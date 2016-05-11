@@ -8,3 +8,5 @@ A go library for [Matrix](https://matrix.org). I've only implemented the functio
 * Read messages
 * Send messages
 * Get join notificaitons with room ID and name
+
+Pull requests are more than welcome
