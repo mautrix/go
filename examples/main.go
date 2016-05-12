@@ -22,7 +22,9 @@ func main() {
 	for {
 		select {
 		case msg := <-session.OnNewMsg:
-			fmt.Println(msg)
+			fmt.Print(msg.RoomName + " - ")
+			fmt.Print(msg.Sender + " - ")
+			fmt.Println(msg.Text)
 		default:
 		}
 	}
