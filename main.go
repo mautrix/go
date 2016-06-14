@@ -11,6 +11,7 @@ type Session struct {
 	AccessToken string
 	HomeServer  string
 	OnNewMsg    chan RoomMessage
+	Timeline    chan Event
 	OnJoin      chan string // When we find a new room
 	stop        chan bool   // stop the service
 }
