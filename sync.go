@@ -53,6 +53,8 @@ type Event struct {
 	Age              int64                  `json:"age"`
 	Nonce            string                 `json:"txn_id"`
 	Unsigned         Unsigned               `json:"unsigned"`
+
+	RoomID string `json:"-"`
 }
 
 // EventContent contains the name and body of an event
@@ -96,6 +98,7 @@ func (session *Session) Sync() error {
 		}
 
 		for _, event := range v.Timeline.Events {
+			event.RoomID = roomID
 			session.Timeline <- event
 			resp, err := POST(session.GetURL("/rooms/%s/receipt/%s/%s", roomID, EvtRead, event.ID))
 			if resp.StatusCode != http.StatusOK {
