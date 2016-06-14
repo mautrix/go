@@ -1,12 +1,12 @@
 package mautrix
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 )
 
 type loginInfo struct {
@@ -17,10 +17,16 @@ type loginInfo struct {
 	Error        string `json:"error"`
 }
 
-// Login .
-func (session *Session) Login(user, password string) error {
-	resp, err := jsonClient(session.GetURL("/login"),
-		[]byte(fmt.Sprintf("{\"type\": \"%s\", \"user\":\"%s\", \"password\": \"%s\"}", LoginPassword, user, password)))
+// PasswordLogin tries to log in with username and password
+func (session *Session) PasswordLogin(user, password string) error {
+	return session.login(fmt.Sprintf(
+		"{\"type\": \"%s\", \"user\":\"%s\", \"password\": \"%s\"}",
+		LoginPassword, user, password,
+	))
+}
+
+func (session *Session) login(payload string) error {
+	resp, err := JSONPOST(session.GetURL("/login"), payload)
 	if err != nil {
 		return err
 	}
@@ -41,8 +47,9 @@ func (session *Session) Login(user, password string) error {
 	return nil
 }
 
-func jsonClient(url string, jsonStr []byte) (io.ReadCloser, error) {
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonStr))
+// JSONPOST makes a JSON POST request to the given URL with the given body.
+func JSONPOST(url, payload string) (io.ReadCloser, error) {
+	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{}
