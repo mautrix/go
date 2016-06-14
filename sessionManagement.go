@@ -25,6 +25,19 @@ func (session *Session) PasswordLogin(user, password string) error {
 	))
 }
 
+// TokenLogin tries to log in with username and auth token
+func (session *Session) TokenLogin(user, token string) error {
+	return session.login(fmt.Sprintf(
+		"{\"type\": \"%s\", \"user\":\"%s\", \"password\": \"%s\", \"txn_id\": \"%s\"}",
+		LoginToken, user, token, GenerateNonce(),
+	))
+}
+
+// DummyLogin tries to log in without authentication
+func (session *Session) DummyLogin() error {
+	return session.login(fmt.Sprintf("{\"type\": \"%s\"}", LoginDummy))
+}
+
 func (session *Session) login(payload string) error {
 	resp, err := JSONPOST(session.GetURL("/login"), payload)
 	if err != nil {
