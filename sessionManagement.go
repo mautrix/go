@@ -17,7 +17,7 @@ type loginInfo struct {
 // PasswordLogin tries to log in with username and password
 func (session *Session) PasswordLogin(user, password string) error {
 	return session.login(fmt.Sprintf(
-		"{\"type\": \"%s\", \"user\":\"%s\", \"password\": \"%s\"}",
+		"{\"type\": \"%s\", \"user\": \"%s\", \"password\": \"%s\"}",
 		LoginPassword, user, password,
 	))
 }
@@ -25,7 +25,7 @@ func (session *Session) PasswordLogin(user, password string) error {
 // TokenLogin tries to log in with username and auth token
 func (session *Session) TokenLogin(user, token string) error {
 	return session.login(fmt.Sprintf(
-		"{\"type\": \"%s\", \"user\":\"%s\", \"password\": \"%s\", \"txn_id\": \"%s\"}",
+		"{\"type\": \"%s\", \"user\": \"%s\", \"token\": \"%s\", \"txn_id\": \"%s\"}",
 		LoginToken, user, token, GenerateNonce(),
 	))
 }
