@@ -41,8 +41,8 @@ func (session *Session) SendToRoom(room, message string) error {
 	req, err := http.NewRequest(
 		"PUT",
 		session.GetURL(
-			"/rooms/%s/send/%s/%d?access_token=%s",
-			room, EvtRoomMessage, session.TxnID, session.AccessToken,
+			"/rooms/%s/send/%s/%s?access_token=%s",
+			room, EvtRoomMessage, GenerateNonce(), session.AccessToken,
 		),
 		buf,
 	)
@@ -53,8 +53,6 @@ func (session *Session) SendToRoom(room, message string) error {
 	if err != nil {
 		return err
 	}
-
-	session.TxnID++
 
 	var data map[string]interface{}
 	err = json.NewDecoder(resp.Body).Decode(&data)

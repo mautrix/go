@@ -12,8 +12,7 @@ type Session struct {
 	HomeServer  string
 	OnNewMsg    chan RoomMessage
 	OnJoin      chan string // When we find a new room
-	TxnID       int
-	stop        chan bool // stop the service
+	stop        chan bool   // stop the service
 }
 
 // Start ..
@@ -55,7 +54,6 @@ func Init(homeserver string) *Session {
 		OnNewMsg:  make(chan RoomMessage, 10),
 		OnJoin:    make(chan string, 10),
 		Rooms:     make(map[string]RoomInfo),
-		TxnID:     0,
 		stop:      make(chan bool),
 	}
 
