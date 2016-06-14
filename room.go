@@ -14,14 +14,6 @@ type RoomInfo struct {
 	Name string
 }
 
-// RoomMessage - Message from a room
-type RoomMessage struct {
-	RoomID   string
-	RoomName string
-	Sender   string
-	Text     string
-}
-
 // RoomNameToID - get the room id from a room name
 func (session *Session) RoomNameToID(roomName string) string {
 	for k, v := range session.Rooms {
