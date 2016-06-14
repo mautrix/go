@@ -37,12 +37,12 @@ func (session *Session) RoomNameToID(roomName string) string {
 func (session *Session) SendToRoom(room, message string) error {
 	message = strings.Replace(message, "\"", "\\\"", -1) // fix for " in messages
 	var buf *bytes.Buffer
-	fmt.Fprintf(buf, "{\"msgtype\":\"m.text\", \"body\":\"%s\"}", message)
+	fmt.Fprintf(buf, "{\"msgtype\":\"%s\", \"body\":\"%s\"}", MsgText, message)
 	req, err := http.NewRequest(
 		"PUT",
 		session.GetURL(
-			"/rooms/%s/send/m.room.message/%d?access_token=%s",
-			room, session.TxnID, session.AccessToken,
+			"/rooms/%s/send/%s/%d?access_token=%s",
+			room, EvtRoomMessage, session.TxnID, session.AccessToken,
 		),
 		buf,
 	)

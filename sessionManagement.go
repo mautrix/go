@@ -20,7 +20,7 @@ type loginInfo struct {
 // Login .
 func (session *Session) Login(user, password string) error {
 	resp, err := jsonClient(session.GetURL("/login"),
-		[]byte(fmt.Sprintf("{\"type\": \"m.login.password\", \"user\":\"%s\", \"password\": \"%s\"}", user, password)))
+		[]byte(fmt.Sprintf("{\"type\": \"%s\", \"user\":\"%s\", \"password\": \"%s\"}", LoginPassword, user, password)))
 	if err != nil {
 		return err
 	}

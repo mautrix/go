@@ -76,7 +76,7 @@ func (session *Session) Sync() error {
 
 		for _, event := range v.State.Events { // Look torugh all events in state
 			switch {
-			case event.Type == "m.room.name":
+			case event.Type == EvtRoomName:
 				_, ok := session.Rooms[roomID]
 				if !ok {
 					session.Rooms[roomID] = RoomInfo{Name: event.Content.Name}
@@ -87,7 +87,7 @@ func (session *Session) Sync() error {
 
 		for _, event := range v.Timeline.Events { // Look torugh all events on timeline
 			switch {
-			case event.Type == "m.room.message":
+			case event.Type == EvtRoomMessage:
 				roomInfo := session.Rooms[roomID]
 				session.OnNewMsg <- RoomMessage{RoomID: roomID,
 					RoomName: roomInfo.Name,
