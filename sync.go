@@ -100,9 +100,9 @@ func (session *Session) Sync() error {
 		for _, event := range v.Timeline.Events {
 			event.RoomID = roomID
 			session.Timeline <- event
-			resp, err := POST(session.GetURL("/rooms/%s/receipt/%s/%s", roomID, EvtRead, event.ID))
+			resp, err := POST(session.GetURL("/rooms/%s/receipt/%s/%s?access_token=%s", roomID, EvtRead, event.ID, session.AccessToken))
 			if resp.StatusCode != http.StatusOK {
-				fmt.Printf("Failed to mark message %s in room %s as read (HTTP %d): %s", event.ID, roomID, resp.StatusCode, err)
+				fmt.Printf("Failed to mark message %s in room %s as read (HTTP %d): %s\n", event.ID, roomID, resp.StatusCode, err)
 			}
 		}
 	}
