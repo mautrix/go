@@ -1,4 +1,4 @@
-package goMatrix
+package mautrix
 
 import (
 	"bytes"
