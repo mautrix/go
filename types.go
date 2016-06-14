@@ -57,6 +57,7 @@ const (
 const (
 	EvtTyping   = "m.typing"
 	EvtReceipt  = "m.receipt"
+	EvtRead     = "m.read"
 	EvtPresence = "m.presence"
 )
 
