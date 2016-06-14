@@ -31,8 +31,8 @@ Loop:
 	}
 }
 
-// Close closes everything down
-func (session *Session) Close() {
+// Stop the listener
+func (session *Session) Stop() {
 	session.stop <- true
 }
 
