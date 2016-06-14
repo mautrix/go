@@ -70,7 +70,7 @@ type Unsigned struct {
 
 // Sync .
 func (session *Session) Sync() error {
-	resp, err := http.Get(session.GetURL("/sync?since=%s&access_token=%s&timeout=10000", session.HomeServer, session.NextBatch, session.AccessToken))
+	resp, err := http.Get(session.GetURL("/sync?since=%s&access_token=%s&timeout=10000", session.NextBatch, session.AccessToken))
 	if err != nil {
 		return err
 	}
