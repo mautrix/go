@@ -4,7 +4,7 @@ import (
 	"fmt"
 )
 
-// Session .
+// Session is a client-server Matrix session
 type Session struct {
 	NextBatch   string
 	Rooms       map[string]RoomInfo // The rooms a user is part of
