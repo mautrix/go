@@ -68,7 +68,7 @@ type Unsigned struct {
 	InviteRoomState []Event `json:"invite_room_state"`
 }
 
-// Sync .
+// Sync the current status with the homeserver
 func (session *Session) Sync() error {
 	resp, err := http.Get(session.GetURL("/sync?since=%s&access_token=%s&timeout=10000", session.NextBatch, session.AccessToken))
 	if err != nil {
