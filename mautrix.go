@@ -25,11 +25,7 @@ Loop:
 		default:
 			err := session.Sync()
 			if err != nil {
-				switch {
-				case err.Error()[(len(err.Error())-11):] == "i/o timeout": // Just ignore this one
-				default:
-					fmt.Println(err)
-				}
+				fmt.Println(err)
 			}
 		}
 	}
