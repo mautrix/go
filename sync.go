@@ -2,12 +2,14 @@ package mautrix
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 )
 
-type syncData struct {
+// SyncData contains everything in a single synchronization
+type SyncData struct {
 	NextBatch string `json:"next_batch"`
-	Rooms     rooms  `json:"rooms"`
+	Rooms     Rooms  `json:"rooms"`
 	// Presence presence `json:"presence"`
 }
 
@@ -15,45 +17,53 @@ type syncData struct {
 //
 // }
 
-type rooms struct {
-	Join map[string]roomIDs `json:"join"`
+// Rooms contains all joined and invited rooms
+type Rooms struct {
+	Join   map[string]Room `json:"join"`
+	Invite map[string]Room `json:"invite"`
+	Leave  map[string]Room `json:"leave"`
 }
 
-type roomIDs struct {
-	Ephemeral ephemeral `json:"ephemeral"`
-	State     state     `json:"state"`
-	Timeline  timeline  `json:"timeline"`
+// Room represents a single room
+type Room struct {
+	// Typing notifications, presence updates, etc..
+	Ephemeral EventContainer `json:"ephemeral"`
+	// Member list and other persistent data
+	State EventContainer `json:"state"`
+	// Messages, state changes, etc..
+	Timeline EventContainer `json:"timeline"`
+	// Tags and custom configs
+	AccountData EventContainer `json:"account_data"`
 }
 
-// ephemeral = things like typing notifications, and presence updates
-type ephemeral struct {
-	Events []event `json:"events"`
+// EventContainer contains an array of events
+type EventContainer struct {
+	Events    []Event `json:"events"`
+	Limited   bool    `json:"limited"`
+	PrevBatch string  `json:"prev_batch"`
 }
 
-// timeline = stuff in the room timeline itself, e.g. messages. also includes state changes.
-type timeline struct {
-	Events []event `json:"events"`
+// Event represents a single event
+type Event struct {
+	ID               string                 `json:"event_id"`
+	Type             string                 `json:"type"`
+	Sender           string                 `json:"sender"`
+	Content          map[string]interface{} `json:"content"`
+	OriginServerTime int64                  `json:"origin_server_ts"`
+	Age              int64                  `json:"age"`
+	Nonce            string                 `json:"txn_id"`
+	Unsigned         Unsigned               `json:"unsigned"`
 }
 
-// state = persistent key/value pair data about the room (e.g. its name)
-type state struct {
-	Events []event `json:"events"`
-}
-
-type event struct {
-	Type     string       `json:"type"`
-	Content  eventContent `json:"content"`
-	Unsigned unsigned     `json:"unsigned"`
-	Sender   string       `json:"sender"`
-}
-
-type eventContent struct {
+// EventContent contains the name and body of an event
+type EventContent struct {
 	Name string `json:"name"`
 	Body string `json:"body"`
 }
 
-type unsigned struct {
-	InviteRoomState []event `json:"invite_room_state"`
+// Unsigned contains the unsigned event contents
+type Unsigned struct {
+	InviteRoomState []Event `json:"invite_room_state"`
 }
 
 // Sync .
@@ -64,7 +74,7 @@ func (session *Session) Sync() error {
 	}
 	defer resp.Body.Close()
 
-	data := syncData{}
+	data := SyncData{}
 	err = json.NewDecoder(resp.Body).Decode(&data)
 	if err != nil {
 		return err
@@ -72,31 +82,26 @@ func (session *Session) Sync() error {
 
 	session.NextBatch = data.NextBatch
 
-	for roomID, v := range data.Rooms.Join { // Look trough all the rooms
-
-		for _, event := range v.State.Events { // Look torugh all events in state
+	for roomID, v := range data.Rooms.Join {
+		for _, event := range v.State.Events {
 			switch {
 			case event.Type == EvtRoomName:
 				_, ok := session.Rooms[roomID]
 				if !ok {
-					session.Rooms[roomID] = RoomInfo{Name: event.Content.Name}
-					session.OnJoin <- event.Content.Name
+					name, _ := event.Content["name"].(string)
+					session.Rooms[roomID] = RoomInfo{Name: name}
+					session.OnJoin <- name
 				}
 			}
 		}
 
-		for _, event := range v.Timeline.Events { // Look torugh all events on timeline
-			switch {
-			case event.Type == EvtRoomMessage:
-				roomInfo := session.Rooms[roomID]
-				session.OnNewMsg <- RoomMessage{RoomID: roomID,
-					RoomName: roomInfo.Name,
-					Sender:   event.Sender,
-					Text:     event.Content.Body,
-				}
+		for _, event := range v.Timeline.Events {
+			session.Timeline <- event
+			resp, err := POST(session.GetURL("/rooms/%s/receipt/%s/%s", roomID, EvtRead, event.ID))
+			if resp.StatusCode != http.StatusOK {
+				fmt.Printf("Failed to mark message %s in room %s as read (HTTP %d): %s", event.ID, roomID, resp.StatusCode, err)
 			}
 		}
-
 	}
 	return nil
 }
