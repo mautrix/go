@@ -25,13 +25,12 @@ func (session *Session) RoomNameToID(roomName string) string {
 
 // SendToRoom - Send message to room
 func (session *Session) SendToRoom(room, message string) error {
-	message = strings.Replace(message, "\"", "\\\"", -1) // fix for " in messages
 	resp, err := JSONPOST(session.GetURL(
 		"/rooms/%s/send/%s/%s?access_token=%s",
 		room, EvtRoomMessage, GenerateNonce(), session.AccessToken,
 	), fmt.Sprintf(
 		"{\"msgtype\": \"%s\", \"body\":\"%s\"}",
-		MsgText, message,
+		MsgText, strings.Replace(message, "\"", "\\\"", -1),
 	))
 	if err != nil {
 		return err
