@@ -4,9 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
-	"strings"
 )
 
 type loginInfo struct {
@@ -43,10 +40,10 @@ func (session *Session) login(payload string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Close()
+	defer resp.Body.Close()
 
 	dat := loginInfo{}
-	err = json.NewDecoder(resp).Decode(&dat)
+	err = json.NewDecoder(resp.Body).Decode(&dat)
 	if err != nil {
 		return err
 	}
@@ -58,18 +55,4 @@ func (session *Session) login(payload string) error {
 	session.AccessToken = dat.AccessToken
 
 	return nil
-}
-
-// JSONPOST makes a JSON POST request to the given URL with the given body.
-func JSONPOST(url, payload string) (io.ReadCloser, error) {
-	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(payload))
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-
-	return resp.Body, nil
 }
