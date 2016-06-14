@@ -2,17 +2,16 @@ package main
 
 import (
 	"fmt"
-	"log"
-
-	"github.com/geir54/goMatrix"
+	"maunium.net/go/mautrix"
 )
 
 func main() {
-	session := goMatrix.Init("https://matrix.org")
+	session := mautrix.Init("https://matrix.org")
 
 	err := session.Login("username", "password")
 	if err != nil {
-		log.Fatal(err)
+		fmt.Println(err)
+		return
 	}
 
 	fmt.Println("Login successful")
@@ -22,9 +21,7 @@ func main() {
 	for {
 		select {
 		case msg := <-session.OnNewMsg:
-			fmt.Print(msg.RoomName + " - ")
-			fmt.Print(msg.Sender + " - ")
-			fmt.Println(msg.Text)
+			fmt.Printf("%s - %s - %s\n", msg.RoomName, msg.Sender, msg.Text)
 		default:
 		}
 	}
