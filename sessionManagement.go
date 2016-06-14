@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 type loginInfo struct {
@@ -18,7 +19,7 @@ type loginInfo struct {
 func (session *Session) PasswordLogin(user, password string) error {
 	return session.login(fmt.Sprintf(
 		"{\"type\": \"%s\", \"user\": \"%s\", \"password\": \"%s\"}",
-		LoginPassword, user, password,
+		LoginPassword, user, strings.Replace(password, "\"", "\\\"", -1),
 	))
 }
 
