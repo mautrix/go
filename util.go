@@ -17,7 +17,7 @@ var src = rand.NewSource(time.Now().UnixNano())
 // GenerateNonce generates a random string
 func GenerateNonce() string {
 	b := make([]byte, 32)
-	for i, cache, remain := 4, src.Int63(), letterIdxMax; i >= 0; {
+	for i, cache, remain := len(b)-1, src.Int63(), letterIdxMax; i >= 0; {
 		if remain == 0 {
 			cache, remain = src.Int63(), letterIdxMax
 		}
