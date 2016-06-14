@@ -58,7 +58,7 @@ type unsigned struct {
 
 // Sync .
 func (session *Session) Sync() error {
-	resp, err := http.Get(session.HomeServer + "/_matrix/client/r0/sync?since=" + session.NextBatch + "&access_token=" + session.AccessToken + "&timeout=10000")
+	resp, err := http.Get(session.GetURL("/sync?since=%s&access_token=%s&timeout=10000", session.HomeServer, session.NextBatch, session.AccessToken))
 	if err != nil {
 		return err
 	}

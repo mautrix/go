@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 )
@@ -18,8 +19,8 @@ type loginInfo struct {
 
 // Login .
 func (session *Session) Login(user, password string) error {
-	resp, err := jsonClient(session.HomeServer+"/_matrix/client/r0/login",
-		[]byte("{\"type\": \"m.login.password\", \"user\":\""+user+"\", \"password\": \""+password+"\"}"))
+	resp, err := jsonClient(session.GetURL("/login"),
+		[]byte(fmt.Sprintf("{\"type\": \"m.login.password\", \"user\":\"%s\", \"password\": \"%s\"}", user, password)))
 	if err != nil {
 		return err
 	}

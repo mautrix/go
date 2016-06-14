@@ -1,6 +1,8 @@
 package goMatrix
 
-import "log"
+import (
+	"fmt"
+)
 
 // Session .
 type Session struct {
@@ -28,7 +30,7 @@ func (session *Session) Start() {
 					switch {
 					case err.Error()[(len(err.Error())-11):] == "i/o timeout": // Just ignore this one
 					default:
-						log.Println(err)
+						fmt.Println(err)
 					}
 				}
 			}
@@ -39,6 +41,11 @@ func (session *Session) Start() {
 // Close closes everything down
 func (session *Session) Close() {
 	session.stop <- true
+}
+
+// GetURL gets the URL for the given path on this session.
+func (session *Session) GetURL(path string, args ...interface{}) string {
+	return fmt.Sprintf("%s/_matrix/client/r0%s", session.HomeServer, fmt.Sprintf(path, args...))
 }
 
 // Init .

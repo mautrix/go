@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 )
 
@@ -36,10 +36,16 @@ func (session *Session) RoomNameToID(roomName string) string {
 // SendToRoom - Send message to room
 func (session *Session) SendToRoom(room, message string) error {
 	message = strings.Replace(message, "\"", "\\\"", -1) // fix for " in messages
-	jsTest := "{\"msgtype\":\"m.text\", \"body\":\"" + message + "\"}"
-
-	url := session.HomeServer + "/_matrix/client/r0/rooms/" + room + "/send/m.room.message/" + strconv.Itoa(session.TxnID) + "?access_token=" + session.AccessToken
-	req, err := http.NewRequest("PUT", url, bytes.NewBuffer([]byte(jsTest)))
+	var buf *bytes.Buffer
+	fmt.Fprintf(buf, "{\"msgtype\":\"m.text\", \"body\":\"%s\"}", message)
+	req, err := http.NewRequest(
+		"PUT",
+		session.GetURL(
+			"/rooms/%s/send/m.room.message/%d?access_token=%s",
+			room, session.TxnID, session.AccessToken,
+		),
+		buf,
+	)
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{}
