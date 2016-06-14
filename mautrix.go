@@ -41,8 +41,8 @@ func (session *Session) GetURL(path string, args ...interface{}) string {
 	return fmt.Sprintf("%s/_matrix/client/r0%s", session.HomeServer, fmt.Sprintf(path, args...))
 }
 
-// Init .
-func Init(homeserver string) *Session {
+// Create a Session
+func Create(homeserver string) *Session {
 	session := Session{HomeServer: homeserver,
 		NextBatch: "s9_13_0_1_1_1",
 		Timeline:  make(chan Event, 10),
