@@ -1,3 +1,3 @@
 mautrix
 ======
-A Golang client library for [Matrix](https://matrix.org).
+A [Matrix](https://matrix.org) client library for Golang.
