@@ -15,8 +15,8 @@ type Session struct {
 	stop        chan bool   // stop the service
 }
 
-// Start ..
-func (session *Session) Start() {
+// Listen for updates from the homeserver
+func (session *Session) Listen() {
 Loop:
 	for {
 		select {
