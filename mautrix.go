@@ -17,24 +17,22 @@ type Session struct {
 
 // Start ..
 func (session *Session) Start() {
-	go func() {
-	Loop:
-		for {
-			select {
-			case <-session.stop:
-				break Loop
-			default:
-				err := session.Sync()
-				if err != nil {
-					switch {
-					case err.Error()[(len(err.Error())-11):] == "i/o timeout": // Just ignore this one
-					default:
-						fmt.Println(err)
-					}
+Loop:
+	for {
+		select {
+		case <-session.stop:
+			break Loop
+		default:
+			err := session.Sync()
+			if err != nil {
+				switch {
+				case err.Error()[(len(err.Error())-11):] == "i/o timeout": // Just ignore this one
+				default:
+					fmt.Println(err)
 				}
 			}
 		}
-	}()
+	}
 }
 
 // Close closes everything down
