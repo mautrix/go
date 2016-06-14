@@ -10,7 +10,6 @@ type Session struct {
 	Rooms       map[string]RoomInfo // The rooms a user is part of
 	AccessToken string
 	HomeServer  string
-	OnNewMsg    chan RoomMessage
 	Timeline    chan Event
 	OnJoin      chan string // When we find a new room
 	stop        chan bool   // stop the service
@@ -52,7 +51,7 @@ func (session *Session) GetURL(path string, args ...interface{}) string {
 func Init(homeserver string) *Session {
 	session := Session{HomeServer: homeserver,
 		NextBatch: "s9_13_0_1_1_1",
-		OnNewMsg:  make(chan RoomMessage, 10),
+		Timeline:  make(chan Event, 10),
 		OnJoin:    make(chan string, 10),
 		Rooms:     make(map[string]RoomInfo),
 		stop:      make(chan bool),
