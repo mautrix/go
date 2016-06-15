@@ -6,9 +6,9 @@ import (
 )
 
 func main() {
-	session := mautrix.Init("https://matrix.org")
+	session := mautrix.Create("https://matrix.org")
 
-	err := session.Login("username", "password")
+	err := session.PasswordLogin("username", "password")
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -16,14 +16,22 @@ func main() {
 
 	fmt.Println("Login successful")
 
-	session.Start()
+	go session.Listen()
 
-	for {
-		select {
-		case msg := <-session.OnNewMsg:
-			fmt.Printf("%s - %s - %s\n", msg.RoomName, msg.Sender, msg.Text)
+	go func() {
+		for roomID := range session.InviteChan {
+			invite := session.Invites[roomID]
+			fmt.Printf("%s invited me to %s (%s)\n", invite.Sender, invite.Name, invite.ID)
+			fmt.Println(invite.Accept())
+		}
+	}()
+
+	for evt := range session.Timeline {
+		switch evt.Type {
+		case mautrix.EvtRoomMessage:
+			fmt.Printf("<%[1]s> %[4]s (%[2]s/%[3]s)\n", evt.Sender, evt.Type, evt.ID, evt.Content["body"])
 		default:
+			fmt.Println(evt.Type)
 		}
 	}
-
 }
