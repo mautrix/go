@@ -83,7 +83,12 @@ func (session *Session) Sync() error {
 	}
 
 	session.NextBatch = data.NextBatch
+	session.syncJoinedRooms(data)
+	session.syncInvitedRooms(data)
+	return nil
+}
 
+func (session *Session) syncJoinedRooms(data SyncData) {
 	for roomID, v := range data.Rooms.Join {
 		for _, event := range v.State.Events {
 			switch {
@@ -106,5 +111,13 @@ func (session *Session) Sync() error {
 			}
 		}
 	}
-	return nil
+}
+
+func (session *Session) syncInvitedRooms(data SyncData) {
+	for roomID, v := range data.Rooms.Invite {
+		for _, event := range v.Timeline.Events {
+			event.RoomID = roomID
+			session.InviteTimeline <- event
+		}
+	}
 }
