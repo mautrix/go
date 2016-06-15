@@ -66,6 +66,7 @@ type Event struct {
 	ID               string                 `json:"event_id"`
 	Type             string                 `json:"type"`
 	Sender           string                 `json:"sender"`
+	StateKey         string                 `json:"state_key"`
 	Content          map[string]interface{} `json:"content"`
 	OriginServerTime int64                  `json:"origin_server_ts"`
 	Age              int64                  `json:"age"`
@@ -133,11 +134,28 @@ func (session *Session) syncJoinedRooms(data SyncData) {
 	}
 }
 
+// Invite wraps an invite to a room
+type Invite struct {
+	Sender  string
+	Name    string
+	ID      string
+	Members map[string]string
+}
+
 func (session *Session) syncInvitedRooms(data SyncData) {
 	for roomID, v := range data.Rooms.Invited {
-		for _, event := range v.InviteState.Events {
-			event.RoomID = roomID
-			session.InviteTimeline <- event
+		var invite = Invite{
+			ID:      roomID,
+			Members: make(map[string]string),
 		}
+		for _, event := range v.InviteState.Events {
+			switch event.Type {
+			case EvtRoomMember:
+				invite.Members[event.StateKey], _ = event.Content["membership"].(string)
+			case EvtRoomName:
+				invite.Name, _ = event.Content["name"].(string)
+			}
+		}
+		session.Invites <- invite
 	}
 }
