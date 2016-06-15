@@ -3,6 +3,7 @@ package mautrix
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 )
 
@@ -50,6 +51,8 @@ func (session *Session) login(payload string) error {
 
 	if dat.Error != "" {
 		return fmt.Errorf(dat.Error)
+	} else if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 
 	session.AccessToken = dat.AccessToken
