@@ -2,7 +2,6 @@ package mautrix
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 )
@@ -50,7 +49,7 @@ func (session *Session) login(payload string) error {
 	}
 
 	if dat.Error != "" {
-		return errors.New(dat.Error)
+		return fmt.Errorf(dat.Error)
 	}
 
 	session.AccessToken = dat.AccessToken

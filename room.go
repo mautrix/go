@@ -2,7 +2,6 @@ package mautrix
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 )
@@ -41,9 +40,9 @@ func (session *Session) SendToRoom(room, message string) error {
 	if err != nil {
 		return err
 	}
-	Error, ok := data["error"]
+	errStr, ok := data["error"]
 	if ok {
-		return errors.New(Error.(string))
+		return fmt.Errorf(errStr.(string))
 	}
 
 	// fmt.Println(data)
