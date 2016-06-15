@@ -8,8 +8,8 @@ import (
 
 // SyncData contains everything in a single synchronization
 type SyncData struct {
-	NextBatch string `json:"next_batch"`
-	Rooms     Rooms  `json:"rooms"`
+	NextBatch string    `json:"next_batch"`
+	Rooms     SyncRooms `json:"rooms"`
 	// Presence presence `json:"presence"`
 }
 
@@ -17,9 +17,9 @@ type SyncData struct {
 //
 // }
 
-// Rooms contains all joined and invited rooms
-type Rooms struct {
-	Join    map[string]Room        `json:"join"`
+// SyncRooms contains all joined and invited rooms
+type SyncRooms struct {
+	Join    map[string]SRoom       `json:"join"`
 	Invited map[string]InvitedRoom `json:"invite"`
 	Leave   map[string]LeftRoom    `json:"leave"`
 }
@@ -37,8 +37,8 @@ type InvitedRoom struct {
 	InviteState EventContainer `json:"invite_state"`
 }
 
-// Room represents a single room
-type Room struct {
+// SRoom represents a single room
+type SRoom struct {
 	// Typing notifications, presence updates, etc..
 	Ephemeral EventContainer `json:"ephemeral"`
 	// Member list and other persistent data
@@ -73,7 +73,7 @@ type Event struct {
 	Nonce            string                 `json:"txn_id"`
 	Unsigned         Unsigned               `json:"unsigned"`
 
-	RoomID string `json:"-"`
+	Room *Room `json:"-"`
 }
 
 // EventContent contains the name and body of an event
@@ -88,8 +88,8 @@ type Unsigned struct {
 }
 
 // Sync the current status with the homeserver
-func (session *Session) Sync() error {
-	resp, err := http.Get(session.GetURL("/sync?since=%s&access_token=%s&timeout=10000", session.NextBatch, session.AccessToken))
+func (s *Session) Sync() error {
+	resp, err := http.Get(s.GetURL("/sync?since=%s&access_token=%s&timeout=10000", s.NextBatch, s.AccessToken))
 	if err != nil {
 		return err
 	}
@@ -101,31 +101,33 @@ func (session *Session) Sync() error {
 		return err
 	}
 
-	session.NextBatch = data.NextBatch
-	session.syncJoinedRooms(data)
-	session.syncInvitedRooms(data)
+	s.NextBatch = data.NextBatch
+	s.syncJoinedRooms(data)
+	s.syncInvitedRooms(data)
 	return nil
 }
 
-func (session *Session) syncJoinedRooms(data SyncData) {
+func (s *Session) syncJoinedRooms(data SyncData) {
 	for roomID, v := range data.Rooms.Join {
+		room, ok := s.Rooms[roomID]
+		if !ok {
+			room = &Room{Session: s, ID: roomID, Members: make(map[string]int)}
+			s.Rooms[roomID] = room
+		}
 		for _, event := range v.State.Events {
 			switch {
 			case event.Type == EvtRoomName:
-				_, ok := session.Rooms[roomID]
-				if !ok {
-					name, _ := event.Content["name"].(string)
-					session.Rooms[roomID] = RoomInfo{Name: name}
-					session.OnJoin <- name
-				}
+				room.Name, _ = event.Content["name"].(string)
+			case event.Type == EvtRoomMember:
+				room.Members[event.StateKey] = 0
 			}
 		}
 
 		for _, event := range v.Timeline.Events {
-			event.RoomID = roomID
-			session.Timeline <- event
+			event.Room = room
+			s.Timeline <- event
 			if len(event.ID) > 0 {
-				resp, err := POST(session.GetURL("/rooms/%s/receipt/%s/%s?access_token=%s", roomID, EvtRead, event.ID, session.AccessToken))
+				resp, err := POST(s.GetURL("/rooms/%s/receipt/%s/%s?access_token=%s", roomID, EvtRead, event.ID, s.AccessToken))
 				if resp.StatusCode != http.StatusOK {
 					fmt.Printf("Failed to mark message %s in room %s as read (HTTP %d): %s\n", event.ID, roomID, resp.StatusCode, err)
 				}
@@ -134,21 +136,18 @@ func (session *Session) syncJoinedRooms(data SyncData) {
 	}
 }
 
-// Invite wraps an invite to a room
-type Invite struct {
-	Sender  string
-	Name    string
-	ID      string
-	Members map[string]string
-}
-
-func (session *Session) syncInvitedRooms(data SyncData) {
+func (s *Session) syncInvitedRooms(data SyncData) {
 	for roomID, v := range data.Rooms.Invited {
-		var invite = Invite{
-			ID:      roomID,
-			Members: make(map[string]string),
+		invite, old := s.Invites[roomID]
+		if !old {
+			invite = &Invite{
+				Session: s,
+				ID:      roomID,
+				Members: make(map[string]string),
+			}
 		}
 		for _, event := range v.InviteState.Events {
+			invite.Sender = event.Sender
 			switch event.Type {
 			case EvtRoomMember:
 				invite.Members[event.StateKey], _ = event.Content["membership"].(string)
@@ -156,6 +155,9 @@ func (session *Session) syncInvitedRooms(data SyncData) {
 				invite.Name, _ = event.Content["name"].(string)
 			}
 		}
-		session.Invites <- invite
+		s.Invites[roomID] = invite
+		if !old {
+			s.InviteChan <- roomID
+		}
 	}
 }

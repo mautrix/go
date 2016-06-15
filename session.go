@@ -16,28 +16,28 @@ type loginInfo struct {
 }
 
 // PasswordLogin tries to log in with username and password
-func (session *Session) PasswordLogin(user, password string) error {
-	return session.login(fmt.Sprintf(
+func (s *Session) PasswordLogin(user, password string) error {
+	return s.login(fmt.Sprintf(
 		"{\"type\": \"%s\", \"user\": \"%s\", \"password\": \"%s\"}",
 		LoginPassword, user, strings.Replace(password, "\"", "\\\"", -1),
 	))
 }
 
 // TokenLogin tries to log in with username and auth token
-func (session *Session) TokenLogin(user, token string) error {
-	return session.login(fmt.Sprintf(
+func (s *Session) TokenLogin(user, token string) error {
+	return s.login(fmt.Sprintf(
 		"{\"type\": \"%s\", \"user\": \"%s\", \"token\": \"%s\", \"txn_id\": \"%s\"}",
 		LoginToken, user, token, GenerateNonce(),
 	))
 }
 
 // DummyLogin tries to log in without authentication
-func (session *Session) DummyLogin() error {
-	return session.login(fmt.Sprintf("{\"type\": \"%s\"}", LoginDummy))
+func (s *Session) DummyLogin() error {
+	return s.login(fmt.Sprintf("{\"type\": \"%s\"}", LoginDummy))
 }
 
-func (session *Session) login(payload string) error {
-	resp, err := JSONPOST(session.GetURL("/login"), payload)
+func (s *Session) login(payload string) error {
+	resp, err := JSONPOST(s.GetURL("/login"), payload)
 	if err != nil {
 		return err
 	}
@@ -55,8 +55,8 @@ func (session *Session) login(payload string) error {
 		return fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 
-	session.AccessToken = dat.AccessToken
-	session.MatrixID = dat.UserID
+	s.AccessToken = dat.AccessToken
+	s.MatrixID = dat.UserID
 
 	return nil
 }

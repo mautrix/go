@@ -7,13 +7,14 @@ import (
 // Session is a client-server Matrix session
 type Session struct {
 	NextBatch   string
-	Rooms       map[string]RoomInfo // The rooms a user is part of
+	Rooms       map[string]*Room
+	Invites     map[string]*Invite
 	AccessToken string
 	MatrixID    string
 	HomeServer  string
 	Timeline    chan Event
-	Invites     chan Invite
-	OnJoin      chan string // When we find a new room
+	InviteChan  chan string
+	JoinChan    chan string // When we find a new room
 	stop        chan bool   // stop the service
 }
 
@@ -46,11 +47,13 @@ func (session *Session) GetURL(path string, args ...interface{}) string {
 // Create a Session
 func Create(homeserver string) *Session {
 	session := Session{HomeServer: homeserver,
-		NextBatch: "s9_13_0_1_1_1",
-		Timeline:  make(chan Event, 10),
-		OnJoin:    make(chan string, 10),
-		Rooms:     make(map[string]RoomInfo),
-		stop:      make(chan bool),
+		NextBatch:  "s9_13_0_1_1_1",
+		Timeline:   make(chan Event, 10),
+		InviteChan: make(chan string, 10),
+		JoinChan:   make(chan string, 10),
+		Invites:    make(map[string]*Invite),
+		Rooms:      make(map[string]*Room),
+		stop:       make(chan bool),
 	}
 
 	return &session

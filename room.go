@@ -3,12 +3,27 @@ package mautrix
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"strings"
 )
 
-// RoomInfo - Information about a room
-type RoomInfo struct {
-	Name string
+// Invite wraps an invite to a room
+type Invite struct {
+	Sender  string
+	Name    string
+	ID      string
+	Members map[string]string
+	Session *Session
+}
+
+// Room is a room
+type Room struct {
+	ID      string
+	Name    string
+	Members map[string]int
+	Session *Session
+	Aliases []string
 }
 
 // SendResponse wraps the response to a room send request
@@ -18,22 +33,11 @@ type SendResponse struct {
 	ErrorCode string `json:"errcode"`
 }
 
-// RoomNameToID - get the room id from a room name
-func (session *Session) RoomNameToID(roomName string) string {
-	for k, v := range session.Rooms {
-		if v.Name == roomName {
-			return k
-		}
-	}
-
-	return ""
-}
-
-// SendToRoom - Send message to room
-func (session *Session) SendToRoom(room, message string) error {
-	resp, err := JSONPOST(session.GetURL(
+// Send a message to this room
+func (r *Room) Send(message string) error {
+	resp, err := JSONPOST(r.Session.GetURL(
 		"/rooms/%s/send/%s/%s?access_token=%s",
-		room, EvtRoomMessage, GenerateNonce(), session.AccessToken,
+		r.ID, EvtRoomMessage, GenerateNonce(), r.Session.AccessToken,
 	), fmt.Sprintf(
 		"{\"msgtype\": \"%s\", \"body\":\"%s\"}",
 		MsgText, strings.Replace(message, "\"", "\\\"", -1),
@@ -41,6 +45,7 @@ func (session *Session) SendToRoom(room, message string) error {
 	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
 
 	var data SendResponse
 	err = json.NewDecoder(resp.Body).Decode(&data)
@@ -52,4 +57,22 @@ func (session *Session) SendToRoom(room, message string) error {
 		return fmt.Errorf("No event ID received!")
 	}
 	return nil
+}
+
+// Join a room
+func (s *Session) Join(roomID string) error {
+	resp, err := POST(s.GetURL("/rooms/%s/join?access_token=%s", roomID, s.AccessToken))
+	defer resp.Body.Close()
+	if err != nil {
+		return err
+	} else if resp.StatusCode != http.StatusOK {
+		errstr, _ := ioutil.ReadAll(resp.Body)
+		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, errstr)
+	}
+	return nil
+}
+
+// Accept the invite
+func (i Invite) Accept() error {
+	return i.Session.Join(i.ID)
 }
