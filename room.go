@@ -17,11 +17,18 @@ type Invite struct {
 	Session *Session
 }
 
+// Member contains some information about a room member
+type Member struct {
+	Membership  string
+	Power       int
+	DisplayName string
+}
+
 // Room is a room
 type Room struct {
 	ID      string
 	Name    string
-	Members map[string]int
+	Members map[string]Member
 	Session *Session
 	Aliases []string
 }

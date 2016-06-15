@@ -111,7 +111,7 @@ func (s *Session) syncJoinedRooms(data SyncData) {
 	for roomID, v := range data.Rooms.Join {
 		room, ok := s.Rooms[roomID]
 		if !ok {
-			room = &Room{Session: s, ID: roomID, Members: make(map[string]int)}
+			room = &Room{Session: s, ID: roomID, Members: make(map[string]Member)}
 			s.Rooms[roomID] = room
 		}
 		for _, event := range v.State.Events {
@@ -119,7 +119,13 @@ func (s *Session) syncJoinedRooms(data SyncData) {
 			case event.Type == EvtRoomName:
 				room.Name, _ = event.Content["name"].(string)
 			case event.Type == EvtRoomMember:
-				room.Members[event.StateKey] = 0
+				member, ok := room.Members[event.StateKey]
+				if !ok {
+					member = Member{}
+				}
+				member.Membership, _ = event.Content["membership"].(string)
+				member.DisplayName, _ = event.Content["displayname"].(string)
+				room.Members[event.StateKey] = member
 			}
 		}
 
