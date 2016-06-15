@@ -6,13 +6,14 @@ import (
 
 // Session is a client-server Matrix session
 type Session struct {
-	NextBatch   string
-	Rooms       map[string]RoomInfo // The rooms a user is part of
-	AccessToken string
-	HomeServer  string
-	Timeline    chan Event
-	OnJoin      chan string // When we find a new room
-	stop        chan bool   // stop the service
+	NextBatch      string
+	Rooms          map[string]RoomInfo // The rooms a user is part of
+	AccessToken    string
+	HomeServer     string
+	Timeline       chan Event
+	InviteTimeline chan Event
+	OnJoin         chan string // When we find a new room
+	stop           chan bool   // stop the service
 }
 
 // Listen for updates from the homeserver
