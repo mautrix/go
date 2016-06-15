@@ -19,9 +19,22 @@ type SyncData struct {
 
 // Rooms contains all joined and invited rooms
 type Rooms struct {
-	Join   map[string]Room `json:"join"`
-	Invite map[string]Room `json:"invite"`
-	Leave  map[string]Room `json:"leave"`
+	Join    map[string]Room        `json:"join"`
+	Invited map[string]InvitedRoom `json:"invite"`
+	Leave   map[string]LeftRoom    `json:"leave"`
+}
+
+// LeftRoom is a room the user has left or been banned from
+type LeftRoom struct {
+	// Member list and other persistent data
+	State EventContainer `json:"state"`
+	// Messages, state changes, etc..
+	Timeline EventContainer `json:"timeline"`
+}
+
+// InvitedRoom is a room that the user has been invited to
+type InvitedRoom struct {
+	InviteState EventContainer `json:"invite_state"`
 }
 
 // Room represents a single room
@@ -31,16 +44,21 @@ type Room struct {
 	// Member list and other persistent data
 	State EventContainer `json:"state"`
 	// Messages, state changes, etc..
-	Timeline EventContainer `json:"timeline"`
+	Timeline Timeline `json:"timeline"`
 	// Tags and custom configs
 	AccountData EventContainer `json:"account_data"`
 }
 
 // EventContainer contains an array of events
 type EventContainer struct {
-	Events    []Event `json:"events"`
-	Limited   bool    `json:"limited"`
-	PrevBatch string  `json:"prev_batch"`
+	Events []Event `json:"events"`
+}
+
+// Timeline wraps things in a timeline
+type Timeline struct {
+	EventContainer
+	Limited   bool   `json:"limited"`
+	PrevBatch string `json:"prev_batch"`
 }
 
 // Event represents a single event
@@ -105,17 +123,19 @@ func (session *Session) syncJoinedRooms(data SyncData) {
 		for _, event := range v.Timeline.Events {
 			event.RoomID = roomID
 			session.Timeline <- event
-			resp, err := POST(session.GetURL("/rooms/%s/receipt/%s/%s?access_token=%s", roomID, EvtRead, event.ID, session.AccessToken))
-			if resp.StatusCode != http.StatusOK {
-				fmt.Printf("Failed to mark message %s in room %s as read (HTTP %d): %s\n", event.ID, roomID, resp.StatusCode, err)
+			if len(event.ID) > 0 {
+				resp, err := POST(session.GetURL("/rooms/%s/receipt/%s/%s?access_token=%s", roomID, EvtRead, event.ID, session.AccessToken))
+				if resp.StatusCode != http.StatusOK {
+					fmt.Printf("Failed to mark message %s in room %s as read (HTTP %d): %s\n", event.ID, roomID, resp.StatusCode, err)
+				}
 			}
 		}
 	}
 }
 
 func (session *Session) syncInvitedRooms(data SyncData) {
-	for roomID, v := range data.Rooms.Invite {
-		for _, event := range v.Timeline.Events {
+	for roomID, v := range data.Rooms.Invited {
+		for _, event := range v.InviteState.Events {
 			event.RoomID = roomID
 			session.InviteTimeline <- event
 		}
