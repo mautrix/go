@@ -56,6 +56,7 @@ func (session *Session) login(payload string) error {
 	}
 
 	session.AccessToken = dat.AccessToken
+	session.MatrixID = dat.UserID
 
 	return nil
 }
