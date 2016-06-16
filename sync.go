@@ -8,14 +8,10 @@ import (
 
 // SyncData contains everything in a single synchronization
 type SyncData struct {
-	NextBatch string    `json:"next_batch"`
-	Rooms     SyncRooms `json:"rooms"`
-	// Presence presence `json:"presence"`
+	NextBatch string         `json:"next_batch"`
+	Rooms     SyncRooms      `json:"rooms"`
+	Presence  EventContainer `json:"presence"`
 }
-
-// type Presence struct {
-//
-// }
 
 // SyncRooms contains all joined and invited rooms
 type SyncRooms struct {
