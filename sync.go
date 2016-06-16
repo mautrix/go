@@ -98,9 +98,16 @@ func (s *Session) Sync() error {
 	}
 
 	s.NextBatch = data.NextBatch
+	s.syncPresence(data)
 	s.syncJoinedRooms(data)
 	s.syncInvitedRooms(data)
 	return nil
+}
+
+func (s *Session) syncPresence(data SyncData) {
+	for _, evt := range data.Presence.Events {
+		s.Presence[evt.Sender], _ = evt.Content["presence"].(string)
+	}
 }
 
 func (s *Session) syncJoinedRooms(data SyncData) {

@@ -9,6 +9,7 @@ type Session struct {
 	NextBatch   string
 	Rooms       map[string]*Room
 	Invites     map[string]*Invite
+	Presence    map[string]string
 	AccessToken string
 	MatrixID    string
 	HomeServer  string
