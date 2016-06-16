@@ -14,8 +14,8 @@ type Session struct {
 	HomeServer  string
 	Timeline    chan Event
 	InviteChan  chan string
-	JoinChan    chan string // When we find a new room
-	stop        chan bool   // stop the service
+	JoinChan    chan string
+	stop        chan bool
 }
 
 // Listen for updates from the homeserver
