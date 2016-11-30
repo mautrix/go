@@ -39,3 +39,12 @@ func (room Room) GetMembershipState(userID string) string {
 	}
 	return state
 }
+
+// NewRoom creates a new Room with the given ID
+func NewRoom(roomID string) *Room {
+	// Init the State map and return a pointer to the Room
+	return &Room{
+		ID:    roomID,
+		State: make(map[string]map[string]*Event),
+	}
+}
