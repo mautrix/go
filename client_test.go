@@ -1,8 +1,10 @@
 package gomatrix
 
-import "fmt"
+import (
+	"fmt"
+)
 
-func ExampleBuildURLWithQuery() {
+func ExampleClientBuildURLWithQuery() {
 	cli, _ := NewClient("https://matrix.org", "@example:matrix.org", "abcdef123456")
 	out := cli.BuildURLWithQuery([]string{"sync"}, map[string]string{
 		"filter_id": "5",
@@ -11,7 +13,7 @@ func ExampleBuildURLWithQuery() {
 	// Output: https://matrix.org/_matrix/client/r0/sync?access_token=abcdef123456&filter_id=5
 }
 
-func ExampleBuildURL() {
+func ExampleClientBuildURL() {
 	userID := "@example:matrix.org"
 	cli, _ := NewClient("https://matrix.org", userID, "abcdef123456")
 	out := cli.BuildURL("user", userID, "filter")
@@ -19,7 +21,7 @@ func ExampleBuildURL() {
 	// Output: https://matrix.org/_matrix/client/r0/user/@example:matrix.org/filter?access_token=abcdef123456
 }
 
-func ExampleBuildBaseURL() {
+func ExampleClientBuildBaseURL() {
 	userID := "@example:matrix.org"
 	cli, _ := NewClient("https://matrix.org", userID, "abcdef123456")
 	out := cli.BuildBaseURL("_matrix", "client", "r0", "directory", "room", "#matrix:matrix.org")
