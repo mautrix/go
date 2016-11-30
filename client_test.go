@@ -1,8 +1,6 @@
 package gomatrix
 
-import (
-	"fmt"
-)
+import "fmt"
 
 func ExampleClient_BuildURLWithQuery() {
 	cli, _ := NewClient("https://matrix.org", "@example:matrix.org", "abcdef123456")

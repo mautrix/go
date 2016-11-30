@@ -1,6 +1,20 @@
 // Package gomatrix implements the Matrix Client-Server API.
 //
 // Specification can be found at http://matrix.org/docs/spec/client_server/r0.2.0.html
+//
+// Example usage of this library: (blocking version)
+//   cli, err := gomatrix.NewClient("https://matrix.org", "@example:matrix.org", "abcdef123456")
+//   if err != nil {
+//       panic(err)
+//   }
+//   cli.Syncer.OnEventType("m.room.message", func(ev *gomatrix.Event) {
+//	     fmt.Println("Message: %+v", ev)
+//   })
+//   if err := cli.Sync(); err != nil {
+//       panic(err)
+//   }
+//
+// To make the example non-blocking, call Sync() in a goroutine.
 package gomatrix
 
 import (
@@ -26,7 +40,6 @@ type Client struct {
 	syncingID     uint32       // Identifies the current Sync. Only one Sync can be active at any given time.
 	Client        *http.Client // The underlying HTTP client which will be used to make HTTP requests.
 	Syncer        Syncer       // The thing which can process /sync responses
-	// TODO: Worker and Rooms
 }
 
 // HTTPError An HTTP Error response, which may wrap an underlying native Go Error.
