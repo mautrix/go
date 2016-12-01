@@ -38,6 +38,7 @@ type Client struct {
 	syncingID     uint32       // Identifies the current Sync. Only one Sync can be active at any given time.
 	Client        *http.Client // The underlying HTTP client which will be used to make HTTP requests.
 	Syncer        Syncer       // The thing which can process /sync responses
+	Store         Storer       // The thing which can store rooms/tokens/ids
 }
 
 // HTTPError An HTTP Error response, which may wrap an underlying native Go Error.
@@ -96,16 +97,16 @@ func (cli *Client) Sync() error {
 	// We will keep syncing until the syncing state changes. Either because
 	// Sync is called or StopSync is called.
 	syncingID := cli.incrementSyncingID()
-	nextBatch := cli.Syncer.NextBatchStorer().LoadNextBatch(cli.UserID)
-	filterID := cli.Syncer.FilterStorer().LoadFilter(cli.UserID)
+	nextBatch := cli.Store.LoadNextBatch(cli.UserID)
+	filterID := cli.Store.LoadFilterID(cli.UserID)
 	if filterID == "" {
-		filterJSON := cli.Syncer.FilterStorer().GetFilterJSON(cli.UserID)
+		filterJSON := cli.Syncer.GetFilterJSON(cli.UserID)
 		resFilter, err := cli.CreateFilter(filterJSON)
 		if err != nil {
 			return err
 		}
 		filterID = resFilter.FilterID
-		cli.Syncer.FilterStorer().SaveFilter(cli.UserID, filterID)
+		cli.Store.SaveFilterID(cli.UserID, filterID)
 	}
 
 	for {
@@ -129,7 +130,7 @@ func (cli *Client) Sync() error {
 		// Save the token now *before* processing it. This means it's possible
 		// to not process some events, but it means that we won't get constantly stuck processing
 		// a malformed/buggy event which keeps making us panic.
-		cli.Syncer.NextBatchStorer().SaveNextBatch(cli.UserID, resSync.NextBatch)
+		cli.Store.SaveNextBatch(cli.UserID, resSync.NextBatch)
 		if err = cli.Syncer.ProcessResponse(resSync, nextBatch); err != nil {
 			return err
 		}
@@ -243,25 +244,17 @@ func NewClient(homeserverURL, userID, accessToken string) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
+	// By default, use an in-memory store which will never save filter ids / next batch tokens to disk.
+	// The client will work with this storer: it just won't remember across restarts.
+	// In practice, a database backend should be used.
+	store := NewInMemoryStore()
 	cli := Client{
 		AccessToken:   accessToken,
 		HomeserverURL: hsURL,
 		UserID:        userID,
 		Prefix:        "/_matrix/client/r0",
-		Syncer: NewDefaultSyncer(
-			userID,
-			// By default, use an in-memory next_batch storer which will never save tokens to disk.
-			// The client will work with this storer: it just won't
-			// remember the token across restarts. In practice, a database backend should be used.
-			&InMemoryNextBatchStore{make(map[string]string)},
-			// By default, use an in-memory filter storer which will never save the filter ID to disk.
-			// The client will work with this storer: it just won't remember the filter
-			// ID across restarts and hence request a new one. In practice, a database backend should be used.
-			&InMemoryFilterStore{
-				Filter:       json.RawMessage(`{"room":{"timeline":{"limit":50}}}`),
-				UserToFilter: make(map[string]string),
-			},
-		),
+		Syncer:        NewDefaultSyncer(userID, store),
+		Store:         store,
 	}
 	// By default, use the default HTTP client.
 	cli.Client = http.DefaultClient

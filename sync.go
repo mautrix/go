@@ -13,35 +13,31 @@ type Syncer interface {
 	// This is useful for detecting the very first sync (since=""). If an error is return, Syncing will be stopped
 	// permanently.
 	ProcessResponse(resp *RespSync, since string) error
-	// Interface for saving and loading the "next_batch" sync token.
-	NextBatchStorer() NextBatchStorer
-	// Interface for saving and loading the filter ID for sync.
-	FilterStorer() FilterStorer
 	// OnFailedSync returns either the time to wait before retrying or an error to stop syncing permanently.
 	OnFailedSync(res *RespSync, err error) (time.Duration, error)
+	// GetFilterJSON for the given user ID. NOT the filter ID.
+	GetFilterJSON(userID string) json.RawMessage
 }
 
 // DefaultSyncer is the default syncing implementation. You can either write your own syncer, or selectively
 // replace parts of this default syncer (e.g. the NextBatch/Filter storers, or the ProcessResponse method).
 type DefaultSyncer struct {
-	UserID         string
-	Rooms          map[string]*Room
-	NextBatchStore NextBatchStorer
-	FilterStore    FilterStorer
-	listeners      map[string][]OnEventListener // event type to listeners array
+	UserID    string
+	Rooms     map[string]*Room
+	Store     Storer
+	listeners map[string][]OnEventListener // event type to listeners array
 }
 
 // OnEventListener can be used with DefaultSyncer.OnEventType to be informed of incoming events.
 type OnEventListener func(*Event)
 
 // NewDefaultSyncer returns an instantiated DefaultSyncer
-func NewDefaultSyncer(userID string, nextBatch NextBatchStorer, filterStore FilterStorer) *DefaultSyncer {
+func NewDefaultSyncer(userID string, store Storer) *DefaultSyncer {
 	return &DefaultSyncer{
-		UserID:         userID,
-		Rooms:          make(map[string]*Room),
-		NextBatchStore: nextBatch,
-		FilterStore:    filterStore,
-		listeners:      make(map[string][]OnEventListener),
+		UserID:    userID,
+		Rooms:     make(map[string]*Room),
+		Store:     store,
+		listeners: make(map[string][]OnEventListener),
 	}
 }
 
@@ -148,71 +144,12 @@ func (s *DefaultSyncer) notifyListeners(event *Event) {
 	}
 }
 
-// NextBatchStorer returns the provided NextBatchStorer
-func (s *DefaultSyncer) NextBatchStorer() NextBatchStorer {
-	return s.NextBatchStore
-}
-
-// FilterStorer returns the provided FilterStorer
-func (s *DefaultSyncer) FilterStorer() FilterStorer {
-	return s.FilterStore
-}
-
 // OnFailedSync always returns a 10 second wait period between failed /syncs.
 func (s *DefaultSyncer) OnFailedSync(res *RespSync, err error) (time.Duration, error) {
 	return 10 * time.Second, nil
 }
 
-// NextBatchStorer controls loading/saving of next_batch tokens for users
-type NextBatchStorer interface {
-	// SaveNextBatch saves a next_batch token for a given user. Best effort.
-	SaveNextBatch(userID, nextBatch string)
-	// LoadNextBatch loads a next_batch token for a given user. Return an empty string if no token exists.
-	LoadNextBatch(userID string) string
-}
-
-// InMemoryNextBatchStore stores next batch tokens in memory.
-type InMemoryNextBatchStore struct {
-	UserToNextBatch map[string]string
-}
-
-// SaveNextBatch saves the mapping in-memory.
-func (s *InMemoryNextBatchStore) SaveNextBatch(userID, nextBatch string) {
-	s.UserToNextBatch[userID] = nextBatch
-}
-
-// LoadNextBatch loads an existing mapping. Returns an empty string if not found
-func (s *InMemoryNextBatchStore) LoadNextBatch(userID string) string {
-	return s.UserToNextBatch[userID]
-}
-
-// FilterStorer controls loading/saving of filter IDs for users
-type FilterStorer interface {
-	// SaveFilter saves a filter ID for a given user. Best effort.
-	SaveFilter(userID, filterID string)
-	// LoadFilter loads a filter ID for a given user. Return an empty string if no token exists.
-	LoadFilter(userID string) string
-	// GetFilterJSON for the given user ID.
-	GetFilterJSON(userID string) json.RawMessage
-}
-
-// InMemoryFilterStore stores filter IDs in memory. It always returns the filter JSON given in the struct.
-type InMemoryFilterStore struct {
-	Filter       json.RawMessage
-	UserToFilter map[string]string
-}
-
-// SaveFilter saves the user->filter ID mapping in memory
-func (s *InMemoryFilterStore) SaveFilter(userID, filterID string) {
-	s.UserToFilter[userID] = filterID
-}
-
-// LoadFilter loads a previously saved user->filter ID mapping from memory. Returns the empty string if not found.
-func (s *InMemoryFilterStore) LoadFilter(userID string) string {
-	return s.UserToFilter[userID]
-}
-
-// GetFilterJSON returns InMemoryFilterStore.Filter
-func (s *InMemoryFilterStore) GetFilterJSON(userID string) json.RawMessage {
-	return s.Filter
+// GetFilterJSON returns a filter with a timeline limit of 50.
+func (s *DefaultSyncer) GetFilterJSON(userID string) json.RawMessage {
+	return json.RawMessage(`{"room":{"timeline":{"limit":50}}}`)
 }
