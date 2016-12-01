@@ -60,5 +60,6 @@ func NewInMemoryStore() *InMemoryStore {
 	return &InMemoryStore{
 		Filters:   make(map[string]string),
 		NextBatch: make(map[string]string),
+		Rooms:     make(map[string]*Room),
 	}
 }
