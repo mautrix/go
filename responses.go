@@ -22,6 +22,9 @@ type RespJoinRoom struct {
 	RoomID string `json:"room_id"`
 }
 
+// RespLeaveRoom is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-leave
+type RespLeaveRoom struct{}
+
 // RespSendEvent is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-rooms-roomid-send-eventtype-txnid
 type RespSendEvent struct {
 	EventID string `json:"event_id"`

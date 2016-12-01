@@ -185,7 +185,7 @@ func (cli *Client) SendJSON(method string, httpURL string, contentJSON interface
 	if res.StatusCode >= 300 || res.StatusCode < 200 {
 		var wrap error
 		var respErr RespError
-		if _ = json.Unmarshal(contents, respErr); respErr.ErrCode != "" {
+		if _ = json.Unmarshal(contents, &respErr); respErr.ErrCode != "" {
 			wrap = respErr
 		}
 
@@ -313,6 +313,20 @@ func (cli *Client) SendMessageEvent(roomID string, eventType string, contentJSON
 func (cli *Client) SendText(roomID, text string) (*RespSendEvent, error) {
 	return cli.SendMessageEvent(roomID, "m.room.message",
 		TextMessage{"m.text", text})
+}
+
+// LeaveRoom leaves the given room. See http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-leave
+func (cli *Client) LeaveRoom(roomID string) (*RespLeaveRoom, error) {
+	u := cli.BuildURL("rooms", roomID, "leave")
+	resBytes, err := cli.SendJSON("POST", u, struct{}{})
+	if err != nil {
+		return nil, err
+	}
+	var resp RespLeaveRoom
+	if err = json.Unmarshal(resBytes, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
 }
 
 // UploadLink uploads an HTTP URL and then returns an MXC URI.
