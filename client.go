@@ -53,7 +53,7 @@ func (e HTTPError) Error() string {
 	if e.WrappedError != nil {
 		wrappedErrMsg = e.WrappedError.Error()
 	}
-	return fmt.Sprintf("%s: %d: %s", e.Message, e.Code, wrappedErrMsg)
+	return fmt.Sprintf("msg=%s code=%d wrapped=%s", e.Message, e.Code, wrappedErrMsg)
 }
 
 // BuildURL builds a URL with the Client's homserver/prefix/access_token set already.
@@ -180,7 +180,7 @@ func (cli *Client) SendJSON(method string, httpURL string, contentJSON interface
 	if res.StatusCode >= 300 || res.StatusCode < 200 {
 		return nil, HTTPError{
 			Code:    res.StatusCode,
-			Message: "Failed to " + method + " JSON: HTTP " + strconv.Itoa(res.StatusCode),
+			Message: "Failed to " + method + " JSON: " + string(contents),
 		}
 	}
 	if err != nil {
