@@ -20,10 +20,10 @@ type Syncer interface {
 }
 
 // DefaultSyncer is the default syncing implementation. You can either write your own syncer, or selectively
-// replace parts of this default syncer (e.g. the NextBatch/Filter storers, or the ProcessResponse method).
+// replace parts of this default syncer (e.g. the ProcessResponse method). The default syncer uses the observer
+// pattern to notify callers about incoming events. See DefaultSyncer.OnEventType for more information.
 type DefaultSyncer struct {
 	UserID    string
-	Rooms     map[string]*Room
 	Store     Storer
 	listeners map[string][]OnEventListener // event type to listeners array
 }
@@ -35,14 +35,13 @@ type OnEventListener func(*Event)
 func NewDefaultSyncer(userID string, store Storer) *DefaultSyncer {
 	return &DefaultSyncer{
 		UserID:    userID,
-		Rooms:     make(map[string]*Room),
 		Store:     store,
 		listeners: make(map[string][]OnEventListener),
 	}
 }
 
 // ProcessResponse processes the /sync response in a way suitable for bots. "Suitable for bots" means a stream of
-// unrepeating events.
+// unrepeating events. Returns a fatal error if a listener panics.
 func (s *DefaultSyncer) ProcessResponse(res *RespSync, since string) (err error) {
 	if !s.shouldProcessResponse(res, since) {
 		return
@@ -126,10 +125,10 @@ func (s *DefaultSyncer) shouldProcessResponse(resp *RespSync, since string) bool
 
 // getOrCreateRoom must only be called by the Sync() goroutine which calls ProcessResponse()
 func (s *DefaultSyncer) getOrCreateRoom(roomID string) *Room {
-	room := s.Rooms[roomID]
+	room := s.Store.LoadRoom(roomID)
 	if room == nil { // create a new Room
 		room = NewRoom(roomID)
-		s.Rooms[roomID] = room
+		s.Store.SaveRoom(room)
 	}
 	return room
 }
@@ -144,7 +143,7 @@ func (s *DefaultSyncer) notifyListeners(event *Event) {
 	}
 }
 
-// OnFailedSync always returns a 10 second wait period between failed /syncs.
+// OnFailedSync always returns a 10 second wait period between failed /syncs, never a fatal error.
 func (s *DefaultSyncer) OnFailedSync(res *RespSync, err error) (time.Duration, error) {
 	return 10 * time.Second, nil
 }
