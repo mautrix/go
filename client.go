@@ -19,6 +19,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -158,7 +159,11 @@ func (cli *Client) StopSync() {
 	cli.incrementSyncingID()
 }
 
-// SendJSON sends JSON to the given URL. Returns an error if the response is not 2xx.
+// SendJSON sends JSON to the given URL.
+//
+// Returns the HTTP body as bytes on 2xx. Returns an error if the response is not 2xx. This error
+// is an HTTPError which includes the returned HTTP status code and possibly a RespError as the
+// WrappedError, if the HTTP body could be decoded as a RespError.
 func (cli *Client) SendJSON(method string, httpURL string, contentJSON interface{}) ([]byte, error) {
 	jsonStr, err := json.Marshal(contentJSON)
 	if err != nil {
@@ -178,9 +183,23 @@ func (cli *Client) SendJSON(method string, httpURL string, contentJSON interface
 	}
 	contents, err := ioutil.ReadAll(res.Body)
 	if res.StatusCode >= 300 || res.StatusCode < 200 {
+		var wrap error
+		var respErr RespError
+		if _ = json.Unmarshal(contents, respErr); respErr.ErrCode != "" {
+			wrap = respErr
+		}
+
+		// If we failed to decode as RespError, don't just drop the HTTP body, include it in the
+		// HTTP error instead (e.g proxy errors which return HTML).
+		msg := "Failed to " + method + " JSON"
+		if wrap == nil {
+			msg = msg + ": " + string(contents)
+		}
+
 		return nil, HTTPError{
-			Code:    res.StatusCode,
-			Message: "Failed to " + method + " JSON: " + string(contents),
+			Code:         res.StatusCode,
+			Message:      msg,
+			WrappedError: wrap,
 		}
 	}
 	if err != nil {
@@ -236,6 +255,105 @@ func (cli *Client) SyncRequest(timeout int, since, filterID string, fullState bo
 	var syncResponse RespSync
 	err = json.NewDecoder(res.Body).Decode(&syncResponse)
 	return &syncResponse, err
+}
+
+// JoinRoom joins the client to a room ID or alias. See http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-join-roomidoralias
+//
+// If serverName is specified, this will be added as a query param to instruct the homeserver to join via that server. If content is specified, it will
+// be JSON encoded and used as the request body.
+func (cli *Client) JoinRoom(roomIDorAlias, serverName string, content interface{}) (*RespJoinRoom, error) {
+	var urlPath string
+	if serverName != "" {
+		urlPath = cli.BuildURLWithQuery([]string{"join", roomIDorAlias}, map[string]string{
+			"server_name": serverName,
+		})
+	} else {
+		urlPath = cli.BuildURL("join", roomIDorAlias)
+	}
+
+	resBytes, err := cli.SendJSON("POST", urlPath, content)
+	if err != nil {
+		return nil, err
+	}
+	var joinRoomResponse RespJoinRoom
+	if err = json.Unmarshal(resBytes, &joinRoomResponse); err != nil {
+		return nil, err
+	}
+	return &joinRoomResponse, nil
+}
+
+// SetDisplayName sets the user's profile display name. See http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-profile-userid-displayname
+func (cli *Client) SetDisplayName(displayName string) error {
+	urlPath := cli.BuildURL("profile", cli.UserID, "displayname")
+	s := struct {
+		DisplayName string `json:"displayname"`
+	}{displayName}
+	_, err := cli.SendJSON("PUT", urlPath, &s)
+	return err
+}
+
+// SendMessageEvent sends a message event into a room. See http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-rooms-roomid-send-eventtype-txnid
+// contentJSON should be a pointer to something that can be encoded as JSON using json.Marshal.
+func (cli *Client) SendMessageEvent(roomID string, eventType string, contentJSON interface{}) (*RespSendEvent, error) {
+	txnID := "go" + strconv.FormatInt(time.Now().UnixNano(), 10)
+	urlPath := cli.BuildURL("rooms", roomID, "send", eventType, txnID)
+	resBytes, err := cli.SendJSON("PUT", urlPath, contentJSON)
+	if err != nil {
+		return nil, err
+	}
+	var sendEventResponse RespSendEvent
+	if err = json.Unmarshal(resBytes, &sendEventResponse); err != nil {
+		return nil, err
+	}
+	return &sendEventResponse, nil
+}
+
+// SendText sends an m.room.message event into the given room with a msgtype of m.text
+// See http://matrix.org/docs/spec/client_server/r0.2.0.html#m-text
+func (cli *Client) SendText(roomID, text string) (*RespSendEvent, error) {
+	return cli.SendMessageEvent(roomID, "m.room.message",
+		TextMessage{"m.text", text})
+}
+
+// UploadLink uploads an HTTP URL and then returns an MXC URI.
+func (cli *Client) UploadLink(link string) (*RespMediaUpload, error) {
+	res, err := cli.Client.Get(link)
+	if res != nil {
+		defer res.Body.Close()
+	}
+	if err != nil {
+		return nil, err
+	}
+	return cli.UploadToContentRepo(res.Body, res.Header.Get("Content-Type"), res.ContentLength)
+}
+
+// UploadToContentRepo uploads the given bytes to the content repository and returns an MXC URI.
+// See http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-media-r0-upload
+func (cli *Client) UploadToContentRepo(content io.Reader, contentType string, contentLength int64) (*RespMediaUpload, error) {
+	req, err := http.NewRequest("POST", cli.BuildBaseURL("_matrix/media/r0/upload"), content)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", contentType)
+	req.ContentLength = contentLength
+	res, err := cli.Client.Do(req)
+	if res != nil {
+		defer res.Body.Close()
+	}
+	if err != nil {
+		return nil, err
+	}
+	if res.StatusCode != 200 {
+		return nil, HTTPError{
+			Message: "Upload request failed",
+			Code:    res.StatusCode,
+		}
+	}
+	var m RespMediaUpload
+	if err := json.NewDecoder(res.Body).Decode(&m); err != nil {
+		return nil, err
+	}
+	return &m, nil
 }
 
 // NewClient creates a new Matrix Client ready for syncing
