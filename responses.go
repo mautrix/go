@@ -40,8 +40,11 @@ type RespUserInteractive struct {
 	Flows []struct {
 		Stages []string `json:"stages"`
 	} `json:"flows"`
-	Params  map[string]interface{} `json:"params"`
-	Session string                 `json:"string"`
+	Params    map[string]interface{} `json:"params"`
+	Session   string                 `json:"string"`
+	Completed []string               `json:"completed"`
+	ErrCode   string                 `json:"errcode"`
+	Error     string                 `json:"error"`
 }
 
 // RespRegister is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-register

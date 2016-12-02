@@ -75,7 +75,9 @@ func (cli *Client) BuildBaseURL(urlPath ...string) string {
 	parts = append(parts, urlPath...)
 	hsURL.Path = path.Join(parts...)
 	query := hsURL.Query()
-	query.Set("access_token", cli.AccessToken)
+	if cli.AccessToken != "" {
+		query.Set("access_token", cli.AccessToken)
+	}
 	hsURL.RawQuery = query.Encode()
 	return hsURL.String()
 }
