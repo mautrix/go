@@ -47,6 +47,16 @@ type RespUserInteractive struct {
 	Error     string                 `json:"error"`
 }
 
+// HasSingleStageFlow returns true if there exists at least 1 Flow with a single stage of stageName.
+func (r RespUserInteractive) HasSingleStageFlow(stageName string) bool {
+	for _, f := range r.Flows {
+		if len(f.Stages) == 1 && f.Stages[0] == stageName {
+			return true
+		}
+	}
+	return false
+}
+
 // RespRegister is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-register
 type RespRegister struct {
 	AccessToken  string `json:"access_token"`
