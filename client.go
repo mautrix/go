@@ -159,17 +159,26 @@ func (cli *Client) StopSync() {
 	cli.incrementSyncingID()
 }
 
-// SendJSON sends JSON to the given URL.
+// MakeRequest makes a JSON HTTP request to the given URL.
+// If "resBody" is not nil, the response body will be json.Unmarshalled into it.
 //
 // Returns the HTTP body as bytes on 2xx. Returns an error if the response is not 2xx. This error
 // is an HTTPError which includes the returned HTTP status code and possibly a RespError as the
 // WrappedError, if the HTTP body could be decoded as a RespError.
-func (cli *Client) SendJSON(method string, httpURL string, contentJSON interface{}) ([]byte, error) {
-	jsonStr, err := json.Marshal(contentJSON)
-	if err != nil {
-		return nil, err
+func (cli *Client) MakeRequest(method string, httpURL string, reqBody interface{}, resBody interface{}) ([]byte, error) {
+	var req *http.Request
+	var err error
+	if reqBody != nil {
+		var jsonStr []byte
+		jsonStr, err = json.Marshal(reqBody)
+		if err != nil {
+			return nil, err
+		}
+		req, err = http.NewRequest(method, httpURL, bytes.NewBuffer(jsonStr))
+	} else {
+		req, err = http.NewRequest(method, httpURL, nil)
 	}
-	req, err := http.NewRequest(method, httpURL, bytes.NewBuffer(jsonStr))
+
 	if err != nil {
 		return nil, err
 	}
@@ -182,7 +191,7 @@ func (cli *Client) SendJSON(method string, httpURL string, contentJSON interface
 		return nil, err
 	}
 	contents, err := ioutil.ReadAll(res.Body)
-	if res.StatusCode >= 300 || res.StatusCode < 200 {
+	if res.StatusCode/100 != 2 { // not 2xx
 		var wrap error
 		var respErr RespError
 		if _ = json.Unmarshal(contents, &respErr); respErr.ErrCode != "" {
@@ -205,25 +214,25 @@ func (cli *Client) SendJSON(method string, httpURL string, contentJSON interface
 	if err != nil {
 		return nil, err
 	}
+
+	if resBody != nil {
+		if err = json.Unmarshal(contents, &resBody); err != nil {
+			return nil, err
+		}
+	}
+
 	return contents, nil
 }
 
 // CreateFilter makes an HTTP request according to http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-user-userid-filter
-func (cli *Client) CreateFilter(filter json.RawMessage) (*RespCreateFilter, error) {
+func (cli *Client) CreateFilter(filter json.RawMessage) (resp *RespCreateFilter, err error) {
 	urlPath := cli.BuildURL("user", cli.UserID, "filter")
-	resBytes, err := cli.SendJSON("POST", urlPath, &filter)
-	if err != nil {
-		return nil, err
-	}
-	var filterResponse RespCreateFilter
-	if err = json.Unmarshal(resBytes, &filterResponse); err != nil {
-		return nil, err
-	}
-	return &filterResponse, nil
+	_, err = cli.MakeRequest("POST", urlPath, &filter, &resp)
+	return
 }
 
 // SyncRequest makes an HTTP request according to http://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-r0-sync
-func (cli *Client) SyncRequest(timeout int, since, filterID string, fullState bool, setPresence string) (*RespSync, error) {
+func (cli *Client) SyncRequest(timeout int, since, filterID string, fullState bool, setPresence string) (resp *RespSync, err error) {
 	query := map[string]string{
 		"timeout": strconv.Itoa(timeout),
 	}
@@ -240,28 +249,15 @@ func (cli *Client) SyncRequest(timeout int, since, filterID string, fullState bo
 		query["full_state"] = "true"
 	}
 	urlPath := cli.BuildURLWithQuery([]string{"sync"}, query)
-	req, err := http.NewRequest("GET", urlPath, nil)
-	if err != nil {
-		return nil, err
-	}
-	res, err := cli.Client.Do(req)
-	if res != nil {
-		defer res.Body.Close()
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	var syncResponse RespSync
-	err = json.NewDecoder(res.Body).Decode(&syncResponse)
-	return &syncResponse, err
+	_, err = cli.MakeRequest("GET", urlPath, nil, &resp)
+	return
 }
 
 // JoinRoom joins the client to a room ID or alias. See http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-join-roomidoralias
 //
 // If serverName is specified, this will be added as a query param to instruct the homeserver to join via that server. If content is specified, it will
 // be JSON encoded and used as the request body.
-func (cli *Client) JoinRoom(roomIDorAlias, serverName string, content interface{}) (*RespJoinRoom, error) {
+func (cli *Client) JoinRoom(roomIDorAlias, serverName string, content interface{}) (resp *RespJoinRoom, err error) {
 	var urlPath string
 	if serverName != "" {
 		urlPath = cli.BuildURLWithQuery([]string{"join", roomIDorAlias}, map[string]string{
@@ -270,42 +266,27 @@ func (cli *Client) JoinRoom(roomIDorAlias, serverName string, content interface{
 	} else {
 		urlPath = cli.BuildURL("join", roomIDorAlias)
 	}
-
-	resBytes, err := cli.SendJSON("POST", urlPath, content)
-	if err != nil {
-		return nil, err
-	}
-	var joinRoomResponse RespJoinRoom
-	if err = json.Unmarshal(resBytes, &joinRoomResponse); err != nil {
-		return nil, err
-	}
-	return &joinRoomResponse, nil
+	_, err = cli.MakeRequest("POST", urlPath, content, &resp)
+	return
 }
 
 // SetDisplayName sets the user's profile display name. See http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-profile-userid-displayname
-func (cli *Client) SetDisplayName(displayName string) error {
+func (cli *Client) SetDisplayName(displayName string) (err error) {
 	urlPath := cli.BuildURL("profile", cli.UserID, "displayname")
 	s := struct {
 		DisplayName string `json:"displayname"`
 	}{displayName}
-	_, err := cli.SendJSON("PUT", urlPath, &s)
-	return err
+	_, err = cli.MakeRequest("PUT", urlPath, &s, nil)
+	return
 }
 
 // SendMessageEvent sends a message event into a room. See http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-rooms-roomid-send-eventtype-txnid
 // contentJSON should be a pointer to something that can be encoded as JSON using json.Marshal.
-func (cli *Client) SendMessageEvent(roomID string, eventType string, contentJSON interface{}) (*RespSendEvent, error) {
+func (cli *Client) SendMessageEvent(roomID string, eventType string, contentJSON interface{}) (resp *RespSendEvent, err error) {
 	txnID := "go" + strconv.FormatInt(time.Now().UnixNano(), 10)
 	urlPath := cli.BuildURL("rooms", roomID, "send", eventType, txnID)
-	resBytes, err := cli.SendJSON("PUT", urlPath, contentJSON)
-	if err != nil {
-		return nil, err
-	}
-	var sendEventResponse RespSendEvent
-	if err = json.Unmarshal(resBytes, &sendEventResponse); err != nil {
-		return nil, err
-	}
-	return &sendEventResponse, nil
+	_, err = cli.MakeRequest("PUT", urlPath, contentJSON, &resp)
+	return
 }
 
 // SendText sends an m.room.message event into the given room with a msgtype of m.text
@@ -316,17 +297,10 @@ func (cli *Client) SendText(roomID, text string) (*RespSendEvent, error) {
 }
 
 // LeaveRoom leaves the given room. See http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-leave
-func (cli *Client) LeaveRoom(roomID string) (*RespLeaveRoom, error) {
+func (cli *Client) LeaveRoom(roomID string) (resp *RespLeaveRoom, err error) {
 	u := cli.BuildURL("rooms", roomID, "leave")
-	resBytes, err := cli.SendJSON("POST", u, struct{}{})
-	if err != nil {
-		return nil, err
-	}
-	var resp RespLeaveRoom
-	if err = json.Unmarshal(resBytes, &resp); err != nil {
-		return nil, err
-	}
-	return &resp, nil
+	_, err = cli.MakeRequest("POST", u, struct{}{}, &resp)
+	return
 }
 
 // UploadLink uploads an HTTP URL and then returns an MXC URI.
