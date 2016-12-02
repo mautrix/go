@@ -38,15 +38,12 @@ func TestClient_StateEvent(t *testing.T) {
 	content := struct {
 		Name string `json:"name"`
 	}{}
-	expectContent := struct {
-		Name string `json:"name"`
-	}{"Room Name Goes Here"}
 
 	if err := cli.StateEvent("!foo:bar", "m.room.name", "", &content); err != nil {
 		t.Fatalf("StateEvent: error, got %s", err.Error())
 	}
-	if content.Name != expectContent.Name {
-		t.Fatalf("StateEvent: got %s, want %s", content.Name, expectContent.Name)
+	if content.Name != "Room Name Goes Here" {
+		t.Fatalf("StateEvent: got %s, want %s", content.Name, "Room Name Goes Here")
 	}
 }
 
