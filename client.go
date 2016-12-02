@@ -276,7 +276,7 @@ func (cli *Client) register(u string, req *ReqRegister) (resp *RespRegister, uia
 // Register makes an HTTP request according to http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-register
 //
 // Registers with kind=user. For kind=guest, see RegisterGuest.
-func (cli *Client) Register(req *ReqRegister) (resp *RespRegister, uiaResp *RespUserInteractive, err error) {
+func (cli *Client) Register(req *ReqRegister) (*RespRegister, *RespUserInteractive, error) {
 	u := cli.BuildURL("register")
 	return cli.register(u, req)
 }
@@ -285,7 +285,7 @@ func (cli *Client) Register(req *ReqRegister) (resp *RespRegister, uiaResp *Resp
 // with kind=guest.
 //
 // For kind=user, see Register.
-func (cli *Client) RegisterGuest(req *ReqRegister) (resp *RespRegister, uiaResp *RespUserInteractive, err error) {
+func (cli *Client) RegisterGuest(req *ReqRegister) (*RespRegister, *RespUserInteractive, error) {
 	query := map[string]string{
 		"kind": "guest",
 	}
