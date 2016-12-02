@@ -162,9 +162,9 @@ func (cli *Client) StopSync() {
 // MakeRequest makes a JSON HTTP request to the given URL.
 // If "resBody" is not nil, the response body will be json.Unmarshalled into it.
 //
-// Returns the HTTP body as bytes on 2xx. Returns an error if the response is not 2xx. This error
-// is an HTTPError which includes the returned HTTP status code and possibly a RespError as the
-// WrappedError, if the HTTP body could be decoded as a RespError.
+// Returns the HTTP body as bytes on 2xx with a nil error. Returns an error if the response is not 2xx along
+// with the HTTP body bytes if it got that far. This error is an HTTPError which includes the returned
+// HTTP status code and possibly a RespError as the WrappedError, if the HTTP body could be decoded as a RespError.
 func (cli *Client) MakeRequest(method string, httpURL string, reqBody interface{}, resBody interface{}) ([]byte, error) {
 	var req *http.Request
 	var err error
@@ -205,7 +205,7 @@ func (cli *Client) MakeRequest(method string, httpURL string, reqBody interface{
 			msg = msg + ": " + string(contents)
 		}
 
-		return nil, HTTPError{
+		return contents, HTTPError{
 			Code:         res.StatusCode,
 			Message:      msg,
 			WrappedError: wrap,
@@ -251,6 +251,46 @@ func (cli *Client) SyncRequest(timeout int, since, filterID string, fullState bo
 	urlPath := cli.BuildURLWithQuery([]string{"sync"}, query)
 	_, err = cli.MakeRequest("GET", urlPath, nil, &resp)
 	return
+}
+
+func (cli *Client) register(u string, req *ReqRegister) (resp *RespRegister, uiaResp *RespUserInteractive, err error) {
+	var bodyBytes []byte
+	bodyBytes, err = cli.MakeRequest("POST", u, req, nil)
+	if err != nil {
+		httpErr, ok := err.(HTTPError)
+		if !ok { // network error
+			return
+		}
+		if httpErr.Code == 401 {
+			// body should be RespUserInteractive, if it isn't, fail with the error
+			err = json.Unmarshal(bodyBytes, &uiaResp)
+			return
+		}
+		return
+	}
+	// body should be RespRegister
+	err = json.Unmarshal(bodyBytes, &resp)
+	return
+}
+
+// Register makes an HTTP request according to http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-register
+//
+// Registers with kind=user. For kind=guest, see RegisterGuest.
+func (cli *Client) Register(req *ReqRegister) (resp *RespRegister, uiaResp *RespUserInteractive, err error) {
+	u := cli.BuildURL("register")
+	return cli.register(u, req)
+}
+
+// RegisterGuest makes an HTTP request according to http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-register
+// with kind=guest.
+//
+// For kind=user, see Register.
+func (cli *Client) RegisterGuest(req *ReqRegister) (resp *RespRegister, uiaResp *RespUserInteractive, err error) {
+	query := map[string]string{
+		"kind": "guest",
+	}
+	u := cli.BuildURLWithQuery([]string{"register"}, query)
+	return cli.register(u, req)
 }
 
 // JoinRoom joins the client to a room ID or alias. See http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-join-roomidoralias
