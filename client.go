@@ -295,6 +295,40 @@ func (cli *Client) RegisterGuest(req *ReqRegister) (*RespRegister, *RespUserInte
 	return cli.register(u, req)
 }
 
+// RegisterDummy performs m.login.dummy registration according to https://matrix.org/docs/spec/client_server/r0.2.0.html#dummy-auth
+//
+// Only a username and password need to be provided on the ReqRegister struct. Most local/developer homeservers will allow registration
+// this way. If the homeserver does not, an error is returned.
+//
+// 	res, err := cli.RegisterDummy(&gomatrix.ReqRegister{
+//		Username: "alice",
+//		Password: "wonderland",
+//	})
+//  if err != nil {
+// 		panic(err)
+// 	}
+// 	token := res.AccessToken
+func (cli *Client) RegisterDummy(req *ReqRegister) (*RespRegister, error) {
+	res, uia, err := cli.Register(req)
+	if err != nil && uia == nil {
+		return nil, err
+	}
+	if uia != nil && uia.HasSingleStageFlow("m.login.dummy") {
+		req.Auth = struct {
+			Type    string `json:"type"`
+			Session string `json:"session,omitempty"`
+		}{"m.login.dummy", uia.Session}
+		res, _, err = cli.Register(req)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if res == nil {
+		return nil, fmt.Errorf("registration failed: does this server support m.login.dummy?")
+	}
+	return res, nil
+}
+
 // JoinRoom joins the client to a room ID or alias. See http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-join-roomidoralias
 //
 // If serverName is specified, this will be added as a query param to instruct the homeserver to join via that server. If content is specified, it will
