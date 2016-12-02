@@ -303,6 +303,15 @@ func (cli *Client) LeaveRoom(roomID string) (resp *RespLeaveRoom, err error) {
 	return
 }
 
+// StateEvent gets a single state event in a room. It will attempt to JSON unmarshal into the given "outContent" struct with
+// the HTTP response body, or return an error.
+// See http://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-r0-rooms-roomid-state-eventtype-statekey
+func (cli *Client) StateEvent(roomID, eventType, stateKey string, outContent interface{}) (err error) {
+	u := cli.BuildURL("rooms", roomID, "state", eventType, stateKey)
+	_, err = cli.MakeRequest("GET", u, nil, outContent)
+	return
+}
+
 // UploadLink uploads an HTTP URL and then returns an MXC URI.
 func (cli *Client) UploadLink(link string) (*RespMediaUpload, error) {
 	res, err := cli.Client.Get(link)
