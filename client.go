@@ -159,22 +159,26 @@ func (cli *Client) StopSync() {
 	cli.incrementSyncingID()
 }
 
-// MakeRequest makes a JSON HTTP request to the given URL. If the method is "GET", the "reqBody" is ignored.
+// MakeRequest makes a JSON HTTP request to the given URL.
 // If "resBody" is not nil, the response body will be json.Unmarshalled into it.
 //
 // Returns the HTTP body as bytes on 2xx. Returns an error if the response is not 2xx. This error
 // is an HTTPError which includes the returned HTTP status code and possibly a RespError as the
 // WrappedError, if the HTTP body could be decoded as a RespError.
 func (cli *Client) MakeRequest(method string, httpURL string, reqBody interface{}, resBody interface{}) ([]byte, error) {
-	var bodyBytes *bytes.Buffer
-	if method != "GET" {
-		jsonStr, err := json.Marshal(reqBody)
+	var req *http.Request
+	var err error
+	if reqBody != nil {
+		var jsonStr []byte
+		jsonStr, err = json.Marshal(reqBody)
 		if err != nil {
 			return nil, err
 		}
-		bodyBytes = bytes.NewBuffer(jsonStr)
+		req, err = http.NewRequest(method, httpURL, bytes.NewBuffer(jsonStr))
+	} else {
+		req, err = http.NewRequest(method, httpURL, nil)
 	}
-	req, err := http.NewRequest(method, httpURL, bodyBytes)
+
 	if err != nil {
 		return nil, err
 	}
@@ -223,7 +227,7 @@ func (cli *Client) MakeRequest(method string, httpURL string, reqBody interface{
 // CreateFilter makes an HTTP request according to http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-user-userid-filter
 func (cli *Client) CreateFilter(filter json.RawMessage) (resp *RespCreateFilter, err error) {
 	urlPath := cli.BuildURL("user", cli.UserID, "filter")
-	_, err = cli.MakeRequest("POST", urlPath, &filter, resp)
+	_, err = cli.MakeRequest("POST", urlPath, &filter, &resp)
 	return
 }
 
@@ -245,7 +249,7 @@ func (cli *Client) SyncRequest(timeout int, since, filterID string, fullState bo
 		query["full_state"] = "true"
 	}
 	urlPath := cli.BuildURLWithQuery([]string{"sync"}, query)
-	_, err = cli.MakeRequest("GET", urlPath, nil, resp)
+	_, err = cli.MakeRequest("GET", urlPath, nil, &resp)
 	return
 }
 
@@ -262,7 +266,7 @@ func (cli *Client) JoinRoom(roomIDorAlias, serverName string, content interface{
 	} else {
 		urlPath = cli.BuildURL("join", roomIDorAlias)
 	}
-	_, err = cli.MakeRequest("POST", urlPath, content, resp)
+	_, err = cli.MakeRequest("POST", urlPath, content, &resp)
 	return
 }
 
@@ -281,7 +285,7 @@ func (cli *Client) SetDisplayName(displayName string) (err error) {
 func (cli *Client) SendMessageEvent(roomID string, eventType string, contentJSON interface{}) (resp *RespSendEvent, err error) {
 	txnID := "go" + strconv.FormatInt(time.Now().UnixNano(), 10)
 	urlPath := cli.BuildURL("rooms", roomID, "send", eventType, txnID)
-	_, err = cli.MakeRequest("PUT", urlPath, contentJSON, resp)
+	_, err = cli.MakeRequest("PUT", urlPath, contentJSON, &resp)
 	return
 }
 
@@ -295,7 +299,7 @@ func (cli *Client) SendText(roomID, text string) (*RespSendEvent, error) {
 // LeaveRoom leaves the given room. See http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-leave
 func (cli *Client) LeaveRoom(roomID string) (resp *RespLeaveRoom, err error) {
 	u := cli.BuildURL("rooms", roomID, "leave")
-	_, err = cli.MakeRequest("POST", u, struct{}{}, resp)
+	_, err = cli.MakeRequest("POST", u, struct{}{}, &resp)
 	return
 }
 
