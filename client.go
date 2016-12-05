@@ -35,11 +35,17 @@ type Client struct {
 	Prefix        string       // The API prefix eg '/_matrix/client/r0'
 	UserID        string       // The user ID of the client. Used for forming HTTP paths which use the client's user ID.
 	AccessToken   string       // The access_token for the client.
-	syncingMutex  sync.Mutex   // protects syncingID
-	syncingID     uint32       // Identifies the current Sync. Only one Sync can be active at any given time.
 	Client        *http.Client // The underlying HTTP client which will be used to make HTTP requests.
 	Syncer        Syncer       // The thing which can process /sync responses
 	Store         Storer       // The thing which can store rooms/tokens/ids
+
+	// The ?user_id= query parameter for application services. This must be set *prior* to calling a method. If this is empty,
+	// no user_id parameter will be sent.
+	// See http://matrix.org/docs/spec/application_service/unstable.html#identity-assertion
+	AppServiceUserID string
+
+	syncingMutex sync.Mutex // protects syncingID
+	syncingID    uint32     // Identifies the current Sync. Only one Sync can be active at any given time.
 }
 
 // HTTPError An HTTP Error response, which may wrap an underlying native Go Error.
@@ -77,6 +83,9 @@ func (cli *Client) BuildBaseURL(urlPath ...string) string {
 	query := hsURL.Query()
 	if cli.AccessToken != "" {
 		query.Set("access_token", cli.AccessToken)
+	}
+	if cli.AppServiceUserID != "" {
+		query.Set("user_id", cli.AppServiceUserID)
 	}
 	hsURL.RawQuery = query.Encode()
 	return hsURL.String()
