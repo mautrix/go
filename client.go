@@ -75,7 +75,9 @@ func (cli *Client) BuildBaseURL(urlPath ...string) string {
 	parts = append(parts, urlPath...)
 	hsURL.Path = path.Join(parts...)
 	query := hsURL.Query()
-	query.Set("access_token", cli.AccessToken)
+	if cli.AccessToken != "" {
+		query.Set("access_token", cli.AccessToken)
+	}
 	hsURL.RawQuery = query.Encode()
 	return hsURL.String()
 }
@@ -162,9 +164,9 @@ func (cli *Client) StopSync() {
 // MakeRequest makes a JSON HTTP request to the given URL.
 // If "resBody" is not nil, the response body will be json.Unmarshalled into it.
 //
-// Returns the HTTP body as bytes on 2xx. Returns an error if the response is not 2xx. This error
-// is an HTTPError which includes the returned HTTP status code and possibly a RespError as the
-// WrappedError, if the HTTP body could be decoded as a RespError.
+// Returns the HTTP body as bytes on 2xx with a nil error. Returns an error if the response is not 2xx along
+// with the HTTP body bytes if it got that far. This error is an HTTPError which includes the returned
+// HTTP status code and possibly a RespError as the WrappedError, if the HTTP body could be decoded as a RespError.
 func (cli *Client) MakeRequest(method string, httpURL string, reqBody interface{}, resBody interface{}) ([]byte, error) {
 	var req *http.Request
 	var err error
@@ -205,7 +207,7 @@ func (cli *Client) MakeRequest(method string, httpURL string, reqBody interface{
 			msg = msg + ": " + string(contents)
 		}
 
-		return nil, HTTPError{
+		return contents, HTTPError{
 			Code:         res.StatusCode,
 			Message:      msg,
 			WrappedError: wrap,
@@ -251,6 +253,85 @@ func (cli *Client) SyncRequest(timeout int, since, filterID string, fullState bo
 	urlPath := cli.BuildURLWithQuery([]string{"sync"}, query)
 	_, err = cli.MakeRequest("GET", urlPath, nil, &resp)
 	return
+}
+
+func (cli *Client) register(u string, req *ReqRegister) (resp *RespRegister, uiaResp *RespUserInteractive, err error) {
+	var bodyBytes []byte
+	bodyBytes, err = cli.MakeRequest("POST", u, req, nil)
+	if err != nil {
+		httpErr, ok := err.(HTTPError)
+		if !ok { // network error
+			return
+		}
+		if httpErr.Code == 401 {
+			// body should be RespUserInteractive, if it isn't, fail with the error
+			err = json.Unmarshal(bodyBytes, &uiaResp)
+			return
+		}
+		return
+	}
+	// body should be RespRegister
+	err = json.Unmarshal(bodyBytes, &resp)
+	return
+}
+
+// Register makes an HTTP request according to http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-register
+//
+// Registers with kind=user. For kind=guest, see RegisterGuest.
+func (cli *Client) Register(req *ReqRegister) (*RespRegister, *RespUserInteractive, error) {
+	u := cli.BuildURL("register")
+	return cli.register(u, req)
+}
+
+// RegisterGuest makes an HTTP request according to http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-register
+// with kind=guest.
+//
+// For kind=user, see Register.
+func (cli *Client) RegisterGuest(req *ReqRegister) (*RespRegister, *RespUserInteractive, error) {
+	query := map[string]string{
+		"kind": "guest",
+	}
+	u := cli.BuildURLWithQuery([]string{"register"}, query)
+	return cli.register(u, req)
+}
+
+// RegisterDummy performs m.login.dummy registration according to https://matrix.org/docs/spec/client_server/r0.2.0.html#dummy-auth
+//
+// Only a username and password need to be provided on the ReqRegister struct. Most local/developer homeservers will allow registration
+// this way. If the homeserver does not, an error is returned. If "setOnClient" is true, the access_token and user_id will be set on
+// this client instance.
+//
+// 	res, err := cli.RegisterDummy(&gomatrix.ReqRegister{
+//		Username: "alice",
+//		Password: "wonderland",
+//	}, false)
+//  if err != nil {
+// 		panic(err)
+// 	}
+// 	token := res.AccessToken
+func (cli *Client) RegisterDummy(req *ReqRegister, setOnClient bool) (*RespRegister, error) {
+	res, uia, err := cli.Register(req)
+	if err != nil && uia == nil {
+		return nil, err
+	}
+	if uia != nil && uia.HasSingleStageFlow("m.login.dummy") {
+		req.Auth = struct {
+			Type    string `json:"type"`
+			Session string `json:"session,omitempty"`
+		}{"m.login.dummy", uia.Session}
+		res, _, err = cli.Register(req)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if res == nil {
+		return nil, fmt.Errorf("registration failed: does this server support m.login.dummy?")
+	}
+	if setOnClient {
+		cli.UserID = res.UserID
+		cli.AccessToken = res.AccessToken
+	}
+	return res, nil
 }
 
 // JoinRoom joins the client to a room ID or alias. See http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-join-roomidoralias

@@ -35,6 +35,37 @@ type RespMediaUpload struct {
 	ContentURI string `json:"content_uri"`
 }
 
+// RespUserInteractive is the JSON response for https://matrix.org/docs/spec/client_server/r0.2.0.html#user-interactive-authentication-api
+type RespUserInteractive struct {
+	Flows []struct {
+		Stages []string `json:"stages"`
+	} `json:"flows"`
+	Params    map[string]interface{} `json:"params"`
+	Session   string                 `json:"string"`
+	Completed []string               `json:"completed"`
+	ErrCode   string                 `json:"errcode"`
+	Error     string                 `json:"error"`
+}
+
+// HasSingleStageFlow returns true if there exists at least 1 Flow with a single stage of stageName.
+func (r RespUserInteractive) HasSingleStageFlow(stageName string) bool {
+	for _, f := range r.Flows {
+		if len(f.Stages) == 1 && f.Stages[0] == stageName {
+			return true
+		}
+	}
+	return false
+}
+
+// RespRegister is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-register
+type RespRegister struct {
+	AccessToken  string `json:"access_token"`
+	DeviceID     string `json:"device_id"`
+	HomeServer   string `json:"home_server"`
+	RefreshToken string `json:"refresh_token"`
+	UserID       string `json:"user_id"`
+}
+
 // RespSync is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-r0-sync
 type RespSync struct {
 	NextBatch   string `json:"next_batch"`
