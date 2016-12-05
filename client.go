@@ -298,17 +298,18 @@ func (cli *Client) RegisterGuest(req *ReqRegister) (*RespRegister, *RespUserInte
 // RegisterDummy performs m.login.dummy registration according to https://matrix.org/docs/spec/client_server/r0.2.0.html#dummy-auth
 //
 // Only a username and password need to be provided on the ReqRegister struct. Most local/developer homeservers will allow registration
-// this way. If the homeserver does not, an error is returned.
+// this way. If the homeserver does not, an error is returned. If "setOnClient" is true, the access_token and user_id will be set on
+// this client instance.
 //
 // 	res, err := cli.RegisterDummy(&gomatrix.ReqRegister{
 //		Username: "alice",
 //		Password: "wonderland",
-//	})
+//	}, false)
 //  if err != nil {
 // 		panic(err)
 // 	}
 // 	token := res.AccessToken
-func (cli *Client) RegisterDummy(req *ReqRegister) (*RespRegister, error) {
+func (cli *Client) RegisterDummy(req *ReqRegister, setOnClient bool) (*RespRegister, error) {
 	res, uia, err := cli.Register(req)
 	if err != nil && uia == nil {
 		return nil, err
@@ -325,6 +326,10 @@ func (cli *Client) RegisterDummy(req *ReqRegister) (*RespRegister, error) {
 	}
 	if res == nil {
 		return nil, fmt.Errorf("registration failed: does this server support m.login.dummy?")
+	}
+	if setOnClient {
+		cli.UserID = res.UserID
+		cli.AccessToken = res.AccessToken
 	}
 	return res, nil
 }
