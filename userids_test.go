@@ -62,3 +62,25 @@ func TestDecodeUserLocalpartErrors(t *testing.T) {
 		}
 	}
 }
+
+var localparttests = []struct {
+	Input        string
+	ExpectOutput string
+}{
+	{"@foo:bar", "foo"},
+	{"@foo:bar:8448", "foo"},
+	{"@foo.bar:baz.quuz", "foo.bar"},
+}
+
+func TestExtractUserLocalpart(t *testing.T) {
+	for _, u := range localparttests {
+		out, err := ExtractUserLocalpart(u.Input)
+		if err != nil {
+			t.Errorf("TestExtractUserLocalpart(%s) => Error: %s", u.Input, err)
+			continue
+		}
+		if out != u.ExpectOutput {
+			t.Errorf("TestExtractUserLocalpart(%s) => Got: %s, Want %s", u.Input, out, u.ExpectOutput)
+		}
+	}
+}
