@@ -27,13 +27,26 @@ func ExampleClient_BuildBaseURL() {
 	// Output: https://matrix.org/_matrix/client/r0/directory/room/%23matrix:matrix.org?access_token=abcdef123456
 }
 
-// Compiled, not run.
+// Retrieve the content of a m.room.name state event.
 func ExampleClient_StateEvent() {
 	content := struct {
 		name string `json:"name"`
 	}{}
 	cli, _ := NewClient("https://matrix.org", "@example:matrix.org", "abcdef123456")
 	if err := cli.StateEvent("!foo:bar", "m.room.name", "", &content); err != nil {
+		panic(err)
+	}
+}
+
+// Login to a local homeserver. This will set Client.UserID and Client.AccessToken on success.
+func ExampleClient_Login() {
+	cli, _ := NewClient("http://localhost:8008", "", "")
+	_, err := cli.Login(&ReqLogin{
+		Type:     "m.login.password",
+		User:     "alice",
+		Password: "wonderland",
+	}, true)
+	if err != nil {
 		panic(err)
 	}
 }

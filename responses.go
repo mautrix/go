@@ -66,6 +66,14 @@ type RespRegister struct {
 	UserID       string `json:"user_id"`
 }
 
+// RespLogin is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-login
+type RespLogin struct {
+	AccessToken string `json:"access_token"`
+	DeviceID    string `json:"device_id"`
+	HomeServer  string `json:"home_server"`
+	UserID      string `json:"user_id"`
+}
+
 // RespSync is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-r0-sync
 type RespSync struct {
 	NextBatch   string `json:"next_batch"`

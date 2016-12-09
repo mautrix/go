@@ -343,6 +343,18 @@ func (cli *Client) RegisterDummy(req *ReqRegister, setOnClient bool) (*RespRegis
 	return res, nil
 }
 
+// Login a user to the homeserver according to http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-login
+// If 'setOnClient' is true, the user ID and access token on login will be set to this client instance.
+func (cli *Client) Login(req *ReqLogin, setOnClient bool) (resp *RespLogin, err error) {
+	urlPath := cli.BuildURL("login")
+	_, err = cli.MakeRequest("POST", urlPath, req, &resp)
+	if setOnClient && resp != nil {
+		cli.UserID = resp.UserID
+		cli.AccessToken = resp.AccessToken
+	}
+	return
+}
+
 // JoinRoom joins the client to a room ID or alias. See http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-join-roomidoralias
 //
 // If serverName is specified, this will be added as a query param to instruct the homeserver to join via that server. If content is specified, it will
