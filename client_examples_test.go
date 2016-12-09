@@ -38,6 +38,25 @@ func ExampleClient_StateEvent() {
 	}
 }
 
+// Join a room by ID.
+func ExampleClient_JoinRoom_id() {
+	cli, _ := NewClient("http://localhost:8008", "@example:localhost", "abcdef123456")
+	if _, err := cli.JoinRoom("!uOILRrqxnsYgQdUzar:localhost", "", nil); err != nil {
+		panic(err)
+	}
+}
+
+// Join a room by alias.
+func ExampleClient_JoinRoom_alias() {
+	cli, _ := NewClient("http://localhost:8008", "@example:localhost", "abcdef123456")
+	if resp, err := cli.JoinRoom("#test:localhost", "", nil); err != nil {
+		panic(err)
+	} else {
+		// Use room ID for something.
+		_ = resp.RoomID
+	}
+}
+
 // Login to a local homeserver. This will set Client.UserID and Client.AccessToken on success.
 func ExampleClient_Login() {
 	cli, _ := NewClient("http://localhost:8008", "", "")
