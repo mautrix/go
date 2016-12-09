@@ -90,8 +90,15 @@ func (cli *Client) BuildURLWithQuery(urlPath []string, urlQuery map[string]strin
 	return u.String()
 }
 
-// Sync starts syncing with the provided Homeserver. This function will block until a fatal /sync error occurs, so should
-// almost always be started as a new goroutine. If Sync() is called twice then the first sync will be stopped.
+// Sync starts syncing with the provided Homeserver. If Sync() is called twice then the first sync will be stopped and the
+// error will be nil.
+//
+// This function will block until a fatal /sync error occurs, so it should almost always be started as a new goroutine.
+// Fatal sync errors can be caused by:
+//   - The failure to create a filter.
+//   - Client.Syncer.OnFailedSync returning an error in response to a failed sync.
+//   - Client.Syncer.ProcessResponse returning an error.
+// If you wish to continue retrying in spite of these fatal errors, call Sync() again.
 func (cli *Client) Sync() error {
 	// Mark the client as syncing.
 	// We will keep syncing until the syncing state changes. Either because
@@ -199,7 +206,7 @@ func (cli *Client) MakeRequest(method string, httpURL string, reqBody interface{
 
 		// If we failed to decode as RespError, don't just drop the HTTP body, include it in the
 		// HTTP error instead (e.g proxy errors which return HTML).
-		msg := "Failed to " + method + " JSON"
+		msg := "Failed to " + method + " JSON to " + req.URL.Path
 		if wrap == nil {
 			msg = msg + ": " + string(contents)
 		}
