@@ -4,23 +4,19 @@ import (
 	"fmt"
 )
 
-func Example_blockingSync() {
+func Example_sync() {
 	cli, _ := NewClient("https://matrix.org", "@example:matrix.org", "MDAefhiuwehfuiwe")
 	syncer := cli.Syncer.(*DefaultSyncer)
 	syncer.OnEventType("m.room.message", func(ev *Event) {
 		fmt.Println("Message: ", ev)
 	})
+
+	// Blocking version
 	if err := cli.Sync(); err != nil {
 		fmt.Println("Sync() returned ", err)
 	}
-}
 
-func Example_nonBlockingSync() {
-	cli, _ := NewClient("https://matrix.org", "@example:matrix.org", "MDAefhiuwehfuiwe")
-	syncer := cli.Syncer.(*DefaultSyncer)
-	syncer.OnEventType("m.room.message", func(ev *Event) {
-		fmt.Println("Message: ", ev)
-	})
+	// Non-blocking version
 	go func() {
 		for {
 			if err := cli.Sync(); err != nil {
