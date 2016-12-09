@@ -1,18 +1,6 @@
 // Package gomatrix implements the Matrix Client-Server API.
 //
 // Specification can be found at http://matrix.org/docs/spec/client_server/r0.2.0.html
-//
-// Example usage of this library: (blocking version)
-// 	cli, _ := gomatrix.NewClient("https://matrix.org", "@example:matrix.org", "MDAefhiuwehfuiwe")
-//	syncer := cli.Syncer.(*gomatrix.DefaultSyncer)
-//	syncer.OnEventType("m.room.message", func(ev *gomatrix.Event) {
-//		fmt.Println("Message: ", ev)
-//	})
-//	if err := cli.Sync(); err != nil {
-//		fmt.Println("Sync() returned ", err)
-//	}
-//
-// To make the example non-blocking, call Sync() in a goroutine.
 package gomatrix
 
 import (
