@@ -1,6 +1,53 @@
 package gomatrix
 
-import "fmt"
+import (
+	"fmt"
+	"net/http"
+)
+
+func Example_sync() {
+	cli, _ := NewClient("https://matrix.org", "@example:matrix.org", "MDAefhiuwehfuiwe")
+	cli.Store.SaveFilterID("@example:matrix.org", "2")                // Optional: if you know it already
+	cli.Store.SaveNextBatch("@example:matrix.org", "111_222_333_444") // Optional: if you know it already
+	syncer := cli.Syncer.(*DefaultSyncer)
+	syncer.OnEventType("m.room.message", func(ev *Event) {
+		fmt.Println("Message: ", ev)
+	})
+
+	// Blocking version
+	if err := cli.Sync(); err != nil {
+		fmt.Println("Sync() returned ", err)
+	}
+
+	// Non-blocking version
+	go func() {
+		for {
+			if err := cli.Sync(); err != nil {
+				fmt.Println("Sync() returned ", err)
+			}
+			// Optional: Wait a period of time before trying to sync again.
+		}
+	}()
+}
+
+func Example_customInterfaces() {
+	// Custom interfaces must be set prior to calling functions on the client.
+	cli, _ := NewClient("https://matrix.org", "@example:matrix.org", "MDAefhiuwehfuiwe")
+
+	// anything which implements the Storer interface
+	customStore := NewInMemoryStore()
+	cli.Store = customStore
+
+	// anything which implements the Syncer interface
+	customSyncer := NewDefaultSyncer("@example:matrix.org", customStore)
+	cli.Syncer = customSyncer
+
+	// any http.Client
+	cli.Client = http.DefaultClient
+
+	// Once you call a function, you can't safely change the interfaces.
+	cli.SendText("!foo:bar", "Down the rabbit hole")
+}
 
 func ExampleClient_BuildURLWithQuery() {
 	cli, _ := NewClient("https://matrix.org", "@example:matrix.org", "abcdef123456")
