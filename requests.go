@@ -21,3 +21,25 @@ type ReqLogin struct {
 	DeviceID                 string `json:"device_id,omitempty"`
 	InitialDeviceDisplayName string `json:"initial_device_display_name,omitempty"`
 }
+
+// ReqCreateRoom is the JSON request for https://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-createroom
+type ReqCreateRoom struct {
+	Visibility      string                 `json:"visibility,omitempty"`
+	RoomAliasName   string                 `json:"room_alias_name,omitempty"`
+	Name            string                 `json:"name,omitempty"`
+	Topic           string                 `json:"topic,omitempty"`
+	Invite          []string               `json:"invite,omitempty"`
+	Invite3PID      []ReqInvite3PID        `json:"invite_3pid,omitempty"`
+	CreationContent map[string]interface{} `json:"creation_content,omitempty"`
+	InitialState    []Event                `json:"initial_state,omitempty"`
+	Preset          string                 `json:"preset,omitempty"`
+	IsDirect        bool                   `json:"is_direct,omitempty"`
+}
+
+// ReqInvite3PID is the JSON request for https://matrix.org/docs/spec/client_server/r0.2.0.html#id57
+// It is also a JSON object used in https://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-createroom
+type ReqInvite3PID struct {
+	IDServer string `json:"id_server"`
+	Medium   string `json:"medium"`
+	Address  string `json:"address"`
+}

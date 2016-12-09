@@ -398,6 +398,17 @@ func (cli *Client) SendText(roomID, text string) (*RespSendEvent, error) {
 		TextMessage{"m.text", text})
 }
 
+// CreateRoom creates a new Matrix room. See https://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-createroom
+//  resp, err := cli.CreateRoom(&gomatrix.ReqCreateRoom{
+//  	Preset: "public_chat",
+//  })
+//  fmt.Println("Room:", resp.RoomID)
+func (cli *Client) CreateRoom(req *ReqCreateRoom) (resp *RespCreateRoom, err error) {
+	urlPath := cli.BuildURL("createRoom")
+	_, err = cli.MakeRequest("POST", urlPath, req, &resp)
+	return
+}
+
 // LeaveRoom leaves the given room. See http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-leave
 func (cli *Client) LeaveRoom(roomID string) (resp *RespLeaveRoom, err error) {
 	u := cli.BuildURL("rooms", roomID, "leave")
