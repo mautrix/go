@@ -393,6 +393,14 @@ func (cli *Client) SendText(roomID, text string) (*RespSendEvent, error) {
 		TextMessage{"m.text", text})
 }
 
+// RedactEvent redacts the given event. See http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-rooms-roomid-redact-eventid-txnid
+func (cli *Client) RedactEvent(roomID, eventID string, req *ReqRedact) (resp *RespSendEvent, err error) {
+	txnID := "go" + strconv.FormatInt(time.Now().UnixNano(), 10)
+	urlPath := cli.BuildURL("rooms", roomID, "redact", eventID, txnID)
+	_, err = cli.MakeRequest("PUT", urlPath, req, &resp)
+	return
+}
+
 // CreateRoom creates a new Matrix room. See https://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-createroom
 //  resp, err := cli.CreateRoom(&gomatrix.ReqCreateRoom{
 //  	Preset: "public_chat",
