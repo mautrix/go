@@ -350,6 +350,13 @@ func (cli *Client) Login(req *ReqLogin, setOnClient bool) (resp *RespLogin, err 
 	return
 }
 
+// Versions returns the list of supported Matrix versions on this homeserver. See http://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-versions
+func (cli *Client) Versions() (resp *RespVersions, err error) {
+	urlPath := cli.BuildBaseURL("_matrix", "client", "versions")
+	_, err = cli.MakeRequest("GET", urlPath, nil, &resp)
+	return
+}
+
 // JoinRoom joins the client to a room ID or alias. See http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-join-roomidoralias
 //
 // If serverName is specified, this will be added as a query param to instruct the homeserver to join via that server. If content is specified, it will
