@@ -350,6 +350,18 @@ func (cli *Client) Login(req *ReqLogin, setOnClient bool) (resp *RespLogin, err 
 	return
 }
 
+// Logout the current user. See http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-logout
+// If "removeCredentials" is true, the user ID and access token will be removed from this client instance on success.
+func (cli *Client) Logout(removeCredentials bool) (resp *RespLogout, err error) {
+	urlPath := cli.BuildURL("logout")
+	_, err = cli.MakeRequest("POST", urlPath, nil, &resp)
+	if removeCredentials && err == nil {
+		cli.UserID = ""
+		cli.AccessToken = ""
+	}
+	return
+}
+
 // JoinRoom joins the client to a room ID or alias. See http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-join-roomidoralias
 //
 // If serverName is specified, this will be added as a query param to instruct the homeserver to join via that server. If content is specified, it will
