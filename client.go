@@ -411,6 +411,48 @@ func (cli *Client) LeaveRoom(roomID string) (resp *RespLeaveRoom, err error) {
 	return
 }
 
+// ForgetRoom forgets a room entirely. See http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-forget
+func (cli *Client) ForgetRoom(roomID string) (resp *RespForgetRoom, err error) {
+	u := cli.BuildURL("rooms", roomID, "forget")
+	_, err = cli.MakeRequest("POST", u, struct{}{}, &resp)
+	return
+}
+
+// InviteUser invites a user to a room. See http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-invite
+func (cli *Client) InviteUser(roomID string, req *ReqInviteUser) (resp *RespInviteUser, err error) {
+	u := cli.BuildURL("rooms", roomID, "invite")
+	_, err = cli.MakeRequest("POST", u, struct{}{}, &resp)
+	return
+}
+
+// InviteUserByThirdParty invites a third-party identifier to a room. See http://matrix.org/docs/spec/client_server/r0.2.0.html#invite-by-third-party-id-endpoint
+func (cli *Client) InviteUserByThirdParty(roomID string, req *ReqInvite3PID) (resp *RespInviteUser, err error) {
+	u := cli.BuildURL("rooms", roomID, "invite")
+	_, err = cli.MakeRequest("POST", u, req, &resp)
+	return
+}
+
+// KickUser kicks a user from a room. See http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-kick
+func (cli *Client) KickUser(roomID string, req *ReqKickUser) (resp *RespKickUser, err error) {
+	u := cli.BuildURL("rooms", roomID, "kick")
+	_, err = cli.MakeRequest("POST", u, req, &resp)
+	return
+}
+
+// BanUser bans a user from a room. See http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-ban
+func (cli *Client) BanUser(roomID string, req *ReqBanUser) (resp *RespBanUser, err error) {
+	u := cli.BuildURL("rooms", roomID, "ban")
+	_, err = cli.MakeRequest("POST", u, req, &resp)
+	return
+}
+
+// UnbanUser unbans a user from a room. See http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-unban
+func (cli *Client) UnbanUser(roomID string, req *ReqUnbanUser) (resp *RespUnbanUser, err error) {
+	u := cli.BuildURL("rooms", roomID, "unban")
+	_, err = cli.MakeRequest("POST", u, req, &resp)
+	return
+}
+
 // StateEvent gets a single state event in a room. It will attempt to JSON unmarshal into the given "outContent" struct with
 // the HTTP response body, or return an error.
 // See http://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-r0-rooms-roomid-state-eventtype-statekey
