@@ -17,6 +17,11 @@ type RespCreateFilter struct {
 	FilterID string `json:"filter_id"`
 }
 
+// RespVersions is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-versions
+type RespVersions struct {
+	Versions []string `json:"versions"`
+}
+
 // RespJoinRoom is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-join
 type RespJoinRoom struct {
 	RoomID string `json:"room_id"`
