@@ -43,3 +43,25 @@ type ReqInvite3PID struct {
 	Medium   string `json:"medium"`
 	Address  string `json:"address"`
 }
+
+// ReqInviteUser is the JSON request for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-invite
+type ReqInviteUser struct {
+	UserID string `json:"user_id"`
+}
+
+// ReqKickUser is the JSON request for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-kick
+type ReqKickUser struct {
+	Reason string `json:"reason,omitempty"`
+	UserID string `json:"user_id"`
+}
+
+// ReqBanUser is the JSON request for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-ban
+type ReqBanUser struct {
+	Reason string `json:"reason,omitempty"`
+	UserID string `json:"user_id"`
+}
+
+// ReqUnbanUser is the JSON request for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-unban
+type ReqUnbanUser struct {
+	UserID string `json:"user_id"`
+}
