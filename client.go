@@ -380,7 +380,7 @@ func (cli *Client) SetDisplayName(displayName string) (err error) {
 // SendMessageEvent sends a message event into a room. See http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-rooms-roomid-send-eventtype-txnid
 // contentJSON should be a pointer to something that can be encoded as JSON using json.Marshal.
 func (cli *Client) SendMessageEvent(roomID string, eventType string, contentJSON interface{}) (resp *RespSendEvent, err error) {
-	txnID := "go" + strconv.FormatInt(time.Now().UnixNano(), 10)
+	txnID := txnID()
 	urlPath := cli.BuildURL("rooms", roomID, "send", eventType, txnID)
 	_, err = cli.MakeRequest("PUT", urlPath, contentJSON, &resp)
 	return
@@ -395,7 +395,7 @@ func (cli *Client) SendText(roomID, text string) (*RespSendEvent, error) {
 
 // RedactEvent redacts the given event. See http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-rooms-roomid-redact-eventid-txnid
 func (cli *Client) RedactEvent(roomID, eventID string, req *ReqRedact) (resp *RespSendEvent, err error) {
-	txnID := "go" + strconv.FormatInt(time.Now().UnixNano(), 10)
+	txnID := txnID()
 	urlPath := cli.BuildURL("rooms", roomID, "redact", eventID, txnID)
 	_, err = cli.MakeRequest("PUT", urlPath, req, &resp)
 	return
@@ -467,6 +467,10 @@ func (cli *Client) UploadToContentRepo(content io.Reader, contentType string, co
 		return nil, err
 	}
 	return &m, nil
+}
+
+func txnID() string {
+	return "go" + strconv.FormatInt(time.Now().UnixNano(), 10)
 }
 
 // NewClient creates a new Matrix Client ready for syncing
