@@ -90,6 +90,18 @@ func (cli *Client) BuildURLWithQuery(urlPath []string, urlQuery map[string]strin
 	return u.String()
 }
 
+// SetCredentials sets the user ID and access token on this client instance.
+func (cli *Client) SetCredentials(userID, accessToken string) {
+	cli.AccessToken = accessToken
+	cli.UserID = userID
+}
+
+// ClearCredentials removes the user ID and access token on this client instance.
+func (cli *Client) ClearCredentials() {
+	cli.AccessToken = ""
+	cli.UserID = ""
+}
+
 // Sync starts syncing with the provided Homeserver. If Sync() is called twice then the first sync will be stopped and the
 // error will be nil.
 //
@@ -302,18 +314,19 @@ func (cli *Client) RegisterGuest(req *ReqRegister) (*RespRegister, *RespUserInte
 // RegisterDummy performs m.login.dummy registration according to https://matrix.org/docs/spec/client_server/r0.2.0.html#dummy-auth
 //
 // Only a username and password need to be provided on the ReqRegister struct. Most local/developer homeservers will allow registration
-// this way. If the homeserver does not, an error is returned. If "setOnClient" is true, the access_token and user_id will be set on
-// this client instance.
+// this way. If the homeserver does not, an error is returned.
+//
+// This does not set credentials on the client instance. See SetCredentials() instead.
 //
 // 	res, err := cli.RegisterDummy(&gomatrix.ReqRegister{
 //		Username: "alice",
 //		Password: "wonderland",
-//	}, false)
+//	})
 //  if err != nil {
 // 		panic(err)
 // 	}
 // 	token := res.AccessToken
-func (cli *Client) RegisterDummy(req *ReqRegister, setOnClient bool) (*RespRegister, error) {
+func (cli *Client) RegisterDummy(req *ReqRegister) (*RespRegister, error) {
 	res, uia, err := cli.Register(req)
 	if err != nil && uia == nil {
 		return nil, err
@@ -331,34 +344,22 @@ func (cli *Client) RegisterDummy(req *ReqRegister, setOnClient bool) (*RespRegis
 	if res == nil {
 		return nil, fmt.Errorf("registration failed: does this server support m.login.dummy?")
 	}
-	if setOnClient {
-		cli.UserID = res.UserID
-		cli.AccessToken = res.AccessToken
-	}
 	return res, nil
 }
 
 // Login a user to the homeserver according to http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-login
-// If 'setOnClient' is true, the user ID and access token on login will be set to this client instance.
-func (cli *Client) Login(req *ReqLogin, setOnClient bool) (resp *RespLogin, err error) {
+// This does not set credentials on this client instance. See SetCredentials() instead.
+func (cli *Client) Login(req *ReqLogin) (resp *RespLogin, err error) {
 	urlPath := cli.BuildURL("login")
 	_, err = cli.MakeRequest("POST", urlPath, req, &resp)
-	if setOnClient && resp != nil {
-		cli.UserID = resp.UserID
-		cli.AccessToken = resp.AccessToken
-	}
 	return
 }
 
 // Logout the current user. See http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-logout
-// If "removeCredentials" is true, the user ID and access token will be removed from this client instance on success.
-func (cli *Client) Logout(removeCredentials bool) (resp *RespLogout, err error) {
+// This does not clear the credentials from the client instance. See ClearCredentials() instead.
+func (cli *Client) Logout() (resp *RespLogout, err error) {
 	urlPath := cli.BuildURL("logout")
 	_, err = cli.MakeRequest("POST", urlPath, nil, &resp)
-	if removeCredentials && err == nil {
-		cli.UserID = ""
-		cli.AccessToken = ""
-	}
 	return
 }
 

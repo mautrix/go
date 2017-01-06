@@ -104,15 +104,16 @@ func ExampleClient_JoinRoom_alias() {
 	}
 }
 
-// Login to a local homeserver. This will set Client.UserID and Client.AccessToken on success.
+// Login to a local homeserver and set the user ID and access token on success.
 func ExampleClient_Login() {
 	cli, _ := NewClient("http://localhost:8008", "", "")
-	_, err := cli.Login(&ReqLogin{
+	resp, err := cli.Login(&ReqLogin{
 		Type:     "m.login.password",
 		User:     "alice",
 		Password: "wonderland",
-	}, true)
+	})
 	if err != nil {
 		panic(err)
 	}
+	cli.SetCredentials(resp.UserID, resp.AccessToken)
 }
