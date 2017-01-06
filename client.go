@@ -359,7 +359,7 @@ func (cli *Client) Logout(removeCredentials bool) (resp *RespLogout, err error) 
 		cli.UserID = ""
 		cli.AccessToken = ""
 	}
-    return
+	return
 }
 
 // Versions returns the list of supported Matrix versions on this homeserver. See http://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-versions
