@@ -4,6 +4,6 @@ set -eu
 
 golint
 go fmt
-go tool vet --shadow .
+go tool vet --all --shadow .
 gocyclo -over 12 .
 go test -timeout 5s -test.v

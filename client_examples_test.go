@@ -77,7 +77,7 @@ func ExampleClient_BuildBaseURL() {
 // Retrieve the content of a m.room.name state event.
 func ExampleClient_StateEvent() {
 	content := struct {
-		name string `json:"name"`
+		Name string `json:"name"`
 	}{}
 	cli, _ := NewClient("https://matrix.org", "@example:matrix.org", "abcdef123456")
 	if err := cli.StateEvent("!foo:bar", "m.room.name", "", &content); err != nil {
