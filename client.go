@@ -359,6 +359,13 @@ func (cli *Client) Logout(removeCredentials bool) (resp *RespLogout, err error) 
 		cli.UserID = ""
 		cli.AccessToken = ""
 	}
+    return
+}
+
+// Versions returns the list of supported Matrix versions on this homeserver. See http://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-versions
+func (cli *Client) Versions() (resp *RespVersions, err error) {
+	urlPath := cli.BuildBaseURL("_matrix", "client", "versions")
+	_, err = cli.MakeRequest("GET", urlPath, nil, &resp)
 	return
 }
 
@@ -392,8 +399,16 @@ func (cli *Client) SetDisplayName(displayName string) (err error) {
 // SendMessageEvent sends a message event into a room. See http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-rooms-roomid-send-eventtype-txnid
 // contentJSON should be a pointer to something that can be encoded as JSON using json.Marshal.
 func (cli *Client) SendMessageEvent(roomID string, eventType string, contentJSON interface{}) (resp *RespSendEvent, err error) {
-	txnID := "go" + strconv.FormatInt(time.Now().UnixNano(), 10)
+	txnID := txnID()
 	urlPath := cli.BuildURL("rooms", roomID, "send", eventType, txnID)
+	_, err = cli.MakeRequest("PUT", urlPath, contentJSON, &resp)
+	return
+}
+
+// SendStateEvent sends a state event into a room. See http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-rooms-roomid-state-eventtype-statekey
+// contentJSON should be a pointer to something that can be encoded as JSON using json.Marshal.
+func (cli *Client) SendStateEvent(roomID, eventType, stateKey string, contentJSON interface{}) (resp *RespSendEvent, err error) {
+	urlPath := cli.BuildURL("rooms", roomID, "state", eventType, stateKey)
 	_, err = cli.MakeRequest("PUT", urlPath, contentJSON, &resp)
 	return
 }
@@ -403,6 +418,14 @@ func (cli *Client) SendMessageEvent(roomID string, eventType string, contentJSON
 func (cli *Client) SendText(roomID, text string) (*RespSendEvent, error) {
 	return cli.SendMessageEvent(roomID, "m.room.message",
 		TextMessage{"m.text", text})
+}
+
+// RedactEvent redacts the given event. See http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-rooms-roomid-redact-eventid-txnid
+func (cli *Client) RedactEvent(roomID, eventID string, req *ReqRedact) (resp *RespSendEvent, err error) {
+	txnID := txnID()
+	urlPath := cli.BuildURL("rooms", roomID, "redact", eventID, txnID)
+	_, err = cli.MakeRequest("PUT", urlPath, req, &resp)
+	return
 }
 
 // CreateRoom creates a new Matrix room. See https://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-createroom
@@ -420,6 +443,48 @@ func (cli *Client) CreateRoom(req *ReqCreateRoom) (resp *RespCreateRoom, err err
 func (cli *Client) LeaveRoom(roomID string) (resp *RespLeaveRoom, err error) {
 	u := cli.BuildURL("rooms", roomID, "leave")
 	_, err = cli.MakeRequest("POST", u, struct{}{}, &resp)
+	return
+}
+
+// ForgetRoom forgets a room entirely. See http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-forget
+func (cli *Client) ForgetRoom(roomID string) (resp *RespForgetRoom, err error) {
+	u := cli.BuildURL("rooms", roomID, "forget")
+	_, err = cli.MakeRequest("POST", u, struct{}{}, &resp)
+	return
+}
+
+// InviteUser invites a user to a room. See http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-invite
+func (cli *Client) InviteUser(roomID string, req *ReqInviteUser) (resp *RespInviteUser, err error) {
+	u := cli.BuildURL("rooms", roomID, "invite")
+	_, err = cli.MakeRequest("POST", u, struct{}{}, &resp)
+	return
+}
+
+// InviteUserByThirdParty invites a third-party identifier to a room. See http://matrix.org/docs/spec/client_server/r0.2.0.html#invite-by-third-party-id-endpoint
+func (cli *Client) InviteUserByThirdParty(roomID string, req *ReqInvite3PID) (resp *RespInviteUser, err error) {
+	u := cli.BuildURL("rooms", roomID, "invite")
+	_, err = cli.MakeRequest("POST", u, req, &resp)
+	return
+}
+
+// KickUser kicks a user from a room. See http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-kick
+func (cli *Client) KickUser(roomID string, req *ReqKickUser) (resp *RespKickUser, err error) {
+	u := cli.BuildURL("rooms", roomID, "kick")
+	_, err = cli.MakeRequest("POST", u, req, &resp)
+	return
+}
+
+// BanUser bans a user from a room. See http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-ban
+func (cli *Client) BanUser(roomID string, req *ReqBanUser) (resp *RespBanUser, err error) {
+	u := cli.BuildURL("rooms", roomID, "ban")
+	_, err = cli.MakeRequest("POST", u, req, &resp)
+	return
+}
+
+// UnbanUser unbans a user from a room. See http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-unban
+func (cli *Client) UnbanUser(roomID string, req *ReqUnbanUser) (resp *RespUnbanUser, err error) {
+	u := cli.BuildURL("rooms", roomID, "unban")
+	_, err = cli.MakeRequest("POST", u, req, &resp)
 	return
 }
 
@@ -471,6 +536,10 @@ func (cli *Client) UploadToContentRepo(content io.Reader, contentType string, co
 		return nil, err
 	}
 	return &m, nil
+}
+
+func txnID() string {
+	return "go" + strconv.FormatInt(time.Now().UnixNano(), 10)
 }
 
 // NewClient creates a new Matrix Client ready for syncing
