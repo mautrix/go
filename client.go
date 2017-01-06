@@ -539,6 +539,26 @@ func (cli *Client) UploadToContentRepo(content io.Reader, contentType string, co
 	return &m, nil
 }
 
+// JoinedMembers returns a map of joined room members. See TODO-SPEC. https://github.com/matrix-org/synapse/pull/1680
+//
+// In general, usage of this API is discouraged in favour of /sync, as calling this API can race with incoming membership changes.
+// This API is primarily designed for application services which may want to efficiently look up joined members in a room.
+func (cli *Client) JoinedMembers(roomID string) (resp *RespJoinedMembers, err error) {
+	u := cli.BuildURL("rooms", roomID, "joined_members")
+	_, err = cli.MakeRequest("GET", u, nil, &resp)
+	return
+}
+
+// JoinedRooms returns a list of rooms which the client is joined to. See TODO-SPEC. https://github.com/matrix-org/synapse/pull/1680
+//
+// In general, usage of this API is discouraged in favour of /sync, as calling this API can race with incoming membership changes.
+// This API is primarily designed for application services which may want to efficiently look up joined rooms.
+func (cli *Client) JoinedRooms() (resp *RespJoinedRooms, err error) {
+	u := cli.BuildURL("joined_rooms")
+	_, err = cli.MakeRequest("GET", u, nil, &resp)
+	return
+}
+
 func txnID() string {
 	return "go" + strconv.FormatInt(time.Now().UnixNano(), 10)
 }

@@ -45,6 +45,19 @@ type RespBanUser struct{}
 // RespUnbanUser is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-unban
 type RespUnbanUser struct{}
 
+// RespJoinedRooms is the JSON response for TODO-SPEC https://github.com/matrix-org/synapse/pull/1680
+type RespJoinedRooms struct {
+	JoinedRooms []string `json:"joined_rooms"`
+}
+
+// RespJoinedMembers is the JSON response for TODO-SPEC https://github.com/matrix-org/synapse/pull/1680
+type RespJoinedMembers struct {
+	Joined map[string]struct {
+		DisplayName *string `json:"display_name"`
+		AvatarURL   *string `json:"avatar_url"`
+	} `json:"joined"`
+}
+
 // RespSendEvent is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-rooms-roomid-send-eventtype-txnid
 type RespSendEvent struct {
 	EventID string `json:"event_id"`
