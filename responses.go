@@ -94,6 +94,9 @@ type RespLogin struct {
 	UserID      string `json:"user_id"`
 }
 
+// RespLogout is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-logout
+type RespLogout struct{}
+
 // RespCreateRoom is the JSON response for https://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-createroom
 type RespCreateRoom struct {
 	RoomID string `json:"room_id"`
