@@ -397,6 +397,24 @@ func (cli *Client) SetDisplayName(displayName string) (err error) {
 	return
 }
 
+// GetAvatarURL gets the user's avatar URL. See http://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-r0-profile-userid-avatar-url
+func (cli *Client) GetAvatarURL() (url string, err error) {
+	urlPath := cli.BuildURL("profile", cli.UserID, "avatar_url")
+	s := struct {
+		AvatarURL string `json:"avatar_url"`
+	}{}
+	res, err := cli.MakeRequest("GET", urlPath, &s, nil)
+	if err != nil {
+		return "", err
+	}
+
+	if err = json.Unmarshal(res, &s); err != nil {
+		return "", err
+	}
+
+	return s.AvatarURL, nil
+}
+
 // SendMessageEvent sends a message event into a room. See http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-rooms-roomid-send-eventtype-txnid
 // contentJSON should be a pointer to something that can be encoded as JSON using json.Marshal.
 func (cli *Client) SendMessageEvent(roomID string, eventType string, contentJSON interface{}) (resp *RespSendEvent, err error) {
@@ -537,6 +555,26 @@ func (cli *Client) UploadToContentRepo(content io.Reader, contentType string, co
 		return nil, err
 	}
 	return &m, nil
+}
+
+// JoinedMembers returns a map of joined room members. See TODO-SPEC. https://github.com/matrix-org/synapse/pull/1680
+//
+// In general, usage of this API is discouraged in favour of /sync, as calling this API can race with incoming membership changes.
+// This API is primarily designed for application services which may want to efficiently look up joined members in a room.
+func (cli *Client) JoinedMembers(roomID string) (resp *RespJoinedMembers, err error) {
+	u := cli.BuildURL("rooms", roomID, "joined_members")
+	_, err = cli.MakeRequest("GET", u, nil, &resp)
+	return
+}
+
+// JoinedRooms returns a list of rooms which the client is joined to. See TODO-SPEC. https://github.com/matrix-org/synapse/pull/1680
+//
+// In general, usage of this API is discouraged in favour of /sync, as calling this API can race with incoming membership changes.
+// This API is primarily designed for application services which may want to efficiently look up joined rooms.
+func (cli *Client) JoinedRooms() (resp *RespJoinedRooms, err error) {
+	u := cli.BuildURL("joined_rooms")
+	_, err = cli.MakeRequest("GET", u, nil, &resp)
+	return
 }
 
 func txnID() string {
