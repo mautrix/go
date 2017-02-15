@@ -403,15 +403,11 @@ func (cli *Client) GetAvatarURL() (url string, err error) {
 	s := struct {
 		AvatarURL string `json:"avatar_url"`
 	}{}
-	// res, err := cli.MakeRequest("GET", urlPath, nil, &s)
+
 	_, err = cli.MakeRequest("GET", urlPath, nil, &s)
 	if err != nil {
 		return "", err
 	}
-
-	// if err = json.Unmarshal(res, &s); err != nil {
-	// 	return "", err
-	// }
 
 	return s.AvatarURL, nil
 }
