@@ -25,13 +25,6 @@ func TestClient_LeaveRoom(t *testing.T) {
 }
 
 func TestClient_GetAvatarUrl(t *testing.T) {
-	// cli, _ := NewClient("https://matrix.org", "@_neb_google:matrix.org", "MDAxOGxvY2F0aW9uIG1hdHJpeC5vcmcKMDAxM2lkZW50aWZpZXIga2V5CjAwMTBjaWQgZ2VuID0gMQowMDJhY2lkIHVzZXJfaWQgPSBAX25lYl9nb29nbGU6bWF0cml4Lm9yZwowMDE2Y2lkIHR5cGUgPSBhY2Nlc3MKMDAyMWNpZCBub25jZSA9IDpUWHlDZ01KLnU3NFNWeFMKMDAyZnNpZ25hdHVyZSDSP25lx3Mm4JQ-eC5a5pTHxXpHYGFg55bYQNyEpofc2wo")
-	// url, err := cli.GetAvatarURL()
-	// if err != nil {
-	// 	t.Fatalf("Failed to get avatar URL: %s", err.Error())
-	// }
-	// fmt.Printf("URL: %s\n", url)
-
 	cli := mockClient(func(req *http.Request) (*http.Response, error) {
 		if req.Method == "GET" && req.URL.Path == "/_matrix/client/r0/profile/@user:test.gomatrix.org/avatar_url" {
 			return &http.Response{
@@ -48,6 +41,22 @@ func TestClient_GetAvatarUrl(t *testing.T) {
 		t.Fatal("GetAvatarURL: Got empty response")
 	}
 
+}
+
+func TestClient_SetAvatarUrl(t *testing.T) {
+	cli := mockClient(func(req *http.Request) (*http.Response, error) {
+		if req.Method == "PUT" && req.URL.Path == "/_matrix/client/r0/profile/@user:test.gomatrix.org/avatar_url" {
+			return &http.Response{
+				StatusCode: 200,
+				Body:       ioutil.NopCloser(bytes.NewBufferString(`{}`)),
+			}, nil
+		}
+		return nil, fmt.Errorf("unhandled URL: %s", req.URL.Path)
+	})
+
+	if err := cli.SetAvatarURL("https://foo.com/bar.png"); err != nil {
+		t.Fatalf("GetAvatarURL: Got error: %s", err.Error())
+	}
 }
 
 func TestClient_StateEvent(t *testing.T) {

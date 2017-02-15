@@ -403,16 +403,35 @@ func (cli *Client) GetAvatarURL() (url string, err error) {
 	s := struct {
 		AvatarURL string `json:"avatar_url"`
 	}{}
-	res, err := cli.MakeRequest("GET", urlPath, &s, nil)
+	// res, err := cli.MakeRequest("GET", urlPath, nil, &s)
+	_, err = cli.MakeRequest("GET", urlPath, nil, &s)
 	if err != nil {
 		return "", err
 	}
 
-	if err = json.Unmarshal(res, &s); err != nil {
-		return "", err
-	}
+	// if err = json.Unmarshal(res, &s); err != nil {
+	// 	return "", err
+	// }
 
 	return s.AvatarURL, nil
+}
+
+// SetAvatarURL sets the user's avatar URL. See http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-profile-userid-avatar-url
+func (cli *Client) SetAvatarURL(url string) (err error) {
+	urlPath := cli.BuildURL("profile", cli.UserID, "avatar_url")
+	s := struct {
+		AvatarURL string `json:"avatar_url"`
+	}{url}
+	res, err := cli.MakeRequest("PUT", urlPath, &s, nil)
+	if err != nil {
+		return err
+	}
+
+	if err = json.Unmarshal(res, &s); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // SendMessageEvent sends a message event into a room. See http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-rooms-roomid-send-eventtype-txnid
