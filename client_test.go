@@ -39,6 +39,8 @@ func TestClient_GetAvatarUrl(t *testing.T) {
 		t.Fatalf("GetAvatarURL: Got error: %s", err.Error())
 	} else if response == "" {
 		t.Fatal("GetAvatarURL: Got empty response")
+	} else if response != "mxc://matrix.org/iJaUjkshgdfsdkjfn" {
+		t.Fatalf("Unexpected response URL: %s", response)
 	}
 
 }
