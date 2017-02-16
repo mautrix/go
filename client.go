@@ -418,12 +418,8 @@ func (cli *Client) SetAvatarURL(url string) (err error) {
 	s := struct {
 		AvatarURL string `json:"avatar_url"`
 	}{url}
-	res, err := cli.MakeRequest("PUT", urlPath, &s, nil)
+	_, err = cli.MakeRequest("PUT", urlPath, &s, nil)
 	if err != nil {
-		return err
-	}
-
-	if err = json.Unmarshal(res, &s); err != nil {
 		return err
 	}
 
