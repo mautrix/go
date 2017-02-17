@@ -24,6 +24,43 @@ func TestClient_LeaveRoom(t *testing.T) {
 	}
 }
 
+func TestClient_GetAvatarUrl(t *testing.T) {
+	cli := mockClient(func(req *http.Request) (*http.Response, error) {
+		if req.Method == "GET" && req.URL.Path == "/_matrix/client/r0/profile/@user:test.gomatrix.org/avatar_url" {
+			return &http.Response{
+				StatusCode: 200,
+				Body:       ioutil.NopCloser(bytes.NewBufferString(`{"avatar_url":"mxc://matrix.org/iJaUjkshgdfsdkjfn"}`)),
+			}, nil
+		}
+		return nil, fmt.Errorf("unhandled URL: %s", req.URL.Path)
+	})
+
+	if response, err := cli.GetAvatarURL(); err != nil {
+		t.Fatalf("GetAvatarURL: Got error: %s", err.Error())
+	} else if response == "" {
+		t.Fatal("GetAvatarURL: Got empty response")
+	} else if response != "mxc://matrix.org/iJaUjkshgdfsdkjfn" {
+		t.Fatalf("Unexpected response URL: %s", response)
+	}
+
+}
+
+func TestClient_SetAvatarUrl(t *testing.T) {
+	cli := mockClient(func(req *http.Request) (*http.Response, error) {
+		if req.Method == "PUT" && req.URL.Path == "/_matrix/client/r0/profile/@user:test.gomatrix.org/avatar_url" {
+			return &http.Response{
+				StatusCode: 200,
+				Body:       ioutil.NopCloser(bytes.NewBufferString(`{}`)),
+			}, nil
+		}
+		return nil, fmt.Errorf("unhandled URL: %s", req.URL.Path)
+	})
+
+	if err := cli.SetAvatarURL("https://foo.com/bar.png"); err != nil {
+		t.Fatalf("GetAvatarURL: Got error: %s", err.Error())
+	}
+}
+
 func TestClient_StateEvent(t *testing.T) {
 	cli := mockClient(func(req *http.Request) (*http.Response, error) {
 		if req.Method == "GET" && req.URL.Path == "/_matrix/client/r0/rooms/!foo:bar/state/m.room.name" {

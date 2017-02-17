@@ -397,6 +397,35 @@ func (cli *Client) SetDisplayName(displayName string) (err error) {
 	return
 }
 
+// GetAvatarURL gets the user's avatar URL. See http://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-r0-profile-userid-avatar-url
+func (cli *Client) GetAvatarURL() (url string, err error) {
+	urlPath := cli.BuildURL("profile", cli.UserID, "avatar_url")
+	s := struct {
+		AvatarURL string `json:"avatar_url"`
+	}{}
+
+	_, err = cli.MakeRequest("GET", urlPath, nil, &s)
+	if err != nil {
+		return "", err
+	}
+
+	return s.AvatarURL, nil
+}
+
+// SetAvatarURL sets the user's avatar URL. See http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-profile-userid-avatar-url
+func (cli *Client) SetAvatarURL(url string) (err error) {
+	urlPath := cli.BuildURL("profile", cli.UserID, "avatar_url")
+	s := struct {
+		AvatarURL string `json:"avatar_url"`
+	}{url}
+	_, err = cli.MakeRequest("PUT", urlPath, &s, nil)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // SendMessageEvent sends a message event into a room. See http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-rooms-roomid-send-eventtype-txnid
 // contentJSON should be a pointer to something that can be encoded as JSON using json.Marshal.
 func (cli *Client) SendMessageEvent(roomID string, eventType string, contentJSON interface{}) (resp *RespSendEvent, err error) {
