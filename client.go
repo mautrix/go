@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/url"
 	"path"
@@ -556,8 +557,16 @@ func (cli *Client) UploadToContentRepo(content io.Reader, contentType string, co
 		return nil, err
 	}
 	if res.StatusCode != 200 {
+		contents, err := ioutil.ReadAll(res.Body)
+		if err != nil {
+			return nil, HTTPError{
+				Message: "Upload request failed - Failed to read response body: " + err.Error(),
+				Code:    res.StatusCode,
+			}
+		}
+		log.Printf("Upload request failed: %s", string(contents))
 		return nil, HTTPError{
-			Message: "Upload request failed",
+			Message: "Upload request failed" + string(contents),
 			Code:    res.StatusCode,
 		}
 	}
