@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/url"
 	"path"
@@ -564,9 +563,8 @@ func (cli *Client) UploadToContentRepo(content io.Reader, contentType string, co
 				Code:    res.StatusCode,
 			}
 		}
-		log.Printf("Upload request failed: %s", string(contents))
 		return nil, HTTPError{
-			Message: "Upload request failed" + string(contents),
+			Message: "Upload request failed: " + string(contents),
 			Code:    res.StatusCode,
 		}
 	}
