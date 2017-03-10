@@ -29,7 +29,7 @@ func (s *Session) NewRequest(payload, contentType, url string, urlArgs ...interf
 // NewJSONRequest creates a new Matrix API request and marshals the given object to JSON and uses it as the payload.
 func (s *Session) NewJSONRequest(payload interface{}, url string, urlArgs ...interface{}) Request {
 	payloadData, _ := json.Marshal(payload)
-	return s.NewRequest(string(payloadData), "application/json", url, urlArgs)
+	return s.NewRequest(string(payloadData), "application/json", url, urlArgs...)
 }
 
 // CompletedRequest is a Matrix API request that has been called.
@@ -52,7 +52,7 @@ func (req Request) PUT() CompletedRequest {
 
 // POST executes this request with HTTP POST.
 func (req Request) POST() CompletedRequest {
-	return req.HTTP(http.MethodPut)
+	return req.HTTP(http.MethodPost)
 }
 
 // HTTP executes this request with the given HTTP method.
@@ -62,7 +62,10 @@ func (req Request) HTTP(method string) CompletedRequest {
 		payloadReader = strings.NewReader(req.Payload)
 	}
 
-	httpReq, _ := http.NewRequest(method, req.URL, payloadReader)
+	httpReq, err := http.NewRequest(method, req.URL, payloadReader)
+	if err != nil {
+		return CompletedRequest{Source: req, Method: method, Response: nil, Error: err}
+	}
 
 	if len(req.ContentType) > 0 {
 		httpReq.Header.Set("Content-Type", req.ContentType)
@@ -74,7 +77,7 @@ func (req Request) HTTP(method string) CompletedRequest {
 
 // OK checks if the request completed successfully.
 func (creq CompletedRequest) OK() bool {
-	if creq.Error != nil {
+	if creq.Response == nil || creq.Error != nil {
 		creq.Close()
 		return false
 	}
@@ -106,5 +109,7 @@ func (creq CompletedRequest) Text() (string, error) {
 
 // Close closes the response body stream.
 func (creq CompletedRequest) Close() {
-	creq.Response.Body.Close()
+	if creq.Response != nil {
+		creq.Response.Body.Close()
+	}
 }
