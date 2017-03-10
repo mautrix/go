@@ -1,9 +1,7 @@
 package mautrix
 
 import (
-	"encoding/json"
 	"fmt"
-	"net/http"
 )
 
 // SyncData contains everything in a single synchronization
@@ -85,14 +83,13 @@ type Unsigned struct {
 
 // Sync the current status with the homeserver
 func (s *Session) Sync() error {
-	resp, err := http.Get(s.GetURL("/sync?since=%s&access_token=%s&timeout=10000", s.NextBatch, s.AccessToken))
-	if err != nil {
-		return err
+	creq := s.NewPlainRequest("/sync?since=%s&access_token=%s&timeout=10000", s.NextBatch, s.AccessToken).GET()
+	if !creq.OK() {
+		return creq.Error
 	}
-	defer resp.Body.Close()
 
 	data := SyncData{}
-	err = json.NewDecoder(resp.Body).Decode(&data)
+	err := creq.JSON(&data)
 	if err != nil {
 		return err
 	}
@@ -136,9 +133,13 @@ func (s *Session) syncJoinedRooms(data SyncData) {
 			event.Room = room
 			s.Timeline <- event
 			if len(event.ID) > 0 {
-				resp, err := POST(s.GetURL("/rooms/%s/receipt/%s/%s?access_token=%s", roomID, EvtRead, event.ID, s.AccessToken))
-				if resp.StatusCode != http.StatusOK {
-					fmt.Printf("Failed to mark message %s in room %s as read (HTTP %d): %s\n", event.ID, roomID, resp.StatusCode, err)
+				creq := s.NewPlainRequest(
+					"/rooms/%s/receipt/%s/%s?access_token=%s",
+					roomID, EvtRead, event.ID, s.AccessToken).POST()
+				if !creq.CheckStatusOK() {
+					fmt.Printf(
+						"Failed to mark message %s in room %s as read (HTTP %d): %s\n",
+						event.ID, roomID, creq.Response.StatusCode, creq.Error)
 				}
 			}
 		}

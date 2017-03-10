@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+
 	"maunium.net/go/mautrix"
 )
 

@@ -1,11 +1,7 @@
 package mautrix
 
 import (
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"net/http"
-	"strings"
 )
 
 // Invite wraps an invite to a room
@@ -29,8 +25,8 @@ type Room struct {
 	ID      string
 	Name    string
 	Members map[string]Member
-	Session *Session
 	Aliases []string
+	Session *Session
 }
 
 // SendResponse wraps the response to a room send request
@@ -42,20 +38,20 @@ type SendResponse struct {
 
 // Send a message to this room
 func (r *Room) Send(message string) error {
-	resp, err := JSONPOST(r.Session.GetURL(
+	creq := r.Session.NewJSONRequest(
+		map[string]string{
+			"msgtype": MsgText,
+			"body":    message,
+		},
 		"/rooms/%s/send/%s/%s?access_token=%s",
 		r.ID, EvtRoomMessage, GenerateNonce(), r.Session.AccessToken,
-	), fmt.Sprintf(
-		"{\"msgtype\": \"%s\", \"body\":\"%s\"}",
-		MsgText, strings.Replace(message, "\"", "\\\"", -1),
-	))
-	if err != nil {
-		return err
+	).PUT()
+	if !creq.OK() {
+		return creq.Error
 	}
-	defer resp.Body.Close()
 
 	var data SendResponse
-	err = json.NewDecoder(resp.Body).Decode(&data)
+	err := creq.JSON(&data)
 	if err != nil {
 		return err
 	} else if len(data.Error) > 0 {
@@ -68,13 +64,15 @@ func (r *Room) Send(message string) error {
 
 // Join a room
 func (s *Session) Join(roomID string) error {
-	resp, err := POST(s.GetURL("/rooms/%s/join?access_token=%s", roomID, s.AccessToken))
-	defer resp.Body.Close()
-	if err != nil {
-		return err
-	} else if resp.StatusCode != http.StatusOK {
-		errstr, _ := ioutil.ReadAll(resp.Body)
-		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, errstr)
+	creq := s.NewPlainRequest(
+		"/rooms/%s/join?access_token=%s",
+		roomID, s.AccessToken,
+	).POST()
+	if !creq.OK() {
+		return creq.Error
+	} else if !creq.CheckStatusOK() {
+		errstr, _ := creq.Text()
+		return fmt.Errorf("HTTP %d: %s", creq.Response.StatusCode, errstr)
 	}
 	return nil
 }

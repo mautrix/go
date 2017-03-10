@@ -1,10 +1,7 @@
 package mautrix
 
 import (
-	"encoding/json"
 	"fmt"
-	"net/http"
-	"strings"
 )
 
 type loginInfo struct {
@@ -17,42 +14,47 @@ type loginInfo struct {
 
 // PasswordLogin tries to log in with username and password
 func (s *Session) PasswordLogin(user, password string) error {
-	return s.login(fmt.Sprintf(
-		"{\"type\": \"%s\", \"user\": \"%s\", \"password\": \"%s\"}",
-		LoginPassword, user, strings.Replace(password, "\"", "\\\"", -1),
-	))
+	return s.login(map[string]string{
+		"type":     LoginPassword,
+		"user":     user,
+		"password": password,
+	})
 }
 
 // TokenLogin tries to log in with username and auth token
 func (s *Session) TokenLogin(user, token string) error {
-	return s.login(fmt.Sprintf(
-		"{\"type\": \"%s\", \"user\": \"%s\", \"token\": \"%s\", \"txn_id\": \"%s\"}",
-		LoginToken, user, token, GenerateNonce(),
-	))
+	s.MatrixID = user
+	s.AccessToken = token
+	return nil
+	/*return s.login(map[string]string{
+		"type":   LoginToken,
+		"user":   user,
+		"token":  token,
+		"txn_id": GenerateNonce(),
+	})*/
 }
 
 // DummyLogin tries to log in without authentication
 func (s *Session) DummyLogin() error {
-	return s.login(fmt.Sprintf("{\"type\": \"%s\"}", LoginDummy))
+	return s.login(map[string]string{"type": LoginDummy})
 }
 
-func (s *Session) login(payload string) error {
-	resp, err := JSONPOST(s.GetURL("/login"), payload)
-	if err != nil {
-		return err
+func (s *Session) login(payload interface{}) error {
+	creq := s.NewJSONRequest(payload, "/login").POST()
+	if !creq.OK() {
+		return creq.Error
 	}
-	defer resp.Body.Close()
 
-	dat := loginInfo{}
-	err = json.NewDecoder(resp.Body).Decode(&dat)
+	var dat loginInfo
+	err := creq.JSON(&dat)
 	if err != nil {
 		return err
 	}
 
 	if dat.Error != "" {
 		return fmt.Errorf(dat.Error)
-	} else if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("HTTP %d", resp.StatusCode)
+	} else if !creq.CheckStatusOK() {
+		return fmt.Errorf("HTTP %d", creq.Response.StatusCode)
 	}
 
 	s.AccessToken = dat.AccessToken

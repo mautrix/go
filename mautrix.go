@@ -52,6 +52,7 @@ func Create(homeserver string) *Session {
 		Timeline:   make(chan Event, 10),
 		InviteChan: make(chan string, 10),
 		JoinChan:   make(chan string, 10),
+		Presence:   make(map[string]string),
 		Invites:    make(map[string]*Invite),
 		Rooms:      make(map[string]*Room),
 		stop:       make(chan bool),
