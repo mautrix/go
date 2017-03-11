@@ -9,6 +9,7 @@ type SyncData struct {
 	NextBatch string         `json:"next_batch"`
 	Rooms     SyncRooms      `json:"rooms"`
 	Presence  EventContainer `json:"presence"`
+	Initial   bool           `json:"-"`
 }
 
 // SyncRooms contains all joined and invited rooms
@@ -73,6 +74,7 @@ func (mx *MatrixBot) Sync() error {
 	if err != nil {
 		return err
 	}
+	data.Initial = len(mx.NextBatch) == 0
 
 	mx.NextBatch = data.NextBatch
 	mx.syncPresence(data)
@@ -109,9 +111,11 @@ func (mx *MatrixBot) syncJoinedRooms(data SyncData) {
 			}
 		}
 
-		for _, event := range v.Timeline.Events {
-			event.Room = room
-			mx.Timeline <- event
+		if !data.Initial {
+			for _, event := range v.Timeline.Events {
+				event.Room = room
+				mx.Timeline <- event
+			}
 		}
 	}
 }
