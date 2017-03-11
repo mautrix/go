@@ -4,10 +4,6 @@
 
 package mautrix
 
-import (
-	"fmt"
-)
-
 // SyncData contains everything in a single synchronization
 type SyncData struct {
 	NextBatch string         `json:"next_batch"`
@@ -57,32 +53,6 @@ type Timeline struct {
 	EventContainer
 	Limited   bool   `json:"limited"`
 	PrevBatch string `json:"prev_batch"`
-}
-
-// Event represents a single event
-type Event struct {
-	ID               string                 `json:"event_id"`
-	Type             string                 `json:"type"`
-	Sender           string                 `json:"sender"`
-	StateKey         string                 `json:"state_key"`
-	Content          map[string]interface{} `json:"content"`
-	OriginServerTime int64                  `json:"origin_server_ts"`
-	Age              int64                  `json:"age"`
-	TransactionID    string                 `json:"txn_id"`
-	Unsigned         Unsigned               `json:"unsigned"`
-
-	Room *Room `json:"-"`
-}
-
-// EventContent contains the name and body of an event
-type EventContent struct {
-	Name string `json:"name"`
-	Body string `json:"body"`
-}
-
-// Unsigned contains the unsigned event contents
-type Unsigned struct {
-	InviteRoomState []Event `json:"invite_room_state"`
 }
 
 // Sync the current status with the homeserver
@@ -142,16 +112,6 @@ func (mx *MatrixBot) syncJoinedRooms(data SyncData) {
 		for _, event := range v.Timeline.Events {
 			event.Room = room
 			mx.Timeline <- event
-			if len(event.ID) > 0 {
-				creq := mx.NewPlainRequest(
-					"/rooms/%s/receipt/%s/%s?access_token=%s",
-					roomID, EvtRead, event.ID, mx.AccessToken).POST()
-				if !creq.CheckStatusOK() {
-					fmt.Printf(
-						"Failed to mark message %s in room %s as read (HTTP %d): %s\n",
-						event.ID, roomID, creq.Response.StatusCode, creq.Error)
-				}
-			}
 		}
 	}
 }
