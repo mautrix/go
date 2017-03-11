@@ -28,28 +28,30 @@ var username = flag.String("username", "", "Matrix username localpart")
 var password = flag.String("password", "", "Matrix password")
 
 func main() {
-	session := mautrix.Create(*homeserver)
+	flag.Parse()
+	fmt.Println("Logging to", *homeserver, "as", *username)
+	mxbot := mautrix.Create(*homeserver)
 
-	err := session.PasswordLogin(*username, *password)
+	err := mxbot.PasswordLogin(*username, *password)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 	fmt.Println("Login successful")
 
-	go session.Listen()
+	go mxbot.Listen()
 
 	for {
 		select {
-		case evt := <-session.Timeline:
+		case evt := <-mxbot.Timeline:
 			switch evt.Type {
 			case mautrix.EvtRoomMessage:
 				fmt.Printf("<%[1]s> %[4]s (%[2]s/%[3]s)\n", evt.Sender, evt.Type, evt.ID, evt.Content["body"])
 			default:
-				fmt.Println(evt.Type)
+				fmt.Println("Unidentified event of type", evt.Type)
 			}
-		case roomID := <-session.InviteChan:
-			invite := session.Invites[roomID]
+		case roomID := <-mxbot.InviteChan:
+			invite := mxbot.Invites[roomID]
 			fmt.Printf("%s invited me to %s (%s)\n", invite.Sender, invite.Name, invite.ID)
 			fmt.Println(invite.Accept())
 		}
