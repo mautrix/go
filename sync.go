@@ -91,11 +91,7 @@ func (mx *MatrixBot) syncPresence(data SyncData) {
 
 func (mx *MatrixBot) syncJoinedRooms(data SyncData) {
 	for roomID, v := range data.Rooms.Join {
-		room, ok := mx.Rooms[roomID]
-		if !ok {
-			room = &Room{Session: mx, ID: roomID, Members: make(map[string]Member)}
-			mx.Rooms[roomID] = room
-		}
+		room := mx.GetRoom(roomID)
 		for _, event := range v.State.Events {
 			switch {
 			case event.Type == EvtRoomName:

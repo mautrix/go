@@ -19,6 +19,9 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"maunium.net/go/mautrix"
 )
@@ -39,21 +42,35 @@ func main() {
 	}
 	fmt.Println("Login successful")
 
-	go mxbot.Listen()
+	stop := make(chan bool, 1)
 
-	for {
-		select {
-		case evt := <-mxbot.Timeline:
-			switch evt.Type {
-			case mautrix.EvtRoomMessage:
-				fmt.Printf("<%[1]s> %[4]s (%[2]s/%[3]s)\n", evt.Sender, evt.Type, evt.ID, evt.Content["body"])
-			default:
-				fmt.Println("Unidentified event of type", evt.Type)
+	go mxbot.Listen()
+	go func() {
+	Loop:
+		for {
+			select {
+			case <-stop:
+				break Loop
+			case evt := <-mxbot.Timeline:
+				evt.MarkRead()
+				switch evt.Type {
+				case mautrix.EvtRoomMessage:
+					fmt.Printf("<%[1]s> %[4]s (%[2]s/%[3]s)\n", evt.Sender, evt.Type, evt.ID, evt.Content["body"])
+				default:
+					fmt.Println("Unidentified event of type", evt.Type)
+				}
+			case roomID := <-mxbot.InviteChan:
+				invite := mxbot.Invites[roomID]
+				fmt.Printf("%s invited me to %s (%s)\n", invite.Sender, invite.Name, invite.ID)
+				fmt.Println(invite.Accept())
 			}
-		case roomID := <-mxbot.InviteChan:
-			invite := mxbot.Invites[roomID]
-			fmt.Printf("%s invited me to %s (%s)\n", invite.Sender, invite.Name, invite.ID)
-			fmt.Println(invite.Accept())
 		}
-	}
+		mxbot.Stop()
+	}()
+
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	<-c
+	stop <- true
+
 }

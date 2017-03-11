@@ -36,6 +36,13 @@ type Member struct {
 	DisplayName string
 }
 
+// SendResponse wraps the response to a room send request
+type SendResponse struct {
+	EventID   string `json:"event_id"`
+	Error     string `json:"error"`
+	ErrorCode string `json:"errcode"`
+}
+
 // Room is a room
 type Room struct {
 	ID      string
@@ -45,15 +52,22 @@ type Room struct {
 	Session *MatrixBot
 }
 
-// SendResponse wraps the response to a room send request
-type SendResponse struct {
-	EventID   string `json:"event_id"`
-	Error     string `json:"error"`
-	ErrorCode string `json:"errcode"`
+func (mx *MatrixBot) createRoom(roomID string) *Room {
+	return &Room{Session: mx, ID: roomID, Members: make(map[string]Member)}
+}
+
+// GetRoom gets the room pointer with the given ID
+func (mx *MatrixBot) GetRoom(roomID string) *Room {
+	room, ok := mx.Rooms[roomID]
+	if !ok {
+		room = mx.createRoom(roomID)
+		mx.Rooms[roomID] = room
+	}
+	return room
 }
 
 // Send a message to this room
-func (r *Room) Send(message string) error {
+func (r *Room) Send(message string) (SendResponse, error) {
 	creq := r.Session.NewJSONRequest(
 		map[string]string{
 			"msgtype": MsgText,
@@ -63,19 +77,15 @@ func (r *Room) Send(message string) error {
 		r.ID, EvtRoomMessage, r.Session.NextTransactionID(), r.Session.AccessToken,
 	).PUT()
 	if !creq.OK() {
-		return creq.Error
+		return SendResponse{}, creq.Error
 	}
 
 	var data SendResponse
 	err := creq.JSON(&data)
 	if err != nil {
-		return err
-	} else if len(data.Error) > 0 {
-		return fmt.Errorf(data.Error)
-	} else if len(data.EventID) == 0 {
-		return fmt.Errorf("No event ID received!")
+		return SendResponse{}, err
 	}
-	return nil
+	return data, nil
 }
 
 // Join a room
