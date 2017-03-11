@@ -1,3 +1,19 @@
+// mautrix - A Matrix client-server library intended for bots.
+// Copyright (C) 2017 Tulir Asokan
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 package mautrix
 
 import (
@@ -13,34 +29,28 @@ type loginInfo struct {
 }
 
 // PasswordLogin tries to log in with username and password
-func (s *Session) PasswordLogin(user, password string) error {
-	return s.login(map[string]string{
+func (mx *MatrixBot) PasswordLogin(user, password string) error {
+	return mx.login(map[string]string{
 		"type":     LoginPassword,
 		"user":     user,
 		"password": password,
 	})
 }
 
-// TokenLogin tries to log in with username and auth token
-func (s *Session) TokenLogin(user, token string) error {
-	s.MatrixID = user
-	s.AccessToken = token
+// SetToken sets the access token to use
+func (mx *MatrixBot) SetToken(user, token string) error {
+	mx.MatrixID = user
+	mx.AccessToken = token
 	return nil
-	/*return s.login(map[string]string{
-		"type":   LoginToken,
-		"user":   user,
-		"token":  token,
-		"txn_id": GenerateNonce(),
-	})*/
 }
 
 // DummyLogin tries to log in without authentication
-func (s *Session) DummyLogin() error {
-	return s.login(map[string]string{"type": LoginDummy})
+func (mx *MatrixBot) DummyLogin() error {
+	return mx.login(map[string]string{"type": LoginDummy})
 }
 
-func (s *Session) login(payload interface{}) error {
-	creq := s.NewJSONRequest(payload, "/login").POST()
+func (mx *MatrixBot) login(payload interface{}) error {
+	creq := mx.NewJSONRequest(payload, "/login").POST()
 	if !creq.OK() {
 		return creq.Error
 	}
@@ -57,8 +67,8 @@ func (s *Session) login(payload interface{}) error {
 		return fmt.Errorf("HTTP %d", creq.Response.StatusCode)
 	}
 
-	s.AccessToken = dat.AccessToken
-	s.MatrixID = dat.UserID
+	mx.AccessToken = dat.AccessToken
+	mx.MatrixID = dat.UserID
 
 	return nil
 }

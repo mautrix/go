@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 package mautrix
 
 import (
@@ -64,7 +68,7 @@ type Event struct {
 	Content          map[string]interface{} `json:"content"`
 	OriginServerTime int64                  `json:"origin_server_ts"`
 	Age              int64                  `json:"age"`
-	Nonce            string                 `json:"txn_id"`
+	TransactionID    string                 `json:"txn_id"`
 	Unsigned         Unsigned               `json:"unsigned"`
 
 	Room *Room `json:"-"`
@@ -82,8 +86,8 @@ type Unsigned struct {
 }
 
 // Sync the current status with the homeserver
-func (s *Session) Sync() error {
-	creq := s.NewPlainRequest("/sync?since=%s&access_token=%s&timeout=10000", s.NextBatch, s.AccessToken).GET()
+func (mx *MatrixBot) Sync() error {
+	creq := mx.NewPlainRequest("/sync?since=%s&access_token=%s&timeout=10000", mx.NextBatch, mx.AccessToken).GET()
 	if !creq.OK() {
 		return creq.Error
 	}
@@ -94,25 +98,25 @@ func (s *Session) Sync() error {
 		return err
 	}
 
-	s.NextBatch = data.NextBatch
-	s.syncPresence(data)
-	s.syncJoinedRooms(data)
-	s.syncInvitedRooms(data)
+	mx.NextBatch = data.NextBatch
+	mx.syncPresence(data)
+	mx.syncJoinedRooms(data)
+	mx.syncInvitedRooms(data)
 	return nil
 }
 
-func (s *Session) syncPresence(data SyncData) {
+func (mx *MatrixBot) syncPresence(data SyncData) {
 	for _, evt := range data.Presence.Events {
-		s.Presence[evt.Sender], _ = evt.Content["presence"].(string)
+		mx.Presence[evt.Sender], _ = evt.Content["presence"].(string)
 	}
 }
 
-func (s *Session) syncJoinedRooms(data SyncData) {
+func (mx *MatrixBot) syncJoinedRooms(data SyncData) {
 	for roomID, v := range data.Rooms.Join {
-		room, ok := s.Rooms[roomID]
+		room, ok := mx.Rooms[roomID]
 		if !ok {
-			room = &Room{Session: s, ID: roomID, Members: make(map[string]Member)}
-			s.Rooms[roomID] = room
+			room = &Room{Session: mx, ID: roomID, Members: make(map[string]Member)}
+			mx.Rooms[roomID] = room
 		}
 		for _, event := range v.State.Events {
 			switch {
@@ -131,11 +135,11 @@ func (s *Session) syncJoinedRooms(data SyncData) {
 
 		for _, event := range v.Timeline.Events {
 			event.Room = room
-			s.Timeline <- event
+			mx.Timeline <- event
 			if len(event.ID) > 0 {
-				creq := s.NewPlainRequest(
+				creq := mx.NewPlainRequest(
 					"/rooms/%s/receipt/%s/%s?access_token=%s",
-					roomID, EvtRead, event.ID, s.AccessToken).POST()
+					roomID, EvtRead, event.ID, mx.AccessToken).POST()
 				if !creq.CheckStatusOK() {
 					fmt.Printf(
 						"Failed to mark message %s in room %s as read (HTTP %d): %s\n",
@@ -146,12 +150,12 @@ func (s *Session) syncJoinedRooms(data SyncData) {
 	}
 }
 
-func (s *Session) syncInvitedRooms(data SyncData) {
+func (mx *MatrixBot) syncInvitedRooms(data SyncData) {
 	for roomID, v := range data.Rooms.Invited {
-		invite, old := s.Invites[roomID]
+		invite, old := mx.Invites[roomID]
 		if !old {
 			invite = &Invite{
-				Session: s,
+				Session: mx,
 				ID:      roomID,
 				Members: make(map[string]string),
 			}
@@ -165,9 +169,9 @@ func (s *Session) syncInvitedRooms(data SyncData) {
 				invite.Name, _ = event.Content["name"].(string)
 			}
 		}
-		s.Invites[roomID] = invite
+		mx.Invites[roomID] = invite
 		if !old {
-			s.InviteChan <- roomID
+			mx.InviteChan <- roomID
 		}
 	}
 }

@@ -1,11 +1,27 @@
+// mautrix - A Matrix client-server library intended for bots.
+// Copyright (C) 2017 Tulir Asokan
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 package mautrix
 
 import (
 	"fmt"
 )
 
-// Session is a client-server Matrix session
-type Session struct {
+// MatrixBot is a client-server Matrix session
+type MatrixBot struct {
 	NextBatch   string
 	Rooms       map[string]*Room
 	Invites     map[string]*Invite
@@ -13,6 +29,7 @@ type Session struct {
 	AccessToken string
 	MatrixID    string
 	HomeServer  string
+	TxnID       int
 	Timeline    chan Event
 	InviteChan  chan string
 	JoinChan    chan string
@@ -20,14 +37,14 @@ type Session struct {
 }
 
 // Listen for updates from the homeserver
-func (session *Session) Listen() {
+func (mx *MatrixBot) Listen() {
 Loop:
 	for {
 		select {
-		case <-session.stop:
+		case <-mx.stop:
 			break Loop
 		default:
-			err := session.Sync()
+			err := mx.Sync()
 			if err != nil {
 				fmt.Println(err)
 			}
@@ -36,18 +53,24 @@ Loop:
 }
 
 // Stop the listener
-func (session *Session) Stop() {
-	session.stop <- true
+func (mx *MatrixBot) Stop() {
+	mx.stop <- true
 }
 
-// GetURL gets the URL for the given path on this session.
-func (session *Session) GetURL(path string, args ...interface{}) string {
-	return fmt.Sprintf("%s/_matrix/client/r0%s", session.HomeServer, fmt.Sprintf(path, args...))
+// GetURL gets the URL for the given path on this session
+func (mx *MatrixBot) GetURL(path string, args ...interface{}) string {
+	return fmt.Sprintf("%s/_matrix/client/r0%s", mx.HomeServer, fmt.Sprintf(path, args...))
+}
+
+// NextTransactionID returns the next message transaction ID
+func (mx *MatrixBot) NextTransactionID() int {
+	mx.TxnID++
+	return mx.TxnID
 }
 
 // Create a Session
-func Create(homeserver string) *Session {
-	session := Session{HomeServer: homeserver,
+func Create(homeserver string) *MatrixBot {
+	mx := MatrixBot{HomeServer: homeserver,
 		NextBatch:  "s9_13_0_1_1_1",
 		Timeline:   make(chan Event, 10),
 		InviteChan: make(chan string, 10),
@@ -58,5 +81,5 @@ func Create(homeserver string) *Session {
 		stop:       make(chan bool),
 	}
 
-	return &session
+	return &mx
 }

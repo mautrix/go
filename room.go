@@ -1,3 +1,19 @@
+// mautrix - A Matrix client-server library intended for bots.
+// Copyright (C) 2017 Tulir Asokan
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 package mautrix
 
 import (
@@ -10,7 +26,7 @@ type Invite struct {
 	Name    string
 	ID      string
 	Members map[string]string
-	Session *Session
+	Session *MatrixBot
 }
 
 // Member contains some information about a room member
@@ -26,7 +42,7 @@ type Room struct {
 	Name    string
 	Members map[string]Member
 	Aliases []string
-	Session *Session
+	Session *MatrixBot
 }
 
 // SendResponse wraps the response to a room send request
@@ -43,8 +59,8 @@ func (r *Room) Send(message string) error {
 			"msgtype": MsgText,
 			"body":    message,
 		},
-		"/rooms/%s/send/%s/%s?access_token=%s",
-		r.ID, EvtRoomMessage, GenerateNonce(), r.Session.AccessToken,
+		"/rooms/%s/send/%s/%d?access_token=%s",
+		r.ID, EvtRoomMessage, r.Session.NextTransactionID(), r.Session.AccessToken,
 	).PUT()
 	if !creq.OK() {
 		return creq.Error
@@ -63,10 +79,10 @@ func (r *Room) Send(message string) error {
 }
 
 // Join a room
-func (s *Session) Join(roomID string) error {
-	creq := s.NewPlainRequest(
+func (mx *MatrixBot) Join(roomID string) error {
+	creq := mx.NewPlainRequest(
 		"/rooms/%s/join?access_token=%s",
-		roomID, s.AccessToken,
+		roomID, mx.AccessToken,
 	).POST()
 	if !creq.OK() {
 		return creq.Error

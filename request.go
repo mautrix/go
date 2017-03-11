@@ -1,3 +1,19 @@
+// mautrix - A Matrix client-server library intended for bots.
+// Copyright (C) 2017 Tulir Asokan
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 package mautrix
 
 import (
@@ -13,23 +29,23 @@ type Request struct {
 	URL         string
 	Payload     string
 	ContentType string
-	Session     *Session
+	Session     *MatrixBot
 }
 
 // NewPlainRequest creates a new payloadless Matrix API request.
-func (s *Session) NewPlainRequest(url string, urlArgs ...interface{}) Request {
-	return Request{Session: s, URL: s.GetURL(url, urlArgs...)}
+func (mx *MatrixBot) NewPlainRequest(url string, urlArgs ...interface{}) Request {
+	return Request{Session: mx, URL: mx.GetURL(url, urlArgs...)}
 }
 
 // NewRequest creates a new Matrix API request with a custom payload.
-func (s *Session) NewRequest(payload, contentType, url string, urlArgs ...interface{}) Request {
-	return Request{Session: s, Payload: payload, ContentType: contentType, URL: s.GetURL(url, urlArgs...)}
+func (mx *MatrixBot) NewRequest(payload, contentType, url string, urlArgs ...interface{}) Request {
+	return Request{Session: mx, Payload: payload, ContentType: contentType, URL: mx.GetURL(url, urlArgs...)}
 }
 
 // NewJSONRequest creates a new Matrix API request and marshals the given object to JSON and uses it as the payload.
-func (s *Session) NewJSONRequest(payload interface{}, url string, urlArgs ...interface{}) Request {
+func (mx *MatrixBot) NewJSONRequest(payload interface{}, url string, urlArgs ...interface{}) Request {
 	payloadData, _ := json.Marshal(payload)
-	return s.NewRequest(string(payloadData), "application/json", url, urlArgs...)
+	return mx.NewRequest(string(payloadData), "application/json", url, urlArgs...)
 }
 
 // CompletedRequest is a Matrix API request that has been called.
