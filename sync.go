@@ -87,7 +87,13 @@ type Unsigned struct {
 
 // Sync the current status with the homeserver
 func (mx *MatrixBot) Sync() error {
-	creq := mx.NewPlainRequest("/sync?since=%s&access_token=%s&timeout=10000", mx.NextBatch, mx.AccessToken).GET()
+	var req Request
+	if len(mx.NextBatch) == 0 {
+		req = mx.NewPlainRequest("/sync?access_token=%s&timeout=10000", mx.AccessToken)
+	} else {
+		req = mx.NewPlainRequest("/sync?since=%s&access_token=%s&timeout=10000", mx.NextBatch, mx.AccessToken)
+	}
+	creq := req.GET()
 	if !creq.OK() {
 		return creq.Error
 	}

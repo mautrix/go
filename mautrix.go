@@ -71,7 +71,6 @@ func (mx *MatrixBot) NextTransactionID() int {
 // Create a Session
 func Create(homeserver string) *MatrixBot {
 	mx := MatrixBot{HomeServer: homeserver,
-		NextBatch:  "s9_13_0_1_1_1",
 		Timeline:   make(chan Event, 10),
 		InviteChan: make(chan string, 10),
 		JoinChan:   make(chan string, 10),
