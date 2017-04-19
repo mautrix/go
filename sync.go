@@ -73,6 +73,14 @@ func (s *DefaultSyncer) ProcessResponse(res *RespSync, since string) (err error)
 			s.notifyListeners(&event)
 		}
 	}
+	for roomID, roomData := range res.Rooms.Leave {
+		room := s.getOrCreateRoom(roomID)
+		for _, event := range roomData.Timeline.Events {
+			event.RoomID = roomID
+			room.UpdateState(&event)
+			s.notifyListeners(&event)
+		}
+	}
 	return
 }
 
