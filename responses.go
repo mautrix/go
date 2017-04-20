@@ -125,6 +125,16 @@ type RespSync struct {
 		Events []Event `json:"events"`
 	} `json:"presence"`
 	Rooms struct {
+		Leave map[string]struct {
+			State struct {
+				Events []Event `json:"events"`
+			} `json:"state"`
+			Timeline struct {
+				Events    []Event `json:"events"`
+				Limited   bool    `json:"limited"`
+				PrevBatch string  `json:"prev_batch"`
+			} `json:"timeline"`
+		} `json:"leave"`
 		Join map[string]struct {
 			State struct {
 				Events []Event `json:"events"`
