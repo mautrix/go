@@ -112,7 +112,7 @@ func (s *DefaultSyncer) shouldProcessResponse(resp *RespSync, since string) bool
 	for roomID, roomData := range resp.Rooms.Join {
 		for i := len(roomData.Timeline.Events) - 1; i >= 0; i-- {
 			e := roomData.Timeline.Events[i]
-			if e.Type == "m.room.member" && *e.StateKey == s.UserID {
+			if e.Type == "m.room.member" && e.StateKey != nil && *e.StateKey == s.UserID {
 				m := e.Content["membership"]
 				mship, ok := m.(string)
 				if !ok {
