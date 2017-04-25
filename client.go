@@ -450,6 +450,28 @@ func (cli *Client) SendText(roomID, text string) (*RespSendEvent, error) {
 		TextMessage{"m.text", text})
 }
 
+// SendImage sends an m.room.message event into the given room with a msgtype of m.image
+// See https://matrix.org/docs/spec/client_server/r0.2.0.html#m-image
+func (cli *Client) SendImage(roomID, body string, url string) (*RespSendEvent, error) {
+	return cli.SendMessageEvent(roomID, "m.room.message",
+		ImageMessage{
+			MsgType: "m.image",
+			Body:    body,
+			URL:     url,
+		})
+}
+
+// SendVideo sends an m.room.message event into the given room with a msgtype of m.video
+// See https://matrix.org/docs/spec/client_server/r0.2.0.html#m-video
+func (cli *Client) SendVideo(roomID, body string, url string) (*RespSendEvent, error) {
+	return cli.SendMessageEvent(roomID, "m.room.message",
+		VideoMessage{
+			MsgType: "m.video",
+			Body:    body,
+			URL:     url,
+		})
+}
+
 // RedactEvent redacts the given event. See http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-rooms-roomid-redact-eventid-txnid
 func (cli *Client) RedactEvent(roomID, eventID string, req *ReqRedact) (resp *RespSendEvent, err error) {
 	txnID := txnID()
