@@ -518,6 +518,14 @@ func (cli *Client) UnbanUser(roomID string, req *ReqUnbanUser) (resp *RespUnbanU
 	return
 }
 
+// UserTyping sets the typing status of the user. See https://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-rooms-roomid-typing-userid
+func (cli *Client) UserTyping(roomID string, typing bool, timeout int64) (resp *RespTyping, err error) {
+	req := ReqTyping{Typing: typing, Timeout: timeout}
+	u := cli.BuildURL("rooms", roomID, "typing", cli.UserID)
+	_, err = cli.MakeRequest("PUT", u, req, &resp)
+	return
+}
+
 // StateEvent gets a single state event in a room. It will attempt to JSON unmarshal into the given "outContent" struct with
 // the HTTP response body, or return an error.
 // See http://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-r0-rooms-roomid-state-eventtype-statekey
