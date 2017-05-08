@@ -450,6 +450,13 @@ func (cli *Client) SendText(roomID, text string) (*RespSendEvent, error) {
 		TextMessage{"m.text", text})
 }
 
+// SendNotice sends an m.room.message event into the given room with a msgtype of m.notice
+// See http://matrix.org/docs/spec/client_server/r0.2.0.html#m-notice
+func (cli *Client) SendNotice(roomID, text string) (*RespSendEvent, error) {
+	return cli.SendMessageEvent(roomID, "m.room.message",
+		TextMessage{"m.notice", text})
+}
+
 // RedactEvent redacts the given event. See http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-rooms-roomid-redact-eventid-txnid
 func (cli *Client) RedactEvent(roomID, eventID string, req *ReqRedact) (resp *RespSendEvent, err error) {
 	txnID := txnID()
