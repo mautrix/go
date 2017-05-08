@@ -44,7 +44,7 @@ type TextMessage struct {
 	Body    string `json:"body"`
 }
 
-// ImageInfo contains info about an image
+// ImageInfo contains info about an image - http://matrix.org/docs/spec/client_server/r0.2.0.html#m-image
 type ImageInfo struct {
 	Height   uint   `json:"h"`
 	Width    uint   `json:"w"`
@@ -52,7 +52,7 @@ type ImageInfo struct {
 	Size     uint   `json:"size"`
 }
 
-// VideoInfo contains info about a video
+// VideoInfo contains info about a video - http://matrix.org/docs/spec/client_server/r0.2.0.html#m-video
 type VideoInfo struct {
 	Mimetype      string    `json:"mimetype"`
 	ThumbnailInfo ImageInfo `json:"thumbnail_info"`
@@ -63,7 +63,7 @@ type VideoInfo struct {
 	Size          uint      `json:"size"`
 }
 
-// VideoMessage is an m.video event
+// VideoMessage is an m.video  - http://matrix.org/docs/spec/client_server/r0.2.0.html#m-video
 type VideoMessage struct {
 	MsgType string    `json:"msgtype"`
 	Body    string    `json:"body"`
