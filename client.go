@@ -472,6 +472,13 @@ func (cli *Client) SendVideo(roomID, body, url string) (*RespSendEvent, error) {
 		})
 }
 
+// SendNotice sends an m.room.message event into the given room with a msgtype of m.notice
+// See http://matrix.org/docs/spec/client_server/r0.2.0.html#m-notice
+func (cli *Client) SendNotice(roomID, text string) (*RespSendEvent, error) {
+	return cli.SendMessageEvent(roomID, "m.room.message",
+		TextMessage{"m.notice", text})
+}
+
 // RedactEvent redacts the given event. See http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-rooms-roomid-redact-eventid-txnid
 func (cli *Client) RedactEvent(roomID, eventID string, req *ReqRedact) (resp *RespSendEvent, err error) {
 	txnID := txnID()
@@ -622,6 +629,26 @@ func (cli *Client) JoinedMembers(roomID string) (resp *RespJoinedMembers, err er
 func (cli *Client) JoinedRooms() (resp *RespJoinedRooms, err error) {
 	u := cli.BuildURL("joined_rooms")
 	_, err = cli.MakeRequest("GET", u, nil, &resp)
+	return
+}
+
+// Messages returns a list of message and state events for a room. It uses
+// pagination query parameters to paginate history in the room.
+// See https://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-r0-rooms-roomid-messages
+func (cli *Client) Messages(roomID, from, to string, dir rune, limit int) (resp *RespMessages, err error) {
+	query := map[string]string{
+		"from": from,
+		"dir":  string(dir),
+	}
+	if to != "" {
+		query["to"] = to
+	}
+	if limit != 0 {
+		query["limit"] = string(limit)
+	}
+
+	urlPath := cli.BuildURLWithQuery([]string{"rooms", roomID, "messages"}, query)
+	_, err = cli.MakeRequest("GET", urlPath, nil, &resp)
 	return
 }
 
