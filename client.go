@@ -450,6 +450,28 @@ func (cli *Client) SendText(roomID, text string) (*RespSendEvent, error) {
 		TextMessage{"m.text", text})
 }
 
+// SendImage sends an m.room.message event into the given room with a msgtype of m.image
+// See https://matrix.org/docs/spec/client_server/r0.2.0.html#m-image
+func (cli *Client) SendImage(roomID, body, url string) (*RespSendEvent, error) {
+	return cli.SendMessageEvent(roomID, "m.room.message",
+		ImageMessage{
+			MsgType: "m.image",
+			Body:    body,
+			URL:     url,
+		})
+}
+
+// SendVideo sends an m.room.message event into the given room with a msgtype of m.video
+// See https://matrix.org/docs/spec/client_server/r0.2.0.html#m-video
+func (cli *Client) SendVideo(roomID, body, url string) (*RespSendEvent, error) {
+	return cli.SendMessageEvent(roomID, "m.room.message",
+		VideoMessage{
+			MsgType: "m.video",
+			Body:    body,
+			URL:     url,
+		})
+}
+
 // SendNotice sends an m.room.message event into the given room with a msgtype of m.notice
 // See http://matrix.org/docs/spec/client_server/r0.2.0.html#m-notice
 func (cli *Client) SendNotice(roomID, text string) (*RespSendEvent, error) {
