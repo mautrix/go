@@ -61,6 +61,13 @@ type RespJoinedMembers struct {
 	} `json:"joined"`
 }
 
+// RespMessages is the JSON response for https://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-r0-rooms-roomid-messages
+type RespMessages struct {
+	Start string  `json:"start"`
+	Chunk []Event `json:"chunk"`
+	End   string  `json:"end"`
+}
+
 // RespSendEvent is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-rooms-roomid-send-eventtype-txnid
 type RespSendEvent struct {
 	EventID string `json:"event_id"`
