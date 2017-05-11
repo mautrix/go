@@ -46,21 +46,21 @@ type TextMessage struct {
 
 // ImageInfo contains info about an image - http://matrix.org/docs/spec/client_server/r0.2.0.html#m-image
 type ImageInfo struct {
-	Height   uint   `json:"h"`
-	Width    uint   `json:"w"`
-	Mimetype string `json:"mimetype"`
-	Size     uint   `json:"size"`
+	Height   uint   `json:"h,omitempty"`
+	Width    uint   `json:"w,omitempty"`
+	Mimetype string `json:"mimetype,omitempty"`
+	Size     uint   `json:"size,omitempty"`
 }
 
 // VideoInfo contains info about a video - http://matrix.org/docs/spec/client_server/r0.2.0.html#m-video
 type VideoInfo struct {
-	Mimetype      string    `json:"mimetype"`
+	Mimetype      string    `json:"mimetype,omitempty"`
 	ThumbnailInfo ImageInfo `json:"thumbnail_info"`
-	ThumbnailURL  string    `json:"thumbnail_url"`
-	Height        uint      `json:"h"`
-	Width         uint      `json:"w"`
-	Duration      uint      `json:"duration"`
-	Size          uint      `json:"size"`
+	ThumbnailURL  string    `json:"thumbnail_url,omitempty"`
+	Height        uint      `json:"h,omitempty"`
+	Width         uint      `json:"w,omitempty"`
+	Duration      uint      `json:"duration,omitempty"`
+	Size          uint      `json:"size,omitempty"`
 }
 
 // VideoMessage is an m.video  - http://matrix.org/docs/spec/client_server/r0.2.0.html#m-video
