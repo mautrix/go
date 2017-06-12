@@ -1,0 +1,12 @@
+language: go
+go:
+ - 1.8
+install:
+ - go get github.com/golang/lint/golint
+ - go get github.com/fzipp/gocyclo
+ - go get golang.org/x/crypto/ed25519
+ - go get github.com/matrix-org/util
+ - go get github.com/matrix-org/gomatrix
+ - go get github.com/client9/misspell/...
+ - go get github.com/gordonklaus/ineffassign
+script: ./hooks/pre-commit
