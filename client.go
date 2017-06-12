@@ -79,7 +79,7 @@ func (cli *Client) BuildBaseURL(urlPath ...string) string {
 	return hsURL.String()
 }
 
-// BuildURLWithQuery builds a URL with query paramters in addition to the Client's homeserver/prefix/access_token set already.
+// BuildURLWithQuery builds a URL with query parameters in addition to the Client's homeserver/prefix/access_token set already.
 func (cli *Client) BuildURLWithQuery(urlPath []string, urlQuery map[string]string) string {
 	u, _ := url.Parse(cli.BuildURL(urlPath...))
 	q := u.Query()
