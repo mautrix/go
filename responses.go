@@ -162,3 +162,10 @@ type RespSync struct {
 		} `json:"invite"`
 	} `json:"rooms"`
 }
+
+type RespTurnServer struct {
+	Username string   `json:"username"`
+	Password string   `json:"password"`
+	TTL      int      `json:"ttl"`
+	URIs     []string `json:"uris"`
+}

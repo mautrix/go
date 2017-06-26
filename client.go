@@ -652,6 +652,14 @@ func (cli *Client) Messages(roomID, from, to string, dir rune, limit int) (resp 
 	return
 }
 
+// TurnServer returns turn server details and credentials for the client to use when initiating calls.
+// See http://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-r0-voip-turnserver
+func (cli *Client) TurnServer() (resp *RespTurnServer, err error) {
+	urlPath := cli.BuildURL("voip", "turnServer")
+	_, err = cli.MakeRequest("GET", urlPath, nil, &resp)
+	return
+}
+
 func txnID() string {
 	return "go" + strconv.FormatInt(time.Now().UnixNano(), 10)
 }
