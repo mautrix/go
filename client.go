@@ -644,7 +644,7 @@ func (cli *Client) Messages(roomID, from, to string, dir rune, limit int) (resp 
 		query["to"] = to
 	}
 	if limit != 0 {
-		query["limit"] = string(limit)
+		query["limit"] = strconv.Itoa(limit)
 	}
 
 	urlPath := cli.BuildURLWithQuery([]string{"rooms", roomID, "messages"}, query)
