@@ -387,6 +387,13 @@ func (cli *Client) JoinRoom(roomIDorAlias, serverName string, content interface{
 	return
 }
 
+// GetDisplayName returns the display name of the user from the specified MXID. See https://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-r0-profile-userid-displayname
+func (cli *Client) GetDisplayName(mxid string) (resp *RespUserDisplayName, err error) {
+	urlPath := cli.BuildURL("profile", mxid, "displayname")
+	_, err = cli.MakeRequest("GET", urlPath, nil, &resp)
+	return
+}
+
 // SetDisplayName sets the user's profile display name. See http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-profile-userid-displayname
 func (cli *Client) SetDisplayName(displayName string) (err error) {
 	urlPath := cli.BuildURL("profile", cli.UserID, "displayname")
