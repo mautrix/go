@@ -90,11 +90,6 @@ type RespUserInteractive struct {
 	Error     string                 `json:"error"`
 }
 
-// RespUserDisplayName is the JSON response for https://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-r0-profile-userid-displayname
-type RespUserDisplayName struct {
-	DisplayName string `json:"displayname"`
-}
-
 // HasSingleStageFlow returns true if there exists at least 1 Flow with a single stage of stageName.
 func (r RespUserInteractive) HasSingleStageFlow(stageName string) bool {
 	for _, f := range r.Flows {
@@ -103,6 +98,11 @@ func (r RespUserInteractive) HasSingleStageFlow(stageName string) bool {
 		}
 	}
 	return false
+}
+
+// RespUserDisplayName is the JSON response for https://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-r0-profile-userid-displayname
+type RespUserDisplayName struct {
+	DisplayName string `json:"displayname"`
 }
 
 // RespRegister is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-register
