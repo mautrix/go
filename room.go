@@ -18,6 +18,8 @@ package mautrix
 
 import (
 	"fmt"
+
+	"github.com/grokify/html-strip-tags-go"
 )
 
 // Invite wraps an invite to a room
@@ -70,8 +72,32 @@ func (mx *MatrixBot) GetRoom(roomID string) *Room {
 func (r *Room) Send(message string) (SendResponse, error) {
 	creq := r.Session.NewJSONRequest(
 		map[string]string{
-			"msgtype": MsgText,
+			"msgtype": MsgNotice,
 			"body":    message,
+		},
+		"/rooms/%s/send/%s/%d?access_token=%s",
+		r.ID, EvtRoomMessage, r.Session.NextTransactionID(), r.Session.AccessToken,
+	).PUT()
+	if !creq.OK() {
+		return SendResponse{}, creq.Error
+	}
+
+	var data SendResponse
+	err := creq.JSON(&data)
+	if err != nil {
+		return SendResponse{}, err
+	}
+	return data, nil
+}
+
+// SendHTML sends a HTML-formatted message to this room
+func (r *Room) SendHTML(message string) (SendResponse, error) {
+	creq := r.Session.NewJSONRequest(
+		map[string]string{
+			"msgtype":        MsgNotice,
+			"body":           strip.StripTags(message),
+			"formatted_body": message,
+			"format":         "org.matrix.custom.html",
 		},
 		"/rooms/%s/send/%s/%d?access_token=%s",
 		r.ID, EvtRoomMessage, r.Session.NextTransactionID(), r.Session.AccessToken,
