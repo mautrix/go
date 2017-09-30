@@ -18,6 +18,7 @@ package mautrix
 
 import (
 	"fmt"
+	"html"
 
 	"github.com/grokify/html-strip-tags-go"
 )
@@ -100,7 +101,7 @@ func (r *Room) SendHTML(message string) (SendResponse, error) {
 	creq := r.Session.NewJSONRequest(
 		map[string]string{
 			"msgtype":        MsgNotice,
-			"body":           strip.StripTags(message),
+			"body":           html.UnescapeString(strip.StripTags(message)),
 			"formatted_body": message,
 			"format":         "org.matrix.custom.html",
 		},
