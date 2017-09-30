@@ -68,7 +68,7 @@ func (mx *MatrixBot) GetRoom(roomID string) *Room {
 	return room
 }
 
-// Send a message to this room
+// Send sends a message to this room
 func (r *Room) Send(message string) (SendResponse, error) {
 	creq := r.Session.NewJSONRequest(
 		map[string]string{
@@ -90,7 +90,12 @@ func (r *Room) Send(message string) (SendResponse, error) {
 	return data, nil
 }
 
-// SendHTML sends a HTML-formatted message to this room
+// Sendf formats and sends a message to this room
+func (r *Room) Sendf(message string, args ...interface{}) (SendResponse, error) {
+	return r.Send(fmt.Sprintf(message, args...))
+}
+
+// SendHTML sends a HTML message to this room
 func (r *Room) SendHTML(message string) (SendResponse, error) {
 	creq := r.Session.NewJSONRequest(
 		map[string]string{
@@ -112,6 +117,11 @@ func (r *Room) SendHTML(message string) (SendResponse, error) {
 		return SendResponse{}, err
 	}
 	return data, nil
+}
+
+// SendfHTML formats and sends a HTML message to this room
+func (r *Room) SendfHTML(message string, args ...interface{}) (SendResponse, error) {
+	return r.SendHTML(fmt.Sprintf(message, args...))
 }
 
 // Join a room
