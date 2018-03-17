@@ -159,10 +159,16 @@ type RespSync struct {
 				Limited   bool    `json:"limited"`
 				PrevBatch string  `json:"prev_batch"`
 			} `json:"timeline"`
+			Ephemeral struct {
+				Events    []Event `json:"events"`
+			} `json:"ephemeral"`
+			AccountData struct {
+				Events    []Event `json:"events"`
+			} `json:"account_data"`
 		} `json:"join"`
 		Invite map[string]struct {
 			State struct {
-				Events []Event
+				Events []Event `json:"events"`
 			} `json:"invite_state"`
 		} `json:"invite"`
 	} `json:"rooms"`
