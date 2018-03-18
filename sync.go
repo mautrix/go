@@ -57,20 +57,20 @@ func (s *DefaultSyncer) ProcessResponse(res *RespSync, since string) (err error)
 		room := s.getOrCreateRoom(roomID)
 		for _, event := range roomData.State.Events {
 			event.RoomID = roomID
-			room.UpdateState(&event)
-			s.notifyListeners(&event)
+			room.UpdateState(event)
+			s.notifyListeners(event)
 		}
 		for _, event := range roomData.Timeline.Events {
 			event.RoomID = roomID
-			s.notifyListeners(&event)
+			s.notifyListeners(event)
 		}
 	}
 	for roomID, roomData := range res.Rooms.Invite {
 		room := s.getOrCreateRoom(roomID)
 		for _, event := range roomData.State.Events {
 			event.RoomID = roomID
-			room.UpdateState(&event)
-			s.notifyListeners(&event)
+			room.UpdateState(event)
+			s.notifyListeners(event)
 		}
 	}
 	for roomID, roomData := range res.Rooms.Leave {
@@ -78,8 +78,8 @@ func (s *DefaultSyncer) ProcessResponse(res *RespSync, since string) (err error)
 		for _, event := range roomData.Timeline.Events {
 			if event.StateKey != nil {
 				event.RoomID = roomID
-				room.UpdateState(&event)
-				s.notifyListeners(&event)
+				room.UpdateState(event)
+				s.notifyListeners(event)
 			}
 		}
 	}

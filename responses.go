@@ -134,41 +134,41 @@ type RespCreateRoom struct {
 type RespSync struct {
 	NextBatch   string `json:"next_batch"`
 	AccountData struct {
-		Events []Event `json:"events"`
+		Events []*Event `json:"events"`
 	} `json:"account_data"`
 	Presence struct {
-		Events []Event `json:"events"`
+		Events []*Event `json:"events"`
 	} `json:"presence"`
 	Rooms struct {
 		Leave map[string]struct {
 			State struct {
-				Events []Event `json:"events"`
+				Events []*Event `json:"events"`
 			} `json:"state"`
 			Timeline struct {
-				Events    []Event `json:"events"`
+				Events    []*Event `json:"events"`
 				Limited   bool    `json:"limited"`
 				PrevBatch string  `json:"prev_batch"`
 			} `json:"timeline"`
 		} `json:"leave"`
 		Join map[string]struct {
 			State struct {
-				Events []Event `json:"events"`
+				Events []*Event `json:"events"`
 			} `json:"state"`
 			Timeline struct {
-				Events    []Event `json:"events"`
+				Events    []*Event `json:"events"`
 				Limited   bool    `json:"limited"`
 				PrevBatch string  `json:"prev_batch"`
 			} `json:"timeline"`
 			Ephemeral struct {
-				Events    []Event `json:"events"`
+				Events    []*Event `json:"events"`
 			} `json:"ephemeral"`
 			AccountData struct {
-				Events    []Event `json:"events"`
+				Events    []*Event `json:"events"`
 			} `json:"account_data"`
 		} `json:"join"`
 		Invite map[string]struct {
 			State struct {
-				Events []Event `json:"events"`
+				Events []*Event `json:"events"`
 			} `json:"invite_state"`
 		} `json:"invite"`
 	} `json:"rooms"`
