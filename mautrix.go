@@ -18,6 +18,7 @@ package mautrix
 
 import (
 	"fmt"
+	"time"
 )
 
 // MatrixBot is a client-server Matrix session
@@ -38,6 +39,7 @@ type MatrixBot struct {
 
 // Listen for updates from the homeserver
 func (mx *MatrixBot) Listen() {
+	sleepTime := 1 * time.second
 Loop:
 	for {
 		select {
@@ -47,6 +49,10 @@ Loop:
 			err := mx.Sync()
 			if err != nil {
 				fmt.Println(err)
+				time.Sleep(sleepTime)
+				if sleepTime < 60 * time.Second {
+					sleepTime += 1 * time.Second
+				}
 			}
 		}
 	}
