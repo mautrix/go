@@ -39,7 +39,7 @@ type MatrixBot struct {
 
 // Listen for updates from the homeserver
 func (mx *MatrixBot) Listen() {
-	sleepTime := 1 * time.second
+	sleepTime := 1 * time.Second
 Loop:
 	for {
 		select {
