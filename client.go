@@ -666,6 +666,18 @@ func (cli *Client) Messages(roomID, from, to string, dir rune, limit int) (resp 
 	return
 }
 
+func (cli *Client) GetEvent(roomID, eventID string) (resp *Event, err error) {
+	urlPath := cli.BuildURL("rooms", roomID, "event", eventID)
+	_, err = cli.MakeRequest("GET", urlPath, nil, &resp)
+	return
+}
+
+func (cli *Client) MarkRead(roomID, eventID string) (err error) {
+	urlPath := cli.BuildURL("rooms", roomID, "receipt", "m.read", eventID)
+	_, err = cli.MakeRequest("POST", urlPath, struct{}{}, nil)
+	return
+}
+
 // TurnServer returns turn server details and credentials for the client to use when initiating calls.
 // See http://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-r0-voip-turnserver
 func (cli *Client) TurnServer() (resp *RespTurnServer, err error) {
