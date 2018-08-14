@@ -460,37 +460,39 @@ func (cli *Client) SendStateEvent(roomID, eventType, stateKey string, contentJSO
 // SendText sends an m.room.message event into the given room with a msgtype of m.text
 // See http://matrix.org/docs/spec/client_server/r0.2.0.html#m-text
 func (cli *Client) SendText(roomID, text string) (*RespSendEvent, error) {
-	return cli.SendMessageEvent(roomID, "m.room.message",
-		TextMessage{"m.text", text})
+	return cli.SendMessageEvent(roomID, "m.room.message", Content{
+		MsgType: MsgText,
+		Body:    text,
+	})
 }
 
 // SendImage sends an m.room.message event into the given room with a msgtype of m.image
 // See https://matrix.org/docs/spec/client_server/r0.2.0.html#m-image
 func (cli *Client) SendImage(roomID, body, url string) (*RespSendEvent, error) {
-	return cli.SendMessageEvent(roomID, "m.room.message",
-		ImageMessage{
-			MsgType: "m.image",
-			Body:    body,
-			URL:     url,
-		})
+	return cli.SendMessageEvent(roomID, "m.room.message", Content{
+		MsgType: MsgImage,
+		Body:    body,
+		URL:     url,
+	})
 }
 
 // SendVideo sends an m.room.message event into the given room with a msgtype of m.video
 // See https://matrix.org/docs/spec/client_server/r0.2.0.html#m-video
 func (cli *Client) SendVideo(roomID, body, url string) (*RespSendEvent, error) {
-	return cli.SendMessageEvent(roomID, "m.room.message",
-		VideoMessage{
-			MsgType: "m.video",
-			Body:    body,
-			URL:     url,
-		})
+	return cli.SendMessageEvent(roomID, "m.room.message", Content{
+		MsgType: MsgVideo,
+		Body:    body,
+		URL:     url,
+	})
 }
 
 // SendNotice sends an m.room.message event into the given room with a msgtype of m.notice
 // See http://matrix.org/docs/spec/client_server/r0.2.0.html#m-notice
 func (cli *Client) SendNotice(roomID, text string) (*RespSendEvent, error) {
-	return cli.SendMessageEvent(roomID, "m.room.message",
-		TextMessage{"m.notice", text})
+	return cli.SendMessageEvent(roomID, "m.room.message", Content{
+		MsgType: MsgNotice,
+		Body:    text,
+	})
 }
 
 // RedactEvent redacts the given event. See http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-rooms-roomid-redact-eventid-txnid
@@ -588,6 +590,10 @@ func (cli *Client) UploadLink(link string) (*RespMediaUpload, error) {
 		return nil, err
 	}
 	return cli.UploadToContentRepo(res.Body, res.Header.Get("Content-Type"), res.ContentLength)
+}
+
+func (cli *Client) UploadBytes(data []byte, contentType string) (*RespMediaUpload, error) {
+	return cli.UploadToContentRepo(bytes.NewReader(data), contentType, int64(len(data)))
 }
 
 // UploadToContentRepo uploads the given bytes to the content repository and returns an MXC URI.
