@@ -43,7 +43,7 @@ const (
 
 // Event represents a single Matrix event.
 type Event struct {
-	StateKey  string    `json:"state_key,omitempty"` // The state key for the event. Only present on State Events.
+	StateKey  *string    `json:"state_key,omitempty"` // The state key for the event. Only present on State Events.
 	Sender    string    `json:"sender"`              // The user ID of the sender of the event
 	Type      EventType `json:"type"`                // The event type
 	Timestamp int64     `json:"origin_server_ts"`    // The unix timestamp when this message was sent by the origin server
@@ -52,6 +52,13 @@ type Event struct {
 	Content   Content   `json:"content"`             // The JSON content of the event.
 	Redacts   string    `json:"redacts,omitempty"`   // The event ID that was redacted if a m.room.redaction event
 	Unsigned  Unsigned  `json:"unsigned,omitempty"`  // Unsigned content set by own homeserver.
+}
+
+func (evt *Event) GetStateKey() string {
+	if evt.StateKey != nil {
+		return *evt.StateKey
+	}
+	return ""
 }
 
 type Unsigned struct {
@@ -79,11 +86,11 @@ type Content struct {
 
 type serializableContent Content
 
-func (content Content) UnmarshalJSON(data []byte) error {
+func (content *Content) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &content.Raw); err != nil {
 		return err
 	}
-	return json.Unmarshal(data, (*serializableContent)(&content))
+	return json.Unmarshal(data, (*serializableContent)(content))
 }
 
 type FileInfo struct {

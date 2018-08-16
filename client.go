@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"maunium.net/go/maulogger"
 )
 
 // Client represents a Matrix client.
@@ -26,6 +27,7 @@ type Client struct {
 	Client        *http.Client // The underlying HTTP client which will be used to make HTTP requests.
 	Syncer        Syncer       // The thing which can process /sync responses
 	Store         Storer       // The thing which can store rooms/tokens/ids
+	Logger        maulogger.Logger
 
 	// The ?user_id= query parameter for application services. This must be set *prior* to calling a method. If this is empty,
 	// no user_id parameter will be sent.
@@ -39,6 +41,7 @@ type Client struct {
 // HTTPError An HTTP Error response, which may wrap an underlying native Go Error.
 type HTTPError struct {
 	WrappedError error
+	RespError    *RespError
 	Message      string
 	Code         int
 }
@@ -177,6 +180,14 @@ func (cli *Client) StopSync() {
 	cli.incrementSyncingID()
 }
 
+func (cli *Client) LogRequest(req *http.Request, body string) {
+	if cli.Logger == nil {
+		return
+	}
+
+	cli.Logger.Debugfln("%s %s %s", req.Method, req.URL.Path, body)
+}
+
 // MakeRequest makes a JSON HTTP request to the given URL.
 // If "resBody" is not nil, the response body will be json.Unmarshalled into it.
 //
@@ -186,12 +197,14 @@ func (cli *Client) StopSync() {
 func (cli *Client) MakeRequest(method string, httpURL string, reqBody interface{}, resBody interface{}) ([]byte, error) {
 	var req *http.Request
 	var err error
+	logBody := "{}"
 	if reqBody != nil {
 		var jsonStr []byte
 		jsonStr, err = json.Marshal(reqBody)
 		if err != nil {
 			return nil, err
 		}
+		logBody = string(jsonStr)
 		req, err = http.NewRequest(method, httpURL, bytes.NewBuffer(jsonStr))
 	} else {
 		req, err = http.NewRequest(method, httpURL, nil)
@@ -201,6 +214,7 @@ func (cli *Client) MakeRequest(method string, httpURL string, reqBody interface{
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	cli.LogRequest(req, logBody)
 	res, err := cli.Client.Do(req)
 	if res != nil {
 		defer res.Body.Close()
@@ -211,9 +225,11 @@ func (cli *Client) MakeRequest(method string, httpURL string, reqBody interface{
 	contents, err := ioutil.ReadAll(res.Body)
 	if res.StatusCode/100 != 2 { // not 2xx
 		var wrap error
-		var respErr RespError
-		if _ = json.Unmarshal(contents, &respErr); respErr.ErrCode != "" {
+		respErr := &RespError{}
+		if _ = json.Unmarshal(contents, respErr); respErr.ErrCode != "" {
 			wrap = respErr
+		} else {
+			respErr = nil
 		}
 
 		// If we failed to decode as RespError, don't just drop the HTTP body, include it in the
@@ -227,6 +243,7 @@ func (cli *Client) MakeRequest(method string, httpURL string, reqBody interface{
 			Code:         res.StatusCode,
 			Message:      msg,
 			WrappedError: wrap,
+			RespError:    respErr,
 		}
 	}
 	if err != nil {
