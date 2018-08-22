@@ -466,10 +466,31 @@ func (cli *Client) SendMessageEvent(roomID string, eventType string, contentJSON
 	return
 }
 
+// SendMessageEvent sends a message event into a room. See http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-rooms-roomid-send-eventtype-txnid
+// contentJSON should be a pointer to something that can be encoded as JSON using json.Marshal.
+func (cli *Client) SendMassagedMessageEvent(roomID string, eventType string, contentJSON interface{}, ts int64) (resp *RespSendEvent, err error) {
+	txnID := txnID()
+	urlPath := cli.BuildURLWithQuery([]string{"rooms", roomID, "send", eventType, txnID}, map[string]string{
+		"ts": strconv.FormatInt(ts, 10),
+	})
+	_, err = cli.MakeRequest("PUT", urlPath, contentJSON, &resp)
+	return
+}
+
 // SendStateEvent sends a state event into a room. See http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-rooms-roomid-state-eventtype-statekey
 // contentJSON should be a pointer to something that can be encoded as JSON using json.Marshal.
 func (cli *Client) SendStateEvent(roomID, eventType, stateKey string, contentJSON interface{}) (resp *RespSendEvent, err error) {
 	urlPath := cli.BuildURL("rooms", roomID, "state", eventType, stateKey)
+	_, err = cli.MakeRequest("PUT", urlPath, contentJSON, &resp)
+	return
+}
+
+// SendStateEvent sends a state event into a room. See http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-rooms-roomid-state-eventtype-statekey
+// contentJSON should be a pointer to something that can be encoded as JSON using json.Marshal.
+func (cli *Client) SendMassagedStateEvent(roomID, eventType, stateKey string, contentJSON interface{}, ts int64) (resp *RespSendEvent, err error) {
+	urlPath := cli.BuildURLWithQuery([]string{"rooms", roomID, "state", eventType, stateKey}, map[string]string{
+		"ts": strconv.FormatInt(ts, 10),
+	})
 	_, err = cli.MakeRequest("PUT", urlPath, contentJSON, &resp)
 	return
 }
