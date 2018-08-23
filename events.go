@@ -39,11 +39,19 @@ const (
 	MsgLocation             = "m.location"
 	MsgVideo                = "m.video"
 	MsgAudio                = "m.audio"
+	MsgFile                 = "m.file"
+)
+
+type Format string
+
+// Message formats
+const (
+	FormatHTML Format = "org.matrix.custom.html"
 )
 
 // Event represents a single Matrix event.
 type Event struct {
-	StateKey  *string    `json:"state_key,omitempty"` // The state key for the event. Only present on State Events.
+	StateKey  *string   `json:"state_key,omitempty"` // The state key for the event. Only present on State Events.
 	Sender    string    `json:"sender"`              // The user ID of the sender of the event
 	Type      EventType `json:"type"`                // The event type
 	Timestamp int64     `json:"origin_server_ts"`    // The unix timestamp when this message was sent by the origin server
@@ -65,15 +73,14 @@ type Unsigned struct {
 	PrevContent   map[string]interface{} `json:"prev_content,omitempty"`
 	PrevSender    string                 `json:"prev_sender,omitempty"`
 	ReplacesState string                 `json:"replaces_state,omitempty"`
-	Age           int64                  `json:"age"`
+	Age           int64                  `json:"age,omitempty"`
 }
-
 type Content struct {
 	Raw map[string]interface{} `json:"-"`
 
-	MsgType       MessageType `json:"msgtype"`
-	Body          string      `json:"body"`
-	Format        string      `json:"format,omitempty"`
+	MsgType       MessageType `json:"msgtype,omitempty"`
+	Body          string      `json:"body,omitempty"`
+	Format        Format      `json:"format,omitempty"`
 	FormattedBody string      `json:"formatted_body,omitempty"`
 
 	Info FileInfo `json:"info,omitempty"`
@@ -108,7 +115,7 @@ type RelatesTo struct {
 }
 
 type InReplyTo struct {
-	EventID string `json:"event_id"`
+	EventID string `json:"event_id,omitempty"`
 	// Not required, just for future-proofing
 	RoomID string `json:"room_id,omitempty"`
 }
