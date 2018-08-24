@@ -6,6 +6,7 @@ package gomatrix
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -13,6 +14,7 @@ import (
 	"net/url"
 	"path"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 	"maunium.net/go/maulogger"
@@ -634,16 +636,41 @@ func (cli *Client) UploadLink(link string) (*RespMediaUpload, error) {
 	if err != nil {
 		return nil, err
 	}
-	return cli.UploadToContentRepo(res.Body, res.Header.Get("Content-Type"), res.ContentLength)
+	return cli.Upload(res.Body, res.Header.Get("Content-Type"), res.ContentLength)
+}
+
+func (cli *Client) Download(mxcURL string) (io.ReadCloser, error) {
+	if !strings.HasPrefix(mxcURL, "mxc://") {
+		return nil, errors.New("invalid Matrix content URL")
+	}
+	parts := strings.Split(mxcURL[len("mxc://"):], "/")
+	if len(parts) != 2 {
+		return nil, errors.New("invalid Matrix content URL")
+	}
+	u := cli.BuildBaseURL("_matrix/media/r0/download", parts[0], parts[1])
+	resp, err := cli.Client.Get(u)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Body, nil
+}
+
+func (cli *Client) DownloadBytes(mxcURL string) ([]byte, error) {
+	resp, err := cli.Download(mxcURL)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Close()
+	return ioutil.ReadAll(resp)
 }
 
 func (cli *Client) UploadBytes(data []byte, contentType string) (*RespMediaUpload, error) {
-	return cli.UploadToContentRepo(bytes.NewReader(data), contentType, int64(len(data)))
+	return cli.Upload(bytes.NewReader(data), contentType, int64(len(data)))
 }
 
 // UploadToContentRepo uploads the given bytes to the content repository and returns an MXC URI.
 // See http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-media-r0-upload
-func (cli *Client) UploadToContentRepo(content io.Reader, contentType string, contentLength int64) (*RespMediaUpload, error) {
+func (cli *Client) Upload(content io.Reader, contentType string, contentLength int64) (*RespMediaUpload, error) {
 	req, err := http.NewRequest("POST", cli.BuildBaseURL("_matrix/media/r0/upload"), content)
 	if err != nil {
 		return nil, err
