@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"golang.org/x/net/html"
-	"maubot.xyz"
 )
 
 var HTMLReplyFallbackRegex = regexp.MustCompile(`^<mx-reply>[\s\S]+?</mx-reply>`)
@@ -27,12 +26,12 @@ func TrimReplyFallbackText(text string) string {
 	return strings.TrimSpace(strings.Join(lines, "\n"))
 }
 
-func RemoveReplyFallback(evt *Event) {
-	if len(evt.Content.RelatesTo.InReplyTo.EventID) > 0 {
-		if evt.Content.Format == maubot.FormatHTML {
-			evt.Content.FormattedBody = TrimReplyFallbackHTML(evt.Content.FormattedBody)
+func (content *Content) RemoveReplyFallback() {
+	if len(content.RelatesTo.InReplyTo.EventID) > 0 {
+		if content.Format == FormatHTML {
+			content.FormattedBody = TrimReplyFallbackHTML(content.FormattedBody)
 		}
-		evt.Content.Body = TrimReplyFallbackText(evt.Content.Body)
+		content.Body = TrimReplyFallbackText(content.Body)
 	}
 }
 
@@ -43,7 +42,7 @@ const ReplyFormat = `<mx-reply><blockquote>
 </blockquote></mx-reply>
 `
 
-func ReplyFallbackHTML(evt *Event) string {
+func (evt *Event) GenerateReplyFallbackHTML() string {
 	body := evt.Content.FormattedBody
 	if len(body) == 0 {
 		body = html.EscapeString(evt.Content.Body)
@@ -54,7 +53,7 @@ func ReplyFallbackHTML(evt *Event) string {
 	return fmt.Sprintf(ReplyFormat, evt.RoomID, evt.ID, evt.Sender, senderDisplayName, body)
 }
 
-func ReplyFallbackText(evt *Event) string {
+func (evt *Event) GenerateReplyFallbackText() string {
 	body := evt.Content.Body
 	lines := strings.Split(strings.TrimSpace(body), "\n")
 	firstLine, lines := lines[0], lines[1:]
@@ -70,18 +69,21 @@ func ReplyFallbackText(evt *Event) string {
 	return fallbackText.String()
 }
 
-func SetReply(content maubot.Content, inReplyTo *Event) maubot.Content {
-	content.RelatesTo.InReplyTo.EventID = inReplyTo.ID
-	content.RelatesTo.InReplyTo.RoomID = inReplyTo.RoomID
-
-	if content.MsgType == maubot.MsgText || content.MsgType == maubot.MsgNotice {
-		if len(content.FormattedBody) == 0 || content.Format != maubot.FormatHTML {
-			content.FormattedBody = html.EscapeString(content.Body)
-			content.Format = maubot.FormatHTML
-		}
-		content.FormattedBody = ReplyFallbackHTML(inReplyTo) + content.FormattedBody
-		content.Body = ReplyFallbackText(inReplyTo) + content.Body
+func (content *Content) SetReply(inReplyTo *Event) {
+	if content.RelatesTo == nil {
+		content.RelatesTo = &RelatesTo{}
+	}
+	content.RelatesTo.InReplyTo = InReplyTo{
+		EventID: inReplyTo.ID,
+		RoomID: inReplyTo.RoomID,
 	}
 
-	return content
+	if content.MsgType == MsgText || content.MsgType == MsgNotice {
+		if len(content.FormattedBody) == 0 || content.Format != FormatHTML {
+			content.FormattedBody = html.EscapeString(content.Body)
+			content.Format = FormatHTML
+		}
+		content.FormattedBody = inReplyTo.GenerateReplyFallbackHTML() + content.FormattedBody
+		content.Body = inReplyTo.GenerateReplyFallbackText() + content.Body
+	}
 }

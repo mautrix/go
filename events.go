@@ -83,12 +83,12 @@ type Content struct {
 	Format        Format      `json:"format,omitempty"`
 	FormattedBody string      `json:"formatted_body,omitempty"`
 
-	Info FileInfo `json:"info,omitempty"`
+	Info *FileInfo `json:"info,omitempty"`
 	URL  string   `json:"url,omitempty"`
 
 	Membership string `json:"membership,omitempty"`
 
-	RelatesTo RelatesTo `json:"m.relates_to,omitempty"`
+	RelatesTo *RelatesTo `json:"m.relates_to,omitempty"`
 }
 
 type serializableContent Content

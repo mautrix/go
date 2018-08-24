@@ -609,6 +609,13 @@ func (cli *Client) UserTyping(roomID string, typing bool, timeout int64) (resp *
 	return
 }
 
+func (cli *Client) SetPresence(status string) (err error) {
+	req := ReqPresence{Presence: status}
+	u := cli.BuildURL("presence", cli.UserID, "status")
+	_, err = cli.MakeRequest("PUT", u, req, nil)
+	return
+}
+
 // StateEvent gets a single state event in a room. It will attempt to JSON unmarshal into the given "outContent" struct with
 // the HTTP response body, or return an error.
 // See http://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-r0-rooms-roomid-state-eventtype-statekey
