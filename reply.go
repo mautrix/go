@@ -27,12 +27,19 @@ func TrimReplyFallbackText(text string) string {
 }
 
 func (content *Content) RemoveReplyFallback() {
-	if len(content.RelatesTo.InReplyTo.EventID) > 0 {
+	if len(content.GetReplyTo()) > 0 {
 		if content.Format == FormatHTML {
 			content.FormattedBody = TrimReplyFallbackHTML(content.FormattedBody)
 		}
 		content.Body = TrimReplyFallbackText(content.Body)
 	}
+}
+
+func (content *Content) GetReplyTo() string {
+	if content.RelatesTo != nil {
+		return content.RelatesTo.InReplyTo.EventID
+	}
+	return ""
 }
 
 const ReplyFormat = `<mx-reply><blockquote>
@@ -75,7 +82,7 @@ func (content *Content) SetReply(inReplyTo *Event) {
 	}
 	content.RelatesTo.InReplyTo = InReplyTo{
 		EventID: inReplyTo.ID,
-		RoomID: inReplyTo.RoomID,
+		RoomID:  inReplyTo.RoomID,
 	}
 
 	if content.MsgType == MsgText || content.MsgType == MsgNotice {

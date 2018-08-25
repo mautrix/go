@@ -100,6 +100,13 @@ func (content *Content) UnmarshalJSON(data []byte) error {
 	return json.Unmarshal(data, (*serializableContent)(content))
 }
 
+func (content *Content) GetInfo() *FileInfo {
+	if content.Info == nil {
+		content.Info = &FileInfo{}
+	}
+	return content.Info
+}
+
 type FileInfo struct {
 	MimeType      string    `json:"mimetype,omitempty"`
 	ThumbnailInfo *FileInfo `json:"thumbnail_info,omitempty"`
@@ -108,6 +115,13 @@ type FileInfo struct {
 	Width         int       `json:"w,omitempty"`
 	Duration      uint      `json:"duration,omitempty"`
 	Size          int       `json:"size,omitempty"`
+}
+
+func (fileInfo *FileInfo) GetThumbnailInfo() *FileInfo {
+	if fileInfo.ThumbnailInfo == nil {
+		fileInfo.ThumbnailInfo = &FileInfo{}
+	}
+	return fileInfo.ThumbnailInfo
 }
 
 type RelatesTo struct {
