@@ -1,9 +1,9 @@
 package gomatrix
 
 import (
+	"encoding/json"
 	"html"
 	"regexp"
-	"encoding/json"
 )
 
 type EventType string
@@ -75,8 +75,10 @@ type Unsigned struct {
 	ReplacesState string                 `json:"replaces_state,omitempty"`
 	Age           int64                  `json:"age,omitempty"`
 }
+
 type Content struct {
-	Raw map[string]interface{} `json:"-"`
+	VeryRaw json.RawMessage        `json:"-"`
+	Raw     map[string]interface{} `json:"-"`
 
 	MsgType       MessageType `json:"msgtype,omitempty"`
 	Body          string      `json:"body,omitempty"`
@@ -84,7 +86,7 @@ type Content struct {
 	FormattedBody string      `json:"formatted_body,omitempty"`
 
 	Info *FileInfo `json:"info,omitempty"`
-	URL  string   `json:"url,omitempty"`
+	URL  string    `json:"url,omitempty"`
 
 	Membership string `json:"membership,omitempty"`
 
@@ -94,10 +96,16 @@ type Content struct {
 type serializableContent Content
 
 func (content *Content) UnmarshalJSON(data []byte) error {
+	content.VeryRaw = data
 	if err := json.Unmarshal(data, &content.Raw); err != nil {
 		return err
 	}
 	return json.Unmarshal(data, (*serializableContent)(content))
+}
+
+func (content *Content) UnmarshalPowerLevels() (pl PowerLevels, err error) {
+	err = json.Unmarshal(content.VeryRaw, &pl)
+	return
 }
 
 func (content *Content) GetInfo() *FileInfo {
@@ -105,6 +113,56 @@ func (content *Content) GetInfo() *FileInfo {
 		content.Info = &FileInfo{}
 	}
 	return content.Info
+}
+
+type PowerLevels struct {
+	Users        map[string]int `json:"users"`
+	UsersDefault int            `json:"users_default,omitempty"`
+
+	Events        map[string]int `json:"events"`
+	EventsDefault int            `json:"events_default,omitempty"`
+
+	StateDefaultPtr *int `json:"state_default,omitempty"`
+
+	InvitePtr *int `json:"invite,omitempty"`
+	KickPtr   *int `json:"kick,omitempty"`
+	BanPtr    *int `json:"ban,omitempty"`
+	RedactPtr *int `json:"redact,omitempty"`
+}
+
+func (pl PowerLevels) Invite() int {
+	if pl.InvitePtr != nil {
+		return *pl.InvitePtr
+	}
+	return 50
+}
+
+func (pl PowerLevels) Kick() int {
+	if pl.KickPtr != nil {
+		return *pl.KickPtr
+	}
+	return 50
+}
+
+func (pl PowerLevels) Ban() int {
+	if pl.BanPtr != nil {
+		return *pl.BanPtr
+	}
+	return 50
+}
+
+func (pl PowerLevels) Redact() int {
+	if pl.RedactPtr != nil {
+		return *pl.RedactPtr
+	}
+	return 50
+}
+
+func (pl PowerLevels) StateDefault() int {
+	if pl.StateDefaultPtr != nil {
+		return *pl.StateDefaultPtr
+	}
+	return 50
 }
 
 type FileInfo struct {
