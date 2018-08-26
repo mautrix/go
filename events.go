@@ -2,8 +2,7 @@ package gomatrix
 
 import (
 	"encoding/json"
-	"html"
-	"regexp"
+	"sync"
 )
 
 type EventType string
@@ -60,6 +59,8 @@ type Event struct {
 	Content   Content   `json:"content"`             // The JSON content of the event.
 	Redacts   string    `json:"redacts,omitempty"`   // The event ID that was redacted if a m.room.redaction event
 	Unsigned  Unsigned  `json:"unsigned,omitempty"`  // Unsigned content set by own homeserver.
+
+	InviteRoomState []StrippedState `json:"invite_room_state"`
 }
 
 func (evt *Event) GetStateKey() string {
@@ -67,6 +68,12 @@ func (evt *Event) GetStateKey() string {
 		return *evt.StateKey
 	}
 	return ""
+}
+
+type StrippedState struct {
+	Content  Content   `json:"content"`
+	Type     EventType `json:"type"`
+	StateKey string    `json:"state_key"`
 }
 
 type Unsigned struct {
@@ -88,9 +95,15 @@ type Content struct {
 	Info *FileInfo `json:"info,omitempty"`
 	URL  string    `json:"url,omitempty"`
 
+	// Membership key for easy access in m.room.member events
 	Membership string `json:"membership,omitempty"`
 
 	RelatesTo *RelatesTo `json:"m.relates_to,omitempty"`
+
+	*PowerLevels
+	*Member
+	*Aliases
+	*CanonicalAlias
 }
 
 type serializableContent Content
@@ -103,10 +116,25 @@ func (content *Content) UnmarshalJSON(data []byte) error {
 	return json.Unmarshal(data, (*serializableContent)(content))
 }
 
-func (content *Content) UnmarshalPowerLevels() (pl PowerLevels, err error) {
+/*func (content *Content) UnmarshalPowerLevels() (pl PowerLevels, err error) {
 	err = json.Unmarshal(content.VeryRaw, &pl)
 	return
 }
+
+func (content *Content) UnmarshalMember() (m Member, err error) {
+	err = json.Unmarshal(content.VeryRaw, &m)
+	return
+}
+
+func (content *Content) UnmarshalAliases() (a Aliases, err error) {
+	err = json.Unmarshal(content.VeryRaw, &a)
+	return
+}
+
+func (content *Content) UnmarshalCanonicalAlias() (ca CanonicalAlias, err error) {
+	err = json.Unmarshal(content.VeryRaw, &ca)
+	return
+}*/
 
 func (content *Content) GetInfo() *FileInfo {
 	if content.Info == nil {
@@ -115,12 +143,38 @@ func (content *Content) GetInfo() *FileInfo {
 	return content.Info
 }
 
+type Member struct {
+	Membership       string            `json:"membership,omitempty"`
+	AvatarURL        string            `json:"avatar_url,omitempty"`
+	Displayname      string            `json:"displayname,omitempty"`
+	ThirdPartyInvite *ThirdPartyInvite `json:"third_party_invite,omitempty"`
+}
+
+type ThirdPartyInvite struct {
+	DisplayName string `json:"display_name"`
+	Signed      struct {
+		Token      string          `json:"token"`
+		Signatures json.RawMessage `json:"signatures"`
+		MXID       string          `json:"mxid"`
+	}
+}
+
+type Aliases struct {
+	Aliases []string `json:"aliases,omitempty"`
+}
+
+type CanonicalAlias struct {
+	Alias string `json:"alias,omitempty"`
+}
+
 type PowerLevels struct {
-	Users        map[string]int `json:"users"`
+	usersLock    sync.RWMutex   `json:"-"`
+	Users        map[string]int `json:"users,omitempty"`
 	UsersDefault int            `json:"users_default,omitempty"`
 
-	Events        map[string]int `json:"events"`
-	EventsDefault int            `json:"events_default,omitempty"`
+	eventsLock    sync.RWMutex      `json:"-"`
+	Events        map[EventType]int `json:"events,omitempty"`
+	EventsDefault int               `json:"events_default,omitempty"`
 
 	StateDefaultPtr *int `json:"state_default,omitempty"`
 
@@ -130,39 +184,100 @@ type PowerLevels struct {
 	RedactPtr *int `json:"redact,omitempty"`
 }
 
-func (pl PowerLevels) Invite() int {
+func (pl *PowerLevels) Invite() int {
 	if pl.InvitePtr != nil {
 		return *pl.InvitePtr
 	}
 	return 50
 }
 
-func (pl PowerLevels) Kick() int {
+func (pl *PowerLevels) Kick() int {
 	if pl.KickPtr != nil {
 		return *pl.KickPtr
 	}
 	return 50
 }
 
-func (pl PowerLevels) Ban() int {
+func (pl *PowerLevels) Ban() int {
 	if pl.BanPtr != nil {
 		return *pl.BanPtr
 	}
 	return 50
 }
 
-func (pl PowerLevels) Redact() int {
+func (pl *PowerLevels) Redact() int {
 	if pl.RedactPtr != nil {
 		return *pl.RedactPtr
 	}
 	return 50
 }
 
-func (pl PowerLevels) StateDefault() int {
+func (pl *PowerLevels) StateDefault() int {
 	if pl.StateDefaultPtr != nil {
 		return *pl.StateDefaultPtr
 	}
 	return 50
+}
+
+func (pl *PowerLevels) GetUserLevel(userID string) int {
+	pl.usersLock.RLock()
+	level, ok := pl.Users[userID]
+	pl.usersLock.RUnlock()
+	if !ok {
+		return pl.UsersDefault
+	}
+	return level
+}
+
+func (pl *PowerLevels) SetUserLevel(userID string, level int) {
+	pl.usersLock.Lock()
+	if level == pl.UsersDefault {
+		delete(pl.Users, userID)
+	} else {
+		pl.Users[userID] = level
+	}
+	pl.usersLock.Unlock()
+}
+
+func (pl *PowerLevels) EnsureUserLevel(userID string, level int) bool {
+	existingLevel := pl.GetUserLevel(userID)
+	if existingLevel != level {
+		pl.SetUserLevel(userID, level)
+		return true
+	}
+	return false
+}
+
+func (pl *PowerLevels) GetEventLevel(eventType EventType, isState bool) int {
+	pl.eventsLock.RLock()
+	level, ok := pl.Events[eventType]
+	pl.eventsLock.RUnlock()
+	if !ok {
+		if isState {
+			return pl.StateDefault()
+		}
+		return pl.EventsDefault
+	}
+	return level
+}
+
+func (pl *PowerLevels) SetEventLevel(eventType EventType, isState bool, level int) {
+	pl.eventsLock.Lock()
+	if (isState && level == pl.StateDefault()) || (!isState && level == pl.EventsDefault) {
+		delete(pl.Events, eventType)
+	} else {
+		pl.Events[eventType] = level
+	}
+	pl.eventsLock.Unlock()
+}
+
+func (pl *PowerLevels) EnsureEventLevel(eventType EventType, isState bool, level int) bool {
+	existingLevel := pl.GetEventLevel(eventType, isState)
+	if existingLevel != level {
+		pl.SetEventLevel(eventType, isState, level)
+		return true
+	}
+	return false
 }
 
 type FileInfo struct {
@@ -190,17 +305,4 @@ type InReplyTo struct {
 	EventID string `json:"event_id,omitempty"`
 	// Not required, just for future-proofing
 	RoomID string `json:"room_id,omitempty"`
-}
-
-var htmlRegex = regexp.MustCompile("<[^<]+?>")
-
-// GetHTMLMessage returns an HTMLMessage with the body set to a stripped version of the provided HTML, in addition
-// to the provided HTML.
-func GetHTMLMessage(msgtype MessageType, htmlText string) Content {
-	return Content{
-		Body:          html.UnescapeString(htmlRegex.ReplaceAllLiteralString(htmlText, "")),
-		MsgType:       msgtype,
-		Format:        "org.matrix.custom.html",
-		FormattedBody: htmlText,
-	}
 }
