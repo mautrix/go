@@ -100,10 +100,12 @@ type Content struct {
 
 	RelatesTo *RelatesTo `json:"m.relates_to,omitempty"`
 
-	*PowerLevels
-	*Member
-	*Aliases
-	*CanonicalAlias
+	PowerLevels
+	Member
+	Aliases
+	CanonicalAlias
+	RoomName
+	RoomTopic
 }
 
 type serializableContent Content
@@ -116,7 +118,7 @@ func (content *Content) UnmarshalJSON(data []byte) error {
 	return json.Unmarshal(data, (*serializableContent)(content))
 }
 
-/*func (content *Content) UnmarshalPowerLevels() (pl PowerLevels, err error) {
+func (content *Content) UnmarshalPowerLevels() (pl PowerLevels, err error) {
 	err = json.Unmarshal(content.VeryRaw, &pl)
 	return
 }
@@ -134,13 +136,21 @@ func (content *Content) UnmarshalAliases() (a Aliases, err error) {
 func (content *Content) UnmarshalCanonicalAlias() (ca CanonicalAlias, err error) {
 	err = json.Unmarshal(content.VeryRaw, &ca)
 	return
-}*/
+}
 
 func (content *Content) GetInfo() *FileInfo {
 	if content.Info == nil {
 		content.Info = &FileInfo{}
 	}
 	return content.Info
+}
+
+type RoomName struct {
+	Name string `json:"name,omitempty"`
+}
+
+type RoomTopic struct {
+	Topic string `json:"topic,omitempty"`
 }
 
 type Member struct {
