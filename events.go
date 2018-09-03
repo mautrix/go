@@ -2,12 +2,62 @@ package gomatrix
 
 import (
 	"encoding/json"
+	"strings"
 	"sync"
 )
 
+type EventTypeClass int
+
+const (
+	// Normal message events
+	MessageEventType EventTypeClass = iota
+	// State events
+	StateEventType
+	// Ephemeral events
+	EphemeralEventType
+	// Account data events
+	AccountDataEventType
+	// Unknown events
+	UnknownEventType
+)
+
 type EventType struct {
-	Type    string
-	IsState bool
+	Type  string
+	Class EventTypeClass
+}
+
+func NewEventType(name string) EventType {
+	evtType := EventType{Type: name}
+	evtType.Class = evtType.GuessClass()
+	return evtType
+}
+
+func (et *EventType) IsState() bool {
+	return et.Class == StateEventType
+}
+
+func (et *EventType) IsEphemeral() bool {
+	return et.Class == EphemeralEventType
+}
+
+func (et *EventType) IsCustom() bool {
+	return !strings.HasPrefix(et.Type, "m.")
+}
+
+func (et *EventType) GuessClass() EventTypeClass {
+	switch et.Type {
+	case StateAliases.Type, StateCanonicalAlias.Type, StateCreate.Type, StateJoinRules.Type, StateMember.Type,
+		StatePowerLevels.Type, StateRoomName.Type, StateRoomAvatar.Type, StateTopic.Type, StatePinnedEvents.Type:
+		return StateEventType
+	case EphemeralEventReceipt.Type, EphemeralEventTyping.Type:
+		return EphemeralEventType
+	case AccountDataDirectChats.Type, AccountDataPushRules.Type, AccountDataRoomTags.Type:
+		return AccountDataEventType
+	case EventRedaction.Type, EventMessage.Type, EventSticker.Type:
+		return MessageEventType
+	default:
+		return UnknownEventType
+	}
 }
 
 func (et *EventType) UnmarshalJSON(data []byte) error {
@@ -15,14 +65,7 @@ func (et *EventType) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
-
-	switch et.Type {
-	case StateAliases.Type, StateCanonicalAlias.Type, StateCreate.Type, StateJoinRules.Type, StateMember.Type,
-		StatePowerLevels.Type, StateRoomName.Type, StateRoomAvatar.Type, StateTopic.Type, StatePinnedEvents.Type:
-		et.IsState = true
-	default:
-		et.IsState = false
-	}
+	et.Class = et.GuessClass()
 	return nil
 }
 
@@ -34,28 +77,41 @@ func (et *EventType) String() string {
 	return et.Type
 }
 
-type MessageType string
-
 // State events
 var (
-	StateAliases        = EventType{"m.room.aliases", true}
-	StateCanonicalAlias = EventType{"m.room.canonical_alias", true}
-	StateCreate         = EventType{"m.room.create", true}
-	StateJoinRules      = EventType{"m.room.join_rules", true}
-	StateMember         = EventType{"m.room.member", true}
-	StatePowerLevels    = EventType{"m.room.power_levels", true}
-	StateRoomName       = EventType{"m.room.name", true}
-	StateTopic          = EventType{"m.room.topic", true}
-	StateRoomAvatar     = EventType{"m.room.avatar", true}
-	StatePinnedEvents   = EventType{"m.room.pinned_events", true}
+	StateAliases        = EventType{"m.room.aliases", StateEventType}
+	StateCanonicalAlias = EventType{"m.room.canonical_alias", StateEventType}
+	StateCreate         = EventType{"m.room.create", StateEventType}
+	StateJoinRules      = EventType{"m.room.join_rules", StateEventType}
+	StateMember         = EventType{"m.room.member", StateEventType}
+	StatePowerLevels    = EventType{"m.room.power_levels", StateEventType}
+	StateRoomName       = EventType{"m.room.name", StateEventType}
+	StateTopic          = EventType{"m.room.topic", StateEventType}
+	StateRoomAvatar     = EventType{"m.room.avatar", StateEventType}
+	StatePinnedEvents   = EventType{"m.room.pinned_events", StateEventType}
 )
 
 // Message events
 var (
-	EventRedaction = EventType{"m.room.redaction", false}
-	EventMessage   = EventType{"m.room.message", false}
-	EventSticker   = EventType{"m.sticker", false}
+	EventRedaction = EventType{"m.room.redaction", MessageEventType}
+	EventMessage   = EventType{"m.room.message", MessageEventType}
+	EventSticker   = EventType{"m.sticker", MessageEventType}
 )
+
+// Ephemeral events
+var (
+	EphemeralEventReceipt = EventType{"m.receipt", EphemeralEventType}
+	EphemeralEventTyping  = EventType{"m.receipt", EphemeralEventType}
+)
+
+// Account data events
+var (
+	AccountDataDirectChats = EventType{"m.direct", AccountDataEventType}
+	AccountDataPushRules   = EventType{"m.push_rules", AccountDataEventType}
+	AccountDataRoomTags    = EventType{"m.tag", AccountDataEventType}
+)
+
+type MessageType string
 
 // Msgtypes
 const (
@@ -105,10 +161,10 @@ type StrippedState struct {
 }
 
 type Unsigned struct {
-	PrevContent   map[string]interface{} `json:"prev_content,omitempty"`
-	PrevSender    string                 `json:"prev_sender,omitempty"`
-	ReplacesState string                 `json:"replaces_state,omitempty"`
-	Age           int64                  `json:"age,omitempty"`
+	PrevContent   *Content `json:"prev_content,omitempty"`
+	PrevSender    string   `json:"prev_sender,omitempty"`
+	ReplacesState string   `json:"replaces_state,omitempty"`
+	Age           int64    `json:"age,omitempty"`
 }
 
 type Content struct {
@@ -124,16 +180,19 @@ type Content struct {
 	URL  string    `json:"url,omitempty"`
 
 	// Membership key for easy access in m.room.member events
-	Membership string `json:"membership,omitempty"`
+	Membership Membership `json:"membership,omitempty"`
 
 	RelatesTo *RelatesTo `json:"m.relates_to,omitempty"`
 
 	PowerLevels
 	Member
-	Aliases
+	Aliases []string `json:"aliases,omitempty"`
 	CanonicalAlias
 	RoomName
 	RoomTopic
+
+	RoomTags      Tags     `json:"tags,omitempty"`
+	TypingUserIDs []string `json:"user_ids,omitempty"`
 }
 
 type serializableContent Content
@@ -156,11 +215,6 @@ func (content *Content) UnmarshalMember() (m Member, err error) {
 	return
 }
 
-func (content *Content) UnmarshalAliases() (a Aliases, err error) {
-	err = json.Unmarshal(content.VeryRaw, &a)
-	return
-}
-
 func (content *Content) UnmarshalCanonicalAlias() (ca CanonicalAlias, err error) {
 	err = json.Unmarshal(content.VeryRaw, &ca)
 	return
@@ -173,6 +227,10 @@ func (content *Content) GetInfo() *FileInfo {
 	return content.Info
 }
 
+type Tags map[string]struct {
+	Order string `json:"order"`
+}
+
 type RoomName struct {
 	Name string `json:"name,omitempty"`
 }
@@ -181,11 +239,24 @@ type RoomTopic struct {
 	Topic string `json:"topic,omitempty"`
 }
 
+// Membership is an enum specifying the membership state of a room member.
+type Membership string
+
+// The allowed membership states as specified in spec section 10.5.5.
+const (
+	MembershipJoin   Membership = "join"
+	MembershipLeave  Membership = "leave"
+	MembershipInvite Membership = "invite"
+	MembershipBan    Membership = "ban"
+	MembershipKnock  Membership = "knock"
+)
+
 type Member struct {
-	Membership       string            `json:"membership,omitempty"`
+	Membership       Membership        `json:"membership,omitempty"`
 	AvatarURL        string            `json:"avatar_url,omitempty"`
 	Displayname      string            `json:"displayname,omitempty"`
 	ThirdPartyInvite *ThirdPartyInvite `json:"third_party_invite,omitempty"`
+	Reason           string            `json:"reason,omitempty"`
 }
 
 type ThirdPartyInvite struct {
@@ -197,10 +268,6 @@ type ThirdPartyInvite struct {
 	}
 }
 
-type Aliases struct {
-	Aliases []string `json:"aliases,omitempty"`
-}
-
 type CanonicalAlias struct {
 	Alias string `json:"alias,omitempty"`
 }
@@ -210,9 +277,9 @@ type PowerLevels struct {
 	Users        map[string]int `json:"users,omitempty"`
 	UsersDefault int            `json:"users_default,omitempty"`
 
-	eventsLock    sync.RWMutex      `json:"-"`
+	eventsLock    sync.RWMutex   `json:"-"`
 	Events        map[string]int `json:"events,omitempty"`
-	EventsDefault int               `json:"events_default,omitempty"`
+	EventsDefault int            `json:"events_default,omitempty"`
 
 	StateDefaultPtr *int `json:"state_default,omitempty"`
 
@@ -291,7 +358,7 @@ func (pl *PowerLevels) GetEventLevel(eventType EventType) int {
 	defer pl.eventsLock.RUnlock()
 	level, ok := pl.Events[eventType.String()]
 	if !ok {
-		if eventType.IsState {
+		if eventType.IsState() {
 			return pl.StateDefault()
 		}
 		return pl.EventsDefault
@@ -302,7 +369,7 @@ func (pl *PowerLevels) GetEventLevel(eventType EventType) int {
 func (pl *PowerLevels) SetEventLevel(eventType EventType, level int) {
 	pl.eventsLock.Lock()
 	defer pl.eventsLock.Unlock()
-	if (eventType.IsState && level == pl.StateDefault()) || (!eventType.IsState && level == pl.EventsDefault) {
+	if (eventType.IsState() && level == pl.StateDefault()) || (!eventType.IsState() && level == pl.EventsDefault) {
 		delete(pl.Events, eventType.String())
 	} else {
 		pl.Events[eventType.String()] = level
