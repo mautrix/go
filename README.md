@@ -1,6 +1,4 @@
-# gomatrix
-[![GoDoc](https://godoc.org/github.com/matrix-org/gomatrix?status.svg)](https://godoc.org/github.com/matrix-org/gomatrix)
+# mautrix-go
+[![GoDoc](https://godoc.org/maunium.net/go/mautrix?status.svg)](https://godoc.org/maunium.net/go/mautrix)
 
-A Golang Matrix client.
-
-**THIS IS UNDER ACTIVE DEVELOPMENT: BREAKING CHANGES ARE FREQUENT.**
+A Golang Matrix framework.
