@@ -1,12 +1,13 @@
+// Copyright 2018 Tulir Asokan
 package format
 
 import (
 	"gopkg.in/russross/blackfriday.v2"
-	"maunium.net/go/gomatrix"
+	"maunium.net/go/mautrix"
 	"strings"
 )
 
-func RenderMarkdown(text string) gomatrix.Content {
+func RenderMarkdown(text string) mautrix.Content {
 	parser := blackfriday.New(
 		blackfriday.WithExtensions(blackfriday.NoIntraEmphasis |
 			blackfriday.Tables |
@@ -28,10 +29,10 @@ func RenderMarkdown(text string) gomatrix.Content {
 	renderer.RenderFooter(&buf, ast)
 	htmlBody := buf.String()
 
-	return gomatrix.Content{
+	return mautrix.Content{
 		FormattedBody: htmlBody,
-		Format:        gomatrix.FormatHTML,
-		MsgType:       gomatrix.MsgText,
+		Format:        mautrix.FormatHTML,
+		MsgType:       mautrix.MsgText,
 		Body:          HTMLToText(htmlBody),
 	}
 }

@@ -1,7 +1,7 @@
-// Package gomatrix implements the Matrix Client-Server API.
+// Package mautrix implements the Matrix Client-Server API.
 //
-// Specification can be found at http://matrix.org/docs/spec/client_server/r0.2.0.html
-package gomatrix
+// Specification can be found at http://matrix.org/docs/spec/client_server/r0.4.0.html
+package mautrix
 
 import (
 	"bytes"

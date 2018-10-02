@@ -1,4 +1,4 @@
-package gomatrix
+package mautrix
 
 import (
 	"testing"

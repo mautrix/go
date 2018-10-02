@@ -1,4 +1,4 @@
-package gomatrix
+package mautrix
 
 // RespError is the standard JSON error response from Homeservers. It also implements the Golang "error" interface.
 // See http://matrix.org/docs/spec/client_server/r0.2.0.html#api-standards

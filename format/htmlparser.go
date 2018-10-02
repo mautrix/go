@@ -1,3 +1,4 @@
+// Copyright 2018 Tulir Asokan
 package format
 
 import (
