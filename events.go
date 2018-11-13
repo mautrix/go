@@ -257,7 +257,7 @@ func (content *Content) GetInfo() *FileInfo {
 }
 
 type Tags map[string]struct {
-	Order string `json:"order"`
+	Order json.Number `json:"order"`
 }
 
 type RoomName struct {
