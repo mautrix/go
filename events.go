@@ -202,7 +202,7 @@ type Content struct {
 	Aliases []string `json:"aliases,omitempty"`
 	Alias string `json:"alias,omitempty"`
 	Name string `json:"name,omitempty"`
-	Topic string `json:"name,omitempty"`
+	Topic string `json:"topic,omitempty"`
 
 	RoomTags      Tags     `json:"tags,omitempty"`
 	TypingUserIDs []string `json:"user_ids,omitempty"`
