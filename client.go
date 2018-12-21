@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -33,6 +34,8 @@ type Client struct {
 	Syncer        Syncer       // The thing which can process /sync responses
 	Store         Storer       // The thing which can store rooms/tokens/ids
 	Logger        Logger
+
+	txnID int32
 
 	// The ?user_id= query parameter for application services. This must be set *prior* to calling a method. If this is empty,
 	// no user_id parameter will be sent.
@@ -461,22 +464,25 @@ func (cli *Client) SetAvatarURL(url string) (err error) {
 	return nil
 }
 
-// SendMessageEvent sends a message event into a room. See http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-rooms-roomid-send-eventtype-txnid
-// contentJSON should be a pointer to something that can be encoded as JSON using json.Marshal.
-func (cli *Client) SendMessageEvent(roomID string, eventType EventType, contentJSON interface{}) (resp *RespSendEvent, err error) {
-	txnID := txnID()
-	urlPath := cli.BuildURL("rooms", roomID, "send", eventType.String(), txnID)
-	_, err = cli.MakeRequest("PUT", urlPath, contentJSON, &resp)
-	return
+type ReqSendEvent struct {
+	Timestamp     int64
+	TransactionID string
 }
 
 // SendMessageEvent sends a message event into a room. See http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-rooms-roomid-send-eventtype-txnid
 // contentJSON should be a pointer to something that can be encoded as JSON using json.Marshal.
-func (cli *Client) SendMassagedMessageEvent(roomID string, eventType EventType, contentJSON interface{}, ts int64) (resp *RespSendEvent, err error) {
-	txnID := txnID()
-	urlPath := cli.BuildURLWithQuery([]string{"rooms", roomID, "send", eventType.String(), txnID}, map[string]string{
-		"ts": strconv.FormatInt(ts, 10),
-	})
+func (cli *Client) SendMessageEvent(roomID string, eventType EventType, contentJSON interface{}, extra ...ReqSendEvent) (resp *RespSendEvent, err error) {
+	txnID := cli.TxnID()
+	queryParams := map[string]string{}
+	if len(extra) > 0 {
+		if len(extra[0].TransactionID) > 0 {
+			txnID = extra[0].TransactionID
+		}
+		if extra[0].Timestamp > 0 {
+			queryParams["ts"] = strconv.FormatInt(extra[0].Timestamp, 10)
+		}
+	}
+	urlPath := cli.BuildURLWithQuery([]string{"rooms", roomID, "send", eventType.String(), txnID}, queryParams)
 	_, err = cli.MakeRequest("PUT", urlPath, contentJSON, &resp)
 	return
 }
@@ -538,8 +544,15 @@ func (cli *Client) SendNotice(roomID, text string) (*RespSendEvent, error) {
 }
 
 // RedactEvent redacts the given event. See http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-rooms-roomid-redact-eventid-txnid
-func (cli *Client) RedactEvent(roomID, eventID string, req *ReqRedact) (resp *RespSendEvent, err error) {
-	txnID := txnID()
+func (cli *Client) RedactEvent(roomID, eventID string, extra ...ReqRedact) (resp *RespSendEvent, err error) {
+	req := ReqRedact{}
+	if len(extra) > 0 {
+		req = extra[0]
+	}
+	txnID := cli.TxnID()
+	if len(req.TxnID) > 0 {
+		txnID = req.TxnID
+	}
 	urlPath := cli.BuildURL("rooms", roomID, "redact", eventID, txnID)
 	_, err = cli.MakeRequest("PUT", urlPath, req, &resp)
 	return
@@ -767,8 +780,9 @@ func (cli *Client) TurnServer() (resp *RespTurnServer, err error) {
 	return
 }
 
-func txnID() string {
-	return "go" + strconv.FormatInt(time.Now().UnixNano(), 10)
+func (cli *Client) TxnID() string {
+	txnID := atomic.AddInt32(&cli.txnID, 1)
+	return fmt.Sprintf("go%d%d", time.Now().UnixNano(), txnID)
 }
 
 // NewClient creates a new Matrix Client ready for syncing
