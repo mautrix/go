@@ -6,9 +6,8 @@ import (
 	"math"
 	"regexp"
 	"strings"
-
-	"golang.org/x/net/html"
 	"strconv"
+	"golang.org/x/net/html"
 )
 
 var MatrixToURL = regexp.MustCompile("^(?:https?://)?(?:www\\.)?matrix\\.to/#/([#@!+].*)(?:/(\\$.+))?")

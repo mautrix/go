@@ -2,9 +2,11 @@
 package format
 
 import (
-	"gopkg.in/russross/blackfriday.v2"
-	"maunium.net/go/mautrix"
 	"strings"
+
+	"github.com/russross/blackfriday/v2"
+
+	"maunium.net/go/mautrix"
 )
 
 func RenderMarkdown(text string) mautrix.Content {
