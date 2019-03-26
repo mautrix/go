@@ -26,10 +26,11 @@ type Logger interface {
 
 // Client represents a Matrix client.
 type Client struct {
-	HomeserverURL *url.URL     // The base homeserver URL
-	Prefix        string       // The API prefix eg '/_matrix/client/r0'
-	UserID        string       // The user ID of the client. Used for forming HTTP paths which use the client's user ID.
-	AccessToken   string       // The access_token for the client.
+	HomeserverURL *url.URL // The base homeserver URL
+	Prefix        []string // The API prefix eg '/_matrix/client/r0'
+	UserID        string   // The user ID of the client. Used for forming HTTP paths which use the client's user ID.
+	AccessToken   string   // The access_token for the client.
+	UserAgent     string
 	Client        *http.Client // The underlying HTTP client which will be used to make HTTP requests.
 	Syncer        Syncer       // The thing which can process /sync responses
 	Store         Storer       // The thing which can store rooms/tokens/ids
@@ -64,11 +65,7 @@ func (e HTTPError) Error() string {
 
 // BuildURL builds a URL with the Client's homserver/prefix/access_token set already.
 func (cli *Client) BuildURL(urlPath ...string) string {
-	ps := []string{cli.Prefix}
-	for _, p := range urlPath {
-		ps = append(ps, p)
-	}
-	return cli.BuildBaseURL(ps...)
+	return cli.BuildBaseURL(append(cli.Prefix, urlPath...)...)
 }
 
 // BuildBaseURL builds a URL with the Client's homeserver/access_token set already. You must
@@ -76,13 +73,17 @@ func (cli *Client) BuildURL(urlPath ...string) string {
 func (cli *Client) BuildBaseURL(urlPath ...string) string {
 	// copy the URL. Purposefully ignore error as the input is from a valid URL already
 	hsURL, _ := url.Parse(cli.HomeserverURL.String())
-	parts := []string{hsURL.Path}
-	parts = append(parts, urlPath...)
-	hsURL.Path = path.Join(parts...)
-	query := hsURL.Query()
-	if cli.AccessToken != "" {
-		query.Set("access_token", cli.AccessToken)
+	rawParts := make([]string, len(urlPath)+1)
+	rawParts[0] = hsURL.RawPath
+	parts := make([]string, len(urlPath)+1)
+	parts[0] = hsURL.Path
+	for i, part := range urlPath {
+		parts[i+1] = part
+		rawParts[i+1] = url.PathEscape(part)
 	}
+	hsURL.Path = path.Join(parts...)
+	hsURL.RawPath = path.Join(rawParts...)
+	query := hsURL.Query()
 	if cli.AppServiceUserID != "" {
 		query.Set("user_id", cli.AppServiceUserID)
 	}
@@ -221,6 +222,8 @@ func (cli *Client) MakeRequest(method string, httpURL string, reqBody interface{
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", cli.UserAgent)
+	req.Header.Set("Authorization", "Bearer "+cli.AccessToken)
 	cli.LogRequest(req, logBody)
 	res, err := cli.Client.Do(req)
 	if res != nil {
@@ -662,7 +665,7 @@ func (cli *Client) Download(mxcURL string) (io.ReadCloser, error) {
 	if len(parts) != 2 {
 		return nil, errors.New("invalid Matrix content URL")
 	}
-	u := cli.BuildBaseURL("_matrix/media/r0/download", parts[0], parts[1])
+	u := cli.BuildBaseURL("_matrix", "media", "r0", "download", parts[0], parts[1])
 	resp, err := cli.Client.Get(u)
 	if err != nil {
 		return nil, err
@@ -686,7 +689,7 @@ func (cli *Client) UploadBytes(data []byte, contentType string) (*RespMediaUploa
 // UploadToContentRepo uploads the given bytes to the content repository and returns an MXC URI.
 // See http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-media-r0-upload
 func (cli *Client) Upload(content io.Reader, contentType string, contentLength int64) (*RespMediaUpload, error) {
-	req, err := http.NewRequest("POST", cli.BuildBaseURL("_matrix/media/r0/upload"), content)
+	req, err := http.NewRequest("POST", cli.BuildBaseURL("_matrix", "media", "r0", "upload"), content)
 	if err != nil {
 		return nil, err
 	}
@@ -797,9 +800,10 @@ func NewClient(homeserverURL, userID, accessToken string) (*Client, error) {
 	store := NewInMemoryStore()
 	cli := Client{
 		AccessToken:   accessToken,
+		UserAgent:     "mautrix-go v0.1.0",
 		HomeserverURL: hsURL,
 		UserID:        userID,
-		Prefix:        "/_matrix/client/r0",
+		Prefix:        []string{"_matrix", "client", "r0"},
 		Syncer:        NewDefaultSyncer(userID, store),
 		Store:         store,
 	}

@@ -41,6 +41,10 @@ func (et *EventType) IsEphemeral() bool {
 	return et.Class == EphemeralEventType
 }
 
+func (et *EventType) IsAccountData() bool {
+	return et.Class == AccountDataEventType
+}
+
 func (et *EventType) IsCustom() bool {
 	return !strings.HasPrefix(et.Type, "m.")
 }
