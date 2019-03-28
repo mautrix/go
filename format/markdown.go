@@ -10,31 +10,23 @@ import (
 )
 
 func RenderMarkdown(text string) mautrix.Content {
-	parser := blackfriday.New(
-		blackfriday.WithExtensions(blackfriday.NoIntraEmphasis |
-			blackfriday.Tables |
-			blackfriday.FencedCode |
-			blackfriday.Strikethrough |
-			blackfriday.SpaceHeadings |
-			blackfriday.DefinitionLists))
-	ast := parser.Parse([]byte(text))
-
-	renderer := blackfriday.NewHTMLRenderer(blackfriday.HTMLRendererParameters{
-		Flags: blackfriday.UseXHTML,
-	})
-
-	var buf strings.Builder
-	renderer.RenderHeader(&buf, ast)
-	ast.Walk(func(node *blackfriday.Node, entering bool) blackfriday.WalkStatus {
-		return renderer.RenderNode(&buf, node, entering)
-	})
-	renderer.RenderFooter(&buf, ast)
-	htmlBody := buf.String()
+	htmlBodyBytes := blackfriday.Run([]byte(text),
+		blackfriday.WithExtensions(blackfriday.NoIntraEmphasis|
+			blackfriday.Tables|
+			blackfriday.FencedCode|
+			blackfriday.Strikethrough|
+			blackfriday.SpaceHeadings|
+			blackfriday.DefinitionLists|
+			blackfriday.HardLineBreak),
+		blackfriday.WithRenderer(blackfriday.NewHTMLRenderer(blackfriday.HTMLRendererParameters{
+			Flags: blackfriday.UseXHTML,
+		})))
+	htmlBody := strings.ReplaceAll(string(htmlBodyBytes), "\n", "")
 
 	return mautrix.Content{
-		FormattedBody: htmlBody,
+		FormattedBody: string(htmlBody),
 		Format:        mautrix.FormatHTML,
 		MsgType:       mautrix.MsgText,
-		Body:          HTMLToText(htmlBody),
+		Body:          HTMLToText(string(htmlBody)),
 	}
 }

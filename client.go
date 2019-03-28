@@ -192,8 +192,11 @@ func (cli *Client) LogRequest(req *http.Request, body string) {
 	if cli.Logger == nil {
 		return
 	}
-
-	cli.Logger.Debugfln("%s %s %s", req.Method, req.URL.Path, body)
+	if len(body) > 0 {
+		cli.Logger.Debugfln("%s %s %s", req.Method, req.URL.String(), body)
+	} else {
+		cli.Logger.Debugfln("%s %s", req.Method, req.URL.String())
+	}
 }
 
 // MakeRequest makes a JSON HTTP request to the given URL.
@@ -205,7 +208,7 @@ func (cli *Client) LogRequest(req *http.Request, body string) {
 func (cli *Client) MakeRequest(method string, httpURL string, reqBody interface{}, resBody interface{}) ([]byte, error) {
 	var req *http.Request
 	var err error
-	logBody := "{}"
+	var logBody string
 	if reqBody != nil {
 		var jsonStr []byte
 		jsonStr, err = json.Marshal(reqBody)
@@ -221,7 +224,9 @@ func (cli *Client) MakeRequest(method string, httpURL string, reqBody interface{
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Content-Type", "application/json")
+	if len(logBody) > 0 {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	req.Header.Set("User-Agent", cli.UserAgent)
 	req.Header.Set("Authorization", "Bearer "+cli.AccessToken)
 	cli.LogRequest(req, logBody)

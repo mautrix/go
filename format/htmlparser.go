@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"math"
 	"regexp"
-	"strings"
 	"strconv"
+	"strings"
+
 	"golang.org/x/net/html"
 )
 
