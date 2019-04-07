@@ -728,7 +728,7 @@ func (cli *Client) Upload(content io.Reader, contentType string, contentLength i
 	return &m, nil
 }
 
-// JoinedMembers returns a map of joined room members. See TODO-SPEC. https://github.com/matrix-org/synapse/pull/1680
+// JoinedMembers returns a map of joined room members. See https://matrix.org/docs/spec/client_server/r0.4.0.html#get-matrix-client-r0-joined-rooms
 //
 // In general, usage of this API is discouraged in favour of /sync, as calling this API can race with incoming membership changes.
 // This API is primarily designed for application services which may want to efficiently look up joined members in a room.
@@ -738,7 +738,7 @@ func (cli *Client) JoinedMembers(roomID string) (resp *RespJoinedMembers, err er
 	return
 }
 
-// JoinedRooms returns a list of rooms which the client is joined to. See TODO-SPEC. https://github.com/matrix-org/synapse/pull/1680
+// JoinedRooms returns a list of rooms which the client is joined to. See https://matrix.org/docs/spec/client_server/r0.4.0.html#get-matrix-client-r0-joined-rooms
 //
 // In general, usage of this API is discouraged in favour of /sync, as calling this API can race with incoming membership changes.
 // This API is primarily designed for application services which may want to efficiently look up joined rooms.

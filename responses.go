@@ -48,12 +48,12 @@ type RespUnbanUser struct{}
 // RespTyping is the JSON response for https://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-rooms-roomid-typing-userid
 type RespTyping struct{}
 
-// RespJoinedRooms is the JSON response for TODO-SPEC https://github.com/matrix-org/synapse/pull/1680
+// RespJoinedRooms is the JSON response for https://matrix.org/docs/spec/client_server/r0.4.0.html#get-matrix-client-r0-joined-rooms
 type RespJoinedRooms struct {
 	JoinedRooms []string `json:"joined_rooms"`
 }
 
-// RespJoinedMembers is the JSON response for TODO-SPEC https://github.com/matrix-org/synapse/pull/1680
+// RespJoinedMembers is the JSON response for https://matrix.org/docs/spec/client_server/r0.4.0.html#get-matrix-client-r0-joined-rooms
 type RespJoinedMembers struct {
 	Joined map[string]struct {
 		DisplayName *string `json:"display_name"`
