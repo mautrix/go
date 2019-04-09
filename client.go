@@ -480,7 +480,7 @@ type ReqSendEvent struct {
 // SendMessageEvent sends a message event into a room. See http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-rooms-roomid-send-eventtype-txnid
 // contentJSON should be a pointer to something that can be encoded as JSON using json.Marshal.
 func (cli *Client) SendMessageEvent(roomID string, eventType EventType, contentJSON interface{}, extra ...ReqSendEvent) (resp *RespSendEvent, err error) {
-	txnID := cli.TxnID()
+	var txnID string
 	queryParams := map[string]string{}
 	if len(extra) > 0 {
 		if len(extra[0].TransactionID) > 0 {
@@ -489,6 +489,9 @@ func (cli *Client) SendMessageEvent(roomID string, eventType EventType, contentJ
 		if extra[0].Timestamp > 0 {
 			queryParams["ts"] = strconv.FormatInt(extra[0].Timestamp, 10)
 		}
+	}
+	if len(txnID) == 0 {
+		txnID = cli.TxnID()
 	}
 	urlPath := cli.BuildURLWithQuery([]string{"rooms", roomID, "send", eventType.String(), txnID}, queryParams)
 	_, err = cli.MakeRequest("PUT", urlPath, contentJSON, &resp)
@@ -557,9 +560,11 @@ func (cli *Client) RedactEvent(roomID, eventID string, extra ...ReqRedact) (resp
 	if len(extra) > 0 {
 		req = extra[0]
 	}
-	txnID := cli.TxnID()
+	var txnID string
 	if len(req.TxnID) > 0 {
 		txnID = req.TxnID
+	} else {
+		txnID = cli.TxnID()
 	}
 	urlPath := cli.BuildURL("rooms", roomID, "redact", eventID, txnID)
 	_, err = cli.MakeRequest("PUT", urlPath, req, &resp)

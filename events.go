@@ -165,22 +165,21 @@ type StrippedState struct {
 	StateKey string    `json:"state_key"`
 }
 
+type OutgoingEventState int
+
+const (
+	EventStateDefault OutgoingEventState = iota
+	EventStateLocalEcho
+	EventStateSendFail
+)
+
 type Unsigned struct {
-	PrevContent   *Content `json:"prev_content,omitempty"`
-	PrevSender    string   `json:"prev_sender,omitempty"`
-	ReplacesState string   `json:"replaces_state,omitempty"`
-	Age           int64    `json:"age,omitempty"`
-
-	PassiveCommand map[string]*MatchedPassiveCommand `json:"m.passive_command,omitempty"`
-}
-
-type MatchedPassiveCommand struct {
-	// Matched  string     `json:"matched"`
-	// Value    string     `json:"value"`
-	Captured [][]string `json:"captured"`
-
-	BackCompatCommand   string            `json:"command"`
-	BackCompatArguments map[string]string `json:"arguments"`
+	PrevContent   *Content           `json:"prev_content,omitempty"`
+	PrevSender    string             `json:"prev_sender,omitempty"`
+	ReplacesState string             `json:"replaces_state,omitempty"`
+	Age           int64              `json:"age,omitempty"`
+	TransactionID string             `json:"transaction_id,omitempty"`
+	OutgoingState OutgoingEventState `json:"-"`
 }
 
 type Content struct {
@@ -204,9 +203,9 @@ type Content struct {
 	*PowerLevels
 	Member
 	Aliases []string `json:"aliases,omitempty"`
-	Alias string `json:"alias,omitempty"`
-	Name string `json:"name,omitempty"`
-	Topic string `json:"topic,omitempty"`
+	Alias   string   `json:"alias,omitempty"`
+	Name    string   `json:"name,omitempty"`
+	Topic   string   `json:"topic,omitempty"`
 
 	RoomTags      Tags     `json:"tags,omitempty"`
 	TypingUserIDs []string `json:"user_ids,omitempty"`

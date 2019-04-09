@@ -2,15 +2,13 @@
 package format
 
 import (
-	"strings"
-
 	"github.com/russross/blackfriday/v2"
 
 	"maunium.net/go/mautrix"
 )
 
 func RenderMarkdown(text string) mautrix.Content {
-	htmlBodyBytes := blackfriday.Run([]byte(text),
+	htmlBody := blackfriday.Run([]byte(text),
 		blackfriday.WithExtensions(blackfriday.NoIntraEmphasis|
 			blackfriday.Tables|
 			blackfriday.FencedCode|
@@ -21,7 +19,7 @@ func RenderMarkdown(text string) mautrix.Content {
 		blackfriday.WithRenderer(blackfriday.NewHTMLRenderer(blackfriday.HTMLRendererParameters{
 			Flags: blackfriday.UseXHTML,
 		})))
-	htmlBody := strings.ReplaceAll(string(htmlBodyBytes), "\n", "")
+	//htmlBody := strings.ReplaceAll(string(htmlBodyBytes), "\n", "")
 
 	return mautrix.Content{
 		FormattedBody: string(htmlBody),
