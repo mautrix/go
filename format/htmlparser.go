@@ -19,6 +19,7 @@ type HTMLParser struct {
 	PillConverter           func(mxid, eventID string) string
 	TabsToSpaces            int
 	Newline                 string
+	HorizontalLine          string
 	BoldConverter           TextConverter
 	ItalicConverter         TextConverter
 	StrikethroughConverter  TextConverter
@@ -66,11 +67,12 @@ func (parser *HTMLParser) listToString(node *html.Node, stripLinebreak bool) str
 			continue
 		}
 		var prefix string
+		// TODO make bullets and numbering configurable
 		if ordered {
 			indexPadding := indentLength - Digits(counter)
 			prefix = fmt.Sprintf("%d. %s", counter, strings.Repeat(" ", indexPadding))
 		} else {
-			prefix = "● "
+			prefix = "* "
 		}
 		str := prefix + child.string
 		counter++
@@ -97,7 +99,7 @@ func (parser *HTMLParser) basicFormatToString(node *html.Node, stripLinebreak bo
 			return parser.ItalicConverter(str)
 		}
 		return fmt.Sprintf("_%s_", str)
-	case "s", "del":
+	case "s", "del", "strike":
 		if parser.StrikethroughConverter != nil {
 			return parser.StrikethroughConverter(str)
 		}
@@ -124,6 +126,7 @@ func (parser *HTMLParser) headerToString(node *html.Node, stripLinebreak bool) s
 func (parser *HTMLParser) blockquoteToString(node *html.Node, stripLinebreak bool) string {
 	str := parser.nodeToTagAwareString(node.FirstChild, stripLinebreak)
 	childrenArr := strings.Split(strings.TrimSpace(str), "\n")
+	// TODO make blockquote prefix configurable
 	for index, child := range childrenArr {
 		childrenArr[index] = "> " + child
 	}
@@ -161,12 +164,14 @@ func (parser *HTMLParser) tagToString(node *html.Node, stripLinebreak bool) stri
 		return parser.headerToString(node, stripLinebreak)
 	case "br":
 		return parser.Newline
-	case "b", "strong", "i", "em", "s", "del", "u", "ins", "tt", "code":
+	case "b", "strong", "i", "em", "s", "strike", "del", "u", "ins", "tt", "code":
 		return parser.basicFormatToString(node, stripLinebreak)
 	case "a":
 		return parser.linkToString(node, stripLinebreak)
 	case "p":
 		return parser.nodeToTagAwareString(node.FirstChild, stripLinebreak) + "\n"
+	case "hr":
+		return parser.HorizontalLine
 	case "pre":
 		var preStr string
 		if node.FirstChild != nil && node.FirstChild.Type == html.ElementNode && node.FirstChild.Data == "code" {
@@ -251,7 +256,8 @@ func (parser *HTMLParser) Parse(htmlData string) string {
 
 func HTMLToText(html string) string {
 	return (&HTMLParser{
-		TabsToSpaces: 4,
-		Newline:      "\n",
+		TabsToSpaces:   4,
+		Newline:        "\n",
+		HorizontalLine: "\n---\n",
 	}).Parse(html)
 }
