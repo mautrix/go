@@ -151,6 +151,9 @@ func (parser *HTMLParser) linkToString(node *html.Node, stripLinebreak bool) str
 		}
 		return str
 	}
+	if str == href {
+		return str
+	}
 	return fmt.Sprintf("%s (%s)", str, href)
 }
 
