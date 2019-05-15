@@ -704,6 +704,7 @@ func (cli *Client) Upload(content io.Reader, contentType string, contentLength i
 		return nil, err
 	}
 	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("Authorization", "Bearer " + cli.AccessToken)
 	req.ContentLength = contentLength
 	cli.LogRequest(req, fmt.Sprintf("%d bytes", contentLength))
 	res, err := cli.Client.Do(req)
