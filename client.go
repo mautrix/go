@@ -35,6 +35,7 @@ type Client struct {
 	Syncer        Syncer       // The thing which can process /sync responses
 	Store         Storer       // The thing which can store rooms/tokens/ids
 	Logger        Logger
+	SyncPresence  string
 
 	txnID int32
 
@@ -140,7 +141,7 @@ func (cli *Client) Sync() error {
 		cli.Store.SaveFilterID(cli.UserID, filterID)
 	}
 	for {
-		resSync, err := cli.SyncRequest(30000, nextBatch, filterID, false, "")
+		resSync, err := cli.SyncRequest(30000, nextBatch, filterID, false, cli.SyncPresence)
 		if err != nil {
 			duration, err2 := cli.Syncer.OnFailedSync(resSync, err)
 			if err2 != nil {
