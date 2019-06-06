@@ -1,7 +1,10 @@
 module maunium.net/go/mautrix
 
+go 1.11
+
 require (
-	golang.org/x/net v0.0.0-20190522155817-f3200d17e092
+	github.com/shurcooL/sanitized_anchor_name v1.0.0 // indirect
+	golang.org/x/net v0.0.0-20190603091049-60506f45cf65
 	gopkg.in/russross/blackfriday.v2 v2.0.1
 )
 
