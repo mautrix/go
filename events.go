@@ -3,6 +3,7 @@ package mautrix
 
 import (
 	"encoding/json"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -100,6 +101,8 @@ var (
 var (
 	EventRedaction = EventType{"m.room.redaction", MessageEventType}
 	EventMessage   = EventType{"m.room.message", MessageEventType}
+	EventEncrypted = EventType{"m.room.encrypted", MessageEventType}
+	EventReaction  = EventType{"m.reaction", MessageEventType}
 	EventSticker   = EventType{"m.sticker", MessageEventType}
 )
 
@@ -180,6 +183,106 @@ type Unsigned struct {
 	Age           int64              `json:"age,omitempty"`
 	TransactionID string             `json:"transaction_id,omitempty"`
 	OutgoingState OutgoingEventState `json:"-"`
+	Relations     Relations          `json:"m.relations,omitempty"`
+}
+
+type RelationChunkItem struct {
+	Type    RelationType `json:"type"`
+	EventID string       `json:"event_id,omitempty"`
+	Key     string       `json:"key,omitempty"`
+	Count   int          `json:"count,omitempty"`
+}
+
+type RelationChunk struct {
+	Chunk []RelationChunkItem `json:"chunk"`
+
+	Limited bool `json:"limited"`
+	Count   int  `json:"count"`
+}
+
+type AnnotationChunk struct {
+	RelationChunk
+	Annotations map[string]int `json:"-"`
+}
+
+type serializableAnnotationChunk AnnotationChunk
+
+func (ac *AnnotationChunk) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, (*serializableAnnotationChunk)(ac)); err != nil {
+		return err
+	}
+	for _, item := range ac.Chunk {
+		ac.Annotations[item.Key] += item.Count
+	}
+	return nil
+}
+
+func (ac *AnnotationChunk) Serialize() RelationChunk {
+	ac.Chunk = make([]RelationChunkItem, len(ac.Annotations))
+	i := 0
+	for key, count := range ac.Annotations {
+		ac.Chunk[i] = RelationChunkItem{
+			Type:  RelAnnotation,
+			Key:   key,
+			Count: count,
+		}
+	}
+	return ac.RelationChunk
+}
+
+type EventIDChunk struct {
+	RelationChunk
+	EventIDs []string `json:"-"`
+}
+
+type serializableEventIDChunk EventIDChunk
+
+func (ec *EventIDChunk) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, (*serializableEventIDChunk)(ec)); err != nil {
+		return err
+	}
+	for _, item := range ec.Chunk {
+		ec.EventIDs = append(ec.EventIDs, item.EventID)
+	}
+	return nil
+}
+
+func (ec *EventIDChunk) Serialize(typ RelationType) RelationChunk {
+	ec.Chunk = make([]RelationChunkItem, len(ec.EventIDs))
+	for i, eventID := range ec.EventIDs {
+		ec.Chunk[i] = RelationChunkItem{
+			Type:    typ,
+			EventID: eventID,
+		}
+	}
+	return ec.RelationChunk
+}
+
+type Relations struct {
+	Raw map[RelationType]RelationChunk `json:"-"`
+
+	Annotations AnnotationChunk `json:"m.annotation,omitempty"`
+	References  EventIDChunk    `json:"m.reference,omitempty"`
+	Replaces    EventIDChunk    `json:"m.replace,omitempty"`
+}
+
+type serializableRelations Relations
+
+func (relations *Relations) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, &relations.Raw); err != nil {
+		return err
+	}
+	return json.Unmarshal(data, (*serializableRelations)(relations))
+}
+
+func (relations *Relations) MarshalJSON() ([]byte, error) {
+	if relations.Raw == nil {
+		relations.Raw = make(map[RelationType]RelationChunk)
+	}
+	relations.Raw[RelAnnotation] = relations.Annotations.Serialize()
+	relations.Raw[RelReference] = relations.References.Serialize(RelReference)
+	relations.Raw[RelReplace] = relations.Replaces.Serialize(RelReplace)
+	return json.Marshal(relations.Raw)
 }
 
 type Content struct {
@@ -197,8 +300,8 @@ type Content struct {
 	// Membership key for easy access in m.room.member events
 	Membership Membership `json:"membership,omitempty"`
 
-	RelatesTo *RelatesTo      `json:"m.relates_to,omitempty"`
-	Command   *MatchedCommand `json:"m.command,omitempty"`
+	NewContent *Content   `json:"m.new_content,omitempty"`
+	RelatesTo  *RelatesTo `json:"m.relates_to,omitempty"`
 
 	*PowerLevels
 	Member
@@ -221,13 +324,6 @@ func (content *Content) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	return json.Unmarshal(data, (*serializableContent)(content))
-}
-
-func (content *Content) GetCommand() *MatchedCommand {
-	if content.Command == nil {
-		content.Command = &MatchedCommand{}
-	}
-	return content.Command
 }
 
 func (content *Content) GetRelatesTo() *RelatesTo {
@@ -411,10 +507,73 @@ type FileInfo struct {
 	MimeType      string    `json:"mimetype,omitempty"`
 	ThumbnailInfo *FileInfo `json:"thumbnail_info,omitempty"`
 	ThumbnailURL  string    `json:"thumbnail_url,omitempty"`
-	Height        int       `json:"h,omitempty"`
-	Width         int       `json:"w,omitempty"`
-	Duration      uint      `json:"duration,omitempty"`
-	Size          int       `json:"size,omitempty"`
+	Width         int       `json:"-"`
+	Height        int       `json:"-"`
+	Duration      uint      `json:"-"`
+	Size          int       `json:"-"`
+}
+
+type serializableFileInfo struct {
+	MimeType      string                `json:"mimetype,omitempty"`
+	ThumbnailInfo *serializableFileInfo `json:"thumbnail_info,omitempty"`
+	ThumbnailURL  string                `json:"thumbnail_url,omitempty"`
+
+	Width    json.Number `json:"w,omitempty"`
+	Height   json.Number `json:"h,omitempty"`
+	Duration json.Number `json:"duration,omitempty"`
+	Size     json.Number `json:"size,omitempty"`
+}
+
+func (sfi *serializableFileInfo) CopyFrom(fileInfo *FileInfo) *serializableFileInfo {
+	if fileInfo == nil {
+		return nil
+	}
+	*sfi = serializableFileInfo{
+		Width:         json.Number(strconv.Itoa(fileInfo.Width)),
+		Height:        json.Number(strconv.Itoa(fileInfo.Height)),
+		Size:          json.Number(strconv.Itoa(fileInfo.Size)),
+		Duration:      json.Number(strconv.Itoa(int(fileInfo.Duration))),
+		MimeType:      fileInfo.MimeType,
+		ThumbnailURL:  fileInfo.ThumbnailURL,
+		ThumbnailInfo: (&serializableFileInfo{}).CopyFrom(fileInfo.ThumbnailInfo),
+	}
+	return sfi
+}
+
+func (sfi *serializableFileInfo) CopyTo(fileInfo *FileInfo) {
+	*fileInfo = FileInfo{
+		Width:        int(numberToUint(sfi.Width)),
+		Height:       int(numberToUint(sfi.Height)),
+		Size:         int(numberToUint(sfi.Size)),
+		Duration:     numberToUint(sfi.Duration),
+		MimeType:     sfi.MimeType,
+		ThumbnailURL: sfi.ThumbnailURL,
+	}
+	if sfi.ThumbnailInfo != nil {
+		fileInfo.ThumbnailInfo = &FileInfo{}
+		sfi.ThumbnailInfo.CopyTo(fileInfo.ThumbnailInfo)
+	}
+}
+
+func (fileInfo *FileInfo) UnmarshalJSON(data []byte) error {
+	sfi := &serializableFileInfo{}
+	if err := json.Unmarshal(data, sfi); err != nil {
+		return err
+	}
+	sfi.CopyTo(fileInfo)
+	return nil
+}
+
+func (fileInfo *FileInfo) MarshalJSON() ([]byte, error) {
+	return json.Marshal((&serializableFileInfo{}).CopyFrom(fileInfo))
+}
+
+func numberToUint(val json.Number) uint {
+	f64, _ := val.Float64()
+	if f64 > 0 {
+		return uint(f64)
+	}
+	return 0
 }
 
 func (fileInfo *FileInfo) GetThumbnailInfo() *FileInfo {
@@ -424,18 +583,50 @@ func (fileInfo *FileInfo) GetThumbnailInfo() *FileInfo {
 	return fileInfo.ThumbnailInfo
 }
 
+type RelationType string
+
+const (
+	RelReplace    RelationType = "m.replace"
+	RelReference  RelationType = "m.reference"
+	RelAnnotation RelationType = "m.annotation"
+)
+
 type RelatesTo struct {
-	InReplyTo InReplyTo `json:"m.in_reply_to,omitempty"`
+	Type    RelationType
+	EventID string
+	Key     string
 }
 
-type InReplyTo struct {
-	EventID string `json:"event_id,omitempty"`
-	// Not required, just for future-proofing
-	RoomID string `json:"room_id,omitempty"`
+type serializableRelatesTo struct {
+	InReplyTo struct {
+		EventID string `json:"event_id,omitempty"`
+	} `json:"m.in_reply_to,omitempty"`
+	Type    RelationType `json:"rel_type,omitempty"`
+	EventID string       `json:"event_id,omitempty"`
+	Key     string       `json:"key,omitempty"`
 }
 
-type MatchedCommand struct {
-	Target    string            `json:"target"`
-	Matched   string            `json:"matched"`
-	Arguments map[string]string `json:"arguments"`
+func (rel *RelatesTo) UnmarshalJSON(data []byte) error {
+	var srel serializableRelatesTo
+	if err := json.Unmarshal(data, &srel); err != nil {
+		return err
+	}
+	if len(srel.Type) > 0 {
+		rel.Type = srel.Type
+		rel.EventID = srel.EventID
+		rel.Key = srel.Key
+	} else if len(srel.InReplyTo.EventID) > 0 {
+		rel.Type = RelReference
+		rel.EventID = srel.InReplyTo.EventID
+		rel.Key = ""
+	}
+	return nil
+}
+
+func (rel *RelatesTo) MarshalJSON() ([]byte, error) {
+	srel := serializableRelatesTo{Type: rel.Type, EventID: rel.EventID, Key: rel.Key}
+	if rel.Type == RelReference {
+		srel.InReplyTo.EventID = rel.EventID
+	}
+	return json.Marshal(&srel)
 }
