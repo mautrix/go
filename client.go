@@ -502,7 +502,7 @@ func (cli *Client) SendMessageEvent(roomID string, eventType EventType, contentJ
 	}
 
 	urlData := []string{"rooms", roomID, "send", eventType.String(), txnID}
-	if len(extra[0].ParentID) > 0 {
+	if len(req.ParentID) > 0 {
 		urlData = []string{"rooms", roomID, "send_relation", req.ParentID, string(req.RelType), eventType.String(), txnID}
 	}
 
