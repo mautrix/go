@@ -481,25 +481,37 @@ func (cli *Client) SetAvatarURL(url string) (err error) {
 type ReqSendEvent struct {
 	Timestamp     int64
 	TransactionID string
+
+	ParentID string
+	RelType  RelationType
 }
 
 // SendMessageEvent sends a message event into a room. See http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-rooms-roomid-send-eventtype-txnid
 // contentJSON should be a pointer to something that can be encoded as JSON using json.Marshal.
 func (cli *Client) SendMessageEvent(roomID string, eventType EventType, contentJSON interface{}, extra ...ReqSendEvent) (resp *RespSendEvent, err error) {
-	var txnID string
-	queryParams := map[string]string{}
+	var req ReqSendEvent
 	if len(extra) > 0 {
-		if len(extra[0].TransactionID) > 0 {
-			txnID = extra[0].TransactionID
-		}
-		if extra[0].Timestamp > 0 {
-			queryParams["ts"] = strconv.FormatInt(extra[0].Timestamp, 10)
-		}
+		req = extra[0]
 	}
-	if len(txnID) == 0 {
+
+	var txnID string
+	if len(req.TransactionID) > 0 {
+		txnID = req.TransactionID
+	} else {
 		txnID = cli.TxnID()
 	}
-	urlPath := cli.BuildURLWithQuery([]string{"rooms", roomID, "send", eventType.String(), txnID}, queryParams)
+
+	queryParams := map[string]string{}
+	if req.Timestamp > 0 {
+		queryParams["ts"] = strconv.FormatInt(req.Timestamp, 10)
+	}
+
+	urlData := []string{"rooms", roomID, "send", eventType.String(), txnID}
+	if len(req.ParentID) > 0 {
+		urlData = []string{"rooms", roomID, "send_relation", req.ParentID, string(req.RelType), eventType.String(), txnID}
+	}
+
+	urlPath := cli.BuildURLWithQuery(urlData, queryParams)
 	_, err = cli.MakeRequest("PUT", urlPath, contentJSON, &resp)
 	return
 }
@@ -557,6 +569,16 @@ func (cli *Client) SendNotice(roomID, text string) (*RespSendEvent, error) {
 	return cli.SendMessageEvent(roomID, EventMessage, Content{
 		MsgType: MsgNotice,
 		Body:    text,
+	})
+}
+
+func (cli *Client) SendReaction(roomID, eventID, reaction string) (*RespSendEvent, error) {
+	return cli.SendMessageEvent(roomID, EventReaction, Content{
+		RelatesTo: &RelatesTo{
+			EventID: eventID,
+			Type:    RelAnnotation,
+			Key:     reaction,
+		},
 	})
 }
 
@@ -710,7 +732,7 @@ func (cli *Client) Upload(content io.Reader, contentType string, contentLength i
 		return nil, err
 	}
 	req.Header.Set("Content-Type", contentType)
-	req.Header.Set("Authorization", "Bearer " + cli.AccessToken)
+	req.Header.Set("Authorization", "Bearer "+cli.AccessToken)
 	req.ContentLength = contentLength
 	cli.LogRequest(req, fmt.Sprintf("%d bytes", contentLength))
 	res, err := cli.Client.Do(req)
