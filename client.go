@@ -238,11 +238,10 @@ func (cli *Client) MakeRequest(method string, httpURL string, reqBody interface{
 	if err != nil {
 		return nil, err
 	}
-	contents, err := ioutil.ReadAll(res.Body)
 	if res.StatusCode/100 != 2 { // not 2xx
 		var wrap error
 		respErr := &RespError{}
-		if _ = json.Unmarshal(contents, respErr); respErr.ErrCode != "" {
+		if _ = json.NewDecoder(res.Body).Decode(respErr); respErr.ErrCode != "" {
 			wrap = respErr
 		} else {
 			respErr = nil
@@ -252,26 +251,32 @@ func (cli *Client) MakeRequest(method string, httpURL string, reqBody interface{
 		// HTTP error instead (e.g proxy errors which return HTML).
 		msg := "Failed to " + method + " JSON to " + req.URL.Path
 		if wrap == nil {
+			contents, err := ioutil.ReadAll(res.Body)
+			if err != nil {
+				return nil, err
+			}
 			msg = msg + ": " + string(contents)
 		}
 
-		return contents, HTTPError{
+		return nil, HTTPError{
 			Code:         res.StatusCode,
 			Message:      msg,
 			WrappedError: wrap,
 			RespError:    respErr,
 		}
 	}
+
+	if resBody != nil {
+		if err = json.NewDecoder(res.Body).Decode(&resBody); err != nil {
+			return nil, err
+		}
+		return nil, nil
+	}
+
+	contents, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		return nil, err
 	}
-
-	if resBody != nil {
-		if err = json.Unmarshal(contents, &resBody); err != nil {
-			return nil, err
-		}
-	}
-
 	return contents, nil
 }
 
