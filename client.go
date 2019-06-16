@@ -817,6 +817,22 @@ func (cli *Client) MarkRead(roomID, eventID string) (err error) {
 	return
 }
 
+func (cli *Client) AddTag(roomID, tag string, order float64) (err error) {
+	urlPath := cli.BuildURL("user", cli.UserID, "rooms", roomID, "tags", tag)
+	var tagData Tag
+	if order == order {
+		tagData.Order = json.Number(strconv.FormatFloat(order, 'e', -1, 64))
+	}
+	_, err = cli.MakeRequest("PUT", urlPath, tagData, nil)
+	return
+}
+
+func (cli *Client) RemoveTag(roomID, tag string) (err error) {
+	urlPath := cli.BuildURL("user", cli.UserID, "rooms", roomID, "tags", tag)
+	_, err = cli.MakeRequest("DELETE", urlPath, nil, nil)
+	return
+}
+
 // TurnServer returns turn server details and credentials for the client to use when initiating calls.
 // See http://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-r0-voip-turnserver
 func (cli *Client) TurnServer() (resp *RespTurnServer, err error) {

@@ -357,8 +357,10 @@ func (content *Content) GetInfo() *FileInfo {
 	return content.Info
 }
 
-type Tags map[string]struct {
-	Order json.Number `json:"order"`
+type Tags map[string]Tag
+
+type Tag struct {
+	Order json.Number `json:"order,omitempty"`
 }
 
 // Membership is an enum specifying the membership state of a room member.
