@@ -606,6 +606,27 @@ type serializableRelatesTo struct {
 	Key     string       `json:"key,omitempty"`
 }
 
+func (rel *RelatesTo) GetReplaceID() string {
+	if rel.Type == RelReplace {
+		return rel.EventID
+	}
+	return ""
+}
+
+func (rel *RelatesTo) GetReferenceID() string {
+	if rel.Type == RelReference {
+		return rel.EventID
+	}
+	return ""
+}
+
+func (rel *RelatesTo) GetAnnotationKey() string {
+	if rel.Type == RelAnnotation {
+		return rel.Key
+	}
+	return ""
+}
+
 func (rel *RelatesTo) UnmarshalJSON(data []byte) error {
 	var srel serializableRelatesTo
 	if err := json.Unmarshal(data, &srel); err != nil {
