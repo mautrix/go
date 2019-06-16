@@ -74,6 +74,9 @@ func (cli *Client) BuildURL(urlPath ...string) string {
 func (cli *Client) BuildBaseURL(urlPath ...string) string {
 	// copy the URL. Purposefully ignore error as the input is from a valid URL already
 	hsURL, _ := url.Parse(cli.HomeserverURL.String())
+	if hsURL.Scheme == "" {
+		hsURL.Scheme = "https"
+	}
 	rawParts := make([]string, len(urlPath)+1)
 	rawParts[0] = hsURL.RawPath
 	parts := make([]string, len(urlPath)+1)
@@ -832,6 +835,9 @@ func NewClient(homeserverURL, userID, accessToken string) (*Client, error) {
 	hsURL, err := url.Parse(homeserverURL)
 	if err != nil {
 		return nil, err
+	}
+	if hsURL.Scheme == "" {
+		hsURL.Scheme = "https"
 	}
 	// By default, use an in-memory store which will never save filter ids / next batch tokens to disk.
 	// The client will work with this storer: it just won't remember across restarts.
