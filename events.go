@@ -177,13 +177,15 @@ const (
 )
 
 type Unsigned struct {
-	PrevContent   *Content           `json:"prev_content,omitempty"`
-	PrevSender    string             `json:"prev_sender,omitempty"`
-	ReplacesState string             `json:"replaces_state,omitempty"`
-	Age           int64              `json:"age,omitempty"`
-	TransactionID string             `json:"transaction_id,omitempty"`
-	OutgoingState OutgoingEventState `json:"-"`
-	Relations     Relations          `json:"m.relations,omitempty"`
+	PrevContent     *Content           `json:"prev_content,omitempty"`
+	PrevSender      string             `json:"prev_sender,omitempty"`
+	ReplacesState   string             `json:"replaces_state,omitempty"`
+	Age             int64              `json:"age,omitempty"`
+	TransactionID   string             `json:"transaction_id,omitempty"`
+	OutgoingState   OutgoingEventState `json:"-"`
+	Relations       Relations          `json:"m.relations,omitempty"`
+	RedactedBy      string             `json:"redacted_by,omitempty"`
+	RedactedBecause *Event             `json:"redacted_because,omitempty"`
 }
 
 type RelationChunkItem struct {
