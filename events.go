@@ -168,21 +168,12 @@ type StrippedState struct {
 	StateKey string    `json:"state_key"`
 }
 
-type OutgoingEventState int
-
-const (
-	EventStateDefault OutgoingEventState = iota
-	EventStateLocalEcho
-	EventStateSendFail
-)
-
 type Unsigned struct {
 	PrevContent     *Content           `json:"prev_content,omitempty"`
 	PrevSender      string             `json:"prev_sender,omitempty"`
 	ReplacesState   string             `json:"replaces_state,omitempty"`
 	Age             int64              `json:"age,omitempty"`
 	TransactionID   string             `json:"transaction_id,omitempty"`
-	OutgoingState   OutgoingEventState `json:"-"`
 	Relations       Relations          `json:"m.relations,omitempty"`
 	RedactedBy      string             `json:"redacted_by,omitempty"`
 	RedactedBecause *Event             `json:"redacted_because,omitempty"`
@@ -204,7 +195,7 @@ type RelationChunk struct {
 
 type AnnotationChunk struct {
 	RelationChunk
-	Annotations map[string]int `json:"-"`
+	Map map[string]int `json:"-"`
 }
 
 type serializableAnnotationChunk AnnotationChunk
@@ -214,15 +205,15 @@ func (ac *AnnotationChunk) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	for _, item := range ac.Chunk {
-		ac.Annotations[item.Key] += item.Count
+		ac.Map[item.Key] += item.Count
 	}
 	return nil
 }
 
 func (ac *AnnotationChunk) Serialize() RelationChunk {
-	ac.Chunk = make([]RelationChunkItem, len(ac.Annotations))
+	ac.Chunk = make([]RelationChunkItem, len(ac.Map))
 	i := 0
-	for key, count := range ac.Annotations {
+	for key, count := range ac.Map {
 		ac.Chunk[i] = RelationChunkItem{
 			Type:  RelAnnotation,
 			Key:   key,
@@ -234,7 +225,7 @@ func (ac *AnnotationChunk) Serialize() RelationChunk {
 
 type EventIDChunk struct {
 	RelationChunk
-	EventIDs []string `json:"-"`
+	List []string `json:"-"`
 }
 
 type serializableEventIDChunk EventIDChunk
@@ -244,14 +235,14 @@ func (ec *EventIDChunk) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	for _, item := range ec.Chunk {
-		ec.EventIDs = append(ec.EventIDs, item.EventID)
+		ec.List = append(ec.List, item.EventID)
 	}
 	return nil
 }
 
 func (ec *EventIDChunk) Serialize(typ RelationType) RelationChunk {
-	ec.Chunk = make([]RelationChunkItem, len(ec.EventIDs))
-	for i, eventID := range ec.EventIDs {
+	ec.Chunk = make([]RelationChunkItem, len(ec.List))
+	for i, eventID := range ec.List {
 		ec.Chunk[i] = RelationChunkItem{
 			Type:    typ,
 			EventID: eventID,
