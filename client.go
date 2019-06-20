@@ -56,6 +56,53 @@ type HTTPError struct {
 	Code         int
 }
 
+type matrixServer struct {
+	MHomeserver     MHomeserver     `json:"m.homeserver"`
+	MIdentityServer MIdentityServer `json:"m.identity_server"`
+}
+type MHomeserver struct {
+	BaseURL string `json:"base_url"`
+}
+type MIdentityServer struct {
+	BaseURL string `json:"base_url"`
+}
+
+// GetServer follows the Matrix spec by extracting the domain from the user ID
+// to get data about the server the user claims to be trying to connect to.
+// GetServer takes a userID as it's only parameter and returns:
+// The "Home Server", "Identity Server", and an error.
+// Link to Matrix spec: https://matrix.org/docs/spec/client_server/r0.5.0#server-discovery
+func GetServer(userID string) (string, string, error) {
+	domain := strings.Split(userID, ":")[1]
+
+	getReq := fmt.Sprintf("https://%s/.well-known/matrix/client", domain)
+	req, err := http.NewRequest("GET", getReq, nil)
+	if err != nil {
+		return "", "", err
+	}
+
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	defer resp.Body.Close()
+	if err != nil {
+		return "", "", err
+	}
+
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", "", err
+	}
+
+	var mServer matrixServer
+	err = json.Unmarshal(data, &mServer)
+	if err != nil {
+		return "", "", err
+	}
+
+	return mServer.MHomeserver.BaseURL, mServer.MIdentityServer.BaseURL, nil
+}
+
 func (e HTTPError) Error() string {
 	var wrappedErrMsg string
 	if e.WrappedError != nil {
