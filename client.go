@@ -56,51 +56,61 @@ type HTTPError struct {
 	Code         int
 }
 
-type matrixServer struct {
-	MHomeserver     MHomeserver     `json:"m.homeserver"`
-	MIdentityServer MIdentityServer `json:"m.identity_server"`
+type ClientWellKnown struct {
+	Homeserver     HomeserverInfo     `json:"m.homeserver"`
+	IdentityServer IdentityServerInfo `json:"m.identity_server"`
 }
-type MHomeserver struct {
-	BaseURL string `json:"base_url"`
-}
-type MIdentityServer struct {
+
+type HomeserverInfo struct {
 	BaseURL string `json:"base_url"`
 }
 
-// GetServer follows the Matrix spec by extracting the domain from the user ID
+type IdentityServerInfo struct {
+	BaseURL string `json:"base_url"`
+}
+
+// DiscoverClientAPI follows the Matrix spec by extracting the domain from the user ID
 // to get data about the server the user claims to be trying to connect to.
-// GetServer takes a userID as it's only parameter and returns:
-// The "Home Server", "Identity Server", and an error.
+// DiscoverClientAPI takes a userID as it's only parameter and returns:
+// The discovery information struct and an error.
 // Link to Matrix spec: https://matrix.org/docs/spec/client_server/r0.5.0#server-discovery
-func GetServer(userID string) (string, string, error) {
-	domain := strings.Split(userID, ":")[1]
+func DiscoverClientAPI(userID string) (*ClientWellKnown, error) {
+	index := strings.IndexRune(userID, ':')
+	if index == -1 {
+		return nil, errors.New("invalid user ID")
+	}
 
-	getReq := fmt.Sprintf("https://%s/.well-known/matrix/client", domain)
-	req, err := http.NewRequest("GET", getReq, nil)
+	wellKnownURL := url.URL{
+		Scheme: "https",
+		Host: userID[index+1:],
+		Path: "/.well-known/matrix/client",
+	}
+
+	req, err := http.NewRequest("GET", wellKnownURL.String(), nil)
 	if err != nil {
-		return "", "", err
+		return nil, err
 	}
 
 	req.Header.Set("Accept", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
-	defer resp.Body.Close()
 	if err != nil {
-		return "", "", err
+		return nil, err
 	}
+	defer resp.Body.Close()
 
 	data, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return "", "", err
+		return nil, err
 	}
 
-	var mServer matrixServer
-	err = json.Unmarshal(data, &mServer)
+	var wellKnown ClientWellKnown
+	err = json.Unmarshal(data, &wellKnown)
 	if err != nil {
-		return "", "", err
+		return nil, err
 	}
 
-	return mServer.MHomeserver.BaseURL, mServer.MIdentityServer.BaseURL, nil
+	return &wellKnown, nil
 }
 
 func (e HTTPError) Error() string {
