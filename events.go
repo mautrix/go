@@ -359,6 +359,14 @@ type Tag struct {
 // Membership is an enum specifying the membership state of a room member.
 type Membership string
 
+func (ms Membership) IsInviteOrJoin() bool {
+	return ms == MembershipJoin || ms == MembershipInvite
+}
+
+func (ms Membership) IsLeaveOrBan() bool {
+	return ms == MembershipLeave ||  ms == MembershipBan
+}
+
 // The allowed membership states as specified in spec section 10.5.5.
 const (
 	MembershipJoin   Membership = "join"
