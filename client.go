@@ -56,6 +56,63 @@ type HTTPError struct {
 	Code         int
 }
 
+type ClientWellKnown struct {
+	Homeserver     HomeserverInfo     `json:"m.homeserver"`
+	IdentityServer IdentityServerInfo `json:"m.identity_server"`
+}
+
+type HomeserverInfo struct {
+	BaseURL string `json:"base_url"`
+}
+
+type IdentityServerInfo struct {
+	BaseURL string `json:"base_url"`
+}
+
+// DiscoverClientAPI follows the Matrix spec by extracting the domain from the user ID
+// to get data about the server the user claims to be trying to connect to.
+// DiscoverClientAPI takes a userID as it's only parameter and returns:
+// The discovery information struct and an error.
+// Link to Matrix spec: https://matrix.org/docs/spec/client_server/r0.5.0#server-discovery
+func DiscoverClientAPI(userID string) (*ClientWellKnown, error) {
+	index := strings.IndexRune(userID, ':')
+	if index == -1 {
+		return nil, errors.New("invalid user ID")
+	}
+
+	wellKnownURL := url.URL{
+		Scheme: "https",
+		Host: userID[index+1:],
+		Path: "/.well-known/matrix/client",
+	}
+
+	req, err := http.NewRequest("GET", wellKnownURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var wellKnown ClientWellKnown
+	err = json.Unmarshal(data, &wellKnown)
+	if err != nil {
+		return nil, err
+	}
+
+	return &wellKnown, nil
+}
+
 func (e HTTPError) Error() string {
 	var wrappedErrMsg string
 	if e.WrappedError != nil {
