@@ -296,12 +296,12 @@ type ThirdPartyInvite struct {
 
 type PowerLevels struct {
 	usersLock    sync.RWMutex   `json:"-"`
-	Users        map[string]int `json:"users,omitempty"`
-	UsersDefault int            `json:"users_default,omitempty"`
+	Users        map[string]int `json:"users"`
+	UsersDefault int            `json:"users_default"`
 
 	eventsLock    sync.RWMutex   `json:"-"`
-	Events        map[string]int `json:"events,omitempty"`
-	EventsDefault int            `json:"events_default,omitempty"`
+	Events        map[string]int `json:"events"`
+	EventsDefault int            `json:"events_default"`
 
 	StateDefaultPtr *int `json:"state_default,omitempty"`
 

@@ -19,10 +19,13 @@ type RelatesTo struct {
 	Key     string
 }
 
+type serializableInReplyTo struct {
+	EventID string `json:"event_id,omitempty"`
+}
+
 type serializableRelatesTo struct {
-	InReplyTo struct {
-		EventID string `json:"event_id,omitempty"`
-	} `json:"m.in_reply_to,omitempty"`
+	InReplyTo *serializableInReplyTo `json:"m.in_reply_to,omitempty"`
+
 	Type    RelationType `json:"rel_type,omitempty"`
 	EventID string       `json:"event_id,omitempty"`
 	Key     string       `json:"key,omitempty"`
@@ -58,7 +61,7 @@ func (rel *RelatesTo) UnmarshalJSON(data []byte) error {
 		rel.Type = srel.Type
 		rel.EventID = srel.EventID
 		rel.Key = srel.Key
-	} else if len(srel.InReplyTo.EventID) > 0 {
+	} else if srel.InReplyTo != nil && len(srel.InReplyTo.EventID) > 0 {
 		rel.Type = RelReference
 		rel.EventID = srel.InReplyTo.EventID
 		rel.Key = ""
@@ -69,7 +72,7 @@ func (rel *RelatesTo) UnmarshalJSON(data []byte) error {
 func (rel *RelatesTo) MarshalJSON() ([]byte, error) {
 	srel := serializableRelatesTo{Type: rel.Type, EventID: rel.EventID, Key: rel.Key}
 	if rel.Type == RelReference {
-		srel.InReplyTo.EventID = rel.EventID
+		srel.InReplyTo = &serializableInReplyTo{rel.EventID}
 	}
 	return json.Marshal(&srel)
 }
