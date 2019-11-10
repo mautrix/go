@@ -169,14 +169,14 @@ type StrippedState struct {
 }
 
 type Unsigned struct {
-	PrevContent     *Content           `json:"prev_content,omitempty"`
-	PrevSender      string             `json:"prev_sender,omitempty"`
-	ReplacesState   string             `json:"replaces_state,omitempty"`
-	Age             int64              `json:"age,omitempty"`
-	TransactionID   string             `json:"transaction_id,omitempty"`
-	Relations       Relations          `json:"m.relations,omitempty"`
-	RedactedBy      string             `json:"redacted_by,omitempty"`
-	RedactedBecause *Event             `json:"redacted_because,omitempty"`
+	PrevContent     *Content  `json:"prev_content,omitempty"`
+	PrevSender      string    `json:"prev_sender,omitempty"`
+	ReplacesState   string    `json:"replaces_state,omitempty"`
+	Age             int64     `json:"age,omitempty"`
+	TransactionID   string    `json:"transaction_id,omitempty"`
+	Relations       Relations `json:"m.relations,omitempty"`
+	RedactedBy      string    `json:"redacted_by,omitempty"`
+	RedactedBecause *Event    `json:"redacted_because,omitempty"`
 }
 
 type Content struct {
@@ -265,7 +265,7 @@ func (ms Membership) IsInviteOrJoin() bool {
 }
 
 func (ms Membership) IsLeaveOrBan() bool {
-	return ms == MembershipLeave ||  ms == MembershipBan
+	return ms == MembershipLeave || ms == MembershipBan
 }
 
 // The allowed membership states as specified in spec section 10.5.5.
@@ -281,6 +281,7 @@ type Member struct {
 	Membership       Membership        `json:"membership,omitempty"`
 	AvatarURL        string            `json:"avatar_url,omitempty"`
 	Displayname      string            `json:"displayname,omitempty"`
+	IsDirect         bool              `json:"is_direct,omitempty"`
 	ThirdPartyInvite *ThirdPartyInvite `json:"third_party_invite,omitempty"`
 	Reason           string            `json:"reason,omitempty"`
 }
