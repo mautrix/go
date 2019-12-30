@@ -10,16 +10,26 @@ type ReqRegister struct {
 	Auth                     interface{} `json:"auth,omitempty"`
 }
 
+type UserIdentifier struct {
+	Type string `json:"type"`
+
+	User string `json:"user,omitempty"`
+
+	Medium  string `json:"medium,omitempty"`
+	Address string `json:"address,omitempty"`
+
+	Country string `json:"country,omitempty"`
+	Phone   string `json:"phone,omitempty"`
+}
+
 // ReqLogin is the JSON request for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-login
 type ReqLogin struct {
-	Type                     string `json:"type"`
-	Password                 string `json:"password,omitempty"`
-	Medium                   string `json:"medium,omitempty"`
-	User                     string `json:"user,omitempty"`
-	Address                  string `json:"address,omitempty"`
-	Token                    string `json:"token,omitempty"`
-	DeviceID                 string `json:"device_id,omitempty"`
-	InitialDeviceDisplayName string `json:"initial_device_display_name,omitempty"`
+	Type                     string         `json:"type"`
+	Identifier               UserIdentifier `json:"identifier"`
+	Password                 string         `json:"password,omitempty"`
+	Token                    string         `json:"token,omitempty"`
+	DeviceID                 string         `json:"device_id,omitempty"`
+	InitialDeviceDisplayName string         `json:"initial_device_display_name,omitempty"`
 }
 
 // ReqCreateRoom is the JSON request for https://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-createroom
@@ -39,7 +49,7 @@ type ReqCreateRoom struct {
 // ReqRedact is the JSON request for http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-rooms-roomid-redact-eventid-txnid
 type ReqRedact struct {
 	Reason string `json:"reason,omitempty"`
-	TxnID string `json:"-"`
+	TxnID  string `json:"-"`
 }
 
 // ReqInvite3PID is the JSON request for https://matrix.org/docs/spec/client_server/r0.2.0.html#id57
