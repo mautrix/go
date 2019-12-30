@@ -82,8 +82,8 @@ func DiscoverClientAPI(userID string) (*ClientWellKnown, error) {
 
 	wellKnownURL := url.URL{
 		Scheme: "https",
-		Host: userID[index+1:],
-		Path: "/.well-known/matrix/client",
+		Host:   userID[index+1:],
+		Path:   "/.well-known/matrix/client",
 	}
 
 	req, err := http.NewRequest("GET", wellKnownURL.String(), nil)
@@ -895,6 +895,24 @@ func (cli *Client) RemoveTag(roomID, tag string) (err error) {
 func (cli *Client) TurnServer() (resp *RespTurnServer, err error) {
 	urlPath := cli.BuildURL("voip", "turnServer")
 	_, err = cli.MakeRequest("GET", urlPath, nil, &resp)
+	return
+}
+
+func (cli *Client) CreateAlias(alias, roomID string) (resp *RespAliasCreate, err error) {
+	urlPath := cli.BuildURL("directory", "room", alias)
+	_, err = cli.MakeRequest("PUT", urlPath, &ReqAliasCreate{ RoomID: roomID }, &resp)
+	return
+}
+
+func (cli *Client) ResolveAlias(alias string) (resp *RespAliasResolve, err error) {
+	urlPath := cli.BuildURL("directory", "room", alias)
+	_, err = cli.MakeRequest("GET", urlPath, nil, &resp)
+	return
+}
+
+func (cli *Client) DeleteAlias(alias string) (resp *RespAliasDelete, err error) {
+	urlPath := cli.BuildURL("directory", "room", alias)
+	_, err = cli.MakeRequest("DELETE", urlPath, nil, &resp)
 	return
 }
 

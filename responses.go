@@ -180,3 +180,10 @@ type RespTurnServer struct {
 	TTL      int      `json:"ttl"`
 	URIs     []string `json:"uris"`
 }
+
+type RespAliasCreate struct{}
+type RespAliasDelete struct{}
+type RespAliasResolve struct {
+	RoomID  string   `json:"room_id"`
+	Servers []string `json:"servers"`
+}

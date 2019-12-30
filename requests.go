@@ -81,3 +81,7 @@ type ReqTyping struct {
 type ReqPresence struct {
 	Presence string `json:"presence"`
 }
+
+type ReqAliasCreate struct {
+	RoomID string `json:"room_id"`
+}
