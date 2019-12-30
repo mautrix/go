@@ -220,6 +220,13 @@ func (content *Content) UnmarshalJSON(data []byte) error {
 	return json.Unmarshal(data, (*serializableContent)(content))
 }
 
+func (content *Content) MarshalJSON() ([]byte, error) {
+	if DisableFancyEventParsing {
+		return json.Marshal(content.Raw)
+	}
+	return json.Marshal((*serializableContent)(content))
+}
+
 func (content *Content) GetRelatesTo() *RelatesTo {
 	if content.RelatesTo == nil {
 		content.RelatesTo = &RelatesTo{}
