@@ -441,13 +441,22 @@ func (sfi *serializableFileInfo) CopyFrom(fileInfo *FileInfo) *serializableFileI
 		return nil
 	}
 	*sfi = serializableFileInfo{
-		Width:         json.Number(strconv.Itoa(fileInfo.Width)),
-		Height:        json.Number(strconv.Itoa(fileInfo.Height)),
-		Size:          json.Number(strconv.Itoa(fileInfo.Size)),
-		Duration:      json.Number(strconv.Itoa(int(fileInfo.Duration))),
 		MimeType:      fileInfo.MimeType,
 		ThumbnailURL:  fileInfo.ThumbnailURL,
 		ThumbnailInfo: (&serializableFileInfo{}).CopyFrom(fileInfo.ThumbnailInfo),
+	}
+	if fileInfo.Width > 0 {
+		sfi.Width = json.Number(strconv.Itoa(fileInfo.Width))
+	}
+	if fileInfo.Height > 0 {
+		sfi.Height = json.Number(strconv.Itoa(fileInfo.Height))
+	}
+	if fileInfo.Size > 0 {
+		sfi.Size = json.Number(strconv.Itoa(fileInfo.Size))
+
+	}
+	if fileInfo.Duration > 0 {
+		sfi.Duration = json.Number(strconv.Itoa(int(fileInfo.Duration)))
 	}
 	return sfi
 }
