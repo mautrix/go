@@ -4,7 +4,7 @@ package format
 import (
 	"strings"
 
-	"gopkg.in/russross/blackfriday.v2"
+	"github.com/russross/blackfriday/v2"
 
 	"maunium.net/go/mautrix"
 )
