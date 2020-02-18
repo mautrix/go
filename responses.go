@@ -114,6 +114,12 @@ type RespRegister struct {
 	UserID       string `json:"user_id"`
 }
 
+type RespLoginFlows struct {
+	Flows []struct{
+		Type string `json:"type"`
+	} `json:"flows"`
+}
+
 // RespLogin is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-login
 type RespLogin struct {
 	AccessToken string `json:"access_token"`
