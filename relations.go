@@ -102,6 +102,7 @@ func (ac *AnnotationChunk) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, (*serializableAnnotationChunk)(ac)); err != nil {
 		return err
 	}
+	ac.Map = make(map[string]int)
 	for _, item := range ac.Chunk {
 		ac.Map[item.Key] += item.Count
 	}
