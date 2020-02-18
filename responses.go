@@ -1,5 +1,9 @@
 package mautrix
 
+import (
+	"encoding/json"
+)
+
 // RespError is the standard JSON error response from Homeservers. It also implements the Golang "error" interface.
 // See http://matrix.org/docs/spec/client_server/r0.2.0.html#api-standards
 type RespError struct {
@@ -140,41 +144,41 @@ type RespCreateRoom struct {
 type RespSync struct {
 	NextBatch   string `json:"next_batch"`
 	AccountData struct {
-		Events []*Event `json:"events"`
+		Events []json.RawMessage `json:"events"`
 	} `json:"account_data"`
 	Presence struct {
-		Events []*Event `json:"events"`
+		Events []json.RawMessage `json:"events"`
 	} `json:"presence"`
 	Rooms struct {
 		Leave map[string]struct {
 			State struct {
-				Events []*Event `json:"events"`
+				Events []json.RawMessage `json:"events"`
 			} `json:"state"`
 			Timeline struct {
-				Events    []*Event `json:"events"`
+				Events    []json.RawMessage `json:"events"`
 				Limited   bool     `json:"limited"`
 				PrevBatch string   `json:"prev_batch"`
 			} `json:"timeline"`
 		} `json:"leave"`
 		Join map[string]struct {
 			State struct {
-				Events []*Event `json:"events"`
+				Events []json.RawMessage `json:"events"`
 			} `json:"state"`
 			Timeline struct {
-				Events    []*Event `json:"events"`
+				Events    []json.RawMessage `json:"events"`
 				Limited   bool     `json:"limited"`
 				PrevBatch string   `json:"prev_batch"`
 			} `json:"timeline"`
 			Ephemeral struct {
-				Events []*Event `json:"events"`
+				Events []json.RawMessage `json:"events"`
 			} `json:"ephemeral"`
 			AccountData struct {
-				Events []*Event `json:"events"`
+				Events []json.RawMessage `json:"events"`
 			} `json:"account_data"`
 		} `json:"join"`
 		Invite map[string]struct {
 			State struct {
-				Events []*Event `json:"events"`
+				Events []json.RawMessage `json:"events"`
 			} `json:"invite_state"`
 		} `json:"invite"`
 	} `json:"rooms"`

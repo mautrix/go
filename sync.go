@@ -3,6 +3,7 @@ package mautrix
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"runtime/debug"
 	"time"
 )
@@ -40,6 +41,17 @@ func NewDefaultSyncer(userID string, store Storer) *DefaultSyncer {
 	}
 }
 
+func parseEvent(roomID string, data json.RawMessage) *Event {
+	event := &Event{}
+	err := json.Unmarshal(data, event)
+	if err != nil {
+		// TODO add separate handler for these
+		_, _ = fmt.Fprintf(os.Stderr, "Failed to unmarshal event: %v\n%s\n", err, string(data))
+		return nil
+	}
+	return event
+}
+
 // ProcessResponse processes the /sync response in a way suitable for bots. "Suitable for bots" means a stream of
 // unrepeating events. Returns a fatal error if a listener panics.
 func (s *DefaultSyncer) ProcessResponse(res *RespSync, since string) (err error) {
@@ -55,29 +67,35 @@ func (s *DefaultSyncer) ProcessResponse(res *RespSync, since string) (err error)
 
 	for roomID, roomData := range res.Rooms.Join {
 		room := s.getOrCreateRoom(roomID)
-		for _, event := range roomData.State.Events {
-			event.RoomID = roomID
-			room.UpdateState(event)
-			s.notifyListeners(event)
+		for _, data := range roomData.State.Events {
+			event := parseEvent(roomID, data)
+			if event != nil {
+				room.UpdateState(event)
+				s.notifyListeners(event)
+			}
 		}
-		for _, event := range roomData.Timeline.Events {
-			event.RoomID = roomID
-			s.notifyListeners(event)
+		for _, data := range roomData.Timeline.Events {
+			event := parseEvent(roomID, data)
+			if event != nil {
+				s.notifyListeners(event)
+			}
 		}
 	}
 	for roomID, roomData := range res.Rooms.Invite {
 		room := s.getOrCreateRoom(roomID)
-		for _, event := range roomData.State.Events {
-			event.RoomID = roomID
-			room.UpdateState(event)
-			s.notifyListeners(event)
+		for _, data := range roomData.State.Events {
+			event := parseEvent(roomID, data)
+			if event != nil {
+				room.UpdateState(event)
+				s.notifyListeners(event)
+			}
 		}
 	}
 	for roomID, roomData := range res.Rooms.Leave {
 		room := s.getOrCreateRoom(roomID)
-		for _, event := range roomData.Timeline.Events {
+		for _, data := range roomData.Timeline.Events {
+			event := parseEvent(roomID, data)
 			if event.StateKey != nil {
-				event.RoomID = roomID
 				room.UpdateState(event)
 				s.notifyListeners(event)
 			}
@@ -111,8 +129,10 @@ func (s *DefaultSyncer) shouldProcessResponse(resp *RespSync, since string) bool
 	// TODO: We probably want to process messages from after the last join event in the timeline.
 	for roomID, roomData := range resp.Rooms.Join {
 		for i := len(roomData.Timeline.Events) - 1; i >= 0; i-- {
-			e := roomData.Timeline.Events[i]
-			if e.Type == StateMember && e.GetStateKey() == s.UserID {
+			evtData := roomData.Timeline.Events[i]
+			// TODO this is horribly inefficient since it's also parsed in ProcessResponse
+			e := parseEvent(roomID, evtData)
+			if e != nil && e.Type == StateMember && e.GetStateKey() == s.UserID {
 				if e.Content.Membership == "join" {
 					_, ok := resp.Rooms.Join[roomID]
 					if !ok {
