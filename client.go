@@ -69,20 +69,13 @@ type IdentityServerInfo struct {
 	BaseURL string `json:"base_url"`
 }
 
-// DiscoverClientAPI follows the Matrix spec by extracting the domain from the user ID
-// to get data about the server the user claims to be trying to connect to.
-// DiscoverClientAPI takes a userID as it's only parameter and returns:
-// The discovery information struct and an error.
-// Link to Matrix spec: https://matrix.org/docs/spec/client_server/r0.5.0#server-discovery
-func DiscoverClientAPI(userID string) (*ClientWellKnown, error) {
-	index := strings.IndexRune(userID, ':')
-	if index == -1 {
-		return nil, errors.New("invalid user ID")
-	}
-
+// DiscoverClientAPI resolves the client API URL from a Matrix server name.
+// Use ParseUserID to extract the server name from a user ID.
+// https://matrix.org/docs/spec/client_server/r0.6.0#server-discovery
+func DiscoverClientAPI(serverName string) (*ClientWellKnown, error) {
 	wellKnownURL := url.URL{
 		Scheme: "https",
-		Host:   userID[index+1:],
+		Host:   serverName,
 		Path:   "/.well-known/matrix/client",
 	}
 
