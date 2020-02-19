@@ -53,7 +53,8 @@ func (et *EventType) IsCustom() bool {
 func (et *EventType) GuessClass() EventTypeClass {
 	switch et.Type {
 	case StateAliases.Type, StateCanonicalAlias.Type, StateCreate.Type, StateJoinRules.Type, StateMember.Type,
-		StatePowerLevels.Type, StateRoomName.Type, StateRoomAvatar.Type, StateTopic.Type, StatePinnedEvents.Type:
+		StatePowerLevels.Type, StateRoomName.Type, StateRoomAvatar.Type, StateTopic.Type, StatePinnedEvents.Type,
+		StateTombstone.Type:
 		return StateEventType
 	case EphemeralEventReceipt.Type, EphemeralEventTyping.Type:
 		return EphemeralEventType
@@ -95,6 +96,7 @@ var (
 	StateTopic          = EventType{"m.room.topic", StateEventType}
 	StateRoomAvatar     = EventType{"m.room.avatar", StateEventType}
 	StatePinnedEvents   = EventType{"m.room.pinned_events", StateEventType}
+	StateTombstone      = EventType{"m.room.tombstone", StateEventType}
 )
 
 // Message events
@@ -203,6 +205,8 @@ type Content struct {
 	Alias   string   `json:"alias,omitempty"`
 	Name    string   `json:"name,omitempty"`
 	Topic   string   `json:"topic,omitempty"`
+
+	ReplacementRoom string `json:"replacement_room,omitempty"`
 
 	RoomTags      Tags     `json:"tags,omitempty"`
 	TypingUserIDs []string `json:"user_ids,omitempty"`
