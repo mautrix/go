@@ -56,11 +56,11 @@ func (et *EventType) GuessClass() EventTypeClass {
 		StatePowerLevels.Type, StateRoomName.Type, StateRoomAvatar.Type, StateTopic.Type, StatePinnedEvents.Type,
 		StateTombstone.Type:
 		return StateEventType
-	case EphemeralEventReceipt.Type, EphemeralEventTyping.Type:
+	case EphemeralEventReceipt.Type, EphemeralEventTyping.Type, EphemeralEventPresence.Type:
 		return EphemeralEventType
 	case AccountDataDirectChats.Type, AccountDataPushRules.Type, AccountDataRoomTags.Type:
 		return AccountDataEventType
-	case EventRedaction.Type, EventMessage.Type, EventSticker.Type:
+	case EventRedaction.Type, EventMessage.Type, EventEncrypted.Type, EventReaction.Type, EventSticker.Type:
 		return MessageEventType
 	default:
 		return UnknownEventType
@@ -110,8 +110,9 @@ var (
 
 // Ephemeral events
 var (
-	EphemeralEventReceipt = EventType{"m.receipt", EphemeralEventType}
-	EphemeralEventTyping  = EventType{"m.typing", EphemeralEventType}
+	EphemeralEventReceipt  = EventType{"m.receipt", EphemeralEventType}
+	EphemeralEventTyping   = EventType{"m.typing", EphemeralEventType}
+	EphemeralEventPresence = EventType{"m.presence", EphemeralEventType}
 )
 
 // Account data events
