@@ -44,6 +44,12 @@ func (rel *RelatesTo) GetReferenceID() string {
 	}
 	return ""
 }
+func (rel *RelatesTo) GetAnnotationID() string {
+	if rel.Type == RelAnnotation {
+		return rel.EventID
+	}
+	return ""
+}
 
 func (rel *RelatesTo) GetAnnotationKey() string {
 	if rel.Type == RelAnnotation {
