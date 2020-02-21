@@ -910,6 +910,14 @@ func (cli *Client) RemoveTag(roomID, tag string) (err error) {
 	return
 }
 
+func (cli *Client) SetTags(roomID string, tags Tags) (err error ){
+	urlPath := cli.BuildURL("user", cli.UserID, "rooms", roomID, "account_data", "m.tag")
+	_, err = cli.MakeRequest("PUT", urlPath, map[string]Tags{
+		"tags": tags,
+	}, nil)
+	return
+}
+
 // TurnServer returns turn server details and credentials for the client to use when initiating calls.
 // See http://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-r0-voip-turnserver
 func (cli *Client) TurnServer() (resp *RespTurnServer, err error) {
