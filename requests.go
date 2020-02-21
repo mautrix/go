@@ -52,6 +52,12 @@ type ReqRedact struct {
 	TxnID  string `json:"-"`
 }
 
+type ReqMembers struct {
+	At            string     `json:"at"`
+	Membership    Membership `json:"membership"`
+	NotMembership Membership `json:"not_membership"`
+}
+
 // ReqInvite3PID is the JSON request for https://matrix.org/docs/spec/client_server/r0.2.0.html#id57
 // It is also a JSON object used in https://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-createroom
 type ReqInvite3PID struct {

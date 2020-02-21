@@ -831,6 +831,26 @@ func (cli *Client) JoinedMembers(roomID string) (resp *RespJoinedMembers, err er
 	return
 }
 
+func (cli *Client) Members(roomID string, req ...ReqMembers) (resp *RespMembers, err error) {
+	var extra ReqMembers
+	if len(req) > 0 {
+		extra = req[0]
+	}
+	query := map[string]string{}
+	if len(extra.At) > 0 {
+		query["at"] = extra.At
+	}
+	if len(extra.Membership) > 0 {
+		query["membership"] = string(extra.Membership)
+	}
+	if len(extra.NotMembership) > 0 {
+		query["not_membership"] = string(extra.NotMembership)
+	}
+	u := cli.BuildURLWithQuery([]string{"rooms", roomID, "members"}, query)
+	_, err = cli.MakeRequest("GET", u, nil, &resp)
+	return
+}
+
 // JoinedRooms returns a list of rooms which the client is joined to. See https://matrix.org/docs/spec/client_server/r0.4.0.html#get-matrix-client-r0-joined-rooms
 //
 // In general, usage of this API is discouraged in favour of /sync, as calling this API can race with incoming membership changes.
@@ -846,8 +866,9 @@ func (cli *Client) JoinedRooms() (resp *RespJoinedRooms, err error) {
 // See https://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-r0-rooms-roomid-messages
 func (cli *Client) Messages(roomID, from, to string, dir rune, limit int) (resp *RespMessages, err error) {
 	query := map[string]string{
-		"from": from,
-		"dir":  string(dir),
+		"from":   from,
+		"dir":    string(dir),
+		"filter": string(cli.Syncer.GetFilterJSON(cli.UserID)),
 	}
 	if to != "" {
 		query["to"] = to
@@ -899,7 +920,7 @@ func (cli *Client) TurnServer() (resp *RespTurnServer, err error) {
 
 func (cli *Client) CreateAlias(alias, roomID string) (resp *RespAliasCreate, err error) {
 	urlPath := cli.BuildURL("directory", "room", alias)
-	_, err = cli.MakeRequest("PUT", urlPath, &ReqAliasCreate{ RoomID: roomID }, &resp)
+	_, err = cli.MakeRequest("PUT", urlPath, &ReqAliasCreate{RoomID: roomID}, &resp)
 	return
 }
 

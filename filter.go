@@ -47,6 +47,9 @@ type FilterPart struct {
 	Senders     []string `json:"senders,omitempty"`
 	Types       []string `json:"types,omitempty"`
 	ContainsURL *bool    `json:"contains_url,omitempty"`
+
+	LazyLoadMembers         bool `json:"lazy_load_members,omitempty"`
+	IncludeRedundantMembers bool `json:"include_redundant_members,omitempty"`
 }
 
 // Validate checks if the filter contains valid property values

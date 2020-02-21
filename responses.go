@@ -69,6 +69,7 @@ type RespJoinedMembers struct {
 type RespMessages struct {
 	Start string   `json:"start"`
 	Chunk []*Event `json:"chunk"`
+	State []*Event `json:"state"`
 	End   string   `json:"end"`
 }
 
@@ -119,7 +120,7 @@ type RespRegister struct {
 }
 
 type RespLoginFlows struct {
-	Flows []struct{
+	Flows []struct {
 		Type string `json:"type"`
 	} `json:"flows"`
 }
@@ -140,6 +141,16 @@ type RespCreateRoom struct {
 	RoomID string `json:"room_id"`
 }
 
+type RespMembers struct {
+	Chunk []*Event `json:"chunk"`
+}
+
+type LazyLoadSummary struct {
+	Heroes             []string `json:"m.heroes,omitempty"`
+	JoinedMemberCount  *int     `json:"m.joined_member_count,omitempty"`
+	InvitedMemberCount *int     `json:"m.invited_member_count,omitempty"`
+}
+
 // RespSync is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-r0-sync
 type RespSync struct {
 	NextBatch   string `json:"next_batch"`
@@ -151,23 +162,25 @@ type RespSync struct {
 	} `json:"presence"`
 	Rooms struct {
 		Leave map[string]struct {
-			State struct {
+			Summary LazyLoadSummary `json:"summary"`
+			State   struct {
 				Events []json.RawMessage `json:"events"`
 			} `json:"state"`
 			Timeline struct {
 				Events    []json.RawMessage `json:"events"`
-				Limited   bool     `json:"limited"`
-				PrevBatch string   `json:"prev_batch"`
+				Limited   bool              `json:"limited"`
+				PrevBatch string            `json:"prev_batch"`
 			} `json:"timeline"`
 		} `json:"leave"`
 		Join map[string]struct {
-			State struct {
+			Summary LazyLoadSummary `json:"summary"`
+			State   struct {
 				Events []json.RawMessage `json:"events"`
 			} `json:"state"`
 			Timeline struct {
 				Events    []json.RawMessage `json:"events"`
-				Limited   bool     `json:"limited"`
-				PrevBatch string   `json:"prev_batch"`
+				Limited   bool              `json:"limited"`
+				PrevBatch string            `json:"prev_batch"`
 			} `json:"timeline"`
 			Ephemeral struct {
 				Events []json.RawMessage `json:"events"`
@@ -177,7 +190,8 @@ type RespSync struct {
 			} `json:"account_data"`
 		} `json:"join"`
 		Invite map[string]struct {
-			State struct {
+			Summary LazyLoadSummary `json:"summary"`
+			State   struct {
 				Events []json.RawMessage `json:"events"`
 			} `json:"invite_state"`
 		} `json:"invite"`
