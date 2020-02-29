@@ -43,12 +43,7 @@ func (content *Content) GetReplyTo() string {
 	return ""
 }
 
-const ReplyFormat = `<mx-reply><blockquote>
-<a href="https://matrix.to/#/%s/%s">In reply to</a>
-<a href="https://matrix.to/#/%s">%s</a>
-%s
-</blockquote></mx-reply>
-`
+const ReplyFormat = `<mx-reply><blockquote><a href="https://matrix.to/#/%s/%s">In reply to</a> <a href="https://matrix.to/#/%s">%s</a><br>%s</blockquote></mx-reply>`
 
 func (evt *Event) GenerateReplyFallbackHTML() string {
 	body := evt.Content.FormattedBody
