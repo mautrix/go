@@ -27,10 +27,19 @@ func RenderMarkdown(text string) mautrix.Content {
 	htmlBody := strings.TrimRight(string(htmlBodyBytes), "\n")
 	htmlBody = antiParagraphRegex.ReplaceAllString(htmlBody, "$1")
 
+	text = HTMLToText(htmlBody)
+
+	if htmlBody == text {
+		return mautrix.Content{
+			MsgType: mautrix.MsgText,
+			Body:    text,
+		}
+	}
+
 	return mautrix.Content{
 		FormattedBody: htmlBody,
 		Format:        mautrix.FormatHTML,
 		MsgType:       mautrix.MsgText,
-		Body:          HTMLToText(htmlBody),
+		Body:          text,
 	}
 }
