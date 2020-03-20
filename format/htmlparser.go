@@ -14,6 +14,7 @@ import (
 var MatrixToURL = regexp.MustCompile("^(?:https?://)?(?:www\\.)?matrix\\.to/#/([#@!+].*)(?:/(\\$.+))?")
 
 type TextConverter func(string) string
+type CodeBlockConverter func(code, language string) string
 
 type HTMLParser struct {
 	PillConverter           func(mxid, eventID string) string
@@ -24,7 +25,7 @@ type HTMLParser struct {
 	ItalicConverter         TextConverter
 	StrikethroughConverter  TextConverter
 	UnderlineConverter      TextConverter
-	MonospaceBlockConverter TextConverter
+	MonospaceBlockConverter CodeBlockConverter
 	MonospaceConverter      TextConverter
 }
 
@@ -177,16 +178,20 @@ func (parser *HTMLParser) tagToString(node *html.Node, stripLinebreak bool) stri
 	case "hr":
 		return parser.HorizontalLine
 	case "pre":
-		var preStr string
+		var preStr, language string
 		if node.FirstChild != nil && node.FirstChild.Type == html.ElementNode && node.FirstChild.Data == "code" {
+			class := parser.getAttribute(node.FirstChild, "class")
+			if strings.HasPrefix(class, "language-") {
+				language = class[len("language-"):]
+			}
 			preStr = parser.nodeToString(node.FirstChild.FirstChild, false)
 		} else {
 			preStr = parser.nodeToString(node.FirstChild, false)
 		}
 		if parser.MonospaceBlockConverter != nil {
-			return parser.MonospaceBlockConverter(preStr)
+			return parser.MonospaceBlockConverter(preStr, language)
 		}
-		return preStr
+		return fmt.Sprintf("```%s\n%s\n```", language, preStr)
 	default:
 		return parser.nodeToTagAwareString(node.FirstChild, stripLinebreak)
 	}
