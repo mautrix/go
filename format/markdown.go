@@ -10,22 +10,22 @@ import (
 	"maunium.net/go/mautrix"
 )
 
-var antiParagraphRegex = regexp.MustCompile("^<p>(.+?)</p>$")
+var AntiParagraphRegex = regexp.MustCompile("^<p>(.+?)</p>$")
+var Extensions = blackfriday.WithExtensions(blackfriday.NoIntraEmphasis |
+	blackfriday.Tables |
+	blackfriday.FencedCode |
+	blackfriday.Strikethrough |
+	blackfriday.SpaceHeadings |
+	blackfriday.DefinitionLists |
+	blackfriday.HardLineBreak)
+var Renderer = blackfriday.WithRenderer(blackfriday.NewHTMLRenderer(blackfriday.HTMLRendererParameters{
+	Flags: blackfriday.UseXHTML,
+}))
 
 func RenderMarkdown(text string) mautrix.Content {
-	htmlBodyBytes := blackfriday.Run([]byte(text),
-		blackfriday.WithExtensions(blackfriday.NoIntraEmphasis|
-			blackfriday.Tables|
-			blackfriday.FencedCode|
-			blackfriday.Strikethrough|
-			blackfriday.SpaceHeadings|
-			blackfriday.DefinitionLists|
-			blackfriday.HardLineBreak),
-		blackfriday.WithRenderer(blackfriday.NewHTMLRenderer(blackfriday.HTMLRendererParameters{
-			Flags: blackfriday.UseXHTML,
-		})))
+	htmlBodyBytes := blackfriday.Run([]byte(text), Extensions, Renderer)
 	htmlBody := strings.TrimRight(string(htmlBodyBytes), "\n")
-	htmlBody = antiParagraphRegex.ReplaceAllString(htmlBody, "$1")
+	htmlBody = AntiParagraphRegex.ReplaceAllString(htmlBody, "$1")
 
 	text = HTMLToText(htmlBody)
 
