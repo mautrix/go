@@ -92,6 +92,10 @@ func DiscoverClientAPI(serverName string) (*ClientWellKnown, error) {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil
+	}
+
 	data, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
@@ -100,7 +104,7 @@ func DiscoverClientAPI(serverName string) (*ClientWellKnown, error) {
 	var wellKnown ClientWellKnown
 	err = json.Unmarshal(data, &wellKnown)
 	if err != nil {
-		return nil, err
+		return nil, errors.New(".well-known response not JSON")
 	}
 
 	return &wellKnown, nil
