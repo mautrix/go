@@ -112,6 +112,7 @@ func (parser *HTMLParser) basicFormatToString(node *html.Node, stripLinebreak bo
 		if parser.MonospaceConverter != nil {
 			return parser.MonospaceConverter(str)
 		}
+		return fmt.Sprintf("`%s`", str)
 	}
 	return str
 }
