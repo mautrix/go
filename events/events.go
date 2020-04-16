@@ -110,7 +110,7 @@ type Content struct {
 	// m.room.topic state
 	Topic string `json:"topic,omitempty"`
 	// m.room.tombstone state
-	ReplacementRoom string `json:"replacement_room,omitempty"`
+	ReplacementRoom id.RoomID `json:"replacement_room,omitempty"`
 	// m.tag account data
 	RoomTags Tags `json:"tags,omitempty"`
 	// m.typing ephemeral
