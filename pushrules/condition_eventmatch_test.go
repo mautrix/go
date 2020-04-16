@@ -17,7 +17,7 @@
 package pushrules_test
 
 import (
-	"maunium.net/go/mautrix/events"
+	"maunium.net/go/mautrix/event"
 
 	"testing"
 
@@ -26,7 +26,7 @@ import (
 
 func TestPushCondition_Match_KindEvent_MsgType(t *testing.T) {
 	condition := newMatchPushCondition("content.msgtype", "m.emote")
-	event := newFakeEvent(events.EventMessage, events.Content{
+	event := newFakeEvent(event.EventMessage, event.Content{
 		Raw: map[string]interface{}{
 			"msgtype": "m.emote",
 			"body":    "tests gomuks pushconditions",
@@ -38,7 +38,7 @@ func TestPushCondition_Match_KindEvent_MsgType(t *testing.T) {
 func TestPushCondition_Match_KindEvent_MsgType_Fail(t *testing.T) {
 	condition := newMatchPushCondition("content.msgtype", "m.emote")
 
-	event := newFakeEvent(events.EventMessage, events.Content{
+	event := newFakeEvent(event.EventMessage, event.Content{
 		Raw: map[string]interface{}{
 			"msgtype": "m.text",
 			"body":    "I'm testing gomuks pushconditions",
@@ -49,49 +49,49 @@ func TestPushCondition_Match_KindEvent_MsgType_Fail(t *testing.T) {
 
 func TestPushCondition_Match_KindEvent_EventType(t *testing.T) {
 	condition := newMatchPushCondition("type", "m.room.foo")
-	event := newFakeEvent(events.NewEventType("m.room.foo"), events.Content{})
+	event := newFakeEvent(event.NewEventType("m.room.foo"), event.Content{})
 	assert.True(t, condition.Match(blankTestRoom, event))
 }
 
 func TestPushCondition_Match_KindEvent_EventType_IllegalGlob(t *testing.T) {
 	condition := newMatchPushCondition("type", "m.room.invalid_glo[b")
-	event := newFakeEvent(events.NewEventType("m.room.invalid_glob"), events.Content{})
+	event := newFakeEvent(event.NewEventType("m.room.invalid_glob"), event.Content{})
 	assert.False(t, condition.Match(blankTestRoom, event))
 }
 
 func TestPushCondition_Match_KindEvent_Sender_Fail(t *testing.T) {
 	condition := newMatchPushCondition("sender", "@foo:maunium.net")
-	event := newFakeEvent(events.NewEventType("m.room.foo"), events.Content{})
+	event := newFakeEvent(event.NewEventType("m.room.foo"), event.Content{})
 	assert.False(t, condition.Match(blankTestRoom, event))
 }
 
 func TestPushCondition_Match_KindEvent_RoomID(t *testing.T) {
 	condition := newMatchPushCondition("room_id", "!fakeroom:maunium.net")
-	event := newFakeEvent(events.NewEventType(""), events.Content{})
+	event := newFakeEvent(event.NewEventType(""), event.Content{})
 	assert.True(t, condition.Match(blankTestRoom, event))
 }
 
 func TestPushCondition_Match_KindEvent_BlankStateKey(t *testing.T) {
 	condition := newMatchPushCondition("state_key", "")
-	event := newFakeEvent(events.NewEventType("m.room.foo"), events.Content{})
+	event := newFakeEvent(event.NewEventType("m.room.foo"), event.Content{})
 	assert.True(t, condition.Match(blankTestRoom, event))
 }
 
 func TestPushCondition_Match_KindEvent_BlankStateKey_Fail(t *testing.T) {
 	condition := newMatchPushCondition("state_key", "not blank")
-	event := newFakeEvent(events.NewEventType("m.room.foo"), events.Content{})
+	event := newFakeEvent(event.NewEventType("m.room.foo"), event.Content{})
 	assert.False(t, condition.Match(blankTestRoom, event))
 }
 
 func TestPushCondition_Match_KindEvent_NonBlankStateKey(t *testing.T) {
 	condition := newMatchPushCondition("state_key", "*:maunium.net")
-	event := newFakeEvent(events.NewEventType("m.room.foo"), events.Content{})
+	event := newFakeEvent(event.NewEventType("m.room.foo"), event.Content{})
 	event.StateKey = (*string)(&event.Sender)
 	assert.True(t, condition.Match(blankTestRoom, event))
 }
 
 func TestPushCondition_Match_KindEvent_UnknownKey(t *testing.T) {
 	condition := newMatchPushCondition("non-existent key", "doesn't affect anything")
-	event := newFakeEvent(events.NewEventType("m.room.foo"), events.Content{})
+	event := newFakeEvent(event.NewEventType("m.room.foo"), event.Content{})
 	assert.False(t, condition.Match(blankTestRoom, event))
 }

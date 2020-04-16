@@ -7,7 +7,7 @@ import (
 	"runtime/debug"
 	"time"
 
-	"maunium.net/go/mautrix/events"
+	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -29,23 +29,23 @@ type Syncer interface {
 type DefaultSyncer struct {
 	UserID    id.UserID
 	Store     Storer
-	listeners map[events.Type][]OnEventListener // event type to listeners array
+	listeners map[event.Type][]OnEventListener // event type to listeners array
 }
 
 // OnEventListener can be used with DefaultSyncer.OnEventType to be informed of incoming events.
-type OnEventListener func(*events.Event)
+type OnEventListener func(*event.Event)
 
 // NewDefaultSyncer returns an instantiated DefaultSyncer
 func NewDefaultSyncer(userID id.UserID, store Storer) *DefaultSyncer {
 	return &DefaultSyncer{
 		UserID:    userID,
 		Store:     store,
-		listeners: make(map[events.Type][]OnEventListener),
+		listeners: make(map[event.Type][]OnEventListener),
 	}
 }
 
-func parseEvent(roomID id.RoomID, data json.RawMessage) *events.Event {
-	event := &events.Event{}
+func parseEvent(roomID id.RoomID, data json.RawMessage) *event.Event {
+	event := &event.Event{}
 	err := json.Unmarshal(data, event)
 	if err != nil {
 		// TODO add separate handler for these
@@ -109,7 +109,7 @@ func (s *DefaultSyncer) ProcessResponse(res *RespSync, since string) (err error)
 
 // OnEventType allows callers to be notified when there are new events for the given event type.
 // There are no duplicate checks.
-func (s *DefaultSyncer) OnEventType(eventType events.Type, callback OnEventListener) {
+func (s *DefaultSyncer) OnEventType(eventType event.Type, callback OnEventListener) {
 	_, exists := s.listeners[eventType]
 	if !exists {
 		s.listeners[eventType] = []OnEventListener{}
@@ -135,7 +135,7 @@ func (s *DefaultSyncer) shouldProcessResponse(resp *RespSync, since string) bool
 			evtData := roomData.Timeline.Events[i]
 			// TODO this is horribly inefficient since it's also parsed in ProcessResponse
 			e := parseEvent(roomID, evtData)
-			if e != nil && e.Type == events.StateMember && e.GetStateKey() == string(s.UserID) {
+			if e != nil && e.Type == event.StateMember && e.GetStateKey() == string(s.UserID) {
 				if e.Content.Membership == "join" {
 					_, ok := resp.Rooms.Join[roomID]
 					if !ok {
@@ -161,7 +161,7 @@ func (s *DefaultSyncer) getOrCreateRoom(roomID id.RoomID) *Room {
 	return room
 }
 
-func (s *DefaultSyncer) notifyListeners(event *events.Event) {
+func (s *DefaultSyncer) notifyListeners(event *event.Event) {
 	listeners, exists := s.listeners[event.Type]
 	if !exists {
 		return

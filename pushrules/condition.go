@@ -12,7 +12,7 @@ import (
 	"strings"
 	"unicode"
 
-	"maunium.net/go/mautrix/events"
+	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/pushrules/glob"
 )
 
@@ -49,7 +49,7 @@ type PushCondition struct {
 var MemberCountFilterRegex = regexp.MustCompile("^(==|[<>]=?)?([0-9]+)$")
 
 // Match checks if this condition is fulfilled for the given event in the given room.
-func (cond *PushCondition) Match(room Room, event *events.Event) bool {
+func (cond *PushCondition) Match(room Room, event *event.Event) bool {
 	switch cond.Kind {
 	case KindEventMatch:
 		return cond.matchValue(room, event)
@@ -62,7 +62,7 @@ func (cond *PushCondition) Match(room Room, event *events.Event) bool {
 	}
 }
 
-func (cond *PushCondition) matchValue(room Room, event *events.Event) bool {
+func (cond *PushCondition) matchValue(room Room, event *event.Event) bool {
 	index := strings.IndexRune(cond.Key, '.')
 	key := cond.Key
 	subkey := ""
@@ -96,7 +96,7 @@ func (cond *PushCondition) matchValue(room Room, event *events.Event) bool {
 	}
 }
 
-func (cond *PushCondition) matchDisplayName(room Room, event *events.Event) bool {
+func (cond *PushCondition) matchDisplayName(room Room, event *event.Event) bool {
 	displayname := room.GetOwnDisplayname()
 	if len(displayname) == 0 {
 		return false

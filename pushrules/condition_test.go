@@ -22,7 +22,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"maunium.net/go/mautrix/events"
+	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/pushrules"
 )
 
@@ -30,7 +30,7 @@ var (
 	blankTestRoom       pushrules.Room
 	displaynameTestRoom pushrules.Room
 
-	countConditionTestEvent *events.Event
+	countConditionTestEvent *event.Event
 
 	displaynamePushCondition *pushrules.PushCondition
 )
@@ -38,14 +38,14 @@ var (
 func init() {
 	blankTestRoom = newFakeRoom(1)
 
-	countConditionTestEvent = &events.Event{
+	countConditionTestEvent = &event.Event{
 		Sender:    "@tulir:maunium.net",
-		Type:      events.EventMessage,
+		Type:      event.EventMessage,
 		Timestamp: 1523791120,
 		ID:        "$123:maunium.net",
 		RoomID:    "!fakeroom:maunium.net",
-		Content: events.Content{
-			MsgType: events.MsgText,
+		Content: event.Content{
+			MsgType: event.MsgText,
 			Body:    "test",
 		},
 	}
@@ -56,8 +56,8 @@ func init() {
 	}
 }
 
-func newFakeEvent(evtType events.Type, content events.Content) *events.Event {
-	return &events.Event{
+func newFakeEvent(evtType event.Type, content event.Content) *event.Event {
+	return &event.Event{
 		Sender:    "@tulir:maunium.net",
 		Type:      evtType,
 		Timestamp: 1523791120,
@@ -86,32 +86,32 @@ func TestPushCondition_Match_InvalidKind(t *testing.T) {
 	condition := &pushrules.PushCondition{
 		Kind: pushrules.PushCondKind("invalid"),
 	}
-	event := newFakeEvent(events.Type{Type: "m.room.foobar"}, events.Content{})
+	event := newFakeEvent(event.Type{Type: "m.room.foobar"}, event.Content{})
 	assert.False(t, condition.Match(blankTestRoom, event))
 }
 
 type FakeRoom struct {
-	members map[string]*events.Member
+	members map[string]*event.Member
 	owner   string
 }
 
 func newFakeRoom(memberCount int) *FakeRoom {
 	room := &FakeRoom{
 		owner:   "@tulir:maunium.net",
-		members: make(map[string]*events.Member),
+		members: make(map[string]*event.Member),
 	}
 
 	if memberCount >= 1 {
-		room.members["@tulir:maunium.net"] = &events.Member{
-			Membership:  events.MembershipJoin,
+		room.members["@tulir:maunium.net"] = &event.Member{
+			Membership:  event.MembershipJoin,
 			Displayname: "tulir",
 		}
 	}
 
 	for i := 0; i < memberCount-1; i++ {
 		mxid := fmt.Sprintf("@extrauser_%d:matrix.org", i)
-		room.members[mxid] = &events.Member{
-			Membership:  events.MembershipJoin,
+		room.members[mxid] = &event.Member{
+			Membership:  event.MembershipJoin,
 			Displayname: fmt.Sprintf("Extra User %d", i),
 		}
 	}

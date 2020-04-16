@@ -1,7 +1,7 @@
 package mautrix
 
 import (
-	"maunium.net/go/mautrix/events"
+	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -46,7 +46,7 @@ type ReqCreateRoom struct {
 	Invite          []id.UserID            `json:"invite,omitempty"`
 	Invite3PID      []ReqInvite3PID        `json:"invite_3pid,omitempty"`
 	CreationContent map[string]interface{} `json:"creation_content,omitempty"`
-	InitialState    []*events.Event        `json:"initial_state,omitempty"`
+	InitialState    []*event.Event         `json:"initial_state,omitempty"`
 	Preset          string                 `json:"preset,omitempty"`
 	IsDirect        bool                   `json:"is_direct,omitempty"`
 }
@@ -58,9 +58,9 @@ type ReqRedact struct {
 }
 
 type ReqMembers struct {
-	At            string            `json:"at"`
-	Membership    events.Membership `json:"membership"`
-	NotMembership events.Membership `json:"not_membership"`
+	At            string           `json:"at"`
+	Membership    event.Membership `json:"membership"`
+	NotMembership event.Membership `json:"not_membership"`
 }
 
 // ReqInvite3PID is the JSON request for https://matrix.org/docs/spec/client_server/r0.2.0.html#id57

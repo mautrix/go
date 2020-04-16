@@ -9,7 +9,7 @@ package pushrules
 import (
 	"encoding/json"
 
-	"maunium.net/go/mautrix/events"
+	"maunium.net/go/mautrix/event"
 )
 
 type PushRuleset struct {
@@ -70,7 +70,7 @@ var DefaultPushActions = PushActionArray{&PushAction{Action: ActionDontNotify}}
 // GetActions matches the given event against all of the push rule
 // collections in this push ruleset in the order of priority as
 // specified in spec section 11.12.1.4.
-func (rs *PushRuleset) GetActions(room Room, event *events.Event) (match PushActionArray) {
+func (rs *PushRuleset) GetActions(room Room, event *event.Event) (match PushActionArray) {
 	// Add push rule collections to array in priority order
 	arrays := []PushRuleCollection{rs.Override, rs.Content, rs.Room, rs.Sender, rs.Underride}
 	// Loop until one of the push rule collections matches the room/event combo.

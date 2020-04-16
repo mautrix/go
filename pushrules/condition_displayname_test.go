@@ -17,7 +17,7 @@
 package pushrules_test
 
 import (
-	"maunium.net/go/mautrix/events"
+	"maunium.net/go/mautrix/event"
 
 	"testing"
 
@@ -25,8 +25,8 @@ import (
 )
 
 func TestPushCondition_Match_DisplayName(t *testing.T) {
-	event := newFakeEvent(events.EventMessage, events.Content{
-		MsgType: events.MsgText,
+	event := newFakeEvent(event.EventMessage, event.Content{
+		MsgType: event.MsgText,
 		Body:    "tulir: test mention",
 	})
 	event.Sender = "@someone_else:matrix.org"
@@ -34,8 +34,8 @@ func TestPushCondition_Match_DisplayName(t *testing.T) {
 }
 
 func TestPushCondition_Match_DisplayName_Fail(t *testing.T) {
-	event := newFakeEvent(events.EventMessage, events.Content{
-		MsgType: events.MsgText,
+	event := newFakeEvent(event.EventMessage, event.Content{
+		MsgType: event.MsgText,
 		Body:    "not a mention",
 	})
 	event.Sender = "@someone_else:matrix.org"
@@ -44,8 +44,8 @@ func TestPushCondition_Match_DisplayName_Fail(t *testing.T) {
 
 func TestPushCondition_Match_DisplayName_FailsOnEmptyRoom(t *testing.T) {
 	emptyRoom := newFakeRoom(0)
-	event := newFakeEvent(events.EventMessage, events.Content{
-		MsgType: events.MsgText,
+	event := newFakeEvent(event.EventMessage, event.Content{
+		MsgType: event.MsgText,
 		Body:    "tulir: this room doesn't have the owner Member available, so it fails.",
 	})
 	event.Sender = "@someone_else:matrix.org"

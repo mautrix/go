@@ -22,15 +22,15 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"maunium.net/go/mautrix/events"
+	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/pushrules"
 )
 
 func TestEventToPushRules(t *testing.T) {
-	event := &events.Event{
-		Type:      events.AccountDataPushRules,
+	event := &event.Event{
+		Type:      event.AccountDataPushRules,
 		Timestamp: 1523380910,
-		Content:   events.Content{
+		Content:   event.Content{
 			VeryRaw: json.RawMessage(JSONExamplePushRules),
 		},
 	}

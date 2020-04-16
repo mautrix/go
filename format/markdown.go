@@ -13,7 +13,7 @@ import (
 
 	"github.com/russross/blackfriday/v2"
 
-	"maunium.net/go/mautrix/events"
+	"maunium.net/go/mautrix/event"
 )
 
 type EscapingRenderer struct {
@@ -41,7 +41,7 @@ var bfhtml = blackfriday.NewHTMLRenderer(blackfriday.HTMLRendererParameters{
 var Renderer = blackfriday.WithRenderer(bfhtml)
 var NoHTMLRenderer = blackfriday.WithRenderer(&EscapingRenderer{bfhtml})
 
-func RenderMarkdown(text string, allowMarkdown, allowHTML bool) events.Content {
+func RenderMarkdown(text string, allowMarkdown, allowHTML bool) event.Content {
 	htmlBody := text
 
 	if allowMarkdown {
@@ -58,17 +58,17 @@ func RenderMarkdown(text string, allowMarkdown, allowHTML bool) events.Content {
 		text = HTMLToText(htmlBody)
 
 		if htmlBody != text {
-			return events.Content{
+			return event.Content{
 				FormattedBody: htmlBody,
-				Format:        events.FormatHTML,
-				MsgType:       events.MsgText,
+				Format:        event.FormatHTML,
+				MsgType:       event.MsgText,
 				Body:          text,
 			}
 		}
 	}
 
-	return events.Content{
-		MsgType: events.MsgText,
+	return event.Content{
+		MsgType: event.MsgText,
 		Body:    text,
 	}
 }

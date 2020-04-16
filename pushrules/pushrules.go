@@ -11,7 +11,7 @@ import (
 	"net/url"
 
 	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/events"
+	"maunium.net/go/mautrix/event"
 )
 
 // GetPushRules returns the push notification rules for the global scope.
@@ -33,7 +33,7 @@ type contentWithRuleset struct {
 }
 
 // EventToPushRules converts a m.push_rules event to a PushRuleset by passing the data through JSON.
-func EventToPushRules(event *events.Event) (*PushRuleset, error) {
+func EventToPushRules(event *event.Event) (*PushRuleset, error) {
 	content := &contentWithRuleset{}
 	err := json.Unmarshal(event.Content.VeryRaw, content)
 	if err != nil {

@@ -3,7 +3,7 @@ package mautrix
 import (
 	"encoding/json"
 
-	"maunium.net/go/mautrix/events"
+	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -70,10 +70,10 @@ type RespJoinedMembers struct {
 
 // RespMessages is the JSON response for https://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-r0-rooms-roomid-messages
 type RespMessages struct {
-	Start string          `json:"start"`
-	Chunk []*events.Event `json:"chunk"`
-	State []*events.Event `json:"state"`
-	End   string          `json:"end"`
+	Start string         `json:"start"`
+	Chunk []*event.Event `json:"chunk"`
+	State []*event.Event `json:"state"`
+	End   string         `json:"end"`
 }
 
 // RespSendEvent is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-rooms-roomid-send-eventtype-txnid
@@ -145,7 +145,7 @@ type RespCreateRoom struct {
 }
 
 type RespMembers struct {
-	Chunk []*events.Event `json:"chunk"`
+	Chunk []*event.Event `json:"chunk"`
 }
 
 type LazyLoadSummary struct {

@@ -9,7 +9,7 @@ package pushrules
 import (
 	"encoding/gob"
 
-	"maunium.net/go/mautrix/events"
+	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/pushrules/glob"
 )
@@ -20,7 +20,7 @@ func init() {
 }
 
 type PushRuleCollection interface {
-	GetActions(room Room, event *events.Event) PushActionArray
+	GetActions(room Room, event *event.Event) PushActionArray
 }
 
 type PushRuleArray []*PushRule
@@ -32,7 +32,7 @@ func (rules PushRuleArray) SetType(typ PushRuleType) PushRuleArray {
 	return rules
 }
 
-func (rules PushRuleArray) GetActions(room Room, event *events.Event) PushActionArray {
+func (rules PushRuleArray) GetActions(room Room, event *event.Event) PushActionArray {
 	for _, rule := range rules {
 		if !rule.Match(room, event) {
 			continue
@@ -59,7 +59,7 @@ func (rules PushRuleArray) SetTypeAndMap(typ PushRuleType) PushRuleMap {
 	return data
 }
 
-func (ruleMap PushRuleMap) GetActions(room Room, event *events.Event) PushActionArray {
+func (ruleMap PushRuleMap) GetActions(room Room, event *event.Event) PushActionArray {
 	var rule *PushRule
 	var found bool
 	switch ruleMap.Type {
@@ -114,7 +114,7 @@ type PushRule struct {
 	Pattern string `json:"pattern,omitempty"`
 }
 
-func (rule *PushRule) Match(room Room, event *events.Event) bool {
+func (rule *PushRule) Match(room Room, event *event.Event) bool {
 	if !rule.Enabled {
 		return false
 	}
@@ -132,7 +132,7 @@ func (rule *PushRule) Match(room Room, event *events.Event) bool {
 	}
 }
 
-func (rule *PushRule) matchConditions(room Room, event *events.Event) bool {
+func (rule *PushRule) matchConditions(room Room, event *event.Event) bool {
 	for _, cond := range rule.Conditions {
 		if !cond.Match(room, event) {
 			return false
@@ -141,7 +141,7 @@ func (rule *PushRule) matchConditions(room Room, event *events.Event) bool {
 	return true
 }
 
-func (rule *PushRule) matchPattern(room Room, event *events.Event) bool {
+func (rule *PushRule) matchPattern(room Room, event *event.Event) bool {
 	pattern, err := glob.Compile(rule.Pattern)
 	if err != nil {
 		return false
