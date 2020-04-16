@@ -71,7 +71,7 @@ func (et *Type) GuessClass() EventTypeClass {
 		return AccountDataEventType
 	case EventRedaction.Type, EventMessage.Type, EventEncrypted.Type, EventReaction.Type, EventSticker.Type:
 		return MessageEventType
-	case ToDeviceNewDevice.Type:
+	case ToDeviceNewDevice.Type, ToDeviceRoomKey.Type, ToDeviceRoomKeyRequest.Type, ToDeviceForwardedRoomKey.Type:
 		return ToDeviceEventType
 	default:
 		return UnknownEventType
@@ -137,4 +137,7 @@ var (
 // Device-to-device events
 var (
 	ToDeviceNewDevice = Type{"m.new_device", ToDeviceEventType}
+	ToDeviceRoomKey = Type{"m.room_key", ToDeviceEventType}
+	ToDeviceRoomKeyRequest = Type{"m.room_key_request", ToDeviceEventType}
+	ToDeviceForwardedRoomKey = Type{"m.forwarded_room_key", ToDeviceEventType}
 )

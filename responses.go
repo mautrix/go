@@ -228,3 +228,18 @@ type RespAliasResolve struct {
 
 type RespUploadKeys struct {
 }
+
+type RespQueryKeys struct {
+	Failures   map[string]map[string]interface{} `json:"failures"`
+	DeviceKeys map[string]map[string]DeviceKeys  `json:"device_keys"`
+}
+
+type RespClaimKeys struct {
+	Failures    map[string]map[string]interface{} `json:"failures"`
+	OneTimeKeys map[id.UserID]map[id.KeyID]string `json:"one_time_keys"`
+}
+
+type RespKeyChanges struct {
+	Changed []id.UserID `json:"changed"`
+	Left    []id.UserID `json:"left"`
+}

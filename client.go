@@ -967,6 +967,27 @@ func (cli *Client) UploadKeys(req *ReqUploadKeys) (resp *RespUploadKeys, err err
 	return
 }
 
+func (cli *Client) QueryKeys(req *ReqQueryKeys) (resp *RespQueryKeys, err error) {
+	urlPath := cli.BuildURL("keys", "query")
+	_, err = cli.MakeRequest("POST", urlPath, req, &resp)
+	return
+}
+
+func (cli *Client) ClaimKeys(req *ReqClaimKeys) (resp *RespClaimKeys, err error) {
+	urlPath := cli.BuildURL("keys", "claim")
+	_, err = cli.MakeRequest("POST", urlPath, req, &resp)
+	return
+}
+
+func (cli *Client) GetKeyChanges(from, to string) (resp *RespKeyChanges, err error) {
+	urlPath := cli.BuildURLWithQuery(URLPath{"keys", "changes"}, map[string]string{
+		"from": from,
+		"to": to,
+	})
+	_, err = cli.MakeRequest("POST", urlPath, nil, &resp)
+	return
+}
+
 // GetPushRules returns the push notification rules for the global scope.
 func (cli *Client) GetPushRules() (*pushrules.PushRuleset, error) {
 	return cli.GetScopedPushRules("global")

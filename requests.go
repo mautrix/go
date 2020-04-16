@@ -118,4 +118,22 @@ type DeviceKeys struct {
 	Algorithms []string                        `json:"algorithms"`
 	Keys       map[id.KeyID]string             `json:"keys"`
 	Signatures map[id.UserID]map[string]string `json:"signatures"`
+	Unsigned   *UnsignedDeviceInfo             `json:"unsigned,omitempty"`
+}
+
+type UnsignedDeviceInfo struct {
+	Name string `json:"device_display_name,omitempty"`
+}
+
+type ReqQueryKeys struct {
+	DeviceKeys map[id.UserID][]id.DeviceID `json:"device_keys"`
+
+	Timeout int64  `json:"timeout,omitempty"`
+	Token   string `json:"token,omitempty"`
+}
+
+type ReqClaimKeys struct {
+	OneTimeKeys map[id.UserID]map[id.DeviceID]string `json:"one_time_keys"`
+
+	Timeout int64 `json:"timeout,omitempty"`
 }

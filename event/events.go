@@ -102,11 +102,19 @@ type Content struct {
 	// Membership key for easy access in m.room.member events
 	Membership Membership `json:"membership,omitempty"`
 
-	Algorithm  string      `json:"algorithm,omitempty"`
+	// Encryption stuff
+	Algorithm string `json:"algorithm,omitempty"`
+	// These are for m.room.encrypted
 	SenderKey  string      `json:"sender_key,omitempty"`
 	DeviceID   id.DeviceID `json:"device_id,omitempty"`
 	SessionID  string      `json:"session_id,omitempty"`
 	Ciphertext string      `json:"ciphertext,omitempty"`
+	// These are for m.room_key and m.forwarded_room_key
+	RoomID     id.RoomID `json:"room_id"`
+	SessionKey string    `json:"session_key"`
+	// These are only for m.forwarded_room_key
+	SenderClaimedKey   string   `json:"sender_claimed_ed25519_key"`
+	ForwardingKeyChain []string `json:"forwarding_curve25519_key_chain"`
 
 	// m.room.canonical_alias state
 	Alias      id.RoomAlias `json:"alias,omitempty"`
