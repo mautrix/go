@@ -1,17 +1,21 @@
 package mautrix
 
+import (
+	"maunium.net/go/mautrix/id"
+)
+
 // Storer is an interface which must be satisfied to store client data.
 //
 // You can either write a struct which persists this data to disk, or you can use the
 // provided "InMemoryStore" which just keeps data around in-memory which is lost on
 // restarts.
 type Storer interface {
-	SaveFilterID(userID, filterID string)
-	LoadFilterID(userID string) string
-	SaveNextBatch(userID, nextBatchToken string)
-	LoadNextBatch(userID string) string
+	SaveFilterID(userID id.UserID, filterID string)
+	LoadFilterID(userID id.UserID) string
+	SaveNextBatch(userID id.UserID, nextBatchToken string)
+	LoadNextBatch(userID id.UserID) string
 	SaveRoom(room *Room)
-	LoadRoom(roomID string) *Room
+	LoadRoom(roomID id.RoomID) *Room
 }
 
 // InMemoryStore implements the Storer interface.
@@ -20,28 +24,28 @@ type Storer interface {
 // or next batch tokens on any goroutine other than the syncing goroutine: the one
 // which called Client.Sync().
 type InMemoryStore struct {
-	Filters   map[string]string
-	NextBatch map[string]string
-	Rooms     map[string]*Room
+	Filters   map[id.UserID]string
+	NextBatch map[id.UserID]string
+	Rooms     map[id.RoomID]*Room
 }
 
 // SaveFilterID to memory.
-func (s *InMemoryStore) SaveFilterID(userID, filterID string) {
+func (s *InMemoryStore) SaveFilterID(userID id.UserID, filterID string) {
 	s.Filters[userID] = filterID
 }
 
 // LoadFilterID from memory.
-func (s *InMemoryStore) LoadFilterID(userID string) string {
+func (s *InMemoryStore) LoadFilterID(userID id.UserID) string {
 	return s.Filters[userID]
 }
 
 // SaveNextBatch to memory.
-func (s *InMemoryStore) SaveNextBatch(userID, nextBatchToken string) {
+func (s *InMemoryStore) SaveNextBatch(userID id.UserID, nextBatchToken string) {
 	s.NextBatch[userID] = nextBatchToken
 }
 
 // LoadNextBatch from memory.
-func (s *InMemoryStore) LoadNextBatch(userID string) string {
+func (s *InMemoryStore) LoadNextBatch(userID id.UserID) string {
 	return s.NextBatch[userID]
 }
 
@@ -51,15 +55,15 @@ func (s *InMemoryStore) SaveRoom(room *Room) {
 }
 
 // LoadRoom from memory.
-func (s *InMemoryStore) LoadRoom(roomID string) *Room {
+func (s *InMemoryStore) LoadRoom(roomID id.RoomID) *Room {
 	return s.Rooms[roomID]
 }
 
 // NewInMemoryStore constructs a new InMemoryStore.
 func NewInMemoryStore() *InMemoryStore {
 	return &InMemoryStore{
-		Filters:   make(map[string]string),
-		NextBatch: make(map[string]string),
-		Rooms:     make(map[string]*Room),
+		Filters:   make(map[id.UserID]string),
+		NextBatch: make(map[id.UserID]string),
+		Rooms:     make(map[id.RoomID]*Room),
 	}
 }

@@ -1,11 +1,16 @@
 package mautrix
 
+import (
+	"maunium.net/go/mautrix/events"
+	"maunium.net/go/mautrix/id"
+)
+
 // ReqRegister is the JSON request for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-register
 type ReqRegister struct {
 	Username                 string      `json:"username,omitempty"`
 	BindEmail                bool        `json:"bind_email,omitempty"`
 	Password                 string      `json:"password,omitempty"`
-	DeviceID                 string      `json:"device_id,omitempty"`
+	DeviceID                 id.DeviceID `json:"device_id,omitempty"`
 	InitialDeviceDisplayName string      `json:"initial_device_display_name"`
 	Auth                     interface{} `json:"auth,omitempty"`
 }
@@ -28,7 +33,7 @@ type ReqLogin struct {
 	Identifier               UserIdentifier `json:"identifier"`
 	Password                 string         `json:"password,omitempty"`
 	Token                    string         `json:"token,omitempty"`
-	DeviceID                 string         `json:"device_id,omitempty"`
+	DeviceID                 id.DeviceID    `json:"device_id,omitempty"`
 	InitialDeviceDisplayName string         `json:"initial_device_display_name,omitempty"`
 }
 
@@ -38,10 +43,10 @@ type ReqCreateRoom struct {
 	RoomAliasName   string                 `json:"room_alias_name,omitempty"`
 	Name            string                 `json:"name,omitempty"`
 	Topic           string                 `json:"topic,omitempty"`
-	Invite          []string               `json:"invite,omitempty"`
+	Invite          []id.UserID            `json:"invite,omitempty"`
 	Invite3PID      []ReqInvite3PID        `json:"invite_3pid,omitempty"`
 	CreationContent map[string]interface{} `json:"creation_content,omitempty"`
-	InitialState    []*Event               `json:"initial_state,omitempty"`
+	InitialState    []*events.Event        `json:"initial_state,omitempty"`
 	Preset          string                 `json:"preset,omitempty"`
 	IsDirect        bool                   `json:"is_direct,omitempty"`
 }
@@ -53,9 +58,9 @@ type ReqRedact struct {
 }
 
 type ReqMembers struct {
-	At            string     `json:"at"`
-	Membership    Membership `json:"membership"`
-	NotMembership Membership `json:"not_membership"`
+	At            string            `json:"at"`
+	Membership    events.Membership `json:"membership"`
+	NotMembership events.Membership `json:"not_membership"`
 }
 
 // ReqInvite3PID is the JSON request for https://matrix.org/docs/spec/client_server/r0.2.0.html#id57
@@ -68,24 +73,24 @@ type ReqInvite3PID struct {
 
 // ReqInviteUser is the JSON request for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-invite
 type ReqInviteUser struct {
-	UserID string `json:"user_id"`
+	UserID id.UserID `json:"user_id"`
 }
 
 // ReqKickUser is the JSON request for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-kick
 type ReqKickUser struct {
-	Reason string `json:"reason,omitempty"`
-	UserID string `json:"user_id"`
+	Reason string    `json:"reason,omitempty"`
+	UserID id.UserID `json:"user_id"`
 }
 
 // ReqBanUser is the JSON request for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-ban
 type ReqBanUser struct {
-	Reason string `json:"reason,omitempty"`
-	UserID string `json:"user_id"`
+	Reason string    `json:"reason,omitempty"`
+	UserID id.UserID `json:"user_id"`
 }
 
 // ReqUnbanUser is the JSON request for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-unban
 type ReqUnbanUser struct {
-	UserID string `json:"user_id"`
+	UserID id.UserID `json:"user_id"`
 }
 
 // ReqTyping is the JSON request for https://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-rooms-roomid-typing-userid
@@ -99,5 +104,18 @@ type ReqPresence struct {
 }
 
 type ReqAliasCreate struct {
-	RoomID string `json:"room_id"`
+	RoomID id.RoomID `json:"room_id"`
+}
+
+type ReqUploadKeys struct {
+	DeviceKeys  DeviceKeys          `json:"device_keys,omitempty"`
+	OneTimeKeys map[id.KeyID]string `json:"one_time_keys"`
+}
+
+type DeviceKeys struct {
+	UserID     id.UserID                       `json:"user_id"`
+	DeviceID   id.DeviceID                     `json:"device_id"`
+	Algorithms []string                        `json:"algorithms"`
+	Keys       map[id.KeyID]string             `json:"keys"`
+	Signatures map[id.UserID]map[string]string `json:"signatures"`
 }

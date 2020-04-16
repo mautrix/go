@@ -1,5 +1,10 @@
-// Copyright 2018 Tulir Asokan
-package mautrix
+// Copyright (c) 2020 Tulir Asokan
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+package events
 
 import (
 	"fmt"
@@ -7,6 +12,8 @@ import (
 	"strings"
 
 	"golang.org/x/net/html"
+
+	"maunium.net/go/mautrix/id"
 )
 
 var HTMLReplyFallbackRegex = regexp.MustCompile(`^<mx-reply>[\s\S]+?</mx-reply>`)
@@ -36,7 +43,7 @@ func (content *Content) RemoveReplyFallback() {
 	}
 }
 
-func (content *Content) GetReplyTo() string {
+func (content *Content) GetReplyTo() id.EventID {
 	if content.RelatesTo != nil && content.RelatesTo.Type == RelReference {
 		return content.RelatesTo.EventID
 	}
@@ -64,9 +71,9 @@ func (evt *Event) GenerateReplyFallbackText() string {
 	senderDisplayName := evt.Sender
 
 	var fallbackText strings.Builder
-	fmt.Fprintf(&fallbackText, "> <%s> %s", senderDisplayName, firstLine)
+	_, _ = fmt.Fprintf(&fallbackText, "> <%s> %s", senderDisplayName, firstLine)
 	for _, line := range lines {
-		fmt.Fprintf(&fallbackText, "\n> %s", line)
+		_, _ = fmt.Fprintf(&fallbackText, "\n> %s", line)
 	}
 	fallbackText.WriteString("\n\n")
 	return fallbackText.String()

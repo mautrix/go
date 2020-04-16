@@ -1,4 +1,10 @@
-package mautrix
+// Copyright (c) 2020 Tulir Asokan
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+package id
 
 import (
 	"bytes"
@@ -6,6 +12,40 @@ import (
 	"fmt"
 	"strings"
 )
+
+type UserID string
+
+func NewUserID(localpart, homeserver string) UserID {
+	return UserID(fmt.Sprintf("@%s:%s", localpart, homeserver))
+}
+
+func NewEncodedUserID(localpart, homeserver string) UserID {
+	return NewUserID(EncodeUserLocalpart(localpart), homeserver)
+}
+
+// Parse parses the user ID into the localpart and server name.
+// See http://matrix.org/docs/spec/intro.html#user-identifiers
+func (userID UserID) Parse() (localpart, homeserver string, err error) {
+	if len(userID) == 0 || userID[0] != '@' || !strings.ContainsRune(string(userID), ':') {
+		err = fmt.Errorf("%s is not a valid user id", userID)
+		return
+	}
+	parts := strings.SplitN(string(userID), ":", 2)
+	localpart, homeserver = strings.TrimPrefix(parts[0], "@"), parts[1]
+	return
+}
+
+func (userID UserID) ParseAndDecode() (localpart, homeserver string, err error) {
+	localpart, homeserver, err = userID.Parse()
+	if err == nil {
+		localpart, err = DecodeUserLocalpart(localpart)
+	}
+	return
+}
+
+func (userID UserID) String() string {
+	return string(userID)
+}
 
 const lowerhex = "0123456789abcdef"
 
@@ -115,16 +155,4 @@ func DecodeUserLocalpart(str string) (string, error) {
 		}
 	}
 	return outputBuffer.String(), nil
-}
-
-// ParseUserID parses a user ID into the localpart and server name.
-// See http://matrix.org/docs/spec/intro.html#user-identifiers
-func ParseUserID(userID string) (localpart, homeserver string, err error) {
-	if len(userID) == 0 || userID[0] != '@' || !strings.ContainsRune(userID, ':') {
-		err = fmt.Errorf("%s is not a valid user id", userID)
-		return
-	}
-	parts := strings.SplitN(userID, ":", 2)
-	localpart, homeserver = strings.TrimPrefix(parts[0], "@"), parts[1]
-	return
 }

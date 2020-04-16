@@ -1,8 +1,15 @@
-// Copyright 2019 Tulir Asokan
-package mautrix
+// Copyright (c) 2020 Tulir Asokan
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+package events
 
 import (
 	"encoding/json"
+
+	"maunium.net/go/mautrix/id"
 )
 
 type RelationType string
@@ -15,36 +22,36 @@ const (
 
 type RelatesTo struct {
 	Type    RelationType
-	EventID string
+	EventID id.EventID
 	Key     string
 }
 
 type serializableInReplyTo struct {
-	EventID string `json:"event_id,omitempty"`
+	EventID id.EventID `json:"event_id,omitempty"`
 }
 
 type serializableRelatesTo struct {
 	InReplyTo *serializableInReplyTo `json:"m.in_reply_to,omitempty"`
 
 	Type    RelationType `json:"rel_type,omitempty"`
-	EventID string       `json:"event_id,omitempty"`
+	EventID id.EventID   `json:"event_id,omitempty"`
 	Key     string       `json:"key,omitempty"`
 }
 
-func (rel *RelatesTo) GetReplaceID() string {
+func (rel *RelatesTo) GetReplaceID() id.EventID {
 	if rel.Type == RelReplace {
 		return rel.EventID
 	}
 	return ""
 }
 
-func (rel *RelatesTo) GetReferenceID() string {
+func (rel *RelatesTo) GetReferenceID() id.EventID {
 	if rel.Type == RelReference {
 		return rel.EventID
 	}
 	return ""
 }
-func (rel *RelatesTo) GetAnnotationID() string {
+func (rel *RelatesTo) GetAnnotationID() id.EventID {
 	if rel.Type == RelAnnotation {
 		return rel.EventID
 	}

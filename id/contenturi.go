@@ -1,4 +1,10 @@
-package mautrix
+// Copyright (c) 2020 Tulir Asokan
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+package id
 
 import (
 	"errors"
@@ -7,6 +13,12 @@ import (
 )
 
 var InvalidContentURI = errors.New("invalid Matrix content URI")
+
+type ContentURIString string
+
+func (uriString ContentURIString) Parse() (ContentURI, error) {
+	return ParseContentURI(string(uriString))
+}
 
 type ContentURI struct {
 	Homeserver string
@@ -40,6 +52,10 @@ func (uri *ContentURI) MarshalJSON() ([]byte, error) {
 
 func (uri *ContentURI) String() string {
 	return fmt.Sprintf("mxc://%s/%s", uri.Homeserver, uri.FileID)
+}
+
+func (uri *ContentURI) CUString() ContentURIString {
+	return ContentURIString(uri.String())
 }
 
 func (uri *ContentURI) IsEmpty() bool {

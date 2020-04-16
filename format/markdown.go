@@ -1,4 +1,9 @@
-// Copyright 2018 Tulir Asokan
+// Copyright (c) 2020 Tulir Asokan
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 package format
 
 import (
@@ -8,7 +13,7 @@ import (
 
 	"github.com/russross/blackfriday/v2"
 
-	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/events"
 )
 
 type EscapingRenderer struct {
@@ -36,7 +41,7 @@ var bfhtml = blackfriday.NewHTMLRenderer(blackfriday.HTMLRendererParameters{
 var Renderer = blackfriday.WithRenderer(bfhtml)
 var NoHTMLRenderer = blackfriday.WithRenderer(&EscapingRenderer{bfhtml})
 
-func RenderMarkdown(text string, allowMarkdown, allowHTML bool) mautrix.Content {
+func RenderMarkdown(text string, allowMarkdown, allowHTML bool) events.Content {
 	htmlBody := text
 
 	if allowMarkdown {
@@ -53,17 +58,17 @@ func RenderMarkdown(text string, allowMarkdown, allowHTML bool) mautrix.Content 
 		text = HTMLToText(htmlBody)
 
 		if htmlBody != text {
-			return mautrix.Content{
+			return events.Content{
 				FormattedBody: htmlBody,
-				Format:        mautrix.FormatHTML,
-				MsgType:       mautrix.MsgText,
+				Format:        events.FormatHTML,
+				MsgType:       events.MsgText,
 				Body:          text,
 			}
 		}
 	}
 
-	return mautrix.Content{
-		MsgType: mautrix.MsgText,
+	return events.Content{
+		MsgType: events.MsgText,
 		Body:    text,
 	}
 }

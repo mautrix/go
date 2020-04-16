@@ -2,6 +2,9 @@ package mautrix
 
 import (
 	"encoding/json"
+
+	"maunium.net/go/mautrix/events"
+	"maunium.net/go/mautrix/id"
 )
 
 // RespError is the standard JSON error response from Homeservers. It also implements the Golang "error" interface.
@@ -54,7 +57,7 @@ type RespTyping struct{}
 
 // RespJoinedRooms is the JSON response for https://matrix.org/docs/spec/client_server/r0.4.0.html#get-matrix-client-r0-joined-rooms
 type RespJoinedRooms struct {
-	JoinedRooms []string `json:"joined_rooms"`
+	JoinedRooms []id.RoomID `json:"joined_rooms"`
 }
 
 // RespJoinedMembers is the JSON response for https://matrix.org/docs/spec/client_server/r0.4.0.html#get-matrix-client-r0-joined-rooms
@@ -67,20 +70,20 @@ type RespJoinedMembers struct {
 
 // RespMessages is the JSON response for https://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-r0-rooms-roomid-messages
 type RespMessages struct {
-	Start string   `json:"start"`
-	Chunk []*Event `json:"chunk"`
-	State []*Event `json:"state"`
-	End   string   `json:"end"`
+	Start string          `json:"start"`
+	Chunk []*events.Event `json:"chunk"`
+	State []*events.Event `json:"state"`
+	End   string          `json:"end"`
 }
 
 // RespSendEvent is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-rooms-roomid-send-eventtype-txnid
 type RespSendEvent struct {
-	EventID string `json:"event_id"`
+	EventID id.EventID `json:"event_id"`
 }
 
 // RespMediaUpload is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-media-r0-upload
 type RespMediaUpload struct {
-	ContentURI string `json:"content_uri"`
+	ContentURI id.ContentURI `json:"content_uri"`
 }
 
 // RespUserInteractive is the JSON response for https://matrix.org/docs/spec/client_server/r0.2.0.html#user-interactive-authentication-api
@@ -112,11 +115,11 @@ type RespUserDisplayName struct {
 
 // RespRegister is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-register
 type RespRegister struct {
-	AccessToken  string `json:"access_token"`
-	DeviceID     string `json:"device_id"`
-	HomeServer   string `json:"home_server"`
-	RefreshToken string `json:"refresh_token"`
-	UserID       string `json:"user_id"`
+	AccessToken  string      `json:"access_token"`
+	DeviceID     id.DeviceID `json:"device_id"`
+	HomeServer   string      `json:"home_server"`
+	RefreshToken string      `json:"refresh_token"`
+	UserID       id.UserID   `json:"user_id"`
 }
 
 type RespLoginFlows struct {
@@ -127,10 +130,10 @@ type RespLoginFlows struct {
 
 // RespLogin is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-login
 type RespLogin struct {
-	AccessToken string `json:"access_token"`
-	DeviceID    string `json:"device_id"`
-	HomeServer  string `json:"home_server"`
-	UserID      string `json:"user_id"`
+	AccessToken string      `json:"access_token"`
+	DeviceID    id.DeviceID `json:"device_id"`
+	HomeServer  string      `json:"home_server"`
+	UserID      id.UserID   `json:"user_id"`
 }
 
 // RespLogout is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-logout
@@ -138,30 +141,41 @@ type RespLogout struct{}
 
 // RespCreateRoom is the JSON response for https://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-createroom
 type RespCreateRoom struct {
-	RoomID string `json:"room_id"`
+	RoomID id.RoomID `json:"room_id"`
 }
 
 type RespMembers struct {
-	Chunk []*Event `json:"chunk"`
+	Chunk []*events.Event `json:"chunk"`
 }
 
 type LazyLoadSummary struct {
-	Heroes             []string `json:"m.heroes,omitempty"`
-	JoinedMemberCount  *int     `json:"m.joined_member_count,omitempty"`
-	InvitedMemberCount *int     `json:"m.invited_member_count,omitempty"`
+	Heroes             []id.UserID `json:"m.heroes,omitempty"`
+	JoinedMemberCount  *int        `json:"m.joined_member_count,omitempty"`
+	InvitedMemberCount *int        `json:"m.invited_member_count,omitempty"`
 }
 
 // RespSync is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-r0-sync
 type RespSync struct {
-	NextBatch   string `json:"next_batch"`
+	NextBatch string `json:"next_batch"`
+
 	AccountData struct {
 		Events []json.RawMessage `json:"events"`
 	} `json:"account_data"`
 	Presence struct {
 		Events []json.RawMessage `json:"events"`
 	} `json:"presence"`
+	ToDevice struct {
+		Events []json.RawMessage `json:"events"`
+	} `json:"to_device"`
+
+	DeviceLists struct {
+		Changed []id.UserID `json:"changed"`
+		Left    []id.UserID `json:"left"`
+	} `json:"device_lists"`
+	DeviceOneTimeKeysCount map[string]int `json:"device_one_time_keys_count"`
+
 	Rooms struct {
-		Leave map[string]struct {
+		Leave map[id.RoomID]struct {
 			Summary LazyLoadSummary `json:"summary"`
 			State   struct {
 				Events []json.RawMessage `json:"events"`
@@ -172,7 +186,7 @@ type RespSync struct {
 				PrevBatch string            `json:"prev_batch"`
 			} `json:"timeline"`
 		} `json:"leave"`
-		Join map[string]struct {
+		Join map[id.RoomID]struct {
 			Summary LazyLoadSummary `json:"summary"`
 			State   struct {
 				Events []json.RawMessage `json:"events"`
@@ -189,7 +203,7 @@ type RespSync struct {
 				Events []json.RawMessage `json:"events"`
 			} `json:"account_data"`
 		} `json:"join"`
-		Invite map[string]struct {
+		Invite map[id.RoomID]struct {
 			Summary LazyLoadSummary `json:"summary"`
 			State   struct {
 				Events []json.RawMessage `json:"events"`
@@ -208,6 +222,9 @@ type RespTurnServer struct {
 type RespAliasCreate struct{}
 type RespAliasDelete struct{}
 type RespAliasResolve struct {
-	RoomID  string   `json:"room_id"`
-	Servers []string `json:"servers"`
+	RoomID  id.RoomID `json:"room_id"`
+	Servers []string  `json:"servers"`
+}
+
+type RespUploadKeys struct {
 }

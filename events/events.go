@@ -1,125 +1,18 @@
-// Copyright 2019 Tulir Asokan
-package mautrix
+// Copyright (c) 2020 Tulir Asokan
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+package events
 
 import (
 	"encoding/json"
 	"strconv"
-	"strings"
 	"sync"
-)
 
-type EventTypeClass int
-
-const (
-	// Normal message events
-	MessageEventType EventTypeClass = iota
-	// State events
-	StateEventType
-	// Ephemeral events
-	EphemeralEventType
-	// Account data events
-	AccountDataEventType
-	// Unknown events
-	UnknownEventType
-)
-
-type EventType struct {
-	Type  string
-	Class EventTypeClass
-}
-
-func NewEventType(name string) EventType {
-	evtType := EventType{Type: name}
-	evtType.Class = evtType.GuessClass()
-	return evtType
-}
-
-func (et *EventType) IsState() bool {
-	return et.Class == StateEventType
-}
-
-func (et *EventType) IsEphemeral() bool {
-	return et.Class == EphemeralEventType
-}
-
-func (et *EventType) IsAccountData() bool {
-	return et.Class == AccountDataEventType
-}
-
-func (et *EventType) IsCustom() bool {
-	return !strings.HasPrefix(et.Type, "m.")
-}
-
-func (et *EventType) GuessClass() EventTypeClass {
-	switch et.Type {
-	case StateAliases.Type, StateCanonicalAlias.Type, StateCreate.Type, StateJoinRules.Type, StateMember.Type,
-		StatePowerLevels.Type, StateRoomName.Type, StateRoomAvatar.Type, StateTopic.Type, StatePinnedEvents.Type,
-		StateTombstone.Type:
-		return StateEventType
-	case EphemeralEventReceipt.Type, EphemeralEventTyping.Type, EphemeralEventPresence.Type:
-		return EphemeralEventType
-	case AccountDataDirectChats.Type, AccountDataPushRules.Type, AccountDataRoomTags.Type:
-		return AccountDataEventType
-	case EventRedaction.Type, EventMessage.Type, EventEncrypted.Type, EventReaction.Type, EventSticker.Type:
-		return MessageEventType
-	default:
-		return UnknownEventType
-	}
-}
-
-func (et *EventType) UnmarshalJSON(data []byte) error {
-	err := json.Unmarshal(data, &et.Type)
-	if err != nil {
-		return err
-	}
-	et.Class = et.GuessClass()
-	return nil
-}
-
-func (et *EventType) MarshalJSON() ([]byte, error) {
-	return json.Marshal(&et.Type)
-}
-
-func (et *EventType) String() string {
-	return et.Type
-}
-
-// State events
-var (
-	StateAliases        = EventType{"m.room.aliases", StateEventType}
-	StateCanonicalAlias = EventType{"m.room.canonical_alias", StateEventType}
-	StateCreate         = EventType{"m.room.create", StateEventType}
-	StateJoinRules      = EventType{"m.room.join_rules", StateEventType}
-	StateMember         = EventType{"m.room.member", StateEventType}
-	StatePowerLevels    = EventType{"m.room.power_levels", StateEventType}
-	StateRoomName       = EventType{"m.room.name", StateEventType}
-	StateTopic          = EventType{"m.room.topic", StateEventType}
-	StateRoomAvatar     = EventType{"m.room.avatar", StateEventType}
-	StatePinnedEvents   = EventType{"m.room.pinned_events", StateEventType}
-	StateTombstone      = EventType{"m.room.tombstone", StateEventType}
-)
-
-// Message events
-var (
-	EventRedaction = EventType{"m.room.redaction", MessageEventType}
-	EventMessage   = EventType{"m.room.message", MessageEventType}
-	EventEncrypted = EventType{"m.room.encrypted", MessageEventType}
-	EventReaction  = EventType{"m.reaction", MessageEventType}
-	EventSticker   = EventType{"m.sticker", MessageEventType}
-)
-
-// Ephemeral events
-var (
-	EphemeralEventReceipt  = EventType{"m.receipt", EphemeralEventType}
-	EphemeralEventTyping   = EventType{"m.typing", EphemeralEventType}
-	EphemeralEventPresence = EventType{"m.presence", EphemeralEventType}
-)
-
-// Account data events
-var (
-	AccountDataDirectChats = EventType{"m.direct", AccountDataEventType}
-	AccountDataPushRules   = EventType{"m.push_rules", AccountDataEventType}
-	AccountDataRoomTags    = EventType{"m.tag", AccountDataEventType}
+	"maunium.net/go/mautrix/crypto/attachment"
+	"maunium.net/go/mautrix/id"
 )
 
 type MessageType string
@@ -145,17 +38,15 @@ const (
 
 // Event represents a single Matrix event.
 type Event struct {
-	StateKey  *string   `json:"state_key,omitempty"` // The state key for the event. Only present on State Events.
-	Sender    string    `json:"sender"`              // The user ID of the sender of the event
-	Type      EventType `json:"type"`                // The event type
-	Timestamp int64     `json:"origin_server_ts"`    // The unix timestamp when this message was sent by the origin server
-	ID        string    `json:"event_id"`            // The unique ID of this event
-	RoomID    string    `json:"room_id"`             // The room the event was sent to. May be nil (e.g. for presence)
-	Content   Content   `json:"content"`             // The JSON content of the event.
-	Redacts   string    `json:"redacts,omitempty"`   // The event ID that was redacted if a m.room.redaction event
-	Unsigned  Unsigned  `json:"unsigned,omitempty"`  // Unsigned content set by own homeserver.
-
-	InviteRoomState []StrippedState `json:"invite_room_state"`
+	StateKey  *string    `json:"state_key,omitempty"` // The state key for the event. Only present on State Events.
+	Sender    id.UserID  `json:"sender"`              // The user ID of the sender of the event
+	Type      Type       `json:"type"`                // The event type
+	Timestamp int64      `json:"origin_server_ts"`    // The unix timestamp when this message was sent by the origin server
+	ID        id.EventID `json:"event_id"`            // The unique ID of this event
+	RoomID    id.RoomID  `json:"room_id"`             // The room the event was sent to. May be nil (e.g. for presence)
+	Content   Content    `json:"content"`             // The JSON content of the event.
+	Redacts   id.EventID `json:"redacts,omitempty"`   // The event ID that was redacted if a m.room.redaction event
+	Unsigned  Unsigned   `json:"unsigned,omitempty"`  // Unsigned content set by own homeserver.
 }
 
 func (evt *Event) GetStateKey() string {
@@ -166,51 +57,64 @@ func (evt *Event) GetStateKey() string {
 }
 
 type StrippedState struct {
-	Content  Content   `json:"content"`
-	Type     EventType `json:"type"`
-	StateKey string    `json:"state_key"`
+	Content  Content `json:"content"`
+	Type     Type    `json:"type"`
+	StateKey string  `json:"state_key"`
 }
 
 type Unsigned struct {
-	PrevContent     *Content  `json:"prev_content,omitempty"`
-	PrevSender      string    `json:"prev_sender,omitempty"`
-	ReplacesState   string    `json:"replaces_state,omitempty"`
-	Age             int64     `json:"age,omitempty"`
-	TransactionID   string    `json:"transaction_id,omitempty"`
-	Relations       Relations `json:"m.relations,omitempty"`
-	RedactedBy      string    `json:"redacted_by,omitempty"`
-	RedactedBecause *Event    `json:"redacted_because,omitempty"`
+	PrevContent     *Content        `json:"prev_content,omitempty"`
+	PrevSender      id.UserID       `json:"prev_sender,omitempty"`
+	ReplacesState   id.EventID      `json:"replaces_state,omitempty"`
+	Age             int64           `json:"age,omitempty"`
+	TransactionID   string          `json:"transaction_id,omitempty"`
+	Relations       Relations       `json:"m.relations,omitempty"`
+	RedactedBecause *Event          `json:"redacted_because,omitempty"`
+	InviteRoomState []StrippedState `json:"invite_room_state"`
+}
+
+type EncryptedFileInfo struct {
+	attachment.EncryptedFile
+	URL id.ContentURIString
 }
 
 type Content struct {
 	VeryRaw json.RawMessage        `json:"-"`
 	Raw     map[string]interface{} `json:"-"`
 
+	// m.room.message
 	MsgType       MessageType `json:"msgtype,omitempty"`
 	Body          string      `json:"body,omitempty"`
 	Format        Format      `json:"format,omitempty"`
 	FormattedBody string      `json:"formatted_body,omitempty"`
-
-	Info *FileInfo `json:"info,omitempty"`
-	URL  string    `json:"url,omitempty"`
-
-	// Membership key for easy access in m.room.member events
-	Membership Membership `json:"membership,omitempty"`
-
+	// media url and info
+	URL  id.ContentURIString `json:"url,omitempty"`
+	Info *FileInfo           `json:"info,omitempty"`
+	File *EncryptedFileInfo  `json:"file,omitempty"`
+	// edits and relations
 	NewContent *Content   `json:"m.new_content,omitempty"`
 	RelatesTo  *RelatesTo `json:"m.relates_to,omitempty"`
 
 	*PowerLevels
+
+	// m.room.member state
 	Member
-	Aliases []string `json:"aliases,omitempty"`
-	Alias   string   `json:"alias,omitempty"`
-	Name    string   `json:"name,omitempty"`
-	Topic   string   `json:"topic,omitempty"`
+	// Membership key for easy access in m.room.member events
+	Membership Membership `json:"membership,omitempty"`
 
+	// m.room.canonical_alias state
+	Alias      id.RoomAlias `json:"alias,omitempty"`
+	AltAliases []string     `json:"alt_aliases,omitempty"`
+	// m.room.name state
+	Name string `json:"name,omitempty"`
+	// m.room.topic state
+	Topic string `json:"topic,omitempty"`
+	// m.room.tombstone state
 	ReplacementRoom string `json:"replacement_room,omitempty"`
-
-	RoomTags      Tags     `json:"tags,omitempty"`
-	TypingUserIDs []string `json:"user_ids,omitempty"`
+	// m.tag account data
+	RoomTags Tags `json:"tags,omitempty"`
+	// m.typing ephemeral
+	TypingUserIDs []id.UserID `json:"user_ids,omitempty"`
 }
 
 type serializableContent Content
@@ -388,7 +292,7 @@ func (pl *PowerLevels) EnsureUserLevel(userID string, level int) bool {
 	return false
 }
 
-func (pl *PowerLevels) GetEventLevel(eventType EventType) int {
+func (pl *PowerLevels) GetEventLevel(eventType Type) int {
 	pl.eventsLock.RLock()
 	defer pl.eventsLock.RUnlock()
 	level, ok := pl.Events[eventType.String()]
@@ -401,7 +305,7 @@ func (pl *PowerLevels) GetEventLevel(eventType EventType) int {
 	return level
 }
 
-func (pl *PowerLevels) SetEventLevel(eventType EventType, level int) {
+func (pl *PowerLevels) SetEventLevel(eventType Type, level int) {
 	pl.eventsLock.Lock()
 	defer pl.eventsLock.Unlock()
 	if (eventType.IsState() && level == pl.StateDefault()) || (!eventType.IsState() && level == pl.EventsDefault) {
@@ -411,7 +315,7 @@ func (pl *PowerLevels) SetEventLevel(eventType EventType, level int) {
 	}
 }
 
-func (pl *PowerLevels) EnsureEventLevel(eventType EventType, level int) bool {
+func (pl *PowerLevels) EnsureEventLevel(eventType Type, level int) bool {
 	existingLevel := pl.GetEventLevel(eventType)
 	if existingLevel != level {
 		pl.SetEventLevel(eventType, level)
@@ -421,13 +325,14 @@ func (pl *PowerLevels) EnsureEventLevel(eventType EventType, level int) bool {
 }
 
 type FileInfo struct {
-	MimeType      string    `json:"mimetype,omitempty"`
-	ThumbnailInfo *FileInfo `json:"thumbnail_info,omitempty"`
-	ThumbnailURL  string    `json:"thumbnail_url,omitempty"`
-	Width         int       `json:"-"`
-	Height        int       `json:"-"`
-	Duration      uint      `json:"-"`
-	Size          int       `json:"-"`
+	MimeType      string             `json:"mimetype,omitempty"`
+	ThumbnailInfo *FileInfo          `json:"thumbnail_info,omitempty"`
+	ThumbnailURL  string             `json:"thumbnail_url,omitempty"`
+	ThumbnailFile *EncryptedFileInfo `json:"thumbnail_file,omitempty"`
+	Width         int                `json:"-"`
+	Height        int                `json:"-"`
+	Duration      uint               `json:"-"`
+	Size          int                `json:"-"`
 }
 
 type serializableFileInfo struct {

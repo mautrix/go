@@ -6,6 +6,9 @@ import (
 	"os"
 	"runtime/debug"
 	"time"
+
+	"maunium.net/go/mautrix/events"
+	"maunium.net/go/mautrix/id"
 )
 
 // Syncer represents an interface that must be satisfied in order to do /sync requests on a client.
@@ -17,32 +20,32 @@ type Syncer interface {
 	// OnFailedSync returns either the time to wait before retrying or an error to stop syncing permanently.
 	OnFailedSync(res *RespSync, err error) (time.Duration, error)
 	// GetFilterJSON for the given user ID. NOT the filter ID.
-	GetFilterJSON(userID string) json.RawMessage
+	GetFilterJSON(userID id.UserID) json.RawMessage
 }
 
 // DefaultSyncer is the default syncing implementation. You can either write your own syncer, or selectively
 // replace parts of this default syncer (e.g. the ProcessResponse method). The default syncer uses the observer
 // pattern to notify callers about incoming events. See DefaultSyncer.OnEventType for more information.
 type DefaultSyncer struct {
-	UserID    string
+	UserID    id.UserID
 	Store     Storer
-	listeners map[EventType][]OnEventListener // event type to listeners array
+	listeners map[events.Type][]OnEventListener // event type to listeners array
 }
 
 // OnEventListener can be used with DefaultSyncer.OnEventType to be informed of incoming events.
-type OnEventListener func(*Event)
+type OnEventListener func(*events.Event)
 
 // NewDefaultSyncer returns an instantiated DefaultSyncer
-func NewDefaultSyncer(userID string, store Storer) *DefaultSyncer {
+func NewDefaultSyncer(userID id.UserID, store Storer) *DefaultSyncer {
 	return &DefaultSyncer{
 		UserID:    userID,
 		Store:     store,
-		listeners: make(map[EventType][]OnEventListener),
+		listeners: make(map[events.Type][]OnEventListener),
 	}
 }
 
-func parseEvent(roomID string, data json.RawMessage) *Event {
-	event := &Event{}
+func parseEvent(roomID id.RoomID, data json.RawMessage) *events.Event {
+	event := &events.Event{}
 	err := json.Unmarshal(data, event)
 	if err != nil {
 		// TODO add separate handler for these
@@ -106,7 +109,7 @@ func (s *DefaultSyncer) ProcessResponse(res *RespSync, since string) (err error)
 
 // OnEventType allows callers to be notified when there are new events for the given event type.
 // There are no duplicate checks.
-func (s *DefaultSyncer) OnEventType(eventType EventType, callback OnEventListener) {
+func (s *DefaultSyncer) OnEventType(eventType events.Type, callback OnEventListener) {
 	_, exists := s.listeners[eventType]
 	if !exists {
 		s.listeners[eventType] = []OnEventListener{}
@@ -132,7 +135,7 @@ func (s *DefaultSyncer) shouldProcessResponse(resp *RespSync, since string) bool
 			evtData := roomData.Timeline.Events[i]
 			// TODO this is horribly inefficient since it's also parsed in ProcessResponse
 			e := parseEvent(roomID, evtData)
-			if e != nil && e.Type == StateMember && e.GetStateKey() == s.UserID {
+			if e != nil && e.Type == events.StateMember && e.GetStateKey() == string(s.UserID) {
 				if e.Content.Membership == "join" {
 					_, ok := resp.Rooms.Join[roomID]
 					if !ok {
@@ -149,7 +152,7 @@ func (s *DefaultSyncer) shouldProcessResponse(resp *RespSync, since string) bool
 }
 
 // getOrCreateRoom must only be called by the Sync() goroutine which calls ProcessResponse()
-func (s *DefaultSyncer) getOrCreateRoom(roomID string) *Room {
+func (s *DefaultSyncer) getOrCreateRoom(roomID id.RoomID) *Room {
 	room := s.Store.LoadRoom(roomID)
 	if room == nil { // create a new Room
 		room = NewRoom(roomID)
@@ -158,7 +161,7 @@ func (s *DefaultSyncer) getOrCreateRoom(roomID string) *Room {
 	return room
 }
 
-func (s *DefaultSyncer) notifyListeners(event *Event) {
+func (s *DefaultSyncer) notifyListeners(event *events.Event) {
 	listeners, exists := s.listeners[event.Type]
 	if !exists {
 		return
@@ -174,6 +177,6 @@ func (s *DefaultSyncer) OnFailedSync(res *RespSync, err error) (time.Duration, e
 }
 
 // GetFilterJSON returns a filter with a timeline limit of 50.
-func (s *DefaultSyncer) GetFilterJSON(userID string) json.RawMessage {
+func (s *DefaultSyncer) GetFilterJSON(userID id.UserID) json.RawMessage {
 	return json.RawMessage(`{"room":{"timeline":{"limit":50}}}`)
 }
