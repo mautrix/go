@@ -150,16 +150,6 @@ func (content *Content) GetPowerLevels() *PowerLevels {
 	return content.PowerLevels
 }
 
-func (content *Content) UnmarshalPowerLevels() (pl PowerLevels, err error) {
-	err = json.Unmarshal(content.VeryRaw, &pl)
-	return
-}
-
-func (content *Content) UnmarshalMember() (m Member, err error) {
-	err = json.Unmarshal(content.VeryRaw, &m)
-	return
-}
-
 func (content *Content) GetInfo() *FileInfo {
 	if content.Info == nil {
 		content.Info = &FileInfo{}
@@ -194,12 +184,12 @@ const (
 )
 
 type Member struct {
-	Membership       Membership        `json:"membership,omitempty"`
-	AvatarURL        string            `json:"avatar_url,omitempty"`
-	Displayname      string            `json:"displayname,omitempty"`
-	IsDirect         bool              `json:"is_direct,omitempty"`
-	ThirdPartyInvite *ThirdPartyInvite `json:"third_party_invite,omitempty"`
-	Reason           string            `json:"reason,omitempty"`
+	Membership       Membership          `json:"membership,omitempty"`
+	AvatarURL        id.ContentURIString `json:"avatar_url,omitempty"`
+	Displayname      string              `json:"displayname,omitempty"`
+	IsDirect         bool                `json:"is_direct,omitempty"`
+	ThirdPartyInvite *ThirdPartyInvite   `json:"third_party_invite,omitempty"`
+	Reason           string              `json:"reason,omitempty"`
 }
 
 type ThirdPartyInvite struct {
@@ -212,9 +202,9 @@ type ThirdPartyInvite struct {
 }
 
 type PowerLevels struct {
-	usersLock    sync.RWMutex   `json:"-"`
-	Users        map[string]int `json:"users"`
-	UsersDefault int            `json:"users_default"`
+	usersLock    sync.RWMutex      `json:"-"`
+	Users        map[id.UserID]int `json:"users"`
+	UsersDefault int               `json:"users_default"`
 
 	eventsLock    sync.RWMutex   `json:"-"`
 	Events        map[string]int `json:"events"`
@@ -263,7 +253,7 @@ func (pl *PowerLevels) StateDefault() int {
 	return 50
 }
 
-func (pl *PowerLevels) GetUserLevel(userID string) int {
+func (pl *PowerLevels) GetUserLevel(userID id.UserID) int {
 	pl.usersLock.RLock()
 	defer pl.usersLock.RUnlock()
 	level, ok := pl.Users[userID]
@@ -273,7 +263,7 @@ func (pl *PowerLevels) GetUserLevel(userID string) int {
 	return level
 }
 
-func (pl *PowerLevels) SetUserLevel(userID string, level int) {
+func (pl *PowerLevels) SetUserLevel(userID id.UserID, level int) {
 	pl.usersLock.Lock()
 	defer pl.usersLock.Unlock()
 	if level == pl.UsersDefault {
@@ -283,7 +273,7 @@ func (pl *PowerLevels) SetUserLevel(userID string, level int) {
 	}
 }
 
-func (pl *PowerLevels) EnsureUserLevel(userID string, level int) bool {
+func (pl *PowerLevels) EnsureUserLevel(userID id.UserID, level int) bool {
 	existingLevel := pl.GetUserLevel(userID)
 	if existingLevel != level {
 		pl.SetUserLevel(userID, level)
@@ -325,20 +315,20 @@ func (pl *PowerLevels) EnsureEventLevel(eventType Type, level int) bool {
 }
 
 type FileInfo struct {
-	MimeType      string             `json:"mimetype,omitempty"`
-	ThumbnailInfo *FileInfo          `json:"thumbnail_info,omitempty"`
-	ThumbnailURL  string             `json:"thumbnail_url,omitempty"`
-	ThumbnailFile *EncryptedFileInfo `json:"thumbnail_file,omitempty"`
-	Width         int                `json:"-"`
-	Height        int                `json:"-"`
-	Duration      uint               `json:"-"`
-	Size          int                `json:"-"`
+	MimeType      string              `json:"mimetype,omitempty"`
+	ThumbnailInfo *FileInfo           `json:"thumbnail_info,omitempty"`
+	ThumbnailURL  id.ContentURIString `json:"thumbnail_url,omitempty"`
+	ThumbnailFile *EncryptedFileInfo  `json:"thumbnail_file,omitempty"`
+	Width         int                 `json:"-"`
+	Height        int                 `json:"-"`
+	Duration      uint                `json:"-"`
+	Size          int                 `json:"-"`
 }
 
 type serializableFileInfo struct {
 	MimeType      string                `json:"mimetype,omitempty"`
 	ThumbnailInfo *serializableFileInfo `json:"thumbnail_info,omitempty"`
-	ThumbnailURL  string                `json:"thumbnail_url,omitempty"`
+	ThumbnailURL  id.ContentURIString   `json:"thumbnail_url,omitempty"`
 
 	Width    json.Number `json:"w,omitempty"`
 	Height   json.Number `json:"h,omitempty"`

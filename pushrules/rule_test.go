@@ -34,7 +34,7 @@ func TestPushRule_Match_Conditions(t *testing.T) {
 		Conditions: []*pushrules.PushCondition{cond1, cond2},
 	}
 
-	event := newFakeEvent(event.EventMessage, event.Content{
+	evt := newFakeEvent(event.EventMessage, event.Content{
 		Raw: map[string]interface{}{
 			"msgtype": "m.emote",
 			"body": "is testing pushrules",
@@ -42,7 +42,7 @@ func TestPushRule_Match_Conditions(t *testing.T) {
 		MsgType: event.MsgEmote,
 		Body:    "is testing pushrules",
 	})
-	assert.True(t, rule.Match(blankTestRoom, event))
+	assert.True(t, rule.Match(blankTestRoom, evt))
 }
 
 func TestPushRule_Match_Conditions_Disabled(t *testing.T) {
@@ -54,7 +54,7 @@ func TestPushRule_Match_Conditions_Disabled(t *testing.T) {
 		Conditions: []*pushrules.PushCondition{cond1, cond2},
 	}
 
-	event := newFakeEvent(event.EventMessage, event.Content{
+	evt := newFakeEvent(event.EventMessage, event.Content{
 		Raw: map[string]interface{}{
 			"msgtype": "m.emote",
 			"body": "is testing pushrules",
@@ -62,7 +62,7 @@ func TestPushRule_Match_Conditions_Disabled(t *testing.T) {
 		MsgType: event.MsgEmote,
 		Body:    "is testing pushrules",
 	})
-	assert.False(t, rule.Match(blankTestRoom, event))
+	assert.False(t, rule.Match(blankTestRoom, evt))
 }
 
 func TestPushRule_Match_Conditions_FailIfOneFails(t *testing.T) {
@@ -74,7 +74,7 @@ func TestPushRule_Match_Conditions_FailIfOneFails(t *testing.T) {
 		Conditions: []*pushrules.PushCondition{cond1, cond2},
 	}
 
-	event := newFakeEvent(event.EventMessage, event.Content{
+	evt := newFakeEvent(event.EventMessage, event.Content{
 		Raw: map[string]interface{}{
 			"msgtype": "m.text",
 			"body": "I'm testing pushrules",
@@ -82,7 +82,7 @@ func TestPushRule_Match_Conditions_FailIfOneFails(t *testing.T) {
 		MsgType: event.MsgText,
 		Body:    "I'm testing pushrules",
 	})
-	assert.False(t, rule.Match(blankTestRoom, event))
+	assert.False(t, rule.Match(blankTestRoom, evt))
 }
 
 func TestPushRule_Match_Content(t *testing.T) {
@@ -92,11 +92,11 @@ func TestPushRule_Match_Content(t *testing.T) {
 		Pattern: "is testing*",
 	}
 
-	event := newFakeEvent(event.EventMessage, event.Content{
+	evt := newFakeEvent(event.EventMessage, event.Content{
 		MsgType: event.MsgEmote,
 		Body:    "is testing pushrules",
 	})
-	assert.True(t, rule.Match(blankTestRoom, event))
+	assert.True(t, rule.Match(blankTestRoom, evt))
 }
 
 func TestPushRule_Match_Content_Fail(t *testing.T) {
@@ -106,11 +106,11 @@ func TestPushRule_Match_Content_Fail(t *testing.T) {
 		Pattern: "is testing*",
 	}
 
-	event := newFakeEvent(event.EventMessage, event.Content{
+	evt := newFakeEvent(event.EventMessage, event.Content{
 		MsgType: event.MsgEmote,
 		Body:    "is not testing pushrules",
 	})
-	assert.False(t, rule.Match(blankTestRoom, event))
+	assert.False(t, rule.Match(blankTestRoom, evt))
 }
 
 func TestPushRule_Match_Content_ImplicitGlob(t *testing.T) {
@@ -120,11 +120,11 @@ func TestPushRule_Match_Content_ImplicitGlob(t *testing.T) {
 		Pattern: "testing",
 	}
 
-	event := newFakeEvent(event.EventMessage, event.Content{
+	evt := newFakeEvent(event.EventMessage, event.Content{
 		MsgType: event.MsgEmote,
 		Body:    "is not testing pushrules",
 	})
-	assert.True(t, rule.Match(blankTestRoom, event))
+	assert.True(t, rule.Match(blankTestRoom, evt))
 }
 
 func TestPushRule_Match_Content_IllegalGlob(t *testing.T) {
@@ -134,11 +134,11 @@ func TestPushRule_Match_Content_IllegalGlob(t *testing.T) {
 		Pattern: "this is not a valid glo[b",
 	}
 
-	event := newFakeEvent(event.EventMessage, event.Content{
+	evt := newFakeEvent(event.EventMessage, event.Content{
 		MsgType: event.MsgEmote,
 		Body:    "this is not a valid glob",
 	})
-	assert.False(t, rule.Match(blankTestRoom, event))
+	assert.False(t, rule.Match(blankTestRoom, evt))
 }
 
 func TestPushRule_Match_Room(t *testing.T) {
@@ -148,8 +148,8 @@ func TestPushRule_Match_Room(t *testing.T) {
 		RuleID:  "!fakeroom:maunium.net",
 	}
 
-	event := newFakeEvent(event.EventMessage, event.Content{})
-	assert.True(t, rule.Match(blankTestRoom, event))
+	evt := newFakeEvent(event.EventMessage, event.Content{})
+	assert.True(t, rule.Match(blankTestRoom, evt))
 }
 
 func TestPushRule_Match_Room_Fail(t *testing.T) {
@@ -159,8 +159,8 @@ func TestPushRule_Match_Room_Fail(t *testing.T) {
 		RuleID:  "!otherroom:maunium.net",
 	}
 
-	event := newFakeEvent(event.EventMessage, event.Content{})
-	assert.False(t, rule.Match(blankTestRoom, event))
+	evt := newFakeEvent(event.EventMessage, event.Content{})
+	assert.False(t, rule.Match(blankTestRoom, evt))
 }
 
 func TestPushRule_Match_Sender(t *testing.T) {
@@ -170,8 +170,8 @@ func TestPushRule_Match_Sender(t *testing.T) {
 		RuleID:  "@tulir:maunium.net",
 	}
 
-	event := newFakeEvent(event.EventMessage, event.Content{})
-	assert.True(t, rule.Match(blankTestRoom, event))
+	evt := newFakeEvent(event.EventMessage, event.Content{})
+	assert.True(t, rule.Match(blankTestRoom, evt))
 }
 
 func TestPushRule_Match_Sender_Fail(t *testing.T) {
@@ -181,8 +181,8 @@ func TestPushRule_Match_Sender_Fail(t *testing.T) {
 		RuleID:  "@someone:matrix.org",
 	}
 
-	event := newFakeEvent(event.EventMessage, event.Content{})
-	assert.False(t, rule.Match(blankTestRoom, event))
+	evt := newFakeEvent(event.EventMessage, event.Content{})
+	assert.False(t, rule.Match(blankTestRoom, evt))
 }
 
 func TestPushRule_Match_UnknownTypeAlwaysFail(t *testing.T) {
@@ -192,6 +192,6 @@ func TestPushRule_Match_UnknownTypeAlwaysFail(t *testing.T) {
 		RuleID:  "@someone:matrix.org",
 	}
 
-	event := newFakeEvent(event.EventMessage, event.Content{})
-	assert.False(t, rule.Match(blankTestRoom, event))
+	evt := newFakeEvent(event.EventMessage, event.Content{})
+	assert.False(t, rule.Match(blankTestRoom, evt))
 }

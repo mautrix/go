@@ -27,14 +27,14 @@ import (
 )
 
 func TestEventToPushRules(t *testing.T) {
-	event := &event.Event{
+	evt := &event.Event{
 		Type:      event.AccountDataPushRules,
 		Timestamp: 1523380910,
 		Content:   event.Content{
 			VeryRaw: json.RawMessage(JSONExamplePushRules),
 		},
 	}
-	pushRuleset, err := pushrules.EventToPushRules(event)
+	pushRuleset, err := pushrules.EventToPushRules(evt)
 	assert.Nil(t, err)
 	assert.NotNil(t, pushRuleset)
 

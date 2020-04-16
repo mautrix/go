@@ -31,7 +31,7 @@ type RespVersions struct {
 
 // RespJoinRoom is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-join
 type RespJoinRoom struct {
-	RoomID string `json:"room_id"`
+	RoomID id.RoomID `json:"room_id"`
 }
 
 // RespLeaveRoom is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-leave

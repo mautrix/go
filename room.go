@@ -13,28 +13,28 @@ type Room struct {
 
 // UpdateState updates the room's current state with the given Event. This will clobber events based
 // on the type/state_key combination.
-func (room Room) UpdateState(event *event.Event) {
-	_, exists := room.State[event.Type]
+func (room Room) UpdateState(evt *event.Event) {
+	_, exists := room.State[evt.Type]
 	if !exists {
-		room.State[event.Type] = make(map[string]*event.Event)
+		room.State[evt.Type] = make(map[string]*event.Event)
 	}
-	room.State[event.Type][*event.StateKey] = event
+	room.State[evt.Type][*evt.StateKey] = evt
 }
 
 // GetStateEvent returns the state event for the given type/state_key combo, or nil.
 func (room Room) GetStateEvent(eventType event.Type, stateKey string) *event.Event {
 	stateEventMap, _ := room.State[eventType]
-	event, _ := stateEventMap[stateKey]
-	return event
+	evt, _ := stateEventMap[stateKey]
+	return evt
 }
 
 // GetMembershipState returns the membership state of the given user ID in this room. If there is
 // no entry for this member, 'leave' is returned for consistency with left users.
 func (room Room) GetMembershipState(userID id.UserID) event.Membership {
 	state := event.MembershipLeave
-	event := room.GetStateEvent(event.StateMember, string(userID))
-	if event != nil {
-		state = event.Content.Membership
+	evt := room.GetStateEvent(event.StateMember, string(userID))
+	if evt != nil {
+		state = evt.Content.Membership
 	}
 	return state
 }

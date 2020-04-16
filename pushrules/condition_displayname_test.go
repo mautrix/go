@@ -25,29 +25,29 @@ import (
 )
 
 func TestPushCondition_Match_DisplayName(t *testing.T) {
-	event := newFakeEvent(event.EventMessage, event.Content{
+	evt := newFakeEvent(event.EventMessage, event.Content{
 		MsgType: event.MsgText,
 		Body:    "tulir: test mention",
 	})
-	event.Sender = "@someone_else:matrix.org"
-	assert.True(t, displaynamePushCondition.Match(displaynameTestRoom, event))
+	evt.Sender = "@someone_else:matrix.org"
+	assert.True(t, displaynamePushCondition.Match(displaynameTestRoom, evt))
 }
 
 func TestPushCondition_Match_DisplayName_Fail(t *testing.T) {
-	event := newFakeEvent(event.EventMessage, event.Content{
+	evt := newFakeEvent(event.EventMessage, event.Content{
 		MsgType: event.MsgText,
 		Body:    "not a mention",
 	})
-	event.Sender = "@someone_else:matrix.org"
-	assert.False(t, displaynamePushCondition.Match(displaynameTestRoom, event))
+	evt.Sender = "@someone_else:matrix.org"
+	assert.False(t, displaynamePushCondition.Match(displaynameTestRoom, evt))
 }
 
 func TestPushCondition_Match_DisplayName_FailsOnEmptyRoom(t *testing.T) {
 	emptyRoom := newFakeRoom(0)
-	event := newFakeEvent(event.EventMessage, event.Content{
+	evt := newFakeEvent(event.EventMessage, event.Content{
 		MsgType: event.MsgText,
 		Body:    "tulir: this room doesn't have the owner Member available, so it fails.",
 	})
-	event.Sender = "@someone_else:matrix.org"
-	assert.False(t, displaynamePushCondition.Match(emptyRoom, event))
+	evt.Sender = "@someone_else:matrix.org"
+	assert.False(t, displaynamePushCondition.Match(emptyRoom, evt))
 }

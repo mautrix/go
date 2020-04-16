@@ -25,6 +25,14 @@ type ContentURI struct {
 	FileID     string
 }
 
+func MustParseContentURI(uri string) ContentURI {
+	parsed, err := ParseContentURI(uri)
+	if err != nil {
+		panic(err)
+	}
+	return parsed
+}
+
 func ParseContentURI(uri string) (parsed ContentURI, err error) {
 	if !strings.HasPrefix(uri, "mxc://") {
 		err = InvalidContentURI

@@ -86,8 +86,8 @@ func TestPushCondition_Match_InvalidKind(t *testing.T) {
 	condition := &pushrules.PushCondition{
 		Kind: pushrules.PushCondKind("invalid"),
 	}
-	event := newFakeEvent(event.Type{Type: "m.room.foobar"}, event.Content{})
-	assert.False(t, condition.Match(blankTestRoom, event))
+	evt := newFakeEvent(event.Type{Type: "m.room.foobar"}, event.Content{})
+	assert.False(t, condition.Match(blankTestRoom, evt))
 }
 
 type FakeRoom struct {

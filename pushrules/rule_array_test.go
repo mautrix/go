@@ -110,11 +110,11 @@ func TestPushRuleArray_GetActions_NoMatchesIsNil(t *testing.T) {
 
 	rules := pushrules.PushRuleArray{rule1, rule2, rule3}
 
-	event := newFakeEvent(event.EventMessage, event.Content{
+	evt := newFakeEvent(event.EventMessage, event.Content{
 		MsgType: event.MsgEmote,
 		Body:    "is testing pushrules",
 	})
-	assert.Nil(t, rules.GetActions(blankTestRoom, event))
+	assert.Nil(t, rules.GetActions(blankTestRoom, evt))
 }
 
 func TestPushRuleMap_GetActions_RoomRuleExists(t *testing.T) {
@@ -159,11 +159,11 @@ func TestPushRuleMap_GetActions_RoomRuleExists(t *testing.T) {
 		Type: pushrules.RoomRule,
 	}
 
-	event := newFakeEvent(event.EventMessage, event.Content{
+	evt := newFakeEvent(event.EventMessage, event.Content{
 		MsgType: event.MsgEmote,
 		Body:    "is testing pushrules",
 	})
-	assert.Equal(t, rules.GetActions(blankTestRoom, event), actions3)
+	assert.Equal(t, rules.GetActions(blankTestRoom, evt), actions3)
 }
 
 func TestPushRuleMap_GetActions_RoomRuleDoesntExist(t *testing.T) {
@@ -197,11 +197,11 @@ func TestPushRuleMap_GetActions_RoomRuleDoesntExist(t *testing.T) {
 		Type: pushrules.RoomRule,
 	}
 
-	event := newFakeEvent(event.EventMessage, event.Content{
+	evt := newFakeEvent(event.EventMessage, event.Content{
 		MsgType: event.MsgEmote,
 		Body:    "is testing pushrules",
 	})
-	assert.Nil(t, rules.GetActions(blankTestRoom, event))
+	assert.Nil(t, rules.GetActions(blankTestRoom, evt))
 }
 
 func TestPushRuleMap_GetActions_SenderRuleExists(t *testing.T) {
@@ -246,11 +246,11 @@ func TestPushRuleMap_GetActions_SenderRuleExists(t *testing.T) {
 		Type: pushrules.SenderRule,
 	}
 
-	event := newFakeEvent(event.EventMessage, event.Content{
+	evt := newFakeEvent(event.EventMessage, event.Content{
 		MsgType: event.MsgEmote,
 		Body:    "is testing pushrules",
 	})
-	assert.Equal(t, rules.GetActions(blankTestRoom, event), actions1)
+	assert.Equal(t, rules.GetActions(blankTestRoom, evt), actions1)
 }
 
 func TestPushRuleArray_SetTypeAndMap(t *testing.T) {
