@@ -102,6 +102,12 @@ type Content struct {
 	// Membership key for easy access in m.room.member events
 	Membership Membership `json:"membership,omitempty"`
 
+	Algorithm  string      `json:"algorithm,omitempty"`
+	SenderKey  string      `json:"sender_key,omitempty"`
+	DeviceID   id.DeviceID `json:"device_id,omitempty"`
+	SessionID  string      `json:"session_id,omitempty"`
+	Ciphertext string      `json:"ciphertext,omitempty"`
+
 	// m.room.canonical_alias state
 	Alias      id.RoomAlias `json:"alias,omitempty"`
 	AltAliases []string     `json:"alt_aliases,omitempty"`
