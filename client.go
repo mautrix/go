@@ -34,7 +34,7 @@ type Stringifiable interface {
 // Client represents a Matrix client.
 type Client struct {
 	HomeserverURL *url.URL  // The base homeserver URL
-	Prefix        []interface{}  // The API prefix eg '/_matrix/client/r0'
+	Prefix        URLPath   // The API prefix eg '/_matrix/client/r0'
 	UserID        id.UserID // The user ID of the client. Used for forming HTTP paths which use the client's user ID.
 	AccessToken   string    // The access_token for the client.
 	UserAgent     string
@@ -982,7 +982,7 @@ func (cli *Client) ClaimKeys(req *ReqClaimKeys) (resp *RespClaimKeys, err error)
 func (cli *Client) GetKeyChanges(from, to string) (resp *RespKeyChanges, err error) {
 	urlPath := cli.BuildURLWithQuery(URLPath{"keys", "changes"}, map[string]string{
 		"from": from,
-		"to": to,
+		"to":   to,
 	})
 	_, err = cli.MakeRequest("POST", urlPath, nil, &resp)
 	return
@@ -1021,17 +1021,14 @@ func NewClient(homeserverURL string, userID id.UserID, accessToken string) (*Cli
 	// The client will work with this storer: it just won't remember across restarts.
 	// In practice, a database backend should be used.
 	store := NewInMemoryStore()
-	cli := Client{
+	return &Client{
 		AccessToken:   accessToken,
 		UserAgent:     "mautrix-go v0.1.0",
 		HomeserverURL: hsURL,
 		UserID:        userID,
-		Prefix:        []interface{}{"_matrix", "client", "r0"},
+		Client:        http.DefaultClient,
+		Prefix:        URLPath{"_matrix", "client", "r0"},
 		Syncer:        NewDefaultSyncer(userID, store),
 		Store:         store,
-	}
-	// By default, use the default HTTP client.
-	cli.Client = http.DefaultClient
-
-	return &cli, nil
+	}, nil
 }
