@@ -13,7 +13,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
-	"math"
 )
 
 var (
@@ -31,9 +30,9 @@ const (
 )
 
 var (
-	keyBase64Length  = base64Length(keyLength)
-	hashBase64Length = base64Length(hashLength)
-	ivBase64Length   = base64Length(ivLength)
+	keyBase64Length  = unpaddedBase64.EncodedLen(keyLength)
+	hashBase64Length = unpaddedBase64.EncodedLen(hashLength)
+	ivBase64Length   = unpaddedBase64.EncodedLen(ivLength)
 )
 
 var unpaddedBase64 = base64.StdEncoding.WithPadding(base64.NoPadding)
@@ -134,10 +133,6 @@ func (ef *EncryptedFile) Decrypt(ciphertext []byte) ([]byte, error) {
 	} else {
 		return xorA256CTR(ciphertext, ef.decoded.key, ef.decoded.iv), nil
 	}
-}
-
-func base64Length(bytes int) int {
-	return int(math.Ceil(4 * (float64(bytes) / 3)))
 }
 
 func xorA256CTR(source []byte, key [keyLength]byte, iv [ivLength]byte) []byte {
