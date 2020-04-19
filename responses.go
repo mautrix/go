@@ -173,41 +173,47 @@ type RespSync struct {
 	DeviceOneTimeKeysCount map[string]int `json:"device_one_time_keys_count"`
 
 	Rooms struct {
-		Leave map[id.RoomID]struct {
-			Summary LazyLoadSummary `json:"summary"`
-			State   struct {
-				Events []*event.Event `json:"events"`
-			} `json:"state"`
-			Timeline struct {
-				Events    []*event.Event `json:"events"`
-				Limited   bool              `json:"limited"`
-				PrevBatch string            `json:"prev_batch"`
-			} `json:"timeline"`
-		} `json:"leave"`
-		Join map[id.RoomID]struct {
-			Summary LazyLoadSummary `json:"summary"`
-			State   struct {
-				Events []*event.Event `json:"events"`
-			} `json:"state"`
-			Timeline struct {
-				Events    []*event.Event `json:"events"`
-				Limited   bool              `json:"limited"`
-				PrevBatch string            `json:"prev_batch"`
-			} `json:"timeline"`
-			Ephemeral struct {
-				Events []*event.Event `json:"events"`
-			} `json:"ephemeral"`
-			AccountData struct {
-				Events []*event.Event `json:"events"`
-			} `json:"account_data"`
-		} `json:"join"`
-		Invite map[id.RoomID]struct {
-			Summary LazyLoadSummary `json:"summary"`
-			State   struct {
-				Events []*event.Event `json:"events"`
-			} `json:"invite_state"`
-		} `json:"invite"`
+		Leave map[id.RoomID]SyncLeftRoom `json:"leave"`
+		Join map[id.RoomID]SyncJoinedRoom `json:"join"`
+		Invite map[id.RoomID]SyncInvitedRoom `json:"invite"`
 	} `json:"rooms"`
+}
+
+type SyncLeftRoom struct {
+	Summary LazyLoadSummary `json:"summary"`
+	State   struct {
+		Events []*event.Event `json:"events"`
+	} `json:"state"`
+	Timeline struct {
+		Events    []*event.Event `json:"events"`
+		Limited   bool              `json:"limited"`
+		PrevBatch string            `json:"prev_batch"`
+	} `json:"timeline"`
+}
+
+type SyncJoinedRoom struct {
+	Summary LazyLoadSummary `json:"summary"`
+	State   struct {
+		Events []*event.Event `json:"events"`
+	} `json:"state"`
+	Timeline struct {
+		Events    []*event.Event `json:"events"`
+		Limited   bool              `json:"limited"`
+		PrevBatch string            `json:"prev_batch"`
+	} `json:"timeline"`
+	Ephemeral struct {
+		Events []*event.Event `json:"events"`
+	} `json:"ephemeral"`
+	AccountData struct {
+		Events []*event.Event `json:"events"`
+	} `json:"account_data"`
+}
+
+type SyncInvitedRoom struct {
+	Summary LazyLoadSummary `json:"summary"`
+	State   struct {
+		Events []*event.Event `json:"events"`
+	} `json:"invite_state"`
 }
 
 type RespTurnServer struct {
