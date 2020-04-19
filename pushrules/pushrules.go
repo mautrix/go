@@ -7,18 +7,25 @@
 package pushrules
 
 import (
+	"encoding/gob"
 	"encoding/json"
+	"reflect"
 
 	"maunium.net/go/mautrix/event"
 )
 
-type contentWithRuleset struct {
+type EventContent struct {
 	Ruleset *PushRuleset `json:"global"`
+}
+
+func init() {
+	event.TypeMap[event.AccountDataPushRules] = reflect.TypeOf(EventContent{})
+	gob.Register(&EventContent{})
 }
 
 // EventToPushRules converts a m.push_rules event to a PushRuleset by passing the data through JSON.
 func EventToPushRules(evt *event.Event) (*PushRuleset, error) {
-	content := &contentWithRuleset{}
+	content := &EventContent{}
 	err := json.Unmarshal(evt.Content.VeryRaw, content)
 	if err != nil {
 		return nil, err

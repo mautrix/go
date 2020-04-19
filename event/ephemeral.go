@@ -7,6 +7,8 @@
 package event
 
 import (
+	"encoding/json"
+
 	"maunium.net/go/mautrix/id"
 )
 
@@ -26,6 +28,22 @@ type Receipts struct {
 
 type ReadReceipt struct {
 	Timestamp int64 `json:"ts"`
+}
+
+type serializableReadReceipt ReadReceipt
+
+func (rr *ReadReceipt) UnmarshalJSON(data []byte) error {
+	// Hacky compatibility hack against crappy clients that send double-encoded read receipts.
+	if data[0] == '"' && data[len(data)-1] == '"' {
+		var strData string
+		err := json.Unmarshal(data, &strData)
+		if err != nil {
+			return err
+		}
+		data = []byte(strData)
+	}
+	err := json.Unmarshal(data, (*serializableReadReceipt)(rr))
+	return err
 }
 
 type Presence string

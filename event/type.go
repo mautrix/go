@@ -8,14 +8,32 @@ package event
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 )
 
-type EventTypeClass int
+type TypeClass int
+
+func (tc TypeClass) Name() string {
+	switch tc {
+	case MessageEventType:
+		return "message"
+	case StateEventType:
+		return "state"
+	case EphemeralEventType:
+		return "ephemeral"
+	case AccountDataEventType:
+		return "account data"
+	case ToDeviceEventType:
+		return "to-device"
+	default:
+		return "unknown"
+	}
+}
 
 const (
 	// Normal message events
-	MessageEventType EventTypeClass = iota
+	MessageEventType TypeClass = iota
 	// State events
 	StateEventType
 	// Ephemeral events
@@ -30,7 +48,7 @@ const (
 
 type Type struct {
 	Type  string
-	Class EventTypeClass
+	Class TypeClass
 }
 
 func NewEventType(name string) Type {
@@ -59,7 +77,7 @@ func (et *Type) IsCustom() bool {
 	return !strings.HasPrefix(et.Type, "m.")
 }
 
-func (et *Type) GuessClass() EventTypeClass {
+func (et *Type) GuessClass() TypeClass {
 	switch et.Type {
 	case StateAliases.Type, StateCanonicalAlias.Type, StateCreate.Type, StateJoinRules.Type, StateMember.Type,
 		StatePowerLevels.Type, StateRoomName.Type, StateRoomAvatar.Type, StateTopic.Type, StatePinnedEvents.Type,
@@ -93,6 +111,10 @@ func (et *Type) MarshalJSON() ([]byte, error) {
 
 func (et *Type) String() string {
 	return et.Type
+}
+
+func (et *Type) Repr() string {
+	return fmt.Sprintf("%s (%s)", et.Type, et.Class.Name())
 }
 
 // State events

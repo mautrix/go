@@ -7,8 +7,8 @@
 package event
 
 import (
+	"encoding/gob"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"reflect"
 
@@ -73,7 +73,7 @@ func (content *Content) MarshalJSON() ([]byte, error) {
 	if content.Raw == nil {
 		if content.Parsed == nil {
 			if content.VeryRaw == nil {
-				return nil, errors.New("no content")
+				return []byte("null"), nil
 			}
 			return content.VeryRaw, nil
 		}
@@ -104,7 +104,7 @@ func mergeMaps(into, from map[string]interface{}) {
 func (content *Content) ParseRaw(evtType Type) error {
 	structType, ok := TypeMap[evtType]
 	if !ok {
-		return fmt.Errorf("unsupported content type %s", evtType.String())
+		return fmt.Errorf("unsupported content type %s", evtType.Repr())
 	}
 	content.Parsed = reflect.New(structType).Interface()
 	return json.Unmarshal(content.VeryRaw, &content.Parsed)
@@ -114,6 +114,36 @@ func (content *Content) MergeParsedToRaw() {
 	s := structs.New(content.Parsed)
 	s.TagName = "json"
 	mergeMaps(content.Raw, s.Map())
+}
+
+func init() {
+	gob.Register(&MemberEventContent{})
+	gob.Register(&PowerLevelsEventContent{})
+	gob.Register(&CanonicalAliasEventContent{})
+	gob.Register(&RoomNameEventContent{})
+	gob.Register(&RoomAvatarEventContent{})
+	gob.Register(&TopicEventContent{})
+	gob.Register(&TombstoneEventContent{})
+	gob.Register(&CreateEventContent{})
+	gob.Register(&JoinRulesEventContent{})
+	gob.Register(&HistoryVisibilityEventContent{})
+	gob.Register(&GuestAccessEventContent{})
+	gob.Register(&PinnedEventsEventContent{})
+	gob.Register(&MessageEventContent{})
+	gob.Register(&MessageEventContent{})
+	gob.Register(&EncryptedEventContent{})
+	gob.Register(&RedactionEventContent{})
+	gob.Register(&ReactionEventContent{})
+	gob.Register(&TagEventContent{})
+	gob.Register(&DirectChatsEventContent{})
+	gob.Register(&FullyReadEventContent{})
+	gob.Register(&IgnoredUserListEventContent{})
+	gob.Register(&TypingEventContent{})
+	gob.Register(&ReceiptEventContent{})
+	gob.Register(&PresenceEventContent{})
+	gob.Register(&RoomKeyEventContent{})
+	gob.Register(&ForwardedRoomKeyEventContent{})
+	gob.Register(&RoomKeyRequestEventContent{})
 }
 
 // Helper cast functions below

@@ -8,7 +8,6 @@ package event_test
 
 import (
 	"encoding/json"
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -119,8 +118,6 @@ func TestMessageEventContent__ParseMedia(t *testing.T) {
 	err = evt.Content.ParseRaw(evt.Type)
 	assert.IsType(t, &event.MessageEventContent{}, evt.Content.Parsed)
 	content := evt.Content.Parsed.(*event.MessageEventContent)
-	fmt.Println(content)
-	fmt.Println(content.Info)
 	assert.Equal(t, event.MsgImage, content.MsgType)
 	parsedURL, err := content.URL.Parse()
 	assert.Nil(t, err)
@@ -130,4 +127,19 @@ func TestMessageEventContent__ParseMedia(t *testing.T) {
 	assert.EqualValues(t, 64, content.GetInfo().Width)
 	assert.EqualValues(t, 64, content.GetInfo().Height)
 	assert.EqualValues(t, 12345, content.GetInfo().Size)
+}
+
+var parsedMessage = &event.Content{
+	Parsed: event.MessageEventContent{
+		MsgType: event.MsgText,
+		Body:    "test",
+	},
+}
+
+const expectedMarshalResult = `{"msgtype":"m.text","body":"test"}`
+
+func TestMessageEventContent__Marshal(t *testing.T) {
+	data, err := json.Marshal(parsedMessage)
+	assert.Nil(t, err)
+	assert.Equal(t, expectedMarshalResult, string(data))
 }
