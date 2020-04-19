@@ -108,17 +108,17 @@ type ReqAliasCreate struct {
 }
 
 type ReqUploadKeys struct {
-	DeviceKeys  DeviceKeys          `json:"device_keys,omitempty"`
+	DeviceKeys  *DeviceKeys         `json:"device_keys,omitempty"`
 	OneTimeKeys map[id.KeyID]string `json:"one_time_keys"`
 }
 
 type DeviceKeys struct {
-	UserID     id.UserID                       `json:"user_id"`
-	DeviceID   id.DeviceID                     `json:"device_id"`
-	Algorithms []string                        `json:"algorithms"`
-	Keys       map[id.KeyID]string             `json:"keys"`
-	Signatures map[id.UserID]map[string]string `json:"signatures"`
-	Unsigned   *UnsignedDeviceInfo             `json:"unsigned,omitempty"`
+	UserID     id.UserID                               `json:"user_id"`
+	DeviceID   id.DeviceID                             `json:"device_id"`
+	Algorithms []string                                `json:"algorithms"`
+	Keys       map[id.DeviceKeyID]string               `json:"keys"`
+	Signatures map[id.UserID]map[id.DeviceKeyID]string `json:"signatures"`
+	Unsigned   *UnsignedDeviceInfo                     `json:"unsigned,omitempty"`
 }
 
 type UnsignedDeviceInfo struct {
