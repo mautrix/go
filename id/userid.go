@@ -13,6 +13,8 @@ import (
 	"strings"
 )
 
+// UserID represents a Matrix user ID.
+// https://matrix.org/docs/spec/appendices#user-identifiers
 type UserID string
 
 func NewUserID(localpart, homeserver string) UserID {

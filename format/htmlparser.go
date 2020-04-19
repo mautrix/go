@@ -16,11 +16,14 @@ import (
 	"golang.org/x/net/html"
 )
 
+// MatrixToURL is the regex for parsing matrix.to URLs.
+// https://matrix.org/docs/spec/appendices#matrix-to-navigation
 var MatrixToURL = regexp.MustCompile("^(?:https?://)?(?:www\\.)?matrix\\.to/#/([#@!+].*)(?:/(\\$.+))?")
 
 type TextConverter func(string) string
 type CodeBlockConverter func(code, language string) string
 
+// HTMLParser is a somewhat customizable Matrix HTML parser.
 type HTMLParser struct {
 	PillConverter           func(mxid, eventID string) string
 	TabsToSpaces            int
@@ -34,6 +37,7 @@ type HTMLParser struct {
 	MonospaceConverter      TextConverter
 }
 
+// TaggedString is a string that also contains a HTML tag.
 type TaggedString struct {
 	string
 	tag string
@@ -48,6 +52,7 @@ func (parser *HTMLParser) getAttribute(node *html.Node, attribute string) string
 	return ""
 }
 
+// Digits counts the number of digits in a non-negative integer.
 func Digits(num int) int {
 	return int(math.Floor(math.Log10(float64(num))) + 1)
 }
@@ -260,6 +265,7 @@ func (parser *HTMLParser) nodeToString(node *html.Node, stripLinebreak bool) str
 	return strings.Join(parser.nodeToStrings(node, stripLinebreak), "")
 }
 
+// Parse converts Matrix HTML into text using the settings in this parser.
 func (parser *HTMLParser) Parse(htmlData string) string {
 	if parser.TabsToSpaces >= 0 {
 		htmlData = strings.Replace(htmlData, "\t", strings.Repeat(" ", parser.TabsToSpaces), -1)
@@ -268,6 +274,7 @@ func (parser *HTMLParser) Parse(htmlData string) string {
 	return parser.nodeToTagAwareString(node, true)
 }
 
+// HTMLToText converts Matrix HTML into text with the default settings.
 func HTMLToText(html string) string {
 	return (&HTMLParser{
 		TabsToSpaces:   4,

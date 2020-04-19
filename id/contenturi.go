@@ -14,12 +14,17 @@ import (
 
 var InvalidContentURI = errors.New("invalid Matrix content URI")
 
+// ContentURIString is a string that's expected to be a Matrix content URI.
+// It's useful for delaying the parsing of the content URI to move errors from the event content
+// JSON parsing step to a later step where more appropriate errors can be produced.
 type ContentURIString string
 
 func (uriString ContentURIString) Parse() (ContentURI, error) {
 	return ParseContentURI(string(uriString))
 }
 
+// ContentURI represents a Matrix content URI.
+// https://matrix.org/docs/spec/client_server/r0.6.0#matrix-content-mxc-uris
 type ContentURI struct {
 	Homeserver string
 	FileID     string
@@ -33,6 +38,7 @@ func MustParseContentURI(uri string) ContentURI {
 	return parsed
 }
 
+// ParseContentURI parses a Matrix content URI.
 func ParseContentURI(uri string) (parsed ContentURI, err error) {
 	if !strings.HasPrefix(uri, "mxc://") {
 		err = InvalidContentURI

@@ -7,12 +7,17 @@
 package id
 
 // A RoomID is a string starting with ! that references a specific room.
+// https://matrix.org/docs/spec/appendices#room-ids-and-event-ids
 type RoomID string
 
-// A RoomAlias is a string starting with # that can be resolved into
+// A RoomAlias is a string starting with # that can be resolved into.
+// https://matrix.org/docs/spec/appendices#room-aliases
 type RoomAlias string
 
 // An EventID is a string starting with $ that references a specific event.
+//
+// https://matrix.org/docs/spec/appendices#room-ids-and-event-ids
+// https://matrix.org/docs/spec/rooms/v4#event-ids
 type EventID string
 
 // A DeviceID is an arbitrary string that references a specific device.

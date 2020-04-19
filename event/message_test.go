@@ -143,3 +143,21 @@ func TestMessageEventContent__Marshal(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, expectedMarshalResult, string(data))
 }
+
+var customParsedMessage = &event.Content{
+	Raw: map[string]interface{}{
+		"net.maunium.custom": "hello world",
+	},
+	Parsed: event.MessageEventContent{
+		MsgType: event.MsgText,
+		Body:    "test",
+	},
+}
+
+const expectedCustomMarshalResult = `{"body":"test","msgtype":"m.text","net.maunium.custom":"hello world"}`
+
+func TestMessageEventContent__Marshal_Custom(t *testing.T) {
+	data, err := json.Marshal(customParsedMessage)
+	assert.Nil(t, err)
+	assert.Equal(t, expectedCustomMarshalResult, string(data))
+}
