@@ -1,9 +1,7 @@
 package mautrix
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"runtime/debug"
 	"time"
 
@@ -20,7 +18,7 @@ type Syncer interface {
 	// OnFailedSync returns either the time to wait before retrying or an error to stop syncing permanently.
 	OnFailedSync(res *RespSync, err error) (time.Duration, error)
 	// GetFilterJSON for the given user ID. NOT the filter ID.
-	GetFilterJSON(userID id.UserID) json.RawMessage
+	GetFilterJSON(userID id.UserID) *Filter
 }
 
 // DefaultSyncer is the default syncing implementation. You can either write your own syncer, or selectively
@@ -44,17 +42,6 @@ func NewDefaultSyncer(userID id.UserID, store Storer) *DefaultSyncer {
 	}
 }
 
-func parseEvent(roomID id.RoomID, data json.RawMessage) *event.Event {
-	event := &event.Event{}
-	err := json.Unmarshal(data, event)
-	if err != nil {
-		// TODO add separate handler for these
-		_, _ = fmt.Fprintf(os.Stderr, "Failed to unmarshal event: %v\n%s\n", err, string(data))
-		return nil
-	}
-	return event
-}
-
 // ProcessResponse processes the /sync response in a way suitable for bots. "Suitable for bots" means a stream of
 // unrepeating events. Returns a fatal error if a listener panics.
 func (s *DefaultSyncer) ProcessResponse(res *RespSync, since string) (err error) {
@@ -70,38 +57,26 @@ func (s *DefaultSyncer) ProcessResponse(res *RespSync, since string) (err error)
 
 	for roomID, roomData := range res.Rooms.Join {
 		room := s.getOrCreateRoom(roomID)
-		for _, data := range roomData.State.Events {
-			event := parseEvent(roomID, data)
-			if event != nil {
-				room.UpdateState(event)
-				s.notifyListeners(event)
-			}
+		for _, evt := range roomData.State.Events {
+			room.UpdateState(evt)
+			s.notifyListeners(evt)
 		}
-		for _, data := range roomData.Timeline.Events {
-			event := parseEvent(roomID, data)
-			if event != nil {
-				s.notifyListeners(event)
-			}
+		for _, evt := range roomData.Timeline.Events {
+			s.notifyListeners(evt)
 		}
 	}
 	for roomID, roomData := range res.Rooms.Invite {
 		room := s.getOrCreateRoom(roomID)
-		for _, data := range roomData.State.Events {
-			event := parseEvent(roomID, data)
-			if event != nil {
-				room.UpdateState(event)
-				s.notifyListeners(event)
-			}
+		for _, evt := range roomData.State.Events {
+			room.UpdateState(evt)
+			s.notifyListeners(evt)
 		}
 	}
 	for roomID, roomData := range res.Rooms.Leave {
 		room := s.getOrCreateRoom(roomID)
-		for _, data := range roomData.Timeline.Events {
-			event := parseEvent(roomID, data)
-			if event.StateKey != nil {
-				room.UpdateState(event)
-				s.notifyListeners(event)
-			}
+		for _, evt := range roomData.Timeline.Events {
+			room.UpdateState(evt)
+			s.notifyListeners(evt)
 		}
 	}
 	return
@@ -132,11 +107,10 @@ func (s *DefaultSyncer) shouldProcessResponse(resp *RespSync, since string) bool
 	// TODO: We probably want to process messages from after the last join event in the timeline.
 	for roomID, roomData := range resp.Rooms.Join {
 		for i := len(roomData.Timeline.Events) - 1; i >= 0; i-- {
-			evtData := roomData.Timeline.Events[i]
-			// TODO this is horribly inefficient since it's also parsed in ProcessResponse
-			e := parseEvent(roomID, evtData)
-			if e != nil && e.Type == event.StateMember && e.GetStateKey() == string(s.UserID) {
-				if e.Content.Membership == "join" {
+			evt := roomData.Timeline.Events[i]
+			if evt.Type == event.StateMember && evt.GetStateKey() == string(s.UserID) {
+				membership, _ := evt.Content.Raw["membership"].(string)
+				if membership == "join" {
 					_, ok := resp.Rooms.Join[roomID]
 					if !ok {
 						continue
@@ -177,6 +151,12 @@ func (s *DefaultSyncer) OnFailedSync(res *RespSync, err error) (time.Duration, e
 }
 
 // GetFilterJSON returns a filter with a timeline limit of 50.
-func (s *DefaultSyncer) GetFilterJSON(userID id.UserID) json.RawMessage {
-	return json.RawMessage(`{"room":{"timeline":{"limit":50}}}`)
+func (s *DefaultSyncer) GetFilterJSON(userID id.UserID) *Filter {
+	return &Filter{
+		Room: RoomFilter{
+			Timeline: FilterPart{
+				Limit: 50,
+			},
+		},
+	}
 }

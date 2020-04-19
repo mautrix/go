@@ -49,12 +49,12 @@ type PushCondition struct {
 var MemberCountFilterRegex = regexp.MustCompile("^(==|[<>]=?)?([0-9]+)$")
 
 // Match checks if this condition is fulfilled for the given event in the given room.
-func (cond *PushCondition) Match(room Room, event *event.Event) bool {
+func (cond *PushCondition) Match(room Room, evt *event.Event) bool {
 	switch cond.Kind {
 	case KindEventMatch:
-		return cond.matchValue(room, event)
+		return cond.matchValue(room, evt)
 	case KindContainsDisplayName:
-		return cond.matchDisplayName(room, event)
+		return cond.matchDisplayName(room, evt)
 	case KindRoomMemberCount:
 		return cond.matchMemberCount(room)
 	default:
@@ -62,7 +62,7 @@ func (cond *PushCondition) Match(room Room, event *event.Event) bool {
 	}
 }
 
-func (cond *PushCondition) matchValue(room Room, event *event.Event) bool {
+func (cond *PushCondition) matchValue(room Room, evt *event.Event) bool {
 	index := strings.IndexRune(cond.Key, '.')
 	key := cond.Key
 	subkey := ""
@@ -78,31 +78,35 @@ func (cond *PushCondition) matchValue(room Room, event *event.Event) bool {
 
 	switch key {
 	case "type":
-		return pattern.MatchString(event.Type.String())
+		return pattern.MatchString(evt.Type.String())
 	case "sender":
-		return pattern.MatchString(string(event.Sender))
+		return pattern.MatchString(string(evt.Sender))
 	case "room_id":
-		return pattern.MatchString(string(event.RoomID))
+		return pattern.MatchString(string(evt.RoomID))
 	case "state_key":
-		if event.StateKey == nil {
+		if evt.StateKey == nil {
 			return cond.Pattern == ""
 		}
-		return pattern.MatchString(*event.StateKey)
+		return pattern.MatchString(*evt.StateKey)
 	case "content":
-		val, _ := event.Content.Raw[subkey].(string)
+		val, _ := evt.Content.Raw[subkey].(string)
 		return pattern.MatchString(val)
 	default:
 		return false
 	}
 }
 
-func (cond *PushCondition) matchDisplayName(room Room, event *event.Event) bool {
+func (cond *PushCondition) matchDisplayName(room Room, evt *event.Event) bool {
 	displayname := room.GetOwnDisplayname()
 	if len(displayname) == 0 {
 		return false
 	}
 
-	msg := event.Content.Body
+	msg, ok := evt.Content.Raw["body"].(string)
+	if !ok {
+		return false
+	}
+
 	isAcceptable := func(r uint8) bool {
 		return unicode.IsSpace(rune(r)) || unicode.IsPunct(rune(r))
 	}

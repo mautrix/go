@@ -41,7 +41,7 @@ var bfhtml = blackfriday.NewHTMLRenderer(blackfriday.HTMLRendererParameters{
 var Renderer = blackfriday.WithRenderer(bfhtml)
 var NoHTMLRenderer = blackfriday.WithRenderer(&EscapingRenderer{bfhtml})
 
-func RenderMarkdown(text string, allowMarkdown, allowHTML bool) event.Content {
+func RenderMarkdown(text string, allowMarkdown, allowHTML bool) event.MessageEventContent {
 	htmlBody := text
 
 	if allowMarkdown {
@@ -58,7 +58,7 @@ func RenderMarkdown(text string, allowMarkdown, allowHTML bool) event.Content {
 		text = HTMLToText(htmlBody)
 
 		if htmlBody != text {
-			return event.Content{
+			return event.MessageEventContent{
 				FormattedBody: htmlBody,
 				Format:        event.FormatHTML,
 				MsgType:       event.MsgText,
@@ -67,7 +67,7 @@ func RenderMarkdown(text string, allowMarkdown, allowHTML bool) event.Content {
 		}
 	}
 
-	return event.Content{
+	return event.MessageEventContent{
 		MsgType: event.MsgText,
 		Body:    text,
 	}

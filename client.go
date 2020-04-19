@@ -358,9 +358,9 @@ func (cli *Client) MakeRequest(method string, httpURL string, reqBody interface{
 }
 
 // CreateFilter makes an HTTP request according to http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-user-userid-filter
-func (cli *Client) CreateFilter(filter json.RawMessage) (resp *RespCreateFilter, err error) {
+func (cli *Client) CreateFilter(filter *Filter) (resp *RespCreateFilter, err error) {
 	urlPath := cli.BuildURL("user", cli.UserID, "filter")
-	_, err = cli.MakeRequest("POST", urlPath, &filter, &resp)
+	_, err = cli.MakeRequest("POST", urlPath, filter, &resp)
 	return
 }
 
@@ -620,7 +620,7 @@ func (cli *Client) SendMassagedStateEvent(roomID id.RoomID, eventType event.Type
 // SendText sends an m.room.message event into the given room with a msgtype of m.text
 // See http://matrix.org/docs/spec/client_server/r0.2.0.html#m-text
 func (cli *Client) SendText(roomID id.RoomID, text string) (*RespSendEvent, error) {
-	return cli.SendMessageEvent(roomID, event.EventMessage, event.Content{
+	return cli.SendMessageEvent(roomID, event.EventMessage, event.MessageEventContent{
 		MsgType: event.MsgText,
 		Body:    text,
 	})
@@ -629,7 +629,7 @@ func (cli *Client) SendText(roomID id.RoomID, text string) (*RespSendEvent, erro
 // SendImage sends an m.room.message event into the given room with a msgtype of m.image
 // See https://matrix.org/docs/spec/client_server/r0.2.0.html#m-image
 func (cli *Client) SendImage(roomID id.RoomID, body string, url id.ContentURI) (*RespSendEvent, error) {
-	return cli.SendMessageEvent(roomID, event.EventMessage, event.Content{
+	return cli.SendMessageEvent(roomID, event.EventMessage, event.MessageEventContent{
 		MsgType: event.MsgImage,
 		Body:    body,
 		URL:     url.CUString(),
@@ -639,7 +639,7 @@ func (cli *Client) SendImage(roomID id.RoomID, body string, url id.ContentURI) (
 // SendVideo sends an m.room.message event into the given room with a msgtype of m.video
 // See https://matrix.org/docs/spec/client_server/r0.2.0.html#m-video
 func (cli *Client) SendVideo(roomID id.RoomID, body string, url id.ContentURI) (*RespSendEvent, error) {
-	return cli.SendMessageEvent(roomID, event.EventMessage, event.Content{
+	return cli.SendMessageEvent(roomID, event.EventMessage, event.MessageEventContent{
 		MsgType: event.MsgVideo,
 		Body:    body,
 		URL:     url.CUString(),
@@ -649,15 +649,15 @@ func (cli *Client) SendVideo(roomID id.RoomID, body string, url id.ContentURI) (
 // SendNotice sends an m.room.message event into the given room with a msgtype of m.notice
 // See http://matrix.org/docs/spec/client_server/r0.2.0.html#m-notice
 func (cli *Client) SendNotice(roomID id.RoomID, text string) (*RespSendEvent, error) {
-	return cli.SendMessageEvent(roomID, event.EventMessage, event.Content{
+	return cli.SendMessageEvent(roomID, event.EventMessage, event.MessageEventContent{
 		MsgType: event.MsgNotice,
 		Body:    text,
 	})
 }
 
 func (cli *Client) SendReaction(roomID id.RoomID, eventID id.EventID, reaction string) (*RespSendEvent, error) {
-	return cli.SendMessageEvent(roomID, event.EventReaction, event.Content{
-		RelatesTo: &event.RelatesTo{
+	return cli.SendMessageEvent(roomID, event.EventReaction, event.ReactionEventContent{
+		RelatesTo: event.RelatesTo{
 			EventID: eventID,
 			Type:    event.RelAnnotation,
 			Key:     reaction,
@@ -882,10 +882,15 @@ func (cli *Client) JoinedRooms() (resp *RespJoinedRooms, err error) {
 // pagination query parameters to paginate history in the room.
 // See https://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-r0-rooms-roomid-messages
 func (cli *Client) Messages(roomID id.RoomID, from, to string, dir rune, limit int) (resp *RespMessages, err error) {
+	filter := cli.Syncer.GetFilterJSON(cli.UserID)
+	filterJSON, err := json.Marshal(filter)
+	if err != nil {
+		return nil, err
+	}
 	query := map[string]string{
 		"from":   from,
 		"dir":    string(dir),
-		"filter": string(cli.Syncer.GetFilterJSON(cli.UserID)),
+		"filter": string(filterJSON),
 	}
 	if to != "" {
 		query["to"] = to

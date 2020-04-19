@@ -34,7 +34,10 @@ func (room Room) GetMembershipState(userID id.UserID) event.Membership {
 	state := event.MembershipLeave
 	evt := room.GetStateEvent(event.StateMember, string(userID))
 	if evt != nil {
-		state = evt.Content.Membership
+		membership, ok := evt.Content.Raw["membership"].(string)
+		if ok {
+			state = event.Membership(membership)
+		}
 	}
 	return state
 }

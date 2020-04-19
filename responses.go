@@ -1,8 +1,6 @@
 package mautrix
 
 import (
-	"encoding/json"
-
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
@@ -159,13 +157,13 @@ type RespSync struct {
 	NextBatch string `json:"next_batch"`
 
 	AccountData struct {
-		Events []json.RawMessage `json:"events"`
+		Events []*event.Event `json:"events"`
 	} `json:"account_data"`
 	Presence struct {
-		Events []json.RawMessage `json:"events"`
+		Events []*event.Event `json:"events"`
 	} `json:"presence"`
 	ToDevice struct {
-		Events []json.RawMessage `json:"events"`
+		Events []*event.Event `json:"events"`
 	} `json:"to_device"`
 
 	DeviceLists struct {
@@ -178,10 +176,10 @@ type RespSync struct {
 		Leave map[id.RoomID]struct {
 			Summary LazyLoadSummary `json:"summary"`
 			State   struct {
-				Events []json.RawMessage `json:"events"`
+				Events []*event.Event `json:"events"`
 			} `json:"state"`
 			Timeline struct {
-				Events    []json.RawMessage `json:"events"`
+				Events    []*event.Event `json:"events"`
 				Limited   bool              `json:"limited"`
 				PrevBatch string            `json:"prev_batch"`
 			} `json:"timeline"`
@@ -189,24 +187,24 @@ type RespSync struct {
 		Join map[id.RoomID]struct {
 			Summary LazyLoadSummary `json:"summary"`
 			State   struct {
-				Events []json.RawMessage `json:"events"`
+				Events []*event.Event `json:"events"`
 			} `json:"state"`
 			Timeline struct {
-				Events    []json.RawMessage `json:"events"`
+				Events    []*event.Event `json:"events"`
 				Limited   bool              `json:"limited"`
 				PrevBatch string            `json:"prev_batch"`
 			} `json:"timeline"`
 			Ephemeral struct {
-				Events []json.RawMessage `json:"events"`
+				Events []*event.Event `json:"events"`
 			} `json:"ephemeral"`
 			AccountData struct {
-				Events []json.RawMessage `json:"events"`
+				Events []*event.Event `json:"events"`
 			} `json:"account_data"`
 		} `json:"join"`
 		Invite map[id.RoomID]struct {
 			Summary LazyLoadSummary `json:"summary"`
 			State   struct {
-				Events []json.RawMessage `json:"events"`
+				Events []*event.Event `json:"events"`
 			} `json:"invite_state"`
 		} `json:"invite"`
 	} `json:"rooms"`

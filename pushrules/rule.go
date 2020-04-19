@@ -20,7 +20,7 @@ func init() {
 }
 
 type PushRuleCollection interface {
-	GetActions(room Room, event *event.Event) PushActionArray
+	GetActions(room Room, evt *event.Event) PushActionArray
 }
 
 type PushRuleArray []*PushRule
@@ -32,9 +32,9 @@ func (rules PushRuleArray) SetType(typ PushRuleType) PushRuleArray {
 	return rules
 }
 
-func (rules PushRuleArray) GetActions(room Room, event *event.Event) PushActionArray {
+func (rules PushRuleArray) GetActions(room Room, evt *event.Event) PushActionArray {
 	for _, rule := range rules {
-		if !rule.Match(room, event) {
+		if !rule.Match(room, evt) {
 			continue
 		}
 		return rule.Actions
@@ -59,16 +59,16 @@ func (rules PushRuleArray) SetTypeAndMap(typ PushRuleType) PushRuleMap {
 	return data
 }
 
-func (ruleMap PushRuleMap) GetActions(room Room, event *event.Event) PushActionArray {
+func (ruleMap PushRuleMap) GetActions(room Room, evt *event.Event) PushActionArray {
 	var rule *PushRule
 	var found bool
 	switch ruleMap.Type {
 	case RoomRule:
-		rule, found = ruleMap.Map[string(event.RoomID)]
+		rule, found = ruleMap.Map[string(evt.RoomID)]
 	case SenderRule:
-		rule, found = ruleMap.Map[string(event.Sender)]
+		rule, found = ruleMap.Map[string(evt.Sender)]
 	}
-	if found && rule.Match(room, event) {
+	if found && rule.Match(room, evt) {
 		return rule.Actions
 	}
 	return nil
@@ -114,37 +114,41 @@ type PushRule struct {
 	Pattern string `json:"pattern,omitempty"`
 }
 
-func (rule *PushRule) Match(room Room, event *event.Event) bool {
+func (rule *PushRule) Match(room Room, evt *event.Event) bool {
 	if !rule.Enabled {
 		return false
 	}
 	switch rule.Type {
 	case OverrideRule, UnderrideRule:
-		return rule.matchConditions(room, event)
+		return rule.matchConditions(room, evt)
 	case ContentRule:
-		return rule.matchPattern(room, event)
+		return rule.matchPattern(room, evt)
 	case RoomRule:
-		return id.RoomID(rule.RuleID) == event.RoomID
+		return id.RoomID(rule.RuleID) == evt.RoomID
 	case SenderRule:
-		return id.UserID(rule.RuleID) == event.Sender
+		return id.UserID(rule.RuleID) == evt.Sender
 	default:
 		return false
 	}
 }
 
-func (rule *PushRule) matchConditions(room Room, event *event.Event) bool {
+func (rule *PushRule) matchConditions(room Room, evt *event.Event) bool {
 	for _, cond := range rule.Conditions {
-		if !cond.Match(room, event) {
+		if !cond.Match(room, evt) {
 			return false
 		}
 	}
 	return true
 }
 
-func (rule *PushRule) matchPattern(room Room, event *event.Event) bool {
+func (rule *PushRule) matchPattern(room Room, evt *event.Event) bool {
 	pattern, err := glob.Compile(rule.Pattern)
 	if err != nil {
 		return false
 	}
-	return pattern.MatchString(event.Content.Body)
+	msg, ok := evt.Content.Raw["body"].(string)
+	if !ok {
+		return false
+	}
+	return pattern.MatchString(msg)
 }

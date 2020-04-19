@@ -34,7 +34,7 @@ func TrimReplyFallbackText(text string) string {
 	return strings.TrimSpace(strings.Join(lines, "\n"))
 }
 
-func (content *Content) RemoveReplyFallback() {
+func (content *MessageEventContent) RemoveReplyFallback() {
 	if len(content.GetReplyTo()) > 0 {
 		if content.Format == FormatHTML {
 			content.FormattedBody = TrimReplyFallbackHTML(content.FormattedBody)
@@ -43,7 +43,7 @@ func (content *Content) RemoveReplyFallback() {
 	}
 }
 
-func (content *Content) GetReplyTo() id.EventID {
+func (content *MessageEventContent) GetReplyTo() id.EventID {
 	if content.RelatesTo != nil && content.RelatesTo.Type == RelReference {
 		return content.RelatesTo.EventID
 	}
@@ -53,9 +53,13 @@ func (content *Content) GetReplyTo() id.EventID {
 const ReplyFormat = `<mx-reply><blockquote><a href="https://matrix.to/#/%s/%s">In reply to</a> <a href="https://matrix.to/#/%s">%s</a><br>%s</blockquote></mx-reply>`
 
 func (evt *Event) GenerateReplyFallbackHTML() string {
-	body := evt.Content.FormattedBody
+	parsedContent, ok := evt.Content.Parsed.(MessageEventContent)
+	if !ok {
+		return ""
+	}
+	body := parsedContent.FormattedBody
 	if len(body) == 0 {
-		body = html.EscapeString(evt.Content.Body)
+		body = html.EscapeString(parsedContent.Body)
 	}
 
 	senderDisplayName := evt.Sender
@@ -64,7 +68,11 @@ func (evt *Event) GenerateReplyFallbackHTML() string {
 }
 
 func (evt *Event) GenerateReplyFallbackText() string {
-	body := evt.Content.Body
+	parsedContent, ok := evt.Content.Parsed.(MessageEventContent)
+	if !ok {
+		return ""
+	}
+	body := parsedContent.Body
 	lines := strings.Split(strings.TrimSpace(body), "\n")
 	firstLine, lines := lines[0], lines[1:]
 
@@ -79,7 +87,7 @@ func (evt *Event) GenerateReplyFallbackText() string {
 	return fallbackText.String()
 }
 
-func (content *Content) SetReply(inReplyTo *Event) {
+func (content *MessageEventContent) SetReply(inReplyTo *Event) {
 	content.RelatesTo = &RelatesTo{
 		EventID: inReplyTo.ID,
 		Type:    RelReference,

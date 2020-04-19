@@ -17,7 +17,7 @@ const (
 )
 
 //Filter is used by clients to specify how the server should filter responses to e.g. sync requests
-//Specified by: https://matrix.org/docs/spec/client_server/r0.2.0.html#filtering
+//Specified by: https://matrix.org/docs/spec/client_server/r0.6.0.html#filtering
 type Filter struct {
 	AccountData FilterPart  `json:"account_data,omitempty"`
 	EventFields []string    `json:"event_fields,omitempty"`
