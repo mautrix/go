@@ -1010,7 +1010,7 @@ func (cli *Client) GetScopedPushRules(scope string) (resp *pushrules.PushRuleset
 // TxnID returns the next transaction ID.
 func (cli *Client) TxnID() string {
 	txnID := atomic.AddInt32(&cli.txnID, 1)
-	return fmt.Sprintf("mautrix-go/%d/%d", time.Now().UnixNano(), txnID)
+	return fmt.Sprintf("mautrix-go_%d_%d", time.Now().UnixNano(), txnID)
 }
 
 // NewClient creates a new Matrix Client ready for syncing
