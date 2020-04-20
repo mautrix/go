@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/fatih/structs"
 )
@@ -99,6 +100,10 @@ func mergeMaps(into, from map[string]interface{}) {
 			into[key] = newValue
 		}
 	}
+}
+
+func IsUnsupportedContentType(err error) bool {
+	return strings.HasPrefix(err.Error(), "unsupported content type ")
 }
 
 func (content *Content) ParseRaw(evtType Type) error {

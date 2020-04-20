@@ -7,8 +7,7 @@
 package event
 
 import (
-	"encoding/base64"
-	"errors"
+	"encoding/json"
 
 	"maunium.net/go/mautrix/id"
 )
@@ -22,29 +21,6 @@ const (
 	AlgorithmMegolmV1 Algorithm = "m.megolm.v1.aes-sha2"
 )
 
-var unpaddedBase64 = base64.StdEncoding.WithPadding(base64.NoPadding)
-
-// UnpaddedBase64 is a byte array that implements the JSON Marshaler and Unmarshaler interfaces
-// to encode and decode the byte array as unpadded base64.
-type UnpaddedBase64 []byte
-
-func (ub64 *UnpaddedBase64) UnmarshalJSON(data []byte) error {
-	if data[0] != '"' || data[len(data)-1] != '"' {
-		return errors.New("failed to decode data into bytes: input doesn't look like a JSON string")
-	}
-	*ub64 = make([]byte, unpaddedBase64.DecodedLen(len(data)-2))
-	_, err := unpaddedBase64.Decode(*ub64, data[1:len(data)-1])
-	return err
-}
-
-func (ub64 *UnpaddedBase64) MarshalJSON() ([]byte, error) {
-	data := make([]byte, unpaddedBase64.EncodedLen(len(*ub64))+2)
-	data[0] = '"'
-	data[len(data)-1] = '"'
-	unpaddedBase64.Encode(data[1:len(data)-1], *ub64)
-	return data, nil
-}
-
 // EncryptionEventContent represents the content of a m.room.encryption state event.
 // https://matrix.org/docs/spec/client_server/r0.6.0#m-room-encryption
 type EncryptionEventContent struct {
@@ -57,14 +33,60 @@ type EncryptionEventContent struct {
 }
 
 // EncryptedEventContent represents the content of a m.room.encrypted message event.
-// This struct only supports the m.megolm.v1.aes-sha2 algorithm. The legacy m.olm.v1 algorithm is not supported.
 // https://matrix.org/docs/spec/client_server/r0.6.0#m-room-encrypted
 type EncryptedEventContent struct {
-	Algorithm  Algorithm      `json:"algorithm"`
-	SenderKey  string         `json:"sender_key"`
-	DeviceID   id.DeviceID    `json:"device_id"`
-	SessionID  string         `json:"session_id"`
-	Ciphertext UnpaddedBase64 `json:"ciphertext"`
+	Algorithm  Algorithm       `json:"algorithm"`
+	SenderKey  string          `json:"sender_key"`
+	DeviceID   id.DeviceID     `json:"device_id"`
+	SessionID  string          `json:"session_id"`
+	Ciphertext json.RawMessage `json:"ciphertext"`
+
+	MegolmCiphertext string         `json:"-"`
+	OlmCiphertext    OlmCiphertexts `json:"-"`
+}
+
+type OlmMessageType int
+
+const (
+	OlmPreKeyMessage OlmMessageType = 0
+	OlmNormalMessage OlmMessageType = 1
+)
+
+type OlmCiphertexts map[string]struct {
+	Body string         `json:"body"`
+	Type OlmMessageType `json:"type"`
+}
+
+type serializableEncryptedEventContent EncryptedEventContent
+
+func (content *EncryptedEventContent) UnmarshalJSON(data []byte) error {
+	err := json.Unmarshal(data, (*serializableEncryptedEventContent)(content))
+	if err != nil {
+		return err
+	}
+	switch content.Algorithm {
+	case AlgorithmOlmV1:
+		content.OlmCiphertext = make(OlmCiphertexts)
+		return json.Unmarshal(content.Ciphertext, &content.OlmCiphertext)
+	case AlgorithmMegolmV1:
+		return json.Unmarshal(content.Ciphertext, &content.MegolmCiphertext)
+	default:
+		return nil
+	}
+}
+
+func (content *EncryptedEventContent) MarshalJSON() ([]byte, error) {
+	var err error
+	switch content.Algorithm {
+	case AlgorithmOlmV1:
+		content.Ciphertext, err = json.Marshal(content.OlmCiphertext)
+	case AlgorithmMegolmV1:
+		content.Ciphertext, err = json.Marshal(content.MegolmCiphertext)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal((*serializableEncryptedEventContent)(content))
 }
 
 // RoomKeyEventContent represents the content of a m.room_key to_device event.
