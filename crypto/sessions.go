@@ -7,11 +7,13 @@
 package crypto
 
 import (
-	"errors"
 	"time"
 
-	"maunium.net/go/mautrix/id"
+	"github.com/pkg/errors"
+
 	"maunium.net/go/olm"
+
+	"maunium.net/go/mautrix/id"
 )
 
 var (
@@ -24,14 +26,31 @@ type UserDevice struct {
 	DeviceID id.DeviceID
 }
 
-type OlmAccount struct {
-	*olm.Account
-	Shared bool
-}
-
 type OlmSession struct {
 	*olm.Session
 	ExpirationMixin
+}
+
+func wrapSession(session *olm.Session) *OlmSession {
+	return &OlmSession{
+		Session: session,
+		ExpirationMixin: ExpirationMixin{
+			TimeMixin: TimeMixin{
+				CreationTime: time.Now(),
+				UseTime:      time.Now(),
+			},
+			MaxAge: 7 * 24 * time.Hour,
+		},
+	}
+}
+
+func (account *OlmAccount) NewInboundSessionFrom(senderKey, ciphertext string) (*OlmSession, error) {
+	session, err := account.Account.NewInboundSessionFrom(olm.Curve25519(senderKey), ciphertext)
+	if err != nil {
+		return nil, err
+	}
+	_ = account.RemoveOneTimeKeys(session)
+	return wrapSession(session), nil
 }
 
 func (session *OlmSession) Encrypt(plaintext string) (olm.MsgType, string) {
@@ -39,23 +58,9 @@ func (session *OlmSession) Encrypt(plaintext string) (olm.MsgType, string) {
 	return session.Session.Encrypt(plaintext)
 }
 
-func (session *OlmSession) Decrypt(ciphertext string, msgType olm.MsgType) (string, error) {
+func (session *OlmSession) Decrypt(ciphertext string, msgType olm.MsgType) ([]byte, error) {
 	session.UseTime = time.Now()
 	return session.Session.Decrypt(ciphertext, msgType)
-}
-
-type TimeMixin struct {
-	CreationTime time.Time
-	UseTime      time.Time
-}
-
-type ExpirationMixin struct {
-	TimeMixin
-	MaxAge time.Duration
-}
-
-func (exp *ExpirationMixin) Expired() bool {
-	return exp.CreationTime.Add(exp.MaxAge).Before(time.Now())
 }
 
 type InboundGroupSession struct {
@@ -66,6 +71,17 @@ type InboundGroupSession struct {
 	RoomID     id.RoomID
 
 	ForwardingChains []string
+}
+
+func NewInboundGroupSession(senderKey, signingKey string, roomID id.RoomID, sessionID, sessionKey string) (*InboundGroupSession, error) {
+	igs, err := olm.NewInboundGroupSession([]byte(sessionKey))
+	return &InboundGroupSession{
+		InboundGroupSession: igs,
+		SigningKey:          signingKey,
+		SenderKey:           senderKey,
+		RoomID:              roomID,
+		ForwardingChains:    nil,
+	}, err
 }
 
 type OutboundGroupSession struct {

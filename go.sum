@@ -4,6 +4,8 @@ github.com/fatih/structs v1.1.0 h1:Q7juDM0QtcnhCpeyLGQKyg4TOIghuNXrkL32pHAUMxo=
 github.com/fatih/structs v1.1.0/go.mod h1:9NiDSp5zOcgEDl+j00MP/WkGVPOlPRLejGD8Ga6PJ7M=
 github.com/mitchellh/mapstructure v1.2.2 h1:dxe5oCinTXiTIcfgmZecdCzPmAJKd46KsCWc35r0TV4=
 github.com/mitchellh/mapstructure v1.2.2/go.mod h1:bFUtVrKA4DC2yAKiSyO/QUcy7e+RRV2QTWOzhPopBRo=
+github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
+github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/russross/blackfriday/v2 v2.0.1/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
@@ -33,3 +35,4 @@ maunium.net/go/canonicaljson v0.1.1 h1:5G+jhiFG/wHPPcZ79tSxbZgiE577vPz0nVfXfKnG0
 maunium.net/go/canonicaljson v0.1.1/go.mod h1:0X1niXxzCoKAURvqbYmimuu6IQpbqd8fIOiwPU5JwRg=
 maunium.net/go/olm v0.0.0-20200419222421-d050af0532a1 h1:6EHqKE4e/osCwhri1lr9u8hzTGFOjei6fGry/cEkA9s=
 maunium.net/go/olm v0.0.0-20200419222421-d050af0532a1/go.mod h1:SaLfmFDzrmqovMPeXoVJOZqij88nuJI9ZWR4/hV03v4=
+maunium.net/go/olm v0.0.0-20200420235207-35b7cc0d340c/go.mod h1:SaLfmFDzrmqovMPeXoVJOZqij88nuJI9ZWR4/hV03v4=

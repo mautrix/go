@@ -7,15 +7,74 @@
 package crypto
 
 import (
-	"maunium.net/go/olm"
+	"encoding/gob"
+	"os"
+	"path/filepath"
+	"strings"
 )
 
 type Store interface {
-	Key() []byte
+	SaveAccount(*OlmAccount) error
+	LoadAccount() (*OlmAccount, error)
 
-	SaveAccount(*olm.Account)
-	LoadAccount() *olm.Account
+	SaveSessions(string, []*OlmSession) error
+	LoadSessions(string) ([]*OlmSession, error)
+}
 
-	LoadSessions() []*olm.Session
-	SaveSession(string, *olm.Session)
+type GobStore struct {
+	Path string
+}
+
+func (gs *GobStore) LoadAccount() (*OlmAccount, error) {
+	file, err := os.Open(filepath.Join(gs.Path, "account.gob"))
+	if err != nil {
+		if os.IsNotExist(err) {
+			err = nil
+		}
+		return nil, err
+	}
+	dec := gob.NewDecoder(file)
+	var account OlmAccount
+	err = dec.Decode(&account)
+	_ = file.Close()
+	return &account, err
+}
+
+func (gs *GobStore) SaveAccount(account *OlmAccount) error {
+	file, err := os.OpenFile(filepath.Join(gs.Path, "account.gob"), os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	err = gob.NewEncoder(file).Encode(account)
+	_ = file.Close()
+	return err
+}
+
+func pathSafe(val string) string {
+	return strings.ReplaceAll(val, "/", "-")
+}
+
+func (gs *GobStore) LoadSessions(senderKey string) ([]*OlmSession, error) {
+	file, err := os.Open(filepath.Join(gs.Path, "sessions", pathSafe(senderKey) + ".gob"))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []*OlmSession{}, nil
+		}
+		return nil, err
+	}
+	dec := gob.NewDecoder(file)
+	var sessions []*OlmSession
+	err = dec.Decode(&sessions)
+	_ = file.Close()
+	return sessions, err
+}
+
+func (gs *GobStore) SaveSessions(senderKey string, sessions []*OlmSession) error {
+	file, err := os.OpenFile(filepath.Join(gs.Path, "sessions", pathSafe(senderKey) + ".gob"), os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	err = gob.NewEncoder(file).Encode(sessions)
+	_ = file.Close()
+	return err
 }
