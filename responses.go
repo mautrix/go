@@ -137,7 +137,7 @@ type RespLogin struct {
 // RespLogout is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-logout
 type RespLogout struct{}
 
-// RespCreateRoom is the JSON response for https://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-createroom
+// RespCreateRoom is the JSON response for https://matrix.org/docs/spec/client_server/r0.6.0.html#post-matrix-client-r0-createroom
 type RespCreateRoom struct {
 	RoomID id.RoomID `json:"room_id"`
 }
@@ -152,7 +152,7 @@ type LazyLoadSummary struct {
 	InvitedMemberCount *int        `json:"m.invited_member_count,omitempty"`
 }
 
-// RespSync is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-r0-sync
+// RespSync is the JSON response for http://matrix.org/docs/spec/client_server/r0.6.0.html#get-matrix-client-r0-sync
 type RespSync struct {
 	NextBatch string `json:"next_batch"`
 
@@ -170,13 +170,18 @@ type RespSync struct {
 		Changed []id.UserID `json:"changed"`
 		Left    []id.UserID `json:"left"`
 	} `json:"device_lists"`
-	DeviceOneTimeKeysCount map[string]int `json:"device_one_time_keys_count"`
+	DeviceOneTimeKeysCount OneTimeKeysCount `json:"device_one_time_keys_count"`
 
 	Rooms struct {
-		Leave map[id.RoomID]SyncLeftRoom `json:"leave"`
-		Join map[id.RoomID]SyncJoinedRoom `json:"join"`
+		Leave  map[id.RoomID]SyncLeftRoom    `json:"leave"`
+		Join   map[id.RoomID]SyncJoinedRoom  `json:"join"`
 		Invite map[id.RoomID]SyncInvitedRoom `json:"invite"`
 	} `json:"rooms"`
+}
+
+type OneTimeKeysCount struct {
+	Curve25519       int `json:"curve25519"`
+	SignedCurve25519 int `json:"signed_curve25519"`
 }
 
 type SyncLeftRoom struct {
@@ -186,8 +191,8 @@ type SyncLeftRoom struct {
 	} `json:"state"`
 	Timeline struct {
 		Events    []*event.Event `json:"events"`
-		Limited   bool              `json:"limited"`
-		PrevBatch string            `json:"prev_batch"`
+		Limited   bool           `json:"limited"`
+		PrevBatch string         `json:"prev_batch"`
 	} `json:"timeline"`
 }
 
@@ -198,8 +203,8 @@ type SyncJoinedRoom struct {
 	} `json:"state"`
 	Timeline struct {
 		Events    []*event.Event `json:"events"`
-		Limited   bool              `json:"limited"`
-		PrevBatch string            `json:"prev_batch"`
+		Limited   bool           `json:"limited"`
+		PrevBatch string         `json:"prev_batch"`
 	} `json:"timeline"`
 	Ephemeral struct {
 		Events []*event.Event `json:"events"`
@@ -231,16 +236,17 @@ type RespAliasResolve struct {
 }
 
 type RespUploadKeys struct {
+	OneTimeKeyCounts OneTimeKeysCount `json:"one_time_key_counts"`
 }
 
 type RespQueryKeys struct {
-	Failures   map[string]map[string]interface{} `json:"failures"`
-	DeviceKeys map[string]map[string]DeviceKeys  `json:"device_keys"`
+	Failures   map[string]map[string]interface{}        `json:"failures"`
+	DeviceKeys map[id.UserID]map[id.DeviceID]DeviceKeys `json:"device_keys"`
 }
 
 type RespClaimKeys struct {
-	Failures    map[string]map[string]interface{}       `json:"failures"`
-	OneTimeKeys map[id.UserID]map[id.DeviceKeyID]string `json:"one_time_keys"`
+	Failures    map[string]map[string]interface{}           `json:"failures"`
+	OneTimeKeys map[id.UserID]map[id.DeviceKeyID]OneTimeKey `json:"one_time_keys"`
 }
 
 type RespKeyChanges struct {

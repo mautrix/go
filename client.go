@@ -33,16 +33,17 @@ type Stringifiable interface {
 
 // Client represents a Matrix client.
 type Client struct {
-	HomeserverURL *url.URL  // The base homeserver URL
-	Prefix        URLPath   // The API prefix eg '/_matrix/client/r0'
-	UserID        id.UserID // The user ID of the client. Used for forming HTTP paths which use the client's user ID.
-	AccessToken   string    // The access_token for the client.
-	UserAgent     string
+	HomeserverURL *url.URL     // The base homeserver URL
+	Prefix        URLPath      // The API prefix eg '/_matrix/client/r0'
+	UserID        id.UserID    // The user ID of the client. Used for forming HTTP paths which use the client's user ID.
+	DeviceID      id.DeviceID  // The device ID of the client.
+	AccessToken   string       // The access_token for the client.
+	UserAgent     string       // The value for the User-Agent header
 	Client        *http.Client // The underlying HTTP client which will be used to make HTTP requests.
 	Syncer        Syncer       // The thing which can process /sync responses
 	Store         Storer       // The thing which can store rooms/tokens/ids
 	Logger        Logger
-	SyncPresence  string
+	SyncPresence  event.Presence
 
 	txnID int32
 
@@ -365,7 +366,7 @@ func (cli *Client) CreateFilter(filter *Filter) (resp *RespCreateFilter, err err
 }
 
 // SyncRequest makes an HTTP request according to http://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-r0-sync
-func (cli *Client) SyncRequest(timeout int, since, filterID string, fullState bool, setPresence string) (resp *RespSync, err error) {
+func (cli *Client) SyncRequest(timeout int, since, filterID string, fullState bool, setPresence event.Presence) (resp *RespSync, err error) {
 	query := map[string]string{
 		"timeout": strconv.Itoa(timeout),
 	}
@@ -376,7 +377,7 @@ func (cli *Client) SyncRequest(timeout int, since, filterID string, fullState bo
 		query["filter"] = filterID
 	}
 	if setPresence != "" {
-		query["set_presence"] = setPresence
+		query["set_presence"] = string(setPresence)
 	}
 	if fullState {
 		query["full_state"] = "true"

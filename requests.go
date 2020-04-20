@@ -1,6 +1,8 @@
 package mautrix
 
 import (
+	"encoding/json"
+
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
@@ -59,8 +61,8 @@ type ReqRedact struct {
 
 type ReqMembers struct {
 	At            string           `json:"at"`
-	Membership    event.Membership `json:"membership"`
-	NotMembership event.Membership `json:"not_membership"`
+	Membership    event.Membership `json:"membership,omitempty"`
+	NotMembership event.Membership `json:"not_membership,omitempty"`
 }
 
 // ReqInvite3PID is the JSON request for https://matrix.org/docs/spec/client_server/r0.2.0.html#id57
