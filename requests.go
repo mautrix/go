@@ -1,6 +1,8 @@
 package mautrix
 
 import (
+	"encoding/json"
+
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
@@ -59,8 +61,8 @@ type ReqRedact struct {
 
 type ReqMembers struct {
 	At            string           `json:"at"`
-	Membership    event.Membership `json:"membership"`
-	NotMembership event.Membership `json:"not_membership"`
+	Membership    event.Membership `json:"membership,omitempty"`
+	NotMembership event.Membership `json:"not_membership,omitempty"`
 }
 
 // ReqInvite3PID is the JSON request for https://matrix.org/docs/spec/client_server/r0.2.0.html#id57
@@ -107,23 +109,56 @@ type ReqAliasCreate struct {
 	RoomID id.RoomID `json:"room_id"`
 }
 
+type OneTimeKey struct {
+	Key        string                 `json:"key"`
+	IsSigned   bool                   `json:"-"`
+	Signatures Signatures             `json:"signatures,omitempty"`
+	Unsigned   map[string]interface{} `json:"unsigned,omitempty"`
+}
+
+type serializableOTK OneTimeKey
+
+func (otk *OneTimeKey) UnmarshalJSON(data []byte) error {
+	err := json.Unmarshal(data, (*serializableOTK)(otk))
+	if err != nil {
+		var key string
+		err := json.Unmarshal(data, &key)
+		if err != nil {
+			return err
+		}
+		otk.Key = key
+		otk.Signatures = nil
+		otk.Unsigned = nil
+		otk.IsSigned = false
+	} else {
+		otk.IsSigned = true
+	}
+	return nil
+}
+
+func (otk *OneTimeKey) MarshalJSON() ([]byte, error) {
+	if !otk.IsSigned {
+		return json.Marshal(otk.Key)
+	} else {
+		return json.Marshal((*serializableOTK)(otk))
+	}
+}
+
 type ReqUploadKeys struct {
-	DeviceKeys  *DeviceKeys         `json:"device_keys,omitempty"`
-	OneTimeKeys map[id.KeyID]string `json:"one_time_keys"`
+	DeviceKeys  *DeviceKeys             `json:"device_keys,omitempty"`
+	OneTimeKeys map[id.KeyID]OneTimeKey `json:"one_time_keys"`
 }
 
 type DeviceKeys struct {
-	UserID     id.UserID                               `json:"user_id"`
-	DeviceID   id.DeviceID                             `json:"device_id"`
-	Algorithms []string                                `json:"algorithms"`
-	Keys       map[id.DeviceKeyID]string               `json:"keys"`
-	Signatures map[id.UserID]map[id.DeviceKeyID]string `json:"signatures"`
-	Unsigned   *UnsignedDeviceInfo                     `json:"unsigned,omitempty"`
+	UserID     id.UserID                 `json:"user_id"`
+	DeviceID   id.DeviceID               `json:"device_id"`
+	Algorithms []string                  `json:"algorithms"`
+	Keys       map[id.DeviceKeyID]string `json:"keys"`
+	Signatures Signatures                `json:"signatures"`
+	Unsigned   map[string]interface{}    `json:"unsigned,omitempty"`
 }
 
-type UnsignedDeviceInfo struct {
-	Name string `json:"device_display_name,omitempty"`
-}
+type Signatures map[id.UserID]map[id.DeviceKeyID]string
 
 type ReqQueryKeys struct {
 	DeviceKeys map[id.UserID][]id.DeviceID `json:"device_keys"`

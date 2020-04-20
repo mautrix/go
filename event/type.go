@@ -165,4 +165,5 @@ var (
 	ToDeviceRoomKey          = Type{"m.room_key", ToDeviceEventType}
 	ToDeviceRoomKeyRequest   = Type{"m.room_key_request", ToDeviceEventType}
 	ToDeviceForwardedRoomKey = Type{"m.forwarded_room_key", ToDeviceEventType}
+	ToDeviceEncrypted        = Type{"m.room.encrypted", ToDeviceEventType}
 )
