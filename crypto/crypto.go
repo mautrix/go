@@ -7,8 +7,8 @@
 package crypto
 
 import (
+	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
-	"maunium.net/go/olm"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
@@ -23,8 +23,8 @@ type OlmMachine struct {
 	store  Store
 
 	account       *OlmAccount
-	sessions      map[string][]*OlmSession
-	groupSessions map[id.RoomID]map[string]map[string]*InboundGroupSession
+	sessions      map[id.SenderKey][]*OlmSession
+	groupSessions map[id.RoomID]map[id.SenderKey]map[id.SessionID]*InboundGroupSession
 	log           Logger
 }
 
@@ -55,7 +55,7 @@ func (mach *OlmMachine) SaveAccount() {
 	}
 }
 
-func (mach *OlmMachine) GetSessions(senderKey string) []*OlmSession {
+func (mach *OlmMachine) GetSessions(senderKey id.SenderKey) []*OlmSession {
 	sessions, ok := mach.sessions[senderKey]
 	if !ok {
 		sessions, err := mach.store.LoadSessions(senderKey)
@@ -68,7 +68,7 @@ func (mach *OlmMachine) GetSessions(senderKey string) []*OlmSession {
 	return sessions
 }
 
-func (mach *OlmMachine) SaveSession(senderKey string, session *OlmSession) {
+func (mach *OlmMachine) SaveSession(senderKey id.SenderKey, session *OlmSession) {
 	mach.sessions[senderKey] = append(mach.sessions[senderKey], session)
 	err := mach.store.SaveSessions(senderKey, mach.sessions[senderKey])
 	if err != nil {
@@ -111,25 +111,25 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 	}
 }
 
-func (mach *OlmMachine) getGroupSessions(roomID id.RoomID, senderKey string) map[string]*InboundGroupSession {
+func (mach *OlmMachine) getGroupSessions(roomID id.RoomID, senderKey id.SenderKey) map[id.SessionID]*InboundGroupSession {
 	roomGroupSessions, ok := mach.groupSessions[roomID]
 	if !ok {
-		roomGroupSessions = make(map[string]map[string]*InboundGroupSession)
+		roomGroupSessions = make(map[id.SenderKey]map[id.SessionID]*InboundGroupSession)
 		mach.groupSessions[roomID] = roomGroupSessions
 	}
 	senderGroupSessions, ok := roomGroupSessions[senderKey]
 	if !ok {
-		senderGroupSessions = make(map[string]*InboundGroupSession)
+		senderGroupSessions = make(map[id.SessionID]*InboundGroupSession)
 		roomGroupSessions[senderKey] = senderGroupSessions
 	}
 	return senderGroupSessions
 }
 
-func (mach *OlmMachine) createGroupSession(senderKey, signingKey string, roomID id.RoomID, sessionID, sessionKey string) {
-	igs, err := NewInboundGroupSession(senderKey, signingKey, roomID, sessionID, sessionKey)
+func (mach *OlmMachine) createGroupSession(senderKey id.SenderKey, signingKey id.Ed25519, roomID id.RoomID, sessionID id.SessionID, sessionKey string) {
+	igs, err := NewInboundGroupSession(senderKey, signingKey, roomID, sessionKey)
 	if err != nil {
 		mach.log.Debugfln("Failed to create inbound group session: %v", err)
-	} else if string(igs.ID()) != sessionID {
+	} else if igs.ID() != sessionID {
 		mach.log.Debugfln("Mismatched session ID while creating inbound group session")
 	} else {
 		mach.getGroupSessions(roomID, senderKey)[sessionID] = igs
@@ -139,7 +139,7 @@ func (mach *OlmMachine) createGroupSession(senderKey, signingKey string, roomID 
 
 func (mach *OlmMachine) receiveRoomKey(evt *OlmEvent, content *event.RoomKeyEventContent) {
 	// TODO nio had a comment saying "handle this better" for the case where evt.Keys.Ed25519 is none?
-	if content.Algorithm != event.AlgorithmMegolmV1 || evt.Keys.Ed25519 == "" {
+	if content.Algorithm != id.AlgorithmMegolmV1 || evt.Keys.Ed25519 == "" {
 		return
 	}
 

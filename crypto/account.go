@@ -8,8 +8,8 @@ package crypto
 
 import (
 	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
-	"maunium.net/go/olm"
 )
 
 type OlmAccount struct {
@@ -22,10 +22,10 @@ func (account *OlmAccount) getInitialKeys(userID id.UserID, deviceID id.DeviceID
 	deviceKeys := &mautrix.DeviceKeys{
 		UserID:     userID,
 		DeviceID:   deviceID,
-		Algorithms: []string{string(olm.AlgorithmMegolmV1)},
+		Algorithms: []string{string(id.AlgorithmMegolmV1)},
 		Keys: map[id.DeviceKeyID]string{
-			id.NewDeviceKeyID("curve25519", deviceID): string(curve),
-			id.NewDeviceKeyID("ed25519", deviceID):    string(ed),
+			id.NewDeviceKeyID(id.KeyAlgorithmCurve25519, deviceID): string(curve),
+			id.NewDeviceKeyID(id.KeyAlgorithmEd25519, deviceID):    string(ed),
 		},
 	}
 
@@ -36,7 +36,7 @@ func (account *OlmAccount) getInitialKeys(userID id.UserID, deviceID id.DeviceID
 
 	deviceKeys.Signatures = mautrix.Signatures{
 		userID: {
-			id.NewDeviceKeyID("ed25519", deviceID): signature,
+			id.NewDeviceKeyID(id.KeyAlgorithmEd25519, deviceID): signature,
 		},
 	}
 	return deviceKeys
@@ -47,16 +47,16 @@ func (account *OlmAccount) getOneTimeKeys(userID id.UserID, deviceID id.DeviceID
 	oneTimeKeys := make(map[id.KeyID]mautrix.OneTimeKey)
 	// TODO do we need unsigned curve25519 one-time keys at all?
 	//      this just signs all of them
-	for keyID, key := range account.OneTimeKeys().Curve25519 {
+	for keyID, key := range account.OneTimeKeys() {
 		key := mautrix.OneTimeKey{Key: string(key)}
 		signature, _ := account.SignJSON(key)
 		key.Signatures = mautrix.Signatures{
 			userID: {
-				id.NewDeviceKeyID("ed25519", deviceID): signature,
+				id.NewDeviceKeyID(id.KeyAlgorithmEd25519, deviceID): signature,
 			},
 		}
 		key.IsSigned = true
-		oneTimeKeys[id.NewKeyID("signed_curve25519", keyID)] = key
+		oneTimeKeys[id.NewKeyID(id.KeyAlgorithmSignedCurve25519, keyID)] = key
 	}
 	account.MarkKeysAsPublished()
 	return oneTimeKeys

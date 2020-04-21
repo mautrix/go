@@ -6,10 +6,6 @@
 
 package id
 
-import (
-	"fmt"
-)
-
 // A RoomID is a string starting with ! that references a specific room.
 // https://matrix.org/docs/spec/appendices#room-ids-and-event-ids
 type RoomID string
@@ -24,23 +20,6 @@ type RoomAlias string
 // https://matrix.org/docs/spec/rooms/v4#event-ids
 type EventID string
 
-// A DeviceID is an arbitrary string that references a specific device.
-type DeviceID string
-
-// A DeviceKeyID is a string formatted as <algorithm>:<device_id> that is used as the key in deviceid-key mappings.
-type DeviceKeyID string
-
-func NewDeviceKeyID(algorithm string, deviceID DeviceID) DeviceKeyID {
-	return DeviceKeyID(fmt.Sprintf("%s:%s", algorithm, deviceID))
-}
-
-// A KeyID a string formatted as <algorithm>:<key_id> that is used as the key in one-time-key mappings.
-type KeyID string
-
-func NewKeyID(algorithm, keyID string) KeyID {
-	return KeyID(fmt.Sprintf("%s:%s", algorithm, keyID))
-}
-
 func (roomID RoomID) String() string {
 	return string(roomID)
 }
@@ -51,12 +30,4 @@ func (roomAlias RoomAlias) String() string {
 
 func (eventID EventID) String() string {
 	return string(eventID)
-}
-
-func (deviceID DeviceID) String() string {
-	return string(deviceID)
-}
-
-func (keyID DeviceKeyID) String() string {
-	return string(keyID)
 }

@@ -11,14 +11,16 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"maunium.net/go/mautrix/id"
 )
 
 type Store interface {
 	SaveAccount(*OlmAccount) error
 	LoadAccount() (*OlmAccount, error)
 
-	SaveSessions(string, []*OlmSession) error
-	LoadSessions(string) ([]*OlmSession, error)
+	SaveSessions(id.SenderKey, []*OlmSession) error
+	LoadSessions(id.SenderKey) ([]*OlmSession, error)
 }
 
 type GobStore struct {
@@ -54,8 +56,8 @@ func pathSafe(val string) string {
 	return strings.ReplaceAll(val, "/", "-")
 }
 
-func (gs *GobStore) LoadSessions(senderKey string) ([]*OlmSession, error) {
-	file, err := os.Open(filepath.Join(gs.Path, "sessions", pathSafe(senderKey) + ".gob"))
+func (gs *GobStore) LoadSessions(senderKey id.SenderKey) ([]*OlmSession, error) {
+	file, err := os.Open(filepath.Join(gs.Path, "sessions", pathSafe(string(senderKey))+".gob"))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return []*OlmSession{}, nil
@@ -69,8 +71,8 @@ func (gs *GobStore) LoadSessions(senderKey string) ([]*OlmSession, error) {
 	return sessions, err
 }
 
-func (gs *GobStore) SaveSessions(senderKey string, sessions []*OlmSession) error {
-	file, err := os.OpenFile(filepath.Join(gs.Path, "sessions", pathSafe(senderKey) + ".gob"), os.O_CREATE|os.O_WRONLY, 0600)
+func (gs *GobStore) SaveSessions(senderKey id.SenderKey, sessions []*OlmSession) error {
+	file, err := os.OpenFile(filepath.Join(gs.Path, "sessions", pathSafe(string(senderKey))+".gob"), os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return err
 	}

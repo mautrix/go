@@ -12,20 +12,11 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-// Algorithm is a Matrix message encryption algorithm.
-// https://matrix.org/docs/spec/client_server/r0.6.0#messaging-algorithm-names
-type Algorithm string
-
-const (
-	AlgorithmOlmV1    Algorithm = "m.olm.v1.curve25519-aes-sha2"
-	AlgorithmMegolmV1 Algorithm = "m.megolm.v1.aes-sha2"
-)
-
 // EncryptionEventContent represents the content of a m.room.encryption state event.
 // https://matrix.org/docs/spec/client_server/r0.6.0#m-room-encryption
 type EncryptionEventContent struct {
 	// The encryption algorithm to be used to encrypt messages sent in this room. Must be 'm.megolm.v1.aes-sha2'.
-	Algorithm Algorithm `json:"algorithm"`
+	Algorithm id.Algorithm `json:"algorithm"`
 	// How long the session should be used before changing it. 604800000 (a week) is the recommended default.
 	RotationPeriodMillis int64 `json:"rotation_period_ms,omitempty"`
 	// How many messages should be sent before changing the session. 100 is the recommended default.
@@ -35,26 +26,19 @@ type EncryptionEventContent struct {
 // EncryptedEventContent represents the content of a m.room.encrypted message event.
 // https://matrix.org/docs/spec/client_server/r0.6.0#m-room-encrypted
 type EncryptedEventContent struct {
-	Algorithm  Algorithm       `json:"algorithm"`
-	SenderKey  string          `json:"sender_key"`
+	Algorithm  id.Algorithm    `json:"algorithm"`
+	SenderKey  id.SenderKey    `json:"sender_key"`
 	DeviceID   id.DeviceID     `json:"device_id"`
-	SessionID  string          `json:"session_id"`
+	SessionID  id.SessionID    `json:"session_id"`
 	Ciphertext json.RawMessage `json:"ciphertext"`
 
 	MegolmCiphertext string         `json:"-"`
 	OlmCiphertext    OlmCiphertexts `json:"-"`
 }
 
-type OlmMessageType int
-
-const (
-	OlmPreKeyMessage OlmMessageType = 0
-	OlmNormalMessage OlmMessageType = 1
-)
-
 type OlmCiphertexts map[string]struct {
-	Body string         `json:"body"`
-	Type OlmMessageType `json:"type"`
+	Body string        `json:"body"`
+	Type id.OlmMsgType `json:"type"`
 }
 
 type serializableEncryptedEventContent EncryptedEventContent
@@ -65,10 +49,10 @@ func (content *EncryptedEventContent) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	switch content.Algorithm {
-	case AlgorithmOlmV1:
+	case id.AlgorithmOlmV1:
 		content.OlmCiphertext = make(OlmCiphertexts)
 		return json.Unmarshal(content.Ciphertext, &content.OlmCiphertext)
-	case AlgorithmMegolmV1:
+	case id.AlgorithmMegolmV1:
 		return json.Unmarshal(content.Ciphertext, &content.MegolmCiphertext)
 	default:
 		return nil
@@ -78,9 +62,9 @@ func (content *EncryptedEventContent) UnmarshalJSON(data []byte) error {
 func (content *EncryptedEventContent) MarshalJSON() ([]byte, error) {
 	var err error
 	switch content.Algorithm {
-	case AlgorithmOlmV1:
+	case id.AlgorithmOlmV1:
 		content.Ciphertext, err = json.Marshal(content.OlmCiphertext)
-	case AlgorithmMegolmV1:
+	case id.AlgorithmMegolmV1:
 		content.Ciphertext, err = json.Marshal(content.MegolmCiphertext)
 	}
 	if err != nil {
@@ -92,10 +76,10 @@ func (content *EncryptedEventContent) MarshalJSON() ([]byte, error) {
 // RoomKeyEventContent represents the content of a m.room_key to_device event.
 // https://matrix.org/docs/spec/client_server/r0.6.0#m-room-key
 type RoomKeyEventContent struct {
-	Algorithm  Algorithm `json:"algorithm"`
-	RoomID     id.RoomID `json:"room_id"`
-	SessionID  string    `json:"session_id"`
-	SessionKey string    `json:"session_key"`
+	Algorithm  id.Algorithm `json:"algorithm"`
+	RoomID     id.RoomID    `json:"room_id"`
+	SessionID  id.SessionID `json:"session_id"`
+	SessionKey string       `json:"session_key"`
 }
 
 // ForwardedRoomKeyEventContent represents the content of a m.forwarded_room_key to_device event.
@@ -123,8 +107,8 @@ type RoomKeyRequestEventContent struct {
 }
 
 type RequestedKeyInfo struct {
-	Algorithm Algorithm `json:"algorithm"`
-	RoomID    id.RoomID `json:"room_id"`
-	SenderKey string    `json:"sender_key"`
-	SessionID string    `json:"session_id"`
+	Algorithm id.Algorithm `json:"algorithm"`
+	RoomID    id.RoomID    `json:"room_id"`
+	SenderKey id.SenderKey `json:"sender_key"`
+	SessionID id.SessionID `json:"session_id"`
 }

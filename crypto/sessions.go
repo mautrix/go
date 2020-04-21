@@ -11,7 +11,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"maunium.net/go/olm"
+	"maunium.net/go/mautrix/crypto/olm"
 
 	"maunium.net/go/mautrix/id"
 )
@@ -44,8 +44,8 @@ func wrapSession(session *olm.Session) *OlmSession {
 	}
 }
 
-func (account *OlmAccount) NewInboundSessionFrom(senderKey, ciphertext string) (*OlmSession, error) {
-	session, err := account.Account.NewInboundSessionFrom(olm.Curve25519(senderKey), ciphertext)
+func (account *OlmAccount) NewInboundSessionFrom(senderKey id.Curve25519, ciphertext string) (*OlmSession, error) {
+	session, err := account.Account.NewInboundSessionFrom(senderKey, ciphertext)
 	if err != nil {
 		return nil, err
 	}
@@ -53,12 +53,12 @@ func (account *OlmAccount) NewInboundSessionFrom(senderKey, ciphertext string) (
 	return wrapSession(session), nil
 }
 
-func (session *OlmSession) Encrypt(plaintext string) (olm.MsgType, string) {
+func (session *OlmSession) Encrypt(plaintext string) (id.OlmMsgType, string) {
 	session.UseTime = time.Now()
 	return session.Session.Encrypt(plaintext)
 }
 
-func (session *OlmSession) Decrypt(ciphertext string, msgType olm.MsgType) ([]byte, error) {
+func (session *OlmSession) Decrypt(ciphertext string, msgType id.OlmMsgType) ([]byte, error) {
 	session.UseTime = time.Now()
 	return session.Session.Decrypt(ciphertext, msgType)
 }
@@ -66,14 +66,14 @@ func (session *OlmSession) Decrypt(ciphertext string, msgType olm.MsgType) ([]by
 type InboundGroupSession struct {
 	*olm.InboundGroupSession
 
-	SigningKey string
-	SenderKey  string
+	SigningKey id.Ed25519
+	SenderKey  id.Curve25519
 	RoomID     id.RoomID
 
 	ForwardingChains []string
 }
 
-func NewInboundGroupSession(senderKey, signingKey string, roomID id.RoomID, sessionID, sessionKey string) (*InboundGroupSession, error) {
+func NewInboundGroupSession(senderKey id.SenderKey, signingKey id.Ed25519, roomID id.RoomID, sessionKey string) (*InboundGroupSession, error) {
 	igs, err := olm.NewInboundGroupSession([]byte(sessionKey))
 	return &InboundGroupSession{
 		InboundGroupSession: igs,
