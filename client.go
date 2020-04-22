@@ -779,9 +779,12 @@ func (cli *Client) UploadLink(link string) (*RespMediaUpload, error) {
 	return cli.Upload(res.Body, res.Header.Get("Content-Type"), res.ContentLength)
 }
 
+func (cli *Client) GetDownloadURL(mxcURL id.ContentURI) string {
+	return cli.BuildBaseURL("_matrix", "media", "r0", "download", mxcURL.Homeserver, mxcURL.FileID)
+}
+
 func (cli *Client) Download(mxcURL id.ContentURI) (io.ReadCloser, error) {
-	u := cli.BuildBaseURL("_matrix", "media", "r0", "download", mxcURL.Homeserver, mxcURL.FileID)
-	resp, err := cli.Client.Get(u)
+	resp, err := cli.Client.Get(cli.GetDownloadURL(mxcURL))
 	if err != nil {
 		return nil, err
 	}
