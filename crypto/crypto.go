@@ -161,5 +161,10 @@ func (mach *OlmMachine) ShareKeys() error {
 		OneTimeKeys: oneTimeKeys,
 	}
 	_, err := mach.client.UploadKeys(req)
-	return err
+	if err != nil {
+		return err
+	}
+	mach.account.Shared = true
+	mach.SaveAccount()
+	return nil
 }
