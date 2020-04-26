@@ -15,17 +15,18 @@ import (
 )
 
 type Logger interface {
-	Debugfln(message string, args ...interface{})
+	Error(message string, args ...interface{})
+	Warn(message string, args ...interface{})
+	Debug(message string, args ...interface{})
+	Trace(message string, args ...interface{})
 }
 
 type OlmMachine struct {
 	client *mautrix.Client
 	store  Store
 
-	account       *OlmAccount
-	sessions      map[id.SenderKey][]*OlmSession
-	groupSessions map[id.RoomID]map[id.SenderKey]map[id.SessionID]*InboundGroupSession
-	log           Logger
+	account *OlmAccount
+	log     Logger
 }
 
 func NewOlmMachine(client *mautrix.Client, store Store) *OlmMachine {
@@ -36,7 +37,7 @@ func NewOlmMachine(client *mautrix.Client, store Store) *OlmMachine {
 }
 
 func (mach *OlmMachine) Load() (err error) {
-	mach.account, err = mach.store.LoadAccount()
+	mach.account, err = mach.store.GetAccount()
 	if err != nil {
 		return
 	}
@@ -49,30 +50,9 @@ func (mach *OlmMachine) Load() (err error) {
 }
 
 func (mach *OlmMachine) SaveAccount() {
-	err := mach.store.SaveAccount(mach.account)
+	err := mach.store.PutAccount(mach.account)
 	if err != nil {
-		mach.log.Debugfln("Failed to save account: %v", err)
-	}
-}
-
-func (mach *OlmMachine) GetSessions(senderKey id.SenderKey) []*OlmSession {
-	sessions, ok := mach.sessions[senderKey]
-	if !ok {
-		sessions, err := mach.store.LoadSessions(senderKey)
-		if err != nil {
-			mach.log.Debugfln("Failed to load sessions for %s: %v", senderKey, err)
-			sessions = make([]*OlmSession, 0)
-		}
-		mach.sessions[senderKey] = sessions
-	}
-	return sessions
-}
-
-func (mach *OlmMachine) SaveSession(senderKey id.SenderKey, session *OlmSession) {
-	mach.sessions[senderKey] = append(mach.sessions[senderKey], session)
-	err := mach.store.SaveSessions(senderKey, mach.sessions[senderKey])
-	if err != nil {
-		mach.log.Debugfln("Failed to save sessions for %s: %v", senderKey, err)
+		mach.log.Error("Failed to save account: %v", err)
 	}
 }
 
@@ -90,7 +70,7 @@ func (mach *OlmMachine) ProcessSyncResponse(resp *mautrix.RespSync) {
 	if resp.DeviceOneTimeKeysCount.SignedCurve25519 <= int(min) {
 		err := mach.ShareKeys()
 		if err != nil {
-			mach.log.Debugfln("Failed to share keys: %v", err)
+			mach.log.Error("Failed to share keys: %v", err)
 		}
 	}
 }
@@ -100,41 +80,32 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 	case *event.EncryptedEventContent:
 		decryptedEvt, err := mach.DecryptOlmEvent(evt)
 		if err != nil {
-			mach.log.Debugfln("Failed to decrypt to-device event:", err)
+			mach.log.Error("Failed to decrypt to-device event:", err)
 			return
 		}
 		switch content := decryptedEvt.Content.Parsed.(type) {
 		case *event.RoomKeyEventContent:
 			mach.receiveRoomKey(decryptedEvt, content)
+			// TODO handle other encrypted to-device events
 		}
-		// TODO unencrypted to-device events should be handled here. At least m.room_key_request and m.verification.start
+		// TODO handle other unencrypted to-device events. At least m.room_key_request and m.verification.start
 	}
-}
-
-func (mach *OlmMachine) getGroupSessions(roomID id.RoomID, senderKey id.SenderKey) map[id.SessionID]*InboundGroupSession {
-	roomGroupSessions, ok := mach.groupSessions[roomID]
-	if !ok {
-		roomGroupSessions = make(map[id.SenderKey]map[id.SessionID]*InboundGroupSession)
-		mach.groupSessions[roomID] = roomGroupSessions
-	}
-	senderGroupSessions, ok := roomGroupSessions[senderKey]
-	if !ok {
-		senderGroupSessions = make(map[id.SessionID]*InboundGroupSession)
-		roomGroupSessions[senderKey] = senderGroupSessions
-	}
-	return senderGroupSessions
 }
 
 func (mach *OlmMachine) createGroupSession(senderKey id.SenderKey, signingKey id.Ed25519, roomID id.RoomID, sessionID id.SessionID, sessionKey string) {
 	igs, err := NewInboundGroupSession(senderKey, signingKey, roomID, sessionKey)
 	if err != nil {
-		mach.log.Debugfln("Failed to create inbound group session: %v", err)
+		mach.log.Error("Failed to create inbound group session: %v", err)
+		return
 	} else if igs.ID() != sessionID {
-		mach.log.Debugfln("Mismatched session ID while creating inbound group session")
-	} else {
-		mach.getGroupSessions(roomID, senderKey)[sessionID] = igs
-		// TODO save mach.groupSessions
+		mach.log.Warn("Mismatched session ID while creating inbound group session")
+		return
 	}
+	err = mach.store.PutGroupSession(roomID, senderKey, sessionID, igs)
+	if err != nil {
+		mach.log.Error("Failed to store new inbound group session: %v", err)
+	}
+	mach.log.Trace("Created inbound group session %s/%s/%s", roomID, senderKey, sessionID)
 }
 
 func (mach *OlmMachine) receiveRoomKey(evt *OlmEvent, content *event.RoomKeyEventContent) {
@@ -166,5 +137,6 @@ func (mach *OlmMachine) ShareKeys() error {
 	}
 	mach.account.Shared = true
 	mach.SaveAccount()
+	mach.log.Trace("Shared keys")
 	return nil
 }

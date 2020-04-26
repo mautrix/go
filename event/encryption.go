@@ -9,6 +9,7 @@ package event
 import (
 	"encoding/json"
 
+	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -32,7 +33,7 @@ type EncryptedEventContent struct {
 	SessionID  id.SessionID    `json:"session_id"`
 	Ciphertext json.RawMessage `json:"ciphertext"`
 
-	MegolmCiphertext string         `json:"-"`
+	MegolmCiphertext []byte         `json:"-"`
 	OlmCiphertext    OlmCiphertexts `json:"-"`
 }
 
@@ -53,10 +54,12 @@ func (content *EncryptedEventContent) UnmarshalJSON(data []byte) error {
 		content.OlmCiphertext = make(OlmCiphertexts)
 		return json.Unmarshal(content.Ciphertext, &content.OlmCiphertext)
 	case id.AlgorithmMegolmV1:
-		return json.Unmarshal(content.Ciphertext, &content.MegolmCiphertext)
-	default:
-		return nil
+		if content.Ciphertext[0] != '"' || content.Ciphertext[len(content.Ciphertext)-1] != '"' {
+			return olm.InputNotJSONString
+		}
+		content.MegolmCiphertext = content.Ciphertext[1:len(content.Ciphertext)-1]
 	}
+	return nil
 }
 
 func (content *EncryptedEventContent) MarshalJSON() ([]byte, error) {
@@ -65,7 +68,10 @@ func (content *EncryptedEventContent) MarshalJSON() ([]byte, error) {
 	case id.AlgorithmOlmV1:
 		content.Ciphertext, err = json.Marshal(content.OlmCiphertext)
 	case id.AlgorithmMegolmV1:
-		content.Ciphertext, err = json.Marshal(content.MegolmCiphertext)
+		content.Ciphertext = make([]byte, len(content.MegolmCiphertext) + 2)
+		content.Ciphertext[0] = '"'
+		content.Ciphertext[len(content.Ciphertext) - 1] = '"'
+		copy(content.Ciphertext[1:len(content.Ciphertext)-1], content.MegolmCiphertext)
 	}
 	if err != nil {
 		return nil, err

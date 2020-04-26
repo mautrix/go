@@ -100,11 +100,25 @@ func (ogs *OutboundGroupSession) Expired() bool {
 	return ogs.MessageCount >= ogs.MaxMessages || ogs.ExpirationMixin.Expired()
 }
 
-func (ogs *OutboundGroupSession) Encrypt(plaintext string) (string, error) {
+func (ogs *OutboundGroupSession) Encrypt(plaintext []byte) ([]byte, error) {
 	if !ogs.Shared {
-		return "", SessionNotShared
+		return nil, SessionNotShared
 	} else if ogs.Expired() {
-		return "", SessionExpired
+		return nil, SessionExpired
 	}
 	return ogs.OutboundGroupSession.Encrypt(plaintext), nil
+}
+
+type TimeMixin struct {
+	CreationTime time.Time
+	UseTime      time.Time
+}
+
+type ExpirationMixin struct {
+	TimeMixin
+	MaxAge time.Duration
+}
+
+func (exp *ExpirationMixin) Expired() bool {
+	return exp.CreationTime.Add(exp.MaxAge).Before(time.Now())
 }

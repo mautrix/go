@@ -142,7 +142,7 @@ func (s *OutboundGroupSession) GobDecode(rawPickled []byte) error {
 
 func (s *OutboundGroupSession) MarshalJSON() ([]byte, error) {
 	pickled := s.Pickle(pickleKey)
-	quotes := make([]byte, len(pickled) + 2)
+	quotes := make([]byte, len(pickled)+2)
 	quotes[0] = '"'
 	quotes[len(quotes)-1] = '"'
 	copy(quotes[1:len(quotes)-1], pickled)
@@ -173,21 +173,21 @@ func (s *OutboundGroupSession) encryptMsgLen(plainTextLen int) uint {
 
 // Encrypt encrypts a message using the Session.  Returns the encrypted message
 // as base64.
-func (s *OutboundGroupSession) Encrypt(plaintext string) string {
+func (s *OutboundGroupSession) Encrypt(plaintext []byte) []byte {
 	if len(plaintext) == 0 {
-		plaintext = " "
+		panic(EmptyInput)
 	}
 	message := make([]byte, s.encryptMsgLen(len(plaintext)))
 	r := C.olm_group_encrypt(
 		(*C.OlmOutboundGroupSession)(s.int),
-		(*C.uint8_t)(&([]byte(plaintext))[0]),
+		(*C.uint8_t)(&plaintext[0]),
 		C.size_t(len(plaintext)),
-		(*C.uint8_t)(&(message)[0]),
+		(*C.uint8_t)(&message[0]),
 		C.size_t(len(message)))
 	if r == errorVal() {
 		panic(s.lastError())
 	}
-	return string(message[:r])
+	return message[:r]
 }
 
 // sessionIdLen returns the number of bytes needed to store a session ID.

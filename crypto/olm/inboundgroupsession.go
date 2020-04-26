@@ -40,7 +40,7 @@ func InboundGroupSessionFromPickled(pickled, key []byte) (*InboundGroupSession, 
 // "OLM_BAD_SESSION_KEY".
 func NewInboundGroupSession(sessionKey []byte) (*InboundGroupSession, error) {
 	if len(sessionKey) == 0 {
-		sessionKey = []byte(" ")
+		return nil, EmptyInput
 	}
 	s := NewBlankInboundGroupSession()
 	r := C.olm_init_inbound_group_session(
@@ -59,7 +59,7 @@ func NewInboundGroupSession(sessionKey []byte) (*InboundGroupSession, error) {
 // error will be "OLM_BAD_SESSION_KEY".
 func InboundGroupSessionImport(sessionKey []byte) (*InboundGroupSession, error) {
 	if len(sessionKey) == 0 {
-		sessionKey = []byte(" ")
+		return nil, EmptyInput
 	}
 	s := NewBlankInboundGroupSession()
 	r := C.olm_import_inbound_group_session(
@@ -189,13 +189,13 @@ func (s *InboundGroupSession) UnmarshalJSON(data []byte) error {
 // unsupported version of the protocol then the error will be
 // "BAD_MESSAGE_VERSION".  If the message couldn't be decoded then the error
 // will be "BAD_MESSAGE_FORMAT".
-func (s *InboundGroupSession) decryptMaxPlaintextLen(message string) (uint, error) {
+func (s *InboundGroupSession) decryptMaxPlaintextLen(message []byte) (uint, error) {
 	if len(message) == 0 {
 		return 0, EmptyInput
 	}
 	r := C.olm_group_decrypt_max_plaintext_length(
 		(*C.OlmInboundGroupSession)(s.int),
-		(*C.uint8_t)(&([]byte(message))[0]),
+		(*C.uint8_t)(&message[0]),
 		C.size_t(len(message)))
 	if r == errorVal() {
 		return 0, s.lastError()
@@ -212,27 +212,27 @@ func (s *InboundGroupSession) decryptMaxPlaintextLen(message string) (uint, erro
 // error will be "BAD_MESSAGE_MAC".  If we do not have a session key
 // corresponding to the message's index (ie, it was sent before the session key
 // was shared with us) the error will be "OLM_UNKNOWN_MESSAGE_INDEX".
-func (s *InboundGroupSession) Decrypt(message string) (string, uint32, error) {
+func (s *InboundGroupSession) Decrypt(message []byte) ([]byte, uint, error) {
 	if len(message) == 0 {
-		return "", 0, EmptyInput
+		return nil, 0, EmptyInput
 	}
 	decryptMaxPlaintextLen, err := s.decryptMaxPlaintextLen(message)
 	if err != nil {
-		return "", 0, err
+		return nil, 0, err
 	}
 	plaintext := make([]byte, decryptMaxPlaintextLen)
 	var messageIndex uint32
 	r := C.olm_group_decrypt(
 		(*C.OlmInboundGroupSession)(s.int),
-		(*C.uint8_t)(&([]byte(message))[0]),
+		(*C.uint8_t)(&message[0]),
 		C.size_t(len(message)),
 		(*C.uint8_t)(&plaintext[0]),
 		C.size_t(len(plaintext)),
 		(*C.uint32_t)(&messageIndex))
 	if r == errorVal() {
-		return "", 0, s.lastError()
+		return nil, 0, s.lastError()
 	}
-	return string(plaintext[:r]), messageIndex, nil
+	return plaintext[:r], uint(messageIndex), nil
 }
 
 // sessionIdLen returns the number of bytes needed to store a session ID.

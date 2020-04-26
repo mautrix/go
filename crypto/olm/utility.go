@@ -55,7 +55,7 @@ func NewUtility() *Utility {
 // Sha256 calculates the SHA-256 hash of the input and encodes it as base64.
 func (u *Utility) Sha256(input string) string {
 	if len(input) == 0 {
-		input = " "
+		panic(EmptyInput)
 	}
 	output := make([]byte, u.sha256Len())
 	r := C.olm_sha256(

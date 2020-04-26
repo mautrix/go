@@ -8,7 +8,6 @@ package crypto
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"github.com/pkg/errors"
 
@@ -17,31 +16,15 @@ import (
 )
 
 var (
-	IncorrectEncryptedContentType       = errors.New("event content is not instance of *event.EncryptedEventContent")
 	UnsupportedAlgorithm                = errors.New("unsupported event encryption algorithm")
 	NotEncryptedForMe                   = errors.New("olm event doesn't contain ciphertext for this device")
 	UnsupportedOlmMessageType           = errors.New("unsupported olm message type")
 	DecryptionFailedWithMatchingSession = errors.New("decryption failed with matching session")
 	DecryptionFailedForNormalMessage    = errors.New("decryption failed for normal message")
-
-	SenderMismatch       = errors.New("mismatched sender in olm payload")
-	RecipientMismatch    = errors.New("mismatched recipient in olm payload")
-	RecipientKeyMismatch = errors.New("mismatched recipient key in olm payload")
+	SenderMismatch                      = errors.New("mismatched sender in olm payload")
+	RecipientMismatch                   = errors.New("mismatched recipient in olm payload")
+	RecipientKeyMismatch                = errors.New("mismatched recipient key in olm payload")
 )
-
-func (mach *OlmMachine) DecryptMegolmEvent(evt *event.Event) (*event.Event, error) {
-	content, ok := evt.Content.Parsed.(*event.EncryptedEventContent)
-	if !ok {
-		return nil, IncorrectEncryptedContentType
-	}
-	fmt.Println(content.Algorithm)
-	// TODO
-	return nil, nil
-}
-
-type OlmEventKeys struct {
-	Ed25519 id.Ed25519 `json:"ed25519"`
-}
 
 type OlmEvent struct {
 	Source *event.Event `json:"-"`
@@ -56,20 +39,6 @@ type OlmEvent struct {
 
 	Type    event.Type    `json:"type"`
 	Content event.Content `json:"content"`
-}
-
-func (mach *OlmMachine) createInboundSession(senderKey id.SenderKey, ciphertext string) (*OlmSession, error) {
-	session, err := mach.account.NewInboundSessionFrom(senderKey, ciphertext)
-	if err != nil {
-		return nil, err
-	}
-	mach.SaveAccount()
-	mach.SaveSession(senderKey, session)
-	return session, nil
-}
-
-func (mach *OlmMachine) markDeviceForUnwedging(sender id.UserID, senderKey id.SenderKey) {
-	// TODO implement
 }
 
 func (mach *OlmMachine) DecryptOlmEvent(evt *event.Event) (*OlmEvent, error) {
@@ -87,6 +56,10 @@ func (mach *OlmMachine) DecryptOlmEvent(evt *event.Event) (*OlmEvent, error) {
 	return mach.decryptOlmEvent(evt, content.SenderKey, ownContent.Type, ownContent.Body)
 }
 
+type OlmEventKeys struct {
+	Ed25519 id.Ed25519 `json:"ed25519"`
+}
+
 func (mach *OlmMachine) decryptOlmEvent(evt *event.Event, senderKey id.SenderKey, olmType id.OlmMsgType, ciphertext string) (*OlmEvent, error) {
 	if olmType != id.OlmMsgTypePreKey && olmType != id.OlmMsgTypeMsg {
 		return nil, UnsupportedOlmMessageType
@@ -95,10 +68,10 @@ func (mach *OlmMachine) decryptOlmEvent(evt *event.Event, senderKey id.SenderKey
 	plaintext, err := mach.tryDecryptOlmEvent(senderKey, olmType, ciphertext)
 	if err != nil {
 		if err == DecryptionFailedWithMatchingSession {
-			mach.log.Debugfln("Found matching session yet decryption failed for sender %s with key %s", evt.Sender, senderKey)
+			mach.log.Warn("Found matching session yet decryption failed for sender %s with key %s", evt.Sender, senderKey)
 			mach.markDeviceForUnwedging(evt.Sender, senderKey)
 		}
-		return nil, err
+		return nil, errors.Wrap(err, "failed to decrypt olm event")
 	}
 
 	// Decryption failed with every known session or no known sessions, let's try to create a new session.
@@ -118,7 +91,7 @@ func (mach *OlmMachine) decryptOlmEvent(evt *event.Event, senderKey id.SenderKey
 
 		plaintext, err = session.Decrypt(ciphertext, olmType)
 		if err != nil {
-			return nil, errors.Wrap(err, "failed to decrypt message with session created from prekey message")
+			return nil, errors.Wrap(err, "failed to decrypt olm event with session created from prekey message")
 		}
 	}
 
@@ -147,11 +120,15 @@ func (mach *OlmMachine) decryptOlmEvent(evt *event.Event, senderKey id.SenderKey
 }
 
 func (mach *OlmMachine) tryDecryptOlmEvent(senderKey id.SenderKey, olmType id.OlmMsgType, ciphertext string) ([]byte, error) {
-	for _, session := range mach.GetSessions(senderKey) {
+	sessions, err := mach.store.GetSessions(senderKey)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to get session for %s", senderKey)
+	}
+	for _, session := range sessions {
 		if olmType == id.OlmMsgTypePreKey {
 			matches, err := session.MatchesInboundSession(ciphertext)
 			if err != nil {
-				return nil, err
+				return nil, errors.Wrap(err, "failed to check if ciphertext matches inbound session")
 			} else if !matches {
 				continue
 			}
@@ -166,4 +143,17 @@ func (mach *OlmMachine) tryDecryptOlmEvent(senderKey id.SenderKey, olmType id.Ol
 		}
 	}
 	return nil, nil
+}
+
+func (mach *OlmMachine) createInboundSession(senderKey id.SenderKey, ciphertext string) (*OlmSession, error) {
+	session, err := mach.account.NewInboundSessionFrom(senderKey, ciphertext)
+	if err != nil {
+		return nil, err
+	}
+	mach.SaveAccount()
+	err = mach.store.AddSession(senderKey, session)
+	if err != nil {
+		mach.log.Error("Failed to store created inbound session: %v", err)
+	}
+	return session, nil
 }
