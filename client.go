@@ -191,6 +191,7 @@ func (cli *Client) SetCredentials(userID id.UserID, accessToken string) {
 func (cli *Client) ClearCredentials() {
 	cli.AccessToken = ""
 	cli.UserID = ""
+	cli.DeviceID = ""
 }
 
 // Sync starts syncing with the provided Homeserver. If Sync() is called twice then the first sync will be stopped and the

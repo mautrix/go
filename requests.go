@@ -152,7 +152,7 @@ type ReqUploadKeys struct {
 type DeviceKeys struct {
 	UserID     id.UserID                 `json:"user_id"`
 	DeviceID   id.DeviceID               `json:"device_id"`
-	Algorithms []string                  `json:"algorithms"`
+	Algorithms []id.Algorithm            `json:"algorithms"`
 	Keys       map[id.DeviceKeyID]string `json:"keys"`
 	Signatures Signatures                `json:"signatures"`
 	Unsigned   map[string]interface{}    `json:"unsigned,omitempty"`

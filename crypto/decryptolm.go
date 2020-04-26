@@ -78,7 +78,7 @@ func (mach *OlmMachine) decryptOlmEvent(evt *event.Event, senderKey id.SenderKey
 	if plaintext == nil {
 		// New sessions can only be created if it's a prekey message, we can't decrypt the message
 		// if it isn't one at this point in time anymore, so return early.
-		if olmType == id.OlmMsgTypePreKey {
+		if olmType != id.OlmMsgTypePreKey {
 			mach.markDeviceForUnwedging(evt.Sender, senderKey)
 			return nil, DecryptionFailedForNormalMessage
 		}

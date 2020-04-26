@@ -12,6 +12,7 @@ import (
 	"github.com/pkg/errors"
 
 	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/id"
 )
 
 var (
@@ -29,6 +30,8 @@ func (mach *OlmMachine) DecryptMegolmEvent(evt *event.Event) (*event.Event, erro
 	content, ok := evt.Content.Parsed.(*event.EncryptedEventContent)
 	if !ok {
 		return nil, IncorrectEncryptedContentType
+	} else if content.Algorithm != id.AlgorithmMegolmV1 {
+		return nil, UnsupportedAlgorithm
 	}
 	sess, err := mach.store.GetGroupSession(evt.RoomID, content.SenderKey, content.SessionID)
 	if err != nil {
@@ -54,6 +57,7 @@ func (mach *OlmMachine) DecryptMegolmEvent(evt *event.Event) (*event.Event, erro
 	if err != nil && !event.IsUnsupportedContentType(err) {
 		return nil, errors.Wrap(err, "failed to parse content of megolm payload event")
 	}
+	megolmEvt.Type.Class = evt.Type.Class
 	return &event.Event{
 		Sender:    evt.Sender,
 		Type:      megolmEvt.Type,

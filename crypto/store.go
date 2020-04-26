@@ -39,7 +39,7 @@ type messageIndexValue struct {
 }
 
 type GobStore struct {
-	*sync.Mutex
+	lock sync.Mutex
 	path string
 
 	Account        *OlmAccount
@@ -85,31 +85,31 @@ func (gs *GobStore) GetAccount() (*OlmAccount, error) {
 	return gs.Account, nil
 }
 
-func (gs *GobStore) SaveAccount(account *OlmAccount) error {
-	gs.Lock()
+func (gs *GobStore) PutAccount(account *OlmAccount) error {
+	gs.lock.Lock()
 	gs.Account = account
 	err := gs.save()
-	gs.Unlock()
+	gs.lock.Unlock()
 	return err
 }
 
-func (gs *GobStore) LoadSessions(senderKey id.SenderKey) ([]*OlmSession, error) {
-	gs.Lock()
+func (gs *GobStore) GetSessions(senderKey id.SenderKey) ([]*OlmSession, error) {
+	gs.lock.Lock()
 	sessions, ok := gs.Sessions[senderKey]
 	if !ok {
 		sessions = []*OlmSession{}
 		gs.Sessions[senderKey] = sessions
 	}
-	gs.Unlock()
+	gs.lock.Unlock()
 	return sessions, nil
 }
 
 func (gs *GobStore) AddSession(senderKey id.SenderKey, session *OlmSession) error {
-	gs.Lock()
+	gs.lock.Lock()
 	sessions, _ := gs.Sessions[senderKey]
 	gs.Sessions[senderKey] = append(sessions, session)
 	err := gs.save()
-	gs.Unlock()
+	gs.lock.Unlock()
 	return err
 }
 
@@ -128,18 +128,18 @@ func (gs *GobStore) getGroupSessions(roomID id.RoomID, senderKey id.SenderKey) m
 }
 
 func (gs *GobStore) PutGroupSession(roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID, igs *InboundGroupSession) error {
-	gs.Lock()
+	gs.lock.Lock()
 	gs.getGroupSessions(roomID, senderKey)[sessionID] = igs
 	err := gs.save()
-	gs.Unlock()
+	gs.lock.Unlock()
 	return err
 }
 
 func (gs *GobStore) GetGroupSession(roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID) (*InboundGroupSession, error) {
-	gs.Lock()
+	gs.lock.Lock()
 	sessions := gs.getGroupSessions(roomID, senderKey)
 	session, ok := sessions[sessionID]
-	gs.Unlock()
+	gs.lock.Unlock()
 	if !ok {
 		return nil, nil
 	}
@@ -147,8 +147,8 @@ func (gs *GobStore) GetGroupSession(roomID id.RoomID, senderKey id.SenderKey, se
 }
 
 func (gs *GobStore) ValidateMessageIndex(senderKey id.SenderKey, sessionID id.SessionID, eventID id.EventID, index uint, timestamp int64) bool {
-	gs.Lock()
-	defer gs.Unlock()
+	gs.lock.Lock()
+	defer gs.lock.Unlock()
 	key := messageIndexKey{
 		SenderKey: senderKey,
 		SessionID: sessionID,

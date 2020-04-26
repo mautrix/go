@@ -27,13 +27,13 @@ type UserDevice struct {
 }
 
 type OlmSession struct {
-	*olm.Session
+	olm.Session
 	ExpirationMixin
 }
 
 func wrapSession(session *olm.Session) *OlmSession {
 	return &OlmSession{
-		Session: session,
+		Session: *session,
 		ExpirationMixin: ExpirationMixin{
 			TimeMixin: TimeMixin{
 				CreationTime: time.Now(),
@@ -64,7 +64,7 @@ func (session *OlmSession) Decrypt(ciphertext string, msgType id.OlmMsgType) ([]
 }
 
 type InboundGroupSession struct {
-	*olm.InboundGroupSession
+	olm.InboundGroupSession
 
 	SigningKey id.Ed25519
 	SenderKey  id.Curve25519
@@ -75,17 +75,20 @@ type InboundGroupSession struct {
 
 func NewInboundGroupSession(senderKey id.SenderKey, signingKey id.Ed25519, roomID id.RoomID, sessionKey string) (*InboundGroupSession, error) {
 	igs, err := olm.NewInboundGroupSession([]byte(sessionKey))
+	if err != nil {
+		return nil, err
+	}
 	return &InboundGroupSession{
-		InboundGroupSession: igs,
+		InboundGroupSession: *igs,
 		SigningKey:          signingKey,
 		SenderKey:           senderKey,
 		RoomID:              roomID,
 		ForwardingChains:    nil,
-	}, err
+	}, nil
 }
 
 type OutboundGroupSession struct {
-	*olm.OutboundGroupSession
+	olm.OutboundGroupSession
 
 	ExpirationMixin
 	MaxMessages  int

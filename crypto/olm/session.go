@@ -154,7 +154,7 @@ func (s *Session) GobEncode() ([]byte, error) {
 }
 
 func (s *Session) GobDecode(rawPickled []byte) error {
-	if s == nil {
+	if s.int == nil {
 		s.int = newSession()
 	}
 	length := unpaddedBase64.EncodedLen(len(rawPickled))

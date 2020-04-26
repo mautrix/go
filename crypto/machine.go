@@ -29,9 +29,10 @@ type OlmMachine struct {
 	log     Logger
 }
 
-func NewOlmMachine(client *mautrix.Client, store Store) *OlmMachine {
+func NewOlmMachine(client *mautrix.Client, log Logger, store Store) *OlmMachine {
 	return &OlmMachine{
 		client: client,
+		log:    log,
 		store:  store,
 	}
 }
@@ -43,7 +44,7 @@ func (mach *OlmMachine) Load() (err error) {
 	}
 	if mach.account == nil {
 		mach.account = &OlmAccount{
-			Account: olm.NewAccount(),
+			Account: *olm.NewAccount(),
 		}
 	}
 	return nil
@@ -58,9 +59,11 @@ func (mach *OlmMachine) SaveAccount() {
 
 func (mach *OlmMachine) ProcessSyncResponse(resp *mautrix.RespSync) {
 	for _, evt := range resp.ToDevice.Events {
+		mach.log.Trace("Got to-device event %s from %s", evt.Type.Type, evt.Sender)
 		evt.Type.Class = event.ToDeviceEventType
 		err := evt.Content.ParseRaw(evt.Type)
 		if err != nil {
+			mach.log.Warn("Failed to parse to-device event of type %s: %v", evt.Type.Type, err)
 			continue
 		}
 		mach.HandleToDeviceEvent(evt)
@@ -68,6 +71,7 @@ func (mach *OlmMachine) ProcessSyncResponse(resp *mautrix.RespSync) {
 
 	min := mach.account.MaxNumberOfOneTimeKeys() / 2
 	if resp.DeviceOneTimeKeysCount.SignedCurve25519 <= int(min) {
+		mach.log.Trace("Sync response said we have %d signed curve25519 keys left, sharing new ones...", resp.DeviceOneTimeKeysCount.SignedCurve25519)
 		err := mach.ShareKeys()
 		if err != nil {
 			mach.log.Error("Failed to share keys: %v", err)
@@ -80,7 +84,7 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 	case *event.EncryptedEventContent:
 		decryptedEvt, err := mach.DecryptOlmEvent(evt)
 		if err != nil {
-			mach.log.Error("Failed to decrypt to-device event:", err)
+			mach.log.Error("Failed to decrypt to-device event: %v", err)
 			return
 		}
 		switch content := decryptedEvt.Content.Parsed.(type) {
@@ -122,21 +126,24 @@ func (mach *OlmMachine) ShareKeys() error {
 	var deviceKeys *mautrix.DeviceKeys
 	if !mach.account.Shared {
 		deviceKeys = mach.account.getInitialKeys(mach.client.UserID, mach.client.DeviceID)
+		mach.log.Trace("Going to upload initial account keys")
 	}
 	oneTimeKeys := mach.account.getOneTimeKeys(mach.client.UserID, mach.client.DeviceID)
 	if len(oneTimeKeys) == 0 && deviceKeys == nil {
+		mach.log.Trace("No one-time keys nor device keys got when trying to share keys")
 		return nil
 	}
 	req := &mautrix.ReqUploadKeys{
 		DeviceKeys:  deviceKeys,
 		OneTimeKeys: oneTimeKeys,
 	}
+	mach.log.Trace("Uploading %d one-time keys:\n%s", len(oneTimeKeys))
 	_, err := mach.client.UploadKeys(req)
 	if err != nil {
 		return err
 	}
 	mach.account.Shared = true
 	mach.SaveAccount()
-	mach.log.Trace("Shared keys")
+	mach.log.Trace("Shared keys and saved account")
 	return nil
 }

@@ -13,7 +13,7 @@ import (
 )
 
 type OlmAccount struct {
-	*olm.Account
+	olm.Account
 	Shared bool
 }
 
@@ -22,7 +22,7 @@ func (account *OlmAccount) getInitialKeys(userID id.UserID, deviceID id.DeviceID
 	deviceKeys := &mautrix.DeviceKeys{
 		UserID:     userID,
 		DeviceID:   deviceID,
-		Algorithms: []string{string(id.AlgorithmMegolmV1)},
+		Algorithms: []id.Algorithm{id.AlgorithmMegolmV1, id.AlgorithmOlmV1},
 		Keys: map[id.DeviceKeyID]string{
 			id.NewDeviceKeyID(id.KeyAlgorithmCurve25519, deviceID): string(curve),
 			id.NewDeviceKeyID(id.KeyAlgorithmEd25519, deviceID):    string(ed),
