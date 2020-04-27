@@ -29,15 +29,15 @@ type EncryptionEventContent struct {
 type EncryptedEventContent struct {
 	Algorithm  id.Algorithm    `json:"algorithm"`
 	SenderKey  id.SenderKey    `json:"sender_key"`
-	DeviceID   id.DeviceID     `json:"device_id"`
-	SessionID  id.SessionID    `json:"session_id"`
+	DeviceID   id.DeviceID     `json:"device_id,omitempty"`
+	SessionID  id.SessionID    `json:"session_id,omitempty"`
 	Ciphertext json.RawMessage `json:"ciphertext"`
 
 	MegolmCiphertext []byte         `json:"-"`
 	OlmCiphertext    OlmCiphertexts `json:"-"`
 }
 
-type OlmCiphertexts map[string]struct {
+type OlmCiphertexts map[id.Curve25519]struct {
 	Body string        `json:"body"`
 	Type id.OlmMsgType `json:"type"`
 }
@@ -54,10 +54,10 @@ func (content *EncryptedEventContent) UnmarshalJSON(data []byte) error {
 		content.OlmCiphertext = make(OlmCiphertexts)
 		return json.Unmarshal(content.Ciphertext, &content.OlmCiphertext)
 	case id.AlgorithmMegolmV1:
-		if content.Ciphertext[0] != '"' || content.Ciphertext[len(content.Ciphertext)-1] != '"' {
+		if len(content.Ciphertext) == 0 || content.Ciphertext[0] != '"' || content.Ciphertext[len(content.Ciphertext)-1] != '"' {
 			return olm.InputNotJSONString
 		}
-		content.MegolmCiphertext = content.Ciphertext[1:len(content.Ciphertext)-1]
+		content.MegolmCiphertext = content.Ciphertext[1 : len(content.Ciphertext)-1]
 	}
 	return nil
 }
@@ -68,9 +68,9 @@ func (content *EncryptedEventContent) MarshalJSON() ([]byte, error) {
 	case id.AlgorithmOlmV1:
 		content.Ciphertext, err = json.Marshal(content.OlmCiphertext)
 	case id.AlgorithmMegolmV1:
-		content.Ciphertext = make([]byte, len(content.MegolmCiphertext) + 2)
+		content.Ciphertext = make([]byte, len(content.MegolmCiphertext)+2)
 		content.Ciphertext[0] = '"'
-		content.Ciphertext[len(content.Ciphertext) - 1] = '"'
+		content.Ciphertext[len(content.Ciphertext)-1] = '"'
 		copy(content.Ciphertext[1:len(content.Ciphertext)-1], content.MegolmCiphertext)
 	}
 	if err != nil {

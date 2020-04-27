@@ -28,12 +28,6 @@ type Tag struct {
 // https://matrix.org/docs/spec/client_server/r0.6.0#m-direct
 type DirectChatsEventContent map[id.UserID][]id.RoomID
 
-// PushRulesEventContent represents the content of a m.push_rules account data event.
-// https://matrix.org/docs/spec/client_server/r0.6.0#m-push-rules
-//type PushRulesEventContent struct {
-//	Global *pushrules.PushRuleset `json:"global"`
-//}
-
 // FullyReadEventContent represents the content of a m.fully_read account data event.
 // https://matrix.org/docs/spec/client_server/r0.6.0#m-fully-read
 type FullyReadEventContent struct {

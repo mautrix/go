@@ -183,7 +183,7 @@ func (a *Account) MarshalJSON() ([]byte, error) {
 }
 
 func (a *Account) UnmarshalJSON(data []byte) error {
-	if data[0] != '"' || data[len(data)-1] != '"' {
+	if len(data) == 0 || data[0] != '"' || data[len(data)-1] != '"' {
 		return InputNotJSONString
 	}
 	if a.int == nil {

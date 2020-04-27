@@ -19,9 +19,11 @@ var (
 	IncorrectEncryptedContentType = errors.New("event content is not instance of *event.EncryptedEventContent")
 	NoSessionFound                = errors.New("failed to decrypt megolm event: no session with given ID found")
 	DuplicateMessageIndex         = errors.New("duplicate message index")
+	WrongRoom                     = errors.New("encrypted megolm event is not intended for this room")
 )
 
 type MegolmEvent struct {
+	RoomID  id.RoomID     `json:"room_id"`
 	Type    event.Type    `json:"type"`
 	Content event.Content `json:"content"`
 }
@@ -52,6 +54,8 @@ func (mach *OlmMachine) DecryptMegolmEvent(evt *event.Event) (*event.Event, erro
 	err = json.Unmarshal(plaintext, &megolmEvt)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to parse megolm payload")
+	} else if megolmEvt.RoomID != evt.RoomID {
+		return nil, WrongRoom
 	}
 	err = megolmEvt.Content.ParseRaw(megolmEvt.Type)
 	if err != nil && !event.IsUnsupportedContentType(err) {

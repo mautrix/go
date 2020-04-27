@@ -752,7 +752,7 @@ func (cli *Client) UserTyping(roomID id.RoomID, typing bool, timeout int64) (res
 	return
 }
 
-func (cli *Client) SetPresence(status string) (err error) {
+func (cli *Client) SetPresence(status event.Presence) (err error) {
 	req := ReqPresence{Presence: status}
 	u := cli.BuildURL("presence", cli.UserID, "status")
 	_, err = cli.MakeRequest("PUT", u, req, nil)
@@ -995,6 +995,12 @@ func (cli *Client) GetKeyChanges(from, to string) (resp *RespKeyChanges, err err
 		"to":   to,
 	})
 	_, err = cli.MakeRequest("POST", urlPath, nil, &resp)
+	return
+}
+
+func (cli *Client) SendToDevice(eventType event.Type, req *ReqSendToDevice) (resp *RespSendToDevice, err error) {
+	urlPath := cli.BuildURL("sendToDevice", eventType.String(), cli.TxnID())
+	_, err = cli.MakeRequest("PUT", urlPath, req, &resp)
 	return
 }
 

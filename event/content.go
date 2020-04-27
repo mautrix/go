@@ -31,6 +31,7 @@ var TypeMap = map[Type]reflect.Type{
 	StateHistoryVisibility: reflect.TypeOf(HistoryVisibilityEventContent{}),
 	StateGuestAccess:       reflect.TypeOf(GuestAccessEventContent{}),
 	StatePinnedEvents:      reflect.TypeOf(PinnedEventsEventContent{}),
+	StateEncryption:        reflect.TypeOf(EncryptionEventContent{}),
 
 	EventMessage:   reflect.TypeOf(MessageEventContent{}),
 	EventSticker:   reflect.TypeOf(MessageEventContent{}),
@@ -42,7 +43,6 @@ var TypeMap = map[Type]reflect.Type{
 	AccountDataDirectChats:     reflect.TypeOf(DirectChatsEventContent{}),
 	AccountDataFullyRead:       reflect.TypeOf(FullyReadEventContent{}),
 	AccountDataIgnoredUserList: reflect.TypeOf(IgnoredUserListEventContent{}),
-	//AccountDataPushRules:       reflect.TypeOf(PushRulesEventContent{}),
 
 	EphemeralEventTyping:   reflect.TypeOf(TypingEventContent{}),
 	EphemeralEventReceipt:  reflect.TypeOf(ReceiptEventContent{}),
@@ -75,7 +75,7 @@ func (content *Content) MarshalJSON() ([]byte, error) {
 	if content.Raw == nil {
 		if content.Parsed == nil {
 			if content.VeryRaw == nil {
-				return []byte("null"), nil
+				return []byte("{}"), nil
 			}
 			return content.VeryRaw, nil
 		}

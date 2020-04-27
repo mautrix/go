@@ -150,7 +150,7 @@ func (s *OutboundGroupSession) MarshalJSON() ([]byte, error) {
 }
 
 func (s *OutboundGroupSession) UnmarshalJSON(data []byte) error {
-	if data[0] != '"' || data[len(data)-1] != '"' {
+	if len(data) == 0 || data[0] != '"' || data[len(data)-1] != '"' {
 		return InputNotJSONString
 	}
 	if s.int == nil {
@@ -219,8 +219,8 @@ func (s *OutboundGroupSession) sessionKeyLen() uint {
 	return uint(C.olm_outbound_group_session_key_length((*C.OlmOutboundGroupSession)(s.int)))
 }
 
-// SessionKey returns the base64-encoded current ratchet key for this session.
-func (s *OutboundGroupSession) SessionKey() string {
+// Key returns the base64-encoded current ratchet key for this session.
+func (s *OutboundGroupSession) Key() string {
 	sessionKey := make([]byte, s.sessionKeyLen())
 	r := C.olm_outbound_group_session_key(
 		(*C.OlmOutboundGroupSession)(s.int),

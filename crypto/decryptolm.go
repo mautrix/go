@@ -41,7 +41,7 @@ type OlmEvent struct {
 	Content event.Content `json:"content"`
 }
 
-func (mach *OlmMachine) DecryptOlmEvent(evt *event.Event) (*OlmEvent, error) {
+func (mach *OlmMachine) decryptOlmEvent(evt *event.Event) (*OlmEvent, error) {
 	content, ok := evt.Content.Parsed.(*event.EncryptedEventContent)
 	if !ok {
 		return nil, IncorrectEncryptedContentType
@@ -49,27 +49,32 @@ func (mach *OlmMachine) DecryptOlmEvent(evt *event.Event) (*OlmEvent, error) {
 		return nil, UnsupportedAlgorithm
 	}
 	_, ownKey := mach.account.IdentityKeys()
-	ownContent, ok := content.OlmCiphertext[string(ownKey)]
+	ownContent, ok := content.OlmCiphertext[ownKey]
 	if !ok {
 		return nil, NotEncryptedForMe
 	}
-	return mach.decryptOlmEvent(evt, content.SenderKey, ownContent.Type, ownContent.Body)
+	decrypted, err := mach.decryptOlmCiphertext(evt.Sender, content.SenderKey, ownContent.Type, ownContent.Body)
+	if err != nil {
+		return nil, err
+	}
+	decrypted.Source = evt
+	return decrypted, nil
 }
 
 type OlmEventKeys struct {
 	Ed25519 id.Ed25519 `json:"ed25519"`
 }
 
-func (mach *OlmMachine) decryptOlmEvent(evt *event.Event, senderKey id.SenderKey, olmType id.OlmMsgType, ciphertext string) (*OlmEvent, error) {
+func (mach *OlmMachine) decryptOlmCiphertext(sender id.UserID, senderKey id.SenderKey, olmType id.OlmMsgType, ciphertext string) (*OlmEvent, error) {
 	if olmType != id.OlmMsgTypePreKey && olmType != id.OlmMsgTypeMsg {
 		return nil, UnsupportedOlmMessageType
 	}
 
-	plaintext, err := mach.tryDecryptOlmEvent(senderKey, olmType, ciphertext)
+	plaintext, err := mach.tryDecryptOlmCiphertext(senderKey, olmType, ciphertext)
 	if err != nil {
 		if err == DecryptionFailedWithMatchingSession {
-			mach.log.Warn("Found matching session yet decryption failed for sender %s with key %s", evt.Sender, senderKey)
-			mach.markDeviceForUnwedging(evt.Sender, senderKey)
+			mach.log.Warn("Found matching session yet decryption failed for sender %s with key %s", sender, senderKey)
+			mach.markDeviceForUnwedging(sender, senderKey)
 		}
 		return nil, errors.Wrap(err, "failed to decrypt olm event")
 	}
@@ -79,13 +84,13 @@ func (mach *OlmMachine) decryptOlmEvent(evt *event.Event, senderKey id.SenderKey
 		// New sessions can only be created if it's a prekey message, we can't decrypt the message
 		// if it isn't one at this point in time anymore, so return early.
 		if olmType != id.OlmMsgTypePreKey {
-			mach.markDeviceForUnwedging(evt.Sender, senderKey)
+			mach.markDeviceForUnwedging(sender, senderKey)
 			return nil, DecryptionFailedForNormalMessage
 		}
 
 		session, err := mach.createInboundSession(senderKey, ciphertext)
 		if err != nil {
-			mach.markDeviceForUnwedging(evt.Sender, senderKey)
+			mach.markDeviceForUnwedging(sender, senderKey)
 			return nil, errors.Wrap(err, "failed to create new session from prekey message")
 		}
 
@@ -100,7 +105,7 @@ func (mach *OlmMachine) decryptOlmEvent(evt *event.Event, senderKey id.SenderKey
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to parse olm payload")
 	}
-	if evt.Sender != olmEvt.Sender {
+	if sender != olmEvt.Sender {
 		return nil, SenderMismatch
 	} else if mach.client.UserID != olmEvt.Recipient {
 		return nil, RecipientMismatch
@@ -113,13 +118,12 @@ func (mach *OlmMachine) decryptOlmEvent(evt *event.Event, senderKey id.SenderKey
 		return nil, errors.Wrap(err, "failed to parse content of olm payload event")
 	}
 
-	olmEvt.Source = evt
 	olmEvt.SenderKey = senderKey
 
 	return &olmEvt, nil
 }
 
-func (mach *OlmMachine) tryDecryptOlmEvent(senderKey id.SenderKey, olmType id.OlmMsgType, ciphertext string) ([]byte, error) {
+func (mach *OlmMachine) tryDecryptOlmCiphertext(senderKey id.SenderKey, olmType id.OlmMsgType, ciphertext string) ([]byte, error) {
 	sessions, err := mach.store.GetSessions(senderKey)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to get session for %s", senderKey)

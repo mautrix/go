@@ -14,6 +14,8 @@ import (
 	"maunium.net/go/mautrix/event"
 )
 
+// EventContent represents the content of a m.push_rules account data event.
+// https://matrix.org/docs/spec/client_server/r0.6.0#m-push-rules
 type EventContent struct {
 	Ruleset *PushRuleset `json:"global"`
 }

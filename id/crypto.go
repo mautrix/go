@@ -30,9 +30,9 @@ const (
 type KeyAlgorithm string
 
 const (
-	KeyAlgorithmCurve25519       = "curve25519"
-	KeyAlgorithmEd25519          = "ed25519"
-	KeyAlgorithmSignedCurve25519 = "signed_curve25519"
+	KeyAlgorithmCurve25519       KeyAlgorithm = "curve25519"
+	KeyAlgorithmEd25519          KeyAlgorithm = "ed25519"
+	KeyAlgorithmSignedCurve25519 KeyAlgorithm = "signed_curve25519"
 )
 
 // A SessionID is an arbitrary string that identifies an Olm or Megolm session.

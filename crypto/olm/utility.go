@@ -107,8 +107,11 @@ var gjsonEscaper = strings.NewReplacer(
 
 func gjsonPath(path ...string) string {
 	var result strings.Builder
-	for _, part := range path {
+	for i, part := range path {
 		_, _ = gjsonEscaper.WriteString(&result, part)
+		if i < len(path) - 1 {
+			result.WriteRune('.')
+		}
 	}
 	return result.String()
 }
@@ -127,6 +130,10 @@ func (u *Utility) VerifySignatureJSON(obj interface{}, userID id.UserID, deviceI
 		return false, SignatureNotFound
 	}
 	objJSON, err = sjson.DeleteBytes(objJSON, "unsigned")
+	if err != nil {
+		return false, err
+	}
+	objJSON, err = sjson.DeleteBytes(objJSON, "signatures")
 	if err != nil {
 		return false, err
 	}

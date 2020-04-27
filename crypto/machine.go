@@ -57,7 +57,11 @@ func (mach *OlmMachine) SaveAccount() {
 	}
 }
 
-func (mach *OlmMachine) ProcessSyncResponse(resp *mautrix.RespSync) {
+func (mach *OlmMachine) ProcessSyncResponse(resp *mautrix.RespSync, since string) {
+	if len(resp.DeviceLists.Changed) > 0 {
+		mach.FetchKeys(resp.DeviceLists.Changed, since)
+	}
+
 	for _, evt := range resp.ToDevice.Events {
 		mach.log.Trace("Got to-device event %s from %s", evt.Type.Type, evt.Sender)
 		evt.Type.Class = event.ToDeviceEventType
@@ -82,7 +86,7 @@ func (mach *OlmMachine) ProcessSyncResponse(resp *mautrix.RespSync) {
 func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 	switch evt.Content.Parsed.(type) {
 	case *event.EncryptedEventContent:
-		decryptedEvt, err := mach.DecryptOlmEvent(evt)
+		decryptedEvt, err := mach.decryptOlmEvent(evt)
 		if err != nil {
 			mach.log.Error("Failed to decrypt to-device event: %v", err)
 			return

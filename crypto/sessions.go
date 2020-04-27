@@ -7,6 +7,7 @@
 package crypto
 
 import (
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -21,14 +22,33 @@ var (
 	SessionExpired   = errors.New("session has expired")
 )
 
-type UserDevice struct {
-	UserID   id.UserID
-	DeviceID id.DeviceID
+// OlmSessionList is a list of OlmSessions. It implements sort.Interface in a way that sorts items
+// in reverse alphabetic order, which means the newest session is first.
+type OlmSessionList []*OlmSession
+
+func (o OlmSessionList) Len() int {
+	return len(o)
+}
+
+func (o OlmSessionList) Less(i, j int) bool {
+	return strings.Compare(string(o[i].ID()), string(o[j].ID())) > 0
+}
+
+func (o OlmSessionList) Swap(i, j int) {
+	o[i], o[j] = o[j], o[i]
 }
 
 type OlmSession struct {
 	olm.Session
 	ExpirationMixin
+	id id.SessionID
+}
+
+func (session *OlmSession) ID() id.SessionID {
+	if session.id == "" {
+		session.id = session.Session.ID()
+	}
+	return session.id
 }
 
 func wrapSession(session *olm.Session) *OlmSession {
@@ -53,7 +73,7 @@ func (account *OlmAccount) NewInboundSessionFrom(senderKey id.Curve25519, cipher
 	return wrapSession(session), nil
 }
 
-func (session *OlmSession) Encrypt(plaintext string) (id.OlmMsgType, string) {
+func (session *OlmSession) Encrypt(plaintext []byte) (id.OlmMsgType, []byte) {
 	session.UseTime = time.Now()
 	return session.Session.Encrypt(plaintext)
 }
@@ -87,6 +107,19 @@ func NewInboundGroupSession(senderKey id.SenderKey, signingKey id.Ed25519, roomI
 	}, nil
 }
 
+type OGSState int
+
+const (
+	OGSNotShared OGSState = iota
+	OGSAlreadyShared
+	OGSIgnored
+)
+
+type UserDevice struct {
+	UserID   id.UserID
+	DeviceID id.DeviceID
+}
+
 type OutboundGroupSession struct {
 	olm.OutboundGroupSession
 
@@ -94,9 +127,25 @@ type OutboundGroupSession struct {
 	MaxMessages  int
 	MessageCount int
 
-	UsersSharedWith []UserDevice
-	UsersIgnored    []UserDevice
-	Shared          bool
+	Users  map[UserDevice]OGSState
+	Shared bool
+}
+
+func NewOutboundGroupSession() *OutboundGroupSession {
+	return &OutboundGroupSession{
+		OutboundGroupSession: *olm.NewOutboundGroupSession(),
+		ExpirationMixin: ExpirationMixin{
+			TimeMixin: TimeMixin{
+				CreationTime: time.Now(),
+				UseTime:      time.Now(),
+			},
+			MaxAge: 7 * 24 * time.Hour,
+		},
+		// TODO take MaxMessages and MaxAge from the m.room.create event
+		MaxMessages: 100,
+		Shared:      false,
+		Users:       make(map[UserDevice]OGSState),
+	}
 }
 
 func (ogs *OutboundGroupSession) Expired() bool {

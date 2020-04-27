@@ -9,22 +9,50 @@ package crypto
 import (
 	"encoding/gob"
 	"os"
+	"sort"
 	"sync"
 
 	"maunium.net/go/mautrix/id"
 )
 
+type TrustState int
+
+const (
+	TrustStateUnset TrustState = iota
+	TrustStateVerified
+	TrustStateBlacklisted
+	TrustStateIgnored
+)
+
+type DeviceIdentity struct {
+	UserID      id.UserID
+	DeviceID    id.DeviceID
+	IdentityKey id.Curve25519
+	SigningKey  id.Ed25519
+
+	Trust   TrustState
+	Deleted bool
+	Name    string
+}
+
 type Store interface {
 	PutAccount(*OlmAccount) error
 	GetAccount() (*OlmAccount, error)
 
-	GetSessions(id.SenderKey) ([]*OlmSession, error)
+	GetSessions(id.SenderKey) (OlmSessionList, error)
+	GetLatestSession(id.SenderKey) (*OlmSession, error)
 	AddSession(id.SenderKey, *OlmSession) error
 
 	PutGroupSession(id.RoomID, id.SenderKey, id.SessionID, *InboundGroupSession) error
 	GetGroupSession(id.RoomID, id.SenderKey, id.SessionID) (*InboundGroupSession, error)
 
+	PutOutboundGroupSession(id.RoomID, *OutboundGroupSession) error
+	GetOutboundGroupSession(id.RoomID) (*OutboundGroupSession, error)
+
 	ValidateMessageIndex(senderKey id.SenderKey, sessionID id.SessionID, eventID id.EventID, index uint, timestamp int64) bool
+
+	GetDevices(id.UserID) (map[id.DeviceID]*DeviceIdentity, error)
+	PutDevices(id.UserID, map[id.DeviceID]*DeviceIdentity) error
 }
 
 type messageIndexKey struct {
@@ -39,21 +67,27 @@ type messageIndexValue struct {
 }
 
 type GobStore struct {
-	lock sync.Mutex
+	lock sync.RWMutex
 	path string
 
-	Account        *OlmAccount
-	Sessions       map[id.SenderKey][]*OlmSession
-	GroupSessions  map[id.RoomID]map[id.SenderKey]map[id.SessionID]*InboundGroupSession
-	MessageIndices map[messageIndexKey]messageIndexValue
+	Account          *OlmAccount
+	Sessions         map[id.SenderKey]OlmSessionList
+	GroupSessions    map[id.RoomID]map[id.SenderKey]map[id.SessionID]*InboundGroupSession
+	OutGroupSessions map[id.RoomID]*OutboundGroupSession
+	MessageIndices   map[messageIndexKey]messageIndexValue
+	Devices          map[id.UserID]map[id.DeviceID]*DeviceIdentity
 }
+
+var _ Store = &GobStore{}
 
 func NewGobStore(path string) (*GobStore, error) {
 	gs := &GobStore{
-		path:           path,
-		Sessions:       make(map[id.SenderKey][]*OlmSession),
-		GroupSessions:  make(map[id.RoomID]map[id.SenderKey]map[id.SessionID]*InboundGroupSession),
-		MessageIndices: make(map[messageIndexKey]messageIndexValue),
+		path:             path,
+		Sessions:         make(map[id.SenderKey]OlmSessionList),
+		GroupSessions:    make(map[id.RoomID]map[id.SenderKey]map[id.SessionID]*InboundGroupSession),
+		OutGroupSessions: make(map[id.RoomID]*OutboundGroupSession),
+		MessageIndices:   make(map[messageIndexKey]messageIndexValue),
+		Devices:          make(map[id.UserID]map[id.DeviceID]*DeviceIdentity),
 	}
 	return gs, gs.load()
 }
@@ -93,7 +127,7 @@ func (gs *GobStore) PutAccount(account *OlmAccount) error {
 	return err
 }
 
-func (gs *GobStore) GetSessions(senderKey id.SenderKey) ([]*OlmSession, error) {
+func (gs *GobStore) GetSessions(senderKey id.SenderKey) (OlmSessionList, error) {
 	gs.lock.Lock()
 	sessions, ok := gs.Sessions[senderKey]
 	if !ok {
@@ -108,9 +142,20 @@ func (gs *GobStore) AddSession(senderKey id.SenderKey, session *OlmSession) erro
 	gs.lock.Lock()
 	sessions, _ := gs.Sessions[senderKey]
 	gs.Sessions[senderKey] = append(sessions, session)
+	sort.Sort(gs.Sessions[senderKey])
 	err := gs.save()
 	gs.lock.Unlock()
 	return err
+}
+
+func (gs *GobStore) GetLatestSession(senderKey id.SenderKey) (*OlmSession, error) {
+	gs.lock.Lock()
+	sessions, ok := gs.Sessions[senderKey]
+	gs.lock.Unlock()
+	if !ok || len(sessions) == 0 {
+		return nil, nil
+	}
+	return sessions[0], nil
 }
 
 func (gs *GobStore) getGroupSessions(roomID id.RoomID, senderKey id.SenderKey) map[id.SessionID]*InboundGroupSession {
@@ -146,6 +191,24 @@ func (gs *GobStore) GetGroupSession(roomID id.RoomID, senderKey id.SenderKey, se
 	return session, nil
 }
 
+func (gs *GobStore) PutOutboundGroupSession(roomID id.RoomID, session *OutboundGroupSession) error {
+	gs.lock.Lock()
+	gs.OutGroupSessions[roomID] = session
+	err := gs.save()
+	gs.lock.Unlock()
+	return err
+}
+
+func (gs *GobStore) GetOutboundGroupSession(roomID id.RoomID) (*OutboundGroupSession, error) {
+	gs.lock.RLock()
+	session, ok := gs.OutGroupSessions[roomID]
+	gs.lock.RUnlock()
+	if !ok {
+		return nil, nil
+	}
+	return session, nil
+}
+
 func (gs *GobStore) ValidateMessageIndex(senderKey id.SenderKey, sessionID id.SessionID, eventID id.EventID, index uint, timestamp int64) bool {
 	gs.lock.Lock()
 	defer gs.lock.Unlock()
@@ -167,4 +230,22 @@ func (gs *GobStore) ValidateMessageIndex(senderKey id.SenderKey, sessionID id.Se
 		return false
 	}
 	return true
+}
+
+func (gs *GobStore) GetDevices(userID id.UserID) (map[id.DeviceID]*DeviceIdentity, error) {
+	gs.lock.RLock()
+	devices, ok := gs.Devices[userID]
+	if !ok {
+		devices = make(map[id.DeviceID]*DeviceIdentity)
+	}
+	gs.lock.RUnlock()
+	return devices, nil
+}
+
+func (gs *GobStore) PutDevices(userID id.UserID, devices map[id.DeviceID]*DeviceIdentity) error {
+	gs.lock.Lock()
+	gs.Devices[userID] = devices
+	err := gs.save()
+	gs.lock.Unlock()
+	return err
 }

@@ -173,7 +173,7 @@ func (s *Session) MarshalJSON() ([]byte, error) {
 }
 
 func (s *Session) UnmarshalJSON(data []byte) error {
-	if data[0] != '"' || data[len(data)-1] != '"' {
+	if len(data) == 0 || len(data) == 0 || data[0] != '"' || data[len(data)-1] != '"' {
 		return InputNotJSONString
 	}
 	if s == nil {
@@ -275,9 +275,9 @@ func (s *Session) EncryptMsgType() id.OlmMsgType {
 
 // Encrypt encrypts a message using the Session.  Returns the encrypted message
 // as base64.
-func (s *Session) Encrypt(plaintext string) (id.OlmMsgType, string) {
+func (s *Session) Encrypt(plaintext []byte) (id.OlmMsgType, []byte) {
 	if len(plaintext) == 0 {
-		plaintext = " "
+		panic(EmptyInput)
 	}
 	// Make the slice be at least length 1
 	random := make([]byte, s.encryptRandomLen()+1)
@@ -289,7 +289,7 @@ func (s *Session) Encrypt(plaintext string) (id.OlmMsgType, string) {
 	message := make([]byte, s.encryptMsgLen(len(plaintext)))
 	r := C.olm_encrypt(
 		(*C.OlmSession)(s.int),
-		unsafe.Pointer(&([]byte(plaintext))[0]),
+		unsafe.Pointer(&plaintext[0]),
 		C.size_t(len(plaintext)),
 		unsafe.Pointer(&random[0]),
 		C.size_t(len(random)),
@@ -298,7 +298,7 @@ func (s *Session) Encrypt(plaintext string) (id.OlmMsgType, string) {
 	if r == errorVal() {
 		panic(s.lastError())
 	}
-	return messageType, string(message[:r])
+	return messageType, message[:r]
 }
 
 // Decrypt decrypts a message using the Session.  Returns the the plain-text on

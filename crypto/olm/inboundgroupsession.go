@@ -34,7 +34,7 @@ func InboundGroupSessionFromPickled(pickled, key []byte) (*InboundGroupSession, 
 }
 
 // NewInboundGroupSession creates a new inbound group session from a key
-// exported from OutboundGroupSession.SessionKey().  Returns error on failure.
+// exported from OutboundGroupSession.Key().  Returns error on failure.
 // If the sessionKey is not valid base64 the error will be
 // "OLM_INVALID_BASE64".  If the session_key is invalid the error will be
 // "OLM_BAD_SESSION_KEY".
@@ -173,7 +173,7 @@ func (s *InboundGroupSession) MarshalJSON() ([]byte, error) {
 }
 
 func (s *InboundGroupSession) UnmarshalJSON(data []byte) error {
-	if data[0] != '"' || data[len(data)-1] != '"' {
+	if len(data) == 0 || data[0] != '"' || data[len(data)-1] != '"' {
 		return InputNotJSONString
 	}
 	if s.int == nil {
