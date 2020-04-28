@@ -73,7 +73,7 @@ func (mach *OlmMachine) decryptOlmCiphertext(sender id.UserID, senderKey id.Send
 	plaintext, err := mach.tryDecryptOlmCiphertext(senderKey, olmType, ciphertext)
 	if err != nil {
 		if err == DecryptionFailedWithMatchingSession {
-			mach.log.Warn("Found matching session yet decryption failed for sender %s with key %s", sender, senderKey)
+			mach.Log.Warn("Found matching session yet decryption failed for sender %s with key %s", sender, senderKey)
 			mach.markDeviceForUnwedging(sender, senderKey)
 		}
 		return nil, errors.Wrap(err, "failed to decrypt olm event")
@@ -107,7 +107,7 @@ func (mach *OlmMachine) decryptOlmCiphertext(sender id.UserID, senderKey id.Send
 	}
 	if sender != olmEvt.Sender {
 		return nil, SenderMismatch
-	} else if mach.client.UserID != olmEvt.Recipient {
+	} else if mach.Client.UserID != olmEvt.Recipient {
 		return nil, RecipientMismatch
 	} else if ed25519, _ := mach.account.IdentityKeys(); ed25519 != olmEvt.RecipientKeys.Ed25519 {
 		return nil, RecipientKeyMismatch
@@ -124,7 +124,7 @@ func (mach *OlmMachine) decryptOlmCiphertext(sender id.UserID, senderKey id.Send
 }
 
 func (mach *OlmMachine) tryDecryptOlmCiphertext(senderKey id.SenderKey, olmType id.OlmMsgType, ciphertext string) ([]byte, error) {
-	sessions, err := mach.store.GetSessions(senderKey)
+	sessions, err := mach.Store.GetSessions(senderKey)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to get session for %s", senderKey)
 	}
@@ -155,9 +155,9 @@ func (mach *OlmMachine) createInboundSession(senderKey id.SenderKey, ciphertext 
 		return nil, err
 	}
 	mach.SaveAccount()
-	err = mach.store.AddSession(senderKey, session)
+	err = mach.Store.AddSession(senderKey, session)
 	if err != nil {
-		mach.log.Error("Failed to store created inbound session: %v", err)
+		mach.Log.Error("Failed to store created inbound session: %v", err)
 	}
 	return session, nil
 }

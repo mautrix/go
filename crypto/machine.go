@@ -22,23 +22,23 @@ type Logger interface {
 }
 
 type OlmMachine struct {
-	client *mautrix.Client
-	store  Store
+	Client *mautrix.Client
+	Store  Store
+	Log     Logger
 
 	account *OlmAccount
-	log     Logger
 }
 
 func NewOlmMachine(client *mautrix.Client, log Logger, store Store) *OlmMachine {
 	return &OlmMachine{
-		client: client,
-		log:    log,
-		store:  store,
+		Client: client,
+		Log:    log,
+		Store:  store,
 	}
 }
 
 func (mach *OlmMachine) Load() (err error) {
-	mach.account, err = mach.store.GetAccount()
+	mach.account, err = mach.Store.GetAccount()
 	if err != nil {
 		return
 	}
@@ -51,23 +51,23 @@ func (mach *OlmMachine) Load() (err error) {
 }
 
 func (mach *OlmMachine) SaveAccount() {
-	err := mach.store.PutAccount(mach.account)
+	err := mach.Store.PutAccount(mach.account)
 	if err != nil {
-		mach.log.Error("Failed to save account: %v", err)
+		mach.Log.Error("Failed to save account: %v", err)
 	}
 }
 
 func (mach *OlmMachine) ProcessSyncResponse(resp *mautrix.RespSync, since string) {
 	if len(resp.DeviceLists.Changed) > 0 {
-		mach.FetchKeys(resp.DeviceLists.Changed, since)
+		mach.fetchKeys(resp.DeviceLists.Changed, since)
 	}
 
 	for _, evt := range resp.ToDevice.Events {
-		mach.log.Trace("Got to-device event %s from %s", evt.Type.Type, evt.Sender)
+		mach.Log.Trace("Got to-device event %s from %s", evt.Type.Type, evt.Sender)
 		evt.Type.Class = event.ToDeviceEventType
 		err := evt.Content.ParseRaw(evt.Type)
 		if err != nil {
-			mach.log.Warn("Failed to parse to-device event of type %s: %v", evt.Type.Type, err)
+			mach.Log.Warn("Failed to parse to-device event of type %s: %v", evt.Type.Type, err)
 			continue
 		}
 		mach.HandleToDeviceEvent(evt)
@@ -75,10 +75,10 @@ func (mach *OlmMachine) ProcessSyncResponse(resp *mautrix.RespSync, since string
 
 	min := mach.account.MaxNumberOfOneTimeKeys() / 2
 	if resp.DeviceOneTimeKeysCount.SignedCurve25519 <= int(min) {
-		mach.log.Trace("Sync response said we have %d signed curve25519 keys left, sharing new ones...", resp.DeviceOneTimeKeysCount.SignedCurve25519)
+		mach.Log.Trace("Sync response said we have %d signed curve25519 keys left, sharing new ones...", resp.DeviceOneTimeKeysCount.SignedCurve25519)
 		err := mach.ShareKeys()
 		if err != nil {
-			mach.log.Error("Failed to share keys: %v", err)
+			mach.Log.Error("Failed to share keys: %v", err)
 		}
 	}
 }
@@ -88,7 +88,7 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 	case *event.EncryptedEventContent:
 		decryptedEvt, err := mach.decryptOlmEvent(evt)
 		if err != nil {
-			mach.log.Error("Failed to decrypt to-device event: %v", err)
+			mach.Log.Error("Failed to decrypt to-device event: %v", err)
 			return
 		}
 		switch content := decryptedEvt.Content.Parsed.(type) {
@@ -103,17 +103,17 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 func (mach *OlmMachine) createGroupSession(senderKey id.SenderKey, signingKey id.Ed25519, roomID id.RoomID, sessionID id.SessionID, sessionKey string) {
 	igs, err := NewInboundGroupSession(senderKey, signingKey, roomID, sessionKey)
 	if err != nil {
-		mach.log.Error("Failed to create inbound group session: %v", err)
+		mach.Log.Error("Failed to create inbound group session: %v", err)
 		return
 	} else if igs.ID() != sessionID {
-		mach.log.Warn("Mismatched session ID while creating inbound group session")
+		mach.Log.Warn("Mismatched session ID while creating inbound group session")
 		return
 	}
-	err = mach.store.PutGroupSession(roomID, senderKey, sessionID, igs)
+	err = mach.Store.PutGroupSession(roomID, senderKey, sessionID, igs)
 	if err != nil {
-		mach.log.Error("Failed to store new inbound group session: %v", err)
+		mach.Log.Error("Failed to store new inbound group session: %v", err)
 	}
-	mach.log.Trace("Created inbound group session %s/%s/%s", roomID, senderKey, sessionID)
+	mach.Log.Trace("Created inbound group session %s/%s/%s", roomID, senderKey, sessionID)
 }
 
 func (mach *OlmMachine) receiveRoomKey(evt *OlmEvent, content *event.RoomKeyEventContent) {
@@ -129,25 +129,25 @@ func (mach *OlmMachine) receiveRoomKey(evt *OlmEvent, content *event.RoomKeyEven
 func (mach *OlmMachine) ShareKeys() error {
 	var deviceKeys *mautrix.DeviceKeys
 	if !mach.account.Shared {
-		deviceKeys = mach.account.getInitialKeys(mach.client.UserID, mach.client.DeviceID)
-		mach.log.Trace("Going to upload initial account keys")
+		deviceKeys = mach.account.getInitialKeys(mach.Client.UserID, mach.Client.DeviceID)
+		mach.Log.Trace("Going to upload initial account keys")
 	}
-	oneTimeKeys := mach.account.getOneTimeKeys(mach.client.UserID, mach.client.DeviceID)
+	oneTimeKeys := mach.account.getOneTimeKeys(mach.Client.UserID, mach.Client.DeviceID)
 	if len(oneTimeKeys) == 0 && deviceKeys == nil {
-		mach.log.Trace("No one-time keys nor device keys got when trying to share keys")
+		mach.Log.Trace("No one-time keys nor device keys got when trying to share keys")
 		return nil
 	}
 	req := &mautrix.ReqUploadKeys{
 		DeviceKeys:  deviceKeys,
 		OneTimeKeys: oneTimeKeys,
 	}
-	mach.log.Trace("Uploading %d one-time keys:\n%s", len(oneTimeKeys))
-	_, err := mach.client.UploadKeys(req)
+	mach.Log.Trace("Uploading %d one-time keys", len(oneTimeKeys))
+	_, err := mach.Client.UploadKeys(req)
 	if err != nil {
 		return err
 	}
 	mach.account.Shared = true
 	mach.SaveAccount()
-	mach.log.Trace("Shared keys and saved account")
+	mach.Log.Trace("Shared keys and saved account")
 	return nil
 }

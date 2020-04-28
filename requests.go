@@ -118,22 +118,17 @@ type OneTimeKey struct {
 
 type serializableOTK OneTimeKey
 
-func (otk *OneTimeKey) UnmarshalJSON(data []byte) error {
-	err := json.Unmarshal(data, (*serializableOTK)(otk))
-	if err != nil {
-		var key id.Curve25519
-		err := json.Unmarshal(data, &key)
-		if err != nil {
-			return err
-		}
-		otk.Key = key
+func (otk *OneTimeKey) UnmarshalJSON(data []byte) (err error) {
+	if len(data) > 0 && data[0] == '"' && data[len(data)-1] == '"' {
+		err = json.Unmarshal(data, &otk.Key)
 		otk.Signatures = nil
 		otk.Unsigned = nil
 		otk.IsSigned = false
 	} else {
+		err = json.Unmarshal(data, (*serializableOTK)(otk))
 		otk.IsSigned = true
 	}
-	return nil
+	return err
 }
 
 func (otk *OneTimeKey) MarshalJSON() ([]byte, error) {

@@ -36,9 +36,15 @@ type DeviceIdentity struct {
 }
 
 type Store interface {
+	Flush() error
+
+	PutNextBatch(string)
+	GetNextBatch() string
+
 	PutAccount(*OlmAccount) error
 	GetAccount() (*OlmAccount, error)
 
+	HasSession(id.SenderKey) bool
 	GetSessions(id.SenderKey) (OlmSessionList, error)
 	GetLatestSession(id.SenderKey) (*OlmSession, error)
 	AddSession(id.SenderKey, *OlmSession) error
@@ -70,6 +76,7 @@ type GobStore struct {
 	lock sync.RWMutex
 	path string
 
+	NextBatch        string
 	Account          *OlmAccount
 	Sessions         map[id.SenderKey]OlmSessionList
 	GroupSessions    map[id.RoomID]map[id.SenderKey]map[id.SessionID]*InboundGroupSession
@@ -115,6 +122,21 @@ func (gs *GobStore) load() error {
 	return err
 }
 
+func (gs *GobStore) Flush() error {
+	gs.lock.Lock()
+	err := gs.save()
+	gs.lock.Unlock()
+	return err
+}
+
+func (gs *GobStore) PutNextBatch(nextBatch string) {
+	gs.NextBatch = nextBatch
+}
+
+func (gs *GobStore) GetNextBatch() string {
+	return gs.NextBatch
+}
+
 func (gs *GobStore) GetAccount() (*OlmAccount, error) {
 	return gs.Account, nil
 }
@@ -148,10 +170,17 @@ func (gs *GobStore) AddSession(senderKey id.SenderKey, session *OlmSession) erro
 	return err
 }
 
-func (gs *GobStore) GetLatestSession(senderKey id.SenderKey) (*OlmSession, error) {
-	gs.lock.Lock()
+func (gs *GobStore) HasSession(senderKey id.SenderKey) bool {
+	gs.lock.RLock()
 	sessions, ok := gs.Sessions[senderKey]
-	gs.lock.Unlock()
+	gs.lock.RUnlock()
+	return ok && len(sessions) > 0 && !sessions[0].Expired()
+}
+
+func (gs *GobStore) GetLatestSession(senderKey id.SenderKey) (*OlmSession, error) {
+	gs.lock.RLock()
+	sessions, ok := gs.Sessions[senderKey]
+	gs.lock.RUnlock()
 	if !ok || len(sessions) == 0 {
 		return nil, nil
 	}
@@ -236,7 +265,7 @@ func (gs *GobStore) GetDevices(userID id.UserID) (map[id.DeviceID]*DeviceIdentit
 	gs.lock.RLock()
 	devices, ok := gs.Devices[userID]
 	if !ok {
-		devices = make(map[id.DeviceID]*DeviceIdentity)
+		devices = nil
 	}
 	gs.lock.RUnlock()
 	return devices, nil

@@ -14,7 +14,7 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-func (mach *OlmMachine) FetchKeys(users []id.UserID, sinceToken string) {
+func (mach *OlmMachine) fetchKeys(users []id.UserID, sinceToken string) (data map[id.UserID]map[id.DeviceID]*DeviceIdentity) {
 	req := &mautrix.ReqQueryKeys{
 		DeviceKeys: mautrix.DeviceKeysRequest{},
 		Timeout:    10 * 1000,
@@ -23,45 +23,48 @@ func (mach *OlmMachine) FetchKeys(users []id.UserID, sinceToken string) {
 	for _, userID := range users {
 		req.DeviceKeys[userID] = mautrix.DeviceIDList{}
 	}
-	mach.log.Trace("Querying keys for %v", users)
-	resp, err := mach.client.QueryKeys(req)
+	mach.Log.Trace("Querying keys for %v", users)
+	resp, err := mach.Client.QueryKeys(req)
 	if err != nil {
-		mach.log.Warn("Failed to query keys: %v", err)
+		mach.Log.Warn("Failed to query keys: %v", err)
 		return
 	}
 	for server, err := range resp.Failures {
-		mach.log.Warn("Query keys failure for %s: %v", server, err)
+		mach.Log.Warn("Query keys failure for %s: %v", server, err)
 	}
-	mach.log.Trace("Query key result received with %d users", len(resp.DeviceKeys))
+	mach.Log.Trace("Query key result received with %d users", len(resp.DeviceKeys))
+	data = make(map[id.UserID]map[id.DeviceID]*DeviceIdentity)
 	for userID, devices := range resp.DeviceKeys {
 		delete(req.DeviceKeys, userID)
 
 		newDevices := make(map[id.DeviceID]*DeviceIdentity)
-		existingDevices, err := mach.store.GetDevices(userID)
+		existingDevices, err := mach.Store.GetDevices(userID)
 		if err != nil {
-			mach.log.Warn("Failed to get existing devices for %s: %v", userID, err)
+			mach.Log.Warn("Failed to get existing devices for %s: %v", userID, err)
 			existingDevices = make(map[id.DeviceID]*DeviceIdentity)
 		}
-		mach.log.Trace("Updating devices for %s, got %d devices, have %d in store", userID, len(devices), len(existingDevices))
+		mach.Log.Trace("Updating devices for %s, got %d devices, have %d in store", userID, len(devices), len(existingDevices))
 		for deviceID, deviceKeys := range devices {
 			existing := existingDevices[deviceID]
-			mach.log.Trace("Validating device %s of %s", deviceID, userID)
+			mach.Log.Trace("Validating device %s of %s", deviceID, userID)
 			newDevice, err := mach.validateDevice(userID, deviceID, deviceKeys, existing)
 			if err != nil {
-				mach.log.Error("Failed to validate device %s of %s: %v", deviceID, userID, err)
+				mach.Log.Error("Failed to validate device %s of %s: %v", deviceID, userID, err)
 			} else if newDevice != nil {
 				newDevices[deviceID] = newDevice
 			}
 		}
-		mach.log.Trace("Storing new device list for %s containing %d devices", userID, len(newDevices))
-		err = mach.store.PutDevices(userID, newDevices)
+		mach.Log.Trace("Storing new device list for %s containing %d devices", userID, len(newDevices))
+		err = mach.Store.PutDevices(userID, newDevices)
 		if err != nil {
-			mach.log.Warn("Failed to update device list for %s: %v", userID, err)
+			mach.Log.Warn("Failed to update device list for %s: %v", userID, err)
 		}
+		data[userID] = newDevices
 	}
 	for userID := range req.DeviceKeys {
-		mach.log.Warn("Didn't get any keys for user %s", userID)
+		mach.Log.Warn("Didn't get any keys for user %s", userID)
 	}
+	return data
 }
 
 var (

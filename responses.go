@@ -245,8 +245,8 @@ type RespQueryKeys struct {
 }
 
 type RespClaimKeys struct {
-	Failures    map[string]interface{}                      `json:"failures"`
-	OneTimeKeys map[id.UserID]map[id.DeviceKeyID]OneTimeKey `json:"one_time_keys"`
+	Failures    map[string]interface{}                                `json:"failures"`
+	OneTimeKeys map[id.UserID]map[id.DeviceID]map[id.KeyID]OneTimeKey `json:"one_time_keys"`
 }
 
 type RespKeyChanges struct {

@@ -8,6 +8,7 @@ package id
 
 import (
 	"fmt"
+	"strings"
 )
 
 // OlmMsgType is an Olm message type
@@ -38,16 +39,31 @@ const (
 // A SessionID is an arbitrary string that identifies an Olm or Megolm session.
 type SessionID string
 
+func (sessionID SessionID) String() string {
+	return string(sessionID)
+}
+
 // Ed25519 is the base64 representation of an Ed25519 public key
 type Ed25519 string
 
+func (ed25519 Ed25519) String() string {
+	return string(ed25519)
+}
+
 // Curve25519 is the base64 representation of an Curve25519 public key
 type Curve25519 string
-
 type SenderKey = Curve25519
+
+func (curve25519 Curve25519) String() string {
+	return string(curve25519)
+}
 
 // A DeviceID is an arbitrary string that references a specific device.
 type DeviceID string
+
+func (deviceID DeviceID) String() string {
+	return string(deviceID)
+}
 
 // A DeviceKeyID is a string formatted as <algorithm>:<device_id> that is used as the key in deviceid-key mappings.
 type DeviceKeyID string
@@ -56,29 +72,33 @@ func NewDeviceKeyID(algorithm KeyAlgorithm, deviceID DeviceID) DeviceKeyID {
 	return DeviceKeyID(fmt.Sprintf("%s:%s", algorithm, deviceID))
 }
 
-// A KeyID a string formatted as <algorithm>:<key_id> that is used as the key in one-time-key mappings.
+func (deviceKeyID DeviceKeyID) String() string {
+	return string(deviceKeyID)
+}
+
+func (deviceKeyID DeviceKeyID) Parse() (Algorithm, DeviceID) {
+	index := strings.IndexRune(string(deviceKeyID), ':')
+	if index < 0 || len(deviceKeyID) <= index+1 {
+		return "", ""
+	}
+	return Algorithm(deviceKeyID[:index]), DeviceID(deviceKeyID[index+1:])
+}
+
+// A KeyID a string formatted as <keyalgorithm>:<key_id> that is used as the key in one-time-key mappings.
 type KeyID string
 
 func NewKeyID(algorithm KeyAlgorithm, keyID string) KeyID {
 	return KeyID(fmt.Sprintf("%s:%s", algorithm, keyID))
 }
 
-func (deviceID DeviceID) String() string {
-	return string(deviceID)
-}
-
-func (keyID DeviceKeyID) String() string {
+func (keyID KeyID) String() string {
 	return string(keyID)
 }
 
-func (sessionID SessionID) String() string {
-	return string(sessionID)
-}
-
-func (ed25519 Ed25519) String() string {
-	return string(ed25519)
-}
-
-func (curve25519 Curve25519) String() string {
-	return string(curve25519)
+func (keyID KeyID) Parse() (KeyAlgorithm, string) {
+	index := strings.IndexRune(string(keyID), ':')
+	if index < 0 || len(keyID) <= index+1 {
+		return "", ""
+	}
+	return KeyAlgorithm(keyID[:index]), string(keyID[index+1:])
 }

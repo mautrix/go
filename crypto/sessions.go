@@ -13,6 +13,7 @@ import (
 	"github.com/pkg/errors"
 
 	"maunium.net/go/mautrix/crypto/olm"
+	"maunium.net/go/mautrix/event"
 
 	"maunium.net/go/mautrix/id"
 )
@@ -59,7 +60,6 @@ func wrapSession(session *olm.Session) *OlmSession {
 				CreationTime: time.Now(),
 				UseTime:      time.Now(),
 			},
-			MaxAge: 7 * 24 * time.Hour,
 		},
 	}
 }
@@ -91,6 +91,8 @@ type InboundGroupSession struct {
 	RoomID     id.RoomID
 
 	ForwardingChains []string
+
+	id id.SessionID
 }
 
 func NewInboundGroupSession(senderKey id.SenderKey, signingKey id.Ed25519, roomID id.RoomID, sessionKey string) (*InboundGroupSession, error) {
@@ -105,6 +107,13 @@ func NewInboundGroupSession(senderKey id.SenderKey, signingKey id.Ed25519, roomI
 		RoomID:              roomID,
 		ForwardingChains:    nil,
 	}, nil
+}
+
+func (igs *InboundGroupSession) ID() id.SessionID {
+	if igs.id == "" {
+		igs.id = igs.InboundGroupSession.ID()
+	}
+	return igs.id
 }
 
 type OGSState int
@@ -129,9 +138,13 @@ type OutboundGroupSession struct {
 
 	Users  map[UserDevice]OGSState
 	Shared bool
+	RoomID id.RoomID
+
+	id      id.SessionID
+	content *event.RoomKeyEventContent
 }
 
-func NewOutboundGroupSession() *OutboundGroupSession {
+func NewOutboundGroupSession(roomID id.RoomID) *OutboundGroupSession {
 	return &OutboundGroupSession{
 		OutboundGroupSession: *olm.NewOutboundGroupSession(),
 		ExpirationMixin: ExpirationMixin{
@@ -145,7 +158,27 @@ func NewOutboundGroupSession() *OutboundGroupSession {
 		MaxMessages: 100,
 		Shared:      false,
 		Users:       make(map[UserDevice]OGSState),
+		RoomID: roomID,
 	}
+}
+
+func (ogs *OutboundGroupSession) ShareContent() event.Content {
+	if ogs.content == nil {
+		ogs.content = &event.RoomKeyEventContent{
+			Algorithm:  id.AlgorithmMegolmV1,
+			RoomID:     ogs.RoomID,
+			SessionID:  ogs.ID(),
+			SessionKey: ogs.Key(),
+		}
+	}
+	return event.Content{Parsed: ogs.content}
+}
+
+func (ogs *OutboundGroupSession) ID() id.SessionID {
+	if ogs.id == "" {
+		ogs.id = ogs.OutboundGroupSession.ID()
+	}
+	return ogs.id
 }
 
 func (ogs *OutboundGroupSession) Expired() bool {
@@ -172,5 +205,8 @@ type ExpirationMixin struct {
 }
 
 func (exp *ExpirationMixin) Expired() bool {
+	if exp.MaxAge == 0 {
+		return false
+	}
 	return exp.CreationTime.Add(exp.MaxAge).Before(time.Now())
 }
