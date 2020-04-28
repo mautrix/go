@@ -44,7 +44,7 @@ func (mach *OlmMachine) Load() (err error) {
 	}
 	if mach.account == nil {
 		mach.account = &OlmAccount{
-			Account: *olm.NewAccount(),
+			Internal: *olm.NewAccount(),
 		}
 	}
 	return nil
@@ -73,7 +73,7 @@ func (mach *OlmMachine) ProcessSyncResponse(resp *mautrix.RespSync, since string
 		mach.HandleToDeviceEvent(evt)
 	}
 
-	min := mach.account.MaxNumberOfOneTimeKeys() / 2
+	min := mach.account.Internal.MaxNumberOfOneTimeKeys() / 2
 	if resp.DeviceOneTimeKeysCount.SignedCurve25519 <= int(min) {
 		mach.Log.Trace("Sync response said we have %d signed curve25519 keys left, sharing new ones...", resp.DeviceOneTimeKeysCount.SignedCurve25519)
 		err := mach.ShareKeys()

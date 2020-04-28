@@ -40,21 +40,21 @@ func (o OlmSessionList) Swap(i, j int) {
 }
 
 type OlmSession struct {
-	olm.Session
+	Internal olm.Session
 	ExpirationMixin
 	id id.SessionID
 }
 
 func (session *OlmSession) ID() id.SessionID {
 	if session.id == "" {
-		session.id = session.Session.ID()
+		session.id = session.Internal.ID()
 	}
 	return session.id
 }
 
 func wrapSession(session *olm.Session) *OlmSession {
 	return &OlmSession{
-		Session: *session,
+		Internal: *session,
 		ExpirationMixin: ExpirationMixin{
 			TimeMixin: TimeMixin{
 				CreationTime: time.Now(),
@@ -65,26 +65,26 @@ func wrapSession(session *olm.Session) *OlmSession {
 }
 
 func (account *OlmAccount) NewInboundSessionFrom(senderKey id.Curve25519, ciphertext string) (*OlmSession, error) {
-	session, err := account.Account.NewInboundSessionFrom(senderKey, ciphertext)
+	session, err := account.Internal.NewInboundSessionFrom(senderKey, ciphertext)
 	if err != nil {
 		return nil, err
 	}
-	_ = account.RemoveOneTimeKeys(session)
+	_ = account.Internal.RemoveOneTimeKeys(session)
 	return wrapSession(session), nil
 }
 
 func (session *OlmSession) Encrypt(plaintext []byte) (id.OlmMsgType, []byte) {
 	session.UseTime = time.Now()
-	return session.Session.Encrypt(plaintext)
+	return session.Internal.Encrypt(plaintext)
 }
 
 func (session *OlmSession) Decrypt(ciphertext string, msgType id.OlmMsgType) ([]byte, error) {
 	session.UseTime = time.Now()
-	return session.Session.Decrypt(ciphertext, msgType)
+	return session.Internal.Decrypt(ciphertext, msgType)
 }
 
 type InboundGroupSession struct {
-	olm.InboundGroupSession
+	Internal olm.InboundGroupSession
 
 	SigningKey id.Ed25519
 	SenderKey  id.Curve25519
@@ -101,17 +101,17 @@ func NewInboundGroupSession(senderKey id.SenderKey, signingKey id.Ed25519, roomI
 		return nil, err
 	}
 	return &InboundGroupSession{
-		InboundGroupSession: *igs,
-		SigningKey:          signingKey,
-		SenderKey:           senderKey,
-		RoomID:              roomID,
-		ForwardingChains:    nil,
+		Internal:         *igs,
+		SigningKey:       signingKey,
+		SenderKey:        senderKey,
+		RoomID:           roomID,
+		ForwardingChains: nil,
 	}, nil
 }
 
 func (igs *InboundGroupSession) ID() id.SessionID {
 	if igs.id == "" {
-		igs.id = igs.InboundGroupSession.ID()
+		igs.id = igs.Internal.ID()
 	}
 	return igs.id
 }
@@ -130,15 +130,15 @@ type UserDevice struct {
 }
 
 type OutboundGroupSession struct {
-	olm.OutboundGroupSession
+	Internal olm.OutboundGroupSession
 
 	ExpirationMixin
 	MaxMessages  int
 	MessageCount int
 
 	Users  map[UserDevice]OGSState
-	Shared bool
 	RoomID id.RoomID
+	Shared bool
 
 	id      id.SessionID
 	content *event.RoomKeyEventContent
@@ -146,7 +146,7 @@ type OutboundGroupSession struct {
 
 func NewOutboundGroupSession(roomID id.RoomID) *OutboundGroupSession {
 	return &OutboundGroupSession{
-		OutboundGroupSession: *olm.NewOutboundGroupSession(),
+		Internal: *olm.NewOutboundGroupSession(),
 		ExpirationMixin: ExpirationMixin{
 			TimeMixin: TimeMixin{
 				CreationTime: time.Now(),
@@ -158,7 +158,7 @@ func NewOutboundGroupSession(roomID id.RoomID) *OutboundGroupSession {
 		MaxMessages: 100,
 		Shared:      false,
 		Users:       make(map[UserDevice]OGSState),
-		RoomID: roomID,
+		RoomID:      roomID,
 	}
 }
 
@@ -168,7 +168,7 @@ func (ogs *OutboundGroupSession) ShareContent() event.Content {
 			Algorithm:  id.AlgorithmMegolmV1,
 			RoomID:     ogs.RoomID,
 			SessionID:  ogs.ID(),
-			SessionKey: ogs.Key(),
+			SessionKey: ogs.Internal.Key(),
 		}
 	}
 	return event.Content{Parsed: ogs.content}
@@ -176,7 +176,7 @@ func (ogs *OutboundGroupSession) ShareContent() event.Content {
 
 func (ogs *OutboundGroupSession) ID() id.SessionID {
 	if ogs.id == "" {
-		ogs.id = ogs.OutboundGroupSession.ID()
+		ogs.id = ogs.Internal.ID()
 	}
 	return ogs.id
 }
@@ -191,7 +191,7 @@ func (ogs *OutboundGroupSession) Encrypt(plaintext []byte) ([]byte, error) {
 	} else if ogs.Expired() {
 		return nil, SessionExpired
 	}
-	return ogs.OutboundGroupSession.Encrypt(plaintext), nil
+	return ogs.Internal.Encrypt(plaintext), nil
 }
 
 type TimeMixin struct {

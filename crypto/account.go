@@ -13,12 +13,12 @@ import (
 )
 
 type OlmAccount struct {
-	olm.Account
-	Shared bool
+	Internal olm.Account
+	Shared   bool
 }
 
 func (account *OlmAccount) getInitialKeys(userID id.UserID, deviceID id.DeviceID) *mautrix.DeviceKeys {
-	ed, curve := account.IdentityKeys()
+	ed, curve := account.Internal.IdentityKeys()
 	deviceKeys := &mautrix.DeviceKeys{
 		UserID:     userID,
 		DeviceID:   deviceID,
@@ -29,7 +29,7 @@ func (account *OlmAccount) getInitialKeys(userID id.UserID, deviceID id.DeviceID
 		},
 	}
 
-	signature, err := account.SignJSON(deviceKeys)
+	signature, err := account.Internal.SignJSON(deviceKeys)
 	if err != nil {
 		panic(err)
 	}
@@ -43,13 +43,13 @@ func (account *OlmAccount) getInitialKeys(userID id.UserID, deviceID id.DeviceID
 }
 
 func (account *OlmAccount) getOneTimeKeys(userID id.UserID, deviceID id.DeviceID) map[id.KeyID]mautrix.OneTimeKey {
-	account.GenOneTimeKeys(account.MaxNumberOfOneTimeKeys() / 3 * 2)
+	account.Internal.GenOneTimeKeys(account.Internal.MaxNumberOfOneTimeKeys() / 3 * 2)
 	oneTimeKeys := make(map[id.KeyID]mautrix.OneTimeKey)
 	// TODO do we need unsigned curve25519 one-time keys at all?
 	//      this just signs all of them
-	for keyID, key := range account.OneTimeKeys() {
+	for keyID, key := range account.Internal.OneTimeKeys() {
 		key := mautrix.OneTimeKey{Key: key}
-		signature, _ := account.SignJSON(key)
+		signature, _ := account.Internal.SignJSON(key)
 		key.Signatures = mautrix.Signatures{
 			userID: {
 				id.NewDeviceKeyID(id.KeyAlgorithmEd25519, deviceID): signature,
@@ -58,6 +58,6 @@ func (account *OlmAccount) getOneTimeKeys(userID id.UserID, deviceID id.DeviceID
 		key.IsSigned = true
 		oneTimeKeys[id.NewKeyID(id.KeyAlgorithmSignedCurve25519, keyID)] = key
 	}
-	account.MarkKeysAsPublished()
+	account.Internal.MarkKeysAsPublished()
 	return oneTimeKeys
 }

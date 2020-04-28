@@ -42,7 +42,7 @@ func (mach *OlmMachine) DecryptMegolmEvent(evt *event.Event) (*event.Event, erro
 		mach.checkIfWedged(evt)
 		return nil, NoSessionFound
 	}
-	plaintext, messageIndex, err := sess.Decrypt(content.MegolmCiphertext)
+	plaintext, messageIndex, err := sess.Internal.Decrypt(content.MegolmCiphertext)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to decrypt megolm event")
 	} else if !mach.Store.ValidateMessageIndex(content.SenderKey, content.SessionID, evt.ID, messageIndex, evt.Timestamp) {

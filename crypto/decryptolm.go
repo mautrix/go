@@ -48,7 +48,7 @@ func (mach *OlmMachine) decryptOlmEvent(evt *event.Event) (*OlmEvent, error) {
 	} else if content.Algorithm != id.AlgorithmOlmV1 {
 		return nil, UnsupportedAlgorithm
 	}
-	_, ownKey := mach.account.IdentityKeys()
+	_, ownKey := mach.account.Internal.IdentityKeys()
 	ownContent, ok := content.OlmCiphertext[ownKey]
 	if !ok {
 		return nil, NotEncryptedForMe
@@ -109,7 +109,7 @@ func (mach *OlmMachine) decryptOlmCiphertext(sender id.UserID, senderKey id.Send
 		return nil, SenderMismatch
 	} else if mach.Client.UserID != olmEvt.Recipient {
 		return nil, RecipientMismatch
-	} else if ed25519, _ := mach.account.IdentityKeys(); ed25519 != olmEvt.RecipientKeys.Ed25519 {
+	} else if ed25519, _ := mach.account.Internal.IdentityKeys(); ed25519 != olmEvt.RecipientKeys.Ed25519 {
 		return nil, RecipientKeyMismatch
 	}
 
@@ -130,7 +130,7 @@ func (mach *OlmMachine) tryDecryptOlmCiphertext(senderKey id.SenderKey, olmType 
 	}
 	for _, session := range sessions {
 		if olmType == id.OlmMsgTypePreKey {
-			matches, err := session.MatchesInboundSession(ciphertext)
+			matches, err := session.Internal.MatchesInboundSession(ciphertext)
 			if err != nil {
 				return nil, errors.Wrap(err, "failed to check if ciphertext matches inbound session")
 			} else if !matches {

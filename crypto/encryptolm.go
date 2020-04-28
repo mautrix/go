@@ -18,7 +18,7 @@ import (
 )
 
 func (mach *OlmMachine) encryptOlmEvent(session *OlmSession, recipient *DeviceIdentity, evtType event.Type, content event.Content) *event.EncryptedEventContent {
-	selfSigningKey, selfIdentityKey := mach.account.IdentityKeys()
+	selfSigningKey, selfIdentityKey := mach.account.Internal.IdentityKeys()
 	evt := &OlmEvent{
 		Sender:        mach.Client.UserID,
 		SenderDevice:  mach.Client.DeviceID,
@@ -68,8 +68,6 @@ func (mach *OlmMachine) createOutboundSessions(input map[id.UserID]map[id.Device
 	if err != nil {
 		return errors.Wrap(err, "failed to claim keys")
 	}
-	dat, _ := json.MarshalIndent(resp, "", "  ")
-	mach.Log.Debug("%s", string(dat))
 	for userID, user := range resp.OneTimeKeys {
 		for deviceID, oneTimeKeys := range user {
 			var oneTimeKey mautrix.OneTimeKey
@@ -87,7 +85,7 @@ func (mach *OlmMachine) createOutboundSessions(input map[id.UserID]map[id.Device
 				mach.Log.Error("Failed to verify signature for %s of %s: %v", deviceID, userID, err)
 			} else if !ok {
 				mach.Log.Warn("Invalid signature for %s of %s", deviceID, userID)
-			} else if sess, err := mach.account.NewOutboundSession(identity.IdentityKey, oneTimeKey.Key); err != nil {
+			} else if sess, err := mach.account.Internal.NewOutboundSession(identity.IdentityKey, oneTimeKey.Key); err != nil {
 				mach.Log.Error("Failed to create outbound session for %s of %s: %v", deviceID, userID, err)
 			} else {
 				wrapped := wrapSession(sess)

@@ -126,6 +126,7 @@ func init() {
 	gob.Register(&MemberEventContent{})
 	gob.Register(&PowerLevelsEventContent{})
 	gob.Register(&CanonicalAliasEventContent{})
+	gob.Register(&EncryptionEventContent{})
 	gob.Register(&RoomNameEventContent{})
 	gob.Register(&RoomAvatarEventContent{})
 	gob.Register(&TopicEventContent{})

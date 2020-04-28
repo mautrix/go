@@ -22,6 +22,7 @@ var (
 )
 
 func (mach *OlmMachine) EncryptMegolmEvent(roomID id.RoomID, evtType event.Type, content event.Content) (*event.EncryptedEventContent, error) {
+	mach.Log.Trace("Encrypting event of type %s for %s", evtType.Type, roomID)
 	session, err := mach.Store.GetOutboundGroupSession(roomID)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get outbound group session")
@@ -40,7 +41,7 @@ func (mach *OlmMachine) EncryptMegolmEvent(roomID id.RoomID, evtType event.Type,
 	if err != nil {
 		return nil, err
 	}
-	_, idKey := mach.account.IdentityKeys()
+	_, idKey := mach.account.Internal.IdentityKeys()
 	return &event.EncryptedEventContent{
 		Algorithm:        id.AlgorithmMegolmV1,
 		SenderKey:        idKey,
@@ -52,8 +53,8 @@ func (mach *OlmMachine) EncryptMegolmEvent(roomID id.RoomID, evtType event.Type,
 
 func (mach *OlmMachine) newOutboundGroupSession(roomID id.RoomID) *OutboundGroupSession {
 	session := NewOutboundGroupSession(roomID)
-	signingKey, idKey := mach.account.IdentityKeys()
-	mach.createGroupSession(idKey, signingKey, roomID, session.ID(), session.Key())
+	signingKey, idKey := mach.account.Internal.IdentityKeys()
+	mach.createGroupSession(idKey, signingKey, roomID, session.ID(), session.Internal.Key())
 	return session
 }
 
@@ -71,6 +72,7 @@ func (mach *OlmMachine) ShareGroupSession(roomID id.RoomID, users []id.UserID) e
 
 	toDevice := &mautrix.ReqSendToDevice{Messages: make(map[id.UserID]map[id.DeviceID]*event.Content)}
 	missingSessions := make(map[id.UserID]map[id.DeviceID]*DeviceIdentity)
+	missingUserSessions := make(map[id.DeviceID]*DeviceIdentity)
 	var fetchKeys []id.UserID
 
 	for _, userID := range users {
@@ -84,14 +86,21 @@ func (mach *OlmMachine) ShareGroupSession(roomID id.RoomID, users []id.UserID) e
 			mach.Log.Trace("%s has no devices, skipping", userID)
 		} else {
 			mach.Log.Trace("Trying to encrypt group session %s for %s", session.ID(), userID)
-			toDevice.Messages[userID], missingSessions[userID] = mach.encryptGroupSessionForUser(session, userID, devices)
+			toDevice.Messages[userID] = make(map[id.DeviceID]*event.Content)
+			mach.encryptGroupSessionForUser(session, userID, devices, toDevice.Messages[userID], missingUserSessions)
+			if len(missingUserSessions) > 0 {
+				missingSessions[userID] = missingUserSessions
+				missingUserSessions = make(map[id.DeviceID]*DeviceIdentity)
+			}
 		}
 	}
 
-	mach.Log.Trace("Fetching missing keys for %d users (%v)", len(fetchKeys), fetchKeys)
-	for userID, devices := range mach.fetchKeys(fetchKeys, "") {
-		mach.Log.Trace("Got %d device keys for %s", len(devices), userID)
-		missingSessions[userID] = devices
+	if len(fetchKeys) > 0 {
+		mach.Log.Trace("Fetching missing keys for %v", fetchKeys)
+		for userID, devices := range mach.fetchKeys(fetchKeys, "") {
+			mach.Log.Trace("Got %d device keys for %s", len(devices), userID)
+			missingSessions[userID] = devices
+		}
 	}
 
 	mach.Log.Trace("Creating missing outbound sessions")
@@ -101,8 +110,17 @@ func (mach *OlmMachine) ShareGroupSession(roomID id.RoomID, users []id.UserID) e
 	}
 
 	for userID, devices := range missingSessions {
+		if len(devices) == 0 {
+			// No missing sessions
+			continue
+		}
+		output, ok := toDevice.Messages[userID]
+		if !ok {
+			output = make(map[id.DeviceID]*event.Content)
+			toDevice.Messages[userID] = output
+		}
 		mach.Log.Trace("Trying to encrypt group session %s for %s (post-fetch retry)", session.ID(), userID)
-		toDevice.Messages[userID], _ = mach.encryptGroupSessionForUser(session, userID, devices)
+		mach.encryptGroupSessionForUser(session, userID, devices, output, nil)
 	}
 
 	mach.Log.Trace("Sending %d to-device messages to share group session for %s", len(toDevice.Messages), roomID)
@@ -115,10 +133,7 @@ func (mach *OlmMachine) ShareGroupSession(roomID id.RoomID, users []id.UserID) e
 	return mach.Store.PutOutboundGroupSession(roomID, session)
 }
 
-func (mach *OlmMachine) encryptGroupSessionForUser(session *OutboundGroupSession, userID id.UserID, devices map[id.DeviceID]*DeviceIdentity) (map[id.DeviceID]*event.Content, map[id.DeviceID]*DeviceIdentity) {
-	toDeviceMessages := make(map[id.DeviceID]*event.Content)
-	missingSessions := make(map[id.DeviceID]*DeviceIdentity)
-
+func (mach *OlmMachine) encryptGroupSessionForUser(session *OutboundGroupSession, userID id.UserID, devices map[id.DeviceID]*DeviceIdentity, output map[id.DeviceID]*event.Content, missingOutput map[id.DeviceID]*DeviceIdentity) {
 	for deviceID, device := range devices {
 		userKey := UserDevice{UserID: userID, DeviceID: deviceID}
 		if userID == mach.Client.UserID && deviceID == mach.Client.DeviceID {
@@ -136,14 +151,14 @@ func (mach *OlmMachine) encryptGroupSessionForUser(session *OutboundGroupSession
 			mach.Log.Error("Failed to get session for %s of %s: %v", deviceID, userID, err)
 		} else if deviceSession == nil {
 			mach.Log.Warn("Didn't find a session for %s of %s", deviceID, userID)
-			missingSessions[deviceID] = device
+			if missingOutput != nil {
+				missingOutput[deviceID] = device
+			}
 		} else {
 			content := mach.encryptOlmEvent(deviceSession, device, event.ToDeviceRoomKey, session.ShareContent())
-			toDeviceMessages[deviceID] = &event.Content{Parsed: content}
+			output[deviceID] = &event.Content{Parsed: content}
 			session.Users[userKey] = OGSAlreadyShared
 			mach.Log.Trace("Encrypted group session %s for %s of %s", session.ID(), deviceID, userID)
 		}
 	}
-
-	return toDeviceMessages, missingSessions
 }
