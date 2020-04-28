@@ -71,9 +71,9 @@ type MessageEventContent struct {
 	FormattedBody string `json:"formatted_body,omitempty"`
 
 	// Extra fields for media types
-	URL  id.ContentURIString `json:"url,omitempty"`
-	Info *FileInfo           `json:"info,omitempty"`
-	File *EncryptedFileInfo  `json:"file,omitempty"`
+	URL  id.ContentURI      `json:"url,omitempty"`
+	Info *FileInfo          `json:"info,omitempty"`
+	File *EncryptedFileInfo `json:"file,omitempty"`
 
 	// Edits and relations
 	NewContent *MessageEventContent `json:"m.new_content,omitempty"`
@@ -103,24 +103,24 @@ func (content *MessageEventContent) GetInfo() *FileInfo {
 
 type EncryptedFileInfo struct {
 	attachment.EncryptedFile
-	URL id.ContentURIString
+	URL id.ContentURI
 }
 
 type FileInfo struct {
-	MimeType      string              `json:"mimetype,omitempty"`
-	ThumbnailInfo *FileInfo           `json:"thumbnail_info,omitempty"`
-	ThumbnailURL  id.ContentURIString `json:"thumbnail_url,omitempty"`
-	ThumbnailFile *EncryptedFileInfo  `json:"thumbnail_file,omitempty"`
-	Width         int                 `json:"-"`
-	Height        int                 `json:"-"`
+	MimeType      string             `json:"mimetype,omitempty"`
+	ThumbnailInfo *FileInfo          `json:"thumbnail_info,omitempty"`
+	ThumbnailURL  id.ContentURI      `json:"thumbnail_url,omitempty"`
+	ThumbnailFile *EncryptedFileInfo `json:"thumbnail_file,omitempty"`
+	Width         int                `json:"-"`
+	Height        int                `json:"-"`
 	Duration      int                `json:"-"`
-	Size          int                 `json:"-"`
+	Size          int                `json:"-"`
 }
 
 type serializableFileInfo struct {
 	MimeType      string                `json:"mimetype,omitempty"`
 	ThumbnailInfo *serializableFileInfo `json:"thumbnail_info,omitempty"`
-	ThumbnailURL  id.ContentURIString   `json:"thumbnail_url,omitempty"`
+	ThumbnailURL  id.ContentURI         `json:"thumbnail_url,omitempty"`
 
 	Width    json.Number `json:"w,omitempty"`
 	Height   json.Number `json:"h,omitempty"`

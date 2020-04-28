@@ -634,7 +634,7 @@ func (cli *Client) SendImage(roomID id.RoomID, body string, url id.ContentURI) (
 	return cli.SendMessageEvent(roomID, event.EventMessage, event.MessageEventContent{
 		MsgType: event.MsgImage,
 		Body:    body,
-		URL:     url.CUString(),
+		URL:     url,
 	})
 }
 
@@ -644,7 +644,7 @@ func (cli *Client) SendVideo(roomID id.RoomID, body string, url id.ContentURI) (
 	return cli.SendMessageEvent(roomID, event.EventMessage, event.MessageEventContent{
 		MsgType: event.MsgVideo,
 		Body:    body,
-		URL:     url.CUString(),
+		URL:     url,
 	})
 }
 
