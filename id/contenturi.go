@@ -8,6 +8,7 @@ package id
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -82,7 +83,7 @@ func (uri *ContentURI) UnmarshalJSON(raw []byte) (err error) {
 }
 
 func (uri *ContentURI) MarshalJSON() ([]byte, error) {
-	return []byte(uri.String()), nil
+	return json.Marshal(uri.String())
 }
 
 func (uri *ContentURI) String() string {
