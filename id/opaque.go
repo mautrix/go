@@ -18,6 +18,10 @@ type RoomID string
 // https://matrix.org/docs/spec/appendices#room-aliases
 type RoomAlias string
 
+func NewRoomAlias(localpart, server string) RoomAlias {
+	return RoomAlias(fmt.Sprintf("#%s:%s", localpart, server))
+}
+
 // An EventID is a string starting with $ that references a specific event.
 //
 // https://matrix.org/docs/spec/appendices#room-ids-and-event-ids
