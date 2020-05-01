@@ -6,6 +6,10 @@
 
 package id
 
+import (
+	"fmt"
+)
+
 // A RoomID is a string starting with ! that references a specific room.
 // https://matrix.org/docs/spec/appendices#room-ids-and-event-ids
 type RoomID string
