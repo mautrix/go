@@ -25,7 +25,7 @@ import (
 )
 
 func TestPushCondition_Match_DisplayName(t *testing.T) {
-	evt := newFakeEvent(event.EventMessage, event.Content{
+	evt := newFakeEvent(event.EventMessage, &event.MessageEventContent{
 		MsgType: event.MsgText,
 		Body:    "tulir: test mention",
 	})
@@ -34,7 +34,7 @@ func TestPushCondition_Match_DisplayName(t *testing.T) {
 }
 
 func TestPushCondition_Match_DisplayName_Fail(t *testing.T) {
-	evt := newFakeEvent(event.EventMessage, event.Content{
+	evt := newFakeEvent(event.EventMessage, &event.MessageEventContent{
 		MsgType: event.MsgText,
 		Body:    "not a mention",
 	})
@@ -44,7 +44,7 @@ func TestPushCondition_Match_DisplayName_Fail(t *testing.T) {
 
 func TestPushCondition_Match_DisplayName_FailsOnEmptyRoom(t *testing.T) {
 	emptyRoom := newFakeRoom(0)
-	evt := newFakeEvent(event.EventMessage, event.Content{
+	evt := newFakeEvent(event.EventMessage, &event.MessageEventContent{
 		MsgType: event.MsgText,
 		Body:    "tulir: this room doesn't have the owner Member available, so it fails.",
 	})

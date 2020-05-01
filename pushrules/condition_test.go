@@ -17,6 +17,7 @@
 package pushrules_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -45,8 +46,14 @@ func init() {
 		ID:        "$123:maunium.net",
 		RoomID:    "!fakeroom:maunium.net",
 		Content: event.Content{
-			MsgType: event.MsgText,
-			Body:    "test",
+			Raw: map[string]interface{}{
+				"msgtype": "m.text",
+				"body":    "test",
+			},
+			Parsed: &event.MessageEventContent{
+				MsgType: event.MsgText,
+				Body:    "test",
+			},
 		},
 	}
 
@@ -56,7 +63,21 @@ func init() {
 	}
 }
 
-func newFakeEvent(evtType event.Type, content event.Content) *event.Event {
+func newFakeEvent(evtType event.Type, parsed interface{}) *event.Event {
+	data, err := json.Marshal(parsed)
+	if err != nil {
+		panic(err)
+	}
+	var raw map[string]interface{}
+	err = json.Unmarshal(data, &raw)
+	if err != nil {
+		panic(err)
+	}
+	content := event.Content{
+		VeryRaw: data,
+		Raw:     raw,
+		Parsed:  parsed,
+	}
 	return &event.Event{
 		Sender:    "@tulir:maunium.net",
 		Type:      evtType,
@@ -86,23 +107,23 @@ func TestPushCondition_Match_InvalidKind(t *testing.T) {
 	condition := &pushrules.PushCondition{
 		Kind: pushrules.PushCondKind("invalid"),
 	}
-	evt := newFakeEvent(event.Type{Type: "m.room.foobar"}, event.Content{})
+	evt := newFakeEvent(event.Type{Type: "m.room.foobar"}, &struct{}{})
 	assert.False(t, condition.Match(blankTestRoom, evt))
 }
 
 type FakeRoom struct {
-	members map[string]*event.Member
+	members map[string]*event.MemberEventContent
 	owner   string
 }
 
 func newFakeRoom(memberCount int) *FakeRoom {
 	room := &FakeRoom{
 		owner:   "@tulir:maunium.net",
-		members: make(map[string]*event.Member),
+		members: make(map[string]*event.MemberEventContent),
 	}
 
 	if memberCount >= 1 {
-		room.members["@tulir:maunium.net"] = &event.Member{
+		room.members["@tulir:maunium.net"] = &event.MemberEventContent{
 			Membership:  event.MembershipJoin,
 			Displayname: "tulir",
 		}
@@ -110,7 +131,7 @@ func newFakeRoom(memberCount int) *FakeRoom {
 
 	for i := 0; i < memberCount-1; i++ {
 		mxid := fmt.Sprintf("@extrauser_%d:matrix.org", i)
-		room.members[mxid] = &event.Member{
+		room.members[mxid] = &event.MemberEventContent{
 			Membership:  event.MembershipJoin,
 			Displayname: fmt.Sprintf("Extra User %d", i),
 		}
