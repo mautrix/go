@@ -50,7 +50,7 @@ func (mach *OlmMachine) createOutboundSessions(input map[id.UserID]map[id.Device
 	for userID, devices := range input {
 		request[userID] = make(map[id.DeviceID]id.KeyAlgorithm)
 		for deviceID, identity := range devices {
-			if !mach.Store.HasSession(identity.IdentityKey) {
+			if !mach.CryptoStore.HasSession(identity.IdentityKey) {
 				request[userID][deviceID] = id.KeyAlgorithmSignedCurve25519
 			}
 		}
@@ -89,7 +89,7 @@ func (mach *OlmMachine) createOutboundSessions(input map[id.UserID]map[id.Device
 				mach.Log.Error("Failed to create outbound session for %s of %s: %v", deviceID, userID, err)
 			} else {
 				wrapped := wrapSession(sess)
-				err = mach.Store.AddSession(identity.IdentityKey, wrapped)
+				err = mach.CryptoStore.AddSession(identity.IdentityKey, wrapped)
 				if err != nil {
 					mach.Log.Error("Failed to store created session for %s of %s: %v", deviceID, userID, err)
 				}

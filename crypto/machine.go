@@ -23,22 +23,30 @@ type Logger interface {
 
 type OlmMachine struct {
 	Client *mautrix.Client
-	Store  Store
-	Log     Logger
+	Log    Logger
+
+	CryptoStore Store
+	StateStore  StateStore
 
 	account *OlmAccount
 }
 
-func NewOlmMachine(client *mautrix.Client, log Logger, store Store) *OlmMachine {
+type StateStore interface {
+	IsEncrypted(id.RoomID) bool
+	FindSharedRooms(id.UserID) []id.RoomID
+}
+
+func NewOlmMachine(client *mautrix.Client, log Logger, cryptoStore Store, stateStore StateStore) *OlmMachine {
 	return &OlmMachine{
-		Client: client,
-		Log:    log,
-		Store:  store,
+		Client:      client,
+		Log:         log,
+		CryptoStore: cryptoStore,
+		StateStore:  stateStore,
 	}
 }
 
 func (mach *OlmMachine) Load() (err error) {
-	mach.account, err = mach.Store.GetAccount()
+	mach.account, err = mach.CryptoStore.GetAccount()
 	if err != nil {
 		return
 	}
@@ -51,7 +59,7 @@ func (mach *OlmMachine) Load() (err error) {
 }
 
 func (mach *OlmMachine) SaveAccount() {
-	err := mach.Store.PutAccount(mach.account)
+	err := mach.CryptoStore.PutAccount(mach.account)
 	if err != nil {
 		mach.Log.Error("Failed to save account: %v", err)
 	}
@@ -83,6 +91,29 @@ func (mach *OlmMachine) ProcessSyncResponse(resp *mautrix.RespSync, since string
 	}
 }
 
+func (mach *OlmMachine) HandleMemberEvent(evt *event.Event) {
+	content := evt.Content.AsMember()
+	if content == nil {
+		return
+	}
+	_ = evt.Unsigned.PrevContent.ParseRaw(evt.Type)
+	prevContent := evt.Unsigned.PrevContent.AsMember()
+	if prevContent == nil {
+		prevContent = &event.MemberEventContent{Membership: "unknown"}
+	}
+	if prevContent.Membership == content.Membership ||
+		(prevContent.Membership == event.MembershipInvite && content.Membership == event.MembershipJoin) ||
+		(prevContent.Membership == event.MembershipBan && content.Membership == event.MembershipLeave) ||
+		(prevContent.Membership == event.MembershipLeave && content.Membership == event.MembershipBan) {
+		return
+	}
+	mach.Log.Trace("Got membership state event in %s changing %s from %s to %s, invalidating group session", evt.RoomID, evt.GetStateKey(), prevContent.Membership, content.Membership)
+	err := mach.CryptoStore.PopOutboundGroupSession(evt.RoomID)
+	if err != nil {
+		mach.Log.Warn("Failed to invalidate outbound group session of %s: %v", evt.RoomID, err)
+	}
+}
+
 func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 	switch evt.Content.Parsed.(type) {
 	case *event.EncryptedEventContent:
@@ -109,7 +140,7 @@ func (mach *OlmMachine) createGroupSession(senderKey id.SenderKey, signingKey id
 		mach.Log.Warn("Mismatched session ID while creating inbound group session")
 		return
 	}
-	err = mach.Store.PutGroupSession(roomID, senderKey, sessionID, igs)
+	err = mach.CryptoStore.PutGroupSession(roomID, senderKey, sessionID, igs)
 	if err != nil {
 		mach.Log.Error("Failed to store new inbound group session: %v", err)
 	}

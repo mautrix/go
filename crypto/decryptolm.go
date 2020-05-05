@@ -124,7 +124,7 @@ func (mach *OlmMachine) decryptOlmCiphertext(sender id.UserID, senderKey id.Send
 }
 
 func (mach *OlmMachine) tryDecryptOlmCiphertext(senderKey id.SenderKey, olmType id.OlmMsgType, ciphertext string) ([]byte, error) {
-	sessions, err := mach.Store.GetSessions(senderKey)
+	sessions, err := mach.CryptoStore.GetSessions(senderKey)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to get session for %s", senderKey)
 	}
@@ -155,7 +155,7 @@ func (mach *OlmMachine) createInboundSession(senderKey id.SenderKey, ciphertext 
 		return nil, err
 	}
 	mach.SaveAccount()
-	err = mach.Store.AddSession(senderKey, session)
+	err = mach.CryptoStore.AddSession(senderKey, session)
 	if err != nil {
 		mach.Log.Error("Failed to store created inbound session: %v", err)
 	}

@@ -35,7 +35,7 @@ func (mach *OlmMachine) DecryptMegolmEvent(evt *event.Event) (*event.Event, erro
 	} else if content.Algorithm != id.AlgorithmMegolmV1 {
 		return nil, UnsupportedAlgorithm
 	}
-	sess, err := mach.Store.GetGroupSession(evt.RoomID, content.SenderKey, content.SessionID)
+	sess, err := mach.CryptoStore.GetGroupSession(evt.RoomID, content.SenderKey, content.SessionID)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get group session")
 	} else if sess == nil {
@@ -45,7 +45,7 @@ func (mach *OlmMachine) DecryptMegolmEvent(evt *event.Event) (*event.Event, erro
 	plaintext, messageIndex, err := sess.Internal.Decrypt(content.MegolmCiphertext)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to decrypt megolm event")
-	} else if !mach.Store.ValidateMessageIndex(content.SenderKey, content.SessionID, evt.ID, messageIndex, evt.Timestamp) {
+	} else if !mach.CryptoStore.ValidateMessageIndex(content.SenderKey, content.SessionID, evt.ID, messageIndex, evt.Timestamp) {
 		return nil, DuplicateMessageIndex
 	}
 	// TODO marking events as verified can probably be done here

@@ -14,6 +14,15 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
+var (
+	MismatchingDeviceID   = errors.New("mismatching device ID in parameter and keys object")
+	MismatchingUserID     = errors.New("mismatching user ID in parameter and keys object")
+	MismatchingSigningKey = errors.New("received update for device with different signing key")
+	NoSigningKeyFound     = errors.New("didn't find ed25519 signing key")
+	NoIdentityKeyFound    = errors.New("didn't find curve25519 identity key")
+	InvalidKeySignature   = errors.New("invalid signature on device keys")
+)
+
 func (mach *OlmMachine) fetchKeys(users []id.UserID, sinceToken string) (data map[id.UserID]map[id.DeviceID]*DeviceIdentity) {
 	req := &mautrix.ReqQueryKeys{
 		DeviceKeys: mautrix.DeviceKeysRequest{},
@@ -38,7 +47,7 @@ func (mach *OlmMachine) fetchKeys(users []id.UserID, sinceToken string) (data ma
 		delete(req.DeviceKeys, userID)
 
 		newDevices := make(map[id.DeviceID]*DeviceIdentity)
-		existingDevices, err := mach.Store.GetDevices(userID)
+		existingDevices, err := mach.CryptoStore.GetDevices(userID)
 		if err != nil {
 			mach.Log.Warn("Failed to get existing devices for %s: %v", userID, err)
 			existingDevices = make(map[id.DeviceID]*DeviceIdentity)
@@ -55,7 +64,7 @@ func (mach *OlmMachine) fetchKeys(users []id.UserID, sinceToken string) (data ma
 			}
 		}
 		mach.Log.Trace("Storing new device list for %s containing %d devices", userID, len(newDevices))
-		err = mach.Store.PutDevices(userID, newDevices)
+		err = mach.CryptoStore.PutDevices(userID, newDevices)
 		if err != nil {
 			mach.Log.Warn("Failed to update device list for %s: %v", userID, err)
 		}
@@ -67,14 +76,15 @@ func (mach *OlmMachine) fetchKeys(users []id.UserID, sinceToken string) (data ma
 	return data
 }
 
-var (
-	MismatchingDeviceID   = errors.New("mismatching device ID in parameter and keys object")
-	MismatchingUserID     = errors.New("mismatching user ID in parameter and keys object")
-	MismatchingSigningKey = errors.New("received update for device with different signing key")
-	NoSigningKeyFound     = errors.New("didn't find ed25519 signing key")
-	NoIdentityKeyFound    = errors.New("didn't find curve25519 identity key")
-	InvalidKeySignature   = errors.New("invalid signature on device keys")
-)
+func (mach *OlmMachine) OnDevicesChanged(userID id.UserID) {
+	for _, roomID := range mach.StateStore.FindSharedRooms(userID) {
+		mach.Log.Trace("Devices of %s changed, invalidating group session for %s", userID, roomID)
+		err := mach.CryptoStore.PopOutboundGroupSession(roomID)
+		if err != nil {
+			mach.Log.Warn("Failed to invalidate outbound group session of %s on device change for %s: %v", roomID, userID, err)
+		}
+	}
+}
 
 func (mach *OlmMachine) validateDevice(userID id.UserID, deviceID id.DeviceID, deviceKeys mautrix.DeviceKeys, existing *DeviceIdentity) (*DeviceIdentity, error) {
 	if deviceID != deviceKeys.DeviceID {

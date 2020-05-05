@@ -23,7 +23,7 @@ var (
 
 func (mach *OlmMachine) EncryptMegolmEvent(roomID id.RoomID, evtType event.Type, content event.Content) (*event.EncryptedEventContent, error) {
 	mach.Log.Trace("Encrypting event of type %s for %s", evtType.Type, roomID)
-	session, err := mach.Store.GetOutboundGroupSession(roomID)
+	session, err := mach.CryptoStore.GetOutboundGroupSession(roomID)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get outbound group session")
 	} else if session == nil {
@@ -60,7 +60,7 @@ func (mach *OlmMachine) newOutboundGroupSession(roomID id.RoomID) *OutboundGroup
 
 func (mach *OlmMachine) ShareGroupSession(roomID id.RoomID, users []id.UserID) error {
 	mach.Log.Trace("Sharing group session for room %s", roomID)
-	session, err := mach.Store.GetOutboundGroupSession(roomID)
+	session, err := mach.CryptoStore.GetOutboundGroupSession(roomID)
 	if err != nil {
 		return errors.Wrap(err, "failed to get previous outbound group session")
 	} else if session != nil && session.Shared {
@@ -76,7 +76,7 @@ func (mach *OlmMachine) ShareGroupSession(roomID id.RoomID, users []id.UserID) e
 	var fetchKeys []id.UserID
 
 	for _, userID := range users {
-		devices, err := mach.Store.GetDevices(userID)
+		devices, err := mach.CryptoStore.GetDevices(userID)
 		if err != nil {
 			mach.Log.Error("Failed to get devices of %s", userID)
 		} else if devices == nil {
@@ -130,7 +130,7 @@ func (mach *OlmMachine) ShareGroupSession(roomID id.RoomID, users []id.UserID) e
 	}
 	mach.Log.Debug("Group session for %s successfully shared", roomID)
 	session.Shared = true
-	return mach.Store.PutOutboundGroupSession(roomID, session)
+	return mach.CryptoStore.PutOutboundGroupSession(roomID, session)
 }
 
 func (mach *OlmMachine) encryptGroupSessionForUser(session *OutboundGroupSession, userID id.UserID, devices map[id.DeviceID]*DeviceIdentity, output map[id.DeviceID]*event.Content, missingOutput map[id.DeviceID]*DeviceIdentity) {
@@ -146,7 +146,7 @@ func (mach *OlmMachine) encryptGroupSessionForUser(session *OutboundGroupSession
 			continue
 		}
 
-		deviceSession, err := mach.Store.GetLatestSession(device.IdentityKey)
+		deviceSession, err := mach.CryptoStore.GetLatestSession(device.IdentityKey)
 		if err != nil {
 			mach.Log.Error("Failed to get session for %s of %s: %v", deviceID, userID, err)
 		} else if deviceSession == nil {

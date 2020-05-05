@@ -54,6 +54,7 @@ type Store interface {
 
 	PutOutboundGroupSession(id.RoomID, *OutboundGroupSession) error
 	GetOutboundGroupSession(id.RoomID) (*OutboundGroupSession, error)
+	PopOutboundGroupSession(id.RoomID) error
 
 	ValidateMessageIndex(senderKey id.SenderKey, sessionID id.SessionID, eventID id.EventID, index uint, timestamp int64) bool
 
@@ -236,6 +237,18 @@ func (gs *GobStore) GetOutboundGroupSession(roomID id.RoomID) (*OutboundGroupSes
 		return nil, nil
 	}
 	return session, nil
+}
+
+func (gs *GobStore) PopOutboundGroupSession(roomID id.RoomID) error {
+	gs.lock.Lock()
+	session, ok := gs.OutGroupSessions[roomID]
+	if !ok || session == nil || !session.Shared {
+		gs.lock.Unlock()
+		return nil
+	}
+	delete(gs.OutGroupSessions, roomID)
+	gs.lock.Unlock()
+	return nil
 }
 
 func (gs *GobStore) ValidateMessageIndex(senderKey id.SenderKey, sessionID id.SessionID, eventID id.EventID, index uint, timestamp int64) bool {

@@ -28,6 +28,11 @@ func (uriString ContentURIString) Parse() (ContentURI, error) {
 	return ParseContentURI(string(uriString))
 }
 
+func (uriString ContentURIString) ParseOrIgnore() ContentURI {
+	parsed, _ := ParseContentURI(string(uriString))
+	return parsed
+}
+
 // ContentURI represents a Matrix content URI.
 // https://matrix.org/docs/spec/client_server/r0.6.0#matrix-content-mxc-uris
 type ContentURI struct {
@@ -83,10 +88,16 @@ func (uri *ContentURI) UnmarshalJSON(raw []byte) (err error) {
 }
 
 func (uri *ContentURI) MarshalJSON() ([]byte, error) {
+	if uri.IsEmpty() {
+		return []byte("null"), nil
+	}
 	return json.Marshal(uri.String())
 }
 
 func (uri *ContentURI) String() string {
+	if uri.IsEmpty() {
+		return ""
+	}
 	return fmt.Sprintf("mxc://%s/%s", uri.Homeserver, uri.FileID)
 }
 
