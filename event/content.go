@@ -31,6 +31,7 @@ var TypeMap = map[Type]reflect.Type{
 	StateHistoryVisibility: reflect.TypeOf(HistoryVisibilityEventContent{}),
 	StateGuestAccess:       reflect.TypeOf(GuestAccessEventContent{}),
 	StatePinnedEvents:      reflect.TypeOf(PinnedEventsEventContent{}),
+	StateEncryption:        reflect.TypeOf(EncryptionEventContent{}),
 
 	EventMessage:   reflect.TypeOf(MessageEventContent{}),
 	EventSticker:   reflect.TypeOf(MessageEventContent{}),
@@ -42,7 +43,6 @@ var TypeMap = map[Type]reflect.Type{
 	AccountDataDirectChats:     reflect.TypeOf(DirectChatsEventContent{}),
 	AccountDataFullyRead:       reflect.TypeOf(FullyReadEventContent{}),
 	AccountDataIgnoredUserList: reflect.TypeOf(IgnoredUserListEventContent{}),
-	//AccountDataPushRules:       reflect.TypeOf(PushRulesEventContent{}),
 
 	EphemeralEventTyping:   reflect.TypeOf(TypingEventContent{}),
 	EphemeralEventReceipt:  reflect.TypeOf(ReceiptEventContent{}),
@@ -51,6 +51,7 @@ var TypeMap = map[Type]reflect.Type{
 	ToDeviceRoomKey:          reflect.TypeOf(RoomKeyEventContent{}),
 	ToDeviceForwardedRoomKey: reflect.TypeOf(ForwardedRoomKeyEventContent{}),
 	ToDeviceRoomKeyRequest:   reflect.TypeOf(RoomKeyRequestEventContent{}),
+	ToDeviceEncrypted:        reflect.TypeOf(EncryptedEventContent{}),
 }
 
 // Content stores the content of a Matrix event.
@@ -64,6 +65,12 @@ type Content struct {
 	Parsed  interface{}
 }
 
+type Relatable interface {
+	GetRelatesTo() *RelatesTo
+	OptionalGetRelatesTo() *RelatesTo
+	SetRelatesTo(rel *RelatesTo)
+}
+
 func (content *Content) UnmarshalJSON(data []byte) error {
 	content.VeryRaw = data
 	err := json.Unmarshal(data, &content.Raw)
@@ -74,7 +81,7 @@ func (content *Content) MarshalJSON() ([]byte, error) {
 	if content.Raw == nil {
 		if content.Parsed == nil {
 			if content.VeryRaw == nil {
-				return []byte("null"), nil
+				return []byte("{}"), nil
 			}
 			return content.VeryRaw, nil
 		}
@@ -125,6 +132,7 @@ func init() {
 	gob.Register(&MemberEventContent{})
 	gob.Register(&PowerLevelsEventContent{})
 	gob.Register(&CanonicalAliasEventContent{})
+	gob.Register(&EncryptionEventContent{})
 	gob.Register(&RoomNameEventContent{})
 	gob.Register(&RoomAvatarEventContent{})
 	gob.Register(&TopicEventContent{})

@@ -102,7 +102,7 @@ type ReqTyping struct {
 }
 
 type ReqPresence struct {
-	Presence string `json:"presence"`
+	Presence event.Presence `json:"presence"`
 }
 
 type ReqAliasCreate struct {
@@ -110,7 +110,7 @@ type ReqAliasCreate struct {
 }
 
 type OneTimeKey struct {
-	Key        string                 `json:"key"`
+	Key        id.Curve25519          `json:"key"`
 	IsSigned   bool                   `json:"-"`
 	Signatures Signatures             `json:"signatures,omitempty"`
 	Unsigned   map[string]interface{} `json:"unsigned,omitempty"`
@@ -118,22 +118,17 @@ type OneTimeKey struct {
 
 type serializableOTK OneTimeKey
 
-func (otk *OneTimeKey) UnmarshalJSON(data []byte) error {
-	err := json.Unmarshal(data, (*serializableOTK)(otk))
-	if err != nil {
-		var key string
-		err := json.Unmarshal(data, &key)
-		if err != nil {
-			return err
-		}
-		otk.Key = key
+func (otk *OneTimeKey) UnmarshalJSON(data []byte) (err error) {
+	if len(data) > 0 && data[0] == '"' && data[len(data)-1] == '"' {
+		err = json.Unmarshal(data, &otk.Key)
 		otk.Signatures = nil
 		otk.Unsigned = nil
 		otk.IsSigned = false
 	} else {
+		err = json.Unmarshal(data, (*serializableOTK)(otk))
 		otk.IsSigned = true
 	}
-	return nil
+	return err
 }
 
 func (otk *OneTimeKey) MarshalJSON() ([]byte, error) {
@@ -150,25 +145,53 @@ type ReqUploadKeys struct {
 }
 
 type DeviceKeys struct {
-	UserID     id.UserID                 `json:"user_id"`
-	DeviceID   id.DeviceID               `json:"device_id"`
-	Algorithms []string                  `json:"algorithms"`
-	Keys       map[id.DeviceKeyID]string `json:"keys"`
-	Signatures Signatures                `json:"signatures"`
-	Unsigned   map[string]interface{}    `json:"unsigned,omitempty"`
+	UserID     id.UserID              `json:"user_id"`
+	DeviceID   id.DeviceID            `json:"device_id"`
+	Algorithms []id.Algorithm         `json:"algorithms"`
+	Keys       KeyMap                 `json:"keys"`
+	Signatures Signatures             `json:"signatures"`
+	Unsigned   map[string]interface{} `json:"unsigned,omitempty"`
+}
+
+type KeyMap map[id.DeviceKeyID]string
+
+func (km KeyMap) GetEd25519(deviceID id.DeviceID) id.Ed25519 {
+	val, ok := km[id.NewDeviceKeyID(id.KeyAlgorithmEd25519, deviceID)]
+	if !ok {
+		return ""
+	}
+	return id.Ed25519(val)
+}
+
+func (km KeyMap) GetCurve25519(deviceID id.DeviceID) id.Curve25519 {
+	val, ok := km[id.NewDeviceKeyID(id.KeyAlgorithmCurve25519, deviceID)]
+	if !ok {
+		return ""
+	}
+	return id.Curve25519(val)
 }
 
 type Signatures map[id.UserID]map[id.DeviceKeyID]string
 
 type ReqQueryKeys struct {
-	DeviceKeys map[id.UserID][]id.DeviceID `json:"device_keys"`
+	DeviceKeys DeviceKeysRequest `json:"device_keys"`
 
 	Timeout int64  `json:"timeout,omitempty"`
 	Token   string `json:"token,omitempty"`
 }
 
+type DeviceKeysRequest map[id.UserID]DeviceIDList
+
+type DeviceIDList []id.DeviceID
+
 type ReqClaimKeys struct {
-	OneTimeKeys map[id.UserID]map[id.DeviceID]string `json:"one_time_keys"`
+	OneTimeKeys OneTimeKeysRequest `json:"one_time_keys"`
 
 	Timeout int64 `json:"timeout,omitempty"`
+}
+
+type OneTimeKeysRequest map[id.UserID]map[id.DeviceID]id.KeyAlgorithm
+
+type ReqSendToDevice struct {
+	Messages map[id.UserID]map[id.DeviceID]*event.Content `json:"messages"`
 }

@@ -30,12 +30,10 @@ const (
 )
 
 var (
-	keyBase64Length  = unpaddedBase64.EncodedLen(keyLength)
-	hashBase64Length = unpaddedBase64.EncodedLen(hashLength)
-	ivBase64Length   = unpaddedBase64.EncodedLen(ivLength)
+	keyBase64Length  = base64.RawURLEncoding.EncodedLen(keyLength)
+	hashBase64Length = base64.RawStdEncoding.EncodedLen(hashLength)
+	ivBase64Length   = base64.RawStdEncoding.EncodedLen(ivLength)
 )
-
-var unpaddedBase64 = base64.StdEncoding.WithPadding(base64.NoPadding)
 
 type JSONWebKey struct {
 	Key         string   `json:"k"`
@@ -67,13 +65,13 @@ func NewEncryptedFile() *EncryptedFile {
 	key, iv := genA256CTR()
 	return &EncryptedFile{
 		Key: JSONWebKey{
-			Key:         unpaddedBase64.EncodeToString(key[:]),
+			Key:         base64.RawURLEncoding.EncodeToString(key[:]),
 			Algorithm:   "A256CTR",
 			Extractable: true,
 			KeyType:     "oct",
 			KeyOps:      []string{"encrypt", "decrypt"},
 		},
-		InitVector: unpaddedBase64.EncodeToString(iv[:]),
+		InitVector: base64.RawStdEncoding.EncodeToString(iv[:]),
 		Version:    "v2",
 
 		decoded: &decodedKeys{key, iv},
@@ -90,11 +88,11 @@ func (ef *EncryptedFile) decodeKeys() error {
 		return InvalidInitVector
 	}
 	ef.decoded = &decodedKeys{}
-	_, err := unpaddedBase64.Decode(ef.decoded.key[:], []byte(ef.Key.Key))
+	_, err := base64.RawURLEncoding.Decode(ef.decoded.key[:], []byte(ef.Key.Key))
 	if err != nil {
 		return InvalidKey
 	}
-	_, err = unpaddedBase64.Decode(ef.decoded.iv[:], []byte(ef.InitVector))
+	_, err = base64.RawStdEncoding.Decode(ef.decoded.iv[:], []byte(ef.InitVector))
 	if err != nil {
 		return InvalidInitVector
 	}
@@ -105,7 +103,7 @@ func (ef *EncryptedFile) Encrypt(plaintext []byte) []byte {
 	ef.decodeKeys()
 	ciphertext := xorA256CTR(plaintext, ef.decoded.key, ef.decoded.iv)
 	hash := sha256.Sum256(ciphertext)
-	ef.Hashes.SHA256 = unpaddedBase64.EncodeToString(hash[:])
+	ef.Hashes.SHA256 = base64.RawStdEncoding.EncodeToString(hash[:])
 	return ciphertext
 }
 
@@ -114,7 +112,7 @@ func (ef *EncryptedFile) checkHash(ciphertext []byte) bool {
 		return false
 	}
 	var hash [hashLength]byte
-	_, err := unpaddedBase64.Decode(hash[:], []byte(ef.Hashes.SHA256))
+	_, err := base64.RawStdEncoding.Decode(hash[:], []byte(ef.Hashes.SHA256))
 	if err != nil {
 		return false
 	}

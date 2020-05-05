@@ -7,12 +7,17 @@
 package id
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 )
 
-var InvalidContentURI = errors.New("invalid Matrix content URI")
+var (
+	InvalidContentURI  = errors.New("invalid Matrix content URI")
+	InputNotJSONString = errors.New("input doesn't look like a JSON string")
+)
 
 // ContentURIString is a string that's expected to be a Matrix content URI.
 // It's useful for delaying the parsing of the content URI to move errors from the event content
@@ -21,6 +26,11 @@ type ContentURIString string
 
 func (uriString ContentURIString) Parse() (ContentURI, error) {
 	return ParseContentURI(string(uriString))
+}
+
+func (uriString ContentURIString) ParseOrIgnore() ContentURI {
+	parsed, _ := ParseContentURI(string(uriString))
+	return parsed
 }
 
 // ContentURI represents a Matrix content URI.
@@ -51,8 +61,25 @@ func ParseContentURI(uri string) (parsed ContentURI, err error) {
 	return
 }
 
+var mxcBytes = []byte("mxc://")
+
+func ParseContentURIBytes(uri []byte) (parsed ContentURI, err error) {
+	if !bytes.HasPrefix(uri, mxcBytes) {
+		err = InvalidContentURI
+	} else if index := bytes.IndexRune(uri[6:], '/'); index == -1 || index == len(uri)-7 {
+		err = InvalidContentURI
+	} else {
+		parsed.Homeserver = string(uri[6 : 6+index])
+		parsed.FileID = string(uri[6+index+1:])
+	}
+	return
+}
+
 func (uri *ContentURI) UnmarshalJSON(raw []byte) (err error) {
-	parsed, err := ParseContentURI(string(raw))
+	if len(raw) < 2 || raw[0] != '"' || raw[len(raw)-1] != '"' {
+		return InputNotJSONString
+	}
+	parsed, err := ParseContentURIBytes(raw[1:len(raw)-1])
 	if err != nil {
 		return err
 	}
@@ -61,10 +88,16 @@ func (uri *ContentURI) UnmarshalJSON(raw []byte) (err error) {
 }
 
 func (uri *ContentURI) MarshalJSON() ([]byte, error) {
-	return []byte(uri.String()), nil
+	if uri.IsEmpty() {
+		return []byte("null"), nil
+	}
+	return json.Marshal(uri.String())
 }
 
 func (uri *ContentURI) String() string {
+	if uri.IsEmpty() {
+		return ""
+	}
 	return fmt.Sprintf("mxc://%s/%s", uri.Homeserver, uri.FileID)
 }
 

@@ -130,7 +130,7 @@ func TestMessageEventContent__ParseMedia(t *testing.T) {
 }
 
 var parsedMessage = &event.Content{
-	Parsed: event.MessageEventContent{
+	Parsed: &event.MessageEventContent{
 		MsgType: event.MsgText,
 		Body:    "test",
 	},
@@ -148,7 +148,7 @@ var customParsedMessage = &event.Content{
 	Raw: map[string]interface{}{
 		"net.maunium.custom": "hello world",
 	},
-	Parsed: event.MessageEventContent{
+	Parsed: &event.MessageEventContent{
 		MsgType: event.MsgText,
 		Body:    "test",
 	},

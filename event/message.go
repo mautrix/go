@@ -55,6 +55,18 @@ type ReactionEventContent struct {
 	RelatesTo RelatesTo `json:"m.relates_to"`
 }
 
+func (content *ReactionEventContent) GetRelatesTo() *RelatesTo {
+	return &content.RelatesTo
+}
+
+func (content *ReactionEventContent) OptionalGetRelatesTo() *RelatesTo {
+	return &content.RelatesTo
+}
+
+func (content *ReactionEventContent) SetRelatesTo(rel *RelatesTo) {
+	content.RelatesTo = *rel
+}
+
 // MssageEventContent represents the content of a m.room.message event.
 //
 // It is also used to represent m.sticker events, as they are equivalent to m.room.message
@@ -87,6 +99,14 @@ func (content *MessageEventContent) GetRelatesTo() *RelatesTo {
 	return content.RelatesTo
 }
 
+func (content *MessageEventContent) OptionalGetRelatesTo() *RelatesTo {
+	return content.RelatesTo
+}
+
+func (content *MessageEventContent) SetRelatesTo(rel *RelatesTo) {
+	content.RelatesTo = rel
+}
+
 func (content *MessageEventContent) GetFile() *EncryptedFileInfo {
 	if content.File == nil {
 		content.File = &EncryptedFileInfo{}
@@ -103,7 +123,7 @@ func (content *MessageEventContent) GetInfo() *FileInfo {
 
 type EncryptedFileInfo struct {
 	attachment.EncryptedFile
-	URL id.ContentURIString
+	URL id.ContentURIString `json:"url"`
 }
 
 type FileInfo struct {
@@ -113,7 +133,7 @@ type FileInfo struct {
 	ThumbnailFile *EncryptedFileInfo  `json:"thumbnail_file,omitempty"`
 	Width         int                 `json:"-"`
 	Height        int                 `json:"-"`
-	Duration      int                `json:"-"`
+	Duration      int                 `json:"-"`
 	Size          int                 `json:"-"`
 }
 

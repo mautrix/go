@@ -240,16 +240,18 @@ type RespUploadKeys struct {
 }
 
 type RespQueryKeys struct {
-	Failures   map[string]map[string]interface{}        `json:"failures"`
+	Failures   map[string]interface{}                   `json:"failures"`
 	DeviceKeys map[id.UserID]map[id.DeviceID]DeviceKeys `json:"device_keys"`
 }
 
 type RespClaimKeys struct {
-	Failures    map[string]map[string]interface{}           `json:"failures"`
-	OneTimeKeys map[id.UserID]map[id.DeviceKeyID]OneTimeKey `json:"one_time_keys"`
+	Failures    map[string]interface{}                                `json:"failures"`
+	OneTimeKeys map[id.UserID]map[id.DeviceID]map[id.KeyID]OneTimeKey `json:"one_time_keys"`
 }
 
 type RespKeyChanges struct {
 	Changed []id.UserID `json:"changed"`
 	Left    []id.UserID `json:"left"`
 }
+
+type RespSendToDevice struct{}

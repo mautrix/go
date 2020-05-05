@@ -191,6 +191,7 @@ func (cli *Client) SetCredentials(userID id.UserID, accessToken string) {
 func (cli *Client) ClearCredentials() {
 	cli.AccessToken = ""
 	cli.UserID = ""
+	cli.DeviceID = ""
 }
 
 // Sync starts syncing with the provided Homeserver. If Sync() is called twice then the first sync will be stopped and the
@@ -751,7 +752,7 @@ func (cli *Client) UserTyping(roomID id.RoomID, typing bool, timeout int64) (res
 	return
 }
 
-func (cli *Client) SetPresence(status string) (err error) {
+func (cli *Client) SetPresence(status event.Presence) (err error) {
 	req := ReqPresence{Presence: status}
 	u := cli.BuildURL("presence", cli.UserID, "status")
 	_, err = cli.MakeRequest("PUT", u, req, nil)
@@ -994,6 +995,12 @@ func (cli *Client) GetKeyChanges(from, to string) (resp *RespKeyChanges, err err
 		"to":   to,
 	})
 	_, err = cli.MakeRequest("POST", urlPath, nil, &resp)
+	return
+}
+
+func (cli *Client) SendToDevice(eventType event.Type, req *ReqSendToDevice) (resp *RespSendToDevice, err error) {
+	urlPath := cli.BuildURL("sendToDevice", eventType.String(), cli.TxnID())
+	_, err = cli.MakeRequest("PUT", urlPath, req, &resp)
 	return
 }
 
