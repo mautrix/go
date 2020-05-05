@@ -61,6 +61,10 @@ func (mach *OlmMachine) DecryptMegolmEvent(evt *event.Event) (*event.Event, erro
 	if err != nil && !event.IsUnsupportedContentType(err) {
 		return nil, errors.Wrap(err, "failed to parse content of megolm payload event")
 	}
+	relatable, ok := megolmEvt.Content.Parsed.(event.Relatable)
+	if ok && content.RelatesTo != nil && relatable.OptionalGetRelatesTo() == nil {
+		relatable.SetRelatesTo(content.RelatesTo)
+	}
 	megolmEvt.Type.Class = evt.Type.Class
 	return &event.Event{
 		Sender:    evt.Sender,

@@ -59,6 +59,14 @@ func (content *ReactionEventContent) GetRelatesTo() *RelatesTo {
 	return &content.RelatesTo
 }
 
+func (content *ReactionEventContent) OptionalGetRelatesTo() *RelatesTo {
+	return &content.RelatesTo
+}
+
+func (content *ReactionEventContent) SetRelatesTo(rel *RelatesTo) {
+	content.RelatesTo = *rel
+}
+
 // MssageEventContent represents the content of a m.room.message event.
 //
 // It is also used to represent m.sticker events, as they are equivalent to m.room.message
@@ -89,6 +97,14 @@ func (content *MessageEventContent) GetRelatesTo() *RelatesTo {
 		content.RelatesTo = &RelatesTo{}
 	}
 	return content.RelatesTo
+}
+
+func (content *MessageEventContent) OptionalGetRelatesTo() *RelatesTo {
+	return content.RelatesTo
+}
+
+func (content *MessageEventContent) SetRelatesTo(rel *RelatesTo) {
+	content.RelatesTo = rel
 }
 
 func (content *MessageEventContent) GetFile() *EncryptedFileInfo {

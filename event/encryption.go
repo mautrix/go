@@ -35,6 +35,8 @@ type EncryptedEventContent struct {
 
 	MegolmCiphertext []byte         `json:"-"`
 	OlmCiphertext    OlmCiphertexts `json:"-"`
+
+	RelatesTo *RelatesTo `json:"m.relates_to,omitempty"`
 }
 
 type OlmCiphertexts map[id.Curve25519]struct {

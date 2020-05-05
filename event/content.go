@@ -65,6 +65,12 @@ type Content struct {
 	Parsed  interface{}
 }
 
+type Relatable interface {
+	GetRelatesTo() *RelatesTo
+	OptionalGetRelatesTo() *RelatesTo
+	SetRelatesTo(rel *RelatesTo)
+}
+
 func (content *Content) UnmarshalJSON(data []byte) error {
 	content.VeryRaw = data
 	err := json.Unmarshal(data, &content.Raw)

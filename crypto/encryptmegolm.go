@@ -41,6 +41,11 @@ func (mach *OlmMachine) EncryptMegolmEvent(roomID id.RoomID, evtType event.Type,
 	if err != nil {
 		return nil, err
 	}
+	relatable, ok := content.Parsed.(event.Relatable)
+	var relatesTo *event.RelatesTo
+	if ok {
+		relatesTo = relatable.OptionalGetRelatesTo()
+	}
 	_, idKey := mach.account.Internal.IdentityKeys()
 	return &event.EncryptedEventContent{
 		Algorithm:        id.AlgorithmMegolmV1,
@@ -48,6 +53,7 @@ func (mach *OlmMachine) EncryptMegolmEvent(roomID id.RoomID, evtType event.Type,
 		DeviceID:         mach.Client.DeviceID,
 		SessionID:        session.ID(),
 		MegolmCiphertext: ciphertext,
+		RelatesTo:        relatesTo,
 	}, nil
 }
 
