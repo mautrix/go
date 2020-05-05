@@ -65,6 +65,10 @@ func (mach *OlmMachine) SaveAccount() {
 	}
 }
 
+func (mach *OlmMachine) FlushStore() error {
+	return mach.CryptoStore.Flush()
+}
+
 func (mach *OlmMachine) ProcessSyncResponse(resp *mautrix.RespSync, since string) {
 	if len(resp.DeviceLists.Changed) > 0 {
 		mach.Log.Trace("Device list changes in /sync: %v", resp.DeviceLists.Changed)
