@@ -67,6 +67,7 @@ func (mach *OlmMachine) SaveAccount() {
 
 func (mach *OlmMachine) ProcessSyncResponse(resp *mautrix.RespSync, since string) {
 	if len(resp.DeviceLists.Changed) > 0 {
+		mach.Log.Trace("Device list changes in /sync: %v", resp.DeviceLists.Changed)
 		mach.fetchKeys(resp.DeviceLists.Changed, since)
 	}
 
@@ -96,8 +97,11 @@ func (mach *OlmMachine) HandleMemberEvent(evt *event.Event) {
 	if content == nil {
 		return
 	}
-	_ = evt.Unsigned.PrevContent.ParseRaw(evt.Type)
-	prevContent := evt.Unsigned.PrevContent.AsMember()
+	var prevContent *event.MemberEventContent
+	if evt.Unsigned.PrevContent != nil {
+		_ = evt.Unsigned.PrevContent.ParseRaw(evt.Type)
+		prevContent = evt.Unsigned.PrevContent.AsMember()
+	}
 	if prevContent == nil {
 		prevContent = &event.MemberEventContent{Membership: "unknown"}
 	}

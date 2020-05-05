@@ -55,6 +55,10 @@ type ReactionEventContent struct {
 	RelatesTo RelatesTo `json:"m.relates_to"`
 }
 
+func (content *ReactionEventContent) GetRelatesTo() *RelatesTo {
+	return &content.RelatesTo
+}
+
 // MssageEventContent represents the content of a m.room.message event.
 //
 // It is also used to represent m.sticker events, as they are equivalent to m.room.message
