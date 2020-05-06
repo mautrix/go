@@ -97,6 +97,9 @@ func (mach *OlmMachine) ProcessSyncResponse(resp *mautrix.RespSync, since string
 }
 
 func (mach *OlmMachine) HandleMemberEvent(evt *event.Event) {
+	if !mach.StateStore.IsEncrypted(evt.RoomID) {
+		return
+	}
 	content := evt.Content.AsMember()
 	if content == nil {
 		return
