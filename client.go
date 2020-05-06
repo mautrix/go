@@ -317,10 +317,16 @@ func (cli *Client) MakeRequest(method string, httpURL string, reqBody interface{
 	if err != nil {
 		return nil, err
 	}
+
+	contents, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+
 	if res.StatusCode/100 != 2 { // not 2xx
 		var wrap error
 		respErr := &RespError{}
-		if _ = json.NewDecoder(res.Body).Decode(respErr); respErr.ErrCode != "" {
+		if _ = json.Unmarshal(contents, respErr); respErr.ErrCode != "" {
 			wrap = respErr
 		} else {
 			respErr = nil
@@ -346,16 +352,12 @@ func (cli *Client) MakeRequest(method string, httpURL string, reqBody interface{
 	}
 
 	if resBody != nil {
-		if err = json.NewDecoder(res.Body).Decode(&resBody); err != nil {
+		if err = json.Unmarshal(contents, &resBody); err != nil {
 			return nil, err
 		}
 		return nil, nil
 	}
 
-	contents, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		return nil, err
-	}
 	return contents, nil
 }
 
@@ -823,21 +825,21 @@ func (cli *Client) Upload(content io.Reader, contentType string, contentLength i
 	if err != nil {
 		return nil, err
 	}
-	if res.StatusCode != 200 {
-		contents, err := ioutil.ReadAll(res.Body)
-		if err != nil {
-			return nil, HTTPError{
-				Message: "Upload request failed - Failed to read response body: " + err.Error(),
-				Code:    res.StatusCode,
-			}
+	contents, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return nil, HTTPError{
+			Message: "Upload request failed - Failed to read response body: " + err.Error(),
+			Code:    res.StatusCode,
 		}
+	}
+	if res.StatusCode != 200 {
 		return nil, HTTPError{
 			Message: "Upload request failed: " + string(contents),
 			Code:    res.StatusCode,
 		}
 	}
 	var m RespMediaUpload
-	if err := json.NewDecoder(res.Body).Decode(&m); err != nil {
+	if err := json.Unmarshal(contents, &m); err != nil {
 		return nil, err
 	}
 	return &m, nil
