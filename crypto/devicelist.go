@@ -53,8 +53,13 @@ func (mach *OlmMachine) fetchKeys(users []id.UserID, sinceToken string) (data ma
 			existingDevices = make(map[id.DeviceID]*DeviceIdentity)
 		}
 		mach.Log.Trace("Updating devices for %s, got %d devices, have %d in store", userID, len(devices), len(existingDevices))
+		changed := false
 		for deviceID, deviceKeys := range devices {
-			existing := existingDevices[deviceID]
+			existing, ok := existingDevices[deviceID]
+			if !ok {
+				// New device
+				changed = true
+			}
 			mach.Log.Trace("Validating device %s of %s", deviceID, userID)
 			newDevice, err := mach.validateDevice(userID, deviceID, deviceKeys, existing)
 			if err != nil {
@@ -69,6 +74,11 @@ func (mach *OlmMachine) fetchKeys(users []id.UserID, sinceToken string) (data ma
 			mach.Log.Warn("Failed to update device list for %s: %v", userID, err)
 		}
 		data[userID] = newDevices
+
+		changed = changed || len(newDevices) != len(existingDevices)
+		if changed {
+			mach.OnDevicesChanged(userID)
+		}
 	}
 	for userID := range req.DeviceKeys {
 		mach.Log.Warn("Didn't get any keys for user %s", userID)
@@ -78,7 +88,7 @@ func (mach *OlmMachine) fetchKeys(users []id.UserID, sinceToken string) (data ma
 
 func (mach *OlmMachine) OnDevicesChanged(userID id.UserID) {
 	for _, roomID := range mach.StateStore.FindSharedRooms(userID) {
-		mach.Log.Trace("Devices of %s changed, invalidating group session for %s", userID, roomID)
+		mach.Log.Debug("Devices of %s changed, invalidating group session for %s", userID, roomID)
 		err := mach.CryptoStore.PopOutboundGroupSession(roomID)
 		if err != nil {
 			mach.Log.Warn("Failed to invalidate outbound group session of %s on device change for %s: %v", roomID, userID, err)
