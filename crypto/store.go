@@ -60,6 +60,7 @@ type Store interface {
 
 	GetDevices(id.UserID) (map[id.DeviceID]*DeviceIdentity, error)
 	PutDevices(id.UserID, map[id.DeviceID]*DeviceIdentity) error
+	FilterTrackedUsers([]id.UserID) []id.UserID
 }
 
 type messageIndexKey struct {
@@ -290,4 +291,18 @@ func (gs *GobStore) PutDevices(userID id.UserID, devices map[id.DeviceID]*Device
 	err := gs.save()
 	gs.lock.Unlock()
 	return err
+}
+
+func (gs *GobStore) FilterTrackedUsers(users []id.UserID) []id.UserID {
+	gs.lock.RLock()
+	var ptr int
+	for _, userID := range users {
+		_, ok := gs.Devices[userID]
+		if ok {
+			users[ptr] = userID
+			ptr++
+		}
+	}
+	gs.lock.RUnlock()
+	return users[:ptr]
 }

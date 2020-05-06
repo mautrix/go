@@ -72,7 +72,7 @@ func (mach *OlmMachine) FlushStore() error {
 func (mach *OlmMachine) ProcessSyncResponse(resp *mautrix.RespSync, since string) {
 	if len(resp.DeviceLists.Changed) > 0 {
 		mach.Log.Trace("Device list changes in /sync: %v", resp.DeviceLists.Changed)
-		mach.fetchKeys(resp.DeviceLists.Changed, since)
+		mach.fetchKeys(resp.DeviceLists.Changed, since, false)
 	}
 
 	for _, evt := range resp.ToDevice.Events {

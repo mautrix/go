@@ -103,7 +103,7 @@ func (mach *OlmMachine) ShareGroupSession(roomID id.RoomID, users []id.UserID) e
 
 	if len(fetchKeys) > 0 {
 		mach.Log.Trace("Fetching missing keys for %v", fetchKeys)
-		for userID, devices := range mach.fetchKeys(fetchKeys, "") {
+		for userID, devices := range mach.fetchKeys(fetchKeys, "", true) {
 			mach.Log.Trace("Got %d device keys for %s", len(devices), userID)
 			missingSessions[userID] = devices
 		}

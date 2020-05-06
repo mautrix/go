@@ -23,11 +23,17 @@ var (
 	InvalidKeySignature   = errors.New("invalid signature on device keys")
 )
 
-func (mach *OlmMachine) fetchKeys(users []id.UserID, sinceToken string) (data map[id.UserID]map[id.DeviceID]*DeviceIdentity) {
+func (mach *OlmMachine) fetchKeys(users []id.UserID, sinceToken string, includeUntracked bool) (data map[id.UserID]map[id.DeviceID]*DeviceIdentity) {
 	req := &mautrix.ReqQueryKeys{
 		DeviceKeys: mautrix.DeviceKeysRequest{},
 		Timeout:    10 * 1000,
 		Token:      sinceToken,
+	}
+	if !includeUntracked {
+		users = mach.CryptoStore.FilterTrackedUsers(users)
+	}
+	if len(users) == 0 {
+		return
 	}
 	for _, userID := range users {
 		req.DeviceKeys[userID] = mautrix.DeviceIDList{}
