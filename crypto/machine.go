@@ -69,6 +69,21 @@ func (mach *OlmMachine) FlushStore() error {
 	return mach.CryptoStore.Flush()
 }
 
+func (mach *OlmMachine) Fingerprint() string {
+	signingKey, _ := mach.account.Internal.IdentityKeys()
+	spacedSigningKey := make([]byte, len(signingKey)+(len(signingKey)-1)/4)
+	var ptr = 0
+	for i, chr := range signingKey {
+		spacedSigningKey[ptr] = byte(chr)
+		ptr++
+		if i%4 == 3 {
+			spacedSigningKey[ptr] = ' '
+			ptr++
+		}
+	}
+	return string(spacedSigningKey)
+}
+
 func (mach *OlmMachine) ProcessSyncResponse(resp *mautrix.RespSync, since string) {
 	if len(resp.DeviceLists.Changed) > 0 {
 		mach.Log.Trace("Device list changes in /sync: %v", resp.DeviceLists.Changed)
