@@ -1,6 +1,6 @@
 package olm
 
-// #cgo LDFLAGS: -lolm
+// #cgo LDFLAGS: -lolm -lstdc++
 // #include <olm/olm.h>
 import "C"
 import (
