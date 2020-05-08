@@ -245,6 +245,13 @@ func (content *Content) AsPinnedEvents() *PinnedEventsEventContent {
 	}
 	return casted
 }
+func (content *Content) AsEncryption() *EncryptionEventContent {
+	casted, ok := content.Parsed.(*EncryptionEventContent)
+	if !ok {
+		return &EncryptionEventContent{}
+	}
+	return casted
+}
 func (content *Content) AsMessage() *MessageEventContent {
 	casted, ok := content.Parsed.(*MessageEventContent)
 	if !ok {
