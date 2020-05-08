@@ -90,6 +90,8 @@ type MessageEventContent struct {
 	// Edits and relations
 	NewContent *MessageEventContent `json:"m.new_content,omitempty"`
 	RelatesTo  *RelatesTo           `json:"m.relates_to,omitempty"`
+
+	replyFallbackRemoved bool `json:"-"`
 }
 
 func (content *MessageEventContent) GetRelatesTo() *RelatesTo {

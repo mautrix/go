@@ -35,11 +35,12 @@ func TrimReplyFallbackText(text string) string {
 }
 
 func (content *MessageEventContent) RemoveReplyFallback() {
-	if len(content.GetReplyTo()) > 0 {
+	if len(content.GetReplyTo()) > 0 && !content.replyFallbackRemoved {
 		if content.Format == FormatHTML {
 			content.FormattedBody = TrimReplyFallbackHTML(content.FormattedBody)
 		}
 		content.Body = TrimReplyFallbackText(content.Body)
+		content.replyFallbackRemoved = true
 	}
 }
 
@@ -53,10 +54,11 @@ func (content *MessageEventContent) GetReplyTo() id.EventID {
 const ReplyFormat = `<mx-reply><blockquote><a href="https://matrix.to/#/%s/%s">In reply to</a> <a href="https://matrix.to/#/%s">%s</a><br>%s</blockquote></mx-reply>`
 
 func (evt *Event) GenerateReplyFallbackHTML() string {
-	parsedContent, ok := evt.Content.Parsed.(MessageEventContent)
+	parsedContent, ok := evt.Content.Parsed.(*MessageEventContent)
 	if !ok {
 		return ""
 	}
+	parsedContent.RemoveReplyFallback()
 	body := parsedContent.FormattedBody
 	if len(body) == 0 {
 		body = html.EscapeString(parsedContent.Body)
@@ -68,10 +70,11 @@ func (evt *Event) GenerateReplyFallbackHTML() string {
 }
 
 func (evt *Event) GenerateReplyFallbackText() string {
-	parsedContent, ok := evt.Content.Parsed.(MessageEventContent)
+	parsedContent, ok := evt.Content.Parsed.(*MessageEventContent)
 	if !ok {
 		return ""
 	}
+	parsedContent.RemoveReplyFallback()
 	body := parsedContent.Body
 	lines := strings.Split(strings.TrimSpace(body), "\n")
 	firstLine, lines := lines[0], lines[1:]
@@ -100,5 +103,6 @@ func (content *MessageEventContent) SetReply(inReplyTo *Event) {
 		}
 		content.FormattedBody = inReplyTo.GenerateReplyFallbackHTML() + content.FormattedBody
 		content.Body = inReplyTo.GenerateReplyFallbackText() + content.Body
+		content.replyFallbackRemoved = false
 	}
 }
