@@ -9,6 +9,58 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
+type EventSource int
+
+const (
+	EventSourcePresence EventSource = 1 << iota
+	EventSourceJoin
+	EventSourceInvite
+	EventSourceLeave
+	EventSourceAccountData
+	EventSourceTimeline
+	EventSourceState
+	EventSourceEphemeral
+	EventSourceToDevice
+)
+
+func (es EventSource) String() string {
+	switch {
+	case es == EventSourcePresence:
+		return "presence"
+	case es == EventSourceAccountData:
+		return "user account data"
+	case es == EventSourceToDevice:
+		return "to-device"
+	case es&EventSourceJoin != 0:
+		es -= EventSourceJoin
+		switch es {
+		case EventSourceState:
+			return "joined state"
+		case EventSourceTimeline:
+			return "joined timeline"
+		case EventSourceEphemeral:
+			return "room ephemeral (joined)"
+		case EventSourceAccountData:
+			return "room account data (joined)"
+		}
+	case es&EventSourceInvite != 0:
+		es -= EventSourceInvite
+		switch es {
+		case EventSourceState:
+			return "invited state"
+		}
+	case es&EventSourceLeave != 0:
+		es -= EventSourceLeave
+		switch es {
+		case EventSourceState:
+			return "left state"
+		case EventSourceTimeline:
+			return "left timeline"
+		}
+	}
+	return fmt.Sprintf("unknown (%d)", es)
+}
+
 // Syncer represents an interface that must be satisfied in order to do /sync requests on a client.
 type Syncer interface {
 	// Process the /sync response. The since parameter is the since= value that was used to produce the response.
@@ -135,13 +187,13 @@ func (s *DefaultSyncer) getOrCreateRoom(roomID id.RoomID) *Room {
 	return room
 }
 
-func (s *DefaultSyncer) notifyListeners(event *event.Event) {
-	listeners, exists := s.listeners[event.Type]
+func (s *DefaultSyncer) notifyListeners(evt *event.Event) {
+	listeners, exists := s.listeners[evt.Type]
 	if !exists {
 		return
 	}
 	for _, fn := range listeners {
-		fn(event)
+		fn(evt)
 	}
 }
 

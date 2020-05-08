@@ -50,7 +50,7 @@ type Client struct {
 	// The ?user_id= query parameter for application services. This must be set *prior* to calling a method. If this is empty,
 	// no user_id parameter will be sent.
 	// See http://matrix.org/docs/spec/application_service/unstable.html#identity-assertion
-	AppServiceUserID string
+	AppServiceUserID id.UserID
 
 	syncingMutex sync.Mutex // protects syncingID
 	syncingID    uint32     // Identifies the current Sync. Only one Sync can be active at any given time.
@@ -162,7 +162,7 @@ func (cli *Client) BuildBaseURL(urlPath ...interface{}) string {
 	hsURL.RawPath = path.Join(rawParts...)
 	query := hsURL.Query()
 	if cli.AppServiceUserID != "" {
-		query.Set("user_id", cli.AppServiceUserID)
+		query.Set("user_id", string(cli.AppServiceUserID))
 	}
 	hsURL.RawQuery = query.Encode()
 	return hsURL.String()
@@ -509,6 +509,11 @@ func (cli *Client) JoinRoom(roomIDorAlias, serverName string, content interface{
 		urlPath = cli.BuildURL("join", roomIDorAlias)
 	}
 	_, err = cli.MakeRequest("POST", urlPath, content, &resp)
+	return
+}
+
+func (cli *Client) JoinRoomByID(roomID id.RoomID) (resp *RespJoinRoom, err error) {
+	_, err = cli.MakeRequest("POST", cli.BuildURL("rooms", roomID, "join"), nil, &resp)
 	return
 }
 
