@@ -94,6 +94,22 @@ func (uri *ContentURI) MarshalJSON() ([]byte, error) {
 	return json.Marshal(uri.String())
 }
 
+func (uri *ContentURI) UnmarshalText(raw []byte) (err error) {
+	parsed, err := ParseContentURIBytes(raw)
+	if err != nil {
+		return err
+	}
+	*uri = parsed
+	return nil
+}
+
+func (uri ContentURI) MarshalText() ([]byte, error) {
+	if uri.IsEmpty() {
+		return []byte(""), nil
+	}
+	return []byte(uri.String()), nil
+}
+
 func (uri *ContentURI) String() string {
 	if uri.IsEmpty() {
 		return ""
