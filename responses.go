@@ -17,6 +17,10 @@ func (e RespError) Error() string {
 	return e.ErrCode + ": " + e.Err
 }
 
+type RespWhoami struct {
+	UserID id.UserID `json:"user_id"`
+}
+
 // RespCreateFilter is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-user-userid-filter
 type RespCreateFilter struct {
 	FilterID string `json:"filter_id"`
@@ -60,7 +64,7 @@ type RespJoinedRooms struct {
 
 // RespJoinedMembers is the JSON response for https://matrix.org/docs/spec/client_server/r0.4.0.html#get-matrix-client-r0-joined-rooms
 type RespJoinedMembers struct {
-	Joined map[string]struct {
+	Joined map[id.UserID]struct {
 		DisplayName *string `json:"display_name"`
 		AvatarURL   *string `json:"avatar_url"`
 	} `json:"joined"`

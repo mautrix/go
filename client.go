@@ -361,6 +361,12 @@ func (cli *Client) MakeRequest(method string, httpURL string, reqBody interface{
 	return contents, nil
 }
 
+func (cli *Client) Whoami() (resp *RespWhoami, err error) {
+	urlPath := cli.BuildURL("account", "whoami")
+	_, err = cli.MakeRequest("GET", urlPath, nil, &resp)
+	return
+}
+
 // CreateFilter makes an HTTP request according to http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-user-userid-filter
 func (cli *Client) CreateFilter(filter *Filter) (resp *RespCreateFilter, err error) {
 	urlPath := cli.BuildURL("user", cli.UserID, "filter")
