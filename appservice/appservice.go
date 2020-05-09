@@ -228,6 +228,8 @@ func (lc *LogConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	}
 
 	switch strings.ToUpper(lc.RawPrintLevel) {
+	case "TRACE":
+		lc.PrintLevel = -10
 	case "DEBUG":
 		lc.PrintLevel = maulogger.LevelDebug.Severity
 	case "INFO":

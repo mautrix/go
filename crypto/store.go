@@ -38,9 +38,6 @@ type DeviceIdentity struct {
 type Store interface {
 	Flush() error
 
-	PutNextBatch(string)
-	GetNextBatch() string
-
 	PutAccount(*OlmAccount) error
 	GetAccount() (*OlmAccount, error)
 
@@ -78,7 +75,6 @@ type GobStore struct {
 	lock sync.RWMutex
 	path string
 
-	NextBatch        string
 	Account          *OlmAccount
 	Sessions         map[id.SenderKey]OlmSessionList
 	GroupSessions    map[id.RoomID]map[id.SenderKey]map[id.SessionID]*InboundGroupSession
@@ -129,14 +125,6 @@ func (gs *GobStore) Flush() error {
 	err := gs.save()
 	gs.lock.Unlock()
 	return err
-}
-
-func (gs *GobStore) PutNextBatch(nextBatch string) {
-	gs.NextBatch = nextBatch
-}
-
-func (gs *GobStore) GetNextBatch() string {
-	return gs.NextBatch
 }
 
 func (gs *GobStore) GetAccount() (*OlmAccount, error) {

@@ -17,6 +17,12 @@ type OlmAccount struct {
 	Shared   bool
 }
 
+func NewOlmAccount() *OlmAccount {
+	return &OlmAccount{
+		Internal: *olm.NewAccount(),
+	}
+}
+
 func (account *OlmAccount) getInitialKeys(userID id.UserID, deviceID id.DeviceID) *mautrix.DeviceKeys {
 	ed, curve := account.Internal.IdentityKeys()
 	deviceKeys := &mautrix.DeviceKeys{

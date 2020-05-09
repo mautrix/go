@@ -65,7 +65,7 @@ func (mach *OlmMachine) newOutboundGroupSession(roomID id.RoomID) *OutboundGroup
 }
 
 func (mach *OlmMachine) ShareGroupSession(roomID id.RoomID, users []id.UserID) error {
-	mach.Log.Trace("Sharing group session for room %s", roomID)
+	mach.Log.Trace("Sharing group session for room %s to %v", roomID, users)
 	session, err := mach.CryptoStore.GetOutboundGroupSession(roomID)
 	if err != nil {
 		return errors.Wrap(err, "failed to get previous outbound group session")
