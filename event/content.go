@@ -12,8 +12,6 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
-
-	"github.com/fatih/structs"
 )
 
 // TypeMap is a mapping from event type to the content struct type.
@@ -87,9 +85,47 @@ func (content *Content) MarshalJSON() ([]byte, error) {
 		}
 		return json.Marshal(content.Parsed)
 	} else if content.Parsed != nil {
-		content.MergeParsedToRaw()
+		// TODO this whole thing is incredibly hacky
+		// It needs to produce JSON, where:
+		// * content.Parsed is applied after content.Raw
+		// * MarshalJSON() is respected inside content.Parsed
+		// * Custom field inside nested objects of content.Raw are preserved,
+		//   even if content.Parsed contains the higher-level objects.
+		// * content.Raw is not modified
+
+		unparsed, err := json.Marshal(content.Parsed)
+		if err != nil {
+			return nil, err
+		}
+
+		var rawParsed map[string]interface{}
+		err = json.Unmarshal(unparsed, &rawParsed)
+		if err != nil {
+			return nil, err
+		}
+
+		output := make(map[string]interface{})
+		for key, value := range content.Raw {
+			output[key] = value
+		}
+
+		mergeMaps(output, rawParsed)
+		return json.Marshal(output)
 	}
 	return json.Marshal(content.Raw)
+}
+
+func IsUnsupportedContentType(err error) bool {
+	return strings.HasPrefix(err.Error(), "unsupported content type ")
+}
+
+func (content *Content) ParseRaw(evtType Type) error {
+	structType, ok := TypeMap[evtType]
+	if !ok {
+		return fmt.Errorf("unsupported content type %s", evtType.Repr())
+	}
+	content.Parsed = reflect.New(structType).Interface()
+	return json.Unmarshal(content.VeryRaw, &content.Parsed)
 }
 
 func mergeMaps(into, from map[string]interface{}) {
@@ -107,25 +143,6 @@ func mergeMaps(into, from map[string]interface{}) {
 			into[key] = newValue
 		}
 	}
-}
-
-func IsUnsupportedContentType(err error) bool {
-	return strings.HasPrefix(err.Error(), "unsupported content type ")
-}
-
-func (content *Content) ParseRaw(evtType Type) error {
-	structType, ok := TypeMap[evtType]
-	if !ok {
-		return fmt.Errorf("unsupported content type %s", evtType.Repr())
-	}
-	content.Parsed = reflect.New(structType).Interface()
-	return json.Unmarshal(content.VeryRaw, &content.Parsed)
-}
-
-func (content *Content) MergeParsedToRaw() {
-	s := structs.New(content.Parsed)
-	s.TagName = "json"
-	mergeMaps(content.Raw, s.Map())
 }
 
 func init() {
