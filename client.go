@@ -1052,7 +1052,7 @@ func NewClient(homeserverURL string, userID id.UserID, accessToken string) (*Cli
 	store := NewInMemoryStore()
 	return &Client{
 		AccessToken:   accessToken,
-		UserAgent:     "mautrix-go v0.1.0",
+		UserAgent:     "mautrix-go " + Version,
 		HomeserverURL: hsURL,
 		UserID:        userID,
 		Client:        http.DefaultClient,
