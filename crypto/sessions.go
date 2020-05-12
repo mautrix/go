@@ -191,6 +191,7 @@ func (ogs *OutboundGroupSession) Encrypt(plaintext []byte) ([]byte, error) {
 	} else if ogs.Expired() {
 		return nil, SessionExpired
 	}
+	ogs.MessageCount++
 	return ogs.Internal.Encrypt(plaintext), nil
 }
 
