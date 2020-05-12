@@ -73,7 +73,7 @@ func (mach *OlmMachine) ShareGroupSession(roomID id.RoomID, users []id.UserID) e
 	session, err := mach.CryptoStore.GetOutboundGroupSession(roomID)
 	if err != nil {
 		return errors.Wrap(err, "failed to get previous outbound group session")
-	} else if session != nil && session.Shared {
+	} else if session != nil && session.Shared && !session.Expired() {
 		return AlreadyShared
 	}
 	if session == nil || session.Expired() {
