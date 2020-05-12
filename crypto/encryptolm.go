@@ -33,6 +33,10 @@ func (mach *OlmMachine) encryptOlmEvent(session *OlmSession, recipient *DeviceId
 		panic(err)
 	}
 	msgType, ciphertext := session.Encrypt(plaintext)
+	err = mach.CryptoStore.UpdateSession(recipient.IdentityKey, session)
+	if err != nil {
+		mach.Log.Warn("Failed to update olm session in crypto store after encrypting: %v", err)
+	}
 	return &event.EncryptedEventContent{
 		Algorithm: id.AlgorithmOlmV1,
 		SenderKey: selfIdentityKey,

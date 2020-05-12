@@ -98,6 +98,11 @@ func (mach *OlmMachine) decryptOlmCiphertext(sender id.UserID, senderKey id.Send
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to decrypt olm event with session created from prekey message")
 		}
+
+		err = mach.CryptoStore.UpdateSession(senderKey, session)
+		if err != nil {
+			mach.Log.Warn("Failed to update new olm session in crypto store after decrypting: %v", err)
+		}
 	}
 
 	var olmEvt OlmEvent
@@ -143,6 +148,10 @@ func (mach *OlmMachine) tryDecryptOlmCiphertext(senderKey id.SenderKey, olmType 
 				return nil, DecryptionFailedWithMatchingSession
 			}
 		} else {
+			err = mach.CryptoStore.UpdateSession(senderKey, session)
+			if err != nil {
+				mach.Log.Warn("Failed to update olm session in crypto store after decrypting: %v", err)
+			}
 			return plaintext, nil
 		}
 	}

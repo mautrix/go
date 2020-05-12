@@ -45,6 +45,7 @@ type Store interface {
 	GetSessions(id.SenderKey) (OlmSessionList, error)
 	GetLatestSession(id.SenderKey) (*OlmSession, error)
 	AddSession(id.SenderKey, *OlmSession) error
+	UpdateSession(id.SenderKey, *OlmSession) error
 
 	PutGroupSession(id.RoomID, id.SenderKey, id.SessionID, *InboundGroupSession) error
 	GetGroupSession(id.RoomID, id.SenderKey, id.SessionID) (*InboundGroupSession, error)
@@ -83,7 +84,7 @@ type GobStore struct {
 	Devices          map[id.UserID]map[id.DeviceID]*DeviceIdentity
 }
 
-var _ Store = &GobStore{}
+var _ Store = (*GobStore)(nil)
 
 func NewGobStore(path string) (*GobStore, error) {
 	gs := &GobStore{
@@ -158,6 +159,11 @@ func (gs *GobStore) AddSession(senderKey id.SenderKey, session *OlmSession) erro
 	err := gs.save()
 	gs.lock.Unlock()
 	return err
+}
+
+func (gs *GobStore) UpdateSession(key id.SenderKey, session *OlmSession) error {
+	// we don't need to do anything here because the session is a pointer and already stored in our map
+	return gs.save()
 }
 
 func (gs *GobStore) HasSession(senderKey id.SenderKey) bool {
