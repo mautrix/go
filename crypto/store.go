@@ -50,9 +50,10 @@ type Store interface {
 	PutGroupSession(id.RoomID, id.SenderKey, id.SessionID, *InboundGroupSession) error
 	GetGroupSession(id.RoomID, id.SenderKey, id.SessionID) (*InboundGroupSession, error)
 
-	PutOutboundGroupSession(id.RoomID, *OutboundGroupSession) error
+	AddOutboundGroupSession(*OutboundGroupSession) error
+	UpdateOutboundGroupSession(*OutboundGroupSession) error
 	GetOutboundGroupSession(id.RoomID) (*OutboundGroupSession, error)
-	PopOutboundGroupSession(id.RoomID) error
+	RemoveOutboundGroupSession(id.RoomID) error
 
 	ValidateMessageIndex(senderKey id.SenderKey, sessionID id.SessionID, eventID id.EventID, index uint, timestamp int64) bool
 
@@ -216,12 +217,17 @@ func (gs *GobStore) GetGroupSession(roomID id.RoomID, senderKey id.SenderKey, se
 	return session, nil
 }
 
-func (gs *GobStore) PutOutboundGroupSession(roomID id.RoomID, session *OutboundGroupSession) error {
+func (gs *GobStore) AddOutboundGroupSession(session *OutboundGroupSession) error {
 	gs.lock.Lock()
-	gs.OutGroupSessions[roomID] = session
+	gs.OutGroupSessions[session.RoomID] = session
 	err := gs.save()
 	gs.lock.Unlock()
 	return err
+}
+
+func (gs *GobStore) UpdateOutboundGroupSession(session *OutboundGroupSession) error {
+	// we don't need to do anything here because the session is a pointer and already stored in our map
+	return gs.save()
 }
 
 func (gs *GobStore) GetOutboundGroupSession(roomID id.RoomID) (*OutboundGroupSession, error) {
@@ -234,7 +240,7 @@ func (gs *GobStore) GetOutboundGroupSession(roomID id.RoomID) (*OutboundGroupSes
 	return session, nil
 }
 
-func (gs *GobStore) PopOutboundGroupSession(roomID id.RoomID) error {
+func (gs *GobStore) RemoveOutboundGroupSession(roomID id.RoomID) error {
 	gs.lock.Lock()
 	session, ok := gs.OutGroupSessions[roomID]
 	if !ok || session == nil || !session.Shared {

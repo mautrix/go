@@ -41,6 +41,10 @@ func (mach *OlmMachine) EncryptMegolmEvent(roomID id.RoomID, evtType event.Type,
 	if err != nil {
 		return nil, err
 	}
+	err = mach.CryptoStore.UpdateOutboundGroupSession(session)
+	if err != nil {
+		mach.Log.Warn("Failed to update megolm session in crypto store after encrypting: %v", err)
+	}
 	relatable, ok := content.Parsed.(event.Relatable)
 	var relatesTo *event.RelatesTo
 	if ok {
@@ -136,7 +140,7 @@ func (mach *OlmMachine) ShareGroupSession(roomID id.RoomID, users []id.UserID) e
 	}
 	mach.Log.Debug("Group session for %s successfully shared", roomID)
 	session.Shared = true
-	return mach.CryptoStore.PutOutboundGroupSession(roomID, session)
+	return mach.CryptoStore.AddOutboundGroupSession(session)
 }
 
 func (mach *OlmMachine) encryptGroupSessionForUser(session *OutboundGroupSession, userID id.UserID, devices map[id.DeviceID]*DeviceIdentity, output map[id.DeviceID]*event.Content, missingOutput map[id.DeviceID]*DeviceIdentity) {

@@ -95,7 +95,7 @@ func (mach *OlmMachine) fetchKeys(users []id.UserID, sinceToken string, includeU
 func (mach *OlmMachine) OnDevicesChanged(userID id.UserID) {
 	for _, roomID := range mach.StateStore.FindSharedRooms(userID) {
 		mach.Log.Debug("Devices of %s changed, invalidating group session for %s", userID, roomID)
-		err := mach.CryptoStore.PopOutboundGroupSession(roomID)
+		err := mach.CryptoStore.RemoveOutboundGroupSession(roomID)
 		if err != nil {
 			mach.Log.Warn("Failed to invalidate outbound group session of %s on device change for %s: %v", roomID, userID, err)
 		}

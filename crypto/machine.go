@@ -134,7 +134,7 @@ func (mach *OlmMachine) HandleMemberEvent(evt *event.Event) {
 		return
 	}
 	mach.Log.Trace("Got membership state event in %s changing %s from %s to %s, invalidating group session", evt.RoomID, evt.GetStateKey(), prevContent.Membership, content.Membership)
-	err := mach.CryptoStore.PopOutboundGroupSession(evt.RoomID)
+	err := mach.CryptoStore.RemoveOutboundGroupSession(evt.RoomID)
 	if err != nil {
 		mach.Log.Warn("Failed to invalidate outbound group session of %s: %v", evt.RoomID, err)
 	}
