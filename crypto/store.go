@@ -58,6 +58,7 @@ type Store interface {
 	ValidateMessageIndex(senderKey id.SenderKey, sessionID id.SessionID, eventID id.EventID, index uint, timestamp int64) bool
 
 	GetDevices(id.UserID) (map[id.DeviceID]*DeviceIdentity, error)
+	GetDevice(id.UserID, id.DeviceID) (*DeviceIdentity, error)
 	PutDevices(id.UserID, map[id.DeviceID]*DeviceIdentity) error
 	FilterTrackedUsers([]id.UserID) []id.UserID
 }
@@ -283,6 +284,20 @@ func (gs *GobStore) GetDevices(userID id.UserID) (map[id.DeviceID]*DeviceIdentit
 	}
 	gs.lock.RUnlock()
 	return devices, nil
+}
+
+func (gs *GobStore) GetDevice(userID id.UserID, deviceID id.DeviceID) (*DeviceIdentity, error) {
+	gs.lock.RLock()
+	defer gs.lock.RUnlock()
+	devices, ok := gs.Devices[userID]
+	if !ok {
+		return nil, nil
+	}
+	device, ok := devices[deviceID]
+	if !ok {
+		return nil, nil
+	}
+	return device, nil
 }
 
 func (gs *GobStore) PutDevices(userID id.UserID, devices map[id.DeviceID]*DeviceIdentity) error {

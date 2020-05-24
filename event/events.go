@@ -21,6 +21,12 @@ type Event struct {
 	Content   Content    `json:"content"`             // The JSON content of the event.
 	Redacts   id.EventID `json:"redacts,omitempty"`   // The event ID that was redacted if a m.room.redaction event
 	Unsigned  Unsigned   `json:"unsigned,omitempty"`  // Unsigned content set by own homeserver.
+
+	Mautrix MautrixInfo `json:"-"`
+}
+
+type MautrixInfo struct {
+	Verified bool
 }
 
 func (evt *Event) GetStateKey() string {

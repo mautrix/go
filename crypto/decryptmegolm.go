@@ -20,6 +20,7 @@ var (
 	NoSessionFound                = errors.New("failed to decrypt megolm event: no session with given ID found")
 	DuplicateMessageIndex         = errors.New("duplicate message index")
 	WrongRoom                     = errors.New("encrypted megolm event is not intended for this room")
+	DeviceKeyMismatch             = errors.New("device keys in event and verified device info do not match")
 )
 
 type MegolmEvent struct {
@@ -48,7 +49,24 @@ func (mach *OlmMachine) DecryptMegolmEvent(evt *event.Event) (*event.Event, erro
 	} else if !mach.CryptoStore.ValidateMessageIndex(content.SenderKey, content.SessionID, evt.ID, messageIndex, evt.Timestamp) {
 		return nil, DuplicateMessageIndex
 	}
-	// TODO marking events as verified can probably be done here
+
+	var verified bool
+	ownSigningKey, ownIdentityKey := mach.account.Internal.IdentityKeys()
+	if content.DeviceID == mach.Client.DeviceID && sess.SigningKey == ownSigningKey && content.SenderKey == ownIdentityKey {
+		verified = true
+	} else {
+		device, err := mach.CryptoStore.GetDevice(evt.Sender, content.DeviceID)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to get sender device from store")
+		} else if device == nil {
+			// TODO query device keys?
+		} else if device.Trust == TrustStateVerified && len(sess.ForwardingChains) == 0 { // For some reason, matrix-nio had a comment saying not to events decrypted using a forwarded key as verified.
+			if device.SigningKey != sess.SigningKey || device.IdentityKey != content.SenderKey {
+				return nil, DeviceKeyMismatch
+			}
+			verified = true
+		}
+	}
 
 	megolmEvt := &MegolmEvent{}
 	err = json.Unmarshal(plaintext, &megolmEvt)
@@ -74,5 +92,8 @@ func (mach *OlmMachine) DecryptMegolmEvent(evt *event.Event) (*event.Event, erro
 		RoomID:    evt.RoomID,
 		Content:   megolmEvt.Content,
 		Unsigned:  evt.Unsigned,
+		Mautrix: event.MautrixInfo{
+			Verified: verified,
+		},
 	}, nil
 }
