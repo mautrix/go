@@ -82,6 +82,9 @@ type MessageEventContent struct {
 	Format        Format `json:"format,omitempty"`
 	FormattedBody string `json:"formatted_body,omitempty"`
 
+	// Extra field for m.location
+	GeoURI string `json:"geo_uri,omitempty"`
+
 	// Extra fields for media types
 	URL  id.ContentURIString `json:"url,omitempty"`
 	Info *FileInfo           `json:"info,omitempty"`
