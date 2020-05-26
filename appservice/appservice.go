@@ -183,6 +183,7 @@ func (as *AppService) BotClient() *mautrix.Client {
 		as.botClient.Syncer = nil
 		as.botClient.Store = nil
 		as.botClient.Logger = as.Log.Sub("Bot")
+		as.botClient.AppServiceUserID = as.BotMXID()
 	}
 	return as.botClient
 }
