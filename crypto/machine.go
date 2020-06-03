@@ -91,7 +91,6 @@ func (mach *OlmMachine) ProcessSyncResponse(resp *mautrix.RespSync, since string
 	}
 
 	for _, evt := range resp.ToDevice.Events {
-		mach.Log.Trace("Got to-device event %s from %s", evt.Type.Type, evt.Sender)
 		evt.Type.Class = event.ToDeviceEventType
 		err := evt.Content.ParseRaw(evt.Type)
 		if err != nil {
@@ -141,8 +140,9 @@ func (mach *OlmMachine) HandleMemberEvent(evt *event.Event) {
 }
 
 func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
-	switch evt.Content.Parsed.(type) {
+	switch content := evt.Content.Parsed.(type) {
 	case *event.EncryptedEventContent:
+		mach.Log.Trace("Handling encrypted to-device event from %s/%s", evt.Sender, content.DeviceID)
 		decryptedEvt, err := mach.decryptOlmEvent(evt)
 		if err != nil {
 			mach.Log.Error("Failed to decrypt to-device event: %v", err)
@@ -154,6 +154,9 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 			// TODO handle other encrypted to-device events
 		}
 		// TODO handle other unencrypted to-device events. At least m.room_key_request and m.verification.start
+	default:
+		deviceID, _ := evt.Content.Raw["device_id"].(string)
+		mach.Log.Trace("Unhandled to-device event of type %s from %s/%s", evt.Type.Type, evt.Sender, deviceID)
 	}
 }
 
