@@ -103,7 +103,7 @@ func (mach *OlmMachine) ProcessSyncResponse(resp *mautrix.RespSync, since string
 	min := mach.account.Internal.MaxNumberOfOneTimeKeys() / 2
 	if resp.DeviceOneTimeKeysCount.SignedCurve25519 <= int(min) {
 		mach.Log.Trace("Sync response said we have %d signed curve25519 keys left, sharing new ones...", resp.DeviceOneTimeKeysCount.SignedCurve25519)
-		err := mach.ShareKeys()
+		err := mach.ShareKeys(resp.DeviceOneTimeKeysCount.SignedCurve25519)
 		if err != nil {
 			mach.Log.Error("Failed to share keys: %v", err)
 		}
@@ -186,13 +186,13 @@ func (mach *OlmMachine) receiveRoomKey(evt *OlmEvent, content *event.RoomKeyEven
 }
 
 // ShareKeys returns a key upload request.
-func (mach *OlmMachine) ShareKeys() error {
+func (mach *OlmMachine) ShareKeys(currentOTKCount int) error {
 	var deviceKeys *mautrix.DeviceKeys
 	if !mach.account.Shared {
 		deviceKeys = mach.account.getInitialKeys(mach.Client.UserID, mach.Client.DeviceID)
 		mach.Log.Trace("Going to upload initial account keys")
 	}
-	oneTimeKeys := mach.account.getOneTimeKeys(mach.Client.UserID, mach.Client.DeviceID)
+	oneTimeKeys := mach.account.getOneTimeKeys(mach.Client.UserID, mach.Client.DeviceID, currentOTKCount)
 	if len(oneTimeKeys) == 0 && deviceKeys == nil {
 		mach.Log.Trace("No one-time keys nor device keys got when trying to share keys")
 		return nil
