@@ -49,7 +49,7 @@ func (account *OlmAccount) getInitialKeys(userID id.UserID, deviceID id.DeviceID
 }
 
 func (account *OlmAccount) getOneTimeKeys(userID id.UserID, deviceID id.DeviceID, currentOTKCount int) map[id.KeyID]mautrix.OneTimeKey {
-	newCount := int(account.Internal.MaxNumberOfOneTimeKeys() / 3 * 2) - currentOTKCount
+	newCount := int(account.Internal.MaxNumberOfOneTimeKeys() / 2) - currentOTKCount
 	if newCount > 0 {
 		account.Internal.GenOneTimeKeys(uint(newCount))
 	}
