@@ -5,6 +5,7 @@ import (
 
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
+	"maunium.net/go/mautrix/pushrules"
 )
 
 // ReqRegister is the JSON request for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-register
@@ -194,4 +195,13 @@ type OneTimeKeysRequest map[id.UserID]map[id.DeviceID]id.KeyAlgorithm
 
 type ReqSendToDevice struct {
 	Messages map[id.UserID]map[id.DeviceID]*event.Content `json:"messages"`
+}
+
+type ReqPutPushRule struct {
+	Before string `json:"-"`
+	After  string `json:"-"`
+
+	Actions    []pushrules.PushActionType `json:"actions"`
+	Conditions []pushrules.PushCondition  `json:"conditions"`
+	Pattern    string                     `json:"pattern"`
 }

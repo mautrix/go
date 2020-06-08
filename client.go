@@ -1031,6 +1031,34 @@ func (cli *Client) GetScopedPushRules(scope string) (resp *pushrules.PushRuleset
 	return
 }
 
+func (cli *Client) GetPushRule(scope string, kind pushrules.PushRuleType, ruleID string) (resp *pushrules.PushRule, err error) {
+	urlPath := cli.BuildURL("pushrules", scope, kind, ruleID)
+	_, err = cli.MakeRequest("GET", urlPath, nil, &resp)
+	if resp != nil {
+		resp.Type = kind
+	}
+	return
+}
+
+func (cli *Client) DeletePushRule(scope string, kind pushrules.PushRuleType, ruleID string) error {
+	urlPath := cli.BuildURL("pushrules", scope, kind, ruleID)
+	_, err := cli.MakeRequest("DELETE", urlPath, nil, nil)
+	return err
+}
+
+func (cli *Client) PutPushRule(scope string, kind pushrules.PushRuleType, ruleID string, req *ReqPutPushRule) error {
+	query := make(map[string]string)
+	if len(req.After) > 0 {
+		query["after"] = req.After
+	}
+	if len(req.Before) > 0 {
+		query["before"] = req.Before
+	}
+	urlPath := cli.BuildURLWithQuery(URLPath{"pushrules", scope, kind, ruleID}, query)
+	_, err := cli.MakeRequest("PUT", urlPath, req, nil)
+	return err
+}
+
 // TxnID returns the next transaction ID.
 func (cli *Client) TxnID() string {
 	txnID := atomic.AddInt32(&cli.txnID, 1)
