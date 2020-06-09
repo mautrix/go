@@ -102,6 +102,8 @@ type DefaultSyncer struct {
 	globalListeners []EventHandler
 	// listeners want a specific event type
 	listeners map[event.Type][]EventHandler
+	// ParseEventContent determines whether or not event content should be parsed before passing to handlers.
+	ParseEventContent bool
 	// ParseErrorHandler is called when event.Content.ParseRaw returns an error.
 	// If it returns false, the event will not be forwarded to listeners.
 	ParseErrorHandler func(evt *event.Event, err error) bool
@@ -112,9 +114,10 @@ var _ Syncer = (*DefaultSyncer)(nil)
 // NewDefaultSyncer returns an instantiated DefaultSyncer
 func NewDefaultSyncer() *DefaultSyncer {
 	return &DefaultSyncer{
-		listeners:       make(map[event.Type][]EventHandler),
-		syncListeners:   []SyncHandler{},
-		globalListeners: []EventHandler{},
+		listeners:         make(map[event.Type][]EventHandler),
+		syncListeners:     []SyncHandler{},
+		globalListeners:   []EventHandler{},
+		ParseEventContent: true,
 		ParseErrorHandler: func(evt *event.Event, err error) bool {
 			return false
 		},
@@ -179,9 +182,11 @@ func (s *DefaultSyncer) processSyncEvent(roomID id.RoomID, evt *event.Event, sou
 		evt.Type.Class = event.MessageEventType
 	}
 
-	err := evt.Content.ParseRaw(evt.Type)
-	if err != nil && !s.ParseErrorHandler(evt, err) {
-		return
+	if s.ParseEventContent {
+		err := evt.Content.ParseRaw(evt.Type)
+		if err != nil && !s.ParseErrorHandler(evt, err) {
+			return
+		}
 	}
 
 	s.notifyListeners(source, evt)
