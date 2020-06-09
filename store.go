@@ -1,6 +1,7 @@
 package mautrix
 
 import (
+	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -57,6 +58,19 @@ func (s *InMemoryStore) SaveRoom(room *Room) {
 // LoadRoom from memory.
 func (s *InMemoryStore) LoadRoom(roomID id.RoomID) *Room {
 	return s.Rooms[roomID]
+}
+
+// UpdateState stores a state event. This can be passed to DefaultSyncer.OnEvent to keep all room state cached.
+func (s *InMemoryStore) UpdateState(_ EventSource, evt *event.Event) {
+	if !evt.Type.IsState() {
+		return
+	}
+	room := s.LoadRoom(evt.RoomID)
+	if room == nil {
+		room = NewRoom(evt.RoomID)
+		s.SaveRoom(room)
+	}
+	room.UpdateState(evt)
 }
 
 // NewInMemoryStore constructs a new InMemoryStore.

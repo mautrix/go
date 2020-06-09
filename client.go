@@ -1074,10 +1074,6 @@ func NewClient(homeserverURL string, userID id.UserID, accessToken string) (*Cli
 	if hsURL.Scheme == "" {
 		hsURL.Scheme = "https"
 	}
-	// By default, use an in-memory store which will never save filter ids / next batch tokens to disk.
-	// The client will work with this storer: it just won't remember across restarts.
-	// In practice, a database backend should be used.
-	store := NewInMemoryStore()
 	return &Client{
 		AccessToken:   accessToken,
 		UserAgent:     "mautrix-go " + Version,
@@ -1085,7 +1081,10 @@ func NewClient(homeserverURL string, userID id.UserID, accessToken string) (*Cli
 		UserID:        userID,
 		Client:        http.DefaultClient,
 		Prefix:        URLPath{"_matrix", "client", "r0"},
-		Syncer:        NewDefaultSyncer(userID, store),
-		Store:         store,
+		Syncer:        NewDefaultSyncer(),
+		// By default, use an in-memory store which will never save filter ids / next batch tokens to disk.
+		// The client will work with this storer: it just won't remember across restarts.
+		// In practice, a database backend should be used.
+		Store:         NewInMemoryStore(),
 	}, nil
 }
