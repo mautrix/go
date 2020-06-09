@@ -110,6 +110,7 @@ type DefaultSyncer struct {
 }
 
 var _ Syncer = (*DefaultSyncer)(nil)
+var _ ExtensibleSyncer = (*DefaultSyncer)(nil)
 
 // NewDefaultSyncer returns an instantiated DefaultSyncer
 func NewDefaultSyncer() *DefaultSyncer {
