@@ -94,7 +94,7 @@ type MessageEventContent struct {
 	NewContent *MessageEventContent `json:"m.new_content,omitempty"`
 	RelatesTo  *RelatesTo           `json:"m.relates_to,omitempty"`
 
-	replyFallbackRemoved bool `json:"-"`
+	replyFallbackRemoved bool
 }
 
 func (content *MessageEventContent) GetRelatesTo() *RelatesTo {
@@ -146,6 +146,7 @@ type serializableFileInfo struct {
 	MimeType      string                `json:"mimetype,omitempty"`
 	ThumbnailInfo *serializableFileInfo `json:"thumbnail_info,omitempty"`
 	ThumbnailURL  id.ContentURIString   `json:"thumbnail_url,omitempty"`
+	ThumbnailFile *EncryptedFileInfo    `json:"thumbnail_file,omitempty"`
 
 	Width    json.Number `json:"w,omitempty"`
 	Height   json.Number `json:"h,omitempty"`
@@ -161,6 +162,7 @@ func (sfi *serializableFileInfo) CopyFrom(fileInfo *FileInfo) *serializableFileI
 		MimeType:      fileInfo.MimeType,
 		ThumbnailURL:  fileInfo.ThumbnailURL,
 		ThumbnailInfo: (&serializableFileInfo{}).CopyFrom(fileInfo.ThumbnailInfo),
+		ThumbnailFile: fileInfo.ThumbnailFile,
 	}
 	if fileInfo.Width > 0 {
 		sfi.Width = json.Number(strconv.Itoa(fileInfo.Width))
