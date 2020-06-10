@@ -11,7 +11,7 @@ import (
 	"runtime/debug"
 
 	log "maunium.net/go/maulogger/v2"
-	"maunium.net/go/mautrix"
+
 	"maunium.net/go/mautrix/event"
 )
 
@@ -23,13 +23,15 @@ const (
 	Sync
 )
 
+type EventHandler func(evt *event.Event)
+
 type EventProcessor struct {
 	ExecMode ExecMode
 
 	as       *AppService
 	log      log.Logger
 	stop     chan struct{}
-	handlers map[event.Type][]mautrix.OnEventListener
+	handlers map[event.Type][]EventHandler
 }
 
 func NewEventProcessor(as *AppService) *EventProcessor {
@@ -38,21 +40,21 @@ func NewEventProcessor(as *AppService) *EventProcessor {
 		as:       as,
 		log:      as.Log.Sub("Events"),
 		stop:     make(chan struct{}, 1),
-		handlers: make(map[event.Type][]mautrix.OnEventListener),
+		handlers: make(map[event.Type][]EventHandler),
 	}
 }
 
-func (ep *EventProcessor) On(evtType event.Type, handler mautrix.OnEventListener) {
+func (ep *EventProcessor) On(evtType event.Type, handler EventHandler) {
 	handlers, ok := ep.handlers[evtType]
 	if !ok {
-		handlers = []mautrix.OnEventListener{handler}
+		handlers = []EventHandler{handler}
 	} else {
 		handlers = append(handlers, handler)
 	}
 	ep.handlers[evtType] = handlers
 }
 
-func (ep *EventProcessor) callHandler(handler mautrix.OnEventListener, evt *event.Event) {
+func (ep *EventProcessor) callHandler(handler EventHandler, evt *event.Event) {
 	defer func() {
 		if err := recover(); err != nil {
 			d, _ := json.Marshal(evt)
