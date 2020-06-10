@@ -815,20 +815,59 @@ func (cli *Client) DownloadBytes(mxcURL id.ContentURI) ([]byte, error) {
 }
 
 func (cli *Client) UploadBytes(data []byte, contentType string) (*RespMediaUpload, error) {
-	return cli.Upload(bytes.NewReader(data), contentType, int64(len(data)))
+	return cli.UploadBytesWithName(data, contentType, "")
 }
 
-// UploadToContentRepo uploads the given bytes to the content repository and returns an MXC URI.
-// See http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-media-r0-upload
+func (cli *Client) UploadBytesWithName(data []byte, contentType, fileName string) (*RespMediaUpload, error) {
+	return cli.UploadMedia(ReqUploadMedia{
+		Content:       bytes.NewReader(data),
+		ContentLength: int64(len(data)),
+		ContentType:   contentType,
+		FileName:      fileName,
+	})
+}
+
+// UploadMedia uploads the given data to the content repository and returns an MXC URI.
+//
+// Deprecated: UploadMedia should be used instead.
 func (cli *Client) Upload(content io.Reader, contentType string, contentLength int64) (*RespMediaUpload, error) {
-	req, err := http.NewRequest("POST", cli.BuildBaseURL("_matrix", "media", "r0", "upload"), content)
+	return cli.UploadMedia(ReqUploadMedia{
+		Content:       content,
+		ContentLength: contentLength,
+		ContentType:   contentType,
+	})
+}
+
+type ReqUploadMedia struct {
+	Content       io.Reader
+	ContentLength int64
+	ContentType   string
+	FileName      string
+}
+
+// UploadMedia uploads the given data to the content repository and returns an MXC URI.
+// See http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-media-r0-upload
+func (cli *Client) UploadMedia(data ReqUploadMedia) (*RespMediaUpload, error) {
+	u, _ := url.Parse(cli.BuildBaseURL("_matrix", "media", "r0", "upload"))
+	if len(data.FileName) > 0 {
+		q := u.Query()
+		q.Set("filename", data.FileName)
+		u.RawQuery = q.Encode()
+	}
+
+	req, err := http.NewRequest("POST", u.String(), data.Content)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Content-Type", contentType)
+
+	if len(data.ContentType) > 0 {
+		req.Header.Set("Content-Type", data.ContentType)
+	}
 	req.Header.Set("Authorization", "Bearer "+cli.AccessToken)
-	req.ContentLength = contentLength
-	cli.LogRequest(req, fmt.Sprintf("%d bytes", contentLength))
+	req.ContentLength = data.ContentLength
+
+	cli.LogRequest(req, fmt.Sprintf("%d bytes", data.ContentLength))
+
 	res, err := cli.Client.Do(req)
 	if res != nil {
 		defer res.Body.Close()
@@ -1085,6 +1124,6 @@ func NewClient(homeserverURL string, userID id.UserID, accessToken string) (*Cli
 		// By default, use an in-memory store which will never save filter ids / next batch tokens to disk.
 		// The client will work with this storer: it just won't remember across restarts.
 		// In practice, a database backend should be used.
-		Store:         NewInMemoryStore(),
+		Store: NewInMemoryStore(),
 	}, nil
 }
