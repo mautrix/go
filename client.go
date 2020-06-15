@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"path"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -155,7 +156,7 @@ func (cli *Client) BuildBaseURL(urlPath ...interface{}) string {
 		default:
 			partStr = fmt.Sprint(casted)
 		}
-		parts[i+1] = partStr
+		parts[i+1] = strings.ReplaceAll(partStr, "/", "%2F")
 		rawParts[i+1] = url.PathEscape(partStr)
 	}
 	hsURL.Path = path.Join(parts...)
