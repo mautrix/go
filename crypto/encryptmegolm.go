@@ -21,7 +21,25 @@ var (
 	NoGroupSession = errors.New("no group session created")
 )
 
-func (mach *OlmMachine) EncryptMegolmEvent(roomID id.RoomID, evtType event.Type, content event.Content) (*event.EncryptedEventContent, error) {
+func getRelatesTo(content interface{}) *event.RelatesTo {
+	contentStruct, ok := content.(event.Content)
+	if ok {
+		content = contentStruct.Parsed
+	}
+	relatable, ok := content.(event.Relatable)
+	if ok {
+		return relatable.OptionalGetRelatesTo()
+	}
+	return nil
+}
+
+type rawMegolmEvent struct {
+	RoomID  id.RoomID     `json:"room_id"`
+	Type    event.Type    `json:"type"`
+	Content interface{} `json:"content"`
+}
+
+func (mach *OlmMachine) EncryptMegolmEvent(roomID id.RoomID, evtType event.Type, content interface{}) (*event.EncryptedEventContent, error) {
 	mach.Log.Trace("Encrypting event of type %s for %s", evtType.Type, roomID)
 	session, err := mach.CryptoStore.GetOutboundGroupSession(roomID)
 	if err != nil {
@@ -29,7 +47,7 @@ func (mach *OlmMachine) EncryptMegolmEvent(roomID id.RoomID, evtType event.Type,
 	} else if session == nil {
 		return nil, NoGroupSession
 	}
-	plaintext, err := json.Marshal(&MegolmEvent{
+	plaintext, err := json.Marshal(&rawMegolmEvent{
 		RoomID:  roomID,
 		Type:    evtType,
 		Content: content,
@@ -45,11 +63,6 @@ func (mach *OlmMachine) EncryptMegolmEvent(roomID id.RoomID, evtType event.Type,
 	if err != nil {
 		mach.Log.Warn("Failed to update megolm session in crypto store after encrypting: %v", err)
 	}
-	relatable, ok := content.Parsed.(event.Relatable)
-	var relatesTo *event.RelatesTo
-	if ok {
-		relatesTo = relatable.OptionalGetRelatesTo()
-	}
 	_, idKey := mach.account.Internal.IdentityKeys()
 	return &event.EncryptedEventContent{
 		Algorithm:        id.AlgorithmMegolmV1,
@@ -57,7 +70,7 @@ func (mach *OlmMachine) EncryptMegolmEvent(roomID id.RoomID, evtType event.Type,
 		DeviceID:         mach.Client.DeviceID,
 		SessionID:        session.ID(),
 		MegolmCiphertext: ciphertext,
-		RelatesTo:        relatesTo,
+		RelatesTo:        getRelatesTo(content),
 	}, nil
 }
 
