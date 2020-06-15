@@ -15,7 +15,6 @@ import (
 	"path"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -53,8 +52,7 @@ type Client struct {
 	// See http://matrix.org/docs/spec/application_service/unstable.html#identity-assertion
 	AppServiceUserID id.UserID
 
-	syncingMutex sync.Mutex // protects syncingID
-	syncingID    uint32     // Identifies the current Sync. Only one Sync can be active at any given time.
+	syncingID uint32 // Identifies the current Sync. Only one Sync can be active at any given time.
 }
 
 // HTTPError An HTTP Error response, which may wrap an underlying native Go Error.
@@ -251,16 +249,11 @@ func (cli *Client) Sync() error {
 }
 
 func (cli *Client) incrementSyncingID() uint32 {
-	cli.syncingMutex.Lock()
-	defer cli.syncingMutex.Unlock()
-	cli.syncingID++
-	return cli.syncingID
+	return atomic.AddUint32(&cli.syncingID, 1)
 }
 
 func (cli *Client) getSyncingID() uint32 {
-	cli.syncingMutex.Lock()
-	defer cli.syncingMutex.Unlock()
-	return cli.syncingID
+	return atomic.LoadUint32(&cli.syncingID)
 }
 
 // StopSync stops the ongoing sync started by Sync.
