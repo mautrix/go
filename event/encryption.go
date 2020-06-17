@@ -21,7 +21,7 @@ type EncryptionEventContent struct {
 	// How long the session should be used before changing it. 604800000 (a week) is the recommended default.
 	RotationPeriodMillis int64 `json:"rotation_period_ms,omitempty"`
 	// How many messages should be sent before changing the session. 100 is the recommended default.
-	RotationPeriodMessages int `json:"rotation_period_messages,omitempty"`
+	RotationPeriodMessages int `json:"rotation_period_msgs,omitempty"`
 }
 
 // EncryptedEventContent represents the content of a m.room.encrypted message event.
