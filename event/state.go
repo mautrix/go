@@ -11,13 +11,10 @@ import (
 )
 
 // CanonicalAliasEventContent represents the content of a m.room.canonical_alias state event.
-// https://matrix.org/docs/spec/client_server/r0.6.0#m-room-canonical-alias
+// https://matrix.org/docs/spec/client_server/r0.6.1#m-room-canonical-alias
 type CanonicalAliasEventContent struct {
-	Alias id.RoomAlias `json:"alias"`
-
-	// This field isn't in a spec release yet.
-	// MSC2432: https://github.com/matrix-org/matrix-doc/pull/2432
-	AltAliases []string `json:"alt_aliases,omitempty"`
+	Alias      id.RoomAlias   `json:"alias"`
+	AltAliases []id.RoomAlias `json:"alt_aliases,omitempty"`
 }
 
 // RoomNameEventContent represents the content of a m.room.name state event.
