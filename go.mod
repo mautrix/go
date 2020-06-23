@@ -4,8 +4,10 @@ go 1.14
 
 require (
 	github.com/gorilla/mux v1.7.4
+	github.com/lib/pq v1.7.0
 	github.com/pkg/errors v0.9.1
 	github.com/russross/blackfriday/v2 v2.0.1
+	github.com/shurcooL/sanitized_anchor_name v1.0.0 // indirect
 	github.com/stretchr/testify v1.6.1
 	github.com/tidwall/gjson v1.6.0
 	github.com/tidwall/sjson v1.1.1
