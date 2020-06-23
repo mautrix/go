@@ -154,7 +154,7 @@ func (cli *Client) BuildBaseURL(urlPath ...interface{}) string {
 		default:
 			partStr = fmt.Sprint(casted)
 		}
-		parts[i+1] = strings.ReplaceAll(partStr, "/", "%2F")
+		parts[i+1] = strings.Replace(partStr, "/", "%2F", -1)
 		rawParts[i+1] = url.PathEscape(partStr)
 	}
 	hsURL.Path = path.Join(parts...)
