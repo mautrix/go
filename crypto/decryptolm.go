@@ -49,7 +49,7 @@ func (mach *OlmMachine) decryptOlmEvent(evt *event.Event) (*DecryptedOlmEvent, e
 	} else if content.Algorithm != id.AlgorithmOlmV1 {
 		return nil, UnsupportedAlgorithm
 	}
-	ownContent, ok := content.OlmCiphertext[mach.account.SigningKey()]
+	ownContent, ok := content.OlmCiphertext[mach.account.IdentityKey()]
 	if !ok {
 		return nil, NotEncryptedForMe
 	}
@@ -116,7 +116,7 @@ func (mach *OlmMachine) decryptOlmCiphertext(sender id.UserID, deviceID id.Devic
 		return nil, SenderMismatch
 	} else if mach.Client.UserID != olmEvt.Recipient {
 		return nil, RecipientMismatch
-	} else if mach.account.IdentityKey() != olmEvt.RecipientKeys.Ed25519 {
+	} else if mach.account.SigningKey() != olmEvt.RecipientKeys.Ed25519 {
 		return nil, RecipientKeyMismatch
 	}
 

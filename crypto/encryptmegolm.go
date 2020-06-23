@@ -74,7 +74,7 @@ func (mach *OlmMachine) EncryptMegolmEvent(roomID id.RoomID, evtType event.Type,
 	}
 	return &event.EncryptedEventContent{
 		Algorithm:        id.AlgorithmMegolmV1,
-		SenderKey:        mach.account.SigningKey(),
+		SenderKey:        mach.account.IdentityKey(),
 		DeviceID:         mach.Client.DeviceID,
 		SessionID:        session.ID(),
 		MegolmCiphertext: ciphertext,
@@ -181,7 +181,7 @@ func (mach *OlmMachine) encryptGroupSessionForUser(session *OutboundGroupSession
 				RoomID:    session.RoomID,
 				Algorithm: id.AlgorithmMegolmV1,
 				SessionID: session.ID(),
-				SenderKey: mach.account.SigningKey(),
+				SenderKey: mach.account.IdentityKey(),
 				Code:      event.RoomKeyWithheldBlacklisted,
 				Reason:    "Device is blacklisted",
 			}}
@@ -192,7 +192,7 @@ func (mach *OlmMachine) encryptGroupSessionForUser(session *OutboundGroupSession
 				RoomID:    session.RoomID,
 				Algorithm: id.AlgorithmMegolmV1,
 				SessionID: session.ID(),
-				SenderKey: mach.account.SigningKey(),
+				SenderKey: mach.account.IdentityKey(),
 				Code:      event.RoomKeyWithheldUnverified,
 				Reason:    "Device is not verified",
 			}}

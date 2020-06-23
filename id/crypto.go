@@ -45,6 +45,7 @@ func (sessionID SessionID) String() string {
 
 // Ed25519 is the base64 representation of an Ed25519 public key
 type Ed25519 string
+type SigningKey = Ed25519
 
 func (ed25519 Ed25519) String() string {
 	return string(ed25519)
@@ -53,6 +54,7 @@ func (ed25519 Ed25519) String() string {
 // Curve25519 is the base64 representation of an Curve25519 public key
 type Curve25519 string
 type SenderKey = Curve25519
+type IdentityKey = Curve25519
 
 func (curve25519 Curve25519) String() string {
 	return string(curve25519)

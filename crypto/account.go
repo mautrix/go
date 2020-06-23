@@ -13,10 +13,10 @@ import (
 )
 
 type OlmAccount struct {
-	Internal   olm.Account
-	signingKey  id.Curve25519
-	identityKey id.Ed25519
-	Shared     bool
+	Internal    olm.Account
+	signingKey  id.SigningKey
+	identityKey id.IdentityKey
+	Shared      bool
 }
 
 func NewOlmAccount() *OlmAccount {
@@ -25,23 +25,23 @@ func NewOlmAccount() *OlmAccount {
 	}
 }
 
-func (account *OlmAccount) Keys() (id.Ed25519, id.Curve25519) {
+func (account *OlmAccount) Keys() (id.SigningKey, id.IdentityKey) {
 	if len(account.signingKey) == 0 || len(account.identityKey) == 0 {
-		account.identityKey, account.signingKey = account.Internal.IdentityKeys()
+		account.signingKey, account.identityKey = account.Internal.IdentityKeys()
 	}
-	return account.identityKey, account.signingKey
+	return account.signingKey, account.identityKey
 }
 
-func (account *OlmAccount) SigningKey() id.Curve25519 {
+func (account *OlmAccount) SigningKey() id.SigningKey {
 	if len(account.signingKey) == 0 {
-		account.identityKey, account.signingKey = account.Internal.IdentityKeys()
+		account.signingKey, account.identityKey = account.Internal.IdentityKeys()
 	}
 	return account.signingKey
 }
 
-func (account *OlmAccount) IdentityKey() id.Ed25519 {
+func (account *OlmAccount) IdentityKey() id.IdentityKey {
 	if len(account.identityKey) == 0 {
-		account.identityKey, account.signingKey = account.Internal.IdentityKeys()
+		account.signingKey, account.identityKey = account.Internal.IdentityKeys()
 	}
 	return account.identityKey
 }
@@ -52,8 +52,8 @@ func (account *OlmAccount) getInitialKeys(userID id.UserID, deviceID id.DeviceID
 		DeviceID:   deviceID,
 		Algorithms: []id.Algorithm{id.AlgorithmMegolmV1, id.AlgorithmOlmV1},
 		Keys: map[id.DeviceKeyID]string{
-			id.NewDeviceKeyID(id.KeyAlgorithmCurve25519, deviceID): string(account.SigningKey()),
-			id.NewDeviceKeyID(id.KeyAlgorithmEd25519, deviceID):    string(account.IdentityKey()),
+			id.NewDeviceKeyID(id.KeyAlgorithmCurve25519, deviceID): string(account.IdentityKey()),
+			id.NewDeviceKeyID(id.KeyAlgorithmEd25519, deviceID):    string(account.SigningKey()),
 		},
 	}
 
