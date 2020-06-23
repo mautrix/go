@@ -120,3 +120,22 @@ type RequestedKeyInfo struct {
 	SenderKey id.SenderKey `json:"sender_key"`
 	SessionID id.SessionID `json:"session_id"`
 }
+
+type RoomKeyWithheldCode string
+
+const (
+	RoomKeyWithheldBlacklisted  RoomKeyWithheldCode = "m.blacklisted"
+	RoomKeyWithheldUnverified   RoomKeyWithheldCode = "m.unverified"
+	RoomKeyWithheldUnauthorized RoomKeyWithheldCode = "m.unauthorized"
+	RoomKeyWithheldUnavailable  RoomKeyWithheldCode = "m.unavailable"
+	RoomKeyWithheldNoOlmSession RoomKeyWithheldCode = "m.no_olm"
+)
+
+type RoomKeyWithheldEventContent struct {
+	RoomID    id.RoomID           `json:"room_id,omitempty"`
+	Algorithm id.Algorithm        `json:"algorithm"`
+	SessionID id.SessionID        `json:"session_id,omitempty"`
+	SenderKey id.SenderKey        `json:"sender_key"`
+	Code      RoomKeyWithheldCode `json:"code"`
+	Reason    string              `json:"reason,omitempty"`
+}

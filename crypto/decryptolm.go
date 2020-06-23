@@ -26,7 +26,8 @@ var (
 	RecipientKeyMismatch                = errors.New("mismatched recipient key in olm payload")
 )
 
-type OlmEvent struct {
+// DecryptedOlmEvent represents an event that was decrypted from an event encrypted with the m.olm.v1.curve25519-aes-sha2 algorithm.
+type DecryptedOlmEvent struct {
 	Source *event.Event `json:"-"`
 
 	SenderKey id.SenderKey `json:"-"`
@@ -41,15 +42,14 @@ type OlmEvent struct {
 	Content event.Content `json:"content"`
 }
 
-func (mach *OlmMachine) decryptOlmEvent(evt *event.Event) (*OlmEvent, error) {
+func (mach *OlmMachine) decryptOlmEvent(evt *event.Event) (*DecryptedOlmEvent, error) {
 	content, ok := evt.Content.Parsed.(*event.EncryptedEventContent)
 	if !ok {
 		return nil, IncorrectEncryptedContentType
 	} else if content.Algorithm != id.AlgorithmOlmV1 {
 		return nil, UnsupportedAlgorithm
 	}
-	_, ownKey := mach.account.Internal.IdentityKeys()
-	ownContent, ok := content.OlmCiphertext[ownKey]
+	ownContent, ok := content.OlmCiphertext[mach.account.SigningKey()]
 	if !ok {
 		return nil, NotEncryptedForMe
 	}
@@ -65,7 +65,7 @@ type OlmEventKeys struct {
 	Ed25519 id.Ed25519 `json:"ed25519"`
 }
 
-func (mach *OlmMachine) decryptOlmCiphertext(sender id.UserID, deviceID id.DeviceID, senderKey id.SenderKey, olmType id.OlmMsgType, ciphertext string) (*OlmEvent, error) {
+func (mach *OlmMachine) decryptOlmCiphertext(sender id.UserID, deviceID id.DeviceID, senderKey id.SenderKey, olmType id.OlmMsgType, ciphertext string) (*DecryptedOlmEvent, error) {
 	if olmType != id.OlmMsgTypePreKey && olmType != id.OlmMsgTypeMsg {
 		return nil, UnsupportedOlmMessageType
 	}
@@ -107,7 +107,7 @@ func (mach *OlmMachine) decryptOlmCiphertext(sender id.UserID, deviceID id.Devic
 		}
 	}
 
-	var olmEvt OlmEvent
+	var olmEvt DecryptedOlmEvent
 	err = json.Unmarshal(plaintext, &olmEvt)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to parse olm payload")
@@ -116,7 +116,7 @@ func (mach *OlmMachine) decryptOlmCiphertext(sender id.UserID, deviceID id.Devic
 		return nil, SenderMismatch
 	} else if mach.Client.UserID != olmEvt.Recipient {
 		return nil, RecipientMismatch
-	} else if ed25519, _ := mach.account.Internal.IdentityKeys(); ed25519 != olmEvt.RecipientKeys.Ed25519 {
+	} else if mach.account.IdentityKey() != olmEvt.RecipientKeys.Ed25519 {
 		return nil, RecipientKeyMismatch
 	}
 
@@ -165,7 +165,7 @@ func (mach *OlmMachine) createInboundSession(senderKey id.SenderKey, ciphertext 
 	if err != nil {
 		return nil, err
 	}
-	mach.SaveAccount()
+	mach.saveAccount()
 	err = mach.CryptoStore.AddSession(senderKey, session)
 	if err != nil {
 		mach.Log.Error("Failed to store created inbound session: %v", err)

@@ -23,12 +23,13 @@ var (
 	DeviceKeyMismatch             = errors.New("device keys in event and verified device info do not match")
 )
 
-type MegolmEvent struct {
+type megolmEvent struct {
 	RoomID  id.RoomID     `json:"room_id"`
 	Type    event.Type    `json:"type"`
 	Content event.Content `json:"content"`
 }
 
+// DecryptMegolmEvent decrypts an m.room.encrypted event where the algorithm is m.megolm.v1.aes-sha2
 func (mach *OlmMachine) DecryptMegolmEvent(evt *event.Event) (*event.Event, error) {
 	content, ok := evt.Content.Parsed.(*event.EncryptedEventContent)
 	if !ok {
@@ -51,7 +52,7 @@ func (mach *OlmMachine) DecryptMegolmEvent(evt *event.Event) (*event.Event, erro
 	}
 
 	var verified bool
-	ownSigningKey, ownIdentityKey := mach.account.Internal.IdentityKeys()
+	ownSigningKey, ownIdentityKey := mach.account.Keys()
 	if content.DeviceID == mach.Client.DeviceID && sess.SigningKey == ownSigningKey && content.SenderKey == ownIdentityKey {
 		verified = true
 	} else {
@@ -68,7 +69,7 @@ func (mach *OlmMachine) DecryptMegolmEvent(evt *event.Event) (*event.Event, erro
 		}
 	}
 
-	megolmEvt := &MegolmEvent{}
+	megolmEvt := &megolmEvent{}
 	err = json.Unmarshal(plaintext, &megolmEvt)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to parse megolm payload")

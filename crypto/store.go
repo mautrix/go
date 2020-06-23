@@ -15,6 +15,7 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
+// TrustState determines how trusted a device is.
 type TrustState int
 
 const (
@@ -24,6 +25,7 @@ const (
 	TrustStateIgnored
 )
 
+// DeviceIdentity contains the identity details of a device and some additional info.
 type DeviceIdentity struct {
 	UserID      id.UserID
 	DeviceID    id.DeviceID
@@ -35,31 +37,68 @@ type DeviceIdentity struct {
 	Name    string
 }
 
+// Store is used by OlmMachine to store Olm and Megolm sessions, user device lists and message indices.
+//
+// General implementation details:
+// * Get methods should not return errors if the requested data does not exist in the store, they should simply return nil.
+// * Update methods may assume that the pointer is the same as what has earlier been added to or fetched from the store.
 type Store interface {
+	// Flush ensures that everything in the store is persisted to disk.
+	// This doesn't have to do anything, e.g. for database-backed implementations that persist everything immediately.
 	Flush() error
 
+	// PutAccount updates the OlmAccount in the store.
 	PutAccount(*OlmAccount) error
+	// GetAccount returns the OlmAccount in the store that was previously inserted with PutAccount.
 	GetAccount() (*OlmAccount, error)
 
-	HasSession(id.SenderKey) bool
-	GetSessions(id.SenderKey) (OlmSessionList, error)
-	GetLatestSession(id.SenderKey) (*OlmSession, error)
+	// AddSession inserts an Olm session into the store.
 	AddSession(id.SenderKey, *OlmSession) error
+	// HasSession returns whether or not the store has an Olm session with the given sender key.
+	HasSession(id.SenderKey) bool
+	// GetSessions returns all Olm sessions in the store with the given sender key.
+	GetSessions(id.SenderKey) (OlmSessionList, error)
+	// GetLatestSession returns the session with the highest session ID (lexiographically sorting).
+	// It's usually safe to return the most recently added session if sorting by session ID is too difficult.
+	GetLatestSession(id.SenderKey) (*OlmSession, error)
+	// UpdateSession updates a session that has previously been inserted with AddSession.
 	UpdateSession(id.SenderKey, *OlmSession) error
 
+	// PutGroupSession inserts an inbound Megolm session into the store.
 	PutGroupSession(id.RoomID, id.SenderKey, id.SessionID, *InboundGroupSession) error
+	// GetGroupSession gets an inbound Megolm session from the store.
 	GetGroupSession(id.RoomID, id.SenderKey, id.SessionID) (*InboundGroupSession, error)
 
+	// AddOutboundGroupSession inserts the given outbound Megolm session into the store.
+	//
+	// The store should index inserted sessions by the RoomID field to support getting and removing sessions.
+	// There will only be one outbound session per room ID at a time.
 	AddOutboundGroupSession(*OutboundGroupSession) error
+	// UpdateOutboundGroupSession updates the given outbound Megolm session in the store.
 	UpdateOutboundGroupSession(*OutboundGroupSession) error
+	// GetOutboundGroupSession gets the stored outbound Megolm session for the given room ID from the store.
 	GetOutboundGroupSession(id.RoomID) (*OutboundGroupSession, error)
+	// RemoveOutboundGroupSession removes the stored outbound Megolm session for the given room ID.
 	RemoveOutboundGroupSession(id.RoomID) error
 
+	// ValidateMessageIndex validates that the given message details aren't from a replay attack.
+	//
+	// Implementations should store a map from (senderKey, sessionID, index) to (eventID, timestamp), then use that map
+	// to check whether or not the message index is valid:
+	//
+	// * If the map key doesn't exist, the given values should be stored and this should return true.
+	// * If the map key exists and the stored values match the given values, this should return true.
+	// * If the map key exists, but the stored values do not match the given values, this should return false.
 	ValidateMessageIndex(senderKey id.SenderKey, sessionID id.SessionID, eventID id.EventID, index uint, timestamp int64) bool
 
+	// GetDevices returns a map from device ID to DeviceIdentity containing all devices of a given user.
 	GetDevices(id.UserID) (map[id.DeviceID]*DeviceIdentity, error)
+	// GetDevice returns a specific device of a given user.
 	GetDevice(id.UserID, id.DeviceID) (*DeviceIdentity, error)
+	// PutDevices overrides the stored device list for the given user with the given list.
 	PutDevices(id.UserID, map[id.DeviceID]*DeviceIdentity) error
+	// FilterTrackedUsers returns a filtered version of the given list that only includes user IDs whose device lists
+	// have been stored with PutDevices. A user is considered tracked even if the PutDevices list was empty.
 	FilterTrackedUsers([]id.UserID) []id.UserID
 }
 
@@ -74,6 +113,7 @@ type messageIndexValue struct {
 	Timestamp int64
 }
 
+// GobStore is a simple Store implementation that dumps everything into a .gob file.
 type GobStore struct {
 	lock sync.RWMutex
 	path string
@@ -88,6 +128,7 @@ type GobStore struct {
 
 var _ Store = (*GobStore)(nil)
 
+// NewGobStore creates a new GobStore that saves everything to the given file.
 func NewGobStore(path string) (*GobStore, error) {
 	gs := &GobStore{
 		path:             path,

@@ -13,8 +13,10 @@ import (
 )
 
 type OlmAccount struct {
-	Internal olm.Account
-	Shared   bool
+	Internal   olm.Account
+	signingKey  id.Curve25519
+	identityKey id.Ed25519
+	Shared     bool
 }
 
 func NewOlmAccount() *OlmAccount {
@@ -23,15 +25,35 @@ func NewOlmAccount() *OlmAccount {
 	}
 }
 
+func (account *OlmAccount) Keys() (id.Ed25519, id.Curve25519) {
+	if len(account.signingKey) == 0 || len(account.identityKey) == 0 {
+		account.identityKey, account.signingKey = account.Internal.IdentityKeys()
+	}
+	return account.identityKey, account.signingKey
+}
+
+func (account *OlmAccount) SigningKey() id.Curve25519 {
+	if len(account.signingKey) == 0 {
+		account.identityKey, account.signingKey = account.Internal.IdentityKeys()
+	}
+	return account.signingKey
+}
+
+func (account *OlmAccount) IdentityKey() id.Ed25519 {
+	if len(account.identityKey) == 0 {
+		account.identityKey, account.signingKey = account.Internal.IdentityKeys()
+	}
+	return account.identityKey
+}
+
 func (account *OlmAccount) getInitialKeys(userID id.UserID, deviceID id.DeviceID) *mautrix.DeviceKeys {
-	ed, curve := account.Internal.IdentityKeys()
 	deviceKeys := &mautrix.DeviceKeys{
 		UserID:     userID,
 		DeviceID:   deviceID,
 		Algorithms: []id.Algorithm{id.AlgorithmMegolmV1, id.AlgorithmOlmV1},
 		Keys: map[id.DeviceKeyID]string{
-			id.NewDeviceKeyID(id.KeyAlgorithmCurve25519, deviceID): string(curve),
-			id.NewDeviceKeyID(id.KeyAlgorithmEd25519, deviceID):    string(ed),
+			id.NewDeviceKeyID(id.KeyAlgorithmCurve25519, deviceID): string(account.SigningKey()),
+			id.NewDeviceKeyID(id.KeyAlgorithmEd25519, deviceID):    string(account.IdentityKey()),
 		},
 	}
 
@@ -49,7 +71,7 @@ func (account *OlmAccount) getInitialKeys(userID id.UserID, deviceID id.DeviceID
 }
 
 func (account *OlmAccount) getOneTimeKeys(userID id.UserID, deviceID id.DeviceID, currentOTKCount int) map[id.KeyID]mautrix.OneTimeKey {
-	newCount := int(account.Internal.MaxNumberOfOneTimeKeys() / 2) - currentOTKCount
+	newCount := int(account.Internal.MaxNumberOfOneTimeKeys()/2) - currentOTKCount
 	if newCount > 0 {
 		account.Internal.GenOneTimeKeys(uint(newCount))
 	}

@@ -39,6 +39,15 @@ type rawMegolmEvent struct {
 	Content interface{} `json:"content"`
 }
 
+// IsShareError returns true if the error is caused by the lack of an outgoing megolm session and can be solved with OlmMachine.ShareGroupSession
+func IsShareError(err error) bool {
+	return err == SessionExpired || err == SessionNotShared || err == NoGroupSession
+}
+
+// EncryptMegolmEvent encrypts data with the m.megolm.v1.aes-sha2 algorithm.
+//
+// If you use the event.Content struct, make sure you pass a pointer to the struct,
+// as JSON serialization will not work correctly otherwise.
 func (mach *OlmMachine) EncryptMegolmEvent(roomID id.RoomID, evtType event.Type, content interface{}) (*event.EncryptedEventContent, error) {
 	mach.Log.Trace("Encrypting event of type %s for %s", evtType.Type, roomID)
 	session, err := mach.CryptoStore.GetOutboundGroupSession(roomID)
@@ -63,10 +72,9 @@ func (mach *OlmMachine) EncryptMegolmEvent(roomID id.RoomID, evtType event.Type,
 	if err != nil {
 		mach.Log.Warn("Failed to update megolm session in crypto store after encrypting: %v", err)
 	}
-	_, idKey := mach.account.Internal.IdentityKeys()
 	return &event.EncryptedEventContent{
 		Algorithm:        id.AlgorithmMegolmV1,
-		SenderKey:        idKey,
+		SenderKey:        mach.account.SigningKey(),
 		DeviceID:         mach.Client.DeviceID,
 		SessionID:        session.ID(),
 		MegolmCiphertext: ciphertext,
@@ -76,11 +84,15 @@ func (mach *OlmMachine) EncryptMegolmEvent(roomID id.RoomID, evtType event.Type,
 
 func (mach *OlmMachine) newOutboundGroupSession(roomID id.RoomID) *OutboundGroupSession {
 	session := NewOutboundGroupSession(roomID)
-	signingKey, idKey := mach.account.Internal.IdentityKeys()
+	signingKey, idKey := mach.account.Keys()
 	mach.createGroupSession(idKey, signingKey, roomID, session.ID(), session.Internal.Key())
 	return session
 }
 
+// ShareGroupSession shares a group session for a specific room with all the devices of the given user list.
+//
+// For devices with TrustStateBlacklisted, a m.room_key.withheld event with code=m.blacklisted is sent.
+// If AllowUnverifiedDevices is false, a similar event with code=m.unverified is sent to devices with TrustStateUnset
 func (mach *OlmMachine) ShareGroupSession(roomID id.RoomID, users []id.UserID) error {
 	mach.Log.Trace("Sharing group session for room %s to %v", roomID, users)
 	session, err := mach.CryptoStore.GetOutboundGroupSession(roomID)
@@ -159,18 +171,33 @@ func (mach *OlmMachine) ShareGroupSession(roomID id.RoomID, users []id.UserID) e
 func (mach *OlmMachine) encryptGroupSessionForUser(session *OutboundGroupSession, userID id.UserID, devices map[id.DeviceID]*DeviceIdentity, output map[id.DeviceID]*event.Content, missingOutput map[id.DeviceID]*DeviceIdentity) {
 	for deviceID, device := range devices {
 		userKey := UserDevice{UserID: userID, DeviceID: deviceID}
-		if userID == mach.Client.UserID && deviceID == mach.Client.DeviceID {
-			session.Users[userKey] = OGSIgnored
-		}
-
-		// TODO blacklisting and verification checking should be done around here
-
 		if state := session.Users[userKey]; state != OGSNotShared {
 			continue
-		}
-
-		deviceSession, err := mach.CryptoStore.GetLatestSession(device.IdentityKey)
-		if err != nil {
+		} else if userID == mach.Client.UserID && deviceID == mach.Client.DeviceID {
+			session.Users[userKey] = OGSIgnored
+		} else if device.Trust == TrustStateBlacklisted {
+			mach.Log.Debug("Not encrypting group session %s for %s of %s: device is blacklisted", session.ID(), deviceID, userID)
+			output[deviceID] = &event.Content{Parsed: event.RoomKeyWithheldEventContent{
+				RoomID:    session.RoomID,
+				Algorithm: id.AlgorithmMegolmV1,
+				SessionID: session.ID(),
+				SenderKey: mach.account.SigningKey(),
+				Code:      event.RoomKeyWithheldBlacklisted,
+				Reason:    "Device is blacklisted",
+			}}
+			session.Users[userKey] = OGSIgnored
+		} else if !mach.AllowUnverifiedDevices && device.Trust == TrustStateUnset {
+			mach.Log.Debug("Not encrypting group session %s for %s of %s: device is not verified", session.ID(), deviceID, userID)
+			output[deviceID] = &event.Content{Parsed: event.RoomKeyWithheldEventContent{
+				RoomID:    session.RoomID,
+				Algorithm: id.AlgorithmMegolmV1,
+				SessionID: session.ID(),
+				SenderKey: mach.account.SigningKey(),
+				Code:      event.RoomKeyWithheldUnverified,
+				Reason:    "Device is not verified",
+			}}
+			session.Users[userKey] = OGSIgnored
+		} else if deviceSession, err := mach.CryptoStore.GetLatestSession(device.IdentityKey); err != nil {
 			mach.Log.Error("Failed to get session for %s of %s: %v", deviceID, userID, err)
 		} else if deviceSession == nil {
 			mach.Log.Warn("Didn't find a session for %s of %s", deviceID, userID)

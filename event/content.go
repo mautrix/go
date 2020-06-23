@@ -50,6 +50,7 @@ var TypeMap = map[Type]reflect.Type{
 	ToDeviceForwardedRoomKey: reflect.TypeOf(ForwardedRoomKeyEventContent{}),
 	ToDeviceRoomKeyRequest:   reflect.TypeOf(RoomKeyRequestEventContent{}),
 	ToDeviceEncrypted:        reflect.TypeOf(EncryptedEventContent{}),
+	ToDeviceRoomKeyWithheld:  reflect.TypeOf(RoomKeyWithheldEventContent{}),
 }
 
 // Content stores the content of a Matrix event.
@@ -174,6 +175,7 @@ func init() {
 	gob.Register(&RoomKeyEventContent{})
 	gob.Register(&ForwardedRoomKeyEventContent{})
 	gob.Register(&RoomKeyRequestEventContent{})
+	gob.Register(&RoomKeyWithheldEventContent{})
 }
 
 // Helper cast functions below
@@ -364,6 +366,13 @@ func (content *Content) AsRoomKeyRequest() *RoomKeyRequestEventContent {
 	casted, ok := content.Parsed.(*RoomKeyRequestEventContent)
 	if !ok {
 		return &RoomKeyRequestEventContent{}
+	}
+	return casted
+}
+func (content *Content) AsRoomKeyWithheld() *RoomKeyWithheldEventContent {
+	casted, ok := content.Parsed.(*RoomKeyWithheldEventContent)
+	if !ok {
+		return &RoomKeyWithheldEventContent{}
 	}
 	return casted
 }

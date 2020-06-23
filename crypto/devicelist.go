@@ -92,6 +92,10 @@ func (mach *OlmMachine) fetchKeys(users []id.UserID, sinceToken string, includeU
 	return data
 }
 
+// OnDevicesChanged finds all shared rooms with the given user and invalidates outbound sessions in those rooms.
+//
+// This is called automatically whenever a device list change is noticed in ProcessSyncResponse and usually does
+// not need to be called manually.
 func (mach *OlmMachine) OnDevicesChanged(userID id.UserID) {
 	for _, roomID := range mach.StateStore.FindSharedRooms(userID) {
 		mach.Log.Debug("Devices of %s changed, invalidating group session for %s", userID, roomID)

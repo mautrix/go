@@ -89,7 +89,7 @@ func (et *Type) GuessClass() TypeClass {
 		return AccountDataEventType
 	case EventRedaction.Type, EventMessage.Type, EventEncrypted.Type, EventReaction.Type, EventSticker.Type:
 		return MessageEventType
-	case ToDeviceRoomKey.Type, ToDeviceRoomKeyRequest.Type, ToDeviceForwardedRoomKey.Type:
+	case ToDeviceRoomKey.Type, ToDeviceRoomKeyRequest.Type, ToDeviceForwardedRoomKey.Type, ToDeviceRoomKeyWithheld.Type:
 		return ToDeviceEventType
 	default:
 		return UnknownEventType
@@ -176,4 +176,5 @@ var (
 	ToDeviceRoomKeyRequest   = Type{"m.room_key_request", ToDeviceEventType}
 	ToDeviceForwardedRoomKey = Type{"m.forwarded_room_key", ToDeviceEventType}
 	ToDeviceEncrypted        = Type{"m.room.encrypted", ToDeviceEventType}
+	ToDeviceRoomKeyWithheld  = Type{"m.room_key.withheld", ToDeviceEventType}
 )

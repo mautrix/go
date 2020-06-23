@@ -18,11 +18,10 @@ import (
 )
 
 func (mach *OlmMachine) encryptOlmEvent(session *OlmSession, recipient *DeviceIdentity, evtType event.Type, content event.Content) *event.EncryptedEventContent {
-	selfSigningKey, selfIdentityKey := mach.account.Internal.IdentityKeys()
-	evt := &OlmEvent{
+	evt := &DecryptedOlmEvent{
 		Sender:        mach.Client.UserID,
 		SenderDevice:  mach.Client.DeviceID,
-		Keys:          OlmEventKeys{Ed25519: selfSigningKey},
+		Keys:          OlmEventKeys{Ed25519: mach.account.IdentityKey()},
 		Recipient:     recipient.UserID,
 		RecipientKeys: OlmEventKeys{Ed25519: recipient.SigningKey},
 		Type:          evtType,
@@ -39,7 +38,7 @@ func (mach *OlmMachine) encryptOlmEvent(session *OlmSession, recipient *DeviceId
 	}
 	return &event.EncryptedEventContent{
 		Algorithm: id.AlgorithmOlmV1,
-		SenderKey: selfIdentityKey,
+		SenderKey: mach.account.SigningKey(),
 		OlmCiphertext: event.OlmCiphertexts{
 			recipient.IdentityKey: {
 				Type: msgType,
