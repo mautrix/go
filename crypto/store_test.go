@@ -16,13 +16,6 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-type emptyLogger struct{}
-
-func (emptyLogger) Error(message string, args ...interface{}) {}
-func (emptyLogger) Warn(message string, args ...interface{})  {}
-func (emptyLogger) Debug(message string, args ...interface{}) {}
-func (emptyLogger) Trace(message string, args ...interface{}) {}
-
 const olmSessID = "sJlikQQKXp7UQjmS9/lyZCNUVJ2AmKyHbufPBaC7tpk"
 const olmPickled = "L6cdv3JYO9OzhXbcjNSwl7ldN5bDvwmGyin+hISePETE6bO71DIlhqTC9YIhg21RDqRPH2HNl1MCyCw0hEXICWQyeJ9S7JLie" +
 	"5PYxhqSSaTYaybvlvw34jvuSgEx0iotM6WNuWu5ocrsOo5Ye/3Nz7lBvxaw2rpS0jZnn7eV1n9GbINZk4YEVWrHOn7OxYfaGECJHDeAk/ameStiy" +
