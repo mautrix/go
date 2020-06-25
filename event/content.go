@@ -121,6 +121,9 @@ func IsUnsupportedContentType(err error) bool {
 }
 
 func (content *Content) ParseRaw(evtType Type) error {
+	if content.Parsed != nil {
+		return fmt.Errorf("content is already parsed")
+	}
 	structType, ok := TypeMap[evtType]
 	if !ok {
 		return fmt.Errorf("unsupported content type %s", evtType.Repr())
