@@ -28,6 +28,12 @@ func (mockStateStore) IsEncrypted(id.RoomID) bool {
 	return true
 }
 
+func (mockStateStore) GetEncryptionEvent(id.RoomID) *event.EncryptionEventContent {
+	return &event.EncryptionEventContent{
+		RotationPeriodMessages: 3,
+	}
+}
+
 func (mockStateStore) FindSharedRooms(id.UserID) []id.RoomID {
 	return []id.RoomID{"room1"}
 }
@@ -118,6 +124,10 @@ func TestOlmMachineOlmMegolmSessions(t *testing.T) {
 	if err != nil {
 		t.Errorf("Error encrypting megolm event: %v", err)
 	}
+	if megolmOutSession.MessageCount != 1 {
+		t.Errorf("Megolm outbound session message count is not 1 but %d", megolmOutSession.MessageCount)
+	}
+
 	encryptedEvt := &event.Event{
 		Content: event.Content{Parsed: encryptedEvtContent},
 		Type:    event.EventEncrypted,
@@ -136,5 +146,14 @@ func TestOlmMachineOlmMegolmSessions(t *testing.T) {
 	}
 	if decryptedEvt.Content.Raw["hello"] != "world" {
 		t.Errorf("Expected event content %v, got %v", eventContent, decryptedEvt.Content.Raw)
+	}
+
+	machineOut.EncryptMegolmEvent("room1", event.EventMessage, eventContent)
+	if megolmOutSession.Expired() {
+		t.Error("Megolm outbound session expired before 3rd message")
+	}
+	machineOut.EncryptMegolmEvent("room1", event.EventMessage, eventContent)
+	if !megolmOutSession.Expired() {
+		t.Error("Megolm outbound session not expired after 3rd message")
 	}
 }

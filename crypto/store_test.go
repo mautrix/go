@@ -190,7 +190,7 @@ func TestStoreOutboundMegolmSession(t *testing.T) {
 				t.Errorf("Error retrieving outbound session: %v", err)
 			}
 
-			outbound := NewOutboundGroupSession("room1")
+			outbound := NewOutboundGroupSession("room1", nil)
 			err = store.AddOutboundGroupSession(outbound)
 			if err != nil {
 				t.Errorf("Error inserting outbound session: %v", err)

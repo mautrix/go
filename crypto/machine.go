@@ -38,7 +38,11 @@ type OlmMachine struct {
 
 // StateStore is used by OlmMachine to get room state information that's needed for encryption.
 type StateStore interface {
+	// IsEncrypted returns whether a room is encrypted.
 	IsEncrypted(id.RoomID) bool
+	// GetEncryptionEvent returns the encryption event's content for an encrypted room.
+	GetEncryptionEvent(id.RoomID) *event.EncryptionEventContent
+	// FindSharedRooms returns the encrypted rooms that another user is also in for a user ID.
 	FindSharedRooms(id.UserID) []id.RoomID
 }
 
