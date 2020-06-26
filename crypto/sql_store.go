@@ -450,21 +450,34 @@ func (store *SQLCryptoStore) PutDevices(userID id.UserID, devices map[id.DeviceI
 		}
 		return nil
 	}
-	// TODO do this in batches to avoid too large db queries
-	values := make([]interface{}, 1, len(devices)*6+1)
-	values[0] = userID
-	valueStrings := make([]string, 0, len(devices))
-	i := 2
-	for deviceID, identity := range devices {
-		values = append(values, deviceID, identity.IdentityKey, identity.SigningKey, identity.Trust, identity.Deleted, identity.Name)
-		valueStrings = append(valueStrings, fmt.Sprintf("($1, $%d, $%d, $%d, $%d, $%d, $%d)", i, i+1, i+2, i+3, i+4, i+5))
-		i += 6
+	deviceBatchLen := 5 // how many devices will be inserted per query
+	deviceIDs := make([]id.DeviceID, 0, len(devices))
+	for deviceID := range devices {
+		deviceIDs = append(deviceIDs, deviceID)
 	}
-	valueString := strings.Join(valueStrings, ",")
-	_, err = tx.Exec("INSERT INTO crypto_device (user_id, device_id, identity_key, signing_key, trust, deleted, name) VALUES "+valueString, values...)
-	if err != nil {
-		_ = tx.Rollback()
-		return errors.Wrap(err, "failed to insert new devices")
+	for batchDeviceIdx := 0; batchDeviceIdx < len(deviceIDs); batchDeviceIdx += deviceBatchLen {
+		var batchDevices []id.DeviceID
+		if batchDeviceIdx+deviceBatchLen < len(deviceIDs) {
+			batchDevices = deviceIDs[batchDeviceIdx : batchDeviceIdx+deviceBatchLen]
+		} else {
+			batchDevices = deviceIDs[batchDeviceIdx:]
+		}
+		values := make([]interface{}, 1, len(devices)*6+1)
+		values[0] = userID
+		valueStrings := make([]string, 0, len(devices))
+		i := 2
+		for _, deviceID := range batchDevices {
+			identity := devices[deviceID]
+			values = append(values, deviceID, identity.IdentityKey, identity.SigningKey, identity.Trust, identity.Deleted, identity.Name)
+			valueStrings = append(valueStrings, fmt.Sprintf("($1, $%d, $%d, $%d, $%d, $%d, $%d)", i, i+1, i+2, i+3, i+4, i+5))
+			i += 6
+		}
+		valueString := strings.Join(valueStrings, ",")
+		_, err = tx.Exec("INSERT INTO crypto_device (user_id, device_id, identity_key, signing_key, trust, deleted, name) VALUES "+valueString, values...)
+		if err != nil {
+			_ = tx.Rollback()
+			return errors.Wrap(err, "failed to insert new devices")
+		}
 	}
 	err = tx.Commit()
 	if err != nil {
