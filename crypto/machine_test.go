@@ -82,6 +82,16 @@ func TestOlmMachineOlmMegolmSessions(t *testing.T) {
 		t.Errorf("Failed to create outbound olm session: %v", err)
 	}
 
+	// store sender device identity in receiving machine store
+	machineIn.CryptoStore.PutDevices("user1", map[id.DeviceID]*DeviceIdentity{
+		"device1": {
+			UserID:      "user1",
+			DeviceID:    "device1",
+			IdentityKey: machineOut.account.IdentityKey(),
+			SigningKey:  machineOut.account.SigningKey(),
+		},
+	})
+
 	// create & store outbound megolm session for sending the event later
 	megolmOutSession := machineOut.newOutboundGroupSession("room1")
 	megolmOutSession.Shared = true
