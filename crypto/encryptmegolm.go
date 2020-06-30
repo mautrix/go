@@ -22,7 +22,7 @@ var (
 )
 
 func getRelatesTo(content interface{}) *event.RelatesTo {
-	contentStruct, ok := content.(event.Content)
+	contentStruct, ok := content.(*event.Content)
 	if ok {
 		content = contentStruct.Parsed
 	}
