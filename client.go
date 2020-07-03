@@ -12,7 +12,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"path"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -143,22 +142,20 @@ func (cli *Client) BuildBaseURL(urlPath ...interface{}) string {
 	parts := make([]string, len(urlPath)+1)
 	parts[0] = hsURL.Path
 	for i, part := range urlPath {
-		var partStr string
 		switch casted := part.(type) {
 		case string:
-			partStr = casted
+			parts[i+1] = casted
 		case int:
-			partStr = strconv.Itoa(casted)
+			parts[i+1] = strconv.Itoa(casted)
 		case Stringifiable:
-			partStr = casted.String()
+			parts[i+1] = casted.String()
 		default:
-			partStr = fmt.Sprint(casted)
+			parts[i+1] = fmt.Sprint(casted)
 		}
-		parts[i+1] = strings.Replace(partStr, "/", "%2F", -1)
-		rawParts[i+1] = url.PathEscape(partStr)
+		rawParts[i+1] = url.PathEscape(parts[i+1])
 	}
-	hsURL.Path = path.Join(parts...)
-	hsURL.RawPath = path.Join(rawParts...)
+	hsURL.Path = strings.Join(parts, "/")
+	hsURL.RawPath = strings.Join(rawParts, "/")
 	query := hsURL.Query()
 	if cli.AppServiceUserID != "" {
 		query.Set("user_id", string(cli.AppServiceUserID))
