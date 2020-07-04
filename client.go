@@ -178,6 +178,8 @@ func (cli *Client) BuildURLWithQuery(urlPath URLPath, urlQuery map[string]string
 }
 
 // SetCredentials sets the user ID and access token on this client instance.
+//
+// Deprecated: use the StoreCredentials field in ReqLogin instead.
 func (cli *Client) SetCredentials(userID id.UserID, accessToken string) {
 	cli.AccessToken = accessToken
 	cli.UserID = userID
@@ -470,10 +472,15 @@ func (cli *Client) GetLoginFlows() (resp *RespLoginFlows, err error) {
 }
 
 // Login a user to the homeserver according to http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-login
-// This does not set credentials on this client instance. See SetCredentials() instead.
 func (cli *Client) Login(req *ReqLogin) (resp *RespLogin, err error) {
 	urlPath := cli.BuildURL("login")
 	_, err = cli.MakeRequest("POST", urlPath, req, &resp)
+	if req.StoreCredentials && err == nil {
+		cli.DeviceID = resp.DeviceID
+		cli.AccessToken = resp.AccessToken
+		cli.UserID = resp.UserID
+		// TODO update cli.HomeserverURL based on the .well-known data in the login response
+	}
 	return
 }
 

@@ -134,8 +134,8 @@ type RespLoginFlows struct {
 type RespLogin struct {
 	AccessToken string      `json:"access_token"`
 	DeviceID    id.DeviceID `json:"device_id"`
-	HomeServer  string      `json:"home_server"`
 	UserID      id.UserID   `json:"user_id"`
+	// TODO add .well-known field here
 }
 
 // RespLogout is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-logout

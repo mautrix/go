@@ -38,6 +38,9 @@ type ReqLogin struct {
 	Token                    string         `json:"token,omitempty"`
 	DeviceID                 id.DeviceID    `json:"device_id,omitempty"`
 	InitialDeviceDisplayName string         `json:"initial_device_display_name,omitempty"`
+
+	// Whether or not the returned credentials should be stored in the Client
+	StoreCredentials bool `json:"-"`
 }
 
 // ReqCreateRoom is the JSON request for https://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-createroom
