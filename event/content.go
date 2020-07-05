@@ -12,6 +12,8 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+
+	"github.com/pkg/errors"
 )
 
 // TypeMap is a mapping from event type to the content struct type.
@@ -120,9 +122,11 @@ func IsUnsupportedContentType(err error) bool {
 	return strings.HasPrefix(err.Error(), "unsupported content type ")
 }
 
+var ContentAlreadyParsed = errors.New("content is already parsed")
+
 func (content *Content) ParseRaw(evtType Type) error {
 	if content.Parsed != nil {
-		return fmt.Errorf("content is already parsed")
+		return ContentAlreadyParsed
 	}
 	structType, ok := TypeMap[evtType]
 	if !ok {
