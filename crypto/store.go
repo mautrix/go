@@ -285,7 +285,7 @@ func (gs *GobStore) GetOutboundGroupSession(roomID id.RoomID) (*OutboundGroupSes
 func (gs *GobStore) RemoveOutboundGroupSession(roomID id.RoomID) error {
 	gs.lock.Lock()
 	session, ok := gs.OutGroupSessions[roomID]
-	if !ok || session == nil || !session.Shared {
+	if !ok || session == nil {
 		gs.lock.Unlock()
 		return nil
 	}
