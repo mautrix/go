@@ -159,6 +159,7 @@ func (mach *OlmMachine) ShareGroupSession(roomID id.RoomID, users []id.UserID) e
 	}
 
 	mach.Log.Trace("Sending %d to-device messages to share group session for %s", len(toDevice.Messages), roomID)
+	// FIXME room key withheld events need to be sent differently
 	_, err = mach.Client.SendToDevice(event.ToDeviceEncrypted, toDevice)
 	if err != nil {
 		return errors.Wrap(err, "failed to share group session")
@@ -194,7 +195,7 @@ func (mach *OlmMachine) encryptGroupSessionForUser(session *OutboundGroupSession
 				SessionID: session.ID(),
 				SenderKey: mach.account.IdentityKey(),
 				Code:      event.RoomKeyWithheldUnverified,
-				Reason:    "Device is not verified",
+				Reason:    "This device does not encrypt messages for unverified devices",
 			}}
 			session.Users[userKey] = OGSIgnored
 		} else if deviceSession, err := mach.CryptoStore.GetLatestSession(device.IdentityKey); err != nil {
