@@ -18,12 +18,189 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
+type migrateFunc func(*sql.Tx, string) error
+
+var dbMigrations [2]migrateFunc = [2]migrateFunc{
+	func(tx *sql.Tx, _ string) error {
+		for _, query := range []string{
+			`CREATE TABLE IF NOT EXISTS crypto_account (
+				device_id  VARCHAR(255) PRIMARY KEY,
+				shared     BOOLEAN      NOT NULL,
+				sync_token TEXT         NOT NULL,
+				account    bytea        NOT NULL
+			)`,
+			`CREATE TABLE IF NOT EXISTS crypto_message_index (
+				sender_key CHAR(43),
+				session_id CHAR(43),
+				"index"    INTEGER,
+				event_id   VARCHAR(255) NOT NULL,
+				timestamp  BIGINT       NOT NULL,
+				PRIMARY KEY (sender_key, session_id, "index")
+			)`,
+			`CREATE TABLE IF NOT EXISTS crypto_tracked_user (
+				user_id VARCHAR(255) PRIMARY KEY
+			)`,
+			`CREATE TABLE IF NOT EXISTS crypto_device (
+				user_id      VARCHAR(255),
+				device_id    VARCHAR(255),
+				identity_key CHAR(43)      NOT NULL,
+				signing_key  CHAR(43)      NOT NULL,
+				trust        SMALLINT      NOT NULL,
+				deleted      BOOLEAN       NOT NULL,
+				name         VARCHAR(255)  NOT NULL,
+				PRIMARY KEY (user_id, device_id)
+			)`,
+			`CREATE TABLE IF NOT EXISTS crypto_olm_session (
+				session_id   CHAR(43)  PRIMARY KEY,
+				sender_key   CHAR(43)  NOT NULL,
+				session      bytea     NOT NULL,
+				created_at   timestamp NOT NULL,
+				last_used    timestamp NOT NULL
+			)`,
+			`CREATE TABLE IF NOT EXISTS crypto_megolm_inbound_session (
+				session_id   CHAR(43)     PRIMARY KEY,
+				sender_key   CHAR(43)     NOT NULL,
+				signing_key  CHAR(43)     NOT NULL,
+				room_id      VARCHAR(255) NOT NULL,
+				session      bytea        NOT NULL,
+				forwarding_chains bytea   NOT NULL
+			)`,
+			`CREATE TABLE IF NOT EXISTS crypto_megolm_outbound_session (
+				room_id       VARCHAR(255) PRIMARY KEY,
+				session_id    CHAR(43)     NOT NULL UNIQUE,
+				session       bytea        NOT NULL,
+				shared        BOOLEAN      NOT NULL,
+				max_messages  INTEGER      NOT NULL,
+				message_count INTEGER      NOT NULL,
+				max_age       BIGINT       NOT NULL,
+				created_at    timestamp    NOT NULL,
+				last_used     timestamp    NOT NULL
+			)`,
+		} {
+			if _, err := tx.Exec(query); err != nil {
+				return err
+			}
+		}
+		return nil
+	},
+	func(tx *sql.Tx, dialect string) error {
+		if dialect == "postgres" {
+			tablesToPkeys := map[string][]string{
+				"crypto_account":                 {},
+				"crypto_olm_session":             {"session_id"},
+				"crypto_megolm_inbound_session":  {"session_id"},
+				"crypto_megolm_outbound_session": {"room_id"},
+			}
+			for tableName, pkeys := range tablesToPkeys {
+				// add account_id to primary key
+				pkeyStr := strings.Join(append(pkeys, "account_id"), ", ")
+				for _, query := range []string{
+					fmt.Sprintf("ALTER TABLE %s ADD COLUMN account_id VARCHAR(255)", tableName),
+					fmt.Sprintf("UPDATE %s SET account_id=''", tableName),
+					fmt.Sprintf("ALTER TABLE %s ALTER COLUMN account_id SET NOT NULL", tableName),
+					fmt.Sprintf("ALTER TABLE %s DROP CONSTRAINT %s_pkey", tableName, tableName),
+					fmt.Sprintf("ALTER TABLE %s ADD CONSTRAINT %s_pkey PRIMARY KEY (%s)", tableName, tableName, pkeyStr),
+				} {
+					if _, err := tx.Exec(query); err != nil {
+						return err
+					}
+				}
+			}
+		} else if dialect == "sqlite3" {
+			tableCols := map[string]string{
+				"crypto_account": `
+					account_id VARCHAR(255) NOT NULL,
+					device_id  VARCHAR(255) NOT NULL,
+					shared     BOOLEAN      NOT NULL,
+					sync_token TEXT         NOT NULL,
+					account    bytea        NOT NULL,
+					PRIMARY KEY (account_id)
+				`,
+				"crypto_olm_session": `
+					account_id   VARCHAR(255) NOT NULL,
+					session_id   CHAR(43)     NOT NULL,
+					sender_key   CHAR(43)     NOT NULL,
+					session      bytea        NOT NULL,
+					created_at   timestamp    NOT NULL,
+					last_used    timestamp    NOT NULL,
+					PRIMARY KEY (account_id, session_id)
+				`,
+				"crypto_megolm_inbound_session": `
+					account_id   VARCHAR(255) NOT NULL,
+					session_id   CHAR(43)     NOT NULL,
+					sender_key   CHAR(43)     NOT NULL,
+					signing_key  CHAR(43)     NOT NULL,
+					room_id      VARCHAR(255) NOT NULL,
+					session      bytea        NOT NULL,
+					forwarding_chains bytea   NOT NULL,
+					PRIMARY KEY (account_id, session_id)
+				`,
+				"crypto_megolm_outbound_session": `
+					account_id    VARCHAR(255) NOT NULL,
+					room_id       VARCHAR(255) NOT NULL,
+					session_id    CHAR(43)     NOT NULL UNIQUE,
+					session       bytea        NOT NULL,
+					shared        BOOLEAN      NOT NULL,
+					max_messages  INTEGER      NOT NULL,
+					message_count INTEGER      NOT NULL,
+					max_age       BIGINT       NOT NULL,
+					created_at    timestamp    NOT NULL,
+					last_used     timestamp    NOT NULL,
+					PRIMARY KEY (account_id, room_id)
+				`,
+			}
+			for tableName, cols := range tableCols {
+				// re-create tables with account_id column and new pkey and re-insert rows
+				for _, query := range []string{
+					fmt.Sprintf("ALTER TABLE %s RENAME TO old_%s", tableName, tableName),
+					fmt.Sprintf("CREATE TABLE %s (%s)", tableName, cols),
+					fmt.Sprintf("INSERT INTO %s SELECT '', * FROM old_%s", tableName, tableName),
+					fmt.Sprintf("DROP TABLE old_%s", tableName),
+				} {
+					if _, err := tx.Exec(query); err != nil {
+						return err
+					}
+				}
+			}
+		} else {
+			return errors.New("unknown dialect: " + dialect)
+		}
+		return nil
+	},
+}
+
+// GetVersion returns the current version of the DB schema.
+func GetVersion(db *sql.DB) (int, error) {
+	_, err := db.Exec("CREATE TABLE IF NOT EXISTS crypto_version (version INTEGER)")
+	if err != nil {
+		return -1, err
+	}
+
+	version := 0
+	row := db.QueryRow("SELECT version FROM crypto_version LIMIT 1")
+	if row != nil {
+		_ = row.Scan(&version)
+	}
+	return version, nil
+}
+
+// SetVersion sets the schema version in a running DB transaction.
+func SetVersion(tx *sql.Tx, version int) error {
+	_, err := tx.Exec("DELETE FROM crypto_version")
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec("INSERT INTO crypto_version (version) VALUES ($1)", version)
+	return err
+}
+
 // SQLCryptoStore is an implementation of a crypto Store for a database backend.
 type SQLCryptoStore struct {
 	DB      *sql.DB
 	Log     Logger
 	Dialect string
 
+	AccountID string
 	DeviceID  id.DeviceID
 	SyncToken string
 	PickleKey []byte
@@ -32,88 +209,50 @@ type SQLCryptoStore struct {
 
 // NewSQLCryptoStore initializes a new crypto Store using the given database, for a device's crypto material.
 // The stored material will be encrypted with the given key.
-func NewSQLCryptoStore(db *sql.DB, dialect string, deviceID id.DeviceID, pickleKey []byte, log Logger) *SQLCryptoStore {
+func NewSQLCryptoStore(db *sql.DB, dialect string, accountID string, deviceID id.DeviceID, pickleKey []byte, log Logger) *SQLCryptoStore {
 	return &SQLCryptoStore{
 		DB:        db,
 		Dialect:   dialect,
 		Log:       log,
 		PickleKey: pickleKey,
+		AccountID: accountID,
 		DeviceID:  deviceID,
 	}
 }
 
-// CreateTables creates the necessary tables in the database for the Store.
+// CreateTables applies all the pending database migrations.
 func (store *SQLCryptoStore) CreateTables() error {
-	initQueries := [...]string{
-		`CREATE TABLE IF NOT EXISTS crypto_account (
-			device_id  VARCHAR(255) PRIMARY KEY,
-			shared     BOOLEAN      NOT NULL,
-			sync_token TEXT         NOT NULL,
-			account    bytea        NOT NULL
-		)`,
-		`CREATE TABLE IF NOT EXISTS crypto_message_index (
-			sender_key CHAR(43),
-			session_id CHAR(43),
-			"index"    INTEGER,
-			event_id   VARCHAR(255) NOT NULL,
-			timestamp  BIGINT       NOT NULL,
-			PRIMARY KEY (sender_key, session_id, "index")
-		)`,
-		`CREATE TABLE IF NOT EXISTS crypto_tracked_user (
-			user_id VARCHAR(255) PRIMARY KEY
-		)`,
-		`CREATE TABLE IF NOT EXISTS crypto_device (
-			user_id      VARCHAR(255),
-			device_id    VARCHAR(255),
-			identity_key CHAR(43)      NOT NULL,
-			signing_key  CHAR(43)      NOT NULL,
-			trust        SMALLINT      NOT NULL,
-			deleted      BOOLEAN       NOT NULL,
-			name         VARCHAR(255)  NOT NULL,
-			PRIMARY KEY (user_id, device_id)
-		)`,
-		`CREATE TABLE IF NOT EXISTS crypto_olm_session (
-			session_id   CHAR(43)  PRIMARY KEY,
-			sender_key   CHAR(43)  NOT NULL,
-			session      bytea     NOT NULL,
-			created_at   timestamp NOT NULL,
-			last_used    timestamp NOT NULL
-		)`,
-		`CREATE TABLE IF NOT EXISTS crypto_megolm_inbound_session (
-			session_id   CHAR(43)     PRIMARY KEY,
-			sender_key   CHAR(43)     NOT NULL,
-			signing_key  CHAR(43)     NOT NULL,
-			room_id      VARCHAR(255) NOT NULL,
-			session      bytea        NOT NULL,
-			forwarding_chains bytea   NOT NULL
-		)`,
-		`CREATE TABLE IF NOT EXISTS crypto_megolm_outbound_session (
-			room_id       VARCHAR(255) PRIMARY KEY,
-			session_id    CHAR(43)     NOT NULL UNIQUE,
-			session       bytea        NOT NULL,
-			shared        BOOLEAN      NOT NULL,
-			max_messages  INTEGER      NOT NULL,
-			message_count INTEGER      NOT NULL,
-			max_age       BIGINT       NOT NULL,
-			created_at    timestamp    NOT NULL,
-			last_used     timestamp    NOT NULL
-		)`,
-	}
-
-	tx, err := store.DB.Begin()
+	version, err := GetVersion(store.DB)
 	if err != nil {
 		return err
 	}
 
-	for _, query := range initQueries {
-		_, err = tx.Exec(query)
+	// perform migrations starting with #version
+	for ; version < len(dbMigrations); version++ {
+		tx, err := store.DB.Begin()
+		if err != nil {
+			return err
+		}
+
+		// run each migrate func
+		migrateFunc := dbMigrations[version]
+		err = migrateFunc(tx, store.Dialect)
 		if err != nil {
 			_ = tx.Rollback()
 			return err
 		}
+
+		// also update the version in this tx
+		if err = SetVersion(tx, version+1); err != nil {
+			return err
+		}
+
+		if err = tx.Commit(); err != nil {
+			return err
+		}
 	}
 
-	return tx.Commit()
+	return nil
 }
 
 // Flush does nothing for this implementation as data is already persisted in the database.
@@ -124,7 +263,7 @@ func (store *SQLCryptoStore) Flush() error {
 // PutNextBatch stores the next sync batch token for the current account.
 func (store *SQLCryptoStore) PutNextBatch(nextBatch string) {
 	store.SyncToken = nextBatch
-	_, err := store.DB.Exec(`UPDATE crypto_account SET sync_token=$1 WHERE device_id=$2`, store.SyncToken, store.DeviceID)
+	_, err := store.DB.Exec(`UPDATE crypto_account SET sync_token=$1 WHERE account_id=$2`, store.SyncToken, store.AccountID)
 	if err != nil {
 		store.Log.Warn("Failed to store sync token: %v", err)
 	}
@@ -134,7 +273,7 @@ func (store *SQLCryptoStore) PutNextBatch(nextBatch string) {
 func (store *SQLCryptoStore) GetNextBatch() string {
 	if store.SyncToken == "" {
 		err := store.DB.
-			QueryRow("SELECT sync_token FROM crypto_account WHERE device_id=$1", store.DeviceID).
+			QueryRow("SELECT sync_token FROM crypto_account WHERE account_id=$1", store.AccountID).
 			Scan(&store.SyncToken)
 		if err != nil && err != sql.ErrNoRows {
 			store.Log.Warn("Failed to scan sync token: %v", err)
@@ -150,12 +289,12 @@ func (store *SQLCryptoStore) PutAccount(account *OlmAccount) error {
 	var err error
 	if store.Dialect == "postgres" {
 		_, err = store.DB.Exec(`
-			INSERT INTO crypto_account (device_id, shared, sync_token, account) VALUES ($1, $2, $3, $4)
-			ON CONFLICT (device_id) DO UPDATE SET shared=$2, sync_token=$3, account=$4`,
-			store.DeviceID, account.Shared, store.SyncToken, bytes)
+			INSERT INTO crypto_account (device_id, shared, sync_token, account, account_id) VALUES ($1, $2, $3, $4, $5)
+			ON CONFLICT (account_id) DO UPDATE SET shared=$2, sync_token=$3, account=$4, account_id=$5`,
+			store.DeviceID, account.Shared, store.SyncToken, bytes, store.AccountID)
 	} else if store.Dialect == "sqlite3" {
-		_, err = store.DB.Exec("INSERT OR REPLACE INTO crypto_account (device_id, shared, sync_token, account) VALUES ($1, $2, $3, $4)",
-			store.DeviceID, account.Shared, store.SyncToken, bytes)
+		_, err = store.DB.Exec("INSERT OR REPLACE INTO crypto_account (device_id, shared, sync_token, account, account_id) VALUES ($1, $2, $3, $4, $5)",
+			store.DeviceID, account.Shared, store.SyncToken, bytes, store.AccountID)
 	} else {
 		err = fmt.Errorf("unsupported dialect %s", store.Dialect)
 	}
@@ -168,7 +307,7 @@ func (store *SQLCryptoStore) PutAccount(account *OlmAccount) error {
 // GetAccount retrieves an OlmAccount from the database.
 func (store *SQLCryptoStore) GetAccount() (*OlmAccount, error) {
 	if store.Account == nil {
-		row := store.DB.QueryRow("SELECT shared, sync_token, account FROM crypto_account WHERE device_id=$1", store.DeviceID)
+		row := store.DB.QueryRow("SELECT shared, sync_token, account FROM crypto_account WHERE account_id=$1", store.AccountID)
 		acc := &OlmAccount{Internal: *olm.NewBlankAccount()}
 		var accountBytes []byte
 		err := row.Scan(&acc.Shared, &store.SyncToken, &accountBytes)
@@ -190,7 +329,8 @@ func (store *SQLCryptoStore) GetAccount() (*OlmAccount, error) {
 func (store *SQLCryptoStore) HasSession(key id.SenderKey) bool {
 	// TODO this may need to be changed if olm sessions start expiring
 	var sessionID id.SessionID
-	err := store.DB.QueryRow("SELECT session_id FROM crypto_olm_session WHERE sender_key=$1 LIMIT 1", key).Scan(&sessionID)
+	err := store.DB.QueryRow("SELECT session_id FROM crypto_olm_session WHERE sender_key=$1 AND account_id=$2 LIMIT 1",
+		key, store.AccountID).Scan(&sessionID)
 	if err == sql.ErrNoRows {
 		return false
 	}
@@ -199,7 +339,8 @@ func (store *SQLCryptoStore) HasSession(key id.SenderKey) bool {
 
 // GetSessions returns all the known Olm sessions for a sender key.
 func (store *SQLCryptoStore) GetSessions(key id.SenderKey) (OlmSessionList, error) {
-	rows, err := store.DB.Query("SELECT session, created_at, last_used FROM crypto_olm_session WHERE sender_key=$1 ORDER BY session_id", key)
+	rows, err := store.DB.Query("SELECT session, created_at, last_used FROM crypto_olm_session WHERE sender_key=$1 AND account_id=$2 ORDER BY session_id",
+		key, store.AccountID)
 	if err != nil {
 		return nil, err
 	}
@@ -222,7 +363,8 @@ func (store *SQLCryptoStore) GetSessions(key id.SenderKey) (OlmSessionList, erro
 
 // GetLatestSession retrieves the Olm session for a given sender key from the database that has the largest ID.
 func (store *SQLCryptoStore) GetLatestSession(key id.SenderKey) (*OlmSession, error) {
-	row := store.DB.QueryRow("SELECT session, created_at, last_used FROM crypto_olm_session WHERE sender_key=$1 ORDER BY session_id DESC LIMIT 1", key)
+	row := store.DB.QueryRow("SELECT session, created_at, last_used FROM crypto_olm_session WHERE sender_key=$1 AND account_id=$2 ORDER BY session_id DESC LIMIT 1",
+		key, store.AccountID)
 	sess := OlmSession{Internal: *olm.NewBlankSession()}
 	var sessionBytes []byte
 	err := row.Scan(&sessionBytes, &sess.CreationTime, &sess.UseTime)
@@ -237,16 +379,16 @@ func (store *SQLCryptoStore) GetLatestSession(key id.SenderKey) (*OlmSession, er
 // AddSession persists an Olm session for a sender in the database.
 func (store *SQLCryptoStore) AddSession(key id.SenderKey, session *OlmSession) error {
 	sessionBytes := session.Internal.Pickle(store.PickleKey)
-	_, err := store.DB.Exec("INSERT INTO crypto_olm_session (session_id, sender_key, session, created_at, last_used) VALUES ($1, $2, $3, $4, $5)",
-		session.ID(), key, sessionBytes, session.CreationTime, session.UseTime)
+	_, err := store.DB.Exec("INSERT INTO crypto_olm_session (session_id, sender_key, session, created_at, last_used, account_id) VALUES ($1, $2, $3, $4, $5, $6)",
+		session.ID(), key, sessionBytes, session.CreationTime, session.UseTime, store.AccountID)
 	return err
 }
 
 // UpdateSession replaces the Olm session for a sender in the database.
 func (store *SQLCryptoStore) UpdateSession(key id.SenderKey, session *OlmSession) error {
 	sessionBytes := session.Internal.Pickle(store.PickleKey)
-	_, err := store.DB.Exec("UPDATE crypto_olm_session SET session=$1, last_used=$2 WHERE session_id=$3",
-		sessionBytes, session.UseTime, session.ID())
+	_, err := store.DB.Exec("UPDATE crypto_olm_session SET session=$1, last_used=$2 WHERE session_id=$3 AND account_id=$4",
+		sessionBytes, session.UseTime, session.ID(), store.AccountID)
 	return err
 }
 
@@ -254,8 +396,8 @@ func (store *SQLCryptoStore) UpdateSession(key id.SenderKey, session *OlmSession
 func (store *SQLCryptoStore) PutGroupSession(roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID, session *InboundGroupSession) error {
 	sessionBytes := session.Internal.Pickle(store.PickleKey)
 	forwardingChains := strings.Join(session.ForwardingChains, ",")
-	_, err := store.DB.Exec("INSERT INTO crypto_megolm_inbound_session (session_id, sender_key, signing_key, room_id, session, forwarding_chains) VALUES ($1, $2, $3, $4, $5, $6)",
-		sessionID, senderKey, session.SigningKey, roomID, sessionBytes, forwardingChains)
+	_, err := store.DB.Exec("INSERT INTO crypto_megolm_inbound_session (session_id, sender_key, signing_key, room_id, session, forwarding_chains, account_id) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+		sessionID, senderKey, session.SigningKey, roomID, sessionBytes, forwardingChains, store.AccountID)
 	return err
 }
 
@@ -267,8 +409,8 @@ func (store *SQLCryptoStore) GetGroupSession(roomID id.RoomID, senderKey id.Send
 	err := store.DB.QueryRow(`
 		SELECT signing_key, session, forwarding_chains
 		FROM crypto_megolm_inbound_session
-		WHERE room_id=$1 AND sender_key=$2 AND session_id=$3`,
-		roomID, senderKey, sessionID,
+		WHERE room_id=$1 AND sender_key=$2 AND session_id=$3 AND account_id=$4`,
+		roomID, senderKey, sessionID, store.AccountID,
 	).Scan(&signingKey, &sessionBytes, &forwardingChains)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -295,16 +437,16 @@ func (store *SQLCryptoStore) AddOutboundGroupSession(session *OutboundGroupSessi
 	if store.Dialect == "postgres" {
 		_, err = store.DB.Exec(`
 			INSERT INTO crypto_megolm_outbound_session (
-				room_id, session_id, session, shared, max_messages, message_count, max_age, created_at, last_used
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-			ON CONFLICT (room_id) DO UPDATE SET session_id=$2, session=$3, shared=$4, max_messages=$5, message_count=$6, max_age=$7, created_at=$8, last_used=$9`,
-			session.RoomID, session.ID(), sessionBytes, session.Shared, session.MaxMessages, session.MessageCount, session.MaxAge, session.CreationTime, session.UseTime)
+				room_id, session_id, session, shared, max_messages, message_count, max_age, created_at, last_used, account_id
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			ON CONFLICT (account_id, room_id) DO UPDATE SET session_id=$2, session=$3, shared=$4, max_messages=$5, message_count=$6, max_age=$7, created_at=$8, last_used=$9, account_id=$10`,
+			session.RoomID, session.ID(), sessionBytes, session.Shared, session.MaxMessages, session.MessageCount, session.MaxAge, session.CreationTime, session.UseTime, store.AccountID)
 	} else if store.Dialect == "sqlite3" {
 		_, err = store.DB.Exec(`
 			INSERT OR REPLACE INTO crypto_megolm_outbound_session (
-				room_id, session_id, session, shared, max_messages, message_count, max_age, created_at, last_used
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-			session.RoomID, session.ID(), sessionBytes, session.Shared, session.MaxMessages, session.MessageCount, session.MaxAge, session.CreationTime, session.UseTime)
+				room_id, session_id, session, shared, max_messages, message_count, max_age, created_at, last_used, account_id
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+			session.RoomID, session.ID(), sessionBytes, session.Shared, session.MaxMessages, session.MessageCount, session.MaxAge, session.CreationTime, session.UseTime, store.AccountID)
 	} else {
 		err = fmt.Errorf("unsupported dialect %s", store.Dialect)
 	}
@@ -314,8 +456,8 @@ func (store *SQLCryptoStore) AddOutboundGroupSession(session *OutboundGroupSessi
 // UpdateOutboundGroupSession replaces an outbound Megolm session with for same room and session ID.
 func (store *SQLCryptoStore) UpdateOutboundGroupSession(session *OutboundGroupSession) error {
 	sessionBytes := session.Internal.Pickle(store.PickleKey)
-	_, err := store.DB.Exec("UPDATE crypto_megolm_outbound_session SET session=$1, message_count=$2, last_used=$3 WHERE room_id=$4 AND session_id=$5",
-		sessionBytes, session.MessageCount, session.UseTime, session.RoomID, session.ID())
+	_, err := store.DB.Exec("UPDATE crypto_megolm_outbound_session SET session=$1, message_count=$2, last_used=$3 WHERE room_id=$4 AND session_id=$5 AND account_id=$6",
+		sessionBytes, session.MessageCount, session.UseTime, session.RoomID, session.ID(), store.AccountID)
 	return err
 }
 
@@ -325,8 +467,8 @@ func (store *SQLCryptoStore) GetOutboundGroupSession(roomID id.RoomID) (*Outboun
 	var sessionBytes []byte
 	err := store.DB.QueryRow(`
 		SELECT session, shared, max_messages, message_count, max_age, created_at, last_used
-		FROM crypto_megolm_outbound_session WHERE room_id=$1`,
-		roomID,
+		FROM crypto_megolm_outbound_session WHERE room_id=$1 AND account_id=$2`,
+		roomID, store.AccountID,
 	).Scan(&sessionBytes, &ogs.Shared, &ogs.MaxMessages, &ogs.MessageCount, &ogs.MaxAge, &ogs.CreationTime, &ogs.UseTime)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -345,7 +487,8 @@ func (store *SQLCryptoStore) GetOutboundGroupSession(roomID id.RoomID) (*Outboun
 
 // RemoveOutboundGroupSession removes the outbound Megolm session for the given room ID.
 func (store *SQLCryptoStore) RemoveOutboundGroupSession(roomID id.RoomID) error {
-	_, err := store.DB.Exec("DELETE FROM crypto_megolm_outbound_session WHERE room_id=$1", roomID)
+	_, err := store.DB.Exec("DELETE FROM crypto_megolm_outbound_session WHERE room_id=$1 AND account_id=$2",
+		roomID, store.AccountID)
 	return err
 }
 

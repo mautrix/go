@@ -28,7 +28,7 @@ func getCryptoStores(t *testing.T) (map[string]Store, func()) {
 	if err != nil {
 		t.Fatalf("Error opening db: %v", err)
 	}
-	sqlStore := NewSQLCryptoStore(db, "sqlite3", id.DeviceID("dev"), []byte("test"), emptyLogger{})
+	sqlStore := NewSQLCryptoStore(db, "sqlite3", "accid", id.DeviceID("dev"), []byte("test"), emptyLogger{})
 	if err = sqlStore.CreateTables(); err != nil {
 		t.Fatalf("Error creating tables: %v", err)
 	}
