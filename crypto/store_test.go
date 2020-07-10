@@ -9,6 +9,7 @@ package crypto
 import (
 	"database/sql"
 	"os"
+	"strconv"
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -189,7 +190,7 @@ func TestStoreOutboundMegolmSession(t *testing.T) {
 				t.Errorf("Error retrieving outbound session: %v", err)
 			}
 
-			outbound := NewOutboundGroupSession("room1")
+			outbound := NewOutboundGroupSession("room1", nil)
 			err = store.AddOutboundGroupSession(outbound)
 			if err != nil {
 				t.Errorf("Error inserting outbound session: %v", err)
@@ -224,22 +225,18 @@ func TestStoreDevices(t *testing.T) {
 	defer cleanup()
 	for storeName, store := range stores {
 		t.Run(storeName, func(t *testing.T) {
-			acc1 := NewOlmAccount()
-			acc2 := NewOlmAccount()
-			err := store.PutDevices("user1", map[id.DeviceID]*DeviceIdentity{
-				"dev1": {
+			deviceMap := make(map[id.DeviceID]*DeviceIdentity)
+			for i := 0; i < 17; i++ {
+				iStr := strconv.Itoa(i)
+				acc := NewOlmAccount()
+				deviceMap[id.DeviceID("dev"+iStr)] = &DeviceIdentity{
 					UserID:      "user1",
-					DeviceID:    "dev1",
-					IdentityKey: acc1.IdentityKey(),
-					SigningKey:  acc1.SigningKey(),
-				},
-				"dev2": {
-					UserID:      "user2",
-					DeviceID:    "dev2",
-					IdentityKey: acc2.IdentityKey(),
-					SigningKey:  acc2.SigningKey(),
-				},
-			})
+					DeviceID:    id.DeviceID("dev" + iStr),
+					IdentityKey: acc.IdentityKey(),
+					SigningKey:  acc.SigningKey(),
+				}
+			}
+			err := store.PutDevices("user1", deviceMap)
 			if err != nil {
 				t.Errorf("Error string devices: %v", err)
 			}
@@ -247,8 +244,14 @@ func TestStoreDevices(t *testing.T) {
 			if err != nil {
 				t.Errorf("Error getting devices: %v", err)
 			}
-			if len(devs) != 2 {
-				t.Errorf("Stored 2 devices, got back %v", len(devs))
+			if len(devs) != 17 {
+				t.Errorf("Stored 17 devices, got back %v", len(devs))
+			}
+			if devs["dev0"].IdentityKey != deviceMap["dev0"].IdentityKey {
+				t.Errorf("First device identity key does not match")
+			}
+			if devs["dev16"].IdentityKey != deviceMap["dev16"].IdentityKey {
+				t.Errorf("Last device identity key does not match")
 			}
 
 			filtered := store.FilterTrackedUsers([]id.UserID{"user0", "user1", "user2"})

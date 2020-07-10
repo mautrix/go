@@ -83,7 +83,7 @@ func (mach *OlmMachine) EncryptMegolmEvent(roomID id.RoomID, evtType event.Type,
 }
 
 func (mach *OlmMachine) newOutboundGroupSession(roomID id.RoomID) *OutboundGroupSession {
-	session := NewOutboundGroupSession(roomID)
+	session := NewOutboundGroupSession(roomID, mach.StateStore.GetEncryptionEvent(roomID))
 	signingKey, idKey := mach.account.Keys()
 	mach.createGroupSession(idKey, signingKey, roomID, session.ID(), session.Internal.Key())
 	return session
