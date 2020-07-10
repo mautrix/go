@@ -265,6 +265,40 @@ func (intent *IntentAPI) Whoami() (*mautrix.RespWhoami, error) {
 	return intent.Client.Whoami()
 }
 
+func (intent *IntentAPI) JoinedMembers(roomID id.RoomID) (resp *mautrix.RespJoinedMembers, err error) {
+	resp, err = intent.Client.JoinedMembers(roomID)
+	if err != nil {
+		return
+	}
+	for userID, member := range resp.Joined {
+		var displayname string
+		var avatarURL id.ContentURIString
+		if member.DisplayName != nil {
+			displayname = *member.DisplayName
+		}
+		if member.AvatarURL != nil {
+			avatarURL = id.ContentURIString(*member.AvatarURL)
+		}
+		intent.as.StateStore.SetMember(roomID, userID, &event.MemberEventContent{
+			Membership:  event.MembershipJoin,
+			AvatarURL:   avatarURL,
+			Displayname: displayname,
+		})
+	}
+	return
+}
+
+func (intent *IntentAPI) Members(roomID id.RoomID, req ...mautrix.ReqMembers) (resp *mautrix.RespMembers, err error) {
+	resp, err = intent.Client.Members(roomID, req...)
+	if err != nil {
+		return
+	}
+	for _, evt := range resp.Chunk {
+		intent.as.UpdateState(evt)
+	}
+	return
+}
+
 func (intent *IntentAPI) EnsureInvited(roomID id.RoomID, userID id.UserID) error {
 	if !intent.as.StateStore.IsInvited(roomID, userID) {
 		_, err := intent.Client.InviteUser(roomID, &mautrix.ReqInviteUser{
