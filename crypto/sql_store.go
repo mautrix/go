@@ -20,7 +20,7 @@ import (
 
 type migrateFunc func(*sql.Tx, string) error
 
-var dbMigrations [2]migrateFunc = [2]migrateFunc{
+var SQLStoreMigrations = [2]migrateFunc{
 	func(tx *sql.Tx, _ string) error {
 		for _, query := range []string{
 			`CREATE TABLE IF NOT EXISTS crypto_account (
@@ -228,14 +228,14 @@ func (store *SQLCryptoStore) CreateTables() error {
 	}
 
 	// perform migrations starting with #version
-	for ; version < len(dbMigrations); version++ {
+	for ; version < len(SQLStoreMigrations); version++ {
 		tx, err := store.DB.Begin()
 		if err != nil {
 			return err
 		}
 
 		// run each migrate func
-		migrateFunc := dbMigrations[version]
+		migrateFunc := SQLStoreMigrations[version]
 		err = migrateFunc(tx, store.Dialect)
 		if err != nil {
 			_ = tx.Rollback()
