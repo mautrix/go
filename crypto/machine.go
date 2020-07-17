@@ -7,9 +7,6 @@
 package crypto
 
 import (
-	"context"
-	"math/rand"
-	"strconv"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -200,51 +197,7 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 			// TODO handle m.dummy encrypted to-device event
 		}
 	case *event.RoomKeyRequestEventContent:
-		// Only forward keys to the same user ID
-		if content.Action == event.KeyRequestActionRequest && mach.Client.UserID == evt.Sender {
-			if content.RequestingDeviceID == mach.Client.DeviceID {
-				mach.Log.Debug("Ignoring key request from the same device (%v)", content.RequestingDeviceID)
-				return
-			}
-			mach.Log.Debug("Received key request from %v for session %v", content.RequestingDeviceID, content.Body.SessionID)
-
-			igs, err := mach.CryptoStore.GetGroupSession(content.Body.RoomID, content.Body.SenderKey, content.Body.SessionID)
-			if err != nil {
-				mach.Log.Error("Error retrieving IGS to forward key: %v", err)
-				return
-			}
-			if igs == nil {
-				mach.Log.Warn("Can't find the requested session to forward: %v", content.Body.SessionID)
-				return
-			}
-
-			// export session key at earliest index
-			exportedKey, err := igs.Internal.Export(igs.Internal.FirstKnownIndex())
-			if err != nil {
-				mach.Log.Error("Error exporting key for session %v: %v", igs.ID(), err)
-				return
-			}
-
-			forwardedRoomKey := event.Content{
-				Parsed: &event.ForwardedRoomKeyEventContent{
-					RoomKeyEventContent: event.RoomKeyEventContent{
-						Algorithm:  id.AlgorithmMegolmV1,
-						RoomID:     igs.RoomID,
-						SessionID:  igs.ID(),
-						SessionKey: exportedKey,
-					},
-					SenderKey:          content.Body.SenderKey,
-					ForwardingKeyChain: igs.ForwardingChains,
-					SenderClaimedKey:   igs.SigningKey,
-				},
-			}
-
-			if err := mach.SendEncryptedToDevice(evt.Sender, content.RequestingDeviceID, forwardedRoomKey); err != nil {
-				mach.Log.Error("Failed to send encrypted forwarded key: %v", err)
-			}
-
-			mach.Log.Debug("Sent encrypted forwarded key to device %v for session %v", content.RequestingDeviceID, igs.ID())
-		}
+		mach.handleRoomKeyRequest(evt.Sender, content, true)
 	// TODO add m.verification.start case
 	default:
 		deviceID, _ := evt.Content.Raw["device_id"].(string)
@@ -252,27 +205,31 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 	}
 }
 
-// SendEncryptedToDevice sends an Olm-encrypted event to the given user device.
-func (mach *OlmMachine) SendEncryptedToDevice(userID id.UserID, deviceID id.DeviceID, content event.Content) error {
+func (mach *OlmMachine) getOrFetchDevice(userID id.UserID, deviceID id.DeviceID) (*DeviceIdentity, error) {
 	// get device identity
 	device, err := mach.CryptoStore.GetDevice(userID, deviceID)
 	if err != nil {
-		return err
-	} else if device == nil {
-		// fetch if not found
-		usersToDevices := mach.fetchKeys([]id.UserID{userID}, "", true)
-		if devices, ok := usersToDevices[userID]; ok {
-			if device, ok = devices[deviceID]; !ok {
-				return errors.Errorf("Failed to get identity for device %v", deviceID)
-			}
-		} else {
-			return errors.Errorf("Error fetching devices for user %v", userID)
-		}
+		return nil, errors.Wrap(err, "failed to get sender device from store")
+	} else if device != nil {
+		return device, nil
 	}
+	// try to fetch if not found
+	usersToDevices := mach.fetchKeys([]id.UserID{userID}, "", true)
+	if devices, ok := usersToDevices[userID]; ok {
+		if device, ok = devices[deviceID]; ok {
+			return device, nil
+		}
+		return nil, errors.Errorf("Failed to get identity for device %v", deviceID)
+	}
+	return nil, errors.Errorf("Error fetching devices for user %v", userID)
+}
+
+// SendEncryptedToDevice sends an Olm-encrypted event to the given user device.
+func (mach *OlmMachine) SendEncryptedToDevice(device *DeviceIdentity, content event.Content) error {
 	// create outbound sessions if missing
 	if err := mach.createOutboundSessions(map[id.UserID]map[id.DeviceID]*DeviceIdentity{
-		userID: {
-			deviceID: device,
+		device.UserID: {
+			device.DeviceID: device,
 		},
 	}); err != nil {
 		return err
@@ -293,86 +250,14 @@ func (mach *OlmMachine) SendEncryptedToDevice(userID id.UserID, deviceID id.Devi
 	_, err = mach.Client.SendToDevice(event.ToDeviceEncrypted,
 		&mautrix.ReqSendToDevice{
 			Messages: map[id.UserID]map[id.DeviceID]*event.Content{
-				userID: {
-					deviceID: encryptedContent,
+				device.UserID: {
+					device.DeviceID: encryptedContent,
 				},
 			},
 		},
 	)
 
 	return err
-}
-
-// RequestRoomKey sends a key request for a room to the current user's devices. If the context is cancelled, then so is the key request.
-// Returns a bool channel that will get notified either when the key is received or the request is cancelled.
-func (mach *OlmMachine) RequestRoomKey(ctx context.Context, toUser id.UserID, toDevice id.DeviceID,
-	roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID) (chan bool, error) {
-
-	requestID := strconv.Itoa(rand.Int())
-	keyResponseReceived := make(chan struct{})
-	// store the channel where we will be notified about responses for this session ID
-	mach.roomKeyRequestFilled.Store(sessionID, keyResponseReceived)
-	// request the keys for this session
-	reqEvtContent := &event.Content{
-		Parsed: event.RoomKeyRequestEventContent{
-			Action: event.KeyRequestActionRequest,
-			Body: event.RequestedKeyInfo{
-				Algorithm: id.AlgorithmMegolmV1,
-				RoomID:    roomID,
-				SenderKey: senderKey,
-				SessionID: sessionID,
-			},
-			RequestID:          requestID,
-			RequestingDeviceID: mach.Client.DeviceID,
-		},
-	}
-
-	toDeviceReq := &mautrix.ReqSendToDevice{
-		Messages: map[id.UserID]map[id.DeviceID]*event.Content{
-			toUser: {
-				toDevice: reqEvtContent,
-			},
-		},
-	}
-	// send messages to the devices
-	if _, err := mach.Client.SendToDevice(event.ToDeviceRoomKeyRequest, toDeviceReq); err != nil {
-		return nil, err
-	}
-	resChan := make(chan bool, 1)
-	go func() {
-		select {
-		case <-keyResponseReceived:
-			// key request successful
-			mach.Log.Debug("Key for session %v was received, cancelling other key requests", sessionID)
-			resChan <- true
-		case <-ctx.Done():
-			// if the context is done, key request was unsuccessful
-			mach.Log.Debug("Context closed (%v) before forwared key for session %v received, sending key request cancellation", ctx.Err(), sessionID)
-			resChan <- false
-		}
-
-		// send a message to all devices cancelling this key request
-		mach.roomKeyRequestFilled.Delete(sessionID)
-
-		cancelEvtContent := &event.Content{
-			Parsed: event.RoomKeyRequestEventContent{
-				Action:             event.KeyRequestActionCancel,
-				RequestID:          requestID,
-				RequestingDeviceID: mach.Client.DeviceID,
-			},
-		}
-
-		toDeviceCancel := &mautrix.ReqSendToDevice{
-			Messages: map[id.UserID]map[id.DeviceID]*event.Content{
-				toUser: {
-					toDevice: cancelEvtContent,
-				},
-			},
-		}
-
-		mach.Client.SendToDevice(event.ToDeviceRoomKeyRequest, toDeviceCancel)
-	}()
-	return resChan, nil
 }
 
 func (mach *OlmMachine) createGroupSession(senderKey id.SenderKey, signingKey id.Ed25519, roomID id.RoomID, sessionID id.SessionID, sessionKey string) {
@@ -398,41 +283,6 @@ func (mach *OlmMachine) receiveRoomKey(evt *DecryptedOlmEvent, content *event.Ro
 	}
 
 	mach.createGroupSession(evt.SenderKey, evt.Keys.Ed25519, content.RoomID, content.SessionID, content.SessionKey)
-}
-
-func (mach *OlmMachine) importForwardedRoomKey(evt *DecryptedOlmEvent, content *event.ForwardedRoomKeyEventContent) bool {
-	if content.Algorithm != id.AlgorithmMegolmV1 || evt.Keys.Ed25519 == "" {
-		return false
-	}
-
-	roomID := content.RoomID
-	senderKey := evt.SenderKey
-	origSenderKey := content.SenderKey
-	sessionID := content.SessionID
-
-	igsInternal, err := olm.InboundGroupSessionImport([]byte(content.SessionKey))
-	igs := &InboundGroupSession{
-		Internal:         *igsInternal,
-		SigningKey:       evt.Keys.Ed25519,
-		SenderKey:        origSenderKey,
-		RoomID:           roomID,
-		ForwardingChains: append(content.ForwardingKeyChain, senderKey.String()),
-		id:               sessionID,
-	}
-	if err != nil {
-		mach.Log.Error("Failed to import inbound group session: %v", err)
-		return false
-	} else if igs.ID() != content.SessionID {
-		mach.Log.Warn("Mismatched session ID while creating inbound group session")
-		return false
-	}
-	err = mach.CryptoStore.PutGroupSession(roomID, origSenderKey, sessionID, igs)
-	if err != nil {
-		mach.Log.Error("Failed to store new inbound group session: %v", err)
-		return false
-	}
-	mach.Log.Trace("Created inbound group session %s/%s/%s", roomID, origSenderKey, sessionID)
-	return true
 }
 
 // ShareKeys uploads necessary keys to the server.
