@@ -131,7 +131,7 @@ func (mach *OlmMachine) ProcessSyncResponse(resp *mautrix.RespSync, since string
 
 	min := mach.account.Internal.MaxNumberOfOneTimeKeys() / 2
 	if resp.DeviceOneTimeKeysCount.SignedCurve25519 < int(min) {
-		mach.Log.Trace("Sync response said we have %d signed curve25519 keys left, sharing new ones...", resp.DeviceOneTimeKeysCount.SignedCurve25519)
+		mach.Log.Debug("Sync response said we have %d signed curve25519 keys left, sharing new ones...", resp.DeviceOneTimeKeysCount.SignedCurve25519)
 		err := mach.ShareKeys(resp.DeviceOneTimeKeysCount.SignedCurve25519)
 		if err != nil {
 			mach.Log.Error("Failed to share keys: %v", err)
