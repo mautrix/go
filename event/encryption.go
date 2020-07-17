@@ -94,8 +94,9 @@ type RoomKeyEventContent struct {
 // https://matrix.org/docs/spec/client_server/r0.6.0#m-forwarded-room-key
 type ForwardedRoomKeyEventContent struct {
 	RoomKeyEventContent
-	SenderClaimedKey   string   `json:"sender_claimed_ed25519_key"`
-	ForwardingKeyChain []string `json:"forwarding_curve25519_key_chain"`
+	SenderKey          id.SenderKey `json:"sender_key"`
+	SenderClaimedKey   id.Ed25519   `json:"sender_claimed_ed25519_key"`
+	ForwardingKeyChain []string     `json:"forwarding_curve25519_key_chain"`
 }
 
 type KeyRequestAction string

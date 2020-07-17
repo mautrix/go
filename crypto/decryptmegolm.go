@@ -56,18 +56,9 @@ func (mach *OlmMachine) DecryptMegolmEvent(evt *event.Event) (*event.Event, erro
 	if content.DeviceID == mach.Client.DeviceID && sess.SigningKey == ownSigningKey && content.SenderKey == ownIdentityKey {
 		verified = true
 	} else {
-		device, err := mach.CryptoStore.GetDevice(evt.Sender, content.DeviceID)
+		device, err := mach.getOrFetchDevice(evt.Sender, content.DeviceID)
 		if err != nil {
-			return nil, errors.Wrap(err, "failed to get sender device from store")
-		} else if device == nil {
-			usersToDevices := mach.fetchKeys([]id.UserID{evt.Sender}, "", true)
-			if devices, ok := usersToDevices[evt.Sender]; ok {
-				if device, ok = devices[content.DeviceID]; !ok {
-					return nil, errors.Errorf("failed to get identity for device %v", content.DeviceID)
-				}
-			} else {
-				return nil, errors.Errorf("Error fetching devices for user %v", evt.Sender)
-			}
+			return nil, err
 		}
 		if device.Trust == TrustStateVerified && len(sess.ForwardingChains) == 0 { // For some reason, matrix-nio had a comment saying not to events decrypted using a forwarded key as verified.
 			if device.SigningKey != sess.SigningKey || device.IdentityKey != content.SenderKey {

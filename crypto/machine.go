@@ -7,6 +7,9 @@
 package crypto
 
 import (
+	"sync"
+
+	"github.com/pkg/errors"
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
 
@@ -34,6 +37,8 @@ type OlmMachine struct {
 	AllowUnverifiedDevices bool
 
 	account *OlmAccount
+
+	roomKeyRequestFilled *sync.Map
 }
 
 // StateStore is used by OlmMachine to get room state information that's needed for encryption.
@@ -55,6 +60,8 @@ func NewOlmMachine(client *mautrix.Client, log Logger, cryptoStore Store, stateS
 		StateStore:  stateStore,
 
 		AllowUnverifiedDevices: true,
+
+		roomKeyRequestFilled: &sync.Map{},
 	}
 }
 
@@ -180,13 +187,77 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 		switch content := decryptedEvt.Content.Parsed.(type) {
 		case *event.RoomKeyEventContent:
 			mach.receiveRoomKey(decryptedEvt, content)
-			// TODO handle other encrypted to-device events
+		case *event.ForwardedRoomKeyEventContent:
+			if mach.importForwardedRoomKey(decryptedEvt, content) {
+				if ch, ok := mach.roomKeyRequestFilled.Load(content.SessionID); ok {
+					// close channel to notify listener that the key was received
+					close(ch.(chan struct{}))
+				}
+			}
+			// TODO handle m.dummy encrypted to-device event
 		}
-		// TODO handle other unencrypted to-device events. At least m.room_key_request and m.verification.start
+	case *event.RoomKeyRequestEventContent:
+		mach.handleRoomKeyRequest(evt.Sender, content, true)
+	// TODO add m.verification.start case
 	default:
 		deviceID, _ := evt.Content.Raw["device_id"].(string)
 		mach.Log.Trace("Unhandled to-device event of type %s from %s/%s", evt.Type.Type, evt.Sender, deviceID)
 	}
+}
+
+func (mach *OlmMachine) getOrFetchDevice(userID id.UserID, deviceID id.DeviceID) (*DeviceIdentity, error) {
+	// get device identity
+	device, err := mach.CryptoStore.GetDevice(userID, deviceID)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get sender device from store")
+	} else if device != nil {
+		return device, nil
+	}
+	// try to fetch if not found
+	usersToDevices := mach.fetchKeys([]id.UserID{userID}, "", true)
+	if devices, ok := usersToDevices[userID]; ok {
+		if device, ok = devices[deviceID]; ok {
+			return device, nil
+		}
+		return nil, errors.Errorf("Failed to get identity for device %v", deviceID)
+	}
+	return nil, errors.Errorf("Error fetching devices for user %v", userID)
+}
+
+// SendEncryptedToDevice sends an Olm-encrypted event to the given user device.
+func (mach *OlmMachine) SendEncryptedToDevice(device *DeviceIdentity, content event.Content) error {
+	// create outbound sessions if missing
+	if err := mach.createOutboundSessions(map[id.UserID]map[id.DeviceID]*DeviceIdentity{
+		device.UserID: {
+			device.DeviceID: device,
+		},
+	}); err != nil {
+		return err
+	}
+
+	// get Olm session
+	olmSess, err := mach.CryptoStore.GetLatestSession(device.IdentityKey)
+	if err != nil {
+		return err
+	}
+	if olmSess == nil {
+		return errors.Errorf("Did not find created outbound session for device %v", device.DeviceID)
+	}
+
+	encrypted := mach.encryptOlmEvent(olmSess, device, event.ToDeviceForwardedRoomKey, content)
+	encryptedContent := &event.Content{Parsed: &encrypted}
+
+	_, err = mach.Client.SendToDevice(event.ToDeviceEncrypted,
+		&mautrix.ReqSendToDevice{
+			Messages: map[id.UserID]map[id.DeviceID]*event.Content{
+				device.UserID: {
+					device.DeviceID: encryptedContent,
+				},
+			},
+		},
+	)
+
+	return err
 }
 
 func (mach *OlmMachine) createGroupSession(senderKey id.SenderKey, signingKey id.Ed25519, roomID id.RoomID, sessionID id.SessionID, sessionKey string) {

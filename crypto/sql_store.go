@@ -356,6 +356,8 @@ func (store *SQLCryptoStore) GetDevice(userID id.UserID, deviceID id.DeviceID) (
 		}
 		return nil, err
 	}
+	identity.UserID = userID
+	identity.DeviceID = deviceID
 	return &identity, nil
 }
 

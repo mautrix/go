@@ -172,9 +172,15 @@ var (
 
 // Device-to-device events
 var (
-	ToDeviceRoomKey          = Type{"m.room_key", ToDeviceEventType}
-	ToDeviceRoomKeyRequest   = Type{"m.room_key_request", ToDeviceEventType}
-	ToDeviceForwardedRoomKey = Type{"m.forwarded_room_key", ToDeviceEventType}
-	ToDeviceEncrypted        = Type{"m.room.encrypted", ToDeviceEventType}
-	ToDeviceRoomKeyWithheld  = Type{"m.room_key.withheld", ToDeviceEventType}
+	ToDeviceRoomKey             = Type{"m.room_key", ToDeviceEventType}
+	ToDeviceRoomKeyRequest      = Type{"m.room_key_request", ToDeviceEventType}
+	ToDeviceForwardedRoomKey    = Type{"m.forwarded_room_key", ToDeviceEventType}
+	ToDeviceEncrypted           = Type{"m.room.encrypted", ToDeviceEventType}
+	ToDeviceRoomKeyWithheld     = Type{"m.room_key.withheld", ToDeviceEventType}
+	ToDeviceVerificationRequest = Type{"m.key.verification.request", ToDeviceEventType}
+	ToDeviceVerificationStart   = Type{"m.key.verification.start", ToDeviceEventType}
+	ToDeviceVerificationAccept  = Type{"m.key.verification.accept", ToDeviceEventType}
+	ToDeviceVerificationKey     = Type{"m.key.verification.key", ToDeviceEventType}
+	ToDeviceVerificationMAC     = Type{"m.key.verification.mac", ToDeviceEventType}
+	ToDeviceVerificationCancel  = Type{"m.key.verification.cancel", ToDeviceEventType}
 )
