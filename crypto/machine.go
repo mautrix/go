@@ -227,7 +227,9 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 	}
 }
 
-func (mach *OlmMachine) getOrFetchDevice(userID id.UserID, deviceID id.DeviceID) (*DeviceIdentity, error) {
+// GetOrFetchDevice attempts to retrieve the device identity for the given device from the store
+// and if it's not found it asks the server for it.
+func (mach *OlmMachine) GetOrFetchDevice(userID id.UserID, deviceID id.DeviceID) (*DeviceIdentity, error) {
 	// get device identity
 	device, err := mach.CryptoStore.GetDevice(userID, deviceID)
 	if err != nil {
