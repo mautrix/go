@@ -9,6 +9,8 @@ package crypto
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
+	"strconv"
 
 	"github.com/pkg/errors"
 	"maunium.net/go/mautrix"
@@ -42,8 +44,7 @@ func (mach *OlmMachine) sendToOneDevice(userID id.UserID, deviceID id.DeviceID, 
 // verificationState holds all the information needed for the state of a SAS verification with another device.
 type verificationState struct {
 	sas           *olm.SAS
-	otherUserID   id.UserID
-	otherDeviceID id.DeviceID
+	otherDevice   *DeviceIdentity
 	initiatedByUs bool
 }
 
@@ -55,7 +56,7 @@ func (mach *OlmMachine) getTransactionState(transactionID string, userID id.User
 		return nil, ErrUnknownTransaction
 	}
 	verState := verStateInterface.(*verificationState)
-	if verState.otherUserID != userID {
+	if verState.otherDevice.UserID != userID {
 		reason := fmt.Sprintf("Unknown user for transaction %v: %v", transactionID, userID)
 		mach.CancelSASVerification(userID, id.DeviceID("*"), transactionID, reason, event.VerificationCancelUserMismatch)
 		mach.keyVerificationTransactionState.Delete(transactionID)
@@ -66,18 +67,32 @@ func (mach *OlmMachine) getTransactionState(transactionID string, userID id.User
 
 // handleVerificationStart handles an incoming m.key.verification.start message.
 // It initializes the state for this SAS verification process and stores it.
-// TODO async func for assuring user wants to verify
 func (mach *OlmMachine) handleVerificationStart(userID id.UserID, content *event.VerificationStartEventContent) {
-	mach.Log.Debug("Received verification request from %v", content.FromDevice)
+	mach.Log.Debug("Received verification start from %v", content.FromDevice)
+	otherDevice, err := mach.getOrFetchDevice(userID, content.FromDevice)
+	if err != nil {
+		mach.Log.Error("Could not find device %v of user %v", content.FromDevice, userID)
+		return
+	}
 	verState := &verificationState{
 		sas:           olm.NewSAS(),
-		otherUserID:   userID,
-		otherDeviceID: content.FromDevice,
+		otherDevice:   otherDevice,
 		initiatedByUs: false,
 	}
-	mach.keyVerificationTransactionState.Store(content.TransactionID, verState)
-	if err := mach.AcceptSASVerification(userID, content, verState.sas.GetPubkey()); err != nil {
-		mach.Log.Error("Error accepting SAS verification: %v", err)
+	if mach.AcceptVerificationFrom(otherDevice) {
+		mach.keyVerificationTransactionState.Store(content.TransactionID, verState)
+		// TODO cancel transaction on any error
+		// TODO start timeout to cancel this transaction
+		if err := mach.AcceptSASVerification(userID, content, verState.sas.GetPubkey()); err != nil {
+			mach.Log.Error("Error accepting SAS verification: %v", err)
+		}
+	} else {
+		mach.Log.Debug("Not accepting SAS verification %v from %v of user %v", content.TransactionID, otherDevice.DeviceID, otherDevice.UserID)
+		if err := mach.CancelSASVerification(
+			otherDevice.UserID, otherDevice.DeviceID, content.TransactionID, "Not accepted by user", event.VerificationCancelByUser); err != nil {
+
+			mach.Log.Error("Error canceling SAS verification: %v", err)
+		}
 	}
 }
 
@@ -104,10 +119,21 @@ func (mach *OlmMachine) handleVerificationKey(userID id.UserID, content *event.V
 	key := verState.sas.GetPubkey()
 
 	// TODO depends on the order of who sent what
-	mach.GetSASVerificationNumbers(userID, verState.otherDeviceID, content.TransactionID, verState.sas)
-	// TODO ask user to match
+	numbers, err := mach.GetSASVerificationNumbers(userID, verState.otherDevice.DeviceID, content.TransactionID, verState.sas)
+	if err != nil {
+		mach.Log.Error("Error getting SAS verification numbers: %v", err)
+		return
+	}
 
-	if err := mach.SendSASVerificationKey(userID, verState.otherDeviceID, content.TransactionID, string(key)); err != nil {
+	// function provided by the caller to determine if the SAS numbers match
+	if !mach.VerifySASNumbersMatch(numbers, verState.otherDevice) {
+		mach.Log.Warn("SAS numbers do not match! Canceling transaction %v", content.TransactionID)
+		mach.keyVerificationTransactionState.Delete(content.TransactionID)
+		mach.CancelSASVerification(userID, verState.otherDevice.DeviceID, content.TransactionID, "Numbers do not match", event.VerificationCancelSASMismatch)
+		return
+	}
+
+	if err := mach.SendSASVerificationKey(userID, verState.otherDevice.DeviceID, content.TransactionID, string(key)); err != nil {
 		mach.Log.Error("Error sending SAS key to other device: %v", err)
 	}
 }
@@ -121,7 +147,7 @@ func (mach *OlmMachine) handleVerificationMAC(userID id.UserID, content *event.V
 		mach.Log.Error("Error getting transaction state: %v", err)
 		return
 	}
-	if err := mach.SendSASVerificationMAC(userID, verState.otherDeviceID, content.TransactionID, verState.sas); err != nil {
+	if err := mach.SendSASVerificationMAC(userID, verState.otherDevice.DeviceID, content.TransactionID, verState.sas); err != nil {
 		mach.Log.Error("Error sending verification MAC to other device: %v", err)
 	}
 }
@@ -129,17 +155,55 @@ func (mach *OlmMachine) handleVerificationMAC(userID id.UserID, content *event.V
 // handleVerificationCancel handles an incoming m.key.verification.cancel message.
 // It cancels the verification process for the given reason.
 func (mach *OlmMachine) handleVerificationCancel(userID id.UserID, content *event.VerificationCancelEventContent) {
-	// TODO
-	// be careful to not cause cancel loops by replying with a cancel
+	// make sure to not reply with a cancel to not cause a loop of cancel messages
+	// this verification will get canceled even if the senders do not match
+	mach.keyVerificationTransactionState.Delete(content.TransactionID)
+	mach.Log.Warn("SAS verification %v was canceled by %v with reason: %v (%v)",
+		content.TransactionID, userID, content.Reason, content.Code)
 }
 
 // handleVerificationRequest handles an incoming m.key.verification.request message.
-// TODO async func for assuring user wants to verify
 func (mach *OlmMachine) handleVerificationRequest(userID id.UserID, content *event.VerificationRequestEventContent) {
-	// TODO
+	mach.Log.Debug("Received verification request from %v", content.FromDevice)
+	otherDevice, err := mach.getOrFetchDevice(userID, content.FromDevice)
+	if err != nil {
+		mach.Log.Error("Could not find device %v of user %v", content.FromDevice, userID)
+		return
+	}
+	if mach.AcceptVerificationFrom(otherDevice) {
+		mach.Log.Debug("Accepting SAS verification %v from %v of user %v", content.TransactionID, otherDevice.DeviceID, otherDevice.UserID)
+		if err := mach.NewSASVerificationWith(otherDevice, content.TransactionID); err != nil {
+			mach.Log.Error("Error accepting SAS verification request: %v", err)
+		}
+	} else {
+		mach.Log.Debug("Not accepting SAS verification %v from %v of user %v", content.TransactionID, otherDevice.DeviceID, otherDevice.UserID)
+		if err := mach.CancelSASVerification(
+			otherDevice.UserID, otherDevice.DeviceID, content.TransactionID, "Not accepted by user", event.VerificationCancelByUser); err != nil {
+
+			mach.Log.Error("Error canceling SAS verification: %v", err)
+		}
+	}
 }
 
-// StartSASVerification starts the SAS verification process with another device.
+// NewSASVerificationWith starts the SAS verification process with another device.
+// If the transaction ID is empty, a new one is generated.
+func (mach *OlmMachine) NewSASVerificationWith(device *DeviceIdentity, transactionID string) error {
+	if transactionID == "" {
+		transactionID = strconv.Itoa(rand.Int())
+	}
+	mach.Log.Debug("Starting new verification transaction %v with device %v of user %v", transactionID, device.DeviceID, device.UserID)
+
+	verState := &verificationState{
+		sas:           olm.NewSAS(),
+		otherDevice:   device,
+		initiatedByUs: true,
+	}
+	mach.keyVerificationTransactionState.Store(transactionID, verState)
+
+	return mach.StartSASVerification(device.UserID, device.DeviceID, transactionID)
+}
+
+// StartSASVerification sends the SAS verification start message to another device.
 func (mach *OlmMachine) StartSASVerification(toUserID id.UserID, toDeviceID id.DeviceID, transactionID string) error {
 	// TODO support emoji verification
 	content := &event.VerificationStartEventContent{

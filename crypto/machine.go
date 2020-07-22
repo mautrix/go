@@ -36,6 +36,11 @@ type OlmMachine struct {
 
 	AllowUnverifiedDevices bool
 
+	// AcceptVerificationFrom determines whether the machine will accept verification requests from this device.
+	AcceptVerificationFrom func(*DeviceIdentity) bool
+	// VerifySASNumbersMatch should return whether the given SAS numbers match with the numbers displayed on this device.
+	VerifySASNumbersMatch func([3]uint, *DeviceIdentity) bool
+
 	account *OlmAccount
 
 	roomKeyRequestFilled            *sync.Map
@@ -61,6 +66,9 @@ func NewOlmMachine(client *mautrix.Client, log Logger, cryptoStore Store, stateS
 		StateStore:  stateStore,
 
 		AllowUnverifiedDevices: true,
+
+		AcceptVerificationFrom: func(_ *DeviceIdentity) bool { return true },
+		VerifySASNumbersMatch:  func(_ [3]uint, _ *DeviceIdentity) bool { return false },
 
 		roomKeyRequestFilled:            &sync.Map{},
 		keyVerificationTransactionState: &sync.Map{},

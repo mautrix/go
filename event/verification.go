@@ -116,6 +116,8 @@ const (
 	VerificationCancelUserMismatch       VerificationCancelCode = "m.user_mismatch"
 	VerificationCancelInvalidMessage     VerificationCancelCode = "m.invalid_message"
 	VerificationCancelAccepted           VerificationCancelCode = "m.accepted"
+	VerificationCancelSASMismatch        VerificationCancelCode = "m.mismatched_sas"
+	VerificationCancelCommitmentMismatch VerificationCancelCode = "m.mismatched_commitment"
 )
 
 // VerificationCancelEventContent represents the content of a m.key.verification.cancel to_device event.
