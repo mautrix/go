@@ -38,7 +38,8 @@ type OlmMachine struct {
 
 	account *OlmAccount
 
-	roomKeyRequestFilled *sync.Map
+	roomKeyRequestFilled            *sync.Map
+	keyVerificationTransactionState *sync.Map
 }
 
 // StateStore is used by OlmMachine to get room state information that's needed for encryption.
@@ -61,7 +62,8 @@ func NewOlmMachine(client *mautrix.Client, log Logger, cryptoStore Store, stateS
 
 		AllowUnverifiedDevices: true,
 
-		roomKeyRequestFilled: &sync.Map{},
+		roomKeyRequestFilled:            &sync.Map{},
+		keyVerificationTransactionState: &sync.Map{},
 	}
 }
 
@@ -198,7 +200,19 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 		}
 	case *event.RoomKeyRequestEventContent:
 		mach.handleRoomKeyRequest(evt.Sender, content, true)
-	// TODO add m.verification.start case
+	// verification cases
+	case *event.VerificationStartEventContent:
+		mach.handleVerificationStart(evt.Sender, content)
+	case *event.VerificationAcceptEventContent:
+		mach.handleVerificationAccept(evt.Sender, content)
+	case *event.VerificationKeyEventContent:
+		mach.handleVerificationKey(evt.Sender, content)
+	case *event.VerificationMacEventContent:
+		mach.handleVerificationMAC(evt.Sender, content)
+	case *event.VerificationCancelEventContent:
+		mach.handleVerificationCancel(evt.Sender, content)
+	case *event.VerificationRequestEventContent:
+		mach.handleVerificationRequest(evt.Sender, content)
 	default:
 		deviceID, _ := evt.Content.Raw["device_id"].(string)
 		mach.Log.Trace("Unhandled to-device event of type %s from %s/%s", evt.Type.Type, evt.Sender, deviceID)
