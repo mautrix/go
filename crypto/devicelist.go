@@ -23,6 +23,10 @@ var (
 	InvalidKeySignature   = errors.New("invalid signature on device keys")
 )
 
+func (mach *OlmMachine) LoadDevices(user id.UserID) map[id.DeviceID]*DeviceIdentity {
+	return mach.fetchKeys([]id.UserID{user}, "", true)[user]
+}
+
 func (mach *OlmMachine) fetchKeys(users []id.UserID, sinceToken string, includeUntracked bool) (data map[id.UserID]map[id.DeviceID]*DeviceIdentity) {
 	req := &mautrix.ReqQueryKeys{
 		DeviceKeys: mautrix.DeviceKeysRequest{},
