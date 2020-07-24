@@ -37,6 +37,10 @@ type DeviceIdentity struct {
 	Name    string
 }
 
+func (device *DeviceIdentity) Fingerprint() string {
+	return Fingerprint(device.SigningKey)
+}
+
 // Store is used by OlmMachine to store Olm and Megolm sessions, user device lists and message indices.
 //
 // General implementation details:
