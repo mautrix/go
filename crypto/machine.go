@@ -207,7 +207,7 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 			// TODO handle m.dummy encrypted to-device event
 		}
 	case *event.RoomKeyRequestEventContent:
-		mach.handleRoomKeyRequest(evt.Sender, content, true)
+		mach.handleRoomKeyRequest(evt.Sender, content, false)
 	// verification cases
 	case *event.VerificationStartEventContent:
 		mach.handleVerificationStart(evt.Sender, content)
