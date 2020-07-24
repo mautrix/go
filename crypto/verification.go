@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"math/rand"
 	"strconv"
+	"time"
 
 	"github.com/pkg/errors"
 	"maunium.net/go/mautrix"
@@ -88,11 +89,10 @@ func (mach *OlmMachine) getTransactionState(transactionID string, userID id.User
 }
 
 // TODO emojis
-// TODO key forwarding to now consider only trusted devices test
 
 // handleVerificationStart handles an incoming m.key.verification.start message.
 // It initializes the state for this SAS verification process and stores it.
-func (mach *OlmMachine) handleVerificationStart(userID id.UserID, content *event.VerificationStartEventContent) {
+func (mach *OlmMachine) handleVerificationStart(userID id.UserID, content *event.VerificationStartEventContent, timeout time.Duration) {
 	mach.Log.Debug("Received verification start from %v", content.FromDevice)
 	otherDevice, err := mach.GetOrFetchDevice(userID, content.FromDevice)
 	if err != nil {
@@ -172,7 +172,9 @@ func (mach *OlmMachine) handleVerificationStart(userID id.UserID, content *event
 			mach.CancelSASVerification(otherDevice.UserID, otherDevice.DeviceID, content.TransactionID, "Transaction already exists", event.VerificationCancelUnexpectedMessage)
 			return
 		}
-		// TODO start timeout to cancel this transaction
+
+		go mach.timeoutAfter(userID, content.TransactionID, timeout)
+
 		if err := mach.AcceptSASVerification(userID, content, verState.sas.GetPubkey()); err != nil {
 			mach.Log.Error("Error accepting SAS verification: %v", err)
 		}
@@ -183,6 +185,19 @@ func (mach *OlmMachine) handleVerificationStart(userID id.UserID, content *event
 
 			mach.Log.Error("Error canceling SAS verification: %v", err)
 		}
+	}
+}
+
+func (mach *OlmMachine) timeoutAfter(userID id.UserID, transactionID string, timeout time.Duration) {
+	// transaction timeout after given duration
+	time.Sleep(timeout)
+	mapKey := userID.String() + ":" + transactionID
+	if verStateInterface, ok := mach.keyVerificationTransactionState.Load(mapKey); ok {
+		verState := verStateInterface.(*verificationState)
+		device := verState.otherDevice
+		mach.keyVerificationTransactionState.Delete(mapKey)
+		mach.CancelSASVerification(device.UserID, device.DeviceID, transactionID, "Timed out", event.VerificationCancelByTimeout)
+		mach.Log.Warn("Verification transaction %v is canceled due to timing out", transactionID)
 	}
 }
 
@@ -387,7 +402,7 @@ func (mach *OlmMachine) handleVerificationRequest(userID id.UserID, content *eve
 	}
 	if mach.AcceptVerificationFrom(otherDevice) {
 		mach.Log.Debug("Accepting SAS verification %v from %v of user %v", content.TransactionID, otherDevice.DeviceID, otherDevice.UserID)
-		if err := mach.NewSASVerificationWith(otherDevice, content.TransactionID); err != nil {
+		if err := mach.NewSASVerificationWith(otherDevice, content.TransactionID, 10*time.Minute); err != nil {
 			mach.Log.Error("Error accepting SAS verification request: %v", err)
 		}
 	} else {
@@ -398,7 +413,7 @@ func (mach *OlmMachine) handleVerificationRequest(userID id.UserID, content *eve
 
 // NewSASVerificationWith starts the SAS verification process with another device.
 // If the transaction ID is empty, a new one is generated.
-func (mach *OlmMachine) NewSASVerificationWith(device *DeviceIdentity, transactionID string) error {
+func (mach *OlmMachine) NewSASVerificationWith(device *DeviceIdentity, transactionID string, timeout time.Duration) error {
 	if transactionID == "" {
 		transactionID = strconv.Itoa(rand.Int())
 	}
@@ -432,6 +447,8 @@ func (mach *OlmMachine) NewSASVerificationWith(device *DeviceIdentity, transacti
 	if loaded {
 		return errors.New("Transaction already exists")
 	}
+
+	go mach.timeoutAfter(device.UserID, transactionID, timeout)
 
 	return nil
 }
