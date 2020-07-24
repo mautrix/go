@@ -39,8 +39,11 @@ type OlmMachine struct {
 
 	// AcceptVerificationFrom determines whether the machine will accept verification requests from this device.
 	AcceptVerificationFrom func(*DeviceIdentity) bool
-	// VerifySASNumbersMatch should return whether the given SAS numbers match with the numbers displayed on this device.
+	// VerifySASNumbersMatch should return whether the given SAS numbers match with the numbers displayed on other device.
 	VerifySASNumbersMatch func([3]uint, *DeviceIdentity) bool
+	// VerifySASNumbersMatch should return whether the given SAS emojis match with the emojis displayed on other device.
+	// This is only needed if support for emoji SAS verification is wanted.
+	VerifySASEmojisMatch func([7]VerificationEmoji, *DeviceIdentity) bool
 
 	account *OlmAccount
 
@@ -68,8 +71,9 @@ func NewOlmMachine(client *mautrix.Client, log Logger, cryptoStore Store, stateS
 
 		AllowUnverifiedDevices: true,
 
-		AcceptVerificationFrom: func(_ *DeviceIdentity) bool { return true },
-		VerifySASNumbersMatch:  func(_ [3]uint, _ *DeviceIdentity) bool { return false },
+		AcceptVerificationFrom: func(*DeviceIdentity) bool { return true },
+		VerifySASNumbersMatch:  func([3]uint, *DeviceIdentity) bool { return false },
+		VerifySASEmojisMatch:   func([7]VerificationEmoji, *DeviceIdentity) bool { return false },
 
 		roomKeyRequestFilled:            &sync.Map{},
 		keyVerificationTransactionState: &sync.Map{},
@@ -211,7 +215,7 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 		mach.handleRoomKeyRequest(evt.Sender, content, false)
 	// verification cases
 	case *event.VerificationStartEventContent:
-		mach.handleVerificationStart(evt.Sender, content, 10*time.Minute)
+		mach.handleVerificationStart(evt.Sender, content, 10*time.Minute, true)
 	case *event.VerificationAcceptEventContent:
 		mach.handleVerificationAccept(evt.Sender, content)
 	case *event.VerificationKeyEventContent:

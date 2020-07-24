@@ -27,6 +27,79 @@ var ErrUnknownTransaction = errors.New("Unknown transaction")
 // ErrUnknownVerificationMethod is returned when the verification method in a received m.key.verification.start is unknown.
 var ErrUnknownVerificationMethod = errors.New("Unknown verification method")
 
+var allEmojis = [...]VerificationEmoji{
+	{'🐶', "Dog"},
+	{'🐱', "Cat"},
+	{'🦁', "Lion"},
+	{'🐎', "Horse"},
+	{'🦄', "Unicorn"},
+	{'🐷', "Pig"},
+	{'🐘', "Elephant"},
+	{'🐰', "Rabbit"},
+	{'🐼', "Panda"},
+	{'🐓', "Rooster"},
+	{'🐧', "Penguin"},
+	{'🐢', "Turtle"},
+	{'🐟', "Fish"},
+	{'🐙', "Octopus"},
+	{'🦋', "Butterfly"},
+	{'🌷', "Flower"},
+	{'🌳', "Tree"},
+	{'🌵', "Cactus"},
+	{'🍄', "Mushroom"},
+	{'🌏', "Globe"},
+	{'🌙', "Moon"},
+	{'☁', "Cloud"},
+	{'🔥', "Fire"},
+	{'🍌', "Banana"},
+	{'🍎', "Apple"},
+	{'🍓', "Strawberry"},
+	{'🌽', "Corn"},
+	{'🍕', "Pizza"},
+	{'🎂', "Cake"},
+	{'❤', "Heart"},
+	{'😀', "Smiley"},
+	{'🤖', "Robot"},
+	{'🎩', "Hat"},
+	{'👓', "Glasses"},
+	{'🔧', "Spanner"},
+	{'🎅', "Santa"},
+	{'👍', "Thumbs Up"},
+	{'☂', "Umbrella"},
+	{'⌛', "Hourglass"},
+	{'⏰', "Clock"},
+	{'🎁', "Gift"},
+	{'💡', "Light Bulb"},
+	{'📕', "Book"},
+	{'✏', "Pencil"},
+	{'📎', "Paperclip"},
+	{'✂', "Scissors"},
+	{'🔒', "Lock"},
+	{'🔑', "Key"},
+	{'🔨', "Hammer"},
+	{'☎', "Telephone"},
+	{'🏁', "Flag"},
+	{'🚂', "Train"},
+	{'🚲', "Bicycle"},
+	{'✈', "Aeroplane"},
+	{'🚀', "Rocket"},
+	{'🏆', "Trophy"},
+	{'⚽', "Ball"},
+	{'🎸', "Guitar"},
+	{'🎺', "Trumpet"},
+	{'🔔', "Bell"},
+	{'⚓', "Anchor"},
+	{'🎧', "Headphones"},
+	{'📁', "Folder"},
+	{'📌', "Pin"},
+}
+
+// VerificationEmoji describes an emoji that might be sent for verifying devices.
+type VerificationEmoji struct {
+	Emoji       rune
+	Description string
+}
+
 // sendToOneDevice sends a to-device event to a single device.
 func (mach *OlmMachine) sendToOneDevice(userID id.UserID, deviceID id.DeviceID, eventType event.Type, content interface{}) error {
 	_, err := mach.Client.SendToDevice(eventType, &mautrix.ReqSendToDevice{
@@ -63,6 +136,7 @@ func getPKAndKeysMAC(sas *olm.SAS, sendingUser id.UserID, sendingDevice id.Devic
 type verificationState struct {
 	sas                 *olm.SAS
 	otherDevice         *DeviceIdentity
+	supportEmojiSAS     bool
 	initiatedByUs       bool
 	verificationStarted bool
 	keyReceived         bool
@@ -88,11 +162,9 @@ func (mach *OlmMachine) getTransactionState(transactionID string, userID id.User
 	return verState, nil
 }
 
-// TODO emojis
-
 // handleVerificationStart handles an incoming m.key.verification.start message.
 // It initializes the state for this SAS verification process and stores it.
-func (mach *OlmMachine) handleVerificationStart(userID id.UserID, content *event.VerificationStartEventContent, timeout time.Duration) {
+func (mach *OlmMachine) handleVerificationStart(userID id.UserID, content *event.VerificationStartEventContent, timeout time.Duration, useEmojiSAS bool) {
 	mach.Log.Debug("Received verification start from %v", content.FromDevice)
 	otherDevice, err := mach.GetOrFetchDevice(userID, content.FromDevice)
 	if err != nil {
@@ -145,9 +217,12 @@ func (mach *OlmMachine) handleVerificationStart(userID id.UserID, content *event
 	}
 	// check for SAS method
 	hasDecimal := false
+	hasEmoji := false
 	for _, sas := range content.ShortAuthenticationString {
 		if sas == event.SASDecimal {
 			hasDecimal = true
+		} else if sas == event.SASEmoji {
+			hasEmoji = true
 		}
 	}
 	if !hasDecimal {
@@ -160,6 +235,7 @@ func (mach *OlmMachine) handleVerificationStart(userID id.UserID, content *event
 		verState := &verificationState{
 			sas:                 olm.NewSAS(),
 			otherDevice:         otherDevice,
+			supportEmojiSAS:     hasEmoji && useEmojiSAS,
 			initiatedByUs:       false,
 			verificationStarted: true,
 			keyReceived:         false,
@@ -175,7 +251,7 @@ func (mach *OlmMachine) handleVerificationStart(userID id.UserID, content *event
 
 		go mach.timeoutAfter(userID, content.TransactionID, timeout)
 
-		if err := mach.AcceptSASVerification(userID, content, verState.sas.GetPubkey()); err != nil {
+		if err := mach.AcceptSASVerification(userID, content, verState.sas.GetPubkey(), hasEmoji && useEmojiSAS); err != nil {
 			mach.Log.Error("Error accepting SAS verification: %v", err)
 		}
 	} else {
@@ -220,21 +296,28 @@ func (mach *OlmMachine) handleVerificationAccept(userID id.UserID, content *even
 	}
 
 	hasDecimal := false
+	hasEmoji := false
 	for _, sas := range content.ShortAuthenticationString {
 		if sas == event.SASDecimal {
 			hasDecimal = true
+		} else if sas == event.SASEmoji {
+			hasEmoji = true
 		}
 	}
 
 	if content.KeyAgreementProtocol != event.KeyAgreementCurve25519 ||
 		content.Hash != event.VerificationHashSHA256 ||
 		content.MessageAuthenticationCode != event.HKDFHMACSHA256 ||
-		!hasDecimal {
+		(!hasDecimal && !hasEmoji) {
 
 		mach.Log.Warn("Canceling verification transaction %v due to unknown parameter", content.TransactionID)
 		mach.keyVerificationTransactionState.Delete(userID.String() + ":" + content.TransactionID)
 		mach.CancelSASVerification(verState.otherDevice.UserID, verState.otherDevice.DeviceID, content.TransactionID, "Verification uses unknown method", event.VerificationCancelUnknownMethod)
 		return
+	}
+
+	if !hasEmoji {
+		verState.supportEmojiSAS = false
 	}
 
 	key := verState.sas.GetPubkey()
@@ -256,12 +339,13 @@ func (mach *OlmMachine) handleVerificationKey(userID id.UserID, content *event.V
 		mach.Log.Error("Error getting transaction state: %v", err)
 		return
 	}
+	device := verState.otherDevice
 
 	if !verState.verificationStarted || verState.keyReceived {
 		// unexpected key at this point
 		mach.Log.Warn("Unexpected verification key message for transaction %v", content.TransactionID)
 		mach.keyVerificationTransactionState.Delete(userID.String() + ":" + content.TransactionID)
-		mach.CancelSASVerification(verState.otherDevice.UserID, verState.otherDevice.DeviceID, content.TransactionID, "Unexpected key message", event.VerificationCancelUnexpectedMessage)
+		mach.CancelSASVerification(device.UserID, device.DeviceID, content.TransactionID, "Unexpected key message", event.VerificationCancelUnexpectedMessage)
 		return
 	}
 
@@ -279,33 +363,61 @@ func (mach *OlmMachine) handleVerificationKey(userID id.UserID, content *event.V
 		if expectedCommitment != verState.commitment {
 			mach.Log.Warn("Canceling verification transaction %v due to commitment mismatch", transactionID)
 			mach.keyVerificationTransactionState.Delete(userID.String() + ":" + transactionID)
-			mach.CancelSASVerification(verState.otherDevice.UserID, verState.otherDevice.DeviceID, transactionID, "Commitment mismatch", event.VerificationCancelCommitmentMismatch)
+			mach.CancelSASVerification(device.UserID, device.DeviceID, transactionID, "Commitment mismatch", event.VerificationCancelCommitmentMismatch)
 			return
 		}
 	} else {
 		// if verification was initiated by other device, send out our key now
 		key := verState.sas.GetPubkey()
-		if err := mach.SendSASVerificationKey(userID, verState.otherDevice.DeviceID, transactionID, string(key)); err != nil {
+		if err := mach.SendSASVerificationKey(userID, device.DeviceID, transactionID, string(key)); err != nil {
 			mach.Log.Error("Error sending SAS key to other device: %v", err)
 			return
 		}
 	}
 
-	// compare the SAS keys and send out the MAC
-	numbers, err := mach.GetSASVerificationNumbers(userID, verState.otherDevice.DeviceID, transactionID, verState.sas)
-	if err != nil {
-		mach.Log.Error("Error getting SAS verification numbers: %v", err)
-		return
+	// compare the SAS keys in a new goroutine and, when the verification is complete, send out the MAC
+	var initUserID, acceptUserID id.UserID
+	var initDeviceID, acceptDeviceID id.DeviceID
+	if verState.initiatedByUs {
+		initUserID = mach.Client.UserID
+		initDeviceID = mach.Client.DeviceID
+		acceptUserID = device.UserID
+		acceptDeviceID = device.DeviceID
+	} else {
+		initUserID = device.UserID
+		initDeviceID = device.DeviceID
+		acceptUserID = mach.Client.UserID
+		acceptDeviceID = mach.Client.DeviceID
 	}
-
-	go mach.verifySASMatch(numbers, transactionID, verState)
+	if verState.supportEmojiSAS {
+		// use emoji SAS
+		emojis, err := mach.GetSASVerificationEmojis(initUserID, initDeviceID, acceptUserID, acceptDeviceID, transactionID, verState.sas)
+		if err != nil {
+			mach.Log.Error("Error getting SAS verification emojis: %v", err)
+			return
+		}
+		go func() {
+			result := mach.VerifySASEmojisMatch(emojis, device)
+			mach.verifySASMatch(result, transactionID, verState)
+		}()
+	} else {
+		// use decimal SAS
+		numbers, err := mach.GetSASVerificationNumbers(initUserID, initDeviceID, acceptUserID, acceptDeviceID, transactionID, verState.sas)
+		if err != nil {
+			mach.Log.Error("Error getting SAS verification numbers: %v", err)
+			return
+		}
+		go func() {
+			result := mach.VerifySASNumbersMatch(numbers, device)
+			mach.verifySASMatch(result, transactionID, verState)
+		}()
+	}
 }
 
 // verifySASMatch is called asynchronously. It waits for the SAS to be compared for the verification to proceed.
 // If the SAS match, then our MAC is sent out. Otherwise the transaction is canceled.
-func (mach *OlmMachine) verifySASMatch(numbers [3]uint, transactionID string, verState *verificationState) {
-	// function provided by the caller to determine if the SAS numbers match
-	if mach.VerifySASNumbersMatch(numbers, verState.otherDevice) {
+func (mach *OlmMachine) verifySASMatch(didMatch bool, transactionID string, verState *verificationState) {
+	if didMatch {
 		verState.sasMatched = true
 		if err := mach.SendSASVerificationMAC(verState.otherDevice.UserID, verState.otherDevice.DeviceID, transactionID, verState.sas); err != nil {
 			mach.Log.Error("Error sending verification MAC to other device: %v", err)
@@ -402,7 +514,7 @@ func (mach *OlmMachine) handleVerificationRequest(userID id.UserID, content *eve
 	}
 	if mach.AcceptVerificationFrom(otherDevice) {
 		mach.Log.Debug("Accepting SAS verification %v from %v of user %v", content.TransactionID, otherDevice.DeviceID, otherDevice.UserID)
-		if err := mach.NewSASVerificationWith(otherDevice, content.TransactionID, 10*time.Minute); err != nil {
+		if err := mach.NewSASVerificationWith(otherDevice, content.TransactionID, 10*time.Minute, true); err != nil {
 			mach.Log.Error("Error accepting SAS verification request: %v", err)
 		}
 	} else {
@@ -413,7 +525,7 @@ func (mach *OlmMachine) handleVerificationRequest(userID id.UserID, content *eve
 
 // NewSASVerificationWith starts the SAS verification process with another device.
 // If the transaction ID is empty, a new one is generated.
-func (mach *OlmMachine) NewSASVerificationWith(device *DeviceIdentity, transactionID string, timeout time.Duration) error {
+func (mach *OlmMachine) NewSASVerificationWith(device *DeviceIdentity, transactionID string, timeout time.Duration, useEmojiSAS bool) error {
 	if transactionID == "" {
 		transactionID = strconv.Itoa(rand.Int())
 	}
@@ -422,13 +534,14 @@ func (mach *OlmMachine) NewSASVerificationWith(device *DeviceIdentity, transacti
 	verState := &verificationState{
 		sas:                 olm.NewSAS(),
 		otherDevice:         device,
+		supportEmojiSAS:     useEmojiSAS,
 		initiatedByUs:       true,
 		verificationStarted: false,
 		keyReceived:         false,
 		sasMatched:          false,
 	}
 
-	startEvent, err := mach.StartSASVerification(device.UserID, device.DeviceID, transactionID)
+	startEvent, err := mach.StartSASVerification(device.UserID, device.DeviceID, transactionID, useEmojiSAS)
 	if err != nil {
 		return err
 	}
@@ -448,14 +561,19 @@ func (mach *OlmMachine) NewSASVerificationWith(device *DeviceIdentity, transacti
 		return errors.New("Transaction already exists")
 	}
 
+	mach.Log.Error("emoji %v", useEmojiSAS)
+
 	go mach.timeoutAfter(device.UserID, transactionID, timeout)
 
 	return nil
 }
 
 // StartSASVerification sends the SAS verification start message to another device.
-func (mach *OlmMachine) StartSASVerification(toUserID id.UserID, toDeviceID id.DeviceID, transactionID string) (*event.VerificationStartEventContent, error) {
-	// TODO support emoji verification
+func (mach *OlmMachine) StartSASVerification(toUserID id.UserID, toDeviceID id.DeviceID, transactionID string, useEmoji bool) (*event.VerificationStartEventContent, error) {
+	sasMethods := []event.SASMethod{event.SASDecimal}
+	if useEmoji {
+		sasMethods = append(sasMethods, event.SASEmoji)
+	}
 	content := &event.VerificationStartEventContent{
 		FromDevice:                 mach.Client.DeviceID,
 		TransactionID:              transactionID,
@@ -463,13 +581,13 @@ func (mach *OlmMachine) StartSASVerification(toUserID id.UserID, toDeviceID id.D
 		KeyAgreementProtocols:      []event.KeyAgreementProtocol{event.KeyAgreementCurve25519},
 		Hashes:                     []event.VerificationHashMethod{event.VerificationHashSHA256},
 		MessageAuthenticationCodes: []event.MACMethod{event.HKDFHMACSHA256},
-		ShortAuthenticationString:  []event.SASMethod{event.SASDecimal},
+		ShortAuthenticationString:  sasMethods,
 	}
 	return content, mach.sendToOneDevice(toUserID, toDeviceID, event.ToDeviceVerificationStart, content)
 }
 
 // AcceptSASVerification accepts a SAS verification process from a received m.key.verification.start event.
-func (mach *OlmMachine) AcceptSASVerification(fromUser id.UserID, startEvent *event.VerificationStartEventContent, publicKey []byte) error {
+func (mach *OlmMachine) AcceptSASVerification(fromUser id.UserID, startEvent *event.VerificationStartEventContent, publicKey []byte, supportEmoji bool) error {
 	if startEvent.Method != event.VerificationMethodSAS {
 		reason := "Unknown verification method: " + string(startEvent.Method)
 		if err := mach.CancelSASVerification(fromUser, startEvent.FromDevice, startEvent.TransactionID, reason, event.VerificationCancelUnknownMethod); err != nil {
@@ -486,13 +604,17 @@ func (mach *OlmMachine) AcceptSASVerification(fromUser id.UserID, startEvent *ev
 		return err
 	}
 	hash := olm.NewUtility().Sha256(string(publicKey) + string(canonical))
+	sasMethods := []event.SASMethod{event.SASDecimal}
+	if supportEmoji {
+		sasMethods = append(sasMethods, event.SASEmoji)
+	}
 	content := &event.VerificationAcceptEventContent{
 		TransactionID:             startEvent.TransactionID,
 		Method:                    event.VerificationMethodSAS,
 		KeyAgreementProtocol:      event.KeyAgreementCurve25519,
 		Hash:                      event.VerificationHashSHA256,
 		MessageAuthenticationCode: event.HKDFHMACSHA256,
-		ShortAuthenticationString: []event.SASMethod{event.SASDecimal},
+		ShortAuthenticationString: sasMethods,
 		Commitment:                hash,
 	}
 	return mach.sendToOneDevice(fromUser, startEvent.FromDevice, event.ToDeviceVerificationAccept, content)
@@ -518,13 +640,14 @@ func (mach *OlmMachine) SendSASVerificationKey(userID id.UserID, deviceID id.Dev
 }
 
 // GetSASVerificationNumbers generates the three numbers that need to match with the other device for a verification to be valid.
-func (mach *OlmMachine) GetSASVerificationNumbers(userID id.UserID, deviceID id.DeviceID, transactionID string, sas *olm.SAS) ([3]uint, error) {
+func (mach *OlmMachine) GetSASVerificationNumbers(initUserID id.UserID, initDeviceID id.DeviceID,
+	acceptUserID id.UserID, acceptDeviceID id.DeviceID, transactionID string, sas *olm.SAS) ([3]uint, error) {
 	sasInfo := "MATRIX_KEY_VERIFICATION_SAS" +
-		userID.String() + deviceID.String() +
-		mach.Client.UserID.String() + mach.Client.DeviceID.String() +
+		initUserID.String() + initDeviceID.String() +
+		acceptUserID.String() + acceptDeviceID.String() +
 		transactionID
 
-	sasBytes, err := sas.GenerateBytes([]byte(sasInfo))
+	sasBytes, err := sas.GenerateBytes([]byte(sasInfo), 5)
 	if err != nil {
 		return [3]uint{0, 0, 0}, err
 	}
@@ -537,6 +660,39 @@ func (mach *OlmMachine) GetSASVerificationNumbers(userID id.UserID, deviceID id.
 	mach.Log.Debug("Generated SAS numbers are: %v-%v-%v", numbers[0], numbers[1], numbers[2])
 
 	return numbers, nil
+}
+
+// GetSASVerificationEmojis generates the three numbers that need to match with the other device for a verification to be valid.
+func (mach *OlmMachine) GetSASVerificationEmojis(initUserID id.UserID, initDeviceID id.DeviceID,
+	acceptUserID id.UserID, acceptDeviceID id.DeviceID, transactionID string, sas *olm.SAS) ([7]VerificationEmoji, error) {
+
+	sasInfo := "MATRIX_KEY_VERIFICATION_SAS" +
+		initUserID.String() + initDeviceID.String() +
+		acceptUserID.String() + acceptDeviceID.String() +
+		transactionID
+
+	var emojis [7]VerificationEmoji
+	sasBytes, err := sas.GenerateBytes([]byte(sasInfo), 6)
+	emojisStr := ""
+
+	if err != nil {
+		return emojis, err
+	}
+
+	sasNum := uint64(sasBytes[0])<<40 | uint64(sasBytes[1])<<32 | uint64(sasBytes[2])<<24 |
+		uint64(sasBytes[3])<<16 | uint64(sasBytes[4])<<8 | uint64(sasBytes[5])
+
+	for i := 0; i < len(emojis); i++ {
+		// take nth group of 6 bits
+		emojiIdx := (sasNum >> (48 - (i+1)*6)) & 0x3F
+		emoji := allEmojis[emojiIdx]
+		emojis[i] = emoji
+		emojisStr += fmt.Sprintf("%c (%v) ", emoji.Emoji, emoji.Description)
+	}
+
+	mach.Log.Debug("Generated SAS numbers are: %v", emojisStr)
+
+	return emojis, nil
 }
 
 // SendSASVerificationMAC sends the MAC of a device's key to the partner device.

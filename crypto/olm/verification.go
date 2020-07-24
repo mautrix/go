@@ -10,8 +10,6 @@ import (
 // #include <olm/sas.h>
 import "C"
 
-const sasBytesLength = 5
-
 // SAS stores an Olm Short Authentication String (SAS) object.
 type SAS struct {
 	int *C.OlmSAS
@@ -97,10 +95,10 @@ func (sas *SAS) SetTheirKey(theirKey []byte) error {
 }
 
 // GenerateBytes generates bytes to use for the short authentication string.
-func (sas *SAS) GenerateBytes(info []byte) ([]byte, error) {
+func (sas *SAS) GenerateBytes(info []byte, count uint) ([]byte, error) {
 	infoCopy := make([]byte, len(info))
 	copy(infoCopy, info)
-	output := make([]byte, sasBytesLength)
+	output := make([]byte, count)
 	r := C.olm_sas_generate_bytes(
 		(*C.OlmSAS)(sas.int),
 		unsafe.Pointer(&infoCopy[0]),
