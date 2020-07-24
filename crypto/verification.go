@@ -67,7 +67,7 @@ type verificationState struct {
 	initiatedByUs       bool
 	verificationStarted bool
 	keyReceived         bool
-	sasMatched          bool
+	sasMatched          chan bool
 	commitment          string
 	startEventCanonical string
 }
@@ -166,7 +166,7 @@ func (mach *OlmMachine) handleVerificationStart(userID id.UserID, content *event
 			initiatedByUs:       false,
 			verificationStarted: true,
 			keyReceived:         false,
-			sasMatched:          false,
+			sasMatched:          make(chan bool, 1),
 		}
 		_, loaded := mach.keyVerificationTransactionState.LoadOrStore(userID.String()+":"+content.TransactionID, verState)
 		if loaded {
@@ -345,14 +345,12 @@ func (mach *OlmMachine) handleVerificationKey(userID id.UserID, content *event.V
 // If the SAS match, then our MAC is sent out. Otherwise the transaction is canceled.
 func (mach *OlmMachine) verifySASMatch(didMatch bool, transactionID string, verState *verificationState) {
 	if didMatch {
-		verState.sasMatched = true
+		verState.sasMatched <- true
 		if err := mach.SendSASVerificationMAC(verState.otherDevice.UserID, verState.otherDevice.DeviceID, transactionID, verState.sas); err != nil {
 			mach.Log.Error("Error sending verification MAC to other device: %v", err)
 		}
 	} else {
-		mach.Log.Warn("SAS numbers do not match! Canceling transaction %v", transactionID)
-		mach.keyVerificationTransactionState.Delete(verState.otherDevice.UserID.String() + ":" + transactionID)
-		mach.CancelSASVerification(verState.otherDevice.UserID, verState.otherDevice.DeviceID, transactionID, "Numbers do not match", event.VerificationCancelSASMismatch)
+		verState.sasMatched <- false
 	}
 }
 
@@ -368,44 +366,53 @@ func (mach *OlmMachine) handleVerificationMAC(userID id.UserID, content *event.V
 
 	device := verState.otherDevice
 
-	if !verState.verificationStarted || !verState.keyReceived || !verState.sasMatched {
+	// we are done with this SAS verification in all cases so we forget about it
+	mach.keyVerificationTransactionState.Delete(userID.String() + ":" + content.TransactionID)
+
+	if !verState.verificationStarted || !verState.keyReceived {
 		// unexpected MAC at this point
 		mach.Log.Warn("Unexpected MAC message for transaction %v", content.TransactionID)
-		mach.keyVerificationTransactionState.Delete(userID.String() + ":" + content.TransactionID)
 		mach.CancelSASVerification(verState.otherDevice.UserID, verState.otherDevice.DeviceID, content.TransactionID, "Unexpected MAC message", event.VerificationCancelUnexpectedMessage)
 		return
 	}
 
-	// we are done with this SAS verification in all cases so we forget about it
-	mach.keyVerificationTransactionState.Delete(userID.String() + ":" + content.TransactionID)
+	// do this in another goroutine as the match result might take a long time to arrive
+	go func() {
+		matched := <-verState.sasMatched
+		if !matched {
+			mach.Log.Warn("SAS do not match! Canceling transaction %v", content.TransactionID)
+			mach.CancelSASVerification(verState.otherDevice.UserID, verState.otherDevice.DeviceID, content.TransactionID, "SAS do not match", event.VerificationCancelSASMismatch)
+			return
+		}
 
-	keyID := id.NewKeyID(id.KeyAlgorithmEd25519, device.DeviceID.String())
-	expectedPKMAC, expectedKeysMAC, err := getPKAndKeysMAC(verState.sas, device.UserID, device.DeviceID,
-		mach.Client.UserID, mach.Client.DeviceID, content.TransactionID, device.SigningKey.String(), keyID)
-	if err != nil {
-		mach.Log.Error("Error generating MAC to match with received MAC: %v", err)
-		return
-	}
+		keyID := id.NewKeyID(id.KeyAlgorithmEd25519, device.DeviceID.String())
+		expectedPKMAC, expectedKeysMAC, err := getPKAndKeysMAC(verState.sas, device.UserID, device.DeviceID,
+			mach.Client.UserID, mach.Client.DeviceID, content.TransactionID, device.SigningKey.String(), keyID)
+		if err != nil {
+			mach.Log.Error("Error generating MAC to match with received MAC: %v", err)
+			return
+		}
 
-	mach.Log.Debug("Expected %v keys MAC, got %v", string(expectedKeysMAC), content.Keys)
-	if content.Keys != string(expectedKeysMAC) {
-		mach.Log.Warn("Canceling verification transaction %v due to mismatched keys MAC")
-		mach.CancelSASVerification(userID, device.DeviceID, content.TransactionID, "Mismatched keys MACs", event.VerificationCancelKeyMismatch)
-		return
-	}
+		mach.Log.Debug("Expected %v keys MAC, got %v", string(expectedKeysMAC), content.Keys)
+		if content.Keys != string(expectedKeysMAC) {
+			mach.Log.Warn("Canceling verification transaction %v due to mismatched keys MAC")
+			mach.CancelSASVerification(userID, device.DeviceID, content.TransactionID, "Mismatched keys MACs", event.VerificationCancelKeyMismatch)
+			return
+		}
 
-	mach.Log.Debug("Expected %v PK MAC, got %v", string(expectedPKMAC), content.Mac[keyID])
-	if content.Mac[keyID] != string(expectedPKMAC) {
-		mach.Log.Warn("Canceling verification transaction %v due to mismatched PK MAC")
-		mach.CancelSASVerification(userID, device.DeviceID, content.TransactionID, "Mismatched PK MACs", event.VerificationCancelKeyMismatch)
-		return
-	}
+		mach.Log.Debug("Expected %v PK MAC, got %v", string(expectedPKMAC), content.Mac[keyID])
+		if content.Mac[keyID] != string(expectedPKMAC) {
+			mach.Log.Warn("Canceling verification transaction %v due to mismatched PK MAC")
+			mach.CancelSASVerification(userID, device.DeviceID, content.TransactionID, "Mismatched PK MACs", event.VerificationCancelKeyMismatch)
+			return
+		}
 
-	// we can finally trust this device
-	device.Trust = TrustStateVerified
-	mach.CryptoStore.PutDevice(device.UserID, device)
+		// we can finally trust this device
+		device.Trust = TrustStateVerified
+		mach.CryptoStore.PutDevice(device.UserID, device)
 
-	mach.Log.Debug("Device %v of user %v verified successfully!", device.DeviceID, device.UserID)
+		mach.Log.Debug("Device %v of user %v verified successfully!", device.DeviceID, device.UserID)
+	}()
 }
 
 // handleVerificationCancel handles an incoming m.key.verification.cancel message.
@@ -465,7 +472,7 @@ func (mach *OlmMachine) NewSASVerificationWith(device *DeviceIdentity, transacti
 		initiatedByUs:       true,
 		verificationStarted: false,
 		keyReceived:         false,
-		sasMatched:          false,
+		sasMatched:          make(chan bool, 1),
 	}
 
 	startEvent, err := mach.StartSASVerification(device.UserID, device.DeviceID, transactionID, useEmojiSAS)
