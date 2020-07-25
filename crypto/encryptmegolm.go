@@ -94,7 +94,7 @@ func (mach *OlmMachine) newOutboundGroupSession(roomID id.RoomID) *OutboundGroup
 // For devices with TrustStateBlacklisted, a m.room_key.withheld event with code=m.blacklisted is sent.
 // If AllowUnverifiedDevices is false, a similar event with code=m.unverified is sent to devices with TrustStateUnset
 func (mach *OlmMachine) ShareGroupSession(roomID id.RoomID, users []id.UserID) error {
-	mach.Log.Trace("Sharing group session for room %s to %v", roomID, users)
+	mach.Log.Debug("Sharing group session for room %s to %v", roomID, users)
 	session, err := mach.CryptoStore.GetOutboundGroupSession(roomID)
 	if err != nil {
 		return errors.Wrap(err, "failed to get previous outbound group session")
