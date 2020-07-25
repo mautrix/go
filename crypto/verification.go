@@ -62,20 +62,20 @@ func (mach *OlmMachine) sendToOneDevice(userID id.UserID, deviceID id.DeviceID, 
 }
 
 func getPKAndKeysMAC(sas *olm.SAS, sendingUser id.UserID, sendingDevice id.DeviceID, receivingUser id.UserID, receivingDevice id.DeviceID,
-	transactionID string, signingKey string, keyID id.KeyID) ([]byte, []byte, error) {
+	transactionID string, signingKey id.SigningKey, keyID id.KeyID) (string, string, error) {
 	sasInfo := "MATRIX_KEY_VERIFICATION_MAC" +
 		sendingUser.String() + sendingDevice.String() +
 		receivingUser.String() + receivingDevice.String() +
 		transactionID
 	pubKeyMac, err := sas.CalculateMAC([]byte(signingKey), []byte(sasInfo+keyID.String()))
 	if err != nil {
-		return nil, nil, err
+		return "", "", err
 	}
 	keysMac, err := sas.CalculateMAC([]byte(keyID.String()), []byte(sasInfo+"KEY_IDS"))
 	if err != nil {
-		return nil, nil, err
+		return "", "", err
 	}
-	return pubKeyMac, keysMac, nil
+	return string(pubKeyMac), string(keysMac), nil
 }
 
 // verificationState holds all the information needed for the state of a SAS verification with another device.
@@ -377,23 +377,24 @@ func (mach *OlmMachine) handleVerificationMAC(userID id.UserID, content *event.V
 		}
 
 		keyID := id.NewKeyID(id.KeyAlgorithmEd25519, device.DeviceID.String())
+
 		expectedPKMAC, expectedKeysMAC, err := getPKAndKeysMAC(verState.sas, device.UserID, device.DeviceID,
-			mach.Client.UserID, mach.Client.DeviceID, content.TransactionID, device.SigningKey.String(), keyID)
+			mach.Client.UserID, mach.Client.DeviceID, content.TransactionID, device.SigningKey, keyID)
 		if err != nil {
 			mach.Log.Error("Error generating MAC to match with received MAC: %v", err)
 			return
 		}
 
-		mach.Log.Debug("Expected %v keys MAC, got %v", string(expectedKeysMAC), content.Keys)
-		if content.Keys != string(expectedKeysMAC) {
-			mach.Log.Warn("Canceling verification transaction %v due to mismatched keys MAC")
+		mach.Log.Debug("Expected %s keys MAC, got %s", expectedKeysMAC, content.Keys)
+		if content.Keys != expectedKeysMAC {
+			mach.Log.Warn("Canceling verification transaction %v due to mismatched keys MAC", content.TransactionID)
 			mach.callbackAndCancelSASVerification(verState, content.TransactionID, "Mismatched keys MACs", event.VerificationCancelKeyMismatch)
 			return
 		}
 
-		mach.Log.Debug("Expected %v PK MAC, got %v", string(expectedPKMAC), content.Mac[keyID])
-		if content.Mac[keyID] != string(expectedPKMAC) {
-			mach.Log.Warn("Canceling verification transaction %v due to mismatched PK MAC")
+		mach.Log.Debug("Expected %s PK MAC, got %s", expectedPKMAC, content.Mac[keyID])
+		if content.Mac[keyID] != expectedPKMAC {
+			mach.Log.Warn("Canceling verification transaction %v due to mismatched PK MAC", content.TransactionID)
 			mach.callbackAndCancelSASVerification(verState, content.TransactionID, "Mismatched PK MACs", event.VerificationCancelKeyMismatch)
 			return
 		}
@@ -579,19 +580,19 @@ func (mach *OlmMachine) SendSASVerificationKey(userID id.UserID, deviceID id.Dev
 func (mach *OlmMachine) SendSASVerificationMAC(userID id.UserID, deviceID id.DeviceID, transactionID string, sas *olm.SAS) error {
 	keyID := id.NewKeyID(id.KeyAlgorithmEd25519, mach.Client.DeviceID.String())
 
-	signingKey := mach.account.SigningKey().String()
+	signingKey := mach.account.SigningKey()
 	pubKeyMac, keysMac, err := getPKAndKeysMAC(sas, mach.Client.UserID, mach.Client.DeviceID, userID, deviceID, transactionID, signingKey, keyID)
 	if err != nil {
 		return err
 	}
-	mach.Log.Debug("MAC of key %v is: %v", string(signingKey), string(pubKeyMac))
-	mach.Log.Debug("MAC of key ID(s) %v is: %v", keyID.String(), string(keysMac))
+	mach.Log.Debug("MAC of key %s is: %s", signingKey, pubKeyMac)
+	mach.Log.Debug("MAC of key ID(s) %s is: %s", keyID, keysMac)
 
 	content := &event.VerificationMacEventContent{
 		TransactionID: transactionID,
-		Keys:          string(keysMac),
+		Keys:          keysMac,
 		Mac: map[id.KeyID]string{
-			keyID: string(pubKeyMac),
+			keyID: pubKeyMac,
 		},
 	}
 	return mach.sendToOneDevice(userID, deviceID, event.ToDeviceVerificationMAC, content)
