@@ -98,67 +98,30 @@ func (mach *OlmMachine) handleVerificationStart(userID id.UserID, content *event
 		mach.Log.Error("Could not find device %v of user %v", content.FromDevice, userID)
 		return
 	}
-	if content.Method != event.VerificationMethodSAS {
-		mach.Log.Warn("Canceling verification transaction %v as it is not SAS", content.TransactionID)
-		mach.CancelSASVerification(otherDevice.UserID, otherDevice.DeviceID, content.TransactionID, "Only SAS method is supported", event.VerificationCancelUnknownMethod)
-		return
+	warnAndCancel := func(logReason, cancelReason string) {
+		mach.Log.Warn("Canceling verification transaction %v as it %s", content.TransactionID, logReason)
+		_ = mach.CancelSASVerification(otherDevice.UserID, otherDevice.DeviceID, content.TransactionID, cancelReason, event.VerificationCancelUnknownMethod)
 	}
-	// check for curve25519
-	hasCurve := false
-	for _, prot := range content.KeyAgreementProtocols {
-		if prot == event.KeyAgreementCurve25519 {
-			hasCurve = true
-			break
-		}
+	switch {
+	case content.Method != event.VerificationMethodSAS:
+		warnAndCancel("is not SAS", "Only SAS method is supported")
+	case !content.SupportsKeyAgreementProtocol(event.KeyAgreementCurve25519HKDFSHA256):
+		warnAndCancel("does not support key agreement protocol curve25519-hkdf-sha256",
+			"Only curve25519-hkdf-sha256 key agreement protocol is supported")
+	case !content.SupportsHashMethod(event.VerificationHashSHA256):
+		warnAndCancel("does not support SHA256 hashing", "Only SHA256 hashing is supported")
+	case !content.SupportsMACMethod(event.HKDFHMACSHA256):
+		warnAndCancel("does not support MAC method hkdf-hmac-sha256", "Only hkdf-hmac-sha256 MAC method is supported")
+	case !content.SupportsSASMethod(event.SASDecimal):
+		warnAndCancel("does not support decimal SAS", "Decimal SAS method must be supported")
+	default:
+		mach.actuallyStartVerification(userID, content, otherDevice, timeout, useEmojiSAS)
 	}
-	if !hasCurve {
-		mach.Log.Warn("Canceling verification transaction %v as it does not support Curve25519 key agreement protocol", content.TransactionID)
-		mach.CancelSASVerification(otherDevice.UserID, otherDevice.DeviceID, content.TransactionID, "Only Curve25519 key agreement protocol is supported", event.VerificationCancelUnknownMethod)
-		return
-	}
-	// check for sha256
-	hasSHA := false
-	for _, hash := range content.Hashes {
-		if hash == event.VerificationHashSHA256 {
-			hasSHA = true
-			break
-		}
-	}
-	if !hasSHA {
-		mach.Log.Warn("Canceling verification transaction %v as it does not support SHA256 hashing", content.TransactionID)
-		mach.CancelSASVerification(otherDevice.UserID, otherDevice.DeviceID, content.TransactionID, "Only SHA256 hashing is supported", event.VerificationCancelUnknownMethod)
-		return
-	}
-	// check for HKDF method
-	hasHKDF := false
-	for _, mac := range content.MessageAuthenticationCodes {
-		if mac == event.HKDFHMACSHA256 {
-			hasHKDF = true
-			break
-		}
-	}
-	if !hasHKDF {
-		mach.Log.Warn("Canceling verification transaction %v as it does not support MAC method hkdf-hmac-sha256", content.TransactionID)
-		mach.CancelSASVerification(otherDevice.UserID, otherDevice.DeviceID, content.TransactionID, "Only hkdf-hmac-sha256 mac method is supported", event.VerificationCancelUnknownMethod)
-		return
-	}
-	// check for SAS method
-	hasDecimal := false
-	hasEmoji := false
-	for _, sas := range content.ShortAuthenticationString {
-		if sas == event.SASDecimal {
-			hasDecimal = true
-		} else if sas == event.SASEmoji {
-			hasEmoji = true
-		}
-	}
-	if !hasDecimal {
-		mach.Log.Warn("Canceling verification transaction %v as it does not support decimal SAS", content.TransactionID)
-		mach.CancelSASVerification(otherDevice.UserID, otherDevice.DeviceID, content.TransactionID, "Decimal SAS method must be supported", event.VerificationCancelUnknownMethod)
-		return
-	}
+}
 
+func (mach *OlmMachine) actuallyStartVerification(userID id.UserID, content *event.VerificationStartEventContent, otherDevice *DeviceIdentity, timeout time.Duration, useEmojiSAS bool) {
 	if mach.AcceptVerificationFrom(otherDevice) {
+		hasEmoji := content.SupportsSASMethod(event.SASEmoji)
 		verState := &verificationState{
 			sas:                 olm.NewSAS(),
 			otherDevice:         otherDevice,
@@ -172,20 +135,20 @@ func (mach *OlmMachine) handleVerificationStart(userID id.UserID, content *event
 		if loaded {
 			// transaction already exists
 			mach.Log.Error("Transaction %v already exists, canceling", content.TransactionID)
-			mach.CancelSASVerification(otherDevice.UserID, otherDevice.DeviceID, content.TransactionID, "Transaction already exists", event.VerificationCancelUnexpectedMessage)
+			_ = mach.CancelSASVerification(otherDevice.UserID, otherDevice.DeviceID, content.TransactionID, "Transaction already exists", event.VerificationCancelUnexpectedMessage)
 			return
 		}
 
 		go mach.timeoutAfter(userID, content.TransactionID, timeout)
 
-		if err := mach.AcceptSASVerification(userID, content, verState.sas.GetPubkey(), hasEmoji && useEmojiSAS); err != nil {
+		err := mach.AcceptSASVerification(userID, content, verState.sas.GetPubkey(), hasEmoji && useEmojiSAS)
+		if err != nil {
 			mach.Log.Error("Error accepting SAS verification: %v", err)
 		}
 	} else {
 		mach.Log.Debug("Not accepting SAS verification %v from %v of user %v", content.TransactionID, otherDevice.DeviceID, otherDevice.UserID)
-		if err := mach.CancelSASVerification(
-			otherDevice.UserID, otherDevice.DeviceID, content.TransactionID, "Not accepted by user", event.VerificationCancelByUser); err != nil {
-
+		err := mach.CancelSASVerification(otherDevice.UserID, otherDevice.DeviceID, content.TransactionID, "Not accepted by user", event.VerificationCancelByUser)
+		if err != nil {
 			mach.Log.Error("Error canceling SAS verification: %v", err)
 		}
 	}
@@ -232,7 +195,7 @@ func (mach *OlmMachine) handleVerificationAccept(userID id.UserID, content *even
 		}
 	}
 
-	if content.KeyAgreementProtocol != event.KeyAgreementCurve25519 ||
+	if content.KeyAgreementProtocol != event.KeyAgreementCurve25519HKDFSHA256 ||
 		content.Hash != event.VerificationHashSHA256 ||
 		content.MessageAuthenticationCode != event.HKDFHMACSHA256 ||
 		(!hasDecimal && !hasEmoji) {
@@ -305,20 +268,25 @@ func (mach *OlmMachine) handleVerificationKey(userID id.UserID, content *event.V
 	// compare the SAS keys in a new goroutine and, when the verification is complete, send out the MAC
 	var initUserID, acceptUserID id.UserID
 	var initDeviceID, acceptDeviceID id.DeviceID
+	var initKey, acceptKey string
 	if verState.initiatedByUs {
 		initUserID = mach.Client.UserID
 		initDeviceID = mach.Client.DeviceID
+		initKey = string(verState.sas.GetPubkey())
 		acceptUserID = device.UserID
 		acceptDeviceID = device.DeviceID
+		acceptKey = content.Key
 	} else {
 		initUserID = device.UserID
 		initDeviceID = device.DeviceID
+		initKey = content.Key
 		acceptUserID = mach.Client.UserID
 		acceptDeviceID = mach.Client.DeviceID
+		acceptKey = string(verState.sas.GetPubkey())
 	}
 	if verState.supportEmojiSAS {
 		// use emoji SAS
-		emojis, err := mach.GetSASVerificationEmojis(initUserID, initDeviceID, acceptUserID, acceptDeviceID, transactionID, verState.sas)
+		emojis, err := mach.GetSASVerificationEmojis(initUserID, initDeviceID, initKey, acceptUserID, acceptDeviceID, acceptKey, transactionID, verState.sas)
 		if err != nil {
 			mach.Log.Error("Error getting SAS verification emojis: %v", err)
 			return
@@ -329,7 +297,7 @@ func (mach *OlmMachine) handleVerificationKey(userID id.UserID, content *event.V
 		}()
 	} else {
 		// use decimal SAS
-		numbers, err := mach.GetSASVerificationNumbers(initUserID, initDeviceID, acceptUserID, acceptDeviceID, transactionID, verState.sas)
+		numbers, err := mach.GetSASVerificationNumbers(initUserID, initDeviceID, initKey, acceptUserID, acceptDeviceID, acceptKey, transactionID, verState.sas)
 		if err != nil {
 			mach.Log.Error("Error getting SAS verification numbers: %v", err)
 			return
@@ -480,11 +448,11 @@ func (mach *OlmMachine) NewSASVerificationWith(device *DeviceIdentity, transacti
 		return err
 	}
 
-	json, err := json.Marshal(startEvent)
+	payload, err := json.Marshal(startEvent)
 	if err != nil {
 		return err
 	}
-	canonical, err := canonicaljson.CanonicalJSON(json)
+	canonical, err := canonicaljson.CanonicalJSON(payload)
 	if err != nil {
 		return err
 	}
@@ -512,7 +480,7 @@ func (mach *OlmMachine) StartSASVerification(toUserID id.UserID, toDeviceID id.D
 		FromDevice:                 mach.Client.DeviceID,
 		TransactionID:              transactionID,
 		Method:                     event.VerificationMethodSAS,
-		KeyAgreementProtocols:      []event.KeyAgreementProtocol{event.KeyAgreementCurve25519},
+		KeyAgreementProtocols:      []event.KeyAgreementProtocol{event.KeyAgreementCurve25519HKDFSHA256},
 		Hashes:                     []event.VerificationHashMethod{event.VerificationHashSHA256},
 		MessageAuthenticationCodes: []event.MACMethod{event.HKDFHMACSHA256},
 		ShortAuthenticationString:  sasMethods,
@@ -529,11 +497,11 @@ func (mach *OlmMachine) AcceptSASVerification(fromUser id.UserID, startEvent *ev
 		}
 		return ErrUnknownVerificationMethod
 	}
-	json, err := json.Marshal(startEvent)
+	payload, err := json.Marshal(startEvent)
 	if err != nil {
 		return err
 	}
-	canonical, err := canonicaljson.CanonicalJSON(json)
+	canonical, err := canonicaljson.CanonicalJSON(payload)
 	if err != nil {
 		return err
 	}
@@ -545,7 +513,7 @@ func (mach *OlmMachine) AcceptSASVerification(fromUser id.UserID, startEvent *ev
 	content := &event.VerificationAcceptEventContent{
 		TransactionID:             startEvent.TransactionID,
 		Method:                    event.VerificationMethodSAS,
-		KeyAgreementProtocol:      event.KeyAgreementCurve25519,
+		KeyAgreementProtocol:      event.KeyAgreementCurve25519HKDFSHA256,
 		Hash:                      event.VerificationHashSHA256,
 		MessageAuthenticationCode: event.HKDFHMACSHA256,
 		ShortAuthenticationString: sasMethods,

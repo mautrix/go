@@ -29,7 +29,10 @@ type VerificationRequestEventContent struct {
 
 type KeyAgreementProtocol string
 
-const KeyAgreementCurve25519 KeyAgreementProtocol = "curve25519"
+const (
+	KeyAgreementCurve25519           KeyAgreementProtocol = "curve25519"
+	KeyAgreementCurve25519HKDFSHA256 KeyAgreementProtocol = "curve25519-hkdf-sha256"
+)
 
 type VerificationHashMethod string
 
@@ -63,6 +66,42 @@ type VerificationStartEventContent struct {
 	MessageAuthenticationCodes []MACMethod `json:"message_authentication_codes"`
 	// The SAS methods the sending device (and the sending device's user) understands.
 	ShortAuthenticationString []SASMethod `json:"short_authentication_string"`
+}
+
+func (vsec *VerificationStartEventContent) SupportsKeyAgreementProtocol(proto KeyAgreementProtocol) bool {
+	for _, supportedProto := range vsec.KeyAgreementProtocols {
+		if supportedProto == proto {
+			return true
+		}
+	}
+	return false
+}
+
+func (vsec *VerificationStartEventContent) SupportsHashMethod(alg VerificationHashMethod) bool {
+	for _, supportedAlg := range vsec.Hashes {
+		if supportedAlg == alg {
+			return true
+		}
+	}
+	return false
+}
+
+func (vsec *VerificationStartEventContent) SupportsMACMethod(meth MACMethod) bool {
+	for _, supportedMeth := range vsec.MessageAuthenticationCodes {
+		if supportedMeth == meth {
+			return true
+		}
+	}
+	return false
+}
+
+func (vsec *VerificationStartEventContent) SupportsSASMethod(meth SASMethod) bool {
+	for _, supportedMeth := range vsec.ShortAuthenticationString {
+		if supportedMeth == meth {
+			return true
+		}
+	}
+	return false
 }
 
 // VerificationAcceptEventContent represents the content of a m.key.verification.accept to_device event.

@@ -87,12 +87,13 @@ type VerificationEmoji struct {
 }
 
 // GetSASVerificationNumbers generates the three numbers that need to match with the other device for a verification to be valid.
-func (mach *OlmMachine) GetSASVerificationNumbers(initUserID id.UserID, initDeviceID id.DeviceID,
-	acceptUserID id.UserID, acceptDeviceID id.DeviceID, transactionID string, sas *olm.SAS) ([3]uint, error) {
-	sasInfo := "MATRIX_KEY_VERIFICATION_SAS" +
-		initUserID.String() + initDeviceID.String() +
-		acceptUserID.String() + acceptDeviceID.String() +
-		transactionID
+func (mach *OlmMachine) GetSASVerificationNumbers(initUserID id.UserID, initDeviceID id.DeviceID, initKey string,
+	acceptUserID id.UserID, acceptDeviceID id.DeviceID, acceptKey string,
+	transactionID string, sas *olm.SAS) ([3]uint, error) {
+	sasInfo := fmt.Sprintf("MATRIX_KEY_VERIFICATION_SAS|%s|%s|%s|%s|%s|%s|%s",
+		initUserID, initDeviceID, initKey,
+		acceptUserID, acceptDeviceID, acceptKey,
+		transactionID)
 
 	sasBytes, err := sas.GenerateBytes([]byte(sasInfo), 5)
 	if err != nil {
@@ -110,13 +111,14 @@ func (mach *OlmMachine) GetSASVerificationNumbers(initUserID id.UserID, initDevi
 }
 
 // GetSASVerificationEmojis generates the three numbers that need to match with the other device for a verification to be valid.
-func (mach *OlmMachine) GetSASVerificationEmojis(initUserID id.UserID, initDeviceID id.DeviceID,
-	acceptUserID id.UserID, acceptDeviceID id.DeviceID, transactionID string, sas *olm.SAS) ([7]VerificationEmoji, error) {
+func (mach *OlmMachine) GetSASVerificationEmojis(initUserID id.UserID, initDeviceID id.DeviceID, initKey string,
+	acceptUserID id.UserID, acceptDeviceID id.DeviceID, acceptKey string,
+	transactionID string, sas *olm.SAS) ([7]VerificationEmoji, error) {
 
-	sasInfo := "MATRIX_KEY_VERIFICATION_SAS" +
-		initUserID.String() + initDeviceID.String() +
-		acceptUserID.String() + acceptDeviceID.String() +
-		transactionID
+	sasInfo := fmt.Sprintf("MATRIX_KEY_VERIFICATION_SAS|%s|%s|%s|%s|%s|%s|%s",
+		initUserID, initDeviceID, initKey,
+		acceptUserID, acceptDeviceID, acceptKey,
+		transactionID)
 
 	var emojis [7]VerificationEmoji
 	sasBytes, err := sas.GenerateBytes([]byte(sasInfo), 6)
