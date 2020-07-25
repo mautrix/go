@@ -10,7 +10,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -61,20 +63,37 @@ func (mach *OlmMachine) sendToOneDevice(userID id.UserID, deviceID id.DeviceID, 
 	return err
 }
 
-func getPKAndKeysMAC(sas *olm.SAS, sendingUser id.UserID, sendingDevice id.DeviceID, receivingUser id.UserID, receivingDevice id.DeviceID,
-	transactionID string, signingKey id.SigningKey, keyID id.KeyID) (string, string, error) {
+func (mach *OlmMachine) getPKAndKeysMAC(sas *olm.SAS, sendingUser id.UserID, sendingDevice id.DeviceID, receivingUser id.UserID, receivingDevice id.DeviceID,
+	transactionID string, signingKey id.SigningKey, mainKeyID id.KeyID, keys map[id.KeyID]string) (string, string, error) {
 	sasInfo := "MATRIX_KEY_VERIFICATION_MAC" +
 		sendingUser.String() + sendingDevice.String() +
 		receivingUser.String() + receivingDevice.String() +
 		transactionID
-	pubKeyMac, err := sas.CalculateMAC([]byte(signingKey), []byte(sasInfo+keyID.String()))
+
+	keyIDString := mainKeyID.String()
+	if keys != nil {
+		keyIDStrings := make([]string, len(keys))
+		i := 0
+		for keyID := range keys {
+			keyIDStrings[i] = keyID.String()
+			i++
+		}
+		sort.Sort(sort.StringSlice(keyIDStrings))
+		keyIDString = strings.Join(keyIDStrings, ",")
+	}
+
+	pubKeyMac, err := sas.CalculateMAC([]byte(signingKey), []byte(sasInfo+mainKeyID.String()))
 	if err != nil {
 		return "", "", err
 	}
-	keysMac, err := sas.CalculateMAC([]byte(keyID.String()), []byte(sasInfo+"KEY_IDS"))
+	mach.Log.Trace("sas.CalculateMAC(\"%s\", \"%s\") -> \"%s\"", signingKey, sasInfo+mainKeyID.String(), string(pubKeyMac))
+
+	keysMac, err := sas.CalculateMAC([]byte(keyIDString), []byte(sasInfo+"KEY_IDS"))
 	if err != nil {
 		return "", "", err
 	}
+	mach.Log.Trace("sas.CalculateMAC(\"%s\", \"%s\") -> \"%s\"", keyIDString, sasInfo+"KEY_IDS", string(keysMac))
+
 	return string(pubKeyMac), string(keysMac), nil
 }
 
@@ -378,8 +397,8 @@ func (mach *OlmMachine) handleVerificationMAC(userID id.UserID, content *event.V
 
 		keyID := id.NewKeyID(id.KeyAlgorithmEd25519, device.DeviceID.String())
 
-		expectedPKMAC, expectedKeysMAC, err := getPKAndKeysMAC(verState.sas, device.UserID, device.DeviceID,
-			mach.Client.UserID, mach.Client.DeviceID, content.TransactionID, device.SigningKey, keyID)
+		expectedPKMAC, expectedKeysMAC, err := mach.getPKAndKeysMAC(verState.sas, device.UserID, device.DeviceID,
+			mach.Client.UserID, mach.Client.DeviceID, content.TransactionID, device.SigningKey, keyID, content.Mac)
 		if err != nil {
 			mach.Log.Error("Error generating MAC to match with received MAC: %v", err)
 			return
@@ -581,7 +600,7 @@ func (mach *OlmMachine) SendSASVerificationMAC(userID id.UserID, deviceID id.Dev
 	keyID := id.NewKeyID(id.KeyAlgorithmEd25519, mach.Client.DeviceID.String())
 
 	signingKey := mach.account.SigningKey()
-	pubKeyMac, keysMac, err := getPKAndKeysMAC(sas, mach.Client.UserID, mach.Client.DeviceID, userID, deviceID, transactionID, signingKey, keyID)
+	pubKeyMac, keysMac, err := mach.getPKAndKeysMAC(sas, mach.Client.UserID, mach.Client.DeviceID, userID, deviceID, transactionID, signingKey, keyID, nil)
 	if err != nil {
 		return err
 	}
