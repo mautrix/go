@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
 
@@ -37,13 +38,9 @@ type OlmMachine struct {
 
 	AllowUnverifiedDevices bool
 
+	DefaultSASTimeout time.Duration
 	// AcceptVerificationFrom determines whether the machine will accept verification requests from this device.
-	AcceptVerificationFrom func(*DeviceIdentity) bool
-	// VerifySASNumbersMatch should return whether the given SAS numbers match with the numbers displayed on other device.
-	VerifySASNumbersMatch func([3]uint, *DeviceIdentity) bool
-	// VerifySASNumbersMatch should return whether the given SAS emojis match with the emojis displayed on other device.
-	// This is only needed if support for emoji SAS verification is wanted.
-	VerifySASEmojisMatch func([7]VerificationEmoji, *DeviceIdentity) bool
+	AcceptVerificationFrom func(*DeviceIdentity) (VerificationRequestResponse, VerificationHooks)
 
 	account *OlmAccount
 
@@ -71,9 +68,11 @@ func NewOlmMachine(client *mautrix.Client, log Logger, cryptoStore Store, stateS
 
 		AllowUnverifiedDevices: true,
 
-		AcceptVerificationFrom: func(*DeviceIdentity) bool { return true },
-		VerifySASNumbersMatch:  func([3]uint, *DeviceIdentity) bool { return false },
-		VerifySASEmojisMatch:   func([7]VerificationEmoji, *DeviceIdentity) bool { return false },
+		DefaultSASTimeout: 10 * time.Minute,
+		AcceptVerificationFrom: func(*DeviceIdentity) (VerificationRequestResponse, VerificationHooks) {
+			// Reject requests by default. Users need to override this to return appropriate verification hooks.
+			return RejectRequest, nil
+		},
 
 		roomKeyRequestFilled:            &sync.Map{},
 		keyVerificationTransactionState: &sync.Map{},

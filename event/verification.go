@@ -27,6 +27,15 @@ type VerificationRequestEventContent struct {
 	Timestamp int64 `json:"timestamp"`
 }
 
+func (vrec *VerificationRequestEventContent) SupportsVerificationMethod(meth VerificationMethod) bool {
+	for _, supportedMeth := range vrec.Methods {
+		if supportedMeth == meth {
+			return true
+		}
+	}
+	return false
+}
+
 type KeyAgreementProtocol string
 
 const (
