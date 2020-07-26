@@ -122,7 +122,6 @@ func (mach *OlmMachine) GetSASVerificationEmojis(initUserID id.UserID, initDevic
 
 	var emojis [7]VerificationEmoji
 	sasBytes, err := sas.GenerateBytes([]byte(sasInfo), 6)
-	emojisStr := ""
 
 	if err != nil {
 		return emojis, err
@@ -136,10 +135,9 @@ func (mach *OlmMachine) GetSASVerificationEmojis(initUserID id.UserID, initDevic
 		emojiIdx := (sasNum >> (48 - (i+1)*6)) & 0x3F
 		emoji := allEmojis[emojiIdx]
 		emojis[i] = emoji
-		emojisStr += fmt.Sprintf("%c (%v) ", emoji.Emoji, emoji.Description)
 	}
 
-	mach.Log.Debug("Generated SAS numbers are: %v", emojisStr)
+	mach.Log.Debug("Generated SAS numbers are: %v", emojis)
 
 	return emojis, nil
 }
