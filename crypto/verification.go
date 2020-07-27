@@ -116,13 +116,13 @@ type verificationState struct {
 func (mach *OlmMachine) getTransactionState(transactionID string, userID id.UserID) (*verificationState, error) {
 	verStateInterface, ok := mach.keyVerificationTransactionState.Load(userID.String() + ":" + transactionID)
 	if !ok {
-		mach.CancelSASVerification(userID, id.DeviceID("*"), transactionID, "Unknown transaction: "+transactionID, event.VerificationCancelUnknownTransaction)
+		mach.SendSASVerificationCancel(userID, id.DeviceID("*"), transactionID, "Unknown transaction: "+transactionID, event.VerificationCancelUnknownTransaction)
 		return nil, ErrUnknownTransaction
 	}
 	verState := verStateInterface.(*verificationState)
 	if verState.otherDevice.UserID != userID {
 		reason := fmt.Sprintf("Unknown user for transaction %v: %v", transactionID, userID)
-		mach.CancelSASVerification(userID, id.DeviceID("*"), transactionID, reason, event.VerificationCancelUserMismatch)
+		mach.SendSASVerificationCancel(userID, id.DeviceID("*"), transactionID, reason, event.VerificationCancelUserMismatch)
 		mach.keyVerificationTransactionState.Delete(userID.String() + ":" + transactionID)
 		return nil, errors.New(reason)
 	}
@@ -140,7 +140,7 @@ func (mach *OlmMachine) handleVerificationStart(userID id.UserID, content *event
 	}
 	warnAndCancel := func(logReason, cancelReason string) {
 		mach.Log.Warn("Canceling verification transaction %v as it %s", content.TransactionID, logReason)
-		_ = mach.CancelSASVerification(otherDevice.UserID, otherDevice.DeviceID, content.TransactionID, cancelReason, event.VerificationCancelUnknownMethod)
+		_ = mach.SendSASVerificationCancel(otherDevice.UserID, otherDevice.DeviceID, content.TransactionID, cancelReason, event.VerificationCancelUnknownMethod)
 	}
 	switch {
 	case content.Method != event.VerificationMethodSAS:
@@ -165,7 +165,7 @@ func (mach *OlmMachine) actuallyStartVerification(userID id.UserID, content *eve
 		sasMethods := commonSASMethods(hooks, content.ShortAuthenticationString)
 		if len(sasMethods) == 0 {
 			mach.Log.Error("No common SAS methods: %v", content.ShortAuthenticationString)
-			_ = mach.CancelSASVerification(otherDevice.UserID, otherDevice.DeviceID, content.TransactionID, "No common SAS methods", event.VerificationCancelUnknownMethod)
+			_ = mach.SendSASVerificationCancel(otherDevice.UserID, otherDevice.DeviceID, content.TransactionID, "No common SAS methods", event.VerificationCancelUnknownMethod)
 			return
 		}
 		verState := &verificationState{
@@ -182,7 +182,7 @@ func (mach *OlmMachine) actuallyStartVerification(userID id.UserID, content *eve
 		if loaded {
 			// transaction already exists
 			mach.Log.Error("Transaction %v already exists, canceling", content.TransactionID)
-			_ = mach.CancelSASVerification(otherDevice.UserID, otherDevice.DeviceID, content.TransactionID, "Transaction already exists", event.VerificationCancelUnexpectedMessage)
+			_ = mach.SendSASVerificationCancel(otherDevice.UserID, otherDevice.DeviceID, content.TransactionID, "Transaction already exists", event.VerificationCancelUnexpectedMessage)
 			return
 		}
 
@@ -194,7 +194,7 @@ func (mach *OlmMachine) actuallyStartVerification(userID id.UserID, content *eve
 		}
 	} else if resp == RejectRequest {
 		mach.Log.Debug("Not accepting SAS verification %v from %v of user %v", content.TransactionID, otherDevice.DeviceID, otherDevice.UserID)
-		err := mach.CancelSASVerification(otherDevice.UserID, otherDevice.DeviceID, content.TransactionID, "Not accepted by user", event.VerificationCancelByUser)
+		err := mach.SendSASVerificationCancel(otherDevice.UserID, otherDevice.DeviceID, content.TransactionID, "Not accepted by user", event.VerificationCancelByUser)
 		if err != nil {
 			mach.Log.Error("Error canceling SAS verification: %v", err)
 		}
@@ -435,7 +435,7 @@ func (mach *OlmMachine) handleVerificationRequest(userID id.UserID, content *eve
 	}
 	if !content.SupportsVerificationMethod(event.VerificationMethodSAS) {
 		mach.Log.Warn("Canceling verification transaction %v as SAS is not supported", content.TransactionID)
-		mach.CancelSASVerification(otherDevice.UserID, otherDevice.DeviceID, content.TransactionID, "Only SAS method is supported", event.VerificationCancelUnknownMethod)
+		mach.SendSASVerificationCancel(otherDevice.UserID, otherDevice.DeviceID, content.TransactionID, "Only SAS method is supported", event.VerificationCancelUnknownMethod)
 		return
 	}
 	resp, hooks := mach.AcceptVerificationFrom(otherDevice)
@@ -446,7 +446,7 @@ func (mach *OlmMachine) handleVerificationRequest(userID id.UserID, content *eve
 		}
 	} else if resp == RejectRequest {
 		mach.Log.Debug("Rejecting SAS verification %v from %v of user %v", content.TransactionID, otherDevice.DeviceID, otherDevice.UserID)
-		mach.CancelSASVerification(otherDevice.UserID, otherDevice.DeviceID, content.TransactionID, "Not accepted by user", event.VerificationCancelByUser)
+		mach.SendSASVerificationCancel(otherDevice.UserID, otherDevice.DeviceID, content.TransactionID, "Not accepted by user", event.VerificationCancelByUser)
 	} else {
 		mach.Log.Debug("Ignoring SAS verification %v from %v of user %v", content.TransactionID, otherDevice.DeviceID, otherDevice.UserID)
 	}
@@ -502,8 +502,8 @@ func (mach *OlmMachine) NewSASVerificationWith(device *DeviceIdentity, hooks Ver
 	return nil
 }
 
-// CancelSASVerification cancels a SAS verification process with the given reason and cancellation code.
-func (mach *OlmMachine) CancelSASVerification(userID id.UserID, deviceID id.DeviceID, transactionID string, reason string, code event.VerificationCancelCode) error {
+// SendSASVerificationCancel is used to manually cancel a SAS verification process with the given reason and cancellation code.
+func (mach *OlmMachine) SendSASVerificationCancel(userID id.UserID, deviceID id.DeviceID, transactionID string, reason string, code event.VerificationCancelCode) error {
 	content := &event.VerificationCancelEventContent{
 		TransactionID: transactionID,
 		Reason:        reason,
@@ -534,7 +534,7 @@ func (mach *OlmMachine) SendSASVerificationStart(toUserID id.UserID, toDeviceID 
 func (mach *OlmMachine) SendSASVerificationAccept(fromUser id.UserID, startEvent *event.VerificationStartEventContent, publicKey []byte, methods []VerificationMethod) error {
 	if startEvent.Method != event.VerificationMethodSAS {
 		reason := "Unknown verification method: " + string(startEvent.Method)
-		if err := mach.CancelSASVerification(fromUser, startEvent.FromDevice, startEvent.TransactionID, reason, event.VerificationCancelUnknownMethod); err != nil {
+		if err := mach.SendSASVerificationCancel(fromUser, startEvent.FromDevice, startEvent.TransactionID, reason, event.VerificationCancelUnknownMethod); err != nil {
 			return err
 		}
 		return ErrUnknownVerificationMethod
@@ -566,7 +566,7 @@ func (mach *OlmMachine) SendSASVerificationAccept(fromUser id.UserID, startEvent
 
 func (mach *OlmMachine) callbackAndCancelSASVerification(verState *verificationState, transactionID, reason string, code event.VerificationCancelCode) error {
 	go verState.hooks.OnCancel(true, reason, code)
-	return mach.CancelSASVerification(verState.otherDevice.UserID, verState.otherDevice.DeviceID, transactionID, reason, code)
+	return mach.SendSASVerificationCancel(verState.otherDevice.UserID, verState.otherDevice.DeviceID, transactionID, reason, code)
 }
 
 // SendSASVerificationKey sends the ephemeral public key for a device to the partner device.
