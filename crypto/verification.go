@@ -7,12 +7,14 @@
 package crypto
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math/rand"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -110,6 +112,8 @@ type verificationState struct {
 	startEventCanonical string
 	chosenSASMethod     VerificationMethod
 	hooks               VerificationHooks
+	extendTimeout       context.CancelFunc
+	lock                sync.Mutex
 }
 
 // getTransactionState retrieves the given transaction's state, or cancels the transaction if it cannot be found or there is a mismatch.
@@ -178,6 +182,9 @@ func (mach *OlmMachine) actuallyStartVerification(userID id.UserID, content *eve
 			hooks:               hooks,
 			chosenSASMethod:     sasMethods[0],
 		}
+		verState.lock.Lock()
+		defer verState.lock.Unlock()
+
 		_, loaded := mach.keyVerificationTransactionState.LoadOrStore(userID.String()+":"+content.TransactionID, verState)
 		if loaded {
 			// transaction already exists
@@ -186,7 +193,7 @@ func (mach *OlmMachine) actuallyStartVerification(userID id.UserID, content *eve
 			return
 		}
 
-		go mach.timeoutAfter(userID, content.TransactionID, timeout)
+		mach.timeoutAfter(verState, content.TransactionID, timeout)
 
 		err := mach.SendSASVerificationAccept(userID, content, verState.sas.GetPubkey(), sasMethods)
 		if err != nil {
@@ -203,16 +210,35 @@ func (mach *OlmMachine) actuallyStartVerification(userID id.UserID, content *eve
 	}
 }
 
-func (mach *OlmMachine) timeoutAfter(userID id.UserID, transactionID string, timeout time.Duration) {
-	// transaction timeout after given duration
-	time.Sleep(timeout)
-	mapKey := userID.String() + ":" + transactionID
-	if verStateInterface, ok := mach.keyVerificationTransactionState.Load(mapKey); ok {
-		verState := verStateInterface.(*verificationState)
-		mach.keyVerificationTransactionState.Delete(mapKey)
-		mach.callbackAndCancelSASVerification(verState, transactionID, "Timed out", event.VerificationCancelByTimeout)
-		mach.Log.Warn("Verification transaction %v is canceled due to timing out", transactionID)
-	}
+func (mach *OlmMachine) timeoutAfter(verState *verificationState, transactionID string, timeout time.Duration) {
+	timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(), timeout)
+	verState.extendTimeout = timeoutCancel
+	go func() {
+		mapKey := verState.otherDevice.UserID.String() + ":" + transactionID
+		for {
+			<-timeoutCtx.Done()
+			// when timeout context is done
+			verState.lock.Lock()
+			// if transaction not active anymore, return
+			if _, ok := mach.keyVerificationTransactionState.Load(mapKey); !ok {
+				verState.lock.Unlock()
+				return
+			}
+			if timeoutCtx.Err() == context.DeadlineExceeded {
+				// if deadline exceeded cancel due to timeout
+				mach.keyVerificationTransactionState.Delete(mapKey)
+				mach.callbackAndCancelSASVerification(verState, transactionID, "Timed out", event.VerificationCancelByTimeout)
+				mach.Log.Warn("Verification transaction %v is canceled due to timing out", transactionID)
+				verState.lock.Unlock()
+				return
+			}
+			// otherwise the cancel func was called, so the timeout is reset
+			mach.Log.Debug("Extending timeout for transaction %v", transactionID)
+			timeoutCtx, timeoutCancel = context.WithTimeout(context.Background(), timeout)
+			verState.extendTimeout = timeoutCancel
+			verState.lock.Unlock()
+		}
+	}()
 }
 
 // handleVerificationAccept handles an incoming m.key.verification.accept message.
@@ -224,6 +250,9 @@ func (mach *OlmMachine) handleVerificationAccept(userID id.UserID, content *even
 		mach.Log.Error("Error getting transaction state: %v", err)
 		return
 	}
+	verState.lock.Lock()
+	defer verState.lock.Unlock()
+	verState.extendTimeout()
 
 	if !verState.initiatedByUs || verState.verificationStarted {
 		// unexpected accept at this point
@@ -265,6 +294,10 @@ func (mach *OlmMachine) handleVerificationKey(userID id.UserID, content *event.V
 		mach.Log.Error("Error getting transaction state: %v", err)
 		return
 	}
+	verState.lock.Lock()
+	defer verState.lock.Unlock()
+	verState.extendTimeout()
+
 	device := verState.otherDevice
 
 	if !verState.verificationStarted || verState.keyReceived {
@@ -337,6 +370,9 @@ func (mach *OlmMachine) handleVerificationKey(userID id.UserID, content *event.V
 // sasCompared is called asynchronously. It waits for the SAS to be compared for the verification to proceed.
 // If the SAS match, then our MAC is sent out. Otherwise the transaction is canceled.
 func (mach *OlmMachine) sasCompared(didMatch bool, transactionID string, verState *verificationState) {
+	verState.lock.Lock()
+	defer verState.lock.Unlock()
+	verState.extendTimeout()
 	if didMatch {
 		verState.sasMatched <- true
 		if err := mach.SendSASVerificationMAC(verState.otherDevice.UserID, verState.otherDevice.DeviceID, transactionID, verState.sas); err != nil {
@@ -356,6 +392,9 @@ func (mach *OlmMachine) handleVerificationMAC(userID id.UserID, content *event.V
 		mach.Log.Error("Error getting transaction state: %v", err)
 		return
 	}
+	verState.lock.Lock()
+	defer verState.lock.Unlock()
+	verState.extendTimeout()
 
 	device := verState.otherDevice
 
@@ -372,6 +411,9 @@ func (mach *OlmMachine) handleVerificationMAC(userID id.UserID, content *event.V
 	// do this in another goroutine as the match result might take a long time to arrive
 	go func() {
 		matched := <-verState.sasMatched
+		verState.lock.Lock()
+		defer verState.lock.Unlock()
+
 		if !matched {
 			mach.Log.Warn("SAS do not match! Canceling transaction %v", content.TransactionID)
 			mach.callbackAndCancelSASVerification(verState, content.TransactionID, "SAS do not match", event.VerificationCancelSASMismatch)
@@ -420,6 +462,7 @@ func (mach *OlmMachine) handleVerificationCancel(userID id.UserID, content *even
 	if ok {
 		go verStateInterface.(*verificationState).hooks.OnCancel(false, content.Reason, content.Code)
 	}
+
 	mach.keyVerificationTransactionState.Delete(userID.String() + ":" + content.TransactionID)
 	mach.Log.Warn("SAS verification %v was canceled by %v with reason: %v (%v)",
 		content.TransactionID, userID, content.Reason, content.Code)
@@ -476,6 +519,8 @@ func (mach *OlmMachine) NewSASVerificationWith(device *DeviceIdentity, hooks Ver
 		sasMatched:          make(chan bool, 1),
 		hooks:               hooks,
 	}
+	verState.lock.Lock()
+	defer verState.lock.Unlock()
 
 	startEvent, err := mach.SendSASVerificationStart(device.UserID, device.DeviceID, transactionID, hooks.VerificationMethods())
 	if err != nil {
@@ -497,7 +542,7 @@ func (mach *OlmMachine) NewSASVerificationWith(device *DeviceIdentity, hooks Ver
 		return "", errors.New("Transaction already exists")
 	}
 
-	go mach.timeoutAfter(device.UserID, transactionID, timeout)
+	mach.timeoutAfter(verState, transactionID, timeout)
 
 	return transactionID, nil
 }
@@ -510,6 +555,8 @@ func (mach *OlmMachine) CancelSASVerification(userID id.UserID, transactionID st
 		return ErrUnknownTransaction
 	}
 	verState := verStateInterface.(*verificationState)
+	verState.lock.Lock()
+	defer verState.lock.Unlock()
 	mach.Log.Trace("User canceled verification transaction %v with reason: %v", transactionID, reason)
 	mach.keyVerificationTransactionState.Delete(mapKey)
 	return mach.callbackAndCancelSASVerification(verState, transactionID, reason, event.VerificationCancelByUser)
