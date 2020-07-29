@@ -160,7 +160,7 @@ func (mach *OlmMachine) handleVerificationStart(userID id.UserID, content *event
 }
 
 func (mach *OlmMachine) actuallyStartVerification(userID id.UserID, content *event.VerificationStartEventContent, otherDevice *DeviceIdentity, timeout time.Duration) {
-	resp, hooks := mach.AcceptVerificationFrom(otherDevice)
+	resp, hooks := mach.AcceptVerificationFrom(content.TransactionID, otherDevice)
 	if resp == AcceptRequest {
 		sasMethods := commonSASMethods(hooks, content.ShortAuthenticationString)
 		if len(sasMethods) == 0 {
@@ -438,10 +438,10 @@ func (mach *OlmMachine) handleVerificationRequest(userID id.UserID, content *eve
 		mach.SendSASVerificationCancel(otherDevice.UserID, otherDevice.DeviceID, content.TransactionID, "Only SAS method is supported", event.VerificationCancelUnknownMethod)
 		return
 	}
-	resp, hooks := mach.AcceptVerificationFrom(otherDevice)
+	resp, hooks := mach.AcceptVerificationFrom(content.TransactionID, otherDevice)
 	if resp == AcceptRequest {
 		mach.Log.Debug("Accepting SAS verification %v from %v of user %v", content.TransactionID, otherDevice.DeviceID, otherDevice.UserID)
-		if err := mach.NewSASVerificationWith(otherDevice, hooks, content.TransactionID, mach.DefaultSASTimeout); err != nil {
+		if _, err := mach.NewSASVerificationWith(otherDevice, hooks, content.TransactionID, mach.DefaultSASTimeout); err != nil {
 			mach.Log.Error("Error accepting SAS verification request: %v", err)
 		}
 	} else if resp == RejectRequest {
@@ -454,14 +454,14 @@ func (mach *OlmMachine) handleVerificationRequest(userID id.UserID, content *eve
 
 // NewSimpleSASVerificationWith starts the SAS verification process with another device with a default timeout,
 // a generated transaction ID and support for both emoji and decimal SAS methods.
-func (mach *OlmMachine) NewSimpleSASVerificationWith(device *DeviceIdentity, hooks VerificationHooks) error {
+func (mach *OlmMachine) NewSimpleSASVerificationWith(device *DeviceIdentity, hooks VerificationHooks) (string, error) {
 	return mach.NewSASVerificationWith(device, hooks, "", mach.DefaultSASTimeout)
 }
 
 // NewSASVerificationWith starts the SAS verification process with another device.
 // If the other device accepts the verification transaction, the methods in `hooks` will be used to verify the SAS match and to complete the transaction..
 // If the transaction ID is empty, a new one is generated.
-func (mach *OlmMachine) NewSASVerificationWith(device *DeviceIdentity, hooks VerificationHooks, transactionID string, timeout time.Duration) error {
+func (mach *OlmMachine) NewSASVerificationWith(device *DeviceIdentity, hooks VerificationHooks, transactionID string, timeout time.Duration) (string, error) {
 	if transactionID == "" {
 		transactionID = strconv.Itoa(rand.Int())
 	}
@@ -479,30 +479,43 @@ func (mach *OlmMachine) NewSASVerificationWith(device *DeviceIdentity, hooks Ver
 
 	startEvent, err := mach.SendSASVerificationStart(device.UserID, device.DeviceID, transactionID, hooks.VerificationMethods())
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	payload, err := json.Marshal(startEvent)
 	if err != nil {
-		return err
+		return "", err
 	}
 	canonical, err := canonicaljson.CanonicalJSON(payload)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	verState.startEventCanonical = string(canonical)
 	_, loaded := mach.keyVerificationTransactionState.LoadOrStore(device.UserID.String()+":"+transactionID, verState)
 	if loaded {
-		return errors.New("Transaction already exists")
+		return "", errors.New("Transaction already exists")
 	}
 
 	go mach.timeoutAfter(device.UserID, transactionID, timeout)
 
-	return nil
+	return transactionID, nil
 }
 
-// SendSASVerificationCancel is used to manually cancel a SAS verification process with the given reason and cancellation code.
+// CancelSASVerification is used by the user to cancel a SAS verification process with the given reason.
+func (mach *OlmMachine) CancelSASVerification(userID id.UserID, transactionID string, reason string) error {
+	mapKey := userID.String() + ":" + transactionID
+	verStateInterface, ok := mach.keyVerificationTransactionState.Load(mapKey)
+	if !ok {
+		return ErrUnknownTransaction
+	}
+	verState := verStateInterface.(*verificationState)
+	mach.Log.Trace("User canceled verification transaction %v with reason: %v", transactionID, reason)
+	mach.keyVerificationTransactionState.Delete(mapKey)
+	return mach.callbackAndCancelSASVerification(verState, transactionID, reason, event.VerificationCancelByUser)
+}
+
+// SendSASVerificationCancel is used to manually send a SAS cancel message process with the given reason and cancellation code.
 func (mach *OlmMachine) SendSASVerificationCancel(userID id.UserID, deviceID id.DeviceID, transactionID string, reason string, code event.VerificationCancelCode) error {
 	content := &event.VerificationCancelEventContent{
 		TransactionID: transactionID,

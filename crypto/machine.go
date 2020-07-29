@@ -40,7 +40,7 @@ type OlmMachine struct {
 
 	DefaultSASTimeout time.Duration
 	// AcceptVerificationFrom determines whether the machine will accept verification requests from this device.
-	AcceptVerificationFrom func(*DeviceIdentity) (VerificationRequestResponse, VerificationHooks)
+	AcceptVerificationFrom func(string, *DeviceIdentity) (VerificationRequestResponse, VerificationHooks)
 
 	account *OlmAccount
 
@@ -69,7 +69,7 @@ func NewOlmMachine(client *mautrix.Client, log Logger, cryptoStore Store, stateS
 		AllowUnverifiedDevices: true,
 
 		DefaultSASTimeout: 10 * time.Minute,
-		AcceptVerificationFrom: func(*DeviceIdentity) (VerificationRequestResponse, VerificationHooks) {
+		AcceptVerificationFrom: func(string, *DeviceIdentity) (VerificationRequestResponse, VerificationHooks) {
 			// Reject requests by default. Users need to override this to return appropriate verification hooks.
 			return RejectRequest, nil
 		},
