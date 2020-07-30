@@ -56,7 +56,7 @@ func (mach *OlmMachine) DecryptMegolmEvent(evt *event.Event) (*event.Event, erro
 	if content.DeviceID == mach.Client.DeviceID && sess.SigningKey == ownSigningKey && content.SenderKey == ownIdentityKey {
 		verified = true
 	} else {
-		device, err := mach.getOrFetchDevice(evt.Sender, content.DeviceID)
+		device, err := mach.GetOrFetchDevice(evt.Sender, content.DeviceID)
 		if err != nil {
 			return nil, err
 		}

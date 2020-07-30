@@ -53,6 +53,13 @@ var TypeMap = map[Type]reflect.Type{
 	ToDeviceRoomKeyRequest:   reflect.TypeOf(RoomKeyRequestEventContent{}),
 	ToDeviceEncrypted:        reflect.TypeOf(EncryptedEventContent{}),
 	ToDeviceRoomKeyWithheld:  reflect.TypeOf(RoomKeyWithheldEventContent{}),
+
+	ToDeviceVerificationStart:   reflect.TypeOf(VerificationStartEventContent{}),
+	ToDeviceVerificationAccept:  reflect.TypeOf(VerificationAcceptEventContent{}),
+	ToDeviceVerificationKey:     reflect.TypeOf(VerificationKeyEventContent{}),
+	ToDeviceVerificationMAC:     reflect.TypeOf(VerificationMacEventContent{}),
+	ToDeviceVerificationCancel:  reflect.TypeOf(VerificationCancelEventContent{}),
+	ToDeviceVerificationRequest: reflect.TypeOf(VerificationRequestEventContent{}),
 }
 
 // Content stores the content of a Matrix event.

@@ -114,6 +114,8 @@ type Store interface {
 	GetDevices(id.UserID) (map[id.DeviceID]*DeviceIdentity, error)
 	// GetDevice returns a specific device of a given user.
 	GetDevice(id.UserID, id.DeviceID) (*DeviceIdentity, error)
+	// PutDevice stores a single device for a user, replacing it if it exists already.
+	PutDevice(id.UserID, *DeviceIdentity) error
 	// PutDevices overrides the stored device list for the given user with the given list.
 	PutDevices(id.UserID, map[id.DeviceID]*DeviceIdentity) error
 	// FilterTrackedUsers returns a filtered version of the given list that only includes user IDs whose device lists
@@ -358,6 +360,19 @@ func (gs *GobStore) GetDevice(userID id.UserID, deviceID id.DeviceID) (*DeviceId
 		return nil, nil
 	}
 	return device, nil
+}
+
+func (gs *GobStore) PutDevice(userID id.UserID, device *DeviceIdentity) error {
+	gs.lock.Lock()
+	devices, ok := gs.Devices[userID]
+	if !ok {
+		devices = make(map[id.DeviceID]*DeviceIdentity)
+		gs.Devices[userID] = devices
+	}
+	devices[device.DeviceID] = device
+	err := gs.save()
+	gs.lock.Unlock()
+	return err
 }
 
 func (gs *GobStore) PutDevices(userID id.UserID, devices map[id.DeviceID]*DeviceIdentity) error {

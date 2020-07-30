@@ -19,7 +19,6 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-
 // SQLCryptoStore is an implementation of a crypto Store for a database backend.
 type SQLCryptoStore struct {
 	DB      *sql.DB
@@ -359,6 +358,26 @@ func (store *SQLCryptoStore) GetDevice(userID id.UserID, deviceID id.DeviceID) (
 	identity.UserID = userID
 	identity.DeviceID = deviceID
 	return &identity, nil
+}
+
+// PutDevice stores a single device for a user, replacing it if it exists already.
+func (store *SQLCryptoStore) PutDevice(userID id.UserID, device *DeviceIdentity) error {
+	var err error
+	if store.Dialect == "postgres" {
+		_, err = store.DB.Exec(`
+			INSERT INTO crypto_device (user_id, device_id, identity_key, signing_key, trust, deleted, name) VALUES ($1, $2, $3, $4, $5, $6, $7)
+			ON CONFLICT (user_id, device_id) DO UPDATE SET identity_key=$3, signing_key=$4, trust=$5, deleted=$6, name=$7`,
+			userID, device.DeviceID, device.IdentityKey, device.SigningKey, device.Trust, device.Deleted, device.Name)
+	} else if store.Dialect == "sqlite3" {
+		_, err = store.DB.Exec("INSERT OR REPLACE INTO crypto_device (user_id, device_id, identity_key, signing_key, trust, deleted, name) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+			userID, device.DeviceID, device.IdentityKey, device.SigningKey, device.Trust, device.Deleted, device.Name)
+	} else {
+		err = fmt.Errorf("unsupported dialect %s", store.Dialect)
+	}
+	if err != nil {
+		store.Log.Warn("Failed to store device: %v", err)
+	}
+	return nil
 }
 
 // PutDevices stores the device identity information for the given user ID.

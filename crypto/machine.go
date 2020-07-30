@@ -8,8 +8,10 @@ package crypto
 
 import (
 	"sync"
+	"time"
 
 	"github.com/pkg/errors"
+
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
 
@@ -36,9 +38,14 @@ type OlmMachine struct {
 
 	AllowUnverifiedDevices bool
 
+	DefaultSASTimeout time.Duration
+	// AcceptVerificationFrom determines whether the machine will accept verification requests from this device.
+	AcceptVerificationFrom func(string, *DeviceIdentity) (VerificationRequestResponse, VerificationHooks)
+
 	account *OlmAccount
 
-	roomKeyRequestFilled *sync.Map
+	roomKeyRequestFilled            *sync.Map
+	keyVerificationTransactionState *sync.Map
 }
 
 // StateStore is used by OlmMachine to get room state information that's needed for encryption.
@@ -61,7 +68,14 @@ func NewOlmMachine(client *mautrix.Client, log Logger, cryptoStore Store, stateS
 
 		AllowUnverifiedDevices: true,
 
-		roomKeyRequestFilled: &sync.Map{},
+		DefaultSASTimeout: 10 * time.Minute,
+		AcceptVerificationFrom: func(string, *DeviceIdentity) (VerificationRequestResponse, VerificationHooks) {
+			// Reject requests by default. Users need to override this to return appropriate verification hooks.
+			return RejectRequest, nil
+		},
+
+		roomKeyRequestFilled:            &sync.Map{},
+		keyVerificationTransactionState: &sync.Map{},
 	}
 }
 
@@ -200,15 +214,29 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 			// TODO handle m.dummy encrypted to-device event
 		}
 	case *event.RoomKeyRequestEventContent:
-		mach.handleRoomKeyRequest(evt.Sender, content, true)
-	// TODO add m.verification.start case
+		mach.handleRoomKeyRequest(evt.Sender, content, false)
+	// verification cases
+	case *event.VerificationStartEventContent:
+		mach.handleVerificationStart(evt.Sender, content, 10*time.Minute)
+	case *event.VerificationAcceptEventContent:
+		mach.handleVerificationAccept(evt.Sender, content)
+	case *event.VerificationKeyEventContent:
+		mach.handleVerificationKey(evt.Sender, content)
+	case *event.VerificationMacEventContent:
+		mach.handleVerificationMAC(evt.Sender, content)
+	case *event.VerificationCancelEventContent:
+		mach.handleVerificationCancel(evt.Sender, content)
+	case *event.VerificationRequestEventContent:
+		mach.handleVerificationRequest(evt.Sender, content)
 	default:
 		deviceID, _ := evt.Content.Raw["device_id"].(string)
 		mach.Log.Trace("Unhandled to-device event of type %s from %s/%s", evt.Type.Type, evt.Sender, deviceID)
 	}
 }
 
-func (mach *OlmMachine) getOrFetchDevice(userID id.UserID, deviceID id.DeviceID) (*DeviceIdentity, error) {
+// GetOrFetchDevice attempts to retrieve the device identity for the given device from the store
+// and if it's not found it asks the server for it.
+func (mach *OlmMachine) GetOrFetchDevice(userID id.UserID, deviceID id.DeviceID) (*DeviceIdentity, error) {
 	// get device identity
 	device, err := mach.CryptoStore.GetDevice(userID, deviceID)
 	if err != nil {
