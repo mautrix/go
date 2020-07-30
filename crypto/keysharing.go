@@ -95,33 +95,28 @@ func (mach *OlmMachine) importForwardedRoomKey(evt *DecryptedOlmEvent, content *
 		return false
 	}
 
-	roomID := content.RoomID
-	senderKey := evt.SenderKey
-	origSenderKey := content.SenderKey
-	sessionID := content.SessionID
-
 	igsInternal, err := olm.InboundGroupSessionImport([]byte(content.SessionKey))
-	igs := &InboundGroupSession{
-		Internal:         *igsInternal,
-		SigningKey:       evt.Keys.Ed25519,
-		SenderKey:        origSenderKey,
-		RoomID:           roomID,
-		ForwardingChains: append(content.ForwardingKeyChain, senderKey.String()),
-		id:               sessionID,
-	}
 	if err != nil {
 		mach.Log.Error("Failed to import inbound group session: %v", err)
 		return false
-	} else if igs.ID() != content.SessionID {
+	} else if igsInternal.ID() != content.SessionID {
 		mach.Log.Warn("Mismatched session ID while creating inbound group session")
 		return false
 	}
-	err = mach.CryptoStore.PutGroupSession(roomID, origSenderKey, sessionID, igs)
+	igs := &InboundGroupSession{
+		Internal:         *igsInternal,
+		SigningKey:       evt.Keys.Ed25519,
+		SenderKey:        content.SenderKey,
+		RoomID:           content.RoomID,
+		ForwardingChains: append(content.ForwardingKeyChain, evt.SenderKey.String()),
+		id:               content.SessionID,
+	}
+	err = mach.CryptoStore.PutGroupSession(content.RoomID, content.SenderKey, content.SessionID, igs)
 	if err != nil {
 		mach.Log.Error("Failed to store new inbound group session: %v", err)
 		return false
 	}
-	mach.Log.Trace("Created inbound group session %s/%s/%s", roomID, origSenderKey, sessionID)
+	mach.Log.Trace("Created inbound group session %s/%s/%s", content.RoomID, content.SenderKey, content.SessionID)
 	return true
 }
 
