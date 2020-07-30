@@ -14,6 +14,11 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
+// SASData contains the data that users need to verify.
+type SASData interface {
+	Type() event.SASMethod
+}
+
 // VerificationMethod describes a method for generating a SAS.
 type VerificationMethod interface {
 	// GetVerificationSAS uses the user, device ID and key of the user who initiated the verification transaction,
@@ -21,32 +26,40 @@ type VerificationMethod interface {
 	// The SAS can be any type, such as an array of numbers or emojis.
 	GetVerificationSAS(initUserID id.UserID, initDeviceID id.DeviceID, initKey string,
 		acceptUserID id.UserID, acceptDeviceID id.DeviceID, acceptKey string,
-		transactionID string, sas *olm.SAS) (interface{}, error)
+		transactionID string, sas *olm.SAS) (SASData, error)
 	// Type returns the type of this SAS method
 	Type() event.SASMethod
 }
 
+const sasInfoFormat = "MATRIX_KEY_VERIFICATION_SAS|%s|%s|%s|%s|%s|%s|%s"
+
 // VerificationMethodDecimal describes the decimal SAS method.
 type VerificationMethodDecimal struct{}
 
-// VerificationMethodEmoji describes the emoji SAS method.
-type VerificationMethodEmoji struct{}
+// DecimalSASData contains the verification numbers for the decimal SAS method.
+type DecimalSASData [3]uint
+
+// Type returns the decimal SAS method type.
+func (DecimalSASData) Type() event.SASMethod {
+	return event.SASDecimal
+}
 
 // GetVerificationSAS generates the three numbers that need to match with the other device for a verification to be valid.
 func (VerificationMethodDecimal) GetVerificationSAS(initUserID id.UserID, initDeviceID id.DeviceID, initKey string,
 	acceptUserID id.UserID, acceptDeviceID id.DeviceID, acceptKey string,
-	transactionID string, sas *olm.SAS) (interface{}, error) {
-	sasInfo := fmt.Sprintf("MATRIX_KEY_VERIFICATION_SAS|%s|%s|%s|%s|%s|%s|%s",
+	transactionID string, sas *olm.SAS) (SASData, error) {
+
+	sasInfo := fmt.Sprintf(sasInfoFormat,
 		initUserID, initDeviceID, initKey,
 		acceptUserID, acceptDeviceID, acceptKey,
 		transactionID)
 
 	sasBytes, err := sas.GenerateBytes([]byte(sasInfo), 5)
 	if err != nil {
-		return [3]uint{0, 0, 0}, err
+		return DecimalSASData{0, 0, 0}, err
 	}
 
-	numbers := [3]uint{
+	numbers := DecimalSASData{
 		(uint(sasBytes[0])<<5 | uint(sasBytes[1])>>3) + 1000,
 		(uint(sasBytes[1]&0x7)<<10 | uint(sasBytes[2])<<2 | uint(sasBytes[3]>>6)) + 1000,
 		(uint(sasBytes[3]&0x3F)<<7 | uint(sasBytes[4])>>1) + 1000,
@@ -133,17 +146,36 @@ type VerificationEmoji struct {
 	Description string
 }
 
+func (vm VerificationEmoji) GetEmoji() rune {
+	return vm.Emoji
+}
+
+func (vm VerificationEmoji) GetDescription() string {
+	return vm.Description
+}
+
+// EmojiSASData contains the verification emojis for the emoji SAS method.
+type EmojiSASData [7]VerificationEmoji
+
+// Type returns the emoji SAS method type.
+func (EmojiSASData) Type() event.SASMethod {
+	return event.SASEmoji
+}
+
+// VerificationMethodEmoji describes the emoji SAS method.
+type VerificationMethodEmoji struct{}
+
 // GetVerificationSAS generates the three numbers that need to match with the other device for a verification to be valid.
 func (VerificationMethodEmoji) GetVerificationSAS(initUserID id.UserID, initDeviceID id.DeviceID, initKey string,
 	acceptUserID id.UserID, acceptDeviceID id.DeviceID, acceptKey string,
-	transactionID string, sas *olm.SAS) (interface{}, error) {
+	transactionID string, sas *olm.SAS) (SASData, error) {
 
-	sasInfo := fmt.Sprintf("MATRIX_KEY_VERIFICATION_SAS|%s|%s|%s|%s|%s|%s|%s",
+	sasInfo := fmt.Sprintf(sasInfoFormat,
 		initUserID, initDeviceID, initKey,
 		acceptUserID, acceptDeviceID, acceptKey,
 		transactionID)
 
-	var emojis [7]VerificationEmoji
+	var emojis EmojiSASData
 	sasBytes, err := sas.GenerateBytes([]byte(sasInfo), 6)
 
 	if err != nil {
