@@ -1,14 +1,16 @@
-package olm
+// +build !nosas
 
-import (
-	"crypto/rand"
-	"unsafe"
-)
+package olm
 
 // #cgo LDFLAGS: -lolm -lstdc++
 // #include <olm/olm.h>
 // #include <olm/sas.h>
 import "C"
+
+import (
+	"crypto/rand"
+	"unsafe"
+)
 
 // SAS stores an Olm Short Authentication String (SAS) object.
 type SAS struct {

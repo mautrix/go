@@ -187,7 +187,7 @@ func (VerificationMethodEmoji) GetVerificationSAS(initUserID id.UserID, initDevi
 
 	for i := 0; i < len(emojis); i++ {
 		// take nth group of 6 bits
-		emojiIdx := (sasNum >> (48 - (i+1)*6)) & 0x3F
+		emojiIdx := (sasNum >> uint(48-(i+1)*6)) & 0x3F
 		emoji := allEmojis[emojiIdx]
 		emojis[i] = emoji
 	}

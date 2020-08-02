@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
+
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
 )
