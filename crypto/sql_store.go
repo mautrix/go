@@ -16,6 +16,7 @@ import (
 
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/crypto/sql_store_upgrade"
+	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -31,6 +32,8 @@ type SQLCryptoStore struct {
 	PickleKey []byte
 	Account   *OlmAccount
 }
+
+var _ Store = (*SQLCryptoStore)(nil)
 
 // NewSQLCryptoStore initializes a new crypto Store using the given database, for a device's crypto material.
 // The stored material will be encrypted with the given key.
@@ -191,26 +194,37 @@ func (store *SQLCryptoStore) UpdateSession(key id.SenderKey, session *OlmSession
 func (store *SQLCryptoStore) PutGroupSession(roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID, session *InboundGroupSession) error {
 	sessionBytes := session.Internal.Pickle(store.PickleKey)
 	forwardingChains := strings.Join(session.ForwardingChains, ",")
-	_, err := store.DB.Exec("INSERT INTO crypto_megolm_inbound_session (session_id, sender_key, signing_key, room_id, session, forwarding_chains, account_id) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+	var query string
+	if store.Dialect == "postgres" {
+		query = `INSERT INTO crypto_megolm_inbound_session
+			(session_id, sender_key, signing_key, room_id, session, forwarding_chains, account_id)
+			VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (session_id, account_id) DO UPDATE
+				SET withheld_code=NULL, withheld_reason=NULL,
+					sender_key=$2, signing_key=$3, room_id=$4, session=$5, forwarding_chains=$6`
+	} else {
+		query = "INSERT OR REPLACE INTO crypto_megolm_inbound_session (session_id, sender_key, signing_key, room_id, session, forwarding_chains, account_id) VALUES ($1, $2, $3, $4, $5, $6, $7)"
+	}
+	_, err := store.DB.Exec(query,
 		sessionID, senderKey, session.SigningKey, roomID, sessionBytes, forwardingChains, store.AccountID)
 	return err
 }
 
 // GetGroupSession retrieves an inbound Megolm group session for a room, sender and session.
 func (store *SQLCryptoStore) GetGroupSession(roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID) (*InboundGroupSession, error) {
-	var signingKey id.Ed25519
+	var signingKey, forwardingChains, withheldCode sql.NullString
 	var sessionBytes []byte
-	var forwardingChains string
 	err := store.DB.QueryRow(`
-		SELECT signing_key, session, forwarding_chains
+		SELECT signing_key, session, forwarding_chains, withheld_code
 		FROM crypto_megolm_inbound_session
 		WHERE room_id=$1 AND sender_key=$2 AND session_id=$3 AND account_id=$4`,
 		roomID, senderKey, sessionID, store.AccountID,
-	).Scan(&signingKey, &sessionBytes, &forwardingChains)
+	).Scan(&signingKey, &sessionBytes, &forwardingChains, &withheldCode)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	} else if err != nil {
 		return nil, err
+	} else if withheldCode.Valid {
+		return nil, ErrGroupSessionWithheld
 	}
 	igs := olm.NewBlankInboundGroupSession()
 	err = igs.Unpickle(sessionBytes, store.PickleKey)
@@ -219,10 +233,38 @@ func (store *SQLCryptoStore) GetGroupSession(roomID id.RoomID, senderKey id.Send
 	}
 	return &InboundGroupSession{
 		Internal:         *igs,
-		SigningKey:       signingKey,
+		SigningKey:       id.Ed25519(signingKey.String),
 		SenderKey:        senderKey,
 		RoomID:           roomID,
-		ForwardingChains: strings.Split(forwardingChains, ","),
+		ForwardingChains: strings.Split(forwardingChains.String, ","),
+	}, nil
+}
+
+func (store *SQLCryptoStore) PutWithheldGroupSession(content event.RoomKeyWithheldEventContent) error {
+	_, err := store.DB.Exec("INSERT INTO crypto_megolm_inbound_session (session_id, sender_key, room_id, withheld_code, withheld_reason, account_id) VALUES ($1, $2, $3, $4, $5, $6)",
+		content.SessionID, content.SenderKey, content.RoomID, content.Code, store.AccountID)
+	return err
+}
+
+func (store *SQLCryptoStore) GetWithheldGroupSession(roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID) (*event.RoomKeyWithheldEventContent, error) {
+	var code, reason sql.NullString
+	err := store.DB.QueryRow(`
+		SELECT withheld_code, withheld_reason FROM crypto_megolm_inbound_session
+		WHERE room_id=$1 AND sender_key=$2 AND session_id=$3 AND account_id=$4`,
+		roomID, senderKey, sessionID, store.AccountID,
+	).Scan(&code, &reason)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	} else if err != nil || !code.Valid {
+		return nil, err
+	}
+	return &event.RoomKeyWithheldEventContent{
+		RoomID:    roomID,
+		Algorithm: id.AlgorithmMegolmV1,
+		SessionID: sessionID,
+		SenderKey: senderKey,
+		Code:      event.RoomKeyWithheldCode(code.String),
+		Reason:    reason.String,
 	}, nil
 }
 

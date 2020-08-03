@@ -8,10 +8,12 @@ package crypto
 
 import (
 	"encoding/gob"
+	"errors"
 	"os"
 	"sort"
 	"sync"
 
+	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -56,6 +58,8 @@ func (device *DeviceIdentity) Fingerprint() string {
 	return Fingerprint(device.SigningKey)
 }
 
+var ErrGroupSessionWithheld = errors.New("group session has been withheld")
+
 // Store is used by OlmMachine to store Olm and Megolm sessions, user device lists and message indices.
 //
 // General implementation details:
@@ -83,10 +87,18 @@ type Store interface {
 	// UpdateSession updates a session that has previously been inserted with AddSession.
 	UpdateSession(id.SenderKey, *OlmSession) error
 
-	// PutGroupSession inserts an inbound Megolm session into the store.
+	// PutGroupSession inserts an inbound Megolm session into the store. If an earlier withhold event has been inserted
+	// with PutWithheldGroupSession, this call should replace that. However, PutWithheldGroupSession must not replace
+	// sessions inserted with this call.
 	PutGroupSession(id.RoomID, id.SenderKey, id.SessionID, *InboundGroupSession) error
-	// GetGroupSession gets an inbound Megolm session from the store.
+	// GetGroupSession gets an inbound Megolm session from the store. If the group session has been withheld
+	// (i.e. a room key withheld event has been saved with PutWithheldGroupSession), this should return the
+	// ErrGroupSessionWithheld error. The caller may use GetWithheldGroupSession to find more details.
 	GetGroupSession(id.RoomID, id.SenderKey, id.SessionID) (*InboundGroupSession, error)
+	// PutWithheldGroupSession tells the store that a specific Megolm session was withheld.
+	PutWithheldGroupSession(event.RoomKeyWithheldEventContent) error
+	// GetWithheldGroupSession gets the event content that was previously inserted with PutWithheldGroupSession.
+	GetWithheldGroupSession(id.RoomID, id.SenderKey, id.SessionID) (*event.RoomKeyWithheldEventContent, error)
 
 	// AddOutboundGroupSession inserts the given outbound Megolm session into the store.
 	//
@@ -139,12 +151,13 @@ type GobStore struct {
 	lock sync.RWMutex
 	path string
 
-	Account          *OlmAccount
-	Sessions         map[id.SenderKey]OlmSessionList
-	GroupSessions    map[id.RoomID]map[id.SenderKey]map[id.SessionID]*InboundGroupSession
-	OutGroupSessions map[id.RoomID]*OutboundGroupSession
-	MessageIndices   map[messageIndexKey]messageIndexValue
-	Devices          map[id.UserID]map[id.DeviceID]*DeviceIdentity
+	Account               *OlmAccount
+	Sessions              map[id.SenderKey]OlmSessionList
+	GroupSessions         map[id.RoomID]map[id.SenderKey]map[id.SessionID]*InboundGroupSession
+	WithheldGroupSessions map[id.RoomID]map[id.SenderKey]map[id.SessionID]*event.RoomKeyWithheldEventContent
+	OutGroupSessions      map[id.RoomID]*OutboundGroupSession
+	MessageIndices        map[messageIndexKey]messageIndexValue
+	Devices               map[id.UserID]map[id.DeviceID]*DeviceIdentity
 }
 
 var _ Store = (*GobStore)(nil)
@@ -152,12 +165,13 @@ var _ Store = (*GobStore)(nil)
 // NewGobStore creates a new GobStore that saves everything to the given file.
 func NewGobStore(path string) (*GobStore, error) {
 	gs := &GobStore{
-		path:             path,
-		Sessions:         make(map[id.SenderKey]OlmSessionList),
-		GroupSessions:    make(map[id.RoomID]map[id.SenderKey]map[id.SessionID]*InboundGroupSession),
-		OutGroupSessions: make(map[id.RoomID]*OutboundGroupSession),
-		MessageIndices:   make(map[messageIndexKey]messageIndexValue),
-		Devices:          make(map[id.UserID]map[id.DeviceID]*DeviceIdentity),
+		path:                  path,
+		Sessions:              make(map[id.SenderKey]OlmSessionList),
+		GroupSessions:         make(map[id.RoomID]map[id.SenderKey]map[id.SessionID]*InboundGroupSession),
+		WithheldGroupSessions: make(map[id.RoomID]map[id.SenderKey]map[id.SessionID]*event.RoomKeyWithheldEventContent),
+		OutGroupSessions:      make(map[id.RoomID]*OutboundGroupSession),
+		MessageIndices:        make(map[messageIndexKey]messageIndexValue),
+		Devices:               make(map[id.UserID]map[id.DeviceID]*DeviceIdentity),
 	}
 	return gs, gs.load()
 }
@@ -271,8 +285,44 @@ func (gs *GobStore) PutGroupSession(roomID id.RoomID, senderKey id.SenderKey, se
 
 func (gs *GobStore) GetGroupSession(roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID) (*InboundGroupSession, error) {
 	gs.lock.Lock()
-	sessions := gs.getGroupSessions(roomID, senderKey)
-	session, ok := sessions[sessionID]
+	session, ok := gs.getGroupSessions(roomID, senderKey)[sessionID]
+	if !ok {
+		_, ok := gs.getWithheldGroupSessions(roomID, senderKey)[sessionID]
+		gs.lock.Unlock()
+		if ok {
+			return nil, ErrGroupSessionWithheld
+		}
+		return nil, nil
+	}
+	gs.lock.Unlock()
+	return session, nil
+}
+
+func (gs *GobStore) getWithheldGroupSessions(roomID id.RoomID, senderKey id.SenderKey) map[id.SessionID]*event.RoomKeyWithheldEventContent {
+	room, ok := gs.WithheldGroupSessions[roomID]
+	if !ok {
+		room = make(map[id.SenderKey]map[id.SessionID]*event.RoomKeyWithheldEventContent)
+		gs.WithheldGroupSessions[roomID] = room
+	}
+	sender, ok := room[senderKey]
+	if !ok {
+		sender = make(map[id.SessionID]*event.RoomKeyWithheldEventContent)
+		room[senderKey] = sender
+	}
+	return sender
+}
+
+func (gs *GobStore) PutWithheldGroupSession(content event.RoomKeyWithheldEventContent) error {
+	gs.lock.Lock()
+	gs.getWithheldGroupSessions(content.RoomID, content.SenderKey)[content.SessionID] = &content
+	err := gs.save()
+	gs.lock.Unlock()
+	return err
+}
+
+func (gs *GobStore) GetWithheldGroupSession(roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID) (*event.RoomKeyWithheldEventContent, error) {
+	gs.lock.Lock()
+	session, ok := gs.getWithheldGroupSessions(roomID, senderKey)[sessionID]
 	gs.lock.Unlock()
 	if !ok {
 		return nil, nil

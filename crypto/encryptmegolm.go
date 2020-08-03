@@ -21,8 +21,6 @@ var (
 	NoGroupSession = errors.New("no group session created")
 )
 
-var ToDeviceOrgMatrixRoomKeyWithheld = event.Type{Type: "org.matrix.room_key.withheld", Class: event.ToDeviceEventType}
-
 func getRelatesTo(content interface{}) *event.RelatesTo {
 	contentStruct, ok := content.(*event.Content)
 	if ok {
@@ -187,7 +185,7 @@ func (mach *OlmMachine) ShareGroupSession(roomID id.RoomID, users []id.UserID) e
 
 	mach.Log.Trace("Sending to-device messages to %d users to report withheld keys in %s", len(toDeviceWithheld.Messages), roomID)
 	// TODO remove the next line once clients support m.room_key.withheld
-	_, _ = mach.Client.SendToDevice(ToDeviceOrgMatrixRoomKeyWithheld, toDeviceWithheld)
+	_, _ = mach.Client.SendToDevice(event.ToDeviceOrgMatrixRoomKeyWithheld, toDeviceWithheld)
 	_, err = mach.Client.SendToDevice(event.ToDeviceRoomKeyWithheld, toDeviceWithheld)
 	if err != nil {
 		mach.Log.Warn("Failed to report withheld keys in %s: %v", roomID, err)

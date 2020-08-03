@@ -10,7 +10,7 @@ import (
 
 type upgradeFunc func(*sql.Tx, string) error
 
-var Upgrades = [2]upgradeFunc{
+var Upgrades = [...]upgradeFunc{
 	func(tx *sql.Tx, _ string) error {
 		for _, query := range []string{
 			`CREATE TABLE IF NOT EXISTS crypto_account (
@@ -103,14 +103,14 @@ var Upgrades = [2]upgradeFunc{
 					device_id  VARCHAR(255) NOT NULL,
 					shared     BOOLEAN      NOT NULL,
 					sync_token TEXT         NOT NULL,
-					account    bytea        NOT NULL,
+					account    BLOB         NOT NULL,
 					PRIMARY KEY (account_id)
 				`,
 				"crypto_olm_session": `
 					account_id   VARCHAR(255) NOT NULL,
 					session_id   CHAR(43)     NOT NULL,
 					sender_key   CHAR(43)     NOT NULL,
-					session      bytea        NOT NULL,
+					session      BLOB         NOT NULL,
 					created_at   timestamp    NOT NULL,
 					last_used    timestamp    NOT NULL,
 					PRIMARY KEY (account_id, session_id)
@@ -121,15 +121,15 @@ var Upgrades = [2]upgradeFunc{
 					sender_key   CHAR(43)     NOT NULL,
 					signing_key  CHAR(43)     NOT NULL,
 					room_id      VARCHAR(255) NOT NULL,
-					session      bytea        NOT NULL,
-					forwarding_chains bytea   NOT NULL,
+					session      BLOB         NOT NULL,
+					forwarding_chains BLOB    NOT NULL,
 					PRIMARY KEY (account_id, session_id)
 				`,
 				"crypto_megolm_outbound_session": `
 					account_id    VARCHAR(255) NOT NULL,
 					room_id       VARCHAR(255) NOT NULL,
 					session_id    CHAR(43)     NOT NULL UNIQUE,
-					session       bytea        NOT NULL,
+					session       BLOB         NOT NULL,
 					shared        BOOLEAN      NOT NULL,
 					max_messages  INTEGER      NOT NULL,
 					message_count INTEGER      NOT NULL,
@@ -151,6 +151,56 @@ var Upgrades = [2]upgradeFunc{
 						return err
 					}
 				}
+			}
+		} else {
+			return errors.New("unknown dialect: " + dialect)
+		}
+		return nil
+	},
+	func(tx *sql.Tx, dialect string) error {
+		if dialect == "postgres" {
+			alters := [...]string{
+				"ADD COLUMN withheld_code VARCHAR(255)",
+				"ADD COLUMN withheld_reason TEXT",
+				"ALTER COLUMN signing_key DROP NOT NULL",
+				"ALTER COLUMN session DROP NOT NULL",
+				"ALTER COLUMN forwarding_chains DROP NOT NULL",
+			}
+			for _, alter := range alters {
+				_, err := tx.Exec(fmt.Sprintf("ALTER TABLE crypto_megolm_inbound_session %s", alter))
+				if err != nil {
+					return err
+				}
+			}
+		} else if dialect == "sqlite3" {
+			_, err := tx.Exec("ALTER TABLE crypto_megolm_inbound_session RENAME TO old_crypto_megolm_inbound_session")
+			if err != nil {
+				return err
+			}
+			_, err = tx.Exec(`CREATE TABLE crypto_megolm_inbound_session (
+				account_id   VARCHAR(255) NOT NULL,
+				session_id   CHAR(43)     NOT NULL,
+				sender_key   CHAR(43)     NOT NULL,
+				signing_key  CHAR(43),
+				room_id      VARCHAR(255) NOT NULL,
+				session           BLOB,
+				forwarding_chains BLOB,
+				withheld_code     VARCHAR(255),
+				withheld_reason   TEXT,
+				PRIMARY KEY (account_id, session_id)
+			)`)
+			if err != nil {
+				return err
+			}
+			_, err = tx.Exec(`INSERT INTO crypto_megolm_inbound_session
+				(session_id, sender_key, signing_key, room_id, session, forwarding_chains, account_id)
+				SELECT * FROM old_crypto_megolm_inbound_session`)
+			if err != nil {
+				return err
+			}
+			_, err = tx.Exec("DROP TABLE old_crypto_megolm_inbound_session")
+			if err != nil {
+				return err
 			}
 		} else {
 			return errors.New("unknown dialect: " + dialect)

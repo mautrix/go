@@ -228,6 +228,8 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 		mach.handleVerificationCancel(evt.Sender, content)
 	case *event.VerificationRequestEventContent:
 		mach.handleVerificationRequest(evt.Sender, content)
+	case *event.RoomKeyWithheldEventContent:
+		mach.handleRoomKeyWithheld(content)
 	default:
 		deviceID, _ := evt.Content.Raw["device_id"].(string)
 		mach.Log.Trace("Unhandled to-device event of type %s from %s/%s", evt.Type.Type, evt.Sender, deviceID)
@@ -314,6 +316,17 @@ func (mach *OlmMachine) receiveRoomKey(evt *DecryptedOlmEvent, content *event.Ro
 	}
 
 	mach.createGroupSession(evt.SenderKey, evt.Keys.Ed25519, content.RoomID, content.SessionID, content.SessionKey)
+}
+
+func (mach *OlmMachine) handleRoomKeyWithheld(content *event.RoomKeyWithheldEventContent) {
+	if content.Algorithm != id.AlgorithmMegolmV1 {
+		mach.Log.Debug("Non-megolm room key withheld event: %+v", content)
+		return
+	}
+	err := mach.CryptoStore.PutWithheldGroupSession(*content)
+	if err != nil {
+		mach.Log.Error("Failed to save room key withheld event: %v", err)
+	}
 }
 
 // ShareKeys uploads necessary keys to the server.
