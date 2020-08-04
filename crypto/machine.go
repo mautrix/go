@@ -36,7 +36,10 @@ type OlmMachine struct {
 	CryptoStore Store
 	StateStore  StateStore
 
-	AllowUnverifiedDevices bool
+	AllowUnverifiedDevices       bool
+	ShareKeysToUnverifiedDevices bool
+
+	AllowKeyShare func(*DeviceIdentity, event.RequestedKeyInfo) *KeyShareRejection
 
 	DefaultSASTimeout time.Duration
 	// AcceptVerificationFrom determines whether the machine will accept verification requests from this device.
@@ -60,13 +63,14 @@ type StateStore interface {
 
 // NewOlmMachine creates an OlmMachine with the given client, logger and stores.
 func NewOlmMachine(client *mautrix.Client, log Logger, cryptoStore Store, stateStore StateStore) *OlmMachine {
-	return &OlmMachine{
+	mach := &OlmMachine{
 		Client:      client,
 		Log:         log,
 		CryptoStore: cryptoStore,
 		StateStore:  stateStore,
 
-		AllowUnverifiedDevices: true,
+		AllowUnverifiedDevices:       true,
+		ShareKeysToUnverifiedDevices: false,
 
 		DefaultSASTimeout: 10 * time.Minute,
 		AcceptVerificationFrom: func(string, *DeviceIdentity) (VerificationRequestResponse, VerificationHooks) {
@@ -77,6 +81,8 @@ func NewOlmMachine(client *mautrix.Client, log Logger, cryptoStore Store, stateS
 		roomKeyRequestFilled:            &sync.Map{},
 		keyVerificationTransactionState: &sync.Map{},
 	}
+	mach.AllowKeyShare = mach.defaultAllowKeyShare
+	return mach
 }
 
 // Load loads the Olm account information from the crypto store. If there's no olm account, a new one is created.
@@ -214,7 +220,7 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 			// TODO handle m.dummy encrypted to-device event
 		}
 	case *event.RoomKeyRequestEventContent:
-		mach.handleRoomKeyRequest(evt.Sender, content, false)
+		mach.handleRoomKeyRequest(evt.Sender, content)
 	// verification cases
 	case *event.VerificationStartEventContent:
 		mach.handleVerificationStart(evt.Sender, content, 10*time.Minute)
