@@ -184,6 +184,9 @@ func (mach *OlmMachine) defaultAllowKeyShare(device *DeviceIdentity, _ event.Req
 func (mach *OlmMachine) handleRoomKeyRequest(sender id.UserID, content *event.RoomKeyRequestEventContent) {
 	if content.Action != event.KeyRequestActionRequest {
 		return
+	} else if content.RequestingDeviceID == mach.Client.DeviceID && sender == mach.Client.UserID {
+		mach.Log.Debug("Ignoring key request %s from ourselves", content.RequestID)
+		return
 	}
 
 	mach.Log.Debug("Received key request from %s/%s for session %s", sender, content.RequestingDeviceID, content.Body.SessionID)
