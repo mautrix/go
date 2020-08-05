@@ -7,9 +7,6 @@
 package event
 
 import (
-	"encoding/json"
-	"strconv"
-
 	"maunium.net/go/mautrix/crypto/attachment"
 	"maunium.net/go/mautrix/id"
 )
@@ -136,84 +133,10 @@ type FileInfo struct {
 	ThumbnailInfo *FileInfo           `json:"thumbnail_info,omitempty"`
 	ThumbnailURL  id.ContentURIString `json:"thumbnail_url,omitempty"`
 	ThumbnailFile *EncryptedFileInfo  `json:"thumbnail_file,omitempty"`
-	Width         int                 `json:"-"`
-	Height        int                 `json:"-"`
-	Duration      int                 `json:"-"`
-	Size          int                 `json:"-"`
-}
-
-type serializableFileInfo struct {
-	MimeType      string                `json:"mimetype,omitempty"`
-	ThumbnailInfo *serializableFileInfo `json:"thumbnail_info,omitempty"`
-	ThumbnailURL  id.ContentURIString   `json:"thumbnail_url,omitempty"`
-	ThumbnailFile *EncryptedFileInfo    `json:"thumbnail_file,omitempty"`
-
-	Width    json.Number `json:"w,omitempty"`
-	Height   json.Number `json:"h,omitempty"`
-	Duration json.Number `json:"duration,omitempty"`
-	Size     json.Number `json:"size,omitempty"`
-}
-
-func (sfi *serializableFileInfo) CopyFrom(fileInfo *FileInfo) *serializableFileInfo {
-	if fileInfo == nil {
-		return nil
-	}
-	*sfi = serializableFileInfo{
-		MimeType:      fileInfo.MimeType,
-		ThumbnailURL:  fileInfo.ThumbnailURL,
-		ThumbnailInfo: (&serializableFileInfo{}).CopyFrom(fileInfo.ThumbnailInfo),
-		ThumbnailFile: fileInfo.ThumbnailFile,
-	}
-	if fileInfo.Width > 0 {
-		sfi.Width = json.Number(strconv.Itoa(fileInfo.Width))
-	}
-	if fileInfo.Height > 0 {
-		sfi.Height = json.Number(strconv.Itoa(fileInfo.Height))
-	}
-	if fileInfo.Size > 0 {
-		sfi.Size = json.Number(strconv.Itoa(fileInfo.Size))
-
-	}
-	if fileInfo.Duration > 0 {
-		sfi.Duration = json.Number(strconv.Itoa(int(fileInfo.Duration)))
-	}
-	return sfi
-}
-
-func (sfi *serializableFileInfo) CopyTo(fileInfo *FileInfo) {
-	*fileInfo = FileInfo{
-		Width:        numberToInt(sfi.Width),
-		Height:       numberToInt(sfi.Height),
-		Size:         numberToInt(sfi.Size),
-		Duration:     numberToInt(sfi.Duration),
-		MimeType:     sfi.MimeType,
-		ThumbnailURL: sfi.ThumbnailURL,
-	}
-	if sfi.ThumbnailInfo != nil {
-		fileInfo.ThumbnailInfo = &FileInfo{}
-		sfi.ThumbnailInfo.CopyTo(fileInfo.ThumbnailInfo)
-	}
-}
-
-func (fileInfo *FileInfo) UnmarshalJSON(data []byte) error {
-	sfi := &serializableFileInfo{}
-	if err := json.Unmarshal(data, sfi); err != nil {
-		return err
-	}
-	sfi.CopyTo(fileInfo)
-	return nil
-}
-
-func (fileInfo *FileInfo) MarshalJSON() ([]byte, error) {
-	return json.Marshal((&serializableFileInfo{}).CopyFrom(fileInfo))
-}
-
-func numberToInt(val json.Number) int {
-	f64, _ := val.Float64()
-	if f64 > 0 {
-		return int(f64)
-	}
-	return 0
+	Width         int                 `json:"w,omitempty"`
+	Height        int                 `json:"h,omitempty"`
+	Duration      int                 `json:"duration,omitempty"`
+	Size          int                 `json:"size,omitempty"`
 }
 
 func (fileInfo *FileInfo) GetThumbnailInfo() *FileInfo {
