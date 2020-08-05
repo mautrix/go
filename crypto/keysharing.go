@@ -189,7 +189,7 @@ func (mach *OlmMachine) handleRoomKeyRequest(sender id.UserID, content *event.Ro
 		return
 	}
 
-	mach.Log.Debug("Received key request from %s/%s for session %s", sender, content.RequestingDeviceID, content.Body.SessionID)
+	mach.Log.Debug("Received key request %s for %s from %s/%s for session %s", content.RequestID, content.Body.SessionID, sender, content.RequestingDeviceID, content.Body.SessionID)
 
 	device, err := mach.GetOrFetchDevice(sender, content.RequestingDeviceID)
 	if err != nil {
