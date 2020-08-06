@@ -91,17 +91,18 @@ type RespMediaUpload struct {
 // RespUserInteractive is the JSON response for https://matrix.org/docs/spec/client_server/r0.2.0.html#user-interactive-authentication-api
 type RespUserInteractive struct {
 	Flows []struct {
-		Stages []string `json:"stages"`
+		Stages []AuthType `json:"stages"`
 	} `json:"flows"`
-	Params    map[string]interface{} `json:"params"`
-	Session   string                 `json:"string"`
-	Completed []string               `json:"completed"`
-	ErrCode   string                 `json:"errcode"`
-	Error     string                 `json:"error"`
+	Params    map[AuthType]interface{} `json:"params"`
+	Session   string                   `json:"string"`
+	Completed []string                 `json:"completed"`
+
+	ErrCode string `json:"errcode"`
+	Error   string `json:"error"`
 }
 
 // HasSingleStageFlow returns true if there exists at least 1 Flow with a single stage of stageName.
-func (r RespUserInteractive) HasSingleStageFlow(stageName string) bool {
+func (r RespUserInteractive) HasSingleStageFlow(stageName AuthType) bool {
 	for _, f := range r.Flows {
 		if len(f.Stages) == 1 && f.Stages[0] == stageName {
 			return true

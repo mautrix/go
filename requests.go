@@ -8,6 +8,27 @@ import (
 	"maunium.net/go/mautrix/pushrules"
 )
 
+type AuthType string
+
+const (
+	AuthTypePassword  = "m.login.password"
+	AuthTypeReCAPTCHA = "m.login.recaptcha"
+	AuthTypeOAuth2    = "m.login.oauth2"
+	AuthTypeSSO       = "m.login.sso"
+	AuthTypeEmail     = "m.login.email.identity"
+	AuthTypeMSISDN    = "m.login.msisdn"
+	AuthTypeToken     = "m.login.token"
+	AuthTypeDummy     = "m.login.dummy"
+)
+
+type IdentifierType string
+
+const (
+	IdentifierTypeUser       = "m.id.user"
+	IdentifierTypeThirdParty = "m.id.thirdparty"
+	IdentifierTypePhone      = "m.id.phone"
+)
+
 // ReqRegister is the JSON request for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-register
 type ReqRegister struct {
 	Username                 string      `json:"username,omitempty"`
@@ -18,8 +39,13 @@ type ReqRegister struct {
 	Auth                     interface{} `json:"auth,omitempty"`
 }
 
+type BaseAuthData struct {
+	Type    AuthType `json:"type"`
+	Session string   `json:"session"`
+}
+
 type UserIdentifier struct {
-	Type string `json:"type"`
+	Type IdentifierType `json:"type"`
 
 	User string `json:"user,omitempty"`
 
@@ -32,7 +58,7 @@ type UserIdentifier struct {
 
 // ReqLogin is the JSON request for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-login
 type ReqLogin struct {
-	Type                     string         `json:"type"`
+	Type                     AuthType       `json:"type"`
 	Identifier               UserIdentifier `json:"identifier"`
 	Password                 string         `json:"password,omitempty"`
 	Token                    string         `json:"token,omitempty"`

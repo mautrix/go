@@ -301,7 +301,9 @@ func (cli *Client) MakeRequest(method string, httpURL string, reqBody interface{
 		req.Header.Set("Content-Type", "application/json")
 	}
 	req.Header.Set("User-Agent", cli.UserAgent)
-	req.Header.Set("Authorization", "Bearer "+cli.AccessToken)
+	if len(cli.AccessToken) > 0 {
+		req.Header.Set("Authorization", "Bearer "+cli.AccessToken)
+	}
 	cli.LogRequest(req, logBody)
 	res, err := cli.Client.Do(req)
 	if res != nil {
@@ -448,19 +450,15 @@ func (cli *Client) RegisterDummy(req *ReqRegister) (*RespRegister, error) {
 	res, uia, err := cli.Register(req)
 	if err != nil && uia == nil {
 		return nil, err
+	} else if uia == nil {
+		return nil, errors.New("server did not return user-interactive auth flows")
+	} else if !uia.HasSingleStageFlow(AuthTypeDummy) {
+		return nil, errors.New("server does not support m.login.dummy")
 	}
-	if uia != nil && uia.HasSingleStageFlow("m.login.dummy") {
-		req.Auth = struct {
-			Type    string `json:"type"`
-			Session string `json:"session,omitempty"`
-		}{"m.login.dummy", uia.Session}
-		res, _, err = cli.Register(req)
-		if err != nil {
-			return nil, err
-		}
-	}
-	if res == nil {
-		return nil, fmt.Errorf("registration failed: does this server support m.login.dummy? ")
+	req.Auth = BaseAuthData{Type: AuthTypeDummy, Session: uia.Session}
+	res, _, err = cli.Register(req)
+	if err != nil {
+		return nil, err
 	}
 	return res, nil
 }
