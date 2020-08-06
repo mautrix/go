@@ -318,7 +318,7 @@ func (cli *Client) MakeRequest(method string, httpURL string, reqBody interface{
 		return nil, err
 	}
 
-	if res.StatusCode/100 != 2 { // not 2xx
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		var wrap error
 		respErr := &RespError{}
 		if _ = json.Unmarshal(contents, respErr); respErr.ErrCode != "" {
