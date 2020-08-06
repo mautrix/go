@@ -331,14 +331,10 @@ func (cli *Client) MakeRequest(method string, httpURL string, reqBody interface{
 		// HTTP error instead (e.g proxy errors which return HTML).
 		msg := "Failed to " + method + " JSON to " + req.URL.Path
 		if wrap == nil {
-			contents, err := ioutil.ReadAll(res.Body)
-			if err != nil {
-				return nil, err
-			}
 			msg = msg + ": " + string(contents)
 		}
 
-		return nil, HTTPError{
+		return contents, HTTPError{
 			Code:         res.StatusCode,
 			Message:      msg,
 			WrappedError: wrap,
