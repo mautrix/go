@@ -452,6 +452,21 @@ func (mach *OlmMachine) handleVerificationMAC(userID id.UserID, content *event.V
 			mach.Log.Warn("Failed to put device after verifying: %v", err)
 		}
 
+		crossSignKeys, err := mach.CryptoStore.GetCrossSigningKeys(device.UserID)
+		if err != nil {
+			mach.Log.Warn("Failed to fetch other user's cross signing keys: %v", err)
+		} else {
+			for verifiedKeyID := range content.Mac {
+				_, verifiedKey := verifiedKeyID.Parse()
+				for _, key := range crossSignKeys {
+					if key.String() == verifiedKey {
+						// TODO make, upload and store sig from my user-signing to this master key
+						break
+					}
+				}
+			}
+		}
+
 		mach.Log.Debug("Device %v of user %v verified successfully!", device.DeviceID, device.UserID)
 
 		verState.hooks.OnSuccess()
@@ -660,6 +675,7 @@ func (mach *OlmMachine) SendSASVerificationMAC(userID id.UserID, deviceID id.Dev
 		Keys:          keysMac,
 		Mac: map[id.KeyID]string{
 			keyID: pubKeyMac,
+			// TODO also send our master xsigning key for verification
 		},
 	}
 	return mach.sendToOneDevice(userID, deviceID, event.ToDeviceVerificationMAC, content)
