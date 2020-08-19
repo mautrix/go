@@ -573,3 +573,90 @@ func (store *SQLCryptoStore) FilterTrackedUsers(users []id.UserID) []id.UserID {
 	}
 	return users[:ptr]
 }
+
+// PutCrossSigningKey stores a cross-signing key of some user along with its usage.
+func (store *SQLCryptoStore) PutCrossSigningKey(userID id.UserID, usage id.CrossSigningUsage, key string) error {
+	var err error
+	if store.Dialect == "postgres" {
+		_, err = store.DB.Exec(`
+			INSERT INTO crypto_cross_signing_keys (user_id, usage, key) VALUES ($1, $2, $3) ON CONFLICT (user_id, usage) DO UPDATE SET key=$3`,
+			userID, usage, key)
+	} else if store.Dialect == "sqlite3" {
+		_, err = store.DB.Exec("INSERT OR REPLACE INTO crypto_cross_signing_keys (user_id, usage, key) VALUES ($1, $2, $3)",
+			userID, usage, key)
+	} else {
+		err = fmt.Errorf("unsupported dialect %s", store.Dialect)
+	}
+	if err != nil {
+		store.Log.Warn("Failed to store device: %v", err)
+	}
+	return nil
+}
+
+// GetCrossSigningKeys retrieves a user's stored cross-signing keys.
+func (store *SQLCryptoStore) GetCrossSigningKeys(userID id.UserID) (map[id.CrossSigningUsage]string, error) {
+	rows, err := store.DB.Query("SELECT usage, key FROM crypto_cross_signing_keys WHERE user_id=$1", userID)
+	if err != nil {
+		return nil, err
+	}
+	data := make(map[id.CrossSigningUsage]string)
+	for rows.Next() {
+		var usage id.CrossSigningUsage
+		var key string
+		err := rows.Scan(&usage, &key)
+		if err != nil {
+			return nil, err
+		}
+		data[usage] = key
+	}
+
+	return data, nil
+}
+
+// PutSignature stores a signature of a cross-signing or device key along with the signer's user ID and key.
+func (store *SQLCryptoStore) PutSignature(signedUserID id.UserID, signedKey id.KeyID, signerUserID id.UserID, signerKey id.KeyID, signature string) error {
+	var err error
+	if store.Dialect == "postgres" {
+		_, err = store.DB.Exec(`
+			INSERT INTO crypto_cross_signing_signatures (signed_user_id, signed_key, signer_user_id, signer_key, signature) VALUES ($1, $2, $3, $4, $5)
+			ON CONFLICT (signed_user_id, signed_key, signer_user_id, signer_key) DO UPDATE SET signature=$5`,
+			signedUserID, signedKey, signerUserID, signerKey, signature)
+	} else if store.Dialect == "sqlite3" {
+		_, err = store.DB.Exec(`
+			INSERT OR REPLACE INTO crypto_cross_signing_signatures (signed_user_id, signed_key, signer_user_id, signer_key, signature)
+			VALUES ($1, $2, $3, $4, $5)`,
+			signedUserID, signedKey, signerUserID, signerKey, signature)
+	} else {
+		err = fmt.Errorf("unsupported dialect %s", store.Dialect)
+	}
+	if err != nil {
+		store.Log.Warn("Failed to store device: %v", err)
+	}
+	return nil
+}
+
+// GetSignaturesForKey retrieves the stored signatures for a given cross-signing or device key.
+func (store *SQLCryptoStore) GetSignaturesForKey(userID id.UserID, key id.KeyID) (map[id.UserID]map[id.KeyID]string, error) {
+	rows, err := store.DB.Query("SELECT signer_user_id, signer_key, signature FROM crypto_cross_signing_signatures WHERE signed_user_id=$1 AND signed_key=$2", userID, key)
+	if err != nil {
+		return nil, err
+	}
+	data := make(map[id.UserID]map[id.KeyID]string)
+	for rows.Next() {
+		var signerUserID id.UserID
+		var signerKey id.KeyID
+		var signature string
+		err := rows.Scan(&signerUserID, &signerKey, &signature)
+		if err != nil {
+			return nil, err
+		}
+		signerKeys, ok := data[signerUserID]
+		if !ok {
+			signerKeys = make(map[id.KeyID]string)
+			data[signerUserID] = signerKeys
+		}
+		signerKeys[signerKey] = signature
+	}
+
+	return data, nil
+}

@@ -36,6 +36,14 @@ const (
 	KeyAlgorithmSignedCurve25519 KeyAlgorithm = "signed_curve25519"
 )
 
+type CrossSigningUsage string
+
+const (
+	XSUsageMaster      CrossSigningUsage = "master"
+	XSUsageSelfSigning CrossSigningUsage = "self_signing"
+	XSUsageUserSigning CrossSigningUsage = "user_signing"
+)
+
 // A SessionID is an arbitrary string that identifies an Olm or Megolm session.
 type SessionID string
 

@@ -34,8 +34,8 @@ func getRelatesTo(content interface{}) *event.RelatesTo {
 }
 
 type rawMegolmEvent struct {
-	RoomID  id.RoomID     `json:"room_id"`
-	Type    event.Type    `json:"type"`
+	RoomID  id.RoomID   `json:"room_id"`
+	Type    event.Type  `json:"type"`
 	Content interface{} `json:"content"`
 }
 

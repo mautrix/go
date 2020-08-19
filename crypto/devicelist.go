@@ -76,6 +76,11 @@ func (mach *OlmMachine) fetchKeys(users []id.UserID, sinceToken string, includeU
 				mach.Log.Error("Failed to validate device %s of %s: %v", deviceID, userID, err)
 			} else if newDevice != nil {
 				newDevices[deviceID] = newDevice
+				for signerUserID, signerKeys := range deviceKeys.Signatures {
+					for signerKey, signature := range signerKeys {
+						mach.CryptoStore.PutSignature(userID, id.NewKeyID(id.KeyAlgorithmEd25519, deviceID.String()), signerUserID, id.KeyID(signerKey), signature)
+					}
+				}
 			}
 		}
 		mach.Log.Trace("Storing new device list for %s containing %d devices", userID, len(newDevices))

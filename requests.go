@@ -183,6 +183,13 @@ type DeviceKeys struct {
 	Unsigned   map[string]interface{} `json:"unsigned,omitempty"`
 }
 
+type CrossSigningKeys struct {
+	UserID     id.UserID                         `json:"user_id"`
+	Usage      []id.CrossSigningUsage            `json:"usage"`
+	Keys       map[id.KeyID]string               `json:"keys"`
+	Signatures map[id.UserID]map[id.KeyID]string `json:"signatures"`
+}
+
 type KeyMap map[id.DeviceKeyID]string
 
 func (km KeyMap) GetEd25519(deviceID id.DeviceID) id.Ed25519 {

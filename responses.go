@@ -249,8 +249,11 @@ type RespUploadKeys struct {
 }
 
 type RespQueryKeys struct {
-	Failures   map[string]interface{}                   `json:"failures"`
-	DeviceKeys map[id.UserID]map[id.DeviceID]DeviceKeys `json:"device_keys"`
+	Failures        map[string]interface{}                   `json:"failures"`
+	DeviceKeys      map[id.UserID]map[id.DeviceID]DeviceKeys `json:"device_keys"`
+	MasterKeys      map[id.UserID]CrossSigningKeys           `json:"master_keys"`
+	SelfSigningKeys map[id.UserID]CrossSigningKeys           `json:"self_signing_keys"`
+	UserSigningKeys map[id.UserID]CrossSigningKeys           `json:"user_signing_keys"`
 }
 
 type RespClaimKeys struct {

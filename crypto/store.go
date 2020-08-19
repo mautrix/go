@@ -140,6 +140,15 @@ type Store interface {
 	// FilterTrackedUsers returns a filtered version of the given list that only includes user IDs whose device lists
 	// have been stored with PutDevices. A user is considered tracked even if the PutDevices list was empty.
 	FilterTrackedUsers([]id.UserID) []id.UserID
+
+	// PutCrossSigningKey stores a cross-signing key of some user along with its usage.
+	PutCrossSigningKey(id.UserID, id.CrossSigningUsage, string) error
+	// GetCrossSigningKeys retrieves a user's stored cross-signing keys.
+	GetCrossSigningKeys(id.UserID) (map[id.CrossSigningUsage]string, error)
+	// PutSignature stores a signature of a cross-signing or device key along with the signer's user ID and key.
+	PutSignature(id.UserID, id.KeyID, id.UserID, id.KeyID, string) error
+	// GetSignatures retrieves the stored signatures for a given cross-signing or device key.
+	GetSignaturesForKey(id.UserID, id.KeyID) (map[id.UserID]map[id.KeyID]string, error)
 }
 
 type messageIndexKey struct {
@@ -165,6 +174,8 @@ type GobStore struct {
 	OutGroupSessions      map[id.RoomID]*OutboundGroupSession
 	MessageIndices        map[messageIndexKey]messageIndexValue
 	Devices               map[id.UserID]map[id.DeviceID]*DeviceIdentity
+	CrossSigningKeys      map[id.UserID]map[id.CrossSigningUsage]string
+	KeySignatures         map[id.UserID]map[id.KeyID]map[id.UserID]map[id.KeyID]string
 }
 
 var _ Store = (*GobStore)(nil)
@@ -482,4 +493,56 @@ func (gs *GobStore) FilterTrackedUsers(users []id.UserID) []id.UserID {
 	}
 	gs.lock.RUnlock()
 	return users[:ptr]
+}
+
+func (gs *GobStore) PutCrossSigningKey(userID id.UserID, usage id.CrossSigningUsage, key string) error {
+	gs.lock.RLock()
+	userKeys, ok := gs.CrossSigningKeys[userID]
+	if !ok {
+		userKeys = make(map[id.CrossSigningUsage]string)
+		gs.CrossSigningKeys[userID] = userKeys
+	}
+	userKeys[usage] = key
+	err := gs.save()
+	gs.lock.RUnlock()
+	return err
+}
+
+func (gs *GobStore) GetCrossSigningKeys(userID id.UserID) (map[id.CrossSigningUsage]string, error) {
+	gs.lock.RLock()
+	defer gs.lock.RUnlock()
+	return gs.CrossSigningKeys[userID], nil
+}
+
+func (gs *GobStore) PutSignature(signedUserID id.UserID, signedKey id.KeyID, signerUserID id.UserID, signerKey id.KeyID, signature string) error {
+	gs.lock.RLock()
+	signedUserSigs, ok := gs.KeySignatures[signedUserID]
+	if !ok {
+		signedUserSigs = make(map[id.KeyID]map[id.UserID]map[id.KeyID]string)
+		gs.KeySignatures[signedUserID] = signedUserSigs
+	}
+	signaturesForKey, ok := signedUserSigs[signedKey]
+	if !ok {
+		signaturesForKey = make(map[id.UserID]map[id.KeyID]string)
+		signedUserSigs[signedKey] = signaturesForKey
+	}
+	signedByUser, ok := signaturesForKey[signerUserID]
+	if !ok {
+		signedByUser = make(map[id.KeyID]string)
+		signaturesForKey[signerUserID] = signedByUser
+	}
+	signedByUser[signerKey] = signature
+	err := gs.save()
+	gs.lock.RUnlock()
+	return err
+}
+
+func (gs *GobStore) GetSignaturesForKey(userID id.UserID, key id.KeyID) (map[id.UserID]map[id.KeyID]string, error) {
+	gs.lock.RLock()
+	defer gs.lock.RUnlock()
+	userKeys, ok := gs.KeySignatures[userID]
+	if !ok {
+		return nil, nil
+	}
+	return userKeys[key], nil
 }
