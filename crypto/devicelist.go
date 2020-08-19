@@ -27,6 +27,46 @@ func (mach *OlmMachine) LoadDevices(user id.UserID) map[id.DeviceID]*DeviceIdent
 	return mach.fetchKeys([]id.UserID{user}, "", true)[user]
 }
 
+func (mach *OlmMachine) storeCrossSigningKeys(crossSigningKeys map[id.UserID]mautrix.CrossSigningKeys, deviceKeys map[id.UserID]map[id.DeviceID]mautrix.DeviceKeys) {
+	for userID, userKeys := range crossSigningKeys {
+		for _, key := range userKeys.Keys {
+			for _, usage := range userKeys.Usage {
+				mach.Log.Debug("Storing cross-signing key for %v: %v (type %v)", userID, key, usage)
+				if err := mach.CryptoStore.PutCrossSigningKey(userID, usage, key); err != nil {
+					mach.Log.Error("Error storing cross-signing key: %v", err)
+				}
+			}
+
+			for signUserID, keySigs := range userKeys.Signatures {
+				for signKeyID, signature := range keySigs {
+					_, signKeyName := signKeyID.Parse()
+					signingKey := id.Ed25519(signKeyName)
+					// if the signer is one of this user's own devices, find the key from the key ID
+					if signUserID == userID {
+						ownDeviceID := id.DeviceID(signKeyName)
+						if ownDeviceKeys, ok := deviceKeys[userID][ownDeviceID]; ok {
+							signingKey = ownDeviceKeys.Keys.GetEd25519(ownDeviceID)
+							mach.Log.Debug("Treating %v as the device name", signKeyName)
+						}
+					}
+
+					mach.Log.Debug("Verifying %v with: %v %v %v", userKeys, signUserID, signKeyName, signingKey)
+					if verified, err := olm.VerifySignatureJSON(userKeys, signUserID, signKeyName, signingKey); err != nil {
+						mach.Log.Error("Error while verifying cross-signing keys: %v", err)
+					} else {
+						if verified {
+							mach.Log.Debug("Cross-signing keys verified")
+							mach.CryptoStore.PutSignature(userID, key, signUserID, signingKey, signature)
+						} else {
+							mach.Log.Error("Cross-signing keys verification unsuccessful", err)
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
 func (mach *OlmMachine) fetchKeys(users []id.UserID, sinceToken string, includeUntracked bool) (data map[id.UserID]map[id.DeviceID]*DeviceIdentity) {
 	req := &mautrix.ReqQueryKeys{
 		DeviceKeys: mautrix.DeviceKeysRequest{},
@@ -78,7 +118,9 @@ func (mach *OlmMachine) fetchKeys(users []id.UserID, sinceToken string, includeU
 				newDevices[deviceID] = newDevice
 				for signerUserID, signerKeys := range deviceKeys.Signatures {
 					for signerKey, signature := range signerKeys {
-						mach.CryptoStore.PutSignature(userID, id.NewKeyID(id.KeyAlgorithmEd25519, deviceID.String()), signerUserID, id.KeyID(signerKey), signature)
+						if signKey, ok := deviceKeys.Keys[signerKey]; ok {
+							mach.CryptoStore.PutSignature(userID, id.Ed25519(signKey), signerUserID, id.Ed25519(signKey), signature)
+						}
 					}
 				}
 			}
@@ -98,6 +140,11 @@ func (mach *OlmMachine) fetchKeys(users []id.UserID, sinceToken string, includeU
 	for userID := range req.DeviceKeys {
 		mach.Log.Warn("Didn't get any keys for user %s", userID)
 	}
+
+	mach.storeCrossSigningKeys(resp.MasterKeys, resp.DeviceKeys)
+	mach.storeCrossSigningKeys(resp.SelfSigningKeys, resp.DeviceKeys)
+	mach.storeCrossSigningKeys(resp.UserSigningKeys, resp.DeviceKeys)
+
 	return data
 }
 
@@ -134,7 +181,7 @@ func (mach *OlmMachine) validateDevice(userID id.UserID, deviceID id.DeviceID, d
 		return existing, MismatchingSigningKey
 	}
 
-	ok, err := olm.VerifySignatureJSON(deviceKeys, userID, deviceID, signingKey)
+	ok, err := olm.VerifySignatureJSON(deviceKeys, userID, deviceID.String(), signingKey)
 	if err != nil {
 		return existing, errors.Wrap(err, "failed to verify signature")
 	} else if !ok {

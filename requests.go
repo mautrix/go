@@ -186,7 +186,7 @@ type DeviceKeys struct {
 type CrossSigningKeys struct {
 	UserID     id.UserID                         `json:"user_id"`
 	Usage      []id.CrossSigningUsage            `json:"usage"`
-	Keys       map[id.KeyID]string               `json:"keys"`
+	Keys       map[id.KeyID]id.Ed25519           `json:"keys"`
 	Signatures map[id.UserID]map[id.KeyID]string `json:"signatures"`
 }
 

@@ -575,7 +575,7 @@ func (store *SQLCryptoStore) FilterTrackedUsers(users []id.UserID) []id.UserID {
 }
 
 // PutCrossSigningKey stores a cross-signing key of some user along with its usage.
-func (store *SQLCryptoStore) PutCrossSigningKey(userID id.UserID, usage id.CrossSigningUsage, key string) error {
+func (store *SQLCryptoStore) PutCrossSigningKey(userID id.UserID, usage id.CrossSigningUsage, key id.Ed25519) error {
 	var err error
 	if store.Dialect == "postgres" {
 		_, err = store.DB.Exec(`
@@ -594,15 +594,15 @@ func (store *SQLCryptoStore) PutCrossSigningKey(userID id.UserID, usage id.Cross
 }
 
 // GetCrossSigningKeys retrieves a user's stored cross-signing keys.
-func (store *SQLCryptoStore) GetCrossSigningKeys(userID id.UserID) (map[id.CrossSigningUsage]string, error) {
+func (store *SQLCryptoStore) GetCrossSigningKeys(userID id.UserID) (map[id.CrossSigningUsage]id.Ed25519, error) {
 	rows, err := store.DB.Query("SELECT usage, key FROM crypto_cross_signing_keys WHERE user_id=$1", userID)
 	if err != nil {
 		return nil, err
 	}
-	data := make(map[id.CrossSigningUsage]string)
+	data := make(map[id.CrossSigningUsage]id.Ed25519)
 	for rows.Next() {
 		var usage id.CrossSigningUsage
-		var key string
+		var key id.Ed25519
 		err := rows.Scan(&usage, &key)
 		if err != nil {
 			return nil, err
@@ -614,7 +614,7 @@ func (store *SQLCryptoStore) GetCrossSigningKeys(userID id.UserID) (map[id.Cross
 }
 
 // PutSignature stores a signature of a cross-signing or device key along with the signer's user ID and key.
-func (store *SQLCryptoStore) PutSignature(signedUserID id.UserID, signedKey id.KeyID, signerUserID id.UserID, signerKey id.KeyID, signature string) error {
+func (store *SQLCryptoStore) PutSignature(signedUserID id.UserID, signedKey id.Ed25519, signerUserID id.UserID, signerKey id.Ed25519, signature string) error {
 	var err error
 	if store.Dialect == "postgres" {
 		_, err = store.DB.Exec(`
@@ -636,15 +636,15 @@ func (store *SQLCryptoStore) PutSignature(signedUserID id.UserID, signedKey id.K
 }
 
 // GetSignaturesForKey retrieves the stored signatures for a given cross-signing or device key.
-func (store *SQLCryptoStore) GetSignaturesForKey(userID id.UserID, key id.KeyID) (map[id.UserID]map[id.KeyID]string, error) {
+func (store *SQLCryptoStore) GetSignaturesForKey(userID id.UserID, key id.Ed25519) (map[id.UserID]map[id.Ed25519]string, error) {
 	rows, err := store.DB.Query("SELECT signer_user_id, signer_key, signature FROM crypto_cross_signing_signatures WHERE signed_user_id=$1 AND signed_key=$2", userID, key)
 	if err != nil {
 		return nil, err
 	}
-	data := make(map[id.UserID]map[id.KeyID]string)
+	data := make(map[id.UserID]map[id.Ed25519]string)
 	for rows.Next() {
 		var signerUserID id.UserID
-		var signerKey id.KeyID
+		var signerKey id.Ed25519
 		var signature string
 		err := rows.Scan(&signerUserID, &signerKey, &signature)
 		if err != nil {
@@ -652,7 +652,7 @@ func (store *SQLCryptoStore) GetSignaturesForKey(userID id.UserID, key id.KeyID)
 		}
 		signerKeys, ok := data[signerUserID]
 		if !ok {
-			signerKeys = make(map[id.KeyID]string)
+			signerKeys = make(map[id.Ed25519]string)
 			data[signerUserID] = signerKeys
 		}
 		signerKeys[signerKey] = signature

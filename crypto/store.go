@@ -142,13 +142,13 @@ type Store interface {
 	FilterTrackedUsers([]id.UserID) []id.UserID
 
 	// PutCrossSigningKey stores a cross-signing key of some user along with its usage.
-	PutCrossSigningKey(id.UserID, id.CrossSigningUsage, string) error
+	PutCrossSigningKey(id.UserID, id.CrossSigningUsage, id.Ed25519) error
 	// GetCrossSigningKeys retrieves a user's stored cross-signing keys.
-	GetCrossSigningKeys(id.UserID) (map[id.CrossSigningUsage]string, error)
+	GetCrossSigningKeys(id.UserID) (map[id.CrossSigningUsage]id.Ed25519, error)
 	// PutSignature stores a signature of a cross-signing or device key along with the signer's user ID and key.
-	PutSignature(id.UserID, id.KeyID, id.UserID, id.KeyID, string) error
+	PutSignature(id.UserID, id.Ed25519, id.UserID, id.Ed25519, string) error
 	// GetSignatures retrieves the stored signatures for a given cross-signing or device key.
-	GetSignaturesForKey(id.UserID, id.KeyID) (map[id.UserID]map[id.KeyID]string, error)
+	GetSignaturesForKey(id.UserID, id.Ed25519) (map[id.UserID]map[id.Ed25519]string, error)
 }
 
 type messageIndexKey struct {
@@ -174,8 +174,8 @@ type GobStore struct {
 	OutGroupSessions      map[id.RoomID]*OutboundGroupSession
 	MessageIndices        map[messageIndexKey]messageIndexValue
 	Devices               map[id.UserID]map[id.DeviceID]*DeviceIdentity
-	CrossSigningKeys      map[id.UserID]map[id.CrossSigningUsage]string
-	KeySignatures         map[id.UserID]map[id.KeyID]map[id.UserID]map[id.KeyID]string
+	CrossSigningKeys      map[id.UserID]map[id.CrossSigningUsage]id.Ed25519
+	KeySignatures         map[id.UserID]map[id.Ed25519]map[id.UserID]map[id.Ed25519]string
 }
 
 var _ Store = (*GobStore)(nil)
@@ -495,11 +495,11 @@ func (gs *GobStore) FilterTrackedUsers(users []id.UserID) []id.UserID {
 	return users[:ptr]
 }
 
-func (gs *GobStore) PutCrossSigningKey(userID id.UserID, usage id.CrossSigningUsage, key string) error {
+func (gs *GobStore) PutCrossSigningKey(userID id.UserID, usage id.CrossSigningUsage, key id.Ed25519) error {
 	gs.lock.RLock()
 	userKeys, ok := gs.CrossSigningKeys[userID]
 	if !ok {
-		userKeys = make(map[id.CrossSigningUsage]string)
+		userKeys = make(map[id.CrossSigningUsage]id.Ed25519)
 		gs.CrossSigningKeys[userID] = userKeys
 	}
 	userKeys[usage] = key
@@ -508,27 +508,27 @@ func (gs *GobStore) PutCrossSigningKey(userID id.UserID, usage id.CrossSigningUs
 	return err
 }
 
-func (gs *GobStore) GetCrossSigningKeys(userID id.UserID) (map[id.CrossSigningUsage]string, error) {
+func (gs *GobStore) GetCrossSigningKeys(userID id.UserID) (map[id.CrossSigningUsage]id.Ed25519, error) {
 	gs.lock.RLock()
 	defer gs.lock.RUnlock()
 	return gs.CrossSigningKeys[userID], nil
 }
 
-func (gs *GobStore) PutSignature(signedUserID id.UserID, signedKey id.KeyID, signerUserID id.UserID, signerKey id.KeyID, signature string) error {
+func (gs *GobStore) PutSignature(signedUserID id.UserID, signedKey id.Ed25519, signerUserID id.UserID, signerKey id.Ed25519, signature string) error {
 	gs.lock.RLock()
 	signedUserSigs, ok := gs.KeySignatures[signedUserID]
 	if !ok {
-		signedUserSigs = make(map[id.KeyID]map[id.UserID]map[id.KeyID]string)
+		signedUserSigs = make(map[id.Ed25519]map[id.UserID]map[id.Ed25519]string)
 		gs.KeySignatures[signedUserID] = signedUserSigs
 	}
 	signaturesForKey, ok := signedUserSigs[signedKey]
 	if !ok {
-		signaturesForKey = make(map[id.UserID]map[id.KeyID]string)
+		signaturesForKey = make(map[id.UserID]map[id.Ed25519]string)
 		signedUserSigs[signedKey] = signaturesForKey
 	}
 	signedByUser, ok := signaturesForKey[signerUserID]
 	if !ok {
-		signedByUser = make(map[id.KeyID]string)
+		signedByUser = make(map[id.Ed25519]string)
 		signaturesForKey[signerUserID] = signedByUser
 	}
 	signedByUser[signerKey] = signature
@@ -537,7 +537,7 @@ func (gs *GobStore) PutSignature(signedUserID id.UserID, signedKey id.KeyID, sig
 	return err
 }
 
-func (gs *GobStore) GetSignaturesForKey(userID id.UserID, key id.KeyID) (map[id.UserID]map[id.KeyID]string, error) {
+func (gs *GobStore) GetSignaturesForKey(userID id.UserID, key id.Ed25519) (map[id.UserID]map[id.Ed25519]string, error) {
 	gs.lock.RLock()
 	defer gs.lock.RUnlock()
 	userKeys, ok := gs.KeySignatures[userID]
