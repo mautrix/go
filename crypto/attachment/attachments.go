@@ -55,7 +55,7 @@ type EncryptedFile struct {
 }
 
 func NewEncryptedFile() *EncryptedFile {
-	key, iv := utils.GenA256CTR()
+	key, iv := utils.GenAttachmentA256CTR()
 	return &EncryptedFile{
 		Key: JSONWebKey{
 			Key:         base64.RawURLEncoding.EncodeToString(key[:]),

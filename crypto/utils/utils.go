@@ -40,8 +40,8 @@ func XorA256CTR(source []byte, key [AESCTRKeyLength]byte, iv [AESCTRIVLength]byt
 	return result
 }
 
-// GenA256CTR generates a new random AES256-CTR key and IV.
-func GenA256CTR() (key [AESCTRKeyLength]byte, iv [AESCTRIVLength]byte) {
+// GenAttachmentA256CTR generates a new random AES256-CTR key and IV suitable for encrypting attachments.
+func GenAttachmentA256CTR() (key [AESCTRKeyLength]byte, iv [AESCTRIVLength]byte) {
 	_, err := rand.Read(key[:])
 	if err != nil {
 		panic(err)
@@ -55,11 +55,21 @@ func GenA256CTR() (key [AESCTRKeyLength]byte, iv [AESCTRIVLength]byte) {
 	return
 }
 
+// GenA256CTRIV generates a random IV for AES256-CTR with the last bit set to zero.
+func GenA256CTRIV() (iv [AESCTRIVLength]byte) {
+	_, err := rand.Read(iv[:])
+	if err != nil {
+		panic(err)
+	}
+	iv[8] &= 0x7F
+	return
+}
+
 // DeriveKeysSHA256 derives an AES and a HMAC key from the given recovery key.
 func DeriveKeysSHA256(key []byte, name string) ([AESCTRKeyLength]byte, [HMACKeyLength]byte) {
 	var zeroBytes [32]byte
 
-	derivedHkdf := hkdf.New(sha256.New, key, zeroBytes[:], []byte(name))
+	derivedHkdf := hkdf.New(sha256.New, key[:], zeroBytes[:], []byte(name))
 
 	var aesKey [AESCTRKeyLength]byte
 	var hmacKey [HMACKeyLength]byte
@@ -75,26 +85,24 @@ func PBKDF2SHA512(password []byte, salt []byte, iters int, keyLenBits int) []byt
 }
 
 // DecodeBase58RecoveryKey recovers the secret storage from a recovery key.
-func DecodeBase58RecoveryKey(recoveryKey string) [AESCTRKeyLength]byte {
-	var res [AESCTRKeyLength]byte
+func DecodeBase58RecoveryKey(recoveryKey string) []byte {
 	noSpaces := strings.ReplaceAll(recoveryKey, " ", "")
 	decoded := base58.Decode(noSpaces)
 	if len(decoded) != AESCTRKeyLength+3 { // AESCTRKeyLength bytes key and 3 bytes prefix / parity
-		return res
+		return nil
 	}
 	var parity byte
 	for _, b := range decoded[:34] {
 		parity ^= b
 	}
 	if parity != decoded[34] || decoded[0] != 0x8B || decoded[1] != 1 {
-		return res
+		return nil
 	}
-	copy(res[:], decoded[2:34])
-	return res
+	return decoded[2:34]
 }
 
 // EncodeBase58RecoveryKey recovers the secret storage from a recovery key.
-func EncodeBase58RecoveryKey(key [AESCTRKeyLength]byte) string {
+func EncodeBase58RecoveryKey(key []byte) string {
 	var inputBytes [35]byte
 	copy(inputBytes[2:34], key[:])
 	inputBytes[0] = 0x8B

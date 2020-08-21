@@ -13,7 +13,7 @@ import (
 
 func TestAES256Ctr(t *testing.T) {
 	expected := "Hello world"
-	key, iv := GenA256CTR()
+	key, iv := GenAttachmentA256CTR()
 	enc := XorA256CTR([]byte(expected), key, iv)
 	dec := XorA256CTR(enc, key, iv)
 	if string(dec) != expected {

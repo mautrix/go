@@ -13,7 +13,8 @@ import (
 // PkSigning stores a key pair for signing messages.
 type PkSigning struct {
 	int       *C.OlmPkSigning
-	PublicKey []byte
+	PublicKey string
+	Seed      []byte
 }
 
 func pkSigningSize() uint {
@@ -44,24 +45,31 @@ func (p *PkSigning) Clear() {
 	C.olm_clear_pk_signing((*C.OlmPkSigning)(p.int))
 }
 
-// NewPkSigning creates a new PkSigning object, containing a key pair for signing messages.
-func NewPkSigning() (*PkSigning, error) {
+// NewPkSigningFromSeed creates a new PkSigning object using the given seed.
+func NewPkSigningFromSeed(seed []byte) (*PkSigning, error) {
 	p := newBlackPkSigning()
 	p.Clear()
 	pubKey := make([]byte, pkSigningPublicKeyLength())
-	// Make the slice be at least length 1
-	random := make([]byte, pkSigningSeedLength())
-	_, err := rand.Read(random)
+	if C.olm_pk_signing_key_from_seed((*C.OlmPkSigning)(p.int),
+		unsafe.Pointer(&pubKey[0]), C.size_t(len(pubKey)),
+		unsafe.Pointer(&seed[0]), C.size_t(len(seed))) == errorVal() {
+		return nil, p.lastError()
+	}
+	p.PublicKey = string(pubKey)
+	p.Seed = seed
+	return p, nil
+}
+
+// NewPkSigning creates a new PkSigning object, containing a key pair for signing messages.
+func NewPkSigning() (*PkSigning, error) {
+	// Generate the seed
+	seed := make([]byte, pkSigningSeedLength())
+	_, err := rand.Read(seed)
 	if err != nil {
 		panic(NotEnoughGoRandom)
 	}
-	if C.olm_pk_signing_key_from_seed((*C.OlmPkSigning)(p.int),
-		unsafe.Pointer(&pubKey[0]), C.size_t(len(pubKey)),
-		unsafe.Pointer(&random[0]), C.size_t(len(random))) == errorVal() {
-		return nil, p.lastError()
-	}
-	p.PublicKey = pubKey
-	return p, nil
+	pk, err := NewPkSigningFromSeed(seed)
+	return pk, err
 }
 
 // Sign creates a signature for the given message using this key.

@@ -604,27 +604,6 @@ func (cli *Client) SetAccountData(name string, data interface{}) (err error) {
 	return nil
 }
 
-// GetAccountData gets the user's account data of this type. See https://matrix.org/docs/spec/client_server/r0.6.0#get-matrix-client-r0-user-userid-account-data-type
-func (cli *Client) GetAccountData(name string) (data map[string]interface{}, err error) {
-	urlPath := cli.BuildURL("user", cli.UserID, "account_data", name)
-	s := make(map[string]interface{})
-
-	_, err = cli.MakeRequest("GET", urlPath, nil, &s)
-
-	return s, err
-}
-
-// SetAccountData sets the user's account data of this type. See https://matrix.org/docs/spec/client_server/r0.6.0#put-matrix-client-r0-user-userid-account-data-type
-func (cli *Client) SetAccountData(name string, data map[string]interface{}) (err error) {
-	urlPath := cli.BuildURL("user", cli.UserID, "account_data", name)
-	_, err = cli.MakeRequest("PUT", urlPath, &data, nil)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 type ReqSendEvent struct {
 	Timestamp     int64
 	TransactionID string
