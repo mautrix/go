@@ -8,12 +8,14 @@ import "C"
 import (
 	"crypto/rand"
 	"unsafe"
+
+	"maunium.net/go/mautrix/id"
 )
 
 // PkSigning stores a key pair for signing messages.
 type PkSigning struct {
 	int       *C.OlmPkSigning
-	PublicKey string
+	PublicKey id.Ed25519
 	Seed      []byte
 }
 
@@ -55,7 +57,7 @@ func NewPkSigningFromSeed(seed []byte) (*PkSigning, error) {
 		unsafe.Pointer(&seed[0]), C.size_t(len(seed))) == errorVal() {
 		return nil, p.lastError()
 	}
-	p.PublicKey = string(pubKey)
+	p.PublicKey = id.Ed25519(pubKey)
 	p.Seed = seed
 	return p, nil
 }

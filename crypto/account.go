@@ -64,7 +64,7 @@ func (account *OlmAccount) getInitialKeys(userID id.UserID, deviceID id.DeviceID
 
 	deviceKeys.Signatures = mautrix.Signatures{
 		userID: {
-			id.NewDeviceKeyID(id.KeyAlgorithmEd25519, deviceID): signature,
+			id.NewKeyID(id.KeyAlgorithmEd25519, deviceID.String()): signature,
 		},
 	}
 	return deviceKeys
@@ -83,7 +83,7 @@ func (account *OlmAccount) getOneTimeKeys(userID id.UserID, deviceID id.DeviceID
 		signature, _ := account.Internal.SignJSON(key)
 		key.Signatures = mautrix.Signatures{
 			userID: {
-				id.NewDeviceKeyID(id.KeyAlgorithmEd25519, deviceID): signature,
+				id.NewKeyID(id.KeyAlgorithmEd25519, deviceID.String()): signature,
 			},
 		}
 		key.IsSigned = true

@@ -208,7 +208,7 @@ func (km KeyMap) GetCurve25519(deviceID id.DeviceID) id.Curve25519 {
 	return id.Curve25519(val)
 }
 
-type Signatures map[id.UserID]map[id.DeviceKeyID]string
+type Signatures map[id.UserID]map[id.KeyID]string
 
 type ReqQueryKeys struct {
 	DeviceKeys DeviceKeysRequest `json:"device_keys"`

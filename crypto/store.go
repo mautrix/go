@@ -147,8 +147,10 @@ type Store interface {
 	GetCrossSigningKeys(id.UserID) (map[id.CrossSigningUsage]id.Ed25519, error)
 	// PutSignature stores a signature of a cross-signing or device key along with the signer's user ID and key.
 	PutSignature(id.UserID, id.Ed25519, id.UserID, id.Ed25519, string) error
-	// GetSignatures retrieves the stored signatures for a given cross-signing or device key.
-	GetSignaturesForKey(id.UserID, id.Ed25519) (map[id.UserID]map[id.Ed25519]string, error)
+	// GetSignaturesForKeyBy returns the signatures for a cross-signing or device key by the given signer.
+	GetSignaturesForKeyBy(id.UserID, id.Ed25519, id.UserID) (map[id.Ed25519]string, error)
+	// IsKeySignedBy returns whether a cross-signing or device key is signed by the given signer.
+	IsKeySignedBy(id.UserID, id.Ed25519, id.UserID, id.Ed25519) (bool, error)
 }
 
 type messageIndexKey struct {
@@ -511,7 +513,11 @@ func (gs *GobStore) PutCrossSigningKey(userID id.UserID, usage id.CrossSigningUs
 func (gs *GobStore) GetCrossSigningKeys(userID id.UserID) (map[id.CrossSigningUsage]id.Ed25519, error) {
 	gs.lock.RLock()
 	defer gs.lock.RUnlock()
-	return gs.CrossSigningKeys[userID], nil
+	keys, ok := gs.CrossSigningKeys[userID]
+	if !ok {
+		return map[id.CrossSigningUsage]id.Ed25519{}, nil
+	}
+	return keys, nil
 }
 
 func (gs *GobStore) PutSignature(signedUserID id.UserID, signedKey id.Ed25519, signerUserID id.UserID, signerKey id.Ed25519, signature string) error {
@@ -537,12 +543,29 @@ func (gs *GobStore) PutSignature(signedUserID id.UserID, signedKey id.Ed25519, s
 	return err
 }
 
-func (gs *GobStore) GetSignaturesForKey(userID id.UserID, key id.Ed25519) (map[id.UserID]map[id.Ed25519]string, error) {
+func (gs *GobStore) GetSignaturesForKeyBy(userID id.UserID, key id.Ed25519, signerID id.UserID) (map[id.Ed25519]string, error) {
 	gs.lock.RLock()
 	defer gs.lock.RUnlock()
 	userKeys, ok := gs.KeySignatures[userID]
 	if !ok {
-		return nil, nil
+		return map[id.Ed25519]string{}, nil
 	}
-	return userKeys[key], nil
+	sigsForKey, ok := userKeys[key]
+	if !ok {
+		return map[id.Ed25519]string{}, nil
+	}
+	sigsBySigner, ok := sigsForKey[signerID]
+	if !ok {
+		return map[id.Ed25519]string{}, nil
+	}
+	return sigsBySigner, nil
+}
+
+func (gs *GobStore) IsKeySignedBy(userID id.UserID, key id.Ed25519, signerID id.UserID, signerKey id.Ed25519) (bool, error) {
+	sigs, err := gs.GetSignaturesForKeyBy(userID, key, signerID)
+	if err != nil {
+		return false, err
+	}
+	_, ok := sigs[signerKey]
+	return ok, nil
 }

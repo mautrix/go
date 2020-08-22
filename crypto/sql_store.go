@@ -588,7 +588,7 @@ func (store *SQLCryptoStore) PutCrossSigningKey(userID id.UserID, usage id.Cross
 		err = fmt.Errorf("unsupported dialect %s", store.Dialect)
 	}
 	if err != nil {
-		store.Log.Warn("Failed to store device: %v", err)
+		store.Log.Warn("Failed to store cross-signing key: %v", err)
 	}
 	return nil
 }
@@ -630,33 +630,37 @@ func (store *SQLCryptoStore) PutSignature(signedUserID id.UserID, signedKey id.E
 		err = fmt.Errorf("unsupported dialect %s", store.Dialect)
 	}
 	if err != nil {
-		store.Log.Warn("Failed to store device: %v", err)
+		store.Log.Warn("Failed to store signature: %v", err)
 	}
 	return nil
 }
 
-// GetSignaturesForKey retrieves the stored signatures for a given cross-signing or device key.
-func (store *SQLCryptoStore) GetSignaturesForKey(userID id.UserID, key id.Ed25519) (map[id.UserID]map[id.Ed25519]string, error) {
-	rows, err := store.DB.Query("SELECT signer_user_id, signer_key, signature FROM crypto_cross_signing_signatures WHERE signed_user_id=$1 AND signed_key=$2", userID, key)
+// GetSignaturesForKeyBy retrieves the stored signatures for a given cross-signing or device key, by the given signer.
+func (store *SQLCryptoStore) GetSignaturesForKeyBy(userID id.UserID, key id.Ed25519, signerID id.UserID) (map[id.Ed25519]string, error) {
+	rows, err := store.DB.Query("SELECT signer_key, signature FROM crypto_cross_signing_signatures WHERE signed_user_id=$1 AND signed_key=$2 AND signer_user_id=$3", userID, key, signerID)
 	if err != nil {
 		return nil, err
 	}
-	data := make(map[id.UserID]map[id.Ed25519]string)
+	data := make(map[id.Ed25519]string)
 	for rows.Next() {
-		var signerUserID id.UserID
 		var signerKey id.Ed25519
 		var signature string
-		err := rows.Scan(&signerUserID, &signerKey, &signature)
+		err := rows.Scan(&signerKey, &signature)
 		if err != nil {
 			return nil, err
 		}
-		signerKeys, ok := data[signerUserID]
-		if !ok {
-			signerKeys = make(map[id.Ed25519]string)
-			data[signerUserID] = signerKeys
-		}
-		signerKeys[signerKey] = signature
+		data[signerKey] = signature
 	}
 
 	return data, nil
+}
+
+// IsKeySignedBy returns whether a cross-signing or device key is signed by the given signer.
+func (store *SQLCryptoStore) IsKeySignedBy(userID id.UserID, key id.Ed25519, signerID id.UserID, signerKey id.Ed25519) (bool, error) {
+	sigs, err := store.GetSignaturesForKeyBy(userID, key, signerID)
+	if err != nil {
+		return false, err
+	}
+	_, ok := sigs[signerKey]
+	return ok, nil
 }

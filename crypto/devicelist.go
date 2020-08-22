@@ -78,7 +78,22 @@ func (mach *OlmMachine) fetchKeys(users []id.UserID, sinceToken string, includeU
 				newDevices[deviceID] = newDevice
 				for signerUserID, signerKeys := range deviceKeys.Signatures {
 					for signerKey, signature := range signerKeys {
-						if signKey, ok := deviceKeys.Keys[signerKey]; ok {
+						// verify and save self-signing key signature for each device
+						if selfSignKeys, ok := resp.SelfSigningKeys[signerUserID]; ok {
+							for _, pubKey := range selfSignKeys.Keys {
+								if verified, err := olm.VerifySignatureJSON(deviceKeys, signerUserID, pubKey.String(), pubKey); verified {
+									if signKey, ok := deviceKeys.Keys[id.DeviceKeyID(signerKey)]; ok {
+										signature := deviceKeys.Signatures[signerUserID][id.NewKeyID(id.KeyAlgorithmEd25519, pubKey.String())]
+										mach.Log.Trace("Verified self-signing signature for device %v: `%v`", deviceID, signature)
+										mach.CryptoStore.PutSignature(userID, id.Ed25519(signKey), signerUserID, pubKey, signature)
+									}
+								} else {
+									mach.Log.Warn("Error verifying device self-signing signature: %v", err)
+								}
+							}
+						}
+						// save signature of device made by its own device signing key
+						if signKey, ok := deviceKeys.Keys[id.DeviceKeyID(signerKey)]; ok {
 							mach.CryptoStore.PutSignature(userID, id.Ed25519(signKey), signerUserID, id.Ed25519(signKey), signature)
 						}
 					}
