@@ -272,13 +272,17 @@ func (cli *Client) LogRequest(req *http.Request, body string) {
 	}
 }
 
-// MakeRequest makes a JSON HTTP request to the given URL.
+func (cli *Client) MakeRequest(method string, httpURL string, reqBody interface{}, resBody interface{}) ([]byte, error) {
+	return cli.MakeFullRequest(method, httpURL, nil, reqBody, resBody)
+}
+
+// MakeFullRequest makes a JSON HTTP request to the given URL.
 // If "resBody" is not nil, the response body will be json.Unmarshalled into it.
 //
 // Returns the HTTP body as bytes on 2xx with a nil error. Returns an error if the response is not 2xx along
 // with the HTTP body bytes if it got that far. This error is an HTTPError which includes the returned
 // HTTP status code and possibly a RespError as the WrappedError, if the HTTP body could be decoded as a RespError.
-func (cli *Client) MakeRequest(method string, httpURL string, reqBody interface{}, resBody interface{}) ([]byte, error) {
+func (cli *Client) MakeFullRequest(method string, httpURL string, headers http.Header, reqBody interface{}, resBody interface{}) ([]byte, error) {
 	var req *http.Request
 	var err error
 	var logBody string
@@ -293,9 +297,11 @@ func (cli *Client) MakeRequest(method string, httpURL string, reqBody interface{
 	} else {
 		req, err = http.NewRequest(method, httpURL, nil)
 	}
-
 	if err != nil {
 		return nil, err
+	}
+	if headers != nil {
+		req.Header = headers
 	}
 	if len(logBody) > 0 {
 		req.Header.Set("Content-Type", "application/json")
@@ -561,6 +567,24 @@ func (cli *Client) SetAvatarURL(url id.ContentURI) (err error) {
 		AvatarURL id.ContentURI `json:"avatar_url"`
 	}{url}
 	_, err = cli.MakeRequest("PUT", urlPath, &s, nil)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// GetAccountData gets the user's account data of this type. See https://matrix.org/docs/spec/client_server/r0.6.1#get-matrix-client-r0-user-userid-account-data-type
+func (cli *Client) GetAccountData(name string, output interface{}) (err error) {
+	urlPath := cli.BuildURL("user", cli.UserID, "account_data", name)
+	_, err = cli.MakeRequest("GET", urlPath, nil, output)
+	return
+}
+
+// SetAccountData sets the user's account data of this type. See https://matrix.org/docs/spec/client_server/r0.6.1#put-matrix-client-r0-user-userid-account-data-type
+func (cli *Client) SetAccountData(name string, data interface{}) (err error) {
+	urlPath := cli.BuildURL("user", cli.UserID, "account_data", name)
+	_, err = cli.MakeRequest("PUT", urlPath, &data, nil)
 	if err != nil {
 		return err
 	}
