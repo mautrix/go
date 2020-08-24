@@ -132,3 +132,71 @@ func (mach *OlmMachine) IsUserTrusted(userID id.UserID) bool {
 	}
 	return sigExists
 }
+
+// uploadCrossSigningKeysToServer uploads the given cached cross-signing keys to the server.
+// It also creates and uploads the appropriate signatures for each key.
+// It requires the user password for completing user-interactive authorization with the server.
+func (mach *OlmMachine) uploadCrossSigningKeysToServer(keys *CrossSigningKeysCache, userPassword string) error {
+	userID := mach.Client.UserID
+	masterKeyID := id.NewKeyID(id.KeyAlgorithmEd25519, keys.MasterKey.PublicKey.String())
+	masterKey := mautrix.CrossSigningKeys{
+		UserID: userID,
+		Usage:  []id.CrossSigningUsage{id.XSUsageMaster},
+		Keys: map[id.KeyID]id.Ed25519{
+			masterKeyID: keys.MasterKey.PublicKey,
+		},
+	}
+
+	selfKey := mautrix.CrossSigningKeys{
+		UserID: userID,
+		Usage:  []id.CrossSigningUsage{id.XSUsageSelfSigning},
+		Keys: map[id.KeyID]id.Ed25519{
+			id.NewKeyID(id.KeyAlgorithmEd25519, keys.SelfSigningKey.PublicKey.String()): keys.SelfSigningKey.PublicKey,
+		},
+	}
+	selfSig, err := keys.MasterKey.SignJSON(selfKey)
+	if err != nil {
+		return err
+	}
+	selfKey.Signatures = map[id.UserID]map[id.KeyID]string{
+		userID: {
+			masterKeyID: selfSig,
+		},
+	}
+	mach.Log.Debug("Self-signing key signature: %v", selfSig)
+
+	userKey := mautrix.CrossSigningKeys{
+		UserID: userID,
+		Usage:  []id.CrossSigningUsage{id.XSUsageUserSigning},
+		Keys: map[id.KeyID]id.Ed25519{
+			id.NewKeyID(id.KeyAlgorithmEd25519, keys.UserSigningKey.PublicKey.String()): keys.UserSigningKey.PublicKey,
+		},
+	}
+	userSig, err := keys.MasterKey.SignJSON(userKey)
+	if err != nil {
+		return err
+	}
+	userKey.Signatures = map[id.UserID]map[id.KeyID]string{
+		userID: {
+			masterKeyID: userSig,
+		},
+	}
+	mach.Log.Debug("User-signing key signature: %v", userSig)
+
+	req := &mautrix.UploadCrossSigningKeysReq{
+		Master:      masterKey,
+		SelfSigning: selfKey,
+		UserSigning: userKey,
+	}
+
+	return mach.Client.UploadCrossSigningKeys(req, func(uiResp *mautrix.RespUserInteractive) interface{} {
+		return mautrix.ReqUIAuthLogin{
+			BaseAuthData: mautrix.BaseAuthData{
+				Type:    mautrix.AuthTypePassword,
+				Session: uiResp.Session,
+			},
+			User:     mach.Client.UserID.String(),
+			Password: userPassword,
+		}
+	})
+}

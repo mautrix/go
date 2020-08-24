@@ -81,6 +81,11 @@ func (mach *OlmMachine) fetchKeys(users []id.UserID, sinceToken string, includeU
 						// verify and save self-signing key signature for each device
 						if selfSignKeys, ok := resp.SelfSigningKeys[signerUserID]; ok {
 							for _, pubKey := range selfSignKeys.Keys {
+								if selfSigs, ok := deviceKeys.Signatures[signerUserID]; !ok {
+									continue
+								} else if _, ok := selfSigs[id.NewKeyID(id.KeyAlgorithmEd25519, pubKey.String())]; !ok {
+									continue
+								}
 								if verified, err := olm.VerifySignatureJSON(deviceKeys, signerUserID, pubKey.String(), pubKey); verified {
 									if signKey, ok := deviceKeys.Keys[id.DeviceKeyID(signerKey)]; ok {
 										signature := deviceKeys.Signatures[signerUserID][id.NewKeyID(id.KeyAlgorithmEd25519, pubKey.String())]
@@ -88,7 +93,7 @@ func (mach *OlmMachine) fetchKeys(users []id.UserID, sinceToken string, includeU
 										mach.CryptoStore.PutSignature(userID, id.Ed25519(signKey), signerUserID, pubKey, signature)
 									}
 								} else {
-									mach.Log.Warn("Error verifying device self-signing signature: %v", err)
+									mach.Log.Warn("Could not verify device self-signing signatures: %v", err)
 								}
 							}
 						}
@@ -116,6 +121,7 @@ func (mach *OlmMachine) fetchKeys(users []id.UserID, sinceToken string, includeU
 		mach.Log.Warn("Didn't get any keys for user %s", userID)
 	}
 
+	// TODO delete old signatures by previous x-signing keys if they have been updated
 	mach.storeCrossSigningKeys(resp.MasterKeys, resp.DeviceKeys)
 	mach.storeCrossSigningKeys(resp.SelfSigningKeys, resp.DeviceKeys)
 	mach.storeCrossSigningKeys(resp.UserSigningKeys, resp.DeviceKeys)

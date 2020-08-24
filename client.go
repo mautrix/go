@@ -1084,6 +1084,27 @@ func (cli *Client) SendToDevice(eventType event.Type, req *ReqSendToDevice) (res
 	return
 }
 
+// UploadCrossSigningKeys uploads the given cross-signing keys to the server.
+// Because the endpoint requires user-interactive authentication a callback must be provided that,
+// given the UI auth parameters, produces the required result (or nil to end the flow).
+func (cli *Client) UploadCrossSigningKeys(keys *UploadCrossSigningKeysReq, uiAuthCallback func(*RespUserInteractive) interface{}) error {
+	urlPath := cli.BuildBaseURL("_matrix", "client", "unstable", "keys", "device_signing", "upload")
+	content, err := cli.MakeRequest("POST", urlPath, keys, nil)
+	if respErr, ok := err.(HTTPError); ok && respErr.Code == 401 {
+		// try again with UI auth
+		var uiAuthResp RespUserInteractive
+		if err := json.Unmarshal(content, &uiAuthResp); err != nil {
+			return err
+		}
+		auth := uiAuthCallback(&uiAuthResp)
+		if auth != nil {
+			keys.Auth = auth
+			content, err = cli.MakeRequest("POST", urlPath, keys, &uiAuthResp)
+		}
+	}
+	return err
+}
+
 // GetPushRules returns the push notification rules for the global scope.
 func (cli *Client) GetPushRules() (*pushrules.PushRuleset, error) {
 	return cli.GetScopedPushRules("global")

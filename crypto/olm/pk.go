@@ -7,8 +7,11 @@ import "C"
 
 import (
 	"crypto/rand"
+	"encoding/json"
 	"unsafe"
 
+	"github.com/tidwall/sjson"
+	"maunium.net/go/mautrix/crypto/canonicaljson"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -82,6 +85,21 @@ func (p *PkSigning) Sign(message []byte) ([]byte, error) {
 		return nil, p.lastError()
 	}
 	return signature, nil
+}
+
+// SignJSON creates a signature for the given object after encoding it to canonical JSON.
+func (p *PkSigning) SignJSON(obj interface{}) (string, error) {
+	objJSON, err := json.Marshal(obj)
+	if err != nil {
+		return "", err
+	}
+	objJSON, _ = sjson.DeleteBytes(objJSON, "unsigned")
+	objJSON, _ = sjson.DeleteBytes(objJSON, "signatures")
+	signature, err := p.Sign(canonicaljson.CanonicalJSONAssumeValid(objJSON))
+	if err != nil {
+		return "", err
+	}
+	return string(signature), nil
 }
 
 // lastError returns the last error that happened in relation to this PkSigning object.

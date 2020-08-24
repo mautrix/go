@@ -98,7 +98,7 @@ type RespUserInteractive struct {
 		Stages []AuthType `json:"stages"`
 	} `json:"flows"`
 	Params    map[AuthType]interface{} `json:"params"`
-	Session   string                   `json:"string"`
+	Session   string                   `json:"session"`
 	Completed []string                 `json:"completed"`
 
 	ErrCode string `json:"errcode"`
@@ -259,6 +259,10 @@ type RespQueryKeys struct {
 type RespClaimKeys struct {
 	Failures    map[string]interface{}                                `json:"failures"`
 	OneTimeKeys map[id.UserID]map[id.DeviceID]map[id.KeyID]OneTimeKey `json:"one_time_keys"`
+}
+
+type RespUploadSignatures struct {
+	Failures map[string]interface{} `json:"failures"`
 }
 
 type RespKeyChanges struct {

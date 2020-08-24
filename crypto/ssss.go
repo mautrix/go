@@ -133,20 +133,8 @@ func (mach *OlmMachine) retrieveDecryptXSigningKey(keyName AccountDataKeyType, k
 // retrieveSSSSKeyData retrieves the data for the requested key from SSSS.
 func (mach *OlmMachine) retrieveSSSSKeyData(keyID string) (*ssssKeyData, error) {
 	var keyData ssssKeyData
-	data, err := mach.Client.GetAccountData("m.secret_storage.key." + keyID)
-	if err != nil {
-		return nil, err
-	}
-
-	bytes, err := json.Marshal(data)
-	if err != nil {
-		return nil, err
-	}
-	if err := json.Unmarshal(bytes, &keyData); err != nil {
-		return nil, err
-	}
-
-	return &keyData, nil
+	err := mach.Client.GetAccountData("m.secret_storage.key."+keyID, &keyData)
+	return &keyData, err
 }
 
 // verifySSSSKey verifies the SSSS key is valid by calculating and comparing its MAC.
@@ -269,7 +257,8 @@ func (mach *OlmMachine) RetrieveCrossSigningKeysWithRecoveryKey(recoveryKey stri
 // GenerateAndUploadCrossSigningKeys generates a new key with all corresponding cross-signing keys.
 // A passphrase can optionally be given for generating the SSSS key, otherwise a random key is used.
 // The recovery key for retrieving the SSSS key is returned.
-func (mach *OlmMachine) GenerateAndUploadCrossSigningKeys(passphrase ...string) (string, error) {
+// It requires the user password for uploading the keys to the server.
+func (mach *OlmMachine) GenerateAndUploadCrossSigningKeys(userPassword string, passphrase ...string) (string, error) {
 	var ssssKey []byte
 	newKeyData := ssssKeyData{Algorithm: SSSSAlgorithmAESHMACSHA2}
 
@@ -328,6 +317,8 @@ func (mach *OlmMachine) GenerateAndUploadCrossSigningKeys(passphrase ...string) 
 	mach.Log.Debug("Generated keys: Master: `%v` Self-signing: `%v` User-signing: `%v`",
 		keysCache.MasterKey.PublicKey, keysCache.SelfSigningKey.PublicKey, keysCache.UserSigningKey.PublicKey)
 
+	mach.uploadCrossSigningKeysToServer(&keysCache, userPassword)
+
 	// generate a key ID for this SSSS key and store the SSSS key info
 	var genKeyIDBytes [24]byte
 	if _, err := rand.Read(genKeyIDBytes[:]); err != nil {
@@ -340,7 +331,7 @@ func (mach *OlmMachine) GenerateAndUploadCrossSigningKeys(passphrase ...string) 
 	}
 
 	// upload the three cross-signing keys
-	if err := mach.uploadCrossSigningKeys(genKeyID, ssssKey, &keysCache, true); err != nil {
+	if err := mach.uploadCrossSigningKeysToSSSS(genKeyID, ssssKey, &keysCache, true); err != nil {
 		return "", err
 	}
 
@@ -349,9 +340,9 @@ func (mach *OlmMachine) GenerateAndUploadCrossSigningKeys(passphrase ...string) 
 	return utils.EncodeBase58RecoveryKey(ssssKey), nil
 }
 
-// uploadCrossSigningKeys stores the given cross-signing keys to SSSS under the given key ID,
+// uploadCrossSigningKeysToSSSS stores the given cross-signing keys to SSSS under the given key ID,
 // optionally setting the key as the default one.
-func (mach *OlmMachine) uploadCrossSigningKeys(keyID string, ssssKey []byte, keys *CrossSigningKeysCache, setDefaultKey bool) error {
+func (mach *OlmMachine) uploadCrossSigningKeysToSSSS(keyID string, ssssKey []byte, keys *CrossSigningKeysCache, setDefaultKey bool) error {
 	if setDefaultKey {
 		mach.Client.SetAccountData(string(AccountDataDefaultKeyType), map[string]interface{}{"key": keyID})
 	}

@@ -69,6 +69,12 @@ type ReqLogin struct {
 	StoreCredentials bool `json:"-"`
 }
 
+type ReqUIAuthLogin struct {
+	BaseAuthData
+	User     string `json:"user"`
+	Password string `json:"password"`
+}
+
 // ReqCreateRoom is the JSON request for https://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-createroom
 type ReqCreateRoom struct {
 	Visibility      string                 `json:"visibility,omitempty"`
@@ -174,6 +180,17 @@ type ReqUploadKeys struct {
 	OneTimeKeys map[id.KeyID]OneTimeKey `json:"one_time_keys"`
 }
 
+type ReqKeysSignatures struct {
+	UserID     id.UserID              `json:"user_id"`
+	DeviceID   id.DeviceID            `json:"device_id,omitempty"`
+	Algorithms []id.Algorithm         `json:"algorithms,omitempty"`
+	Usage      []id.CrossSigningUsage `json:"usage,omitempty"`
+	Keys       KeyMap                 `json:"keys"`
+	Signatures Signatures             `json:"signatures"`
+}
+
+type ReqUploadSignatures map[id.UserID]map[string]ReqKeysSignatures
+
 type DeviceKeys struct {
 	UserID     id.UserID              `json:"user_id"`
 	DeviceID   id.DeviceID            `json:"device_id"`
@@ -188,6 +205,13 @@ type CrossSigningKeys struct {
 	Usage      []id.CrossSigningUsage            `json:"usage"`
 	Keys       map[id.KeyID]id.Ed25519           `json:"keys"`
 	Signatures map[id.UserID]map[id.KeyID]string `json:"signatures"`
+}
+
+type UploadCrossSigningKeysReq struct {
+	Master      CrossSigningKeys `json:"master_key"`
+	SelfSigning CrossSigningKeys `json:"self_signing_key"`
+	UserSigning CrossSigningKeys `json:"user_signing_key"`
+	Auth        interface{}      `json:"auth,omitempty"`
 }
 
 type KeyMap map[id.DeviceKeyID]string
