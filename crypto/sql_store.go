@@ -268,6 +268,61 @@ func (store *SQLCryptoStore) GetWithheldGroupSession(roomID id.RoomID, senderKey
 	}, nil
 }
 
+func (store *SQLCryptoStore) scanGroupSessionList(rows *sql.Rows) (result []*InboundGroupSession) {
+	for rows.Next() {
+		var roomID id.RoomID
+		var signingKey, senderKey, forwardingChains sql.NullString
+		var sessionBytes []byte
+		err := rows.Scan(&roomID, &signingKey, &senderKey, &sessionBytes, &forwardingChains)
+		if err != nil {
+			store.Log.Warn("Failed to scan row: %v", err)
+			continue
+		}
+		igs := olm.NewBlankInboundGroupSession()
+		err = igs.Unpickle(sessionBytes, store.PickleKey)
+		if err != nil {
+			store.Log.Warn("Failed to unpickle session: %v", err)
+			continue
+		}
+		result = append(result, &InboundGroupSession{
+			Internal:         *igs,
+			SigningKey:       id.Ed25519(signingKey.String),
+			SenderKey:        id.Curve25519(senderKey.String),
+			RoomID:           roomID,
+			ForwardingChains: strings.Split(forwardingChains.String, ","),
+		})
+	}
+	return
+}
+
+func (store *SQLCryptoStore) GetGroupSessionsForRoom(roomID id.RoomID) ([]*InboundGroupSession, error) {
+	rows, err := store.DB.Query(`
+		SELECT room_id, signing_key, sender_key, session, forwarding_chains
+		FROM crypto_megolm_inbound_session WHERE room_id=$1 AND account_id=$2`,
+		roomID, store.AccountID,
+	)
+	if err == sql.ErrNoRows {
+		return []*InboundGroupSession{}, nil
+	} else if err != nil {
+		return nil, err
+	}
+	return store.scanGroupSessionList(rows), nil
+}
+
+func (store *SQLCryptoStore) GetAllGroupSessions() ([]*InboundGroupSession, error) {
+	rows, err := store.DB.Query(`
+		SELECT room_id, signing_key, sender_key, session, forwarding_chains
+		FROM crypto_megolm_inbound_session WHERE account_id=$2`,
+		store.AccountID,
+	)
+	if err == sql.ErrNoRows {
+		return []*InboundGroupSession{}, nil
+	} else if err != nil {
+		return nil, err
+	}
+	return store.scanGroupSessionList(rows), nil
+}
+
 // AddOutboundGroupSession stores an outbound Megolm session, along with the information about the room and involved devices.
 func (store *SQLCryptoStore) AddOutboundGroupSession(session *OutboundGroupSession) (err error) {
 	sessionBytes := session.Internal.Pickle(store.PickleKey)
