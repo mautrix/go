@@ -211,7 +211,7 @@ var Upgrades = [...]upgradeFunc{
 		if _, err := tx.Exec(
 			`CREATE TABLE IF NOT EXISTS crypto_cross_signing_keys (
 				user_id VARCHAR(255) NOT NULL,
-				usage   CHAR(20)     NOT NULL,
+				usage   VARCHAR(20)  NOT NULL,
 				key     CHAR(43)     NOT NULL,
 				PRIMARY KEY (user_id, usage)
 			)`,

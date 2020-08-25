@@ -7,6 +7,7 @@
 package crypto
 
 import (
+	"github.com/pkg/errors"
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
@@ -199,4 +200,66 @@ func (mach *OlmMachine) uploadCrossSigningKeysToServer(keys *CrossSigningKeysCac
 			Password: userPassword,
 		}
 	})
+}
+
+// SignUserAndUpload creates a cross-signing signature for a user, stores it and uploads it to the server.
+func (mach *OlmMachine) SignUserAndUpload(userID id.UserID) error {
+	if mach.crossSigningKeys == nil {
+		return errors.New("No cross-signing keys found")
+	}
+	if userID == mach.Client.UserID {
+		return nil
+	}
+
+	keys, err := mach.CryptoStore.GetCrossSigningKeys(userID)
+	if err != nil {
+		return err
+	}
+	masterKey, ok := keys[id.XSUsageMaster]
+	if !ok {
+		return errors.Errorf("No master key found for user %v", userID)
+	}
+
+	userSigningKey := mach.crossSigningKeys.UserSigningKey
+	masterKeyObj := mautrix.ReqKeysSignatures{
+		UserID: userID,
+		Usage:  []id.CrossSigningUsage{id.XSUsageMaster},
+		Keys: map[id.KeyID]id.Ed25519{
+			id.NewKeyID(id.KeyAlgorithmEd25519, masterKey.String()): masterKey,
+		},
+	}
+	signature, err := userSigningKey.SignJSON(masterKeyObj)
+	if err != nil {
+		return err
+	}
+	masterKeyObj.Signatures = mautrix.Signatures{
+		mach.Client.UserID: map[id.KeyID]string{
+			id.NewKeyID(id.KeyAlgorithmEd25519, userSigningKey.PublicKey.String()): signature,
+		},
+	}
+	mach.Log.Trace("Signed master key for user %v: `%v`", userID, signature)
+
+	resp, err := mach.Client.UploadSignatures(&mautrix.ReqUploadSignatures{
+		userID: map[string]mautrix.ReqKeysSignatures{
+			masterKey.String(): masterKeyObj,
+		},
+	})
+
+	if err != nil {
+		return err
+	}
+	if len(resp.Failures) > 0 {
+		return errors.Errorf("Key uploading failures: %v", resp.Failures)
+	}
+
+	if err := mach.CryptoStore.PutSignature(userID, masterKey, mach.Client.UserID, userSigningKey.PublicKey, signature); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// SignDeviceAndUpload creates a cross-signing signature for a device, stores it and uploads it to the server.
+func (mach *OlmMachine) SignDeviceAndUpload(device *DeviceIdentity) error {
+	return nil
 }

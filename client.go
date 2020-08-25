@@ -1105,6 +1105,12 @@ func (cli *Client) UploadCrossSigningKeys(keys *UploadCrossSigningKeysReq, uiAut
 	return err
 }
 
+func (cli *Client) UploadSignatures(req *ReqUploadSignatures) (resp *RespUploadSignatures, err error) {
+	urlPath := cli.BuildBaseURL("_matrix", "client", "unstable", "keys", "signatures", "upload")
+	_, err = cli.MakeRequest("POST", urlPath, req, &resp)
+	return
+}
+
 // GetPushRules returns the push notification rules for the global scope.
 func (cli *Client) GetPushRules() (*pushrules.PushRuleset, error) {
 	return cli.GetScopedPushRules("global")
