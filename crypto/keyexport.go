@@ -41,8 +41,11 @@ type ExportedSession struct {
 
 const defaultPassphraseRounds = 100000
 
-func computeKey(passphrase string, salt []byte, rounds int) []byte {
-	return pbkdf2.Key([]byte(passphrase), salt, rounds, 512, sha512.New)
+func computeKey(passphrase string, salt []byte, rounds int) (encryptionKey, hashKey []byte) {
+	key := pbkdf2.Key([]byte(passphrase), salt, rounds, 64, sha512.New)
+	encryptionKey = key[:32]
+	hashKey = key[32:]
+	return
 }
 
 func makeExportIV() ([]byte, error) {
@@ -63,9 +66,7 @@ func makeExportKeys(passphrase string) (encryptionKey, hashKey, salt, iv []byte,
 		return
 	}
 
-	key := computeKey(passphrase, salt, defaultPassphraseRounds)
-	encryptionKey = key[:256]
-	hashKey = key[256:]
+	encryptionKey, hashKey = computeKey(passphrase, salt, defaultPassphraseRounds)
 
 	iv, err = makeExportIV()
 	return
@@ -105,16 +106,24 @@ const exportLineLengthLimit = 76
 const exportHeaderLength = 1 + 16 + 16 + 4
 const exportHashLength = 32
 
+func min(a, b int) int {
+	if a > b {
+		return b
+	}
+	return a
+}
+
 func formatKeyExportData(data []byte) string {
 	dataStr := base64.StdEncoding.EncodeToString(data)
-	lines := make([]string, math.Ceil(float64(len(dataStr)) / exportLineLengthLimit) + 2)
+	// Base64 lines + prefix + suffix + empty line at end
+	lines := make([]string, int(math.Ceil(float64(len(dataStr)) / exportLineLengthLimit)) + 3)
 	lines[0] = exportPrefix
 	line := 1
 	for ptr := 0; ptr < len(dataStr); ptr += exportLineLengthLimit {
-		lines[line] = dataStr[ptr:ptr+exportLineLengthLimit]
+		lines[line] = dataStr[ptr:min(ptr+exportLineLengthLimit, len(dataStr))]
 		line++
 	}
-	lines[len(lines)-1] = exportSuffix
+	lines[len(lines)-2] = exportSuffix
 	return strings.Join(lines, "\n")
 }
 
@@ -150,7 +159,10 @@ func ExportKeys(passphrase string, sessions []*InboundGroupSession) (string, err
 	binary.BigEndian.PutUint32(exportData[33:37], defaultPassphraseRounds)
 
 	// Encrypt data with AES-256-CTR
-	block, _ := aes.NewCipher(encryptionKey)
+	block, err := aes.NewCipher(encryptionKey)
+	if err != nil {
+		return "", err
+	}
 	cipher.NewCTR(block, iv).XORKeyStream(exportData[exportHeaderLength:dataWithoutHashLength], unencryptedData)
 
 	// Hash all the data with HMAC-SHA256 and put it at the end

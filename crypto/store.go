@@ -339,6 +339,7 @@ func (gs *GobStore) GetWithheldGroupSession(roomID id.RoomID, senderKey id.Sende
 
 func (gs *GobStore) GetGroupSessionsForRoom(roomID id.RoomID) ([]*InboundGroupSession, error) {
 	gs.lock.Lock()
+	defer gs.lock.Unlock()
 	room, ok := gs.GroupSessions[roomID]
 	if !ok {
 		return []*InboundGroupSession{}, nil
@@ -349,7 +350,6 @@ func (gs *GobStore) GetGroupSessionsForRoom(roomID id.RoomID) ([]*InboundGroupSe
 			result = append(result, session)
 		}
 	}
-	gs.lock.Unlock()
 	return result, nil
 }
 

@@ -24,7 +24,8 @@ import (
 )
 
 var (
-	ErrMissingExportPrefix          = errors.New("invalid Matrix key export: missing prefix/suffix")
+	ErrMissingExportPrefix          = errors.New("invalid Matrix key export: missing prefix")
+	ErrMissingExportSuffix          = errors.New("invalid Matrix key export: missing suffix")
 	ErrUnsupportedExportVersion     = errors.New("unsupported Matrix key export format version")
 	ErrMismatchingExportHash        = errors.New("mismatching hash; incorrect passphrase?")
 	ErrInvalidExportedAlgorithm     = errors.New("session has unknown algorithm")
@@ -45,9 +46,7 @@ func decryptKeyExport(passphrase string, exportData []byte) ([]ExportedSession, 
 	hash := exportData[dataWithoutHashLength:]
 
 	// Compute the encryption and hash keys from the passphrase and salt
-	key := computeKey(passphrase, salt, int(passphraseRounds))
-	encryptionKey := key[:256]
-	hashKey := key[256:]
+	encryptionKey, hashKey := computeKey(passphrase, salt, int(passphraseRounds))
 
 	// Compute and verify the hash. If it doesn't match, the passphrase is probably wrong
 	mac := hmac.New(sha256.New, hashKey)
@@ -89,6 +88,7 @@ func (mach *OlmMachine) importExportedRoomKey(session ExportedSession) error {
 		// TODO should we add something here to mark the signing key as unverified like key requests do?
 		ForwardingChains: session.ForwardingChains,
 	}
+	// TODO we probably shouldn't override existing sessions (except maybe if earliest known session is lower than the one in the store?)
 	err = mach.CryptoStore.PutGroupSession(igs.RoomID, igs.SenderKey, igs.ID(), igs)
 	if err != nil {
 		return errors.Wrap(err, "failed to store imported session")
@@ -96,17 +96,19 @@ func (mach *OlmMachine) importExportedRoomKey(session ExportedSession) error {
 	return nil
 }
 
-func (mach *OlmMachine) ImportKeys(passphrase string, data string) (int, error) {
-	if !strings.HasPrefix(data, exportPrefix) || !strings.HasSuffix(data, exportSuffix) {
-		return 0, ErrMissingExportPrefix
+func (mach *OlmMachine) ImportKeys(passphrase string, data string) (int, int, error) {
+	if !strings.HasPrefix(data, exportPrefix) {
+		return 0, 0, ErrMissingExportPrefix
+	} else if !strings.HasSuffix(data, exportSuffix) && !strings.HasSuffix(data, exportSuffix + "\n") {
+		return 0, 0, ErrMissingExportSuffix
 	}
 	exportData, err := base64.StdEncoding.DecodeString(data[len(exportPrefix) : len(data)-len(exportPrefix)])
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	sessions, err := decryptKeyExport(passphrase, exportData)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 
 	count := 0
@@ -119,5 +121,5 @@ func (mach *OlmMachine) ImportKeys(passphrase string, data string) (int, error) 
 			count++
 		}
 	}
-	return count, nil
+	return count, len(sessions), nil
 }
