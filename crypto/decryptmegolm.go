@@ -58,9 +58,10 @@ func (mach *OlmMachine) DecryptMegolmEvent(evt *event.Event) (*event.Event, erro
 	} else {
 		device, err := mach.GetOrFetchDevice(evt.Sender, content.DeviceID)
 		if err != nil {
-			return nil, err
-		}
-		if device.Trust == TrustStateVerified && len(sess.ForwardingChains) == 0 { // For some reason, matrix-nio had a comment saying not to events decrypted using a forwarded key as verified.
+			// We don't want to throw these errors as the message can still be decrypted.
+			mach.Log.Debug("Failed to get device %s/%s to verify session %s: %v", evt.Sender, content.DeviceID, sess.ID(), err)
+			// TODO maybe store the info that the device is deleted?
+		} else if device.Trust == TrustStateVerified && len(sess.ForwardingChains) == 0 { // For some reason, matrix-nio had a comment saying not to events decrypted using a forwarded key as verified.
 			if device.SigningKey != sess.SigningKey || device.IdentityKey != content.SenderKey {
 				return nil, DeviceKeyMismatch
 			}

@@ -100,6 +100,13 @@ type Store interface {
 	// GetWithheldGroupSession gets the event content that was previously inserted with PutWithheldGroupSession.
 	GetWithheldGroupSession(id.RoomID, id.SenderKey, id.SessionID) (*event.RoomKeyWithheldEventContent, error)
 
+	// GetGroupSessionsForRoom gets all the inbound Megolm sessions for a specific room. This is used for creating key
+	// export files. Unlike GetGroupSession, this should not return any errors about withheld keys.
+	GetGroupSessionsForRoom(id.RoomID) ([]*InboundGroupSession, error)
+	// GetGroupSessionsForRoom gets all the inbound Megolm sessions in the store. This is used for creating key export
+	// files. Unlike GetGroupSession, this should not return any errors about withheld keys.
+	GetAllGroupSessions() ([]*InboundGroupSession, error)
+
 	// AddOutboundGroupSession inserts the given outbound Megolm session into the store.
 	//
 	// The store should index inserted sessions by the RoomID field to support getting and removing sessions.
@@ -239,7 +246,7 @@ func (gs *GobStore) AddSession(senderKey id.SenderKey, session *OlmSession) erro
 	return err
 }
 
-func (gs *GobStore) UpdateSession(key id.SenderKey, session *OlmSession) error {
+func (gs *GobStore) UpdateSession(_ id.SenderKey, _ *OlmSession) error {
 	// we don't need to do anything here because the session is a pointer and already stored in our map
 	return gs.save()
 }
@@ -330,6 +337,36 @@ func (gs *GobStore) GetWithheldGroupSession(roomID id.RoomID, senderKey id.Sende
 	return session, nil
 }
 
+func (gs *GobStore) GetGroupSessionsForRoom(roomID id.RoomID) ([]*InboundGroupSession, error) {
+	gs.lock.Lock()
+	defer gs.lock.Unlock()
+	room, ok := gs.GroupSessions[roomID]
+	if !ok {
+		return []*InboundGroupSession{}, nil
+	}
+	var result []*InboundGroupSession
+	for _, sessions := range room {
+		for _, session := range sessions {
+			result = append(result, session)
+		}
+	}
+	return result, nil
+}
+
+func (gs *GobStore) GetAllGroupSessions() ([]*InboundGroupSession, error) {
+	gs.lock.Lock()
+	var result []*InboundGroupSession
+	for _, room := range gs.GroupSessions {
+		for _, sessions := range room {
+			for _, session := range sessions {
+				result = append(result, session)
+			}
+		}
+	}
+	gs.lock.Unlock()
+	return result, nil
+}
+
 func (gs *GobStore) AddOutboundGroupSession(session *OutboundGroupSession) error {
 	gs.lock.Lock()
 	gs.OutGroupSessions[session.RoomID] = session
@@ -338,7 +375,7 @@ func (gs *GobStore) AddOutboundGroupSession(session *OutboundGroupSession) error
 	return err
 }
 
-func (gs *GobStore) UpdateOutboundGroupSession(session *OutboundGroupSession) error {
+func (gs *GobStore) UpdateOutboundGroupSession(_ *OutboundGroupSession) error {
 	// we don't need to do anything here because the session is a pointer and already stored in our map
 	return gs.save()
 }
