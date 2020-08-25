@@ -55,7 +55,7 @@ func makeExportIV() ([]byte, error) {
 		return nil, err
 	}
 	// Set bit 63 to zero
-	iv[7] &= 0b10000000
+	iv[7] &= 0b11111110
 	return iv, nil
 }
 
@@ -168,7 +168,7 @@ func ExportKeys(passphrase string, sessions []*InboundGroupSession) (string, err
 	// Hash all the data with HMAC-SHA256 and put it at the end
 	mac := hmac.New(sha256.New, hashKey)
 	mac.Write(exportData[:dataWithoutHashLength])
-	mac.Sum(exportData[dataWithoutHashLength:])
+	mac.Sum(exportData[:dataWithoutHashLength])
 
 	// Format the export (prefix, base64'd exportData, suffix) and return
 	return formatKeyExportData(exportData), nil
