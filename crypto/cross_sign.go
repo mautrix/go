@@ -224,8 +224,8 @@ func (mach *OlmMachine) SignUserAndUpload(userID id.UserID) error {
 	masterKeyObj := mautrix.ReqKeysSignatures{
 		UserID: userID,
 		Usage:  []id.CrossSigningUsage{id.XSUsageMaster},
-		Keys: map[id.KeyID]id.Ed25519{
-			id.NewKeyID(id.KeyAlgorithmEd25519, masterKey.String()): masterKey,
+		Keys: map[id.KeyID]string{
+			id.NewKeyID(id.KeyAlgorithmEd25519, masterKey.String()): masterKey.String(),
 		},
 	}
 	signature, err := userSigningKey.SignJSON(masterKeyObj)
@@ -259,7 +259,122 @@ func (mach *OlmMachine) SignUserAndUpload(userID id.UserID) error {
 	return nil
 }
 
-// SignDeviceAndUpload creates a cross-signing signature for a device, stores it and uploads it to the server.
-func (mach *OlmMachine) SignDeviceAndUpload(device *DeviceIdentity) error {
+// SignOwnMasterKeyAndUpload uses the current account for signing the current user's master key and uploads the signature.
+func (mach *OlmMachine) SignOwnMasterKeyAndUpload() error {
+	if mach.crossSigningKeys == nil {
+		return errors.New("No cross-signing keys found")
+	}
+
+	if mach.account == nil {
+		return errors.New("No Olm account found")
+	}
+
+	userID := mach.Client.UserID
+	deviceID := mach.Client.DeviceID
+	masterKey := mach.crossSigningKeys.MasterKey.PublicKey
+
+	masterKeyObj := mautrix.ReqKeysSignatures{
+		UserID: userID,
+		Usage:  []id.CrossSigningUsage{id.XSUsageMaster},
+		Keys: map[id.KeyID]string{
+			id.NewKeyID(id.KeyAlgorithmEd25519, masterKey.String()): masterKey.String(),
+		},
+	}
+	signature, err := mach.account.Internal.SignJSON(masterKeyObj)
+	if err != nil {
+		return err
+	}
+	masterKeyObj.Signatures = mautrix.Signatures{
+		userID: map[id.KeyID]string{
+			id.NewKeyID(id.KeyAlgorithmEd25519, deviceID.String()): signature,
+		},
+	}
+	mach.Log.Trace("Signed own master key with device %v: `%v`", deviceID, signature)
+
+	resp, err := mach.Client.UploadSignatures(&mautrix.ReqUploadSignatures{
+		userID: map[string]mautrix.ReqKeysSignatures{
+			masterKey.String(): masterKeyObj,
+		},
+	})
+
+	if err != nil {
+		return err
+	}
+	if len(resp.Failures) > 0 {
+		return errors.Errorf("Key uploading failures: %v", resp.Failures)
+	}
+
+	if err := mach.CryptoStore.PutSignature(userID, masterKey, userID, mach.account.SigningKey(), signature); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// SignOwnDeviceAndUpload creates a cross-signing signature for a device belonging to the current user and uploads it to the server.
+func (mach *OlmMachine) SignOwnDeviceAndUpload(deviceID id.DeviceID) error {
+	if mach.crossSigningKeys == nil {
+		return errors.New("No cross-signing keys found")
+	}
+
+	userID := mach.Client.UserID
+	selfSigningKey := mach.crossSigningKeys.SelfSigningKey
+
+	devicesKeys, err := mach.Client.QueryKeys(&mautrix.ReqQueryKeys{
+		DeviceKeys: mautrix.DeviceKeysRequest{
+			userID: mautrix.DeviceIDList{deviceID},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	userKeys, ok := devicesKeys.DeviceKeys[userID]
+	if !ok {
+		return errors.New("Could not find user in query keys response")
+	}
+	deviceObj, ok := userKeys[deviceID]
+	if !ok {
+		return errors.New("Could not find device in query keys response")
+	}
+
+	deviceKeyObj := mautrix.ReqKeysSignatures{
+		UserID:     userID,
+		DeviceID:   deviceID,
+		Algorithms: deviceObj.Algorithms,
+		Keys:       make(map[id.KeyID]string),
+	}
+	for keyID, key := range deviceObj.Keys {
+		deviceKeyObj.Keys[id.KeyID(keyID)] = key
+	}
+
+	signature, err := selfSigningKey.SignJSON(deviceKeyObj)
+	if err != nil {
+		return err
+	}
+	deviceKeyObj.Signatures = mautrix.Signatures{
+		userID: map[id.KeyID]string{
+			id.NewKeyID(id.KeyAlgorithmEd25519, selfSigningKey.PublicKey.String()): signature,
+		},
+	}
+
+	mach.Log.Trace("Signed own device %v with self-signing key: `%v`", deviceID, signature)
+
+	resp, err := mach.Client.UploadSignatures(&mautrix.ReqUploadSignatures{
+		userID: map[string]mautrix.ReqKeysSignatures{
+			deviceID.String(): deviceKeyObj,
+		},
+	})
+
+	if err != nil {
+		return err
+	}
+	if len(resp.Failures) > 0 {
+		return errors.Errorf("Key uploading failures: %v", resp.Failures)
+	}
+
+	if err := mach.CryptoStore.PutSignature(userID, deviceObj.Keys.GetEd25519(deviceID), userID, selfSigningKey.PublicKey, signature); err != nil {
+		return err
+	}
+
 	return nil
 }

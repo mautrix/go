@@ -181,12 +181,12 @@ type ReqUploadKeys struct {
 }
 
 type ReqKeysSignatures struct {
-	UserID     id.UserID               `json:"user_id"`
-	DeviceID   id.DeviceID             `json:"device_id,omitempty"`
-	Algorithms []id.Algorithm          `json:"algorithms,omitempty"`
-	Usage      []id.CrossSigningUsage  `json:"usage,omitempty"`
-	Keys       map[id.KeyID]id.Ed25519 `json:"keys"`
-	Signatures Signatures              `json:"signatures"`
+	UserID     id.UserID              `json:"user_id"`
+	DeviceID   id.DeviceID            `json:"device_id,omitempty"`
+	Algorithms []id.Algorithm         `json:"algorithms,omitempty"`
+	Usage      []id.CrossSigningUsage `json:"usage,omitempty"`
+	Keys       map[id.KeyID]string    `json:"keys"`
+	Signatures Signatures             `json:"signatures"`
 }
 
 type ReqUploadSignatures map[id.UserID]map[string]ReqKeysSignatures
@@ -204,7 +204,7 @@ type CrossSigningKeys struct {
 	UserID     id.UserID                         `json:"user_id"`
 	Usage      []id.CrossSigningUsage            `json:"usage"`
 	Keys       map[id.KeyID]id.Ed25519           `json:"keys"`
-	Signatures map[id.UserID]map[id.KeyID]string `json:"signatures"`
+	Signatures map[id.UserID]map[id.KeyID]string `json:"signatures,omitempty"`
 }
 
 type UploadCrossSigningKeysReq struct {
