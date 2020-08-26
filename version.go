@@ -1,3 +1,3 @@
 package mautrix
 
-const Version = "v0.7.3"
+const Version = "v0.7.4"

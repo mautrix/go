@@ -15,7 +15,6 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
-	"strings"
 
 	"github.com/pkg/errors"
 
@@ -32,8 +31,30 @@ var (
 	ErrMismatchingExportedSessionID = errors.New("imported session has different ID than expected")
 )
 
+var exportPrefixBytes, exportSuffixBytes = []byte(exportPrefix), []byte(exportSuffix)
+
+func decodeKeyExport(data []byte) ([]byte, error) {
+	// If there valid prefix and suffix aren't there, it's probably not a Matrix key export
+	if !bytes.HasPrefix(data, exportPrefixBytes) {
+		return nil, ErrMissingExportPrefix
+	} else if !bytes.HasSuffix(data, exportSuffixBytes) {
+		return nil, ErrMissingExportSuffix
+	}
+	// Remove the prefix and suffix, we don't care about them anymore
+	data = data[len(exportPrefix) : len(data)-len(exportSuffix)]
+
+	// Allocate space for the decoded data. Ignore newlines when counting the length
+	exportData := make([]byte, base64.StdEncoding.DecodedLen(len(data)-bytes.Count(data, []byte{'\n'})))
+	n, err := base64.StdEncoding.Decode(exportData, data)
+	if err != nil {
+		return nil, err
+	}
+
+	return exportData[:n], nil
+}
+
 func decryptKeyExport(passphrase string, exportData []byte) ([]ExportedSession, error) {
-	if exportData[0] != 0x01 {
+	if exportData[0] != exportVersion1 {
 		return nil, ErrUnsupportedExportVersion
 	}
 
@@ -51,7 +72,7 @@ func decryptKeyExport(passphrase string, exportData []byte) ([]ExportedSession, 
 	// Compute and verify the hash. If it doesn't match, the passphrase is probably wrong
 	mac := hmac.New(sha256.New, hashKey)
 	mac.Write(exportData[:dataWithoutHashLength])
-	if bytes.Compare(hash, mac.Sum(nil)) != 0 {
+	if !bytes.Equal(hash, mac.Sum(nil)) {
 		return nil, ErrMismatchingExportHash
 	}
 
@@ -69,16 +90,16 @@ func decryptKeyExport(passphrase string, exportData []byte) ([]ExportedSession, 
 	return sessionsJSON, nil
 }
 
-func (mach *OlmMachine) importExportedRoomKey(session ExportedSession) error {
+func (mach *OlmMachine) importExportedRoomKey(session ExportedSession) (bool, error) {
 	if session.Algorithm != id.AlgorithmMegolmV1 {
-		return ErrInvalidExportedAlgorithm
+		return false, ErrInvalidExportedAlgorithm
 	}
 
 	igsInternal, err := olm.InboundGroupSessionImport([]byte(session.SessionKey))
 	if err != nil {
-		return errors.Wrap(err, "failed to import session")
+		return false, errors.Wrap(err, "failed to import session")
 	} else if igsInternal.ID() != session.SessionID {
-		return ErrMismatchingExportedSessionID
+		return false, ErrMismatchingExportedSessionID
 	}
 	igs := &InboundGroupSession{
 		Internal:   *igsInternal,
@@ -88,21 +109,22 @@ func (mach *OlmMachine) importExportedRoomKey(session ExportedSession) error {
 		// TODO should we add something here to mark the signing key as unverified like key requests do?
 		ForwardingChains: session.ForwardingChains,
 	}
-	// TODO we probably shouldn't override existing sessions (except maybe if earliest known session is lower than the one in the store?)
+	existingIGS, _ := mach.CryptoStore.GetGroupSession(igs.RoomID, igs.SenderKey, igs.ID())
+	if existingIGS != nil && existingIGS.Internal.FirstKnownIndex() <= igs.Internal.FirstKnownIndex() {
+		// We already have an equivalent or better session in the store, so don't override it.
+		return false, nil
+	}
 	err = mach.CryptoStore.PutGroupSession(igs.RoomID, igs.SenderKey, igs.ID(), igs)
 	if err != nil {
-		return errors.Wrap(err, "failed to store imported session")
+		return false, errors.Wrap(err, "failed to store imported session")
 	}
-	return nil
+	return true, nil
 }
 
-func (mach *OlmMachine) ImportKeys(passphrase string, data string) (int, int, error) {
-	if !strings.HasPrefix(data, exportPrefix) {
-		return 0, 0, ErrMissingExportPrefix
-	} else if !strings.HasSuffix(data, exportSuffix) && !strings.HasSuffix(data, exportSuffix + "\n") {
-		return 0, 0, ErrMissingExportSuffix
-	}
-	exportData, err := base64.StdEncoding.DecodeString(data[len(exportPrefix) : len(data)-len(exportPrefix)])
+// ImportKeys imports data that was exported with the format specified in the Matrix spec.
+// See See https://matrix.org/docs/spec/client_server/r0.6.1#key-exports
+func (mach *OlmMachine) ImportKeys(passphrase string, data []byte) (int, int, error) {
+	exportData, err := decodeKeyExport(data)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -113,12 +135,14 @@ func (mach *OlmMachine) ImportKeys(passphrase string, data string) (int, int, er
 
 	count := 0
 	for _, session := range sessions {
-		err := mach.importExportedRoomKey(session)
+		imported, err := mach.importExportedRoomKey(session)
 		if err != nil {
 			mach.Log.Warn("Failed to import Megolm session %s/%s from file: %v", session.RoomID, session.SessionID, err)
-		} else {
+		} else if imported {
 			mach.Log.Debug("Imported Megolm session %s/%s from file", session.RoomID, session.SessionID)
 			count++
+		} else {
+			mach.Log.Debug("Skipped Megolm session %s/%s: already in store", session.RoomID, session.SessionID)
 		}
 	}
 	return count, len(sessions), nil
