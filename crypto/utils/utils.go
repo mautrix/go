@@ -47,7 +47,7 @@ func GenAttachmentA256CTR() (key [AESCTRKeyLength]byte, iv [AESCTRIVLength]byte)
 		panic(err)
 	}
 
-	// For some reason we leave the 8 last bytes empty even though AES256-CTR has a 16-byte block size.
+	// The last 8 bytes of the IV act as the counter in AES-CTR, which means they're left empty here
 	_, err = rand.Read(iv[:8])
 	if err != nil {
 		panic(err)

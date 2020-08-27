@@ -151,6 +151,8 @@ type Store interface {
 	GetSignaturesForKeyBy(id.UserID, id.Ed25519, id.UserID) (map[id.Ed25519]string, error)
 	// IsKeySignedBy returns whether a cross-signing or device key is signed by the given signer.
 	IsKeySignedBy(id.UserID, id.Ed25519, id.UserID, id.Ed25519) (bool, error)
+	// DropSignaturesByKey deletes the signatures made by the given user and key from the store. It returns the number of signatures deleted.
+	DropSignaturesByKey(id.UserID, id.Ed25519) (int64, error)
 }
 
 type messageIndexKey struct {
@@ -568,4 +570,21 @@ func (gs *GobStore) IsKeySignedBy(userID id.UserID, key id.Ed25519, signerID id.
 	}
 	_, ok := sigs[signerKey]
 	return ok, nil
+}
+
+func (gs *GobStore) DropSignaturesByKey(userID id.UserID, key id.Ed25519) (int64, error) {
+	var count int64
+	gs.lock.RLock()
+	for _, userSigs := range gs.KeySignatures {
+		for _, keySigs := range userSigs {
+			if signedBySigner, ok := keySigs[userID]; ok {
+				if _, ok := signedBySigner[key]; ok {
+					count++
+					delete(signedBySigner, key)
+				}
+			}
+		}
+	}
+	gs.lock.RUnlock()
+	return count, nil
 }

@@ -121,7 +121,6 @@ func (mach *OlmMachine) fetchKeys(users []id.UserID, sinceToken string, includeU
 		mach.Log.Warn("Didn't get any keys for user %s", userID)
 	}
 
-	// TODO delete old signatures by previous x-signing keys if they have been updated
 	mach.storeCrossSigningKeys(resp.MasterKeys, resp.DeviceKeys)
 	mach.storeCrossSigningKeys(resp.SelfSigningKeys, resp.DeviceKeys)
 	mach.storeCrossSigningKeys(resp.UserSigningKeys, resp.DeviceKeys)

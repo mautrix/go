@@ -664,3 +664,16 @@ func (store *SQLCryptoStore) IsKeySignedBy(userID id.UserID, key id.Ed25519, sig
 	_, ok := sigs[signerKey]
 	return ok, nil
 }
+
+// DropSignaturesByKey deletes the signatures made by the given user and key from the store. It returns the number of signatures deleted.
+func (store *SQLCryptoStore) DropSignaturesByKey(userID id.UserID, key id.Ed25519) (int64, error) {
+	res, err := store.DB.Exec("DELETE FROM crypto_cross_signing_signatures WHERE signer_user_id=$1 AND signer_key=$2", userID, key)
+	if err != nil {
+		return 0, err
+	}
+	count, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}

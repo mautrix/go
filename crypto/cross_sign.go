@@ -15,6 +15,28 @@ import (
 
 func (mach *OlmMachine) storeCrossSigningKeys(crossSigningKeys map[id.UserID]mautrix.CrossSigningKeys, deviceKeys map[id.UserID]map[id.DeviceID]mautrix.DeviceKeys) {
 	for userID, userKeys := range crossSigningKeys {
+		currentKeys, err := mach.CryptoStore.GetCrossSigningKeys(userID)
+		if err != nil {
+			mach.Log.Error("Error fetching current cross-signing keys of user %v: %v", userID, err)
+		}
+		if currentKeys != nil {
+			for curKeyUsage, curKey := range currentKeys {
+				// got a new key with the same usage as an existing key
+				for _, newKeyUsage := range userKeys.Usage {
+					if newKeyUsage == curKeyUsage {
+						if _, ok := userKeys.Keys[id.NewKeyID(id.KeyAlgorithmEd25519, curKey.String())]; !ok {
+							// old key is not in the new key map so we drop signatures made by it
+							if count, err := mach.CryptoStore.DropSignaturesByKey(userID, curKey); err != nil {
+								mach.Log.Error("Error deleting old signatures: %v", err)
+							} else {
+								mach.Log.Debug("Dropped %v signatures made by key `%v` (%v) as it has been replaced", count, curKey, curKeyUsage)
+							}
+						}
+					}
+				}
+			}
+		}
+
 		for _, key := range userKeys.Keys {
 			for _, usage := range userKeys.Usage {
 				mach.Log.Debug("Storing cross-signing key for %v: %v (type %v)", userID, key, usage)
@@ -36,7 +58,7 @@ func (mach *OlmMachine) storeCrossSigningKeys(crossSigningKeys map[id.UserID]mau
 						}
 					}
 
-					mach.Log.Debug("Verifying %v with: %v %v %v", userKeys, signUserID, signKeyName, signingKey)
+					mach.Log.Debug("Verifying with key %v of user %v", signingKey, signUserID)
 					if verified, err := olm.VerifySignatureJSON(userKeys, signUserID, signKeyName, signingKey); err != nil {
 						mach.Log.Error("Error while verifying cross-signing keys: %v", err)
 					} else {
