@@ -124,6 +124,10 @@ func (e HTTPError) Error() string {
 	return fmt.Sprintf("msg=%s code=%d wrapped=%s", e.Message, e.Code, wrappedErrMsg)
 }
 
+func (e HTTPError) Unwrap() error {
+	return e.WrappedError
+}
+
 // BuildURL builds a URL with the Client's homserver/prefix/access_token set already.
 func (cli *Client) BuildURL(urlPath ...interface{}) string {
 	return cli.BuildBaseURL(append(cli.Prefix, urlPath...)...)
@@ -358,6 +362,7 @@ func (cli *Client) MakeFullRequest(method string, httpURL string, headers http.H
 	return contents, nil
 }
 
+// Whoami gets the user ID of the current user. See https://matrix.org/docs/spec/client_server/r0.6.1#post-matrix-client-r0-rooms-roomid-join
 func (cli *Client) Whoami() (resp *RespWhoami, err error) {
 	urlPath := cli.BuildURL("account", "whoami")
 	_, err = cli.MakeRequest("GET", urlPath, nil, &resp)
@@ -492,14 +497,14 @@ func (cli *Client) Logout() (resp *RespLogout, err error) {
 	return
 }
 
-// Versions returns the list of supported Matrix versions on this homeserver. See http://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-versions
+// Versions returns the list of supported Matrix versions on this homeserver. See http://matrix.org/docs/spec/client_server/r0.6.1.html#get-matrix-client-versions
 func (cli *Client) Versions() (resp *RespVersions, err error) {
 	urlPath := cli.BuildBaseURL("_matrix", "client", "versions")
 	_, err = cli.MakeRequest("GET", urlPath, nil, &resp)
 	return
 }
 
-// JoinRoom joins the client to a room ID or alias. See http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-join-roomidoralias
+// JoinRoom joins the client to a room ID or alias. See http://matrix.org/docs/spec/client_server/r0.6.1.html#post-matrix-client-r0-join-roomidoralias
 //
 // If serverName is specified, this will be added as a query param to instruct the homeserver to join via that server. If content is specified, it will
 // be JSON encoded and used as the request body.
@@ -516,26 +521,28 @@ func (cli *Client) JoinRoom(roomIDorAlias, serverName string, content interface{
 	return
 }
 
+// JoinRoomByID joins the client to a room ID. See https://matrix.org/docs/spec/client_server/r0.6.1#post-matrix-client-r0-rooms-roomid-join
+//
+// Unlike JoinRoom, this method can only be used to join rooms that the server already knows about.
+// It's mostly intended for bridges and other things where it's already certain that the server is in the room.
 func (cli *Client) JoinRoomByID(roomID id.RoomID) (resp *RespJoinRoom, err error) {
 	_, err = cli.MakeRequest("POST", cli.BuildURL("rooms", roomID, "join"), nil, &resp)
 	return
 }
 
-// GetDisplayName returns the display name of the user from the specified MXID. See https://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-r0-profile-userid-displayname
-func (cli *Client) GetDisplayName(mxid string) (resp *RespUserDisplayName, err error) {
+// GetDisplayName returns the display name of the user with the specified MXID. See https://matrix.org/docs/spec/client_server/r0.6.1.html#get-matrix-client-r0-profile-userid-displayname
+func (cli *Client) GetDisplayName(mxid id.UserID) (resp *RespUserDisplayName, err error) {
 	urlPath := cli.BuildURL("profile", mxid, "displayname")
 	_, err = cli.MakeRequest("GET", urlPath, nil, &resp)
 	return
 }
 
-// GetOwnDisplayName returns the user's display name. See https://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-r0-profile-userid-displayname
+// GetOwnDisplayName returns the user's display name. See https://matrix.org/docs/spec/client_server/r0.6.1.html#get-matrix-client-r0-profile-userid-displayname
 func (cli *Client) GetOwnDisplayName() (resp *RespUserDisplayName, err error) {
-	urlPath := cli.BuildURL("profile", cli.UserID, "displayname")
-	_, err = cli.MakeRequest("GET", urlPath, nil, &resp)
-	return
+	return cli.GetDisplayName(cli.UserID)
 }
 
-// SetDisplayName sets the user's profile display name. See http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-profile-userid-displayname
+// SetDisplayName sets the user's profile display name. See http://matrix.org/docs/spec/client_server/r0.6.1.html#put-matrix-client-r0-profile-userid-displayname
 func (cli *Client) SetDisplayName(displayName string) (err error) {
 	urlPath := cli.BuildURL("profile", cli.UserID, "displayname")
 	s := struct {
@@ -545,22 +552,27 @@ func (cli *Client) SetDisplayName(displayName string) (err error) {
 	return
 }
 
-// GetAvatarURL gets the user's avatar URL. See http://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-r0-profile-userid-avatar-url
-func (cli *Client) GetAvatarURL() (url string, err error) {
+// GetAvatarURL gets the avatar URL of the user with the specified MXID. See http://matrix.org/docs/spec/client_server/r0.6.1.html#get-matrix-client-r0-profile-userid-avatar-url
+func (cli *Client) GetAvatarURL(mxid id.UserID) (url id.ContentURI, err error) {
 	urlPath := cli.BuildURL("profile", cli.UserID, "avatar_url")
 	s := struct {
-		AvatarURL string `json:"avatar_url"`
+		AvatarURL id.ContentURI `json:"avatar_url"`
 	}{}
 
 	_, err = cli.MakeRequest("GET", urlPath, nil, &s)
 	if err != nil {
-		return "", err
+		return
 	}
-
-	return s.AvatarURL, nil
+	url = s.AvatarURL
+	return
 }
 
-// SetAvatarURL sets the user's avatar URL. See http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-profile-userid-avatar-url
+// GetOwnAvatarURL gets the user's avatar URL. See http://matrix.org/docs/spec/client_server/r0.6.1.html#get-matrix-client-r0-profile-userid-avatar-url
+func (cli *Client) GetOwnAvatarURL() (url id.ContentURI, err error) {
+	return cli.GetAvatarURL(cli.UserID)
+}
+
+// SetAvatarURL sets the user's avatar URL. See http://matrix.org/docs/spec/client_server/r0.6.1.html#put-matrix-client-r0-profile-userid-avatar-url
 func (cli *Client) SetAvatarURL(url id.ContentURI) (err error) {
 	urlPath := cli.BuildURL("profile", cli.UserID, "avatar_url")
 	s := struct {

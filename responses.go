@@ -17,8 +17,11 @@ func (e RespError) Error() string {
 	return e.ErrCode + ": " + e.Err
 }
 
+// RespWhoami is the JSON response for https://matrix.org/docs/spec/client_server/r0.6.1#get-matrix-client-r0-account-whoami
 type RespWhoami struct {
 	UserID id.UserID `json:"user_id"`
+	// N.B. This field is not in the spec yet, it's expected to land in r0.6.2 or r0.7.0
+	DeviceID id.DeviceID `json:"device_id"`
 }
 
 // RespCreateFilter is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-user-userid-filter
@@ -26,9 +29,10 @@ type RespCreateFilter struct {
 	FilterID string `json:"filter_id"`
 }
 
-// RespVersions is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-versions
+// RespVersions is the JSON response for http://matrix.org/docs/spec/client_server/r0.6.1.html#get-matrix-client-versions
 type RespVersions struct {
-	Versions []string `json:"versions"`
+	Versions         []string        `json:"versions"`
+	UnstableFeatures map[string]bool `json:"unstable_features"`
 }
 
 // RespJoinRoom is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-join
