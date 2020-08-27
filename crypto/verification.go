@@ -75,17 +75,15 @@ func (mach *OlmMachine) getPKAndKeysMAC(sas *olm.SAS, sendingUser id.UserID, sen
 		receivingUser.String() + receivingDevice.String() +
 		transactionID
 
-	keyIDString := mainKeyID.String()
-	if keys != nil {
-		keyIDStrings := make([]string, len(keys))
-		i := 0
-		for keyID := range keys {
-			keyIDStrings[i] = keyID.String()
-			i++
-		}
-		sort.Sort(sort.StringSlice(keyIDStrings))
-		keyIDString = strings.Join(keyIDStrings, ",")
+	// get key IDs from key map
+	keyIDStrings := make([]string, len(keys))
+	i := 0
+	for keyID := range keys {
+		keyIDStrings[i] = keyID.String()
+		i++
 	}
+	sort.Sort(sort.StringSlice(keyIDStrings))
+	keyIDString := strings.Join(keyIDStrings, ",")
 
 	pubKeyMac, err := sas.CalculateMAC([]byte(signingKey), []byte(sasInfo+mainKeyID.String()))
 	if err != nil {
@@ -452,16 +450,28 @@ func (mach *OlmMachine) handleVerificationMAC(userID id.UserID, content *event.V
 			mach.Log.Warn("Failed to put device after verifying: %v", err)
 		}
 
-		crossSignKeys, err := mach.CryptoStore.GetCrossSigningKeys(device.UserID)
-		if err != nil {
-			mach.Log.Warn("Failed to fetch other user's cross signing keys: %v", err)
-		} else {
-			for verifiedKeyID := range content.Mac {
-				_, verifiedKey := verifiedKeyID.Parse()
-				for _, key := range crossSignKeys {
-					if key.String() == verifiedKey {
-						// TODO make, upload and store sig from my user-signing to this master key
-						break
+		// if our own cross-signing keys are available
+		if mach.crossSigningKeys != nil {
+			crossSignKeys, err := mach.CryptoStore.GetCrossSigningKeys(device.UserID)
+			if err != nil {
+				mach.Log.Warn("Failed to fetch other user's cross signing keys: %v", err)
+			} else {
+				if masterKey, ok := crossSignKeys[id.XSUsageMaster]; ok {
+					masterKeyID := id.NewKeyID(id.KeyAlgorithmEd25519, masterKey.String())
+					if masterKeyMAC, ok := content.Mac[masterKeyID]; ok {
+						expectedMasterKeyMAC, _, err := mach.getPKAndKeysMAC(verState.sas, device.UserID, device.DeviceID,
+							mach.Client.UserID, mach.Client.DeviceID, content.TransactionID, masterKey, masterKeyID, content.Mac)
+						if err != nil {
+							mach.Log.Error("Error generating master key MAC: %v", err)
+						} else if masterKeyMAC == expectedMasterKeyMAC {
+							if err := mach.SignUserAndUpload(device.UserID, masterKey); err != nil {
+								mach.Log.Error("Error signing master key of %v: %v", device.UserID, err)
+							} else {
+								mach.Log.Debug("Signed master key of %v after SAS verification", device.UserID)
+							}
+						} else {
+							mach.Log.Error("Expected %s master key MAC, got %s", expectedMasterKeyMAC, masterKeyMAC)
+						}
 					}
 				}
 			}
@@ -663,21 +673,38 @@ func (mach *OlmMachine) SendSASVerificationMAC(userID id.UserID, deviceID id.Dev
 	keyID := id.NewKeyID(id.KeyAlgorithmEd25519, mach.Client.DeviceID.String())
 
 	signingKey := mach.account.SigningKey()
-	pubKeyMac, keysMac, err := mach.getPKAndKeysMAC(sas, mach.Client.UserID, mach.Client.DeviceID, userID, deviceID, transactionID, signingKey, keyID, nil)
+	keyIDsMap := map[id.KeyID]string{keyID: ""}
+	macMap := make(map[id.KeyID]string)
+
+	if mach.crossSigningKeys != nil {
+		masterKey := mach.crossSigningKeys.MasterKey.PublicKey
+		masterKeyID := id.NewKeyID(id.KeyAlgorithmEd25519, masterKey.String())
+		// add master key ID to key map
+		keyIDsMap[masterKeyID] = ""
+		masterKeyMAC, _, err := mach.getPKAndKeysMAC(sas, mach.Client.UserID, mach.Client.DeviceID,
+			userID, deviceID, transactionID, masterKey, masterKeyID, keyIDsMap)
+		if err != nil {
+			mach.Log.Error("Error generating master key MAC: %v", err)
+		} else {
+			mach.Log.Debug("Generated master key `%v` MAC: %v", masterKey, masterKeyMAC)
+			macMap[masterKeyID] = masterKeyMAC
+		}
+	}
+
+	pubKeyMac, keysMac, err := mach.getPKAndKeysMAC(sas, mach.Client.UserID, mach.Client.DeviceID, userID, deviceID, transactionID, signingKey, keyID, keyIDsMap)
 	if err != nil {
 		return err
 	}
 	mach.Log.Debug("MAC of key %s is: %s", signingKey, pubKeyMac)
 	mach.Log.Debug("MAC of key ID(s) %s is: %s", keyID, keysMac)
+	macMap[keyID] = pubKeyMac
 
 	content := &event.VerificationMacEventContent{
 		TransactionID: transactionID,
 		Keys:          keysMac,
-		Mac: map[id.KeyID]string{
-			keyID: pubKeyMac,
-			// TODO also send our master xsigning key for verification
-		},
+		Mac:           macMap,
 	}
+
 	return mach.sendToOneDevice(userID, deviceID, event.ToDeviceVerificationMAC, content)
 }
 

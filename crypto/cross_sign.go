@@ -225,21 +225,12 @@ func (mach *OlmMachine) uploadCrossSigningKeysToServer(keys *CrossSigningKeysCac
 }
 
 // SignUserAndUpload creates a cross-signing signature for a user, stores it and uploads it to the server.
-func (mach *OlmMachine) SignUserAndUpload(userID id.UserID) error {
+func (mach *OlmMachine) SignUserAndUpload(userID id.UserID, masterKey id.Ed25519) error {
 	if mach.crossSigningKeys == nil {
 		return errors.New("No cross-signing keys found")
 	}
 	if userID == mach.Client.UserID {
 		return nil
-	}
-
-	keys, err := mach.CryptoStore.GetCrossSigningKeys(userID)
-	if err != nil {
-		return err
-	}
-	masterKey, ok := keys[id.XSUsageMaster]
-	if !ok {
-		return errors.Errorf("No master key found for user %v", userID)
 	}
 
 	userSigningKey := mach.crossSigningKeys.UserSigningKey
