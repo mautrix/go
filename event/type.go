@@ -26,6 +26,8 @@ func (tc TypeClass) Name() string {
 		return "account data"
 	case ToDeviceEventType:
 		return "to-device"
+	case InRoomVerificationEventType:
+		return "in-room verification"
 	default:
 		return "unknown"
 	}
@@ -42,6 +44,8 @@ const (
 	AccountDataEventType
 	// Device-to-device events
 	ToDeviceEventType
+	// In-room verification events
+	InRoomVerificationEventType
 	// Unknown events
 	UnknownEventType
 )
@@ -73,6 +77,10 @@ func (et *Type) IsToDevice() bool {
 	return et.Class == ToDeviceEventType
 }
 
+func (et *Type) IsInRoomVerification() bool {
+	return et.Class == InRoomVerificationEventType
+}
+
 func (et *Type) IsCustom() bool {
 	return !strings.HasPrefix(et.Type, "m.")
 }
@@ -91,6 +99,8 @@ func (et *Type) GuessClass() TypeClass {
 		return MessageEventType
 	case ToDeviceRoomKey.Type, ToDeviceRoomKeyRequest.Type, ToDeviceForwardedRoomKey.Type, ToDeviceRoomKeyWithheld.Type:
 		return ToDeviceEventType
+	case InRoomVerificationStart.Type, InRoomVerificationAccept.Type, InRoomVerificationKey.Type, InRoomVerificationMAC.Type, InRoomVerificationCancel.Type:
+		return InRoomVerificationEventType
 	default:
 		return UnknownEventType
 	}
@@ -168,6 +178,15 @@ var (
 	AccountDataRoomTags        = Type{"m.tag", AccountDataEventType}
 	AccountDataFullyRead       = Type{"m.fully_read", AccountDataEventType}
 	AccountDataIgnoredUserList = Type{"m.ignored_user_list", AccountDataEventType}
+)
+
+// In-room verification events
+var (
+	InRoomVerificationStart  = Type{"m.key.verification.start", InRoomVerificationEventType}
+	InRoomVerificationAccept = Type{"m.key.verification.accept", InRoomVerificationEventType}
+	InRoomVerificationKey    = Type{"m.key.verification.key", InRoomVerificationEventType}
+	InRoomVerificationMAC    = Type{"m.key.verification.mac", InRoomVerificationEventType}
+	InRoomVerificationCancel = Type{"m.key.verification.cancel", InRoomVerificationEventType}
 )
 
 // Device-to-device events

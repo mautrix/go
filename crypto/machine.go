@@ -225,17 +225,17 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 		mach.handleRoomKeyRequest(evt.Sender, content)
 	// verification cases
 	case *event.VerificationStartEventContent:
-		mach.handleVerificationStart(evt.Sender, content, 10*time.Minute)
+		mach.handleVerificationStart(evt.Sender, content, content.TransactionID, 10*time.Minute, "")
 	case *event.VerificationAcceptEventContent:
-		mach.handleVerificationAccept(evt.Sender, content)
+		mach.handleVerificationAccept(evt.Sender, content, content.TransactionID)
 	case *event.VerificationKeyEventContent:
-		mach.handleVerificationKey(evt.Sender, content)
+		mach.handleVerificationKey(evt.Sender, content, content.TransactionID)
 	case *event.VerificationMacEventContent:
-		mach.handleVerificationMAC(evt.Sender, content)
+		mach.handleVerificationMAC(evt.Sender, content, content.TransactionID)
 	case *event.VerificationCancelEventContent:
-		mach.handleVerificationCancel(evt.Sender, content)
+		mach.handleVerificationCancel(evt.Sender, content, content.TransactionID)
 	case *event.VerificationRequestEventContent:
-		mach.handleVerificationRequest(evt.Sender, content)
+		mach.handleVerificationRequest(evt.Sender, content, content.TransactionID, "")
 	case *event.RoomKeyWithheldEventContent:
 		mach.handleRoomKeyWithheld(content)
 	default:
