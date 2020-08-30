@@ -217,7 +217,7 @@ func (mach *OlmMachine) actuallyStartVerification(userID id.UserID, content *eve
 		if inRoomID == "" {
 			err = mach.SendSASVerificationAccept(userID, content, verState.sas.GetPubkey(), sasMethods)
 		} else {
-			err = mach.SendInRoomSASVerificationAccept(inRoomID, userID, content, verState.sas.GetPubkey(), sasMethods)
+			err = mach.SendInRoomSASVerificationAccept(inRoomID, userID, content, transactionID, verState.sas.GetPubkey(), sasMethods)
 		}
 		if err != nil {
 			mach.Log.Error("Error accepting SAS verification: %v", err)
@@ -563,7 +563,18 @@ func (mach *OlmMachine) handleVerificationRequest(userID id.UserID, content *eve
 	resp, hooks := mach.AcceptVerificationFrom(transactionID, otherDevice)
 	if resp == AcceptRequest {
 		mach.Log.Debug("Accepting SAS verification %v from %v of user %v", transactionID, otherDevice.DeviceID, otherDevice.UserID)
-		if _, err := mach.NewSASVerificationWith(otherDevice, hooks, transactionID, mach.DefaultSASTimeout, inRoomID); err != nil {
+		if inRoomID == "" {
+			_, err = mach.NewSASVerificationWith(otherDevice, hooks, transactionID, mach.DefaultSASTimeout)
+		} else {
+			if err := mach.SendInRoomSASVerificationReady(inRoomID, transactionID); err != nil {
+				mach.Log.Error("Error sending in-room SAS verification ready: %v", err)
+			}
+			if mach.Client.UserID < otherDevice.UserID {
+				// up to us to send the start message
+				_, err = mach.newInRoomSASVerificationWithInner(inRoomID, otherDevice, hooks, transactionID, mach.DefaultSASTimeout)
+			}
+		}
+		if err != nil {
 			mach.Log.Error("Error accepting SAS verification request: %v", err)
 		}
 	} else if resp == RejectRequest {
@@ -581,13 +592,13 @@ func (mach *OlmMachine) handleVerificationRequest(userID id.UserID, content *eve
 // NewSimpleSASVerificationWith starts the SAS verification process with another device with a default timeout,
 // a generated transaction ID and support for both emoji and decimal SAS methods.
 func (mach *OlmMachine) NewSimpleSASVerificationWith(device *DeviceIdentity, hooks VerificationHooks) (string, error) {
-	return mach.NewSASVerificationWith(device, hooks, "", mach.DefaultSASTimeout, "")
+	return mach.NewSASVerificationWith(device, hooks, "", mach.DefaultSASTimeout)
 }
 
 // NewSASVerificationWith starts the SAS verification process with another device.
 // If the other device accepts the verification transaction, the methods in `hooks` will be used to verify the SAS match and to complete the transaction..
 // If the transaction ID is empty, a new one is generated.
-func (mach *OlmMachine) NewSASVerificationWith(device *DeviceIdentity, hooks VerificationHooks, transactionID string, timeout time.Duration, inRoomID id.RoomID) (string, error) {
+func (mach *OlmMachine) NewSASVerificationWith(device *DeviceIdentity, hooks VerificationHooks, transactionID string, timeout time.Duration) (string, error) {
 	if transactionID == "" {
 		transactionID = strconv.Itoa(rand.Int())
 	}
@@ -601,21 +612,11 @@ func (mach *OlmMachine) NewSASVerificationWith(device *DeviceIdentity, hooks Ver
 		keyReceived:         false,
 		sasMatched:          make(chan bool, 1),
 		hooks:               hooks,
-		inRoomID:            inRoomID,
 	}
 	verState.lock.Lock()
 	defer verState.lock.Unlock()
 
-	var startEvent *event.VerificationStartEventContent
-	var err error
-
-	if inRoomID == "" {
-		// to-device verification
-		startEvent, err = mach.SendSASVerificationStart(device.UserID, device.DeviceID, transactionID, hooks.VerificationMethods())
-	} else {
-		// in-room verification
-		startEvent, err = mach.SendInRoomSASVerificationStart(inRoomID, device.UserID, transactionID, hooks.VerificationMethods())
-	}
+	startEvent, err := mach.SendSASVerificationStart(device.UserID, device.DeviceID, transactionID, hooks.VerificationMethods())
 	if err != nil {
 		return "", err
 	}

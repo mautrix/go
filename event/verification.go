@@ -82,7 +82,7 @@ type VerificationStartEventContent struct {
 	// The user that the event is sent to for in-room verification.
 	To id.UserID `json:"to,omitempty"`
 	// Original event ID for in-room verification.
-	RelatesTo RelatesTo `json:"m.relates_to,omitempty"`
+	RelatesTo *RelatesTo `json:"m.relates_to,omitempty"`
 }
 
 func (vsec *VerificationStartEventContent) SupportsKeyAgreementProtocol(proto KeyAgreementProtocol) bool {
@@ -119,6 +119,16 @@ func (vsec *VerificationStartEventContent) SupportsSASMethod(meth SASMethod) boo
 		}
 	}
 	return false
+}
+
+// VerificationReadyEventContent represents the content of a m.key.verification.ready event.
+type VerificationReadyEventContent struct {
+	// The device ID which accepted the process.
+	FromDevice id.DeviceID `json:"from_device"`
+	// The verification methods supported by the sender.
+	Methods []VerificationMethod `json:"methods"`
+	// Original event ID for in-room verification.
+	RelatesTo RelatesTo `json:"m.relates_to,omitempty"`
 }
 
 // VerificationAcceptEventContent represents the content of a m.key.verification.accept to_device event.

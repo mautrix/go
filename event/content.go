@@ -49,6 +49,7 @@ var TypeMap = map[Type]reflect.Type{
 	EphemeralEventPresence: reflect.TypeOf(PresenceEventContent{}),
 
 	InRoomVerificationStart:  reflect.TypeOf(VerificationStartEventContent{}),
+	InRoomVerificationReady:  reflect.TypeOf(VerificationReadyEventContent{}),
 	InRoomVerificationAccept: reflect.TypeOf(VerificationAcceptEventContent{}),
 	InRoomVerificationKey:    reflect.TypeOf(VerificationKeyEventContent{}),
 	InRoomVerificationMAC:    reflect.TypeOf(VerificationMacEventContent{}),

@@ -183,6 +183,7 @@ var (
 // In-room verification events
 var (
 	InRoomVerificationStart  = Type{"m.key.verification.start", InRoomVerificationEventType}
+	InRoomVerificationReady  = Type{"m.key.verification.ready", InRoomVerificationEventType}
 	InRoomVerificationAccept = Type{"m.key.verification.accept", InRoomVerificationEventType}
 	InRoomVerificationKey    = Type{"m.key.verification.key", InRoomVerificationEventType}
 	InRoomVerificationMAC    = Type{"m.key.verification.mac", InRoomVerificationEventType}
