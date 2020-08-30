@@ -84,9 +84,6 @@ func (rel *RelatesTo) UnmarshalJSON(data []byte) error {
 
 func (rel *RelatesTo) MarshalJSON() ([]byte, error) {
 	srel := serializableRelatesTo{Type: rel.Type, EventID: rel.EventID, Key: rel.Key}
-	if rel.Type == RelReference {
-		srel.InReplyTo = &serializableInReplyTo{rel.EventID}
-	}
 	return json.Marshal(&srel)
 }
 
