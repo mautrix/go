@@ -13,6 +13,8 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"hash"
+	"io"
 )
 
 var (
@@ -21,6 +23,7 @@ var (
 	UnsupportedAlgorithm = errors.New("unsupported JWK encryption algorithm")
 	InvalidKey           = errors.New("failed to decode key")
 	InvalidInitVector    = errors.New("failed to decode initialization vector")
+	ReaderClosed         = errors.New("encrypting reader was already closed")
 )
 
 const (
@@ -78,7 +81,6 @@ func NewEncryptedFile() *EncryptedFile {
 	}
 }
 
-
 func (ef *EncryptedFile) decodeKeys() error {
 	if ef.decoded != nil {
 		return nil
@@ -102,21 +104,61 @@ func (ef *EncryptedFile) decodeKeys() error {
 func (ef *EncryptedFile) Encrypt(plaintext []byte) []byte {
 	ef.decodeKeys()
 	ciphertext := xorA256CTR(plaintext, ef.decoded.key, ef.decoded.iv)
-	hash := sha256.Sum256(ciphertext)
-	ef.Hashes.SHA256 = base64.RawStdEncoding.EncodeToString(hash[:])
+	checksum := sha256.Sum256(ciphertext)
+	ef.Hashes.SHA256 = base64.RawStdEncoding.EncodeToString(checksum[:])
 	return ciphertext
+}
+
+// encryptingReader is a variation of cipher.StreamReader that also hashes the content.
+type encryptingReader struct {
+	stream cipher.Stream
+	hash   hash.Hash
+	source io.Reader
+	file   *EncryptedFile
+	closed bool
+}
+
+func (r *encryptingReader) Read(dst []byte) (n int, err error) {
+	if r.closed {
+		return 0, ReaderClosed
+	}
+	n, err = r.source.Read(dst)
+	r.stream.XORKeyStream(dst[:n], dst[:n])
+	r.hash.Write(dst[:n])
+	return
+}
+
+func (r *encryptingReader) Close() (err error) {
+	closer, ok := r.source.(io.ReadCloser)
+	if ok {
+		err = closer.Close()
+	}
+	r.file.Hashes.SHA256 = base64.RawStdEncoding.EncodeToString(r.hash.Sum(nil))
+	r.closed = true
+	return
+}
+
+func (ef *EncryptedFile) EncryptStream(reader io.Reader) io.ReadCloser {
+	ef.decodeKeys()
+	block, _ := aes.NewCipher(ef.decoded.key[:])
+	return &encryptingReader{
+		stream: cipher.NewCTR(block, ef.decoded.iv[:]),
+		hash:   sha256.New(),
+		source: reader,
+		file:   ef,
+	}
 }
 
 func (ef *EncryptedFile) checkHash(ciphertext []byte) bool {
 	if len(ef.Hashes.SHA256) != hashBase64Length {
 		return false
 	}
-	var hash [hashLength]byte
-	_, err := base64.RawStdEncoding.Decode(hash[:], []byte(ef.Hashes.SHA256))
+	var checksum [hashLength]byte
+	_, err := base64.RawStdEncoding.Decode(checksum[:], []byte(ef.Hashes.SHA256))
 	if err != nil {
 		return false
 	}
-	return hash == sha256.Sum256(ciphertext)
+	return checksum == sha256.Sum256(ciphertext)
 }
 
 func (ef *EncryptedFile) Decrypt(ciphertext []byte) ([]byte, error) {
