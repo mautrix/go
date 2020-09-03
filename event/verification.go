@@ -28,7 +28,7 @@ type VerificationRequestEventContent struct {
 	// The user that the event is sent to for in-room verification.
 	To id.UserID `json:"to,omitempty"`
 	// Original event ID for in-room verification.
-	RelatesTo RelatesTo `json:"m.relates_to,omitempty"`
+	RelatesTo *RelatesTo `json:"m.relates_to,omitempty"`
 }
 
 func (vrec *VerificationRequestEventContent) SupportsVerificationMethod(meth VerificationMethod) bool {
@@ -121,6 +121,21 @@ func (vsec *VerificationStartEventContent) SupportsSASMethod(meth SASMethod) boo
 	return false
 }
 
+func (vsec *VerificationStartEventContent) GetRelatesTo() *RelatesTo {
+	if vsec.RelatesTo == nil {
+		vsec.RelatesTo = &RelatesTo{}
+	}
+	return vsec.RelatesTo
+}
+
+func (vsec *VerificationStartEventContent) OptionalGetRelatesTo() *RelatesTo {
+	return vsec.RelatesTo
+}
+
+func (vsec *VerificationStartEventContent) SetRelatesTo(rel *RelatesTo) {
+	vsec.RelatesTo = rel
+}
+
 // VerificationReadyEventContent represents the content of a m.key.verification.ready event.
 type VerificationReadyEventContent struct {
 	// The device ID which accepted the process.
@@ -128,7 +143,22 @@ type VerificationReadyEventContent struct {
 	// The verification methods supported by the sender.
 	Methods []VerificationMethod `json:"methods"`
 	// Original event ID for in-room verification.
-	RelatesTo RelatesTo `json:"m.relates_to,omitempty"`
+	RelatesTo *RelatesTo `json:"m.relates_to,omitempty"`
+}
+
+func (vrec *VerificationReadyEventContent) GetRelatesTo() *RelatesTo {
+	if vrec.RelatesTo == nil {
+		vrec.RelatesTo = &RelatesTo{}
+	}
+	return vrec.RelatesTo
+}
+
+func (vrec *VerificationReadyEventContent) OptionalGetRelatesTo() *RelatesTo {
+	return vrec.RelatesTo
+}
+
+func (vrec *VerificationReadyEventContent) SetRelatesTo(rel *RelatesTo) {
+	vrec.RelatesTo = rel
 }
 
 // VerificationAcceptEventContent represents the content of a m.key.verification.accept to_device event.
@@ -151,7 +181,22 @@ type VerificationAcceptEventContent struct {
 	// The user that the event is sent to for in-room verification.
 	To id.UserID `json:"to,omitempty"`
 	// Original event ID for in-room verification.
-	RelatesTo RelatesTo `json:"m.relates_to,omitempty"`
+	RelatesTo *RelatesTo `json:"m.relates_to,omitempty"`
+}
+
+func (vaec *VerificationAcceptEventContent) GetRelatesTo() *RelatesTo {
+	if vaec.RelatesTo == nil {
+		vaec.RelatesTo = &RelatesTo{}
+	}
+	return vaec.RelatesTo
+}
+
+func (vaec *VerificationAcceptEventContent) OptionalGetRelatesTo() *RelatesTo {
+	return vaec.RelatesTo
+}
+
+func (vaec *VerificationAcceptEventContent) SetRelatesTo(rel *RelatesTo) {
+	vaec.RelatesTo = rel
 }
 
 // VerificationKeyEventContent represents the content of a m.key.verification.key to_device event.
@@ -164,7 +209,22 @@ type VerificationKeyEventContent struct {
 	// The user that the event is sent to for in-room verification.
 	To id.UserID `json:"to,omitempty"`
 	// Original event ID for in-room verification.
-	RelatesTo RelatesTo `json:"m.relates_to,omitempty"`
+	RelatesTo *RelatesTo `json:"m.relates_to,omitempty"`
+}
+
+func (vkec *VerificationKeyEventContent) GetRelatesTo() *RelatesTo {
+	if vkec.RelatesTo == nil {
+		vkec.RelatesTo = &RelatesTo{}
+	}
+	return vkec.RelatesTo
+}
+
+func (vkec *VerificationKeyEventContent) OptionalGetRelatesTo() *RelatesTo {
+	return vkec.RelatesTo
+}
+
+func (vkec *VerificationKeyEventContent) SetRelatesTo(rel *RelatesTo) {
+	vkec.RelatesTo = rel
 }
 
 // VerificationMacEventContent represents the content of a m.key.verification.mac to_device event.
@@ -179,7 +239,22 @@ type VerificationMacEventContent struct {
 	// The user that the event is sent to for in-room verification.
 	To id.UserID `json:"to,omitempty"`
 	// Original event ID for in-room verification.
-	RelatesTo RelatesTo `json:"m.relates_to,omitempty"`
+	RelatesTo *RelatesTo `json:"m.relates_to,omitempty"`
+}
+
+func (vmec *VerificationMacEventContent) GetRelatesTo() *RelatesTo {
+	if vmec.RelatesTo == nil {
+		vmec.RelatesTo = &RelatesTo{}
+	}
+	return vmec.RelatesTo
+}
+
+func (vmec *VerificationMacEventContent) OptionalGetRelatesTo() *RelatesTo {
+	return vmec.RelatesTo
+}
+
+func (vmec *VerificationMacEventContent) SetRelatesTo(rel *RelatesTo) {
+	vmec.RelatesTo = rel
 }
 
 type VerificationCancelCode string
@@ -210,5 +285,20 @@ type VerificationCancelEventContent struct {
 	// The user that the event is sent to for in-room verification.
 	To id.UserID `json:"to,omitempty"`
 	// Original event ID for in-room verification.
-	RelatesTo RelatesTo `json:"m.relates_to,omitempty"`
+	RelatesTo *RelatesTo `json:"m.relates_to,omitempty"`
+}
+
+func (vcec *VerificationCancelEventContent) GetRelatesTo() *RelatesTo {
+	if vcec.RelatesTo == nil {
+		vcec.RelatesTo = &RelatesTo{}
+	}
+	return vcec.RelatesTo
+}
+
+func (vcec *VerificationCancelEventContent) OptionalGetRelatesTo() *RelatesTo {
+	return vcec.RelatesTo
+}
+
+func (vcec *VerificationCancelEventContent) SetRelatesTo(rel *RelatesTo) {
+	vcec.RelatesTo = rel
 }

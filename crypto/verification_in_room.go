@@ -20,6 +20,7 @@ import (
 var (
 	ErrNoVerificationFromDevice = errors.New("from_device field is empty")
 	ErrNoVerificationMethods    = errors.New("verification method list is empty")
+	ErrNoRelatesTo = errors.New("missing m.relates_to info")
 )
 
 // ProcessInRoomVerification is a callback that is to be called when a client receives a message
@@ -29,13 +30,13 @@ func (mach *OlmMachine) ProcessInRoomVerification(evt *event.Event) error {
 		// nothing to do if the message is our own
 		return nil
 	}
+	if relatable, ok := evt.Content.Parsed.(event.Relatable); !ok || relatable.OptionalGetRelatesTo() == nil {
+		return ErrNoRelatesTo
+	}
 
 	switch content := evt.Content.Parsed.(type) {
 	case *event.MessageEventContent:
 		if content.MsgType == event.MsgVerificationRequest {
-			if content.RelatesTo == nil {
-				return nil
-			}
 			if content.FromDevice == "" {
 				return ErrNoVerificationFromDevice
 			}
@@ -70,7 +71,7 @@ func (mach *OlmMachine) ProcessInRoomVerification(evt *event.Event) error {
 // SendInRoomSASVerificationCancel is used to manually send an in-room SAS cancel message process with the given reason and cancellation code.
 func (mach *OlmMachine) SendInRoomSASVerificationCancel(roomID id.RoomID, userID id.UserID, transactionID string, reason string, code event.VerificationCancelCode) error {
 	content := &event.VerificationCancelEventContent{
-		RelatesTo: event.RelatesTo{Type: event.RelReference, EventID: id.EventID(transactionID)},
+		RelatesTo: &event.RelatesTo{Type: event.RelReference, EventID: id.EventID(transactionID)},
 		Reason:    reason,
 		Code:      code,
 		To:        userID,
@@ -100,7 +101,7 @@ func (mach *OlmMachine) SendInRoomSASVerificationReady(roomID id.RoomID, transac
 	content := &event.VerificationReadyEventContent{
 		FromDevice: mach.Client.DeviceID,
 		Methods:    []event.VerificationMethod{event.VerificationMethodSAS},
-		RelatesTo:  event.RelatesTo{Type: event.RelReference, EventID: id.EventID(transactionID)},
+		RelatesTo:  &event.RelatesTo{Type: event.RelReference, EventID: id.EventID(transactionID)},
 	}
 
 	_, err := mach.Client.SendMessageEvent(roomID, event.InRoomVerificationReady, content)
@@ -151,7 +152,7 @@ func (mach *OlmMachine) SendInRoomSASVerificationAccept(roomID id.RoomID, fromUs
 		sasMethods[i] = method.Type()
 	}
 	content := &event.VerificationAcceptEventContent{
-		RelatesTo:                 event.RelatesTo{Type: event.RelReference, EventID: id.EventID(transactionID)},
+		RelatesTo:                 &event.RelatesTo{Type: event.RelReference, EventID: id.EventID(transactionID)},
 		Method:                    event.VerificationMethodSAS,
 		KeyAgreementProtocol:      event.KeyAgreementCurve25519HKDFSHA256,
 		Hash:                      event.VerificationHashSHA256,
@@ -167,7 +168,7 @@ func (mach *OlmMachine) SendInRoomSASVerificationAccept(roomID id.RoomID, fromUs
 // SendInRoomSASVerificationKey sends the ephemeral public key for a device to the partner device for an in-room verification.
 func (mach *OlmMachine) SendInRoomSASVerificationKey(roomID id.RoomID, userID id.UserID, transactionID string, key string) error {
 	content := &event.VerificationKeyEventContent{
-		RelatesTo: event.RelatesTo{Type: event.RelReference, EventID: id.EventID(transactionID)},
+		RelatesTo: &event.RelatesTo{Type: event.RelReference, EventID: id.EventID(transactionID)},
 		Key:       key,
 		To:        userID,
 	}
@@ -207,7 +208,7 @@ func (mach *OlmMachine) SendInRoomSASVerificationMAC(roomID id.RoomID, userID id
 	macMap[keyID] = pubKeyMac
 
 	content := &event.VerificationMacEventContent{
-		RelatesTo: event.RelatesTo{Type: event.RelReference, EventID: id.EventID(transactionID)},
+		RelatesTo: &event.RelatesTo{Type: event.RelReference, EventID: id.EventID(transactionID)},
 		Keys:      keysMac,
 		Mac:       macMap,
 		To:        userID,
