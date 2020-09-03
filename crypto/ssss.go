@@ -174,6 +174,39 @@ func verifySSSSKey(ssssKey []byte, iv, mac string) error {
 	return nil
 }
 
+type CrossSigningSeeds struct {
+	MasterKey      []byte
+	SelfSigningKey []byte
+	UserSigningKey []byte
+}
+
+func (mach *OlmMachine) ExportCrossSigningKeys() CrossSigningSeeds {
+	return CrossSigningSeeds{
+		MasterKey:      mach.crossSigningKeys.MasterKey.Seed,
+		SelfSigningKey: mach.crossSigningKeys.SelfSigningKey.Seed,
+		UserSigningKey: mach.crossSigningKeys.UserSigningKey.Seed,
+	}
+}
+
+func (mach *OlmMachine) ImportCrossSigningKeys(keys CrossSigningSeeds) (err error) {
+	var keysCache CrossSigningKeysCache
+	if keysCache.MasterKey, err = olm.NewPkSigningFromSeed(keys.MasterKey); err != nil {
+		return
+	}
+	if keysCache.SelfSigningKey, err = olm.NewPkSigningFromSeed(keys.SelfSigningKey); err != nil {
+		return
+	}
+	if keysCache.UserSigningKey, err = olm.NewPkSigningFromSeed(keys.UserSigningKey); err != nil {
+		return
+	}
+
+	mach.Log.Trace("Got cross-signing keys: Master `%v` Self-signing `%v` User-signing `%v`",
+		keysCache.MasterKey.PublicKey, keysCache.SelfSigningKey.PublicKey, keysCache.UserSigningKey.PublicKey)
+
+	mach.crossSigningKeys = &keysCache
+	return
+}
+
 // keysCacheFromSSSSKey retrieves all the cross-signing keys from SSSS using the given SSSS key and stores them in the olm machine.
 func (mach *OlmMachine) keysCacheFromSSSSKey(keyID string, ssssKey []byte) error {
 	masterKey, err := mach.retrieveDecryptXSigningKey(AccountDataMasterKeyType, keyID, ssssKey)
@@ -189,22 +222,11 @@ func (mach *OlmMachine) keysCacheFromSSSSKey(keyID string, ssssKey []byte) error
 		return err
 	}
 
-	var keysCache CrossSigningKeysCache
-	if keysCache.MasterKey, err = olm.NewPkSigningFromSeed(masterKey[:]); err != nil {
-		return err
-	}
-	if keysCache.SelfSigningKey, err = olm.NewPkSigningFromSeed(selfSignKey[:]); err != nil {
-		return err
-	}
-	if keysCache.UserSigningKey, err = olm.NewPkSigningFromSeed(userSignKey[:]); err != nil {
-		return err
-	}
-
-	mach.Log.Trace("Retrieved keys from SSSS: Master `%v` Self-signing `%v` User-signing `%v`",
-		keysCache.MasterKey.PublicKey, keysCache.SelfSigningKey.PublicKey, keysCache.UserSigningKey.PublicKey)
-
-	mach.crossSigningKeys = &keysCache
-	return nil
+	return mach.ImportCrossSigningKeys(CrossSigningSeeds{
+		MasterKey:      masterKey[:],
+		SelfSigningKey: selfSignKey[:],
+		UserSigningKey: userSignKey[:],
+	})
 }
 
 // RetrieveCrossSigningKeysWithPassphrase retrieves the cross-signing keys from SSSS using the given passphrase to decrypt them.
@@ -333,7 +355,7 @@ func (mach *OlmMachine) GenerateAndUploadCrossSigningKeys(userPassword string, p
 	if keysCache.UserSigningKey, err = olm.NewPkSigning(); err != nil {
 		return "", err
 	}
-	mach.Log.Debug("Generated keys: Master: `%v` Self-signing: `%v` User-signing: `%v`",
+	mach.Log.Debug("Generated cross-signing keys: Master: `%v` Self-signing: `%v` User-signing: `%v`",
 		keysCache.MasterKey.PublicKey, keysCache.SelfSigningKey.PublicKey, keysCache.UserSigningKey.PublicKey)
 
 	err = mach.uploadCrossSigningKeysToServer(&keysCache, userPassword)
