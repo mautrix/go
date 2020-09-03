@@ -7,10 +7,20 @@
 package crypto
 
 import (
-	"github.com/pkg/errors"
+	"errors"
+	"fmt"
+
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
+)
+
+var (
+	ErrCrossSigningKeysNotCached = errors.New("cross-signing private keys not in cache")
+	ErrOlmAccountNotLoaded       = errors.New("olm account has not been loaded")
+	ErrSignatureUploadFail       = errors.New("server-side failure uploading signatures")
+	ErrUserNotInQueryResponse    = errors.New("could not find user in query keys response")
+	ErrDeviceNotInQueryResponse  = errors.New("could not find device in query keys response")
 )
 
 func (mach *OlmMachine) storeCrossSigningKeys(crossSigningKeys map[id.UserID]mautrix.CrossSigningKeys, deviceKeys map[id.UserID]map[id.DeviceID]mautrix.DeviceKeys) {
@@ -227,11 +237,10 @@ func (mach *OlmMachine) uploadCrossSigningKeysToServer(keys *CrossSigningKeysCac
 
 // SignUserAndUpload creates a cross-signing signature for a user, stores it and uploads it to the server.
 func (mach *OlmMachine) SignUserAndUpload(userID id.UserID, masterKey id.Ed25519) error {
-	if mach.crossSigningKeys == nil {
-		return errors.New("No cross-signing keys found")
-	}
 	if userID == mach.Client.UserID {
 		return nil
+	} else if mach.crossSigningKeys == nil {
+		return ErrCrossSigningKeysNotCached
 	}
 
 	userSigningKey := mach.crossSigningKeys.UserSigningKey
@@ -244,7 +253,7 @@ func (mach *OlmMachine) SignUserAndUpload(userID id.UserID, masterKey id.Ed25519
 	}
 	signature, err := userSigningKey.SignJSON(masterKeyObj)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to sign JSON: %w", err)
 	}
 	masterKeyObj.Signatures = mautrix.Signatures{
 		mach.Client.UserID: map[id.KeyID]string{
@@ -260,14 +269,13 @@ func (mach *OlmMachine) SignUserAndUpload(userID id.UserID, masterKey id.Ed25519
 	})
 
 	if err != nil {
-		return err
-	}
-	if len(resp.Failures) > 0 {
-		return errors.Errorf("Key uploading failures: %v", resp.Failures)
+		return fmt.Errorf("error while uploading signatures: %w", err)
+	} else if len(resp.Failures) > 0 {
+		return fmt.Errorf("%w: %+v", ErrSignatureUploadFail, resp.Failures)
 	}
 
 	if err := mach.CryptoStore.PutSignature(userID, masterKey, mach.Client.UserID, userSigningKey.PublicKey, signature); err != nil {
-		return err
+		return fmt.Errorf("error storing signature in crypto store: %w", err)
 	}
 
 	return nil
@@ -276,11 +284,9 @@ func (mach *OlmMachine) SignUserAndUpload(userID id.UserID, masterKey id.Ed25519
 // SignOwnMasterKeyAndUpload uses the current account for signing the current user's master key and uploads the signature.
 func (mach *OlmMachine) SignOwnMasterKeyAndUpload() error {
 	if mach.crossSigningKeys == nil {
-		return errors.New("No cross-signing keys found")
-	}
-
-	if mach.account == nil {
-		return errors.New("No Olm account found")
+		return ErrCrossSigningKeysNotCached
+	} else if mach.account == nil {
+		return ErrOlmAccountNotLoaded
 	}
 
 	userID := mach.Client.UserID
@@ -296,7 +302,7 @@ func (mach *OlmMachine) SignOwnMasterKeyAndUpload() error {
 	}
 	signature, err := mach.account.Internal.SignJSON(masterKeyObj)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to sign JSON: %w", err)
 	}
 	masterKeyObj.Signatures = mautrix.Signatures{
 		userID: map[id.KeyID]string{
@@ -312,14 +318,13 @@ func (mach *OlmMachine) SignOwnMasterKeyAndUpload() error {
 	})
 
 	if err != nil {
-		return err
-	}
-	if len(resp.Failures) > 0 {
-		return errors.Errorf("Key uploading failures: %v", resp.Failures)
+		return fmt.Errorf("error while uploading signatures: %w", err)
+	} else if len(resp.Failures) > 0 {
+		return fmt.Errorf("%w: %+v", ErrSignatureUploadFail, resp.Failures)
 	}
 
 	if err := mach.CryptoStore.PutSignature(userID, masterKey, userID, mach.account.SigningKey(), signature); err != nil {
-		return err
+		return fmt.Errorf("error storing signature in crypto store: %w", err)
 	}
 
 	return nil
@@ -328,7 +333,7 @@ func (mach *OlmMachine) SignOwnMasterKeyAndUpload() error {
 // SignOwnDeviceAndUpload creates a cross-signing signature for a device belonging to the current user and uploads it to the server.
 func (mach *OlmMachine) SignOwnDeviceAndUpload(deviceID id.DeviceID) error {
 	if mach.crossSigningKeys == nil {
-		return errors.New("No cross-signing keys found")
+		return ErrCrossSigningKeysNotCached
 	}
 
 	userID := mach.Client.UserID
@@ -340,15 +345,15 @@ func (mach *OlmMachine) SignOwnDeviceAndUpload(deviceID id.DeviceID) error {
 		},
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("error querying device keys for %s: %w", deviceID, err)
 	}
 	userKeys, ok := devicesKeys.DeviceKeys[userID]
 	if !ok {
-		return errors.New("Could not find user in query keys response")
+		return ErrUserNotInQueryResponse
 	}
 	deviceObj, ok := userKeys[deviceID]
 	if !ok {
-		return errors.New("Could not find device in query keys response")
+		return ErrDeviceNotInQueryResponse
 	}
 
 	deviceKeyObj := mautrix.ReqKeysSignatures{
@@ -363,7 +368,7 @@ func (mach *OlmMachine) SignOwnDeviceAndUpload(deviceID id.DeviceID) error {
 
 	signature, err := selfSigningKey.SignJSON(deviceKeyObj)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to sign JSON: %w", err)
 	}
 	deviceKeyObj.Signatures = mautrix.Signatures{
 		userID: map[id.KeyID]string{
@@ -380,14 +385,13 @@ func (mach *OlmMachine) SignOwnDeviceAndUpload(deviceID id.DeviceID) error {
 	})
 
 	if err != nil {
-		return err
-	}
-	if len(resp.Failures) > 0 {
-		return errors.Errorf("Key uploading failures: %v", resp.Failures)
+		return fmt.Errorf("error while uploading signatures: %w", err)
+	} else if len(resp.Failures) > 0 {
+		return fmt.Errorf("%w: %+v", ErrSignatureUploadFail, resp.Failures)
 	}
 
 	if err := mach.CryptoStore.PutSignature(userID, deviceObj.Keys.GetEd25519(deviceID), userID, selfSigningKey.PublicKey, signature); err != nil {
-		return err
+		return fmt.Errorf("error storing signature in crypto store: %w", err)
 	}
 
 	return nil
