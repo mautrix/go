@@ -24,9 +24,10 @@ var (
 	ErrNoKeyFieldInAccountDataEvent   = fmt.Errorf("%w: missing key field in account data event", ErrNoDefaultKeyID)
 	ErrKeyNotFound                    = errors.New("encrypted data for given key ID not found")
 	ErrKeyDataMACMismatch             = errors.New("key data MAC mismatch")
-	ErrStorageKeyMACMismatch          = errors.New("storage key MAC mismatch")
 	ErrNoPassphrase                   = errors.New("no passphrase data has been set for the default key")
 	ErrUnsupportedPassphraseAlgorithm = errors.New("unsupported passphrase KDF algorithm")
+	ErrIncorrectRecoveryKey           = errors.New("incorrect recovery key")
+	ErrInvalidRecoveryKey             = errors.New("invalid recovery key")
 )
 
 // AccountDataKeyType is the type of account data cross-signing keys that can be stored on SSSS.
@@ -105,7 +106,7 @@ func (skd *SSSSKeyData) VerifyKey(key []byte) error {
 	calcMac := utils.HMACSHA256B64(cipher, hmacKey)
 
 	if strings.ReplaceAll(skd.MAC, "=", "") != strings.ReplaceAll(calcMac, "=", "") {
-		return ErrStorageKeyMACMismatch
+		return ErrIncorrectRecoveryKey
 	}
 
 	return nil
@@ -288,7 +289,7 @@ func (mach *OlmMachine) RetrieveCrossSigningKeysWithRecoveryKey(recoveryKey stri
 
 	ssssKey := utils.DecodeBase58RecoveryKey(recoveryKey)
 	if ssssKey == nil {
-		return errors.New("Error decoding recovery key")
+		return ErrInvalidRecoveryKey
 	}
 
 	if err := keyData.VerifyKey(ssssKey); err != nil {
@@ -306,7 +307,7 @@ func (mach *OlmMachine) RetrieveCrossSigningKeysWithRecoveryKey(recoveryKey stri
 // is used. The base58-formatted recovery key is the first return parameter.
 //
 // The account password of the user is required for uploading keys to the server.
-func (mach *OlmMachine) GenerateAndUploadCrossSigningKeys(userPassword string, passphrase string) (string, error) {
+func (mach *OlmMachine) GenerateAndUploadCrossSigningKeys(userPassword, passphrase string) (string, error) {
 	var ssssKey []byte
 	newKeyData := SSSSKeyData{Algorithm: SSSSAlgorithmAESHMACSHA2}
 
