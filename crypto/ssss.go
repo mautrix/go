@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"strings"
 
+	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/crypto/utils"
 )
@@ -59,40 +60,75 @@ type CrossSigningKeysCache struct {
 	UserSigningKey *olm.PkSigning
 }
 
-type ssssPassphraseData struct {
+type SSSSPassphraseData struct {
 	Algorithm  SSSSAlgorithm `json:"algorithm"`
 	Iterations int           `json:"iterations"`
 	Salt       string        `json:"salt"`
 	Bits       int           `json:"bits"`
 }
 
-type ssssKeyData struct {
+// GetKey gets the SSSS key from the passphrase.
+func (spd *SSSSPassphraseData) GetKey(passphrase string) ([]byte, error) {
+	if spd == nil {
+		return nil, ErrNoPassphrase
+	}
+
+	if spd.Algorithm != SSSSAlgorithmPBKDF2 {
+		return nil, fmt.Errorf("%w: %s", ErrUnsupportedPassphraseAlgorithm, spd.Algorithm)
+	}
+
+	bits := 256
+	if spd.Bits != 0 {
+		bits = spd.Bits
+	}
+
+	return utils.PBKDF2SHA512([]byte(passphrase), []byte(spd.Salt), spd.Iterations, bits), nil
+}
+
+type SSSSKeyData struct {
 	Algorithm  SSSSAlgorithm       `json:"algorithm"`
 	IV         string              `json:"iv"`
 	MAC        string              `json:"mac"`
-	Passphrase *ssssPassphraseData `json:"passphrase,omitempty"`
+	Passphrase *SSSSPassphraseData `json:"passphrase,omitempty"`
 }
 
-type ssssEncryptedKeyData struct {
+// VerifyKey verifies the SSSS key is valid by calculating and comparing its MAC.
+func (skd *SSSSKeyData) VerifyKey(key []byte) error {
+	aesKey, hmacKey := utils.DeriveKeysSHA256(key, "")
+
+	var ivBytes [utils.AESCTRIVLength]byte
+	_, _ = base64.StdEncoding.Decode(ivBytes[:], []byte(skd.IV))
+
+	var zeroBytes [utils.AESCTRKeyLength]byte
+	cipher := utils.XorA256CTR(zeroBytes[:], aesKey, ivBytes)
+
+	calcMac := utils.HMACSHA256B64(cipher, hmacKey)
+
+	if strings.ReplaceAll(skd.MAC, "=", "") != strings.ReplaceAll(calcMac, "=", "") {
+		return ErrStorageKeyMACMismatch
+	}
+
+	return nil
+}
+
+type SSSSEncryptedKeyData struct {
 	Ciphertext string `json:"ciphertext"`
 	IV         string `json:"iv"`
 	MAC        string `json:"mac"`
 }
 
-type ssssEncryptedData struct {
-	Encrypted map[string]ssssEncryptedKeyData `json:"encrypted"`
+type SSSSEncryptedData struct {
+	Encrypted map[string]SSSSEncryptedKeyData `json:"encrypted"`
 }
 
-// getDefaultKeyID retrieves the default key ID for this account from SSSS.
-func (mach *OlmMachine) getDefaultKeyID() (string, error) {
+// GetDefaultSSSSKeyID retrieves the default key ID for this account from SSSS.
+func (mach *OlmMachine) GetDefaultSSSSKeyID() (string, error) {
 	var data map[string]string
 	err := mach.Client.GetAccountData(string(AccountDataDefaultKeyType), &data)
 	if err != nil {
-		// TODO add this check after HTTPError is moved or supports errors.Is
-		// Currently it's commented out to avoid cyclic imports
-		//if httpErr, ok := err.(*mautrix.HTTPError); ok && httpErr.RespError != nil && httpErr.RespError.ErrCode == "M_NOT_FOUND" {
-		//	return "", ErrNoDefaultKeyAccountDataEvent
-		//}
+		if httpErr, ok := err.(mautrix.HTTPError); ok && httpErr.RespError != nil && httpErr.RespError.ErrCode == "M_NOT_FOUND" {
+			return "", ErrNoDefaultKeyAccountDataEvent
+		}
 		return "", fmt.Errorf("failed to get default key account data from server: %w", err)
 	}
 	keyID, ok := data["key"]
@@ -105,7 +141,7 @@ func (mach *OlmMachine) getDefaultKeyID() (string, error) {
 // retrieveDecryptXSigningKey retrieves the requested cross-signing key from SSSS and decrypts it using the given SSSS key.
 func (mach *OlmMachine) retrieveDecryptXSigningKey(keyName AccountDataKeyType, keyID string, ssssKey []byte) ([utils.AESCTRKeyLength]byte, error) {
 	var decryptedKey [utils.AESCTRKeyLength]byte
-	var encData ssssEncryptedData
+	var encData SSSSEncryptedData
 
 	// retrieve and parse the account data for this key type from SSSS
 	err := mach.Client.GetAccountData(string(keyName), &encData)
@@ -147,37 +183,30 @@ func (mach *OlmMachine) retrieveDecryptXSigningKey(keyName AccountDataKeyType, k
 	return decryptedKey, nil
 }
 
-// retrieveSSSSKeyData retrieves the data for the requested key from SSSS.
-func (mach *OlmMachine) retrieveSSSSKeyData(keyID string) (*ssssKeyData, error) {
-	var keyData ssssKeyData
-	err := mach.Client.GetAccountData("m.secret_storage.key."+keyID, &keyData)
-	return &keyData, err
+// RetrieveSSSSKeyData retrieves the data for the requested key from SSSS.
+func (mach *OlmMachine) RetrieveSSSSKeyData(keyID string) (keyData *SSSSKeyData, err error) {
+	keyData = &SSSSKeyData{}
+	err = mach.Client.GetAccountData(fmt.Sprintf("m.secret_storage.key.%s", keyID), keyData)
+	return
 }
 
-// verifySSSSKey verifies the SSSS key is valid by calculating and comparing its MAC.
-func verifySSSSKey(ssssKey []byte, iv, mac string) error {
-	aesKey, hmacKey := utils.DeriveKeysSHA256(ssssKey, "")
-
-	var ivBytes [utils.AESCTRIVLength]byte
-	decodedIV, _ := base64.StdEncoding.DecodeString(iv)
-	copy(ivBytes[:], decodedIV)
-
-	var zeroBytes [utils.AESCTRKeyLength]byte
-	cipher := utils.XorA256CTR(zeroBytes[:], aesKey, ivBytes)
-
-	calcMac := utils.HMACSHA256B64(cipher, hmacKey)
-
-	if strings.ReplaceAll(mac, "=", "") != strings.ReplaceAll(calcMac, "=", "") {
-		return ErrStorageKeyMACMismatch
+func (mach *OlmMachine) RetrieveDefaultSSSSKeyData() (string, *SSSSKeyData, error) {
+	keyID, err := mach.GetDefaultSSSSKeyID()
+	if err != nil {
+		return "", nil, err
 	}
-
-	return nil
+	keyData, err := mach.RetrieveSSSSKeyData(keyID)
+	return keyID, keyData, err
 }
 
 type CrossSigningSeeds struct {
 	MasterKey      []byte
 	SelfSigningKey []byte
 	UserSigningKey []byte
+}
+
+func (mach *OlmMachine) GetCachedCrossSigningKeys() *CrossSigningKeysCache {
+	return mach.crossSigningKeys
 }
 
 func (mach *OlmMachine) ExportCrossSigningKeys() CrossSigningSeeds {
@@ -208,7 +237,7 @@ func (mach *OlmMachine) ImportCrossSigningKeys(keys CrossSigningSeeds) (err erro
 }
 
 // keysCacheFromSSSSKey retrieves all the cross-signing keys from SSSS using the given SSSS key and stores them in the olm machine.
-func (mach *OlmMachine) keysCacheFromSSSSKey(keyID string, ssssKey []byte) error {
+func (mach *OlmMachine) RetrieveCrossSigningKeys(keyID string, ssssKey []byte) error {
 	masterKey, err := mach.retrieveDecryptXSigningKey(AccountDataMasterKeyType, keyID, ssssKey)
 	if err != nil {
 		return err
@@ -231,50 +260,28 @@ func (mach *OlmMachine) keysCacheFromSSSSKey(keyID string, ssssKey []byte) error
 
 // RetrieveCrossSigningKeysWithPassphrase retrieves the cross-signing keys from SSSS using the given passphrase to decrypt them.
 func (mach *OlmMachine) RetrieveCrossSigningKeysWithPassphrase(passphrase string) error {
-	keyID, err := mach.getDefaultKeyID()
-	if err != nil {
-		return err
-	}
-	mach.Log.Debug("Default SSSS key ID: %v", keyID)
-
-	keyData, err := mach.retrieveSSSSKeyData(keyID)
+	keyID, keyData, err := mach.RetrieveDefaultSSSSKeyData()
 	if err != nil {
 		return err
 	}
 
-	if keyData.Passphrase == nil {
-		return ErrNoPassphrase
+	ssssKey, err := keyData.Passphrase.GetKey(passphrase)
+	if err != nil {
+		return err
 	}
 
-	if keyData.Passphrase.Algorithm != SSSSAlgorithmPBKDF2 {
-		return fmt.Errorf("%w: %s", ErrUnsupportedPassphraseAlgorithm, keyData.Passphrase.Algorithm)
-	}
-
-	bits := 256
-	if keyData.Passphrase.Bits != 0 {
-		bits = keyData.Passphrase.Bits
-	}
-
-	ssssKey := utils.PBKDF2SHA512([]byte(passphrase), []byte(keyData.Passphrase.Salt), keyData.Passphrase.Iterations, bits)
-
-	if err := verifySSSSKey(ssssKey, keyData.IV, keyData.MAC); err != nil {
+	if err := keyData.VerifyKey(ssssKey); err != nil {
 		return err
 	}
 
 	mach.Log.Debug("Retrieved and verified SSSS key from passphrase")
 
-	return mach.keysCacheFromSSSSKey(keyID, ssssKey)
+	return mach.RetrieveCrossSigningKeys(keyID, ssssKey)
 }
 
 // RetrieveCrossSigningKeysWithRecoveryKey retrieves the cross-signing keys from SSSS using the given recovery key to decrypt them.
 func (mach *OlmMachine) RetrieveCrossSigningKeysWithRecoveryKey(recoveryKey string) error {
-	keyID, err := mach.getDefaultKeyID()
-	if err != nil {
-		return err
-	}
-	mach.Log.Debug("Default SSSS key ID: %v", keyID)
-
-	keyData, err := mach.retrieveSSSSKeyData(keyID)
+	keyID, keyData, err := mach.RetrieveDefaultSSSSKeyData()
 	if err != nil {
 		return err
 	}
@@ -284,13 +291,13 @@ func (mach *OlmMachine) RetrieveCrossSigningKeysWithRecoveryKey(recoveryKey stri
 		return errors.New("Error decoding recovery key")
 	}
 
-	if err := verifySSSSKey(ssssKey, keyData.IV, keyData.MAC); err != nil {
+	if err := keyData.VerifyKey(ssssKey); err != nil {
 		return err
 	}
 
 	mach.Log.Debug("Retrieved and verified SSSS key from recovery key")
 
-	return mach.keysCacheFromSSSSKey(keyID, ssssKey)
+	return mach.RetrieveCrossSigningKeys(keyID, ssssKey)
 }
 
 // GenerateAndUploadCrossSigningKeys generates a new key with all corresponding cross-signing keys.
@@ -301,7 +308,7 @@ func (mach *OlmMachine) RetrieveCrossSigningKeysWithRecoveryKey(recoveryKey stri
 // The account password of the user is required for uploading keys to the server.
 func (mach *OlmMachine) GenerateAndUploadCrossSigningKeys(userPassword string, passphrase string) (string, error) {
 	var ssssKey []byte
-	newKeyData := ssssKeyData{Algorithm: SSSSAlgorithmAESHMACSHA2}
+	newKeyData := SSSSKeyData{Algorithm: SSSSAlgorithmAESHMACSHA2}
 
 	if len(passphrase) > 0 {
 		// if a passphrase is given use it to generate an SSSS key and save the parameters used for PBKDF2
@@ -309,16 +316,19 @@ func (mach *OlmMachine) GenerateAndUploadCrossSigningKeys(userPassword string, p
 		if _, err := rand.Read(saltBytes[:]); err != nil {
 			panic(err)
 		}
-		passData := ssssPassphraseData{
+		newKeyData.Passphrase = &SSSSPassphraseData{
 			Algorithm:  SSSSAlgorithmPBKDF2,
 			Iterations: 500000,
 			Bits:       256,
 			Salt:       base64.StdEncoding.EncodeToString(saltBytes[:]),
 		}
-		newKeyData.Passphrase = &passData
 
 		mach.Log.Debug("Generating SSSS key from passphrase")
-		ssssKey = utils.PBKDF2SHA512([]byte(passphrase), []byte(passData.Salt), passData.Iterations, passData.Bits)
+		var err error
+		ssssKey, err = newKeyData.Passphrase.GetKey(passphrase)
+		if err != nil {
+			panic(err)
+		}
 	} else {
 		// if no passphrase generate a random SSSS key
 		mach.Log.Debug("Generating random SSSS key")
@@ -414,8 +424,8 @@ func (mach *OlmMachine) uploadCrossSigningSingleKey(keyID string, keyName Accoun
 
 	mach.Log.Debug("Calculated MAC for key %v with ID `%v`: `%v`", keyName, keyID, macStr)
 
-	encryptedXKeyData := ssssEncryptedData{
-		Encrypted: map[string]ssssEncryptedKeyData{
+	encryptedXKeyData := SSSSEncryptedData{
+		Encrypted: map[string]SSSSEncryptedKeyData{
 			keyID: {
 				Ciphertext: base64.StdEncoding.EncodeToString(encrypted),
 				IV:         ivStr,
