@@ -159,6 +159,7 @@ func (mach *OlmMachine) IsUserTrusted(userID id.UserID) bool {
 // uploadCrossSigningKeysToServer uploads the given cached cross-signing keys to the server.
 // It also creates and uploads the appropriate signatures for each key.
 // It requires the user password for completing user-interactive authorization with the server.
+// TODO support SSO as an alternative for password auth
 func (mach *OlmMachine) uploadCrossSigningKeysToServer(keys *CrossSigningKeysCache, userPassword string) error {
 	userID := mach.Client.UserID
 	masterKeyID := id.NewKeyID(id.KeyAlgorithmEd25519, keys.MasterKey.PublicKey.String())

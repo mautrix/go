@@ -8,33 +8,39 @@ package crypto
 
 import (
 	"encoding/json"
+	"errors"
 	"time"
 
-	"github.com/pkg/errors"
 	"maunium.net/go/mautrix/crypto/canonicaljson"
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
+var (
+	ErrNoVerificationFromDevice = errors.New("from_device field is empty")
+	ErrNoVerificationMethods    = errors.New("verification method list is empty")
+)
+
 // ProcessInRoomVerification is a callback that is to be called when a client receives a message
 // related to in-room verification.
-func (mach *OlmMachine) ProcessInRoomVerification(evt *event.Event, relatesTo *event.RelatesTo) error {
+func (mach *OlmMachine) ProcessInRoomVerification(evt *event.Event) error {
 	if evt.Sender == mach.Client.UserID {
 		// nothing to do if the message is our own
 		return nil
 	}
-	if relatesTo == nil && evt.Type != event.EventMessage {
-		return errors.New("Missing relates_to information")
-	}
+
 	switch content := evt.Content.Parsed.(type) {
 	case *event.MessageEventContent:
 		if content.MsgType == event.MsgVerificationRequest {
+			if content.RelatesTo == nil {
+				return nil
+			}
 			if content.FromDevice == "" {
-				return errors.New("from_device field is empty")
+				return ErrNoVerificationFromDevice
 			}
 			if content.Methods == nil {
-				return errors.New("methods field is empty")
+				return ErrNoVerificationMethods
 			}
 
 			newContent := &event.VerificationRequestEventContent{
@@ -46,18 +52,17 @@ func (mach *OlmMachine) ProcessInRoomVerification(evt *event.Event, relatesTo *e
 			mach.handleVerificationRequest(evt.Sender, newContent, evt.ID.String(), evt.RoomID)
 		}
 	case *event.VerificationStartEventContent:
-		content.RelatesTo = &event.RelatesTo{Type: event.RelReference, EventID: relatesTo.EventID}
-		mach.handleVerificationStart(evt.Sender, content, relatesTo.EventID.String(), 10*time.Minute, evt.RoomID)
+		mach.handleVerificationStart(evt.Sender, content, content.RelatesTo.EventID.String(), 10*time.Minute, evt.RoomID)
 	case *event.VerificationReadyEventContent:
-		mach.handleInRoomVerificationReady(evt.Sender, evt.RoomID, content, relatesTo.EventID.String())
+		mach.handleInRoomVerificationReady(evt.Sender, evt.RoomID, content, content.RelatesTo.EventID.String())
 	case *event.VerificationAcceptEventContent:
-		mach.handleVerificationAccept(evt.Sender, content, relatesTo.EventID.String())
+		mach.handleVerificationAccept(evt.Sender, content, content.RelatesTo.EventID.String())
 	case *event.VerificationKeyEventContent:
-		mach.handleVerificationKey(evt.Sender, content, relatesTo.EventID.String())
+		mach.handleVerificationKey(evt.Sender, content, content.RelatesTo.EventID.String())
 	case *event.VerificationMacEventContent:
-		mach.handleVerificationMAC(evt.Sender, content, relatesTo.EventID.String())
+		mach.handleVerificationMAC(evt.Sender, content, content.RelatesTo.EventID.String())
 	case *event.VerificationCancelEventContent:
-		mach.handleVerificationCancel(evt.Sender, content, relatesTo.EventID.String())
+		mach.handleVerificationCancel(evt.Sender, content, content.RelatesTo.EventID.String())
 	}
 	return nil
 }
@@ -84,7 +89,10 @@ func (mach *OlmMachine) SendInRoomSASVerificationRequest(roomID id.RoomID, toUse
 	}
 
 	resp, err := mach.Client.SendMessageEvent(roomID, event.EventMessage, content)
-	return resp.EventID.String(), err
+	if err != nil {
+		return "", err
+	}
+	return resp.EventID.String(), nil
 }
 
 // SendInRoomSASVerificationReady is used to manually send an in-room SAS verification ready message to another user.

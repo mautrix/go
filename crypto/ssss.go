@@ -9,36 +9,48 @@ package crypto
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
+	"fmt"
 	"strings"
 
-	"github.com/pkg/errors"
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/crypto/utils"
+)
+
+var (
+	ErrNoDefaultKeyID                 = errors.New("could not find default key ID")
+	ErrNoDefaultKeyAccountDataEvent   = fmt.Errorf("%w: no %s event in account data", ErrNoDefaultKeyID, AccountDataDefaultKeyType)
+	ErrNoKeyFieldInAccountDataEvent   = fmt.Errorf("%w: missing key field in account data event", ErrNoDefaultKeyID)
+	ErrKeyNotFound                    = errors.New("encrypted data for given key ID not found")
+	ErrKeyDataMACMismatch             = errors.New("key data MAC mismatch")
+	ErrStorageKeyMACMismatch          = errors.New("storage key MAC mismatch")
+	ErrNoPassphrase                   = errors.New("no passphrase data has been set for the default key")
+	ErrUnsupportedPassphraseAlgorithm = errors.New("unsupported passphrase KDF algorithm")
 )
 
 // AccountDataKeyType is the type of account data cross-signing keys that can be stored on SSSS.
 type AccountDataKeyType string
 
-// AccountDataDefaultKeyType is the type for fetching the default key's ID.
-var AccountDataDefaultKeyType AccountDataKeyType = "m.secret_storage.default_key"
-
-// AccountDataMasterKeyType is the type for master cross-signing keys.
-var AccountDataMasterKeyType AccountDataKeyType = "m.cross_signing.master"
-
-// AccountDataUserSigningKeyType is the type for user signing keys.
-var AccountDataUserSigningKeyType AccountDataKeyType = "m.cross_signing.user_signing"
-
-// AccountDataSelfSigningKeyType is the type for self signing keys.
-var AccountDataSelfSigningKeyType AccountDataKeyType = "m.cross_signing.self_signing"
+var (
+	// AccountDataDefaultKeyType is the type for fetching the default key's ID.
+	AccountDataDefaultKeyType AccountDataKeyType = "m.secret_storage.default_key"
+	// AccountDataMasterKeyType is the type for master cross-signing keys.
+	AccountDataMasterKeyType AccountDataKeyType = "m.cross_signing.master"
+	// AccountDataUserSigningKeyType is the type for user signing keys.
+	AccountDataUserSigningKeyType AccountDataKeyType = "m.cross_signing.user_signing"
+	// AccountDataSelfSigningKeyType is the type for self signing keys.
+	AccountDataSelfSigningKeyType AccountDataKeyType = "m.cross_signing.self_signing"
+)
 
 // SSSSAlgorithm is the type for algorithms used in SSSS.
 type SSSSAlgorithm string
 
-// SSSSAlgorithmPBKDF2 is the algorithm used for deriving a key from an SSSS passphrase.
-var SSSSAlgorithmPBKDF2 SSSSAlgorithm = "m.pbkdf2"
-
-// SSSSAlgorithmAESHMACSHA2 is the algorithm used for encrypting and verifying secrets stored on SSSS.
-var SSSSAlgorithmAESHMACSHA2 SSSSAlgorithm = "m.secret_storage.v1.aes-hmac-sha2"
+var (
+	// SSSSAlgorithmPBKDF2 is the algorithm used for deriving a key from an SSSS passphrase.
+	SSSSAlgorithmPBKDF2 SSSSAlgorithm = "m.pbkdf2"
+	// SSSSAlgorithmAESHMACSHA2 is the algorithm used for encrypting and verifying secrets stored on SSSS.
+	SSSSAlgorithmAESHMACSHA2 SSSSAlgorithm = "m.secret_storage.v1.aes-hmac-sha2"
+)
 
 // CrossSigningKeysCache holds the three cross-signing keys for the current user.
 type CrossSigningKeysCache struct {
@@ -76,11 +88,16 @@ func (mach *OlmMachine) getDefaultKeyID() (string, error) {
 	var data map[string]string
 	err := mach.Client.GetAccountData(string(AccountDataDefaultKeyType), &data)
 	if err != nil {
-		return "", err
+		// TODO add this check after HTTPError is moved or supports errors.Is
+		// Currently it's commented out to avoid cyclic imports
+		//if httpErr, ok := err.(*mautrix.HTTPError); ok && httpErr.RespError != nil && httpErr.RespError.ErrCode == "M_NOT_FOUND" {
+		//	return "", ErrNoDefaultKeyAccountDataEvent
+		//}
+		return "", fmt.Errorf("failed to get default key account data from server: %w", err)
 	}
 	keyID, ok := data["key"]
 	if !ok {
-		return "", errors.New("Could not get default key ID")
+		return "", ErrNoKeyFieldInAccountDataEvent
 	}
 	return keyID, nil
 }
@@ -98,7 +115,7 @@ func (mach *OlmMachine) retrieveDecryptXSigningKey(keyName AccountDataKeyType, k
 
 	keyEncData, ok := encData.Encrypted[keyID]
 	if !ok {
-		return decryptedKey, errors.New("Encrypted data for this key not found")
+		return decryptedKey, ErrKeyNotFound
 	}
 
 	var ivBytes [utils.AESCTRIVLength]byte
@@ -116,7 +133,7 @@ func (mach *OlmMachine) retrieveDecryptXSigningKey(keyName AccountDataKeyType, k
 	// compare the stored MAC with the one we calculated from the ciphertext
 	calcMac := utils.HMACSHA256B64(ciphertextBytes, hmacKey)
 	if strings.ReplaceAll(keyEncData.MAC, "=", "") != strings.ReplaceAll(calcMac, "=", "") {
-		return decryptedKey, errors.New("Key data MAC mismatch")
+		return decryptedKey, ErrKeyDataMACMismatch
 	}
 
 	// use the derived AES key to decrypt the requested cross-signing key seed
@@ -151,7 +168,7 @@ func verifySSSSKey(ssssKey []byte, iv, mac string) error {
 	calcMac := utils.HMACSHA256B64(cipher, hmacKey)
 
 	if strings.ReplaceAll(mac, "=", "") != strings.ReplaceAll(calcMac, "=", "") {
-		return errors.New("Storage key MAC mismatch")
+		return ErrStorageKeyMACMismatch
 	}
 
 	return nil
@@ -204,11 +221,11 @@ func (mach *OlmMachine) RetrieveCrossSigningKeysWithPassphrase(passphrase string
 	}
 
 	if keyData.Passphrase == nil {
-		return errors.New("No passphrase data in default key")
+		return ErrNoPassphrase
 	}
 
 	if keyData.Passphrase.Algorithm != SSSSAlgorithmPBKDF2 {
-		return errors.New("Unexpected passphrase KDF algorithm")
+		return fmt.Errorf("%w: %s", ErrUnsupportedPassphraseAlgorithm, keyData.Passphrase.Algorithm)
 	}
 
 	bits := 256
@@ -255,10 +272,12 @@ func (mach *OlmMachine) RetrieveCrossSigningKeysWithRecoveryKey(recoveryKey stri
 }
 
 // GenerateAndUploadCrossSigningKeys generates a new key with all corresponding cross-signing keys.
-// A passphrase can optionally be given for generating the SSSS key, otherwise a random key is used.
-// The recovery key for retrieving the SSSS key is returned.
-// It requires the user password for uploading the keys to the server.
-func (mach *OlmMachine) GenerateAndUploadCrossSigningKeys(userPassword string, passphrase ...string) (string, error) {
+//
+// A passphrase can be provided to generate the SSSS key. If the passphrase is empty, a random key
+// is used. The base58-formatted recovery key is the first return parameter.
+//
+// The account password of the user is required for uploading keys to the server.
+func (mach *OlmMachine) GenerateAndUploadCrossSigningKeys(userPassword string, passphrase string) (string, error) {
 	var ssssKey []byte
 	newKeyData := ssssKeyData{Algorithm: SSSSAlgorithmAESHMACSHA2}
 
@@ -277,7 +296,7 @@ func (mach *OlmMachine) GenerateAndUploadCrossSigningKeys(userPassword string, p
 		newKeyData.Passphrase = &passData
 
 		mach.Log.Debug("Generating SSSS key from passphrase")
-		ssssKey = utils.PBKDF2SHA512([]byte(passphrase[0]), []byte(passData.Salt), passData.Iterations, passData.Bits)
+		ssssKey = utils.PBKDF2SHA512([]byte(passphrase), []byte(passData.Salt), passData.Iterations, passData.Bits)
 	} else {
 		// if no passphrase generate a random SSSS key
 		mach.Log.Debug("Generating random SSSS key")
@@ -317,7 +336,10 @@ func (mach *OlmMachine) GenerateAndUploadCrossSigningKeys(userPassword string, p
 	mach.Log.Debug("Generated keys: Master: `%v` Self-signing: `%v` User-signing: `%v`",
 		keysCache.MasterKey.PublicKey, keysCache.SelfSigningKey.PublicKey, keysCache.UserSigningKey.PublicKey)
 
-	mach.uploadCrossSigningKeysToServer(&keysCache, userPassword)
+	err = mach.uploadCrossSigningKeysToServer(&keysCache, userPassword)
+	if err != nil {
+		return "", fmt.Errorf("failed to upload cross-signing keys: %w", err)
+	}
 
 	// generate a key ID for this SSSS key and store the SSSS key info
 	var genKeyIDBytes [24]byte
