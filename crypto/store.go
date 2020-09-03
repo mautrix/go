@@ -194,6 +194,8 @@ func NewGobStore(path string) (*GobStore, error) {
 		OutGroupSessions:      make(map[id.RoomID]*OutboundGroupSession),
 		MessageIndices:        make(map[messageIndexKey]messageIndexValue),
 		Devices:               make(map[id.UserID]map[id.DeviceID]*DeviceIdentity),
+		CrossSigningKeys:      make(map[id.UserID]map[id.CrossSigningUsage]id.Ed25519),
+		KeySignatures:         make(map[id.UserID]map[id.Ed25519]map[id.UserID]map[id.Ed25519]string),
 	}
 	return gs, gs.load()
 }
