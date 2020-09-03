@@ -173,7 +173,7 @@ func (mach *OlmMachine) handleVerificationStart(userID id.UserID, content *event
 }
 
 func (mach *OlmMachine) actuallyStartVerification(userID id.UserID, content *event.VerificationStartEventContent, otherDevice *DeviceIdentity, transactionID string, timeout time.Duration, inRoomID id.RoomID) {
-	resp, hooks := mach.AcceptVerificationFrom(transactionID, otherDevice)
+	resp, hooks := mach.AcceptVerificationFrom(transactionID, otherDevice, inRoomID)
 	if resp == AcceptRequest {
 		sasMethods := commonSASMethods(hooks, content.ShortAuthenticationString)
 		if len(sasMethods) == 0 {
@@ -560,7 +560,7 @@ func (mach *OlmMachine) handleVerificationRequest(userID id.UserID, content *eve
 		}
 		return
 	}
-	resp, hooks := mach.AcceptVerificationFrom(transactionID, otherDevice)
+	resp, hooks := mach.AcceptVerificationFrom(transactionID, otherDevice, inRoomID)
 	if resp == AcceptRequest {
 		mach.Log.Debug("Accepting SAS verification %v from %v of user %v", transactionID, otherDevice.DeviceID, otherDevice.UserID)
 		if inRoomID == "" {
