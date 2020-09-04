@@ -202,7 +202,10 @@ func (parser *HTMLParser) tagToString(node *html.Node, stripLinebreak bool, ctx 
 		if parser.MonospaceBlockConverter != nil {
 			return parser.MonospaceBlockConverter(preStr, language, ctx)
 		}
-		return fmt.Sprintf("```%s\n%s\n```", language, preStr)
+		if len(preStr) == 0 || preStr[len(preStr)-1] != '\n' {
+			preStr += "\n"
+		}
+		return fmt.Sprintf("```%s\n%s```", language, preStr)
 	default:
 		return parser.nodeToTagAwareString(node.FirstChild, stripLinebreak, ctx)
 	}
