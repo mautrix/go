@@ -1,5 +1,5 @@
 // Copyright (C) 2017 Tulir Asokan
-// Copyright (C) 2018 Luca Weiss
+// Copyright (C) 2018-2020 Luca Weiss
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -20,6 +20,8 @@ import (
 	"flag"
 	"fmt"
 	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/event"
+	"os"
 )
 
 var homeserver = flag.String("homeserver", "https://matrix.org", "Matrix homeserver")
@@ -28,24 +30,33 @@ var password = flag.String("password", "", "Matrix password")
 
 func main() {
 	flag.Parse()
+	if *username == "" || *password == "" {
+		_, _ = fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
+		flag.PrintDefaults()
+		os.Exit(1)
+	}
+
 	fmt.Println("Logging to", *homeserver, "as", *username)
 	client, err := mautrix.NewClient(*homeserver, "", "")
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-	resp, err := client.Login(&mautrix.ReqLogin{Type: "m.login.password", User: *username, Password: *password})
+	_, err = client.Login(&mautrix.ReqLogin{
+		Type:             "m.login.password",
+		Identifier:       mautrix.UserIdentifier{Type: mautrix.IdentifierTypeUser, User: *username},
+		Password:         *password,
+		StoreCredentials: true,
+	})
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-	client.SetCredentials(resp.UserID, resp.AccessToken)
-
 	fmt.Println("Login successful")
 
 	syncer := client.Syncer.(*mautrix.DefaultSyncer)
-	syncer.OnEventType(mautrix.EventMessage, func(evt *mautrix.Event) {
-		fmt.Printf("<%[1]s> %[4]s (%[2]s/%[3]s)\n", evt.Sender, evt.Type.String(), evt.ID, evt.Content.Body)
+	syncer.OnEventType(event.EventMessage, func(source mautrix.EventSource, evt *event.Event) {
+		fmt.Printf("<%[1]s> %[4]s (%[2]s/%[3]s)\n", evt.Sender, evt.Type.String(), evt.ID, evt.Content.AsMessage().Body)
 	})
 
 	err = client.Sync()
