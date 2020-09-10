@@ -17,6 +17,8 @@ import (
 
 var (
 	ErrCrossSigningKeysNotCached = errors.New("cross-signing private keys not in cache")
+	ErrUserSigningKeyNotCached = errors.New("user-signing private key not in cache")
+	ErrSelfSigningKeyNotCached = errors.New("self-signing private key not in cache")
 	ErrOlmAccountNotLoaded       = errors.New("olm account has not been loaded")
 	ErrSignatureUploadFail       = errors.New("server-side failure uploading signatures")
 	ErrUserNotInQueryResponse    = errors.New("could not find user in query keys response")
@@ -166,11 +168,8 @@ func (mach *OlmMachine) IsUserTrusted(userID id.UserID) bool {
 	return sigExists
 }
 
-// uploadCrossSigningKeysToServer uploads the given cached cross-signing keys to the server.
-// It also creates and uploads the appropriate signatures for each key.
-// It requires the user password for completing user-interactive authorization with the server.
-// TODO support SSO as an alternative for password auth
-func (mach *OlmMachine) uploadCrossSigningKeysToServer(keys *CrossSigningKeysCache, userPassword string) error {
+// UploadSignedCrossSigningKeys signs and uploads the given cached cross-signing keys to the server.
+func (mach *OlmMachine) UploadSignedCrossSigningKeys(keys *CrossSigningKeysCache, uiaCallback mautrix.UIACallback) error {
 	userID := mach.Client.UserID
 	masterKeyID := id.NewKeyID(id.KeyAlgorithmEd25519, keys.MasterKey.PublicKey.String())
 	masterKey := mautrix.CrossSigningKeys{
@@ -190,14 +189,13 @@ func (mach *OlmMachine) uploadCrossSigningKeysToServer(keys *CrossSigningKeysCac
 	}
 	selfSig, err := keys.MasterKey.SignJSON(selfKey)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to sign self-signing key: %w", err)
 	}
 	selfKey.Signatures = map[id.UserID]map[id.KeyID]string{
 		userID: {
 			masterKeyID: selfSig,
 		},
 	}
-	mach.Log.Debug("Self-signing key signature: %v", selfSig)
 
 	userKey := mautrix.CrossSigningKeys{
 		UserID: userID,
@@ -208,39 +206,27 @@ func (mach *OlmMachine) uploadCrossSigningKeysToServer(keys *CrossSigningKeysCac
 	}
 	userSig, err := keys.MasterKey.SignJSON(userKey)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to sign user-signing key: %w", err)
 	}
 	userKey.Signatures = map[id.UserID]map[id.KeyID]string{
 		userID: {
 			masterKeyID: userSig,
 		},
 	}
-	mach.Log.Debug("User-signing key signature: %v", userSig)
 
-	req := &mautrix.UploadCrossSigningKeysReq{
+	return mach.Client.UploadCrossSigningKeys(&mautrix.UploadCrossSigningKeysReq{
 		Master:      masterKey,
 		SelfSigning: selfKey,
 		UserSigning: userKey,
-	}
-
-	return mach.Client.UploadCrossSigningKeys(req, func(uiResp *mautrix.RespUserInteractive) interface{} {
-		return mautrix.ReqUIAuthLogin{
-			BaseAuthData: mautrix.BaseAuthData{
-				Type:    mautrix.AuthTypePassword,
-				Session: uiResp.Session,
-			},
-			User:     mach.Client.UserID.String(),
-			Password: userPassword,
-		}
-	})
+	}, uiaCallback)
 }
 
 // SignUserAndUpload creates a cross-signing signature for a user, stores it and uploads it to the server.
 func (mach *OlmMachine) SignUserAndUpload(userID id.UserID, masterKey id.Ed25519) error {
 	if userID == mach.Client.UserID {
 		return nil
-	} else if mach.crossSigningKeys == nil {
-		return ErrCrossSigningKeysNotCached
+	} else if mach.crossSigningKeys == nil || mach.crossSigningKeys.UserSigningKey == nil {
+		return ErrUserSigningKeyNotCached
 	}
 
 	userSigningKey := mach.crossSigningKeys.UserSigningKey
@@ -332,8 +318,8 @@ func (mach *OlmMachine) SignOwnMasterKeyAndUpload() error {
 
 // SignOwnDeviceAndUpload creates a cross-signing signature for a device belonging to the current user and uploads it to the server.
 func (mach *OlmMachine) SignOwnDeviceAndUpload(deviceID id.DeviceID) error {
-	if mach.crossSigningKeys == nil {
-		return ErrCrossSigningKeysNotCached
+	if mach.crossSigningKeys == nil || mach.crossSigningKeys.SelfSigningKey == nil {
+		return ErrSelfSigningKeyNotCached
 	}
 
 	userID := mach.Client.UserID

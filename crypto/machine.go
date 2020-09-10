@@ -13,6 +13,7 @@ import (
 	"github.com/pkg/errors"
 
 	"maunium.net/go/mautrix/crypto/olm"
+	"maunium.net/go/mautrix/crypto/ssss"
 	"maunium.net/go/mautrix/id"
 
 	"maunium.net/go/mautrix"
@@ -31,6 +32,7 @@ type Logger interface {
 // OlmMachine is the main struct for handling Matrix end-to-end encryption.
 type OlmMachine struct {
 	Client *mautrix.Client
+	SSSS   *ssss.Machine
 	Log    Logger
 
 	CryptoStore Store
@@ -67,6 +69,7 @@ type StateStore interface {
 func NewOlmMachine(client *mautrix.Client, log Logger, cryptoStore Store, stateStore StateStore) *OlmMachine {
 	mach := &OlmMachine{
 		Client:      client,
+		SSSS:        ssss.NewSSSSMachine(client),
 		Log:         log,
 		CryptoStore: cryptoStore,
 		StateStore:  stateStore,
