@@ -54,14 +54,6 @@ type Client struct {
 	syncingID uint32 // Identifies the current Sync. Only one Sync can be active at any given time.
 }
 
-// HTTPError An HTTP Error response, which may wrap an underlying native Go Error.
-type HTTPError struct {
-	WrappedError error
-	RespError    *RespError
-	Message      string
-	Code         int
-}
-
 type ClientWellKnown struct {
 	Homeserver     HomeserverInfo     `json:"m.homeserver"`
 	IdentityServer IdentityServerInfo `json:"m.identity_server"`
@@ -114,18 +106,6 @@ func DiscoverClientAPI(serverName string) (*ClientWellKnown, error) {
 	}
 
 	return &wellKnown, nil
-}
-
-func (e HTTPError) Error() string {
-	var wrappedErrMsg string
-	if e.WrappedError != nil {
-		wrappedErrMsg = e.WrappedError.Error()
-	}
-	return fmt.Sprintf("msg=%s code=%d wrapped=%s", e.Message, e.Code, wrappedErrMsg)
-}
-
-func (e HTTPError) Unwrap() error {
-	return e.WrappedError
 }
 
 // BuildURL builds a URL with the Client's homserver/prefix/access_token set already.
@@ -294,7 +274,10 @@ func (cli *Client) MakeFullRequest(method string, httpURL string, headers http.H
 		var jsonStr []byte
 		jsonStr, err = json.Marshal(reqBody)
 		if err != nil {
-			return nil, err
+			return nil, HTTPError{
+				Message:      "failed to marshal JSON",
+				WrappedError: err,
+			}
 		}
 		logBody = string(jsonStr)
 		req, err = http.NewRequest(method, httpURL, bytes.NewBuffer(jsonStr))
@@ -302,7 +285,10 @@ func (cli *Client) MakeFullRequest(method string, httpURL string, headers http.H
 		req, err = http.NewRequest(method, httpURL, nil)
 	}
 	if err != nil {
-		return nil, err
+		return nil, HTTPError{
+			Message:      "failed to create request",
+			WrappedError: err,
+		}
 	}
 	if headers != nil {
 		req.Header = headers
@@ -320,43 +306,52 @@ func (cli *Client) MakeFullRequest(method string, httpURL string, headers http.H
 		defer res.Body.Close()
 	}
 	if err != nil {
-		return nil, err
+		return nil, HTTPError{
+			Request:  req,
+			Response: res,
+
+			Message:      "request error",
+			WrappedError: err,
+		}
 	}
 
 	contents, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		return nil, err
+		return nil, HTTPError{
+			Request:  req,
+			Response: res,
+
+			Message:      "failed to read response body",
+			WrappedError: err,
+		}
 	}
 
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		var wrap error
 		respErr := &RespError{}
-		if _ = json.Unmarshal(contents, respErr); respErr.ErrCode != "" {
-			wrap = respErr
-		} else {
+		if _ = json.Unmarshal(contents, respErr); respErr.ErrCode == "" {
 			respErr = nil
 		}
 
-		// If we failed to decode as RespError, don't just drop the HTTP body, include it in the
-		// HTTP error instead (e.g proxy errors which return HTML).
-		msg := "Failed to " + method + " JSON to " + req.URL.Path
-		if wrap == nil {
-			msg = msg + ": " + string(contents)
-		}
-
 		return contents, HTTPError{
-			Code:         res.StatusCode,
-			Message:      msg,
-			WrappedError: wrap,
-			RespError:    respErr,
+			Request:   req,
+			Response:  res,
+			RespError: respErr,
 		}
 	}
 
-	if resBody != nil {
-		if err = json.Unmarshal(contents, &resBody); err != nil {
-			return nil, err
+	if resBody == nil {
+		return contents, nil
+	}
+
+	if err = json.Unmarshal(contents, &resBody); err != nil {
+		return nil, HTTPError{
+			Request:  req,
+			Response: res,
+
+			Message:      "failed to unmarshal response body",
+			ResponseBody: string(contents),
+			WrappedError: err,
 		}
-		return nil, nil
 	}
 
 	return contents, nil
@@ -406,7 +401,7 @@ func (cli *Client) register(url string, req *ReqRegister) (resp *RespRegister, u
 		if !ok { // network error
 			return
 		}
-		if httpErr.Code == 401 {
+		if httpErr.IsStatus(http.StatusUnauthorized) {
 			// body should be RespUserInteractive, if it isn't, fail with the error
 			err = json.Unmarshal(bodyBytes, &uiaResp)
 			return
@@ -885,7 +880,10 @@ func (cli *Client) UploadMedia(data ReqUploadMedia) (*RespMediaUpload, error) {
 
 	req, err := http.NewRequest("POST", u.String(), data.Content)
 	if err != nil {
-		return nil, err
+		return nil, HTTPError{
+			WrappedError: err,
+			Message:      "failed to create request",
+		}
 	}
 
 	if len(data.ContentType) > 0 {
@@ -906,19 +904,34 @@ func (cli *Client) UploadMedia(data ReqUploadMedia) (*RespMediaUpload, error) {
 	contents, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		return nil, HTTPError{
-			Message: "Upload request failed - Failed to read response body: " + err.Error(),
-			Code:    res.StatusCode,
+			Message:      "failed to read upload response body",
+			WrappedError: err,
+			Response:     res,
+			Request:      req,
 		}
 	}
 	if res.StatusCode != 200 {
+		respErr := &RespError{}
+		if _ = json.Unmarshal(contents, respErr); respErr.ErrCode == "" {
+			respErr = nil
+		}
+
 		return nil, HTTPError{
-			Message: "Upload request failed: " + string(contents),
-			Code:    res.StatusCode,
+			Request:   req,
+			Response:  res,
+			RespError: respErr,
 		}
 	}
 	var m RespMediaUpload
 	if err := json.Unmarshal(contents, &m); err != nil {
-		return nil, err
+		return nil, HTTPError{
+			Request:  req,
+			Response: res,
+
+			Message:      "failed to unmarshal upload response body",
+			ResponseBody: string(contents),
+			WrappedError: err,
+		}
 	}
 	return &m, nil
 }
@@ -1092,7 +1105,7 @@ type UIACallback = func(*RespUserInteractive) interface{}
 func (cli *Client) UploadCrossSigningKeys(keys *UploadCrossSigningKeysReq, uiaCallback UIACallback) error {
 	urlPath := cli.BuildBaseURL("_matrix", "client", "unstable", "keys", "device_signing", "upload")
 	content, err := cli.MakeRequest("POST", urlPath, keys, nil)
-	if respErr, ok := err.(HTTPError); ok && respErr.Code == 401 {
+	if respErr, ok := err.(HTTPError); ok && respErr.IsStatus(http.StatusUnauthorized) {
 		// try again with UI auth
 		var uiAuthResp RespUserInteractive
 		if err := json.Unmarshal(content, &uiAuthResp); err != nil {

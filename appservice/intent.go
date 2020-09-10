@@ -7,9 +7,9 @@
 package appservice
 
 import (
+	"errors"
+	"fmt"
 	"strings"
-
-	"github.com/pkg/errors"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
@@ -59,11 +59,8 @@ func (intent *IntentAPI) EnsureRegistered() error {
 	}
 
 	err := intent.Register()
-	if err != nil {
-		httpErr, ok := err.(mautrix.HTTPError)
-		if !ok || httpErr.RespError == nil || httpErr.RespError.ErrCode != "M_USER_IN_USE" {
-			return errors.Wrap(err, "failed to ensure registered")
-		}
+	if err != nil && !errors.Is(err, mautrix.MUserInUse) {
+		return fmt.Errorf("failed to ensure registered: %w", err)
 	}
 	intent.as.StateStore.MarkRegistered(intent.UserID)
 	return nil
@@ -75,24 +72,23 @@ func (intent *IntentAPI) EnsureJoined(roomID id.RoomID) error {
 	}
 
 	if err := intent.EnsureRegistered(); err != nil {
-		return errors.Wrap(err, "failed to ensure joined")
+		return fmt.Errorf("failed to ensure joined: %w", err)
 	}
 
 	resp, err := intent.JoinRoomByID(roomID)
 	if err != nil {
-		httpErr, ok := err.(mautrix.HTTPError)
-		if !ok || httpErr.RespError == nil || httpErr.RespError.ErrCode != "M_FORBIDDEN" || intent.bot == nil {
-			return errors.Wrap(err, "failed to ensure joined")
+		if !errors.Is(err, mautrix.MForbidden) || intent.bot == nil {
+			return fmt.Errorf("failed to ensure joined: %w", err)
 		}
 		_, inviteErr := intent.bot.InviteUser(roomID, &mautrix.ReqInviteUser{
 			UserID: intent.UserID,
 		})
 		if inviteErr != nil {
-			return errors.Wrap(err, "failed to ensure joined")
+			return fmt.Errorf("failed to ensure joined: %w", err)
 		}
 		resp, err = intent.JoinRoomByID(roomID)
 		if err != nil {
-			return errors.Wrap(err, "failed to ensure joined")
+			return fmt.Errorf("failed to ensure joined: %w", err)
 		}
 	}
 	intent.as.StateStore.SetMembership(resp.RoomID, intent.UserID, "join")
@@ -304,7 +300,7 @@ func (intent *IntentAPI) EnsureInvited(roomID id.RoomID, userID id.UserID) error
 		_, err := intent.Client.InviteUser(roomID, &mautrix.ReqInviteUser{
 			UserID: userID,
 		})
-		if httpErr, ok := err.(mautrix.HTTPError); ok && strings.Contains(httpErr.RespError.Err, "is already in the room") {
+		if httpErr, ok := err.(mautrix.HTTPError); ok && httpErr.RespError != nil && strings.Contains(httpErr.RespError.Err, "is already in the room") {
 			return nil
 		}
 		return err
