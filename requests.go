@@ -69,6 +69,11 @@ type ReqLogin struct {
 	StoreCredentials bool `json:"-"`
 }
 
+type ReqUIAuthFallback struct {
+	Session string `json:"session"`
+	User    string `json:"user"`
+}
+
 type ReqUIAuthLogin struct {
 	BaseAuthData
 	User     string `json:"user"`
