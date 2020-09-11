@@ -136,6 +136,18 @@ func (mach *OlmMachine) Fingerprint() string {
 	return Fingerprint(mach.account.SigningKey())
 }
 
+// OwnIdentity returns this device's DeviceIdentity struct
+func (mach *OlmMachine) OwnIdentity() *DeviceIdentity {
+	return &DeviceIdentity{
+		UserID:      mach.Client.UserID,
+		DeviceID:    mach.Client.DeviceID,
+		IdentityKey: mach.account.IdentityKey(),
+		SigningKey:  mach.account.SigningKey(),
+		Trust:       TrustStateVerified,
+		Deleted:     false,
+	}
+}
+
 // ProcessSyncResponse processes a single /sync response.
 //
 // This can be easily registered into a mautrix client using .OnSync():
