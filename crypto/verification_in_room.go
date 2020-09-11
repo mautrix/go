@@ -184,8 +184,8 @@ func (mach *OlmMachine) SendInRoomSASVerificationMAC(roomID id.RoomID, userID id
 	keyIDsMap := map[id.KeyID]string{keyID: ""}
 	macMap := make(map[id.KeyID]string)
 
-	if mach.crossSigningKeys != nil {
-		masterKey := mach.crossSigningKeys.MasterKey.PublicKey
+	if mach.CrossSigningKeys != nil {
+		masterKey := mach.CrossSigningKeys.MasterKey.PublicKey
 		masterKeyID := id.NewKeyID(id.KeyAlgorithmEd25519, masterKey.String())
 		// add master key ID to key map
 		keyIDsMap[masterKeyID] = ""

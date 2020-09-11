@@ -207,6 +207,13 @@ type CrossSigningKeys struct {
 	Signatures map[id.UserID]map[id.KeyID]string `json:"signatures,omitempty"`
 }
 
+func (csk *CrossSigningKeys) FirstKey() id.Ed25519 {
+	for _, key := range csk.Keys {
+		return key
+	}
+	return ""
+}
+
 type UploadCrossSigningKeysReq struct {
 	Master      CrossSigningKeys `json:"master_key"`
 	SelfSigning CrossSigningKeys `json:"self_signing_key"`

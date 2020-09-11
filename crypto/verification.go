@@ -495,31 +495,29 @@ func (mach *OlmMachine) handleVerificationMAC(userID id.UserID, content *event.V
 			mach.Log.Warn("Failed to put device after verifying: %v", err)
 		}
 
-		// if our own cross-signing keys are available
-		if mach.crossSigningKeys != nil {
-			crossSignKeys, err := mach.CryptoStore.GetCrossSigningKeys(device.UserID)
-			if err != nil {
-				mach.Log.Warn("Failed to fetch other user's cross signing keys: %v", err)
+		if mach.CrossSigningKeys != nil {
+			if device.UserID == mach.Client.UserID {
+				err := mach.SignOwnDevice(device)
+				if err != nil {
+					mach.Log.Error("Failed to cross-sign own device %s: %v", device.DeviceID, err)
+				} else {
+					mach.Log.Debug("Cross-signed own device %v after SAS verification", device.DeviceID)
+				}
 			} else {
-				if masterKey, ok := crossSignKeys[id.XSUsageMaster]; ok {
-					masterKeyID := id.NewKeyID(id.KeyAlgorithmEd25519, masterKey.String())
-					if masterKeyMAC, ok := content.Mac[masterKeyID]; ok {
-						expectedMasterKeyMAC, _, err := mach.getPKAndKeysMAC(verState.sas, device.UserID, device.DeviceID,
-							mach.Client.UserID, mach.Client.DeviceID, transactionID, masterKey, masterKeyID, content.Mac)
-						if err != nil {
-							mach.Log.Error("Error generating master key MAC: %v", err)
-						} else if masterKeyMAC == expectedMasterKeyMAC {
-							if err := mach.SignUserAndUpload(device.UserID, masterKey); err != nil {
-								mach.Log.Error("Error signing master key of %v: %v", device.UserID, err)
-							} else {
-								mach.Log.Debug("Signed master key of %v after SAS verification", device.UserID)
-							}
-						} else {
-							mach.Log.Error("Expected %s master key MAC, got %s", expectedMasterKeyMAC, masterKeyMAC)
-						}
+				masterKey, err := mach.fetchMasterKey(device, content, verState, transactionID)
+				if err != nil {
+					mach.Log.Warn("Failed to fetch %s's master key: %v", device.UserID, err)
+				} else {
+					if err := mach.SignUser(device.UserID, masterKey); err != nil {
+						mach.Log.Error("Failed to cross-sign master key of %s: %v", device.UserID, err)
+					} else {
+						mach.Log.Debug("Cross-signed master key of %v after SAS verification", device.UserID)
 					}
 				}
 			}
+		} else {
+			// TODO ask user to unlock cross-signing keys?
+			mach.Log.Debug("Cross-signing keys not cached, not signing %s/%s", device.UserID, device.DeviceID)
 		}
 
 		mach.Log.Debug("Device %v of user %v verified successfully!", device.DeviceID, device.UserID)
@@ -740,8 +738,8 @@ func (mach *OlmMachine) SendSASVerificationMAC(userID id.UserID, deviceID id.Dev
 	keyIDsMap := map[id.KeyID]string{keyID: ""}
 	macMap := make(map[id.KeyID]string)
 
-	if mach.crossSigningKeys != nil {
-		masterKey := mach.crossSigningKeys.MasterKey.PublicKey
+	if mach.CrossSigningKeys != nil {
+		masterKey := mach.CrossSigningKeys.MasterKey.PublicKey
 		masterKeyID := id.NewKeyID(id.KeyAlgorithmEd25519, masterKey.String())
 		// add master key ID to key map
 		keyIDsMap[masterKeyID] = ""

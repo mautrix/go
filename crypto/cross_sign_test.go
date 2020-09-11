@@ -35,7 +35,7 @@ func getOlmMachine(t *testing.T) *OlmMachine {
 
 	return &OlmMachine{
 		CryptoStore: sqlStore,
-		crossSigningKeys: &CrossSigningKeysCache{
+		CrossSigningKeys: &CrossSigningKeysCache{
 			MasterKey:      mk,
 			SelfSigningKey: ssk,
 			UserSigningKey: usk,
@@ -58,10 +58,10 @@ func TestTrustOwnDevice(t *testing.T) {
 		t.Error("Own device trusted while it shouldn't be")
 	}
 
-	m.CryptoStore.PutSignature(ownDevice.UserID, m.crossSigningKeys.SelfSigningKey.PublicKey,
-		ownDevice.UserID, m.crossSigningKeys.MasterKey.PublicKey, "sig1")
+	m.CryptoStore.PutSignature(ownDevice.UserID, m.CrossSigningKeys.SelfSigningKey.PublicKey,
+		ownDevice.UserID, m.CrossSigningKeys.MasterKey.PublicKey, "sig1")
 	m.CryptoStore.PutSignature(ownDevice.UserID, ownDevice.SigningKey,
-		ownDevice.UserID, m.crossSigningKeys.SelfSigningKey.PublicKey, "sig2")
+		ownDevice.UserID, m.CrossSigningKeys.SelfSigningKey.PublicKey, "sig2")
 
 	if !m.IsUserTrusted(ownDevice.UserID) {
 		t.Error("Own user not trusted while they should be")
@@ -81,19 +81,19 @@ func TestTrustOtherUser(t *testing.T) {
 	theirMasterKey, _ := olm.NewPkSigning()
 	m.CryptoStore.PutCrossSigningKey(otherUser, id.XSUsageMaster, theirMasterKey.PublicKey)
 
-	m.CryptoStore.PutSignature(m.Client.UserID, m.crossSigningKeys.UserSigningKey.PublicKey,
-		m.Client.UserID, m.crossSigningKeys.MasterKey.PublicKey, "sig1")
+	m.CryptoStore.PutSignature(m.Client.UserID, m.CrossSigningKeys.UserSigningKey.PublicKey,
+		m.Client.UserID, m.CrossSigningKeys.MasterKey.PublicKey, "sig1")
 
 	// sign them with self-signing instead of user-signing key
 	m.CryptoStore.PutSignature(otherUser, theirMasterKey.PublicKey,
-		m.Client.UserID, m.crossSigningKeys.SelfSigningKey.PublicKey, "invalid_sig")
+		m.Client.UserID, m.CrossSigningKeys.SelfSigningKey.PublicKey, "invalid_sig")
 
 	if m.IsUserTrusted(otherUser) {
 		t.Error("Other user trusted before their master key has been signed with our user-signing key")
 	}
 
 	m.CryptoStore.PutSignature(otherUser, theirMasterKey.PublicKey,
-		m.Client.UserID, m.crossSigningKeys.UserSigningKey.PublicKey, "sig2")
+		m.Client.UserID, m.CrossSigningKeys.UserSigningKey.PublicKey, "sig2")
 
 	if !m.IsUserTrusted(otherUser) {
 		t.Error("Other user not trusted while they should be")
@@ -120,10 +120,10 @@ func TestTrustOtherDevice(t *testing.T) {
 	theirSSK, _ := olm.NewPkSigning()
 	m.CryptoStore.PutCrossSigningKey(otherUser, id.XSUsageSelfSigning, theirSSK.PublicKey)
 
-	m.CryptoStore.PutSignature(m.Client.UserID, m.crossSigningKeys.UserSigningKey.PublicKey,
-		m.Client.UserID, m.crossSigningKeys.MasterKey.PublicKey, "sig1")
+	m.CryptoStore.PutSignature(m.Client.UserID, m.CrossSigningKeys.UserSigningKey.PublicKey,
+		m.Client.UserID, m.CrossSigningKeys.MasterKey.PublicKey, "sig1")
 	m.CryptoStore.PutSignature(otherUser, theirMasterKey.PublicKey,
-		m.Client.UserID, m.crossSigningKeys.UserSigningKey.PublicKey, "sig2")
+		m.Client.UserID, m.CrossSigningKeys.UserSigningKey.PublicKey, "sig2")
 
 	if !m.IsUserTrusted(otherUser) {
 		t.Error("Other user not trusted while they should be")
