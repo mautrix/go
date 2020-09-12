@@ -173,6 +173,23 @@ func (mach *OlmMachine) handleVerificationStart(userID id.UserID, content *event
 }
 
 func (mach *OlmMachine) actuallyStartVerification(userID id.UserID, content *event.VerificationStartEventContent, otherDevice *DeviceIdentity, transactionID string, timeout time.Duration, inRoomID id.RoomID) {
+	if inRoomID != "" && transactionID != "" {
+		verState, err := mach.getTransactionState(transactionID, userID)
+		if err != nil {
+			mach.Log.Error("Failed to get transaction state for in-room verification %s start: %v", transactionID, err)
+			_ = mach.SendInRoomSASVerificationCancel(inRoomID, otherDevice.UserID, transactionID, "Internal state error in gomuks :(", "net.maunium.internal_error")
+			return
+		}
+		mach.timeoutAfter(verState, transactionID, timeout)
+		sasMethods := commonSASMethods(verState.hooks, content.ShortAuthenticationString)
+		err = mach.SendInRoomSASVerificationAccept(inRoomID, userID, content, transactionID, verState.sas.GetPubkey(), sasMethods)
+		if err != nil {
+			mach.Log.Error("Error accepting in-room SAS verification: %v", err)
+		}
+		verState.chosenSASMethod = sasMethods[0]
+		verState.verificationStarted = true
+		return
+	}
 	resp, hooks := mach.AcceptVerificationFrom(transactionID, otherDevice, inRoomID)
 	if resp == AcceptRequest {
 		sasMethods := commonSASMethods(hooks, content.ShortAuthenticationString)
