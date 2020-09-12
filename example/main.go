@@ -24,23 +24,22 @@ import (
 	"os"
 )
 
-var homeserver = flag.String("homeserver", "https://matrix.org", "Matrix homeserver")
+var homeserver = flag.String("homeserver", "", "Matrix homeserver")
 var username = flag.String("username", "", "Matrix username localpart")
 var password = flag.String("password", "", "Matrix password")
 
 func main() {
 	flag.Parse()
-	if *username == "" || *password == "" {
+	if *username == "" || *password == "" || *homeserver == "" {
 		_, _ = fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
 
-	fmt.Println("Logging to", *homeserver, "as", *username)
+	fmt.Println("Logging into", *homeserver, "as", *username)
 	client, err := mautrix.NewClient(*homeserver, "", "")
 	if err != nil {
-		fmt.Println(err)
-		return
+		panic(err)
 	}
 	_, err = client.Login(&mautrix.ReqLogin{
 		Type:             "m.login.password",
@@ -49,8 +48,7 @@ func main() {
 		StoreCredentials: true,
 	})
 	if err != nil {
-		fmt.Println(err)
-		return
+		panic(err)
 	}
 	fmt.Println("Login successful")
 
@@ -61,6 +59,6 @@ func main() {
 
 	err = client.Sync()
 	if err != nil {
-		fmt.Println(err)
+		panic(err)
 	}
 }
