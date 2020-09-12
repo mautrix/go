@@ -96,9 +96,6 @@ func (mach *OlmMachine) GenerateAndUploadCrossSigningKeys(userPassword, passphra
 		return recoveryKey, fmt.Errorf("failed to publish cross-signing keys: %w", err)
 	}
 
-	// save cross-signing keys, generate and return recovery key
-	mach.CrossSigningKeys = keysCache
-
 	err = mach.SSSS.SetDefaultKeyID(key.ID)
 	if err != nil {
 		return recoveryKey, fmt.Errorf("failed to mark %s as the default key: %w", key.ID, err)

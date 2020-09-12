@@ -57,19 +57,20 @@ func (mach *OlmMachine) IsDeviceTrusted(device *DeviceIdentity) bool {
 // IsUserTrusted returns whether a user has been determined to be trusted by our user-signing key having signed their master key.
 // In the case the user ID is our own and we have successfully retrieved our cross-signing keys, we trust our own user.
 func (mach *OlmMachine) IsUserTrusted(userID id.UserID) bool {
-	if mach.CrossSigningKeys == nil {
+	csPubkeys := mach.GetOwnCrossSigningPublicKeys()
+	if csPubkeys == nil {
 		return false
 	}
 	if userID == mach.Client.UserID {
 		return true
 	}
 	// first we verify our user-signing key
-	sskSigs, err := mach.CryptoStore.GetSignaturesForKeyBy(mach.Client.UserID, mach.CrossSigningKeys.UserSigningKey.PublicKey, mach.Client.UserID)
+	sskSigs, err := mach.CryptoStore.GetSignaturesForKeyBy(mach.Client.UserID, csPubkeys.UserSigningKey, mach.Client.UserID)
 	if err != nil {
 		mach.Log.Error("Error retrieving our self-singing key signatures: %v", err)
 		return false
 	}
-	if _, ok := sskSigs[mach.CrossSigningKeys.MasterKey.PublicKey]; !ok {
+	if _, ok := sskSigs[csPubkeys.MasterKey]; !ok {
 		// our user-signing key was not signed by our master key
 		return false
 	}
@@ -83,7 +84,7 @@ func (mach *OlmMachine) IsUserTrusted(userID id.UserID) bool {
 		mach.Log.Error("Master key of user %v not found", userID)
 		return false
 	}
-	sigExists, err := mach.CryptoStore.IsKeySignedBy(userID, theirMskKey, mach.Client.UserID, mach.CrossSigningKeys.UserSigningKey.PublicKey)
+	sigExists, err := mach.CryptoStore.IsKeySignedBy(userID, theirMskKey, mach.Client.UserID, csPubkeys.UserSigningKey)
 	if err != nil {
 		mach.Log.Error("Error retrieving cross-singing signatures for master key of user %v from database: %v", userID, err)
 		return false

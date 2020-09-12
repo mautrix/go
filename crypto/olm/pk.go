@@ -11,6 +11,7 @@ import (
 	"unsafe"
 
 	"github.com/tidwall/sjson"
+
 	"maunium.net/go/mautrix/crypto/canonicaljson"
 	"maunium.net/go/mautrix/id"
 )

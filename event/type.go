@@ -75,8 +75,8 @@ func (et *Type) IsToDevice() bool {
 
 func (et *Type) IsInRoomVerification() bool {
 	switch et.Type {
-	case InRoomVerificationStart.Type, InRoomVerificationAccept.Type, InRoomVerificationKey.Type,
-		InRoomVerificationMAC.Type, InRoomVerificationCancel.Type:
+	case InRoomVerificationStart.Type, InRoomVerificationReady.Type, InRoomVerificationAccept.Type,
+		InRoomVerificationKey.Type, InRoomVerificationMAC.Type, InRoomVerificationCancel.Type:
 		return true
 	default:
 		return false
@@ -99,7 +99,9 @@ func (et *Type) GuessClass() TypeClass {
 		AccountDataSecretStorageKey.Type, AccountDataSecretStorageDefaultKey.Type,
 		AccountDataCrossSigningMaster.Type, AccountDataCrossSigningSelf.Type, AccountDataCrossSigningUser.Type:
 		return AccountDataEventType
-	case EventRedaction.Type, EventMessage.Type, EventEncrypted.Type, EventReaction.Type, EventSticker.Type:
+	case EventRedaction.Type, EventMessage.Type, EventEncrypted.Type, EventReaction.Type, EventSticker.Type,
+		InRoomVerificationStart.Type, InRoomVerificationReady.Type, InRoomVerificationAccept.Type,
+		InRoomVerificationKey.Type, InRoomVerificationMAC.Type, InRoomVerificationCancel.Type:
 		return MessageEventType
 	case ToDeviceRoomKey.Type, ToDeviceRoomKeyRequest.Type, ToDeviceForwardedRoomKey.Type, ToDeviceRoomKeyWithheld.Type:
 		return ToDeviceEventType

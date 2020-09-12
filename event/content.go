@@ -9,11 +9,9 @@ package event
 import (
 	"encoding/gob"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
-	"strings"
-
-	"github.com/pkg/errors"
 )
 
 // TypeMap is a mapping from event type to the content struct type.
@@ -135,10 +133,11 @@ func (content *Content) MarshalJSON() ([]byte, error) {
 }
 
 func IsUnsupportedContentType(err error) bool {
-	return strings.HasPrefix(err.Error(), "unsupported content type ")
+	return errors.Is(err, UnsupportedContentType)
 }
 
 var ContentAlreadyParsed = errors.New("content is already parsed")
+var UnsupportedContentType = errors.New("unsupported content type")
 
 func (content *Content) ParseRaw(evtType Type) error {
 	if content.Parsed != nil {
@@ -146,7 +145,7 @@ func (content *Content) ParseRaw(evtType Type) error {
 	}
 	structType, ok := TypeMap[evtType]
 	if !ok {
-		return fmt.Errorf("unsupported content type %s", evtType.Repr())
+		return fmt.Errorf("%w %s", UnsupportedContentType, evtType.Repr())
 	}
 	content.Parsed = reflect.New(structType).Interface()
 	return json.Unmarshal(content.VeryRaw, &content.Parsed)

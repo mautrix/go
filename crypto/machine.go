@@ -52,7 +52,8 @@ type OlmMachine struct {
 	roomKeyRequestFilled            *sync.Map
 	keyVerificationTransactionState *sync.Map
 
-	CrossSigningKeys *CrossSigningKeysCache
+	CrossSigningKeys    *CrossSigningKeysCache
+	crossSigningPubkeys *CrossSigningPublicKeysCache
 }
 
 // StateStore is used by OlmMachine to get room state information that's needed for encryption.

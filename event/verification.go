@@ -146,6 +146,8 @@ type VerificationReadyEventContent struct {
 	RelatesTo *RelatesTo `json:"m.relates_to,omitempty"`
 }
 
+var _ Relatable = (*VerificationReadyEventContent)(nil)
+
 func (vrec *VerificationReadyEventContent) GetRelatesTo() *RelatesTo {
 	if vrec.RelatesTo == nil {
 		vrec.RelatesTo = &RelatesTo{}

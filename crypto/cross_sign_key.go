@@ -21,6 +21,14 @@ type CrossSigningKeysCache struct {
 	UserSigningKey *olm.PkSigning
 }
 
+func (cskc *CrossSigningKeysCache) PublicKeys() *CrossSigningPublicKeysCache {
+	return &CrossSigningPublicKeysCache{
+		MasterKey:      cskc.MasterKey.PublicKey,
+		SelfSigningKey: cskc.SelfSigningKey.PublicKey,
+		UserSigningKey: cskc.UserSigningKey.PublicKey,
+	}
+}
+
 type CrossSigningSeeds struct {
 	MasterKey      []byte
 	SelfSigningKey []byte
@@ -51,6 +59,7 @@ func (mach *OlmMachine) ImportCrossSigningKeys(keys CrossSigningSeeds) (err erro
 		keysCache.MasterKey.PublicKey, keysCache.SelfSigningKey.PublicKey, keysCache.UserSigningKey.PublicKey)
 
 	mach.CrossSigningKeys = &keysCache
+	mach.crossSigningPubkeys = keysCache.PublicKeys()
 	return
 }
 
@@ -118,9 +127,17 @@ func (mach *OlmMachine) PublishCrossSigningKeys(keys *CrossSigningKeysCache, uia
 		},
 	}
 
-	return mach.Client.UploadCrossSigningKeys(&mautrix.UploadCrossSigningKeysReq{
+	err = mach.Client.UploadCrossSigningKeys(&mautrix.UploadCrossSigningKeysReq{
 		Master:      masterKey,
 		SelfSigning: selfKey,
 		UserSigning: userKey,
 	}, uiaCallback)
+	if err != nil {
+		return err
+	}
+
+	mach.CrossSigningKeys = keys
+	mach.crossSigningPubkeys = keys.PublicKeys()
+
+	return nil
 }
