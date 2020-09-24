@@ -8,8 +8,8 @@ package crypto
 
 import (
 	"encoding/json"
-
-	"github.com/pkg/errors"
+	"errors"
+	"fmt"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
@@ -34,8 +34,8 @@ func getRelatesTo(content interface{}) *event.RelatesTo {
 }
 
 type rawMegolmEvent struct {
-	RoomID  id.RoomID     `json:"room_id"`
-	Type    event.Type    `json:"type"`
+	RoomID  id.RoomID   `json:"room_id"`
+	Type    event.Type  `json:"type"`
 	Content interface{} `json:"content"`
 }
 
@@ -52,7 +52,7 @@ func (mach *OlmMachine) EncryptMegolmEvent(roomID id.RoomID, evtType event.Type,
 	mach.Log.Trace("Encrypting event of type %s for %s", evtType.Type, roomID)
 	session, err := mach.CryptoStore.GetOutboundGroupSession(roomID)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to get outbound group session")
+		return nil, fmt.Errorf("failed to get outbound group session: %w", err)
 	} else if session == nil {
 		return nil, NoGroupSession
 	}
@@ -97,7 +97,7 @@ func (mach *OlmMachine) ShareGroupSession(roomID id.RoomID, users []id.UserID) e
 	mach.Log.Debug("Sharing group session for room %s to %v", roomID, users)
 	session, err := mach.CryptoStore.GetOutboundGroupSession(roomID)
 	if err != nil {
-		return errors.Wrap(err, "failed to get previous outbound group session")
+		return fmt.Errorf("failed to get previous outbound group session: %w", err)
 	} else if session != nil && session.Shared && !session.Expired() {
 		return AlreadyShared
 	}
@@ -180,7 +180,7 @@ func (mach *OlmMachine) ShareGroupSession(roomID id.RoomID, users []id.UserID) e
 	mach.Log.Trace("Sending to-device to %d users to share group session for %s", len(toDevice.Messages), roomID)
 	_, err = mach.Client.SendToDevice(event.ToDeviceEncrypted, toDevice)
 	if err != nil {
-		return errors.Wrap(err, "failed to share group session")
+		return fmt.Errorf("failed to share group session: %w", err)
 	}
 
 	mach.Log.Trace("Sending to-device messages to %d users to report withheld keys in %s", len(toDeviceWithheld.Messages), roomID)

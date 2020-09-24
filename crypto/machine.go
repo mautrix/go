@@ -7,10 +7,10 @@
 package crypto
 
 import (
+	"errors"
+	"fmt"
 	"sync"
 	"time"
-
-	"github.com/pkg/errors"
 
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
@@ -50,7 +50,7 @@ type OlmMachine struct {
 	roomKeyRequestFilled            *sync.Map
 	keyVerificationTransactionState *sync.Map
 
-	keyWaiters map[id.SessionID]chan struct{}
+	keyWaiters     map[id.SessionID]chan struct{}
 	keyWaitersLock sync.Mutex
 }
 
@@ -251,7 +251,7 @@ func (mach *OlmMachine) GetOrFetchDevice(userID id.UserID, deviceID id.DeviceID)
 	// get device identity
 	device, err := mach.CryptoStore.GetDevice(userID, deviceID)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to get sender device from store")
+		return nil, fmt.Errorf("failed to get sender device from store: %w", err)
 	} else if device != nil {
 		return device, nil
 	}
@@ -261,9 +261,9 @@ func (mach *OlmMachine) GetOrFetchDevice(userID id.UserID, deviceID id.DeviceID)
 		if device, ok = devices[deviceID]; ok {
 			return device, nil
 		}
-		return nil, errors.Errorf("Failed to get identity for device %v", deviceID)
+		return nil, fmt.Errorf("didn't get identity for device %s of %s", deviceID, userID)
 	}
-	return nil, errors.Errorf("Error fetching devices for user %v", userID)
+	return nil, fmt.Errorf("didn't get any devices for %s", userID)
 }
 
 // SendEncryptedToDevice sends an Olm-encrypted event to the given user device.
@@ -283,7 +283,7 @@ func (mach *OlmMachine) SendEncryptedToDevice(device *DeviceIdentity, content ev
 		return err
 	}
 	if olmSess == nil {
-		return errors.Errorf("Did not find created outbound session for device %v", device.DeviceID)
+		return fmt.Errorf("didn't find created outbound session for device %s of %s", device.DeviceID, device.UserID)
 	}
 
 	encrypted := mach.encryptOlmEvent(olmSess, device, event.ToDeviceForwardedRoomKey, content)

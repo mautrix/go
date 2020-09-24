@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	"github.com/lib/pq"
-	"github.com/pkg/errors"
 
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/crypto/sql_store_upgrade"
@@ -183,7 +182,7 @@ func (store *SQLCryptoStore) AddSession(key id.SenderKey, session *OlmSession) e
 }
 
 // UpdateSession replaces the Olm session for a sender in the database.
-func (store *SQLCryptoStore) UpdateSession(key id.SenderKey, session *OlmSession) error {
+func (store *SQLCryptoStore) UpdateSession(_ id.SenderKey, session *OlmSession) error {
 	sessionBytes := session.Internal.Pickle(store.PickleKey)
 	_, err := store.DB.Exec("UPDATE crypto_olm_session SET session=$1, last_used=$2 WHERE session_id=$3 AND account_id=$4",
 		sessionBytes, session.UseTime, session.ID(), store.AccountID)
@@ -492,18 +491,18 @@ func (store *SQLCryptoStore) PutDevices(userID id.UserID, devices map[id.DeviceI
 		err = fmt.Errorf("unsupported dialect %s", store.Dialect)
 	}
 	if err != nil {
-		return errors.Wrap(err, "failed to add user to tracked users list")
+		return fmt.Errorf("failed to add user to tracked users list: %w", err)
 	}
 
 	_, err = tx.Exec("DELETE FROM crypto_device WHERE user_id=$1", userID)
 	if err != nil {
 		_ = tx.Rollback()
-		return errors.Wrap(err, "failed to delete old devices")
+		return fmt.Errorf("failed to delete old devices: %w", err)
 	}
 	if len(devices) == 0 {
 		err = tx.Commit()
 		if err != nil {
-			return errors.Wrap(err, "failed to commit changes (no devices added)")
+			return fmt.Errorf("failed to commit changes (no devices added): %w", err)
 		}
 		return nil
 	}
@@ -533,12 +532,12 @@ func (store *SQLCryptoStore) PutDevices(userID id.UserID, devices map[id.DeviceI
 		_, err = tx.Exec("INSERT INTO crypto_device (user_id, device_id, identity_key, signing_key, trust, deleted, name) VALUES "+valueString, values...)
 		if err != nil {
 			_ = tx.Rollback()
-			return errors.Wrap(err, "failed to insert new devices")
+			return fmt.Errorf("failed to insert new devices: %w", err)
 		}
 	}
 	err = tx.Commit()
 	if err != nil {
-		return errors.Wrap(err, "failed to commit changes")
+		return fmt.Errorf("failed to commit changes: %w", err)
 	}
 	return nil
 }

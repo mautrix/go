@@ -8,8 +8,8 @@ package crypto
 
 import (
 	"encoding/json"
-
-	"github.com/pkg/errors"
+	"errors"
+	"fmt"
 
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -39,14 +39,14 @@ func (mach *OlmMachine) DecryptMegolmEvent(evt *event.Event) (*event.Event, erro
 	}
 	sess, err := mach.CryptoStore.GetGroupSession(evt.RoomID, content.SenderKey, content.SessionID)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to get group session")
+		return nil, fmt.Errorf("failed to get group session: %w", err)
 	} else if sess == nil {
 		mach.checkIfWedged(evt)
 		return nil, NoSessionFound
 	}
 	plaintext, messageIndex, err := sess.Internal.Decrypt(content.MegolmCiphertext)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to decrypt megolm event")
+		return nil, fmt.Errorf("failed to decrypt megolm event: %w", err)
 	} else if !mach.CryptoStore.ValidateMessageIndex(content.SenderKey, content.SessionID, evt.ID, messageIndex, evt.Timestamp) {
 		return nil, DuplicateMessageIndex
 	}
@@ -72,13 +72,13 @@ func (mach *OlmMachine) DecryptMegolmEvent(evt *event.Event) (*event.Event, erro
 	megolmEvt := &megolmEvent{}
 	err = json.Unmarshal(plaintext, &megolmEvt)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to parse megolm payload")
+		return nil, fmt.Errorf("failed to parse megolm payload: %w", err)
 	} else if megolmEvt.RoomID != evt.RoomID {
 		return nil, WrongRoom
 	}
 	err = megolmEvt.Content.ParseRaw(megolmEvt.Type)
 	if err != nil && !event.IsUnsupportedContentType(err) {
-		return nil, errors.Wrap(err, "failed to parse content of megolm payload event")
+		return nil, fmt.Errorf("failed to parse content of megolm payload event: %w", err)
 	}
 	relatable, ok := megolmEvt.Content.Parsed.(event.Relatable)
 	if ok && content.RelatesTo != nil && relatable.OptionalGetRelatesTo() == nil {

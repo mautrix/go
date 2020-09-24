@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/pkg/errors"
 	"golang.org/x/crypto/pbkdf2"
 
 	"maunium.net/go/mautrix/crypto/olm"
@@ -91,7 +90,7 @@ func exportSessions(sessions []*InboundGroupSession) ([]ExportedSession, error) 
 	for i, session := range sessions {
 		key, err := session.Internal.Export(session.Internal.FirstKnownIndex())
 		if err != nil {
-			return nil, errors.Wrap(err, "failed to export session")
+			return nil, fmt.Errorf("failed to export session: %w", err)
 		}
 		export[i] = ExportedSession{
 			Algorithm:         id.AlgorithmMegolmV1,

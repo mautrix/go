@@ -9,11 +9,10 @@ package event
 import (
 	"encoding/gob"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
-
-	"github.com/pkg/errors"
 )
 
 // TypeMap is a mapping from event type to the content struct type.

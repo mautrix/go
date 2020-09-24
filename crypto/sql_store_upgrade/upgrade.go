@@ -2,13 +2,14 @@ package sql_store_upgrade
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
-
-	"github.com/pkg/errors"
 )
 
 type upgradeFunc func(*sql.Tx, string) error
+
+var ErrUnknownDialect = errors.New("unknown dialect")
 
 var Upgrades = [...]upgradeFunc{
 	func(tx *sql.Tx, _ string) error {
@@ -153,7 +154,7 @@ var Upgrades = [...]upgradeFunc{
 				}
 			}
 		} else {
-			return errors.New("unknown dialect: " + dialect)
+			return fmt.Errorf("%w (%s)", ErrUnknownDialect, dialect)
 		}
 		return nil
 	},
@@ -203,7 +204,7 @@ var Upgrades = [...]upgradeFunc{
 				return err
 			}
 		} else {
-			return errors.New("unknown dialect: " + dialect)
+			return fmt.Errorf("%w (%s)", ErrUnknownDialect, dialect)
 		}
 		return nil
 	},

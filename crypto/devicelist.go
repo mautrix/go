@@ -7,7 +7,8 @@
 package crypto
 
 import (
-	"github.com/pkg/errors"
+	"errors"
+	"fmt"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto/olm"
@@ -131,7 +132,7 @@ func (mach *OlmMachine) validateDevice(userID id.UserID, deviceID id.DeviceID, d
 
 	ok, err := olm.VerifySignatureJSON(deviceKeys, userID, deviceID, signingKey)
 	if err != nil {
-		return existing, errors.Wrap(err, "failed to verify signature")
+		return existing, fmt.Errorf("failed to verify signature: %w", err)
 	} else if !ok {
 		return existing, InvalidKeySignature
 	}

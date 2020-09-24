@@ -7,10 +7,9 @@
 package crypto
 
 import (
+	"errors"
 	"strings"
 	"time"
-
-	"github.com/pkg/errors"
 
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/event"
