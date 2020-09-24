@@ -224,7 +224,7 @@ func (store *SQLCryptoStore) GetGroupSession(roomID id.RoomID, senderKey id.Send
 	} else if err != nil {
 		return nil, err
 	} else if withheldCode.Valid {
-		return nil, ErrGroupSessionWithheld
+		return nil, fmt.Errorf("%w (%s)", ErrGroupSessionWithheld, withheldCode.String)
 	}
 	igs := olm.NewBlankInboundGroupSession()
 	err = igs.Unpickle(sessionBytes, store.PickleKey)

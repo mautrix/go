@@ -134,6 +134,7 @@ func (mach *OlmMachine) importForwardedRoomKey(evt *DecryptedOlmEvent, content *
 		mach.Log.Error("Failed to store new inbound group session: %v", err)
 		return false
 	}
+	mach.markSessionReceived(content.SessionID)
 	mach.Log.Trace("Created inbound group session %s/%s/%s", content.RoomID, content.SenderKey, content.SessionID)
 	return true
 }

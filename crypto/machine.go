@@ -49,6 +49,9 @@ type OlmMachine struct {
 
 	roomKeyRequestFilled            *sync.Map
 	keyVerificationTransactionState *sync.Map
+
+	keyWaiters map[id.SessionID]chan struct{}
+	keyWaitersLock sync.Mutex
 }
 
 // StateStore is used by OlmMachine to get room state information that's needed for encryption.
@@ -311,8 +314,40 @@ func (mach *OlmMachine) createGroupSession(senderKey id.SenderKey, signingKey id
 	err = mach.CryptoStore.PutGroupSession(roomID, senderKey, sessionID, igs)
 	if err != nil {
 		mach.Log.Error("Failed to store new inbound group session: %v", err)
+		return
 	}
+	mach.markSessionReceived(sessionID)
 	mach.Log.Trace("Created inbound group session %s/%s/%s", roomID, senderKey, sessionID)
+}
+
+func (mach *OlmMachine) markSessionReceived(id id.SessionID) {
+	mach.keyWaitersLock.Lock()
+	ch, ok := mach.keyWaiters[id]
+	if ok {
+		close(ch)
+		delete(mach.keyWaiters, id)
+	}
+	mach.keyWaitersLock.Unlock()
+}
+
+// WaitForSession waits for the given Megolm session to arrive.
+func (mach *OlmMachine) WaitForSession(roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID, timeout time.Duration) bool {
+	mach.keyWaitersLock.Lock()
+	ch, ok := mach.keyWaiters[sessionID]
+	if !ok {
+		ch := make(chan struct{})
+		mach.keyWaiters[sessionID] = ch
+	}
+	mach.keyWaitersLock.Unlock()
+	select {
+	case <-ch:
+		return true
+	case <-time.After(timeout):
+		sess, err := mach.CryptoStore.GetGroupSession(roomID, senderKey, sessionID)
+		// Check if the session somehow appeared in the store without telling us
+		// We accept withheld sessions as received, as then the decryption attempt will show the error.
+		return sess != nil || errors.Is(err, ErrGroupSessionWithheld)
+	}
 }
 
 func (mach *OlmMachine) receiveRoomKey(evt *DecryptedOlmEvent, content *event.RoomKeyEventContent) {

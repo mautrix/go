@@ -9,6 +9,7 @@ package crypto
 import (
 	"encoding/gob"
 	"errors"
+	"fmt"
 	"os"
 	"sort"
 	"sync"
@@ -294,10 +295,10 @@ func (gs *GobStore) GetGroupSession(roomID id.RoomID, senderKey id.SenderKey, se
 	gs.lock.Lock()
 	session, ok := gs.getGroupSessions(roomID, senderKey)[sessionID]
 	if !ok {
-		_, ok := gs.getWithheldGroupSessions(roomID, senderKey)[sessionID]
+		withheld, ok := gs.getWithheldGroupSessions(roomID, senderKey)[sessionID]
 		gs.lock.Unlock()
 		if ok {
-			return nil, ErrGroupSessionWithheld
+			return nil, fmt.Errorf("%w (%s)", ErrGroupSessionWithheld, withheld.Code)
 		}
 		return nil, nil
 	}

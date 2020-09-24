@@ -118,6 +118,7 @@ func (mach *OlmMachine) importExportedRoomKey(session ExportedSession) (bool, er
 	if err != nil {
 		return false, errors.Wrap(err, "failed to store imported session")
 	}
+	mach.markSessionReceived(igs.ID())
 	return true, nil
 }
 
