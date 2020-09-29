@@ -191,7 +191,7 @@ func (mach *OlmMachine) ShareGroupSession(roomID id.RoomID, users []id.UserID) e
 		mach.Log.Warn("Failed to report withheld keys in %s: %v", roomID, err)
 	}
 
-	mach.Log.Debug("Group session for %s successfully shared", roomID)
+	mach.Log.Debug("Group session %s for %s successfully shared", session.ID(), roomID)
 	session.Shared = true
 	return mach.CryptoStore.AddOutboundGroupSession(session)
 }

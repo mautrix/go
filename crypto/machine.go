@@ -83,6 +83,8 @@ func NewOlmMachine(client *mautrix.Client, log Logger, cryptoStore Store, stateS
 
 		roomKeyRequestFilled:            &sync.Map{},
 		keyVerificationTransactionState: &sync.Map{},
+
+		keyWaiters: make(map[id.SessionID]chan struct{}),
 	}
 	mach.AllowKeyShare = mach.defaultAllowKeyShare
 	return mach
