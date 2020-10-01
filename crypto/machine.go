@@ -288,6 +288,9 @@ func (mach *OlmMachine) SendEncryptedToDevice(device *DeviceIdentity, content ev
 		return fmt.Errorf("didn't find created outbound session for device %s of %s", device.DeviceID, device.UserID)
 	}
 
+	olmSess.Lock()
+	defer olmSess.Unlock()
+
 	encrypted := mach.encryptOlmEvent(olmSess, device, event.ToDeviceForwardedRoomKey, content)
 	encryptedContent := &event.Content{Parsed: &encrypted}
 
@@ -319,7 +322,7 @@ func (mach *OlmMachine) createGroupSession(senderKey id.SenderKey, signingKey id
 		return
 	}
 	mach.markSessionReceived(sessionID)
-	mach.Log.Trace("Created inbound group session %s/%s/%s", roomID, senderKey, sessionID)
+	mach.Log.Debug("Received inbound group session %s / %s / %s", roomID, senderKey, sessionID)
 }
 
 func (mach *OlmMachine) markSessionReceived(id id.SessionID) {

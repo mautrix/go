@@ -66,6 +66,7 @@ var ErrGroupSessionWithheld = errors.New("group session has been withheld")
 // General implementation details:
 // * Get methods should not return errors if the requested data does not exist in the store, they should simply return nil.
 // * Update methods may assume that the pointer is the same as what has earlier been added to or fetched from the store.
+// * OlmSessions should be cached so that the mutex works. Alternatively, implementations can use OlmSession.SetLock to provide a custom mutex implementation.
 type Store interface {
 	// Flush ensures that everything in the store is persisted to disk.
 	// This doesn't have to do anything, e.g. for database-backed implementations that persist everything immediately.
