@@ -18,7 +18,7 @@ import (
 var (
 	IncorrectEncryptedContentType = errors.New("event content is not instance of *event.EncryptedEventContent")
 	NoSessionFound                = errors.New("failed to decrypt megolm event: no session with given ID found")
-	DuplicateMessageIndex         = errors.New("duplicate message index")
+	DuplicateMessageIndex         = errors.New("duplicate megolm message index")
 	WrongRoom                     = errors.New("encrypted megolm event is not intended for this room")
 	DeviceKeyMismatch             = errors.New("device keys in event and verified device info do not match")
 )
@@ -42,7 +42,7 @@ func (mach *OlmMachine) DecryptMegolmEvent(evt *event.Event) (*event.Event, erro
 		return nil, fmt.Errorf("failed to get group session: %w", err)
 	} else if sess == nil {
 		mach.checkIfWedged(evt)
-		return nil, NoSessionFound
+		return nil, fmt.Errorf("%w (ID %s)", NoSessionFound, content.SessionID)
 	}
 	plaintext, messageIndex, err := sess.Internal.Decrypt(content.MegolmCiphertext)
 	if err != nil {
