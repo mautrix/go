@@ -94,7 +94,7 @@ func (mach *OlmMachine) decryptOlmCiphertext(sender id.UserID, deviceID id.Devic
 			mach.markDeviceForUnwedging(sender, senderKey)
 			return nil, fmt.Errorf("failed to create new session from prekey message: %w", err)
 		}
-		mach.Log.Trace("Created inbound session %s for %s/%s (sender key: %s)", session.ID(), sender, deviceID, senderKey)
+		mach.Log.Debug("Created inbound olm session %s for %s/%s (sender key: %s)", session.ID(), sender, deviceID, senderKey)
 
 		plaintext, err = session.Decrypt(ciphertext, olmType)
 		if err != nil {
