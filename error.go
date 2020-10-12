@@ -69,7 +69,7 @@ type HTTPError struct {
 }
 
 func (e HTTPError) Is(err error) bool {
-	return errors.Is(e.RespError, err) || errors.Is(e.WrappedError, err)
+	return (e.RespError != nil && errors.Is(e.RespError, err)) || (e.WrappedError != nil && errors.Is(e.WrappedError, err))
 }
 
 func (e HTTPError) IsStatus(code int) bool {
