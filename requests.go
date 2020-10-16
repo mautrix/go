@@ -19,6 +19,8 @@ const (
 	AuthTypeMSISDN    = "m.login.msisdn"
 	AuthTypeToken     = "m.login.token"
 	AuthTypeDummy     = "m.login.dummy"
+
+	AuthTypeAppservice = "uk.half-shot.msc2778.login.application_service"
 )
 
 type IdentifierType string

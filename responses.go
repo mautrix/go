@@ -119,8 +119,17 @@ type RespRegister struct {
 
 type RespLoginFlows struct {
 	Flows []struct {
-		Type string `json:"type"`
+		Type AuthType `json:"type"`
 	} `json:"flows"`
+}
+
+func (rlf *RespLoginFlows) HasFlow(flowType AuthType) bool {
+	for _, flow := range rlf.Flows {
+		if flow.Type == flowType {
+			return true
+		}
+	}
+	return false
 }
 
 // RespLogin is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-login
