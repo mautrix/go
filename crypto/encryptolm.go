@@ -8,8 +8,7 @@ package crypto
 
 import (
 	"encoding/json"
-
-	"github.com/pkg/errors"
+	"fmt"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto/olm"
@@ -69,7 +68,7 @@ func (mach *OlmMachine) createOutboundSessions(input map[id.UserID]map[id.Device
 		Timeout:     10 * 1000,
 	})
 	if err != nil {
-		return errors.Wrap(err, "failed to claim keys")
+		return fmt.Errorf("failed to claim keys: %w", err)
 	}
 	for userID, user := range resp.OneTimeKeys {
 		for deviceID, oneTimeKeys := range user {

@@ -32,8 +32,10 @@ func (tc TypeClass) Name() string {
 }
 
 const (
+	// Unknown events
+	UnknownEventType TypeClass = iota
 	// Normal message events
-	MessageEventType TypeClass = iota
+	MessageEventType
 	// State events
 	StateEventType
 	// Ephemeral events
@@ -42,8 +44,6 @@ const (
 	AccountDataEventType
 	// Device-to-device events
 	ToDeviceEventType
-	// Unknown events
-	UnknownEventType
 )
 
 type Type struct {

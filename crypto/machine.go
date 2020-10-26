@@ -7,10 +7,10 @@
 package crypto
 
 import (
+	"errors"
+	"fmt"
 	"sync"
 	"time"
-
-	"github.com/pkg/errors"
 
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/crypto/ssss"
@@ -52,6 +52,9 @@ type OlmMachine struct {
 	roomKeyRequestFilled            *sync.Map
 	keyVerificationTransactionState *sync.Map
 
+	keyWaiters     map[id.SessionID]chan struct{}
+	keyWaitersLock sync.Mutex
+
 	CrossSigningKeys    *CrossSigningKeysCache
 	crossSigningPubkeys *CrossSigningPublicKeysCache
 }
@@ -86,6 +89,8 @@ func NewOlmMachine(client *mautrix.Client, log Logger, cryptoStore Store, stateS
 
 		roomKeyRequestFilled:            &sync.Map{},
 		keyVerificationTransactionState: &sync.Map{},
+
+		keyWaiters: make(map[id.SessionID]chan struct{}),
 	}
 	mach.AllowKeyShare = mach.defaultAllowKeyShare
 	return mach
@@ -266,7 +271,7 @@ func (mach *OlmMachine) GetOrFetchDevice(userID id.UserID, deviceID id.DeviceID)
 	// get device identity
 	device, err := mach.CryptoStore.GetDevice(userID, deviceID)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to get sender device from store")
+		return nil, fmt.Errorf("failed to get sender device from store: %w", err)
 	} else if device != nil {
 		return device, nil
 	}
@@ -276,9 +281,9 @@ func (mach *OlmMachine) GetOrFetchDevice(userID id.UserID, deviceID id.DeviceID)
 		if device, ok = devices[deviceID]; ok {
 			return device, nil
 		}
-		return nil, errors.Errorf("Failed to get identity for device %v", deviceID)
+		return nil, fmt.Errorf("didn't get identity for device %s of %s", deviceID, userID)
 	}
-	return nil, errors.Errorf("Error fetching devices for user %v", userID)
+	return nil, fmt.Errorf("didn't get any devices for %s", userID)
 }
 
 // SendEncryptedToDevice sends an Olm-encrypted event to the given user device.
@@ -298,8 +303,11 @@ func (mach *OlmMachine) SendEncryptedToDevice(device *DeviceIdentity, content ev
 		return err
 	}
 	if olmSess == nil {
-		return errors.Errorf("Did not find created outbound session for device %v", device.DeviceID)
+		return fmt.Errorf("didn't find created outbound session for device %s of %s", device.DeviceID, device.UserID)
 	}
+
+	olmSess.Lock()
+	defer olmSess.Unlock()
 
 	encrypted := mach.encryptOlmEvent(olmSess, device, event.ToDeviceForwardedRoomKey, content)
 	encryptedContent := &event.Content{Parsed: &encrypted}
@@ -329,8 +337,40 @@ func (mach *OlmMachine) createGroupSession(senderKey id.SenderKey, signingKey id
 	err = mach.CryptoStore.PutGroupSession(roomID, senderKey, sessionID, igs)
 	if err != nil {
 		mach.Log.Error("Failed to store new inbound group session: %v", err)
+		return
 	}
-	mach.Log.Trace("Created inbound group session %s/%s/%s", roomID, senderKey, sessionID)
+	mach.markSessionReceived(sessionID)
+	mach.Log.Debug("Received inbound group session %s / %s / %s", roomID, senderKey, sessionID)
+}
+
+func (mach *OlmMachine) markSessionReceived(id id.SessionID) {
+	mach.keyWaitersLock.Lock()
+	ch, ok := mach.keyWaiters[id]
+	if ok {
+		close(ch)
+		delete(mach.keyWaiters, id)
+	}
+	mach.keyWaitersLock.Unlock()
+}
+
+// WaitForSession waits for the given Megolm session to arrive.
+func (mach *OlmMachine) WaitForSession(roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID, timeout time.Duration) bool {
+	mach.keyWaitersLock.Lock()
+	ch, ok := mach.keyWaiters[sessionID]
+	if !ok {
+		ch := make(chan struct{})
+		mach.keyWaiters[sessionID] = ch
+	}
+	mach.keyWaitersLock.Unlock()
+	select {
+	case <-ch:
+		return true
+	case <-time.After(timeout):
+		sess, err := mach.CryptoStore.GetGroupSession(roomID, senderKey, sessionID)
+		// Check if the session somehow appeared in the store without telling us
+		// We accept withheld sessions as received, as then the decryption attempt will show the error.
+		return sess != nil || errors.Is(err, ErrGroupSessionWithheld)
+	}
 }
 
 func (mach *OlmMachine) receiveRoomKey(evt *DecryptedOlmEvent, content *event.RoomKeyEventContent) {

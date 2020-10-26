@@ -11,6 +11,7 @@ package crypto
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	"sort"
@@ -19,8 +20,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pkg/errors"
-
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto/canonicaljson"
 	"maunium.net/go/mautrix/crypto/olm"
@@ -28,11 +27,14 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-// ErrUnknownTransaction is returned when a key verification message is received with an unknown transaction ID.
-var ErrUnknownTransaction = errors.New("Unknown transaction")
-
-// ErrUnknownVerificationMethod is returned when the verification method in a received m.key.verification.start is unknown.
-var ErrUnknownVerificationMethod = errors.New("Unknown verification method")
+var (
+	ErrUnknownUserForTransaction = errors.New("unknown user for transaction")
+	ErrTransactionAlreadyExists  = errors.New("transaction already exists")
+	// ErrUnknownTransaction is returned when a key verification message is received with an unknown transaction ID.
+	ErrUnknownTransaction = errors.New("unknown transaction")
+	// ErrUnknownVerificationMethod is returned when the verification method in a received m.key.verification.start is unknown.
+	ErrUnknownVerificationMethod = errors.New("unknown verification method")
+)
 
 type VerificationHooks interface {
 	// VerifySASMatch receives the generated SAS and its method, as well as the device that is being verified.
@@ -133,7 +135,7 @@ func (mach *OlmMachine) getTransactionState(transactionID string, userID id.User
 			_ = mach.SendInRoomSASVerificationCancel(verState.inRoomID, userID, transactionID, reason, event.VerificationCancelUserMismatch)
 		}
 		mach.keyVerificationTransactionState.Delete(userID.String() + ":" + transactionID)
-		return nil, errors.New(reason)
+		return nil, fmt.Errorf("%w %s: %s", ErrUnknownUserForTransaction, transactionID, userID)
 	}
 	return verState, nil
 }
@@ -648,7 +650,7 @@ func (mach *OlmMachine) NewSASVerificationWith(device *DeviceIdentity, hooks Ver
 	verState.startEventCanonical = string(canonical)
 	_, loaded := mach.keyVerificationTransactionState.LoadOrStore(device.UserID.String()+":"+transactionID, verState)
 	if loaded {
-		return "", errors.New("Transaction already exists")
+		return "", ErrTransactionAlreadyExists
 	}
 
 	mach.timeoutAfter(verState, transactionID, timeout)

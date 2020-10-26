@@ -7,10 +7,10 @@
 package crypto
 
 import (
+	"errors"
 	"strings"
+	"sync"
 	"time"
-
-	"github.com/pkg/errors"
 
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/event"
@@ -43,6 +43,20 @@ type OlmSession struct {
 	Internal olm.Session
 	ExpirationMixin
 	id id.SessionID
+	// This is unexported so gob wouldn't insist on trying to marshaling it
+	lock sync.Locker
+}
+
+func (session *OlmSession) SetLock(lock sync.Locker) {
+	session.lock = lock
+}
+
+func (session *OlmSession) Lock() {
+	session.lock.Lock()
+}
+
+func (session *OlmSession) Unlock() {
+	session.lock.Unlock()
 }
 
 func (session *OlmSession) ID() id.SessionID {
@@ -55,6 +69,7 @@ func (session *OlmSession) ID() id.SessionID {
 func wrapSession(session *olm.Session) *OlmSession {
 	return &OlmSession{
 		Internal: *session,
+		lock:     &sync.Mutex{},
 		ExpirationMixin: ExpirationMixin{
 			TimeMixin: TimeMixin{
 				CreationTime: time.Now(),

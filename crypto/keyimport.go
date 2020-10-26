@@ -15,8 +15,8 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
-
-	"github.com/pkg/errors"
+	"errors"
+	"fmt"
 
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
@@ -85,7 +85,7 @@ func decryptKeyExport(passphrase string, exportData []byte) ([]ExportedSession, 
 	var sessionsJSON []ExportedSession
 	err := json.Unmarshal(unencryptedData, &sessionsJSON)
 	if err != nil {
-		return nil, errors.Wrap(err, "invalid export json")
+		return nil, fmt.Errorf("invalid export json: %w", err)
 	}
 	return sessionsJSON, nil
 }
@@ -97,7 +97,7 @@ func (mach *OlmMachine) importExportedRoomKey(session ExportedSession) (bool, er
 
 	igsInternal, err := olm.InboundGroupSessionImport([]byte(session.SessionKey))
 	if err != nil {
-		return false, errors.Wrap(err, "failed to import session")
+		return false, fmt.Errorf("failed to import session: %w", err)
 	} else if igsInternal.ID() != session.SessionID {
 		return false, ErrMismatchingExportedSessionID
 	}
@@ -116,8 +116,9 @@ func (mach *OlmMachine) importExportedRoomKey(session ExportedSession) (bool, er
 	}
 	err = mach.CryptoStore.PutGroupSession(igs.RoomID, igs.SenderKey, igs.ID(), igs)
 	if err != nil {
-		return false, errors.Wrap(err, "failed to store imported session")
+		return false, fmt.Errorf("failed to store imported session: %w", err)
 	}
+	mach.markSessionReceived(igs.ID())
 	return true, nil
 }
 

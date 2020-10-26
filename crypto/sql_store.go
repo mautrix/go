@@ -10,9 +10,9 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/lib/pq"
-	"github.com/pkg/errors"
 
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/crypto/sql_store_upgrade"
@@ -31,6 +31,9 @@ type SQLCryptoStore struct {
 	SyncToken string
 	PickleKey []byte
 	Account   *OlmAccount
+
+	olmSessionCache map[id.SenderKey]map[id.SessionID]*OlmSession
+	olmSessionCacheLock sync.Mutex
 }
 
 var _ Store = (*SQLCryptoStore)(nil)
@@ -45,6 +48,8 @@ func NewSQLCryptoStore(db *sql.DB, dialect string, accountID string, deviceID id
 		PickleKey: pickleKey,
 		AccountID: accountID,
 		DeviceID:  deviceID,
+
+		olmSessionCache: make(map[id.SenderKey]map[id.SessionID]*OlmSession),
 	}
 }
 
@@ -125,7 +130,12 @@ func (store *SQLCryptoStore) GetAccount() (*OlmAccount, error) {
 
 // HasSession returns whether there is an Olm session for the given sender key.
 func (store *SQLCryptoStore) HasSession(key id.SenderKey) bool {
-	// TODO this may need to be changed if olm sessions start expiring
+	store.olmSessionCacheLock.Lock()
+	cache, ok := store.olmSessionCache[key]
+	store.olmSessionCacheLock.Unlock()
+	if ok && len(cache) > 0 {
+		return true
+	}
 	var sessionID id.SessionID
 	err := store.DB.QueryRow("SELECT session_id FROM crypto_olm_session WHERE sender_key=$1 AND account_id=$2 LIMIT 1",
 		key, store.AccountID).Scan(&sessionID)
@@ -137,53 +147,88 @@ func (store *SQLCryptoStore) HasSession(key id.SenderKey) bool {
 
 // GetSessions returns all the known Olm sessions for a sender key.
 func (store *SQLCryptoStore) GetSessions(key id.SenderKey) (OlmSessionList, error) {
-	rows, err := store.DB.Query("SELECT session, created_at, last_used FROM crypto_olm_session WHERE sender_key=$1 AND account_id=$2 ORDER BY session_id",
+	rows, err := store.DB.Query("SELECT session_id, session, created_at, last_used FROM crypto_olm_session WHERE sender_key=$1 AND account_id=$2 ORDER BY session_id",
 		key, store.AccountID)
 	if err != nil {
 		return nil, err
 	}
 	list := OlmSessionList{}
+	store.olmSessionCacheLock.Lock()
+	defer store.olmSessionCacheLock.Unlock()
+	cache := store.getOlmSessionCache(key)
 	for rows.Next() {
-		sess := OlmSession{Internal: *olm.NewBlankSession()}
+		sess := OlmSession{Internal: *olm.NewBlankSession(), lock: &sync.Mutex{}}
 		var sessionBytes []byte
-		err := rows.Scan(&sessionBytes, &sess.CreationTime, &sess.UseTime)
+		var sessionID id.SessionID
+		err := rows.Scan(&sessionID, &sessionBytes, &sess.CreationTime, &sess.UseTime)
 		if err != nil {
 			return nil, err
+		} else if existing, ok := cache[sessionID]; ok {
+			list = append(list, existing)
+		} else {
+			err = sess.Internal.Unpickle(sessionBytes, store.PickleKey)
+			if err != nil {
+				return nil, err
+			}
+			list = append(list, &sess)
+			cache[sess.ID()] = &sess
 		}
-		err = sess.Internal.Unpickle(sessionBytes, store.PickleKey)
-		if err != nil {
-			return nil, err
-		}
-		list = append(list, &sess)
 	}
 	return list, nil
 }
 
+func (store *SQLCryptoStore) getOlmSessionCache(key id.SenderKey) map[id.SessionID]*OlmSession {
+	data, ok := store.olmSessionCache[key]
+	if !ok {
+		data = make(map[id.SessionID]*OlmSession)
+		store.olmSessionCache[key] = data
+	}
+	return data
+}
+
 // GetLatestSession retrieves the Olm session for a given sender key from the database that has the largest ID.
 func (store *SQLCryptoStore) GetLatestSession(key id.SenderKey) (*OlmSession, error) {
-	row := store.DB.QueryRow("SELECT session, created_at, last_used FROM crypto_olm_session WHERE sender_key=$1 AND account_id=$2 ORDER BY session_id DESC LIMIT 1",
+	store.olmSessionCacheLock.Lock()
+	defer store.olmSessionCacheLock.Unlock()
+
+	row := store.DB.QueryRow("SELECT session_id, session, created_at, last_used FROM crypto_olm_session WHERE sender_key=$1 AND account_id=$2 ORDER BY session_id DESC LIMIT 1",
 		key, store.AccountID)
-	sess := OlmSession{Internal: *olm.NewBlankSession()}
+
+	sess := OlmSession{Internal: *olm.NewBlankSession(), lock: &sync.Mutex{}}
 	var sessionBytes []byte
-	err := row.Scan(&sessionBytes, &sess.CreationTime, &sess.UseTime)
+	var sessionID id.SessionID
+
+	err := row.Scan(&sessionID, &sessionBytes, &sess.CreationTime, &sess.UseTime)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	} else if err != nil {
 		return nil, err
 	}
-	return &sess, sess.Internal.Unpickle(sessionBytes, store.PickleKey)
+
+	cache := store.getOlmSessionCache(key)
+	if oldSess, ok := cache[sessionID]; ok {
+		return oldSess, nil
+	} else if err = sess.Internal.Unpickle(sessionBytes, store.PickleKey); err != nil {
+		return nil, err
+	} else {
+		cache[sessionID] = &sess
+		return &sess, nil
+	}
 }
 
 // AddSession persists an Olm session for a sender in the database.
 func (store *SQLCryptoStore) AddSession(key id.SenderKey, session *OlmSession) error {
+	store.olmSessionCacheLock.Lock()
+	defer store.olmSessionCacheLock.Unlock()
 	sessionBytes := session.Internal.Pickle(store.PickleKey)
 	_, err := store.DB.Exec("INSERT INTO crypto_olm_session (session_id, sender_key, session, created_at, last_used, account_id) VALUES ($1, $2, $3, $4, $5, $6)",
 		session.ID(), key, sessionBytes, session.CreationTime, session.UseTime, store.AccountID)
+	store.getOlmSessionCache(key)[session.ID()] = session
 	return err
 }
 
 // UpdateSession replaces the Olm session for a sender in the database.
-func (store *SQLCryptoStore) UpdateSession(key id.SenderKey, session *OlmSession) error {
+func (store *SQLCryptoStore) UpdateSession(_ id.SenderKey, session *OlmSession) error {
 	sessionBytes := session.Internal.Pickle(store.PickleKey)
 	_, err := store.DB.Exec("UPDATE crypto_olm_session SET session=$1, last_used=$2 WHERE session_id=$3 AND account_id=$4",
 		sessionBytes, session.UseTime, session.ID(), store.AccountID)
@@ -224,7 +269,7 @@ func (store *SQLCryptoStore) GetGroupSession(roomID id.RoomID, senderKey id.Send
 	} else if err != nil {
 		return nil, err
 	} else if withheldCode.Valid {
-		return nil, ErrGroupSessionWithheld
+		return nil, fmt.Errorf("%w (%s)", ErrGroupSessionWithheld, withheldCode.String)
 	}
 	igs := olm.NewBlankInboundGroupSession()
 	err = igs.Unpickle(sessionBytes, store.PickleKey)
@@ -492,18 +537,18 @@ func (store *SQLCryptoStore) PutDevices(userID id.UserID, devices map[id.DeviceI
 		err = fmt.Errorf("unsupported dialect %s", store.Dialect)
 	}
 	if err != nil {
-		return errors.Wrap(err, "failed to add user to tracked users list")
+		return fmt.Errorf("failed to add user to tracked users list: %w", err)
 	}
 
 	_, err = tx.Exec("DELETE FROM crypto_device WHERE user_id=$1", userID)
 	if err != nil {
 		_ = tx.Rollback()
-		return errors.Wrap(err, "failed to delete old devices")
+		return fmt.Errorf("failed to delete old devices: %w", err)
 	}
 	if len(devices) == 0 {
 		err = tx.Commit()
 		if err != nil {
-			return errors.Wrap(err, "failed to commit changes (no devices added)")
+			return fmt.Errorf("failed to commit changes (no devices added): %w", err)
 		}
 		return nil
 	}
@@ -533,12 +578,12 @@ func (store *SQLCryptoStore) PutDevices(userID id.UserID, devices map[id.DeviceI
 		_, err = tx.Exec("INSERT INTO crypto_device (user_id, device_id, identity_key, signing_key, trust, deleted, name) VALUES "+valueString, values...)
 		if err != nil {
 			_ = tx.Rollback()
-			return errors.Wrap(err, "failed to insert new devices")
+			return fmt.Errorf("failed to insert new devices: %w", err)
 		}
 	}
 	err = tx.Commit()
 	if err != nil {
-		return errors.Wrap(err, "failed to commit changes")
+		return fmt.Errorf("failed to commit changes: %w", err)
 	}
 	return nil
 }

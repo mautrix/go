@@ -9,8 +9,6 @@ package event
 import (
 	"encoding/json"
 
-	"github.com/pkg/errors"
-
 	"maunium.net/go/mautrix/id"
 )
 
@@ -58,7 +56,7 @@ func (content *EncryptedEventContent) UnmarshalJSON(data []byte) error {
 		return json.Unmarshal(content.Ciphertext, &content.OlmCiphertext)
 	case id.AlgorithmMegolmV1:
 		if len(content.Ciphertext) == 0 || content.Ciphertext[0] != '"' || content.Ciphertext[len(content.Ciphertext)-1] != '"' {
-			return errors.New("input doesn't look like a JSON string")
+			return id.InputNotJSONString
 		}
 		content.MegolmCiphertext = content.Ciphertext[1 : len(content.Ciphertext)-1]
 	}

@@ -9,6 +9,7 @@ package crypto
 import (
 	"encoding/gob"
 	"errors"
+	"fmt"
 	"os"
 	"sort"
 	"sync"
@@ -65,6 +66,7 @@ var ErrGroupSessionWithheld = errors.New("group session has been withheld")
 // General implementation details:
 // * Get methods should not return errors if the requested data does not exist in the store, they should simply return nil.
 // * Update methods may assume that the pointer is the same as what has earlier been added to or fetched from the store.
+// * OlmSessions should be cached so that the mutex works. Alternatively, implementations can use OlmSession.SetLock to provide a custom mutex implementation.
 type Store interface {
 	// Flush ensures that everything in the store is persisted to disk.
 	// This doesn't have to do anything, e.g. for database-backed implementations that persist everything immediately.
@@ -311,10 +313,10 @@ func (gs *GobStore) GetGroupSession(roomID id.RoomID, senderKey id.SenderKey, se
 	gs.lock.Lock()
 	session, ok := gs.getGroupSessions(roomID, senderKey)[sessionID]
 	if !ok {
-		_, ok := gs.getWithheldGroupSessions(roomID, senderKey)[sessionID]
+		withheld, ok := gs.getWithheldGroupSessions(roomID, senderKey)[sessionID]
 		gs.lock.Unlock()
 		if ok {
-			return nil, ErrGroupSessionWithheld
+			return nil, fmt.Errorf("%w (%s)", ErrGroupSessionWithheld, withheld.Code)
 		}
 		return nil, nil
 	}
