@@ -23,12 +23,14 @@ type EventListener func(evt *event.Event)
 
 // WriteBlankOK writes a blank OK message as a reply to a HTTP request.
 func WriteBlankOK(w http.ResponseWriter) {
+	w.Header().Add("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("{}"))
 }
 
 // Respond responds to a HTTP request with a JSON object.
 func Respond(w http.ResponseWriter, data interface{}) error {
+	w.Header().Add("Content-Type", "application/json")
 	dataStr, err := json.Marshal(data)
 	if err != nil {
 		return err
@@ -45,6 +47,7 @@ type Error struct {
 }
 
 func (err Error) Write(w http.ResponseWriter) {
+	w.Header().Add("Content-Type", "application/json")
 	w.WriteHeader(err.HTTPStatus)
 	_ = Respond(w, &err)
 }
