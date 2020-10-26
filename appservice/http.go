@@ -128,6 +128,14 @@ func (as *AppService) PutTransaction(w http.ResponseWriter, r *http.Request) {
 			Message:    "Failed to parse body JSON",
 		}.Write(w)
 	} else {
+		if as.Registration.EphemeralEvents {
+			if eventList.EphemeralEvents != nil {
+				as.handleEvents(eventList.EphemeralEvents, event.EphemeralEventType)
+			} else if eventList.SoruEphemeralEvents != nil {
+				as.handleEvents(eventList.SoruEphemeralEvents, event.EphemeralEventType)
+			}
+		}
+		as.handleEvents(eventList.Events, event.UnknownEventType)
 		for _, evt := range eventList.Events {
 			if evt.StateKey != nil {
 				evt.Type.Class = event.StateEventType
@@ -144,6 +152,30 @@ func (as *AppService) PutTransaction(w http.ResponseWriter, r *http.Request) {
 		WriteBlankOK(w)
 	}
 	as.lastProcessedTransaction = txnID
+}
+
+func (as *AppService) handleEvents(evts []*event.Event, typeClass event.TypeClass) {
+	for _, evt := range evts {
+		if typeClass != event.UnknownEventType {
+			evt.Type.Class = typeClass
+		} else if evt.StateKey != nil {
+			evt.Type.Class = event.StateEventType
+		} else {
+			evt.Type.Class = event.MessageEventType
+		}
+		err := evt.Content.ParseRaw(evt.Type)
+		if err != nil {
+			if evt.ID != "" {
+				as.Log.Debugfln("Failed to parse content of %s (%s): %v", evt.ID, evt.Type.Type, err)
+			} else {
+				as.Log.Debugfln("Failed to parse content of a %s: %v", evt.Type.Type, err)
+			}
+		}
+		if evt.Type.IsState() {
+			as.UpdateState(evt)
+		}
+		as.Events <- evt
+	}
 }
 
 // GetRoom handles a /rooms GET call from the homeserver.

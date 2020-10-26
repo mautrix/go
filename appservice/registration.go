@@ -23,6 +23,7 @@ type Registration struct {
 	SenderLocalpart string     `yaml:"sender_localpart"`
 	RateLimited     bool       `yaml:"rate_limited"`
 	Namespaces      Namespaces `yaml:"namespaces"`
+	EphemeralEvents bool       `yaml:"de.sorunome.msc2409.push_ephemeral,omitempty"`
 }
 
 // CreateRegistration creates a Registration with random appservice and homeserver tokens.

@@ -15,7 +15,9 @@ import (
 
 // EventList contains a list of events.
 type EventList struct {
-	Events []*event.Event `json:"events"`
+	Events              []*event.Event `json:"events"`
+	EphemeralEvents     []*event.Event `json:"ephemeral"`
+	SoruEphemeralEvents []*event.Event `json:"de.sorunome.msc2409.ephemeral"`
 }
 
 // EventListener is a function that receives events.
