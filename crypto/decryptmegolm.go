@@ -61,7 +61,7 @@ func (mach *OlmMachine) DecryptMegolmEvent(evt *event.Event) (*event.Event, erro
 			// We don't want to throw these errors as the message can still be decrypted.
 			mach.Log.Debug("Failed to get device %s/%s to verify session %s: %v", evt.Sender, content.DeviceID, sess.ID(), err)
 			// TODO maybe store the info that the device is deleted?
-		} else if device.Trust == TrustStateVerified && len(sess.ForwardingChains) == 0 { // For some reason, matrix-nio had a comment saying not to events decrypted using a forwarded key as verified.
+		} else if mach.IsDeviceTrusted(device) && len(sess.ForwardingChains) == 0 { // For some reason, matrix-nio had a comment saying not to events decrypted using a forwarded key as verified.
 			if device.SigningKey != sess.SigningKey || device.IdentityKey != content.SenderKey {
 				return nil, DeviceKeyMismatch
 			}
@@ -76,13 +76,26 @@ func (mach *OlmMachine) DecryptMegolmEvent(evt *event.Event) (*event.Event, erro
 	} else if megolmEvt.RoomID != evt.RoomID {
 		return nil, WrongRoom
 	}
+	megolmEvt.Type.Class = evt.Type.Class
 	err = megolmEvt.Content.ParseRaw(megolmEvt.Type)
-	if err != nil && !event.IsUnsupportedContentType(err) {
-		return nil, fmt.Errorf("failed to parse content of megolm payload event: %w", err)
+	if err != nil {
+		if event.IsUnsupportedContentType(err) {
+			mach.Log.Warn("Unsupported event type %s in encrypted event %s", megolmEvt.Type.Repr(), evt.ID)
+		} else {
+			return nil, fmt.Errorf("failed to parse content of megolm payload event: %w", err)
+		}
 	}
-	relatable, ok := megolmEvt.Content.Parsed.(event.Relatable)
-	if ok && content.RelatesTo != nil && relatable.OptionalGetRelatesTo() == nil {
-		relatable.SetRelatesTo(content.RelatesTo)
+	if content.RelatesTo != nil {
+		relatable, ok := megolmEvt.Content.Parsed.(event.Relatable)
+		if ok {
+			if relatable.OptionalGetRelatesTo() == nil {
+				relatable.SetRelatesTo(content.RelatesTo)
+			} else {
+				mach.Log.Trace("Not overriding relation data in %s, as encrypted payload already has it", evt.ID)
+			}
+		} else {
+			mach.Log.Warn("Encrypted event %s has relation data, but content type %T (%s) doesn't support it", evt.ID, megolmEvt.Content.Parsed, megolmEvt.Type.String())
+		}
 	}
 	megolmEvt.Type.Class = evt.Type.Class
 	return &event.Event{

@@ -9,12 +9,13 @@ package attachment
 import (
 	"crypto/aes"
 	"crypto/cipher"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
 	"hash"
 	"io"
+
+	"maunium.net/go/mautrix/crypto/utils"
 )
 
 var (
@@ -26,16 +27,10 @@ var (
 	ReaderClosed         = errors.New("encrypting reader was already closed")
 )
 
-const (
-	keyLength  = 32
-	hashLength = 32
-	ivLength   = 16
-)
-
 var (
-	keyBase64Length  = base64.RawURLEncoding.EncodedLen(keyLength)
-	hashBase64Length = base64.RawStdEncoding.EncodedLen(hashLength)
-	ivBase64Length   = base64.RawStdEncoding.EncodedLen(ivLength)
+	keyBase64Length  = base64.RawURLEncoding.EncodedLen(utils.AESCTRKeyLength)
+	ivBase64Length   = base64.RawStdEncoding.EncodedLen(utils.AESCTRIVLength)
+	hashBase64Length = base64.RawStdEncoding.EncodedLen(utils.SHAHashLength)
 )
 
 type JSONWebKey struct {
@@ -51,8 +46,8 @@ type EncryptedFileHashes struct {
 }
 
 type decodedKeys struct {
-	key [keyLength]byte
-	iv  [ivLength]byte
+	key [utils.AESCTRKeyLength]byte
+	iv  [utils.AESCTRIVLength]byte
 }
 
 type EncryptedFile struct {
@@ -65,7 +60,7 @@ type EncryptedFile struct {
 }
 
 func NewEncryptedFile() *EncryptedFile {
-	key, iv := genA256CTR()
+	key, iv := utils.GenAttachmentA256CTR()
 	return &EncryptedFile{
 		Key: JSONWebKey{
 			Key:         base64.RawURLEncoding.EncodeToString(key[:]),
@@ -103,7 +98,7 @@ func (ef *EncryptedFile) decodeKeys() error {
 
 func (ef *EncryptedFile) Encrypt(plaintext []byte) []byte {
 	ef.decodeKeys()
-	ciphertext := xorA256CTR(plaintext, ef.decoded.key, ef.decoded.iv)
+	ciphertext := utils.XorA256CTR(plaintext, ef.decoded.key, ef.decoded.iv)
 	checksum := sha256.Sum256(ciphertext)
 	ef.Hashes.SHA256 = base64.RawStdEncoding.EncodeToString(checksum[:])
 	return ciphertext
@@ -153,7 +148,7 @@ func (ef *EncryptedFile) checkHash(ciphertext []byte) bool {
 	if len(ef.Hashes.SHA256) != hashBase64Length {
 		return false
 	}
-	var checksum [hashLength]byte
+	var checksum [utils.SHAHashLength]byte
 	_, err := base64.RawStdEncoding.Decode(checksum[:], []byte(ef.Hashes.SHA256))
 	if err != nil {
 		return false
@@ -171,27 +166,6 @@ func (ef *EncryptedFile) Decrypt(ciphertext []byte) ([]byte, error) {
 	} else if err := ef.decodeKeys(); err != nil {
 		return nil, err
 	} else {
-		return xorA256CTR(ciphertext, ef.decoded.key, ef.decoded.iv), nil
+		return utils.XorA256CTR(ciphertext, ef.decoded.key, ef.decoded.iv), nil
 	}
-}
-
-func xorA256CTR(source []byte, key [keyLength]byte, iv [ivLength]byte) []byte {
-	block, _ := aes.NewCipher(key[:])
-	result := make([]byte, len(source))
-	cipher.NewCTR(block, iv[:]).XORKeyStream(result, source)
-	return result
-}
-
-func genA256CTR() (key [keyLength]byte, iv [ivLength]byte) {
-	_, err := rand.Read(key[:])
-	if err != nil {
-		panic(err)
-	}
-
-	// For some reason we leave the 8 last bytes empty even though AES256-CTR has a 16-byte block size.
-	_, err = rand.Read(iv[:8])
-	if err != nil {
-		panic(err)
-	}
-	return
 }

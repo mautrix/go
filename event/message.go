@@ -28,6 +28,8 @@ const (
 	MsgVideo    MessageType = "m.video"
 	MsgAudio    MessageType = "m.audio"
 	MsgFile     MessageType = "m.file"
+
+	MsgVerificationRequest MessageType = "m.key.verification.request"
 )
 
 // Format specifies the format of the formatted_body in m.room.message events.
@@ -93,6 +95,11 @@ type MessageEventContent struct {
 	// Edits and relations
 	NewContent *MessageEventContent `json:"m.new_content,omitempty"`
 	RelatesTo  *RelatesTo           `json:"m.relates_to,omitempty"`
+
+	// In-room verification
+	To         id.UserID            `json:"to,omitempty"`
+	FromDevice id.DeviceID          `json:"from_device,omitempty"`
+	Methods    []VerificationMethod `json:"methods,omitempty"`
 
 	replyFallbackRemoved bool
 }

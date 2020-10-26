@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"maunium.net/go/mautrix/crypto/olm"
+	"maunium.net/go/mautrix/crypto/ssss"
 	"maunium.net/go/mautrix/id"
 
 	"maunium.net/go/mautrix"
@@ -31,6 +32,7 @@ type Logger interface {
 // OlmMachine is the main struct for handling Matrix end-to-end encryption.
 type OlmMachine struct {
 	Client *mautrix.Client
+	SSSS   *ssss.Machine
 	Log    Logger
 
 	CryptoStore Store
@@ -43,7 +45,7 @@ type OlmMachine struct {
 
 	DefaultSASTimeout time.Duration
 	// AcceptVerificationFrom determines whether the machine will accept verification requests from this device.
-	AcceptVerificationFrom func(string, *DeviceIdentity) (VerificationRequestResponse, VerificationHooks)
+	AcceptVerificationFrom func(string, *DeviceIdentity, id.RoomID) (VerificationRequestResponse, VerificationHooks)
 
 	account *OlmAccount
 
@@ -52,6 +54,9 @@ type OlmMachine struct {
 
 	keyWaiters     map[id.SessionID]chan struct{}
 	keyWaitersLock sync.Mutex
+
+	CrossSigningKeys    *CrossSigningKeysCache
+	crossSigningPubkeys *CrossSigningPublicKeysCache
 }
 
 // StateStore is used by OlmMachine to get room state information that's needed for encryption.
@@ -68,6 +73,7 @@ type StateStore interface {
 func NewOlmMachine(client *mautrix.Client, log Logger, cryptoStore Store, stateStore StateStore) *OlmMachine {
 	mach := &OlmMachine{
 		Client:      client,
+		SSSS:        ssss.NewSSSSMachine(client),
 		Log:         log,
 		CryptoStore: cryptoStore,
 		StateStore:  stateStore,
@@ -76,7 +82,7 @@ func NewOlmMachine(client *mautrix.Client, log Logger, cryptoStore Store, stateS
 		ShareKeysToUnverifiedDevices: false,
 
 		DefaultSASTimeout: 10 * time.Minute,
-		AcceptVerificationFrom: func(string, *DeviceIdentity) (VerificationRequestResponse, VerificationHooks) {
+		AcceptVerificationFrom: func(string, *DeviceIdentity, id.RoomID) (VerificationRequestResponse, VerificationHooks) {
 			// Reject requests by default. Users need to override this to return appropriate verification hooks.
 			return RejectRequest, nil
 		},
@@ -134,6 +140,18 @@ func Fingerprint(signingKey id.SigningKey) string {
 // Fingerprint returns the fingerprint of the Olm account that can be used for non-interactive verification.
 func (mach *OlmMachine) Fingerprint() string {
 	return Fingerprint(mach.account.SigningKey())
+}
+
+// OwnIdentity returns this device's DeviceIdentity struct
+func (mach *OlmMachine) OwnIdentity() *DeviceIdentity {
+	return &DeviceIdentity{
+		UserID:      mach.Client.UserID,
+		DeviceID:    mach.Client.DeviceID,
+		IdentityKey: mach.account.IdentityKey(),
+		SigningKey:  mach.account.SigningKey(),
+		Trust:       TrustStateVerified,
+		Deleted:     false,
+	}
 }
 
 // ProcessSyncResponse processes a single /sync response.
@@ -228,17 +246,17 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 		mach.handleRoomKeyRequest(evt.Sender, content)
 	// verification cases
 	case *event.VerificationStartEventContent:
-		mach.handleVerificationStart(evt.Sender, content, 10*time.Minute)
+		mach.handleVerificationStart(evt.Sender, content, content.TransactionID, 10*time.Minute, "")
 	case *event.VerificationAcceptEventContent:
-		mach.handleVerificationAccept(evt.Sender, content)
+		mach.handleVerificationAccept(evt.Sender, content, content.TransactionID)
 	case *event.VerificationKeyEventContent:
-		mach.handleVerificationKey(evt.Sender, content)
+		mach.handleVerificationKey(evt.Sender, content, content.TransactionID)
 	case *event.VerificationMacEventContent:
-		mach.handleVerificationMAC(evt.Sender, content)
+		mach.handleVerificationMAC(evt.Sender, content, content.TransactionID)
 	case *event.VerificationCancelEventContent:
-		mach.handleVerificationCancel(evt.Sender, content)
+		mach.handleVerificationCancel(evt.Sender, content, content.TransactionID)
 	case *event.VerificationRequestEventContent:
-		mach.handleVerificationRequest(evt.Sender, content)
+		mach.handleVerificationRequest(evt.Sender, content, content.TransactionID, "")
 	case *event.RoomKeyWithheldEventContent:
 		mach.handleRoomKeyWithheld(content)
 	default:

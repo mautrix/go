@@ -142,6 +142,19 @@ type Store interface {
 	// FilterTrackedUsers returns a filtered version of the given list that only includes user IDs whose device lists
 	// have been stored with PutDevices. A user is considered tracked even if the PutDevices list was empty.
 	FilterTrackedUsers([]id.UserID) []id.UserID
+
+	// PutCrossSigningKey stores a cross-signing key of some user along with its usage.
+	PutCrossSigningKey(id.UserID, id.CrossSigningUsage, id.Ed25519) error
+	// GetCrossSigningKeys retrieves a user's stored cross-signing keys.
+	GetCrossSigningKeys(id.UserID) (map[id.CrossSigningUsage]id.Ed25519, error)
+	// PutSignature stores a signature of a cross-signing or device key along with the signer's user ID and key.
+	PutSignature(id.UserID, id.Ed25519, id.UserID, id.Ed25519, string) error
+	// GetSignaturesForKeyBy returns the signatures for a cross-signing or device key by the given signer.
+	GetSignaturesForKeyBy(id.UserID, id.Ed25519, id.UserID) (map[id.Ed25519]string, error)
+	// IsKeySignedBy returns whether a cross-signing or device key is signed by the given signer.
+	IsKeySignedBy(id.UserID, id.Ed25519, id.UserID, id.Ed25519) (bool, error)
+	// DropSignaturesByKey deletes the signatures made by the given user and key from the store. It returns the number of signatures deleted.
+	DropSignaturesByKey(id.UserID, id.Ed25519) (int64, error)
 }
 
 type messageIndexKey struct {
@@ -167,6 +180,8 @@ type GobStore struct {
 	OutGroupSessions      map[id.RoomID]*OutboundGroupSession
 	MessageIndices        map[messageIndexKey]messageIndexValue
 	Devices               map[id.UserID]map[id.DeviceID]*DeviceIdentity
+	CrossSigningKeys      map[id.UserID]map[id.CrossSigningUsage]id.Ed25519
+	KeySignatures         map[id.UserID]map[id.Ed25519]map[id.UserID]map[id.Ed25519]string
 }
 
 var _ Store = (*GobStore)(nil)
@@ -181,6 +196,8 @@ func NewGobStore(path string) (*GobStore, error) {
 		OutGroupSessions:      make(map[id.RoomID]*OutboundGroupSession),
 		MessageIndices:        make(map[messageIndexKey]messageIndexValue),
 		Devices:               make(map[id.UserID]map[id.DeviceID]*DeviceIdentity),
+		CrossSigningKeys:      make(map[id.UserID]map[id.CrossSigningUsage]id.Ed25519),
+		KeySignatures:         make(map[id.UserID]map[id.Ed25519]map[id.UserID]map[id.Ed25519]string),
 	}
 	return gs, gs.load()
 }
@@ -484,4 +501,94 @@ func (gs *GobStore) FilterTrackedUsers(users []id.UserID) []id.UserID {
 	}
 	gs.lock.RUnlock()
 	return users[:ptr]
+}
+
+func (gs *GobStore) PutCrossSigningKey(userID id.UserID, usage id.CrossSigningUsage, key id.Ed25519) error {
+	gs.lock.RLock()
+	userKeys, ok := gs.CrossSigningKeys[userID]
+	if !ok {
+		userKeys = make(map[id.CrossSigningUsage]id.Ed25519)
+		gs.CrossSigningKeys[userID] = userKeys
+	}
+	userKeys[usage] = key
+	err := gs.save()
+	gs.lock.RUnlock()
+	return err
+}
+
+func (gs *GobStore) GetCrossSigningKeys(userID id.UserID) (map[id.CrossSigningUsage]id.Ed25519, error) {
+	gs.lock.RLock()
+	defer gs.lock.RUnlock()
+	keys, ok := gs.CrossSigningKeys[userID]
+	if !ok {
+		return map[id.CrossSigningUsage]id.Ed25519{}, nil
+	}
+	return keys, nil
+}
+
+func (gs *GobStore) PutSignature(signedUserID id.UserID, signedKey id.Ed25519, signerUserID id.UserID, signerKey id.Ed25519, signature string) error {
+	gs.lock.RLock()
+	signedUserSigs, ok := gs.KeySignatures[signedUserID]
+	if !ok {
+		signedUserSigs = make(map[id.Ed25519]map[id.UserID]map[id.Ed25519]string)
+		gs.KeySignatures[signedUserID] = signedUserSigs
+	}
+	signaturesForKey, ok := signedUserSigs[signedKey]
+	if !ok {
+		signaturesForKey = make(map[id.UserID]map[id.Ed25519]string)
+		signedUserSigs[signedKey] = signaturesForKey
+	}
+	signedByUser, ok := signaturesForKey[signerUserID]
+	if !ok {
+		signedByUser = make(map[id.Ed25519]string)
+		signaturesForKey[signerUserID] = signedByUser
+	}
+	signedByUser[signerKey] = signature
+	err := gs.save()
+	gs.lock.RUnlock()
+	return err
+}
+
+func (gs *GobStore) GetSignaturesForKeyBy(userID id.UserID, key id.Ed25519, signerID id.UserID) (map[id.Ed25519]string, error) {
+	gs.lock.RLock()
+	defer gs.lock.RUnlock()
+	userKeys, ok := gs.KeySignatures[userID]
+	if !ok {
+		return map[id.Ed25519]string{}, nil
+	}
+	sigsForKey, ok := userKeys[key]
+	if !ok {
+		return map[id.Ed25519]string{}, nil
+	}
+	sigsBySigner, ok := sigsForKey[signerID]
+	if !ok {
+		return map[id.Ed25519]string{}, nil
+	}
+	return sigsBySigner, nil
+}
+
+func (gs *GobStore) IsKeySignedBy(userID id.UserID, key id.Ed25519, signerID id.UserID, signerKey id.Ed25519) (bool, error) {
+	sigs, err := gs.GetSignaturesForKeyBy(userID, key, signerID)
+	if err != nil {
+		return false, err
+	}
+	_, ok := sigs[signerKey]
+	return ok, nil
+}
+
+func (gs *GobStore) DropSignaturesByKey(userID id.UserID, key id.Ed25519) (int64, error) {
+	var count int64
+	gs.lock.RLock()
+	for _, userSigs := range gs.KeySignatures {
+		for _, keySigs := range userSigs {
+			if signedBySigner, ok := keySigs[userID]; ok {
+				if _, ok := signedBySigner[key]; ok {
+					count++
+					delete(signedBySigner, key)
+				}
+			}
+		}
+	}
+	gs.lock.RUnlock()
+	return count, nil
 }

@@ -247,7 +247,7 @@ func (mach *OlmMachine) findOlmSessionsForUser(session *OutboundGroupSession, us
 				Reason:    "Device is blacklisted",
 			}}
 			session.Users[userKey] = OGSIgnored
-		} else if !mach.AllowUnverifiedDevices && device.Trust == TrustStateUnset {
+		} else if !mach.AllowUnverifiedDevices && !mach.IsDeviceTrusted(device) {
 			mach.Log.Debug("Not encrypting group session %s for %s of %s: device is not verified", session.ID(), deviceID, userID)
 			withheld[deviceID] = &event.Content{Parsed: &event.RoomKeyWithheldEventContent{
 				RoomID:    session.RoomID,

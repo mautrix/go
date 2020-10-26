@@ -83,7 +83,11 @@ func (e HTTPError) Error() string {
 		return fmt.Sprintf("failed to %s %s: %s (HTTP %d): %s", e.Request.Method, e.Request.URL.Path,
 			e.RespError.ErrCode, e.Response.StatusCode, e.RespError.Err)
 	} else {
-		return fmt.Sprintf("failed to %s %s: %d %s\n%s", e.Request.Method, e.Request.URL.Path, e.Response.StatusCode, e.Response.Status, e.ResponseBody)
+		msg := fmt.Sprintf("failed to %s %s: %s", e.Request.Method, e.Request.URL.Path, e.Response.Status)
+		if len(e.ResponseBody) > 0 {
+			msg = fmt.Sprintf("%s\n%s", msg, e.ResponseBody)
+		}
+		return msg
 	}
 }
 

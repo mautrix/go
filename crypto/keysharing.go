@@ -172,7 +172,7 @@ func (mach *OlmMachine) defaultAllowKeyShare(device *DeviceIdentity, _ event.Req
 	} else if device.Trust == TrustStateBlacklisted {
 		mach.Log.Debug("Ignoring key request from blacklisted device %s", device.DeviceID)
 		return &KeyShareRejectBlacklisted
-	} else if device.Trust == TrustStateVerified {
+	} else if mach.IsDeviceTrusted(device) {
 		mach.Log.Debug("Accepting key request from verified device %s", device.DeviceID)
 		return nil
 	} else if mach.ShareKeysToUnverifiedDevices {

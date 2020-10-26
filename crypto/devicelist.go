@@ -77,6 +77,33 @@ func (mach *OlmMachine) fetchKeys(users []id.UserID, sinceToken string, includeU
 				mach.Log.Error("Failed to validate device %s of %s: %v", deviceID, userID, err)
 			} else if newDevice != nil {
 				newDevices[deviceID] = newDevice
+				for signerUserID, signerKeys := range deviceKeys.Signatures {
+					for signerKey, signature := range signerKeys {
+						// verify and save self-signing key signature for each device
+						if selfSignKeys, ok := resp.SelfSigningKeys[signerUserID]; ok {
+							for _, pubKey := range selfSignKeys.Keys {
+								if selfSigs, ok := deviceKeys.Signatures[signerUserID]; !ok {
+									continue
+								} else if _, ok := selfSigs[id.NewKeyID(id.KeyAlgorithmEd25519, pubKey.String())]; !ok {
+									continue
+								}
+								if verified, err := olm.VerifySignatureJSON(deviceKeys, signerUserID, pubKey.String(), pubKey); verified {
+									if signKey, ok := deviceKeys.Keys[id.DeviceKeyID(signerKey)]; ok {
+										signature := deviceKeys.Signatures[signerUserID][id.NewKeyID(id.KeyAlgorithmEd25519, pubKey.String())]
+										mach.Log.Trace("Verified self-signing signature for device %v: `%v`", deviceID, signature)
+										mach.CryptoStore.PutSignature(userID, id.Ed25519(signKey), signerUserID, pubKey, signature)
+									}
+								} else {
+									mach.Log.Warn("Could not verify device self-signing signatures: %v", err)
+								}
+							}
+						}
+						// save signature of device made by its own device signing key
+						if signKey, ok := deviceKeys.Keys[id.DeviceKeyID(signerKey)]; ok {
+							mach.CryptoStore.PutSignature(userID, id.Ed25519(signKey), signerUserID, id.Ed25519(signKey), signature)
+						}
+					}
+				}
 			}
 		}
 		mach.Log.Trace("Storing new device list for %s containing %d devices", userID, len(newDevices))
@@ -94,6 +121,11 @@ func (mach *OlmMachine) fetchKeys(users []id.UserID, sinceToken string, includeU
 	for userID := range req.DeviceKeys {
 		mach.Log.Warn("Didn't get any keys for user %s", userID)
 	}
+
+	mach.storeCrossSigningKeys(resp.MasterKeys, resp.DeviceKeys)
+	mach.storeCrossSigningKeys(resp.SelfSigningKeys, resp.DeviceKeys)
+	mach.storeCrossSigningKeys(resp.UserSigningKeys, resp.DeviceKeys)
+
 	return data
 }
 
@@ -130,7 +162,7 @@ func (mach *OlmMachine) validateDevice(userID id.UserID, deviceID id.DeviceID, d
 		return existing, MismatchingSigningKey
 	}
 
-	ok, err := olm.VerifySignatureJSON(deviceKeys, userID, deviceID, signingKey)
+	ok, err := olm.VerifySignatureJSON(deviceKeys, userID, deviceID.String(), signingKey)
 	if err != nil {
 		return existing, fmt.Errorf("failed to verify signature: %w", err)
 	} else if !ok {

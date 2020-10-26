@@ -618,3 +618,107 @@ func (store *SQLCryptoStore) FilterTrackedUsers(users []id.UserID) []id.UserID {
 	}
 	return users[:ptr]
 }
+
+// PutCrossSigningKey stores a cross-signing key of some user along with its usage.
+func (store *SQLCryptoStore) PutCrossSigningKey(userID id.UserID, usage id.CrossSigningUsage, key id.Ed25519) error {
+	var err error
+	if store.Dialect == "postgres" {
+		_, err = store.DB.Exec(`
+			INSERT INTO crypto_cross_signing_keys (user_id, usage, key) VALUES ($1, $2, $3) ON CONFLICT (user_id, usage) DO UPDATE SET key=$3`,
+			userID, usage, key)
+	} else if store.Dialect == "sqlite3" {
+		_, err = store.DB.Exec("INSERT OR REPLACE INTO crypto_cross_signing_keys (user_id, usage, key) VALUES ($1, $2, $3)",
+			userID, usage, key)
+	} else {
+		err = fmt.Errorf("unsupported dialect %s", store.Dialect)
+	}
+	if err != nil {
+		store.Log.Warn("Failed to store cross-signing key: %v", err)
+	}
+	return nil
+}
+
+// GetCrossSigningKeys retrieves a user's stored cross-signing keys.
+func (store *SQLCryptoStore) GetCrossSigningKeys(userID id.UserID) (map[id.CrossSigningUsage]id.Ed25519, error) {
+	rows, err := store.DB.Query("SELECT usage, key FROM crypto_cross_signing_keys WHERE user_id=$1", userID)
+	if err != nil {
+		return nil, err
+	}
+	data := make(map[id.CrossSigningUsage]id.Ed25519)
+	for rows.Next() {
+		var usage id.CrossSigningUsage
+		var key id.Ed25519
+		err := rows.Scan(&usage, &key)
+		if err != nil {
+			return nil, err
+		}
+		data[usage] = key
+	}
+
+	return data, nil
+}
+
+// PutSignature stores a signature of a cross-signing or device key along with the signer's user ID and key.
+func (store *SQLCryptoStore) PutSignature(signedUserID id.UserID, signedKey id.Ed25519, signerUserID id.UserID, signerKey id.Ed25519, signature string) error {
+	var err error
+	if store.Dialect == "postgres" {
+		_, err = store.DB.Exec(`
+			INSERT INTO crypto_cross_signing_signatures (signed_user_id, signed_key, signer_user_id, signer_key, signature) VALUES ($1, $2, $3, $4, $5)
+			ON CONFLICT (signed_user_id, signed_key, signer_user_id, signer_key) DO UPDATE SET signature=$5`,
+			signedUserID, signedKey, signerUserID, signerKey, signature)
+	} else if store.Dialect == "sqlite3" {
+		_, err = store.DB.Exec(`
+			INSERT OR REPLACE INTO crypto_cross_signing_signatures (signed_user_id, signed_key, signer_user_id, signer_key, signature)
+			VALUES ($1, $2, $3, $4, $5)`,
+			signedUserID, signedKey, signerUserID, signerKey, signature)
+	} else {
+		err = fmt.Errorf("unsupported dialect %s", store.Dialect)
+	}
+	if err != nil {
+		store.Log.Warn("Failed to store signature: %v", err)
+	}
+	return nil
+}
+
+// GetSignaturesForKeyBy retrieves the stored signatures for a given cross-signing or device key, by the given signer.
+func (store *SQLCryptoStore) GetSignaturesForKeyBy(userID id.UserID, key id.Ed25519, signerID id.UserID) (map[id.Ed25519]string, error) {
+	rows, err := store.DB.Query("SELECT signer_key, signature FROM crypto_cross_signing_signatures WHERE signed_user_id=$1 AND signed_key=$2 AND signer_user_id=$3", userID, key, signerID)
+	if err != nil {
+		return nil, err
+	}
+	data := make(map[id.Ed25519]string)
+	for rows.Next() {
+		var signerKey id.Ed25519
+		var signature string
+		err := rows.Scan(&signerKey, &signature)
+		if err != nil {
+			return nil, err
+		}
+		data[signerKey] = signature
+	}
+
+	return data, nil
+}
+
+// IsKeySignedBy returns whether a cross-signing or device key is signed by the given signer.
+func (store *SQLCryptoStore) IsKeySignedBy(userID id.UserID, key id.Ed25519, signerID id.UserID, signerKey id.Ed25519) (bool, error) {
+	sigs, err := store.GetSignaturesForKeyBy(userID, key, signerID)
+	if err != nil {
+		return false, err
+	}
+	_, ok := sigs[signerKey]
+	return ok, nil
+}
+
+// DropSignaturesByKey deletes the signatures made by the given user and key from the store. It returns the number of signatures deleted.
+func (store *SQLCryptoStore) DropSignaturesByKey(userID id.UserID, key id.Ed25519) (int64, error) {
+	res, err := store.DB.Exec("DELETE FROM crypto_cross_signing_signatures WHERE signer_user_id=$1 AND signer_key=$2", userID, key)
+	if err != nil {
+		return 0, err
+	}
+	count, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
