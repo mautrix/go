@@ -54,13 +54,13 @@ type ErrorCode string
 
 // Native ErrorCodes
 const (
-	ErrForbidden ErrorCode = "M_FORBIDDEN"
-	ErrUnknown   ErrorCode = "M_UNKNOWN"
+	ErrUnknownToken ErrorCode = "M_UNKNOWN_TOKEN"
+	ErrBadJSON      ErrorCode = "M_BAD_JSON"
+	ErrNotJSON      ErrorCode = "M_NOT_JSON"
+	ErrUnknown      ErrorCode = "M_UNKNOWN"
 )
 
 // Custom ErrorCodes
 const (
 	ErrNoTransactionID ErrorCode = "NET.MAUNIUM.NO_TRANSACTION_ID"
-	ErrNoBody          ErrorCode = "NET.MAUNIUM.NO_REQUEST_BODY"
-	ErrInvalidJSON     ErrorCode = "NET.MAUNIUM.INVALID_JSON"
 )

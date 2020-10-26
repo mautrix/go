@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -51,27 +52,38 @@ func (as *AppService) Stop() {
 		return
 	}
 
-	ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 	_ = as.server.Shutdown(ctx)
 	as.server = nil
 }
 
 // CheckServerToken checks if the given request originated from the Matrix homeserver.
-func (as *AppService) CheckServerToken(w http.ResponseWriter, r *http.Request) bool {
-	query := r.URL.Query()
-	val, ok := query["access_token"]
-	if !ok {
+func (as *AppService) CheckServerToken(w http.ResponseWriter, r *http.Request) (isValid bool) {
+	authHeader := r.Header.Get("Authorization")
+	if len(authHeader) > 0 && strings.HasPrefix(authHeader, "Bearer ") {
+		isValid = authHeader[len("Bearer "):] == as.Registration.ServerToken
+	} else {
+		queryToken := r.URL.Query().Get("access_token")
+		if len(queryToken) > 0 {
+			isValid = queryToken == as.Registration.ServerToken
+		} else {
+			Error{
+				ErrorCode:  ErrUnknownToken,
+				HTTPStatus: http.StatusForbidden,
+				Message:    "Missing access token",
+			}.Write(w)
+			return
+		}
+	}
+	if !isValid {
 		Error{
-			ErrorCode:  ErrForbidden,
+			ErrorCode:  ErrUnknownToken,
 			HTTPStatus: http.StatusForbidden,
-			Message:    "Bad token supplied.",
+			Message:    "Incorrect access token",
 		}.Write(w)
-		return false
 	}
-	for _, str := range val {
-		return str == as.Registration.ServerToken
-	}
-	return false
+	return
 }
 
 // PutTransaction handles a /transactions PUT call from the homeserver.
@@ -86,7 +98,7 @@ func (as *AppService) PutTransaction(w http.ResponseWriter, r *http.Request) {
 		Error{
 			ErrorCode:  ErrNoTransactionID,
 			HTTPStatus: http.StatusBadRequest,
-			Message:    "Missing transaction ID.",
+			Message:    "Missing transaction ID",
 		}.Write(w)
 		return
 	}
@@ -94,9 +106,9 @@ func (as *AppService) PutTransaction(w http.ResponseWriter, r *http.Request) {
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil || len(body) == 0 {
 		Error{
-			ErrorCode:  ErrNoBody,
+			ErrorCode:  ErrNotJSON,
 			HTTPStatus: http.StatusBadRequest,
-			Message:    "Missing request body.",
+			Message:    "Missing request body",
 		}.Write(w)
 		return
 	}
@@ -111,9 +123,9 @@ func (as *AppService) PutTransaction(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		as.Log.Warnfln("Failed to parse JSON of transaction %s: %v", txnID, err)
 		Error{
-			ErrorCode:  ErrInvalidJSON,
+			ErrorCode:  ErrBadJSON,
 			HTTPStatus: http.StatusBadRequest,
-			Message:    "Failed to parse body JSON.",
+			Message:    "Failed to parse body JSON",
 		}.Write(w)
 	} else {
 		for _, evt := range eventList.Events {
