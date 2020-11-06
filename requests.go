@@ -8,6 +8,29 @@ import (
 	"maunium.net/go/mautrix/pushrules"
 )
 
+type AuthType string
+
+const (
+	AuthTypePassword  = "m.login.password"
+	AuthTypeReCAPTCHA = "m.login.recaptcha"
+	AuthTypeOAuth2    = "m.login.oauth2"
+	AuthTypeSSO       = "m.login.sso"
+	AuthTypeEmail     = "m.login.email.identity"
+	AuthTypeMSISDN    = "m.login.msisdn"
+	AuthTypeToken     = "m.login.token"
+	AuthTypeDummy     = "m.login.dummy"
+
+	AuthTypeAppservice = "uk.half-shot.msc2778.login.application_service"
+)
+
+type IdentifierType string
+
+const (
+	IdentifierTypeUser       = "m.id.user"
+	IdentifierTypeThirdParty = "m.id.thirdparty"
+	IdentifierTypePhone      = "m.id.phone"
+)
+
 // ReqRegister is the JSON request for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-register
 type ReqRegister struct {
 	Username                 string      `json:"username,omitempty"`
@@ -18,8 +41,13 @@ type ReqRegister struct {
 	Auth                     interface{} `json:"auth,omitempty"`
 }
 
+type BaseAuthData struct {
+	Type    AuthType `json:"type"`
+	Session string   `json:"session"`
+}
+
 type UserIdentifier struct {
-	Type string `json:"type"`
+	Type IdentifierType `json:"type"`
 
 	User string `json:"user,omitempty"`
 
@@ -32,12 +60,26 @@ type UserIdentifier struct {
 
 // ReqLogin is the JSON request for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-login
 type ReqLogin struct {
-	Type                     string         `json:"type"`
+	Type                     AuthType       `json:"type"`
 	Identifier               UserIdentifier `json:"identifier"`
 	Password                 string         `json:"password,omitempty"`
 	Token                    string         `json:"token,omitempty"`
 	DeviceID                 id.DeviceID    `json:"device_id,omitempty"`
 	InitialDeviceDisplayName string         `json:"initial_device_display_name,omitempty"`
+
+	// Whether or not the returned credentials should be stored in the Client
+	StoreCredentials bool `json:"-"`
+}
+
+type ReqUIAuthFallback struct {
+	Session string `json:"session"`
+	User    string `json:"user"`
+}
+
+type ReqUIAuthLogin struct {
+	BaseAuthData
+	User     string `json:"user"`
+	Password string `json:"password"`
 }
 
 // ReqCreateRoom is the JSON request for https://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-createroom
@@ -145,6 +187,17 @@ type ReqUploadKeys struct {
 	OneTimeKeys map[id.KeyID]OneTimeKey `json:"one_time_keys"`
 }
 
+type ReqKeysSignatures struct {
+	UserID     id.UserID              `json:"user_id"`
+	DeviceID   id.DeviceID            `json:"device_id,omitempty"`
+	Algorithms []id.Algorithm         `json:"algorithms,omitempty"`
+	Usage      []id.CrossSigningUsage `json:"usage,omitempty"`
+	Keys       map[id.KeyID]string    `json:"keys"`
+	Signatures Signatures             `json:"signatures"`
+}
+
+type ReqUploadSignatures map[id.UserID]map[string]ReqKeysSignatures
+
 type DeviceKeys struct {
 	UserID     id.UserID              `json:"user_id"`
 	DeviceID   id.DeviceID            `json:"device_id"`
@@ -152,6 +205,27 @@ type DeviceKeys struct {
 	Keys       KeyMap                 `json:"keys"`
 	Signatures Signatures             `json:"signatures"`
 	Unsigned   map[string]interface{} `json:"unsigned,omitempty"`
+}
+
+type CrossSigningKeys struct {
+	UserID     id.UserID                         `json:"user_id"`
+	Usage      []id.CrossSigningUsage            `json:"usage"`
+	Keys       map[id.KeyID]id.Ed25519           `json:"keys"`
+	Signatures map[id.UserID]map[id.KeyID]string `json:"signatures,omitempty"`
+}
+
+func (csk *CrossSigningKeys) FirstKey() id.Ed25519 {
+	for _, key := range csk.Keys {
+		return key
+	}
+	return ""
+}
+
+type UploadCrossSigningKeysReq struct {
+	Master      CrossSigningKeys `json:"master_key"`
+	SelfSigning CrossSigningKeys `json:"self_signing_key"`
+	UserSigning CrossSigningKeys `json:"user_signing_key"`
+	Auth        interface{}      `json:"auth,omitempty"`
 }
 
 type KeyMap map[id.DeviceKeyID]string
@@ -172,7 +246,7 @@ func (km KeyMap) GetCurve25519(deviceID id.DeviceID) id.Curve25519 {
 	return id.Curve25519(val)
 }
 
-type Signatures map[id.UserID]map[id.DeviceKeyID]string
+type Signatures map[id.UserID]map[id.KeyID]string
 
 type ReqQueryKeys struct {
 	DeviceKeys DeviceKeysRequest `json:"device_keys"`

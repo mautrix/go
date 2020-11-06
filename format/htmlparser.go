@@ -20,12 +20,13 @@ import (
 // https://matrix.org/docs/spec/appendices#matrix-to-navigation
 var MatrixToURL = regexp.MustCompile("^(?:https?://)?(?:www\\.)?matrix\\.to/#/([#@!+].*)(?:/(\\$.+))?")
 
-type TextConverter func(string) string
-type CodeBlockConverter func(code, language string) string
+type Context map[string]interface{}
+type TextConverter func(string, Context) string
+type CodeBlockConverter func(code, language string, ctx Context) string
 
 // HTMLParser is a somewhat customizable Matrix HTML parser.
 type HTMLParser struct {
-	PillConverter           func(mxid, eventID string) string
+	PillConverter           func(mxid, eventID string, ctx Context) string
 	TabsToSpaces            int
 	Newline                 string
 	HorizontalLine          string
@@ -57,9 +58,9 @@ func Digits(num int) int {
 	return int(math.Floor(math.Log10(float64(num))) + 1)
 }
 
-func (parser *HTMLParser) listToString(node *html.Node, stripLinebreak bool) string {
+func (parser *HTMLParser) listToString(node *html.Node, stripLinebreak bool, ctx Context) string {
 	ordered := node.Data == "ol"
-	taggedChildren := parser.nodeToTaggedStrings(node.FirstChild, stripLinebreak)
+	taggedChildren := parser.nodeToTaggedStrings(node.FirstChild, stripLinebreak, ctx)
 	counter := 1
 	indentLength := 0
 	if ordered {
@@ -97,46 +98,46 @@ func (parser *HTMLParser) listToString(node *html.Node, stripLinebreak bool) str
 	return strings.Join(children, "\n")
 }
 
-func (parser *HTMLParser) basicFormatToString(node *html.Node, stripLinebreak bool) string {
-	str := parser.nodeToTagAwareString(node.FirstChild, stripLinebreak)
+func (parser *HTMLParser) basicFormatToString(node *html.Node, stripLinebreak bool, ctx Context) string {
+	str := parser.nodeToTagAwareString(node.FirstChild, stripLinebreak, ctx)
 	switch node.Data {
 	case "b", "strong":
 		if parser.BoldConverter != nil {
-			return parser.BoldConverter(str)
+			return parser.BoldConverter(str, ctx)
 		}
 		return fmt.Sprintf("**%s**", str)
 	case "i", "em":
 		if parser.ItalicConverter != nil {
-			return parser.ItalicConverter(str)
+			return parser.ItalicConverter(str, ctx)
 		}
 		return fmt.Sprintf("_%s_", str)
 	case "s", "del", "strike":
 		if parser.StrikethroughConverter != nil {
-			return parser.StrikethroughConverter(str)
+			return parser.StrikethroughConverter(str, ctx)
 		}
 		return fmt.Sprintf("~~%s~~", str)
 	case "u", "ins":
 		if parser.UnderlineConverter != nil {
-			return parser.UnderlineConverter(str)
+			return parser.UnderlineConverter(str, ctx)
 		}
 	case "tt", "code":
 		if parser.MonospaceConverter != nil {
-			return parser.MonospaceConverter(str)
+			return parser.MonospaceConverter(str, ctx)
 		}
 		return fmt.Sprintf("`%s`", str)
 	}
 	return str
 }
 
-func (parser *HTMLParser) headerToString(node *html.Node, stripLinebreak bool) string {
-	children := parser.nodeToStrings(node.FirstChild, stripLinebreak)
+func (parser *HTMLParser) headerToString(node *html.Node, stripLinebreak bool, ctx Context) string {
+	children := parser.nodeToStrings(node.FirstChild, stripLinebreak, ctx)
 	length := int(node.Data[1] - '0')
 	prefix := strings.Repeat("#", length) + " "
 	return prefix + strings.Join(children, "")
 }
 
-func (parser *HTMLParser) blockquoteToString(node *html.Node, stripLinebreak bool) string {
-	str := parser.nodeToTagAwareString(node.FirstChild, stripLinebreak)
+func (parser *HTMLParser) blockquoteToString(node *html.Node, stripLinebreak bool, ctx Context) string {
+	str := parser.nodeToTagAwareString(node.FirstChild, stripLinebreak, ctx)
 	childrenArr := strings.Split(strings.TrimSpace(str), "\n")
 	// TODO make blockquote prefix configurable
 	for index, child := range childrenArr {
@@ -145,8 +146,8 @@ func (parser *HTMLParser) blockquoteToString(node *html.Node, stripLinebreak boo
 	return strings.Join(childrenArr, "\n")
 }
 
-func (parser *HTMLParser) linkToString(node *html.Node, stripLinebreak bool) string {
-	str := parser.nodeToTagAwareString(node.FirstChild, stripLinebreak)
+func (parser *HTMLParser) linkToString(node *html.Node, stripLinebreak bool, ctx Context) string {
+	str := parser.nodeToTagAwareString(node.FirstChild, stripLinebreak, ctx)
 	href := parser.getAttribute(node, "href")
 	if len(href) == 0 {
 		return str
@@ -159,7 +160,7 @@ func (parser *HTMLParser) linkToString(node *html.Node, stripLinebreak bool) str
 			if len(match) == 3 {
 				eventID = match[2]
 			}
-			return parser.PillConverter(mxid, eventID)
+			return parser.PillConverter(mxid, eventID, ctx)
 		}
 		return str
 	}
@@ -169,22 +170,22 @@ func (parser *HTMLParser) linkToString(node *html.Node, stripLinebreak bool) str
 	return fmt.Sprintf("%s (%s)", str, href)
 }
 
-func (parser *HTMLParser) tagToString(node *html.Node, stripLinebreak bool) string {
+func (parser *HTMLParser) tagToString(node *html.Node, stripLinebreak bool, ctx Context) string {
 	switch node.Data {
 	case "blockquote":
-		return parser.blockquoteToString(node, stripLinebreak)
+		return parser.blockquoteToString(node, stripLinebreak, ctx)
 	case "ol", "ul":
-		return parser.listToString(node, stripLinebreak)
+		return parser.listToString(node, stripLinebreak, ctx)
 	case "h1", "h2", "h3", "h4", "h5", "h6":
-		return parser.headerToString(node, stripLinebreak)
+		return parser.headerToString(node, stripLinebreak, ctx)
 	case "br":
 		return parser.Newline
 	case "b", "strong", "i", "em", "s", "strike", "del", "u", "ins", "tt", "code":
-		return parser.basicFormatToString(node, stripLinebreak)
+		return parser.basicFormatToString(node, stripLinebreak, ctx)
 	case "a":
-		return parser.linkToString(node, stripLinebreak)
+		return parser.linkToString(node, stripLinebreak, ctx)
 	case "p":
-		return parser.nodeToTagAwareString(node.FirstChild, stripLinebreak) + "\n"
+		return parser.nodeToTagAwareString(node.FirstChild, stripLinebreak, ctx) + "\n"
 	case "hr":
 		return parser.HorizontalLine
 	case "pre":
@@ -194,20 +195,23 @@ func (parser *HTMLParser) tagToString(node *html.Node, stripLinebreak bool) stri
 			if strings.HasPrefix(class, "language-") {
 				language = class[len("language-"):]
 			}
-			preStr = parser.nodeToString(node.FirstChild.FirstChild, false)
+			preStr = parser.nodeToString(node.FirstChild.FirstChild, false, ctx)
 		} else {
-			preStr = parser.nodeToString(node.FirstChild, false)
+			preStr = parser.nodeToString(node.FirstChild, false, ctx)
 		}
 		if parser.MonospaceBlockConverter != nil {
-			return parser.MonospaceBlockConverter(preStr, language)
+			return parser.MonospaceBlockConverter(preStr, language, ctx)
 		}
-		return fmt.Sprintf("```%s\n%s\n```", language, preStr)
+		if len(preStr) == 0 || preStr[len(preStr)-1] != '\n' {
+			preStr += "\n"
+		}
+		return fmt.Sprintf("```%s\n%s```", language, preStr)
 	default:
-		return parser.nodeToTagAwareString(node.FirstChild, stripLinebreak)
+		return parser.nodeToTagAwareString(node.FirstChild, stripLinebreak, ctx)
 	}
 }
 
-func (parser *HTMLParser) singleNodeToString(node *html.Node, stripLinebreak bool) TaggedString {
+func (parser *HTMLParser) singleNodeToString(node *html.Node, stripLinebreak bool, ctx Context) TaggedString {
 	switch node.Type {
 	case html.TextNode:
 		if stripLinebreak {
@@ -215,17 +219,17 @@ func (parser *HTMLParser) singleNodeToString(node *html.Node, stripLinebreak boo
 		}
 		return TaggedString{node.Data, "text"}
 	case html.ElementNode:
-		return TaggedString{parser.tagToString(node, stripLinebreak), node.Data}
+		return TaggedString{parser.tagToString(node, stripLinebreak, ctx), node.Data}
 	case html.DocumentNode:
-		return TaggedString{parser.nodeToTagAwareString(node.FirstChild, stripLinebreak), "html"}
+		return TaggedString{parser.nodeToTagAwareString(node.FirstChild, stripLinebreak, ctx), "html"}
 	default:
 		return TaggedString{"", "unknown"}
 	}
 }
 
-func (parser *HTMLParser) nodeToTaggedStrings(node *html.Node, stripLinebreak bool) (strs []TaggedString) {
+func (parser *HTMLParser) nodeToTaggedStrings(node *html.Node, stripLinebreak bool, ctx Context) (strs []TaggedString) {
 	for ; node != nil; node = node.NextSibling {
-		strs = append(strs, parser.singleNodeToString(node, stripLinebreak))
+		strs = append(strs, parser.singleNodeToString(node, stripLinebreak, ctx))
 	}
 	return
 }
@@ -241,8 +245,8 @@ func (parser *HTMLParser) isBlockTag(tag string) bool {
 	return false
 }
 
-func (parser *HTMLParser) nodeToTagAwareString(node *html.Node, stripLinebreak bool) string {
-	strs := parser.nodeToTaggedStrings(node, stripLinebreak)
+func (parser *HTMLParser) nodeToTagAwareString(node *html.Node, stripLinebreak bool, ctx Context) string {
+	strs := parser.nodeToTaggedStrings(node, stripLinebreak, ctx)
 	var output strings.Builder
 	for _, str := range strs {
 		tstr := str.string
@@ -254,24 +258,24 @@ func (parser *HTMLParser) nodeToTagAwareString(node *html.Node, stripLinebreak b
 	return strings.TrimSpace(output.String())
 }
 
-func (parser *HTMLParser) nodeToStrings(node *html.Node, stripLinebreak bool) (strs []string) {
+func (parser *HTMLParser) nodeToStrings(node *html.Node, stripLinebreak bool, ctx Context) (strs []string) {
 	for ; node != nil; node = node.NextSibling {
-		strs = append(strs, parser.singleNodeToString(node, stripLinebreak).string)
+		strs = append(strs, parser.singleNodeToString(node, stripLinebreak, ctx).string)
 	}
 	return
 }
 
-func (parser *HTMLParser) nodeToString(node *html.Node, stripLinebreak bool) string {
-	return strings.Join(parser.nodeToStrings(node, stripLinebreak), "")
+func (parser *HTMLParser) nodeToString(node *html.Node, stripLinebreak bool, ctx Context) string {
+	return strings.Join(parser.nodeToStrings(node, stripLinebreak, ctx), "")
 }
 
 // Parse converts Matrix HTML into text using the settings in this parser.
-func (parser *HTMLParser) Parse(htmlData string) string {
+func (parser *HTMLParser) Parse(htmlData string, ctx Context) string {
 	if parser.TabsToSpaces >= 0 {
 		htmlData = strings.Replace(htmlData, "\t", strings.Repeat(" ", parser.TabsToSpaces), -1)
 	}
 	node, _ := html.Parse(strings.NewReader(htmlData))
-	return parser.nodeToTagAwareString(node, true)
+	return parser.nodeToTagAwareString(node, true, ctx)
 }
 
 // HTMLToText converts Matrix HTML into text with the default settings.
@@ -280,5 +284,5 @@ func HTMLToText(html string) string {
 		TabsToSpaces:   4,
 		Newline:        "\n",
 		HorizontalLine: "\n---\n",
-	}).Parse(html)
+	}).Parse(html, make(Context))
 }

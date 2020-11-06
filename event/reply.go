@@ -45,7 +45,7 @@ func (content *MessageEventContent) RemoveReplyFallback() {
 }
 
 func (content *MessageEventContent) GetReplyTo() id.EventID {
-	if content.RelatesTo != nil && content.RelatesTo.Type == RelReference {
+	if content.RelatesTo != nil && content.RelatesTo.Type == RelReply {
 		return content.RelatesTo.EventID
 	}
 	return ""
@@ -93,7 +93,7 @@ func (evt *Event) GenerateReplyFallbackText() string {
 func (content *MessageEventContent) SetReply(inReplyTo *Event) {
 	content.RelatesTo = &RelatesTo{
 		EventID: inReplyTo.ID,
-		Type:    RelReference,
+		Type:    RelReply,
 	}
 
 	if content.MsgType == MsgText || content.MsgType == MsgNotice {

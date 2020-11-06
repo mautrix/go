@@ -13,8 +13,10 @@ import (
 )
 
 type OlmAccount struct {
-	Internal olm.Account
-	Shared   bool
+	Internal    olm.Account
+	signingKey  id.SigningKey
+	identityKey id.IdentityKey
+	Shared      bool
 }
 
 func NewOlmAccount() *OlmAccount {
@@ -23,15 +25,35 @@ func NewOlmAccount() *OlmAccount {
 	}
 }
 
+func (account *OlmAccount) Keys() (id.SigningKey, id.IdentityKey) {
+	if len(account.signingKey) == 0 || len(account.identityKey) == 0 {
+		account.signingKey, account.identityKey = account.Internal.IdentityKeys()
+	}
+	return account.signingKey, account.identityKey
+}
+
+func (account *OlmAccount) SigningKey() id.SigningKey {
+	if len(account.signingKey) == 0 {
+		account.signingKey, account.identityKey = account.Internal.IdentityKeys()
+	}
+	return account.signingKey
+}
+
+func (account *OlmAccount) IdentityKey() id.IdentityKey {
+	if len(account.identityKey) == 0 {
+		account.signingKey, account.identityKey = account.Internal.IdentityKeys()
+	}
+	return account.identityKey
+}
+
 func (account *OlmAccount) getInitialKeys(userID id.UserID, deviceID id.DeviceID) *mautrix.DeviceKeys {
-	ed, curve := account.Internal.IdentityKeys()
 	deviceKeys := &mautrix.DeviceKeys{
 		UserID:     userID,
 		DeviceID:   deviceID,
 		Algorithms: []id.Algorithm{id.AlgorithmMegolmV1, id.AlgorithmOlmV1},
 		Keys: map[id.DeviceKeyID]string{
-			id.NewDeviceKeyID(id.KeyAlgorithmCurve25519, deviceID): string(curve),
-			id.NewDeviceKeyID(id.KeyAlgorithmEd25519, deviceID):    string(ed),
+			id.NewDeviceKeyID(id.KeyAlgorithmCurve25519, deviceID): string(account.IdentityKey()),
+			id.NewDeviceKeyID(id.KeyAlgorithmEd25519, deviceID):    string(account.SigningKey()),
 		},
 	}
 
@@ -42,14 +64,14 @@ func (account *OlmAccount) getInitialKeys(userID id.UserID, deviceID id.DeviceID
 
 	deviceKeys.Signatures = mautrix.Signatures{
 		userID: {
-			id.NewDeviceKeyID(id.KeyAlgorithmEd25519, deviceID): signature,
+			id.NewKeyID(id.KeyAlgorithmEd25519, deviceID.String()): signature,
 		},
 	}
 	return deviceKeys
 }
 
 func (account *OlmAccount) getOneTimeKeys(userID id.UserID, deviceID id.DeviceID, currentOTKCount int) map[id.KeyID]mautrix.OneTimeKey {
-	newCount := int(account.Internal.MaxNumberOfOneTimeKeys() / 2) - currentOTKCount
+	newCount := int(account.Internal.MaxNumberOfOneTimeKeys()/2) - currentOTKCount
 	if newCount > 0 {
 		account.Internal.GenOneTimeKeys(uint(newCount))
 	}
@@ -61,7 +83,7 @@ func (account *OlmAccount) getOneTimeKeys(userID id.UserID, deviceID id.DeviceID
 		signature, _ := account.Internal.SignJSON(key)
 		key.Signatures = mautrix.Signatures{
 			userID: {
-				id.NewDeviceKeyID(id.KeyAlgorithmEd25519, deviceID): signature,
+				id.NewKeyID(id.KeyAlgorithmEd25519, deviceID.String()): signature,
 			},
 		}
 		key.IsSigned = true

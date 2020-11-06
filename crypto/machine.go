@@ -7,13 +7,21 @@
 package crypto
 
 import (
+	"errors"
+	"fmt"
+	"sync"
+	"time"
+
 	"maunium.net/go/mautrix/crypto/olm"
+	"maunium.net/go/mautrix/crypto/ssss"
 	"maunium.net/go/mautrix/id"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 )
 
+// Logger is a simple logging struct for OlmMachine.
+// Implementations are recommended to use fmt.Sprintf and manually add a newline after the message.
 type Logger interface {
 	Error(message string, args ...interface{})
 	Warn(message string, args ...interface{})
@@ -21,30 +29,75 @@ type Logger interface {
 	Trace(message string, args ...interface{})
 }
 
+// OlmMachine is the main struct for handling Matrix end-to-end encryption.
 type OlmMachine struct {
 	Client *mautrix.Client
+	SSSS   *ssss.Machine
 	Log    Logger
 
 	CryptoStore Store
 	StateStore  StateStore
 
+	AllowUnverifiedDevices       bool
+	ShareKeysToUnverifiedDevices bool
+
+	AllowKeyShare func(*DeviceIdentity, event.RequestedKeyInfo) *KeyShareRejection
+
+	DefaultSASTimeout time.Duration
+	// AcceptVerificationFrom determines whether the machine will accept verification requests from this device.
+	AcceptVerificationFrom func(string, *DeviceIdentity, id.RoomID) (VerificationRequestResponse, VerificationHooks)
+
 	account *OlmAccount
+
+	roomKeyRequestFilled            *sync.Map
+	keyVerificationTransactionState *sync.Map
+
+	keyWaiters     map[id.SessionID]chan struct{}
+	keyWaitersLock sync.Mutex
+
+	CrossSigningKeys    *CrossSigningKeysCache
+	crossSigningPubkeys *CrossSigningPublicKeysCache
 }
 
+// StateStore is used by OlmMachine to get room state information that's needed for encryption.
 type StateStore interface {
+	// IsEncrypted returns whether a room is encrypted.
 	IsEncrypted(id.RoomID) bool
+	// GetEncryptionEvent returns the encryption event's content for an encrypted room.
+	GetEncryptionEvent(id.RoomID) *event.EncryptionEventContent
+	// FindSharedRooms returns the encrypted rooms that another user is also in for a user ID.
 	FindSharedRooms(id.UserID) []id.RoomID
 }
 
+// NewOlmMachine creates an OlmMachine with the given client, logger and stores.
 func NewOlmMachine(client *mautrix.Client, log Logger, cryptoStore Store, stateStore StateStore) *OlmMachine {
-	return &OlmMachine{
+	mach := &OlmMachine{
 		Client:      client,
+		SSSS:        ssss.NewSSSSMachine(client),
 		Log:         log,
 		CryptoStore: cryptoStore,
 		StateStore:  stateStore,
+
+		AllowUnverifiedDevices:       true,
+		ShareKeysToUnverifiedDevices: false,
+
+		DefaultSASTimeout: 10 * time.Minute,
+		AcceptVerificationFrom: func(string, *DeviceIdentity, id.RoomID) (VerificationRequestResponse, VerificationHooks) {
+			// Reject requests by default. Users need to override this to return appropriate verification hooks.
+			return RejectRequest, nil
+		},
+
+		roomKeyRequestFilled:            &sync.Map{},
+		keyVerificationTransactionState: &sync.Map{},
+
+		keyWaiters: make(map[id.SessionID]chan struct{}),
 	}
+	mach.AllowKeyShare = mach.defaultAllowKeyShare
+	return mach
 }
 
+// Load loads the Olm account information from the crypto store. If there's no olm account, a new one is created.
+// This must be called before using the machine.
 func (mach *OlmMachine) Load() (err error) {
 	mach.account, err = mach.CryptoStore.GetAccount()
 	if err != nil {
@@ -58,19 +111,19 @@ func (mach *OlmMachine) Load() (err error) {
 	return nil
 }
 
-func (mach *OlmMachine) SaveAccount() {
+func (mach *OlmMachine) saveAccount() {
 	err := mach.CryptoStore.PutAccount(mach.account)
 	if err != nil {
 		mach.Log.Error("Failed to save account: %v", err)
 	}
 }
 
+// FlushStore calls the Flush method of the CryptoStore.
 func (mach *OlmMachine) FlushStore() error {
 	return mach.CryptoStore.Flush()
 }
 
-func (mach *OlmMachine) Fingerprint() string {
-	signingKey, _ := mach.account.Internal.IdentityKeys()
+func Fingerprint(signingKey id.SigningKey) string {
 	spacedSigningKey := make([]byte, len(signingKey)+(len(signingKey)-1)/4)
 	var ptr = 0
 	for i, chr := range signingKey {
@@ -84,6 +137,28 @@ func (mach *OlmMachine) Fingerprint() string {
 	return string(spacedSigningKey)
 }
 
+// Fingerprint returns the fingerprint of the Olm account that can be used for non-interactive verification.
+func (mach *OlmMachine) Fingerprint() string {
+	return Fingerprint(mach.account.SigningKey())
+}
+
+// OwnIdentity returns this device's DeviceIdentity struct
+func (mach *OlmMachine) OwnIdentity() *DeviceIdentity {
+	return &DeviceIdentity{
+		UserID:      mach.Client.UserID,
+		DeviceID:    mach.Client.DeviceID,
+		IdentityKey: mach.account.IdentityKey(),
+		SigningKey:  mach.account.SigningKey(),
+		Trust:       TrustStateVerified,
+		Deleted:     false,
+	}
+}
+
+// ProcessSyncResponse processes a single /sync response.
+//
+// This can be easily registered into a mautrix client using .OnSync():
+//
+//     client.Syncer.(*mautrix.DefaultSyncer).OnSync(c.crypto.ProcessSyncResponse)
 func (mach *OlmMachine) ProcessSyncResponse(resp *mautrix.RespSync, since string) {
 	if len(resp.DeviceLists.Changed) > 0 {
 		mach.Log.Trace("Device list changes in /sync: %v", resp.DeviceLists.Changed)
@@ -101,8 +176,8 @@ func (mach *OlmMachine) ProcessSyncResponse(resp *mautrix.RespSync, since string
 	}
 
 	min := mach.account.Internal.MaxNumberOfOneTimeKeys() / 2
-	if resp.DeviceOneTimeKeysCount.SignedCurve25519 <= int(min) {
-		mach.Log.Trace("Sync response said we have %d signed curve25519 keys left, sharing new ones...", resp.DeviceOneTimeKeysCount.SignedCurve25519)
+	if resp.DeviceOneTimeKeysCount.SignedCurve25519 < int(min) {
+		mach.Log.Debug("Sync response said we have %d signed curve25519 keys left, sharing new ones...", resp.DeviceOneTimeKeysCount.SignedCurve25519)
 		err := mach.ShareKeys(resp.DeviceOneTimeKeysCount.SignedCurve25519)
 		if err != nil {
 			mach.Log.Error("Failed to share keys: %v", err)
@@ -110,6 +185,11 @@ func (mach *OlmMachine) ProcessSyncResponse(resp *mautrix.RespSync, since string
 	}
 }
 
+// HandleMemberEvent handles a single membership event.
+//
+// Currently this is not automatically called, so you must add a listener yourself:
+//
+//     client.Syncer.(*mautrix.DefaultSyncer).OnSync(c.crypto.ProcessSyncResponse)
 func (mach *OlmMachine) HandleMemberEvent(evt *event.Event) {
 	if !mach.StateStore.IsEncrypted(evt.RoomID) {
 		return
@@ -139,6 +219,8 @@ func (mach *OlmMachine) HandleMemberEvent(evt *event.Event) {
 	}
 }
 
+// HandleToDeviceEvent handles a single to-device event. This is automatically called by ProcessSyncResponse, so you
+// don't need to add any custom handlers if you use that method.
 func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 	switch content := evt.Content.Parsed.(type) {
 	case *event.EncryptedEventContent:
@@ -151,13 +233,96 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 		switch content := decryptedEvt.Content.Parsed.(type) {
 		case *event.RoomKeyEventContent:
 			mach.receiveRoomKey(decryptedEvt, content)
-			// TODO handle other encrypted to-device events
+		case *event.ForwardedRoomKeyEventContent:
+			if mach.importForwardedRoomKey(decryptedEvt, content) {
+				if ch, ok := mach.roomKeyRequestFilled.Load(content.SessionID); ok {
+					// close channel to notify listener that the key was received
+					close(ch.(chan struct{}))
+				}
+			}
+			// TODO handle m.dummy encrypted to-device event
 		}
-		// TODO handle other unencrypted to-device events. At least m.room_key_request and m.verification.start
+	case *event.RoomKeyRequestEventContent:
+		mach.handleRoomKeyRequest(evt.Sender, content)
+	// verification cases
+	case *event.VerificationStartEventContent:
+		mach.handleVerificationStart(evt.Sender, content, content.TransactionID, 10*time.Minute, "")
+	case *event.VerificationAcceptEventContent:
+		mach.handleVerificationAccept(evt.Sender, content, content.TransactionID)
+	case *event.VerificationKeyEventContent:
+		mach.handleVerificationKey(evt.Sender, content, content.TransactionID)
+	case *event.VerificationMacEventContent:
+		mach.handleVerificationMAC(evt.Sender, content, content.TransactionID)
+	case *event.VerificationCancelEventContent:
+		mach.handleVerificationCancel(evt.Sender, content, content.TransactionID)
+	case *event.VerificationRequestEventContent:
+		mach.handleVerificationRequest(evt.Sender, content, content.TransactionID, "")
+	case *event.RoomKeyWithheldEventContent:
+		mach.handleRoomKeyWithheld(content)
 	default:
 		deviceID, _ := evt.Content.Raw["device_id"].(string)
 		mach.Log.Trace("Unhandled to-device event of type %s from %s/%s", evt.Type.Type, evt.Sender, deviceID)
 	}
+}
+
+// GetOrFetchDevice attempts to retrieve the device identity for the given device from the store
+// and if it's not found it asks the server for it.
+func (mach *OlmMachine) GetOrFetchDevice(userID id.UserID, deviceID id.DeviceID) (*DeviceIdentity, error) {
+	// get device identity
+	device, err := mach.CryptoStore.GetDevice(userID, deviceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get sender device from store: %w", err)
+	} else if device != nil {
+		return device, nil
+	}
+	// try to fetch if not found
+	usersToDevices := mach.fetchKeys([]id.UserID{userID}, "", true)
+	if devices, ok := usersToDevices[userID]; ok {
+		if device, ok = devices[deviceID]; ok {
+			return device, nil
+		}
+		return nil, fmt.Errorf("didn't get identity for device %s of %s", deviceID, userID)
+	}
+	return nil, fmt.Errorf("didn't get any devices for %s", userID)
+}
+
+// SendEncryptedToDevice sends an Olm-encrypted event to the given user device.
+func (mach *OlmMachine) SendEncryptedToDevice(device *DeviceIdentity, content event.Content) error {
+	// create outbound sessions if missing
+	if err := mach.createOutboundSessions(map[id.UserID]map[id.DeviceID]*DeviceIdentity{
+		device.UserID: {
+			device.DeviceID: device,
+		},
+	}); err != nil {
+		return err
+	}
+
+	// get Olm session
+	olmSess, err := mach.CryptoStore.GetLatestSession(device.IdentityKey)
+	if err != nil {
+		return err
+	}
+	if olmSess == nil {
+		return fmt.Errorf("didn't find created outbound session for device %s of %s", device.DeviceID, device.UserID)
+	}
+
+	olmSess.Lock()
+	defer olmSess.Unlock()
+
+	encrypted := mach.encryptOlmEvent(olmSess, device, event.ToDeviceForwardedRoomKey, content)
+	encryptedContent := &event.Content{Parsed: &encrypted}
+
+	_, err = mach.Client.SendToDevice(event.ToDeviceEncrypted,
+		&mautrix.ReqSendToDevice{
+			Messages: map[id.UserID]map[id.DeviceID]*event.Content{
+				device.UserID: {
+					device.DeviceID: encryptedContent,
+				},
+			},
+		},
+	)
+
+	return err
 }
 
 func (mach *OlmMachine) createGroupSession(senderKey id.SenderKey, signingKey id.Ed25519, roomID id.RoomID, sessionID id.SessionID, sessionKey string) {
@@ -172,11 +337,43 @@ func (mach *OlmMachine) createGroupSession(senderKey id.SenderKey, signingKey id
 	err = mach.CryptoStore.PutGroupSession(roomID, senderKey, sessionID, igs)
 	if err != nil {
 		mach.Log.Error("Failed to store new inbound group session: %v", err)
+		return
 	}
-	mach.Log.Trace("Created inbound group session %s/%s/%s", roomID, senderKey, sessionID)
+	mach.markSessionReceived(sessionID)
+	mach.Log.Debug("Received inbound group session %s / %s / %s", roomID, senderKey, sessionID)
 }
 
-func (mach *OlmMachine) receiveRoomKey(evt *OlmEvent, content *event.RoomKeyEventContent) {
+func (mach *OlmMachine) markSessionReceived(id id.SessionID) {
+	mach.keyWaitersLock.Lock()
+	ch, ok := mach.keyWaiters[id]
+	if ok {
+		close(ch)
+		delete(mach.keyWaiters, id)
+	}
+	mach.keyWaitersLock.Unlock()
+}
+
+// WaitForSession waits for the given Megolm session to arrive.
+func (mach *OlmMachine) WaitForSession(roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID, timeout time.Duration) bool {
+	mach.keyWaitersLock.Lock()
+	ch, ok := mach.keyWaiters[sessionID]
+	if !ok {
+		ch := make(chan struct{})
+		mach.keyWaiters[sessionID] = ch
+	}
+	mach.keyWaitersLock.Unlock()
+	select {
+	case <-ch:
+		return true
+	case <-time.After(timeout):
+		sess, err := mach.CryptoStore.GetGroupSession(roomID, senderKey, sessionID)
+		// Check if the session somehow appeared in the store without telling us
+		// We accept withheld sessions as received, as then the decryption attempt will show the error.
+		return sess != nil || errors.Is(err, ErrGroupSessionWithheld)
+	}
+}
+
+func (mach *OlmMachine) receiveRoomKey(evt *DecryptedOlmEvent, content *event.RoomKeyEventContent) {
 	// TODO nio had a comment saying "handle this better" for the case where evt.Keys.Ed25519 is none?
 	if content.Algorithm != id.AlgorithmMegolmV1 || evt.Keys.Ed25519 == "" {
 		return
@@ -185,7 +382,22 @@ func (mach *OlmMachine) receiveRoomKey(evt *OlmEvent, content *event.RoomKeyEven
 	mach.createGroupSession(evt.SenderKey, evt.Keys.Ed25519, content.RoomID, content.SessionID, content.SessionKey)
 }
 
-// ShareKeys returns a key upload request.
+func (mach *OlmMachine) handleRoomKeyWithheld(content *event.RoomKeyWithheldEventContent) {
+	if content.Algorithm != id.AlgorithmMegolmV1 {
+		mach.Log.Debug("Non-megolm room key withheld event: %+v", content)
+		return
+	}
+	err := mach.CryptoStore.PutWithheldGroupSession(*content)
+	if err != nil {
+		mach.Log.Error("Failed to save room key withheld event: %v", err)
+	}
+}
+
+// ShareKeys uploads necessary keys to the server.
+//
+// If the Olm account hasn't been shared, the account keys will be uploaded.
+// If currentOTKCount is less than half of the limit (100 / 2 = 50), enough one-time keys will be uploaded so exactly
+// half of the limit is filled.
 func (mach *OlmMachine) ShareKeys(currentOTKCount int) error {
 	var deviceKeys *mautrix.DeviceKeys
 	if !mach.account.Shared {
@@ -207,7 +419,7 @@ func (mach *OlmMachine) ShareKeys(currentOTKCount int) error {
 		return err
 	}
 	mach.account.Shared = true
-	mach.SaveAccount()
+	mach.saveAccount()
 	mach.Log.Trace("Shared keys and saved account")
 	return nil
 }

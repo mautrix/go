@@ -15,7 +15,9 @@ import (
 
 // EventList contains a list of events.
 type EventList struct {
-	Events []*event.Event `json:"events"`
+	Events              []*event.Event `json:"events"`
+	EphemeralEvents     []*event.Event `json:"ephemeral"`
+	SoruEphemeralEvents []*event.Event `json:"de.sorunome.msc2409.ephemeral"`
 }
 
 // EventListener is a function that receives events.
@@ -23,12 +25,14 @@ type EventListener func(evt *event.Event)
 
 // WriteBlankOK writes a blank OK message as a reply to a HTTP request.
 func WriteBlankOK(w http.ResponseWriter) {
+	w.Header().Add("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("{}"))
 }
 
 // Respond responds to a HTTP request with a JSON object.
 func Respond(w http.ResponseWriter, data interface{}) error {
+	w.Header().Add("Content-Type", "application/json")
 	dataStr, err := json.Marshal(data)
 	if err != nil {
 		return err
@@ -45,6 +49,7 @@ type Error struct {
 }
 
 func (err Error) Write(w http.ResponseWriter) {
+	w.Header().Add("Content-Type", "application/json")
 	w.WriteHeader(err.HTTPStatus)
 	_ = Respond(w, &err)
 }
@@ -54,13 +59,13 @@ type ErrorCode string
 
 // Native ErrorCodes
 const (
-	ErrForbidden ErrorCode = "M_FORBIDDEN"
-	ErrUnknown   ErrorCode = "M_UNKNOWN"
+	ErrUnknownToken ErrorCode = "M_UNKNOWN_TOKEN"
+	ErrBadJSON      ErrorCode = "M_BAD_JSON"
+	ErrNotJSON      ErrorCode = "M_NOT_JSON"
+	ErrUnknown      ErrorCode = "M_UNKNOWN"
 )
 
 // Custom ErrorCodes
 const (
 	ErrNoTransactionID ErrorCode = "NET.MAUNIUM.NO_TRANSACTION_ID"
-	ErrNoBody          ErrorCode = "NET.MAUNIUM.NO_REQUEST_BODY"
-	ErrInvalidJSON     ErrorCode = "NET.MAUNIUM.INVALID_JSON"
 )

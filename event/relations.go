@@ -18,6 +18,7 @@ const (
 	RelReplace    RelationType = "m.replace"
 	RelReference  RelationType = "m.reference"
 	RelAnnotation RelationType = "m.annotation"
+	RelReply      RelationType = "net.maunium.reply"
 )
 
 type RelatesTo struct {
@@ -51,6 +52,14 @@ func (rel *RelatesTo) GetReferenceID() id.EventID {
 	}
 	return ""
 }
+
+func (rel *RelatesTo) GetReplyID() id.EventID {
+	if rel.Type == RelReply {
+		return rel.EventID
+	}
+	return ""
+}
+
 func (rel *RelatesTo) GetAnnotationID() id.EventID {
 	if rel.Type == RelAnnotation {
 		return rel.EventID
@@ -75,7 +84,7 @@ func (rel *RelatesTo) UnmarshalJSON(data []byte) error {
 		rel.EventID = srel.EventID
 		rel.Key = srel.Key
 	} else if srel.InReplyTo != nil && len(srel.InReplyTo.EventID) > 0 {
-		rel.Type = RelReference
+		rel.Type = RelReply
 		rel.EventID = srel.InReplyTo.EventID
 		rel.Key = ""
 	}
@@ -84,7 +93,7 @@ func (rel *RelatesTo) UnmarshalJSON(data []byte) error {
 
 func (rel *RelatesTo) MarshalJSON() ([]byte, error) {
 	srel := serializableRelatesTo{Type: rel.Type, EventID: rel.EventID, Key: rel.Key}
-	if rel.Type == RelReference {
+	if rel.Type == RelReply {
 		srel.InReplyTo = &serializableInReplyTo{rel.EventID}
 	}
 	return json.Marshal(&srel)

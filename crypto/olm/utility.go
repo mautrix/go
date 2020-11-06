@@ -109,7 +109,7 @@ func gjsonPath(path ...string) string {
 	var result strings.Builder
 	for i, part := range path {
 		_, _ = gjsonEscaper.WriteString(&result, part)
-		if i < len(path) - 1 {
+		if i < len(path)-1 {
 			result.WriteRune('.')
 		}
 	}
@@ -120,12 +120,12 @@ func gjsonPath(path ...string) string {
 // the Matrix specification:
 // https://matrix.org/speculator/spec/drafts%2Fe2e/appendices.html#signing-json
 // If the _obj is a struct, the `json` tags will be honored.
-func (u *Utility) VerifySignatureJSON(obj interface{}, userID id.UserID, deviceID id.DeviceID, key id.Ed25519) (bool, error) {
+func (u *Utility) VerifySignatureJSON(obj interface{}, userID id.UserID, keyName string, key id.Ed25519) (bool, error) {
 	objJSON, err := json.Marshal(obj)
 	if err != nil {
 		return false, err
 	}
-	sig := gjson.GetBytes(objJSON, gjsonPath("signatures", string(userID), fmt.Sprintf("ed25519:%s", deviceID)))
+	sig := gjson.GetBytes(objJSON, gjsonPath("signatures", string(userID), fmt.Sprintf("ed25519:%s", keyName)))
 	if !sig.Exists() || sig.Type != gjson.String {
 		return false, SignatureNotFound
 	}
@@ -147,8 +147,8 @@ func (u *Utility) VerifySignatureJSON(obj interface{}, userID id.UserID, deviceI
 // This function is a wrapper over Utility.VerifySignatureJSON that creates and
 // destroys the Utility object transparently.
 // If the _obj is a struct, the `json` tags will be honored.
-func VerifySignatureJSON(obj interface{}, userID id.UserID, deviceID id.DeviceID, key id.Ed25519) (bool, error) {
+func VerifySignatureJSON(obj interface{}, userID id.UserID, keyName string, key id.Ed25519) (bool, error) {
 	u := NewUtility()
 	defer u.Clear()
-	return u.VerifySignatureJSON(obj, userID, deviceID, key)
+	return u.VerifySignatureJSON(obj, userID, keyName, key)
 }

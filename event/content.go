@@ -9,9 +9,9 @@ package event
 import (
 	"encoding/gob"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
-	"strings"
 )
 
 // TypeMap is a mapping from event type to the content struct type.
@@ -46,10 +46,27 @@ var TypeMap = map[Type]reflect.Type{
 	EphemeralEventReceipt:  reflect.TypeOf(ReceiptEventContent{}),
 	EphemeralEventPresence: reflect.TypeOf(PresenceEventContent{}),
 
+	InRoomVerificationStart:  reflect.TypeOf(VerificationStartEventContent{}),
+	InRoomVerificationReady:  reflect.TypeOf(VerificationReadyEventContent{}),
+	InRoomVerificationAccept: reflect.TypeOf(VerificationAcceptEventContent{}),
+	InRoomVerificationKey:    reflect.TypeOf(VerificationKeyEventContent{}),
+	InRoomVerificationMAC:    reflect.TypeOf(VerificationMacEventContent{}),
+	InRoomVerificationCancel: reflect.TypeOf(VerificationCancelEventContent{}),
+
 	ToDeviceRoomKey:          reflect.TypeOf(RoomKeyEventContent{}),
 	ToDeviceForwardedRoomKey: reflect.TypeOf(ForwardedRoomKeyEventContent{}),
 	ToDeviceRoomKeyRequest:   reflect.TypeOf(RoomKeyRequestEventContent{}),
 	ToDeviceEncrypted:        reflect.TypeOf(EncryptedEventContent{}),
+	ToDeviceRoomKeyWithheld:  reflect.TypeOf(RoomKeyWithheldEventContent{}),
+
+	ToDeviceVerificationStart:   reflect.TypeOf(VerificationStartEventContent{}),
+	ToDeviceVerificationAccept:  reflect.TypeOf(VerificationAcceptEventContent{}),
+	ToDeviceVerificationKey:     reflect.TypeOf(VerificationKeyEventContent{}),
+	ToDeviceVerificationMAC:     reflect.TypeOf(VerificationMacEventContent{}),
+	ToDeviceVerificationCancel:  reflect.TypeOf(VerificationCancelEventContent{}),
+	ToDeviceVerificationRequest: reflect.TypeOf(VerificationRequestEventContent{}),
+
+	ToDeviceOrgMatrixRoomKeyWithheld: reflect.TypeOf(RoomKeyWithheldEventContent{}),
 }
 
 // Content stores the content of a Matrix event.
@@ -116,13 +133,19 @@ func (content *Content) MarshalJSON() ([]byte, error) {
 }
 
 func IsUnsupportedContentType(err error) bool {
-	return strings.HasPrefix(err.Error(), "unsupported content type ")
+	return errors.Is(err, UnsupportedContentType)
 }
 
+var ContentAlreadyParsed = errors.New("content is already parsed")
+var UnsupportedContentType = errors.New("unsupported content type")
+
 func (content *Content) ParseRaw(evtType Type) error {
+	if content.Parsed != nil {
+		return ContentAlreadyParsed
+	}
 	structType, ok := TypeMap[evtType]
 	if !ok {
-		return fmt.Errorf("unsupported content type %s", evtType.Repr())
+		return fmt.Errorf("%w %s", UnsupportedContentType, evtType.Repr())
 	}
 	content.Parsed = reflect.New(structType).Interface()
 	return json.Unmarshal(content.VeryRaw, &content.Parsed)
@@ -174,6 +197,7 @@ func init() {
 	gob.Register(&RoomKeyEventContent{})
 	gob.Register(&ForwardedRoomKeyEventContent{})
 	gob.Register(&RoomKeyRequestEventContent{})
+	gob.Register(&RoomKeyWithheldEventContent{})
 }
 
 // Helper cast functions below
@@ -364,6 +388,13 @@ func (content *Content) AsRoomKeyRequest() *RoomKeyRequestEventContent {
 	casted, ok := content.Parsed.(*RoomKeyRequestEventContent)
 	if !ok {
 		return &RoomKeyRequestEventContent{}
+	}
+	return casted
+}
+func (content *Content) AsRoomKeyWithheld() *RoomKeyWithheldEventContent {
+	casted, ok := content.Parsed.(*RoomKeyWithheldEventContent)
+	if !ok {
+		return &RoomKeyWithheldEventContent{}
 	}
 	return casted
 }

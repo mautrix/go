@@ -5,20 +5,11 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-// RespError is the standard JSON error response from Homeservers. It also implements the Golang "error" interface.
-// See http://matrix.org/docs/spec/client_server/r0.2.0.html#api-standards
-type RespError struct {
-	ErrCode string `json:"errcode"`
-	Err     string `json:"error"`
-}
-
-// Error returns the errcode and error message.
-func (e RespError) Error() string {
-	return e.ErrCode + ": " + e.Err
-}
-
+// RespWhoami is the JSON response for https://matrix.org/docs/spec/client_server/r0.6.1#get-matrix-client-r0-account-whoami
 type RespWhoami struct {
 	UserID id.UserID `json:"user_id"`
+	// N.B. This field is not in the spec yet, it's expected to land in r0.6.2 or r0.7.0
+	DeviceID id.DeviceID `json:"device_id"`
 }
 
 // RespCreateFilter is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-user-userid-filter
@@ -26,9 +17,10 @@ type RespCreateFilter struct {
 	FilterID string `json:"filter_id"`
 }
 
-// RespVersions is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-versions
+// RespVersions is the JSON response for http://matrix.org/docs/spec/client_server/r0.6.1.html#get-matrix-client-versions
 type RespVersions struct {
-	Versions []string `json:"versions"`
+	Versions         []string        `json:"versions"`
+	UnstableFeatures map[string]bool `json:"unstable_features"`
 }
 
 // RespJoinRoom is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-join
@@ -91,17 +83,18 @@ type RespMediaUpload struct {
 // RespUserInteractive is the JSON response for https://matrix.org/docs/spec/client_server/r0.2.0.html#user-interactive-authentication-api
 type RespUserInteractive struct {
 	Flows []struct {
-		Stages []string `json:"stages"`
+		Stages []AuthType `json:"stages"`
 	} `json:"flows"`
-	Params    map[string]interface{} `json:"params"`
-	Session   string                 `json:"string"`
-	Completed []string               `json:"completed"`
-	ErrCode   string                 `json:"errcode"`
-	Error     string                 `json:"error"`
+	Params    map[AuthType]interface{} `json:"params"`
+	Session   string                   `json:"session"`
+	Completed []string                 `json:"completed"`
+
+	ErrCode string `json:"errcode"`
+	Error   string `json:"error"`
 }
 
 // HasSingleStageFlow returns true if there exists at least 1 Flow with a single stage of stageName.
-func (r RespUserInteractive) HasSingleStageFlow(stageName string) bool {
+func (r RespUserInteractive) HasSingleStageFlow(stageName AuthType) bool {
 	for _, f := range r.Flows {
 		if len(f.Stages) == 1 && f.Stages[0] == stageName {
 			return true
@@ -126,16 +119,25 @@ type RespRegister struct {
 
 type RespLoginFlows struct {
 	Flows []struct {
-		Type string `json:"type"`
+		Type AuthType `json:"type"`
 	} `json:"flows"`
+}
+
+func (rlf *RespLoginFlows) HasFlow(flowType AuthType) bool {
+	for _, flow := range rlf.Flows {
+		if flow.Type == flowType {
+			return true
+		}
+	}
+	return false
 }
 
 // RespLogin is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-login
 type RespLogin struct {
 	AccessToken string      `json:"access_token"`
 	DeviceID    id.DeviceID `json:"device_id"`
-	HomeServer  string      `json:"home_server"`
 	UserID      id.UserID   `json:"user_id"`
+	// TODO add .well-known field here
 }
 
 // RespLogout is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-logout
@@ -244,13 +246,20 @@ type RespUploadKeys struct {
 }
 
 type RespQueryKeys struct {
-	Failures   map[string]interface{}                   `json:"failures"`
-	DeviceKeys map[id.UserID]map[id.DeviceID]DeviceKeys `json:"device_keys"`
+	Failures        map[string]interface{}                   `json:"failures"`
+	DeviceKeys      map[id.UserID]map[id.DeviceID]DeviceKeys `json:"device_keys"`
+	MasterKeys      map[id.UserID]CrossSigningKeys           `json:"master_keys"`
+	SelfSigningKeys map[id.UserID]CrossSigningKeys           `json:"self_signing_keys"`
+	UserSigningKeys map[id.UserID]CrossSigningKeys           `json:"user_signing_keys"`
 }
 
 type RespClaimKeys struct {
 	Failures    map[string]interface{}                                `json:"failures"`
 	OneTimeKeys map[id.UserID]map[id.DeviceID]map[id.KeyID]OneTimeKey `json:"one_time_keys"`
+}
+
+type RespUploadSignatures struct {
+	Failures map[string]interface{} `json:"failures"`
 }
 
 type RespKeyChanges struct {

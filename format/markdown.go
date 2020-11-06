@@ -42,7 +42,7 @@ var Renderer = blackfriday.WithRenderer(bfhtml)
 var NoHTMLRenderer = blackfriday.WithRenderer(&EscapingRenderer{bfhtml})
 
 func RenderMarkdown(text string, allowMarkdown, allowHTML bool) event.MessageEventContent {
-	htmlBody := text
+	var htmlBody string
 
 	if allowMarkdown {
 		renderer := Renderer
@@ -52,9 +52,11 @@ func RenderMarkdown(text string, allowMarkdown, allowHTML bool) event.MessageEve
 		htmlBodyBytes := blackfriday.Run([]byte(text), Extensions, renderer)
 		htmlBody = strings.TrimRight(string(htmlBodyBytes), "\n")
 		htmlBody = AntiParagraphRegex.ReplaceAllString(htmlBody, "$1")
+	} else {
+		htmlBody = strings.Replace(text, "\n", "<br>", -1)
 	}
 
-	if allowHTML || allowMarkdown {
+	if len(htmlBody) > 0 {
 		text = HTMLToText(htmlBody)
 
 		if htmlBody != text {

@@ -32,8 +32,10 @@ func (tc TypeClass) Name() string {
 }
 
 const (
+	// Unknown events
+	UnknownEventType TypeClass = iota
 	// Normal message events
-	MessageEventType TypeClass = iota
+	MessageEventType
 	// State events
 	StateEventType
 	// Ephemeral events
@@ -42,8 +44,6 @@ const (
 	AccountDataEventType
 	// Device-to-device events
 	ToDeviceEventType
-	// Unknown events
-	UnknownEventType
 )
 
 type Type struct {
@@ -73,6 +73,16 @@ func (et *Type) IsToDevice() bool {
 	return et.Class == ToDeviceEventType
 }
 
+func (et *Type) IsInRoomVerification() bool {
+	switch et.Type {
+	case InRoomVerificationStart.Type, InRoomVerificationReady.Type, InRoomVerificationAccept.Type,
+		InRoomVerificationKey.Type, InRoomVerificationMAC.Type, InRoomVerificationCancel.Type:
+		return true
+	default:
+		return false
+	}
+}
+
 func (et *Type) IsCustom() bool {
 	return !strings.HasPrefix(et.Type, "m.")
 }
@@ -85,11 +95,15 @@ func (et *Type) GuessClass() TypeClass {
 		return StateEventType
 	case EphemeralEventReceipt.Type, EphemeralEventTyping.Type, EphemeralEventPresence.Type:
 		return EphemeralEventType
-	case AccountDataDirectChats.Type, AccountDataPushRules.Type, AccountDataRoomTags.Type:
+	case AccountDataDirectChats.Type, AccountDataPushRules.Type, AccountDataRoomTags.Type,
+		AccountDataSecretStorageKey.Type, AccountDataSecretStorageDefaultKey.Type,
+		AccountDataCrossSigningMaster.Type, AccountDataCrossSigningSelf.Type, AccountDataCrossSigningUser.Type:
 		return AccountDataEventType
-	case EventRedaction.Type, EventMessage.Type, EventEncrypted.Type, EventReaction.Type, EventSticker.Type:
+	case EventRedaction.Type, EventMessage.Type, EventEncrypted.Type, EventReaction.Type, EventSticker.Type,
+		InRoomVerificationStart.Type, InRoomVerificationReady.Type, InRoomVerificationAccept.Type,
+		InRoomVerificationKey.Type, InRoomVerificationMAC.Type, InRoomVerificationCancel.Type:
 		return MessageEventType
-	case ToDeviceRoomKey.Type, ToDeviceRoomKeyRequest.Type, ToDeviceForwardedRoomKey.Type:
+	case ToDeviceRoomKey.Type, ToDeviceRoomKeyRequest.Type, ToDeviceForwardedRoomKey.Type, ToDeviceRoomKeyWithheld.Type:
 		return ToDeviceEventType
 	default:
 		return UnknownEventType
@@ -152,6 +166,13 @@ var (
 	EventEncrypted = Type{"m.room.encrypted", MessageEventType}
 	EventReaction  = Type{"m.reaction", MessageEventType}
 	EventSticker   = Type{"m.sticker", MessageEventType}
+
+	InRoomVerificationStart  = Type{"m.key.verification.start", MessageEventType}
+	InRoomVerificationReady  = Type{"m.key.verification.ready", MessageEventType}
+	InRoomVerificationAccept = Type{"m.key.verification.accept", MessageEventType}
+	InRoomVerificationKey    = Type{"m.key.verification.key", MessageEventType}
+	InRoomVerificationMAC    = Type{"m.key.verification.mac", MessageEventType}
+	InRoomVerificationCancel = Type{"m.key.verification.cancel", MessageEventType}
 )
 
 // Ephemeral events
@@ -168,12 +189,27 @@ var (
 	AccountDataRoomTags        = Type{"m.tag", AccountDataEventType}
 	AccountDataFullyRead       = Type{"m.fully_read", AccountDataEventType}
 	AccountDataIgnoredUserList = Type{"m.ignored_user_list", AccountDataEventType}
+
+	AccountDataSecretStorageDefaultKey = Type{"m.secret_storage.default_key", AccountDataEventType}
+	AccountDataSecretStorageKey        = Type{"m.secret_storage.key", AccountDataEventType}
+	AccountDataCrossSigningMaster      = Type{"m.cross_signing.master", AccountDataEventType}
+	AccountDataCrossSigningUser        = Type{"m.cross_signing.user_signing", AccountDataEventType}
+	AccountDataCrossSigningSelf        = Type{"m.cross_signing.self_signing", AccountDataEventType}
 )
 
 // Device-to-device events
 var (
-	ToDeviceRoomKey          = Type{"m.room_key", ToDeviceEventType}
-	ToDeviceRoomKeyRequest   = Type{"m.room_key_request", ToDeviceEventType}
-	ToDeviceForwardedRoomKey = Type{"m.forwarded_room_key", ToDeviceEventType}
-	ToDeviceEncrypted        = Type{"m.room.encrypted", ToDeviceEventType}
+	ToDeviceRoomKey             = Type{"m.room_key", ToDeviceEventType}
+	ToDeviceRoomKeyRequest      = Type{"m.room_key_request", ToDeviceEventType}
+	ToDeviceForwardedRoomKey    = Type{"m.forwarded_room_key", ToDeviceEventType}
+	ToDeviceEncrypted           = Type{"m.room.encrypted", ToDeviceEventType}
+	ToDeviceRoomKeyWithheld     = Type{"m.room_key.withheld", ToDeviceEventType}
+	ToDeviceVerificationRequest = Type{"m.key.verification.request", ToDeviceEventType}
+	ToDeviceVerificationStart   = Type{"m.key.verification.start", ToDeviceEventType}
+	ToDeviceVerificationAccept  = Type{"m.key.verification.accept", ToDeviceEventType}
+	ToDeviceVerificationKey     = Type{"m.key.verification.key", ToDeviceEventType}
+	ToDeviceVerificationMAC     = Type{"m.key.verification.mac", ToDeviceEventType}
+	ToDeviceVerificationCancel  = Type{"m.key.verification.cancel", ToDeviceEventType}
+
+	ToDeviceOrgMatrixRoomKeyWithheld = Type{"org.matrix.room_key.withheld", ToDeviceEventType}
 )

@@ -9,7 +9,6 @@ package event
 import (
 	"encoding/json"
 
-	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -21,7 +20,7 @@ type EncryptionEventContent struct {
 	// How long the session should be used before changing it. 604800000 (a week) is the recommended default.
 	RotationPeriodMillis int64 `json:"rotation_period_ms,omitempty"`
 	// How many messages should be sent before changing the session. 100 is the recommended default.
-	RotationPeriodMessages int `json:"rotation_period_messages,omitempty"`
+	RotationPeriodMessages int `json:"rotation_period_msgs,omitempty"`
 }
 
 // EncryptedEventContent represents the content of a m.room.encrypted message event.
@@ -57,7 +56,7 @@ func (content *EncryptedEventContent) UnmarshalJSON(data []byte) error {
 		return json.Unmarshal(content.Ciphertext, &content.OlmCiphertext)
 	case id.AlgorithmMegolmV1:
 		if len(content.Ciphertext) == 0 || content.Ciphertext[0] != '"' || content.Ciphertext[len(content.Ciphertext)-1] != '"' {
-			return olm.InputNotJSONString
+			return id.InputNotJSONString
 		}
 		content.MegolmCiphertext = content.Ciphertext[1 : len(content.Ciphertext)-1]
 	}
@@ -94,8 +93,9 @@ type RoomKeyEventContent struct {
 // https://matrix.org/docs/spec/client_server/r0.6.0#m-forwarded-room-key
 type ForwardedRoomKeyEventContent struct {
 	RoomKeyEventContent
-	SenderClaimedKey   string   `json:"sender_claimed_ed25519_key"`
-	ForwardingKeyChain []string `json:"forwarding_curve25519_key_chain"`
+	SenderKey          id.SenderKey `json:"sender_key"`
+	SenderClaimedKey   id.Ed25519   `json:"sender_claimed_ed25519_key"`
+	ForwardingKeyChain []string     `json:"forwarding_curve25519_key_chain"`
 }
 
 type KeyRequestAction string
@@ -119,4 +119,23 @@ type RequestedKeyInfo struct {
 	RoomID    id.RoomID    `json:"room_id"`
 	SenderKey id.SenderKey `json:"sender_key"`
 	SessionID id.SessionID `json:"session_id"`
+}
+
+type RoomKeyWithheldCode string
+
+const (
+	RoomKeyWithheldBlacklisted  RoomKeyWithheldCode = "m.blacklisted"
+	RoomKeyWithheldUnverified   RoomKeyWithheldCode = "m.unverified"
+	RoomKeyWithheldUnauthorized RoomKeyWithheldCode = "m.unauthorized"
+	RoomKeyWithheldUnavailable  RoomKeyWithheldCode = "m.unavailable"
+	RoomKeyWithheldNoOlmSession RoomKeyWithheldCode = "m.no_olm"
+)
+
+type RoomKeyWithheldEventContent struct {
+	RoomID    id.RoomID           `json:"room_id,omitempty"`
+	Algorithm id.Algorithm        `json:"algorithm"`
+	SessionID id.SessionID        `json:"session_id,omitempty"`
+	SenderKey id.SenderKey        `json:"sender_key"`
+	Code      RoomKeyWithheldCode `json:"code"`
+	Reason    string              `json:"reason,omitempty"`
 }

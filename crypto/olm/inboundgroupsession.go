@@ -262,8 +262,8 @@ func (s *InboundGroupSession) ID() id.SessionID {
 }
 
 // FirstKnownIndex returns the first message index we know how to decrypt.
-func (s *InboundGroupSession) FirstKnownIndex() uint {
-	return uint(C.olm_inbound_group_session_first_known_index((*C.OlmInboundGroupSession)(s.int)))
+func (s *InboundGroupSession) FirstKnownIndex() uint32 {
+	return uint32(C.olm_inbound_group_session_first_known_index((*C.OlmInboundGroupSession)(s.int)))
 }
 
 // IsVerified check if the session has been verified as a valid session.  (A
