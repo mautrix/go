@@ -21,7 +21,7 @@ type Registration struct {
 	AppToken        string     `yaml:"as_token"`
 	ServerToken     string     `yaml:"hs_token"`
 	SenderLocalpart string     `yaml:"sender_localpart"`
-	RateLimited     bool       `yaml:"rate_limited,omitempty"`
+	RateLimited     *bool       `yaml:"rate_limited,omitempty"`
 	Namespaces      Namespaces `yaml:"namespaces"`
 	EphemeralEvents bool       `yaml:"de.sorunome.msc2409.push_ephemeral,omitempty"`
 	Protocols       []string   `yaml:"protocols,omitempty"`
