@@ -136,19 +136,6 @@ func (as *AppService) PutTransaction(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		as.handleEvents(eventList.Events, event.UnknownEventType)
-		for _, evt := range eventList.Events {
-			if evt.StateKey != nil {
-				evt.Type.Class = event.StateEventType
-			} else {
-				evt.Type.Class = event.MessageEventType
-			}
-			err := evt.Content.ParseRaw(evt.Type)
-			if err != nil {
-				as.Log.Debugfln("Failed to parse content of %s: %v", evt.ID, err)
-			}
-			as.UpdateState(evt)
-			as.Events <- evt
-		}
 		WriteBlankOK(w)
 	}
 	as.lastProcessedTransaction = txnID
