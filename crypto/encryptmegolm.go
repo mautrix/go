@@ -220,10 +220,10 @@ func (mach *OlmMachine) encryptAndSendGroupSession(session *OutboundGroupSession
 			mach.Log.Trace("Encrypting group session %s for %s of %s", session.ID(), deviceID, userID)
 			device.session.Lock()
 			// We intentionally defer in a loop as it's the safest way of making sure nothing gets locked permanently.
-			defer func() {
-				mach.Log.Trace("Unlocking session for %s/%s", userID, deviceID)
-				device.session.Unlock()
-			}()
+			defer func(innerSession *OlmSession, innerUser id.UserID, innerDevice id.DeviceID) {
+				mach.Log.Trace("Unlocking session for %s/%s", innerUser, innerDevice)
+				innerSession.Unlock()
+			}(device.session, userID, deviceID)
 			content := mach.encryptOlmEvent(device.session, device.identity, event.ToDeviceRoomKey, session.ShareContent())
 			output[deviceID] = &event.Content{Parsed: content}
 			deviceCount++
