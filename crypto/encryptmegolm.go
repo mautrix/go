@@ -207,6 +207,8 @@ func (mach *OlmMachine) ShareGroupSession(roomID id.RoomID, users []id.UserID) e
 }
 
 func (mach *OlmMachine) encryptAndSendGroupSession(session *OutboundGroupSession, olmSessions map[id.UserID]map[id.DeviceID]deviceSessionWrapper) error {
+	mach.olmLock.Lock()
+	defer mach.olmLock.Unlock()
 	mach.Log.Trace("Encrypting group session %s for all found devices", session.ID())
 	deviceCount := 0
 	toDevice := &mautrix.ReqSendToDevice{Messages: make(map[id.UserID]map[id.DeviceID]*event.Content)}
@@ -218,12 +220,6 @@ func (mach *OlmMachine) encryptAndSendGroupSession(session *OutboundGroupSession
 		toDevice.Messages[userID] = output
 		for deviceID, device := range sessions {
 			mach.Log.Trace("Encrypting group session %s for %s of %s", session.ID(), deviceID, userID)
-			device.session.Lock()
-			// We intentionally defer in a loop as it's the safest way of making sure nothing gets locked permanently.
-			defer func(innerSession *OlmSession, innerUser id.UserID, innerDevice id.DeviceID) {
-				mach.Log.Trace("Unlocking session for %s/%s", innerUser, innerDevice)
-				innerSession.Unlock()
-			}(device.session, userID, deviceID)
 			content := mach.encryptOlmEvent(device.session, device.identity, event.ToDeviceRoomKey, session.ShareContent())
 			output[deviceID] = &event.Content{Parsed: content}
 			deviceCount++

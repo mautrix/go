@@ -157,7 +157,7 @@ func (store *SQLCryptoStore) GetSessions(key id.SenderKey) (OlmSessionList, erro
 	defer store.olmSessionCacheLock.Unlock()
 	cache := store.getOlmSessionCache(key)
 	for rows.Next() {
-		sess := OlmSession{Internal: *olm.NewBlankSession(), lock: &sync.Mutex{}}
+		sess := OlmSession{Internal: *olm.NewBlankSession()}
 		var sessionBytes []byte
 		var sessionID id.SessionID
 		err := rows.Scan(&sessionID, &sessionBytes, &sess.CreationTime, &sess.UseTime)
@@ -194,7 +194,7 @@ func (store *SQLCryptoStore) GetLatestSession(key id.SenderKey) (*OlmSession, er
 	row := store.DB.QueryRow("SELECT session_id, session, created_at, last_used FROM crypto_olm_session WHERE sender_key=$1 AND account_id=$2 ORDER BY session_id DESC LIMIT 1",
 		key, store.AccountID)
 
-	sess := OlmSession{Internal: *olm.NewBlankSession(), lock: &sync.Mutex{}}
+	sess := OlmSession{Internal: *olm.NewBlankSession()}
 	var sessionBytes []byte
 	var sessionID id.SessionID
 

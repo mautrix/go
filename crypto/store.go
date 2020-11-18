@@ -66,7 +66,6 @@ var ErrGroupSessionWithheld = errors.New("group session has been withheld")
 // General implementation details:
 // * Get methods should not return errors if the requested data does not exist in the store, they should simply return nil.
 // * Update methods may assume that the pointer is the same as what has earlier been added to or fetched from the store.
-// * OlmSessions should be cached so that the mutex works. Alternatively, implementations can use OlmSession.SetLock to provide a custom mutex implementation.
 type Store interface {
 	// Flush ensures that everything in the store is persisted to disk.
 	// This doesn't have to do anything, e.g. for database-backed implementations that persist everything immediately.
@@ -169,6 +168,8 @@ type messageIndexValue struct {
 }
 
 // GobStore is a simple Store implementation that dumps everything into a .gob file.
+//
+// Deprecated: this is not atomic and can lose data. Using SQLCryptoStore or a custom implementation is recommended.
 type GobStore struct {
 	lock sync.RWMutex
 	path string
@@ -187,6 +188,8 @@ type GobStore struct {
 var _ Store = (*GobStore)(nil)
 
 // NewGobStore creates a new GobStore that saves everything to the given file.
+//
+// Deprecated: this is not atomic and can lose data. Using SQLCryptoStore or a custom implementation is recommended.
 func NewGobStore(path string) (*GobStore, error) {
 	gs := &GobStore{
 		path:                  path,

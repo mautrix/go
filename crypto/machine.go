@@ -55,6 +55,8 @@ type OlmMachine struct {
 	keyWaiters     map[id.SessionID]chan struct{}
 	keyWaitersLock sync.Mutex
 
+	olmLock sync.Mutex
+
 	CrossSigningKeys    *CrossSigningKeysCache
 	crossSigningPubkeys *CrossSigningPublicKeysCache
 }
@@ -306,8 +308,8 @@ func (mach *OlmMachine) SendEncryptedToDevice(device *DeviceIdentity, content ev
 		return fmt.Errorf("didn't find created outbound session for device %s of %s", device.DeviceID, device.UserID)
 	}
 
-	olmSess.Lock()
-	defer olmSess.Unlock()
+	mach.olmLock.Lock()
+	defer mach.olmLock.Unlock()
 
 	encrypted := mach.encryptOlmEvent(olmSess, device, event.ToDeviceForwardedRoomKey, content)
 	encryptedContent := &event.Content{Parsed: &encrypted}
