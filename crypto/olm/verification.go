@@ -15,6 +15,7 @@ import (
 // SAS stores an Olm Short Authentication String (SAS) object.
 type SAS struct {
 	int *C.OlmSAS
+	mem []byte
 }
 
 // NewBlankSAS initializes an empty SAS object.
@@ -22,6 +23,7 @@ func NewBlankSAS() *SAS {
 	memory := make([]byte, sasSize())
 	return &SAS{
 		int: C.olm_sas(unsafe.Pointer(&memory[0])),
+		mem: memory,
 	}
 }
 

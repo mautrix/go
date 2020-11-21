@@ -19,6 +19,7 @@ import (
 // PkSigning stores a key pair for signing messages.
 type PkSigning struct {
 	int       *C.OlmPkSigning
+	mem       []byte
 	PublicKey id.Ed25519
 	Seed      []byte
 }
@@ -39,10 +40,11 @@ func pkSigningSignatureLength() uint {
 	return uint(C.olm_pk_signature_length())
 }
 
-func newBlackPkSigning() *PkSigning {
+func NewBlankPkSigning() *PkSigning {
 	memory := make([]byte, pkSigningSize())
 	return &PkSigning{
 		int: C.olm_pk_signing(unsafe.Pointer(&memory[0])),
+		mem: memory,
 	}
 }
 
@@ -53,7 +55,7 @@ func (p *PkSigning) Clear() {
 
 // NewPkSigningFromSeed creates a new PkSigning object using the given seed.
 func NewPkSigningFromSeed(seed []byte) (*PkSigning, error) {
-	p := newBlackPkSigning()
+	p := NewBlankPkSigning()
 	p.Clear()
 	pubKey := make([]byte, pkSigningPublicKeyLength())
 	if C.olm_pk_signing_key_from_seed((*C.OlmPkSigning)(p.int),

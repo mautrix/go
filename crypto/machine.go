@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/crypto/ssss"
 	"maunium.net/go/mautrix/id"
 
@@ -106,9 +105,7 @@ func (mach *OlmMachine) Load() (err error) {
 		return
 	}
 	if mach.account == nil {
-		mach.account = &OlmAccount{
-			Internal: *olm.NewAccount(),
-		}
+		mach.account = NewOlmAccount()
 	}
 	return nil
 }

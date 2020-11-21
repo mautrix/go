@@ -19,6 +19,7 @@ import (
 // Account stores a device account for end to end encrypted messaging.
 type Account struct {
 	int *C.OlmAccount
+	mem []byte
 }
 
 // AccountFromPickled loads an Account from a pickled base64 string.  Decrypts
@@ -34,14 +35,12 @@ func AccountFromPickled(pickled, key []byte) (*Account, error) {
 	return a, a.Unpickle(pickled, key)
 }
 
-// newAccount initialises an empty Account.
-func newAccount() *C.OlmAccount {
-	memory := make([]byte, accountSize())
-	return C.olm_account(unsafe.Pointer(&memory[0]))
-}
-
 func NewBlankAccount() *Account {
-	return &Account{int: newAccount()}
+	memory := make([]byte, accountSize())
+	return &Account{
+		int: C.olm_account(unsafe.Pointer(&memory[0])),
+		mem: memory,
+	}
 }
 
 // NewAccount creates a new Account.
@@ -165,7 +164,7 @@ func (a *Account) GobEncode() ([]byte, error) {
 
 func (a *Account) GobDecode(rawPickled []byte) error {
 	if a.int == nil {
-		a.int = newAccount()
+		*a = *NewBlankAccount()
 	}
 	length := unpaddedBase64.EncodedLen(len(rawPickled))
 	pickled := make([]byte, length)
@@ -187,7 +186,7 @@ func (a *Account) UnmarshalJSON(data []byte) error {
 		return InputNotJSONString
 	}
 	if a.int == nil {
-		a.int = newAccount()
+		*a = *NewBlankAccount()
 	}
 	return a.Unpickle(data[1:len(data)-1], pickleKey)
 }

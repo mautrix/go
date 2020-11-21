@@ -19,7 +19,10 @@ import (
 
 // Utility stores the necessary state to perform hash and signature
 // verification operations.
-type Utility C.OlmUtility
+type Utility struct {
+	int *C.OlmUtility
+	mem []byte
+}
 
 // utilitySize returns the size of a utility object in bytes.
 func utilitySize() uint {
@@ -28,18 +31,18 @@ func utilitySize() uint {
 
 // sha256Len returns the length of the buffer needed to hold the SHA-256 hash.
 func (u *Utility) sha256Len() uint {
-	return uint(C.olm_sha256_length((*C.OlmUtility)(u)))
+	return uint(C.olm_sha256_length((*C.OlmUtility)(u.int)))
 }
 
 // lastError returns an error describing the most recent error to happen to a
 // utility.
 func (u *Utility) lastError() error {
-	return convertError(C.GoString(C.olm_utility_last_error((*C.OlmUtility)(u))))
+	return convertError(C.GoString(C.olm_utility_last_error((*C.OlmUtility)(u.int))))
 }
 
 // Clear clears the memory used to back this utility.
 func (u *Utility) Clear() error {
-	r := C.olm_clear_utility((*C.OlmUtility)(u))
+	r := C.olm_clear_utility((*C.OlmUtility)(u.int))
 	if r == errorVal() {
 		return u.lastError()
 	}
@@ -49,7 +52,10 @@ func (u *Utility) Clear() error {
 // NewUtility creates a new utility.
 func NewUtility() *Utility {
 	memory := make([]byte, utilitySize())
-	return (*Utility)(C.olm_utility(unsafe.Pointer(&memory[0])))
+	return &Utility{
+		int: C.olm_utility(unsafe.Pointer(&memory[0])),
+		mem: memory,
+	}
 }
 
 // Sha256 calculates the SHA-256 hash of the input and encodes it as base64.
@@ -59,7 +65,7 @@ func (u *Utility) Sha256(input string) string {
 	}
 	output := make([]byte, u.sha256Len())
 	r := C.olm_sha256(
-		(*C.OlmUtility)(u),
+		(*C.OlmUtility)(u.int),
 		unsafe.Pointer(&([]byte(input)[0])),
 		C.size_t(len(input)),
 		unsafe.Pointer(&(output[0])),
@@ -78,7 +84,7 @@ func (u *Utility) VerifySignature(message string, key id.Ed25519, signature stri
 		return false, EmptyInput
 	}
 	r := C.olm_ed25519_verify(
-		(*C.OlmUtility)(u),
+		(*C.OlmUtility)(u.int),
 		unsafe.Pointer(&([]byte(key)[0])),
 		C.size_t(len(key)),
 		unsafe.Pointer(&([]byte(message)[0])),

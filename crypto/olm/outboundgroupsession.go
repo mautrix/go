@@ -15,6 +15,7 @@ import (
 // group.
 type OutboundGroupSession struct {
 	int *C.OlmOutboundGroupSession
+	mem []byte
 }
 
 // OutboundGroupSessionFromPickled loads an OutboundGroupSession from a pickled
@@ -55,14 +56,12 @@ func outboundGroupSessionSize() uint {
 }
 
 // newOutboundGroupSession initialises an empty OutboundGroupSession.
-func newOutboundGroupSession() *C.OlmOutboundGroupSession {
-	memory := make([]byte, outboundGroupSessionSize())
-	return C.olm_outbound_group_session(unsafe.Pointer(&memory[0]))
-}
-
-// newOutboundGroupSession initialises an empty OutboundGroupSession.
 func NewBlankOutboundGroupSession() *OutboundGroupSession {
-	return &OutboundGroupSession{int: newOutboundGroupSession()}
+	memory := make([]byte, outboundGroupSessionSize())
+	return &OutboundGroupSession{
+		int: C.olm_outbound_group_session(unsafe.Pointer(&memory[0])),
+		mem: memory,
+	}
 }
 
 // lastError returns an error describing the most recent error to happen to an
@@ -131,8 +130,8 @@ func (s *OutboundGroupSession) GobEncode() ([]byte, error) {
 }
 
 func (s *OutboundGroupSession) GobDecode(rawPickled []byte) error {
-	if s.int == nil {
-		s.int = newOutboundGroupSession()
+	if s == nil || s.int == nil {
+		*s = *NewBlankOutboundGroupSession()
 	}
 	length := unpaddedBase64.EncodedLen(len(rawPickled))
 	pickled := make([]byte, length)
@@ -153,8 +152,8 @@ func (s *OutboundGroupSession) UnmarshalJSON(data []byte) error {
 	if len(data) == 0 || data[0] != '"' || data[len(data)-1] != '"' {
 		return InputNotJSONString
 	}
-	if s.int == nil {
-		s.int = newOutboundGroupSession()
+	if s == nil || s.int == nil {
+		*s = *NewBlankOutboundGroupSession()
 	}
 	return s.Unpickle(data[1:len(data)-1], pickleKey)
 }

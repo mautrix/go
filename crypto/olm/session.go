@@ -14,6 +14,7 @@ import (
 // Session stores an end to end encrypted messaging session.
 type Session struct {
 	int *C.OlmSession
+	mem []byte
 }
 
 // sessionSize is the size of a session object in bytes.
@@ -34,14 +35,12 @@ func SessionFromPickled(pickled, key []byte) (*Session, error) {
 	return s, s.Unpickle(pickled, key)
 }
 
-// newSession initialises an empty Session.
-func newSession() *C.OlmSession {
-	memory := make([]byte, sessionSize())
-	return C.olm_session(unsafe.Pointer(&memory[0]))
-}
-
 func NewBlankSession() *Session {
-	return &Session{int: newSession()}
+	memory := make([]byte, sessionSize())
+	return &Session{
+		int: C.olm_session(unsafe.Pointer(&memory[0])),
+		mem: memory,
+	}
 }
 
 // lastError returns an error describing the most recent error to happen to a
@@ -154,8 +153,8 @@ func (s *Session) GobEncode() ([]byte, error) {
 }
 
 func (s *Session) GobDecode(rawPickled []byte) error {
-	if s.int == nil {
-		s.int = newSession()
+	if s == nil || s.int == nil {
+		*s = *NewBlankSession()
 	}
 	length := unpaddedBase64.EncodedLen(len(rawPickled))
 	pickled := make([]byte, length)
@@ -176,8 +175,8 @@ func (s *Session) UnmarshalJSON(data []byte) error {
 	if len(data) == 0 || len(data) == 0 || data[0] != '"' || data[len(data)-1] != '"' {
 		return InputNotJSONString
 	}
-	if s == nil {
-		s.int = newSession()
+	if s == nil || s.int == nil {
+		*s = *NewBlankSession()
 	}
 	return s.Unpickle(data[1:len(data)-1], pickleKey)
 }
