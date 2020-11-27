@@ -22,9 +22,9 @@ const (
 )
 
 type RelatesTo struct {
-	Type    RelationType
-	EventID id.EventID
-	Key     string
+	Type    RelationType `json:"rel_type"`
+	EventID id.EventID   `json:"event_id"`
+	Key     string       `json:"key"`
 }
 
 type serializableInReplyTo struct {
