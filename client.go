@@ -658,7 +658,7 @@ func (cli *Client) SendMassagedStateEvent(roomID id.RoomID, eventType event.Type
 // SendText sends an m.room.message event into the given room with a msgtype of m.text
 // See http://matrix.org/docs/spec/client_server/r0.2.0.html#m-text
 func (cli *Client) SendText(roomID id.RoomID, text string) (*RespSendEvent, error) {
-	return cli.SendMessageEvent(roomID, event.EventMessage, event.MessageEventContent{
+	return cli.SendMessageEvent(roomID, event.EventMessage, &event.MessageEventContent{
 		MsgType: event.MsgText,
 		Body:    text,
 	})
@@ -667,7 +667,7 @@ func (cli *Client) SendText(roomID id.RoomID, text string) (*RespSendEvent, erro
 // SendImage sends an m.room.message event into the given room with a msgtype of m.image
 // See https://matrix.org/docs/spec/client_server/r0.2.0.html#m-image
 func (cli *Client) SendImage(roomID id.RoomID, body string, url id.ContentURI) (*RespSendEvent, error) {
-	return cli.SendMessageEvent(roomID, event.EventMessage, event.MessageEventContent{
+	return cli.SendMessageEvent(roomID, event.EventMessage, &event.MessageEventContent{
 		MsgType: event.MsgImage,
 		Body:    body,
 		URL:     url.CUString(),
@@ -677,7 +677,7 @@ func (cli *Client) SendImage(roomID id.RoomID, body string, url id.ContentURI) (
 // SendVideo sends an m.room.message event into the given room with a msgtype of m.video
 // See https://matrix.org/docs/spec/client_server/r0.2.0.html#m-video
 func (cli *Client) SendVideo(roomID id.RoomID, body string, url id.ContentURI) (*RespSendEvent, error) {
-	return cli.SendMessageEvent(roomID, event.EventMessage, event.MessageEventContent{
+	return cli.SendMessageEvent(roomID, event.EventMessage, &event.MessageEventContent{
 		MsgType: event.MsgVideo,
 		Body:    body,
 		URL:     url.CUString(),
@@ -687,14 +687,14 @@ func (cli *Client) SendVideo(roomID id.RoomID, body string, url id.ContentURI) (
 // SendNotice sends an m.room.message event into the given room with a msgtype of m.notice
 // See http://matrix.org/docs/spec/client_server/r0.2.0.html#m-notice
 func (cli *Client) SendNotice(roomID id.RoomID, text string) (*RespSendEvent, error) {
-	return cli.SendMessageEvent(roomID, event.EventMessage, event.MessageEventContent{
+	return cli.SendMessageEvent(roomID, event.EventMessage, &event.MessageEventContent{
 		MsgType: event.MsgNotice,
 		Body:    text,
 	})
 }
 
 func (cli *Client) SendReaction(roomID id.RoomID, eventID id.EventID, reaction string) (*RespSendEvent, error) {
-	return cli.SendMessageEvent(roomID, event.EventReaction, event.ReactionEventContent{
+	return cli.SendMessageEvent(roomID, event.EventReaction, &event.ReactionEventContent{
 		RelatesTo: event.RelatesTo{
 			EventID: eventID,
 			Type:    event.RelAnnotation,
