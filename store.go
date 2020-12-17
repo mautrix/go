@@ -81,3 +81,82 @@ func NewInMemoryStore() *InMemoryStore {
 		Rooms:     make(map[id.RoomID]*Room),
 	}
 }
+
+// AccountDataStore uses account data to store the next batch token, and
+// reuses the InMemoryStore for all other operations.
+type AccountDataStore struct {
+	*InMemoryStore
+	eventType string
+	client    *Client
+}
+
+type accountData struct {
+	NextBatch string `json:"next_batch"`
+}
+
+// SaveNextBatch to account data.
+func (s *AccountDataStore) SaveNextBatch(userID id.UserID, nextBatchToken string) {
+	if userID.String() != s.client.UserID.String() {
+		panic("AccountDataStore must only be used with bots")
+	}
+
+	data := accountData{
+		NextBatch: nextBatchToken,
+	}
+
+	err := s.client.SetAccountData(s.eventType, data)
+	if err != nil {
+		if s.client.Logger != nil {
+			s.client.Logger.Debugfln("failed to save next batch token to account data: %s", err.Error())
+		}
+	}
+}
+
+// LoadNextBatch from account data.
+func (s *AccountDataStore) LoadNextBatch(userID id.UserID) string {
+	if userID.String() != s.client.UserID.String() {
+		panic("AccountDataStore must only be used with bots")
+	}
+
+	data := &accountData{}
+
+	err := s.client.GetAccountData(s.eventType, data)
+	if err != nil {
+		if s.client.Logger != nil {
+			s.client.Logger.Debugfln("failed to load next batch token to account data: %s", err.Error())
+		}
+		return ""
+	}
+
+	return data.NextBatch
+}
+
+// NewAccountDataStore returns a new AccountDataStore, which stores
+// the next_batch token as a custom event in account data in the
+// homeserver.
+//
+// AccountDataStore is only appropriate for bots, not appservices.
+//
+// eventType should be a reversed DNS name like tld.domain.sub.internal and
+// must be unique for a client. The data stored in it is considered internal
+// and must not be modified through outside means. You should also add a filter
+// for account data changes of this event type, to avoid ending up in a sync
+// loop:
+//
+//	mautrix.Filter{
+//		AccountData: mautrix.FilterPart{
+//			Limit: 20,
+//			NotTypes: []event.Type{
+//				event.NewEventType(eventType),
+//			},
+//		},
+//	}
+//	mautrix.Client.CreateFilter(...)
+//
+func NewAccountDataStore(eventType string, client *Client) *AccountDataStore {
+	return &AccountDataStore{
+		InMemoryStore: NewInMemoryStore(),
+		eventType:     eventType,
+		client:        client,
+	}
+}
