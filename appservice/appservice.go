@@ -96,6 +96,8 @@ type AppService struct {
 	botIntent *IntentAPI
 	clients   map[id.UserID]*mautrix.Client
 	intents   map[id.UserID]*IntentAPI
+
+	StopWebsocket func()
 }
 
 // HostConfig contains info about how to host the appservice.
