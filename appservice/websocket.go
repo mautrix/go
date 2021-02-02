@@ -10,6 +10,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
+	"path/filepath"
 	"sync"
 
 	"github.com/gorilla/websocket"
@@ -28,9 +30,18 @@ type WebsocketMessage struct {
 	EventList
 }
 
-func (as *AppService) StartWebsocket() error {
-	url := as.botClient.BuildBaseURL("_matrix", "client", "unstable", "fi.mau.as_sync")
-	ws, resp, err := websocket.DefaultDialer.Dial(url, http.Header{
+func (as *AppService) StartWebsocket(baseURL string) error {
+	parsed, err := url.Parse(baseURL)
+	if err != nil {
+		return fmt.Errorf("failed to parse URL: %w", err)
+	}
+	parsed.Path = filepath.Join(parsed.Path, "_matrix/client/unstable/fi.mau.as_sync")
+	if parsed.Scheme == "http" {
+		parsed.Scheme = "ws"
+	} else if parsed.Scheme == "https" {
+		parsed.Scheme = "wss"
+	}
+	ws, resp, err := websocket.DefaultDialer.Dial(parsed.String(), http.Header{
 		"Authorization": []string{fmt.Sprintf("Bearer %s", as.Registration.AppToken)},
 	})
 	if resp != nil && resp.StatusCode >= 400 {
