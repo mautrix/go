@@ -66,6 +66,7 @@ func (as *AppService) StartWebsocket(baseURL string) error {
 		})
 	}
 	as.StopWebsocket = stopFunc
+	as.Log.Debugln("Appservice transaction websocket connected")
 
 	go func() {
 		defer stopFunc()
@@ -73,7 +74,7 @@ func (as *AppService) StartWebsocket(baseURL string) error {
 			var msg WebsocketMessage
 			err := ws.ReadJSON(&msg)
 			if err != nil {
-				as.Log.Warnln("Error reading from websocket: %v", err)
+				as.Log.Warnln("Error reading from websocket:", err)
 				return
 			}
 			if as.Registration.EphemeralEvents && msg.EphemeralEvents != nil {
@@ -86,12 +87,12 @@ func (as *AppService) StartWebsocket(baseURL string) error {
 	<-closeChan
 
 	err = ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseGoingAway, ""))
-	if err != nil {
-		as.Log.Warnln("Error writing close message to websocket: %v", err)
+	if err != nil && err != websocket.ErrCloseSent {
+		as.Log.Warnln("Error writing close message to websocket:", err)
 	}
 	err = ws.Close()
 	if err != nil {
-		as.Log.Warnln("Error closing websocket: %v", err)
+		as.Log.Warnln("Error closing websocket:", err)
 	}
 	return nil
 }
