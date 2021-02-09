@@ -571,8 +571,8 @@ func (cli *Client) GetOwnAvatarURL() (url id.ContentURI, err error) {
 func (cli *Client) SetAvatarURL(url id.ContentURI) (err error) {
 	urlPath := cli.BuildURL("profile", cli.UserID, "avatar_url")
 	s := struct {
-		AvatarURL id.ContentURI `json:"avatar_url"`
-	}{url}
+		AvatarURL string `json:"avatar_url"`
+	}{url.String()}
 	_, err = cli.MakeRequest("PUT", urlPath, &s, nil)
 	if err != nil {
 		return err
