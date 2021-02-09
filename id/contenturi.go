@@ -50,7 +50,9 @@ func MustParseContentURI(uri string) ContentURI {
 
 // ParseContentURI parses a Matrix content URI.
 func ParseContentURI(uri string) (parsed ContentURI, err error) {
-	if !strings.HasPrefix(uri, "mxc://") {
+	if len(uri) == 0 {
+		return
+	} else if !strings.HasPrefix(uri, "mxc://") {
 		err = InvalidContentURI
 	} else if index := strings.IndexRune(uri[6:], '/'); index == -1 || index == len(uri)-7 {
 		err = InvalidContentURI
@@ -64,7 +66,9 @@ func ParseContentURI(uri string) (parsed ContentURI, err error) {
 var mxcBytes = []byte("mxc://")
 
 func ParseContentURIBytes(uri []byte) (parsed ContentURI, err error) {
-	if !bytes.HasPrefix(uri, mxcBytes) {
+	if len(uri) == 0 {
+		return
+	} else if !bytes.HasPrefix(uri, mxcBytes) {
 		err = InvalidContentURI
 	} else if index := bytes.IndexRune(uri[6:], '/'); index == -1 || index == len(uri)-7 {
 		err = InvalidContentURI
@@ -76,7 +80,10 @@ func ParseContentURIBytes(uri []byte) (parsed ContentURI, err error) {
 }
 
 func (uri *ContentURI) UnmarshalJSON(raw []byte) (err error) {
-	if len(raw) < 2 || raw[0] != '"' || raw[len(raw)-1] != '"' {
+	if string(raw) == "null" {
+		*uri = ContentURI{}
+		return nil
+	} else if len(raw) < 2 || raw[0] != '"' || raw[len(raw)-1] != '"' {
 		return InputNotJSONString
 	}
 	parsed, err := ParseContentURIBytes(raw[1:len(raw)-1])
