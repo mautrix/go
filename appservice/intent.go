@@ -230,7 +230,7 @@ func (intent *IntentAPI) SetRoomName(roomID id.RoomID, roomName string) (*mautri
 
 func (intent *IntentAPI) SetRoomAvatar(roomID id.RoomID, avatarURL id.ContentURI) (*mautrix.RespSendEvent, error) {
 	return intent.SendStateEvent(roomID, event.StateRoomAvatar, "", map[string]interface{}{
-		"url": avatarURL,
+		"url": avatarURL.String(),
 	})
 }
 
