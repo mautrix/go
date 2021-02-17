@@ -16,5 +16,5 @@ require (
 	golang.org/x/crypto v0.0.0-20201016220609-9e8e0b390897
 	golang.org/x/net v0.0.0-20201026091529-146b70c837a4
 	gopkg.in/yaml.v2 v2.3.0
-	maunium.net/go/maulogger/v2 v2.1.1
+	maunium.net/go/maulogger/v2 v2.2.0
 )
