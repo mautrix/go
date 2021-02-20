@@ -1097,6 +1097,36 @@ func (cli *Client) SendToDevice(eventType event.Type, req *ReqSendToDevice) (res
 	return
 }
 
+func (cli *Client) GetDevicesInfo() (resp *RespDevicesInfo, err error) {
+	urlPath := cli.BuildURL("devices")
+	_, err = cli.MakeRequest("GET", urlPath, nil, &resp)
+	return
+}
+
+func (cli *Client) GetDeviceInfo(deviceID id.DeviceID) (resp *RespDeviceInfo, err error) {
+	urlPath := cli.BuildURL("devices", deviceID)
+	_, err = cli.MakeRequest("GET", urlPath, nil, &resp)
+	return
+}
+
+func (cli *Client) SetDeviceInfo(deviceID id.DeviceID, req *ReqDeviceInfo) error {
+	urlPath := cli.BuildURL("devices", deviceID)
+	_, err := cli.MakeRequest("PUT", urlPath, req, nil)
+	return err
+}
+
+func (cli *Client) DeleteDevice(deviceID id.DeviceID, req *ReqDeleteDevice) error {
+	urlPath := cli.BuildURL("devices", deviceID)
+	_, err := cli.MakeRequest("DELETE", urlPath, req, nil)
+	return err
+}
+
+func (cli *Client) DeleteDevices(req *ReqDeleteDevices) error {
+	urlPath := cli.BuildURL("delete_devices")
+	_, err := cli.MakeRequest("DELETE", urlPath, req, nil)
+	return err
+}
+
 type UIACallback = func(*RespUserInteractive) interface{}
 
 // UploadCrossSigningKeys uploads the given cross-signing keys to the server.
