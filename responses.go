@@ -268,3 +268,16 @@ type RespKeyChanges struct {
 }
 
 type RespSendToDevice struct{}
+
+// RespDevicesInfo is the JSON response for https://matrix.org/docs/spec/client_server/r0.6.1#get-matrix-client-r0-devices
+type RespDevicesInfo struct {
+	Devices []RespDeviceInfo `json:"devices"`
+}
+
+// RespDeviceInfo is the JSON response for https://matrix.org/docs/spec/client_server/r0.6.1#get-matrix-client-r0-devices-deviceid
+type RespDeviceInfo struct {
+	DeviceID    id.DeviceID `json:"device_id"`
+	DisplayName string      `json:"display_name"`
+	LastSeenIP  string      `json:"last_seen_ip"`
+	LastSeenTS  int64       `json:"last_seen_ts"`
+}

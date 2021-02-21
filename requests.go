@@ -271,6 +271,22 @@ type ReqSendToDevice struct {
 	Messages map[id.UserID]map[id.DeviceID]*event.Content `json:"messages"`
 }
 
+// ReqDeviceInfo is the JSON request for https://matrix.org/docs/spec/client_server/r0.6.1#put-matrix-client-r0-devices-deviceid
+type ReqDeviceInfo struct {
+	DisplayName string `json:"display_name,omitempty"`
+}
+
+// ReqDeleteDevice is the JSON request for https://matrix.org/docs/spec/client_server/r0.6.1#delete-matrix-client-r0-devices-deviceid
+type ReqDeleteDevice struct {
+	Auth interface{} `json:"auth,omitempty"`
+}
+
+// ReqDeleteDevices is the JSON request for https://matrix.org/docs/spec/client_server/r0.6.1#post-matrix-client-r0-delete-devices
+type ReqDeleteDevices struct {
+	Devices []id.DeviceID `json:"devices"`
+	Auth    interface{}   `json:"auth,omitempty"`
+}
+
 type ReqPutPushRule struct {
 	Before string `json:"-"`
 	After  string `json:"-"`
