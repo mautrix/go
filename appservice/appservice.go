@@ -219,6 +219,8 @@ type LogConfig struct {
 	FileMode        uint32 `yaml:"file_mode"`
 	TimestampFormat string `yaml:"timestamp_format"`
 	RawPrintLevel   string `yaml:"print_level"`
+	JSONStdout      bool   `yaml:"print_json"`
+	JSONFile        bool   `yaml:"file_json"`
 	PrintLevel      int    `yaml:"-"`
 }
 
@@ -308,4 +310,8 @@ func (lc LogConfig) Configure(log maulogger.Logger) {
 	basicLogger.FileTimeFormat = lc.FileDateFormat
 	basicLogger.TimeFormat = lc.TimestampFormat
 	basicLogger.PrintLevel = lc.PrintLevel
+	basicLogger.JSONFile = lc.JSONFile
+	if lc.JSONStdout {
+		basicLogger.EnableJSONStdout()
+	}
 }
