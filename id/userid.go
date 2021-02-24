@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tulir Asokan
+// Copyright (c) 2021 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -9,13 +9,17 @@ package id
 import (
 	"bytes"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 )
 
 // UserID represents a Matrix user ID.
 // https://matrix.org/docs/spec/appendices#user-identifiers
 type UserID string
+
+const UserIDMaxLength = 255
 
 func NewUserID(localpart, homeserver string) UserID {
 	return UserID(fmt.Sprintf("@%s:%s", localpart, homeserver))
@@ -25,11 +29,22 @@ func NewEncodedUserID(localpart, homeserver string) UserID {
 	return NewUserID(EncodeUserLocalpart(localpart), homeserver)
 }
 
+var (
+	ErrInvalidUserID         = errors.New("is not a valid user ID")
+	ErrNoncompliantLocalpart = errors.New("contains characters that are not allowed")
+	ErrUserIDTooLong         = errors.New("the given user ID is longer than 255 characters")
+	ErrEmptyLocalpart        = errors.New("empty localparts are not allowed")
+)
+
 // Parse parses the user ID into the localpart and server name.
-// See http://matrix.org/docs/spec/intro.html#user-identifiers
+//
+// Note that this only enforces very basic user ID formatting requirements: user IDs start with
+// a @, and contain a : after the @. If you want to enforce localpart validity, see the
+// ParseAndValidate and ValidateUserLocalpart functions.
 func (userID UserID) Parse() (localpart, homeserver string, err error) {
 	if len(userID) == 0 || userID[0] != '@' || !strings.ContainsRune(string(userID), ':') {
-		err = fmt.Errorf("%s is not a valid user id", userID)
+		// This error wrapping lets you use errors.Is() nicely even though the message contains the user ID
+		err = fmt.Errorf("'%s' %w", userID, ErrInvalidUserID)
 		return
 	}
 	parts := strings.SplitN(string(userID), ":", 2)
@@ -37,8 +52,34 @@ func (userID UserID) Parse() (localpart, homeserver string, err error) {
 	return
 }
 
-func (userID UserID) ParseAndDecode() (localpart, homeserver string, err error) {
+var ValidLocalpartRegex = regexp.MustCompile("^[0-9a-z-.=_/]+$")
+
+// ValidateUserLocalpart validates a Matrix user ID localpart using the grammar
+// in https://matrix.org/docs/spec/appendices#user-identifier
+func ValidateUserLocalpart(localpart string) error {
+	if len(localpart) == 0 {
+		return ErrEmptyLocalpart
+	} else if !ValidLocalpartRegex.MatchString(localpart) {
+		return fmt.Errorf("'%s' %w", localpart, ErrNoncompliantLocalpart)
+	}
+	return nil
+}
+
+// ParseAndValidate parses the user ID into the localpart and server name like Parse,
+// and also validates that the localpart is allowed according to the user identifiers spec.
+func (userID UserID) ParseAndValidate() (localpart, homeserver string, err error) {
 	localpart, homeserver, err = userID.Parse()
+	if err == nil {
+		err = ValidateUserLocalpart(localpart)
+	}
+	if err == nil && len(userID) > UserIDMaxLength {
+		err = ErrUserIDTooLong
+	}
+	return
+}
+
+func (userID UserID) ParseAndDecode() (localpart, homeserver string, err error) {
+	localpart, homeserver, err = userID.ParseAndValidate()
 	if err == nil {
 		localpart, err = DecodeUserLocalpart(localpart)
 	}
