@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/gorilla/mux"
 	"gopkg.in/yaml.v2"
@@ -94,8 +95,11 @@ type AppService struct {
 	server    *http.Server
 	botClient *mautrix.Client
 	botIntent *IntentAPI
-	clients   map[id.UserID]*mautrix.Client
-	intents   map[id.UserID]*IntentAPI
+
+	clients     map[id.UserID]*mautrix.Client
+	clientsLock sync.RWMutex
+	intents     map[id.UserID]*IntentAPI
+	intentsLock sync.RWMutex
 
 	StopWebsocket func()
 }
@@ -135,15 +139,30 @@ func (as *AppService) BotMXID() id.UserID {
 	return id.NewUserID(as.Registration.SenderLocalpart, as.HomeserverDomain)
 }
 
-func (as *AppService) Intent(userID id.UserID) *IntentAPI {
+func (as *AppService) makeIntent(userID id.UserID) *IntentAPI {
+	as.intentsLock.Lock()
+	defer as.intentsLock.Unlock()
+
 	intent, ok := as.intents[userID]
+	if ok {
+		return intent
+	}
+
+	localpart, homeserver, err := userID.Parse()
+	if err != nil || len(localpart) == 0 || homeserver != as.HomeserverDomain {
+		return nil
+	}
+	intent = as.NewIntentAPI(localpart)
+	as.intents[userID] = intent
+	return intent
+}
+
+func (as *AppService) Intent(userID id.UserID) *IntentAPI {
+	as.intentsLock.RLock()
+	intent, ok := as.intents[userID]
+	as.intentsLock.RUnlock()
 	if !ok {
-		localpart, homeserver, err := userID.Parse()
-		if err != nil || len(localpart) == 0 || homeserver != as.HomeserverDomain {
-			return nil
-		}
-		intent = as.NewIntentAPI(localpart)
-		as.intents[userID] = intent
+		return as.makeIntent(userID)
 	}
 	return intent
 }
@@ -156,20 +175,34 @@ func (as *AppService) BotIntent() *IntentAPI {
 	return as.botIntent
 }
 
-func (as *AppService) Client(userID id.UserID) *mautrix.Client {
+func (as *AppService) makeClient(userID id.UserID) *mautrix.Client {
+	as.clientsLock.Lock()
+	defer as.clientsLock.Unlock()
+
 	client, ok := as.clients[userID]
+	if ok {
+		return client
+	}
+
+	client, err := mautrix.NewClient(as.HomeserverURL, userID, as.Registration.AppToken)
+	if err != nil {
+		as.Log.Fatalln("Failed to create mautrix client instance:", err)
+		return nil
+	}
+	client.Syncer = nil
+	client.Store = nil
+	client.AppServiceUserID = userID
+	client.Logger = as.Log.Sub(string(userID))
+	as.clients[userID] = client
+	return client
+}
+
+func (as *AppService) Client(userID id.UserID) *mautrix.Client {
+	as.clientsLock.RLock()
+	client, ok := as.clients[userID]
+	as.clientsLock.RUnlock()
 	if !ok {
-		var err error
-		client, err = mautrix.NewClient(as.HomeserverURL, userID, as.Registration.AppToken)
-		if err != nil {
-			as.Log.Fatalln("Failed to create gomatrix instance:", err)
-			return nil
-		}
-		client.Syncer = nil
-		client.Store = nil
-		client.AppServiceUserID = userID
-		client.Logger = as.Log.Sub(string(userID))
-		as.clients[userID] = client
+		return as.makeClient(userID)
 	}
 	return client
 }
