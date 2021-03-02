@@ -84,7 +84,8 @@ func DiscoverClientAPI(serverName string) (*ClientWellKnown, error) {
 
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -1218,7 +1219,7 @@ func NewClient(homeserverURL string, userID id.UserID, accessToken string) (*Cli
 		UserAgent:     "mautrix-go " + Version,
 		HomeserverURL: hsURL,
 		UserID:        userID,
-		Client:        http.DefaultClient,
+		Client:        &http.Client{Timeout: 180 * time.Second},
 		Prefix:        URLPath{"_matrix", "client", "r0"},
 		Syncer:        NewDefaultSyncer(),
 		// By default, use an in-memory store which will never save filter ids / next batch tokens to disk.
