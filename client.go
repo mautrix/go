@@ -516,7 +516,7 @@ func (cli *Client) Logout() (resp *RespLogout, err error) {
 // LogoutAll logs out all the devices of the current user. See https://matrix.org/docs/spec/client_server/r0.6.1#post-matrix-client-r0-logout-all
 // This does not clear the credentials from the client instance. See ClearCredentials() instead.
 func (cli *Client) LogoutAll() (resp *RespLogout, err error) {
-	urlPath := cli.BuildURL("logout")
+	urlPath := cli.BuildURL("logout", "all")
 	_, err = cli.MakeRequest("POST", urlPath, nil, &resp)
 	return
 }
