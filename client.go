@@ -513,6 +513,14 @@ func (cli *Client) Logout() (resp *RespLogout, err error) {
 	return
 }
 
+// LogoutAll logs out all the devices of the current user. See https://matrix.org/docs/spec/client_server/r0.6.1#post-matrix-client-r0-logout-all
+// This does not clear the credentials from the client instance. See ClearCredentials() instead.
+func (cli *Client) LogoutAll() (resp *RespLogout, err error) {
+	urlPath := cli.BuildURL("logout")
+	_, err = cli.MakeRequest("POST", urlPath, nil, &resp)
+	return
+}
+
 // Versions returns the list of supported Matrix versions on this homeserver. See http://matrix.org/docs/spec/client_server/r0.6.1.html#get-matrix-client-versions
 func (cli *Client) Versions() (resp *RespVersions, err error) {
 	urlPath := cli.BuildBaseURL("_matrix", "client", "versions")
