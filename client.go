@@ -288,7 +288,7 @@ func (cli *Client) MakeFullRequest(params FullRequest) ([]byte, error) {
 	var req *http.Request
 	var err error
 	var logBody string
-	var reqBody *bytes.Buffer
+	var reqBody io.Reader
 	if params.Context == nil {
 		params.Context = context.Background()
 	}
