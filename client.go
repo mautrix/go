@@ -5,6 +5,7 @@ package mautrix
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -187,6 +188,10 @@ func (cli *Client) ClearCredentials() {
 //   - Client.Syncer.ProcessResponse returning an error.
 // If you wish to continue retrying in spite of these fatal errors, call Sync() again.
 func (cli *Client) Sync() error {
+	return cli.SyncWithContext(context.Background())
+}
+
+func (cli *Client) SyncWithContext(ctx context.Context) error {
 	// Mark the client as syncing.
 	// We will keep syncing until the syncing state changes. Either because
 	// Sync is called or StopSync is called.
@@ -203,8 +208,11 @@ func (cli *Client) Sync() error {
 		cli.Store.SaveFilterID(cli.UserID, filterID)
 	}
 	for {
-		resSync, err := cli.SyncRequest(30000, nextBatch, filterID, false, cli.SyncPresence)
+		resSync, err := cli.SyncRequest(30000, nextBatch, filterID, false, cli.SyncPresence, ctx)
 		if err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			duration, err2 := cli.Syncer.OnFailedSync(resSync, err)
 			if err2 != nil {
 				return err2
@@ -258,7 +266,16 @@ func (cli *Client) LogRequest(req *http.Request, body string) {
 }
 
 func (cli *Client) MakeRequest(method string, httpURL string, reqBody interface{}, resBody interface{}) ([]byte, error) {
-	return cli.MakeFullRequest(method, httpURL, nil, reqBody, resBody)
+	return cli.MakeFullRequest(FullRequest{Method: method, URL: httpURL, RequestJSON: reqBody, ResponseJSON: resBody})
+}
+
+type FullRequest struct {
+	Method       string
+	URL          string
+	Headers      http.Header
+	RequestJSON  interface{}
+	ResponseJSON interface{}
+	Context      context.Context
 }
 
 // MakeFullRequest makes a JSON HTTP request to the given URL.
@@ -267,13 +284,17 @@ func (cli *Client) MakeRequest(method string, httpURL string, reqBody interface{
 // Returns the HTTP body as bytes on 2xx with a nil error. Returns an error if the response is not 2xx along
 // with the HTTP body bytes if it got that far. This error is an HTTPError which includes the returned
 // HTTP status code and possibly a RespError as the WrappedError, if the HTTP body could be decoded as a RespError.
-func (cli *Client) MakeFullRequest(method string, httpURL string, headers http.Header, reqBody interface{}, resBody interface{}) ([]byte, error) {
+func (cli *Client) MakeFullRequest(params FullRequest) ([]byte, error) {
 	var req *http.Request
 	var err error
 	var logBody string
-	if reqBody != nil {
+	var reqBody *bytes.Buffer
+	if params.Context == nil {
+		params.Context = context.Background()
+	}
+	if params.RequestJSON != nil {
 		var jsonStr []byte
-		jsonStr, err = json.Marshal(reqBody)
+		jsonStr, err = json.Marshal(params.RequestJSON)
 		if err != nil {
 			return nil, HTTPError{
 				Message:      "failed to marshal JSON",
@@ -281,18 +302,17 @@ func (cli *Client) MakeFullRequest(method string, httpURL string, headers http.H
 			}
 		}
 		logBody = string(jsonStr)
-		req, err = http.NewRequest(method, httpURL, bytes.NewBuffer(jsonStr))
-	} else {
-		req, err = http.NewRequest(method, httpURL, nil)
+		reqBody = bytes.NewBuffer(jsonStr)
 	}
+	req, err = http.NewRequestWithContext(params.Context, params.Method, params.URL, reqBody)
 	if err != nil {
 		return nil, HTTPError{
 			Message:      "failed to create request",
 			WrappedError: err,
 		}
 	}
-	if headers != nil {
-		req.Header = headers
+	if params.Headers != nil {
+		req.Header = params.Headers
 	}
 	if len(logBody) > 0 {
 		req.Header.Set("Content-Type", "application/json")
@@ -340,11 +360,11 @@ func (cli *Client) MakeFullRequest(method string, httpURL string, headers http.H
 		}
 	}
 
-	if resBody == nil {
+	if params.ResponseJSON == nil {
 		return contents, nil
 	}
 
-	if err = json.Unmarshal(contents, &resBody); err != nil {
+	if err = json.Unmarshal(contents, &params.ResponseJSON); err != nil {
 		return nil, HTTPError{
 			Request:  req,
 			Response: res,
@@ -373,7 +393,7 @@ func (cli *Client) CreateFilter(filter *Filter) (resp *RespCreateFilter, err err
 }
 
 // SyncRequest makes an HTTP request according to http://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-r0-sync
-func (cli *Client) SyncRequest(timeout int, since, filterID string, fullState bool, setPresence event.Presence) (resp *RespSync, err error) {
+func (cli *Client) SyncRequest(timeout int, since, filterID string, fullState bool, setPresence event.Presence, ctx context.Context) (resp *RespSync, err error) {
 	query := map[string]string{
 		"timeout": strconv.Itoa(timeout),
 	}
@@ -390,7 +410,7 @@ func (cli *Client) SyncRequest(timeout int, since, filterID string, fullState bo
 		query["full_state"] = "true"
 	}
 	urlPath := cli.BuildURLWithQuery(URLPath{"sync"}, query)
-	_, err = cli.MakeRequest("GET", urlPath, nil, &resp)
+	_, err = cli.MakeFullRequest(FullRequest{Method: "GET", URL: urlPath, ResponseJSON: &resp, Context: ctx})
 	return
 }
 
