@@ -20,7 +20,8 @@ const (
 	AuthTypeToken     = "m.login.token"
 	AuthTypeDummy     = "m.login.dummy"
 
-	AuthTypeAppservice = "uk.half-shot.msc2778.login.application_service"
+	AuthTypeAppservice      = "m.login.application_service"
+	AuthTypeHalfyAppservice = "uk.half-shot.msc2778.login.application_service"
 )
 
 type IdentifierType string
@@ -34,16 +35,20 @@ const (
 // ReqRegister is the JSON request for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-register
 type ReqRegister struct {
 	Username                 string      `json:"username,omitempty"`
-	BindEmail                bool        `json:"bind_email,omitempty"`
 	Password                 string      `json:"password,omitempty"`
 	DeviceID                 id.DeviceID `json:"device_id,omitempty"`
-	InitialDeviceDisplayName string      `json:"initial_device_display_name"`
+	InitialDeviceDisplayName string      `json:"initial_device_display_name,omitempty"`
+	InhibitLogin             bool        `json:"inhibit_login,omitempty"`
 	Auth                     interface{} `json:"auth,omitempty"`
+
+	// Type for registration, only used for appservice user registrations
+	// https://matrix.org/docs/spec/application_service/r0.1.2#server-admin-style-permissions
+	Type AuthType `json:"type"`
 }
 
 type BaseAuthData struct {
 	Type    AuthType `json:"type"`
-	Session string   `json:"session"`
+	Session string   `json:"session,omitempty"`
 }
 
 type UserIdentifier struct {
