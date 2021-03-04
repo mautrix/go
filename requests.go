@@ -32,7 +32,7 @@ const (
 	IdentifierTypePhone      = "m.id.phone"
 )
 
-// ReqRegister is the JSON request for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-register
+// ReqRegister is the JSON request for https://matrix.org/docs/spec/client_server/r0.6.1#post-matrix-client-r0-register
 type ReqRegister struct {
 	Username                 string      `json:"username,omitempty"`
 	Password                 string      `json:"password,omitempty"`
@@ -43,7 +43,7 @@ type ReqRegister struct {
 
 	// Type for registration, only used for appservice user registrations
 	// https://matrix.org/docs/spec/application_service/r0.1.2#server-admin-style-permissions
-	Type AuthType `json:"type"`
+	Type AuthType `json:"type,omitempty"`
 }
 
 type BaseAuthData struct {
