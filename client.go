@@ -419,18 +419,14 @@ func (cli *Client) register(url string, req *ReqRegister) (resp *RespRegister, u
 	bodyBytes, err = cli.MakeRequest("POST", url, req, nil)
 	if err != nil {
 		httpErr, ok := err.(HTTPError)
-		if !ok { // network error
-			return
-		}
-		if httpErr.IsStatus(http.StatusUnauthorized) {
-			// body should be RespUserInteractive, if it isn't, fail with the error
+		// if response has a 401 status, but doesn't have the errcode field, it's probably a UIA response.
+		if ok && httpErr.IsStatus(http.StatusUnauthorized) && httpErr.RespError == nil {
 			err = json.Unmarshal(bodyBytes, &uiaResp)
-			return
 		}
-		return
+	} else {
+		// body should be RespRegister
+		err = json.Unmarshal(bodyBytes, &resp)
 	}
-	// body should be RespRegister
-	err = json.Unmarshal(bodyBytes, &resp)
 	return
 }
 

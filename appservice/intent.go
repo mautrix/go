@@ -48,10 +48,7 @@ func (intent *IntentAPI) Register() error {
 		Username: intent.Localpart,
 		Type:     mautrix.AuthTypeAppservice,
 	})
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 func (intent *IntentAPI) EnsureRegistered() error {
