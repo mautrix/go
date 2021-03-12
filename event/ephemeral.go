@@ -49,9 +49,9 @@ func (rr *ReadReceipt) UnmarshalJSON(data []byte) error {
 type Presence string
 
 const (
-	PresenceOnline      = "online"
-	PresenceOffline     = "offline"
-	PresenceUnavailable = "unavailable"
+	PresenceOnline      Presence = "online"
+	PresenceOffline     Presence = "offline"
+	PresenceUnavailable Presence = "unavailable"
 )
 
 // PresenceEventContent represents the content of a m.presence ephemeral event.
