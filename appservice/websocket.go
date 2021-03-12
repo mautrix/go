@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tulir Asokan
+// Copyright (c) 2021 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,6 +8,7 @@ package appservice
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -24,13 +25,31 @@ type ErrorResponse struct {
 	Error     string    `json:"error"`
 }
 
-type WebsocketMessage struct {
+type WebsocketCommand struct {
+	ReqID   int             `json:"id,omitempty"`
+	Command string          `json:"command"`
+	Data    json.RawMessage `json:"data"`
+}
+
+type WebsocketTransaction struct {
 	Status string `json:"status"`
 	TxnID  string `json:"txn_id"`
 	EventList
 }
 
-func (as *AppService) StartWebsocket(baseURL string) error {
+type WebsocketMessage struct {
+	WebsocketTransaction
+	WebsocketCommand
+}
+
+func (as *AppService) SendWebsocket(cmd WebsocketCommand) error {
+	if as.ws == nil {
+		return errors.New("websocket not connected")
+	}
+	return as.ws.WriteJSON(&cmd)
+}
+
+func (as *AppService) StartWebsocket(baseURL string, onConnect func()) error {
 	parsed, err := url.Parse(baseURL)
 	if err != nil {
 		return fmt.Errorf("failed to parse URL: %w", err)
@@ -65,7 +84,9 @@ func (as *AppService) StartWebsocket(baseURL string) error {
 			close(closeChan)
 		})
 	}
+	as.ws = ws
 	as.StopWebsocket = stopFunc
+	as.PrepareWebsocket()
 	as.Log.Debugln("Appservice transaction websocket connected")
 
 	go func() {
@@ -77,12 +98,29 @@ func (as *AppService) StartWebsocket(baseURL string) error {
 				as.Log.Warnln("Error reading from websocket:", err)
 				return
 			}
-			if as.Registration.EphemeralEvents && msg.EphemeralEvents != nil {
-				as.handleEvents(msg.EphemeralEvents, event.EphemeralEventType)
+			if msg.Command == "" || msg.Command == "transaction" {
+				if as.Registration.EphemeralEvents && msg.EphemeralEvents != nil {
+					as.handleEvents(msg.EphemeralEvents, event.EphemeralEventType)
+				}
+				as.handleEvents(msg.Events, event.UnknownEventType)
+			} else if msg.Command == "connect" {
+				as.Log.Debugln("Websocket connect confirmation received")
+			} else if msg.Command == "disconnect" {
+				as.Log.Debugln("Websocket disconnect command received")
+				break
+			} else {
+				select {
+				case as.WebsocketCommands <- msg.WebsocketCommand:
+				default:
+					as.Log.Warnln("Dropping websocket command %s %d / %s", msg.Command, msg.ReqID, msg.Data)
+				}
 			}
-			as.handleEvents(msg.Events, event.UnknownEventType)
 		}
 	}()
+
+	if onConnect != nil {
+		onConnect()
+	}
 
 	<-closeChan
 
@@ -96,4 +134,3 @@ func (as *AppService) StartWebsocket(baseURL string) error {
 	}
 	return nil
 }
-

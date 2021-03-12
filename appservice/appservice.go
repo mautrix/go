@@ -18,6 +18,7 @@ import (
 	"sync"
 
 	"github.com/gorilla/mux"
+	"github.com/gorilla/websocket"
 	"gopkg.in/yaml.v2"
 
 	"maunium.net/go/maulogger/v2"
@@ -101,7 +102,15 @@ type AppService struct {
 	intents     map[id.UserID]*IntentAPI
 	intentsLock sync.RWMutex
 
-	StopWebsocket func()
+	ws                *websocket.Conn
+	StopWebsocket     func()
+	WebsocketCommands chan WebsocketCommand
+}
+
+func (as *AppService) PrepareWebsocket() {
+	if as.WebsocketCommands == nil {
+		as.WebsocketCommands = make(chan WebsocketCommand, 32)
+	}
 }
 
 // HostConfig contains info about how to host the appservice.
