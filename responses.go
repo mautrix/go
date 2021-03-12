@@ -49,7 +49,7 @@ type RespUnbanUser struct{}
 // RespTyping is the JSON response for https://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-rooms-roomid-typing-userid
 type RespTyping struct{}
 
-// RespPresence is the JSON response for https://matrix.org/docs/spec/client_server/latest#get-matrix-client-r0-presence-userid-status
+// RespPresence is the JSON response for https://matrix.org/docs/spec/client_server/r0.6.1#get-matrix-client-r0-presence-userid-status
 type RespPresence struct {
 	Presence        event.Presence `json:"presence"`
 	LastActiveAgo   int            `json:"last_active_ago"`

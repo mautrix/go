@@ -813,7 +813,7 @@ func (cli *Client) UserTyping(roomID id.RoomID, typing bool, timeout int64) (res
 	return
 }
 
-// GetPresence gets the presence of the user with the specified MXID. See https://matrix.org/docs/spec/client_server/latest#get-matrix-client-r0-presence-userid-status
+// GetPresence gets the presence of the user with the specified MXID. See https://matrix.org/docs/spec/client_server/r0.6.1#get-matrix-client-r0-presence-userid-status
 func (cli *Client) GetPresence(userID id.UserID) (resp *RespPresence, err error) {
 	resp = new(RespPresence)
 	u := cli.BuildURL("presence", userID, "status")
@@ -821,7 +821,7 @@ func (cli *Client) GetPresence(userID id.UserID) (resp *RespPresence, err error)
 	return
 }
 
-// GetPresence gets the user's presence. See https://matrix.org/docs/spec/client_server/latest#get-matrix-client-r0-presence-userid-status
+// GetOwnPresence gets the user's presence. See https://matrix.org/docs/spec/client_server/r0.6.1#get-matrix-client-r0-presence-userid-status
 func (cli *Client) GetOwnPresence() (resp *RespPresence, err error) {
 	return cli.GetPresence(cli.UserID)
 }
