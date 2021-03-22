@@ -84,6 +84,7 @@ func DiscoverClientAPI(serverName string) (*ClientWellKnown, error) {
 	}
 
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", DefaultUserAgent + " .well-known fetcher")
 
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
@@ -928,6 +929,7 @@ func (cli *Client) UploadMedia(data ReqUploadMedia) (*RespMediaUpload, error) {
 		req.Header.Set("Content-Type", data.ContentType)
 	}
 	req.Header.Set("Authorization", "Bearer "+cli.AccessToken)
+	req.Header.Set("User-Agent", cli.UserAgent)
 	req.ContentLength = data.ContentLength
 
 	cli.LogRequest(req, fmt.Sprintf("%d bytes", data.ContentLength))
@@ -1253,7 +1255,7 @@ func NewClient(homeserverURL string, userID id.UserID, accessToken string) (*Cli
 	}
 	return &Client{
 		AccessToken:   accessToken,
-		UserAgent:     "mautrix-go " + Version,
+		UserAgent:     DefaultUserAgent,
 		HomeserverURL: hsURL,
 		UserID:        userID,
 		Client:        &http.Client{Timeout: 180 * time.Second},

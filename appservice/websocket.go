@@ -62,6 +62,7 @@ func (as *AppService) StartWebsocket(baseURL string, onConnect func()) error {
 	}
 	ws, resp, err := websocket.DefaultDialer.Dial(parsed.String(), http.Header{
 		"Authorization": []string{fmt.Sprintf("Bearer %s", as.Registration.AppToken)},
+		"User-Agent": []string{as.BotClient().UserAgent},
 	})
 	if resp != nil && resp.StatusCode >= 400 {
 		var errResp ErrorResponse

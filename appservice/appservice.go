@@ -39,6 +39,7 @@ func Create() *AppService {
 		intents:    make(map[id.UserID]*IntentAPI),
 		StateStore: NewBasicStateStore(),
 		Router:     mux.NewRouter(),
+		UserAgent:  mautrix.DefaultUserAgent,
 	}
 }
 
@@ -93,6 +94,7 @@ type AppService struct {
 	StateStore   StateStore        `yaml:"-"`
 
 	Router    *mux.Router `yaml:"-"`
+	UserAgent string      `yaml:"-"`
 	server    *http.Server
 	botClient *mautrix.Client
 	botIntent *IntentAPI
@@ -198,6 +200,7 @@ func (as *AppService) makeClient(userID id.UserID) *mautrix.Client {
 		as.Log.Fatalln("Failed to create mautrix client instance:", err)
 		return nil
 	}
+	client.UserAgent = as.UserAgent
 	client.Syncer = nil
 	client.Store = nil
 	client.AppServiceUserID = userID
@@ -224,6 +227,7 @@ func (as *AppService) BotClient() *mautrix.Client {
 			as.Log.Fatalln("Failed to create gomatrix instance:", err)
 			return nil
 		}
+		as.botClient.UserAgent = as.UserAgent
 		as.botClient.Syncer = nil
 		as.botClient.Store = nil
 		as.botClient.Logger = as.Log.Sub("Bot")
@@ -236,6 +240,10 @@ func (as *AppService) BotClient() *mautrix.Client {
 func (as *AppService) Init() (bool, error) {
 	as.Events = make(chan *event.Event, EventChannelSize)
 	as.QueryHandler = &QueryHandlerStub{}
+
+	if len(as.UserAgent) == 0 {
+		as.UserAgent = mautrix.DefaultUserAgent
+	}
 
 	as.Log = maulogger.Create()
 	as.LogConfig.Configure(as.Log)
