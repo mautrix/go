@@ -223,23 +223,25 @@ func (mach *OlmMachine) HandleMemberEvent(evt *event.Event) {
 func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 	switch content := evt.Content.Parsed.(type) {
 	case *event.EncryptedEventContent:
-		mach.Log.Trace("Handling encrypted to-device event from %s/%s", evt.Sender, content.DeviceID)
+		mach.Log.Debug("Handling encrypted to-device event from %s/%s", evt.Sender, content.SenderKey)
 		decryptedEvt, err := mach.decryptOlmEvent(evt)
 		if err != nil {
 			mach.Log.Error("Failed to decrypt to-device event: %v", err)
 			return
 		}
-		switch content := decryptedEvt.Content.Parsed.(type) {
+		switch decryptedContent := decryptedEvt.Content.Parsed.(type) {
 		case *event.RoomKeyEventContent:
-			mach.receiveRoomKey(decryptedEvt, content)
+			mach.receiveRoomKey(decryptedEvt, decryptedContent)
 		case *event.ForwardedRoomKeyEventContent:
-			if mach.importForwardedRoomKey(decryptedEvt, content) {
-				if ch, ok := mach.roomKeyRequestFilled.Load(content.SessionID); ok {
+			if mach.importForwardedRoomKey(decryptedEvt, decryptedContent) {
+				if ch, ok := mach.roomKeyRequestFilled.Load(decryptedContent.SessionID); ok {
 					// close channel to notify listener that the key was received
 					close(ch.(chan struct{}))
 				}
 			}
-			// TODO handle m.dummy encrypted to-device event
+			// TODO handle m.dummy encrypted to-device event?
+		default:
+			mach.Log.Debug("Unhandled encrypted to-device event of type %s from %s/%s (session: %s)", decryptedEvt.Type.String(), decryptedEvt.Sender, decryptedEvt.SenderDevice, content.SessionID)
 		}
 	case *event.RoomKeyRequestEventContent:
 		mach.handleRoomKeyRequest(evt.Sender, content)
@@ -375,6 +377,7 @@ func (mach *OlmMachine) WaitForSession(roomID id.RoomID, senderKey id.SenderKey,
 func (mach *OlmMachine) receiveRoomKey(evt *DecryptedOlmEvent, content *event.RoomKeyEventContent) {
 	// TODO nio had a comment saying "handle this better" for the case where evt.Keys.Ed25519 is none?
 	if content.Algorithm != id.AlgorithmMegolmV1 || evt.Keys.Ed25519 == "" {
+		mach.Log.Debug("Ignoring weird room key from %s/%s: alg=%s, ed25519=%s, sessionid=%s, roomid=%s", evt.Sender, evt.SenderDevice, content.Algorithm, evt.Keys.Ed25519, content.SessionID, content.RoomID)
 		return
 	}
 
