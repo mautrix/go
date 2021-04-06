@@ -14,7 +14,7 @@ require (
 	github.com/tidwall/gjson v1.6.8
 	github.com/tidwall/sjson v1.1.5
 	golang.org/x/crypto v0.0.0-20210220033148-5ea612d1eb83
-	golang.org/x/net v0.0.0-20210220033124-5f55cee0dc0d
+	golang.org/x/net v0.0.0-20210405180319-a5a99cb37ef4
 	gopkg.in/yaml.v2 v2.3.0
 	maunium.net/go/maulogger/v2 v2.2.4
 )

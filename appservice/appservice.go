@@ -12,13 +12,16 @@ import (
 	"html/template"
 	"io/ioutil"
 	"net/http"
+	"net/http/cookiejar"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
+	"golang.org/x/net/publicsuffix"
 	"gopkg.in/yaml.v2"
 
 	"maunium.net/go/maulogger/v2"
@@ -33,10 +36,12 @@ var EventChannelSize = 64
 
 // Create a blank appservice instance.
 func Create() *AppService {
+	jar, _ := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
 	return &AppService{
 		LogConfig:  CreateLogConfig(),
 		clients:    make(map[id.UserID]*mautrix.Client),
 		intents:    make(map[id.UserID]*IntentAPI),
+		HTTPClient: &http.Client{Timeout: 180 * time.Second, Jar: jar},
 		StateStore: NewBasicStateStore(),
 		Router:     mux.NewRouter(),
 		UserAgent:  mautrix.DefaultUserAgent,
@@ -93,11 +98,12 @@ type AppService struct {
 	QueryHandler QueryHandler      `yaml:"-"`
 	StateStore   StateStore        `yaml:"-"`
 
-	Router    *mux.Router `yaml:"-"`
-	UserAgent string      `yaml:"-"`
-	server    *http.Server
-	botClient *mautrix.Client
-	botIntent *IntentAPI
+	Router     *mux.Router `yaml:"-"`
+	UserAgent  string      `yaml:"-"`
+	server     *http.Server
+	HTTPClient *http.Client
+	botClient  *mautrix.Client
+	botIntent  *IntentAPI
 
 	clients     map[id.UserID]*mautrix.Client
 	clientsLock sync.RWMutex
@@ -180,8 +186,7 @@ func (as *AppService) Intent(userID id.UserID) *IntentAPI {
 
 func (as *AppService) BotIntent() *IntentAPI {
 	if as.botIntent == nil {
-		as.botIntent = as.NewIntentAPI(as.Registration.SenderLocalpart)
-		as.botIntent.Logger = as.Log.Sub(string(as.botIntent.UserID))
+		as.botIntent = as.makeIntent(as.BotMXID())
 	}
 	return as.botIntent
 }
@@ -205,6 +210,7 @@ func (as *AppService) makeClient(userID id.UserID) *mautrix.Client {
 	client.Store = nil
 	client.AppServiceUserID = userID
 	client.Logger = as.Log.Sub(string(userID))
+	client.Client = as.HTTPClient
 	as.clients[userID] = client
 	return client
 }
@@ -221,17 +227,8 @@ func (as *AppService) Client(userID id.UserID) *mautrix.Client {
 
 func (as *AppService) BotClient() *mautrix.Client {
 	if as.botClient == nil {
-		var err error
-		as.botClient, err = mautrix.NewClient(as.HomeserverURL, as.BotMXID(), as.Registration.AppToken)
-		if err != nil {
-			as.Log.Fatalln("Failed to create gomatrix instance:", err)
-			return nil
-		}
-		as.botClient.UserAgent = as.UserAgent
-		as.botClient.Syncer = nil
-		as.botClient.Store = nil
+		as.botClient = as.makeClient(as.BotMXID())
 		as.botClient.Logger = as.Log.Sub("Bot")
-		as.botClient.AppServiceUserID = as.BotMXID()
 	}
 	return as.botClient
 }
