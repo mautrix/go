@@ -167,6 +167,13 @@ func (as *AppService) makeIntent(userID id.UserID) *IntentAPI {
 
 	localpart, homeserver, err := userID.Parse()
 	if err != nil || len(localpart) == 0 || homeserver != as.HomeserverDomain {
+		if err != nil {
+			as.Log.Fatalfln("Failed to parse user ID %s: %v", userID, err)
+		} else if len(localpart) == 0 {
+			as.Log.Fatalfln("Failed to make intent for %s: localpart is empty", userID)
+		} else if homeserver != as.HomeserverDomain {
+			as.Log.Fatalfln("Failed to make intent for %s: homeserver isn't %s", userID, as.HomeserverDomain)
+		}
 		return nil
 	}
 	intent = as.NewIntentAPI(localpart)
