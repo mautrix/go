@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -76,6 +77,8 @@ func TestMessageEventContent__ParseEdit(t *testing.T) {
 	assert.Equal(t, id.RoomID("!bar"), evt.RoomID)
 
 	err = evt.Content.ParseRaw(evt.Type)
+	require.NoError(t, err)
+
 	assert.IsType(t, &event.MessageEventContent{}, evt.Content.Parsed)
 	content := evt.Content.Parsed.(*event.MessageEventContent)
 	assert.Equal(t, event.MsgText, content.MsgType)
@@ -116,6 +119,8 @@ func TestMessageEventContent__ParseMedia(t *testing.T) {
 	assert.Equal(t, id.RoomID("!bar"), evt.RoomID)
 
 	err = evt.Content.ParseRaw(evt.Type)
+	require.NoError(t, err)
+
 	assert.IsType(t, &event.MessageEventContent{}, evt.Content.Parsed)
 	content := evt.Content.Parsed.(*event.MessageEventContent)
 	assert.Equal(t, event.MsgImage, content.MsgType)
