@@ -105,6 +105,8 @@ type AppService struct {
 	botClient  *mautrix.Client
 	botIntent  *IntentAPI
 
+	DefaultHTTPRetries int
+
 	clients     map[id.UserID]*mautrix.Client
 	clientsLock sync.RWMutex
 	intents     map[id.UserID]*IntentAPI
@@ -218,6 +220,7 @@ func (as *AppService) makeClient(userID id.UserID) *mautrix.Client {
 	client.AppServiceUserID = userID
 	client.Logger = as.Log.Sub(string(userID))
 	client.Client = as.HTTPClient
+	client.DefaultHTTPRetries = as.DefaultHTTPRetries
 	as.clients[userID] = client
 	return client
 }
