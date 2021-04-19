@@ -83,6 +83,16 @@ func (et *Type) IsInRoomVerification() bool {
 	}
 }
 
+func (et *Type) IsCall() bool {
+	switch et.Type {
+	case CallInvite.Type, CallCandidates.Type, CallAnswer.Type, CallReject.Type, CallSelectAnswer.Type,
+		CallNegotiate.Type, CallHangup.Type:
+		return true
+	default:
+		return false
+	}
+}
+
 func (et *Type) IsCustom() bool {
 	return !strings.HasPrefix(et.Type, "m.")
 }
@@ -173,6 +183,14 @@ var (
 	InRoomVerificationKey    = Type{"m.key.verification.key", MessageEventType}
 	InRoomVerificationMAC    = Type{"m.key.verification.mac", MessageEventType}
 	InRoomVerificationCancel = Type{"m.key.verification.cancel", MessageEventType}
+
+	CallInvite       = Type{"m.call.invite", MessageEventType}
+	CallCandidates   = Type{"m.call.candidates", MessageEventType}
+	CallAnswer       = Type{"m.call.answer", MessageEventType}
+	CallReject       = Type{"m.call.reject", MessageEventType}
+	CallSelectAnswer = Type{"m.call.select_answer", MessageEventType}
+	CallNegotiate    = Type{"m.call.negotiate", MessageEventType}
+	CallHangup       = Type{"m.call.hangup", MessageEventType}
 )
 
 // Ephemeral events
