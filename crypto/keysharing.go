@@ -193,7 +193,7 @@ func (mach *OlmMachine) handleRoomKeyRequest(sender id.UserID, content *event.Ro
 		return
 	}
 
-	mach.Log.Debug("Received key request %s for %s from %s/%s for session %s", content.RequestID, content.Body.SessionID, sender, content.RequestingDeviceID, content.Body.SessionID)
+	mach.Log.Debug("Received key request %s for %s from %s/%s", content.RequestID, content.Body.SessionID, sender, content.RequestingDeviceID)
 
 	device, err := mach.GetOrFetchDevice(sender, content.RequestingDeviceID)
 	if err != nil {
@@ -239,7 +239,7 @@ func (mach *OlmMachine) handleRoomKeyRequest(sender id.UserID, content *event.Ro
 		},
 	}
 
-	if err := mach.SendEncryptedToDevice(device, forwardedRoomKey); err != nil {
+	if err := mach.SendEncryptedToDevice(device, event.ToDeviceForwardedRoomKey, forwardedRoomKey); err != nil {
 		mach.Log.Error("Failed to send encrypted forwarded key %s to %s/%s: %v", igs.ID(), device.UserID, device.DeviceID, err)
 	}
 

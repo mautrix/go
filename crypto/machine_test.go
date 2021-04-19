@@ -112,7 +112,7 @@ func TestOlmMachineOlmMegolmSessions(t *testing.T) {
 
 	for _, content := range content.OlmCiphertext {
 		// decrypt olm ciphertext
-		decrypted, err := machineIn.decryptOlmCiphertext("user1", "device1", senderKey, content.Type, content.Body)
+		decrypted, err := machineIn.decryptAndParseOlmCiphertext("user1", "device1", senderKey, content.Type, content.Body)
 		if err != nil {
 			t.Errorf("Error decrypting olm content: %v", err)
 		}

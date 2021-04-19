@@ -53,7 +53,7 @@ func (mach *OlmMachine) decryptOlmEvent(evt *event.Event) (*DecryptedOlmEvent, e
 	if !ok {
 		return nil, NotEncryptedForMe
 	}
-	decrypted, err := mach.decryptOlmCiphertext(evt.Sender, content.DeviceID, content.SenderKey, ownContent.Type, ownContent.Body)
+	decrypted, err := mach.decryptAndParseOlmCiphertext(evt.Sender, content.DeviceID, content.SenderKey, ownContent.Type, ownContent.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -65,46 +65,14 @@ type OlmEventKeys struct {
 	Ed25519 id.Ed25519 `json:"ed25519"`
 }
 
-func (mach *OlmMachine) decryptOlmCiphertext(sender id.UserID, deviceID id.DeviceID, senderKey id.SenderKey, olmType id.OlmMsgType, ciphertext string) (*DecryptedOlmEvent, error) {
+func (mach *OlmMachine) decryptAndParseOlmCiphertext(sender id.UserID, deviceID id.DeviceID, senderKey id.SenderKey, olmType id.OlmMsgType, ciphertext string) (*DecryptedOlmEvent, error) {
 	if olmType != id.OlmMsgTypePreKey && olmType != id.OlmMsgTypeMsg {
 		return nil, UnsupportedOlmMessageType
 	}
 
-	plaintext, err := mach.tryDecryptOlmCiphertext(senderKey, olmType, ciphertext)
+	plaintext, err := mach.tryDecryptOlmCiphertext(sender, deviceID, senderKey, olmType, ciphertext)
 	if err != nil {
-		if err == DecryptionFailedWithMatchingSession {
-			mach.Log.Warn("Found matching session yet decryption failed for sender %s with key %s", sender, senderKey)
-			mach.markDeviceForUnwedging(sender, senderKey)
-		}
-		return nil, fmt.Errorf("failed to decrypt olm event: %w", err)
-	}
-
-	// Decryption failed with every known session or no known sessions, let's try to create a new session.
-	if plaintext == nil {
-		// New sessions can only be created if it's a prekey message, we can't decrypt the message
-		// if it isn't one at this point in time anymore, so return early.
-		if olmType != id.OlmMsgTypePreKey {
-			mach.markDeviceForUnwedging(sender, senderKey)
-			return nil, DecryptionFailedForNormalMessage
-		}
-
-		mach.Log.Trace("Trying to create inbound session for %s/%s", sender, deviceID)
-		session, err := mach.createInboundSession(senderKey, ciphertext)
-		if err != nil {
-			mach.markDeviceForUnwedging(sender, senderKey)
-			return nil, fmt.Errorf("failed to create new session from prekey message: %w", err)
-		}
-		mach.Log.Debug("Created inbound olm session %s for %s/%s (sender key: %s)", session.ID(), sender, deviceID, senderKey)
-
-		plaintext, err = session.Decrypt(ciphertext, olmType)
-		if err != nil {
-			return nil, fmt.Errorf("failed to decrypt olm event with session created from prekey message: %w", err)
-		}
-
-		err = mach.CryptoStore.UpdateSession(senderKey, session)
-		if err != nil {
-			mach.Log.Warn("Failed to update new olm session in crypto store after decrypting: %v", err)
-		}
+		return nil, err
 	}
 
 	var olmEvt DecryptedOlmEvent
@@ -130,7 +98,54 @@ func (mach *OlmMachine) decryptOlmCiphertext(sender id.UserID, deviceID id.Devic
 	return &olmEvt, nil
 }
 
-func (mach *OlmMachine) tryDecryptOlmCiphertext(senderKey id.SenderKey, olmType id.OlmMsgType, ciphertext string) ([]byte, error) {
+func (mach *OlmMachine) tryDecryptOlmCiphertext(sender id.UserID, deviceID id.DeviceID, senderKey id.SenderKey, olmType id.OlmMsgType, ciphertext string) ([]byte, error) {
+	mach.olmLock.Lock()
+	defer mach.olmLock.Unlock()
+
+	plaintext, err := mach.tryDecryptOlmCiphertextWithExistingSession(senderKey, olmType, ciphertext)
+	if err != nil {
+		if err == DecryptionFailedWithMatchingSession {
+			mach.Log.Warn("Found matching session yet decryption failed for sender %s with key %s", sender, senderKey)
+			mach.markDeviceForUnwedging(sender, senderKey)
+		}
+		return nil, fmt.Errorf("failed to decrypt olm event: %w", err)
+	}
+
+	if plaintext != nil {
+		// Decryption successful
+		return plaintext, nil
+	}
+
+	// Decryption failed with every known session or no known sessions, let's try to create a new session.
+	//
+	// New sessions can only be created if it's a prekey message, we can't decrypt the message
+	// if it isn't one at this point in time anymore, so return early.
+	if olmType != id.OlmMsgTypePreKey {
+		mach.markDeviceForUnwedging(sender, senderKey)
+		return nil, DecryptionFailedForNormalMessage
+	}
+
+	mach.Log.Trace("Trying to create inbound session for %s/%s", sender, deviceID)
+	session, err := mach.createInboundSession(senderKey, ciphertext)
+	if err != nil {
+		mach.markDeviceForUnwedging(sender, senderKey)
+		return nil, fmt.Errorf("failed to create new session from prekey message: %w", err)
+	}
+	mach.Log.Debug("Created inbound olm session %s for %s/%s (sender key: %s)", session.ID(), sender, deviceID, senderKey)
+
+	plaintext, err = session.Decrypt(ciphertext, olmType)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt olm event with session created from prekey message: %w", err)
+	}
+
+	err = mach.CryptoStore.UpdateSession(senderKey, session)
+	if err != nil {
+		mach.Log.Warn("Failed to update new olm session in crypto store after decrypting: %v", err)
+	}
+	return plaintext, nil
+}
+
+func (mach *OlmMachine) tryDecryptOlmCiphertextWithExistingSession(senderKey id.SenderKey, olmType id.OlmMsgType, ciphertext string) ([]byte, error) {
 	sessions, err := mach.CryptoStore.GetSessions(senderKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get session for %s: %w", senderKey, err)
