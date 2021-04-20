@@ -21,7 +21,7 @@ type TagEventContent struct {
 type Tags map[string]Tag
 
 type Tag struct {
-	Order json.Number `json:"order"`
+	Order json.Number `json:"order,omitempty"`
 }
 
 // DirectChatsEventContent represents the content of a m.direct account data event.

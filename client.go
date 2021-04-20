@@ -706,6 +706,22 @@ func (cli *Client) SetAccountData(name string, data interface{}) (err error) {
 	return nil
 }
 
+func (cli *Client) GetRoomAccountData(roomID id.RoomID, name string, output interface{}) (err error) {
+	urlPath := cli.BuildURL("user", cli.UserID, "rooms", roomID, "account_data", name)
+	_, err = cli.MakeRequest("GET", urlPath, nil, output)
+	return
+}
+
+func (cli *Client) SetRoomAccountData(roomID id.RoomID, name string, data interface{}) (err error) {
+	urlPath := cli.BuildURL("user", cli.UserID, "rooms", roomID, "account_data", name)
+	_, err = cli.MakeRequest("PUT", urlPath, &data, nil)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 type ReqSendEvent struct {
 	Timestamp     int64
 	TransactionID string
@@ -1093,13 +1109,28 @@ func (cli *Client) MarkRead(roomID id.RoomID, eventID id.EventID) (err error) {
 	return
 }
 
-func (cli *Client) AddTag(roomID id.RoomID, tag string, order float64) (err error) {
-	urlPath := cli.BuildURL("user", cli.UserID, "rooms", roomID, "tags", tag)
+func (cli *Client) AddTag(roomID id.RoomID, tag string, order float64) error {
 	var tagData event.Tag
 	if order == order {
 		tagData.Order = json.Number(strconv.FormatFloat(order, 'e', -1, 64))
 	}
-	_, err = cli.MakeRequest("PUT", urlPath, tagData, nil)
+	return cli.AddTagWithCustomData(roomID, tag, tagData)
+}
+
+func (cli *Client) AddTagWithCustomData(roomID id.RoomID, tag string, data interface{}) (err error) {
+	urlPath := cli.BuildURL("user", cli.UserID, "rooms", roomID, "tags", tag)
+	_, err = cli.MakeRequest("PUT", urlPath, data, nil)
+	return
+}
+
+func (cli *Client) GetTags(roomID id.RoomID) (tags event.TagEventContent, err error) {
+	err = cli.GetTagsWithCustomData(roomID, &tags)
+	return
+}
+
+func (cli *Client) GetTagsWithCustomData(roomID id.RoomID, resp interface{}) (err error) {
+	urlPath := cli.BuildURL("user", cli.UserID, "rooms", roomID, "tags")
+	_, err = cli.MakeRequest("GET", urlPath, nil, &resp)
 	return
 }
 
@@ -1109,12 +1140,11 @@ func (cli *Client) RemoveTag(roomID id.RoomID, tag string) (err error) {
 	return
 }
 
+// Deprecated: Synapse may not handle setting m.tag directly properly, so you should use the Add/RemoveTag methods instead.
 func (cli *Client) SetTags(roomID id.RoomID, tags event.Tags) (err error) {
-	urlPath := cli.BuildURL("user", cli.UserID, "rooms", roomID, "account_data", "m.tag")
-	_, err = cli.MakeRequest("PUT", urlPath, map[string]event.Tags{
+	return cli.SetRoomAccountData(roomID, "m.tag", map[string]event.Tags{
 		"tags": tags,
-	}, nil)
-	return
+	})
 }
 
 // TurnServer returns turn server details and credentials for the client to use when initiating calls.
