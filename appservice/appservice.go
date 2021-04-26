@@ -113,7 +113,7 @@ type AppService struct {
 	intentsLock sync.RWMutex
 
 	ws                *websocket.Conn
-	StopWebsocket     func()
+	StopWebsocket     func(error)
 	WebsocketCommands chan WebsocketCommand
 }
 
