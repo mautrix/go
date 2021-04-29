@@ -56,7 +56,7 @@ func RenderMarkdown(text string, allowMarkdown, allowHTML bool) event.MessageEve
 		htmlBody = strings.Replace(text, "\n", "<br>", -1)
 	}
 
-	if len(htmlBody) > 0 {
+	if len(htmlBody) > 0 && (allowMarkdown || allowHTML) {
 		text = HTMLToText(htmlBody)
 
 		if htmlBody != text {
