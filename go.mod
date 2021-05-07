@@ -9,7 +9,6 @@ require (
 	github.com/lib/pq v1.9.0
 	github.com/mattn/go-sqlite3 v1.14.6
 	github.com/russross/blackfriday/v2 v2.1.0
-	github.com/shurcooL/sanitized_anchor_name v1.0.0
 	github.com/stretchr/testify v1.6.1
 	github.com/tidwall/gjson v1.6.8
 	github.com/tidwall/sjson v1.1.5
