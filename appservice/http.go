@@ -9,6 +9,7 @@ package appservice
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -151,12 +152,10 @@ func (as *AppService) handleEvents(evts []*event.Event, typeClass event.TypeClas
 			evt.Type.Class = event.MessageEventType
 		}
 		err := evt.Content.ParseRaw(evt.Type)
-		if err != nil {
-			if evt.ID != "" {
-				as.Log.Debugfln("Failed to parse content of %s (%s): %v", evt.ID, evt.Type.Type, err)
-			} else {
-				as.Log.Debugfln("Failed to parse content of a %s: %v", evt.Type.Type, err)
-			}
+		if errors.Is(err, event.UnsupportedContentType) {
+			as.Log.Debugfln("Not parsing content of %s: %v", evt.ID, err)
+		} else if err != nil {
+			as.Log.Debugfln("Failed to parse content of %s (type %s): %v", evt.ID, evt.Type.Type, err)
 		}
 		if evt.Type.IsState() {
 			as.UpdateState(evt)

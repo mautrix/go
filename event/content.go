@@ -145,7 +145,7 @@ func IsUnsupportedContentType(err error) bool {
 }
 
 var ContentAlreadyParsed = errors.New("content is already parsed")
-var UnsupportedContentType = errors.New("unsupported content type")
+var UnsupportedContentType = errors.New("unsupported event type")
 
 func (content *Content) ParseRaw(evtType Type) error {
 	if content.Parsed != nil {
