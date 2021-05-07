@@ -160,4 +160,16 @@ func TestCallVersion_UnmarshalJSON(t *testing.T) {
 	err = json.Unmarshal([]byte(`"com.example.call.version"`), &version)
 	assert.NoError(t, err)
 	assert.Equal(t, event.CallVersion("com.example.call.version"), version)
+
+	err = json.Unmarshal([]byte(`1.234`), &version)
+	assert.Error(t, err)
+
+	err = json.Unmarshal([]byte(`false`), &version)
+	assert.Error(t, err)
+
+	err = json.Unmarshal([]byte(`["hmm"]`), &version)
+	assert.Error(t, err)
+
+	err = json.Unmarshal([]byte(`{"hmm": true}`), &version)
+	assert.Error(t, err)
 }
