@@ -28,12 +28,15 @@ type Receipts struct {
 
 type ReadReceipt struct {
 	Timestamp int64 `json:"ts"`
-}
 
-type serializableReadReceipt ReadReceipt
+	// Extra contains any unknown fields in the read receipt event.
+	// Most servers don't allow clients to set them, so this will be empty in most cases.
+	Extra map[string]interface{} `json:"-"`
+}
 
 func (rr *ReadReceipt) UnmarshalJSON(data []byte) error {
 	// Hacky compatibility hack against crappy clients that send double-encoded read receipts.
+	// TODO is this actually needed? clients can't currently set custom content in receipts 🤔
 	if data[0] == '"' && data[len(data)-1] == '"' {
 		var strData string
 		err := json.Unmarshal(data, &strData)
@@ -42,8 +45,19 @@ func (rr *ReadReceipt) UnmarshalJSON(data []byte) error {
 		}
 		data = []byte(strData)
 	}
-	err := json.Unmarshal(data, (*serializableReadReceipt)(rr))
-	return err
+
+	var parsed map[string]interface{}
+	err := json.Unmarshal(data, &parsed)
+	if err != nil {
+		return err
+	}
+	ts, _ := parsed["ts"].(float64)
+	delete(parsed, "ts")
+	*rr = ReadReceipt{
+		Timestamp: int64(ts),
+		Extra:     parsed,
+	}
+	return nil
 }
 
 type Presence string
