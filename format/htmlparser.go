@@ -9,16 +9,13 @@ package format
 import (
 	"fmt"
 	"math"
-	"regexp"
 	"strconv"
 	"strings"
 
 	"golang.org/x/net/html"
-)
 
-// MatrixToURL is the regex for parsing matrix.to URLs.
-// https://matrix.org/docs/spec/appendices#matrix-to-navigation
-var MatrixToURL = regexp.MustCompile("^(?:https?://)?(?:www\\.)?matrix\\.to/#/([#@!+].*)(?:/(\\$.+))?")
+	"maunium.net/go/mautrix/id"
+)
 
 type Context map[string]interface{}
 type TextConverter func(string, Context) string
@@ -152,17 +149,9 @@ func (parser *HTMLParser) linkToString(node *html.Node, stripLinebreak bool, ctx
 	if len(href) == 0 {
 		return str
 	}
-	match := MatrixToURL.FindStringSubmatch(href)
-	if len(match) == 2 || len(match) == 3 {
-		if parser.PillConverter != nil {
-			mxid := match[1]
-			eventID := ""
-			if len(match) == 3 {
-				eventID = match[2]
-			}
-			return parser.PillConverter(mxid, eventID, ctx)
-		}
-		return str
+	parsedMatrix, err := id.ParseMatrixURIOrMatrixToURL(href)
+	if err == nil && parsedMatrix != nil {
+		return parser.PillConverter(parsedMatrix.PrimaryIdentifier(), parsedMatrix.SecondaryIdentifier(), ctx)
 	}
 	if str == href {
 		return str
