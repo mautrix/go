@@ -154,10 +154,10 @@ func (parser *HTMLParser) linkToString(node *html.Node, stripLinebreak bool, ctx
 		return str
 	}
 	decoded_href, err := url.QueryUnescape(href)
-	if err == nil {
-		href = decoded_href
+	if err != nil {
+		decoded_href = href
 	}
-	match := MatrixToURL.FindStringSubmatch(href)
+	match := MatrixToURL.FindStringSubmatch(decoded_href)
 	if len(match) == 2 || len(match) == 3 {
 		if parser.PillConverter != nil {
 			mxid := match[1]
