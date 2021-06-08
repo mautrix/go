@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"golang.org/x/net/html"
+	"net/url"
 )
 
 // MatrixToURL is the regex for parsing matrix.to URLs.
@@ -151,6 +152,10 @@ func (parser *HTMLParser) linkToString(node *html.Node, stripLinebreak bool, ctx
 	href := parser.getAttribute(node, "href")
 	if len(href) == 0 {
 		return str
+	}
+	decoded_href, err := url.QueryUnescape(href)
+	if err == nil {
+		href = decoded_href
 	}
 	match := MatrixToURL.FindStringSubmatch(href)
 	if len(match) == 2 || len(match) == 3 {
