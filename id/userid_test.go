@@ -23,7 +23,7 @@ func TestUserID_Parse(t *testing.T) {
 	assert.Equal(t, "maunium.net", parsedServerName)
 }
 
-func TestUserID_Parse_Emtpty(t *testing.T) {
+func TestUserID_Parse_Empty(t *testing.T) {
 	const inputUserID = "@:ponies.im"
 	parsedLocalpart, parsedServerName, err := id.UserID(inputUserID).Parse()
 	assert.NoError(t, err)

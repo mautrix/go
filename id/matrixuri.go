@@ -81,23 +81,16 @@ func (uri *MatrixURI) String() string {
 
 // MatrixToURL converts to parsed matrix: URI into a matrix.to URL
 func (uri *MatrixURI) MatrixToURL() string {
-	rawFragment := fmt.Sprintf("#/%s", uri.PrimaryIdentifier())
 	fragment := fmt.Sprintf("#/%s", url.QueryEscape(uri.PrimaryIdentifier()))
 	if uri.Sigil2 != 0 {
-		rawFragment = fmt.Sprintf("%s/%s", rawFragment, uri.SecondaryIdentifier())
-		fragment = fmt.Sprintf("%s/%s", rawFragment, url.QueryEscape(uri.SecondaryIdentifier()))
+		fragment = fmt.Sprintf("%s/%s", fragment, url.QueryEscape(uri.SecondaryIdentifier()))
 	}
 	query := uri.getQuery().Encode()
 	if len(query) > 0 {
-		rawFragment = fmt.Sprintf("%s?%s", rawFragment, query)
 		fragment = fmt.Sprintf("%s?%s", fragment, query)
 	}
-	return (&url.URL{
-		Scheme:      "https",
-		Host:        "matrix.to",
-		Fragment:    fragment,
-		RawFragment: rawFragment,
-	}).String()
+	// It would be nice to use URL{...}.String() here, but figuring out the Fragment vs RawFragment stuff is a pain
+	return fmt.Sprintf("https://matrix.to/%s", fragment)
 }
 
 // PrimaryIdentifier returns the first Matrix identifier in the URI.
@@ -211,7 +204,7 @@ func ProcessMatrixURI(uri *url.URL) (*MatrixURI, error) {
 	parsed.MXID1 = parts[1]
 
 	// Step 6: if the first part is a room and the URI has 4 segments, construct a second level identifier
-	if (parsed.Sigil1 == '!' || parsed.Sigil1 == '@') && len(parts) == 4 {
+	if (parsed.Sigil1 == '!' || parsed.Sigil1 == '#') && len(parts) == 4 {
 		// a: find the sigil from the third segment
 		switch parts[2] {
 		case "e", "event":
@@ -255,7 +248,11 @@ func ProcessMatrixToURL(uri *url.URL) (*MatrixURI, error) {
 		return nil, ErrNotMatrixTo
 	}
 
-	parts := strings.Split(uri.Fragment, "/")
+	initialSplit := strings.SplitN(uri.Fragment, "?", 2)
+	parts := strings.Split(initialSplit[0], "/")
+	if len(initialSplit) > 1 {
+		uri.RawQuery = initialSplit[1]
+	}
 
 	if len(parts) < 2 || len(parts) > 3 {
 		return nil, ErrInvalidMatrixToPartCount
