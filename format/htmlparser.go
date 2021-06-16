@@ -20,10 +20,31 @@ import (
 type Context map[string]interface{}
 type TextConverter func(string, Context) string
 type CodeBlockConverter func(code, language string, ctx Context) string
+type PillConverter func(displayname, mxid, eventID string, ctx Context) string
+
+func DefaultPillConverter(displayname, mxid, eventID string, _ Context) string {
+	switch {
+	case len(mxid) == 0, mxid[0] == '@':
+		// User link, always just show the displayname
+		return displayname
+	case len(eventID) > 0:
+		// Event ID link, always just show the link
+		return fmt.Sprintf("https://matrix.to/#/%s/%s", mxid, eventID)
+	case mxid[0] == '!' && displayname == mxid:
+		// Room ID link with no separate display text, just show the link
+		return fmt.Sprintf("https://matrix.to/#/%s", mxid)
+	case mxid[0] == '#':
+		// Room alias link, just show the alias
+		return mxid
+	default:
+		// Other link (e.g. room ID link with display text), show text and link
+		return fmt.Sprintf("%s (https://matrix.to/#/%s)", displayname, mxid)
+	}
+}
 
 // HTMLParser is a somewhat customizable Matrix HTML parser.
 type HTMLParser struct {
-	PillConverter           func(mxid, eventID string, ctx Context) string
+	PillConverter           PillConverter
 	TabsToSpaces            int
 	Newline                 string
 	HorizontalLine          string
@@ -149,9 +170,11 @@ func (parser *HTMLParser) linkToString(node *html.Node, stripLinebreak bool, ctx
 	if len(href) == 0 {
 		return str
 	}
-	parsedMatrix, err := id.ParseMatrixURIOrMatrixToURL(href)
-	if err == nil && parsedMatrix != nil {
-		return parser.PillConverter(parsedMatrix.PrimaryIdentifier(), parsedMatrix.SecondaryIdentifier(), ctx)
+	if parser.PillConverter != nil {
+		parsedMatrix, err := id.ParseMatrixURIOrMatrixToURL(href)
+		if err == nil && parsedMatrix != nil {
+			return parser.PillConverter(str, parsedMatrix.PrimaryIdentifier(), parsedMatrix.SecondaryIdentifier(), ctx)
+		}
 	}
 	if str == href {
 		return str
@@ -273,5 +296,6 @@ func HTMLToText(html string) string {
 		TabsToSpaces:   4,
 		Newline:        "\n",
 		HorizontalLine: "\n---\n",
+		PillConverter:  DefaultPillConverter,
 	}).Parse(html, make(Context))
 }
