@@ -180,11 +180,8 @@ type RespSync struct {
 		Events []*event.Event `json:"events"`
 	} `json:"to_device"`
 
-	DeviceLists struct {
-		Changed []id.UserID `json:"changed"`
-		Left    []id.UserID `json:"left"`
-	} `json:"device_lists"`
-	DeviceOneTimeKeysCount OneTimeKeysCount `json:"device_one_time_keys_count"`
+	DeviceLists    DeviceLists `json:"device_lists"`
+	DeviceOTKCount OTKCount    `json:"device_one_time_keys_count"`
 
 	Rooms struct {
 		Leave  map[id.RoomID]SyncLeftRoom    `json:"leave"`
@@ -193,9 +190,17 @@ type RespSync struct {
 	} `json:"rooms"`
 }
 
-type OneTimeKeysCount struct {
+type DeviceLists struct {
+	Changed []id.UserID `json:"changed"`
+	Left    []id.UserID `json:"left"`
+}
+
+type OTKCount struct {
 	Curve25519       int `json:"curve25519"`
 	SignedCurve25519 int `json:"signed_curve25519"`
+
+	// For appservice OTK counts only: the user ID in question
+	UserID id.UserID `json:"-"`
 }
 
 type SyncLeftRoom struct {
@@ -250,7 +255,7 @@ type RespAliasResolve struct {
 }
 
 type RespUploadKeys struct {
-	OneTimeKeyCounts OneTimeKeysCount `json:"one_time_key_counts"`
+	OneTimeKeyCounts OTKCount `json:"one_time_key_counts"`
 }
 
 type RespQueryKeys struct {

@@ -33,6 +33,7 @@ import (
 
 // EventChannelSize is the size for the Events channel in Appservice instances.
 var EventChannelSize = 64
+var OTKChannelSize = 4
 
 // Create a blank appservice instance.
 func Create() *AppService {
@@ -83,20 +84,17 @@ type AppService struct {
 	RegistrationPath string     `yaml:"registration"`
 	Host             HostConfig `yaml:"host"`
 	LogConfig        LogConfig  `yaml:"logging"`
-	Sync             struct {
-		Enabled   bool   `yaml:"enabled"`
-		FilterID  string `yaml:"filter_id"`
-		NextBatch string `yaml:"next_batch"`
-	} `yaml:"sync"`
 
 	Registration *Registration    `yaml:"-"`
 	Log          maulogger.Logger `yaml:"-"`
 
 	lastProcessedTransaction string
 
-	Events       chan *event.Event `yaml:"-"`
-	QueryHandler QueryHandler      `yaml:"-"`
-	StateStore   StateStore        `yaml:"-"`
+	Events       chan *event.Event         `yaml:"-"`
+	DeviceLists  chan *mautrix.DeviceLists `yaml:"-"`
+	OTKCounts    chan *mautrix.OTKCount    `yaml:"-"`
+	QueryHandler QueryHandler              `yaml:"-"`
+	StateStore   StateStore                `yaml:"-"`
 
 	Router     *mux.Router `yaml:"-"`
 	UserAgent  string      `yaml:"-"`
@@ -246,6 +244,8 @@ func (as *AppService) BotClient() *mautrix.Client {
 // Init initializes the logger and loads the registration of this appservice.
 func (as *AppService) Init() (bool, error) {
 	as.Events = make(chan *event.Event, EventChannelSize)
+	as.OTKCounts = make(chan *mautrix.OTKCount, OTKChannelSize)
+	as.DeviceLists = make(chan *mautrix.DeviceLists, EventChannelSize)
 	as.QueryHandler = &QueryHandlerStub{}
 
 	if len(as.UserAgent) == 0 {

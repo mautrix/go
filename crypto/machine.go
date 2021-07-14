@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"maunium.net/go/mautrix/appservice"
 	"maunium.net/go/mautrix/crypto/ssss"
 	"maunium.net/go/mautrix/id"
 
@@ -153,16 +154,47 @@ func (mach *OlmMachine) OwnIdentity() *DeviceIdentity {
 	}
 }
 
+func (mach *OlmMachine) AddAppserviceListener(ep *appservice.EventProcessor, az *appservice.AppService) {
+	// ToDeviceForwardedRoomKey and ToDeviceRoomKey should only be present inside encrypted to-device events
+	ep.On(event.ToDeviceEncrypted, mach.HandleToDeviceEvent)
+	ep.On(event.ToDeviceRoomKeyRequest, mach.HandleToDeviceEvent)
+	ep.On(event.ToDeviceRoomKeyWithheld, mach.HandleToDeviceEvent)
+	ep.On(event.ToDeviceOrgMatrixRoomKeyWithheld, mach.HandleToDeviceEvent)
+	ep.On(event.ToDeviceVerificationRequest, mach.HandleToDeviceEvent)
+	ep.On(event.ToDeviceVerificationStart, mach.HandleToDeviceEvent)
+	ep.On(event.ToDeviceVerificationAccept, mach.HandleToDeviceEvent)
+	ep.On(event.ToDeviceVerificationKey, mach.HandleToDeviceEvent)
+	ep.On(event.ToDeviceVerificationMAC, mach.HandleToDeviceEvent)
+	ep.On(event.ToDeviceVerificationCancel, mach.HandleToDeviceEvent)
+	ep.OnOTK(mach.HandleOTKCounts)
+	ep.OnDeviceList(mach.HandleDeviceLists)
+}
+
+func (mach *OlmMachine) HandleDeviceLists(dl *mautrix.DeviceLists, since string) {
+	if len(dl.Changed) > 0 {
+		mach.Log.Trace("Device list changes in /sync: %v", dl.Changed)
+		mach.fetchKeys(dl.Changed, since, false)
+	}
+}
+
+func (mach *OlmMachine) HandleOTKCounts(otkCount *mautrix.OTKCount) {
+	minCount := mach.account.Internal.MaxNumberOfOneTimeKeys() / 2
+	if otkCount.SignedCurve25519 < int(minCount) {
+		mach.Log.Debug("Sync response said we have %d signed curve25519 keys left, sharing new ones...", otkCount.SignedCurve25519)
+		err := mach.ShareKeys(otkCount.SignedCurve25519)
+		if err != nil {
+			mach.Log.Error("Failed to share keys: %v", err)
+		}
+	}
+}
+
 // ProcessSyncResponse processes a single /sync response.
 //
 // This can be easily registered into a mautrix client using .OnSync():
 //
 //     client.Syncer.(*mautrix.DefaultSyncer).OnSync(c.crypto.ProcessSyncResponse)
 func (mach *OlmMachine) ProcessSyncResponse(resp *mautrix.RespSync, since string) bool {
-	if len(resp.DeviceLists.Changed) > 0 {
-		mach.Log.Trace("Device list changes in /sync: %v", resp.DeviceLists.Changed)
-		mach.fetchKeys(resp.DeviceLists.Changed, since, false)
-	}
+	mach.HandleDeviceLists(&resp.DeviceLists, since)
 
 	for _, evt := range resp.ToDevice.Events {
 		evt.Type.Class = event.ToDeviceEventType
@@ -174,14 +206,7 @@ func (mach *OlmMachine) ProcessSyncResponse(resp *mautrix.RespSync, since string
 		mach.HandleToDeviceEvent(evt)
 	}
 
-	min := mach.account.Internal.MaxNumberOfOneTimeKeys() / 2
-	if resp.DeviceOneTimeKeysCount.SignedCurve25519 < int(min) {
-		mach.Log.Debug("Sync response said we have %d signed curve25519 keys left, sharing new ones...", resp.DeviceOneTimeKeysCount.SignedCurve25519)
-		err := mach.ShareKeys(resp.DeviceOneTimeKeysCount.SignedCurve25519)
-		if err != nil {
-			mach.Log.Error("Failed to share keys: %v", err)
-		}
-	}
+	mach.HandleOTKCounts(&resp.DeviceOTKCount)
 	return true
 }
 
@@ -222,6 +247,11 @@ func (mach *OlmMachine) HandleMemberEvent(evt *event.Event) {
 // HandleToDeviceEvent handles a single to-device event. This is automatically called by ProcessSyncResponse, so you
 // don't need to add any custom handlers if you use that method.
 func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
+	if len(evt.ToUserID) > 0 && (evt.ToUserID != mach.Client.UserID || evt.ToDeviceID != mach.Client.DeviceID) {
+		// TODO This log probably needs to be silence-able if someone wants to use encrypted appservices with multiple e2ee sessions
+		mach.Log.Debug("Dropping to-device event targeted to %s/%s (not us)", evt.ToUserID, evt.ToDeviceID)
+		return
+	}
 	switch content := evt.Content.Parsed.(type) {
 	case *event.EncryptedEventContent:
 		mach.Log.Debug("Handling encrypted to-device event from %s/%s", evt.Sender, content.SenderKey)

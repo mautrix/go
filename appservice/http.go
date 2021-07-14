@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tulir Asokan
+// Copyright (c) 2021 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -17,11 +17,12 @@ import (
 
 	"github.com/gorilla/mux"
 
+	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
-// Listen starts the HTTP server that listens for calls from the Matrix homeserver.
+// Start starts the HTTP server that listens for calls from the Matrix homeserver.
 func (as *AppService) Start() {
 	as.Router.HandleFunc("/transactions/{txnID}", as.PutTransaction).Methods(http.MethodPut)
 	as.Router.HandleFunc("/rooms/{roomAlias}", as.GetRoom).Methods(http.MethodGet)
@@ -119,8 +120,8 @@ func (as *AppService) PutTransaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	eventList := EventList{}
-	err = json.Unmarshal(body, &eventList)
+	var txn Transaction
+	err = json.Unmarshal(body, &txn)
 	if err != nil {
 		as.Log.Warnfln("Failed to parse JSON of transaction %s: %v", txnID, err)
 		Error{
@@ -130,22 +131,53 @@ func (as *AppService) PutTransaction(w http.ResponseWriter, r *http.Request) {
 		}.Write(w)
 	} else {
 		if as.Registration.EphemeralEvents {
-			if eventList.EphemeralEvents != nil {
-				as.handleEvents(eventList.EphemeralEvents, event.EphemeralEventType)
-			} else if eventList.SoruEphemeralEvents != nil {
-				as.handleEvents(eventList.SoruEphemeralEvents, event.EphemeralEventType)
+			if txn.EphemeralEvents != nil {
+				as.handleEvents(txn.EphemeralEvents, event.EphemeralEventType)
+			} else if txn.MSC2409EphemeralEvents != nil {
+				as.handleEvents(txn.MSC2409EphemeralEvents, event.EphemeralEventType)
 			}
 		}
-		as.handleEvents(eventList.Events, event.UnknownEventType)
+		as.handleEvents(txn.Events, event.UnknownEventType)
+		if txn.DeviceLists != nil {
+			as.handleDeviceLists(txn.DeviceLists)
+		} else if txn.MSC3202DeviceLists != nil {
+			as.handleDeviceLists(txn.MSC3202DeviceLists)
+		}
+		if txn.DeviceOTKCount != nil {
+			as.handleOTKCounts(txn.DeviceOTKCount)
+		} else if txn.MSC3202DeviceOTKCount != nil {
+			as.handleOTKCounts(txn.MSC3202DeviceOTKCount)
+		}
 		WriteBlankOK(w)
 	}
 	as.lastProcessedTransaction = txnID
 }
 
-func (as *AppService) handleEvents(evts []*event.Event, typeClass event.TypeClass) {
+func (as *AppService) handleOTKCounts(otks map[id.UserID]mautrix.OTKCount) {
+	for userID, otkCounts := range otks {
+		otkCounts.UserID = userID
+		select {
+		case as.OTKCounts <- &otkCounts:
+		default:
+			as.Log.Warnfln("Dropped OTK count update for %s because channel is full", userID)
+		}
+	}
+}
+
+func (as *AppService) handleDeviceLists(dl *mautrix.DeviceLists) {
+	select {
+	case as.DeviceLists <- dl:
+	default:
+		as.Log.Warnln("Dropped device list update because channel is full")
+	}
+}
+
+func (as *AppService) handleEvents(evts []*event.Event, defaultTypeClass event.TypeClass) {
 	for _, evt := range evts {
-		if typeClass != event.UnknownEventType {
-			evt.Type.Class = typeClass
+		if len(evt.ToUserID) > 0 {
+			evt.Type.Class = event.ToDeviceEventType
+		} else if defaultTypeClass != event.UnknownEventType {
+			evt.Type.Class = defaultTypeClass
 		} else if evt.StateKey != nil {
 			evt.Type.Class = event.StateEventType
 		} else {

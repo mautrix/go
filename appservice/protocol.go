@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tulir Asokan
+// Copyright (c) 2021 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -10,14 +10,21 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/id"
 )
 
-// EventList contains a list of events.
-type EventList struct {
-	Events              []*event.Event `json:"events"`
-	EphemeralEvents     []*event.Event `json:"ephemeral"`
-	SoruEphemeralEvents []*event.Event `json:"de.sorunome.msc2409.ephemeral"`
+// Transaction contains a list of events.
+type Transaction struct {
+	Events          []*event.Event                 `json:"events"`
+	EphemeralEvents []*event.Event                 `json:"ephemeral,omitempty"`
+	DeviceLists     *mautrix.DeviceLists           `json:"device_lists,omitempty"`
+	DeviceOTKCount  map[id.UserID]mautrix.OTKCount `json:"device_one_time_keys_count,omitempty"`
+
+	MSC2409EphemeralEvents []*event.Event                 `json:"de.sorunome.msc2409.ephemeral,omitempty"`
+	MSC3202DeviceLists     *mautrix.DeviceLists           `json:"org.matrix.msc3202.device_lists,omitempty"`
+	MSC3202DeviceOTKCount  map[id.UserID]mautrix.OTKCount `json:"org.matrix.msc3202.device_one_time_keys_count,omitempty"`
 }
 
 // EventListener is a function that receives events.

@@ -12,6 +12,7 @@ import (
 
 	log "maunium.net/go/maulogger/v2"
 
+	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 )
 
@@ -24,6 +25,8 @@ const (
 )
 
 type EventHandler func(evt *event.Event)
+type OTKHandler func(otk *mautrix.OTKCount)
+type DeviceListHandler func(otk *mautrix.DeviceLists, since string)
 
 type EventProcessor struct {
 	ExecMode ExecMode
@@ -32,6 +35,9 @@ type EventProcessor struct {
 	log      log.Logger
 	stop     chan struct{}
 	handlers map[event.Type][]EventHandler
+
+	otkHandlers        []OTKHandler
+	deviceListHandlers []DeviceListHandler
 }
 
 func NewEventProcessor(as *AppService) *EventProcessor {
@@ -41,6 +47,9 @@ func NewEventProcessor(as *AppService) *EventProcessor {
 		log:      as.Log.Sub("Events"),
 		stop:     make(chan struct{}, 1),
 		handlers: make(map[event.Type][]EventHandler),
+
+		otkHandlers:        make([]OTKHandler, 0),
+		deviceListHandlers: make([]DeviceListHandler, 0),
 	}
 }
 
@@ -54,14 +63,46 @@ func (ep *EventProcessor) On(evtType event.Type, handler EventHandler) {
 	ep.handlers[evtType] = handlers
 }
 
+func (ep *EventProcessor) OnOTK(handler OTKHandler) {
+	ep.otkHandlers = append(ep.otkHandlers, handler)
+}
+
+func (ep *EventProcessor) OnDeviceList(handler DeviceListHandler) {
+	ep.deviceListHandlers = append(ep.deviceListHandlers, handler)
+}
+
+func (ep *EventProcessor) recoverFunc(data interface{}) {
+	if err := recover(); err != nil {
+		d, _ := json.Marshal(data)
+		ep.log.Errorfln("Panic in Matrix event handler: %v (event content: %s):\n%s", err, string(d), string(debug.Stack()))
+	}
+}
+
 func (ep *EventProcessor) callHandler(handler EventHandler, evt *event.Event) {
-	defer func() {
-		if err := recover(); err != nil {
-			d, _ := json.Marshal(evt)
-			ep.log.Errorfln("Panic in Matrix event handler: %v (event content: %s):\n%s", err, string(d), string(debug.Stack()))
-		}
-	}()
+	defer ep.recoverFunc(evt)
 	handler(evt)
+}
+
+func (ep *EventProcessor) callOTKHandler(handler OTKHandler, otk *mautrix.OTKCount) {
+	defer ep.recoverFunc(otk)
+	handler(otk)
+}
+
+func (ep *EventProcessor) callDeviceListHandler(handler DeviceListHandler, dl *mautrix.DeviceLists) {
+	defer ep.recoverFunc(dl)
+	handler(dl, "")
+}
+
+func (ep *EventProcessor) DispatchOTK(otk *mautrix.OTKCount) {
+	for _, handler := range ep.otkHandlers {
+		go ep.callOTKHandler(handler, otk)
+	}
+}
+
+func (ep *EventProcessor) DispatchDeviceList(dl *mautrix.DeviceLists) {
+	for _, handler := range ep.deviceListHandlers {
+		go ep.callDeviceListHandler(handler, dl)
+	}
 }
 
 func (ep *EventProcessor) Dispatch(evt *event.Event) {
@@ -92,6 +133,10 @@ func (ep *EventProcessor) Start() {
 		select {
 		case evt := <-ep.as.Events:
 			ep.Dispatch(evt)
+		case otk := <-ep.as.OTKCounts:
+			ep.DispatchOTK(otk)
+		case dl := <-ep.as.DeviceLists:
+			ep.DispatchDeviceList(dl)
 		case <-ep.stop:
 			return
 		}

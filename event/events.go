@@ -23,6 +23,9 @@ type Event struct {
 	Unsigned  Unsigned   `json:"unsigned,omitempty"`  // Unsigned content set by own homeserver.
 
 	Mautrix MautrixInfo `json:"-"`
+
+	ToUserID   id.UserID   `json:"to_user_id,omitempty"`   // The user ID that the to-device event was sent to. Only present in MSC2409 appservice transactions.
+	ToDeviceID id.DeviceID `json:"to_device_id,omitempty"` // The device ID that the to-device event was sent to. Only present in MSC2409 appservice transactions.
 }
 
 type MautrixInfo struct {

@@ -20,11 +20,6 @@ import (
 	"maunium.net/go/mautrix/event"
 )
 
-type ErrorResponse struct {
-	ErrorCode ErrorCode `json:"errcode"`
-	Error     string    `json:"error"`
-}
-
 type WebsocketCommand struct {
 	ReqID   int             `json:"id,omitempty"`
 	Command string          `json:"command"`
@@ -34,7 +29,7 @@ type WebsocketCommand struct {
 type WebsocketTransaction struct {
 	Status string `json:"status"`
 	TxnID  string `json:"txn_id"`
-	EventList
+	Transaction
 }
 
 type WebsocketMessage struct {
@@ -150,12 +145,12 @@ func (as *AppService) StartWebsocket(baseURL string, onConnect func()) error {
 		"User-Agent":    []string{as.BotClient().UserAgent},
 	})
 	if resp != nil && resp.StatusCode >= 400 {
-		var errResp ErrorResponse
+		var errResp Error
 		err = json.NewDecoder(resp.Body).Decode(&errResp)
 		if err != nil {
 			return fmt.Errorf("websocket request returned HTTP %d with non-JSON body", resp.StatusCode)
 		} else {
-			return fmt.Errorf("websocket request returned %s (HTTP %d): %s", errResp.ErrorCode, resp.StatusCode, errResp.Error)
+			return fmt.Errorf("websocket request returned %s (HTTP %d): %s", errResp.ErrorCode, resp.StatusCode, errResp.Message)
 		}
 	} else if err != nil {
 		return fmt.Errorf("failed to open websocket: %w", err)
