@@ -7,6 +7,7 @@
 package appservice
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,16 +15,31 @@ import (
 	"net/url"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 
 	"github.com/gorilla/websocket"
 
 	"maunium.net/go/mautrix/event"
 )
 
+type WebsocketRequest struct {
+	ReqID   int         `json:"id,omitempty"`
+	Command string      `json:"command"`
+	Data    interface{} `json:"data"`
+}
+
 type WebsocketCommand struct {
 	ReqID   int             `json:"id,omitempty"`
 	Command string          `json:"command"`
 	Data    json.RawMessage `json:"data"`
+}
+
+func (wsc *WebsocketCommand) MakeResponse(data interface{}) *WebsocketRequest {
+	return &WebsocketRequest{
+		ReqID:   wsc.ReqID,
+		Command: "response",
+		Data:    data,
+	}
 }
 
 type WebsocketTransaction struct {
@@ -45,8 +61,8 @@ const (
 )
 
 var (
-	WebsocketManualStop = errors.New("the websocket was disconnected manually")
-	WebsocketOverridden = errors.New("a new call to StartWebsocket overrode the previous connection")
+	WebsocketManualStop   = errors.New("the websocket was disconnected manually")
+	WebsocketOverridden   = errors.New("a new call to StartWebsocket overrode the previous connection")
 	WebsocketUnknownError = errors.New("an unknown error occurred")
 )
 
@@ -95,11 +111,48 @@ func parseCloseError(err error) error {
 	return &closeCommand
 }
 
-func (as *AppService) SendWebsocket(cmd WebsocketCommand) error {
+func (as *AppService) SendWebsocket(cmd *WebsocketRequest) error {
 	if as.ws == nil {
 		return errors.New("websocket not connected")
 	}
-	return as.ws.WriteJSON(&cmd)
+	return as.ws.WriteJSON(cmd)
+}
+
+func (as *AppService) addWebsocketResponseWaiter(reqID int, waiter chan<- json.RawMessage) {
+	as.websocketRequestsLock.Lock()
+	as.websocketRequests[reqID] = waiter
+	as.websocketRequestsLock.Unlock()
+}
+
+func (as *AppService) removeWebsocketResponseWaiter(reqID int, waiter chan<- json.RawMessage) {
+	as.websocketRequestsLock.Lock()
+	existingWaiter, ok := as.websocketRequests[reqID]
+	if ok && existingWaiter == waiter {
+		delete(as.websocketRequests, reqID)
+	}
+	close(waiter)
+	as.websocketRequestsLock.Unlock()
+}
+
+func (as *AppService) RequestWebsocket(ctx context.Context, cmd *WebsocketRequest, response interface{}) error {
+	cmd.ReqID = int(atomic.AddInt32(&as.websocketRequestID, 1))
+	respChan := make(chan json.RawMessage, 1)
+	as.addWebsocketResponseWaiter(cmd.ReqID, respChan)
+	defer as.removeWebsocketResponseWaiter(cmd.ReqID, respChan)
+	err := as.SendWebsocket(cmd)
+	if err != nil {
+		return err
+	}
+	select {
+	case data := <-respChan:
+		if response != nil {
+			return json.Unmarshal(data, &response)
+		} else {
+			return nil
+		}
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (as *AppService) consumeWebsocket(stopFunc func(error), ws *websocket.Conn) {
@@ -119,6 +172,19 @@ func (as *AppService) consumeWebsocket(stopFunc func(error), ws *websocket.Conn)
 			as.handleEvents(msg.Events, event.UnknownEventType)
 		} else if msg.Command == "connect" {
 			as.Log.Debugln("Websocket connect confirmation received")
+		} else if msg.Command == "response" || msg.Command == "error" {
+			as.websocketRequestsLock.RLock()
+			respChan, ok := as.websocketRequests[msg.ReqID]
+			if ok {
+				select {
+				case respChan <- msg.Data:
+				default:
+					as.Log.Warnln("Failed to handle response to %d: channel didn't accept response", msg.ReqID)
+				}
+			} else {
+				as.Log.Warnln("Dropping response to %d: unknown request ID", msg.ReqID)
+			}
+			as.websocketRequestsLock.RUnlock()
 		} else {
 			select {
 			case as.WebsocketCommands <- msg.WebsocketCommand:

@@ -7,6 +7,7 @@
 package appservice
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"html/template"
@@ -110,9 +111,12 @@ type AppService struct {
 	intents     map[id.UserID]*IntentAPI
 	intentsLock sync.RWMutex
 
-	ws                *websocket.Conn
-	StopWebsocket     func(error)
-	WebsocketCommands chan WebsocketCommand
+	ws                    *websocket.Conn
+	StopWebsocket         func(error)
+	WebsocketCommands     chan WebsocketCommand
+	websocketRequests     map[int]chan<- json.RawMessage
+	websocketRequestsLock sync.RWMutex
+	websocketRequestID    int32
 }
 
 func (as *AppService) PrepareWebsocket() {
