@@ -199,17 +199,17 @@ func (as *AppService) consumeWebsocket(stopFunc func(error), ws *websocket.Conn)
 				select {
 				case respChan <- &msg.WebsocketCommand:
 				default:
-					as.Log.Warnln("Failed to handle response to %d: channel didn't accept response", msg.ReqID)
+					as.Log.Warnfln("Failed to handle response to %d: channel didn't accept response", msg.ReqID)
 				}
 			} else {
-				as.Log.Warnln("Dropping response to %d: unknown request ID", msg.ReqID)
+				as.Log.Warnfln("Dropping response to %d: unknown request ID", msg.ReqID)
 			}
 			as.websocketRequestsLock.RUnlock()
 		} else {
 			select {
 			case as.WebsocketCommands <- msg.WebsocketCommand:
 			default:
-				as.Log.Warnln("Dropping websocket command %s %d / %s", msg.Command, msg.ReqID, msg.Data)
+				as.Log.Warnfln("Dropping websocket command %s %d / %s", msg.Command, msg.ReqID, msg.Data)
 			}
 		}
 	}
