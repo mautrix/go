@@ -52,7 +52,7 @@ func Respond(w http.ResponseWriter, data interface{}) error {
 type Error struct {
 	HTTPStatus int       `json:"-"`
 	ErrorCode  ErrorCode `json:"errcode"`
-	Message    string    `json:"message"`
+	Message    string    `json:"error"`
 }
 
 func (err Error) Write(w http.ResponseWriter) {
