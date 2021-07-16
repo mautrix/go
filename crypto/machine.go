@@ -168,6 +168,7 @@ func (mach *OlmMachine) AddAppserviceListener(ep *appservice.EventProcessor, az 
 	ep.On(event.ToDeviceVerificationCancel, mach.HandleToDeviceEvent)
 	ep.OnOTK(mach.HandleOTKCounts)
 	ep.OnDeviceList(mach.HandleDeviceLists)
+	mach.Log.Trace("Added listeners for encryption data coming from appservice transactions")
 }
 
 func (mach *OlmMachine) HandleDeviceLists(dl *mautrix.DeviceLists, since string) {

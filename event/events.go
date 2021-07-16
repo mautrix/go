@@ -12,15 +12,15 @@ import (
 
 // Event represents a single Matrix event.
 type Event struct {
-	StateKey  *string    `json:"state_key,omitempty"` // The state key for the event. Only present on State Events.
-	Sender    id.UserID  `json:"sender"`              // The user ID of the sender of the event
-	Type      Type       `json:"type"`                // The event type
-	Timestamp int64      `json:"origin_server_ts"`    // The unix timestamp when this message was sent by the origin server
-	ID        id.EventID `json:"event_id"`            // The unique ID of this event
-	RoomID    id.RoomID  `json:"room_id"`             // The room the event was sent to. May be nil (e.g. for presence)
-	Content   Content    `json:"content"`             // The JSON content of the event.
-	Redacts   id.EventID `json:"redacts,omitempty"`   // The event ID that was redacted if a m.room.redaction event
-	Unsigned  Unsigned   `json:"unsigned,omitempty"`  // Unsigned content set by own homeserver.
+	StateKey  *string    `json:"state_key,omitempty"`        // The state key for the event. Only present on State Events.
+	Sender    id.UserID  `json:"sender,omitempty"`           // The user ID of the sender of the event
+	Type      Type       `json:"type"`                       // The event type
+	Timestamp int64      `json:"origin_server_ts,omitempty"` // The unix timestamp when this message was sent by the origin server
+	ID        id.EventID `json:"event_id,omitempty"`         // The unique ID of this event
+	RoomID    id.RoomID  `json:"room_id,omitempty"`          // The room the event was sent to. May be nil (e.g. for presence)
+	Content   Content    `json:"content"`                    // The JSON content of the event.
+	Redacts   id.EventID `json:"redacts,omitempty"`          // The event ID that was redacted if a m.room.redaction event
+	Unsigned  Unsigned   `json:"unsigned,omitempty"`         // Unsigned content set by own homeserver.
 
 	Mautrix MautrixInfo `json:"-"`
 
@@ -53,5 +53,5 @@ type Unsigned struct {
 	TransactionID   string          `json:"transaction_id,omitempty"`
 	Relations       Relations       `json:"m.relations,omitempty"`
 	RedactedBecause *Event          `json:"redacted_because,omitempty"`
-	InviteRoomState []StrippedState `json:"invite_room_state"`
+	InviteRoomState []StrippedState `json:"invite_room_state,omitempty"`
 }
