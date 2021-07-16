@@ -7,7 +7,6 @@
 package appservice
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"html/template"
@@ -114,7 +113,7 @@ type AppService struct {
 	ws                    *websocket.Conn
 	StopWebsocket         func(error)
 	WebsocketCommands     chan WebsocketCommand
-	websocketRequests     map[int]chan<- json.RawMessage
+	websocketRequests     map[int]chan<- *WebsocketCommand
 	websocketRequestsLock sync.RWMutex
 	websocketRequestID    int32
 }
@@ -122,6 +121,7 @@ type AppService struct {
 func (as *AppService) PrepareWebsocket() {
 	if as.WebsocketCommands == nil {
 		as.WebsocketCommands = make(chan WebsocketCommand, 32)
+		as.websocketRequests = make(map[int]chan<- *WebsocketCommand)
 	}
 }
 

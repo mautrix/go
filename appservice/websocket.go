@@ -118,13 +118,13 @@ func (as *AppService) SendWebsocket(cmd *WebsocketRequest) error {
 	return as.ws.WriteJSON(cmd)
 }
 
-func (as *AppService) addWebsocketResponseWaiter(reqID int, waiter chan<- json.RawMessage) {
+func (as *AppService) addWebsocketResponseWaiter(reqID int, waiter chan<- *WebsocketCommand) {
 	as.websocketRequestsLock.Lock()
 	as.websocketRequests[reqID] = waiter
 	as.websocketRequestsLock.Unlock()
 }
 
-func (as *AppService) removeWebsocketResponseWaiter(reqID int, waiter chan<- json.RawMessage) {
+func (as *AppService) removeWebsocketResponseWaiter(reqID int, waiter chan<- *WebsocketCommand) {
 	as.websocketRequestsLock.Lock()
 	existingWaiter, ok := as.websocketRequests[reqID]
 	if ok && existingWaiter == waiter {
@@ -134,9 +134,18 @@ func (as *AppService) removeWebsocketResponseWaiter(reqID int, waiter chan<- jso
 	as.websocketRequestsLock.Unlock()
 }
 
+type ErrorResponse struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+func (er *ErrorResponse) Error() string {
+	return fmt.Sprintf("%s: %s", er.Code, er.Message)
+}
+
 func (as *AppService) RequestWebsocket(ctx context.Context, cmd *WebsocketRequest, response interface{}) error {
 	cmd.ReqID = int(atomic.AddInt32(&as.websocketRequestID, 1))
-	respChan := make(chan json.RawMessage, 1)
+	respChan := make(chan *WebsocketCommand, 1)
 	as.addWebsocketResponseWaiter(cmd.ReqID, respChan)
 	defer as.removeWebsocketResponseWaiter(cmd.ReqID, respChan)
 	err := as.SendWebsocket(cmd)
@@ -144,9 +153,20 @@ func (as *AppService) RequestWebsocket(ctx context.Context, cmd *WebsocketReques
 		return err
 	}
 	select {
-	case data := <-respChan:
-		if response != nil {
-			return json.Unmarshal(data, &response)
+	case resp := <-respChan:
+		if resp.Command == "error" {
+			var respErr ErrorResponse
+			err = json.Unmarshal(resp.Data, &respErr)
+			if err != nil {
+				return fmt.Errorf("failed to parse error JSON: %w", err)
+			}
+			return &respErr
+		} else if response != nil {
+			err = json.Unmarshal(resp.Data, &response)
+			if err != nil {
+				return fmt.Errorf("failed to parse response JSON: %w", err)
+			}
+			return nil
 		} else {
 			return nil
 		}
@@ -177,7 +197,7 @@ func (as *AppService) consumeWebsocket(stopFunc func(error), ws *websocket.Conn)
 			respChan, ok := as.websocketRequests[msg.ReqID]
 			if ok {
 				select {
-				case respChan <- msg.Data:
+				case respChan <- &msg.WebsocketCommand:
 				default:
 					as.Log.Warnln("Failed to handle response to %d: channel didn't accept response", msg.ReqID)
 				}
