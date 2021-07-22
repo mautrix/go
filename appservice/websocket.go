@@ -115,6 +115,8 @@ func (as *AppService) SendWebsocket(cmd *WebsocketRequest) error {
 	if as.ws == nil {
 		return errors.New("websocket not connected")
 	}
+	as.wsWriteLock.Lock()
+	defer as.wsWriteLock.Unlock()
 	return as.ws.WriteJSON(cmd)
 }
 
