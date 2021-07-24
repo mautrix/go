@@ -130,27 +130,31 @@ func (as *AppService) PutTransaction(w http.ResponseWriter, r *http.Request) {
 			Message:    "Failed to parse body JSON",
 		}.Write(w)
 	} else {
-		if as.Registration.EphemeralEvents {
-			if txn.EphemeralEvents != nil {
-				as.handleEvents(txn.EphemeralEvents, event.EphemeralEventType)
-			} else if txn.MSC2409EphemeralEvents != nil {
-				as.handleEvents(txn.MSC2409EphemeralEvents, event.EphemeralEventType)
-			}
-		}
-		as.handleEvents(txn.Events, event.UnknownEventType)
-		if txn.DeviceLists != nil {
-			as.handleDeviceLists(txn.DeviceLists)
-		} else if txn.MSC3202DeviceLists != nil {
-			as.handleDeviceLists(txn.MSC3202DeviceLists)
-		}
-		if txn.DeviceOTKCount != nil {
-			as.handleOTKCounts(txn.DeviceOTKCount)
-		} else if txn.MSC3202DeviceOTKCount != nil {
-			as.handleOTKCounts(txn.MSC3202DeviceOTKCount)
-		}
+		as.handleTransaction(&txn)
 		WriteBlankOK(w)
 	}
 	as.lastProcessedTransaction = txnID
+}
+
+func (as *AppService) handleTransaction(txn *Transaction) {
+	if as.Registration.EphemeralEvents {
+		if txn.EphemeralEvents != nil {
+			as.handleEvents(txn.EphemeralEvents, event.EphemeralEventType)
+		} else if txn.MSC2409EphemeralEvents != nil {
+			as.handleEvents(txn.MSC2409EphemeralEvents, event.EphemeralEventType)
+		}
+	}
+	as.handleEvents(txn.Events, event.UnknownEventType)
+	if txn.DeviceLists != nil {
+		as.handleDeviceLists(txn.DeviceLists)
+	} else if txn.MSC3202DeviceLists != nil {
+		as.handleDeviceLists(txn.MSC3202DeviceLists)
+	}
+	if txn.DeviceOTKCount != nil {
+		as.handleOTKCounts(txn.DeviceOTKCount)
+	} else if txn.MSC3202DeviceOTKCount != nil {
+		as.handleOTKCounts(txn.MSC3202DeviceOTKCount)
+	}
 }
 
 func (as *AppService) handleOTKCounts(otks map[id.UserID]mautrix.OTKCount) {

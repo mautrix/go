@@ -18,8 +18,6 @@ import (
 	"sync/atomic"
 
 	"github.com/gorilla/websocket"
-
-	"maunium.net/go/mautrix/event"
 )
 
 type WebsocketRequest struct {
@@ -188,10 +186,7 @@ func (as *AppService) consumeWebsocket(stopFunc func(error), ws *websocket.Conn)
 			return
 		}
 		if msg.Command == "" || msg.Command == "transaction" {
-			if as.Registration.EphemeralEvents && msg.EphemeralEvents != nil {
-				as.handleEvents(msg.EphemeralEvents, event.EphemeralEventType)
-			}
-			as.handleEvents(msg.Events, event.UnknownEventType)
+			as.handleTransaction(&msg.Transaction)
 		} else if msg.Command == "connect" {
 			as.Log.Debugln("Websocket connect confirmation received")
 		} else if msg.Command == "response" || msg.Command == "error" {
