@@ -200,7 +200,8 @@ type OTKCount struct {
 	SignedCurve25519 int `json:"signed_curve25519"`
 
 	// For appservice OTK counts only: the user ID in question
-	UserID id.UserID `json:"-"`
+	UserID   id.UserID   `json:"-"`
+	DeviceID id.DeviceID `json:"-"`
 }
 
 type SyncLeftRoom struct {

@@ -179,6 +179,12 @@ func (mach *OlmMachine) HandleDeviceLists(dl *mautrix.DeviceLists, since string)
 }
 
 func (mach *OlmMachine) HandleOTKCounts(otkCount *mautrix.OTKCount) {
+	if (len(otkCount.UserID) > 0 && otkCount.UserID != mach.Client.UserID) || (len(otkCount.DeviceID) > 0 && otkCount.DeviceID != mach.Client.DeviceID) {
+		// TODO This log probably needs to be silence-able if someone wants to use encrypted appservices with multiple e2ee sessions
+		mach.Log.Debug("Dropping OTK counts targeted to %s/%s (not us)", otkCount.UserID, otkCount.DeviceID)
+		return
+	}
+
 	minCount := mach.account.Internal.MaxNumberOfOneTimeKeys() / 2
 	if otkCount.SignedCurve25519 < int(minCount) {
 		mach.Log.Debug("Sync response said we have %d signed curve25519 keys left, sharing new ones...", otkCount.SignedCurve25519)
