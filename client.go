@@ -120,24 +120,19 @@ func DiscoverClientAPI(serverName string) (*ClientWellKnown, error) {
 	return &wellKnown, nil
 }
 
-// BuildURL builds a URL with the Client's homserver/prefix/access_token set already.
+// BuildURL builds a URL with the Client's homeserver and appservice user ID set already.
 func (cli *Client) BuildURL(urlPath ...interface{}) string {
 	return cli.BuildBaseURL(append(cli.Prefix, urlPath...)...)
 }
 
-// BuildBaseURL builds a URL with the Client's homeserver/access_token set already. You must
-// supply the prefix in the path.
-func (cli *Client) BuildBaseURL(urlPath ...interface{}) string {
-	// copy the URL. Purposefully ignore error as the input is from a valid URL already
-	hsURL, _ := url.Parse(cli.HomeserverURL.String())
-	if hsURL.Scheme == "" {
-		hsURL.Scheme = "https"
-	}
-	rawParts := make([]string, len(urlPath)+1)
-	rawParts[0] = hsURL.RawPath
-	parts := make([]string, len(urlPath)+1)
-	parts[0] = hsURL.Path
-	for i, part := range urlPath {
+// BuildURL builds a URL with the given path parts
+func BuildURL(baseURL *url.URL, path ...interface{}) *url.URL {
+	createdURL := *baseURL
+	rawParts := make([]string, len(path)+1)
+	rawParts[0] = createdURL.RawPath
+	parts := make([]string, len(path)+1)
+	parts[0] = createdURL.Path
+	for i, part := range path {
 		switch casted := part.(type) {
 		case string:
 			parts[i+1] = casted
@@ -150,8 +145,20 @@ func (cli *Client) BuildBaseURL(urlPath ...interface{}) string {
 		}
 		rawParts[i+1] = url.PathEscape(parts[i+1])
 	}
-	hsURL.Path = strings.Join(parts, "/")
-	hsURL.RawPath = strings.Join(rawParts, "/")
+	createdURL.Path = strings.Join(parts, "/")
+	createdURL.RawPath = strings.Join(rawParts, "/")
+	return &createdURL
+}
+
+// BuildBaseURL builds a URL with the Client's homeserver and appservice user ID set already.
+// You must supply the prefix in the path.
+func (cli *Client) BuildBaseURL(urlPath ...interface{}) string {
+	// copy the URL. Purposefully ignore error as the input is from a valid URL already
+	hsURL, _ := url.Parse(cli.HomeserverURL.String())
+	if hsURL.Scheme == "" {
+		hsURL.Scheme = "https"
+	}
+	hsURL = BuildURL(hsURL, urlPath...)
 	query := hsURL.Query()
 	if cli.AppServiceUserID != "" {
 		query.Set("user_id", string(cli.AppServiceUserID))
@@ -162,7 +169,8 @@ func (cli *Client) BuildBaseURL(urlPath ...interface{}) string {
 
 type URLPath = []interface{}
 
-// BuildURLWithQuery builds a URL with query parameters in addition to the Client's homeserver/prefix/access_token set already.
+// BuildURLWithQuery builds a URL with query parameters in addition to the Client's
+// homeserver and appservice user ID set already.
 func (cli *Client) BuildURLWithQuery(urlPath URLPath, urlQuery map[string]string) string {
 	u, _ := url.Parse(cli.BuildURL(urlPath...))
 	q := u.Query()
