@@ -197,7 +197,7 @@ func (parser *HTMLParser) tagToString(node *html.Node, stripLinebreak bool, ctx 
 	case "a":
 		return parser.linkToString(node, stripLinebreak, ctx)
 	case "p":
-		return parser.nodeToTagAwareString(node.FirstChild, stripLinebreak, ctx) + "\n"
+		return parser.nodeToTagAwareString(node.FirstChild, stripLinebreak, ctx)
 	case "hr":
 		return parser.HorizontalLine
 	case "pre":
