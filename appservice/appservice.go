@@ -46,6 +46,8 @@ func Create() *AppService {
 		StateStore: NewBasicStateStore(),
 		Router:     mux.NewRouter(),
 		UserAgent:  mautrix.DefaultUserAgent,
+		Live:       true,
+		Ready:      false,
 	}
 }
 
@@ -104,6 +106,9 @@ type AppService struct {
 	botIntent  *IntentAPI
 
 	DefaultHTTPRetries int
+
+	Live  bool
+	Ready bool
 
 	clients     map[id.UserID]*mautrix.Client
 	clientsLock sync.RWMutex

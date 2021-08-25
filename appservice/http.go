@@ -30,6 +30,8 @@ func (as *AppService) Start() {
 	as.Router.HandleFunc("/_matrix/app/v1/transactions/{txnID}", as.PutTransaction).Methods(http.MethodPut)
 	as.Router.HandleFunc("/_matrix/app/v1/rooms/{roomAlias}", as.GetRoom).Methods(http.MethodGet)
 	as.Router.HandleFunc("/_matrix/app/v1/users/{userID}", as.GetUser).Methods(http.MethodGet)
+	as.Router.HandleFunc("/_matrix/mau/live", as.GetLive).Methods(http.MethodGet)
+	as.Router.HandleFunc("/_matrix/mau/ready", as.GetReady).Methods(http.MethodGet)
 
 	var err error
 	as.server = &http.Server{
@@ -236,4 +238,24 @@ func (as *AppService) GetUser(w http.ResponseWriter, r *http.Request) {
 			HTTPStatus: http.StatusNotFound,
 		}.Write(w)
 	}
+}
+
+func (as *AppService) GetLive(w http.ResponseWriter, r *http.Request) {
+	w.Header().Add("Content-Type", "application/json")
+	if as.Live {
+		w.WriteHeader(http.StatusOK)
+	} else {
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+	w.Write([]byte("{}"))
+}
+
+func (as *AppService) GetReady(w http.ResponseWriter, r *http.Request) {
+	w.Header().Add("Content-Type", "application/json")
+	if as.Ready {
+		w.WriteHeader(http.StatusOK)
+	} else {
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+	w.Write([]byte("{}"))
 }
