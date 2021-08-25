@@ -30,6 +30,7 @@ func (as *AppService) Start() {
 	as.Router.HandleFunc("/_matrix/app/v1/transactions/{txnID}", as.PutTransaction).Methods(http.MethodPut)
 	as.Router.HandleFunc("/_matrix/app/v1/rooms/{roomAlias}", as.GetRoom).Methods(http.MethodGet)
 	as.Router.HandleFunc("/_matrix/app/v1/users/{userID}", as.GetUser).Methods(http.MethodGet)
+	as.Router.HandleFunc("/health", as.GetHealth).Methods(http.MethodGet)
 
 	var err error
 	as.server = &http.Server{
@@ -236,4 +237,11 @@ func (as *AppService) GetUser(w http.ResponseWriter, r *http.Request) {
 			HTTPStatus: http.StatusNotFound,
 		}.Write(w)
 	}
+}
+
+// GetHealth responds with "OK".
+func (as *AppService) GetHealth(w http.ResponseWriter, r *http.Request) {
+	w.Header().Add("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("OK"))
 }
