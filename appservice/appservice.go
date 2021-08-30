@@ -46,6 +46,7 @@ func Create() *AppService {
 		StateStore: NewBasicStateStore(),
 		Router:     mux.NewRouter(),
 		UserAgent:  mautrix.DefaultUserAgent,
+		txnIDC:     NewTransactionIDCache(128),
 		Live:       true,
 		Ready:      false,
 	}
@@ -90,7 +91,7 @@ type AppService struct {
 	Registration *Registration    `yaml:"-"`
 	Log          maulogger.Logger `yaml:"-"`
 
-	lastProcessedTransaction string
+	txnIDC *TransactionIDCache
 
 	Events       chan *event.Event         `yaml:"-"`
 	DeviceLists  chan *mautrix.DeviceLists `yaml:"-"`

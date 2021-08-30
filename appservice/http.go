@@ -116,7 +116,7 @@ func (as *AppService) PutTransaction(w http.ResponseWriter, r *http.Request) {
 		}.Write(w)
 		return
 	}
-	if as.lastProcessedTransaction == txnID {
+	if as.txnIDC.IsProcessed(txnID) {
 		// Duplicate transaction ID: no-op
 		WriteBlankOK(w)
 		return
@@ -134,8 +134,8 @@ func (as *AppService) PutTransaction(w http.ResponseWriter, r *http.Request) {
 	} else {
 		as.handleTransaction(&txn)
 		WriteBlankOK(w)
+		as.txnIDC.MarkProcessed(txnID)
 	}
-	as.lastProcessedTransaction = txnID
 }
 
 func (as *AppService) handleTransaction(txn *Transaction) {
