@@ -287,7 +287,7 @@ func (store *SQLCryptoStore) GetGroupSession(roomID id.RoomID, senderKey id.Send
 
 func (store *SQLCryptoStore) PutWithheldGroupSession(content event.RoomKeyWithheldEventContent) error {
 	_, err := store.DB.Exec("INSERT INTO crypto_megolm_inbound_session (session_id, sender_key, room_id, withheld_code, withheld_reason, account_id) VALUES ($1, $2, $3, $4, $5, $6)",
-		content.SessionID, content.SenderKey, content.RoomID, content.Code, store.AccountID)
+		content.SessionID, content.SenderKey, content.RoomID, content.Code, content.Reason, store.AccountID)
 	return err
 }
 
