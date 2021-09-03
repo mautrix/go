@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -24,6 +25,8 @@ type WebsocketRequest struct {
 	ReqID   int         `json:"id,omitempty"`
 	Command string      `json:"command"`
 	Data    interface{} `json:"data"`
+
+	Deadline time.Duration `json:"-"`
 }
 
 type WebsocketCommand struct {
@@ -115,6 +118,10 @@ func (as *AppService) SendWebsocket(cmd *WebsocketRequest) error {
 	}
 	as.wsWriteLock.Lock()
 	defer as.wsWriteLock.Unlock()
+	if cmd.Deadline == 0 {
+		cmd.Deadline = 3 * time.Minute
+	}
+	_ = as.ws.SetWriteDeadline(time.Now().Add(cmd.Deadline))
 	return as.ws.WriteJSON(cmd)
 }
 
@@ -262,7 +269,7 @@ func (as *AppService) StartWebsocket(baseURL string, onConnect func()) error {
 	closeErr := <-closeChan
 
 	err = ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseGoingAway, ""))
-	if err != nil && err != websocket.ErrCloseSent {
+	if err != nil && !errors.Is(err, websocket.ErrCloseSent) {
 		as.Log.Warnln("Error writing close message to websocket:", err)
 	}
 	err = ws.Close()
