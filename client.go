@@ -13,6 +13,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -302,9 +303,12 @@ type FullRequest struct {
 	ResponseJSON  interface{}
 	Context       context.Context
 	MaxAttempts   int
+
+	SensitiveContent bool
 }
 
 var requestID int32
+var logSensitiveContent = os.Getenv("MAUTRIX_LOG_SENSITIVE_CONTENT") == "yes"
 
 func (params *FullRequest) compileRequest() (*http.Request, error) {
 	var logBody string
@@ -320,10 +324,14 @@ func (params *FullRequest) compileRequest() (*http.Request, error) {
 				WrappedError: err,
 			}
 		}
-		logBody = string(jsonStr)
+		if params.SensitiveContent && !logSensitiveContent {
+			logBody = "<sensitive content omitted>"
+		} else {
+			logBody = string(jsonStr)
+		}
 		reqBody = bytes.NewBuffer(jsonStr)
 	} else if params.RequestLength > 0 && params.RequestBody != nil {
-		logBody = fmt.Sprintf("%d bytes", params.RequestLength)
+		logBody = fmt.Sprintf("<%d bytes>", params.RequestLength)
 	}
 	ctx := context.WithValue(params.Context, logBodyContextKey, logBody)
 	reqID := atomic.AddInt32(&requestID, 1)
@@ -580,8 +588,13 @@ func (cli *Client) GetLoginFlows() (resp *RespLoginFlows, err error) {
 
 // Login a user to the homeserver according to http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-login
 func (cli *Client) Login(req *ReqLogin) (resp *RespLogin, err error) {
-	urlPath := cli.BuildURL("login")
-	_, err = cli.MakeRequest("POST", urlPath, req, &resp)
+	_, err = cli.MakeFullRequest(FullRequest{
+		Method:           http.MethodPost,
+		URL:              cli.BuildURL("login"),
+		RequestJSON:      req,
+		ResponseJSON:     &resp,
+		SensitiveContent: true,
+	})
 	if req.StoreCredentials && err == nil {
 		cli.DeviceID = resp.DeviceID
 		cli.AccessToken = resp.AccessToken
