@@ -514,7 +514,12 @@ func (cli *Client) SyncRequest(timeout int, since, filterID string, fullState bo
 
 func (cli *Client) register(url string, req *ReqRegister) (resp *RespRegister, uiaResp *RespUserInteractive, err error) {
 	var bodyBytes []byte
-	bodyBytes, err = cli.MakeRequest("POST", url, req, nil)
+	bodyBytes, err = cli.MakeFullRequest(FullRequest{
+		Method:           http.MethodPost,
+		URL:              url,
+		RequestJSON:      req,
+		SensitiveContent: len(req.Password) > 0,
+	})
 	if err != nil {
 		httpErr, ok := err.(HTTPError)
 		// if response has a 401 status, but doesn't have the errcode field, it's probably a UIA response.
@@ -1269,8 +1274,12 @@ type UIACallback = func(*RespUserInteractive) interface{}
 // Because the endpoint requires user-interactive authentication a callback must be provided that,
 // given the UI auth parameters, produces the required result (or nil to end the flow).
 func (cli *Client) UploadCrossSigningKeys(keys *UploadCrossSigningKeysReq, uiaCallback UIACallback) error {
-	urlPath := cli.BuildBaseURL("_matrix", "client", "unstable", "keys", "device_signing", "upload")
-	content, err := cli.MakeRequest("POST", urlPath, keys, nil)
+	content, err := cli.MakeFullRequest(FullRequest{
+		Method:           http.MethodPost,
+		URL:              cli.BuildBaseURL("_matrix", "client", "unstable", "keys", "device_signing", "upload"),
+		RequestJSON:      keys,
+		SensitiveContent: keys.Auth != nil,
+	})
 	if respErr, ok := err.(HTTPError); ok && respErr.IsStatus(http.StatusUnauthorized) {
 		// try again with UI auth
 		var uiAuthResp RespUserInteractive
