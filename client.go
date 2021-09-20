@@ -51,6 +51,8 @@ type Client struct {
 	Logger        Logger
 	SyncPresence  event.Presence
 
+	StreamSyncMinAge time.Duration
+
 	// Number of times that mautrix will retry any HTTP request
 	// if the request fails entirely or returns a HTTP gateway error (502-504)
 	DefaultHTTPRetries int
@@ -226,8 +228,22 @@ func (cli *Client) SyncWithContext(ctx context.Context) error {
 		filterID = resFilter.FilterID
 		cli.Store.SaveFilterID(cli.UserID, filterID)
 	}
+	lastSuccessfulSync := time.Now().Add(-cli.StreamSyncMinAge - 1 * time.Hour)
 	for {
-		resSync, err := cli.SyncRequest(30000, nextBatch, filterID, false, cli.SyncPresence, ctx)
+		streamResp := false
+		if cli.StreamSyncMinAge > 0 && time.Since(lastSuccessfulSync) > cli.StreamSyncMinAge {
+			cli.Logger.Debugfln("Last sync is old, will stream next response")
+			streamResp = true
+		}
+		resSync, err := cli.FullSyncRequest(ReqSync{
+			Timeout:        30000,
+			Since:          nextBatch,
+			FilterID:       filterID,
+			FullState:      false,
+			SetPresence:    cli.SyncPresence,
+			Context:        ctx,
+			StreamResponse: streamResp,
+		})
 		if err != nil {
 			if ctx.Err() != nil {
 				return ctx.Err()
@@ -239,6 +255,7 @@ func (cli *Client) SyncWithContext(ctx context.Context) error {
 			time.Sleep(duration)
 			continue
 		}
+		lastSuccessfulSync = time.Now()
 
 		// Check that the syncing state hasn't changed
 		// Either because we've stopped syncing or another sync has been started.
@@ -294,16 +311,16 @@ func (cli *Client) MakeRequest(method string, httpURL string, reqBody interface{
 }
 
 type FullRequest struct {
-	Method        string
-	URL           string
-	Headers       http.Header
-	RequestJSON   interface{}
-	RequestBody   io.Reader
-	RequestLength int64
-	ResponseJSON  interface{}
-	Context       context.Context
-	MaxAttempts   int
-
+	Method           string
+	URL              string
+	Headers          http.Header
+	RequestJSON      interface{}
+	RequestBody      io.Reader
+	RequestLength    int64
+	ResponseJSON     interface{}
+	Context          context.Context
+	MaxAttempts      int
+	StreamViaFile    bool
 	SensitiveContent bool
 }
 
@@ -373,7 +390,7 @@ func (cli *Client) MakeFullRequest(params FullRequest) ([]byte, error) {
 	if len(cli.AccessToken) > 0 {
 		req.Header.Set("Authorization", "Bearer "+cli.AccessToken)
 	}
-	return cli.executeCompiledRequest(req, params.MaxAttempts-1, 4*time.Second, params.ResponseJSON)
+	return cli.executeCompiledRequest(req, params.MaxAttempts-1, 4*time.Second, params.ResponseJSON, params.StreamViaFile)
 }
 
 func (cli *Client) logWarning(format string, args ...interface{}) {
@@ -385,7 +402,7 @@ func (cli *Client) logWarning(format string, args ...interface{}) {
 	}
 }
 
-func (cli *Client) doRetry(req *http.Request, cause error, retries int, backoff time.Duration, responseJSON interface{}) ([]byte, error) {
+func (cli *Client) doRetry(req *http.Request, cause error, retries int, backoff time.Duration, responseJSON interface{}, streamViaFile bool) ([]byte, error) {
 	reqID, _ := req.Context().Value(logRequestIDContextKey).(int)
 	if req.Body != nil {
 		if req.GetBody == nil {
@@ -401,10 +418,88 @@ func (cli *Client) doRetry(req *http.Request, cause error, retries int, backoff 
 	}
 	cli.logWarning("Request #%d failed: %v, retrying in %d seconds", reqID, cause, int(backoff.Seconds()))
 	time.Sleep(backoff)
-	return cli.executeCompiledRequest(req, retries-1, backoff*2, responseJSON)
+	return cli.executeCompiledRequest(req, retries-1, backoff*2, responseJSON, streamViaFile)
 }
 
-func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backoff time.Duration, responseJSON interface{}) ([]byte, error) {
+func (cli *Client) readRequestBody(req *http.Request, res *http.Response) ([]byte, error) {
+	contents, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return nil, HTTPError{
+			Request:  req,
+			Response: res,
+
+			Message:      "failed to read response body",
+			WrappedError: err,
+		}
+	}
+	return contents, nil
+}
+
+func (cli *Client) closeTemp(file *os.File) {
+	_ = file.Close()
+	err := os.Remove(file.Name())
+	if err != nil {
+		cli.logWarning("Failed to remove temp file %s: %v", file.Name(), err)
+	}
+}
+
+func (cli *Client) streamResponse(req *http.Request, res *http.Response, responseJSON interface{}) error {
+	file, err := os.CreateTemp("", "mautrix-response-")
+	if err != nil {
+		cli.logWarning("Failed to create temporary file: %v", err)
+		_, err = cli.handleNormalResponse(req, res, responseJSON)
+		return err
+	}
+	defer cli.closeTemp(file)
+	if _, err = io.Copy(file, res.Body); err != nil {
+		return fmt.Errorf("failed to copy response to file: %w", err)
+	} else if _, err = file.Seek(0, 0); err != nil {
+		return fmt.Errorf("failed to seek to beginning of response file: %w", err)
+	} else if err = json.NewDecoder(file).Decode(responseJSON); err != nil {
+		return fmt.Errorf("failed to unmarshal response body: %w", err)
+	} else {
+		return nil
+	}
+}
+
+func (cli *Client) handleNormalResponse(req *http.Request, res *http.Response, responseJSON interface{}) ([]byte, error) {
+	if contents, err := cli.readRequestBody(req, res); err != nil {
+		return nil, err
+	} else if responseJSON == nil {
+		return contents, nil
+	} else if err = json.Unmarshal(contents, &responseJSON); err != nil {
+		return nil, HTTPError{
+			Request:  req,
+			Response: res,
+
+			Message:      "failed to unmarshal response body",
+			ResponseBody: string(contents),
+			WrappedError: err,
+		}
+	} else {
+		return contents, nil
+	}
+}
+
+func (cli *Client) handleResponseError(req *http.Request, res *http.Response) ([]byte, error) {
+	contents, err := cli.readRequestBody(req, res)
+	if err != nil {
+		return contents, err
+	}
+
+	respErr := &RespError{}
+	if _ = json.Unmarshal(contents, respErr); respErr.ErrCode == "" {
+		respErr = nil
+	}
+
+	return contents, HTTPError{
+		Request:   req,
+		Response:  res,
+		RespError: respErr,
+	}
+}
+
+func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backoff time.Duration, responseJSON interface{}, streamViaFile bool) ([]byte, error) {
 	cli.LogRequest(req)
 	res, err := cli.Client.Do(req)
 	if res != nil {
@@ -412,7 +507,7 @@ func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backof
 	}
 	if err != nil {
 		if retries > 0 {
-			return cli.doRetry(req, err, retries, backoff, responseJSON)
+			return cli.doRetry(req, err, retries, backoff, responseJSON, streamViaFile)
 		}
 		return nil, HTTPError{
 			Request:  req,
@@ -424,49 +519,16 @@ func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backof
 	}
 
 	if retries > 0 && (res.StatusCode == http.StatusBadGateway || res.StatusCode == http.StatusServiceUnavailable || res.StatusCode == http.StatusGatewayTimeout) {
-		return cli.doRetry(req, fmt.Errorf("HTTP %d", res.StatusCode), retries, backoff, responseJSON)
-	}
-
-	contents, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		return nil, HTTPError{
-			Request:  req,
-			Response: res,
-
-			Message:      "failed to read response body",
-			WrappedError: err,
-		}
+		return cli.doRetry(req, fmt.Errorf("HTTP %d", res.StatusCode), retries, backoff, responseJSON, streamViaFile)
 	}
 
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		respErr := &RespError{}
-		if _ = json.Unmarshal(contents, respErr); respErr.ErrCode == "" {
-			respErr = nil
-		}
-
-		return contents, HTTPError{
-			Request:   req,
-			Response:  res,
-			RespError: respErr,
-		}
+		return cli.handleResponseError(req, res)
+	} else if streamViaFile {
+		return nil, cli.streamResponse(req, res, responseJSON)
+	} else {
+		return cli.handleNormalResponse(req, res, responseJSON)
 	}
-
-	if responseJSON == nil {
-		return contents, nil
-	}
-
-	if err = json.Unmarshal(contents, &responseJSON); err != nil {
-		return nil, HTTPError{
-			Request:  req,
-			Response: res,
-
-			Message:      "failed to unmarshal response body",
-			ResponseBody: string(contents),
-			WrappedError: err,
-		}
-	}
-
-	return contents, nil
 }
 
 // Whoami gets the user ID of the current user. See https://matrix.org/docs/spec/client_server/r0.6.1#post-matrix-client-r0-rooms-roomid-join
@@ -485,27 +547,55 @@ func (cli *Client) CreateFilter(filter *Filter) (resp *RespCreateFilter, err err
 
 // SyncRequest makes an HTTP request according to http://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-r0-sync
 func (cli *Client) SyncRequest(timeout int, since, filterID string, fullState bool, setPresence event.Presence, ctx context.Context) (resp *RespSync, err error) {
+	return cli.FullSyncRequest(ReqSync{
+		Timeout:     timeout,
+		Since:       since,
+		FilterID:    filterID,
+		FullState:   fullState,
+		SetPresence: setPresence,
+		Context:     ctx,
+	})
+}
+
+type ReqSync struct {
+	Timeout     int
+	Since       string
+	FilterID    string
+	FullState   bool
+	SetPresence event.Presence
+
+	Context        context.Context
+	StreamResponse bool
+}
+
+func (req *ReqSync) BuildQuery() map[string]string {
 	query := map[string]string{
-		"timeout": strconv.Itoa(timeout),
+		"timeout": strconv.Itoa(req.Timeout),
 	}
-	if since != "" {
-		query["since"] = since
+	if req.Since != "" {
+		query["since"] = req.Since
 	}
-	if filterID != "" {
-		query["filter"] = filterID
+	if req.FilterID != "" {
+		query["filter"] = req.FilterID
 	}
-	if setPresence != "" {
-		query["set_presence"] = string(setPresence)
+	if req.SetPresence != "" {
+		query["set_presence"] = string(req.SetPresence)
 	}
-	if fullState {
+	if req.FullState {
 		query["full_state"] = "true"
 	}
-	urlPath := cli.BuildURLWithQuery(URLPath{"sync"}, query)
+	return query
+}
+
+// FullSyncRequest makes an HTTP request according to http://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-r0-sync
+func (cli *Client) FullSyncRequest(req ReqSync) (resp *RespSync, err error) {
+	urlPath := cli.BuildURLWithQuery(URLPath{"sync"}, req.BuildQuery())
 	_, err = cli.MakeFullRequest(FullRequest{
-		Method:       http.MethodGet,
-		URL:          urlPath,
-		ResponseJSON: &resp,
-		Context:      ctx,
+		Method:        http.MethodGet,
+		URL:           urlPath,
+		ResponseJSON:  &resp,
+		Context:       req.Context,
+		StreamViaFile: req.StreamResponse,
 		// We don't want automatic retries for SyncRequest, the Sync() wrapper handles those.
 		MaxAttempts: 1,
 	})
