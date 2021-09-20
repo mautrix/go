@@ -604,7 +604,16 @@ func (cli *Client) Login(req *ReqLogin) (resp *RespLogin, err error) {
 		cli.DeviceID = resp.DeviceID
 		cli.AccessToken = resp.AccessToken
 		cli.UserID = resp.UserID
-		// TODO update cli.HomeserverURL based on the .well-known data in the login response
+		cli.Logger.Debugfln("Stored credentials for %s/%s after login", cli.UserID, cli.DeviceID)
+	}
+	if req.StoreHomeserverURL && err == nil && resp.WellKnown != nil && len(resp.WellKnown.Homeserver.BaseURL) > 0 {
+		var urlErr error
+		cli.HomeserverURL, urlErr = url.Parse(resp.WellKnown.Homeserver.BaseURL)
+		if urlErr != nil {
+			cli.logWarning("Failed to parse homeserver URL '%s' in login response: %v", resp.WellKnown.Homeserver.BaseURL, urlErr)
+		} else {
+			cli.Logger.Debugfln("Updated homeserver URL to %s after login", cli.HomeserverURL.String())
+		}
 	}
 	return
 }

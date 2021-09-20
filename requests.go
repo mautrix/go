@@ -74,6 +74,8 @@ type ReqLogin struct {
 
 	// Whether or not the returned credentials should be stored in the Client
 	StoreCredentials bool `json:"-"`
+	// Whether or not the returned .well-known data should update the homeserver URL in the Client
+	StoreHomeserverURL bool `json:"-"`
 }
 
 type ReqUIAuthFallback struct {

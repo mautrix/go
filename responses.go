@@ -140,12 +140,12 @@ func (rlf *RespLoginFlows) HasFlow(flowType AuthType) bool {
 	return false
 }
 
-// RespLogin is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-login
+// RespLogin is the JSON response for https://matrix.org/docs/spec/client_server/r0.6.1#post-matrix-client-r0-login
 type RespLogin struct {
-	AccessToken string      `json:"access_token"`
-	DeviceID    id.DeviceID `json:"device_id"`
-	UserID      id.UserID   `json:"user_id"`
-	// TODO add .well-known field here
+	AccessToken string           `json:"access_token"`
+	DeviceID    id.DeviceID      `json:"device_id"`
+	UserID      id.UserID        `json:"user_id"`
+	WellKnown   *ClientWellKnown `json:"well_known"`
 }
 
 // RespLogout is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-logout
