@@ -130,9 +130,9 @@ func (cli *Client) BuildURL(urlPath ...interface{}) string {
 func BuildURL(baseURL *url.URL, path ...interface{}) *url.URL {
 	createdURL := *baseURL
 	rawParts := make([]string, len(path)+1)
-	rawParts[0] = createdURL.RawPath
+	rawParts[0] = strings.TrimSuffix(createdURL.RawPath, "/")
 	parts := make([]string, len(path)+1)
-	parts[0] = createdURL.Path
+	parts[0] = strings.TrimSuffix(createdURL.Path, "/")
 	for i, part := range path {
 		switch casted := part.(type) {
 		case string:
@@ -154,12 +154,12 @@ func BuildURL(baseURL *url.URL, path ...interface{}) *url.URL {
 // BuildBaseURL builds a URL with the Client's homeserver and appservice user ID set already.
 // You must supply the prefix in the path.
 func (cli *Client) BuildBaseURL(urlPath ...interface{}) string {
-	// copy the URL. Purposefully ignore error as the input is from a valid URL already
-	hsURL, _ := url.Parse(cli.HomeserverURL.String())
+	// Dereference the URL to copy it
+	hsURL := *cli.HomeserverURL
 	if hsURL.Scheme == "" {
 		hsURL.Scheme = "https"
 	}
-	hsURL = BuildURL(hsURL, urlPath...)
+	hsURL = *BuildURL(&hsURL, urlPath...)
 	query := hsURL.Query()
 	if cli.AppServiceUserID != "" {
 		query.Set("user_id", string(cli.AppServiceUserID))
