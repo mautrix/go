@@ -28,6 +28,14 @@ type Logger interface {
 	Debugfln(message string, args ...interface{})
 }
 
+// StubLogger is an implementation of Logger that does nothing
+type StubLogger struct{}
+
+func (sl *StubLogger) Debugfln(message string, args ...interface{}) {}
+func (sl *StubLogger) Warnfln(message string, args ...interface{})  {}
+
+var stubLogger = &StubLogger{}
+
 type WarnLogger interface {
 	Logger
 	Warnfln(message string, args ...interface{})
@@ -228,7 +236,7 @@ func (cli *Client) SyncWithContext(ctx context.Context) error {
 		filterID = resFilter.FilterID
 		cli.Store.SaveFilterID(cli.UserID, filterID)
 	}
-	lastSuccessfulSync := time.Now().Add(-cli.StreamSyncMinAge - 1 * time.Hour)
+	lastSuccessfulSync := time.Now().Add(-cli.StreamSyncMinAge - 1*time.Hour)
 	for {
 		streamResp := false
 		if cli.StreamSyncMinAge > 0 && time.Since(lastSuccessfulSync) > cli.StreamSyncMinAge {
@@ -294,7 +302,7 @@ const logBodyContextKey = "fi.mau.mautrix.log_body"
 const logRequestIDContextKey = "fi.mau.mautrix.request_id"
 
 func (cli *Client) LogRequest(req *http.Request) {
-	if cli.Logger == nil {
+	if cli.Logger == stubLogger {
 		return
 	}
 	body, ok := req.Context().Value(logBodyContextKey).(string)
@@ -1465,6 +1473,7 @@ func NewClient(homeserverURL string, userID id.UserID, accessToken string) (*Cli
 		Client:        &http.Client{Timeout: 180 * time.Second},
 		Prefix:        URLPath{"_matrix", "client", "r0"},
 		Syncer:        NewDefaultSyncer(),
+		Logger:        stubLogger,
 		// By default, use an in-memory store which will never save filter ids / next batch tokens to disk.
 		// The client will work with this storer: it just won't remember across restarts.
 		// In practice, a database backend should be used.
