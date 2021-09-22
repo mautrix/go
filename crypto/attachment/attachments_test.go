@@ -25,6 +25,7 @@ const helloWorldRawFile = `{
   }
 }`
 const random16Bytes = "\x85\xb4\x16/\xcaO\x1d\xe6\x7f\x95\xeb\xdb+g\x11\xb1"
+
 var random16BytesBase64 = base64.StdEncoding.EncodeToString([]byte(random16Bytes))
 
 func parseHelloWorld() *EncryptedFile {

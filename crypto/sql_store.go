@@ -32,7 +32,7 @@ type SQLCryptoStore struct {
 	PickleKey []byte
 	Account   *OlmAccount
 
-	olmSessionCache map[id.SenderKey]map[id.SessionID]*OlmSession
+	olmSessionCache     map[id.SenderKey]map[id.SessionID]*OlmSession
 	olmSessionCacheLock sync.Mutex
 }
 

@@ -16,12 +16,12 @@ import (
 )
 
 var (
-	roomIDLink = id.MatrixURI{Sigil1: '!', MXID1: "7NdBVvkd4aLSbgKt9RXl:example.org"}
-	roomIDViaLink = id.MatrixURI{Sigil1: '!', MXID1: "7NdBVvkd4aLSbgKt9RXl:example.org", Via: []string{"maunium.net", "matrix.org"}}
-	roomAliasLink = id.MatrixURI{Sigil1: '#', MXID1: "someroom:example.org"}
-	roomIDEventLink = id.MatrixURI{Sigil1: '!', MXID1: "7NdBVvkd4aLSbgKt9RXl:example.org", Sigil2: '$', MXID2: "uOH4C9cK4HhMeFWkUXMbdF_dtndJ0j9je-kIK3XpV1s"}
+	roomIDLink         = id.MatrixURI{Sigil1: '!', MXID1: "7NdBVvkd4aLSbgKt9RXl:example.org"}
+	roomIDViaLink      = id.MatrixURI{Sigil1: '!', MXID1: "7NdBVvkd4aLSbgKt9RXl:example.org", Via: []string{"maunium.net", "matrix.org"}}
+	roomAliasLink      = id.MatrixURI{Sigil1: '#', MXID1: "someroom:example.org"}
+	roomIDEventLink    = id.MatrixURI{Sigil1: '!', MXID1: "7NdBVvkd4aLSbgKt9RXl:example.org", Sigil2: '$', MXID2: "uOH4C9cK4HhMeFWkUXMbdF_dtndJ0j9je-kIK3XpV1s"}
 	roomAliasEventLink = id.MatrixURI{Sigil1: '#', MXID1: "someroom:example.org", Sigil2: '$', MXID2: "uOH4C9cK4HhMeFWkUXMbdF_dtndJ0j9je-kIK3XpV1s"}
-	userLink = id.MatrixURI{Sigil1: '@', MXID1: "user:example.org"}
+	userLink           = id.MatrixURI{Sigil1: '@', MXID1: "user:example.org"}
 )
 
 func TestMatrixURI_MatrixToURL(t *testing.T) {

@@ -164,7 +164,7 @@ func (s *Session) GobDecode(rawPickled []byte) error {
 
 func (s *Session) MarshalJSON() ([]byte, error) {
 	pickled := s.Pickle(pickleKey)
-	quotes := make([]byte, len(pickled) + 2)
+	quotes := make([]byte, len(pickled)+2)
 	quotes[0] = '"'
 	quotes[len(quotes)-1] = '"'
 	copy(quotes[1:len(quotes)-1], pickled)

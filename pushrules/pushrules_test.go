@@ -20,7 +20,7 @@ func TestEventToPushRules(t *testing.T) {
 	evt := &event.Event{
 		Type:      event.AccountDataPushRules,
 		Timestamp: 1523380910,
-		Content:   event.Content{
+		Content: event.Content{
 			VeryRaw: json.RawMessage(JSONExamplePushRules),
 		},
 	}

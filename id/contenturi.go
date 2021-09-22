@@ -86,7 +86,7 @@ func (uri *ContentURI) UnmarshalJSON(raw []byte) (err error) {
 	} else if len(raw) < 2 || raw[0] != '"' || raw[len(raw)-1] != '"' {
 		return InputNotJSONString
 	}
-	parsed, err := ParseContentURIBytes(raw[1:len(raw)-1])
+	parsed, err := ParseContentURIBytes(raw[1 : len(raw)-1])
 	if err != nil {
 		return err
 	}

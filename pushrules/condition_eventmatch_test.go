@@ -18,7 +18,7 @@ func TestPushCondition_Match_KindEvent_MsgType(t *testing.T) {
 	condition := newMatchPushCondition("content.msgtype", "m.emote")
 	evt := newFakeEvent(event.EventMessage, &event.MessageEventContent{
 		MsgType: event.MsgEmote,
-		Body: "tests gomuks pushconditions",
+		Body:    "tests gomuks pushconditions",
 	})
 	assert.True(t, condition.Match(blankTestRoom, evt))
 }
@@ -28,7 +28,7 @@ func TestPushCondition_Match_KindEvent_MsgType_Fail(t *testing.T) {
 
 	evt := newFakeEvent(event.EventMessage, &event.MessageEventContent{
 		MsgType: event.MsgText,
-		Body: "I'm testing gomuks pushconditions",
+		Body:    "I'm testing gomuks pushconditions",
 	})
 	assert.False(t, condition.Match(blankTestRoom, evt))
 }

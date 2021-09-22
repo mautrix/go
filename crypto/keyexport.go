@@ -45,12 +45,16 @@ const defaultPassphraseRounds = 100000
 
 const exportPrefix = "-----BEGIN MEGOLM SESSION DATA-----\n"
 const exportSuffix = "-----END MEGOLM SESSION DATA-----\n"
+
 // Only version 0x01 is currently specified in the spec
 const exportVersion1 = 0x01
+
 // The standard for wrapping base64 is 76 bytes
 const exportLineLengthLimit = 76
+
 // Byte count for version + salt + iv + number of rounds
 const exportHeaderLength = 1 + 16 + 16 + 4
+
 // SHA-256 hash length
 const exportHashLength = 32
 

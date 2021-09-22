@@ -1,3 +1,4 @@
+//go:build !nosas
 // +build !nosas
 
 package olm

@@ -20,7 +20,7 @@ import (
 var (
 	ErrNoVerificationFromDevice = errors.New("from_device field is empty")
 	ErrNoVerificationMethods    = errors.New("verification method list is empty")
-	ErrNoRelatesTo = errors.New("missing m.relates_to info")
+	ErrNoRelatesTo              = errors.New("missing m.relates_to info")
 )
 
 // ProcessInRoomVerification is a callback that is to be called when a client receives a message
