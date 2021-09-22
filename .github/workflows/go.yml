@@ -18,6 +18,9 @@ jobs:
       with:
         go-version: ${{ matrix.go-version }}
 
+    - name: Install libolm
+      run: apt-get install libolm-dev libolm3
+
     - name: Build
       run: go build -v ./...
 
