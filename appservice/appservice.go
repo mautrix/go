@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -123,6 +124,15 @@ type AppService struct {
 	websocketRequests     map[int]chan<- *WebsocketCommand
 	websocketRequestsLock sync.RWMutex
 	websocketRequestID    int32
+	// ProcessID is an identifier sent to the websocket proxy for debugging connections
+	ProcessID string
+}
+
+func getDefaultProcessID() string {
+	pid := syscall.Getpid()
+	uid := syscall.Getuid()
+	hostname, _ := os.Hostname()
+	return fmt.Sprintf("%s-%d-%d", hostname, uid, pid)
 }
 
 func (as *AppService) PrepareWebsocket() {
@@ -261,6 +271,9 @@ func (as *AppService) Init() (bool, error) {
 
 	if len(as.UserAgent) == 0 {
 		as.UserAgent = mautrix.DefaultUserAgent
+	}
+	if len(as.ProcessID) == 0 {
+		as.ProcessID = getDefaultProcessID()
 	}
 
 	as.Log = maulogger.Create()
