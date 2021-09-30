@@ -108,3 +108,20 @@ const (
 type GuestAccessEventContent struct {
 	GuestAccess GuestAccess `json:"guest_access"`
 }
+
+type BridgeInfoSection struct {
+	ID          string              `json:"id"`
+	DisplayName string              `json:"displayname,omitempty"`
+	AvatarURL   id.ContentURIString `json:"avatar_url,omitempty"`
+	ExternalURL string              `json:"external_url,omitempty"`
+}
+
+// BridgeEventContent represents the content of a m.bridge state event.
+// https://github.com/matrix-org/matrix-doc/pull/2346
+type BridgeEventContent struct {
+	BridgeBot id.UserID          `json:"bridgebot"`
+	Creator   id.UserID          `json:"creator,omitempty"`
+	Protocol  BridgeInfoSection  `json:"protocol"`
+	Network   *BridgeInfoSection `json:"network,omitempty"`
+	Channel   BridgeInfoSection  `json:"channel"`
+}

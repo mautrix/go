@@ -30,6 +30,8 @@ var TypeMap = map[Type]reflect.Type{
 	StateGuestAccess:       reflect.TypeOf(GuestAccessEventContent{}),
 	StatePinnedEvents:      reflect.TypeOf(PinnedEventsEventContent{}),
 	StateEncryption:        reflect.TypeOf(EncryptionEventContent{}),
+	StateBridge:            reflect.TypeOf(BridgeEventContent{}),
+	StateHalfShotBridge:    reflect.TypeOf(BridgeEventContent{}),
 
 	EventMessage:   reflect.TypeOf(MessageEventContent{}),
 	EventSticker:   reflect.TypeOf(MessageEventContent{}),
@@ -298,6 +300,13 @@ func (content *Content) AsEncryption() *EncryptionEventContent {
 	casted, ok := content.Parsed.(*EncryptionEventContent)
 	if !ok {
 		return &EncryptionEventContent{}
+	}
+	return casted
+}
+func (content *Content) AsBridge() *BridgeEventContent {
+	casted, ok := content.Parsed.(*BridgeEventContent)
+	if !ok {
+		return &BridgeEventContent{}
 	}
 	return casted
 }

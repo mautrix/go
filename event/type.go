@@ -101,7 +101,7 @@ func (et *Type) GuessClass() TypeClass {
 	switch et.Type {
 	case StateAliases.Type, StateCanonicalAlias.Type, StateCreate.Type, StateJoinRules.Type, StateMember.Type,
 		StatePowerLevels.Type, StateRoomName.Type, StateRoomAvatar.Type, StateTopic.Type, StatePinnedEvents.Type,
-		StateTombstone.Type, StateEncryption.Type:
+		StateTombstone.Type, StateEncryption.Type, StateBridge.Type, StateHalfShotBridge.Type:
 		return StateEventType
 	case EphemeralEventReceipt.Type, EphemeralEventTyping.Type, EphemeralEventPresence.Type:
 		return EphemeralEventType
@@ -169,6 +169,8 @@ var (
 	StatePinnedEvents      = Type{"m.room.pinned_events", StateEventType}
 	StateTombstone         = Type{"m.room.tombstone", StateEventType}
 	StateEncryption        = Type{"m.room.encryption", StateEventType}
+	StateBridge            = Type{"m.bridge", StateEventType}
+	StateHalfShotBridge    = Type{"uk.half-shot.bridge", StateEventType}
 )
 
 // Message events
