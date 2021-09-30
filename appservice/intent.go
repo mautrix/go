@@ -121,11 +121,18 @@ func (intent *IntentAPI) SendMassagedStateEvent(roomID id.RoomID, eventType even
 	return intent.Client.SendMassagedStateEvent(roomID, eventType, stateKey, contentJSON, ts)
 }
 
-func (intent *IntentAPI) StateEvent(roomID id.RoomID, eventType event.Type, stateKey string, outContent interface{}) (err error) {
+func (intent *IntentAPI) StateEvent(roomID id.RoomID, eventType event.Type, stateKey string, outContent interface{}) error {
 	if err := intent.EnsureJoined(roomID); err != nil {
 		return err
 	}
 	return intent.Client.StateEvent(roomID, eventType, stateKey, outContent)
+}
+
+func (intent *IntentAPI) State(roomID id.RoomID) (mautrix.RoomStateMap, error) {
+	if err := intent.EnsureJoined(roomID); err != nil {
+		return nil, err
+	}
+	return intent.Client.State(roomID)
 }
 
 func (intent *IntentAPI) Member(roomID id.RoomID, userID id.UserID) *event.MemberEventContent {

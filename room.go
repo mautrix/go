@@ -5,10 +5,12 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
+type RoomStateMap = map[event.Type]map[string]*event.Event
+
 // Room represents a single Matrix room.
 type Room struct {
 	ID    id.RoomID
-	State map[event.Type]map[string]*event.Event
+	State RoomStateMap
 }
 
 // UpdateState updates the room's current state with the given Event. This will clobber events based
@@ -47,6 +49,6 @@ func NewRoom(roomID id.RoomID) *Room {
 	// Init the State map and return a pointer to the Room
 	return &Room{
 		ID:    roomID,
-		State: make(map[event.Type]map[string]*event.Event),
+		State: make(RoomStateMap),
 	}
 }

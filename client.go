@@ -1078,6 +1078,55 @@ func (cli *Client) StateEvent(roomID id.RoomID, eventType event.Type, stateKey s
 	return
 }
 
+// parseRoomStateArray parses a JSON array as a stream and stores the events inside it in a room state map.
+func parseRoomStateArray(_ *http.Request, res *http.Response, responseJSON interface{}) ([]byte, error) {
+	response := make(RoomStateMap)
+	responsePtr := responseJSON.(*interface{})
+	*responsePtr = response
+	dec := json.NewDecoder(res.Body)
+
+	arrayStart, err := dec.Token()
+	if err != nil {
+		return nil, err
+	} else if arrayStart != json.Delim('[') {
+		return nil, fmt.Errorf("expected array start, got %+v", arrayStart)
+	}
+
+	for i := 1; dec.More(); i++ {
+		var evt *event.Event
+		err = dec.Decode(&evt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse state array item #%d: %v", i, err)
+		}
+		subMap, ok := response[evt.Type]
+		if !ok {
+			subMap = make(map[string]*event.Event)
+			response[evt.Type] = subMap
+		}
+		subMap[*evt.StateKey] = evt
+	}
+
+	arrayEnd, err := dec.Token()
+	if err != nil {
+		return nil, err
+	} else if arrayEnd != json.Delim(']') {
+		return nil, fmt.Errorf("expected array end, got %+v", arrayStart)
+	}
+	return nil, nil
+}
+
+// State gets all state in a room.
+// See https://matrix.org/docs/spec/client_server/r0.6.1#get-matrix-client-r0-rooms-roomid-state
+func (cli *Client) State(roomID id.RoomID) (stateMap RoomStateMap, err error) {
+	_, err = cli.MakeFullRequest(FullRequest{
+		Method:       http.MethodGet,
+		URL:          cli.BuildURL("rooms", roomID, "state"),
+		ResponseJSON: &stateMap,
+		Handler:      parseRoomStateArray,
+	})
+	return
+}
+
 // UploadLink uploads an HTTP URL and then returns an MXC URI.
 func (cli *Client) UploadLink(link string) (*RespMediaUpload, error) {
 	res, err := cli.Client.Get(link)
