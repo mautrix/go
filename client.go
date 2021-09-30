@@ -1081,7 +1081,7 @@ func (cli *Client) StateEvent(roomID id.RoomID, eventType event.Type, stateKey s
 // parseRoomStateArray parses a JSON array as a stream and stores the events inside it in a room state map.
 func parseRoomStateArray(_ *http.Request, res *http.Response, responseJSON interface{}) ([]byte, error) {
 	response := make(RoomStateMap)
-	responsePtr := responseJSON.(*interface{})
+	responsePtr := responseJSON.(*map[event.Type]map[string]*event.Event)
 	*responsePtr = response
 	dec := json.NewDecoder(res.Body)
 
@@ -1098,6 +1098,7 @@ func parseRoomStateArray(_ *http.Request, res *http.Response, responseJSON inter
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse state array item #%d: %v", i, err)
 		}
+		_ = evt.Content.ParseRaw(evt.Type)
 		subMap, ok := response[evt.Type]
 		if !ok {
 			subMap = make(map[string]*event.Event)
