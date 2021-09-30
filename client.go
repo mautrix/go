@@ -318,6 +318,8 @@ func (cli *Client) MakeRequest(method string, httpURL string, reqBody interface{
 	return cli.MakeFullRequest(FullRequest{Method: method, URL: httpURL, RequestJSON: reqBody, ResponseJSON: resBody})
 }
 
+type ClientResponseHandler = func(req *http.Request, res *http.Response, responseJSON interface{}) ([]byte, error)
+
 type FullRequest struct {
 	Method           string
 	URL              string
@@ -328,8 +330,8 @@ type FullRequest struct {
 	ResponseJSON     interface{}
 	Context          context.Context
 	MaxAttempts      int
-	StreamViaFile    bool
 	SensitiveContent bool
+	Handler          ClientResponseHandler
 }
 
 var requestID int32
@@ -394,11 +396,14 @@ func (cli *Client) MakeFullRequest(params FullRequest) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	if params.Handler == nil {
+		params.Handler = cli.handleNormalResponse
+	}
 	req.Header.Set("User-Agent", cli.UserAgent)
 	if len(cli.AccessToken) > 0 {
 		req.Header.Set("Authorization", "Bearer "+cli.AccessToken)
 	}
-	return cli.executeCompiledRequest(req, params.MaxAttempts-1, 4*time.Second, params.ResponseJSON, params.StreamViaFile)
+	return cli.executeCompiledRequest(req, params.MaxAttempts-1, 4*time.Second, params.ResponseJSON, params.Handler)
 }
 
 func (cli *Client) logWarning(format string, args ...interface{}) {
@@ -410,7 +415,7 @@ func (cli *Client) logWarning(format string, args ...interface{}) {
 	}
 }
 
-func (cli *Client) doRetry(req *http.Request, cause error, retries int, backoff time.Duration, responseJSON interface{}, streamViaFile bool) ([]byte, error) {
+func (cli *Client) doRetry(req *http.Request, cause error, retries int, backoff time.Duration, responseJSON interface{}, handler ClientResponseHandler) ([]byte, error) {
 	reqID, _ := req.Context().Value(logRequestIDContextKey).(int)
 	if req.Body != nil {
 		if req.GetBody == nil {
@@ -426,7 +431,7 @@ func (cli *Client) doRetry(req *http.Request, cause error, retries int, backoff 
 	}
 	cli.logWarning("Request #%d failed: %v, retrying in %d seconds", reqID, cause, int(backoff.Seconds()))
 	time.Sleep(backoff)
-	return cli.executeCompiledRequest(req, retries-1, backoff*2, responseJSON, streamViaFile)
+	return cli.executeCompiledRequest(req, retries-1, backoff*2, responseJSON, handler)
 }
 
 func (cli *Client) readRequestBody(req *http.Request, res *http.Response) ([]byte, error) {
@@ -451,22 +456,22 @@ func (cli *Client) closeTemp(file *os.File) {
 	}
 }
 
-func (cli *Client) streamResponse(req *http.Request, res *http.Response, responseJSON interface{}) error {
+func (cli *Client) streamResponse(req *http.Request, res *http.Response, responseJSON interface{}) ([]byte, error) {
 	file, err := ioutil.TempFile("", "mautrix-response-")
 	if err != nil {
 		cli.logWarning("Failed to create temporary file: %v", err)
 		_, err = cli.handleNormalResponse(req, res, responseJSON)
-		return err
+		return nil, err
 	}
 	defer cli.closeTemp(file)
 	if _, err = io.Copy(file, res.Body); err != nil {
-		return fmt.Errorf("failed to copy response to file: %w", err)
+		return nil, fmt.Errorf("failed to copy response to file: %w", err)
 	} else if _, err = file.Seek(0, 0); err != nil {
-		return fmt.Errorf("failed to seek to beginning of response file: %w", err)
+		return nil, fmt.Errorf("failed to seek to beginning of response file: %w", err)
 	} else if err = json.NewDecoder(file).Decode(responseJSON); err != nil {
-		return fmt.Errorf("failed to unmarshal response body: %w", err)
+		return nil, fmt.Errorf("failed to unmarshal response body: %w", err)
 	} else {
-		return nil
+		return nil, nil
 	}
 }
 
@@ -507,7 +512,7 @@ func (cli *Client) handleResponseError(req *http.Request, res *http.Response) ([
 	}
 }
 
-func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backoff time.Duration, responseJSON interface{}, streamViaFile bool) ([]byte, error) {
+func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backoff time.Duration, responseJSON interface{}, handler ClientResponseHandler) ([]byte, error) {
 	cli.LogRequest(req)
 	res, err := cli.Client.Do(req)
 	if res != nil {
@@ -515,7 +520,7 @@ func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backof
 	}
 	if err != nil {
 		if retries > 0 {
-			return cli.doRetry(req, err, retries, backoff, responseJSON, streamViaFile)
+			return cli.doRetry(req, err, retries, backoff, responseJSON, handler)
 		}
 		return nil, HTTPError{
 			Request:  req,
@@ -527,16 +532,13 @@ func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backof
 	}
 
 	if retries > 0 && (res.StatusCode == http.StatusBadGateway || res.StatusCode == http.StatusServiceUnavailable || res.StatusCode == http.StatusGatewayTimeout) {
-		return cli.doRetry(req, fmt.Errorf("HTTP %d", res.StatusCode), retries, backoff, responseJSON, streamViaFile)
+		return cli.doRetry(req, fmt.Errorf("HTTP %d", res.StatusCode), retries, backoff, responseJSON, handler)
 	}
 
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		return cli.handleResponseError(req, res)
-	} else if streamViaFile {
-		return nil, cli.streamResponse(req, res, responseJSON)
-	} else {
-		return cli.handleNormalResponse(req, res, responseJSON)
 	}
+	return handler(req, res, responseJSON)
 }
 
 // Whoami gets the user ID of the current user. See https://matrix.org/docs/spec/client_server/r0.6.1#post-matrix-client-r0-rooms-roomid-join
@@ -598,15 +600,18 @@ func (req *ReqSync) BuildQuery() map[string]string {
 // FullSyncRequest makes an HTTP request according to http://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-r0-sync
 func (cli *Client) FullSyncRequest(req ReqSync) (resp *RespSync, err error) {
 	urlPath := cli.BuildURLWithQuery(URLPath{"sync"}, req.BuildQuery())
-	_, err = cli.MakeFullRequest(FullRequest{
-		Method:        http.MethodGet,
-		URL:           urlPath,
-		ResponseJSON:  &resp,
-		Context:       req.Context,
-		StreamViaFile: req.StreamResponse,
+	fullReq := FullRequest{
+		Method:       http.MethodGet,
+		URL:          urlPath,
+		ResponseJSON: &resp,
+		Context:      req.Context,
 		// We don't want automatic retries for SyncRequest, the Sync() wrapper handles those.
 		MaxAttempts: 1,
-	})
+	}
+	if req.StreamResponse {
+		fullReq.Handler = cli.streamResponse
+	}
+	_, err = cli.MakeFullRequest(fullReq)
 	return
 }
 
