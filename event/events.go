@@ -7,6 +7,8 @@
 package event
 
 import (
+	"encoding/json"
+
 	"maunium.net/go/mautrix/id"
 )
 
@@ -26,6 +28,47 @@ type Event struct {
 
 	ToUserID   id.UserID   `json:"to_user_id,omitempty"`   // The user ID that the to-device event was sent to. Only present in MSC2409 appservice transactions.
 	ToDeviceID id.DeviceID `json:"to_device_id,omitempty"` // The device ID that the to-device event was sent to. Only present in MSC2409 appservice transactions.
+}
+
+type eventForMarshaling struct {
+	StateKey  *string    `json:"state_key,omitempty"`
+	Sender    id.UserID  `json:"sender,omitempty"`
+	Type      Type       `json:"type"`
+	Timestamp int64      `json:"origin_server_ts,omitempty"`
+	ID        id.EventID `json:"event_id,omitempty"`
+	RoomID    id.RoomID  `json:"room_id,omitempty"`
+	Content   Content    `json:"content"`
+	Redacts   id.EventID `json:"redacts,omitempty"`
+	Unsigned  *Unsigned  `json:"unsigned,omitempty"`
+
+	ToUserID   id.UserID   `json:"to_user_id,omitempty"`
+	ToDeviceID id.DeviceID `json:"to_device_id,omitempty"`
+}
+
+// MarshalJSON marshals the event, including omitting the unsigned field if it's empty.
+//
+// This is necessary because Unsigned is not a pointer (for convenience reasons),
+// and encoding/json doesn't know how to check if a non-pointer struct is empty.
+//
+// TODO(tulir): maybe it makes more sense to make Unsigned a pointer and make an easy and safe way to access it?
+func (evt *Event) MarshalJSON() ([]byte, error) {
+	unsigned := &evt.Unsigned
+	if unsigned.IsEmpty() {
+		unsigned = nil
+	}
+	return json.Marshal(&eventForMarshaling{
+		StateKey:   evt.StateKey,
+		Sender:     evt.Sender,
+		Type:       evt.Type,
+		Timestamp:  evt.Timestamp,
+		ID:         evt.ID,
+		RoomID:     evt.RoomID,
+		Content:    evt.Content,
+		Redacts:    evt.Redacts,
+		Unsigned:   unsigned,
+		ToUserID:   evt.ToUserID,
+		ToDeviceID: evt.ToDeviceID,
+	})
 }
 
 type MautrixInfo struct {
@@ -54,4 +97,10 @@ type Unsigned struct {
 	Relations       Relations       `json:"m.relations,omitempty"`
 	RedactedBecause *Event          `json:"redacted_because,omitempty"`
 	InviteRoomState []StrippedState `json:"invite_room_state,omitempty"`
+}
+
+func (us *Unsigned) IsEmpty() bool {
+	return us.PrevContent == nil && us.PrevSender == "" && us.ReplacesState == "" && us.Age == 0 &&
+		us.TransactionID == "" && us.RedactedBecause == nil && us.InviteRoomState == nil && us.Relations.Raw == nil &&
+		us.Relations.Annotations.Map == nil && us.Relations.References.List == nil && us.Relations.Replaces.List == nil
 }
