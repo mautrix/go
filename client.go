@@ -131,11 +131,6 @@ func DiscoverClientAPI(serverName string) (*ClientWellKnown, error) {
 	return &wellKnown, nil
 }
 
-// BuildURL builds a URL with the Client's homeserver and appservice user ID set already.
-func (cli *Client) BuildURL(urlPath ...interface{}) string {
-	return cli.BuildBaseURL(append(cli.Prefix, urlPath...)...)
-}
-
 // BuildURL builds a URL with the given path parts
 func BuildURL(baseURL *url.URL, path ...interface{}) *url.URL {
 	createdURL := *baseURL
@@ -161,9 +156,28 @@ func BuildURL(baseURL *url.URL, path ...interface{}) *url.URL {
 	return &createdURL
 }
 
+// BuildURL builds a URL with the Client's homeserver and appservice user ID set already.
+func (cli *Client) BuildURL(urlPath ...interface{}) string {
+	return cli.BuildBaseURL(append(cli.Prefix, urlPath...)...)
+}
+
 // BuildBaseURL builds a URL with the Client's homeserver and appservice user ID set already.
 // You must supply the prefix in the path.
 func (cli *Client) BuildBaseURL(urlPath ...interface{}) string {
+	return cli.BuildBaseURLWithQuery(urlPath, nil)
+}
+
+type URLPath = []interface{}
+
+// BuildURLWithQuery builds a URL with query parameters in addition to the Client's
+// homeserver and appservice user ID set already.
+func (cli *Client) BuildURLWithQuery(urlPath URLPath, urlQuery map[string]string) string {
+	return cli.BuildBaseURLWithQuery(append(cli.Prefix, urlPath...), urlQuery)
+}
+
+// BuildBaseURLWithQuery builds a URL with query parameters in addition to the Client's homeserver
+// and appservice user ID set already. You must supply the prefix in the path.
+func (cli *Client) BuildBaseURLWithQuery(urlPath URLPath, urlQuery map[string]string) string {
 	// Dereference the URL to copy it
 	hsURL := *cli.HomeserverURL
 	if hsURL.Scheme == "" {
@@ -174,22 +188,13 @@ func (cli *Client) BuildBaseURL(urlPath ...interface{}) string {
 	if cli.AppServiceUserID != "" {
 		query.Set("user_id", string(cli.AppServiceUserID))
 	}
+	if urlQuery != nil {
+		for k, v := range urlQuery {
+			query.Set(k, v)
+		}
+	}
 	hsURL.RawQuery = query.Encode()
 	return hsURL.String()
-}
-
-type URLPath = []interface{}
-
-// BuildURLWithQuery builds a URL with query parameters in addition to the Client's
-// homeserver and appservice user ID set already.
-func (cli *Client) BuildURLWithQuery(urlPath URLPath, urlQuery map[string]string) string {
-	u, _ := url.Parse(cli.BuildURL(urlPath...))
-	q := u.Query()
-	for k, v := range urlQuery {
-		q.Set(k, v)
-	}
-	u.RawQuery = q.Encode()
-	return u.String()
 }
 
 // SetCredentials sets the user ID and access token on this client instance.
