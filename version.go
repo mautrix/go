@@ -1,5 +1,5 @@
 package mautrix
 
-const Version = "v0.9.29"
+const Version = "v0.9.30"
 
 var DefaultUserAgent = "mautrix-go/" + Version
