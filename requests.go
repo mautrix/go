@@ -302,3 +302,11 @@ type ReqPutPushRule struct {
 	Conditions []pushrules.PushCondition  `json:"conditions"`
 	Pattern    string                     `json:"pattern"`
 }
+
+type ReqBatchSend struct {
+	PrevEventID id.EventID `json:"-"`
+	BatchID     id.BatchID `json:"-"`
+
+	StateEventsAtStart []*event.Event `json:"state_events_at_start"`
+	Events             []*event.Event `json:"events"`
+}

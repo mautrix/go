@@ -28,6 +28,10 @@ func NewRoomAlias(localpart, server string) RoomAlias {
 // https://matrix.org/docs/spec/rooms/v4#event-ids
 type EventID string
 
+// A BatchID is a string identifying a batch of events being backfilled to a room.
+// https://github.com/matrix-org/matrix-doc/pull/2716
+type BatchID string
+
 func (roomID RoomID) String() string {
 	return string(roomID)
 }
@@ -38,4 +42,8 @@ func (roomAlias RoomAlias) String() string {
 
 func (eventID EventID) String() string {
 	return string(eventID)
+}
+
+func (batchID BatchID) String() string {
+	return string(batchID)
 }

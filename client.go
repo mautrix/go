@@ -1510,6 +1510,21 @@ func (cli *Client) PutPushRule(scope string, kind pushrules.PushRuleType, ruleID
 	return err
 }
 
+// BatchSend sends a batch of historical events into a room. This is only available for appservices.
+//
+// See https://github.com/matrix-org/matrix-doc/pull/2716 for more info.
+func (cli *Client) BatchSend(roomID id.RoomID, req *ReqBatchSend) (resp *RespBatchSend, err error) {
+	path := URLPath{"_matrix", "client", "unstable", "org.matrix.msc2716", "rooms", roomID, "batch_send"}
+	query := map[string]string{
+		"prev_event_id": req.PrevEventID.String(),
+	}
+	if len(req.BatchID) > 0 {
+		query["batch_id"] = req.BatchID.String()
+	}
+	_, err = cli.MakeRequest("POST", cli.BuildBaseURLWithQuery(path, query), req, &resp)
+	return
+}
+
 // TxnID returns the next transaction ID.
 func (cli *Client) TxnID() string {
 	txnID := atomic.AddInt32(&cli.txnID, 1)
