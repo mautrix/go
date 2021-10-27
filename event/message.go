@@ -119,6 +119,21 @@ func (content *MessageEventContent) SetRelatesTo(rel *RelatesTo) {
 	content.RelatesTo = rel
 }
 
+func (content *MessageEventContent) SetEdit(original id.EventID) {
+	newContent := *content
+	content.NewContent = &newContent
+	content.RelatesTo = &RelatesTo{
+		Type:    RelReplace,
+		EventID: original,
+	}
+	if content.MsgType == MsgText || content.MsgType == MsgNotice {
+		content.Body = "* " + content.Body
+		if content.Format == FormatHTML && len(content.FormattedBody) > 0 {
+			content.FormattedBody = "* " + content.FormattedBody
+		}
+	}
+}
+
 func (content *MessageEventContent) GetFile() *EncryptedFileInfo {
 	if content.File == nil {
 		content.File = &EncryptedFileInfo{}
