@@ -277,7 +277,7 @@ func (as *AppService) StartWebsocket(baseURL string, onConnect func()) error {
 		"Authorization": []string{fmt.Sprintf("Bearer %s", as.Registration.AppToken)},
 		"User-Agent":    []string{as.BotClient().UserAgent},
 
-		"X-Mautrix-Process-ID": []string{as.ProcessID},
+		"X-Mautrix-Process-ID":        []string{as.ProcessID},
 		"X-Mautrix-Websocket-Version": []string{"2"},
 	})
 	if resp != nil && resp.StatusCode >= 400 {
