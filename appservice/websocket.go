@@ -35,10 +35,20 @@ type WebsocketCommand struct {
 	Data    json.RawMessage `json:"data"`
 }
 
-func (wsc *WebsocketCommand) MakeResponse(data interface{}) *WebsocketRequest {
+func (wsc *WebsocketCommand) MakeResponse(ok bool, data interface{}) *WebsocketRequest {
+	if wsc.ReqID == 0 {
+		return nil
+	}
+	cmd := "response"
+	if !ok {
+		cmd = "error"
+	}
+	if err, isError := data.(error); isError {
+		data = map[string]interface{}{"message": err.Error()}
+	}
 	return &WebsocketRequest{
 		ReqID:   wsc.ReqID,
-		Command: "response",
+		Command: cmd,
 		Data:    data,
 	}
 }
@@ -65,6 +75,8 @@ var (
 	WebsocketManualStop   = errors.New("the websocket was disconnected manually")
 	WebsocketOverridden   = errors.New("a new call to StartWebsocket overrode the previous connection")
 	WebsocketUnknownError = errors.New("an unknown error occurred")
+
+	WebsocketNotConnected = errors.New("websocket not connected")
 )
 
 func (mwcc MeowWebsocketCloseCode) String() string {
@@ -113,8 +125,10 @@ func parseCloseError(err error) error {
 }
 
 func (as *AppService) SendWebsocket(cmd *WebsocketRequest) error {
-	if as.ws == nil {
-		return errors.New("websocket not connected")
+	if cmd == nil {
+		return nil
+	} else if as.ws == nil {
+		return WebsocketNotConnected
 	}
 	as.wsWriteLock.Lock()
 	defer as.wsWriteLock.Unlock()
@@ -182,6 +196,17 @@ func (as *AppService) RequestWebsocket(ctx context.Context, cmd *WebsocketReques
 	}
 }
 
+func (as *AppService) unknownCommandHandler(cmd WebsocketCommand) (bool, interface{}) {
+	as.Log.Warnfln("No handler for websocket command %s (%d)", cmd.Command, cmd.ReqID)
+	return false, fmt.Errorf("unknown request type")
+}
+
+func (as *AppService) SetWebsocketCommandHandler(cmd string, handler WebsocketHandler) {
+	as.websocketHandlersLock.Lock()
+	as.websocketHandlers[cmd] = handler
+	as.websocketHandlersLock.Unlock()
+}
+
 func (as *AppService) consumeWebsocket(stopFunc func(error), ws *websocket.Conn) {
 	defer stopFunc(WebsocketUnknownError)
 	for {
@@ -194,6 +219,12 @@ func (as *AppService) consumeWebsocket(stopFunc func(error), ws *websocket.Conn)
 		}
 		if msg.Command == "" || msg.Command == "transaction" {
 			as.handleTransaction(&msg.Transaction)
+			go func() {
+				err = as.SendWebsocket(msg.MakeResponse(true, nil))
+				if err != nil {
+					as.Log.Warnfln("Failed to send response to %s %d: %v", msg.Command, msg.ReqID, err)
+				}
+			}()
 		} else if msg.Command == "connect" {
 			as.Log.Debugln("Websocket connect confirmation received")
 		} else if msg.Command == "response" || msg.Command == "error" {
@@ -210,11 +241,23 @@ func (as *AppService) consumeWebsocket(stopFunc func(error), ws *websocket.Conn)
 			}
 			as.websocketRequestsLock.RUnlock()
 		} else {
-			select {
-			case as.WebsocketCommands <- msg.WebsocketCommand:
-			default:
-				as.Log.Warnfln("Dropping websocket command %s %d / %s", msg.Command, msg.ReqID, msg.Data)
+			as.websocketHandlersLock.RLock()
+			handler, ok := as.websocketHandlers[msg.Command]
+			as.websocketHandlersLock.RUnlock()
+			if !ok {
+				handler = as.unknownCommandHandler
 			}
+			go func() {
+				okResp, data := handler(msg.WebsocketCommand)
+				err = as.SendWebsocket(msg.MakeResponse(okResp, data))
+				if err != nil {
+					as.Log.Warnfln("Failed to send response to %s %d: %v", msg.Command, msg.ReqID, err)
+				} else if okResp {
+					as.Log.Debugfln("Sent success response to %s %d", msg.Command, msg.ReqID)
+				} else {
+					as.Log.Debugfln("Sent error response to %s %d", msg.Command, msg.ReqID)
+				}
+			}()
 		}
 	}
 }
@@ -235,6 +278,7 @@ func (as *AppService) StartWebsocket(baseURL string, onConnect func()) error {
 		"User-Agent":    []string{as.BotClient().UserAgent},
 
 		"X-Mautrix-Process-ID": []string{as.ProcessID},
+		"X-Mautrix-Websocket-Version": []string{"2"},
 	})
 	if resp != nil && resp.StatusCode >= 400 {
 		var errResp Error

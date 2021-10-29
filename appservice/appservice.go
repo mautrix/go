@@ -80,6 +80,8 @@ func (qh *QueryHandlerStub) QueryUser(userID id.UserID) bool {
 	return false
 }
 
+type WebsocketHandler func(WebsocketCommand) (ok bool, data interface{})
+
 // AppService is the main config for all appservices.
 // It also serves as the appservice instance struct.
 type AppService struct {
@@ -120,7 +122,8 @@ type AppService struct {
 	ws                    *websocket.Conn
 	wsWriteLock           sync.Mutex
 	StopWebsocket         func(error)
-	WebsocketCommands     chan WebsocketCommand
+	websocketHandlers     map[string]WebsocketHandler
+	websocketHandlersLock sync.RWMutex
 	websocketRequests     map[int]chan<- *WebsocketCommand
 	websocketRequestsLock sync.RWMutex
 	websocketRequestID    int32
@@ -136,8 +139,8 @@ func getDefaultProcessID() string {
 }
 
 func (as *AppService) PrepareWebsocket() {
-	if as.WebsocketCommands == nil {
-		as.WebsocketCommands = make(chan WebsocketCommand, 32)
+	if as.websocketHandlers == nil {
+		as.websocketHandlers = make(map[string]WebsocketHandler, 32)
 		as.websocketRequests = make(map[int]chan<- *WebsocketCommand)
 	}
 }
