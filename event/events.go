@@ -41,8 +41,40 @@ type eventForMarshaling struct {
 	Redacts   id.EventID `json:"redacts,omitempty"`
 	Unsigned  *Unsigned  `json:"unsigned,omitempty"`
 
+	PrevContent   *Content    `json:"prev_content,omitempty"`
+	ReplacesState *id.EventID `json:"replaces_state,omitempty"`
+
 	ToUserID   id.UserID   `json:"to_user_id,omitempty"`
 	ToDeviceID id.DeviceID `json:"to_device_id,omitempty"`
+}
+
+// UnmarshalJSON unmarshals the event, including moving prev_content from the top level to inside unsigned.
+func (evt *Event) UnmarshalJSON(data []byte) error {
+	var efm eventForMarshaling
+	err := json.Unmarshal(data, &efm)
+	if err != nil {
+		return err
+	}
+	evt.StateKey = efm.StateKey
+	evt.Sender = efm.Sender
+	evt.Type = efm.Type
+	evt.Timestamp = efm.Timestamp
+	evt.ID = efm.ID
+	evt.RoomID = efm.RoomID
+	evt.Content = efm.Content
+	evt.Redacts = efm.Redacts
+	if efm.Unsigned != nil {
+		evt.Unsigned = *efm.Unsigned
+	}
+	if efm.PrevContent != nil && evt.Unsigned.PrevContent == nil {
+		evt.Unsigned.PrevContent = efm.PrevContent
+	}
+	if efm.ReplacesState != nil && *efm.ReplacesState != "" && evt.Unsigned.ReplacesState == "" {
+		evt.Unsigned.ReplacesState = *efm.ReplacesState
+	}
+	evt.ToUserID = efm.ToUserID
+	evt.ToDeviceID = efm.ToDeviceID
+	return nil
 }
 
 // MarshalJSON marshals the event, including omitting the unsigned field if it's empty.
