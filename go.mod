@@ -6,7 +6,6 @@ require (
 	github.com/btcsuite/btcutil v1.0.2
 	github.com/gorilla/mux v1.8.0
 	github.com/gorilla/websocket v1.4.2
-	github.com/lib/pq v1.10.3
 	github.com/mattn/go-sqlite3 v1.14.9
 	github.com/russross/blackfriday/v2 v2.1.0
 	github.com/stretchr/testify v1.7.0

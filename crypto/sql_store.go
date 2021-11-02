@@ -8,17 +8,21 @@ package crypto
 
 import (
 	"database/sql"
+	"database/sql/driver"
 	"fmt"
 	"strings"
 	"sync"
-
-	"github.com/lib/pq"
 
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/crypto/sql_store_upgrade"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
+
+var PostgresArrayWrapper func(interface{}) interface {
+	driver.Valuer
+	sql.Scanner
+}
 
 // SQLCryptoStore is an implementation of a crypto Store for a database backend.
 type SQLCryptoStore struct {
@@ -592,8 +596,8 @@ func (store *SQLCryptoStore) PutDevices(userID id.UserID, devices map[id.DeviceI
 func (store *SQLCryptoStore) FilterTrackedUsers(users []id.UserID) []id.UserID {
 	var rows *sql.Rows
 	var err error
-	if store.Dialect == "postgres" {
-		rows, err = store.DB.Query("SELECT user_id FROM crypto_tracked_user WHERE user_id = ANY($1)", pq.Array(users))
+	if store.Dialect == "postgres" && PostgresArrayWrapper != nil {
+		rows, err = store.DB.Query("SELECT user_id FROM crypto_tracked_user WHERE user_id = ANY($1)", PostgresArrayWrapper(users))
 	} else {
 		queryString := make([]string, len(users))
 		params := make([]interface{}, len(users))
