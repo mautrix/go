@@ -196,7 +196,11 @@ func (as *AppService) handleEvents(evts []*event.Event, defaultTypeClass event.T
 			as.Log.Debugfln("Failed to parse content of %s (type %s): %v", evt.ID, evt.Type.Type, err)
 		}
 		if evt.Type.IsState() {
-			as.UpdateState(evt)
+			// TODO sending historical state events in AS transactions is probably a bug in synapse, this can be removed if/when that bug is fixed.
+			historical, ok := evt.Content.Raw["org.matrix.msc2716.historical"].(bool)
+			if !ok || !historical {
+				as.UpdateState(evt)
+			}
 		}
 		as.Events <- evt
 	}
