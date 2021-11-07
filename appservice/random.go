@@ -3,6 +3,7 @@ package appservice
 import (
 	"math/rand"
 	"time"
+	"unsafe"
 )
 
 const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -29,6 +30,5 @@ func RandomString(n int) string {
 		cache >>= letterIdxBits
 		remain--
 	}
-
-	return string(b)
+	return *(*string)(unsafe.Pointer(&b))
 }
