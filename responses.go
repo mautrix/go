@@ -125,19 +125,27 @@ type RespRegister struct {
 	UserID       id.UserID   `json:"user_id"`
 }
 
-type RespLoginFlows struct {
-	Flows []struct {
-		Type AuthType `json:"type"`
-	} `json:"flows"`
+type LoginFlow struct {
+	Type AuthType `json:"type"`
 }
 
-func (rlf *RespLoginFlows) HasFlow(flowType AuthType) bool {
+type RespLoginFlows struct {
+	Flows []LoginFlow `json:"flows"`
+}
+
+func (rlf *RespLoginFlows) FirstFlowOfType(flowTypes ...AuthType) *LoginFlow {
 	for _, flow := range rlf.Flows {
-		if flow.Type == flowType {
-			return true
+		for _, flowType := range flowTypes {
+			if flow.Type == flowType {
+				return &flow
+			}
 		}
 	}
-	return false
+	return nil
+}
+
+func (rlf *RespLoginFlows) HasFlow(flowType ...AuthType) bool {
+	return rlf.FirstFlowOfType(flowType...) != nil
 }
 
 // RespLogin is the JSON response for https://matrix.org/docs/spec/client_server/r0.6.1#post-matrix-client-r0-login
