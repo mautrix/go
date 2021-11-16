@@ -119,6 +119,7 @@ func (as *AppService) PutTransaction(w http.ResponseWriter, r *http.Request) {
 	if as.txnIDC.IsProcessed(txnID) {
 		// Duplicate transaction ID: no-op
 		WriteBlankOK(w)
+		as.Log.Debugfln("Ignoring duplicate transaction %s", txnID)
 		return
 	}
 
@@ -132,13 +133,13 @@ func (as *AppService) PutTransaction(w http.ResponseWriter, r *http.Request) {
 			Message:    "Failed to parse body JSON",
 		}.Write(w)
 	} else {
-		as.handleTransaction(&txn)
+		as.handleTransaction(txnID, &txn)
 		WriteBlankOK(w)
-		as.txnIDC.MarkProcessed(txnID)
 	}
 }
 
-func (as *AppService) handleTransaction(txn *Transaction) {
+func (as *AppService) handleTransaction(id string, txn *Transaction) {
+	as.Log.Debugfln("Starting handling of transaction %s (%s)", id, txn.ContentString())
 	if as.Registration.EphemeralEvents {
 		if txn.EphemeralEvents != nil {
 			as.handleEvents(txn.EphemeralEvents, event.EphemeralEventType)
@@ -157,6 +158,7 @@ func (as *AppService) handleTransaction(txn *Transaction) {
 	} else if txn.MSC3202DeviceOTKCount != nil {
 		as.handleOTKCounts(txn.MSC3202DeviceOTKCount)
 	}
+	as.txnIDC.MarkProcessed(id)
 }
 
 func (as *AppService) handleOTKCounts(otks map[id.UserID]mautrix.OTKCount) {

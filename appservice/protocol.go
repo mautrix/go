@@ -8,7 +8,9 @@ package appservice
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strings"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
@@ -25,6 +27,29 @@ type Transaction struct {
 	MSC2409EphemeralEvents []*event.Event                 `json:"de.sorunome.msc2409.ephemeral,omitempty"`
 	MSC3202DeviceLists     *mautrix.DeviceLists           `json:"org.matrix.msc3202.device_lists,omitempty"`
 	MSC3202DeviceOTKCount  map[id.UserID]mautrix.OTKCount `json:"org.matrix.msc3202.device_one_time_keys_count,omitempty"`
+}
+
+func (txn *Transaction) ContentString() string {
+	var parts []string
+	if len(txn.Events) > 0 {
+		parts = append(parts, fmt.Sprintf("%d PDUs", len(txn.Events)))
+	}
+	if len(txn.EphemeralEvents) > 0 {
+		parts = append(parts, fmt.Sprintf("%d EDUs", len(txn.EphemeralEvents)))
+	} else if len(txn.MSC2409EphemeralEvents) > 0 {
+		parts = append(parts, fmt.Sprintf("%d EDUs (unstable)", len(txn.MSC2409EphemeralEvents)))
+	}
+	if len(txn.DeviceOTKCount) > 0 {
+		parts = append(parts, fmt.Sprintf("OTK counts for %d users", len(txn.DeviceOTKCount)))
+	} else if len(txn.MSC3202DeviceOTKCount) > 0 {
+		parts = append(parts, fmt.Sprintf("OTK counts for %d users (unstable)", len(txn.MSC3202DeviceOTKCount)))
+	}
+	if txn.DeviceLists != nil {
+		parts = append(parts, fmt.Sprintf("%d device list changes", len(txn.DeviceLists.Changed)))
+	} else if txn.MSC3202DeviceLists != nil {
+		parts = append(parts, fmt.Sprintf("%d device list changes (unstable)", len(txn.MSC3202DeviceLists.Changed)))
+	}
+	return strings.Join(parts, ", ")
 }
 
 // EventListener is a function that receives events.

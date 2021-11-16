@@ -219,10 +219,9 @@ func (as *AppService) consumeWebsocket(stopFunc func(error), ws *websocket.Conn)
 		}
 		if msg.Command == "" || msg.Command == "transaction" {
 			if msg.TxnID == "" || !as.txnIDC.IsProcessed(msg.TxnID) {
-				as.handleTransaction(&msg.Transaction)
-				as.txnIDC.MarkProcessed(msg.TxnID)
+				as.handleTransaction(msg.TxnID, &msg.Transaction)
 			} else {
-				as.Log.Debugln("Ignoring duplicate transaction with ID", msg.TxnID)
+				as.Log.Debugfln("Ignoring duplicate transaction %s (%s)", msg.TxnID, msg.Transaction.ContentString())
 			}
 			go func() {
 				err = as.SendWebsocket(msg.MakeResponse(true, map[string]interface{}{"txn_id": msg.TxnID}))
