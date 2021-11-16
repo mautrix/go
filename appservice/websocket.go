@@ -282,7 +282,7 @@ func (as *AppService) StartWebsocket(baseURL string, onConnect func()) error {
 		"User-Agent":    []string{as.BotClient().UserAgent},
 
 		"X-Mautrix-Process-ID":        []string{as.ProcessID},
-		"X-Mautrix-Websocket-Version": []string{"2"},
+		"X-Mautrix-Websocket-Version": []string{"3"},
 	})
 	if resp != nil && resp.StatusCode >= 400 {
 		var errResp Error
