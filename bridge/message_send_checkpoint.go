@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"time"
 
+	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
@@ -84,6 +85,7 @@ func SendCheckpoints(endpoint string, asToken string, checkpoints []*MessageSend
 	}
 
 	req.Header.Set("Authorization", "Bearer "+asToken)
+	req.Header.Set("User-Agent", mautrix.DefaultUserAgent+" checkpoint sender")
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
