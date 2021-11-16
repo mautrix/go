@@ -4,7 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-package appservice
+package bridge
 
 import (
 	"bytes"
@@ -22,19 +22,19 @@ import (
 type MessageSendCheckpointStep string
 
 const (
-	ClientStep     MessageSendCheckpointStep = "CLIENT"
-	HomeserverStep MessageSendCheckpointStep = "HOMESERVER"
-	BridgeStep     MessageSendCheckpointStep = "BRIDGE"
-	RemoteStep     MessageSendCheckpointStep = "REMOTE"
-	CommandStep    MessageSendCheckpointStep = "COMMAND"
+	StepClient     MessageSendCheckpointStep = "CLIENT"
+	StepHomeserver MessageSendCheckpointStep = "HOMESERVER"
+	StepBridge     MessageSendCheckpointStep = "BRIDGE"
+	StepRemote     MessageSendCheckpointStep = "REMOTE"
+	StepCommand    MessageSendCheckpointStep = "COMMAND"
 )
 
 type MessageSendCheckpointStatus string
 
 const (
-	SuccesssStatus    MessageSendCheckpointStatus = "SUCCESS"
-	WillRetryStatus   MessageSendCheckpointStatus = "WILL_RETRY"
-	PermFailureStatus MessageSendCheckpointStatus = "PERM_FAILURE"
+	StatusSuccesss    MessageSendCheckpointStatus = "SUCCESS"
+	StatusWillRetry   MessageSendCheckpointStatus = "WILL_RETRY"
+	StatusPermFailure MessageSendCheckpointStatus = "PERM_FAILURE"
 )
 
 type MessageSendCheckpointReportedBy string
