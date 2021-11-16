@@ -218,9 +218,14 @@ func (as *AppService) consumeWebsocket(stopFunc func(error), ws *websocket.Conn)
 			return
 		}
 		if msg.Command == "" || msg.Command == "transaction" {
-			as.handleTransaction(&msg.Transaction)
+			if msg.TxnID == "" || !as.txnIDC.IsProcessed(msg.TxnID) {
+				as.handleTransaction(&msg.Transaction)
+				as.txnIDC.MarkProcessed(msg.TxnID)
+			} else {
+				as.Log.Debugln("Ignoring duplicate transaction with ID", msg.TxnID)
+			}
 			go func() {
-				err = as.SendWebsocket(msg.MakeResponse(true, nil))
+				err = as.SendWebsocket(msg.MakeResponse(true, map[string]interface{}{"txn_id": msg.TxnID}))
 				if err != nil {
 					as.Log.Warnfln("Failed to send response to %s %d: %v", msg.Command, msg.ReqID, err)
 				}
