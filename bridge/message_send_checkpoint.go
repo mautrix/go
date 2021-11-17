@@ -71,15 +71,9 @@ func NewMessageSendCheckpoint(eventID id.EventID, roomID id.RoomID, step Message
 }
 
 func NewErrorMessageSendCheckpoint(eventID id.EventID, roomID id.RoomID, step MessageSendCheckpointStep, eventType event.Type, err error) *MessageSendCheckpoint {
-	return &MessageSendCheckpoint{
-		EventID:    eventID,
-		RoomID:     roomID,
-		Step:       step,
-		Timestamp:  time.Now(),
-		Status:     StatusPermFailure,
-		EventType:  eventType,
-		ReportedBy: ReportedByBridge,
-	}
+	checkpoint := NewMessageSendCheckpoint(eventID, roomID, step, StatusPermFailure, eventType)
+	checkpoint.Info = err.Error()
+	return checkpoint
 }
 
 func GetCheckpointTypes() map[event.Type]interface{} {
