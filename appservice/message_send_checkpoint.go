@@ -26,6 +26,7 @@ const (
 	StepClient     MessageSendCheckpointStep = "CLIENT"
 	StepHomeserver MessageSendCheckpointStep = "HOMESERVER"
 	StepBridge     MessageSendCheckpointStep = "BRIDGE"
+	StepDecrypted  MessageSendCheckpointStep = "DECRYPTED"
 	StepRemote     MessageSendCheckpointStep = "REMOTE"
 	StepCommand    MessageSendCheckpointStep = "COMMAND"
 )
