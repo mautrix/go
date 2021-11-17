@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/appservice"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
@@ -93,33 +94,41 @@ func GetCheckpointTypes() map[event.Type]interface{} {
 	}
 }
 
-func (cp *MessageSendCheckpoint) Send(endpoint string, asToken string) error {
-	return SendCheckpoints(endpoint, asToken, []*MessageSendCheckpoint{cp})
+func (cp *MessageSendCheckpoint) Send(as *appservice.AppService) error {
+	return SendCheckpoints(as, []*MessageSendCheckpoint{cp})
 }
 
-type CheckpointsJson struct {
+type CheckpointsJSON struct {
 	Checkpoints []*MessageSendCheckpoint `json:"checkpoints"`
 }
 
-func SendCheckpoints(endpoint string, asToken string, checkpoints []*MessageSendCheckpoint) error {
-	if endpoint == "" {
+func SendCheckpoints(as *appservice.AppService, checkpoints []*MessageSendCheckpoint) error {
+	checkpointsJSON := CheckpointsJSON{Checkpoints: checkpoints}
+
+	if as.HasWebsocket() {
+		return as.SendWebsocket(&appservice.WebsocketRequest{
+			Command: "message_checkpoint",
+			Data:    checkpointsJSON,
+		})
+	}
+
+	if as.MessageSendCheckpointEndpoint == "" {
 		return nil
 	}
 
 	var body bytes.Buffer
-	checkpointsJson := CheckpointsJson{Checkpoints: checkpoints}
-	if err := json.NewEncoder(&body).Encode(checkpointsJson); err != nil {
+	if err := json.NewEncoder(&body).Encode(checkpointsJSON); err != nil {
 		return fmt.Errorf("failed to encode message send checkpoint JSON: %w", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, &body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, as.MessageSendCheckpointEndpoint, &body)
 	if err != nil {
 		return err
 	}
 
-	req.Header.Set("Authorization", "Bearer "+asToken)
+	req.Header.Set("Authorization", "Bearer "+as.Registration.AppToken)
 	req.Header.Set("User-Agent", mautrix.DefaultUserAgent+" checkpoint sender")
 	req.Header.Set("Content-Type", "application/json")
 
