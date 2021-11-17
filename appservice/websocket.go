@@ -125,7 +125,7 @@ func parseCloseError(err error) error {
 }
 
 func (as *AppService) HasWebsocket() bool {
-	return as.ws == nil
+	return as.ws != nil
 }
 
 func (as *AppService) SendWebsocket(cmd *WebsocketRequest) error {
