@@ -211,23 +211,18 @@ func (as *AppService) handleEvents(evts []*event.Event, defaultTypeClass event.T
 	}
 }
 
-func (as *AppService) sendMessageSendCheckpoint(evt *event.Event) error {
+func (as *AppService) sendMessageSendCheckpoint(evt *event.Event) {
 	endpoint := as.MessageSendCheckpointEndpoint
 	if endpoint == "" {
-		return nil
+		return
 	}
 
 	if _, ok := GetCheckpointTypes()[evt.Type]; !ok {
-		return nil
+		return
 	}
 
 	as.Log.Debugfln("Sending message send checkpoint for %s to API server", evt.ID)
-
-	checkpoint := NewMessageSendCheckpoint(evt.ID, evt.RoomID, StepBridge, StatusSuccesss, evt.Type)
-	if evt.Type == event.EventMessage {
-		checkpoint.MessageType = evt.Content.AsMessage().MsgType
-	}
-	return checkpoint.Send(as)
+	as.SendMessageSendCheckpoint(evt, StepBridge)
 }
 
 // GetRoom handles a /rooms GET call from the homeserver.
