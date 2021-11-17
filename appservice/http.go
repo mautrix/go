@@ -18,7 +18,6 @@ import (
 	"github.com/gorilla/mux"
 
 	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/bridge"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
@@ -218,17 +217,17 @@ func (as *AppService) sendMessageSendCheckpoint(evt *event.Event) error {
 		return nil
 	}
 
-	if _, ok := bridge.GetCheckpointTypes()[evt.Type]; !ok {
+	if _, ok := GetCheckpointTypes()[evt.Type]; !ok {
 		return nil
 	}
 
 	as.Log.Debugfln("Sending message send checkpoint for %s to API server", evt.ID)
 
-	checkpoint := bridge.NewMessageSendCheckpoint(evt.ID, evt.RoomID, bridge.StepBridge, bridge.StatusSuccesss, evt.Type)
+	checkpoint := NewMessageSendCheckpoint(evt.ID, evt.RoomID, StepBridge, StatusSuccesss, evt.Type)
 	if evt.Type == event.EventMessage {
 		checkpoint.MessageType = evt.Content.AsMessage().MsgType
 	}
-	return checkpoint.Send(endpoint, as.Registration.AppToken)
+	return checkpoint.Send(as)
 }
 
 // GetRoom handles a /rooms GET call from the homeserver.

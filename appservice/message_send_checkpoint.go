@@ -4,7 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-package bridge
+package appservice
 
 import (
 	"bytes"
@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/appservice"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
@@ -94,7 +93,7 @@ func GetCheckpointTypes() map[event.Type]interface{} {
 	}
 }
 
-func (cp *MessageSendCheckpoint) Send(as *appservice.AppService) error {
+func (cp *MessageSendCheckpoint) Send(as *AppService) error {
 	return SendCheckpoints(as, []*MessageSendCheckpoint{cp})
 }
 
@@ -102,11 +101,11 @@ type CheckpointsJSON struct {
 	Checkpoints []*MessageSendCheckpoint `json:"checkpoints"`
 }
 
-func SendCheckpoints(as *appservice.AppService, checkpoints []*MessageSendCheckpoint) error {
+func SendCheckpoints(as *AppService, checkpoints []*MessageSendCheckpoint) error {
 	checkpointsJSON := CheckpointsJSON{Checkpoints: checkpoints}
 
 	if as.HasWebsocket() {
-		return as.SendWebsocket(&appservice.WebsocketRequest{
+		return as.SendWebsocket(&WebsocketRequest{
 			Command: "message_checkpoint",
 			Data:    checkpointsJSON,
 		})
