@@ -58,6 +58,47 @@ type MessageSendCheckpoint struct {
 	Info        string                          `json:"info"`
 }
 
+func NewMessageSendCheckpoint(eventID id.EventID, roomID id.RoomID, step MessageSendCheckpointStep, status MessageSendCheckpointStatus, eventType event.Type) *MessageSendCheckpoint {
+	return &MessageSendCheckpoint{
+		EventID:    eventID,
+		RoomID:     roomID,
+		Step:       step,
+		Timestamp:  time.Now(),
+		Status:     status,
+		EventType:  eventType,
+		ReportedBy: ReportedByBridge,
+	}
+}
+
+func NewErrorMessageSendCheckpoint(eventID id.EventID, roomID id.RoomID, step MessageSendCheckpointStep, eventType event.Type, err error) *MessageSendCheckpoint {
+	return &MessageSendCheckpoint{
+		EventID:    eventID,
+		RoomID:     roomID,
+		Step:       step,
+		Timestamp:  time.Now(),
+		Status:     StatusPermFailure,
+		EventType:  eventType,
+		ReportedBy: ReportedByBridge,
+	}
+}
+
+func GetCheckpointTypes() map[event.Type]interface{} {
+	return map[event.Type]interface{}{
+		event.EventRedaction:   struct{}{},
+		event.EventMessage:     struct{}{},
+		event.EventEncrypted:   struct{}{},
+		event.EventSticker:     struct{}{},
+		event.EventReaction:    struct{}{},
+		event.CallInvite:       struct{}{},
+		event.CallCandidates:   struct{}{},
+		event.CallSelectAnswer: struct{}{},
+		event.CallAnswer:       struct{}{},
+		event.CallHangup:       struct{}{},
+		event.CallReject:       struct{}{},
+		event.CallNegotiate:    struct{}{},
+	}
+}
+
 func (cp *MessageSendCheckpoint) Send(endpoint string, asToken string) error {
 	return SendCheckpoints(endpoint, asToken, []*MessageSendCheckpoint{cp})
 }

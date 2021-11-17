@@ -18,6 +18,7 @@ import (
 	"github.com/gorilla/mux"
 
 	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/bridge"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
@@ -197,6 +198,9 @@ func (as *AppService) handleEvents(evts []*event.Event, defaultTypeClass event.T
 		} else if err != nil {
 			as.Log.Debugfln("Failed to parse content of %s (type %s): %v", evt.ID, evt.Type.Type, err)
 		}
+
+		go as.sendMessageSendCheckpoint(evt)
+
 		if evt.Type.IsState() {
 			// TODO remove this check after https://github.com/matrix-org/synapse/pull/11265
 			historical, ok := evt.Content.Raw["org.matrix.msc2716.historical"].(bool)
@@ -206,6 +210,25 @@ func (as *AppService) handleEvents(evts []*event.Event, defaultTypeClass event.T
 		}
 		as.Events <- evt
 	}
+}
+
+func (as *AppService) sendMessageSendCheckpoint(evt *event.Event) error {
+	endpoint := as.MessageSendCheckpointEndpoint
+	if endpoint == "" {
+		return nil
+	}
+
+	if _, ok := bridge.GetCheckpointTypes()[evt.Type]; !ok {
+		return nil
+	}
+
+	as.Log.Debugfln("Sending message send checkpoint for %s to API server", evt.ID)
+
+	checkpoint := bridge.NewMessageSendCheckpoint(evt.ID, evt.RoomID, bridge.StepBridge, bridge.StatusSuccesss, evt.Type)
+	if evt.Type == event.EventMessage {
+		checkpoint.MessageType = evt.Content.AsMessage().MsgType
+	}
+	return checkpoint.Send(endpoint, as.Registration.AppToken)
 }
 
 // GetRoom handles a /rooms GET call from the homeserver.
