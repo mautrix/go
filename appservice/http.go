@@ -217,7 +217,7 @@ func (as *AppService) sendMessageSendCheckpoint(evt *event.Event) {
 		return
 	}
 
-	if _, ok := GetCheckpointTypes()[evt.Type]; !ok {
+	if _, ok := CheckpointTypes[evt.Type]; !ok {
 		return
 	}
 

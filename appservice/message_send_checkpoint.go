@@ -55,8 +55,23 @@ type MessageSendCheckpoint struct {
 	EventType   event.Type                      `json:"event_type"`
 	ReportedBy  MessageSendCheckpointReportedBy `json:"reported_by"`
 	RetryNum    int                             `json:"retry_num"`
-	MessageType event.MessageType               `json:"message_type"`
-	Info        string                          `json:"info"`
+	MessageType event.MessageType               `json:"message_type,omitempty"`
+	Info        string                          `json:"info,omitempty"`
+}
+
+var CheckpointTypes = map[event.Type]interface{}{
+	event.EventRedaction:   struct{}{},
+	event.EventMessage:     struct{}{},
+	event.EventEncrypted:   struct{}{},
+	event.EventSticker:     struct{}{},
+	event.EventReaction:    struct{}{},
+	event.CallInvite:       struct{}{},
+	event.CallCandidates:   struct{}{},
+	event.CallSelectAnswer: struct{}{},
+	event.CallAnswer:       struct{}{},
+	event.CallHangup:       struct{}{},
+	event.CallReject:       struct{}{},
+	event.CallNegotiate:    struct{}{},
 }
 
 func NewMessageSendCheckpoint(evt *event.Event, step MessageSendCheckpointStep, status MessageSendCheckpointStatus) *MessageSendCheckpoint {
@@ -88,23 +103,6 @@ func (as *AppService) SendErrorMessageSendCheckpoint(evt *event.Event, step Mess
 	checkpoint := NewMessageSendCheckpoint(evt, step, status)
 	checkpoint.Info = err.Error()
 	go checkpoint.Send(as)
-}
-
-func GetCheckpointTypes() map[event.Type]interface{} {
-	return map[event.Type]interface{}{
-		event.EventRedaction:   struct{}{},
-		event.EventMessage:     struct{}{},
-		event.EventEncrypted:   struct{}{},
-		event.EventSticker:     struct{}{},
-		event.EventReaction:    struct{}{},
-		event.CallInvite:       struct{}{},
-		event.CallCandidates:   struct{}{},
-		event.CallSelectAnswer: struct{}{},
-		event.CallAnswer:       struct{}{},
-		event.CallHangup:       struct{}{},
-		event.CallReject:       struct{}{},
-		event.CallNegotiate:    struct{}{},
-	}
 }
 
 func (cp *MessageSendCheckpoint) Send(as *AppService) error {
