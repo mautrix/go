@@ -197,6 +197,9 @@ func (as *AppService) handleEvents(evts []*event.Event, defaultTypeClass event.T
 		} else if err != nil {
 			as.Log.Debugfln("Failed to parse content of %s (type %s): %v", evt.ID, evt.Type.Type, err)
 		}
+
+		go as.sendMessageSendCheckpoint(evt)
+
 		if evt.Type.IsState() {
 			// TODO remove this check after https://github.com/matrix-org/synapse/pull/11265
 			historical, ok := evt.Content.Raw["org.matrix.msc2716.historical"].(bool)
@@ -206,6 +209,20 @@ func (as *AppService) handleEvents(evts []*event.Event, defaultTypeClass event.T
 		}
 		as.Events <- evt
 	}
+}
+
+func (as *AppService) sendMessageSendCheckpoint(evt *event.Event) {
+	endpoint := as.MessageSendCheckpointEndpoint
+	if endpoint == "" {
+		return
+	}
+
+	if _, ok := CheckpointTypes[evt.Type]; !ok {
+		return
+	}
+
+	as.Log.Debugfln("Sending message send checkpoint for %s to API server", evt.ID)
+	as.SendMessageSendCheckpoint(evt, StepBridge)
 }
 
 // GetRoom handles a /rooms GET call from the homeserver.
