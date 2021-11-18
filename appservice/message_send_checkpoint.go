@@ -50,7 +50,7 @@ type MessageSendCheckpoint struct {
 	EventID     id.EventID                      `json:"event_id"`
 	RoomID      id.RoomID                       `json:"room_id"`
 	Step        MessageSendCheckpointStep       `json:"step"`
-	Timestamp   time.Time                       `json:"timestamp"`
+	Timestamp   int64                           `json:"timestamp"`
 	Status      MessageSendCheckpointStatus     `json:"status"`
 	EventType   event.Type                      `json:"event_type"`
 	ReportedBy  MessageSendCheckpointReportedBy `json:"reported_by"`
@@ -79,7 +79,7 @@ func NewMessageSendCheckpoint(evt *event.Event, step MessageSendCheckpointStep, 
 		EventID:    evt.ID,
 		RoomID:     evt.RoomID,
 		Step:       step,
-		Timestamp:  time.Now(),
+		Timestamp:  time.Now().UnixNano() / int64(time.Millisecond),
 		Status:     status,
 		EventType:  evt.Type,
 		ReportedBy: ReportedByBridge,
