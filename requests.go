@@ -125,6 +125,7 @@ type ReqInvite3PID struct {
 
 // ReqInviteUser is the JSON request for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-invite
 type ReqInviteUser struct {
+	Reason string    `json:"reason,omitempty"`
 	UserID id.UserID `json:"user_id"`
 }
 
@@ -142,6 +143,7 @@ type ReqBanUser struct {
 
 // ReqUnbanUser is the JSON request for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-unban
 type ReqUnbanUser struct {
+	Reason string    `json:"reason,omitempty"`
 	UserID id.UserID `json:"user_id"`
 }
 
