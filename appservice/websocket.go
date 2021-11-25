@@ -72,11 +72,12 @@ const (
 )
 
 var (
-	WebsocketManualStop   = errors.New("the websocket was disconnected manually")
-	WebsocketOverridden   = errors.New("a new call to StartWebsocket overrode the previous connection")
-	WebsocketUnknownError = errors.New("an unknown error occurred")
+	ErrWebsocketManualStop = errors.New("the websocket was disconnected manually")
+	ErrWebsocketOverridden = errors.New("a new call to StartWebsocket overrode the previous connection")
+	ErrWebsocketUnknownError = errors.New("an unknown error occurred")
 
-	WebsocketNotConnected = errors.New("websocket not connected")
+	ErrWebsocketNotConnected = errors.New("websocket not connected")
+	ErrWebsocketClosed       = errors.New("websocket closed before response received")
 )
 
 func (mwcc MeowWebsocketCloseCode) String() string {
@@ -132,7 +133,7 @@ func (as *AppService) SendWebsocket(cmd *WebsocketRequest) error {
 	if cmd == nil {
 		return nil
 	} else if as.ws == nil {
-		return WebsocketNotConnected
+		return ErrWebsocketNotConnected
 	}
 	as.wsWriteLock.Lock()
 	defer as.wsWriteLock.Unlock()
@@ -141,6 +142,15 @@ func (as *AppService) SendWebsocket(cmd *WebsocketRequest) error {
 	}
 	_ = as.ws.SetWriteDeadline(time.Now().Add(cmd.Deadline))
 	return as.ws.WriteJSON(cmd)
+}
+
+func (as *AppService) clearWebsocketResponseWaiters() {
+	as.websocketRequestsLock.Lock()
+	for _, waiter := range as.websocketRequests {
+		waiter <- &WebsocketCommand{Command: "__websocket_closed"}
+	}
+	as.websocketRequests = make(map[int]chan<- *WebsocketCommand)
+	as.websocketRequestsLock.Unlock()
 }
 
 func (as *AppService) addWebsocketResponseWaiter(reqID int, waiter chan<- *WebsocketCommand) {
@@ -179,7 +189,9 @@ func (as *AppService) RequestWebsocket(ctx context.Context, cmd *WebsocketReques
 	}
 	select {
 	case resp := <-respChan:
-		if resp.Command == "error" {
+		if resp.Command == "__websocket_closed" {
+			return ErrWebsocketClosed
+		} else if resp.Command == "error" {
 			var respErr ErrorResponse
 			err = json.Unmarshal(resp.Data, &respErr)
 			if err != nil {
@@ -212,7 +224,7 @@ func (as *AppService) SetWebsocketCommandHandler(cmd string, handler WebsocketHa
 }
 
 func (as *AppService) consumeWebsocket(stopFunc func(error), ws *websocket.Conn) {
-	defer stopFunc(WebsocketUnknownError)
+	defer stopFunc(ErrWebsocketUnknownError)
 	for {
 		var msg WebsocketMessage
 		err := ws.ReadJSON(&msg)
@@ -300,12 +312,12 @@ func (as *AppService) StartWebsocket(baseURL string, onConnect func()) error {
 		return fmt.Errorf("failed to open websocket: %w", err)
 	}
 	if as.StopWebsocket != nil {
-		as.StopWebsocket(WebsocketOverridden)
+		as.StopWebsocket(ErrWebsocketOverridden)
 	}
 	closeChan := make(chan error)
-	closeChanSync := sync.Once{}
+	closeChanOnce := sync.Once{}
 	stopFunc := func(err error) {
-		closeChanSync.Do(func() {
+		closeChanOnce.Do(func() {
 			closeChan <- err
 		})
 	}
@@ -323,6 +335,7 @@ func (as *AppService) StartWebsocket(baseURL string, onConnect func()) error {
 	closeErr := <-closeChan
 
 	if as.ws == ws {
+		as.clearWebsocketResponseWaiters()
 		as.ws = nil
 	}
 
