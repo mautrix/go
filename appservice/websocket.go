@@ -72,8 +72,8 @@ const (
 )
 
 var (
-	ErrWebsocketManualStop = errors.New("the websocket was disconnected manually")
-	ErrWebsocketOverridden = errors.New("a new call to StartWebsocket overrode the previous connection")
+	ErrWebsocketManualStop   = errors.New("the websocket was disconnected manually")
+	ErrWebsocketOverridden   = errors.New("a new call to StartWebsocket overrode the previous connection")
 	ErrWebsocketUnknownError = errors.New("an unknown error occurred")
 
 	ErrWebsocketNotConnected = errors.New("websocket not connected")
