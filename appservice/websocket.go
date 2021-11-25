@@ -322,6 +322,10 @@ func (as *AppService) StartWebsocket(baseURL string, onConnect func()) error {
 
 	closeErr := <-closeChan
 
+	if as.ws == ws {
+		as.ws = nil
+	}
+
 	err = ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseGoingAway, ""))
 	if err != nil && !errors.Is(err, websocket.ErrCloseSent) {
 		as.Log.Warnln("Error writing close message to websocket:", err)
