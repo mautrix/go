@@ -11,8 +11,6 @@ package crypto
 
 import (
 	"context"
-	"math/rand"
-	"strconv"
 
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
@@ -39,39 +37,20 @@ var (
 
 // RequestRoomKey sends a key request for a room to the current user's devices. If the context is cancelled, then so is the key request.
 // Returns a bool channel that will get notified either when the key is received or the request is cancelled.
+//
+// Deprecated: this only supports a single key request target, so the whole automatic cancelling feature isn't very useful.
 func (mach *OlmMachine) RequestRoomKey(ctx context.Context, toUser id.UserID, toDevice id.DeviceID,
 	roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID) (chan bool, error) {
 
-	requestID := strconv.Itoa(rand.Int())
+	requestID := mach.Client.TxnID()
 	keyResponseReceived := make(chan struct{})
-	// store the channel where we will be notified about responses for this session ID
 	mach.roomKeyRequestFilled.Store(sessionID, keyResponseReceived)
-	// request the keys for this session
-	reqEvtContent := &event.Content{
-		Parsed: event.RoomKeyRequestEventContent{
-			Action: event.KeyRequestActionRequest,
-			Body: event.RequestedKeyInfo{
-				Algorithm: id.AlgorithmMegolmV1,
-				RoomID:    roomID,
-				SenderKey: senderKey,
-				SessionID: sessionID,
-			},
-			RequestID:          requestID,
-			RequestingDeviceID: mach.Client.DeviceID,
-		},
-	}
 
-	toDeviceReq := &mautrix.ReqSendToDevice{
-		Messages: map[id.UserID]map[id.DeviceID]*event.Content{
-			toUser: {
-				toDevice: reqEvtContent,
-			},
-		},
-	}
-	// send messages to the devices
-	if _, err := mach.Client.SendToDevice(event.ToDeviceRoomKeyRequest, toDeviceReq); err != nil {
+	err := mach.SendRoomKeyRequest(roomID, senderKey, sessionID, requestID, map[id.UserID][]id.DeviceID{toUser: {toDevice}})
+	if err != nil {
 		return nil, err
 	}
+
 	resChan := make(chan bool, 1)
 	go func() {
 		select {
@@ -107,6 +86,46 @@ func (mach *OlmMachine) RequestRoomKey(ctx context.Context, toUser id.UserID, to
 		mach.Client.SendToDevice(event.ToDeviceRoomKeyRequest, toDeviceCancel)
 	}()
 	return resChan, nil
+}
+
+// SendRoomKeyRequest sends a key request for the given key (identified by the room ID, sender key and session ID) to the given users.
+//
+// The request ID parameter is optional. If it's empty, a random ID will be generated.
+//
+// This function does not wait for the keys to arrive. You can use WaitForSession to wait for the session to
+// arrive (in any way, not just as a reply to this request). There's also RequestRoomKey which waits for a response
+// to the specific key request, but currently it only supports a single target device and is therefore deprecated.
+// A future function may properly support multiple targets and automatically canceling the other requests when receiving
+// the first response.
+func (mach *OlmMachine) SendRoomKeyRequest(roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID, requestID string, users map[id.UserID][]id.DeviceID) error {
+	if len(requestID) == 0 {
+		requestID = mach.Client.TxnID()
+	}
+	requestEvent := &event.Content{
+		Parsed: &event.RoomKeyRequestEventContent{
+			Action: event.KeyRequestActionRequest,
+			Body: event.RequestedKeyInfo{
+				Algorithm: id.AlgorithmMegolmV1,
+				RoomID:    roomID,
+				SenderKey: senderKey,
+				SessionID: sessionID,
+			},
+			RequestID:          requestID,
+			RequestingDeviceID: mach.Client.DeviceID,
+		},
+	}
+
+	toDeviceReq := &mautrix.ReqSendToDevice{
+		Messages: make(map[id.UserID]map[id.DeviceID]*event.Content, len(users)),
+	}
+	for user, devices := range users {
+		toDeviceReq.Messages[user] = make(map[id.DeviceID]*event.Content, len(devices))
+		for _, device := range devices {
+			toDeviceReq.Messages[user][device] = requestEvent
+		}
+	}
+	_, err := mach.Client.SendToDevice(event.ToDeviceRoomKeyRequest, toDeviceReq)
+	return err
 }
 
 func (mach *OlmMachine) importForwardedRoomKey(evt *DecryptedOlmEvent, content *event.ForwardedRoomKeyEventContent) bool {
