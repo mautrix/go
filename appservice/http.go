@@ -199,7 +199,7 @@ func (as *AppService) handleEvents(evts []*event.Event, defaultTypeClass event.T
 		}
 
 		if _, ok := CheckpointTypes[evt.Type]; ok {
-			go as.SendMessageSendCheckpoint(evt, StepBridge)
+			go as.SendMessageSendCheckpoint(evt, StepBridge, 0)
 		}
 
 		if evt.Type.IsState() {

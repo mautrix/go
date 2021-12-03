@@ -74,7 +74,7 @@ var CheckpointTypes = map[event.Type]interface{}{
 	event.CallNegotiate:    struct{}{},
 }
 
-func NewMessageSendCheckpoint(evt *event.Event, step MessageSendCheckpointStep, status MessageSendCheckpointStatus) *MessageSendCheckpoint {
+func NewMessageSendCheckpoint(evt *event.Event, step MessageSendCheckpointStep, status MessageSendCheckpointStatus, retryNum int) *MessageSendCheckpoint {
 	checkpoint := MessageSendCheckpoint{
 		EventID:    evt.ID,
 		RoomID:     evt.RoomID,
@@ -83,6 +83,7 @@ func NewMessageSendCheckpoint(evt *event.Event, step MessageSendCheckpointStep, 
 		Status:     status,
 		EventType:  evt.Type,
 		ReportedBy: ReportedByBridge,
+		RetryNum:   retryNum,
 	}
 	if evt.Type == event.EventMessage {
 		checkpoint.MessageType = evt.Content.AsMessage().MsgType
@@ -90,17 +91,17 @@ func NewMessageSendCheckpoint(evt *event.Event, step MessageSendCheckpointStep, 
 	return &checkpoint
 }
 
-func (as *AppService) SendMessageSendCheckpoint(evt *event.Event, step MessageSendCheckpointStep) {
-	checkpoint := NewMessageSendCheckpoint(evt, step, StatusSuccesss)
+func (as *AppService) SendMessageSendCheckpoint(evt *event.Event, step MessageSendCheckpointStep, retryNum int) {
+	checkpoint := NewMessageSendCheckpoint(evt, step, StatusSuccesss, retryNum)
 	go checkpoint.Send(as)
 }
 
-func (as *AppService) SendErrorMessageSendCheckpoint(evt *event.Event, step MessageSendCheckpointStep, err error, permanent bool) {
+func (as *AppService) SendErrorMessageSendCheckpoint(evt *event.Event, step MessageSendCheckpointStep, err error, permanent bool, retryNum int) {
 	status := StatusWillRetry
 	if permanent {
 		status = StatusPermFailure
 	}
-	checkpoint := NewMessageSendCheckpoint(evt, step, status)
+	checkpoint := NewMessageSendCheckpoint(evt, step, status, retryNum)
 	checkpoint.Info = err.Error()
 	go checkpoint.Send(as)
 }
