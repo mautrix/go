@@ -47,15 +47,25 @@ func (mach *OlmMachine) encryptOlmEvent(session *OlmSession, recipient *DeviceId
 	}
 }
 
+func (mach *OlmMachine) shouldCreateNewSession(identityKey id.IdentityKey) bool {
+	if !mach.CryptoStore.HasSession(identityKey) {
+		return true
+	}
+	mach.devicesToUnwedgeLock.Lock()
+	_, shouldUnwedge := mach.devicesToUnwedge[identityKey]
+	if shouldUnwedge {
+		delete(mach.devicesToUnwedge, identityKey)
+	}
+	mach.devicesToUnwedgeLock.Unlock()
+	return shouldUnwedge
+}
+
 func (mach *OlmMachine) createOutboundSessions(input map[id.UserID]map[id.DeviceID]*DeviceIdentity) error {
 	request := make(mautrix.OneTimeKeysRequest)
 	for userID, devices := range input {
 		request[userID] = make(map[id.DeviceID]id.KeyAlgorithm)
 		for deviceID, identity := range devices {
-			if !mach.CryptoStore.HasSession(identity.IdentityKey) {
-				request[userID][deviceID] = id.KeyAlgorithmSignedCurve25519
-			} else if _, shouldUnwedge := mach.devicesToUnwedge.LoadAndDelete(identity.IdentityKey); shouldUnwedge {
-				mach.Log.Trace("Adding %s/%s to claim key request for unwedging", userID, deviceID)
+			if mach.shouldCreateNewSession(identity.IdentityKey) {
 				request[userID][deviceID] = id.KeyAlgorithmSignedCurve25519
 			}
 		}

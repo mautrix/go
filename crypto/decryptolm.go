@@ -213,7 +213,9 @@ func (mach *OlmMachine) unwedgeDevice(sender id.UserID, senderKey id.SenderKey) 
 	}
 
 	mach.Log.Debug("Creating new Olm session with %s/%s (key: %s)", sender, deviceIdentity.DeviceID, senderKey)
-	mach.devicesToUnwedge.Store(senderKey, true)
+	mach.devicesToUnwedgeLock.Lock()
+	mach.devicesToUnwedge[senderKey] = true
+	mach.devicesToUnwedgeLock.Unlock()
 	err = mach.SendEncryptedToDevice(deviceIdentity, event.ToDeviceDummy, event.Content{})
 	if err != nil {
 		mach.Log.Error("Failed to send dummy event to unwedge session with %s/%s: %v", sender, senderKey, err)
