@@ -138,6 +138,8 @@ type Store interface {
 	PutDevice(id.UserID, *DeviceIdentity) error
 	// PutDevices overrides the stored device list for the given user with the given list.
 	PutDevices(id.UserID, map[id.DeviceID]*DeviceIdentity) error
+	// FindDeviceByKey finds a specific device by its identity key.
+	FindDeviceByKey(id.UserID, id.IdentityKey) (*DeviceIdentity, error)
 	// FilterTrackedUsers returns a filtered version of the given list that only includes user IDs whose device lists
 	// have been stored with PutDevices. A user is considered tracked even if the PutDevices list was empty.
 	FilterTrackedUsers([]id.UserID) []id.UserID
@@ -469,6 +471,21 @@ func (gs *GobStore) GetDevice(userID id.UserID, deviceID id.DeviceID) (*DeviceId
 		return nil, nil
 	}
 	return device, nil
+}
+
+func (gs *GobStore) FindDeviceByKey(userID id.UserID, identityKey id.IdentityKey) (*DeviceIdentity, error) {
+	gs.lock.RLock()
+	defer gs.lock.RUnlock()
+	devices, ok := gs.Devices[userID]
+	if !ok {
+		return nil, nil
+	}
+	for _, device := range devices {
+		if device.IdentityKey == identityKey {
+			return device, nil
+		}
+	}
+	return nil, nil
 }
 
 func (gs *GobStore) PutDevice(userID id.UserID, device *DeviceIdentity) error {

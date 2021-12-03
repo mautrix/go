@@ -28,8 +28,8 @@ type EncryptionEventContent struct {
 type EncryptedEventContent struct {
 	Algorithm  id.Algorithm    `json:"algorithm"`
 	SenderKey  id.SenderKey    `json:"sender_key"`
-	DeviceID   id.DeviceID     `json:"device_id,omitempty"`
-	SessionID  id.SessionID    `json:"session_id,omitempty"`
+	DeviceID   id.DeviceID     `json:"device_id,omitempty"`  // Only present for Megolm events
+	SessionID  id.SessionID    `json:"session_id,omitempty"` // Only present for Megolm events
 	Ciphertext json.RawMessage `json:"ciphertext"`
 
 	MegolmCiphertext []byte         `json:"-"`

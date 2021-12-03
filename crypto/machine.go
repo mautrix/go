@@ -333,6 +333,24 @@ func (mach *OlmMachine) GetOrFetchDevice(userID id.UserID, deviceID id.DeviceID)
 	return nil, fmt.Errorf("didn't get any devices for %s", userID)
 }
 
+// GetOrFetchDeviceByKey attempts to retrieve the device identity for the device with the given identity key from the
+// store and if it's not found it asks the server for it. This returns nil if the server doesn't return a device with
+// the given identity key.
+func (mach *OlmMachine) GetOrFetchDeviceByKey(userID id.UserID, identityKey id.IdentityKey) (*DeviceIdentity, error) {
+	deviceIdentity, err := mach.CryptoStore.FindDeviceByKey(userID, identityKey)
+	if err != nil || deviceIdentity != nil {
+		return deviceIdentity, err
+	}
+	mach.Log.Debug("Didn't find identity of %s/%s in crypto store, fetching from server", userID, identityKey)
+	devices := mach.LoadDevices(userID)
+	for _, device := range devices {
+		if device.IdentityKey == identityKey {
+			return device, nil
+		}
+	}
+	return nil, nil
+}
+
 // SendEncryptedToDevice sends an Olm-encrypted event to the given user device.
 func (mach *OlmMachine) SendEncryptedToDevice(device *DeviceIdentity, evtType event.Type, content event.Content) error {
 	if err := mach.createOutboundSessions(map[id.UserID]map[id.DeviceID]*DeviceIdentity{

@@ -54,7 +54,7 @@ func (mach *OlmMachine) decryptOlmEvent(evt *event.Event) (*DecryptedOlmEvent, e
 	if !ok {
 		return nil, NotEncryptedForMe
 	}
-	decrypted, err := mach.decryptAndParseOlmCiphertext(evt.Sender, content.DeviceID, content.SenderKey, ownContent.Type, ownContent.Body)
+	decrypted, err := mach.decryptAndParseOlmCiphertext(evt.Sender, content.SenderKey, ownContent.Type, ownContent.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -66,12 +66,12 @@ type OlmEventKeys struct {
 	Ed25519 id.Ed25519 `json:"ed25519"`
 }
 
-func (mach *OlmMachine) decryptAndParseOlmCiphertext(sender id.UserID, deviceID id.DeviceID, senderKey id.SenderKey, olmType id.OlmMsgType, ciphertext string) (*DecryptedOlmEvent, error) {
+func (mach *OlmMachine) decryptAndParseOlmCiphertext(sender id.UserID, senderKey id.SenderKey, olmType id.OlmMsgType, ciphertext string) (*DecryptedOlmEvent, error) {
 	if olmType != id.OlmMsgTypePreKey && olmType != id.OlmMsgTypeMsg {
 		return nil, UnsupportedOlmMessageType
 	}
 
-	plaintext, err := mach.tryDecryptOlmCiphertext(sender, deviceID, senderKey, olmType, ciphertext)
+	plaintext, err := mach.tryDecryptOlmCiphertext(sender, senderKey, olmType, ciphertext)
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +99,7 @@ func (mach *OlmMachine) decryptAndParseOlmCiphertext(sender id.UserID, deviceID 
 	return &olmEvt, nil
 }
 
-func (mach *OlmMachine) tryDecryptOlmCiphertext(sender id.UserID, deviceID id.DeviceID, senderKey id.SenderKey, olmType id.OlmMsgType, ciphertext string) ([]byte, error) {
+func (mach *OlmMachine) tryDecryptOlmCiphertext(sender id.UserID, senderKey id.SenderKey, olmType id.OlmMsgType, ciphertext string) ([]byte, error) {
 	mach.olmLock.Lock()
 	defer mach.olmLock.Unlock()
 
@@ -107,7 +107,7 @@ func (mach *OlmMachine) tryDecryptOlmCiphertext(sender id.UserID, deviceID id.De
 	if err != nil {
 		if err == DecryptionFailedWithMatchingSession {
 			mach.Log.Warn("Found matching session yet decryption failed for sender %s with key %s", sender, senderKey)
-			go mach.unwedgeDevice(sender, deviceID, senderKey)
+			go mach.unwedgeDevice(sender, senderKey)
 		}
 		return nil, fmt.Errorf("failed to decrypt olm event: %w", err)
 	}
@@ -122,17 +122,17 @@ func (mach *OlmMachine) tryDecryptOlmCiphertext(sender id.UserID, deviceID id.De
 	// New sessions can only be created if it's a prekey message, we can't decrypt the message
 	// if it isn't one at this point in time anymore, so return early.
 	if olmType != id.OlmMsgTypePreKey {
-		go mach.unwedgeDevice(sender, deviceID, senderKey)
+		go mach.unwedgeDevice(sender, senderKey)
 		return nil, DecryptionFailedForNormalMessage
 	}
 
-	mach.Log.Trace("Trying to create inbound session for %s/%s", sender, deviceID)
+	mach.Log.Trace("Trying to create inbound session for %s/%s", sender, senderKey)
 	session, err := mach.createInboundSession(senderKey, ciphertext)
 	if err != nil {
-		go mach.unwedgeDevice(sender, deviceID, senderKey)
+		go mach.unwedgeDevice(sender, senderKey)
 		return nil, fmt.Errorf("failed to create new session from prekey message: %w", err)
 	}
-	mach.Log.Debug("Created inbound olm session %s for %s/%s (sender key: %s)", session.ID(), sender, deviceID, senderKey)
+	mach.Log.Debug("Created inbound olm session %s for %s/%s", session.ID(), sender, senderKey)
 
 	plaintext, err = session.Decrypt(ciphertext, olmType)
 	if err != nil {
@@ -191,25 +191,31 @@ func (mach *OlmMachine) createInboundSession(senderKey id.SenderKey, ciphertext 
 
 const MinUnwedgeInterval = 1 * time.Hour
 
-func (mach *OlmMachine) unwedgeDevice(sender id.UserID, deviceID id.DeviceID, senderKey id.SenderKey) {
+func (mach *OlmMachine) unwedgeDevice(sender id.UserID, senderKey id.SenderKey) {
 	mach.recentlyUnwedgedLock.Lock()
 	prevUnwedge, ok := mach.recentlyUnwedged[senderKey]
 	delta := time.Now().Sub(prevUnwedge)
 	if ok && delta < MinUnwedgeInterval {
-		mach.Log.Debug("Not creating new Olm session with %s/%s, previous recreation was %s ago", sender, deviceID, delta)
+		mach.Log.Debug("Not creating new Olm session with %s/%s, previous recreation was %s ago", sender, senderKey, delta)
 		mach.recentlyUnwedgedLock.Unlock()
 		return
 	}
 	mach.recentlyUnwedged[senderKey] = time.Now()
 	mach.recentlyUnwedgedLock.Unlock()
-	mach.Log.Debug("Creating new Olm session with %s/%s...", sender, deviceID)
-	mach.devicesToUnwedge.Store(senderKey, true)
-	err := mach.SendEncryptedToDevice(&DeviceIdentity{
-		UserID:      sender,
-		DeviceID:    deviceID,
-		IdentityKey: senderKey,
-	}, event.ToDeviceDummy, event.Content{})
+
+	deviceIdentity, err := mach.GetOrFetchDeviceByKey(sender, senderKey)
 	if err != nil {
-		mach.Log.Error("Failed to send dummy event to unwedge session with %s/%s: %v", sender, deviceID, err)
+		mach.Log.Error("Failed to find device info by identity key: %v", err)
+		return
+	} else if deviceIdentity == nil {
+		mach.Log.Warn("Didn't find identity of %s/%s, can't unwedge session", sender, senderKey)
+		return
+	}
+
+	mach.Log.Debug("Creating new Olm session with %s/%s (key: %s)", sender, deviceIdentity.DeviceID, senderKey)
+	mach.devicesToUnwedge.Store(senderKey, true)
+	err = mach.SendEncryptedToDevice(deviceIdentity, event.ToDeviceDummy, event.Content{})
+	if err != nil {
+		mach.Log.Error("Failed to send dummy event to unwedge session with %s/%s: %v", sender, senderKey, err)
 	}
 }
