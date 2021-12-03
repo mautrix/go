@@ -60,6 +60,7 @@ var TypeMap = map[Type]reflect.Type{
 	ToDeviceRoomKeyRequest:   reflect.TypeOf(RoomKeyRequestEventContent{}),
 	ToDeviceEncrypted:        reflect.TypeOf(EncryptedEventContent{}),
 	ToDeviceRoomKeyWithheld:  reflect.TypeOf(RoomKeyWithheldEventContent{}),
+	ToDeviceDummy:            reflect.TypeOf(DummyEventContent{}),
 
 	ToDeviceVerificationStart:   reflect.TypeOf(VerificationStartEventContent{}),
 	ToDeviceVerificationAccept:  reflect.TypeOf(VerificationAcceptEventContent{}),

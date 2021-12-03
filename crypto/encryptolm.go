@@ -54,6 +54,9 @@ func (mach *OlmMachine) createOutboundSessions(input map[id.UserID]map[id.Device
 		for deviceID, identity := range devices {
 			if !mach.CryptoStore.HasSession(identity.IdentityKey) {
 				request[userID][deviceID] = id.KeyAlgorithmSignedCurve25519
+			} else if _, shouldUnwedge := mach.devicesToUnwedge.LoadAndDelete(identity.IdentityKey); shouldUnwedge {
+				mach.Log.Trace("Adding %s/%s to claim key request for unwedging", userID, deviceID)
+				request[userID][deviceID] = id.KeyAlgorithmSignedCurve25519
 			}
 		}
 		if len(request[userID]) == 0 {
@@ -77,7 +80,7 @@ func (mach *OlmMachine) createOutboundSessions(input map[id.UserID]map[id.Device
 			for keyID, oneTimeKey = range oneTimeKeys {
 				break
 			}
-			keyAlg, _ := keyID.Parse()
+			keyAlg, keyIndex := keyID.Parse()
 			if keyAlg != id.KeyAlgorithmSignedCurve25519 {
 				mach.Log.Warn("Unexpected key ID algorithm in one-time key response for %s of %s: %s", deviceID, userID, keyID)
 				continue
@@ -94,6 +97,8 @@ func (mach *OlmMachine) createOutboundSessions(input map[id.UserID]map[id.Device
 				err = mach.CryptoStore.AddSession(identity.IdentityKey, wrapped)
 				if err != nil {
 					mach.Log.Error("Failed to store created session for %s of %s: %v", deviceID, userID, err)
+				} else {
+					mach.Log.Debug("Created new Olm session with %s/%s (OTK ID: %d)", userID, deviceID, keyIndex)
 				}
 			}
 		}

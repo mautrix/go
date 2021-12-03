@@ -41,7 +41,6 @@ func (mach *OlmMachine) DecryptMegolmEvent(evt *event.Event) (*event.Event, erro
 	if err != nil {
 		return nil, fmt.Errorf("failed to get group session: %w", err)
 	} else if sess == nil {
-		mach.checkIfWedged(evt)
 		return nil, fmt.Errorf("%w (ID %s)", NoSessionFound, content.SessionID)
 	}
 	plaintext, messageIndex, err := sess.Internal.Decrypt(content.MegolmCiphertext)

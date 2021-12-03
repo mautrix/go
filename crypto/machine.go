@@ -55,6 +55,8 @@ type OlmMachine struct {
 	keyWaiters     map[id.SessionID]chan struct{}
 	keyWaitersLock sync.Mutex
 
+	devicesToUnwedge *sync.Map
+
 	olmLock sync.Mutex
 
 	CrossSigningKeys    *CrossSigningKeysCache
@@ -93,6 +95,8 @@ func NewOlmMachine(client *mautrix.Client, log Logger, cryptoStore Store, stateS
 		keyVerificationTransactionState: &sync.Map{},
 
 		keyWaiters: make(map[id.SessionID]chan struct{}),
+
+		devicesToUnwedge: &sync.Map{},
 	}
 	mach.AllowKeyShare = mach.defaultAllowKeyShare
 	return mach
@@ -277,7 +281,8 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 					close(ch.(chan struct{}))
 				}
 			}
-			// TODO handle m.dummy encrypted to-device event?
+		case *event.DummyEventContent:
+			mach.Log.Debug("Received encrypted dummy event from %s/%s", decryptedEvt.Sender, decryptedEvt.SenderDevice)
 		default:
 			mach.Log.Debug("Unhandled encrypted to-device event of type %s from %s/%s", decryptedEvt.Type.String(), decryptedEvt.Sender, decryptedEvt.SenderDevice)
 		}
@@ -327,7 +332,6 @@ func (mach *OlmMachine) GetOrFetchDevice(userID id.UserID, deviceID id.DeviceID)
 
 // SendEncryptedToDevice sends an Olm-encrypted event to the given user device.
 func (mach *OlmMachine) SendEncryptedToDevice(device *DeviceIdentity, evtType event.Type, content event.Content) error {
-	// create outbound sessions if missing
 	if err := mach.createOutboundSessions(map[id.UserID]map[id.DeviceID]*DeviceIdentity{
 		device.UserID: {
 			device.DeviceID: device,
@@ -339,7 +343,6 @@ func (mach *OlmMachine) SendEncryptedToDevice(device *DeviceIdentity, evtType ev
 	mach.olmLock.Lock()
 	defer mach.olmLock.Unlock()
 
-	// get Olm session
 	olmSess, err := mach.CryptoStore.GetLatestSession(device.IdentityKey)
 	if err != nil {
 		return err

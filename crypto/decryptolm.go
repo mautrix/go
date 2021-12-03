@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tulir Asokan
+// Copyright (c) 2021 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -106,7 +106,7 @@ func (mach *OlmMachine) tryDecryptOlmCiphertext(sender id.UserID, deviceID id.De
 	if err != nil {
 		if err == DecryptionFailedWithMatchingSession {
 			mach.Log.Warn("Found matching session yet decryption failed for sender %s with key %s", sender, senderKey)
-			mach.markDeviceForUnwedging(sender, senderKey)
+			go mach.unwedgeDevice(sender, deviceID, senderKey)
 		}
 		return nil, fmt.Errorf("failed to decrypt olm event: %w", err)
 	}
@@ -121,14 +121,14 @@ func (mach *OlmMachine) tryDecryptOlmCiphertext(sender id.UserID, deviceID id.De
 	// New sessions can only be created if it's a prekey message, we can't decrypt the message
 	// if it isn't one at this point in time anymore, so return early.
 	if olmType != id.OlmMsgTypePreKey {
-		mach.markDeviceForUnwedging(sender, senderKey)
+		go mach.unwedgeDevice(sender, deviceID, senderKey)
 		return nil, DecryptionFailedForNormalMessage
 	}
 
 	mach.Log.Trace("Trying to create inbound session for %s/%s", sender, deviceID)
 	session, err := mach.createInboundSession(senderKey, ciphertext)
 	if err != nil {
-		mach.markDeviceForUnwedging(sender, senderKey)
+		go mach.unwedgeDevice(sender, deviceID, senderKey)
 		return nil, fmt.Errorf("failed to create new session from prekey message: %w", err)
 	}
 	mach.Log.Debug("Created inbound olm session %s for %s/%s (sender key: %s)", session.ID(), sender, deviceID, senderKey)
@@ -186,4 +186,17 @@ func (mach *OlmMachine) createInboundSession(senderKey id.SenderKey, ciphertext 
 		mach.Log.Error("Failed to store created inbound session: %v", err)
 	}
 	return session, nil
+}
+
+func (mach *OlmMachine) unwedgeDevice(sender id.UserID, deviceID id.DeviceID, senderKey id.SenderKey) {
+	mach.Log.Debug("Creating new Olm session with %s/%s...", sender, deviceID)
+	mach.devicesToUnwedge.Store(senderKey, true)
+	err := mach.SendEncryptedToDevice(&DeviceIdentity{
+		UserID:      sender,
+		DeviceID:    deviceID,
+		IdentityKey: senderKey,
+	}, event.ToDeviceDummy, event.Content{})
+	if err != nil {
+		mach.Log.Error("Failed to send dummy event to unwedge session with %s/%s: %v", sender, deviceID, err)
+	}
 }

@@ -139,3 +139,5 @@ type RoomKeyWithheldEventContent struct {
 	Code      RoomKeyWithheldCode `json:"code"`
 	Reason    string              `json:"reason,omitempty"`
 }
+
+type DummyEventContent struct{}

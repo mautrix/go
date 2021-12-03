@@ -226,6 +226,7 @@ var (
 	ToDeviceForwardedRoomKey    = Type{"m.forwarded_room_key", ToDeviceEventType}
 	ToDeviceEncrypted           = Type{"m.room.encrypted", ToDeviceEventType}
 	ToDeviceRoomKeyWithheld     = Type{"m.room_key.withheld", ToDeviceEventType}
+	ToDeviceDummy               = Type{"m.dummy", ToDeviceEventType}
 	ToDeviceVerificationRequest = Type{"m.key.verification.request", ToDeviceEventType}
 	ToDeviceVerificationStart   = Type{"m.key.verification.start", ToDeviceEventType}
 	ToDeviceVerificationAccept  = Type{"m.key.verification.accept", ToDeviceEventType}
