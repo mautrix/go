@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -188,7 +189,19 @@ func (mach *OlmMachine) createInboundSession(senderKey id.SenderKey, ciphertext 
 	return session, nil
 }
 
+const MinUnwedgeInterval = 1 * time.Hour
+
 func (mach *OlmMachine) unwedgeDevice(sender id.UserID, deviceID id.DeviceID, senderKey id.SenderKey) {
+	mach.recentlyUnwedgedLock.Lock()
+	prevUnwedge, ok := mach.recentlyUnwedged[senderKey]
+	delta := time.Now().Sub(prevUnwedge)
+	if ok && delta < MinUnwedgeInterval {
+		mach.Log.Debug("Not creating new Olm session with %s/%s, previous recreation was %s ago", sender, deviceID, delta)
+		mach.recentlyUnwedgedLock.Unlock()
+		return
+	}
+	mach.recentlyUnwedged[senderKey] = time.Now()
+	mach.recentlyUnwedgedLock.Unlock()
 	mach.Log.Debug("Creating new Olm session with %s/%s...", sender, deviceID)
 	mach.devicesToUnwedge.Store(senderKey, true)
 	err := mach.SendEncryptedToDevice(&DeviceIdentity{

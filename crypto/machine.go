@@ -55,7 +55,9 @@ type OlmMachine struct {
 	keyWaiters     map[id.SessionID]chan struct{}
 	keyWaitersLock sync.Mutex
 
-	devicesToUnwedge *sync.Map
+	devicesToUnwedge     *sync.Map
+	recentlyUnwedged     map[id.SenderKey]time.Time
+	recentlyUnwedgedLock sync.Mutex
 
 	olmLock sync.Mutex
 
@@ -97,6 +99,7 @@ func NewOlmMachine(client *mautrix.Client, log Logger, cryptoStore Store, stateS
 		keyWaiters: make(map[id.SessionID]chan struct{}),
 
 		devicesToUnwedge: &sync.Map{},
+		recentlyUnwedged: make(map[id.SenderKey]time.Time),
 	}
 	mach.AllowKeyShare = mach.defaultAllowKeyShare
 	return mach
