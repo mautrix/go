@@ -706,7 +706,7 @@ func (cli *Client) Login(req *ReqLogin) (resp *RespLogin, err error) {
 		URL:              cli.BuildURL("login"),
 		RequestJSON:      req,
 		ResponseJSON:     &resp,
-		SensitiveContent: len(req.Password) > 0,
+		SensitiveContent: len(req.Password) > 0 || len(req.Token) > 0,
 	})
 	if req.StoreCredentials && err == nil {
 		cli.DeviceID = resp.DeviceID
