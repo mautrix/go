@@ -181,8 +181,10 @@ func (mach *OlmMachine) AddAppserviceListener(ep *appservice.EventProcessor, az 
 
 func (mach *OlmMachine) HandleDeviceLists(dl *mautrix.DeviceLists, since string) {
 	if len(dl.Changed) > 0 {
-		mach.Log.Trace("Device list changes in /sync: %v", dl.Changed)
+		traceID := time.Now().Format("15:04:05.000000")
+		mach.Log.Trace("Device list changes in /sync: %v (trace: %s)", dl.Changed, traceID)
 		mach.fetchKeys(dl.Changed, since, false)
+		mach.Log.Trace("Finished handling device list changes (trace: %s)", traceID)
 	}
 }
 
@@ -195,10 +197,13 @@ func (mach *OlmMachine) HandleOTKCounts(otkCount *mautrix.OTKCount) {
 
 	minCount := mach.account.Internal.MaxNumberOfOneTimeKeys() / 2
 	if otkCount.SignedCurve25519 < int(minCount) {
-		mach.Log.Debug("Sync response said we have %d signed curve25519 keys left, sharing new ones...", otkCount.SignedCurve25519)
+		traceID := time.Now().Format("15:04:05.000000")
+		mach.Log.Debug("Sync response said we have %d signed curve25519 keys left, sharing new ones... (trace: %s)", otkCount.SignedCurve25519, traceID)
 		err := mach.ShareKeys(otkCount.SignedCurve25519)
 		if err != nil {
-			mach.Log.Error("Failed to share keys: %v", err)
+			mach.Log.Error("Failed to share keys: %v (trace: %s)", err, traceID)
+		} else {
+			mach.Log.Debug("Successfully shared keys (trace: %s)", traceID)
 		}
 	}
 }
@@ -267,17 +272,24 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 		mach.Log.Debug("Dropping to-device event targeted to %s/%s (not us)", evt.ToUserID, evt.ToDeviceID)
 		return
 	}
+	traceID := time.Now().Format("15:04:05.000000")
+	if evt.Type != event.ToDeviceEncrypted {
+		mach.Log.Trace("Starting handling to-device event of type %s from %s (trace: %s)", evt.Type.Type, evt.Sender, traceID)
+	}
 	switch content := evt.Content.Parsed.(type) {
 	case *event.EncryptedEventContent:
-		mach.Log.Debug("Handling encrypted to-device event from %s/%s", evt.Sender, content.SenderKey)
+		mach.Log.Debug("Handling encrypted to-device event from %s/%s (trace: %s)", evt.Sender, content.SenderKey, traceID)
 		decryptedEvt, err := mach.decryptOlmEvent(evt)
 		if err != nil {
-			mach.Log.Error("Failed to decrypt to-device event: %v", err)
+			mach.Log.Error("Failed to decrypt to-device event: %v (trace: %s)", err, traceID)
 			return
 		}
+		mach.Log.Trace("Successfully decrypted to-device from %s/%s into type %s (sender key: %s, trace: %s)", decryptedEvt.Sender, decryptedEvt.SenderDevice, decryptedEvt.Type.String(), decryptedEvt.SenderKey, traceID)
+
 		switch decryptedContent := decryptedEvt.Content.Parsed.(type) {
 		case *event.RoomKeyEventContent:
 			mach.receiveRoomKey(decryptedEvt, decryptedContent)
+			mach.Log.Trace("Handled room key event from %s/%s (trace: %s)", decryptedEvt.Sender, decryptedEvt.SenderDevice, traceID)
 		case *event.ForwardedRoomKeyEventContent:
 			if mach.importForwardedRoomKey(decryptedEvt, decryptedContent) {
 				if ch, ok := mach.roomKeyRequestFilled.Load(decryptedContent.SessionID); ok {
@@ -285,11 +297,13 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 					close(ch.(chan struct{}))
 				}
 			}
+			mach.Log.Trace("Handled forwarded room key event from %s/%s (trace: %s)", decryptedEvt.Sender, decryptedEvt.SenderDevice, traceID)
 		case *event.DummyEventContent:
-			mach.Log.Debug("Received encrypted dummy event from %s/%s", decryptedEvt.Sender, decryptedEvt.SenderDevice)
+			mach.Log.Debug("Received encrypted dummy event from %s/%s (trace: %s)", decryptedEvt.Sender, decryptedEvt.SenderDevice, traceID)
 		default:
-			mach.Log.Debug("Unhandled encrypted to-device event of type %s from %s/%s", decryptedEvt.Type.String(), decryptedEvt.Sender, decryptedEvt.SenderDevice)
+			mach.Log.Debug("Unhandled encrypted to-device event of type %s from %s/%s (trace: %s)", decryptedEvt.Type.String(), decryptedEvt.Sender, decryptedEvt.SenderDevice, traceID)
 		}
+		return
 	case *event.RoomKeyRequestEventContent:
 		mach.handleRoomKeyRequest(evt.Sender, content)
 	// verification cases
@@ -309,8 +323,10 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 		mach.handleRoomKeyWithheld(content)
 	default:
 		deviceID, _ := evt.Content.Raw["device_id"].(string)
-		mach.Log.Trace("Unhandled to-device event of type %s from %s/%s", evt.Type.Type, evt.Sender, deviceID)
+		mach.Log.Trace("Unhandled to-device event of type %s from %s/%s (trace: %s)", evt.Type.Type, evt.Sender, deviceID, traceID)
+		return
 	}
+	mach.Log.Trace("Finished handling to-device event of type %s from %s (trace: %s)", evt.Type.Type, evt.Sender, traceID)
 }
 
 // GetOrFetchDevice attempts to retrieve the device identity for the given device from the store
@@ -486,6 +502,5 @@ func (mach *OlmMachine) ShareKeys(currentOTKCount int) error {
 	}
 	mach.account.Shared = true
 	mach.saveAccount()
-	mach.Log.Trace("Shared keys and saved account")
 	return nil
 }
