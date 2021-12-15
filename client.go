@@ -974,6 +974,11 @@ func (cli *Client) RedactEvent(roomID id.RoomID, eventID id.EventID, extra ...Re
 	req := ReqRedact{}
 	if len(extra) > 0 {
 		req = extra[0]
+	}
+	if req.Extra == nil {
+		req.Extra = make(map[string]interface{})
+	}
+	if len(req.Reason) > 0 {
 		req.Extra["reason"] = req.Reason
 	}
 	var txnID string
