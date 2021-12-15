@@ -37,6 +37,8 @@ const (
 	StatusSuccesss    MessageSendCheckpointStatus = "SUCCESS"
 	StatusWillRetry   MessageSendCheckpointStatus = "WILL_RETRY"
 	StatusPermFailure MessageSendCheckpointStatus = "PERM_FAILURE"
+	StatusUnsupported MessageSendCheckpointStatus = "UNSUPPORTED"
+	StatusTimeout     MessageSendCheckpointStatus = "TIMEOUT"
 )
 
 type MessageSendCheckpointReportedBy string
