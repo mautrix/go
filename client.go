@@ -975,6 +975,12 @@ func (cli *Client) RedactEvent(roomID id.RoomID, eventID id.EventID, extra ...Re
 	if len(extra) > 0 {
 		req = extra[0]
 	}
+	if req.Extra == nil {
+		req.Extra = make(map[string]interface{})
+	}
+	if len(req.Reason) > 0 {
+		req.Extra["reason"] = req.Reason
+	}
 	var txnID string
 	if len(req.TxnID) > 0 {
 		txnID = req.TxnID
@@ -982,7 +988,7 @@ func (cli *Client) RedactEvent(roomID id.RoomID, eventID id.EventID, extra ...Re
 		txnID = cli.TxnID()
 	}
 	urlPath := cli.BuildURL("rooms", roomID, "redact", eventID, txnID)
-	_, err = cli.MakeRequest("PUT", urlPath, req, &resp)
+	_, err = cli.MakeRequest("PUT", urlPath, req.Extra, &resp)
 	return
 }
 
