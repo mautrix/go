@@ -61,19 +61,19 @@ type MessageSendCheckpoint struct {
 	Info        string                          `json:"info,omitempty"`
 }
 
-var CheckpointTypes = map[event.Type]interface{}{
-	event.EventRedaction:   struct{}{},
-	event.EventMessage:     struct{}{},
-	event.EventEncrypted:   struct{}{},
-	event.EventSticker:     struct{}{},
-	event.EventReaction:    struct{}{},
-	event.CallInvite:       struct{}{},
-	event.CallCandidates:   struct{}{},
-	event.CallSelectAnswer: struct{}{},
-	event.CallAnswer:       struct{}{},
-	event.CallHangup:       struct{}{},
-	event.CallReject:       struct{}{},
-	event.CallNegotiate:    struct{}{},
+var CheckpointTypes = map[event.Type]struct{}{
+	event.EventRedaction:   {},
+	event.EventMessage:     {},
+	event.EventEncrypted:   {},
+	event.EventSticker:     {},
+	event.EventReaction:    {},
+	event.CallInvite:       {},
+	event.CallCandidates:   {},
+	event.CallSelectAnswer: {},
+	event.CallAnswer:       {},
+	event.CallHangup:       {},
+	event.CallReject:       {},
+	event.CallNegotiate:    {},
 }
 
 func NewMessageSendCheckpoint(evt *event.Event, step MessageSendCheckpointStep, status MessageSendCheckpointStatus, retryNum int) *MessageSendCheckpoint {
