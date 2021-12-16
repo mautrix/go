@@ -51,6 +51,10 @@ func (session *OlmSession) ID() id.SessionID {
 	return session.id
 }
 
+func (session *OlmSession) Describe() string {
+	return session.Internal.Describe()
+}
+
 func wrapSession(session *olm.Session) *OlmSession {
 	return &OlmSession{
 		Internal: *session,

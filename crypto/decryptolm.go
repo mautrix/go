@@ -132,7 +132,7 @@ func (mach *OlmMachine) tryDecryptOlmCiphertext(sender id.UserID, senderKey id.S
 		go mach.unwedgeDevice(sender, senderKey)
 		return nil, fmt.Errorf("failed to create new session from prekey message: %w", err)
 	}
-	mach.Log.Debug("Created inbound olm session %s for %s/%s", session.ID(), sender, senderKey)
+	mach.Log.Debug("Created inbound olm session %s for %s/%s: %s", session.ID(), sender, senderKey, session.Describe())
 
 	plaintext, err = session.Decrypt(ciphertext, olmType)
 	if err != nil {
@@ -151,6 +151,7 @@ func (mach *OlmMachine) tryDecryptOlmCiphertextWithExistingSession(senderKey id.
 	if err != nil {
 		return nil, fmt.Errorf("failed to get session for %s: %w", senderKey, err)
 	}
+
 	for _, session := range sessions {
 		if olmType == id.OlmMsgTypePreKey {
 			matches, err := session.Internal.MatchesInboundSession(ciphertext)
@@ -160,6 +161,7 @@ func (mach *OlmMachine) tryDecryptOlmCiphertextWithExistingSession(senderKey id.
 				continue
 			}
 		}
+		mach.Log.Trace("Trying to decrypt olm message from %s with session %s: %s", senderKey, session.ID(), session.Describe())
 		plaintext, err := session.Decrypt(ciphertext, olmType)
 		if err != nil {
 			if olmType == id.OlmMsgTypePreKey {
@@ -170,6 +172,7 @@ func (mach *OlmMachine) tryDecryptOlmCiphertextWithExistingSession(senderKey id.
 			if err != nil {
 				mach.Log.Warn("Failed to update olm session in crypto store after decrypting: %v", err)
 			}
+			mach.Log.Trace("Decrypted olm message from %s with session %s", senderKey, session.ID())
 			return plaintext, nil
 		}
 	}

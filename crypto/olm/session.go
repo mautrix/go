@@ -2,6 +2,7 @@ package olm
 
 // #cgo LDFLAGS: -lolm -lstdc++
 // #include <olm/olm.h>
+// #include <stdlib.h>
 import "C"
 
 import (
@@ -327,4 +328,18 @@ func (s *Session) Decrypt(message string, msgType id.OlmMsgType) ([]byte, error)
 		return nil, s.lastError()
 	}
 	return plaintext[:r], nil
+}
+
+// https://gitlab.matrix.org/matrix-org/olm/-/blob/3.2.8/include/olm/olm.h#L392-393
+const maxDescribeSize = 600
+
+// Describe generates a string describing the internal state of an olm session for debugging and logging purposes.
+func (s *Session) Describe() string {
+	desc := (*C.char)(C.malloc(C.size_t(maxDescribeSize)))
+	defer C.free(unsafe.Pointer(desc))
+	C.olm_session_describe(
+		(*C.OlmSession)(s.int),
+		desc,
+		C.size_t(maxDescribeSize))
+	return C.GoString(desc)
 }

@@ -30,6 +30,7 @@ func (mach *OlmMachine) encryptOlmEvent(session *OlmSession, recipient *DeviceId
 	if err != nil {
 		panic(err)
 	}
+	mach.Log.Trace("Encrypting olm message for %s with session %s: %s", recipient.IdentityKey, session.ID(), session.Describe())
 	msgType, ciphertext := session.Encrypt(plaintext)
 	err = mach.CryptoStore.UpdateSession(recipient.IdentityKey, session)
 	if err != nil {
