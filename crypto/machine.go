@@ -131,6 +131,16 @@ func (mach *OlmMachine) FlushStore() error {
 	return mach.CryptoStore.Flush()
 }
 
+func (mach *OlmMachine) timeTrace(thing, trace string, expectedDuration time.Duration) func() {
+	start := time.Now()
+	return func() {
+		duration := time.Now().Sub(start)
+		if duration > expectedDuration {
+			mach.Log.Warn("%s took %s (trace: %s)", thing, duration, trace)
+		}
+	}
+}
+
 func Fingerprint(signingKey id.SigningKey) string {
 	spacedSigningKey := make([]byte, len(signingKey)+(len(signingKey)-1)/4)
 	var ptr = 0
@@ -279,7 +289,7 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 	switch content := evt.Content.Parsed.(type) {
 	case *event.EncryptedEventContent:
 		mach.Log.Debug("Handling encrypted to-device event from %s/%s (trace: %s)", evt.Sender, content.SenderKey, traceID)
-		decryptedEvt, err := mach.decryptOlmEvent(evt)
+		decryptedEvt, err := mach.decryptOlmEvent(evt, traceID)
 		if err != nil {
 			mach.Log.Error("Failed to decrypt to-device event: %v (trace: %s)", err, traceID)
 			return
@@ -288,7 +298,7 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 
 		switch decryptedContent := decryptedEvt.Content.Parsed.(type) {
 		case *event.RoomKeyEventContent:
-			mach.receiveRoomKey(decryptedEvt, decryptedContent)
+			mach.receiveRoomKey(decryptedEvt, decryptedContent, traceID)
 			mach.Log.Trace("Handled room key event from %s/%s (trace: %s)", decryptedEvt.Sender, decryptedEvt.SenderDevice, traceID)
 		case *event.ForwardedRoomKeyEventContent:
 			if mach.importForwardedRoomKey(decryptedEvt, decryptedContent) {
@@ -406,7 +416,7 @@ func (mach *OlmMachine) SendEncryptedToDevice(device *DeviceIdentity, evtType ev
 	return err
 }
 
-func (mach *OlmMachine) createGroupSession(senderKey id.SenderKey, signingKey id.Ed25519, roomID id.RoomID, sessionID id.SessionID, sessionKey string) {
+func (mach *OlmMachine) createGroupSession(senderKey id.SenderKey, signingKey id.Ed25519, roomID id.RoomID, sessionID id.SessionID, sessionKey string, traceID string) {
 	igs, err := NewInboundGroupSession(senderKey, signingKey, roomID, sessionKey)
 	if err != nil {
 		mach.Log.Error("Failed to create inbound group session: %v", err)
@@ -454,14 +464,14 @@ func (mach *OlmMachine) WaitForSession(roomID id.RoomID, senderKey id.SenderKey,
 	}
 }
 
-func (mach *OlmMachine) receiveRoomKey(evt *DecryptedOlmEvent, content *event.RoomKeyEventContent) {
+func (mach *OlmMachine) receiveRoomKey(evt *DecryptedOlmEvent, content *event.RoomKeyEventContent, traceID string) {
 	// TODO nio had a comment saying "handle this better" for the case where evt.Keys.Ed25519 is none?
 	if content.Algorithm != id.AlgorithmMegolmV1 || evt.Keys.Ed25519 == "" {
 		mach.Log.Debug("Ignoring weird room key from %s/%s: alg=%s, ed25519=%s, sessionid=%s, roomid=%s", evt.Sender, evt.SenderDevice, content.Algorithm, evt.Keys.Ed25519, content.SessionID, content.RoomID)
 		return
 	}
 
-	mach.createGroupSession(evt.SenderKey, evt.Keys.Ed25519, content.RoomID, content.SessionID, content.SessionKey)
+	mach.createGroupSession(evt.SenderKey, evt.Keys.Ed25519, content.RoomID, content.SessionID, content.SessionKey, traceID)
 }
 
 func (mach *OlmMachine) handleRoomKeyWithheld(content *event.RoomKeyWithheldEventContent) {

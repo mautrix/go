@@ -43,7 +43,7 @@ type DecryptedOlmEvent struct {
 	Content event.Content `json:"content"`
 }
 
-func (mach *OlmMachine) decryptOlmEvent(evt *event.Event) (*DecryptedOlmEvent, error) {
+func (mach *OlmMachine) decryptOlmEvent(evt *event.Event, traceID string) (*DecryptedOlmEvent, error) {
 	content, ok := evt.Content.Parsed.(*event.EncryptedEventContent)
 	if !ok {
 		return nil, IncorrectEncryptedContentType
@@ -54,7 +54,7 @@ func (mach *OlmMachine) decryptOlmEvent(evt *event.Event) (*DecryptedOlmEvent, e
 	if !ok {
 		return nil, NotEncryptedForMe
 	}
-	decrypted, err := mach.decryptAndParseOlmCiphertext(evt.Sender, content.SenderKey, ownContent.Type, ownContent.Body)
+	decrypted, err := mach.decryptAndParseOlmCiphertext(evt.Sender, content.SenderKey, ownContent.Type, ownContent.Body, traceID)
 	if err != nil {
 		return nil, err
 	}
@@ -66,15 +66,19 @@ type OlmEventKeys struct {
 	Ed25519 id.Ed25519 `json:"ed25519"`
 }
 
-func (mach *OlmMachine) decryptAndParseOlmCiphertext(sender id.UserID, senderKey id.SenderKey, olmType id.OlmMsgType, ciphertext string) (*DecryptedOlmEvent, error) {
+func (mach *OlmMachine) decryptAndParseOlmCiphertext(sender id.UserID, senderKey id.SenderKey, olmType id.OlmMsgType, ciphertext string, traceID string) (*DecryptedOlmEvent, error) {
 	if olmType != id.OlmMsgTypePreKey && olmType != id.OlmMsgTypeMsg {
 		return nil, UnsupportedOlmMessageType
 	}
 
-	plaintext, err := mach.tryDecryptOlmCiphertext(sender, senderKey, olmType, ciphertext)
+	endTimeTrace := mach.timeTrace("decrypting olm ciphertext", traceID, 5*time.Second)
+	plaintext, err := mach.tryDecryptOlmCiphertext(sender, senderKey, olmType, ciphertext, traceID)
+	endTimeTrace()
 	if err != nil {
 		return nil, err
 	}
+
+	defer mach.timeTrace("parsing decrypted olm event", traceID, time.Second)()
 
 	var olmEvt DecryptedOlmEvent
 	err = json.Unmarshal(plaintext, &olmEvt)
@@ -99,11 +103,13 @@ func (mach *OlmMachine) decryptAndParseOlmCiphertext(sender id.UserID, senderKey
 	return &olmEvt, nil
 }
 
-func (mach *OlmMachine) tryDecryptOlmCiphertext(sender id.UserID, senderKey id.SenderKey, olmType id.OlmMsgType, ciphertext string) ([]byte, error) {
+func (mach *OlmMachine) tryDecryptOlmCiphertext(sender id.UserID, senderKey id.SenderKey, olmType id.OlmMsgType, ciphertext string, traceID string) ([]byte, error) {
+	endTimeTrace := mach.timeTrace("waiting for olm lock", traceID, 5*time.Second)
 	mach.olmLock.Lock()
+	endTimeTrace()
 	defer mach.olmLock.Unlock()
 
-	plaintext, err := mach.tryDecryptOlmCiphertextWithExistingSession(senderKey, olmType, ciphertext)
+	plaintext, err := mach.tryDecryptOlmCiphertextWithExistingSession(senderKey, olmType, ciphertext, traceID)
 	if err != nil {
 		if err == DecryptionFailedWithMatchingSession {
 			mach.Log.Warn("Found matching session yet decryption failed for sender %s with key %s", sender, senderKey)
@@ -127,34 +133,44 @@ func (mach *OlmMachine) tryDecryptOlmCiphertext(sender id.UserID, senderKey id.S
 	}
 
 	mach.Log.Trace("Trying to create inbound session for %s/%s", sender, senderKey)
+	endTimeTrace = mach.timeTrace("creating inbound olm session", traceID, time.Second)
 	session, err := mach.createInboundSession(senderKey, ciphertext)
+	endTimeTrace()
 	if err != nil {
 		go mach.unwedgeDevice(sender, senderKey)
 		return nil, fmt.Errorf("failed to create new session from prekey message: %w", err)
 	}
 	mach.Log.Debug("Created inbound olm session %s for %s/%s: %s", session.ID(), sender, senderKey, session.Describe())
 
+	endTimeTrace = mach.timeTrace(fmt.Sprintf("decrypting prekey olm message with %s/%s", senderKey, session.ID()), traceID, time.Second)
 	plaintext, err = session.Decrypt(ciphertext, olmType)
+	endTimeTrace()
 	if err != nil {
 		return nil, fmt.Errorf("failed to decrypt olm event with session created from prekey message: %w", err)
 	}
 
+	endTimeTrace = mach.timeTrace(fmt.Sprintf("updating new session %s/%s in database", senderKey, session.ID()), traceID, time.Second)
 	err = mach.CryptoStore.UpdateSession(senderKey, session)
+	endTimeTrace()
 	if err != nil {
 		mach.Log.Warn("Failed to update new olm session in crypto store after decrypting: %v", err)
 	}
 	return plaintext, nil
 }
 
-func (mach *OlmMachine) tryDecryptOlmCiphertextWithExistingSession(senderKey id.SenderKey, olmType id.OlmMsgType, ciphertext string) ([]byte, error) {
+func (mach *OlmMachine) tryDecryptOlmCiphertextWithExistingSession(senderKey id.SenderKey, olmType id.OlmMsgType, ciphertext string, traceID string) ([]byte, error) {
+	endTimeTrace := mach.timeTrace(fmt.Sprintf("getting sessions with %s", senderKey), traceID, time.Second)
 	sessions, err := mach.CryptoStore.GetSessions(senderKey)
+	endTimeTrace()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get session for %s: %w", senderKey, err)
 	}
 
 	for _, session := range sessions {
 		if olmType == id.OlmMsgTypePreKey {
+			endTimeTrace = mach.timeTrace(fmt.Sprintf("checking if prekey olm message matches session %s/%s", senderKey, session.ID()), traceID, time.Second)
 			matches, err := session.Internal.MatchesInboundSession(ciphertext)
+			endTimeTrace()
 			if err != nil {
 				return nil, fmt.Errorf("failed to check if ciphertext matches inbound session: %w", err)
 			} else if !matches {
@@ -162,13 +178,17 @@ func (mach *OlmMachine) tryDecryptOlmCiphertextWithExistingSession(senderKey id.
 			}
 		}
 		mach.Log.Trace("Trying to decrypt olm message from %s with session %s: %s", senderKey, session.ID(), session.Describe())
+		endTimeTrace = mach.timeTrace(fmt.Sprintf("decrypting olm message with %s/%s", senderKey, session.ID()), traceID, time.Second)
 		plaintext, err := session.Decrypt(ciphertext, olmType)
+		endTimeTrace()
 		if err != nil {
 			if olmType == id.OlmMsgTypePreKey {
 				return nil, DecryptionFailedWithMatchingSession
 			}
 		} else {
+			endTimeTrace = mach.timeTrace(fmt.Sprintf("updating session %s/%s in database", senderKey, session.ID()), traceID, time.Second)
 			err = mach.CryptoStore.UpdateSession(senderKey, session)
+			endTimeTrace()
 			if err != nil {
 				mach.Log.Warn("Failed to update olm session in crypto store after decrypting: %v", err)
 			}
