@@ -3,6 +3,15 @@ package olm
 // #cgo LDFLAGS: -lolm -lstdc++
 // #include <olm/olm.h>
 // #include <stdlib.h>
+// #include <stdio.h>
+// void olm_session_describe(OlmSession * session, char *buf, size_t buflen) __attribute__((weak));
+// void meowlm_session_describe(OlmSession * session, char *buf, size_t buflen) {
+//   if (olm_session_describe) {
+//     olm_session_describe(session, buf, buflen);
+//   } else {
+//     sprintf(buf, "olm_session_describe not supported");
+//   }
+// }
 import "C"
 
 import (
@@ -337,7 +346,7 @@ const maxDescribeSize = 600
 func (s *Session) Describe() string {
 	desc := (*C.char)(C.malloc(C.size_t(maxDescribeSize)))
 	defer C.free(unsafe.Pointer(desc))
-	C.olm_session_describe(
+	C.meowlm_session_describe(
 		(*C.OlmSession)(s.int),
 		desc,
 		C.size_t(maxDescribeSize))
