@@ -276,6 +276,28 @@ var Upgrades = [...]upgradeFunc{
 		}
 		return nil
 	},
+	func(tx *sql.Tx, dialect string) error {
+		_, err := tx.Exec("ALTER TABLE crypto_olm_session RENAME COLUMN last_used TO last_decrypted")
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec("ALTER TABLE crypto_olm_session ADD COLUMN last_encrypted timestamp")
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec("UPDATE crypto_olm_session SET last_encrypted=last_decrypted")
+		if err != nil {
+			return err
+		}
+		if dialect == "postgres" {
+			// This is too hard to do on sqlite, so let's just do it on postgres
+			_, err = tx.Exec("ALTER TABLE crypto_olm_session ALTER COLUMN last_encrypted SET NOT NULL")
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	},
 }
 
 // GetVersion returns the current version of the DB schema.

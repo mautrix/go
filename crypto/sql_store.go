@@ -93,18 +93,11 @@ func (store *SQLCryptoStore) GetNextBatch() string {
 func (store *SQLCryptoStore) PutAccount(account *OlmAccount) error {
 	store.Account = account
 	bytes := account.Internal.Pickle(store.PickleKey)
-	var err error
-	if store.Dialect == "postgres" {
-		_, err = store.DB.Exec(`
-			INSERT INTO crypto_account (device_id, shared, sync_token, account, account_id) VALUES ($1, $2, $3, $4, $5)
-			ON CONFLICT (account_id) DO UPDATE SET shared=$2, sync_token=$3, account=$4, account_id=$5`,
-			store.DeviceID, account.Shared, store.SyncToken, bytes, store.AccountID)
-	} else if store.Dialect == "sqlite3" {
-		_, err = store.DB.Exec("INSERT OR REPLACE INTO crypto_account (device_id, shared, sync_token, account, account_id) VALUES ($1, $2, $3, $4, $5)",
-			store.DeviceID, account.Shared, store.SyncToken, bytes, store.AccountID)
-	} else {
-		err = fmt.Errorf("unsupported dialect %s", store.Dialect)
-	}
+	_, err := store.DB.Exec(`
+		INSERT INTO crypto_account (device_id, shared, sync_token, account, account_id) VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (account_id) DO UPDATE SET shared=excluded.shared, sync_token=excluded.sync_token,
+											   account=excluded.account, account_id=excluded.account_id
+	`, store.DeviceID, account.Shared, store.SyncToken, bytes, store.AccountID)
 	if err != nil {
 		store.Log.Warn("Failed to store account: %v", err)
 	}
@@ -151,7 +144,7 @@ func (store *SQLCryptoStore) HasSession(key id.SenderKey) bool {
 
 // GetSessions returns all the known Olm sessions for a sender key.
 func (store *SQLCryptoStore) GetSessions(key id.SenderKey) (OlmSessionList, error) {
-	rows, err := store.DB.Query("SELECT session_id, session, created_at, last_used FROM crypto_olm_session WHERE sender_key=$1 AND account_id=$2 ORDER BY session_id",
+	rows, err := store.DB.Query("SELECT session_id, session, created_at, last_encrypted, last_decrypted FROM crypto_olm_session WHERE sender_key=$1 AND account_id=$2 ORDER BY last_decrypted DESC",
 		key, store.AccountID)
 	if err != nil {
 		return nil, err
@@ -164,7 +157,7 @@ func (store *SQLCryptoStore) GetSessions(key id.SenderKey) (OlmSessionList, erro
 		sess := OlmSession{Internal: *olm.NewBlankSession()}
 		var sessionBytes []byte
 		var sessionID id.SessionID
-		err := rows.Scan(&sessionID, &sessionBytes, &sess.CreationTime, &sess.UseTime)
+		err := rows.Scan(&sessionID, &sessionBytes, &sess.CreationTime, &sess.LastEncryptedTime, &sess.LastDecryptedTime)
 		if err != nil {
 			return nil, err
 		} else if existing, ok := cache[sessionID]; ok {
@@ -195,14 +188,14 @@ func (store *SQLCryptoStore) GetLatestSession(key id.SenderKey) (*OlmSession, er
 	store.olmSessionCacheLock.Lock()
 	defer store.olmSessionCacheLock.Unlock()
 
-	row := store.DB.QueryRow("SELECT session_id, session, created_at, last_used FROM crypto_olm_session WHERE sender_key=$1 AND account_id=$2 ORDER BY session_id DESC LIMIT 1",
+	row := store.DB.QueryRow("SELECT session_id, session, created_at, last_encrypted, last_decrypted FROM crypto_olm_session WHERE sender_key=$1 AND account_id=$2 ORDER BY last_decrypted DESC LIMIT 1",
 		key, store.AccountID)
 
 	sess := OlmSession{Internal: *olm.NewBlankSession()}
 	var sessionBytes []byte
 	var sessionID id.SessionID
 
-	err := row.Scan(&sessionID, &sessionBytes, &sess.CreationTime, &sess.UseTime)
+	err := row.Scan(&sessionID, &sessionBytes, &sess.CreationTime, &sess.LastEncryptedTime, &sess.LastDecryptedTime)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	} else if err != nil {
@@ -225,8 +218,8 @@ func (store *SQLCryptoStore) AddSession(key id.SenderKey, session *OlmSession) e
 	store.olmSessionCacheLock.Lock()
 	defer store.olmSessionCacheLock.Unlock()
 	sessionBytes := session.Internal.Pickle(store.PickleKey)
-	_, err := store.DB.Exec("INSERT INTO crypto_olm_session (session_id, sender_key, session, created_at, last_used, account_id) VALUES ($1, $2, $3, $4, $5, $6)",
-		session.ID(), key, sessionBytes, session.CreationTime, session.UseTime, store.AccountID)
+	_, err := store.DB.Exec("INSERT INTO crypto_olm_session (session_id, sender_key, session, created_at, last_encrypted, last_decrypted, account_id) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+		session.ID(), key, sessionBytes, session.CreationTime, session.LastEncryptedTime, session.LastDecryptedTime, store.AccountID)
 	store.getOlmSessionCache(key)[session.ID()] = session
 	return err
 }
@@ -234,8 +227,8 @@ func (store *SQLCryptoStore) AddSession(key id.SenderKey, session *OlmSession) e
 // UpdateSession replaces the Olm session for a sender in the database.
 func (store *SQLCryptoStore) UpdateSession(_ id.SenderKey, session *OlmSession) error {
 	sessionBytes := session.Internal.Pickle(store.PickleKey)
-	_, err := store.DB.Exec("UPDATE crypto_olm_session SET session=$1, last_used=$2 WHERE session_id=$3 AND account_id=$4",
-		sessionBytes, session.UseTime, session.ID(), store.AccountID)
+	_, err := store.DB.Exec("UPDATE crypto_olm_session SET session=$1, last_encrypted=$2, last_decrypted=$3 WHERE session_id=$4 AND account_id=$5",
+		sessionBytes, session.LastEncryptedTime, session.LastDecryptedTime, session.ID(), store.AccountID)
 	return err
 }
 
@@ -243,18 +236,14 @@ func (store *SQLCryptoStore) UpdateSession(_ id.SenderKey, session *OlmSession) 
 func (store *SQLCryptoStore) PutGroupSession(roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID, session *InboundGroupSession) error {
 	sessionBytes := session.Internal.Pickle(store.PickleKey)
 	forwardingChains := strings.Join(session.ForwardingChains, ",")
-	var query string
-	if store.Dialect == "postgres" {
-		query = `INSERT INTO crypto_megolm_inbound_session
+	_, err := store.DB.Exec(`
+		INSERT INTO crypto_megolm_inbound_session
 			(session_id, sender_key, signing_key, room_id, session, forwarding_chains, account_id)
-			VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (session_id, account_id) DO UPDATE
-				SET withheld_code=NULL, withheld_reason=NULL,
-					sender_key=$2, signing_key=$3, room_id=$4, session=$5, forwarding_chains=$6`
-	} else {
-		query = "INSERT OR REPLACE INTO crypto_megolm_inbound_session (session_id, sender_key, signing_key, room_id, session, forwarding_chains, account_id) VALUES ($1, $2, $3, $4, $5, $6, $7)"
-	}
-	_, err := store.DB.Exec(query,
-		sessionID, senderKey, session.SigningKey, roomID, sessionBytes, forwardingChains, store.AccountID)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)
+		ON CONFLICT (session_id, account_id) DO UPDATE
+		    SET withheld_code=NULL, withheld_reason=NULL, sender_key=excluded.sender_key, signing_key=excluded.signing_key,
+		        room_id=excluded.room_id, session=excluded.session, forwarding_chains=excluded.forwarding_chains
+	`, sessionID, senderKey, session.SigningKey, roomID, sessionBytes, forwardingChains, store.AccountID)
 	return err
 }
 
@@ -373,32 +362,26 @@ func (store *SQLCryptoStore) GetAllGroupSessions() ([]*InboundGroupSession, erro
 }
 
 // AddOutboundGroupSession stores an outbound Megolm session, along with the information about the room and involved devices.
-func (store *SQLCryptoStore) AddOutboundGroupSession(session *OutboundGroupSession) (err error) {
+func (store *SQLCryptoStore) AddOutboundGroupSession(session *OutboundGroupSession) error {
 	sessionBytes := session.Internal.Pickle(store.PickleKey)
-	if store.Dialect == "postgres" {
-		_, err = store.DB.Exec(`
-			INSERT INTO crypto_megolm_outbound_session (
-				room_id, session_id, session, shared, max_messages, message_count, max_age, created_at, last_used, account_id
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-			ON CONFLICT (account_id, room_id) DO UPDATE SET session_id=$2, session=$3, shared=$4, max_messages=$5, message_count=$6, max_age=$7, created_at=$8, last_used=$9, account_id=$10`,
-			session.RoomID, session.ID(), sessionBytes, session.Shared, session.MaxMessages, session.MessageCount, session.MaxAge, session.CreationTime, session.UseTime, store.AccountID)
-	} else if store.Dialect == "sqlite3" {
-		_, err = store.DB.Exec(`
-			INSERT OR REPLACE INTO crypto_megolm_outbound_session (
-				room_id, session_id, session, shared, max_messages, message_count, max_age, created_at, last_used, account_id
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-			session.RoomID, session.ID(), sessionBytes, session.Shared, session.MaxMessages, session.MessageCount, session.MaxAge, session.CreationTime, session.UseTime, store.AccountID)
-	} else {
-		err = fmt.Errorf("unsupported dialect %s", store.Dialect)
-	}
-	return
+	_, err := store.DB.Exec(`
+		INSERT INTO crypto_megolm_outbound_session
+			(room_id, session_id, session, shared, max_messages, message_count, max_age, created_at, last_used, account_id)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		ON CONFLICT (account_id, room_id) DO UPDATE
+			SET session_id=excluded.session_id, session=excluded.session, shared=excluded.shared,
+				max_messages=excluded.max_messages, message_count=excluded.message_count, max_age=excluded.max_age,
+				created_at=excluded.created_at, last_used=excluded.last_used, account_id=excluded.account_id
+	`, session.RoomID, session.ID(), sessionBytes, session.Shared, session.MaxMessages, session.MessageCount,
+		session.MaxAge, session.CreationTime, session.LastEncryptedTime, store.AccountID)
+	return err
 }
 
 // UpdateOutboundGroupSession replaces an outbound Megolm session with for same room and session ID.
 func (store *SQLCryptoStore) UpdateOutboundGroupSession(session *OutboundGroupSession) error {
 	sessionBytes := session.Internal.Pickle(store.PickleKey)
 	_, err := store.DB.Exec("UPDATE crypto_megolm_outbound_session SET session=$1, message_count=$2, last_used=$3 WHERE room_id=$4 AND session_id=$5 AND account_id=$6",
-		sessionBytes, session.MessageCount, session.UseTime, session.RoomID, session.ID(), store.AccountID)
+		sessionBytes, session.MessageCount, session.LastEncryptedTime, session.RoomID, session.ID(), store.AccountID)
 	return err
 }
 
@@ -410,7 +393,7 @@ func (store *SQLCryptoStore) GetOutboundGroupSession(roomID id.RoomID) (*Outboun
 		SELECT session, shared, max_messages, message_count, max_age, created_at, last_used
 		FROM crypto_megolm_outbound_session WHERE room_id=$1 AND account_id=$2`,
 		roomID, store.AccountID,
-	).Scan(&sessionBytes, &ogs.Shared, &ogs.MaxMessages, &ogs.MessageCount, &ogs.MaxAge, &ogs.CreationTime, &ogs.UseTime)
+	).Scan(&sessionBytes, &ogs.Shared, &ogs.MaxMessages, &ogs.MessageCount, &ogs.MaxAge, &ogs.CreationTime, &ogs.LastEncryptedTime)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	} else if err != nil {
@@ -527,22 +510,11 @@ func (store *SQLCryptoStore) FindDeviceByKey(userID id.UserID, identityKey id.Id
 
 // PutDevice stores a single device for a user, replacing it if it exists already.
 func (store *SQLCryptoStore) PutDevice(userID id.UserID, device *DeviceIdentity) error {
-	var err error
-	if store.Dialect == "postgres" {
-		_, err = store.DB.Exec(`
+	_, err := store.DB.Exec(`
 			INSERT INTO crypto_device (user_id, device_id, identity_key, signing_key, trust, deleted, name) VALUES ($1, $2, $3, $4, $5, $6, $7)
-			ON CONFLICT (user_id, device_id) DO UPDATE SET identity_key=$3, signing_key=$4, trust=$5, deleted=$6, name=$7`,
-			userID, device.DeviceID, device.IdentityKey, device.SigningKey, device.Trust, device.Deleted, device.Name)
-	} else if store.Dialect == "sqlite3" {
-		_, err = store.DB.Exec("INSERT OR REPLACE INTO crypto_device (user_id, device_id, identity_key, signing_key, trust, deleted, name) VALUES ($1, $2, $3, $4, $5, $6, $7)",
-			userID, device.DeviceID, device.IdentityKey, device.SigningKey, device.Trust, device.Deleted, device.Name)
-	} else {
-		err = fmt.Errorf("unsupported dialect %s", store.Dialect)
-	}
-	if err != nil {
-		store.Log.Warn("Failed to store device: %v", err)
-	}
-	return nil
+			ON CONFLICT (user_id, device_id) DO UPDATE SET identity_key=excluded.identity_key, signing_key=excluded.signing_key, trust=excluded.trust, deleted=excluded.deleted, name=excluded.name`,
+		userID, device.DeviceID, device.IdentityKey, device.SigningKey, device.Trust, device.Deleted, device.Name)
+	return err
 }
 
 // PutDevices stores the device identity information for the given user ID.
@@ -552,13 +524,7 @@ func (store *SQLCryptoStore) PutDevices(userID id.UserID, devices map[id.DeviceI
 		return err
 	}
 
-	if store.Dialect == "postgres" {
-		_, err = tx.Exec("INSERT INTO crypto_tracked_user (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING", userID)
-	} else if store.Dialect == "sqlite3" {
-		_, err = tx.Exec("INSERT OR IGNORE INTO crypto_tracked_user (user_id) VALUES ($1)", userID)
-	} else {
-		err = fmt.Errorf("unsupported dialect %s", store.Dialect)
-	}
+	_, err = tx.Exec("INSERT INTO crypto_tracked_user (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING", userID)
 	if err != nil {
 		return fmt.Errorf("failed to add user to tracked users list: %w", err)
 	}
@@ -644,21 +610,11 @@ func (store *SQLCryptoStore) FilterTrackedUsers(users []id.UserID) []id.UserID {
 
 // PutCrossSigningKey stores a cross-signing key of some user along with its usage.
 func (store *SQLCryptoStore) PutCrossSigningKey(userID id.UserID, usage id.CrossSigningUsage, key id.Ed25519) error {
-	var err error
-	if store.Dialect == "postgres" {
-		_, err = store.DB.Exec(`
-			INSERT INTO crypto_cross_signing_keys (user_id, usage, key) VALUES ($1, $2, $3) ON CONFLICT (user_id, usage) DO UPDATE SET key=$3`,
-			userID, usage, key)
-	} else if store.Dialect == "sqlite3" {
-		_, err = store.DB.Exec("INSERT OR REPLACE INTO crypto_cross_signing_keys (user_id, usage, key) VALUES ($1, $2, $3)",
-			userID, usage, key)
-	} else {
-		err = fmt.Errorf("unsupported dialect %s", store.Dialect)
-	}
-	if err != nil {
-		store.Log.Warn("Failed to store cross-signing key: %v", err)
-	}
-	return nil
+	_, err := store.DB.Exec(`
+		INSERT INTO crypto_cross_signing_keys (user_id, usage, key) VALUES ($1, $2, $3)
+		ON CONFLICT (user_id, usage) DO UPDATE SET key=excluded.key
+	`, userID, usage, key)
+	return err
 }
 
 // GetCrossSigningKeys retrieves a user's stored cross-signing keys.
@@ -683,24 +639,11 @@ func (store *SQLCryptoStore) GetCrossSigningKeys(userID id.UserID) (map[id.Cross
 
 // PutSignature stores a signature of a cross-signing or device key along with the signer's user ID and key.
 func (store *SQLCryptoStore) PutSignature(signedUserID id.UserID, signedKey id.Ed25519, signerUserID id.UserID, signerKey id.Ed25519, signature string) error {
-	var err error
-	if store.Dialect == "postgres" {
-		_, err = store.DB.Exec(`
-			INSERT INTO crypto_cross_signing_signatures (signed_user_id, signed_key, signer_user_id, signer_key, signature) VALUES ($1, $2, $3, $4, $5)
-			ON CONFLICT (signed_user_id, signed_key, signer_user_id, signer_key) DO UPDATE SET signature=$5`,
-			signedUserID, signedKey, signerUserID, signerKey, signature)
-	} else if store.Dialect == "sqlite3" {
-		_, err = store.DB.Exec(`
-			INSERT OR REPLACE INTO crypto_cross_signing_signatures (signed_user_id, signed_key, signer_user_id, signer_key, signature)
-			VALUES ($1, $2, $3, $4, $5)`,
-			signedUserID, signedKey, signerUserID, signerKey, signature)
-	} else {
-		err = fmt.Errorf("unsupported dialect %s", store.Dialect)
-	}
-	if err != nil {
-		store.Log.Warn("Failed to store signature: %v", err)
-	}
-	return nil
+	_, err := store.DB.Exec(`
+		INSERT INTO crypto_cross_signing_signatures (signed_user_id, signed_key, signer_user_id, signer_key, signature) VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (signed_user_id, signed_key, signer_user_id, signer_key) DO UPDATE SET signature=excluded.signature
+	`, signedUserID, signedKey, signerUserID, signerKey, signature)
+	return err
 }
 
 // GetSignaturesForKeyBy retrieves the stored signatures for a given cross-signing or device key, by the given signer.

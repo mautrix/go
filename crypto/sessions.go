@@ -8,7 +8,6 @@ package crypto
 
 import (
 	"errors"
-	"strings"
 	"time"
 
 	"maunium.net/go/mautrix/crypto/olm"
@@ -22,8 +21,8 @@ var (
 	SessionExpired   = errors.New("session has expired")
 )
 
-// OlmSessionList is a list of OlmSessions. It implements sort.Interface in a way that sorts items
-// in reverse alphabetic order, which means the newest session is first.
+// OlmSessionList is a list of OlmSessions.
+// It implements sort.Interface so that the session with recent successful decryptions comes first.
 type OlmSessionList []*OlmSession
 
 func (o OlmSessionList) Len() int {
@@ -31,7 +30,7 @@ func (o OlmSessionList) Len() int {
 }
 
 func (o OlmSessionList) Less(i, j int) bool {
-	return strings.Compare(string(o[i].ID()), string(o[j].ID())) > 0
+	return o[i].LastDecryptedTime.After(o[j].LastEncryptedTime)
 }
 
 func (o OlmSessionList) Swap(i, j int) {
@@ -60,8 +59,9 @@ func wrapSession(session *olm.Session) *OlmSession {
 		Internal: *session,
 		ExpirationMixin: ExpirationMixin{
 			TimeMixin: TimeMixin{
-				CreationTime: time.Now(),
-				UseTime:      time.Now(),
+				CreationTime:      time.Now(),
+				LastEncryptedTime: time.Now(),
+				LastDecryptedTime: time.Now(),
 			},
 		},
 	}
@@ -77,13 +77,16 @@ func (account *OlmAccount) NewInboundSessionFrom(senderKey id.Curve25519, cipher
 }
 
 func (session *OlmSession) Encrypt(plaintext []byte) (id.OlmMsgType, []byte) {
-	session.UseTime = time.Now()
+	session.LastEncryptedTime = time.Now()
 	return session.Internal.Encrypt(plaintext)
 }
 
 func (session *OlmSession) Decrypt(ciphertext string, msgType id.OlmMsgType) ([]byte, error) {
-	session.UseTime = time.Now()
-	return session.Internal.Decrypt(ciphertext, msgType)
+	msg, err := session.Internal.Decrypt(ciphertext, msgType)
+	if err == nil {
+		session.LastDecryptedTime = time.Now()
+	}
+	return msg, err
 }
 
 type InboundGroupSession struct {
@@ -152,8 +155,8 @@ func NewOutboundGroupSession(roomID id.RoomID, encryptionContent *event.Encrypti
 		Internal: *olm.NewOutboundGroupSession(),
 		ExpirationMixin: ExpirationMixin{
 			TimeMixin: TimeMixin{
-				CreationTime: time.Now(),
-				UseTime:      time.Now(),
+				CreationTime:      time.Now(),
+				LastEncryptedTime: time.Now(),
 			},
 			MaxAge: 7 * 24 * time.Hour,
 		},
@@ -203,12 +206,14 @@ func (ogs *OutboundGroupSession) Encrypt(plaintext []byte) ([]byte, error) {
 		return nil, SessionExpired
 	}
 	ogs.MessageCount++
+	ogs.LastEncryptedTime = time.Now()
 	return ogs.Internal.Encrypt(plaintext), nil
 }
 
 type TimeMixin struct {
-	CreationTime time.Time
-	UseTime      time.Time
+	CreationTime      time.Time
+	LastEncryptedTime time.Time
+	LastDecryptedTime time.Time
 }
 
 type ExpirationMixin struct {
