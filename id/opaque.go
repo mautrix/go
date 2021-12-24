@@ -36,19 +36,21 @@ func (roomID RoomID) String() string {
 	return string(roomID)
 }
 
-func (roomID RoomID) URI() *MatrixURI {
+func (roomID RoomID) URI(via ...string) *MatrixURI {
 	return &MatrixURI{
 		Sigil1: '!',
 		MXID1:  string(roomID)[1:],
+		Via:    via,
 	}
 }
 
-func (roomID RoomID) EventURI(eventID EventID) *MatrixURI {
+func (roomID RoomID) EventURI(eventID EventID, via ...string) *MatrixURI {
 	return &MatrixURI{
 		Sigil1: '!',
 		MXID1:  string(roomID)[1:],
 		Sigil2: '$',
 		MXID2:  string(eventID)[1:],
+		Via:    via,
 	}
 }
 
