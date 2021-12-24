@@ -52,6 +52,16 @@ func (userID UserID) Parse() (localpart, homeserver string, err error) {
 	return
 }
 
+// URI returns the user ID as a MatrixURI struct, which can then be stringified into a matrix: URI or a matrix.to URL.
+//
+// This does not parse or validate the user ID. Use the ParseAndValidate method if you want to ensure the user ID is valid first.
+func (userID UserID) URI() *MatrixURI {
+	return &MatrixURI{
+		Sigil1: '@',
+		MXID1:  string(userID)[1:],
+	}
+}
+
 var ValidLocalpartRegex = regexp.MustCompile("^[0-9a-z-.=_/]+$")
 
 // ValidateUserLocalpart validates a Matrix user ID localpart using the grammar

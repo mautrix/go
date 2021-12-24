@@ -79,3 +79,8 @@ func TestUserIDEncoding(t *testing.T) {
 	assert.Equal(t, inputLocalpart, decodedLocalpart)
 	assert.Equal(t, inputServerName, decodedServerName)
 }
+
+func TestUserID_URI(t *testing.T) {
+	userID := id.NewUserID("hello", "example.com")
+	assert.Equal(t, userID.URI().String(), "matrix:u/hello:example.com")
+}

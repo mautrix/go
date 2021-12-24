@@ -36,8 +36,40 @@ func (roomID RoomID) String() string {
 	return string(roomID)
 }
 
+func (roomID RoomID) URI() *MatrixURI {
+	return &MatrixURI{
+		Sigil1: '!',
+		MXID1:  string(roomID)[1:],
+	}
+}
+
+func (roomID RoomID) EventURI(eventID EventID) *MatrixURI {
+	return &MatrixURI{
+		Sigil1: '!',
+		MXID1:  string(roomID)[1:],
+		Sigil2: '$',
+		MXID2:  string(eventID)[1:],
+	}
+}
+
 func (roomAlias RoomAlias) String() string {
 	return string(roomAlias)
+}
+
+func (roomAlias RoomAlias) URI() *MatrixURI {
+	return &MatrixURI{
+		Sigil1: '#',
+		MXID1:  string(roomAlias)[1:],
+	}
+}
+
+func (roomAlias RoomAlias) EventURI(eventID EventID) *MatrixURI {
+	return &MatrixURI{
+		Sigil1: '#',
+		MXID1:  string(roomAlias)[1:],
+		Sigil2: '$',
+		MXID2:  string(eventID)[1:],
+	}
 }
 
 func (eventID EventID) String() string {
