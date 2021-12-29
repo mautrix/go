@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tulir Asokan
+// Copyright (c) 2021 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -32,6 +32,8 @@ var TypeMap = map[Type]reflect.Type{
 	StateEncryption:        reflect.TypeOf(EncryptionEventContent{}),
 	StateBridge:            reflect.TypeOf(BridgeEventContent{}),
 	StateHalfShotBridge:    reflect.TypeOf(BridgeEventContent{}),
+	StateSpaceParent:       reflect.TypeOf(SpaceParentEventContent{}),
+	StateSpaceChild:        reflect.TypeOf(SpaceChildEventContent{}),
 
 	EventMessage:   reflect.TypeOf(MessageEventContent{}),
 	EventSticker:   reflect.TypeOf(MessageEventContent{}),
@@ -184,6 +186,9 @@ func init() {
 	gob.Register(&PowerLevelsEventContent{})
 	gob.Register(&CanonicalAliasEventContent{})
 	gob.Register(&EncryptionEventContent{})
+	gob.Register(&BridgeEventContent{})
+	gob.Register(&SpaceChildEventContent{})
+	gob.Register(&SpaceParentEventContent{})
 	gob.Register(&RoomNameEventContent{})
 	gob.Register(&RoomAvatarEventContent{})
 	gob.Register(&TopicEventContent{})
@@ -308,6 +313,20 @@ func (content *Content) AsBridge() *BridgeEventContent {
 	casted, ok := content.Parsed.(*BridgeEventContent)
 	if !ok {
 		return &BridgeEventContent{}
+	}
+	return casted
+}
+func (content *Content) AsSpaceChild() *SpaceChildEventContent {
+	casted, ok := content.Parsed.(*SpaceChildEventContent)
+	if !ok {
+		return &SpaceChildEventContent{}
+	}
+	return casted
+}
+func (content *Content) AsSpaceParent() *SpaceParentEventContent {
+	casted, ok := content.Parsed.(*SpaceParentEventContent)
+	if !ok {
+		return &SpaceParentEventContent{}
 	}
 	return casted
 }

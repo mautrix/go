@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tulir Asokan
+// Copyright (c) 2021 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -10,6 +10,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+)
+
+type RoomType string
+
+const (
+	RoomTypeDefault RoomType = ""
+	RoomTypeSpace   RoomType = "m.space"
 )
 
 type TypeClass int
@@ -101,7 +108,8 @@ func (et *Type) GuessClass() TypeClass {
 	switch et.Type {
 	case StateAliases.Type, StateCanonicalAlias.Type, StateCreate.Type, StateJoinRules.Type, StateMember.Type,
 		StatePowerLevels.Type, StateRoomName.Type, StateRoomAvatar.Type, StateTopic.Type, StatePinnedEvents.Type,
-		StateTombstone.Type, StateEncryption.Type, StateBridge.Type, StateHalfShotBridge.Type:
+		StateTombstone.Type, StateEncryption.Type, StateBridge.Type, StateHalfShotBridge.Type, StateSpaceParent.Type,
+		StateSpaceChild.Type:
 		return StateEventType
 	case EphemeralEventReceipt.Type, EphemeralEventTyping.Type, EphemeralEventPresence.Type:
 		return EphemeralEventType
@@ -171,6 +179,8 @@ var (
 	StateEncryption        = Type{"m.room.encryption", StateEventType}
 	StateBridge            = Type{"m.bridge", StateEventType}
 	StateHalfShotBridge    = Type{"uk.half-shot.bridge", StateEventType}
+	StateSpaceChild        = Type{"m.space.child", StateEventType}
+	StateSpaceParent       = Type{"m.space.parent", StateEventType}
 )
 
 // Message events

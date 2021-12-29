@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tulir Asokan
+// Copyright (c) 2021 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -45,7 +45,8 @@ type TombstoneEventContent struct {
 // CreateEventContent represents the content of a m.room.create state event.
 // https://matrix.org/docs/spec/client_server/r0.6.0#m-room-create
 type CreateEventContent struct {
-	Creator     id.UserID `json:"creator"`
+	Type        RoomType  `json:"type,omitempty"`
+	Creator     id.UserID `json:"creator,omitempty"`
 	Federate    bool      `json:"m.federate,omitempty"`
 	RoomVersion string    `json:"version,omitempty"`
 	Predecessor struct {
@@ -124,4 +125,14 @@ type BridgeEventContent struct {
 	Protocol  BridgeInfoSection  `json:"protocol"`
 	Network   *BridgeInfoSection `json:"network,omitempty"`
 	Channel   BridgeInfoSection  `json:"channel"`
+}
+
+type SpaceChildEventContent struct {
+	Via   []string `json:"via,omitempty"`
+	Order string   `json:"order,omitempty"`
+}
+
+type SpaceParentEventContent struct {
+	Via       []string `json:"via,omitempty"`
+	Canonical bool     `json:"canonical,omitempty"`
 }
