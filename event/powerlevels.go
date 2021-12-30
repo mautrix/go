@@ -25,10 +25,11 @@ type PowerLevelsEventContent struct {
 
 	StateDefaultPtr *int `json:"state_default,omitempty"`
 
-	InvitePtr *int `json:"invite,omitempty"`
-	KickPtr   *int `json:"kick,omitempty"`
-	BanPtr    *int `json:"ban,omitempty"`
-	RedactPtr *int `json:"redact,omitempty"`
+	InvitePtr     *int `json:"invite,omitempty"`
+	KickPtr       *int `json:"kick,omitempty"`
+	BanPtr        *int `json:"ban,omitempty"`
+	RedactPtr     *int `json:"redact,omitempty"`
+	HistoricalPtr *int `json:"historical,omitempty"`
 }
 
 func (pl *PowerLevelsEventContent) Invite() int {
@@ -57,6 +58,13 @@ func (pl *PowerLevelsEventContent) Redact() int {
 		return *pl.RedactPtr
 	}
 	return 50
+}
+
+func (pl *PowerLevelsEventContent) Historical() int {
+	if pl.HistoricalPtr != nil {
+		return *pl.HistoricalPtr
+	}
+	return 100
 }
 
 func (pl *PowerLevelsEventContent) StateDefault() int {
