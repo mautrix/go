@@ -16,12 +16,12 @@ import (
 // https://matrix.org/docs/spec/client_server/r0.6.0#m-room-power-levels
 type PowerLevelsEventContent struct {
 	usersLock    sync.RWMutex      `json:"-"`
-	Users        map[id.UserID]int `json:"users"`
-	UsersDefault int               `json:"users_default"`
+	Users        map[id.UserID]int `json:"users,omitempty"`
+	UsersDefault int               `json:"users_default,omitempty"`
 
 	eventsLock    sync.RWMutex   `json:"-"`
-	Events        map[string]int `json:"events"`
-	EventsDefault int            `json:"events_default"`
+	Events        map[string]int `json:"events,omitempty"`
+	EventsDefault int            `json:"events_default,omitempty"`
 
 	StateDefaultPtr *int `json:"state_default,omitempty"`
 
