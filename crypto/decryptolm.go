@@ -146,6 +146,7 @@ func (mach *OlmMachine) tryDecryptOlmCiphertext(sender id.UserID, senderKey id.S
 	plaintext, err = session.Decrypt(ciphertext, olmType)
 	endTimeTrace()
 	if err != nil {
+		go mach.unwedgeDevice(sender, senderKey)
 		return nil, fmt.Errorf("failed to decrypt olm event with session created from prekey message: %w", err)
 	}
 
