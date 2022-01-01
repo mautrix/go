@@ -78,6 +78,16 @@ type RespMessages struct {
 	End   string         `json:"end"`
 }
 
+// RespContext is the JSON response for https://spec.matrix.org/v1.1/client-server-api/#get_matrixclientv3roomsroomidcontexteventid
+type RespContext struct {
+	End          string         `json:"end"`
+	Event        *event.Event   `json:"event"`
+	EventsAfter  []*event.Event `json:"events_after"`
+	EventsBefore []*event.Event `json:"events_before"`
+	Start        string         `json:"start"`
+	State        []*event.Event `json:"state"`
+}
+
 // RespSendEvent is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-rooms-roomid-send-eventtype-txnid
 type RespSendEvent struct {
 	EventID id.EventID `json:"event_id"`

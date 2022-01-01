@@ -1296,6 +1296,28 @@ func (cli *Client) Messages(roomID id.RoomID, from, to string, dir rune, limit i
 	return
 }
 
+// Context returns a number of events that happened just before and after the
+// specified event. It use pagination query parameters to paginate history in
+// the room.
+// See https://spec.matrix.org/v1.1/client-server-api/#get_matrixclientv3roomsroomidcontexteventid
+func (cli *Client) Context(roomID id.RoomID, eventID id.EventID, filter *Filter, limit int) (resp *RespContext, err error) {
+	query := map[string]string{}
+	if filter != nil {
+		filterJSON, err := json.Marshal(filter)
+		if err != nil {
+			return nil, err
+		}
+		query["filter"] = string(filterJSON)
+	}
+	if limit != 0 {
+		query["limit"] = strconv.Itoa(limit)
+	}
+
+	urlPath := cli.BuildURLWithQuery(URLPath{"rooms", roomID, "context", eventID}, query)
+	_, err = cli.MakeRequest("GET", urlPath, nil, &resp)
+	return
+}
+
 func (cli *Client) GetEvent(roomID id.RoomID, eventID id.EventID) (resp *event.Event, err error) {
 	urlPath := cli.BuildURL("rooms", roomID, "event", eventID)
 	_, err = cli.MakeRequest("GET", urlPath, nil, &resp)
