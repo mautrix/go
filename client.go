@@ -940,6 +940,14 @@ func (cli *Client) SendImage(roomID id.RoomID, body string, url id.ContentURI) (
 	})
 }
 
+// SendSticker sends an m.sticker event into the given room. See https://spec.matrix.org/v1.1/client-server-api/#msticker
+func (cli *Client) SendSticker(roomID id.RoomID, body string, url id.ContentURI) (*RespSendEvent, error) {
+	return cli.SendMessageEvent(roomID, event.EventSticker, &event.MessageEventContent{
+		Body: body,
+		URL:  url.CUString(),
+	})
+}
+
 // SendVideo sends an m.room.message event into the given room with a msgtype of m.video
 // See https://matrix.org/docs/spec/client_server/r0.2.0.html#m-video
 func (cli *Client) SendVideo(roomID id.RoomID, body string, url id.ContentURI) (*RespSendEvent, error) {
