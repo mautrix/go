@@ -31,7 +31,7 @@ var ffmpegDefaultParams = []string{"-hide_banner", "-loglevel", "warning"}
 //
 // Returns: the path to the converted file.
 func ConvertPath(inputFile string, outputExtension string, inputArgs []string, outputArgs []string, removeInput bool) (string, error) {
-	outputFilename := strings.TrimSuffix(inputFile, filepath.Ext(inputFile)) + "." + outputExtension
+	outputFilename := strings.TrimSuffix(inputFile, filepath.Ext(inputFile)) + outputExtension
 
 	args := []string{}
 	args = append(args, ffmpegDefaultParams...)
@@ -39,8 +39,6 @@ func ConvertPath(inputFile string, outputExtension string, inputArgs []string, o
 	args = append(args, "-i", inputFile)
 	args = append(args, outputArgs...)
 	args = append(args, outputFilename)
-
-	log.Info(args)
 
 	cmd := exec.Command("ffmpeg", args...)
 	vcLog := log.Sub("ffmpeg").Writer(log.LevelWarn)
@@ -74,9 +72,9 @@ func ConvertBytes(data []byte, outputExtension string, inputArgs []string, outpu
 		return nil, err
 	}
 	defer os.RemoveAll(tempdir)
-	inputFileName := fmt.Sprintf("%s/input.%s", tempdir, util.ExtensionFromMimetype(inputMime))
+	inputFileName := fmt.Sprintf("%s/input%s", tempdir, util.ExtensionFromMimetype(inputMime))
 
-	inputFile, err := os.OpenFile(inputFileName, os.O_EXCL|os.O_WRONLY, 0600)
+	inputFile, err := os.OpenFile(inputFileName, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open input file: %w", err)
 	}
