@@ -29,6 +29,14 @@ type RoomAvatarEventContent struct {
 	URL id.ContentURI `json:"url"`
 }
 
+// ServerAclsEventContent represents the content of a m.room.server_acl state event.
+// https://spec.matrix.org/v1.1/client-server-api/#server-access-control-lists-acls-for-rooms
+type ServerAclsEventContent struct {
+	Allow           []string `json:"allow,omitempty"`
+	AllowIPLiterals bool     `json:"allow_ip_literals"`
+	Deny            []string `json:"deny,omitempty"`
+}
+
 // TopicEventContent represents the content of a m.room.topic state event.
 // https://matrix.org/docs/spec/client_server/r0.6.0#m-room-topic
 type TopicEventContent struct {

@@ -107,9 +107,9 @@ func (et *Type) IsCustom() bool {
 func (et *Type) GuessClass() TypeClass {
 	switch et.Type {
 	case StateAliases.Type, StateCanonicalAlias.Type, StateCreate.Type, StateJoinRules.Type, StateMember.Type,
-		StatePowerLevels.Type, StateRoomName.Type, StateRoomAvatar.Type, StateTopic.Type, StatePinnedEvents.Type,
-		StateTombstone.Type, StateEncryption.Type, StateBridge.Type, StateHalfShotBridge.Type, StateSpaceParent.Type,
-		StateSpaceChild.Type:
+		StatePowerLevels.Type, StateRoomName.Type, StateRoomAvatar.Type, StateServerAcls.Type, StateTopic.Type,
+		StatePinnedEvents.Type, StateTombstone.Type, StateEncryption.Type, StateBridge.Type, StateHalfShotBridge.Type,
+		StateSpaceParent.Type, StateSpaceChild.Type:
 		return StateEventType
 	case EphemeralEventReceipt.Type, EphemeralEventTyping.Type, EphemeralEventPresence.Type:
 		return EphemeralEventType
@@ -175,6 +175,7 @@ var (
 	StateTopic             = Type{"m.room.topic", StateEventType}
 	StateRoomAvatar        = Type{"m.room.avatar", StateEventType}
 	StatePinnedEvents      = Type{"m.room.pinned_events", StateEventType}
+	StateServerAcls        = Type{"m.room.server_acl", StateEventType}
 	StateTombstone         = Type{"m.room.tombstone", StateEventType}
 	StateEncryption        = Type{"m.room.encryption", StateEventType}
 	StateBridge            = Type{"m.bridge", StateEventType}
