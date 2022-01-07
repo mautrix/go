@@ -107,7 +107,7 @@ func (et *Type) IsCustom() bool {
 func (et *Type) GuessClass() TypeClass {
 	switch et.Type {
 	case StateAliases.Type, StateCanonicalAlias.Type, StateCreate.Type, StateJoinRules.Type, StateMember.Type,
-		StatePowerLevels.Type, StateRoomName.Type, StateRoomAvatar.Type, StateServerAcls.Type, StateTopic.Type,
+		StatePowerLevels.Type, StateRoomName.Type, StateRoomAvatar.Type, StateServerACL.Type, StateTopic.Type,
 		StatePinnedEvents.Type, StateTombstone.Type, StateEncryption.Type, StateBridge.Type, StateHalfShotBridge.Type,
 		StateSpaceParent.Type, StateSpaceChild.Type:
 		return StateEventType
