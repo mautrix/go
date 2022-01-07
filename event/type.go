@@ -175,7 +175,7 @@ var (
 	StateTopic             = Type{"m.room.topic", StateEventType}
 	StateRoomAvatar        = Type{"m.room.avatar", StateEventType}
 	StatePinnedEvents      = Type{"m.room.pinned_events", StateEventType}
-	StateServerAcls        = Type{"m.room.server_acl", StateEventType}
+	StateServerACL         = Type{"m.room.server_acl", StateEventType}
 	StateTombstone         = Type{"m.room.tombstone", StateEventType}
 	StateEncryption        = Type{"m.room.encryption", StateEventType}
 	StateBridge            = Type{"m.bridge", StateEventType}
