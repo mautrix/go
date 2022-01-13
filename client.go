@@ -620,11 +620,11 @@ func (cli *Client) FullSyncRequest(req ReqSync) (resp *RespSync, err error) {
 	_, err = cli.MakeFullRequest(fullReq)
 	duration := time.Now().Sub(start)
 	timeout := time.Duration(req.Timeout) * time.Millisecond
-	buffer := 5 * time.Second
+	buffer := 10 * time.Second
 	if req.Since == "" {
 		buffer = 1 * time.Minute
 	}
-	if duration > timeout+buffer {
+	if err == nil && duration > timeout+buffer {
 		cli.logWarning("Sync request (%s) took %s with timeout %s", req.Since, duration, timeout)
 	}
 	return
