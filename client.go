@@ -1014,9 +1014,15 @@ func (cli *Client) CreateRoom(req *ReqCreateRoom) (resp *RespCreateRoom, err err
 }
 
 // LeaveRoom leaves the given room. See http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-leave
-func (cli *Client) LeaveRoom(roomID id.RoomID) (resp *RespLeaveRoom, err error) {
+func (cli *Client) LeaveRoom(roomID id.RoomID, optionalReq ...*ReqLeave) (resp *RespLeaveRoom, err error) {
+	req := &ReqLeave{}
+	if len(optionalReq) == 1 {
+		req = optionalReq[0]
+	} else if len(optionalReq) > 1 {
+		panic("invalid number of arguments to LeaveRoom")
+	}
 	u := cli.BuildURL("rooms", roomID, "leave")
-	_, err = cli.MakeRequest("POST", u, struct{}{}, &resp)
+	_, err = cli.MakeRequest("POST", u, req, &resp)
 	return
 }
 

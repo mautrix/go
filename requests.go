@@ -126,6 +126,10 @@ type ReqInvite3PID struct {
 	Address  string `json:"address"`
 }
 
+type ReqLeave struct {
+	Reason string `json:"reason,omitempty"`
+}
+
 // ReqInviteUser is the JSON request for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-invite
 type ReqInviteUser struct {
 	Reason string    `json:"reason,omitempty"`
