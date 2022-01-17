@@ -1353,6 +1353,12 @@ func (cli *Client) MarkReadWithContent(roomID id.RoomID, eventID id.EventID, con
 	return
 }
 
+func (cli *Client) SetReadMarkers(roomID id.RoomID, content interface{}) (err error) {
+	urlPath := cli.BuildURL("rooms", roomID, "read_markers")
+	_, err = cli.MakeRequest("POST", urlPath, &content, nil)
+	return
+}
+
 func (cli *Client) AddTag(roomID id.RoomID, tag string, order float64) error {
 	var tagData event.Tag
 	if order == order {

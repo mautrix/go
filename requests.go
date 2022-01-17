@@ -319,3 +319,8 @@ type ReqBatchSend struct {
 	StateEventsAtStart []*event.Event `json:"state_events_at_start"`
 	Events             []*event.Event `json:"events"`
 }
+
+type ReqSetReadMarkers struct {
+	Read      id.EventID `json:"m.read"`
+	FullyRead id.EventID `json:"m.fully_read"`
+}
