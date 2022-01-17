@@ -66,8 +66,14 @@ func (intent *IntentAPI) EnsureRegistered() error {
 	return nil
 }
 
-func (intent *IntentAPI) EnsureJoined(roomID id.RoomID) error {
-	if intent.as.StateStore.IsInRoom(roomID, intent.UserID) {
+type EnsureJoinedParams struct {
+	IgnoreCache bool
+}
+
+func (intent *IntentAPI) EnsureJoined(roomID id.RoomID, extra ...EnsureJoinedParams) error {
+	if len(extra) > 1 {
+		panic("invalid number of extra parameters")
+	} else if intent.as.StateStore.IsInRoom(roomID, intent.UserID) && (len(extra) == 0 || !extra[0].IgnoreCache) {
 		return nil
 	}
 
