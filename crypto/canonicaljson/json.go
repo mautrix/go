@@ -255,19 +255,3 @@ func readHexDigits(input []byte) uint32 {
 	hex |= hex >> 8
 	return hex & 0xFFFF
 }
-
-// RawJSONFromResult extracts the raw JSON bytes pointed to by result.
-// input must be the json bytes that were used to generate result
-func RawJSONFromResult(result gjson.Result, input []byte) (RawJSON []byte) {
-	// This is lifted from gjson README. Basically, result.Raw is a copy of
-	// the bytes we want, but its more efficient to take a slice.
-	// If Index is 0 then for some reason we can't extract it from the original
-	// JSON bytes.
-	if result.Index > 0 {
-		RawJSON = input[result.Index : result.Index+len(result.Raw)]
-	} else {
-		RawJSON = []byte(result.Raw)
-	}
-
-	return
-}

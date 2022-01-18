@@ -10,7 +10,7 @@ require (
 	github.com/russross/blackfriday/v2 v2.1.0
 	github.com/stretchr/testify v1.7.0
 	github.com/tidwall/gjson v1.13.0
-	github.com/tidwall/sjson v1.2.3
+	github.com/tidwall/sjson v1.2.4
 	golang.org/x/crypto v0.0.0-20211215153901-e495a2d5b3d3
 	golang.org/x/net v0.0.0-20211216030914-fe4d6282115f
 	gopkg.in/yaml.v2 v2.4.0
