@@ -47,8 +47,7 @@ func CanonicalJSONAssumeValid(input []byte) []byte {
 func SortJSON(input, output []byte) []byte {
 	result := gjson.ParseBytes(input)
 
-	RawJSON := RawJSONFromResult(result, input)
-	return sortJSONValue(result, RawJSON, output)
+	return sortJSONValue(result, input, output)
 }
 
 // sortJSONValue takes a gjson.Result and sorts it. inputJSON must be the
@@ -64,7 +63,7 @@ func sortJSONValue(input gjson.Result, inputJSON, output []byte) []byte {
 
 	// If its neither an object nor an array then there is no sub structure
 	// to sort, so just append the raw bytes.
-	return append(output, inputJSON...)
+	return append(output, input.Raw...)
 }
 
 // sortJSONArray takes a gjson.Result and sorts it, assuming its an array.
@@ -76,10 +75,7 @@ func sortJSONArray(input gjson.Result, inputJSON, output []byte) []byte {
 	input.ForEach(func(_, value gjson.Result) bool {
 		output = append(output, sep)
 		sep = ','
-
-		RawJSON := RawJSONFromResult(value, inputJSON)
-		output = sortJSONValue(value, RawJSON, output)
-
+		output = sortJSONValue(value, inputJSON, output)
 		return true // keep iterating
 	})
 
@@ -99,7 +95,7 @@ func sortJSONArray(input gjson.Result, inputJSON, output []byte) []byte {
 func sortJSONObject(input gjson.Result, inputJSON, output []byte) []byte {
 	type entry struct {
 		key    string // The parsed key string
-		rawKey []byte // The raw, unparsed key JSON string
+		rawKey string // The raw, unparsed key JSON string
 		value  gjson.Result
 	}
 
@@ -110,7 +106,7 @@ func sortJSONObject(input gjson.Result, inputJSON, output []byte) []byte {
 	input.ForEach(func(key, value gjson.Result) bool {
 		entries = append(entries, entry{
 			key:    key.String(),
-			rawKey: RawJSONFromResult(key, inputJSON),
+			rawKey: key.Raw,
 			value:  value,
 		})
 		return true // keep iterating
@@ -130,10 +126,7 @@ func sortJSONObject(input gjson.Result, inputJSON, output []byte) []byte {
 		// Append the raw unparsed JSON key, *not* the parsed key
 		output = append(output, entry.rawKey...)
 		output = append(output, ':')
-
-		RawJSON := RawJSONFromResult(entry.value, inputJSON)
-
-		output = sortJSONValue(entry.value, RawJSON, output)
+		output = sortJSONValue(entry.value, inputJSON, output)
 	}
 	if sep == '{' {
 		// If sep is still '{' then the object was empty and we never wrote the

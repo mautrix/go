@@ -9,7 +9,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.10
 	github.com/russross/blackfriday/v2 v2.1.0
 	github.com/stretchr/testify v1.7.0
-	github.com/tidwall/gjson v1.10.2
+	github.com/tidwall/gjson v1.13.0
 	github.com/tidwall/sjson v1.2.3
 	golang.org/x/crypto v0.0.0-20211215153901-e495a2d5b3d3
 	golang.org/x/net v0.0.0-20211216030914-fe4d6282115f
