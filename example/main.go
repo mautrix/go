@@ -19,9 +19,10 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
+
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
-	"os"
 )
 
 var homeserver = flag.String("homeserver", "", "Matrix homeserver")
