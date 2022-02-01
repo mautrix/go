@@ -1,8 +1,10 @@
 package olm
 
 // #cgo LDFLAGS: -lolm -lstdc++
+// #cgo freebsd LDFLAGS: -L/usr/local/lib -lolm -lstdc++
 // #include <olm/olm.h>
 import "C"
+
 import (
 	"encoding/base64"
 
