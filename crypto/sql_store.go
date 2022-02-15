@@ -496,7 +496,7 @@ func (store *SQLCryptoStore) FindDeviceByKey(userID id.UserID, identityKey id.Id
 		SELECT device_id, identity_key, signing_key, trust, deleted, name
 		FROM crypto_device WHERE user_id=$1 AND identity_key=$2`,
 		userID, identityKey,
-	).Scan(&identity.DeviceID, &identity.SigningKey, &identity.Trust, &identity.Deleted, &identity.Name)
+	).Scan(&identity.DeviceID, &identity.IdentityKey, &identity.SigningKey, &identity.Trust, &identity.Deleted, &identity.Name)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
