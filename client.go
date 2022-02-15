@@ -1246,6 +1246,18 @@ func (cli *Client) UploadMedia(data ReqUploadMedia) (*RespMediaUpload, error) {
 	return &m, err
 }
 
+// GetURLPreview asks the homeserver to fetch a preview for a given URL.
+//
+// See https://spec.matrix.org/v1.2/client-server-api/#get_matrixmediav3preview_url
+func (cli *Client) GetURLPreview(url string) (*RespPreviewURL, error) {
+	reqURL := cli.BuildBaseURLWithQuery(URLPath{"_matrix", "media", "r0", "preview_url"}, map[string]string{
+		"url": url,
+	})
+	var output RespPreviewURL
+	_, err := cli.MakeRequest(http.MethodGet, reqURL, nil, &output)
+	return &output, err
+}
+
 // JoinedMembers returns a map of joined room members. See https://matrix.org/docs/spec/client_server/r0.4.0.html#get-matrix-client-r0-joined-rooms
 //
 // In general, usage of this API is discouraged in favour of /sync, as calling this API can race with incoming membership changes.
