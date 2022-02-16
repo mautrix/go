@@ -493,7 +493,7 @@ func (store *SQLCryptoStore) GetDevice(userID id.UserID, deviceID id.DeviceID) (
 func (store *SQLCryptoStore) FindDeviceByKey(userID id.UserID, identityKey id.IdentityKey) (*DeviceIdentity, error) {
 	var identity DeviceIdentity
 	err := store.DB.QueryRow(`
-		SELECT device_id, identity_key, signing_key, trust, deleted, name
+		SELECT device_id, signing_key, trust, deleted, name
 		FROM crypto_device WHERE user_id=$1 AND identity_key=$2`,
 		userID, identityKey,
 	).Scan(&identity.DeviceID, &identity.SigningKey, &identity.Trust, &identity.Deleted, &identity.Name)
