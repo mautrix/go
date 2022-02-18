@@ -148,7 +148,7 @@ func SendCheckpoints(as *AppService, checkpoints []*MessageSendCheckpoint) error
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("Failed to send bridge state update: %w", err)
+		return fmt.Errorf("failed to send bridge state update: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
@@ -156,7 +156,7 @@ func SendCheckpoints(as *AppService, checkpoints []*MessageSendCheckpoint) error
 		if respBody != nil {
 			respBody = bytes.ReplaceAll(respBody, []byte("\n"), []byte("\\n"))
 		}
-		return fmt.Errorf("Unexpected status code %d sending bridge state update: %s", resp.StatusCode, respBody)
+		return fmt.Errorf("unexpected status code %d sending bridge state update: %s", resp.StatusCode, respBody)
 	}
 	return nil
 }
