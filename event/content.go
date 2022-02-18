@@ -488,3 +488,10 @@ func (content *Content) AsCallHangup() *CallHangupEventContent {
 	}
 	return casted
 }
+func (content *Content) AsModPolicy() *ModPolicyContent {
+	casted, ok := content.Parsed.(*ModPolicyContent)
+	if !ok {
+		return &ModPolicyContent{}
+	}
+	return casted
+}
