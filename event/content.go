@@ -150,19 +150,19 @@ func (content *Content) MarshalJSON() ([]byte, error) {
 }
 
 func IsUnsupportedContentType(err error) bool {
-	return errors.Is(err, UnsupportedContentType)
+	return errors.Is(err, ErrUnsupportedContentType)
 }
 
-var ContentAlreadyParsed = errors.New("content is already parsed")
-var UnsupportedContentType = errors.New("unsupported event type")
+var ErrContentAlreadyParsed = errors.New("content is already parsed")
+var ErrUnsupportedContentType = errors.New("unsupported event type")
 
 func (content *Content) ParseRaw(evtType Type) error {
 	if content.Parsed != nil {
-		return ContentAlreadyParsed
+		return ErrContentAlreadyParsed
 	}
 	structType, ok := TypeMap[evtType]
 	if !ok {
-		return fmt.Errorf("%w %s", UnsupportedContentType, evtType.Repr())
+		return fmt.Errorf("%w %s", ErrUnsupportedContentType, evtType.Repr())
 	}
 	content.Parsed = reflect.New(structType).Interface()
 	return json.Unmarshal(content.VeryRaw, &content.Parsed)
