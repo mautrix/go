@@ -77,7 +77,7 @@ func (content *ReactionEventContent) SetRelatesTo(rel *RelatesTo) {
 // https://matrix.org/docs/spec/client_server/r0.6.0#m-room-message
 type MessageEventContent struct {
 	// Base m.room.message fields
-	MsgType MessageType `json:"msgtype"`
+	MsgType MessageType `json:"msgtype,omitempty"`
 	Body    string      `json:"body"`
 
 	// Extra fields for text types
