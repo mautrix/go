@@ -61,7 +61,7 @@ func (evt *Event) GenerateReplyFallbackHTML() string {
 	parsedContent.RemoveReplyFallback()
 	body := parsedContent.FormattedBody
 	if len(body) == 0 {
-		body = html.EscapeString(parsedContent.Body)
+		body = strings.ReplaceAll(html.EscapeString(parsedContent.Body), "\n", "<br/>")
 	}
 
 	senderDisplayName := evt.Sender
@@ -98,7 +98,7 @@ func (content *MessageEventContent) SetReply(inReplyTo *Event) {
 
 	if content.MsgType == MsgText || content.MsgType == MsgNotice {
 		if len(content.FormattedBody) == 0 || content.Format != FormatHTML {
-			content.FormattedBody = html.EscapeString(content.Body)
+			content.FormattedBody = strings.ReplaceAll(html.EscapeString(content.Body), "\n", "<br/>")
 			content.Format = FormatHTML
 		}
 		content.FormattedBody = inReplyTo.GenerateReplyFallbackHTML() + content.FormattedBody
