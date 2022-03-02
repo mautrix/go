@@ -90,11 +90,11 @@ func (intent *IntentAPI) EnsureJoined(roomID id.RoomID, extra ...EnsureJoinedPar
 			UserID: intent.UserID,
 		})
 		if inviteErr != nil {
-			return fmt.Errorf("failed to ensure joined: %w", err)
+			return fmt.Errorf("failed to invite in ensure joined: %w", err)
 		}
 		resp, err = intent.JoinRoomByID(roomID)
 		if err != nil {
-			return fmt.Errorf("failed to ensure joined: %w", err)
+			return fmt.Errorf("failed to ensure joined after invite: %w", err)
 		}
 	}
 	intent.as.StateStore.SetMembership(resp.RoomID, intent.UserID, event.MembershipJoin)
