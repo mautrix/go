@@ -204,12 +204,13 @@ func (sfi *serializableFileInfo) CopyFrom(fileInfo *FileInfo) *serializableFileI
 
 func (sfi *serializableFileInfo) CopyTo(fileInfo *FileInfo) {
 	*fileInfo = FileInfo{
-		Width:        numberToInt(sfi.Width),
-		Height:       numberToInt(sfi.Height),
-		Size:         numberToInt(sfi.Size),
-		Duration:     numberToInt(sfi.Duration),
-		MimeType:     sfi.MimeType,
-		ThumbnailURL: sfi.ThumbnailURL,
+		Width:         numberToInt(sfi.Width),
+		Height:        numberToInt(sfi.Height),
+		Size:          numberToInt(sfi.Size),
+		Duration:      numberToInt(sfi.Duration),
+		MimeType:      sfi.MimeType,
+		ThumbnailURL:  sfi.ThumbnailURL,
+		ThumbnailFile: sfi.ThumbnailFile,
 	}
 	if sfi.ThumbnailInfo != nil {
 		fileInfo.ThumbnailInfo = &FileInfo{}
