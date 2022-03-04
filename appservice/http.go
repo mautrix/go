@@ -192,7 +192,7 @@ func (as *AppService) handleEvents(evts []*event.Event, defaultTypeClass event.T
 			evt.Type.Class = event.MessageEventType
 		}
 		err := evt.Content.ParseRaw(evt.Type)
-		if errors.Is(err, event.UnsupportedContentType) {
+		if errors.Is(err, event.ErrUnsupportedContentType) {
 			as.Log.Debugfln("Not parsing content of %s: %v", evt.ID, err)
 		} else if err != nil {
 			as.Log.Debugfln("Failed to parse content of %s (type %s): %v", evt.ID, evt.Type.Type, err)

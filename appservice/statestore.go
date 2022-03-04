@@ -63,7 +63,7 @@ func (store *TypingStateStore) IsTyping(roomID id.RoomID, userID id.UserID) bool
 	if !ok {
 		return false
 	}
-	typingEndsAt, _ := roomTyping[userID]
+	typingEndsAt := roomTyping[userID]
 	return typingEndsAt >= time.Now().Unix()
 }
 
@@ -218,7 +218,7 @@ func (store *BasicStateStore) SetPowerLevels(roomID id.RoomID, levels *event.Pow
 
 func (store *BasicStateStore) GetPowerLevels(roomID id.RoomID) (levels *event.PowerLevelsEventContent) {
 	store.powerLevelsLock.RLock()
-	levels, _ = store.PowerLevels[roomID]
+	levels = store.PowerLevels[roomID]
 	store.powerLevelsLock.RUnlock()
 	return
 }
