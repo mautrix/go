@@ -68,12 +68,17 @@ func (intent *IntentAPI) EnsureRegistered() error {
 
 type EnsureJoinedParams struct {
 	IgnoreCache bool
+	BotOverride *mautrix.Client
 }
 
 func (intent *IntentAPI) EnsureJoined(roomID id.RoomID, extra ...EnsureJoinedParams) error {
+	var params EnsureJoinedParams
 	if len(extra) > 1 {
 		panic("invalid number of extra parameters")
-	} else if intent.as.StateStore.IsInRoom(roomID, intent.UserID) && (len(extra) == 0 || !extra[0].IgnoreCache) {
+	} else if len(extra) == 1 {
+		params = extra[0]
+	}
+	if intent.as.StateStore.IsInRoom(roomID, intent.UserID) && !params.IgnoreCache {
 		return nil
 	}
 
@@ -83,10 +88,14 @@ func (intent *IntentAPI) EnsureJoined(roomID id.RoomID, extra ...EnsureJoinedPar
 
 	resp, err := intent.JoinRoomByID(roomID)
 	if err != nil {
-		if !errors.Is(err, mautrix.MForbidden) || intent.bot == nil {
+		bot := intent.bot
+		if params.BotOverride != nil {
+			bot = params.BotOverride
+		}
+		if !errors.Is(err, mautrix.MForbidden) || bot == nil {
 			return fmt.Errorf("failed to ensure joined: %w", err)
 		}
-		_, inviteErr := intent.bot.InviteUser(roomID, &mautrix.ReqInviteUser{
+		_, inviteErr := bot.InviteUser(roomID, &mautrix.ReqInviteUser{
 			UserID: intent.UserID,
 		})
 		if inviteErr != nil {
