@@ -99,7 +99,7 @@ func (intent *IntentAPI) EnsureJoined(roomID id.RoomID, extra ...EnsureJoinedPar
 			UserID: intent.UserID,
 		})
 		if inviteErr != nil {
-			return fmt.Errorf("failed to invite in ensure joined: %w", err)
+			return fmt.Errorf("failed to invite in ensure joined: %w", inviteErr)
 		}
 		resp, err = intent.JoinRoomByID(roomID)
 		if err != nil {
