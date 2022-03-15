@@ -130,9 +130,10 @@ func (as *AppService) HasWebsocket() bool {
 }
 
 func (as *AppService) SendWebsocket(cmd *WebsocketRequest) error {
+	ws := as.ws
 	if cmd == nil {
 		return nil
-	} else if as.ws == nil {
+	} else if ws == nil {
 		return ErrWebsocketNotConnected
 	}
 	as.wsWriteLock.Lock()
@@ -140,8 +141,8 @@ func (as *AppService) SendWebsocket(cmd *WebsocketRequest) error {
 	if cmd.Deadline == 0 {
 		cmd.Deadline = 3 * time.Minute
 	}
-	_ = as.ws.SetWriteDeadline(time.Now().Add(cmd.Deadline))
-	return as.ws.WriteJSON(cmd)
+	_ = ws.SetWriteDeadline(time.Now().Add(cmd.Deadline))
+	return ws.WriteJSON(cmd)
 }
 
 func (as *AppService) clearWebsocketResponseWaiters() {
