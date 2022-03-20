@@ -88,9 +88,14 @@ var TypeMap = map[Type]reflect.Type{
 
 // Content stores the content of a Matrix event.
 //
-// By default, the content is only parsed into a map[string]interface{}. However, you can call ParseRaw with the
-// correct event type to parse the content into a nicer struct, which you can then access from Parsed or via the
-// helper functions.
+// By default, the raw JSON bytes are stored in VeryRaw and parsed into a map[string]interface{} in the Raw field.
+// Additionally, you can call ParseRaw with the correct event type to parse the (VeryRaw) content into a nicer struct,
+// which you can then access from Parsed or via the helper functions.
+//
+// When being marshaled into JSON, the data in Parsed will be marshaled first and then recursively merged
+// with the data in Raw. Values in Raw are preferred, but nested objects will be recursed into before merging,
+// rather than overriding the whole object with the one in Raw).
+// If one of them is nil, the only the other is used. If both (Parsed and Raw) are nil, VeryRaw is used instead.
 type Content struct {
 	VeryRaw json.RawMessage
 	Raw     map[string]interface{}
