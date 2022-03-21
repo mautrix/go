@@ -1193,6 +1193,36 @@ func (cli *Client) DownloadBytes(mxcURL id.ContentURI) ([]byte, error) {
 	return ioutil.ReadAll(resp)
 }
 
+// UnstableCreateMXC creates a blank Matrix content URI to allow uploading the content asynchronously later.
+// See https://github.com/matrix-org/matrix-spec-proposals/pull/2246
+func (cli *Client) UnstableCreateMXC() (*RespCreateMXC, error) {
+	u, _ := url.Parse(cli.BuildBaseURL("_matrix", "media", "unstable", "fi.mau.msc2246", "create"))
+	var m RespCreateMXC
+	_, err := cli.MakeFullRequest(FullRequest{
+		Method:       http.MethodPost,
+		URL:          u.String(),
+		ResponseJSON: &m,
+	})
+	return &m, err
+}
+
+// UnstableUploadAsync creates a blank content URI with UnstableCreateMXC, starts uploading the data in the background
+// and returns the created MXC immediately. See https://github.com/matrix-org/matrix-spec-proposals/pull/2246 for more info.
+func (cli *Client) UnstableUploadAsync(req ReqUploadMedia) (*RespCreateMXC, error) {
+	resp, err := cli.UnstableCreateMXC()
+	if err != nil {
+		return nil, err
+	}
+	req.UnstableMXC = resp.ContentURI
+	go func() {
+		_, err = cli.UploadMedia(req)
+		if err != nil {
+			cli.logWarning("Failed to upload %s: %v", req.UnstableMXC, err)
+		}
+	}()
+	return resp, nil
+}
+
 func (cli *Client) UploadBytes(data []byte, contentType string) (*RespMediaUpload, error) {
 	return cli.UploadBytesWithName(data, contentType, "")
 }
@@ -1222,12 +1252,19 @@ type ReqUploadMedia struct {
 	ContentLength int64
 	ContentType   string
 	FileName      string
+
+	// UnstableMXC specifies an existing MXC URI which doesn't have content yet to upload into.
+	// See https://github.com/matrix-org/matrix-spec-proposals/pull/2246 for more info.
+	UnstableMXC id.ContentURI
 }
 
 // UploadMedia uploads the given data to the content repository and returns an MXC URI.
 // See https://spec.matrix.org/v1.2/client-server-api/#post_matrixmediav3upload
 func (cli *Client) UploadMedia(data ReqUploadMedia) (*RespMediaUpload, error) {
 	u, _ := url.Parse(cli.BuildBaseURL("_matrix", "media", "r0", "upload"))
+	if !data.UnstableMXC.IsEmpty() {
+		u, _ = url.Parse(cli.BuildBaseURL("_matrix", "media", "unstable", "fi.mau.msc2246", "upload", data.UnstableMXC.Homeserver, data.UnstableMXC.FileID))
+	}
 	if len(data.FileName) > 0 {
 		q := u.Query()
 		q.Set("filename", data.FileName)
