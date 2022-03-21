@@ -330,6 +330,7 @@ type FullRequest struct {
 	URL              string
 	Headers          http.Header
 	RequestJSON      interface{}
+	RequestBytes     []byte
 	RequestBody      io.Reader
 	RequestLength    int64
 	ResponseJSON     interface{}
@@ -361,7 +362,11 @@ func (params *FullRequest) compileRequest() (*http.Request, error) {
 		} else {
 			logBody = string(jsonStr)
 		}
-		reqBody = bytes.NewBuffer(jsonStr)
+		reqBody = bytes.NewReader(jsonStr)
+	} else if params.RequestBytes != nil {
+		logBody = fmt.Sprintf("<%d bytes>", len(params.RequestBytes))
+		reqBody = bytes.NewReader(params.RequestBytes)
+		params.RequestLength = int64(len(params.RequestBytes))
 	} else if params.RequestLength > 0 && params.RequestBody != nil {
 		logBody = fmt.Sprintf("<%d bytes>", params.RequestLength)
 	}
@@ -1194,10 +1199,9 @@ func (cli *Client) UploadBytes(data []byte, contentType string) (*RespMediaUploa
 
 func (cli *Client) UploadBytesWithName(data []byte, contentType, fileName string) (*RespMediaUpload, error) {
 	return cli.UploadMedia(ReqUploadMedia{
-		Content:       bytes.NewReader(data),
-		ContentLength: int64(len(data)),
-		ContentType:   contentType,
-		FileName:      fileName,
+		ContentBytes: data,
+		ContentType:  contentType,
+		FileName:     fileName,
 	})
 }
 
@@ -1213,6 +1217,7 @@ func (cli *Client) Upload(content io.Reader, contentType string, contentLength i
 }
 
 type ReqUploadMedia struct {
+	ContentBytes  []byte
 	Content       io.Reader
 	ContentLength int64
 	ContentType   string
@@ -1220,7 +1225,7 @@ type ReqUploadMedia struct {
 }
 
 // UploadMedia uploads the given data to the content repository and returns an MXC URI.
-// See http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-media-r0-upload
+// See https://spec.matrix.org/v1.2/client-server-api/#post_matrixmediav3upload
 func (cli *Client) UploadMedia(data ReqUploadMedia) (*RespMediaUpload, error) {
 	u, _ := url.Parse(cli.BuildBaseURL("_matrix", "media", "r0", "upload"))
 	if len(data.FileName) > 0 {
@@ -1239,6 +1244,7 @@ func (cli *Client) UploadMedia(data ReqUploadMedia) (*RespMediaUpload, error) {
 		Method:        http.MethodPost,
 		URL:           u.String(),
 		Headers:       headers,
+		RequestBytes:  data.ContentBytes,
 		RequestBody:   data.Content,
 		RequestLength: data.ContentLength,
 		ResponseJSON:  &m,
