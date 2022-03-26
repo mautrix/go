@@ -1262,8 +1262,10 @@ type ReqUploadMedia struct {
 // See https://spec.matrix.org/v1.2/client-server-api/#post_matrixmediav3upload
 func (cli *Client) UploadMedia(data ReqUploadMedia) (*RespMediaUpload, error) {
 	u, _ := url.Parse(cli.BuildBaseURL("_matrix", "media", "r0", "upload"))
+	method := http.MethodPost
 	if !data.UnstableMXC.IsEmpty() {
 		u, _ = url.Parse(cli.BuildBaseURL("_matrix", "media", "unstable", "fi.mau.msc2246", "upload", data.UnstableMXC.Homeserver, data.UnstableMXC.FileID))
+		method = http.MethodPut
 	}
 	if len(data.FileName) > 0 {
 		q := u.Query()
@@ -1278,7 +1280,7 @@ func (cli *Client) UploadMedia(data ReqUploadMedia) (*RespMediaUpload, error) {
 
 	var m RespMediaUpload
 	_, err := cli.MakeFullRequest(FullRequest{
-		Method:        http.MethodPost,
+		Method:        method,
 		URL:           u.String(),
 		Headers:       headers,
 		RequestBytes:  data.ContentBytes,
