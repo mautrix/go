@@ -293,6 +293,9 @@ type RespAliasResolve struct {
 	RoomID  id.RoomID `json:"room_id"`
 	Servers []string  `json:"servers"`
 }
+type RespAliasList struct {
+	Aliases []id.RoomAlias `json:"aliases"`
+}
 
 type RespUploadKeys struct {
 	OneTimeKeyCounts OTKCount `json:"one_time_key_counts"`

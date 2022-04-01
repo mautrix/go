@@ -1480,6 +1480,12 @@ func (cli *Client) DeleteAlias(alias id.RoomAlias) (resp *RespAliasDelete, err e
 	return
 }
 
+func (cli *Client) GetAliases(roomID id.RoomID) (resp *RespAliasList, err error) {
+	urlPath := cli.BuildURL("rooms", roomID, "aliases")
+	_, err = cli.MakeRequest("GET", urlPath, nil, &resp)
+	return
+}
+
 func (cli *Client) UploadKeys(req *ReqUploadKeys) (resp *RespUploadKeys, err error) {
 	urlPath := cli.BuildURL("keys", "upload")
 	_, err = cli.MakeRequest("POST", urlPath, req, &resp)
