@@ -97,10 +97,7 @@ func (content *MessageEventContent) SetReply(inReplyTo *Event) {
 	}
 
 	if content.MsgType == MsgText || content.MsgType == MsgNotice {
-		if len(content.FormattedBody) == 0 || content.Format != FormatHTML {
-			content.FormattedBody = strings.ReplaceAll(html.EscapeString(content.Body), "\n", "<br/>")
-			content.Format = FormatHTML
-		}
+		content.EnsureHasHTML()
 		content.FormattedBody = inReplyTo.GenerateReplyFallbackHTML() + content.FormattedBody
 		content.Body = inReplyTo.GenerateReplyFallbackText() + content.Body
 		content.replyFallbackRemoved = false

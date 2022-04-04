@@ -9,6 +9,9 @@ package event
 import (
 	"encoding/json"
 	"strconv"
+	"strings"
+
+	"golang.org/x/net/html"
 
 	"maunium.net/go/mautrix/crypto/attachment"
 	"maunium.net/go/mautrix/id"
@@ -131,6 +134,13 @@ func (content *MessageEventContent) SetEdit(original id.EventID) {
 		if content.Format == FormatHTML && len(content.FormattedBody) > 0 {
 			content.FormattedBody = "* " + content.FormattedBody
 		}
+	}
+}
+
+func (content *MessageEventContent) EnsureHasHTML() {
+	if len(content.FormattedBody) == 0 || content.Format != FormatHTML {
+		content.FormattedBody = strings.ReplaceAll(html.EscapeString(content.Body), "\n", "<br/>")
+		content.Format = FormatHTML
 	}
 }
 
