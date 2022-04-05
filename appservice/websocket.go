@@ -67,7 +67,9 @@ func (wsc *WebsocketCommand) MakeResponse(ok bool, data interface{}) *WebsocketR
 		} else {
 			errorData, _ = sjson.SetBytes(nil, "message", err.Error())
 		}
-		errorData, _ = sjson.SetBytes(errorData, "prefix_message", prefixMessage)
+		if len(prefixMessage) > 0 {
+			errorData, _ = sjson.SetBytes(errorData, "prefix_message", prefixMessage)
+		}
 		data = errorData
 	}
 	return &WebsocketRequest{
