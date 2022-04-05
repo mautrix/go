@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tulir Asokan
+// Copyright (c) 2022 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -14,11 +14,14 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
 
 type WebsocketRequest struct {
@@ -44,7 +47,28 @@ func (wsc *WebsocketCommand) MakeResponse(ok bool, data interface{}) *WebsocketR
 		cmd = "error"
 	}
 	if err, isError := data.(error); isError {
-		data = map[string]interface{}{"message": err.Error()}
+		var errorData json.RawMessage
+		var jsonErr error
+		unwrappedErr := err
+		var prefixMessage string
+		for unwrappedErr != nil {
+			errorData, jsonErr = json.Marshal(unwrappedErr)
+			if errorData != nil && jsonErr == nil {
+				prefixMessage = strings.Replace(err.Error(), unwrappedErr.Error(), "", 1)
+				prefixMessage = strings.TrimRight(prefixMessage, ": ")
+				break
+			}
+			unwrappedErr = errors.Unwrap(unwrappedErr)
+		}
+		if errorData != nil {
+			if !gjson.GetBytes(errorData, "message").Exists() {
+				errorData, _ = sjson.SetBytes(errorData, "message", err.Error())
+			} // else: marshaled error contains a message already
+		} else {
+			errorData, _ = sjson.SetBytes(nil, "message", err.Error())
+		}
+		errorData, _ = sjson.SetBytes(errorData, "prefix_message", prefixMessage)
+		data = errorData
 	}
 	return &WebsocketRequest{
 		ReqID:   wsc.ReqID,
