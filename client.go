@@ -135,7 +135,7 @@ func DiscoverClientAPI(serverName string) (*ClientWellKnown, error) {
 func BuildURL(baseURL *url.URL, path ...interface{}) *url.URL {
 	createdURL := *baseURL
 	rawParts := make([]string, len(path)+1)
-	rawParts[0] = strings.TrimSuffix(createdURL.RawPath, "/")
+	rawParts[0] = strings.TrimSuffix(createdURL.EscapedPath(), "/")
 	parts := make([]string, len(path)+1)
 	parts[0] = strings.TrimSuffix(createdURL.Path, "/")
 	for i, part := range path {
