@@ -10,8 +10,8 @@ require (
 	github.com/stretchr/testify v1.7.1
 	github.com/tidwall/gjson v1.14.0
 	github.com/tidwall/sjson v1.2.4
-	golang.org/x/crypto v0.0.0-20220331220935-ae2d96664a29
-	golang.org/x/net v0.0.0-20220403103023-749bd193bc2b
+	golang.org/x/crypto v0.0.0-20220408190544-5352b0902921
+	golang.org/x/net v0.0.0-20220407224826-aac1ed45d8e3
 	gopkg.in/yaml.v2 v2.4.0
 	maunium.net/go/maulogger/v2 v2.3.2
 )
