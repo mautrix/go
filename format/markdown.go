@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tulir Asokan
+// Copyright (c) 2022 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,50 +7,39 @@
 package format
 
 import (
-	"io"
+	"fmt"
 	"regexp"
 	"strings"
 
-	"github.com/russross/blackfriday/v2"
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/extension"
+	"github.com/yuin/goldmark/renderer/html"
 
 	"maunium.net/go/mautrix/event"
 )
 
-type EscapingRenderer struct {
-	*blackfriday.HTMLRenderer
-}
-
-func (r *EscapingRenderer) RenderNode(w io.Writer, node *blackfriday.Node, entering bool) blackfriday.WalkStatus {
-	if node.Type == blackfriday.HTMLSpan {
-		node.Type = blackfriday.Text
-	}
-	return r.HTMLRenderer.RenderNode(w, node, entering)
-}
-
 var AntiParagraphRegex = regexp.MustCompile("^<p>(.+?)</p>$")
-var Extensions = blackfriday.WithExtensions(blackfriday.NoIntraEmphasis |
-	blackfriday.Tables |
-	blackfriday.FencedCode |
-	blackfriday.Strikethrough |
-	blackfriday.SpaceHeadings |
-	blackfriday.DefinitionLists |
-	blackfriday.HardLineBreak)
-var bfhtml = blackfriday.NewHTMLRenderer(blackfriday.HTMLRendererParameters{
-	Flags: blackfriday.UseXHTML,
-})
-var Renderer = blackfriday.WithRenderer(bfhtml)
-var NoHTMLRenderer = blackfriday.WithRenderer(&EscapingRenderer{bfhtml})
+
+var Extensions = goldmark.WithExtensions(extension.Strikethrough, extension.Table, ExtensionSpoiler)
+var HTMLOptions = goldmark.WithRendererOptions(html.WithHardWraps(), html.WithUnsafe())
+
+var withHTML = goldmark.New(Extensions, HTMLOptions)
+var noHTML = goldmark.New(Extensions, HTMLOptions, goldmark.WithExtensions(ExtensionEscapeHTML))
 
 func RenderMarkdown(text string, allowMarkdown, allowHTML bool) event.MessageEventContent {
 	var htmlBody string
 
 	if allowMarkdown {
-		renderer := Renderer
+		rndr := withHTML
 		if !allowHTML {
-			renderer = NoHTMLRenderer
+			rndr = noHTML
 		}
-		htmlBodyBytes := blackfriday.Run([]byte(text), Extensions, renderer)
-		htmlBody = strings.TrimRight(string(htmlBodyBytes), "\n")
+		var buf strings.Builder
+		err := rndr.Convert([]byte(text), &buf)
+		if err != nil {
+			panic(fmt.Errorf("markdown parser errored: %w", err))
+		}
+		htmlBody = strings.TrimRight(buf.String(), "\n")
 		htmlBody = AntiParagraphRegex.ReplaceAllString(htmlBody, "$1")
 	} else {
 		htmlBody = strings.Replace(text, "\n", "<br>", -1)

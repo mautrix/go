@@ -6,10 +6,10 @@ require (
 	github.com/gorilla/mux v1.8.0
 	github.com/gorilla/websocket v1.5.0
 	github.com/mattn/go-sqlite3 v1.14.12
-	github.com/russross/blackfriday/v2 v2.1.0
 	github.com/stretchr/testify v1.7.1
 	github.com/tidwall/gjson v1.14.0
 	github.com/tidwall/sjson v1.2.4
+	github.com/yuin/goldmark v1.4.11
 	golang.org/x/crypto v0.0.0-20220408190544-5352b0902921
 	golang.org/x/net v0.0.0-20220407224826-aac1ed45d8e3
 	gopkg.in/yaml.v2 v2.4.0
