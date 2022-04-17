@@ -11,26 +11,27 @@ import (
 )
 
 // CanonicalAliasEventContent represents the content of a m.room.canonical_alias state event.
-// https://matrix.org/docs/spec/client_server/r0.6.1#m-room-canonical-alias
+// https://spec.matrix.org/v1.2/client-server-api/#mroomcanonical_alias
 type CanonicalAliasEventContent struct {
 	Alias      id.RoomAlias   `json:"alias"`
 	AltAliases []id.RoomAlias `json:"alt_aliases,omitempty"`
 }
 
 // RoomNameEventContent represents the content of a m.room.name state event.
-// https://matrix.org/docs/spec/client_server/r0.6.0#m-room-name
+// https://spec.matrix.org/v1.2/client-server-api/#mroomname
 type RoomNameEventContent struct {
 	Name string `json:"name"`
 }
 
 // RoomAvatarEventContent represents the content of a m.room.avatar state event.
-// https://matrix.org/docs/spec/client_server/r0.6.0#m-room-avatar
+// https://spec.matrix.org/v1.2/client-server-api/#mroomavatar
 type RoomAvatarEventContent struct {
-	URL id.ContentURI `json:"url"`
+	URL  id.ContentURI `json:"url"`
+	Info *FileInfo     `json:"info,omitempty"`
 }
 
 // ServerACLEventContent represents the content of a m.room.server_acl state event.
-// https://spec.matrix.org/v1.1/client-server-api/#server-access-control-lists-acls-for-rooms
+// https://spec.matrix.org/v1.2/client-server-api/#server-access-control-lists-acls-for-rooms
 type ServerACLEventContent struct {
 	Allow           []string `json:"allow,omitempty"`
 	AllowIPLiterals bool     `json:"allow_ip_literals"`
@@ -38,20 +39,20 @@ type ServerACLEventContent struct {
 }
 
 // TopicEventContent represents the content of a m.room.topic state event.
-// https://matrix.org/docs/spec/client_server/r0.6.0#m-room-topic
+// https://spec.matrix.org/v1.2/client-server-api/#mroomtopic
 type TopicEventContent struct {
 	Topic string `json:"topic"`
 }
 
 // TombstoneEventContent represents the content of a m.room.tombstone state event.
-// https://matrix.org/docs/spec/client_server/r0.6.0#m-room-tombstone
+// https://spec.matrix.org/v1.2/client-server-api/#mroomtombstone
 type TombstoneEventContent struct {
 	Body            string    `json:"body"`
 	ReplacementRoom id.RoomID `json:"replacement_room"`
 }
 
 // CreateEventContent represents the content of a m.room.create state event.
-// https://matrix.org/docs/spec/client_server/r0.6.0#m-room-create
+// https://spec.matrix.org/v1.2/client-server-api/#mroomcreate
 type CreateEventContent struct {
 	Type        RoomType  `json:"type,omitempty"`
 	Creator     id.UserID `json:"creator,omitempty"`
@@ -64,30 +65,43 @@ type CreateEventContent struct {
 }
 
 // JoinRule specifies how open a room is to new members.
-// https://matrix.org/docs/spec/client_server/r0.6.0#m-room-join-rules
+// https://spec.matrix.org/v1.2/client-server-api/#mroomjoin_rules
 type JoinRule string
 
 const (
-	JoinRulePublic  JoinRule = "public"
-	JoinRuleKnock   JoinRule = "knock"
-	JoinRuleInvite  JoinRule = "invite"
-	JoinRulePrivate JoinRule = "private"
+	JoinRulePublic     JoinRule = "public"
+	JoinRuleKnock      JoinRule = "knock"
+	JoinRuleInvite     JoinRule = "invite"
+	JoinRuleRestricted JoinRule = "restricted"
+	JoinRulePrivate    JoinRule = "private"
 )
 
 // JoinRulesEventContent represents the content of a m.room.join_rules state event.
-// https://matrix.org/docs/spec/client_server/r0.6.0#m-room-join-rules
+// https://spec.matrix.org/v1.2/client-server-api/#mroomjoin_rules
 type JoinRulesEventContent struct {
-	JoinRule JoinRule `json:"join_rule"`
+	JoinRule JoinRule        `json:"join_rule"`
+	Allow    []JoinRuleAllow `json:"allow,omitempty"`
+}
+
+type JoinRuleAllowType string
+
+const (
+	JoinRuleAllowRoomMembership JoinRuleAllowType = "m.room_membership"
+)
+
+type JoinRuleAllow struct {
+	RoomID id.RoomID         `json:"room_id"`
+	Type   JoinRuleAllowType `json:"type"`
 }
 
 // PinnedEventsEventContent represents the content of a m.room.pinned_events state event.
-// https://matrix.org/docs/spec/client_server/r0.6.0#m-room-pinned-events
+// https://spec.matrix.org/v1.2/client-server-api/#mroompinned_events
 type PinnedEventsEventContent struct {
 	Pinned []id.EventID `json:"pinned"`
 }
 
 // HistoryVisibility specifies who can see new messages.
-// https://matrix.org/docs/spec/client_server/r0.6.0#m-room-history-visibility
+// https://spec.matrix.org/v1.2/client-server-api/#mroomhistory_visibility
 type HistoryVisibility string
 
 const (
@@ -98,13 +112,13 @@ const (
 )
 
 // HistoryVisibilityEventContent represents the content of a m.room.history_visibility state event.
-// https://matrix.org/docs/spec/client_server/r0.6.0#m-room-history-visibility
+// https://spec.matrix.org/v1.2/client-server-api/#mroomhistory_visibility
 type HistoryVisibilityEventContent struct {
 	HistoryVisibility HistoryVisibility `json:"history_visibility"`
 }
 
 // GuestAccess specifies whether or not guest accounts can join.
-// https://matrix.org/docs/spec/client_server/r0.6.0#m-room-guest-access
+// https://spec.matrix.org/v1.2/client-server-api/#mroomguest_access
 type GuestAccess string
 
 const (
@@ -113,7 +127,7 @@ const (
 )
 
 // GuestAccessEventContent represents the content of a m.room.guest_access state event.
-// https://matrix.org/docs/spec/client_server/r0.6.0#m-room-guest-access
+// https://spec.matrix.org/v1.2/client-server-api/#mroomguest_access
 type GuestAccessEventContent struct {
 	GuestAccess GuestAccess `json:"guest_access"`
 }
@@ -146,7 +160,7 @@ type SpaceParentEventContent struct {
 }
 
 // ModPolicyContent represents the content of a m.room.rule.user, m.room.rule.room, and m.room.rule.server state event.
-// https://spec.matrix.org/v1.1/client-server-api/#moderation-policy-lists
+// https://spec.matrix.org/v1.2/client-server-api/#moderation-policy-lists
 type ModPolicyContent struct {
 	Entity         string `json:"entity"`
 	Reason         string `json:"reason"`

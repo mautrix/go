@@ -15,7 +15,7 @@ type VerificationMethod string
 const VerificationMethodSAS VerificationMethod = "m.sas.v1"
 
 // VerificationRequestEventContent represents the content of a m.key.verification.request to_device event.
-// https://matrix.org/docs/spec/client_server/r0.6.0#m-key-verification-request
+// https://spec.matrix.org/v1.2/client-server-api/#mkeyverificationrequest
 type VerificationRequestEventContent struct {
 	// The device ID which is initiating the request.
 	FromDevice id.DeviceID `json:"from_device"`
@@ -63,7 +63,7 @@ const (
 )
 
 // VerificationStartEventContent represents the content of a m.key.verification.start to_device event.
-// https://matrix.org/docs/spec/client_server/r0.6.0#m-key-verification-start
+// https://spec.matrix.org/v1.2/client-server-api/#mkeyverificationstartmsasv1
 type VerificationStartEventContent struct {
 	// The device ID which is initiating the process.
 	FromDevice id.DeviceID `json:"from_device"`
@@ -137,6 +137,7 @@ func (vsec *VerificationStartEventContent) SetRelatesTo(rel *RelatesTo) {
 }
 
 // VerificationReadyEventContent represents the content of a m.key.verification.ready event.
+// https://spec.matrix.org/v1.2/client-server-api/#mkeyverificationready
 type VerificationReadyEventContent struct {
 	// The device ID which accepted the process.
 	FromDevice id.DeviceID `json:"from_device"`
@@ -164,7 +165,7 @@ func (vrec *VerificationReadyEventContent) SetRelatesTo(rel *RelatesTo) {
 }
 
 // VerificationAcceptEventContent represents the content of a m.key.verification.accept to_device event.
-// https://matrix.org/docs/spec/client_server/r0.6.0#m-key-verification-accept
+// https://spec.matrix.org/v1.2/client-server-api/#mkeyverificationaccept
 type VerificationAcceptEventContent struct {
 	// An opaque identifier for the verification process. Must be the same as the one used for the m.key.verification.start message.
 	TransactionID string `json:"transaction_id,omitempty"`
@@ -202,7 +203,7 @@ func (vaec *VerificationAcceptEventContent) SetRelatesTo(rel *RelatesTo) {
 }
 
 // VerificationKeyEventContent represents the content of a m.key.verification.key to_device event.
-// https://matrix.org/docs/spec/client_server/r0.6.0#m-key-verification-key
+// https://spec.matrix.org/v1.2/client-server-api/#mkeyverificationkey
 type VerificationKeyEventContent struct {
 	// An opaque identifier for the verification process. Must be the same as the one used for the m.key.verification.start message.
 	TransactionID string `json:"transaction_id,omitempty"`
@@ -230,7 +231,7 @@ func (vkec *VerificationKeyEventContent) SetRelatesTo(rel *RelatesTo) {
 }
 
 // VerificationMacEventContent represents the content of a m.key.verification.mac to_device event.
-// https://matrix.org/docs/spec/client_server/r0.6.0#m-key-verification-mac
+// https://spec.matrix.org/v1.2/client-server-api/#mkeyverificationmac
 type VerificationMacEventContent struct {
 	// An opaque identifier for the verification process. Must be the same as the one used for the m.key.verification.start message.
 	TransactionID string `json:"transaction_id,omitempty"`
@@ -276,7 +277,7 @@ const (
 )
 
 // VerificationCancelEventContent represents the content of a m.key.verification.cancel to_device event.
-// https://matrix.org/docs/spec/client_server/r0.6.0#m-key-verification-cancel
+// https://spec.matrix.org/v1.2/client-server-api/#mkeyverificationcancel
 type VerificationCancelEventContent struct {
 	// The opaque identifier for the verification process/request.
 	TransactionID string `json:"transaction_id,omitempty"`

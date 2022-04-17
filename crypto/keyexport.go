@@ -148,7 +148,7 @@ func formatKeyExportData(data []byte) []byte {
 }
 
 // ExportKeys exports the given Megolm sessions with the format specified in the Matrix spec.
-// See https://matrix.org/docs/spec/client_server/r0.6.1#key-exports
+// See https://spec.matrix.org/v1.2/client-server-api/#key-exports
 func ExportKeys(passphrase string, sessions []*InboundGroupSession) ([]byte, error) {
 	// Make all the keys necessary for exporting
 	encryptionKey, hashKey, salt, iv := makeExportKeys(passphrase)

@@ -20,7 +20,7 @@ const (
 )
 
 // Algorithm is a Matrix message encryption algorithm.
-// https://matrix.org/docs/spec/client_server/r0.6.0#messaging-algorithm-names
+// https://spec.matrix.org/v1.2/client-server-api/#messaging-algorithm-names
 type Algorithm string
 
 const (

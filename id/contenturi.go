@@ -34,7 +34,7 @@ func (uriString ContentURIString) ParseOrIgnore() ContentURI {
 }
 
 // ContentURI represents a Matrix content URI.
-// https://matrix.org/docs/spec/client_server/r0.6.0#matrix-content-mxc-uris
+// https://spec.matrix.org/v1.2/client-server-api/#matrix-content-mxc-uris
 type ContentURI struct {
 	Homeserver string
 	FileID     string

@@ -12,14 +12,14 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-// TagEventContent represents the content of a m.typing ephemeral event.
-// https://matrix.org/docs/spec/client_server/r0.6.0#m-typing
+// TypingEventContent represents the content of a m.typing ephemeral event.
+// https://spec.matrix.org/v1.2/client-server-api/#mtyping
 type TypingEventContent struct {
 	UserIDs []id.UserID `json:"user_ids"`
 }
 
 // ReceiptEventContent represents the content of a m.receipt ephemeral event.
-// https://matrix.org/docs/spec/client_server/r0.6.0#m-receipt
+// https://spec.matrix.org/v1.2/client-server-api/#mreceipt
 type ReceiptEventContent map[id.EventID]Receipts
 
 type Receipts struct {
@@ -69,7 +69,7 @@ const (
 )
 
 // PresenceEventContent represents the content of a m.presence ephemeral event.
-// https://matrix.org/docs/spec/client_server/r0.6.0#m-presence
+// https://spec.matrix.org/v1.2/client-server-api/#mpresence
 type PresenceEventContent struct {
 	Presence        Presence            `json:"presence"`
 	Displayname     string              `json:"displayname,omitempty"`

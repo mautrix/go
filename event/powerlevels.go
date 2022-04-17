@@ -13,13 +13,13 @@ import (
 )
 
 // PowerLevelsEventContent represents the content of a m.room.power_levels state event content.
-// https://matrix.org/docs/spec/client_server/r0.6.0#m-room-power-levels
+// https://spec.matrix.org/v1.2/client-server-api/#mroompower_levels
 type PowerLevelsEventContent struct {
-	usersLock    sync.RWMutex      `json:"-"`
+	usersLock    sync.RWMutex
 	Users        map[id.UserID]int `json:"users,omitempty"`
 	UsersDefault int               `json:"users_default,omitempty"`
 
-	eventsLock    sync.RWMutex   `json:"-"`
+	eventsLock    sync.RWMutex
 	Events        map[string]int `json:"events,omitempty"`
 	EventsDefault int            `json:"events_default,omitempty"`
 

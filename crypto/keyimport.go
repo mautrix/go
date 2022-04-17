@@ -34,7 +34,7 @@ var (
 var exportPrefixBytes, exportSuffixBytes = []byte(exportPrefix), []byte(exportSuffix)
 
 func decodeKeyExport(data []byte) ([]byte, error) {
-	// If there valid prefix and suffix aren't there, it's probably not a Matrix key export
+	// If the valid prefix and suffix aren't there, it's probably not a Matrix key export
 	if !bytes.HasPrefix(data, exportPrefixBytes) {
 		return nil, ErrMissingExportPrefix
 	} else if !bytes.HasSuffix(data, exportSuffixBytes) {
@@ -123,7 +123,7 @@ func (mach *OlmMachine) importExportedRoomKey(session ExportedSession) (bool, er
 }
 
 // ImportKeys imports data that was exported with the format specified in the Matrix spec.
-// See See https://matrix.org/docs/spec/client_server/r0.6.1#key-exports
+// See https://spec.matrix.org/v1.2/client-server-api/#key-exports
 func (mach *OlmMachine) ImportKeys(passphrase string, data []byte) (int, int, error) {
 	exportData, err := decodeKeyExport(data)
 	if err != nil {

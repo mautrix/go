@@ -25,7 +25,7 @@ type Room interface {
 // PushCondKind is the type of a push condition.
 type PushCondKind string
 
-// The allowed push condition kinds as specified in section 11.12.1.4.3 of r0.3.0 of the Client-Server API.
+// The allowed push condition kinds as specified in https://spec.matrix.org/v1.2/client-server-api/#conditions-1
 const (
 	KindEventMatch          PushCondKind = "event_match"
 	KindContainsDisplayName PushCondKind = "contains_display_name"

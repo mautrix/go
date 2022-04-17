@@ -56,28 +56,42 @@ func BuildURL(baseURL *url.URL, path ...interface{}) *url.URL {
 }
 
 // BuildURL builds a URL with the Client's homeserver and appservice user ID set already.
-func (cli *Client) BuildURL(urlPath ...interface{}) string {
-	return cli.BuildBaseURL(append(cli.Prefix, urlPath...)...)
+func (cli *Client) BuildURL(urlPath PrefixableURLPath) string {
+	return cli.BuildURLWithQuery(urlPath, nil)
 }
 
-// BuildBaseURL builds a URL with the Client's homeserver and appservice user ID set already.
-// You must supply the prefix in the path.
-func (cli *Client) BuildBaseURL(urlPath ...interface{}) string {
-	return cli.BuildBaseURLWithQuery(urlPath, nil)
+// BuildClientURL builds a URL with the Client's homeserver and appservice user ID set already.
+// This method also automatically prepends the client API prefix (/_matrix/client).
+func (cli *Client) BuildClientURL(urlPath ...interface{}) string {
+	return cli.BuildURLWithQuery(ClientURLPath(urlPath), nil)
 }
 
-type URLPath = []interface{}
-
-// BuildURLWithQuery builds a URL with query parameters in addition to the Client's
-// homeserver and appservice user ID set already.
-func (cli *Client) BuildURLWithQuery(urlPath URLPath, urlQuery map[string]string) string {
-	return cli.BuildBaseURLWithQuery(append(cli.Prefix, urlPath...), urlQuery)
+type PrefixableURLPath interface {
+	FullPath() []interface{}
 }
 
-// BuildBaseURLWithQuery builds a URL with query parameters in addition to the Client's homeserver
-// and appservice user ID set already. You must supply the prefix in the path.
-func (cli *Client) BuildBaseURLWithQuery(urlPath URLPath, urlQuery map[string]string) string {
-	hsURL := *BuildURL(cli.HomeserverURL, urlPath...)
+type BaseURLPath []interface{}
+
+func (bup BaseURLPath) FullPath() []interface{} {
+	return bup
+}
+
+type ClientURLPath []interface{}
+
+func (cup ClientURLPath) FullPath() []interface{} {
+	return append([]interface{}{"_matrix", "client"}, []interface{}(cup)...)
+}
+
+type MediaURLPath []interface{}
+
+func (mup MediaURLPath) FullPath() []interface{} {
+	return append([]interface{}{"_matrix", "media"}, []interface{}(mup)...)
+}
+
+// BuildURLWithQuery builds a URL with query parameters in addition to the Client's homeserver
+// and appservice user ID set already.
+func (cli *Client) BuildURLWithQuery(urlPath PrefixableURLPath, urlQuery map[string]string) string {
+	hsURL := *BuildURL(cli.HomeserverURL, urlPath.FullPath()...)
 	query := hsURL.Query()
 	if cli.AppServiceUserID != "" {
 		query.Set("user_id", string(cli.AppServiceUserID))

@@ -15,7 +15,7 @@ import (
 )
 
 // EventContent represents the content of a m.push_rules account data event.
-// https://matrix.org/docs/spec/client_server/r0.6.0#m-push-rules
+// https://spec.matrix.org/v1.2/client-server-api/#mpush_rules
 type EventContent struct {
 	Ruleset *PushRuleset `json:"global"`
 }

@@ -13,7 +13,7 @@ import (
 )
 
 // TagEventContent represents the content of a m.tag room account data event.
-// https://matrix.org/docs/spec/client_server/r0.6.0#m-tag
+// https://spec.matrix.org/v1.2/client-server-api/#mtag
 type TagEventContent struct {
 	Tags Tags `json:"tags"`
 }
@@ -25,17 +25,17 @@ type Tag struct {
 }
 
 // DirectChatsEventContent represents the content of a m.direct account data event.
-// https://matrix.org/docs/spec/client_server/r0.6.0#m-direct
+// https://spec.matrix.org/v1.2/client-server-api/#mdirect
 type DirectChatsEventContent map[id.UserID][]id.RoomID
 
 // FullyReadEventContent represents the content of a m.fully_read account data event.
-// https://matrix.org/docs/spec/client_server/r0.6.0#m-fully-read
+// https://spec.matrix.org/v1.2/client-server-api/#mfully_read
 type FullyReadEventContent struct {
 	EventID id.EventID `json:"event_id"`
 }
 
 // IgnoredUserListEventContent represents the content of a m.ignored_user_list account data event.
-// https://matrix.org/docs/spec/client_server/r0.6.0#m-ignored-user-list
+// https://spec.matrix.org/v1.2/client-server-api/#mignored_user_list
 type IgnoredUserListEventContent struct {
 	IgnoredUsers map[id.UserID]IgnoredUser `json:"ignored_users"`
 }

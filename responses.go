@@ -5,51 +5,50 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-// RespWhoami is the JSON response for https://matrix.org/docs/spec/client_server/r0.6.1#get-matrix-client-r0-account-whoami
+// RespWhoami is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3accountwhoami
 type RespWhoami struct {
-	UserID id.UserID `json:"user_id"`
-	// N.B. This field is not in the spec yet, it's expected to land in r0.6.2 or r0.7.0
+	UserID   id.UserID   `json:"user_id"`
 	DeviceID id.DeviceID `json:"device_id"`
 }
 
-// RespCreateFilter is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-user-userid-filter
+// RespCreateFilter is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3useruseridfilter
 type RespCreateFilter struct {
 	FilterID string `json:"filter_id"`
 }
 
-// RespVersions is the JSON response for http://matrix.org/docs/spec/client_server/r0.6.1.html#get-matrix-client-versions
+// RespVersions is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientversions
 type RespVersions struct {
 	Versions         []string        `json:"versions"`
 	UnstableFeatures map[string]bool `json:"unstable_features"`
 }
 
-// RespJoinRoom is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-join
+// RespJoinRoom is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3roomsroomidjoin
 type RespJoinRoom struct {
 	RoomID id.RoomID `json:"room_id"`
 }
 
-// RespLeaveRoom is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-leave
+// RespLeaveRoom is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3roomsroomidleave
 type RespLeaveRoom struct{}
 
-// RespForgetRoom is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-forget
+// RespForgetRoom is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3roomsroomidforget
 type RespForgetRoom struct{}
 
-// RespInviteUser is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-invite
+// RespInviteUser is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3roomsroomidinvite
 type RespInviteUser struct{}
 
-// RespKickUser is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-kick
+// RespKickUser is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3roomsroomidkick
 type RespKickUser struct{}
 
-// RespBanUser is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-ban
+// RespBanUser is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3roomsroomidban
 type RespBanUser struct{}
 
-// RespUnbanUser is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-rooms-roomid-unban
+// RespUnbanUser is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3roomsroomidunban
 type RespUnbanUser struct{}
 
-// RespTyping is the JSON response for https://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-rooms-roomid-typing-userid
+// RespTyping is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#put_matrixclientv3roomsroomidtypinguserid
 type RespTyping struct{}
 
-// RespPresence is the JSON response for https://matrix.org/docs/spec/client_server/r0.6.1#get-matrix-client-r0-presence-userid-status
+// RespPresence is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3presenceuseridstatus
 type RespPresence struct {
 	Presence        event.Presence `json:"presence"`
 	LastActiveAgo   int            `json:"last_active_ago"`
@@ -57,12 +56,12 @@ type RespPresence struct {
 	CurrentlyActive bool           `json:"currently_active"`
 }
 
-// RespJoinedRooms is the JSON response for https://matrix.org/docs/spec/client_server/r0.4.0.html#get-matrix-client-r0-joined-rooms
+// RespJoinedRooms is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3joined_rooms
 type RespJoinedRooms struct {
 	JoinedRooms []id.RoomID `json:"joined_rooms"`
 }
 
-// RespJoinedMembers is the JSON response for https://matrix.org/docs/spec/client_server/r0.4.0.html#get-matrix-client-r0-joined-rooms
+// RespJoinedMembers is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3roomsroomidjoined_members
 type RespJoinedMembers struct {
 	Joined map[id.UserID]struct {
 		DisplayName *string `json:"display_name"`
@@ -70,7 +69,7 @@ type RespJoinedMembers struct {
 	} `json:"joined"`
 }
 
-// RespMessages is the JSON response for https://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-r0-rooms-roomid-messages
+// RespMessages is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3roomsroomidmessages
 type RespMessages struct {
 	Start string         `json:"start"`
 	Chunk []*event.Event `json:"chunk"`
@@ -78,7 +77,7 @@ type RespMessages struct {
 	End   string         `json:"end"`
 }
 
-// RespContext is the JSON response for https://spec.matrix.org/v1.1/client-server-api/#get_matrixclientv3roomsroomidcontexteventid
+// RespContext is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3roomsroomidcontexteventid
 type RespContext struct {
 	End          string         `json:"end"`
 	Event        *event.Event   `json:"event"`
@@ -88,12 +87,12 @@ type RespContext struct {
 	State        []*event.Event `json:"state"`
 }
 
-// RespSendEvent is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#put-matrix-client-r0-rooms-roomid-send-eventtype-txnid
+// RespSendEvent is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#put_matrixclientv3roomsroomidsendeventtypetxnid
 type RespSendEvent struct {
 	EventID id.EventID `json:"event_id"`
 }
 
-// RespMediaUpload is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-media-r0-upload
+// RespMediaUpload is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#post_matrixmediav3upload
 type RespMediaUpload struct {
 	ContentURI id.ContentURI `json:"content_uri"`
 }
@@ -119,7 +118,7 @@ type RespPreviewURL struct {
 	ImageType   string `json:"og:image:type,omitempty"`
 }
 
-// RespUserInteractive is the JSON response for https://matrix.org/docs/spec/client_server/r0.2.0.html#user-interactive-authentication-api
+// RespUserInteractive is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#user-interactive-authentication-api
 type RespUserInteractive struct {
 	Flows []struct {
 		Stages []AuthType `json:"stages"`
@@ -142,12 +141,12 @@ func (r RespUserInteractive) HasSingleStageFlow(stageName AuthType) bool {
 	return false
 }
 
-// RespUserDisplayName is the JSON response for https://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-r0-profile-userid-displayname
+// RespUserDisplayName is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3profileuseriddisplayname
 type RespUserDisplayName struct {
 	DisplayName string `json:"displayname"`
 }
 
-// RespRegister is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-register
+// RespRegister is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3register
 type RespRegister struct {
 	AccessToken  string      `json:"access_token"`
 	DeviceID     id.DeviceID `json:"device_id"`
@@ -160,6 +159,7 @@ type LoginFlow struct {
 	Type AuthType `json:"type"`
 }
 
+// RespLoginFlows is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3login
 type RespLoginFlows struct {
 	Flows []LoginFlow `json:"flows"`
 }
@@ -179,7 +179,7 @@ func (rlf *RespLoginFlows) HasFlow(flowType ...AuthType) bool {
 	return rlf.FirstFlowOfType(flowType...) != nil
 }
 
-// RespLogin is the JSON response for https://matrix.org/docs/spec/client_server/r0.6.1#post-matrix-client-r0-login
+// RespLogin is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3login
 type RespLogin struct {
 	AccessToken string           `json:"access_token"`
 	DeviceID    id.DeviceID      `json:"device_id"`
@@ -187,10 +187,10 @@ type RespLogin struct {
 	WellKnown   *ClientWellKnown `json:"well_known"`
 }
 
-// RespLogout is the JSON response for http://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-logout
+// RespLogout is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3logout
 type RespLogout struct{}
 
-// RespCreateRoom is the JSON response for https://matrix.org/docs/spec/client_server/r0.6.0.html#post-matrix-client-r0-createroom
+// RespCreateRoom is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3createroom
 type RespCreateRoom struct {
 	RoomID id.RoomID `json:"room_id"`
 }
@@ -205,7 +205,7 @@ type LazyLoadSummary struct {
 	InvitedMemberCount *int        `json:"m.invited_member_count,omitempty"`
 }
 
-// RespSync is the JSON response for http://matrix.org/docs/spec/client_server/r0.6.0.html#get-matrix-client-r0-sync
+// RespSync is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3sync
 type RespSync struct {
 	NextBatch string `json:"next_batch"`
 
@@ -325,12 +325,12 @@ type RespKeyChanges struct {
 
 type RespSendToDevice struct{}
 
-// RespDevicesInfo is the JSON response for https://matrix.org/docs/spec/client_server/r0.6.1#get-matrix-client-r0-devices
+// RespDevicesInfo is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3devices
 type RespDevicesInfo struct {
 	Devices []RespDeviceInfo `json:"devices"`
 }
 
-// RespDeviceInfo is the JSON response for https://matrix.org/docs/spec/client_server/r0.6.1#get-matrix-client-r0-devices-deviceid
+// RespDeviceInfo is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3devicesdeviceid
 type RespDeviceInfo struct {
 	DeviceID    id.DeviceID `json:"device_id"`
 	DisplayName string      `json:"display_name"`

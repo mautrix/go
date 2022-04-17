@@ -13,7 +13,7 @@ import (
 )
 
 // EncryptionEventContent represents the content of a m.room.encryption state event.
-// https://matrix.org/docs/spec/client_server/r0.6.0#m-room-encryption
+// https://spec.matrix.org/v1.2/client-server-api/#mroomencryption
 type EncryptionEventContent struct {
 	// The encryption algorithm to be used to encrypt messages sent in this room. Must be 'm.megolm.v1.aes-sha2'.
 	Algorithm id.Algorithm `json:"algorithm"`
@@ -24,10 +24,12 @@ type EncryptionEventContent struct {
 }
 
 // EncryptedEventContent represents the content of a m.room.encrypted message event.
-// https://matrix.org/docs/spec/client_server/r0.6.0#m-room-encrypted
+// https://spec.matrix.org/v1.2/client-server-api/#mroomencrypted
+//
+// Note that sender_key and device_id are deprecated in Megolm events as of https://github.com/matrix-org/matrix-spec-proposals/pull/3700
 type EncryptedEventContent struct {
 	Algorithm  id.Algorithm    `json:"algorithm"`
-	SenderKey  id.SenderKey    `json:"sender_key"`
+	SenderKey  id.SenderKey    `json:"sender_key,omitempty"`
 	DeviceID   id.DeviceID     `json:"device_id,omitempty"`  // Only present for Megolm events
 	SessionID  id.SessionID    `json:"session_id,omitempty"` // Only present for Megolm events
 	Ciphertext json.RawMessage `json:"ciphertext"`
@@ -81,7 +83,7 @@ func (content *EncryptedEventContent) MarshalJSON() ([]byte, error) {
 }
 
 // RoomKeyEventContent represents the content of a m.room_key to_device event.
-// https://matrix.org/docs/spec/client_server/r0.6.0#m-room-key
+// https://spec.matrix.org/v1.2/client-server-api/#mroom_key
 type RoomKeyEventContent struct {
 	Algorithm  id.Algorithm `json:"algorithm"`
 	RoomID     id.RoomID    `json:"room_id"`
@@ -90,7 +92,7 @@ type RoomKeyEventContent struct {
 }
 
 // ForwardedRoomKeyEventContent represents the content of a m.forwarded_room_key to_device event.
-// https://matrix.org/docs/spec/client_server/r0.6.0#m-forwarded-room-key
+// https://spec.matrix.org/v1.2/client-server-api/#mforwarded_room_key
 type ForwardedRoomKeyEventContent struct {
 	RoomKeyEventContent
 	SenderKey          id.SenderKey `json:"sender_key"`
@@ -106,7 +108,7 @@ const (
 )
 
 // RoomKeyRequestEventContent represents the content of a m.room_key_request to_device event.
-// https://matrix.org/docs/spec/client_server/r0.6.0#m-room-key-request
+// https://spec.matrix.org/v1.2/client-server-api/#mroom_key_request
 type RoomKeyRequestEventContent struct {
 	Body               RequestedKeyInfo `json:"body"`
 	Action             KeyRequestAction `json:"action"`

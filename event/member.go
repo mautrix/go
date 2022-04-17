@@ -33,7 +33,7 @@ const (
 )
 
 // MemberEventContent represents the content of a m.room.member state event.
-// https://matrix.org/docs/spec/client_server/r0.6.0#m-room-member
+// https://spec.matrix.org/v1.2/client-server-api/#mroommember
 type MemberEventContent struct {
 	Membership       Membership          `json:"membership"`
 	AvatarURL        id.ContentURIString `json:"avatar_url,omitempty"`

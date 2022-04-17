@@ -101,7 +101,7 @@ func (e HTTPError) Unwrap() error {
 }
 
 // RespError is the standard JSON error response from Homeservers. It also implements the Golang "error" interface.
-// See http://matrix.org/docs/spec/client_server/r0.6.1.html#api-standards
+// See https://spec.matrix.org/v1.2/client-server-api/#api-standards
 type RespError struct {
 	ErrCode   string
 	Err       string

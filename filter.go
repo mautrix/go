@@ -16,8 +16,8 @@ const (
 	EventFormatFederation EventFormat = "federation"
 )
 
-//Filter is used by clients to specify how the server should filter responses to e.g. sync requests
-//Specified by: https://matrix.org/docs/spec/client_server/r0.6.0.html#filtering
+// Filter is used by clients to specify how the server should filter responses to e.g. sync requests
+// Specified by: https://spec.matrix.org/v1.2/client-server-api/#filtering
 type Filter struct {
 	AccountData FilterPart  `json:"account_data,omitempty"`
 	EventFields []string    `json:"event_fields,omitempty"`
