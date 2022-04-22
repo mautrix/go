@@ -348,12 +348,26 @@ func (intent *IntentAPI) SetDisplayName(displayName string) error {
 	if err := intent.EnsureRegistered(); err != nil {
 		return err
 	}
+	resp, err := intent.Client.GetOwnDisplayName()
+	if err != nil {
+		return fmt.Errorf("failed to check current displayname: %w", err)
+	} else if resp.DisplayName == displayName {
+		// No need to update
+		return nil
+	}
 	return intent.Client.SetDisplayName(displayName)
 }
 
 func (intent *IntentAPI) SetAvatarURL(avatarURL id.ContentURI) error {
 	if err := intent.EnsureRegistered(); err != nil {
 		return err
+	}
+	resp, err := intent.Client.GetOwnAvatarURL()
+	if err != nil {
+		return fmt.Errorf("failed to check current avatar URL: %w", err)
+	} else if resp.FileID == avatarURL.FileID && resp.Homeserver == avatarURL.Homeserver {
+		// No need to update
+		return nil
 	}
 	return intent.Client.SetAvatarURL(avatarURL)
 }
