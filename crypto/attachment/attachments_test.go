@@ -24,9 +24,7 @@ const helloWorldRawFile = `{
     "sha256": "rO+040ZhUxbpbmIS9GUuMSen4NPKFxMzqOUJeemM8mk"
   }
 }`
-const random16Bytes = "\x85\xb4\x16/\xcaO\x1d\xe6\x7f\x95\xeb\xdb+g\x11\xb1"
-
-var random16BytesBase64 = base64.StdEncoding.EncodeToString([]byte(random16Bytes))
+const random32Bytes = "\x85\xb4\x16/\xcaO\x1d\xe6\x7f\x95\xeb\xdb+g\x11\xb1\x81\x1a\xafY\x00\x1dq!h{\x81F\xaa\xd7A\x00"
 
 func parseHelloWorld() *EncryptedFile {
 	file := &EncryptedFile{}
@@ -74,7 +72,7 @@ func TestUnsupportedAlgorithm(t *testing.T) {
 
 func TestHashMismatch(t *testing.T) {
 	file := parseHelloWorld()
-	file.Hashes.SHA256 = random16BytesBase64
+	file.Hashes.SHA256 = base64.RawStdEncoding.EncodeToString([]byte(random32Bytes))
 	err := file.DecryptInPlace([]byte(helloWorldCiphertext))
 	if err != HashMismatch {
 		t.Errorf("Didn't get expected HashMismatch error: %v", err)
@@ -85,8 +83,8 @@ func TestTooLongHash(t *testing.T) {
 	file := parseHelloWorld()
 	file.Hashes.SHA256 = "TG9yZW0gaXBzdW0gZG9sb3Igc2l0IGFtZXQsIGNvbnNlY3RldHVlciBhZGlwaXNjaW5nIGVsaXQuIFNlZCBwb3N1ZXJlIGludGVyZHVtIHNlbS4gUXVpc3F1ZSBsaWd1bGEgZXJvcyB1bGxhbWNvcnBlciBxdWlzLCBsYWNpbmlhIHF1aXMgZmFjaWxpc2lzIHNlZCBzYXBpZW4uCg"
 	err := file.DecryptInPlace([]byte(helloWorldCiphertext))
-	if err != HashMismatch {
-		t.Errorf("Didn't get expected HashMismatch error: %v", err)
+	if err != InvalidHash {
+		t.Errorf("Didn't get expected InvalidHash error: %v", err)
 	}
 }
 
@@ -94,7 +92,7 @@ func TestTooShortHash(t *testing.T) {
 	file := parseHelloWorld()
 	file.Hashes.SHA256 = "5/Gy1JftyyQ"
 	err := file.DecryptInPlace([]byte(helloWorldCiphertext))
-	if err != HashMismatch {
-		t.Errorf("Didn't get expected HashMismatch error: %v", err)
+	if err != InvalidHash {
+		t.Errorf("Didn't get expected InvalidHash error: %v", err)
 	}
 }
