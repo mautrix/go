@@ -70,8 +70,7 @@ func (kd *KeyMetadata) calculateHash(key []byte) string {
 	var ivBytes [utils.AESCTRIVLength]byte
 	_, _ = base64.StdEncoding.Decode(ivBytes[:], []byte(kd.IV))
 
-	var zeroBytes [utils.AESCTRKeyLength]byte
-	cipher := utils.XorA256CTR(zeroBytes[:], aesKey, ivBytes)
+	cipher := utils.XorA256CTR(make([]byte, utils.AESCTRKeyLength), aesKey, ivBytes)
 
 	return utils.HMACSHA256B64(cipher, hmacKey)
 }

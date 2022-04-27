@@ -56,7 +56,7 @@ type EncryptedFile struct {
 	Hashes     EncryptedFileHashes `json:"hashes"`
 	Version    string              `json:"v"`
 
-	decoded *decodedKeys `json:"-"`
+	decoded *decodedKeys
 }
 
 func NewEncryptedFile() *EncryptedFile {
@@ -96,12 +96,12 @@ func (ef *EncryptedFile) decodeKeys() error {
 	return nil
 }
 
-func (ef *EncryptedFile) Encrypt(plaintext []byte) []byte {
+// Encrypt encrypts the given data in-place and updates the SHA256 hash in the EncryptedFile struct.
+func (ef *EncryptedFile) Encrypt(data []byte) {
 	ef.decodeKeys()
-	ciphertext := utils.XorA256CTR(plaintext, ef.decoded.key, ef.decoded.iv)
-	checksum := sha256.Sum256(ciphertext)
+	utils.XorA256CTR(data, ef.decoded.key, ef.decoded.iv)
+	checksum := sha256.Sum256(data)
 	ef.Hashes.SHA256 = base64.RawStdEncoding.EncodeToString(checksum[:])
-	return ciphertext
 }
 
 // encryptingReader is a variation of cipher.StreamReader that also hashes the content.
@@ -156,16 +156,18 @@ func (ef *EncryptedFile) checkHash(ciphertext []byte) bool {
 	return checksum == sha256.Sum256(ciphertext)
 }
 
-func (ef *EncryptedFile) Decrypt(ciphertext []byte) ([]byte, error) {
+// Decrypt encrypts the given data in-place and updates the SHA256 hash in the EncryptedFile struct.
+func (ef *EncryptedFile) Decrypt(data []byte) error {
 	if ef.Version != "v2" {
-		return nil, UnsupportedVersion
+		return UnsupportedVersion
 	} else if ef.Key.Algorithm != "A256CTR" {
-		return nil, UnsupportedAlgorithm
-	} else if !ef.checkHash(ciphertext) {
-		return nil, HashMismatch
+		return UnsupportedAlgorithm
+	} else if !ef.checkHash(data) {
+		return HashMismatch
 	} else if err := ef.decodeKeys(); err != nil {
-		return nil, err
+		return err
 	} else {
-		return utils.XorA256CTR(ciphertext, ef.decoded.key, ef.decoded.iv), nil
+		utils.XorA256CTR(data, ef.decoded.key, ef.decoded.iv)
+		return nil
 	}
 }

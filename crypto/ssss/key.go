@@ -89,12 +89,12 @@ func (key *Key) Encrypt(eventType string, data []byte) EncryptedKeyData {
 	iv := utils.GenA256CTRIV()
 	payload := make([]byte, base64.StdEncoding.EncodedLen(len(data)))
 	base64.StdEncoding.Encode(payload, data)
-	ciphertext := utils.XorA256CTR(payload, aesKey, iv)
+	utils.XorA256CTR(payload, aesKey, iv)
 
 	return EncryptedKeyData{
-		Ciphertext: base64.StdEncoding.EncodeToString(ciphertext),
+		Ciphertext: base64.StdEncoding.EncodeToString(payload),
 		IV:         base64.StdEncoding.EncodeToString(iv[:]),
-		MAC:        utils.HMACSHA256B64(ciphertext, hmacKey),
+		MAC:        utils.HMACSHA256B64(payload, hmacKey),
 	}
 }
 
@@ -104,7 +104,7 @@ func (key *Key) Decrypt(eventType string, data EncryptedKeyData) ([]byte, error)
 	decodedIV, _ := base64.StdEncoding.DecodeString(data.IV)
 	copy(ivBytes[:], decodedIV)
 
-	ciphertextBytes, err := base64.StdEncoding.DecodeString(data.Ciphertext)
+	payload, err := base64.StdEncoding.DecodeString(data.Ciphertext)
 	if err != nil {
 		return nil, err
 	}
@@ -113,12 +113,12 @@ func (key *Key) Decrypt(eventType string, data EncryptedKeyData) ([]byte, error)
 	aesKey, hmacKey := utils.DeriveKeysSHA256(key.Key, eventType)
 
 	// compare the stored MAC with the one we calculated from the ciphertext
-	calcMac := utils.HMACSHA256B64(ciphertextBytes, hmacKey)
+	calcMac := utils.HMACSHA256B64(payload, hmacKey)
 	if strings.ReplaceAll(data.MAC, "=", "") != strings.ReplaceAll(calcMac, "=", "") {
 		return nil, ErrKeyDataMACMismatch
 	}
 
-	decrypted := utils.XorA256CTR(ciphertextBytes, aesKey, ivBytes)
-	decryptedDecoded, err := base64.StdEncoding.DecodeString(string(decrypted))
+	utils.XorA256CTR(payload, aesKey, ivBytes)
+	decryptedDecoded, err := base64.StdEncoding.DecodeString(string(payload))
 	return decryptedDecoded, err
 }
