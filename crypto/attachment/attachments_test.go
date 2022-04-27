@@ -36,26 +36,28 @@ func parseHelloWorld() *EncryptedFile {
 
 func TestDecryptHelloWorld(t *testing.T) {
 	file := parseHelloWorld()
-	plaintext, err := file.Decrypt([]byte(helloWorldCiphertext))
+	data := []byte(helloWorldCiphertext)
+	err := file.Decrypt(data)
 	if err != nil {
 		t.Errorf("Failed to decrypt file: %v", err)
-	} else if string(plaintext) != "hello world" {
-		t.Errorf("Unexpected decrypt output: %v", plaintext)
+	} else if string(data) != "hello world" {
+		t.Errorf("Unexpected decrypt output: %v", data)
 	}
 }
 
 func TestEncryptHelloWorld(t *testing.T) {
 	file := parseHelloWorld()
-	ciphertext := file.Encrypt([]byte("hello world"))
-	if string(ciphertext) != helloWorldCiphertext {
-		t.Errorf("Unexpected encrypt output: %v", ciphertext)
+	data := []byte("hello world")
+	file.Encrypt(data)
+	if string(data) != helloWorldCiphertext {
+		t.Errorf("Unexpected encrypt output: %v", data)
 	}
 }
 
 func TestUnsupportedVersion(t *testing.T) {
 	file := parseHelloWorld()
 	file.Version = "foo"
-	_, err := file.Decrypt([]byte(helloWorldCiphertext))
+	err := file.Decrypt([]byte(helloWorldCiphertext))
 	if err != UnsupportedVersion {
 		t.Errorf("Didn't get expected UnsupportedVersion error: %v", err)
 	}
@@ -64,7 +66,7 @@ func TestUnsupportedVersion(t *testing.T) {
 func TestUnsupportedAlgorithm(t *testing.T) {
 	file := parseHelloWorld()
 	file.Key.Algorithm = "bar"
-	_, err := file.Decrypt([]byte(helloWorldCiphertext))
+	err := file.Decrypt([]byte(helloWorldCiphertext))
 	if err != UnsupportedAlgorithm {
 		t.Errorf("Didn't get expected UnsupportedAlgorithm error: %v", err)
 	}
@@ -73,7 +75,7 @@ func TestUnsupportedAlgorithm(t *testing.T) {
 func TestHashMismatch(t *testing.T) {
 	file := parseHelloWorld()
 	file.Hashes.SHA256 = random16BytesBase64
-	_, err := file.Decrypt([]byte(helloWorldCiphertext))
+	err := file.Decrypt([]byte(helloWorldCiphertext))
 	if err != HashMismatch {
 		t.Errorf("Didn't get expected HashMismatch error: %v", err)
 	}
@@ -82,7 +84,7 @@ func TestHashMismatch(t *testing.T) {
 func TestTooLongHash(t *testing.T) {
 	file := parseHelloWorld()
 	file.Hashes.SHA256 = "TG9yZW0gaXBzdW0gZG9sb3Igc2l0IGFtZXQsIGNvbnNlY3RldHVlciBhZGlwaXNjaW5nIGVsaXQuIFNlZCBwb3N1ZXJlIGludGVyZHVtIHNlbS4gUXVpc3F1ZSBsaWd1bGEgZXJvcyB1bGxhbWNvcnBlciBxdWlzLCBsYWNpbmlhIHF1aXMgZmFjaWxpc2lzIHNlZCBzYXBpZW4uCg"
-	_, err := file.Decrypt([]byte(helloWorldCiphertext))
+	err := file.Decrypt([]byte(helloWorldCiphertext))
 	if err != HashMismatch {
 		t.Errorf("Didn't get expected HashMismatch error: %v", err)
 	}
@@ -91,7 +93,7 @@ func TestTooLongHash(t *testing.T) {
 func TestTooShortHash(t *testing.T) {
 	file := parseHelloWorld()
 	file.Hashes.SHA256 = "5/Gy1JftyyQ"
-	_, err := file.Decrypt([]byte(helloWorldCiphertext))
+	err := file.Decrypt([]byte(helloWorldCiphertext))
 	if err != HashMismatch {
 		t.Errorf("Didn't get expected HashMismatch error: %v", err)
 	}
