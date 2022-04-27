@@ -4,6 +4,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 const helloWorldCiphertext = ":6\xc7O1yR\x06\xe8\xcf]"
@@ -36,63 +38,48 @@ func TestDecryptHelloWorld(t *testing.T) {
 	file := parseHelloWorld()
 	data := []byte(helloWorldCiphertext)
 	err := file.DecryptInPlace(data)
-	if err != nil {
-		t.Errorf("Failed to decrypt file: %v", err)
-	} else if string(data) != "hello world" {
-		t.Errorf("Unexpected decrypt output: %v", data)
-	}
+	assert.NoError(t, err, "failed to decrypt file")
+	assert.Equal(t, "hello world", string(data), "unexpected decrypt output")
 }
 
 func TestEncryptHelloWorld(t *testing.T) {
 	file := parseHelloWorld()
 	data := []byte("hello world")
 	file.EncryptInPlace(data)
-	if string(data) != helloWorldCiphertext {
-		t.Errorf("Unexpected encrypt output: %v", data)
-	}
+	assert.Equal(t, helloWorldCiphertext, string(data), "unexpected encrypt output")
 }
 
 func TestUnsupportedVersion(t *testing.T) {
 	file := parseHelloWorld()
 	file.Version = "foo"
 	err := file.DecryptInPlace([]byte(helloWorldCiphertext))
-	if err != UnsupportedVersion {
-		t.Errorf("Didn't get expected UnsupportedVersion error: %v", err)
-	}
+	assert.ErrorIs(t, err, UnsupportedVersion)
 }
 
 func TestUnsupportedAlgorithm(t *testing.T) {
 	file := parseHelloWorld()
 	file.Key.Algorithm = "bar"
 	err := file.DecryptInPlace([]byte(helloWorldCiphertext))
-	if err != UnsupportedAlgorithm {
-		t.Errorf("Didn't get expected UnsupportedAlgorithm error: %v", err)
-	}
+	assert.ErrorIs(t, err, UnsupportedAlgorithm)
 }
 
 func TestHashMismatch(t *testing.T) {
 	file := parseHelloWorld()
 	file.Hashes.SHA256 = base64.RawStdEncoding.EncodeToString([]byte(random32Bytes))
 	err := file.DecryptInPlace([]byte(helloWorldCiphertext))
-	if err != HashMismatch {
-		t.Errorf("Didn't get expected HashMismatch error: %v", err)
-	}
+	assert.ErrorIs(t, err, HashMismatch)
 }
 
 func TestTooLongHash(t *testing.T) {
 	file := parseHelloWorld()
 	file.Hashes.SHA256 = "TG9yZW0gaXBzdW0gZG9sb3Igc2l0IGFtZXQsIGNvbnNlY3RldHVlciBhZGlwaXNjaW5nIGVsaXQuIFNlZCBwb3N1ZXJlIGludGVyZHVtIHNlbS4gUXVpc3F1ZSBsaWd1bGEgZXJvcyB1bGxhbWNvcnBlciBxdWlzLCBsYWNpbmlhIHF1aXMgZmFjaWxpc2lzIHNlZCBzYXBpZW4uCg"
 	err := file.DecryptInPlace([]byte(helloWorldCiphertext))
-	if err != InvalidHash {
-		t.Errorf("Didn't get expected InvalidHash error: %v", err)
-	}
+	assert.ErrorIs(t, err, InvalidHash)
 }
 
 func TestTooShortHash(t *testing.T) {
 	file := parseHelloWorld()
 	file.Hashes.SHA256 = "5/Gy1JftyyQ"
 	err := file.DecryptInPlace([]byte(helloWorldCiphertext))
-	if err != InvalidHash {
-		t.Errorf("Didn't get expected InvalidHash error: %v", err)
-	}
+	assert.ErrorIs(t, err, InvalidHash)
 }
