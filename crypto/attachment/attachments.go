@@ -96,8 +96,19 @@ func (ef *EncryptedFile) decodeKeys() error {
 	return nil
 }
 
-// Encrypt encrypts the given data in-place and updates the SHA256 hash in the EncryptedFile struct.
-func (ef *EncryptedFile) Encrypt(data []byte) {
+// Encrypt encrypts the given data, updates the SHA256 hash in the EncryptedFile struct and returns the ciphertext.
+//
+// Deprecated: this makes a copy for the ciphertext, which means 2x memory usage. EncryptInPlace is recommended.
+func (ef *EncryptedFile) Encrypt(plaintext []byte) []byte {
+	ciphertext := make([]byte, len(plaintext))
+	copy(ciphertext, plaintext)
+	ef.EncryptInPlace(ciphertext)
+	return ciphertext
+}
+
+// EncryptInPlace encrypts the given data in-place (i.e. the provided data is overridden with the ciphertext)
+// and updates the SHA256 hash in the EncryptedFile struct.
+func (ef *EncryptedFile) EncryptInPlace(data []byte) {
 	ef.decodeKeys()
 	utils.XorA256CTR(data, ef.decoded.key, ef.decoded.iv)
 	checksum := sha256.Sum256(data)
@@ -156,8 +167,17 @@ func (ef *EncryptedFile) checkHash(ciphertext []byte) bool {
 	return checksum == sha256.Sum256(ciphertext)
 }
 
-// Decrypt encrypts the given data in-place and updates the SHA256 hash in the EncryptedFile struct.
-func (ef *EncryptedFile) Decrypt(data []byte) error {
+// Decrypt decrypts the given data and returns the plaintext.
+//
+// Deprecated: this makes a copy for the plaintext data, which means 2x memory usage. DecryptInPlace is recommended.
+func (ef *EncryptedFile) Decrypt(ciphertext []byte) ([]byte, error) {
+	plaintext := make([]byte, len(ciphertext))
+	copy(plaintext, ciphertext)
+	return plaintext, ef.DecryptInPlace(plaintext)
+}
+
+// DecryptInPlace decrypts the given data in-place (i.e. the provided data is overridden with the plaintext).
+func (ef *EncryptedFile) DecryptInPlace(data []byte) error {
 	if ef.Version != "v2" {
 		return UnsupportedVersion
 	} else if ef.Key.Algorithm != "A256CTR" {
