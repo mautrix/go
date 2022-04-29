@@ -108,8 +108,11 @@ func (as *AppService) SendErrorMessageSendCheckpoint(evt *event.Event, step Mess
 	go checkpoint.Send(as)
 }
 
-func (cp *MessageSendCheckpoint) Send(as *AppService) error {
-	return SendCheckpoints(as, []*MessageSendCheckpoint{cp})
+func (cp *MessageSendCheckpoint) Send(as *AppService) {
+	err := SendCheckpoints(as, []*MessageSendCheckpoint{cp})
+	if err != nil {
+		as.Log.Warnfln("Error sending checkpoint %s/%s for %s: %v", cp.Step, cp.Status, cp.EventID, err)
+	}
 }
 
 type CheckpointsJSON struct {
