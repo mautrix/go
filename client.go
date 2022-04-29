@@ -62,6 +62,8 @@ type Client struct {
 	// Number of times that mautrix will retry any HTTP request
 	// if the request fails entirely or returns a HTTP gateway error (502-504)
 	DefaultHTTPRetries int
+	// Set to true to disable automatically sleeping on 429 errors.
+	IgnoreRateLimit bool
 
 	txnID int32
 
@@ -475,6 +477,13 @@ func (cli *Client) parseBackoffFromResponse(res *http.Response, now time.Time, f
 	return fallback
 }
 
+func (cli *Client) shouldRetry(res *http.Response) bool {
+	return res.StatusCode == http.StatusBadGateway ||
+		res.StatusCode == http.StatusServiceUnavailable ||
+		res.StatusCode == http.StatusGatewayTimeout ||
+		(res.StatusCode == http.StatusTooManyRequests && !cli.IgnoreRateLimit)
+}
+
 func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backoff time.Duration, responseJSON interface{}, handler ClientResponseHandler) ([]byte, error) {
 	cli.LogRequest(req)
 	res, err := cli.Client.Do(req)
@@ -494,7 +503,7 @@ func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backof
 		}
 	}
 
-	if retries > 0 && (res.StatusCode == http.StatusBadGateway || res.StatusCode == http.StatusServiceUnavailable || res.StatusCode == http.StatusGatewayTimeout || res.StatusCode == http.StatusTooManyRequests) {
+	if retries > 0 && cli.shouldRetry(res) {
 		if res.StatusCode == http.StatusTooManyRequests {
 			backoff = cli.parseBackoffFromResponse(res, time.Now(), backoff)
 		}
