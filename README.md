@@ -2,7 +2,7 @@
 [![GoDoc](https://godoc.org/maunium.net/go/mautrix?status.svg)](https://godoc.org/maunium.net/go/mautrix)
 
 A Golang Matrix framework. Used by [gomuks](https://matrix.org/docs/projects/client/gomuks),
-[go-neb](https://github.com/matrix-org/go-neb), [mautrix-whatsapp](https://github.com/tulir/mautrix-whatsapp)
+[go-neb](https://github.com/matrix-org/go-neb), [mautrix-whatsapp](https://github.com/mautrix/whatsapp)
 and others.
 
 Matrix room: [`#maunium:maunium.net`](https://matrix.to/#/#maunium:maunium.net)
