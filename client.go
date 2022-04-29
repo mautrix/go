@@ -454,6 +454,27 @@ func (cli *Client) handleResponseError(req *http.Request, res *http.Response) ([
 	}
 }
 
+// parseBackoffFromResponse extracts the backoff time specified in the Retry-After header if present. See
+// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Retry-After.
+func (cli *Client) parseBackoffFromResponse(res *http.Response, now time.Time, fallback time.Duration) time.Duration {
+	retryAfterHeaderValue := res.Header.Get("Retry-After")
+	if retryAfterHeaderValue == "" {
+		return fallback
+	}
+
+	if t, err := time.Parse(http.TimeFormat, retryAfterHeaderValue); err == nil {
+		return t.Sub(now)
+	}
+
+	if seconds, err := strconv.Atoi(retryAfterHeaderValue); err == nil {
+		return time.Duration(seconds) * time.Second
+	}
+
+	cli.logWarning(`Failed to parse Retry-After header value "%s"`, retryAfterHeaderValue)
+
+	return fallback
+}
+
 func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backoff time.Duration, responseJSON interface{}, handler ClientResponseHandler) ([]byte, error) {
 	cli.LogRequest(req)
 	res, err := cli.Client.Do(req)
@@ -473,7 +494,10 @@ func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backof
 		}
 	}
 
-	if retries > 0 && (res.StatusCode == http.StatusBadGateway || res.StatusCode == http.StatusServiceUnavailable || res.StatusCode == http.StatusGatewayTimeout) {
+	if retries > 0 && (res.StatusCode == http.StatusBadGateway || res.StatusCode == http.StatusServiceUnavailable || res.StatusCode == http.StatusGatewayTimeout || res.StatusCode == http.StatusTooManyRequests) {
+		if res.StatusCode == http.StatusTooManyRequests {
+			backoff = cli.parseBackoffFromResponse(res, time.Now(), backoff)
+		}
 		return cli.doRetry(req, fmt.Errorf("HTTP %d", res.StatusCode), retries, backoff, responseJSON, handler)
 	}
 
