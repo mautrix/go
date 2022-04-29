@@ -11,17 +11,15 @@ import (
 type AuthType string
 
 const (
-	AuthTypePassword  AuthType = "m.login.password"
-	AuthTypeReCAPTCHA AuthType = "m.login.recaptcha"
-	AuthTypeOAuth2    AuthType = "m.login.oauth2"
-	AuthTypeSSO       AuthType = "m.login.sso"
-	AuthTypeEmail     AuthType = "m.login.email.identity"
-	AuthTypeMSISDN    AuthType = "m.login.msisdn"
-	AuthTypeToken     AuthType = "m.login.token"
-	AuthTypeDummy     AuthType = "m.login.dummy"
-
-	AuthTypeAppservice      AuthType = "m.login.application_service"
-	AuthTypeHalfyAppservice AuthType = "uk.half-shot.msc2778.login.application_service"
+	AuthTypePassword   AuthType = "m.login.password"
+	AuthTypeReCAPTCHA  AuthType = "m.login.recaptcha"
+	AuthTypeOAuth2     AuthType = "m.login.oauth2"
+	AuthTypeSSO        AuthType = "m.login.sso"
+	AuthTypeEmail      AuthType = "m.login.email.identity"
+	AuthTypeMSISDN     AuthType = "m.login.msisdn"
+	AuthTypeToken      AuthType = "m.login.token"
+	AuthTypeDummy      AuthType = "m.login.dummy"
+	AuthTypeAppservice AuthType = "m.login.application_service"
 )
 
 type IdentifierType string
