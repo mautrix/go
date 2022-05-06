@@ -16,12 +16,6 @@ type RespCreateFilter struct {
 	FilterID string `json:"filter_id"`
 }
 
-// RespVersions is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientversions
-type RespVersions struct {
-	Versions         []string        `json:"versions"`
-	UnstableFeatures map[string]bool `json:"unstable_features"`
-}
-
 // RespJoinRoom is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3roomsroomidjoin
 type RespJoinRoom struct {
 	RoomID id.RoomID `json:"room_id"`
