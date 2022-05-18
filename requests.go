@@ -314,6 +314,8 @@ type ReqBatchSend struct {
 	PrevEventID id.EventID `json:"-"`
 	BatchID     id.BatchID `json:"-"`
 
+	BeeperNewMessages bool `json:"-"`
+
 	StateEventsAtStart []*event.Event `json:"state_events_at_start"`
 	Events             []*event.Event `json:"events"`
 }

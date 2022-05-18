@@ -1598,6 +1598,10 @@ func (cli *Client) BatchSend(roomID id.RoomID, req *ReqBatchSend) (resp *RespBat
 	query := map[string]string{
 		"prev_event_id": req.PrevEventID.String(),
 	}
+	if req.BeeperNewMessages {
+		query["com.beeper.new_messages"] = "true"
+		req.StateEventsAtStart = nil
+	}
 	if len(req.BatchID) > 0 {
 		query["batch_id"] = req.BatchID.String()
 	}
