@@ -1,7 +1,7 @@
 -- v0 -> v6: Latest revision
 CREATE TABLE IF NOT EXISTS crypto_account (
-	account_id TEXT PRIMARY KEY,
-	device_id  TEXT PRIMARY KEY,
+	account_id TEXT    PRIMARY KEY,
+	device_id  TEXT    NOT NULL,
 	shared     BOOLEAN NOT NULL,
 	sync_token TEXT    NOT NULL,
 	account    bytea   NOT NULL

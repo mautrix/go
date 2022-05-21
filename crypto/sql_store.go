@@ -71,7 +71,7 @@ func (store *SQLCryptoStore) PutNextBatch(nextBatch string) {
 	store.SyncToken = nextBatch
 	_, err := store.DB.Exec(`UPDATE crypto_account SET sync_token=$1 WHERE account_id=$2`, store.SyncToken, store.AccountID)
 	if err != nil {
-		store.Log.Warn("Failed to store sync token: %v", err)
+		store.Log.Warnfln("Failed to store sync token: %v", err)
 	}
 }
 
@@ -82,7 +82,7 @@ func (store *SQLCryptoStore) GetNextBatch() string {
 			QueryRow("SELECT sync_token FROM crypto_account WHERE account_id=$1", store.AccountID).
 			Scan(&store.SyncToken)
 		if err != nil && err != sql.ErrNoRows {
-			store.Log.Warn("Failed to scan sync token: %v", err)
+			store.Log.Warnfln("Failed to scan sync token: %v", err)
 		}
 	}
 	return store.SyncToken
@@ -98,7 +98,7 @@ func (store *SQLCryptoStore) PutAccount(account *OlmAccount) error {
 											   account=excluded.account, account_id=excluded.account_id
 	`, store.DeviceID, account.Shared, store.SyncToken, bytes, store.AccountID)
 	if err != nil {
-		store.Log.Warn("Failed to store account: %v", err)
+		store.Log.Warnfln("Failed to store account: %v", err)
 	}
 	return nil
 }
@@ -312,13 +312,13 @@ func (store *SQLCryptoStore) scanGroupSessionList(rows *sql.Rows) (result []*Inb
 		var sessionBytes []byte
 		err := rows.Scan(&roomID, &signingKey, &senderKey, &sessionBytes, &forwardingChains)
 		if err != nil {
-			store.Log.Warn("Failed to scan row: %v", err)
+			store.Log.Warnfln("Failed to scan row: %v", err)
 			continue
 		}
 		igs := olm.NewBlankInboundGroupSession()
 		err = igs.Unpickle(sessionBytes, store.PickleKey)
 		if err != nil {
-			store.Log.Warn("Failed to unpickle session: %v", err)
+			store.Log.Warnfln("Failed to unpickle session: %v", err)
 			continue
 		}
 		result = append(result, &InboundGroupSession{
@@ -429,11 +429,11 @@ func (store *SQLCryptoStore) ValidateMessageIndex(senderKey id.SenderKey, sessio
 		_, err := store.DB.Exec(`INSERT INTO crypto_message_index (sender_key, session_id, "index", event_id, timestamp) VALUES ($1, $2, $3, $4, $5)`,
 			senderKey, sessionID, index, eventID, timestamp)
 		if err != nil {
-			store.Log.Warn("Failed to store message index: %v", err)
+			store.Log.Warnfln("Failed to store message index: %v", err)
 		}
 		return true
 	} else if err != nil {
-		store.Log.Warn("Failed to scan message index: %v", err)
+		store.Log.Warnfln("Failed to scan message index: %v", err)
 		return true
 	}
 	if resultEventID != eventID || resultTimestamp != timestamp {
@@ -592,14 +592,14 @@ func (store *SQLCryptoStore) FilterTrackedUsers(users []id.UserID) []id.UserID {
 		rows, err = store.DB.Query("SELECT user_id FROM crypto_tracked_user WHERE user_id IN ("+strings.Join(queryString, ",")+")", params...)
 	}
 	if err != nil {
-		store.Log.Warn("Failed to filter tracked users: %v", err)
+		store.Log.Warnfln("Failed to filter tracked users: %v", err)
 		return users
 	}
 	var ptr int
 	for rows.Next() {
 		err = rows.Scan(&users[ptr])
 		if err != nil {
-			store.Log.Warn("Failed to scan tracked user ID: %v", err)
+			store.Log.Warnfln("Failed to scan tracked user ID: %v", err)
 		} else {
 			ptr++
 		}

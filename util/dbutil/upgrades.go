@@ -125,8 +125,8 @@ func (db *Database) Upgrade() error {
 	}
 
 	db.Log.Infofln("Database currently on v%d, latest: v%d", version, len(db.UpgradeTable))
-	upgradesToApply := db.UpgradeTable[version:]
-	for _, upgradeItem := range upgradesToApply {
+	for version < len(db.UpgradeTable) {
+		upgradeItem := db.UpgradeTable[version]
 		if upgradeItem.fn == nil {
 			continue
 		}
