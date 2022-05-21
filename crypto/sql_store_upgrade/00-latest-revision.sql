@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS crypto_megolm_inbound_session (
 	forwarding_chains bytea,
 	withheld_code     TEXT,
 	withheld_reason   TEXT,
-	PRIMARY KEY (account_id, session)
+	PRIMARY KEY (account_id, session_id)
 );
 
 CREATE TABLE IF NOT EXISTS crypto_megolm_outbound_session (
