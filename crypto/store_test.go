@@ -16,6 +16,7 @@ import (
 
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
+	"maunium.net/go/mautrix/util/dbutil"
 )
 
 const olmSessID = "sJlikQQKXp7UQjmS9/lyZCNUVJ2AmKyHbufPBaC7tpk"
@@ -26,12 +27,16 @@ const olmPickled = "L6cdv3JYO9OzhXbcjNSwl7ldN5bDvwmGyin+hISePETE6bO71DIlhqTC9YIh
 const groupSession = "9ZbsRqJuETbjnxPpKv29n3dubP/m5PSLbr9I9CIWS2O86F/Og1JZXhqT+4fA5tovoPfdpk5QLh7PfDyjmgOcO9sSA37maJyzCy6Ap+uBZLAXp6VLJ0mjSvxi+PAbzGKDMqpn+pa+oeEIH6SFPG/2GGDSRoXVi5fttAClCIoav5RflWiMypKqnQRfkZR2Gx8glOaBiTzAd7m0X6XGfYIPol41JUIHfBLuJBfXQ0Uu5GScV4eKUWdJP2J6zzC2Hx8cZAhiBBzAza0CbGcnUK+YJXMYaJg92HiIo++l317LlsYUJ/P+gKOLafYR9/l8bAzxH7j5s31PnRs7mD1Bl6G1LFM+dPsGXUOLx6PlvlTlYYM/opai0uKKzT0Wk6zPoq9fN/smlXEPBtKlw2fqcytL4gOF0MrBPEca"
 
 func getCryptoStores(t *testing.T) (map[string]Store, func()) {
-	db, err := sql.Open("sqlite3", ":memory:?_busy_timeout=5000")
+	rawDB, err := sql.Open("sqlite3", ":memory:?_busy_timeout=5000")
 	if err != nil {
 		t.Fatalf("Error opening db: %v", err)
 	}
-	sqlStore := NewSQLCryptoStore(db, "sqlite3", "accid", id.DeviceID("dev"), []byte("test"), emptyLogger{})
-	if err = sqlStore.CreateTables(); err != nil {
+	db, err := dbutil.NewWithDB(rawDB, "sqlite3")
+	if err != nil {
+		t.Fatalf("Error opening db: %v", err)
+	}
+	sqlStore := NewSQLCryptoStore(db, "accid", id.DeviceID("dev"), []byte("test"))
+	if err = sqlStore.Upgrade(); err != nil {
 		t.Fatalf("Error creating tables: %v", err)
 	}
 

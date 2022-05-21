@@ -28,6 +28,20 @@ type BaseUpgrader interface {
 	GetBase() string
 }
 
+type StructUpgrader struct {
+	SimpleUpgrader
+	Blocks [][]string
+	Base   string
+}
+
+func (su *StructUpgrader) SpacedBlocks() [][]string {
+	return su.Blocks
+}
+
+func (su *StructUpgrader) GetBase() string {
+	return su.Base
+}
+
 type SimpleUpgrader func(helper *Helper)
 
 func (su SimpleUpgrader) DoUpgrade(helper *Helper) {

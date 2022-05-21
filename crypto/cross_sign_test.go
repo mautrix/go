@@ -12,17 +12,23 @@ import (
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto/olm"
-	sqlUpgrade "maunium.net/go/mautrix/crypto/sql_store_upgrade"
 	"maunium.net/go/mautrix/id"
+	"maunium.net/go/mautrix/util/dbutil"
 )
 
 func getOlmMachine(t *testing.T) *OlmMachine {
-	db, err := sql.Open("sqlite3", ":memory:?_busy_timeout=5000")
+	rawDB, err := sql.Open("sqlite3", ":memory:?_busy_timeout=5000")
 	if err != nil {
 		t.Fatalf("Error opening db: %v", err)
 	}
-	sqlUpgrade.Upgrade(db, "sqlite3")
-	sqlStore := NewSQLCryptoStore(db, "sqlite3", "accid", id.DeviceID("dev"), []byte("test"), emptyLogger{})
+	db, err := dbutil.NewWithDB(rawDB, "sqlite3")
+	if err != nil {
+		t.Fatalf("Error opening db: %v", err)
+	}
+	sqlStore := NewSQLCryptoStore(db, "accid", id.DeviceID("dev"), []byte("test"))
+	if err = sqlStore.Upgrade(); err != nil {
+		t.Fatalf("Error creating tables: %v", err)
+	}
 
 	userID := id.UserID("@mautrix")
 	mk, _ := olm.NewPkSigning()

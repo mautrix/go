@@ -23,7 +23,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"golang.org/x/net/publicsuffix"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 
 	"maunium.net/go/maulogger/v2"
 

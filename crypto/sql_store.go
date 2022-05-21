@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tulir Asokan
+// Copyright (c) 2022 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -17,6 +17,7 @@ import (
 	"maunium.net/go/mautrix/crypto/sql_store_upgrade"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
+	"maunium.net/go/mautrix/util/dbutil"
 )
 
 var PostgresArrayWrapper func(interface{}) interface {
@@ -26,9 +27,7 @@ var PostgresArrayWrapper func(interface{}) interface {
 
 // SQLCryptoStore is an implementation of a crypto Store for a database backend.
 type SQLCryptoStore struct {
-	DB      *sql.DB
-	Log     Logger
-	Dialect string
+	*dbutil.Database
 
 	AccountID string
 	DeviceID  id.DeviceID
@@ -44,11 +43,9 @@ var _ Store = (*SQLCryptoStore)(nil)
 
 // NewSQLCryptoStore initializes a new crypto Store using the given database, for a device's crypto material.
 // The stored material will be encrypted with the given key.
-func NewSQLCryptoStore(db *sql.DB, dialect string, accountID string, deviceID id.DeviceID, pickleKey []byte, log Logger) *SQLCryptoStore {
+func NewSQLCryptoStore(db *dbutil.Database, accountID string, deviceID id.DeviceID, pickleKey []byte) *SQLCryptoStore {
 	return &SQLCryptoStore{
-		DB:        db,
-		Dialect:   dialect,
-		Log:       log,
+		Database:  db.Child("CryptoStore", sql_store_upgrade.VersionTableName, sql_store_upgrade.Table),
 		PickleKey: pickleKey,
 		AccountID: accountID,
 		DeviceID:  deviceID,
@@ -58,8 +55,10 @@ func NewSQLCryptoStore(db *sql.DB, dialect string, accountID string, deviceID id
 }
 
 // CreateTables applies all the pending database migrations.
+//
+// Deprecated: The Upgrade method (inherited from dbutil.Database) should be used instead
 func (store *SQLCryptoStore) CreateTables() error {
-	return sql_store_upgrade.Upgrade(store.DB, store.Dialect)
+	return store.Upgrade()
 }
 
 // Flush does nothing for this implementation as data is already persisted in the database.
@@ -581,7 +580,7 @@ func (store *SQLCryptoStore) PutDevices(userID id.UserID, devices map[id.DeviceI
 func (store *SQLCryptoStore) FilterTrackedUsers(users []id.UserID) []id.UserID {
 	var rows *sql.Rows
 	var err error
-	if store.Dialect == "postgres" && PostgresArrayWrapper != nil {
+	if store.Dialect == dbutil.Postgres && PostgresArrayWrapper != nil {
 		rows, err = store.DB.Query("SELECT user_id FROM crypto_tracked_user WHERE user_id = ANY($1)", PostgresArrayWrapper(users))
 	} else {
 		queryString := make([]string, len(users))
