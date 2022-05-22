@@ -66,12 +66,16 @@ type User interface {
 	GetMXID() id.UserID
 	GetCommandState() map[string]interface{}
 	GetIDoublePuppet() DoublePuppet
+	GetIGhost() Ghost
 }
 
 type DoublePuppet interface {
+	CustomIntent() *appservice.IntentAPI
+	SwitchCustomMXID(accessToken string, userID id.UserID) error
 }
 
 type Ghost interface {
+	DoublePuppet
 	DefaultIntent() *appservice.IntentAPI
 	GetMXID() id.UserID
 }

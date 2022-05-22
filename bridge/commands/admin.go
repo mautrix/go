@@ -12,28 +12,6 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-var CommandHelp = &FullHandler{
-	Func: func(ce *Event) {
-		ce.Reply(FormatHelp(ce))
-	},
-	Name: "help",
-	Help: HelpMeta{
-		Section:     HelpSectionGeneral,
-		Description: "Show this help message.",
-	},
-}
-
-var CommandVersion = &FullHandler{
-	Func: func(ce *Event) {
-		ce.Reply("[%s](%s) %s (%s)", ce.Bridge.Name, ce.Bridge.URL, ce.Bridge.LinkifiedVersion, ce.Bridge.BuildTime)
-	},
-	Name: "version",
-	Help: HelpMeta{
-		Section:     HelpSectionGeneral,
-		Description: "Get the bridge version.",
-	},
-}
-
 var CommandDiscardMegolmSession = &FullHandler{
 	Func: func(ce *Event) {
 		if ce.Bridge.Crypto == nil {
@@ -52,7 +30,7 @@ var CommandDiscardMegolmSession = &FullHandler{
 	RequiresAdmin: true,
 }
 
-func cmdSetPowerLevel(ce *Event) {
+func fnSetPowerLevel(ce *Event) {
 	var level int
 	var userID id.UserID
 	var err error
@@ -86,7 +64,7 @@ func cmdSetPowerLevel(ce *Event) {
 }
 
 var CommandSetPowerLevel = &FullHandler{
-	Func:    cmdSetPowerLevel,
+	Func:    fnSetPowerLevel,
 	Name:    "set-pl",
 	Aliases: []string{"set-power-level"},
 	Help: HelpMeta{
