@@ -123,7 +123,7 @@ func (mx *MatrixHandler) HandleBotInvite(evt *event.Event) {
 		return
 	}
 
-	if user.GetPermissionLevel() <= 0 {
+	if user.GetPermissionLevel() <= bridgeconfig.PermissionLevelBlock {
 		_, _ = intent.SendNotice(evt.RoomID, "You are not whitelisted to use this bridge.\n"+
 			"If you're the owner of this bridge, see the bridge.permissions section in your config file.")
 		_, _ = intent.LeaveRoom(evt.RoomID)
@@ -250,6 +250,11 @@ func (mx *MatrixHandler) HandleMembership(evt *event.Event) {
 		return
 	}
 
+	mhp, ok := portal.(MembershipHandlingPortal)
+	if !ok {
+		return
+	}
+
 	if content.Membership == event.MembershipLeave {
 		if evt.Unsigned.PrevContent != nil {
 			_ = evt.Unsigned.PrevContent.ParseRaw(evt.Type)
@@ -259,12 +264,12 @@ func (mx *MatrixHandler) HandleMembership(evt *event.Event) {
 			}
 		}
 		if isSelf {
-			portal.HandleMatrixLeave(user)
+			mhp.HandleMatrixLeave(user)
 		} else if ghost != nil {
-			portal.HandleMatrixKick(user, ghost)
+			mhp.HandleMatrixKick(user, ghost)
 		}
 	} else if content.Membership == event.MembershipInvite && !isSelf && ghost != nil {
-		portal.HandleMatrixInvite(user, ghost)
+		mhp.HandleMatrixInvite(user, ghost)
 	}
 	// TODO kicking/inviting non-ghost users users
 }
@@ -285,7 +290,12 @@ func (mx *MatrixHandler) HandleRoomMetadata(evt *event.Event) {
 		return
 	}
 
-	portal.HandleMatrixMeta(user, evt)
+	metaPortal, ok := portal.(MetaHandlingPortal)
+	if !ok {
+		return
+	}
+
+	metaPortal.HandleMatrixMeta(user, evt)
 }
 
 const doublePuppetKey = "fi.mau.double_puppet_source"
@@ -458,6 +468,11 @@ func (mx *MatrixHandler) HandleReceipt(evt *event.Event) {
 		return
 	}
 
+	rrPortal, ok := portal.(ReadReceiptHandlingPortal)
+	if !ok {
+		return
+	}
+
 	for eventID, receipts := range *evt.Content.AsReceipt() {
 		for userID, receipt := range receipts.Read {
 			user := mx.bridge.Child.GetIUser(userID, false)
@@ -475,7 +490,7 @@ func (mx *MatrixHandler) HandleReceipt(evt *event.Event) {
 					dp.ScheduleDisappearing()
 				}
 			} else {
-				portal.HandleMatrixReadReceipt(user, eventID, time.UnixMilli(receipt.Timestamp))
+				rrPortal.HandleMatrixReadReceipt(user, eventID, time.UnixMilli(receipt.Timestamp))
 			}
 		}
 	}
@@ -486,5 +501,9 @@ func (mx *MatrixHandler) HandleTyping(evt *event.Event) {
 	if portal == nil {
 		return
 	}
-	portal.HandleMatrixTyping(evt.Content.AsTyping().UserIDs)
+	typingPortal, ok := portal.(TypingPortal)
+	if !ok {
+		return
+	}
+	typingPortal.HandleMatrixTyping(evt.Content.AsTyping().UserIDs)
 }

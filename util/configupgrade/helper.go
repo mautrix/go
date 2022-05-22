@@ -202,7 +202,7 @@ func NewHelper(base, cfg *yaml.Node) *Helper {
 
 func (helper *Helper) AddSpaceBeforeComment(path ...string) {
 	node := helper.GetBaseNode(path...)
-	if node.Key == nil {
+	if node == nil || node.Key == nil {
 		panic(fmt.Errorf("didn't find key at %+v", path))
 	}
 	node.Key.HeadComment = "\n" + node.Key.HeadComment

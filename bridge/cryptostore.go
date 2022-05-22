@@ -11,10 +11,16 @@ package bridge
 import (
 	"database/sql"
 
+	"github.com/lib/pq"
+
 	"maunium.net/go/mautrix/crypto"
 	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/util/dbutil"
 )
+
+func init() {
+	crypto.PostgresArrayWrapper = pq.Array
+}
 
 type SQLCryptoStore struct {
 	*crypto.SQLCryptoStore

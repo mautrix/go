@@ -8,6 +8,7 @@ package commands
 
 import (
 	"fmt"
+	"strings"
 
 	"maunium.net/go/maulogger/v2"
 
@@ -47,6 +48,7 @@ func (ce *Event) MainIntent() *appservice.IntentAPI {
 
 // Reply sends a reply to command as notice.
 func (ce *Event) Reply(msg string, args ...interface{}) {
+	msg = strings.ReplaceAll(msg, "$cmdprefix ", ce.Bridge.Config.Bridge.GetCommandPrefix())
 	content := format.RenderMarkdown(fmt.Sprintf(msg, args...), true, false)
 	content.MsgType = event.MsgNotice
 	_, err := ce.MainIntent().SendMessageEvent(ce.RoomID, event.EventMessage, content)

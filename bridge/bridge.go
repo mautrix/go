@@ -45,16 +45,32 @@ type Portal interface {
 	MainIntent() *appservice.IntentAPI
 
 	ReceiveMatrixEvent(user User, evt *event.Event)
+}
 
-	HandleMatrixReadReceipt(sender User, eventID id.EventID, receiptTimestamp time.Time)
-	HandleMatrixTyping(userIDs []id.UserID)
-	HandleMatrixMeta(sender User, evt *event.Event)
+type MembershipHandlingPortal interface {
+	Portal
 	HandleMatrixLeave(sender User)
 	HandleMatrixKick(sender User, ghost Ghost)
 	HandleMatrixInvite(sender User, ghost Ghost)
 }
 
+type ReadReceiptHandlingPortal interface {
+	Portal
+	HandleMatrixReadReceipt(sender User, eventID id.EventID, receiptTimestamp time.Time)
+}
+
+type TypingPortal interface {
+	Portal
+	HandleMatrixTyping(userIDs []id.UserID)
+}
+
+type MetaHandlingPortal interface {
+	Portal
+	HandleMatrixMeta(sender User, evt *event.Event)
+}
+
 type DisappearingPortal interface {
+	Portal
 	ScheduleDisappearing()
 }
 
