@@ -14,6 +14,7 @@ import (
 	"maunium.net/go/maulogger/v2"
 
 	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/bridge/bridgeconfig"
 	"maunium.net/go/mautrix/crypto"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -91,7 +92,7 @@ func (helper *CryptoHelper) allowKeyShare(device *crypto.DeviceIdentity, info ev
 		}
 		user := helper.bridge.Child.GetIUser(device.UserID, true)
 		// FIXME reimplement IsInPortal
-		if user.GetPermissionLevel() < PermissionAdmin /*&& !user.IsInPortal(portal.Key)*/ {
+		if user.GetPermissionLevel() < bridgeconfig.PermissionLevelAdmin /*&& !user.IsInPortal(portal.Key)*/ {
 			helper.log.Debugfln("Rejecting key request for %s from %s/%s: user is not in portal", info.SessionID, device.UserID, device.DeviceID)
 			return &crypto.KeyShareRejection{Code: event.RoomKeyWithheldUnauthorized, Reason: "You're not in that portal"}
 		}

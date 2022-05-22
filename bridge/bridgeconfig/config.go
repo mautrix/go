@@ -171,11 +171,7 @@ type BaseConfig struct {
 	Logging    appservice.LogConfig `yaml:"logging"`
 }
 
-type configUpgrader struct{}
-
-var Upgrader = configUpgrader{}
-
-func (upg configUpgrader) DoUpgrade(helper *up.Helper) {
+func doUpgrade(helper *up.Helper) {
 	helper.Copy(up.Str, "homeserver", "address")
 	helper.Copy(up.Str, "homeserver", "domain")
 	helper.Copy(up.Bool, "homeserver", "asmux")
@@ -207,3 +203,6 @@ func (upg configUpgrader) DoUpgrade(helper *up.Helper) {
 	helper.Copy(up.Str|up.Timestamp, "logging", "timestamp_format")
 	helper.Copy(up.Str, "logging", "print_level")
 }
+
+// Upgrader is a config upgrader that copies the default fields in the homeserver, appservice and logging blocks.
+var Upgrader = up.SimpleUpgrader(doUpgrade)

@@ -58,16 +58,8 @@ type DisappearingPortal interface {
 	ScheduleDisappearing()
 }
 
-type PermissionLevel int
-
-const (
-	PermissionRelay PermissionLevel = 5
-	PermissionUser  PermissionLevel = 10
-	PermissionAdmin PermissionLevel = 100
-)
-
 type User interface {
-	GetPermissionLevel() PermissionLevel
+	GetPermissionLevel() bridgeconfig.PermissionLevel
 	IsLoggedIn() bool
 	GetManagementRoomID() id.RoomID
 	SetManagementRoom(id.RoomID)

@@ -16,6 +16,7 @@ import (
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/appservice"
+	"maunium.net/go/mautrix/bridge/bridgeconfig"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/format"
 	"maunium.net/go/mautrix/id"
@@ -155,7 +156,7 @@ func (mx *MatrixHandler) HandleBotInvite(evt *event.Event) {
 func (mx *MatrixHandler) HandleGhostInvite(evt *event.Event, inviter User, ghost Ghost) {
 	intent := ghost.DefaultIntent()
 
-	if inviter.GetPermissionLevel() < PermissionUser {
+	if inviter.GetPermissionLevel() < bridgeconfig.PermissionLevelUser {
 		mx.log.Debugfln("Rejecting invite for %s from %s to %s: user is not whitelisted", ghost.GetMXID(), evt.Sender, evt.RoomID)
 		_, err := intent.LeaveRoom(evt.RoomID, &mautrix.ReqLeave{
 			Reason: "You're not whitelisted to use this bridge",
@@ -245,7 +246,7 @@ func (mx *MatrixHandler) HandleMembership(evt *event.Event) {
 			mx.HandleGhostInvite(evt, user, ghost)
 		}
 		return
-	} else if user.GetPermissionLevel() < PermissionUser || !user.IsLoggedIn() {
+	} else if user.GetPermissionLevel() < bridgeconfig.PermissionLevelUser || !user.IsLoggedIn() {
 		return
 	}
 
@@ -402,7 +403,7 @@ func (mx *MatrixHandler) HandleMessage(evt *event.Event) {
 
 	content := evt.Content.AsMessage()
 	content.RemoveReplyFallback()
-	if user.GetPermissionLevel() >= PermissionUser && content.MsgType == event.MsgText {
+	if user.GetPermissionLevel() >= bridgeconfig.PermissionLevelUser && content.MsgType == event.MsgText {
 		commandPrefix := mx.bridge.Config.Bridge.GetCommandPrefix()
 		hasCommandPrefix := strings.HasPrefix(content.Body, commandPrefix)
 		if hasCommandPrefix {
@@ -427,7 +428,7 @@ func (mx *MatrixHandler) HandleReaction(evt *event.Event) {
 	}
 
 	user := mx.bridge.Child.GetIUser(evt.Sender, true)
-	if user == nil || user.GetPermissionLevel() < PermissionUser || !user.IsLoggedIn() {
+	if user == nil || user.GetPermissionLevel() < bridgeconfig.PermissionLevelUser || !user.IsLoggedIn() {
 		return
 	}
 

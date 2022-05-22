@@ -7,7 +7,7 @@
 package commands
 
 import (
-	"maunium.net/go/mautrix/bridge"
+	"maunium.net/go/mautrix/bridge/bridgeconfig"
 )
 
 type Handler interface {
@@ -51,13 +51,13 @@ func (fh *FullHandler) GetAliases() []string {
 }
 
 func (fh *FullHandler) HasPermission(ce *Event) bool {
-	return (!fh.RequiresAdmin || ce.User.GetPermissionLevel() >= bridge.PermissionAdmin) &&
+	return (!fh.RequiresAdmin || ce.User.GetPermissionLevel() >= bridgeconfig.PermissionLevelAdmin) &&
 		(!fh.RequiresPortal || ce.Portal != nil) &&
 		(!fh.RequiresLogin || ce.User.IsLoggedIn())
 }
 
 func (fh *FullHandler) Run(ce *Event) {
-	if fh.RequiresAdmin && ce.User.GetPermissionLevel() < bridge.PermissionAdmin {
+	if fh.RequiresAdmin && ce.User.GetPermissionLevel() < bridgeconfig.PermissionLevelAdmin {
 		ce.Reply("That command is limited to bridge administrators.")
 	} else if fh.RequiresPortal && ce.Portal == nil {
 		ce.Reply("That command can only be ran in portal rooms.")

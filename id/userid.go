@@ -52,6 +52,16 @@ func (userID UserID) Parse() (localpart, homeserver string, err error) {
 	return
 }
 
+func (userID UserID) Localpart() string {
+	localpart, _, _ := userID.Parse()
+	return localpart
+}
+
+func (userID UserID) Homeserver() string {
+	_, homeserver, _ := userID.Parse()
+	return homeserver
+}
+
 // URI returns the user ID as a MatrixURI struct, which can then be stringified into a matrix: URI or a matrix.to URL.
 //
 // This does not parse or validate the user ID. Use the ParseAndValidate method if you want to ensure the user ID is valid first.
