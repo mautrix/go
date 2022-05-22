@@ -360,6 +360,15 @@ func (br *Bridge) start() {
 	br.AS.Ready = true
 }
 
+func (br *Bridge) stop() {
+	if br.Crypto != nil {
+		br.Crypto.Stop()
+	}
+	br.AS.Stop()
+	br.EventProcessor.Stop()
+	br.Child.Stop()
+}
+
 func (br *Bridge) Main() {
 	flag.SetHelpTitles(
 		fmt.Sprintf("%s - %s", br.Name, br.Description),
@@ -394,7 +403,7 @@ func (br *Bridge) Main() {
 	<-c
 
 	br.Log.Infoln("Interrupt received, stopping...")
-	br.Child.Stop()
+	br.stop()
 	br.Log.Infoln("Bridge stopped.")
 	os.Exit(0)
 }
