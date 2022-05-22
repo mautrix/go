@@ -142,6 +142,8 @@ type DatabaseConfig struct {
 type BridgeConfig interface {
 	FormatUsername(username string) string
 	GetEncryptionConfig() EncryptionConfig
+	GetCommandPrefix() string
+	GetManagementRoomTexts() ManagementRoomTexts
 }
 
 type EncryptionConfig struct {
@@ -153,6 +155,13 @@ type EncryptionConfig struct {
 		RequireCrossSigning bool `yaml:"require_cross_signing"`
 		RequireVerification bool `yaml:"require_verification"`
 	} `yaml:"key_sharing"`
+}
+
+type ManagementRoomTexts struct {
+	Welcome            string `yaml:"welcome"`
+	WelcomeConnected   string `yaml:"welcome_connected"`
+	WelcomeUnconnected string `yaml:"welcome_unconnected"`
+	AdditionalHelp     string `yaml:"additional_help"`
 }
 
 type BaseConfig struct {

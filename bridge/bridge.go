@@ -40,10 +40,48 @@ var wantHelp, _ = flag.MakeHelpFlag()
 
 type Portal interface {
 	IsEncrypted() bool
+	IsPrivateChat() bool
+	MarkEncrypted()
+	MainIntent() *appservice.IntentAPI
+
+	ReceiveMatrixEvent(user User, evt *event.Event)
+
+	HandleMatrixReadReceipt(sender User, eventID id.EventID, receiptTimestamp time.Time)
+	HandleMatrixTyping(userIDs []id.UserID)
+	HandleMatrixMeta(sender User, evt *event.Event)
+	HandleMatrixLeave(sender User)
+	HandleMatrixKick(sender User, ghost Ghost)
+	HandleMatrixInvite(sender User, ghost Ghost)
 }
 
+type DisappearingPortal interface {
+	ScheduleDisappearing()
+}
+
+type PermissionLevel int
+
+const (
+	PermissionRelay PermissionLevel = 5
+	PermissionUser  PermissionLevel = 10
+	PermissionAdmin PermissionLevel = 100
+)
+
 type User interface {
-	IsAdmin() bool
+	GetPermissionLevel() PermissionLevel
+	IsLoggedIn() bool
+	GetManagementRoomID() id.RoomID
+	SetManagementRoom(id.RoomID)
+	GetMXID() id.UserID
+	GetCommandState() map[string]interface{}
+	GetIDoublePuppet() DoublePuppet
+}
+
+type DoublePuppet interface {
+}
+
+type Ghost interface {
+	DefaultIntent() *appservice.IntentAPI
+	GetMXID() id.UserID
 }
 
 type ChildOverride interface {
@@ -54,8 +92,11 @@ type ChildOverride interface {
 	Start()
 	Stop()
 
-	GetIPortalByMXID(id id.RoomID) Portal
-	GetIUserByMXID(id id.UserID) User
+	GetIPortal(id.RoomID) Portal
+	GetIUser(id id.UserID, create bool) User
+	IsGhost(id.UserID) bool
+	GetIGhost(id.UserID) Ghost
+	CreatePrivatePortal(id.RoomID, User, Ghost)
 }
 
 type Bridge struct {
@@ -67,16 +108,19 @@ type Bridge struct {
 
 	VersionDesc      string
 	LinkifiedVersion string
+	BuildTime        string
 
-	AS             *appservice.AppService
-	EventProcessor *appservice.EventProcessor
-	Bot            *appservice.IntentAPI
-	Config         bridgeconfig.BaseConfig
-	ConfigUpgrader configupgrade.BaseUpgrader
-	Log            log.Logger
-	DB             *dbutil.Database
-	StateStore     *sqlstatestore.SQLStateStore
-	Crypto         Crypto
+	AS               *appservice.AppService
+	EventProcessor   *appservice.EventProcessor
+	CommandProcessor CommandProcessor
+	MatrixHandler    *MatrixHandler
+	Bot              *appservice.IntentAPI
+	Config           bridgeconfig.BaseConfig
+	ConfigUpgrader   configupgrade.BaseUpgrader
+	Log              log.Logger
+	DB               *dbutil.Database
+	StateStore       *sqlstatestore.SQLStateStore
+	Crypto           Crypto
 
 	Child ChildOverride
 }
@@ -135,14 +179,15 @@ func (br *Bridge) InitVersion(tag, commit, buildTime string) {
 		}
 	}
 
-	linkifiedVersion := fmt.Sprintf("v%s", br.Version)
+	br.LinkifiedVersion = fmt.Sprintf("v%s", br.Version)
 	if tag == br.Version {
-		linkifiedVersion = fmt.Sprintf("[v%s](%s/releases/v%s)", br.Version, br.URL, tag)
+		br.LinkifiedVersion = fmt.Sprintf("[v%s](%s/releases/v%s)", br.Version, br.URL, tag)
 	} else if len(commit) > 8 {
-		linkifiedVersion = strings.Replace(linkifiedVersion, commit[:8], fmt.Sprintf("[%s](%s/commit/%s)", commit[:8], br.URL, commit), 1)
+		br.LinkifiedVersion = strings.Replace(br.LinkifiedVersion, commit[:8], fmt.Sprintf("[%s](%s/commit/%s)", commit[:8], br.URL, commit), 1)
 	}
 	mautrix.DefaultUserAgent = fmt.Sprintf("%s/%s %s", br.Name, br.Version, mautrix.DefaultUserAgent)
 	br.VersionDesc = fmt.Sprintf("%s %s (%s)", br.Name, br.Version, buildTime)
+	br.BuildTime = buildTime
 }
 
 func (br *Bridge) ensureConnection() {
@@ -261,6 +306,8 @@ func (br *Bridge) init() {
 
 	br.Log.Debugln("Initializing Matrix event processor")
 	br.EventProcessor = appservice.NewEventProcessor(br.AS)
+	br.Log.Debugln("Initializing Matrix event handler")
+	br.MatrixHandler = NewMatrixHandler(br)
 
 	br.Crypto = NewCryptoHelper(br)
 

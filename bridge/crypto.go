@@ -1,3 +1,9 @@
+// Copyright (c) 2022 Tulir Asokan
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 package bridge
 
 import (
@@ -78,14 +84,14 @@ func (helper *CryptoHelper) allowKeyShare(device *crypto.DeviceIdentity, info ev
 	} else if device.Trust == crypto.TrustStateBlacklisted {
 		return &crypto.KeyShareRejectBlacklisted
 	} else if device.Trust == crypto.TrustStateVerified || !cfg.RequireVerification {
-		portal := helper.bridge.Child.GetIPortalByMXID(info.RoomID)
+		portal := helper.bridge.Child.GetIPortal(info.RoomID)
 		if portal == nil {
 			helper.log.Debugfln("Rejecting key request for %s from %s/%s: room is not a portal", info.SessionID, device.UserID, device.DeviceID)
 			return &crypto.KeyShareRejection{Code: event.RoomKeyWithheldUnavailable, Reason: "Requested room is not a portal room"}
 		}
-		user := helper.bridge.Child.GetIUserByMXID(device.UserID)
+		user := helper.bridge.Child.GetIUser(device.UserID, true)
 		// FIXME reimplement IsInPortal
-		if !user.IsAdmin() /*&& !user.IsInPortal(portal.Key)*/ {
+		if user.GetPermissionLevel() < PermissionAdmin /*&& !user.IsInPortal(portal.Key)*/ {
 			helper.log.Debugfln("Rejecting key request for %s from %s/%s: user is not in portal", info.SessionID, device.UserID, device.DeviceID)
 			return &crypto.KeyShareRejection{Code: event.RoomKeyWithheldUnauthorized, Reason: "You're not in that portal"}
 		}
@@ -292,7 +298,7 @@ type cryptoStateStore struct {
 var _ crypto.StateStore = (*cryptoStateStore)(nil)
 
 func (c *cryptoStateStore) IsEncrypted(id id.RoomID) bool {
-	portal := c.bridge.Child.GetIPortalByMXID(id)
+	portal := c.bridge.Child.GetIPortal(id)
 	if portal != nil {
 		return portal.IsEncrypted()
 	}

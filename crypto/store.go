@@ -104,7 +104,7 @@ type Store interface {
 	// GetGroupSessionsForRoom gets all the inbound Megolm sessions for a specific room. This is used for creating key
 	// export files. Unlike GetGroupSession, this should not return any errors about withheld keys.
 	GetGroupSessionsForRoom(id.RoomID) ([]*InboundGroupSession, error)
-	// GetGroupSessionsForRoom gets all the inbound Megolm sessions in the store. This is used for creating key export
+	// GetAllGroupSessions gets all the inbound Megolm sessions in the store. This is used for creating key export
 	// files. Unlike GetGroupSession, this should not return any errors about withheld keys.
 	GetAllGroupSessions() ([]*InboundGroupSession, error)
 
