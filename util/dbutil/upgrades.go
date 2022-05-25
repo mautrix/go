@@ -128,6 +128,7 @@ func (db *Database) Upgrade() error {
 	for version < len(db.UpgradeTable) {
 		upgradeItem := db.UpgradeTable[version]
 		if upgradeItem.fn == nil {
+			db.Log.Debugfln("Skipping v%d -> v%d as no upgrade function is defined", version, version+1)
 			version++
 			continue
 		}
