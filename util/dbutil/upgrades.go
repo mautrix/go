@@ -128,6 +128,7 @@ func (db *Database) Upgrade() error {
 	for version < len(db.UpgradeTable) {
 		upgradeItem := db.UpgradeTable[version]
 		if upgradeItem.fn == nil {
+			version++
 			continue
 		}
 		db.Log.Infofln("Upgrading database from v%d to v%d: %s", version, upgradeItem.upgradesTo, upgradeItem.message)
