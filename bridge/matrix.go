@@ -298,7 +298,7 @@ func (mx *MatrixHandler) HandleRoomMetadata(evt *event.Event) {
 	metaPortal.HandleMatrixMeta(user, evt)
 }
 
-const doublePuppetKey = "fi.mau.double_puppet_source"
+const DoublePuppetKey = "fi.mau.double_puppet_source"
 
 func (mx *MatrixHandler) shouldIgnoreEvent(evt *event.Event) bool {
 	if evt.Sender == mx.bridge.Bot.UserID || mx.bridge.Child.IsGhost(evt.Sender) {
@@ -307,7 +307,7 @@ func (mx *MatrixHandler) shouldIgnoreEvent(evt *event.Event) bool {
 	user := mx.bridge.Child.GetIUser(evt.Sender, true)
 	if user == nil || user.GetPermissionLevel() <= 0 {
 		return true
-	} else if val, ok := evt.Content.Raw[doublePuppetKey]; ok && val == mx.bridge.Name && user.GetIDoublePuppet() != nil {
+	} else if val, ok := evt.Content.Raw[DoublePuppetKey]; ok && val == mx.bridge.Name && user.GetIDoublePuppet() != nil {
 		return true
 	}
 	return false
@@ -481,7 +481,7 @@ func (mx *MatrixHandler) HandleReceipt(evt *event.Event) {
 				continue
 			}
 			customPuppet := user.GetIDoublePuppet()
-			if val, ok := receipt.Extra[doublePuppetKey].(string); ok && customPuppet != nil && val == mx.bridge.Name {
+			if val, ok := receipt.Extra[DoublePuppetKey].(string); ok && customPuppet != nil && val == mx.bridge.Name {
 				// Ignore double puppeted read receipts.
 				mx.log.Debugfln("Ignoring double puppeted read receipt %+v", evt.Content.Raw)
 				// But do start disappearing messages, because the user read the chat
