@@ -18,25 +18,28 @@ const (
 	RelReplace    RelationType = "m.replace"
 	RelReference  RelationType = "m.reference"
 	RelAnnotation RelationType = "m.annotation"
-	RelReply      RelationType = "net.maunium.reply"
+	RelThread     RelationType = "m.thread"
 )
 
 type RelatesTo struct {
-	Type    RelationType
-	EventID id.EventID
-	Key     string
+	Type    RelationType `json:"rel_type"`
+	EventID id.EventID   `json:"event_id"`
+	Key     string       `json:"key,omitempty"`
+
+	InReplyTo     *InReplyTo `json:"m.in_reply_to,omitempty"`
+	IsFallingBack bool       `json:"is_falling_back,omitempty"`
 }
 
-type serializableInReplyTo struct {
+type InReplyTo struct {
 	EventID id.EventID `json:"event_id,omitempty"`
 }
 
-type serializableRelatesTo struct {
-	InReplyTo *serializableInReplyTo `json:"m.in_reply_to,omitempty"`
-
-	Type    RelationType `json:"rel_type,omitempty"`
-	EventID id.EventID   `json:"event_id,omitempty"`
-	Key     string       `json:"key,omitempty"`
+func (rel *RelatesTo) Copy() *RelatesTo {
+	if rel == nil {
+		return nil
+	}
+	cp := *rel
+	return &cp
 }
 
 func (rel *RelatesTo) GetReplaceID() id.EventID {
@@ -53,9 +56,16 @@ func (rel *RelatesTo) GetReferenceID() id.EventID {
 	return ""
 }
 
-func (rel *RelatesTo) GetReplyID() id.EventID {
-	if rel.Type == RelReply {
+func (rel *RelatesTo) GetThreadParent() id.EventID {
+	if rel.Type == RelThread {
 		return rel.EventID
+	}
+	return ""
+}
+
+func (rel *RelatesTo) GetReplyTo() id.EventID {
+	if rel.InReplyTo != nil {
+		return rel.InReplyTo.EventID
 	}
 	return ""
 }
@@ -74,29 +84,33 @@ func (rel *RelatesTo) GetAnnotationKey() string {
 	return ""
 }
 
-func (rel *RelatesTo) UnmarshalJSON(data []byte) error {
-	var srel serializableRelatesTo
-	if err := json.Unmarshal(data, &srel); err != nil {
-		return err
-	}
-	if len(srel.Type) > 0 {
-		rel.Type = srel.Type
-		rel.EventID = srel.EventID
-		rel.Key = srel.Key
-	} else if srel.InReplyTo != nil && len(srel.InReplyTo.EventID) > 0 {
-		rel.Type = RelReply
-		rel.EventID = srel.InReplyTo.EventID
-		rel.Key = ""
-	}
-	return nil
+func (rel *RelatesTo) SetReplace(mxid id.EventID) *RelatesTo {
+	rel.Type = RelReplace
+	rel.EventID = mxid
+	return rel
 }
 
-func (rel *RelatesTo) MarshalJSON() ([]byte, error) {
-	srel := serializableRelatesTo{Type: rel.Type, EventID: rel.EventID, Key: rel.Key}
-	if rel.Type == RelReply {
-		srel.InReplyTo = &serializableInReplyTo{rel.EventID}
+func (rel *RelatesTo) SetReplyTo(mxid id.EventID) *RelatesTo {
+	rel.InReplyTo = &InReplyTo{EventID: mxid}
+	rel.IsFallingBack = false
+	return rel
+}
+
+func (rel *RelatesTo) SetThread(mxid, fallback id.EventID) *RelatesTo {
+	rel.Type = RelThread
+	rel.EventID = mxid
+	if fallback != "" && rel.GetReplyTo() == "" {
+		rel.SetReplyTo(fallback)
+		rel.IsFallingBack = true
 	}
-	return json.Marshal(&srel)
+	return rel
+}
+
+func (rel *RelatesTo) SetAnnotation(mxid id.EventID, key string) *RelatesTo {
+	rel.Type = RelAnnotation
+	rel.EventID = mxid
+	rel.Key = key
+	return rel
 }
 
 type RelationChunkItem struct {

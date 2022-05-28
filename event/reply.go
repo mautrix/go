@@ -45,8 +45,8 @@ func (content *MessageEventContent) RemoveReplyFallback() {
 }
 
 func (content *MessageEventContent) GetReplyTo() id.EventID {
-	if content.RelatesTo != nil && content.RelatesTo.Type == RelReply {
-		return content.RelatesTo.EventID
+	if content.RelatesTo != nil {
+		return content.RelatesTo.GetReplyTo()
 	}
 	return ""
 }
@@ -91,10 +91,7 @@ func (evt *Event) GenerateReplyFallbackText() string {
 }
 
 func (content *MessageEventContent) SetReply(inReplyTo *Event) {
-	content.RelatesTo = &RelatesTo{
-		EventID: inReplyTo.ID,
-		Type:    RelReply,
-	}
+	content.RelatesTo = (&RelatesTo{}).SetReplyTo(inReplyTo.ID)
 
 	if content.MsgType == MsgText || content.MsgType == MsgNotice {
 		content.EnsureHasHTML()

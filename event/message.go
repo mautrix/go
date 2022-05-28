@@ -125,10 +125,7 @@ func (content *MessageEventContent) SetRelatesTo(rel *RelatesTo) {
 func (content *MessageEventContent) SetEdit(original id.EventID) {
 	newContent := *content
 	content.NewContent = &newContent
-	content.RelatesTo = &RelatesTo{
-		Type:    RelReplace,
-		EventID: original,
-	}
+	content.RelatesTo = (&RelatesTo{}).SetReplace(original)
 	if content.MsgType == MsgText || content.MsgType == MsgNotice {
 		content.Body = "* " + content.Body
 		if content.Format == FormatHTML && len(content.FormattedBody) > 0 {
