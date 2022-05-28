@@ -123,7 +123,7 @@ func (mx *MatrixHandler) HandleBotInvite(evt *event.Event) {
 		return
 	}
 
-	if user.GetPermissionLevel() <= bridgeconfig.PermissionLevelBlock {
+	if user.GetPermissionLevel() < bridgeconfig.PermissionLevelUser {
 		_, _ = intent.SendNotice(evt.RoomID, "You are not whitelisted to use this bridge.\n"+
 			"If you're the owner of this bridge, see the bridge.permissions section in your config file.")
 		_, _ = intent.LeaveRoom(evt.RoomID)
