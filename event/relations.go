@@ -22,8 +22,8 @@ const (
 )
 
 type RelatesTo struct {
-	Type    RelationType `json:"rel_type"`
-	EventID id.EventID   `json:"event_id"`
+	Type    RelationType `json:"rel_type,omitempty"`
+	EventID id.EventID   `json:"event_id,omitempty"`
 	Key     string       `json:"key,omitempty"`
 
 	InReplyTo     *InReplyTo `json:"m.in_reply_to,omitempty"`
