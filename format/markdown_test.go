@@ -56,20 +56,49 @@ var simpleSpoilerTests = map[string]string{
 	"test **||*foo*||**":                      `test <strong><span data-mx-spoiler><em>foo</em></span></strong>`,
 	"test ~~**||*foo*||**~~":                  `test <del><strong><span data-mx-spoiler><em>foo</em></span></strong></del>`,
 	"> ||~~***foo***~~||":                     "<blockquote><p><span data-mx-spoiler><del><em><strong>foo</strong></em></del></span></p></blockquote>",
+
+	"a \\||test||": "a ||test||",
+	"\\~~test~~":   "~~test~~",
+	"\\*test* hmm": "*test* hmm",
+}
+
+func render(renderer goldmark.Markdown, text string) string {
+	var buf strings.Builder
+	err := renderer.Convert([]byte(text), &buf)
+	if err != nil {
+		panic(err)
+	}
+	return buf.String()
 }
 
 func TestRenderMarkdown_SimpleSpoiler(t *testing.T) {
-	renderer := goldmark.New(goldmark.WithExtensions(extension.Strikethrough, extension.Table, mdext.SimpleSpoiler, mdext.EscapeHTML), format.HTMLOptions)
-	render := func(text string) string {
-		var buf strings.Builder
-		err := renderer.Convert([]byte(text), &buf)
-		if err != nil {
-			panic(err)
-		}
-		return buf.String()
-	}
+	renderer := goldmark.New(goldmark.WithExtensions(extension.Strikethrough, mdext.SimpleSpoiler, mdext.EscapeHTML), format.HTMLOptions)
 	for markdown, html := range simpleSpoilerTests {
-		rendered := format.UnwrapSingleParagraph(render(markdown))
+		rendered := format.UnwrapSingleParagraph(render(renderer, markdown))
+		assert.Equal(t, html, strings.ReplaceAll(rendered, "\n", ""))
+	}
+}
+
+var discordUnderlineTests = map[string]string{
+	"**test**":           "<strong>test</strong>",
+	"*test*":             "<em>test</em>",
+	"_test_":             "<em>test</em>",
+	"__test__":           "<u>test</u>",
+	"__*test*__":         "<u><em>test</em></u>",
+	"___test___":         "<em><u>test</u></em>",
+	"____test____":       "<u><u>test</u></u>",
+	"**__test__**":       "<strong><u>test</u></strong>",
+	"__***test***__":     "<u><em><strong>test</strong></em></u>",
+	"__~~***test***~~__": "<u><del><em><strong>test</strong></em></del></u>",
+
+	//"\\__test__":         "__test__",
+	//"\\**test**":         "**test**",
+}
+
+func TestRenderMarkdown_DiscordUnderline(t *testing.T) {
+	renderer := goldmark.New(goldmark.WithExtensions(extension.Strikethrough, mdext.DiscordUnderline, mdext.EscapeHTML), format.HTMLOptions)
+	for markdown, html := range discordUnderlineTests {
+		rendered := format.UnwrapSingleParagraph(render(renderer, markdown))
 		assert.Equal(t, html, strings.ReplaceAll(rendered, "\n", ""))
 	}
 }
