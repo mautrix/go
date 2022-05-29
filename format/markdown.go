@@ -50,7 +50,7 @@ func RenderMarkdownCustom(text string, renderer goldmark.Markdown) event.Message
 }
 
 func HTMLToContent(html string) event.MessageEventContent {
-	text := HTMLToText(html)
+	text := HTMLToMarkdown(html)
 	if html != text {
 		return event.MessageEventContent{
 			FormattedBody: html,

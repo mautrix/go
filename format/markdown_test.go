@@ -65,7 +65,7 @@ var spoilerTests = map[string]string{
 	"test ||reason|[bar](https://example.com)||": `test <span data-mx-spoiler="reason"><a href="https://example.com">bar</a></span>`,
 	"test [||reason|foo||](https://example.com)": `test <a href="https://example.com"><span data-mx-spoiler="reason">foo</span></a>`,
 	"test [||foo||](https://example.com)":        `test <a href="https://example.com"><span data-mx-spoiler>foo</span></a>`,
-	"test [||*foo*||](https://example.com)":      `test <a href="https://example.com"><span data-mx-spoiler><em>foo</em></span></a>`,
+	"test [||_foo_||](https://example.com)":      `test <a href="https://example.com"><span data-mx-spoiler><em>foo</em></span></a>`,
 	// FIXME wrapping spoilers in italic/bold/strikethrough doesn't work for some reason
 	//"test **[||foo||](https://example.com)**":    `test <strong><a href="https://example.com"><span data-mx-spoiler>foo</span></a></strong>`,
 	//"test **||foo||**":                           `test <strong><span data-mx-spoiler><em>foo</span></strong>`,
@@ -77,8 +77,7 @@ var spoilerTests = map[string]string{
 func TestRenderMarkdown_Spoiler(t *testing.T) {
 	for markdown, html := range spoilerTests {
 		rendered := format.RenderMarkdown(markdown, true, false)
-		// FIXME the HTML parser doesn't do spoilers yet
-		//assert.Equal(t, plaintext, rendered.Body)
+		assert.Equal(t, markdown, rendered.Body)
 		assert.Equal(t, html, strings.ReplaceAll(rendered.FormattedBody, "\n", ""))
 	}
 }

@@ -19,6 +19,9 @@ import (
 
 type Context map[string]interface{}
 type TextConverter func(string, Context) string
+type SpoilerConverter func(text, reason string, ctx Context) string
+type LinkConverter func(text, href string, ctx Context) string
+type ColorConverter func(text, fg, bg string, ctx Context) string
 type CodeBlockConverter func(code, language string, ctx Context) string
 type PillConverter func(displayname, mxid, eventID string, ctx Context) string
 
@@ -52,6 +55,9 @@ type HTMLParser struct {
 	ItalicConverter         TextConverter
 	StrikethroughConverter  TextConverter
 	UnderlineConverter      TextConverter
+	LinkConverter           LinkConverter
+	SpoilerConverter        SpoilerConverter
+	ColorConverter          ColorConverter
 	MonospaceBlockConverter CodeBlockConverter
 	MonospaceConverter      TextConverter
 	TextConverter           TextConverter
@@ -63,13 +69,18 @@ type TaggedString struct {
 	tag string
 }
 
-func (parser *HTMLParser) getAttribute(node *html.Node, attribute string) string {
+func (parser *HTMLParser) maybeGetAttribute(node *html.Node, attribute string) (string, bool) {
 	for _, attr := range node.Attr {
 		if attr.Key == attribute {
-			return attr.Val
+			return attr.Val, true
 		}
 	}
-	return ""
+	return "", false
+}
+
+func (parser *HTMLParser) getAttribute(node *html.Node, attribute string) string {
+	val, _ := parser.maybeGetAttribute(node, attribute)
+	return val
 }
 
 // Digits counts the number of digits in a non-negative integer.
@@ -148,6 +159,33 @@ func (parser *HTMLParser) basicFormatToString(node *html.Node, stripLinebreak bo
 	return str
 }
 
+func (parser *HTMLParser) spanToString(node *html.Node, stripLinebreak bool, ctx Context) string {
+	str := parser.nodeToTagAwareString(node.FirstChild, stripLinebreak, ctx)
+	if node.Data == "span" {
+		reason, isSpoiler := parser.maybeGetAttribute(node, "data-mx-spoiler")
+		if isSpoiler {
+			if parser.SpoilerConverter != nil {
+				str = parser.SpoilerConverter(str, reason, ctx)
+			} else if len(reason) > 0 {
+				str = fmt.Sprintf("||%s|%s||", reason, str)
+			} else {
+				str = fmt.Sprintf("||%s||", str)
+			}
+		}
+	}
+	if parser.ColorConverter != nil {
+		fg := parser.getAttribute(node, "data-mx-color")
+		if len(fg) == 0 && node.Data == "font" {
+			fg = parser.getAttribute(node, "color")
+		}
+		bg := parser.getAttribute(node, "data-mx-bg-color")
+		if len(bg) > 0 || len(fg) > 0 {
+			str = parser.ColorConverter(str, fg, bg, ctx)
+		}
+	}
+	return str
+}
+
 func (parser *HTMLParser) headerToString(node *html.Node, stripLinebreak bool, ctx Context) string {
 	children := parser.nodeToStrings(node.FirstChild, stripLinebreak, ctx)
 	length := int(node.Data[1] - '0')
@@ -177,7 +215,9 @@ func (parser *HTMLParser) linkToString(node *html.Node, stripLinebreak bool, ctx
 			return parser.PillConverter(str, parsedMatrix.PrimaryIdentifier(), parsedMatrix.SecondaryIdentifier(), ctx)
 		}
 	}
-	if str == href {
+	if parser.LinkConverter != nil {
+		return parser.LinkConverter(str, href, ctx)
+	} else if str == href {
 		return str
 	}
 	return fmt.Sprintf("%s (%s)", str, href)
@@ -195,6 +235,8 @@ func (parser *HTMLParser) tagToString(node *html.Node, stripLinebreak bool, ctx 
 		return parser.Newline
 	case "b", "strong", "i", "em", "s", "strike", "del", "u", "ins", "tt", "code":
 		return parser.basicFormatToString(node, stripLinebreak, ctx)
+	case "span", "font":
+		return parser.spanToString(node, stripLinebreak, ctx)
 	case "a":
 		return parser.linkToString(node, stripLinebreak, ctx)
 	case "p":
@@ -301,5 +343,23 @@ func HTMLToText(html string) string {
 		Newline:        "\n",
 		HorizontalLine: "\n---\n",
 		PillConverter:  DefaultPillConverter,
+	}).Parse(html, make(Context))
+}
+
+// HTMLToMarkdown converts Matrix HTML into markdown with the default settings.
+//
+// Currently, the only difference to HTMLToText is how links are formatted.
+func HTMLToMarkdown(html string) string {
+	return (&HTMLParser{
+		TabsToSpaces:   4,
+		Newline:        "\n",
+		HorizontalLine: "\n---\n",
+		PillConverter:  DefaultPillConverter,
+		LinkConverter: func(text, href string, ctx Context) string {
+			if text == href {
+				return text
+			}
+			return fmt.Sprintf("[%s](%s)", text, href)
+		},
 	}).Parse(html, make(Context))
 }
