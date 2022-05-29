@@ -4,7 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-package format
+package mdext
 
 import (
 	"bytes"
@@ -56,7 +56,7 @@ type spoilerParser struct{}
 
 var defaultSpoilerParser = &spoilerParser{}
 
-func newSpoilerParser() parser.InlineParser {
+func NewSpoilerParser() parser.InlineParser {
 	return defaultSpoilerParser
 }
 
@@ -122,7 +122,7 @@ type spoilerHTMLRenderer struct {
 	html.Config
 }
 
-func newSpoilerHTMLRenderer(opts ...html.Option) renderer.NodeRenderer {
+func NewSpoilerHTMLRenderer(opts ...html.Option) renderer.NodeRenderer {
 	r := &spoilerHTMLRenderer{
 		Config: html.NewConfig(),
 	}
@@ -152,14 +152,17 @@ func (r *spoilerHTMLRenderer) renderSpoiler(w util.BufWriter, source []byte, n a
 
 type extSpoiler struct{}
 
-// ExtensionSpoiler is an extension that allow you to use spoiler expression like '~~text~~' .
-var ExtensionSpoiler = &extSpoiler{}
+// Spoiler is an extension that allow you to use spoiler expression like '||text||' or ||reason|text|| .
+//
+// There are some types of nested formatting that aren't supported with advanced spoilers.
+// The SimpleSpoiler extension that doesn't support reasons can be used to work around those.
+var Spoiler = &extSpoiler{}
 
 func (e *extSpoiler) Extend(m goldmark.Markdown) {
 	m.Parser().AddOptions(parser.WithInlineParsers(
-		util.Prioritized(newSpoilerParser(), 500),
+		util.Prioritized(NewSpoilerParser(), 500),
 	))
 	m.Renderer().AddOptions(renderer.WithNodeRenderers(
-		util.Prioritized(newSpoilerHTMLRenderer(), 500),
+		util.Prioritized(NewSpoilerHTMLRenderer(), 500),
 	))
 }

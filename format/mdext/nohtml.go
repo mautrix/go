@@ -4,7 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-package format
+package mdext
 
 import (
 	"github.com/yuin/goldmark"
@@ -17,7 +17,8 @@ import (
 type extEscapeHTML struct{}
 type escapingHTMLRenderer struct{}
 
-var ExtensionEscapeHTML = &extEscapeHTML{}
+// EscapeHTML is an extension that escapes HTML in the input markdown instead of passing it through as-is.
+var EscapeHTML = &extEscapeHTML{}
 var defaultEHR = &escapingHTMLRenderer{}
 
 func (eeh *extEscapeHTML) Extend(m goldmark.Markdown) {
