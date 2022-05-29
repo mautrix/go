@@ -8,7 +8,6 @@ package format
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/yuin/goldmark"
@@ -18,13 +17,25 @@ import (
 	"maunium.net/go/mautrix/event"
 )
 
-var AntiParagraphRegex = regexp.MustCompile("^<p>(.+?)</p>$")
+const paragraphStart = "<p>"
+const paragraphEnd = "</p>"
 
 var Extensions = goldmark.WithExtensions(extension.Strikethrough, extension.Table, ExtensionSpoiler)
 var HTMLOptions = goldmark.WithRendererOptions(html.WithHardWraps(), html.WithUnsafe())
 
 var withHTML = goldmark.New(Extensions, HTMLOptions)
 var noHTML = goldmark.New(Extensions, HTMLOptions, goldmark.WithExtensions(ExtensionEscapeHTML))
+
+// UnwrapSingleParagraph removes paragraph tags surrounding a string if the string only contains a single paragraph.
+func UnwrapSingleParagraph(html string) string {
+	if strings.HasPrefix(html, paragraphStart) && strings.HasSuffix(html, paragraphEnd) {
+		htmlBodyWithoutP := html[len(paragraphStart) : len(html)-len(paragraphEnd)]
+		if !strings.Contains(htmlBodyWithoutP, paragraphStart) {
+			return htmlBodyWithoutP
+		}
+	}
+	return html
+}
 
 func RenderMarkdown(text string, allowMarkdown, allowHTML bool) event.MessageEventContent {
 	var htmlBody string
@@ -40,7 +51,7 @@ func RenderMarkdown(text string, allowMarkdown, allowHTML bool) event.MessageEve
 			panic(fmt.Errorf("markdown parser errored: %w", err))
 		}
 		htmlBody = strings.TrimRight(buf.String(), "\n")
-		htmlBody = AntiParagraphRegex.ReplaceAllString(htmlBody, "$1")
+		htmlBody = UnwrapSingleParagraph(htmlBody)
 	} else {
 		htmlBody = strings.Replace(text, "\n", "<br>", -1)
 	}
