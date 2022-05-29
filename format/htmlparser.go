@@ -54,6 +54,7 @@ type HTMLParser struct {
 	UnderlineConverter      TextConverter
 	MonospaceBlockConverter CodeBlockConverter
 	MonospaceConverter      TextConverter
+	TextConverter           TextConverter
 }
 
 // TaggedString is a string that also contains a HTML tag.
@@ -228,6 +229,9 @@ func (parser *HTMLParser) singleNodeToString(node *html.Node, stripLinebreak boo
 	case html.TextNode:
 		if stripLinebreak {
 			node.Data = strings.Replace(node.Data, "\n", "", -1)
+		}
+		if parser.TextConverter != nil {
+			node.Data = parser.TextConverter(node.Data, ctx)
 		}
 		return TaggedString{node.Data, "text"}
 	case html.ElementNode:
