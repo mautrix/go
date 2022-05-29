@@ -14,9 +14,49 @@ import (
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
 
+	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/format"
 	"maunium.net/go/mautrix/format/mdext"
 )
+
+func TestRenderMarkdown_PlainText(t *testing.T) {
+	content := format.RenderMarkdown("hello world", true, true)
+	assert.Equal(t, event.MessageEventContent{MsgType: event.MsgText, Body: "hello world"}, content)
+	content = format.RenderMarkdown("hello world", true, false)
+	assert.Equal(t, event.MessageEventContent{MsgType: event.MsgText, Body: "hello world"}, content)
+	content = format.RenderMarkdown("hello world", false, true)
+	assert.Equal(t, event.MessageEventContent{MsgType: event.MsgText, Body: "hello world"}, content)
+	content = format.RenderMarkdown("<b>hello world</b>", false, false)
+	assert.Equal(t, event.MessageEventContent{MsgType: event.MsgText, Body: "<b>hello world</b>"}, content)
+}
+
+func TestRenderMarkdown_EscapeHTML(t *testing.T) {
+	content := format.RenderMarkdown("<b>hello world</b>", true, false)
+	assert.Equal(t, event.MessageEventContent{
+		MsgType:       event.MsgText,
+		Body:          "<b>hello world</b>",
+		Format:        event.FormatHTML,
+		FormattedBody: "&lt;b&gt;hello world&lt;/b&gt;",
+	}, content)
+}
+
+func TestRenderMarkdown_HTML(t *testing.T) {
+	content := format.RenderMarkdown("<b>hello world</b>", false, true)
+	assert.Equal(t, event.MessageEventContent{
+		MsgType:       event.MsgText,
+		Body:          "**hello world**",
+		Format:        event.FormatHTML,
+		FormattedBody: "<b>hello world</b>",
+	}, content)
+
+	content = format.RenderMarkdown("<b>hello world</b>", true, true)
+	assert.Equal(t, event.MessageEventContent{
+		MsgType:       event.MsgText,
+		Body:          "**hello world**",
+		Format:        event.FormatHTML,
+		FormattedBody: "<b>hello world</b>",
+	}, content)
+}
 
 var spoilerTests = map[string]string{
 	"test ||bar||":            "test <span data-mx-spoiler>bar</span>",

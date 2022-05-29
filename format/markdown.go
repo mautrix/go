@@ -39,6 +39,32 @@ func UnwrapSingleParagraph(html string) string {
 	return html
 }
 
+func RenderMarkdownCustom(text string, renderer goldmark.Markdown) event.MessageEventContent {
+	var buf strings.Builder
+	err := renderer.Convert([]byte(text), &buf)
+	if err != nil {
+		panic(fmt.Errorf("markdown parser errored: %w", err))
+	}
+	htmlBody := UnwrapSingleParagraph(buf.String())
+	return HTMLToContent(htmlBody)
+}
+
+func HTMLToContent(html string) event.MessageEventContent {
+	text := HTMLToText(html)
+	if html != text {
+		return event.MessageEventContent{
+			FormattedBody: html,
+			Format:        event.FormatHTML,
+			MsgType:       event.MsgText,
+			Body:          text,
+		}
+	}
+	return event.MessageEventContent{
+		MsgType: event.MsgText,
+		Body:    text,
+	}
+}
+
 func RenderMarkdown(text string, allowMarkdown, allowHTML bool) event.MessageEventContent {
 	var htmlBody string
 
@@ -47,31 +73,14 @@ func RenderMarkdown(text string, allowMarkdown, allowHTML bool) event.MessageEve
 		if !allowHTML {
 			rndr = noHTML
 		}
-		var buf strings.Builder
-		err := rndr.Convert([]byte(text), &buf)
-		if err != nil {
-			panic(fmt.Errorf("markdown parser errored: %w", err))
-		}
-		htmlBody = UnwrapSingleParagraph(buf.String())
-	} else {
+		return RenderMarkdownCustom(text, rndr)
+	} else if allowHTML {
 		htmlBody = strings.Replace(text, "\n", "<br>", -1)
-	}
-
-	if len(htmlBody) > 0 && (allowMarkdown || allowHTML) {
-		text = HTMLToText(htmlBody)
-
-		if htmlBody != text {
-			return event.MessageEventContent{
-				FormattedBody: htmlBody,
-				Format:        event.FormatHTML,
-				MsgType:       event.MsgText,
-				Body:          text,
-			}
+		return HTMLToContent(htmlBody)
+	} else {
+		return event.MessageEventContent{
+			MsgType: event.MsgText,
+			Body:    text,
 		}
-	}
-
-	return event.MessageEventContent{
-		MsgType: event.MsgText,
-		Body:    text,
 	}
 }
