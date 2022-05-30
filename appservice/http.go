@@ -198,10 +198,6 @@ func (as *AppService) handleEvents(evts []*event.Event, defaultTypeClass event.T
 			as.Log.Debugfln("Failed to parse content of %s (type %s): %v", evt.ID, evt.Type.Type, err)
 		}
 
-		if _, ok := CheckpointTypes[evt.Type]; ok {
-			go as.SendMessageSendCheckpoint(evt, StepBridge, 0)
-		}
-
 		if evt.Type.IsState() {
 			// TODO remove this check after https://github.com/matrix-org/synapse/pull/11265
 			historical, ok := evt.Content.Raw["org.matrix.msc2716.historical"].(bool)

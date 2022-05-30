@@ -4,7 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-package appservice
+package bridge
 
 import (
 	"bytes"
@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/appservice"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
@@ -62,18 +63,18 @@ type MessageSendCheckpoint struct {
 }
 
 var CheckpointTypes = map[event.Type]struct{}{
-	event.EventRedaction:   {},
-	event.EventMessage:     {},
-	event.EventEncrypted:   {},
-	event.EventSticker:     {},
-	event.EventReaction:    {},
-	event.CallInvite:       {},
-	event.CallCandidates:   {},
-	event.CallSelectAnswer: {},
-	event.CallAnswer:       {},
-	event.CallHangup:       {},
-	event.CallReject:       {},
-	event.CallNegotiate:    {},
+	event.EventRedaction: {},
+	event.EventMessage:   {},
+	event.EventEncrypted: {},
+	event.EventSticker:   {},
+	event.EventReaction:  {},
+	//event.CallInvite:       {},
+	//event.CallCandidates:   {},
+	//event.CallSelectAnswer: {},
+	//event.CallAnswer:       {},
+	//event.CallHangup:       {},
+	//event.CallReject:       {},
+	//event.CallNegotiate:    {},
 }
 
 func NewMessageSendCheckpoint(evt *event.Event, step MessageSendCheckpointStep, status MessageSendCheckpointStatus, retryNum int) *MessageSendCheckpoint {
@@ -93,22 +94,22 @@ func NewMessageSendCheckpoint(evt *event.Event, step MessageSendCheckpointStep, 
 	return &checkpoint
 }
 
-func (as *AppService) SendMessageSendCheckpoint(evt *event.Event, step MessageSendCheckpointStep, retryNum int) {
+func (br *Bridge) SendMessageSuccessCheckpoint(evt *event.Event, step MessageSendCheckpointStep, retryNum int) {
 	checkpoint := NewMessageSendCheckpoint(evt, step, StatusSuccesss, retryNum)
-	go checkpoint.Send(as)
+	go checkpoint.Send(br.AS)
 }
 
-func (as *AppService) SendErrorMessageSendCheckpoint(evt *event.Event, step MessageSendCheckpointStep, err error, permanent bool, retryNum int) {
+func (br *Bridge) SendMessageErrorCheckpoint(evt *event.Event, step MessageSendCheckpointStep, err error, permanent bool, retryNum int) {
 	status := StatusWillRetry
 	if permanent {
 		status = StatusPermFailure
 	}
 	checkpoint := NewMessageSendCheckpoint(evt, step, status, retryNum)
 	checkpoint.Info = err.Error()
-	go checkpoint.Send(as)
+	go checkpoint.Send(br.AS)
 }
 
-func (cp *MessageSendCheckpoint) Send(as *AppService) {
+func (cp *MessageSendCheckpoint) Send(as *appservice.AppService) {
 	err := SendCheckpoints(as, []*MessageSendCheckpoint{cp})
 	if err != nil {
 		as.Log.Warnfln("Error sending checkpoint %s/%s for %s: %v", cp.Step, cp.Status, cp.EventID, err)
@@ -119,11 +120,11 @@ type CheckpointsJSON struct {
 	Checkpoints []*MessageSendCheckpoint `json:"checkpoints"`
 }
 
-func SendCheckpoints(as *AppService, checkpoints []*MessageSendCheckpoint) error {
+func SendCheckpoints(as *appservice.AppService, checkpoints []*MessageSendCheckpoint) error {
 	checkpointsJSON := CheckpointsJSON{Checkpoints: checkpoints}
 
 	if as.HasWebsocket() {
-		return as.SendWebsocket(&WebsocketRequest{
+		return as.SendWebsocket(&appservice.WebsocketRequest{
 			Command: "message_checkpoint",
 			Data:    checkpointsJSON,
 		})
