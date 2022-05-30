@@ -430,7 +430,7 @@ func (mx *MatrixHandler) HandleMessage(evt *event.Event) {
 			content.Body = strings.TrimLeft(content.Body[len(commandPrefix):], " ")
 		}
 		if hasCommandPrefix || evt.RoomID == user.GetManagementRoomID() {
-			mx.bridge.CommandProcessor.Handle(evt.RoomID, evt.ID, user, content.Body, content.GetReplyTo())
+			go mx.bridge.CommandProcessor.Handle(evt.RoomID, evt.ID, user, content.Body, content.GetReplyTo())
 			return
 		}
 	}

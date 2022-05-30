@@ -318,7 +318,7 @@ func (br *Bridge) init() {
 
 	br.Log.Debugln("Initializing Matrix event processor")
 	br.EventProcessor = appservice.NewEventProcessor(br.AS)
-	br.EventProcessor.ExecMode = appservice.AsyncLoop
+	br.EventProcessor.ExecMode = appservice.Sync
 	br.Log.Debugln("Initializing Matrix event handler")
 	br.MatrixHandler = NewMatrixHandler(br)
 
