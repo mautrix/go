@@ -31,9 +31,9 @@ type SQLCryptoStore struct {
 
 var _ crypto.Store = (*SQLCryptoStore)(nil)
 
-func NewSQLCryptoStore(db *dbutil.Database, userID id.UserID, ghostIDFormat string) *SQLCryptoStore {
+func NewSQLCryptoStore(db *dbutil.Database, userID id.UserID, ghostIDFormat, pickleKey string) *SQLCryptoStore {
 	return &SQLCryptoStore{
-		SQLCryptoStore: crypto.NewSQLCryptoStore(db, "", "", []byte("maunium.net/go/mautrix-whatsapp")),
+		SQLCryptoStore: crypto.NewSQLCryptoStore(db, "", "", []byte(pickleKey)),
 		UserID:         userID,
 		GhostIDFormat:  ghostIDFormat,
 	}

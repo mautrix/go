@@ -53,10 +53,14 @@ func NewCryptoHelper(bridge *Bridge) Crypto {
 }
 
 func (helper *CryptoHelper) Init() error {
+	if len(helper.bridge.CryptoPickleKey) == 0 {
+		panic("CryptoPickleKey not set")
+	}
 	helper.log.Debugln("Initializing end-to-bridge encryption...")
 
 	helper.store = NewSQLCryptoStore(helper.bridge.DB, helper.bridge.AS.BotMXID(),
-		fmt.Sprintf("@%s:%s", helper.bridge.Config.Bridge.FormatUsername("%"), helper.bridge.AS.HomeserverDomain))
+		fmt.Sprintf("@%s:%s", helper.bridge.Config.Bridge.FormatUsername("%"), helper.bridge.AS.HomeserverDomain),
+		helper.bridge.CryptoPickleKey)
 
 	err := helper.store.Upgrade()
 	if err != nil {

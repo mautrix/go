@@ -133,6 +133,7 @@ type Bridge struct {
 	DB               *dbutil.Database
 	StateStore       *sqlstatestore.SQLStateStore
 	Crypto           Crypto
+	CryptoPickleKey  string
 
 	Child ChildOverride
 }
