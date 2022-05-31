@@ -42,6 +42,17 @@ const (
 	MsgStatusTimeout     MessageCheckpointStatus = "TIMEOUT"
 )
 
+func ReasonToCheckpointStatus(reason event.MessageStatusReason) MessageCheckpointStatus {
+	switch reason {
+	case event.MessageStatusUnsupported:
+		return MsgStatusUnsupported
+	case event.MessageStatusTooOld:
+		return MsgStatusTimeout
+	default:
+		return MsgStatusPermFailure
+	}
+}
+
 type MessageCheckpointReportedBy string
 
 const (
