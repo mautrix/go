@@ -10,6 +10,7 @@ package bridge
 
 import (
 	"database/sql"
+	"errors"
 
 	"github.com/lib/pq"
 
@@ -40,7 +41,7 @@ func NewSQLCryptoStore(db *dbutil.Database, userID id.UserID, ghostIDFormat stri
 
 func (store *SQLCryptoStore) FindDeviceID() (deviceID id.DeviceID) {
 	err := store.DB.QueryRow("SELECT device_id FROM crypto_account WHERE account_id=$1", store.AccountID).Scan(&deviceID)
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		store.Log.Warn("Failed to scan device ID: %v", err)
 	}
 	return

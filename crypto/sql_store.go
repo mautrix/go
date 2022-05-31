@@ -9,6 +9,7 @@ package crypto
 import (
 	"database/sql"
 	"database/sql/driver"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -81,7 +82,7 @@ func (store *SQLCryptoStore) GetNextBatch() string {
 		err := store.DB.
 			QueryRow("SELECT sync_token FROM crypto_account WHERE account_id=$1", store.AccountID).
 			Scan(&store.SyncToken)
-		if err != nil && err != sql.ErrNoRows {
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			store.Log.Warnfln("Failed to scan sync token: %v", err)
 		}
 	}

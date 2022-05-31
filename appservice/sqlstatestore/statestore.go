@@ -89,7 +89,7 @@ func (store *SQLStateStore) GetMembership(roomID id.RoomID, userID id.UserID) ev
 	err := store.
 		QueryRow("SELECT membership FROM mx_user_profile WHERE room_id=$1 AND user_id=$2", roomID, userID).
 		Scan(&membership)
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		store.Log.Warnfln("Failed to scan membership of %s in %s: %v", userID, roomID, err)
 	}
 	return membership
@@ -108,7 +108,7 @@ func (store *SQLStateStore) TryGetMember(roomID id.RoomID, userID id.UserID) (*e
 	err := store.
 		QueryRow("SELECT membership, displayname, avatar_url FROM mx_user_profile WHERE room_id=$1 AND user_id=$2", roomID, userID).
 		Scan(&member.Membership, &member.Displayname, &member.AvatarURL)
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		store.Log.Warnfln("Failed to scan member info of %s in %s: %v", userID, roomID, err)
 	}
 	return &member, err == nil
@@ -156,7 +156,7 @@ func (store *SQLStateStore) IsMembership(roomID id.RoomID, userID id.UserID, all
 
 func (store *SQLStateStore) SetMembership(roomID id.RoomID, userID id.UserID, membership event.Membership) {
 	_, err := store.Exec(`
-		INSERT INTO mx_user_profile (room_id, user_id, membership) VALUES ($1, $2, $3)
+		INSERT INTO mx_user_profile (room_id, user_id, membership, displayname, avatar_url) VALUES ($1, $2, $3, '', '')
 		ON CONFLICT (room_id, user_id) DO UPDATE SET membership=excluded.membership
 	`, roomID, userID, membership)
 	if err != nil {
