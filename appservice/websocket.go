@@ -366,6 +366,7 @@ func (as *AppService) StartWebsocket(baseURL string, onConnect func()) error {
 		as.ws = nil
 	}
 
+	_ = ws.SetWriteDeadline(time.Now().Add(3 * time.Second))
 	err = ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseGoingAway, ""))
 	if err != nil && !errors.Is(err, websocket.ErrCloseSent) {
 		as.Log.Warnln("Error writing close message to websocket:", err)

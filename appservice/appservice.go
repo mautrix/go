@@ -109,8 +109,6 @@ type AppService struct {
 	botClient  *mautrix.Client
 	botIntent  *IntentAPI
 
-	MessageSendCheckpointEndpoint string
-
 	DefaultHTTPRetries int
 
 	Live  bool

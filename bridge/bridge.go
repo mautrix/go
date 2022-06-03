@@ -133,6 +133,7 @@ type Bridge struct {
 	DB               *dbutil.Database
 	StateStore       *sqlstatestore.SQLStateStore
 	Crypto           Crypto
+	CryptoPickleKey  string
 
 	Child ChildOverride
 }
@@ -318,6 +319,7 @@ func (br *Bridge) init() {
 
 	br.Log.Debugln("Initializing Matrix event processor")
 	br.EventProcessor = appservice.NewEventProcessor(br.AS)
+	br.EventProcessor.ExecMode = appservice.Sync
 	br.Log.Debugln("Initializing Matrix event handler")
 	br.MatrixHandler = NewMatrixHandler(br)
 

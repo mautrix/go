@@ -48,6 +48,9 @@ func NewMatrixHandler(br *Bridge) *MatrixHandler {
 
 		TrackEventDuration: noopTrack,
 	}
+	for evtType := range CheckpointTypes {
+		br.EventProcessor.On(evtType, handler.sendBridgeCheckpoint)
+	}
 	br.EventProcessor.On(event.EventMessage, handler.HandleMessage)
 	br.EventProcessor.On(event.EventEncrypted, handler.HandleEncrypted)
 	br.EventProcessor.On(event.EventSticker, handler.HandleMessage)
@@ -61,6 +64,12 @@ func NewMatrixHandler(br *Bridge) *MatrixHandler {
 	br.EventProcessor.On(event.EphemeralEventReceipt, handler.HandleReceipt)
 	br.EventProcessor.On(event.EphemeralEventTyping, handler.HandleTyping)
 	return handler
+}
+
+func (mx *MatrixHandler) sendBridgeCheckpoint(evt *event.Event) {
+	if !evt.Mautrix.CheckpointSent {
+		go mx.bridge.SendMessageSuccessCheckpoint(evt, MsgStepBridge, 0)
+	}
 }
 
 func (mx *MatrixHandler) HandleEncryption(evt *event.Event) {
@@ -326,26 +335,27 @@ func (mx *MatrixHandler) HandleEncrypted(evt *event.Event) {
 	if errors.Is(err, NoSessionFound) {
 		content := evt.Content.AsEncrypted()
 		mx.log.Debugfln("Couldn't find session %s trying to decrypt %s, waiting %d seconds...", content.SessionID, evt.ID, int(sessionWaitTimeout.Seconds()))
-		mx.as.SendErrorMessageSendCheckpoint(evt, appservice.StepDecrypted, err, false, decryptionRetryCount)
+		mx.bridge.SendMessageErrorCheckpoint(evt, MsgStepDecrypted, err, false, decryptionRetryCount)
 		decryptionRetryCount++
 		if mx.bridge.Crypto.WaitForSession(evt.RoomID, content.SenderKey, content.SessionID, sessionWaitTimeout) {
 			mx.log.Debugfln("Got session %s after waiting, trying to decrypt %s again", content.SessionID, evt.ID)
 			decrypted, err = mx.bridge.Crypto.Decrypt(evt)
 		} else {
-			mx.as.SendErrorMessageSendCheckpoint(evt, appservice.StepDecrypted, fmt.Errorf("didn't receive encryption keys"), false, decryptionRetryCount)
+			mx.bridge.SendMessageErrorCheckpoint(evt, MsgStepDecrypted, fmt.Errorf("didn't receive encryption keys"), false, decryptionRetryCount)
 			go mx.waitLongerForSession(evt)
 			return
 		}
 	}
 	if err != nil {
-		mx.as.SendErrorMessageSendCheckpoint(evt, appservice.StepDecrypted, err, true, decryptionRetryCount)
+		mx.bridge.SendMessageErrorCheckpoint(evt, MsgStepDecrypted, err, true, decryptionRetryCount)
 
 		mx.log.Warnfln("Failed to decrypt %s: %v", evt.ID, err)
 		_, _ = mx.bridge.Bot.SendNotice(evt.RoomID, fmt.Sprintf(
 			"\u26a0 Your message was not bridged: %v", err))
 		return
 	}
-	mx.as.SendMessageSendCheckpoint(decrypted, appservice.StepDecrypted, decryptionRetryCount)
+	mx.bridge.SendMessageSuccessCheckpoint(decrypted, MsgStepDecrypted, decryptionRetryCount)
+	decrypted.Mautrix.CheckpointSent = true
 	mx.bridge.EventProcessor.Dispatch(decrypted)
 }
 
@@ -371,17 +381,17 @@ func (mx *MatrixHandler) waitLongerForSession(evt *event.Event) {
 		mx.log.Debugfln("Got session %s after waiting more, trying to decrypt %s again", content.SessionID, evt.ID)
 		decrypted, err := mx.bridge.Crypto.Decrypt(evt)
 		if err == nil {
-			mx.as.SendMessageSendCheckpoint(decrypted, appservice.StepDecrypted, 2)
+			mx.bridge.SendMessageSuccessCheckpoint(decrypted, MsgStepDecrypted, 2)
 			mx.bridge.EventProcessor.Dispatch(decrypted)
 			_, _ = mx.bridge.Bot.RedactEvent(evt.RoomID, resp.EventID)
 			return
 		}
 		mx.log.Warnfln("Failed to decrypt %s: %v", evt.ID, err)
-		mx.as.SendErrorMessageSendCheckpoint(evt, appservice.StepDecrypted, err, true, 2)
+		mx.bridge.SendMessageErrorCheckpoint(evt, MsgStepDecrypted, err, true, 2)
 		update.Body = fmt.Sprintf("\u26a0 Your message was not bridged: %v", err)
 	} else {
 		mx.log.Debugfln("Didn't get %s, giving up on %s", content.SessionID, evt.ID)
-		mx.as.SendErrorMessageSendCheckpoint(evt, appservice.StepDecrypted, fmt.Errorf("didn't receive encryption keys"), true, 2)
+		mx.bridge.SendMessageErrorCheckpoint(evt, MsgStepDecrypted, fmt.Errorf("didn't receive encryption keys"), true, 2)
 		update.Body = "\u26a0 Your message was not bridged: the bridge hasn't received the decryption keys. " +
 			"If this error keeps happening, try restarting your client."
 	}
@@ -420,7 +430,7 @@ func (mx *MatrixHandler) HandleMessage(evt *event.Event) {
 			content.Body = strings.TrimLeft(content.Body[len(commandPrefix):], " ")
 		}
 		if hasCommandPrefix || evt.RoomID == user.GetManagementRoomID() {
-			mx.bridge.CommandProcessor.Handle(evt.RoomID, evt.ID, user, content.Body, content.GetReplyTo())
+			go mx.bridge.CommandProcessor.Handle(evt.RoomID, evt.ID, user, content.Body, content.GetReplyTo())
 			return
 		}
 	}

@@ -76,7 +76,6 @@ func (config *BaseConfig) MakeAppService() *appservice.AppService {
 	as.HomeserverURL = config.Homeserver.Address
 	as.Host.Hostname = config.AppService.Hostname
 	as.Host.Port = config.AppService.Port
-	as.MessageSendCheckpointEndpoint = config.Homeserver.MessageSendCheckpointEndpoint
 	as.DefaultHTTPRetries = 4
 	as.Registration = config.AppService.GetRegistration()
 	return as

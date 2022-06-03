@@ -92,6 +92,14 @@ func NewWithDB(db *sql.DB, rawDialect string) (*Database, error) {
 	}, nil
 }
 
+func NewWithDialect(uri, rawDialect string) (*Database, error) {
+	db, err := sql.Open(rawDialect, uri)
+	if err != nil {
+		return nil, err
+	}
+	return NewWithDB(db, rawDialect)
+}
+
 func NewFromConfig(owner string, cfg bridgeconfig.DatabaseConfig, dbLog log.Logger) (*Database, error) {
 	dialect, err := ParseDialect(cfg.Type)
 	if err != nil {

@@ -10,6 +10,7 @@ package bridge
 
 import (
 	"database/sql"
+	"errors"
 
 	"github.com/lib/pq"
 
@@ -30,9 +31,9 @@ type SQLCryptoStore struct {
 
 var _ crypto.Store = (*SQLCryptoStore)(nil)
 
-func NewSQLCryptoStore(db *dbutil.Database, userID id.UserID, ghostIDFormat string) *SQLCryptoStore {
+func NewSQLCryptoStore(db *dbutil.Database, userID id.UserID, ghostIDFormat, pickleKey string) *SQLCryptoStore {
 	return &SQLCryptoStore{
-		SQLCryptoStore: crypto.NewSQLCryptoStore(db, "", "", []byte("maunium.net/go/mautrix-whatsapp")),
+		SQLCryptoStore: crypto.NewSQLCryptoStore(db, "", "", []byte(pickleKey)),
 		UserID:         userID,
 		GhostIDFormat:  ghostIDFormat,
 	}
@@ -40,7 +41,7 @@ func NewSQLCryptoStore(db *dbutil.Database, userID id.UserID, ghostIDFormat stri
 
 func (store *SQLCryptoStore) FindDeviceID() (deviceID id.DeviceID) {
 	err := store.DB.QueryRow("SELECT device_id FROM crypto_account WHERE account_id=$1", store.AccountID).Scan(&deviceID)
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		store.Log.Warn("Failed to scan device ID: %v", err)
 	}
 	return
