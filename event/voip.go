@@ -10,6 +10,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+
+	"maunium.net/go/mautrix/id"
 )
 
 type CallHangupReason string
@@ -83,7 +85,7 @@ type BaseCallEventContent struct {
 
 type CallInviteEventContent struct {
 	BaseCallEventContent
-	DeviceID string   `json:"device_id"`
+	DeviceID id.DeviceID   `json:"device_id"`
 	SenderSessionID string `json:"sender_session_id"`
 	Lifetime int      `json:"lifetime"`
 	Offer    CallData `json:"offer"`
