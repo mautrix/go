@@ -315,7 +315,7 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 		}
 		return
 	case *event.RoomKeyRequestEventContent:
-		mach.handleRoomKeyRequest(evt.Sender, content)
+		go mach.handleRoomKeyRequest(evt.Sender, content)
 	// verification cases
 	case *event.VerificationStartEventContent:
 		mach.handleVerificationStart(evt.Sender, content, content.TransactionID, 10*time.Minute, "")
