@@ -5,6 +5,7 @@
 package base58_test
 
 import (
+	"errors"
 	"testing"
 
 	"maunium.net/go/mautrix/util/base58"
@@ -52,7 +53,7 @@ func TestBase58Check(t *testing.T) {
 	// test the two decoding failure cases
 	// case 1: checksum error
 	_, _, err := base58.CheckDecode("3MNQE1Y")
-	if err != base58.ErrChecksum {
+	if !errors.Is(err, base58.ErrChecksum) {
 		t.Error("Checkdecode test failed, expected ErrChecksum")
 	}
 	// case 2: invalid formats (string lengths below 5 mean the version byte and/or the checksum
@@ -61,7 +62,7 @@ func TestBase58Check(t *testing.T) {
 	for len := 0; len < 4; len++ {
 		testString += "x"
 		_, _, err = base58.CheckDecode(testString)
-		if err != base58.ErrInvalidFormat {
+		if !errors.Is(err, base58.ErrInvalidFormat) {
 			t.Error("Checkdecode test failed, expected ErrInvalidFormat")
 		}
 	}
