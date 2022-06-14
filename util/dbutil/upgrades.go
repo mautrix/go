@@ -27,8 +27,6 @@ type Upgrader struct {
 	*sql.DB
 	Log     log.Logger
 	Dialect Dialect
-
-	upgrades []upgrade
 }
 
 var ErrUnsupportedDatabaseVersion = fmt.Errorf("unsupported database schema version")
