@@ -23,7 +23,7 @@ func parseAndNormalizeBaseURL(homeserverURL string) (*url.URL, error) {
 		fixedURL := hsURL.String()
 		hsURL, err = url.Parse(fixedURL)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse fixed URL '%s': %v", fixedURL, err)
+			return nil, fmt.Errorf("failed to parse fixed URL '%s': %w", fixedURL, err)
 		}
 	}
 	hsURL.RawPath = hsURL.EscapedPath()
