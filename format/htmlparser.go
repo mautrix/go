@@ -164,11 +164,12 @@ func (parser *HTMLParser) spanToString(node *html.Node, stripLinebreak bool, ctx
 	if node.Data == "span" {
 		reason, isSpoiler := parser.maybeGetAttribute(node, "data-mx-spoiler")
 		if isSpoiler {
-			if parser.SpoilerConverter != nil {
+			switch {
+			case parser.SpoilerConverter != nil:
 				str = parser.SpoilerConverter(str, reason, ctx)
-			} else if len(reason) > 0 {
+			case len(reason) > 0:
 				str = fmt.Sprintf("||%s|%s||", reason, str)
-			} else {
+			default:
 				str = fmt.Sprintf("||%s||", str)
 			}
 		}

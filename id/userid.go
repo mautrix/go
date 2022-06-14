@@ -189,7 +189,8 @@ func DecodeUserLocalpart(str string) (string, error) {
 			return "", fmt.Errorf("Byte pos %d: Invalid byte", i)
 		}
 
-		if b == '_' { // next byte is a-z and should be upper-case or is another _ and should be a literal _
+		switch b {
+		case '_': // next byte is a-z and should be upper-case or is another _ and should be a literal _
 			if i+1 >= len(strBytes) {
 				return "", fmt.Errorf("Byte pos %d: expected _[a-z_] encoding but ran out of string", i)
 			}
@@ -202,7 +203,7 @@ func DecodeUserLocalpart(str string) (string, error) {
 				outputBuffer.WriteByte(strBytes[i+1] - 0x20) // ASCII shift a-z to A-Z
 			}
 			i++ // skip next byte since we just handled it
-		} else if b == '=' { // next 2 bytes are hex and should be buffered ready to be read as utf8
+		case '=': // next 2 bytes are hex and should be buffered ready to be read as utf8
 			if i+2 >= len(strBytes) {
 				return "", fmt.Errorf("Byte pos: %d: expected quote-printable encoding but ran out of string", i)
 			}
@@ -213,7 +214,7 @@ func DecodeUserLocalpart(str string) (string, error) {
 			}
 			outputBuffer.WriteByte(dst[0])
 			i += 2 // skip next 2 bytes since we just handled it
-		} else { // pass through
+		default: // pass through
 			outputBuffer.WriteByte(b)
 		}
 	}

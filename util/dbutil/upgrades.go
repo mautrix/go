@@ -78,17 +78,24 @@ func (db *Database) checkDatabaseOwner() error {
 	if db.Owner == "" {
 		return nil
 	}
-	if _, err := db.Exec(createOwnerTable); err != nil {
+
+	_, err := db.Exec(createOwnerTable)
+	if err != nil {
 		return fmt.Errorf("failed to ensure database owner table exists: %w", err)
-	} else if err = db.QueryRow("SELECT owner FROM database_owner WHERE key=0").Scan(&owner); errors.Is(err, sql.ErrNoRows) {
+	}
+
+	err = db.QueryRow("SELECT owner FROM database_owner WHERE key=0").Scan(&owner)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
 		_, err = db.Exec("INSERT INTO database_owner (owner) VALUES ($1)", db.Owner)
 		if err != nil {
 			return fmt.Errorf("failed to insert database owner: %w", err)
 		}
-	} else if err != nil {
+	case err != nil:
 		return fmt.Errorf("failed to check database owner: %w", err)
-	} else if owner != db.Owner {
+	case owner != db.Owner:
 		return fmt.Errorf("%w %s", ErrNotOwned, owner)
+
 	}
 	return nil
 }

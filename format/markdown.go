@@ -67,20 +67,19 @@ func HTMLToContent(html string) event.MessageEventContent {
 
 func RenderMarkdown(text string, allowMarkdown, allowHTML bool) event.MessageEventContent {
 	var htmlBody string
-
-	if allowMarkdown {
+	switch {
+	case allowMarkdown:
 		rndr := withHTML
 		if !allowHTML {
 			rndr = noHTML
 		}
 		return RenderMarkdownCustom(text, rndr)
-	} else if allowHTML {
+	case allowHTML:
 		htmlBody = strings.Replace(text, "\n", "<br>", -1)
 		return HTMLToContent(htmlBody)
-	} else {
-		return event.MessageEventContent{
-			MsgType: event.MsgText,
-			Body:    text,
-		}
+	}
+	return event.MessageEventContent{
+		MsgType: event.MsgText,
+		Body:    text,
 	}
 }
