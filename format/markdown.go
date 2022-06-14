@@ -75,7 +75,7 @@ func RenderMarkdown(text string, allowMarkdown, allowHTML bool) event.MessageEve
 		}
 		return RenderMarkdownCustom(text, rndr)
 	case allowHTML:
-		htmlBody = strings.Replace(text, "\n", "<br>", -1)
+		htmlBody = strings.ReplaceAll(text, "\n", "<br>")
 		return HTMLToContent(htmlBody)
 	}
 	return event.MessageEventContent{

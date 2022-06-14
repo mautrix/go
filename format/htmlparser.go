@@ -271,7 +271,7 @@ func (parser *HTMLParser) singleNodeToString(node *html.Node, stripLinebreak boo
 	switch node.Type {
 	case html.TextNode:
 		if stripLinebreak {
-			node.Data = strings.Replace(node.Data, "\n", "", -1)
+			node.Data = strings.ReplaceAll(node.Data, "\n", "")
 		}
 		if parser.TextConverter != nil {
 			node.Data = parser.TextConverter(node.Data, ctx)
@@ -331,7 +331,7 @@ func (parser *HTMLParser) nodeToString(node *html.Node, stripLinebreak bool, ctx
 // Parse converts Matrix HTML into text using the settings in this parser.
 func (parser *HTMLParser) Parse(htmlData string, ctx Context) string {
 	if parser.TabsToSpaces >= 0 {
-		htmlData = strings.Replace(htmlData, "\t", strings.Repeat(" ", parser.TabsToSpaces), -1)
+		htmlData = strings.ReplaceAll(htmlData, "\t", strings.Repeat(" ", parser.TabsToSpaces))
 	}
 	node, _ := html.Parse(strings.NewReader(htmlData))
 	return parser.nodeToTagAwareString(node, true, ctx)
