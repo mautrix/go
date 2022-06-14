@@ -657,7 +657,7 @@ func (cli *Client) RegisterGuest(req *ReqRegister) (*RespRegister, *RespUserInte
 // 	}
 // 	token := res.AccessToken
 func (cli *Client) RegisterDummy(req *ReqRegister) (*RespRegister, error) {
-	res, uia, err := cli.Register(req)
+	_, uia, err := cli.Register(req)
 	if err != nil && uia == nil {
 		return nil, err
 	} else if uia == nil {
@@ -666,7 +666,7 @@ func (cli *Client) RegisterDummy(req *ReqRegister) (*RespRegister, error) {
 		return nil, errors.New("server does not support m.login.dummy")
 	}
 	req.Auth = BaseAuthData{Type: AuthTypeDummy, Session: uia.Session}
-	res, _, err = cli.Register(req)
+	res, _, err := cli.Register(req)
 	if err != nil {
 		return nil, err
 	}
