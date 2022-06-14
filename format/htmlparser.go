@@ -103,7 +103,7 @@ func (parser *HTMLParser) listToString(node *html.Node, stripLinebreak bool, ctx
 		indentLength = Digits(longestIndex)
 	}
 	indent := strings.Repeat(" ", indentLength+2)
-	var children []string
+	children := make([]string, 0, len(taggedChildren))
 	for _, child := range taggedChildren {
 		if child.tag != "li" {
 			continue
