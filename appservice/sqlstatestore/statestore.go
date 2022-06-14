@@ -11,7 +11,6 @@ import (
 	"embed"
 	"encoding/json"
 	"errors"
-	"sync"
 
 	"maunium.net/go/mautrix/appservice"
 	"maunium.net/go/mautrix/event"
@@ -34,8 +33,7 @@ type SQLStateStore struct {
 	*dbutil.Database
 	*appservice.TypingStateStore
 
-	Typing     map[id.RoomID]map[id.UserID]int64
-	typingLock sync.RWMutex
+	Typing map[id.RoomID]map[id.UserID]int64
 }
 
 var _ appservice.StateStore = (*SQLStateStore)(nil)
