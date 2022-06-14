@@ -332,9 +332,8 @@ func (as *AppService) StartWebsocket(baseURL string, onConnect func()) error {
 		err = json.NewDecoder(resp.Body).Decode(&errResp)
 		if err != nil {
 			return fmt.Errorf("websocket request returned HTTP %d with non-JSON body", resp.StatusCode)
-		} else {
-			return fmt.Errorf("websocket request returned %s (HTTP %d): %s", errResp.ErrorCode, resp.StatusCode, errResp.Message)
 		}
+		return fmt.Errorf("websocket request returned %s (HTTP %d): %s", errResp.ErrorCode, resp.StatusCode, errResp.Message)
 	} else if err != nil {
 		return fmt.Errorf("failed to open websocket: %w", err)
 	}

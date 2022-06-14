@@ -191,9 +191,8 @@ func (otk *OneTimeKey) UnmarshalJSON(data []byte) (err error) {
 func (otk *OneTimeKey) MarshalJSON() ([]byte, error) {
 	if !otk.IsSigned {
 		return json.Marshal(otk.Key)
-	} else {
-		return json.Marshal((*serializableOTK)(otk))
 	}
+	return json.Marshal((*serializableOTK)(otk))
 }
 
 type ReqUploadKeys struct {

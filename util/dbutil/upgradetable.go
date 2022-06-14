@@ -97,13 +97,12 @@ func (db *Database) parseDialectFilter(line []byte) (int, error) {
 		} else if dialect != db.Dialect {
 			if len(match[2]) == 0 {
 				return 1, nil
-			} else {
-				lineCount, err := strconv.Atoi(string(match[2]))
-				if err != nil {
-					return 0, fmt.Errorf("invalid line count '%s': %w", match[2], err)
-				}
-				return lineCount, nil
 			}
+			lineCount, err := strconv.Atoi(string(match[2]))
+			if err != nil {
+				return 0, fmt.Errorf("invalid line count '%s': %w", match[2], err)
+			}
+			return lineCount, nil
 		}
 	}
 	return 0, nil
