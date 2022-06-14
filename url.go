@@ -96,10 +96,8 @@ func (cli *Client) BuildURLWithQuery(urlPath PrefixableURLPath, urlQuery map[str
 	if cli.AppServiceUserID != "" {
 		query.Set("user_id", string(cli.AppServiceUserID))
 	}
-	if urlQuery != nil {
-		for k, v := range urlQuery {
-			query.Set(k, v)
-		}
+	for k, v := range urlQuery {
+		query.Set(k, v)
 	}
 	hsURL.RawQuery = query.Encode()
 	return hsURL.String()
