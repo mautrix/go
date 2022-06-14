@@ -327,13 +327,16 @@ func (as *AppService) StartWebsocket(baseURL string, onConnect func()) error {
 		"X-Mautrix-Process-ID":        []string{as.ProcessID},
 		"X-Mautrix-Websocket-Version": []string{"3"},
 	})
-	if resp != nil && resp.StatusCode >= 400 {
-		var errResp Error
-		err = json.NewDecoder(resp.Body).Decode(&errResp)
-		if err != nil {
-			return fmt.Errorf("websocket request returned HTTP %d with non-JSON body", resp.StatusCode)
+	if resp != nil {
+		defer resp.Body.Close()
+		if resp.StatusCode >= 400 {
+			var errResp Error
+			err = json.NewDecoder(resp.Body).Decode(&errResp)
+			if err != nil {
+				return fmt.Errorf("websocket request returned HTTP %d with non-JSON body", resp.StatusCode)
+			}
+			return fmt.Errorf("websocket request returned %s (HTTP %d): %s", errResp.ErrorCode, resp.StatusCode, errResp.Message)
 		}
-		return fmt.Errorf("websocket request returned %s (HTTP %d): %s", errResp.ErrorCode, resp.StatusCode, errResp.Message)
 	} else if err != nil {
 		return fmt.Errorf("failed to open websocket: %w", err)
 	}
