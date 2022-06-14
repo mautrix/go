@@ -69,7 +69,7 @@ func GenA256CTRIV() (iv [AESCTRIVLength]byte) {
 func DeriveKeysSHA256(key []byte, name string) ([AESCTRKeyLength]byte, [HMACKeyLength]byte) {
 	var zeroBytes [32]byte
 
-	derivedHkdf := hkdf.New(sha256.New, key[:], zeroBytes[:], []byte(name))
+	derivedHkdf := hkdf.New(sha256.New, key, zeroBytes[:], []byte(name))
 
 	var aesKey [AESCTRKeyLength]byte
 	var hmacKey [HMACKeyLength]byte
@@ -104,7 +104,7 @@ func DecodeBase58RecoveryKey(recoveryKey string) []byte {
 // EncodeBase58RecoveryKey recovers the secret storage from a recovery key.
 func EncodeBase58RecoveryKey(key []byte) string {
 	var inputBytes [35]byte
-	copy(inputBytes[2:34], key[:])
+	copy(inputBytes[2:34], key)
 	inputBytes[0] = 0x8B
 	inputBytes[1] = 1
 
