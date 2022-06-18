@@ -53,7 +53,7 @@ func (wsc *WebsocketCommand) MakeResponse(ok bool, data interface{}) *WebsocketR
 		var prefixMessage string
 		for unwrappedErr != nil {
 			errorData, jsonErr = json.Marshal(unwrappedErr)
-			if errorData != nil && len(errorData) > 2 && jsonErr == nil {
+			if len(errorData) > 2 && jsonErr == nil {
 				prefixMessage = strings.Replace(err.Error(), unwrappedErr.Error(), "", 1)
 				prefixMessage = strings.TrimRight(prefixMessage, ": ")
 				break
@@ -216,24 +216,24 @@ func (as *AppService) RequestWebsocket(ctx context.Context, cmd *WebsocketReques
 	}
 	select {
 	case resp := <-respChan:
-		if resp.Command == "__websocket_closed" {
+		switch {
+		case resp.Command == "__websocket_closed":
 			return ErrWebsocketClosed
-		} else if resp.Command == "error" {
+		case resp.Command == "error":
 			var respErr ErrorResponse
 			err = json.Unmarshal(resp.Data, &respErr)
 			if err != nil {
 				return fmt.Errorf("failed to parse error JSON: %w", err)
 			}
 			return &respErr
-		} else if response != nil {
+		case response != nil:
 			err = json.Unmarshal(resp.Data, &response)
 			if err != nil {
 				return fmt.Errorf("failed to parse response JSON: %w", err)
 			}
 			return nil
-		} else {
-			return nil
 		}
+		return nil
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -260,7 +260,8 @@ func (as *AppService) consumeWebsocket(stopFunc func(error), ws *websocket.Conn)
 			stopFunc(parseCloseError(err))
 			return
 		}
-		if msg.Command == "" || msg.Command == "transaction" {
+		switch {
+		case msg.Command == "", msg.Command == "transaction":
 			if msg.TxnID == "" || !as.txnIDC.IsProcessed(msg.TxnID) {
 				as.handleTransaction(msg.TxnID, &msg.Transaction)
 			} else {
@@ -272,9 +273,9 @@ func (as *AppService) consumeWebsocket(stopFunc func(error), ws *websocket.Conn)
 					as.Log.Warnfln("Failed to send response to %s %d: %v", msg.Command, msg.ReqID, err)
 				}
 			}()
-		} else if msg.Command == "connect" {
+		case msg.Command == "connect":
 			as.Log.Debugln("Websocket connect confirmation received")
-		} else if msg.Command == "response" || msg.Command == "error" {
+		case msg.Command == "response", msg.Command == "error":
 			as.websocketRequestsLock.RLock()
 			respChan, ok := as.websocketRequests[msg.ReqID]
 			if ok {
@@ -287,7 +288,7 @@ func (as *AppService) consumeWebsocket(stopFunc func(error), ws *websocket.Conn)
 				as.Log.Warnfln("Dropping response to %d: unknown request ID", msg.ReqID)
 			}
 			as.websocketRequestsLock.RUnlock()
-		} else {
+		default:
 			as.websocketHandlersLock.RLock()
 			handler, ok := as.websocketHandlers[msg.Command]
 			as.websocketHandlersLock.RUnlock()
@@ -297,11 +298,12 @@ func (as *AppService) consumeWebsocket(stopFunc func(error), ws *websocket.Conn)
 			go func() {
 				okResp, data := handler(msg.WebsocketCommand)
 				err = as.SendWebsocket(msg.MakeResponse(okResp, data))
-				if err != nil {
+				switch {
+				case err != nil:
 					as.Log.Warnfln("Failed to send response to %s %d: %v", msg.Command, msg.ReqID, err)
-				} else if okResp {
+				case okResp:
 					as.Log.Debugfln("Sent success response to %s %d", msg.Command, msg.ReqID)
-				} else {
+				default:
 					as.Log.Debugfln("Sent error response to %s %d", msg.Command, msg.ReqID)
 				}
 			}()
@@ -327,12 +329,14 @@ func (as *AppService) StartWebsocket(baseURL string, onConnect func()) error {
 		"X-Mautrix-Process-ID":        []string{as.ProcessID},
 		"X-Mautrix-Websocket-Version": []string{"3"},
 	})
-	if resp != nil && resp.StatusCode >= 400 {
-		var errResp Error
-		err = json.NewDecoder(resp.Body).Decode(&errResp)
-		if err != nil {
-			return fmt.Errorf("websocket request returned HTTP %d with non-JSON body", resp.StatusCode)
-		} else {
+	if resp != nil {
+		defer resp.Body.Close()
+		if resp.StatusCode >= 400 {
+			var errResp Error
+			err = json.NewDecoder(resp.Body).Decode(&errResp)
+			if err != nil {
+				return fmt.Errorf("websocket request returned HTTP %d with non-JSON body", resp.StatusCode)
+			}
 			return fmt.Errorf("websocket request returned %s (HTTP %d): %s", errResp.ErrorCode, resp.StatusCode, errResp.Message)
 		}
 	} else if err != nil {

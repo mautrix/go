@@ -36,12 +36,13 @@ func (ut *UpgradeTable) Register(from, to int, message string, fn upgradeFunc) {
 		panic("invalid from value in UpgradeTable.Register() call")
 	}
 	upg := upgrade{message: message, fn: fn, upgradesTo: to}
-	if len(*ut) == from {
+	switch {
+	case len(*ut) == from:
 		*ut = append(*ut, upg)
 		return
-	} else if len(*ut) < from {
+	case len(*ut) < from:
 		ut.extend(from + 1)
-	} else if (*ut)[from].fn != nil {
+	case (*ut)[from].fn != nil:
 		panic(fmt.Errorf("tried to override upgrade at %d ('%s') with '%s'", from, (*ut)[from].message, upg.message))
 	}
 	(*ut)[from] = upg
@@ -97,13 +98,12 @@ func (db *Database) parseDialectFilter(line []byte) (int, error) {
 		} else if dialect != db.Dialect {
 			if len(match[2]) == 0 {
 				return 1, nil
-			} else {
-				lineCount, err := strconv.Atoi(string(match[2]))
-				if err != nil {
-					return 0, fmt.Errorf("invalid line count '%s': %w", match[2], err)
-				}
-				return lineCount, nil
 			}
+			lineCount, err := strconv.Atoi(string(match[2]))
+			if err != nil {
+				return 0, fmt.Errorf("invalid line count '%s': %w", match[2], err)
+			}
+			return lineCount, nil
 		}
 	}
 	return 0, nil
@@ -113,11 +113,12 @@ func (db *Database) mutateSQLUpgrade(lines [][]byte) (string, error) {
 	output := lines[:0]
 	for i := 0; i < len(lines); i++ {
 		skipLines, err := db.parseDialectFilter(lines[i])
-		if err != nil {
+		switch {
+		case err != nil:
 			return "", err
-		} else if skipLines > 0 {
+		case skipLines > 0:
 			i += skipLines
-		} else {
+		default:
 			output = append(output, lines[i])
 		}
 	}

@@ -204,7 +204,7 @@ func (sfi *serializableFileInfo) CopyFrom(fileInfo *FileInfo) *serializableFileI
 
 	}
 	if fileInfo.Duration > 0 {
-		sfi.Duration = json.Number(strconv.Itoa(int(fileInfo.Duration)))
+		sfi.Duration = json.Number(strconv.Itoa(fileInfo.Duration))
 	}
 	return sfi
 }

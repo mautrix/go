@@ -182,13 +182,14 @@ func (as *AppService) handleDeviceLists(dl *mautrix.DeviceLists) {
 
 func (as *AppService) handleEvents(evts []*event.Event, defaultTypeClass event.TypeClass) {
 	for _, evt := range evts {
-		if len(evt.ToUserID) > 0 {
+		switch {
+		case len(evt.ToUserID) > 0:
 			evt.Type.Class = event.ToDeviceEventType
-		} else if defaultTypeClass != event.UnknownEventType {
+		case defaultTypeClass != event.UnknownEventType:
 			evt.Type.Class = defaultTypeClass
-		} else if evt.StateKey != nil {
+		case evt.StateKey != nil:
 			evt.Type.Class = event.StateEventType
-		} else {
+		default:
 			evt.Type.Class = event.MessageEventType
 		}
 		err := evt.Content.ParseRaw(evt.Type)

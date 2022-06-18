@@ -103,7 +103,7 @@ func (parser *HTMLParser) listToString(node *html.Node, stripLinebreak bool, ctx
 		indentLength = Digits(longestIndex)
 	}
 	indent := strings.Repeat(" ", indentLength+2)
-	var children []string
+	children := make([]string, 0, len(taggedChildren))
 	for _, child := range taggedChildren {
 		if child.tag != "li" {
 			continue
@@ -164,11 +164,12 @@ func (parser *HTMLParser) spanToString(node *html.Node, stripLinebreak bool, ctx
 	if node.Data == "span" {
 		reason, isSpoiler := parser.maybeGetAttribute(node, "data-mx-spoiler")
 		if isSpoiler {
-			if parser.SpoilerConverter != nil {
+			switch {
+			case parser.SpoilerConverter != nil:
 				str = parser.SpoilerConverter(str, reason, ctx)
-			} else if len(reason) > 0 {
+			case len(reason) > 0:
 				str = fmt.Sprintf("||%s|%s||", reason, str)
-			} else {
+			default:
 				str = fmt.Sprintf("||%s||", str)
 			}
 		}
@@ -270,7 +271,7 @@ func (parser *HTMLParser) singleNodeToString(node *html.Node, stripLinebreak boo
 	switch node.Type {
 	case html.TextNode:
 		if stripLinebreak {
-			node.Data = strings.Replace(node.Data, "\n", "", -1)
+			node.Data = strings.ReplaceAll(node.Data, "\n", "")
 		}
 		if parser.TextConverter != nil {
 			node.Data = parser.TextConverter(node.Data, ctx)
@@ -330,7 +331,7 @@ func (parser *HTMLParser) nodeToString(node *html.Node, stripLinebreak bool, ctx
 // Parse converts Matrix HTML into text using the settings in this parser.
 func (parser *HTMLParser) Parse(htmlData string, ctx Context) string {
 	if parser.TabsToSpaces >= 0 {
-		htmlData = strings.Replace(htmlData, "\t", strings.Repeat(" ", parser.TabsToSpaces), -1)
+		htmlData = strings.ReplaceAll(htmlData, "\t", strings.Repeat(" ", parser.TabsToSpaces))
 	}
 	node, _ := html.Parse(strings.NewReader(htmlData))
 	return parser.nodeToTagAwareString(node, true, ctx)

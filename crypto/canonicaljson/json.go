@@ -164,14 +164,15 @@ func CompactJSON(input, output []byte) []byte {
 				if c == '\\' {
 					escape := input[i]
 					i++
-					if escape == 'u' {
+					switch escape {
+					case 'u':
 						// If this is a unicode escape then we need to handle it specially
 						output, i = compactUnicodeEscape(input, output, i)
-					} else if escape == '/' {
+					case '/':
 						// JSON does not require escaping '/', but allows encoders to escape it as a special case.
 						// Since the escape isn't required we remove it.
 						output = append(output, escape)
-					} else {
+					default:
 						// All other permitted escapes are single charater escapes that are already in their shortest form.
 						output = append(output, '\\', escape)
 					}

@@ -102,7 +102,6 @@ func globToRegex(glob string) (*regexp.Regexp, error) {
 
 	if hasGlobCharacters {
 		return regexp.Compile("^" + regex + "$")
-	} else {
-		return regexp.Compile(regex)
 	}
+	return regexp.Compile(regex)
 }

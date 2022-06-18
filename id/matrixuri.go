@@ -150,9 +150,8 @@ func ParseMatrixURIOrMatrixToURL(uri string) (*MatrixURI, error) {
 		return ProcessMatrixURI(parsed)
 	} else if strings.HasSuffix(parsed.Hostname(), "matrix.to") {
 		return ProcessMatrixToURL(parsed)
-	} else {
-		return nil, ErrNotMatrixToOrMatrixURI
 	}
+	return nil, ErrNotMatrixToOrMatrixURI
 }
 
 // ParseMatrixURI implements the matrix: URI parsing algorithm.

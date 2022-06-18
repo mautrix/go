@@ -588,7 +588,7 @@ func (cli *Client) FullSyncRequest(req ReqSync) (resp *RespSync, err error) {
 	}
 	start := time.Now()
 	_, err = cli.MakeFullRequest(fullReq)
-	duration := time.Now().Sub(start)
+	duration := time.Since(start)
 	timeout := time.Duration(req.Timeout) * time.Millisecond
 	buffer := 10 * time.Second
 	if req.Since == "" {
@@ -657,7 +657,7 @@ func (cli *Client) RegisterGuest(req *ReqRegister) (*RespRegister, *RespUserInte
 // 	}
 // 	token := res.AccessToken
 func (cli *Client) RegisterDummy(req *ReqRegister) (*RespRegister, error) {
-	res, uia, err := cli.Register(req)
+	_, uia, err := cli.Register(req)
 	if err != nil && uia == nil {
 		return nil, err
 	} else if uia == nil {
@@ -666,7 +666,7 @@ func (cli *Client) RegisterDummy(req *ReqRegister) (*RespRegister, error) {
 		return nil, errors.New("server does not support m.login.dummy")
 	}
 	req.Auth = BaseAuthData{Type: AuthTypeDummy, Session: uia.Session}
-	res, _, err = cli.Register(req)
+	res, _, err := cli.Register(req)
 	if err != nil {
 		return nil, err
 	}
@@ -1094,7 +1094,7 @@ func parseRoomStateArray(_ *http.Request, res *http.Response, responseJSON inter
 		var evt *event.Event
 		err = dec.Decode(&evt)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse state array item #%d: %v", i, err)
+			return nil, fmt.Errorf("failed to parse state array item #%d: %w", i, err)
 		}
 		_ = evt.Content.ParseRaw(evt.Type)
 		subMap, ok := response[evt.Type]

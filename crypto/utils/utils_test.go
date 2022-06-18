@@ -41,7 +41,7 @@ func TestPBKDF(t *testing.T) {
 	}
 	key := PBKDF2SHA512([]byte("Hello world"), salt, 1000, 256)
 	expected := "ffk9YdbVE1cgqOWgDaec0lH+rJzO+MuCcxpIn3Z6D0E="
-	keyB64 := base64.StdEncoding.EncodeToString([]byte(key))
+	keyB64 := base64.StdEncoding.EncodeToString(key)
 	if keyB64 != expected {
 		t.Errorf("Expected base64 of generated key to be `%v`, got `%v`", expected, keyB64)
 	}
@@ -52,7 +52,7 @@ func TestDecodeSSSSKey(t *testing.T) {
 	decoded := DecodeBase58RecoveryKey(recoveryKey)
 
 	expected := "QCFDrXZYLEFnwf4NikVm62rYGJS2mNBEmAWLC3CgNPw="
-	decodedB64 := base64.StdEncoding.EncodeToString(decoded[:])
+	decodedB64 := base64.StdEncoding.EncodeToString(decoded)
 	if expected != decodedB64 {
 		t.Errorf("Expected decoded recovery key b64 to be `%v`, got `%v`", expected, decodedB64)
 	}
@@ -66,7 +66,7 @@ func TestKeyDerivationAndHMAC(t *testing.T) {
 	recoveryKey := "EsUG Ddi6 e1Cm F4um g38u JN72 d37v Q2ry qCf2 rKgL E2MQ ZQz6"
 	decoded := DecodeBase58RecoveryKey(recoveryKey)
 
-	aesKey, hmacKey := DeriveKeysSHA256(decoded[:], "m.cross_signing.master")
+	aesKey, hmacKey := DeriveKeysSHA256(decoded, "m.cross_signing.master")
 
 	ciphertextBytes, err := base64.StdEncoding.DecodeString("Fx16KlJ9vkd3Dd6CafIq5spaH5QmK5BALMzbtFbQznG2j1VARKK+klc4/Qo=")
 	if err != nil {

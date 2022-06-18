@@ -46,7 +46,7 @@ func ConvertPath(inputFile string, outputExtension string, inputArgs []string, o
 	cmd.Stderr = vcLog
 	err := cmd.Run()
 	if err != nil {
-		return "", fmt.Errorf("ffmpeg error: %+v", err)
+		return "", fmt.Errorf("ffmpeg error: %+w", err)
 	}
 
 	if removeInput {

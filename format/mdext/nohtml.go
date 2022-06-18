@@ -51,11 +51,9 @@ func (ehr *escapingHTMLRenderer) renderHTMLBlock(w util.BufWriter, source []byte
 			line := n.Lines().At(i)
 			html.DefaultWriter.RawWrite(w, line.Value(source))
 		}
-	} else {
-		if n.HasClosure() {
-			closure := n.ClosureLine
-			html.DefaultWriter.RawWrite(w, closure.Value(source))
-		}
+	} else if n.HasClosure() {
+		closure := n.ClosureLine
+		html.DefaultWriter.RawWrite(w, closure.Value(source))
 	}
 	return ast.WalkContinue, nil
 }
