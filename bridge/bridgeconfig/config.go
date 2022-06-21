@@ -154,6 +154,12 @@ type EncryptionConfig struct {
 		RequireCrossSigning bool `yaml:"require_cross_signing"`
 		RequireVerification bool `yaml:"require_verification"`
 	} `yaml:"key_sharing"`
+
+	Rotation struct {
+		EnableCustom bool  `yaml:"enable_custom"`
+		Milliseconds int64 `yaml:"milliseconds"`
+		Messages     int   `yaml:"messages"`
+	} `yaml:"rotation"`
 }
 
 type ManagementRoomTexts struct {
