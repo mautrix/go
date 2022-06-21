@@ -156,6 +156,9 @@ func (br *Bridge) GenerateRegistration() {
 		// We need to save the generated as_token and hs_token in the config
 		_, _ = fmt.Fprintln(os.Stderr, "--no-update is not compatible with --generate-registration")
 		os.Exit(5)
+	} else if br.Config.Homeserver.Domain == "example.com" {
+		_, _ = fmt.Fprintln(os.Stderr, "Homeserver domain is not set")
+		os.Exit(20)
 	}
 	reg := br.Config.GenerateRegistration()
 	err := reg.Save(*registrationPath)
@@ -285,6 +288,23 @@ func (br *Bridge) loadConfig() {
 	}
 }
 
+func (br *Bridge) validateConfig() error {
+	switch {
+	case br.Config.Homeserver.Address == "https://example.com":
+		return errors.New("homeserver.address not configured")
+	case br.Config.Homeserver.Domain == "example.com":
+		return errors.New("homeserver.domain not configured")
+	case br.Config.AppService.ASToken == "This value is generated when generating the registration":
+		return errors.New("appservice.as_token not configured. Did you forget to generate the registration? ")
+	case br.Config.AppService.HSToken == "This value is generated when generating the registration":
+		return errors.New("appservice.hs_token not configured. Did you forget to generate the registration? ")
+	case br.Config.AppService.Database.URI == "postgres://user:password@host/database?sslmode=disable":
+		return errors.New("appservice.database not configured")
+	default:
+		return br.Config.Bridge.Validate()
+	}
+}
+
 func (br *Bridge) init() {
 	var err error
 
@@ -301,6 +321,13 @@ func (br *Bridge) init() {
 			os.Exit(12)
 		}
 	}
+
+	err = br.validateConfig()
+	if err != nil {
+		br.Log.Fatalln("Configuration error:", err)
+		os.Exit(11)
+	}
+
 	br.AS.Log = log.Sub("Matrix")
 	br.Bot = br.AS.BotIntent()
 	br.Log.Infoln("Initializing", br.VersionDesc)

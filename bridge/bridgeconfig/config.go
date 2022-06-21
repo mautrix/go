@@ -143,6 +143,7 @@ type BridgeConfig interface {
 	GetEncryptionConfig() EncryptionConfig
 	GetCommandPrefix() string
 	GetManagementRoomTexts() ManagementRoomTexts
+	Validate() error
 }
 
 type EncryptionConfig struct {
