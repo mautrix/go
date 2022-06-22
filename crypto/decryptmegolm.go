@@ -54,6 +54,7 @@ func (mach *OlmMachine) DecryptMegolmEvent(evt *event.Event) (*event.Event, erro
 	}
 
 	var trustLevel id.TrustState
+	var forwardedKeys bool
 	ownSigningKey, ownIdentityKey := mach.account.Keys()
 	if sess.SigningKey == ownSigningKey && sess.SenderKey == ownIdentityKey && len(sess.ForwardingChains) == 0 {
 		trustLevel = id.TrustStateVerified
@@ -62,18 +63,21 @@ func (mach *OlmMachine) DecryptMegolmEvent(evt *event.Event) (*event.Event, erro
 		if err != nil {
 			// We don't want to throw these errors as the message can still be decrypted.
 			mach.Log.Debug("Failed to get device %s/%s to verify session %s: %v", evt.Sender, sess.SenderKey, sess.ID(), err)
+			trustLevel = id.TrustStateUnknownDevice
 		} else if len(sess.ForwardingChains) == 0 || (len(sess.ForwardingChains) == 1 && sess.ForwardingChains[0] == sess.SenderKey.String()) {
 			if device.SigningKey != sess.SigningKey || device.IdentityKey != sess.SenderKey {
 				return nil, DeviceKeyMismatch
 			}
 			trustLevel = mach.ResolveTrust(device)
 		} else {
+			forwardedKeys = true
 			lastChainItem := sess.ForwardingChains[len(sess.ForwardingChains)-1]
 			receivedFrom, _ := mach.CryptoStore.FindDeviceByKey(evt.Sender, id.IdentityKey(lastChainItem))
 			if receivedFrom != nil {
 				trustLevel = mach.ResolveTrust(receivedFrom)
 			} else {
 				mach.Log.Debug("Couldn't resolve trust level of session %s: forwarding chain ends with unknown device %s", sess.ID(), lastChainItem)
+				trustLevel = id.TrustStateForwarded
 			}
 		}
 	}
@@ -116,8 +120,9 @@ func (mach *OlmMachine) DecryptMegolmEvent(evt *event.Event) (*event.Event, erro
 		Content:   megolmEvt.Content,
 		Unsigned:  evt.Unsigned,
 		Mautrix: event.MautrixInfo{
-			TrustState:   trustLevel,
-			WasEncrypted: true,
+			TrustState:    trustLevel,
+			ForwardedKeys: forwardedKeys,
+			WasEncrypted:  true,
 		},
 	}, nil
 }

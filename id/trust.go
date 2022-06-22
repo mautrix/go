@@ -17,6 +17,8 @@ type TrustState int
 const (
 	TrustStateBlacklisted        TrustState = -100
 	TrustStateUnset              TrustState = 0
+	TrustStateUnknownDevice      TrustState = 10
+	TrustStateForwarded          TrustState = 20
 	TrustStateCrossSigned        TrustState = 100
 	TrustStateCrossSignedTrusted TrustState = 200
 	TrustStateVerified           TrustState = 300
@@ -43,6 +45,10 @@ func ParseTrustState(val string) TrustState {
 		return TrustStateBlacklisted
 	case "unverified":
 		return TrustStateUnset
+	case "unknown-device", "unknown device":
+		return TrustStateUnknownDevice
+	case "forwarded":
+		return TrustStateForwarded
 	case "cross-signed", "tofu", "verified (via cross-signing, tofu)":
 		return TrustStateCrossSigned
 	case "cross-signed-trusted", "verified (via cross-signing, trusted user)":
@@ -60,6 +66,10 @@ func (ts TrustState) String() string {
 		return "blacklisted"
 	case TrustStateUnset:
 		return "unverified"
+	case TrustStateUnknownDevice:
+		return "unknown-device"
+	case TrustStateForwarded:
+		return "forwarded"
 	case TrustStateCrossSigned:
 		return "cross-signed"
 	case TrustStateCrossSignedTrusted:
@@ -77,6 +87,10 @@ func (ts TrustState) Description() string {
 		return "blacklisted"
 	case TrustStateUnset:
 		return "unverified"
+	case TrustStateUnknownDevice:
+		return "unknown device"
+	case TrustStateForwarded:
+		return "forwarded"
 	case TrustStateCrossSigned:
 		return "cross-signed, tofu"
 	case TrustStateCrossSignedTrusted:
