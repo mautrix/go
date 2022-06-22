@@ -28,6 +28,43 @@ func (mach *OlmMachine) LoadDevices(user id.UserID) map[id.DeviceID]*DeviceIdent
 	return mach.fetchKeys([]id.UserID{user}, "", true)[user]
 }
 
+func (mach *OlmMachine) storeDeviceSelfSignatures(userID id.UserID, deviceID id.DeviceID, resp *mautrix.RespQueryKeys) {
+	deviceKeys := resp.DeviceKeys[userID][deviceID]
+	for signerUserID, signerKeys := range deviceKeys.Signatures {
+		for signerKey, signature := range signerKeys {
+			// verify and save self-signing key signature for each device
+			if selfSignKeys, ok := resp.SelfSigningKeys[signerUserID]; ok {
+				for _, pubKey := range selfSignKeys.Keys {
+					if selfSigs, ok := deviceKeys.Signatures[signerUserID]; !ok {
+						continue
+					} else if _, ok := selfSigs[id.NewKeyID(id.KeyAlgorithmEd25519, pubKey.String())]; !ok {
+						continue
+					}
+					if verified, err := olm.VerifySignatureJSON(deviceKeys, signerUserID, pubKey.String(), pubKey); verified {
+						if signKey, ok := deviceKeys.Keys[id.DeviceKeyID(signerKey)]; ok {
+							signature := deviceKeys.Signatures[signerUserID][id.NewKeyID(id.KeyAlgorithmEd25519, pubKey.String())]
+							mach.Log.Trace("Verified self-signing signature for device %s/%s: %s", signerUserID, deviceID, signature)
+							err = mach.CryptoStore.PutSignature(userID, id.Ed25519(signKey), signerUserID, pubKey, signature)
+							if err != nil {
+								mach.Log.Warn("Failed to store self-signing signature for device %s/%s: %v", signerUserID, deviceID, err)
+							}
+						}
+					} else {
+						mach.Log.Warn("Could not verify device self-signing signatures for %s/%s: %v", signerUserID, deviceID, err)
+					}
+				}
+			}
+			// save signature of device made by its own device signing key
+			if signKey, ok := deviceKeys.Keys[id.DeviceKeyID(signerKey)]; ok {
+				err := mach.CryptoStore.PutSignature(userID, id.Ed25519(signKey), signerUserID, id.Ed25519(signKey), signature)
+				if err != nil {
+					mach.Log.Warn("Failed to store self-signing signature for %s/%s: %v", signerUserID, signKey, err)
+				}
+			}
+		}
+	}
+}
+
 func (mach *OlmMachine) fetchKeys(users []id.UserID, sinceToken string, includeUntracked bool) (data map[id.UserID]map[id.DeviceID]*DeviceIdentity) {
 	req := &mautrix.ReqQueryKeys{
 		DeviceKeys: mautrix.DeviceKeysRequest{},
@@ -77,33 +114,7 @@ func (mach *OlmMachine) fetchKeys(users []id.UserID, sinceToken string, includeU
 				mach.Log.Error("Failed to validate device %s of %s: %v", deviceID, userID, err)
 			} else if newDevice != nil {
 				newDevices[deviceID] = newDevice
-				for signerUserID, signerKeys := range deviceKeys.Signatures {
-					for signerKey, signature := range signerKeys {
-						// verify and save self-signing key signature for each device
-						if selfSignKeys, ok := resp.SelfSigningKeys[signerUserID]; ok {
-							for _, pubKey := range selfSignKeys.Keys {
-								if selfSigs, ok := deviceKeys.Signatures[signerUserID]; !ok {
-									continue
-								} else if _, ok := selfSigs[id.NewKeyID(id.KeyAlgorithmEd25519, pubKey.String())]; !ok {
-									continue
-								}
-								if verified, err := olm.VerifySignatureJSON(deviceKeys, signerUserID, pubKey.String(), pubKey); verified {
-									if signKey, ok := deviceKeys.Keys[id.DeviceKeyID(signerKey)]; ok {
-										signature := deviceKeys.Signatures[signerUserID][id.NewKeyID(id.KeyAlgorithmEd25519, pubKey.String())]
-										mach.Log.Trace("Verified self-signing signature for device %v: `%v`", deviceID, signature)
-										mach.CryptoStore.PutSignature(userID, id.Ed25519(signKey), signerUserID, pubKey, signature)
-									}
-								} else {
-									mach.Log.Warn("Could not verify device self-signing signatures: %v", err)
-								}
-							}
-						}
-						// save signature of device made by its own device signing key
-						if signKey, ok := deviceKeys.Keys[id.DeviceKeyID(signerKey)]; ok {
-							mach.CryptoStore.PutSignature(userID, id.Ed25519(signKey), signerUserID, id.Ed25519(signKey), signature)
-						}
-					}
-				}
+				mach.storeDeviceSelfSignatures(userID, deviceID, resp)
 			}
 		}
 		mach.Log.Trace("Storing new device list for %s containing %d devices", userID, len(newDevices))

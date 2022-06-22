@@ -24,13 +24,14 @@ func (mach *OlmMachine) storeCrossSigningKeys(crossSigningKeys map[id.UserID]mau
 				for _, newKeyUsage := range userKeys.Usage {
 					if newKeyUsage == curKeyUsage {
 						if _, ok := userKeys.Keys[id.NewKeyID(id.KeyAlgorithmEd25519, curKey.String())]; !ok {
-							// old key is not in the new key map so we drop signatures made by it
+							// old key is not in the new key map, so we drop signatures made by it
 							if count, err := mach.CryptoStore.DropSignaturesByKey(userID, curKey); err != nil {
-								mach.Log.Error("Error deleting old signatures: %v", err)
+								mach.Log.Error("Error deleting old signatures made by %s (%s): %v", curKey, curKeyUsage, err)
 							} else {
-								mach.Log.Debug("Dropped %v signatures made by key `%v` (%v) as it has been replaced", count, curKey, curKeyUsage)
+								mach.Log.Debug("Dropped %d signatures made by key %s (%s) as it has been replaced", count, curKey, curKeyUsage)
 							}
 						}
+						break
 					}
 				}
 			}
@@ -38,8 +39,8 @@ func (mach *OlmMachine) storeCrossSigningKeys(crossSigningKeys map[id.UserID]mau
 
 		for _, key := range userKeys.Keys {
 			for _, usage := range userKeys.Usage {
-				mach.Log.Debug("Storing cross-signing key for %v: %v (type %v)", userID, key, usage)
-				if err := mach.CryptoStore.PutCrossSigningKey(userID, usage, key); err != nil {
+				mach.Log.Debug("Storing cross-signing key for %s: %s (type %s)", userID, key, usage)
+				if err = mach.CryptoStore.PutCrossSigningKey(userID, usage, key); err != nil {
 					mach.Log.Error("Error storing cross-signing key: %v", err)
 				}
 			}
@@ -53,19 +54,22 @@ func (mach *OlmMachine) storeCrossSigningKeys(crossSigningKeys map[id.UserID]mau
 						ownDeviceID := id.DeviceID(signKeyName)
 						if ownDeviceKeys, ok := deviceKeys[userID][ownDeviceID]; ok {
 							signingKey = ownDeviceKeys.Keys.GetEd25519(ownDeviceID)
-							mach.Log.Debug("Treating %v as the device name", signKeyName)
+							mach.Log.Trace("Treating %s as the device ID -> signing key %s", signKeyName, signingKey)
 						}
 					}
 
-					mach.Log.Debug("Verifying with key %v of user %v", signingKey, signUserID)
+					mach.Log.Debug("Verifying cross-signing key %s/%s/%v with key %s/%s", userID, key, userKeys.Usage, signUserID, signingKey)
 					if verified, err := olm.VerifySignatureJSON(userKeys, signUserID, signKeyName, signingKey); err != nil {
-						mach.Log.Error("Error while verifying cross-signing keys: %v", err)
+						mach.Log.Warn("Error while verifying signature from %s for %s: %v", signingKey, key, err)
 					} else {
 						if verified {
-							mach.Log.Debug("Cross-signing keys verified")
-							mach.CryptoStore.PutSignature(userID, key, signUserID, signingKey, signature)
+							mach.Log.Debug("Signature from %s for %s verified", signingKey, key)
+							err = mach.CryptoStore.PutSignature(userID, key, signUserID, signingKey, signature)
+							if err != nil {
+								mach.Log.Warn("Failed to store signature from %s for %s: %v", signingKey, key, err)
+							}
 						} else {
-							mach.Log.Error("Cross-signing keys verification unsuccessful", err)
+							mach.Log.Error("Invalid signature from %s for %s", signingKey, key)
 						}
 					}
 				}
