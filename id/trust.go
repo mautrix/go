@@ -20,7 +20,7 @@ const (
 	TrustStateCrossSigned        TrustState = 100
 	TrustStateCrossSignedTrusted TrustState = 200
 	TrustStateVerified           TrustState = 300
-	TrustStateInvalid            TrustState = 2<<31 - 1
+	TrustStateInvalid            TrustState = (2 << 31) - 1
 )
 
 func (ts *TrustState) UnmarshalText(data []byte) error {
