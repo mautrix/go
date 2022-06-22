@@ -143,18 +143,22 @@ type BridgeConfig interface {
 	GetEncryptionConfig() EncryptionConfig
 	GetCommandPrefix() string
 	GetManagementRoomTexts() ManagementRoomTexts
+	EnableMessageStatusEvents() bool
+	EnableMessageErrorNotices() bool
 	Validate() error
 }
 
 type EncryptionConfig struct {
 	Allow   bool `yaml:"allow"`
 	Default bool `yaml:"default"`
+	Require bool `yaml:"require"`
 
-	KeySharing struct {
-		Allow               bool `yaml:"allow"`
-		RequireCrossSigning bool `yaml:"require_cross_signing"`
-		RequireVerification bool `yaml:"require_verification"`
-	} `yaml:"key_sharing"`
+	VerificationLevels struct {
+		Receive id.TrustState `yaml:"receive"`
+		Send    id.TrustState `yaml:"send"`
+		Share   id.TrustState `yaml:"share"`
+	} `yaml:"verification_levels"`
+	AllowKeySharing bool `yaml:"allow_key_sharing"`
 
 	Rotation struct {
 		EnableCustom bool  `yaml:"enable_custom"`

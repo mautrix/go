@@ -29,7 +29,7 @@ var (
 	KeyShareRejectNoResponse = KeyShareRejection{}
 
 	KeyShareRejectBlacklisted   = KeyShareRejection{event.RoomKeyWithheldBlacklisted, "You have been blacklisted by this device"}
-	KeyShareRejectUnverified    = KeyShareRejection{event.RoomKeyWithheldUnverified, "You have not been verified by this device"}
+	KeyShareRejectUnverified    = KeyShareRejection{event.RoomKeyWithheldUnverified, "This device does not share keys to unverified devices"}
 	KeyShareRejectOtherUser     = KeyShareRejection{event.RoomKeyWithheldUnauthorized, "This device does not share keys to other users"}
 	KeyShareRejectUnavailable   = KeyShareRejection{event.RoomKeyWithheldUnavailable, "Requested session ID not found on this device"}
 	KeyShareRejectInternalError = KeyShareRejection{event.RoomKeyWithheldUnavailable, "An internal error occurred while trying to share the requested session"}
@@ -190,17 +190,14 @@ func (mach *OlmMachine) defaultAllowKeyShare(device *DeviceIdentity, _ event.Req
 	} else if mach.Client.DeviceID == device.DeviceID {
 		mach.Log.Debug("Ignoring key request from ourselves")
 		return &KeyShareRejectNoResponse
-	} else if device.Trust == TrustStateBlacklisted {
+	} else if device.Trust == id.TrustStateBlacklisted {
 		mach.Log.Debug("Ignoring key request from blacklisted device %s", device.DeviceID)
 		return &KeyShareRejectBlacklisted
-	} else if mach.IsDeviceTrusted(device) {
-		mach.Log.Debug("Accepting key request from verified device %s", device.DeviceID)
-		return nil
-	} else if mach.ShareKeysToUnverifiedDevices {
-		mach.Log.Debug("Accepting key request from unverified device %s (ShareKeysToUnverifiedDevices is true)", device.DeviceID)
+	} else if trustState := mach.ResolveTrust(device); trustState >= mach.ShareKeysMinTrust {
+		mach.Log.Debug("Accepting key request from device %s (trust state: %s)", device.DeviceID, trustState.Description())
 		return nil
 	} else {
-		mach.Log.Debug("Ignoring key request from unverified device %s", device.DeviceID)
+		mach.Log.Debug("Ignoring key request from unverified device %s (trust state: %s)", device.DeviceID, trustState.Description())
 		return &KeyShareRejectUnverified
 	}
 }

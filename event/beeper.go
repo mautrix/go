@@ -9,11 +9,12 @@ package event
 type MessageStatusReason string
 
 const (
-	MessageStatusGenericError MessageStatusReason = "m.event_not_handled"
-	MessageStatusUnsupported  MessageStatusReason = "com.beeper.unsupported_event"
-	MessageStatusTooOld       MessageStatusReason = "m.event_too_old"
-	MessageStatusNetworkError MessageStatusReason = "m.foreign_network_error"
-	MessageStatusNoPermission MessageStatusReason = "m.no_permission"
+	MessageStatusGenericError  MessageStatusReason = "m.event_not_handled"
+	MessageStatusUnsupported   MessageStatusReason = "com.beeper.unsupported_event"
+	MessageStatusUndecryptable MessageStatusReason = "com.beeper.undecryptable_event"
+	MessageStatusTooOld        MessageStatusReason = "m.event_too_old"
+	MessageStatusNetworkError  MessageStatusReason = "m.foreign_network_error"
+	MessageStatusNoPermission  MessageStatusReason = "m.no_permission"
 )
 
 type BeeperMessageStatusEventContent struct {

@@ -77,6 +77,7 @@ func (helper *CryptoHelper) Init() error {
 	stateStore := &cryptoStateStore{helper.bridge}
 	helper.mach = crypto.NewOlmMachine(helper.client, logger, helper.store, stateStore)
 	helper.mach.AllowKeyShare = helper.allowKeyShare
+	helper.mach.SendKeysMinTrust = helper.bridge.Config.Bridge.GetEncryptionConfig().VerificationLevels.Send
 
 	helper.client.Syncer = &cryptoSyncer{helper.mach}
 	helper.client.Store = &cryptoClientStore{helper.store}
@@ -85,12 +86,12 @@ func (helper *CryptoHelper) Init() error {
 }
 
 func (helper *CryptoHelper) allowKeyShare(device *crypto.DeviceIdentity, info event.RequestedKeyInfo) *crypto.KeyShareRejection {
-	cfg := helper.bridge.Config.Bridge.GetEncryptionConfig().KeySharing
-	if !cfg.Allow {
+	cfg := helper.bridge.Config.Bridge.GetEncryptionConfig()
+	if !cfg.AllowKeySharing {
 		return &crypto.KeyShareRejectNoResponse
-	} else if device.Trust == crypto.TrustStateBlacklisted {
+	} else if device.Trust == id.TrustStateBlacklisted {
 		return &crypto.KeyShareRejectBlacklisted
-	} else if device.Trust == crypto.TrustStateVerified || !cfg.RequireVerification {
+	} else if trustState := helper.mach.ResolveTrust(device); trustState >= cfg.VerificationLevels.Share {
 		portal := helper.bridge.Child.GetIPortal(info.RoomID)
 		if portal == nil {
 			helper.log.Debugfln("Rejecting key request for %s from %s/%s: room is not a portal", info.SessionID, device.UserID, device.DeviceID)
@@ -195,6 +196,9 @@ func (helper *CryptoHelper) WaitForSession(roomID id.RoomID, senderKey id.Sender
 }
 
 func (helper *CryptoHelper) RequestSession(roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID, userID id.UserID, deviceID id.DeviceID) {
+	if deviceID == "" {
+		deviceID = "*"
+	}
 	err := helper.mach.SendRoomKeyRequest(roomID, senderKey, sessionID, "", map[id.UserID][]id.DeviceID{userID: {deviceID}})
 	if err != nil {
 		helper.log.Warnfln("Failed to send key request to %s/%s for %s in %s: %v", userID, deviceID, sessionID, roomID, err)

@@ -509,7 +509,7 @@ func (mach *OlmMachine) handleVerificationMAC(userID id.UserID, content *event.V
 		}
 
 		// we can finally trust this device
-		device.Trust = TrustStateVerified
+		device.Trust = id.TrustStateVerified
 		err = mach.CryptoStore.PutDevice(device.UserID, device)
 		if err != nil {
 			mach.Log.Warn("Failed to put device after verifying: %v", err)

@@ -10,48 +10,60 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-// IsDeviceTrusted returns whether a device has been determined to be trusted either through verification or cross-signing.
-func (mach *OlmMachine) IsDeviceTrusted(device *DeviceIdentity) bool {
-	userID := device.UserID
-	if device.Trust == TrustStateVerified {
-		return true
-	} else if device.Trust == TrustStateBlacklisted {
-		return false
-	}
-	if !mach.IsUserTrusted(userID) {
-		return false
+// ResolveTrust resolves the trust state of the device from cross-signing.
+func (mach *OlmMachine) ResolveTrust(device *DeviceIdentity) id.TrustState {
+	if device.Trust == id.TrustStateVerified || device.Trust == id.TrustStateBlacklisted {
+		return device.Trust
 	}
 
-	theirKeys, err := mach.CryptoStore.GetCrossSigningKeys(userID)
+	theirKeys, err := mach.CryptoStore.GetCrossSigningKeys(device.UserID)
 	if err != nil {
-		mach.Log.Error("Error retrieving cross-singing key of user %v from database: %v", userID, err)
-		return false
+		mach.Log.Error("Error retrieving cross-singing key of user %v from database: %v", device.UserID, err)
+		return id.TrustStateUnset
 	}
 	theirMSK, ok := theirKeys[id.XSUsageMaster]
 	if !ok {
-		mach.Log.Error("Master key of user %v not found", userID)
-		return false
+		mach.Log.Error("Master key of user %v not found", device.UserID)
+		return id.TrustStateUnset
 	}
 	theirSSK, ok := theirKeys[id.XSUsageSelfSigning]
 	if !ok {
-		mach.Log.Error("Self-signing key of user %v not found", userID)
-		return false
+		mach.Log.Error("Self-signing key of user %v not found", device.UserID)
+		return id.TrustStateUnset
 	}
-	sskSigExists, err := mach.CryptoStore.IsKeySignedBy(userID, theirSSK, userID, theirMSK)
+	sskSigExists, err := mach.CryptoStore.IsKeySignedBy(device.UserID, theirSSK, device.UserID, theirMSK)
 	if err != nil {
-		mach.Log.Error("Error retrieving cross-singing signatures for master key of user %v from database: %v", userID, err)
-		return false
+		mach.Log.Error("Error retrieving cross-singing signatures for master key of user %v from database: %v", device.UserID, err)
+		return id.TrustStateUnset
 	}
 	if !sskSigExists {
-		mach.Log.Warn("Self-signing key of user %v is not signed by their master key", userID)
-		return false
+		mach.Log.Warn("Self-signing key of user %v is not signed by their master key", device.UserID)
+		return id.TrustStateUnset
 	}
-	deviceSigExists, err := mach.CryptoStore.IsKeySignedBy(userID, device.SigningKey, userID, theirSSK)
+	deviceSigExists, err := mach.CryptoStore.IsKeySignedBy(device.UserID, device.SigningKey, device.UserID, theirSSK)
 	if err != nil {
-		mach.Log.Error("Error retrieving cross-singing signatures for master key of user %v from database: %v", userID, err)
+		mach.Log.Error("Error retrieving cross-singing signatures for master key of user %v from database: %v", device.UserID, err)
+		return id.TrustStateUnset
+	} else if !deviceSigExists {
+		return id.TrustStateUnset
+	}
+	if deviceSigExists {
+		if mach.IsUserTrusted(device.UserID) {
+			return id.TrustStateCrossSignedTrusted
+		}
+		return id.TrustStateCrossSigned
+	}
+	return id.TrustStateUnset
+}
+
+// IsDeviceTrusted returns whether a device has been determined to be trusted either through verification or cross-signing.
+func (mach *OlmMachine) IsDeviceTrusted(device *DeviceIdentity) bool {
+	switch mach.ResolveTrust(device) {
+	case id.TrustStateVerified, id.TrustStateCrossSigned, id.TrustStateCrossSignedTrusted:
+		return true
+	default:
 		return false
 	}
-	return deviceSigExists
 }
 
 // IsUserTrusted returns whether a user has been determined to be trusted by our user-signing key having signed their master key.

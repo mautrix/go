@@ -179,7 +179,7 @@ func (mach *OlmMachine) validateDevice(userID id.UserID, deviceID id.DeviceID, d
 		DeviceID:    deviceID,
 		IdentityKey: identityKey,
 		SigningKey:  signingKey,
-		Trust:       TrustStateUnset,
+		Trust:       id.TrustStateUnset,
 		Name:        name,
 		Deleted:     false,
 	}, nil

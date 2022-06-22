@@ -269,12 +269,16 @@ func (store *SQLCryptoStore) GetGroupSession(roomID id.RoomID, senderKey id.Send
 	if err != nil {
 		return nil, err
 	}
+	var chains []string
+	if forwardingChains.String != "" {
+		chains = strings.Split(forwardingChains.String, ",")
+	}
 	return &InboundGroupSession{
 		Internal:         *igs,
 		SigningKey:       id.Ed25519(signingKey.String),
 		SenderKey:        senderKey,
 		RoomID:           roomID,
-		ForwardingChains: strings.Split(forwardingChains.String, ","),
+		ForwardingChains: chains,
 	}, nil
 }
 
@@ -322,12 +326,16 @@ func (store *SQLCryptoStore) scanGroupSessionList(rows *sql.Rows) (result []*Inb
 			store.Log.Warnfln("Failed to unpickle session: %v", err)
 			continue
 		}
+		var chains []string
+		if forwardingChains.String != "" {
+			chains = strings.Split(forwardingChains.String, ",")
+		}
 		result = append(result, &InboundGroupSession{
 			Internal:         *igs,
 			SigningKey:       id.Ed25519(signingKey.String),
 			SenderKey:        id.Curve25519(senderKey.String),
 			RoomID:           roomID,
-			ForwardingChains: strings.Split(forwardingChains.String, ","),
+			ForwardingChains: chains,
 		})
 	}
 	return

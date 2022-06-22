@@ -104,7 +104,9 @@ func (evt *Event) MarshalJSON() ([]byte, error) {
 }
 
 type MautrixInfo struct {
-	Verified bool
+	TrustState    id.TrustState
+	ForwardedKeys bool
+	WasEncrypted  bool
 
 	CheckpointSent bool
 }

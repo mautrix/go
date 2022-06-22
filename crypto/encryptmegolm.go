@@ -74,11 +74,13 @@ func (mach *OlmMachine) EncryptMegolmEvent(roomID id.RoomID, evtType event.Type,
 	}
 	return &event.EncryptedEventContent{
 		Algorithm:        id.AlgorithmMegolmV1,
-		SenderKey:        mach.account.IdentityKey(),
-		DeviceID:         mach.Client.DeviceID,
 		SessionID:        session.ID(),
 		MegolmCiphertext: ciphertext,
 		RelatesTo:        getRelatesTo(content),
+
+		// These are deprecated
+		SenderKey: mach.account.IdentityKey(),
+		DeviceID:  mach.Client.DeviceID,
 	}, nil
 }
 
@@ -239,8 +241,11 @@ func (mach *OlmMachine) findOlmSessionsForUser(session *OutboundGroupSession, us
 			continue
 		} else if userID == mach.Client.UserID && deviceID == mach.Client.DeviceID {
 			session.Users[userKey] = OGSIgnored
-		} else if device.Trust == TrustStateBlacklisted {
-			mach.Log.Debug("Not encrypting group session %s for %s of %s: device is blacklisted", session.ID(), deviceID, userID)
+		} else if device.Trust == id.TrustStateBlacklisted {
+			mach.Log.Debug(
+				"Not encrypting group session %s for %s of %s: device is blacklisted",
+				session.ID(), deviceID, userID,
+			)
 			withheld[deviceID] = &event.Content{Parsed: &event.RoomKeyWithheldEventContent{
 				RoomID:    session.RoomID,
 				Algorithm: id.AlgorithmMegolmV1,
@@ -250,8 +255,11 @@ func (mach *OlmMachine) findOlmSessionsForUser(session *OutboundGroupSession, us
 				Reason:    "Device is blacklisted",
 			}}
 			session.Users[userKey] = OGSIgnored
-		} else if !mach.AllowUnverifiedDevices && !mach.IsDeviceTrusted(device) {
-			mach.Log.Debug("Not encrypting group session %s for %s of %s: device is not verified", session.ID(), deviceID, userID)
+		} else if trustState := mach.ResolveTrust(device); trustState < mach.SendKeysMinTrust {
+			mach.Log.Debug(
+				"Not encrypting group session %s for %s of %s: device is not verified (minimum: %s, device: %s)",
+				session.ID(), deviceID, userID, mach.SendKeysMinTrust.Description(), trustState.Description(),
+			)
 			withheld[deviceID] = &event.Content{Parsed: &event.RoomKeyWithheldEventContent{
 				RoomID:    session.RoomID,
 				Algorithm: id.AlgorithmMegolmV1,

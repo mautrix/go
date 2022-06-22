@@ -27,12 +27,16 @@ func (mach *OlmMachine) GetOwnCrossSigningPublicKeys() *CrossSigningPublicKeysCa
 		mach.crossSigningPubkeys = mach.CrossSigningKeys.PublicKeys()
 		return mach.crossSigningPubkeys
 	}
+	if mach.crossSigningPubkeysFetched {
+		return nil
+	}
 	cspk, err := mach.GetCrossSigningPublicKeys(mach.Client.UserID)
 	if err != nil {
 		mach.Log.Error("Failed to get own cross-signing public keys: %v", err)
 		return nil
 	}
 	mach.crossSigningPubkeys = cspk
+	mach.crossSigningPubkeysFetched = true
 	return mach.crossSigningPubkeys
 }
 

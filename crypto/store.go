@@ -18,31 +18,6 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-// TrustState determines how trusted a device is.
-type TrustState int
-
-const (
-	TrustStateUnset TrustState = iota
-	TrustStateVerified
-	TrustStateBlacklisted
-	TrustStateIgnored
-)
-
-func (ts TrustState) String() string {
-	switch ts {
-	case TrustStateUnset:
-		return "unverified"
-	case TrustStateVerified:
-		return "verified"
-	case TrustStateBlacklisted:
-		return "blacklisted"
-	case TrustStateIgnored:
-		return "ignored"
-	default:
-		return ""
-	}
-}
-
 // DeviceIdentity contains the identity details of a device and some additional info.
 type DeviceIdentity struct {
 	UserID      id.UserID
@@ -50,7 +25,7 @@ type DeviceIdentity struct {
 	IdentityKey id.Curve25519
 	SigningKey  id.Ed25519
 
-	Trust   TrustState
+	Trust   id.TrustState
 	Deleted bool
 	Name    string
 }

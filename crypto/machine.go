@@ -38,8 +38,8 @@ type OlmMachine struct {
 	CryptoStore Store
 	StateStore  StateStore
 
-	AllowUnverifiedDevices       bool
-	ShareKeysToUnverifiedDevices bool
+	SendKeysMinTrust  id.TrustState
+	ShareKeysMinTrust id.TrustState
 
 	AllowKeyShare func(*DeviceIdentity, event.RequestedKeyInfo) *KeyShareRejection
 
@@ -64,6 +64,8 @@ type OlmMachine struct {
 
 	CrossSigningKeys    *CrossSigningKeysCache
 	crossSigningPubkeys *CrossSigningPublicKeysCache
+
+	crossSigningPubkeysFetched bool
 }
 
 // StateStore is used by OlmMachine to get room state information that's needed for encryption.
@@ -85,8 +87,8 @@ func NewOlmMachine(client *mautrix.Client, log Logger, cryptoStore Store, stateS
 		CryptoStore: cryptoStore,
 		StateStore:  stateStore,
 
-		AllowUnverifiedDevices:       true,
-		ShareKeysToUnverifiedDevices: false,
+		SendKeysMinTrust:  id.TrustStateUnset,
+		ShareKeysMinTrust: id.TrustStateCrossSigned,
 
 		DefaultSASTimeout: 10 * time.Minute,
 		AcceptVerificationFrom: func(string, *DeviceIdentity, id.RoomID) (VerificationRequestResponse, VerificationHooks) {
@@ -167,7 +169,7 @@ func (mach *OlmMachine) OwnIdentity() *DeviceIdentity {
 		DeviceID:    mach.Client.DeviceID,
 		IdentityKey: mach.account.IdentityKey(),
 		SigningKey:  mach.account.SigningKey(),
-		Trust:       TrustStateVerified,
+		Trust:       id.TrustStateVerified,
 		Deleted:     false,
 	}
 }
