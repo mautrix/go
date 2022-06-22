@@ -77,7 +77,7 @@ func (helper *CryptoHelper) Init() error {
 	stateStore := &cryptoStateStore{helper.bridge}
 	helper.mach = crypto.NewOlmMachine(helper.client, logger, helper.store, stateStore)
 	helper.mach.AllowKeyShare = helper.allowKeyShare
-	helper.mach.SendKeysMinTrust = helper.bridge.Config.Bridge.GetEncryptionConfig().VerificationLevels.Send
+	helper.mach.SendKeysMinTrust = helper.bridge.Config.Bridge.GetEncryptionConfig().VerificationLevels.Receive
 
 	helper.client.Syncer = &cryptoSyncer{helper.mach}
 	helper.client.Store = &cryptoClientStore{helper.store}

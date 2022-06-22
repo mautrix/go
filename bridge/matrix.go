@@ -367,7 +367,7 @@ var errDeviceNotVerified = errors.New("your device is not verified")
 var errMessageNotEncrypted = errors.New("unencrypted message")
 
 func (mx *MatrixHandler) postDecrypt(decrypted *event.Event, retryCount int, errorEventID id.EventID) {
-	minLevel := mx.bridge.Config.Bridge.GetEncryptionConfig().VerificationLevels.Receive
+	minLevel := mx.bridge.Config.Bridge.GetEncryptionConfig().VerificationLevels.Send
 	if decrypted.Mautrix.TrustState < minLevel {
 		mx.log.Warnfln("Dropping %s due to insufficient verification level (event: %s, required: %s)", decrypted.ID, decrypted.Mautrix.TrustState.Description(), minLevel.Description())
 		go mx.sendCryptoStatusError(decrypted, errorEventID, errDeviceNotVerified, retryCount, true)
