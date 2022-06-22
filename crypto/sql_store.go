@@ -461,7 +461,7 @@ func (store *SQLCryptoStore) GetDevices(userID id.UserID) (map[id.DeviceID]*Devi
 		return nil, err
 	}
 
-	rows, err := store.DB.Query("SELECT device_id, identity_key, signing_key, trust, deleted, name FROM crypto_device WHERE user_id=$1", userID)
+	rows, err := store.DB.Query("SELECT device_id, identity_key, signing_key, trust, deleted, name FROM crypto_device WHERE user_id=$1 AND deleted=false", userID)
 	if err != nil {
 		return nil, err
 	}
@@ -516,11 +516,18 @@ func (store *SQLCryptoStore) FindDeviceByKey(userID id.UserID, identityKey id.Id
 	return &identity, nil
 }
 
+const deviceInsertQuery = `
+INSERT INTO crypto_device (user_id, device_id, identity_key, signing_key, trust, deleted, name)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (user_id, device_id) DO UPDATE
+    SET identity_key=excluded.identity_key, deleted=excluded.deleted, trust=excluded.trust, name=excluded.name
+`
+
+var deviceMassInsertTemplate = strings.ReplaceAll(deviceInsertQuery, "($1, $2, $3, $4, $5, $6, $7)", "%s")
+
 // PutDevice stores a single device for a user, replacing it if it exists already.
 func (store *SQLCryptoStore) PutDevice(userID id.UserID, device *DeviceIdentity) error {
-	_, err := store.DB.Exec(`
-			INSERT INTO crypto_device (user_id, device_id, identity_key, signing_key, trust, deleted, name) VALUES ($1, $2, $3, $4, $5, $6, $7)
-			ON CONFLICT (user_id, device_id) DO UPDATE SET identity_key=excluded.identity_key, signing_key=excluded.signing_key, trust=excluded.trust, deleted=excluded.deleted, name=excluded.name`,
+	_, err := store.DB.Exec(deviceInsertQuery,
 		userID, device.DeviceID, device.IdentityKey, device.SigningKey, device.Trust, device.Deleted, device.Name)
 	return err
 }
@@ -537,7 +544,7 @@ func (store *SQLCryptoStore) PutDevices(userID id.UserID, devices map[id.DeviceI
 		return fmt.Errorf("failed to add user to tracked users list: %w", err)
 	}
 
-	_, err = tx.Exec("DELETE FROM crypto_device WHERE user_id=$1", userID)
+	_, err = tx.Exec("UPDATE crypto_device SET deleted=true WHERE user_id=$1", userID)
 	if err != nil {
 		_ = tx.Rollback()
 		return fmt.Errorf("failed to delete old devices: %w", err)
@@ -554,6 +561,10 @@ func (store *SQLCryptoStore) PutDevices(userID id.UserID, devices map[id.DeviceI
 	for deviceID := range devices {
 		deviceIDs = append(deviceIDs, deviceID)
 	}
+	var valueStringFormat = "($1, $%d, $%d, $%d, $%d, $%d, $%d)"
+	if store.Dialect == dbutil.SQLite {
+		valueStringFormat = strings.ReplaceAll(valueStringFormat, "$", "?")
+	}
 	for batchDeviceIdx := 0; batchDeviceIdx < len(deviceIDs); batchDeviceIdx += deviceBatchLen {
 		var batchDevices []id.DeviceID
 		if batchDeviceIdx+deviceBatchLen < len(deviceIDs) {
@@ -568,11 +579,11 @@ func (store *SQLCryptoStore) PutDevices(userID id.UserID, devices map[id.DeviceI
 		for _, deviceID := range batchDevices {
 			identity := devices[deviceID]
 			values = append(values, deviceID, identity.IdentityKey, identity.SigningKey, identity.Trust, identity.Deleted, identity.Name)
-			valueStrings = append(valueStrings, fmt.Sprintf("($1, $%d, $%d, $%d, $%d, $%d, $%d)", i, i+1, i+2, i+3, i+4, i+5))
+			valueStrings = append(valueStrings, fmt.Sprintf(valueStringFormat, i, i+1, i+2, i+3, i+4, i+5))
 			i += 6
 		}
 		valueString := strings.Join(valueStrings, ",")
-		_, err = tx.Exec("INSERT INTO crypto_device (user_id, device_id, identity_key, signing_key, trust, deleted, name) VALUES "+valueString, values...)
+		_, err = tx.Exec(fmt.Sprintf(deviceMassInsertTemplate, valueString), values...)
 		if err != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("failed to insert new devices: %w", err)
