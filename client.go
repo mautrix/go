@@ -1358,6 +1358,16 @@ func (cli *Client) Context(roomID id.RoomID, eventID id.EventID, filter *FilterP
 	return
 }
 
+func (cli *Client) Search(search SearchCategories, nextBatch *string) (resp *RespSearch, err error) {
+	query := make(map[string]string)
+	if nextBatch != nil {
+		query["next_batch"] = *nextBatch
+	}
+	urlPath := cli.BuildURLWithQuery(ClientURLPath{"v3", "search"}, query)
+	_, err = cli.MakeRequest("POST", urlPath, &search, &resp)
+	return
+}
+
 func (cli *Client) GetEvent(roomID id.RoomID, eventID id.EventID) (resp *event.Event, err error) {
 	urlPath := cli.BuildClientURL("v3", "rooms", roomID, "event", eventID)
 	_, err = cli.MakeRequest("GET", urlPath, nil, &resp)

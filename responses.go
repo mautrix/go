@@ -342,3 +342,35 @@ type RespBatchSend struct {
 
 	NextBatchID id.BatchID `json:"next_batch_id"`
 }
+
+type EventContext struct {
+	End          string         `json:"end"`
+	EventsAfter  []*event.Event `json:"events_after"`
+	EventsBefore []*event.Event `json:"events_before"`
+	ProfileInfo  map[string]struct {
+		AvatarURL   *string `json:"avatar_url"`
+		DisplayName *string `json:"display_name"`
+	} `json:"profile_info"`
+	Start string `json:"start"`
+}
+
+type SearchResults struct {
+	Context EventContext `json:"context"`
+	Rank    float64      `json:"rank"`
+	Result  *event.Event `json:"result"`
+}
+
+type ResRoomEvents struct {
+	Count      int                                     `json:"count"`
+	Groups     map[string]string                       `json:"groups"`
+	Highlights []string                                `json:"highlights"`
+	NextBatch  string                                  `json:"next_batch"`
+	Results    []SearchResults                         `json:"results"`
+	State      map[id.RoomID][]map[string]*event.Event `json:"state"`
+}
+
+type RespSearch struct {
+	SearchCategories struct {
+		RoomEvents ResRoomEvents `json:"room_events"`
+	} `json:"search_categories"`
+}

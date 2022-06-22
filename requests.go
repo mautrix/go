@@ -324,3 +324,31 @@ type ReqSetReadMarkers struct {
 	Read      id.EventID `json:"m.read"`
 	FullyRead id.EventID `json:"m.fully_read"`
 }
+
+type SearchGroups struct {
+	Key string `json:"key,omitempty"`
+}
+
+// The include event context. Part of
+// https://spec.matrix.org/v1.3/client-server-api/#post_matrixclientv3search.
+type IncludeEventContext struct {
+	AfterLimit     int  `json:"after_limit,omitempty"`
+	BeforeLimit    int  `json:"before_limit,omitempty"`
+	IncludeProfile bool `json:"include_profile,omitempty"`
+}
+
+type RoomEventCriteria struct {
+	EventContext IncludeEventContext `json:"event_context,omitempty"`
+	Filter       FilterPart          `json:"filter,omitempty"`
+	Groupings    struct {
+		GroupBy []SearchGroups `json:"group_by,omitempty"`
+	} `json:"groupings,omitempty"`
+	IncludeState bool     `json:"include_state,omitempty"`
+	Keys         []string `json:"keys,omitempty"`
+	OrderBy      string   `json:"order_by,omitempty"`
+	SearchTerm   string   `json:"search_term"`
+}
+
+type SearchCategories struct {
+	RoomEvents RoomEventCriteria `json:"room_events"`
+}
