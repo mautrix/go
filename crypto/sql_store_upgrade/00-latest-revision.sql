@@ -1,4 +1,4 @@
--- v0 -> v6: Latest revision
+-- v0 -> v8: Latest revision
 CREATE TABLE IF NOT EXISTS crypto_account (
 	account_id TEXT    PRIMARY KEY,
 	device_id  TEXT    NOT NULL,
@@ -73,6 +73,9 @@ CREATE TABLE IF NOT EXISTS crypto_cross_signing_keys (
 	user_id TEXT,
 	usage   TEXT,
 	key     CHAR(43) NOT NULL,
+
+	first_seen_key CHAR(43) NOT NULL,
+
 	PRIMARY KEY (user_id, usage)
 );
 
