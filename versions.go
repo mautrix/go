@@ -39,6 +39,15 @@ func (versions *RespVersions) ContainsGreaterOrEqual(version SpecVersion) bool {
 	})
 }
 
+func (versions *RespVersions) GetLatest() (latest SpecVersion) {
+	for _, ver := range versions.Versions {
+		if ver.GreaterThan(latest) {
+			latest = ver
+		}
+	}
+	return
+}
+
 type SpecVersionFormat int
 
 const (
@@ -57,6 +66,7 @@ var (
 	SpecR061 = MustParseSpecVersion("r0.6.1")
 	SpecV11  = MustParseSpecVersion("v1.1")
 	SpecV12  = MustParseSpecVersion("v1.2")
+	SpecV13  = MustParseSpecVersion("v1.3")
 )
 
 func (svf SpecVersionFormat) String() string {
@@ -116,7 +126,7 @@ func (sv *SpecVersion) MarshalText() ([]byte, error) {
 	return []byte(sv.String()), nil
 }
 
-func (sv *SpecVersion) String() string {
+func (sv SpecVersion) String() string {
 	switch sv.Format {
 	case SpecVersionFormatR:
 		return fmt.Sprintf("r%d.%d.%d", sv.Major, sv.Minor, sv.Patch)

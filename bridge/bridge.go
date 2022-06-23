@@ -112,6 +112,10 @@ type ChildOverride interface {
 	CreatePrivatePortal(id.RoomID, User, Ghost)
 }
 
+type CSFeatureRequirer interface {
+	CheckFeatures(versions *mautrix.RespVersions) (string, bool)
+}
+
 type Bridge struct {
 	Name         string
 	URL          string
@@ -207,6 +211,8 @@ func (br *Bridge) InitVersion(tag, commit, buildTime string) {
 	br.BuildTime = buildTime
 }
 
+var MinSpecVersion = mautrix.SpecV11
+
 func (br *Bridge) ensureConnection() {
 	for {
 		versions, err := br.Bot.Versions()
@@ -215,9 +221,16 @@ func (br *Bridge) ensureConnection() {
 			time.Sleep(10 * time.Second)
 			continue
 		}
-		if !versions.ContainsGreaterOrEqual(mautrix.SpecV11) {
-			br.Log.Warnfln("Server isn't advertising modern spec versions")
+		if !versions.ContainsGreaterOrEqual(MinSpecVersion) {
+			br.Log.Fatalfln("Server isn't advertising modern spec versions (latest supported by server: %s, minimum required by bridge: %s)", versions.GetLatest(), MinSpecVersion)
+			os.Exit(18)
+		} else if fr, ok := br.Child.(CSFeatureRequirer); ok {
+			if msg, hasFeatures := fr.CheckFeatures(versions); !hasFeatures {
+				br.Log.Fatalln(msg)
+				os.Exit(18)
+			}
 		}
+
 		resp, err := br.Bot.Whoami()
 		if err != nil {
 			if errors.Is(err, mautrix.MUnknownToken) {
