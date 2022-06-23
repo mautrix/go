@@ -363,14 +363,32 @@ func (mx *MatrixHandler) sendCryptoStatusError(evt *event.Event, editEvent id.Ev
 	return ""
 }
 
-var errDeviceNotVerified = errors.New("your device is not verified")
+var errDeviceNotTrusted = errors.New("your device is not trusted")
 var errMessageNotEncrypted = errors.New("unencrypted message")
+
+func deviceUnverifiedErrorWithExplanation(trust id.TrustState) error {
+	var explanation string
+	switch trust {
+	case id.TrustStateBlacklisted:
+		explanation = "device is blacklisted"
+	case id.TrustStateUnknownDevice:
+		explanation = "device info not found"
+	case id.TrustStateForwarded:
+		explanation = "keys were forwarded from an unknown device"
+	case id.TrustStateCrossSignedUntrusted:
+		explanation = "cross-signing keys changed after setting up the bridge"
+	default:
+		return errDeviceNotTrusted
+	}
+	return fmt.Errorf("%w (%s)", errDeviceNotTrusted, explanation)
+}
 
 func (mx *MatrixHandler) postDecrypt(decrypted *event.Event, retryCount int, errorEventID id.EventID) {
 	minLevel := mx.bridge.Config.Bridge.GetEncryptionConfig().VerificationLevels.Send
 	if decrypted.Mautrix.TrustState < minLevel {
-		mx.log.Warnfln("Dropping %s due to insufficient verification level (event: %s, required: %s)", decrypted.ID, decrypted.Mautrix.TrustState.Description(), minLevel.Description())
-		go mx.sendCryptoStatusError(decrypted, errorEventID, errDeviceNotVerified, retryCount, true)
+		mx.log.Warnfln("Dropping %s due to insufficient verification level (event: %s, required: %s)", decrypted.ID, decrypted.Mautrix.TrustState, minLevel)
+		err := deviceUnverifiedErrorWithExplanation(decrypted.Mautrix.TrustState)
+		go mx.sendCryptoStatusError(decrypted, errorEventID, err, retryCount, true)
 		return
 	}
 

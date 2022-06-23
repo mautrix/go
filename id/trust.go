@@ -15,14 +15,15 @@ import (
 type TrustState int
 
 const (
-	TrustStateBlacklisted        TrustState = -100
-	TrustStateUnset              TrustState = 0
-	TrustStateUnknownDevice      TrustState = 10
-	TrustStateForwarded          TrustState = 20
-	TrustStateCrossSigned        TrustState = 100
-	TrustStateCrossSignedTrusted TrustState = 200
-	TrustStateVerified           TrustState = 300
-	TrustStateInvalid            TrustState = (1 << 31) - 1
+	TrustStateBlacklisted          TrustState = -100
+	TrustStateUnset                TrustState = 0
+	TrustStateUnknownDevice        TrustState = 10
+	TrustStateForwarded            TrustState = 20
+	TrustStateCrossSignedUntrusted TrustState = 50
+	TrustStateCrossSignedTOFU      TrustState = 100
+	TrustStateCrossSignedVerified  TrustState = 200
+	TrustStateVerified             TrustState = 300
+	TrustStateInvalid              TrustState = (1 << 31) - 1
 )
 
 func (ts *TrustState) UnmarshalText(data []byte) error {
@@ -45,14 +46,16 @@ func ParseTrustState(val string) TrustState {
 		return TrustStateBlacklisted
 	case "unverified":
 		return TrustStateUnset
+	case "cross-signed-untrusted", "cross-signed, untrusted":
+		return TrustStateCrossSignedUntrusted
 	case "unknown-device", "unknown device":
 		return TrustStateUnknownDevice
 	case "forwarded":
 		return TrustStateForwarded
-	case "cross-signed", "tofu", "verified (via cross-signing, tofu)":
-		return TrustStateCrossSigned
-	case "cross-signed-trusted", "verified (via cross-signing, trusted user)":
-		return TrustStateCrossSignedTrusted
+	case "cross-signed-tofu", "cross-signed", "cross-signed, trusted on first use":
+		return TrustStateCrossSignedTOFU
+	case "cross-signed-verified", "cross-signed-trusted", "cross-signed, verified user user":
+		return TrustStateCrossSignedVerified
 	case "verified":
 		return TrustStateVerified
 	default:
@@ -66,14 +69,16 @@ func (ts TrustState) String() string {
 		return "blacklisted"
 	case TrustStateUnset:
 		return "unverified"
+	case TrustStateCrossSignedUntrusted:
+		return "cross-signed-untrusted"
 	case TrustStateUnknownDevice:
 		return "unknown-device"
 	case TrustStateForwarded:
 		return "forwarded"
-	case TrustStateCrossSigned:
-		return "cross-signed"
-	case TrustStateCrossSignedTrusted:
-		return "cross-signed-trusted"
+	case TrustStateCrossSignedTOFU:
+		return "cross-signed-tofu"
+	case TrustStateCrossSignedVerified:
+		return "cross-signed-verified"
 	case TrustStateVerified:
 		return "verified"
 	default:
@@ -87,14 +92,16 @@ func (ts TrustState) Description() string {
 		return "blacklisted"
 	case TrustStateUnset:
 		return "unverified"
+	case TrustStateCrossSignedUntrusted:
+		return "cross-signed, untrusted"
 	case TrustStateUnknownDevice:
 		return "unknown device"
 	case TrustStateForwarded:
 		return "forwarded"
-	case TrustStateCrossSigned:
-		return "cross-signed, tofu"
-	case TrustStateCrossSignedTrusted:
-		return "cross-signed, trusted user"
+	case TrustStateCrossSignedTOFU:
+		return "cross-signed, trusted on first use"
+	case TrustStateCrossSignedVerified:
+		return "cross-signed, verified user"
 	case TrustStateVerified:
 		return "verified locally"
 	default:

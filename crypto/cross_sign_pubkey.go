@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tulir Asokan
+// Copyright (c) 2022 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -51,9 +51,9 @@ func (mach *OlmMachine) GetCrossSigningPublicKeys(userID id.UserID) (*CrossSigni
 			selfSigning, _ := dbKeys[id.XSUsageSelfSigning]
 			userSigning, _ := dbKeys[id.XSUsageUserSigning]
 			return &CrossSigningPublicKeysCache{
-				MasterKey:      masterKey,
-				SelfSigningKey: selfSigning,
-				UserSigningKey: userSigning,
+				MasterKey:      masterKey.Key,
+				SelfSigningKey: selfSigning.Key,
+				UserSigningKey: userSigning.Key,
 			}, nil
 		}
 	}

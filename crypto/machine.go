@@ -88,7 +88,7 @@ func NewOlmMachine(client *mautrix.Client, log Logger, cryptoStore Store, stateS
 		StateStore:  stateStore,
 
 		SendKeysMinTrust:  id.TrustStateUnset,
-		ShareKeysMinTrust: id.TrustStateCrossSigned,
+		ShareKeysMinTrust: id.TrustStateCrossSignedTOFU,
 
 		DefaultSASTimeout: 10 * time.Minute,
 		AcceptVerificationFrom: func(string, *DeviceIdentity, id.RoomID) (VerificationRequestResponse, VerificationHooks) {

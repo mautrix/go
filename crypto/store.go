@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tulir Asokan
+// Copyright (c) 2022 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -32,6 +32,11 @@ type DeviceIdentity struct {
 
 func (device *DeviceIdentity) Fingerprint() string {
 	return Fingerprint(device.SigningKey)
+}
+
+type CrossSigningKey struct {
+	Key   id.Ed25519
+	First id.Ed25519
 }
 
 var ErrGroupSessionWithheld = errors.New("group session has been withheld")
@@ -122,7 +127,7 @@ type Store interface {
 	// PutCrossSigningKey stores a cross-signing key of some user along with its usage.
 	PutCrossSigningKey(id.UserID, id.CrossSigningUsage, id.Ed25519) error
 	// GetCrossSigningKeys retrieves a user's stored cross-signing keys.
-	GetCrossSigningKeys(id.UserID) (map[id.CrossSigningUsage]id.Ed25519, error)
+	GetCrossSigningKeys(id.UserID) (map[id.CrossSigningUsage]CrossSigningKey, error)
 	// PutSignature stores a signature of a cross-signing or device key along with the signer's user ID and key.
 	PutSignature(id.UserID, id.Ed25519, id.UserID, id.Ed25519, string) error
 	// GetSignaturesForKeyBy returns the signatures for a cross-signing or device key by the given signer.
@@ -158,7 +163,7 @@ type GobStore struct {
 	OutGroupSessions      map[id.RoomID]*OutboundGroupSession
 	MessageIndices        map[messageIndexKey]messageIndexValue
 	Devices               map[id.UserID]map[id.DeviceID]*DeviceIdentity
-	CrossSigningKeys      map[id.UserID]map[id.CrossSigningUsage]id.Ed25519
+	CrossSigningKeys      map[id.UserID]map[id.CrossSigningUsage]CrossSigningKey
 	KeySignatures         map[id.UserID]map[id.Ed25519]map[id.UserID]map[id.Ed25519]string
 }
 
@@ -176,7 +181,7 @@ func NewGobStore(path string) (*GobStore, error) {
 		OutGroupSessions:      make(map[id.RoomID]*OutboundGroupSession),
 		MessageIndices:        make(map[messageIndexKey]messageIndexValue),
 		Devices:               make(map[id.UserID]map[id.DeviceID]*DeviceIdentity),
-		CrossSigningKeys:      make(map[id.UserID]map[id.CrossSigningUsage]id.Ed25519),
+		CrossSigningKeys:      make(map[id.UserID]map[id.CrossSigningUsage]CrossSigningKey),
 		KeySignatures:         make(map[id.UserID]map[id.Ed25519]map[id.UserID]map[id.Ed25519]string),
 	}
 	return gs, gs.load()
@@ -502,21 +507,30 @@ func (gs *GobStore) PutCrossSigningKey(userID id.UserID, usage id.CrossSigningUs
 	gs.lock.RLock()
 	userKeys, ok := gs.CrossSigningKeys[userID]
 	if !ok {
-		userKeys = make(map[id.CrossSigningUsage]id.Ed25519)
+		userKeys = make(map[id.CrossSigningUsage]CrossSigningKey)
 		gs.CrossSigningKeys[userID] = userKeys
 	}
-	userKeys[usage] = key
+	existing, ok := userKeys[usage]
+	if ok {
+		existing.Key = key
+		userKeys[usage] = existing
+	} else {
+		userKeys[usage] = CrossSigningKey{
+			Key:   key,
+			First: key,
+		}
+	}
 	err := gs.save()
 	gs.lock.RUnlock()
 	return err
 }
 
-func (gs *GobStore) GetCrossSigningKeys(userID id.UserID) (map[id.CrossSigningUsage]id.Ed25519, error) {
+func (gs *GobStore) GetCrossSigningKeys(userID id.UserID) (map[id.CrossSigningUsage]CrossSigningKey, error) {
 	gs.lock.RLock()
 	defer gs.lock.RUnlock()
 	keys, ok := gs.CrossSigningKeys[userID]
 	if !ok {
-		return map[id.CrossSigningUsage]id.Ed25519{}, nil
+		return map[id.CrossSigningUsage]CrossSigningKey{}, nil
 	}
 	return keys, nil
 }

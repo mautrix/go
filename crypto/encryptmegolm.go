@@ -258,7 +258,7 @@ func (mach *OlmMachine) findOlmSessionsForUser(session *OutboundGroupSession, us
 		} else if trustState := mach.ResolveTrust(device); trustState < mach.SendKeysMinTrust {
 			mach.Log.Debug(
 				"Not encrypting group session %s for %s of %s: device is not verified (minimum: %s, device: %s)",
-				session.ID(), deviceID, userID, mach.SendKeysMinTrust.Description(), trustState.Description(),
+				session.ID(), deviceID, userID, mach.SendKeysMinTrust, trustState,
 			)
 			withheld[deviceID] = &event.Content{Parsed: &event.RoomKeyWithheldEventContent{
 				RoomID:    session.RoomID,

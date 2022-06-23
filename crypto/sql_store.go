@@ -630,27 +630,27 @@ func (store *SQLCryptoStore) FilterTrackedUsers(users []id.UserID) []id.UserID {
 // PutCrossSigningKey stores a cross-signing key of some user along with its usage.
 func (store *SQLCryptoStore) PutCrossSigningKey(userID id.UserID, usage id.CrossSigningUsage, key id.Ed25519) error {
 	_, err := store.DB.Exec(`
-		INSERT INTO crypto_cross_signing_keys (user_id, usage, key) VALUES ($1, $2, $3)
+		INSERT INTO crypto_cross_signing_keys (user_id, usage, key, first_seen_key) VALUES ($1, $2, $3, $4)
 		ON CONFLICT (user_id, usage) DO UPDATE SET key=excluded.key
-	`, userID, usage, key)
+	`, userID, usage, key, key)
 	return err
 }
 
 // GetCrossSigningKeys retrieves a user's stored cross-signing keys.
-func (store *SQLCryptoStore) GetCrossSigningKeys(userID id.UserID) (map[id.CrossSigningUsage]id.Ed25519, error) {
-	rows, err := store.DB.Query("SELECT usage, key FROM crypto_cross_signing_keys WHERE user_id=$1", userID)
+func (store *SQLCryptoStore) GetCrossSigningKeys(userID id.UserID) (map[id.CrossSigningUsage]CrossSigningKey, error) {
+	rows, err := store.DB.Query("SELECT usage, key, first_seen_key FROM crypto_cross_signing_keys WHERE user_id=$1", userID)
 	if err != nil {
 		return nil, err
 	}
-	data := make(map[id.CrossSigningUsage]id.Ed25519)
+	data := make(map[id.CrossSigningUsage]CrossSigningKey)
 	for rows.Next() {
 		var usage id.CrossSigningUsage
-		var key id.Ed25519
-		err := rows.Scan(&usage, &key)
+		var key, first id.Ed25519
+		err := rows.Scan(&usage, &key, &first)
 		if err != nil {
 			return nil, err
 		}
-		data[usage] = key
+		data[usage] = CrossSigningKey{key, first}
 	}
 
 	return data, nil

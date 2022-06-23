@@ -1,4 +1,5 @@
 // Copyright (c) 2020 Nikos Filippakis
+// Copyright (c) 2022 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -41,20 +42,20 @@ func (mach *OlmMachine) fetchMasterKey(device *DeviceIdentity, content *event.Ve
 	if !ok {
 		return "", ErrCrossSigningMasterKeyNotFound
 	}
-	masterKeyID := id.NewKeyID(id.KeyAlgorithmEd25519, masterKey.String())
+	masterKeyID := id.NewKeyID(id.KeyAlgorithmEd25519, masterKey.Key.String())
 	masterKeyMAC, ok := content.Mac[masterKeyID]
 	if !ok {
-		return masterKey, ErrMasterKeyMACNotFound
+		return masterKey.Key, ErrMasterKeyMACNotFound
 	}
 	expectedMasterKeyMAC, _, err := mach.getPKAndKeysMAC(verState.sas, device.UserID, device.DeviceID,
-		mach.Client.UserID, mach.Client.DeviceID, transactionID, masterKey, masterKeyID, content.Mac)
+		mach.Client.UserID, mach.Client.DeviceID, transactionID, masterKey.Key, masterKeyID, content.Mac)
 	if err != nil {
-		return masterKey, fmt.Errorf("failed to calculate expected MAC for master key: %w", err)
+		return masterKey.Key, fmt.Errorf("failed to calculate expected MAC for master key: %w", err)
 	}
 	if masterKeyMAC != expectedMasterKeyMAC {
 		err = fmt.Errorf("%w: expected %s, got %s", ErrMismatchingMasterKeyMAC, expectedMasterKeyMAC, masterKeyMAC)
 	}
-	return masterKey, err
+	return masterKey.Key, err
 }
 
 // SignUser creates a cross-signing signature for a user, stores it and uploads it to the server.

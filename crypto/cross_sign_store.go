@@ -1,4 +1,5 @@
 // Copyright (c) 2020 Nikos Filippakis
+// Copyright (c) 2022 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -23,9 +24,9 @@ func (mach *OlmMachine) storeCrossSigningKeys(crossSigningKeys map[id.UserID]mau
 				// got a new key with the same usage as an existing key
 				for _, newKeyUsage := range userKeys.Usage {
 					if newKeyUsage == curKeyUsage {
-						if _, ok := userKeys.Keys[id.NewKeyID(id.KeyAlgorithmEd25519, curKey.String())]; !ok {
+						if _, ok := userKeys.Keys[id.NewKeyID(id.KeyAlgorithmEd25519, curKey.Key.String())]; !ok {
 							// old key is not in the new key map, so we drop signatures made by it
-							if count, err := mach.CryptoStore.DropSignaturesByKey(userID, curKey); err != nil {
+							if count, err := mach.CryptoStore.DropSignaturesByKey(userID, curKey.Key); err != nil {
 								mach.Log.Error("Error deleting old signatures made by %s (%s): %v", curKey, curKeyUsage, err)
 							} else {
 								mach.Log.Debug("Dropped %d signatures made by key %s (%s) as it has been replaced", count, curKey, curKeyUsage)
