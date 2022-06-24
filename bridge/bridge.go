@@ -117,6 +117,11 @@ type FlagHandlingBridge interface {
 	HandleFlags() bool
 }
 
+type PreInitableBridge interface {
+	ChildOverride
+	PreInit()
+}
+
 type CSFeatureRequirer interface {
 	CheckFeatures(versions *mautrix.RespVersions) (string, bool)
 }
@@ -333,12 +338,19 @@ func (br *Bridge) validateConfig() error {
 }
 
 func (br *Bridge) init() {
+	pib, ok := br.Child.(PreInitableBridge)
+	if ok {
+		pib.PreInit()
+	}
+
 	var err error
 
 	br.AS = br.Config.MakeAppService()
 	_, _ = br.AS.Init()
 
-	br.Log = log.Create() // TODO create with username metadata for iMessage
+	if br.Log == nil {
+		br.Log = log.Create()
+	}
 	br.Config.Logging.Configure(br.Log)
 	log.DefaultLogger = br.Log.(*log.BasicLogger)
 	if len(br.Config.Logging.FileNameFormat) > 0 {
