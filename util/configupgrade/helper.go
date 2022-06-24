@@ -212,9 +212,13 @@ func (helper *Helper) Copy(allowedTypes YAMLType, path ...string) {
 	base, cfg := helper.Base, helper.Config
 	var ok bool
 	for _, item := range path {
-		base = base.Map[item]
 		cfg, ok = cfg.Map[item]
 		if !ok {
+			return
+		}
+		base, ok = base.Map[item]
+		if !ok {
+			_, _ = fmt.Fprintf(os.Stderr, "Ignoring config field %s which is missing in base config\n", strings.Join(path, "->"))
 			return
 		}
 	}
