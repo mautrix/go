@@ -218,6 +218,8 @@ func doUpgrade(helper *up.Helper) {
 	helper.Copy(up.Int, "logging", "file_mode")
 	helper.Copy(up.Str|up.Timestamp, "logging", "timestamp_format")
 	helper.Copy(up.Str, "logging", "print_level")
+	helper.Copy(up.Bool, "logging", "print_json")
+	helper.Copy(up.Bool, "logging", "file_json")
 }
 
 // Upgrader is a config upgrader that copies the default fields in the homeserver, appservice and logging blocks.
