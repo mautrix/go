@@ -139,6 +139,8 @@ func getDefaultProcessID() string {
 }
 
 func (as *AppService) PrepareWebsocket() {
+	as.websocketHandlersLock.Lock()
+	defer as.websocketHandlersLock.Unlock()
 	if as.websocketHandlers == nil {
 		as.websocketHandlers = make(map[string]WebsocketHandler, 32)
 		as.websocketRequests = make(map[int]chan<- *WebsocketCommand)

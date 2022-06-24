@@ -9,8 +9,12 @@
 package bridge
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"os"
 	"runtime/debug"
+	"sync"
 	"time"
 
 	"maunium.net/go/maulogger/v2"
@@ -37,6 +41,10 @@ type CryptoHelper struct {
 	store   *SQLCryptoStore
 	log     maulogger.Logger
 	baseLog maulogger.Logger
+
+	lock       sync.RWMutex
+	syncDone   sync.WaitGroup
+	cancelSync func()
 }
 
 func NewCryptoHelper(bridge *Bridge) Crypto {
@@ -149,11 +157,29 @@ func (helper *CryptoHelper) loginBot() (*mautrix.Client, error) {
 	return client, nil
 }
 
+func (helper *CryptoHelper) RegisterAppserviceListener() {
+	if helper.bridge.Config.Bridge.GetEncryptionConfig().Appservice {
+		helper.log.Debugln("End-to-bridge encryption is in appservice mode, registering event listeners")
+		helper.bridge.AS.Registration.EphemeralEvents = true
+		helper.mach.AddAppserviceListener(helper.bridge.EventProcessor, helper.bridge.AS)
+		return
+	}
+}
+
 func (helper *CryptoHelper) Start() {
+	if helper.bridge.Config.Bridge.GetEncryptionConfig().Appservice {
+		helper.log.Debugln("End-to-bridge encryption is in appservice mode, not starting syncer")
+		return
+	}
+	helper.syncDone.Add(1)
+	defer helper.syncDone.Done()
 	helper.log.Debugln("Starting syncer for receiving to-device messages")
-	err := helper.client.Sync()
-	if err != nil {
-		helper.log.Errorln("Fatal error syncing:", err)
+	var ctx context.Context
+	ctx, helper.cancelSync = context.WithCancel(context.Background())
+	err := helper.client.SyncWithContext(ctx)
+	if err != nil && !errors.Is(err, context.Canceled) {
+		helper.log.Fatalln("Fatal error syncing:", err)
+		os.Exit(51)
 	} else {
 		helper.log.Infoln("Bridge bot to-device syncer stopped without error")
 	}
@@ -162,6 +188,66 @@ func (helper *CryptoHelper) Start() {
 func (helper *CryptoHelper) Stop() {
 	helper.log.Debugln("CryptoHelper.Stop() called, stopping bridge bot sync")
 	helper.client.StopSync()
+	if helper.cancelSync != nil {
+		helper.cancelSync()
+	}
+	helper.syncDone.Wait()
+}
+
+func (helper *CryptoHelper) clearDatabase() {
+	_, err := helper.store.DB.Exec("DELETE FROM crypto_account")
+	if err != nil {
+		helper.log.Warnln("Failed to clear crypto_account table:", err)
+	}
+	_, err = helper.store.DB.Exec("DELETE FROM crypto_olm_session")
+	if err != nil {
+		helper.log.Warnln("Failed to clear crypto_olm_session table:", err)
+	}
+	_, err = helper.store.DB.Exec("DELETE FROM crypto_megolm_outbound_session")
+	if err != nil {
+		helper.log.Warnln("Failed to clear crypto_megolm_outbound_session table:", err)
+	}
+	//_, _ = helper.store.DB.Exec("DELETE FROM crypto_device")
+	//_, _ = helper.store.DB.Exec("DELETE FROM crypto_tracked_user")
+	//_, _ = helper.store.DB.Exec("DELETE FROM crypto_cross_signing_keys")
+	//_, _ = helper.store.DB.Exec("DELETE FROM crypto_cross_signing_signatures")
+}
+
+func (helper *CryptoHelper) Reset() {
+	helper.lock.Lock()
+	defer helper.lock.Unlock()
+	helper.log.Infoln("Resetting end-to-bridge encryption device")
+	helper.Stop()
+	helper.log.Debugln("Crypto syncer stopped, clearing database")
+	helper.clearDatabase()
+	helper.log.Debugln("Crypto database cleared, logging out of all sessions")
+	_, err := helper.client.LogoutAll()
+	if err != nil {
+		helper.log.Warnln("Failed to log out all devices:", err)
+	}
+	helper.client = nil
+	helper.store = nil
+	helper.mach = nil
+	err = helper.Init()
+	if err != nil {
+		helper.log.Fatalln("Error reinitializing end-to-bridge encryption:", err)
+		os.Exit(50)
+	}
+	helper.log.Infoln("End-to-bridge encryption successfully reset")
+	helper.RegisterAppserviceListener()
+	go helper.Start()
+	sph, ok := helper.bridge.Child.(syncProxyHelper)
+	if ok {
+		sph.RequestStartSync()
+	}
+}
+
+func (helper *CryptoHelper) Client() *mautrix.Client {
+	return helper.client
+}
+
+type syncProxyHelper interface {
+	RequestStartSync()
 }
 
 func (helper *CryptoHelper) Decrypt(evt *event.Event) (*event.Event, error) {
@@ -169,6 +255,8 @@ func (helper *CryptoHelper) Decrypt(evt *event.Event) (*event.Event, error) {
 }
 
 func (helper *CryptoHelper) Encrypt(roomID id.RoomID, evtType event.Type, content event.Content) (*event.EncryptedEventContent, error) {
+	helper.lock.RLock()
+	defer helper.lock.RUnlock()
 	encrypted, err := helper.mach.EncryptMegolmEvent(roomID, evtType, &content)
 	if err != nil {
 		if err != crypto.SessionExpired && err != crypto.SessionNotShared && err != crypto.NoGroupSession {
@@ -192,10 +280,14 @@ func (helper *CryptoHelper) Encrypt(roomID id.RoomID, evtType event.Type, conten
 }
 
 func (helper *CryptoHelper) WaitForSession(roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID, timeout time.Duration) bool {
+	helper.lock.RLock()
+	defer helper.lock.RUnlock()
 	return helper.mach.WaitForSession(roomID, senderKey, sessionID, timeout)
 }
 
 func (helper *CryptoHelper) RequestSession(roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID, userID id.UserID, deviceID id.DeviceID) {
+	helper.lock.RLock()
+	defer helper.lock.RUnlock()
 	if deviceID == "" {
 		deviceID = "*"
 	}
@@ -208,6 +300,8 @@ func (helper *CryptoHelper) RequestSession(roomID id.RoomID, senderKey id.Sender
 }
 
 func (helper *CryptoHelper) ResetSession(roomID id.RoomID) {
+	helper.lock.RLock()
+	defer helper.lock.RUnlock()
 	err := helper.mach.CryptoStore.RemoveOutboundGroupSession(roomID)
 	if err != nil {
 		helper.log.Debugfln("Error manually removing outbound group session in %s: %v", roomID, err)
@@ -215,6 +309,8 @@ func (helper *CryptoHelper) ResetSession(roomID id.RoomID) {
 }
 
 func (helper *CryptoHelper) HandleMemberEvent(evt *event.Event) {
+	helper.lock.RLock()
+	defer helper.lock.RUnlock()
 	helper.mach.HandleMemberEvent(evt)
 }
 

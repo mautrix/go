@@ -112,6 +112,11 @@ type ChildOverride interface {
 	CreatePrivatePortal(id.RoomID, User, Ghost)
 }
 
+type FlagHandlingBridge interface {
+	ChildOverride
+	HandleFlags() bool
+}
+
 type CSFeatureRequirer interface {
 	CheckFeatures(versions *mautrix.RespVersions) (string, bool)
 }
@@ -123,6 +128,9 @@ type Bridge struct {
 	Version      string
 	ProtocolName string
 
+	AdditionalShortFlags string
+	AdditionalLongFlags  string
+
 	VersionDesc      string
 	LinkifiedVersion string
 	BuildTime        string
@@ -133,6 +141,9 @@ type Bridge struct {
 	MatrixHandler    *MatrixHandler
 	Bot              *appservice.IntentAPI
 	Config           bridgeconfig.BaseConfig
+	ConfigPath       string
+	RegistrationPath string
+	SaveConfig       bool
 	ConfigUpgrader   configupgrade.BaseUpgrader
 	Log              log.Logger
 	DB               *dbutil.Database
@@ -152,11 +163,14 @@ type Crypto interface {
 	ResetSession(id.RoomID)
 	Init() error
 	Start()
+	RegisterAppserviceListener()
 	Stop()
+	Reset()
+	Client() *mautrix.Client
 }
 
 func (br *Bridge) GenerateRegistration() {
-	if *dontSaveConfig {
+	if !br.SaveConfig {
 		// We need to save the generated as_token and hs_token in the config
 		_, _ = fmt.Fprintln(os.Stderr, "--no-update is not compatible with --generate-registration")
 		os.Exit(5)
@@ -165,7 +179,7 @@ func (br *Bridge) GenerateRegistration() {
 		os.Exit(20)
 	}
 	reg := br.Config.GenerateRegistration()
-	err := reg.Save(*registrationPath)
+	err := reg.Save(br.RegistrationPath)
 	if err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "Failed to save registration:", err)
 		os.Exit(21)
@@ -175,7 +189,7 @@ func (br *Bridge) GenerateRegistration() {
 		helper.Set(configupgrade.Str, reg.AppToken, "appservice", "as_token")
 		helper.Set(configupgrade.Str, reg.ServerToken, "appservice", "hs_token")
 	}
-	_, _, err = configupgrade.Do(*configPath, true, br.ConfigUpgrader, configupgrade.SimpleUpgrader(updateTokens))
+	_, _, err = configupgrade.Do(br.ConfigPath, true, br.ConfigUpgrader, configupgrade.SimpleUpgrader(updateTokens))
 	if err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "Failed to save config:", err)
 		os.Exit(22)
@@ -277,7 +291,7 @@ func (br *Bridge) UpdateBotProfile() {
 }
 
 func (br *Bridge) loadConfig() {
-	configData, upgraded, err := configupgrade.Do(*configPath, !*dontSaveConfig, br.ConfigUpgrader)
+	configData, upgraded, err := configupgrade.Do(br.ConfigPath, br.SaveConfig, br.ConfigUpgrader)
 	if err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "Error updating config:", err)
 		if configData == nil {
@@ -324,7 +338,7 @@ func (br *Bridge) init() {
 	br.AS = br.Config.MakeAppService()
 	_, _ = br.AS.Init()
 
-	br.Log = log.Create()
+	br.Log = log.Create() // TODO create with username metadata for iMessage
 	br.Config.Logging.Configure(br.Log)
 	log.DefaultLogger = br.Log.(*log.BasicLogger)
 	if len(br.Config.Logging.FileNameFormat) > 0 {
@@ -427,8 +441,11 @@ func (br *Bridge) stop() {
 func (br *Bridge) Main() {
 	flag.SetHelpTitles(
 		fmt.Sprintf("%s - %s", br.Name, br.Description),
-		fmt.Sprintf("%s [-hgvn] [-c <path>] [-r <path>]", br.Name))
+		fmt.Sprintf("%s [-hgvn%s] [-c <path>] [-r <path>]%s", br.Name, br.AdditionalShortFlags, br.AdditionalLongFlags))
 	err := flag.Parse()
+	br.ConfigPath = *configPath
+	br.RegistrationPath = *registrationPath
+	br.SaveConfig = !*dontSaveConfig
 	if err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		flag.PrintHelp()
@@ -438,6 +455,8 @@ func (br *Bridge) Main() {
 		os.Exit(0)
 	} else if *version {
 		fmt.Println(br.VersionDesc)
+		return
+	} else if flagHandler, ok := br.Child.(FlagHandlingBridge); ok && flagHandler.HandleFlags() {
 		return
 	}
 

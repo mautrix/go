@@ -6,10 +6,6 @@
 
 package commands
 
-import (
-	"maunium.net/go/mautrix/bridge"
-)
-
 var CommandLoginMatrix = &FullHandler{
 	Func: fnLoginMatrix,
 	Name: "login-matrix",
@@ -26,10 +22,9 @@ func fnLoginMatrix(ce *Event) {
 		ce.Reply("**Usage:** `login-matrix <access token>`")
 		return
 	}
-	var puppet bridge.DoublePuppet
-	puppet = ce.User.GetIGhost()
+	puppet := ce.User.GetIDoublePuppet()
 	if puppet == nil {
-		puppet = ce.User.GetIDoublePuppet()
+		puppet = ce.User.GetIGhost()
 		if puppet == nil {
 			ce.Reply("Didn't get a ghost :(")
 			return
