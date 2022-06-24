@@ -76,8 +76,6 @@ func (account *OlmAccount) getOneTimeKeys(userID id.UserID, deviceID id.DeviceID
 		account.Internal.GenOneTimeKeys(uint(newCount))
 	}
 	oneTimeKeys := make(map[id.KeyID]mautrix.OneTimeKey)
-	// TODO do we need unsigned curve25519 one-time keys at all?
-	//      this just signs all of them
 	for keyID, key := range account.Internal.OneTimeKeys() {
 		key := mautrix.OneTimeKey{Key: key}
 		signature, _ := account.Internal.SignJSON(key)
