@@ -35,7 +35,7 @@ const (
 type MessageCheckpointStatus string
 
 const (
-	MsgStatusSuccesss    MessageCheckpointStatus = "SUCCESS"
+	MsgStatusSuccess     MessageCheckpointStatus = "SUCCESS"
 	MsgStatusWillRetry   MessageCheckpointStatus = "WILL_RETRY"
 	MsgStatusPermFailure MessageCheckpointStatus = "PERM_FAILURE"
 	MsgStatusUnsupported MessageCheckpointStatus = "UNSUPPORTED"
@@ -106,7 +106,7 @@ func NewMessageCheckpoint(evt *event.Event, step MessageCheckpointStep, status M
 }
 
 func (br *Bridge) SendMessageSuccessCheckpoint(evt *event.Event, step MessageCheckpointStep, retryNum int) {
-	br.SendMessageCheckpoint(evt, step, nil, MsgStatusSuccesss, retryNum)
+	br.SendMessageCheckpoint(evt, step, nil, MsgStatusSuccess, retryNum)
 }
 
 func (br *Bridge) SendMessageErrorCheckpoint(evt *event.Event, step MessageCheckpointStep, err error, permanent bool, retryNum int) {
