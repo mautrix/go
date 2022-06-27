@@ -46,6 +46,7 @@ type Portal interface {
 	MainIntent() *appservice.IntentAPI
 
 	ReceiveMatrixEvent(user User, evt *event.Event)
+	UpdateBridgeInfo()
 }
 
 type MembershipHandlingPortal interface {
@@ -106,6 +107,7 @@ type ChildOverride interface {
 	Stop()
 
 	GetIPortal(id.RoomID) Portal
+	GetAllIPortals() []Portal
 	GetIUser(id id.UserID, create bool) User
 	IsGhost(id.UserID) bool
 	GetIGhost(id.UserID) Ghost
@@ -439,6 +441,28 @@ func (br *Bridge) start() {
 
 	br.Child.Start()
 	br.AS.Ready = true
+
+	if br.Config.Bridge.GetResendBridgeInfo() {
+		go br.ResendBridgeInfo()
+	}
+}
+
+func (br *Bridge) ResendBridgeInfo() {
+	if !br.SaveConfig {
+		br.Log.Warnln("Not setting resend_bridge_info to false in config due to --no-update flag")
+	} else {
+		_, _, err := configupgrade.Do(br.ConfigPath, true, br.ConfigUpgrader, configupgrade.SimpleUpgrader(func(helper *configupgrade.Helper) {
+			helper.Set(configupgrade.Bool, "false", "bridge", "resend_bridge_info")
+		}))
+		if err != nil {
+			br.Log.Errorln("Failed to save config after setting resend_bridge_info to false:", err)
+		}
+	}
+	br.Log.Infoln("Re-sending bridge info state event to all portals")
+	for _, portal := range br.Child.GetAllIPortals() {
+		portal.UpdateBridgeInfo()
+	}
+	br.Log.Infoln("Finished re-sending bridge info state events")
 }
 
 func (br *Bridge) stop() {

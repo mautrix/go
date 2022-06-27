@@ -146,6 +146,7 @@ type BridgeConfig interface {
 	GetEncryptionConfig() EncryptionConfig
 	GetCommandPrefix() string
 	GetManagementRoomTexts() ManagementRoomTexts
+	GetResendBridgeInfo() bool
 	EnableMessageStatusEvents() bool
 	EnableMessageErrorNotices() bool
 	Validate() error
