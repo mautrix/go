@@ -65,10 +65,14 @@ func (mach *OlmMachine) DecryptMegolmEvent(evt *event.Event) (*event.Event, erro
 			mach.Log.Debug("Failed to get device %s/%s to verify session %s: %v", evt.Sender, sess.SenderKey, sess.ID(), err)
 			trustLevel = id.TrustStateUnknownDevice
 		} else if len(sess.ForwardingChains) == 0 || (len(sess.ForwardingChains) == 1 && sess.ForwardingChains[0] == sess.SenderKey.String()) {
-			if device.SigningKey != sess.SigningKey || device.IdentityKey != sess.SenderKey {
+			if device == nil {
+				mach.Log.Debug("Couldn't resolve trust level of session %s: sent by unknown device %s/%s", sess.ID(), evt.Sender, sess.SenderKey)
+				trustLevel = id.TrustStateUnknownDevice
+			} else if device.SigningKey != sess.SigningKey || device.IdentityKey != sess.SenderKey {
 				return nil, DeviceKeyMismatch
+			} else {
+				trustLevel = mach.ResolveTrust(device)
 			}
-			trustLevel = mach.ResolveTrust(device)
 		} else {
 			forwardedKeys = true
 			lastChainItem := sess.ForwardingChains[len(sess.ForwardingChains)-1]
