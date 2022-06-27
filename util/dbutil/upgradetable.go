@@ -137,18 +137,70 @@ func sqlUpgradeFunc(fileName string, lines [][]byte) upgradeFunc {
 	}
 }
 
+func splitSQLUpgradeFunc(sqliteLines, postgresLines []byte) upgradeFunc {
+	return func(tx *sql.Tx, database *Database) (err error) {
+		switch database.Dialect {
+		case SQLite:
+			_, err = tx.Exec(string(sqliteLines))
+		case Postgres:
+			_, err = tx.Exec(string(postgresLines))
+		default:
+			err = fmt.Errorf("unknown dialect %s", database.Dialect)
+		}
+		return
+	}
+}
+
+func parseSplitSQLUpgrade(name string, fs fullFS, skipNames map[string]struct{}) (from, to int, message string, fn upgradeFunc) {
+	postgresName := fmt.Sprintf("%s.postgres.sql", name)
+	sqliteName := fmt.Sprintf("%s.sqlite.sql", name)
+	skipNames[postgresName] = struct{}{}
+	skipNames[sqliteName] = struct{}{}
+	postgresData, err := fs.ReadFile(postgresName)
+	if err != nil {
+		panic(err)
+	}
+	sqliteData, err := fs.ReadFile(sqliteName)
+	if err != nil {
+		panic(err)
+	}
+	from, to, message, _, err = parseFileHeader(postgresData)
+	if err != nil {
+		panic(fmt.Errorf("failed to parse header in %s: %w", postgresName, err))
+	}
+	sqliteFrom, sqliteTo, sqliteMessage, _, err := parseFileHeader(sqliteData)
+	if err != nil {
+		panic(fmt.Errorf("failed to parse header in %s: %w", sqliteName, err))
+	}
+	if from != sqliteFrom || to != sqliteTo {
+		panic(fmt.Errorf("mismatching versions in postgres and sqlite versions of %s: %d/%d -> %d/%d", name, from, sqliteFrom, to, sqliteTo))
+	} else if message != sqliteMessage {
+		panic(fmt.Errorf("mismatching message in postgres and sqlite versions of %s: %q != %q", name, message, sqliteMessage))
+	}
+	fn = splitSQLUpgradeFunc(sqliteData, postgresData)
+	return
+}
+
 type fullFS interface {
 	fs.ReadFileFS
 	fs.ReadDirFS
 }
+
+var splitFileNameRegex = regexp.MustCompile(`^(.+)\.(postgres|sqlite)\.sql$`)
 
 func (ut *UpgradeTable) RegisterFS(fs fullFS) {
 	files, err := fs.ReadDir(".")
 	if err != nil {
 		panic(err)
 	}
+	skipNames := map[string]struct{}{}
 	for _, file := range files {
-		if data, err := fs.ReadFile(file.Name()); err != nil {
+		if _, skip := skipNames[file.Name()]; skip {
+			// do nothing
+		} else if splitName := splitFileNameRegex.FindStringSubmatch(file.Name()); splitName != nil {
+			from, to, message, fn := parseSplitSQLUpgrade(splitName[1], fs, skipNames)
+			ut.Register(from, to, message, fn)
+		} else if data, err := fs.ReadFile(file.Name()); err != nil {
 			panic(err)
 		} else if from, to, message, lines, err := parseFileHeader(data); err != nil {
 			panic(fmt.Errorf("failed to parse header in %s: %w", file.Name(), err))
