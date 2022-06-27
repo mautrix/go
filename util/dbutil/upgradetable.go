@@ -137,13 +137,13 @@ func sqlUpgradeFunc(fileName string, lines [][]byte) upgradeFunc {
 	}
 }
 
-func splitSQLUpgradeFunc(sqliteLines, postgresLines []byte) upgradeFunc {
+func splitSQLUpgradeFunc(sqliteData, postgresData string) upgradeFunc {
 	return func(tx *sql.Tx, database *Database) (err error) {
 		switch database.Dialect {
 		case SQLite:
-			_, err = tx.Exec(string(sqliteLines))
+			_, err = tx.Exec(sqliteData)
 		case Postgres:
-			_, err = tx.Exec(string(postgresLines))
+			_, err = tx.Exec(postgresData)
 		default:
 			err = fmt.Errorf("unknown dialect %s", database.Dialect)
 		}
@@ -177,7 +177,7 @@ func parseSplitSQLUpgrade(name string, fs fullFS, skipNames map[string]struct{})
 	} else if message != sqliteMessage {
 		panic(fmt.Errorf("mismatching message in postgres and sqlite versions of %s: %q != %q", name, message, sqliteMessage))
 	}
-	fn = splitSQLUpgradeFunc(sqliteData, postgresData)
+	fn = splitSQLUpgradeFunc(string(sqliteData), string(postgresData))
 	return
 }
 
