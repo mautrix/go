@@ -6,6 +6,10 @@
 
 package event
 
+import (
+	"maunium.net/go/mautrix/id"
+)
+
 type MessageStatusReason string
 
 const (
@@ -26,6 +30,8 @@ type BeeperMessageStatusEventContent struct {
 	Message   string              `json:"message,omitempty"`
 	CanRetry  *bool               `json:"can_retry,omitempty"`
 	IsCertain *bool               `json:"is_certain,omitempty"`
+
+	LastRetry id.EventID `json:"last_retry,omitempty"`
 }
 
 func (status *BeeperMessageStatusEventContent) SetCanRetry(canRetry bool) *BeeperMessageStatusEventContent {
@@ -36,4 +42,10 @@ func (status *BeeperMessageStatusEventContent) SetCanRetry(canRetry bool) *Beepe
 func (status *BeeperMessageStatusEventContent) SetIsCertain(isCertain bool) *BeeperMessageStatusEventContent {
 	status.IsCertain = &isCertain
 	return status
+}
+
+type BeeperRetryMetadata struct {
+	OriginalEventID id.EventID `json:"original_event_id"`
+	RetryCount      int        `json:"retry_count"`
+	// last_retry is also present, but not used by bridges
 }

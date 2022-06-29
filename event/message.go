@@ -107,6 +107,8 @@ type MessageEventContent struct {
 	Methods    []VerificationMethod `json:"methods,omitempty"`
 
 	replyFallbackRemoved bool
+
+	MessageSendRetry *BeeperRetryMetadata `json:"com.beeper.message_send_retry,omitempty"`
 }
 
 func (content *MessageEventContent) GetRelatesTo() *RelatesTo {

@@ -71,6 +71,9 @@ type MessageCheckpoint struct {
 	RetryNum    int                         `json:"retry_num"`
 	MessageType event.MessageType           `json:"message_type,omitempty"`
 	Info        string                      `json:"info,omitempty"`
+
+	OriginalEventID  id.EventID `json:"original_event_id"`
+	ManualRetryCount int        `json:"manual_retry_count"`
 }
 
 var CheckpointTypes = map[event.Type]struct{}{
@@ -101,6 +104,10 @@ func NewMessageCheckpoint(evt *event.Event, step MessageCheckpointStep, status M
 	}
 	if evt.Type == event.EventMessage {
 		checkpoint.MessageType = evt.Content.AsMessage().MsgType
+	}
+	if retryMeta := evt.Content.AsMessage().MessageSendRetry; retryMeta != nil {
+		checkpoint.OriginalEventID = retryMeta.OriginalEventID
+		checkpoint.ManualRetryCount = retryMeta.RetryCount
 	}
 	return &checkpoint
 }
