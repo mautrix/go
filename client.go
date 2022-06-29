@@ -400,7 +400,7 @@ func (cli *Client) closeTemp(file *os.File) {
 }
 
 func (cli *Client) streamResponse(req *http.Request, res *http.Response, responseJSON interface{}) ([]byte, error) {
-	file, err := io.TempFile("", "mautrix-response-")
+	file, err := os.CreateTemp("", "mautrix-response-")
 	if err != nil {
 		cli.logWarning("Failed to create temporary file: %v", err)
 		_, err = cli.handleNormalResponse(req, res, responseJSON)
