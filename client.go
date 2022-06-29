@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -117,7 +116,7 @@ func DiscoverClientAPI(serverName string) (*ClientWellKnown, error) {
 		return nil, nil
 	}
 
-	data, err := ioutil.ReadAll(resp.Body)
+	data, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -379,7 +378,7 @@ func (cli *Client) doRetry(req *http.Request, cause error, retries int, backoff 
 }
 
 func (cli *Client) readRequestBody(req *http.Request, res *http.Response) ([]byte, error) {
-	contents, err := ioutil.ReadAll(res.Body)
+	contents, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, HTTPError{
 			Request:  req,
@@ -401,7 +400,7 @@ func (cli *Client) closeTemp(file *os.File) {
 }
 
 func (cli *Client) streamResponse(req *http.Request, res *http.Response, responseJSON interface{}) ([]byte, error) {
-	file, err := ioutil.TempFile("", "mautrix-response-")
+	file, err := io.TempFile("", "mautrix-response-")
 	if err != nil {
 		cli.logWarning("Failed to create temporary file: %v", err)
 		_, err = cli.handleNormalResponse(req, res, responseJSON)
@@ -1143,20 +1142,30 @@ func (cli *Client) GetDownloadURL(mxcURL id.ContentURI) string {
 }
 
 func (cli *Client) Download(mxcURL id.ContentURI) (io.ReadCloser, error) {
-	resp, err := cli.Client.Get(cli.GetDownloadURL(mxcURL))
-	if err != nil {
+	return cli.DownloadContext(context.Background(), mxcURL)
+}
+
+func (cli *Client) DownloadContext(ctx context.Context, mxcURL id.ContentURI) (io.ReadCloser, error) {
+	if req, err := http.NewRequestWithContext(ctx, http.MethodGet, cli.GetDownloadURL(mxcURL), nil); err != nil {
 		return nil, err
+	} else if resp, err := cli.Client.Do(req); err != nil {
+		return nil, err
+	} else {
+		return resp.Body, nil
 	}
-	return resp.Body, nil
 }
 
 func (cli *Client) DownloadBytes(mxcURL id.ContentURI) ([]byte, error) {
-	resp, err := cli.Download(mxcURL)
+	return cli.DownloadBytesContext(context.Background(), mxcURL)
+}
+
+func (cli *Client) DownloadBytesContext(ctx context.Context, mxcURL id.ContentURI) ([]byte, error) {
+	resp, err := cli.DownloadContext(ctx, mxcURL)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Close()
-	return ioutil.ReadAll(resp)
+	return io.ReadAll(resp)
 }
 
 // UnstableCreateMXC creates a blank Matrix content URI to allow uploading the content asynchronously later.
