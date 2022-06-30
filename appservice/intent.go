@@ -192,8 +192,10 @@ func (intent *IntentAPI) updateStoreWithOutgoingEvent(roomID id.RoomID, eventTyp
 }
 
 func (intent *IntentAPI) SendStateEvent(roomID id.RoomID, eventType event.Type, stateKey string, contentJSON interface{}) (*mautrix.RespSendEvent, error) {
-	if err := intent.EnsureJoined(roomID); err != nil {
-		return nil, err
+	if eventType != event.StateMember || stateKey != string(intent.UserID) {
+		if err := intent.EnsureJoined(roomID); err != nil {
+			return nil, err
+		}
 	}
 	contentJSON = intent.AddDoublePuppetValue(contentJSON)
 	resp, err := intent.Client.SendStateEvent(roomID, eventType, stateKey, contentJSON)
@@ -283,6 +285,28 @@ func (intent *IntentAPI) JoinRoomByID(roomID id.RoomID, extraContent ...map[stri
 	resp, err = intent.Client.JoinRoomByID(roomID)
 	if err == nil {
 		intent.as.StateStore.SetMembership(roomID, intent.UserID, event.MembershipJoin)
+	}
+	return
+}
+
+func (intent *IntentAPI) LeaveRoom(roomID id.RoomID, extra ...interface{}) (resp *mautrix.RespLeaveRoom, err error) {
+	var extraContent map[string]interface{}
+	leaveReq := &mautrix.ReqLeave{}
+	for _, item := range extra {
+		switch val := item.(type) {
+		case map[string]interface{}:
+			extraContent = val
+		case *mautrix.ReqLeave:
+			leaveReq = val
+		}
+	}
+	if intent.IsCustomPuppet || extraContent != nil {
+		_, err = intent.SendCustomMembershipEvent(roomID, intent.UserID, event.MembershipLeave, leaveReq.Reason, extraContent)
+		return &mautrix.RespLeaveRoom{}, err
+	}
+	resp, err = intent.Client.LeaveRoom(roomID, leaveReq)
+	if err == nil {
+		intent.as.StateStore.SetMembership(roomID, intent.UserID, event.MembershipLeave)
 	}
 	return
 }
