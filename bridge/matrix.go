@@ -514,6 +514,9 @@ func (mx *MatrixHandler) HandleReaction(evt *event.Event) {
 
 func (mx *MatrixHandler) HandleRedaction(evt *event.Event) {
 	defer mx.TrackEventDuration(evt.Type)()
+	if mx.shouldIgnoreEvent(evt) {
+		return
+	}
 
 	user := mx.bridge.Child.GetIUser(evt.Sender, true)
 	if user == nil {
