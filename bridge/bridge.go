@@ -164,7 +164,7 @@ type Bridge struct {
 type Crypto interface {
 	HandleMemberEvent(*event.Event)
 	Decrypt(*event.Event) (*event.Event, error)
-	Encrypt(id.RoomID, event.Type, event.Content) (*event.EncryptedEventContent, error)
+	Encrypt(id.RoomID, event.Type, *event.Content) error
 	WaitForSession(id.RoomID, id.SenderKey, id.SessionID, time.Duration) bool
 	RequestSession(id.RoomID, id.SenderKey, id.SessionID, id.UserID, id.DeviceID)
 	ResetSession(id.RoomID)
@@ -348,6 +348,7 @@ func (br *Bridge) init() {
 	var err error
 
 	br.AS = br.Config.MakeAppService()
+	br.AS.DoublePuppetValue = br.Name
 	_, _ = br.AS.Init()
 
 	if br.Log == nil {

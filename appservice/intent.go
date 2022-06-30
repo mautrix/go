@@ -110,10 +110,48 @@ func (intent *IntentAPI) EnsureJoined(roomID id.RoomID, extra ...EnsureJoinedPar
 	return nil
 }
 
+func (intent *IntentAPI) AddDoublePuppetValue(into interface{}) interface{} {
+	if !intent.IsCustomPuppet || intent.as.DoublePuppetValue == "" {
+		return into
+	}
+	switch val := into.(type) {
+	case *map[string]interface{}:
+		if *val == nil {
+			valNonPtr := make(map[string]interface{})
+			*val = valNonPtr
+		}
+		(*val)[DoublePuppetKey] = intent.as.DoublePuppetValue
+		return val
+	case map[string]interface{}:
+		val[DoublePuppetKey] = intent.as.DoublePuppetValue
+		return val
+	case *event.Content:
+		if val.Raw == nil {
+			val.Raw = make(map[string]interface{})
+		}
+		val.Raw[DoublePuppetKey] = intent.as.DoublePuppetValue
+		return val
+	case event.Content:
+		if val.Raw == nil {
+			val.Raw = make(map[string]interface{})
+		}
+		val.Raw[DoublePuppetKey] = intent.as.DoublePuppetValue
+		return val
+	default:
+		return &event.Content{
+			Raw: map[string]interface{}{
+				DoublePuppetKey: intent.as.DoublePuppetValue,
+			},
+			Parsed: val,
+		}
+	}
+}
+
 func (intent *IntentAPI) SendMessageEvent(roomID id.RoomID, eventType event.Type, contentJSON interface{}) (*mautrix.RespSendEvent, error) {
 	if err := intent.EnsureJoined(roomID); err != nil {
 		return nil, err
 	}
+	contentJSON = intent.AddDoublePuppetValue(contentJSON)
 	return intent.Client.SendMessageEvent(roomID, eventType, contentJSON)
 }
 
@@ -121,6 +159,7 @@ func (intent *IntentAPI) SendMassagedMessageEvent(roomID id.RoomID, eventType ev
 	if err := intent.EnsureJoined(roomID); err != nil {
 		return nil, err
 	}
+	contentJSON = intent.AddDoublePuppetValue(contentJSON)
 	return intent.Client.SendMessageEvent(roomID, eventType, contentJSON, mautrix.ReqSendEvent{Timestamp: ts})
 }
 
@@ -156,6 +195,7 @@ func (intent *IntentAPI) SendStateEvent(roomID id.RoomID, eventType event.Type, 
 	if err := intent.EnsureJoined(roomID); err != nil {
 		return nil, err
 	}
+	contentJSON = intent.AddDoublePuppetValue(contentJSON)
 	resp, err := intent.Client.SendStateEvent(roomID, eventType, stateKey, contentJSON)
 	if err == nil && resp != nil {
 		intent.updateStoreWithOutgoingEvent(roomID, eventType, stateKey, contentJSON, resp.EventID)
@@ -167,6 +207,7 @@ func (intent *IntentAPI) SendMassagedStateEvent(roomID id.RoomID, eventType even
 	if err := intent.EnsureJoined(roomID); err != nil {
 		return nil, err
 	}
+	contentJSON = intent.AddDoublePuppetValue(contentJSON)
 	resp, err := intent.Client.SendMassagedStateEvent(roomID, eventType, stateKey, contentJSON, ts)
 	if err == nil && resp != nil {
 		intent.updateStoreWithOutgoingEvent(roomID, eventType, stateKey, contentJSON, resp.EventID)
@@ -319,11 +360,16 @@ func (intent *IntentAPI) SendNotice(roomID id.RoomID, text string) (*mautrix.Res
 	return intent.Client.SendNotice(roomID, text)
 }
 
-func (intent *IntentAPI) RedactEvent(roomID id.RoomID, eventID id.EventID, req ...mautrix.ReqRedact) (*mautrix.RespSendEvent, error) {
+func (intent *IntentAPI) RedactEvent(roomID id.RoomID, eventID id.EventID, extra ...mautrix.ReqRedact) (*mautrix.RespSendEvent, error) {
 	if err := intent.EnsureJoined(roomID); err != nil {
 		return nil, err
 	}
-	return intent.Client.RedactEvent(roomID, eventID, req...)
+	var req mautrix.ReqRedact
+	if len(extra) > 0 {
+		req = extra[0]
+	}
+	intent.AddDoublePuppetValue(&req.Extra)
+	return intent.Client.RedactEvent(roomID, eventID, req)
 }
 
 func (intent *IntentAPI) SetRoomName(roomID id.RoomID, roomName string) (*mautrix.RespSendEvent, error) {

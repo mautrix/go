@@ -254,29 +254,31 @@ func (helper *CryptoHelper) Decrypt(evt *event.Event) (*event.Event, error) {
 	return helper.mach.DecryptMegolmEvent(evt)
 }
 
-func (helper *CryptoHelper) Encrypt(roomID id.RoomID, evtType event.Type, content event.Content) (*event.EncryptedEventContent, error) {
+func (helper *CryptoHelper) Encrypt(roomID id.RoomID, evtType event.Type, content *event.Content) (err error) {
 	helper.lock.RLock()
 	defer helper.lock.RUnlock()
-	encrypted, err := helper.mach.EncryptMegolmEvent(roomID, evtType, &content)
+	var encrypted *event.EncryptedEventContent
+	encrypted, err = helper.mach.EncryptMegolmEvent(roomID, evtType, &content)
 	if err != nil {
 		if err != crypto.SessionExpired && err != crypto.SessionNotShared && err != crypto.NoGroupSession {
-			return nil, err
+			return
 		}
 		helper.log.Debugfln("Got %v while encrypting event for %s, sharing group session and trying again...", err, roomID)
-		users, err := helper.store.GetRoomMembers(roomID)
+		var users []id.UserID
+		users, err = helper.store.GetRoomMembers(roomID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get room member list: %w", err)
-		}
-		err = helper.mach.ShareGroupSession(roomID, users)
-		if err != nil {
-			return nil, fmt.Errorf("failed to share group session: %w", err)
-		}
-		encrypted, err = helper.mach.EncryptMegolmEvent(roomID, evtType, &content)
-		if err != nil {
-			return nil, fmt.Errorf("failed to encrypt event after re-sharing group session: %w", err)
+			err = fmt.Errorf("failed to get room member list: %w", err)
+		} else if err = helper.mach.ShareGroupSession(roomID, users); err != nil {
+			err = fmt.Errorf("failed to share group session: %w", err)
+		} else if encrypted, err = helper.mach.EncryptMegolmEvent(roomID, evtType, &content); err != nil {
+			err = fmt.Errorf("failed to encrypt event after re-sharing group session: %w", err)
 		}
 	}
-	return encrypted, nil
+	if encrypted != nil {
+		content.Parsed = encrypted
+		content.Raw = nil
+	}
+	return
 }
 
 func (helper *CryptoHelper) WaitForSession(roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID, timeout time.Duration) bool {
