@@ -117,17 +117,17 @@ func (uri ContentURI) MarshalText() ([]byte, error) {
 	return []byte(uri.String()), nil
 }
 
-func (uri *ContentURI) String() string {
+func (uri ContentURI) String() string {
 	if uri.IsEmpty() {
 		return ""
 	}
 	return fmt.Sprintf("mxc://%s/%s", uri.Homeserver, uri.FileID)
 }
 
-func (uri *ContentURI) CUString() ContentURIString {
+func (uri ContentURI) CUString() ContentURIString {
 	return ContentURIString(uri.String())
 }
 
-func (uri *ContentURI) IsEmpty() bool {
+func (uri ContentURI) IsEmpty() bool {
 	return len(uri.Homeserver) == 0 || len(uri.FileID) == 0
 }
