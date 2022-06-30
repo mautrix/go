@@ -98,6 +98,12 @@ type Ghost interface {
 	GetMXID() id.UserID
 }
 
+type GhostWithProfile interface {
+	Ghost
+	GetDisplayname() string
+	GetAvatarURL() id.ContentURI
+}
+
 type ChildOverride interface {
 	GetExampleConfig() string
 	GetConfigPtr() interface{}
@@ -339,6 +345,21 @@ func (br *Bridge) validateConfig() error {
 	}
 }
 
+func (br *Bridge) getProfile(userID id.UserID, roomID id.RoomID) *event.MemberEventContent {
+	ghost := br.Child.GetIGhost(userID)
+	if ghost == nil {
+		return nil
+	}
+	profilefulGhost, ok := ghost.(GhostWithProfile)
+	if ok {
+		return &event.MemberEventContent{
+			Displayname: profilefulGhost.GetDisplayname(),
+			AvatarURL:   profilefulGhost.GetAvatarURL().CUString(),
+		}
+	}
+	return nil
+}
+
 func (br *Bridge) init() {
 	pib, ok := br.Child.(PreInitableBridge)
 	if ok {
@@ -349,6 +370,7 @@ func (br *Bridge) init() {
 
 	br.AS = br.Config.MakeAppService()
 	br.AS.DoublePuppetValue = br.Name
+	br.AS.GetProfile = br.getProfile
 	_, _ = br.AS.Init()
 
 	if br.Log == nil {

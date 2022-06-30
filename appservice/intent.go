@@ -241,7 +241,57 @@ func (intent *IntentAPI) State(roomID id.RoomID) (mautrix.RoomStateMap, error) {
 	return state, err
 }
 
-func (intent *IntentAPI) InviteUser(roomID id.RoomID, req *mautrix.ReqInviteUser) (resp *mautrix.RespInviteUser, err error) {
+func (intent *IntentAPI) SendCustomMembershipEvent(roomID id.RoomID, target id.UserID, membership event.Membership, reason string, extraContent ...map[string]interface{}) (*mautrix.RespSendEvent, error) {
+	content := &event.MemberEventContent{
+		Membership: membership,
+		Reason:     reason,
+	}
+	memberContent, ok := intent.as.StateStore.TryGetMember(roomID, target)
+	if !ok {
+		if intent.as.GetProfile != nil {
+			memberContent = intent.as.GetProfile(target, roomID)
+			ok = memberContent != nil
+		}
+		if !ok {
+			err := intent.StateEvent(roomID, event.StateMember, target.String(), memberContent)
+			if err != nil {
+				intent.Logger.Debugfln("Failed to get member info for %s/%s to fill new %s membership event: %v", roomID, target, membership, err)
+			} else {
+				ok = true
+			}
+		}
+	}
+	if ok {
+		content.Displayname = memberContent.Displayname
+		content.AvatarURL = memberContent.AvatarURL
+	}
+	var extra map[string]interface{}
+	if len(extraContent) > 0 {
+		extra = extraContent[0]
+	}
+	return intent.SendStateEvent(roomID, event.StateMember, target.String(), &event.Content{
+		Parsed: content,
+		Raw:    extra,
+	})
+}
+
+func (intent *IntentAPI) JoinRoomByID(roomID id.RoomID, extraContent ...map[string]interface{}) (resp *mautrix.RespJoinRoom, err error) {
+	if intent.IsCustomPuppet || len(extraContent) > 0 {
+		_, err = intent.SendCustomMembershipEvent(roomID, intent.UserID, event.MembershipJoin, "", extraContent...)
+		return &mautrix.RespJoinRoom{}, err
+	}
+	resp, err = intent.Client.JoinRoomByID(roomID)
+	if err == nil {
+		intent.as.StateStore.SetMembership(roomID, intent.UserID, event.MembershipJoin)
+	}
+	return
+}
+
+func (intent *IntentAPI) InviteUser(roomID id.RoomID, req *mautrix.ReqInviteUser, extraContent ...map[string]interface{}) (resp *mautrix.RespInviteUser, err error) {
+	if intent.IsCustomPuppet || len(extraContent) > 0 {
+		_, err = intent.SendCustomMembershipEvent(roomID, req.UserID, event.MembershipInvite, req.Reason, extraContent...)
+		return &mautrix.RespInviteUser{}, err
+	}
 	resp, err = intent.Client.InviteUser(roomID, req)
 	if err == nil {
 		intent.as.StateStore.SetMembership(roomID, req.UserID, event.MembershipInvite)
@@ -249,7 +299,11 @@ func (intent *IntentAPI) InviteUser(roomID id.RoomID, req *mautrix.ReqInviteUser
 	return
 }
 
-func (intent *IntentAPI) KickUser(roomID id.RoomID, req *mautrix.ReqKickUser) (resp *mautrix.RespKickUser, err error) {
+func (intent *IntentAPI) KickUser(roomID id.RoomID, req *mautrix.ReqKickUser, extraContent ...map[string]interface{}) (resp *mautrix.RespKickUser, err error) {
+	if intent.IsCustomPuppet || len(extraContent) > 0 {
+		_, err = intent.SendCustomMembershipEvent(roomID, req.UserID, event.MembershipLeave, req.Reason, extraContent...)
+		return &mautrix.RespKickUser{}, err
+	}
 	resp, err = intent.Client.KickUser(roomID, req)
 	if err == nil {
 		intent.as.StateStore.SetMembership(roomID, req.UserID, event.MembershipLeave)
@@ -257,7 +311,11 @@ func (intent *IntentAPI) KickUser(roomID id.RoomID, req *mautrix.ReqKickUser) (r
 	return
 }
 
-func (intent *IntentAPI) BanUser(roomID id.RoomID, req *mautrix.ReqBanUser) (resp *mautrix.RespBanUser, err error) {
+func (intent *IntentAPI) BanUser(roomID id.RoomID, req *mautrix.ReqBanUser, extraContent ...map[string]interface{}) (resp *mautrix.RespBanUser, err error) {
+	if intent.IsCustomPuppet || len(extraContent) > 0 {
+		_, err = intent.SendCustomMembershipEvent(roomID, req.UserID, event.MembershipBan, req.Reason, extraContent...)
+		return &mautrix.RespBanUser{}, err
+	}
 	resp, err = intent.Client.BanUser(roomID, req)
 	if err == nil {
 		intent.as.StateStore.SetMembership(roomID, req.UserID, event.MembershipBan)
@@ -265,7 +323,11 @@ func (intent *IntentAPI) BanUser(roomID id.RoomID, req *mautrix.ReqBanUser) (res
 	return
 }
 
-func (intent *IntentAPI) UnbanUser(roomID id.RoomID, req *mautrix.ReqUnbanUser) (resp *mautrix.RespUnbanUser, err error) {
+func (intent *IntentAPI) UnbanUser(roomID id.RoomID, req *mautrix.ReqUnbanUser, extraContent ...map[string]interface{}) (resp *mautrix.RespUnbanUser, err error) {
+	if intent.IsCustomPuppet || len(extraContent) > 0 {
+		_, err = intent.SendCustomMembershipEvent(roomID, req.UserID, event.MembershipLeave, req.Reason, extraContent...)
+		return &mautrix.RespUnbanUser{}, err
+	}
 	resp, err = intent.Client.UnbanUser(roomID, req)
 	if err == nil {
 		intent.as.StateStore.SetMembership(roomID, req.UserID, event.MembershipLeave)

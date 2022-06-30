@@ -131,6 +131,7 @@ type AppService struct {
 	ProcessID string
 
 	DoublePuppetValue string
+	GetProfile        func(userID id.UserID, roomID id.RoomID) *event.MemberEventContent
 }
 
 const DoublePuppetKey = "fi.mau.double_puppet_source"
