@@ -31,6 +31,8 @@ type BeeperMessageStatusEventContent struct {
 	CanRetry  *bool               `json:"can_retry,omitempty"`
 	IsCertain *bool               `json:"is_certain,omitempty"`
 
+	StillWorking bool `json:"still_working,omitempty"`
+
 	LastRetry id.EventID `json:"last_retry,omitempty"`
 }
 
