@@ -30,14 +30,19 @@ var CommandVersion = &FullHandler{
 
 var CommandCancel = &FullHandler{
 	Func: func(ce *Event) {
-		state := ce.User.GetCommandState()
+		commandingUser, ok := ce.User.(CommandingUser)
+		if !ok {
+			ce.Reply("This bridge does not implement cancelable commands")
+			return
+		}
+		state := commandingUser.GetCommandState()
 
 		if state != nil {
-			action, ok := state["action"].(string)
-			if !ok {
+			action := state.Action
+			if action == "" {
 				action = "Unknown action"
 			}
-			ce.User.SetCommandState(nil)
+			commandingUser.SetCommandState(nil)
 			ce.Reply("%s cancelled.", action)
 		} else {
 			ce.Reply("No ongoing command.")

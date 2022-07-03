@@ -87,20 +87,16 @@ func (proc *Processor) Handle(roomID id.RoomID, eventID id.EventID, user bridge.
 	if !ok {
 		realCommand = ce.Command
 	}
+	commandingUser, ok := ce.User.(CommandingUser)
 
 	var handler MinimalHandler
 	handler, ok = proc.handlers[realCommand]
 	if !ok {
-		if state := ce.User.GetCommandState(); state != nil {
+		if state := commandingUser.GetCommandState(); state != nil && state.Next != nil {
 			ce.Command = ""
 			ce.Args = args
-			handler, ok = state["next"].(MinimalHandler)
-			if ok {
-				ce.Handler = handler
-				handler.Run(ce)
-			} else {
-				ce.Reply("Unknown command, use the `help` command for help.")
-			}
+			ce.Handler = state.Next
+			state.Next.Run(ce)
 		} else {
 			ce.Reply("Unknown command, use the `help` command for help.")
 		}

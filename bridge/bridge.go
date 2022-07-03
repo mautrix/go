@@ -82,8 +82,6 @@ type User interface {
 	GetManagementRoomID() id.RoomID
 	SetManagementRoom(id.RoomID)
 	GetMXID() id.UserID
-	GetCommandState() map[string]interface{}
-	SetCommandState(map[string]interface{})
 	GetIDoublePuppet() DoublePuppet
 	GetIGhost() Ghost
 }
