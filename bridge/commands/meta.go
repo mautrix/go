@@ -27,3 +27,25 @@ var CommandVersion = &FullHandler{
 		Description: "Get the bridge version.",
 	},
 }
+
+var CommandCancel = &FullHandler{
+	Func: func(ce *Event) {
+		state := ce.User.GetCommandState()
+
+		if state != nil {
+			action, ok := state["action"].(string)
+			if !ok {
+				action = "Unknown action"
+			}
+			ce.User.SetCommandState(nil)
+			ce.Reply("%s cancelled.", action)
+		} else {
+			ce.Reply("No ongoing command.")
+		}
+	},
+	Name: "cancel",
+	Help: HelpMeta{
+		Section:     HelpSectionGeneral,
+		Description: "Cancel an ongoing action.",
+	},
+}

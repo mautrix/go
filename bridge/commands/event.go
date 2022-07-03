@@ -25,7 +25,7 @@ type Event struct {
 	Bridge    *bridge.Bridge
 	Portal    bridge.Portal
 	Processor *Processor
-	Handler   Handler
+	Handler   MinimalHandler
 	RoomID    id.RoomID
 	EventID   id.EventID
 	User      bridge.User

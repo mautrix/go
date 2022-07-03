@@ -34,7 +34,7 @@ func NewProcessor(bridge *bridge.Bridge) *Processor {
 		aliases:  make(map[string]string),
 	}
 	proc.AddHandlers(
-		CommandHelp, CommandVersion,
+		CommandHelp, CommandVersion, CommandCancel,
 		CommandLoginMatrix, CommandLogoutMatrix, CommandPingMatrix,
 		CommandDiscardMegolmSession, CommandSetPowerLevel)
 	return proc
@@ -88,12 +88,13 @@ func (proc *Processor) Handle(roomID id.RoomID, eventID id.EventID, user bridge.
 		realCommand = ce.Command
 	}
 
-	handler, ok := proc.handlers[realCommand]
+	var handler MinimalHandler
+	handler, ok = proc.handlers[realCommand]
 	if !ok {
 		if state := ce.User.GetCommandState(); state != nil {
 			ce.Command = ""
 			ce.Args = args
-			handler, ok = state["next"].(Handler)
+			handler, ok = state["next"].(MinimalHandler)
 			if ok {
 				ce.Handler = handler
 				handler.Run(ce)

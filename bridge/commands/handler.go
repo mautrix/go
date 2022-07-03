@@ -10,8 +10,18 @@ import (
 	"maunium.net/go/mautrix/bridge/bridgeconfig"
 )
 
-type Handler interface {
+type MinimalHandler interface {
 	Run(*Event)
+}
+
+type MinimalHandlerFunc func(*Event)
+
+func (mhf MinimalHandlerFunc) Run(ce *Event) {
+	mhf(ce)
+}
+
+type Handler interface {
+	MinimalHandler
 	GetName() string
 }
 
