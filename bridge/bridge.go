@@ -248,7 +248,7 @@ func (br *Bridge) ensureConnection() {
 			continue
 		}
 		if !versions.ContainsGreaterOrEqual(MinSpecVersion) {
-			br.Log.Fatalfln("Homeserver isn't advertising modern spec versions (latest supported by server: %s, minimum required by bridge: %s)", versions.GetLatest(), MinSpecVersion)
+			br.Log.Fatalfln("The homeserver is outdated (server supports %s, but the bridge requires at least %s)", versions.GetLatest(), MinSpecVersion)
 			os.Exit(18)
 		} else if fr, ok := br.Child.(CSFeatureRequirer); ok {
 			if msg, hasFeatures := fr.CheckFeatures(versions); !hasFeatures {
