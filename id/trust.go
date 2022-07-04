@@ -85,26 +85,3 @@ func (ts TrustState) String() string {
 		return "invalid"
 	}
 }
-
-func (ts TrustState) Description() string {
-	switch ts {
-	case TrustStateBlacklisted:
-		return "blacklisted"
-	case TrustStateUnset:
-		return "unverified"
-	case TrustStateCrossSignedUntrusted:
-		return "cross-signed, untrusted"
-	case TrustStateUnknownDevice:
-		return "unknown device"
-	case TrustStateForwarded:
-		return "forwarded"
-	case TrustStateCrossSignedTOFU:
-		return "cross-signed, trusted on first use"
-	case TrustStateCrossSignedVerified:
-		return "cross-signed, verified user"
-	case TrustStateVerified:
-		return "verified locally"
-	default:
-		return fmt.Sprintf("unknown %d", ts)
-	}
-}
