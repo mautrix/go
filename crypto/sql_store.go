@@ -425,30 +425,23 @@ func (store *SQLCryptoStore) RemoveOutboundGroupSession(roomID id.RoomID) error 
 }
 
 // ValidateMessageIndex returns whether the given event information match the ones stored in the database
-// for the given sender key, session ID and index.
-// If the event information was not yet stored, it's stored now.
+// for the given sender key, session ID and index. If the index hasn't been stored, this will store it.
 func (store *SQLCryptoStore) ValidateMessageIndex(senderKey id.SenderKey, sessionID id.SessionID, eventID id.EventID, index uint, timestamp int64) bool {
-	var resultEventID id.EventID
-	var resultTimestamp int64
-	err := store.DB.QueryRow(
-		`SELECT event_id, timestamp FROM crypto_message_index WHERE sender_key=$1 AND session_id=$2 AND "index"=$3`,
-		senderKey, sessionID, index,
-	).Scan(&resultEventID, &resultTimestamp)
-	if err == sql.ErrNoRows {
-		_, err := store.DB.Exec(`INSERT INTO crypto_message_index (sender_key, session_id, "index", event_id, timestamp) VALUES ($1, $2, $3, $4, $5)`,
-			senderKey, sessionID, index, eventID, timestamp)
-		if err != nil {
-			store.Log.Warnfln("Failed to store message index: %v", err)
-		}
-		return true
-	} else if err != nil {
+	const validateQuery = `
+	INSERT INTO crypto_message_index (sender_key, session_id, "index", event_id, timestamp)
+	VALUES ($1, $2, $3, $4, $5)
+	-- have to update something so that RETURNING * always returns the row
+	ON CONFLICT (sender_key, session_id, "index") DO UPDATE SET sender_key=excluded.sender_key
+	RETURNING event_id, timestamp
+	`
+	var expectedEventID id.EventID
+	var expectedTimestamp int64
+	err := store.DB.QueryRow(validateQuery, senderKey, sessionID, index, eventID, timestamp).Scan(&expectedEventID, &expectedTimestamp)
+	if err != nil {
 		store.Log.Warnfln("Failed to scan message index: %v", err)
 		return true
 	}
-	if resultEventID != eventID || resultTimestamp != timestamp {
-		return false
-	}
-	return true
+	return expectedEventID == eventID && expectedTimestamp == timestamp
 }
 
 // GetDevices returns a map of device IDs to device identities, including the identity and signing keys, for a given user ID.
