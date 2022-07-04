@@ -58,6 +58,10 @@ func (mach *OlmMachine) storeCrossSigningKeys(crossSigningKeys map[id.UserID]mau
 							mach.Log.Trace("Treating %s as the device ID -> signing key %s", signKeyName, signingKey)
 						}
 					}
+					if len(signingKey) != 43 {
+						mach.Log.Trace("Cross-signing key %s/%s/%v has a signature from an unknown key %s", userID, key, userKeys.Usage, signKeyID)
+						continue
+					}
 
 					mach.Log.Debug("Verifying cross-signing key %s/%s/%v with key %s/%s", userID, key, userKeys.Usage, signUserID, signingKey)
 					if verified, err := olm.VerifySignatureJSON(userKeys, signUserID, signKeyName, signingKey); err != nil {
