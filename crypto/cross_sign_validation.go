@@ -77,13 +77,11 @@ func (mach *OlmMachine) IsUserTrusted(userID id.UserID) bool {
 		return true
 	}
 	// first we verify our user-signing key
-	sskSigs, err := mach.CryptoStore.GetSignaturesForKeyBy(mach.Client.UserID, csPubkeys.UserSigningKey, mach.Client.UserID)
+	ourUserSigningKeyTrusted, err := mach.CryptoStore.IsKeySignedBy(mach.Client.UserID, csPubkeys.UserSigningKey, mach.Client.UserID, csPubkeys.MasterKey)
 	if err != nil {
 		mach.Log.Error("Error retrieving our self-singing key signatures: %v", err)
 		return false
-	}
-	if _, ok := sskSigs[csPubkeys.MasterKey]; !ok {
-		// our user-signing key was not signed by our master key
+	} else if !ourUserSigningKeyTrusted {
 		return false
 	}
 	theirKeys, err := mach.CryptoStore.GetCrossSigningKeys(userID)

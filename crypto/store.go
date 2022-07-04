@@ -129,11 +129,9 @@ type Store interface {
 	// GetCrossSigningKeys retrieves a user's stored cross-signing keys.
 	GetCrossSigningKeys(id.UserID) (map[id.CrossSigningUsage]CrossSigningKey, error)
 	// PutSignature stores a signature of a cross-signing or device key along with the signer's user ID and key.
-	PutSignature(id.UserID, id.Ed25519, id.UserID, id.Ed25519, string) error
-	// GetSignaturesForKeyBy returns the signatures for a cross-signing or device key by the given signer.
-	GetSignaturesForKeyBy(id.UserID, id.Ed25519, id.UserID) (map[id.Ed25519]string, error)
+	PutSignature(signedUser id.UserID, signedKey id.Ed25519, signerUser id.UserID, signerKey id.Ed25519, signature string) error
 	// IsKeySignedBy returns whether a cross-signing or device key is signed by the given signer.
-	IsKeySignedBy(id.UserID, id.Ed25519, id.UserID, id.Ed25519) (bool, error)
+	IsKeySignedBy(userID id.UserID, key id.Ed25519, signedByUser id.UserID, signedByKey id.Ed25519) (bool, error)
 	// DropSignaturesByKey deletes the signatures made by the given user and key from the store. It returns the number of signatures deleted.
 	DropSignaturesByKey(id.UserID, id.Ed25519) (int64, error)
 }

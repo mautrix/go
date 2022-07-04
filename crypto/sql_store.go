@@ -686,13 +686,13 @@ func (store *SQLCryptoStore) GetSignaturesForKeyBy(userID id.UserID, key id.Ed25
 }
 
 // IsKeySignedBy returns whether a cross-signing or device key is signed by the given signer.
-func (store *SQLCryptoStore) IsKeySignedBy(userID id.UserID, key id.Ed25519, signerID id.UserID, signerKey id.Ed25519) (bool, error) {
-	sigs, err := store.GetSignaturesForKeyBy(userID, key, signerID)
-	if err != nil {
-		return false, err
-	}
-	_, ok := sigs[signerKey]
-	return ok, nil
+func (store *SQLCryptoStore) IsKeySignedBy(signedUserID id.UserID, signedKey id.Ed25519, signerUserID id.UserID, signerKey id.Ed25519) (isSigned bool, err error) {
+	q := `SELECT EXISTS(
+		SELECT 1 FROM crypto_cross_signing_signatures
+		WHERE signed_user_id=$1 AND signed_key=$2 AND signer_user_id=$3 AND signer_key=$4
+	)`
+	err = store.DB.QueryRow(q, signedUserID, signedKey, signerUserID, signerKey).Scan(&isSigned)
+	return
 }
 
 // DropSignaturesByKey deletes the signatures made by the given user and key from the store. It returns the number of signatures deleted.
