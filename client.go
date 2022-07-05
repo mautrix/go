@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -252,6 +253,26 @@ func (cli *Client) LogRequest(req *http.Request) {
 	}
 }
 
+func (cli *Client) LogRequestDone(req *http.Request, resp *http.Response, handlerErr error, contentLength int, duration time.Duration) {
+	if cli.Logger == stubLogger {
+		return
+	}
+	reqID, _ := req.Context().Value(logRequestIDContextKey).(int)
+	mime := resp.Header.Get("Content-Type")
+	var suffix string
+	if handlerErr != nil {
+		suffix = fmt.Sprintf(" (but parsing the body failed)")
+	}
+	length := resp.ContentLength
+	if length == -1 && contentLength > 0 {
+		length = int64(contentLength)
+	}
+	cli.Logger.Debugfln(
+		"req #%d (%s) completed in %s with status %d and %d bytes of %s body%s",
+		reqID, strings.TrimPrefix(req.URL.Path, "/_matrix/client"), duration, resp.StatusCode, length, mime, suffix,
+	)
+}
+
 func (cli *Client) MakeRequest(method string, httpURL string, reqBody interface{}, resBody interface{}) ([]byte, error) {
 	return cli.MakeFullRequest(FullRequest{Method: method, URL: httpURL, RequestJSON: reqBody, ResponseJSON: resBody})
 }
@@ -485,7 +506,9 @@ func (cli *Client) shouldRetry(res *http.Response) bool {
 
 func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backoff time.Duration, responseJSON interface{}, handler ClientResponseHandler) ([]byte, error) {
 	cli.LogRequest(req)
+	startTime := time.Now()
 	res, err := cli.Client.Do(req)
+	duration := time.Now().Sub(startTime)
 	if res != nil {
 		defer res.Body.Close()
 	}
@@ -509,10 +532,15 @@ func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backof
 		return cli.doRetry(req, fmt.Errorf("HTTP %d", res.StatusCode), retries, backoff, responseJSON, handler)
 	}
 
+	var body []byte
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return cli.handleResponseError(req, res)
+		body, err = cli.handleResponseError(req, res)
+		cli.LogRequestDone(req, res, nil, len(body), duration)
+	} else {
+		body, err = handler(req, res, responseJSON)
+		cli.LogRequestDone(req, res, err, len(body), duration)
 	}
-	return handler(req, res, responseJSON)
+	return body, err
 }
 
 // Whoami gets the user ID of the current user. See https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3accountwhoami
