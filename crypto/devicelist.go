@@ -50,7 +50,10 @@ func (mach *OlmMachine) storeDeviceSelfSignatures(userID id.UserID, deviceID id.
 							}
 						}
 					} else {
-						mach.Log.Warn("Could not verify device self-signing signatures for %s/%s: %v", signerUserID, deviceID, err)
+						if err == nil {
+							err = errors.New("invalid signature")
+						}
+						mach.Log.Warn("Could not verify device self-signing signature for %s/%s: %v", signerUserID, deviceID, err)
 					}
 				}
 			}
@@ -156,9 +159,9 @@ func (mach *OlmMachine) OnDevicesChanged(userID id.UserID) {
 
 func (mach *OlmMachine) validateDevice(userID id.UserID, deviceID id.DeviceID, deviceKeys mautrix.DeviceKeys, existing *id.Device) (*id.Device, error) {
 	if deviceID != deviceKeys.DeviceID {
-		return nil, MismatchingDeviceID
+		return nil, fmt.Errorf("%w (expected %s, got %s)", MismatchingDeviceID, deviceID, deviceKeys.DeviceID)
 	} else if userID != deviceKeys.UserID {
-		return nil, MismatchingUserID
+		return nil, fmt.Errorf("%w (expected %s, got %s)", MismatchingUserID, userID, deviceKeys.UserID)
 	}
 
 	signingKey := deviceKeys.Keys.GetEd25519(deviceID)
@@ -170,7 +173,7 @@ func (mach *OlmMachine) validateDevice(userID id.UserID, deviceID id.DeviceID, d
 	}
 
 	if existing != nil && existing.SigningKey != signingKey {
-		return existing, MismatchingSigningKey
+		return existing, fmt.Errorf("%w (expected %s, got %s)", MismatchingSigningKey, existing.SigningKey, signingKey)
 	}
 
 	ok, err := olm.VerifySignatureJSON(deviceKeys, userID, deviceID.String(), signingKey)
