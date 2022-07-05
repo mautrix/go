@@ -107,6 +107,7 @@ type MautrixInfo struct {
 	TrustState    id.TrustState
 	ForwardedKeys bool
 	WasEncrypted  bool
+	TrustSource   interface{}
 
 	CheckpointSent bool
 }
