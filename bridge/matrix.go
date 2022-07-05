@@ -384,7 +384,12 @@ func deviceUnverifiedErrorWithExplanation(trust id.TrustState) error {
 func (mx *MatrixHandler) postDecrypt(decrypted *event.Event, retryCount int, errorEventID id.EventID) {
 	minLevel := mx.bridge.Config.Bridge.GetEncryptionConfig().VerificationLevels.Send
 	if decrypted.Mautrix.TrustState < minLevel {
-		mx.log.Warnfln("Dropping %s due to insufficient verification level (event: %s, required: %s)", decrypted.ID, decrypted.Mautrix.TrustState, minLevel)
+		deviceDesc := "unknown device"
+		if decrypted.Mautrix.TrustSource != nil {
+			dev := decrypted.Mautrix.TrustSource
+			deviceDesc = fmt.Sprintf("%s/%s", dev.DeviceID, dev.SigningKey)
+		}
+		mx.log.Warnfln("Dropping %s from %s/%s (forwarded: %t) due to insufficient verification level (event: %s, required: %s)", decrypted.ID, decrypted.Sender, deviceDesc, decrypted.Mautrix.ForwardedKeys, decrypted.Mautrix.TrustState, minLevel)
 		err := deviceUnverifiedErrorWithExplanation(decrypted.Mautrix.TrustState)
 		go mx.sendCryptoStatusError(decrypted, errorEventID, err, retryCount, true)
 		return
