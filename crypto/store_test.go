@@ -231,11 +231,11 @@ func TestStoreDevices(t *testing.T) {
 	defer cleanup()
 	for storeName, store := range stores {
 		t.Run(storeName, func(t *testing.T) {
-			deviceMap := make(map[id.DeviceID]*DeviceIdentity)
+			deviceMap := make(map[id.DeviceID]*id.Device)
 			for i := 0; i < 17; i++ {
 				iStr := strconv.Itoa(i)
 				acc := NewOlmAccount()
-				deviceMap[id.DeviceID("dev"+iStr)] = &DeviceIdentity{
+				deviceMap[id.DeviceID("dev"+iStr)] = &id.Device{
 					UserID:      "user1",
 					DeviceID:    id.DeviceID("dev" + iStr),
 					IdentityKey: acc.IdentityKey(),

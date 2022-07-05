@@ -160,7 +160,7 @@ func (mach *OlmMachine) importForwardedRoomKey(evt *DecryptedOlmEvent, content *
 	return true
 }
 
-func (mach *OlmMachine) rejectKeyRequest(rejection KeyShareRejection, device *DeviceIdentity, request event.RequestedKeyInfo) {
+func (mach *OlmMachine) rejectKeyRequest(rejection KeyShareRejection, device *id.Device, request event.RequestedKeyInfo) {
 	if rejection.Code == "" {
 		// If the rejection code is empty, it means don't share keys, but also don't tell the requester.
 		return
@@ -183,7 +183,7 @@ func (mach *OlmMachine) rejectKeyRequest(rejection KeyShareRejection, device *De
 	}
 }
 
-func (mach *OlmMachine) defaultAllowKeyShare(device *DeviceIdentity, _ event.RequestedKeyInfo) *KeyShareRejection {
+func (mach *OlmMachine) defaultAllowKeyShare(device *id.Device, _ event.RequestedKeyInfo) *KeyShareRejection {
 	if mach.Client.UserID != device.UserID {
 		mach.Log.Debug("Ignoring key request from a different user (%s)", device.UserID)
 		return &KeyShareRejectOtherUser

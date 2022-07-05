@@ -55,7 +55,7 @@ func getOlmMachine(t *testing.T) *OlmMachine {
 
 func TestTrustOwnDevice(t *testing.T) {
 	m := getOlmMachine(t)
-	ownDevice := &DeviceIdentity{
+	ownDevice := &id.Device{
 		UserID:     m.Client.UserID,
 		DeviceID:   "device",
 		SigningKey: id.Ed25519("deviceKey"),
@@ -109,7 +109,7 @@ func TestTrustOtherUser(t *testing.T) {
 func TestTrustOtherDevice(t *testing.T) {
 	m := getOlmMachine(t)
 	otherUser := id.UserID("@user")
-	theirDevice := &DeviceIdentity{
+	theirDevice := &id.Device{
 		UserID:     otherUser,
 		DeviceID:   "theirDevice",
 		SigningKey: id.Ed25519("theirDeviceKey"),

@@ -41,11 +41,11 @@ type OlmMachine struct {
 	SendKeysMinTrust  id.TrustState
 	ShareKeysMinTrust id.TrustState
 
-	AllowKeyShare func(*DeviceIdentity, event.RequestedKeyInfo) *KeyShareRejection
+	AllowKeyShare func(*id.Device, event.RequestedKeyInfo) *KeyShareRejection
 
 	DefaultSASTimeout time.Duration
 	// AcceptVerificationFrom determines whether the machine will accept verification requests from this device.
-	AcceptVerificationFrom func(string, *DeviceIdentity, id.RoomID) (VerificationRequestResponse, VerificationHooks)
+	AcceptVerificationFrom func(string, *id.Device, id.RoomID) (VerificationRequestResponse, VerificationHooks)
 
 	account *OlmAccount
 
@@ -91,7 +91,7 @@ func NewOlmMachine(client *mautrix.Client, log Logger, cryptoStore Store, stateS
 		ShareKeysMinTrust: id.TrustStateCrossSignedTOFU,
 
 		DefaultSASTimeout: 10 * time.Minute,
-		AcceptVerificationFrom: func(string, *DeviceIdentity, id.RoomID) (VerificationRequestResponse, VerificationHooks) {
+		AcceptVerificationFrom: func(string, *id.Device, id.RoomID) (VerificationRequestResponse, VerificationHooks) {
 			// Reject requests by default. Users need to override this to return appropriate verification hooks.
 			return RejectRequest, nil
 		},
@@ -143,28 +143,19 @@ func (mach *OlmMachine) timeTrace(thing, trace string, expectedDuration time.Dur
 	}
 }
 
-func Fingerprint(signingKey id.SigningKey) string {
-	spacedSigningKey := make([]byte, len(signingKey)+(len(signingKey)-1)/4)
-	var ptr = 0
-	for i, chr := range signingKey {
-		spacedSigningKey[ptr] = byte(chr)
-		ptr++
-		if i%4 == 3 {
-			spacedSigningKey[ptr] = ' '
-			ptr++
-		}
-	}
-	return string(spacedSigningKey)
+// Deprecated: moved to SigningKey.Fingerprint
+func Fingerprint(key id.SigningKey) string {
+	return key.Fingerprint()
 }
 
 // Fingerprint returns the fingerprint of the Olm account that can be used for non-interactive verification.
 func (mach *OlmMachine) Fingerprint() string {
-	return Fingerprint(mach.account.SigningKey())
+	return mach.account.SigningKey().Fingerprint()
 }
 
 // OwnIdentity returns this device's DeviceIdentity struct
-func (mach *OlmMachine) OwnIdentity() *DeviceIdentity {
-	return &DeviceIdentity{
+func (mach *OlmMachine) OwnIdentity() *id.Device {
+	return &id.Device{
 		UserID:      mach.Client.UserID,
 		DeviceID:    mach.Client.DeviceID,
 		IdentityKey: mach.account.IdentityKey(),
@@ -343,7 +334,7 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 
 // GetOrFetchDevice attempts to retrieve the device identity for the given device from the store
 // and if it's not found it asks the server for it.
-func (mach *OlmMachine) GetOrFetchDevice(userID id.UserID, deviceID id.DeviceID) (*DeviceIdentity, error) {
+func (mach *OlmMachine) GetOrFetchDevice(userID id.UserID, deviceID id.DeviceID) (*id.Device, error) {
 	// get device identity
 	device, err := mach.CryptoStore.GetDevice(userID, deviceID)
 	if err != nil {
@@ -365,7 +356,7 @@ func (mach *OlmMachine) GetOrFetchDevice(userID id.UserID, deviceID id.DeviceID)
 // GetOrFetchDeviceByKey attempts to retrieve the device identity for the device with the given identity key from the
 // store and if it's not found it asks the server for it. This returns nil if the server doesn't return a device with
 // the given identity key.
-func (mach *OlmMachine) GetOrFetchDeviceByKey(userID id.UserID, identityKey id.IdentityKey) (*DeviceIdentity, error) {
+func (mach *OlmMachine) GetOrFetchDeviceByKey(userID id.UserID, identityKey id.IdentityKey) (*id.Device, error) {
 	deviceIdentity, err := mach.CryptoStore.FindDeviceByKey(userID, identityKey)
 	if err != nil || deviceIdentity != nil {
 		return deviceIdentity, err
@@ -381,8 +372,8 @@ func (mach *OlmMachine) GetOrFetchDeviceByKey(userID id.UserID, identityKey id.I
 }
 
 // SendEncryptedToDevice sends an Olm-encrypted event to the given user device.
-func (mach *OlmMachine) SendEncryptedToDevice(device *DeviceIdentity, evtType event.Type, content event.Content) error {
-	if err := mach.createOutboundSessions(map[id.UserID]map[id.DeviceID]*DeviceIdentity{
+func (mach *OlmMachine) SendEncryptedToDevice(device *id.Device, evtType event.Type, content event.Content) error {
+	if err := mach.createOutboundSessions(map[id.UserID]map[id.DeviceID]*id.Device{
 		device.UserID: {
 			device.DeviceID: device,
 		},

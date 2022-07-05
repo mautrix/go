@@ -93,7 +93,7 @@ func (mach *OlmMachine) newOutboundGroupSession(roomID id.RoomID) *OutboundGroup
 
 type deviceSessionWrapper struct {
 	session  *OlmSession
-	identity *DeviceIdentity
+	identity *id.Device
 }
 
 // ShareGroupSession shares a group session for a specific room with all the devices of the given user list.
@@ -115,8 +115,8 @@ func (mach *OlmMachine) ShareGroupSession(roomID id.RoomID, users []id.UserID) e
 	withheldCount := 0
 	toDeviceWithheld := &mautrix.ReqSendToDevice{Messages: make(map[id.UserID]map[id.DeviceID]*event.Content)}
 	olmSessions := make(map[id.UserID]map[id.DeviceID]deviceSessionWrapper)
-	missingSessions := make(map[id.UserID]map[id.DeviceID]*DeviceIdentity)
-	missingUserSessions := make(map[id.DeviceID]*DeviceIdentity)
+	missingSessions := make(map[id.UserID]map[id.DeviceID]*id.Device)
+	missingUserSessions := make(map[id.DeviceID]*id.Device)
 	var fetchKeys []id.UserID
 
 	for _, userID := range users {
@@ -137,7 +137,7 @@ func (mach *OlmMachine) ShareGroupSession(roomID id.RoomID, users []id.UserID) e
 			withheldCount += len(toDeviceWithheld.Messages[userID])
 			if len(missingUserSessions) > 0 {
 				missingSessions[userID] = missingUserSessions
-				missingUserSessions = make(map[id.DeviceID]*DeviceIdentity)
+				missingUserSessions = make(map[id.DeviceID]*id.Device)
 			}
 			if len(toDeviceWithheld.Messages[userID]) == 0 {
 				delete(toDeviceWithheld.Messages, userID)
@@ -234,7 +234,7 @@ func (mach *OlmMachine) encryptAndSendGroupSession(session *OutboundGroupSession
 	return err
 }
 
-func (mach *OlmMachine) findOlmSessionsForUser(session *OutboundGroupSession, userID id.UserID, devices map[id.DeviceID]*DeviceIdentity, output map[id.DeviceID]deviceSessionWrapper, withheld map[id.DeviceID]*event.Content, missingOutput map[id.DeviceID]*DeviceIdentity) {
+func (mach *OlmMachine) findOlmSessionsForUser(session *OutboundGroupSession, userID id.UserID, devices map[id.DeviceID]*id.Device, output map[id.DeviceID]deviceSessionWrapper, withheld map[id.DeviceID]*event.Content, missingOutput map[id.DeviceID]*id.Device) {
 	for deviceID, device := range devices {
 		userKey := UserDevice{UserID: userID, DeviceID: deviceID}
 		if state := session.Users[userKey]; state != OGSNotShared {

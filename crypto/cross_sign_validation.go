@@ -12,7 +12,7 @@ import (
 )
 
 // ResolveTrust resolves the trust state of the device from cross-signing.
-func (mach *OlmMachine) ResolveTrust(device *DeviceIdentity) id.TrustState {
+func (mach *OlmMachine) ResolveTrust(device *id.Device) id.TrustState {
 	if device.Trust == id.TrustStateVerified || device.Trust == id.TrustStateBlacklisted {
 		return device.Trust
 	}
@@ -57,7 +57,7 @@ func (mach *OlmMachine) ResolveTrust(device *DeviceIdentity) id.TrustState {
 }
 
 // IsDeviceTrusted returns whether a device has been determined to be trusted either through verification or cross-signing.
-func (mach *OlmMachine) IsDeviceTrusted(device *DeviceIdentity) bool {
+func (mach *OlmMachine) IsDeviceTrusted(device *id.Device) bool {
 	switch mach.ResolveTrust(device) {
 	case id.TrustStateVerified, id.TrustStateCrossSignedTOFU, id.TrustStateCrossSignedVerified:
 		return true

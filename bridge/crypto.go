@@ -93,7 +93,7 @@ func (helper *CryptoHelper) Init() error {
 	return helper.mach.Load()
 }
 
-func (helper *CryptoHelper) allowKeyShare(device *crypto.DeviceIdentity, info event.RequestedKeyInfo) *crypto.KeyShareRejection {
+func (helper *CryptoHelper) allowKeyShare(device *id.Device, info event.RequestedKeyInfo) *crypto.KeyShareRejection {
 	cfg := helper.bridge.Config.Bridge.GetEncryptionConfig()
 	if !cfg.AllowKeySharing {
 		return &crypto.KeyShareRejectNoResponse

@@ -83,7 +83,7 @@ func TestOlmMachineOlmMegolmSessions(t *testing.T) {
 	}
 
 	// store sender device identity in receiving machine store
-	machineIn.CryptoStore.PutDevices("user1", map[id.DeviceID]*DeviceIdentity{
+	machineIn.CryptoStore.PutDevices("user1", map[id.DeviceID]*id.Device{
 		"device1": {
 			UserID:      "user1",
 			DeviceID:    "device1",
@@ -98,7 +98,7 @@ func TestOlmMachineOlmMegolmSessions(t *testing.T) {
 	machineOut.CryptoStore.AddOutboundGroupSession(megolmOutSession)
 
 	// encrypt m.room_key event with olm session
-	deviceIdentity := &DeviceIdentity{
+	deviceIdentity := &id.Device{
 		UserID:      "user2",
 		DeviceID:    "device2",
 		IdentityKey: machineIn.account.IdentityKey(),

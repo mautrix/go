@@ -59,6 +59,20 @@ func (ed25519 Ed25519) String() string {
 	return string(ed25519)
 }
 
+func (ed25519 Ed25519) Fingerprint() string {
+	spacedSigningKey := make([]byte, len(ed25519)+(len(ed25519)-1)/4)
+	var ptr = 0
+	for i, chr := range ed25519 {
+		spacedSigningKey[ptr] = byte(chr)
+		ptr++
+		if i%4 == 3 {
+			spacedSigningKey[ptr] = ' '
+			ptr++
+		}
+	}
+	return string(spacedSigningKey)
+}
+
 // Curve25519 is the base64 representation of an Curve25519 public key
 type Curve25519 string
 type SenderKey = Curve25519
@@ -111,4 +125,25 @@ func (keyID KeyID) Parse() (KeyAlgorithm, string) {
 		return "", ""
 	}
 	return KeyAlgorithm(keyID[:index]), string(keyID[index+1:])
+}
+
+// Device contains the identity details of a device and some additional info.
+type Device struct {
+	UserID      UserID
+	DeviceID    DeviceID
+	IdentityKey Curve25519
+	SigningKey  Ed25519
+
+	Trust   TrustState
+	Deleted bool
+	Name    string
+}
+
+func (device *Device) Fingerprint() string {
+	return device.SigningKey.Fingerprint()
+}
+
+type CrossSigningKey struct {
+	Key   Ed25519
+	First Ed25519
 }

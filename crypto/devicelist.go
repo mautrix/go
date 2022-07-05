@@ -24,7 +24,7 @@ var (
 	InvalidKeySignature   = errors.New("invalid signature on device keys")
 )
 
-func (mach *OlmMachine) LoadDevices(user id.UserID) map[id.DeviceID]*DeviceIdentity {
+func (mach *OlmMachine) LoadDevices(user id.UserID) map[id.DeviceID]*id.Device {
 	return mach.fetchKeys([]id.UserID{user}, "", true)[user]
 }
 
@@ -65,7 +65,7 @@ func (mach *OlmMachine) storeDeviceSelfSignatures(userID id.UserID, deviceID id.
 	}
 }
 
-func (mach *OlmMachine) fetchKeys(users []id.UserID, sinceToken string, includeUntracked bool) (data map[id.UserID]map[id.DeviceID]*DeviceIdentity) {
+func (mach *OlmMachine) fetchKeys(users []id.UserID, sinceToken string, includeUntracked bool) (data map[id.UserID]map[id.DeviceID]*id.Device) {
 	req := &mautrix.ReqQueryKeys{
 		DeviceKeys: mautrix.DeviceKeysRequest{},
 		Timeout:    10 * 1000,
@@ -90,15 +90,15 @@ func (mach *OlmMachine) fetchKeys(users []id.UserID, sinceToken string, includeU
 		mach.Log.Warn("Query keys failure for %s: %v", server, err)
 	}
 	mach.Log.Trace("Query key result received with %d users", len(resp.DeviceKeys))
-	data = make(map[id.UserID]map[id.DeviceID]*DeviceIdentity)
+	data = make(map[id.UserID]map[id.DeviceID]*id.Device)
 	for userID, devices := range resp.DeviceKeys {
 		delete(req.DeviceKeys, userID)
 
-		newDevices := make(map[id.DeviceID]*DeviceIdentity)
+		newDevices := make(map[id.DeviceID]*id.Device)
 		existingDevices, err := mach.CryptoStore.GetDevices(userID)
 		if err != nil {
 			mach.Log.Warn("Failed to get existing devices for %s: %v", userID, err)
-			existingDevices = make(map[id.DeviceID]*DeviceIdentity)
+			existingDevices = make(map[id.DeviceID]*id.Device)
 		}
 		mach.Log.Trace("Updating devices for %s, got %d devices, have %d in store", userID, len(devices), len(existingDevices))
 		changed := false
@@ -154,7 +154,7 @@ func (mach *OlmMachine) OnDevicesChanged(userID id.UserID) {
 	}
 }
 
-func (mach *OlmMachine) validateDevice(userID id.UserID, deviceID id.DeviceID, deviceKeys mautrix.DeviceKeys, existing *DeviceIdentity) (*DeviceIdentity, error) {
+func (mach *OlmMachine) validateDevice(userID id.UserID, deviceID id.DeviceID, deviceKeys mautrix.DeviceKeys, existing *id.Device) (*id.Device, error) {
 	if deviceID != deviceKeys.DeviceID {
 		return nil, MismatchingDeviceID
 	} else if userID != deviceKeys.UserID {
@@ -185,7 +185,7 @@ func (mach *OlmMachine) validateDevice(userID id.UserID, deviceID id.DeviceID, d
 		name = string(deviceID)
 	}
 
-	return &DeviceIdentity{
+	return &id.Device{
 		UserID:      userID,
 		DeviceID:    deviceID,
 		IdentityKey: identityKey,

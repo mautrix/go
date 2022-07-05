@@ -445,7 +445,7 @@ func (store *SQLCryptoStore) ValidateMessageIndex(senderKey id.SenderKey, sessio
 }
 
 // GetDevices returns a map of device IDs to device identities, including the identity and signing keys, for a given user ID.
-func (store *SQLCryptoStore) GetDevices(userID id.UserID) (map[id.DeviceID]*DeviceIdentity, error) {
+func (store *SQLCryptoStore) GetDevices(userID id.UserID) (map[id.DeviceID]*id.Device, error) {
 	var ignore id.UserID
 	err := store.DB.QueryRow("SELECT user_id FROM crypto_tracked_user WHERE user_id=$1", userID).Scan(&ignore)
 	if err == sql.ErrNoRows {
@@ -458,9 +458,9 @@ func (store *SQLCryptoStore) GetDevices(userID id.UserID) (map[id.DeviceID]*Devi
 	if err != nil {
 		return nil, err
 	}
-	data := make(map[id.DeviceID]*DeviceIdentity)
+	data := make(map[id.DeviceID]*id.Device)
 	for rows.Next() {
-		var identity DeviceIdentity
+		var identity id.Device
 		err := rows.Scan(&identity.DeviceID, &identity.IdentityKey, &identity.SigningKey, &identity.Trust, &identity.Deleted, &identity.Name)
 		if err != nil {
 			return nil, err
@@ -472,8 +472,8 @@ func (store *SQLCryptoStore) GetDevices(userID id.UserID) (map[id.DeviceID]*Devi
 }
 
 // GetDevice returns the device dentity for a given user and device ID.
-func (store *SQLCryptoStore) GetDevice(userID id.UserID, deviceID id.DeviceID) (*DeviceIdentity, error) {
-	var identity DeviceIdentity
+func (store *SQLCryptoStore) GetDevice(userID id.UserID, deviceID id.DeviceID) (*id.Device, error) {
+	var identity id.Device
 	err := store.DB.QueryRow(`
 		SELECT identity_key, signing_key, trust, deleted, name
 		FROM crypto_device WHERE user_id=$1 AND device_id=$2`,
@@ -491,8 +491,8 @@ func (store *SQLCryptoStore) GetDevice(userID id.UserID, deviceID id.DeviceID) (
 }
 
 // FindDeviceByKey finds a specific device by its sender key.
-func (store *SQLCryptoStore) FindDeviceByKey(userID id.UserID, identityKey id.IdentityKey) (*DeviceIdentity, error) {
-	var identity DeviceIdentity
+func (store *SQLCryptoStore) FindDeviceByKey(userID id.UserID, identityKey id.IdentityKey) (*id.Device, error) {
+	var identity id.Device
 	err := store.DB.QueryRow(`
 		SELECT device_id, signing_key, trust, deleted, name
 		FROM crypto_device WHERE user_id=$1 AND identity_key=$2`,
@@ -519,14 +519,14 @@ ON CONFLICT (user_id, device_id) DO UPDATE
 var deviceMassInsertTemplate = strings.ReplaceAll(deviceInsertQuery, "($1, $2, $3, $4, $5, $6, $7)", "%s")
 
 // PutDevice stores a single device for a user, replacing it if it exists already.
-func (store *SQLCryptoStore) PutDevice(userID id.UserID, device *DeviceIdentity) error {
+func (store *SQLCryptoStore) PutDevice(userID id.UserID, device *id.Device) error {
 	_, err := store.DB.Exec(deviceInsertQuery,
 		userID, device.DeviceID, device.IdentityKey, device.SigningKey, device.Trust, device.Deleted, device.Name)
 	return err
 }
 
 // PutDevices stores the device identity information for the given user ID.
-func (store *SQLCryptoStore) PutDevices(userID id.UserID, devices map[id.DeviceID]*DeviceIdentity) error {
+func (store *SQLCryptoStore) PutDevices(userID id.UserID, devices map[id.DeviceID]*id.Device) error {
 	tx, err := store.DB.Begin()
 	if err != nil {
 		return err
@@ -630,12 +630,12 @@ func (store *SQLCryptoStore) PutCrossSigningKey(userID id.UserID, usage id.Cross
 }
 
 // GetCrossSigningKeys retrieves a user's stored cross-signing keys.
-func (store *SQLCryptoStore) GetCrossSigningKeys(userID id.UserID) (map[id.CrossSigningUsage]CrossSigningKey, error) {
+func (store *SQLCryptoStore) GetCrossSigningKeys(userID id.UserID) (map[id.CrossSigningUsage]id.CrossSigningKey, error) {
 	rows, err := store.DB.Query("SELECT usage, key, first_seen_key FROM crypto_cross_signing_keys WHERE user_id=$1", userID)
 	if err != nil {
 		return nil, err
 	}
-	data := make(map[id.CrossSigningUsage]CrossSigningKey)
+	data := make(map[id.CrossSigningUsage]id.CrossSigningKey)
 	for rows.Next() {
 		var usage id.CrossSigningUsage
 		var key, first id.Ed25519
@@ -643,7 +643,7 @@ func (store *SQLCryptoStore) GetCrossSigningKeys(userID id.UserID) (map[id.Cross
 		if err != nil {
 			return nil, err
 		}
-		data[usage] = CrossSigningKey{key, first}
+		data[usage] = id.CrossSigningKey{key, first}
 	}
 
 	return data, nil

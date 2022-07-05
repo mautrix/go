@@ -55,7 +55,7 @@ func (mach *OlmMachine) DecryptMegolmEvent(evt *event.Event) (*event.Event, erro
 
 	var trustLevel id.TrustState
 	var forwardedKeys bool
-	var device *DeviceIdentity
+	var device *id.Device
 	ownSigningKey, ownIdentityKey := mach.account.Keys()
 	if sess.SigningKey == ownSigningKey && sess.SenderKey == ownIdentityKey && len(sess.ForwardingChains) == 0 {
 		trustLevel = id.TrustStateVerified
