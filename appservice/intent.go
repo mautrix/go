@@ -256,7 +256,7 @@ func (intent *IntentAPI) SendCustomMembershipEvent(roomID id.RoomID, target id.U
 			ok = memberContent != nil
 		}
 		if !ok {
-			err := intent.StateEvent(roomID, event.StateMember, target.String(), memberContent)
+			err := intent.StateEvent(roomID, event.StateMember, target.String(), &memberContent)
 			if err != nil {
 				intent.Logger.Debugfln("Failed to get member info for %s/%s to fill new %s membership event: %v", roomID, target, membership, err)
 			} else {
@@ -264,7 +264,7 @@ func (intent *IntentAPI) SendCustomMembershipEvent(roomID id.RoomID, target id.U
 			}
 		}
 	}
-	if ok {
+	if ok && memberContent != nil {
 		content.Displayname = memberContent.Displayname
 		content.AvatarURL = memberContent.AvatarURL
 	}
