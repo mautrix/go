@@ -19,7 +19,7 @@ type StateStore interface {
 	MarkRegistered(userID id.UserID)
 
 	IsTyping(roomID id.RoomID, userID id.UserID) bool
-	SetTyping(roomID id.RoomID, userID id.UserID, timeout int64)
+	SetTyping(roomID id.RoomID, userID id.UserID, timeout time.Duration)
 
 	IsInRoom(roomID id.RoomID, userID id.UserID) bool
 	IsInvited(roomID id.RoomID, userID id.UserID) bool
@@ -46,13 +46,13 @@ func (as *AppService) UpdateState(evt *event.Event) {
 }
 
 type TypingStateStore struct {
-	typing     map[id.RoomID]map[id.UserID]int64
+	typing     map[id.RoomID]map[id.UserID]time.Time
 	typingLock sync.RWMutex
 }
 
 func NewTypingStateStore() *TypingStateStore {
 	return &TypingStateStore{
-		typing: make(map[id.RoomID]map[id.UserID]int64),
+		typing: make(map[id.RoomID]map[id.UserID]time.Time),
 	}
 }
 
@@ -64,24 +64,24 @@ func (store *TypingStateStore) IsTyping(roomID id.RoomID, userID id.UserID) bool
 		return false
 	}
 	typingEndsAt := roomTyping[userID]
-	return typingEndsAt >= time.Now().Unix()
+	return typingEndsAt.After(time.Now())
 }
 
-func (store *TypingStateStore) SetTyping(roomID id.RoomID, userID id.UserID, timeout int64) {
+func (store *TypingStateStore) SetTyping(roomID id.RoomID, userID id.UserID, timeout time.Duration) {
 	store.typingLock.Lock()
 	defer store.typingLock.Unlock()
 	roomTyping, ok := store.typing[roomID]
 	if !ok {
 		if timeout >= 0 {
-			roomTyping = map[id.UserID]int64{
-				userID: time.Now().Unix() + timeout,
+			roomTyping = map[id.UserID]time.Time{
+				userID: time.Now().Add(timeout),
 			}
 		} else {
 			return
 		}
 	} else {
 		if timeout >= 0 {
-			roomTyping[userID] = time.Now().Unix() + timeout
+			roomTyping[userID] = time.Now().Add(timeout)
 		} else {
 			delete(roomTyping, userID)
 		}
