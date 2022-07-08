@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/mattn/go-sqlite3"
 	"gopkg.in/yaml.v3"
 	flag "maunium.net/go/mauflag"
 	log "maunium.net/go/maulogger/v2"
@@ -399,6 +400,9 @@ func (br *Bridge) init() {
 	br.DB, err = dbutil.NewFromConfig(br.Name, br.Config.AppService.Database, br.Log.Sub("Database"))
 	if err != nil {
 		br.Log.Fatalln("Failed to initialize database connection:", err)
+		if sqlError := (&sqlite3.Error{}); errors.As(err, sqlError) && sqlError.Code == sqlite3.ErrCorrupt {
+			os.Exit(18)
+		}
 		os.Exit(14)
 	}
 	br.DB.IgnoreUnsupportedDatabase = *ignoreUnsupportedDatabase
@@ -421,7 +425,9 @@ func (br *Bridge) init() {
 
 func (br *Bridge) LogDBUpgradeErrorAndExit(name string, err error) {
 	br.Log.Fatalfln("Failed to initialize %s: %v", name, err)
-	if errors.Is(err, dbutil.ErrForeignTables) {
+	if sqlError := (&sqlite3.Error{}); errors.As(err, sqlError) && sqlError.Code == sqlite3.ErrCorrupt {
+		os.Exit(18)
+	} else if errors.Is(err, dbutil.ErrForeignTables) {
 		br.Log.Infoln("You can use --ignore-foreign-tables to ignore this error")
 	} else if errors.Is(err, dbutil.ErrNotOwned) {
 		br.Log.Infoln("Sharing the same database with different programs is not supported")
