@@ -7,6 +7,7 @@
 package dbutil
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strings"
@@ -49,6 +50,11 @@ func ParseDialect(engine string) (Dialect, error) {
 
 type Scannable interface {
 	Scan(...interface{}) error
+}
+
+type Execable interface {
+	Exec(query string, args ...interface{}) (sql.Result, error)
+	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
 }
 
 type Database struct {
