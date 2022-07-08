@@ -6,8 +6,8 @@ require (
 	github.com/gorilla/mux v1.8.0
 	github.com/gorilla/websocket v1.5.0
 	github.com/lib/pq v1.10.6
-	github.com/mattn/go-sqlite3 v1.14.13
-	github.com/stretchr/testify v1.7.5
+	github.com/mattn/go-sqlite3 v1.14.14
+	github.com/stretchr/testify v1.8.0
 	github.com/tidwall/gjson v1.14.1
 	github.com/tidwall/sjson v1.2.4
 	github.com/yuin/goldmark v1.4.12
