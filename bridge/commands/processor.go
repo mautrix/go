@@ -81,7 +81,7 @@ func (proc *Processor) Handle(roomID id.RoomID, eventID id.EventID, user bridge.
 		ReplyTo:   replyTo,
 		Log:       proc.log,
 	}
-	proc.log.Debugfln("%s sent '%s' in %s", user.GetMXID(), message, roomID)
+	proc.log.Debugfln("%s sent %q in %s", user.GetMXID(), message, roomID)
 
 	realCommand, ok := proc.aliases[ce.Command]
 	if !ok {
@@ -92,7 +92,11 @@ func (proc *Processor) Handle(roomID id.RoomID, eventID id.EventID, user bridge.
 	var handler MinimalHandler
 	handler, ok = proc.handlers[realCommand]
 	if !ok {
-		if state := commandingUser.GetCommandState(); state != nil && state.Next != nil {
+		var state *CommandState
+		if commandingUser != nil {
+			state = commandingUser.GetCommandState()
+		}
+		if state != nil && state.Next != nil {
 			ce.Command = ""
 			ce.Args = args
 			ce.Handler = state.Next
