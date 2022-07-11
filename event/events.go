@@ -8,6 +8,7 @@ package event
 
 import (
 	"encoding/json"
+	"time"
 
 	"maunium.net/go/mautrix/id"
 )
@@ -108,6 +109,9 @@ type MautrixInfo struct {
 	ForwardedKeys bool
 	WasEncrypted  bool
 	TrustSource   *id.Device
+
+	ReceivedAt         time.Time
+	DecryptionDuration time.Duration
 
 	CheckpointSent bool
 }

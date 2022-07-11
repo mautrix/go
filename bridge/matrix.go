@@ -381,7 +381,7 @@ func deviceUnverifiedErrorWithExplanation(trust id.TrustState) error {
 	return fmt.Errorf("%w (%s)", errDeviceNotTrusted, explanation)
 }
 
-func (mx *MatrixHandler) postDecrypt(decrypted *event.Event, retryCount int, errorEventID id.EventID) {
+func (mx *MatrixHandler) postDecrypt(decrypted *event.Event, retryCount int, errorEventID id.EventID, duration time.Duration) {
 	minLevel := mx.bridge.Config.Bridge.GetEncryptionConfig().VerificationLevels.Send
 	if decrypted.Mautrix.TrustState < minLevel {
 		deviceDesc := "unknown device"
@@ -397,6 +397,8 @@ func (mx *MatrixHandler) postDecrypt(decrypted *event.Event, retryCount int, err
 
 	mx.bridge.SendMessageSuccessCheckpoint(decrypted, MsgStepDecrypted, retryCount)
 	decrypted.Mautrix.CheckpointSent = true
+	decrypted.Mautrix.DecryptionDuration = duration
+	mx.log.Debugfln("Successfully decrypted %s", decrypted.ID)
 	mx.bridge.EventProcessor.Dispatch(decrypted)
 	if errorEventID != "" {
 		_, _ = mx.bridge.Bot.RedactEvent(decrypted.RoomID, errorEventID)
@@ -408,19 +410,21 @@ func (mx *MatrixHandler) HandleEncrypted(evt *event.Event) {
 	if mx.shouldIgnoreEvent(evt) || mx.bridge.Crypto == nil {
 		return
 	}
+	content := evt.Content.AsEncrypted()
+	mx.log.Debugfln("Decrypting %s (%s)", evt.ID, content.SessionID)
 
+	decryptionStart := time.Now()
 	decrypted, err := mx.bridge.Crypto.Decrypt(evt)
 	decryptionRetryCount := 0
 	if errors.Is(err, NoSessionFound) {
 		decryptionRetryCount = 1
-		content := evt.Content.AsEncrypted()
 		mx.log.Debugfln("Couldn't find session %s trying to decrypt %s, waiting %d seconds...", content.SessionID, evt.ID, int(sessionWaitTimeout.Seconds()))
 		mx.bridge.SendMessageErrorCheckpoint(evt, MsgStepDecrypted, err, false, 0)
 		if mx.bridge.Crypto.WaitForSession(evt.RoomID, content.SenderKey, content.SessionID, sessionWaitTimeout) {
 			mx.log.Debugfln("Got session %s after waiting, trying to decrypt %s again", content.SessionID, evt.ID)
 			decrypted, err = mx.bridge.Crypto.Decrypt(evt)
 		} else {
-			go mx.waitLongerForSession(evt)
+			go mx.waitLongerForSession(evt, decryptionStart)
 			return
 		}
 	}
@@ -430,13 +434,13 @@ func (mx *MatrixHandler) HandleEncrypted(evt *event.Event) {
 		go mx.sendCryptoStatusError(evt, "", err, decryptionRetryCount, true)
 		return
 	}
-	mx.postDecrypt(decrypted, decryptionRetryCount, "")
+	mx.postDecrypt(decrypted, decryptionRetryCount, "", time.Since(decryptionStart))
 }
 
 const firstDecryptionErrorMsg = "the bridge hasn't received the decryption keys. The bridge will retry for %d seconds"
 const finalDecryptionErrorMsg = "the bridge hasn't received the decryption keys"
 
-func (mx *MatrixHandler) waitLongerForSession(evt *event.Event) {
+func (mx *MatrixHandler) waitLongerForSession(evt *event.Event, decryptionStart time.Time) {
 	const extendedTimeout = sessionWaitTimeout * 2
 
 	content := evt.Content.AsEncrypted()
@@ -460,7 +464,7 @@ func (mx *MatrixHandler) waitLongerForSession(evt *event.Event) {
 		return
 	}
 
-	mx.postDecrypt(decrypted, 2, errorEventID)
+	mx.postDecrypt(decrypted, 2, errorEventID, time.Since(decryptionStart))
 }
 
 func (mx *MatrixHandler) HandleMessage(evt *event.Event) {

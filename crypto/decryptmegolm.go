@@ -129,6 +129,7 @@ func (mach *OlmMachine) DecryptMegolmEvent(evt *event.Event) (*event.Event, erro
 			TrustSource:   device,
 			ForwardedKeys: forwardedKeys,
 			WasEncrypted:  true,
+			ReceivedAt:    evt.Mautrix.ReceivedAt,
 		},
 	}, nil
 }

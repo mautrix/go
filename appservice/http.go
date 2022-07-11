@@ -182,6 +182,7 @@ func (as *AppService) handleDeviceLists(dl *mautrix.DeviceLists) {
 
 func (as *AppService) handleEvents(evts []*event.Event, defaultTypeClass event.TypeClass) {
 	for _, evt := range evts {
+		evt.Mautrix.ReceivedAt = time.Now()
 		if len(evt.ToUserID) > 0 {
 			evt.Type.Class = event.ToDeviceEventType
 		} else if defaultTypeClass != event.UnknownEventType {
