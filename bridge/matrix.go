@@ -381,7 +381,15 @@ func deviceUnverifiedErrorWithExplanation(trust id.TrustState) error {
 	return fmt.Errorf("%w (%s)", errDeviceNotTrusted, explanation)
 }
 
-func (mx *MatrixHandler) postDecrypt(decrypted *event.Event, retryCount int, errorEventID id.EventID, duration time.Duration) {
+func copySomeKeys(original, decrypted *event.Event) {
+	isScheduled, _ := original.Content.Raw["com.beeper.scheduled"].(bool)
+	_, alreadyExists := decrypted.Content.Raw["com.beeper.scheduled"]
+	if isScheduled && !alreadyExists {
+		decrypted.Content.Raw["com.beeper.scheduled"] = true
+	}
+}
+
+func (mx *MatrixHandler) postDecrypt(original, decrypted *event.Event, retryCount int, errorEventID id.EventID, duration time.Duration) {
 	minLevel := mx.bridge.Config.Bridge.GetEncryptionConfig().VerificationLevels.Send
 	if decrypted.Mautrix.TrustState < minLevel {
 		deviceDesc := "unknown device"
@@ -394,6 +402,7 @@ func (mx *MatrixHandler) postDecrypt(decrypted *event.Event, retryCount int, err
 		go mx.sendCryptoStatusError(decrypted, errorEventID, err, retryCount, true)
 		return
 	}
+	copySomeKeys(original, decrypted)
 
 	mx.bridge.SendMessageSuccessCheckpoint(decrypted, MsgStepDecrypted, retryCount)
 	decrypted.Mautrix.CheckpointSent = true
@@ -434,7 +443,7 @@ func (mx *MatrixHandler) HandleEncrypted(evt *event.Event) {
 		go mx.sendCryptoStatusError(evt, "", err, decryptionRetryCount, true)
 		return
 	}
-	mx.postDecrypt(decrypted, decryptionRetryCount, "", time.Since(decryptionStart))
+	mx.postDecrypt(evt, decrypted, decryptionRetryCount, "", time.Since(decryptionStart))
 }
 
 const firstDecryptionErrorMsg = "the bridge hasn't received the decryption keys. The bridge will retry for %d seconds"
@@ -464,7 +473,7 @@ func (mx *MatrixHandler) waitLongerForSession(evt *event.Event, decryptionStart 
 		return
 	}
 
-	mx.postDecrypt(decrypted, 2, errorEventID, time.Since(decryptionStart))
+	mx.postDecrypt(evt, decrypted, 2, errorEventID, time.Since(decryptionStart))
 }
 
 func (mx *MatrixHandler) HandleMessage(evt *event.Event) {
