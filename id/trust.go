@@ -46,15 +46,15 @@ func ParseTrustState(val string) TrustState {
 		return TrustStateBlacklisted
 	case "unverified":
 		return TrustStateUnset
-	case "cross-signed-untrusted", "cross-signed, untrusted":
+	case "cross-signed-untrusted":
 		return TrustStateCrossSignedUntrusted
-	case "unknown-device", "unknown device":
+	case "unknown-device":
 		return TrustStateUnknownDevice
 	case "forwarded":
 		return TrustStateForwarded
-	case "cross-signed-tofu", "cross-signed", "cross-signed, trusted on first use":
+	case "cross-signed-tofu", "cross-signed":
 		return TrustStateCrossSignedTOFU
-	case "cross-signed-verified", "cross-signed-trusted", "cross-signed, verified user user":
+	case "cross-signed-verified", "cross-signed-trusted":
 		return TrustStateCrossSignedVerified
 	case "verified":
 		return TrustStateVerified
