@@ -325,20 +325,23 @@ const sessionWaitTimeout = 3 * time.Second
 func (mx *MatrixHandler) sendCryptoStatusError(evt *event.Event, editEvent id.EventID, err error, retryCount int, isFinal bool) id.EventID {
 	mx.bridge.SendMessageErrorCheckpoint(evt, MsgStepDecrypted, err, isFinal, retryCount)
 
-	if isFinal && mx.bridge.Config.Bridge.EnableMessageStatusEvents() {
-		trueVal := true
-		_, sendErr := mx.bridge.Bot.SendMessageEvent(evt.RoomID, event.BeeperMessageStatus, &event.BeeperMessageStatusEventContent{
+	if mx.bridge.Config.Bridge.EnableMessageStatusEvents() {
+		statusEvent := &event.BeeperMessageStatusEventContent{
 			// TODO: network
 			RelatesTo: event.RelatesTo{
 				Type:    event.RelReference,
 				EventID: evt.ID,
 			},
-			Success:   false,
-			IsCertain: &trueVal,
-			CanRetry:  &trueVal,
-			Reason:    event.MessageStatusUndecryptable,
-			Error:     err.Error(),
-		})
+			Status:  event.MessageStatusRetriable,
+			Reason:  event.MessageStatusUndecryptable,
+			Error:   err.Error(),
+			Message: errorToHumanMessage(err),
+		}
+		if !isFinal {
+			statusEvent.Status = event.MessageStatusPending
+		}
+		statusEvent.FillLegacyBooleans()
+		_, sendErr := mx.bridge.Bot.SendMessageEvent(evt.RoomID, event.BeeperMessageStatus, statusEvent)
 		if sendErr != nil {
 			mx.log.Warnfln("Failed to send message status event for %s: %v", evt.ID, sendErr)
 		}
@@ -363,12 +366,26 @@ func (mx *MatrixHandler) sendCryptoStatusError(evt *event.Event, editEvent id.Ev
 
 var errDeviceNotTrusted = errors.New("your device is not trusted")
 var errMessageNotEncrypted = errors.New("unencrypted message")
+var errNoDecryptionKeys = errors.New("the bridge hasn't received the decryption keys")
+
+func errorToHumanMessage(err error) string {
+	switch {
+	case errors.Is(err, errDeviceNotTrusted), errors.Is(err, errNoDecryptionKeys):
+		return err.Error()
+	case errors.Is(err, errMessageNotEncrypted):
+		return "the message is not encrypted"
+	default:
+		return "the bridge failed to decrypt the message"
+	}
+}
 
 func deviceUnverifiedErrorWithExplanation(trust id.TrustState) error {
 	var explanation string
 	switch trust {
 	case id.TrustStateBlacklisted:
 		explanation = "device is blacklisted"
+	case id.TrustStateUnset:
+		explanation = "unverified"
 	case id.TrustStateUnknownDevice:
 		explanation = "device info not found"
 	case id.TrustStateForwarded:
@@ -446,9 +463,6 @@ func (mx *MatrixHandler) HandleEncrypted(evt *event.Event) {
 	mx.postDecrypt(evt, decrypted, decryptionRetryCount, "", time.Since(decryptionStart))
 }
 
-const firstDecryptionErrorMsg = "the bridge hasn't received the decryption keys. The bridge will retry for %d seconds"
-const finalDecryptionErrorMsg = "the bridge hasn't received the decryption keys"
-
 func (mx *MatrixHandler) waitLongerForSession(evt *event.Event, decryptionStart time.Time) {
 	const extendedTimeout = sessionWaitTimeout * 2
 
@@ -457,11 +471,11 @@ func (mx *MatrixHandler) waitLongerForSession(evt *event.Event, decryptionStart 
 		content.SessionID, evt.ID, int(extendedTimeout.Seconds()))
 
 	go mx.bridge.Crypto.RequestSession(evt.RoomID, content.SenderKey, content.SessionID, evt.Sender, content.DeviceID)
-	errorEventID := mx.sendCryptoStatusError(evt, "", fmt.Errorf(firstDecryptionErrorMsg, int(extendedTimeout.Seconds())), 1, false)
+	errorEventID := mx.sendCryptoStatusError(evt, "", fmt.Errorf("%w. The bridge will retry for %d seconds", errNoDecryptionKeys, int(extendedTimeout.Seconds())), 1, false)
 
 	if !mx.bridge.Crypto.WaitForSession(evt.RoomID, content.SenderKey, content.SessionID, extendedTimeout) {
 		mx.log.Debugfln("Didn't get %s, giving up on %s", content.SessionID, evt.ID)
-		mx.sendCryptoStatusError(evt, errorEventID, errors.New(finalDecryptionErrorMsg), 2, true)
+		mx.sendCryptoStatusError(evt, errorEventID, errNoDecryptionKeys, 2, true)
 		return
 	}
 

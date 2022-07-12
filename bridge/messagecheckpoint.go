@@ -42,7 +42,10 @@ const (
 	MsgStatusTimeout     MessageCheckpointStatus = "TIMEOUT"
 )
 
-func ReasonToCheckpointStatus(reason event.MessageStatusReason) MessageCheckpointStatus {
+func ReasonToCheckpointStatus(reason event.MessageStatusReason, status event.MessageStatus) MessageCheckpointStatus {
+	if status == event.MessageStatusPending {
+		return MsgStatusWillRetry
+	}
 	switch reason {
 	case event.MessageStatusUnsupported:
 		return MsgStatusUnsupported

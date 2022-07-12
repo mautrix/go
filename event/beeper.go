@@ -21,29 +21,44 @@ const (
 	MessageStatusNoPermission  MessageStatusReason = "m.no_permission"
 )
 
+type MessageStatus string
+
+const (
+	MessageStatusSuccess   MessageStatus = "SUCCESS"
+	MessageStatusPending   MessageStatus = "PENDING"
+	MessageStatusRetriable MessageStatus = "FAIL_RETRIABLE"
+	MessageStatusFail      MessageStatus = "FAIL_PERMANENT"
+)
+
 type BeeperMessageStatusEventContent struct {
 	Network   string              `json:"network"`
 	RelatesTo RelatesTo           `json:"m.relates_to"`
-	Success   bool                `json:"success"`
+	Status    MessageStatus       `json:"status"`
 	Reason    MessageStatusReason `json:"reason,omitempty"`
 	Error     string              `json:"error,omitempty"`
 	Message   string              `json:"message,omitempty"`
-	CanRetry  *bool               `json:"can_retry,omitempty"`
-	IsCertain *bool               `json:"is_certain,omitempty"`
 
-	StillWorking bool `json:"still_working,omitempty"`
+	Success      bool  `json:"success"`
+	CanRetry     *bool `json:"can_retry,omitempty"`
+	StillWorking bool  `json:"still_working,omitempty"`
 
 	LastRetry id.EventID `json:"last_retry,omitempty"`
 }
 
-func (status *BeeperMessageStatusEventContent) SetCanRetry(canRetry bool) *BeeperMessageStatusEventContent {
-	status.CanRetry = &canRetry
-	return status
-}
-
-func (status *BeeperMessageStatusEventContent) SetIsCertain(isCertain bool) *BeeperMessageStatusEventContent {
-	status.IsCertain = &isCertain
-	return status
+func (status *BeeperMessageStatusEventContent) FillLegacyBooleans() {
+	trueVal := true
+	falseVal := true
+	switch status.Status {
+	case MessageStatusSuccess:
+		status.Success = true
+	case MessageStatusPending:
+		status.CanRetry = &trueVal
+		status.StillWorking = true
+	case MessageStatusRetriable:
+		status.CanRetry = &trueVal
+	case MessageStatusFail:
+		status.CanRetry = &falseVal
+	}
 }
 
 type BeeperRetryMetadata struct {
