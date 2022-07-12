@@ -166,3 +166,8 @@ type ModPolicyContent struct {
 	Reason         string `json:"reason"`
 	Recommendation string `json:"recommendation"`
 }
+
+type InsertionMarkerContent struct {
+	InsertionID id.EventID `json:"org.matrix.msc2716.marker.insertion"`
+	Timestamp   int64      `json:"com.beeper.timestamp,omitempty"`
+}
