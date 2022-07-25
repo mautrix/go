@@ -298,20 +298,20 @@ type RespUploadKeys struct {
 }
 
 type RespQueryKeys struct {
-	Failures        map[string]interface{}                   `json:"failures"`
-	DeviceKeys      map[id.UserID]map[id.DeviceID]DeviceKeys `json:"device_keys"`
-	MasterKeys      map[id.UserID]CrossSigningKeys           `json:"master_keys"`
-	SelfSigningKeys map[id.UserID]CrossSigningKeys           `json:"self_signing_keys"`
-	UserSigningKeys map[id.UserID]CrossSigningKeys           `json:"user_signing_keys"`
+	Failures        map[string]interface{}                   `json:"failures,omitempty"`
+	DeviceKeys      map[id.UserID]map[id.DeviceID]DeviceKeys `json:"device_keys,omitempty"`
+	MasterKeys      map[id.UserID]CrossSigningKeys           `json:"master_keys,omitempty"`
+	SelfSigningKeys map[id.UserID]CrossSigningKeys           `json:"self_signing_keys,omitempty"`
+	UserSigningKeys map[id.UserID]CrossSigningKeys           `json:"user_signing_keys,omitempty"`
 }
 
 type RespClaimKeys struct {
-	Failures    map[string]interface{}                                `json:"failures"`
-	OneTimeKeys map[id.UserID]map[id.DeviceID]map[id.KeyID]OneTimeKey `json:"one_time_keys"`
+	Failures    map[string]interface{}                                `json:"failures,omitempty"`
+	OneTimeKeys map[id.UserID]map[id.DeviceID]map[id.KeyID]OneTimeKey `json:"one_time_keys,omitempty"`
 }
 
 type RespUploadSignatures struct {
-	Failures map[string]interface{} `json:"failures"`
+	Failures map[string]interface{} `json:"failures,omitempty"`
 }
 
 type RespKeyChanges struct {
