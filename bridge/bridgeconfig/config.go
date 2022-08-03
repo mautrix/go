@@ -13,6 +13,7 @@ import (
 
 	"maunium.net/go/mautrix/appservice"
 	"maunium.net/go/mautrix/id"
+	"maunium.net/go/mautrix/util"
 	up "maunium.net/go/mautrix/util/configupgrade"
 )
 
@@ -46,7 +47,7 @@ type AppserviceConfig struct {
 }
 
 func (config *BaseConfig) MakeUserIDRegex() *regexp.Regexp {
-	usernamePlaceholder := appservice.RandomString(16)
+	usernamePlaceholder := util.RandomString(16)
 	usernameTemplate := fmt.Sprintf("@%s:%s",
 		config.Bridge.FormatUsername(usernamePlaceholder),
 		config.Homeserver.Domain)
@@ -63,7 +64,7 @@ func (config *BaseConfig) GenerateRegistration() *appservice.Registration {
 	config.AppService.ASToken = registration.AppToken
 	config.AppService.copyToRegistration(registration)
 
-	registration.SenderLocalpart = appservice.RandomString(32)
+	registration.SenderLocalpart = util.RandomString(32)
 	botRegex := regexp.MustCompile(fmt.Sprintf("^@%s:%s$",
 		regexp.QuoteMeta(config.AppService.Bot.Username),
 		regexp.QuoteMeta(config.Homeserver.Domain)))
