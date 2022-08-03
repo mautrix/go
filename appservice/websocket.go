@@ -289,9 +289,11 @@ func (as *AppService) consumeWebsocket(stopFunc func(error), ws *websocket.Conn)
 			as.websocketRequestsLock.RUnlock()
 		} else {
 			as.Log.Debugfln("Received command request %s %d", msg.Command, msg.ReqID)
+			startTime := time.Now()
 			as.websocketHandlersLock.RLock()
 			handler, ok := as.websocketHandlers[msg.Command]
 			as.websocketHandlersLock.RUnlock()
+			duration := time.Now().Sub(startTime)
 			if !ok {
 				handler = as.unknownCommandHandler
 			}
@@ -301,9 +303,9 @@ func (as *AppService) consumeWebsocket(stopFunc func(error), ws *websocket.Conn)
 				if err != nil {
 					as.Log.Warnfln("Failed to send response to %s %d: %v", msg.Command, msg.ReqID, err)
 				} else if okResp {
-					as.Log.Debugfln("Sent success response to %s %d", msg.Command, msg.ReqID)
+					as.Log.Debugfln("Sent success response to %s %d (took %s)", msg.Command, msg.ReqID, duration)
 				} else {
-					as.Log.Debugfln("Sent error response to %s %d", msg.Command, msg.ReqID)
+					as.Log.Debugfln("Sent error response to %s %d (took %s)", msg.Command, msg.ReqID, duration)
 				}
 			}()
 		}
