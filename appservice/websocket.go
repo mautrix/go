@@ -289,16 +289,16 @@ func (as *AppService) consumeWebsocket(stopFunc func(error), ws *websocket.Conn)
 			as.websocketRequestsLock.RUnlock()
 		} else {
 			as.Log.Debugfln("Received command request %s %d", msg.Command, msg.ReqID)
-			startTime := time.Now()
 			as.websocketHandlersLock.RLock()
 			handler, ok := as.websocketHandlers[msg.Command]
 			as.websocketHandlersLock.RUnlock()
-			duration := time.Now().Sub(startTime)
 			if !ok {
 				handler = as.unknownCommandHandler
 			}
 			go func() {
+				startTime := time.Now()
 				okResp, data := handler(msg.WebsocketCommand)
+				duration := time.Now().Sub(startTime)
 				err = as.SendWebsocket(msg.MakeResponse(okResp, data))
 				if err != nil {
 					as.Log.Warnfln("Failed to send response to %s %d: %v", msg.Command, msg.ReqID, err)
