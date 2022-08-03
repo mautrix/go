@@ -16,17 +16,17 @@ import (
 // Registration contains the data in a Matrix appservice registration.
 // See https://spec.matrix.org/v1.2/application-service-api/#registration
 type Registration struct {
-	ID              string     `yaml:"id"`
-	URL             string     `yaml:"url"`
-	AppToken        string     `yaml:"as_token"`
-	ServerToken     string     `yaml:"hs_token"`
-	SenderLocalpart string     `yaml:"sender_localpart"`
-	RateLimited     *bool      `yaml:"rate_limited,omitempty"`
-	Namespaces      Namespaces `yaml:"namespaces"`
-	Protocols       []string   `yaml:"protocols,omitempty"`
+	ID              string     `yaml:"id" json:"id"`
+	URL             string     `yaml:"url" json:"url"`
+	AppToken        string     `yaml:"as_token" json:"as_token"`
+	ServerToken     string     `yaml:"hs_token" json:"hs_token"`
+	SenderLocalpart string     `yaml:"sender_localpart" json:"sender_localpart"`
+	RateLimited     *bool      `yaml:"rate_limited,omitempty" json:"rate_limited,omitempty"`
+	Namespaces      Namespaces `yaml:"namespaces" json:"namespaces"`
+	Protocols       []string   `yaml:"protocols,omitempty" json:"protocols,omitempty"`
 
-	SoruEphemeralEvents bool `yaml:"de.sorunome.msc2409.push_ephemeral,omitempty"`
-	EphemeralEvents     bool `yaml:"push_ephemeral,omitempty"`
+	SoruEphemeralEvents bool `yaml:"de.sorunome.msc2409.push_ephemeral,omitempty" json:"de.sorunome.msc2409.push_ephemeral,omitempty"`
+	EphemeralEvents     bool `yaml:"push_ephemeral,omitempty" json:"push_ephemeral,omitempty"`
 }
 
 // CreateRegistration creates a Registration with random appservice and homeserver tokens.
