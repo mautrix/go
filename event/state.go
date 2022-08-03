@@ -51,17 +51,19 @@ type TombstoneEventContent struct {
 	ReplacementRoom id.RoomID `json:"replacement_room"`
 }
 
+type Predecessor struct {
+	RoomID  id.RoomID  `json:"room_id"`
+	EventID id.EventID `json:"event_id"`
+}
+
 // CreateEventContent represents the content of a m.room.create state event.
 // https://spec.matrix.org/v1.2/client-server-api/#mroomcreate
 type CreateEventContent struct {
-	Type        RoomType  `json:"type,omitempty"`
-	Creator     id.UserID `json:"creator,omitempty"`
-	Federate    bool      `json:"m.federate,omitempty"`
-	RoomVersion string    `json:"version,omitempty"`
-	Predecessor struct {
-		RoomID  id.RoomID  `json:"room_id"`
-		EventID id.EventID `json:"event_id"`
-	} `json:"predecessor"`
+	Type        RoomType     `json:"type,omitempty"`
+	Creator     id.UserID    `json:"creator,omitempty"`
+	Federate    bool         `json:"m.federate,omitempty"`
+	RoomVersion string       `json:"version,omitempty"`
+	Predecessor *Predecessor `json:"predecessor,omitempty"`
 }
 
 // JoinRule specifies how open a room is to new members.
