@@ -154,7 +154,8 @@ func isValidEscapedChar(b byte) bool {
 // are encoded using leading underscores ("_"). Characters outside the aforementioned ranges
 // (including literal underscores ("_") and equals ("=")) are encoded as UTF8 code points (NOT NCRs)
 // and converted to lower-case hex with a leading "=". For example:
-//   Alph@Bet_50up  => _alph=40_bet=5f50up
+//
+//	Alph@Bet_50up  => _alph=40_bet=5f50up
 func EncodeUserLocalpart(str string) string {
 	strBytes := []byte(str)
 	var outputBuffer bytes.Buffer
@@ -176,7 +177,9 @@ func EncodeUserLocalpart(str string) string {
 //
 // This decodes quoted-printable bytes back into UTF8, and unescapes casing. For
 // example:
-//  _alph=40_bet=5f50up  =>  Alph@Bet_50up
+//
+//	_alph=40_bet=5f50up  =>  Alph@Bet_50up
+//
 // Returns an error if the input string contains characters outside the
 // range "a-z0-9._=-", has an invalid quote-printable byte (e.g. not hex), or has
 // an invalid _ escaped byte (e.g. "_5").

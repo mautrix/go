@@ -215,7 +215,7 @@ func (mach *OlmMachine) HandleOTKCounts(otkCount *mautrix.OTKCount) {
 //
 // This can be easily registered into a mautrix client using .OnSync():
 //
-//     client.Syncer.(*mautrix.DefaultSyncer).OnSync(c.crypto.ProcessSyncResponse)
+//	client.Syncer.(*mautrix.DefaultSyncer).OnSync(c.crypto.ProcessSyncResponse)
 func (mach *OlmMachine) ProcessSyncResponse(resp *mautrix.RespSync, since string) bool {
 	mach.HandleDeviceLists(&resp.DeviceLists, since)
 
@@ -237,7 +237,7 @@ func (mach *OlmMachine) ProcessSyncResponse(resp *mautrix.RespSync, since string
 //
 // Currently this is not automatically called, so you must add a listener yourself:
 //
-//     client.Syncer.(*mautrix.DefaultSyncer).OnEventType(event.StateMember, c.crypto.HandleMemberEvent)
+//	client.Syncer.(*mautrix.DefaultSyncer).OnEventType(event.StateMember, c.crypto.HandleMemberEvent)
 func (mach *OlmMachine) HandleMemberEvent(evt *event.Event) {
 	if !mach.StateStore.IsEncrypted(evt.RoomID) {
 		return

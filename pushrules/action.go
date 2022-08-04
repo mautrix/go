@@ -83,11 +83,11 @@ type PushAction struct {
 
 // UnmarshalJSON parses JSON into this PushAction.
 //
-//  * If the JSON is a single string, the value is stored in the Action field.
-//  * If the JSON is an object with the set_tweak field, Action will be set to
-//    "set_tweak", Tweak will be set to the value of the set_tweak field and
-//    and Value will be set to the value of the value field.
-//  * In any other case, the function does nothing.
+//   - If the JSON is a single string, the value is stored in the Action field.
+//   - If the JSON is an object with the set_tweak field, Action will be set to
+//     "set_tweak", Tweak will be set to the value of the set_tweak field and
+//     and Value will be set to the value of the value field.
+//   - In any other case, the function does nothing.
 func (action *PushAction) UnmarshalJSON(raw []byte) error {
 	var data interface{}
 

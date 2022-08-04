@@ -48,9 +48,12 @@ func (ut *UpgradeTable) Register(from, to int, message string, fn upgradeFunc) {
 }
 
 // Syntax is either
-//   -- v0 -> v1: Message
+//
+//	-- v0 -> v1: Message
+//
 // or
-//   -- v1: Message
+//
+//	-- v1: Message
 var upgradeHeaderRegex = regexp.MustCompile(`^-- (?:v(\d+) -> )?v(\d+): (.+)$`)
 
 func parseFileHeader(file []byte) (from, to int, message string, lines [][]byte, err error) {
@@ -82,9 +85,13 @@ func parseFileHeader(file []byte) (from, to int, message string, lines [][]byte,
 }
 
 // To limit the next line to one dialect:
-//   -- only: postgres
+//
+//	-- only: postgres
+//
 // To limit the next N lines:
-//   -- only: sqlite for next 123 lines
+//
+//	-- only: sqlite for next 123 lines
+//
 // If the single-line limit is on the second line of the file, the whole file is limited to that dialect.
 var dialectLineFilter = regexp.MustCompile(`^\s*-- only: (postgres|sqlite)(?: for next (\d+) lines)?`)
 

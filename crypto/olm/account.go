@@ -250,12 +250,13 @@ func (a *Account) SignJSON(obj interface{}) (string, error) {
 // The returned data is a struct with the single value "Curve25519", which is
 // itself an object mapping key id to base64-encoded Curve25519 key.  For
 // example:
-// 	{
-// 	    Curve25519: {
-// 	        "AAAAAA": "wo76WcYtb0Vk/pBOdmduiGJ0wIEjW4IBMbbQn7aSnTo",
-// 	        "AAAAAB": "LRvjo46L1X2vx69sS9QNFD29HWulxrmW11Up5AfAjgU"
-// 	    }
-// 	}
+//
+//	{
+//	    Curve25519: {
+//	        "AAAAAA": "wo76WcYtb0Vk/pBOdmduiGJ0wIEjW4IBMbbQn7aSnTo",
+//	        "AAAAAB": "LRvjo46L1X2vx69sS9QNFD29HWulxrmW11Up5AfAjgU"
+//	    }
+//	}
 func (a *Account) OneTimeKeys() map[string]id.Curve25519 {
 	oneTimeKeysJSON := make([]byte, a.oneTimeKeysLen())
 	r := C.olm_account_one_time_keys(

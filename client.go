@@ -154,6 +154,7 @@ func (cli *Client) ClearCredentials() {
 //   - The failure to create a filter.
 //   - Client.Syncer.OnFailedSync returning an error in response to a failed sync.
 //   - Client.Syncer.ProcessResponse returning an error.
+//
 // If you wish to continue retrying in spite of these fatal errors, call Sync() again.
 func (cli *Client) Sync() error {
 	return cli.SyncWithContext(context.Background())
@@ -679,14 +680,14 @@ func (cli *Client) RegisterGuest(req *ReqRegister) (*RespRegister, *RespUserInte
 //
 // This does not set credentials on the client instance. See SetCredentials() instead.
 //
-// 	res, err := cli.RegisterDummy(&mautrix.ReqRegister{
+//	res, err := cli.RegisterDummy(&mautrix.ReqRegister{
 //		Username: "alice",
 //		Password: "wonderland",
 //	})
-//  if err != nil {
-// 		panic(err)
-// 	}
-// 	token := res.AccessToken
+//	if err != nil {
+//		panic(err)
+//	}
+//	token := res.AccessToken
 func (cli *Client) RegisterDummy(req *ReqRegister) (*RespRegister, error) {
 	res, uia, err := cli.Register(req)
 	if err != nil && uia == nil {
@@ -1005,10 +1006,11 @@ func (cli *Client) RedactEvent(roomID id.RoomID, eventID id.EventID, extra ...Re
 }
 
 // CreateRoom creates a new Matrix room. See https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3createroom
-//  resp, err := cli.CreateRoom(&mautrix.ReqCreateRoom{
-//  	Preset: "public_chat",
-//  })
-//  fmt.Println("Room:", resp.RoomID)
+//
+//	resp, err := cli.CreateRoom(&mautrix.ReqCreateRoom{
+//		Preset: "public_chat",
+//	})
+//	fmt.Println("Room:", resp.RoomID)
 func (cli *Client) CreateRoom(req *ReqCreateRoom) (resp *RespCreateRoom, err error) {
 	urlPath := cli.BuildClientURL("v3", "createRoom")
 	_, err = cli.MakeRequest("POST", urlPath, req, &resp)
