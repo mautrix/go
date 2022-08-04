@@ -125,14 +125,14 @@ type RespPreviewURL struct {
 // RespUserInteractive is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#user-interactive-authentication-api
 type RespUserInteractive struct {
 	Flows []struct {
-		Stages []AuthType `json:"stages"`
-	} `json:"flows"`
-	Params    map[AuthType]interface{} `json:"params"`
-	Session   string                   `json:"session"`
-	Completed []string                 `json:"completed"`
+		Stages []AuthType `json:"stages,omitempty"`
+	} `json:"flows,omitempty"`
+	Params    map[AuthType]interface{} `json:"params,omitempty"`
+	Session   string                   `json:"session,omitempty"`
+	Completed []string                 `json:"completed,omitempty"`
 
-	ErrCode string `json:"errcode"`
-	Error   string `json:"error"`
+	ErrCode string `json:"errcode,omitempty"`
+	Error   string `json:"error,omitempty"`
 }
 
 // HasSingleStageFlow returns true if there exists at least 1 Flow with a single stage of stageName.
@@ -155,7 +155,7 @@ type RespRegister struct {
 	AccessToken  string      `json:"access_token"`
 	DeviceID     id.DeviceID `json:"device_id"`
 	HomeServer   string      `json:"home_server"`
-	RefreshToken string      `json:"refresh_token"`
+	RefreshToken string      `json:"refresh_token,omitempty"`
 	UserID       id.UserID   `json:"user_id"`
 }
 
@@ -188,7 +188,7 @@ type RespLogin struct {
 	AccessToken string           `json:"access_token"`
 	DeviceID    id.DeviceID      `json:"device_id"`
 	UserID      id.UserID        `json:"user_id"`
-	WellKnown   *ClientWellKnown `json:"well_known"`
+	WellKnown   *ClientWellKnown `json:"well_known,omitempty"`
 }
 
 // RespLogout is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3logout
