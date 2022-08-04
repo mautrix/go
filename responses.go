@@ -395,19 +395,21 @@ func (rc *RespCapabilities) UnmarshalJSON(data []byte) error {
 }
 
 func (rc *RespCapabilities) MarshalJSON() ([]byte, error) {
-	marshalableCopy := make(map[string]interface{})
+	marshalableCopy := make(map[string]interface{}, len(rc.Custom))
 	val := reflect.ValueOf(rc).Elem()
 	for _, field := range reflect.VisibleFields(val.Type()) {
 		jsonTag := strings.Split(field.Tag.Get("json"), ",")[0]
 		if jsonTag != "-" && jsonTag != "" {
 			fieldVal := val.FieldByIndex(field.Index)
 			if !fieldVal.IsNil() {
-				rc.Custom[jsonTag] = fieldVal.Interface()
+				marshalableCopy[jsonTag] = fieldVal.Interface()
 			}
 		}
 	}
-	for key, value := range rc.Custom {
-		marshalableCopy[key] = value
+	if rc.Custom != nil {
+		for key, value := range rc.Custom {
+			marshalableCopy[key] = value
+		}
 	}
 	var buf bytes.Buffer
 	buf.WriteString(`{"capabilities":`)

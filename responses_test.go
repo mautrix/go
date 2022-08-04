@@ -109,4 +109,5 @@ func TestRespCapabilities_MarshalJSON(t *testing.T) {
 	marshaledString := string(canonicaljson.CanonicalJSONAssumeValid(data))
 	origString := string(canonicaljson.CanonicalJSONAssumeValid([]byte(sampleData)))
 	assert.Equal(t, marshaledString, origString)
+	assert.Len(t, sampleObject.Custom, 1)
 }
