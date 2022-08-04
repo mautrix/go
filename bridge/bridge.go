@@ -536,7 +536,7 @@ func (br *Bridge) Main() {
 	br.start()
 	br.Log.Infoln("Bridge started!")
 
-	c := make(chan os.Signal)
+	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	<-c
 

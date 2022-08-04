@@ -639,11 +639,11 @@ func (store *SQLCryptoStore) GetCrossSigningKeys(userID id.UserID) (map[id.Cross
 	for rows.Next() {
 		var usage id.CrossSigningUsage
 		var key, first id.Ed25519
-		err := rows.Scan(&usage, &key, &first)
+		err = rows.Scan(&usage, &key, &first)
 		if err != nil {
 			return nil, err
 		}
-		data[usage] = id.CrossSigningKey{key, first}
+		data[usage] = id.CrossSigningKey{Key: key, First: first}
 	}
 
 	return data, nil
