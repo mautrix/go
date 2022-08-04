@@ -69,8 +69,8 @@ type RespJoinedMembers struct {
 }
 
 type JoinedMember struct {
-	DisplayName *string `json:"display_name,omitempty"`
-	AvatarURL   *string `json:"avatar_url,omitempty"`
+	DisplayName string `json:"display_name,omitempty"`
+	AvatarURL   string `json:"avatar_url,omitempty"`
 }
 
 // RespMessages is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3roomsroomidmessages
@@ -154,11 +154,15 @@ type RespUserDisplayName struct {
 
 // RespRegister is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3register
 type RespRegister struct {
-	AccessToken  string      `json:"access_token"`
-	DeviceID     id.DeviceID `json:"device_id"`
-	HomeServer   string      `json:"home_server"`
-	RefreshToken string      `json:"refresh_token,omitempty"`
-	UserID       id.UserID   `json:"user_id"`
+	AccessToken string      `json:"access_token"`
+	DeviceID    id.DeviceID `json:"device_id"`
+	UserID      id.UserID   `json:"user_id"`
+
+	RefreshToken string `json:"refresh_token,omitempty"`
+	ExpiresInMS  int64  `json:"expires_in_ms,omitempty"`
+
+	// Deprecated: homeserver should be parsed from the user ID
+	HomeServer string `json:"home_server,omitempty"`
 }
 
 type LoginFlow struct {

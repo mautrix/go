@@ -37,6 +37,7 @@ type ReqRegister struct {
 	DeviceID                 id.DeviceID `json:"device_id,omitempty"`
 	InitialDeviceDisplayName string      `json:"initial_device_display_name,omitempty"`
 	InhibitLogin             bool        `json:"inhibit_login,omitempty"`
+	RefreshToken             bool        `json:"refresh_token,omitempty"`
 	Auth                     interface{} `json:"auth,omitempty"`
 
 	// Type for registration, only used for appservice user registrations
