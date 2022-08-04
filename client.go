@@ -762,6 +762,13 @@ func (cli *Client) Versions() (resp *RespVersions, err error) {
 	return
 }
 
+// Capabilities returns capabilities on this homeserver. See https://spec.matrix.org/v1.3/client-server-api/#capabilities-negotiation
+func (cli *Client) Capabilities() (resp *RespCapabilities, err error) {
+	urlPath := cli.BuildClientURL("v3", "capabilities")
+	_, err = cli.MakeRequest("GET", urlPath, nil, &resp)
+	return
+}
+
 // JoinRoom joins the client to a room ID or alias. See https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3joinroomidoralias
 //
 // If serverName is specified, this will be added as a query param to instruct the homeserver to join via that server. If content is specified, it will

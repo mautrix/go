@@ -1,6 +1,14 @@
 package mautrix
 
 import (
+	"bytes"
+	"encoding/json"
+	"reflect"
+	"strconv"
+	"strings"
+
+	"github.com/tidwall/gjson"
+
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
@@ -343,4 +351,117 @@ type RespBatchSend struct {
 	BaseInsertionEventID id.EventID `json:"base_insertion_event_id"`
 
 	NextBatchID id.BatchID `json:"next_batch_id"`
+}
+
+// RespCapabilities is the JSON response for https://spec.matrix.org/v1.3/client-server-api/#get_matrixclientv3capabilities
+type RespCapabilities struct {
+	RoomVersions    *CapRoomVersions `json:"m.room_versions,omitempty"`
+	ChangePassword  *CapBooleanTrue  `json:"m.change_password,omitempty"`
+	SetDisplayname  *CapBooleanTrue  `json:"m.set_displayname,omitempty"`
+	SetAvatarURL    *CapBooleanTrue  `json:"m.set_avatar_url,omitempty"`
+	ThreePIDChanges *CapBooleanTrue  `json:"m.3pid_changes,omitempty"`
+
+	Custom map[string]interface{} `json:"-"`
+}
+
+type serializableRespCapabilities RespCapabilities
+
+func (rc *RespCapabilities) UnmarshalJSON(data []byte) error {
+	res := gjson.GetBytes(data, "capabilities")
+	if !res.Exists() || !res.IsObject() {
+		return nil
+	}
+	if res.Index > 0 {
+		data = data[res.Index : res.Index+len(res.Raw)]
+	} else {
+		data = []byte(res.Raw)
+	}
+	err := json.Unmarshal(data, (*serializableRespCapabilities)(rc))
+	if err != nil {
+		return err
+	}
+	err = json.Unmarshal(data, &rc.Custom)
+	if err != nil {
+		return err
+	}
+	// Remove non-custom capabilities from the custom map so that they don't get overridden when serializing back
+	for _, field := range reflect.VisibleFields(reflect.TypeOf(rc).Elem()) {
+		jsonTag := strings.Split(field.Tag.Get("json"), ",")[0]
+		if jsonTag != "-" && jsonTag != "" {
+			delete(rc.Custom, jsonTag)
+		}
+	}
+	return nil
+}
+
+func (rc *RespCapabilities) MarshalJSON() ([]byte, error) {
+	marshalableCopy := make(map[string]interface{})
+	val := reflect.ValueOf(rc).Elem()
+	for _, field := range reflect.VisibleFields(val.Type()) {
+		jsonTag := strings.Split(field.Tag.Get("json"), ",")[0]
+		if jsonTag != "-" && jsonTag != "" {
+			fieldVal := val.FieldByIndex(field.Index)
+			if !fieldVal.IsNil() {
+				rc.Custom[jsonTag] = fieldVal.Interface()
+			}
+		}
+	}
+	for key, value := range rc.Custom {
+		marshalableCopy[key] = value
+	}
+	var buf bytes.Buffer
+	buf.WriteString(`{"capabilities":`)
+	err := json.NewEncoder(&buf).Encode(marshalableCopy)
+	if err != nil {
+		return nil, err
+	}
+	buf.WriteByte('}')
+	return buf.Bytes(), nil
+}
+
+type CapBoolean struct {
+	Enabled bool `json:"enabled"`
+}
+
+type CapBooleanTrue CapBoolean
+
+// IsEnabled returns true if the capability is either enabled explicitly or not specified (nil)
+func (cb *CapBooleanTrue) IsEnabled() bool {
+	// Default to true when
+	return cb == nil || cb.Enabled
+}
+
+type CapBooleanFalse CapBoolean
+
+// IsEnabled returns true if the capability is enabled explicitly. If it's not specified, this returns false.
+func (cb *CapBooleanFalse) IsEnabled() bool {
+	return cb != nil && cb.Enabled
+}
+
+type CapRoomVersionStability string
+
+const (
+	CapRoomVersionStable   CapRoomVersionStability = "stable"
+	CapRoomVersionUnstable CapRoomVersionStability = "unstable"
+)
+
+type CapRoomVersions struct {
+	Default   string                             `json:"default"`
+	Available map[string]CapRoomVersionStability `json:"available"`
+}
+
+func (vers *CapRoomVersions) IsStable(version string) bool {
+	if vers == nil || vers.Available == nil {
+		val, err := strconv.Atoi(version)
+		return err == nil && val > 0
+	}
+	return vers.Available[version] == CapRoomVersionStable
+}
+
+func (vers *CapRoomVersions) IsAvailable(version string) bool {
+	if vers == nil || vers.Available == nil {
+		return false
+	}
+	_, available := vers.Available[version]
+	return available
 }
