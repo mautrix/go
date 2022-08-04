@@ -124,15 +124,17 @@ type RespPreviewURL struct {
 
 // RespUserInteractive is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#user-interactive-authentication-api
 type RespUserInteractive struct {
-	Flows []struct {
-		Stages []AuthType `json:"stages,omitempty"`
-	} `json:"flows,omitempty"`
+	Flows     []UIAFlow                `json:"flows,omitempty"`
 	Params    map[AuthType]interface{} `json:"params,omitempty"`
 	Session   string                   `json:"session,omitempty"`
 	Completed []string                 `json:"completed,omitempty"`
 
 	ErrCode string `json:"errcode,omitempty"`
 	Error   string `json:"error,omitempty"`
+}
+
+type UIAFlow struct {
+	Stages []AuthType `json:"stages,omitempty"`
 }
 
 // HasSingleStageFlow returns true if there exists at least 1 Flow with a single stage of stageName.
