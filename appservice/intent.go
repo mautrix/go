@@ -518,18 +518,10 @@ func (intent *IntentAPI) JoinedMembers(roomID id.RoomID) (resp *mautrix.RespJoin
 		return
 	}
 	for userID, member := range resp.Joined {
-		var displayname string
-		var avatarURL id.ContentURIString
-		if member.DisplayName != nil {
-			displayname = *member.DisplayName
-		}
-		if member.AvatarURL != nil {
-			avatarURL = id.ContentURIString(*member.AvatarURL)
-		}
 		intent.as.StateStore.SetMember(roomID, userID, &event.MemberEventContent{
 			Membership:  event.MembershipJoin,
-			AvatarURL:   avatarURL,
-			Displayname: displayname,
+			AvatarURL:   id.ContentURIString(member.AvatarURL),
+			Displayname: member.DisplayName,
 		})
 	}
 	return
