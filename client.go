@@ -323,6 +323,10 @@ func (params *FullRequest) compileRequest() (*http.Request, error) {
 		params.RequestLength = int64(len(params.RequestBytes))
 	} else if params.RequestLength > 0 && params.RequestBody != nil {
 		logBody = fmt.Sprintf("<%d bytes>", params.RequestLength)
+	} else if params.Method != http.MethodGet && params.Method != http.MethodHead {
+		params.RequestJSON = struct{}{}
+		logBody = "<default empty object>"
+		reqBody = bytes.NewReader([]byte("{}"))
 	}
 	ctx := context.WithValue(params.Context, logBodyContextKey, logBody)
 	reqID := atomic.AddInt32(&requestID, 1)
