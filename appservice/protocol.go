@@ -17,16 +17,19 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
+type OTKCountMap = map[id.UserID]map[id.DeviceID]mautrix.OTKCount
+
 // Transaction contains a list of events.
 type Transaction struct {
-	Events          []*event.Event                 `json:"events"`
-	EphemeralEvents []*event.Event                 `json:"ephemeral,omitempty"`
-	DeviceLists     *mautrix.DeviceLists           `json:"device_lists,omitempty"`
-	DeviceOTKCount  map[id.UserID]mautrix.OTKCount `json:"device_one_time_keys_count,omitempty"`
+	Events          []*event.Event `json:"events"`
+	EphemeralEvents []*event.Event `json:"ephemeral,omitempty"`
 
-	MSC2409EphemeralEvents []*event.Event                 `json:"de.sorunome.msc2409.ephemeral,omitempty"`
-	MSC3202DeviceLists     *mautrix.DeviceLists           `json:"org.matrix.msc3202.device_lists,omitempty"`
-	MSC3202DeviceOTKCount  map[id.UserID]mautrix.OTKCount `json:"org.matrix.msc3202.device_one_time_keys_count,omitempty"`
+	DeviceLists    *mautrix.DeviceLists `json:"device_lists,omitempty"`
+	DeviceOTKCount OTKCountMap          `json:"device_one_time_keys_count,omitempty"`
+
+	MSC2409EphemeralEvents []*event.Event       `json:"de.sorunome.msc2409.ephemeral,omitempty"`
+	MSC3202DeviceLists     *mautrix.DeviceLists `json:"org.matrix.msc3202.device_lists,omitempty"`
+	MSC3202DeviceOTKCount  OTKCountMap          `json:"org.matrix.msc3202.device_one_time_keys_count,omitempty"`
 }
 
 func (txn *Transaction) ContentString() string {

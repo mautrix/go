@@ -161,13 +161,16 @@ func (as *AppService) handleTransaction(id string, txn *Transaction) {
 	as.txnIDC.MarkProcessed(id)
 }
 
-func (as *AppService) handleOTKCounts(otks map[id.UserID]mautrix.OTKCount) {
-	for userID, otkCounts := range otks {
-		otkCounts.UserID = userID
-		select {
-		case as.OTKCounts <- &otkCounts:
-		default:
-			as.Log.Warnfln("Dropped OTK count update for %s because channel is full", userID)
+func (as *AppService) handleOTKCounts(otks OTKCountMap) {
+	for userID, devices := range otks {
+		for deviceID, otkCounts := range devices {
+			otkCounts.UserID = userID
+			otkCounts.DeviceID = deviceID
+			select {
+			case as.OTKCounts <- &otkCounts:
+			default:
+				as.Log.Warnfln("Dropped OTK count update for %s because channel is full", userID)
+			}
 		}
 	}
 }
