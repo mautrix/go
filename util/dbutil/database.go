@@ -52,10 +52,31 @@ type Scannable interface {
 	Scan(...interface{}) error
 }
 
-type Execable interface {
-	Exec(query string, args ...interface{}) (sql.Result, error)
+// Expected implementations of Scannable
+var (
+	_ Scannable = (*sql.Row)(nil)
+	_ Scannable = (*sql.Rows)(nil)
+)
+
+type ContextExecable interface {
 	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+	QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row
 }
+
+type Execable interface {
+	ContextExecable
+	Exec(query string, args ...interface{}) (sql.Result, error)
+	Query(query string, args ...interface{}) (*sql.Rows, error)
+	QueryRow(query string, args ...interface{}) *sql.Row
+}
+
+// Expected implementations of Execable
+var (
+	_ Execable        = (*sql.Tx)(nil)
+	_ Execable        = (*sql.DB)(nil)
+	_ ContextExecable = (*sql.Conn)(nil)
+)
 
 type Database struct {
 	*sql.DB
