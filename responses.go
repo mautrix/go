@@ -202,7 +202,8 @@ type RespLogout struct{}
 
 // RespCreateRoom is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3createroom
 type RespCreateRoom struct {
-	RoomID id.RoomID `json:"room_id"`
+	RoomID      id.RoomID `json:"room_id"`
+	RoomVersion string    `json:"room_version"`
 }
 
 type RespMembers struct {
