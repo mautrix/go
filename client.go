@@ -200,8 +200,12 @@ func (cli *Client) SyncWithContext(ctx context.Context) error {
 			if err2 != nil {
 				return err2
 			}
-			time.Sleep(duration)
-			continue
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(duration):
+				continue
+			}
 		}
 		lastSuccessfulSync = time.Now()
 
