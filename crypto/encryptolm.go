@@ -109,7 +109,7 @@ func (mach *OlmMachine) createOutboundSessions(input map[id.UserID]map[id.Device
 				if err != nil {
 					mach.Log.Error("Failed to store created session for %s of %s: %v", deviceID, userID, err)
 				} else {
-					mach.Log.Debug("Created new Olm session with %s/%s (OTK ID: %d)", userID, deviceID, keyIndex)
+					mach.Log.Debug("Created new Olm session with %s/%s (OTK ID: %s)", userID, deviceID, keyIndex)
 				}
 			}
 		}
