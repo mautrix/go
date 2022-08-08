@@ -116,8 +116,8 @@ func (db *Database) parseDialectFilter(line []byte) (int, error) {
 	return 0, nil
 }
 
-func (db *Database) mutateSQLUpgrade(lines [][]byte) (string, error) {
-	output := lines[:0]
+func (db *Database) filterSQLUpgrade(lines [][]byte) (string, error) {
+	output := make([][]byte, 0, len(lines))
 	for i := 0; i < len(lines); i++ {
 		skipLines, err := db.parseDialectFilter(lines[i])
 		if err != nil {
@@ -135,7 +135,7 @@ func sqlUpgradeFunc(fileName string, lines [][]byte) upgradeFunc {
 	return func(tx *sql.Tx, db *Database) error {
 		if skip, err := db.parseDialectFilter(lines[0]); err == nil && skip == 1 {
 			return nil
-		} else if upgradeSQL, err := db.mutateSQLUpgrade(lines); err != nil {
+		} else if upgradeSQL, err := db.filterSQLUpgrade(lines); err != nil {
 			panic(fmt.Errorf("failed to parse upgrade %s: %w", fileName, err))
 		} else {
 			_, err = tx.Exec(upgradeSQL)
