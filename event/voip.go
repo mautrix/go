@@ -76,13 +76,13 @@ func (cv *CallVersion) Int() (int, error) {
 }
 
 type BaseCallEventContent struct {
-	CallID  string      `json:"call_id"`
-	ConfID  string      `json:"conf_id"`
-	PartyID string      `json:"party_id"`
-	Version CallVersion `json:"version"`
-	DeviceID id.DeviceID `json:"device_id"`
-	DestSessionID string `json:"dest_session_id"`
-	SenderSessionID string `json:"sender_session_id"`
+	CallID          string       `json:"call_id"`
+	ConfID          string       `json:"conf_id"`
+	PartyID         string       `json:"party_id"`
+	Version         CallVersion  `json:"version"`
+	DeviceID        id.DeviceID  `json:"device_id"`
+	DestSessionID   id.SessionID `json:"dest_session_id"`
+	SenderSessionID id.SessionID `json:"sender_session_id"`
 }
 
 type CallInviteEventContent struct {
