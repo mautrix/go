@@ -62,7 +62,7 @@ type CreateEventContent struct {
 	Type        RoomType     `json:"type,omitempty"`
 	Creator     id.UserID    `json:"creator,omitempty"`
 	Federate    bool         `json:"m.federate,omitempty"`
-	RoomVersion string       `json:"version,omitempty"`
+	RoomVersion string       `json:"room_version,omitempty"`
 	Predecessor *Predecessor `json:"predecessor,omitempty"`
 }
 
