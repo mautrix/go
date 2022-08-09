@@ -571,7 +571,7 @@ func (mx *MatrixHandler) HandleReceipt(evt *event.Event) {
 	}
 
 	for eventID, receipts := range *evt.Content.AsReceipt() {
-		for userID, receipt := range receipts.Read {
+		for userID, receipt := range receipts[event.ReceiptTypeRead] {
 			user := mx.bridge.Child.GetIUser(userID, false)
 			if user == nil {
 				// Not a bridge user
