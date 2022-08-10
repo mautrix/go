@@ -249,7 +249,7 @@ type RespSyncRooms struct {
 
 type marshalableRespSync RespSync
 
-var syncPathsToDelete = []string{"account_data", "presence", "to_device", "device_lists", "rooms"}
+var syncPathsToDelete = []string{"account_data", "presence", "to_device", "device_lists", "device_one_time_keys_count", "rooms"}
 
 func marshalAndDeleteEmpty(marshalable interface{}, paths []string) ([]byte, error) {
 	data, err := json.Marshal(marshalable)
@@ -278,8 +278,8 @@ type DeviceLists struct {
 }
 
 type OTKCount struct {
-	Curve25519       int `json:"curve25519"`
-	SignedCurve25519 int `json:"signed_curve25519"`
+	Curve25519       int `json:"curve25519,omitempty"`
+	SignedCurve25519 int `json:"signed_curve25519,omitempty"`
 
 	// For appservice OTK counts only: the user ID in question
 	UserID   id.UserID   `json:"-"`
