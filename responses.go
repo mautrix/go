@@ -220,28 +220,28 @@ type RespSync struct {
 	NextBatch string `json:"next_batch"`
 
 	AccountData struct {
-		Events []*event.Event `json:"events"`
+		Events []*event.Event `json:"events,omitempty"`
 	} `json:"account_data"`
 	Presence struct {
-		Events []*event.Event `json:"events"`
+		Events []*event.Event `json:"events,omitempty"`
 	} `json:"presence"`
 	ToDevice struct {
-		Events []*event.Event `json:"events"`
+		Events []*event.Event `json:"events,omitempty"`
 	} `json:"to_device"`
 
 	DeviceLists    DeviceLists `json:"device_lists"`
 	DeviceOTKCount OTKCount    `json:"device_one_time_keys_count"`
 
 	Rooms struct {
-		Leave  map[id.RoomID]SyncLeftRoom    `json:"leave"`
-		Join   map[id.RoomID]SyncJoinedRoom  `json:"join"`
-		Invite map[id.RoomID]SyncInvitedRoom `json:"invite"`
+		Leave  map[id.RoomID]SyncLeftRoom    `json:"leave,omitempty"`
+		Join   map[id.RoomID]SyncJoinedRoom  `json:"join,omitempty"`
+		Invite map[id.RoomID]SyncInvitedRoom `json:"invite,omitempty"`
 	} `json:"rooms"`
 }
 
 type DeviceLists struct {
-	Changed []id.UserID `json:"changed"`
-	Left    []id.UserID `json:"left"`
+	Changed []id.UserID `json:"changed,omitempty"`
+	Left    []id.UserID `json:"left,omitempty"`
 }
 
 type OTKCount struct {
@@ -256,10 +256,10 @@ type OTKCount struct {
 type SyncLeftRoom struct {
 	Summary LazyLoadSummary `json:"summary"`
 	State   struct {
-		Events []*event.Event `json:"events"`
+		Events []*event.Event `json:"events,omitempty"`
 	} `json:"state"`
 	Timeline struct {
-		Events    []*event.Event `json:"events"`
+		Events    []*event.Event `json:"events,omitempty"`
 		Limited   bool           `json:"limited"`
 		PrevBatch string         `json:"prev_batch"`
 	} `json:"timeline"`
@@ -268,25 +268,25 @@ type SyncLeftRoom struct {
 type SyncJoinedRoom struct {
 	Summary LazyLoadSummary `json:"summary"`
 	State   struct {
-		Events []*event.Event `json:"events"`
+		Events []*event.Event `json:"events,omitempty"`
 	} `json:"state"`
 	Timeline struct {
-		Events    []*event.Event `json:"events"`
-		Limited   bool           `json:"limited"`
+		Events    []*event.Event `json:"events,omitempty"`
+		Limited   bool           `json:"limited,omitempty"`
 		PrevBatch string         `json:"prev_batch"`
 	} `json:"timeline"`
 	Ephemeral struct {
-		Events []*event.Event `json:"events"`
+		Events []*event.Event `json:"events,omitempty"`
 	} `json:"ephemeral"`
 	AccountData struct {
-		Events []*event.Event `json:"events"`
+		Events []*event.Event `json:"events,omitempty"`
 	} `json:"account_data"`
 }
 
 type SyncInvitedRoom struct {
 	Summary LazyLoadSummary `json:"summary"`
 	State   struct {
-		Events []*event.Event `json:"events"`
+		Events []*event.Event `json:"events,omitempty"`
 	} `json:"invite_state"`
 }
 
@@ -312,7 +312,7 @@ type RespUploadKeys struct {
 }
 
 type RespQueryKeys struct {
-	Failures        map[string]interface{}                   `json:"failures"`
+	Failures        map[string]interface{}                   `json:"failures,omitempty"`
 	DeviceKeys      map[id.UserID]map[id.DeviceID]DeviceKeys `json:"device_keys"`
 	MasterKeys      map[id.UserID]CrossSigningKeys           `json:"master_keys"`
 	SelfSigningKeys map[id.UserID]CrossSigningKeys           `json:"self_signing_keys"`
@@ -320,12 +320,12 @@ type RespQueryKeys struct {
 }
 
 type RespClaimKeys struct {
-	Failures    map[string]interface{}                                `json:"failures"`
-	OneTimeKeys map[id.UserID]map[id.DeviceID]map[id.KeyID]OneTimeKey `json:"one_time_keys"`
+	Failures    map[string]interface{}                                `json:"failures,omitempty"`
+	OneTimeKeys map[id.UserID]map[id.DeviceID]map[id.KeyID]OneTimeKey `json:"one_time_keys,omitempty"`
 }
 
 type RespUploadSignatures struct {
-	Failures map[string]interface{} `json:"failures"`
+	Failures map[string]interface{} `json:"failures,omitempty"`
 }
 
 type RespKeyChanges struct {
