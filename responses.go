@@ -3,11 +3,13 @@ package mautrix
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
 
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -215,28 +217,59 @@ type LazyLoadSummary struct {
 	InvitedMemberCount *int        `json:"m.invited_member_count,omitempty"`
 }
 
+type SyncEventsList struct {
+	Events []*event.Event `json:"events,omitempty"`
+}
+
+type SyncTimeline struct {
+	SyncEventsList
+	Limited   bool   `json:"limited,omitempty"`
+	PrevBatch string `json:"prev_batch,omitempty"`
+}
+
 // RespSync is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3sync
 type RespSync struct {
 	NextBatch string `json:"next_batch"`
 
-	AccountData struct {
-		Events []*event.Event `json:"events,omitempty"`
-	} `json:"account_data"`
-	Presence struct {
-		Events []*event.Event `json:"events,omitempty"`
-	} `json:"presence"`
-	ToDevice struct {
-		Events []*event.Event `json:"events,omitempty"`
-	} `json:"to_device"`
+	AccountData SyncEventsList `json:"account_data"`
+	Presence    SyncEventsList `json:"presence"`
+	ToDevice    SyncEventsList `json:"to_device"`
 
 	DeviceLists    DeviceLists `json:"device_lists"`
 	DeviceOTKCount OTKCount    `json:"device_one_time_keys_count"`
 
-	Rooms struct {
-		Leave  map[id.RoomID]SyncLeftRoom    `json:"leave,omitempty"`
-		Join   map[id.RoomID]SyncJoinedRoom  `json:"join,omitempty"`
-		Invite map[id.RoomID]SyncInvitedRoom `json:"invite,omitempty"`
-	} `json:"rooms"`
+	Rooms RespSyncRooms `json:"rooms"`
+}
+
+type RespSyncRooms struct {
+	Leave  map[id.RoomID]SyncLeftRoom    `json:"leave,omitempty"`
+	Join   map[id.RoomID]SyncJoinedRoom  `json:"join,omitempty"`
+	Invite map[id.RoomID]SyncInvitedRoom `json:"invite,omitempty"`
+}
+
+type marshalableRespSync RespSync
+
+var syncPathsToDelete = []string{"account_data", "presence", "to_device", "device_lists", "rooms"}
+
+func marshalAndDeleteEmpty(marshalable interface{}, paths []string) ([]byte, error) {
+	data, err := json.Marshal(marshalable)
+	if err != nil {
+		return nil, err
+	}
+	for _, path := range paths {
+		res := gjson.GetBytes(data, path)
+		if res.IsObject() && len(res.Raw) == 2 {
+			data, err = sjson.DeleteBytes(data, path)
+			if err != nil {
+				return nil, fmt.Errorf("failed to delete empty %s: %w", path, err)
+			}
+		}
+	}
+	return data, nil
+}
+
+func (rs *RespSync) MarshalJSON() ([]byte, error) {
+	return marshalAndDeleteEmpty((*marshalableRespSync)(rs), syncPathsToDelete)
 }
 
 type DeviceLists struct {
@@ -254,40 +287,46 @@ type OTKCount struct {
 }
 
 type SyncLeftRoom struct {
-	Summary LazyLoadSummary `json:"summary"`
-	State   struct {
-		Events []*event.Event `json:"events,omitempty"`
-	} `json:"state"`
-	Timeline struct {
-		Events    []*event.Event `json:"events,omitempty"`
-		Limited   bool           `json:"limited"`
-		PrevBatch string         `json:"prev_batch"`
-	} `json:"timeline"`
+	Summary  LazyLoadSummary `json:"summary"`
+	State    SyncEventsList  `json:"state"`
+	Timeline SyncTimeline    `json:"timeline"`
+}
+
+type marshalableSyncLeftRoom SyncLeftRoom
+
+var syncLeftRoomPathsToDelete = []string{"summary", "state", "timeline"}
+
+func (slr SyncLeftRoom) MarshalJSON() ([]byte, error) {
+	return marshalAndDeleteEmpty((marshalableSyncLeftRoom)(slr), syncLeftRoomPathsToDelete)
 }
 
 type SyncJoinedRoom struct {
-	Summary LazyLoadSummary `json:"summary"`
-	State   struct {
-		Events []*event.Event `json:"events,omitempty"`
-	} `json:"state"`
-	Timeline struct {
-		Events    []*event.Event `json:"events,omitempty"`
-		Limited   bool           `json:"limited,omitempty"`
-		PrevBatch string         `json:"prev_batch"`
-	} `json:"timeline"`
-	Ephemeral struct {
-		Events []*event.Event `json:"events,omitempty"`
-	} `json:"ephemeral"`
-	AccountData struct {
-		Events []*event.Event `json:"events,omitempty"`
-	} `json:"account_data"`
+	Summary     LazyLoadSummary `json:"summary"`
+	State       SyncEventsList  `json:"state"`
+	Timeline    SyncTimeline    `json:"timeline"`
+	Ephemeral   SyncEventsList  `json:"ephemeral"`
+	AccountData SyncEventsList  `json:"account_data"`
+}
+
+type marshalableSyncJoinedRoom SyncJoinedRoom
+
+var syncJoinedRoomPathsToDelete = []string{"summary", "state", "timeline", "ephemeral", "account_data"}
+
+func (sjr SyncJoinedRoom) MarshalJSON() ([]byte, error) {
+	return marshalAndDeleteEmpty((marshalableSyncJoinedRoom)(sjr), syncJoinedRoomPathsToDelete)
 }
 
 type SyncInvitedRoom struct {
 	Summary LazyLoadSummary `json:"summary"`
-	State   struct {
-		Events []*event.Event `json:"events,omitempty"`
-	} `json:"invite_state"`
+	State   SyncEventsList  `json:"invite_state"`
+}
+
+type marshalableSyncInvitedRoom SyncInvitedRoom
+
+var syncInvitedRoomPathsToDelete = []string{"summary"}
+
+func (sir SyncInvitedRoom) MarshalJSON() ([]byte, error) {
+	return marshalAndDeleteEmpty((marshalableSyncInvitedRoom)(sir), syncInvitedRoomPathsToDelete)
 }
 
 type RespTurnServer struct {
