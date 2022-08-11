@@ -3,6 +3,7 @@ package dbutil
 import (
 	"context"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -103,7 +104,7 @@ func (z zeroLogger) QueryTiming(ctx context.Context, method, query string, args 
 	if log.GetLevel() != zerolog.TraceLevel && duration < 1*time.Second {
 		return
 	}
-	query = whitespaceRegex.ReplaceAllLiteralString(query, " ")
+	query = strings.TrimSpace(whitespaceRegex.ReplaceAllLiteralString(query, " "))
 	log.Trace().
 		Int64("duration_µs", duration.Microseconds()).
 		Str("method", method).
