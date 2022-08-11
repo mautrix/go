@@ -21,21 +21,24 @@ type LoggingExecable struct {
 
 func (le *LoggingExecable) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
 	start := time.Now()
-	res, err := le.UnderlyingExecable.ExecContext(ctx, le.db.mutateQuery(query), args...)
+	query = le.db.mutateQuery(query)
+	res, err := le.UnderlyingExecable.ExecContext(ctx, query, args...)
 	le.db.Log.QueryTiming(ctx, "Exec", query, args, time.Since(start))
 	return res, err
 }
 
 func (le *LoggingExecable) QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
 	start := time.Now()
-	rows, err := le.UnderlyingExecable.QueryContext(ctx, le.db.mutateQuery(query), args...)
+	query = le.db.mutateQuery(query)
+	rows, err := le.UnderlyingExecable.QueryContext(ctx, query, args...)
 	le.db.Log.QueryTiming(ctx, "Query", query, args, time.Since(start))
 	return rows, err
 }
 
 func (le *LoggingExecable) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
 	start := time.Now()
-	row := le.UnderlyingExecable.QueryRowContext(ctx, le.db.mutateQuery(query), args...)
+	query = le.db.mutateQuery(query)
+	row := le.UnderlyingExecable.QueryRowContext(ctx, query, args...)
 	le.db.Log.QueryTiming(ctx, "QueryRow", query, args, time.Since(start))
 	return row
 }
