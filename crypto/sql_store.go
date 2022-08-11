@@ -28,7 +28,7 @@ var PostgresArrayWrapper func(interface{}) interface {
 
 // SQLCryptoStore is an implementation of a crypto Store for a database backend.
 type SQLCryptoStore struct {
-	*dbutil.Database
+	DB *dbutil.Database
 
 	AccountID string
 	DeviceID  id.DeviceID
@@ -44,9 +44,9 @@ var _ Store = (*SQLCryptoStore)(nil)
 
 // NewSQLCryptoStore initializes a new crypto Store using the given database, for a device's crypto material.
 // The stored material will be encrypted with the given key.
-func NewSQLCryptoStore(db *dbutil.Database, accountID string, deviceID id.DeviceID, pickleKey []byte) *SQLCryptoStore {
+func NewSQLCryptoStore(db *dbutil.Database, log dbutil.DatabaseLogger, accountID string, deviceID id.DeviceID, pickleKey []byte) *SQLCryptoStore {
 	return &SQLCryptoStore{
-		Database:  db.Child("CryptoStore", sql_store_upgrade.VersionTableName, sql_store_upgrade.Table),
+		DB:        db.Child(sql_store_upgrade.VersionTableName, sql_store_upgrade.Table, log),
 		PickleKey: pickleKey,
 		AccountID: accountID,
 		DeviceID:  deviceID,
@@ -55,11 +55,8 @@ func NewSQLCryptoStore(db *dbutil.Database, accountID string, deviceID id.Device
 	}
 }
 
-// CreateTables applies all the pending database migrations.
-//
-// Deprecated: The Upgrade method (inherited from dbutil.Database) should be used instead
-func (store *SQLCryptoStore) CreateTables() error {
-	return store.Upgrade()
+func (store *SQLCryptoStore) Upgrade() error {
+	return store.DB.Upgrade()
 }
 
 // Flush does nothing for this implementation as data is already persisted in the database.
@@ -68,25 +65,23 @@ func (store *SQLCryptoStore) Flush() error {
 }
 
 // PutNextBatch stores the next sync batch token for the current account.
-func (store *SQLCryptoStore) PutNextBatch(nextBatch string) {
+func (store *SQLCryptoStore) PutNextBatch(nextBatch string) error {
 	store.SyncToken = nextBatch
 	_, err := store.DB.Exec(`UPDATE crypto_account SET sync_token=$1 WHERE account_id=$2`, store.SyncToken, store.AccountID)
-	if err != nil {
-		store.Log.Warnfln("Failed to store sync token: %v", err)
-	}
+	return err
 }
 
 // GetNextBatch retrieves the next sync batch token for the current account.
-func (store *SQLCryptoStore) GetNextBatch() string {
+func (store *SQLCryptoStore) GetNextBatch() (string, error) {
 	if store.SyncToken == "" {
 		err := store.DB.
 			QueryRow("SELECT sync_token FROM crypto_account WHERE account_id=$1", store.AccountID).
 			Scan(&store.SyncToken)
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			store.Log.Warnfln("Failed to scan sync token: %v", err)
+		if !errors.Is(err, sql.ErrNoRows) {
+			return "", err
 		}
 	}
-	return store.SyncToken
+	return store.SyncToken, nil
 }
 
 // PutAccount stores an OlmAccount in the database.
@@ -98,10 +93,7 @@ func (store *SQLCryptoStore) PutAccount(account *OlmAccount) error {
 		ON CONFLICT (account_id) DO UPDATE SET shared=excluded.shared, sync_token=excluded.sync_token,
 											   account=excluded.account, account_id=excluded.account_id
 	`, store.DeviceID, account.Shared, store.SyncToken, bytes, store.AccountID)
-	if err != nil {
-		store.Log.Warnfln("Failed to store account: %v", err)
-	}
-	return nil
+	return err
 }
 
 // GetAccount retrieves an OlmAccount from the database.
@@ -157,7 +149,7 @@ func (store *SQLCryptoStore) GetSessions(key id.SenderKey) (OlmSessionList, erro
 		sess := OlmSession{Internal: *olm.NewBlankSession()}
 		var sessionBytes []byte
 		var sessionID id.SessionID
-		err := rows.Scan(&sessionID, &sessionBytes, &sess.CreationTime, &sess.LastEncryptedTime, &sess.LastDecryptedTime)
+		err = rows.Scan(&sessionID, &sessionBytes, &sess.CreationTime, &sess.LastEncryptedTime, &sess.LastDecryptedTime)
 		if err != nil {
 			return nil, err
 		} else if existing, ok := cache[sessionID]; ok {
@@ -310,21 +302,19 @@ func (store *SQLCryptoStore) GetWithheldGroupSession(roomID id.RoomID, senderKey
 	}, nil
 }
 
-func (store *SQLCryptoStore) scanGroupSessionList(rows *sql.Rows) (result []*InboundGroupSession) {
+func (store *SQLCryptoStore) scanGroupSessionList(rows *sql.Rows) (result []*InboundGroupSession, err error) {
 	for rows.Next() {
 		var roomID id.RoomID
 		var signingKey, senderKey, forwardingChains sql.NullString
 		var sessionBytes []byte
-		err := rows.Scan(&roomID, &signingKey, &senderKey, &sessionBytes, &forwardingChains)
+		err = rows.Scan(&roomID, &signingKey, &senderKey, &sessionBytes, &forwardingChains)
 		if err != nil {
-			store.Log.Warnfln("Failed to scan row: %v", err)
-			continue
+			return
 		}
 		igs := olm.NewBlankInboundGroupSession()
 		err = igs.Unpickle(sessionBytes, store.PickleKey)
 		if err != nil {
-			store.Log.Warnfln("Failed to unpickle session: %v", err)
-			continue
+			return
 		}
 		var chains []string
 		if forwardingChains.String != "" {
@@ -352,7 +342,7 @@ func (store *SQLCryptoStore) GetGroupSessionsForRoom(roomID id.RoomID) ([]*Inbou
 	} else if err != nil {
 		return nil, err
 	}
-	return store.scanGroupSessionList(rows), nil
+	return store.scanGroupSessionList(rows)
 }
 
 func (store *SQLCryptoStore) GetAllGroupSessions() ([]*InboundGroupSession, error) {
@@ -366,7 +356,7 @@ func (store *SQLCryptoStore) GetAllGroupSessions() ([]*InboundGroupSession, erro
 	} else if err != nil {
 		return nil, err
 	}
-	return store.scanGroupSessionList(rows), nil
+	return store.scanGroupSessionList(rows)
 }
 
 // AddOutboundGroupSession stores an outbound Megolm session, along with the information about the room and involved devices.
@@ -426,7 +416,7 @@ func (store *SQLCryptoStore) RemoveOutboundGroupSession(roomID id.RoomID) error 
 
 // ValidateMessageIndex returns whether the given event information match the ones stored in the database
 // for the given sender key, session ID and index. If the index hasn't been stored, this will store it.
-func (store *SQLCryptoStore) ValidateMessageIndex(senderKey id.SenderKey, sessionID id.SessionID, eventID id.EventID, index uint, timestamp int64) bool {
+func (store *SQLCryptoStore) ValidateMessageIndex(senderKey id.SenderKey, sessionID id.SessionID, eventID id.EventID, index uint, timestamp int64) (bool, error) {
 	const validateQuery = `
 	INSERT INTO crypto_message_index (sender_key, session_id, "index", event_id, timestamp)
 	VALUES ($1, $2, $3, $4, $5)
@@ -438,10 +428,9 @@ func (store *SQLCryptoStore) ValidateMessageIndex(senderKey id.SenderKey, sessio
 	var expectedTimestamp int64
 	err := store.DB.QueryRow(validateQuery, senderKey, sessionID, index, eventID, timestamp).Scan(&expectedEventID, &expectedTimestamp)
 	if err != nil {
-		store.Log.Warnfln("Failed to scan message index: %v", err)
-		return true
+		return false, err
 	}
-	return expectedEventID == eventID && expectedTimestamp == timestamp
+	return expectedEventID == eventID && expectedTimestamp == timestamp, nil
 }
 
 // GetDevices returns a map of device IDs to device identities, including the identity and signing keys, for a given user ID.
@@ -555,7 +544,7 @@ func (store *SQLCryptoStore) PutDevices(userID id.UserID, devices map[id.DeviceI
 		deviceIDs = append(deviceIDs, deviceID)
 	}
 	var valueStringFormat = "($1, $%d, $%d, $%d, $%d, $%d, $%d)"
-	if store.Dialect == dbutil.SQLite {
+	if store.DB.Dialect == dbutil.SQLite {
 		valueStringFormat = strings.ReplaceAll(valueStringFormat, "$", "?")
 	}
 	for batchDeviceIdx := 0; batchDeviceIdx < len(deviceIDs); batchDeviceIdx += deviceBatchLen {
@@ -589,11 +578,11 @@ func (store *SQLCryptoStore) PutDevices(userID id.UserID, devices map[id.DeviceI
 	return nil
 }
 
-// FilterTrackedUsers finds all of the user IDs out of the given ones for which the database contains identity information.
-func (store *SQLCryptoStore) FilterTrackedUsers(users []id.UserID) []id.UserID {
+// FilterTrackedUsers finds all the user IDs out of the given ones for which the database contains identity information.
+func (store *SQLCryptoStore) FilterTrackedUsers(users []id.UserID) ([]id.UserID, error) {
 	var rows *sql.Rows
 	var err error
-	if store.Dialect == dbutil.Postgres && PostgresArrayWrapper != nil {
+	if store.DB.Dialect == dbutil.Postgres && PostgresArrayWrapper != nil {
 		rows, err = store.DB.Query("SELECT user_id FROM crypto_tracked_user WHERE user_id = ANY($1)", PostgresArrayWrapper(users))
 	} else {
 		queryString := make([]string, len(users))
@@ -605,19 +594,18 @@ func (store *SQLCryptoStore) FilterTrackedUsers(users []id.UserID) []id.UserID {
 		rows, err = store.DB.Query("SELECT user_id FROM crypto_tracked_user WHERE user_id IN ("+strings.Join(queryString, ",")+")", params...)
 	}
 	if err != nil {
-		store.Log.Warnfln("Failed to filter tracked users: %v", err)
-		return users
+		return users, err
 	}
 	var ptr int
 	for rows.Next() {
 		err = rows.Scan(&users[ptr])
 		if err != nil {
-			store.Log.Warnfln("Failed to scan tracked user ID: %v", err)
+			return users, err
 		} else {
 			ptr++
 		}
 	}
-	return users[:ptr]
+	return users[:ptr], nil
 }
 
 // PutCrossSigningKey stores a cross-signing key of some user along with its usage.
@@ -668,7 +656,7 @@ func (store *SQLCryptoStore) GetSignaturesForKeyBy(userID id.UserID, key id.Ed25
 	for rows.Next() {
 		var signerKey id.Ed25519
 		var signature string
-		err := rows.Scan(&signerKey, &signature)
+		err = rows.Scan(&signerKey, &signature)
 		if err != nil {
 			return nil, err
 		}

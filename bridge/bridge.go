@@ -397,7 +397,7 @@ func (br *Bridge) init() {
 	br.Log.Infoln("Initializing", br.VersionDesc)
 
 	br.Log.Debugln("Initializing database connection")
-	br.DB, err = dbutil.NewFromConfig(br.Name, br.Config.AppService.Database, br.Log.Sub("Database"))
+	br.DB, err = dbutil.NewFromConfig(br.Name, br.Config.AppService.Database, dbutil.MauLogger(br.Log.Sub("Database")))
 	if err != nil {
 		br.Log.Fatalln("Failed to initialize database connection:", err)
 		if sqlError := (&sqlite3.Error{}); errors.As(err, sqlError) && sqlError.Code == sqlite3.ErrCorrupt {
@@ -409,7 +409,7 @@ func (br *Bridge) init() {
 	br.DB.IgnoreForeignTables = *ignoreForeignTables
 
 	br.Log.Debugln("Initializing state store")
-	br.StateStore = sqlstatestore.NewSQLStateStore(br.DB)
+	br.StateStore = sqlstatestore.NewSQLStateStore(br.DB, dbutil.MauLogger(br.Log.Sub("Database").Sub("StateStore")))
 	br.AS.StateStore = br.StateStore
 
 	br.Log.Debugln("Initializing Matrix event processor")

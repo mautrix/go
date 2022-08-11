@@ -9,11 +9,11 @@ package dbutil
 import (
 	"embed"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/require"
-	"maunium.net/go/maulogger/v2"
 )
 
 //go:embed samples/*.sql samples/output/*.sql
@@ -31,10 +31,14 @@ func expectVersionCheck(mock sqlmock.Sqlmock) {
 		WillReturnRows(sqlmock.NewRows([]string{"version"}).AddRow(0))
 }
 
-func expectVersionBump(mock sqlmock.Sqlmock, toVersion int) {
+func expectVersionBump(dialect Dialect, mock sqlmock.Sqlmock, toVersion int) {
 	mock.ExpectExec("DELETE FROM version").
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectExec("INSERT INTO version (version) VALUES ($1)").
+	q := "INSERT INTO version (version) VALUES ($1)"
+	if dialect == SQLite {
+		q = strings.ReplaceAll(q, "$1", "?1")
+	}
+	mock.ExpectExec(q).
 		WithArgs(toVersion).
 		WillReturnResult(sqlmock.NewResult(0, 0))
 }
@@ -48,18 +52,20 @@ func testUpgrade(dialect Dialect) func(t *testing.T) {
 		require.NoError(t, err)
 
 		db := &Database{
-			DB:           conn,
-			Log:          maulogger.Create(),
+			RawDB:        conn,
+			Log:          NoopLogger,
 			VersionTable: "version",
 			Dialect:      dialect,
 			UpgradeTable: makeTable(),
 		}
+		db.loggingDB.UnderlyingExecable = conn
+		db.loggingDB.db = db
 
 		expectVersionCheck(mock)
 		mock.ExpectBegin()
 		mock.ExpectExec(string(expectedUpgrade)).
 			WillReturnResult(sqlmock.NewResult(0, 0))
-		expectVersionBump(mock, 3)
+		expectVersionBump(db.Dialect, mock, 3)
 		mock.ExpectCommit()
 		err = db.Upgrade()
 		require.NoError(t, err)

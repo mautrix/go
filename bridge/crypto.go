@@ -24,6 +24,7 @@ import (
 	"maunium.net/go/mautrix/crypto"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
+	"maunium.net/go/mautrix/util/dbutil"
 )
 
 var NoSessionFound = crypto.NoSessionFound
@@ -66,9 +67,13 @@ func (helper *CryptoHelper) Init() error {
 	}
 	helper.log.Debugln("Initializing end-to-bridge encryption...")
 
-	helper.store = NewSQLCryptoStore(helper.bridge.DB, helper.bridge.AS.BotMXID(),
+	helper.store = NewSQLCryptoStore(
+		helper.bridge.DB,
+		dbutil.MauLogger(helper.bridge.Log.Sub("Database").Sub("CryptoStore")),
+		helper.bridge.AS.BotMXID(),
 		fmt.Sprintf("@%s:%s", helper.bridge.Config.Bridge.FormatUsername("%"), helper.bridge.AS.HomeserverDomain),
-		helper.bridge.CryptoPickleKey)
+		helper.bridge.CryptoPickleKey,
+	)
 
 	err := helper.store.Upgrade()
 	if err != nil {
@@ -391,11 +396,16 @@ func (c cryptoClientStore) SaveRoom(_ *mautrix.Room)           {}
 func (c cryptoClientStore) LoadRoom(_ id.RoomID) *mautrix.Room { return nil }
 
 func (c cryptoClientStore) SaveNextBatch(_ id.UserID, nextBatchToken string) {
+	// TODO error
 	c.int.PutNextBatch(nextBatchToken)
 }
 
 func (c cryptoClientStore) LoadNextBatch(_ id.UserID) string {
-	return c.int.GetNextBatch()
+	nb, err := c.int.GetNextBatch()
+	if err != nil {
+		// TODO :(
+	}
+	return nb
 }
 
 var _ mautrix.Storer = (*cryptoClientStore)(nil)

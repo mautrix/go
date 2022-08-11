@@ -69,13 +69,18 @@ func (mach *OlmMachine) storeDeviceSelfSignatures(userID id.UserID, deviceID id.
 }
 
 func (mach *OlmMachine) fetchKeys(users []id.UserID, sinceToken string, includeUntracked bool) (data map[id.UserID]map[id.DeviceID]*id.Device) {
+	// TODO this function should probably return errors
 	req := &mautrix.ReqQueryKeys{
 		DeviceKeys: mautrix.DeviceKeysRequest{},
 		Timeout:    10 * 1000,
 		Token:      sinceToken,
 	}
 	if !includeUntracked {
-		users = mach.CryptoStore.FilterTrackedUsers(users)
+		var err error
+		users, err = mach.CryptoStore.FilterTrackedUsers(users)
+		if err != nil {
+			mach.Log.Warn("Failed to filter tracked user list: %v", err)
+		}
 	}
 	if len(users) == 0 {
 		return

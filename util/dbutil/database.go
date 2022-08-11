@@ -10,10 +10,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
-
-	log "maunium.net/go/maulogger/v2"
 
 	"maunium.net/go/mautrix/bridge/bridgeconfig"
 )
@@ -71,18 +70,27 @@ type Execable interface {
 	QueryRow(query string, args ...interface{}) *sql.Row
 }
 
+type Transaction interface {
+	Execable
+	Commit() error
+	Rollback() error
+}
+
 // Expected implementations of Execable
 var (
 	_ Execable        = (*sql.Tx)(nil)
 	_ Execable        = (*sql.DB)(nil)
+	_ Execable        = (*LoggingExecable)(nil)
+	_ Transaction     = (*LoggingTxn)(nil)
 	_ ContextExecable = (*sql.Conn)(nil)
 )
 
 type Database struct {
-	*sql.DB
+	loggingDB
+	RawDB        *sql.DB
 	Owner        string
 	VersionTable string
-	Log          log.Logger
+	Log          DatabaseLogger
 	Dialect      Dialect
 	UpgradeTable UpgradeTable
 
@@ -90,13 +98,28 @@ type Database struct {
 	IgnoreUnsupportedDatabase bool
 }
 
-func (db *Database) Child(logName, versionTable string, upgradeTable UpgradeTable) *Database {
+var positionalParamPattern = regexp.MustCompile(`\$(\d+)`)
+
+func (db *Database) mutateQuery(query string) string {
+	switch db.Dialect {
+	case SQLite:
+		return positionalParamPattern.ReplaceAllString(query, "?$1")
+	default:
+		return query
+	}
+}
+
+func (db *Database) Child(versionTable string, upgradeTable UpgradeTable, log DatabaseLogger) *Database {
+	if log == nil {
+		log = db.Log
+	}
 	return &Database{
-		DB:           db.DB,
+		RawDB:        db.RawDB,
+		loggingDB:    db.loggingDB,
 		Owner:        "",
 		VersionTable: versionTable,
 		UpgradeTable: upgradeTable,
-		Log:          db.Log.Sub(logName),
+		Log:          log,
 		Dialect:      db.Dialect,
 
 		IgnoreForeignTables:       true,
@@ -109,14 +132,17 @@ func NewWithDB(db *sql.DB, rawDialect string) (*Database, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Database{
-		DB:      db,
+	wrappedDB := &Database{
+		RawDB:   db,
 		Dialect: dialect,
-		Log:     log.Sub("Database"),
+		Log:     NoopLogger,
 
 		IgnoreForeignTables: true,
 		VersionTable:        "version",
-	}, nil
+	}
+	wrappedDB.loggingDB.UnderlyingExecable = db
+	wrappedDB.loggingDB.db = wrappedDB
+	return wrappedDB, nil
 }
 
 func NewWithDialect(uri, rawDialect string) (*Database, error) {
@@ -127,7 +153,7 @@ func NewWithDialect(uri, rawDialect string) (*Database, error) {
 	return NewWithDB(db, rawDialect)
 }
 
-func NewFromConfig(owner string, cfg bridgeconfig.DatabaseConfig, dbLog log.Logger) (*Database, error) {
+func NewFromConfig(owner string, cfg bridgeconfig.DatabaseConfig, logger DatabaseLogger) (*Database, error) {
 	dialect, err := ParseDialect(cfg.Type)
 	if err != nil {
 		return nil, err
@@ -152,16 +178,21 @@ func NewFromConfig(owner string, cfg bridgeconfig.DatabaseConfig, dbLog log.Logg
 		}
 		conn.SetConnMaxLifetime(maxLifetimeDuration)
 	}
-	if dbLog == nil {
-		dbLog = log.Sub("Database")
+	if logger == nil {
+		logger = NoopLogger
 	}
-	return &Database{
-		DB:      conn,
+	wrappedDB := &Database{
+		RawDB: conn,
+
 		Owner:   owner,
-		Log:     dbLog,
 		Dialect: dialect,
+
+		Log: logger,
 
 		IgnoreForeignTables: true,
 		VersionTable:        "version",
-	}, nil
+	}
+	wrappedDB.loggingDB.UnderlyingExecable = conn
+	wrappedDB.loggingDB.db = wrappedDB
+	return wrappedDB, nil
 }

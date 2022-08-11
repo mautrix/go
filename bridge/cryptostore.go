@@ -31,9 +31,9 @@ type SQLCryptoStore struct {
 
 var _ crypto.Store = (*SQLCryptoStore)(nil)
 
-func NewSQLCryptoStore(db *dbutil.Database, userID id.UserID, ghostIDFormat, pickleKey string) *SQLCryptoStore {
+func NewSQLCryptoStore(db *dbutil.Database, log dbutil.DatabaseLogger, userID id.UserID, ghostIDFormat, pickleKey string) *SQLCryptoStore {
 	return &SQLCryptoStore{
-		SQLCryptoStore: crypto.NewSQLCryptoStore(db, "", "", []byte(pickleKey)),
+		SQLCryptoStore: crypto.NewSQLCryptoStore(db, log, "", "", []byte(pickleKey)),
 		UserID:         userID,
 		GhostIDFormat:  ghostIDFormat,
 	}
@@ -42,7 +42,8 @@ func NewSQLCryptoStore(db *dbutil.Database, userID id.UserID, ghostIDFormat, pic
 func (store *SQLCryptoStore) FindDeviceID() (deviceID id.DeviceID) {
 	err := store.DB.QueryRow("SELECT device_id FROM crypto_account WHERE account_id=$1", store.AccountID).Scan(&deviceID)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		store.Log.Warn("Failed to scan device ID: %v", err)
+		// TODO return error
+		store.DB.Log.Warn("Failed to scan device ID: %v", err)
 	}
 	return
 }
@@ -63,7 +64,7 @@ func (store *SQLCryptoStore) GetRoomMembers(roomID id.RoomID) (members []id.User
 		var userID id.UserID
 		err = rows.Scan(&userID)
 		if err != nil {
-			store.Log.Warn("Failed to scan member in %s: %v", roomID, err)
+			return members, err
 		} else {
 			members = append(members, userID)
 		}

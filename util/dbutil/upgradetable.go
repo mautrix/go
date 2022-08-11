@@ -8,7 +8,6 @@ package dbutil
 
 import (
 	"bytes"
-	"database/sql"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -164,7 +163,7 @@ func (db *Database) filterSQLUpgrade(lines [][]byte) (string, error) {
 }
 
 func sqlUpgradeFunc(fileName string, lines [][]byte) upgradeFunc {
-	return func(tx *sql.Tx, db *Database) error {
+	return func(tx Transaction, db *Database) error {
 		if skip, err := db.parseDialectFilter(lines[0]); err == nil && skip == skipNextLine {
 			return nil
 		} else if upgradeSQL, err := db.filterSQLUpgrade(lines); err != nil {
@@ -177,7 +176,7 @@ func sqlUpgradeFunc(fileName string, lines [][]byte) upgradeFunc {
 }
 
 func splitSQLUpgradeFunc(sqliteData, postgresData string) upgradeFunc {
-	return func(tx *sql.Tx, database *Database) (err error) {
+	return func(tx Transaction, database *Database) (err error) {
 		switch database.Dialect {
 		case SQLite:
 			_, err = tx.Exec(sqliteData)
