@@ -65,7 +65,11 @@ type zeroLogger struct {
 }
 
 func ZeroLogger(log zerolog.Logger) DatabaseLogger {
-	return &zeroLogger{l: &log}
+	return ZeroLoggerPtr(&log)
+}
+
+func ZeroLoggerPtr(log *zerolog.Logger) DatabaseLogger {
+	return &zeroLogger{l: log}
 }
 
 func (z zeroLogger) WarnUnsupportedVersion(current, latest int) {
