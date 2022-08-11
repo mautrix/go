@@ -17,11 +17,12 @@ import (
 type CallHangupReason string
 
 const (
-	CallHangupICEFailed       CallHangupReason = "ice_failed"
-	CallHangupInviteTimeout   CallHangupReason = "invite_timeout"
-	CallHangupUserHangup      CallHangupReason = "user_hangup"
-	CallHangupUserMediaFailed CallHangupReason = "user_media_failed"
-	CallHangupUnknownError    CallHangupReason = "unknown_error"
+	CallHangupICEFailed        CallHangupReason = "ice_failed"
+	CallHangupInviteTimeout    CallHangupReason = "invite_timeout"
+	CallHangupUserHangup       CallHangupReason = "user_hangup"
+	CallHangupUserMediaFailed  CallHangupReason = "user_media_failed"
+	CallHangupKeepAliveTimeout CallHangupReason = "keep_alive_timeout"
+	CallHangupUnknownError     CallHangupReason = "unknown_error"
 )
 
 type CallDataType string
