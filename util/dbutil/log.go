@@ -2,6 +2,7 @@ package dbutil
 
 import (
 	"context"
+	"regexp"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -9,7 +10,7 @@ import (
 )
 
 type DatabaseLogger interface {
-	QueryTiming(ctx context.Context, method, query string, duration time.Duration)
+	QueryTiming(ctx context.Context, method, query string, args []interface{}, duration time.Duration)
 	WarnUnsupportedVersion(current, latest int)
 	PrepareUpgrade(current, latest int)
 	DoUpgrade(from, to int, message string)
@@ -21,11 +22,12 @@ type noopLogger struct{}
 
 var NoopLogger DatabaseLogger = &noopLogger{}
 
-func (n noopLogger) WarnUnsupportedVersion(_, _ int)                             {}
-func (n noopLogger) PrepareUpgrade(_, _ int)                                     {}
-func (n noopLogger) DoUpgrade(_, _ int, _ string)                                {}
-func (n noopLogger) QueryTiming(_ context.Context, _, _ string, _ time.Duration) {}
-func (n noopLogger) Warn(msg string, args ...interface{})                        {}
+func (n noopLogger) WarnUnsupportedVersion(_, _ int)      {}
+func (n noopLogger) PrepareUpgrade(_, _ int)              {}
+func (n noopLogger) DoUpgrade(_, _ int, _ string)         {}
+func (n noopLogger) Warn(msg string, args ...interface{}) {}
+
+func (n noopLogger) QueryTiming(_ context.Context, _, _ string, _ []interface{}, _ time.Duration) {}
 
 type mauLogger struct {
 	l maulogger.Logger
@@ -47,7 +49,7 @@ func (m mauLogger) DoUpgrade(from, to int, message string) {
 	m.l.Infofln("Upgrading database from v%d to v%d: %s", from, to, message)
 }
 
-func (m mauLogger) QueryTiming(_ context.Context, method, query string, duration time.Duration) {
+func (m mauLogger) QueryTiming(_ context.Context, method, query string, _ []interface{}, duration time.Duration) {
 	if duration > 1*time.Second {
 		m.l.Warnfln("%s(%s) took %.3f seconds", method, query, duration.Seconds())
 	}
@@ -91,25 +93,30 @@ func (z zeroLogger) DoUpgrade(from, to int, message string) {
 		Msg("Upgrading database")
 }
 
-func (z zeroLogger) QueryTiming(ctx context.Context, method, query string, duration time.Duration) {
-	var evt *zerolog.Event
-	var msg string
+var whitespaceRegex = regexp.MustCompile(`\s+`)
+
+func (z zeroLogger) QueryTiming(ctx context.Context, method, query string, args []interface{}, duration time.Duration) {
 	log := zerolog.Ctx(ctx)
 	if log.GetLevel() == zerolog.Disabled {
 		log = z.l
 	}
-	if duration > 1*time.Second {
-		evt = log.Warn()
-		msg = "Unusually long query"
-	} else {
-		evt = log.Trace()
-		msg = "Query duration"
+	if log.GetLevel() != zerolog.TraceLevel && duration < 1*time.Second {
+		return
 	}
-	evt.
+	query = whitespaceRegex.ReplaceAllLiteralString(query, " ")
+	log.Trace().
 		Int64("duration_µs", duration.Microseconds()).
 		Str("method", method).
 		Str("query", query).
-		Msg(msg)
+		Interface("query_args", args).
+		Msg("Query")
+	if duration >= 1*time.Second {
+		log.Warn().
+			Float64("duration_seconds", duration.Seconds()).
+			Str("method", method).
+			Str("query", query).
+			Msg("Query took long")
+	}
 }
 
 func (z zeroLogger) Warn(msg string, args ...interface{}) {

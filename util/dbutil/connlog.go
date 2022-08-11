@@ -22,21 +22,21 @@ type LoggingExecable struct {
 func (le *LoggingExecable) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
 	start := time.Now()
 	res, err := le.UnderlyingExecable.ExecContext(ctx, le.db.mutateQuery(query), args...)
-	le.db.Log.QueryTiming(ctx, "Exec", query, time.Since(start))
+	le.db.Log.QueryTiming(ctx, "Exec", query, args, time.Since(start))
 	return res, err
 }
 
 func (le *LoggingExecable) QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
 	start := time.Now()
 	rows, err := le.UnderlyingExecable.QueryContext(ctx, le.db.mutateQuery(query), args...)
-	le.db.Log.QueryTiming(ctx, "Query", query, time.Since(start))
+	le.db.Log.QueryTiming(ctx, "Query", query, args, time.Since(start))
 	return rows, err
 }
 
 func (le *LoggingExecable) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
 	start := time.Now()
 	row := le.UnderlyingExecable.QueryRowContext(ctx, le.db.mutateQuery(query), args...)
-	le.db.Log.QueryTiming(ctx, "QueryRow", query, time.Since(start))
+	le.db.Log.QueryTiming(ctx, "QueryRow", query, args, time.Since(start))
 	return row
 }
 
@@ -63,7 +63,7 @@ type loggingDB struct {
 func (ld *loggingDB) BeginTx(ctx context.Context, opts *sql.TxOptions) (*LoggingTxn, error) {
 	start := time.Now()
 	tx, err := ld.db.RawDB.BeginTx(ctx, opts)
-	ld.db.Log.QueryTiming(ctx, "Begin", "", time.Since(start))
+	ld.db.Log.QueryTiming(ctx, "Begin", "", nil, time.Since(start))
 	if err != nil {
 		return nil, err
 	}
@@ -87,13 +87,13 @@ type LoggingTxn struct {
 func (lt *LoggingTxn) Commit() error {
 	start := time.Now()
 	err := lt.UnderlyingTx.Commit()
-	lt.db.Log.QueryTiming(lt.ctx, "Commit", "", time.Since(start))
+	lt.db.Log.QueryTiming(lt.ctx, "Commit", "", nil, time.Since(start))
 	return err
 }
 
 func (lt *LoggingTxn) Rollback() error {
 	start := time.Now()
 	err := lt.UnderlyingTx.Rollback()
-	lt.db.Log.QueryTiming(lt.ctx, "Rollback", "", time.Since(start))
+	lt.db.Log.QueryTiming(lt.ctx, "Rollback", "", nil, time.Since(start))
 	return err
 }
