@@ -153,6 +153,26 @@ func NewWithDialect(uri, rawDialect string) (*Database, error) {
 	return NewWithDB(db, rawDialect)
 }
 
+func (db *Database) Configure(cfg bridgeconfig.DatabaseConfig) error {
+	db.RawDB.SetMaxOpenConns(cfg.MaxOpenConns)
+	db.RawDB.SetMaxIdleConns(cfg.MaxIdleConns)
+	if len(cfg.ConnMaxIdleTime) > 0 {
+		maxIdleTimeDuration, err := time.ParseDuration(cfg.ConnMaxIdleTime)
+		if err != nil {
+			return fmt.Errorf("failed to parse max_conn_idle_time: %w", err)
+		}
+		db.RawDB.SetConnMaxIdleTime(maxIdleTimeDuration)
+	}
+	if len(cfg.ConnMaxLifetime) > 0 {
+		maxLifetimeDuration, err := time.ParseDuration(cfg.ConnMaxLifetime)
+		if err != nil {
+			return fmt.Errorf("failed to parse max_conn_idle_time: %w", err)
+		}
+		db.RawDB.SetConnMaxLifetime(maxLifetimeDuration)
+	}
+	return nil
+}
+
 func NewFromConfig(owner string, cfg bridgeconfig.DatabaseConfig, logger DatabaseLogger) (*Database, error) {
 	dialect, err := ParseDialect(cfg.Type)
 	if err != nil {
@@ -161,22 +181,6 @@ func NewFromConfig(owner string, cfg bridgeconfig.DatabaseConfig, logger Databas
 	conn, err := sql.Open(cfg.Type, cfg.URI)
 	if err != nil {
 		return nil, err
-	}
-	conn.SetMaxOpenConns(cfg.MaxOpenConns)
-	conn.SetMaxIdleConns(cfg.MaxIdleConns)
-	if len(cfg.ConnMaxIdleTime) > 0 {
-		maxIdleTimeDuration, err := time.ParseDuration(cfg.ConnMaxIdleTime)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse max_conn_idle_time: %w", err)
-		}
-		conn.SetConnMaxIdleTime(maxIdleTimeDuration)
-	}
-	if len(cfg.ConnMaxLifetime) > 0 {
-		maxLifetimeDuration, err := time.ParseDuration(cfg.ConnMaxLifetime)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse max_conn_idle_time: %w", err)
-		}
-		conn.SetConnMaxLifetime(maxLifetimeDuration)
 	}
 	if logger == nil {
 		logger = NoopLogger
@@ -191,6 +195,10 @@ func NewFromConfig(owner string, cfg bridgeconfig.DatabaseConfig, logger Databas
 
 		IgnoreForeignTables: true,
 		VersionTable:        "version",
+	}
+	err = wrappedDB.Configure(cfg)
+	if err != nil {
+		return nil, err
 	}
 	wrappedDB.loggingDB.UnderlyingExecable = conn
 	wrappedDB.loggingDB.db = wrappedDB
