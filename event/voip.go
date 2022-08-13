@@ -146,3 +146,28 @@ type CallHangupEventContent struct {
 	BaseCallEventContent
 	Reason CallHangupReason `json:"reason"`
 }
+
+type SFUTrackDescription struct {
+	StreamID string `json:"stream_id"`
+	TrackID  string `json:"track_id"`
+}
+
+type SFUMessageOperation string
+
+const (
+	SFUOperationSelect    SFUMessageOperation = "select"
+	SFUOperationMetadata  SFUMessageOperation = "metadata"
+	SFUOperationPublish   SFUMessageOperation = "publish"
+	SFUOperationUnpublish SFUMessageOperation = "unpublish"
+	SFUOperationAlive     SFUMessageOperation = "alive"
+	SFUOperationOffer     SFUMessageOperation = "offer"
+	SFUOperationAnswer    SFUMessageOperation = "answer"
+)
+
+type SFUMessage struct {
+	Op       SFUMessageOperation   `json:"op"`
+	Start    []SFUTrackDescription `json:"start,omitempty"`
+	Stop     []SFUTrackDescription `json:"stop,omitempty"`
+	SDP      string                `json:"sdp,omitempty"`
+	Metadata CallSDPStreamMetadata `json:"metadata,omitempty"`
+}
