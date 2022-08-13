@@ -251,4 +251,12 @@ var (
 	ToDeviceVerificationCancel  = Type{"m.key.verification.cancel", ToDeviceEventType}
 
 	ToDeviceOrgMatrixRoomKeyWithheld = Type{"org.matrix.room_key.withheld", ToDeviceEventType}
+
+	ToDeviceCallInvite       = Type{"m.call.invite", ToDeviceEventType}
+	ToDeviceCallCandidates   = Type{"m.call.candidates", ToDeviceEventType}
+	ToDeviceCallAnswer       = Type{"m.call.answer", ToDeviceEventType}
+	ToDeviceCallReject       = Type{"m.call.reject", ToDeviceEventType}
+	ToDeviceCallSelectAnswer = Type{"m.call.select_answer", ToDeviceEventType}
+	ToDeviceCallNegotiate    = Type{"m.call.negotiate", ToDeviceEventType}
+	ToDeviceCallHangup       = Type{"m.call.hangup", ToDeviceEventType}
 )

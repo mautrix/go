@@ -86,6 +86,14 @@ var TypeMap = map[Type]reflect.Type{
 	CallSelectAnswer: reflect.TypeOf(CallSelectAnswerEventContent{}),
 	CallNegotiate:    reflect.TypeOf(CallNegotiateEventContent{}),
 	CallHangup:       reflect.TypeOf(CallHangupEventContent{}),
+
+	ToDeviceCallInvite:       reflect.TypeOf(CallInviteEventContent{}),
+	ToDeviceCallCandidates:   reflect.TypeOf(CallCandidatesEventContent{}),
+	ToDeviceCallAnswer:       reflect.TypeOf(CallAnswerEventContent{}),
+	ToDeviceCallReject:       reflect.TypeOf(CallRejectEventContent{}),
+	ToDeviceCallSelectAnswer: reflect.TypeOf(CallSelectAnswerEventContent{}),
+	ToDeviceCallNegotiate:    reflect.TypeOf(CallNegotiateEventContent{}),
+	ToDeviceCallHangup:       reflect.TypeOf(CallHangupEventContent{}),
 }
 
 // Content stores the content of a Matrix event.
