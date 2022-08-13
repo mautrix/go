@@ -86,10 +86,33 @@ type BaseCallEventContent struct {
 	SenderSessionID id.SessionID `json:"sender_session_id"`
 }
 
+type CallSDPStreamMetadataPurpose string
+
+const (
+	Usermedia   CallSDPStreamMetadataPurpose = "m.usermedia"
+	Screenshare CallSDPStreamMetadataPurpose = "m.screenshare"
+)
+
+type CallSDPStreamMetadataTrack struct{}
+
+type CallSDPStreamMetadataTracks map[string]CallSDPStreamMetadataTrack
+
+type CallSDPStreamMetadataObject struct {
+	UserID     id.UserID                    `json:"user_id"`
+	DeviceID   id.DeviceID                  `json:"device_id"`
+	Purpose    CallSDPStreamMetadataPurpose `json:"purpose"`
+	AudioMuted bool                         `json:"audio_muted"`
+	VideoMuted bool                         `json:"video_muted"`
+	Tracks     CallSDPStreamMetadataTracks  `json:"tracks"`
+}
+
+type CallSDPStreamMetadata map[string]CallSDPStreamMetadataObject
+
 type CallInviteEventContent struct {
 	BaseCallEventContent
-	Lifetime int      `json:"lifetime"`
-	Offer    CallData `json:"offer"`
+	Lifetime          int                   `json:"lifetime"`
+	Offer             CallData              `json:"offer"`
+	SDPStreamMetadata CallSDPStreamMetadata `json:"org.matrix.msc3077.sdp_stream_metadata"`
 }
 
 type CallCandidatesEventContent struct {
@@ -103,7 +126,8 @@ type CallRejectEventContent struct {
 
 type CallAnswerEventContent struct {
 	BaseCallEventContent
-	Answer CallData `json:"answer"`
+	Answer            CallData              `json:"answer"`
+	SDPStreamMetadata CallSDPStreamMetadata `json:"org.matrix.msc3077.sdp_stream_metadata"`
 }
 
 type CallSelectAnswerEventContent struct {
@@ -113,8 +137,9 @@ type CallSelectAnswerEventContent struct {
 
 type CallNegotiateEventContent struct {
 	BaseCallEventContent
-	Lifetime    int      `json:"lifetime"`
-	Description CallData `json:"description"`
+	Lifetime          int                   `json:"lifetime"`
+	Description       CallData              `json:"description"`
+	SDPStreamMetadata CallSDPStreamMetadata `json:"org.matrix.msc3077.sdp_stream_metadata"`
 }
 
 type CallHangupEventContent struct {
