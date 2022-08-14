@@ -543,10 +543,7 @@ func (store *SQLCryptoStore) PutDevices(userID id.UserID, devices map[id.DeviceI
 	for deviceID := range devices {
 		deviceIDs = append(deviceIDs, deviceID)
 	}
-	var valueStringFormat = "($1, $%d, $%d, $%d, $%d, $%d, $%d)"
-	if store.DB.Dialect == dbutil.SQLite {
-		valueStringFormat = strings.ReplaceAll(valueStringFormat, "$", "?")
-	}
+	const valueStringFormat = "($1, $%d, $%d, $%d, $%d, $%d, $%d)"
 	for batchDeviceIdx := 0; batchDeviceIdx < len(deviceIDs); batchDeviceIdx += deviceBatchLen {
 		var batchDevices []id.DeviceID
 		if batchDeviceIdx+deviceBatchLen < len(deviceIDs) {
