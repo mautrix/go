@@ -103,6 +103,8 @@ type ReqCreateRoom struct {
 	RoomVersion     string                 `json:"room_version,omitempty"`
 
 	PowerLevelOverride *event.PowerLevelsEventContent `json:"power_level_content_override,omitempty"`
+
+	MeowRoomID id.RoomID `json:"fi.mau.room_id,omitempty"`
 }
 
 // ReqRedact is the JSON request for https://spec.matrix.org/v1.2/client-server-api/#put_matrixclientv3roomsroomidredacteventidtxnid

@@ -894,6 +894,8 @@ func (cli *Client) SetRoomAccountData(roomID id.RoomID, name string, data interf
 type ReqSendEvent struct {
 	Timestamp     int64
 	TransactionID string
+
+	MeowEventID id.EventID
 }
 
 // SendMessageEvent sends a message event into a room. See https://spec.matrix.org/v1.2/client-server-api/#put_matrixclientv3roomsroomidsendeventtypetxnid
@@ -914,6 +916,9 @@ func (cli *Client) SendMessageEvent(roomID id.RoomID, eventType event.Type, cont
 	queryParams := map[string]string{}
 	if req.Timestamp > 0 {
 		queryParams["ts"] = strconv.FormatInt(req.Timestamp, 10)
+	}
+	if req.MeowEventID != "" {
+		queryParams["fi.mau.event_id"] = req.MeowEventID.String()
 	}
 
 	urlData := ClientURLPath{"v3", "rooms", roomID, "send", eventType.String(), txnID}
