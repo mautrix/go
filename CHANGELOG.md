@@ -1,11 +1,17 @@
 ## v0.12.0 (unreleased)
 
-* Switched `Client.UserTyping` to take a `time.Duration` instead of raw `int64`
-  milliseconds.
-* Removed custom reply relation type and switched to using the wire format
-  (nesting in `m.in_reply_to`).
-* Added database upgrade framework
-  * Originally from mautrix-whatsapp, but usable for non-bridges too.
+* **Breaking change:** Switched `Client.UserTyping` to take a `time.Duration`
+  instead of raw `int64` milliseconds.
+* **Breaking change:** Removed custom reply relation type and switched to using
+  the wire format (nesting in `m.in_reply_to`).
+* Added device ID to appservice OTK count map to match updated [MSC3202].
+  This is also a breaking change, but the previous incorrect behavior wasn't
+  implemented by anything other than mautrix-syncproxy/imessage.
+* (There are probably other breaking changes too).
+* Added database utility and schema upgrade framework
+  * Originally from mautrix-whatsapp, but usable for non-bridges too
+  * Includes connection wrapper to log query durations and mutate queries for
+    SQLite compatibility (replacing `$x` with `?x`).
 * Added bridge utilities similar to mautrix-python. Currently includes:
   * Crypto helper
   * Startup flow
@@ -15,11 +21,18 @@
   * Appservice SQL state store
 * Added alternative markdown spoiler parsing extension that doesn't support
   reasons, but works better otherwise.
-* Added Discord underline markdown parsing extension.
+* Added Discord underline markdown parsing extension (`_foo_` -> <u>foo</u>).
 * Added support for parsing spoilers and color tags in the HTML parser.
 * Added support for mutating plain text nodes in the HTML parser.
 * Added room version field to the create room request struct.
 * Added empty JSON object as default request body for all non-GET requests.
+* Added wrapper for `/capabilities` endpoint.
+* Added `omitempty` markers for lots of structs to make the structs easier to
+  use on the server side too.
+* Fixed `CreateEventContent` using the wrong field name for the room version
+  field.
+* Fixed `StopSync` not immediately cancelling the sync loop if it was sleeping
+  after a failed sync.
 * Fixed `GetAvatarURL` always returning the current user's avatar instead of
   the specified user's avatar (thanks to [@nightmared] in [#83]).
 * Improved request logging and added new log when a request finishes.
