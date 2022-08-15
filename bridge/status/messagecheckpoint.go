@@ -75,6 +75,9 @@ type MessageCheckpoint struct {
 	MessageType event.MessageType           `json:"message_type,omitempty"`
 	Info        string                      `json:"info,omitempty"`
 
+	ClientType    string `json:"client_type,omitempty"`
+	ClientVersion string `json:"client_version,omitempty"`
+
 	OriginalEventID  id.EventID `json:"original_event_id"`
 	ManualRetryCount int        `json:"manual_retry_count"`
 }
