@@ -17,6 +17,7 @@ import (
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/appservice"
 	"maunium.net/go/mautrix/bridge/bridgeconfig"
+	"maunium.net/go/mautrix/bridge/status"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/format"
 	"maunium.net/go/mautrix/id"
@@ -48,7 +49,7 @@ func NewMatrixHandler(br *Bridge) *MatrixHandler {
 
 		TrackEventDuration: noopTrack,
 	}
-	for evtType := range CheckpointTypes {
+	for evtType := range status.CheckpointTypes {
 		br.EventProcessor.On(evtType, handler.sendBridgeCheckpoint)
 	}
 	br.EventProcessor.On(event.EventMessage, handler.HandleMessage)
@@ -68,7 +69,7 @@ func NewMatrixHandler(br *Bridge) *MatrixHandler {
 
 func (mx *MatrixHandler) sendBridgeCheckpoint(evt *event.Event) {
 	if !evt.Mautrix.CheckpointSent {
-		go mx.bridge.SendMessageSuccessCheckpoint(evt, MsgStepBridge, 0)
+		go mx.bridge.SendMessageSuccessCheckpoint(evt, status.MsgStepBridge, 0)
 	}
 }
 
@@ -323,7 +324,7 @@ func (mx *MatrixHandler) shouldIgnoreEvent(evt *event.Event) bool {
 const sessionWaitTimeout = 3 * time.Second
 
 func (mx *MatrixHandler) sendCryptoStatusError(evt *event.Event, editEvent id.EventID, err error, retryCount int, isFinal bool) id.EventID {
-	mx.bridge.SendMessageErrorCheckpoint(evt, MsgStepDecrypted, err, isFinal, retryCount)
+	mx.bridge.SendMessageErrorCheckpoint(evt, status.MsgStepDecrypted, err, isFinal, retryCount)
 
 	if mx.bridge.Config.Bridge.EnableMessageStatusEvents() {
 		statusEvent := &event.BeeperMessageStatusEventContent{
@@ -421,7 +422,7 @@ func (mx *MatrixHandler) postDecrypt(original, decrypted *event.Event, retryCoun
 	}
 	copySomeKeys(original, decrypted)
 
-	mx.bridge.SendMessageSuccessCheckpoint(decrypted, MsgStepDecrypted, retryCount)
+	mx.bridge.SendMessageSuccessCheckpoint(decrypted, status.MsgStepDecrypted, retryCount)
 	decrypted.Mautrix.CheckpointSent = true
 	decrypted.Mautrix.DecryptionDuration = duration
 	mx.log.Debugfln("Successfully decrypted %s", decrypted.ID)
@@ -445,7 +446,7 @@ func (mx *MatrixHandler) HandleEncrypted(evt *event.Event) {
 	if errors.Is(err, NoSessionFound) {
 		decryptionRetryCount = 1
 		mx.log.Debugfln("Couldn't find session %s trying to decrypt %s, waiting %d seconds...", content.SessionID, evt.ID, int(sessionWaitTimeout.Seconds()))
-		mx.bridge.SendMessageErrorCheckpoint(evt, MsgStepDecrypted, err, false, 0)
+		mx.bridge.SendMessageErrorCheckpoint(evt, status.MsgStepDecrypted, err, false, 0)
 		if mx.bridge.Crypto.WaitForSession(evt.RoomID, content.SenderKey, content.SessionID, sessionWaitTimeout) {
 			mx.log.Debugfln("Got session %s after waiting, trying to decrypt %s again", content.SessionID, evt.ID)
 			decrypted, err = mx.bridge.Crypto.Decrypt(evt)
@@ -455,7 +456,7 @@ func (mx *MatrixHandler) HandleEncrypted(evt *event.Event) {
 		}
 	}
 	if err != nil {
-		mx.bridge.SendMessageErrorCheckpoint(evt, MsgStepDecrypted, err, true, decryptionRetryCount)
+		mx.bridge.SendMessageErrorCheckpoint(evt, status.MsgStepDecrypted, err, true, decryptionRetryCount)
 		mx.log.Warnfln("Failed to decrypt %s: %v", evt.ID, err)
 		go mx.sendCryptoStatusError(evt, "", err, decryptionRetryCount, true)
 		return
