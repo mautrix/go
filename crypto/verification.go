@@ -40,7 +40,7 @@ var (
 type VerificationHooks interface {
 	// VerifySASMatch receives the generated SAS and its method, as well as the device that is being verified.
 	// It returns whether the given SAS match with the SAS displayed on other device.
-	VerifySASMatch(otherDevice *DeviceIdentity, sas SASData) bool
+	VerifySASMatch(otherDevice *id.Device, sas SASData) bool
 	// VerificationMethods returns the list of supported verification methods in order of preference.
 	// It must contain at least the decimal method.
 	VerificationMethods() []VerificationMethod
@@ -106,7 +106,7 @@ func (mach *OlmMachine) getPKAndKeysMAC(sas *olm.SAS, sendingUser id.UserID, sen
 // verificationState holds all the information needed for the state of a SAS verification with another device.
 type verificationState struct {
 	sas                 *olm.SAS
-	otherDevice         *DeviceIdentity
+	otherDevice         *id.Device
 	initiatedByUs       bool
 	verificationStarted bool
 	keyReceived         bool
@@ -175,7 +175,7 @@ func (mach *OlmMachine) handleVerificationStart(userID id.UserID, content *event
 	}
 }
 
-func (mach *OlmMachine) actuallyStartVerification(userID id.UserID, content *event.VerificationStartEventContent, otherDevice *DeviceIdentity, transactionID string, timeout time.Duration, inRoomID id.RoomID) {
+func (mach *OlmMachine) actuallyStartVerification(userID id.UserID, content *event.VerificationStartEventContent, otherDevice *id.Device, transactionID string, timeout time.Duration, inRoomID id.RoomID) {
 	if inRoomID != "" && transactionID != "" {
 		verState, err := mach.getTransactionState(transactionID, userID)
 		if err != nil {
@@ -509,7 +509,7 @@ func (mach *OlmMachine) handleVerificationMAC(userID id.UserID, content *event.V
 		}
 
 		// we can finally trust this device
-		device.Trust = TrustStateVerified
+		device.Trust = id.TrustStateVerified
 		err = mach.CryptoStore.PutDevice(device.UserID, device)
 		if err != nil {
 			mach.Log.Warn("Failed to put device after verifying: %v", err)
@@ -609,14 +609,14 @@ func (mach *OlmMachine) handleVerificationRequest(userID id.UserID, content *eve
 
 // NewSimpleSASVerificationWith starts the SAS verification process with another device with a default timeout,
 // a generated transaction ID and support for both emoji and decimal SAS methods.
-func (mach *OlmMachine) NewSimpleSASVerificationWith(device *DeviceIdentity, hooks VerificationHooks) (string, error) {
+func (mach *OlmMachine) NewSimpleSASVerificationWith(device *id.Device, hooks VerificationHooks) (string, error) {
 	return mach.NewSASVerificationWith(device, hooks, "", mach.DefaultSASTimeout)
 }
 
 // NewSASVerificationWith starts the SAS verification process with another device.
 // If the other device accepts the verification transaction, the methods in `hooks` will be used to verify the SAS match and to complete the transaction..
 // If the transaction ID is empty, a new one is generated.
-func (mach *OlmMachine) NewSASVerificationWith(device *DeviceIdentity, hooks VerificationHooks, transactionID string, timeout time.Duration) (string, error) {
+func (mach *OlmMachine) NewSASVerificationWith(device *id.Device, hooks VerificationHooks, transactionID string, timeout time.Duration) (string, error) {
 	if transactionID == "" {
 		transactionID = strconv.Itoa(rand.Int())
 	}

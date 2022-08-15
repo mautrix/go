@@ -35,7 +35,7 @@ func getCryptoStores(t *testing.T) (map[string]Store, func()) {
 	if err != nil {
 		t.Fatalf("Error opening db: %v", err)
 	}
-	sqlStore := NewSQLCryptoStore(db, "accid", id.DeviceID("dev"), []byte("test"))
+	sqlStore := NewSQLCryptoStore(db, nil, "accid", id.DeviceID("dev"), []byte("test"))
 	if err = sqlStore.Upgrade(); err != nil {
 		t.Fatalf("Error creating tables: %v", err)
 	}
@@ -59,7 +59,7 @@ func TestPutNextBatch(t *testing.T) {
 	defer cleanup()
 	store := stores["sql"].(*SQLCryptoStore)
 	store.PutNextBatch("batch1")
-	if batch := store.GetNextBatch(); batch != "batch1" {
+	if batch, _ := store.GetNextBatch(); batch != "batch1" {
 		t.Errorf("Expected batch1, got %v", batch)
 	}
 }
@@ -91,16 +91,16 @@ func TestValidateMessageIndex(t *testing.T) {
 	for storeName, store := range stores {
 		t.Run(storeName, func(t *testing.T) {
 			acc := NewOlmAccount()
-			if !store.ValidateMessageIndex(acc.IdentityKey(), "sess1", "event1", 0, 1000) {
+			if ok, _ := store.ValidateMessageIndex(acc.IdentityKey(), "sess1", "event1", 0, 1000); !ok {
 				t.Error("First message not validated successfully")
 			}
-			if store.ValidateMessageIndex(acc.IdentityKey(), "sess1", "event1", 0, 1001) {
+			if ok, _ := store.ValidateMessageIndex(acc.IdentityKey(), "sess1", "event1", 0, 1001); ok {
 				t.Error("First message validated successfully after changing timestamp")
 			}
-			if store.ValidateMessageIndex(acc.IdentityKey(), "sess1", "event2", 0, 1000) {
+			if ok, _ := store.ValidateMessageIndex(acc.IdentityKey(), "sess1", "event2", 0, 1000); ok {
 				t.Error("First message validated successfully after changing event ID")
 			}
-			if !store.ValidateMessageIndex(acc.IdentityKey(), "sess1", "event1", 0, 1000) {
+			if ok, _ := store.ValidateMessageIndex(acc.IdentityKey(), "sess1", "event1", 0, 1000); !ok {
 				t.Error("First message not validated successfully for a second time")
 			}
 		})
@@ -231,11 +231,11 @@ func TestStoreDevices(t *testing.T) {
 	defer cleanup()
 	for storeName, store := range stores {
 		t.Run(storeName, func(t *testing.T) {
-			deviceMap := make(map[id.DeviceID]*DeviceIdentity)
+			deviceMap := make(map[id.DeviceID]*id.Device)
 			for i := 0; i < 17; i++ {
 				iStr := strconv.Itoa(i)
 				acc := NewOlmAccount()
-				deviceMap[id.DeviceID("dev"+iStr)] = &DeviceIdentity{
+				deviceMap[id.DeviceID("dev"+iStr)] = &id.Device{
 					UserID:      "user1",
 					DeviceID:    id.DeviceID("dev" + iStr),
 					IdentityKey: acc.IdentityKey(),
@@ -260,8 +260,10 @@ func TestStoreDevices(t *testing.T) {
 				t.Errorf("Last device identity key does not match")
 			}
 
-			filtered := store.FilterTrackedUsers([]id.UserID{"user0", "user1", "user2"})
-			if len(filtered) != 1 || filtered[0] != "user1" {
+			filtered, err := store.FilterTrackedUsers([]id.UserID{"user0", "user1", "user2"})
+			if err != nil {
+				t.Errorf("Error filtering tracked users: %v", err)
+			} else if len(filtered) != 1 || filtered[0] != "user1" {
 				t.Errorf("Expected to get 'user1' from filter, got %v", filtered)
 			}
 		})

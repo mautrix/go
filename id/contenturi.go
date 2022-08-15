@@ -8,6 +8,7 @@ package id
 
 import (
 	"bytes"
+	"database/sql/driver"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -95,7 +96,7 @@ func (uri *ContentURI) UnmarshalJSON(raw []byte) (err error) {
 }
 
 func (uri *ContentURI) MarshalJSON() ([]byte, error) {
-	if uri.IsEmpty() {
+	if uri == nil || uri.IsEmpty() {
 		return []byte("null"), nil
 	}
 	return json.Marshal(uri.String())
@@ -111,23 +112,47 @@ func (uri *ContentURI) UnmarshalText(raw []byte) (err error) {
 }
 
 func (uri ContentURI) MarshalText() ([]byte, error) {
-	if uri.IsEmpty() {
-		return []byte(""), nil
-	}
 	return []byte(uri.String()), nil
 }
 
-func (uri *ContentURI) String() string {
+func (uri *ContentURI) Scan(i interface{}) error {
+	var parsed ContentURI
+	var err error
+	switch value := i.(type) {
+	case nil:
+		// don't do anything, set uri to empty
+	case []byte:
+		parsed, err = ParseContentURIBytes(value)
+	case string:
+		parsed, err = ParseContentURI(value)
+	default:
+		return fmt.Errorf("invalid type %T for ContentURI.Scan", i)
+	}
+	if err != nil {
+		return err
+	}
+	*uri = parsed
+	return nil
+}
+
+func (uri *ContentURI) Value() (driver.Value, error) {
+	if uri == nil {
+		return nil, nil
+	}
+	return uri.String(), nil
+}
+
+func (uri ContentURI) String() string {
 	if uri.IsEmpty() {
 		return ""
 	}
 	return fmt.Sprintf("mxc://%s/%s", uri.Homeserver, uri.FileID)
 }
 
-func (uri *ContentURI) CUString() ContentURIString {
+func (uri ContentURI) CUString() ContentURIString {
 	return ContentURIString(uri.String())
 }
 
-func (uri *ContentURI) IsEmpty() bool {
+func (uri ContentURI) IsEmpty() bool {
 	return len(uri.Homeserver) == 0 || len(uri.FileID) == 0
 }

@@ -34,7 +34,7 @@ func NewProcessor(bridge *bridge.Bridge) *Processor {
 		aliases:  make(map[string]string),
 	}
 	proc.AddHandlers(
-		CommandHelp, CommandVersion,
+		CommandHelp, CommandVersion, CommandCancel,
 		CommandLoginMatrix, CommandLogoutMatrix, CommandPingMatrix,
 		CommandDiscardMegolmSession, CommandSetPowerLevel)
 	return proc
@@ -81,25 +81,26 @@ func (proc *Processor) Handle(roomID id.RoomID, eventID id.EventID, user bridge.
 		ReplyTo:   replyTo,
 		Log:       proc.log,
 	}
-	proc.log.Debugfln("%s sent '%s' in %s", user.GetMXID(), message, roomID)
+	proc.log.Debugfln("%s sent %q in %s", user.GetMXID(), message, roomID)
 
 	realCommand, ok := proc.aliases[ce.Command]
 	if !ok {
 		realCommand = ce.Command
 	}
+	commandingUser, ok := ce.User.(CommandingUser)
 
-	handler, ok := proc.handlers[realCommand]
+	var handler MinimalHandler
+	handler, ok = proc.handlers[realCommand]
 	if !ok {
-		if state := ce.User.GetCommandState(); state != nil {
+		var state *CommandState
+		if commandingUser != nil {
+			state = commandingUser.GetCommandState()
+		}
+		if state != nil && state.Next != nil {
 			ce.Command = ""
 			ce.Args = args
-			handler, ok = state["next"].(Handler)
-			if ok {
-				ce.Handler = handler
-				handler.Run(ce)
-			} else {
-				ce.Reply("Unknown command, use the `help` command for help.")
-			}
+			ce.Handler = state.Next
+			state.Next.Run(ce)
 		} else {
 			ce.Reply("Unknown command, use the `help` command for help.")
 		}

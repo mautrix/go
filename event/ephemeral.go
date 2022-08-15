@@ -22,8 +22,41 @@ type TypingEventContent struct {
 // https://spec.matrix.org/v1.2/client-server-api/#mreceipt
 type ReceiptEventContent map[id.EventID]Receipts
 
-type Receipts struct {
-	Read map[id.UserID]ReadReceipt `json:"m.read"`
+func (rec ReceiptEventContent) Set(evtID id.EventID, receiptType ReceiptType, userID id.UserID, receipt ReadReceipt) {
+	rec.GetOrCreate(evtID).GetOrCreate(receiptType).Set(userID, receipt)
+}
+
+func (rec ReceiptEventContent) GetOrCreate(evt id.EventID) Receipts {
+	receipts, ok := rec[evt]
+	if !ok {
+		receipts = make(Receipts)
+		rec[evt] = receipts
+	}
+	return receipts
+}
+
+type ReceiptType string
+
+const (
+	ReceiptTypeRead        ReceiptType = "m.read"
+	ReceiptTypeReadPrivate ReceiptType = "m.read.private"
+)
+
+type Receipts map[ReceiptType]UserReceipts
+
+func (rps Receipts) GetOrCreate(receiptType ReceiptType) UserReceipts {
+	read, ok := rps[receiptType]
+	if !ok {
+		read = make(UserReceipts)
+		rps[receiptType] = read
+	}
+	return read
+}
+
+type UserReceipts map[id.UserID]ReadReceipt
+
+func (ur UserReceipts) Set(userID id.UserID, receipt ReadReceipt) {
+	ur[userID] = receipt
 }
 
 type ReadReceipt struct {

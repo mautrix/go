@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tulir Asokan
+// Copyright (c) 2022 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -18,46 +18,8 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-// TrustState determines how trusted a device is.
-type TrustState int
-
-const (
-	TrustStateUnset TrustState = iota
-	TrustStateVerified
-	TrustStateBlacklisted
-	TrustStateIgnored
-)
-
-func (ts TrustState) String() string {
-	switch ts {
-	case TrustStateUnset:
-		return "unverified"
-	case TrustStateVerified:
-		return "verified"
-	case TrustStateBlacklisted:
-		return "blacklisted"
-	case TrustStateIgnored:
-		return "ignored"
-	default:
-		return ""
-	}
-}
-
-// DeviceIdentity contains the identity details of a device and some additional info.
-type DeviceIdentity struct {
-	UserID      id.UserID
-	DeviceID    id.DeviceID
-	IdentityKey id.Curve25519
-	SigningKey  id.Ed25519
-
-	Trust   TrustState
-	Deleted bool
-	Name    string
-}
-
-func (device *DeviceIdentity) Fingerprint() string {
-	return Fingerprint(device.SigningKey)
-}
+// Deprecated: moved to id.Device
+type DeviceIdentity = id.Device
 
 var ErrGroupSessionWithheld = errors.New("group session has been withheld")
 
@@ -128,32 +90,30 @@ type Store interface {
 	// * If the map key doesn't exist, the given values should be stored and this should return true.
 	// * If the map key exists and the stored values match the given values, this should return true.
 	// * If the map key exists, but the stored values do not match the given values, this should return false.
-	ValidateMessageIndex(senderKey id.SenderKey, sessionID id.SessionID, eventID id.EventID, index uint, timestamp int64) bool
+	ValidateMessageIndex(senderKey id.SenderKey, sessionID id.SessionID, eventID id.EventID, index uint, timestamp int64) (bool, error)
 
 	// GetDevices returns a map from device ID to DeviceIdentity containing all devices of a given user.
-	GetDevices(id.UserID) (map[id.DeviceID]*DeviceIdentity, error)
+	GetDevices(id.UserID) (map[id.DeviceID]*id.Device, error)
 	// GetDevice returns a specific device of a given user.
-	GetDevice(id.UserID, id.DeviceID) (*DeviceIdentity, error)
+	GetDevice(id.UserID, id.DeviceID) (*id.Device, error)
 	// PutDevice stores a single device for a user, replacing it if it exists already.
-	PutDevice(id.UserID, *DeviceIdentity) error
+	PutDevice(id.UserID, *id.Device) error
 	// PutDevices overrides the stored device list for the given user with the given list.
-	PutDevices(id.UserID, map[id.DeviceID]*DeviceIdentity) error
+	PutDevices(id.UserID, map[id.DeviceID]*id.Device) error
 	// FindDeviceByKey finds a specific device by its identity key.
-	FindDeviceByKey(id.UserID, id.IdentityKey) (*DeviceIdentity, error)
+	FindDeviceByKey(id.UserID, id.IdentityKey) (*id.Device, error)
 	// FilterTrackedUsers returns a filtered version of the given list that only includes user IDs whose device lists
 	// have been stored with PutDevices. A user is considered tracked even if the PutDevices list was empty.
-	FilterTrackedUsers([]id.UserID) []id.UserID
+	FilterTrackedUsers([]id.UserID) ([]id.UserID, error)
 
 	// PutCrossSigningKey stores a cross-signing key of some user along with its usage.
 	PutCrossSigningKey(id.UserID, id.CrossSigningUsage, id.Ed25519) error
 	// GetCrossSigningKeys retrieves a user's stored cross-signing keys.
-	GetCrossSigningKeys(id.UserID) (map[id.CrossSigningUsage]id.Ed25519, error)
+	GetCrossSigningKeys(id.UserID) (map[id.CrossSigningUsage]id.CrossSigningKey, error)
 	// PutSignature stores a signature of a cross-signing or device key along with the signer's user ID and key.
-	PutSignature(id.UserID, id.Ed25519, id.UserID, id.Ed25519, string) error
-	// GetSignaturesForKeyBy returns the signatures for a cross-signing or device key by the given signer.
-	GetSignaturesForKeyBy(id.UserID, id.Ed25519, id.UserID) (map[id.Ed25519]string, error)
+	PutSignature(signedUser id.UserID, signedKey id.Ed25519, signerUser id.UserID, signerKey id.Ed25519, signature string) error
 	// IsKeySignedBy returns whether a cross-signing or device key is signed by the given signer.
-	IsKeySignedBy(id.UserID, id.Ed25519, id.UserID, id.Ed25519) (bool, error)
+	IsKeySignedBy(userID id.UserID, key id.Ed25519, signedByUser id.UserID, signedByKey id.Ed25519) (bool, error)
 	// DropSignaturesByKey deletes the signatures made by the given user and key from the store. It returns the number of signatures deleted.
 	DropSignaturesByKey(id.UserID, id.Ed25519) (int64, error)
 }
@@ -182,8 +142,8 @@ type GobStore struct {
 	WithheldGroupSessions map[id.RoomID]map[id.SenderKey]map[id.SessionID]*event.RoomKeyWithheldEventContent
 	OutGroupSessions      map[id.RoomID]*OutboundGroupSession
 	MessageIndices        map[messageIndexKey]messageIndexValue
-	Devices               map[id.UserID]map[id.DeviceID]*DeviceIdentity
-	CrossSigningKeys      map[id.UserID]map[id.CrossSigningUsage]id.Ed25519
+	Devices               map[id.UserID]map[id.DeviceID]*id.Device
+	CrossSigningKeys      map[id.UserID]map[id.CrossSigningUsage]id.CrossSigningKey
 	KeySignatures         map[id.UserID]map[id.Ed25519]map[id.UserID]map[id.Ed25519]string
 }
 
@@ -200,8 +160,8 @@ func NewGobStore(path string) (*GobStore, error) {
 		WithheldGroupSessions: make(map[id.RoomID]map[id.SenderKey]map[id.SessionID]*event.RoomKeyWithheldEventContent),
 		OutGroupSessions:      make(map[id.RoomID]*OutboundGroupSession),
 		MessageIndices:        make(map[messageIndexKey]messageIndexValue),
-		Devices:               make(map[id.UserID]map[id.DeviceID]*DeviceIdentity),
-		CrossSigningKeys:      make(map[id.UserID]map[id.CrossSigningUsage]id.Ed25519),
+		Devices:               make(map[id.UserID]map[id.DeviceID]*id.Device),
+		CrossSigningKeys:      make(map[id.UserID]map[id.CrossSigningUsage]id.CrossSigningKey),
 		KeySignatures:         make(map[id.UserID]map[id.Ed25519]map[id.UserID]map[id.Ed25519]string),
 	}
 	return gs, gs.load()
@@ -426,7 +386,7 @@ func (gs *GobStore) RemoveOutboundGroupSession(roomID id.RoomID) error {
 	return nil
 }
 
-func (gs *GobStore) ValidateMessageIndex(senderKey id.SenderKey, sessionID id.SessionID, eventID id.EventID, index uint, timestamp int64) bool {
+func (gs *GobStore) ValidateMessageIndex(senderKey id.SenderKey, sessionID id.SessionID, eventID id.EventID, index uint, timestamp int64) (bool, error) {
 	gs.lock.Lock()
 	defer gs.lock.Unlock()
 	key := messageIndexKey{
@@ -441,15 +401,15 @@ func (gs *GobStore) ValidateMessageIndex(senderKey id.SenderKey, sessionID id.Se
 			Timestamp: timestamp,
 		}
 		_ = gs.save()
-		return true
+		return true, nil
 	}
 	if val.EventID != eventID || val.Timestamp != timestamp {
-		return false
+		return false, nil
 	}
-	return true
+	return true, nil
 }
 
-func (gs *GobStore) GetDevices(userID id.UserID) (map[id.DeviceID]*DeviceIdentity, error) {
+func (gs *GobStore) GetDevices(userID id.UserID) (map[id.DeviceID]*id.Device, error) {
 	gs.lock.RLock()
 	devices, ok := gs.Devices[userID]
 	if !ok {
@@ -459,7 +419,7 @@ func (gs *GobStore) GetDevices(userID id.UserID) (map[id.DeviceID]*DeviceIdentit
 	return devices, nil
 }
 
-func (gs *GobStore) GetDevice(userID id.UserID, deviceID id.DeviceID) (*DeviceIdentity, error) {
+func (gs *GobStore) GetDevice(userID id.UserID, deviceID id.DeviceID) (*id.Device, error) {
 	gs.lock.RLock()
 	defer gs.lock.RUnlock()
 	devices, ok := gs.Devices[userID]
@@ -473,7 +433,7 @@ func (gs *GobStore) GetDevice(userID id.UserID, deviceID id.DeviceID) (*DeviceId
 	return device, nil
 }
 
-func (gs *GobStore) FindDeviceByKey(userID id.UserID, identityKey id.IdentityKey) (*DeviceIdentity, error) {
+func (gs *GobStore) FindDeviceByKey(userID id.UserID, identityKey id.IdentityKey) (*id.Device, error) {
 	gs.lock.RLock()
 	defer gs.lock.RUnlock()
 	devices, ok := gs.Devices[userID]
@@ -488,11 +448,11 @@ func (gs *GobStore) FindDeviceByKey(userID id.UserID, identityKey id.IdentityKey
 	return nil, nil
 }
 
-func (gs *GobStore) PutDevice(userID id.UserID, device *DeviceIdentity) error {
+func (gs *GobStore) PutDevice(userID id.UserID, device *id.Device) error {
 	gs.lock.Lock()
 	devices, ok := gs.Devices[userID]
 	if !ok {
-		devices = make(map[id.DeviceID]*DeviceIdentity)
+		devices = make(map[id.DeviceID]*id.Device)
 		gs.Devices[userID] = devices
 	}
 	devices[device.DeviceID] = device
@@ -501,7 +461,7 @@ func (gs *GobStore) PutDevice(userID id.UserID, device *DeviceIdentity) error {
 	return err
 }
 
-func (gs *GobStore) PutDevices(userID id.UserID, devices map[id.DeviceID]*DeviceIdentity) error {
+func (gs *GobStore) PutDevices(userID id.UserID, devices map[id.DeviceID]*id.Device) error {
 	gs.lock.Lock()
 	gs.Devices[userID] = devices
 	err := gs.save()
@@ -509,7 +469,7 @@ func (gs *GobStore) PutDevices(userID id.UserID, devices map[id.DeviceID]*Device
 	return err
 }
 
-func (gs *GobStore) FilterTrackedUsers(users []id.UserID) []id.UserID {
+func (gs *GobStore) FilterTrackedUsers(users []id.UserID) ([]id.UserID, error) {
 	gs.lock.RLock()
 	var ptr int
 	for _, userID := range users {
@@ -520,28 +480,37 @@ func (gs *GobStore) FilterTrackedUsers(users []id.UserID) []id.UserID {
 		}
 	}
 	gs.lock.RUnlock()
-	return users[:ptr]
+	return users[:ptr], nil
 }
 
 func (gs *GobStore) PutCrossSigningKey(userID id.UserID, usage id.CrossSigningUsage, key id.Ed25519) error {
 	gs.lock.RLock()
 	userKeys, ok := gs.CrossSigningKeys[userID]
 	if !ok {
-		userKeys = make(map[id.CrossSigningUsage]id.Ed25519)
+		userKeys = make(map[id.CrossSigningUsage]id.CrossSigningKey)
 		gs.CrossSigningKeys[userID] = userKeys
 	}
-	userKeys[usage] = key
+	existing, ok := userKeys[usage]
+	if ok {
+		existing.Key = key
+		userKeys[usage] = existing
+	} else {
+		userKeys[usage] = id.CrossSigningKey{
+			Key:   key,
+			First: key,
+		}
+	}
 	err := gs.save()
 	gs.lock.RUnlock()
 	return err
 }
 
-func (gs *GobStore) GetCrossSigningKeys(userID id.UserID) (map[id.CrossSigningUsage]id.Ed25519, error) {
+func (gs *GobStore) GetCrossSigningKeys(userID id.UserID) (map[id.CrossSigningUsage]id.CrossSigningKey, error) {
 	gs.lock.RLock()
 	defer gs.lock.RUnlock()
 	keys, ok := gs.CrossSigningKeys[userID]
 	if !ok {
-		return map[id.CrossSigningUsage]id.Ed25519{}, nil
+		return map[id.CrossSigningUsage]id.CrossSigningKey{}, nil
 	}
 	return keys, nil
 }

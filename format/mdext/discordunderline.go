@@ -56,7 +56,7 @@ type discordUnderlineParser struct{}
 var defaultDiscordUnderlineParser = &discordUnderlineParser{}
 
 // NewDiscordUnderlineParser return a new InlineParser that parses
-// strikethrough expressions.
+// Discord underline expressions.
 func NewDiscordUnderlineParser() parser.InlineParser {
 	return defaultDiscordUnderlineParser
 }

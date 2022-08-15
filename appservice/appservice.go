@@ -129,7 +129,12 @@ type AppService struct {
 	websocketRequestID    int32
 	// ProcessID is an identifier sent to the websocket proxy for debugging connections
 	ProcessID string
+
+	DoublePuppetValue string
+	GetProfile        func(userID id.UserID, roomID id.RoomID) *event.MemberEventContent
 }
+
+const DoublePuppetKey = "fi.mau.double_puppet_source"
 
 func getDefaultProcessID() string {
 	pid := syscall.Getpid()
@@ -139,6 +144,8 @@ func getDefaultProcessID() string {
 }
 
 func (as *AppService) PrepareWebsocket() {
+	as.websocketHandlersLock.Lock()
+	defer as.websocketHandlersLock.Unlock()
 	if as.websocketHandlers == nil {
 		as.websocketHandlers = make(map[string]WebsocketHandler, 32)
 		as.websocketRequests = make(map[int]chan<- *WebsocketCommand)

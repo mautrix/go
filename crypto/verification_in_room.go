@@ -255,10 +255,10 @@ func (mach *OlmMachine) SendInRoomSASVerificationMAC(roomID id.RoomID, userID id
 // NewInRoomSASVerificationWith starts the in-room SAS verification process with another user in the given room.
 // It returns the generated transaction ID.
 func (mach *OlmMachine) NewInRoomSASVerificationWith(inRoomID id.RoomID, userID id.UserID, hooks VerificationHooks, timeout time.Duration) (string, error) {
-	return mach.newInRoomSASVerificationWithInner(inRoomID, &DeviceIdentity{UserID: userID}, hooks, "", timeout)
+	return mach.newInRoomSASVerificationWithInner(inRoomID, &id.Device{UserID: userID}, hooks, "", timeout)
 }
 
-func (mach *OlmMachine) newInRoomSASVerificationWithInner(inRoomID id.RoomID, device *DeviceIdentity, hooks VerificationHooks, transactionID string, timeout time.Duration) (string, error) {
+func (mach *OlmMachine) newInRoomSASVerificationWithInner(inRoomID id.RoomID, device *id.Device, hooks VerificationHooks, transactionID string, timeout time.Duration) (string, error) {
 	mach.Log.Debug("Starting new in-room verification transaction user %v", device.UserID)
 
 	request := transactionID == ""

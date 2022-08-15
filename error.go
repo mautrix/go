@@ -16,10 +16,11 @@ import (
 // Common error codes from https://matrix.org/docs/spec/client_server/latest#api-standards
 //
 // Can be used with errors.Is() to check the response code without casting the error:
-//   err := client.Sync()
-//   if errors.Is(err, MUnknownToken) {
-//     // logout
-//   }
+//
+//	err := client.Sync()
+//	if errors.Is(err, MUnknownToken) {
+//		// logout
+//	}
 var (
 	// Forbidden access, e.g. joining a room without permission, failed login.
 	MForbidden = RespError{ErrCode: "M_FORBIDDEN"}

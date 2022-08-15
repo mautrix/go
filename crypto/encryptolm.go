@@ -16,7 +16,7 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-func (mach *OlmMachine) encryptOlmEvent(session *OlmSession, recipient *DeviceIdentity, evtType event.Type, content event.Content) *event.EncryptedEventContent {
+func (mach *OlmMachine) encryptOlmEvent(session *OlmSession, recipient *id.Device, evtType event.Type, content event.Content) *event.EncryptedEventContent {
 	evt := &DecryptedOlmEvent{
 		Sender:        mach.Client.UserID,
 		SenderDevice:  mach.Client.DeviceID,
@@ -61,7 +61,7 @@ func (mach *OlmMachine) shouldCreateNewSession(identityKey id.IdentityKey) bool 
 	return shouldUnwedge
 }
 
-func (mach *OlmMachine) createOutboundSessions(input map[id.UserID]map[id.DeviceID]*DeviceIdentity) error {
+func (mach *OlmMachine) createOutboundSessions(input map[id.UserID]map[id.DeviceID]*id.Device) error {
 	request := make(mautrix.OneTimeKeysRequest)
 	for userID, devices := range input {
 		request[userID] = make(map[id.DeviceID]id.KeyAlgorithm)
@@ -109,7 +109,7 @@ func (mach *OlmMachine) createOutboundSessions(input map[id.UserID]map[id.Device
 				if err != nil {
 					mach.Log.Error("Failed to store created session for %s of %s: %v", deviceID, userID, err)
 				} else {
-					mach.Log.Debug("Created new Olm session with %s/%s (OTK ID: %d)", userID, deviceID, keyIndex)
+					mach.Log.Debug("Created new Olm session with %s/%s (OTK ID: %s)", userID, deviceID, keyIndex)
 				}
 			}
 		}

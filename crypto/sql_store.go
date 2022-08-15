@@ -28,7 +28,7 @@ var PostgresArrayWrapper func(interface{}) interface {
 
 // SQLCryptoStore is an implementation of a crypto Store for a database backend.
 type SQLCryptoStore struct {
-	*dbutil.Database
+	DB *dbutil.Database
 
 	AccountID string
 	DeviceID  id.DeviceID
@@ -44,9 +44,9 @@ var _ Store = (*SQLCryptoStore)(nil)
 
 // NewSQLCryptoStore initializes a new crypto Store using the given database, for a device's crypto material.
 // The stored material will be encrypted with the given key.
-func NewSQLCryptoStore(db *dbutil.Database, accountID string, deviceID id.DeviceID, pickleKey []byte) *SQLCryptoStore {
+func NewSQLCryptoStore(db *dbutil.Database, log dbutil.DatabaseLogger, accountID string, deviceID id.DeviceID, pickleKey []byte) *SQLCryptoStore {
 	return &SQLCryptoStore{
-		Database:  db.Child("CryptoStore", sql_store_upgrade.VersionTableName, sql_store_upgrade.Table),
+		DB:        db.Child(sql_store_upgrade.VersionTableName, sql_store_upgrade.Table, log),
 		PickleKey: pickleKey,
 		AccountID: accountID,
 		DeviceID:  deviceID,
@@ -55,11 +55,8 @@ func NewSQLCryptoStore(db *dbutil.Database, accountID string, deviceID id.Device
 	}
 }
 
-// CreateTables applies all the pending database migrations.
-//
-// Deprecated: The Upgrade method (inherited from dbutil.Database) should be used instead
-func (store *SQLCryptoStore) CreateTables() error {
-	return store.Upgrade()
+func (store *SQLCryptoStore) Upgrade() error {
+	return store.DB.Upgrade()
 }
 
 // Flush does nothing for this implementation as data is already persisted in the database.
@@ -68,25 +65,23 @@ func (store *SQLCryptoStore) Flush() error {
 }
 
 // PutNextBatch stores the next sync batch token for the current account.
-func (store *SQLCryptoStore) PutNextBatch(nextBatch string) {
+func (store *SQLCryptoStore) PutNextBatch(nextBatch string) error {
 	store.SyncToken = nextBatch
 	_, err := store.DB.Exec(`UPDATE crypto_account SET sync_token=$1 WHERE account_id=$2`, store.SyncToken, store.AccountID)
-	if err != nil {
-		store.Log.Warnfln("Failed to store sync token: %v", err)
-	}
+	return err
 }
 
 // GetNextBatch retrieves the next sync batch token for the current account.
-func (store *SQLCryptoStore) GetNextBatch() string {
+func (store *SQLCryptoStore) GetNextBatch() (string, error) {
 	if store.SyncToken == "" {
 		err := store.DB.
 			QueryRow("SELECT sync_token FROM crypto_account WHERE account_id=$1", store.AccountID).
 			Scan(&store.SyncToken)
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			store.Log.Warnfln("Failed to scan sync token: %v", err)
+		if !errors.Is(err, sql.ErrNoRows) {
+			return "", err
 		}
 	}
-	return store.SyncToken
+	return store.SyncToken, nil
 }
 
 // PutAccount stores an OlmAccount in the database.
@@ -98,10 +93,7 @@ func (store *SQLCryptoStore) PutAccount(account *OlmAccount) error {
 		ON CONFLICT (account_id) DO UPDATE SET shared=excluded.shared, sync_token=excluded.sync_token,
 											   account=excluded.account, account_id=excluded.account_id
 	`, store.DeviceID, account.Shared, store.SyncToken, bytes, store.AccountID)
-	if err != nil {
-		store.Log.Warnfln("Failed to store account: %v", err)
-	}
-	return nil
+	return err
 }
 
 // GetAccount retrieves an OlmAccount from the database.
@@ -157,7 +149,7 @@ func (store *SQLCryptoStore) GetSessions(key id.SenderKey) (OlmSessionList, erro
 		sess := OlmSession{Internal: *olm.NewBlankSession()}
 		var sessionBytes []byte
 		var sessionID id.SessionID
-		err := rows.Scan(&sessionID, &sessionBytes, &sess.CreationTime, &sess.LastEncryptedTime, &sess.LastDecryptedTime)
+		err = rows.Scan(&sessionID, &sessionBytes, &sess.CreationTime, &sess.LastEncryptedTime, &sess.LastDecryptedTime)
 		if err != nil {
 			return nil, err
 		} else if existing, ok := cache[sessionID]; ok {
@@ -269,12 +261,16 @@ func (store *SQLCryptoStore) GetGroupSession(roomID id.RoomID, senderKey id.Send
 	if err != nil {
 		return nil, err
 	}
+	var chains []string
+	if forwardingChains.String != "" {
+		chains = strings.Split(forwardingChains.String, ",")
+	}
 	return &InboundGroupSession{
 		Internal:         *igs,
 		SigningKey:       id.Ed25519(signingKey.String),
 		SenderKey:        senderKey,
 		RoomID:           roomID,
-		ForwardingChains: strings.Split(forwardingChains.String, ","),
+		ForwardingChains: chains,
 	}, nil
 }
 
@@ -306,28 +302,30 @@ func (store *SQLCryptoStore) GetWithheldGroupSession(roomID id.RoomID, senderKey
 	}, nil
 }
 
-func (store *SQLCryptoStore) scanGroupSessionList(rows *sql.Rows) (result []*InboundGroupSession) {
+func (store *SQLCryptoStore) scanGroupSessionList(rows *sql.Rows) (result []*InboundGroupSession, err error) {
 	for rows.Next() {
 		var roomID id.RoomID
 		var signingKey, senderKey, forwardingChains sql.NullString
 		var sessionBytes []byte
-		err := rows.Scan(&roomID, &signingKey, &senderKey, &sessionBytes, &forwardingChains)
+		err = rows.Scan(&roomID, &signingKey, &senderKey, &sessionBytes, &forwardingChains)
 		if err != nil {
-			store.Log.Warnfln("Failed to scan row: %v", err)
-			continue
+			return
 		}
 		igs := olm.NewBlankInboundGroupSession()
 		err = igs.Unpickle(sessionBytes, store.PickleKey)
 		if err != nil {
-			store.Log.Warnfln("Failed to unpickle session: %v", err)
-			continue
+			return
+		}
+		var chains []string
+		if forwardingChains.String != "" {
+			chains = strings.Split(forwardingChains.String, ",")
 		}
 		result = append(result, &InboundGroupSession{
 			Internal:         *igs,
 			SigningKey:       id.Ed25519(signingKey.String),
 			SenderKey:        id.Curve25519(senderKey.String),
 			RoomID:           roomID,
-			ForwardingChains: strings.Split(forwardingChains.String, ","),
+			ForwardingChains: chains,
 		})
 	}
 	return
@@ -344,7 +342,7 @@ func (store *SQLCryptoStore) GetGroupSessionsForRoom(roomID id.RoomID) ([]*Inbou
 	} else if err != nil {
 		return nil, err
 	}
-	return store.scanGroupSessionList(rows), nil
+	return store.scanGroupSessionList(rows)
 }
 
 func (store *SQLCryptoStore) GetAllGroupSessions() ([]*InboundGroupSession, error) {
@@ -358,7 +356,7 @@ func (store *SQLCryptoStore) GetAllGroupSessions() ([]*InboundGroupSession, erro
 	} else if err != nil {
 		return nil, err
 	}
-	return store.scanGroupSessionList(rows), nil
+	return store.scanGroupSessionList(rows)
 }
 
 // AddOutboundGroupSession stores an outbound Megolm session, along with the information about the room and involved devices.
@@ -417,34 +415,26 @@ func (store *SQLCryptoStore) RemoveOutboundGroupSession(roomID id.RoomID) error 
 }
 
 // ValidateMessageIndex returns whether the given event information match the ones stored in the database
-// for the given sender key, session ID and index.
-// If the event information was not yet stored, it's stored now.
-func (store *SQLCryptoStore) ValidateMessageIndex(senderKey id.SenderKey, sessionID id.SessionID, eventID id.EventID, index uint, timestamp int64) bool {
-	var resultEventID id.EventID
-	var resultTimestamp int64
-	err := store.DB.QueryRow(
-		`SELECT event_id, timestamp FROM crypto_message_index WHERE sender_key=$1 AND session_id=$2 AND "index"=$3`,
-		senderKey, sessionID, index,
-	).Scan(&resultEventID, &resultTimestamp)
-	if err == sql.ErrNoRows {
-		_, err := store.DB.Exec(`INSERT INTO crypto_message_index (sender_key, session_id, "index", event_id, timestamp) VALUES ($1, $2, $3, $4, $5)`,
-			senderKey, sessionID, index, eventID, timestamp)
-		if err != nil {
-			store.Log.Warnfln("Failed to store message index: %v", err)
-		}
-		return true
-	} else if err != nil {
-		store.Log.Warnfln("Failed to scan message index: %v", err)
-		return true
+// for the given sender key, session ID and index. If the index hasn't been stored, this will store it.
+func (store *SQLCryptoStore) ValidateMessageIndex(senderKey id.SenderKey, sessionID id.SessionID, eventID id.EventID, index uint, timestamp int64) (bool, error) {
+	const validateQuery = `
+	INSERT INTO crypto_message_index (sender_key, session_id, "index", event_id, timestamp)
+	VALUES ($1, $2, $3, $4, $5)
+	-- have to update something so that RETURNING * always returns the row
+	ON CONFLICT (sender_key, session_id, "index") DO UPDATE SET sender_key=excluded.sender_key
+	RETURNING event_id, timestamp
+	`
+	var expectedEventID id.EventID
+	var expectedTimestamp int64
+	err := store.DB.QueryRow(validateQuery, senderKey, sessionID, index, eventID, timestamp).Scan(&expectedEventID, &expectedTimestamp)
+	if err != nil {
+		return false, err
 	}
-	if resultEventID != eventID || resultTimestamp != timestamp {
-		return false
-	}
-	return true
+	return expectedEventID == eventID && expectedTimestamp == timestamp, nil
 }
 
 // GetDevices returns a map of device IDs to device identities, including the identity and signing keys, for a given user ID.
-func (store *SQLCryptoStore) GetDevices(userID id.UserID) (map[id.DeviceID]*DeviceIdentity, error) {
+func (store *SQLCryptoStore) GetDevices(userID id.UserID) (map[id.DeviceID]*id.Device, error) {
 	var ignore id.UserID
 	err := store.DB.QueryRow("SELECT user_id FROM crypto_tracked_user WHERE user_id=$1", userID).Scan(&ignore)
 	if err == sql.ErrNoRows {
@@ -453,13 +443,13 @@ func (store *SQLCryptoStore) GetDevices(userID id.UserID) (map[id.DeviceID]*Devi
 		return nil, err
 	}
 
-	rows, err := store.DB.Query("SELECT device_id, identity_key, signing_key, trust, deleted, name FROM crypto_device WHERE user_id=$1", userID)
+	rows, err := store.DB.Query("SELECT device_id, identity_key, signing_key, trust, deleted, name FROM crypto_device WHERE user_id=$1 AND deleted=false", userID)
 	if err != nil {
 		return nil, err
 	}
-	data := make(map[id.DeviceID]*DeviceIdentity)
+	data := make(map[id.DeviceID]*id.Device)
 	for rows.Next() {
-		var identity DeviceIdentity
+		var identity id.Device
 		err := rows.Scan(&identity.DeviceID, &identity.IdentityKey, &identity.SigningKey, &identity.Trust, &identity.Deleted, &identity.Name)
 		if err != nil {
 			return nil, err
@@ -471,8 +461,8 @@ func (store *SQLCryptoStore) GetDevices(userID id.UserID) (map[id.DeviceID]*Devi
 }
 
 // GetDevice returns the device dentity for a given user and device ID.
-func (store *SQLCryptoStore) GetDevice(userID id.UserID, deviceID id.DeviceID) (*DeviceIdentity, error) {
-	var identity DeviceIdentity
+func (store *SQLCryptoStore) GetDevice(userID id.UserID, deviceID id.DeviceID) (*id.Device, error) {
+	var identity id.Device
 	err := store.DB.QueryRow(`
 		SELECT identity_key, signing_key, trust, deleted, name
 		FROM crypto_device WHERE user_id=$1 AND device_id=$2`,
@@ -490,8 +480,8 @@ func (store *SQLCryptoStore) GetDevice(userID id.UserID, deviceID id.DeviceID) (
 }
 
 // FindDeviceByKey finds a specific device by its sender key.
-func (store *SQLCryptoStore) FindDeviceByKey(userID id.UserID, identityKey id.IdentityKey) (*DeviceIdentity, error) {
-	var identity DeviceIdentity
+func (store *SQLCryptoStore) FindDeviceByKey(userID id.UserID, identityKey id.IdentityKey) (*id.Device, error) {
+	var identity id.Device
 	err := store.DB.QueryRow(`
 		SELECT device_id, signing_key, trust, deleted, name
 		FROM crypto_device WHERE user_id=$1 AND identity_key=$2`,
@@ -508,17 +498,24 @@ func (store *SQLCryptoStore) FindDeviceByKey(userID id.UserID, identityKey id.Id
 	return &identity, nil
 }
 
+const deviceInsertQuery = `
+INSERT INTO crypto_device (user_id, device_id, identity_key, signing_key, trust, deleted, name)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (user_id, device_id) DO UPDATE
+    SET identity_key=excluded.identity_key, deleted=excluded.deleted, trust=excluded.trust, name=excluded.name
+`
+
+var deviceMassInsertTemplate = strings.ReplaceAll(deviceInsertQuery, "($1, $2, $3, $4, $5, $6, $7)", "%s")
+
 // PutDevice stores a single device for a user, replacing it if it exists already.
-func (store *SQLCryptoStore) PutDevice(userID id.UserID, device *DeviceIdentity) error {
-	_, err := store.DB.Exec(`
-			INSERT INTO crypto_device (user_id, device_id, identity_key, signing_key, trust, deleted, name) VALUES ($1, $2, $3, $4, $5, $6, $7)
-			ON CONFLICT (user_id, device_id) DO UPDATE SET identity_key=excluded.identity_key, signing_key=excluded.signing_key, trust=excluded.trust, deleted=excluded.deleted, name=excluded.name`,
+func (store *SQLCryptoStore) PutDevice(userID id.UserID, device *id.Device) error {
+	_, err := store.DB.Exec(deviceInsertQuery,
 		userID, device.DeviceID, device.IdentityKey, device.SigningKey, device.Trust, device.Deleted, device.Name)
 	return err
 }
 
 // PutDevices stores the device identity information for the given user ID.
-func (store *SQLCryptoStore) PutDevices(userID id.UserID, devices map[id.DeviceID]*DeviceIdentity) error {
+func (store *SQLCryptoStore) PutDevices(userID id.UserID, devices map[id.DeviceID]*id.Device) error {
 	tx, err := store.DB.Begin()
 	if err != nil {
 		return err
@@ -529,7 +526,7 @@ func (store *SQLCryptoStore) PutDevices(userID id.UserID, devices map[id.DeviceI
 		return fmt.Errorf("failed to add user to tracked users list: %w", err)
 	}
 
-	_, err = tx.Exec("DELETE FROM crypto_device WHERE user_id=$1", userID)
+	_, err = tx.Exec("UPDATE crypto_device SET deleted=true WHERE user_id=$1", userID)
 	if err != nil {
 		_ = tx.Rollback()
 		return fmt.Errorf("failed to delete old devices: %w", err)
@@ -546,6 +543,7 @@ func (store *SQLCryptoStore) PutDevices(userID id.UserID, devices map[id.DeviceI
 	for deviceID := range devices {
 		deviceIDs = append(deviceIDs, deviceID)
 	}
+	const valueStringFormat = "($1, $%d, $%d, $%d, $%d, $%d, $%d)"
 	for batchDeviceIdx := 0; batchDeviceIdx < len(deviceIDs); batchDeviceIdx += deviceBatchLen {
 		var batchDevices []id.DeviceID
 		if batchDeviceIdx+deviceBatchLen < len(deviceIDs) {
@@ -560,11 +558,11 @@ func (store *SQLCryptoStore) PutDevices(userID id.UserID, devices map[id.DeviceI
 		for _, deviceID := range batchDevices {
 			identity := devices[deviceID]
 			values = append(values, deviceID, identity.IdentityKey, identity.SigningKey, identity.Trust, identity.Deleted, identity.Name)
-			valueStrings = append(valueStrings, fmt.Sprintf("($1, $%d, $%d, $%d, $%d, $%d, $%d)", i, i+1, i+2, i+3, i+4, i+5))
+			valueStrings = append(valueStrings, fmt.Sprintf(valueStringFormat, i, i+1, i+2, i+3, i+4, i+5))
 			i += 6
 		}
 		valueString := strings.Join(valueStrings, ",")
-		_, err = tx.Exec("INSERT INTO crypto_device (user_id, device_id, identity_key, signing_key, trust, deleted, name) VALUES "+valueString, values...)
+		_, err = tx.Exec(fmt.Sprintf(deviceMassInsertTemplate, valueString), values...)
 		if err != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("failed to insert new devices: %w", err)
@@ -577,11 +575,11 @@ func (store *SQLCryptoStore) PutDevices(userID id.UserID, devices map[id.DeviceI
 	return nil
 }
 
-// FilterTrackedUsers finds all of the user IDs out of the given ones for which the database contains identity information.
-func (store *SQLCryptoStore) FilterTrackedUsers(users []id.UserID) []id.UserID {
+// FilterTrackedUsers finds all the user IDs out of the given ones for which the database contains identity information.
+func (store *SQLCryptoStore) FilterTrackedUsers(users []id.UserID) ([]id.UserID, error) {
 	var rows *sql.Rows
 	var err error
-	if store.Dialect == dbutil.Postgres && PostgresArrayWrapper != nil {
+	if store.DB.Dialect == dbutil.Postgres && PostgresArrayWrapper != nil {
 		rows, err = store.DB.Query("SELECT user_id FROM crypto_tracked_user WHERE user_id = ANY($1)", PostgresArrayWrapper(users))
 	} else {
 		queryString := make([]string, len(users))
@@ -593,45 +591,44 @@ func (store *SQLCryptoStore) FilterTrackedUsers(users []id.UserID) []id.UserID {
 		rows, err = store.DB.Query("SELECT user_id FROM crypto_tracked_user WHERE user_id IN ("+strings.Join(queryString, ",")+")", params...)
 	}
 	if err != nil {
-		store.Log.Warnfln("Failed to filter tracked users: %v", err)
-		return users
+		return users, err
 	}
 	var ptr int
 	for rows.Next() {
 		err = rows.Scan(&users[ptr])
 		if err != nil {
-			store.Log.Warnfln("Failed to scan tracked user ID: %v", err)
+			return users, err
 		} else {
 			ptr++
 		}
 	}
-	return users[:ptr]
+	return users[:ptr], nil
 }
 
 // PutCrossSigningKey stores a cross-signing key of some user along with its usage.
 func (store *SQLCryptoStore) PutCrossSigningKey(userID id.UserID, usage id.CrossSigningUsage, key id.Ed25519) error {
 	_, err := store.DB.Exec(`
-		INSERT INTO crypto_cross_signing_keys (user_id, usage, key) VALUES ($1, $2, $3)
+		INSERT INTO crypto_cross_signing_keys (user_id, usage, key, first_seen_key) VALUES ($1, $2, $3, $4)
 		ON CONFLICT (user_id, usage) DO UPDATE SET key=excluded.key
-	`, userID, usage, key)
+	`, userID, usage, key, key)
 	return err
 }
 
 // GetCrossSigningKeys retrieves a user's stored cross-signing keys.
-func (store *SQLCryptoStore) GetCrossSigningKeys(userID id.UserID) (map[id.CrossSigningUsage]id.Ed25519, error) {
-	rows, err := store.DB.Query("SELECT usage, key FROM crypto_cross_signing_keys WHERE user_id=$1", userID)
+func (store *SQLCryptoStore) GetCrossSigningKeys(userID id.UserID) (map[id.CrossSigningUsage]id.CrossSigningKey, error) {
+	rows, err := store.DB.Query("SELECT usage, key, first_seen_key FROM crypto_cross_signing_keys WHERE user_id=$1", userID)
 	if err != nil {
 		return nil, err
 	}
-	data := make(map[id.CrossSigningUsage]id.Ed25519)
+	data := make(map[id.CrossSigningUsage]id.CrossSigningKey)
 	for rows.Next() {
 		var usage id.CrossSigningUsage
-		var key id.Ed25519
-		err := rows.Scan(&usage, &key)
+		var key, first id.Ed25519
+		err = rows.Scan(&usage, &key, &first)
 		if err != nil {
 			return nil, err
 		}
-		data[usage] = key
+		data[usage] = id.CrossSigningKey{Key: key, First: first}
 	}
 
 	return data, nil
@@ -656,7 +653,7 @@ func (store *SQLCryptoStore) GetSignaturesForKeyBy(userID id.UserID, key id.Ed25
 	for rows.Next() {
 		var signerKey id.Ed25519
 		var signature string
-		err := rows.Scan(&signerKey, &signature)
+		err = rows.Scan(&signerKey, &signature)
 		if err != nil {
 			return nil, err
 		}
@@ -667,13 +664,13 @@ func (store *SQLCryptoStore) GetSignaturesForKeyBy(userID id.UserID, key id.Ed25
 }
 
 // IsKeySignedBy returns whether a cross-signing or device key is signed by the given signer.
-func (store *SQLCryptoStore) IsKeySignedBy(userID id.UserID, key id.Ed25519, signerID id.UserID, signerKey id.Ed25519) (bool, error) {
-	sigs, err := store.GetSignaturesForKeyBy(userID, key, signerID)
-	if err != nil {
-		return false, err
-	}
-	_, ok := sigs[signerKey]
-	return ok, nil
+func (store *SQLCryptoStore) IsKeySignedBy(signedUserID id.UserID, signedKey id.Ed25519, signerUserID id.UserID, signerKey id.Ed25519) (isSigned bool, err error) {
+	q := `SELECT EXISTS(
+		SELECT 1 FROM crypto_cross_signing_signatures
+		WHERE signed_user_id=$1 AND signed_key=$2 AND signer_user_id=$3 AND signer_key=$4
+	)`
+	err = store.DB.QueryRow(q, signedUserID, signedKey, signerUserID, signerKey).Scan(&isSigned)
+	return
 }
 
 // DropSignaturesByKey deletes the signatures made by the given user and key from the store. It returns the number of signatures deleted.

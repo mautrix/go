@@ -161,13 +161,16 @@ func (as *AppService) handleTransaction(id string, txn *Transaction) {
 	as.txnIDC.MarkProcessed(id)
 }
 
-func (as *AppService) handleOTKCounts(otks map[id.UserID]mautrix.OTKCount) {
-	for userID, otkCounts := range otks {
-		otkCounts.UserID = userID
-		select {
-		case as.OTKCounts <- &otkCounts:
-		default:
-			as.Log.Warnfln("Dropped OTK count update for %s because channel is full", userID)
+func (as *AppService) handleOTKCounts(otks OTKCountMap) {
+	for userID, devices := range otks {
+		for deviceID, otkCounts := range devices {
+			otkCounts.UserID = userID
+			otkCounts.DeviceID = deviceID
+			select {
+			case as.OTKCounts <- &otkCounts:
+			default:
+				as.Log.Warnfln("Dropped OTK count update for %s because channel is full", userID)
+			}
 		}
 	}
 }
@@ -182,6 +185,7 @@ func (as *AppService) handleDeviceLists(dl *mautrix.DeviceLists) {
 
 func (as *AppService) handleEvents(evts []*event.Event, defaultTypeClass event.TypeClass) {
 	for _, evt := range evts {
+		evt.Mautrix.ReceivedAt = time.Now()
 		if len(evt.ToUserID) > 0 {
 			evt.Type.Class = event.ToDeviceEventType
 		} else if defaultTypeClass != event.UnknownEventType {

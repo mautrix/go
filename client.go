@@ -10,11 +10,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -117,7 +117,7 @@ func DiscoverClientAPI(serverName string) (*ClientWellKnown, error) {
 		return nil, nil
 	}
 
-	data, err := ioutil.ReadAll(resp.Body)
+	data, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -154,6 +154,7 @@ func (cli *Client) ClearCredentials() {
 //   - The failure to create a filter.
 //   - Client.Syncer.OnFailedSync returning an error in response to a failed sync.
 //   - Client.Syncer.ProcessResponse returning an error.
+//
 // If you wish to continue retrying in spite of these fatal errors, call Sync() again.
 func (cli *Client) Sync() error {
 	return cli.SyncWithContext(context.Background())
@@ -199,8 +200,12 @@ func (cli *Client) SyncWithContext(ctx context.Context) error {
 			if err2 != nil {
 				return err2
 			}
-			time.Sleep(duration)
-			continue
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(duration):
+				continue
+			}
 		}
 		lastSuccessfulSync = time.Now()
 
@@ -253,6 +258,26 @@ func (cli *Client) LogRequest(req *http.Request) {
 	}
 }
 
+func (cli *Client) LogRequestDone(req *http.Request, resp *http.Response, handlerErr error, contentLength int, duration time.Duration) {
+	if cli.Logger == stubLogger {
+		return
+	}
+	reqID, _ := req.Context().Value(logRequestIDContextKey).(int)
+	mime := resp.Header.Get("Content-Type")
+	var suffix string
+	if handlerErr != nil {
+		suffix = fmt.Sprintf(" (but parsing the body failed)")
+	}
+	length := resp.ContentLength
+	if length == -1 && contentLength > 0 {
+		length = int64(contentLength)
+	}
+	cli.Logger.Debugfln(
+		"req #%d (%s) completed in %s with status %d and %d bytes of %s body%s",
+		reqID, strings.TrimPrefix(req.URL.Path, "/_matrix/client"), duration, resp.StatusCode, length, mime, suffix,
+	)
+}
+
 func (cli *Client) MakeRequest(method string, httpURL string, reqBody interface{}, resBody interface{}) ([]byte, error) {
 	return cli.MakeFullRequest(FullRequest{Method: method, URL: httpURL, RequestJSON: reqBody, ResponseJSON: resBody})
 }
@@ -303,6 +328,10 @@ func (params *FullRequest) compileRequest() (*http.Request, error) {
 		params.RequestLength = int64(len(params.RequestBytes))
 	} else if params.RequestLength > 0 && params.RequestBody != nil {
 		logBody = fmt.Sprintf("<%d bytes>", params.RequestLength)
+	} else if params.Method != http.MethodGet && params.Method != http.MethodHead {
+		params.RequestJSON = struct{}{}
+		logBody = "<default empty object>"
+		reqBody = bytes.NewReader([]byte("{}"))
 	}
 	ctx := context.WithValue(params.Context, logBodyContextKey, logBody)
 	reqID := atomic.AddInt32(&requestID, 1)
@@ -379,7 +408,7 @@ func (cli *Client) doRetry(req *http.Request, cause error, retries int, backoff 
 }
 
 func (cli *Client) readRequestBody(req *http.Request, res *http.Response) ([]byte, error) {
-	contents, err := ioutil.ReadAll(res.Body)
+	contents, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, HTTPError{
 			Request:  req,
@@ -401,7 +430,7 @@ func (cli *Client) closeTemp(file *os.File) {
 }
 
 func (cli *Client) streamResponse(req *http.Request, res *http.Response, responseJSON interface{}) ([]byte, error) {
-	file, err := ioutil.TempFile("", "mautrix-response-")
+	file, err := os.CreateTemp("", "mautrix-response-")
 	if err != nil {
 		cli.logWarning("Failed to create temporary file: %v", err)
 		_, err = cli.handleNormalResponse(req, res, responseJSON)
@@ -486,7 +515,9 @@ func (cli *Client) shouldRetry(res *http.Response) bool {
 
 func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backoff time.Duration, responseJSON interface{}, handler ClientResponseHandler) ([]byte, error) {
 	cli.LogRequest(req)
+	startTime := time.Now()
 	res, err := cli.Client.Do(req)
+	duration := time.Now().Sub(startTime)
 	if res != nil {
 		defer res.Body.Close()
 	}
@@ -510,10 +541,15 @@ func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backof
 		return cli.doRetry(req, fmt.Errorf("HTTP %d", res.StatusCode), retries, backoff, responseJSON, handler)
 	}
 
+	var body []byte
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return cli.handleResponseError(req, res)
+		body, err = cli.handleResponseError(req, res)
+		cli.LogRequestDone(req, res, nil, len(body), duration)
+	} else {
+		body, err = handler(req, res, responseJSON)
+		cli.LogRequestDone(req, res, err, len(body), duration)
 	}
-	return handler(req, res, responseJSON)
+	return body, err
 }
 
 // Whoami gets the user ID of the current user. See https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3accountwhoami
@@ -648,14 +684,14 @@ func (cli *Client) RegisterGuest(req *ReqRegister) (*RespRegister, *RespUserInte
 //
 // This does not set credentials on the client instance. See SetCredentials() instead.
 //
-// 	res, err := cli.RegisterDummy(&mautrix.ReqRegister{
+//	res, err := cli.RegisterDummy(&mautrix.ReqRegister{
 //		Username: "alice",
 //		Password: "wonderland",
 //	})
-//  if err != nil {
-// 		panic(err)
-// 	}
-// 	token := res.AccessToken
+//	if err != nil {
+//		panic(err)
+//	}
+//	token := res.AccessToken
 func (cli *Client) RegisterDummy(req *ReqRegister) (*RespRegister, error) {
 	res, uia, err := cli.Register(req)
 	if err != nil && uia == nil {
@@ -730,6 +766,13 @@ func (cli *Client) Versions() (resp *RespVersions, err error) {
 	return
 }
 
+// Capabilities returns capabilities on this homeserver. See https://spec.matrix.org/v1.3/client-server-api/#capabilities-negotiation
+func (cli *Client) Capabilities() (resp *RespCapabilities, err error) {
+	urlPath := cli.BuildClientURL("v3", "capabilities")
+	_, err = cli.MakeRequest("GET", urlPath, nil, &resp)
+	return
+}
+
 // JoinRoom joins the client to a room ID or alias. See https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3joinroomidoralias
 //
 // If serverName is specified, this will be added as a query param to instruct the homeserver to join via that server. If content is specified, it will
@@ -780,7 +823,7 @@ func (cli *Client) SetDisplayName(displayName string) (err error) {
 
 // GetAvatarURL gets the avatar URL of the user with the specified MXID. See https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3profileuseridavatar_url
 func (cli *Client) GetAvatarURL(mxid id.UserID) (url id.ContentURI, err error) {
-	urlPath := cli.BuildClientURL("v3", "profile", cli.UserID, "avatar_url")
+	urlPath := cli.BuildClientURL("v3", "profile", mxid, "avatar_url")
 	s := struct {
 		AvatarURL id.ContentURI `json:"avatar_url"`
 	}{}
@@ -851,6 +894,8 @@ func (cli *Client) SetRoomAccountData(roomID id.RoomID, name string, data interf
 type ReqSendEvent struct {
 	Timestamp     int64
 	TransactionID string
+
+	MeowEventID id.EventID
 }
 
 // SendMessageEvent sends a message event into a room. See https://spec.matrix.org/v1.2/client-server-api/#put_matrixclientv3roomsroomidsendeventtypetxnid
@@ -871,6 +916,9 @@ func (cli *Client) SendMessageEvent(roomID id.RoomID, eventType event.Type, cont
 	queryParams := map[string]string{}
 	if req.Timestamp > 0 {
 		queryParams["ts"] = strconv.FormatInt(req.Timestamp, 10)
+	}
+	if req.MeowEventID != "" {
+		queryParams["fi.mau.event_id"] = req.MeowEventID.String()
 	}
 
 	urlData := ClientURLPath{"v3", "rooms", roomID, "send", eventType.String(), txnID}
@@ -974,10 +1022,11 @@ func (cli *Client) RedactEvent(roomID id.RoomID, eventID id.EventID, extra ...Re
 }
 
 // CreateRoom creates a new Matrix room. See https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3createroom
-//  resp, err := cli.CreateRoom(&mautrix.ReqCreateRoom{
-//  	Preset: "public_chat",
-//  })
-//  fmt.Println("Room:", resp.RoomID)
+//
+//	resp, err := cli.CreateRoom(&mautrix.ReqCreateRoom{
+//		Preset: "public_chat",
+//	})
+//	fmt.Println("Room:", resp.RoomID)
 func (cli *Client) CreateRoom(req *ReqCreateRoom) (resp *RespCreateRoom, err error) {
 	urlPath := cli.BuildClientURL("v3", "createRoom")
 	_, err = cli.MakeRequest("POST", urlPath, req, &resp)
@@ -1040,8 +1089,8 @@ func (cli *Client) UnbanUser(roomID id.RoomID, req *ReqUnbanUser) (resp *RespUnb
 }
 
 // UserTyping sets the typing status of the user. See https://spec.matrix.org/v1.2/client-server-api/#put_matrixclientv3roomsroomidtypinguserid
-func (cli *Client) UserTyping(roomID id.RoomID, typing bool, timeout int64) (resp *RespTyping, err error) {
-	req := ReqTyping{Typing: typing, Timeout: timeout}
+func (cli *Client) UserTyping(roomID id.RoomID, typing bool, timeout time.Duration) (resp *RespTyping, err error) {
+	req := ReqTyping{Typing: typing, Timeout: timeout.Milliseconds()}
 	u := cli.BuildClientURL("v3", "rooms", roomID, "typing", cli.UserID)
 	_, err = cli.MakeRequest("PUT", u, req, &resp)
 	return
@@ -1143,20 +1192,30 @@ func (cli *Client) GetDownloadURL(mxcURL id.ContentURI) string {
 }
 
 func (cli *Client) Download(mxcURL id.ContentURI) (io.ReadCloser, error) {
-	resp, err := cli.Client.Get(cli.GetDownloadURL(mxcURL))
-	if err != nil {
+	return cli.DownloadContext(context.Background(), mxcURL)
+}
+
+func (cli *Client) DownloadContext(ctx context.Context, mxcURL id.ContentURI) (io.ReadCloser, error) {
+	if req, err := http.NewRequestWithContext(ctx, http.MethodGet, cli.GetDownloadURL(mxcURL), nil); err != nil {
 		return nil, err
+	} else if resp, err := cli.Client.Do(req); err != nil {
+		return nil, err
+	} else {
+		return resp.Body, nil
 	}
-	return resp.Body, nil
 }
 
 func (cli *Client) DownloadBytes(mxcURL id.ContentURI) ([]byte, error) {
-	resp, err := cli.Download(mxcURL)
+	return cli.DownloadBytesContext(context.Background(), mxcURL)
+}
+
+func (cli *Client) DownloadBytesContext(ctx context.Context, mxcURL id.ContentURI) ([]byte, error) {
+	resp, err := cli.DownloadContext(ctx, mxcURL)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Close()
-	return ioutil.ReadAll(resp)
+	return io.ReadAll(resp)
 }
 
 // UnstableCreateMXC creates a blank Matrix content URI to allow uploading the content asynchronously later.

@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tulir Asokan
+// Copyright (c) 2022 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -27,12 +27,16 @@ func (mach *OlmMachine) GetOwnCrossSigningPublicKeys() *CrossSigningPublicKeysCa
 		mach.crossSigningPubkeys = mach.CrossSigningKeys.PublicKeys()
 		return mach.crossSigningPubkeys
 	}
+	if mach.crossSigningPubkeysFetched {
+		return nil
+	}
 	cspk, err := mach.GetCrossSigningPublicKeys(mach.Client.UserID)
 	if err != nil {
 		mach.Log.Error("Failed to get own cross-signing public keys: %v", err)
 		return nil
 	}
 	mach.crossSigningPubkeys = cspk
+	mach.crossSigningPubkeysFetched = true
 	return mach.crossSigningPubkeys
 }
 
@@ -47,9 +51,9 @@ func (mach *OlmMachine) GetCrossSigningPublicKeys(userID id.UserID) (*CrossSigni
 			selfSigning, _ := dbKeys[id.XSUsageSelfSigning]
 			userSigning, _ := dbKeys[id.XSUsageUserSigning]
 			return &CrossSigningPublicKeysCache{
-				MasterKey:      masterKey,
-				SelfSigningKey: selfSigning,
-				UserSigningKey: userSigning,
+				MasterKey:      masterKey.Key,
+				SelfSigningKey: selfSigning.Key,
+				UserSigningKey: userSigning.Key,
 			}, nil
 		}
 	}

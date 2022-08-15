@@ -95,6 +95,8 @@ type MessageEventContent struct {
 	Info *FileInfo           `json:"info,omitempty"`
 	File *EncryptedFileInfo  `json:"file,omitempty"`
 
+	FileName string `json:"filename,omitempty"`
+
 	// Edits and relations
 	NewContent *MessageEventContent `json:"m.new_content,omitempty"`
 	RelatesTo  *RelatesTo           `json:"m.relates_to,omitempty"`
@@ -105,6 +107,8 @@ type MessageEventContent struct {
 	Methods    []VerificationMethod `json:"methods,omitempty"`
 
 	replyFallbackRemoved bool
+
+	MessageSendRetry *BeeperRetryMetadata `json:"com.beeper.message_send_retry,omitempty"`
 }
 
 func (content *MessageEventContent) GetRelatesTo() *RelatesTo {

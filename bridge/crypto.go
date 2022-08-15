@@ -9,8 +9,12 @@
 package bridge
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"os"
 	"runtime/debug"
+	"sync"
 	"time"
 
 	"maunium.net/go/maulogger/v2"
@@ -20,6 +24,7 @@ import (
 	"maunium.net/go/mautrix/crypto"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
+	"maunium.net/go/mautrix/util/dbutil"
 )
 
 var NoSessionFound = crypto.NoSessionFound
@@ -37,6 +42,10 @@ type CryptoHelper struct {
 	store   *SQLCryptoStore
 	log     maulogger.Logger
 	baseLog maulogger.Logger
+
+	lock       sync.RWMutex
+	syncDone   sync.WaitGroup
+	cancelSync func()
 }
 
 func NewCryptoHelper(bridge *Bridge) Crypto {
@@ -58,9 +67,13 @@ func (helper *CryptoHelper) Init() error {
 	}
 	helper.log.Debugln("Initializing end-to-bridge encryption...")
 
-	helper.store = NewSQLCryptoStore(helper.bridge.DB, helper.bridge.AS.BotMXID(),
+	helper.store = NewSQLCryptoStore(
+		helper.bridge.DB,
+		dbutil.MauLogger(helper.bridge.Log.Sub("Database").Sub("CryptoStore")),
+		helper.bridge.AS.BotMXID(),
 		fmt.Sprintf("@%s:%s", helper.bridge.Config.Bridge.FormatUsername("%"), helper.bridge.AS.HomeserverDomain),
-		helper.bridge.CryptoPickleKey)
+		helper.bridge.CryptoPickleKey,
+	)
 
 	err := helper.store.Upgrade()
 	if err != nil {
@@ -77,6 +90,7 @@ func (helper *CryptoHelper) Init() error {
 	stateStore := &cryptoStateStore{helper.bridge}
 	helper.mach = crypto.NewOlmMachine(helper.client, logger, helper.store, stateStore)
 	helper.mach.AllowKeyShare = helper.allowKeyShare
+	helper.mach.SendKeysMinTrust = helper.bridge.Config.Bridge.GetEncryptionConfig().VerificationLevels.Receive
 
 	helper.client.Syncer = &cryptoSyncer{helper.mach}
 	helper.client.Store = &cryptoClientStore{helper.store}
@@ -84,13 +98,13 @@ func (helper *CryptoHelper) Init() error {
 	return helper.mach.Load()
 }
 
-func (helper *CryptoHelper) allowKeyShare(device *crypto.DeviceIdentity, info event.RequestedKeyInfo) *crypto.KeyShareRejection {
-	cfg := helper.bridge.Config.Bridge.GetEncryptionConfig().KeySharing
-	if !cfg.Allow {
+func (helper *CryptoHelper) allowKeyShare(device *id.Device, info event.RequestedKeyInfo) *crypto.KeyShareRejection {
+	cfg := helper.bridge.Config.Bridge.GetEncryptionConfig()
+	if !cfg.AllowKeySharing {
 		return &crypto.KeyShareRejectNoResponse
-	} else if device.Trust == crypto.TrustStateBlacklisted {
+	} else if device.Trust == id.TrustStateBlacklisted {
 		return &crypto.KeyShareRejectBlacklisted
-	} else if device.Trust == crypto.TrustStateVerified || !cfg.RequireVerification {
+	} else if trustState := helper.mach.ResolveTrust(device); trustState >= cfg.VerificationLevels.Share {
 		portal := helper.bridge.Child.GetIPortal(info.RoomID)
 		if portal == nil {
 			helper.log.Debugfln("Rejecting key request for %s from %s/%s: room is not a portal", info.SessionID, device.UserID, device.DeviceID)
@@ -148,11 +162,29 @@ func (helper *CryptoHelper) loginBot() (*mautrix.Client, error) {
 	return client, nil
 }
 
+func (helper *CryptoHelper) RegisterAppserviceListener() {
+	if helper.bridge.Config.Bridge.GetEncryptionConfig().Appservice {
+		helper.log.Debugln("End-to-bridge encryption is in appservice mode, registering event listeners")
+		helper.bridge.AS.Registration.EphemeralEvents = true
+		helper.mach.AddAppserviceListener(helper.bridge.EventProcessor, helper.bridge.AS)
+		return
+	}
+}
+
 func (helper *CryptoHelper) Start() {
+	if helper.bridge.Config.Bridge.GetEncryptionConfig().Appservice {
+		helper.log.Debugln("End-to-bridge encryption is in appservice mode, not starting syncer")
+		return
+	}
+	helper.syncDone.Add(1)
+	defer helper.syncDone.Done()
 	helper.log.Debugln("Starting syncer for receiving to-device messages")
-	err := helper.client.Sync()
-	if err != nil {
-		helper.log.Errorln("Fatal error syncing:", err)
+	var ctx context.Context
+	ctx, helper.cancelSync = context.WithCancel(context.Background())
+	err := helper.client.SyncWithContext(ctx)
+	if err != nil && !errors.Is(err, context.Canceled) {
+		helper.log.Fatalln("Fatal error syncing:", err)
+		os.Exit(51)
 	} else {
 		helper.log.Infoln("Bridge bot to-device syncer stopped without error")
 	}
@@ -161,40 +193,111 @@ func (helper *CryptoHelper) Start() {
 func (helper *CryptoHelper) Stop() {
 	helper.log.Debugln("CryptoHelper.Stop() called, stopping bridge bot sync")
 	helper.client.StopSync()
+	if helper.cancelSync != nil {
+		helper.cancelSync()
+	}
+	helper.syncDone.Wait()
+}
+
+func (helper *CryptoHelper) clearDatabase() {
+	_, err := helper.store.DB.Exec("DELETE FROM crypto_account")
+	if err != nil {
+		helper.log.Warnln("Failed to clear crypto_account table:", err)
+	}
+	_, err = helper.store.DB.Exec("DELETE FROM crypto_olm_session")
+	if err != nil {
+		helper.log.Warnln("Failed to clear crypto_olm_session table:", err)
+	}
+	_, err = helper.store.DB.Exec("DELETE FROM crypto_megolm_outbound_session")
+	if err != nil {
+		helper.log.Warnln("Failed to clear crypto_megolm_outbound_session table:", err)
+	}
+	//_, _ = helper.store.DB.Exec("DELETE FROM crypto_device")
+	//_, _ = helper.store.DB.Exec("DELETE FROM crypto_tracked_user")
+	//_, _ = helper.store.DB.Exec("DELETE FROM crypto_cross_signing_keys")
+	//_, _ = helper.store.DB.Exec("DELETE FROM crypto_cross_signing_signatures")
+}
+
+func (helper *CryptoHelper) Reset() {
+	helper.lock.Lock()
+	defer helper.lock.Unlock()
+	helper.log.Infoln("Resetting end-to-bridge encryption device")
+	helper.Stop()
+	helper.log.Debugln("Crypto syncer stopped, clearing database")
+	helper.clearDatabase()
+	helper.log.Debugln("Crypto database cleared, logging out of all sessions")
+	_, err := helper.client.LogoutAll()
+	if err != nil {
+		helper.log.Warnln("Failed to log out all devices:", err)
+	}
+	helper.client = nil
+	helper.store = nil
+	helper.mach = nil
+	err = helper.Init()
+	if err != nil {
+		helper.log.Fatalln("Error reinitializing end-to-bridge encryption:", err)
+		os.Exit(50)
+	}
+	helper.log.Infoln("End-to-bridge encryption successfully reset")
+	helper.RegisterAppserviceListener()
+	go helper.Start()
+	sph, ok := helper.bridge.Child.(syncProxyHelper)
+	if ok {
+		sph.RequestStartSync()
+	}
+}
+
+func (helper *CryptoHelper) Client() *mautrix.Client {
+	return helper.client
+}
+
+type syncProxyHelper interface {
+	RequestStartSync()
 }
 
 func (helper *CryptoHelper) Decrypt(evt *event.Event) (*event.Event, error) {
 	return helper.mach.DecryptMegolmEvent(evt)
 }
 
-func (helper *CryptoHelper) Encrypt(roomID id.RoomID, evtType event.Type, content event.Content) (*event.EncryptedEventContent, error) {
-	encrypted, err := helper.mach.EncryptMegolmEvent(roomID, evtType, &content)
+func (helper *CryptoHelper) Encrypt(roomID id.RoomID, evtType event.Type, content *event.Content) (err error) {
+	helper.lock.RLock()
+	defer helper.lock.RUnlock()
+	var encrypted *event.EncryptedEventContent
+	encrypted, err = helper.mach.EncryptMegolmEvent(roomID, evtType, content)
 	if err != nil {
 		if err != crypto.SessionExpired && err != crypto.SessionNotShared && err != crypto.NoGroupSession {
-			return nil, err
+			return
 		}
 		helper.log.Debugfln("Got %v while encrypting event for %s, sharing group session and trying again...", err, roomID)
-		users, err := helper.store.GetRoomMembers(roomID)
+		var users []id.UserID
+		users, err = helper.store.GetRoomMembers(roomID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get room member list: %w", err)
-		}
-		err = helper.mach.ShareGroupSession(roomID, users)
-		if err != nil {
-			return nil, fmt.Errorf("failed to share group session: %w", err)
-		}
-		encrypted, err = helper.mach.EncryptMegolmEvent(roomID, evtType, &content)
-		if err != nil {
-			return nil, fmt.Errorf("failed to encrypt event after re-sharing group session: %w", err)
+			err = fmt.Errorf("failed to get room member list: %w", err)
+		} else if err = helper.mach.ShareGroupSession(roomID, users); err != nil {
+			err = fmt.Errorf("failed to share group session: %w", err)
+		} else if encrypted, err = helper.mach.EncryptMegolmEvent(roomID, evtType, content); err != nil {
+			err = fmt.Errorf("failed to encrypt event after re-sharing group session: %w", err)
 		}
 	}
-	return encrypted, nil
+	if encrypted != nil {
+		content.Parsed = encrypted
+		content.Raw = nil
+	}
+	return
 }
 
 func (helper *CryptoHelper) WaitForSession(roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID, timeout time.Duration) bool {
+	helper.lock.RLock()
+	defer helper.lock.RUnlock()
 	return helper.mach.WaitForSession(roomID, senderKey, sessionID, timeout)
 }
 
 func (helper *CryptoHelper) RequestSession(roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID, userID id.UserID, deviceID id.DeviceID) {
+	helper.lock.RLock()
+	defer helper.lock.RUnlock()
+	if deviceID == "" {
+		deviceID = "*"
+	}
 	err := helper.mach.SendRoomKeyRequest(roomID, senderKey, sessionID, "", map[id.UserID][]id.DeviceID{userID: {deviceID}})
 	if err != nil {
 		helper.log.Warnfln("Failed to send key request to %s/%s for %s in %s: %v", userID, deviceID, sessionID, roomID, err)
@@ -204,6 +307,8 @@ func (helper *CryptoHelper) RequestSession(roomID id.RoomID, senderKey id.Sender
 }
 
 func (helper *CryptoHelper) ResetSession(roomID id.RoomID) {
+	helper.lock.RLock()
+	defer helper.lock.RUnlock()
 	err := helper.mach.CryptoStore.RemoveOutboundGroupSession(roomID)
 	if err != nil {
 		helper.log.Debugfln("Error manually removing outbound group session in %s: %v", roomID, err)
@@ -211,6 +316,8 @@ func (helper *CryptoHelper) ResetSession(roomID id.RoomID) {
 }
 
 func (helper *CryptoHelper) HandleMemberEvent(evt *event.Event) {
+	helper.lock.RLock()
+	defer helper.lock.RUnlock()
 	helper.mach.HandleMemberEvent(evt)
 }
 
@@ -289,11 +396,16 @@ func (c cryptoClientStore) SaveRoom(_ *mautrix.Room)           {}
 func (c cryptoClientStore) LoadRoom(_ id.RoomID) *mautrix.Room { return nil }
 
 func (c cryptoClientStore) SaveNextBatch(_ id.UserID, nextBatchToken string) {
+	// TODO error
 	c.int.PutNextBatch(nextBatchToken)
 }
 
 func (c cryptoClientStore) LoadNextBatch(_ id.UserID) string {
-	return c.int.GetNextBatch()
+	nb, err := c.int.GetNextBatch()
+	if err != nil {
+		// TODO :(
+	}
+	return nb
 }
 
 var _ mautrix.Storer = (*cryptoClientStore)(nil)

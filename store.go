@@ -152,7 +152,6 @@ func (s *AccountDataStore) LoadNextBatch(userID id.UserID) string {
 //		},
 //	}
 //	mautrix.Client.CreateFilter(...)
-//
 func NewAccountDataStore(eventType string, client *Client) *AccountDataStore {
 	return &AccountDataStore{
 		InMemoryStore: NewInMemoryStore(),

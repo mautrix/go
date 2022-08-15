@@ -1,4 +1,5 @@
 // Copyright (c) 2020 Nikos Filippakis
+// Copyright (c) 2022 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -32,7 +33,7 @@ var (
 	ErrMismatchingMasterKeyMAC       = errors.New("mismatching cross-signing master key MAC")
 )
 
-func (mach *OlmMachine) fetchMasterKey(device *DeviceIdentity, content *event.VerificationMacEventContent, verState *verificationState, transactionID string) (id.Ed25519, error) {
+func (mach *OlmMachine) fetchMasterKey(device *id.Device, content *event.VerificationMacEventContent, verState *verificationState, transactionID string) (id.Ed25519, error) {
 	crossSignKeys, err := mach.CryptoStore.GetCrossSigningKeys(device.UserID)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch cross-signing keys: %w", err)
@@ -41,20 +42,20 @@ func (mach *OlmMachine) fetchMasterKey(device *DeviceIdentity, content *event.Ve
 	if !ok {
 		return "", ErrCrossSigningMasterKeyNotFound
 	}
-	masterKeyID := id.NewKeyID(id.KeyAlgorithmEd25519, masterKey.String())
+	masterKeyID := id.NewKeyID(id.KeyAlgorithmEd25519, masterKey.Key.String())
 	masterKeyMAC, ok := content.Mac[masterKeyID]
 	if !ok {
-		return masterKey, ErrMasterKeyMACNotFound
+		return masterKey.Key, ErrMasterKeyMACNotFound
 	}
 	expectedMasterKeyMAC, _, err := mach.getPKAndKeysMAC(verState.sas, device.UserID, device.DeviceID,
-		mach.Client.UserID, mach.Client.DeviceID, transactionID, masterKey, masterKeyID, content.Mac)
+		mach.Client.UserID, mach.Client.DeviceID, transactionID, masterKey.Key, masterKeyID, content.Mac)
 	if err != nil {
-		return masterKey, fmt.Errorf("failed to calculate expected MAC for master key: %w", err)
+		return masterKey.Key, fmt.Errorf("failed to calculate expected MAC for master key: %w", err)
 	}
 	if masterKeyMAC != expectedMasterKeyMAC {
 		err = fmt.Errorf("%w: expected %s, got %s", ErrMismatchingMasterKeyMAC, expectedMasterKeyMAC, masterKeyMAC)
 	}
-	return masterKey, err
+	return masterKey.Key, err
 }
 
 // SignUser creates a cross-signing signature for a user, stores it and uploads it to the server.
@@ -137,7 +138,7 @@ func (mach *OlmMachine) SignOwnMasterKey() error {
 }
 
 // SignOwnDevice creates a cross-signing signature for a device belonging to the current user and uploads it to the server.
-func (mach *OlmMachine) SignOwnDevice(device *DeviceIdentity) error {
+func (mach *OlmMachine) SignOwnDevice(device *id.Device) error {
 	if device.UserID != mach.Client.UserID {
 		return ErrCantSignOtherDevice
 	} else if mach.CrossSigningKeys == nil || mach.CrossSigningKeys.SelfSigningKey == nil {
@@ -175,7 +176,7 @@ func (mach *OlmMachine) SignOwnDevice(device *DeviceIdentity) error {
 
 // getFullDeviceKeys gets the full device keys object for the given device.
 // This is used because we don't cache some of the details like list of algorithms and unsupported key types.
-func (mach *OlmMachine) getFullDeviceKeys(device *DeviceIdentity) (*mautrix.DeviceKeys, error) {
+func (mach *OlmMachine) getFullDeviceKeys(device *id.Device) (*mautrix.DeviceKeys, error) {
 	devicesKeys, err := mach.Client.QueryKeys(&mautrix.ReqQueryKeys{
 		DeviceKeys: mautrix.DeviceKeysRequest{
 			device.UserID: mautrix.DeviceIDList{device.DeviceID},

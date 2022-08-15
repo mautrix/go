@@ -21,6 +21,7 @@ var (
 	DuplicateMessageIndex         = errors.New("duplicate megolm message index")
 	WrongRoom                     = errors.New("encrypted megolm event is not intended for this room")
 	DeviceKeyMismatch             = errors.New("device keys in event and verified device info do not match")
+	SenderKeyMismatch             = errors.New("sender keys in content and megolm session do not match")
 )
 
 type megolmEvent struct {
@@ -42,29 +43,49 @@ func (mach *OlmMachine) DecryptMegolmEvent(evt *event.Event) (*event.Event, erro
 		return nil, fmt.Errorf("failed to get group session: %w", err)
 	} else if sess == nil {
 		return nil, fmt.Errorf("%w (ID %s)", NoSessionFound, content.SessionID)
+	} else if content.SenderKey != "" && content.SenderKey != sess.SenderKey {
+		return nil, SenderKeyMismatch
 	}
 	plaintext, messageIndex, err := sess.Internal.Decrypt(content.MegolmCiphertext)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decrypt megolm event: %w", err)
-	} else if !mach.CryptoStore.ValidateMessageIndex(content.SenderKey, content.SessionID, evt.ID, messageIndex, evt.Timestamp) {
+	} else if ok, err = mach.CryptoStore.ValidateMessageIndex(sess.SenderKey, content.SessionID, evt.ID, messageIndex, evt.Timestamp); err != nil {
+		return nil, fmt.Errorf("failed to check if message index is duplicate: %w", err)
+	} else if !ok {
 		return nil, DuplicateMessageIndex
 	}
 
-	var verified bool
+	var trustLevel id.TrustState
+	var forwardedKeys bool
+	var device *id.Device
 	ownSigningKey, ownIdentityKey := mach.account.Keys()
-	if content.DeviceID == mach.Client.DeviceID && sess.SigningKey == ownSigningKey && content.SenderKey == ownIdentityKey {
-		verified = true
+	if sess.SigningKey == ownSigningKey && sess.SenderKey == ownIdentityKey && len(sess.ForwardingChains) == 0 {
+		trustLevel = id.TrustStateVerified
 	} else {
-		device, err := mach.GetOrFetchDevice(evt.Sender, content.DeviceID)
+		device, err = mach.GetOrFetchDeviceByKey(evt.Sender, sess.SenderKey)
 		if err != nil {
 			// We don't want to throw these errors as the message can still be decrypted.
-			mach.Log.Debug("Failed to get device %s/%s to verify session %s: %v", evt.Sender, content.DeviceID, sess.ID(), err)
-			// TODO maybe store the info that the device is deleted?
-		} else if mach.IsDeviceTrusted(device) && len(sess.ForwardingChains) == 0 { // For some reason, matrix-nio had a comment saying not to events decrypted using a forwarded key as verified.
-			if device.SigningKey != sess.SigningKey || device.IdentityKey != content.SenderKey {
+			mach.Log.Debug("Failed to get device %s/%s to verify session %s: %v", evt.Sender, sess.SenderKey, sess.ID(), err)
+			trustLevel = id.TrustStateUnknownDevice
+		} else if len(sess.ForwardingChains) == 0 || (len(sess.ForwardingChains) == 1 && sess.ForwardingChains[0] == sess.SenderKey.String()) {
+			if device == nil {
+				mach.Log.Debug("Couldn't resolve trust level of session %s: sent by unknown device %s/%s", sess.ID(), evt.Sender, sess.SenderKey)
+				trustLevel = id.TrustStateUnknownDevice
+			} else if device.SigningKey != sess.SigningKey || device.IdentityKey != sess.SenderKey {
 				return nil, DeviceKeyMismatch
+			} else {
+				trustLevel = mach.ResolveTrust(device)
 			}
-			verified = true
+		} else {
+			forwardedKeys = true
+			lastChainItem := sess.ForwardingChains[len(sess.ForwardingChains)-1]
+			device, _ = mach.CryptoStore.FindDeviceByKey(evt.Sender, id.IdentityKey(lastChainItem))
+			if device != nil {
+				trustLevel = mach.ResolveTrust(device)
+			} else {
+				mach.Log.Debug("Couldn't resolve trust level of session %s: forwarding chain ends with unknown device %s", sess.ID(), lastChainItem)
+				trustLevel = id.TrustStateForwarded
+			}
 		}
 	}
 
@@ -106,7 +127,11 @@ func (mach *OlmMachine) DecryptMegolmEvent(evt *event.Event) (*event.Event, erro
 		Content:   megolmEvt.Content,
 		Unsigned:  evt.Unsigned,
 		Mautrix: event.MautrixInfo{
-			Verified: verified,
+			TrustState:    trustLevel,
+			TrustSource:   device,
+			ForwardedKeys: forwardedKeys,
+			WasEncrypted:  true,
+			ReceivedAt:    evt.Mautrix.ReceivedAt,
 		},
 	}, nil
 }

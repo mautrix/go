@@ -140,6 +140,7 @@ func (s *DefaultSyncer) ProcessResponse(res *RespSync, since string) (err error)
 		}
 	}
 
+	s.processSyncEvents("", res.ToDevice.Events, EventSourceToDevice)
 	s.processSyncEvents("", res.Presence.Events, EventSourcePresence)
 	s.processSyncEvents("", res.AccountData.Events, EventSourceAccountData)
 

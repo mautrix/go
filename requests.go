@@ -37,6 +37,7 @@ type ReqRegister struct {
 	DeviceID                 id.DeviceID `json:"device_id,omitempty"`
 	InitialDeviceDisplayName string      `json:"initial_device_display_name,omitempty"`
 	InhibitLogin             bool        `json:"inhibit_login,omitempty"`
+	RefreshToken             bool        `json:"refresh_token,omitempty"`
 	Auth                     interface{} `json:"auth,omitempty"`
 
 	// Type for registration, only used for appservice user registrations
@@ -99,8 +100,11 @@ type ReqCreateRoom struct {
 	InitialState    []*event.Event         `json:"initial_state,omitempty"`
 	Preset          string                 `json:"preset,omitempty"`
 	IsDirect        bool                   `json:"is_direct,omitempty"`
+	RoomVersion     string                 `json:"room_version,omitempty"`
 
 	PowerLevelOverride *event.PowerLevelsEventContent `json:"power_level_content_override,omitempty"`
+
+	MeowRoomID id.RoomID `json:"fi.mau.room_id,omitempty"`
 }
 
 // ReqRedact is the JSON request for https://spec.matrix.org/v1.2/client-server-api/#put_matrixclientv3roomsroomidredacteventidtxnid
@@ -321,6 +325,11 @@ type ReqBatchSend struct {
 }
 
 type ReqSetReadMarkers struct {
-	Read      id.EventID `json:"m.read"`
-	FullyRead id.EventID `json:"m.fully_read"`
+	Read        id.EventID `json:"m.read"`
+	ReadPrivate id.EventID `json:"m.read.private"`
+	FullyRead   id.EventID `json:"m.fully_read"`
+
+	BeeperReadExtra        interface{} `json:"com.beeper.read.extra"`
+	BeeperReadPrivateExtra interface{} `json:"com.beeper.read.private.extra"`
+	BeeperFullyReadExtra   interface{} `json:"com.beeper.fully_read.extra"`
 }

@@ -17,6 +17,7 @@ import (
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/appservice"
 	"maunium.net/go/mautrix/bridge/bridgeconfig"
+	"maunium.net/go/mautrix/bridge/status"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/format"
 	"maunium.net/go/mautrix/id"
@@ -48,7 +49,7 @@ func NewMatrixHandler(br *Bridge) *MatrixHandler {
 
 		TrackEventDuration: noopTrack,
 	}
-	for evtType := range CheckpointTypes {
+	for evtType := range status.CheckpointTypes {
 		br.EventProcessor.On(evtType, handler.sendBridgeCheckpoint)
 	}
 	br.EventProcessor.On(event.EventMessage, handler.HandleMessage)
@@ -68,7 +69,7 @@ func NewMatrixHandler(br *Bridge) *MatrixHandler {
 
 func (mx *MatrixHandler) sendBridgeCheckpoint(evt *event.Event) {
 	if !evt.Mautrix.CheckpointSent {
-		go mx.bridge.SendMessageSuccessCheckpoint(evt, MsgStepBridge, 0)
+		go mx.bridge.SendMessageSuccessCheckpoint(evt, status.MsgStepBridge, 0)
 	}
 }
 
@@ -307,8 +308,6 @@ func (mx *MatrixHandler) HandleRoomMetadata(evt *event.Event) {
 	metaPortal.HandleMatrixMeta(user, evt)
 }
 
-const DoublePuppetKey = "fi.mau.double_puppet_source"
-
 func (mx *MatrixHandler) shouldIgnoreEvent(evt *event.Event) bool {
 	if evt.Sender == mx.bridge.Bot.UserID || mx.bridge.Child.IsGhost(evt.Sender) {
 		return true
@@ -316,103 +315,189 @@ func (mx *MatrixHandler) shouldIgnoreEvent(evt *event.Event) bool {
 	user := mx.bridge.Child.GetIUser(evt.Sender, true)
 	if user == nil || user.GetPermissionLevel() <= 0 {
 		return true
-	} else if val, ok := evt.Content.Raw[DoublePuppetKey]; ok && val == mx.bridge.Name && user.GetIDoublePuppet() != nil {
+	} else if val, ok := evt.Content.Raw[appservice.DoublePuppetKey]; ok && val == mx.bridge.Name && user.GetIDoublePuppet() != nil {
 		return true
 	}
 	return false
 }
 
-const sessionWaitTimeout = 5 * time.Second
+const sessionWaitTimeout = 3 * time.Second
+
+func (mx *MatrixHandler) sendCryptoStatusError(evt *event.Event, editEvent id.EventID, err error, retryCount int, isFinal bool) id.EventID {
+	mx.bridge.SendMessageErrorCheckpoint(evt, status.MsgStepDecrypted, err, isFinal, retryCount)
+
+	if mx.bridge.Config.Bridge.EnableMessageStatusEvents() {
+		statusEvent := &event.BeeperMessageStatusEventContent{
+			// TODO: network
+			RelatesTo: event.RelatesTo{
+				Type:    event.RelReference,
+				EventID: evt.ID,
+			},
+			Status:  event.MessageStatusRetriable,
+			Reason:  event.MessageStatusUndecryptable,
+			Error:   err.Error(),
+			Message: errorToHumanMessage(err),
+		}
+		if !isFinal {
+			statusEvent.Status = event.MessageStatusPending
+		}
+		statusEvent.FillLegacyBooleans()
+		_, sendErr := mx.bridge.Bot.SendMessageEvent(evt.RoomID, event.BeeperMessageStatus, statusEvent)
+		if sendErr != nil {
+			mx.log.Warnfln("Failed to send message status event for %s: %v", evt.ID, sendErr)
+		}
+	}
+	if mx.bridge.Config.Bridge.EnableMessageErrorNotices() {
+		update := event.MessageEventContent{
+			MsgType: event.MsgNotice,
+			Body:    fmt.Sprintf("\u26a0 Your message was not bridged: %v.", err),
+		}
+		if editEvent != "" {
+			update.SetEdit(editEvent)
+		}
+		resp, sendErr := mx.bridge.Bot.SendMessageEvent(evt.RoomID, event.EventMessage, &update)
+		if sendErr != nil {
+			mx.log.Warnfln("Failed to send decryption error notice about %s: %v", evt.ID, sendErr)
+		} else if resp != nil {
+			return resp.EventID
+		}
+	}
+	return ""
+}
+
+var errDeviceNotTrusted = errors.New("your device is not trusted")
+var errMessageNotEncrypted = errors.New("unencrypted message")
+var errNoDecryptionKeys = errors.New("the bridge hasn't received the decryption keys")
+
+func errorToHumanMessage(err error) string {
+	switch {
+	case errors.Is(err, errDeviceNotTrusted), errors.Is(err, errNoDecryptionKeys):
+		return err.Error()
+	case errors.Is(err, errMessageNotEncrypted):
+		return "the message is not encrypted"
+	default:
+		return "the bridge failed to decrypt the message"
+	}
+}
+
+func deviceUnverifiedErrorWithExplanation(trust id.TrustState) error {
+	var explanation string
+	switch trust {
+	case id.TrustStateBlacklisted:
+		explanation = "device is blacklisted"
+	case id.TrustStateUnset:
+		explanation = "unverified"
+	case id.TrustStateUnknownDevice:
+		explanation = "device info not found"
+	case id.TrustStateForwarded:
+		explanation = "keys were forwarded from an unknown device"
+	case id.TrustStateCrossSignedUntrusted:
+		explanation = "cross-signing keys changed after setting up the bridge"
+	default:
+		return errDeviceNotTrusted
+	}
+	return fmt.Errorf("%w (%s)", errDeviceNotTrusted, explanation)
+}
+
+func copySomeKeys(original, decrypted *event.Event) {
+	isScheduled, _ := original.Content.Raw["com.beeper.scheduled"].(bool)
+	_, alreadyExists := decrypted.Content.Raw["com.beeper.scheduled"]
+	if isScheduled && !alreadyExists {
+		decrypted.Content.Raw["com.beeper.scheduled"] = true
+	}
+}
+
+func (mx *MatrixHandler) postDecrypt(original, decrypted *event.Event, retryCount int, errorEventID id.EventID, duration time.Duration) {
+	minLevel := mx.bridge.Config.Bridge.GetEncryptionConfig().VerificationLevels.Send
+	if decrypted.Mautrix.TrustState < minLevel {
+		deviceDesc := "unknown device"
+		if decrypted.Mautrix.TrustSource != nil {
+			dev := decrypted.Mautrix.TrustSource
+			deviceDesc = fmt.Sprintf("%s/%s", dev.DeviceID, dev.SigningKey)
+		}
+		mx.log.Warnfln("Dropping %s from %s/%s (forwarded: %t) due to insufficient verification level (event: %s, required: %s)", decrypted.ID, decrypted.Sender, deviceDesc, decrypted.Mautrix.ForwardedKeys, decrypted.Mautrix.TrustState, minLevel)
+		err := deviceUnverifiedErrorWithExplanation(decrypted.Mautrix.TrustState)
+		go mx.sendCryptoStatusError(decrypted, errorEventID, err, retryCount, true)
+		return
+	}
+	copySomeKeys(original, decrypted)
+
+	mx.bridge.SendMessageSuccessCheckpoint(decrypted, status.MsgStepDecrypted, retryCount)
+	decrypted.Mautrix.CheckpointSent = true
+	decrypted.Mautrix.DecryptionDuration = duration
+	mx.log.Debugfln("Successfully decrypted %s", decrypted.ID)
+	mx.bridge.EventProcessor.Dispatch(decrypted)
+	if errorEventID != "" {
+		_, _ = mx.bridge.Bot.RedactEvent(decrypted.RoomID, errorEventID)
+	}
+}
 
 func (mx *MatrixHandler) HandleEncrypted(evt *event.Event) {
 	defer mx.TrackEventDuration(evt.Type)()
 	if mx.shouldIgnoreEvent(evt) || mx.bridge.Crypto == nil {
 		return
 	}
+	content := evt.Content.AsEncrypted()
+	mx.log.Debugfln("Decrypting %s (%s)", evt.ID, content.SessionID)
 
+	decryptionStart := time.Now()
 	decrypted, err := mx.bridge.Crypto.Decrypt(evt)
 	decryptionRetryCount := 0
 	if errors.Is(err, NoSessionFound) {
-		content := evt.Content.AsEncrypted()
+		decryptionRetryCount = 1
 		mx.log.Debugfln("Couldn't find session %s trying to decrypt %s, waiting %d seconds...", content.SessionID, evt.ID, int(sessionWaitTimeout.Seconds()))
-		mx.bridge.SendMessageErrorCheckpoint(evt, MsgStepDecrypted, err, false, decryptionRetryCount)
-		decryptionRetryCount++
+		mx.bridge.SendMessageErrorCheckpoint(evt, status.MsgStepDecrypted, err, false, 0)
 		if mx.bridge.Crypto.WaitForSession(evt.RoomID, content.SenderKey, content.SessionID, sessionWaitTimeout) {
 			mx.log.Debugfln("Got session %s after waiting, trying to decrypt %s again", content.SessionID, evt.ID)
 			decrypted, err = mx.bridge.Crypto.Decrypt(evt)
 		} else {
-			mx.bridge.SendMessageErrorCheckpoint(evt, MsgStepDecrypted, fmt.Errorf("didn't receive encryption keys"), false, decryptionRetryCount)
-			go mx.waitLongerForSession(evt)
+			go mx.waitLongerForSession(evt, decryptionStart)
 			return
 		}
 	}
 	if err != nil {
-		mx.bridge.SendMessageErrorCheckpoint(evt, MsgStepDecrypted, err, true, decryptionRetryCount)
-
+		mx.bridge.SendMessageErrorCheckpoint(evt, status.MsgStepDecrypted, err, true, decryptionRetryCount)
 		mx.log.Warnfln("Failed to decrypt %s: %v", evt.ID, err)
-		_, _ = mx.bridge.Bot.SendNotice(evt.RoomID, fmt.Sprintf(
-			"\u26a0 Your message was not bridged: %v", err))
+		go mx.sendCryptoStatusError(evt, "", err, decryptionRetryCount, true)
 		return
 	}
-	mx.bridge.SendMessageSuccessCheckpoint(decrypted, MsgStepDecrypted, decryptionRetryCount)
-	decrypted.Mautrix.CheckpointSent = true
-	mx.bridge.EventProcessor.Dispatch(decrypted)
+	mx.postDecrypt(evt, decrypted, decryptionRetryCount, "", time.Since(decryptionStart))
 }
 
-func (mx *MatrixHandler) waitLongerForSession(evt *event.Event) {
-	const extendedTimeout = sessionWaitTimeout * 3
+func (mx *MatrixHandler) waitLongerForSession(evt *event.Event, decryptionStart time.Time) {
+	const extendedTimeout = sessionWaitTimeout * 2
 
 	content := evt.Content.AsEncrypted()
 	mx.log.Debugfln("Couldn't find session %s trying to decrypt %s, waiting %d more seconds...",
 		content.SessionID, evt.ID, int(extendedTimeout.Seconds()))
 
 	go mx.bridge.Crypto.RequestSession(evt.RoomID, content.SenderKey, content.SessionID, evt.Sender, content.DeviceID)
+	errorEventID := mx.sendCryptoStatusError(evt, "", fmt.Errorf("%w. The bridge will retry for %d seconds", errNoDecryptionKeys, int(extendedTimeout.Seconds())), 1, false)
 
-	resp, err := mx.bridge.Bot.SendNotice(evt.RoomID, fmt.Sprintf(
-		"\u26a0 Your message was not bridged: the bridge hasn't received the decryption keys. "+
-			"The bridge will retry for %d seconds. If this error keeps happening, try restarting your client.",
-		int(extendedTimeout.Seconds())))
-	if err != nil {
-		mx.log.Errorfln("Failed to send decryption error to %s: %v", evt.RoomID, err)
-	}
-	update := event.MessageEventContent{MsgType: event.MsgNotice}
-
-	if mx.bridge.Crypto.WaitForSession(evt.RoomID, content.SenderKey, content.SessionID, extendedTimeout) {
-		mx.log.Debugfln("Got session %s after waiting more, trying to decrypt %s again", content.SessionID, evt.ID)
-		decrypted, err := mx.bridge.Crypto.Decrypt(evt)
-		if err == nil {
-			mx.bridge.SendMessageSuccessCheckpoint(decrypted, MsgStepDecrypted, 2)
-			mx.bridge.EventProcessor.Dispatch(decrypted)
-			_, _ = mx.bridge.Bot.RedactEvent(evt.RoomID, resp.EventID)
-			return
-		}
-		mx.log.Warnfln("Failed to decrypt %s: %v", evt.ID, err)
-		mx.bridge.SendMessageErrorCheckpoint(evt, MsgStepDecrypted, err, true, 2)
-		update.Body = fmt.Sprintf("\u26a0 Your message was not bridged: %v", err)
-	} else {
+	if !mx.bridge.Crypto.WaitForSession(evt.RoomID, content.SenderKey, content.SessionID, extendedTimeout) {
 		mx.log.Debugfln("Didn't get %s, giving up on %s", content.SessionID, evt.ID)
-		mx.bridge.SendMessageErrorCheckpoint(evt, MsgStepDecrypted, fmt.Errorf("didn't receive encryption keys"), true, 2)
-		update.Body = "\u26a0 Your message was not bridged: the bridge hasn't received the decryption keys. " +
-			"If this error keeps happening, try restarting your client."
+		mx.sendCryptoStatusError(evt, errorEventID, errNoDecryptionKeys, 2, true)
+		return
 	}
 
-	newContent := update
-	update.NewContent = &newContent
-	if resp != nil {
-		update.RelatesTo = &event.RelatesTo{
-			Type:    event.RelReplace,
-			EventID: resp.EventID,
-		}
-	}
-	_, err = mx.bridge.Bot.SendMessageEvent(evt.RoomID, event.EventMessage, &update)
+	mx.log.Debugfln("Got session %s after waiting more, trying to decrypt %s again", content.SessionID, evt.ID)
+	decrypted, err := mx.bridge.Crypto.Decrypt(evt)
 	if err != nil {
-		mx.log.Debugfln("Failed to update decryption error notice %s: %v", resp.EventID, err)
+		mx.log.Warnfln("Failed to decrypt %s: %v", evt.ID, err)
+		mx.sendCryptoStatusError(evt, errorEventID, err, 2, true)
+		return
 	}
+
+	mx.postDecrypt(evt, decrypted, 2, errorEventID, time.Since(decryptionStart))
 }
 
 func (mx *MatrixHandler) HandleMessage(evt *event.Event) {
 	defer mx.TrackEventDuration(evt.Type)()
 	if mx.shouldIgnoreEvent(evt) {
+		return
+	} else if !evt.Mautrix.WasEncrypted && mx.bridge.Config.Bridge.GetEncryptionConfig().Require {
+		mx.log.Warnfln("Dropping %s as it's not encrypted!", evt.ID)
+		mx.sendCryptoStatusError(evt, "", errMessageNotEncrypted, 0, true)
 		return
 	}
 
@@ -460,6 +545,9 @@ func (mx *MatrixHandler) HandleReaction(evt *event.Event) {
 
 func (mx *MatrixHandler) HandleRedaction(evt *event.Event) {
 	defer mx.TrackEventDuration(evt.Type)()
+	if mx.shouldIgnoreEvent(evt) {
+		return
+	}
 
 	user := mx.bridge.Child.GetIUser(evt.Sender, true)
 	if user == nil {
@@ -484,14 +572,14 @@ func (mx *MatrixHandler) HandleReceipt(evt *event.Event) {
 	}
 
 	for eventID, receipts := range *evt.Content.AsReceipt() {
-		for userID, receipt := range receipts.Read {
+		for userID, receipt := range receipts[event.ReceiptTypeRead] {
 			user := mx.bridge.Child.GetIUser(userID, false)
 			if user == nil {
 				// Not a bridge user
 				continue
 			}
 			customPuppet := user.GetIDoublePuppet()
-			if val, ok := receipt.Extra[DoublePuppetKey].(string); ok && customPuppet != nil && val == mx.bridge.Name {
+			if val, ok := receipt.Extra[appservice.DoublePuppetKey].(string); ok && customPuppet != nil && val == mx.bridge.Name {
 				// Ignore double puppeted read receipts.
 				mx.log.Debugfln("Ignoring double puppeted read receipt %+v", evt.Content.Raw)
 				// But do start disappearing messages, because the user read the chat

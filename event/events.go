@@ -8,6 +8,7 @@ package event
 
 import (
 	"encoding/json"
+	"time"
 
 	"maunium.net/go/mautrix/id"
 )
@@ -104,7 +105,13 @@ func (evt *Event) MarshalJSON() ([]byte, error) {
 }
 
 type MautrixInfo struct {
-	Verified bool
+	TrustState    id.TrustState
+	ForwardedKeys bool
+	WasEncrypted  bool
+	TrustSource   *id.Device
+
+	ReceivedAt         time.Time
+	DecryptionDuration time.Duration
 
 	CheckpointSent bool
 }
@@ -128,13 +135,12 @@ type Unsigned struct {
 	ReplacesState   id.EventID      `json:"replaces_state,omitempty"`
 	Age             int64           `json:"age,omitempty"`
 	TransactionID   string          `json:"transaction_id,omitempty"`
-	Relations       Relations       `json:"m.relations,omitempty"`
+	Relations       *Relations      `json:"m.relations,omitempty"`
 	RedactedBecause *Event          `json:"redacted_because,omitempty"`
 	InviteRoomState []StrippedState `json:"invite_room_state,omitempty"`
 }
 
 func (us *Unsigned) IsEmpty() bool {
 	return us.PrevContent == nil && us.PrevSender == "" && us.ReplacesState == "" && us.Age == 0 &&
-		us.TransactionID == "" && us.RedactedBecause == nil && us.InviteRoomState == nil && us.Relations.Raw == nil &&
-		us.Relations.Annotations.Map == nil && us.Relations.References.List == nil && us.Relations.Replaces.List == nil
+		us.TransactionID == "" && us.RedactedBecause == nil && us.InviteRoomState == nil && us.Relations == nil
 }

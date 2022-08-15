@@ -288,6 +288,7 @@ func (as *AppService) consumeWebsocket(stopFunc func(error), ws *websocket.Conn)
 			}
 			as.websocketRequestsLock.RUnlock()
 		} else {
+			as.Log.Debugfln("Received command request %s %d", msg.Command, msg.ReqID)
 			as.websocketHandlersLock.RLock()
 			handler, ok := as.websocketHandlers[msg.Command]
 			as.websocketHandlersLock.RUnlock()

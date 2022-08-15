@@ -10,25 +10,15 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-
-	log "maunium.net/go/maulogger/v2"
 )
 
-type upgradeFunc func(*sql.Tx, *Database) error
+type upgradeFunc func(Transaction, *Database) error
 
 type upgrade struct {
 	message string
 	fn      upgradeFunc
 
 	upgradesTo int
-}
-
-type Upgrader struct {
-	*sql.DB
-	Log     log.Logger
-	Dialect Dialect
-
-	upgrades []upgrade
 }
 
 var ErrUnsupportedDatabaseVersion = fmt.Errorf("unsupported database schema version")
@@ -95,7 +85,7 @@ func (db *Database) checkDatabaseOwner() error {
 	return nil
 }
 
-func (db *Database) setVersion(tx *sql.Tx, version int) error {
+func (db *Database) setVersion(tx Transaction, version int) error {
 	_, err := tx.Exec(fmt.Sprintf("DELETE FROM %s", db.VersionTable))
 	if err != nil {
 		return err
@@ -116,24 +106,23 @@ func (db *Database) Upgrade() error {
 	}
 
 	if version > len(db.UpgradeTable) {
-		warning := fmt.Sprintf("currently on v%d, latest known: v%d", version, len(db.UpgradeTable))
 		if db.IgnoreUnsupportedDatabase {
-			db.Log.Warnfln("Unsupported database schema version: %s - continuing anyway", warning)
+			db.Log.WarnUnsupportedVersion(version, len(db.UpgradeTable))
 			return nil
 		}
-		return fmt.Errorf("%w: %s", ErrUnsupportedDatabaseVersion, warning)
+		return fmt.Errorf("%w: currently on v%d, latest known: v%d", ErrUnsupportedDatabaseVersion, version, len(db.UpgradeTable))
 	}
 
-	db.Log.Infofln("Database currently on v%d, latest: v%d", version, len(db.UpgradeTable))
+	db.Log.PrepareUpgrade(version, len(db.UpgradeTable))
+	logVersion := version
 	for version < len(db.UpgradeTable) {
 		upgradeItem := db.UpgradeTable[version]
 		if upgradeItem.fn == nil {
-			db.Log.Debugfln("Skipping v%d -> v%d as no upgrade function is defined", version, version+1)
 			version++
 			continue
 		}
-		db.Log.Infofln("Upgrading database from v%d to v%d: %s", version, upgradeItem.upgradesTo, upgradeItem.message)
-		var tx *sql.Tx
+		db.Log.DoUpgrade(logVersion, upgradeItem.upgradesTo, upgradeItem.message)
+		var tx Transaction
 		tx, err = db.Begin()
 		if err != nil {
 			return err
@@ -143,6 +132,7 @@ func (db *Database) Upgrade() error {
 			return err
 		}
 		version = upgradeItem.upgradesTo
+		logVersion = version
 		err = db.setVersion(tx, version)
 		if err != nil {
 			return err

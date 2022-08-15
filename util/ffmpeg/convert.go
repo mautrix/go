@@ -7,6 +7,7 @@
 package ffmpeg
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -15,12 +16,13 @@ import (
 	"strings"
 
 	log "maunium.net/go/maulogger/v2"
+
 	"maunium.net/go/mautrix/util"
 )
 
 var ffmpegDefaultParams = []string{"-hide_banner", "-loglevel", "warning"}
 
-// Convert a media file on the disk using ffmpeg.
+// ConvertPath converts a media file on the disk using ffmpeg.
 //
 // Args:
 // * inputFile: The full path to the file.
@@ -30,17 +32,17 @@ var ffmpegDefaultParams = []string{"-hide_banner", "-loglevel", "warning"}
 // * removeInput: Whether the input file should be removed after converting.
 //
 // Returns: the path to the converted file.
-func ConvertPath(inputFile string, outputExtension string, inputArgs []string, outputArgs []string, removeInput bool) (string, error) {
+func ConvertPath(ctx context.Context, inputFile string, outputExtension string, inputArgs []string, outputArgs []string, removeInput bool) (string, error) {
 	outputFilename := strings.TrimSuffix(inputFile, filepath.Ext(inputFile)) + outputExtension
 
-	args := []string{}
+	args := make([]string, 0, len(ffmpegDefaultParams)+len(inputArgs)+2+len(outputArgs)+1)
 	args = append(args, ffmpegDefaultParams...)
 	args = append(args, inputArgs...)
 	args = append(args, "-i", inputFile)
 	args = append(args, outputArgs...)
 	args = append(args, outputFilename)
 
-	cmd := exec.Command("ffmpeg", args...)
+	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
 	vcLog := log.Sub("ffmpeg").Writer(log.LevelWarn)
 	cmd.Stdout = vcLog
 	cmd.Stderr = vcLog
@@ -50,13 +52,13 @@ func ConvertPath(inputFile string, outputExtension string, inputArgs []string, o
 	}
 
 	if removeInput {
-		os.Remove(inputFile)
+		_ = os.Remove(inputFile)
 	}
 
 	return outputFilename, nil
 }
 
-// Convert media data using ffmpeg.
+// ConvertBytes converts media data using ffmpeg.
 //
 // Args:
 // * data: The media data to convert
@@ -66,7 +68,7 @@ func ConvertPath(inputFile string, outputExtension string, inputArgs []string, o
 // * inputMime: The mimetype of the input data.
 //
 // Returns: the converted data
-func ConvertBytes(data []byte, outputExtension string, inputArgs []string, outputArgs []string, inputMime string) ([]byte, error) {
+func ConvertBytes(ctx context.Context, data []byte, outputExtension string, inputArgs []string, outputArgs []string, inputMime string) ([]byte, error) {
 	tempdir, err := ioutil.TempDir("", "mautrix_ffmpeg_*")
 	if err != nil {
 		return nil, err
@@ -80,12 +82,12 @@ func ConvertBytes(data []byte, outputExtension string, inputArgs []string, outpu
 	}
 	_, err = inputFile.Write(data)
 	if err != nil {
-		inputFile.Close()
+		_ = inputFile.Close()
 		return nil, fmt.Errorf("failed to write data to input file: %w", err)
 	}
-	inputFile.Close()
+	_ = inputFile.Close()
 
-	outputPath, err := ConvertPath(inputFileName, outputExtension, inputArgs, outputArgs, false)
+	outputPath, err := ConvertPath(ctx, inputFileName, outputExtension, inputArgs, outputArgs, false)
 	if err != nil {
 		return nil, err
 	}

@@ -29,7 +29,7 @@ var (
 	KeyShareRejectNoResponse = KeyShareRejection{}
 
 	KeyShareRejectBlacklisted   = KeyShareRejection{event.RoomKeyWithheldBlacklisted, "You have been blacklisted by this device"}
-	KeyShareRejectUnverified    = KeyShareRejection{event.RoomKeyWithheldUnverified, "You have not been verified by this device"}
+	KeyShareRejectUnverified    = KeyShareRejection{event.RoomKeyWithheldUnverified, "This device does not share keys to unverified devices"}
 	KeyShareRejectOtherUser     = KeyShareRejection{event.RoomKeyWithheldUnauthorized, "This device does not share keys to other users"}
 	KeyShareRejectUnavailable   = KeyShareRejection{event.RoomKeyWithheldUnavailable, "Requested session ID not found on this device"}
 	KeyShareRejectInternalError = KeyShareRejection{event.RoomKeyWithheldUnavailable, "An internal error occurred while trying to share the requested session"}
@@ -160,7 +160,7 @@ func (mach *OlmMachine) importForwardedRoomKey(evt *DecryptedOlmEvent, content *
 	return true
 }
 
-func (mach *OlmMachine) rejectKeyRequest(rejection KeyShareRejection, device *DeviceIdentity, request event.RequestedKeyInfo) {
+func (mach *OlmMachine) rejectKeyRequest(rejection KeyShareRejection, device *id.Device, request event.RequestedKeyInfo) {
 	if rejection.Code == "" {
 		// If the rejection code is empty, it means don't share keys, but also don't tell the requester.
 		return
@@ -183,24 +183,21 @@ func (mach *OlmMachine) rejectKeyRequest(rejection KeyShareRejection, device *De
 	}
 }
 
-func (mach *OlmMachine) defaultAllowKeyShare(device *DeviceIdentity, _ event.RequestedKeyInfo) *KeyShareRejection {
+func (mach *OlmMachine) defaultAllowKeyShare(device *id.Device, _ event.RequestedKeyInfo) *KeyShareRejection {
 	if mach.Client.UserID != device.UserID {
 		mach.Log.Debug("Ignoring key request from a different user (%s)", device.UserID)
 		return &KeyShareRejectOtherUser
 	} else if mach.Client.DeviceID == device.DeviceID {
 		mach.Log.Debug("Ignoring key request from ourselves")
 		return &KeyShareRejectNoResponse
-	} else if device.Trust == TrustStateBlacklisted {
+	} else if device.Trust == id.TrustStateBlacklisted {
 		mach.Log.Debug("Ignoring key request from blacklisted device %s", device.DeviceID)
 		return &KeyShareRejectBlacklisted
-	} else if mach.IsDeviceTrusted(device) {
-		mach.Log.Debug("Accepting key request from verified device %s", device.DeviceID)
-		return nil
-	} else if mach.ShareKeysToUnverifiedDevices {
-		mach.Log.Debug("Accepting key request from unverified device %s (ShareKeysToUnverifiedDevices is true)", device.DeviceID)
+	} else if trustState := mach.ResolveTrust(device); trustState >= mach.ShareKeysMinTrust {
+		mach.Log.Debug("Accepting key request from device %s (trust state: %s)", device.DeviceID, trustState)
 		return nil
 	} else {
-		mach.Log.Debug("Ignoring key request from unverified device %s", device.DeviceID)
+		mach.Log.Debug("Ignoring key request from unverified device %s (trust state: %s)", device.DeviceID, trustState)
 		return &KeyShareRejectUnverified
 	}
 }

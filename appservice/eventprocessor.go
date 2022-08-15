@@ -63,6 +63,16 @@ func (ep *EventProcessor) On(evtType event.Type, handler EventHandler) {
 	ep.handlers[evtType] = handlers
 }
 
+func (ep *EventProcessor) PrependHandler(evtType event.Type, handler EventHandler) {
+	handlers, ok := ep.handlers[evtType]
+	if !ok {
+		handlers = []EventHandler{handler}
+	} else {
+		handlers = append([]EventHandler{handler}, handlers...)
+	}
+	ep.handlers[evtType] = handlers
+}
+
 func (ep *EventProcessor) OnOTK(handler OTKHandler) {
 	ep.otkHandlers = append(ep.otkHandlers, handler)
 }

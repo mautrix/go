@@ -28,10 +28,13 @@ type EncryptionEventContent struct {
 //
 // Note that sender_key and device_id are deprecated in Megolm events as of https://github.com/matrix-org/matrix-spec-proposals/pull/3700
 type EncryptedEventContent struct {
-	Algorithm  id.Algorithm    `json:"algorithm"`
-	SenderKey  id.SenderKey    `json:"sender_key,omitempty"`
-	DeviceID   id.DeviceID     `json:"device_id,omitempty"`  // Only present for Megolm events
-	SessionID  id.SessionID    `json:"session_id,omitempty"` // Only present for Megolm events
+	Algorithm id.Algorithm `json:"algorithm"`
+	SenderKey id.SenderKey `json:"sender_key,omitempty"`
+	// Deprecated: Matrix v1.3
+	DeviceID id.DeviceID `json:"device_id,omitempty"`
+	// Only present for Megolm events
+	SessionID id.SessionID `json:"session_id,omitempty"`
+
 	Ciphertext json.RawMessage `json:"ciphertext"`
 
 	MegolmCiphertext []byte         `json:"-"`

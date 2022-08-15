@@ -13,6 +13,7 @@ import (
 
 	"maunium.net/go/mautrix/appservice"
 	"maunium.net/go/mautrix/id"
+	"maunium.net/go/mautrix/util"
 	up "maunium.net/go/mautrix/util/configupgrade"
 )
 
@@ -24,6 +25,9 @@ type HomeserverConfig struct {
 	Asmux                         bool   `yaml:"asmux"`
 	StatusEndpoint                string `yaml:"status_endpoint"`
 	MessageSendCheckpointEndpoint string `yaml:"message_send_checkpoint_endpoint"`
+
+	WSProxy        string `yaml:"websocket_proxy"`
+	WSPingInterval int    `yaml:"ping_interval_seconds"`
 }
 
 type AppserviceConfig struct {
@@ -43,7 +47,7 @@ type AppserviceConfig struct {
 }
 
 func (config *BaseConfig) MakeUserIDRegex() *regexp.Regexp {
-	usernamePlaceholder := appservice.RandomString(16)
+	usernamePlaceholder := util.RandomString(16)
 	usernameTemplate := fmt.Sprintf("@%s:%s",
 		config.Bridge.FormatUsername(usernamePlaceholder),
 		config.Homeserver.Domain)
@@ -60,7 +64,7 @@ func (config *BaseConfig) GenerateRegistration() *appservice.Registration {
 	config.AppService.ASToken = registration.AppToken
 	config.AppService.copyToRegistration(registration)
 
-	registration.SenderLocalpart = appservice.RandomString(32)
+	registration.SenderLocalpart = util.RandomString(32)
 	botRegex := regexp.MustCompile(fmt.Sprintf("^@%s:%s$",
 		regexp.QuoteMeta(config.AppService.Bot.Username),
 		regexp.QuoteMeta(config.Homeserver.Domain)))
@@ -143,17 +147,30 @@ type BridgeConfig interface {
 	GetEncryptionConfig() EncryptionConfig
 	GetCommandPrefix() string
 	GetManagementRoomTexts() ManagementRoomTexts
+	GetResendBridgeInfo() bool
+	EnableMessageStatusEvents() bool
+	EnableMessageErrorNotices() bool
+	Validate() error
 }
 
 type EncryptionConfig struct {
-	Allow   bool `yaml:"allow"`
-	Default bool `yaml:"default"`
+	Allow      bool `yaml:"allow"`
+	Default    bool `yaml:"default"`
+	Require    bool `yaml:"require"`
+	Appservice bool `yaml:"appservice"`
 
-	KeySharing struct {
-		Allow               bool `yaml:"allow"`
-		RequireCrossSigning bool `yaml:"require_cross_signing"`
-		RequireVerification bool `yaml:"require_verification"`
-	} `yaml:"key_sharing"`
+	VerificationLevels struct {
+		Receive id.TrustState `yaml:"receive"`
+		Send    id.TrustState `yaml:"send"`
+		Share   id.TrustState `yaml:"share"`
+	} `yaml:"verification_levels"`
+	AllowKeySharing bool `yaml:"allow_key_sharing"`
+
+	Rotation struct {
+		EnableCustom bool  `yaml:"enable_custom"`
+		Milliseconds int64 `yaml:"milliseconds"`
+		Messages     int   `yaml:"messages"`
+	} `yaml:"rotation"`
 }
 
 type ManagementRoomTexts struct {
@@ -177,6 +194,8 @@ func doUpgrade(helper *up.Helper) {
 	helper.Copy(up.Str|up.Null, "homeserver", "status_endpoint")
 	helper.Copy(up.Str|up.Null, "homeserver", "message_send_checkpoint_endpoint")
 	helper.Copy(up.Bool, "homeserver", "async_media")
+	helper.Copy(up.Str|up.Null, "homeserver", "websocket_proxy")
+	helper.Copy(up.Int, "homeserver", "ping_interval_seconds")
 
 	helper.Copy(up.Str, "appservice", "address")
 	helper.Copy(up.Str, "appservice", "hostname")
@@ -201,6 +220,8 @@ func doUpgrade(helper *up.Helper) {
 	helper.Copy(up.Int, "logging", "file_mode")
 	helper.Copy(up.Str|up.Timestamp, "logging", "timestamp_format")
 	helper.Copy(up.Str, "logging", "print_level")
+	helper.Copy(up.Bool, "logging", "print_json")
+	helper.Copy(up.Bool, "logging", "file_json")
 }
 
 // Upgrader is a config upgrader that copies the default fields in the homeserver, appservice and logging blocks.

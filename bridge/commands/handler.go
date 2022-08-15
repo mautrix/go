@@ -7,11 +7,34 @@
 package commands
 
 import (
+	"maunium.net/go/mautrix/bridge"
 	"maunium.net/go/mautrix/bridge/bridgeconfig"
 )
 
-type Handler interface {
+type MinimalHandler interface {
 	Run(*Event)
+}
+
+type MinimalHandlerFunc func(*Event)
+
+func (mhf MinimalHandlerFunc) Run(ce *Event) {
+	mhf(ce)
+}
+
+type CommandState struct {
+	Next   MinimalHandler
+	Action string
+	Meta   interface{}
+}
+
+type CommandingUser interface {
+	bridge.User
+	GetCommandState() *CommandState
+	SetCommandState(*CommandState)
+}
+
+type Handler interface {
+	MinimalHandler
 	GetName() string
 }
 

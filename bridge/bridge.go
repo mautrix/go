@@ -11,10 +11,12 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/mattn/go-sqlite3"
 	"gopkg.in/yaml.v3"
 	flag "maunium.net/go/mauflag"
 	log "maunium.net/go/maulogger/v2"
@@ -45,6 +47,7 @@ type Portal interface {
 	MainIntent() *appservice.IntentAPI
 
 	ReceiveMatrixEvent(user User, evt *event.Event)
+	UpdateBridgeInfo()
 }
 
 type MembershipHandlingPortal interface {
@@ -80,7 +83,6 @@ type User interface {
 	GetManagementRoomID() id.RoomID
 	SetManagementRoom(id.RoomID)
 	GetMXID() id.UserID
-	GetCommandState() map[string]interface{}
 	GetIDoublePuppet() DoublePuppet
 	GetIGhost() Ghost
 }
@@ -96,6 +98,12 @@ type Ghost interface {
 	GetMXID() id.UserID
 }
 
+type GhostWithProfile interface {
+	Ghost
+	GetDisplayname() string
+	GetAvatarURL() id.ContentURI
+}
+
 type ChildOverride interface {
 	GetExampleConfig() string
 	GetConfigPtr() interface{}
@@ -105,10 +113,25 @@ type ChildOverride interface {
 	Stop()
 
 	GetIPortal(id.RoomID) Portal
+	GetAllIPortals() []Portal
 	GetIUser(id id.UserID, create bool) User
 	IsGhost(id.UserID) bool
 	GetIGhost(id.UserID) Ghost
 	CreatePrivatePortal(id.RoomID, User, Ghost)
+}
+
+type FlagHandlingBridge interface {
+	ChildOverride
+	HandleFlags() bool
+}
+
+type PreInitableBridge interface {
+	ChildOverride
+	PreInit()
+}
+
+type CSFeatureRequirer interface {
+	CheckFeatures(versions *mautrix.RespVersions) (string, bool)
 }
 
 type Bridge struct {
@@ -117,6 +140,9 @@ type Bridge struct {
 	Description  string
 	Version      string
 	ProtocolName string
+
+	AdditionalShortFlags string
+	AdditionalLongFlags  string
 
 	VersionDesc      string
 	LinkifiedVersion string
@@ -128,6 +154,9 @@ type Bridge struct {
 	MatrixHandler    *MatrixHandler
 	Bot              *appservice.IntentAPI
 	Config           bridgeconfig.BaseConfig
+	ConfigPath       string
+	RegistrationPath string
+	SaveConfig       bool
 	ConfigUpgrader   configupgrade.BaseUpgrader
 	Log              log.Logger
 	DB               *dbutil.Database
@@ -141,23 +170,29 @@ type Bridge struct {
 type Crypto interface {
 	HandleMemberEvent(*event.Event)
 	Decrypt(*event.Event) (*event.Event, error)
-	Encrypt(id.RoomID, event.Type, event.Content) (*event.EncryptedEventContent, error)
+	Encrypt(id.RoomID, event.Type, *event.Content) error
 	WaitForSession(id.RoomID, id.SenderKey, id.SessionID, time.Duration) bool
 	RequestSession(id.RoomID, id.SenderKey, id.SessionID, id.UserID, id.DeviceID)
 	ResetSession(id.RoomID)
 	Init() error
 	Start()
+	RegisterAppserviceListener()
 	Stop()
+	Reset()
+	Client() *mautrix.Client
 }
 
 func (br *Bridge) GenerateRegistration() {
-	if *dontSaveConfig {
+	if !br.SaveConfig {
 		// We need to save the generated as_token and hs_token in the config
 		_, _ = fmt.Fprintln(os.Stderr, "--no-update is not compatible with --generate-registration")
 		os.Exit(5)
+	} else if br.Config.Homeserver.Domain == "example.com" {
+		_, _ = fmt.Fprintln(os.Stderr, "Homeserver domain is not set")
+		os.Exit(20)
 	}
 	reg := br.Config.GenerateRegistration()
-	err := reg.Save(*registrationPath)
+	err := reg.Save(br.RegistrationPath)
 	if err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "Failed to save registration:", err)
 		os.Exit(21)
@@ -167,7 +202,7 @@ func (br *Bridge) GenerateRegistration() {
 		helper.Set(configupgrade.Str, reg.AppToken, "appservice", "as_token")
 		helper.Set(configupgrade.Str, reg.ServerToken, "appservice", "hs_token")
 	}
-	_, _, err = configupgrade.Do(*configPath, true, br.ConfigUpgrader, configupgrade.SimpleUpgrader(updateTokens))
+	_, _, err = configupgrade.Do(br.ConfigPath, true, br.ConfigUpgrader, configupgrade.SimpleUpgrader(updateTokens))
 	if err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "Failed to save config:", err)
 		os.Exit(22)
@@ -199,9 +234,11 @@ func (br *Bridge) InitVersion(tag, commit, buildTime string) {
 		br.LinkifiedVersion = strings.Replace(br.LinkifiedVersion, commit[:8], fmt.Sprintf("[%s](%s/commit/%s)", commit[:8], br.URL, commit), 1)
 	}
 	mautrix.DefaultUserAgent = fmt.Sprintf("%s/%s %s", br.Name, br.Version, mautrix.DefaultUserAgent)
-	br.VersionDesc = fmt.Sprintf("%s %s (%s)", br.Name, br.Version, buildTime)
+	br.VersionDesc = fmt.Sprintf("%s %s (%s with %s)", br.Name, br.Version, buildTime, runtime.Version())
 	br.BuildTime = buildTime
 }
+
+var MinSpecVersion = mautrix.SpecV11
 
 func (br *Bridge) ensureConnection() {
 	for {
@@ -211,9 +248,16 @@ func (br *Bridge) ensureConnection() {
 			time.Sleep(10 * time.Second)
 			continue
 		}
-		if !versions.ContainsGreaterOrEqual(mautrix.SpecV11) {
-			br.Log.Warnfln("Server isn't advertising modern spec versions")
+		if !versions.ContainsGreaterOrEqual(MinSpecVersion) {
+			br.Log.Fatalfln("The homeserver is outdated (server supports %s, but the bridge requires at least %s)", versions.GetLatest(), MinSpecVersion)
+			os.Exit(18)
+		} else if fr, ok := br.Child.(CSFeatureRequirer); ok {
+			if msg, hasFeatures := fr.CheckFeatures(versions); !hasFeatures {
+				br.Log.Fatalln(msg)
+				os.Exit(18)
+			}
 		}
+
 		resp, err := br.Bot.Whoami()
 		if err != nil {
 			if errors.Is(err, mautrix.MUnknownToken) {
@@ -260,7 +304,7 @@ func (br *Bridge) UpdateBotProfile() {
 }
 
 func (br *Bridge) loadConfig() {
-	configData, upgraded, err := configupgrade.Do(*configPath, !*dontSaveConfig, br.ConfigUpgrader)
+	configData, upgraded, err := configupgrade.Do(br.ConfigPath, br.SaveConfig, br.ConfigUpgrader)
 	if err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "Error updating config:", err)
 		if configData == nil {
@@ -284,13 +328,54 @@ func (br *Bridge) loadConfig() {
 	}
 }
 
+func (br *Bridge) validateConfig() error {
+	switch {
+	case br.Config.Homeserver.Address == "https://example.com":
+		return errors.New("homeserver.address not configured")
+	case br.Config.Homeserver.Domain == "example.com":
+		return errors.New("homeserver.domain not configured")
+	case br.Config.AppService.ASToken == "This value is generated when generating the registration":
+		return errors.New("appservice.as_token not configured. Did you forget to generate the registration? ")
+	case br.Config.AppService.HSToken == "This value is generated when generating the registration":
+		return errors.New("appservice.hs_token not configured. Did you forget to generate the registration? ")
+	case br.Config.AppService.Database.URI == "postgres://user:password@host/database?sslmode=disable":
+		return errors.New("appservice.database not configured")
+	default:
+		return br.Config.Bridge.Validate()
+	}
+}
+
+func (br *Bridge) getProfile(userID id.UserID, roomID id.RoomID) *event.MemberEventContent {
+	ghost := br.Child.GetIGhost(userID)
+	if ghost == nil {
+		return nil
+	}
+	profilefulGhost, ok := ghost.(GhostWithProfile)
+	if ok {
+		return &event.MemberEventContent{
+			Displayname: profilefulGhost.GetDisplayname(),
+			AvatarURL:   profilefulGhost.GetAvatarURL().CUString(),
+		}
+	}
+	return nil
+}
+
 func (br *Bridge) init() {
+	pib, ok := br.Child.(PreInitableBridge)
+	if ok {
+		pib.PreInit()
+	}
+
 	var err error
 
 	br.AS = br.Config.MakeAppService()
+	br.AS.DoublePuppetValue = br.Name
+	br.AS.GetProfile = br.getProfile
 	_, _ = br.AS.Init()
 
-	br.Log = log.Create()
+	if br.Log == nil {
+		br.Log = log.Create()
+	}
 	br.Config.Logging.Configure(br.Log)
 	log.DefaultLogger = br.Log.(*log.BasicLogger)
 	if len(br.Config.Logging.FileNameFormat) > 0 {
@@ -300,21 +385,31 @@ func (br *Bridge) init() {
 			os.Exit(12)
 		}
 	}
+
+	err = br.validateConfig()
+	if err != nil {
+		br.Log.Fatalln("Configuration error:", err)
+		os.Exit(11)
+	}
+
 	br.AS.Log = log.Sub("Matrix")
 	br.Bot = br.AS.BotIntent()
 	br.Log.Infoln("Initializing", br.VersionDesc)
 
 	br.Log.Debugln("Initializing database connection")
-	br.DB, err = dbutil.NewFromConfig(br.Name, br.Config.AppService.Database, br.Log.Sub("Database"))
+	br.DB, err = dbutil.NewFromConfig(br.Name, br.Config.AppService.Database, dbutil.MauLogger(br.Log.Sub("Database")))
 	if err != nil {
 		br.Log.Fatalln("Failed to initialize database connection:", err)
+		if sqlError := (&sqlite3.Error{}); errors.As(err, sqlError) && sqlError.Code == sqlite3.ErrCorrupt {
+			os.Exit(18)
+		}
 		os.Exit(14)
 	}
 	br.DB.IgnoreUnsupportedDatabase = *ignoreUnsupportedDatabase
 	br.DB.IgnoreForeignTables = *ignoreForeignTables
 
 	br.Log.Debugln("Initializing state store")
-	br.StateStore = sqlstatestore.NewSQLStateStore(br.DB)
+	br.StateStore = sqlstatestore.NewSQLStateStore(br.DB, dbutil.MauLogger(br.Log.Sub("Database").Sub("StateStore")))
 	br.AS.StateStore = br.StateStore
 
 	br.Log.Debugln("Initializing Matrix event processor")
@@ -330,7 +425,9 @@ func (br *Bridge) init() {
 
 func (br *Bridge) LogDBUpgradeErrorAndExit(name string, err error) {
 	br.Log.Fatalfln("Failed to initialize %s: %v", name, err)
-	if errors.Is(err, dbutil.ErrForeignTables) {
+	if sqlError := (&sqlite3.Error{}); errors.As(err, sqlError) && sqlError.Code == sqlite3.ErrCorrupt {
+		os.Exit(18)
+	} else if errors.Is(err, dbutil.ErrForeignTables) {
 		br.Log.Infoln("You can use --ignore-foreign-tables to ignore this error")
 	} else if errors.Is(err, dbutil.ErrNotOwned) {
 		br.Log.Infoln("Sharing the same database with different programs is not supported")
@@ -372,6 +469,28 @@ func (br *Bridge) start() {
 
 	br.Child.Start()
 	br.AS.Ready = true
+
+	if br.Config.Bridge.GetResendBridgeInfo() {
+		go br.ResendBridgeInfo()
+	}
+}
+
+func (br *Bridge) ResendBridgeInfo() {
+	if !br.SaveConfig {
+		br.Log.Warnln("Not setting resend_bridge_info to false in config due to --no-update flag")
+	} else {
+		_, _, err := configupgrade.Do(br.ConfigPath, true, br.ConfigUpgrader, configupgrade.SimpleUpgrader(func(helper *configupgrade.Helper) {
+			helper.Set(configupgrade.Bool, "false", "bridge", "resend_bridge_info")
+		}))
+		if err != nil {
+			br.Log.Errorln("Failed to save config after setting resend_bridge_info to false:", err)
+		}
+	}
+	br.Log.Infoln("Re-sending bridge info state event to all portals")
+	for _, portal := range br.Child.GetAllIPortals() {
+		portal.UpdateBridgeInfo()
+	}
+	br.Log.Infoln("Finished re-sending bridge info state events")
 }
 
 func (br *Bridge) stop() {
@@ -386,8 +505,11 @@ func (br *Bridge) stop() {
 func (br *Bridge) Main() {
 	flag.SetHelpTitles(
 		fmt.Sprintf("%s - %s", br.Name, br.Description),
-		fmt.Sprintf("%s [-hgvn] [-c <path>] [-r <path>]", br.Name))
+		fmt.Sprintf("%s [-hgvn%s] [-c <path>] [-r <path>]%s", br.Name, br.AdditionalShortFlags, br.AdditionalLongFlags))
 	err := flag.Parse()
+	br.ConfigPath = *configPath
+	br.RegistrationPath = *registrationPath
+	br.SaveConfig = !*dontSaveConfig
 	if err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		flag.PrintHelp()
@@ -397,6 +519,8 @@ func (br *Bridge) Main() {
 		os.Exit(0)
 	} else if *version {
 		fmt.Println(br.VersionDesc)
+		return
+	} else if flagHandler, ok := br.Child.(FlagHandlingBridge); ok && flagHandler.HandleFlags() {
 		return
 	}
 
@@ -412,7 +536,7 @@ func (br *Bridge) Main() {
 	br.start()
 	br.Log.Infoln("Bridge started!")
 
-	c := make(chan os.Signal)
+	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	<-c
 

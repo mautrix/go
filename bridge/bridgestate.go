@@ -18,90 +18,10 @@ import (
 
 	log "maunium.net/go/maulogger/v2"
 
-	"maunium.net/go/mautrix/id"
+	"maunium.net/go/mautrix/bridge/status"
 )
 
-type StateEvent string
-type StateErrorCode string
-
-type StateErrorMap map[StateErrorCode]string
-
-func (bem StateErrorMap) Update(data StateErrorMap) {
-	for key, value := range data {
-		bem[key] = value
-	}
-}
-
-var StateHumanErrors = make(StateErrorMap)
-
-const (
-	StateUnconfigured        StateEvent = "UNCONFIGURED"
-	StateRunning             StateEvent = "RUNNING"
-	StateConnecting          StateEvent = "CONNECTING"
-	StateBackfilling         StateEvent = "BACKFILLING"
-	StateConnected           StateEvent = "CONNECTED"
-	StateTransientDisconnect StateEvent = "TRANSIENT_DISCONNECT"
-	StateBadCredentials      StateEvent = "BAD_CREDENTIALS"
-	StateUnknownError        StateEvent = "UNKNOWN_ERROR"
-	StateLoggedOut           StateEvent = "LOGGED_OUT"
-)
-
-type State struct {
-	StateEvent StateEvent `json:"state_event"`
-	Timestamp  int64      `json:"timestamp"`
-	TTL        int        `json:"ttl"`
-
-	Source  string         `json:"source,omitempty"`
-	Error   StateErrorCode `json:"error,omitempty"`
-	Message string         `json:"message,omitempty"`
-
-	UserID     id.UserID `json:"user_id,omitempty"`
-	RemoteID   string    `json:"remote_id,omitempty"`
-	RemoteName string    `json:"remote_name,omitempty"`
-
-	Reason string                 `json:"reason,omitempty"`
-	Info   map[string]interface{} `json:"info,omitempty"`
-}
-
-type GlobalState struct {
-	RemoteStates map[string]State `json:"remoteState"`
-	BridgeState  State            `json:"bridgeState"`
-}
-
-type StateFiller interface {
-	GetMXID() id.UserID
-	GetRemoteID() string
-	GetRemoteName() string
-}
-
-func (pong State) Fill(user StateFiller) State {
-	if user != nil {
-		pong.UserID = user.GetMXID()
-		pong.RemoteID = user.GetRemoteID()
-		pong.RemoteName = user.GetRemoteName()
-	}
-
-	pong.Timestamp = time.Now().Unix()
-	pong.Source = "bridge"
-	if len(pong.Error) > 0 {
-		pong.TTL = 60
-		msg, ok := StateHumanErrors[pong.Error]
-		if ok {
-			pong.Message = msg
-		}
-	} else {
-		pong.TTL = 240
-	}
-	return pong
-}
-func (pong *State) shouldDeduplicate(newPong *State) bool {
-	if pong == nil || pong.StateEvent != newPong.StateEvent || pong.Error != newPong.Error {
-		return false
-	}
-	return pong.Timestamp+int64(pong.TTL/5) > time.Now().Unix()
-}
-
-func (br *Bridge) SendBridgeState(ctx context.Context, state *State) error {
+func (br *Bridge) SendBridgeState(ctx context.Context, state *status.BridgeState) error {
 	var body bytes.Buffer
 	if err := json.NewEncoder(&body).Encode(&state); err != nil {
 		return fmt.Errorf("failed to encode bridge state JSON: %w", err)
@@ -130,7 +50,7 @@ func (br *Bridge) SendBridgeState(ctx context.Context, state *State) error {
 	return nil
 }
 
-func (br *Bridge) SendGlobalBridgeState(state State) {
+func (br *Bridge) SendGlobalBridgeState(state status.BridgeState) {
 	if len(br.Config.Homeserver.StatusEndpoint) == 0 {
 		return
 	}
@@ -145,19 +65,19 @@ func (br *Bridge) SendGlobalBridgeState(state State) {
 }
 
 type BridgeStateQueue struct {
-	prev   *State
-	ch     chan State
+	prev   *status.BridgeState
+	ch     chan status.BridgeState
 	log    log.Logger
 	bridge *Bridge
-	user   StateFiller
+	user   status.BridgeStateFiller
 }
 
-func (br *Bridge) NewBridgeStateQueue(user StateFiller, log log.Logger) *BridgeStateQueue {
+func (br *Bridge) NewBridgeStateQueue(user status.BridgeStateFiller, log log.Logger) *BridgeStateQueue {
 	if len(br.Config.Homeserver.StatusEndpoint) == 0 {
 		return nil
 	}
 	bsq := &BridgeStateQueue{
-		ch:     make(chan State, 10),
+		ch:     make(chan status.BridgeState, 10),
 		log:    log,
 		bridge: br,
 		user:   user,
@@ -178,10 +98,10 @@ func (bsq *BridgeStateQueue) loop() {
 	}
 }
 
-func (bsq *BridgeStateQueue) immediateSendBridgeState(state State) {
+func (bsq *BridgeStateQueue) immediateSendBridgeState(state status.BridgeState) {
 	retryIn := 2
 	for {
-		if bsq.prev != nil && bsq.prev.shouldDeduplicate(&state) {
+		if bsq.prev != nil && bsq.prev.ShouldDeduplicate(&state) {
 			bsq.log.Debugfln("Not sending bridge state %s as it's a duplicate", state.StateEvent)
 			return
 		}
@@ -205,7 +125,7 @@ func (bsq *BridgeStateQueue) immediateSendBridgeState(state State) {
 	}
 }
 
-func (bsq *BridgeStateQueue) Send(state State) {
+func (bsq *BridgeStateQueue) Send(state status.BridgeState) {
 	if bsq == nil {
 		return
 	}
@@ -226,14 +146,14 @@ func (bsq *BridgeStateQueue) Send(state State) {
 	}
 }
 
-func (bsq *BridgeStateQueue) GetPrev() State {
+func (bsq *BridgeStateQueue) GetPrev() status.BridgeState {
 	if bsq != nil && bsq.prev != nil {
 		return *bsq.prev
 	}
-	return State{}
+	return status.BridgeState{}
 }
 
-func (bsq *BridgeStateQueue) SetPrev(prev State) {
+func (bsq *BridgeStateQueue) SetPrev(prev status.BridgeState) {
 	if bsq != nil {
 		bsq.prev = &prev
 	}
