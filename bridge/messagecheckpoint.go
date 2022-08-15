@@ -11,7 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"time"
 
@@ -61,6 +61,7 @@ type MessageCheckpointReportedBy string
 const (
 	MsgReportedByAsmux  MessageCheckpointReportedBy = "ASMUX"
 	MsgReportedByBridge MessageCheckpointReportedBy = "BRIDGE"
+	MsgReportedByHungry MessageCheckpointReportedBy = "HUNGRYSERV"
 )
 
 type MessageCheckpoint struct {
@@ -136,17 +137,13 @@ func (br *Bridge) SendMessageCheckpoint(evt *event.Event, step MessageCheckpoint
 }
 
 func (cp *MessageCheckpoint) Send(br *Bridge) {
-	err := SendMessageCheckpoints(br, []*MessageCheckpoint{cp})
+	err := br.SendMessageCheckpoints([]*MessageCheckpoint{cp})
 	if err != nil {
 		br.Log.Warnfln("Error sending checkpoint %s/%s for %s: %v", cp.Step, cp.Status, cp.EventID, err)
 	}
 }
 
-type CheckpointsJSON struct {
-	Checkpoints []*MessageCheckpoint `json:"checkpoints"`
-}
-
-func SendMessageCheckpoints(br *Bridge, checkpoints []*MessageCheckpoint) error {
+func (br *Bridge) SendMessageCheckpoints(checkpoints []*MessageCheckpoint) error {
 	checkpointsJSON := CheckpointsJSON{Checkpoints: checkpoints}
 
 	if br.AS.HasWebsocket() {
@@ -161,8 +158,16 @@ func SendMessageCheckpoints(br *Bridge, checkpoints []*MessageCheckpoint) error 
 		return nil
 	}
 
+	return checkpointsJSON.SendHTTP(endpoint, br.AS.Registration.AppToken)
+}
+
+type CheckpointsJSON struct {
+	Checkpoints []*MessageCheckpoint `json:"checkpoints"`
+}
+
+func (cj *CheckpointsJSON) SendHTTP(endpoint string, token string) error {
 	var body bytes.Buffer
-	if err := json.NewEncoder(&body).Encode(checkpointsJSON); err != nil {
+	if err := json.NewEncoder(&body).Encode(cj); err != nil {
 		return fmt.Errorf("failed to encode message send checkpoint JSON: %w", err)
 	}
 
@@ -173,7 +178,7 @@ func SendMessageCheckpoints(br *Bridge, checkpoints []*MessageCheckpoint) error 
 		return err
 	}
 
-	req.Header.Set("Authorization", "Bearer "+br.AS.Registration.AppToken)
+	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("User-Agent", mautrix.DefaultUserAgent+" checkpoint sender")
 	req.Header.Set("Content-Type", "application/json")
 
@@ -183,7 +188,7 @@ func SendMessageCheckpoints(br *Bridge, checkpoints []*MessageCheckpoint) error 
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		respBody, _ := ioutil.ReadAll(resp.Body)
+		respBody, _ := io.ReadAll(resp.Body)
 		if respBody != nil {
 			respBody = bytes.ReplaceAll(respBody, []byte("\n"), []byte("\\n"))
 		}
