@@ -1,4 +1,4 @@
-## v0.12.0 (unreleased)
+## v0.12.0 (2022-08-16)
 
 * **Breaking change:** Switched `Client.UserTyping` to take a `time.Duration`
   instead of raw `int64` milliseconds.
@@ -29,6 +29,8 @@
 * Added wrapper for `/capabilities` endpoint.
 * Added `omitempty` markers for lots of structs to make the structs easier to
   use on the server side too.
+* Added support for registering to-device event handlers via the default
+  Syncer's `OnEvent` and `OnEventType` methods.
 * Fixed `CreateEventContent` using the wrong field name for the room version
   field.
 * Fixed `StopSync` not immediately cancelling the sync loop if it was sleeping
