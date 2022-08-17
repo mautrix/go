@@ -38,10 +38,9 @@ type CallData struct {
 }
 
 type CallCandidate struct {
-	Candidate        string `json:"candidate"`
-	SDPMLineIndex    int    `json:"sdpMLineIndex"`
-	SDPMID           string `json:"sdpMid"`
-	UsernameFragment string `json:"usernameFragment,omitempty"`
+	Candidate     string `json:"candidate"`
+	SDPMLineIndex int    `json:"sdpMLineIndex"`
+	SDPMID        string `json:"sdpMid"`
 }
 
 type CallVersion string
