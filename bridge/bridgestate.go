@@ -7,12 +7,7 @@
 package bridge
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
 	"runtime/debug"
 	"time"
 
@@ -22,32 +17,7 @@ import (
 )
 
 func (br *Bridge) SendBridgeState(ctx context.Context, state *status.BridgeState) error {
-	var body bytes.Buffer
-	if err := json.NewEncoder(&body).Encode(&state); err != nil {
-		return fmt.Errorf("failed to encode bridge state JSON: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, br.Config.Homeserver.StatusEndpoint, &body)
-	if err != nil {
-		return fmt.Errorf("failed to prepare request: %w", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+br.Config.AppService.ASToken)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		respBody, _ := io.ReadAll(resp.Body)
-		if respBody != nil {
-			respBody = bytes.ReplaceAll(respBody, []byte("\n"), []byte("\\n"))
-		}
-		return fmt.Errorf("unexpected status code %d sending bridge state update: %s", resp.StatusCode, respBody)
-	}
-	return nil
+	return state.Send(ctx, br.Config.Homeserver.StatusEndpoint, br.Config.AppService.ASToken)
 }
 
 func (br *Bridge) SendGlobalBridgeState(state status.BridgeState) {

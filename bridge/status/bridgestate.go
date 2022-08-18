@@ -7,6 +7,12 @@
 package status
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
 	"time"
 
 	"maunium.net/go/mautrix/id"
@@ -84,6 +90,35 @@ func (pong BridgeState) Fill(user BridgeStateFiller) BridgeState {
 		pong.TTL = 240
 	}
 	return pong
+}
+
+func (pong *BridgeState) Send(ctx context.Context, url, token string) error {
+	var body bytes.Buffer
+	if err := json.NewEncoder(&body).Encode(&pong); err != nil {
+		return fmt.Errorf("failed to encode bridge state JSON: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, &body)
+	if err != nil {
+		return fmt.Errorf("failed to prepare request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		respBody, _ := io.ReadAll(resp.Body)
+		if respBody != nil {
+			respBody = bytes.ReplaceAll(respBody, []byte("\n"), []byte("\\n"))
+		}
+		return fmt.Errorf("unexpected status code %d sending bridge state update: %s", resp.StatusCode, respBody)
+	}
+	return nil
 }
 
 func (pong *BridgeState) ShouldDeduplicate(newPong *BridgeState) bool {
