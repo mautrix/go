@@ -1,3 +1,7 @@
+## v0.12.1 (unreleased)
+
+* Bumped minimum Go version to 1.18.
+
 ## v0.12.0 (2022-08-16)
 
 * **Breaking change:** Switched `Client.UserTyping` to take a `time.Duration`

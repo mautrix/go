@@ -6,7 +6,6 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false
       matrix:
         go-version: [1.19]
     steps:
@@ -16,6 +15,7 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: ${{ matrix.go-version }}
+          cache: true
 
       - name: Install libolm
         run: sudo apt-get install libolm-dev libolm3
@@ -36,7 +36,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        go-version: [1.17, 1.18, 1.19]
+        go-version: [1.18, 1.19]
 
     steps:
       - uses: actions/checkout@v3
@@ -45,6 +45,7 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: ${{ matrix.go-version }}
+          cache: true
 
       - name: Set up gotestfmt
         uses: haveyoudebuggedit/gotestfmt-action@v2
