@@ -360,7 +360,7 @@ type RespQueryKeys struct {
 
 type RespClaimKeys struct {
 	Failures    map[string]interface{}                                `json:"failures,omitempty"`
-	OneTimeKeys map[id.UserID]map[id.DeviceID]map[id.KeyID]OneTimeKey `json:"one_time_keys,omitempty"`
+	OneTimeKeys map[id.UserID]map[id.DeviceID]map[id.KeyID]OneTimeKey `json:"one_time_keys"`
 }
 
 type RespUploadSignatures struct {
