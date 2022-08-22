@@ -57,6 +57,8 @@ func testUpgrade(dialect Dialect) func(t *testing.T) {
 			VersionTable: "version",
 			Dialect:      dialect,
 			UpgradeTable: makeTable(),
+
+			IgnoreForeignTables: true,
 		}
 		db.loggingDB.UnderlyingExecable = conn
 		db.loggingDB.db = db
