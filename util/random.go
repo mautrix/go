@@ -27,6 +27,9 @@ var letters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
 // RandomString generates a random string of the given length.
 func RandomString(n int) string {
+	if n%4 != 0 {
+		n += 4 - (n % 4)
+	}
 	decodedLength := base64.RawStdEncoding.DecodedLen(n)
 	output := make([]byte, n)
 	base64.RawStdEncoding.Encode(output, RandomBytes(decodedLength))
@@ -39,7 +42,7 @@ func RandomString(n int) string {
 			output[i] = letters[int(output[i])%len(letters)]
 		}
 	}
-	return *(*string)(unsafe.Pointer(&output))
+	return (*(*string)(unsafe.Pointer(&output)))[:n]
 }
 
 func base62Encode(val uint32, minWidth int) string {
