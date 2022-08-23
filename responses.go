@@ -156,8 +156,8 @@ type RespUserDisplayName struct {
 
 // RespRegister is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3register
 type RespRegister struct {
-	AccessToken string      `json:"access_token"`
-	DeviceID    id.DeviceID `json:"device_id"`
+	AccessToken string      `json:"access_token,omitempty"`
+	DeviceID    id.DeviceID `json:"device_id,omitempty"`
 	UserID      id.UserID   `json:"user_id"`
 
 	RefreshToken string `json:"refresh_token,omitempty"`
