@@ -9,6 +9,8 @@ package util
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"hash/crc32"
+	"strings"
 	"unsafe"
 )
 
@@ -21,7 +23,7 @@ func RandomBytes(n int) []byte {
 	return data
 }
 
-var letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+var letters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
 // RandomString generates a random string of the given length.
 func RandomString(n int) string {
@@ -38,4 +40,20 @@ func RandomString(n int) string {
 		}
 	}
 	return *(*string)(unsafe.Pointer(&output))
+}
+
+func base62Encode(val uint32, minWidth int) string {
+	var buf strings.Builder
+	for val > 0 {
+		rem := val % 62
+		val = val / 62
+		buf.WriteByte(letters[rem])
+	}
+	return strings.Repeat("0", minWidth-buf.Len()) + buf.String()
+}
+
+func RandomToken(namespace string, randomLength int) string {
+	token := namespace + "_" + RandomString(randomLength)
+	checksum := base62Encode(crc32.ChecksumIEEE([]byte(token)), 6)
+	return token + "_" + checksum
 }
