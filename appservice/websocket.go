@@ -90,6 +90,8 @@ type WebsocketMessage struct {
 	WebsocketCommand
 }
 
+const WebsocketCloseConnReplaced = 4001
+
 type MeowWebsocketCloseCode string
 
 const (
@@ -142,7 +144,7 @@ func parseCloseError(err error) error {
 		}
 	}
 	if len(closeCommand.Status) == 0 {
-		if closeCommand.Code == 4001 {
+		if closeCommand.Code == WebsocketCloseConnReplaced {
 			closeCommand.Status = MeowConnectionReplaced
 		} else if closeCommand.Code == websocket.CloseServiceRestart {
 			closeCommand.Status = MeowServerShuttingDown
