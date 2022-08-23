@@ -90,13 +90,17 @@ type WebsocketMessage struct {
 	WebsocketCommand
 }
 
-const WebsocketCloseConnReplaced = 4001
+const (
+	WebsocketCloseConnReplaced       = 4001
+	WebsocketCloseTxnNotAcknowledged = 4002
+)
 
 type MeowWebsocketCloseCode string
 
 const (
 	MeowServerShuttingDown MeowWebsocketCloseCode = "server_shutting_down"
 	MeowConnectionReplaced MeowWebsocketCloseCode = "conn_replaced"
+	MeowTxnNotAcknowledged MeowWebsocketCloseCode = "transactions_not_acknowledged"
 )
 
 var (
