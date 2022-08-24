@@ -12,6 +12,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/rs/zerolog"
+
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -30,6 +32,17 @@ type Transaction struct {
 	MSC2409EphemeralEvents []*event.Event       `json:"de.sorunome.msc2409.ephemeral,omitempty"`
 	MSC3202DeviceLists     *mautrix.DeviceLists `json:"org.matrix.msc3202.device_lists,omitempty"`
 	MSC3202DeviceOTKCount  OTKCountMap          `json:"org.matrix.msc3202.device_one_time_keys_count,omitempty"`
+}
+
+func (txn *Transaction) MarshalZerologObject(ctx *zerolog.Event) {
+	ctx.Int("pdu", len(txn.Events))
+	ctx.Int("edu", len(txn.EphemeralEvents))
+	if len(txn.DeviceOTKCount) > 0 {
+		ctx.Int("otk_count_users", len(txn.DeviceOTKCount))
+	}
+	if txn.DeviceLists != nil {
+		ctx.Int("device_changes", len(txn.DeviceLists.Changed))
+	}
 }
 
 func (txn *Transaction) ContentString() string {
