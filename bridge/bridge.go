@@ -176,7 +176,6 @@ type Crypto interface {
 	ResetSession(id.RoomID)
 	Init() error
 	Start()
-	RegisterAppserviceListener()
 	Stop()
 	Reset()
 	Client() *mautrix.Client
