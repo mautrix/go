@@ -4,8 +4,6 @@ package olm
 // #include <olm/olm.h>
 import "C"
 import (
-	"encoding/base64"
-
 	"maunium.net/go/mautrix/id"
 )
 
@@ -25,8 +23,6 @@ func Version() (major, minor, patch uint8) {
 func errorVal() C.size_t {
 	return C.olm_error()
 }
-
-var unpaddedBase64 = base64.StdEncoding.WithPadding(base64.NoPadding)
 
 var pickleKey = []byte("maunium.net/go/mautrix/crypto/olm")
 

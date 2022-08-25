@@ -5,6 +5,7 @@ package olm
 import "C"
 
 import (
+	"encoding/base64"
 	"unsafe"
 
 	"maunium.net/go/mautrix/id"
@@ -146,9 +147,9 @@ func (s *InboundGroupSession) Unpickle(pickled, key []byte) error {
 
 func (s *InboundGroupSession) GobEncode() ([]byte, error) {
 	pickled := s.Pickle(pickleKey)
-	length := unpaddedBase64.DecodedLen(len(pickled))
+	length := base64.RawStdEncoding.DecodedLen(len(pickled))
 	rawPickled := make([]byte, length)
-	_, err := unpaddedBase64.Decode(rawPickled, pickled)
+	_, err := base64.RawStdEncoding.Decode(rawPickled, pickled)
 	return rawPickled, err
 }
 
@@ -156,9 +157,9 @@ func (s *InboundGroupSession) GobDecode(rawPickled []byte) error {
 	if s == nil || s.int == nil {
 		*s = *NewBlankInboundGroupSession()
 	}
-	length := unpaddedBase64.EncodedLen(len(rawPickled))
+	length := base64.RawStdEncoding.EncodedLen(len(rawPickled))
 	pickled := make([]byte, length)
-	unpaddedBase64.Encode(pickled, rawPickled)
+	base64.RawStdEncoding.Encode(pickled, rawPickled)
 	return s.Unpickle(pickled, pickleKey)
 }
 
