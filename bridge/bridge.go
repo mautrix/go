@@ -333,6 +333,8 @@ func (br *Bridge) validateConfig() error {
 		return errors.New("homeserver.address not configured")
 	case br.Config.Homeserver.Domain == "example.com":
 		return errors.New("homeserver.domain not configured")
+	case !bridgeconfig.AllowedHomeserverSoftware[br.Config.Homeserver.Software]:
+		return errors.New("invalid value for homeserver.software (use `standard` if you don't know what the field is for)")
 	case br.Config.AppService.ASToken == "This value is generated when generating the registration":
 		return errors.New("appservice.as_token not configured. Did you forget to generate the registration? ")
 	case br.Config.AppService.HSToken == "This value is generated when generating the registration":

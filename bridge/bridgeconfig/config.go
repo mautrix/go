@@ -17,12 +17,27 @@ import (
 	up "maunium.net/go/mautrix/util/configupgrade"
 )
 
+type HomeserverSoftware string
+
+const (
+	SoftwareStandard HomeserverSoftware = "standard"
+	SoftwareAsmux    HomeserverSoftware = "asmux"
+	SoftwareHungry   HomeserverSoftware = "hungry"
+)
+
+var AllowedHomeserverSoftware = map[HomeserverSoftware]bool{
+	SoftwareStandard: true,
+	SoftwareAsmux:    true,
+	SoftwareHungry:   true,
+}
+
 type HomeserverConfig struct {
 	Address    string `yaml:"address"`
 	Domain     string `yaml:"domain"`
 	AsyncMedia bool   `yaml:"async_media"`
 
-	Asmux                         bool   `yaml:"asmux"`
+	Software HomeserverSoftware `yaml:"software"`
+
 	StatusEndpoint                string `yaml:"status_endpoint"`
 	MessageSendCheckpointEndpoint string `yaml:"message_send_checkpoint_endpoint"`
 
@@ -190,7 +205,11 @@ type BaseConfig struct {
 func doUpgrade(helper *up.Helper) {
 	helper.Copy(up.Str, "homeserver", "address")
 	helper.Copy(up.Str, "homeserver", "domain")
-	helper.Copy(up.Bool, "homeserver", "asmux")
+	if legacyAsmuxFlag, ok := helper.Get(up.Bool, "homeserver", "asmux"); ok && legacyAsmuxFlag == "true" {
+		helper.Set(up.Str, "asmux", "homeserver", "software")
+	} else {
+		helper.Copy(up.Str, "homeserver", "software")
+	}
 	helper.Copy(up.Str|up.Null, "homeserver", "status_endpoint")
 	helper.Copy(up.Str|up.Null, "homeserver", "message_send_checkpoint_endpoint")
 	helper.Copy(up.Bool, "homeserver", "async_media")
