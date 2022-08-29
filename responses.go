@@ -309,7 +309,7 @@ type SyncJoinedRoom struct {
 
 	UnreadNotifications UnreadNotificationCounts `json:"unread_notifications,omitempty"`
 	// https://github.com/matrix-org/matrix-spec-proposals/pull/2654
-	UnstableUnreadCount int `json:"org.matrix.msc2654.unread_count,omitempty"`
+	MSC2654UnreadCount int `json:"org.matrix.msc2654.unread_count,omitempty"`
 }
 
 type UnreadNotificationCounts struct {
