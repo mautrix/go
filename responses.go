@@ -306,11 +306,20 @@ type SyncJoinedRoom struct {
 	Timeline    SyncTimeline    `json:"timeline"`
 	Ephemeral   SyncEventsList  `json:"ephemeral"`
 	AccountData SyncEventsList  `json:"account_data"`
+
+	UnreadNotifications UnreadNotificationCounts `json:"unread_notifications,omitempty"`
+	// https://github.com/matrix-org/matrix-spec-proposals/pull/2654
+	UnstableUnreadCount int `json:"org.matrix.msc2654.unread_count,omitempty"`
+}
+
+type UnreadNotificationCounts struct {
+	HighlightCount    int `json:"highlight_count,omitempty"`
+	NotificationCount int `json:"notification_count,omitempty"`
 }
 
 type marshalableSyncJoinedRoom SyncJoinedRoom
 
-var syncJoinedRoomPathsToDelete = []string{"summary", "state", "timeline", "ephemeral", "account_data"}
+var syncJoinedRoomPathsToDelete = []string{"summary", "state", "timeline", "ephemeral", "account_data", "unread_notifications"}
 
 func (sjr SyncJoinedRoom) MarshalJSON() ([]byte, error) {
 	return marshalAndDeleteEmpty((marshalableSyncJoinedRoom)(sjr), syncJoinedRoomPathsToDelete)
