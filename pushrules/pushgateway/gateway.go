@@ -72,12 +72,40 @@ func (pk *PushKey) Push(ctx context.Context, data *PushNotification) error {
 	return data.Push(ctx, pk.URL)
 }
 
-type reqPush struct {
+type ReqPush struct {
 	Notification *PushNotification `json:"notification"`
 }
 
+type RespPush struct {
+	Rejected []string `json:"rejected"`
+}
+
+var ErrPushRejected error = &RespPush{}
+
+func (rp *RespPush) Error() string {
+	return fmt.Sprintf("push gateway rejected keys: %v", rp.Rejected)
+}
+
+func (rp *RespPush) Is(other error) bool {
+	// Allow using errors.Is(err, ErrPushRejected) as a generic type check
+	// without caring about the actual rejected keys.
+	if other == ErrPushRejected {
+		return true
+	}
+	otherRespPush, ok := other.(*RespPush)
+	if !ok || len(otherRespPush.Rejected) != len(rp.Rejected) {
+		return false
+	}
+	for i, key := range otherRespPush.Rejected {
+		if key != rp.Rejected[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func (pn *PushNotification) Push(ctx context.Context, url string) error {
-	payload, err := json.Marshal(&reqPush{Notification: pn})
+	payload, err := json.Marshal(&ReqPush{Notification: pn})
 	if err != nil {
 		return fmt.Errorf("failed to marshal payload: %w", err)
 	}
@@ -86,12 +114,18 @@ func (pn *PushNotification) Push(ctx context.Context, url string) error {
 		return fmt.Errorf("failed to prepare push request: %w", err)
 	}
 	req.Header.Set("User-Agent", mautrix.DefaultUserAgent)
+	var respData RespPush
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send push request: %w", err)
+	} else if body, err := io.ReadAll(resp.Body); err != nil {
+		return fmt.Errorf("failed to read push response body (status %d): %v", resp.StatusCode, err)
 	} else if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("unexpected status code %d: %s", resp.StatusCode, bytes.ReplaceAll(body, []byte("\n"), []byte("\\n")))
+	} else if err = json.Unmarshal(body, &respData); err != nil {
+		return fmt.Errorf("unexpected non-JSON body in push response (status %d): %s", resp.StatusCode, bytes.ReplaceAll(body, []byte("\n"), []byte("\\n")))
+	} else if len(respData.Rejected) > 0 {
+		return &respData
 	}
 	return nil
 }
