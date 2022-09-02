@@ -64,7 +64,7 @@ type PushNotification struct {
 	Content           json.RawMessage `json:"content,omitempty"`
 	UserIsTarget      bool            `json:"user_is_target,omitempty"`
 
-	// TODO add com.beeper.ttl field and update Sygnal to read that field
+	BeeperTTL *int `json:"com.beeper.ttl,omitempty"`
 }
 
 func (pk *PushKey) Push(ctx context.Context, data *PushNotification) error {
