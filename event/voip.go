@@ -93,7 +93,11 @@ const (
 	Screenshare CallSDPStreamMetadataPurpose = "m.screenshare"
 )
 
-type CallSDPStreamMetadataTrack struct{}
+type CallSDPStreamMetadataTrack struct {
+	Kind   string `json:"kind,omitempty"`
+	Width  int    `json:"width,omitempty"`
+	Height int    `json:"height,omitempty"`
+}
 
 type CallSDPStreamMetadataTracks map[string]CallSDPStreamMetadataTrack
 
@@ -150,6 +154,8 @@ type CallHangupEventContent struct {
 type SFUTrackDescription struct {
 	StreamID string `json:"stream_id"`
 	TrackID  string `json:"track_id"`
+	Width    int    `json:"width,omitempty"`
+	Height   int    `json:"height,omitempty"`
 }
 
 type SFUMessageOperation string
