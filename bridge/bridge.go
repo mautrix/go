@@ -165,6 +165,8 @@ type Bridge struct {
 	CryptoPickleKey  string
 
 	Child ChildOverride
+
+	manualStop chan int
 }
 
 type Crypto interface {
@@ -503,6 +505,14 @@ func (br *Bridge) stop() {
 	br.Child.Stop()
 }
 
+func (br *Bridge) ManualStop(exitCode int) {
+	if br.manualStop != nil {
+		br.manualStop <- exitCode
+	} else {
+		os.Exit(exitCode)
+	}
+}
+
 func (br *Bridge) Main() {
 	flag.SetHelpTitles(
 		fmt.Sprintf("%s - %s", br.Name, br.Description),
@@ -532,6 +542,7 @@ func (br *Bridge) Main() {
 		return
 	}
 
+	br.manualStop = make(chan int, 1)
 	br.init()
 	br.Log.Infoln("Bridge initialization complete, starting...")
 	br.start()
@@ -539,10 +550,15 @@ func (br *Bridge) Main() {
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	<-c
+	var exitCode int
+	select {
+	case <-c:
+		br.Log.Infoln("Interrupt received, stopping...")
+	case exitCode = <-br.manualStop:
+		br.Log.Infofln("Manual stop with code %d requested", exitCode)
+	}
 
-	br.Log.Infoln("Interrupt received, stopping...")
 	br.stop()
 	br.Log.Infoln("Bridge stopped.")
-	os.Exit(0)
+	os.Exit(exitCode)
 }
