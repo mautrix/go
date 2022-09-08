@@ -33,8 +33,8 @@ const (
 
 type BaseDevice struct {
 	AppID     string         `json:"app_id"`
-	PushKey   string         `json:"push_key"`
-	PushKeyTS int64          `json:"push_key_ts,omitempty"`
+	PushKey   string         `json:"pushkey"`
+	PushKeyTS int64          `json:"pushkey_ts,omitempty"`
 	Data      map[string]any `json:"data,omitempty"`
 }
 
