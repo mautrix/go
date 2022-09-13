@@ -107,6 +107,7 @@ type RespMediaUpload struct {
 type RespCreateMXC struct {
 	ContentURI      id.ContentURI `json:"content_uri"`
 	UnusedExpiresAt int           `json:"unused_expires_at,omitempty"`
+	UploadURL       string        `json:"upload_url,omitempty"`
 }
 
 // RespPreviewURL is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#get_matrixmediav3preview_url
