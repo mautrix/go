@@ -206,7 +206,7 @@ func doUpgrade(helper *up.Helper) {
 	helper.Copy(up.Str, "homeserver", "address")
 	helper.Copy(up.Str, "homeserver", "domain")
 	if legacyAsmuxFlag, ok := helper.Get(up.Bool, "homeserver", "asmux"); ok && legacyAsmuxFlag == "true" {
-		helper.Set(up.Str, "asmux", "homeserver", "software")
+		helper.Set(up.Str, string(SoftwareAsmux), "homeserver", "software")
 	} else {
 		helper.Copy(up.Str, "homeserver", "software")
 	}
