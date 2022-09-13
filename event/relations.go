@@ -140,7 +140,9 @@ func (ac *AnnotationChunk) UnmarshalJSON(data []byte) error {
 	}
 	ac.Map = make(map[string]int)
 	for _, item := range ac.Chunk {
-		ac.Map[item.Key] += item.Count
+		if item.Key != "" {
+			ac.Map[item.Key] += item.Count
+		}
 	}
 	return nil
 }
@@ -154,7 +156,9 @@ func (ac *AnnotationChunk) Serialize() RelationChunk {
 			Key:   key,
 			Count: count,
 		}
+		i++
 	}
+	ac.Count = len(ac.Chunk)
 	return ac.RelationChunk
 }
 
@@ -183,6 +187,7 @@ func (ec *EventIDChunk) Serialize(typ RelationType) RelationChunk {
 			EventID: eventID,
 		}
 	}
+	ec.Count = len(ec.Chunk)
 	return ec.RelationChunk
 }
 
@@ -210,5 +215,10 @@ func (relations *Relations) MarshalJSON() ([]byte, error) {
 	relations.Raw[RelAnnotation] = relations.Annotations.Serialize()
 	relations.Raw[RelReference] = relations.References.Serialize(RelReference)
 	relations.Raw[RelReplace] = relations.Replaces.Serialize(RelReplace)
+	for key, item := range relations.Raw {
+		if len(item.Chunk) == 0 {
+			delete(relations.Raw, key)
+		}
+	}
 	return json.Marshal(relations.Raw)
 }
