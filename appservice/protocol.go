@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tulir Asokan
+// Copyright (c) 2022 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -25,11 +25,13 @@ type OTKCountMap = map[id.UserID]map[id.DeviceID]mautrix.OTKCount
 type Transaction struct {
 	Events          []*event.Event `json:"events"`
 	EphemeralEvents []*event.Event `json:"ephemeral,omitempty"`
+	ToDeviceEvents  []*event.Event `json:"to_device,omitempty"`
 
 	DeviceLists    *mautrix.DeviceLists `json:"device_lists,omitempty"`
 	DeviceOTKCount OTKCountMap          `json:"device_one_time_keys_count,omitempty"`
 
 	MSC2409EphemeralEvents []*event.Event       `json:"de.sorunome.msc2409.ephemeral,omitempty"`
+	MSC2409ToDeviceEvents  []*event.Event       `json:"de.sorunome.msc2409.to_device,omitempty"`
 	MSC3202DeviceLists     *mautrix.DeviceLists `json:"org.matrix.msc3202.device_lists,omitempty"`
 	MSC3202DeviceOTKCount  OTKCountMap          `json:"org.matrix.msc3202.device_one_time_keys_count,omitempty"`
 }
@@ -37,6 +39,7 @@ type Transaction struct {
 func (txn *Transaction) MarshalZerologObject(ctx *zerolog.Event) {
 	ctx.Int("pdu", len(txn.Events))
 	ctx.Int("edu", len(txn.EphemeralEvents))
+	ctx.Int("to_device", len(txn.ToDeviceEvents))
 	if len(txn.DeviceOTKCount) > 0 {
 		ctx.Int("otk_count_users", len(txn.DeviceOTKCount))
 	}
@@ -54,6 +57,11 @@ func (txn *Transaction) ContentString() string {
 		parts = append(parts, fmt.Sprintf("%d EDUs", len(txn.EphemeralEvents)))
 	} else if len(txn.MSC2409EphemeralEvents) > 0 {
 		parts = append(parts, fmt.Sprintf("%d EDUs (unstable)", len(txn.MSC2409EphemeralEvents)))
+	}
+	if len(txn.ToDeviceEvents) > 0 {
+		parts = append(parts, fmt.Sprintf("%d to-device events", len(txn.ToDeviceEvents)))
+	} else if len(txn.MSC2409ToDeviceEvents) > 0 {
+		parts = append(parts, fmt.Sprintf("%d to-device events (unstable)", len(txn.MSC2409ToDeviceEvents)))
 	}
 	if len(txn.DeviceOTKCount) > 0 {
 		parts = append(parts, fmt.Sprintf("OTK counts for %d users", len(txn.DeviceOTKCount)))

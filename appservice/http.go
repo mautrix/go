@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tulir Asokan
+// Copyright (c) 2022 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -146,6 +146,11 @@ func (as *AppService) handleTransaction(id string, txn *Transaction) {
 		} else if txn.MSC2409EphemeralEvents != nil {
 			as.handleEvents(txn.MSC2409EphemeralEvents, event.EphemeralEventType)
 		}
+		if txn.ToDeviceEvents != nil {
+			as.handleEvents(txn.ToDeviceEvents, event.ToDeviceEventType)
+		} else if txn.MSC2409ToDeviceEvents != nil {
+			as.handleEvents(txn.MSC2409ToDeviceEvents, event.ToDeviceEventType)
+		}
 	}
 	as.handleEvents(txn.Events, event.UnknownEventType)
 	if txn.DeviceLists != nil {
@@ -186,9 +191,7 @@ func (as *AppService) handleDeviceLists(dl *mautrix.DeviceLists) {
 func (as *AppService) handleEvents(evts []*event.Event, defaultTypeClass event.TypeClass) {
 	for _, evt := range evts {
 		evt.Mautrix.ReceivedAt = time.Now()
-		if len(evt.ToUserID) > 0 {
-			evt.Type.Class = event.ToDeviceEventType
-		} else if defaultTypeClass != event.UnknownEventType {
+		if defaultTypeClass != event.UnknownEventType {
 			evt.Type.Class = defaultTypeClass
 		} else if evt.StateKey != nil {
 			evt.Type.Class = event.StateEventType
