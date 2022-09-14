@@ -3,16 +3,15 @@ package mautrix
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
 
 	"github.com/tidwall/gjson"
-	"github.com/tidwall/sjson"
 
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
+	"maunium.net/go/mautrix/util"
 )
 
 // RespWhoami is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3accountwhoami
@@ -252,25 +251,8 @@ type marshalableRespSync RespSync
 
 var syncPathsToDelete = []string{"account_data", "presence", "to_device", "device_lists", "device_one_time_keys_count", "rooms"}
 
-func marshalAndDeleteEmpty(marshalable interface{}, paths []string) ([]byte, error) {
-	data, err := json.Marshal(marshalable)
-	if err != nil {
-		return nil, err
-	}
-	for _, path := range paths {
-		res := gjson.GetBytes(data, path)
-		if res.IsObject() && len(res.Raw) == 2 {
-			data, err = sjson.DeleteBytes(data, path)
-			if err != nil {
-				return nil, fmt.Errorf("failed to delete empty %s: %w", path, err)
-			}
-		}
-	}
-	return data, nil
-}
-
 func (rs *RespSync) MarshalJSON() ([]byte, error) {
-	return marshalAndDeleteEmpty((*marshalableRespSync)(rs), syncPathsToDelete)
+	return util.MarshalAndDeleteEmpty((*marshalableRespSync)(rs), syncPathsToDelete)
 }
 
 type DeviceLists struct {
@@ -298,7 +280,7 @@ type marshalableSyncLeftRoom SyncLeftRoom
 var syncLeftRoomPathsToDelete = []string{"summary", "state", "timeline"}
 
 func (slr SyncLeftRoom) MarshalJSON() ([]byte, error) {
-	return marshalAndDeleteEmpty((marshalableSyncLeftRoom)(slr), syncLeftRoomPathsToDelete)
+	return util.MarshalAndDeleteEmpty((marshalableSyncLeftRoom)(slr), syncLeftRoomPathsToDelete)
 }
 
 type SyncJoinedRoom struct {
@@ -323,7 +305,7 @@ type marshalableSyncJoinedRoom SyncJoinedRoom
 var syncJoinedRoomPathsToDelete = []string{"summary", "state", "timeline", "ephemeral", "account_data"}
 
 func (sjr SyncJoinedRoom) MarshalJSON() ([]byte, error) {
-	return marshalAndDeleteEmpty((marshalableSyncJoinedRoom)(sjr), syncJoinedRoomPathsToDelete)
+	return util.MarshalAndDeleteEmpty((marshalableSyncJoinedRoom)(sjr), syncJoinedRoomPathsToDelete)
 }
 
 type SyncInvitedRoom struct {
@@ -336,7 +318,7 @@ type marshalableSyncInvitedRoom SyncInvitedRoom
 var syncInvitedRoomPathsToDelete = []string{"summary"}
 
 func (sir SyncInvitedRoom) MarshalJSON() ([]byte, error) {
-	return marshalAndDeleteEmpty((marshalableSyncInvitedRoom)(sir), syncInvitedRoomPathsToDelete)
+	return util.MarshalAndDeleteEmpty((marshalableSyncInvitedRoom)(sir), syncInvitedRoomPathsToDelete)
 }
 
 type RespTurnServer struct {
