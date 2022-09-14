@@ -1300,8 +1300,6 @@ func (cli *Client) UploadMedia(data ReqUploadMedia) (*RespMediaUpload, error) {
 				return nil, err
 			}
 
-			req.Header.Set("Content-Type", data.ContentType)
-
 			resp, err := http.DefaultClient.Do(req)
 			if err != nil {
 				return nil, err
