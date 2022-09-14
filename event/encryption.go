@@ -131,7 +131,7 @@ type RoomKeyWithheldCode string
 const (
 	RoomKeyWithheldBlacklisted  RoomKeyWithheldCode = "m.blacklisted"
 	RoomKeyWithheldUnverified   RoomKeyWithheldCode = "m.unverified"
-	RoomKeyWithheldUnauthorized RoomKeyWithheldCode = "m.unauthorized"
+	RoomKeyWithheldUnauthorized RoomKeyWithheldCode = "m.unauthorised"
 	RoomKeyWithheldUnavailable  RoomKeyWithheldCode = "m.unavailable"
 	RoomKeyWithheldNoOlmSession RoomKeyWithheldCode = "m.no_olm"
 )
