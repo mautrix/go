@@ -1293,12 +1293,21 @@ type ReqUploadMedia struct {
 func (cli *Client) UploadMedia(data ReqUploadMedia) (*RespMediaUpload, error) {
 	if data.UploadURL != "" {
 		retries := cli.DefaultHTTPRetries
+		if data.ContentBytes == nil {
+			// Can't retry with a reader
+			retries = 0
+		}
 		for {
+			if data.Content == nil {
+				data.Content = bytes.NewReader(data.ContentBytes)
+			}
 			cli.Logger.Debugfln("Uploading media to external URL %s", data.UploadURL)
 			req, err := http.NewRequest(http.MethodPut, data.UploadURL, data.Content)
 			if err != nil {
 				return nil, err
 			}
+			// Tell the next retry to create a new reader from ContentBytes
+			data.Content = nil
 			req.Header.Set("Content-Type", data.ContentType)
 
 			resp, err := http.DefaultClient.Do(req)
