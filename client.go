@@ -1309,6 +1309,7 @@ func (cli *Client) UploadMedia(data ReqUploadMedia) (*RespMediaUpload, error) {
 
 			// should we accept more status codes?
 			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+				cli.Logger.Debugfln("response to upload: %d", resp.StatusCode)
 				break
 			}
 
