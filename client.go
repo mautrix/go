@@ -1294,29 +1294,26 @@ func (cli *Client) UploadMedia(data ReqUploadMedia) (*RespMediaUpload, error) {
 	if data.UploadURL != "" {
 		retries := cli.DefaultHTTPRetries
 		for {
-			cli.Logger.Debugfln("uploading to URL %s", data.UploadURL)
+			cli.Logger.Debugfln("Uploading media to external URL %s", data.UploadURL)
 			req, err := http.NewRequest(http.MethodPut, data.UploadURL, data.Content)
 			if err != nil {
 				return nil, err
 			}
-
 			req.Header.Set("Content-Type", data.ContentType)
 
 			resp, err := http.DefaultClient.Do(req)
 			if err != nil {
 				return nil, err
-			}
-
-			// should we accept more status codes?
-			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			} else if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+				// Upload successful
 				break
 			}
 
 			if retries > 0 && cli.shouldRetry(resp) {
-				cli.Logger.Debugfln("error uploading media to %s, retrying: %v", data.UploadURL, err)
-				retries = retries - 1
+				cli.Logger.Debugfln("Error uploading media to %s: HTTP %d, retrying", data.UploadURL, resp.StatusCode)
+				retries--
 			} else {
-				cli.Logger.Debugfln("error uploading media to %s, not retrying: %v", data.UploadURL, err)
+				cli.Logger.Debugfln("Error uploading media to %s: HTTP %d, not retrying", data.UploadURL, resp.StatusCode)
 				return nil, err
 			}
 		}
