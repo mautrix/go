@@ -1288,88 +1288,91 @@ type ReqUploadMedia struct {
 	UploadURL string
 }
 
+func (cli *Client) uploadMediaToURL(data ReqUploadMedia) (*RespMediaUpload, error) {
+	retries := cli.DefaultHTTPRetries
+	if data.ContentBytes == nil {
+		// Can't retry with a reader
+		retries = 0
+	}
+	for {
+		if data.Content == nil {
+			data.Content = bytes.NewReader(data.ContentBytes)
+		}
+		cli.Logger.Debugfln("Uploading media to external URL %s", data.UploadURL)
+		req, err := http.NewRequest(http.MethodPut, data.UploadURL, data.Content)
+		if err != nil {
+			return nil, err
+		}
+		// Tell the next retry to create a new reader from ContentBytes
+		data.Content = nil
+		req.Header.Set("Content-Type", data.ContentType)
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return nil, err
+		} else if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			// Upload successful
+			break
+		}
+
+		if retries > 0 && cli.shouldRetry(resp) {
+			cli.Logger.Debugfln("Error uploading media to %s: HTTP %d, retrying", data.UploadURL, resp.StatusCode)
+			retries--
+		} else {
+			cli.Logger.Debugfln("Error uploading media to %s: HTTP %d, not retrying", data.UploadURL, resp.StatusCode)
+			return nil, err
+		}
+	}
+
+	notifyURL := cli.BuildURL(MediaURLPath{"unstable", "fi.mau.msc2246", "upload", data.UnstableMXC.Homeserver, data.UnstableMXC.FileID, "complete"})
+
+	var m *RespMediaUpload
+	_, err := cli.MakeFullRequest(FullRequest{
+		Method:       http.MethodPost,
+		URL:          notifyURL,
+		ResponseJSON: m,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return m, nil
+}
+
 // UploadMedia uploads the given data to the content repository and returns an MXC URI.
 // See https://spec.matrix.org/v1.2/client-server-api/#post_matrixmediav3upload
 func (cli *Client) UploadMedia(data ReqUploadMedia) (*RespMediaUpload, error) {
 	if data.UploadURL != "" {
-		retries := cli.DefaultHTTPRetries
-		if data.ContentBytes == nil {
-			// Can't retry with a reader
-			retries = 0
-		}
-		for {
-			if data.Content == nil {
-				data.Content = bytes.NewReader(data.ContentBytes)
-			}
-			cli.Logger.Debugfln("Uploading media to external URL %s", data.UploadURL)
-			req, err := http.NewRequest(http.MethodPut, data.UploadURL, data.Content)
-			if err != nil {
-				return nil, err
-			}
-			// Tell the next retry to create a new reader from ContentBytes
-			data.Content = nil
-			req.Header.Set("Content-Type", data.ContentType)
-
-			resp, err := http.DefaultClient.Do(req)
-			if err != nil {
-				return nil, err
-			} else if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-				// Upload successful
-				break
-			}
-
-			if retries > 0 && cli.shouldRetry(resp) {
-				cli.Logger.Debugfln("Error uploading media to %s: HTTP %d, retrying", data.UploadURL, resp.StatusCode)
-				retries--
-			} else {
-				cli.Logger.Debugfln("Error uploading media to %s: HTTP %d, not retrying", data.UploadURL, resp.StatusCode)
-				return nil, err
-			}
-		}
-
-		notifyURL := cli.BuildURL(MediaURLPath{"unstable", "fi.mau.msc2246", "upload", data.UnstableMXC.Homeserver, data.UnstableMXC.FileID, "complete"})
-
-		var m *RespMediaUpload
-		_, err := cli.MakeFullRequest(FullRequest{
-			Method:       http.MethodPost,
-			URL:          notifyURL,
-			ResponseJSON: m,
-		})
-		if err != nil {
-			return nil, err
-		}
-
-		return m, nil
-	} else {
-		u, _ := url.Parse(cli.BuildURL(MediaURLPath{"v3", "upload"}))
-		method := http.MethodPost
-		if !data.UnstableMXC.IsEmpty() {
-			u, _ = url.Parse(cli.BuildURL(MediaURLPath{"unstable", "fi.mau.msc2246", "upload", data.UnstableMXC.Homeserver, data.UnstableMXC.FileID}))
-			method = http.MethodPut
-		}
-		if len(data.FileName) > 0 {
-			q := u.Query()
-			q.Set("filename", data.FileName)
-			u.RawQuery = q.Encode()
-		}
-
-		var headers http.Header
-		if len(data.ContentType) > 0 {
-			headers = http.Header{"Content-Type": []string{data.ContentType}}
-		}
-
-		var m RespMediaUpload
-		_, err := cli.MakeFullRequest(FullRequest{
-			Method:        method,
-			URL:           u.String(),
-			Headers:       headers,
-			RequestBytes:  data.ContentBytes,
-			RequestBody:   data.Content,
-			RequestLength: data.ContentLength,
-			ResponseJSON:  &m,
-		})
-		return &m, err
+		return cli.uploadMediaToURL(data)
 	}
+	u, _ := url.Parse(cli.BuildURL(MediaURLPath{"v3", "upload"}))
+	method := http.MethodPost
+	if !data.UnstableMXC.IsEmpty() {
+		u, _ = url.Parse(cli.BuildURL(MediaURLPath{"unstable", "fi.mau.msc2246", "upload", data.UnstableMXC.Homeserver, data.UnstableMXC.FileID}))
+		method = http.MethodPut
+	}
+	if len(data.FileName) > 0 {
+		q := u.Query()
+		q.Set("filename", data.FileName)
+		u.RawQuery = q.Encode()
+	}
+
+	var headers http.Header
+	if len(data.ContentType) > 0 {
+		headers = http.Header{"Content-Type": []string{data.ContentType}}
+	}
+
+	var m RespMediaUpload
+	_, err := cli.MakeFullRequest(FullRequest{
+		Method:        method,
+		URL:           u.String(),
+		Headers:       headers,
+		RequestBytes:  data.ContentBytes,
+		RequestBody:   data.Content,
+		RequestLength: data.ContentLength,
+		ResponseJSON:  &m,
+	})
+	return &m, err
 }
 
 // GetURLPreview asks the homeserver to fetch a preview for a given URL.
