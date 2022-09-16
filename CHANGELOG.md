@@ -1,6 +1,21 @@
-## v0.12.1 (unreleased)
+## v0.12.1 (2022-09-16)
 
 * Bumped minimum Go version to 1.18.
+* Added `omitempty` for a bunch of fields in response structs to make them more
+  usable for server implementations.
+* Added `util.RandomToken` to generate GitHub-style access tokens with checksums.
+* Added utilities to call the push gateway API.
+* Added `unread_notifications` and [MSC2654] `unread_count` fields to /sync
+  response structs.
+* Implemented [MSC3870] for uploading and downloading media directly to/from an
+  external media storage like S3.
+* Fixed dbutil database ownership checks on SQLite.
+* Fixed typo in unauthorized encryption key withheld code
+  (`m.unauthorized` -> `m.unauthorised`).
+* Fixed [MSC2409] support to have a separate field for to-device events.
+
+[MSC2654]: https://github.com/matrix-org/matrix-spec-proposals/pull/2654
+[MSC3870]: https://github.com/matrix-org/matrix-spec-proposals/pull/3870
 
 ## v0.12.0 (2022-08-16)
 
