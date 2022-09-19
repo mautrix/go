@@ -12,6 +12,7 @@ import (
 
 	"maunium.net/go/maulogger/v2"
 
+	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/appservice"
 	"maunium.net/go/mautrix/bridge"
 	"maunium.net/go/mautrix/event"
@@ -62,6 +63,14 @@ func (ce *Event) React(key string) {
 	_, err := ce.MainIntent().SendReaction(ce.RoomID, ce.EventID, key)
 	if err != nil {
 		ce.Processor.log.Warnfln("Failed to react to command from %s: %v", ce.User.GetMXID(), err)
+	}
+}
+
+// Redact redacts the command.
+func (ce *Event) Redact(req ...mautrix.ReqRedact) {
+	_, err := ce.MainIntent().RedactEvent(ce.RoomID, ce.EventID, req...)
+	if err != nil {
+		ce.Processor.log.Warnfln("Failed to redact command from %s: %v", ce.User.GetMXID(), err)
 	}
 }
 
