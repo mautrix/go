@@ -7,7 +7,6 @@ import "C"
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 	"unsafe"
 
 	"github.com/tidwall/gjson"
@@ -15,6 +14,7 @@ import (
 
 	"maunium.net/go/mautrix/crypto/canonicaljson"
 	"maunium.net/go/mautrix/id"
+	"maunium.net/go/mautrix/util"
 )
 
 // Utility stores the necessary state to perform hash and signature
@@ -102,26 +102,6 @@ func (u *Utility) VerifySignature(message string, key id.Ed25519, signature stri
 	return ok, err
 }
 
-var gjsonEscaper = strings.NewReplacer(
-	`\`, `\\`,
-	".", `\.`,
-	"|", `\|`,
-	"#", `\#`,
-	"@", `\@`,
-	"*", `\*`,
-	"?", `\?`)
-
-func gjsonPath(path ...string) string {
-	var result strings.Builder
-	for i, part := range path {
-		_, _ = gjsonEscaper.WriteString(&result, part)
-		if i < len(path)-1 {
-			result.WriteRune('.')
-		}
-	}
-	return result.String()
-}
-
 // VerifySignatureJSON verifies the signature in the JSON object _obj following
 // the Matrix specification:
 // https://matrix.org/speculator/spec/drafts%2Fe2e/appendices.html#signing-json
@@ -131,7 +111,7 @@ func (u *Utility) VerifySignatureJSON(obj interface{}, userID id.UserID, keyName
 	if err != nil {
 		return false, err
 	}
-	sig := gjson.GetBytes(objJSON, gjsonPath("signatures", string(userID), fmt.Sprintf("ed25519:%s", keyName)))
+	sig := gjson.GetBytes(objJSON, util.GJSONPath("signatures", string(userID), fmt.Sprintf("ed25519:%s", keyName)))
 	if !sig.Exists() || sig.Type != gjson.String {
 		return false, SignatureNotFound
 	}
