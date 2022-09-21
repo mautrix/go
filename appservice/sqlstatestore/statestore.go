@@ -118,7 +118,7 @@ func (store *SQLStateStore) FindSharedRooms(userID id.UserID) (rooms []id.RoomID
 	rows, err := store.Query(`
 		SELECT room_id FROM mx_user_profile
 		LEFT JOIN portal ON portal.mxid=mx_user_profile.room_id
-		WHERE user_id=$1 AND portal.encrypted=true
+		WHERE mx_user_profile.user_id=$1 AND portal.encrypted=true
 	`, userID)
 	if err != nil {
 		store.Log.Warn("Failed to query shared rooms with %s: %v", userID, err)
