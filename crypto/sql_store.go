@@ -334,7 +334,7 @@ func (store *SQLCryptoStore) scanGroupSessionList(rows *sql.Rows) (result []*Inb
 func (store *SQLCryptoStore) GetGroupSessionsForRoom(roomID id.RoomID) ([]*InboundGroupSession, error) {
 	rows, err := store.DB.Query(`
 		SELECT room_id, signing_key, sender_key, session, forwarding_chains
-		FROM crypto_megolm_inbound_session WHERE room_id=$1 AND account_id=$2`,
+		FROM crypto_megolm_inbound_session WHERE room_id=$1 AND account_id=$2 AND session IS NOT NULL`,
 		roomID, store.AccountID,
 	)
 	if err == sql.ErrNoRows {
@@ -348,7 +348,7 @@ func (store *SQLCryptoStore) GetGroupSessionsForRoom(roomID id.RoomID) ([]*Inbou
 func (store *SQLCryptoStore) GetAllGroupSessions() ([]*InboundGroupSession, error) {
 	rows, err := store.DB.Query(`
 		SELECT room_id, signing_key, sender_key, session, forwarding_chains
-		FROM crypto_megolm_inbound_session WHERE account_id=$2`,
+		FROM crypto_megolm_inbound_session WHERE account_id=$2 AND session IS NOT NULL`,
 		store.AccountID,
 	)
 	if err == sql.ErrNoRows {
