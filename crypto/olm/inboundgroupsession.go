@@ -132,6 +132,8 @@ func (s *InboundGroupSession) Pickle(key []byte) []byte {
 func (s *InboundGroupSession) Unpickle(pickled, key []byte) error {
 	if len(key) == 0 {
 		return NoKeyProvided
+	} else if len(pickled) == 0 {
+		return EmptyInput
 	}
 	r := C.olm_unpickle_inbound_group_session(
 		(*C.OlmInboundGroupSession)(s.int),
