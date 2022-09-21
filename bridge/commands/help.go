@@ -108,7 +108,7 @@ func FormatHelp(ce *Event) string {
 		prefixMsg = "This is your management room: prefixing commands with `%s` is not required."
 	} else if ce.Portal != nil {
 		prefixMsg = "**This is a portal room**: you must always prefix commands with `%s`. Management commands will not be bridged."
-	} else if ce.Portal != nil {
+	} else {
 		prefixMsg = "This is not your management room: prefixing commands with `%s` is required."
 	}
 	_, _ = fmt.Fprintf(&output, prefixMsg, ce.Bridge.Config.Bridge.GetCommandPrefix())
