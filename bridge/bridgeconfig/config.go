@@ -67,7 +67,7 @@ func (config *BaseConfig) MakeUserIDRegex() *regexp.Regexp {
 		config.Bridge.FormatUsername(usernamePlaceholder),
 		config.Homeserver.Domain)
 	usernameTemplate = regexp.QuoteMeta(usernameTemplate)
-	usernameTemplate = strings.Replace(usernameTemplate, usernamePlaceholder, "[0-9]+", 1)
+	usernameTemplate = strings.Replace(usernameTemplate, usernamePlaceholder, ".+", 1)
 	usernameTemplate = fmt.Sprintf("^%s$", usernameTemplate)
 	return regexp.MustCompile(usernameTemplate)
 }
