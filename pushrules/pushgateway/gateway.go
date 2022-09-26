@@ -22,6 +22,9 @@ import (
 type NotificationCounts struct {
 	MissedCalls int `json:"missed_calls,omitempty"`
 	Unread      int `json:"unread,omitempty"`
+
+	BeeperServerType string `json:"com.beeper.server_type,omitempty"`
+	BeeperAsOfToken  string `json:"com.beeper.as_of_token,omitempty"`
 }
 
 type PushPriority string
@@ -31,11 +34,69 @@ const (
 	PushPriorityLow  PushPriority = "low"
 )
 
+type PushFormat string
+
+const (
+	PushFormatDefault     PushFormat = ""
+	PushFormatEventIDOnly PushFormat = "event_id_only"
+)
+
+type PusherData map[string]any
+
+func (pd PusherData) Format() PushFormat {
+	val, _ := pd["format"].(string)
+	return PushFormat(val)
+}
+
+func (pd PusherData) URL() string {
+	val, _ := pd["url"].(string)
+	return val
+}
+
+// ConvertToNotificationData returns a copy of the map with the url and format fields removed.
+func (pd PusherData) ConvertToNotificationData() PusherData {
+	pdCopy := make(PusherData, len(pd)-2)
+	for key, value := range pd {
+		if key != "format" && key != "url" {
+			pdCopy[key] = value
+		}
+	}
+	return pdCopy
+}
+
+type PusherKind string
+
+const (
+	PusherKindHTTP  PusherKind = "http"
+	PusherKindEmail PusherKind = "email"
+)
+
+type PusherAppID string
+
+const (
+	PusherAppEmail PusherAppID = "m.email"
+)
+
+type Pusher struct {
+	AppDisplayName    string      `json:"app_display_name"`
+	AppID             PusherAppID `json:"app_id"`
+	Data              PusherData  `json:"data"`
+	DeviceDisplayName string      `json:"device_display_name"`
+	Kind              *PusherKind `json:"kind"`
+	Language          string      `json:"lang"`
+	ProfileTag        string      `json:"profile_tag,omitempty"`
+	PushKey           string      `json:"pushkey"`
+}
+
+type RespPushers struct {
+	Pushers []Pusher `json:"pushers"`
+}
+
 type BaseDevice struct {
-	AppID     string         `json:"app_id"`
-	PushKey   string         `json:"pushkey"`
-	PushKeyTS int64          `json:"pushkey_ts,omitempty"`
-	Data      map[string]any `json:"data,omitempty"`
+	AppID     PusherAppID `json:"app_id"`
+	PushKey   string      `json:"pushkey"`
+	PushKeyTS int64       `json:"pushkey_ts,omitempty"`
+	Data      PusherData  `json:"data,omitempty"`
 }
 
 type PushKey struct {
