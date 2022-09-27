@@ -15,6 +15,10 @@ func UM(time time.Time) UnixMilli {
 	return UnixMilli{Time: time}
 }
 
+func UMInt(ts int64) UnixMilli {
+	return UM(time.UnixMilli(ts))
+}
+
 func UnixMilliNow() UnixMilli {
 	return UM(time.Now())
 }
@@ -46,6 +50,10 @@ func (um *UnixMilli) UnmarshalJSON(data []byte) error {
 
 func U(time time.Time) Unix {
 	return Unix{Time: time}
+}
+
+func UInt(ts int64) UnixMilli {
+	return UM(time.Unix(ts, 0))
 }
 
 func UnixNow() Unix {
