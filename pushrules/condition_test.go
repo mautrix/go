@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/pushrules"
 )
 
@@ -104,12 +105,15 @@ func TestPushCondition_Match_InvalidKind(t *testing.T) {
 type FakeRoom struct {
 	members map[string]*event.MemberEventContent
 	owner   string
+
+	events map[id.EventID]*event.Event
 }
 
 func newFakeRoom(memberCount int) *FakeRoom {
 	room := &FakeRoom{
 		owner:   "@tulir:maunium.net",
 		members: make(map[string]*event.MemberEventContent),
+		events:  make(map[id.EventID]*event.Event),
 	}
 
 	if memberCount >= 1 {
@@ -140,4 +144,8 @@ func (fr *FakeRoom) GetOwnDisplayname() string {
 		return member.Displayname
 	}
 	return ""
+}
+
+func (fr *FakeRoom) GetEvent(evtID id.EventID) *event.Event {
+	return fr.events[evtID]
 }

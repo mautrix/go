@@ -7,13 +7,17 @@
 package pushrules
 
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
 	"unicode"
 
+	"github.com/tidwall/gjson"
+
 	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/pushrules/glob"
 )
 
@@ -21,6 +25,12 @@ import (
 type Room interface {
 	GetOwnDisplayname() string
 	GetMemberCount() int
+}
+
+// EventfulRoom is an extension of Room to support MSC3664.
+type EventfulRoom interface {
+	Room
+	GetEvent(id.EventID) *event.Event
 }
 
 // PushCondKind is the type of a push condition.
@@ -31,6 +41,11 @@ const (
 	KindEventMatch          PushCondKind = "event_match"
 	KindContainsDisplayName PushCondKind = "contains_display_name"
 	KindRoomMemberCount     PushCondKind = "room_member_count"
+
+	// MSC3664: https://github.com/matrix-org/matrix-spec-proposals/pull/3664
+
+	KindRelatedEventMatch         PushCondKind = "related_event_match"
+	KindUnstableRelatedEventMatch PushCondKind = "im.nheko.msc3664.related_event_match"
 )
 
 // PushCondition wraps a condition that is required for a specific PushRule to be used.
@@ -44,6 +59,9 @@ type PushCondition struct {
 	// The condition that needs to be fulfilled for RoomMemberCount-type conditions.
 	// A decimal integer optionally prefixed by ==, <, >, >= or <=. Prefix "==" is assumed if no prefix found.
 	MemberCountCondition string `json:"is,omitempty"`
+
+	// The relation type for related_event_match from MSC3664
+	RelType event.RelationType `json:"rel_type,omitempty"`
 }
 
 // MemberCountFilterRegex is the regular expression to parse the MemberCountCondition of PushConditions.
@@ -54,6 +72,8 @@ func (cond *PushCondition) Match(room Room, evt *event.Event) bool {
 	switch cond.Kind {
 	case KindEventMatch:
 		return cond.matchValue(room, evt)
+	case KindRelatedEventMatch, KindUnstableRelatedEventMatch:
+		return cond.matchRelatedEvent(room, evt)
 	case KindContainsDisplayName:
 		return cond.matchDisplayName(room, evt)
 	case KindRoomMemberCount:
@@ -145,6 +165,47 @@ func (cond *PushCondition) matchValue(room Room, evt *event.Event) bool {
 		return pattern.MatchString(stringifyForPushCondition(val))
 	default:
 		return false
+	}
+}
+
+func (cond *PushCondition) getRelationEventID(relatesTo *event.RelatesTo) id.EventID {
+	if relatesTo == nil {
+		return ""
+	}
+	switch cond.RelType {
+	case "":
+		return relatesTo.EventID
+	case "m.in_reply_to":
+		if relatesTo.IsFallingBack || relatesTo.InReplyTo == nil {
+			return ""
+		}
+		return relatesTo.InReplyTo.EventID
+	default:
+		if relatesTo.Type != cond.RelType {
+			return ""
+		}
+		return relatesTo.EventID
+	}
+}
+
+func (cond *PushCondition) matchRelatedEvent(room Room, evt *event.Event) bool {
+	var relatesTo *event.RelatesTo
+	if relatable, ok := evt.Content.Parsed.(event.Relatable); ok {
+		relatesTo = relatable.OptionalGetRelatesTo()
+	} else {
+		res := gjson.GetBytes(evt.Content.VeryRaw, `m\.relates_to`)
+		if res.Exists() && res.IsObject() {
+			_ = json.Unmarshal([]byte(res.Str), &relatesTo)
+		}
+	}
+	if evtID := cond.getRelationEventID(relatesTo); evtID == "" {
+		return false
+	} else if eventfulRoom, ok := room.(EventfulRoom); !ok {
+		return false
+	} else if evt = eventfulRoom.GetEvent(relatesTo.EventID); evt == nil {
+		return false
+	} else {
+		return cond.matchValue(room, evt)
 	}
 }
 

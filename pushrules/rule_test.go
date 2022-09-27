@@ -64,7 +64,7 @@ func TestPushRule_Match_Conditions_NestedKey_Boolean(t *testing.T) {
 		Conditions: []*pushrules.PushCondition{cond1},
 	}
 
-	evt := newFakeEvent(event.EventMessage, &event.MemberEventContent{
+	evt := newFakeEvent(event.StateMember, &event.MemberEventContent{
 		Membership: "invite",
 	})
 	assert.False(t, rule.Match(blankTestRoom, evt))
@@ -86,7 +86,7 @@ func TestPushRule_Match_Conditions_EscapedKey(t *testing.T) {
 		Conditions: []*pushrules.PushCondition{cond1},
 	}
 
-	evt := newFakeEvent(event.EventMessage, &event.MemberEventContent{
+	evt := newFakeEvent(event.StateMember, &event.MemberEventContent{
 		Membership: "invite",
 	})
 	assert.False(t, rule.Match(blankTestRoom, evt))
@@ -102,7 +102,7 @@ func TestPushRule_Match_Conditions_EscapedKey_NoNesting(t *testing.T) {
 		Conditions: []*pushrules.PushCondition{cond1},
 	}
 
-	evt := newFakeEvent(event.EventMessage, &event.MemberEventContent{
+	evt := newFakeEvent(event.StateMember, &event.MemberEventContent{
 		Membership: "invite",
 	})
 	assert.False(t, rule.Match(blankTestRoom, evt))
@@ -110,6 +110,34 @@ func TestPushRule_Match_Conditions_EscapedKey_NoNesting(t *testing.T) {
 		"will_auto_accept": true,
 	}
 	assert.False(t, rule.Match(blankTestRoom, evt))
+}
+
+func TestPushRule_Match_Conditions_RelatedEvent(t *testing.T) {
+	cond1 := &pushrules.PushCondition{
+		Kind:    pushrules.KindRelatedEventMatch,
+		Key:     "sender",
+		Pattern: "@tulir:maunium.net",
+	}
+	rule := &pushrules.PushRule{
+		Type:       pushrules.OverrideRule,
+		Enabled:    true,
+		Conditions: []*pushrules.PushCondition{cond1},
+	}
+
+	evt := newFakeEvent(event.EventReaction, &event.ReactionEventContent{
+		RelatesTo: event.RelatesTo{
+			Type:    event.RelAnnotation,
+			EventID: "$meow",
+			Key:     "🐈️",
+		},
+	})
+	roomWithEvent := newFakeRoom(1)
+	assert.False(t, rule.Match(roomWithEvent, evt))
+	roomWithEvent.events["$meow"] = newFakeEvent(event.EventMessage, &event.MessageEventContent{
+		MsgType: event.MsgEmote,
+		Body:    "is testing pushrules",
+	})
+	assert.True(t, rule.Match(roomWithEvent, evt))
 }
 
 func TestPushRule_Match_Conditions_Disabled(t *testing.T) {
