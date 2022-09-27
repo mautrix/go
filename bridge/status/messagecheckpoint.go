@@ -79,8 +79,8 @@ type MessageCheckpoint struct {
 	ClientType    string `json:"client_type,omitempty"`
 	ClientVersion string `json:"client_version,omitempty"`
 
-	OriginalEventID  id.EventID `json:"original_event_id"`
-	ManualRetryCount int        `json:"manual_retry_count"`
+	OriginalEventID  id.EventID `json:"original_event_id,omitempty"`
+	ManualRetryCount int        `json:"manual_retry_count,omitempty"`
 }
 
 var CheckpointTypes = map[event.Type]struct{}{
