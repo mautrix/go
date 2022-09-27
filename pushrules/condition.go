@@ -195,7 +195,7 @@ func (cond *PushCondition) matchRelatedEvent(room Room, evt *event.Event) bool {
 	} else {
 		res := gjson.GetBytes(evt.Content.VeryRaw, `m\.relates_to`)
 		if res.Exists() && res.IsObject() {
-			_ = json.Unmarshal([]byte(res.Str), &relatesTo)
+			_ = json.Unmarshal([]byte(res.Raw), &relatesTo)
 		}
 	}
 	if evtID := cond.getRelationEventID(relatesTo); evtID == "" {
