@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tulir Asokan
+// Copyright (c) 2022 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,6 +7,7 @@
 package pushrules
 
 import (
+	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -62,14 +63,59 @@ func (cond *PushCondition) Match(room Room, evt *event.Event) bool {
 	}
 }
 
-func (cond *PushCondition) matchValue(room Room, evt *event.Event) bool {
-	index := strings.IndexRune(cond.Key, '.')
-	key := cond.Key
-	subkey := ""
-	if index > 0 {
-		subkey = key[index+1:]
-		key = key[0:index]
+func splitWithEscaping(s string, separator, escape byte) []string {
+	var token []byte
+	var tokens []string
+	for i := 0; i < len(s); i++ {
+		if s[i] == separator {
+			tokens = append(tokens, string(token))
+			token = token[:0]
+		} else if s[i] == escape && i+1 < len(s) {
+			i++
+			token = append(token, s[i])
+		} else {
+			token = append(token, s[i])
+		}
 	}
+	tokens = append(tokens, string(token))
+	return tokens
+}
+
+func hackyNestedGet(data map[string]interface{}, path []string) (interface{}, bool) {
+	val, ok := data[path[0]]
+	if len(path) == 1 {
+		// We don't have any more path parts, return the value regardless of whether it exists or not.
+		return val, ok
+	} else if ok {
+		if mapVal, ok := val.(map[string]interface{}); ok {
+			val, ok = hackyNestedGet(mapVal, path[1:])
+			if ok {
+				return val, true
+			}
+		}
+	}
+	// If we don't find the key, try to combine the first two parts.
+	// e.g. if the key is content.m.relates_to.rel_type, we'll first try data["m"], which will fail,
+	//      then combine m and relates_to to get data["m.relates_to"], which should succeed.
+	path[1] = path[0] + "." + path[1]
+	return hackyNestedGet(data, path[1:])
+}
+
+func stringifyForPushCondition(val interface{}) string {
+	switch typedVal := val.(type) {
+	case string:
+		return typedVal
+	case float64:
+		// Floats aren't allowed in Matrix events, but the JSON parser always stores numbers as floats,
+		// so just handle that and convert to int
+		return strconv.FormatInt(int64(typedVal), 10)
+	default:
+		return fmt.Sprint(val)
+	}
+}
+
+func (cond *PushCondition) matchValue(room Room, evt *event.Event) bool {
+	key, subkey, _ := strings.Cut(cond.Key, ".")
 
 	pattern, err := glob.Compile(cond.Pattern)
 	if err != nil {
@@ -89,8 +135,14 @@ func (cond *PushCondition) matchValue(room Room, evt *event.Event) bool {
 		}
 		return pattern.MatchString(*evt.StateKey)
 	case "content":
-		val, _ := evt.Content.Raw[subkey].(string)
-		return pattern.MatchString(val)
+		// Split the match key with escaping to implement https://github.com/matrix-org/matrix-spec-proposals/pull/3873
+		splitKey := splitWithEscaping(subkey, '.', '\\')
+		// Then do a hacky nested get that supports combining parts for the backwards-compat part of MSC3873
+		val, ok := hackyNestedGet(evt.Content.Raw, splitKey)
+		if !ok {
+			return cond.Pattern == ""
+		}
+		return pattern.MatchString(stringifyForPushCondition(val))
 	default:
 		return false
 	}

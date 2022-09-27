@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tulir Asokan
+// Copyright (c) 2022 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -29,6 +29,87 @@ func TestPushRule_Match_Conditions(t *testing.T) {
 		Body:    "is testing pushrules",
 	})
 	assert.True(t, rule.Match(blankTestRoom, evt))
+}
+
+func TestPushRule_Match_Conditions_NestedKey(t *testing.T) {
+	cond1 := newMatchPushCondition("content.m.relates_to.rel_type", "m.replace")
+	rule := &pushrules.PushRule{
+		Type:       pushrules.OverrideRule,
+		Enabled:    true,
+		Conditions: []*pushrules.PushCondition{cond1},
+	}
+
+	evt := newFakeEvent(event.EventMessage, &event.MessageEventContent{
+		MsgType: event.MsgEmote,
+		Body:    "is testing pushrules",
+		RelatesTo: &event.RelatesTo{
+			Type:    event.RelReplace,
+			EventID: "$meow",
+		},
+	})
+	assert.True(t, rule.Match(blankTestRoom, evt))
+
+	evt = newFakeEvent(event.EventMessage, &event.MessageEventContent{
+		MsgType: event.MsgEmote,
+		Body:    "is testing pushrules",
+	})
+	assert.False(t, rule.Match(blankTestRoom, evt))
+}
+
+func TestPushRule_Match_Conditions_NestedKey_Boolean(t *testing.T) {
+	cond1 := newMatchPushCondition("content.fi.mau.will_auto_accept", "true")
+	rule := &pushrules.PushRule{
+		Type:       pushrules.OverrideRule,
+		Enabled:    true,
+		Conditions: []*pushrules.PushCondition{cond1},
+	}
+
+	evt := newFakeEvent(event.EventMessage, &event.MemberEventContent{
+		Membership: "invite",
+	})
+	assert.False(t, rule.Match(blankTestRoom, evt))
+	evt.Content.Raw["fi.mau.will_auto_accept"] = true
+	assert.True(t, rule.Match(blankTestRoom, evt))
+	delete(evt.Content.Raw, "fi.mau.will_auto_accept")
+	assert.False(t, rule.Match(blankTestRoom, evt))
+	evt.Content.Raw["fi.mau"] = map[string]interface{}{
+		"will_auto_accept": true,
+	}
+	assert.True(t, rule.Match(blankTestRoom, evt))
+}
+
+func TestPushRule_Match_Conditions_EscapedKey(t *testing.T) {
+	cond1 := newMatchPushCondition("content.fi\\.mau\\.will_auto_accept", "true")
+	rule := &pushrules.PushRule{
+		Type:       pushrules.OverrideRule,
+		Enabled:    true,
+		Conditions: []*pushrules.PushCondition{cond1},
+	}
+
+	evt := newFakeEvent(event.EventMessage, &event.MemberEventContent{
+		Membership: "invite",
+	})
+	assert.False(t, rule.Match(blankTestRoom, evt))
+	evt.Content.Raw["fi.mau.will_auto_accept"] = true
+	assert.True(t, rule.Match(blankTestRoom, evt))
+}
+
+func TestPushRule_Match_Conditions_EscapedKey_NoNesting(t *testing.T) {
+	cond1 := newMatchPushCondition("content.fi\\.mau\\.will_auto_accept", "true")
+	rule := &pushrules.PushRule{
+		Type:       pushrules.OverrideRule,
+		Enabled:    true,
+		Conditions: []*pushrules.PushCondition{cond1},
+	}
+
+	evt := newFakeEvent(event.EventMessage, &event.MemberEventContent{
+		Membership: "invite",
+	})
+	assert.False(t, rule.Match(blankTestRoom, evt))
+	evt.Content.Raw["fi.mau"] = map[string]interface{}{
+		"will_auto_accept": true,
+	}
+	assert.False(t, rule.Match(blankTestRoom, evt))
 }
 
 func TestPushRule_Match_Conditions_Disabled(t *testing.T) {
