@@ -18,6 +18,7 @@ import (
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
+	"maunium.net/go/mautrix/util/jsontime"
 )
 
 type MessageCheckpointStep string
@@ -67,7 +68,7 @@ type MessageCheckpoint struct {
 	EventID     id.EventID                  `json:"event_id"`
 	RoomID      id.RoomID                   `json:"room_id"`
 	Step        MessageCheckpointStep       `json:"step"`
-	Timestamp   int64                       `json:"timestamp"`
+	Timestamp   jsontime.UnixMilli          `json:"timestamp"`
 	Status      MessageCheckpointStatus     `json:"status"`
 	EventType   event.Type                  `json:"event_type"`
 	ReportedBy  MessageCheckpointReportedBy `json:"reported_by"`
@@ -102,7 +103,7 @@ func NewMessageCheckpoint(evt *event.Event, step MessageCheckpointStep, status M
 		EventID:    evt.ID,
 		RoomID:     evt.RoomID,
 		Step:       step,
-		Timestamp:  time.Now().UnixNano() / int64(time.Millisecond),
+		Timestamp:  jsontime.UnixMilliNow(),
 		Status:     status,
 		EventType:  evt.Type,
 		ReportedBy: MsgReportedByBridge,

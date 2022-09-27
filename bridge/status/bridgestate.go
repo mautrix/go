@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"maunium.net/go/mautrix/id"
+	"maunium.net/go/mautrix/util/jsontime"
 )
 
 type BridgeStateEvent string
@@ -47,7 +48,7 @@ const (
 
 type BridgeState struct {
 	StateEvent BridgeStateEvent `json:"state_event"`
-	Timestamp  int64            `json:"timestamp"`
+	Timestamp  jsontime.Unix    `json:"timestamp"`
 	TTL        int              `json:"ttl"`
 
 	Source  string               `json:"source,omitempty"`
@@ -80,7 +81,7 @@ func (pong BridgeState) Fill(user BridgeStateFiller) BridgeState {
 		pong.RemoteName = user.GetRemoteName()
 	}
 
-	pong.Timestamp = time.Now().Unix()
+	pong.Timestamp = jsontime.UnixNow()
 	pong.Source = "bridge"
 	if len(pong.Error) > 0 {
 		pong.TTL = 60
@@ -127,5 +128,5 @@ func (pong *BridgeState) ShouldDeduplicate(newPong *BridgeState) bool {
 	if pong == nil || pong.StateEvent != newPong.StateEvent || pong.Error != newPong.Error {
 		return false
 	}
-	return pong.Timestamp+int64(pong.TTL/5) > time.Now().Unix()
+	return pong.Timestamp.Add(time.Duration(pong.TTL/5) * time.Second).After(time.Now())
 }
