@@ -59,7 +59,7 @@ type MembershipHandlingPortal interface {
 
 type ReadReceiptHandlingPortal interface {
 	Portal
-	HandleMatrixReadReceipt(sender User, eventID id.EventID, receiptTimestamp time.Time)
+	HandleMatrixReadReceipt(sender User, eventID id.EventID, receipt event.ReadReceipt)
 }
 
 type TypingPortal interface {

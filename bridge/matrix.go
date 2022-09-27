@@ -588,7 +588,7 @@ func (mx *MatrixHandler) HandleReceipt(evt *event.Event) {
 					dp.ScheduleDisappearing()
 				}
 			} else {
-				rrPortal.HandleMatrixReadReceipt(user, eventID, time.UnixMilli(receipt.Timestamp))
+				rrPortal.HandleMatrixReadReceipt(user, eventID, receipt)
 			}
 		}
 	}
