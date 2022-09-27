@@ -52,8 +52,8 @@ func U(time time.Time) Unix {
 	return Unix{Time: time}
 }
 
-func UInt(ts int64) UnixMilli {
-	return UM(time.Unix(ts, 0))
+func UInt(ts int64) Unix {
+	return U(time.Unix(ts, 0))
 }
 
 func UnixNow() Unix {
