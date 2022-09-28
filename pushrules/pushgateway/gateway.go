@@ -175,6 +175,7 @@ func (pn *PushNotification) Push(ctx context.Context, url string) error {
 		return fmt.Errorf("failed to prepare push request: %w", err)
 	}
 	req.Header.Set("User-Agent", mautrix.DefaultUserAgent)
+	req.Header.Set("Content-Type", "application/json")
 	var respData RespPush
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
