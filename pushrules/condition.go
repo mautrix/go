@@ -155,7 +155,7 @@ func (cond *PushCondition) matchValue(room Room, evt *event.Event) bool {
 		return pattern.MatchString(string(evt.RoomID))
 	case "state_key":
 		if evt.StateKey == nil {
-			return cond.Pattern == ""
+			return false
 		}
 		return pattern.MatchString(*evt.StateKey)
 	case "content":

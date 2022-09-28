@@ -60,7 +60,15 @@ func TestPushCondition_Match_KindEvent_RoomID(t *testing.T) {
 func TestPushCondition_Match_KindEvent_BlankStateKey(t *testing.T) {
 	condition := newMatchPushCondition("state_key", "")
 	evt := newFakeEvent(event.NewEventType("m.room.foo"), &struct{}{})
+	blankString := ""
+	evt.StateKey = &blankString
 	assert.True(t, condition.Match(blankTestRoom, evt))
+}
+
+func TestPushCondition_Match_KindEvent_NonStateStateKey(t *testing.T) {
+	condition := newMatchPushCondition("state_key", "")
+	evt := newFakeEvent(event.NewEventType("m.room.foo"), &struct{}{})
+	assert.False(t, condition.Match(blankTestRoom, evt))
 }
 
 func TestPushCondition_Match_KindEvent_BlankStateKey_Fail(t *testing.T) {
