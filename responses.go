@@ -79,7 +79,7 @@ type RespMessages struct {
 	Start string         `json:"start"`
 	Chunk []*event.Event `json:"chunk"`
 	State []*event.Event `json:"state"`
-	End   string         `json:"end"`
+	End   string         `json:"end,omitempty"`
 }
 
 // RespContext is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3roomsroomidcontexteventid
