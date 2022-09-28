@@ -122,9 +122,13 @@ func hackyNestedGet(data map[string]interface{}, path []string) (interface{}, bo
 }
 
 func stringifyForPushCondition(val interface{}) string {
+	// Implement MSC3862 to allow matching any type of field
+	// https://github.com/matrix-org/matrix-spec-proposals/pull/3862
 	switch typedVal := val.(type) {
 	case string:
 		return typedVal
+	case nil:
+		return "null"
 	case float64:
 		// Floats aren't allowed in Matrix events, but the JSON parser always stores numbers as floats,
 		// so just handle that and convert to int
