@@ -164,6 +164,8 @@ type Bridge struct {
 	Crypto           Crypto
 	CryptoPickleKey  string
 
+	MediaConfig mautrix.RespMediaConfig
+
 	Child ChildOverride
 
 	manualStop chan int
@@ -279,6 +281,15 @@ func (br *Bridge) ensureConnection() {
 	}
 }
 
+func (br *Bridge) fetchMediaConfig() {
+	cfg, err := br.Bot.GetMediaConfig()
+	if err != nil {
+		br.Log.Warnfln("Failed to fetch media config: %v", err)
+	} else {
+		br.MediaConfig = *cfg
+	}
+}
+
 func (br *Bridge) UpdateBotProfile() {
 	br.Log.Debugln("Updating bot profile")
 	botConfig := &br.Config.AppService.Bot
@@ -371,6 +382,8 @@ func (br *Bridge) init() {
 
 	var err error
 
+	br.MediaConfig.UploadSize = 50 * 1024 * 1024
+
 	br.AS = br.Config.MakeAppService()
 	br.AS.DoublePuppetValue = br.Name
 	br.AS.GetProfile = br.getProfile
@@ -451,6 +464,7 @@ func (br *Bridge) start() {
 
 	br.Log.Debugln("Checking connection to homeserver")
 	br.ensureConnection()
+	go br.fetchMediaConfig()
 
 	if br.Crypto != nil {
 		err = br.Crypto.Init()
