@@ -247,9 +247,9 @@ type RespSync struct {
 }
 
 type RespSyncRooms struct {
-	Leave  map[id.RoomID]SyncLeftRoom    `json:"leave,omitempty"`
-	Join   map[id.RoomID]SyncJoinedRoom  `json:"join,omitempty"`
-	Invite map[id.RoomID]SyncInvitedRoom `json:"invite,omitempty"`
+	Leave  map[id.RoomID]*SyncLeftRoom    `json:"leave,omitempty"`
+	Join   map[id.RoomID]*SyncJoinedRoom  `json:"join,omitempty"`
+	Invite map[id.RoomID]*SyncInvitedRoom `json:"invite,omitempty"`
 }
 
 type marshalableRespSync RespSync
