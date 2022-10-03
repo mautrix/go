@@ -1175,6 +1175,13 @@ func (cli *Client) State(roomID id.RoomID) (stateMap RoomStateMap, err error) {
 	return
 }
 
+// GetMediaConfig fetches the configuration of the content repository, such as upload limitations.
+func (cli *Client) GetMediaConfig() (resp *RespMediaConfig, err error) {
+	u := cli.BuildURL(MediaURLPath{"v3", "config"})
+	_, err = cli.MakeRequest("GET", u, nil, &resp)
+	return
+}
+
 // UploadLink uploads an HTTP URL and then returns an MXC URI.
 func (cli *Client) UploadLink(link string) (*RespMediaUpload, error) {
 	res, err := cli.Client.Get(link)

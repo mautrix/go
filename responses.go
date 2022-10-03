@@ -97,6 +97,11 @@ type RespSendEvent struct {
 	EventID id.EventID `json:"event_id"`
 }
 
+// RespMediaConfig is the JSON response for https://spec.matrix.org/v1.4/client-server-api/#get_matrixmediav3config
+type RespMediaConfig struct {
+	UploadSize int64 `json:"m.upload.size,omitempty"`
+}
+
 // RespMediaUpload is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#post_matrixmediav3upload
 type RespMediaUpload struct {
 	ContentURI id.ContentURI `json:"content_uri"`
