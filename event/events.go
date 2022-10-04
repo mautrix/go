@@ -138,6 +138,8 @@ type Unsigned struct {
 	Relations       *Relations      `json:"m.relations,omitempty"`
 	RedactedBecause *Event          `json:"redacted_because,omitempty"`
 	InviteRoomState []StrippedState `json:"invite_room_state,omitempty"`
+
+	HungryRowID int64 `json:"com.beeper.hungry_row_id,omitempty"`
 }
 
 func (us *Unsigned) IsEmpty() bool {
