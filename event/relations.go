@@ -43,42 +43,42 @@ func (rel *RelatesTo) Copy() *RelatesTo {
 }
 
 func (rel *RelatesTo) GetReplaceID() id.EventID {
-	if rel.Type == RelReplace {
+	if rel != nil && rel.Type == RelReplace {
 		return rel.EventID
 	}
 	return ""
 }
 
 func (rel *RelatesTo) GetReferenceID() id.EventID {
-	if rel.Type == RelReference {
+	if rel != nil && rel.Type == RelReference {
 		return rel.EventID
 	}
 	return ""
 }
 
 func (rel *RelatesTo) GetThreadParent() id.EventID {
-	if rel.Type == RelThread {
+	if rel != nil && rel.Type == RelThread {
 		return rel.EventID
 	}
 	return ""
 }
 
 func (rel *RelatesTo) GetReplyTo() id.EventID {
-	if rel.InReplyTo != nil {
+	if rel != nil && rel.InReplyTo != nil {
 		return rel.InReplyTo.EventID
 	}
 	return ""
 }
 
 func (rel *RelatesTo) GetAnnotationID() id.EventID {
-	if rel.Type == RelAnnotation {
+	if rel != nil && rel.Type == RelAnnotation {
 		return rel.EventID
 	}
 	return ""
 }
 
 func (rel *RelatesTo) GetAnnotationKey() string {
-	if rel.Type == RelAnnotation {
+	if rel != nil && rel.Type == RelAnnotation {
 		return rel.Key
 	}
 	return ""
