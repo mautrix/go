@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"time"
 
+	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/util/jsontime"
 )
@@ -107,6 +108,7 @@ func (pong *BridgeState) Send(ctx context.Context, url, token string) error {
 	}
 
 	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("User-Agent", mautrix.DefaultUserAgent+" (bridge state sender)")
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)

@@ -104,7 +104,7 @@ func DiscoverClientAPI(serverName string) (*ClientWellKnown, error) {
 	}
 
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", DefaultUserAgent+" .well-known fetcher")
+	req.Header.Set("User-Agent", DefaultUserAgent+" (.well-known fetcher)")
 
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
@@ -1205,6 +1205,8 @@ func (cli *Client) Download(mxcURL id.ContentURI) (io.ReadCloser, error) {
 func (cli *Client) DownloadContext(ctx context.Context, mxcURL id.ContentURI) (io.ReadCloser, error) {
 	if req, err := http.NewRequestWithContext(ctx, http.MethodGet, cli.GetDownloadURL(mxcURL), nil); err != nil {
 		return nil, err
+	} else if req.Header.Set("User-Agent", cli.UserAgent+" (media downloader)"); false {
+		panic("false is true")
 	} else if resp, err := cli.Client.Do(req); err != nil {
 		return nil, err
 	} else {
@@ -1313,6 +1315,7 @@ func (cli *Client) uploadMediaToURL(data ReqUploadMedia) (*RespMediaUpload, erro
 		// Tell the next retry to create a new reader from ContentBytes
 		data.Content = nil
 		req.Header.Set("Content-Type", data.ContentType)
+		req.Header.Set("User-Agent", cli.UserAgent+" (external media uploader)")
 
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {

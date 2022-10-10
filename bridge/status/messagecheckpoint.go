@@ -137,7 +137,7 @@ func (cj *CheckpointsJSON) SendHTTP(endpoint string, token string) error {
 	}
 
 	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("User-Agent", mautrix.DefaultUserAgent+" checkpoint sender")
+	req.Header.Set("User-Agent", mautrix.DefaultUserAgent+" (checkpoint sender)")
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
