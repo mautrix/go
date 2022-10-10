@@ -251,7 +251,10 @@ func (br *Bridge) ensureConnection() {
 			time.Sleep(10 * time.Second)
 			continue
 		}
-		if !versions.ContainsGreaterOrEqual(MinSpecVersion) {
+		if br.Config.Homeserver.Software == bridgeconfig.SoftwareHungry && !versions.UnstableFeatures["com.beeper.hungry"] {
+			br.Log.Fatalln("The config claims the homeserver is hungryserv, but the /versions response didn't confirm it")
+			os.Exit(18)
+		} else if !versions.ContainsGreaterOrEqual(MinSpecVersion) {
 			br.Log.Fatalfln("The homeserver is outdated (server supports %s, but the bridge requires at least %s)", versions.GetLatest(), MinSpecVersion)
 			os.Exit(18)
 		} else if fr, ok := br.Child.(CSFeatureRequirer); ok {
