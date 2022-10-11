@@ -1319,18 +1319,13 @@ func (cli *Client) uploadMediaToURL(data ReqUploadMedia) (*RespMediaUpload, erro
 
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
-			return nil, err
-		} else if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-			// Upload successful
-			break
-		}
-
-		if retries > 0 && cli.shouldRetry(resp) {
+			cli.Logger.Debugfln("Error uploading media to %s: %v, retrying", data.UploadURL, err)
+			retries--
+		} else if resp.StatusCode >= 400 || resp.StatusCode < 200 {
 			cli.Logger.Debugfln("Error uploading media to %s: HTTP %d, retrying", data.UploadURL, resp.StatusCode)
 			retries--
 		} else {
-			cli.Logger.Debugfln("Error uploading media to %s: HTTP %d, not retrying", data.UploadURL, resp.StatusCode)
-			return nil, err
+			break
 		}
 	}
 
