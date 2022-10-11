@@ -159,6 +159,11 @@ type RespUserDisplayName struct {
 	DisplayName string `json:"displayname"`
 }
 
+// RespRegisterAvailable is the JSON response for https://spec.matrix.org/v1.4/client-server-api/#get_matrixclientv3registeravailable
+type RespRegisterAvailable struct {
+	Available bool `json:"available"`
+}
+
 // RespRegister is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3register
 type RespRegister struct {
 	AccessToken string      `json:"access_token,omitempty"`

@@ -636,6 +636,37 @@ func (cli *Client) FullSyncRequest(req ReqSync) (resp *RespSync, err error) {
 	return
 }
 
+// RegisterAvailable checks if a username is valid and available for registration on the server.
+//
+// See https://spec.matrix.org/v1.4/client-server-api/#get_matrixclientv3registeravailable for more details
+//
+// This will always return an error if the username isn't available, so checking the actual response struct is generally
+// not necessary. It is still returned for future-proofing. For a simple availability check, just check that the returned
+// error is nil. `errors.Is` can be used to find the exact reason why a username isn't available:
+//
+//	_, err := cli.RegisterAvailable("cat")
+//	if errors.Is(err, mautrix.MUserInUse) {
+//		// Username is taken
+//	} else if errors.Is(err, mautrix.MInvalidUsername) {
+//		// Username is not valid
+//	} else if errors.Is(err, mautrix.MExclusive) {
+//		// Username is reserved for an appservice
+//	} else if errors.Is(err, mautrix.MLimitExceeded) {
+//		// Too many requests
+//	} else if err != nil {
+//		// Unknown error
+//	} else {
+//		// Username is available
+//	}
+func (cli *Client) RegisterAvailable(username string) (resp *RespRegisterAvailable, err error) {
+	u := cli.BuildURLWithQuery(ClientURLPath{"v3", "register", "available"}, map[string]string{"username": username})
+	_, err = cli.MakeRequest(http.MethodGet, u, nil, &resp)
+	if err == nil && !resp.Available {
+		err = fmt.Errorf(`request returned OK status without "available": true`)
+	}
+	return
+}
+
 func (cli *Client) register(url string, req *ReqRegister) (resp *RespRegister, uiaResp *RespUserInteractive, err error) {
 	var bodyBytes []byte
 	bodyBytes, err = cli.MakeFullRequest(FullRequest{
