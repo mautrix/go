@@ -636,6 +636,31 @@ func (cli *Client) FullSyncRequest(req ReqSync) (resp *RespSync, err error) {
 	return
 }
 
+func (cli *Client) registerAvailable(url string) (resp *RespRegisterAvail, respErr *RespError, err error) {
+	bodyBytes, err := cli.MakeRequest("GET", url, nil, nil)
+
+	if err != nil {
+		httpErr, ok := err.(HTTPError)
+		if ok && httpErr.IsStatus(http.StatusBadRequest) && httpErr.RespError != nil {
+			err = json.Unmarshal(bodyBytes, &respErr)
+		} else if ok && httpErr.IsStatus(http.StatusTooManyRequests) && httpErr.RespError != nil {
+			err = json.Unmarshal(bodyBytes, &respErr)
+		}
+	} else {
+		// body should be RespRegisterAvail
+		err = json.Unmarshal(bodyBytes, &resp)
+	}
+
+	return 
+}
+
+// RegisterAvailable makes an HTTP request according to https://spec.matrix.org/v1.4/client-server-api/#get_matrixclientv3registeravailable
+func (cli *Client) RegisterAvailable(username string) (*RespRegisterAvail, *RespError, error) {
+	u := cli.BuildURLWithQuery(ClientURLPath{"v3", "register", "available"}, map[string]string{"username": username})
+
+	return cli.registerAvailable(u)
+}
+
 func (cli *Client) register(url string, req *ReqRegister) (resp *RespRegister, uiaResp *RespUserInteractive, err error) {
 	var bodyBytes []byte
 	bodyBytes, err = cli.MakeFullRequest(FullRequest{
