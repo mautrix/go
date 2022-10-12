@@ -1360,18 +1360,17 @@ func (cli *Client) uploadMediaToURL(data ReqUploadMedia) (*RespMediaUpload, erro
 		}
 	}
 
-	notifyURL, _ := url.Parse(cli.BuildURL(MediaURLPath{"unstable", "fi.mau.msc2246", "upload", data.UnstableMXC.Homeserver, data.UnstableMXC.FileID, "complete"}))
-
+	query := map[string]string{}
 	if len(data.FileName) > 0 {
-		q := notifyURL.Query()
-		q.Set("filename", data.FileName)
-		notifyURL.RawQuery = q.Encode()
+		query["filename"] = data.FileName
 	}
+
+	notifyURL := cli.BuildURLWithQuery(MediaURLPath{"unstable", "fi.mau.msc2246", "upload", data.UnstableMXC.Homeserver, data.UnstableMXC.FileID, "complete"}), query)
 
 	var m *RespMediaUpload
 	_, err := cli.MakeFullRequest(FullRequest{
 		Method:       http.MethodPost,
-		URL:          notifyURL.String(),
+		URL:          notifyURL,
 		ResponseJSON: m,
 	})
 	if err != nil {
