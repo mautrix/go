@@ -6,15 +6,15 @@ require (
 	github.com/DATA-DOG/go-sqlmock v1.5.0
 	github.com/gorilla/mux v1.8.0
 	github.com/gorilla/websocket v1.5.0
-	github.com/lib/pq v1.10.6
+	github.com/lib/pq v1.10.7
 	github.com/mattn/go-sqlite3 v1.14.15
-	github.com/rs/zerolog v1.27.0
+	github.com/rs/zerolog v1.28.0
 	github.com/stretchr/testify v1.8.0
 	github.com/tidwall/gjson v1.14.3
 	github.com/tidwall/sjson v1.2.5
-	github.com/yuin/goldmark v1.4.13
-	golang.org/x/crypto v0.0.0-20220817201139-bc19a97f63c8
-	golang.org/x/net v0.0.0-20220812174116-3211cb980234
+	github.com/yuin/goldmark v1.5.2
+	golang.org/x/crypto v0.0.0-20221012134737-56aed061732a
+	golang.org/x/net v0.0.0-20221014081412-f15817d10f9b
 	gopkg.in/yaml.v3 v3.0.1
 	maunium.net/go/mauflag v1.0.0
 	maunium.net/go/maulogger/v2 v2.3.2
