@@ -24,6 +24,8 @@ import (
 var (
 	// Forbidden access, e.g. joining a room without permission, failed login.
 	MForbidden = RespError{ErrCode: "M_FORBIDDEN"}
+	// Unrecognized request, e.g. the endpoint does not exist or is not implemented.
+	MUnrecognized = RespError{ErrCode: "M_UNRECOGNIZED"}
 	// The access token specified was not recognised.
 	MUnknownToken = RespError{ErrCode: "M_UNKNOWN_TOKEN"}
 	// No access token was specified for the request.
@@ -47,7 +49,7 @@ var (
 	MRoomInUse = RespError{ErrCode: "M_ROOM_IN_USE"}
 	// The state change requested cannot be performed, such as attempting to unban a user who is not banned.
 	MBadState = RespError{ErrCode: "M_BAD_STATE"}
-	// 	The request or entity was too large.
+	// The request or entity was too large.
 	MTooLarge = RespError{ErrCode: "M_TOO_LARGE"}
 	// The resource being requested is reserved by an application service, or the application service making the request has not created the resource.
 	MExclusive = RespError{ErrCode: "M_EXCLUSIVE"}
