@@ -1,3 +1,25 @@
+## v0.12.2 (2022-10-16)
+
+* Added utility method to redact bridge commands.
+* Added thread ID field to read receipts to match Matrix v1.4 changes.
+* Added automatic fetching of media repo config at bridge startup to make it
+  easier for bridges to check homeserver media size limits.
+* Added wrapper for the `/register/available` endpoint.
+* Added custom user agent to all requests mautrix-go makes. The value can be
+  customized by changing the `DefaultUserAgent` variable.
+* Implemented [MSC3664], [MSC3862] and [MSC3873] in the push rule evaluator.
+* Added workaround for potential race conditions in OTK uploads when using
+  appservice encryption ([MSC3202]).
+* Fixed generating registrations to use `.+` instead of `[0-9]+` in the
+  username regex.
+* Fixed panic in megolm session listing methods if the store contains withheld
+  key entries.
+* Fixed missing header in bridge command help messages.
+
+[MSC3664]: https://github.com/matrix-org/matrix-spec-proposals/pull/3664
+[MSC3862]: https://github.com/matrix-org/matrix-spec-proposals/pull/3862
+[MSC3873]: https://github.com/matrix-org/matrix-spec-proposals/pull/3873
+
 ## v0.12.1 (2022-09-16)
 
 * Bumped minimum Go version to 1.18.
