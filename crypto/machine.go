@@ -62,6 +62,9 @@ type OlmMachine struct {
 
 	olmLock sync.Mutex
 
+	otkUploadLock sync.Mutex
+	lastOTKUpload time.Time
+
 	CrossSigningKeys    *CrossSigningKeysCache
 	crossSigningPubkeys *CrossSigningPublicKeysCache
 
@@ -484,6 +487,18 @@ func (mach *OlmMachine) handleRoomKeyWithheld(content *event.RoomKeyWithheldEven
 // If currentOTKCount is less than half of the limit (100 / 2 = 50), enough one-time keys will be uploaded so exactly
 // half of the limit is filled.
 func (mach *OlmMachine) ShareKeys(currentOTKCount int) error {
+	start := time.Now()
+	mach.otkUploadLock.Lock()
+	defer mach.otkUploadLock.Unlock()
+	if mach.lastOTKUpload.Add(1 * time.Minute).After(start) {
+		mach.Log.Trace("Checking OTK count from server due to suspiciously close share keys requests")
+		resp, err := mach.Client.UploadKeys(&mautrix.ReqUploadKeys{})
+		if err != nil {
+			return fmt.Errorf("failed to check current OTK counts: %w", err)
+		}
+		mach.Log.Trace("Fetched current OTK count (%d) from server (input count was %d)", resp.OneTimeKeyCounts.SignedCurve25519, currentOTKCount)
+		currentOTKCount = resp.OneTimeKeyCounts.SignedCurve25519
+	}
 	var deviceKeys *mautrix.DeviceKeys
 	if !mach.account.Shared {
 		deviceKeys = mach.account.getInitialKeys(mach.Client.UserID, mach.Client.DeviceID)
@@ -503,6 +518,7 @@ func (mach *OlmMachine) ShareKeys(currentOTKCount int) error {
 	if err != nil {
 		return err
 	}
+	mach.lastOTKUpload = time.Now()
 	mach.account.Shared = true
 	mach.saveAccount()
 	return nil
