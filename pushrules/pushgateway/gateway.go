@@ -125,7 +125,8 @@ type PushNotification struct {
 	Content           json.RawMessage `json:"content,omitempty"`
 	UserIsTarget      bool            `json:"user_is_target,omitempty"`
 
-	BeeperTTL *int `json:"com.beeper.ttl,omitempty"`
+	BeeperTTL    *int      `json:"com.beeper.ttl,omitempty"`
+	BeeperUserID id.UserID `json:"com.beeper.user_id,omitempty"`
 }
 
 func (pk *PushKey) Push(ctx context.Context, data *PushNotification) error {
