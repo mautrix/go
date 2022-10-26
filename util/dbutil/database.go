@@ -47,6 +47,16 @@ func ParseDialect(engine string) (Dialect, error) {
 	}
 }
 
+type Rows interface {
+	Close() error
+	ColumnTypes() ([]*sql.ColumnType, error)
+	Columns() ([]string, error)
+	Err() error
+	Next() bool
+	NextResultSet() bool
+	Scan(...any) error
+}
+
 type Scannable interface {
 	Scan(...interface{}) error
 }
@@ -54,19 +64,32 @@ type Scannable interface {
 // Expected implementations of Scannable
 var (
 	_ Scannable = (*sql.Row)(nil)
-	_ Scannable = (*sql.Rows)(nil)
+	_ Scannable = (Rows)(nil)
 )
 
-type ContextExecable interface {
+type UnderlyingContextExecable interface {
 	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
 	QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
 	QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row
 }
 
+type ContextExecable interface {
+	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+	QueryContext(ctx context.Context, query string, args ...interface{}) (Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row
+}
+
+type UnderlyingExecable interface {
+	UnderlyingContextExecable
+	Exec(query string, args ...interface{}) (sql.Result, error)
+	Query(query string, args ...interface{}) (*sql.Rows, error)
+	QueryRow(query string, args ...interface{}) *sql.Row
+}
+
 type Execable interface {
 	ContextExecable
 	Exec(query string, args ...interface{}) (sql.Result, error)
-	Query(query string, args ...interface{}) (*sql.Rows, error)
+	Query(query string, args ...interface{}) (Rows, error)
 	QueryRow(query string, args ...interface{}) *sql.Row
 }
 
@@ -78,11 +101,11 @@ type Transaction interface {
 
 // Expected implementations of Execable
 var (
-	_ Execable        = (*sql.Tx)(nil)
-	_ Execable        = (*sql.DB)(nil)
-	_ Execable        = (*LoggingExecable)(nil)
-	_ Transaction     = (*LoggingTxn)(nil)
-	_ ContextExecable = (*sql.Conn)(nil)
+	_ UnderlyingExecable        = (*sql.Tx)(nil)
+	_ UnderlyingExecable        = (*sql.DB)(nil)
+	_ Execable                  = (*LoggingExecable)(nil)
+	_ Transaction               = (*LoggingTxn)(nil)
+	_ UnderlyingContextExecable = (*sql.Conn)(nil)
 )
 
 type Database struct {

@@ -49,7 +49,7 @@ func (store *SQLCryptoStore) FindDeviceID() (deviceID id.DeviceID) {
 }
 
 func (store *SQLCryptoStore) GetRoomMembers(roomID id.RoomID) (members []id.UserID, err error) {
-	var rows *sql.Rows
+	var rows dbutil.Rows
 	rows, err = store.DB.Query(`
 		SELECT user_id FROM mx_user_profile
 		WHERE room_id=$1

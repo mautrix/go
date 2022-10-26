@@ -302,7 +302,7 @@ func (store *SQLCryptoStore) GetWithheldGroupSession(roomID id.RoomID, senderKey
 	}, nil
 }
 
-func (store *SQLCryptoStore) scanGroupSessionList(rows *sql.Rows) (result []*InboundGroupSession, err error) {
+func (store *SQLCryptoStore) scanGroupSessionList(rows dbutil.Rows) (result []*InboundGroupSession, err error) {
 	for rows.Next() {
 		var roomID id.RoomID
 		var signingKey, senderKey, forwardingChains sql.NullString
@@ -577,7 +577,7 @@ func (store *SQLCryptoStore) PutDevices(userID id.UserID, devices map[id.DeviceI
 
 // FilterTrackedUsers finds all the user IDs out of the given ones for which the database contains identity information.
 func (store *SQLCryptoStore) FilterTrackedUsers(users []id.UserID) ([]id.UserID, error) {
-	var rows *sql.Rows
+	var rows dbutil.Rows
 	var err error
 	if store.DB.Dialect == dbutil.Postgres && PostgresArrayWrapper != nil {
 		rows, err = store.DB.Query("SELECT user_id FROM crypto_tracked_user WHERE user_id = ANY($1)", PostgresArrayWrapper(users))
