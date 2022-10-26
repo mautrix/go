@@ -11,7 +11,7 @@ import (
 )
 
 type DatabaseLogger interface {
-	QueryTiming(ctx context.Context, method, query string, args []interface{}, duration time.Duration)
+	QueryTiming(ctx context.Context, method, query string, args []interface{}, nrows int, duration time.Duration)
 	WarnUnsupportedVersion(current, latest int)
 	PrepareUpgrade(current, latest int)
 	DoUpgrade(from, to int, message string)
@@ -28,7 +28,8 @@ func (n noopLogger) PrepareUpgrade(_, _ int)              {}
 func (n noopLogger) DoUpgrade(_, _ int, _ string)         {}
 func (n noopLogger) Warn(msg string, args ...interface{}) {}
 
-func (n noopLogger) QueryTiming(_ context.Context, _, _ string, _ []interface{}, _ time.Duration) {}
+func (n noopLogger) QueryTiming(_ context.Context, _, _ string, _ []interface{}, _ int, _ time.Duration) {
+}
 
 type mauLogger struct {
 	l maulogger.Logger
@@ -50,7 +51,7 @@ func (m mauLogger) DoUpgrade(from, to int, message string) {
 	m.l.Infofln("Upgrading database from v%d to v%d: %s", from, to, message)
 }
 
-func (m mauLogger) QueryTiming(_ context.Context, method, query string, _ []interface{}, duration time.Duration) {
+func (m mauLogger) QueryTiming(_ context.Context, method, query string, _ []interface{}, _ int, duration time.Duration) {
 	if duration > 1*time.Second {
 		m.l.Warnfln("%s(%s) took %.3f seconds", method, query, duration.Seconds())
 	}
@@ -100,13 +101,17 @@ func (z zeroLogger) DoUpgrade(from, to int, message string) {
 
 var whitespaceRegex = regexp.MustCompile(`\s+`)
 
-func (z zeroLogger) QueryTiming(ctx context.Context, method, query string, args []interface{}, duration time.Duration) {
+func (z zeroLogger) QueryTiming(ctx context.Context, method, query string, args []interface{}, nrows int, duration time.Duration) {
 	log := zerolog.Ctx(ctx)
 	if log.GetLevel() == zerolog.Disabled {
 		log = z.l
 	}
 	if log.GetLevel() != zerolog.TraceLevel && duration < 1*time.Second {
 		return
+	}
+	if nrows > -1 {
+		rowLog := log.With().Int("rows", nrows).Logger()
+		log = &rowLog
 	}
 	query = strings.TrimSpace(whitespaceRegex.ReplaceAllLiteralString(query, " "))
 	log.Trace().
