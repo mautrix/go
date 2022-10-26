@@ -181,7 +181,7 @@ type Crypto interface {
 	Init() error
 	Start()
 	Stop()
-	Reset()
+	Reset(startAfterReset bool)
 	Client() *mautrix.Client
 }
 

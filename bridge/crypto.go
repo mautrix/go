@@ -80,7 +80,8 @@ func (helper *CryptoHelper) Init() error {
 		helper.bridge.LogDBUpgradeErrorAndExit("crypto store", err)
 	}
 
-	helper.client, err = helper.loginBot()
+	var isExistingDevice bool
+	helper.client, isExistingDevice, err = helper.loginBot()
 	if err != nil {
 		return err
 	}
@@ -95,7 +96,14 @@ func (helper *CryptoHelper) Init() error {
 	helper.client.Syncer = &cryptoSyncer{helper.mach}
 	helper.client.Store = &cryptoClientStore{helper.store}
 
-	return helper.mach.Load()
+	err = helper.mach.Load()
+	if err != nil {
+		return err
+	}
+	if isExistingDevice {
+		helper.verifyKeysAreOnServer()
+	}
+	return nil
 }
 
 func (helper *CryptoHelper) allowKeyShare(device *id.Device, info event.RequestedKeyInfo) *crypto.KeyShareRejection {
@@ -123,23 +131,23 @@ func (helper *CryptoHelper) allowKeyShare(device *id.Device, info event.Requeste
 	}
 }
 
-func (helper *CryptoHelper) loginBot() (*mautrix.Client, error) {
+func (helper *CryptoHelper) loginBot() (*mautrix.Client, bool, error) {
 	deviceID := helper.store.FindDeviceID()
 	if len(deviceID) > 0 {
 		helper.log.Debugln("Found existing device ID for bot in database:", deviceID)
 	}
 	client, err := mautrix.NewClient(helper.bridge.AS.HomeserverURL, "", "")
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize client: %w", err)
+		return nil, deviceID != "", fmt.Errorf("failed to initialize client: %w", err)
 	}
 	client.Logger = helper.baseLog.Sub("Bot")
 	client.Client = helper.bridge.AS.HTTPClient
 	client.DefaultHTTPRetries = helper.bridge.AS.DefaultHTTPRetries
 	flows, err := client.GetLoginFlows()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get supported login flows: %w", err)
+		return nil, deviceID != "", fmt.Errorf("failed to get supported login flows: %w", err)
 	} else if !flows.HasFlow(mautrix.AuthTypeAppservice) {
-		return nil, fmt.Errorf("homeserver does not support appservice login")
+		return nil, deviceID != "", fmt.Errorf("homeserver does not support appservice login")
 	}
 	// We set the API token to the AS token here to authenticate the appservice login
 	// It'll get overridden after the login
@@ -156,10 +164,29 @@ func (helper *CryptoHelper) loginBot() (*mautrix.Client, error) {
 		InitialDeviceDisplayName: fmt.Sprintf("%s bridge", helper.bridge.ProtocolName),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to log in as bridge bot: %w", err)
+		return nil, deviceID != "", fmt.Errorf("failed to log in as bridge bot: %w", err)
 	}
 	helper.store.DeviceID = resp.DeviceID
-	return client, nil
+	return client, deviceID != "", nil
+}
+
+func (helper *CryptoHelper) verifyKeysAreOnServer() {
+	helper.log.Debugfln("Making sure keys are still on server")
+	resp, err := helper.client.QueryKeys(&mautrix.ReqQueryKeys{
+		DeviceKeys: map[id.UserID]mautrix.DeviceIDList{
+			helper.client.UserID: {helper.client.DeviceID},
+		},
+	})
+	if err != nil {
+		helper.log.Fatalln("Failed to query own keys to make sure device still exists:", err)
+		os.Exit(33)
+	}
+	device, ok := resp.DeviceKeys[helper.client.UserID][helper.client.DeviceID]
+	if ok && len(device.Keys) > 0 {
+		return
+	}
+	helper.log.Warnln("Existing device doesn't have keys on server, resetting crypto")
+	helper.Reset(false)
 }
 
 func (helper *CryptoHelper) Start() {
@@ -211,7 +238,7 @@ func (helper *CryptoHelper) clearDatabase() {
 	//_, _ = helper.store.DB.Exec("DELETE FROM crypto_cross_signing_signatures")
 }
 
-func (helper *CryptoHelper) Reset() {
+func (helper *CryptoHelper) Reset(startAfterReset bool) {
 	helper.lock.Lock()
 	defer helper.lock.Unlock()
 	helper.log.Infoln("Resetting end-to-bridge encryption device")
@@ -232,7 +259,9 @@ func (helper *CryptoHelper) Reset() {
 		os.Exit(50)
 	}
 	helper.log.Infoln("End-to-bridge encryption successfully reset")
-	go helper.Start()
+	if startAfterReset {
+		go helper.Start()
+	}
 }
 
 func (helper *CryptoHelper) Client() *mautrix.Client {
