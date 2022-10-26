@@ -335,6 +335,9 @@ func (syncer *cryptoSyncer) ProcessResponse(resp *mautrix.RespSync, since string
 }
 
 func (syncer *cryptoSyncer) OnFailedSync(_ *mautrix.RespSync, err error) (time.Duration, error) {
+	if errors.Is(err, mautrix.MUnknownToken) {
+		return 0, err
+	}
 	syncer.Log.Error("Error /syncing, waiting 10 seconds: %v", err)
 	return 10 * time.Second, nil
 }
