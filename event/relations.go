@@ -70,6 +70,13 @@ func (rel *RelatesTo) GetReplyTo() id.EventID {
 	return ""
 }
 
+func (rel *RelatesTo) GetNonFallbackReplyTo() id.EventID {
+	if rel != nil && rel.InReplyTo != nil && !rel.IsFallingBack {
+		return rel.InReplyTo.EventID
+	}
+	return ""
+}
+
 func (rel *RelatesTo) GetAnnotationID() id.EventID {
 	if rel != nil && rel.Type == RelAnnotation {
 		return rel.EventID
