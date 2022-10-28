@@ -35,7 +35,7 @@ func TrimReplyFallbackText(text string) string {
 }
 
 func (content *MessageEventContent) RemoveReplyFallback() {
-	if len(content.GetReplyTo()) > 0 && !content.replyFallbackRemoved {
+	if len(content.RelatesTo.GetReplyTo()) > 0 && !content.replyFallbackRemoved {
 		if content.Format == FormatHTML {
 			content.FormattedBody = TrimReplyFallbackHTML(content.FormattedBody)
 		}
@@ -44,11 +44,9 @@ func (content *MessageEventContent) RemoveReplyFallback() {
 	}
 }
 
+// Deprecated: RelatesTo methods are nil-safe, so RelatesTo.GetReplyTo can be used directly
 func (content *MessageEventContent) GetReplyTo() id.EventID {
-	if content.RelatesTo != nil {
-		return content.RelatesTo.GetReplyTo()
-	}
-	return ""
+	return content.RelatesTo.GetReplyTo()
 }
 
 const ReplyFormat = `<mx-reply><blockquote><a href="https://matrix.to/#/%s/%s">In reply to</a> <a href="https://matrix.to/#/%s">%s</a><br>%s</blockquote></mx-reply>`
