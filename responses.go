@@ -517,7 +517,8 @@ func (vers *CapRoomVersions) IsAvailable(version string) bool {
 
 // RespHierarchy is the JSON response for https://spec.matrix.org/v1.4/client-server-api/#get_matrixclientv1roomsroomidhierarchy
 type RespHierarchy struct {
-	Rooms []ChildRoomsChunk `json:"rooms"`
+	NextBatch string            `json:"next_batch"`
+	Rooms     []ChildRoomsChunk `json:"rooms"`
 }
 
 type ChildRoomsChunk struct {
