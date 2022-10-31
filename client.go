@@ -1468,6 +1468,12 @@ func (cli *Client) JoinedRooms() (resp *RespJoinedRooms, err error) {
 	return
 }
 
+func (cli *Client) Hierarchy(roomID id.RoomID) (resp *RespHierarchy, err error) {
+	u := cli.BuildClientURL("v1", "rooms", roomID, "hierarchy")
+	_, err = cli.MakeRequest("GET", u, nil, &resp)
+	return
+}
+
 // Messages returns a list of message and state events for a room. It uses
 // pagination query parameters to paginate history in the room.
 // See https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3roomsroomidmessages
