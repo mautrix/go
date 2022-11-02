@@ -48,7 +48,9 @@ func testUpgrade(dialect Dialect) func(t *testing.T) {
 		conn, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual))
 		require.NoError(t, err)
 
-		expectedUpgrade, err := rawUpgrades.ReadFile(fmt.Sprintf("samples/output/01-%s.sql", dialect.String()))
+		expectedUpgrade1, err := rawUpgrades.ReadFile(fmt.Sprintf("samples/output/01-%s.sql", dialect.String()))
+		require.NoError(t, err)
+		expectedUpgrade2, err := rawUpgrades.ReadFile(fmt.Sprintf("samples/output/04-%s.sql", dialect.String()))
 		require.NoError(t, err)
 
 		db := &Database{
@@ -65,10 +67,13 @@ func testUpgrade(dialect Dialect) func(t *testing.T) {
 
 		expectVersionCheck(mock)
 		mock.ExpectBegin()
-		mock.ExpectExec(string(expectedUpgrade)).
+		mock.ExpectExec(string(expectedUpgrade1)).
 			WillReturnResult(sqlmock.NewResult(0, 0))
 		expectVersionBump(db.Dialect, mock, 3)
 		mock.ExpectCommit()
+		mock.ExpectExec(string(expectedUpgrade2)).
+			WillReturnResult(sqlmock.NewResult(0, 0))
+		expectVersionBump(db.Dialect, mock, 4)
 		err = db.Upgrade()
 		require.NoError(t, err)
 		require.NoError(t, mock.ExpectationsWereMet())

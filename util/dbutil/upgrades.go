@@ -12,13 +12,14 @@ import (
 	"fmt"
 )
 
-type upgradeFunc func(Transaction, *Database) error
+type upgradeFunc func(Execable, *Database) error
 
 type upgrade struct {
 	message string
 	fn      upgradeFunc
 
-	upgradesTo int
+	upgradesTo  int
+	transaction bool
 }
 
 var ErrUnsupportedDatabaseVersion = fmt.Errorf("unsupported database schema version")
@@ -93,7 +94,7 @@ func (db *Database) checkDatabaseOwner() error {
 	return nil
 }
 
-func (db *Database) setVersion(tx Transaction, version int) error {
+func (db *Database) setVersion(tx Execable, version int) error {
 	_, err := tx.Exec(fmt.Sprintf("DELETE FROM %s", db.VersionTable))
 	if err != nil {
 		return err
@@ -129,25 +130,33 @@ func (db *Database) Upgrade() error {
 			version++
 			continue
 		}
-		db.Log.DoUpgrade(logVersion, upgradeItem.upgradesTo, upgradeItem.message)
+		db.Log.DoUpgrade(logVersion, upgradeItem.upgradesTo, upgradeItem.message, upgradeItem.transaction)
 		var tx Transaction
-		tx, err = db.Begin()
-		if err != nil {
-			return err
+		var upgradeConn Execable
+		if upgradeItem.transaction {
+			tx, err = db.Begin()
+			if err != nil {
+				return err
+			}
+			upgradeConn = tx
+		} else {
+			upgradeConn = db
 		}
-		err = upgradeItem.fn(tx, db)
+		err = upgradeItem.fn(upgradeConn, db)
 		if err != nil {
 			return err
 		}
 		version = upgradeItem.upgradesTo
 		logVersion = version
-		err = db.setVersion(tx, version)
+		err = db.setVersion(upgradeConn, version)
 		if err != nil {
 			return err
 		}
-		err = tx.Commit()
-		if err != nil {
-			return err
+		if tx != nil {
+			err = tx.Commit()
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
