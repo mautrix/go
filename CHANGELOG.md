@@ -1,3 +1,20 @@
+## v0.12.3 (unreleased)
+
+* **Breaking change:** Added logging for row iteration in the dbutil package.
+  This changes the return type of `Query` methods from `*sql.Rows` to a new
+  `dbutil.Rows` interface.
+* Added flag to disable wrapping database upgrades in a transaction (e.g. to
+  allow setting `PRAGMA`s for advanced table mutations on SQLite).
+* Deprecated `MessageEventContent.GetReplyTo` in favor of directly using
+  `RelatesTo.GetReplyTo`. RelatesTo methods are nil-safe, so checking if
+  RelatesTo is nil is not necessary for using those methods.
+* Added `RelatesTo.GetNonFallbackReplyTo` utility method to get the reply event
+  ID, unless the reply is a thread fallback.
+* Added check to bridge encryption helper to make sure the e2ee keys are still
+  on the server. Synapse is known to sometimes lose keys randomly.
+* Changed bridge crypto syncer to crash on `M_UNKNOWN_TOKEN` errors instead of
+  retrying forever pointlessly.
+
 ## v0.12.2 (2022-10-16)
 
 * Added utility method to redact bridge commands.
