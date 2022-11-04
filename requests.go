@@ -172,10 +172,15 @@ type ReqAliasCreate struct {
 }
 
 type OneTimeKey struct {
-	Key        id.Curve25519          `json:"key"`
-	IsSigned   bool                   `json:"-"`
-	Signatures Signatures             `json:"signatures,omitempty"`
-	Unsigned   map[string]interface{} `json:"unsigned,omitempty"`
+	Key        id.Curve25519  `json:"key"`
+	Fallback   bool           `json:"fallback,omitempty"`
+	Signatures Signatures     `json:"signatures,omitempty"`
+	Unsigned   map[string]any `json:"unsigned,omitempty"`
+	IsSigned   bool           `json:"-"`
+
+	// Raw data in the one-time key. This must be used for signature verification to ensure unrecognized fields
+	// aren't thrown away (because that would invalidate the signature).
+	RawData json.RawMessage `json:"-"`
 }
 
 type serializableOTK OneTimeKey
@@ -188,6 +193,7 @@ func (otk *OneTimeKey) UnmarshalJSON(data []byte) (err error) {
 		otk.IsSigned = false
 	} else {
 		err = json.Unmarshal(data, (*serializableOTK)(otk))
+		otk.RawData = data
 		otk.IsSigned = true
 	}
 	return err

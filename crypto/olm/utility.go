@@ -107,9 +107,13 @@ func (u *Utility) VerifySignature(message string, key id.Ed25519, signature stri
 // https://matrix.org/speculator/spec/drafts%2Fe2e/appendices.html#signing-json
 // If the _obj is a struct, the `json` tags will be honored.
 func (u *Utility) VerifySignatureJSON(obj interface{}, userID id.UserID, keyName string, key id.Ed25519) (bool, error) {
-	objJSON, err := json.Marshal(obj)
-	if err != nil {
-		return false, err
+	var err error
+	objJSON, ok := obj.(json.RawMessage)
+	if !ok {
+		objJSON, err = json.Marshal(obj)
+		if err != nil {
+			return false, err
+		}
 	}
 	sig := gjson.GetBytes(objJSON, util.GJSONPath("signatures", string(userID), fmt.Sprintf("ed25519:%s", keyName)))
 	if !sig.Exists() || sig.Type != gjson.String {

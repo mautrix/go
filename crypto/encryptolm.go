@@ -97,7 +97,7 @@ func (mach *OlmMachine) createOutboundSessions(input map[id.UserID]map[id.Device
 				continue
 			}
 			identity := input[userID][deviceID]
-			if ok, err := olm.VerifySignatureJSON(oneTimeKey, userID, deviceID.String(), identity.SigningKey); err != nil {
+			if ok, err := olm.VerifySignatureJSON(oneTimeKey.RawData, userID, deviceID.String(), identity.SigningKey); err != nil {
 				mach.Log.Error("Failed to verify signature for %s of %s: %v", deviceID, userID, err)
 			} else if !ok {
 				mach.Log.Warn("Invalid signature for %s of %s", deviceID, userID)
