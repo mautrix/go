@@ -29,6 +29,7 @@ import (
 	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/util/configupgrade"
 	"maunium.net/go/mautrix/util/dbutil"
+	_ "maunium.net/go/mautrix/util/dbutil/litestream"
 )
 
 var configPath = flag.MakeFull("c", "config", "The path to your config file.", "config.yaml").String()
