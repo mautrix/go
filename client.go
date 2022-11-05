@@ -1468,6 +1468,32 @@ func (cli *Client) JoinedRooms() (resp *RespJoinedRooms, err error) {
 	return
 }
 
+// Hierarchy returns a list of rooms that are in the room's hierarchy. See https://spec.matrix.org/v1.4/client-server-api/#get_matrixclientv1roomsroomidhierarchy
+//
+// The hierarchy API is provided to walk the space tree and discover the rooms with their aesthetic details. works in a depth-first manner:
+// when it encounters another space as a child it recurses into that space before returning non-space children.
+//
+// NOTE: Only the roomID is required, the rest of the fields are optional and ignored if left to default values.
+func (cli *Client) Hierarchy(roomID id.RoomID, from string, max_depth int, suggested_only bool, limit int) (resp *RespHierarchy, err error) {
+	query := map[string]string{}
+	if from != "" {
+		query["from"] = from
+	}
+	if limit > 0 {
+		query["limit"] = strconv.Itoa(limit)
+	}
+	if max_depth > 0 {
+		query["max_depth"] = strconv.Itoa(max_depth)
+	}
+	if suggested_only {
+		query["suggested_only"] = "true"
+	}
+
+	urlPath := cli.BuildURLWithQuery(ClientURLPath{"v1", "rooms", roomID, "hierarchy"}, query)
+	_, err = cli.MakeRequest("GET", urlPath, nil, &resp)
+	return
+}
+
 // Messages returns a list of message and state events for a room. It uses
 // pagination query parameters to paginate history in the room.
 // See https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3roomsroomidmessages

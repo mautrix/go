@@ -58,6 +58,8 @@ var (
 	// The client attempted to join a room that has a version the server does not support.
 	// Inspect the room_version property of the error response for the room's version.
 	MIncompatibleRoomVersion = RespError{ErrCode: "M_INCOMPATIBLE_ROOM_VERSION"}
+	// The client specified a parameter that has the wrong value.
+	MInvalidParam = RespError{ErrCode: "M_INVALID_PARAM"}
 )
 
 // HTTPError An HTTP Error response, which may wrap an underlying native Go Error.

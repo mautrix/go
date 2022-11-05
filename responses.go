@@ -514,3 +514,31 @@ func (vers *CapRoomVersions) IsAvailable(version string) bool {
 	_, available := vers.Available[version]
 	return available
 }
+
+// RespHierarchy is the JSON response for https://spec.matrix.org/v1.4/client-server-api/#get_matrixclientv1roomsroomidhierarchy
+type RespHierarchy struct {
+	NextBatch string            `json:"next_batch"`
+	Rooms     []ChildRoomsChunk `json:"rooms"`
+}
+
+type ChildRoomsChunk struct {
+	AvatarURL        string                    `json:"avatar_url"`
+	CanonicalAlias   string                    `json:"canonical_alias"`
+	ChildrenState    []StrippedChildStateEvent `json:"children_state"`
+	GuestCanJoin     bool                      `json:"guest_can_join"`
+	JoinRule         string                    `json:"join_rule"`
+	Name             string                    `json:"name"`
+	NumJoinedMembers int                       `json:"num_joined_members"`
+	RoomID           id.RoomID                 `json:"room_id"`
+	RoomType         string                    `json:"room_type"`
+	Topic            string                    `json:"topic"`
+	WorldReadble     bool                      `json:"world_readable"`
+}
+
+type StrippedChildStateEvent struct {
+	Content        json.RawMessage `json:"content"`
+	OriginServerTs int64           `json:"origin_server_ts"`
+	Sender         id.UserID       `json:"sender"`
+	StateKey       string          `json:"state_key"`
+	Type           string          `json:"type"`
+}
