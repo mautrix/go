@@ -124,9 +124,10 @@ func (evt *Event) GetStateKey() string {
 }
 
 type StrippedState struct {
-	Content  Content `json:"content"`
-	Type     Type    `json:"type"`
-	StateKey string  `json:"state_key"`
+	Content  Content   `json:"content"`
+	Type     Type      `json:"type"`
+	StateKey string    `json:"state_key"`
+	Sender   id.UserID `json:"sender"`
 }
 
 type Unsigned struct {
