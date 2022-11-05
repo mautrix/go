@@ -61,13 +61,13 @@ type AppserviceConfig struct {
 	EphemeralEvents bool `yaml:"ephemeral_events"`
 }
 
-func (config *BaseConfig) MakeUserIDRegex() *regexp.Regexp {
+func (config *BaseConfig) MakeUserIDRegex(matcher string) *regexp.Regexp {
 	usernamePlaceholder := strings.ToLower(util.RandomString(16))
 	usernameTemplate := fmt.Sprintf("@%s:%s",
 		config.Bridge.FormatUsername(usernamePlaceholder),
 		config.Homeserver.Domain)
 	usernameTemplate = regexp.QuoteMeta(usernameTemplate)
-	usernameTemplate = strings.Replace(usernameTemplate, usernamePlaceholder, ".+", 1)
+	usernameTemplate = strings.Replace(usernameTemplate, usernamePlaceholder, matcher, 1)
 	usernameTemplate = fmt.Sprintf("^%s$", usernameTemplate)
 	return regexp.MustCompile(usernameTemplate)
 }
@@ -84,7 +84,7 @@ func (config *BaseConfig) GenerateRegistration() *appservice.Registration {
 		regexp.QuoteMeta(config.AppService.Bot.Username),
 		regexp.QuoteMeta(config.Homeserver.Domain)))
 	registration.Namespaces.UserIDs.Register(botRegex, true)
-	registration.Namespaces.UserIDs.Register(config.MakeUserIDRegex(), true)
+	registration.Namespaces.UserIDs.Register(config.MakeUserIDRegex(".*"), true)
 
 	return registration
 }
