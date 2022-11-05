@@ -2,6 +2,7 @@ package mautrix
 
 import (
 	"encoding/json"
+	"strconv"
 
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -339,4 +340,42 @@ type ReqSetReadMarkers struct {
 	BeeperReadExtra        interface{} `json:"com.beeper.read.extra"`
 	BeeperReadPrivateExtra interface{} `json:"com.beeper.read.private.extra"`
 	BeeperFullyReadExtra   interface{} `json:"com.beeper.fully_read.extra"`
+}
+
+// ReqHierarchy contains the parameters for https://spec.matrix.org/v1.4/client-server-api/#get_matrixclientv1roomsroomidhierarchy
+//
+// As it's a GET method, there is no JSON body, so this is only query parameters.
+type ReqHierarchy struct {
+	// A pagination token from a previous Hierarchy call.
+	// If specified, max_depth and suggested_only cannot be changed from the first request.
+	From string
+	// Limit for the maximum number of rooms to include per response.
+	// The server will apply a default value if a limit isn't provided.
+	Limit int
+	// Limit for how far to go into the space. When reached, no further child rooms will be returned.
+	// The server will apply a default value if a max depth isn't provided.
+	MaxDepth *int
+	// Flag to indicate whether the server should only consider suggested rooms.
+	// Suggested rooms are annotated in their m.space.child event contents.
+	SuggestedOnly bool
+}
+
+func (req *ReqHierarchy) Query() map[string]string {
+	query := map[string]string{}
+	if req == nil {
+		return query
+	}
+	if req.From != "" {
+		query["from"] = req.From
+	}
+	if req.Limit > 0 {
+		query["limit"] = strconv.Itoa(req.Limit)
+	}
+	if req.MaxDepth != nil {
+		query["max_depth"] = strconv.Itoa(*req.MaxDepth)
+	}
+	if req.SuggestedOnly {
+		query["suggested_only"] = "true"
+	}
+	return query
 }

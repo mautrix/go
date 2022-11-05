@@ -1473,24 +1473,10 @@ func (cli *Client) JoinedRooms() (resp *RespJoinedRooms, err error) {
 // The hierarchy API is provided to walk the space tree and discover the rooms with their aesthetic details. works in a depth-first manner:
 // when it encounters another space as a child it recurses into that space before returning non-space children.
 //
-// NOTE: Only the roomID is required, the rest of the fields are optional and ignored if left to default values.
-func (cli *Client) Hierarchy(roomID id.RoomID, from string, max_depth int, suggested_only bool, limit int) (resp *RespHierarchy, err error) {
-	query := map[string]string{}
-	if from != "" {
-		query["from"] = from
-	}
-	if limit > 0 {
-		query["limit"] = strconv.Itoa(limit)
-	}
-	if max_depth > 0 {
-		query["max_depth"] = strconv.Itoa(max_depth)
-	}
-	if suggested_only {
-		query["suggested_only"] = "true"
-	}
-
-	urlPath := cli.BuildURLWithQuery(ClientURLPath{"v1", "rooms", roomID, "hierarchy"}, query)
-	_, err = cli.MakeRequest("GET", urlPath, nil, &resp)
+// The second function parameter specifies query parameters to limit the response. No query parameters will be added if it's nil.
+func (cli *Client) Hierarchy(roomID id.RoomID, req *ReqHierarchy) (resp *RespHierarchy, err error) {
+	urlPath := cli.BuildURLWithQuery(ClientURLPath{"v1", "rooms", roomID, "hierarchy"}, req.Query())
+	_, err = cli.MakeRequest(http.MethodGet, urlPath, nil, &resp)
 	return
 }
 
