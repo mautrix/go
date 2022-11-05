@@ -62,7 +62,7 @@ type AppserviceConfig struct {
 }
 
 func (config *BaseConfig) MakeUserIDRegex() *regexp.Regexp {
-	usernamePlaceholder := util.RandomString(16)
+	usernamePlaceholder := strings.ToLower(util.RandomString(16))
 	usernameTemplate := fmt.Sprintf("@%s:%s",
 		config.Bridge.FormatUsername(usernamePlaceholder),
 		config.Homeserver.Domain)
