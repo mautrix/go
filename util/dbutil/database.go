@@ -40,7 +40,7 @@ func ParseDialect(engine string) (Dialect, error) {
 	switch strings.ToLower(engine) {
 	case "postgres", "postgresql":
 		return Postgres, nil
-	case "sqlite3", "sqlite", "litestream":
+	case "sqlite3", "sqlite", "litestream", "sqlite3-fk-wal":
 		return SQLite, nil
 	default:
 		return DialectUnknown, fmt.Errorf("unknown dialect '%s'", engine)
