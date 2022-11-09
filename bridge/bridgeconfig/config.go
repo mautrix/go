@@ -58,7 +58,8 @@ type AppserviceConfig struct {
 	ASToken string `yaml:"as_token"`
 	HSToken string `yaml:"hs_token"`
 
-	EphemeralEvents bool `yaml:"ephemeral_events"`
+	EphemeralEvents   bool `yaml:"ephemeral_events"`
+	AsyncTransactions bool `yaml:"async_transactions"`
 }
 
 func (config *BaseConfig) MakeUserIDRegex(matcher string) *regexp.Regexp {
@@ -230,6 +231,7 @@ func doUpgrade(helper *up.Helper) {
 	helper.Copy(up.Str, "appservice", "bot", "displayname")
 	helper.Copy(up.Str, "appservice", "bot", "avatar")
 	helper.Copy(up.Bool, "appservice", "ephemeral_events")
+	helper.Copy(up.Bool, "appservice", "async_transactions")
 	helper.Copy(up.Str, "appservice", "as_token")
 	helper.Copy(up.Str, "appservice", "hs_token")
 
