@@ -445,15 +445,20 @@ func (mach *OlmMachine) WaitForSession(roomID id.RoomID, senderKey id.SenderKey,
 	mach.keyWaitersLock.Lock()
 	ch, ok := mach.keyWaiters[sessionID]
 	if !ok {
-		ch := make(chan struct{})
+		ch = make(chan struct{})
 		mach.keyWaiters[sessionID] = ch
 	}
 	mach.keyWaitersLock.Unlock()
+	// Handle race conditions where a session appears between the failed decryption and WaitForSession call.
+	sess, err := mach.CryptoStore.GetGroupSession(roomID, senderKey, sessionID)
+	if sess != nil || errors.Is(err, ErrGroupSessionWithheld) {
+		return true
+	}
 	select {
 	case <-ch:
 		return true
 	case <-time.After(timeout):
-		sess, err := mach.CryptoStore.GetGroupSession(roomID, senderKey, sessionID)
+		sess, err = mach.CryptoStore.GetGroupSession(roomID, senderKey, sessionID)
 		// Check if the session somehow appeared in the store without telling us
 		// We accept withheld sessions as received, as then the decryption attempt will show the error.
 		return sess != nil || errors.Is(err, ErrGroupSessionWithheld)
