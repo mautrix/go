@@ -137,11 +137,21 @@ func (ep *EventProcessor) Dispatch(evt *event.Event) {
 		}
 	}
 }
-
-func (ep *EventProcessor) Start() {
+func (ep *EventProcessor) startEvents() {
 	for {
 		select {
 		case evt := <-ep.as.Events:
+			ep.Dispatch(evt)
+		case <-ep.stop:
+			return
+		}
+	}
+}
+
+func (ep *EventProcessor) startEncryption() {
+	for {
+		select {
+		case evt := <-ep.as.ToDeviceEvents:
 			ep.Dispatch(evt)
 		case otk := <-ep.as.OTKCounts:
 			ep.DispatchOTK(otk)
@@ -153,6 +163,11 @@ func (ep *EventProcessor) Start() {
 	}
 }
 
+func (ep *EventProcessor) Start() {
+	go ep.startEvents()
+	go ep.startEncryption()
+}
+
 func (ep *EventProcessor) Stop() {
-	ep.stop <- struct{}{}
+	close(ep.stop)
 }

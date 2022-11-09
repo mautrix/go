@@ -481,7 +481,7 @@ func (br *Bridge) start() {
 	br.Log.Debugln("Starting application service HTTP server")
 	go br.AS.Start()
 	br.Log.Debugln("Starting event processor")
-	go br.EventProcessor.Start()
+	br.EventProcessor.Start()
 
 	go br.UpdateBotProfile()
 	if br.Crypto != nil {

@@ -96,11 +96,12 @@ type AppService struct {
 
 	txnIDC *TransactionIDCache
 
-	Events       chan *event.Event         `yaml:"-"`
-	DeviceLists  chan *mautrix.DeviceLists `yaml:"-"`
-	OTKCounts    chan *mautrix.OTKCount    `yaml:"-"`
-	QueryHandler QueryHandler              `yaml:"-"`
-	StateStore   StateStore                `yaml:"-"`
+	Events         chan *event.Event         `yaml:"-"`
+	ToDeviceEvents chan *event.Event         `yaml:"-"`
+	DeviceLists    chan *mautrix.DeviceLists `yaml:"-"`
+	OTKCounts      chan *mautrix.OTKCount    `yaml:"-"`
+	QueryHandler   QueryHandler              `yaml:"-"`
+	StateStore     StateStore                `yaml:"-"`
 
 	Router     *mux.Router `yaml:"-"`
 	UserAgent  string      `yaml:"-"`
@@ -275,6 +276,7 @@ func (as *AppService) BotClient() *mautrix.Client {
 // Init initializes the logger and loads the registration of this appservice.
 func (as *AppService) Init() (bool, error) {
 	as.Events = make(chan *event.Event, EventChannelSize)
+	as.ToDeviceEvents = make(chan *event.Event, EventChannelSize)
 	as.OTKCounts = make(chan *mautrix.OTKCount, OTKChannelSize)
 	as.DeviceLists = make(chan *mautrix.DeviceLists, EventChannelSize)
 	as.QueryHandler = &QueryHandlerStub{}

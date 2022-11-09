@@ -206,13 +206,19 @@ func (as *AppService) handleEvents(evts []*event.Event, defaultTypeClass event.T
 		}
 
 		if evt.Type.IsState() {
-			// TODO remove this check after https://github.com/matrix-org/synapse/pull/11265
+			// TODO remove this check after making sure the log doesn't happen
 			historical, ok := evt.Content.Raw["org.matrix.msc2716.historical"].(bool)
-			if !ok || !historical {
+			if ok && historical {
+				as.Log.Warnfln("Received historical state event %s (%s/%s)", evt.ID, evt.Type.Type, evt.GetStateKey())
+			} else {
 				as.UpdateState(evt)
 			}
 		}
-		as.Events <- evt
+		if evt.Type.Class == event.ToDeviceEventType {
+			as.ToDeviceEvents <- evt
+		} else {
+			as.Events <- evt
+		}
 	}
 }
 
