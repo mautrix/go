@@ -1772,6 +1772,9 @@ func (cli *Client) BatchSend(roomID id.RoomID, req *ReqBatchSend) (resp *RespBat
 	if req.BeeperNewMessages {
 		query["com.beeper.new_messages"] = "true"
 	}
+	if req.BeeperMarkReadBy != "" {
+		query["com.beeper.mark_read_by"] = req.BeeperMarkReadBy.String()
+	}
 	if len(req.BatchID) > 0 {
 		query["batch_id"] = req.BatchID.String()
 	}
