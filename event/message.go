@@ -138,9 +138,13 @@ func (content *MessageEventContent) SetEdit(original id.EventID) {
 	}
 }
 
+func TextToHTML(text string) string {
+	return strings.ReplaceAll(html.EscapeString(text), "\n", "<br/>")
+}
+
 func (content *MessageEventContent) EnsureHasHTML() {
 	if len(content.FormattedBody) == 0 || content.Format != FormatHTML {
-		content.FormattedBody = strings.ReplaceAll(html.EscapeString(content.Body), "\n", "<br/>")
+		content.FormattedBody = TextToHTML(content.Body)
 		content.Format = FormatHTML
 	}
 }
