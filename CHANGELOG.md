@@ -8,12 +8,22 @@
 * Deprecated `MessageEventContent.GetReplyTo` in favor of directly using
   `RelatesTo.GetReplyTo`. RelatesTo methods are nil-safe, so checking if
   RelatesTo is nil is not necessary for using those methods.
+* Added wrapper for space hierarchyendpoint (thanks to [@mgcm] in [#100]).
+* Added bridge config option to handle transactions asynchronously.
+* Added separate channels for to-device events in appservice transaction
+  handler to avoid blocking to-device events behind normal events.
 * Added `RelatesTo.GetNonFallbackReplyTo` utility method to get the reply event
   ID, unless the reply is a thread fallback.
+* Added `event.TextToHTML` as an utility method to HTML-escape a string and
+  replace newlines with `<br/>`.
 * Added check to bridge encryption helper to make sure the e2ee keys are still
   on the server. Synapse is known to sometimes lose keys randomly.
 * Changed bridge crypto syncer to crash on `M_UNKNOWN_TOKEN` errors instead of
   retrying forever pointlessly.
+* Fixed verifying signatures of fallback one-time keys.
+
+[@mgcm]: https://github.com/mgcm
+[#100]: https://github.com/mautrix/go/pull/100
 
 ## v0.12.2 (2022-10-16)
 
