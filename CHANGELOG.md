@@ -1,4 +1,4 @@
-## v0.12.3 (unreleased)
+## v0.12.3 (2022-11-16)
 
 * **Breaking change:** Added logging for row iteration in the dbutil package.
   This changes the return type of `Query` methods from `*sql.Rows` to a new
