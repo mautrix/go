@@ -34,9 +34,6 @@ func init() {
 
 	sql.Register("sqlite3-fk-wal", &sqlite3.SQLiteDriver{
 		ConnectHook: func(conn *sqlite3.SQLiteConn) (err error) {
-			if err = conn.SetFileControlInt("main", sqlite3.SQLITE_FCNTL_PERSIST_WAL, 1); err != nil {
-				return
-			}
 			if _, err = conn.Exec("PRAGMA foreign_keys = ON", []driver.Value{}); err != nil {
 				return
 			}
