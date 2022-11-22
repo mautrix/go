@@ -417,7 +417,19 @@ func (br *Bridge) init() {
 	br.Log.Infoln("Initializing", br.VersionDesc)
 
 	br.Log.Debugln("Initializing database connection")
-	br.DB, err = dbutil.NewFromConfig(br.Name, br.Config.AppService.Database, dbutil.MauLogger(br.Log.Sub("Database")))
+	dbConfig := br.Config.AppService.Database
+	if (dbConfig.Type == "sqlite3-fk-wal" || dbConfig.Type == "litestream") && dbConfig.MaxOpenConns != 1 && !strings.Contains(dbConfig.URI, "_txlock=immediate") {
+		var fixedExampleURI string
+		if !strings.HasPrefix(dbConfig.URI, "file:") {
+			fixedExampleURI = fmt.Sprintf("file:%s?_txlock=immediate", dbConfig.URI)
+		} else if !strings.ContainsRune(dbConfig.URI, '?') {
+			fixedExampleURI = fmt.Sprintf("%s?_txlock=immediate", dbConfig.URI)
+		} else {
+			fixedExampleURI = fmt.Sprintf("%s&_txlock=immediate", dbConfig.URI)
+		}
+		br.Log.Warnfln("Using SQLite without _txlock=immediate is not recommended (e.g. `uri: %s`)", fixedExampleURI)
+	}
+	br.DB, err = dbutil.NewFromConfig(br.Name, dbConfig, dbutil.MauLogger(br.Log.Sub("Database")))
 	if err != nil {
 		br.Log.Fatalln("Failed to initialize database connection:", err)
 		if sqlError := (&sqlite3.Error{}); errors.As(err, sqlError) && sqlError.Code == sqlite3.ErrCorrupt {
