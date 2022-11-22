@@ -220,7 +220,11 @@ func doUpgrade(helper *up.Helper) {
 	helper.Copy(up.Str, "appservice", "address")
 	helper.Copy(up.Str, "appservice", "hostname")
 	helper.Copy(up.Int, "appservice", "port")
-	helper.Copy(up.Str, "appservice", "database", "type")
+	if dbType, ok := helper.Get(up.Str, "appservice", "database", "type"); ok && dbType == "sqlite3" {
+		helper.Set(up.Str, "sqlite3-fk-wal", "appservice", "database", "type")
+	} else {
+		helper.Copy(up.Str, "appservice", "database", "type")
+	}
 	helper.Copy(up.Str, "appservice", "database", "uri")
 	helper.Copy(up.Int, "appservice", "database", "max_open_conns")
 	helper.Copy(up.Int, "appservice", "database", "max_idle_conns")
