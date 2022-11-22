@@ -157,6 +157,7 @@ func (content *Content) MarshalJSON() ([]byte, error) {
 	return json.Marshal(content.Raw)
 }
 
+// Deprecated: use errors.Is directly
 func IsUnsupportedContentType(err error) bool {
 	return errors.Is(err, ErrUnsupportedContentType)
 }

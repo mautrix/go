@@ -99,7 +99,7 @@ func (mach *OlmMachine) DecryptMegolmEvent(evt *event.Event) (*event.Event, erro
 	megolmEvt.Type.Class = evt.Type.Class
 	err = megolmEvt.Content.ParseRaw(megolmEvt.Type)
 	if err != nil {
-		if event.IsUnsupportedContentType(err) {
+		if errors.Is(err, event.ErrUnsupportedContentType) {
 			mach.Log.Warn("Unsupported event type %s in encrypted event %s", megolmEvt.Type.Repr(), evt.ID)
 		} else {
 			return nil, fmt.Errorf("failed to parse content of megolm payload event: %w", err)
@@ -113,8 +113,9 @@ func (mach *OlmMachine) DecryptMegolmEvent(evt *event.Event) (*event.Event, erro
 			} else {
 				mach.Log.Trace("Not overriding relation data in %s, as encrypted payload already has it", evt.ID)
 			}
-		} else {
-			mach.Log.Warn("Encrypted event %s has relation data, but content type %T (%s) doesn't support it", evt.ID, megolmEvt.Content.Parsed, megolmEvt.Type.String())
+		}
+		if _, hasRelation := megolmEvt.Content.Raw["m.relates_to"]; !hasRelation {
+			megolmEvt.Content.Raw["m.relates_to"] = evt.Content.Raw["m.relates_to"]
 		}
 	}
 	megolmEvt.Type.Class = evt.Type.Class

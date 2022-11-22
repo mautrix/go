@@ -94,7 +94,7 @@ func (mach *OlmMachine) decryptAndParseOlmCiphertext(sender id.UserID, senderKey
 	}
 
 	err = olmEvt.Content.ParseRaw(olmEvt.Type)
-	if err != nil && !event.IsUnsupportedContentType(err) {
+	if err != nil && !errors.Is(err, event.ErrUnsupportedContentType) {
 		return nil, fmt.Errorf("failed to parse content of olm payload event: %w", err)
 	}
 
