@@ -535,6 +535,10 @@ func (br *Bridge) stop() {
 	br.AS.Stop()
 	br.EventProcessor.Stop()
 	br.Child.Stop()
+	err := br.DB.RawDB.Close()
+	if err != nil {
+		br.Log.Warnfln("Error closing database: %v", err)
+	}
 }
 
 func (br *Bridge) ManualStop(exitCode int) {
