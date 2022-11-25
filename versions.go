@@ -57,6 +57,8 @@ const (
 )
 
 var (
+	SpecR000 = MustParseSpecVersion("r0.0.0")
+	SpecR001 = MustParseSpecVersion("r0.0.1")
 	SpecR010 = MustParseSpecVersion("r0.1.0")
 	SpecR020 = MustParseSpecVersion("r0.2.0")
 	SpecR030 = MustParseSpecVersion("r0.3.0")
@@ -68,6 +70,7 @@ var (
 	SpecV12  = MustParseSpecVersion("v1.2")
 	SpecV13  = MustParseSpecVersion("v1.3")
 	SpecV14  = MustParseSpecVersion("v1.4")
+	SpecV15  = MustParseSpecVersion("v1.5")
 )
 
 func (svf SpecVersionFormat) String() string {
