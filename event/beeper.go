@@ -43,6 +43,8 @@ type BeeperMessageStatusEventContent struct {
 	StillWorking bool  `json:"still_working,omitempty"`
 
 	LastRetry id.EventID `json:"last_retry,omitempty"`
+
+	MutateEventKey string `json:"mutate_event_key,omitempty"`
 }
 
 func (status *BeeperMessageStatusEventContent) FillLegacyBooleans() {
