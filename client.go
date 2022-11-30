@@ -1536,13 +1536,14 @@ func (cli *Client) GetEvent(roomID id.RoomID, eventID id.EventID) (resp *event.E
 }
 
 func (cli *Client) MarkRead(roomID id.RoomID, eventID id.EventID) (err error) {
-	return cli.MarkReadWithContent(roomID, eventID, struct{}{})
+	return cli.SendReceipt(roomID, eventID, event.ReceiptTypeRead, nil)
 }
 
-// MarkReadWithContent sends a read receipt including custom data.
-// N.B. This is not (yet) a part of the spec, normal servers will drop any extra content.
-func (cli *Client) MarkReadWithContent(roomID id.RoomID, eventID id.EventID, content interface{}) (err error) {
-	urlPath := cli.BuildClientURL("v3", "rooms", roomID, "receipt", "m.read", eventID)
+// SendReceipt sends a receipt, usually specifically a read receipt.
+//
+// Passing nil as the content is safe, the library will automatically replace it with an empty JSON object.
+func (cli *Client) SendReceipt(roomID id.RoomID, eventID id.EventID, receiptType event.ReceiptType, content interface{}) (err error) {
+	urlPath := cli.BuildClientURL("v3", "rooms", roomID, "receipt", receiptType, eventID)
 	_, err = cli.MakeRequest("POST", urlPath, &content, nil)
 	return
 }

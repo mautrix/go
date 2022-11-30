@@ -76,7 +76,7 @@ func (ce *Event) Redact(req ...mautrix.ReqRedact) {
 
 // MarkRead marks the command event as read.
 func (ce *Event) MarkRead() {
-	err := ce.MainIntent().MarkRead(ce.RoomID, ce.EventID)
+	err := ce.MainIntent().SendReceipt(ce.RoomID, ce.EventID, event.ReceiptTypeRead, nil)
 	if err != nil {
 		ce.Processor.log.Warnfln("Failed to mark command from %s as read: %v", ce.User.GetMXID(), err)
 	}
