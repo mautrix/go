@@ -343,6 +343,10 @@ type ReqSetReadMarkers struct {
 	BeeperFullyReadExtra   interface{} `json:"com.beeper.fully_read.extra"`
 }
 
+type ReqSendReceipt struct {
+	ThreadID string `json:"thread_id,omitempty"`
+}
+
 // ReqHierarchy contains the parameters for https://spec.matrix.org/v1.4/client-server-api/#get_matrixclientv1roomsroomidhierarchy
 //
 // As it's a GET method, there is no JSON body, so this is only query parameters.

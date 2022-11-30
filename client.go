@@ -1542,6 +1542,7 @@ func (cli *Client) MarkRead(roomID id.RoomID, eventID id.EventID) (err error) {
 // SendReceipt sends a receipt, usually specifically a read receipt.
 //
 // Passing nil as the content is safe, the library will automatically replace it with an empty JSON object.
+// To mark a message in a specific thread as read, use pass a ReqSendReceipt as the content.
 func (cli *Client) SendReceipt(roomID id.RoomID, eventID id.EventID, receiptType event.ReceiptType, content interface{}) (err error) {
 	urlPath := cli.BuildClientURL("v3", "rooms", roomID, "receipt", receiptType, eventID)
 	_, err = cli.MakeRequest("POST", urlPath, &content, nil)
