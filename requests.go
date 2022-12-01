@@ -384,3 +384,23 @@ func (req *ReqHierarchy) Query() map[string]string {
 	}
 	return query
 }
+
+type ReqBeeperMergeRoom struct {
+	NewRoom ReqCreateRoom `json:"create"`
+	Key     string        `json:"key"`
+	Rooms   []id.RoomID   `json:"rooms"`
+	User    id.UserID     `json:"user_id"`
+}
+
+type BeeperSplitRoomPart struct {
+	UserID  id.UserID     `json:"user_id"`
+	Values  []string      `json:"values"`
+	NewRoom ReqCreateRoom `json:"create"`
+}
+
+type ReqBeeperSplitRoom struct {
+	RoomID id.RoomID `json:"-"`
+
+	Key   string                `json:"key"`
+	Parts []BeeperSplitRoomPart `json:"parts"`
+}

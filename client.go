@@ -1784,6 +1784,18 @@ func (cli *Client) BatchSend(roomID id.RoomID, req *ReqBatchSend) (resp *RespBat
 	return
 }
 
+func (cli *Client) BeeperMergeRooms(req *ReqBeeperMergeRoom) (resp *RespBeeperMergeRoom, err error) {
+	urlPath := cli.BuildClientURL("unstable", "com.beeper.chatmerging", "merge")
+	_, err = cli.MakeRequest(http.MethodPost, urlPath, req, &resp)
+	return
+}
+
+func (cli *Client) BeeperSplitRoom(req *ReqBeeperSplitRoom) (resp *RespBeeperSplitRoom, err error) {
+	urlPath := cli.BuildClientURL("unstable", "com.beeper.chatmerging", "rooms", req.RoomID, "split")
+	_, err = cli.MakeRequest(http.MethodPost, urlPath, req, &resp)
+	return
+}
+
 // TxnID returns the next transaction ID.
 func (cli *Client) TxnID() string {
 	txnID := atomic.AddInt32(&cli.txnID, 1)

@@ -540,3 +540,9 @@ type StrippedStateWithTime struct {
 	event.StrippedState
 	Timestamp jsontime.UnixMilli `json:"origin_server_ts"`
 }
+
+type RespBeeperMergeRoom RespCreateRoom
+
+type RespBeeperSplitRoom struct {
+	RoomIDs map[string]id.RoomID `json:"room_ids"`
+}
