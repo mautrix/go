@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -38,7 +39,14 @@ func (mach *OlmMachine) DecryptMegolmEvent(evt *event.Event) (*event.Event, erro
 	} else if content.Algorithm != id.AlgorithmMegolmV1 {
 		return nil, UnsupportedAlgorithm
 	}
-	sess, err := mach.CryptoStore.GetGroupSession(evt.RoomID, content.SenderKey, content.SessionID)
+	encryptionRoomID := evt.RoomID
+	// Allow the server to move encrypted events between rooms if both the real room and target room are on a non-federatable .local domain.
+	// The message index checks to prevent replay attacks still apply and aren't based on the room ID,
+	// so the event ID and timestamp must remain the same when the event is moved to a different room.
+	if origRoomID, ok := evt.Content.Raw["com.beeper.original_room_id"].(string); ok && strings.HasSuffix(origRoomID, ".local") && strings.HasSuffix(evt.RoomID.String(), ".local") {
+		encryptionRoomID = id.RoomID(origRoomID)
+	}
+	sess, err := mach.CryptoStore.GetGroupSession(encryptionRoomID, content.SenderKey, content.SessionID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get group session: %w", err)
 	} else if sess == nil {
@@ -93,7 +101,7 @@ func (mach *OlmMachine) DecryptMegolmEvent(evt *event.Event) (*event.Event, erro
 	err = json.Unmarshal(plaintext, &megolmEvt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse megolm payload: %w", err)
-	} else if megolmEvt.RoomID != evt.RoomID {
+	} else if megolmEvt.RoomID != encryptionRoomID {
 		return nil, WrongRoom
 	}
 	megolmEvt.Type.Class = evt.Type.Class
