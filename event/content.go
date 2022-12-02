@@ -77,6 +77,7 @@ var TypeMap = map[Type]reflect.Type{
 	ToDeviceVerificationMAC:     reflect.TypeOf(VerificationMacEventContent{}),
 	ToDeviceVerificationCancel:  reflect.TypeOf(VerificationCancelEventContent{}),
 	ToDeviceVerificationRequest: reflect.TypeOf(VerificationRequestEventContent{}),
+	ToDeviceVerificationReady:   reflect.TypeOf(VerificationReadyEventContent{}),
 
 	ToDeviceOrgMatrixRoomKeyWithheld: reflect.TypeOf(RoomKeyWithheldEventContent{}),
 

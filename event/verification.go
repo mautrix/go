@@ -141,6 +141,8 @@ func (vsec *VerificationStartEventContent) SetRelatesTo(rel *RelatesTo) {
 type VerificationReadyEventContent struct {
 	// The device ID which accepted the process.
 	FromDevice id.DeviceID `json:"from_device"`
+	// An opaque identifier for the verification process. Must be unique with respect to the devices involved.
+	TransactionID string `json:"transaction_id,omitempty"`
 	// The verification methods supported by the sender.
 	Methods []VerificationMethod `json:"methods"`
 	// Original event ID for in-room verification.

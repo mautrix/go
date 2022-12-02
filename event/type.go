@@ -255,6 +255,7 @@ var (
 	ToDeviceVerificationKey     = Type{"m.key.verification.key", ToDeviceEventType}
 	ToDeviceVerificationMAC     = Type{"m.key.verification.mac", ToDeviceEventType}
 	ToDeviceVerificationCancel  = Type{"m.key.verification.cancel", ToDeviceEventType}
+	ToDeviceVerificationReady   = Type{"m.key.verification.ready", ToDeviceEventType}
 
 	ToDeviceOrgMatrixRoomKeyWithheld = Type{"org.matrix.room_key.withheld", ToDeviceEventType}
 
