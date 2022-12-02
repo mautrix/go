@@ -516,6 +516,7 @@ func (mx *MatrixHandler) HandleMessage(evt *event.Event) {
 		}
 		if hasCommandPrefix || evt.RoomID == user.GetManagementRoomID() {
 			go mx.bridge.CommandProcessor.Handle(evt.RoomID, evt.ID, user, content.Body, content.RelatesTo.GetReplyTo())
+			go mx.bridge.SendMessageSuccessCheckpoint(evt, status.MsgStepCommand, 0)
 			return
 		}
 	}
