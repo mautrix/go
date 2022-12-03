@@ -152,8 +152,9 @@ type BridgeEventContent struct {
 }
 
 type SpaceChildEventContent struct {
-	Via   []string `json:"via,omitempty"`
-	Order string   `json:"order,omitempty"`
+	Via       []string `json:"via,omitempty"`
+	Order     string   `json:"order,omitempty"`
+	Suggested bool     `json:"suggested,omitempty"`
 }
 
 type SpaceParentEventContent struct {
