@@ -7,7 +7,6 @@
 package sql_store_upgrade
 
 import (
-	"database/sql"
 	"embed"
 	"fmt"
 
@@ -26,15 +25,4 @@ func init() {
 		return fmt.Errorf("upgrading from versions 1 and 2 of the crypto store is no longer supported in mautrix-go v0.12+")
 	})
 	Table.RegisterFS(fs)
-}
-
-// Upgrade upgrades the database from the current to the latest version available.
-func Upgrade(sqlDB *sql.DB, dialect string) error {
-	db, err := dbutil.NewWithDB(sqlDB, dialect)
-	if err != nil {
-		return err
-	}
-	db.VersionTable = VersionTableName
-	db.UpgradeTable = Table
-	return db.Upgrade()
 }
