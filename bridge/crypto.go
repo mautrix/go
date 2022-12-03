@@ -75,7 +75,7 @@ func (helper *CryptoHelper) Init() error {
 		helper.bridge.CryptoPickleKey,
 	)
 
-	err := helper.store.Upgrade()
+	err := helper.store.DB.Upgrade()
 	if err != nil {
 		helper.bridge.LogDBUpgradeErrorAndExit("crypto store", err)
 	}

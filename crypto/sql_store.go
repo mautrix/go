@@ -55,10 +55,6 @@ func NewSQLCryptoStore(db *dbutil.Database, log dbutil.DatabaseLogger, accountID
 	}
 }
 
-func (store *SQLCryptoStore) Upgrade() error {
-	return store.DB.Upgrade()
-}
-
 // Flush does nothing for this implementation as data is already persisted in the database.
 func (store *SQLCryptoStore) Flush() error {
 	return nil

@@ -26,7 +26,7 @@ func getOlmMachine(t *testing.T) *OlmMachine {
 		t.Fatalf("Error opening db: %v", err)
 	}
 	sqlStore := NewSQLCryptoStore(db, nil, "accid", id.DeviceID("dev"), []byte("test"))
-	if err = sqlStore.Upgrade(); err != nil {
+	if err = sqlStore.DB.Upgrade(); err != nil {
 		t.Fatalf("Error creating tables: %v", err)
 	}
 
