@@ -1,3 +1,14 @@
+## unreleased
+
+* **Breaking change:** Replaced `MarkReadWithContent` with `SendReceipt` to
+  support private read receipts and thread receipts in the same function.
+* Removed legacy `sql_store_upgrade.Upgrade` method. Using `store.DB.Upgrade()`
+  after `NewSQLCryptoStore(...)` is recommended instead (the bridge module does
+  this automatically).
+* Added missing `suggested` field to `m.space.child` content struct.
+* Changed bridge configs to force `sqlite3-fk-wal` instead of `sqlite3`.
+* Updated bridge helper to close database connection when stopping.
+
 ## v0.12.3 (2022-11-16)
 
 * **Breaking change:** Added logging for row iteration in the dbutil package.
