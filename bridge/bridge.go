@@ -346,7 +346,7 @@ func (br *Bridge) loadConfig() {
 
 func (br *Bridge) validateConfig() error {
 	switch {
-	case br.Config.Homeserver.Address == "https://example.com":
+	case br.Config.Homeserver.Address == "https://matrix.example.com":
 		return errors.New("homeserver.address not configured")
 	case br.Config.Homeserver.Domain == "example.com":
 		return errors.New("homeserver.domain not configured")
