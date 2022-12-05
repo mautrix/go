@@ -6,6 +6,8 @@
   after `NewSQLCryptoStore(...)` is recommended instead (the bridge module does
   this automatically).
 * Added missing `suggested` field to `m.space.child` content struct.
+* Added `device_unused_fallback_key_types` to `/sync` response and appservice
+  transaction structs.
 * Changed bridge configs to force `sqlite3-fk-wal` instead of `sqlite3`.
 * Updated bridge helper to close database connection when stopping.
 

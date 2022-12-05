@@ -20,6 +20,7 @@ import (
 )
 
 type OTKCountMap = map[id.UserID]map[id.DeviceID]mautrix.OTKCount
+type FallbackKeyMap = map[id.UserID]map[id.DeviceID][]id.KeyAlgorithm
 
 // Transaction contains a list of events.
 type Transaction struct {
@@ -29,11 +30,13 @@ type Transaction struct {
 
 	DeviceLists    *mautrix.DeviceLists `json:"device_lists,omitempty"`
 	DeviceOTKCount OTKCountMap          `json:"device_one_time_keys_count,omitempty"`
+	FallbackKeys   FallbackKeyMap       `json:"device_unused_fallback_key_types,omitempty"`
 
 	MSC2409EphemeralEvents []*event.Event       `json:"de.sorunome.msc2409.ephemeral,omitempty"`
 	MSC2409ToDeviceEvents  []*event.Event       `json:"de.sorunome.msc2409.to_device,omitempty"`
 	MSC3202DeviceLists     *mautrix.DeviceLists `json:"org.matrix.msc3202.device_lists,omitempty"`
 	MSC3202DeviceOTKCount  OTKCountMap          `json:"org.matrix.msc3202.device_one_time_keys_count,omitempty"`
+	MSC3202FallbackKeys    FallbackKeyMap       `json:"org.matrix.msc3202.device_unused_fallback_key_types,omitempty"`
 }
 
 func (txn *Transaction) MarshalZerologObject(ctx *zerolog.Event) {
@@ -45,6 +48,9 @@ func (txn *Transaction) MarshalZerologObject(ctx *zerolog.Event) {
 	}
 	if txn.DeviceLists != nil {
 		ctx.Int("device_changes", len(txn.DeviceLists.Changed))
+	}
+	if txn.FallbackKeys != nil {
+		ctx.Int("fallback_key_users", len(txn.FallbackKeys))
 	}
 }
 
@@ -72,6 +78,11 @@ func (txn *Transaction) ContentString() string {
 		parts = append(parts, fmt.Sprintf("%d device list changes", len(txn.DeviceLists.Changed)))
 	} else if txn.MSC3202DeviceLists != nil {
 		parts = append(parts, fmt.Sprintf("%d device list changes (unstable)", len(txn.MSC3202DeviceLists.Changed)))
+	}
+	if txn.FallbackKeys != nil {
+		parts = append(parts, fmt.Sprintf("unused fallback key counts for %d users", len(txn.FallbackKeys)))
+	} else if txn.MSC3202FallbackKeys != nil {
+		parts = append(parts, fmt.Sprintf("unused fallback key counts for %d users (unstable)", len(txn.MSC3202FallbackKeys)))
 	}
 	return strings.Join(parts, ", ")
 }

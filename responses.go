@@ -246,8 +246,9 @@ type RespSync struct {
 	Presence    SyncEventsList `json:"presence"`
 	ToDevice    SyncEventsList `json:"to_device"`
 
-	DeviceLists    DeviceLists `json:"device_lists"`
-	DeviceOTKCount OTKCount    `json:"device_one_time_keys_count"`
+	DeviceLists    DeviceLists       `json:"device_lists"`
+	DeviceOTKCount OTKCount          `json:"device_one_time_keys_count"`
+	FallbackKeys   []id.KeyAlgorithm `json:"device_unused_fallback_key_types"`
 
 	Rooms RespSyncRooms `json:"rooms"`
 }
