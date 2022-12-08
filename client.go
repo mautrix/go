@@ -830,6 +830,12 @@ func (cli *Client) JoinRoomByID(roomID id.RoomID) (resp *RespJoinRoom, err error
 	return
 }
 
+func (cli *Client) GetProfile(mxid id.UserID) (resp *RespUserProfile, err error) {
+	urlPath := cli.BuildClientURL("v3", "profile", mxid)
+	_, err = cli.MakeRequest("GET", urlPath, nil, &resp)
+	return
+}
+
 // GetDisplayName returns the display name of the user with the specified MXID. See https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3profileuseriddisplayname
 func (cli *Client) GetDisplayName(mxid id.UserID) (resp *RespUserDisplayName, err error) {
 	urlPath := cli.BuildClientURL("v3", "profile", mxid, "displayname")

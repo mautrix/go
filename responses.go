@@ -160,6 +160,11 @@ type RespUserDisplayName struct {
 	DisplayName string `json:"displayname"`
 }
 
+type RespUserProfile struct {
+	DisplayName string        `json:"displayname"`
+	AvatarURL   id.ContentURI `json:"avatar_url"`
+}
+
 // RespRegisterAvailable is the JSON response for https://spec.matrix.org/v1.4/client-server-api/#get_matrixclientv3registeravailable
 type RespRegisterAvailable struct {
 	Available bool `json:"available"`

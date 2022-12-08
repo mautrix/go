@@ -256,11 +256,12 @@ func (intent *IntentAPI) SendCustomMembershipEvent(roomID id.RoomID, target id.U
 			ok = memberContent != nil
 		}
 		if !ok {
-			err := intent.StateEvent(roomID, event.StateMember, target.String(), &memberContent)
+			profile, err := intent.GetProfile(target)
 			if err != nil {
-				intent.Logger.Debugfln("Failed to get member info for %s/%s to fill new %s membership event: %v", roomID, target, membership, err)
+				intent.Logger.Debugfln("Failed to get profile for %s to fill new %s membership event: %v", target, membership, err)
 			} else {
-				ok = true
+				content.Displayname = profile.DisplayName
+				content.AvatarURL = profile.AvatarURL.CUString()
 			}
 		}
 	}
