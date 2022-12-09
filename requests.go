@@ -334,13 +334,13 @@ type ReqBatchSend struct {
 }
 
 type ReqSetReadMarkers struct {
-	Read        id.EventID `json:"m.read"`
-	ReadPrivate id.EventID `json:"m.read.private"`
-	FullyRead   id.EventID `json:"m.fully_read"`
+	Read        id.EventID `json:"m.read,omitempty"`
+	ReadPrivate id.EventID `json:"m.read.private,omitempty"`
+	FullyRead   id.EventID `json:"m.fully_read,omitempty"`
 
-	BeeperReadExtra        interface{} `json:"com.beeper.read.extra"`
-	BeeperReadPrivateExtra interface{} `json:"com.beeper.read.private.extra"`
-	BeeperFullyReadExtra   interface{} `json:"com.beeper.fully_read.extra"`
+	BeeperReadExtra        interface{} `json:"com.beeper.read.extra,omitempty"`
+	BeeperReadPrivateExtra interface{} `json:"com.beeper.read.private.extra,omitempty"`
+	BeeperFullyReadExtra   interface{} `json:"com.beeper.fully_read.extra,omitempty"`
 }
 
 type ReqSendReceipt struct {
