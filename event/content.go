@@ -95,6 +95,12 @@ var TypeMap = map[Type]reflect.Type{
 	ToDeviceCallSelectAnswer: reflect.TypeOf(CallSelectAnswerEventContent{}),
 	ToDeviceCallNegotiate:    reflect.TypeOf(CallNegotiateEventContent{}),
 	ToDeviceCallHangup:       reflect.TypeOf(CallHangupEventContent{}),
+
+	FocusCallTrackSubscription:        reflect.TypeOf(FocusCallTrackSubscriptionEventContent{}),
+	FocusCallNegotiate:                reflect.TypeOf(FocusCallNegotiateEventContent{}),
+	FocusCallSDPStreamMetadataChanged: reflect.TypeOf(FocusCallSDPStreamMetadataChangedEventContent{}),
+	FocusCallPing:                     reflect.TypeOf(FocusCallPingEventContent{}),
+	FocusCallPong:                     reflect.TypeOf(FocusCallPongEventContent{}),
 }
 
 // Content stores the content of a Matrix event.
@@ -501,6 +507,41 @@ func (content *Content) AsCallHangup() *CallHangupEventContent {
 	casted, ok := content.Parsed.(*CallHangupEventContent)
 	if !ok {
 		return &CallHangupEventContent{}
+	}
+	return casted
+}
+func (content *Content) AsFocusCallTrackSubscription() *FocusCallTrackSubscriptionEventContent {
+	casted, ok := content.Parsed.(*FocusCallTrackSubscriptionEventContent)
+	if !ok {
+		return &FocusCallTrackSubscriptionEventContent{}
+	}
+	return casted
+}
+func (content *Content) AsFocusCallNegotiate() *FocusCallNegotiateEventContent {
+	casted, ok := content.Parsed.(*FocusCallNegotiateEventContent)
+	if !ok {
+		return &FocusCallNegotiateEventContent{}
+	}
+	return casted
+}
+func (content *Content) AsFocusCallSDPStreamMetadataChanged() *FocusCallSDPStreamMetadataChangedEventContent {
+	casted, ok := content.Parsed.(*FocusCallSDPStreamMetadataChangedEventContent)
+	if !ok {
+		return &FocusCallSDPStreamMetadataChangedEventContent{}
+	}
+	return casted
+}
+func (content *Content) AsFocusCallPing() *FocusCallPingEventContent {
+	casted, ok := content.Parsed.(*FocusCallPingEventContent)
+	if !ok {
+		return &FocusCallPingEventContent{}
+	}
+	return casted
+}
+func (content *Content) AsFocusCallPong() *FocusCallPongEventContent {
+	casted, ok := content.Parsed.(*FocusCallPongEventContent)
+	if !ok {
+		return &FocusCallPongEventContent{}
 	}
 	return casted
 }

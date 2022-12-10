@@ -151,29 +151,27 @@ type CallHangupEventContent struct {
 	Reason CallHangupReason `json:"reason"`
 }
 
-type SFUTrackDescription struct {
+type FocusTrackDescription struct {
 	StreamID string `json:"stream_id"`
 	TrackID  string `json:"track_id"`
 	Width    int    `json:"width,omitempty"`
 	Height   int    `json:"height,omitempty"`
 }
 
-type SFUMessageOperation string
-
-const (
-	SFUOperationSelect    SFUMessageOperation = "select"
-	SFUOperationMetadata  SFUMessageOperation = "metadata"
-	SFUOperationPublish   SFUMessageOperation = "publish"
-	SFUOperationUnpublish SFUMessageOperation = "unpublish"
-	SFUOperationAlive     SFUMessageOperation = "alive"
-	SFUOperationOffer     SFUMessageOperation = "offer"
-	SFUOperationAnswer    SFUMessageOperation = "answer"
-)
-
-type SFUMessage struct {
-	Op       SFUMessageOperation   `json:"op"`
-	Start    []SFUTrackDescription `json:"start,omitempty"`
-	Stop     []SFUTrackDescription `json:"stop,omitempty"`
-	SDP      string                `json:"sdp,omitempty"`
-	Metadata CallSDPStreamMetadata `json:"metadata,omitempty"`
+type FocusCallTrackSubscriptionEventContent struct {
+	Subscribe   []FocusTrackDescription `json:"subscribe"`
+	Unsubscribe []FocusTrackDescription `json:"unsubscribe"`
 }
+
+type FocusCallNegotiateEventContent struct {
+	Description       CallData              `json:"description"`
+	SDPStreamMetadata CallSDPStreamMetadata `json:"m.sdp_stream_metadata"`
+}
+
+type FocusCallSDPStreamMetadataChangedEventContent struct {
+	SDPStreamMetadata CallSDPStreamMetadata `json:"m.sdp_stream_metadata"`
+}
+
+type FocusCallPingEventContent struct{}
+
+type FocusCallPongEventContent struct{}

@@ -33,6 +33,8 @@ func (tc TypeClass) Name() string {
 		return "account data"
 	case ToDeviceEventType:
 		return "to-device"
+	case FocusEventType:
+		return "focus"
 	default:
 		return "unknown"
 	}
@@ -51,6 +53,8 @@ const (
 	AccountDataEventType
 	// Device-to-device events
 	ToDeviceEventType
+	// Focus events
+	FocusEventType
 )
 
 type Type struct {
@@ -78,6 +82,10 @@ func (et *Type) IsAccountData() bool {
 
 func (et *Type) IsToDevice() bool {
 	return et.Class == ToDeviceEventType
+}
+
+func (et *Type) IsFocus() bool {
+	return et.Class == FocusEventType
 }
 
 func (et *Type) IsInRoomVerification() bool {
@@ -261,4 +269,13 @@ var (
 	ToDeviceCallSelectAnswer = Type{"m.call.select_answer", ToDeviceEventType}
 	ToDeviceCallNegotiate    = Type{"m.call.negotiate", ToDeviceEventType}
 	ToDeviceCallHangup       = Type{"m.call.hangup", ToDeviceEventType}
+)
+
+// Focus events
+var (
+	FocusCallTrackSubscription        = Type{"m.call.track_subscription", FocusEventType}
+	FocusCallNegotiate                = Type{"m.call.negotiate", FocusEventType}
+	FocusCallSDPStreamMetadataChanged = Type{"m.call.sdp_stream_metadata_changed", FocusEventType}
+	FocusCallPing                     = Type{"m.call.ping", FocusEventType}
+	FocusCallPong                     = Type{"m.call.pong", FocusEventType}
 )
