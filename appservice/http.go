@@ -44,7 +44,7 @@ func (as *AppService) Start() {
 	} else {
 		err = as.server.ListenAndServeTLS(as.Host.TLSCert, as.Host.TLSKey)
 	}
-	if err != nil && err.Error() != "http: Server closed" {
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		as.Log.Fatalln("Error while listening:", err)
 	} else {
 		as.Log.Debugln("Listener stopped.")
