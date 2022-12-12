@@ -15,6 +15,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/tidwall/sjson"
+
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/util/jsontime"
@@ -97,12 +99,20 @@ func (pong BridgeState) Fill(user BridgeStateFiller) BridgeState {
 }
 
 func (pong *BridgeState) Send(ctx context.Context, url, token string) error {
-	var body bytes.Buffer
-	if err := json.NewEncoder(&body).Encode(&pong); err != nil {
+	var body []byte
+	var err error
+	if body, err = json.Marshal(&pong); err != nil {
 		return fmt.Errorf("failed to encode bridge state JSON: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, &body)
+	if pong.StateEvent == StateBridgeUnreachable {
+		body, err = sjson.SetBytes(body, "stateEvent", pong.StateEvent)
+		if err != nil {
+			return fmt.Errorf("failed to add stateEvent field to bridge_unreachable state")
+		}
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("failed to prepare request: %w", err)
 	}
