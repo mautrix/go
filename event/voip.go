@@ -165,11 +165,11 @@ type FocusCallTrackSubscriptionEventContent struct {
 
 type FocusCallNegotiateEventContent struct {
 	Description       CallData              `json:"description"`
-	SDPStreamMetadata CallSDPStreamMetadata `json:"m.sdp_stream_metadata"`
+	SDPStreamMetadata CallSDPStreamMetadata `json:"sdp_stream_metadata"`
 }
 
 type FocusCallSDPStreamMetadataChangedEventContent struct {
-	SDPStreamMetadata CallSDPStreamMetadata `json:"m.sdp_stream_metadata"`
+	SDPStreamMetadata CallSDPStreamMetadata `json:"sdp_stream_metadata"`
 }
 
 type FocusCallPingEventContent struct{}
