@@ -132,6 +132,9 @@ func (et *Type) GuessClass() TypeClass {
 		CallInvite.Type, CallCandidates.Type, CallAnswer.Type, CallReject.Type, CallSelectAnswer.Type,
 		CallNegotiate.Type, CallHangup.Type, BeeperMessageStatus.Type:
 		return MessageEventType
+	case FocusCallTrackSubscription.Type, FocusCallNegotiate.Type, FocusCallSDPStreamMetadataChanged.Type, FocusCallPing.Type,
+		FocusCallPong.Type:
+		return FocusEventType
 	case ToDeviceRoomKey.Type, ToDeviceRoomKeyRequest.Type, ToDeviceForwardedRoomKey.Type, ToDeviceRoomKeyWithheld.Type:
 		return ToDeviceEventType
 	default:
