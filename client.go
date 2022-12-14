@@ -1240,14 +1240,21 @@ func (cli *Client) Download(mxcURL id.ContentURI) (io.ReadCloser, error) {
 }
 
 func (cli *Client) DownloadContext(ctx context.Context, mxcURL id.ContentURI) (io.ReadCloser, error) {
-	if req, err := http.NewRequestWithContext(ctx, http.MethodGet, cli.GetDownloadURL(mxcURL), nil); err != nil {
-		return nil, err
-	} else if req.Header.Set("User-Agent", cli.UserAgent+" (media downloader)"); false {
-		panic("false is true")
-	} else if resp, err := cli.Client.Do(req); err != nil {
-		return nil, err
+	_, resp, err := cli.downloadContext(ctx, mxcURL)
+	return resp.Body, err
+}
+
+func (cli *Client) downloadContext(ctx context.Context, mxcURL id.ContentURI) (*http.Request, *http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, cli.GetDownloadURL(mxcURL), nil)
+	if err != nil {
+		return req, nil, err
+	}
+	req.Header.Set("User-Agent", cli.UserAgent+" (media downloader)")
+	cli.LogRequest(req)
+	if resp, err := cli.Client.Do(req); err != nil {
+		return req, nil, err
 	} else {
-		return resp.Body, nil
+		return req, resp, nil
 	}
 }
 
@@ -1256,12 +1263,19 @@ func (cli *Client) DownloadBytes(mxcURL id.ContentURI) ([]byte, error) {
 }
 
 func (cli *Client) DownloadBytesContext(ctx context.Context, mxcURL id.ContentURI) ([]byte, error) {
-	resp, err := cli.DownloadContext(ctx, mxcURL)
+	req, resp, err := cli.downloadContext(ctx, mxcURL)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Close()
-	return io.ReadAll(resp)
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 || resp.StatusCode < 200 {
+		respErr := &RespError{}
+		if _ = json.NewDecoder(resp.Body).Decode(respErr); respErr.ErrCode == "" {
+			respErr = nil
+		}
+		return nil, HTTPError{Request: req, Response: resp, RespError: respErr}
+	}
+	return io.ReadAll(resp.Body)
 }
 
 // UnstableCreateMXC creates a blank Matrix content URI to allow uploading the content asynchronously later.
