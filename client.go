@@ -902,7 +902,7 @@ func (cli *Client) GetAccountData(name string, output interface{}) (err error) {
 // SetAccountData sets the user's account data of this type. See https://spec.matrix.org/v1.2/client-server-api/#put_matrixclientv3useruseridaccount_datatype
 func (cli *Client) SetAccountData(name string, data interface{}) (err error) {
 	urlPath := cli.BuildClientURL("v3", "user", cli.UserID, "account_data", name)
-	_, err = cli.MakeRequest("PUT", urlPath, &data, nil)
+	_, err = cli.MakeRequest("PUT", urlPath, data, nil)
 	if err != nil {
 		return err
 	}
@@ -920,7 +920,7 @@ func (cli *Client) GetRoomAccountData(roomID id.RoomID, name string, output inte
 // SetRoomAccountData sets the user's account data of this type in a specific room. See https://spec.matrix.org/v1.2/client-server-api/#put_matrixclientv3useruseridroomsroomidaccount_datatype
 func (cli *Client) SetRoomAccountData(roomID id.RoomID, name string, data interface{}) (err error) {
 	urlPath := cli.BuildClientURL("v3", "user", cli.UserID, "rooms", roomID, "account_data", name)
-	_, err = cli.MakeRequest("PUT", urlPath, &data, nil)
+	_, err = cli.MakeRequest("PUT", urlPath, data, nil)
 	if err != nil {
 		return err
 	}
@@ -1565,13 +1565,13 @@ func (cli *Client) MarkRead(roomID id.RoomID, eventID id.EventID) (err error) {
 // To mark a message in a specific thread as read, use pass a ReqSendReceipt as the content.
 func (cli *Client) SendReceipt(roomID id.RoomID, eventID id.EventID, receiptType event.ReceiptType, content interface{}) (err error) {
 	urlPath := cli.BuildClientURL("v3", "rooms", roomID, "receipt", receiptType, eventID)
-	_, err = cli.MakeRequest("POST", urlPath, &content, nil)
+	_, err = cli.MakeRequest("POST", urlPath, content, nil)
 	return
 }
 
 func (cli *Client) SetReadMarkers(roomID id.RoomID, content interface{}) (err error) {
 	urlPath := cli.BuildClientURL("v3", "rooms", roomID, "read_markers")
-	_, err = cli.MakeRequest("POST", urlPath, &content, nil)
+	_, err = cli.MakeRequest("POST", urlPath, content, nil)
 	return
 }
 
