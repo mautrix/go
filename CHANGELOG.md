@@ -1,4 +1,4 @@
-## unreleased
+## v0.12.4 (2022-12-16)
 
 * Added `SendReceipt` to support private read receipts and thread receipts in
   the same function. `MarkReadWithContent` is now deprecated.
