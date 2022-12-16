@@ -1559,6 +1559,13 @@ func (cli *Client) MarkRead(roomID id.RoomID, eventID id.EventID) (err error) {
 	return cli.SendReceipt(roomID, eventID, event.ReceiptTypeRead, nil)
 }
 
+// MarkReadWithContent sends a read receipt including custom data.
+//
+// Deprecated: Use SendReceipt instead.
+func (cli *Client) MarkReadWithContent(roomID id.RoomID, eventID id.EventID, content interface{}) (err error) {
+	return cli.SendReceipt(roomID, eventID, event.ReceiptTypeRead, content)
+}
+
 // SendReceipt sends a receipt, usually specifically a read receipt.
 //
 // Passing nil as the content is safe, the library will automatically replace it with an empty JSON object.
