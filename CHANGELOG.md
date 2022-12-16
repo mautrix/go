@@ -1,15 +1,20 @@
 ## unreleased
 
-* **Breaking change:** Replaced `MarkReadWithContent` with `SendReceipt` to
-  support private read receipts and thread receipts in the same function.
+* Added `SendReceipt` to support private read receipts and thread receipts in
+  the same function. `MarkReadWithContent` is now deprecated.
+* Changed media download methods to return errors if the server returns a
+  non-2xx status code.
 * Removed legacy `sql_store_upgrade.Upgrade` method. Using `store.DB.Upgrade()`
   after `NewSQLCryptoStore(...)` is recommended instead (the bridge module does
   this automatically).
 * Added missing `suggested` field to `m.space.child` content struct.
 * Added `device_unused_fallback_key_types` to `/sync` response and appservice
   transaction structs.
+* Changed `ReqSetReadMarkers` to omit empty fields.
 * Changed bridge configs to force `sqlite3-fk-wal` instead of `sqlite3`.
 * Updated bridge helper to close database connection when stopping.
+* Fixed read receipt and account data endpoints sending `null` instead of an
+  empty object as the body when content isn't provided.
 
 ## v0.12.3 (2022-11-16)
 
