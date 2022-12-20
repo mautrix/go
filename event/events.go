@@ -140,7 +140,7 @@ type Unsigned struct {
 	RedactedBecause *Event          `json:"redacted_because,omitempty"`
 	InviteRoomState []StrippedState `json:"invite_room_state,omitempty"`
 
-	HungryRowID int64 `json:"com.beeper.hungry_row_id,omitempty"`
+	BeeperHSOrder int64 `json:"com.beeper.hs.order,omitempty"`
 }
 
 func (us *Unsigned) IsEmpty() bool {
