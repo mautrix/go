@@ -1823,6 +1823,12 @@ func (cli *Client) BeeperSplitRoom(req *ReqBeeperSplitRoom) (resp *RespBeeperSpl
 	return
 }
 
+func (cli *Client) BeeperDeleteRoom(roomID id.RoomID) (err error) {
+	urlPath := cli.BuildClientURL("unstable", "com.beeper.yeet", "rooms", roomID, "delete")
+	_, err = cli.MakeRequest(http.MethodPut, urlPath, nil, nil)
+	return
+}
+
 // TxnID returns the next transaction ID.
 func (cli *Client) TxnID() string {
 	txnID := atomic.AddInt32(&cli.txnID, 1)
