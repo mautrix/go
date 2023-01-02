@@ -1,3 +1,8 @@
+## unreleased
+
+* **Breaking change:** Removed `IsTyping` and `SetTyping` in `appservice.StateStore`
+  and removed the `TypingStateStore` struct implementing those methods.
+
 ## v0.12.4 (2022-12-16)
 
 * Added `SendReceipt` to support private read receipts and thread receipts in
