@@ -1825,7 +1825,7 @@ func (cli *Client) BeeperSplitRoom(req *ReqBeeperSplitRoom) (resp *RespBeeperSpl
 
 func (cli *Client) BeeperDeleteRoom(roomID id.RoomID) (err error) {
 	urlPath := cli.BuildClientURL("unstable", "com.beeper.yeet", "rooms", roomID, "delete")
-	_, err = cli.MakeRequest(http.MethodPut, urlPath, nil, nil)
+	_, err = cli.MakeRequest(http.MethodPost, urlPath, nil, nil)
 	return
 }
 
