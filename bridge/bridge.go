@@ -165,7 +165,8 @@ type Bridge struct {
 	Crypto           Crypto
 	CryptoPickleKey  string
 
-	MediaConfig mautrix.RespMediaConfig
+	MediaConfig  mautrix.RespMediaConfig
+	SpecVersions mautrix.RespVersions
 
 	Child ChildOverride
 
@@ -252,6 +253,7 @@ func (br *Bridge) ensureConnection() {
 			time.Sleep(10 * time.Second)
 			continue
 		}
+		br.SpecVersions = *versions
 		if br.Config.Homeserver.Software == bridgeconfig.SoftwareHungry && !versions.UnstableFeatures["com.beeper.hungry"] {
 			br.Log.Fatalln("The config claims the homeserver is hungryserv, but the /versions response didn't confirm it")
 			os.Exit(18)
