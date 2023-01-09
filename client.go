@@ -1503,7 +1503,7 @@ func (cli *Client) Hierarchy(roomID id.RoomID, req *ReqHierarchy) (resp *RespHie
 // Messages returns a list of message and state events for a room. It uses
 // pagination query parameters to paginate history in the room.
 // See https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3roomsroomidmessages
-func (cli *Client) Messages(roomID id.RoomID, from, to string, dir rune, filter *FilterPart, limit int) (resp *RespMessages, err error) {
+func (cli *Client) Messages(roomID id.RoomID, from, to string, dir Direction, filter *FilterPart, limit int) (resp *RespMessages, err error) {
 	query := map[string]string{
 		"from": from,
 		"dir":  string(dir),
@@ -1524,6 +1524,19 @@ func (cli *Client) Messages(roomID id.RoomID, from, to string, dir rune, filter 
 
 	urlPath := cli.BuildURLWithQuery(ClientURLPath{"v3", "rooms", roomID, "messages"}, query)
 	_, err = cli.MakeRequest("GET", urlPath, nil, &resp)
+	return
+}
+
+// TimestampToEvent finds the ID of the event closest to the given timestamp.
+//
+// See https://spec.matrix.org/v1.6/client-server-api/#get_matrixclientv1roomsroomidtimestamp_to_event
+func (cli *Client) TimestampToEvent(roomID id.RoomID, timestamp time.Time, dir Direction) (resp *RespTimestampToEvent, err error) {
+	query := map[string]string{
+		"ts":  strconv.FormatInt(timestamp.UnixMilli(), 10),
+		"dir": string(dir),
+	}
+	urlPath := cli.BuildURLWithQuery(ClientURLPath{"v1", "rooms", roomID, "timestamp_to_event"}, query)
+	_, err = cli.MakeRequest(http.MethodGet, urlPath, nil, &resp)
 	return
 }
 

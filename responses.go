@@ -557,3 +557,8 @@ type RespBeeperMergeRoom RespCreateRoom
 type RespBeeperSplitRoom struct {
 	RoomIDs map[string]id.RoomID `json:"room_ids"`
 }
+
+type RespTimestampToEvent struct {
+	EventID   id.EventID         `json:"event_id"`
+	Timestamp jsontime.UnixMilli `json:"origin_server_ts"`
+}

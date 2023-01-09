@@ -31,6 +31,13 @@ const (
 	IdentifierTypePhone      = "m.id.phone"
 )
 
+type Direction rune
+
+const (
+	DirectionForward  Direction = 'f'
+	DirectionBackward Direction = 'b'
+)
+
 // ReqRegister is the JSON request for https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3register
 type ReqRegister struct {
 	Username                 string      `json:"username,omitempty"`
