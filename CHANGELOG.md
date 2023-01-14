@@ -2,6 +2,10 @@
 
 * **Breaking change:** Removed `IsTyping` and `SetTyping` in `appservice.StateStore`
   and removed the `TypingStateStore` struct implementing those methods.
+* **Breaking change:** Removed legacy fields in Beeper MSS events.
+* Added knocked rooms to sync response structs.
+* Added wrapper for `/timestamp_to_event` endpoint added in Matrix v1.6.
+* Fixed MSC3870 uploads not failing properly after using up the max retry count.
 
 ## v0.12.4 (2022-12-16)
 
