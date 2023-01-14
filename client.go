@@ -1348,6 +1348,18 @@ type ReqUploadMedia struct {
 	UploadURL string
 }
 
+func (cli *Client) tryUploadMediaToURL(url, contentType string, content io.Reader) (*http.Response, error) {
+	cli.Logger.Debugfln("Uploading media to external URL %s", url)
+	req, err := http.NewRequest(http.MethodPut, url, content)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("User-Agent", cli.UserAgent+" (external media uploader)")
+
+	return http.DefaultClient.Do(req)
+}
+
 func (cli *Client) uploadMediaToURL(data ReqUploadMedia) (*RespMediaUpload, error) {
 	retries := cli.DefaultHTTPRetries
 	if data.ContentBytes == nil {
@@ -1355,29 +1367,26 @@ func (cli *Client) uploadMediaToURL(data ReqUploadMedia) (*RespMediaUpload, erro
 		retries = 0
 	}
 	for {
-		if data.Content == nil {
-			data.Content = bytes.NewReader(data.ContentBytes)
+		reader := data.Content
+		if reader == nil {
+			reader = bytes.NewReader(data.ContentBytes)
+		} else {
+			data.Content = nil
 		}
-		cli.Logger.Debugfln("Uploading media to external URL %s", data.UploadURL)
-		req, err := http.NewRequest(http.MethodPut, data.UploadURL, data.Content)
-		if err != nil {
+		resp, err := cli.tryUploadMediaToURL(data.UploadURL, data.ContentType, reader)
+		if err == nil {
+			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+				// Everything is fine
+				break
+			}
+			err = fmt.Errorf("HTTP %d", resp.StatusCode)
+		}
+		if retries <= 0 {
+			cli.logWarning("Error uploading media to %s: %v, not retrying", data.UploadURL, err)
 			return nil, err
 		}
-		// Tell the next retry to create a new reader from ContentBytes
-		data.Content = nil
-		req.Header.Set("Content-Type", data.ContentType)
-		req.Header.Set("User-Agent", cli.UserAgent+" (external media uploader)")
-
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			cli.Logger.Debugfln("Error uploading media to %s: %v, retrying", data.UploadURL, err)
-			retries--
-		} else if resp.StatusCode >= 400 || resp.StatusCode < 200 {
-			cli.Logger.Debugfln("Error uploading media to %s: HTTP %d, retrying", data.UploadURL, resp.StatusCode)
-			retries--
-		} else {
-			break
-		}
+		cli.Logger.Debugfln("Error uploading media to %s: %v, retrying", data.UploadURL, err)
+		retries--
 	}
 
 	query := map[string]string{}
