@@ -117,6 +117,10 @@ func (parser *HTMLParser) listToString(node *html.Node, stripLinebreak bool, ctx
 		// TODO make bullets and numbering configurable
 		if ordered {
 			indexPadding := indentLength - Digits(counter)
+			if indexPadding < 0 {
+				// This will happen on negative start indexes where longestIndex is usually wrong, otherwise shouldn't happen
+				indexPadding = 0
+			}
 			prefix = fmt.Sprintf("%d. %s", counter, strings.Repeat(" ", indexPadding))
 		} else {
 			prefix = "* "
