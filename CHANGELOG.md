@@ -1,4 +1,4 @@
-## v0.13.0 (unreleased)
+## v0.13.0 (2023-01-16)
 
 * **Breaking change:** Removed `IsTyping` and `SetTyping` in `appservice.StateStore`
   and removed the `TypingStateStore` struct implementing those methods.
