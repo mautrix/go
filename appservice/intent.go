@@ -528,7 +528,9 @@ func (intent *IntentAPI) EnsureInvited(roomID id.RoomID, userID id.UserID) error
 		_, err := intent.InviteUser(roomID, &mautrix.ReqInviteUser{
 			UserID: userID,
 		})
-		if httpErr, ok := err.(mautrix.HTTPError); ok && httpErr.RespError != nil && strings.Contains(httpErr.RespError.Err, "is already in the room") {
+		if httpErr, ok := err.(mautrix.HTTPError); ok &&
+			httpErr.RespError != nil &&
+			(strings.Contains(httpErr.RespError.Err, "is already in the room") || strings.Contains(httpErr.RespError.Err, "is already joined to room")) {
 			return nil
 		}
 		return err
