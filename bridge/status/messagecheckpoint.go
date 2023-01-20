@@ -126,7 +126,7 @@ type CheckpointsJSON struct {
 func (cj *CheckpointsJSON) SendHTTP(endpoint string, token string) error {
 	var body bytes.Buffer
 	if err := json.NewEncoder(&body).Encode(cj); err != nil {
-		return fmt.Errorf("failed to encode message send checkpoint JSON: %w", err)
+		return fmt.Errorf("failed to encode message checkpoint JSON: %w", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -142,7 +142,7 @@ func (cj *CheckpointsJSON) SendHTTP(endpoint string, token string) error {
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to send bridge state update: %w", err)
+		return fmt.Errorf("failed to send message checkpoint: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
@@ -150,7 +150,7 @@ func (cj *CheckpointsJSON) SendHTTP(endpoint string, token string) error {
 		if respBody != nil {
 			respBody = bytes.ReplaceAll(respBody, []byte("\n"), []byte("\\n"))
 		}
-		return fmt.Errorf("unexpected status code %d sending bridge state update: %s", resp.StatusCode, respBody)
+		return fmt.Errorf("unexpected status code %d sending message checkpoint: %s", resp.StatusCode, respBody)
 	}
 	return nil
 }
