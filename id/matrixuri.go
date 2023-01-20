@@ -67,10 +67,10 @@ func (uri *MatrixURI) getQuery() url.Values {
 func (uri *MatrixURI) String() string {
 	parts := []string{
 		SigilToPathSegment[uri.Sigil1],
-		uri.MXID1,
+		url.PathEscape(uri.MXID1),
 	}
 	if uri.Sigil2 != 0 {
-		parts = append(parts, SigilToPathSegment[uri.Sigil2], uri.MXID2)
+		parts = append(parts, SigilToPathSegment[uri.Sigil2], url.PathEscape(uri.MXID2))
 	}
 	return (&url.URL{
 		Scheme:   "matrix",
@@ -81,9 +81,9 @@ func (uri *MatrixURI) String() string {
 
 // MatrixToURL converts to parsed matrix: URI into a matrix.to URL
 func (uri *MatrixURI) MatrixToURL() string {
-	fragment := fmt.Sprintf("#/%s", url.QueryEscape(uri.PrimaryIdentifier()))
+	fragment := fmt.Sprintf("#/%s", url.PathEscape(uri.PrimaryIdentifier()))
 	if uri.Sigil2 != 0 {
-		fragment = fmt.Sprintf("%s/%s", fragment, url.QueryEscape(uri.SecondaryIdentifier()))
+		fragment = fmt.Sprintf("%s/%s", fragment, url.PathEscape(uri.SecondaryIdentifier()))
 	}
 	query := uri.getQuery().Encode()
 	if len(query) > 0 {
