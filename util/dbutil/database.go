@@ -38,7 +38,7 @@ func (dialect Dialect) String() string {
 
 func ParseDialect(engine string) (Dialect, error) {
 	switch strings.ToLower(engine) {
-	case "postgres", "postgresql":
+	case "postgres", "postgresql", "pgx":
 		return Postgres, nil
 	case "sqlite3", "sqlite", "litestream", "sqlite3-fk-wal":
 		return SQLite, nil
