@@ -32,7 +32,6 @@ const VersionTableName = "mx_version"
 
 type SQLStateStore struct {
 	*dbutil.Database
-	*appservice.TypingStateStore
 
 	Typing     map[id.RoomID]map[id.UserID]int64
 	typingLock sync.RWMutex
@@ -42,8 +41,7 @@ var _ appservice.StateStore = (*SQLStateStore)(nil)
 
 func NewSQLStateStore(db *dbutil.Database, log dbutil.DatabaseLogger) *SQLStateStore {
 	return &SQLStateStore{
-		Database:         db.Child(VersionTableName, UpgradeTable, log),
-		TypingStateStore: appservice.NewTypingStateStore(),
+		Database: db.Child(VersionTableName, UpgradeTable, log),
 	}
 }
 

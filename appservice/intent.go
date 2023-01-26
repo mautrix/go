@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
@@ -403,21 +402,6 @@ func (intent *IntentAPI) SetPowerLevel(roomID id.RoomID, userID id.UserID, level
 	return nil, nil
 }
 
-func (intent *IntentAPI) UserTyping(roomID id.RoomID, typing bool, timeout time.Duration) (resp *mautrix.RespTyping, err error) {
-	if intent.as.StateStore.IsTyping(roomID, intent.UserID) == typing {
-		return
-	}
-	resp, err = intent.Client.UserTyping(roomID, typing, timeout)
-	if err != nil {
-		return
-	}
-	if !typing {
-		timeout = -1
-	}
-	intent.as.StateStore.SetTyping(roomID, intent.UserID, timeout)
-	return
-}
-
 func (intent *IntentAPI) SendText(roomID id.RoomID, text string) (*mautrix.RespSendEvent, error) {
 	if err := intent.EnsureJoined(roomID); err != nil {
 		return nil, err
@@ -544,7 +528,9 @@ func (intent *IntentAPI) EnsureInvited(roomID id.RoomID, userID id.UserID) error
 		_, err := intent.InviteUser(roomID, &mautrix.ReqInviteUser{
 			UserID: userID,
 		})
-		if httpErr, ok := err.(mautrix.HTTPError); ok && httpErr.RespError != nil && strings.Contains(httpErr.RespError.Err, "is already in the room") {
+		if httpErr, ok := err.(mautrix.HTTPError); ok &&
+			httpErr.RespError != nil &&
+			(strings.Contains(httpErr.RespError.Err, "is already in the room") || strings.Contains(httpErr.RespError.Err, "is already joined to room")) {
 			return nil
 		}
 		return err

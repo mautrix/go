@@ -262,6 +262,7 @@ type RespSyncRooms struct {
 	Leave  map[id.RoomID]*SyncLeftRoom    `json:"leave,omitempty"`
 	Join   map[id.RoomID]*SyncJoinedRoom  `json:"join,omitempty"`
 	Invite map[id.RoomID]*SyncInvitedRoom `json:"invite,omitempty"`
+	Knock  map[id.RoomID]*SyncKnockedRoom `json:"knock,omitempty"`
 }
 
 type marshalableRespSync RespSync
@@ -336,6 +337,10 @@ var syncInvitedRoomPathsToDelete = []string{"summary"}
 
 func (sir SyncInvitedRoom) MarshalJSON() ([]byte, error) {
 	return util.MarshalAndDeleteEmpty((marshalableSyncInvitedRoom)(sir), syncInvitedRoomPathsToDelete)
+}
+
+type SyncKnockedRoom struct {
+	State SyncEventsList `json:"knock_state"`
 }
 
 type RespTurnServer struct {
@@ -551,4 +556,9 @@ type RespBeeperMergeRoom RespCreateRoom
 
 type RespBeeperSplitRoom struct {
 	RoomIDs map[string]id.RoomID `json:"room_ids"`
+}
+
+type RespTimestampToEvent struct {
+	EventID   id.EventID         `json:"event_id"`
+	Timestamp jsontime.UnixMilli `json:"origin_server_ts"`
 }

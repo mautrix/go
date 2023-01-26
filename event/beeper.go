@@ -13,12 +13,13 @@ import (
 type MessageStatusReason string
 
 const (
-	MessageStatusGenericError  MessageStatusReason = "m.event_not_handled"
-	MessageStatusUnsupported   MessageStatusReason = "com.beeper.unsupported_event"
-	MessageStatusUndecryptable MessageStatusReason = "com.beeper.undecryptable_event"
-	MessageStatusTooOld        MessageStatusReason = "m.event_too_old"
-	MessageStatusNetworkError  MessageStatusReason = "m.foreign_network_error"
-	MessageStatusNoPermission  MessageStatusReason = "m.no_permission"
+	MessageStatusGenericError      MessageStatusReason = "m.event_not_handled"
+	MessageStatusUnsupported       MessageStatusReason = "com.beeper.unsupported_event"
+	MessageStatusUndecryptable     MessageStatusReason = "com.beeper.undecryptable_event"
+	MessageStatusTooOld            MessageStatusReason = "m.event_too_old"
+	MessageStatusNetworkError      MessageStatusReason = "m.foreign_network_error"
+	MessageStatusNoPermission      MessageStatusReason = "m.no_permission"
+	MessageStatusBridgeUnavailable MessageStatusReason = "m.bridge_unavailable"
 )
 
 type MessageStatus string
@@ -38,29 +39,9 @@ type BeeperMessageStatusEventContent struct {
 	Error     string              `json:"error,omitempty"`
 	Message   string              `json:"message,omitempty"`
 
-	Success      bool  `json:"success"`
-	CanRetry     *bool `json:"can_retry,omitempty"`
-	StillWorking bool  `json:"still_working,omitempty"`
-
 	LastRetry id.EventID `json:"last_retry,omitempty"`
 
 	MutateEventKey string `json:"mutate_event_key,omitempty"`
-}
-
-func (status *BeeperMessageStatusEventContent) FillLegacyBooleans() {
-	trueVal := true
-	falseVal := true
-	switch status.Status {
-	case MessageStatusSuccess:
-		status.Success = true
-	case MessageStatusPending:
-		status.CanRetry = &trueVal
-		status.StillWorking = true
-	case MessageStatusRetriable:
-		status.CanRetry = &trueVal
-	case MessageStatusFail:
-		status.CanRetry = &falseVal
-	}
 }
 
 type BeeperRetryMetadata struct {

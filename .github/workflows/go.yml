@@ -48,7 +48,9 @@ jobs:
           cache: true
 
       - name: Set up gotestfmt
-        uses: haveyoudebuggedit/gotestfmt-action@v2
+        uses: GoTestTools/gotestfmt-action@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install libolm
         run: sudo apt-get install libolm-dev libolm3

@@ -1,3 +1,13 @@
+## v0.13.0 (2023-01-16)
+
+* **Breaking change:** Removed `IsTyping` and `SetTyping` in `appservice.StateStore`
+  and removed the `TypingStateStore` struct implementing those methods.
+* **Breaking change:** Removed legacy fields in Beeper MSS events.
+* Added knocked rooms to sync response structs.
+* Added wrapper for `/timestamp_to_event` endpoint added in Matrix v1.6.
+* Fixed MSC3870 uploads not failing properly after using up the max retry count.
+* Fixed parsing non-positive ordered list start positions in HTML parser.
+
 ## v0.12.4 (2022-12-16)
 
 * Added `SendReceipt` to support private read receipts and thread receipts in
@@ -140,6 +150,11 @@
 
 [@nightmared]: https://github.com/nightmared
 [#83]: https://github.com/mautrix/go/pull/83
+
+## v0.11.1 (2023-01-15)
+
+* Fixed parsing non-positive ordered list start positions in HTML parser
+  (backport of the same fix in v0.13.0).
 
 ## v0.11.0 (2022-05-16)
 

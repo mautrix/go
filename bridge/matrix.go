@@ -341,7 +341,6 @@ func (mx *MatrixHandler) sendCryptoStatusError(evt *event.Event, editEvent id.Ev
 		if !isFinal {
 			statusEvent.Status = event.MessageStatusPending
 		}
-		statusEvent.FillLegacyBooleans()
 		_, sendErr := mx.bridge.Bot.SendMessageEvent(evt.RoomID, event.BeeperMessageStatus, statusEvent)
 		if sendErr != nil {
 			mx.log.Warnfln("Failed to send message status event for %s: %v", evt.ID, sendErr)
