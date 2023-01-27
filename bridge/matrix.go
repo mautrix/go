@@ -321,7 +321,8 @@ func (mx *MatrixHandler) shouldIgnoreEvent(evt *event.Event) bool {
 	return false
 }
 
-const sessionWaitTimeout = 3 * time.Second
+const initialSessionWaitTimeout = 3 * time.Second
+const extendedSessionWaitTimeout = 22 * time.Second
 
 func (mx *MatrixHandler) sendCryptoStatusError(evt *event.Event, editEvent id.EventID, err error, retryCount int, isFinal bool) id.EventID {
 	mx.bridge.SendMessageErrorCheckpoint(evt, status.MsgStepDecrypted, err, isFinal, retryCount)
@@ -444,9 +445,9 @@ func (mx *MatrixHandler) HandleEncrypted(evt *event.Event) {
 	decryptionRetryCount := 0
 	if errors.Is(err, NoSessionFound) {
 		decryptionRetryCount = 1
-		mx.log.Debugfln("Couldn't find session %s trying to decrypt %s, waiting %d seconds...", content.SessionID, evt.ID, int(sessionWaitTimeout.Seconds()))
+		mx.log.Debugfln("Couldn't find session %s trying to decrypt %s, waiting %d seconds...", content.SessionID, evt.ID, int(initialSessionWaitTimeout.Seconds()))
 		mx.bridge.SendMessageErrorCheckpoint(evt, status.MsgStepDecrypted, err, false, 0)
-		if mx.bridge.Crypto.WaitForSession(evt.RoomID, content.SenderKey, content.SessionID, sessionWaitTimeout) {
+		if mx.bridge.Crypto.WaitForSession(evt.RoomID, content.SenderKey, content.SessionID, initialSessionWaitTimeout) {
 			mx.log.Debugfln("Got session %s after waiting, trying to decrypt %s again", content.SessionID, evt.ID)
 			decrypted, err = mx.bridge.Crypto.Decrypt(evt)
 		} else {
@@ -464,16 +465,15 @@ func (mx *MatrixHandler) HandleEncrypted(evt *event.Event) {
 }
 
 func (mx *MatrixHandler) waitLongerForSession(evt *event.Event, decryptionStart time.Time) {
-	const extendedTimeout = sessionWaitTimeout * 2
 
 	content := evt.Content.AsEncrypted()
 	mx.log.Debugfln("Couldn't find session %s trying to decrypt %s, waiting %d more seconds...",
-		content.SessionID, evt.ID, int(extendedTimeout.Seconds()))
+		content.SessionID, evt.ID, int(extendedSessionWaitTimeout.Seconds()))
 
 	go mx.bridge.Crypto.RequestSession(evt.RoomID, content.SenderKey, content.SessionID, evt.Sender, content.DeviceID)
-	errorEventID := mx.sendCryptoStatusError(evt, "", fmt.Errorf("%w. The bridge will retry for %d seconds", errNoDecryptionKeys, int(extendedTimeout.Seconds())), 1, false)
+	errorEventID := mx.sendCryptoStatusError(evt, "", fmt.Errorf("%w. The bridge will retry for %d seconds", errNoDecryptionKeys, int(extendedSessionWaitTimeout.Seconds())), 1, false)
 
-	if !mx.bridge.Crypto.WaitForSession(evt.RoomID, content.SenderKey, content.SessionID, extendedTimeout) {
+	if !mx.bridge.Crypto.WaitForSession(evt.RoomID, content.SenderKey, content.SessionID, extendedSessionWaitTimeout) {
 		mx.log.Debugfln("Didn't get %s, giving up on %s", content.SessionID, evt.ID)
 		mx.sendCryptoStatusError(evt, errorEventID, errNoDecryptionKeys, 2, true)
 		return
