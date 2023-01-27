@@ -1,3 +1,9 @@
+## unreleased
+
+* **Breaking change:** Refactored the HTML parser `Context` to have more data.
+* Fixed escaping path components when forming matrix.to URLs or `matrix:` URIs.
+* Bumped default timeouts for decrypting incoming messages.
+
 ## v0.13.0 (2023-01-16)
 
 * **Breaking change:** Removed `IsTyping` and `SetTyping` in `appservice.StateStore`
