@@ -175,6 +175,25 @@ func (parser *HTMLParser) listToString(node *html.Node, ctx Context) string {
 	return strings.Join(children, "\n")
 }
 
+func LongestSequence(in string, of rune) int {
+	currentSeq := 0
+	maxSeq := 0
+	for _, chr := range in {
+		if chr == of {
+			currentSeq++
+		} else {
+			if currentSeq > maxSeq {
+				maxSeq = currentSeq
+			}
+			currentSeq = 0
+		}
+	}
+	if currentSeq > maxSeq {
+		maxSeq = currentSeq
+	}
+	return maxSeq
+}
+
 func (parser *HTMLParser) basicFormatToString(node *html.Node, ctx Context) string {
 	str := parser.nodeToTagAwareString(node.FirstChild, ctx)
 	switch node.Data {
@@ -201,7 +220,8 @@ func (parser *HTMLParser) basicFormatToString(node *html.Node, ctx Context) stri
 		if parser.MonospaceConverter != nil {
 			return parser.MonospaceConverter(str, ctx)
 		}
-		return fmt.Sprintf("`%s`", str)
+		surround := strings.Repeat("`", LongestSequence(str, '`')+1)
+		return fmt.Sprintf("%s%s%s", surround, str, surround)
 	}
 	return str
 }
