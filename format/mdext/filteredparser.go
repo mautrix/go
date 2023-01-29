@@ -7,9 +7,10 @@
 package mdext
 
 import (
+	"reflect"
+
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/util"
-	"reflect"
 )
 
 func filterParsers(list []util.PrioritizedValue, forbidden map[reflect.Type]struct{}) []util.PrioritizedValue {
