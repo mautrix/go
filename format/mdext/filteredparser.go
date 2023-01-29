@@ -9,16 +9,14 @@ package mdext
 import (
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/util"
+	"reflect"
 )
 
-func filterParsers(list []util.PrioritizedValue, forbidden ...any) []util.PrioritizedValue {
+func filterParsers(list []util.PrioritizedValue, forbidden map[reflect.Type]struct{}) []util.PrioritizedValue {
 	n := 0
-itemLoop:
 	for _, item := range list {
-		for _, forbiddenItem := range forbidden {
-			if item.Value == forbiddenItem {
-				continue itemLoop
-			}
+		if _, isForbidden := forbidden[reflect.TypeOf(item.Value)]; isForbidden {
+			continue
 		}
 		list[n] = item
 		n++
@@ -34,9 +32,13 @@ itemLoop:
 //		mdext.ParserWithoutFeatures(goldmark.NewListParser(), goldmark.NewListItemParser())
 //	))
 func ParserWithoutFeatures(features ...any) parser.Parser {
-	filteredBlockParsers := filterParsers(parser.DefaultBlockParsers(), features...)
-	filteredInlineParsers := filterParsers(parser.DefaultInlineParsers(), features...)
-	filteredParagraphTransformers := filterParsers(parser.DefaultParagraphTransformers(), features...)
+	forbiddenTypes := make(map[reflect.Type]struct{}, len(features))
+	for _, feature := range features {
+		forbiddenTypes[reflect.TypeOf(feature)] = struct{}{}
+	}
+	filteredBlockParsers := filterParsers(parser.DefaultBlockParsers(), forbiddenTypes)
+	filteredInlineParsers := filterParsers(parser.DefaultInlineParsers(), forbiddenTypes)
+	filteredParagraphTransformers := filterParsers(parser.DefaultParagraphTransformers(), forbiddenTypes)
 	return parser.NewParser(
 		parser.WithBlockParsers(filteredBlockParsers...),
 		parser.WithInlineParsers(filteredInlineParsers...),
