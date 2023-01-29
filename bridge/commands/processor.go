@@ -68,6 +68,8 @@ func (proc *Processor) Handle(roomID id.RoomID, eventID id.EventID, user bridge.
 	if len(args) == 0 {
 		args = []string{"unknown-command"}
 	}
+	command := strings.ToLower(args[0])
+	rawArgs := strings.TrimLeft(strings.TrimPrefix(message, command), " ")
 	ce := &Event{
 		Bot:       proc.bridge.Bot,
 		Bridge:    proc.bridge,
@@ -76,8 +78,9 @@ func (proc *Processor) Handle(roomID id.RoomID, eventID id.EventID, user bridge.
 		RoomID:    roomID,
 		EventID:   eventID,
 		User:      user,
-		Command:   strings.ToLower(args[0]),
+		Command:   command,
 		Args:      args[1:],
+		RawArgs:   rawArgs,
 		ReplyTo:   replyTo,
 		Log:       proc.log,
 	}

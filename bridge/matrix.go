@@ -511,7 +511,7 @@ func (mx *MatrixHandler) HandleMessage(evt *event.Event) {
 		commandPrefix := mx.bridge.Config.Bridge.GetCommandPrefix()
 		hasCommandPrefix := strings.HasPrefix(content.Body, commandPrefix)
 		if hasCommandPrefix {
-			content.Body = strings.TrimLeft(content.Body[len(commandPrefix):], " ")
+			content.Body = strings.TrimLeft(strings.TrimPrefix(content.Body, commandPrefix), " ")
 		}
 		if hasCommandPrefix || evt.RoomID == user.GetManagementRoomID() {
 			go mx.bridge.CommandProcessor.Handle(evt.RoomID, evt.ID, user, content.Body, content.RelatesTo.GetReplyTo())

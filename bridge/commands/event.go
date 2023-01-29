@@ -32,6 +32,7 @@ type Event struct {
 	User      bridge.User
 	Command   string
 	Args      []string
+	RawArgs   string
 	ReplyTo   id.EventID
 	Log       maulogger.Logger
 }
