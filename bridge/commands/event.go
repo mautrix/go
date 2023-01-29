@@ -48,10 +48,19 @@ func (ce *Event) MainIntent() *appservice.IntentAPI {
 	return intent
 }
 
-// Reply sends a reply to command as notice.
+// Reply sends a reply to command as notice, with optional string formatting and automatic $cmdprefix replacement.
 func (ce *Event) Reply(msg string, args ...interface{}) {
 	msg = strings.ReplaceAll(msg, "$cmdprefix ", ce.Bridge.Config.Bridge.GetCommandPrefix()+" ")
-	content := format.RenderMarkdown(fmt.Sprintf(msg, args...), true, false)
+	if len(args) > 0 {
+		msg = fmt.Sprintf(msg, args...)
+	}
+	ce.ReplyAdvanced(msg, true, false)
+}
+
+// ReplyAdvanced sends a reply to command as notice. It allows using HTML and disabling markdown,
+// but doesn't have built-in string formatting.
+func (ce *Event) ReplyAdvanced(msg string, allowMarkdown, allowHTML bool) {
+	content := format.RenderMarkdown(msg, allowMarkdown, allowHTML)
 	content.MsgType = event.MsgNotice
 	_, err := ce.MainIntent().SendMessageEvent(ce.RoomID, event.EventMessage, content)
 	if err != nil {
