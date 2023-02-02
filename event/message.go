@@ -135,6 +135,12 @@ func (content *MessageEventContent) SetEdit(original id.EventID) {
 		if content.Format == FormatHTML && len(content.FormattedBody) > 0 {
 			content.FormattedBody = "* " + content.FormattedBody
 		}
+		// If the message is long, remove most of the useless edit fallback to avoid event size issues.
+		if len(content.Body) > 10000 {
+			content.FormattedBody = ""
+			content.Format = ""
+			content.Body = content.Body[:50] + "[edit fallback cut…]"
+		}
 	}
 }
 
