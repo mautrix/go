@@ -32,7 +32,7 @@ var ffmpegDefaultParams = []string{"-hide_banner", "-loglevel", "warning"}
 //
 // Returns: the path to the converted file.
 func ConvertPath(ctx context.Context, inputFile string, outputExtension string, inputArgs []string, outputArgs []string, removeInput bool) (string, error) {
-	outputFilename := strings.TrimSuffix(inputFile, filepath.Ext(inputFile)) + outputExtension
+	outputFilename := strings.TrimSuffix(strings.TrimSuffix(inputFile, filepath.Ext(inputFile)), "*") + outputExtension
 
 	args := make([]string, 0, len(ffmpegDefaultParams)+len(inputArgs)+2+len(outputArgs)+1)
 	args = append(args, ffmpegDefaultParams...)
