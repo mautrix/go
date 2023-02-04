@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
-	"io/ioutil"
 	"net/http"
 	"net/http/cookiejar"
 	"os"
@@ -55,7 +54,7 @@ func Create() *AppService {
 
 // Load an appservice config from a file.
 func Load(path string) (*AppService, error) {
-	data, readErr := ioutil.ReadFile(path)
+	data, readErr := os.ReadFile(path)
 	if readErr != nil {
 		return nil, readErr
 	}
@@ -172,7 +171,7 @@ func (as *AppService) Save(path string) error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(path, data, 0644)
+	return os.WriteFile(path, data, 0644)
 }
 
 // YAML returns the config in YAML format.
