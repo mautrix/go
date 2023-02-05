@@ -36,6 +36,7 @@ func (bem BridgeStateErrorMap) Update(data BridgeStateErrorMap) {
 var BridgeStateHumanErrors = make(BridgeStateErrorMap)
 
 const (
+	StateStarting          BridgeStateEvent = "STARTING"
 	StateUnconfigured      BridgeStateEvent = "UNCONFIGURED"
 	StateRunning           BridgeStateEvent = "RUNNING"
 	StateBridgeUnreachable BridgeStateEvent = "BRIDGE_UNREACHABLE"
