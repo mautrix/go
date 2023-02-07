@@ -23,6 +23,8 @@ type PowerLevelsEventContent struct {
 	Events        map[string]int `json:"events,omitempty"`
 	EventsDefault int            `json:"events_default,omitempty"`
 
+	Notifications PowerLevelsEventContentNotifications `json:"notifications,omitempty"`
+
 	StateDefaultPtr *int `json:"state_default,omitempty"`
 
 	InvitePtr     *int `json:"invite,omitempty"`
@@ -30,6 +32,13 @@ type PowerLevelsEventContent struct {
 	BanPtr        *int `json:"ban,omitempty"`
 	RedactPtr     *int `json:"redact,omitempty"`
 	HistoricalPtr *int `json:"historical,omitempty"`
+}
+
+// Notifications represents the content of the notifications key in an
+// m.room.power_levels state event content.
+// https://spec.matrix.org/v1.2/client-server-api/#mroompower_levels
+type PowerLevelsEventContentNotifications struct {
+	Room int `json:"room,omitempty"`
 }
 
 func (pl *PowerLevelsEventContent) Invite() int {
