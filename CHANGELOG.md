@@ -3,6 +3,12 @@
 * **Breaking change:** Refactored the HTML parser `Context` to have more data.
 * Fixed escaping path components when forming matrix.to URLs or `matrix:` URIs.
 * Bumped default timeouts for decrypting incoming messages.
+* Added `notifications` key to `PowerLevelEventContent`.
+* Added `RawArgs` to bridge commands to allow accessing non-split input.
+* Added `ReplyAdvanced` to bridge commands to allow setting markdown settings.
+* Added `SyncMap` utility as a simple generic wrapper for a map with a mutex.
+* Added `ReturnableOnce` utility as a wrapper for `sync.Once` with a return value.
+* Changed `SetEdit` to cut off edit fallback if the message is long.
 
 ## v0.13.0 (2023-01-16)
 
