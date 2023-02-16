@@ -1,3 +1,7 @@
+## unreleased
+
+* Bumped minimum Go version to 1.19.
+
 ## v0.14.0 (2023-02-16)
 
 * **Breaking change *(format)*** Refactored the HTML parser `Context` to have
