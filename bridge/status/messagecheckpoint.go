@@ -32,6 +32,26 @@ const (
 	MsgStepCommand    MessageCheckpointStep = "COMMAND"
 )
 
+func (mcs MessageCheckpointStep) order() int {
+	checkpointOrder := map[MessageCheckpointStep]int{
+		MsgStepClient:     0,
+		MsgStepHomeserver: 1,
+		MsgStepBridge:     2,
+		MsgStepDecrypted:  3,
+		MsgStepRemote:     4,
+		MsgStepCommand:    4,
+	}
+	if order, ok := checkpointOrder[mcs]; !ok {
+		panic(fmt.Sprintf("Unknown checkpoint step %s", mcs))
+	} else {
+		return order
+	}
+}
+
+func (mcs MessageCheckpointStep) Before(other MessageCheckpointStep) bool {
+	return mcs.order() < other.order()
+}
+
 type MessageCheckpointStatus string
 
 const (
