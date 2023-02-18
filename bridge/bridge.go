@@ -23,11 +23,11 @@ import (
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/appservice"
-	"maunium.net/go/mautrix/appservice/sqlstatestore"
 	"maunium.net/go/mautrix/bridge/bridgeconfig"
 	"maunium.net/go/mautrix/crypto"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
+	"maunium.net/go/mautrix/sqlstatestore"
 	"maunium.net/go/mautrix/util/configupgrade"
 	"maunium.net/go/mautrix/util/dbutil"
 	_ "maunium.net/go/mautrix/util/dbutil/litestream"

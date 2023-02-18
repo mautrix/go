@@ -211,7 +211,7 @@ func (as *AppService) handleEvents(evts []*event.Event, defaultTypeClass event.T
 			if ok && historical {
 				as.Log.Warnfln("Received historical state event %s (%s/%s)", evt.ID, evt.Type.Type, evt.GetStateKey())
 			} else {
-				as.UpdateState(evt)
+				mautrix.UpdateStateStore(as.StateStore, evt)
 			}
 		}
 		if evt.Type.Class == event.ToDeviceEventType {

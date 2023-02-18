@@ -7,7 +7,7 @@ import (
 // SyncStore is an interface which must be satisfied to store client data.
 //
 // You can either write a struct which persists this data to disk, or you can use the
-// provided "InMemoryStore" which just keeps data around in-memory which is lost on
+// provided "MemorySyncStore" which just keeps data around in-memory which is lost on
 // restarts.
 type SyncStore interface {
 	SaveFilterID(userID id.UserID, filterID string)
@@ -19,48 +19,48 @@ type SyncStore interface {
 // Deprecated: renamed to SyncStore
 type Storer = SyncStore
 
-// InMemoryStore implements the Storer interface.
+// MemorySyncStore implements the Storer interface.
 //
 // Everything is persisted in-memory as maps. It is not safe to load/save filter IDs
 // or next batch tokens on any goroutine other than the syncing goroutine: the one
 // which called Client.Sync().
-type InMemoryStore struct {
+type MemorySyncStore struct {
 	Filters   map[id.UserID]string
 	NextBatch map[id.UserID]string
 }
 
 // SaveFilterID to memory.
-func (s *InMemoryStore) SaveFilterID(userID id.UserID, filterID string) {
+func (s *MemorySyncStore) SaveFilterID(userID id.UserID, filterID string) {
 	s.Filters[userID] = filterID
 }
 
 // LoadFilterID from memory.
-func (s *InMemoryStore) LoadFilterID(userID id.UserID) string {
+func (s *MemorySyncStore) LoadFilterID(userID id.UserID) string {
 	return s.Filters[userID]
 }
 
 // SaveNextBatch to memory.
-func (s *InMemoryStore) SaveNextBatch(userID id.UserID, nextBatchToken string) {
+func (s *MemorySyncStore) SaveNextBatch(userID id.UserID, nextBatchToken string) {
 	s.NextBatch[userID] = nextBatchToken
 }
 
 // LoadNextBatch from memory.
-func (s *InMemoryStore) LoadNextBatch(userID id.UserID) string {
+func (s *MemorySyncStore) LoadNextBatch(userID id.UserID) string {
 	return s.NextBatch[userID]
 }
 
-// NewInMemoryStore constructs a new InMemoryStore.
-func NewInMemoryStore() *InMemoryStore {
-	return &InMemoryStore{
+// NewMemorySyncStore constructs a new MemorySyncStore.
+func NewMemorySyncStore() *MemorySyncStore {
+	return &MemorySyncStore{
 		Filters:   make(map[id.UserID]string),
 		NextBatch: make(map[id.UserID]string),
 	}
 }
 
 // AccountDataStore uses account data to store the next batch token, and
-// reuses the InMemoryStore for all other operations.
+// reuses the MemorySyncStore for all other operations.
 type AccountDataStore struct {
-	*InMemoryStore
+	*MemorySyncStore
 	eventType string
 	client    *Client
 }
@@ -129,8 +129,8 @@ func (s *AccountDataStore) LoadNextBatch(userID id.UserID) string {
 //	mautrix.Client.CreateFilter(...)
 func NewAccountDataStore(eventType string, client *Client) *AccountDataStore {
 	return &AccountDataStore{
-		InMemoryStore: NewInMemoryStore(),
-		eventType:     eventType,
-		client:        client,
+		MemorySyncStore: NewMemorySyncStore(),
+		eventType:       eventType,
+		client:          client,
 	}
 }

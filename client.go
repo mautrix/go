@@ -54,6 +54,7 @@ type Client struct {
 	Client        *http.Client // The underlying HTTP client which will be used to make HTTP requests.
 	Syncer        Syncer       // The thing which can process /sync responses
 	Store         SyncStore    // The thing which can store tokens/ids
+	StateStore    StateStore
 	Logger        Logger
 	SyncPresence  event.Presence
 
@@ -817,6 +818,9 @@ func (cli *Client) JoinRoom(roomIDorAlias, serverName string, content interface{
 		urlPath = cli.BuildClientURL("v3", "join", roomIDorAlias)
 	}
 	_, err = cli.MakeRequest("POST", urlPath, content, &resp)
+	if err == nil && cli.StateStore != nil {
+		cli.StateStore.SetMembership(resp.RoomID, cli.UserID, event.MembershipJoin)
+	}
 	return
 }
 
@@ -826,6 +830,9 @@ func (cli *Client) JoinRoom(roomIDorAlias, serverName string, content interface{
 // It's mostly intended for bridges and other things where it's already certain that the server is in the room.
 func (cli *Client) JoinRoomByID(roomID id.RoomID) (resp *RespJoinRoom, err error) {
 	_, err = cli.MakeRequest("POST", cli.BuildClientURL("v3", "rooms", roomID, "join"), nil, &resp)
+	if err == nil && cli.StateStore != nil {
+		cli.StateStore.SetMembership(resp.RoomID, cli.UserID, event.MembershipJoin)
+	}
 	return
 }
 
@@ -969,6 +976,9 @@ func (cli *Client) SendMessageEvent(roomID id.RoomID, eventType event.Type, cont
 func (cli *Client) SendStateEvent(roomID id.RoomID, eventType event.Type, stateKey string, contentJSON interface{}) (resp *RespSendEvent, err error) {
 	urlPath := cli.BuildClientURL("v3", "rooms", roomID, "state", eventType.String(), stateKey)
 	_, err = cli.MakeRequest("PUT", urlPath, contentJSON, &resp)
+	if err == nil && cli.StateStore != nil {
+		cli.updateStoreWithOutgoingEvent(roomID, eventType, stateKey, contentJSON)
+	}
 	return
 }
 
@@ -979,6 +989,9 @@ func (cli *Client) SendMassagedStateEvent(roomID id.RoomID, eventType event.Type
 		"ts": strconv.FormatInt(ts, 10),
 	})
 	_, err = cli.MakeRequest("PUT", urlPath, contentJSON, &resp)
+	if err == nil && cli.StateStore != nil {
+		cli.updateStoreWithOutgoingEvent(roomID, eventType, stateKey, contentJSON)
+	}
 	return
 }
 
@@ -1042,6 +1055,12 @@ func (cli *Client) RedactEvent(roomID id.RoomID, eventID id.EventID, extra ...Re
 func (cli *Client) CreateRoom(req *ReqCreateRoom) (resp *RespCreateRoom, err error) {
 	urlPath := cli.BuildClientURL("v3", "createRoom")
 	_, err = cli.MakeRequest("POST", urlPath, req, &resp)
+	if err == nil && cli.StateStore != nil {
+		cli.StateStore.SetMembership(resp.RoomID, cli.UserID, event.MembershipJoin)
+		for _, evt := range req.InitialState {
+			UpdateStateStore(cli.StateStore, evt)
+		}
+	}
 	return
 }
 
@@ -1055,6 +1074,9 @@ func (cli *Client) LeaveRoom(roomID id.RoomID, optionalReq ...*ReqLeave) (resp *
 	}
 	u := cli.BuildClientURL("v3", "rooms", roomID, "leave")
 	_, err = cli.MakeRequest("POST", u, req, &resp)
+	if err == nil && cli.StateStore != nil {
+		cli.StateStore.SetMembership(roomID, cli.UserID, event.MembershipLeave)
+	}
 	return
 }
 
@@ -1069,6 +1091,9 @@ func (cli *Client) ForgetRoom(roomID id.RoomID) (resp *RespForgetRoom, err error
 func (cli *Client) InviteUser(roomID id.RoomID, req *ReqInviteUser) (resp *RespInviteUser, err error) {
 	u := cli.BuildClientURL("v3", "rooms", roomID, "invite")
 	_, err = cli.MakeRequest("POST", u, req, &resp)
+	if err == nil && cli.StateStore != nil {
+		cli.StateStore.SetMembership(roomID, req.UserID, event.MembershipInvite)
+	}
 	return
 }
 
@@ -1083,6 +1108,9 @@ func (cli *Client) InviteUserByThirdParty(roomID id.RoomID, req *ReqInvite3PID) 
 func (cli *Client) KickUser(roomID id.RoomID, req *ReqKickUser) (resp *RespKickUser, err error) {
 	u := cli.BuildClientURL("v3", "rooms", roomID, "kick")
 	_, err = cli.MakeRequest("POST", u, req, &resp)
+	if err == nil && cli.StateStore != nil {
+		cli.StateStore.SetMembership(roomID, req.UserID, event.MembershipLeave)
+	}
 	return
 }
 
@@ -1090,6 +1118,9 @@ func (cli *Client) KickUser(roomID id.RoomID, req *ReqKickUser) (resp *RespKickU
 func (cli *Client) BanUser(roomID id.RoomID, req *ReqBanUser) (resp *RespBanUser, err error) {
 	u := cli.BuildClientURL("v3", "rooms", roomID, "ban")
 	_, err = cli.MakeRequest("POST", u, req, &resp)
+	if err == nil && cli.StateStore != nil {
+		cli.StateStore.SetMembership(roomID, req.UserID, event.MembershipBan)
+	}
 	return
 }
 
@@ -1097,6 +1128,9 @@ func (cli *Client) BanUser(roomID id.RoomID, req *ReqBanUser) (resp *RespBanUser
 func (cli *Client) UnbanUser(roomID id.RoomID, req *ReqUnbanUser) (resp *RespUnbanUser, err error) {
 	u := cli.BuildClientURL("v3", "rooms", roomID, "unban")
 	_, err = cli.MakeRequest("POST", u, req, &resp)
+	if err == nil && cli.StateStore != nil {
+		cli.StateStore.SetMembership(roomID, req.UserID, event.MembershipLeave)
+	}
 	return
 }
 
@@ -1128,12 +1162,43 @@ func (cli *Client) SetPresence(status event.Presence) (err error) {
 	return
 }
 
+func (cli *Client) updateStoreWithOutgoingEvent(roomID id.RoomID, eventType event.Type, stateKey string, contentJSON interface{}) {
+	if cli.StateStore == nil {
+		return
+	}
+	fakeEvt := &event.Event{
+		StateKey: &stateKey,
+		Type:     eventType,
+		RoomID:   roomID,
+	}
+	var err error
+	fakeEvt.Content.VeryRaw, err = json.Marshal(contentJSON)
+	if err != nil {
+		cli.Logger.Debugfln("Failed to marshal state event content to update state store: %v", err)
+		return
+	}
+	err = json.Unmarshal(fakeEvt.Content.VeryRaw, &fakeEvt.Content.Raw)
+	if err != nil {
+		cli.Logger.Debugfln("Failed to unmarshal state event content to update state store: %v", err)
+		return
+	}
+	err = fakeEvt.Content.ParseRaw(fakeEvt.Type)
+	if err != nil {
+		cli.Logger.Debugfln("Failed to parse state event content to update state store: %v", err)
+		return
+	}
+	UpdateStateStore(cli.StateStore, fakeEvt)
+}
+
 // StateEvent gets a single state event in a room. It will attempt to JSON unmarshal into the given "outContent" struct with
 // the HTTP response body, or return an error.
 // See https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3roomsroomidstateeventtypestatekey
 func (cli *Client) StateEvent(roomID id.RoomID, eventType event.Type, stateKey string, outContent interface{}) (err error) {
 	u := cli.BuildClientURL("v3", "rooms", roomID, "state", eventType.String(), stateKey)
 	_, err = cli.MakeRequest("GET", u, nil, outContent)
+	if err == nil && cli.StateStore != nil {
+		cli.updateStoreWithOutgoingEvent(roomID, eventType, stateKey, outContent)
+	}
 	return
 }
 
@@ -1184,6 +1249,13 @@ func (cli *Client) State(roomID id.RoomID) (stateMap RoomStateMap, err error) {
 		ResponseJSON: &stateMap,
 		Handler:      parseRoomStateArray,
 	})
+	if err == nil && cli.StateStore != nil {
+		for _, evts := range stateMap {
+			for _, evt := range evts {
+				UpdateStateStore(cli.StateStore, evt)
+			}
+		}
+	}
 	return
 }
 
@@ -1439,6 +1511,15 @@ func (cli *Client) GetURLPreview(url string) (*RespPreviewURL, error) {
 func (cli *Client) JoinedMembers(roomID id.RoomID) (resp *RespJoinedMembers, err error) {
 	u := cli.BuildClientURL("v3", "rooms", roomID, "joined_members")
 	_, err = cli.MakeRequest("GET", u, nil, &resp)
+	if err == nil && cli.StateStore != nil {
+		for userID, member := range resp.Joined {
+			cli.StateStore.SetMember(roomID, userID, &event.MemberEventContent{
+				Membership:  event.MembershipJoin,
+				AvatarURL:   id.ContentURIString(member.AvatarURL),
+				Displayname: member.DisplayName,
+			})
+		}
+	}
 	return
 }
 
@@ -1459,6 +1540,11 @@ func (cli *Client) Members(roomID id.RoomID, req ...ReqMembers) (resp *RespMembe
 	}
 	u := cli.BuildURLWithQuery(ClientURLPath{"v3", "rooms", roomID, "members"}, query)
 	_, err = cli.MakeRequest("GET", u, nil, &resp)
+	if err == nil && cli.StateStore != nil {
+		for _, evt := range resp.Chunk {
+			UpdateStateStore(cli.StateStore, evt)
+		}
+	}
 	return
 }
 
@@ -1849,6 +1935,6 @@ func NewClient(homeserverURL string, userID id.UserID, accessToken string) (*Cli
 		// By default, use an in-memory store which will never save filter ids / next batch tokens to disk.
 		// The client will work with this storer: it just won't remember across restarts.
 		// In practice, a database backend should be used.
-		Store: NewInMemoryStore(),
+		Store: NewMemorySyncStore(),
 	}, nil
 }

@@ -43,7 +43,7 @@ func Create() *AppService {
 		clients:    make(map[id.UserID]*mautrix.Client),
 		intents:    make(map[id.UserID]*IntentAPI),
 		HTTPClient: &http.Client{Timeout: 180 * time.Second, Jar: jar},
-		StateStore: NewBasicStateStore(),
+		StateStore: mautrix.NewMemoryStateStore().(StateStore),
 		Router:     mux.NewRouter(),
 		UserAgent:  mautrix.DefaultUserAgent,
 		txnIDC:     NewTransactionIDCache(128),
@@ -80,6 +80,17 @@ func (qh *QueryHandlerStub) QueryUser(userID id.UserID) bool {
 }
 
 type WebsocketHandler func(WebsocketCommand) (ok bool, data interface{})
+
+type StateStore interface {
+	mautrix.StateStore
+
+	IsRegistered(userID id.UserID) bool
+	MarkRegistered(userID id.UserID)
+
+	GetPowerLevel(roomID id.RoomID, userID id.UserID) int
+	GetPowerLevelRequirement(roomID id.RoomID, eventType event.Type) int
+	HasPowerLevel(roomID id.RoomID, userID id.UserID, eventType event.Type) bool
+}
 
 // AppService is the main config for all appservices.
 // It also serves as the appservice instance struct.
@@ -246,6 +257,7 @@ func (as *AppService) makeClient(userID id.UserID) *mautrix.Client {
 	client.UserAgent = as.UserAgent
 	client.Syncer = nil
 	client.Store = nil
+	client.StateStore = as.StateStore
 	client.SetAppServiceUserID = true
 	client.Logger = as.Log.Sub(string(userID))
 	client.Client = as.HTTPClient
