@@ -1,4 +1,4 @@
-module mautrix-example
+module maunium.net/go/mautrix/example
 
 go 1.15
 
