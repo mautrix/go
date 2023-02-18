@@ -7,6 +7,7 @@
 package mautrix
 
 import (
+	"errors"
 	"fmt"
 	"runtime/debug"
 	"time"
@@ -76,9 +77,8 @@ type SyncHandler func(resp *RespSync, since string) bool
 
 // Syncer is an interface that must be satisfied in order to do /sync requests on a client.
 type Syncer interface {
-	// Process the /sync response. The since parameter is the since= value that was used to produce the response.
-	// This is useful for detecting the very first sync (since=""). If an error is return, Syncing will be stopped
-	// permanently.
+	// ProcessResponse processes the /sync response. The since parameter is the since= value that was used to produce the response.
+	// This is useful for detecting the very first sync (since=""). If an error is return, Syncing will be stopped permanently.
 	ProcessResponse(resp *RespSync, since string) error
 	// OnFailedSync returns either the time to wait before retrying or an error to stop syncing permanently.
 	OnFailedSync(res *RespSync, err error) (time.Duration, error)
@@ -226,6 +226,9 @@ func (s *DefaultSyncer) OnEvent(callback EventHandler) {
 
 // OnFailedSync always returns a 10 second wait period between failed /syncs, never a fatal error.
 func (s *DefaultSyncer) OnFailedSync(res *RespSync, err error) (time.Duration, error) {
+	if errors.Is(err, MUnknownToken) {
+		return 0, err
+	}
 	return 10 * time.Second, nil
 }
 
