@@ -991,30 +991,6 @@ func (cli *Client) SendText(roomID id.RoomID, text string) (*RespSendEvent, erro
 	})
 }
 
-// SendImage sends an m.room.message event into the given room with a msgtype of m.image
-// See https://spec.matrix.org/v1.2/client-server-api/#mimage
-//
-// Deprecated: This does not allow setting image metadata, you should prefer SendMessageEvent with a properly filled &event.MessageEventContent
-func (cli *Client) SendImage(roomID id.RoomID, body string, url id.ContentURI) (*RespSendEvent, error) {
-	return cli.SendMessageEvent(roomID, event.EventMessage, &event.MessageEventContent{
-		MsgType: event.MsgImage,
-		Body:    body,
-		URL:     url.CUString(),
-	})
-}
-
-// SendVideo sends an m.room.message event into the given room with a msgtype of m.video
-// See https://spec.matrix.org/v1.2/client-server-api/#mvideo
-//
-// Deprecated: This does not allow setting video metadata, you should prefer SendMessageEvent with a properly filled &event.MessageEventContent
-func (cli *Client) SendVideo(roomID id.RoomID, body string, url id.ContentURI) (*RespSendEvent, error) {
-	return cli.SendMessageEvent(roomID, event.EventMessage, &event.MessageEventContent{
-		MsgType: event.MsgVideo,
-		Body:    body,
-		URL:     url.CUString(),
-	})
-}
-
 // SendNotice sends an m.room.message event into the given room with a msgtype of m.notice
 // See https://spec.matrix.org/v1.2/client-server-api/#mnotice
 func (cli *Client) SendNotice(roomID id.RoomID, text string) (*RespSendEvent, error) {

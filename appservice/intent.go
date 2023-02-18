@@ -409,22 +409,6 @@ func (intent *IntentAPI) SendText(roomID id.RoomID, text string) (*mautrix.RespS
 	return intent.Client.SendText(roomID, text)
 }
 
-// Deprecated: This does not allow setting image metadata, you should prefer SendMessageEvent with a properly filled &event.MessageEventContent
-func (intent *IntentAPI) SendImage(roomID id.RoomID, body string, url id.ContentURI) (*mautrix.RespSendEvent, error) {
-	if err := intent.EnsureJoined(roomID); err != nil {
-		return nil, err
-	}
-	return intent.Client.SendImage(roomID, body, url)
-}
-
-// Deprecated: This does not allow setting video metadata, you should prefer SendMessageEvent with a properly filled &event.MessageEventContent
-func (intent *IntentAPI) SendVideo(roomID id.RoomID, body string, url id.ContentURI) (*mautrix.RespSendEvent, error) {
-	if err := intent.EnsureJoined(roomID); err != nil {
-		return nil, err
-	}
-	return intent.Client.SendVideo(roomID, body, url)
-}
-
 func (intent *IntentAPI) SendNotice(roomID id.RoomID, text string) (*mautrix.RespSendEvent, error) {
 	if err := intent.EnsureJoined(roomID); err != nil {
 		return nil, err
