@@ -53,7 +53,7 @@ type Client struct {
 	UserAgent     string       // The value for the User-Agent header
 	Client        *http.Client // The underlying HTTP client which will be used to make HTTP requests.
 	Syncer        Syncer       // The thing which can process /sync responses
-	Store         Storer       // The thing which can store rooms/tokens/ids
+	Store         SyncStore    // The thing which can store tokens/ids
 	Logger        Logger
 	SyncPresence  event.Presence
 

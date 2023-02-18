@@ -4,17 +4,20 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-// Storer is an interface which must be satisfied to store client data.
+// SyncStore is an interface which must be satisfied to store client data.
 //
 // You can either write a struct which persists this data to disk, or you can use the
 // provided "InMemoryStore" which just keeps data around in-memory which is lost on
 // restarts.
-type Storer interface {
+type SyncStore interface {
 	SaveFilterID(userID id.UserID, filterID string)
 	LoadFilterID(userID id.UserID) string
 	SaveNextBatch(userID id.UserID, nextBatchToken string)
 	LoadNextBatch(userID id.UserID) string
 }
+
+// Deprecated: renamed to SyncStore
+type Storer = SyncStore
 
 // InMemoryStore implements the Storer interface.
 //

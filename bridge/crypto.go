@@ -426,7 +426,7 @@ func (c cryptoClientStore) LoadNextBatch(_ id.UserID) string {
 	return nb
 }
 
-var _ mautrix.Storer = (*cryptoClientStore)(nil)
+var _ mautrix.SyncStore = (*cryptoClientStore)(nil)
 
 type cryptoStateStore struct {
 	bridge *Bridge
