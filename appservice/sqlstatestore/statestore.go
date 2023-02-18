@@ -11,7 +11,6 @@ import (
 	"embed"
 	"encoding/json"
 	"errors"
-	"sync"
 
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -31,9 +30,6 @@ const VersionTableName = "mx_version"
 
 type SQLStateStore struct {
 	*dbutil.Database
-
-	Typing     map[id.RoomID]map[id.UserID]int64
-	typingLock sync.RWMutex
 }
 
 func NewSQLStateStore(db *dbutil.Database, log dbutil.DatabaseLogger) *SQLStateStore {
