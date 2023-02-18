@@ -25,6 +25,7 @@ import (
 	"maunium.net/go/mautrix/appservice"
 	"maunium.net/go/mautrix/appservice/sqlstatestore"
 	"maunium.net/go/mautrix/bridge/bridgeconfig"
+	"maunium.net/go/mautrix/crypto"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/util/configupgrade"
@@ -40,6 +41,9 @@ var version = flag.MakeFull("v", "version", "View bridge version and quit.", "fa
 var ignoreUnsupportedDatabase = flag.Make().LongKey("ignore-unsupported-database").Usage("Run even if the database schema is too new").Default("false").Bool()
 var ignoreForeignTables = flag.Make().LongKey("ignore-foreign-tables").Usage("Run even if the database contains tables from other programs (like Synapse)").Default("false").Bool()
 var wantHelp, _ = flag.MakeHelpFlag()
+
+var _ appservice.StateStore = (*sqlstatestore.SQLStateStore)(nil)
+var _ crypto.StateStore = (*sqlstatestore.SQLStateStore)(nil)
 
 type Portal interface {
 	IsEncrypted() bool

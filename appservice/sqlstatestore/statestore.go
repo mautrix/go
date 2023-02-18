@@ -13,7 +13,6 @@ import (
 	"errors"
 	"sync"
 
-	"maunium.net/go/mautrix/appservice"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/util/dbutil"
@@ -36,8 +35,6 @@ type SQLStateStore struct {
 	Typing     map[id.RoomID]map[id.UserID]int64
 	typingLock sync.RWMutex
 }
-
-var _ appservice.StateStore = (*SQLStateStore)(nil)
 
 func NewSQLStateStore(db *dbutil.Database, log dbutil.DatabaseLogger) *SQLStateStore {
 	return &SQLStateStore{
@@ -170,6 +167,46 @@ func (store *SQLStateStore) SetMember(roomID id.RoomID, userID id.UserID, member
 	if err != nil {
 		store.Log.Warn("Failed to set membership of %s in %s to %s: %v", userID, roomID, member, err)
 	}
+}
+
+func (store *SQLStateStore) SetEncryptionEvent(roomID id.RoomID, content *event.EncryptionEventContent) {
+	contentBytes, err := json.Marshal(content)
+	if err != nil {
+		store.Log.Warn("Failed to marshal encryption config of %s: %v", roomID, err)
+		return
+	}
+	_, err = store.Exec(`
+		INSERT INTO mx_room_state (room_id, encryption) VALUES ($1, $2)
+		ON CONFLICT (room_id) DO UPDATE SET encryption=excluded.encryption
+	`, roomID, contentBytes)
+	if err != nil {
+		store.Log.Warn("Failed to store encryption config of %s: %v", roomID, err)
+	}
+}
+
+func (store *SQLStateStore) GetEncryptionEvent(roomID id.RoomID) *event.EncryptionEventContent {
+	var data []byte
+	err := store.
+		QueryRow("SELECT encryption FROM mx_room_state WHERE room_id=$1", roomID).
+		Scan(&data)
+	if err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			store.Log.Warn("Failed to scan encryption config of %s: %v", roomID, err)
+		}
+		return nil
+	}
+	content := &event.EncryptionEventContent{}
+	err = json.Unmarshal(data, content)
+	if err != nil {
+		store.Log.Warn("Failed to parse encryption config of %s: %v", roomID, err)
+		return nil
+	}
+	return content
+}
+
+func (store *SQLStateStore) IsEncrypted(roomID id.RoomID) bool {
+	cfg := store.GetEncryptionEvent(roomID)
+	return cfg != nil && cfg.Algorithm == id.AlgorithmMegolmV1
 }
 
 func (store *SQLStateStore) SetPowerLevels(roomID id.RoomID, levels *event.PowerLevelsEventContent) {

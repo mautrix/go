@@ -1,4 +1,4 @@
--- v0 -> v3: Latest revision
+-- v0 -> v4: Latest revision
 
 CREATE TABLE mx_registrations (
 	user_id TEXT PRIMARY KEY
@@ -18,5 +18,6 @@ CREATE TABLE mx_user_profile (
 
 CREATE TABLE mx_room_state (
 	room_id      TEXT PRIMARY KEY,
-	power_levels jsonb
+	power_levels jsonb,
+	encryption   jsonb
 );

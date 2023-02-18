@@ -448,7 +448,6 @@ func (c *cryptoStateStore) FindSharedRooms(id id.UserID) []id.RoomID {
 	return c.bridge.StateStore.FindSharedRooms(id)
 }
 
-func (c *cryptoStateStore) GetEncryptionEvent(id.RoomID) *event.EncryptionEventContent {
-	// TODO implement
-	return nil
+func (c *cryptoStateStore) GetEncryptionEvent(id id.RoomID) *event.EncryptionEventContent {
+	return c.bridge.StateStore.GetEncryptionEvent(id)
 }
