@@ -412,8 +412,6 @@ type cryptoClientStore struct {
 
 func (c cryptoClientStore) SaveFilterID(_ id.UserID, _ string) {}
 func (c cryptoClientStore) LoadFilterID(_ id.UserID) string    { return "" }
-func (c cryptoClientStore) SaveRoom(_ *mautrix.Room)           {}
-func (c cryptoClientStore) LoadRoom(_ id.RoomID) *mautrix.Room { return nil }
 
 func (c cryptoClientStore) SaveNextBatch(_ id.UserID, nextBatchToken string) {
 	// TODO error

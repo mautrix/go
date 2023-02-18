@@ -1,7 +1,6 @@
 package mautrix
 
 import (
-	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -15,8 +14,6 @@ type Storer interface {
 	LoadFilterID(userID id.UserID) string
 	SaveNextBatch(userID id.UserID, nextBatchToken string)
 	LoadNextBatch(userID id.UserID) string
-	SaveRoom(room *Room)
-	LoadRoom(roomID id.RoomID) *Room
 }
 
 // InMemoryStore implements the Storer interface.
@@ -27,7 +24,6 @@ type Storer interface {
 type InMemoryStore struct {
 	Filters   map[id.UserID]string
 	NextBatch map[id.UserID]string
-	Rooms     map[id.RoomID]*Room
 }
 
 // SaveFilterID to memory.
@@ -50,35 +46,11 @@ func (s *InMemoryStore) LoadNextBatch(userID id.UserID) string {
 	return s.NextBatch[userID]
 }
 
-// SaveRoom to memory.
-func (s *InMemoryStore) SaveRoom(room *Room) {
-	s.Rooms[room.ID] = room
-}
-
-// LoadRoom from memory.
-func (s *InMemoryStore) LoadRoom(roomID id.RoomID) *Room {
-	return s.Rooms[roomID]
-}
-
-// UpdateState stores a state event. This can be passed to DefaultSyncer.OnEvent to keep all room state cached.
-func (s *InMemoryStore) UpdateState(_ EventSource, evt *event.Event) {
-	if !evt.Type.IsState() {
-		return
-	}
-	room := s.LoadRoom(evt.RoomID)
-	if room == nil {
-		room = NewRoom(evt.RoomID)
-		s.SaveRoom(room)
-	}
-	room.UpdateState(evt)
-}
-
 // NewInMemoryStore constructs a new InMemoryStore.
 func NewInMemoryStore() *InMemoryStore {
 	return &InMemoryStore{
 		Filters:   make(map[id.UserID]string),
 		NextBatch: make(map[id.UserID]string),
-		Rooms:     make(map[id.RoomID]*Room),
 	}
 }
 
