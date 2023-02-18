@@ -308,14 +308,16 @@ func (as *AppService) consumeWebsocket(stopFunc func(error), ws *websocket.Conn)
 				handler = as.unknownCommandHandler
 			}
 			go func() {
+				startTime := time.Now()
 				okResp, data := handler(msg.WebsocketCommand)
+				duration := time.Now().Sub(startTime)
 				err = as.SendWebsocket(msg.MakeResponse(okResp, data))
 				if err != nil {
 					as.Log.Warnfln("Failed to send response to %s %d: %v", msg.Command, msg.ReqID, err)
 				} else if okResp {
-					as.Log.Debugfln("Sent success response to %s %d", msg.Command, msg.ReqID)
+					as.Log.Debugfln("Sent success response to %s %d (took %s)", msg.Command, msg.ReqID, duration)
 				} else {
-					as.Log.Debugfln("Sent error response to %s %d", msg.Command, msg.ReqID)
+					as.Log.Debugfln("Sent error response to %s %d (took %s)", msg.Command, msg.ReqID, duration)
 				}
 			}()
 		}
