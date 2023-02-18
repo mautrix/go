@@ -67,10 +67,9 @@ type Client struct {
 
 	txnID int32
 
-	// The ?user_id= query parameter for application services. This must be set *prior* to calling a method.
-	// If this is empty, no user_id parameter will be sent.
-	// See https://spec.matrix.org/v1.2/application-service-api/#identity-assertion
-	AppServiceUserID id.UserID
+	// Should the ?user_id= query parameter be set in requests?
+	// See https://spec.matrix.org/v1.6/application-service-api/#identity-assertion
+	SetAppServiceUserID bool
 
 	syncingID uint32 // Identifies the current Sync. Only one Sync can be active at any given time.
 }

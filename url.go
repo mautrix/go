@@ -93,8 +93,8 @@ func (mup MediaURLPath) FullPath() []interface{} {
 func (cli *Client) BuildURLWithQuery(urlPath PrefixableURLPath, urlQuery map[string]string) string {
 	hsURL := *BuildURL(cli.HomeserverURL, urlPath.FullPath()...)
 	query := hsURL.Query()
-	if cli.AppServiceUserID != "" {
-		query.Set("user_id", string(cli.AppServiceUserID))
+	if cli.SetAppServiceUserID {
+		query.Set("user_id", string(cli.UserID))
 	}
 	if urlQuery != nil {
 		for k, v := range urlQuery {
