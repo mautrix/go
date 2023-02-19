@@ -8,7 +8,6 @@ package crypto
 
 import (
 	"database/sql"
-	"os"
 	"strconv"
 	"testing"
 
@@ -26,7 +25,7 @@ const olmPickled = "L6cdv3JYO9OzhXbcjNSwl7ldN5bDvwmGyin+hISePETE6bO71DIlhqTC9YIh
 	"qcCwp6sZrgLbmfBUBb0zJCogCmYw8m2"
 const groupSession = "9ZbsRqJuETbjnxPpKv29n3dubP/m5PSLbr9I9CIWS2O86F/Og1JZXhqT+4fA5tovoPfdpk5QLh7PfDyjmgOcO9sSA37maJyzCy6Ap+uBZLAXp6VLJ0mjSvxi+PAbzGKDMqpn+pa+oeEIH6SFPG/2GGDSRoXVi5fttAClCIoav5RflWiMypKqnQRfkZR2Gx8glOaBiTzAd7m0X6XGfYIPol41JUIHfBLuJBfXQ0Uu5GScV4eKUWdJP2J6zzC2Hx8cZAhiBBzAza0CbGcnUK+YJXMYaJg92HiIo++l317LlsYUJ/P+gKOLafYR9/l8bAzxH7j5s31PnRs7mD1Bl6G1LFM+dPsGXUOLx6PlvlTlYYM/opai0uKKzT0Wk6zPoq9fN/smlXEPBtKlw2fqcytL4gOF0MrBPEca"
 
-func getCryptoStores(t *testing.T) (map[string]Store, func()) {
+func getCryptoStores(t *testing.T) map[string]Store {
 	rawDB, err := sql.Open("sqlite3", ":memory:?_busy_timeout=5000")
 	if err != nil {
 		t.Fatalf("Error opening db: %v", err)
@@ -40,23 +39,19 @@ func getCryptoStores(t *testing.T) (map[string]Store, func()) {
 		t.Fatalf("Error creating tables: %v", err)
 	}
 
-	os.Remove("gob_store_test.gob")
-	gobStore, err := NewGobStore("gob_store_test.gob")
+	gobStore := NewMemoryStore(nil)
 	if err != nil {
 		t.Fatalf("Error creating Gob store: %v", err)
 	}
 
 	return map[string]Store{
-			"sql": sqlStore,
-			"gob": gobStore,
-		}, func() {
-			os.Remove("gob_store_test.gob")
-		}
+		"sql": sqlStore,
+		"gob": gobStore,
+	}
 }
 
 func TestPutNextBatch(t *testing.T) {
-	stores, cleanup := getCryptoStores(t)
-	defer cleanup()
+	stores := getCryptoStores(t)
 	store := stores["sql"].(*SQLCryptoStore)
 	store.PutNextBatch("batch1")
 	if batch, _ := store.GetNextBatch(); batch != "batch1" {
@@ -65,8 +60,7 @@ func TestPutNextBatch(t *testing.T) {
 }
 
 func TestPutAccount(t *testing.T) {
-	stores, cleanup := getCryptoStores(t)
-	defer cleanup()
+	stores := getCryptoStores(t)
 	for storeName, store := range stores {
 		t.Run(storeName, func(t *testing.T) {
 			acc := NewOlmAccount()
@@ -86,8 +80,7 @@ func TestPutAccount(t *testing.T) {
 }
 
 func TestValidateMessageIndex(t *testing.T) {
-	stores, cleanup := getCryptoStores(t)
-	defer cleanup()
+	stores := getCryptoStores(t)
 	for storeName, store := range stores {
 		t.Run(storeName, func(t *testing.T) {
 			acc := NewOlmAccount()
@@ -108,8 +101,7 @@ func TestValidateMessageIndex(t *testing.T) {
 }
 
 func TestStoreOlmSession(t *testing.T) {
-	stores, cleanup := getCryptoStores(t)
-	defer cleanup()
+	stores := getCryptoStores(t)
 	for storeName, store := range stores {
 		t.Run(storeName, func(t *testing.T) {
 			if store.HasSession(olmSessID) {
@@ -148,8 +140,7 @@ func TestStoreOlmSession(t *testing.T) {
 }
 
 func TestStoreMegolmSession(t *testing.T) {
-	stores, cleanup := getCryptoStores(t)
-	defer cleanup()
+	stores := getCryptoStores(t)
 	for storeName, store := range stores {
 		t.Run(storeName, func(t *testing.T) {
 			acc := NewOlmAccount()
@@ -184,8 +175,7 @@ func TestStoreMegolmSession(t *testing.T) {
 }
 
 func TestStoreOutboundMegolmSession(t *testing.T) {
-	stores, cleanup := getCryptoStores(t)
-	defer cleanup()
+	stores := getCryptoStores(t)
 	for storeName, store := range stores {
 		t.Run(storeName, func(t *testing.T) {
 			sess, err := store.GetOutboundGroupSession("room1")
@@ -227,8 +217,7 @@ func TestStoreOutboundMegolmSession(t *testing.T) {
 }
 
 func TestStoreDevices(t *testing.T) {
-	stores, cleanup := getCryptoStores(t)
-	defer cleanup()
+	stores := getCryptoStores(t)
 	for storeName, store := range stores {
 		t.Run(storeName, func(t *testing.T) {
 			deviceMap := make(map[id.DeviceID]*id.Device)

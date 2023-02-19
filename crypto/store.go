@@ -7,10 +7,8 @@
 package crypto
 
 import (
-	"encoding/gob"
 	"errors"
 	"fmt"
-	"os"
 	"sort"
 	"sync"
 
@@ -129,12 +127,12 @@ type messageIndexValue struct {
 	Timestamp int64
 }
 
-// GobStore is a simple Store implementation that dumps everything into a .gob file.
-//
-// Deprecated: this is not atomic and can lose data. Using SQLCryptoStore or a custom implementation is recommended.
-type GobStore struct {
+// MemoryStore is a simple in-memory Store implementation. It can optionally have a callback function for saving data,
+// but the actual storage must be implemented manually.
+type MemoryStore struct {
 	lock sync.RWMutex
-	path string
+
+	save func() error
 
 	Account               *OlmAccount
 	Sessions              map[id.SenderKey]OlmSessionList
@@ -147,14 +145,15 @@ type GobStore struct {
 	KeySignatures         map[id.UserID]map[id.Ed25519]map[id.UserID]map[id.Ed25519]string
 }
 
-var _ Store = (*GobStore)(nil)
+var _ Store = (*MemoryStore)(nil)
 
-// NewGobStore creates a new GobStore that saves everything to the given file.
-//
-// Deprecated: this is not atomic and can lose data. Using SQLCryptoStore or a custom implementation is recommended.
-func NewGobStore(path string) (*GobStore, error) {
-	gs := &GobStore{
-		path:                  path,
+func NewMemoryStore(saveCallback func() error) *MemoryStore {
+	if saveCallback == nil {
+		saveCallback = func() error { return nil }
+	}
+	return &MemoryStore{
+		save: saveCallback,
+
 		Sessions:              make(map[id.SenderKey]OlmSessionList),
 		GroupSessions:         make(map[id.RoomID]map[id.SenderKey]map[id.SessionID]*InboundGroupSession),
 		WithheldGroupSessions: make(map[id.RoomID]map[id.SenderKey]map[id.SessionID]*event.RoomKeyWithheldEventContent),
@@ -164,44 +163,20 @@ func NewGobStore(path string) (*GobStore, error) {
 		CrossSigningKeys:      make(map[id.UserID]map[id.CrossSigningUsage]id.CrossSigningKey),
 		KeySignatures:         make(map[id.UserID]map[id.Ed25519]map[id.UserID]map[id.Ed25519]string),
 	}
-	return gs, gs.load()
 }
 
-func (gs *GobStore) save() error {
-	file, err := os.OpenFile(gs.path, os.O_CREATE|os.O_WRONLY, 0600)
-	if err != nil {
-		return err
-	}
-	err = gob.NewEncoder(file).Encode(gs)
-	_ = file.Close()
-	return err
-}
-
-func (gs *GobStore) load() error {
-	file, err := os.OpenFile(gs.path, os.O_RDONLY, 0600)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
-	err = gob.NewDecoder(file).Decode(gs)
-	_ = file.Close()
-	return err
-}
-
-func (gs *GobStore) Flush() error {
+func (gs *MemoryStore) Flush() error {
 	gs.lock.Lock()
 	err := gs.save()
 	gs.lock.Unlock()
 	return err
 }
 
-func (gs *GobStore) GetAccount() (*OlmAccount, error) {
+func (gs *MemoryStore) GetAccount() (*OlmAccount, error) {
 	return gs.Account, nil
 }
 
-func (gs *GobStore) PutAccount(account *OlmAccount) error {
+func (gs *MemoryStore) PutAccount(account *OlmAccount) error {
 	gs.lock.Lock()
 	gs.Account = account
 	err := gs.save()
@@ -209,7 +184,7 @@ func (gs *GobStore) PutAccount(account *OlmAccount) error {
 	return err
 }
 
-func (gs *GobStore) GetSessions(senderKey id.SenderKey) (OlmSessionList, error) {
+func (gs *MemoryStore) GetSessions(senderKey id.SenderKey) (OlmSessionList, error) {
 	gs.lock.Lock()
 	sessions, ok := gs.Sessions[senderKey]
 	if !ok {
@@ -220,7 +195,7 @@ func (gs *GobStore) GetSessions(senderKey id.SenderKey) (OlmSessionList, error) 
 	return sessions, nil
 }
 
-func (gs *GobStore) AddSession(senderKey id.SenderKey, session *OlmSession) error {
+func (gs *MemoryStore) AddSession(senderKey id.SenderKey, session *OlmSession) error {
 	gs.lock.Lock()
 	sessions, _ := gs.Sessions[senderKey]
 	gs.Sessions[senderKey] = append(sessions, session)
@@ -230,19 +205,19 @@ func (gs *GobStore) AddSession(senderKey id.SenderKey, session *OlmSession) erro
 	return err
 }
 
-func (gs *GobStore) UpdateSession(_ id.SenderKey, _ *OlmSession) error {
+func (gs *MemoryStore) UpdateSession(_ id.SenderKey, _ *OlmSession) error {
 	// we don't need to do anything here because the session is a pointer and already stored in our map
 	return gs.save()
 }
 
-func (gs *GobStore) HasSession(senderKey id.SenderKey) bool {
+func (gs *MemoryStore) HasSession(senderKey id.SenderKey) bool {
 	gs.lock.RLock()
 	sessions, ok := gs.Sessions[senderKey]
 	gs.lock.RUnlock()
 	return ok && len(sessions) > 0 && !sessions[0].Expired()
 }
 
-func (gs *GobStore) GetLatestSession(senderKey id.SenderKey) (*OlmSession, error) {
+func (gs *MemoryStore) GetLatestSession(senderKey id.SenderKey) (*OlmSession, error) {
 	gs.lock.RLock()
 	sessions, ok := gs.Sessions[senderKey]
 	gs.lock.RUnlock()
@@ -252,7 +227,7 @@ func (gs *GobStore) GetLatestSession(senderKey id.SenderKey) (*OlmSession, error
 	return sessions[0], nil
 }
 
-func (gs *GobStore) getGroupSessions(roomID id.RoomID, senderKey id.SenderKey) map[id.SessionID]*InboundGroupSession {
+func (gs *MemoryStore) getGroupSessions(roomID id.RoomID, senderKey id.SenderKey) map[id.SessionID]*InboundGroupSession {
 	room, ok := gs.GroupSessions[roomID]
 	if !ok {
 		room = make(map[id.SenderKey]map[id.SessionID]*InboundGroupSession)
@@ -266,7 +241,7 @@ func (gs *GobStore) getGroupSessions(roomID id.RoomID, senderKey id.SenderKey) m
 	return sender
 }
 
-func (gs *GobStore) PutGroupSession(roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID, igs *InboundGroupSession) error {
+func (gs *MemoryStore) PutGroupSession(roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID, igs *InboundGroupSession) error {
 	gs.lock.Lock()
 	gs.getGroupSessions(roomID, senderKey)[sessionID] = igs
 	err := gs.save()
@@ -274,7 +249,7 @@ func (gs *GobStore) PutGroupSession(roomID id.RoomID, senderKey id.SenderKey, se
 	return err
 }
 
-func (gs *GobStore) GetGroupSession(roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID) (*InboundGroupSession, error) {
+func (gs *MemoryStore) GetGroupSession(roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID) (*InboundGroupSession, error) {
 	gs.lock.Lock()
 	session, ok := gs.getGroupSessions(roomID, senderKey)[sessionID]
 	if !ok {
@@ -289,7 +264,7 @@ func (gs *GobStore) GetGroupSession(roomID id.RoomID, senderKey id.SenderKey, se
 	return session, nil
 }
 
-func (gs *GobStore) getWithheldGroupSessions(roomID id.RoomID, senderKey id.SenderKey) map[id.SessionID]*event.RoomKeyWithheldEventContent {
+func (gs *MemoryStore) getWithheldGroupSessions(roomID id.RoomID, senderKey id.SenderKey) map[id.SessionID]*event.RoomKeyWithheldEventContent {
 	room, ok := gs.WithheldGroupSessions[roomID]
 	if !ok {
 		room = make(map[id.SenderKey]map[id.SessionID]*event.RoomKeyWithheldEventContent)
@@ -303,7 +278,7 @@ func (gs *GobStore) getWithheldGroupSessions(roomID id.RoomID, senderKey id.Send
 	return sender
 }
 
-func (gs *GobStore) PutWithheldGroupSession(content event.RoomKeyWithheldEventContent) error {
+func (gs *MemoryStore) PutWithheldGroupSession(content event.RoomKeyWithheldEventContent) error {
 	gs.lock.Lock()
 	gs.getWithheldGroupSessions(content.RoomID, content.SenderKey)[content.SessionID] = &content
 	err := gs.save()
@@ -311,7 +286,7 @@ func (gs *GobStore) PutWithheldGroupSession(content event.RoomKeyWithheldEventCo
 	return err
 }
 
-func (gs *GobStore) GetWithheldGroupSession(roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID) (*event.RoomKeyWithheldEventContent, error) {
+func (gs *MemoryStore) GetWithheldGroupSession(roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID) (*event.RoomKeyWithheldEventContent, error) {
 	gs.lock.Lock()
 	session, ok := gs.getWithheldGroupSessions(roomID, senderKey)[sessionID]
 	gs.lock.Unlock()
@@ -321,7 +296,7 @@ func (gs *GobStore) GetWithheldGroupSession(roomID id.RoomID, senderKey id.Sende
 	return session, nil
 }
 
-func (gs *GobStore) GetGroupSessionsForRoom(roomID id.RoomID) ([]*InboundGroupSession, error) {
+func (gs *MemoryStore) GetGroupSessionsForRoom(roomID id.RoomID) ([]*InboundGroupSession, error) {
 	gs.lock.Lock()
 	defer gs.lock.Unlock()
 	room, ok := gs.GroupSessions[roomID]
@@ -337,7 +312,7 @@ func (gs *GobStore) GetGroupSessionsForRoom(roomID id.RoomID) ([]*InboundGroupSe
 	return result, nil
 }
 
-func (gs *GobStore) GetAllGroupSessions() ([]*InboundGroupSession, error) {
+func (gs *MemoryStore) GetAllGroupSessions() ([]*InboundGroupSession, error) {
 	gs.lock.Lock()
 	var result []*InboundGroupSession
 	for _, room := range gs.GroupSessions {
@@ -351,7 +326,7 @@ func (gs *GobStore) GetAllGroupSessions() ([]*InboundGroupSession, error) {
 	return result, nil
 }
 
-func (gs *GobStore) AddOutboundGroupSession(session *OutboundGroupSession) error {
+func (gs *MemoryStore) AddOutboundGroupSession(session *OutboundGroupSession) error {
 	gs.lock.Lock()
 	gs.OutGroupSessions[session.RoomID] = session
 	err := gs.save()
@@ -359,12 +334,12 @@ func (gs *GobStore) AddOutboundGroupSession(session *OutboundGroupSession) error
 	return err
 }
 
-func (gs *GobStore) UpdateOutboundGroupSession(_ *OutboundGroupSession) error {
+func (gs *MemoryStore) UpdateOutboundGroupSession(_ *OutboundGroupSession) error {
 	// we don't need to do anything here because the session is a pointer and already stored in our map
 	return gs.save()
 }
 
-func (gs *GobStore) GetOutboundGroupSession(roomID id.RoomID) (*OutboundGroupSession, error) {
+func (gs *MemoryStore) GetOutboundGroupSession(roomID id.RoomID) (*OutboundGroupSession, error) {
 	gs.lock.RLock()
 	session, ok := gs.OutGroupSessions[roomID]
 	gs.lock.RUnlock()
@@ -374,7 +349,7 @@ func (gs *GobStore) GetOutboundGroupSession(roomID id.RoomID) (*OutboundGroupSes
 	return session, nil
 }
 
-func (gs *GobStore) RemoveOutboundGroupSession(roomID id.RoomID) error {
+func (gs *MemoryStore) RemoveOutboundGroupSession(roomID id.RoomID) error {
 	gs.lock.Lock()
 	session, ok := gs.OutGroupSessions[roomID]
 	if !ok || session == nil {
@@ -386,7 +361,7 @@ func (gs *GobStore) RemoveOutboundGroupSession(roomID id.RoomID) error {
 	return nil
 }
 
-func (gs *GobStore) ValidateMessageIndex(senderKey id.SenderKey, sessionID id.SessionID, eventID id.EventID, index uint, timestamp int64) (bool, error) {
+func (gs *MemoryStore) ValidateMessageIndex(senderKey id.SenderKey, sessionID id.SessionID, eventID id.EventID, index uint, timestamp int64) (bool, error) {
 	gs.lock.Lock()
 	defer gs.lock.Unlock()
 	key := messageIndexKey{
@@ -409,7 +384,7 @@ func (gs *GobStore) ValidateMessageIndex(senderKey id.SenderKey, sessionID id.Se
 	return true, nil
 }
 
-func (gs *GobStore) GetDevices(userID id.UserID) (map[id.DeviceID]*id.Device, error) {
+func (gs *MemoryStore) GetDevices(userID id.UserID) (map[id.DeviceID]*id.Device, error) {
 	gs.lock.RLock()
 	devices, ok := gs.Devices[userID]
 	if !ok {
@@ -419,7 +394,7 @@ func (gs *GobStore) GetDevices(userID id.UserID) (map[id.DeviceID]*id.Device, er
 	return devices, nil
 }
 
-func (gs *GobStore) GetDevice(userID id.UserID, deviceID id.DeviceID) (*id.Device, error) {
+func (gs *MemoryStore) GetDevice(userID id.UserID, deviceID id.DeviceID) (*id.Device, error) {
 	gs.lock.RLock()
 	defer gs.lock.RUnlock()
 	devices, ok := gs.Devices[userID]
@@ -433,7 +408,7 @@ func (gs *GobStore) GetDevice(userID id.UserID, deviceID id.DeviceID) (*id.Devic
 	return device, nil
 }
 
-func (gs *GobStore) FindDeviceByKey(userID id.UserID, identityKey id.IdentityKey) (*id.Device, error) {
+func (gs *MemoryStore) FindDeviceByKey(userID id.UserID, identityKey id.IdentityKey) (*id.Device, error) {
 	gs.lock.RLock()
 	defer gs.lock.RUnlock()
 	devices, ok := gs.Devices[userID]
@@ -448,7 +423,7 @@ func (gs *GobStore) FindDeviceByKey(userID id.UserID, identityKey id.IdentityKey
 	return nil, nil
 }
 
-func (gs *GobStore) PutDevice(userID id.UserID, device *id.Device) error {
+func (gs *MemoryStore) PutDevice(userID id.UserID, device *id.Device) error {
 	gs.lock.Lock()
 	devices, ok := gs.Devices[userID]
 	if !ok {
@@ -461,7 +436,7 @@ func (gs *GobStore) PutDevice(userID id.UserID, device *id.Device) error {
 	return err
 }
 
-func (gs *GobStore) PutDevices(userID id.UserID, devices map[id.DeviceID]*id.Device) error {
+func (gs *MemoryStore) PutDevices(userID id.UserID, devices map[id.DeviceID]*id.Device) error {
 	gs.lock.Lock()
 	gs.Devices[userID] = devices
 	err := gs.save()
@@ -469,7 +444,7 @@ func (gs *GobStore) PutDevices(userID id.UserID, devices map[id.DeviceID]*id.Dev
 	return err
 }
 
-func (gs *GobStore) FilterTrackedUsers(users []id.UserID) ([]id.UserID, error) {
+func (gs *MemoryStore) FilterTrackedUsers(users []id.UserID) ([]id.UserID, error) {
 	gs.lock.RLock()
 	var ptr int
 	for _, userID := range users {
@@ -483,7 +458,7 @@ func (gs *GobStore) FilterTrackedUsers(users []id.UserID) ([]id.UserID, error) {
 	return users[:ptr], nil
 }
 
-func (gs *GobStore) PutCrossSigningKey(userID id.UserID, usage id.CrossSigningUsage, key id.Ed25519) error {
+func (gs *MemoryStore) PutCrossSigningKey(userID id.UserID, usage id.CrossSigningUsage, key id.Ed25519) error {
 	gs.lock.RLock()
 	userKeys, ok := gs.CrossSigningKeys[userID]
 	if !ok {
@@ -505,7 +480,7 @@ func (gs *GobStore) PutCrossSigningKey(userID id.UserID, usage id.CrossSigningUs
 	return err
 }
 
-func (gs *GobStore) GetCrossSigningKeys(userID id.UserID) (map[id.CrossSigningUsage]id.CrossSigningKey, error) {
+func (gs *MemoryStore) GetCrossSigningKeys(userID id.UserID) (map[id.CrossSigningUsage]id.CrossSigningKey, error) {
 	gs.lock.RLock()
 	defer gs.lock.RUnlock()
 	keys, ok := gs.CrossSigningKeys[userID]
@@ -515,7 +490,7 @@ func (gs *GobStore) GetCrossSigningKeys(userID id.UserID) (map[id.CrossSigningUs
 	return keys, nil
 }
 
-func (gs *GobStore) PutSignature(signedUserID id.UserID, signedKey id.Ed25519, signerUserID id.UserID, signerKey id.Ed25519, signature string) error {
+func (gs *MemoryStore) PutSignature(signedUserID id.UserID, signedKey id.Ed25519, signerUserID id.UserID, signerKey id.Ed25519, signature string) error {
 	gs.lock.RLock()
 	signedUserSigs, ok := gs.KeySignatures[signedUserID]
 	if !ok {
@@ -538,7 +513,7 @@ func (gs *GobStore) PutSignature(signedUserID id.UserID, signedKey id.Ed25519, s
 	return err
 }
 
-func (gs *GobStore) GetSignaturesForKeyBy(userID id.UserID, key id.Ed25519, signerID id.UserID) (map[id.Ed25519]string, error) {
+func (gs *MemoryStore) GetSignaturesForKeyBy(userID id.UserID, key id.Ed25519, signerID id.UserID) (map[id.Ed25519]string, error) {
 	gs.lock.RLock()
 	defer gs.lock.RUnlock()
 	userKeys, ok := gs.KeySignatures[userID]
@@ -556,7 +531,7 @@ func (gs *GobStore) GetSignaturesForKeyBy(userID id.UserID, key id.Ed25519, sign
 	return sigsBySigner, nil
 }
 
-func (gs *GobStore) IsKeySignedBy(userID id.UserID, key id.Ed25519, signerID id.UserID, signerKey id.Ed25519) (bool, error) {
+func (gs *MemoryStore) IsKeySignedBy(userID id.UserID, key id.Ed25519, signerID id.UserID, signerKey id.Ed25519) (bool, error) {
 	sigs, err := gs.GetSignaturesForKeyBy(userID, key, signerID)
 	if err != nil {
 		return false, err
@@ -565,7 +540,7 @@ func (gs *GobStore) IsKeySignedBy(userID id.UserID, key id.Ed25519, signerID id.
 	return ok, nil
 }
 
-func (gs *GobStore) DropSignaturesByKey(userID id.UserID, key id.Ed25519) (int64, error) {
+func (gs *MemoryStore) DropSignaturesByKey(userID id.UserID, key id.Ed25519) (int64, error) {
 	var count int64
 	gs.lock.RLock()
 	for _, userSigs := range gs.KeySignatures {

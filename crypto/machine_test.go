@@ -7,7 +7,6 @@
 package crypto
 
 import (
-	"os"
 	"testing"
 
 	"maunium.net/go/mautrix"
@@ -31,34 +30,29 @@ func (mockStateStore) FindSharedRooms(id.UserID) []id.RoomID {
 	return []id.RoomID{"room1"}
 }
 
-func newMachine(t *testing.T, userID id.UserID) (*OlmMachine, string) {
+func newMachine(t *testing.T, userID id.UserID) *OlmMachine {
 	client, err := mautrix.NewClient("http://localhost", userID, "token")
 	if err != nil {
 		t.Fatalf("Error creating client: %v", err)
 	}
 	client.DeviceID = "device1"
 
-	storeFileName := "gob_store_test_" + userID.String() + ".gob"
-	gobStore, err := NewGobStore(storeFileName)
+	gobStore := NewMemoryStore(nil)
 	if err != nil {
-		os.Remove(storeFileName)
 		t.Fatalf("Error creating Gob store: %v", err)
 	}
 
 	machine := NewOlmMachine(client, NoopLogger{}, gobStore, mockStateStore{})
 	if err := machine.Load(); err != nil {
-		os.Remove(storeFileName)
 		t.Fatalf("Error creating account: %v", err)
 	}
 
-	return machine, storeFileName
+	return machine
 }
 
 func TestOlmMachineOlmMegolmSessions(t *testing.T) {
-	machineOut, storeFileNameOut := newMachine(t, "user1")
-	defer os.Remove(storeFileNameOut)
-	machineIn, storeFileNameIn := newMachine(t, "user2")
-	defer os.Remove(storeFileNameIn)
+	machineOut := newMachine(t, "user1")
+	machineIn := newMachine(t, "user2")
 
 	// generate OTKs for receiving machine
 	otks := machineIn.account.getOneTimeKeys("user2", "device2", 0)
