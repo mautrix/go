@@ -9,15 +9,20 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
+	"sync"
 
+	"github.com/chzyer/readline"
 	_ "github.com/mattn/go-sqlite3"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto/cryptohelper"
 	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/id"
 )
 
 var homeserver = flag.String("homeserver", "", "Matrix homeserver")
@@ -39,10 +44,20 @@ func main() {
 	}
 	//client.Logger = maulogger.DefaultLogger
 	//maulogger.DefaultLogger.PrintLevel = 0
+	rl, err := readline.New("[no room]> ")
+	if err != nil {
+		panic(err)
+	}
+	defer rl.Close()
+	stdout := rl.Stdout()
+
+	var lastRoomID id.RoomID
 
 	syncer := client.Syncer.(*mautrix.DefaultSyncer)
 	syncer.OnEventType(event.EventMessage, func(source mautrix.EventSource, evt *event.Event) {
-		fmt.Printf("<%[1]s> %[4]s (%[2]s/%[3]s)\n", evt.Sender, evt.Type.String(), evt.ID, evt.Content.AsMessage().Body)
+		lastRoomID = evt.RoomID
+		rl.SetPrompt(fmt.Sprintf("%s> ", lastRoomID))
+		_, _ = fmt.Fprintf(stdout, "<%[1]s> %[4]s (%[2]s/%[3]s)\n", evt.Sender, evt.Type.String(), evt.ID, evt.Content.AsMessage().Body)
 	})
 
 	cryptoHelper, err := cryptohelper.NewCryptoHelper(client, []byte("meow"), *database)
@@ -54,11 +69,11 @@ func main() {
 	//client.UserID = "..."
 	//client.DeviceID = "..."
 	//client.AccessToken = "..."
+	// You don't need to set a device ID in LoginAs because the crypto helper will set it for you if necessary.
 	cryptoHelper.LoginAs = &mautrix.ReqLogin{
-		Type:             mautrix.AuthTypePassword,
-		Identifier:       mautrix.UserIdentifier{Type: mautrix.IdentifierTypeUser, User: *username},
-		Password:         *password,
-		StoreCredentials: true,
+		Type:       mautrix.AuthTypePassword,
+		Identifier: mautrix.UserIdentifier{Type: mautrix.IdentifierTypeUser, User: *username},
+		Password:   *password,
 	}
 	// If you want to use multiple clients with the same DB, you should set a distinct database account ID for each one.
 	//cryptoHelper.DBAccountID = ""
@@ -66,10 +81,42 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	// Set the client crypto helper in order to automatically encrypt outgoing messages
+	client.Crypto = cryptoHelper
 
-	fmt.Println("Now running")
-	err = client.Sync()
+	_, _ = fmt.Fprintln(stdout, "Now running")
+	syncCtx, cancelSync := context.WithCancel(context.Background())
+	var syncStopWait sync.WaitGroup
+	syncStopWait.Add(1)
+
+	go func() {
+		err = client.SyncWithContext(syncCtx)
+		defer syncStopWait.Done()
+		if err != nil && !errors.Is(err, context.Canceled) {
+			panic(err)
+		}
+	}()
+
+	for {
+		line, err := rl.Readline()
+		if err != nil { // io.EOF
+			break
+		}
+		if lastRoomID == "" {
+			_, _ = fmt.Fprintln(stdout, "Wait for an incoming message before sending messages")
+			continue
+		}
+		resp, err := client.SendText(lastRoomID, line)
+		if err != nil {
+			_, _ = fmt.Fprintln(stdout, "Failed to send:", err)
+		} else {
+			_, _ = fmt.Fprintln(stdout, "Sent", resp.EventID)
+		}
+	}
+	cancelSync()
+	syncStopWait.Wait()
+	err = cryptoHelper.Close()
 	if err != nil {
-		panic(err)
+		_, _ = fmt.Fprintln(stdout, "Error closing db:", err)
 	}
 }

@@ -177,6 +177,16 @@ func (helper *CryptoHelper) Init() error {
 	return nil
 }
 
+func (helper *CryptoHelper) Close() error {
+	if helper.dbForManagedStores != nil {
+		err := helper.dbForManagedStores.RawDB.Close()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (helper *CryptoHelper) verifyDeviceKeysOnServer() error {
 	helper.log.Debugfln("Making sure our device has the expected keys on the server")
 	resp, err := helper.client.QueryKeys(&mautrix.ReqQueryKeys{
