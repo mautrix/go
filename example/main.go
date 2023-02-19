@@ -18,6 +18,7 @@ import (
 
 	"github.com/chzyer/readline"
 	_ "github.com/mattn/go-sqlite3"
+	"maunium.net/go/maulogger/v2"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto/cryptohelper"
@@ -42,14 +43,19 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	//client.Logger = maulogger.DefaultLogger
-	//maulogger.DefaultLogger.PrintLevel = 0
 	rl, err := readline.New("[no room]> ")
 	if err != nil {
 		panic(err)
 	}
 	defer rl.Close()
 	stdout := rl.Stdout()
+	client.Logger = maulogger.DefaultLogger
+	// Don't log to stdout, it messes up the readline :(
+	maulogger.DefaultLogger.PrintLevel = maulogger.LevelFatal.Severity
+	err = maulogger.OpenFile()
+	if err != nil {
+		panic(err)
+	}
 
 	var lastRoomID id.RoomID
 
