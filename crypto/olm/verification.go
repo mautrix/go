@@ -1,6 +1,3 @@
-//go:build !nosas
-// +build !nosas
-
 package olm
 
 // #cgo LDFLAGS: -lolm -lstdc++

@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tulir Asokan
+// Copyright (c) 2023 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,8 +7,11 @@
 package crypto
 
 import (
+	"context"
 	"errors"
 	"fmt"
+
+	"github.com/rs/zerolog"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto/olm"
@@ -25,10 +28,12 @@ var (
 )
 
 func (mach *OlmMachine) LoadDevices(user id.UserID) map[id.DeviceID]*id.Device {
-	return mach.fetchKeys([]id.UserID{user}, "", true)[user]
+	// TODO proper context?
+	return mach.fetchKeys(context.TODO(), []id.UserID{user}, "", true)[user]
 }
 
-func (mach *OlmMachine) storeDeviceSelfSignatures(userID id.UserID, deviceID id.DeviceID, resp *mautrix.RespQueryKeys) {
+func (mach *OlmMachine) storeDeviceSelfSignatures(ctx context.Context, userID id.UserID, deviceID id.DeviceID, resp *mautrix.RespQueryKeys) {
+	log := zerolog.Ctx(ctx)
 	deviceKeys := resp.DeviceKeys[userID][deviceID]
 	for signerUserID, signerKeys := range deviceKeys.Signatures {
 		for signerKey, signature := range signerKeys {
@@ -43,17 +48,27 @@ func (mach *OlmMachine) storeDeviceSelfSignatures(userID id.UserID, deviceID id.
 					if verified, err := olm.VerifySignatureJSON(deviceKeys, signerUserID, pubKey.String(), pubKey); verified {
 						if signKey, ok := deviceKeys.Keys[id.DeviceKeyID(signerKey)]; ok {
 							signature := deviceKeys.Signatures[signerUserID][id.NewKeyID(id.KeyAlgorithmEd25519, pubKey.String())]
-							mach.Log.Trace("Verified self-signing signature for device %s/%s: %s", signerUserID, deviceID, signature)
+							log.Trace().Err(err).
+								Str("signer_user_id", signerUserID.String()).
+								Str("signed_device_id", deviceID.String()).
+								Str("signature", signature).
+								Msg("Verified self-signing signature")
 							err = mach.CryptoStore.PutSignature(userID, id.Ed25519(signKey), signerUserID, pubKey, signature)
 							if err != nil {
-								mach.Log.Warn("Failed to store self-signing signature for device %s/%s: %v", signerUserID, deviceID, err)
+								log.Warn().Err(err).
+									Str("signer_user_id", signerUserID.String()).
+									Str("signed_device_id", deviceID.String()).
+									Msg("Failed to store self-signing signature")
 							}
 						}
 					} else {
 						if err == nil {
 							err = errors.New("invalid signature")
 						}
-						mach.Log.Warn("Could not verify device self-signing signature for %s/%s: %v", signerUserID, deviceID, err)
+						log.Warn().Err(err).
+							Str("signer_user_id", signerUserID.String()).
+							Str("signed_device_id", deviceID.String()).
+							Msg("Failed to verify self-signing signature")
 					}
 				}
 			}
@@ -61,25 +76,29 @@ func (mach *OlmMachine) storeDeviceSelfSignatures(userID id.UserID, deviceID id.
 			if signKey, ok := deviceKeys.Keys[id.DeviceKeyID(signerKey)]; ok {
 				err := mach.CryptoStore.PutSignature(userID, id.Ed25519(signKey), signerUserID, id.Ed25519(signKey), signature)
 				if err != nil {
-					mach.Log.Warn("Failed to store self-signing signature for %s/%s: %v", signerUserID, signKey, err)
+					log.Warn().Err(err).
+						Str("signer_user_id", signerUserID.String()).
+						Str("signer_key", signKey).
+						Msg("Failed to store self-signing signature")
 				}
 			}
 		}
 	}
 }
 
-func (mach *OlmMachine) fetchKeys(users []id.UserID, sinceToken string, includeUntracked bool) (data map[id.UserID]map[id.DeviceID]*id.Device) {
+func (mach *OlmMachine) fetchKeys(ctx context.Context, users []id.UserID, sinceToken string, includeUntracked bool) (data map[id.UserID]map[id.DeviceID]*id.Device) {
 	// TODO this function should probably return errors
 	req := &mautrix.ReqQueryKeys{
 		DeviceKeys: mautrix.DeviceKeysRequest{},
 		Timeout:    10 * 1000,
 		Token:      sinceToken,
 	}
+	log := mach.machOrContextLog(ctx)
 	if !includeUntracked {
 		var err error
 		users, err = mach.CryptoStore.FilterTrackedUsers(users)
 		if err != nil {
-			mach.Log.Warn("Failed to filter tracked user list: %v", err)
+			log.Warn().Err(err).Msg("Failed to filter tracked user list")
 		}
 	}
 	if len(users) == 0 {
@@ -88,47 +107,52 @@ func (mach *OlmMachine) fetchKeys(users []id.UserID, sinceToken string, includeU
 	for _, userID := range users {
 		req.DeviceKeys[userID] = mautrix.DeviceIDList{}
 	}
-	mach.Log.Trace("Querying keys for %v", users)
+	log.Trace().Strs("users", strishArray(users)).Msg("Querying keys for users")
 	resp, err := mach.Client.QueryKeys(req)
 	if err != nil {
-		mach.Log.Warn("Failed to query keys: %v", err)
+		log.Error().Err(err).Msg("Failed to query keys")
 		return
 	}
 	for server, err := range resp.Failures {
-		mach.Log.Warn("Query keys failure for %s: %v", server, err)
+		log.Warn().Interface("query_error", err).Str("server", server).Msg("Query keys failure for server")
 	}
-	mach.Log.Trace("Query key result received with %d users", len(resp.DeviceKeys))
+	log.Trace().Int("user_count", len(resp.DeviceKeys)).Msg("Query key result received")
 	data = make(map[id.UserID]map[id.DeviceID]*id.Device)
 	for userID, devices := range resp.DeviceKeys {
+		log := log.With().Str("user_id", userID.String()).Logger()
 		delete(req.DeviceKeys, userID)
 
 		newDevices := make(map[id.DeviceID]*id.Device)
 		existingDevices, err := mach.CryptoStore.GetDevices(userID)
 		if err != nil {
-			mach.Log.Warn("Failed to get existing devices for %s: %v", userID, err)
+			log.Warn().Err(err).Msg("Failed to get existing devices for user")
 			existingDevices = make(map[id.DeviceID]*id.Device)
 		}
-		mach.Log.Trace("Updating devices for %s, got %d devices, have %d in store", userID, len(devices), len(existingDevices))
+		log.Trace().
+			Int("new_device_count", len(devices)).
+			Int("old_device_count", len(existingDevices)).
+			Msg("Updating devices in store")
 		changed := false
 		for deviceID, deviceKeys := range devices {
+			log := log.With().Str("device_id", deviceID.String()).Logger()
 			existing, ok := existingDevices[deviceID]
 			if !ok {
 				// New device
 				changed = true
 			}
-			mach.Log.Trace("Validating device %s of %s", deviceID, userID)
+			log.Trace().Msg("Validating device")
 			newDevice, err := mach.validateDevice(userID, deviceID, deviceKeys, existing)
 			if err != nil {
-				mach.Log.Error("Failed to validate device %s of %s: %v", deviceID, userID, err)
+				log.Error().Err(err).Msg("Failed to validate device")
 			} else if newDevice != nil {
 				newDevices[deviceID] = newDevice
-				mach.storeDeviceSelfSignatures(userID, deviceID, resp)
+				mach.storeDeviceSelfSignatures(ctx, userID, deviceID, resp)
 			}
 		}
-		mach.Log.Trace("Storing new device list for %s containing %d devices", userID, len(newDevices))
+		log.Trace().Int("new_device_count", len(newDevices)).Msg("Storing new device list")
 		err = mach.CryptoStore.PutDevices(userID, newDevices)
 		if err != nil {
-			mach.Log.Warn("Failed to update device list for %s: %v", userID, err)
+			log.Warn().Err(err).Msg("Failed to update device list")
 		}
 		data[userID] = newDevices
 
@@ -138,12 +162,12 @@ func (mach *OlmMachine) fetchKeys(users []id.UserID, sinceToken string, includeU
 		}
 	}
 	for userID := range req.DeviceKeys {
-		mach.Log.Warn("Didn't get any keys for user %s", userID)
+		log.Warn().Str("user_id", userID.String()).Msg("Didn't get any keys for user")
 	}
 
-	mach.storeCrossSigningKeys(resp.MasterKeys, resp.DeviceKeys)
-	mach.storeCrossSigningKeys(resp.SelfSigningKeys, resp.DeviceKeys)
-	mach.storeCrossSigningKeys(resp.UserSigningKeys, resp.DeviceKeys)
+	mach.storeCrossSigningKeys(ctx, resp.MasterKeys, resp.DeviceKeys)
+	mach.storeCrossSigningKeys(ctx, resp.SelfSigningKeys, resp.DeviceKeys)
+	mach.storeCrossSigningKeys(ctx, resp.UserSigningKeys, resp.DeviceKeys)
 
 	return data
 }
@@ -154,10 +178,16 @@ func (mach *OlmMachine) fetchKeys(users []id.UserID, sinceToken string, includeU
 // not need to be called manually.
 func (mach *OlmMachine) OnDevicesChanged(userID id.UserID) {
 	for _, roomID := range mach.StateStore.FindSharedRooms(userID) {
-		mach.Log.Debug("Devices of %s changed, invalidating group session for %s", userID, roomID)
+		mach.Log.Debug().
+			Str("user_id", userID.String()).
+			Str("room_id", roomID.String()).
+			Msg("Invalidating group session in room due to device change notification")
 		err := mach.CryptoStore.RemoveOutboundGroupSession(roomID)
 		if err != nil {
-			mach.Log.Warn("Failed to invalidate outbound group session of %s on device change for %s: %v", roomID, userID, err)
+			mach.Log.Warn().Err(err).
+				Str("user_id", userID.String()).
+				Str("room_id", roomID.String()).
+				Msg("Failed to invalidate outbound group session")
 		}
 	}
 }

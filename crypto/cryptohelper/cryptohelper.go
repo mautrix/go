@@ -7,23 +7,27 @@
 package cryptohelper
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
 	"time"
+
+	"maunium.net/go/maulogger/v2"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/sqlstatestore"
+	"maunium.net/go/mautrix/util"
 	"maunium.net/go/mautrix/util/dbutil"
 )
 
 type CryptoHelper struct {
 	client    *mautrix.Client
 	mach      *crypto.OlmMachine
-	log       mautrix.WarnLogger
+	log       maulogger.Logger
 	lock      sync.RWMutex
 	pickleKey []byte
 
@@ -89,7 +93,7 @@ func NewCryptoHelper(cli *mautrix.Client, pickleKey []byte, store any) (*CryptoH
 
 	return &CryptoHelper{
 		client:    cli,
-		log:       cli.Logger.(mautrix.WarnLogger),
+		log:       cli.Logger.(maulogger.Logger),
 		pickleKey: pickleKey,
 
 		unmanagedCryptoStore: unmanagedCryptoStore,
@@ -156,7 +160,7 @@ func (helper *CryptoHelper) Init() error {
 	if helper.client.DeviceID == "" || helper.client.UserID == "" {
 		return fmt.Errorf("the client must be logged in")
 	}
-	helper.mach = crypto.NewOlmMachine(helper.client, crypto.NoopLogger{}, cryptoStore, stateStore)
+	helper.mach = crypto.NewOlmMachine(helper.client, util.MauToZeroLog(helper.log), cryptoStore, stateStore)
 	err := helper.mach.Load()
 	if err != nil {
 		return fmt.Errorf("failed to load olm account: %w", err)
@@ -306,7 +310,7 @@ func (helper *CryptoHelper) Decrypt(evt *event.Event) (*event.Event, error) {
 	if helper == nil {
 		return nil, fmt.Errorf("crypto helper is nil")
 	}
-	return helper.mach.DecryptMegolmEvent(evt)
+	return helper.mach.DecryptMegolmEvent(context.TODO(), evt)
 }
 
 func (helper *CryptoHelper) Encrypt(roomID id.RoomID, evtType event.Type, content any) (encrypted *event.EncryptedEventContent, err error) {
@@ -315,7 +319,8 @@ func (helper *CryptoHelper) Encrypt(roomID id.RoomID, evtType event.Type, conten
 	}
 	helper.lock.RLock()
 	defer helper.lock.RUnlock()
-	encrypted, err = helper.mach.EncryptMegolmEvent(roomID, evtType, content)
+	ctx := context.TODO()
+	encrypted, err = helper.mach.EncryptMegolmEvent(ctx, roomID, evtType, content)
 	if err != nil {
 		if err != crypto.SessionExpired && err != crypto.SessionNotShared && err != crypto.NoGroupSession {
 			return
@@ -326,9 +331,9 @@ func (helper *CryptoHelper) Encrypt(roomID id.RoomID, evtType event.Type, conten
 		users, err = helper.managedStateStore.GetRoomJoinedOrInvitedMembers(roomID)
 		if err != nil {
 			err = fmt.Errorf("failed to get room member list: %w", err)
-		} else if err = helper.mach.ShareGroupSession(roomID, users); err != nil {
+		} else if err = helper.mach.ShareGroupSession(ctx, roomID, users); err != nil {
 			err = fmt.Errorf("failed to share group session: %w", err)
-		} else if encrypted, err = helper.mach.EncryptMegolmEvent(roomID, evtType, content); err != nil {
+		} else if encrypted, err = helper.mach.EncryptMegolmEvent(ctx, roomID, evtType, content); err != nil {
 			err = fmt.Errorf("failed to encrypt event after re-sharing group session: %w", err)
 		}
 	}

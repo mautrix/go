@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tulir Asokan
+// Copyright (c) 2023 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,6 +7,7 @@
 package crypto
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -32,13 +33,21 @@ type megolmEvent struct {
 }
 
 // DecryptMegolmEvent decrypts an m.room.encrypted event where the algorithm is m.megolm.v1.aes-sha2
-func (mach *OlmMachine) DecryptMegolmEvent(evt *event.Event) (*event.Event, error) {
+func (mach *OlmMachine) DecryptMegolmEvent(ctx context.Context, evt *event.Event) (*event.Event, error) {
 	content, ok := evt.Content.Parsed.(*event.EncryptedEventContent)
 	if !ok {
 		return nil, IncorrectEncryptedContentType
 	} else if content.Algorithm != id.AlgorithmMegolmV1 {
 		return nil, UnsupportedAlgorithm
 	}
+	log := mach.machOrContextLog(ctx).With().
+		Str("action", "decrypt megolm event").
+		Str("event_id", evt.ID.String()).
+		Str("sender", evt.Sender.String()).
+		Str("sender_key", content.SenderKey.String()).
+		Str("session_id", content.SessionID.String()).
+		Logger()
+	ctx = log.WithContext(ctx)
 	encryptionRoomID := evt.RoomID
 	// Allow the server to move encrypted events between rooms if both the real room and target room are on a non-federatable .local domain.
 	// The message index checks to prevent replay attacks still apply and aren't based on the room ID,
@@ -70,14 +79,16 @@ func (mach *OlmMachine) DecryptMegolmEvent(evt *event.Event) (*event.Event, erro
 	if sess.SigningKey == ownSigningKey && sess.SenderKey == ownIdentityKey && len(sess.ForwardingChains) == 0 {
 		trustLevel = id.TrustStateVerified
 	} else {
-		device, err = mach.GetOrFetchDeviceByKey(evt.Sender, sess.SenderKey)
+		device, err = mach.GetOrFetchDeviceByKey(ctx, evt.Sender, sess.SenderKey)
 		if err != nil {
 			// We don't want to throw these errors as the message can still be decrypted.
-			mach.Log.Debug("Failed to get device %s/%s to verify session %s: %v", evt.Sender, sess.SenderKey, sess.ID(), err)
+			log.Debug().Err(err).Msg("Failed to get device to verify session")
 			trustLevel = id.TrustStateUnknownDevice
 		} else if len(sess.ForwardingChains) == 0 || (len(sess.ForwardingChains) == 1 && sess.ForwardingChains[0] == sess.SenderKey.String()) {
 			if device == nil {
-				mach.Log.Debug("Couldn't resolve trust level of session %s: sent by unknown device %s/%s", sess.ID(), evt.Sender, sess.SenderKey)
+				log.Debug().Err(err).
+					Str("session_sender_key", sess.SenderKey.String()).
+					Msg("Couldn't resolve trust level of session: sent by unknown device")
 				trustLevel = id.TrustStateUnknownDevice
 			} else if device.SigningKey != sess.SigningKey || device.IdentityKey != sess.SenderKey {
 				return nil, DeviceKeyMismatch
@@ -91,7 +102,9 @@ func (mach *OlmMachine) DecryptMegolmEvent(evt *event.Event) (*event.Event, erro
 			if device != nil {
 				trustLevel = mach.ResolveTrust(device)
 			} else {
-				mach.Log.Debug("Couldn't resolve trust level of session %s: forwarding chain ends with unknown device %s", sess.ID(), lastChainItem)
+				log.Debug().
+					Str("forward_last_sender_key", lastChainItem).
+					Msg("Couldn't resolve trust level of session: forwarding chain ends with unknown device")
 				trustLevel = id.TrustStateForwarded
 			}
 		}
@@ -105,10 +118,11 @@ func (mach *OlmMachine) DecryptMegolmEvent(evt *event.Event) (*event.Event, erro
 		return nil, WrongRoom
 	}
 	megolmEvt.Type.Class = evt.Type.Class
+	log = log.With().Str("decrypted_event_type", megolmEvt.Type.Repr()).Logger()
 	err = megolmEvt.Content.ParseRaw(megolmEvt.Type)
 	if err != nil {
 		if errors.Is(err, event.ErrUnsupportedContentType) {
-			mach.Log.Warn("Unsupported event type %s in encrypted event %s", megolmEvt.Type.Repr(), evt.ID)
+			log.Warn().Msg("Unsupported event type in encrypted event")
 		} else {
 			return nil, fmt.Errorf("failed to parse content of megolm payload event: %w", err)
 		}
@@ -119,7 +133,7 @@ func (mach *OlmMachine) DecryptMegolmEvent(evt *event.Event) (*event.Event, erro
 			if relatable.OptionalGetRelatesTo() == nil {
 				relatable.SetRelatesTo(content.RelatesTo)
 			} else {
-				mach.Log.Trace("Not overriding relation data in %s, as encrypted payload already has it", evt.ID)
+				log.Trace().Msg("Not overriding relation data as encrypted payload already has it")
 			}
 		}
 		if _, hasRelation := megolmEvt.Content.Raw["m.relates_to"]; !hasRelation {

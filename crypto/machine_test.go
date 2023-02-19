@@ -7,6 +7,7 @@
 package crypto
 
 import (
+	"context"
 	"testing"
 
 	"maunium.net/go/mautrix"
@@ -42,7 +43,7 @@ func newMachine(t *testing.T, userID id.UserID) *OlmMachine {
 		t.Fatalf("Error creating Gob store: %v", err)
 	}
 
-	machine := NewOlmMachine(client, NoopLogger{}, gobStore, mockStateStore{})
+	machine := NewOlmMachine(client, nil, gobStore, mockStateStore{})
 	if err := machine.Load(); err != nil {
 		t.Fatalf("Error creating account: %v", err)
 	}
@@ -80,7 +81,7 @@ func TestOlmMachineOlmMegolmSessions(t *testing.T) {
 	})
 
 	// create & store outbound megolm session for sending the event later
-	megolmOutSession := machineOut.newOutboundGroupSession("room1")
+	megolmOutSession := machineOut.newOutboundGroupSession(context.TODO(), "room1")
 	megolmOutSession.Shared = true
 	machineOut.CryptoStore.AddOutboundGroupSession(megolmOutSession)
 
@@ -92,14 +93,14 @@ func TestOlmMachineOlmMegolmSessions(t *testing.T) {
 		SigningKey:  machineIn.account.SigningKey(),
 	}
 	wrapped := wrapSession(olmSession)
-	content := machineOut.encryptOlmEvent(wrapped, deviceIdentity, event.ToDeviceRoomKey, megolmOutSession.ShareContent())
+	content := machineOut.encryptOlmEvent(context.TODO(), wrapped, deviceIdentity, event.ToDeviceRoomKey, megolmOutSession.ShareContent())
 
 	senderKey := machineOut.account.IdentityKey()
 	signingKey := machineOut.account.SigningKey()
 
 	for _, content := range content.OlmCiphertext {
 		// decrypt olm ciphertext
-		decrypted, err := machineIn.decryptAndParseOlmCiphertext("user1", senderKey, content.Type, content.Body, "test")
+		decrypted, err := machineIn.decryptAndParseOlmCiphertext(context.TODO(), "user1", senderKey, content.Type, content.Body)
 		if err != nil {
 			t.Errorf("Error decrypting olm content: %v", err)
 		}
@@ -117,7 +118,7 @@ func TestOlmMachineOlmMegolmSessions(t *testing.T) {
 
 	// encrypt event with megolm session in sending machine
 	eventContent := map[string]string{"hello": "world"}
-	encryptedEvtContent, err := machineOut.EncryptMegolmEvent("room1", event.EventMessage, eventContent)
+	encryptedEvtContent, err := machineOut.EncryptMegolmEvent(context.TODO(), "room1", event.EventMessage, eventContent)
 	if err != nil {
 		t.Errorf("Error encrypting megolm event: %v", err)
 	}
@@ -134,7 +135,7 @@ func TestOlmMachineOlmMegolmSessions(t *testing.T) {
 	}
 
 	// decrypt event on receiving machine and confirm
-	decryptedEvt, err := machineIn.DecryptMegolmEvent(encryptedEvt)
+	decryptedEvt, err := machineIn.DecryptMegolmEvent(context.TODO(), encryptedEvt)
 	if err != nil {
 		t.Errorf("Error decrypting megolm event: %v", err)
 	}
@@ -145,11 +146,11 @@ func TestOlmMachineOlmMegolmSessions(t *testing.T) {
 		t.Errorf("Expected event content %v, got %v", eventContent, decryptedEvt.Content.Raw)
 	}
 
-	machineOut.EncryptMegolmEvent("room1", event.EventMessage, eventContent)
+	machineOut.EncryptMegolmEvent(context.TODO(), "room1", event.EventMessage, eventContent)
 	if megolmOutSession.Expired() {
 		t.Error("Megolm outbound session expired before 3rd message")
 	}
-	machineOut.EncryptMegolmEvent("room1", event.EventMessage, eventContent)
+	machineOut.EncryptMegolmEvent(context.TODO(), "room1", event.EventMessage, eventContent)
 	if !megolmOutSession.Expired() {
 		t.Error("Megolm outbound session not expired after 3rd message")
 	}

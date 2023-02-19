@@ -1,16 +1,16 @@
 // Copyright (c) 2020 Nikos Filippakis
+// Copyright (c) 2023 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-//go:build !nosas
-// +build !nosas
-
 package crypto
 
 import (
 	"context"
+
+	"github.com/rs/zerolog"
 
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
@@ -56,11 +56,11 @@ func (mach *OlmMachine) RequestRoomKey(ctx context.Context, toUser id.UserID, to
 		select {
 		case <-keyResponseReceived:
 			// key request successful
-			mach.Log.Debug("Key for session %v was received, cancelling other key requests", sessionID)
+			mach.Log.Debug().Msgf("Key for session %v was received, cancelling other key requests", sessionID)
 			resChan <- true
 		case <-ctx.Done():
 			// if the context is done, key request was unsuccessful
-			mach.Log.Debug("Context closed (%v) before forwared key for session %v received, sending key request cancellation", ctx.Err(), sessionID)
+			mach.Log.Debug().Msgf("Context closed (%v) before forwared key for session %v received, sending key request cancellation", ctx.Err(), sessionID)
 			resChan <- false
 		}
 
@@ -128,18 +128,26 @@ func (mach *OlmMachine) SendRoomKeyRequest(roomID id.RoomID, senderKey id.Sender
 	return err
 }
 
-func (mach *OlmMachine) importForwardedRoomKey(evt *DecryptedOlmEvent, content *event.ForwardedRoomKeyEventContent) bool {
+func (mach *OlmMachine) importForwardedRoomKey(ctx context.Context, evt *DecryptedOlmEvent, content *event.ForwardedRoomKeyEventContent) bool {
+	log := zerolog.Ctx(ctx).With().
+		Str("session_id", content.SessionID.String()).
+		Str("room_id", content.RoomID.String()).
+		Logger()
 	if content.Algorithm != id.AlgorithmMegolmV1 || evt.Keys.Ed25519 == "" {
-		mach.Log.Debug("Ignoring weird forwarded room key from %s/%s: alg=%s, ed25519=%s, sessionid=%s, roomid=%s", evt.Sender, evt.SenderDevice, content.Algorithm, evt.Keys.Ed25519, content.SessionID, content.RoomID)
+		log.Debug().
+			Str("algorithm", string(content.Algorithm)).
+			Msg("Ignoring weird forwarded room key")
 		return false
 	}
 
 	igsInternal, err := olm.InboundGroupSessionImport([]byte(content.SessionKey))
 	if err != nil {
-		mach.Log.Error("Failed to import inbound group session: %v", err)
+		log.Error().Err(err).Msg("Failed to import inbound group session")
 		return false
 	} else if igsInternal.ID() != content.SessionID {
-		mach.Log.Warn("Mismatched session ID while creating inbound group session")
+		log.Warn().
+			Str("actual_session_id", igsInternal.ID().String()).
+			Msg("Mismatched session ID while creating inbound group session from forward")
 		return false
 	}
 	igs := &InboundGroupSession{
@@ -152,11 +160,11 @@ func (mach *OlmMachine) importForwardedRoomKey(evt *DecryptedOlmEvent, content *
 	}
 	err = mach.CryptoStore.PutGroupSession(content.RoomID, content.SenderKey, content.SessionID, igs)
 	if err != nil {
-		mach.Log.Error("Failed to store new inbound group session: %v", err)
+		log.Error().Err(err).Msg("Failed to store new inbound group session")
 		return false
 	}
 	mach.markSessionReceived(content.SessionID)
-	mach.Log.Trace("Received forwarded inbound group session %s/%s/%s", content.RoomID, content.SenderKey, content.SessionID)
+	log.Debug().Msg("Received forwarded inbound group session")
 	return true
 }
 
@@ -175,50 +183,72 @@ func (mach *OlmMachine) rejectKeyRequest(rejection KeyShareRejection, device *id
 	}
 	err := mach.sendToOneDevice(device.UserID, device.DeviceID, event.ToDeviceRoomKeyWithheld, &content)
 	if err != nil {
-		mach.Log.Warn("Failed to send key share rejection %s to %s/%s: %v", rejection.Code, device.UserID, device.DeviceID, err)
+		mach.Log.Warn().Err(err).
+			Str("code", string(rejection.Code)).
+			Str("user_id", device.UserID.String()).
+			Str("device_id", device.DeviceID.String()).
+			Msg("Failed to send key share rejection")
 	}
 	err = mach.sendToOneDevice(device.UserID, device.DeviceID, event.ToDeviceOrgMatrixRoomKeyWithheld, &content)
 	if err != nil {
-		mach.Log.Warn("Failed to send key share rejection %s (org.matrix.) to %s/%s: %v", rejection.Code, device.UserID, device.DeviceID, err)
+		mach.Log.Warn().Err(err).
+			Str("code", string(rejection.Code)).
+			Str("user_id", device.UserID.String()).
+			Str("device_id", device.DeviceID.String()).
+			Msg("Failed to send key share rejection (legacy event type)")
 	}
 }
 
-func (mach *OlmMachine) defaultAllowKeyShare(device *id.Device, _ event.RequestedKeyInfo) *KeyShareRejection {
+func (mach *OlmMachine) defaultAllowKeyShare(ctx context.Context, device *id.Device, _ event.RequestedKeyInfo) *KeyShareRejection {
+	log := mach.machOrContextLog(ctx)
 	if mach.Client.UserID != device.UserID {
-		mach.Log.Debug("Ignoring key request from a different user (%s)", device.UserID)
+		log.Debug().Msg("Rejecting key request from a different user")
 		return &KeyShareRejectOtherUser
 	} else if mach.Client.DeviceID == device.DeviceID {
-		mach.Log.Debug("Ignoring key request from ourselves")
+		log.Debug().Msg("Ignoring key request from ourselves")
 		return &KeyShareRejectNoResponse
 	} else if device.Trust == id.TrustStateBlacklisted {
-		mach.Log.Debug("Ignoring key request from blacklisted device %s", device.DeviceID)
+		log.Debug().Msg("Rejecting key request from blacklisted device")
 		return &KeyShareRejectBlacklisted
 	} else if trustState := mach.ResolveTrust(device); trustState >= mach.ShareKeysMinTrust {
-		mach.Log.Debug("Accepting key request from device %s (trust state: %s)", device.DeviceID, trustState)
+		log.Debug().
+			Str("min_trust", mach.SendKeysMinTrust.String()).
+			Str("device_trust", trustState.String()).
+			Msg("Accepting key request from trusted device")
 		return nil
 	} else {
-		mach.Log.Debug("Ignoring key request from unverified device %s (trust state: %s)", device.DeviceID, trustState)
+		log.Debug().
+			Str("min_trust", mach.SendKeysMinTrust.String()).
+			Str("device_trust", trustState.String()).
+			Msg("Rejecting key request from untrusted device")
 		return &KeyShareRejectUnverified
 	}
 }
 
-func (mach *OlmMachine) handleRoomKeyRequest(sender id.UserID, content *event.RoomKeyRequestEventContent) {
+func (mach *OlmMachine) handleRoomKeyRequest(ctx context.Context, sender id.UserID, content *event.RoomKeyRequestEventContent) {
+	log := zerolog.Ctx(ctx).With().
+		Str("request_id", content.RequestID).
+		Str("device_id", content.RequestingDeviceID.String()).
+		Str("room_id", content.Body.RoomID.String()).
+		Str("session_id", content.Body.SessionID.String()).
+		Logger()
+	ctx = log.WithContext(ctx)
 	if content.Action != event.KeyRequestActionRequest {
 		return
 	} else if content.RequestingDeviceID == mach.Client.DeviceID && sender == mach.Client.UserID {
-		mach.Log.Debug("Ignoring key request %s from ourselves", content.RequestID)
+		log.Debug().Msg("Ignoring key request from ourselves")
 		return
 	}
 
-	mach.Log.Debug("Received key request %s for %s from %s/%s", content.RequestID, content.Body.SessionID, sender, content.RequestingDeviceID)
+	log.Debug().Msg("Received key request")
 
-	device, err := mach.GetOrFetchDevice(sender, content.RequestingDeviceID)
+	device, err := mach.GetOrFetchDevice(ctx, sender, content.RequestingDeviceID)
 	if err != nil {
-		mach.Log.Error("Failed to fetch device %s/%s that requested keys: %v", sender, content.RequestingDeviceID, err)
+		log.Error().Err(err).Msg("Failed to fetch device that requested keys")
 		return
 	}
 
-	rejection := mach.AllowKeyShare(device, content.Body)
+	rejection := mach.AllowKeyShare(ctx, device, content.Body)
 	if rejection != nil {
 		mach.rejectKeyRequest(*rejection, device, content.Body)
 		return
@@ -226,18 +256,24 @@ func (mach *OlmMachine) handleRoomKeyRequest(sender id.UserID, content *event.Ro
 
 	igs, err := mach.CryptoStore.GetGroupSession(content.Body.RoomID, content.Body.SenderKey, content.Body.SessionID)
 	if err != nil {
-		mach.Log.Error("Failed to fetch group session to forward to %s/%s: %v", device.UserID, device.DeviceID, err)
+		log.Error().Err(err).Msg("Failed to get group session to forward")
 		mach.rejectKeyRequest(KeyShareRejectInternalError, device, content.Body)
 		return
 	} else if igs == nil {
-		mach.Log.Warn("Didn't find group session %s to forward to %s/%s", content.Body.SessionID, device.UserID, device.DeviceID)
+		log.Error().Msg("Didn't find group session to forward")
 		mach.rejectKeyRequest(KeyShareRejectUnavailable, device, content.Body)
 		return
 	}
+	if internalID := igs.ID(); internalID != content.Body.SessionID {
+		// Should this be an error?
+		log = log.With().Str("unexpected_session_id", internalID.String()).Logger()
+	}
 
-	exportedKey, err := igs.Internal.Export(igs.Internal.FirstKnownIndex())
+	firstKnownIndex := igs.Internal.FirstKnownIndex()
+	log = log.With().Uint32("first_known_index", firstKnownIndex).Logger()
+	exportedKey, err := igs.Internal.Export(firstKnownIndex)
 	if err != nil {
-		mach.Log.Error("Failed to export session %s to forward to %s/%s: %v", igs.ID(), device.UserID, device.DeviceID, err)
+		log.Error().Err(err).Msg("Failed to export group session to forward")
 		mach.rejectKeyRequest(KeyShareRejectInternalError, device, content.Body)
 		return
 	}
@@ -256,9 +292,9 @@ func (mach *OlmMachine) handleRoomKeyRequest(sender id.UserID, content *event.Ro
 		},
 	}
 
-	if err := mach.SendEncryptedToDevice(device, event.ToDeviceForwardedRoomKey, forwardedRoomKey); err != nil {
-		mach.Log.Error("Failed to send encrypted forwarded key %s to %s/%s: %v", igs.ID(), device.UserID, device.DeviceID, err)
+	if err = mach.SendEncryptedToDevice(ctx, device, event.ToDeviceForwardedRoomKey, forwardedRoomKey); err != nil {
+		log.Error().Err(err).Msg("Failed to encrypt and send group session")
+	} else {
+		log.Debug().Msg("Successfully sent forwarded group session")
 	}
-
-	mach.Log.Debug("Sent encrypted forwarded key to device %s/%s for session %s", device.UserID, device.DeviceID, igs.ID())
 }

@@ -24,6 +24,7 @@ import (
 	"maunium.net/go/mautrix/crypto"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
+	"maunium.net/go/mautrix/util"
 	"maunium.net/go/mautrix/util/dbutil"
 )
 
@@ -87,9 +88,8 @@ func (helper *CryptoHelper) Init() error {
 	}
 
 	helper.log.Debugln("Logged in as bridge bot with device ID", helper.client.DeviceID)
-	logger := &cryptoLogger{helper.baseLog}
 	stateStore := &cryptoStateStore{helper.bridge}
-	helper.mach = crypto.NewOlmMachine(helper.client, logger, helper.store, stateStore)
+	helper.mach = crypto.NewOlmMachine(helper.client, util.MauToZeroLog(helper.baseLog), helper.store, stateStore)
 	helper.mach.AllowKeyShare = helper.allowKeyShare
 	helper.mach.SendKeysMinTrust = helper.bridge.Config.Bridge.GetEncryptionConfig().VerificationLevels.Receive
 
@@ -106,7 +106,7 @@ func (helper *CryptoHelper) Init() error {
 	return nil
 }
 
-func (helper *CryptoHelper) allowKeyShare(device *id.Device, info event.RequestedKeyInfo) *crypto.KeyShareRejection {
+func (helper *CryptoHelper) allowKeyShare(ctx context.Context, device *id.Device, info event.RequestedKeyInfo) *crypto.KeyShareRejection {
 	cfg := helper.bridge.Config.Bridge.GetEncryptionConfig()
 	if !cfg.AllowKeySharing {
 		return &crypto.KeyShareRejectNoResponse
@@ -193,7 +193,7 @@ func (helper *CryptoHelper) Start() {
 	if helper.bridge.Config.Bridge.GetEncryptionConfig().Appservice {
 		helper.log.Debugln("End-to-bridge encryption is in appservice mode, registering event listeners and not starting syncer")
 		helper.bridge.AS.Registration.EphemeralEvents = true
-		helper.mach.AddAppserviceListener(helper.bridge.EventProcessor, helper.bridge.AS)
+		helper.mach.AddAppserviceListener(helper.bridge.EventProcessor)
 		return
 	}
 	helper.syncDone.Add(1)
@@ -273,14 +273,15 @@ type syncProxyHelper interface {
 }
 
 func (helper *CryptoHelper) Decrypt(evt *event.Event) (*event.Event, error) {
-	return helper.mach.DecryptMegolmEvent(evt)
+	return helper.mach.DecryptMegolmEvent(context.TODO(), evt)
 }
 
 func (helper *CryptoHelper) Encrypt(roomID id.RoomID, evtType event.Type, content *event.Content) (err error) {
 	helper.lock.RLock()
 	defer helper.lock.RUnlock()
 	var encrypted *event.EncryptedEventContent
-	encrypted, err = helper.mach.EncryptMegolmEvent(roomID, evtType, content)
+	ctx := context.TODO()
+	encrypted, err = helper.mach.EncryptMegolmEvent(ctx, roomID, evtType, content)
 	if err != nil {
 		if err != crypto.SessionExpired && err != crypto.SessionNotShared && err != crypto.NoGroupSession {
 			return
@@ -290,9 +291,9 @@ func (helper *CryptoHelper) Encrypt(roomID id.RoomID, evtType event.Type, conten
 		users, err = helper.store.GetRoomJoinedOrInvitedMembers(roomID)
 		if err != nil {
 			err = fmt.Errorf("failed to get room member list: %w", err)
-		} else if err = helper.mach.ShareGroupSession(roomID, users); err != nil {
+		} else if err = helper.mach.ShareGroupSession(ctx, roomID, users); err != nil {
 			err = fmt.Errorf("failed to share group session: %w", err)
-		} else if encrypted, err = helper.mach.EncryptMegolmEvent(roomID, evtType, content); err != nil {
+		} else if encrypted, err = helper.mach.EncryptMegolmEvent(ctx, roomID, evtType, content); err != nil {
 			err = fmt.Errorf("failed to encrypt event after re-sharing group session: %w", err)
 		}
 	}
@@ -347,18 +348,22 @@ func (syncer *cryptoSyncer) ProcessResponse(resp *mautrix.RespSync, since string
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
-				syncer.Log.Error("Processing sync response (%s) panicked: %v\n%s", since, err, debug.Stack())
+				syncer.Log.Error().
+					Str("since", since).
+					Interface("error", err).
+					Str("stack", string(debug.Stack())).
+					Msg("Processing sync response panicked")
 			}
 			done <- struct{}{}
 		}()
-		syncer.Log.Trace("Starting sync response handling (%s)", since)
+		syncer.Log.Trace().Str("since", since).Msg("Starting sync response handling")
 		syncer.ProcessSyncResponse(resp, since)
-		syncer.Log.Trace("Successfully handled sync response (%s)", since)
+		syncer.Log.Trace().Str("since", since).Msg("Successfully handled sync response")
 	}()
 	select {
 	case <-done:
 	case <-time.After(30 * time.Second):
-		syncer.Log.Warn("Handling sync response (%s) is taking unusually long", since)
+		syncer.Log.Warn().Str("since", since).Msg("Handling sync response is taking unusually long")
 	}
 	return nil
 }
@@ -367,7 +372,7 @@ func (syncer *cryptoSyncer) OnFailedSync(_ *mautrix.RespSync, err error) (time.D
 	if errors.Is(err, mautrix.MUnknownToken) {
 		return 0, err
 	}
-	syncer.Log.Error("Error /syncing, waiting 10 seconds: %v", err)
+	syncer.Log.Error().Err(err).Msg("Error /syncing, waiting 10 seconds")
 	return 10 * time.Second, nil
 }
 
