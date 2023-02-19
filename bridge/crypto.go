@@ -140,7 +140,7 @@ func (helper *CryptoHelper) loginBot() (*mautrix.Client, bool, error) {
 	if err != nil {
 		return nil, deviceID != "", fmt.Errorf("failed to initialize client: %w", err)
 	}
-	client.Logger = helper.baseLog.Sub("Bot")
+	client.Logger = *util.MauToZeroLog(helper.baseLog.Sub("Bot"))
 	client.Client = helper.bridge.AS.HTTPClient
 	client.DefaultHTTPRetries = helper.bridge.AS.DefaultHTTPRetries
 	flows, err := client.GetLoginFlows()

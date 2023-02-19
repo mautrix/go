@@ -29,6 +29,7 @@ import (
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
+	"maunium.net/go/mautrix/util"
 )
 
 // EventChannelSize is the size for the Events channel in Appservice instances.
@@ -259,7 +260,7 @@ func (as *AppService) makeClient(userID id.UserID) *mautrix.Client {
 	client.Store = nil
 	client.StateStore = as.StateStore
 	client.SetAppServiceUserID = true
-	client.Logger = as.Log.Sub(string(userID))
+	client.Logger = *util.MauToZeroLog(as.Log.Sub(string(userID)))
 	client.Client = as.HTTPClient
 	client.DefaultHTTPRetries = as.DefaultHTTPRetries
 	as.clients[userID] = client
@@ -279,7 +280,7 @@ func (as *AppService) Client(userID id.UserID) *mautrix.Client {
 func (as *AppService) BotClient() *mautrix.Client {
 	if as.botClient == nil {
 		as.botClient = as.makeClient(as.BotMXID())
-		as.botClient.Logger = as.Log.Sub("Bot")
+		as.botClient.Logger = *util.MauToZeroLog(as.Log.Sub("Bot"))
 	}
 	return as.botClient
 }

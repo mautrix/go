@@ -13,21 +13,20 @@ import (
 	"sync"
 	"time"
 
-	"maunium.net/go/maulogger/v2"
+	"github.com/rs/zerolog"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/sqlstatestore"
-	"maunium.net/go/mautrix/util"
 	"maunium.net/go/mautrix/util/dbutil"
 )
 
 type CryptoHelper struct {
 	client    *mautrix.Client
 	mach      *crypto.OlmMachine
-	log       maulogger.Logger
+	log       zerolog.Logger
 	lock      sync.RWMutex
 	pickleKey []byte
 
@@ -83,9 +82,9 @@ func NewCryptoHelper(cli *mautrix.Client, pickleKey []byte, store any) (*CryptoH
 	default:
 		return nil, fmt.Errorf("you must pass a *dbutil.Database or *crypto.StateStore to NewCryptoHelper")
 	}
+	log := cli.Logger.With().Str("module", "crypto").Logger()
 	if cli.StateStore == nil && dbForManagedStores != nil {
-		// TODO log
-		managedStateStore = sqlstatestore.NewSQLStateStore(dbForManagedStores, nil)
+		managedStateStore = sqlstatestore.NewSQLStateStore(dbForManagedStores, dbutil.ZeroLogger(log.With().Str("database", "statestore").Logger()))
 		cli.StateStore = managedStateStore
 	} else if _, isCryptoCompatible := cli.StateStore.(crypto.StateStore); !isCryptoCompatible {
 		return nil, fmt.Errorf("the client state store must implement crypto.StateStore")
@@ -93,7 +92,7 @@ func NewCryptoHelper(cli *mautrix.Client, pickleKey []byte, store any) (*CryptoH
 
 	return &CryptoHelper{
 		client:    cli,
-		log:       cli.Logger.(maulogger.Logger),
+		log:       log,
 		pickleKey: pickleKey,
 
 		unmanagedCryptoStore: unmanagedCryptoStore,
@@ -123,7 +122,7 @@ func (helper *CryptoHelper) Init() error {
 	}
 	var cryptoStore crypto.Store
 	if helper.unmanagedCryptoStore == nil {
-		managedCryptoStore := crypto.NewSQLCryptoStore(helper.dbForManagedStores, nil, helper.DBAccountID, helper.client.DeviceID, helper.pickleKey)
+		managedCryptoStore := crypto.NewSQLCryptoStore(helper.dbForManagedStores, dbutil.ZeroLogger(helper.log.With().Str("database", "cryptostore").Logger()), helper.DBAccountID, helper.client.DeviceID, helper.pickleKey)
 		if helper.client.Store == nil {
 			helper.client.Store = managedCryptoStore
 		} else if _, isMemory := helper.client.Store.(*mautrix.MemorySyncStore); isMemory {
@@ -139,7 +138,10 @@ func (helper *CryptoHelper) Init() error {
 				helper.LoginAs.DeviceID = storedDeviceID
 			}
 			helper.LoginAs.StoreCredentials = true
-			helper.log.Debugfln("Logging in as %s/%s", helper.LoginAs.Identifier.User, helper.LoginAs.DeviceID)
+			helper.log.Debug().
+				Str("username", helper.LoginAs.Identifier.User).
+				Str("device_id", helper.LoginAs.DeviceID.String()).
+				Msg("Logging in")
 			_, err = helper.client.Login(helper.LoginAs)
 			if err != nil {
 				return err
@@ -160,7 +162,7 @@ func (helper *CryptoHelper) Init() error {
 	if helper.client.DeviceID == "" || helper.client.UserID == "" {
 		return fmt.Errorf("the client must be logged in")
 	}
-	helper.mach = crypto.NewOlmMachine(helper.client, util.MauToZeroLog(helper.log), cryptoStore, stateStore)
+	helper.mach = crypto.NewOlmMachine(helper.client, &helper.log, cryptoStore, stateStore)
 	err := helper.mach.Load()
 	if err != nil {
 		return fmt.Errorf("failed to load olm account: %w", err)
@@ -173,7 +175,7 @@ func (helper *CryptoHelper) Init() error {
 	if _, ok = helper.client.Syncer.(mautrix.DispatchableSyncer); ok {
 		syncer.OnEventType(event.EventEncrypted, helper.HandleEncrypted)
 	} else {
-		helper.log.Warnfln("Client syncer does not implement DispatchableSyncer. Events will not be decrypted automatically.")
+		helper.log.Warn().Msg("Client syncer does not implement DispatchableSyncer. Events will not be decrypted automatically.")
 	}
 	if helper.managedStateStore != nil {
 		syncer.OnEvent(helper.client.StateStoreSyncHandler)
@@ -192,7 +194,7 @@ func (helper *CryptoHelper) Close() error {
 }
 
 func (helper *CryptoHelper) verifyDeviceKeysOnServer() error {
-	helper.log.Debugfln("Making sure our device has the expected keys on the server")
+	helper.log.Debug().Msg("Making sure our device has the expected keys on the server")
 	resp, err := helper.client.QueryKeys(&mautrix.ReqQueryKeys{
 		DeviceKeys: map[id.UserID]mautrix.DeviceIDList{
 			helper.client.UserID: {helper.client.DeviceID},
@@ -208,7 +210,7 @@ func (helper *CryptoHelper) verifyDeviceKeysOnServer() error {
 		if isShared {
 			return fmt.Errorf("olm account is marked as shared, keys seem to have disappeared from the server")
 		} else {
-			helper.log.Debugfln("Olm account not shared and keys not on server, so device is probably fine")
+			helper.log.Debug().Msg("Olm account not shared and keys not on server, so device is probably fine")
 			return nil
 		}
 	} else if !isShared {
@@ -217,9 +219,9 @@ func (helper *CryptoHelper) verifyDeviceKeysOnServer() error {
 		return fmt.Errorf("mismatching identity key on server (%q != %q)", ownID.SigningKey, ed)
 	}
 	if !isShared {
-		helper.log.Debugfln("Olm account not marked as shared, but keys on server match?")
+		helper.log.Debug().Msg("Olm account not marked as shared, but keys on server match?")
 	} else {
-		helper.log.Debugfln("Olm account marked as shared and keys on server match, device is fine")
+		helper.log.Debug().Msg("Olm account marked as shared and keys on server match, device is fine")
 	}
 	return nil
 }
@@ -234,21 +236,27 @@ func (helper *CryptoHelper) HandleEncrypted(src mautrix.EventSource, evt *event.
 		return
 	}
 	content := evt.Content.AsEncrypted()
-	helper.log.Debugfln("Decrypting %s (%s)", evt.ID, content.SessionID)
+	log := helper.log.With().
+		Str("event_id", evt.ID.String()).
+		Str("session_id", content.SessionID.String()).
+		Logger()
+	log.Debug().Msg("Decrypting received event")
 
 	decrypted, err := helper.Decrypt(evt)
 	if errors.Is(err, NoSessionFound) {
-		helper.log.Debugfln("Couldn't find session %s trying to decrypt %s, waiting %d seconds...", content.SessionID, evt.ID, int(initialSessionWaitTimeout.Seconds()))
+		log.Debug().
+			Int("wait_seconds", int(initialSessionWaitTimeout.Seconds())).
+			Msg("Couldn't find session, waiting for keys to arrive...")
 		if helper.mach.WaitForSession(evt.RoomID, content.SenderKey, content.SessionID, initialSessionWaitTimeout) {
-			helper.log.Debugfln("Got session %s after waiting, trying to decrypt %s again", content.SessionID, evt.ID)
+			log.Debug().Msg("Got keys after waiting, trying to decrypt event again")
 			decrypted, err = helper.Decrypt(evt)
 		} else {
-			go helper.waitLongerForSession(src, evt)
+			go helper.waitLongerForSession(log, src, evt)
 			return
 		}
 	}
 	if err != nil {
-		helper.log.Warnfln("Failed to decrypt %s: %v", evt.ID, err)
+		log.Warn().Err(err).Msg("Failed to decrypt event")
 		return
 	}
 	helper.postDecrypt(src, decrypted)
@@ -267,30 +275,36 @@ func (helper *CryptoHelper) RequestSession(roomID id.RoomID, senderKey id.Sender
 	if deviceID == "" {
 		deviceID = "*"
 	}
+	// TODO get log from context
+	log := helper.log.With().
+		Str("session_id", sessionID.String()).
+		Str("user_id", userID.String()).
+		Str("device_id", deviceID.String()).
+		Str("room_id", roomID.String()).
+		Logger()
 	err := helper.mach.SendRoomKeyRequest(roomID, senderKey, sessionID, "", map[id.UserID][]id.DeviceID{userID: {deviceID}})
 	if err != nil {
-		helper.log.Warnfln("Failed to send key request to %s/%s for %s in %s: %v", userID, deviceID, sessionID, roomID, err)
+		log.Warn().Err(err).Msg("Failed to send key request")
 	} else {
-		helper.log.Debugfln("Sent key request to %s/%s for %s in %s", userID, deviceID, sessionID, roomID)
+		log.Debug().Msg("Sent key request")
 	}
 }
 
-func (helper *CryptoHelper) waitLongerForSession(src mautrix.EventSource, evt *event.Event) {
+func (helper *CryptoHelper) waitLongerForSession(log zerolog.Logger, src mautrix.EventSource, evt *event.Event) {
 	content := evt.Content.AsEncrypted()
-	helper.log.Debugfln("Couldn't find session %s trying to decrypt %s, waiting %d more seconds...",
-		content.SessionID, evt.ID, int(extendedSessionWaitTimeout.Seconds()))
+	log.Debug().Int("wait_seconds", int(extendedSessionWaitTimeout.Seconds())).Msg("Couldn't find session, requesting keys and waiting longer...")
 
 	go helper.RequestSession(evt.RoomID, content.SenderKey, content.SessionID, evt.Sender, content.DeviceID)
 
 	if !helper.mach.WaitForSession(evt.RoomID, content.SenderKey, content.SessionID, extendedSessionWaitTimeout) {
-		helper.log.Debugfln("Didn't get %s, giving up on %s", content.SessionID, evt.ID)
+		log.Debug().Msg("Didn't get session, giving up")
 		return
 	}
 
-	helper.log.Debugfln("Got session %s after waiting more, trying to decrypt %s again", content.SessionID, evt.ID)
+	log.Debug().Msg("Got keys after waiting longer, trying to decrypt event again")
 	decrypted, err := helper.Decrypt(evt)
 	if err != nil {
-		helper.log.Warnfln("Failed to decrypt %s: %v", evt.ID, err)
+		log.Error().Err(err).Msg("Failed to decrypt event")
 		return
 	}
 
@@ -325,7 +339,10 @@ func (helper *CryptoHelper) Encrypt(roomID id.RoomID, evtType event.Type, conten
 		if err != crypto.SessionExpired && err != crypto.SessionNotShared && err != crypto.NoGroupSession {
 			return
 		}
-		helper.log.Debugfln("Got %v while encrypting event for %s, sharing group session and trying again...", err, roomID)
+		helper.log.Debug().
+			Err(err).
+			Str("room_id", roomID.String()).
+			Msg("Got session error while encrypting event, sharing group session and trying again")
 		var users []id.UserID
 		// TODO don't use managedStateStore
 		users, err = helper.managedStateStore.GetRoomJoinedOrInvitedMembers(roomID)

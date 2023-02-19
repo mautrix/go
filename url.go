@@ -43,7 +43,7 @@ func BuildURL(baseURL *url.URL, path ...interface{}) *url.URL {
 			parts[i+1] = casted
 		case int:
 			parts[i+1] = strconv.Itoa(casted)
-		case Stringifiable:
+		case fmt.Stringer:
 			parts[i+1] = casted.String()
 		default:
 			parts[i+1] = fmt.Sprint(casted)

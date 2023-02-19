@@ -15,10 +15,11 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/chzyer/readline"
 	_ "github.com/mattn/go-sqlite3"
-	"maunium.net/go/maulogger/v2"
+	"github.com/rs/zerolog"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto/cryptohelper"
@@ -48,14 +49,11 @@ func main() {
 		panic(err)
 	}
 	defer rl.Close()
-	stdout := rl.Stdout()
-	client.Logger = maulogger.DefaultLogger
-	// Don't log to stdout, it messes up the readline :(
-	maulogger.DefaultLogger.PrintLevel = maulogger.LevelFatal.Severity
-	err = maulogger.OpenFile()
-	if err != nil {
-		panic(err)
-	}
+	log := zerolog.New(zerolog.NewConsoleWriter(func(w *zerolog.ConsoleWriter) {
+		w.Out = rl.Stdout()
+		w.TimeFormat = time.Stamp
+	})).With().Timestamp().Logger()
+	client.Logger = log
 
 	var lastRoomID id.RoomID
 
@@ -63,7 +61,12 @@ func main() {
 	syncer.OnEventType(event.EventMessage, func(source mautrix.EventSource, evt *event.Event) {
 		lastRoomID = evt.RoomID
 		rl.SetPrompt(fmt.Sprintf("%s> ", lastRoomID))
-		_, _ = fmt.Fprintf(stdout, "<%[1]s> %[4]s (%[2]s/%[3]s)\n", evt.Sender, evt.Type.String(), evt.ID, evt.Content.AsMessage().Body)
+		log.Info().
+			Str("sender", evt.Sender.String()).
+			Str("type", evt.Type.String()).
+			Str("id", evt.ID.String()).
+			Str("body", evt.Content.AsMessage().Body).
+			Msg("Received message")
 	})
 	syncer.OnEventType(event.StateMember, func(source mautrix.EventSource, evt *event.Event) {
 		if evt.GetStateKey() == client.UserID.String() && evt.Content.AsMember().Membership == event.MembershipInvite {
@@ -71,9 +74,15 @@ func main() {
 			if err == nil {
 				lastRoomID = evt.RoomID
 				rl.SetPrompt(fmt.Sprintf("%s> ", lastRoomID))
-				_, _ = fmt.Fprintf(stdout, "Joined %s after invite from %s\n", evt.RoomID, evt.Sender)
+				log.Info().
+					Str("room_id", evt.RoomID.String()).
+					Str("inviter", evt.Sender.String()).
+					Msg("Joined room after invite")
 			} else {
-				_, _ = fmt.Fprintf(stdout, "Failed to join %s after invite from %s: %v\n", evt.RoomID, evt.Sender, err)
+				log.Error().Err(err).
+					Str("room_id", evt.RoomID.String()).
+					Str("inviter", evt.Sender.String()).
+					Msg("Failed to join room after invite")
 			}
 		}
 	})
@@ -102,7 +111,7 @@ func main() {
 	// Set the client crypto helper in order to automatically encrypt outgoing messages
 	client.Crypto = cryptoHelper
 
-	_, _ = fmt.Fprintln(stdout, "Now running")
+	log.Info().Msg("Now running")
 	syncCtx, cancelSync := context.WithCancel(context.Background())
 	var syncStopWait sync.WaitGroup
 	syncStopWait.Add(1)
@@ -121,20 +130,20 @@ func main() {
 			break
 		}
 		if lastRoomID == "" {
-			_, _ = fmt.Fprintln(stdout, "Wait for an incoming message before sending messages")
+			log.Error().Msg("Wait for an incoming message before sending messages")
 			continue
 		}
 		resp, err := client.SendText(lastRoomID, line)
 		if err != nil {
-			_, _ = fmt.Fprintln(stdout, "Failed to send:", err)
+			log.Error().Err(err).Msg("Failed to send event")
 		} else {
-			_, _ = fmt.Fprintln(stdout, "Sent", resp.EventID)
+			log.Info().Str("event_id", resp.EventID.String()).Msg("Event sent")
 		}
 	}
 	cancelSync()
 	syncStopWait.Wait()
 	err = cryptoHelper.Close()
 	if err != nil {
-		_, _ = fmt.Fprintln(stdout, "Error closing db:", err)
+		log.Error().Err(err).Msg("Error closing database")
 	}
 }

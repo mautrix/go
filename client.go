@@ -18,31 +18,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/rs/zerolog"
+
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/pushrules"
 )
-
-type Logger interface {
-	Debugfln(message string, args ...interface{})
-}
-
-// StubLogger is an implementation of Logger that does nothing
-type StubLogger struct{}
-
-func (sl *StubLogger) Debugfln(message string, args ...interface{}) {}
-func (sl *StubLogger) Warnfln(message string, args ...interface{})  {}
-
-var stubLogger = &StubLogger{}
-
-type WarnLogger interface {
-	Logger
-	Warnfln(message string, args ...interface{})
-}
-
-type Stringifiable interface {
-	String() string
-}
 
 type CryptoHelper interface {
 	Encrypt(id.RoomID, event.Type, any) (*event.EncryptedEventContent, error)
@@ -64,7 +45,7 @@ type Client struct {
 	Store         SyncStore    // The thing which can store tokens/ids
 	StateStore    StateStore
 	Crypto        CryptoHelper
-	Logger        Logger
+	Logger        zerolog.Logger
 	SyncPresence  event.Presence
 
 	StreamSyncMinAge time.Duration
@@ -189,7 +170,7 @@ func (cli *Client) SyncWithContext(ctx context.Context) error {
 	for {
 		streamResp := false
 		if cli.StreamSyncMinAge > 0 && time.Since(lastSuccessfulSync) > cli.StreamSyncMinAge {
-			cli.Logger.Debugfln("Last sync is old, will stream next response")
+			cli.Logger.Debug().Msg("Last sync is old, will stream next response")
 			streamResp = true
 		}
 		resSync, err := cli.FullSyncRequest(ReqSync{
@@ -255,36 +236,35 @@ const logBodyContextKey = "fi.mau.mautrix.log_body"
 const logRequestIDContextKey = "fi.mau.mautrix.request_id"
 
 func (cli *Client) LogRequest(req *http.Request) {
-	if cli.Logger == stubLogger {
-		return
+	evt := zerolog.Ctx(req.Context()).Debug().
+		Str("method", req.Method).
+		Str("url", req.URL.String())
+	body := req.Context().Value(logBodyContextKey)
+	if body != nil {
+		evt.Interface("body", body)
 	}
-	body, ok := req.Context().Value(logBodyContextKey).(string)
-	reqID, _ := req.Context().Value(logRequestIDContextKey).(int)
-	if ok && len(body) > 0 {
-		cli.Logger.Debugfln("req #%d: %s %s %s", reqID, req.Method, req.URL.String(), body)
-	} else {
-		cli.Logger.Debugfln("req #%d: %s %s", reqID, req.Method, req.URL.String())
-	}
+	evt.Msg("Sending request")
 }
 
 func (cli *Client) LogRequestDone(req *http.Request, resp *http.Response, handlerErr error, contentLength int, duration time.Duration) {
-	if cli.Logger == stubLogger {
-		return
-	}
-	reqID, _ := req.Context().Value(logRequestIDContextKey).(int)
 	mime := resp.Header.Get("Content-Type")
-	var suffix string
-	if handlerErr != nil {
-		suffix = fmt.Sprintf(" (but parsing the body failed)")
-	}
 	length := resp.ContentLength
 	if length == -1 && contentLength > 0 {
 		length = int64(contentLength)
 	}
-	cli.Logger.Debugfln(
-		"req #%d (%s) completed in %s with status %d and %d bytes of %s body%s",
-		reqID, strings.TrimPrefix(req.URL.Path, "/_matrix/client"), duration, resp.StatusCode, length, mime, suffix,
-	)
+	path := strings.TrimPrefix(req.URL.Path, cli.HomeserverURL.Path)
+	path = strings.TrimPrefix(path, "/_matrix/client")
+	evt := zerolog.Ctx(req.Context()).Debug().
+		Str("method", req.Method).
+		Str("path", path).
+		Int("status_code", resp.StatusCode).
+		Int64("response_length", length).
+		Str("response_mime", mime).
+		Str("duration", duration.String())
+	if handlerErr != nil {
+		evt.AnErr("body_parse_err", handlerErr)
+	}
+	evt.Msg("Request completed")
 }
 
 func (cli *Client) MakeRequest(method string, httpURL string, reqBody interface{}, resBody interface{}) ([]byte, error) {
@@ -306,13 +286,14 @@ type FullRequest struct {
 	MaxAttempts      int
 	SensitiveContent bool
 	Handler          ClientResponseHandler
+	Logger           *zerolog.Logger
 }
 
 var requestID int32
 var logSensitiveContent = os.Getenv("MAUTRIX_LOG_SENSITIVE_CONTENT") == "yes"
 
 func (params *FullRequest) compileRequest() (*http.Request, error) {
-	var logBody string
+	var logBody any
 	reqBody := params.RequestBody
 	if params.Context == nil {
 		params.Context = context.Background()
@@ -328,7 +309,7 @@ func (params *FullRequest) compileRequest() (*http.Request, error) {
 		if params.SensitiveContent && !logSensitiveContent {
 			logBody = "<sensitive content omitted>"
 		} else {
-			logBody = string(jsonStr)
+			logBody = params.RequestJSON
 		}
 		reqBody = bytes.NewReader(jsonStr)
 	} else if params.RequestBytes != nil {
@@ -339,11 +320,19 @@ func (params *FullRequest) compileRequest() (*http.Request, error) {
 		logBody = fmt.Sprintf("<%d bytes>", params.RequestLength)
 	} else if params.Method != http.MethodGet && params.Method != http.MethodHead {
 		params.RequestJSON = struct{}{}
-		logBody = "<default empty object>"
+		logBody = params.RequestJSON
 		reqBody = bytes.NewReader([]byte("{}"))
 	}
-	ctx := context.WithValue(params.Context, logBodyContextKey, logBody)
 	reqID := atomic.AddInt32(&requestID, 1)
+	ctx := params.Context
+	logger := zerolog.Ctx(ctx)
+	if logger.GetLevel() == zerolog.Disabled {
+		logger = params.Logger
+	}
+	ctx = logger.With().
+		Int32("req_id", reqID).
+		Logger().WithContext(ctx)
+	ctx = context.WithValue(ctx, logBodyContextKey, logBody)
 	ctx = context.WithValue(ctx, logRequestIDContextKey, int(reqID))
 	req, err := http.NewRequestWithContext(ctx, params.Method, params.URL, reqBody)
 	if err != nil {
@@ -374,6 +363,9 @@ func (cli *Client) MakeFullRequest(params FullRequest) ([]byte, error) {
 	if params.MaxAttempts == 0 {
 		params.MaxAttempts = 1 + cli.DefaultHTTPRetries
 	}
+	if params.Logger == nil {
+		params.Logger = &cli.Logger
+	}
 	req, err := params.compileRequest()
 	if err != nil {
 		return nil, err
@@ -388,30 +380,31 @@ func (cli *Client) MakeFullRequest(params FullRequest) ([]byte, error) {
 	return cli.executeCompiledRequest(req, params.MaxAttempts-1, 4*time.Second, params.ResponseJSON, params.Handler)
 }
 
-func (cli *Client) logWarning(format string, args ...interface{}) {
-	warnLogger, ok := cli.Logger.(WarnLogger)
-	if ok {
-		warnLogger.Warnfln(format, args...)
-	} else {
-		cli.Logger.Debugfln(format, args...)
+func (cli *Client) cliOrContextLog(ctx context.Context) *zerolog.Logger {
+	log := zerolog.Ctx(ctx)
+	if log.GetLevel() == zerolog.Disabled {
+		return &cli.Logger
 	}
+	return log
 }
 
 func (cli *Client) doRetry(req *http.Request, cause error, retries int, backoff time.Duration, responseJSON interface{}, handler ClientResponseHandler) ([]byte, error) {
-	reqID, _ := req.Context().Value(logRequestIDContextKey).(int)
+	log := zerolog.Ctx(req.Context())
 	if req.Body != nil {
 		if req.GetBody == nil {
-			cli.logWarning("Failed to get new body to retry request #%d: GetBody is nil", reqID)
+			log.Warn().Msg("Failed to get new body to retry request: GetBody is nil")
 			return nil, cause
 		}
 		var err error
 		req.Body, err = req.GetBody()
 		if err != nil {
-			cli.logWarning("Failed to get new body to retry request #%d: %v", reqID, err)
+			log.Warn().Err(err).Msg("Failed to get new body to retry request")
 			return nil, cause
 		}
 	}
-	cli.logWarning("Request #%d failed: %v, retrying in %d seconds", reqID, cause, int(backoff.Seconds()))
+	log.Warn().Err(cause).
+		Int("retry_in_seconds", int(backoff.Seconds())).
+		Msg("Request failed, retrying")
 	time.Sleep(backoff)
 	return cli.executeCompiledRequest(req, retries-1, backoff*2, responseJSON, handler)
 }
@@ -430,22 +423,23 @@ func (cli *Client) readRequestBody(req *http.Request, res *http.Response) ([]byt
 	return contents, nil
 }
 
-func (cli *Client) closeTemp(file *os.File) {
+func closeTemp(log *zerolog.Logger, file *os.File) {
 	_ = file.Close()
 	err := os.Remove(file.Name())
 	if err != nil {
-		cli.logWarning("Failed to remove temp file %s: %v", file.Name(), err)
+		log.Warn().Err(err).Str("file_name", file.Name()).Msg("Failed to remove response temp file")
 	}
 }
 
 func (cli *Client) streamResponse(req *http.Request, res *http.Response, responseJSON interface{}) ([]byte, error) {
+	log := zerolog.Ctx(req.Context())
 	file, err := os.CreateTemp("", "mautrix-response-")
 	if err != nil {
-		cli.logWarning("Failed to create temporary file: %v", err)
+		log.Warn().Err(err).Msg("Failed to create temporary file for streaming response")
 		_, err = cli.handleNormalResponse(req, res, responseJSON)
 		return nil, err
 	}
-	defer cli.closeTemp(file)
+	defer closeTemp(log, file)
 	if _, err = io.Copy(file, res.Body); err != nil {
 		return nil, fmt.Errorf("failed to copy response to file: %w", err)
 	} else if _, err = file.Seek(0, 0); err != nil {
@@ -496,7 +490,7 @@ func (cli *Client) handleResponseError(req *http.Request, res *http.Response) ([
 
 // parseBackoffFromResponse extracts the backoff time specified in the Retry-After header if present. See
 // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Retry-After.
-func (cli *Client) parseBackoffFromResponse(res *http.Response, now time.Time, fallback time.Duration) time.Duration {
+func (cli *Client) parseBackoffFromResponse(req *http.Request, res *http.Response, now time.Time, fallback time.Duration) time.Duration {
 	retryAfterHeaderValue := res.Header.Get("Retry-After")
 	if retryAfterHeaderValue == "" {
 		return fallback
@@ -510,7 +504,9 @@ func (cli *Client) parseBackoffFromResponse(res *http.Response, now time.Time, f
 		return time.Duration(seconds) * time.Second
 	}
 
-	cli.logWarning(`Failed to parse Retry-After header value "%s"`, retryAfterHeaderValue)
+	zerolog.Ctx(req.Context()).Warn().
+		Str("retry_after", retryAfterHeaderValue).
+		Msg("Failed to parse Retry-After header value")
 
 	return fallback
 }
@@ -545,7 +541,7 @@ func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backof
 
 	if retries > 0 && cli.shouldRetry(res) {
 		if res.StatusCode == http.StatusTooManyRequests {
-			backoff = cli.parseBackoffFromResponse(res, time.Now(), backoff)
+			backoff = cli.parseBackoffFromResponse(req, res, time.Now(), backoff)
 		}
 		return cli.doRetry(req, fmt.Errorf("HTTP %d", res.StatusCode), retries, backoff, responseJSON, handler)
 	}
@@ -640,7 +636,11 @@ func (cli *Client) FullSyncRequest(req ReqSync) (resp *RespSync, err error) {
 		buffer = 1 * time.Minute
 	}
 	if err == nil && duration > timeout+buffer {
-		cli.logWarning("Sync request (%s) took %s with timeout %s", req.Since, duration, timeout)
+		cli.cliOrContextLog(fullReq.Context).Warn().
+			Str("since", req.Since).
+			Str("duration", duration.String()).
+			Str("timeout", timeout.String()).
+			Msg("Sync request took unusually long")
 	}
 	return
 }
@@ -769,15 +769,24 @@ func (cli *Client) Login(req *ReqLogin) (resp *RespLogin, err error) {
 		cli.DeviceID = resp.DeviceID
 		cli.AccessToken = resp.AccessToken
 		cli.UserID = resp.UserID
-		cli.Logger.Debugfln("Stored credentials for %s/%s after login", cli.UserID, cli.DeviceID)
+
+		cli.Logger.Debug().
+			Str("user_id", cli.UserID.String()).
+			Str("device_id", cli.DeviceID.String()).
+			Msg("Stored credentials after login")
 	}
 	if req.StoreHomeserverURL && err == nil && resp.WellKnown != nil && len(resp.WellKnown.Homeserver.BaseURL) > 0 {
 		var urlErr error
 		cli.HomeserverURL, urlErr = url.Parse(resp.WellKnown.Homeserver.BaseURL)
 		if urlErr != nil {
-			cli.logWarning("Failed to parse homeserver URL '%s' in login response: %v", resp.WellKnown.Homeserver.BaseURL, urlErr)
+			cli.Logger.Warn().
+				Err(urlErr).
+				Str("homeserver_url", resp.WellKnown.Homeserver.BaseURL).
+				Msg("Failed to parse homeserver URL in login response")
 		} else {
-			cli.Logger.Debugfln("Updated homeserver URL to %s after login", cli.HomeserverURL.String())
+			cli.Logger.Debug().
+				Str("homeserver_url", cli.HomeserverURL.String()).
+				Msg("Updated homeserver URL after login")
 		}
 	}
 	return
@@ -1193,17 +1202,17 @@ func (cli *Client) updateStoreWithOutgoingEvent(roomID id.RoomID, eventType even
 	var err error
 	fakeEvt.Content.VeryRaw, err = json.Marshal(contentJSON)
 	if err != nil {
-		cli.Logger.Debugfln("Failed to marshal state event content to update state store: %v", err)
+		cli.Logger.Warn().Err(err).Msg("Failed to marshal state event content to update state store")
 		return
 	}
 	err = json.Unmarshal(fakeEvt.Content.VeryRaw, &fakeEvt.Content.Raw)
 	if err != nil {
-		cli.Logger.Debugfln("Failed to unmarshal state event content to update state store: %v", err)
+		cli.Logger.Warn().Err(err).Msg("Failed to unmarshal state event content to update state store")
 		return
 	}
 	err = fakeEvt.Content.ParseRaw(fakeEvt.Type)
 	if err != nil {
-		cli.Logger.Debugfln("Failed to parse state event content to update state store: %v", err)
+		cli.Logger.Warn().Err(err).Msg("Failed to parse state event content to update state store")
 		return
 	}
 	UpdateStateStore(cli.StateStore, fakeEvt)
@@ -1311,6 +1320,9 @@ func (cli *Client) DownloadContext(ctx context.Context, mxcURL id.ContentURI) (i
 }
 
 func (cli *Client) downloadContext(ctx context.Context, mxcURL id.ContentURI) (*http.Request, *http.Response, error) {
+	if zerolog.Ctx(ctx).GetLevel() == zerolog.Disabled {
+		ctx = cli.Logger.WithContext(ctx)
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, cli.GetDownloadURL(mxcURL), nil)
 	if err != nil {
 		return req, nil, err
@@ -1369,7 +1381,7 @@ func (cli *Client) UnstableUploadAsync(req ReqUploadMedia) (*RespCreateMXC, erro
 	go func() {
 		_, err = cli.UploadMedia(req)
 		if err != nil {
-			cli.logWarning("Failed to upload %s: %v", req.UnstableMXC, err)
+			cli.Logger.Error().Str("mxc", req.UnstableMXC.String()).Err(err).Msg("Async upload of media failed")
 		}
 	}()
 	return resp, nil
@@ -1415,7 +1427,7 @@ type ReqUploadMedia struct {
 }
 
 func (cli *Client) tryUploadMediaToURL(url, contentType string, content io.Reader) (*http.Response, error) {
-	cli.Logger.Debugfln("Uploading media to external URL %s", url)
+	cli.Logger.Debug().Str("url", url).Msg("Uploading media to external URL")
 	req, err := http.NewRequest(http.MethodPut, url, content)
 	if err != nil {
 		return nil, err
@@ -1448,10 +1460,10 @@ func (cli *Client) uploadMediaToURL(data ReqUploadMedia) (*RespMediaUpload, erro
 			err = fmt.Errorf("HTTP %d", resp.StatusCode)
 		}
 		if retries <= 0 {
-			cli.logWarning("Error uploading media to %s: %v, not retrying", data.UploadURL, err)
+			cli.Logger.Warn().Str("url", data.UploadURL).Err(err).Msg("Error uploading media to external URL, not retrying")
 			return nil, err
 		}
-		cli.Logger.Debugfln("Error uploading media to %s: %v, retrying", data.UploadURL, err)
+		cli.Logger.Warn().Str("url", data.UploadURL).Err(err).Msg("Error uploading media to external URL, retrying")
 		retries--
 	}
 
@@ -1950,7 +1962,7 @@ func NewClient(homeserverURL string, userID id.UserID, accessToken string) (*Cli
 		UserID:        userID,
 		Client:        &http.Client{Timeout: 180 * time.Second},
 		Syncer:        NewDefaultSyncer(),
-		Logger:        stubLogger,
+		Logger:        zerolog.Nop(),
 		// By default, use an in-memory store which will never save filter ids / next batch tokens to disk.
 		// The client will work with this storer: it just won't remember across restarts.
 		// In practice, a database backend should be used.

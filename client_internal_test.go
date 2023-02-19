@@ -1,21 +1,15 @@
 package mautrix
 
 import (
-	"fmt"
+	"bytes"
+	"context"
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/rs/zerolog"
+	"github.com/tidwall/gjson"
 )
-
-type testLogger struct {
-	StubLogger
-
-	lastLogged string
-}
-
-func (tl *testLogger) Warnfln(message string, args ...interface{}) {
-	tl.lastLogged = fmt.Sprintf(message, args...)
-}
 
 func TestBackoffFromResponse(t *testing.T) {
 	now := time.Now().Truncate(time.Second)
@@ -45,15 +39,15 @@ func TestBackoffFromResponse(t *testing.T) {
 		"Bad": {
 			headerValue: "invalid",
 			expected:    defaultBackoff,
-			expectedLog: `Failed to parse Retry-After header value "invalid"`,
+			expectedLog: `Failed to parse Retry-After header value`,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			logger := &testLogger{}
-
-			c := &Client{Logger: logger}
+			var out bytes.Buffer
+			c := &Client{Logger: zerolog.New(&out)}
 
 			actual := c.parseBackoffFromResponse(
+				(&http.Request{}).WithContext(c.Logger.WithContext(context.Background())),
 				&http.Response{
 					Header: http.Header{
 						"Retry-After": []string{tt.headerValue},
@@ -67,8 +61,9 @@ func TestBackoffFromResponse(t *testing.T) {
 				t.Fatalf("Backoff duration output mismatch, expected %s, got %s", tt.expected, actual)
 			}
 
-			if logger.lastLogged != tt.expectedLog {
-				t.Fatalf(`Log line mismatch, expected "%s", got "%s"`, tt.expectedLog, logger.lastLogged)
+			lastLogged := gjson.GetBytes(out.Bytes(), zerolog.MessageFieldName).Str
+			if lastLogged != tt.expectedLog {
+				t.Fatalf(`Log line mismatch, expected "%s", got "%s"`, tt.expectedLog, lastLogged)
 			}
 		})
 	}
