@@ -9,9 +9,6 @@
 package bridge
 
 import (
-	"database/sql"
-	"errors"
-
 	"github.com/lib/pq"
 
 	"maunium.net/go/mautrix/crypto"
@@ -39,16 +36,7 @@ func NewSQLCryptoStore(db *dbutil.Database, log dbutil.DatabaseLogger, userID id
 	}
 }
 
-func (store *SQLCryptoStore) FindDeviceID() (deviceID id.DeviceID) {
-	err := store.DB.QueryRow("SELECT device_id FROM crypto_account WHERE account_id=$1", store.AccountID).Scan(&deviceID)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		// TODO return error
-		store.DB.Log.Warn("Failed to scan device ID: %v", err)
-	}
-	return
-}
-
-func (store *SQLCryptoStore) GetRoomMembers(roomID id.RoomID) (members []id.UserID, err error) {
+func (store *SQLCryptoStore) GetRoomJoinedOrInvitedMembers(roomID id.RoomID) (members []id.UserID, err error) {
 	var rows dbutil.Rows
 	rows, err = store.DB.Query(`
 		SELECT user_id FROM mx_user_profile

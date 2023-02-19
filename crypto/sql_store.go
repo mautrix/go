@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 
+	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/crypto/sql_store_upgrade"
 	"maunium.net/go/mautrix/event"
@@ -78,6 +79,35 @@ func (store *SQLCryptoStore) GetNextBatch() (string, error) {
 		}
 	}
 	return store.SyncToken, nil
+}
+
+var _ mautrix.SyncStore = (*SQLCryptoStore)(nil)
+
+func (store *SQLCryptoStore) SaveFilterID(_ id.UserID, _ string) {}
+func (store *SQLCryptoStore) LoadFilterID(_ id.UserID) string    { return "" }
+
+func (store *SQLCryptoStore) SaveNextBatch(_ id.UserID, nextBatchToken string) {
+	err := store.PutNextBatch(nextBatchToken)
+	if err != nil {
+		// TODO handle error
+	}
+}
+
+func (store *SQLCryptoStore) LoadNextBatch(_ id.UserID) string {
+	nb, err := store.GetNextBatch()
+	if err != nil {
+		// TODO handle error
+	}
+	return nb
+}
+
+func (store *SQLCryptoStore) FindDeviceID() (deviceID id.DeviceID) {
+	err := store.DB.QueryRow("SELECT device_id FROM crypto_account WHERE account_id=$1", store.AccountID).Scan(&deviceID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		// TODO return error
+		store.DB.Log.Warn("Failed to scan device ID: %v", err)
+	}
+	return
 }
 
 // PutAccount stores an OlmAccount in the database.

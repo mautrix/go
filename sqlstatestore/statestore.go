@@ -11,6 +11,8 @@ import (
 	"embed"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
 
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -56,9 +58,20 @@ func (store *SQLStateStore) MarkRegistered(userID id.UserID) {
 	}
 }
 
-func (store *SQLStateStore) GetRoomMembers(roomID id.RoomID) map[id.UserID]*event.MemberEventContent {
+func (store *SQLStateStore) GetRoomMembers(roomID id.RoomID, memberships ...event.Membership) map[id.UserID]*event.MemberEventContent {
 	members := make(map[id.UserID]*event.MemberEventContent)
-	rows, err := store.Query("SELECT user_id, membership, displayname, avatar_url FROM mx_user_profile WHERE room_id=$1", roomID)
+	args := make([]any, len(memberships)+1)
+	args[0] = roomID
+	query := "SELECT user_id, membership, displayname, avatar_url FROM mx_user_profile WHERE room_id=$1"
+	if len(memberships) > 0 {
+		placeholders := make([]string, len(memberships))
+		for i, membership := range memberships {
+			args[i+1] = string(membership)
+			placeholders[i] = fmt.Sprintf("$%d", i+2)
+		}
+		query = fmt.Sprintf("%s AND membership IN (%s)", query, strings.Join(placeholders, ","))
+	}
+	rows, err := store.Query(query, args...)
 	if err != nil {
 		return members
 	}
@@ -73,6 +86,17 @@ func (store *SQLStateStore) GetRoomMembers(roomID id.RoomID) map[id.UserID]*even
 		}
 	}
 	return members
+}
+
+func (store *SQLStateStore) GetRoomJoinedOrInvitedMembers(roomID id.RoomID) (members []id.UserID, err error) {
+	memberMap := store.GetRoomMembers(roomID, event.MembershipJoin, event.MembershipInvite)
+	members = make([]id.UserID, 0, len(memberMap)-1)
+	i := 0
+	for userID := range memberMap {
+		members[i] = userID
+		i++
+	}
+	return
 }
 
 func (store *SQLStateStore) GetMembership(roomID id.RoomID, userID id.UserID) event.Membership {

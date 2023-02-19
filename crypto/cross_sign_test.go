@@ -49,7 +49,7 @@ func getOlmMachine(t *testing.T) *OlmMachine {
 		Client: &mautrix.Client{
 			UserID: userID,
 		},
-		Log: emptyLogger{},
+		Log: NoopLogger{},
 	}
 }
 

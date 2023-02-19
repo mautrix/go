@@ -29,44 +29,52 @@ const (
 	EventSourceState
 	EventSourceEphemeral
 	EventSourceToDevice
+	EventSourceDecrypted
 )
 
+const primaryTypes = EventSourcePresence | EventSourceAccountData | EventSourceToDevice | EventSourceTimeline | EventSourceState
+const roomSections = EventSourceJoin | EventSourceInvite | EventSourceLeave
+const roomableTypes = EventSourceAccountData | EventSourceTimeline | EventSourceState
+const encryptableTypes = roomableTypes | EventSourceToDevice
+
 func (es EventSource) String() string {
-	switch {
-	case es == EventSourcePresence:
-		return "presence"
-	case es == EventSourceAccountData:
-		return "user account data"
-	case es == EventSourceToDevice:
-		return "to-device"
-	case es&EventSourceJoin != 0:
-		es -= EventSourceJoin
-		switch es {
-		case EventSourceState:
-			return "joined state"
-		case EventSourceTimeline:
-			return "joined timeline"
-		case EventSourceEphemeral:
-			return "room ephemeral (joined)"
-		case EventSourceAccountData:
-			return "room account data (joined)"
-		}
-	case es&EventSourceInvite != 0:
-		es -= EventSourceInvite
-		switch es {
-		case EventSourceState:
-			return "invited state"
-		}
-	case es&EventSourceLeave != 0:
-		es -= EventSourceLeave
-		switch es {
-		case EventSourceState:
-			return "left state"
-		case EventSourceTimeline:
-			return "left timeline"
-		}
+	var typeName string
+	switch es & primaryTypes {
+	case EventSourcePresence:
+		typeName = "presence"
+	case EventSourceAccountData:
+		typeName = "account data"
+	case EventSourceToDevice:
+		typeName = "to-device"
+	case EventSourceTimeline:
+		typeName = "timeline"
+	case EventSourceState:
+		typeName = "state"
+	default:
+		return fmt.Sprintf("unknown (%d)", es)
 	}
-	return fmt.Sprintf("unknown (%d)", es)
+	if es&roomableTypes != 0 {
+		switch es & roomSections {
+		case EventSourceJoin:
+			typeName = "joined room " + typeName
+		case EventSourceInvite:
+			typeName = "invited room " + typeName
+		case EventSourceLeave:
+			typeName = "left room " + typeName
+		default:
+			return fmt.Sprintf("unknown (%d)", es)
+		}
+		es &^= roomableTypes
+	}
+	if es&encryptableTypes != 0 && es&EventSourceDecrypted != 0 {
+		typeName += " (decrypted)"
+		es &^= EventSourceDecrypted
+	}
+	es &^= primaryTypes
+	if es != 0 {
+		return fmt.Sprintf("unknown (%d)", es)
+	}
+	return typeName
 }
 
 // EventHandler handles a single event from a sync response.
@@ -90,6 +98,10 @@ type ExtensibleSyncer interface {
 	OnSync(callback SyncHandler)
 	OnEvent(callback EventHandler)
 	OnEventType(eventType event.Type, callback EventHandler)
+}
+
+type DispatchableSyncer interface {
+	Dispatch(source EventSource, evt *event.Event)
 }
 
 // DefaultSyncer is the default syncing implementation. You can either write your own syncer, or selectively
@@ -191,10 +203,10 @@ func (s *DefaultSyncer) processSyncEvent(roomID id.RoomID, evt *event.Event, sou
 		}
 	}
 
-	s.notifyListeners(source, evt)
+	s.Dispatch(source, evt)
 }
 
-func (s *DefaultSyncer) notifyListeners(source EventSource, evt *event.Event) {
+func (s *DefaultSyncer) Dispatch(source EventSource, evt *event.Event) {
 	for _, fn := range s.globalListeners {
 		fn(source, evt)
 	}
@@ -244,7 +256,10 @@ func (s *DefaultSyncer) GetFilterJSON(userID id.UserID) *Filter {
 }
 
 // OldEventIgnorer is an utility struct for bots to ignore events from before the bot joined the room.
-// Create a struct and call Register with your DefaultSyncer to register the sync handler.
+//
+// Create a struct and call Register with your DefaultSyncer to register the sync handler, e.g.:
+//
+//	(&OldEventIgnorer{UserID: cli.UserID}).Register(cli.Syncer.(mautrix.ExtensibleSyncer))
 type OldEventIgnorer struct {
 	UserID id.UserID
 }

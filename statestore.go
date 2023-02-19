@@ -27,6 +27,7 @@ type StateStore interface {
 	GetPowerLevels(roomID id.RoomID) *event.PowerLevelsEventContent
 
 	SetEncryptionEvent(roomID id.RoomID, content *event.EncryptionEventContent)
+	IsEncrypted(roomID id.RoomID) bool
 }
 
 func UpdateStateStore(store StateStore, evt *event.Event) {

@@ -15,13 +15,6 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-type emptyLogger struct{}
-
-func (emptyLogger) Error(message string, args ...interface{}) {}
-func (emptyLogger) Warn(message string, args ...interface{})  {}
-func (emptyLogger) Debug(message string, args ...interface{}) {}
-func (emptyLogger) Trace(message string, args ...interface{}) {}
-
 type mockStateStore struct{}
 
 func (mockStateStore) IsEncrypted(id.RoomID) bool {
@@ -52,7 +45,7 @@ func newMachine(t *testing.T, userID id.UserID) (*OlmMachine, string) {
 		t.Fatalf("Error creating Gob store: %v", err)
 	}
 
-	machine := NewOlmMachine(client, emptyLogger{}, gobStore, mockStateStore{})
+	machine := NewOlmMachine(client, NoopLogger{}, gobStore, mockStateStore{})
 	if err := machine.Load(); err != nil {
 		os.Remove(storeFileName)
 		t.Fatalf("Error creating account: %v", err)

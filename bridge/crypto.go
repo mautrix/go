@@ -94,7 +94,7 @@ func (helper *CryptoHelper) Init() error {
 	helper.mach.SendKeysMinTrust = helper.bridge.Config.Bridge.GetEncryptionConfig().VerificationLevels.Receive
 
 	helper.client.Syncer = &cryptoSyncer{helper.mach}
-	helper.client.Store = &cryptoClientStore{helper.store}
+	helper.client.Store = helper.store
 
 	err = helper.mach.Load()
 	if err != nil {
@@ -287,7 +287,7 @@ func (helper *CryptoHelper) Encrypt(roomID id.RoomID, evtType event.Type, conten
 		}
 		helper.log.Debugfln("Got %v while encrypting event for %s, sharing group session and trying again...", err, roomID)
 		var users []id.UserID
-		users, err = helper.store.GetRoomMembers(roomID)
+		users, err = helper.store.GetRoomJoinedOrInvitedMembers(roomID)
 		if err != nil {
 			err = fmt.Errorf("failed to get room member list: %w", err)
 		} else if err = helper.mach.ShareGroupSession(roomID, users); err != nil {
@@ -335,7 +335,7 @@ func (helper *CryptoHelper) ResetSession(roomID id.RoomID) {
 func (helper *CryptoHelper) HandleMemberEvent(evt *event.Event) {
 	helper.lock.RLock()
 	defer helper.lock.RUnlock()
-	helper.mach.HandleMemberEvent(evt)
+	helper.mach.HandleMemberEvent(0, evt)
 }
 
 type cryptoSyncer struct {
@@ -405,28 +405,6 @@ func (c *cryptoLogger) Debug(message string, args ...interface{}) {
 func (c *cryptoLogger) Trace(message string, args ...interface{}) {
 	c.int.Logfln(levelTrace, message, args...)
 }
-
-type cryptoClientStore struct {
-	int *SQLCryptoStore
-}
-
-func (c cryptoClientStore) SaveFilterID(_ id.UserID, _ string) {}
-func (c cryptoClientStore) LoadFilterID(_ id.UserID) string    { return "" }
-
-func (c cryptoClientStore) SaveNextBatch(_ id.UserID, nextBatchToken string) {
-	// TODO error
-	c.int.PutNextBatch(nextBatchToken)
-}
-
-func (c cryptoClientStore) LoadNextBatch(_ id.UserID) string {
-	nb, err := c.int.GetNextBatch()
-	if err != nil {
-		// TODO :(
-	}
-	return nb
-}
-
-var _ mautrix.SyncStore = (*cryptoClientStore)(nil)
 
 type cryptoStateStore struct {
 	bridge *Bridge

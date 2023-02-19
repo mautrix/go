@@ -1,18 +1,10 @@
 // Copyright (C) 2017 Tulir Asokan
 // Copyright (C) 2018-2020 Luca Weiss
+// Copyright (C) 2023 Tulir Asokan
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 package main
 
@@ -21,13 +13,17 @@ import (
 	"fmt"
 	"os"
 
+	_ "github.com/mattn/go-sqlite3"
+
 	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/crypto/cryptohelper"
 	"maunium.net/go/mautrix/event"
 )
 
 var homeserver = flag.String("homeserver", "", "Matrix homeserver")
 var username = flag.String("username", "", "Matrix username localpart")
 var password = flag.String("password", "", "Matrix password")
+var database = flag.String("database", "mautrix-example.db", "SQLite database path")
 
 func main() {
 	flag.Parse()
@@ -37,27 +33,41 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Println("Logging into", *homeserver, "as", *username)
 	client, err := mautrix.NewClient(*homeserver, "", "")
 	if err != nil {
 		panic(err)
 	}
-	_, err = client.Login(&mautrix.ReqLogin{
-		Type:             "m.login.password",
-		Identifier:       mautrix.UserIdentifier{Type: mautrix.IdentifierTypeUser, User: *username},
-		Password:         *password,
-		StoreCredentials: true,
-	})
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println("Login successful")
+	//client.Logger = maulogger.DefaultLogger
+	//maulogger.DefaultLogger.PrintLevel = 0
 
 	syncer := client.Syncer.(*mautrix.DefaultSyncer)
 	syncer.OnEventType(event.EventMessage, func(source mautrix.EventSource, evt *event.Event) {
 		fmt.Printf("<%[1]s> %[4]s (%[2]s/%[3]s)\n", evt.Sender, evt.Type.String(), evt.ID, evt.Content.AsMessage().Body)
 	})
 
+	cryptoHelper, err := cryptohelper.NewCryptoHelper(client, []byte("meow"), *database)
+	if err != nil {
+		panic(err)
+	}
+
+	// You can also store the user/device IDs and access token and put them in the client beforehand instead of using LoginAs.
+	//client.UserID = "..."
+	//client.DeviceID = "..."
+	//client.AccessToken = "..."
+	cryptoHelper.LoginAs = &mautrix.ReqLogin{
+		Type:             mautrix.AuthTypePassword,
+		Identifier:       mautrix.UserIdentifier{Type: mautrix.IdentifierTypeUser, User: *username},
+		Password:         *password,
+		StoreCredentials: true,
+	}
+	// If you want to use multiple clients with the same DB, you should set a distinct database account ID for each one.
+	//cryptoHelper.DBAccountID = ""
+	err = cryptoHelper.Init()
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println("Now running")
 	err = client.Sync()
 	if err != nil {
 		panic(err)

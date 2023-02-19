@@ -29,6 +29,13 @@ type Logger interface {
 	Trace(message string, args ...interface{})
 }
 
+type NoopLogger struct{}
+
+func (NoopLogger) Error(message string, args ...interface{}) {}
+func (NoopLogger) Warn(message string, args ...interface{})  {}
+func (NoopLogger) Debug(message string, args ...interface{}) {}
+func (NoopLogger) Trace(message string, args ...interface{}) {}
+
 // OlmMachine is the main struct for handling Matrix end-to-end encryption.
 type OlmMachine struct {
 	Client *mautrix.Client
@@ -156,6 +163,10 @@ func (mach *OlmMachine) Fingerprint() string {
 	return mach.account.SigningKey().Fingerprint()
 }
 
+func (mach *OlmMachine) GetAccount() *OlmAccount {
+	return mach.account
+}
+
 // OwnIdentity returns this device's DeviceIdentity struct
 func (mach *OlmMachine) OwnIdentity() *id.Device {
 	return &id.Device{
@@ -218,7 +229,7 @@ func (mach *OlmMachine) HandleOTKCounts(otkCount *mautrix.OTKCount) {
 //
 // This can be easily registered into a mautrix client using .OnSync():
 //
-//	client.Syncer.(*mautrix.DefaultSyncer).OnSync(c.crypto.ProcessSyncResponse)
+//	client.Syncer.(mautrix.ExtensibleSyncer).OnSync(c.crypto.ProcessSyncResponse)
 func (mach *OlmMachine) ProcessSyncResponse(resp *mautrix.RespSync, since string) bool {
 	mach.HandleDeviceLists(&resp.DeviceLists, since)
 
@@ -240,8 +251,8 @@ func (mach *OlmMachine) ProcessSyncResponse(resp *mautrix.RespSync, since string
 //
 // Currently this is not automatically called, so you must add a listener yourself:
 //
-//	client.Syncer.(*mautrix.DefaultSyncer).OnEventType(event.StateMember, c.crypto.HandleMemberEvent)
-func (mach *OlmMachine) HandleMemberEvent(evt *event.Event) {
+//	client.Syncer.(mautrix.ExtensibleSyncer).OnEventType(event.StateMember, c.crypto.HandleMemberEvent)
+func (mach *OlmMachine) HandleMemberEvent(_ mautrix.EventSource, evt *event.Event) {
 	if !mach.StateStore.IsEncrypted(evt.RoomID) {
 		return
 	}

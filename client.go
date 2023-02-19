@@ -44,6 +44,14 @@ type Stringifiable interface {
 	String() string
 }
 
+type CryptoHelper interface {
+	Encrypt(id.RoomID, event.Type, any) (*event.EncryptedEventContent, error)
+	Decrypt(*event.Event) (*event.Event, error)
+	WaitForSession(id.RoomID, id.SenderKey, id.SessionID, time.Duration) bool
+	RequestSession(id.RoomID, id.SenderKey, id.SessionID, id.UserID, id.DeviceID)
+	Init() error
+}
+
 // Client represents a Matrix client.
 type Client struct {
 	HomeserverURL *url.URL     // The base homeserver URL
@@ -55,6 +63,7 @@ type Client struct {
 	Syncer        Syncer       // The thing which can process /sync responses
 	Store         SyncStore    // The thing which can store tokens/ids
 	StateStore    StateStore
+	Crypto        CryptoHelper
 	Logger        Logger
 	SyncPresence  event.Presence
 
@@ -938,6 +947,8 @@ type ReqSendEvent struct {
 	Timestamp     int64
 	TransactionID string
 
+	DontEncrypt bool
+
 	MeowEventID id.EventID
 }
 
@@ -964,8 +975,16 @@ func (cli *Client) SendMessageEvent(roomID id.RoomID, eventType event.Type, cont
 		queryParams["fi.mau.event_id"] = req.MeowEventID.String()
 	}
 
-	urlData := ClientURLPath{"v3", "rooms", roomID, "send", eventType.String(), txnID}
+	if !req.DontEncrypt && cli.Crypto != nil && cli.StateStore.IsEncrypted(roomID) && eventType != event.EventReaction {
+		contentJSON, err = cli.Crypto.Encrypt(roomID, eventType, contentJSON)
+		if err != nil {
+			err = fmt.Errorf("failed to encrypt event: %w", err)
+			return
+		}
+		eventType = event.EventEncrypted
+	}
 
+	urlData := ClientURLPath{"v3", "rooms", roomID, "send", eventType.String(), txnID}
 	urlPath := cli.BuildURLWithQuery(urlData, queryParams)
 	_, err = cli.MakeRequest("PUT", urlPath, contentJSON, &resp)
 	return
