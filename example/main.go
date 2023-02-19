@@ -65,6 +65,18 @@ func main() {
 		rl.SetPrompt(fmt.Sprintf("%s> ", lastRoomID))
 		_, _ = fmt.Fprintf(stdout, "<%[1]s> %[4]s (%[2]s/%[3]s)\n", evt.Sender, evt.Type.String(), evt.ID, evt.Content.AsMessage().Body)
 	})
+	syncer.OnEventType(event.StateMember, func(source mautrix.EventSource, evt *event.Event) {
+		if evt.GetStateKey() == client.UserID.String() && evt.Content.AsMember().Membership == event.MembershipInvite {
+			_, err := client.JoinRoomByID(evt.RoomID)
+			if err == nil {
+				lastRoomID = evt.RoomID
+				rl.SetPrompt(fmt.Sprintf("%s> ", lastRoomID))
+				_, _ = fmt.Fprintf(stdout, "Joined %s after invite from %s\n", evt.RoomID, evt.Sender)
+			} else {
+				_, _ = fmt.Fprintf(stdout, "Failed to join %s after invite from %s: %v\n", evt.RoomID, evt.Sender, err)
+			}
+		}
+	})
 
 	cryptoHelper, err := cryptohelper.NewCryptoHelper(client, []byte("meow"), *database)
 	if err != nil {
