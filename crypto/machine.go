@@ -167,7 +167,7 @@ func (mach *OlmMachine) GetAccount() *OlmAccount {
 	return mach.account
 }
 
-// OwnIdentity returns this device's DeviceIdentity struct
+// OwnIdentity returns this device's id.Device struct
 func (mach *OlmMachine) OwnIdentity() *id.Device {
 	return &id.Device{
 		UserID:      mach.Client.UserID,

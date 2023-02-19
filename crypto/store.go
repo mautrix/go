@@ -16,9 +16,6 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-// Deprecated: moved to id.Device
-type DeviceIdentity = id.Device
-
 var ErrGroupSessionWithheld = errors.New("group session has been withheld")
 
 // Store is used by OlmMachine to store Olm and Megolm sessions, user device lists and message indices.
@@ -90,7 +87,7 @@ type Store interface {
 	// * If the map key exists, but the stored values do not match the given values, this should return false.
 	ValidateMessageIndex(senderKey id.SenderKey, sessionID id.SessionID, eventID id.EventID, index uint, timestamp int64) (bool, error)
 
-	// GetDevices returns a map from device ID to DeviceIdentity containing all devices of a given user.
+	// GetDevices returns a map from device ID to id.Device struct containing all devices of a given user.
 	GetDevices(id.UserID) (map[id.DeviceID]*id.Device, error)
 	// GetDevice returns a specific device of a given user.
 	GetDevice(id.UserID, id.DeviceID) (*id.Device, error)
