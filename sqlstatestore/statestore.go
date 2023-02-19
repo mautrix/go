@@ -90,7 +90,7 @@ func (store *SQLStateStore) GetRoomMembers(roomID id.RoomID, memberships ...even
 
 func (store *SQLStateStore) GetRoomJoinedOrInvitedMembers(roomID id.RoomID) (members []id.UserID, err error) {
 	memberMap := store.GetRoomMembers(roomID, event.MembershipJoin, event.MembershipInvite)
-	members = make([]id.UserID, 0, len(memberMap)-1)
+	members = make([]id.UserID, len(memberMap))
 	i := 0
 	for userID := range memberMap {
 		members[i] = userID
