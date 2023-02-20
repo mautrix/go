@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Tulir Asokan
+// Copyright (c) 2023 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/rs/zerolog"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 )
@@ -36,6 +37,8 @@ type WebsocketCommand struct {
 	ReqID   int             `json:"id,omitempty"`
 	Command string          `json:"command"`
 	Data    json.RawMessage `json:"data"`
+
+	Ctx context.Context `json:"-"`
 }
 
 func (wsc *WebsocketCommand) MakeResponse(ok bool, data interface{}) *WebsocketRequest {
@@ -252,7 +255,7 @@ func (as *AppService) RequestWebsocket(ctx context.Context, cmd *WebsocketReques
 }
 
 func (as *AppService) unknownCommandHandler(cmd WebsocketCommand) (bool, interface{}) {
-	as.Log.Warnfln("No handler for websocket command %s (%d)", cmd.Command, cmd.ReqID)
+	zerolog.Ctx(cmd.Ctx).Warn().Msg("No handler for websocket command")
 	return false, fmt.Errorf("unknown request type")
 }
 
@@ -264,28 +267,36 @@ func (as *AppService) SetWebsocketCommandHandler(cmd string, handler WebsocketHa
 
 func (as *AppService) consumeWebsocket(stopFunc func(error), ws *websocket.Conn) {
 	defer stopFunc(ErrWebsocketUnknownError)
+	ctx := context.Background()
 	for {
 		var msg WebsocketMessage
 		err := ws.ReadJSON(&msg)
 		if err != nil {
-			as.Log.Debugln("Error reading from websocket:", err)
+			as.Log.Debug().Err(err).Msg("Error reading from websocket")
 			stopFunc(parseCloseError(err))
 			return
 		}
+		log := as.Log.With().
+			Int("req_id", msg.ReqID).
+			Str("command", msg.Command).
+			Logger()
+		ctx = log.WithContext(ctx)
 		if msg.Command == "" || msg.Command == "transaction" {
 			if msg.TxnID == "" || !as.txnIDC.IsProcessed(msg.TxnID) {
-				as.handleTransaction(msg.TxnID, &msg.Transaction)
+				as.handleTransaction(ctx, msg.TxnID, &msg.Transaction)
 			} else {
-				as.Log.Debugfln("Ignoring duplicate transaction %s (%s)", msg.TxnID, msg.Transaction.ContentString())
+				log.Debug().
+					Object("content", &msg.Transaction).
+					Msg("Ignoring duplicate transaction")
 			}
 			go func() {
 				err = as.SendWebsocket(msg.MakeResponse(true, &WebsocketTransactionResponse{TxnID: msg.TxnID}))
 				if err != nil {
-					as.Log.Warnfln("Failed to send response to %s %d: %v", msg.Command, msg.ReqID, err)
+					log.Warn().Err(err).Msg("Failed to send response to websocket transaction")
 				}
 			}()
 		} else if msg.Command == "connect" {
-			as.Log.Debugln("Websocket connect confirmation received")
+			log.Debug().Msg("Websocket connect confirmation received")
 		} else if msg.Command == "response" || msg.Command == "error" {
 			as.websocketRequestsLock.RLock()
 			respChan, ok := as.websocketRequests[msg.ReqID]
@@ -293,14 +304,14 @@ func (as *AppService) consumeWebsocket(stopFunc func(error), ws *websocket.Conn)
 				select {
 				case respChan <- &msg.WebsocketCommand:
 				default:
-					as.Log.Warnfln("Failed to handle response to %d: channel didn't accept response", msg.ReqID)
+					log.Warn().Msg("Failed to handle response: channel didn't accept response")
 				}
 			} else {
-				as.Log.Warnfln("Dropping response to %d: unknown request ID", msg.ReqID)
+				log.Warn().Msg("Dropping response to unknown request ID")
 			}
 			as.websocketRequestsLock.RUnlock()
 		} else {
-			as.Log.Debugfln("Received command request %s %d", msg.Command, msg.ReqID)
+			log.Debug().Msg("Received websocket command")
 			as.websocketHandlersLock.RLock()
 			handler, ok := as.websocketHandlers[msg.Command]
 			as.websocketHandlersLock.RUnlock()
@@ -311,11 +322,11 @@ func (as *AppService) consumeWebsocket(stopFunc func(error), ws *websocket.Conn)
 				okResp, data := handler(msg.WebsocketCommand)
 				err = as.SendWebsocket(msg.MakeResponse(okResp, data))
 				if err != nil {
-					as.Log.Warnfln("Failed to send response to %s %d: %v", msg.Command, msg.ReqID, err)
+					log.Error().Err(err).Msg("Failed to send response to websocket command")
 				} else if okResp {
-					as.Log.Debugfln("Sent success response to %s %d", msg.Command, msg.ReqID)
+					log.Debug().Msg("Sent success response to websocket command")
 				} else {
-					as.Log.Debugfln("Sent error response to %s %d", msg.Command, msg.ReqID)
+					log.Debug().Msg("Sent error response to websocket command")
 				}
 			}()
 		}
@@ -364,7 +375,7 @@ func (as *AppService) StartWebsocket(baseURL string, onConnect func()) error {
 	as.ws = ws
 	as.StopWebsocket = stopFunc
 	as.PrepareWebsocket()
-	as.Log.Debugln("Appservice transaction websocket connected")
+	as.Log.Debug().Msg("Appservice transaction websocket opened")
 
 	go as.consumeWebsocket(stopFunc, ws)
 
@@ -382,11 +393,11 @@ func (as *AppService) StartWebsocket(baseURL string, onConnect func()) error {
 	_ = ws.SetWriteDeadline(time.Now().Add(3 * time.Second))
 	err = ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseGoingAway, ""))
 	if err != nil && !errors.Is(err, websocket.ErrCloseSent) {
-		as.Log.Warnln("Error writing close message to websocket:", err)
+		as.Log.Warn().Err(err).Msg("Error writing close message to websocket")
 	}
 	err = ws.Close()
 	if err != nil {
-		as.Log.Warnln("Error closing websocket:", err)
+		as.Log.Warn().Err(err).Msg("Error closing websocket")
 	}
 	return closeErr
 }

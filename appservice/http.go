@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Tulir Asokan
+// Copyright (c) 2023 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/rs/zerolog"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
@@ -38,16 +39,17 @@ func (as *AppService) Start() {
 		Addr:    as.Host.Address(),
 		Handler: as.Router,
 	}
-	as.Log.Infoln("Listening on", as.Host.Address())
 	if len(as.Host.TLSCert) == 0 || len(as.Host.TLSKey) == 0 {
+		as.Log.Info().Str("address", as.Host.Address()).Msg("Starting HTTP listener")
 		err = as.server.ListenAndServe()
 	} else {
+		as.Log.Info().Str("address", as.Host.Address()).Msg("Starting HTTP listener with TLS")
 		err = as.server.ListenAndServeTLS(as.Host.TLSCert, as.Host.TLSKey)
 	}
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		as.Log.Fatalln("Error while listening:", err)
+		as.Log.Error().Err(err).Msg("Error in HTTP listener")
 	} else {
-		as.Log.Debugln("Listener stopped.")
+		as.Log.Debug().Msg("HTTP listener stopped")
 	}
 }
 
@@ -116,57 +118,61 @@ func (as *AppService) PutTransaction(w http.ResponseWriter, r *http.Request) {
 		}.Write(w)
 		return
 	}
+	log := as.Log.With().Str("txn_id", txnID).Logger()
+	ctx := context.Background()
+	ctx = log.WithContext(ctx)
 	if as.txnIDC.IsProcessed(txnID) {
 		// Duplicate transaction ID: no-op
 		WriteBlankOK(w)
-		as.Log.Debugfln("Ignoring duplicate transaction %s", txnID)
+		log.Debug().Msg("Ignoring duplicate transaction")
 		return
 	}
 
 	var txn Transaction
 	err = json.Unmarshal(body, &txn)
 	if err != nil {
-		as.Log.Warnfln("Failed to parse JSON of transaction %s: %v", txnID, err)
+		log.Error().Err(err).Msg("Failed to parse transaction content")
 		Error{
 			ErrorCode:  ErrBadJSON,
 			HTTPStatus: http.StatusBadRequest,
 			Message:    "Failed to parse body JSON",
 		}.Write(w)
 	} else {
-		as.handleTransaction(txnID, &txn)
+		as.handleTransaction(ctx, txnID, &txn)
 		WriteBlankOK(w)
 	}
 }
 
-func (as *AppService) handleTransaction(id string, txn *Transaction) {
-	as.Log.Debugfln("Starting handling of transaction %s (%s)", id, txn.ContentString())
+func (as *AppService) handleTransaction(ctx context.Context, id string, txn *Transaction) {
+	log := zerolog.Ctx(ctx)
+	log.Debug().Object("content", txn).Msg("Starting handling of transaction")
 	if as.Registration.EphemeralEvents {
 		if txn.EphemeralEvents != nil {
-			as.handleEvents(txn.EphemeralEvents, event.EphemeralEventType)
+			as.handleEvents(ctx, txn.EphemeralEvents, event.EphemeralEventType)
 		} else if txn.MSC2409EphemeralEvents != nil {
-			as.handleEvents(txn.MSC2409EphemeralEvents, event.EphemeralEventType)
+			as.handleEvents(ctx, txn.MSC2409EphemeralEvents, event.EphemeralEventType)
 		}
 		if txn.ToDeviceEvents != nil {
-			as.handleEvents(txn.ToDeviceEvents, event.ToDeviceEventType)
+			as.handleEvents(ctx, txn.ToDeviceEvents, event.ToDeviceEventType)
 		} else if txn.MSC2409ToDeviceEvents != nil {
-			as.handleEvents(txn.MSC2409ToDeviceEvents, event.ToDeviceEventType)
+			as.handleEvents(ctx, txn.MSC2409ToDeviceEvents, event.ToDeviceEventType)
 		}
 	}
-	as.handleEvents(txn.Events, event.UnknownEventType)
+	as.handleEvents(ctx, txn.Events, event.UnknownEventType)
 	if txn.DeviceLists != nil {
-		as.handleDeviceLists(txn.DeviceLists)
+		as.handleDeviceLists(ctx, txn.DeviceLists)
 	} else if txn.MSC3202DeviceLists != nil {
-		as.handleDeviceLists(txn.MSC3202DeviceLists)
+		as.handleDeviceLists(ctx, txn.MSC3202DeviceLists)
 	}
 	if txn.DeviceOTKCount != nil {
-		as.handleOTKCounts(txn.DeviceOTKCount)
+		as.handleOTKCounts(ctx, txn.DeviceOTKCount)
 	} else if txn.MSC3202DeviceOTKCount != nil {
-		as.handleOTKCounts(txn.MSC3202DeviceOTKCount)
+		as.handleOTKCounts(ctx, txn.MSC3202DeviceOTKCount)
 	}
 	as.txnIDC.MarkProcessed(id)
 }
 
-func (as *AppService) handleOTKCounts(otks OTKCountMap) {
+func (as *AppService) handleOTKCounts(ctx context.Context, otks OTKCountMap) {
 	for userID, devices := range otks {
 		for deviceID, otkCounts := range devices {
 			otkCounts.UserID = userID
@@ -174,21 +180,23 @@ func (as *AppService) handleOTKCounts(otks OTKCountMap) {
 			select {
 			case as.OTKCounts <- &otkCounts:
 			default:
-				as.Log.Warnfln("Dropped OTK count update for %s because channel is full", userID)
+				zerolog.Ctx(ctx).Warn().
+					Str("user_id", userID.String()).
+					Msg("Dropped OTK count update for user because channel is full")
 			}
 		}
 	}
 }
 
-func (as *AppService) handleDeviceLists(dl *mautrix.DeviceLists) {
+func (as *AppService) handleDeviceLists(ctx context.Context, dl *mautrix.DeviceLists) {
 	select {
 	case as.DeviceLists <- dl:
 	default:
-		as.Log.Warnln("Dropped device list update because channel is full")
+		zerolog.Ctx(ctx).Warn().Msg("Dropped device list update because channel is full")
 	}
 }
 
-func (as *AppService) handleEvents(evts []*event.Event, defaultTypeClass event.TypeClass) {
+func (as *AppService) handleEvents(ctx context.Context, evts []*event.Event, defaultTypeClass event.TypeClass) {
 	for _, evt := range evts {
 		evt.Mautrix.ReceivedAt = time.Now()
 		if defaultTypeClass != event.UnknownEventType {
@@ -200,16 +208,23 @@ func (as *AppService) handleEvents(evts []*event.Event, defaultTypeClass event.T
 		}
 		err := evt.Content.ParseRaw(evt.Type)
 		if errors.Is(err, event.ErrUnsupportedContentType) {
-			as.Log.Debugfln("Not parsing content of %s: %v", evt.ID, err)
+			zerolog.Ctx(ctx).Debug().Str("event_id", evt.ID.String()).Msg("Not parsing content of unsupported event")
 		} else if err != nil {
-			as.Log.Debugfln("Failed to parse content of %s (type %s): %v", evt.ID, evt.Type.Type, err)
+			zerolog.Ctx(ctx).Warn().Err(err).
+				Str("event_id", evt.ID.String()).
+				Str("event_type", evt.Type.Type).
+				Msg("Failed to parse content of event")
 		}
 
 		if evt.Type.IsState() {
 			// TODO remove this check after making sure the log doesn't happen
 			historical, ok := evt.Content.Raw["org.matrix.msc2716.historical"].(bool)
 			if ok && historical {
-				as.Log.Warnfln("Received historical state event %s (%s/%s)", evt.ID, evt.Type.Type, evt.GetStateKey())
+				zerolog.Ctx(ctx).Warn().
+					Str("event_id", evt.ID.String()).
+					Str("event_type", evt.Type.Type).
+					Str("state_key", evt.GetStateKey()).
+					Msg("Received historical state event")
 			} else {
 				mautrix.UpdateStateStore(as.StateStore, evt)
 			}

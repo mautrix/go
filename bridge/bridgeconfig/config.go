@@ -11,6 +11,8 @@ import (
 	"regexp"
 	"strings"
 
+	"go.mau.fi/zeroconfig"
+
 	"maunium.net/go/mautrix/appservice"
 	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/util"
@@ -197,10 +199,10 @@ type ManagementRoomTexts struct {
 }
 
 type BaseConfig struct {
-	Homeserver HomeserverConfig     `yaml:"homeserver"`
-	AppService AppserviceConfig     `yaml:"appservice"`
-	Bridge     BridgeConfig         `yaml:"-"`
-	Logging    appservice.LogConfig `yaml:"logging"`
+	Homeserver HomeserverConfig  `yaml:"homeserver"`
+	AppService AppserviceConfig  `yaml:"appservice"`
+	Bridge     BridgeConfig      `yaml:"-"`
+	Logging    zeroconfig.Config `yaml:"logging"`
 }
 
 func doUpgrade(helper *up.Helper) {
@@ -239,14 +241,16 @@ func doUpgrade(helper *up.Helper) {
 	helper.Copy(up.Str, "appservice", "as_token")
 	helper.Copy(up.Str, "appservice", "hs_token")
 
-	helper.Copy(up.Str, "logging", "directory")
-	helper.Copy(up.Str|up.Null, "logging", "file_name_format")
-	helper.Copy(up.Str|up.Timestamp, "logging", "file_date_format")
-	helper.Copy(up.Int, "logging", "file_mode")
-	helper.Copy(up.Str|up.Timestamp, "logging", "timestamp_format")
-	helper.Copy(up.Str, "logging", "print_level")
-	helper.Copy(up.Bool, "logging", "print_json")
-	helper.Copy(up.Bool, "logging", "file_json")
+	helper.Copy(up.Map, "logging")
+	// TODO migrate approximate settings from old config
+	//helper.Copy(up.Str, "logging", "directory")
+	//helper.Copy(up.Str|up.Null, "logging", "file_name_format")
+	//helper.Copy(up.Str|up.Timestamp, "logging", "file_date_format")
+	//helper.Copy(up.Int, "logging", "file_mode")
+	//helper.Copy(up.Str|up.Timestamp, "logging", "timestamp_format")
+	//helper.Copy(up.Str, "logging", "print_level")
+	//helper.Copy(up.Bool, "logging", "print_json")
+	//helper.Copy(up.Bool, "logging", "file_json")
 }
 
 // Upgrader is a config upgrader that copies the default fields in the homeserver, appservice and logging blocks.

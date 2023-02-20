@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Tulir Asokan
+// Copyright (c) 2023 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -17,9 +17,10 @@ import (
 	"time"
 
 	"github.com/mattn/go-sqlite3"
+	"github.com/rs/zerolog"
 	"gopkg.in/yaml.v3"
 	flag "maunium.net/go/mauflag"
-	log "maunium.net/go/maulogger/v2"
+	"maunium.net/go/maulogger/v2"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/appservice"
@@ -28,6 +29,7 @@ import (
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/sqlstatestore"
+	"maunium.net/go/mautrix/util"
 	"maunium.net/go/mautrix/util/configupgrade"
 	"maunium.net/go/mautrix/util/dbutil"
 	_ "maunium.net/go/mautrix/util/dbutil/litestream"
@@ -163,11 +165,14 @@ type Bridge struct {
 	RegistrationPath string
 	SaveConfig       bool
 	ConfigUpgrader   configupgrade.BaseUpgrader
-	Log              log.Logger
 	DB               *dbutil.Database
 	StateStore       *sqlstatestore.SQLStateStore
 	Crypto           Crypto
 	CryptoPickleKey  string
+
+	// Deprecated: Switch to ZLog
+	Log  maulogger.Logger
+	ZLog *zerolog.Logger
 
 	MediaConfig  mautrix.RespMediaConfig
 	SpecVersions mautrix.RespVersions
@@ -394,23 +399,19 @@ func (br *Bridge) init() {
 
 	br.MediaConfig.UploadSize = 50 * 1024 * 1024
 
+	br.ZLog, err = br.Config.Logging.Compile()
+	if err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, "Failed to initialize logger:", err)
+		os.Exit(12)
+	}
+	br.Log = util.ZeroToMauLog(br.ZLog)
+
 	br.AS = br.Config.MakeAppService()
 	br.AS.DoublePuppetValue = br.Name
 	br.AS.GetProfile = br.getProfile
+	br.AS.Log = *br.ZLog
+	br.AS.LogConfig = nil
 	_, _ = br.AS.Init()
-
-	if br.Log == nil {
-		br.Log = log.Create()
-	}
-	br.Config.Logging.Configure(br.Log)
-	log.DefaultLogger = br.Log.(*log.BasicLogger)
-	if len(br.Config.Logging.FileNameFormat) > 0 {
-		err = log.OpenFile()
-		if err != nil {
-			_, _ = fmt.Fprintln(os.Stderr, "Failed to open log file:", err)
-			os.Exit(12)
-		}
-	}
 
 	err = br.validateConfig()
 	if err != nil {
@@ -418,7 +419,6 @@ func (br *Bridge) init() {
 		os.Exit(11)
 	}
 
-	br.AS.Log = log.Sub("Matrix")
 	br.Bot = br.AS.BotIntent()
 	br.Log.Infoln("Initializing", br.VersionDesc)
 

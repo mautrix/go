@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Tulir Asokan
+// Copyright (c) 2023 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -41,16 +41,30 @@ type Transaction struct {
 
 func (txn *Transaction) MarshalZerologObject(ctx *zerolog.Event) {
 	ctx.Int("pdu", len(txn.Events))
-	ctx.Int("edu", len(txn.EphemeralEvents))
-	ctx.Int("to_device", len(txn.ToDeviceEvents))
+	if txn.EphemeralEvents != nil {
+		ctx.Int("edu", len(txn.EphemeralEvents))
+	} else if txn.MSC2409EphemeralEvents != nil {
+		ctx.Int("unstable_edu", len(txn.MSC2409EphemeralEvents))
+	}
+	if txn.ToDeviceEvents != nil {
+		ctx.Int("to_device", len(txn.ToDeviceEvents))
+	} else if txn.MSC2409ToDeviceEvents != nil {
+		ctx.Int("unstable_to_device", len(txn.MSC2409ToDeviceEvents))
+	}
 	if len(txn.DeviceOTKCount) > 0 {
 		ctx.Int("otk_count_users", len(txn.DeviceOTKCount))
+	} else if len(txn.MSC3202DeviceOTKCount) > 0 {
+		ctx.Int("unstable_otk_count_users", len(txn.MSC3202DeviceOTKCount))
 	}
 	if txn.DeviceLists != nil {
 		ctx.Int("device_changes", len(txn.DeviceLists.Changed))
+	} else if txn.MSC3202DeviceLists != nil {
+		ctx.Int("unstable_device_changes", len(txn.MSC3202DeviceLists.Changed))
 	}
 	if txn.FallbackKeys != nil {
 		ctx.Int("fallback_key_users", len(txn.FallbackKeys))
+	} else if txn.MSC3202FallbackKeys != nil {
+		ctx.Int("unstable_fallback_key_users", len(txn.MSC3202FallbackKeys))
 	}
 }
 

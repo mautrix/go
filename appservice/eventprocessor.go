@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tulir Asokan
+// Copyright (c) 2023 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -10,7 +10,7 @@ import (
 	"encoding/json"
 	"runtime/debug"
 
-	log "maunium.net/go/maulogger/v2"
+	"github.com/rs/zerolog"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
@@ -32,7 +32,6 @@ type EventProcessor struct {
 	ExecMode ExecMode
 
 	as       *AppService
-	log      log.Logger
 	stop     chan struct{}
 	handlers map[event.Type][]EventHandler
 
@@ -44,7 +43,6 @@ func NewEventProcessor(as *AppService) *EventProcessor {
 	return &EventProcessor{
 		ExecMode: AsyncHandlers,
 		as:       as,
-		log:      as.Log.Sub("Events"),
 		stop:     make(chan struct{}, 1),
 		handlers: make(map[event.Type][]EventHandler),
 
@@ -84,7 +82,11 @@ func (ep *EventProcessor) OnDeviceList(handler DeviceListHandler) {
 func (ep *EventProcessor) recoverFunc(data interface{}) {
 	if err := recover(); err != nil {
 		d, _ := json.Marshal(data)
-		ep.log.Errorfln("Panic in Matrix event handler: %v (event content: %s):\n%s", err, string(d), string(debug.Stack()))
+		ep.as.Log.Error().
+			Str(zerolog.ErrorStackFieldName, string(debug.Stack())).
+			Interface(zerolog.ErrorFieldName, err).
+			Str("event_content", string(d)).
+			Msg("Panic in Matrix event handler")
 	}
 }
 

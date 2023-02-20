@@ -13,6 +13,7 @@ require (
 	github.com/tidwall/gjson v1.14.4
 	github.com/tidwall/sjson v1.2.5
 	github.com/yuin/goldmark v1.5.4
+	go.mau.fi/zeroconfig v0.0.0-20230220212126-e089a3ad8557
 	golang.org/x/crypto v0.6.0
 	golang.org/x/net v0.6.0
 	gopkg.in/yaml.v3 v3.0.1
@@ -21,6 +22,7 @@ require (
 )
 
 require (
+	github.com/coreos/go-systemd/v22 v22.3.3-0.20220203105225-a9a7ef127534 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
@@ -28,4 +30,5 @@ require (
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect
 	golang.org/x/sys v0.5.0 // indirect
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 )
