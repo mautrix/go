@@ -53,7 +53,7 @@ func main() {
 		w.Out = rl.Stdout()
 		w.TimeFormat = time.Stamp
 	})).With().Timestamp().Logger()
-	client.Logger = log
+	client.Log = log
 
 	var lastRoomID id.RoomID
 

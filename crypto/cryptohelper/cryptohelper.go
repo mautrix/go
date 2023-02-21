@@ -82,7 +82,7 @@ func NewCryptoHelper(cli *mautrix.Client, pickleKey []byte, store any) (*CryptoH
 	default:
 		return nil, fmt.Errorf("you must pass a *dbutil.Database or *crypto.StateStore to NewCryptoHelper")
 	}
-	log := cli.Logger.With().Str("module", "crypto").Logger()
+	log := cli.Log.With().Str("module", "crypto").Logger()
 	if cli.StateStore == nil && dbForManagedStores != nil {
 		managedStateStore = sqlstatestore.NewSQLStateStore(dbForManagedStores, dbutil.ZeroLogger(log.With().Str("database", "statestore").Logger()))
 		cli.StateStore = managedStateStore

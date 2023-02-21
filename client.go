@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"maunium.net/go/maulogger/v2/maulogadapt"
 
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -33,6 +34,17 @@ type CryptoHelper interface {
 	Init() error
 }
 
+// Deprecated: switch to zerolog
+type Logger interface {
+	Debugfln(message string, args ...interface{})
+}
+
+// Deprecated: switch to zerolog
+type WarnLogger interface {
+	Logger
+	Warnfln(message string, args ...interface{})
+}
+
 // Client represents a Matrix client.
 type Client struct {
 	HomeserverURL *url.URL     // The base homeserver URL
@@ -45,8 +57,12 @@ type Client struct {
 	Store         SyncStore    // The thing which can store tokens/ids
 	StateStore    StateStore
 	Crypto        CryptoHelper
-	Logger        zerolog.Logger
-	SyncPresence  event.Presence
+
+	Log zerolog.Logger
+	// Deprecated: switch to the zerolog instance in Log
+	Logger Logger
+
+	SyncPresence event.Presence
 
 	StreamSyncMinAge time.Duration
 
@@ -170,7 +186,7 @@ func (cli *Client) SyncWithContext(ctx context.Context) error {
 	for {
 		streamResp := false
 		if cli.StreamSyncMinAge > 0 && time.Since(lastSuccessfulSync) > cli.StreamSyncMinAge {
-			cli.Logger.Debug().Msg("Last sync is old, will stream next response")
+			cli.Log.Debug().Msg("Last sync is old, will stream next response")
 			streamResp = true
 		}
 		resSync, err := cli.FullSyncRequest(ReqSync{
@@ -364,7 +380,7 @@ func (cli *Client) MakeFullRequest(params FullRequest) ([]byte, error) {
 		params.MaxAttempts = 1 + cli.DefaultHTTPRetries
 	}
 	if params.Logger == nil {
-		params.Logger = &cli.Logger
+		params.Logger = &cli.Log
 	}
 	req, err := params.compileRequest()
 	if err != nil {
@@ -383,7 +399,7 @@ func (cli *Client) MakeFullRequest(params FullRequest) ([]byte, error) {
 func (cli *Client) cliOrContextLog(ctx context.Context) *zerolog.Logger {
 	log := zerolog.Ctx(ctx)
 	if log.GetLevel() == zerolog.Disabled {
-		return &cli.Logger
+		return &cli.Log
 	}
 	return log
 }
@@ -770,7 +786,7 @@ func (cli *Client) Login(req *ReqLogin) (resp *RespLogin, err error) {
 		cli.AccessToken = resp.AccessToken
 		cli.UserID = resp.UserID
 
-		cli.Logger.Debug().
+		cli.Log.Debug().
 			Str("user_id", cli.UserID.String()).
 			Str("device_id", cli.DeviceID.String()).
 			Msg("Stored credentials after login")
@@ -779,12 +795,12 @@ func (cli *Client) Login(req *ReqLogin) (resp *RespLogin, err error) {
 		var urlErr error
 		cli.HomeserverURL, urlErr = url.Parse(resp.WellKnown.Homeserver.BaseURL)
 		if urlErr != nil {
-			cli.Logger.Warn().
+			cli.Log.Warn().
 				Err(urlErr).
 				Str("homeserver_url", resp.WellKnown.Homeserver.BaseURL).
 				Msg("Failed to parse homeserver URL in login response")
 		} else {
-			cli.Logger.Debug().
+			cli.Log.Debug().
 				Str("homeserver_url", cli.HomeserverURL.String()).
 				Msg("Updated homeserver URL after login")
 		}
@@ -1202,17 +1218,17 @@ func (cli *Client) updateStoreWithOutgoingEvent(roomID id.RoomID, eventType even
 	var err error
 	fakeEvt.Content.VeryRaw, err = json.Marshal(contentJSON)
 	if err != nil {
-		cli.Logger.Warn().Err(err).Msg("Failed to marshal state event content to update state store")
+		cli.Log.Warn().Err(err).Msg("Failed to marshal state event content to update state store")
 		return
 	}
 	err = json.Unmarshal(fakeEvt.Content.VeryRaw, &fakeEvt.Content.Raw)
 	if err != nil {
-		cli.Logger.Warn().Err(err).Msg("Failed to unmarshal state event content to update state store")
+		cli.Log.Warn().Err(err).Msg("Failed to unmarshal state event content to update state store")
 		return
 	}
 	err = fakeEvt.Content.ParseRaw(fakeEvt.Type)
 	if err != nil {
-		cli.Logger.Warn().Err(err).Msg("Failed to parse state event content to update state store")
+		cli.Log.Warn().Err(err).Msg("Failed to parse state event content to update state store")
 		return
 	}
 	UpdateStateStore(cli.StateStore, fakeEvt)
@@ -1321,7 +1337,7 @@ func (cli *Client) DownloadContext(ctx context.Context, mxcURL id.ContentURI) (i
 
 func (cli *Client) downloadContext(ctx context.Context, mxcURL id.ContentURI) (*http.Request, *http.Response, error) {
 	if zerolog.Ctx(ctx).GetLevel() == zerolog.Disabled {
-		ctx = cli.Logger.WithContext(ctx)
+		ctx = cli.Log.WithContext(ctx)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, cli.GetDownloadURL(mxcURL), nil)
 	if err != nil {
@@ -1381,7 +1397,7 @@ func (cli *Client) UnstableUploadAsync(req ReqUploadMedia) (*RespCreateMXC, erro
 	go func() {
 		_, err = cli.UploadMedia(req)
 		if err != nil {
-			cli.Logger.Error().Str("mxc", req.UnstableMXC.String()).Err(err).Msg("Async upload of media failed")
+			cli.Log.Error().Str("mxc", req.UnstableMXC.String()).Err(err).Msg("Async upload of media failed")
 		}
 	}()
 	return resp, nil
@@ -1427,7 +1443,7 @@ type ReqUploadMedia struct {
 }
 
 func (cli *Client) tryUploadMediaToURL(url, contentType string, content io.Reader) (*http.Response, error) {
-	cli.Logger.Debug().Str("url", url).Msg("Uploading media to external URL")
+	cli.Log.Debug().Str("url", url).Msg("Uploading media to external URL")
 	req, err := http.NewRequest(http.MethodPut, url, content)
 	if err != nil {
 		return nil, err
@@ -1460,10 +1476,10 @@ func (cli *Client) uploadMediaToURL(data ReqUploadMedia) (*RespMediaUpload, erro
 			err = fmt.Errorf("HTTP %d", resp.StatusCode)
 		}
 		if retries <= 0 {
-			cli.Logger.Warn().Str("url", data.UploadURL).Err(err).Msg("Error uploading media to external URL, not retrying")
+			cli.Log.Warn().Str("url", data.UploadURL).Err(err).Msg("Error uploading media to external URL, not retrying")
 			return nil, err
 		}
-		cli.Logger.Warn().Str("url", data.UploadURL).Err(err).Msg("Error uploading media to external URL, retrying")
+		cli.Log.Warn().Str("url", data.UploadURL).Err(err).Msg("Error uploading media to external URL, retrying")
 		retries--
 	}
 
@@ -1955,17 +1971,19 @@ func NewClient(homeserverURL string, userID id.UserID, accessToken string) (*Cli
 	if err != nil {
 		return nil, err
 	}
-	return &Client{
+	cli := &Client{
 		AccessToken:   accessToken,
 		UserAgent:     DefaultUserAgent,
 		HomeserverURL: hsURL,
 		UserID:        userID,
 		Client:        &http.Client{Timeout: 180 * time.Second},
 		Syncer:        NewDefaultSyncer(),
-		Logger:        zerolog.Nop(),
+		Log:           zerolog.Nop(),
 		// By default, use an in-memory store which will never save filter ids / next batch tokens to disk.
 		// The client will work with this storer: it just won't remember across restarts.
 		// In practice, a database backend should be used.
 		Store: NewMemorySyncStore(),
-	}, nil
+	}
+	cli.Logger = maulogadapt.ZeroAsMau(&cli.Log)
+	return cli, nil
 }

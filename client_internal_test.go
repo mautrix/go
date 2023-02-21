@@ -44,10 +44,10 @@ func TestBackoffFromResponse(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			var out bytes.Buffer
-			c := &Client{Logger: zerolog.New(&out)}
+			c := &Client{Log: zerolog.New(&out)}
 
 			actual := c.parseBackoffFromResponse(
-				(&http.Request{}).WithContext(c.Logger.WithContext(context.Background())),
+				(&http.Request{}).WithContext(c.Log.WithContext(context.Background())),
 				&http.Response{
 					Header: http.Header{
 						"Retry-After": []string{tt.headerValue},

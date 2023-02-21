@@ -94,7 +94,7 @@ func (s *AccountDataStore) SaveNextBatch(userID id.UserID, nextBatchToken string
 
 	err := s.client.SetAccountData(s.EventType, data)
 	if err != nil {
-		s.client.Logger.Warn().Err(err).Msg("Failed to save next batch token to account data")
+		s.client.Log.Warn().Err(err).Msg("Failed to save next batch token to account data")
 	}
 }
 
@@ -107,7 +107,7 @@ func (s *AccountDataStore) LoadNextBatch(userID id.UserID) string {
 
 	err := s.client.GetAccountData(s.EventType, data)
 	if err != nil {
-		s.client.Logger.Warn().Err(err).Msg("Failed to load next batch token from account data")
+		s.client.Log.Warn().Err(err).Msg("Failed to load next batch token from account data")
 		return ""
 	}
 

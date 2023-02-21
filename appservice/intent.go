@@ -208,7 +208,7 @@ func (intent *IntentAPI) SendCustomMembershipEvent(roomID id.RoomID, target id.U
 		if !ok {
 			profile, err := intent.GetProfile(target)
 			if err != nil {
-				intent.Logger.Debug().Err(err).
+				intent.Log.Debug().Err(err).
 					Str("target_user_id", target.String()).
 					Str("membership", string(membership)).
 					Msg("Failed to get profile to fill new membership event")

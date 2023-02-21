@@ -270,7 +270,7 @@ func (as *AppService) makeClient(userID id.UserID) *mautrix.Client {
 	client.Store = nil
 	client.StateStore = as.StateStore
 	client.SetAppServiceUserID = true
-	client.Logger = as.Log.With().Str("as_user_id", client.UserID.String()).Logger()
+	client.Log = as.Log.With().Str("as_user_id", client.UserID.String()).Logger()
 	client.Client = as.HTTPClient
 	client.DefaultHTTPRetries = as.DefaultHTTPRetries
 	as.clients[userID] = client
