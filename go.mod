@@ -18,7 +18,7 @@ require (
 	golang.org/x/net v0.6.0
 	gopkg.in/yaml.v3 v3.0.1
 	maunium.net/go/mauflag v1.0.0
-	maunium.net/go/maulogger/v2 v2.3.2
+	maunium.net/go/maulogger/v2 v2.4.0
 )
 
 require (

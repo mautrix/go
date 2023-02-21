@@ -21,6 +21,7 @@ import (
 	"gopkg.in/yaml.v3"
 	flag "maunium.net/go/mauflag"
 	"maunium.net/go/maulogger/v2"
+	"maunium.net/go/maulogger/v2/maulogadapt"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/appservice"
@@ -29,7 +30,6 @@ import (
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/sqlstatestore"
-	"maunium.net/go/mautrix/util"
 	"maunium.net/go/mautrix/util/configupgrade"
 	"maunium.net/go/mautrix/util/dbutil"
 	_ "maunium.net/go/mautrix/util/dbutil/litestream"
@@ -404,7 +404,7 @@ func (br *Bridge) init() {
 		_, _ = fmt.Fprintln(os.Stderr, "Failed to initialize logger:", err)
 		os.Exit(12)
 	}
-	br.Log = util.ZeroToMauLog(br.ZLog)
+	br.Log = maulogadapt.ZeroAsMau(br.ZLog)
 
 	br.AS = br.Config.MakeAppService()
 	br.AS.DoublePuppetValue = br.Name

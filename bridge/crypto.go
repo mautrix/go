@@ -18,13 +18,13 @@ import (
 	"time"
 
 	"maunium.net/go/maulogger/v2"
+	"maunium.net/go/maulogger/v2/maulogadapt"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridge/bridgeconfig"
 	"maunium.net/go/mautrix/crypto"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
-	"maunium.net/go/mautrix/util"
 	"maunium.net/go/mautrix/util/dbutil"
 )
 
@@ -89,7 +89,7 @@ func (helper *CryptoHelper) Init() error {
 
 	helper.log.Debugln("Logged in as bridge bot with device ID", helper.client.DeviceID)
 	stateStore := &cryptoStateStore{helper.bridge}
-	helper.mach = crypto.NewOlmMachine(helper.client, util.MauToZeroLog(helper.baseLog), helper.store, stateStore)
+	helper.mach = crypto.NewOlmMachine(helper.client, maulogadapt.MauAsZero(helper.baseLog), helper.store, stateStore)
 	helper.mach.AllowKeyShare = helper.allowKeyShare
 	helper.mach.SendKeysMinTrust = helper.bridge.Config.Bridge.GetEncryptionConfig().VerificationLevels.Receive
 
@@ -140,7 +140,7 @@ func (helper *CryptoHelper) loginBot() (*mautrix.Client, bool, error) {
 	if err != nil {
 		return nil, deviceID != "", fmt.Errorf("failed to initialize client: %w", err)
 	}
-	client.Logger = *util.MauToZeroLog(helper.baseLog.Sub("Bot"))
+	client.Logger = *maulogadapt.MauAsZero(helper.baseLog.Sub("Bot"))
 	client.Client = helper.bridge.AS.HTTPClient
 	client.DefaultHTTPRetries = helper.bridge.AS.DefaultHTTPRetries
 	flows, err := client.GetLoginFlows()
