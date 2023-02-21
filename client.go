@@ -62,6 +62,9 @@ type Client struct {
 	// Deprecated: switch to the zerolog instance in Log
 	Logger Logger
 
+	RequestHook  func(req *http.Request)
+	ResponseHook func(req *http.Request, resp *http.Response, duration time.Duration)
+
 	SyncPresence event.Presence
 
 	StreamSyncMinAge time.Duration
@@ -248,14 +251,21 @@ func (cli *Client) StopSync() {
 	cli.incrementSyncingID()
 }
 
-const logBodyContextKey = "fi.mau.mautrix.log_body"
-const logRequestIDContextKey = "fi.mau.mautrix.request_id"
+type contextKey int
+
+const (
+	LogBodyContextKey contextKey = iota
+	LogRequestIDContextKey
+)
 
 func (cli *Client) LogRequest(req *http.Request) {
+	if cli.RequestHook != nil {
+		cli.RequestHook(req)
+	}
 	evt := zerolog.Ctx(req.Context()).Debug().
 		Str("method", req.Method).
 		Str("url", req.URL.String())
-	body := req.Context().Value(logBodyContextKey)
+	body := req.Context().Value(LogBodyContextKey)
 	if body != nil {
 		evt.Interface("body", body)
 	}
@@ -263,6 +273,9 @@ func (cli *Client) LogRequest(req *http.Request) {
 }
 
 func (cli *Client) LogRequestDone(req *http.Request, resp *http.Response, handlerErr error, contentLength int, duration time.Duration) {
+	if cli.ResponseHook != nil {
+		cli.ResponseHook(req, resp, duration)
+	}
 	mime := resp.Header.Get("Content-Type")
 	length := resp.ContentLength
 	if length == -1 && contentLength > 0 {
@@ -348,8 +361,8 @@ func (params *FullRequest) compileRequest() (*http.Request, error) {
 	ctx = logger.With().
 		Int32("req_id", reqID).
 		Logger().WithContext(ctx)
-	ctx = context.WithValue(ctx, logBodyContextKey, logBody)
-	ctx = context.WithValue(ctx, logRequestIDContextKey, int(reqID))
+	ctx = context.WithValue(ctx, LogBodyContextKey, logBody)
+	ctx = context.WithValue(ctx, LogRequestIDContextKey, int(reqID))
 	req, err := http.NewRequestWithContext(ctx, params.Method, params.URL, reqBody)
 	if err != nil {
 		return nil, HTTPError{
