@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Tulir Asokan
+// Copyright (c) 2023 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -17,8 +17,7 @@ import (
 	"sync"
 	"time"
 
-	"maunium.net/go/maulogger/v2"
-	"maunium.net/go/maulogger/v2/maulogadapt"
+	"github.com/rs/zerolog"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridge/bridgeconfig"
@@ -30,19 +29,12 @@ import (
 
 var NoSessionFound = crypto.NoSessionFound
 
-var levelTrace = maulogger.Level{
-	Name:     "TRACE",
-	Severity: -10,
-	Color:    -1,
-}
-
 type CryptoHelper struct {
-	bridge  *Bridge
-	client  *mautrix.Client
-	mach    *crypto.OlmMachine
-	store   *SQLCryptoStore
-	log     maulogger.Logger
-	baseLog maulogger.Logger
+	bridge *Bridge
+	client *mautrix.Client
+	mach   *crypto.OlmMachine
+	store  *SQLCryptoStore
+	log    *zerolog.Logger
 
 	lock       sync.RWMutex
 	syncDone   sync.WaitGroup
@@ -54,11 +46,10 @@ func NewCryptoHelper(bridge *Bridge) Crypto {
 		bridge.Log.Debugln("Bridge built with end-to-bridge encryption, but disabled in config")
 		return nil
 	}
-	baseLog := bridge.Log.Sub("Crypto")
+	log := bridge.ZLog.With().Str("component", "crypto").Logger()
 	return &CryptoHelper{
-		bridge:  bridge,
-		log:     baseLog.Sub("Helper"),
-		baseLog: baseLog,
+		bridge: bridge,
+		log:    &log,
 	}
 }
 
@@ -66,11 +57,11 @@ func (helper *CryptoHelper) Init() error {
 	if len(helper.bridge.CryptoPickleKey) == 0 {
 		panic("CryptoPickleKey not set")
 	}
-	helper.log.Debugln("Initializing end-to-bridge encryption...")
+	helper.log.Debug().Msg("Initializing end-to-bridge encryption...")
 
 	helper.store = NewSQLCryptoStore(
 		helper.bridge.DB,
-		dbutil.MauLogger(helper.bridge.Log.Sub("Database").Sub("CryptoStore")),
+		dbutil.ZeroLogger(helper.bridge.ZLog.With().Str("db_section", "crypto").Logger()),
 		helper.bridge.AS.BotMXID(),
 		fmt.Sprintf("@%s:%s", helper.bridge.Config.Bridge.FormatUsername("%"), helper.bridge.AS.HomeserverDomain),
 		helper.bridge.CryptoPickleKey,
@@ -78,7 +69,7 @@ func (helper *CryptoHelper) Init() error {
 
 	err := helper.store.DB.Upgrade()
 	if err != nil {
-		helper.bridge.LogDBUpgradeErrorAndExit("crypto store", err)
+		helper.bridge.LogDBUpgradeErrorAndExit("crypto", err)
 	}
 
 	var isExistingDevice bool
@@ -87,9 +78,11 @@ func (helper *CryptoHelper) Init() error {
 		return err
 	}
 
-	helper.log.Debugln("Logged in as bridge bot with device ID", helper.client.DeviceID)
+	helper.log.Debug().
+		Str("device_id", helper.client.DeviceID.String()).
+		Msg("Logged in as bridge bot")
 	stateStore := &cryptoStateStore{helper.bridge}
-	helper.mach = crypto.NewOlmMachine(helper.client, maulogadapt.MauAsZero(helper.baseLog), helper.store, stateStore)
+	helper.mach = crypto.NewOlmMachine(helper.client, helper.log, helper.store, stateStore)
 	helper.mach.AllowKeyShare = helper.allowKeyShare
 	helper.mach.SendKeysMinTrust = helper.bridge.Config.Bridge.GetEncryptionConfig().VerificationLevels.Receive
 
@@ -115,16 +108,16 @@ func (helper *CryptoHelper) allowKeyShare(ctx context.Context, device *id.Device
 	} else if trustState := helper.mach.ResolveTrust(device); trustState >= cfg.VerificationLevels.Share {
 		portal := helper.bridge.Child.GetIPortal(info.RoomID)
 		if portal == nil {
-			helper.log.Debugfln("Rejecting key request for %s from %s/%s: room is not a portal", info.SessionID, device.UserID, device.DeviceID)
+			zerolog.Ctx(ctx).Debug().Msg("Rejecting key request: room is not a portal")
 			return &crypto.KeyShareRejection{Code: event.RoomKeyWithheldUnavailable, Reason: "Requested room is not a portal room"}
 		}
 		user := helper.bridge.Child.GetIUser(device.UserID, true)
 		// FIXME reimplement IsInPortal
 		if user.GetPermissionLevel() < bridgeconfig.PermissionLevelAdmin /*&& !user.IsInPortal(portal.Key)*/ {
-			helper.log.Debugfln("Rejecting key request for %s from %s/%s: user is not in portal", info.SessionID, device.UserID, device.DeviceID)
+			zerolog.Ctx(ctx).Debug().Msg("Rejecting key request: user is not in portal")
 			return &crypto.KeyShareRejection{Code: event.RoomKeyWithheldUnauthorized, Reason: "You're not in that portal"}
 		}
-		helper.log.Debugfln("Accepting key request for %s from %s/%s", info.SessionID, device.UserID, device.DeviceID)
+		zerolog.Ctx(ctx).Debug().Msg("Accepting key request")
 		return nil
 	} else {
 		return &crypto.KeyShareRejectUnverified
@@ -134,13 +127,13 @@ func (helper *CryptoHelper) allowKeyShare(ctx context.Context, device *id.Device
 func (helper *CryptoHelper) loginBot() (*mautrix.Client, bool, error) {
 	deviceID := helper.store.FindDeviceID()
 	if len(deviceID) > 0 {
-		helper.log.Debugln("Found existing device ID for bot in database:", deviceID)
+		helper.log.Debug().Str("device_id", deviceID.String()).Msg("Found existing device ID for bot in database")
 	}
 	client, err := mautrix.NewClient(helper.bridge.AS.HomeserverURL, "", "")
 	if err != nil {
 		return nil, deviceID != "", fmt.Errorf("failed to initialize client: %w", err)
 	}
-	client.Log = *maulogadapt.MauAsZero(helper.baseLog.Sub("Bot"))
+	client.Log = helper.log.With().Str("as_user_id", client.UserID.String()).Logger()
 	client.Client = helper.bridge.AS.HTTPClient
 	client.DefaultHTTPRetries = helper.bridge.AS.DefaultHTTPRetries
 	flows, err := client.GetLoginFlows()
@@ -171,47 +164,47 @@ func (helper *CryptoHelper) loginBot() (*mautrix.Client, bool, error) {
 }
 
 func (helper *CryptoHelper) verifyKeysAreOnServer() {
-	helper.log.Debugfln("Making sure keys are still on server")
+	helper.log.Debug().Msg("Making sure keys are still on server")
 	resp, err := helper.client.QueryKeys(&mautrix.ReqQueryKeys{
 		DeviceKeys: map[id.UserID]mautrix.DeviceIDList{
 			helper.client.UserID: {helper.client.DeviceID},
 		},
 	})
 	if err != nil {
-		helper.log.Fatalln("Failed to query own keys to make sure device still exists:", err)
+		helper.log.WithLevel(zerolog.FatalLevel).Err(err).Msg("Failed to query own keys to make sure device still exists")
 		os.Exit(33)
 	}
 	device, ok := resp.DeviceKeys[helper.client.UserID][helper.client.DeviceID]
 	if ok && len(device.Keys) > 0 {
 		return
 	}
-	helper.log.Warnln("Existing device doesn't have keys on server, resetting crypto")
+	helper.log.Warn().Msg("Existing device doesn't have keys on server, resetting crypto")
 	helper.Reset(false)
 }
 
 func (helper *CryptoHelper) Start() {
 	if helper.bridge.Config.Bridge.GetEncryptionConfig().Appservice {
-		helper.log.Debugln("End-to-bridge encryption is in appservice mode, registering event listeners and not starting syncer")
+		helper.log.Debug().Msg("End-to-bridge encryption is in appservice mode, registering event listeners and not starting syncer")
 		helper.bridge.AS.Registration.EphemeralEvents = true
 		helper.mach.AddAppserviceListener(helper.bridge.EventProcessor)
 		return
 	}
 	helper.syncDone.Add(1)
 	defer helper.syncDone.Done()
-	helper.log.Debugln("Starting syncer for receiving to-device messages")
+	helper.log.Debug().Msg("Starting syncer for receiving to-device messages")
 	var ctx context.Context
 	ctx, helper.cancelSync = context.WithCancel(context.Background())
 	err := helper.client.SyncWithContext(ctx)
 	if err != nil && !errors.Is(err, context.Canceled) {
-		helper.log.Fatalln("Fatal error syncing:", err)
+		helper.log.WithLevel(zerolog.FatalLevel).Err(err).Msg("Fatal error syncing")
 		os.Exit(51)
 	} else {
-		helper.log.Infoln("Bridge bot to-device syncer stopped without error")
+		helper.log.Info().Msg("Bridge bot to-device syncer stopped without error")
 	}
 }
 
 func (helper *CryptoHelper) Stop() {
-	helper.log.Debugln("CryptoHelper.Stop() called, stopping bridge bot sync")
+	helper.log.Debug().Msg("CryptoHelper.Stop() called, stopping bridge bot sync")
 	helper.client.StopSync()
 	if helper.cancelSync != nil {
 		helper.cancelSync()
@@ -222,15 +215,15 @@ func (helper *CryptoHelper) Stop() {
 func (helper *CryptoHelper) clearDatabase() {
 	_, err := helper.store.DB.Exec("DELETE FROM crypto_account")
 	if err != nil {
-		helper.log.Warnln("Failed to clear crypto_account table:", err)
+		helper.log.Warn().Err(err).Msg("Failed to clear crypto_account table")
 	}
 	_, err = helper.store.DB.Exec("DELETE FROM crypto_olm_session")
 	if err != nil {
-		helper.log.Warnln("Failed to clear crypto_olm_session table:", err)
+		helper.log.Warn().Err(err).Msg("Failed to clear crypto_olm_session table")
 	}
 	_, err = helper.store.DB.Exec("DELETE FROM crypto_megolm_outbound_session")
 	if err != nil {
-		helper.log.Warnln("Failed to clear crypto_megolm_outbound_session table:", err)
+		helper.log.Warn().Err(err).Msg("Failed to clear crypto_megolm_outbound_session table")
 	}
 	//_, _ = helper.store.DB.Exec("DELETE FROM crypto_device")
 	//_, _ = helper.store.DB.Exec("DELETE FROM crypto_tracked_user")
@@ -241,24 +234,24 @@ func (helper *CryptoHelper) clearDatabase() {
 func (helper *CryptoHelper) Reset(startAfterReset bool) {
 	helper.lock.Lock()
 	defer helper.lock.Unlock()
-	helper.log.Infoln("Resetting end-to-bridge encryption device")
+	helper.log.Info().Msg("Resetting end-to-bridge encryption device")
 	helper.Stop()
-	helper.log.Debugln("Crypto syncer stopped, clearing database")
+	helper.log.Debug().Msg("Crypto syncer stopped, clearing database")
 	helper.clearDatabase()
-	helper.log.Debugln("Crypto database cleared, logging out of all sessions")
+	helper.log.Debug().Msg("Crypto database cleared, logging out of all sessions")
 	_, err := helper.client.LogoutAll()
 	if err != nil {
-		helper.log.Warnln("Failed to log out all devices:", err)
+		helper.log.Warn().Err(err).Msg("Failed to log out all devices")
 	}
 	helper.client = nil
 	helper.store = nil
 	helper.mach = nil
 	err = helper.Init()
 	if err != nil {
-		helper.log.Fatalln("Error reinitializing end-to-bridge encryption:", err)
+		helper.log.WithLevel(zerolog.FatalLevel).Err(err).Msg("Error reinitializing end-to-bridge encryption")
 		os.Exit(50)
 	}
-	helper.log.Infoln("End-to-bridge encryption successfully reset")
+	helper.log.Info().Msg("End-to-bridge encryption successfully reset")
 	if startAfterReset {
 		go helper.Start()
 	}
@@ -286,7 +279,9 @@ func (helper *CryptoHelper) Encrypt(roomID id.RoomID, evtType event.Type, conten
 		if err != crypto.SessionExpired && err != crypto.SessionNotShared && err != crypto.NoGroupSession {
 			return
 		}
-		helper.log.Debugfln("Got %v while encrypting event for %s, sharing group session and trying again...", err, roomID)
+		helper.log.Debug().Err(err).
+			Str("room_id", roomID.String()).
+			Msg("Got error while encrypting event for room, sharing group session and trying again...")
 		var users []id.UserID
 		users, err = helper.store.GetRoomJoinedOrInvitedMembers(roomID)
 		if err != nil {
@@ -318,9 +313,19 @@ func (helper *CryptoHelper) RequestSession(roomID id.RoomID, senderKey id.Sender
 	}
 	err := helper.mach.SendRoomKeyRequest(roomID, senderKey, sessionID, "", map[id.UserID][]id.DeviceID{userID: {deviceID}})
 	if err != nil {
-		helper.log.Warnfln("Failed to send key request to %s/%s for %s in %s: %v", userID, deviceID, sessionID, roomID, err)
+		helper.log.Warn().Err(err).
+			Str("user_id", userID.String()).
+			Str("device_id", deviceID.String()).
+			Str("session_id", sessionID.String()).
+			Str("room_id", roomID.String()).
+			Msg("Failed to send key request")
 	} else {
-		helper.log.Debugfln("Sent key request to %s/%s for %s in %s", userID, deviceID, sessionID, roomID)
+		helper.log.Debug().
+			Str("user_id", userID.String()).
+			Str("device_id", deviceID.String()).
+			Str("session_id", sessionID.String()).
+			Str("room_id", roomID.String()).
+			Msg("Sent key request")
 	}
 }
 
@@ -329,7 +334,9 @@ func (helper *CryptoHelper) ResetSession(roomID id.RoomID) {
 	defer helper.lock.RUnlock()
 	err := helper.mach.CryptoStore.RemoveOutboundGroupSession(roomID)
 	if err != nil {
-		helper.log.Debugfln("Error manually removing outbound group session in %s: %v", roomID, err)
+		helper.log.Debug().Err(err).
+			Str("room_id", roomID.String()).
+			Msg("Error manually removing outbound group session in room")
 	}
 }
 
@@ -391,26 +398,6 @@ func (syncer *cryptoSyncer) GetFilterJSON(_ id.UserID) *mautrix.Filter {
 	}
 }
 
-type cryptoLogger struct {
-	int maulogger.Logger
-}
-
-func (c *cryptoLogger) Error(message string, args ...interface{}) {
-	c.int.Errorfln(message, args...)
-}
-
-func (c *cryptoLogger) Warn(message string, args ...interface{}) {
-	c.int.Warnfln(message, args...)
-}
-
-func (c *cryptoLogger) Debug(message string, args ...interface{}) {
-	c.int.Debugfln(message, args...)
-}
-
-func (c *cryptoLogger) Trace(message string, args ...interface{}) {
-	c.int.Logfln(levelTrace, message, args...)
-}
-
 type cryptoStateStore struct {
 	bridge *Bridge
 }
@@ -422,7 +409,7 @@ func (c *cryptoStateStore) IsEncrypted(id id.RoomID) bool {
 	if portal != nil {
 		return portal.IsEncrypted()
 	}
-	return false
+	return c.bridge.StateStore.IsEncrypted(id)
 }
 
 func (c *cryptoStateStore) FindSharedRooms(id id.UserID) []id.RoomID {

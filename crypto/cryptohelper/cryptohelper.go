@@ -82,9 +82,9 @@ func NewCryptoHelper(cli *mautrix.Client, pickleKey []byte, store any) (*CryptoH
 	default:
 		return nil, fmt.Errorf("you must pass a *dbutil.Database or *crypto.StateStore to NewCryptoHelper")
 	}
-	log := cli.Log.With().Str("module", "crypto").Logger()
+	log := cli.Log.With().Str("component", "crypto").Logger()
 	if cli.StateStore == nil && dbForManagedStores != nil {
-		managedStateStore = sqlstatestore.NewSQLStateStore(dbForManagedStores, dbutil.ZeroLogger(log.With().Str("database", "statestore").Logger()))
+		managedStateStore = sqlstatestore.NewSQLStateStore(dbForManagedStores, dbutil.ZeroLogger(log.With().Str("db_section", "matrix_state").Logger()))
 		cli.StateStore = managedStateStore
 	} else if _, isCryptoCompatible := cli.StateStore.(crypto.StateStore); !isCryptoCompatible {
 		return nil, fmt.Errorf("the client state store must implement crypto.StateStore")
@@ -122,7 +122,7 @@ func (helper *CryptoHelper) Init() error {
 	}
 	var cryptoStore crypto.Store
 	if helper.unmanagedCryptoStore == nil {
-		managedCryptoStore := crypto.NewSQLCryptoStore(helper.dbForManagedStores, dbutil.ZeroLogger(helper.log.With().Str("database", "cryptostore").Logger()), helper.DBAccountID, helper.client.DeviceID, helper.pickleKey)
+		managedCryptoStore := crypto.NewSQLCryptoStore(helper.dbForManagedStores, dbutil.ZeroLogger(helper.log.With().Str("db_section", "crypto").Logger()), helper.DBAccountID, helper.client.DeviceID, helper.pickleKey)
 		if helper.client.Store == nil {
 			helper.client.Store = managedCryptoStore
 		} else if _, isMemory := helper.client.Store.(*mautrix.MemorySyncStore); isMemory {

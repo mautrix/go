@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Tulir Asokan
+// Copyright (c) 2023 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -10,7 +10,8 @@ import (
 	"runtime/debug"
 	"strings"
 
-	"maunium.net/go/maulogger/v2"
+	"github.com/rs/zerolog"
+	"maunium.net/go/maulogger/v2/maulogadapt"
 
 	"maunium.net/go/mautrix/bridge"
 	"maunium.net/go/mautrix/id"
@@ -18,7 +19,7 @@ import (
 
 type Processor struct {
 	bridge *bridge.Bridge
-	log    maulogger.Logger
+	log    *zerolog.Logger
 
 	handlers map[string]Handler
 	aliases  map[string]string
@@ -28,7 +29,7 @@ type Processor struct {
 func NewProcessor(bridge *bridge.Bridge) *Processor {
 	proc := &Processor{
 		bridge: bridge,
-		log:    bridge.Log.Sub("CommandProcessor"),
+		log:    bridge.ZLog,
 
 		handlers: make(map[string]Handler),
 		aliases:  make(map[string]string),
@@ -61,7 +62,11 @@ func (proc *Processor) Handle(roomID id.RoomID, eventID id.EventID, user bridge.
 	defer func() {
 		err := recover()
 		if err != nil {
-			proc.log.Errorfln("Panic handling command from %s: %v\n%s", user.GetMXID(), err, debug.Stack())
+			proc.log.Error().
+				Str(zerolog.ErrorStackFieldName, string(debug.Stack())).
+				Interface(zerolog.ErrorFieldName, err).
+				Str("event_id", eventID.String()).
+				Msg("Panic in Matrix command handler")
 		}
 	}()
 	args := strings.Fields(message)
@@ -70,6 +75,12 @@ func (proc *Processor) Handle(roomID id.RoomID, eventID id.EventID, user bridge.
 	}
 	command := strings.ToLower(args[0])
 	rawArgs := strings.TrimLeft(strings.TrimPrefix(message, command), " ")
+	log := proc.log.With().
+		Str("user_id", user.GetMXID().String()).
+		Str("event_id", eventID.String()).
+		Str("room_id", roomID.String()).
+		Str("command", command).
+		Logger()
 	ce := &Event{
 		Bot:       proc.bridge.Bot,
 		Bridge:    proc.bridge,
@@ -82,9 +93,10 @@ func (proc *Processor) Handle(roomID id.RoomID, eventID id.EventID, user bridge.
 		Args:      args[1:],
 		RawArgs:   rawArgs,
 		ReplyTo:   replyTo,
-		Log:       proc.log,
+		ZLog:      &log,
+		Log:       maulogadapt.ZeroAsMau(&log),
 	}
-	proc.log.Debugfln("%s sent %q in %s", user.GetMXID(), message, roomID)
+	log.Debug().Msg("Received command")
 
 	realCommand, ok := proc.aliases[ce.Command]
 	if !ok {
@@ -108,7 +120,6 @@ func (proc *Processor) Handle(roomID id.RoomID, eventID id.EventID, user bridge.
 			ce.Reply("Unknown command, use the `help` command for help.")
 		}
 	} else {
-		ce.Log = ce.Log.Sub(realCommand)
 		ce.Handler = handler
 		handler.Run(ce)
 	}

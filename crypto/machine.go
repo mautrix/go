@@ -111,7 +111,7 @@ func NewOlmMachine(client *mautrix.Client, log *zerolog.Logger, cryptoStore Stor
 
 func (mach *OlmMachine) machOrContextLog(ctx context.Context) *zerolog.Logger {
 	log := zerolog.Ctx(ctx)
-	if log.GetLevel() == zerolog.Disabled {
+	if log.GetLevel() == zerolog.Disabled || log == zerolog.DefaultContextLogger {
 		return mach.Log
 	}
 	return log

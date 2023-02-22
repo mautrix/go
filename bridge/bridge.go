@@ -258,20 +258,23 @@ func (br *Bridge) ensureConnection() {
 	for {
 		versions, err := br.Bot.Versions()
 		if err != nil {
-			br.Log.Errorfln("Failed to connect to homeserver: %v. Retrying in 10 seconds...", err)
+			br.ZLog.Err(err).Msg("Failed to connect to homeserver, retrying in 10 seconds...")
 			time.Sleep(10 * time.Second)
 			continue
 		}
 		br.SpecVersions = *versions
 		if br.Config.Homeserver.Software == bridgeconfig.SoftwareHungry && !versions.UnstableFeatures["com.beeper.hungry"] {
-			br.Log.Fatalln("The config claims the homeserver is hungryserv, but the /versions response didn't confirm it")
+			br.ZLog.WithLevel(zerolog.FatalLevel).Msg("The config claims the homeserver is hungryserv, but the /versions response didn't confirm it")
 			os.Exit(18)
 		} else if !versions.ContainsGreaterOrEqual(MinSpecVersion) {
-			br.Log.Fatalfln("The homeserver is outdated (server supports %s, but the bridge requires at least %s)", versions.GetLatest(), MinSpecVersion)
+			br.ZLog.WithLevel(zerolog.FatalLevel).
+				Stringer("server_supports", versions.GetLatest()).
+				Stringer("bridge_requires", MinSpecVersion).
+				Msg("The homeserver is outdated (supported spec versions are below minimum required by bridge)")
 			os.Exit(18)
 		} else if fr, ok := br.Child.(CSFeatureRequirer); ok {
 			if msg, hasFeatures := fr.CheckFeatures(versions); !hasFeatures {
-				br.Log.Fatalln(msg)
+				br.ZLog.WithLevel(zerolog.FatalLevel).Msg(msg)
 				os.Exit(18)
 			}
 		}
@@ -279,16 +282,19 @@ func (br *Bridge) ensureConnection() {
 		resp, err := br.Bot.Whoami()
 		if err != nil {
 			if errors.Is(err, mautrix.MUnknownToken) {
-				br.Log.Fatalln("The as_token was not accepted. Is the registration file installed in your homeserver correctly?")
+				br.ZLog.WithLevel(zerolog.FatalLevel).Msg("The as_token was not accepted. Is the registration file installed in your homeserver correctly?")
 				os.Exit(16)
 			} else if errors.Is(err, mautrix.MExclusive) {
-				br.Log.Fatalln("The as_token was accepted, but the /register request was not. Are the homeserver domain and username template in the config correct, and do they match the values in the registration?")
+				br.ZLog.WithLevel(zerolog.FatalLevel).Msg("The as_token was accepted, but the /register request was not. Are the homeserver domain and username template in the config correct, and do they match the values in the registration?")
 				os.Exit(16)
 			}
-			br.Log.Errorfln("Failed to connect to homeserver: %v. Retrying in 10 seconds...", err)
+			br.ZLog.Err(err).Msg("Failed to connect to homeserver, retrying in 10 seconds...")
 			time.Sleep(10 * time.Second)
 		} else if resp.UserID != br.Bot.UserID {
-			br.Log.Fatalln("Unexpected user ID in whoami call: got %s, expected %s", resp.UserID, br.Bot.UserID)
+			br.ZLog.WithLevel(zerolog.FatalLevel).
+				Stringer("got_user_id", resp.UserID).
+				Stringer("expected_user_id", br.Bot.UserID).
+				Msg("Unexpected user ID in whoami call")
 			os.Exit(17)
 		} else {
 			break
@@ -299,14 +305,14 @@ func (br *Bridge) ensureConnection() {
 func (br *Bridge) fetchMediaConfig() {
 	cfg, err := br.Bot.GetMediaConfig()
 	if err != nil {
-		br.Log.Warnfln("Failed to fetch media config: %v", err)
+		br.ZLog.Warn().Err(err).Msg("Failed to fetch media config")
 	} else {
 		br.MediaConfig = *cfg
 	}
 }
 
 func (br *Bridge) UpdateBotProfile() {
-	br.Log.Debugln("Updating bot profile")
+	br.ZLog.Debug().Msg("Updating bot profile")
 	botConfig := &br.Config.AppService.Bot
 
 	var err error
@@ -317,7 +323,7 @@ func (br *Bridge) UpdateBotProfile() {
 		err = br.Bot.SetAvatarURL(botConfig.ParsedAvatar)
 	}
 	if err != nil {
-		br.Log.Warnln("Failed to update bot avatar:", err)
+		br.ZLog.Warn().Err(err).Msg("Failed to update bot avatar")
 	}
 
 	if botConfig.Displayname == "remove" {
@@ -326,7 +332,7 @@ func (br *Bridge) UpdateBotProfile() {
 		err = br.Bot.SetDisplayName(botConfig.Displayname)
 	}
 	if err != nil {
-		br.Log.Warnln("Failed to update bot displayname:", err)
+		br.ZLog.Warn().Err(err).Msg("Failed to update bot displayname")
 	}
 }
 
@@ -404,6 +410,8 @@ func (br *Bridge) init() {
 		_, _ = fmt.Fprintln(os.Stderr, "Failed to initialize logger:", err)
 		os.Exit(12)
 	}
+	defaultCtxLog := br.ZLog.With().Bool("default_context_log", true).Caller().Logger()
+	zerolog.DefaultContextLogger = &defaultCtxLog
 	br.Log = maulogadapt.ZeroAsMau(br.ZLog)
 
 	br.AS = br.Config.MakeAppService()
@@ -415,14 +423,19 @@ func (br *Bridge) init() {
 
 	err = br.validateConfig()
 	if err != nil {
-		br.Log.Fatalln("Configuration error:", err)
+		br.ZLog.WithLevel(zerolog.FatalLevel).Err(err).Msg("Configuration error")
 		os.Exit(11)
 	}
 
 	br.Bot = br.AS.BotIntent()
-	br.Log.Infoln("Initializing", br.VersionDesc)
+	br.ZLog.Info().
+		Str("name", br.Name).
+		Str("version", br.Version).
+		Str("built_at", br.BuildTime).
+		Str("go_version", runtime.Version()).
+		Msg("Initializing bridge")
 
-	br.Log.Debugln("Initializing database connection")
+	br.ZLog.Debug().Msg("Initializing database connection")
 	dbConfig := br.Config.AppService.Database
 	if (dbConfig.Type == "sqlite3-fk-wal" || dbConfig.Type == "litestream") && dbConfig.MaxOpenConns != 1 && !strings.Contains(dbConfig.URI, "_txlock=immediate") {
 		var fixedExampleURI string
@@ -433,11 +446,13 @@ func (br *Bridge) init() {
 		} else {
 			fixedExampleURI = fmt.Sprintf("%s&_txlock=immediate", dbConfig.URI)
 		}
-		br.Log.Warnfln("Using SQLite without _txlock=immediate is not recommended (e.g. `uri: %s`)", fixedExampleURI)
+		br.ZLog.Warn().
+			Str("fixed_uri_example", fixedExampleURI).
+			Msg("Using SQLite without _txlock=immediate is not recommended")
 	}
-	br.DB, err = dbutil.NewFromConfig(br.Name, dbConfig, dbutil.MauLogger(br.Log.Sub("Database")))
+	br.DB, err = dbutil.NewFromConfig(br.Name, dbConfig, dbutil.ZeroLogger(br.ZLog.With().Str("db_section", "main").Logger()))
 	if err != nil {
-		br.Log.Fatalln("Failed to initialize database connection:", err)
+		br.ZLog.WithLevel(zerolog.FatalLevel).Err(err).Msg("Failed to initialize database connection")
 		if sqlError := (&sqlite3.Error{}); errors.As(err, sqlError) && sqlError.Code == sqlite3.ErrCorrupt {
 			os.Exit(18)
 		}
@@ -446,16 +461,16 @@ func (br *Bridge) init() {
 	br.DB.IgnoreUnsupportedDatabase = *ignoreUnsupportedDatabase
 	br.DB.IgnoreForeignTables = *ignoreForeignTables
 
-	br.Log.Debugln("Initializing state store")
-	br.StateStore = sqlstatestore.NewSQLStateStore(br.DB, dbutil.MauLogger(br.Log.Sub("Database").Sub("StateStore")))
+	br.ZLog.Debug().Msg("Initializing state store")
+	br.StateStore = sqlstatestore.NewSQLStateStore(br.DB, dbutil.ZeroLogger(br.ZLog.With().Str("db_section", "matrix_state").Logger()))
 	br.AS.StateStore = br.StateStore
 
-	br.Log.Debugln("Initializing Matrix event processor")
+	br.ZLog.Debug().Msg("Initializing Matrix event processor")
 	br.EventProcessor = appservice.NewEventProcessor(br.AS)
 	if !br.Config.AppService.AsyncTransactions {
 		br.EventProcessor.ExecMode = appservice.Sync
 	}
-	br.Log.Debugln("Initializing Matrix event handler")
+	br.ZLog.Debug().Msg("Initializing Matrix event handler")
 	br.MatrixHandler = NewMatrixHandler(br)
 
 	br.Crypto = NewCryptoHelper(br)
@@ -464,47 +479,50 @@ func (br *Bridge) init() {
 }
 
 func (br *Bridge) LogDBUpgradeErrorAndExit(name string, err error) {
-	br.Log.Fatalfln("Failed to initialize %s: %v", name, err)
+	br.ZLog.WithLevel(zerolog.FatalLevel).
+		Err(err).
+		Str("db_section", name).
+		Msg("Failed to initialize database")
 	if sqlError := (&sqlite3.Error{}); errors.As(err, sqlError) && sqlError.Code == sqlite3.ErrCorrupt {
 		os.Exit(18)
 	} else if errors.Is(err, dbutil.ErrForeignTables) {
-		br.Log.Infoln("You can use --ignore-foreign-tables to ignore this error")
+		br.ZLog.Info().Msg("You can use --ignore-foreign-tables to ignore this error")
 	} else if errors.Is(err, dbutil.ErrNotOwned) {
-		br.Log.Infoln("Sharing the same database with different programs is not supported")
+		br.ZLog.Info().Msg("Sharing the same database with different programs is not supported")
 	} else if errors.Is(err, dbutil.ErrUnsupportedDatabaseVersion) {
-		br.Log.Infoln("Downgrading the bridge is not supported")
+		br.ZLog.Info().Msg("Downgrading the bridge is not supported")
 	}
 	os.Exit(15)
 }
 
 func (br *Bridge) start() {
-	br.Log.Debugln("Running database upgrades")
+	br.ZLog.Debug().Msg("Running database upgrades")
 	err := br.DB.Upgrade()
 	if err != nil {
-		br.LogDBUpgradeErrorAndExit("main database", err)
+		br.LogDBUpgradeErrorAndExit("main", err)
 	} else if err = br.StateStore.Upgrade(); err != nil {
-		br.LogDBUpgradeErrorAndExit("matrix state store", err)
+		br.LogDBUpgradeErrorAndExit("matrix_state", err)
 	}
 
-	br.Log.Debugln("Checking connection to homeserver")
+	br.ZLog.Debug().Msg("Checking connection to homeserver")
 	br.ensureConnection()
 	go br.fetchMediaConfig()
 
 	if br.Crypto != nil {
 		err = br.Crypto.Init()
 		if err != nil {
-			br.Log.Fatalln("Error initializing end-to-bridge encryption:", err)
+			br.ZLog.WithLevel(zerolog.FatalLevel).Err(err).Msg("Error initializing end-to-bridge encryption")
 			os.Exit(19)
 		}
 	}
 
 	if br.AS.Host.Port != 0 {
-		br.Log.Debugln("Starting application service HTTP server")
+		br.ZLog.Debug().Msg("Starting application service HTTP server")
 		go br.AS.Start()
 	} else {
-		br.Log.Debugln("Appservice port not configured, not starting HTTP server")
+		br.ZLog.Debug().Msg("Appservice port not configured, not starting HTTP server")
 	}
-	br.Log.Debugln("Starting event processor")
+	br.ZLog.Debug().Msg("Starting event processor")
 	br.EventProcessor.Start()
 
 	go br.UpdateBotProfile()
@@ -522,20 +540,20 @@ func (br *Bridge) start() {
 
 func (br *Bridge) ResendBridgeInfo() {
 	if !br.SaveConfig {
-		br.Log.Warnln("Not setting resend_bridge_info to false in config due to --no-update flag")
+		br.ZLog.Warn().Msg("Not setting resend_bridge_info to false in config due to --no-update flag")
 	} else {
 		_, _, err := configupgrade.Do(br.ConfigPath, true, br.ConfigUpgrader, configupgrade.SimpleUpgrader(func(helper *configupgrade.Helper) {
 			helper.Set(configupgrade.Bool, "false", "bridge", "resend_bridge_info")
 		}))
 		if err != nil {
-			br.Log.Errorln("Failed to save config after setting resend_bridge_info to false:", err)
+			br.ZLog.Err(err).Msg("Failed to save config after setting resend_bridge_info to false")
 		}
 	}
-	br.Log.Infoln("Re-sending bridge info state event to all portals")
+	br.ZLog.Info().Msg("Re-sending bridge info state event to all portals")
 	for _, portal := range br.Child.GetAllIPortals() {
 		portal.UpdateBridgeInfo()
 	}
-	br.Log.Infoln("Finished re-sending bridge info state events")
+	br.ZLog.Info().Msg("Finished re-sending bridge info state events")
 }
 
 func (br *Bridge) stop() {
@@ -547,7 +565,7 @@ func (br *Bridge) stop() {
 	br.Child.Stop()
 	err := br.DB.RawDB.Close()
 	if err != nil {
-		br.Log.Warnfln("Error closing database: %v", err)
+		br.ZLog.Warn().Err(err).Msg("Error closing database")
 	}
 }
 
@@ -590,21 +608,21 @@ func (br *Bridge) Main() {
 
 	br.manualStop = make(chan int, 1)
 	br.init()
-	br.Log.Infoln("Bridge initialization complete, starting...")
+	br.ZLog.Info().Msg("Bridge initialization complete, starting...")
 	br.start()
-	br.Log.Infoln("Bridge started!")
+	br.ZLog.Info().Msg("Bridge started!")
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	var exitCode int
 	select {
 	case <-c:
-		br.Log.Infoln("Interrupt received, stopping...")
+		br.ZLog.Info().Msg("Interrupt received, stopping...")
 	case exitCode = <-br.manualStop:
-		br.Log.Infofln("Manual stop with code %d requested", exitCode)
+		br.ZLog.Info().Int("exit_code", exitCode).Msg("Manual stop requested")
 	}
 
 	br.stop()
-	br.Log.Infoln("Bridge stopped.")
+	br.ZLog.Info().Msg("Bridge stopped.")
 	os.Exit(exitCode)
 }

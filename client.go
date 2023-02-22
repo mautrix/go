@@ -355,7 +355,7 @@ func (params *FullRequest) compileRequest() (*http.Request, error) {
 	reqID := atomic.AddInt32(&requestID, 1)
 	ctx := params.Context
 	logger := zerolog.Ctx(ctx)
-	if logger.GetLevel() == zerolog.Disabled {
+	if logger.GetLevel() == zerolog.Disabled || logger == zerolog.DefaultContextLogger {
 		logger = params.Logger
 	}
 	ctx = logger.With().
@@ -411,7 +411,7 @@ func (cli *Client) MakeFullRequest(params FullRequest) ([]byte, error) {
 
 func (cli *Client) cliOrContextLog(ctx context.Context) *zerolog.Logger {
 	log := zerolog.Ctx(ctx)
-	if log.GetLevel() == zerolog.Disabled {
+	if log.GetLevel() == zerolog.Disabled || log == zerolog.DefaultContextLogger {
 		return &cli.Log
 	}
 	return log
@@ -1349,7 +1349,8 @@ func (cli *Client) DownloadContext(ctx context.Context, mxcURL id.ContentURI) (i
 }
 
 func (cli *Client) downloadContext(ctx context.Context, mxcURL id.ContentURI) (*http.Request, *http.Response, error) {
-	if zerolog.Ctx(ctx).GetLevel() == zerolog.Disabled {
+	ctxLog := zerolog.Ctx(ctx)
+	if ctxLog.GetLevel() == zerolog.Disabled || ctxLog == zerolog.DefaultContextLogger {
 		ctx = cli.Log.WithContext(ctx)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, cli.GetDownloadURL(mxcURL), nil)

@@ -1,4 +1,5 @@
 // Copyright (c) 2021 Sumner Evans
+// Copyright (c) 2023 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -35,7 +36,7 @@ func (br *Bridge) SendMessageCheckpoint(evt *event.Event, step status.MessageChe
 func (br *Bridge) SendRawMessageCheckpoint(cp *status.MessageCheckpoint) {
 	err := br.SendMessageCheckpoints([]*status.MessageCheckpoint{cp})
 	if err != nil {
-		br.Log.Warnfln("Error sending checkpoint %s/%s for %s: %v", cp.Step, cp.Status, cp.EventID, err)
+		br.ZLog.Warn().Interface("message_checkpoint", cp).Msg("Error sending message checkpoint")
 	}
 }
 
