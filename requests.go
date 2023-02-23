@@ -411,3 +411,23 @@ type ReqBeeperSplitRoom struct {
 	Key   string                `json:"key"`
 	Parts []BeeperSplitRoomPart `json:"parts"`
 }
+
+type ReqRoomKeysVersionCreate struct {
+	Algorithm string                 `json:"algorithm"`
+	AuthData  map[string]interface{} `json:"auth_data"`
+}
+
+type ReqRoomKeysUpdate struct {
+	Rooms map[id.RoomID]ReqRoomKeysRoomUpdate `json:"rooms"`
+}
+
+type ReqRoomKeysRoomUpdate struct {
+	Sessions map[id.SessionID]ReqRoomKeysSessionUpdate `json:"sessions"`
+}
+
+type ReqRoomKeysSessionUpdate struct {
+	FirstMessageIndex int                    `json:"first_message_index"`
+	ForwardedCount    int                    `json:"forwarded_count"`
+	IsVerified        bool                   `json:"is_verified"`
+	SessionData       map[string]interface{} `json:"session_data"`
+}

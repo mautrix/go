@@ -562,3 +562,35 @@ type RespTimestampToEvent struct {
 	EventID   id.EventID         `json:"event_id"`
 	Timestamp jsontime.UnixMilli `json:"origin_server_ts"`
 }
+
+type RespRoomKeysVersionCreate struct {
+	Version string `json:"version"`
+}
+
+type RespRoomKeysVersion struct {
+	Algorithm string                 `json:"algorithm"`
+	AuthData  map[string]interface{} `json:"auth_data"`
+	Count     int                    `json:"count"`
+	Etag      string                 `json:"etag"`
+	Version   string                 `json:"version"`
+}
+
+type RespRoomKeys struct {
+	Rooms map[id.RoomID]RespRoomKeysRoom `json:"rooms"`
+}
+
+type RespRoomKeysRoom struct {
+	Sessions map[id.SessionID]RespRoomKeysSession `json:"sessions"`
+}
+
+type RespRoomKeysSession struct {
+	FirstMessageIndex int                    `json:"first_message_index"`
+	ForwardedCount    int                    `json:"forwarded_count"`
+	IsVerified        bool                   `json:"is_verified"`
+	SessionData       map[string]interface{} `json:"session_data"`
+}
+
+type RespRoomKeysUpdate struct {
+	Count int    `json:"count"`
+	Etag  string `json:"etag"`
+}
