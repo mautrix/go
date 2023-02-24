@@ -202,9 +202,9 @@ func (mach *OlmMachine) tryDecryptOlmCiphertextWithExistingSession(ctx context.C
 			err = mach.CryptoStore.UpdateSession(senderKey, session)
 			endTimeTrace()
 			if err != nil {
-				mach.Log.Warn().Err(err).Msg("Failed to update olm session in crypto store after decrypting")
+				log.Warn().Err(err).Msg("Failed to update olm session in crypto store after decrypting")
 			}
-			mach.Log.Debug().Msg("Decrypted olm message")
+			log.Debug().Msg("Decrypted olm message")
 			return plaintext, nil
 		}
 	}
