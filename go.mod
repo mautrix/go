@@ -13,12 +13,12 @@ require (
 	github.com/tidwall/gjson v1.14.4
 	github.com/tidwall/sjson v1.2.5
 	github.com/yuin/goldmark v1.5.4
-	go.mau.fi/zeroconfig v0.0.0-20230220212126-e089a3ad8557
+	go.mau.fi/zeroconfig v0.1.0
 	golang.org/x/crypto v0.6.0
 	golang.org/x/net v0.6.0
 	gopkg.in/yaml.v3 v3.0.1
 	maunium.net/go/mauflag v1.0.0
-	maunium.net/go/maulogger/v2 v2.4.0
+	maunium.net/go/maulogger/v2 v2.4.1
 )
 
 require (
