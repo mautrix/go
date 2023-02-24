@@ -6,7 +6,7 @@ require (
 	github.com/chzyer/readline v1.5.1
 	github.com/mattn/go-sqlite3 v1.14.16
 	github.com/rs/zerolog v1.29.0
-	maunium.net/go/mautrix v0.15.0
+	maunium.net/go/mautrix v0.15.0-beta.1
 )
 
 require (
@@ -22,4 +22,4 @@ require (
 	maunium.net/go/maulogger/v2 v2.4.1 // indirect
 )
 
-replace maunium.net/go/mautrix => ../
+//replace maunium.net/go/mautrix => ../
