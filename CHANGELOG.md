@@ -1,4 +1,6 @@
-## unreleased
+## v0.15.0 (unreleased)
+
+### beta.1 (2023-02-24)
 
 * Bumped minimum Go version to 1.19.
 * **Breaking changes**
