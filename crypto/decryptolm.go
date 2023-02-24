@@ -145,7 +145,7 @@ func (mach *OlmMachine) tryDecryptOlmCiphertext(ctx context.Context, sender id.U
 		return nil, fmt.Errorf("failed to create new session from prekey message: %w", err)
 	}
 	log = log.With().Str("new_session_id", session.ID().String()).Logger()
-	log.Trace().
+	log.Debug().
 		Str("session_description", session.Describe()).
 		Msg("Created inbound olm session")
 	ctx = log.WithContext(ctx)
@@ -189,7 +189,7 @@ func (mach *OlmMachine) tryDecryptOlmCiphertextWithExistingSession(ctx context.C
 				continue
 			}
 		}
-		log.Trace().Str("session_description", session.Describe()).Msg("Trying to decrypt olm message")
+		log.Debug().Str("session_description", session.Describe()).Msg("Trying to decrypt olm message")
 		endTimeTrace = mach.timeTrace(ctx, "decrypting olm message", time.Second)
 		plaintext, err := session.Decrypt(ciphertext, olmType)
 		endTimeTrace()
@@ -204,7 +204,7 @@ func (mach *OlmMachine) tryDecryptOlmCiphertextWithExistingSession(ctx context.C
 			if err != nil {
 				mach.Log.Warn().Err(err).Msg("Failed to update olm session in crypto store after decrypting")
 			}
-			mach.Log.Trace().Msg("Decrypted olm message")
+			mach.Log.Debug().Msg("Decrypted olm message")
 			return plaintext, nil
 		}
 	}

@@ -195,25 +195,25 @@ func (mach *OlmMachine) AddAppserviceListener(ep *appservice.EventProcessor) {
 	ep.On(event.ToDeviceVerificationCancel, mach.HandleToDeviceEvent)
 	ep.OnOTK(mach.HandleOTKCounts)
 	ep.OnDeviceList(mach.HandleDeviceLists)
-	mach.Log.Trace().Msg("Added listeners for encryption data coming from appservice transactions")
+	mach.Log.Debug().Msg("Added listeners for encryption data coming from appservice transactions")
 }
 
 func (mach *OlmMachine) HandleDeviceLists(dl *mautrix.DeviceLists, since string) {
 	if len(dl.Changed) > 0 {
 		traceID := time.Now().Format("15:04:05.000000")
-		mach.Log.Trace().
+		mach.Log.Debug().
 			Str("trace_id", traceID).
 			Interface("changes", dl.Changed).
 			Msg("Device list changes in /sync")
 		mach.fetchKeys(context.TODO(), dl.Changed, since, false)
-		mach.Log.Trace().Str("trace_id", traceID).Msg("Finished handling device list changes")
+		mach.Log.Debug().Str("trace_id", traceID).Msg("Finished handling device list changes")
 	}
 }
 
 func (mach *OlmMachine) HandleOTKCounts(otkCount *mautrix.OTKCount) {
 	if (len(otkCount.UserID) > 0 && otkCount.UserID != mach.Client.UserID) || (len(otkCount.DeviceID) > 0 && otkCount.DeviceID != mach.Client.DeviceID) {
 		// TODO This log probably needs to be silence-able if someone wants to use encrypted appservices with multiple e2ee sessions
-		mach.Log.Debug().
+		mach.Log.Warn().
 			Str("target_user_id", otkCount.UserID.String()).
 			Str("target_device_id", otkCount.DeviceID.String()).
 			Msg("Dropping OTK counts targeted to someone else")
@@ -317,14 +317,14 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 		Logger()
 	ctx := log.WithContext(context.Background())
 	if evt.Type != event.ToDeviceEncrypted {
-		log.Trace().Msg("Starting handling to-device event")
+		log.Debug().Msg("Starting handling to-device event")
 	}
 	switch content := evt.Content.Parsed.(type) {
 	case *event.EncryptedEventContent:
 		log = log.With().
 			Str("sender_key", content.SenderKey.String()).
 			Logger()
-		log.Trace().Msg("Handling encrypted to-device event")
+		log.Debug().Msg("Handling encrypted to-device event")
 		ctx = log.WithContext(context.Background())
 		decryptedEvt, err := mach.decryptOlmEvent(ctx, evt)
 		if err != nil {
@@ -375,10 +375,10 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 		mach.handleRoomKeyWithheld(ctx, content)
 	default:
 		deviceID, _ := evt.Content.Raw["device_id"].(string)
-		log.Trace().Str("maybe_device_id", deviceID).Msg("Unhandled to-device event")
+		log.Debug().Str("maybe_device_id", deviceID).Msg("Unhandled to-device event")
 		return
 	}
-	log.Trace().Msg("Finished handling to-device event")
+	log.Debug().Msg("Finished handling to-device event")
 }
 
 // GetOrFetchDevice attempts to retrieve the device identity for the given device from the store
@@ -557,12 +557,12 @@ func (mach *OlmMachine) ShareKeys(ctx context.Context, currentOTKCount int) erro
 	mach.otkUploadLock.Lock()
 	defer mach.otkUploadLock.Unlock()
 	if mach.lastOTKUpload.Add(1 * time.Minute).After(start) {
-		log.Trace().Msg("Checking OTK count from server due to suspiciously close share keys requests")
+		log.Debug().Msg("Checking OTK count from server due to suspiciously close share keys requests")
 		resp, err := mach.Client.UploadKeys(&mautrix.ReqUploadKeys{})
 		if err != nil {
 			return fmt.Errorf("failed to check current OTK counts: %w", err)
 		}
-		log.Trace().
+		log.Debug().
 			Int("input_count", currentOTKCount).
 			Int("server_count", resp.OneTimeKeyCounts.SignedCurve25519).
 			Msg("Fetched current OTK count from server")
@@ -571,18 +571,18 @@ func (mach *OlmMachine) ShareKeys(ctx context.Context, currentOTKCount int) erro
 	var deviceKeys *mautrix.DeviceKeys
 	if !mach.account.Shared {
 		deviceKeys = mach.account.getInitialKeys(mach.Client.UserID, mach.Client.DeviceID)
-		log.Trace().Msg("Going to upload initial account keys")
+		log.Debug().Msg("Going to upload initial account keys")
 	}
 	oneTimeKeys := mach.account.getOneTimeKeys(mach.Client.UserID, mach.Client.DeviceID, currentOTKCount)
 	if len(oneTimeKeys) == 0 && deviceKeys == nil {
-		log.Trace().Msg("No one-time keys nor device keys got when trying to share keys")
+		log.Debug().Msg("No one-time keys nor device keys got when trying to share keys")
 		return nil
 	}
 	req := &mautrix.ReqUploadKeys{
 		DeviceKeys:  deviceKeys,
 		OneTimeKeys: oneTimeKeys,
 	}
-	log.Trace().Int("count", len(oneTimeKeys)).Msg("Uploading %d one-time keys")
+	log.Debug().Int("count", len(oneTimeKeys)).Msg("Uploading %d one-time keys")
 	_, err := mach.Client.UploadKeys(req)
 	if err != nil {
 		return err

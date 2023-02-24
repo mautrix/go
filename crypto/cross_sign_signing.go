@@ -79,7 +79,7 @@ func (mach *OlmMachine) SignUser(userID id.UserID, masterKey id.Ed25519) error {
 		return err
 	}
 
-	mach.Log.Trace().
+	mach.Log.Debug().
 		Str("user_id", userID.String()).
 		Str("signature", signature).
 		Msg("Signed master key of user with our user-signing key")
@@ -119,7 +119,7 @@ func (mach *OlmMachine) SignOwnMasterKey() error {
 			id.NewKeyID(id.KeyAlgorithmEd25519, deviceID.String()): signature,
 		},
 	}
-	mach.Log.Trace().
+	mach.Log.Debug().
 		Str("device_id", deviceID.String()).
 		Str("signature", signature).
 		Msg("Signed own master key with own device key")
@@ -171,7 +171,7 @@ func (mach *OlmMachine) SignOwnDevice(device *id.Device) error {
 		return err
 	}
 
-	mach.Log.Trace().
+	mach.Log.Debug().
 		Str("user_id", device.UserID.String()).
 		Str("device_id", device.DeviceID.String()).
 		Str("signature", signature).

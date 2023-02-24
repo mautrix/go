@@ -56,7 +56,7 @@ func (mach *OlmMachine) ImportCrossSigningKeys(keys CrossSigningSeeds) (err erro
 		return
 	}
 
-	mach.Log.Trace().
+	mach.Log.Debug().
 		Str("master", keysCache.MasterKey.PublicKey.String()).
 		Str("self_signing", keysCache.SelfSigningKey.PublicKey.String()).
 		Str("user_signing", keysCache.UserSigningKey.PublicKey.String()).

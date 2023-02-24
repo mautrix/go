@@ -32,7 +32,7 @@ func (mach *OlmMachine) encryptOlmEvent(ctx context.Context, session *OlmSession
 		panic(err)
 	}
 	log := mach.machOrContextLog(ctx)
-	log.Trace().
+	log.Debug().
 		Str("recipient_identity_key", recipient.IdentityKey.String()).
 		Str("session_id", session.ID().String()).
 		Str("session_description", session.Describe()).

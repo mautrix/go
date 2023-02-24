@@ -71,7 +71,7 @@ func (mach *OlmMachine) EncryptMegolmEvent(ctx context.Context, roomID id.RoomID
 		Str("room_id", roomID.String()).
 		Str("session_id", session.ID().String()).
 		Logger()
-	log.Trace().Msg("Preparing to encrypt event")
+	log.Debug().Msg("Preparing to encrypt event")
 	ciphertext, err := session.Encrypt(plaintext)
 	if err != nil {
 		return nil, err
@@ -147,7 +147,7 @@ func (mach *OlmMachine) ShareGroupSession(ctx context.Context, roomID id.RoomID,
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to get devices of user")
 		} else if devices == nil {
-			log.Trace().Msg("GetDevices returned nil, will fetch keys and retry")
+			log.Debug().Msg("GetDevices returned nil, will fetch keys and retry")
 			fetchKeys = append(fetchKeys, userID)
 		} else if len(devices) == 0 {
 			log.Trace().Msg("User has no devices, skipping")
@@ -156,7 +156,7 @@ func (mach *OlmMachine) ShareGroupSession(ctx context.Context, roomID id.RoomID,
 			toDeviceWithheld.Messages[userID] = make(map[id.DeviceID]*event.Content)
 			olmSessions[userID] = make(map[id.DeviceID]deviceSessionWrapper)
 			mach.findOlmSessionsForUser(ctx, session, userID, devices, olmSessions[userID], toDeviceWithheld.Messages[userID], missingUserSessions)
-			log.Trace().
+			log.Debug().
 				Int("olm_session_count", len(olmSessions[userID])).
 				Int("withheld_count", len(toDeviceWithheld.Messages[userID])).
 				Int("missing_count", len(missingUserSessions)).
@@ -173,9 +173,9 @@ func (mach *OlmMachine) ShareGroupSession(ctx context.Context, roomID id.RoomID,
 	}
 
 	if len(fetchKeys) > 0 {
-		log.Trace().Strs("users", strishArray(fetchKeys)).Msg("Fetching missing keys")
+		log.Debug().Strs("users", strishArray(fetchKeys)).Msg("Fetching missing keys")
 		for userID, devices := range mach.fetchKeys(ctx, fetchKeys, "", true) {
-			log.Trace().
+			log.Debug().
 				Int("device_count", len(devices)).
 				Str("target_user_id", userID.String()).
 				Msg("Got device keys for user")
@@ -184,7 +184,7 @@ func (mach *OlmMachine) ShareGroupSession(ctx context.Context, roomID id.RoomID,
 	}
 
 	if len(missingSessions) > 0 {
-		log.Trace().Msg("Creating missing olm sessions")
+		log.Debug().Msg("Creating missing olm sessions")
 		err = mach.createOutboundSessions(ctx, missingSessions)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to create missing olm sessions")
@@ -210,7 +210,7 @@ func (mach *OlmMachine) ShareGroupSession(ctx context.Context, roomID id.RoomID,
 		log := log.With().Str("target_user_id", userID.String()).Logger()
 		log.Trace().Msg("Trying to find olm session to encrypt megolm session for user (post-fetch retry)")
 		mach.findOlmSessionsForUser(ctx, session, userID, devices, output, withheld, nil)
-		log.Trace().
+		log.Debug().
 			Int("olm_session_count", len(output)).
 			Int("withheld_count", len(withheld)).
 			Msg("Completed post-fetch retry of finding olm sessions")
@@ -226,7 +226,7 @@ func (mach *OlmMachine) ShareGroupSession(ctx context.Context, roomID id.RoomID,
 	}
 
 	if len(toDeviceWithheld.Messages) > 0 {
-		log.Trace().
+		log.Debug().
 			Int("device_count", withheldCount).
 			Int("user_count", len(toDeviceWithheld.Messages)).
 			Msg("Sending to-device messages to report withheld key")
@@ -267,14 +267,14 @@ func (mach *OlmMachine) encryptAndSendGroupSession(ctx context.Context, session 
 			content := mach.encryptOlmEvent(ctx, device.session, device.identity, event.ToDeviceRoomKey, session.ShareContent())
 			output[deviceID] = &event.Content{Parsed: content}
 			deviceCount++
-			log.Trace().
+			log.Debug().
 				Str("target_user_id", userID.String()).
 				Str("target_device_id", deviceID.String()).
 				Msg("Encrypted group session for device")
 		}
 	}
 
-	log.Trace().
+	log.Debug().
 		Int("device_count", deviceCount).
 		Int("user_count", len(toDevice.Messages)).
 		Msg("Sending to-device messages to share group session")

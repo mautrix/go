@@ -107,7 +107,7 @@ func (mach *OlmMachine) fetchKeys(ctx context.Context, users []id.UserID, sinceT
 	for _, userID := range users {
 		req.DeviceKeys[userID] = mautrix.DeviceIDList{}
 	}
-	log.Trace().Strs("users", strishArray(users)).Msg("Querying keys for users")
+	log.Debug().Strs("users", strishArray(users)).Msg("Querying keys for users")
 	resp, err := mach.Client.QueryKeys(req)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to query keys")
@@ -128,7 +128,7 @@ func (mach *OlmMachine) fetchKeys(ctx context.Context, users []id.UserID, sinceT
 			log.Warn().Err(err).Msg("Failed to get existing devices for user")
 			existingDevices = make(map[id.DeviceID]*id.Device)
 		}
-		log.Trace().
+		log.Debug().
 			Int("new_device_count", len(devices)).
 			Int("old_device_count", len(existingDevices)).
 			Msg("Updating devices in store")

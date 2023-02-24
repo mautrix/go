@@ -75,7 +75,7 @@ func (mach *OlmMachine) storeCrossSigningKeys(ctx context.Context, crossSigningK
 						}
 					}
 					if len(signingKey) != 43 {
-						log.Trace().Msg("Cross-signing key has a signature from an unknown key")
+						log.Debug().Msg("Cross-signing key has a signature from an unknown key")
 						continue
 					}
 
