@@ -13,8 +13,6 @@ import (
 	"regexp"
 	"strings"
 	"time"
-
-	"maunium.net/go/mautrix/bridge/bridgeconfig"
 )
 
 type Dialect int
@@ -176,7 +174,18 @@ func NewWithDialect(uri, rawDialect string) (*Database, error) {
 	return NewWithDB(db, rawDialect)
 }
 
-func (db *Database) Configure(cfg bridgeconfig.DatabaseConfig) error {
+type Config struct {
+	Type string `yaml:"type"`
+	URI  string `yaml:"uri"`
+
+	MaxOpenConns int `yaml:"max_open_conns"`
+	MaxIdleConns int `yaml:"max_idle_conns"`
+
+	ConnMaxIdleTime string `yaml:"conn_max_idle_time"`
+	ConnMaxLifetime string `yaml:"conn_max_lifetime"`
+}
+
+func (db *Database) Configure(cfg Config) error {
 	db.RawDB.SetMaxOpenConns(cfg.MaxOpenConns)
 	db.RawDB.SetMaxIdleConns(cfg.MaxIdleConns)
 	if len(cfg.ConnMaxIdleTime) > 0 {
@@ -196,7 +205,7 @@ func (db *Database) Configure(cfg bridgeconfig.DatabaseConfig) error {
 	return nil
 }
 
-func NewFromConfig(owner string, cfg bridgeconfig.DatabaseConfig, logger DatabaseLogger) (*Database, error) {
+func NewFromConfig(owner string, cfg Config, logger DatabaseLogger) (*Database, error) {
 	dialect, err := ParseDialect(cfg.Type)
 	if err != nil {
 		return nil, err

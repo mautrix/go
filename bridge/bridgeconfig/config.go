@@ -21,6 +21,7 @@ import (
 	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/util"
 	up "maunium.net/go/mautrix/util/configupgrade"
+	"maunium.net/go/mautrix/util/dbutil"
 )
 
 type HomeserverSoftware string
@@ -56,7 +57,7 @@ type AppserviceConfig struct {
 	Hostname string `yaml:"hostname"`
 	Port     uint16 `yaml:"port"`
 
-	Database DatabaseConfig `yaml:"database"`
+	Database dbutil.Config `yaml:"database"`
 
 	ID  string        `yaml:"id"`
 	Bot BotUserConfig `yaml:"bot"`
@@ -151,17 +152,6 @@ func (buc *BotUserConfig) UnmarshalYAML(unmarshal func(interface{}) error) error
 		}
 	}
 	return nil
-}
-
-type DatabaseConfig struct {
-	Type string `yaml:"type"`
-	URI  string `yaml:"uri"`
-
-	MaxOpenConns int `yaml:"max_open_conns"`
-	MaxIdleConns int `yaml:"max_idle_conns"`
-
-	ConnMaxIdleTime string `yaml:"conn_max_idle_time"`
-	ConnMaxLifetime string `yaml:"conn_max_lifetime"`
 }
 
 type BridgeConfig interface {
