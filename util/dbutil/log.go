@@ -35,6 +35,7 @@ type mauLogger struct {
 	l maulogger.Logger
 }
 
+// Deprecated: Use zerolog instead
 func MauLogger(log maulogger.Logger) DatabaseLogger {
 	return &mauLogger{l: log}
 }
