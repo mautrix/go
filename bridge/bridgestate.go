@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
-	log "maunium.net/go/maulogger/v2"
 
 	"maunium.net/go/mautrix/bridge/status"
 )
@@ -29,9 +28,9 @@ func (br *Bridge) SendGlobalBridgeState(state status.BridgeState) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := br.SendBridgeState(ctx, &state); err != nil {
-		br.Log.Warnln("Failed to update global bridge state:", err)
+		br.ZLog.Warn().Err(err).Msg("Failed to update global bridge state")
 	} else {
-		br.Log.Debugfln("Sent new global bridge state %+v", state)
+		br.ZLog.Debug().Interface("bridge_state", state).Msg("Sent new global bridge state")
 	}
 }
 
@@ -42,7 +41,7 @@ type BridgeStateQueue struct {
 	user   status.BridgeStateFiller
 }
 
-func (br *Bridge) NewBridgeStateQueue(user status.BridgeStateFiller, log log.Logger) *BridgeStateQueue {
+func (br *Bridge) NewBridgeStateQueue(user status.BridgeStateFiller) *BridgeStateQueue {
 	if len(br.Config.Homeserver.StatusEndpoint) == 0 {
 		return nil
 	}
