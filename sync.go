@@ -119,6 +119,8 @@ type DefaultSyncer struct {
 	// ParseErrorHandler is called when event.Content.ParseRaw returns an error.
 	// If it returns false, the event will not be forwarded to listeners.
 	ParseErrorHandler func(evt *event.Event, err error) bool
+	// FilterJSON is used when the client starts syncing and doesn't get an existing filter ID from SyncStore's LoadFilterID.
+	FilterJSON *Filter
 }
 
 var _ Syncer = (*DefaultSyncer)(nil)
@@ -244,15 +246,21 @@ func (s *DefaultSyncer) OnFailedSync(res *RespSync, err error) (time.Duration, e
 	return 10 * time.Second, nil
 }
 
+var defaultFilter = Filter{
+	Room: RoomFilter{
+		Timeline: FilterPart{
+			Limit: 50,
+		},
+	},
+}
+
 // GetFilterJSON returns a filter with a timeline limit of 50.
 func (s *DefaultSyncer) GetFilterJSON(userID id.UserID) *Filter {
-	return &Filter{
-		Room: RoomFilter{
-			Timeline: FilterPart{
-				Limit: 50,
-			},
-		},
+	if s.FilterJSON == nil {
+		defaultFilterCopy := defaultFilter
+		s.FilterJSON = &defaultFilterCopy
 	}
+	return s.FilterJSON
 }
 
 // OldEventIgnorer is an utility struct for bots to ignore events from before the bot joined the room.
