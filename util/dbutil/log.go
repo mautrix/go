@@ -104,7 +104,7 @@ var whitespaceRegex = regexp.MustCompile(`\s+`)
 
 func (z zeroLogger) QueryTiming(ctx context.Context, method, query string, args []interface{}, nrows int, duration time.Duration) {
 	log := zerolog.Ctx(ctx)
-	if log.GetLevel() == zerolog.Disabled {
+	if log.GetLevel() == zerolog.Disabled || log == zerolog.DefaultContextLogger {
 		log = z.l
 	}
 	if log.GetLevel() != zerolog.TraceLevel && duration < 1*time.Second {
