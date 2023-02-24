@@ -126,7 +126,7 @@ func (s *AccountDataStore) LoadNextBatch(userID id.UserID) string {
 // for account data changes of this event type, to avoid ending up in a sync
 // loop:
 //
-//	mautrix.Filter{
+//	filter := mautrix.Filter{
 //		AccountData: mautrix.FilterPart{
 //			Limit: 20,
 //			NotTypes: []event.Type{
@@ -134,7 +134,13 @@ func (s *AccountDataStore) LoadNextBatch(userID id.UserID) string {
 //			},
 //		},
 //	}
-//	mautrix.Client.CreateFilter(...)
+//	// If you use a custom Syncer, set the filter there, not like this
+//	client.Syncer.(*mautrix.DefaultSyncer).FilterJSON = &filter
+//	client.Store = mautrix.NewAccountDataStore("com.example.mybot.store", client)
+//	go func() {
+//		err := client.Sync()
+//		// don't forget to check err
+//	}()
 func NewAccountDataStore(eventType string, client *Client) *AccountDataStore {
 	return &AccountDataStore{
 		EventType: eventType,
