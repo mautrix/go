@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Tulir Asokan
+// Copyright (c) 2023 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,10 +8,14 @@ package bridgeconfig
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
+	"github.com/rs/zerolog"
 	"go.mau.fi/zeroconfig"
+	"gopkg.in/yaml.v3"
 
 	"maunium.net/go/mautrix/appservice"
 	"maunium.net/go/mautrix/id"
@@ -241,16 +245,71 @@ func doUpgrade(helper *up.Helper) {
 	helper.Copy(up.Str, "appservice", "as_token")
 	helper.Copy(up.Str, "appservice", "hs_token")
 
-	helper.Copy(up.Map, "logging")
-	// TODO migrate approximate settings from old config
-	//helper.Copy(up.Str, "logging", "directory")
-	//helper.Copy(up.Str|up.Null, "logging", "file_name_format")
-	//helper.Copy(up.Str|up.Timestamp, "logging", "file_date_format")
-	//helper.Copy(up.Int, "logging", "file_mode")
-	//helper.Copy(up.Str|up.Timestamp, "logging", "timestamp_format")
-	//helper.Copy(up.Str, "logging", "print_level")
-	//helper.Copy(up.Bool, "logging", "print_json")
-	//helper.Copy(up.Bool, "logging", "file_json")
+	if helper.GetNode("logging", "writers") == nil && (helper.GetNode("logging", "print_level") != nil || helper.GetNode("logging", "file_name_format") != nil) {
+		_, _ = fmt.Fprintln(os.Stderr, "Migrating legacy log config")
+		migrateLegacyLogConfig(helper)
+	} else {
+		helper.Copy(up.Map, "logging")
+	}
+}
+
+type legacyLogConfig struct {
+	Directory       string `yaml:"directory"`
+	FileNameFormat  string `yaml:"file_name_format"`
+	FileDateFormat  string `yaml:"file_date_format"`
+	FileMode        uint32 `yaml:"file_mode"`
+	TimestampFormat string `yaml:"timestamp_format"`
+	RawPrintLevel   string `yaml:"print_level"`
+	JSONStdout      bool   `yaml:"print_json"`
+	JSONFile        bool   `yaml:"file_json"`
+}
+
+func migrateLegacyLogConfig(helper *up.Helper) {
+	var llc legacyLogConfig
+	var newConfig zeroconfig.Config
+	err := helper.GetBaseNode("logging").Decode(&newConfig)
+	if err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, "Base config is corrupted: failed to decode example log config:", err)
+		return
+	} else if len(newConfig.Writers) != 2 || newConfig.Writers[0].Type != "stdout" || newConfig.Writers[1].Type != "file" {
+		_, _ = fmt.Fprintln(os.Stderr, "Base log config is not in expected format")
+		return
+	}
+	err = helper.GetNode("logging").Decode(&llc)
+	if err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, "Failed to decode legacy log config:", err)
+		return
+	}
+	if llc.RawPrintLevel != "" {
+		level, err := zerolog.ParseLevel(llc.RawPrintLevel)
+		if err != nil {
+			_, _ = fmt.Fprintln(os.Stderr, "Failed to parse minimum stdout log level:", err)
+		} else {
+			newConfig.Writers[0].MinLevel = &level
+		}
+	}
+	if llc.Directory != "" && llc.FileNameFormat != "" {
+		if llc.FileNameFormat == "{{.Date}}-{{.Index}}.log" {
+			llc.FileNameFormat = "bridge.log"
+		} else {
+			llc.FileNameFormat = strings.ReplaceAll(llc.FileNameFormat, "{{.Date}}", "")
+			llc.FileNameFormat = strings.ReplaceAll(llc.FileNameFormat, "{{.Index}}", "")
+		}
+		newConfig.Writers[1].Filename = filepath.Join(llc.Directory, llc.FileNameFormat)
+	}
+	if llc.JSONStdout {
+		newConfig.Writers[0].TimeFormat = ""
+		newConfig.Writers[0].Format = "json"
+	} else if llc.TimestampFormat != "" {
+		newConfig.Writers[0].TimeFormat = llc.TimestampFormat
+	}
+	var updatedConfig yaml.Node
+	err = updatedConfig.Encode(&newConfig)
+	if err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, "Failed to encode migrated log config:", err)
+		return
+	}
+	*helper.GetBaseNode("logging").Node = updatedConfig
 }
 
 // Upgrader is a config upgrader that copies the default fields in the homeserver, appservice and logging blocks.
