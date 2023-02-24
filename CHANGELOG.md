@@ -1,6 +1,27 @@
 ## unreleased
 
 * Bumped minimum Go version to 1.19.
+* **Breaking changes**
+  * *(all)* Switched to zerolog for logging.
+    * The `Client` and `Bridge` structs still include a legacy logger for
+      backwards compatibility.
+  * *(client, appservice)* Moved `SQLStateStore` from appservice module to the
+    top-level (client) module.
+  * *(client, appservice)* Removed unused `Typing` map in `SQLStateStore`.
+  * *(client)* Removed unused `SaveRoom` and `LoadRoom` methods in `Storer`.
+  * *(client, appservice)* Removed deprecated `SendVideo` and `SendImage` methods.
+  * *(client)* Replaced `AppServiceUserID` field with `SetAppServiceUserID` boolean.
+    The `UserID` field is used as the value for the query param.
+  * *(crypto)* Renamed `GobStore` to `MemoryStore` and removed the file saving
+    features. The data can still be persisted, but the persistence part must be
+    implemented separately.
+  * *(crypto)* Removed deprecated `DeviceIdentity` alias
+    (renamed to `id.Device` long ago).
+* *(client)* Renamed `Storer` interface to `SyncStore`. A type alias exists for
+  backwards-compatibility.
+* *(crypto/cryptohelper)* Added package for a simplified crypto interface for clients.
+* *(example)* Added e2ee support to example using crypto helper.
+* *(client)* Changed default syncer to stop syncing on `M_UNKNOWN_TOKEN` errors.
 
 ## v0.14.0 (2023-02-16)
 
