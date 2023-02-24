@@ -15,7 +15,6 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"maunium.net/go/mautrix/appservice"
 	"maunium.net/go/mautrix/crypto/ssss"
 	"maunium.net/go/mautrix/id"
 
@@ -181,7 +180,13 @@ func (mach *OlmMachine) OwnIdentity() *id.Device {
 	}
 }
 
-func (mach *OlmMachine) AddAppserviceListener(ep *appservice.EventProcessor) {
+type asEventProcessor interface {
+	On(evtType event.Type, handler func(evt *event.Event))
+	OnOTK(func(otk *mautrix.OTKCount))
+	OnDeviceList(func(lists *mautrix.DeviceLists, since string))
+}
+
+func (mach *OlmMachine) AddAppserviceListener(ep asEventProcessor) {
 	// ToDeviceForwardedRoomKey and ToDeviceRoomKey should only be present inside encrypted to-device events
 	ep.On(event.ToDeviceEncrypted, mach.HandleToDeviceEvent)
 	ep.On(event.ToDeviceRoomKeyRequest, mach.HandleToDeviceEvent)

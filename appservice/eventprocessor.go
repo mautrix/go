@@ -24,9 +24,9 @@ const (
 	Sync
 )
 
-type EventHandler func(evt *event.Event)
-type OTKHandler func(otk *mautrix.OTKCount)
-type DeviceListHandler func(otk *mautrix.DeviceLists, since string)
+type EventHandler = func(evt *event.Event)
+type OTKHandler = func(otk *mautrix.OTKCount)
+type DeviceListHandler = func(lists *mautrix.DeviceLists, since string)
 
 type EventProcessor struct {
 	ExecMode ExecMode
