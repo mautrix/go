@@ -24,8 +24,11 @@ import (
 	"maunium.net/go/mautrix/crypto"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
+	"maunium.net/go/mautrix/sqlstatestore"
 	"maunium.net/go/mautrix/util/dbutil"
 )
+
+var _ crypto.StateStore = (*sqlstatestore.SQLStateStore)(nil)
 
 var NoSessionFound = crypto.NoSessionFound
 

@@ -26,7 +26,6 @@ import (
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/appservice"
 	"maunium.net/go/mautrix/bridge/bridgeconfig"
-	"maunium.net/go/mautrix/crypto"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/sqlstatestore"
@@ -45,7 +44,6 @@ var ignoreForeignTables = flag.Make().LongKey("ignore-foreign-tables").Usage("Ru
 var wantHelp, _ = flag.MakeHelpFlag()
 
 var _ appservice.StateStore = (*sqlstatestore.SQLStateStore)(nil)
-var _ crypto.StateStore = (*sqlstatestore.SQLStateStore)(nil)
 
 type Portal interface {
 	IsEncrypted() bool
