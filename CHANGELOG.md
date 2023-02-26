@@ -1,5 +1,9 @@
 ## v0.15.0 (unreleased)
 
+* *(bridge)* Fixed building with `nocrypto` tag.
+* *(util/variationselector)* Added `FullyQualify` method to add necessary emoji
+  variation selectors without adding all possible ones.
+
 ### beta.1 (2023-02-24)
 
 * Bumped minimum Go version to 1.19.
@@ -19,6 +23,7 @@
     implemented separately.
   * *(crypto)* Removed deprecated `DeviceIdentity` alias
     (renamed to `id.Device` long ago).
+  * *(client)* Removed `Stringifable` interface as it's the same as `fmt.Stringer`.
 * *(client)* Renamed `Storer` interface to `SyncStore`. A type alias exists for
   backwards-compatibility.
 * *(crypto/cryptohelper)* Added package for a simplified crypto interface for clients.
