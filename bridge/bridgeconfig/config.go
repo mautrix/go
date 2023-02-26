@@ -286,6 +286,8 @@ func migrateLegacyLogConfig(helper *up.Helper) {
 			llc.FileNameFormat = strings.ReplaceAll(llc.FileNameFormat, "{{.Index}}", "")
 		}
 		newConfig.Writers[1].Filename = filepath.Join(llc.Directory, llc.FileNameFormat)
+	} else if llc.FileNameFormat == "" {
+		newConfig.Writers = newConfig.Writers[0:1]
 	}
 	if llc.JSONStdout {
 		newConfig.Writers[0].TimeFormat = ""

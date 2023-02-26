@@ -1,6 +1,8 @@
 ## v0.15.0 (unreleased)
 
 * *(bridge)* Fixed building with `nocrypto` tag.
+* *(bridge)* Fixed legacy logging config migration not disabling file writer
+  when `file_name_format` was empty.
 * *(util/variationselector)* Added `FullyQualify` method to add necessary emoji
   variation selectors without adding all possible ones.
 
