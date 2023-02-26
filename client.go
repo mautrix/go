@@ -1117,6 +1117,13 @@ func (cli *Client) CreateRoom(req *ReqCreateRoom) (resp *RespCreateRoom, err err
 		for _, evt := range req.InitialState {
 			UpdateStateStore(cli.StateStore, evt)
 		}
+		inviteMembership := event.MembershipInvite
+		if req.BeeperAutoJoinInvites {
+			inviteMembership = event.MembershipJoin
+		}
+		for _, invitee := range req.Invite {
+			cli.StateStore.SetMembership(resp.RoomID, invitee, inviteMembership)
+		}
 	}
 	return
 }
