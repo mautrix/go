@@ -123,14 +123,15 @@ func (mach *OlmMachine) ShareGroupSession(ctx context.Context, roomID id.RoomID,
 	} else if session != nil && session.Shared && !session.Expired() {
 		return AlreadyShared
 	}
+	log := mach.machOrContextLog(ctx).With().
+		Str("room_id", roomID.String()).
+		Str("action", "share megolm session").
+		Logger()
+	ctx = log.WithContext(ctx)
 	if session == nil || session.Expired() {
 		session = mach.newOutboundGroupSession(ctx, roomID)
 	}
-	log := mach.machOrContextLog(ctx).With().
-		Str("room_id", roomID.String()).
-		Str("session_id", session.ID().String()).
-		Str("action", "share megolm session").
-		Logger()
+	log = log.With().Str("session_id", session.ID().String()).Logger()
 	ctx = log.WithContext(ctx)
 	log.Debug().Strs("users", strishArray(users)).Msg("Sharing group session for room")
 
