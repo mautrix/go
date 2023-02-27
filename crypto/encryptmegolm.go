@@ -322,7 +322,7 @@ func (mach *OlmMachine) findOlmSessionsForUser(ctx context.Context, session *Out
 		} else if deviceSession, err := mach.CryptoStore.GetLatestSession(device.IdentityKey); err != nil {
 			log.Error().Err(err).Msg("Failed to get olm session to encrypt group session")
 		} else if deviceSession == nil {
-			log.Error().Err(err).Msg("Didn't find olm session to encrypt group session")
+			log.Warn().Err(err).Msg("Didn't find olm session to encrypt group session")
 			if missingOutput != nil {
 				missingOutput[deviceID] = device
 			}
