@@ -9,6 +9,7 @@ package bridge
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"os/signal"
 	"runtime"
@@ -152,6 +153,8 @@ type Bridge struct {
 	VersionDesc      string
 	LinkifiedVersion string
 	BuildTime        string
+
+	PublicHSAddress *url.URL
 
 	AS               *appservice.AppService
 	EventProcessor   *appservice.EventProcessor
@@ -472,6 +475,18 @@ func (br *Bridge) init() {
 	br.MatrixHandler = NewMatrixHandler(br)
 
 	br.Crypto = NewCryptoHelper(br)
+
+	hsURL := br.AS.HomeserverURL
+	if br.Config.Homeserver.PublicAddress != "" {
+		hsURL = br.Config.Homeserver.PublicAddress
+	}
+	br.PublicHSAddress, err = url.Parse(hsURL)
+	if err != nil {
+		br.ZLog.WithLevel(zerolog.FatalLevel).Err(err).
+			Str("input", hsURL).
+			Msg("Failed to parse public homeserver URL")
+		os.Exit(15)
+	}
 
 	br.Child.Init()
 }

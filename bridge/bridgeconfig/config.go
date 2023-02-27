@@ -43,6 +43,8 @@ type HomeserverConfig struct {
 	Domain     string `yaml:"domain"`
 	AsyncMedia bool   `yaml:"async_media"`
 
+	PublicAddress string `yaml:"public_address,omitempty"`
+
 	Software HomeserverSoftware `yaml:"software"`
 
 	StatusEndpoint                string `yaml:"status_endpoint"`
