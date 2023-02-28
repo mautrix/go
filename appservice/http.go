@@ -11,7 +11,10 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"io/fs"
+	"net"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -25,18 +28,22 @@ import (
 
 // Start starts the HTTP server that listens for calls from the Matrix homeserver.
 func (as *AppService) Start() {
-	var err error
+	as.Router.HandleFunc("/transactions/{txnID}", as.PutTransaction).Methods(http.MethodPut)
+	as.Router.HandleFunc("/rooms/{roomAlias}", as.GetRoom).Methods(http.MethodGet)
+	as.Router.HandleFunc("/users/{userID}", as.GetUser).Methods(http.MethodGet)
+	as.Router.HandleFunc("/_matrix/app/v1/transactions/{txnID}", as.PutTransaction).Methods(http.MethodPut)
+	as.Router.HandleFunc("/_matrix/app/v1/rooms/{roomAlias}", as.GetRoom).Methods(http.MethodGet)
+	as.Router.HandleFunc("/_matrix/app/v1/users/{userID}", as.GetUser).Methods(http.MethodGet)
+	as.Router.HandleFunc("/_matrix/app/v1/ping", as.PostPing).Methods(http.MethodPost)
+	as.Router.HandleFunc("/_matrix/app/unstable/fi.mau.msc2659/ping", as.PostPing).Methods(http.MethodPost)
+	as.Router.HandleFunc("/_matrix/mau/live", as.GetLive).Methods(http.MethodGet)
+	as.Router.HandleFunc("/_matrix/mau/ready", as.GetReady).Methods(http.MethodGet)
+
 	as.server = &http.Server{
 		Addr:    as.Host.Address(),
 		Handler: as.Router,
 	}
-	if len(as.Host.TLSCert) == 0 || len(as.Host.TLSKey) == 0 {
-		as.Log.Info().Str("address", as.Host.Address()).Msg("Starting HTTP listener")
-		err = as.server.ListenAndServe()
-	} else {
-		as.Log.Info().Str("address", as.Host.Address()).Msg("Starting HTTP listener with TLS")
-		err = as.server.ListenAndServeTLS(as.Host.TLSCert, as.Host.TLSKey)
-	}
+	err := as.start()
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		as.Log.Error().Err(err).Msg("Error in HTTP listener")
 	} else {
@@ -44,6 +51,38 @@ func (as *AppService) Start() {
 	}
 }
 
+func (as *AppService) start() error {
+	if as.Host.IsUnixSocket() {
+		return as.startUnixSocket()
+	} else {
+		return as.startTcp()
+	}
+}
+func (as *AppService) startUnixSocket() error {
+	err := os.Remove(as.Host.UnixSocket())
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		as.Log.Error().Err(err).Msg("failed to listen unix socket HTTP")
+		return err
+	}
+	listener, err := net.Listen("unix", as.Host.UnixSocket())
+	if err != nil {
+		as.Log.Error().Err(err).Msg("failed to listen unix socket HTTP")
+		return err
+	}
+	as.Log.Info().Str("socket", as.Host.UnixSocket()).Msg("Starting unix socket HTTP listener")
+	return as.server.Serve(listener)
+}
+
+func (as *AppService) startTcp() error {
+	if len(as.Host.TLSCert) == 0 || len(as.Host.TLSKey) == 0 {
+		as.Log.Info().Str("address", as.Host.Address()).Msg("Starting HTTP listener")
+		return as.server.ListenAndServe()
+	} else {
+		as.Log.Info().Str("address", as.Host.Address()).Msg("Starting HTTP listener with TLS")
+		return as.server.ListenAndServeTLS(as.Host.TLSCert, as.Host.TLSKey)
+	}
+
+}
 func (as *AppService) Stop() {
 	if as.server == nil {
 		return

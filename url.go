@@ -18,7 +18,11 @@ func parseAndNormalizeBaseURL(homeserverURL string) (*url.URL, error) {
 	if err != nil {
 		return nil, err
 	}
-	if hsURL.Scheme == "" {
+	if strings.HasPrefix(homeserverURL, "/") {
+		hsURL.Scheme = "http"
+		hsURL.Host = "unix"
+		hsURL.Path = ""
+	} else if hsURL.Scheme == "" {
 		hsURL.Scheme = "https"
 		fixedURL := hsURL.String()
 		hsURL, err = url.Parse(fixedURL)

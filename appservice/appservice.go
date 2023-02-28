@@ -7,10 +7,13 @@
 package appservice
 
 import (
+	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/cookiejar"
 	"os"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -34,7 +37,6 @@ var OTKChannelSize = 4
 
 // Create a blank appservice instance.
 func Create() *AppService {
-	jar, _ := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
 	defaultLogLevel := zerolog.TraceLevel
 	return &AppService{
 		LogConfig: &zeroconfig.Config{
@@ -46,7 +48,6 @@ func Create() *AppService {
 		},
 		clients:    make(map[id.UserID]*mautrix.Client),
 		intents:    make(map[id.UserID]*IntentAPI),
-		HTTPClient: &http.Client{Timeout: 180 * time.Second, Jar: jar},
 		StateStore: mautrix.NewMemoryStateStore().(StateStore),
 		Router:     mux.NewRouter(),
 		UserAgent:  mautrix.DefaultUserAgent,
@@ -64,7 +65,9 @@ func Load(path string) (*AppService, error) {
 	}
 
 	config := Create()
-	return config, yaml.Unmarshal(data, config)
+	err := yaml.Unmarshal(data, config)
+	config.HTTPClient = CreateHTTPClient(config.HomeserverURL)
+	return config, err
 }
 
 // QueryHandler handles room alias and user ID queries from the homeserver.
@@ -180,6 +183,18 @@ func (hc *HostConfig) Address() string {
 	return fmt.Sprintf("%s:%d", hc.Hostname, hc.Port)
 }
 
+func (hc *HostConfig) IsUnixSocket() bool {
+	return strings.HasPrefix(hc.Hostname, "/")
+}
+
+func (hc *HostConfig) IsConfigured() bool {
+	return hc.IsUnixSocket() || hc.Port != 0
+}
+
+func (hc *HostConfig) UnixSocket() string {
+	return hc.Hostname
+}
+
 // Save saves this config into a file at the given path.
 func (as *AppService) Save(path string) error {
 	data, err := yaml.Marshal(as)
@@ -249,6 +264,19 @@ func (as *AppService) BotIntent() *IntentAPI {
 		as.botIntent = as.makeIntent(as.BotMXID())
 	}
 	return as.botIntent
+}
+
+func CreateHTTPClient(url string) *http.Client {
+	jar, _ := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
+	client := &http.Client{Timeout: 180 * time.Second, Jar: jar}
+	if strings.HasPrefix(url, "/") {
+		client.Transport = &http.Transport{
+			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
+				return net.Dial("unix", url)
+			},
+		}
+	}
+	return client
 }
 
 func (as *AppService) makeClient(userID id.UserID) *mautrix.Client {

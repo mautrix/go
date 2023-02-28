@@ -63,3 +63,13 @@ func TestClient_BuildURL_MissingSchemeWithPath(t *testing.T) {
 	built := cli.BuildClientURL("v3", "foo/bar%2F🐈 1", "hello", "world")
 	assert.Equal(t, "https://example.com/base/_matrix/client/v3/foo%2Fbar%252F%F0%9F%90%88%201/hello/world", built)
 }
+
+func TestClient_BuildURL_UnixSocket(t *testing.T) {
+	cli, err := mautrix.NewClient("/path", "", "")
+	assert.NoError(t, err)
+	assert.Equal(t, cli.HomeserverURL.Scheme, "http")
+	assert.Equal(t, cli.HomeserverURL.Host, "unix")
+	assert.Equal(t, cli.HomeserverURL.Path, "")
+	built := cli.BuildClientURL("v3", "foo/bar%2F🐈 1", "hello", "world")
+	assert.Equal(t, "http://unix/_matrix/client/v3/foo%2Fbar%252F%F0%9F%90%88%201/hello/world", built)
+}
