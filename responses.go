@@ -568,11 +568,11 @@ type RespRoomKeysVersionCreate struct {
 }
 
 type RespRoomKeysVersion struct {
-	Algorithm string                 `json:"algorithm"`
-	AuthData  map[string]interface{} `json:"auth_data"`
-	Count     int                    `json:"count"`
-	Etag      string                 `json:"etag"`
-	Version   string                 `json:"version"`
+	Algorithm string          `json:"algorithm"`
+	AuthData  json.RawMessage `json:"auth_data"`
+	Count     int             `json:"count"`
+	ETag      string          `json:"etag"`
+	Version   string          `json:"version"`
 }
 
 type RespRoomKeys struct {
@@ -584,13 +584,13 @@ type RespRoomKeysRoom struct {
 }
 
 type RespRoomKeysSession struct {
-	FirstMessageIndex int                    `json:"first_message_index"`
-	ForwardedCount    int                    `json:"forwarded_count"`
-	IsVerified        bool                   `json:"is_verified"`
-	SessionData       map[string]interface{} `json:"session_data"`
+	FirstMessageIndex int             `json:"first_message_index"`
+	ForwardedCount    int             `json:"forwarded_count"`
+	IsVerified        bool            `json:"is_verified"`
+	SessionData       json.RawMessage `json:"session_data"`
 }
 
 type RespRoomKeysUpdate struct {
 	Count int    `json:"count"`
-	Etag  string `json:"etag"`
+	ETag  string `json:"etag"`
 }

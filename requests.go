@@ -413,8 +413,8 @@ type ReqBeeperSplitRoom struct {
 }
 
 type ReqRoomKeysVersionCreate struct {
-	Algorithm string                 `json:"algorithm"`
-	AuthData  map[string]interface{} `json:"auth_data"`
+	Algorithm string          `json:"algorithm"`
+	AuthData  json.RawMessage `json:"auth_data"`
 }
 
 type ReqRoomKeysUpdate struct {
@@ -426,8 +426,8 @@ type ReqRoomKeysRoomUpdate struct {
 }
 
 type ReqRoomKeysSessionUpdate struct {
-	FirstMessageIndex int                    `json:"first_message_index"`
-	ForwardedCount    int                    `json:"forwarded_count"`
-	IsVerified        bool                   `json:"is_verified"`
-	SessionData       map[string]interface{} `json:"session_data"`
+	FirstMessageIndex int             `json:"first_message_index"`
+	ForwardedCount    int             `json:"forwarded_count"`
+	IsVerified        bool            `json:"is_verified"`
+	SessionData       json.RawMessage `json:"session_data"`
 }
