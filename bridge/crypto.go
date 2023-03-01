@@ -46,7 +46,7 @@ type CryptoHelper struct {
 
 func NewCryptoHelper(bridge *Bridge) Crypto {
 	if !bridge.Config.Bridge.GetEncryptionConfig().Allow {
-		bridge.Log.Debugln("Bridge built with end-to-bridge encryption, but disabled in config")
+		bridge.ZLog.Debug().Msg("Bridge built with end-to-bridge encryption, but disabled in config")
 		return nil
 	}
 	log := bridge.ZLog.With().Str("component", "crypto").Logger()
@@ -264,10 +264,6 @@ func (helper *CryptoHelper) Reset(startAfterReset bool) {
 
 func (helper *CryptoHelper) Client() *mautrix.Client {
 	return helper.client
-}
-
-type syncProxyHelper interface {
-	RequestStartSync()
 }
 
 func (helper *CryptoHelper) Decrypt(evt *event.Event) (*event.Event, error) {
