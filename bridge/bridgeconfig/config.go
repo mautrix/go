@@ -173,6 +173,8 @@ type EncryptionConfig struct {
 	Require    bool `yaml:"require"`
 	Appservice bool `yaml:"appservice"`
 
+	PlaintextMentions bool `yaml:"plaintext_mentions"`
+
 	VerificationLevels struct {
 		Receive id.TrustState `yaml:"receive"`
 		Send    id.TrustState `yaml:"send"`

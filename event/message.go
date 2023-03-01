@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tulir Asokan
+// Copyright (c) 2023 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -97,6 +97,9 @@ type MessageEventContent struct {
 
 	FileName string `json:"filename,omitempty"`
 
+	Mentions         *Mentions `json:"m.mentions,omitempty"`
+	UnstableMentions *Mentions `json:"org.matrix.msc3952.mentions,omitempty"`
+
 	// Edits and relations
 	NewContent *MessageEventContent `json:"m.new_content,omitempty"`
 	RelatesTo  *RelatesTo           `json:"m.relates_to,omitempty"`
@@ -167,6 +170,11 @@ func (content *MessageEventContent) GetInfo() *FileInfo {
 		content.Info = &FileInfo{}
 	}
 	return content.Info
+}
+
+type Mentions struct {
+	UserIDs []id.UserID `json:"user_ids,omitempty"`
+	Room    bool        `json:"room,omitempty"`
 }
 
 type EncryptedFileInfo struct {

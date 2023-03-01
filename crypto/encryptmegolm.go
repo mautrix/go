@@ -36,6 +36,18 @@ func getRelatesTo(content interface{}) *event.RelatesTo {
 	return nil
 }
 
+func getMentions(content interface{}) *event.Mentions {
+	contentStruct, ok := content.(*event.Content)
+	if ok {
+		content = contentStruct.Parsed
+	}
+	message, ok := content.(*event.MessageEventContent)
+	if ok {
+		return message.Mentions
+	}
+	return nil
+}
+
 type rawMegolmEvent struct {
 	RoomID  id.RoomID   `json:"room_id"`
 	Type    event.Type  `json:"type"`
@@ -80,7 +92,7 @@ func (mach *OlmMachine) EncryptMegolmEvent(ctx context.Context, roomID id.RoomID
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to update megolm session in crypto store after encrypting")
 	}
-	return &event.EncryptedEventContent{
+	encrypted := &event.EncryptedEventContent{
 		Algorithm:        id.AlgorithmMegolmV1,
 		SessionID:        session.ID(),
 		MegolmCiphertext: ciphertext,
@@ -89,7 +101,11 @@ func (mach *OlmMachine) EncryptMegolmEvent(ctx context.Context, roomID id.RoomID
 		// These are deprecated
 		SenderKey: mach.account.IdentityKey(),
 		DeviceID:  mach.Client.DeviceID,
-	}, nil
+	}
+	if mach.PlaintextMentions {
+		encrypted.Mentions = getMentions(content)
+	}
+	return encrypted, nil
 }
 
 func (mach *OlmMachine) newOutboundGroupSession(ctx context.Context, roomID id.RoomID) *OutboundGroupSession {

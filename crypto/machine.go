@@ -31,6 +31,8 @@ type OlmMachine struct {
 	CryptoStore Store
 	StateStore  StateStore
 
+	PlaintextMentions bool
+
 	SendKeysMinTrust  id.TrustState
 	ShareKeysMinTrust id.TrustState
 
