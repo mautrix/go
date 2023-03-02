@@ -1,10 +1,16 @@
 ## v0.15.0 (unreleased)
 
+## beta.2 (2023-03-02)
+
 * *(bridge)* Fixed building with `nocrypto` tag.
 * *(bridge)* Fixed legacy logging config migration not disabling file writer
   when `file_name_format` was empty.
+* *(bridge)* Added option to require room power level to run commands.
+* *(event)* Added structs for [MSC3952]: Intentional Mentions.
 * *(util/variationselector)* Added `FullyQualify` method to add necessary emoji
   variation selectors without adding all possible ones.
+
+[MSC3952]: https://github.com/matrix-org/matrix-spec-proposals/pull/3952
 
 ### beta.1 (2023-02-24)
 
