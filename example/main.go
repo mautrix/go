@@ -31,6 +31,7 @@ var homeserver = flag.String("homeserver", "", "Matrix homeserver")
 var username = flag.String("username", "", "Matrix username localpart")
 var password = flag.String("password", "", "Matrix password")
 var database = flag.String("database", "mautrix-example.db", "SQLite database path")
+var debug = flag.Bool("debug", false, "Enable debug logs")
 
 func main() {
 	flag.Parse()
@@ -53,6 +54,9 @@ func main() {
 		w.Out = rl.Stdout()
 		w.TimeFormat = time.Stamp
 	})).With().Timestamp().Logger()
+	if !*debug {
+		log = log.Level(zerolog.InfoLevel)
+	}
 	client.Log = log
 
 	var lastRoomID id.RoomID
