@@ -1,6 +1,6 @@
 ## v0.15.0 (unreleased)
 
-## beta.2 (2023-03-02)
+### beta.2 (2023-03-02)
 
 * *(bridge)* Fixed building with `nocrypto` tag.
 * *(bridge)* Fixed legacy logging config migration not disabling file writer
