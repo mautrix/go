@@ -450,7 +450,6 @@ func (mx *MatrixHandler) postDecrypt(ctx context.Context, original, decrypted *e
 	mx.bridge.SendMessageSuccessCheckpoint(decrypted, status.MsgStepDecrypted, retryCount)
 	decrypted.Mautrix.CheckpointSent = true
 	decrypted.Mautrix.DecryptionDuration = duration
-	log.Debug().Msg("Successfully decrypted event")
 	mx.bridge.EventProcessor.Dispatch(decrypted)
 	if errorEventID != "" {
 		_, _ = mx.bridge.Bot.RedactEvent(decrypted.RoomID, errorEventID)

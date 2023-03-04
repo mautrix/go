@@ -71,6 +71,7 @@ func (mach *OlmMachine) DecryptMegolmEvent(ctx context.Context, evt *event.Event
 	} else if !ok {
 		return nil, DuplicateMessageIndex
 	}
+	log = log.With().Uint("message_index", messageIndex).Logger()
 
 	var trustLevel id.TrustState
 	var forwardedKeys bool
@@ -140,6 +141,7 @@ func (mach *OlmMachine) DecryptMegolmEvent(ctx context.Context, evt *event.Event
 			megolmEvt.Content.Raw["m.relates_to"] = evt.Content.Raw["m.relates_to"]
 		}
 	}
+	log.Debug().Msg("Event decrypted successfully")
 	megolmEvt.Type.Class = evt.Type.Class
 	return &event.Event{
 		Sender:    evt.Sender,

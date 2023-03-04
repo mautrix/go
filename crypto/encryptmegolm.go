@@ -8,6 +8,8 @@ package crypto
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -59,6 +61,22 @@ func IsShareError(err error) bool {
 	return err == SessionExpired || err == SessionNotShared || err == NoGroupSession
 }
 
+func parseMessageIndex(ciphertext []byte) (uint64, error) {
+	decoded := make([]byte, base64.RawStdEncoding.DecodedLen(len(ciphertext)))
+	var err error
+	_, err = base64.RawStdEncoding.Decode(decoded, ciphertext)
+	if err != nil {
+		return 0, err
+	} else if decoded[0] != 3 || decoded[1] != 8 {
+		return 0, fmt.Errorf("unexpected initial bytes %d and %d", decoded[0], decoded[1])
+	}
+	index, read := binary.Uvarint(decoded[2 : 2+binary.MaxVarintLen64])
+	if read <= 0 {
+		return 0, fmt.Errorf("failed to decode varint, read value %d", read)
+	}
+	return index, nil
+}
+
 // EncryptMegolmEvent encrypts data with the m.megolm.v1.aes-sha2 algorithm.
 //
 // If you use the event.Content struct, make sure you pass a pointer to the struct,
@@ -83,11 +101,18 @@ func (mach *OlmMachine) EncryptMegolmEvent(ctx context.Context, roomID id.RoomID
 		Str("room_id", roomID.String()).
 		Str("session_id", session.ID().String()).
 		Logger()
-	log.Debug().Msg("Preparing to encrypt event")
+	log.Trace().Msg("Encrypting event...")
 	ciphertext, err := session.Encrypt(plaintext)
 	if err != nil {
 		return nil, err
 	}
+	idx, err := parseMessageIndex(ciphertext)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to get megolm message index of encrypted event")
+	} else {
+		log = log.With().Uint64("message_index", idx).Logger()
+	}
+	log.Debug().Msg("Encrypted event successfully")
 	err = mach.CryptoStore.UpdateOutboundGroupSession(session)
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to update megolm session in crypto store after encrypting")
