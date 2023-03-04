@@ -412,6 +412,7 @@ func (br *Bridge) init() {
 		os.Exit(12)
 	}
 	defaultCtxLog := br.ZLog.With().Bool("default_context_log", true).Caller().Logger()
+	zerolog.TimeFieldFormat = time.RFC3339Nano
 	zerolog.DefaultContextLogger = &defaultCtxLog
 	br.Log = maulogadapt.ZeroAsMau(br.ZLog)
 
