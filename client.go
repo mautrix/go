@@ -289,7 +289,7 @@ func (cli *Client) LogRequestDone(req *http.Request, resp *http.Response, handle
 		Int("status_code", resp.StatusCode).
 		Int64("response_length", length).
 		Str("response_mime", mime).
-		Str("duration", duration.String())
+		Dur("duration", duration)
 	if handlerErr != nil {
 		evt.AnErr("body_parse_err", handlerErr)
 	}
@@ -667,8 +667,8 @@ func (cli *Client) FullSyncRequest(req ReqSync) (resp *RespSync, err error) {
 	if err == nil && duration > timeout+buffer {
 		cli.cliOrContextLog(fullReq.Context).Warn().
 			Str("since", req.Since).
-			Str("duration", duration.String()).
-			Str("timeout", timeout.String()).
+			Dur("duration", duration).
+			Dur("timeout", timeout).
 			Msg("Sync request took unusually long")
 	}
 	return

@@ -150,7 +150,7 @@ func (mach *OlmMachine) timeTrace(ctx context.Context, thing string, expectedDur
 		if duration > expectedDuration {
 			zerolog.Ctx(ctx).Warn().
 				Str("action", thing).
-				Str("duration", duration.String()).
+				Dur("duration", duration).
 				Msg("Executing encryption function took longer than expected")
 		}
 	}
