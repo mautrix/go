@@ -1,5 +1,10 @@
 ## v0.15.0 (unreleased)
 
+* *(client)* Changed request logging to log durations as floats instead of strings.
+* *(bridge)* Changed zerolog to use nanosecond instead of second precision timestamps.
+* *(crypto)* Added message index to log after encrypting/decrypting megolm events.
+* *(sqlstatestore)* Fixed warning log for rooms that don't have encryption enabled.
+
 ### beta.2 (2023-03-02)
 
 * *(bridge)* Fixed building with `nocrypto` tag.
