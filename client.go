@@ -1286,6 +1286,7 @@ func parseRoomStateArray(_ *http.Request, res *http.Response, responseJSON inter
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse state array item #%d: %v", i, err)
 		}
+		evt.Type.Class = event.StateEventType
 		_ = evt.Content.ParseRaw(evt.Type)
 		subMap, ok := response[evt.Type]
 		if !ok {
