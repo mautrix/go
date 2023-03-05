@@ -39,11 +39,6 @@ type Handler interface {
 	GetName() string
 }
 
-type PermissionedHandler interface {
-	Handler
-	HasPermission(*Event) bool
-}
-
 type AliasedHandler interface {
 	Handler
 	GetAliases() []string
@@ -76,10 +71,8 @@ func (fh *FullHandler) GetAliases() []string {
 	return fh.Aliases
 }
 
-func (fh *FullHandler) HasPermission(ce *Event) bool {
-	return (!fh.RequiresAdmin || ce.User.GetPermissionLevel() >= bridgeconfig.PermissionLevelAdmin) &&
-		(!fh.RequiresPortal || ce.Portal != nil) &&
-		(!fh.RequiresLogin || ce.User.IsLoggedIn())
+func (fh *FullHandler) ShowInHelp(ce *Event) bool {
+	return !fh.RequiresAdmin || ce.User.GetPermissionLevel() >= bridgeconfig.PermissionLevelAdmin
 }
 
 func (fh *FullHandler) userHasRoomPermission(ce *Event) bool {
