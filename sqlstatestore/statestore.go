@@ -214,6 +214,8 @@ func (store *SQLStateStore) GetEncryptionEvent(roomID id.RoomID) *event.Encrypti
 			store.Log.Warn("Failed to scan encryption config of %s: %v", roomID, err)
 		}
 		return nil
+	} else if data == nil {
+		return nil
 	}
 	content := &event.EncryptionEventContent{}
 	err = json.Unmarshal(data, content)
@@ -253,6 +255,8 @@ func (store *SQLStateStore) GetPowerLevels(roomID id.RoomID) (levels *event.Powe
 		if !errors.Is(err, sql.ErrNoRows) {
 			store.Log.Warn("Failed to scan power levels of %s: %v", roomID, err)
 		}
+		return
+	} else if data == nil {
 		return
 	}
 	levels = &event.PowerLevelsEventContent{}
