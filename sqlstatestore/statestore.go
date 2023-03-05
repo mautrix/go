@@ -215,6 +215,9 @@ func (store *SQLStateStore) GetEncryptionEvent(roomID id.RoomID) *event.Encrypti
 		}
 		return nil
 	}
+	if !json.Valid(data) {
+		return nil
+	}
 	content := &event.EncryptionEventContent{}
 	err = json.Unmarshal(data, content)
 	if err != nil {
