@@ -276,10 +276,13 @@ func (as *AppService) consumeWebsocket(stopFunc func(error), ws *websocket.Conn)
 			stopFunc(parseCloseError(err))
 			return
 		}
-		log := as.Log.With().
+		with := as.Log.With().
 			Int("req_id", msg.ReqID).
-			Str("command", msg.Command).
-			Logger()
+			Str("command", msg.Command)
+		if msg.TxnID != "" {
+			with = with.Str("transaction_id", msg.TxnID)
+		}
+		log := with.Logger()
 		ctx = log.WithContext(ctx)
 		if msg.Command == "" || msg.Command == "transaction" {
 			if msg.TxnID == "" || !as.txnIDC.IsProcessed(msg.TxnID) {
@@ -293,6 +296,8 @@ func (as *AppService) consumeWebsocket(stopFunc func(error), ws *websocket.Conn)
 				err = as.SendWebsocket(msg.MakeResponse(true, &WebsocketTransactionResponse{TxnID: msg.TxnID}))
 				if err != nil {
 					log.Warn().Err(err).Msg("Failed to send response to websocket transaction")
+				} else {
+					log.Debug().Msg("Sent response to transaction")
 				}
 			}()
 		} else if msg.Command == "connect" {
