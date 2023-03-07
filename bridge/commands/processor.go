@@ -79,7 +79,7 @@ func (proc *Processor) Handle(roomID id.RoomID, eventID id.EventID, user bridge.
 		Str("user_id", user.GetMXID().String()).
 		Str("event_id", eventID.String()).
 		Str("room_id", roomID.String()).
-		Str("command", command).
+		Str("mx_command", command).
 		Logger()
 	ce := &Event{
 		Bot:       proc.bridge.Bot,

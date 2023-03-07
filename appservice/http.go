@@ -118,7 +118,7 @@ func (as *AppService) PutTransaction(w http.ResponseWriter, r *http.Request) {
 		}.Write(w)
 		return
 	}
-	log := as.Log.With().Str("txn_id", txnID).Logger()
+	log := as.Log.With().Str("transaction_id", txnID).Logger()
 	ctx := context.Background()
 	ctx = log.WithContext(ctx)
 	if as.txnIDC.IsProcessed(txnID) {
@@ -170,6 +170,7 @@ func (as *AppService) handleTransaction(ctx context.Context, id string, txn *Tra
 		as.handleOTKCounts(ctx, txn.MSC3202DeviceOTKCount)
 	}
 	as.txnIDC.MarkProcessed(id)
+	log.Debug().Msg("Finished dispatching events from transaction")
 }
 
 func (as *AppService) handleOTKCounts(ctx context.Context, otks OTKCountMap) {
@@ -197,6 +198,7 @@ func (as *AppService) handleDeviceLists(ctx context.Context, dl *mautrix.DeviceL
 }
 
 func (as *AppService) handleEvents(ctx context.Context, evts []*event.Event, defaultTypeClass event.TypeClass) {
+	log := zerolog.Ctx(ctx)
 	for _, evt := range evts {
 		evt.Mautrix.ReceivedAt = time.Now()
 		if defaultTypeClass != event.UnknownEventType {
@@ -208,11 +210,12 @@ func (as *AppService) handleEvents(ctx context.Context, evts []*event.Event, def
 		}
 		err := evt.Content.ParseRaw(evt.Type)
 		if errors.Is(err, event.ErrUnsupportedContentType) {
-			zerolog.Ctx(ctx).Debug().Str("event_id", evt.ID.String()).Msg("Not parsing content of unsupported event")
+			log.Debug().Str("event_id", evt.ID.String()).Msg("Not parsing content of unsupported event")
 		} else if err != nil {
-			zerolog.Ctx(ctx).Warn().Err(err).
+			log.Warn().Err(err).
 				Str("event_id", evt.ID.String()).
 				Str("event_type", evt.Type.Type).
+				Str("event_type_class", evt.Type.Class.Name()).
 				Msg("Failed to parse content of event")
 		}
 
@@ -220,7 +223,7 @@ func (as *AppService) handleEvents(ctx context.Context, evts []*event.Event, def
 			// TODO remove this check after making sure the log doesn't happen
 			historical, ok := evt.Content.Raw["org.matrix.msc2716.historical"].(bool)
 			if ok && historical {
-				zerolog.Ctx(ctx).Warn().
+				log.Warn().
 					Str("event_id", evt.ID.String()).
 					Str("event_type", evt.Type.Type).
 					Str("state_key", evt.GetStateKey()).
@@ -229,10 +232,21 @@ func (as *AppService) handleEvents(ctx context.Context, evts []*event.Event, def
 				mautrix.UpdateStateStore(as.StateStore, evt)
 			}
 		}
+		var ch chan *event.Event
 		if evt.Type.Class == event.ToDeviceEventType {
-			as.ToDeviceEvents <- evt
+			ch = as.ToDeviceEvents
 		} else {
-			as.Events <- evt
+			ch = as.Events
+		}
+		select {
+		case ch <- evt:
+		default:
+			log.Warn().
+				Str("event_id", evt.ID.String()).
+				Str("event_type", evt.Type.Type).
+				Str("event_type_class", evt.Type.Class.Name()).
+				Msg("Event channel is full")
+			ch <- evt
 		}
 	}
 }

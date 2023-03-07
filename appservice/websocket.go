@@ -278,7 +278,7 @@ func (as *AppService) consumeWebsocket(stopFunc func(error), ws *websocket.Conn)
 		}
 		with := as.Log.With().
 			Int("req_id", msg.ReqID).
-			Str("command", msg.Command)
+			Str("ws_command", msg.Command)
 		if msg.TxnID != "" {
 			with = with.Str("transaction_id", msg.TxnID)
 		}
