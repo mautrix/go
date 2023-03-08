@@ -23,7 +23,7 @@ func (le *LoggingExecable) ExecContext(ctx context.Context, query string, args .
 	start := time.Now()
 	query = le.db.mutateQuery(query)
 	res, err := le.UnderlyingExecable.ExecContext(ctx, query, args...)
-	le.db.Log.QueryTiming(ctx, "Exec", query, args, -1, time.Since(start))
+	le.db.Log.QueryTiming(ctx, "Exec", query, args, -1, time.Since(start), err)
 	return res, err
 }
 
@@ -31,7 +31,7 @@ func (le *LoggingExecable) QueryContext(ctx context.Context, query string, args 
 	start := time.Now()
 	query = le.db.mutateQuery(query)
 	rows, err := le.UnderlyingExecable.QueryContext(ctx, query, args...)
-	le.db.Log.QueryTiming(ctx, "Query", query, args, -1, time.Since(start))
+	le.db.Log.QueryTiming(ctx, "Query", query, args, -1, time.Since(start), err)
 	return &LoggingRows{
 		ctx:   ctx,
 		db:    le.db,
@@ -46,7 +46,7 @@ func (le *LoggingExecable) QueryRowContext(ctx context.Context, query string, ar
 	start := time.Now()
 	query = le.db.mutateQuery(query)
 	row := le.UnderlyingExecable.QueryRowContext(ctx, query, args...)
-	le.db.Log.QueryTiming(ctx, "QueryRow", query, args, -1, time.Since(start))
+	le.db.Log.QueryTiming(ctx, "QueryRow", query, args, -1, time.Since(start), nil)
 	return row
 }
 
@@ -73,7 +73,7 @@ type loggingDB struct {
 func (ld *loggingDB) BeginTx(ctx context.Context, opts *sql.TxOptions) (*LoggingTxn, error) {
 	start := time.Now()
 	tx, err := ld.db.RawDB.BeginTx(ctx, opts)
-	ld.db.Log.QueryTiming(ctx, "Begin", "", nil, -1, time.Since(start))
+	ld.db.Log.QueryTiming(ctx, "Begin", "", nil, -1, time.Since(start), err)
 	if err != nil {
 		return nil, err
 	}
@@ -97,14 +97,14 @@ type LoggingTxn struct {
 func (lt *LoggingTxn) Commit() error {
 	start := time.Now()
 	err := lt.UnderlyingTx.Commit()
-	lt.db.Log.QueryTiming(lt.ctx, "Commit", "", nil, -1, time.Since(start))
+	lt.db.Log.QueryTiming(lt.ctx, "Commit", "", nil, -1, time.Since(start), err)
 	return err
 }
 
 func (lt *LoggingTxn) Rollback() error {
 	start := time.Now()
 	err := lt.UnderlyingTx.Rollback()
-	lt.db.Log.QueryTiming(lt.ctx, "Rollback", "", nil, -1, time.Since(start))
+	lt.db.Log.QueryTiming(lt.ctx, "Rollback", "", nil, -1, time.Since(start), err)
 	return err
 }
 
@@ -120,7 +120,7 @@ type LoggingRows struct {
 
 func (lrs *LoggingRows) stopTiming() {
 	if !lrs.start.IsZero() {
-		lrs.db.Log.QueryTiming(lrs.ctx, "EndRows", lrs.query, lrs.args, lrs.nrows, time.Since(lrs.start))
+		lrs.db.Log.QueryTiming(lrs.ctx, "EndRows", lrs.query, lrs.args, lrs.nrows, time.Since(lrs.start), lrs.rs.Err())
 		lrs.start = time.Time{}
 	}
 }
