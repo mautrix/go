@@ -7,6 +7,7 @@
 package bridge
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -291,15 +292,40 @@ func (br *Bridge) ensureConnection() {
 			}
 			br.ZLog.Err(err).Msg("Failed to connect to homeserver, retrying in 10 seconds...")
 			time.Sleep(10 * time.Second)
+			continue
 		} else if resp.UserID != br.Bot.UserID {
 			br.ZLog.WithLevel(zerolog.FatalLevel).
 				Stringer("got_user_id", resp.UserID).
 				Stringer("expected_user_id", br.Bot.UserID).
 				Msg("Unexpected user ID in whoami call")
 			os.Exit(17)
-		} else {
-			break
 		}
+
+		if br.SpecVersions.UnstableFeatures["fi.mau.msc2659"] && br.AS.Host.Port != 0 {
+			resp, err := br.Bot.AppservicePing()
+			if err != nil {
+				evt := br.ZLog.WithLevel(zerolog.FatalLevel).Err(err)
+				var httpErr mautrix.HTTPError
+				if errors.As(err, &httpErr) && httpErr.RespError != nil {
+					if val, ok := httpErr.RespError.ExtraData["body"].(string); ok {
+						val = strings.TrimSpace(val)
+						valBytes := []byte(val)
+						if json.Valid(valBytes) {
+							evt.RawJSON("body", valBytes)
+						} else {
+							evt.Str("body", val)
+						}
+					}
+				}
+				evt.Msg("Homeserver -> bridge connection is not working")
+				os.Exit(13)
+			}
+			br.ZLog.Debug().Int64("duration_ms", resp.DurationMS).Msg("Homeserver -> bridge connection works")
+		} else {
+			br.ZLog.Debug().Msg("Homeserver does not support checking status of homeserver -> bridge connection")
+		}
+
+		break
 	}
 }
 
@@ -518,6 +544,13 @@ func (br *Bridge) start() {
 		br.LogDBUpgradeErrorAndExit("matrix_state", err)
 	}
 
+	if br.AS.Host.Port != 0 {
+		br.ZLog.Debug().Msg("Starting application service HTTP server")
+		go br.AS.Start()
+	} else {
+		br.ZLog.Debug().Msg("Appservice port not configured, not starting HTTP server")
+	}
+
 	br.ZLog.Debug().Msg("Checking connection to homeserver")
 	br.ensureConnection()
 	go br.fetchMediaConfig()
@@ -530,12 +563,6 @@ func (br *Bridge) start() {
 		}
 	}
 
-	if br.AS.Host.Port != 0 {
-		br.ZLog.Debug().Msg("Starting application service HTTP server")
-		go br.AS.Start()
-	} else {
-		br.ZLog.Debug().Msg("Appservice port not configured, not starting HTTP server")
-	}
 	br.ZLog.Debug().Msg("Starting event processor")
 	br.EventProcessor.Start()
 

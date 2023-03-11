@@ -552,6 +552,10 @@ type StrippedStateWithTime struct {
 	Timestamp jsontime.UnixMilli `json:"origin_server_ts"`
 }
 
+type RespAppservicePing struct {
+	DurationMS int64 `json:"duration"`
+}
+
 type RespBeeperMergeRoom RespCreateRoom
 
 type RespBeeperSplitRoom struct {

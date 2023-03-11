@@ -1963,6 +1963,17 @@ func (cli *Client) BatchSend(roomID id.RoomID, req *ReqBatchSend) (resp *RespBat
 	return
 }
 
+func (cli *Client) AppservicePing() (resp *RespAppservicePing, err error) {
+	_, err = cli.MakeFullRequest(FullRequest{
+		Method:       http.MethodPost,
+		URL:          cli.BuildClientURL("unstable", "fi.mau.msc2659", "appservice", "ping"),
+		ResponseJSON: &resp,
+		// This endpoint intentionally returns 50x, so don't retry
+		MaxAttempts: 1,
+	})
+	return
+}
+
 func (cli *Client) BeeperMergeRooms(req *ReqBeeperMergeRoom) (resp *RespBeeperMergeRoom, err error) {
 	urlPath := cli.BuildClientURL("unstable", "com.beeper.chatmerging", "merge")
 	_, err = cli.MakeRequest(http.MethodPost, urlPath, req, &resp)

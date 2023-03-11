@@ -31,6 +31,8 @@ func (as *AppService) Start() {
 	as.Router.HandleFunc("/_matrix/app/v1/transactions/{txnID}", as.PutTransaction).Methods(http.MethodPut)
 	as.Router.HandleFunc("/_matrix/app/v1/rooms/{roomAlias}", as.GetRoom).Methods(http.MethodGet)
 	as.Router.HandleFunc("/_matrix/app/v1/users/{userID}", as.GetUser).Methods(http.MethodGet)
+	as.Router.HandleFunc("/_matrix/app/v1/ping", as.PostPing).Methods(http.MethodPost)
+	as.Router.HandleFunc("/_matrix/app/unstable/fi.mau.msc2659/ping", as.PostPing).Methods(http.MethodPost)
 	as.Router.HandleFunc("/_matrix/mau/live", as.GetLive).Methods(http.MethodGet)
 	as.Router.HandleFunc("/_matrix/mau/ready", as.GetReady).Methods(http.MethodGet)
 
@@ -287,6 +289,16 @@ func (as *AppService) GetUser(w http.ResponseWriter, r *http.Request) {
 			HTTPStatus: http.StatusNotFound,
 		}.Write(w)
 	}
+}
+
+func (as *AppService) PostPing(w http.ResponseWriter, r *http.Request) {
+	if !as.CheckServerToken(w, r) {
+		return
+	}
+
+	w.Header().Add("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("{}"))
 }
 
 func (as *AppService) GetLive(w http.ResponseWriter, r *http.Request) {
