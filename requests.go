@@ -392,6 +392,10 @@ func (req *ReqHierarchy) Query() map[string]string {
 	return query
 }
 
+type ReqAppservicePing struct {
+	TxnID string `json:"transaction_id,omitempty"`
+}
+
 type ReqBeeperMergeRoom struct {
 	NewRoom ReqCreateRoom `json:"create"`
 	Key     string        `json:"key"`

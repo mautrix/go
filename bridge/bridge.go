@@ -302,9 +302,10 @@ func (br *Bridge) ensureConnection() {
 		}
 
 		if br.SpecVersions.UnstableFeatures["fi.mau.msc2659"] && br.AS.Host.Port != 0 {
-			resp, err := br.Bot.AppservicePing()
+			txnID := br.Bot.TxnID()
+			resp, err := br.Bot.AppservicePing(br.Config.AppService.ID, txnID)
 			if err != nil {
-				evt := br.ZLog.WithLevel(zerolog.FatalLevel).Err(err)
+				evt := br.ZLog.WithLevel(zerolog.FatalLevel).Err(err).Str("txn_id", txnID)
 				var httpErr mautrix.HTTPError
 				if errors.As(err, &httpErr) && httpErr.RespError != nil {
 					if val, ok := httpErr.RespError.ExtraData["body"].(string); ok {
@@ -320,7 +321,10 @@ func (br *Bridge) ensureConnection() {
 				evt.Msg("Homeserver -> bridge connection is not working")
 				os.Exit(13)
 			}
-			br.ZLog.Debug().Int64("duration_ms", resp.DurationMS).Msg("Homeserver -> bridge connection works")
+			br.ZLog.Debug().
+				Str("txn_id", txnID).
+				Int64("duration_ms", resp.DurationMS).
+				Msg("Homeserver -> bridge connection works")
 		} else {
 			br.ZLog.Debug().Msg("Homeserver does not support checking status of homeserver -> bridge connection")
 		}

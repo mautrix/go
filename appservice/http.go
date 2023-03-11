@@ -295,6 +295,19 @@ func (as *AppService) PostPing(w http.ResponseWriter, r *http.Request) {
 	if !as.CheckServerToken(w, r) {
 		return
 	}
+	body, err := io.ReadAll(r.Body)
+	if err != nil || len(body) == 0 || !json.Valid(body) {
+		Error{
+			ErrorCode:  ErrNotJSON,
+			HTTPStatus: http.StatusBadRequest,
+			Message:    "Missing request body",
+		}.Write(w)
+		return
+	}
+
+	var txn mautrix.ReqAppservicePing
+	_ = json.Unmarshal(body, &txn)
+	as.Log.Debug().Str("txn_id", txn.TxnID).Msg("Received ping from homeserver")
 
 	w.Header().Add("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
