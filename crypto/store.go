@@ -7,6 +7,7 @@
 package crypto
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sort"
@@ -85,7 +86,7 @@ type Store interface {
 	// * If the map key doesn't exist, the given values should be stored and this should return true.
 	// * If the map key exists and the stored values match the given values, this should return true.
 	// * If the map key exists, but the stored values do not match the given values, this should return false.
-	ValidateMessageIndex(senderKey id.SenderKey, sessionID id.SessionID, eventID id.EventID, index uint, timestamp int64) (bool, error)
+	ValidateMessageIndex(ctx context.Context, senderKey id.SenderKey, sessionID id.SessionID, eventID id.EventID, index uint, timestamp int64) (bool, error)
 
 	// GetDevices returns a map from device ID to id.Device struct containing all devices of a given user.
 	GetDevices(id.UserID) (map[id.DeviceID]*id.Device, error)
@@ -358,7 +359,7 @@ func (gs *MemoryStore) RemoveOutboundGroupSession(roomID id.RoomID) error {
 	return nil
 }
 
-func (gs *MemoryStore) ValidateMessageIndex(senderKey id.SenderKey, sessionID id.SessionID, eventID id.EventID, index uint, timestamp int64) (bool, error) {
+func (gs *MemoryStore) ValidateMessageIndex(_ context.Context, senderKey id.SenderKey, sessionID id.SessionID, eventID id.EventID, index uint, timestamp int64) (bool, error) {
 	gs.lock.Lock()
 	defer gs.lock.Unlock()
 	key := messageIndexKey{

@@ -66,7 +66,7 @@ func (mach *OlmMachine) DecryptMegolmEvent(ctx context.Context, evt *event.Event
 	plaintext, messageIndex, err := sess.Internal.Decrypt(content.MegolmCiphertext)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decrypt megolm event: %w", err)
-	} else if ok, err = mach.CryptoStore.ValidateMessageIndex(sess.SenderKey, content.SessionID, evt.ID, messageIndex, evt.Timestamp); err != nil {
+	} else if ok, err = mach.CryptoStore.ValidateMessageIndex(ctx, sess.SenderKey, content.SessionID, evt.ID, messageIndex, evt.Timestamp); err != nil {
 		return nil, fmt.Errorf("failed to check if message index is duplicate: %w", err)
 	} else if !ok {
 		return nil, DuplicateMessageIndex

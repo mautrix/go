@@ -7,6 +7,7 @@
 package crypto
 
 import (
+	"context"
 	"database/sql"
 	"strconv"
 	"testing"
@@ -84,16 +85,16 @@ func TestValidateMessageIndex(t *testing.T) {
 	for storeName, store := range stores {
 		t.Run(storeName, func(t *testing.T) {
 			acc := NewOlmAccount()
-			if ok, _ := store.ValidateMessageIndex(acc.IdentityKey(), "sess1", "event1", 0, 1000); !ok {
+			if ok, _ := store.ValidateMessageIndex(context.TODO(), acc.IdentityKey(), "sess1", "event1", 0, 1000); !ok {
 				t.Error("First message not validated successfully")
 			}
-			if ok, _ := store.ValidateMessageIndex(acc.IdentityKey(), "sess1", "event1", 0, 1001); ok {
+			if ok, _ := store.ValidateMessageIndex(context.TODO(), acc.IdentityKey(), "sess1", "event1", 0, 1001); ok {
 				t.Error("First message validated successfully after changing timestamp")
 			}
-			if ok, _ := store.ValidateMessageIndex(acc.IdentityKey(), "sess1", "event2", 0, 1000); ok {
+			if ok, _ := store.ValidateMessageIndex(context.TODO(), acc.IdentityKey(), "sess1", "event2", 0, 1000); ok {
 				t.Error("First message validated successfully after changing event ID")
 			}
-			if ok, _ := store.ValidateMessageIndex(acc.IdentityKey(), "sess1", "event1", 0, 1000); !ok {
+			if ok, _ := store.ValidateMessageIndex(context.TODO(), acc.IdentityKey(), "sess1", "event1", 0, 1000); !ok {
 				t.Error("First message not validated successfully for a second time")
 			}
 		})

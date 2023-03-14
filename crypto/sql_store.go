@@ -7,12 +7,15 @@
 package crypto
 
 import (
+	"context"
 	"database/sql"
 	"database/sql/driver"
 	"errors"
 	"fmt"
 	"strings"
 	"sync"
+
+	"github.com/rs/zerolog"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto/olm"
@@ -442,7 +445,7 @@ func (store *SQLCryptoStore) RemoveOutboundGroupSession(roomID id.RoomID) error 
 
 // ValidateMessageIndex returns whether the given event information match the ones stored in the database
 // for the given sender key, session ID and index. If the index hasn't been stored, this will store it.
-func (store *SQLCryptoStore) ValidateMessageIndex(senderKey id.SenderKey, sessionID id.SessionID, eventID id.EventID, index uint, timestamp int64) (bool, error) {
+func (store *SQLCryptoStore) ValidateMessageIndex(ctx context.Context, senderKey id.SenderKey, sessionID id.SessionID, eventID id.EventID, index uint, timestamp int64) (bool, error) {
 	const validateQuery = `
 	INSERT INTO crypto_message_index (sender_key, session_id, "index", event_id, timestamp)
 	VALUES ($1, $2, $3, $4, $5)
@@ -452,11 +455,19 @@ func (store *SQLCryptoStore) ValidateMessageIndex(senderKey id.SenderKey, sessio
 	`
 	var expectedEventID id.EventID
 	var expectedTimestamp int64
-	err := store.DB.QueryRow(validateQuery, senderKey, sessionID, index, eventID, timestamp).Scan(&expectedEventID, &expectedTimestamp)
+	err := store.DB.QueryRowContext(ctx, validateQuery, senderKey, sessionID, index, eventID, timestamp).Scan(&expectedEventID, &expectedTimestamp)
 	if err != nil {
 		return false, err
+	} else if expectedEventID != eventID || expectedTimestamp != timestamp {
+		zerolog.Ctx(ctx).Debug().
+			Uint("message_index", index).
+			Str("expected_event_id", expectedEventID.String()).
+			Int64("expected_timestamp", expectedTimestamp).
+			Int64("actual_timestamp", timestamp).
+			Msg("Failed to validate that message index wasn't duplicated")
+		return false, nil
 	}
-	return expectedEventID == eventID && expectedTimestamp == timestamp, nil
+	return true, nil
 }
 
 // GetDevices returns a map of device IDs to device identities, including the identity and signing keys, for a given user ID.
