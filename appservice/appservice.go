@@ -302,6 +302,17 @@ func (as *AppService) Init() (bool, error) {
 	as.DeviceLists = make(chan *mautrix.DeviceLists, EventChannelSize)
 	as.QueryHandler = &QueryHandlerStub{}
 
+	as.Router.HandleFunc("/transactions/{txnID}", as.PutTransaction).Methods(http.MethodPut)
+	as.Router.HandleFunc("/rooms/{roomAlias}", as.GetRoom).Methods(http.MethodGet)
+	as.Router.HandleFunc("/users/{userID}", as.GetUser).Methods(http.MethodGet)
+	as.Router.HandleFunc("/_matrix/app/v1/transactions/{txnID}", as.PutTransaction).Methods(http.MethodPut)
+	as.Router.HandleFunc("/_matrix/app/v1/rooms/{roomAlias}", as.GetRoom).Methods(http.MethodGet)
+	as.Router.HandleFunc("/_matrix/app/v1/users/{userID}", as.GetUser).Methods(http.MethodGet)
+	as.Router.HandleFunc("/_matrix/app/v1/ping", as.PostPing).Methods(http.MethodPost)
+	as.Router.HandleFunc("/_matrix/app/unstable/fi.mau.msc2659/ping", as.PostPing).Methods(http.MethodPost)
+	as.Router.HandleFunc("/_matrix/mau/live", as.GetLive).Methods(http.MethodGet)
+	as.Router.HandleFunc("/_matrix/mau/ready", as.GetReady).Methods(http.MethodGet)
+
 	if len(as.UserAgent) == 0 {
 		as.UserAgent = mautrix.DefaultUserAgent
 	}
