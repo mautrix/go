@@ -22,6 +22,7 @@ import (
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridge/bridgeconfig"
 	"maunium.net/go/mautrix/crypto"
+	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/sqlstatestore"
@@ -31,6 +32,7 @@ import (
 var _ crypto.StateStore = (*sqlstatestore.SQLStateStore)(nil)
 
 var NoSessionFound = crypto.NoSessionFound
+var UnknownMessageIndex = olm.UnknownMessageIndex
 
 type CryptoHelper struct {
 	bridge *Bridge

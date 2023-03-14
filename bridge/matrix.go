@@ -389,6 +389,8 @@ func errorToHumanMessage(err error) string {
 	switch {
 	case errors.Is(err, errDeviceNotTrusted), errors.Is(err, errNoDecryptionKeys):
 		return err.Error()
+	case errors.Is(err, UnknownMessageIndex):
+		return "the keys received by the bridge can't decrypt the message"
 	case errors.Is(err, errMessageNotEncrypted):
 		return "the message is not encrypted"
 	default:
