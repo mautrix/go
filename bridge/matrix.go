@@ -391,6 +391,8 @@ func errorToHumanMessage(err error) string {
 		return err.Error()
 	case errors.Is(err, UnknownMessageIndex):
 		return "the keys received by the bridge can't decrypt the message"
+	case errors.Is(err, ErrGroupSessionWithheld):
+		return "your client refused to share decryption keys with the bridge"
 	case errors.Is(err, errMessageNotEncrypted):
 		return "the message is not encrypted"
 	default:
