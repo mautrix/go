@@ -1,12 +1,21 @@
 ## v0.15.0 (unreleased)
 
-* *(client)* Changed request logging to log durations as floats instead of strings.
-* *(bridge)* Changed zerolog to use nanosecond instead of second precision timestamps.
-* *(crypto)* Added message index to log after encrypting/decrypting megolm events.
-* *(sqlstatestore)* Fixed warning log for rooms that don't have encryption enabled.
-* **Breaking change *(appservice)*** Removed `Load()` and `AppService.Init()` functions.
-  The struct should just be created with `Create()` and the relevant fields should
-  be filled manually.
+### beta.3 (2023-03-15)
+
+* **Breaking change *(appservice)*** Removed `Load()` and `AppService.Init()`
+  functions. The struct should just be created with `Create()` and the relevant
+  fields should be filled manually.
+* **Breaking change *(appservice)*** Removed public `HomeserverURL` field and
+  replaced it with a `SetHomeserverURL` method.
+* *(appservice)* Added support for unix sockets for homeserver URL and
+  appservice HTTP server.
+* *(client)* Changed request logging to log durations as floats instead of
+  strings (using zerolog's `Dur()`, so the exact output can be configured).
+* *(bridge)* Changed zerolog to use nanosecond precision timestamps.
+* *(crypto)* Added message index to log after encrypting/decrypting megolm
+  events, and when failing to decrypt due to duplicate index.
+* *(sqlstatestore)* Fixed warning log for rooms that don't have encryption
+  enabled.
 
 ### beta.2 (2023-03-02)
 
