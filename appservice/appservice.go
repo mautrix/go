@@ -21,8 +21,6 @@ import (
 	"golang.org/x/net/publicsuffix"
 	"gopkg.in/yaml.v3"
 
-	"go.mau.fi/zeroconfig"
-
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -35,15 +33,8 @@ var OTKChannelSize = 4
 // Create a blank appservice instance.
 func Create() *AppService {
 	jar, _ := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
-	defaultLogLevel := zerolog.TraceLevel
-	return &AppService{
-		LogConfig: &zeroconfig.Config{
-			MinLevel: &defaultLogLevel,
-			Writers: []zeroconfig.WriterConfig{{
-				Type:   zeroconfig.WriterTypeStdout,
-				Format: zeroconfig.LogFormatPrettyColored,
-			}},
-		},
+	as := &AppService{
+		Log:        zerolog.Nop(),
 		clients:    make(map[id.UserID]*mautrix.Client),
 		intents:    make(map[id.UserID]*IntentAPI),
 		HTTPClient: &http.Client{Timeout: 180 * time.Second, Jar: jar},
@@ -53,18 +44,27 @@ func Create() *AppService {
 		txnIDC:     NewTransactionIDCache(128),
 		Live:       true,
 		Ready:      false,
-	}
-}
+		ProcessID:  getDefaultProcessID(),
 
-// Load an appservice config from a file.
-func Load(path string) (*AppService, error) {
-	data, readErr := os.ReadFile(path)
-	if readErr != nil {
-		return nil, readErr
+		Events:         make(chan *event.Event, EventChannelSize),
+		ToDeviceEvents: make(chan *event.Event, EventChannelSize),
+		OTKCounts:      make(chan *mautrix.OTKCount, OTKChannelSize),
+		DeviceLists:    make(chan *mautrix.DeviceLists, EventChannelSize),
+		QueryHandler:   &QueryHandlerStub{},
 	}
 
-	config := Create()
-	return config, yaml.Unmarshal(data, config)
+	as.Router.HandleFunc("/transactions/{txnID}", as.PutTransaction).Methods(http.MethodPut)
+	as.Router.HandleFunc("/rooms/{roomAlias}", as.GetRoom).Methods(http.MethodGet)
+	as.Router.HandleFunc("/users/{userID}", as.GetUser).Methods(http.MethodGet)
+	as.Router.HandleFunc("/_matrix/app/v1/transactions/{txnID}", as.PutTransaction).Methods(http.MethodPut)
+	as.Router.HandleFunc("/_matrix/app/v1/rooms/{roomAlias}", as.GetRoom).Methods(http.MethodGet)
+	as.Router.HandleFunc("/_matrix/app/v1/users/{userID}", as.GetUser).Methods(http.MethodGet)
+	as.Router.HandleFunc("/_matrix/app/v1/ping", as.PostPing).Methods(http.MethodPost)
+	as.Router.HandleFunc("/_matrix/app/unstable/fi.mau.msc2659/ping", as.PostPing).Methods(http.MethodPost)
+	as.Router.HandleFunc("/_matrix/mau/live", as.GetLive).Methods(http.MethodGet)
+	as.Router.HandleFunc("/_matrix/mau/ready", as.GetReady).Methods(http.MethodGet)
+
+	return as
 }
 
 // QueryHandler handles room alias and user ID queries from the homeserver.
@@ -99,26 +99,24 @@ type StateStore interface {
 // AppService is the main config for all appservices.
 // It also serves as the appservice instance struct.
 type AppService struct {
-	HomeserverDomain string             `yaml:"homeserver_domain"`
-	HomeserverURL    string             `yaml:"homeserver_url"`
-	RegistrationPath string             `yaml:"registration"`
-	Host             HostConfig         `yaml:"host"`
-	LogConfig        *zeroconfig.Config `yaml:"logging"`
+	HomeserverDomain string
+	HomeserverURL    string
+	Host             HostConfig
 
-	Registration *Registration  `yaml:"-"`
-	Log          zerolog.Logger `yaml:"-"`
+	Registration *Registration
+	Log          zerolog.Logger
 
 	txnIDC *TransactionIDCache
 
-	Events         chan *event.Event         `yaml:"-"`
-	ToDeviceEvents chan *event.Event         `yaml:"-"`
-	DeviceLists    chan *mautrix.DeviceLists `yaml:"-"`
-	OTKCounts      chan *mautrix.OTKCount    `yaml:"-"`
-	QueryHandler   QueryHandler              `yaml:"-"`
-	StateStore     StateStore                `yaml:"-"`
+	Events         chan *event.Event
+	ToDeviceEvents chan *event.Event
+	DeviceLists    chan *mautrix.DeviceLists
+	OTKCounts      chan *mautrix.OTKCount
+	QueryHandler   QueryHandler
+	StateStore     StateStore
 
-	Router     *mux.Router `yaml:"-"`
-	UserAgent  string      `yaml:"-"`
+	Router     *mux.Router
+	UserAgent  string
 	server     *http.Server
 	HTTPClient *http.Client
 	botClient  *mautrix.Client
@@ -292,53 +290,4 @@ func (as *AppService) BotClient() *mautrix.Client {
 		as.botClient = as.makeClient(as.BotMXID())
 	}
 	return as.botClient
-}
-
-// Init initializes the logger and loads the registration of this appservice.
-func (as *AppService) Init() (bool, error) {
-	as.Events = make(chan *event.Event, EventChannelSize)
-	as.ToDeviceEvents = make(chan *event.Event, EventChannelSize)
-	as.OTKCounts = make(chan *mautrix.OTKCount, OTKChannelSize)
-	as.DeviceLists = make(chan *mautrix.DeviceLists, EventChannelSize)
-	as.QueryHandler = &QueryHandlerStub{}
-
-	as.Router.HandleFunc("/transactions/{txnID}", as.PutTransaction).Methods(http.MethodPut)
-	as.Router.HandleFunc("/rooms/{roomAlias}", as.GetRoom).Methods(http.MethodGet)
-	as.Router.HandleFunc("/users/{userID}", as.GetUser).Methods(http.MethodGet)
-	as.Router.HandleFunc("/_matrix/app/v1/transactions/{txnID}", as.PutTransaction).Methods(http.MethodPut)
-	as.Router.HandleFunc("/_matrix/app/v1/rooms/{roomAlias}", as.GetRoom).Methods(http.MethodGet)
-	as.Router.HandleFunc("/_matrix/app/v1/users/{userID}", as.GetUser).Methods(http.MethodGet)
-	as.Router.HandleFunc("/_matrix/app/v1/ping", as.PostPing).Methods(http.MethodPost)
-	as.Router.HandleFunc("/_matrix/app/unstable/fi.mau.msc2659/ping", as.PostPing).Methods(http.MethodPost)
-	as.Router.HandleFunc("/_matrix/mau/live", as.GetLive).Methods(http.MethodGet)
-	as.Router.HandleFunc("/_matrix/mau/ready", as.GetReady).Methods(http.MethodGet)
-
-	if len(as.UserAgent) == 0 {
-		as.UserAgent = mautrix.DefaultUserAgent
-	}
-	if len(as.ProcessID) == 0 {
-		as.ProcessID = getDefaultProcessID()
-	}
-
-	if as.LogConfig != nil {
-		log, err := as.LogConfig.Compile()
-		if err != nil {
-			return false, fmt.Errorf("error initializing logger: %w", err)
-		}
-		as.Log = *log
-		as.Log.Debug().Msg("Logger initialized successfully")
-	}
-
-	if len(as.RegistrationPath) > 0 {
-		var err error
-		as.Registration, err = LoadRegistration(as.RegistrationPath)
-		if err != nil {
-			return false, err
-		}
-	}
-
-	if as.LogConfig != nil {
-		as.Log.Debug().Msg("Appservice initialized successfully")
-	}
-	return true, nil
 }

@@ -450,8 +450,6 @@ func (br *Bridge) init() {
 	br.AS.DoublePuppetValue = br.Name
 	br.AS.GetProfile = br.getProfile
 	br.AS.Log = *br.ZLog
-	br.AS.LogConfig = nil
-	_, _ = br.AS.Init()
 
 	err = br.validateConfig()
 	if err != nil {

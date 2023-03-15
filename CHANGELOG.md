@@ -4,6 +4,9 @@
 * *(bridge)* Changed zerolog to use nanosecond instead of second precision timestamps.
 * *(crypto)* Added message index to log after encrypting/decrypting megolm events.
 * *(sqlstatestore)* Fixed warning log for rooms that don't have encryption enabled.
+* **Breaking change *(appservice)*** Removed `Load()` and `AppService.Init()` functions.
+  The struct should just be created with `Create()` and the relevant fields should
+  be filled manually.
 
 ### beta.2 (2023-03-02)
 
