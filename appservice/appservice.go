@@ -7,10 +7,14 @@
 package appservice
 
 import (
+	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/cookiejar"
+	"net/url"
 	"os"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -20,6 +24,7 @@ import (
 	"github.com/rs/zerolog"
 	"golang.org/x/net/publicsuffix"
 	"gopkg.in/yaml.v3"
+	"maunium.net/go/maulogger/v2/maulogadapt"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
@@ -100,7 +105,7 @@ type StateStore interface {
 // It also serves as the appservice instance struct.
 type AppService struct {
 	HomeserverDomain string
-	HomeserverURL    string
+	hsURLForClient   *url.URL
 	Host             HostConfig
 
 	Registration *Registration
@@ -178,6 +183,14 @@ func (hc *HostConfig) Address() string {
 	return fmt.Sprintf("%s:%d", hc.Hostname, hc.Port)
 }
 
+func (hc *HostConfig) IsUnixSocket() bool {
+	return strings.HasPrefix(hc.Hostname, "/")
+}
+
+func (hc *HostConfig) IsConfigured() bool {
+	return hc.IsUnixSocket() || hc.Port != 0
+}
+
 // Save saves this config into a file at the given path.
 func (as *AppService) Save(path string) error {
 	data, err := yaml.Marshal(as)
@@ -249,29 +262,73 @@ func (as *AppService) BotIntent() *IntentAPI {
 	return as.botIntent
 }
 
+func (as *AppService) SetHomeserverURL(homeserverURL string) error {
+	parsedURL, err := url.Parse(homeserverURL)
+	if err != nil {
+		return err
+	}
+
+	as.hsURLForClient = parsedURL
+	if as.hsURLForClient.Scheme == "unix" {
+		as.hsURLForClient.Scheme = "http"
+		as.hsURLForClient.Host = "unix"
+		as.hsURLForClient.Path = ""
+	} else if as.hsURLForClient.Scheme == "" {
+		as.hsURLForClient.Scheme = "https"
+	}
+	as.hsURLForClient.RawPath = parsedURL.EscapedPath()
+
+	jar, _ := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
+	as.HTTPClient = &http.Client{Timeout: 180 * time.Second, Jar: jar}
+	if parsedURL.Scheme == "unix" {
+		as.HTTPClient.Transport = &http.Transport{
+			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
+				return net.Dial("unix", parsedURL.Path)
+			},
+		}
+	}
+	return nil
+}
+
+func (as *AppService) NewMautrixClient(userID id.UserID) *mautrix.Client {
+	client := &mautrix.Client{
+		HomeserverURL:       as.hsURLForClient,
+		UserID:              userID,
+		SetAppServiceUserID: true,
+		AccessToken:         as.Registration.AppToken,
+		UserAgent:           as.UserAgent,
+		StateStore:          as.StateStore,
+		Log:                 as.Log.With().Str("as_user_id", userID.String()).Logger(),
+		Client:              as.HTTPClient,
+		DefaultHTTPRetries:  as.DefaultHTTPRetries,
+	}
+	client.Logger = maulogadapt.ZeroAsMau(&client.Log)
+	return client
+}
+
+func (as *AppService) NewExternalMautrixClient(userID id.UserID, token string, homeserverURL string) (*mautrix.Client, error) {
+	client := as.NewMautrixClient(userID)
+	client.AccessToken = token
+	if homeserverURL != "" {
+		client.Client = &http.Client{Timeout: 180 * time.Second}
+		var err error
+		client.HomeserverURL, err = mautrix.ParseAndNormalizeBaseURL(homeserverURL)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return client, nil
+}
+
 func (as *AppService) makeClient(userID id.UserID) *mautrix.Client {
 	as.clientsLock.Lock()
 	defer as.clientsLock.Unlock()
 
 	client, ok := as.clients[userID]
-	if ok {
-		return client
+	if !ok {
+		client = as.NewMautrixClient(userID)
+		as.clients[userID] = client
 	}
-
-	client, err := mautrix.NewClient(as.HomeserverURL, userID, as.Registration.AppToken)
-	if err != nil {
-		as.Log.Error().Err(err).Msg("Failed to create mautrix client instance")
-		return nil
-	}
-	client.UserAgent = as.UserAgent
-	client.Syncer = nil
-	client.Store = nil
-	client.StateStore = as.StateStore
-	client.SetAppServiceUserID = true
-	client.Log = as.Log.With().Str("as_user_id", client.UserID.String()).Logger()
-	client.Client = as.HTTPClient
-	client.DefaultHTTPRetries = as.DefaultHTTPRetries
-	as.clients[userID] = client
 	return client
 }
 

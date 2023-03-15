@@ -2001,7 +2001,7 @@ func (cli *Client) TxnID() string {
 
 // NewClient creates a new Matrix Client ready for syncing
 func NewClient(homeserverURL string, userID id.UserID, accessToken string) (*Client, error) {
-	hsURL, err := parseAndNormalizeBaseURL(homeserverURL)
+	hsURL, err := ParseAndNormalizeBaseURL(homeserverURL)
 	if err != nil {
 		return nil, err
 	}

@@ -136,23 +136,15 @@ func (helper *CryptoHelper) loginBot() (*mautrix.Client, bool, error) {
 	if len(deviceID) > 0 {
 		helper.log.Debug().Str("device_id", deviceID.String()).Msg("Found existing device ID for bot in database")
 	}
-	client, err := mautrix.NewClient(helper.bridge.AS.HomeserverURL, "", "")
-	if err != nil {
-		return nil, deviceID != "", fmt.Errorf("failed to initialize client: %w", err)
-	}
-	client.StateStore = helper.bridge.AS.StateStore
-	client.Log = helper.log.With().Str("as_user_id", helper.bridge.AS.BotMXID().String()).Logger()
-	client.Client = helper.bridge.AS.HTTPClient
-	client.DefaultHTTPRetries = helper.bridge.AS.DefaultHTTPRetries
+	// Create a new client instance with the default AS settings (including as_token),
+	// the Login call will then override the access token in the client.
+	client := helper.bridge.AS.NewMautrixClient(helper.bridge.AS.BotMXID())
 	flows, err := client.GetLoginFlows()
 	if err != nil {
 		return nil, deviceID != "", fmt.Errorf("failed to get supported login flows: %w", err)
 	} else if !flows.HasFlow(mautrix.AuthTypeAppservice) {
 		return nil, deviceID != "", fmt.Errorf("homeserver does not support appservice login")
 	}
-	// We set the API token to the AS token here to authenticate the appservice login
-	// It'll get overridden after the login
-	client.AccessToken = helper.bridge.AS.Registration.AppToken
 	resp, err := client.Login(&mautrix.ReqLogin{
 		Type: mautrix.AuthTypeAppservice,
 		Identifier: mautrix.UserIdentifier{

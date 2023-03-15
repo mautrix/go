@@ -11,8 +11,10 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -25,22 +27,44 @@ import (
 
 // Start starts the HTTP server that listens for calls from the Matrix homeserver.
 func (as *AppService) Start() {
-	var err error
 	as.server = &http.Server{
-		Addr:    as.Host.Address(),
 		Handler: as.Router,
 	}
-	if len(as.Host.TLSCert) == 0 || len(as.Host.TLSKey) == 0 {
-		as.Log.Info().Str("address", as.Host.Address()).Msg("Starting HTTP listener")
-		err = as.server.ListenAndServe()
+	var err error
+	if as.Host.IsUnixSocket() {
+		err = as.listenUnix()
 	} else {
-		as.Log.Info().Str("address", as.Host.Address()).Msg("Starting HTTP listener with TLS")
-		err = as.server.ListenAndServeTLS(as.Host.TLSCert, as.Host.TLSKey)
+		as.server.Addr = as.Host.Address()
+		err = as.listenTCP()
 	}
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		as.Log.Error().Err(err).Msg("Error in HTTP listener")
 	} else {
 		as.Log.Debug().Msg("HTTP listener stopped")
+	}
+}
+
+func (as *AppService) listenUnix() error {
+	socket := as.Host.Hostname
+	_ = syscall.Unlink(socket)
+	defer func() {
+		_ = syscall.Unlink(socket)
+	}()
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		return err
+	}
+	as.Log.Info().Str("socket", socket).Msg("Starting unix socket HTTP listener")
+	return as.server.Serve(listener)
+}
+
+func (as *AppService) listenTCP() error {
+	if len(as.Host.TLSCert) == 0 || len(as.Host.TLSKey) == 0 {
+		as.Log.Info().Str("address", as.server.Addr).Msg("Starting HTTP listener")
+		return as.server.ListenAndServe()
+	} else {
+		as.Log.Info().Str("address", as.server.Addr).Msg("Starting HTTP listener with TLS")
+		return as.server.ListenAndServeTLS(as.Host.TLSCert, as.Host.TLSKey)
 	}
 }
 

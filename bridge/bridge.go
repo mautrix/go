@@ -301,7 +301,7 @@ func (br *Bridge) ensureConnection() {
 			os.Exit(17)
 		}
 
-		if br.SpecVersions.UnstableFeatures["fi.mau.msc2659"] && br.AS.Host.Port != 0 {
+		if br.SpecVersions.UnstableFeatures["fi.mau.msc2659"] && br.AS.Host.IsConfigured() {
 			txnID := br.Bot.TxnID()
 			resp, err := br.Bot.AppservicePing(br.Config.AppService.ID, txnID)
 			if err != nil {
@@ -505,7 +505,7 @@ func (br *Bridge) init() {
 
 	br.Crypto = NewCryptoHelper(br)
 
-	hsURL := br.AS.HomeserverURL
+	hsURL := br.Config.Homeserver.Address
 	if br.Config.Homeserver.PublicAddress != "" {
 		hsURL = br.Config.Homeserver.PublicAddress
 	}
@@ -546,13 +546,12 @@ func (br *Bridge) start() {
 		br.LogDBUpgradeErrorAndExit("matrix_state", err)
 	}
 
-	if br.AS.Host.Port != 0 {
+	if br.AS.Host.IsConfigured() {
 		br.ZLog.Debug().Msg("Starting application service HTTP server")
 		go br.AS.Start()
 	} else {
-		br.ZLog.Debug().Msg("Appservice port not configured, not starting HTTP server")
+		br.ZLog.Debug().Msg("Appservice config doesn't have port nor unix socket path, not starting HTTP server")
 	}
-
 	br.ZLog.Debug().Msg("Checking connection to homeserver")
 	br.ensureConnection()
 	go br.fetchMediaConfig()

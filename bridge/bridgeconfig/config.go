@@ -102,7 +102,7 @@ func (config *BaseConfig) GenerateRegistration() *appservice.Registration {
 func (config *BaseConfig) MakeAppService() *appservice.AppService {
 	as := appservice.Create()
 	as.HomeserverDomain = config.Homeserver.Domain
-	as.HomeserverURL = config.Homeserver.Address
+	_ = as.SetHomeserverURL(config.Homeserver.Address)
 	as.Host.Hostname = config.AppService.Hostname
 	as.Host.Port = config.AppService.Port
 	as.DefaultHTTPRetries = 4

@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-func parseAndNormalizeBaseURL(homeserverURL string) (*url.URL, error) {
+func ParseAndNormalizeBaseURL(homeserverURL string) (*url.URL, error) {
 	hsURL, err := url.Parse(homeserverURL)
 	if err != nil {
 		return nil, err
