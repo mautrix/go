@@ -267,8 +267,8 @@ func (as *AppService) SetHomeserverURL(homeserverURL string) error {
 	if err != nil {
 		return err
 	}
-
-	as.hsURLForClient = parsedURL
+	copied := *parsedURL
+	as.hsURLForClient = &copied
 	if as.hsURLForClient.Scheme == "unix" {
 		as.hsURLForClient.Scheme = "http"
 		as.hsURLForClient.Host = "unix"
