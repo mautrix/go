@@ -33,6 +33,8 @@ func (tc TypeClass) Name() string {
 		return "account data"
 	case ToDeviceEventType:
 		return "to-device"
+	case FocusEventType:
+		return "focus"
 	default:
 		return "unknown"
 	}
@@ -51,6 +53,8 @@ const (
 	AccountDataEventType
 	// Device-to-device events
 	ToDeviceEventType
+	// Focus events
+	FocusEventType
 )
 
 type Type struct {
@@ -78,6 +82,10 @@ func (et *Type) IsAccountData() bool {
 
 func (et *Type) IsToDevice() bool {
 	return et.Class == ToDeviceEventType
+}
+
+func (et *Type) IsFocus() bool {
+	return et.Class == FocusEventType
 }
 
 func (et *Type) IsInRoomVerification() bool {
@@ -124,6 +132,9 @@ func (et *Type) GuessClass() TypeClass {
 		CallInvite.Type, CallCandidates.Type, CallAnswer.Type, CallReject.Type, CallSelectAnswer.Type,
 		CallNegotiate.Type, CallHangup.Type, BeeperMessageStatus.Type:
 		return MessageEventType
+	case FocusCallTrackSubscription.Type, FocusCallNegotiate.Type, FocusCallSDPStreamMetadataChanged.Type, FocusCallPing.Type,
+		FocusCallPong.Type:
+		return FocusEventType
 	case ToDeviceRoomKey.Type, ToDeviceRoomKeyRequest.Type, ToDeviceForwardedRoomKey.Type, ToDeviceRoomKeyWithheld.Type:
 		return ToDeviceEventType
 	default:
@@ -253,4 +264,21 @@ var (
 	ToDeviceVerificationCancel  = Type{"m.key.verification.cancel", ToDeviceEventType}
 
 	ToDeviceOrgMatrixRoomKeyWithheld = Type{"org.matrix.room_key.withheld", ToDeviceEventType}
+
+	ToDeviceCallInvite       = Type{"m.call.invite", ToDeviceEventType}
+	ToDeviceCallCandidates   = Type{"m.call.candidates", ToDeviceEventType}
+	ToDeviceCallAnswer       = Type{"m.call.answer", ToDeviceEventType}
+	ToDeviceCallReject       = Type{"m.call.reject", ToDeviceEventType}
+	ToDeviceCallSelectAnswer = Type{"m.call.select_answer", ToDeviceEventType}
+	ToDeviceCallNegotiate    = Type{"m.call.negotiate", ToDeviceEventType}
+	ToDeviceCallHangup       = Type{"m.call.hangup", ToDeviceEventType}
+)
+
+// Focus events
+var (
+	FocusCallTrackSubscription        = Type{"m.call.track_subscription", FocusEventType}
+	FocusCallNegotiate                = Type{"m.call.negotiate", FocusEventType}
+	FocusCallSDPStreamMetadataChanged = Type{"m.call.sdp_stream_metadata_changed", FocusEventType}
+	FocusCallPing                     = Type{"m.call.ping", FocusEventType}
+	FocusCallPong                     = Type{"m.call.pong", FocusEventType}
 )
