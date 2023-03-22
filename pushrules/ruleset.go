@@ -67,10 +67,7 @@ func (rs *PushRuleset) MarshalJSON() ([]byte, error) {
 // collections in a Ruleset match the event given to GetActions()
 var DefaultPushActions = PushActionArray{&PushAction{Action: ActionDontNotify}}
 
-// GetActions matches the given event against all of the push rule
-// collections in this push ruleset in the order of priority as
-// specified in spec section 11.12.1.4.
-func (rs *PushRuleset) GetActions(room Room, evt *event.Event) (match PushActionArray) {
+func (rs *PushRuleset) GetMatchingRule(room Room, evt *event.Event) (rule *PushRule) {
 	// Add push rule collections to array in priority order
 	arrays := []PushRuleCollection{rs.Override, rs.Content, rs.Room, rs.Sender, rs.Underride}
 	// Loop until one of the push rule collections matches the room/event combo.
@@ -78,11 +75,23 @@ func (rs *PushRuleset) GetActions(room Room, evt *event.Event) (match PushAction
 		if pra == nil {
 			continue
 		}
-		if match = pra.GetActions(room, evt); match != nil {
+		if rule = pra.GetMatchingRule(room, evt); rule != nil {
 			// Match found, return it.
 			return
 		}
 	}
-	// No match found, return default actions.
-	return DefaultPushActions
+	// No match found
+	return nil
+}
+
+// GetActions matches the given event against all of the push rule
+// collections in this push ruleset in the order of priority as
+// specified in spec section 11.12.1.4.
+func (rs *PushRuleset) GetActions(room Room, evt *event.Event) (match PushActionArray) {
+	actions := rs.GetMatchingRule(room, evt).GetActions()
+	if actions == nil {
+		// No match found, return default actions.
+		return DefaultPushActions
+	}
+	return actions
 }
