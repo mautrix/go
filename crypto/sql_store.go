@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/rs/zerolog"
 
@@ -400,7 +401,7 @@ func (store *SQLCryptoStore) AddOutboundGroupSession(session *OutboundGroupSessi
 				max_messages=excluded.max_messages, message_count=excluded.message_count, max_age=excluded.max_age,
 				created_at=excluded.created_at, last_used=excluded.last_used, account_id=excluded.account_id
 	`, session.RoomID, session.ID(), sessionBytes, session.Shared, session.MaxMessages, session.MessageCount,
-		session.MaxAge, session.CreationTime, session.LastEncryptedTime, store.AccountID)
+		session.MaxAge.Milliseconds(), session.CreationTime, session.LastEncryptedTime, store.AccountID)
 	return err
 }
 
@@ -416,11 +417,12 @@ func (store *SQLCryptoStore) UpdateOutboundGroupSession(session *OutboundGroupSe
 func (store *SQLCryptoStore) GetOutboundGroupSession(roomID id.RoomID) (*OutboundGroupSession, error) {
 	var ogs OutboundGroupSession
 	var sessionBytes []byte
+	var maxAgeMS int64
 	err := store.DB.QueryRow(`
 		SELECT session, shared, max_messages, message_count, max_age, created_at, last_used
 		FROM crypto_megolm_outbound_session WHERE room_id=$1 AND account_id=$2`,
 		roomID, store.AccountID,
-	).Scan(&sessionBytes, &ogs.Shared, &ogs.MaxMessages, &ogs.MessageCount, &ogs.MaxAge, &ogs.CreationTime, &ogs.LastEncryptedTime)
+	).Scan(&sessionBytes, &ogs.Shared, &ogs.MaxMessages, &ogs.MessageCount, &maxAgeMS, &ogs.CreationTime, &ogs.LastEncryptedTime)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	} else if err != nil {
@@ -433,6 +435,7 @@ func (store *SQLCryptoStore) GetOutboundGroupSession(roomID id.RoomID) (*Outboun
 	}
 	ogs.Internal = *intOGS
 	ogs.RoomID = roomID
+	ogs.MaxAge = time.Duration(maxAgeMS) * time.Millisecond
 	return &ogs, nil
 }
 
