@@ -311,6 +311,7 @@ func (as *AppService) NewExternalMautrixClient(userID id.UserID, token string, h
 	client.AccessToken = token
 	if homeserverURL != "" {
 		client.Client = &http.Client{Timeout: 180 * time.Second}
+		client.SetAppServiceUserID = false
 		var err error
 		client.HomeserverURL, err = mautrix.ParseAndNormalizeBaseURL(homeserverURL)
 		if err != nil {
