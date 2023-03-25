@@ -103,6 +103,40 @@ func (db *Database) setVersion(tx Execable, version int) error {
 	return err
 }
 
+func (db *Database) doUpgrade(upgradeItem upgrade) (err error) {
+	var tx Transaction
+	var upgradeConn Execable
+	if upgradeItem.transaction {
+		tx, err = db.Begin()
+		if err != nil {
+			return
+		}
+		upgradeConn = tx
+		defer func() {
+			if err != nil {
+				rollbackErr := tx.Rollback()
+				if rollbackErr != nil {
+					// TODO log?
+				}
+			}
+		}()
+	} else {
+		upgradeConn = db
+	}
+	err = upgradeItem.fn(upgradeConn, db)
+	if err != nil {
+		return
+	}
+	err = db.setVersion(upgradeConn, upgradeItem.upgradesTo)
+	if err != nil {
+		return
+	}
+	if tx != nil {
+		err = tx.Commit()
+	}
+	return
+}
+
 func (db *Database) Upgrade() error {
 	err := db.checkDatabaseOwner()
 	if err != nil {
@@ -131,33 +165,12 @@ func (db *Database) Upgrade() error {
 			continue
 		}
 		db.Log.DoUpgrade(logVersion, upgradeItem.upgradesTo, upgradeItem.message, upgradeItem.transaction)
-		var tx Transaction
-		var upgradeConn Execable
-		if upgradeItem.transaction {
-			tx, err = db.Begin()
-			if err != nil {
-				return err
-			}
-			upgradeConn = tx
-		} else {
-			upgradeConn = db
-		}
-		err = upgradeItem.fn(upgradeConn, db)
+		err := db.doUpgrade(upgradeItem)
 		if err != nil {
 			return err
 		}
 		version = upgradeItem.upgradesTo
 		logVersion = version
-		err = db.setVersion(upgradeConn, version)
-		if err != nil {
-			return err
-		}
-		if tx != nil {
-			err = tx.Commit()
-			if err != nil {
-				return err
-			}
-		}
 	}
 	return nil
 }
