@@ -34,6 +34,8 @@ type CryptoHelper struct {
 	unmanagedCryptoStore crypto.Store
 	dbForManagedStores   *dbutil.Database
 
+	DecryptErrorCallback func(*event.Event, error)
+
 	LoginAs *mautrix.ReqLogin
 
 	DBAccountID string
@@ -98,6 +100,8 @@ func NewCryptoHelper(cli *mautrix.Client, pickleKey []byte, store any) (*CryptoH
 		unmanagedCryptoStore: unmanagedCryptoStore,
 		managedStateStore:    managedStateStore,
 		dbForManagedStores:   dbForManagedStores,
+
+		DecryptErrorCallback: func(_ *event.Event, _ error) {},
 	}, nil
 }
 
@@ -257,6 +261,7 @@ func (helper *CryptoHelper) HandleEncrypted(src mautrix.EventSource, evt *event.
 	}
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to decrypt event")
+		helper.DecryptErrorCallback(evt, err)
 		return
 	}
 	helper.postDecrypt(src, decrypted)
@@ -298,6 +303,7 @@ func (helper *CryptoHelper) waitLongerForSession(log zerolog.Logger, src mautrix
 
 	if !helper.mach.WaitForSession(evt.RoomID, content.SenderKey, content.SessionID, extendedSessionWaitTimeout) {
 		log.Debug().Msg("Didn't get session, giving up")
+		helper.DecryptErrorCallback(evt, NoSessionFound)
 		return
 	}
 
@@ -305,6 +311,7 @@ func (helper *CryptoHelper) waitLongerForSession(log zerolog.Logger, src mautrix
 	decrypted, err := helper.Decrypt(evt)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to decrypt event")
+		helper.DecryptErrorCallback(evt, err)
 		return
 	}
 
