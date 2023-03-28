@@ -197,6 +197,10 @@ func (helper *CryptoHelper) Close() error {
 	return nil
 }
 
+func (helper *CryptoHelper) Machine() *crypto.OlmMachine {
+	return helper.mach
+}
+
 func (helper *CryptoHelper) verifyDeviceKeysOnServer() error {
 	helper.log.Debug().Msg("Making sure our device has the expected keys on the server")
 	resp, err := helper.client.QueryKeys(&mautrix.ReqQueryKeys{
