@@ -188,7 +188,7 @@ func (helper *CryptoHelper) Init() error {
 }
 
 func (helper *CryptoHelper) Close() error {
-	if helper.dbForManagedStores != nil {
+	if helper != nil && helper.dbForManagedStores != nil {
 		err := helper.dbForManagedStores.RawDB.Close()
 		if err != nil {
 			return err
@@ -198,6 +198,9 @@ func (helper *CryptoHelper) Close() error {
 }
 
 func (helper *CryptoHelper) Machine() *crypto.OlmMachine {
+	if helper == nil || helper.mach == nil {
+		panic("Machine() called before initing CryptoHelper")
+	}
 	return helper.mach
 }
 
