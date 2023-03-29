@@ -1,6 +1,8 @@
 package mautrix
 
 import (
+	"errors"
+
 	"maunium.net/go/mautrix/id"
 )
 
@@ -63,6 +65,7 @@ type AccountDataStore struct {
 	FilterID  string
 	EventType string
 	client    *Client
+	nextBatch string
 }
 
 type accountData struct {
@@ -86,6 +89,8 @@ func (s *AccountDataStore) LoadFilterID(userID id.UserID) string {
 func (s *AccountDataStore) SaveNextBatch(userID id.UserID, nextBatchToken string) {
 	if userID.String() != s.client.UserID.String() {
 		panic("AccountDataStore must only be used with a single account")
+	} else if nextBatchToken == s.nextBatch {
+		return
 	}
 
 	data := accountData{
@@ -95,6 +100,9 @@ func (s *AccountDataStore) SaveNextBatch(userID id.UserID, nextBatchToken string
 	err := s.client.SetAccountData(s.EventType, data)
 	if err != nil {
 		s.client.Log.Warn().Err(err).Msg("Failed to save next batch token to account data")
+	} else {
+		s.client.Log.Debug().Msg("Saved next batch token")
+		s.nextBatch = nextBatchToken
 	}
 }
 
@@ -107,11 +115,17 @@ func (s *AccountDataStore) LoadNextBatch(userID id.UserID) string {
 
 	err := s.client.GetAccountData(s.EventType, data)
 	if err != nil {
-		s.client.Log.Warn().Err(err).Msg("Failed to load next batch token from account data")
+		if errors.Is(err, MNotFound) {
+			s.client.Log.Debug().Msg("No next batch token found in account data")
+		} else {
+			s.client.Log.Warn().Err(err).Msg("Failed to load next batch token from account data")
+		}
 		return ""
 	}
+	s.nextBatch = data.NextBatch
+	s.client.Log.Debug().Str("next_batch", data.NextBatch).Msg("Loaded next batch token from account data")
 
-	return data.NextBatch
+	return s.nextBatch
 }
 
 // NewAccountDataStore returns a new AccountDataStore, which stores
