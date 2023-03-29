@@ -65,7 +65,7 @@ func (rb *RingBuffer[Key, Value]) Iter(callback func(key Key, val Value) error) 
 func MapRingBuffer[Key comparable, Value, Output any](rb *RingBuffer[Key, Value], callback func(key Key, val Value) (Output, error)) ([]Output, error) {
 	rb.lock.RLock()
 	defer rb.lock.RUnlock()
-	output := make([]Output, rb.size)
+	output := make([]Output, 0, rb.size)
 	err := rb.unlockedIter(func(key Key, val Value) error {
 		item, err := callback(key, val)
 		if err != nil {
