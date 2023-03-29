@@ -589,7 +589,7 @@ func (mach *OlmMachine) ShareKeys(ctx context.Context, currentOTKCount int) erro
 		DeviceKeys:  deviceKeys,
 		OneTimeKeys: oneTimeKeys,
 	}
-	log.Debug().Int("count", len(oneTimeKeys)).Msg("Uploading %d one-time keys")
+	log.Debug().Int("count", len(oneTimeKeys)).Msg("Uploading one-time keys")
 	_, err := mach.Client.UploadKeys(req)
 	if err != nil {
 		return err
