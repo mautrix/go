@@ -294,7 +294,10 @@ func (helper *CryptoHelper) RequestSession(roomID id.RoomID, senderKey id.Sender
 		Str("device_id", deviceID.String()).
 		Str("room_id", roomID.String()).
 		Logger()
-	err := helper.mach.SendRoomKeyRequest(roomID, senderKey, sessionID, "", map[id.UserID][]id.DeviceID{userID: {deviceID}})
+	err := helper.mach.SendRoomKeyRequest(roomID, senderKey, sessionID, "", map[id.UserID][]id.DeviceID{
+		userID:               {deviceID},
+		helper.client.UserID: {"*"},
+	})
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to send key request")
 	} else {
