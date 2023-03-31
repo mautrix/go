@@ -492,7 +492,7 @@ func (br *Bridge) init() {
 	br.DB.IgnoreForeignTables = *ignoreForeignTables
 
 	br.ZLog.Debug().Msg("Initializing state store")
-	br.StateStore = sqlstatestore.NewSQLStateStore(br.DB, dbutil.ZeroLogger(br.ZLog.With().Str("db_section", "matrix_state").Logger()))
+	br.StateStore = sqlstatestore.NewSQLStateStore(br.DB, dbutil.ZeroLogger(br.ZLog.With().Str("db_section", "matrix_state").Logger()), true)
 	br.AS.StateStore = br.StateStore
 
 	br.ZLog.Debug().Msg("Initializing Matrix event processor")

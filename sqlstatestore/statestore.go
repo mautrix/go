@@ -32,11 +32,13 @@ const VersionTableName = "mx_version"
 
 type SQLStateStore struct {
 	*dbutil.Database
+	IsBridge bool
 }
 
-func NewSQLStateStore(db *dbutil.Database, log dbutil.DatabaseLogger) *SQLStateStore {
+func NewSQLStateStore(db *dbutil.Database, log dbutil.DatabaseLogger, isBridge bool) *SQLStateStore {
 	return &SQLStateStore{
 		Database: db.Child(VersionTableName, UpgradeTable, log),
+		IsBridge: isBridge,
 	}
 }
 
@@ -130,11 +132,19 @@ func (store *SQLStateStore) TryGetMember(roomID id.RoomID, userID id.UserID) (*e
 }
 
 func (store *SQLStateStore) FindSharedRooms(userID id.UserID) (rooms []id.RoomID) {
-	rows, err := store.Query(`
+	query := `
 		SELECT room_id FROM mx_user_profile
 		LEFT JOIN portal ON portal.mxid=mx_user_profile.room_id
 		WHERE mx_user_profile.user_id=$1 AND portal.encrypted=true
-	`, userID)
+	`
+	if !store.IsBridge {
+		query = `
+		SELECT room_id FROM mx_user_profile
+		LEFT JOIN mx_room_state ON mx_room_state.room_id=mx_user_profile.room_id
+		WHERE mx_user_profile.user_id=$1 AND mx_room_state.encryption IS NOT NULL
+	`
+	}
+	rows, err := store.Query(query, userID)
 	if err != nil {
 		store.Log.Warn("Failed to query shared rooms with %s: %v", userID, err)
 		return

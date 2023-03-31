@@ -86,7 +86,7 @@ func NewCryptoHelper(cli *mautrix.Client, pickleKey []byte, store any) (*CryptoH
 	}
 	log := cli.Log.With().Str("component", "crypto").Logger()
 	if cli.StateStore == nil && dbForManagedStores != nil {
-		managedStateStore = sqlstatestore.NewSQLStateStore(dbForManagedStores, dbutil.ZeroLogger(log.With().Str("db_section", "matrix_state").Logger()))
+		managedStateStore = sqlstatestore.NewSQLStateStore(dbForManagedStores, dbutil.ZeroLogger(log.With().Str("db_section", "matrix_state").Logger()), false)
 		cli.StateStore = managedStateStore
 	} else if _, isCryptoCompatible := cli.StateStore.(crypto.StateStore); !isCryptoCompatible {
 		return nil, fmt.Errorf("the client state store must implement crypto.StateStore")
