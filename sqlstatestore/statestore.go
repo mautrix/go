@@ -139,7 +139,7 @@ func (store *SQLStateStore) FindSharedRooms(userID id.UserID) (rooms []id.RoomID
 	`
 	if !store.IsBridge {
 		query = `
-		SELECT room_id FROM mx_user_profile
+		SELECT mx_user_profile.room_id FROM mx_user_profile
 		LEFT JOIN mx_room_state ON mx_room_state.room_id=mx_user_profile.room_id
 		WHERE mx_user_profile.user_id=$1 AND mx_room_state.encryption IS NOT NULL
 	`
