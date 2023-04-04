@@ -34,8 +34,57 @@ type PowerLevelsEventContent struct {
 	HistoricalPtr *int `json:"historical,omitempty"`
 }
 
+func copyPtr(ptr *int) *int {
+	if ptr == nil {
+		return nil
+	}
+	val := *ptr
+	return &val
+}
+
+func copyMap[Key comparable](m map[Key]int) map[Key]int {
+	if m == nil {
+		return nil
+	}
+	copied := make(map[Key]int, len(m))
+	for k, v := range m {
+		copied[k] = v
+	}
+	return copied
+}
+
+func (pl *PowerLevelsEventContent) Clone() *PowerLevelsEventContent {
+	if pl == nil {
+		return nil
+	}
+	return &PowerLevelsEventContent{
+		Users:           copyMap(pl.Users),
+		UsersDefault:    pl.UsersDefault,
+		Events:          copyMap(pl.Events),
+		EventsDefault:   pl.EventsDefault,
+		StateDefaultPtr: copyPtr(pl.StateDefaultPtr),
+
+		Notifications: pl.Notifications.Clone(),
+
+		InvitePtr:     copyPtr(pl.InvitePtr),
+		KickPtr:       copyPtr(pl.KickPtr),
+		BanPtr:        copyPtr(pl.BanPtr),
+		RedactPtr:     copyPtr(pl.RedactPtr),
+		HistoricalPtr: copyPtr(pl.HistoricalPtr),
+	}
+}
+
 type NotificationPowerLevels struct {
 	RoomPtr *int `json:"room,omitempty"`
+}
+
+func (npl *NotificationPowerLevels) Clone() *NotificationPowerLevels {
+	if npl == nil {
+		return nil
+	}
+	return &NotificationPowerLevels{
+		RoomPtr: copyPtr(npl.RoomPtr),
+	}
 }
 
 func (npl *NotificationPowerLevels) Room() int {
