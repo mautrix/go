@@ -112,6 +112,7 @@ type MautrixInfo struct {
 
 	ReceivedAt         time.Time
 	EditedAt           time.Time
+	LastEditID         id.EventID
 	DecryptionDuration time.Duration
 
 	CheckpointSent bool
