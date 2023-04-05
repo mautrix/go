@@ -1,3 +1,19 @@
+## unreleased
+
+* *(pushrules)* Added method to get entire push rule that matched (instead of
+  only the list of actions).
+* *(pushrules)* Deprecated `NotifySpecified` as there's no reason to read it.
+* *(crypto)* Changed `max_age` column in `crypto_megolm_inbound_session` table
+  to be milliseconds instead of nanoseconds.
+* *(util)* Added method for iterating `RingBuffer`.
+* *(crypto/cryptohelper)* Changed decryption errors to request session from all
+  own devices in addition to the sender, instead of only asking the sender.
+* *(sqlstatestore)* Fixed `FindSharedRooms` throwing an error when using from
+  a non-bridge context.
+* *(client)* Optimized `AccountDataSyncStore` to not resend save requests if
+  the sync token didn't change.
+* *(types)* Added `Clone()` method for `PowerLevelEventContent`.
+
 ## v0.15.0 (2023-03-16)
 
 ### beta.3 (2023-03-15)
