@@ -945,6 +945,13 @@ func (cli *Client) SetAvatarURL(url id.ContentURI) (err error) {
 	return nil
 }
 
+// BeeperUpdateProfile sets custom fields in the user's profile.
+func (cli *Client) BeeperUpdateProfile(data map[string]any) (err error) {
+	urlPath := cli.BuildClientURL("v3", "profile", cli.UserID)
+	_, err = cli.MakeRequest("PATCH", urlPath, &data, nil)
+	return
+}
+
 // GetAccountData gets the user's account data of this type. See https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3useruseridaccount_datatype
 func (cli *Client) GetAccountData(name string, output interface{}) (err error) {
 	urlPath := cli.BuildClientURL("v3", "user", cli.UserID, "account_data", name)
