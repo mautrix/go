@@ -74,6 +74,7 @@ func NewMemoryStateStore() StateStore {
 		Registrations: make(map[id.UserID]bool),
 		Members:       make(map[id.RoomID]map[id.UserID]*event.MemberEventContent),
 		PowerLevels:   make(map[id.RoomID]*event.PowerLevelsEventContent),
+		Encryption:    make(map[id.RoomID]*event.EncryptionEventContent),
 	}
 }
 
