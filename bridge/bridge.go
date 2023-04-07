@@ -142,11 +142,13 @@ type CSFeatureRequirer interface {
 }
 
 type Bridge struct {
-	Name         string
-	URL          string
-	Description  string
-	Version      string
-	ProtocolName string
+	Name              string
+	URL               string
+	Description       string
+	Version           string
+	ProtocolName      string
+	BeeperServiceName string
+	BeeperNetworkName string
 
 	AdditionalShortFlags string
 	AdditionalLongFlags  string
@@ -364,6 +366,16 @@ func (br *Bridge) UpdateBotProfile() {
 	}
 	if err != nil {
 		br.ZLog.Warn().Err(err).Msg("Failed to update bot displayname")
+	}
+
+	if br.Config.Homeserver.Software == bridgeconfig.SoftwareHungry && br.BeeperNetworkName != "" {
+		br.ZLog.Debug().Msg("Setting contact info on the appservice bot")
+		br.Bot.BeeperUpdateProfile(map[string]any{
+			"com.beeper.bridge.service":       br.BeeperServiceName,
+			"com.beeper.bridge.network":       br.BeeperNetworkName,
+			"com.beeper.bridge.is_bridge_bot": true,
+			"com.beeper.bridge.is_bot":        true,
+		})
 	}
 }
 
