@@ -101,7 +101,10 @@ func (s *AccountDataStore) SaveNextBatch(userID id.UserID, nextBatchToken string
 	if err != nil {
 		s.client.Log.Warn().Err(err).Msg("Failed to save next batch token to account data")
 	} else {
-		s.client.Log.Debug().Msg("Saved next batch token")
+		s.client.Log.Debug().
+			Str("old_token", s.nextBatch).
+			Str("new_token", nextBatchToken).
+			Msg("Saved next batch token")
 		s.nextBatch = nextBatchToken
 	}
 }
