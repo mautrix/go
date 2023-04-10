@@ -284,7 +284,7 @@ func (mach *OlmMachine) handleRoomKeyRequest(ctx context.Context, sender id.User
 				Algorithm:  id.AlgorithmMegolmV1,
 				RoomID:     igs.RoomID,
 				SessionID:  igs.ID(),
-				SessionKey: exportedKey,
+				SessionKey: string(exportedKey),
 			},
 			SenderKey:          content.Body.SenderKey,
 			ForwardingKeyChain: igs.ForwardingChains,

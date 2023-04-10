@@ -122,6 +122,19 @@ func (igs *InboundGroupSession) ID() id.SessionID {
 	return igs.id
 }
 
+func (igs *InboundGroupSession) RatchetTo(index uint32) error {
+	exported, err := igs.Internal.Export(index)
+	if err != nil {
+		return err
+	}
+	imported, err := olm.InboundGroupSessionImport(exported)
+	if err != nil {
+		return err
+	}
+	igs.Internal = *imported
+	return nil
+}
+
 type OGSState int
 
 const (
