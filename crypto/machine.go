@@ -347,7 +347,7 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 
 		switch decryptedContent := decryptedEvt.Content.Parsed.(type) {
 		case *event.RoomKeyEventContent:
-			mach.receiveRoomKey(ctx, decryptedEvt, decryptedContent, traceID)
+			mach.receiveRoomKey(ctx, decryptedEvt, decryptedContent)
 			log.Trace().Msg("Handled room key event")
 		case *event.ForwardedRoomKeyEventContent:
 			if mach.importForwardedRoomKey(ctx, decryptedEvt, decryptedContent) {
@@ -472,7 +472,7 @@ func (mach *OlmMachine) SendEncryptedToDevice(ctx context.Context, device *id.De
 	return err
 }
 
-func (mach *OlmMachine) createGroupSession(ctx context.Context, senderKey id.SenderKey, signingKey id.Ed25519, roomID id.RoomID, sessionID id.SessionID, sessionKey string, traceID string) {
+func (mach *OlmMachine) createGroupSession(ctx context.Context, senderKey id.SenderKey, signingKey id.Ed25519, roomID id.RoomID, sessionID id.SessionID, sessionKey string) {
 	log := zerolog.Ctx(ctx)
 	igs, err := NewInboundGroupSession(senderKey, signingKey, roomID, sessionKey)
 	if err != nil {
@@ -529,7 +529,7 @@ func (mach *OlmMachine) WaitForSession(roomID id.RoomID, senderKey id.SenderKey,
 	}
 }
 
-func (mach *OlmMachine) receiveRoomKey(ctx context.Context, evt *DecryptedOlmEvent, content *event.RoomKeyEventContent, traceID string) {
+func (mach *OlmMachine) receiveRoomKey(ctx context.Context, evt *DecryptedOlmEvent, content *event.RoomKeyEventContent) {
 	if content.Algorithm != id.AlgorithmMegolmV1 || evt.Keys.Ed25519 == "" {
 		zerolog.Ctx(ctx).Debug().
 			Str("algorithm", string(content.Algorithm)).
@@ -539,7 +539,7 @@ func (mach *OlmMachine) receiveRoomKey(ctx context.Context, evt *DecryptedOlmEve
 		return
 	}
 
-	mach.createGroupSession(ctx, evt.SenderKey, evt.Keys.Ed25519, content.RoomID, content.SessionID, content.SessionKey, traceID)
+	mach.createGroupSession(ctx, evt.SenderKey, evt.Keys.Ed25519, content.RoomID, content.SessionID, content.SessionKey)
 }
 
 func (mach *OlmMachine) handleRoomKeyWithheld(ctx context.Context, content *event.RoomKeyWithheldEventContent) {
