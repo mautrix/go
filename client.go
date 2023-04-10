@@ -1131,6 +1131,9 @@ func (cli *Client) CreateRoom(req *ReqCreateRoom) (resp *RespCreateRoom, err err
 		for _, invitee := range req.Invite {
 			cli.StateStore.SetMembership(resp.RoomID, invitee, inviteMembership)
 		}
+		for _, evt := range req.InitialState {
+			cli.updateStoreWithOutgoingEvent(resp.RoomID, evt.Type, evt.GetStateKey(), &evt.Content)
+		}
 	}
 	return
 }
