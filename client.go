@@ -1255,7 +1255,12 @@ func (cli *Client) updateStoreWithOutgoingEvent(roomID id.RoomID, eventType even
 	}
 	err = fakeEvt.Content.ParseRaw(fakeEvt.Type)
 	if err != nil {
-		cli.Log.Warn().Err(err).Msg("Failed to parse state event content to update state store")
+		switch fakeEvt.Type {
+		case event.StateMember, event.StatePowerLevels, event.StateEncryption:
+			cli.Log.Warn().Err(err).Msg("Failed to parse state event content to update state store")
+		default:
+			cli.Log.Debug().Err(err).Msg("Failed to parse state event content to update state store")
+		}
 		return
 	}
 	UpdateStateStore(cli.StateStore, fakeEvt)
