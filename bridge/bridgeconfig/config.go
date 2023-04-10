@@ -175,6 +175,11 @@ type EncryptionConfig struct {
 
 	PlaintextMentions bool `yaml:"plaintext_mentions"`
 
+	DeleteKeys struct {
+		DeleteOutboundOnAck bool `yaml:"delete_outbound_on_ack"`
+		RatchetOnDecrypt    bool `yaml:"ratchet_on_decrypt"`
+	} `yaml:"delete_keys"`
+
 	VerificationLevels struct {
 		Receive id.TrustState `yaml:"receive"`
 		Send    id.TrustState `yaml:"send"`

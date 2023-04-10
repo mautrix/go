@@ -135,6 +135,8 @@ const (
 	RoomKeyWithheldUnauthorized RoomKeyWithheldCode = "m.unauthorised"
 	RoomKeyWithheldUnavailable  RoomKeyWithheldCode = "m.unavailable"
 	RoomKeyWithheldNoOlmSession RoomKeyWithheldCode = "m.no_olm"
+
+	RoomKeyWithheldBeeperRedacted RoomKeyWithheldCode = "com.beeper.redacted"
 )
 
 type RoomKeyWithheldEventContent struct {

@@ -49,3 +49,9 @@ type BeeperRetryMetadata struct {
 	RetryCount      int        `json:"retry_count"`
 	// last_retry is also present, but not used by bridges
 }
+
+type BeeperRoomKeyAckEventContent struct {
+	RoomID            id.RoomID    `json:"room_id"`
+	SessionID         id.SessionID `json:"session_id"`
+	FirstMessageIndex int          `json:"first_message_index"`
+}

@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
@@ -108,6 +109,8 @@ func (mach *OlmMachine) importExportedRoomKey(session ExportedSession) (bool, er
 		RoomID:     session.RoomID,
 		// TODO should we add something here to mark the signing key as unverified like key requests do?
 		ForwardingChains: session.ForwardingChains,
+
+		ReceivedAt: time.Now().UTC(),
 	}
 	existingIGS, _ := mach.CryptoStore.GetGroupSession(igs.RoomID, igs.SenderKey, igs.ID())
 	if existingIGS != nil && existingIGS.Internal.FirstKnownIndex() <= igs.Internal.FirstKnownIndex() {

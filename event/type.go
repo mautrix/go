@@ -124,7 +124,8 @@ func (et *Type) GuessClass() TypeClass {
 		CallInvite.Type, CallCandidates.Type, CallAnswer.Type, CallReject.Type, CallSelectAnswer.Type,
 		CallNegotiate.Type, CallHangup.Type, BeeperMessageStatus.Type:
 		return MessageEventType
-	case ToDeviceRoomKey.Type, ToDeviceRoomKeyRequest.Type, ToDeviceForwardedRoomKey.Type, ToDeviceRoomKeyWithheld.Type:
+	case ToDeviceRoomKey.Type, ToDeviceRoomKeyRequest.Type, ToDeviceForwardedRoomKey.Type, ToDeviceRoomKeyWithheld.Type,
+		ToDeviceBeeperRoomKeyAck.Type:
 		return ToDeviceEventType
 	default:
 		return UnknownEventType
@@ -253,4 +254,6 @@ var (
 	ToDeviceVerificationCancel  = Type{"m.key.verification.cancel", ToDeviceEventType}
 
 	ToDeviceOrgMatrixRoomKeyWithheld = Type{"org.matrix.room_key.withheld", ToDeviceEventType}
+
+	ToDeviceBeeperRoomKeyAck = Type{"com.beeper.room_key.ack", ToDeviceEventType}
 )

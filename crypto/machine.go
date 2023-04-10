@@ -55,7 +55,9 @@ type OlmMachine struct {
 	recentlyUnwedged     map[id.IdentityKey]time.Time
 	recentlyUnwedgedLock sync.Mutex
 
-	olmLock sync.Mutex
+	olmLock           sync.Mutex
+	megolmEncryptLock sync.Mutex
+	megolmDecryptLock sync.Mutex
 
 	otkUploadLock sync.Mutex
 	lastOTKUpload time.Time
@@ -64,6 +66,9 @@ type OlmMachine struct {
 	crossSigningPubkeys *CrossSigningPublicKeysCache
 
 	crossSigningPubkeysFetched bool
+
+	DeleteOutboundKeysOnAck bool
+	RatchetKeysOnDecrypt    bool
 }
 
 // StateStore is used by OlmMachine to get room state information that's needed for encryption.
@@ -365,6 +370,8 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 		return
 	case *event.RoomKeyRequestEventContent:
 		go mach.handleRoomKeyRequest(ctx, evt.Sender, content)
+	case *event.BeeperRoomKeyAckEventContent:
+		mach.handleBeeperRoomKeyAck(ctx, evt.Sender, content)
 	// verification cases
 	case *event.VerificationStartEventContent:
 		mach.handleVerificationStart(evt.Sender, content, content.TransactionID, 10*time.Minute, "")
@@ -472,9 +479,9 @@ func (mach *OlmMachine) SendEncryptedToDevice(ctx context.Context, device *id.De
 	return err
 }
 
-func (mach *OlmMachine) createGroupSession(ctx context.Context, senderKey id.SenderKey, signingKey id.Ed25519, roomID id.RoomID, sessionID id.SessionID, sessionKey string) {
+func (mach *OlmMachine) createGroupSession(ctx context.Context, senderKey id.SenderKey, signingKey id.Ed25519, roomID id.RoomID, sessionID id.SessionID, sessionKey string, maxAge time.Duration, maxMessages int) {
 	log := zerolog.Ctx(ctx)
-	igs, err := NewInboundGroupSession(senderKey, signingKey, roomID, sessionKey)
+	igs, err := NewInboundGroupSession(senderKey, signingKey, roomID, sessionKey, maxAge, maxMessages)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to create inbound group session")
 		return
@@ -539,7 +546,14 @@ func (mach *OlmMachine) receiveRoomKey(ctx context.Context, evt *DecryptedOlmEve
 		return
 	}
 
-	mach.createGroupSession(ctx, evt.SenderKey, evt.Keys.Ed25519, content.RoomID, content.SessionID, content.SessionKey)
+	config := mach.StateStore.GetEncryptionEvent(content.RoomID)
+	var maxAge time.Duration
+	var maxMessages int
+	if config != nil {
+		maxAge = time.Duration(config.RotationPeriodMillis) * time.Millisecond
+		maxMessages = config.RotationPeriodMessages
+	}
+	mach.createGroupSession(ctx, evt.SenderKey, evt.Keys.Ed25519, content.RoomID, content.SessionID, content.SessionKey, maxAge, maxMessages)
 }
 
 func (mach *OlmMachine) handleRoomKeyWithheld(ctx context.Context, content *event.RoomKeyWithheldEventContent) {

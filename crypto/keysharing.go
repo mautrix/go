@@ -9,6 +9,7 @@ package crypto
 
 import (
 	"context"
+	"time"
 
 	"github.com/rs/zerolog"
 
@@ -150,6 +151,13 @@ func (mach *OlmMachine) importForwardedRoomKey(ctx context.Context, evt *Decrypt
 			Msg("Mismatched session ID while creating inbound group session from forward")
 		return false
 	}
+	config := mach.StateStore.GetEncryptionEvent(content.RoomID)
+	var maxAge time.Duration
+	var maxMessages int
+	if config != nil {
+		maxAge = time.Duration(config.RotationPeriodMillis) * time.Millisecond
+		maxMessages = config.RotationPeriodMessages
+	}
 	igs := &InboundGroupSession{
 		Internal:         *igsInternal,
 		SigningKey:       evt.Keys.Ed25519,
@@ -157,6 +165,10 @@ func (mach *OlmMachine) importForwardedRoomKey(ctx context.Context, evt *Decrypt
 		RoomID:           content.RoomID,
 		ForwardingChains: append(content.ForwardingKeyChain, evt.SenderKey.String()),
 		id:               content.SessionID,
+
+		ReceivedAt:  time.Now().UTC(),
+		MaxAge:      maxAge.Milliseconds(),
+		MaxMessages: maxMessages,
 	}
 	err = mach.CryptoStore.PutGroupSession(content.RoomID, content.SenderKey, content.SessionID, igs)
 	if err != nil {
@@ -296,5 +308,30 @@ func (mach *OlmMachine) handleRoomKeyRequest(ctx context.Context, sender id.User
 		log.Error().Err(err).Msg("Failed to encrypt and send group session")
 	} else {
 		log.Debug().Msg("Successfully sent forwarded group session")
+	}
+}
+
+func (mach *OlmMachine) handleBeeperRoomKeyAck(ctx context.Context, sender id.UserID, content *event.BeeperRoomKeyAckEventContent) {
+	log := mach.machOrContextLog(ctx).With().
+		Str("room_id", content.RoomID.String()).
+		Str("session_id", content.SessionID.String()).
+		Int("first_message_index", content.FirstMessageIndex).
+		Logger()
+
+	sess, err := mach.CryptoStore.GetGroupSession(content.RoomID, "", content.SessionID)
+	if err != nil {
+		log.Err(err).Msg("Failed to get group session to check if it should be redacted")
+		return
+	}
+
+	isInbound := sess.SenderKey == mach.OwnIdentity().IdentityKey
+	if isInbound && mach.DeleteOutboundKeysOnAck {
+		log.Debug().Msg("Redacting inbound copy of outbound group session after ack")
+		err = mach.CryptoStore.RedactGroupSession(content.RoomID, sess.SenderKey, content.SessionID)
+		if err != nil {
+			log.Err(err).Msg("Failed to redact group session")
+		}
+	} else {
+		log.Debug().Bool("inbound", isInbound).Msg("Received room key ack")
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -254,31 +255,58 @@ func (store *SQLCryptoStore) UpdateSession(_ id.SenderKey, session *OlmSession) 
 	return err
 }
 
+func intishPtr[T int | int64](i T) *T {
+	if i == 0 {
+		return nil
+	}
+	return &i
+}
+
+func datePtr(t time.Time) *time.Time {
+	if t.IsZero() {
+		return nil
+	}
+	return &t
+}
+
 // PutGroupSession stores an inbound Megolm group session for a room, sender and session.
 func (store *SQLCryptoStore) PutGroupSession(roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID, session *InboundGroupSession) error {
 	sessionBytes := session.Internal.Pickle(store.PickleKey)
 	forwardingChains := strings.Join(session.ForwardingChains, ",")
-	_, err := store.DB.Exec(`
-		INSERT INTO crypto_megolm_inbound_session
-			(session_id, sender_key, signing_key, room_id, session, forwarding_chains, account_id)
-			VALUES ($1, $2, $3, $4, $5, $6, $7)
+	ratchetSafety, err := json.Marshal(&session.RatchetSafety)
+	if err != nil {
+		return fmt.Errorf("failed to marshal ratchet safety info: %w", err)
+	}
+	_, err = store.DB.Exec(`
+		INSERT INTO crypto_megolm_inbound_session (
+			session_id, sender_key, signing_key, room_id, session, forwarding_chains,
+			ratchet_safety, received_at, max_age, max_messages, account_id
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		ON CONFLICT (session_id, account_id) DO UPDATE
 		    SET withheld_code=NULL, withheld_reason=NULL, sender_key=excluded.sender_key, signing_key=excluded.signing_key,
-		        room_id=excluded.room_id, session=excluded.session, forwarding_chains=excluded.forwarding_chains
-	`, sessionID, senderKey, session.SigningKey, roomID, sessionBytes, forwardingChains, store.AccountID)
+		        room_id=excluded.room_id, session=excluded.session, forwarding_chains=excluded.forwarding_chains,
+		        ratchet_safety=excluded.ratchet_safety, received_at=excluded.received_at,
+		        max_age=excluded.max_age, max_messages=excluded.max_messages
+	`,
+		sessionID, senderKey, session.SigningKey, roomID, sessionBytes, forwardingChains,
+		ratchetSafety, datePtr(session.ReceivedAt), intishPtr(session.MaxAge), intishPtr(session.MaxMessages),
+		store.AccountID,
+	)
 	return err
 }
 
 // GetGroupSession retrieves an inbound Megolm group session for a room, sender and session.
 func (store *SQLCryptoStore) GetGroupSession(roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID) (*InboundGroupSession, error) {
 	var signingKey, forwardingChains, withheldCode sql.NullString
-	var sessionBytes []byte
+	var sessionBytes, ratchetSafetyBytes []byte
+	var receivedAt sql.NullTime
+	var maxAge, maxMessages sql.NullInt64
 	err := store.DB.QueryRow(`
-		SELECT signing_key, session, forwarding_chains, withheld_code
+		SELECT signing_key, session, forwarding_chains, withheld_code, ratchet_safety, received_at, max_age, max_messages
 		FROM crypto_megolm_inbound_session
-		WHERE room_id=$1 AND sender_key=$2 AND session_id=$3 AND account_id=$4`,
+		WHERE room_id=$1 AND (sender_key=$2 OR $2 = '') AND session_id=$3 AND account_id=$4`,
 		roomID, senderKey, sessionID, store.AccountID,
-	).Scan(&signingKey, &sessionBytes, &forwardingChains, &withheldCode)
+	).Scan(&signingKey, &sessionBytes, &forwardingChains, &withheldCode, &ratchetSafetyBytes, &receivedAt, &maxAge, &maxMessages)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	} else if err != nil {
@@ -295,18 +323,38 @@ func (store *SQLCryptoStore) GetGroupSession(roomID id.RoomID, senderKey id.Send
 	if forwardingChains.String != "" {
 		chains = strings.Split(forwardingChains.String, ",")
 	}
+	var rs RatchetSafety
+	if len(ratchetSafetyBytes) > 0 {
+		err = json.Unmarshal(ratchetSafetyBytes, &rs)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal ratchet safety info: %w", err)
+		}
+	}
 	return &InboundGroupSession{
 		Internal:         *igs,
 		SigningKey:       id.Ed25519(signingKey.String),
 		SenderKey:        senderKey,
 		RoomID:           roomID,
 		ForwardingChains: chains,
+		RatchetSafety:    rs,
+		ReceivedAt:       receivedAt.Time,
+		MaxAge:           maxAge.Int64,
+		MaxMessages:      int(maxMessages.Int64),
 	}, nil
 }
 
+func (store *SQLCryptoStore) RedactGroupSession(_ id.RoomID, _ id.SenderKey, sessionID id.SessionID) error {
+	_, err := store.DB.Exec(`
+		UPDATE crypto_megolm_inbound_session
+		SET withheld_code=$1, withheld_reason='Session redacted', session=NULL, forwarding_chains=NULL, ratchet_safety=NULL
+		WHERE session_id=$2 AND account_id=$3
+	`, event.RoomKeyWithheldBeeperRedacted, sessionID, store.AccountID)
+	return err
+}
+
 func (store *SQLCryptoStore) PutWithheldGroupSession(content event.RoomKeyWithheldEventContent) error {
-	_, err := store.DB.Exec("INSERT INTO crypto_megolm_inbound_session (session_id, sender_key, room_id, withheld_code, withheld_reason, account_id) VALUES ($1, $2, $3, $4, $5, $6)",
-		content.SessionID, content.SenderKey, content.RoomID, content.Code, content.Reason, store.AccountID)
+	_, err := store.DB.Exec("INSERT INTO crypto_megolm_inbound_session (session_id, sender_key, room_id, withheld_code, withheld_reason, received_at, account_id) VALUES ($1, $2, $3, $4, $5, $6. $7)",
+		content.SessionID, content.SenderKey, content.RoomID, content.Code, content.Reason, time.Now().UTC(), store.AccountID)
 	return err
 }
 
@@ -336,8 +384,10 @@ func (store *SQLCryptoStore) scanGroupSessionList(rows dbutil.Rows) (result []*I
 	for rows.Next() {
 		var roomID id.RoomID
 		var signingKey, senderKey, forwardingChains sql.NullString
-		var sessionBytes []byte
-		err = rows.Scan(&roomID, &signingKey, &senderKey, &sessionBytes, &forwardingChains)
+		var sessionBytes, ratchetSafetyBytes []byte
+		var receivedAt sql.NullTime
+		var maxAge, maxMessages sql.NullInt64
+		err = rows.Scan(&roomID, &signingKey, &senderKey, &sessionBytes, &forwardingChains, &ratchetSafetyBytes, &receivedAt, &maxAge, &maxMessages)
 		if err != nil {
 			return
 		}
@@ -350,12 +400,23 @@ func (store *SQLCryptoStore) scanGroupSessionList(rows dbutil.Rows) (result []*I
 		if forwardingChains.String != "" {
 			chains = strings.Split(forwardingChains.String, ",")
 		}
+		var rs RatchetSafety
+		if len(ratchetSafetyBytes) > 0 {
+			err = json.Unmarshal(ratchetSafetyBytes, &rs)
+			if err != nil {
+				return nil, fmt.Errorf("failed to unmarshal ratchet safety info: %w", err)
+			}
+		}
 		result = append(result, &InboundGroupSession{
 			Internal:         *igs,
 			SigningKey:       id.Ed25519(signingKey.String),
 			SenderKey:        id.Curve25519(senderKey.String),
 			RoomID:           roomID,
 			ForwardingChains: chains,
+			RatchetSafety:    rs,
+			ReceivedAt:       receivedAt.Time,
+			MaxAge:           maxAge.Int64,
+			MaxMessages:      int(maxMessages.Int64),
 		})
 	}
 	return
@@ -363,7 +424,7 @@ func (store *SQLCryptoStore) scanGroupSessionList(rows dbutil.Rows) (result []*I
 
 func (store *SQLCryptoStore) GetGroupSessionsForRoom(roomID id.RoomID) ([]*InboundGroupSession, error) {
 	rows, err := store.DB.Query(`
-		SELECT room_id, signing_key, sender_key, session, forwarding_chains
+		SELECT room_id, signing_key, sender_key, session, forwarding_chains, ratchet_safety, received_at, max_age, max_messages
 		FROM crypto_megolm_inbound_session WHERE room_id=$1 AND account_id=$2 AND session IS NOT NULL`,
 		roomID, store.AccountID,
 	)
@@ -377,7 +438,7 @@ func (store *SQLCryptoStore) GetGroupSessionsForRoom(roomID id.RoomID) ([]*Inbou
 
 func (store *SQLCryptoStore) GetAllGroupSessions() ([]*InboundGroupSession, error) {
 	rows, err := store.DB.Query(`
-		SELECT room_id, signing_key, sender_key, session, forwarding_chains
+		SELECT room_id, signing_key, sender_key, session, forwarding_chains, ratchet_safety, received_at, max_age, max_messages
 		FROM crypto_megolm_inbound_session WHERE account_id=$2 AND session IS NOT NULL`,
 		store.AccountID,
 	)

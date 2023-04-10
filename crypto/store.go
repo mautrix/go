@@ -54,6 +54,8 @@ type Store interface {
 	// (i.e. a room key withheld event has been saved with PutWithheldGroupSession), this should return the
 	// ErrGroupSessionWithheld error. The caller may use GetWithheldGroupSession to find more details.
 	GetGroupSession(id.RoomID, id.SenderKey, id.SessionID) (*InboundGroupSession, error)
+	// RedactGroupSession removes the session data for the given inbound Megolm session from the store.
+	RedactGroupSession(id.RoomID, id.SenderKey, id.SessionID) error
 	// PutWithheldGroupSession tells the store that a specific Megolm session was withheld.
 	PutWithheldGroupSession(event.RoomKeyWithheldEventContent) error
 	// GetWithheldGroupSession gets the event content that was previously inserted with PutWithheldGroupSession.
@@ -260,6 +262,14 @@ func (gs *MemoryStore) GetGroupSession(roomID id.RoomID, senderKey id.SenderKey,
 	}
 	gs.lock.Unlock()
 	return session, nil
+}
+
+func (gs *MemoryStore) RedactGroupSession(roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID) error {
+	gs.lock.Lock()
+	delete(gs.getGroupSessions(roomID, senderKey), sessionID)
+	err := gs.save()
+	gs.lock.Unlock()
+	return err
 }
 
 func (gs *MemoryStore) getWithheldGroupSessions(roomID id.RoomID, senderKey id.SenderKey) map[id.SessionID]*event.RoomKeyWithheldEventContent {
