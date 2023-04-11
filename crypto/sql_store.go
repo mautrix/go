@@ -349,7 +349,7 @@ func (store *SQLCryptoStore) RedactGroupSession(_ id.RoomID, _ id.SenderKey, ses
 	_, err := store.DB.Exec(`
 		UPDATE crypto_megolm_inbound_session
 		SET withheld_code=$1, withheld_reason=$2, session=NULL, forwarding_chains=NULL
-		WHERE session_id=$3 AND account_id=$4
+		WHERE session_id=$3 AND account_id=$4 AND session IS NOT NULL
 	`, event.RoomKeyWithheldBeeperRedacted, "Session redacted: "+reason, sessionID, store.AccountID)
 	return err
 }
@@ -361,7 +361,7 @@ func (store *SQLCryptoStore) RedactGroupSessions(roomID id.RoomID, senderKey id.
 	res, err := store.DB.Query(`
 		UPDATE crypto_megolm_inbound_session
 		SET withheld_code=$1, withheld_reason=$2, session=NULL, forwarding_chains=NULL
-		WHERE (room_id=$3 OR $3='') AND (sender_key=$4 OR $4='') AND account_id=$5 AND is_scheduled=false
+		WHERE (room_id=$3 OR $3='') AND (sender_key=$4 OR $4='') AND session IS NOT NULL AND account_id=$5 AND is_scheduled=false
 		RETURNING session_id
 	`, event.RoomKeyWithheldBeeperRedacted, "Session redacted: "+reason, roomID, senderKey, store.AccountID)
 	var sessionIDs []id.SessionID
