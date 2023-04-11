@@ -99,6 +99,7 @@ func (helper *CryptoHelper) Init() error {
 	helper.mach.RatchetKeysOnDecrypt = encryptionConfig.DeleteKeys.RatchetOnDecrypt
 	helper.mach.DeleteFullyUsedKeysOnDecrypt = encryptionConfig.DeleteKeys.DeleteFullyUsedOnDecrypt
 	helper.mach.DeletePreviousKeysOnReceive = encryptionConfig.DeleteKeys.DeletePrevOnNewSession
+	helper.mach.DeleteKeysOnDeviceDelete = encryptionConfig.DeleteKeys.DeleteOnDeviceDelete
 
 	helper.client.Syncer = &cryptoSyncer{helper.mach}
 	helper.client.Store = helper.store
