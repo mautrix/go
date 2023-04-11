@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS crypto_megolm_inbound_session (
 	received_at       timestamp,
 	max_age           BIGINT,
 	max_messages      INTEGER,
+	is_scheduled      BOOLEAN NOT NULL DEFAULT false,
 	PRIMARY KEY (account_id, session_id)
 );
 

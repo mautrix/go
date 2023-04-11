@@ -121,7 +121,7 @@ func TestOlmMachineOlmMegolmSessions(t *testing.T) {
 		// store room key in new inbound group session
 		decrypted.Content.ParseRaw(event.ToDeviceRoomKey)
 		roomKeyEvt := decrypted.Content.AsRoomKey()
-		igs, err := NewInboundGroupSession(senderKey, signingKey, "room1", roomKeyEvt.SessionKey, 0, 0)
+		igs, err := NewInboundGroupSession(senderKey, signingKey, "room1", roomKeyEvt.SessionKey, 0, 0, false)
 		if err != nil {
 			t.Errorf("Error creating inbound megolm session: %v", err)
 		}

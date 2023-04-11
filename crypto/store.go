@@ -55,7 +55,9 @@ type Store interface {
 	// ErrGroupSessionWithheld error. The caller may use GetWithheldGroupSession to find more details.
 	GetGroupSession(id.RoomID, id.SenderKey, id.SessionID) (*InboundGroupSession, error)
 	// RedactGroupSession removes the session data for the given inbound Megolm session from the store.
-	RedactGroupSession(id.RoomID, id.SenderKey, id.SessionID) error
+	RedactGroupSession(id.RoomID, id.SenderKey, id.SessionID, string) error
+	// RedactGroupSessions removes the session data for all inbound Megolm sessions from a specific device and/or in a specific room.
+	RedactGroupSessions(id.RoomID, id.SenderKey, string) ([]id.SessionID, error)
 	// PutWithheldGroupSession tells the store that a specific Megolm session was withheld.
 	PutWithheldGroupSession(event.RoomKeyWithheldEventContent) error
 	// GetWithheldGroupSession gets the event content that was previously inserted with PutWithheldGroupSession.
@@ -264,12 +266,50 @@ func (gs *MemoryStore) GetGroupSession(roomID id.RoomID, senderKey id.SenderKey,
 	return session, nil
 }
 
-func (gs *MemoryStore) RedactGroupSession(roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID) error {
+func (gs *MemoryStore) RedactGroupSession(roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID, reason string) error {
 	gs.lock.Lock()
 	delete(gs.getGroupSessions(roomID, senderKey), sessionID)
 	err := gs.save()
 	gs.lock.Unlock()
 	return err
+}
+
+func (gs *MemoryStore) RedactGroupSessions(roomID id.RoomID, senderKey id.SenderKey, reason string) ([]id.SessionID, error) {
+	gs.lock.Lock()
+	var sessionIDs []id.SessionID
+	if roomID != "" && senderKey != "" {
+		sessions := gs.getGroupSessions(roomID, senderKey)
+		for sessionID := range sessions {
+			sessionIDs = append(sessionIDs, sessionID)
+			delete(sessions, sessionID)
+		}
+	} else if senderKey != "" {
+		for _, room := range gs.GroupSessions {
+			sessions, ok := room[senderKey]
+			if ok {
+				for sessionID := range sessions {
+					sessionIDs = append(sessionIDs, sessionID)
+				}
+				delete(room, senderKey)
+			}
+		}
+	} else if roomID != "" {
+		room, ok := gs.GroupSessions[roomID]
+		if ok {
+			for senderKey := range room {
+				sessions := room[senderKey]
+				for sessionID := range sessions {
+					sessionIDs = append(sessionIDs, sessionID)
+				}
+			}
+			delete(gs.GroupSessions, roomID)
+		}
+	} else {
+		return nil, fmt.Errorf("room ID or sender key must be provided for redacting sessions")
+	}
+	err := gs.save()
+	gs.lock.Unlock()
+	return sessionIDs, err
 }
 
 func (gs *MemoryStore) getWithheldGroupSessions(roomID id.RoomID, senderKey id.SenderKey) map[id.SessionID]*event.RoomKeyWithheldEventContent {

@@ -208,8 +208,17 @@ func (mach *OlmMachine) actuallyDecryptMegolmEvent(ctx context.Context, evt *eve
 		Uint32("new_ratchet_index", ratchetTargetIndex).
 		Uint("next_new_index", sess.RatchetSafety.NextIndex).
 		Uints("missed_indices", sess.RatchetSafety.MissedIndices).
+		Int("max_messages", sess.MaxMessages).
 		Logger()
-	if ratchetCurrentIndex < ratchetTargetIndex && mach.RatchetKeysOnDecrypt {
+	if sess.MaxMessages > 0 && int(ratchetTargetIndex) >= sess.MaxMessages && len(sess.RatchetSafety.MissedIndices) == 0 && mach.DeleteFullyUsedKeysOnDecrypt {
+		err = mach.CryptoStore.RedactGroupSession(sess.RoomID, sess.SenderKey, sess.ID(), "maximum messages reached")
+		if err != nil {
+			log.Err(err).Msg("Failed to delete fully used session")
+			return sess, plaintext, messageIndex, RatchetError
+		} else {
+			log.Info().Msg("Deleted fully used session")
+		}
+	} else if ratchetCurrentIndex < ratchetTargetIndex && mach.RatchetKeysOnDecrypt {
 		if err = sess.RatchetTo(ratchetTargetIndex); err != nil {
 			log.Err(err).Msg("Failed to ratchet session")
 			return sess, plaintext, messageIndex, RatchetError
@@ -217,7 +226,7 @@ func (mach *OlmMachine) actuallyDecryptMegolmEvent(ctx context.Context, evt *eve
 			log.Err(err).Msg("Failed to store ratcheted session")
 			return sess, plaintext, messageIndex, RatchetError
 		} else {
-			log.Debug().Msg("Ratcheted session forward")
+			log.Info().Msg("Ratcheted session forward")
 		}
 	} else if didModify {
 		if err = mach.CryptoStore.PutGroupSession(sess.RoomID, sess.SenderKey, sess.ID(), sess); err != nil {

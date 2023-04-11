@@ -158,6 +158,12 @@ func (mach *OlmMachine) importForwardedRoomKey(ctx context.Context, evt *Decrypt
 		maxAge = time.Duration(config.RotationPeriodMillis) * time.Millisecond
 		maxMessages = config.RotationPeriodMessages
 	}
+	if content.MaxAge != 0 {
+		maxAge = time.Duration(content.MaxAge) * time.Millisecond
+	}
+	if content.MaxMessages != 0 {
+		maxMessages = content.MaxMessages
+	}
 	igs := &InboundGroupSession{
 		Internal:         *igsInternal,
 		SigningKey:       evt.Keys.Ed25519,
@@ -169,6 +175,7 @@ func (mach *OlmMachine) importForwardedRoomKey(ctx context.Context, evt *Decrypt
 		ReceivedAt:  time.Now().UTC(),
 		MaxAge:      maxAge.Milliseconds(),
 		MaxMessages: maxMessages,
+		IsScheduled: content.IsScheduled,
 	}
 	err = mach.CryptoStore.PutGroupSession(content.RoomID, content.SenderKey, content.SessionID, igs)
 	if err != nil {
@@ -325,9 +332,9 @@ func (mach *OlmMachine) handleBeeperRoomKeyAck(ctx context.Context, sender id.Us
 	}
 
 	isInbound := sess.SenderKey == mach.OwnIdentity().IdentityKey
-	if isInbound && mach.DeleteOutboundKeysOnAck {
+	if isInbound && mach.DeleteOutboundKeysOnAck && content.FirstMessageIndex == 0 {
 		log.Debug().Msg("Redacting inbound copy of outbound group session after ack")
-		err = mach.CryptoStore.RedactGroupSession(content.RoomID, sess.SenderKey, content.SessionID)
+		err = mach.CryptoStore.RedactGroupSession(content.RoomID, sess.SenderKey, content.SessionID, "outbound session acked")
 		if err != nil {
 			log.Err(err).Msg("Failed to redact group session")
 		}

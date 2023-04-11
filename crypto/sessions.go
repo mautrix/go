@@ -107,11 +107,12 @@ type InboundGroupSession struct {
 	ReceivedAt  time.Time
 	MaxAge      int64
 	MaxMessages int
+	IsScheduled bool
 
 	id id.SessionID
 }
 
-func NewInboundGroupSession(senderKey id.SenderKey, signingKey id.Ed25519, roomID id.RoomID, sessionKey string, maxAge time.Duration, maxMessages int) (*InboundGroupSession, error) {
+func NewInboundGroupSession(senderKey id.SenderKey, signingKey id.Ed25519, roomID id.RoomID, sessionKey string, maxAge time.Duration, maxMessages int, isScheduled bool) (*InboundGroupSession, error) {
 	igs, err := olm.NewInboundGroupSession([]byte(sessionKey))
 	if err != nil {
 		return nil, err
@@ -125,6 +126,7 @@ func NewInboundGroupSession(senderKey id.SenderKey, signingKey id.Ed25519, roomI
 		ReceivedAt:       time.Now().UTC(),
 		MaxAge:           maxAge.Milliseconds(),
 		MaxMessages:      maxMessages,
+		IsScheduled:      isScheduled,
 	}, nil
 }
 

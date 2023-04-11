@@ -67,8 +67,10 @@ type OlmMachine struct {
 
 	crossSigningPubkeysFetched bool
 
-	DeleteOutboundKeysOnAck bool
-	RatchetKeysOnDecrypt    bool
+	DeleteOutboundKeysOnAck      bool
+	DeletePreviousKeysOnReceive  bool
+	RatchetKeysOnDecrypt         bool
+	DeleteFullyUsedKeysOnDecrypt bool
 }
 
 // StateStore is used by OlmMachine to get room state information that's needed for encryption.
@@ -479,9 +481,9 @@ func (mach *OlmMachine) SendEncryptedToDevice(ctx context.Context, device *id.De
 	return err
 }
 
-func (mach *OlmMachine) createGroupSession(ctx context.Context, senderKey id.SenderKey, signingKey id.Ed25519, roomID id.RoomID, sessionID id.SessionID, sessionKey string, maxAge time.Duration, maxMessages int) {
+func (mach *OlmMachine) createGroupSession(ctx context.Context, senderKey id.SenderKey, signingKey id.Ed25519, roomID id.RoomID, sessionID id.SessionID, sessionKey string, maxAge time.Duration, maxMessages int, isScheduled bool) {
 	log := zerolog.Ctx(ctx)
-	igs, err := NewInboundGroupSession(senderKey, signingKey, roomID, sessionKey, maxAge, maxMessages)
+	igs, err := NewInboundGroupSession(senderKey, signingKey, roomID, sessionKey, maxAge, maxMessages, isScheduled)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to create inbound group session")
 		return
@@ -498,7 +500,12 @@ func (mach *OlmMachine) createGroupSession(ctx context.Context, senderKey id.Sen
 		return
 	}
 	mach.markSessionReceived(sessionID)
-	log.Debug().Str("session_id", sessionID.String()).Msg("Received inbound group session")
+	log.Debug().
+		Str("session_id", sessionID.String()).
+		Str("max_age", maxAge.String()).
+		Int("max_messages", maxMessages).
+		Bool("is_scheduled", isScheduled).
+		Msg("Received inbound group session")
 }
 
 func (mach *OlmMachine) markSessionReceived(id id.SessionID) {
@@ -536,13 +543,25 @@ func (mach *OlmMachine) WaitForSession(roomID id.RoomID, senderKey id.SenderKey,
 	}
 }
 
+func stringifyArray[T ~string](arr []T) []string {
+	strs := make([]string, len(arr))
+	for i, v := range arr {
+		strs[i] = string(v)
+	}
+	return strs
+}
+
 func (mach *OlmMachine) receiveRoomKey(ctx context.Context, evt *DecryptedOlmEvent, content *event.RoomKeyEventContent) {
+	log := zerolog.Ctx(ctx).With().
+		Str("algorithm", string(content.Algorithm)).
+		Str("session_id", content.SessionID.String()).
+		Str("room_id", content.RoomID.String()).
+		Bool("scheduled", content.IsScheduled).
+		Int64("max_age", content.MaxAge).
+		Int("max_messages", content.MaxMessages).
+		Logger()
 	if content.Algorithm != id.AlgorithmMegolmV1 || evt.Keys.Ed25519 == "" {
-		zerolog.Ctx(ctx).Debug().
-			Str("algorithm", string(content.Algorithm)).
-			Str("session_id", content.SessionID.String()).
-			Str("room_id", content.RoomID.String()).
-			Msg("Ignoring weird room key")
+		log.Debug().Msg("Ignoring weird room key")
 		return
 	}
 
@@ -553,7 +572,24 @@ func (mach *OlmMachine) receiveRoomKey(ctx context.Context, evt *DecryptedOlmEve
 		maxAge = time.Duration(config.RotationPeriodMillis) * time.Millisecond
 		maxMessages = config.RotationPeriodMessages
 	}
-	mach.createGroupSession(ctx, evt.SenderKey, evt.Keys.Ed25519, content.RoomID, content.SessionID, content.SessionKey, maxAge, maxMessages)
+	if content.MaxAge != 0 {
+		maxAge = time.Duration(content.MaxAge) * time.Millisecond
+	}
+	if content.MaxMessages != 0 {
+		maxMessages = content.MaxMessages
+	}
+	if mach.DeletePreviousKeysOnReceive {
+		log.Debug().Msg("Redacting previous megolm sessions from sender in room")
+		sessionIDs, err := mach.CryptoStore.RedactGroupSessions(content.RoomID, evt.SenderKey, "received new key from device")
+		if err != nil {
+			log.Err(err).Msg("Failed to redact previous megolm sessions")
+		} else {
+			log.Info().
+				Strs("session_ids", stringifyArray(sessionIDs)).
+				Msg("Redacted previous megolm sessions")
+		}
+	}
+	mach.createGroupSession(ctx, evt.SenderKey, evt.Keys.Ed25519, content.RoomID, content.SessionID, content.SessionKey, maxAge, maxMessages, content.IsScheduled)
 }
 
 func (mach *OlmMachine) handleRoomKeyWithheld(ctx context.Context, content *event.RoomKeyWithheldEventContent) {
