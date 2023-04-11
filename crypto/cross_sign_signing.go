@@ -1,5 +1,5 @@
 // Copyright (c) 2020 Nikos Filippakis
-// Copyright (c) 2022 Tulir Asokan
+// Copyright (c) 2023 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -79,7 +79,10 @@ func (mach *OlmMachine) SignUser(userID id.UserID, masterKey id.Ed25519) error {
 		return err
 	}
 
-	mach.Log.Trace("Signed master key of %s with user-signing key: `%v`", userID, signature)
+	mach.Log.Debug().
+		Str("user_id", userID.String()).
+		Str("signature", signature).
+		Msg("Signed master key of user with our user-signing key")
 
 	if err := mach.CryptoStore.PutSignature(userID, masterKey, mach.Client.UserID, mach.CrossSigningKeys.UserSigningKey.PublicKey, signature); err != nil {
 		return fmt.Errorf("error storing signature in crypto store: %w", err)
@@ -116,7 +119,10 @@ func (mach *OlmMachine) SignOwnMasterKey() error {
 			id.NewKeyID(id.KeyAlgorithmEd25519, deviceID.String()): signature,
 		},
 	}
-	mach.Log.Trace("Signed own master key with device %v: `%v`", deviceID, signature)
+	mach.Log.Debug().
+		Str("device_id", deviceID.String()).
+		Str("signature", signature).
+		Msg("Signed own master key with own device key")
 
 	resp, err := mach.Client.UploadSignatures(&mautrix.ReqUploadSignatures{
 		userID: map[string]mautrix.ReqKeysSignatures{
@@ -165,7 +171,11 @@ func (mach *OlmMachine) SignOwnDevice(device *id.Device) error {
 		return err
 	}
 
-	mach.Log.Trace("Signed own device %s with self-signing key: `%v`", device.UserID, device.DeviceID, signature)
+	mach.Log.Debug().
+		Str("user_id", device.UserID.String()).
+		Str("device_id", device.DeviceID.String()).
+		Str("signature", signature).
+		Msg("Signed own device key with self-signing key")
 
 	if err := mach.CryptoStore.PutSignature(device.UserID, device.SigningKey, mach.Client.UserID, mach.CrossSigningKeys.SelfSigningKey.PublicKey, signature); err != nil {
 		return fmt.Errorf("error storing signature in crypto store: %w", err)

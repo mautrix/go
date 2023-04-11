@@ -9,6 +9,7 @@ package commands
 import (
 	"maunium.net/go/mautrix/bridge"
 	"maunium.net/go/mautrix/bridge/bridgeconfig"
+	"maunium.net/go/mautrix/event"
 )
 
 type MinimalHandler interface {
@@ -38,11 +39,6 @@ type Handler interface {
 	GetName() string
 }
 
-type PermissionedHandler interface {
-	Handler
-	HasPermission(*Event) bool
-}
-
 type AliasedHandler interface {
 	Handler
 	GetAliases() []string
@@ -58,6 +54,8 @@ type FullHandler struct {
 	RequiresAdmin  bool
 	RequiresPortal bool
 	RequiresLogin  bool
+
+	RequiresEventLevel event.Type
 }
 
 func (fh *FullHandler) GetHelp() HelpMeta {
@@ -73,19 +71,29 @@ func (fh *FullHandler) GetAliases() []string {
 	return fh.Aliases
 }
 
-func (fh *FullHandler) HasPermission(ce *Event) bool {
-	return (!fh.RequiresAdmin || ce.User.GetPermissionLevel() >= bridgeconfig.PermissionLevelAdmin) &&
-		(!fh.RequiresPortal || ce.Portal != nil) &&
-		(!fh.RequiresLogin || ce.User.IsLoggedIn())
+func (fh *FullHandler) ShowInHelp(ce *Event) bool {
+	return !fh.RequiresAdmin || ce.User.GetPermissionLevel() >= bridgeconfig.PermissionLevelAdmin
+}
+
+func (fh *FullHandler) userHasRoomPermission(ce *Event) bool {
+	levels, err := ce.MainIntent().PowerLevels(ce.RoomID)
+	if err != nil {
+		ce.ZLog.Warn().Err(err).Msg("Failed to check room power levels")
+		ce.Reply("Failed to get room power levels to see if you're allowed to use that command")
+		return false
+	}
+	return levels.GetUserLevel(ce.User.GetMXID()) >= levels.GetEventLevel(fh.RequiresEventLevel)
 }
 
 func (fh *FullHandler) Run(ce *Event) {
 	if fh.RequiresAdmin && ce.User.GetPermissionLevel() < bridgeconfig.PermissionLevelAdmin {
 		ce.Reply("That command is limited to bridge administrators.")
+	} else if fh.RequiresEventLevel.Type != "" && ce.User.GetPermissionLevel() < bridgeconfig.PermissionLevelAdmin && !fh.userHasRoomPermission(ce) {
+		ce.Reply("That command requires room admin rights.")
 	} else if fh.RequiresPortal && ce.Portal == nil {
 		ce.Reply("That command can only be ran in portal rooms.")
 	} else if fh.RequiresLogin && !ce.User.IsLoggedIn() {
-		ce.Reply("That command requires you to be logged in")
+		ce.Reply("That command requires you to be logged in.")
 	} else {
 		fh.Func(ce)
 	}

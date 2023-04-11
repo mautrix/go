@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Tulir Asokan
+// Copyright (c) 2023 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -11,7 +11,7 @@ import (
 	"runtime/debug"
 	"time"
 
-	log "maunium.net/go/maulogger/v2"
+	"github.com/rs/zerolog"
 
 	"maunium.net/go/mautrix/bridge/status"
 )
@@ -28,27 +28,25 @@ func (br *Bridge) SendGlobalBridgeState(state status.BridgeState) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := br.SendBridgeState(ctx, &state); err != nil {
-		br.Log.Warnln("Failed to update global bridge state:", err)
+		br.ZLog.Warn().Err(err).Msg("Failed to update global bridge state")
 	} else {
-		br.Log.Debugfln("Sent new global bridge state %+v", state)
+		br.ZLog.Debug().Interface("bridge_state", state).Msg("Sent new global bridge state")
 	}
 }
 
 type BridgeStateQueue struct {
 	prev   *status.BridgeState
 	ch     chan status.BridgeState
-	log    log.Logger
 	bridge *Bridge
 	user   status.BridgeStateFiller
 }
 
-func (br *Bridge) NewBridgeStateQueue(user status.BridgeStateFiller, log log.Logger) *BridgeStateQueue {
+func (br *Bridge) NewBridgeStateQueue(user status.BridgeStateFiller) *BridgeStateQueue {
 	if len(br.Config.Homeserver.StatusEndpoint) == 0 {
 		return nil
 	}
 	bsq := &BridgeStateQueue{
 		ch:     make(chan status.BridgeState, 10),
-		log:    log,
 		bridge: br,
 		user:   user,
 	}
@@ -60,7 +58,10 @@ func (bsq *BridgeStateQueue) loop() {
 	defer func() {
 		err := recover()
 		if err != nil {
-			bsq.log.Errorfln("Bridge state loop panicked: %v\n%s", err, debug.Stack())
+			bsq.bridge.ZLog.Error().
+				Str(zerolog.ErrorStackFieldName, string(debug.Stack())).
+				Interface(zerolog.ErrorFieldName, err).
+				Msg("Panic in bridge state loop")
 		}
 	}()
 	for state := range bsq.ch {
@@ -72,7 +73,9 @@ func (bsq *BridgeStateQueue) immediateSendBridgeState(state status.BridgeState) 
 	retryIn := 2
 	for {
 		if bsq.prev != nil && bsq.prev.ShouldDeduplicate(&state) {
-			bsq.log.Debugfln("Not sending bridge state %s as it's a duplicate", state.StateEvent)
+			bsq.bridge.ZLog.Debug().
+				Str("state_event", string(state.StateEvent)).
+				Msg("Not sending bridge state as it's a duplicate")
 			return
 		}
 
@@ -81,7 +84,9 @@ func (bsq *BridgeStateQueue) immediateSendBridgeState(state status.BridgeState) 
 		cancel()
 
 		if err != nil {
-			bsq.log.Warnfln("Failed to update bridge state: %v, retrying in %d seconds", err, retryIn)
+			bsq.bridge.ZLog.Warn().Err(err).
+				Int("retry_in_seconds", retryIn).
+				Msg("Failed to update bridge state")
 			time.Sleep(time.Duration(retryIn) * time.Second)
 			retryIn *= 2
 			if retryIn > 64 {
@@ -89,7 +94,9 @@ func (bsq *BridgeStateQueue) immediateSendBridgeState(state status.BridgeState) 
 			}
 		} else {
 			bsq.prev = &state
-			bsq.log.Debugfln("Sent new bridge state %+v", state)
+			bsq.bridge.ZLog.Debug().
+				Interface("bridge_state", state).
+				Msg("Sent new bridge state")
 			return
 		}
 	}
@@ -103,7 +110,7 @@ func (bsq *BridgeStateQueue) Send(state status.BridgeState) {
 	state = state.Fill(bsq.user)
 
 	if len(bsq.ch) >= 8 {
-		bsq.log.Warnln("Bridge state queue is nearly full, discarding an item")
+		bsq.bridge.ZLog.Warn().Msg("Bridge state queue is nearly full, discarding an item")
 		select {
 		case <-bsq.ch:
 		default:
@@ -112,7 +119,7 @@ func (bsq *BridgeStateQueue) Send(state status.BridgeState) {
 	select {
 	case bsq.ch <- state:
 	default:
-		bsq.log.Errorfln("Bridge state queue is full, dropped new state")
+		bsq.bridge.ZLog.Error().Msg("Bridge state queue is full, dropped new state")
 	}
 }
 

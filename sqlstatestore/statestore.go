@@ -11,9 +11,9 @@ import (
 	"embed"
 	"encoding/json"
 	"errors"
-	"sync"
+	"fmt"
+	"strings"
 
-	"maunium.net/go/mautrix/appservice"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/util/dbutil"
@@ -32,16 +32,13 @@ const VersionTableName = "mx_version"
 
 type SQLStateStore struct {
 	*dbutil.Database
-
-	Typing     map[id.RoomID]map[id.UserID]int64
-	typingLock sync.RWMutex
+	IsBridge bool
 }
 
-var _ appservice.StateStore = (*SQLStateStore)(nil)
-
-func NewSQLStateStore(db *dbutil.Database, log dbutil.DatabaseLogger) *SQLStateStore {
+func NewSQLStateStore(db *dbutil.Database, log dbutil.DatabaseLogger, isBridge bool) *SQLStateStore {
 	return &SQLStateStore{
 		Database: db.Child(VersionTableName, UpgradeTable, log),
+		IsBridge: isBridge,
 	}
 }
 
@@ -63,9 +60,20 @@ func (store *SQLStateStore) MarkRegistered(userID id.UserID) {
 	}
 }
 
-func (store *SQLStateStore) GetRoomMembers(roomID id.RoomID) map[id.UserID]*event.MemberEventContent {
+func (store *SQLStateStore) GetRoomMembers(roomID id.RoomID, memberships ...event.Membership) map[id.UserID]*event.MemberEventContent {
 	members := make(map[id.UserID]*event.MemberEventContent)
-	rows, err := store.Query("SELECT user_id, membership, displayname, avatar_url FROM mx_user_profile WHERE room_id=$1", roomID)
+	args := make([]any, len(memberships)+1)
+	args[0] = roomID
+	query := "SELECT user_id, membership, displayname, avatar_url FROM mx_user_profile WHERE room_id=$1"
+	if len(memberships) > 0 {
+		placeholders := make([]string, len(memberships))
+		for i, membership := range memberships {
+			args[i+1] = string(membership)
+			placeholders[i] = fmt.Sprintf("$%d", i+2)
+		}
+		query = fmt.Sprintf("%s AND membership IN (%s)", query, strings.Join(placeholders, ","))
+	}
+	rows, err := store.Query(query, args...)
 	if err != nil {
 		return members
 	}
@@ -80,6 +88,17 @@ func (store *SQLStateStore) GetRoomMembers(roomID id.RoomID) map[id.UserID]*even
 		}
 	}
 	return members
+}
+
+func (store *SQLStateStore) GetRoomJoinedOrInvitedMembers(roomID id.RoomID) (members []id.UserID, err error) {
+	memberMap := store.GetRoomMembers(roomID, event.MembershipJoin, event.MembershipInvite)
+	members = make([]id.UserID, len(memberMap))
+	i := 0
+	for userID := range memberMap {
+		members[i] = userID
+		i++
+	}
+	return
 }
 
 func (store *SQLStateStore) GetMembership(roomID id.RoomID, userID id.UserID) event.Membership {
@@ -113,11 +132,19 @@ func (store *SQLStateStore) TryGetMember(roomID id.RoomID, userID id.UserID) (*e
 }
 
 func (store *SQLStateStore) FindSharedRooms(userID id.UserID) (rooms []id.RoomID) {
-	rows, err := store.Query(`
+	query := `
 		SELECT room_id FROM mx_user_profile
 		LEFT JOIN portal ON portal.mxid=mx_user_profile.room_id
 		WHERE mx_user_profile.user_id=$1 AND portal.encrypted=true
-	`, userID)
+	`
+	if !store.IsBridge {
+		query = `
+		SELECT mx_user_profile.room_id FROM mx_user_profile
+		LEFT JOIN mx_room_state ON mx_room_state.room_id=mx_user_profile.room_id
+		WHERE mx_user_profile.user_id=$1 AND mx_room_state.encryption IS NOT NULL
+	`
+	}
+	rows, err := store.Query(query, userID)
 	if err != nil {
 		store.Log.Warn("Failed to query shared rooms with %s: %v", userID, err)
 		return
@@ -172,6 +199,48 @@ func (store *SQLStateStore) SetMember(roomID id.RoomID, userID id.UserID, member
 	}
 }
 
+func (store *SQLStateStore) SetEncryptionEvent(roomID id.RoomID, content *event.EncryptionEventContent) {
+	contentBytes, err := json.Marshal(content)
+	if err != nil {
+		store.Log.Warn("Failed to marshal encryption config of %s: %v", roomID, err)
+		return
+	}
+	_, err = store.Exec(`
+		INSERT INTO mx_room_state (room_id, encryption) VALUES ($1, $2)
+		ON CONFLICT (room_id) DO UPDATE SET encryption=excluded.encryption
+	`, roomID, contentBytes)
+	if err != nil {
+		store.Log.Warn("Failed to store encryption config of %s: %v", roomID, err)
+	}
+}
+
+func (store *SQLStateStore) GetEncryptionEvent(roomID id.RoomID) *event.EncryptionEventContent {
+	var data []byte
+	err := store.
+		QueryRow("SELECT encryption FROM mx_room_state WHERE room_id=$1", roomID).
+		Scan(&data)
+	if err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			store.Log.Warn("Failed to scan encryption config of %s: %v", roomID, err)
+		}
+		return nil
+	} else if data == nil {
+		return nil
+	}
+	content := &event.EncryptionEventContent{}
+	err = json.Unmarshal(data, content)
+	if err != nil {
+		store.Log.Warn("Failed to parse encryption config of %s: %v", roomID, err)
+		return nil
+	}
+	return content
+}
+
+func (store *SQLStateStore) IsEncrypted(roomID id.RoomID) bool {
+	cfg := store.GetEncryptionEvent(roomID)
+	return cfg != nil && cfg.Algorithm == id.AlgorithmMegolmV1
+}
+
 func (store *SQLStateStore) SetPowerLevels(roomID id.RoomID, levels *event.PowerLevelsEventContent) {
 	levelsBytes, err := json.Marshal(levels)
 	if err != nil {
@@ -196,6 +265,8 @@ func (store *SQLStateStore) GetPowerLevels(roomID id.RoomID) (levels *event.Powe
 		if !errors.Is(err, sql.ErrNoRows) {
 			store.Log.Warn("Failed to scan power levels of %s: %v", roomID, err)
 		}
+		return
+	} else if data == nil {
 		return
 	}
 	levels = &event.PowerLevelsEventContent{}

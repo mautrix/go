@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Tulir Asokan
+// Copyright (c) 2023 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/rs/zerolog"
 	"maunium.net/go/maulogger/v2"
 
 	"maunium.net/go/mautrix"
@@ -32,8 +33,11 @@ type Event struct {
 	User      bridge.User
 	Command   string
 	Args      []string
+	RawArgs   string
 	ReplyTo   id.EventID
-	Log       maulogger.Logger
+	ZLog      *zerolog.Logger
+	// Deprecated: switch to ZLog
+	Log maulogger.Logger
 }
 
 // MainIntent returns the intent to use when replying to the command.
@@ -47,14 +51,23 @@ func (ce *Event) MainIntent() *appservice.IntentAPI {
 	return intent
 }
 
-// Reply sends a reply to command as notice.
+// Reply sends a reply to command as notice, with optional string formatting and automatic $cmdprefix replacement.
 func (ce *Event) Reply(msg string, args ...interface{}) {
 	msg = strings.ReplaceAll(msg, "$cmdprefix ", ce.Bridge.Config.Bridge.GetCommandPrefix()+" ")
-	content := format.RenderMarkdown(fmt.Sprintf(msg, args...), true, false)
+	if len(args) > 0 {
+		msg = fmt.Sprintf(msg, args...)
+	}
+	ce.ReplyAdvanced(msg, true, false)
+}
+
+// ReplyAdvanced sends a reply to command as notice. It allows using HTML and disabling markdown,
+// but doesn't have built-in string formatting.
+func (ce *Event) ReplyAdvanced(msg string, allowMarkdown, allowHTML bool) {
+	content := format.RenderMarkdown(msg, allowMarkdown, allowHTML)
 	content.MsgType = event.MsgNotice
 	_, err := ce.MainIntent().SendMessageEvent(ce.RoomID, event.EventMessage, content)
 	if err != nil {
-		ce.Processor.log.Warnfln("Failed to reply to command from %s: %v", ce.User.GetMXID(), err)
+		ce.ZLog.Error().Err(err).Msgf("Failed to reply to command")
 	}
 }
 
@@ -62,7 +75,7 @@ func (ce *Event) Reply(msg string, args ...interface{}) {
 func (ce *Event) React(key string) {
 	_, err := ce.MainIntent().SendReaction(ce.RoomID, ce.EventID, key)
 	if err != nil {
-		ce.Processor.log.Warnfln("Failed to react to command from %s: %v", ce.User.GetMXID(), err)
+		ce.ZLog.Error().Err(err).Msgf("Failed to react to command")
 	}
 }
 
@@ -70,7 +83,7 @@ func (ce *Event) React(key string) {
 func (ce *Event) Redact(req ...mautrix.ReqRedact) {
 	_, err := ce.MainIntent().RedactEvent(ce.RoomID, ce.EventID, req...)
 	if err != nil {
-		ce.Processor.log.Warnfln("Failed to redact command from %s: %v", ce.User.GetMXID(), err)
+		ce.ZLog.Error().Err(err).Msgf("Failed to redact command")
 	}
 }
 
@@ -78,6 +91,6 @@ func (ce *Event) Redact(req ...mautrix.ReqRedact) {
 func (ce *Event) MarkRead() {
 	err := ce.MainIntent().SendReceipt(ce.RoomID, ce.EventID, event.ReceiptTypeRead, nil)
 	if err != nil {
-		ce.Processor.log.Warnfln("Failed to mark command from %s as read: %v", ce.User.GetMXID(), err)
+		ce.ZLog.Error().Err(err).Msgf("Failed to mark command as read")
 	}
 }

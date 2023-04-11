@@ -7,6 +7,7 @@
 package crypto
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"time"
@@ -80,7 +81,7 @@ func (mach *OlmMachine) SendInRoomSASVerificationCancel(roomID id.RoomID, userID
 		To:        userID,
 	}
 
-	encrypted, err := mach.EncryptMegolmEvent(roomID, event.InRoomVerificationCancel, content)
+	encrypted, err := mach.EncryptMegolmEvent(context.TODO(), roomID, event.InRoomVerificationCancel, content)
 	if err != nil {
 		return err
 	}
@@ -97,7 +98,7 @@ func (mach *OlmMachine) SendInRoomSASVerificationRequest(roomID id.RoomID, toUse
 		To:         toUserID,
 	}
 
-	encrypted, err := mach.EncryptMegolmEvent(roomID, event.EventMessage, content)
+	encrypted, err := mach.EncryptMegolmEvent(context.TODO(), roomID, event.EventMessage, content)
 	if err != nil {
 		return "", err
 	}
@@ -116,7 +117,7 @@ func (mach *OlmMachine) SendInRoomSASVerificationReady(roomID id.RoomID, transac
 		RelatesTo:  &event.RelatesTo{Type: event.RelReference, EventID: id.EventID(transactionID)},
 	}
 
-	encrypted, err := mach.EncryptMegolmEvent(roomID, event.InRoomVerificationReady, content)
+	encrypted, err := mach.EncryptMegolmEvent(context.TODO(), roomID, event.InRoomVerificationReady, content)
 	if err != nil {
 		return err
 	}
@@ -141,7 +142,7 @@ func (mach *OlmMachine) SendInRoomSASVerificationStart(roomID id.RoomID, toUserI
 		To:                         toUserID,
 	}
 
-	encrypted, err := mach.EncryptMegolmEvent(roomID, event.InRoomVerificationStart, content)
+	encrypted, err := mach.EncryptMegolmEvent(context.TODO(), roomID, event.InRoomVerificationStart, content)
 	if err != nil {
 		return nil, err
 	}
@@ -182,7 +183,7 @@ func (mach *OlmMachine) SendInRoomSASVerificationAccept(roomID id.RoomID, fromUs
 		To:                        fromUser,
 	}
 
-	encrypted, err := mach.EncryptMegolmEvent(roomID, event.InRoomVerificationAccept, content)
+	encrypted, err := mach.EncryptMegolmEvent(context.TODO(), roomID, event.InRoomVerificationAccept, content)
 	if err != nil {
 		return err
 	}
@@ -198,7 +199,7 @@ func (mach *OlmMachine) SendInRoomSASVerificationKey(roomID id.RoomID, userID id
 		To:        userID,
 	}
 
-	encrypted, err := mach.EncryptMegolmEvent(roomID, event.InRoomVerificationKey, content)
+	encrypted, err := mach.EncryptMegolmEvent(context.TODO(), roomID, event.InRoomVerificationKey, content)
 	if err != nil {
 		return err
 	}
@@ -222,9 +223,9 @@ func (mach *OlmMachine) SendInRoomSASVerificationMAC(roomID id.RoomID, userID id
 		masterKeyMAC, _, err := mach.getPKAndKeysMAC(sas, mach.Client.UserID, mach.Client.DeviceID,
 			userID, deviceID, transactionID, masterKey, masterKeyID, keyIDsMap)
 		if err != nil {
-			mach.Log.Error("Error generating master key MAC: %v", err)
+			mach.Log.Error().Msgf("Error generating master key MAC: %v", err)
 		} else {
-			mach.Log.Debug("Generated master key `%v` MAC: %v", masterKey, masterKeyMAC)
+			mach.Log.Debug().Msgf("Generated master key `%v` MAC: %v", masterKey, masterKeyMAC)
 			macMap[masterKeyID] = masterKeyMAC
 		}
 	}
@@ -233,8 +234,8 @@ func (mach *OlmMachine) SendInRoomSASVerificationMAC(roomID id.RoomID, userID id
 	if err != nil {
 		return err
 	}
-	mach.Log.Debug("MAC of key %s is: %s", signingKey, pubKeyMac)
-	mach.Log.Debug("MAC of key ID(s) %s is: %s", keyID, keysMac)
+	mach.Log.Debug().Msgf("MAC of key %s is: %s", signingKey, pubKeyMac)
+	mach.Log.Debug().Msgf("MAC of key ID(s) %s is: %s", keyID, keysMac)
 	macMap[keyID] = pubKeyMac
 
 	content := &event.VerificationMacEventContent{
@@ -244,7 +245,7 @@ func (mach *OlmMachine) SendInRoomSASVerificationMAC(roomID id.RoomID, userID id
 		To:        userID,
 	}
 
-	encrypted, err := mach.EncryptMegolmEvent(roomID, event.InRoomVerificationMAC, content)
+	encrypted, err := mach.EncryptMegolmEvent(context.TODO(), roomID, event.InRoomVerificationMAC, content)
 	if err != nil {
 		return err
 	}
@@ -259,7 +260,7 @@ func (mach *OlmMachine) NewInRoomSASVerificationWith(inRoomID id.RoomID, userID 
 }
 
 func (mach *OlmMachine) newInRoomSASVerificationWithInner(inRoomID id.RoomID, device *id.Device, hooks VerificationHooks, transactionID string, timeout time.Duration) (string, error) {
-	mach.Log.Debug("Starting new in-room verification transaction user %v", device.UserID)
+	mach.Log.Debug().Msgf("Starting new in-room verification transaction user %v", device.UserID)
 
 	request := transactionID == ""
 	if request {
@@ -310,15 +311,15 @@ func (mach *OlmMachine) newInRoomSASVerificationWithInner(inRoomID id.RoomID, de
 }
 
 func (mach *OlmMachine) handleInRoomVerificationReady(userID id.UserID, roomID id.RoomID, content *event.VerificationReadyEventContent, transactionID string) {
-	device, err := mach.GetOrFetchDevice(userID, content.FromDevice)
+	device, err := mach.GetOrFetchDevice(context.TODO(), userID, content.FromDevice)
 	if err != nil {
-		mach.Log.Error("Error fetching device %v of user %v: %v", content.FromDevice, userID, err)
+		mach.Log.Error().Msgf("Error fetching device %v of user %v: %v", content.FromDevice, userID, err)
 		return
 	}
 
 	verState, err := mach.getTransactionState(transactionID, userID)
 	if err != nil {
-		mach.Log.Error("Error getting transaction state: %v", err)
+		mach.Log.Error().Msgf("Error getting transaction state: %v", err)
 		return
 	}
 	//mach.keyVerificationTransactionState.Delete(userID.String() + ":" + transactionID)

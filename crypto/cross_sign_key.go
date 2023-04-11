@@ -1,4 +1,5 @@
 // Copyright (c) 2020 Nikos Filippakis
+// Copyright (c) 2023 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -55,8 +56,11 @@ func (mach *OlmMachine) ImportCrossSigningKeys(keys CrossSigningSeeds) (err erro
 		return
 	}
 
-	mach.Log.Trace("Got cross-signing keys: Master `%v` Self-signing `%v` User-signing `%v`",
-		keysCache.MasterKey.PublicKey, keysCache.SelfSigningKey.PublicKey, keysCache.UserSigningKey.PublicKey)
+	mach.Log.Debug().
+		Str("master", keysCache.MasterKey.PublicKey.String()).
+		Str("self_signing", keysCache.SelfSigningKey.PublicKey.String()).
+		Str("user_signing", keysCache.UserSigningKey.PublicKey.String()).
+		Msg("Imported own cross-signing keys")
 
 	mach.CrossSigningKeys = &keysCache
 	mach.crossSigningPubkeys = keysCache.PublicKeys()
@@ -76,8 +80,11 @@ func (mach *OlmMachine) GenerateCrossSigningKeys() (*CrossSigningKeysCache, erro
 	if keysCache.UserSigningKey, err = olm.NewPkSigning(); err != nil {
 		return nil, fmt.Errorf("failed to generate user-signing key: %w", err)
 	}
-	mach.Log.Debug("Generated cross-signing keys: Master: `%v` Self-signing: `%v` User-signing: `%v`",
-		keysCache.MasterKey.PublicKey, keysCache.SelfSigningKey.PublicKey, keysCache.UserSigningKey.PublicKey)
+	mach.Log.Debug().
+		Str("master", keysCache.MasterKey.PublicKey.String()).
+		Str("self_signing", keysCache.SelfSigningKey.PublicKey.String()).
+		Str("user_signing", keysCache.UserSigningKey.PublicKey.String()).
+		Msg("Generated cross-signing keys")
 	return &keysCache, nil
 }
 

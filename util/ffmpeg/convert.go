@@ -9,7 +9,6 @@ package ffmpeg
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -33,7 +32,7 @@ var ffmpegDefaultParams = []string{"-hide_banner", "-loglevel", "warning"}
 //
 // Returns: the path to the converted file.
 func ConvertPath(ctx context.Context, inputFile string, outputExtension string, inputArgs []string, outputArgs []string, removeInput bool) (string, error) {
-	outputFilename := strings.TrimSuffix(inputFile, filepath.Ext(inputFile)) + outputExtension
+	outputFilename := strings.TrimSuffix(strings.TrimSuffix(inputFile, filepath.Ext(inputFile)), "*") + outputExtension
 
 	args := make([]string, 0, len(ffmpegDefaultParams)+len(inputArgs)+2+len(outputArgs)+1)
 	args = append(args, ffmpegDefaultParams...)
@@ -69,7 +68,7 @@ func ConvertPath(ctx context.Context, inputFile string, outputExtension string, 
 //
 // Returns: the converted data
 func ConvertBytes(ctx context.Context, data []byte, outputExtension string, inputArgs []string, outputArgs []string, inputMime string) ([]byte, error) {
-	tempdir, err := ioutil.TempDir("", "mautrix_ffmpeg_*")
+	tempdir, err := os.MkdirTemp("", "mautrix_ffmpeg_*")
 	if err != nil {
 		return nil, err
 	}
@@ -91,5 +90,5 @@ func ConvertBytes(ctx context.Context, data []byte, outputExtension string, inpu
 	if err != nil {
 		return nil, err
 	}
-	return ioutil.ReadFile(outputPath)
+	return os.ReadFile(outputPath)
 }

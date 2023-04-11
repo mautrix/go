@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Tulir Asokan
+// Copyright (c) 2023 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,13 +8,20 @@ package bridgeconfig
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/rs/zerolog"
+	"go.mau.fi/zeroconfig"
+	"gopkg.in/yaml.v3"
 
 	"maunium.net/go/mautrix/appservice"
 	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/util"
 	up "maunium.net/go/mautrix/util/configupgrade"
+	"maunium.net/go/mautrix/util/dbutil"
 )
 
 type HomeserverSoftware string
@@ -36,6 +43,8 @@ type HomeserverConfig struct {
 	Domain     string `yaml:"domain"`
 	AsyncMedia bool   `yaml:"async_media"`
 
+	PublicAddress string `yaml:"public_address,omitempty"`
+
 	Software HomeserverSoftware `yaml:"software"`
 
 	StatusEndpoint                string `yaml:"status_endpoint"`
@@ -50,7 +59,7 @@ type AppserviceConfig struct {
 	Hostname string `yaml:"hostname"`
 	Port     uint16 `yaml:"port"`
 
-	Database DatabaseConfig `yaml:"database"`
+	Database dbutil.Config `yaml:"database"`
 
 	ID  string        `yaml:"id"`
 	Bot BotUserConfig `yaml:"bot"`
@@ -93,7 +102,7 @@ func (config *BaseConfig) GenerateRegistration() *appservice.Registration {
 func (config *BaseConfig) MakeAppService() *appservice.AppService {
 	as := appservice.Create()
 	as.HomeserverDomain = config.Homeserver.Domain
-	as.HomeserverURL = config.Homeserver.Address
+	_ = as.SetHomeserverURL(config.Homeserver.Address)
 	as.Host.Hostname = config.AppService.Hostname
 	as.Host.Port = config.AppService.Port
 	as.DefaultHTTPRetries = 4
@@ -147,17 +156,6 @@ func (buc *BotUserConfig) UnmarshalYAML(unmarshal func(interface{}) error) error
 	return nil
 }
 
-type DatabaseConfig struct {
-	Type string `yaml:"type"`
-	URI  string `yaml:"uri"`
-
-	MaxOpenConns int `yaml:"max_open_conns"`
-	MaxIdleConns int `yaml:"max_idle_conns"`
-
-	ConnMaxIdleTime string `yaml:"conn_max_idle_time"`
-	ConnMaxLifetime string `yaml:"conn_max_lifetime"`
-}
-
 type BridgeConfig interface {
 	FormatUsername(username string) string
 	GetEncryptionConfig() EncryptionConfig
@@ -174,6 +172,8 @@ type EncryptionConfig struct {
 	Default    bool `yaml:"default"`
 	Require    bool `yaml:"require"`
 	Appservice bool `yaml:"appservice"`
+
+	PlaintextMentions bool `yaml:"plaintext_mentions"`
 
 	VerificationLevels struct {
 		Receive id.TrustState `yaml:"receive"`
@@ -197,10 +197,10 @@ type ManagementRoomTexts struct {
 }
 
 type BaseConfig struct {
-	Homeserver HomeserverConfig     `yaml:"homeserver"`
-	AppService AppserviceConfig     `yaml:"appservice"`
-	Bridge     BridgeConfig         `yaml:"-"`
-	Logging    appservice.LogConfig `yaml:"logging"`
+	Homeserver HomeserverConfig  `yaml:"homeserver"`
+	AppService AppserviceConfig  `yaml:"appservice"`
+	Bridge     BridgeConfig      `yaml:"-"`
+	Logging    zeroconfig.Config `yaml:"logging"`
 }
 
 func doUpgrade(helper *up.Helper) {
@@ -219,7 +219,7 @@ func doUpgrade(helper *up.Helper) {
 
 	helper.Copy(up.Str, "appservice", "address")
 	helper.Copy(up.Str, "appservice", "hostname")
-	helper.Copy(up.Int, "appservice", "port")
+	helper.Copy(up.Int|up.Null, "appservice", "port")
 	if dbType, ok := helper.Get(up.Str, "appservice", "database", "type"); ok && dbType == "sqlite3" {
 		helper.Set(up.Str, "sqlite3-fk-wal", "appservice", "database", "type")
 	} else {
@@ -239,14 +239,73 @@ func doUpgrade(helper *up.Helper) {
 	helper.Copy(up.Str, "appservice", "as_token")
 	helper.Copy(up.Str, "appservice", "hs_token")
 
-	helper.Copy(up.Str, "logging", "directory")
-	helper.Copy(up.Str|up.Null, "logging", "file_name_format")
-	helper.Copy(up.Str|up.Timestamp, "logging", "file_date_format")
-	helper.Copy(up.Int, "logging", "file_mode")
-	helper.Copy(up.Str|up.Timestamp, "logging", "timestamp_format")
-	helper.Copy(up.Str, "logging", "print_level")
-	helper.Copy(up.Bool, "logging", "print_json")
-	helper.Copy(up.Bool, "logging", "file_json")
+	if helper.GetNode("logging", "writers") == nil && (helper.GetNode("logging", "print_level") != nil || helper.GetNode("logging", "file_name_format") != nil) {
+		_, _ = fmt.Fprintln(os.Stderr, "Migrating legacy log config")
+		migrateLegacyLogConfig(helper)
+	} else {
+		helper.Copy(up.Map, "logging")
+	}
+}
+
+type legacyLogConfig struct {
+	Directory       string `yaml:"directory"`
+	FileNameFormat  string `yaml:"file_name_format"`
+	FileDateFormat  string `yaml:"file_date_format"`
+	FileMode        uint32 `yaml:"file_mode"`
+	TimestampFormat string `yaml:"timestamp_format"`
+	RawPrintLevel   string `yaml:"print_level"`
+	JSONStdout      bool   `yaml:"print_json"`
+	JSONFile        bool   `yaml:"file_json"`
+}
+
+func migrateLegacyLogConfig(helper *up.Helper) {
+	var llc legacyLogConfig
+	var newConfig zeroconfig.Config
+	err := helper.GetBaseNode("logging").Decode(&newConfig)
+	if err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, "Base config is corrupted: failed to decode example log config:", err)
+		return
+	} else if len(newConfig.Writers) != 2 || newConfig.Writers[0].Type != "stdout" || newConfig.Writers[1].Type != "file" {
+		_, _ = fmt.Fprintln(os.Stderr, "Base log config is not in expected format")
+		return
+	}
+	err = helper.GetNode("logging").Decode(&llc)
+	if err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, "Failed to decode legacy log config:", err)
+		return
+	}
+	if llc.RawPrintLevel != "" {
+		level, err := zerolog.ParseLevel(llc.RawPrintLevel)
+		if err != nil {
+			_, _ = fmt.Fprintln(os.Stderr, "Failed to parse minimum stdout log level:", err)
+		} else {
+			newConfig.Writers[0].MinLevel = &level
+		}
+	}
+	if llc.Directory != "" && llc.FileNameFormat != "" {
+		if llc.FileNameFormat == "{{.Date}}-{{.Index}}.log" {
+			llc.FileNameFormat = "bridge.log"
+		} else {
+			llc.FileNameFormat = strings.ReplaceAll(llc.FileNameFormat, "{{.Date}}", "")
+			llc.FileNameFormat = strings.ReplaceAll(llc.FileNameFormat, "{{.Index}}", "")
+		}
+		newConfig.Writers[1].Filename = filepath.Join(llc.Directory, llc.FileNameFormat)
+	} else if llc.FileNameFormat == "" {
+		newConfig.Writers = newConfig.Writers[0:1]
+	}
+	if llc.JSONStdout {
+		newConfig.Writers[0].TimeFormat = ""
+		newConfig.Writers[0].Format = "json"
+	} else if llc.TimestampFormat != "" {
+		newConfig.Writers[0].TimeFormat = llc.TimestampFormat
+	}
+	var updatedConfig yaml.Node
+	err = updatedConfig.Encode(&newConfig)
+	if err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, "Failed to encode migrated log config:", err)
+		return
+	}
+	*helper.GetBaseNode("logging").Node = updatedConfig
 }
 
 // Upgrader is a config upgrader that copies the default fields in the homeserver, appservice and logging blocks.

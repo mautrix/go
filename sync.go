@@ -7,6 +7,7 @@
 package mautrix
 
 import (
+	"errors"
 	"fmt"
 	"runtime/debug"
 	"time"
@@ -28,44 +29,52 @@ const (
 	EventSourceState
 	EventSourceEphemeral
 	EventSourceToDevice
+	EventSourceDecrypted
 )
 
+const primaryTypes = EventSourcePresence | EventSourceAccountData | EventSourceToDevice | EventSourceTimeline | EventSourceState
+const roomSections = EventSourceJoin | EventSourceInvite | EventSourceLeave
+const roomableTypes = EventSourceAccountData | EventSourceTimeline | EventSourceState
+const encryptableTypes = roomableTypes | EventSourceToDevice
+
 func (es EventSource) String() string {
-	switch {
-	case es == EventSourcePresence:
-		return "presence"
-	case es == EventSourceAccountData:
-		return "user account data"
-	case es == EventSourceToDevice:
-		return "to-device"
-	case es&EventSourceJoin != 0:
-		es -= EventSourceJoin
-		switch es {
-		case EventSourceState:
-			return "joined state"
-		case EventSourceTimeline:
-			return "joined timeline"
-		case EventSourceEphemeral:
-			return "room ephemeral (joined)"
-		case EventSourceAccountData:
-			return "room account data (joined)"
-		}
-	case es&EventSourceInvite != 0:
-		es -= EventSourceInvite
-		switch es {
-		case EventSourceState:
-			return "invited state"
-		}
-	case es&EventSourceLeave != 0:
-		es -= EventSourceLeave
-		switch es {
-		case EventSourceState:
-			return "left state"
-		case EventSourceTimeline:
-			return "left timeline"
-		}
+	var typeName string
+	switch es & primaryTypes {
+	case EventSourcePresence:
+		typeName = "presence"
+	case EventSourceAccountData:
+		typeName = "account data"
+	case EventSourceToDevice:
+		typeName = "to-device"
+	case EventSourceTimeline:
+		typeName = "timeline"
+	case EventSourceState:
+		typeName = "state"
+	default:
+		return fmt.Sprintf("unknown (%d)", es)
 	}
-	return fmt.Sprintf("unknown (%d)", es)
+	if es&roomableTypes != 0 {
+		switch es & roomSections {
+		case EventSourceJoin:
+			typeName = "joined room " + typeName
+		case EventSourceInvite:
+			typeName = "invited room " + typeName
+		case EventSourceLeave:
+			typeName = "left room " + typeName
+		default:
+			return fmt.Sprintf("unknown (%d)", es)
+		}
+		es &^= roomableTypes
+	}
+	if es&encryptableTypes != 0 && es&EventSourceDecrypted != 0 {
+		typeName += " (decrypted)"
+		es &^= EventSourceDecrypted
+	}
+	es &^= primaryTypes
+	if es != 0 {
+		return fmt.Sprintf("unknown (%d)", es)
+	}
+	return typeName
 }
 
 // EventHandler handles a single event from a sync response.
@@ -76,9 +85,8 @@ type SyncHandler func(resp *RespSync, since string) bool
 
 // Syncer is an interface that must be satisfied in order to do /sync requests on a client.
 type Syncer interface {
-	// Process the /sync response. The since parameter is the since= value that was used to produce the response.
-	// This is useful for detecting the very first sync (since=""). If an error is return, Syncing will be stopped
-	// permanently.
+	// ProcessResponse processes the /sync response. The since parameter is the since= value that was used to produce the response.
+	// This is useful for detecting the very first sync (since=""). If an error is return, Syncing will be stopped permanently.
 	ProcessResponse(resp *RespSync, since string) error
 	// OnFailedSync returns either the time to wait before retrying or an error to stop syncing permanently.
 	OnFailedSync(res *RespSync, err error) (time.Duration, error)
@@ -90,6 +98,10 @@ type ExtensibleSyncer interface {
 	OnSync(callback SyncHandler)
 	OnEvent(callback EventHandler)
 	OnEventType(eventType event.Type, callback EventHandler)
+}
+
+type DispatchableSyncer interface {
+	Dispatch(source EventSource, evt *event.Event)
 }
 
 // DefaultSyncer is the default syncing implementation. You can either write your own syncer, or selectively
@@ -107,6 +119,8 @@ type DefaultSyncer struct {
 	// ParseErrorHandler is called when event.Content.ParseRaw returns an error.
 	// If it returns false, the event will not be forwarded to listeners.
 	ParseErrorHandler func(evt *event.Event, err error) bool
+	// FilterJSON is used when the client starts syncing and doesn't get an existing filter ID from SyncStore's LoadFilterID.
+	FilterJSON *Filter
 }
 
 var _ Syncer = (*DefaultSyncer)(nil)
@@ -191,10 +205,10 @@ func (s *DefaultSyncer) processSyncEvent(roomID id.RoomID, evt *event.Event, sou
 		}
 	}
 
-	s.notifyListeners(source, evt)
+	s.Dispatch(source, evt)
 }
 
-func (s *DefaultSyncer) notifyListeners(source EventSource, evt *event.Event) {
+func (s *DefaultSyncer) Dispatch(source EventSource, evt *event.Event) {
 	for _, fn := range s.globalListeners {
 		fn(source, evt)
 	}
@@ -226,22 +240,34 @@ func (s *DefaultSyncer) OnEvent(callback EventHandler) {
 
 // OnFailedSync always returns a 10 second wait period between failed /syncs, never a fatal error.
 func (s *DefaultSyncer) OnFailedSync(res *RespSync, err error) (time.Duration, error) {
+	if errors.Is(err, MUnknownToken) {
+		return 0, err
+	}
 	return 10 * time.Second, nil
+}
+
+var defaultFilter = Filter{
+	Room: RoomFilter{
+		Timeline: FilterPart{
+			Limit: 50,
+		},
+	},
 }
 
 // GetFilterJSON returns a filter with a timeline limit of 50.
 func (s *DefaultSyncer) GetFilterJSON(userID id.UserID) *Filter {
-	return &Filter{
-		Room: RoomFilter{
-			Timeline: FilterPart{
-				Limit: 50,
-			},
-		},
+	if s.FilterJSON == nil {
+		defaultFilterCopy := defaultFilter
+		s.FilterJSON = &defaultFilterCopy
 	}
+	return s.FilterJSON
 }
 
 // OldEventIgnorer is an utility struct for bots to ignore events from before the bot joined the room.
-// Create a struct and call Register with your DefaultSyncer to register the sync handler.
+//
+// Create a struct and call Register with your DefaultSyncer to register the sync handler, e.g.:
+//
+//	(&OldEventIgnorer{UserID: cli.UserID}).Register(cli.Syncer.(mautrix.ExtensibleSyncer))
 type OldEventIgnorer struct {
 	UserID id.UserID
 }

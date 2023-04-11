@@ -7,13 +7,18 @@
 package crypto
 
 import (
+	"context"
 	"database/sql"
 	"database/sql/driver"
 	"errors"
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/rs/zerolog"
+
+	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/crypto/sql_store_upgrade"
 	"maunium.net/go/mautrix/event"
@@ -78,6 +83,35 @@ func (store *SQLCryptoStore) GetNextBatch() (string, error) {
 		}
 	}
 	return store.SyncToken, nil
+}
+
+var _ mautrix.SyncStore = (*SQLCryptoStore)(nil)
+
+func (store *SQLCryptoStore) SaveFilterID(_ id.UserID, _ string) {}
+func (store *SQLCryptoStore) LoadFilterID(_ id.UserID) string    { return "" }
+
+func (store *SQLCryptoStore) SaveNextBatch(_ id.UserID, nextBatchToken string) {
+	err := store.PutNextBatch(nextBatchToken)
+	if err != nil {
+		// TODO handle error
+	}
+}
+
+func (store *SQLCryptoStore) LoadNextBatch(_ id.UserID) string {
+	nb, err := store.GetNextBatch()
+	if err != nil {
+		// TODO handle error
+	}
+	return nb
+}
+
+func (store *SQLCryptoStore) FindDeviceID() (deviceID id.DeviceID) {
+	err := store.DB.QueryRow("SELECT device_id FROM crypto_account WHERE account_id=$1", store.AccountID).Scan(&deviceID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		// TODO return error
+		store.DB.Log.Warn("Failed to scan device ID: %v", err)
+	}
+	return
 }
 
 // PutAccount stores an OlmAccount in the database.
@@ -367,7 +401,7 @@ func (store *SQLCryptoStore) AddOutboundGroupSession(session *OutboundGroupSessi
 				max_messages=excluded.max_messages, message_count=excluded.message_count, max_age=excluded.max_age,
 				created_at=excluded.created_at, last_used=excluded.last_used, account_id=excluded.account_id
 	`, session.RoomID, session.ID(), sessionBytes, session.Shared, session.MaxMessages, session.MessageCount,
-		session.MaxAge, session.CreationTime, session.LastEncryptedTime, store.AccountID)
+		session.MaxAge.Milliseconds(), session.CreationTime, session.LastEncryptedTime, store.AccountID)
 	return err
 }
 
@@ -383,11 +417,12 @@ func (store *SQLCryptoStore) UpdateOutboundGroupSession(session *OutboundGroupSe
 func (store *SQLCryptoStore) GetOutboundGroupSession(roomID id.RoomID) (*OutboundGroupSession, error) {
 	var ogs OutboundGroupSession
 	var sessionBytes []byte
+	var maxAgeMS int64
 	err := store.DB.QueryRow(`
 		SELECT session, shared, max_messages, message_count, max_age, created_at, last_used
 		FROM crypto_megolm_outbound_session WHERE room_id=$1 AND account_id=$2`,
 		roomID, store.AccountID,
-	).Scan(&sessionBytes, &ogs.Shared, &ogs.MaxMessages, &ogs.MessageCount, &ogs.MaxAge, &ogs.CreationTime, &ogs.LastEncryptedTime)
+	).Scan(&sessionBytes, &ogs.Shared, &ogs.MaxMessages, &ogs.MessageCount, &maxAgeMS, &ogs.CreationTime, &ogs.LastEncryptedTime)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	} else if err != nil {
@@ -400,6 +435,7 @@ func (store *SQLCryptoStore) GetOutboundGroupSession(roomID id.RoomID) (*Outboun
 	}
 	ogs.Internal = *intOGS
 	ogs.RoomID = roomID
+	ogs.MaxAge = time.Duration(maxAgeMS) * time.Millisecond
 	return &ogs, nil
 }
 
@@ -412,7 +448,7 @@ func (store *SQLCryptoStore) RemoveOutboundGroupSession(roomID id.RoomID) error 
 
 // ValidateMessageIndex returns whether the given event information match the ones stored in the database
 // for the given sender key, session ID and index. If the index hasn't been stored, this will store it.
-func (store *SQLCryptoStore) ValidateMessageIndex(senderKey id.SenderKey, sessionID id.SessionID, eventID id.EventID, index uint, timestamp int64) (bool, error) {
+func (store *SQLCryptoStore) ValidateMessageIndex(ctx context.Context, senderKey id.SenderKey, sessionID id.SessionID, eventID id.EventID, index uint, timestamp int64) (bool, error) {
 	const validateQuery = `
 	INSERT INTO crypto_message_index (sender_key, session_id, "index", event_id, timestamp)
 	VALUES ($1, $2, $3, $4, $5)
@@ -422,11 +458,19 @@ func (store *SQLCryptoStore) ValidateMessageIndex(senderKey id.SenderKey, sessio
 	`
 	var expectedEventID id.EventID
 	var expectedTimestamp int64
-	err := store.DB.QueryRow(validateQuery, senderKey, sessionID, index, eventID, timestamp).Scan(&expectedEventID, &expectedTimestamp)
+	err := store.DB.QueryRowContext(ctx, validateQuery, senderKey, sessionID, index, eventID, timestamp).Scan(&expectedEventID, &expectedTimestamp)
 	if err != nil {
 		return false, err
+	} else if expectedEventID != eventID || expectedTimestamp != timestamp {
+		zerolog.Ctx(ctx).Debug().
+			Uint("message_index", index).
+			Str("expected_event_id", expectedEventID.String()).
+			Int64("expected_timestamp", expectedTimestamp).
+			Int64("actual_timestamp", timestamp).
+			Msg("Failed to validate that message index wasn't duplicated")
+		return false, nil
 	}
-	return expectedEventID == eventID && expectedTimestamp == timestamp, nil
+	return true, nil
 }
 
 // GetDevices returns a map of device IDs to device identities, including the identity and signing keys, for a given user ID.

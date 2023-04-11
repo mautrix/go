@@ -15,6 +15,7 @@ import (
 type HelpfulHandler interface {
 	Handler
 	GetHelp() HelpMeta
+	ShowInHelp(*Event) bool
 }
 
 type HelpSection struct {
@@ -80,11 +81,7 @@ func FormatHelp(ce *Event) string {
 	sections := make(map[HelpSection]helpMetaList)
 	for _, handler := range ce.Processor.handlers {
 		helpfulHandler, ok := handler.(HelpfulHandler)
-		if !ok {
-			continue
-		}
-		permissionedHandler, ok := handler.(PermissionedHandler)
-		if ok && !permissionedHandler.HasPermission(ce) {
+		if !ok || !helpfulHandler.ShowInHelp(ce) {
 			continue
 		}
 		help := helpfulHandler.GetHelp()

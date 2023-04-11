@@ -20,6 +20,7 @@ func init() {
 }
 
 type PushRuleCollection interface {
+	GetMatchingRule(room Room, evt *event.Event) *PushRule
 	GetActions(room Room, evt *event.Event) PushActionArray
 }
 
@@ -32,14 +33,18 @@ func (rules PushRuleArray) SetType(typ PushRuleType) PushRuleArray {
 	return rules
 }
 
-func (rules PushRuleArray) GetActions(room Room, evt *event.Event) PushActionArray {
+func (rules PushRuleArray) GetMatchingRule(room Room, evt *event.Event) *PushRule {
 	for _, rule := range rules {
 		if !rule.Match(room, evt) {
 			continue
 		}
-		return rule.Actions
+		return rule
 	}
 	return nil
+}
+
+func (rules PushRuleArray) GetActions(room Room, evt *event.Event) PushActionArray {
+	return rules.GetMatchingRule(room, evt).GetActions()
 }
 
 type PushRuleMap struct {
@@ -59,7 +64,7 @@ func (rules PushRuleArray) SetTypeAndMap(typ PushRuleType) PushRuleMap {
 	return data
 }
 
-func (ruleMap PushRuleMap) GetActions(room Room, evt *event.Event) PushActionArray {
+func (ruleMap PushRuleMap) GetMatchingRule(room Room, evt *event.Event) *PushRule {
 	var rule *PushRule
 	var found bool
 	switch ruleMap.Type {
@@ -69,9 +74,13 @@ func (ruleMap PushRuleMap) GetActions(room Room, evt *event.Event) PushActionArr
 		rule, found = ruleMap.Map[string(evt.Sender)]
 	}
 	if found && rule.Match(room, evt) {
-		return rule.Actions
+		return rule
 	}
 	return nil
+}
+
+func (ruleMap PushRuleMap) GetActions(room Room, evt *event.Event) PushActionArray {
+	return ruleMap.GetMatchingRule(room, evt).GetActions()
 }
 
 func (ruleMap PushRuleMap) Unmap() PushRuleArray {
@@ -114,8 +123,15 @@ type PushRule struct {
 	Pattern string `json:"pattern,omitempty"`
 }
 
+func (rule *PushRule) GetActions() PushActionArray {
+	if rule == nil {
+		return nil
+	}
+	return rule.Actions
+}
+
 func (rule *PushRule) Match(room Room, evt *event.Event) bool {
-	if !rule.Enabled {
+	if rule == nil || !rule.Enabled {
 		return false
 	}
 	switch rule.Type {

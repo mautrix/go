@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tulir Asokan
+// Copyright (c) 2023 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,14 +7,13 @@
 package appservice
 
 import (
-	"errors"
+	"context"
 	"fmt"
-	"html/template"
-	"io/ioutil"
+	"net"
 	"net/http"
 	"net/http/cookiejar"
+	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -22,10 +21,10 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
+	"github.com/rs/zerolog"
 	"golang.org/x/net/publicsuffix"
 	"gopkg.in/yaml.v3"
-
-	"maunium.net/go/maulogger/v2"
+	"maunium.net/go/maulogger/v2/maulogadapt"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
@@ -39,29 +38,38 @@ var OTKChannelSize = 4
 // Create a blank appservice instance.
 func Create() *AppService {
 	jar, _ := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
-	return &AppService{
-		LogConfig:  CreateLogConfig(),
+	as := &AppService{
+		Log:        zerolog.Nop(),
 		clients:    make(map[id.UserID]*mautrix.Client),
 		intents:    make(map[id.UserID]*IntentAPI),
 		HTTPClient: &http.Client{Timeout: 180 * time.Second, Jar: jar},
-		StateStore: NewBasicStateStore(),
+		StateStore: mautrix.NewMemoryStateStore().(StateStore),
 		Router:     mux.NewRouter(),
 		UserAgent:  mautrix.DefaultUserAgent,
 		txnIDC:     NewTransactionIDCache(128),
 		Live:       true,
 		Ready:      false,
-	}
-}
+		ProcessID:  getDefaultProcessID(),
 
-// Load an appservice config from a file.
-func Load(path string) (*AppService, error) {
-	data, readErr := ioutil.ReadFile(path)
-	if readErr != nil {
-		return nil, readErr
+		Events:         make(chan *event.Event, EventChannelSize),
+		ToDeviceEvents: make(chan *event.Event, EventChannelSize),
+		OTKCounts:      make(chan *mautrix.OTKCount, OTKChannelSize),
+		DeviceLists:    make(chan *mautrix.DeviceLists, EventChannelSize),
+		QueryHandler:   &QueryHandlerStub{},
 	}
 
-	config := Create()
-	return config, yaml.Unmarshal(data, config)
+	as.Router.HandleFunc("/transactions/{txnID}", as.PutTransaction).Methods(http.MethodPut)
+	as.Router.HandleFunc("/rooms/{roomAlias}", as.GetRoom).Methods(http.MethodGet)
+	as.Router.HandleFunc("/users/{userID}", as.GetUser).Methods(http.MethodGet)
+	as.Router.HandleFunc("/_matrix/app/v1/transactions/{txnID}", as.PutTransaction).Methods(http.MethodPut)
+	as.Router.HandleFunc("/_matrix/app/v1/rooms/{roomAlias}", as.GetRoom).Methods(http.MethodGet)
+	as.Router.HandleFunc("/_matrix/app/v1/users/{userID}", as.GetUser).Methods(http.MethodGet)
+	as.Router.HandleFunc("/_matrix/app/v1/ping", as.PostPing).Methods(http.MethodPost)
+	as.Router.HandleFunc("/_matrix/app/unstable/fi.mau.msc2659/ping", as.PostPing).Methods(http.MethodPost)
+	as.Router.HandleFunc("/_matrix/mau/live", as.GetLive).Methods(http.MethodGet)
+	as.Router.HandleFunc("/_matrix/mau/ready", as.GetReady).Methods(http.MethodGet)
+
+	return as
 }
 
 // QueryHandler handles room alias and user ID queries from the homeserver.
@@ -82,29 +90,38 @@ func (qh *QueryHandlerStub) QueryUser(userID id.UserID) bool {
 
 type WebsocketHandler func(WebsocketCommand) (ok bool, data interface{})
 
+type StateStore interface {
+	mautrix.StateStore
+
+	IsRegistered(userID id.UserID) bool
+	MarkRegistered(userID id.UserID)
+
+	GetPowerLevel(roomID id.RoomID, userID id.UserID) int
+	GetPowerLevelRequirement(roomID id.RoomID, eventType event.Type) int
+	HasPowerLevel(roomID id.RoomID, userID id.UserID, eventType event.Type) bool
+}
+
 // AppService is the main config for all appservices.
 // It also serves as the appservice instance struct.
 type AppService struct {
-	HomeserverDomain string     `yaml:"homeserver_domain"`
-	HomeserverURL    string     `yaml:"homeserver_url"`
-	RegistrationPath string     `yaml:"registration"`
-	Host             HostConfig `yaml:"host"`
-	LogConfig        LogConfig  `yaml:"logging"`
+	HomeserverDomain string
+	hsURLForClient   *url.URL
+	Host             HostConfig
 
-	Registration *Registration    `yaml:"-"`
-	Log          maulogger.Logger `yaml:"-"`
+	Registration *Registration
+	Log          zerolog.Logger
 
 	txnIDC *TransactionIDCache
 
-	Events         chan *event.Event         `yaml:"-"`
-	ToDeviceEvents chan *event.Event         `yaml:"-"`
-	DeviceLists    chan *mautrix.DeviceLists `yaml:"-"`
-	OTKCounts      chan *mautrix.OTKCount    `yaml:"-"`
-	QueryHandler   QueryHandler              `yaml:"-"`
-	StateStore     StateStore                `yaml:"-"`
+	Events         chan *event.Event
+	ToDeviceEvents chan *event.Event
+	DeviceLists    chan *mautrix.DeviceLists
+	OTKCounts      chan *mautrix.OTKCount
+	QueryHandler   QueryHandler
+	StateStore     StateStore
 
-	Router     *mux.Router `yaml:"-"`
-	UserAgent  string      `yaml:"-"`
+	Router     *mux.Router
+	UserAgent  string
 	server     *http.Server
 	HTTPClient *http.Client
 	botClient  *mautrix.Client
@@ -166,13 +183,21 @@ func (hc *HostConfig) Address() string {
 	return fmt.Sprintf("%s:%d", hc.Hostname, hc.Port)
 }
 
+func (hc *HostConfig) IsUnixSocket() bool {
+	return strings.HasPrefix(hc.Hostname, "/")
+}
+
+func (hc *HostConfig) IsConfigured() bool {
+	return hc.IsUnixSocket() || hc.Port != 0
+}
+
 // Save saves this config into a file at the given path.
 func (as *AppService) Save(path string) error {
 	data, err := yaml.Marshal(as)
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(path, data, 0644)
+	return os.WriteFile(path, data, 0644)
 }
 
 // YAML returns the config in YAML format.
@@ -200,11 +225,18 @@ func (as *AppService) makeIntent(userID id.UserID) *IntentAPI {
 	localpart, homeserver, err := userID.Parse()
 	if err != nil || len(localpart) == 0 || homeserver != as.HomeserverDomain {
 		if err != nil {
-			as.Log.Fatalfln("Failed to parse user ID %s: %v", userID, err)
+			as.Log.Error().Err(err).
+				Str("user_id", userID.String()).
+				Msg("Failed to parse user ID")
 		} else if len(localpart) == 0 {
-			as.Log.Fatalfln("Failed to make intent for %s: localpart is empty", userID)
+			as.Log.Error().Err(err).
+				Str("user_id", userID.String()).
+				Msg("Failed to make intent: localpart is empty")
 		} else if homeserver != as.HomeserverDomain {
-			as.Log.Fatalfln("Failed to make intent for %s: homeserver isn't %s", userID, as.HomeserverDomain)
+			as.Log.Error().Err(err).
+				Str("user_id", userID.String()).
+				Str("expected_homeserver", as.HomeserverDomain).
+				Msg("Failed to make intent: homeserver doesn't match")
 		}
 		return nil
 	}
@@ -230,28 +262,74 @@ func (as *AppService) BotIntent() *IntentAPI {
 	return as.botIntent
 }
 
+func (as *AppService) SetHomeserverURL(homeserverURL string) error {
+	parsedURL, err := url.Parse(homeserverURL)
+	if err != nil {
+		return err
+	}
+	copied := *parsedURL
+	as.hsURLForClient = &copied
+	if as.hsURLForClient.Scheme == "unix" {
+		as.hsURLForClient.Scheme = "http"
+		as.hsURLForClient.Host = "unix"
+		as.hsURLForClient.Path = ""
+	} else if as.hsURLForClient.Scheme == "" {
+		as.hsURLForClient.Scheme = "https"
+	}
+	as.hsURLForClient.RawPath = parsedURL.EscapedPath()
+
+	jar, _ := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
+	as.HTTPClient = &http.Client{Timeout: 180 * time.Second, Jar: jar}
+	if parsedURL.Scheme == "unix" {
+		as.HTTPClient.Transport = &http.Transport{
+			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
+				return net.Dial("unix", parsedURL.Path)
+			},
+		}
+	}
+	return nil
+}
+
+func (as *AppService) NewMautrixClient(userID id.UserID) *mautrix.Client {
+	client := &mautrix.Client{
+		HomeserverURL:       as.hsURLForClient,
+		UserID:              userID,
+		SetAppServiceUserID: true,
+		AccessToken:         as.Registration.AppToken,
+		UserAgent:           as.UserAgent,
+		StateStore:          as.StateStore,
+		Log:                 as.Log.With().Str("as_user_id", userID.String()).Logger(),
+		Client:              as.HTTPClient,
+		DefaultHTTPRetries:  as.DefaultHTTPRetries,
+	}
+	client.Logger = maulogadapt.ZeroAsMau(&client.Log)
+	return client
+}
+
+func (as *AppService) NewExternalMautrixClient(userID id.UserID, token string, homeserverURL string) (*mautrix.Client, error) {
+	client := as.NewMautrixClient(userID)
+	client.AccessToken = token
+	client.SetAppServiceUserID = false
+	if homeserverURL != "" {
+		client.Client = &http.Client{Timeout: 180 * time.Second}
+		var err error
+		client.HomeserverURL, err = mautrix.ParseAndNormalizeBaseURL(homeserverURL)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return client, nil
+}
+
 func (as *AppService) makeClient(userID id.UserID) *mautrix.Client {
 	as.clientsLock.Lock()
 	defer as.clientsLock.Unlock()
 
 	client, ok := as.clients[userID]
-	if ok {
-		return client
+	if !ok {
+		client = as.NewMautrixClient(userID)
+		as.clients[userID] = client
 	}
-
-	client, err := mautrix.NewClient(as.HomeserverURL, userID, as.Registration.AppToken)
-	if err != nil {
-		as.Log.Fatalln("Failed to create mautrix client instance:", err)
-		return nil
-	}
-	client.UserAgent = as.UserAgent
-	client.Syncer = nil
-	client.Store = nil
-	client.AppServiceUserID = userID
-	client.Logger = as.Log.Sub(string(userID))
-	client.Client = as.HTTPClient
-	client.DefaultHTTPRetries = as.DefaultHTTPRetries
-	as.clients[userID] = client
 	return client
 }
 
@@ -268,143 +346,6 @@ func (as *AppService) Client(userID id.UserID) *mautrix.Client {
 func (as *AppService) BotClient() *mautrix.Client {
 	if as.botClient == nil {
 		as.botClient = as.makeClient(as.BotMXID())
-		as.botClient.Logger = as.Log.Sub("Bot")
 	}
 	return as.botClient
-}
-
-// Init initializes the logger and loads the registration of this appservice.
-func (as *AppService) Init() (bool, error) {
-	as.Events = make(chan *event.Event, EventChannelSize)
-	as.ToDeviceEvents = make(chan *event.Event, EventChannelSize)
-	as.OTKCounts = make(chan *mautrix.OTKCount, OTKChannelSize)
-	as.DeviceLists = make(chan *mautrix.DeviceLists, EventChannelSize)
-	as.QueryHandler = &QueryHandlerStub{}
-
-	if len(as.UserAgent) == 0 {
-		as.UserAgent = mautrix.DefaultUserAgent
-	}
-	if len(as.ProcessID) == 0 {
-		as.ProcessID = getDefaultProcessID()
-	}
-
-	as.Log = maulogger.Create()
-	as.LogConfig.Configure(as.Log)
-	as.Log.Debugln("Logger initialized successfully.")
-
-	if len(as.RegistrationPath) > 0 {
-		var err error
-		as.Registration, err = LoadRegistration(as.RegistrationPath)
-		if err != nil {
-			return false, err
-		}
-	}
-
-	as.Log.Debugln("Appservice initialized successfully.")
-	return true, nil
-}
-
-// LogConfig contains configs for the logger.
-type LogConfig struct {
-	Directory       string `yaml:"directory"`
-	FileNameFormat  string `yaml:"file_name_format"`
-	FileDateFormat  string `yaml:"file_date_format"`
-	FileMode        uint32 `yaml:"file_mode"`
-	TimestampFormat string `yaml:"timestamp_format"`
-	RawPrintLevel   string `yaml:"print_level"`
-	JSONStdout      bool   `yaml:"print_json"`
-	JSONFile        bool   `yaml:"file_json"`
-	PrintLevel      int    `yaml:"-"`
-}
-
-type umLogConfig LogConfig
-
-func (lc *LogConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	err := unmarshal((*umLogConfig)(lc))
-	if err != nil {
-		return err
-	}
-
-	switch strings.ToUpper(lc.RawPrintLevel) {
-	case "TRACE":
-		lc.PrintLevel = -10
-	case "DEBUG":
-		lc.PrintLevel = maulogger.LevelDebug.Severity
-	case "INFO":
-		lc.PrintLevel = maulogger.LevelInfo.Severity
-	case "WARN", "WARNING":
-		lc.PrintLevel = maulogger.LevelWarn.Severity
-	case "ERR", "ERROR":
-		lc.PrintLevel = maulogger.LevelError.Severity
-	case "FATAL":
-		lc.PrintLevel = maulogger.LevelFatal.Severity
-	default:
-		return errors.New("invalid print level " + lc.RawPrintLevel)
-	}
-	return err
-}
-
-func (lc *LogConfig) MarshalYAML() (interface{}, error) {
-	switch {
-	case lc.PrintLevel >= maulogger.LevelFatal.Severity:
-		lc.RawPrintLevel = maulogger.LevelFatal.Name
-	case lc.PrintLevel >= maulogger.LevelError.Severity:
-		lc.RawPrintLevel = maulogger.LevelError.Name
-	case lc.PrintLevel >= maulogger.LevelWarn.Severity:
-		lc.RawPrintLevel = maulogger.LevelWarn.Name
-	case lc.PrintLevel >= maulogger.LevelInfo.Severity:
-		lc.RawPrintLevel = maulogger.LevelInfo.Name
-	default:
-		lc.RawPrintLevel = maulogger.LevelDebug.Name
-	}
-	return lc, nil
-}
-
-// CreateLogConfig creates a basic LogConfig.
-func CreateLogConfig() LogConfig {
-	return LogConfig{
-		Directory:       "./logs",
-		FileNameFormat:  "%[1]s-%02[2]d.log",
-		TimestampFormat: "Jan _2, 2006 15:04:05",
-		FileMode:        0600,
-		FileDateFormat:  "2006-01-02",
-		PrintLevel:      10,
-	}
-}
-
-type FileFormatData struct {
-	Date  string
-	Index int
-}
-
-// GetFileFormat returns a mauLogger-compatible logger file format based on the data in the struct.
-func (lc LogConfig) GetFileFormat() maulogger.LoggerFileFormat {
-	if len(lc.Directory) > 0 {
-		_ = os.MkdirAll(lc.Directory, 0700)
-	}
-	path := filepath.Join(lc.Directory, lc.FileNameFormat)
-	tpl, _ := template.New("fileformat").Parse(path)
-
-	return func(now string, i int) string {
-		var buf strings.Builder
-		_ = tpl.Execute(&buf, FileFormatData{
-			Date:  now,
-			Index: i,
-		})
-		return buf.String()
-	}
-}
-
-// Configure configures a mauLogger instance with the data in this struct.
-func (lc LogConfig) Configure(log maulogger.Logger) {
-	basicLogger := log.(*maulogger.BasicLogger)
-	basicLogger.FileFormat = lc.GetFileFormat()
-	basicLogger.FileMode = os.FileMode(lc.FileMode)
-	basicLogger.FileTimeFormat = lc.FileDateFormat
-	basicLogger.TimeFormat = lc.TimestampFormat
-	basicLogger.PrintLevel = lc.PrintLevel
-	basicLogger.JSONFile = lc.JSONFile
-	if lc.JSONStdout {
-		basicLogger.EnableJSONStdout()
-	}
 }

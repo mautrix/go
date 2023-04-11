@@ -32,6 +32,8 @@ type RelatesTo struct {
 
 type InReplyTo struct {
 	EventID id.EventID `json:"event_id,omitempty"`
+
+	UnstableRoomID id.RoomID `json:"room_id,omitempty"`
 }
 
 func (rel *RelatesTo) Copy() *RelatesTo {

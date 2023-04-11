@@ -7,7 +7,7 @@
 package appservice
 
 import (
-	"io/ioutil"
+	"os"
 	"regexp"
 
 	"gopkg.in/yaml.v3"
@@ -41,7 +41,7 @@ func CreateRegistration() *Registration {
 
 // LoadRegistration loads a YAML file and turns it into a Registration.
 func LoadRegistration(path string) (*Registration, error) {
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +60,7 @@ func (reg *Registration) Save(path string) error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(path, data, 0600)
+	return os.WriteFile(path, data, 0600)
 }
 
 // YAML returns the registration in YAML format.

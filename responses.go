@@ -552,6 +552,10 @@ type StrippedStateWithTime struct {
 	Timestamp jsontime.UnixMilli `json:"origin_server_ts"`
 }
 
+type RespAppservicePing struct {
+	DurationMS int64 `json:"duration"`
+}
+
 type RespBeeperMergeRoom RespCreateRoom
 
 type RespBeeperSplitRoom struct {
@@ -561,4 +565,36 @@ type RespBeeperSplitRoom struct {
 type RespTimestampToEvent struct {
 	EventID   id.EventID         `json:"event_id"`
 	Timestamp jsontime.UnixMilli `json:"origin_server_ts"`
+}
+
+type RespRoomKeysVersionCreate struct {
+	Version string `json:"version"`
+}
+
+type RespRoomKeysVersion struct {
+	Algorithm string          `json:"algorithm"`
+	AuthData  json.RawMessage `json:"auth_data"`
+	Count     int             `json:"count"`
+	ETag      string          `json:"etag"`
+	Version   string          `json:"version"`
+}
+
+type RespRoomKeys struct {
+	Rooms map[id.RoomID]RespRoomKeysRoom `json:"rooms"`
+}
+
+type RespRoomKeysRoom struct {
+	Sessions map[id.SessionID]RespRoomKeysSession `json:"sessions"`
+}
+
+type RespRoomKeysSession struct {
+	FirstMessageIndex int             `json:"first_message_index"`
+	ForwardedCount    int             `json:"forwarded_count"`
+	IsVerified        bool            `json:"is_verified"`
+	SessionData       json.RawMessage `json:"session_data"`
+}
+
+type RespRoomKeysUpdate struct {
+	Count int    `json:"count"`
+	ETag  string `json:"etag"`
 }

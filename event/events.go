@@ -111,6 +111,8 @@ type MautrixInfo struct {
 	TrustSource   *id.Device
 
 	ReceivedAt         time.Time
+	EditedAt           time.Time
+	LastEditID         id.EventID
 	DecryptionDuration time.Duration
 
 	CheckpointSent bool

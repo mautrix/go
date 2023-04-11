@@ -1,4 +1,5 @@
 // Copyright (c) 2020 Nikos Filippakis
+// Copyright (c) 2023 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,14 +8,19 @@
 package crypto
 
 import (
+	"context"
 	"database/sql"
 	"testing"
+
+	"github.com/rs/zerolog"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/util/dbutil"
 )
+
+var noopLogger = zerolog.Nop()
 
 func getOlmMachine(t *testing.T) *OlmMachine {
 	rawDB, err := sql.Open("sqlite3", ":memory:?_busy_timeout=5000")
@@ -49,7 +55,7 @@ func getOlmMachine(t *testing.T) *OlmMachine {
 		Client: &mautrix.Client{
 			UserID: userID,
 		},
-		Log: emptyLogger{},
+		Log: &noopLogger,
 	}
 }
 
@@ -69,7 +75,7 @@ func TestTrustOwnDevice(t *testing.T) {
 	m.CryptoStore.PutSignature(ownDevice.UserID, ownDevice.SigningKey,
 		ownDevice.UserID, m.CrossSigningKeys.SelfSigningKey.PublicKey, "sig2")
 
-	if !m.IsUserTrusted(ownDevice.UserID) {
+	if trusted, _ := m.IsUserTrusted(context.TODO(), ownDevice.UserID); !trusted {
 		t.Error("Own user not trusted while they should be")
 	}
 	if !m.IsDeviceTrusted(ownDevice) {
@@ -80,7 +86,7 @@ func TestTrustOwnDevice(t *testing.T) {
 func TestTrustOtherUser(t *testing.T) {
 	m := getOlmMachine(t)
 	otherUser := id.UserID("@user")
-	if m.IsUserTrusted(otherUser) {
+	if trusted, _ := m.IsUserTrusted(context.TODO(), otherUser); trusted {
 		t.Error("Other user trusted while they shouldn't be")
 	}
 
@@ -94,14 +100,14 @@ func TestTrustOtherUser(t *testing.T) {
 	m.CryptoStore.PutSignature(otherUser, theirMasterKey.PublicKey,
 		m.Client.UserID, m.CrossSigningKeys.SelfSigningKey.PublicKey, "invalid_sig")
 
-	if m.IsUserTrusted(otherUser) {
+	if trusted, _ := m.IsUserTrusted(context.TODO(), otherUser); trusted {
 		t.Error("Other user trusted before their master key has been signed with our user-signing key")
 	}
 
 	m.CryptoStore.PutSignature(otherUser, theirMasterKey.PublicKey,
 		m.Client.UserID, m.CrossSigningKeys.UserSigningKey.PublicKey, "sig2")
 
-	if !m.IsUserTrusted(otherUser) {
+	if trusted, _ := m.IsUserTrusted(context.TODO(), otherUser); !trusted {
 		t.Error("Other user not trusted while they should be")
 	}
 }
@@ -114,7 +120,7 @@ func TestTrustOtherDevice(t *testing.T) {
 		DeviceID:   "theirDevice",
 		SigningKey: id.Ed25519("theirDeviceKey"),
 	}
-	if m.IsUserTrusted(otherUser) {
+	if trusted, _ := m.IsUserTrusted(context.TODO(), otherUser); trusted {
 		t.Error("Other user trusted while they shouldn't be")
 	}
 	if m.IsDeviceTrusted(theirDevice) {
@@ -131,7 +137,7 @@ func TestTrustOtherDevice(t *testing.T) {
 	m.CryptoStore.PutSignature(otherUser, theirMasterKey.PublicKey,
 		m.Client.UserID, m.CrossSigningKeys.UserSigningKey.PublicKey, "sig2")
 
-	if !m.IsUserTrusted(otherUser) {
+	if trusted, _ := m.IsUserTrusted(context.TODO(), otherUser); !trusted {
 		t.Error("Other user not trusted while they should be")
 	}
 

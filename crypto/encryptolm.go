@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tulir Asokan
+// Copyright (c) 2023 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,6 +7,7 @@
 package crypto
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -16,7 +17,7 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-func (mach *OlmMachine) encryptOlmEvent(session *OlmSession, recipient *id.Device, evtType event.Type, content event.Content) *event.EncryptedEventContent {
+func (mach *OlmMachine) encryptOlmEvent(ctx context.Context, session *OlmSession, recipient *id.Device, evtType event.Type, content event.Content) *event.EncryptedEventContent {
 	evt := &DecryptedOlmEvent{
 		Sender:        mach.Client.UserID,
 		SenderDevice:  mach.Client.DeviceID,
@@ -30,11 +31,16 @@ func (mach *OlmMachine) encryptOlmEvent(session *OlmSession, recipient *id.Devic
 	if err != nil {
 		panic(err)
 	}
-	mach.Log.Trace("Encrypting olm message for %s with session %s: %s", recipient.IdentityKey, session.ID(), session.Describe())
+	log := mach.machOrContextLog(ctx)
+	log.Debug().
+		Str("recipient_identity_key", recipient.IdentityKey.String()).
+		Str("session_id", session.ID().String()).
+		Str("session_description", session.Describe()).
+		Msg("Encrypting olm message")
 	msgType, ciphertext := session.Encrypt(plaintext)
 	err = mach.CryptoStore.UpdateSession(recipient.IdentityKey, session)
 	if err != nil {
-		mach.Log.Warn("Failed to update olm session in crypto store after encrypting: %v", err)
+		log.Error().Err(err).Msg("Failed to update olm session in crypto store after encrypting")
 	}
 	return &event.EncryptedEventContent{
 		Algorithm: id.AlgorithmOlmV1,
@@ -61,7 +67,7 @@ func (mach *OlmMachine) shouldCreateNewSession(identityKey id.IdentityKey) bool 
 	return shouldUnwedge
 }
 
-func (mach *OlmMachine) createOutboundSessions(input map[id.UserID]map[id.DeviceID]*id.Device) error {
+func (mach *OlmMachine) createOutboundSessions(ctx context.Context, input map[id.UserID]map[id.DeviceID]*id.Device) error {
 	request := make(mautrix.OneTimeKeysRequest)
 	for userID, devices := range input {
 		request[userID] = make(map[id.DeviceID]id.KeyAlgorithm)
@@ -84,6 +90,7 @@ func (mach *OlmMachine) createOutboundSessions(input map[id.UserID]map[id.Device
 	if err != nil {
 		return fmt.Errorf("failed to claim keys: %w", err)
 	}
+	log := mach.machOrContextLog(ctx)
 	for userID, user := range resp.OneTimeKeys {
 		for deviceID, oneTimeKeys := range user {
 			var oneTimeKey mautrix.OneTimeKey
@@ -91,25 +98,30 @@ func (mach *OlmMachine) createOutboundSessions(input map[id.UserID]map[id.Device
 			for keyID, oneTimeKey = range oneTimeKeys {
 				break
 			}
-			keyAlg, keyIndex := keyID.Parse()
+			log := log.With().
+				Str("peer_user_id", userID.String()).
+				Str("peer_device_id", deviceID.String()).
+				Str("peer_otk_id", keyID.String()).
+				Logger()
+			keyAlg, _ := keyID.Parse()
 			if keyAlg != id.KeyAlgorithmSignedCurve25519 {
-				mach.Log.Warn("Unexpected key ID algorithm in one-time key response for %s of %s: %s", deviceID, userID, keyID)
+				log.Warn().Msg("Unexpected key ID algorithm in one-time key response")
 				continue
 			}
 			identity := input[userID][deviceID]
 			if ok, err := olm.VerifySignatureJSON(oneTimeKey.RawData, userID, deviceID.String(), identity.SigningKey); err != nil {
-				mach.Log.Error("Failed to verify signature for %s of %s: %v", deviceID, userID, err)
+				log.Error().Err(err).Msg("Failed to verify signature of one-time key")
 			} else if !ok {
-				mach.Log.Warn("Invalid signature for %s of %s", deviceID, userID)
+				log.Warn().Msg("One-time key has invalid signature from device")
 			} else if sess, err := mach.account.Internal.NewOutboundSession(identity.IdentityKey, oneTimeKey.Key); err != nil {
-				mach.Log.Error("Failed to create outbound session for %s of %s: %v", deviceID, userID, err)
+				log.Error().Err(err).Msg("Failed to create outbound session with claimed one-time key")
 			} else {
 				wrapped := wrapSession(sess)
 				err = mach.CryptoStore.AddSession(identity.IdentityKey, wrapped)
 				if err != nil {
-					mach.Log.Error("Failed to store created session for %s of %s: %v", deviceID, userID, err)
+					log.Error().Err(err).Msg("Failed to store created outbound session")
 				} else {
-					mach.Log.Debug("Created new Olm session with %s/%s (OTK ID: %s)", userID, deviceID, keyIndex)
+					log.Debug().Msg("Created new Olm session")
 				}
 			}
 		}

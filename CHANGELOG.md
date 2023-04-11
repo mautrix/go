@@ -1,3 +1,92 @@
+## unreleased
+
+* *(pushrules)* Added method to get entire push rule that matched (instead of
+  only the list of actions).
+* *(pushrules)* Deprecated `NotifySpecified` as there's no reason to read it.
+* *(crypto)* Changed `max_age` column in `crypto_megolm_inbound_session` table
+  to be milliseconds instead of nanoseconds.
+* *(util)* Added method for iterating `RingBuffer`.
+* *(crypto/cryptohelper)* Changed decryption errors to request session from all
+  own devices in addition to the sender, instead of only asking the sender.
+* *(sqlstatestore)* Fixed `FindSharedRooms` throwing an error when using from
+  a non-bridge context.
+* *(client)* Optimized `AccountDataSyncStore` to not resend save requests if
+  the sync token didn't change.
+* *(types)* Added `Clone()` method for `PowerLevelEventContent`.
+
+## v0.15.0 (2023-03-16)
+
+### beta.3 (2023-03-15)
+
+* **Breaking change *(appservice)*** Removed `Load()` and `AppService.Init()`
+  functions. The struct should just be created with `Create()` and the relevant
+  fields should be filled manually.
+* **Breaking change *(appservice)*** Removed public `HomeserverURL` field and
+  replaced it with a `SetHomeserverURL` method.
+* *(appservice)* Added support for unix sockets for homeserver URL and
+  appservice HTTP server.
+* *(client)* Changed request logging to log durations as floats instead of
+  strings (using zerolog's `Dur()`, so the exact output can be configured).
+* *(bridge)* Changed zerolog to use nanosecond precision timestamps.
+* *(crypto)* Added message index to log after encrypting/decrypting megolm
+  events, and when failing to decrypt due to duplicate index.
+* *(sqlstatestore)* Fixed warning log for rooms that don't have encryption
+  enabled.
+
+### beta.2 (2023-03-02)
+
+* *(bridge)* Fixed building with `nocrypto` tag.
+* *(bridge)* Fixed legacy logging config migration not disabling file writer
+  when `file_name_format` was empty.
+* *(bridge)* Added option to require room power level to run commands.
+* *(event)* Added structs for [MSC3952]: Intentional Mentions.
+* *(util/variationselector)* Added `FullyQualify` method to add necessary emoji
+  variation selectors without adding all possible ones.
+
+[MSC3952]: https://github.com/matrix-org/matrix-spec-proposals/pull/3952
+
+### beta.1 (2023-02-24)
+
+* Bumped minimum Go version to 1.19.
+* **Breaking changes**
+  * *(all)* Switched to zerolog for logging.
+    * The `Client` and `Bridge` structs still include a legacy logger for
+      backwards compatibility.
+  * *(client, appservice)* Moved `SQLStateStore` from appservice module to the
+    top-level (client) module.
+  * *(client, appservice)* Removed unused `Typing` map in `SQLStateStore`.
+  * *(client)* Removed unused `SaveRoom` and `LoadRoom` methods in `Storer`.
+  * *(client, appservice)* Removed deprecated `SendVideo` and `SendImage` methods.
+  * *(client)* Replaced `AppServiceUserID` field with `SetAppServiceUserID` boolean.
+    The `UserID` field is used as the value for the query param.
+  * *(crypto)* Renamed `GobStore` to `MemoryStore` and removed the file saving
+    features. The data can still be persisted, but the persistence part must be
+    implemented separately.
+  * *(crypto)* Removed deprecated `DeviceIdentity` alias
+    (renamed to `id.Device` long ago).
+  * *(client)* Removed `Stringifable` interface as it's the same as `fmt.Stringer`.
+* *(client)* Renamed `Storer` interface to `SyncStore`. A type alias exists for
+  backwards-compatibility.
+* *(crypto/cryptohelper)* Added package for a simplified crypto interface for clients.
+* *(example)* Added e2ee support to example using crypto helper.
+* *(client)* Changed default syncer to stop syncing on `M_UNKNOWN_TOKEN` errors.
+
+## v0.14.0 (2023-02-16)
+
+* **Breaking change *(format)*** Refactored the HTML parser `Context` to have
+  more data.
+* *(id)* Fixed escaping path components when forming matrix.to URLs
+  or `matrix:` URIs.
+* *(bridge)* Bumped default timeouts for decrypting incoming messages.
+* *(bridge)* Added `RawArgs` to commands to allow accessing non-split input.
+* *(bridge)* Added `ReplyAdvanced` to commands to allow setting markdown
+  settings.
+* *(event)* Added `notifications` key to `PowerLevelEventContent`.
+* *(event)* Changed `SetEdit` to cut off edit fallback if the message is long.
+* *(util)* Added `SyncMap` as a simple generic wrapper for a map with a mutex.
+* *(util)* Added `ReturnableOnce` as a wrapper for `sync.Once` with a return
+  value.
+
 ## v0.13.0 (2023-01-16)
 
 * **Breaking change:** Removed `IsTyping` and `SetTyping` in `appservice.StateStore`

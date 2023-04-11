@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-func parseAndNormalizeBaseURL(homeserverURL string) (*url.URL, error) {
+func ParseAndNormalizeBaseURL(homeserverURL string) (*url.URL, error) {
 	hsURL, err := url.Parse(homeserverURL)
 	if err != nil {
 		return nil, err
@@ -43,7 +43,7 @@ func BuildURL(baseURL *url.URL, path ...interface{}) *url.URL {
 			parts[i+1] = casted
 		case int:
 			parts[i+1] = strconv.Itoa(casted)
-		case Stringifiable:
+		case fmt.Stringer:
 			parts[i+1] = casted.String()
 		default:
 			parts[i+1] = fmt.Sprint(casted)
@@ -93,8 +93,8 @@ func (mup MediaURLPath) FullPath() []interface{} {
 func (cli *Client) BuildURLWithQuery(urlPath PrefixableURLPath, urlQuery map[string]string) string {
 	hsURL := *BuildURL(cli.HomeserverURL, urlPath.FullPath()...)
 	query := hsURL.Query()
-	if cli.AppServiceUserID != "" {
-		query.Set("user_id", string(cli.AppServiceUserID))
+	if cli.SetAppServiceUserID {
+		query.Set("user_id", string(cli.UserID))
 	}
 	if urlQuery != nil {
 		for k, v := range urlQuery {

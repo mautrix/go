@@ -33,14 +33,15 @@ type PushActionArray []*PushAction
 
 // PushActionArrayShould contains the important information parsed from a PushActionArray.
 type PushActionArrayShould struct {
-	// Whether or not the array contained a Notify, DontNotify or Coalesce action type.
+	// Whether the array contained a Notify, DontNotify or Coalesce action type.
+	// Deprecated: an empty array should be treated as no notification, so there's no reason to check this field.
 	NotifySpecified bool
-	// Whether or not the event in question should trigger a notification.
+	// Whether the event in question should trigger a notification.
 	Notify bool
-	// Whether or not the event in question should be highlighted.
+	// Whether the event in question should be highlighted.
 	Highlight bool
 
-	// Whether or not the event in question should trigger a sound alert.
+	// Whether the event in question should trigger a sound alert.
 	PlaySound bool
 	// The name of the sound to play if PlaySound is true.
 	SoundName string

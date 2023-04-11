@@ -392,6 +392,10 @@ func (req *ReqHierarchy) Query() map[string]string {
 	return query
 }
 
+type ReqAppservicePing struct {
+	TxnID string `json:"transaction_id,omitempty"`
+}
+
 type ReqBeeperMergeRoom struct {
 	NewRoom ReqCreateRoom `json:"create"`
 	Key     string        `json:"key"`
@@ -410,4 +414,24 @@ type ReqBeeperSplitRoom struct {
 
 	Key   string                `json:"key"`
 	Parts []BeeperSplitRoomPart `json:"parts"`
+}
+
+type ReqRoomKeysVersionCreate struct {
+	Algorithm string          `json:"algorithm"`
+	AuthData  json.RawMessage `json:"auth_data"`
+}
+
+type ReqRoomKeysUpdate struct {
+	Rooms map[id.RoomID]ReqRoomKeysRoomUpdate `json:"rooms"`
+}
+
+type ReqRoomKeysRoomUpdate struct {
+	Sessions map[id.SessionID]ReqRoomKeysSessionUpdate `json:"sessions"`
+}
+
+type ReqRoomKeysSessionUpdate struct {
+	FirstMessageIndex int             `json:"first_message_index"`
+	ForwardedCount    int             `json:"forwarded_count"`
+	IsVerified        bool            `json:"is_verified"`
+	SessionData       json.RawMessage `json:"session_data"`
 }
