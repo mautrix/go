@@ -45,6 +45,8 @@ type CryptoHelper struct {
 	lock       sync.RWMutex
 	syncDone   sync.WaitGroup
 	cancelSync func()
+
+	cancelPeriodicDeleteLoop func()
 }
 
 func NewCryptoHelper(bridge *Bridge) Crypto {
@@ -100,6 +102,11 @@ func (helper *CryptoHelper) Init() error {
 	helper.mach.DeleteFullyUsedKeysOnDecrypt = encryptionConfig.DeleteKeys.DeleteFullyUsedOnDecrypt
 	helper.mach.DeletePreviousKeysOnReceive = encryptionConfig.DeleteKeys.DeletePrevOnNewSession
 	helper.mach.DeleteKeysOnDeviceDelete = encryptionConfig.DeleteKeys.DeleteOnDeviceDelete
+	if encryptionConfig.DeleteKeys.PeriodicallyDeleteExpired {
+		ctx, cancel := context.WithCancel(context.Background())
+		helper.cancelPeriodicDeleteLoop = cancel
+		go helper.mach.ExpiredKeyDeleteLoop(ctx)
+	}
 
 	helper.client.Syncer = &cryptoSyncer{helper.mach}
 	helper.client.Store = helper.store
@@ -280,6 +287,9 @@ func (helper *CryptoHelper) Stop() {
 	helper.client.StopSync()
 	if helper.cancelSync != nil {
 		helper.cancelSync()
+	}
+	if helper.cancelPeriodicDeleteLoop != nil {
+		helper.cancelPeriodicDeleteLoop()
 	}
 	helper.syncDone.Wait()
 }

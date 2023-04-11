@@ -650,3 +650,23 @@ func (mach *OlmMachine) ShareKeys(ctx context.Context, currentOTKCount int) erro
 	mach.saveAccount()
 	return nil
 }
+
+func (mach *OlmMachine) ExpiredKeyDeleteLoop(ctx context.Context) {
+	log := mach.Log.With().Str("action", "redact expired sessions").Logger()
+	for {
+		sessionIDs, err := mach.CryptoStore.RedactExpiredGroupSessions()
+		if err != nil {
+			log.Err(err).Msg("Failed to redact expired megolm sessions")
+		} else if len(sessionIDs) > 0 {
+			log.Info().Strs("session_ids", stringifyArray(sessionIDs)).Msg("Redacted expired megolm sessions")
+		} else {
+			log.Debug().Msg("Didn't find any expired megolm sessions")
+		}
+		select {
+		case <-ctx.Done():
+			log.Debug().Msg("Loop stopped")
+			return
+		case <-time.After(24 * time.Hour):
+		}
+	}
+}

@@ -373,6 +373,40 @@ func (store *SQLCryptoStore) RedactGroupSessions(roomID id.RoomID, senderKey id.
 	return sessionIDs, err
 }
 
+func (store *SQLCryptoStore) RedactExpiredGroupSessions() ([]id.SessionID, error) {
+	var query string
+	switch store.DB.Dialect {
+	case dbutil.Postgres:
+		query = `
+			UPDATE crypto_megolm_inbound_session
+			SET withheld_code=$1, withheld_reason=$2, session=NULL, forwarding_chains=NULL
+			WHERE account_id=$3 AND session IS NOT NULL AND is_scheduled=false
+			  AND received_at IS NOT NULL and max_age IS NOT NULL
+			  AND received_at + 2 * (max_age * interval '1 millisecond') < now()
+			RETURNING session_id
+		`
+	case dbutil.SQLite:
+		query = `
+			UPDATE crypto_megolm_inbound_session
+			SET withheld_code=$1, withheld_reason=$2, session=NULL, forwarding_chains=NULL
+			WHERE account_id=$3 AND session IS NOT NULL AND is_scheduled=false
+			  AND received_at IS NOT NULL and max_age IS NOT NULL
+			  AND unixepoch(received_at) + (2 * max_age / 1000) < unixepoch(date('now'))
+			RETURNING session_id
+		`
+	default:
+		return nil, fmt.Errorf("unsupported dialect")
+	}
+	res, err := store.DB.Query(query, event.RoomKeyWithheldBeeperRedacted, "Session redacted: expired", store.AccountID)
+	var sessionIDs []id.SessionID
+	for res.Next() {
+		var sessionID id.SessionID
+		_ = res.Scan(&sessionID)
+		sessionIDs = append(sessionIDs, sessionID)
+	}
+	return sessionIDs, err
+}
+
 func (store *SQLCryptoStore) PutWithheldGroupSession(content event.RoomKeyWithheldEventContent) error {
 	_, err := store.DB.Exec("INSERT INTO crypto_megolm_inbound_session (session_id, sender_key, room_id, withheld_code, withheld_reason, received_at, account_id) VALUES ($1, $2, $3, $4, $5, $6. $7)",
 		content.SessionID, content.SenderKey, content.RoomID, content.Code, content.Reason, time.Now().UTC(), store.AccountID)
