@@ -297,17 +297,17 @@ func (store *SQLCryptoStore) PutGroupSession(roomID id.RoomID, senderKey id.Send
 
 // GetGroupSession retrieves an inbound Megolm group session for a room, sender and session.
 func (store *SQLCryptoStore) GetGroupSession(roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID) (*InboundGroupSession, error) {
-	var signingKey, forwardingChains, withheldCode sql.NullString
+	var senderKeyDB, signingKey, forwardingChains, withheldCode sql.NullString
 	var sessionBytes, ratchetSafetyBytes []byte
 	var receivedAt sql.NullTime
 	var maxAge, maxMessages sql.NullInt64
 	var isScheduled bool
 	err := store.DB.QueryRow(`
-		SELECT signing_key, session, forwarding_chains, withheld_code, ratchet_safety, received_at, max_age, max_messages, is_scheduled
+		SELECT sender_key, signing_key, session, forwarding_chains, withheld_code, ratchet_safety, received_at, max_age, max_messages, is_scheduled
 		FROM crypto_megolm_inbound_session
 		WHERE room_id=$1 AND (sender_key=$2 OR $2 = '') AND session_id=$3 AND account_id=$4`,
 		roomID, senderKey, sessionID, store.AccountID,
-	).Scan(&signingKey, &sessionBytes, &forwardingChains, &withheldCode, &ratchetSafetyBytes, &receivedAt, &maxAge, &maxMessages, &isScheduled)
+	).Scan(&senderKeyDB, &signingKey, &sessionBytes, &forwardingChains, &withheldCode, &ratchetSafetyBytes, &receivedAt, &maxAge, &maxMessages, &isScheduled)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	} else if err != nil {
@@ -330,6 +330,9 @@ func (store *SQLCryptoStore) GetGroupSession(roomID id.RoomID, senderKey id.Send
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal ratchet safety info: %w", err)
 		}
+	}
+	if senderKey == "" {
+		senderKey = id.Curve25519(senderKeyDB.String)
 	}
 	return &InboundGroupSession{
 		Internal:         *igs,
