@@ -178,7 +178,7 @@ type EncryptionConfig struct {
 	DeleteKeys struct {
 		DeleteOutboundOnAck       bool `yaml:"delete_outbound_on_ack"`
 		RatchetOnDecrypt          bool `yaml:"ratchet_on_decrypt"`
-		DeleteFullyUsedOnDecrypt  bool `yamL:"delete_fully_used_on_decrypt"`
+		DeleteFullyUsedOnDecrypt  bool `yaml:"delete_fully_used_on_decrypt"`
 		DeletePrevOnNewSession    bool `yaml:"delete_prev_on_new_session"`
 		DeleteOnDeviceDelete      bool `yaml:"delete_on_device_delete"`
 		PeriodicallyDeleteExpired bool `yaml:"periodically_delete_expired"`

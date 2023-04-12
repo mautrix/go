@@ -557,9 +557,6 @@ func (mach *OlmMachine) receiveRoomKey(ctx context.Context, evt *DecryptedOlmEve
 		Str("algorithm", string(content.Algorithm)).
 		Str("session_id", content.SessionID.String()).
 		Str("room_id", content.RoomID.String()).
-		Bool("scheduled", content.IsScheduled).
-		Int64("max_age", content.MaxAge).
-		Int("max_messages", content.MaxMessages).
 		Logger()
 	if content.Algorithm != id.AlgorithmMegolmV1 || evt.Keys.Ed25519 == "" {
 		log.Debug().Msg("Ignoring weird room key")
@@ -571,7 +568,13 @@ func (mach *OlmMachine) receiveRoomKey(ctx context.Context, evt *DecryptedOlmEve
 	var maxMessages int
 	if config != nil {
 		maxAge = time.Duration(config.RotationPeriodMillis) * time.Millisecond
+		if maxAge == 0 {
+			maxAge = 7 * 24 * time.Hour
+		}
 		maxMessages = config.RotationPeriodMessages
+		if maxMessages == 0 {
+			maxMessages = 100
+		}
 	}
 	if content.MaxAge != 0 {
 		maxAge = time.Duration(content.MaxAge) * time.Millisecond
