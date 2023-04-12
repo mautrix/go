@@ -28,6 +28,8 @@ type StateStore interface {
 
 	SetEncryptionEvent(roomID id.RoomID, content *event.EncryptionEventContent)
 	IsEncrypted(roomID id.RoomID) bool
+
+	GetRoomJoinedOrInvitedMembers(roomID id.RoomID) ([]id.UserID, error)
 }
 
 func UpdateStateStore(store StateStore, evt *event.Event) {
@@ -102,6 +104,15 @@ func (store *MemoryStateStore) GetRoomMembers(roomID id.RoomID) map[id.UserID]*e
 		store.membersLock.Unlock()
 	}
 	return members
+}
+
+func (store *MemoryStateStore) GetRoomJoinedOrInvitedMembers(roomID id.RoomID) ([]id.UserID, error) {
+	members := store.GetRoomMembers(roomID)
+	ids := make([]id.UserID, 0, len(members))
+	for id := range members {
+		ids = append(ids, id)
+	}
+	return ids, nil
 }
 
 func (store *MemoryStateStore) GetMembership(roomID id.RoomID, userID id.UserID) event.Membership {
