@@ -68,6 +68,7 @@ type OlmMachine struct {
 	crossSigningPubkeysFetched bool
 
 	DeleteOutboundKeysOnAck      bool
+	DontStoreOutboundKeys        bool
 	DeletePreviousKeysOnReceive  bool
 	RatchetKeysOnDecrypt         bool
 	DeleteFullyUsedKeysOnDecrypt bool
