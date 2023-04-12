@@ -582,7 +582,7 @@ func (mach *OlmMachine) receiveRoomKey(ctx context.Context, evt *DecryptedOlmEve
 	if content.MaxMessages != 0 {
 		maxMessages = content.MaxMessages
 	}
-	if mach.DeletePreviousKeysOnReceive {
+	if mach.DeletePreviousKeysOnReceive && !content.IsScheduled {
 		log.Debug().Msg("Redacting previous megolm sessions from sender in room")
 		sessionIDs, err := mach.CryptoStore.RedactGroupSessions(content.RoomID, evt.SenderKey, "received new key from device")
 		if err != nil {
