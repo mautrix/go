@@ -505,6 +505,7 @@ func (mach *OlmMachine) createGroupSession(ctx context.Context, senderKey id.Sen
 	mach.markSessionReceived(sessionID)
 	log.Debug().
 		Str("session_id", sessionID.String()).
+		Str("sender_key", senderKey.String()).
 		Str("max_age", maxAge.String()).
 		Int("max_messages", maxMessages).
 		Bool("is_scheduled", isScheduled).

@@ -330,6 +330,10 @@ func (mach *OlmMachine) handleBeeperRoomKeyAck(ctx context.Context, sender id.Us
 		log.Err(err).Msg("Failed to get group session to check if it should be redacted")
 		return
 	}
+	log = log.With().
+		Str("sender_key", sess.SenderKey.String()).
+		Str("own_identity", mach.OwnIdentity().IdentityKey.String()).
+		Logger()
 
 	isInbound := sess.SenderKey == mach.OwnIdentity().IdentityKey
 	if isInbound && mach.DeleteOutboundKeysOnAck && content.FirstMessageIndex == 0 {
