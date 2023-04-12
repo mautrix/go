@@ -161,6 +161,8 @@ func removeItem(slice []uint, item uint) ([]uint, bool) {
 	return slice, false
 }
 
+const missedIndexCutoff = 10
+
 func (mach *OlmMachine) actuallyDecryptMegolmEvent(ctx context.Context, evt *event.Event, encryptionRoomID id.RoomID, content *event.EncryptedEventContent) (*InboundGroupSession, []byte, uint, error) {
 	mach.megolmDecryptLock.Lock()
 	defer mach.megolmDecryptLock.Unlock()
@@ -198,6 +200,17 @@ func (mach *OlmMachine) actuallyDecryptMegolmEvent(ctx context.Context, evt *eve
 	default:
 		sess.RatchetSafety.MissedIndices, didModify = removeItem(sess.RatchetSafety.MissedIndices, messageIndex)
 	}
+	// Use presence of ReceivedAt as a sign that this is a recent megolm session,
+	// and therefore it's safe to drop missed indices entirely.
+	if !sess.ReceivedAt.IsZero() && len(sess.RatchetSafety.MissedIndices) > 0 && int(sess.RatchetSafety.MissedIndices[0]) < int(sess.RatchetSafety.NextIndex)-missedIndexCutoff {
+		limit := sess.RatchetSafety.NextIndex - missedIndexCutoff
+		var cutoff int
+		for ; cutoff < len(sess.RatchetSafety.MissedIndices) && sess.RatchetSafety.MissedIndices[cutoff] < limit; cutoff++ {
+		}
+		sess.RatchetSafety.LostIndices = append(sess.RatchetSafety.LostIndices, sess.RatchetSafety.MissedIndices[:cutoff]...)
+		sess.RatchetSafety.MissedIndices = sess.RatchetSafety.MissedIndices[cutoff:]
+		didModify = true
+	}
 	ratchetTargetIndex := uint32(sess.RatchetSafety.NextIndex)
 	if len(sess.RatchetSafety.MissedIndices) > 0 {
 		ratchetTargetIndex = uint32(sess.RatchetSafety.MissedIndices[0])
@@ -208,6 +221,7 @@ func (mach *OlmMachine) actuallyDecryptMegolmEvent(ctx context.Context, evt *eve
 		Uint32("new_ratchet_index", ratchetTargetIndex).
 		Uint("next_new_index", sess.RatchetSafety.NextIndex).
 		Uints("missed_indices", sess.RatchetSafety.MissedIndices).
+		Uints("lost_indices", sess.RatchetSafety.LostIndices).
 		Int("max_messages", sess.MaxMessages).
 		Logger()
 	if sess.MaxMessages > 0 && int(ratchetTargetIndex) >= sess.MaxMessages && len(sess.RatchetSafety.MissedIndices) == 0 && mach.DeleteFullyUsedKeysOnDecrypt {
@@ -232,6 +246,8 @@ func (mach *OlmMachine) actuallyDecryptMegolmEvent(ctx context.Context, evt *eve
 		if err = mach.CryptoStore.PutGroupSession(sess.RoomID, sess.SenderKey, sess.ID(), sess); err != nil {
 			log.Err(err).Msg("Failed to store updated ratchet safety data")
 			return sess, plaintext, messageIndex, RatchetError
+		} else {
+			log.Debug().Msg("Ratchet safety data changed (ratchet state didn't change)")
 		}
 	} else {
 		log.Debug().Msg("Ratchet safety data didn't change")

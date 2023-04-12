@@ -92,6 +92,7 @@ func (session *OlmSession) Decrypt(ciphertext string, msgType id.OlmMsgType) ([]
 type RatchetSafety struct {
 	NextIndex     uint   `json:"next_index"`
 	MissedIndices []uint `json:"missed_indices,omitempty"`
+	LostIndices   []uint `json:"lost_indices,omitempty"`
 }
 
 type InboundGroupSession struct {
