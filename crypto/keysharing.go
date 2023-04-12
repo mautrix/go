@@ -9,6 +9,7 @@ package crypto
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -327,7 +328,11 @@ func (mach *OlmMachine) handleBeeperRoomKeyAck(ctx context.Context, sender id.Us
 
 	sess, err := mach.CryptoStore.GetGroupSession(content.RoomID, "", content.SessionID)
 	if err != nil {
-		log.Err(err).Msg("Failed to get group session to check if it should be redacted")
+		if errors.Is(err, ErrGroupSessionWithheld) {
+			log.Debug().Err(err).Msg("Acked group session was already redacted")
+		} else {
+			log.Err(err).Msg("Failed to get group session to check if it should be redacted")
+		}
 		return
 	}
 	log = log.With().
