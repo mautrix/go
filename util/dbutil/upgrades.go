@@ -43,7 +43,10 @@ func (db *Database) getVersion() (int, error) {
 const tableExistsPostgres = "SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name=$1)"
 const tableExistsSQLite = "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND tbl_name=$1)"
 
-func (db *Database) tableExists(table string) (exists bool, err error) {
+func (db *Database) TableExists(tx Execable, table string) (exists bool, err error) {
+	if tx == nil {
+		tx = db
+	}
 	if db.Dialect == SQLite {
 		err = db.QueryRow(tableExistsSQLite, table).Scan(&exists)
 	} else if db.Dialect == Postgres {
@@ -53,7 +56,7 @@ func (db *Database) tableExists(table string) (exists bool, err error) {
 }
 
 func (db *Database) tableExistsNoError(table string) bool {
-	exists, err := db.tableExists(table)
+	exists, err := db.TableExists(nil, table)
 	if err != nil {
 		panic(fmt.Errorf("failed to check if table exists: %w", err))
 	}

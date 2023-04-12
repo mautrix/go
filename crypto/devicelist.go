@@ -128,6 +128,7 @@ func (mach *OlmMachine) fetchKeys(ctx context.Context, users []id.UserID, sinceT
 			log.Warn().Err(err).Msg("Failed to get existing devices for user")
 			existingDevices = make(map[id.DeviceID]*id.Device)
 		}
+
 		log.Debug().
 			Int("new_device_count", len(devices)).
 			Int("old_device_count", len(existingDevices)).
@@ -158,6 +159,26 @@ func (mach *OlmMachine) fetchKeys(ctx context.Context, users []id.UserID, sinceT
 
 		changed = changed || len(newDevices) != len(existingDevices)
 		if changed {
+			if mach.DeleteKeysOnDeviceDelete {
+				for deviceID := range newDevices {
+					delete(existingDevices, deviceID)
+				}
+				for _, device := range existingDevices {
+					log := log.With().
+						Str("device_id", device.DeviceID.String()).
+						Str("identity_key", device.IdentityKey.String()).
+						Str("signing_key", device.SigningKey.String()).
+						Logger()
+					sessionIDs, err := mach.CryptoStore.RedactGroupSessions("", device.IdentityKey, "device removed")
+					if err != nil {
+						log.Err(err).Msg("Failed to redact megolm sessions from deleted device")
+					} else {
+						log.Info().
+							Strs("session_ids", stringifyArray(sessionIDs)).
+							Msg("Redacted megolm sessions from deleted device")
+					}
+				}
+			}
 			mach.OnDevicesChanged(userID)
 		}
 	}

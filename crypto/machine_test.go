@@ -10,6 +10,9 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -49,6 +52,17 @@ func newMachine(t *testing.T, userID id.UserID) *OlmMachine {
 	}
 
 	return machine
+}
+
+func TestRatchetMegolmSession(t *testing.T) {
+	mach := newMachine(t, "user1")
+	outSess := mach.newOutboundGroupSession(context.TODO(), "meow")
+	inSess, err := mach.CryptoStore.GetGroupSession("meow", mach.OwnIdentity().IdentityKey, outSess.ID())
+	require.NoError(t, err)
+	assert.Equal(t, uint32(0), inSess.Internal.FirstKnownIndex())
+	err = inSess.RatchetTo(10)
+	assert.NoError(t, err)
+	assert.Equal(t, uint32(10), inSess.Internal.FirstKnownIndex())
 }
 
 func TestOlmMachineOlmMegolmSessions(t *testing.T) {
@@ -107,7 +121,7 @@ func TestOlmMachineOlmMegolmSessions(t *testing.T) {
 		// store room key in new inbound group session
 		decrypted.Content.ParseRaw(event.ToDeviceRoomKey)
 		roomKeyEvt := decrypted.Content.AsRoomKey()
-		igs, err := NewInboundGroupSession(senderKey, signingKey, "room1", roomKeyEvt.SessionKey)
+		igs, err := NewInboundGroupSession(senderKey, signingKey, "room1", roomKeyEvt.SessionKey, 0, 0, false)
 		if err != nil {
 			t.Errorf("Error creating inbound megolm session: %v", err)
 		}

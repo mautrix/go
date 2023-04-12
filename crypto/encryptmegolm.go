@@ -82,6 +82,8 @@ func parseMessageIndex(ciphertext []byte) (uint64, error) {
 // If you use the event.Content struct, make sure you pass a pointer to the struct,
 // as JSON serialization will not work correctly otherwise.
 func (mach *OlmMachine) EncryptMegolmEvent(ctx context.Context, roomID id.RoomID, evtType event.Type, content interface{}) (*event.EncryptedEventContent, error) {
+	mach.megolmEncryptLock.Lock()
+	defer mach.megolmEncryptLock.Unlock()
 	session, err := mach.CryptoStore.GetOutboundGroupSession(roomID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get outbound group session: %w", err)
@@ -135,8 +137,10 @@ func (mach *OlmMachine) EncryptMegolmEvent(ctx context.Context, roomID id.RoomID
 
 func (mach *OlmMachine) newOutboundGroupSession(ctx context.Context, roomID id.RoomID) *OutboundGroupSession {
 	session := NewOutboundGroupSession(roomID, mach.StateStore.GetEncryptionEvent(roomID))
-	signingKey, idKey := mach.account.Keys()
-	mach.createGroupSession(ctx, idKey, signingKey, roomID, session.ID(), session.Internal.Key())
+	if !mach.DontStoreOutboundKeys {
+		signingKey, idKey := mach.account.Keys()
+		mach.createGroupSession(ctx, idKey, signingKey, roomID, session.ID(), session.Internal.Key(), session.MaxAge, session.MaxMessages, false)
+	}
 	return session
 }
 
@@ -158,6 +162,8 @@ func strishArray[T ~string](arr []T) []string {
 // For devices with TrustStateBlacklisted, a m.room_key.withheld event with code=m.blacklisted is sent.
 // If AllowUnverifiedDevices is false, a similar event with code=m.unverified is sent to devices with TrustStateUnset
 func (mach *OlmMachine) ShareGroupSession(ctx context.Context, roomID id.RoomID, users []id.UserID) error {
+	mach.megolmEncryptLock.Lock()
+	defer mach.megolmEncryptLock.Unlock()
 	session, err := mach.CryptoStore.GetOutboundGroupSession(roomID)
 	if err != nil {
 		return fmt.Errorf("failed to get previous outbound group session: %w", err)

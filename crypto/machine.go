@@ -55,7 +55,9 @@ type OlmMachine struct {
 	recentlyUnwedged     map[id.IdentityKey]time.Time
 	recentlyUnwedgedLock sync.Mutex
 
-	olmLock sync.Mutex
+	olmLock           sync.Mutex
+	megolmEncryptLock sync.Mutex
+	megolmDecryptLock sync.Mutex
 
 	otkUploadLock sync.Mutex
 	lastOTKUpload time.Time
@@ -64,6 +66,13 @@ type OlmMachine struct {
 	crossSigningPubkeys *CrossSigningPublicKeysCache
 
 	crossSigningPubkeysFetched bool
+
+	DeleteOutboundKeysOnAck      bool
+	DontStoreOutboundKeys        bool
+	DeletePreviousKeysOnReceive  bool
+	RatchetKeysOnDecrypt         bool
+	DeleteFullyUsedKeysOnDecrypt bool
+	DeleteKeysOnDeviceDelete     bool
 }
 
 // StateStore is used by OlmMachine to get room state information that's needed for encryption.
@@ -193,6 +202,7 @@ func (mach *OlmMachine) AddAppserviceListener(ep asEventProcessor) {
 	ep.On(event.ToDeviceEncrypted, mach.HandleToDeviceEvent)
 	ep.On(event.ToDeviceRoomKeyRequest, mach.HandleToDeviceEvent)
 	ep.On(event.ToDeviceRoomKeyWithheld, mach.HandleToDeviceEvent)
+	ep.On(event.ToDeviceBeeperRoomKeyAck, mach.HandleToDeviceEvent)
 	ep.On(event.ToDeviceOrgMatrixRoomKeyWithheld, mach.HandleToDeviceEvent)
 	ep.On(event.ToDeviceVerificationRequest, mach.HandleToDeviceEvent)
 	ep.On(event.ToDeviceVerificationStart, mach.HandleToDeviceEvent)
@@ -365,6 +375,8 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 		return
 	case *event.RoomKeyRequestEventContent:
 		go mach.handleRoomKeyRequest(ctx, evt.Sender, content)
+	case *event.BeeperRoomKeyAckEventContent:
+		mach.handleBeeperRoomKeyAck(ctx, evt.Sender, content)
 	// verification cases
 	case *event.VerificationStartEventContent:
 		mach.handleVerificationStart(evt.Sender, content, content.TransactionID, 10*time.Minute, "")
@@ -472,9 +484,9 @@ func (mach *OlmMachine) SendEncryptedToDevice(ctx context.Context, device *id.De
 	return err
 }
 
-func (mach *OlmMachine) createGroupSession(ctx context.Context, senderKey id.SenderKey, signingKey id.Ed25519, roomID id.RoomID, sessionID id.SessionID, sessionKey string) {
+func (mach *OlmMachine) createGroupSession(ctx context.Context, senderKey id.SenderKey, signingKey id.Ed25519, roomID id.RoomID, sessionID id.SessionID, sessionKey string, maxAge time.Duration, maxMessages int, isScheduled bool) {
 	log := zerolog.Ctx(ctx)
-	igs, err := NewInboundGroupSession(senderKey, signingKey, roomID, sessionKey)
+	igs, err := NewInboundGroupSession(senderKey, signingKey, roomID, sessionKey, maxAge, maxMessages, isScheduled)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to create inbound group session")
 		return
@@ -491,7 +503,13 @@ func (mach *OlmMachine) createGroupSession(ctx context.Context, senderKey id.Sen
 		return
 	}
 	mach.markSessionReceived(sessionID)
-	log.Debug().Str("session_id", sessionID.String()).Msg("Received inbound group session")
+	log.Debug().
+		Str("session_id", sessionID.String()).
+		Str("sender_key", senderKey.String()).
+		Str("max_age", maxAge.String()).
+		Int("max_messages", maxMessages).
+		Bool("is_scheduled", isScheduled).
+		Msg("Received inbound group session")
 }
 
 func (mach *OlmMachine) markSessionReceived(id id.SessionID) {
@@ -529,17 +547,56 @@ func (mach *OlmMachine) WaitForSession(roomID id.RoomID, senderKey id.SenderKey,
 	}
 }
 
+func stringifyArray[T ~string](arr []T) []string {
+	strs := make([]string, len(arr))
+	for i, v := range arr {
+		strs[i] = string(v)
+	}
+	return strs
+}
+
 func (mach *OlmMachine) receiveRoomKey(ctx context.Context, evt *DecryptedOlmEvent, content *event.RoomKeyEventContent) {
+	log := zerolog.Ctx(ctx).With().
+		Str("algorithm", string(content.Algorithm)).
+		Str("session_id", content.SessionID.String()).
+		Str("room_id", content.RoomID.String()).
+		Logger()
 	if content.Algorithm != id.AlgorithmMegolmV1 || evt.Keys.Ed25519 == "" {
-		zerolog.Ctx(ctx).Debug().
-			Str("algorithm", string(content.Algorithm)).
-			Str("session_id", content.SessionID.String()).
-			Str("room_id", content.RoomID.String()).
-			Msg("Ignoring weird room key")
+		log.Debug().Msg("Ignoring weird room key")
 		return
 	}
 
-	mach.createGroupSession(ctx, evt.SenderKey, evt.Keys.Ed25519, content.RoomID, content.SessionID, content.SessionKey)
+	config := mach.StateStore.GetEncryptionEvent(content.RoomID)
+	var maxAge time.Duration
+	var maxMessages int
+	if config != nil {
+		maxAge = time.Duration(config.RotationPeriodMillis) * time.Millisecond
+		if maxAge == 0 {
+			maxAge = 7 * 24 * time.Hour
+		}
+		maxMessages = config.RotationPeriodMessages
+		if maxMessages == 0 {
+			maxMessages = 100
+		}
+	}
+	if content.MaxAge != 0 {
+		maxAge = time.Duration(content.MaxAge) * time.Millisecond
+	}
+	if content.MaxMessages != 0 {
+		maxMessages = content.MaxMessages
+	}
+	if mach.DeletePreviousKeysOnReceive && !content.IsScheduled {
+		log.Debug().Msg("Redacting previous megolm sessions from sender in room")
+		sessionIDs, err := mach.CryptoStore.RedactGroupSessions(content.RoomID, evt.SenderKey, "received new key from device")
+		if err != nil {
+			log.Err(err).Msg("Failed to redact previous megolm sessions")
+		} else {
+			log.Info().
+				Strs("session_ids", stringifyArray(sessionIDs)).
+				Msg("Redacted previous megolm sessions")
+		}
+	}
+	mach.createGroupSession(ctx, evt.SenderKey, evt.Keys.Ed25519, content.RoomID, content.SessionID, content.SessionKey, maxAge, maxMessages, content.IsScheduled)
 }
 
 func (mach *OlmMachine) handleRoomKeyWithheld(ctx context.Context, content *event.RoomKeyWithheldEventContent) {
@@ -598,4 +655,24 @@ func (mach *OlmMachine) ShareKeys(ctx context.Context, currentOTKCount int) erro
 	mach.account.Shared = true
 	mach.saveAccount()
 	return nil
+}
+
+func (mach *OlmMachine) ExpiredKeyDeleteLoop(ctx context.Context) {
+	log := mach.Log.With().Str("action", "redact expired sessions").Logger()
+	for {
+		sessionIDs, err := mach.CryptoStore.RedactExpiredGroupSessions()
+		if err != nil {
+			log.Err(err).Msg("Failed to redact expired megolm sessions")
+		} else if len(sessionIDs) > 0 {
+			log.Info().Strs("session_ids", stringifyArray(sessionIDs)).Msg("Redacted expired megolm sessions")
+		} else {
+			log.Debug().Msg("Didn't find any expired megolm sessions")
+		}
+		select {
+		case <-ctx.Done():
+			log.Debug().Msg("Loop stopped")
+			return
+		case <-time.After(24 * time.Hour):
+		}
+	}
 }
