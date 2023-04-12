@@ -201,6 +201,7 @@ func (mach *OlmMachine) AddAppserviceListener(ep asEventProcessor) {
 	ep.On(event.ToDeviceEncrypted, mach.HandleToDeviceEvent)
 	ep.On(event.ToDeviceRoomKeyRequest, mach.HandleToDeviceEvent)
 	ep.On(event.ToDeviceRoomKeyWithheld, mach.HandleToDeviceEvent)
+	ep.On(event.ToDeviceBeeperRoomKeyAck, mach.HandleToDeviceEvent)
 	ep.On(event.ToDeviceOrgMatrixRoomKeyWithheld, mach.HandleToDeviceEvent)
 	ep.On(event.ToDeviceVerificationRequest, mach.HandleToDeviceEvent)
 	ep.On(event.ToDeviceVerificationStart, mach.HandleToDeviceEvent)
