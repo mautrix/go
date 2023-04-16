@@ -1,5 +1,7 @@
-## unreleased
+## v0.15.1 (2023-04-16)
 
+* *(crypto, bridge)* Added options to automatically ratchet/delete megolm
+  sessions to minimize access to old messages.
 * *(pushrules)* Added method to get entire push rule that matched (instead of
   only the list of actions).
 * *(pushrules)* Deprecated `NotifySpecified` as there's no reason to read it.
