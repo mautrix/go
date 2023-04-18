@@ -374,7 +374,6 @@ func (br *Bridge) UpdateBotProfile() {
 			"com.beeper.bridge.service":       br.BeeperServiceName,
 			"com.beeper.bridge.network":       br.BeeperNetworkName,
 			"com.beeper.bridge.is_bridge_bot": true,
-			"com.beeper.bridge.is_bot":        true,
 		})
 	}
 }
