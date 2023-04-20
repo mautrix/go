@@ -206,9 +206,9 @@ func (store *SQLStateStore) ClearCachedMembers(roomID id.RoomID, memberships ...
 	params[0] = roomID
 	if len(memberships) > 0 {
 		placeholders := make([]string, len(memberships))
-		for i := range placeholders {
+		for i, membership := range memberships {
 			placeholders[i] = "$" + strconv.Itoa(i+2)
-			params = append(params, memberships[i])
+			params[i+1] = string(membership)
 		}
 		query += fmt.Sprintf(" AND membership IN (%s)", strings.Join(placeholders, ","))
 	}
