@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"maunium.net/go/mautrix/event"
@@ -196,6 +197,24 @@ func (store *SQLStateStore) SetMember(roomID id.RoomID, userID id.UserID, member
 	`, roomID, userID, member.Membership, member.Displayname, member.AvatarURL)
 	if err != nil {
 		store.Log.Warn("Failed to set membership of %s in %s to %s: %v", userID, roomID, member, err)
+	}
+}
+
+func (store *SQLStateStore) ClearCachedMembers(roomID id.RoomID, memberships ...event.Membership) {
+	query := "DELETE FROM mx_user_profile WHERE room_id=$1"
+	params := make([]any, len(memberships)+1)
+	params[0] = roomID
+	if len(memberships) > 0 {
+		placeholders := make([]string, len(memberships))
+		for i := range placeholders {
+			placeholders[i] = "$" + strconv.Itoa(i+2)
+			params = append(params, memberships[i])
+		}
+		query += fmt.Sprintf(" AND membership IN (%s)", strings.Join(placeholders, ","))
+	}
+	_, err := store.Exec(query, params...)
+	if err != nil {
+		store.Log.Warn("Failed to clear cached members of %s: %v", roomID, err)
 	}
 }
 

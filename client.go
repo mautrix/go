@@ -1330,6 +1330,7 @@ func (cli *Client) State(roomID id.RoomID) (stateMap RoomStateMap, err error) {
 		Handler:      parseRoomStateArray,
 	})
 	if err == nil && cli.StateStore != nil {
+		cli.StateStore.ClearCachedMembers(roomID)
 		for _, evts := range stateMap {
 			for _, evt := range evts {
 				UpdateStateStore(cli.StateStore, evt)
@@ -1596,6 +1597,7 @@ func (cli *Client) JoinedMembers(roomID id.RoomID) (resp *RespJoinedMembers, err
 	u := cli.BuildClientURL("v3", "rooms", roomID, "joined_members")
 	_, err = cli.MakeRequest("GET", u, nil, &resp)
 	if err == nil && cli.StateStore != nil {
+		cli.StateStore.ClearCachedMembers(roomID, event.MembershipJoin)
 		for userID, member := range resp.Joined {
 			cli.StateStore.SetMember(roomID, userID, &event.MemberEventContent{
 				Membership:  event.MembershipJoin,
@@ -1625,6 +1627,13 @@ func (cli *Client) Members(roomID id.RoomID, req ...ReqMembers) (resp *RespMembe
 	u := cli.BuildURLWithQuery(ClientURLPath{"v3", "rooms", roomID, "members"}, query)
 	_, err = cli.MakeRequest("GET", u, nil, &resp)
 	if err == nil && cli.StateStore != nil {
+		var clearMemberships []event.Membership
+		if extra.Membership != "" {
+			clearMemberships = append(clearMemberships, extra.Membership)
+		}
+		if extra.NotMembership == "" {
+			cli.StateStore.ClearCachedMembers(roomID, clearMemberships...)
+		}
 		for _, evt := range resp.Chunk {
 			UpdateStateStore(cli.StateStore, evt)
 		}
