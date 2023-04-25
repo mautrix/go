@@ -34,8 +34,8 @@ func (mach *OlmMachine) encryptOlmEvent(ctx context.Context, session *OlmSession
 	log := mach.machOrContextLog(ctx)
 	log.Debug().
 		Str("recipient_identity_key", recipient.IdentityKey.String()).
-		Str("session_id", session.ID().String()).
-		Str("session_description", session.Describe()).
+		Str("olm_session_id", session.ID().String()).
+		Str("olm_session_description", session.Describe()).
 		Msg("Encrypting olm message")
 	msgType, ciphertext := session.Encrypt(plaintext)
 	err = mach.CryptoStore.UpdateSession(recipient.IdentityKey, session)
