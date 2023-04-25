@@ -177,7 +177,7 @@ func (db *Database) Upgrade() error {
 		return fmt.Errorf("%w: currently on v%d (compatible down to v%d), latest known: v%d", ErrUnsupportedDatabaseVersion, version, compat, len(db.UpgradeTable))
 	}
 
-	db.Log.PrepareUpgrade(version, len(db.UpgradeTable))
+	db.Log.PrepareUpgrade(version, compat, len(db.UpgradeTable))
 	logVersion := version
 	for version < len(db.UpgradeTable) {
 		upgradeItem := db.UpgradeTable[version]
