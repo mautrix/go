@@ -374,7 +374,6 @@ func (br *Bridge) UpdateBotProfile() {
 			"com.beeper.bridge.service":       br.BeeperServiceName,
 			"com.beeper.bridge.network":       br.BeeperNetworkName,
 			"com.beeper.bridge.is_bridge_bot": true,
-			"com.beeper.bridge.is_bot":        true,
 		})
 	}
 }
@@ -458,18 +457,12 @@ func (br *Bridge) init() {
 	zerolog.DefaultContextLogger = &defaultCtxLog
 	br.Log = maulogadapt.ZeroAsMau(br.ZLog)
 
-	br.AS = br.Config.MakeAppService()
-	br.AS.DoublePuppetValue = br.Name
-	br.AS.GetProfile = br.getProfile
-	br.AS.Log = *br.ZLog
-
 	err = br.validateConfig()
 	if err != nil {
 		br.ZLog.WithLevel(zerolog.FatalLevel).Err(err).Msg("Configuration error")
 		os.Exit(11)
 	}
 
-	br.Bot = br.AS.BotIntent()
 	br.ZLog.Info().
 		Str("name", br.Name).
 		Str("version", br.Version).
@@ -505,7 +498,13 @@ func (br *Bridge) init() {
 
 	br.ZLog.Debug().Msg("Initializing state store")
 	br.StateStore = sqlstatestore.NewSQLStateStore(br.DB, dbutil.ZeroLogger(br.ZLog.With().Str("db_section", "matrix_state").Logger()), true)
+
+	br.AS = br.Config.MakeAppService()
+	br.AS.DoublePuppetValue = br.Name
+	br.AS.GetProfile = br.getProfile
+	br.AS.Log = *br.ZLog
 	br.AS.StateStore = br.StateStore
+	br.Bot = br.AS.BotIntent()
 
 	br.ZLog.Debug().Msg("Initializing Matrix event processor")
 	br.EventProcessor = appservice.NewEventProcessor(br.AS)

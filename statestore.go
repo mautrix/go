@@ -22,6 +22,7 @@ type StateStore interface {
 	TryGetMember(roomID id.RoomID, userID id.UserID) (*event.MemberEventContent, bool)
 	SetMembership(roomID id.RoomID, userID id.UserID, membership event.Membership)
 	SetMember(roomID id.RoomID, userID id.UserID, member *event.MemberEventContent)
+	ClearCachedMembers(roomID id.RoomID, memberships ...event.Membership)
 
 	SetPowerLevels(roomID id.RoomID, levels *event.PowerLevelsEventContent)
 	GetPowerLevels(roomID id.RoomID) *event.PowerLevelsEventContent
@@ -188,6 +189,23 @@ func (store *MemoryStateStore) SetMember(roomID id.RoomID, userID id.UserID, mem
 	}
 	store.Members[roomID] = members
 	store.membersLock.Unlock()
+}
+
+func (store *MemoryStateStore) ClearCachedMembers(roomID id.RoomID, memberships ...event.Membership) {
+	store.membersLock.Lock()
+	defer store.membersLock.Unlock()
+	members, ok := store.Members[roomID]
+	if !ok {
+		return
+	}
+	for userID, member := range members {
+		for _, membership := range memberships {
+			if membership == member.Membership {
+				delete(members, userID)
+				break
+			}
+		}
+	}
 }
 
 func (store *MemoryStateStore) SetPowerLevels(roomID id.RoomID, levels *event.PowerLevelsEventContent) {

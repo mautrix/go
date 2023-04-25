@@ -276,8 +276,13 @@ func (mach *OlmMachine) handleRoomKeyRequest(ctx context.Context, sender id.User
 
 	igs, err := mach.CryptoStore.GetGroupSession(content.Body.RoomID, content.Body.SenderKey, content.Body.SessionID)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to get group session to forward")
-		mach.rejectKeyRequest(KeyShareRejectInternalError, device, content.Body)
+		if errors.Is(err, ErrGroupSessionWithheld) {
+			log.Debug().Err(err).Msg("Requested group session not available")
+			mach.rejectKeyRequest(KeyShareRejectUnavailable, device, content.Body)
+		} else {
+			log.Error().Err(err).Msg("Failed to get group session to forward")
+			mach.rejectKeyRequest(KeyShareRejectInternalError, device, content.Body)
+		}
 		return
 	} else if igs == nil {
 		log.Error().Msg("Didn't find group session to forward")
