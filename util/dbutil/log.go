@@ -12,8 +12,8 @@ import (
 
 type DatabaseLogger interface {
 	QueryTiming(ctx context.Context, method, query string, args []interface{}, nrows int, duration time.Duration, err error)
-	WarnUnsupportedVersion(current, latest int)
-	PrepareUpgrade(current, latest int)
+	WarnUnsupportedVersion(current, compat, latest int)
+	PrepareUpgrade(current, compat, latest int)
 	DoUpgrade(from, to int, message string, txn bool)
 	// Deprecated: legacy warning method, return errors instead
 	Warn(msg string, args ...interface{})
@@ -23,8 +23,8 @@ type noopLogger struct{}
 
 var NoopLogger DatabaseLogger = &noopLogger{}
 
-func (n noopLogger) WarnUnsupportedVersion(_, _ int)      {}
-func (n noopLogger) PrepareUpgrade(_, _ int)              {}
+func (n noopLogger) WarnUnsupportedVersion(_, _, _ int)   {}
+func (n noopLogger) PrepareUpgrade(_, _, _ int)           {}
 func (n noopLogger) DoUpgrade(_, _ int, _ string, _ bool) {}
 func (n noopLogger) Warn(msg string, args ...interface{}) {}
 
@@ -40,12 +40,12 @@ func MauLogger(log maulogger.Logger) DatabaseLogger {
 	return &mauLogger{l: log}
 }
 
-func (m mauLogger) WarnUnsupportedVersion(current, latest int) {
-	m.l.Warnfln("Unsupported database schema version: currently on v%d, latest known: v%d - continuing anyway", current, latest)
+func (m mauLogger) WarnUnsupportedVersion(current, compat, latest int) {
+	m.l.Warnfln("Unsupported database schema version: currently on v%d (compatible down to v%d), latest known: v%d - continuing anyway", current, compat, latest)
 }
 
-func (m mauLogger) PrepareUpgrade(current, latest int) {
-	m.l.Infofln("Database currently on v%d, latest: v%d", current, latest)
+func (m mauLogger) PrepareUpgrade(current, compat, latest int) {
+	m.l.Infofln("Database currently on v%d (compat: v%d), latest known: v%d", current, compat, latest)
 }
 
 func (m mauLogger) DoUpgrade(from, to int, message string, _ bool) {
@@ -74,18 +74,20 @@ func ZeroLoggerPtr(log *zerolog.Logger) DatabaseLogger {
 	return &zeroLogger{l: log}
 }
 
-func (z zeroLogger) WarnUnsupportedVersion(current, latest int) {
+func (z zeroLogger) WarnUnsupportedVersion(current, compat, latest int) {
 	z.l.Warn().
-		Int("current_db_version", current).
+		Int("current_version", current).
+		Int("oldest_compatible_version", compat).
 		Int("latest_known_version", latest).
 		Msg("Unsupported database schema version, continuing anyway")
 }
 
-func (z zeroLogger) PrepareUpgrade(current, latest int) {
+func (z zeroLogger) PrepareUpgrade(current, compat, latest int) {
 	evt := z.l.Info().
-		Int("current_db_version", current).
+		Int("current_version", current).
+		Int("oldest_compatible_version", compat).
 		Int("latest_known_version", latest)
-	if current == latest {
+	if current >= latest {
 		evt.Msg("Database is up to date")
 	} else {
 		evt.Msg("Preparing to update database schema")

@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Tulir Asokan
+// Copyright (c) 2023 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -29,14 +29,17 @@ func (ut *UpgradeTable) extend(toSize int) {
 	}
 }
 
-func (ut *UpgradeTable) Register(from, to int, message string, txn bool, fn upgradeFunc) {
+func (ut *UpgradeTable) Register(from, to, compat int, message string, txn bool, fn upgradeFunc) {
 	if from < 0 {
 		from += to
 	}
 	if from < 0 {
 		panic("invalid from value in UpgradeTable.Register() call")
 	}
-	upg := upgrade{message: message, fn: fn, upgradesTo: to, transaction: txn}
+	if compat <= 0 {
+		compat = to
+	}
+	upg := upgrade{message: message, fn: fn, upgradesTo: to, compatVersion: compat, transaction: txn}
 	if len(*ut) == from {
 		*ut = append(*ut, upg)
 		return
@@ -55,7 +58,11 @@ func (ut *UpgradeTable) Register(from, to int, message string, txn bool, fn upgr
 // or
 //
 //	-- v1: Message
-var upgradeHeaderRegex = regexp.MustCompile(`^-- (?:v(\d+) -> )?v(\d+): (.+)$`)
+//
+// Both syntaxes may also have a compatibility notice before the colon:
+//
+//	-- v5 (compatible with v3+): Upgrade with backwards compatibility
+var upgradeHeaderRegex = regexp.MustCompile(`^-- (?:v(\d+) -> )?v(\d+)(?: \(compatible with v(\d+)\+\))?: (.+)$`)
 
 // To disable wrapping the upgrade in a single transaction, put `--transaction: off` on the second line.
 //
@@ -64,7 +71,7 @@ var upgradeHeaderRegex = regexp.MustCompile(`^-- (?:v(\d+) -> )?v(\d+): (.+)$`)
 //	// do dangerous stuff
 var transactionDisableRegex = regexp.MustCompile(`^-- transaction: (\w*)`)
 
-func parseFileHeader(file []byte) (from, to int, message string, txn bool, lines [][]byte, err error) {
+func parseFileHeader(file []byte) (from, to, compat int, message string, txn bool, lines [][]byte, err error) {
 	lines = bytes.Split(file, []byte("\n"))
 	if len(lines) < 2 {
 		err = errors.New("upgrade file too short")
@@ -75,19 +82,22 @@ func parseFileHeader(file []byte) (from, to int, message string, txn bool, lines
 	lines = lines[1:]
 	if match == nil {
 		err = errors.New("header not found")
-	} else if len(match) != 4 {
+	} else if len(match) != 5 {
 		err = errors.New("unexpected number of items in regex match")
 	} else if maybeFrom, err = strconv.Atoi(string(match[1])); len(match[1]) > 0 && err != nil {
 		err = fmt.Errorf("invalid source version: %w", err)
 	} else if to, err = strconv.Atoi(string(match[2])); err != nil {
 		err = fmt.Errorf("invalid target version: %w", err)
+	} else if compat, err = strconv.Atoi(string(match[3])); len(match[3]) > 0 && err != nil {
+		err = fmt.Errorf("invalid compatible version: %w", err)
 	} else {
+		err = nil
 		if len(match[1]) > 0 {
 			from = maybeFrom
 		} else {
 			from = -1
 		}
-		message = string(match[3])
+		message = string(match[4])
 		txn = true
 		match = transactionDisableRegex.FindSubmatch(lines[0])
 		if match != nil {
@@ -205,7 +215,7 @@ func splitSQLUpgradeFunc(sqliteData, postgresData string) upgradeFunc {
 	}
 }
 
-func parseSplitSQLUpgrade(name string, fs fullFS, skipNames map[string]struct{}) (from, to int, message string, txn bool, fn upgradeFunc) {
+func parseSplitSQLUpgrade(name string, fs fullFS, skipNames map[string]struct{}) (from, to, compat int, message string, txn bool, fn upgradeFunc) {
 	postgresName := fmt.Sprintf("%s.postgres.sql", name)
 	sqliteName := fmt.Sprintf("%s.sqlite.sql", name)
 	skipNames[postgresName] = struct{}{}
@@ -218,15 +228,15 @@ func parseSplitSQLUpgrade(name string, fs fullFS, skipNames map[string]struct{})
 	if err != nil {
 		panic(err)
 	}
-	from, to, message, txn, _, err = parseFileHeader(postgresData)
+	from, to, compat, message, txn, _, err = parseFileHeader(postgresData)
 	if err != nil {
 		panic(fmt.Errorf("failed to parse header in %s: %w", postgresName, err))
 	}
-	sqliteFrom, sqliteTo, sqliteMessage, sqliteTxn, _, err := parseFileHeader(sqliteData)
+	sqliteFrom, sqliteTo, sqliteCompat, sqliteMessage, sqliteTxn, _, err := parseFileHeader(sqliteData)
 	if err != nil {
 		panic(fmt.Errorf("failed to parse header in %s: %w", sqliteName, err))
 	}
-	if from != sqliteFrom || to != sqliteTo {
+	if from != sqliteFrom || to != sqliteTo || compat != sqliteCompat {
 		panic(fmt.Errorf("mismatching versions in postgres and sqlite versions of %s: %d/%d -> %d/%d", name, from, sqliteFrom, to, sqliteTo))
 	} else if message != sqliteMessage {
 		panic(fmt.Errorf("mismatching message in postgres and sqlite versions of %s: %q != %q", name, message, sqliteMessage))
@@ -260,14 +270,14 @@ func (ut *UpgradeTable) RegisterFSPath(fs fullFS, dir string) {
 		} else if _, skip := skipNames[file.Name()]; skip {
 			// also do nothing
 		} else if splitName := splitFileNameRegex.FindStringSubmatch(file.Name()); splitName != nil {
-			from, to, message, txn, fn := parseSplitSQLUpgrade(splitName[1], fs, skipNames)
-			ut.Register(from, to, message, txn, fn)
+			from, to, compat, message, txn, fn := parseSplitSQLUpgrade(splitName[1], fs, skipNames)
+			ut.Register(from, to, compat, message, txn, fn)
 		} else if data, err := fs.ReadFile(filepath.Join(dir, file.Name())); err != nil {
 			panic(err)
-		} else if from, to, message, txn, lines, err := parseFileHeader(data); err != nil {
+		} else if from, to, compat, message, txn, lines, err := parseFileHeader(data); err != nil {
 			panic(fmt.Errorf("failed to parse header in %s: %w", file.Name(), err))
 		} else {
-			ut.Register(from, to, message, txn, sqlUpgradeFunc(file.Name(), lines))
+			ut.Register(from, to, compat, message, txn, sqlUpgradeFunc(file.Name(), lines))
 		}
 	}
 }
