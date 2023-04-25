@@ -54,9 +54,15 @@ func (db *Database) getVersion() (version, compat int, err error) {
 		return
 	}
 
-	err = db.QueryRow(fmt.Sprintf("SELECT version, compat FROM %s LIMIT 1", db.VersionTable)).Scan(&version, &compat)
+	var compatNull sql.NullInt32
+	err = db.QueryRow(fmt.Sprintf("SELECT version, compat FROM %s LIMIT 1", db.VersionTable)).Scan(&version, &compatNull)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = nil
+	}
+	if compatNull.Valid && compatNull.Int32 != 0 {
+		compat = int(compatNull.Int32)
+	} else {
+		compat = version
 	}
 	return
 }
