@@ -11,6 +11,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+
+	"golang.org/x/exp/maps"
 )
 
 // Common error codes from https://matrix.org/docs/spec/client_server/latest#api-standards
@@ -129,12 +131,13 @@ func (e *RespError) UnmarshalJSON(data []byte) error {
 }
 
 func (e *RespError) MarshalJSON() ([]byte, error) {
-	if e.ExtraData == nil {
-		e.ExtraData = make(map[string]interface{})
+	data := maps.Clone(e.ExtraData)
+	if data == nil {
+		data = make(map[string]any)
 	}
-	e.ExtraData["errcode"] = e.ErrCode
-	e.ExtraData["error"] = e.Err
-	return json.Marshal(&e.ExtraData)
+	data["errcode"] = e.ErrCode
+	data["error"] = e.Err
+	return json.Marshal(data)
 }
 
 // Error returns the errcode and error message.

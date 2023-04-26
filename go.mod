@@ -15,6 +15,7 @@ require (
 	github.com/yuin/goldmark v1.5.4
 	go.mau.fi/zeroconfig v0.1.2
 	golang.org/x/crypto v0.8.0
+	golang.org/x/exp v0.0.0-20230425010034-47ecfdc1ba53
 	golang.org/x/net v0.9.0
 	gopkg.in/yaml.v3 v3.0.1
 	maunium.net/go/mauflag v1.0.0
