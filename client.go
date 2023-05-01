@@ -293,6 +293,9 @@ func (cli *Client) LogRequestDone(req *http.Request, resp *http.Response, handle
 	if handlerErr != nil {
 		evt.AnErr("body_parse_err", handlerErr)
 	}
+	if serverRequestID := resp.Header.Get("X-Beeper-Request-ID"); serverRequestID != "" {
+		evt.Str("beeper_request_id", serverRequestID)
+	}
 	evt.Msg("Request completed")
 }
 
