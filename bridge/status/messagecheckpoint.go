@@ -52,6 +52,14 @@ func (mcs MessageCheckpointStep) Before(other MessageCheckpointStep) bool {
 	return mcs.order() < other.order()
 }
 
+func (mcs MessageCheckpointStep) IsValid() bool {
+	switch mcs {
+	case MsgStepClient, MsgStepHomeserver, MsgStepBridge, MsgStepDecrypted, MsgStepRemote, MsgStepCommand:
+		return true
+	}
+	return false
+}
+
 type MessageCheckpointStatus string
 
 const (
@@ -61,6 +69,14 @@ const (
 	MsgStatusUnsupported MessageCheckpointStatus = "UNSUPPORTED"
 	MsgStatusTimeout     MessageCheckpointStatus = "TIMEOUT"
 )
+
+func (mcs MessageCheckpointStatus) IsValid() bool {
+	switch mcs {
+	case MsgStatusSuccess, MsgStatusWillRetry, MsgStatusPermFailure, MsgStatusUnsupported, MsgStatusTimeout:
+		return true
+	}
+	return false
+}
 
 func ReasonToCheckpointStatus(reason event.MessageStatusReason, status event.MessageStatus) MessageCheckpointStatus {
 	if status == event.MessageStatusPending {
@@ -83,6 +99,14 @@ const (
 	MsgReportedByBridge MessageCheckpointReportedBy = "BRIDGE"
 	MsgReportedByHungry MessageCheckpointReportedBy = "HUNGRYSERV"
 )
+
+func (mcrb MessageCheckpointReportedBy) IsValid() bool {
+	switch mcrb {
+	case MsgReportedByAsmux, MsgReportedByBridge, MsgReportedByHungry:
+		return true
+	}
+	return false
+}
 
 type MessageCheckpoint struct {
 	EventID     id.EventID                  `json:"event_id"`
