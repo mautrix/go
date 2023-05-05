@@ -1993,7 +1993,7 @@ func (cli *Client) BatchSend(roomID id.RoomID, req *ReqBatchSend) (resp *RespBat
 func (cli *Client) AppservicePing(id, txnID string) (resp *RespAppservicePing, err error) {
 	_, err = cli.MakeFullRequest(FullRequest{
 		Method:       http.MethodPost,
-		URL:          cli.BuildClientURL("unstable", "fi.mau.msc2659", "appservice", id, "ping"),
+		URL:          cli.BuildClientURL("v1", "appservice", id, "ping"),
 		RequestJSON:  &ReqAppservicePing{TxnID: txnID},
 		ResponseJSON: &resp,
 		// This endpoint intentionally returns 50x, so don't retry

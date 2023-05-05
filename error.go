@@ -63,10 +63,10 @@ var (
 	// The client specified a parameter that has the wrong value.
 	MInvalidParam = RespError{ErrCode: "M_INVALID_PARAM"}
 
-	MSC2659URLNotSet         = RespError{ErrCode: "FI.MAU.MSC2659_URL_NOT_SET"}
-	MSC2659BadStatus         = RespError{ErrCode: "FI.MAU.MSC2659_BAD_STATUS"}
-	MSC2659ConnectionTimeout = RespError{ErrCode: "FI.MAU.MSC2659_CONNECTION_TIMEOUT"}
-	MSC2659ConnectionFailed  = RespError{ErrCode: "FI.MAU.MSC2659_CONNECTION_FAILED"}
+	MURLNotSet         = RespError{ErrCode: "M_URL_NOT_SET"}
+	MBadStatus         = RespError{ErrCode: "M_BAD_STATUS"}
+	MConnectionTimeout = RespError{ErrCode: "M_CONNECTION_TIMEOUT"}
+	MConnectionFailed  = RespError{ErrCode: "M_CONNECTION_FAILED"}
 )
 
 // HTTPError An HTTP Error response, which may wrap an underlying native Go Error.

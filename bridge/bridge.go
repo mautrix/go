@@ -303,7 +303,7 @@ func (br *Bridge) ensureConnection() {
 			os.Exit(17)
 		}
 
-		if br.SpecVersions.UnstableFeatures["fi.mau.msc2659"] && br.AS.Host.IsConfigured() {
+		if (br.SpecVersions.UnstableFeatures["fi.mau.msc2659.stable"] || br.SpecVersions.ContainsGreaterOrEqual(mautrix.SpecV17)) && br.AS.Host.IsConfigured() {
 			txnID := br.Bot.TxnID()
 			resp, err := br.Bot.AppservicePing(br.Config.AppService.ID, txnID)
 			if err != nil {
