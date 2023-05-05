@@ -555,6 +555,20 @@ func (mx *MatrixHandler) HandleMessage(evt *event.Event) {
 		if hasCommandPrefix || evt.RoomID == user.GetManagementRoomID() {
 			go mx.bridge.CommandProcessor.Handle(evt.RoomID, evt.ID, user, content.Body, content.RelatesTo.GetReplyTo())
 			go mx.bridge.SendMessageSuccessCheckpoint(evt, status.MsgStepCommand, 0)
+			if mx.bridge.Config.Bridge.EnableMessageStatusEvents() {
+				statusEvent := &event.BeeperMessageStatusEventContent{
+					// TODO: network
+					RelatesTo: event.RelatesTo{
+						Type:    event.RelReference,
+						EventID: evt.ID,
+					},
+					Status: event.MessageStatusSuccess,
+				}
+				_, sendErr := mx.bridge.Bot.SendMessageEvent(evt.RoomID, event.BeeperMessageStatus, statusEvent)
+				if sendErr != nil {
+					mx.log.Warn().Str("event_id", evt.ID.String()).Err(sendErr).Msg("Failed to send message status event for command")
+				}
+			}
 			return
 		}
 	}
