@@ -64,14 +64,24 @@ func (m mauLogger) Warn(msg string, args ...interface{}) {
 
 type zeroLogger struct {
 	l *zerolog.Logger
+	ZeroLogSettings
 }
 
-func ZeroLogger(log zerolog.Logger) DatabaseLogger {
-	return ZeroLoggerPtr(&log)
+type ZeroLogSettings struct {
+	CallerSkipFrame int
+	Caller          bool
 }
 
-func ZeroLoggerPtr(log *zerolog.Logger) DatabaseLogger {
-	return &zeroLogger{l: log}
+func ZeroLogger(log zerolog.Logger, cfg ...ZeroLogSettings) DatabaseLogger {
+	return ZeroLoggerPtr(&log, cfg...)
+}
+
+func ZeroLoggerPtr(log *zerolog.Logger, cfg ...ZeroLogSettings) DatabaseLogger {
+	wrapped := &zeroLogger{l: log}
+	if len(cfg) > 0 {
+		wrapped.ZeroLogSettings = cfg[0]
+	}
+	return wrapped
 }
 
 func (z zeroLogger) WarnUnsupportedVersion(current, compat, latest int) {
@@ -126,11 +136,14 @@ func (z zeroLogger) QueryTiming(ctx context.Context, method, query string, args 
 		Interface("query_args", args).
 		Msg("Query")
 	if duration >= 1*time.Second {
-		log.Warn().
+		evt := log.Warn().
 			Float64("duration_seconds", duration.Seconds()).
 			Str("method", method).
-			Str("query", query).
-			Msg("Query took long")
+			Str("query", query)
+		if z.Caller {
+			evt = evt.Caller(z.CallerSkipFrame)
+		}
+		evt.Msg("Query took long")
 	}
 }
 
