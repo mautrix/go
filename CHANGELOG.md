@@ -1,3 +1,17 @@
+## v0.15.2 (unreleased)
+
+* *(client)* Changed member-fetching methods to clear existing member info in
+  state store.
+* *(client)* Added support for inserting mautrix-go commit hash into default
+  user agent at compile time.
+* *(bridge)* Fixed bridge bot intent not having state store set.
+* *(client)* Fixed `RespError` marshaling mutating the `ExtraData` map and
+  potentially causing panics.
+* *(util/dbutil)* Added `DoTxn` method for an easier way to manage database
+  transactions.
+* *(util)* Added a zerolog `CallerMarshalFunc` implementation that includes the
+  function name.
+
 ## v0.15.1 (2023-04-16)
 
 * *(crypto, bridge)* Added options to automatically ratchet/delete megolm
