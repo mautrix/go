@@ -31,6 +31,7 @@ import (
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/sqlstatestore"
+	"maunium.net/go/mautrix/util"
 	"maunium.net/go/mautrix/util/configupgrade"
 	"maunium.net/go/mautrix/util/dbutil"
 	_ "maunium.net/go/mautrix/util/dbutil/litestream"
@@ -455,6 +456,7 @@ func (br *Bridge) init() {
 	}
 	defaultCtxLog := br.ZLog.With().Bool("default_context_log", true).Caller().Logger()
 	zerolog.TimeFieldFormat = time.RFC3339Nano
+	zerolog.CallerMarshalFunc = util.CallerWithFunctionName
 	zerolog.DefaultContextLogger = &defaultCtxLog
 	br.Log = maulogadapt.ZeroAsMau(br.ZLog)
 
