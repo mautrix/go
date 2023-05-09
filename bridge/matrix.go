@@ -386,12 +386,16 @@ var errMessageNotEncrypted = errors.New("unencrypted message")
 var errNoDecryptionKeys = errors.New("the bridge hasn't received the decryption keys")
 
 func errorToHumanMessage(err error) string {
+	var withheld *event.RoomKeyWithheldEventContent
 	switch {
 	case errors.Is(err, errDeviceNotTrusted), errors.Is(err, errNoDecryptionKeys):
 		return err.Error()
 	case errors.Is(err, UnknownMessageIndex):
 		return "the keys received by the bridge can't decrypt the message"
-	case errors.Is(err, ErrGroupSessionWithheld):
+	case errors.As(err, &withheld):
+		if withheld.Code == event.RoomKeyWithheldBeeperRedacted {
+			return "your client used an outdated encryption session"
+		}
 		return "your client refused to share decryption keys with the bridge"
 	case errors.Is(err, errMessageNotEncrypted):
 		return "the message is not encrypted"

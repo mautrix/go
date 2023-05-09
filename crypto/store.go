@@ -8,7 +8,6 @@ package crypto
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sort"
 	"sync"
@@ -17,7 +16,7 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-var ErrGroupSessionWithheld = errors.New("group session has been withheld")
+var ErrGroupSessionWithheld error = &event.RoomKeyWithheldEventContent{}
 
 // Store is used by OlmMachine to store Olm and Megolm sessions, user device lists and message indices.
 //

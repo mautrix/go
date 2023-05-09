@@ -32,7 +32,6 @@ import (
 var _ crypto.StateStore = (*sqlstatestore.SQLStateStore)(nil)
 
 var NoSessionFound = crypto.NoSessionFound
-var ErrGroupSessionWithheld = crypto.ErrGroupSessionWithheld
 var UnknownMessageIndex = olm.UnknownMessageIndex
 
 type CryptoHelper struct {

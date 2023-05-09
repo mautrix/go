@@ -8,6 +8,7 @@ package event
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"maunium.net/go/mautrix/id"
 )
@@ -154,6 +155,25 @@ type RoomKeyWithheldEventContent struct {
 	SenderKey id.SenderKey        `json:"sender_key"`
 	Code      RoomKeyWithheldCode `json:"code"`
 	Reason    string              `json:"reason,omitempty"`
+}
+
+const groupSessionWithheldMsg = "group session has been withheld: %s"
+
+func (withheld *RoomKeyWithheldEventContent) Error() string {
+	switch withheld.Code {
+	case RoomKeyWithheldBlacklisted, RoomKeyWithheldUnverified, RoomKeyWithheldUnauthorized, RoomKeyWithheldUnavailable, RoomKeyWithheldNoOlmSession:
+		return fmt.Sprintf(groupSessionWithheldMsg, withheld.Code)
+	default:
+		return fmt.Sprintf(groupSessionWithheldMsg+" (%s)", withheld.Code, withheld.Reason)
+	}
+}
+
+func (withheld *RoomKeyWithheldEventContent) Is(other error) bool {
+	otherWithheld, ok := other.(*RoomKeyWithheldEventContent)
+	if !ok {
+		return false
+	}
+	return withheld.Code == "" || otherWithheld.Code == "" || withheld.Code == otherWithheld.Code
 }
 
 type DummyEventContent struct{}
