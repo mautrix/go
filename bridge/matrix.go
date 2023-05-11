@@ -368,12 +368,15 @@ func (mx *MatrixHandler) sendCryptoStatusError(ctx context.Context, evt *event.E
 			MsgType: event.MsgNotice,
 			Body:    fmt.Sprintf("\u26a0 Your message was not bridged: %v.", err),
 		}
+		if errors.Is(err, errNoCrypto) {
+			update.Body = "🔒 This bridge has not been configured to support encryption"
+		}
 		if editEvent != "" {
 			update.SetEdit(editEvent)
 		}
 		resp, sendErr := mx.bridge.Bot.SendMessageEvent(evt.RoomID, event.EventMessage, &update)
 		if sendErr != nil {
-			zerolog.Ctx(ctx).Error().Err(err).Msg("Failed to send decryption error notice")
+			zerolog.Ctx(ctx).Error().Err(sendErr).Msg("Failed to send decryption error notice")
 		} else if resp != nil {
 			return resp.EventID
 		}
@@ -381,9 +384,12 @@ func (mx *MatrixHandler) sendCryptoStatusError(ctx context.Context, evt *event.E
 	return ""
 }
 
-var errDeviceNotTrusted = errors.New("your device is not trusted")
-var errMessageNotEncrypted = errors.New("unencrypted message")
-var errNoDecryptionKeys = errors.New("the bridge hasn't received the decryption keys")
+var (
+	errDeviceNotTrusted    = errors.New("your device is not trusted")
+	errMessageNotEncrypted = errors.New("unencrypted message")
+	errNoDecryptionKeys    = errors.New("the bridge hasn't received the decryption keys")
+	errNoCrypto            = errors.New("this bridge has not been configured to support encryption")
+)
 
 func errorToHumanMessage(err error) string {
 	var withheld *event.RoomKeyWithheldEventContent
@@ -466,7 +472,7 @@ func (mx *MatrixHandler) postDecrypt(ctx context.Context, original, decrypted *e
 
 func (mx *MatrixHandler) HandleEncrypted(evt *event.Event) {
 	defer mx.TrackEventDuration(evt.Type)()
-	if mx.shouldIgnoreEvent(evt) || mx.bridge.Crypto == nil {
+	if mx.shouldIgnoreEvent(evt) {
 		return
 	}
 	content := evt.Content.AsEncrypted()
@@ -476,6 +482,10 @@ func (mx *MatrixHandler) HandleEncrypted(evt *event.Event) {
 		Str("session_id", content.SessionID.String()).
 		Logger()
 	ctx = log.WithContext(ctx)
+	if mx.bridge.Crypto == nil {
+		go mx.sendCryptoStatusError(ctx, evt, "", errNoCrypto, 0, true)
+		return
+	}
 	log.Debug().Msg("Decrypting received event")
 
 	decryptionStart := time.Now()
