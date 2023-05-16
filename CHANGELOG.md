@@ -1,4 +1,4 @@
-## v0.15.2 (unreleased)
+## v0.15.2 (2023-05-16)
 
 * *(client)* Changed member-fetching methods to clear existing member info in
   state store.
@@ -11,6 +11,8 @@
   transactions.
 * *(util)* Added a zerolog `CallerMarshalFunc` implementation that includes the
   function name.
+* *(bridge)* Added error reply to encrypted messages if the bridge isn't
+  configured to do encryption.
 
 ## v0.15.1 (2023-04-16)
 
