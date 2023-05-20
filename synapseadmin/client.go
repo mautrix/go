@@ -16,3 +16,7 @@ import (
 type Client struct {
 	*mautrix.Client
 }
+
+func (cli *Client) BuildAdminURL(path ...any) string {
+	return cli.BuildURL(mautrix.SynapseAdminURLPath(path))
+}
