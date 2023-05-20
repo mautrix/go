@@ -318,3 +318,34 @@ func dontProcessOldEvents(userID id.UserID, resp *RespSync, since string) bool {
 	}
 	return true
 }
+
+// FillInviteState is a sync handler that moves events from the state event list to the InviteRoomState in the invite event.
+//
+// To use it, register it with your Syncer, e.g.:
+//
+//	cli.Syncer.(mautrix.ExtensibleSyncer).OnSync(cli.FillInviteState)
+func (cli *Client) FillInviteState(resp *RespSync, _ string) bool {
+	for _, meta := range resp.Rooms.Invite {
+		var inviteState []event.StrippedState
+		var inviteEvt *event.Event
+		for _, evt := range meta.State.Events {
+			if evt.Type == event.StateMember && evt.GetStateKey() == cli.UserID.String() {
+				inviteEvt = evt
+			} else {
+				evt.Type.Class = event.StateEventType
+				_ = evt.Content.ParseRaw(evt.Type)
+				inviteState = append(inviteState, event.StrippedState{
+					Content:  evt.Content,
+					Type:     evt.Type,
+					StateKey: evt.GetStateKey(),
+					Sender:   evt.Sender,
+				})
+			}
+		}
+		if inviteEvt != nil {
+			inviteEvt.Unsigned.InviteRoomState = inviteState
+			meta.State.Events = []*event.Event{inviteEvt}
+		}
+	}
+	return true
+}
