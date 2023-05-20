@@ -1,3 +1,11 @@
+## v0.15.3 (unreleased)
+
+* *(synapseadmin)* Added wrappers for some Synapse admin API endpoints.
+* *(client)* Deprecated `OldEventIgnorer` and added `Client.DontProcessOldEvents`
+  to replace it.
+* *(client)* Added `MoveInviteState` sync handler for moving state events in
+  the invite section of sync inside the invite event itself.
+
 ## v0.15.2 (2023-05-16)
 
 * *(client)* Changed member-fetching methods to clear existing member info in
