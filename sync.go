@@ -72,7 +72,7 @@ func (es EventSource) String() string {
 	}
 	es &^= primaryTypes
 	if es != 0 {
-		return fmt.Sprintf("unknown (%d)", es)
+		return fmt.Sprintf("unknown (%s+%d)", typeName, es)
 	}
 	return typeName
 }
