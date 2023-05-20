@@ -62,9 +62,9 @@ func (es EventSource) String() string {
 		case EventSourceLeave:
 			typeName = "left room " + typeName
 		default:
-			return fmt.Sprintf("unknown (%d)", es)
+			return fmt.Sprintf("unknown (%s+%d)", typeName, es)
 		}
-		es &^= roomableTypes
+		es &^= roomSections
 	}
 	if es&encryptableTypes != 0 && es&EventSourceDecrypted != 0 {
 		typeName += " (decrypted)"
