@@ -134,6 +134,12 @@ func (rule *PushRule) Match(room Room, evt *event.Event) bool {
 	if rule == nil || !rule.Enabled {
 		return false
 	}
+	if rule.RuleID == ".m.rule.contains_display_name" || rule.RuleID == ".m.rule.contains_user_name" || rule.RuleID == ".m.rule.roomnotif" {
+		if _, containsMentions := evt.Content.Raw["m.mentions"]; containsMentions {
+			// Disable legacy mention push rules when the event contains the new mentions key
+			return false
+		}
+	}
 	switch rule.Type {
 	case OverrideRule, UnderrideRule:
 		return rule.matchConditions(room, evt)
