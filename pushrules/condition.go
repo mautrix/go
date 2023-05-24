@@ -198,6 +198,19 @@ func numberToInt64(a any) int64 {
 	}
 }
 
+func valueEquals(a, b any) bool {
+	// Convert floats to ints when comparing numbers (the JSON parser generates floats, but Matrix only allows integers)
+	// Also allow other numeric types in case something generates events manually without json
+	switch a.(type) {
+	case float64, float32, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+		switch b.(type) {
+		case float64, float32, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+			return numberToInt64(a) == numberToInt64(b)
+		}
+	}
+	return a == b
+}
+
 func (cond *PushCondition) matchValue(evt *event.Event) bool {
 	val, ok := cond.getValue(evt)
 	if !ok {
@@ -212,23 +225,14 @@ func (cond *PushCondition) matchValue(evt *event.Event) bool {
 		}
 		return pattern.MatchString(stringifyForPushCondition(val))
 	case KindEventPropertyIs:
-		// Convert floats to ints when comparing numbers (the JSON parser generates floats, but Matrix only allows integers)
-		// Also allow other numeric types in case something generates events manually without json
-		switch val.(type) {
-		case float64, float32, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
-			switch cond.Value.(type) {
-			case float64, float32, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
-				return numberToInt64(val) == numberToInt64(cond.Value)
-			}
-		}
-		return val == cond.Value
+		return valueEquals(val, cond.Value)
 	case KindEventPropertyContains:
 		valArr, ok := val.([]any)
 		if !ok {
 			return false
 		}
 		for _, item := range valArr {
-			if item == cond.Value {
+			if valueEquals(item, cond.Value) {
 				return true
 			}
 		}

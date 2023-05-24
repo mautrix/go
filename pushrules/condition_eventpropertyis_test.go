@@ -38,3 +38,54 @@ func TestPushCondition_Match_KindEventPropertyIs_Integer(t *testing.T) {
 	evt := newFakeEvent(event.NewEventType("m.room.foo"), map[string]any{"meow": 5})
 	assert.True(t, condition.Match(blankTestRoom, evt))
 }
+
+func TestPushCondition_Match_KindEventPropertyIs_Integer_NoMatch(t *testing.T) {
+	condition := newEventPropertyIsPushCondition("content.meow", 0)
+	evt := newFakeEvent(event.NewEventType("m.room.foo"), map[string]any{"meow": "NaN"})
+	assert.False(t, condition.Match(blankTestRoom, evt))
+}
+
+func TestPushCondition_Match_KindEventPropertyIs_String(t *testing.T) {
+	condition := newEventPropertyIsPushCondition("content.meow", "foo")
+	evt := newFakeEvent(event.NewEventType("m.room.foo"), map[string]any{"meow": "foo"})
+	assert.True(t, condition.Match(blankTestRoom, evt))
+}
+
+func TestPushCondition_Match_KindEventPropertyIs_String_NoMatch(t *testing.T) {
+	condition := newEventPropertyIsPushCondition("content.meow", "foo")
+	evt := newFakeEvent(event.NewEventType("m.room.foo"), map[string]any{"meow": "foo!"})
+	assert.False(t, condition.Match(blankTestRoom, evt))
+}
+
+func TestPushCondition_Match_KindEventPropertyIs_Null(t *testing.T) {
+	condition := newEventPropertyIsPushCondition("content.meow", nil)
+	evt := newFakeEvent(event.NewEventType("m.room.foo"), map[string]any{"meow": nil})
+	assert.True(t, condition.Match(blankTestRoom, evt))
+}
+
+func TestPushCondition_Match_KindEventPropertyIs_Null_NoMatch(t *testing.T) {
+	condition := newEventPropertyIsPushCondition("content.meow", nil)
+	evt := newFakeEvent(event.NewEventType("m.room.foo"), map[string]any{"meow": "a"})
+	assert.False(t, condition.Match(blankTestRoom, evt))
+}
+
+func TestPushCondition_Match_KindEventPropertyIs_Bool(t *testing.T) {
+	condition := newEventPropertyIsPushCondition("content.meow", false)
+	evt := newFakeEvent(event.NewEventType("m.room.foo"), map[string]any{"meow": false})
+	assert.True(t, condition.Match(blankTestRoom, evt))
+	condition = newEventPropertyIsPushCondition("content.meow", true)
+	evt = newFakeEvent(event.NewEventType("m.room.foo"), map[string]any{"meow": true})
+	assert.True(t, condition.Match(blankTestRoom, evt))
+}
+
+func TestPushCondition_Match_KindEventPropertyIs_Bool_NoMatch(t *testing.T) {
+	condition := newEventPropertyIsPushCondition("content.meow", false)
+	evt := newFakeEvent(event.NewEventType("m.room.foo"), map[string]any{"meow": true})
+	assert.False(t, condition.Match(blankTestRoom, evt))
+	condition = newEventPropertyIsPushCondition("content.meow", true)
+	evt = newFakeEvent(event.NewEventType("m.room.foo"), map[string]any{"meow": false})
+	assert.False(t, condition.Match(blankTestRoom, evt))
+	condition = newEventPropertyIsPushCondition("content.meow", false)
+	evt = newFakeEvent(event.NewEventType("m.room.foo"), map[string]any{"meow": ""})
+	assert.False(t, condition.Match(blankTestRoom, evt))
+}
