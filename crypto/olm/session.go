@@ -326,12 +326,13 @@ func (s *Session) Decrypt(message string, msgType id.OlmMsgType) ([]byte, error)
 	if err != nil {
 		return nil, err
 	}
+	messageCopy := []byte(message)
 	plaintext := make([]byte, decryptMaxPlaintextLen)
 	r := C.olm_decrypt(
 		(*C.OlmSession)(s.int),
 		C.size_t(msgType),
-		unsafe.Pointer(&([]byte(message))[0]),
-		C.size_t(len(message)),
+		unsafe.Pointer(&(messageCopy)[0]),
+		C.size_t(len(messageCopy)),
 		unsafe.Pointer(&plaintext[0]),
 		C.size_t(len(plaintext)))
 	if r == errorVal() {

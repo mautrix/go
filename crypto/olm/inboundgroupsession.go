@@ -230,12 +230,14 @@ func (s *InboundGroupSession) Decrypt(message []byte) ([]byte, uint, error) {
 	if err != nil {
 		return nil, 0, err
 	}
+	messageCopy := make([]byte, len(message))
+	copy(messageCopy, message)
 	plaintext := make([]byte, decryptMaxPlaintextLen)
 	var messageIndex uint32
 	r := C.olm_group_decrypt(
 		(*C.OlmInboundGroupSession)(s.int),
-		(*C.uint8_t)(&message[0]),
-		C.size_t(len(message)),
+		(*C.uint8_t)(&messageCopy[0]),
+		C.size_t(len(messageCopy)),
 		(*C.uint8_t)(&plaintext[0]),
 		C.size_t(len(plaintext)),
 		(*C.uint32_t)(&messageIndex))
