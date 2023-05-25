@@ -61,7 +61,7 @@ func IsShareError(err error) bool {
 	return err == SessionExpired || err == SessionNotShared || err == NoGroupSession
 }
 
-func parseMessageIndex(ciphertext []byte) (uint64, error) {
+func parseMessageIndex(ciphertext []byte) (uint, error) {
 	decoded := make([]byte, base64.RawStdEncoding.DecodedLen(len(ciphertext)))
 	var err error
 	_, err = base64.RawStdEncoding.Decode(decoded, ciphertext)
@@ -74,7 +74,7 @@ func parseMessageIndex(ciphertext []byte) (uint64, error) {
 	if read <= 0 {
 		return 0, fmt.Errorf("failed to decode varint, read value %d", read)
 	}
-	return index, nil
+	return uint(index), nil
 }
 
 // EncryptMegolmEvent encrypts data with the m.megolm.v1.aes-sha2 algorithm.
@@ -112,7 +112,7 @@ func (mach *OlmMachine) EncryptMegolmEvent(ctx context.Context, roomID id.RoomID
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to get megolm message index of encrypted event")
 	} else {
-		log = log.With().Uint64("message_index", idx).Logger()
+		log = log.With().Uint("message_index", idx).Logger()
 	}
 	log.Debug().Msg("Encrypted event successfully")
 	err = mach.CryptoStore.UpdateOutboundGroupSession(session)

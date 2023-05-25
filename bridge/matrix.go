@@ -398,6 +398,8 @@ func errorToHumanMessage(err error) string {
 		return err.Error()
 	case errors.Is(err, UnknownMessageIndex):
 		return "the keys received by the bridge can't decrypt the message"
+	case errors.Is(err, DuplicateMessageIndex):
+		return "your client encrypted multiple messages with the same key"
 	case errors.As(err, &withheld):
 		if withheld.Code == event.RoomKeyWithheldBeeperRedacted {
 			return "your client used an outdated encryption session"

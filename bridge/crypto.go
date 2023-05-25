@@ -32,6 +32,7 @@ import (
 var _ crypto.StateStore = (*sqlstatestore.SQLStateStore)(nil)
 
 var NoSessionFound = crypto.NoSessionFound
+var DuplicateMessageIndex = crypto.DuplicateMessageIndex
 var UnknownMessageIndex = olm.UnknownMessageIndex
 
 type CryptoHelper struct {

@@ -15,6 +15,7 @@ import (
 
 	"github.com/rs/zerolog"
 
+	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
@@ -163,6 +164,26 @@ func removeItem(slice []uint, item uint) ([]uint, bool) {
 
 const missedIndexCutoff = 10
 
+func (mach *OlmMachine) checkUndecryptableMessageIndexDuplication(ctx context.Context, sess *InboundGroupSession, evt *event.Event, content *event.EncryptedEventContent) (uint, error) {
+	log := *zerolog.Ctx(ctx)
+	messageIndex, decodeErr := parseMessageIndex(content.MegolmCiphertext)
+	if decodeErr != nil {
+		log.Warn().Err(decodeErr).Msg("Failed to parse message index to check if it's a duplicate for message that failed to decrypt")
+		return 0, fmt.Errorf("%w (also failed to parse message index)", olm.UnknownMessageIndex)
+	}
+	firstKnown := sess.Internal.FirstKnownIndex()
+	log = log.With().Uint("message_index", messageIndex).Uint32("first_known_index", firstKnown).Logger()
+	if ok, err := mach.CryptoStore.ValidateMessageIndex(ctx, sess.SenderKey, content.SessionID, evt.ID, messageIndex, evt.Timestamp); err != nil {
+		log.Debug().Err(err).Msg("Failed to check if message index is duplicate")
+		return messageIndex, fmt.Errorf("%w (failed to check if index is duplicate; received: %d, earliest known: %d)", olm.UnknownMessageIndex, messageIndex, firstKnown)
+	} else if !ok {
+		log.Debug().Msg("Failed to decrypt message due to unknown index and found duplicate")
+		return messageIndex, fmt.Errorf("%w %d (also failed to decrypt because earliest known index is %d)", DuplicateMessageIndex, messageIndex, firstKnown)
+	}
+	log.Debug().Msg("Failed to decrypt message due to unknown index, but index is not duplicate")
+	return messageIndex, fmt.Errorf("%w (not duplicate index; received: %d, earliest known: %d)", olm.UnknownMessageIndex, messageIndex, firstKnown)
+}
+
 func (mach *OlmMachine) actuallyDecryptMegolmEvent(ctx context.Context, evt *event.Event, encryptionRoomID id.RoomID, content *event.EncryptedEventContent) (*InboundGroupSession, []byte, uint, error) {
 	mach.megolmDecryptLock.Lock()
 	defer mach.megolmDecryptLock.Unlock()
@@ -177,11 +198,15 @@ func (mach *OlmMachine) actuallyDecryptMegolmEvent(ctx context.Context, evt *eve
 	}
 	plaintext, messageIndex, err := sess.Internal.Decrypt(content.MegolmCiphertext)
 	if err != nil {
+		if errors.Is(err, olm.UnknownMessageIndex) && mach.RatchetKeysOnDecrypt {
+			messageIndex, err = mach.checkUndecryptableMessageIndexDuplication(ctx, sess, evt, content)
+			return sess, nil, messageIndex, fmt.Errorf("failed to decrypt megolm event: %w", err)
+		}
 		return sess, nil, 0, fmt.Errorf("failed to decrypt megolm event: %w", err)
 	} else if ok, err := mach.CryptoStore.ValidateMessageIndex(ctx, sess.SenderKey, content.SessionID, evt.ID, messageIndex, evt.Timestamp); err != nil {
 		return sess, nil, messageIndex, fmt.Errorf("failed to check if message index is duplicate: %w", err)
 	} else if !ok {
-		return sess, nil, messageIndex, DuplicateMessageIndex
+		return sess, nil, messageIndex, fmt.Errorf("%w %d", DuplicateMessageIndex, messageIndex)
 	}
 
 	expectedMessageIndex := sess.RatchetSafety.NextIndex
