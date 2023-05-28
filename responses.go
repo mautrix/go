@@ -108,11 +108,12 @@ type RespMediaUpload struct {
 	ContentURI id.ContentURI `json:"content_uri"`
 }
 
-// RespCreateMXC is the JSON response for /_matrix/media/v3/create as specified in https://github.com/matrix-org/matrix-spec-proposals/pull/2246
+// RespCreateMXC is the JSON response for https://spec.matrix.org/v1.7/client-server-api/#post_matrixmediav1create
 type RespCreateMXC struct {
 	ContentURI      id.ContentURI `json:"content_uri"`
 	UnusedExpiresAt int           `json:"unused_expires_at,omitempty"`
-	UploadURL       string        `json:"upload_url,omitempty"`
+
+	UnstableUploadURL string `json:"com.beeper.msc3870.upload_url,omitempty"`
 }
 
 // RespPreviewURL is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#get_matrixmediav3preview_url
