@@ -73,6 +73,8 @@ type OlmMachine struct {
 	RatchetKeysOnDecrypt         bool
 	DeleteFullyUsedKeysOnDecrypt bool
 	DeleteKeysOnDeviceDelete     bool
+
+	DisableDeviceChangeKeyRotation bool
 }
 
 // StateStore is used by OlmMachine to get room state information that's needed for encryption.

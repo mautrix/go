@@ -196,6 +196,8 @@ type EncryptionConfig struct {
 		EnableCustom bool  `yaml:"enable_custom"`
 		Milliseconds int64 `yaml:"milliseconds"`
 		Messages     int   `yaml:"messages"`
+
+		DisableDeviceChangeKeyRotation bool `yaml:"disable_device_change_key_rotation"`
 	} `yaml:"rotation"`
 }
 

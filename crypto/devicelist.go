@@ -198,6 +198,9 @@ func (mach *OlmMachine) fetchKeys(ctx context.Context, users []id.UserID, sinceT
 // This is called automatically whenever a device list change is noticed in ProcessSyncResponse and usually does
 // not need to be called manually.
 func (mach *OlmMachine) OnDevicesChanged(userID id.UserID) {
+	if mach.DisableDeviceChangeKeyRotation {
+		return
+	}
 	for _, roomID := range mach.StateStore.FindSharedRooms(userID) {
 		mach.Log.Debug().
 			Str("user_id", userID.String()).
