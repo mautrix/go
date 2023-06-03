@@ -102,6 +102,7 @@ func (mach *OlmMachine) EncryptMegolmEvent(ctx context.Context, roomID id.RoomID
 		Str("event_type", evtType.Type).
 		Str("room_id", roomID.String()).
 		Str("session_id", session.ID().String()).
+		Uint("expected_index", session.Internal.MessageIndex()).
 		Logger()
 	log.Trace().Msg("Encrypting event...")
 	ciphertext, err := session.Encrypt(plaintext)
