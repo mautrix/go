@@ -71,8 +71,12 @@ type loggingDB struct {
 }
 
 func (ld *loggingDB) BeginTx(ctx context.Context, opts *sql.TxOptions) (*LoggingTxn, error) {
+	targetDB := ld.db.RawDB
+	if opts != nil && opts.ReadOnly && ld.db.ReadOnlyDB != nil {
+		targetDB = ld.db.ReadOnlyDB
+	}
 	start := time.Now()
-	tx, err := ld.db.RawDB.BeginTx(ctx, opts)
+	tx, err := targetDB.BeginTx(ctx, opts)
 	ld.db.Log.QueryTiming(ctx, "Begin", "", nil, -1, time.Since(start), err)
 	if err != nil {
 		return nil, err

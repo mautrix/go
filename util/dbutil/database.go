@@ -109,6 +109,7 @@ var (
 type Database struct {
 	loggingDB
 	RawDB        *sql.DB
+	ReadOnlyDB   *sql.DB
 	Owner        string
 	VersionTable string
 	Log          DatabaseLogger
