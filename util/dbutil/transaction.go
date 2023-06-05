@@ -80,3 +80,14 @@ func (db *Database) DoTxn(ctx context.Context, opts *sql.TxOptions, fn func(ctx 
 	log.Trace().Msg("Commit successful")
 	return nil
 }
+
+func (db *Database) Conn(ctx context.Context) ContextExecable {
+	if ctx == nil {
+		return db
+	}
+	txn, ok := ctx.Value(ContextKeyDatabaseTransaction).(Transaction)
+	if ok {
+		return txn
+	}
+	return db
+}
