@@ -189,7 +189,7 @@ func (helper *CryptoHelper) Init() error {
 
 func (helper *CryptoHelper) Close() error {
 	if helper != nil && helper.dbForManagedStores != nil {
-		err := helper.dbForManagedStores.RawDB.Close()
+		err := helper.dbForManagedStores.Close()
 		if err != nil {
 			return err
 		}

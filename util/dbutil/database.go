@@ -194,6 +194,19 @@ type Config struct {
 	ReadOnlyPool PoolConfig `yaml:"ro_pool"`
 }
 
+func (db *Database) Close() error {
+	err := db.RawDB.Close()
+	if db.ReadOnlyDB != nil {
+		err2 := db.ReadOnlyDB.Close()
+		if err == nil {
+			err = fmt.Errorf("closing read-only db failed: %w", err)
+		} else {
+			err = fmt.Errorf("%w (closing read-only db also failed: %v)", err, err2)
+		}
+	}
+	return err
+}
+
 func (db *Database) Configure(cfg Config) error {
 	if err := db.configure(db.ReadOnlyDB, cfg.ReadOnlyPool); err != nil {
 		return err

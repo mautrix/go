@@ -619,7 +619,7 @@ func (br *Bridge) stop() {
 	br.AS.Stop()
 	br.EventProcessor.Stop()
 	br.Child.Stop()
-	err := br.DB.RawDB.Close()
+	err := br.DB.Close()
 	if err != nil {
 		br.ZLog.Warn().Err(err).Msg("Error closing database")
 	}
