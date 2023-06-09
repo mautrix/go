@@ -50,6 +50,7 @@ type HomeserverConfig struct {
 	StatusEndpoint                string `yaml:"status_endpoint"`
 	MessageSendCheckpointEndpoint string `yaml:"message_send_checkpoint_endpoint"`
 
+	Websocket      bool   `yaml:"websocket"`
 	WSProxy        string `yaml:"websocket_proxy"`
 	WSPingInterval int    `yaml:"ping_interval_seconds"`
 }
@@ -227,6 +228,7 @@ func doUpgrade(helper *up.Helper) {
 	helper.Copy(up.Str|up.Null, "homeserver", "message_send_checkpoint_endpoint")
 	helper.Copy(up.Bool, "homeserver", "async_media")
 	helper.Copy(up.Str|up.Null, "homeserver", "websocket_proxy")
+	helper.Copy(up.Bool, "homeserver", "websocket")
 	helper.Copy(up.Int, "homeserver", "ping_interval_seconds")
 
 	helper.Copy(up.Str, "appservice", "address")

@@ -99,7 +99,7 @@ func (pong BridgeState) Fill(user BridgeStateFiller) BridgeState {
 	return pong
 }
 
-func (pong *BridgeState) Send(ctx context.Context, url, token string) error {
+func (pong *BridgeState) SendHTTP(ctx context.Context, url, token string) error {
 	var body []byte
 	var err error
 	if body, err = json.Marshal(&pong); err != nil {
