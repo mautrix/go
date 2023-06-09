@@ -80,6 +80,11 @@ func ZeroLoggerPtr(log *zerolog.Logger, cfg ...ZeroLogSettings) DatabaseLogger {
 	wrapped := &zeroLogger{l: log}
 	if len(cfg) > 0 {
 		wrapped.ZeroLogSettings = cfg[0]
+	} else {
+		wrapped.ZeroLogSettings = ZeroLogSettings{
+			CallerSkipFrame: 2, // Skip LoggingExecable.ExecContext and zeroLogger.QueryTiming
+			Caller:          true,
+		}
 	}
 	return wrapped
 }
