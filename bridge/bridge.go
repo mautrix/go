@@ -31,6 +31,7 @@ import (
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/sqlstatestore"
+	"maunium.net/go/mautrix/util"
 	"maunium.net/go/mautrix/util/configupgrade"
 	"maunium.net/go/mautrix/util/dbutil"
 	_ "maunium.net/go/mautrix/util/dbutil/litestream"
@@ -264,75 +265,76 @@ func (br *Bridge) ensureConnection() {
 		if err != nil {
 			br.ZLog.Err(err).Msg("Failed to connect to homeserver, retrying in 10 seconds...")
 			time.Sleep(10 * time.Second)
-			continue
-		}
-		br.SpecVersions = *versions
-		if br.Config.Homeserver.Software == bridgeconfig.SoftwareHungry && !versions.UnstableFeatures["com.beeper.hungry"] {
-			br.ZLog.WithLevel(zerolog.FatalLevel).Msg("The config claims the homeserver is hungryserv, but the /versions response didn't confirm it")
-			os.Exit(18)
-		} else if !versions.ContainsGreaterOrEqual(MinSpecVersion) {
-			br.ZLog.WithLevel(zerolog.FatalLevel).
-				Stringer("server_supports", versions.GetLatest()).
-				Stringer("bridge_requires", MinSpecVersion).
-				Msg("The homeserver is outdated (supported spec versions are below minimum required by bridge)")
-			os.Exit(18)
-		} else if fr, ok := br.Child.(CSFeatureRequirer); ok {
-			if msg, hasFeatures := fr.CheckFeatures(versions); !hasFeatures {
-				br.ZLog.WithLevel(zerolog.FatalLevel).Msg(msg)
-				os.Exit(18)
-			}
-		}
-
-		resp, err := br.Bot.Whoami()
-		if err != nil {
-			if errors.Is(err, mautrix.MUnknownToken) {
-				br.ZLog.WithLevel(zerolog.FatalLevel).Msg("The as_token was not accepted. Is the registration file installed in your homeserver correctly?")
-				os.Exit(16)
-			} else if errors.Is(err, mautrix.MExclusive) {
-				br.ZLog.WithLevel(zerolog.FatalLevel).Msg("The as_token was accepted, but the /register request was not. Are the homeserver domain and username template in the config correct, and do they match the values in the registration?")
-				os.Exit(16)
-			}
-			br.ZLog.Err(err).Msg("Failed to connect to homeserver, retrying in 10 seconds...")
-			time.Sleep(10 * time.Second)
-			continue
-		} else if resp.UserID != br.Bot.UserID {
-			br.ZLog.WithLevel(zerolog.FatalLevel).
-				Stringer("got_user_id", resp.UserID).
-				Stringer("expected_user_id", br.Bot.UserID).
-				Msg("Unexpected user ID in whoami call")
-			os.Exit(17)
-		}
-
-		if br.SpecVersions.UnstableFeatures["fi.mau.msc2659"] && br.AS.Host.IsConfigured() {
-			txnID := br.Bot.TxnID()
-			resp, err := br.Bot.AppservicePing(br.Config.AppService.ID, txnID)
-			if err != nil {
-				evt := br.ZLog.WithLevel(zerolog.FatalLevel).Err(err).Str("txn_id", txnID)
-				var httpErr mautrix.HTTPError
-				if errors.As(err, &httpErr) && httpErr.RespError != nil {
-					if val, ok := httpErr.RespError.ExtraData["body"].(string); ok {
-						val = strings.TrimSpace(val)
-						valBytes := []byte(val)
-						if json.Valid(valBytes) {
-							evt.RawJSON("body", valBytes)
-						} else {
-							evt.Str("body", val)
-						}
-					}
-				}
-				evt.Msg("Homeserver -> bridge connection is not working")
-				os.Exit(13)
-			}
-			br.ZLog.Debug().
-				Str("txn_id", txnID).
-				Int64("duration_ms", resp.DurationMS).
-				Msg("Homeserver -> bridge connection works")
 		} else {
-			br.ZLog.Debug().Msg("Homeserver does not support checking status of homeserver -> bridge connection")
+			br.SpecVersions = *versions
+			break
 		}
-
-		break
 	}
+
+	if br.Config.Homeserver.Software == bridgeconfig.SoftwareHungry && !br.SpecVersions.UnstableFeatures["com.beeper.hungry"] {
+		br.ZLog.WithLevel(zerolog.FatalLevel).Msg("The config claims the homeserver is hungryserv, but the /versions response didn't confirm it")
+		os.Exit(18)
+	} else if !br.SpecVersions.ContainsGreaterOrEqual(MinSpecVersion) {
+		br.ZLog.WithLevel(zerolog.FatalLevel).
+			Stringer("server_supports", br.SpecVersions.GetLatest()).
+			Stringer("bridge_requires", MinSpecVersion).
+			Msg("The homeserver is outdated (supported spec versions are below minimum required by bridge)")
+		os.Exit(18)
+	} else if fr, ok := br.Child.(CSFeatureRequirer); ok {
+		if msg, hasFeatures := fr.CheckFeatures(&br.SpecVersions); !hasFeatures {
+			br.ZLog.WithLevel(zerolog.FatalLevel).Msg(msg)
+			os.Exit(18)
+		}
+	}
+
+	resp, err := br.Bot.Whoami()
+	if err != nil {
+		if errors.Is(err, mautrix.MUnknownToken) {
+			br.ZLog.WithLevel(zerolog.FatalLevel).Msg("The as_token was not accepted. Is the registration file installed in your homeserver correctly?")
+		} else if errors.Is(err, mautrix.MExclusive) {
+			br.ZLog.WithLevel(zerolog.FatalLevel).Msg("The as_token was accepted, but the /register request was not. Are the homeserver domain and username template in the config correct, and do they match the values in the registration?")
+		} else {
+			br.ZLog.WithLevel(zerolog.FatalLevel).Err(err).Msg("/whoami request failed with unknown error")
+		}
+		os.Exit(16)
+	} else if resp.UserID != br.Bot.UserID {
+		br.ZLog.WithLevel(zerolog.FatalLevel).
+			Stringer("got_user_id", resp.UserID).
+			Stringer("expected_user_id", br.Bot.UserID).
+			Msg("Unexpected user ID in whoami call")
+		os.Exit(17)
+	}
+
+	if !br.AS.Host.IsConfigured() {
+		br.ZLog.Debug().Msg("Websocket mode: no need to check status of homeserver -> bridge connection")
+		return
+	} else if !br.SpecVersions.UnstableFeatures["fi.mau.msc2659.stable"] && !br.SpecVersions.ContainsGreaterOrEqual(mautrix.SpecV17) {
+		br.ZLog.Debug().Msg("Homeserver does not support checking status of homeserver -> bridge connection")
+		return
+	}
+	txnID := br.Bot.TxnID()
+	pingResp, err := br.Bot.AppservicePing(br.Config.AppService.ID, txnID)
+	if err != nil {
+		evt := br.ZLog.WithLevel(zerolog.FatalLevel).Err(err).Str("txn_id", txnID)
+		var httpErr mautrix.HTTPError
+		if errors.As(err, &httpErr) && httpErr.RespError != nil {
+			if val, ok := httpErr.RespError.ExtraData["body"].(string); ok {
+				val = strings.TrimSpace(val)
+				valBytes := []byte(val)
+				if json.Valid(valBytes) {
+					evt.RawJSON("body", valBytes)
+				} else {
+					evt.Str("body", val)
+				}
+			}
+		}
+		evt.Msg("Homeserver -> bridge connection is not working")
+		os.Exit(13)
+	}
+	br.ZLog.Debug().
+		Str("txn_id", txnID).
+		Int64("duration_ms", pingResp.DurationMS).
+		Msg("Homeserver -> bridge connection works")
 }
 
 func (br *Bridge) fetchMediaConfig() {
@@ -374,7 +376,6 @@ func (br *Bridge) UpdateBotProfile() {
 			"com.beeper.bridge.service":       br.BeeperServiceName,
 			"com.beeper.bridge.network":       br.BeeperNetworkName,
 			"com.beeper.bridge.is_bridge_bot": true,
-			"com.beeper.bridge.is_bot":        true,
 		})
 	}
 }
@@ -455,13 +456,9 @@ func (br *Bridge) init() {
 	}
 	defaultCtxLog := br.ZLog.With().Bool("default_context_log", true).Caller().Logger()
 	zerolog.TimeFieldFormat = time.RFC3339Nano
+	zerolog.CallerMarshalFunc = util.CallerWithFunctionName
 	zerolog.DefaultContextLogger = &defaultCtxLog
 	br.Log = maulogadapt.ZeroAsMau(br.ZLog)
-
-	br.AS = br.Config.MakeAppService()
-	br.AS.DoublePuppetValue = br.Name
-	br.AS.GetProfile = br.getProfile
-	br.AS.Log = *br.ZLog
 
 	err = br.validateConfig()
 	if err != nil {
@@ -469,7 +466,6 @@ func (br *Bridge) init() {
 		os.Exit(11)
 	}
 
-	br.Bot = br.AS.BotIntent()
 	br.ZLog.Info().
 		Str("name", br.Name).
 		Str("version", br.Version).
@@ -505,7 +501,13 @@ func (br *Bridge) init() {
 
 	br.ZLog.Debug().Msg("Initializing state store")
 	br.StateStore = sqlstatestore.NewSQLStateStore(br.DB, dbutil.ZeroLogger(br.ZLog.With().Str("db_section", "matrix_state").Logger()), true)
+
+	br.AS = br.Config.MakeAppService()
+	br.AS.DoublePuppetValue = br.Name
+	br.AS.GetProfile = br.getProfile
+	br.AS.Log = *br.ZLog
 	br.AS.StateStore = br.StateStore
+	br.Bot = br.AS.BotIntent()
 
 	br.ZLog.Debug().Msg("Initializing Matrix event processor")
 	br.EventProcessor = appservice.NewEventProcessor(br.AS)
@@ -617,7 +619,7 @@ func (br *Bridge) stop() {
 	br.AS.Stop()
 	br.EventProcessor.Stop()
 	br.Child.Stop()
-	err := br.DB.RawDB.Close()
+	err := br.DB.Close()
 	if err != nil {
 		br.ZLog.Warn().Err(err).Msg("Error closing database")
 	}

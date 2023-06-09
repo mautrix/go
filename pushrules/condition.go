@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Tulir Asokan
+// Copyright (c) 2023 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -38,9 +38,11 @@ type PushCondKind string
 
 // The allowed push condition kinds as specified in https://spec.matrix.org/v1.2/client-server-api/#conditions-1
 const (
-	KindEventMatch          PushCondKind = "event_match"
-	KindContainsDisplayName PushCondKind = "contains_display_name"
-	KindRoomMemberCount     PushCondKind = "room_member_count"
+	KindEventMatch            PushCondKind = "event_match"
+	KindContainsDisplayName   PushCondKind = "contains_display_name"
+	KindRoomMemberCount       PushCondKind = "room_member_count"
+	KindEventPropertyIs       PushCondKind = "event_property_is"
+	KindEventPropertyContains PushCondKind = "event_property_contains"
 
 	// MSC3664: https://github.com/matrix-org/matrix-spec-proposals/pull/3664
 
@@ -56,6 +58,8 @@ type PushCondition struct {
 	Key string `json:"key,omitempty"`
 	// The glob-style pattern to match the field against. Only applicable if kind is EventMatch.
 	Pattern string `json:"pattern,omitempty"`
+	// The exact value to match the field against. Only applicable if kind is EventPropertyIs or EventPropertyContains.
+	Value any `json:"value,omitempty"`
 	// The condition that needs to be fulfilled for RoomMemberCount-type conditions.
 	// A decimal integer optionally prefixed by ==, <, >, >= or <=. Prefix "==" is assumed if no prefix found.
 	MemberCountCondition string `json:"is,omitempty"`
@@ -70,8 +74,8 @@ var MemberCountFilterRegex = regexp.MustCompile("^(==|[<>]=?)?([0-9]+)$")
 // Match checks if this condition is fulfilled for the given event in the given room.
 func (cond *PushCondition) Match(room Room, evt *event.Event) bool {
 	switch cond.Kind {
-	case KindEventMatch:
-		return cond.matchValue(room, evt)
+	case KindEventMatch, KindEventPropertyIs, KindEventPropertyContains:
+		return cond.matchValue(evt)
 	case KindRelatedEventMatch, KindUnstableRelatedEventMatch:
 		return cond.matchRelatedEvent(room, evt)
 	case KindContainsDisplayName:
@@ -101,13 +105,13 @@ func splitWithEscaping(s string, separator, escape byte) []string {
 	return tokens
 }
 
-func hackyNestedGet(data map[string]interface{}, path []string) (interface{}, bool) {
+func hackyNestedGet(data map[string]any, path []string) (any, bool) {
 	val, ok := data[path[0]]
 	if len(path) == 1 {
 		// We don't have any more path parts, return the value regardless of whether it exists or not.
 		return val, ok
 	} else if ok {
-		if mapVal, ok := val.(map[string]interface{}); ok {
+		if mapVal, ok := val.(map[string]any); ok {
 			val, ok = hackyNestedGet(mapVal, path[1:])
 			if ok {
 				return val, true
@@ -138,37 +142,103 @@ func stringifyForPushCondition(val interface{}) string {
 	}
 }
 
-func (cond *PushCondition) matchValue(room Room, evt *event.Event) bool {
+func (cond *PushCondition) getValue(evt *event.Event) (any, bool) {
 	key, subkey, _ := strings.Cut(cond.Key, ".")
-
-	pattern, err := glob.Compile(cond.Pattern)
-	if err != nil {
-		return false
-	}
 
 	switch key {
 	case "type":
-		return pattern.MatchString(evt.Type.String())
+		return evt.Type.Type, true
 	case "sender":
-		return pattern.MatchString(string(evt.Sender))
+		return evt.Sender.String(), true
 	case "room_id":
-		return pattern.MatchString(string(evt.RoomID))
+		return evt.RoomID.String(), true
 	case "state_key":
 		if evt.StateKey == nil {
-			return false
+			return nil, false
 		}
-		return pattern.MatchString(*evt.StateKey)
+		return *evt.StateKey, true
 	case "content":
 		// Split the match key with escaping to implement https://github.com/matrix-org/matrix-spec-proposals/pull/3873
 		splitKey := splitWithEscaping(subkey, '.', '\\')
 		// Then do a hacky nested get that supports combining parts for the backwards-compat part of MSC3873
-		val, ok := hackyNestedGet(evt.Content.Raw, splitKey)
-		if !ok {
-			return cond.Pattern == ""
+		return hackyNestedGet(evt.Content.Raw, splitKey)
+	default:
+		return nil, false
+	}
+}
+
+func numberToInt64(a any) int64 {
+	switch typed := a.(type) {
+	case float64:
+		return int64(typed)
+	case float32:
+		return int64(typed)
+	case int:
+		return int64(typed)
+	case int8:
+		return int64(typed)
+	case int16:
+		return int64(typed)
+	case int32:
+		return int64(typed)
+	case int64:
+		return typed
+	case uint:
+		return int64(typed)
+	case uint8:
+		return int64(typed)
+	case uint16:
+		return int64(typed)
+	case uint32:
+		return int64(typed)
+	case uint64:
+		return int64(typed)
+	default:
+		return 0
+	}
+}
+
+func valueEquals(a, b any) bool {
+	// Convert floats to ints when comparing numbers (the JSON parser generates floats, but Matrix only allows integers)
+	// Also allow other numeric types in case something generates events manually without json
+	switch a.(type) {
+	case float64, float32, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+		switch b.(type) {
+		case float64, float32, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+			return numberToInt64(a) == numberToInt64(b)
+		}
+	}
+	return a == b
+}
+
+func (cond *PushCondition) matchValue(evt *event.Event) bool {
+	val, ok := cond.getValue(evt)
+	if !ok {
+		return false
+	}
+
+	switch cond.Kind {
+	case KindEventMatch, KindRelatedEventMatch, KindUnstableRelatedEventMatch:
+		pattern, err := glob.Compile(cond.Pattern)
+		if err != nil {
+			return false
 		}
 		return pattern.MatchString(stringifyForPushCondition(val))
-	default:
+	case KindEventPropertyIs:
+		return valueEquals(val, cond.Value)
+	case KindEventPropertyContains:
+		valArr, ok := val.([]any)
+		if !ok {
+			return false
+		}
+		for _, item := range valArr {
+			if valueEquals(item, cond.Value) {
+				return true
+			}
+		}
 		return false
+	default:
+		panic(fmt.Errorf("matchValue called for unknown condition kind %s", cond.Kind))
 	}
 }
 
@@ -209,7 +279,7 @@ func (cond *PushCondition) matchRelatedEvent(room Room, evt *event.Event) bool {
 	} else if evt = eventfulRoom.GetEvent(relatesTo.EventID); evt == nil {
 		return false
 	} else {
-		return cond.matchValue(room, evt)
+		return cond.matchValue(evt)
 	}
 }
 

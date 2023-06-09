@@ -1,4 +1,4 @@
--- v0 -> v4: Latest revision
+-- v0 -> v5: Latest revision
 
 CREATE TABLE mx_registrations (
 	user_id TEXT PRIMARY KEY

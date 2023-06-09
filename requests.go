@@ -21,6 +21,8 @@ const (
 	AuthTypeToken      AuthType = "m.login.token"
 	AuthTypeDummy      AuthType = "m.login.dummy"
 	AuthTypeAppservice AuthType = "m.login.application_service"
+
+	AuthTypeSynapseJWT AuthType = "org.matrix.login.jwt"
 )
 
 type IdentifierType string

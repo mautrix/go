@@ -61,7 +61,7 @@ func IsShareError(err error) bool {
 	return err == SessionExpired || err == SessionNotShared || err == NoGroupSession
 }
 
-func parseMessageIndex(ciphertext []byte) (uint64, error) {
+func parseMessageIndex(ciphertext []byte) (uint, error) {
 	decoded := make([]byte, base64.RawStdEncoding.DecodedLen(len(ciphertext)))
 	var err error
 	_, err = base64.RawStdEncoding.Decode(decoded, ciphertext)
@@ -74,7 +74,7 @@ func parseMessageIndex(ciphertext []byte) (uint64, error) {
 	if read <= 0 {
 		return 0, fmt.Errorf("failed to decode varint, read value %d", read)
 	}
-	return index, nil
+	return uint(index), nil
 }
 
 // EncryptMegolmEvent encrypts data with the m.megolm.v1.aes-sha2 algorithm.
@@ -82,6 +82,8 @@ func parseMessageIndex(ciphertext []byte) (uint64, error) {
 // If you use the event.Content struct, make sure you pass a pointer to the struct,
 // as JSON serialization will not work correctly otherwise.
 func (mach *OlmMachine) EncryptMegolmEvent(ctx context.Context, roomID id.RoomID, evtType event.Type, content interface{}) (*event.EncryptedEventContent, error) {
+	mach.megolmEncryptLock.Lock()
+	defer mach.megolmEncryptLock.Unlock()
 	session, err := mach.CryptoStore.GetOutboundGroupSession(roomID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get outbound group session: %w", err)
@@ -100,6 +102,7 @@ func (mach *OlmMachine) EncryptMegolmEvent(ctx context.Context, roomID id.RoomID
 		Str("event_type", evtType.Type).
 		Str("room_id", roomID.String()).
 		Str("session_id", session.ID().String()).
+		Uint("expected_index", session.Internal.MessageIndex()).
 		Logger()
 	log.Trace().Msg("Encrypting event...")
 	ciphertext, err := session.Encrypt(plaintext)
@@ -110,7 +113,7 @@ func (mach *OlmMachine) EncryptMegolmEvent(ctx context.Context, roomID id.RoomID
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to get megolm message index of encrypted event")
 	} else {
-		log = log.With().Uint64("message_index", idx).Logger()
+		log = log.With().Uint("message_index", idx).Logger()
 	}
 	log.Debug().Msg("Encrypted event successfully")
 	err = mach.CryptoStore.UpdateOutboundGroupSession(session)
@@ -135,8 +138,10 @@ func (mach *OlmMachine) EncryptMegolmEvent(ctx context.Context, roomID id.RoomID
 
 func (mach *OlmMachine) newOutboundGroupSession(ctx context.Context, roomID id.RoomID) *OutboundGroupSession {
 	session := NewOutboundGroupSession(roomID, mach.StateStore.GetEncryptionEvent(roomID))
-	signingKey, idKey := mach.account.Keys()
-	mach.createGroupSession(ctx, idKey, signingKey, roomID, session.ID(), session.Internal.Key())
+	if !mach.DontStoreOutboundKeys {
+		signingKey, idKey := mach.account.Keys()
+		mach.createGroupSession(ctx, idKey, signingKey, roomID, session.ID(), session.Internal.Key(), session.MaxAge, session.MaxMessages, false)
+	}
 	return session
 }
 
@@ -158,6 +163,8 @@ func strishArray[T ~string](arr []T) []string {
 // For devices with TrustStateBlacklisted, a m.room_key.withheld event with code=m.blacklisted is sent.
 // If AllowUnverifiedDevices is false, a similar event with code=m.unverified is sent to devices with TrustStateUnset
 func (mach *OlmMachine) ShareGroupSession(ctx context.Context, roomID id.RoomID, users []id.UserID) error {
+	mach.megolmEncryptLock.Lock()
+	defer mach.megolmEncryptLock.Unlock()
 	session, err := mach.CryptoStore.GetOutboundGroupSession(roomID)
 	if err != nil {
 		return fmt.Errorf("failed to get previous outbound group session: %w", err)

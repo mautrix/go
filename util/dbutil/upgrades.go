@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Tulir Asokan
+// Copyright (c) 2023 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -18,42 +18,97 @@ type upgrade struct {
 	message string
 	fn      upgradeFunc
 
-	upgradesTo  int
-	transaction bool
+	upgradesTo    int
+	compatVersion int
+	transaction   bool
 }
 
-var ErrUnsupportedDatabaseVersion = fmt.Errorf("unsupported database schema version")
-var ErrForeignTables = fmt.Errorf("the database contains foreign tables")
-var ErrNotOwned = fmt.Errorf("the database is owned by")
+var ErrUnsupportedDatabaseVersion = errors.New("unsupported database schema version")
+var ErrForeignTables = errors.New("the database contains foreign tables")
+var ErrNotOwned = errors.New("the database is owned by")
+var ErrUnsupportedDialect = errors.New("unsupported database dialect")
 
-func (db *Database) getVersion() (int, error) {
-	_, err := db.Exec(fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (version INTEGER)", db.VersionTable))
-	if err != nil {
-		return -1, err
+func (db *Database) upgradeVersionTable() error {
+	if compatColumnExists, err := db.ColumnExists(nil, db.VersionTable, "compat"); err != nil {
+		return fmt.Errorf("failed to check if version table is up to date: %w", err)
+	} else if !compatColumnExists {
+		if tableExists, err := db.TableExists(nil, db.VersionTable); err != nil {
+			return fmt.Errorf("failed to check if version table exists: %w", err)
+		} else if !tableExists {
+			_, err = db.Exec(fmt.Sprintf("CREATE TABLE %s (version INTEGER, compat INTEGER)", db.VersionTable))
+			if err != nil {
+				return fmt.Errorf("failed to create version table: %w", err)
+			}
+		} else {
+			_, err = db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN compat INTEGER", db.VersionTable))
+			if err != nil {
+				return fmt.Errorf("failed to add compat column to version table: %w", err)
+			}
+		}
 	}
-
-	version := 0
-	err = db.QueryRow(fmt.Sprintf("SELECT version FROM %s LIMIT 1", db.VersionTable)).Scan(&version)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return -1, err
-	}
-	return version, nil
+	return nil
 }
 
-const tableExistsPostgres = "SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name=$1)"
-const tableExistsSQLite = "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND tbl_name=$1)"
+func (db *Database) getVersion() (version, compat int, err error) {
+	if err = db.upgradeVersionTable(); err != nil {
+		return
+	}
 
-func (db *Database) tableExists(table string) (exists bool, err error) {
-	if db.Dialect == SQLite {
+	var compatNull sql.NullInt32
+	err = db.QueryRow(fmt.Sprintf("SELECT version, compat FROM %s LIMIT 1", db.VersionTable)).Scan(&version, &compatNull)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = nil
+	}
+	if compatNull.Valid && compatNull.Int32 != 0 {
+		compat = int(compatNull.Int32)
+	} else {
+		compat = version
+	}
+	return
+}
+
+const (
+	tableExistsPostgres = "SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name=$1)"
+	tableExistsSQLite   = "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND tbl_name=?1)"
+)
+
+func (db *Database) TableExists(tx Execable, table string) (exists bool, err error) {
+	if tx == nil {
+		tx = db
+	}
+	switch db.Dialect {
+	case SQLite:
 		err = db.QueryRow(tableExistsSQLite, table).Scan(&exists)
-	} else if db.Dialect == Postgres {
+	case Postgres:
 		err = db.QueryRow(tableExistsPostgres, table).Scan(&exists)
+	default:
+		err = ErrUnsupportedDialect
+	}
+	return
+}
+
+const (
+	columnExistsPostgres = "SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name=$1 AND column_name=$2)"
+	columnExistsSQLite   = "SELECT EXISTS(SELECT 1 FROM pragma_table_info(?1) WHERE name=?2)"
+)
+
+func (db *Database) ColumnExists(tx Execable, table, column string) (exists bool, err error) {
+	if tx == nil {
+		tx = db
+	}
+	switch db.Dialect {
+	case SQLite:
+		err = db.QueryRow(columnExistsSQLite, table, column).Scan(&exists)
+	case Postgres:
+		err = db.QueryRow(columnExistsPostgres, table, column).Scan(&exists)
+	default:
+		err = ErrUnsupportedDialect
 	}
 	return
 }
 
 func (db *Database) tableExistsNoError(table string) bool {
-	exists, err := db.tableExists(table)
+	exists, err := db.TableExists(nil, table)
 	if err != nil {
 		panic(fmt.Errorf("failed to check if table exists: %w", err))
 	}
@@ -94,12 +149,12 @@ func (db *Database) checkDatabaseOwner() error {
 	return nil
 }
 
-func (db *Database) setVersion(tx Execable, version int) error {
+func (db *Database) setVersion(tx Execable, version, compat int) error {
 	_, err := tx.Exec(fmt.Sprintf("DELETE FROM %s", db.VersionTable))
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec(fmt.Sprintf("INSERT INTO %s (version) VALUES ($1)", db.VersionTable), version)
+	_, err = tx.Exec(fmt.Sprintf("INSERT INTO %s (version, compat) VALUES ($1, $2)", db.VersionTable), version, compat)
 	return err
 }
 
@@ -109,20 +164,20 @@ func (db *Database) Upgrade() error {
 		return err
 	}
 
-	version, err := db.getVersion()
+	version, compat, err := db.getVersion()
 	if err != nil {
 		return err
 	}
 
-	if version > len(db.UpgradeTable) {
+	if compat > len(db.UpgradeTable) {
 		if db.IgnoreUnsupportedDatabase {
-			db.Log.WarnUnsupportedVersion(version, len(db.UpgradeTable))
+			db.Log.WarnUnsupportedVersion(version, compat, len(db.UpgradeTable))
 			return nil
 		}
-		return fmt.Errorf("%w: currently on v%d, latest known: v%d", ErrUnsupportedDatabaseVersion, version, len(db.UpgradeTable))
+		return fmt.Errorf("%w: currently on v%d (compatible down to v%d), latest known: v%d", ErrUnsupportedDatabaseVersion, version, compat, len(db.UpgradeTable))
 	}
 
-	db.Log.PrepareUpgrade(version, len(db.UpgradeTable))
+	db.Log.PrepareUpgrade(version, compat, len(db.UpgradeTable))
 	logVersion := version
 	for version < len(db.UpgradeTable) {
 		upgradeItem := db.UpgradeTable[version]
@@ -148,7 +203,7 @@ func (db *Database) Upgrade() error {
 		}
 		version = upgradeItem.upgradesTo
 		logVersion = version
-		err = db.setVersion(upgradeConn, version)
+		err = db.setVersion(upgradeConn, version, upgradeItem.compatVersion)
 		if err != nil {
 			return err
 		}

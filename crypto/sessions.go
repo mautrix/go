@@ -89,6 +89,12 @@ func (session *OlmSession) Decrypt(ciphertext string, msgType id.OlmMsgType) ([]
 	return msg, err
 }
 
+type RatchetSafety struct {
+	NextIndex     uint   `json:"next_index"`
+	MissedIndices []uint `json:"missed_indices,omitempty"`
+	LostIndices   []uint `json:"lost_indices,omitempty"`
+}
+
 type InboundGroupSession struct {
 	Internal olm.InboundGroupSession
 
@@ -97,11 +103,17 @@ type InboundGroupSession struct {
 	RoomID     id.RoomID
 
 	ForwardingChains []string
+	RatchetSafety    RatchetSafety
+
+	ReceivedAt  time.Time
+	MaxAge      int64
+	MaxMessages int
+	IsScheduled bool
 
 	id id.SessionID
 }
 
-func NewInboundGroupSession(senderKey id.SenderKey, signingKey id.Ed25519, roomID id.RoomID, sessionKey string) (*InboundGroupSession, error) {
+func NewInboundGroupSession(senderKey id.SenderKey, signingKey id.Ed25519, roomID id.RoomID, sessionKey string, maxAge time.Duration, maxMessages int, isScheduled bool) (*InboundGroupSession, error) {
 	igs, err := olm.NewInboundGroupSession([]byte(sessionKey))
 	if err != nil {
 		return nil, err
@@ -112,6 +124,10 @@ func NewInboundGroupSession(senderKey id.SenderKey, signingKey id.Ed25519, roomI
 		SenderKey:        senderKey,
 		RoomID:           roomID,
 		ForwardingChains: nil,
+		ReceivedAt:       time.Now().UTC(),
+		MaxAge:           maxAge.Milliseconds(),
+		MaxMessages:      maxMessages,
+		IsScheduled:      isScheduled,
 	}, nil
 }
 
@@ -120,6 +136,19 @@ func (igs *InboundGroupSession) ID() id.SessionID {
 		igs.id = igs.Internal.ID()
 	}
 	return igs.id
+}
+
+func (igs *InboundGroupSession) RatchetTo(index uint32) error {
+	exported, err := igs.Internal.Export(index)
+	if err != nil {
+		return err
+	}
+	imported, err := olm.InboundGroupSessionImport(exported)
+	if err != nil {
+		return err
+	}
+	igs.Internal = *imported
+	return nil
 }
 
 type OGSState int

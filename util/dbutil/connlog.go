@@ -71,8 +71,12 @@ type loggingDB struct {
 }
 
 func (ld *loggingDB) BeginTx(ctx context.Context, opts *sql.TxOptions) (*LoggingTxn, error) {
+	targetDB := ld.db.RawDB
+	if opts != nil && opts.ReadOnly && ld.db.ReadOnlyDB != nil {
+		targetDB = ld.db.ReadOnlyDB
+	}
 	start := time.Now()
-	tx, err := ld.db.RawDB.BeginTx(ctx, opts)
+	tx, err := targetDB.BeginTx(ctx, opts)
 	ld.db.Log.QueryTiming(ctx, "Begin", "", nil, -1, time.Since(start), err)
 	if err != nil {
 		return nil, err
@@ -81,6 +85,7 @@ func (ld *loggingDB) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Logging
 		LoggingExecable: LoggingExecable{UnderlyingExecable: tx, db: ld.db},
 		UnderlyingTx:    tx,
 		ctx:             ctx,
+		StartTime:       start,
 	}, nil
 }
 
@@ -92,11 +97,16 @@ type LoggingTxn struct {
 	LoggingExecable
 	UnderlyingTx *sql.Tx
 	ctx          context.Context
+
+	StartTime  time.Time
+	EndTime    time.Time
+	noTotalLog bool
 }
 
 func (lt *LoggingTxn) Commit() error {
 	start := time.Now()
 	err := lt.UnderlyingTx.Commit()
+	lt.endLog()
 	lt.db.Log.QueryTiming(lt.ctx, "Commit", "", nil, -1, time.Since(start), err)
 	return err
 }
@@ -104,8 +114,16 @@ func (lt *LoggingTxn) Commit() error {
 func (lt *LoggingTxn) Rollback() error {
 	start := time.Now()
 	err := lt.UnderlyingTx.Rollback()
+	lt.endLog()
 	lt.db.Log.QueryTiming(lt.ctx, "Rollback", "", nil, -1, time.Since(start), err)
 	return err
+}
+
+func (lt *LoggingTxn) endLog() {
+	lt.EndTime = time.Now()
+	if !lt.noTotalLog {
+		lt.db.Log.QueryTiming(lt.ctx, "<Transaction>", "", nil, -1, lt.EndTime.Sub(lt.StartTime), nil)
+	}
 }
 
 type LoggingRows struct {

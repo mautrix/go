@@ -553,7 +553,7 @@ type StrippedStateWithTime struct {
 }
 
 type RespAppservicePing struct {
-	DurationMS int64 `json:"duration"`
+	DurationMS int64 `json:"duration_ms"`
 }
 
 type RespBeeperMergeRoom RespCreateRoom

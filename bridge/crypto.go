@@ -32,7 +32,7 @@ import (
 var _ crypto.StateStore = (*sqlstatestore.SQLStateStore)(nil)
 
 var NoSessionFound = crypto.NoSessionFound
-var ErrGroupSessionWithheld = crypto.ErrGroupSessionWithheld
+var DuplicateMessageIndex = crypto.DuplicateMessageIndex
 var UnknownMessageIndex = olm.UnknownMessageIndex
 
 type CryptoHelper struct {
@@ -45,6 +45,8 @@ type CryptoHelper struct {
 	lock       sync.RWMutex
 	syncDone   sync.WaitGroup
 	cancelSync func()
+
+	cancelPeriodicDeleteLoop func()
 }
 
 func NewCryptoHelper(bridge *Bridge) Crypto {
@@ -90,8 +92,23 @@ func (helper *CryptoHelper) Init() error {
 	stateStore := &cryptoStateStore{helper.bridge}
 	helper.mach = crypto.NewOlmMachine(helper.client, helper.log, helper.store, stateStore)
 	helper.mach.AllowKeyShare = helper.allowKeyShare
-	helper.mach.SendKeysMinTrust = helper.bridge.Config.Bridge.GetEncryptionConfig().VerificationLevels.Receive
-	helper.mach.PlaintextMentions = helper.bridge.Config.Bridge.GetEncryptionConfig().PlaintextMentions
+
+	encryptionConfig := helper.bridge.Config.Bridge.GetEncryptionConfig()
+	helper.mach.SendKeysMinTrust = encryptionConfig.VerificationLevels.Receive
+	helper.mach.PlaintextMentions = encryptionConfig.PlaintextMentions
+
+	helper.mach.DeleteOutboundKeysOnAck = encryptionConfig.DeleteKeys.DeleteOutboundOnAck
+	helper.mach.DontStoreOutboundKeys = encryptionConfig.DeleteKeys.DontStoreOutbound
+	helper.mach.RatchetKeysOnDecrypt = encryptionConfig.DeleteKeys.RatchetOnDecrypt
+	helper.mach.DeleteFullyUsedKeysOnDecrypt = encryptionConfig.DeleteKeys.DeleteFullyUsedOnDecrypt
+	helper.mach.DeletePreviousKeysOnReceive = encryptionConfig.DeleteKeys.DeletePrevOnNewSession
+	helper.mach.DeleteKeysOnDeviceDelete = encryptionConfig.DeleteKeys.DeleteOnDeviceDelete
+	helper.mach.DisableDeviceChangeKeyRotation = encryptionConfig.Rotation.DisableDeviceChangeKeyRotation
+	if encryptionConfig.DeleteKeys.PeriodicallyDeleteExpired {
+		ctx, cancel := context.WithCancel(context.Background())
+		helper.cancelPeriodicDeleteLoop = cancel
+		go helper.mach.ExpiredKeyDeleteLoop(ctx)
+	}
 
 	helper.client.Syncer = &cryptoSyncer{helper.mach}
 	helper.client.Store = helper.store
@@ -103,7 +120,71 @@ func (helper *CryptoHelper) Init() error {
 	if isExistingDevice {
 		helper.verifyKeysAreOnServer()
 	}
+
+	go helper.resyncEncryptionInfo()
+
 	return nil
+}
+
+func (helper *CryptoHelper) resyncEncryptionInfo() {
+	log := helper.log.With().Str("action", "resync encryption event").Logger()
+	rows, err := helper.bridge.DB.Query(`SELECT room_id FROM mx_room_state WHERE encryption='{"resync":true}'`)
+	if err != nil {
+		log.Err(err).Msg("Failed to query rooms for resync")
+		return
+	}
+	var roomIDs []id.RoomID
+	for rows.Next() {
+		var roomID id.RoomID
+		err = rows.Scan(&roomID)
+		if err != nil {
+			log.Err(err).Msg("Failed to scan room ID")
+			continue
+		}
+		roomIDs = append(roomIDs, roomID)
+	}
+	_ = rows.Close()
+	if len(roomIDs) > 0 {
+		log.Debug().Interface("room_ids", roomIDs).Msg("Resyncing rooms")
+		for _, roomID := range roomIDs {
+			var evt event.EncryptionEventContent
+			err = helper.client.StateEvent(roomID, event.StateEncryption, "", &evt)
+			if err != nil {
+				log.Err(err).Str("room_id", roomID.String()).Msg("Failed to get encryption event")
+				_, err = helper.bridge.DB.Exec(`
+					UPDATE mx_room_state SET encryption=NULL WHERE room_id=$1 AND encryption='{"resync":true}'
+				`, roomID)
+				if err != nil {
+					log.Err(err).Str("room_id", roomID.String()).Msg("Failed to unmark room for resync after failed sync")
+				}
+			} else {
+				maxAge := evt.RotationPeriodMillis
+				if maxAge <= 0 {
+					maxAge = (7 * 24 * time.Hour).Milliseconds()
+				}
+				maxMessages := evt.RotationPeriodMessages
+				if maxMessages <= 0 {
+					maxMessages = 100
+				}
+				log.Debug().
+					Str("room_id", roomID.String()).
+					Int64("max_age_ms", maxAge).
+					Int("max_messages", maxMessages).
+					Interface("content", &evt).
+					Msg("Resynced encryption event")
+				_, err = helper.bridge.DB.Exec(`
+					UPDATE crypto_megolm_inbound_session
+					SET max_age=$1, max_messages=$2
+					WHERE room_id=$3 AND max_age IS NULL AND max_messages IS NULL
+				`, maxAge, maxMessages, roomID)
+				if err != nil {
+					log.Err(err).Str("room_id", roomID.String()).Msg("Failed to update megolm session table")
+				} else {
+					log.Debug().Str("room_id", roomID.String()).Msg("Updated megolm session table")
+				}
+			}
+		}
+	}
 }
 
 func (helper *CryptoHelper) allowKeyShare(ctx context.Context, device *id.Device, info event.RequestedKeyInfo) *crypto.KeyShareRejection {
@@ -208,6 +289,9 @@ func (helper *CryptoHelper) Stop() {
 	helper.client.StopSync()
 	if helper.cancelSync != nil {
 		helper.cancelSync()
+	}
+	if helper.cancelPeriodicDeleteLoop != nil {
+		helper.cancelPeriodicDeleteLoop()
 	}
 	helper.syncDone.Wait()
 }

@@ -1,5 +1,31 @@
-## unreleased
+## v0.15.3 (unreleased)
 
+* *(synapseadmin)* Added wrappers for some Synapse admin API endpoints.
+* *(client)* Deprecated `OldEventIgnorer` and added `Client.DontProcessOldEvents`
+  to replace it.
+* *(client)* Added `MoveInviteState` sync handler for moving state events in
+  the invite section of sync inside the invite event itself.
+
+## v0.15.2 (2023-05-16)
+
+* *(client)* Changed member-fetching methods to clear existing member info in
+  state store.
+* *(client)* Added support for inserting mautrix-go commit hash into default
+  user agent at compile time.
+* *(bridge)* Fixed bridge bot intent not having state store set.
+* *(client)* Fixed `RespError` marshaling mutating the `ExtraData` map and
+  potentially causing panics.
+* *(util/dbutil)* Added `DoTxn` method for an easier way to manage database
+  transactions.
+* *(util)* Added a zerolog `CallerMarshalFunc` implementation that includes the
+  function name.
+* *(bridge)* Added error reply to encrypted messages if the bridge isn't
+  configured to do encryption.
+
+## v0.15.1 (2023-04-16)
+
+* *(crypto, bridge)* Added options to automatically ratchet/delete megolm
+  sessions to minimize access to old messages.
 * *(pushrules)* Added method to get entire push rule that matched (instead of
   only the list of actions).
 * *(pushrules)* Deprecated `NotifySpecified` as there's no reason to read it.

@@ -9,6 +9,8 @@ package crypto
 
 import (
 	"context"
+	"errors"
+	"time"
 
 	"github.com/rs/zerolog"
 
@@ -150,6 +152,19 @@ func (mach *OlmMachine) importForwardedRoomKey(ctx context.Context, evt *Decrypt
 			Msg("Mismatched session ID while creating inbound group session from forward")
 		return false
 	}
+	config := mach.StateStore.GetEncryptionEvent(content.RoomID)
+	var maxAge time.Duration
+	var maxMessages int
+	if config != nil {
+		maxAge = time.Duration(config.RotationPeriodMillis) * time.Millisecond
+		maxMessages = config.RotationPeriodMessages
+	}
+	if content.MaxAge != 0 {
+		maxAge = time.Duration(content.MaxAge) * time.Millisecond
+	}
+	if content.MaxMessages != 0 {
+		maxMessages = content.MaxMessages
+	}
 	igs := &InboundGroupSession{
 		Internal:         *igsInternal,
 		SigningKey:       evt.Keys.Ed25519,
@@ -157,6 +172,11 @@ func (mach *OlmMachine) importForwardedRoomKey(ctx context.Context, evt *Decrypt
 		RoomID:           content.RoomID,
 		ForwardingChains: append(content.ForwardingKeyChain, evt.SenderKey.String()),
 		id:               content.SessionID,
+
+		ReceivedAt:  time.Now().UTC(),
+		MaxAge:      maxAge.Milliseconds(),
+		MaxMessages: maxMessages,
+		IsScheduled: content.IsScheduled,
 	}
 	err = mach.CryptoStore.PutGroupSession(content.RoomID, content.SenderKey, content.SessionID, igs)
 	if err != nil {
@@ -256,8 +276,13 @@ func (mach *OlmMachine) handleRoomKeyRequest(ctx context.Context, sender id.User
 
 	igs, err := mach.CryptoStore.GetGroupSession(content.Body.RoomID, content.Body.SenderKey, content.Body.SessionID)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to get group session to forward")
-		mach.rejectKeyRequest(KeyShareRejectInternalError, device, content.Body)
+		if errors.Is(err, ErrGroupSessionWithheld) {
+			log.Debug().Err(err).Msg("Requested group session not available")
+			mach.rejectKeyRequest(KeyShareRejectUnavailable, device, content.Body)
+		} else {
+			log.Error().Err(err).Msg("Failed to get group session to forward")
+			mach.rejectKeyRequest(KeyShareRejectInternalError, device, content.Body)
+		}
 		return
 	} else if igs == nil {
 		log.Error().Msg("Didn't find group session to forward")
@@ -284,7 +309,7 @@ func (mach *OlmMachine) handleRoomKeyRequest(ctx context.Context, sender id.User
 				Algorithm:  id.AlgorithmMegolmV1,
 				RoomID:     igs.RoomID,
 				SessionID:  igs.ID(),
-				SessionKey: exportedKey,
+				SessionKey: string(exportedKey),
 			},
 			SenderKey:          content.Body.SenderKey,
 			ForwardingKeyChain: igs.ForwardingChains,
@@ -296,5 +321,38 @@ func (mach *OlmMachine) handleRoomKeyRequest(ctx context.Context, sender id.User
 		log.Error().Err(err).Msg("Failed to encrypt and send group session")
 	} else {
 		log.Debug().Msg("Successfully sent forwarded group session")
+	}
+}
+
+func (mach *OlmMachine) handleBeeperRoomKeyAck(ctx context.Context, sender id.UserID, content *event.BeeperRoomKeyAckEventContent) {
+	log := mach.machOrContextLog(ctx).With().
+		Str("room_id", content.RoomID.String()).
+		Str("session_id", content.SessionID.String()).
+		Int("first_message_index", content.FirstMessageIndex).
+		Logger()
+
+	sess, err := mach.CryptoStore.GetGroupSession(content.RoomID, "", content.SessionID)
+	if err != nil {
+		if errors.Is(err, ErrGroupSessionWithheld) {
+			log.Debug().Err(err).Msg("Acked group session was already redacted")
+		} else {
+			log.Err(err).Msg("Failed to get group session to check if it should be redacted")
+		}
+		return
+	}
+	log = log.With().
+		Str("sender_key", sess.SenderKey.String()).
+		Str("own_identity", mach.OwnIdentity().IdentityKey.String()).
+		Logger()
+
+	isInbound := sess.SenderKey == mach.OwnIdentity().IdentityKey
+	if isInbound && mach.DeleteOutboundKeysOnAck && content.FirstMessageIndex == 0 {
+		log.Debug().Msg("Redacting inbound copy of outbound group session after ack")
+		err = mach.CryptoStore.RedactGroupSession(content.RoomID, sess.SenderKey, content.SessionID, "outbound session acked")
+		if err != nil {
+			log.Err(err).Msg("Failed to redact group session")
+		}
+	} else {
+		log.Debug().Bool("inbound", isInbound).Msg("Received room key ack")
 	}
 }

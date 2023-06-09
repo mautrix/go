@@ -1,4 +1,4 @@
--- v0 -> v8: Latest revision
+-- v0 -> v10: Latest revision
 CREATE TABLE IF NOT EXISTS crypto_account (
 	account_id TEXT    PRIMARY KEY,
 	device_id  TEXT    NOT NULL,
@@ -52,6 +52,11 @@ CREATE TABLE IF NOT EXISTS crypto_megolm_inbound_session (
 	forwarding_chains bytea,
 	withheld_code     TEXT,
 	withheld_reason   TEXT,
+	ratchet_safety    jsonb,
+	received_at       timestamp,
+	max_age           BIGINT,
+	max_messages      INTEGER,
+	is_scheduled      BOOLEAN NOT NULL DEFAULT false,
 	PRIMARY KEY (account_id, session_id)
 );
 

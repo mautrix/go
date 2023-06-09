@@ -232,12 +232,14 @@ func (s *InboundGroupSession) Decrypt(message []byte) ([]byte, uint, error) {
 	if err != nil {
 		return nil, 0, err
 	}
+	messageCopy := make([]byte, len(message))
+	copy(messageCopy, message)
 	plaintext := make([]byte, decryptMaxPlaintextLen)
 	var messageIndex uint32
 	r := C.olm_group_decrypt(
 		(*C.OlmInboundGroupSession)(s.int),
-		(*C.uint8_t)(&message[0]),
-		C.size_t(len(message)),
+		(*C.uint8_t)(&messageCopy[0]),
+		C.size_t(len(messageCopy)),
 		(*C.uint8_t)(&plaintext[0]),
 		C.size_t(len(plaintext)),
 		(*C.uint32_t)(&messageIndex))
@@ -290,7 +292,7 @@ func (s *InboundGroupSession) exportLen() uint {
 // if we do not have a session key corresponding to the given index (ie, it was
 // sent before the session key was shared with us) the error will be
 // "OLM_UNKNOWN_MESSAGE_INDEX".
-func (s *InboundGroupSession) Export(messageIndex uint32) (string, error) {
+func (s *InboundGroupSession) Export(messageIndex uint32) ([]byte, error) {
 	key := make([]byte, s.exportLen())
 	r := C.olm_export_inbound_group_session(
 		(*C.OlmInboundGroupSession)(s.int),
@@ -298,7 +300,7 @@ func (s *InboundGroupSession) Export(messageIndex uint32) (string, error) {
 		C.size_t(len(key)),
 		C.uint32_t(messageIndex))
 	if r == errorVal() {
-		return "", s.lastError()
+		return nil, s.lastError()
 	}
-	return string(key[:r]), nil
+	return key[:r], nil
 }

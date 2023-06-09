@@ -62,9 +62,9 @@ func (es EventSource) String() string {
 		case EventSourceLeave:
 			typeName = "left room " + typeName
 		default:
-			return fmt.Sprintf("unknown (%d)", es)
+			return fmt.Sprintf("unknown (%s+%d)", typeName, es)
 		}
-		es &^= roomableTypes
+		es &^= roomSections
 	}
 	if es&encryptableTypes != 0 && es&EventSourceDecrypted != 0 {
 		typeName += " (decrypted)"
@@ -72,7 +72,7 @@ func (es EventSource) String() string {
 	}
 	es &^= primaryTypes
 	if es != 0 {
-		return fmt.Sprintf("unknown (%d)", es)
+		return fmt.Sprintf("unknown (%s+%d)", typeName, es)
 	}
 	return typeName
 }
@@ -263,11 +263,9 @@ func (s *DefaultSyncer) GetFilterJSON(userID id.UserID) *Filter {
 	return s.FilterJSON
 }
 
-// OldEventIgnorer is an utility struct for bots to ignore events from before the bot joined the room.
+// OldEventIgnorer is a utility struct for bots to ignore events from before the bot joined the room.
 //
-// Create a struct and call Register with your DefaultSyncer to register the sync handler, e.g.:
-//
-//	(&OldEventIgnorer{UserID: cli.UserID}).Register(cli.Syncer.(mautrix.ExtensibleSyncer))
+// Deprecated: Use Client.DontProcessOldEvents instead.
 type OldEventIgnorer struct {
 	UserID id.UserID
 }
@@ -276,9 +274,21 @@ func (oei *OldEventIgnorer) Register(syncer ExtensibleSyncer) {
 	syncer.OnSync(oei.DontProcessOldEvents)
 }
 
-// DontProcessOldEvents returns true if a sync response should be processed. May modify the response to remove
-// stuff that shouldn't be processed.
 func (oei *OldEventIgnorer) DontProcessOldEvents(resp *RespSync, since string) bool {
+	return dontProcessOldEvents(oei.UserID, resp, since)
+}
+
+// DontProcessOldEvents is a sync handler that removes rooms that the user just joined.
+// It's meant for bots to ignore events from before the bot joined the room.
+//
+// To use it, register it with your Syncer, e.g.:
+//
+//	cli.Syncer.(mautrix.ExtensibleSyncer).OnSync(cli.DontProcessOldEvents)
+func (cli *Client) DontProcessOldEvents(resp *RespSync, since string) bool {
+	return dontProcessOldEvents(cli.UserID, resp, since)
+}
+
+func dontProcessOldEvents(userID id.UserID, resp *RespSync, since string) bool {
 	if since == "" {
 		return false
 	}
@@ -292,7 +302,7 @@ func (oei *OldEventIgnorer) DontProcessOldEvents(resp *RespSync, since string) b
 	for roomID, roomData := range resp.Rooms.Join {
 		for i := len(roomData.Timeline.Events) - 1; i >= 0; i-- {
 			evt := roomData.Timeline.Events[i]
-			if evt.Type == event.StateMember && evt.GetStateKey() == string(oei.UserID) {
+			if evt.Type == event.StateMember && evt.GetStateKey() == string(userID) {
 				membership, _ := evt.Content.Raw["membership"].(string)
 				if membership == "join" {
 					_, ok := resp.Rooms.Join[roomID]
@@ -304,6 +314,37 @@ func (oei *OldEventIgnorer) DontProcessOldEvents(resp *RespSync, since string) b
 					break
 				}
 			}
+		}
+	}
+	return true
+}
+
+// MoveInviteState is a sync handler that moves events from the state event list to the InviteRoomState in the invite event.
+//
+// To use it, register it with your Syncer, e.g.:
+//
+//	cli.Syncer.(mautrix.ExtensibleSyncer).OnSync(cli.MoveInviteState)
+func (cli *Client) MoveInviteState(resp *RespSync, _ string) bool {
+	for _, meta := range resp.Rooms.Invite {
+		var inviteState []event.StrippedState
+		var inviteEvt *event.Event
+		for _, evt := range meta.State.Events {
+			if evt.Type == event.StateMember && evt.GetStateKey() == cli.UserID.String() {
+				inviteEvt = evt
+			} else {
+				evt.Type.Class = event.StateEventType
+				_ = evt.Content.ParseRaw(evt.Type)
+				inviteState = append(inviteState, event.StrippedState{
+					Content:  evt.Content,
+					Type:     evt.Type,
+					StateKey: evt.GetStateKey(),
+					Sender:   evt.Sender,
+				})
+			}
+		}
+		if inviteEvt != nil {
+			inviteEvt.Unsigned.InviteRoomState = inviteState
+			meta.State.Events = []*event.Event{inviteEvt}
 		}
 	}
 	return true

@@ -25,12 +25,18 @@ func (br *Bridge) SendGlobalBridgeState(state status.BridgeState) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	if err := br.SendBridgeState(ctx, &state); err != nil {
-		br.ZLog.Warn().Err(err).Msg("Failed to update global bridge state")
-	} else {
-		br.ZLog.Debug().Interface("bridge_state", state).Msg("Sent new global bridge state")
+	for {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		if err := br.SendBridgeState(ctx, &state); err != nil {
+			br.ZLog.Warn().Err(err).Msg("Failed to update global bridge state")
+			cancel()
+			time.Sleep(5 * time.Second)
+			continue
+		} else {
+			br.ZLog.Debug().Interface("bridge_state", state).Msg("Sent new global bridge state")
+			cancel()
+			break
+		}
 	}
 }
 

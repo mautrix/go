@@ -94,6 +94,22 @@ func newMatchPushCondition(key, pattern string) *pushrules.PushCondition {
 	}
 }
 
+func newEventPropertyIsPushCondition(key string, value any) *pushrules.PushCondition {
+	return &pushrules.PushCondition{
+		Kind:  pushrules.KindEventPropertyIs,
+		Key:   key,
+		Value: value,
+	}
+}
+
+func newEventPropertyContainsPushCondition(key string, value any) *pushrules.PushCondition {
+	return &pushrules.PushCondition{
+		Kind:  pushrules.KindEventPropertyContains,
+		Key:   key,
+		Value: value,
+	}
+}
+
 func TestPushCondition_Match_InvalidKind(t *testing.T) {
 	condition := &pushrules.PushCondition{
 		Kind: pushrules.PushCondKind("invalid"),

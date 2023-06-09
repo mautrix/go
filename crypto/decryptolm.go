@@ -144,9 +144,9 @@ func (mach *OlmMachine) tryDecryptOlmCiphertext(ctx context.Context, sender id.U
 		go mach.unwedgeDevice(log, sender, senderKey)
 		return nil, fmt.Errorf("failed to create new session from prekey message: %w", err)
 	}
-	log = log.With().Str("new_session_id", session.ID().String()).Logger()
+	log = log.With().Str("new_olm_session_id", session.ID().String()).Logger()
 	log.Debug().
-		Str("session_description", session.Describe()).
+		Str("olm_session_description", session.Describe()).
 		Msg("Created inbound olm session")
 	ctx = log.WithContext(ctx)
 
@@ -177,7 +177,7 @@ func (mach *OlmMachine) tryDecryptOlmCiphertextWithExistingSession(ctx context.C
 	}
 
 	for _, session := range sessions {
-		log := log.With().Str("session_id", session.ID().String()).Logger()
+		log := log.With().Str("olm_session_id", session.ID().String()).Logger()
 		ctx := log.WithContext(ctx)
 		if olmType == id.OlmMsgTypePreKey {
 			endTimeTrace = mach.timeTrace(ctx, "checking if prekey olm message matches session", time.Second)

@@ -97,8 +97,7 @@ type MessageEventContent struct {
 
 	FileName string `json:"filename,omitempty"`
 
-	Mentions         *Mentions `json:"m.mentions,omitempty"`
-	UnstableMentions *Mentions `json:"org.matrix.msc3952.mentions,omitempty"`
+	Mentions *Mentions `json:"m.mentions,omitempty"`
 
 	// Edits and relations
 	NewContent *MessageEventContent `json:"m.new_content,omitempty"`

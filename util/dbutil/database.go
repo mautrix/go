@@ -10,6 +10,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -35,12 +36,13 @@ func (dialect Dialect) String() string {
 }
 
 func ParseDialect(engine string) (Dialect, error) {
-	switch strings.ToLower(engine) {
-	case "postgres", "postgresql", "pgx":
+	engine = strings.ToLower(engine)
+
+	if strings.HasPrefix(engine, "postgres") || engine == "pgx" {
 		return Postgres, nil
-	case "sqlite3", "sqlite", "litestream", "sqlite3-fk-wal":
+	} else if strings.HasPrefix(engine, "sqlite") || strings.HasPrefix(engine, "litestream") {
 		return SQLite, nil
-	default:
+	} else {
 		return DialectUnknown, fmt.Errorf("unknown dialect '%s'", engine)
 	}
 }
@@ -109,6 +111,7 @@ var (
 type Database struct {
 	loggingDB
 	RawDB        *sql.DB
+	ReadOnlyDB   *sql.DB
 	Owner        string
 	VersionTable string
 	Log          DatabaseLogger
@@ -171,10 +174,11 @@ func NewWithDialect(uri, rawDialect string) (*Database, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return NewWithDB(db, rawDialect)
 }
 
-type Config struct {
+type PoolConfig struct {
 	Type string `yaml:"type"`
 	URI  string `yaml:"uri"`
 
@@ -185,54 +189,101 @@ type Config struct {
 	ConnMaxLifetime string `yaml:"conn_max_lifetime"`
 }
 
+type Config struct {
+	PoolConfig   `yaml:",inline"`
+	ReadOnlyPool PoolConfig `yaml:"ro_pool"`
+}
+
+func (db *Database) Close() error {
+	err := db.RawDB.Close()
+	if db.ReadOnlyDB != nil {
+		err2 := db.ReadOnlyDB.Close()
+		if err == nil {
+			err = fmt.Errorf("closing read-only db failed: %w", err)
+		} else {
+			err = fmt.Errorf("%w (closing read-only db also failed: %v)", err, err2)
+		}
+	}
+	return err
+}
+
 func (db *Database) Configure(cfg Config) error {
-	db.RawDB.SetMaxOpenConns(cfg.MaxOpenConns)
-	db.RawDB.SetMaxIdleConns(cfg.MaxIdleConns)
+	if err := db.configure(db.ReadOnlyDB, cfg.ReadOnlyPool); err != nil {
+		return err
+	}
+
+	return db.configure(db.RawDB, cfg.PoolConfig)
+}
+
+func (db *Database) configure(rawDB *sql.DB, cfg PoolConfig) error {
+	if rawDB == nil {
+		return nil
+	}
+
+	rawDB.SetMaxOpenConns(cfg.MaxOpenConns)
+	rawDB.SetMaxIdleConns(cfg.MaxIdleConns)
 	if len(cfg.ConnMaxIdleTime) > 0 {
 		maxIdleTimeDuration, err := time.ParseDuration(cfg.ConnMaxIdleTime)
 		if err != nil {
 			return fmt.Errorf("failed to parse max_conn_idle_time: %w", err)
 		}
-		db.RawDB.SetConnMaxIdleTime(maxIdleTimeDuration)
+		rawDB.SetConnMaxIdleTime(maxIdleTimeDuration)
 	}
 	if len(cfg.ConnMaxLifetime) > 0 {
 		maxLifetimeDuration, err := time.ParseDuration(cfg.ConnMaxLifetime)
 		if err != nil {
 			return fmt.Errorf("failed to parse max_conn_idle_time: %w", err)
 		}
-		db.RawDB.SetConnMaxLifetime(maxLifetimeDuration)
+		rawDB.SetConnMaxLifetime(maxLifetimeDuration)
 	}
 	return nil
 }
 
 func NewFromConfig(owner string, cfg Config, logger DatabaseLogger) (*Database, error) {
-	dialect, err := ParseDialect(cfg.Type)
+	wrappedDB, err := NewWithDialect(cfg.URI, cfg.Type)
 	if err != nil {
 		return nil, err
 	}
-	conn, err := sql.Open(cfg.Type, cfg.URI)
-	if err != nil {
-		return nil, err
-	}
-	if logger == nil {
-		logger = NoopLogger
-	}
-	wrappedDB := &Database{
-		RawDB: conn,
 
-		Owner:   owner,
-		Dialect: dialect,
-
-		Log: logger,
-
-		IgnoreForeignTables: true,
-		VersionTable:        "version",
+	wrappedDB.Owner = owner
+	if logger != nil {
+		wrappedDB.Log = logger
 	}
+
+	if cfg.ReadOnlyPool.MaxOpenConns > 0 {
+		if cfg.ReadOnlyPool.Type == "" {
+			cfg.ReadOnlyPool.Type = cfg.Type
+		}
+
+		roUri := cfg.ReadOnlyPool.URI
+		if roUri == "" {
+			uriParts := strings.Split(cfg.URI, "?")
+
+			var qs url.Values
+			if len(uriParts) == 2 {
+				var err error
+				qs, err = url.ParseQuery(uriParts[1])
+				if err != nil {
+					return nil, err
+				}
+
+				qs.Del("_txlock")
+			}
+			qs.Set("_query_only", "true")
+
+			roUri = uriParts[0] + "?" + qs.Encode()
+		}
+
+		wrappedDB.ReadOnlyDB, err = sql.Open(cfg.ReadOnlyPool.Type, roUri)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	err = wrappedDB.Configure(cfg)
 	if err != nil {
 		return nil, err
 	}
-	wrappedDB.loggingDB.UnderlyingExecable = conn
-	wrappedDB.loggingDB.db = wrappedDB
+
 	return wrappedDB, nil
 }

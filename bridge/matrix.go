@@ -368,12 +368,15 @@ func (mx *MatrixHandler) sendCryptoStatusError(ctx context.Context, evt *event.E
 			MsgType: event.MsgNotice,
 			Body:    fmt.Sprintf("\u26a0 Your message was not bridged: %v.", err),
 		}
+		if errors.Is(err, errNoCrypto) {
+			update.Body = "🔒 This bridge has not been configured to support encryption"
+		}
 		if editEvent != "" {
 			update.SetEdit(editEvent)
 		}
 		resp, sendErr := mx.bridge.Bot.SendMessageEvent(evt.RoomID, event.EventMessage, &update)
 		if sendErr != nil {
-			zerolog.Ctx(ctx).Error().Err(err).Msg("Failed to send decryption error notice")
+			zerolog.Ctx(ctx).Error().Err(sendErr).Msg("Failed to send decryption error notice")
 		} else if resp != nil {
 			return resp.EventID
 		}
@@ -381,17 +384,26 @@ func (mx *MatrixHandler) sendCryptoStatusError(ctx context.Context, evt *event.E
 	return ""
 }
 
-var errDeviceNotTrusted = errors.New("your device is not trusted")
-var errMessageNotEncrypted = errors.New("unencrypted message")
-var errNoDecryptionKeys = errors.New("the bridge hasn't received the decryption keys")
+var (
+	errDeviceNotTrusted    = errors.New("your device is not trusted")
+	errMessageNotEncrypted = errors.New("unencrypted message")
+	errNoDecryptionKeys    = errors.New("the bridge hasn't received the decryption keys")
+	errNoCrypto            = errors.New("this bridge has not been configured to support encryption")
+)
 
 func errorToHumanMessage(err error) string {
+	var withheld *event.RoomKeyWithheldEventContent
 	switch {
 	case errors.Is(err, errDeviceNotTrusted), errors.Is(err, errNoDecryptionKeys):
 		return err.Error()
 	case errors.Is(err, UnknownMessageIndex):
 		return "the keys received by the bridge can't decrypt the message"
-	case errors.Is(err, ErrGroupSessionWithheld):
+	case errors.Is(err, DuplicateMessageIndex):
+		return "your client encrypted multiple messages with the same key"
+	case errors.As(err, &withheld):
+		if withheld.Code == event.RoomKeyWithheldBeeperRedacted {
+			return "your client used an outdated encryption session"
+		}
 		return "your client refused to share decryption keys with the bridge"
 	case errors.Is(err, errMessageNotEncrypted):
 		return "the message is not encrypted"
@@ -462,7 +474,7 @@ func (mx *MatrixHandler) postDecrypt(ctx context.Context, original, decrypted *e
 
 func (mx *MatrixHandler) HandleEncrypted(evt *event.Event) {
 	defer mx.TrackEventDuration(evt.Type)()
-	if mx.shouldIgnoreEvent(evt) || mx.bridge.Crypto == nil {
+	if mx.shouldIgnoreEvent(evt) {
 		return
 	}
 	content := evt.Content.AsEncrypted()
@@ -472,6 +484,10 @@ func (mx *MatrixHandler) HandleEncrypted(evt *event.Event) {
 		Str("session_id", content.SessionID.String()).
 		Logger()
 	ctx = log.WithContext(ctx)
+	if mx.bridge.Crypto == nil {
+		go mx.sendCryptoStatusError(ctx, evt, "", errNoCrypto, 0, true)
+		return
+	}
 	log.Debug().Msg("Decrypting received event")
 
 	decryptionStart := time.Now()
@@ -555,6 +571,20 @@ func (mx *MatrixHandler) HandleMessage(evt *event.Event) {
 		if hasCommandPrefix || evt.RoomID == user.GetManagementRoomID() {
 			go mx.bridge.CommandProcessor.Handle(evt.RoomID, evt.ID, user, content.Body, content.RelatesTo.GetReplyTo())
 			go mx.bridge.SendMessageSuccessCheckpoint(evt, status.MsgStepCommand, 0)
+			if mx.bridge.Config.Bridge.EnableMessageStatusEvents() {
+				statusEvent := &event.BeeperMessageStatusEventContent{
+					// TODO: network
+					RelatesTo: event.RelatesTo{
+						Type:    event.RelReference,
+						EventID: evt.ID,
+					},
+					Status: event.MessageStatusSuccess,
+				}
+				_, sendErr := mx.bridge.Bot.SendMessageEvent(evt.RoomID, event.BeeperMessageStatus, statusEvent)
+				if sendErr != nil {
+					mx.log.Warn().Str("event_id", evt.ID.String()).Err(sendErr).Msg("Failed to send message status event for command")
+				}
+			}
 			return
 		}
 	}

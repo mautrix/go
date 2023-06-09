@@ -22,12 +22,15 @@ type StateStore interface {
 	TryGetMember(roomID id.RoomID, userID id.UserID) (*event.MemberEventContent, bool)
 	SetMembership(roomID id.RoomID, userID id.UserID, membership event.Membership)
 	SetMember(roomID id.RoomID, userID id.UserID, member *event.MemberEventContent)
+	ClearCachedMembers(roomID id.RoomID, memberships ...event.Membership)
 
 	SetPowerLevels(roomID id.RoomID, levels *event.PowerLevelsEventContent)
 	GetPowerLevels(roomID id.RoomID) *event.PowerLevelsEventContent
 
 	SetEncryptionEvent(roomID id.RoomID, content *event.EncryptionEventContent)
 	IsEncrypted(roomID id.RoomID) bool
+
+	GetRoomJoinedOrInvitedMembers(roomID id.RoomID) ([]id.UserID, error)
 }
 
 func UpdateStateStore(store StateStore, evt *event.Event) {
@@ -104,6 +107,15 @@ func (store *MemoryStateStore) GetRoomMembers(roomID id.RoomID) map[id.UserID]*e
 	return members
 }
 
+func (store *MemoryStateStore) GetRoomJoinedOrInvitedMembers(roomID id.RoomID) ([]id.UserID, error) {
+	members := store.GetRoomMembers(roomID)
+	ids := make([]id.UserID, 0, len(members))
+	for id := range members {
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
+
 func (store *MemoryStateStore) GetMembership(roomID id.RoomID, userID id.UserID) event.Membership {
 	return store.GetMember(roomID, userID).Membership
 }
@@ -177,6 +189,23 @@ func (store *MemoryStateStore) SetMember(roomID id.RoomID, userID id.UserID, mem
 	}
 	store.Members[roomID] = members
 	store.membersLock.Unlock()
+}
+
+func (store *MemoryStateStore) ClearCachedMembers(roomID id.RoomID, memberships ...event.Membership) {
+	store.membersLock.Lock()
+	defer store.membersLock.Unlock()
+	members, ok := store.Members[roomID]
+	if !ok {
+		return
+	}
+	for userID, member := range members {
+		for _, membership := range memberships {
+			if membership == member.Membership {
+				delete(members, userID)
+				break
+			}
+		}
+	}
 }
 
 func (store *MemoryStateStore) SetPowerLevels(roomID id.RoomID, levels *event.PowerLevelsEventContent) {

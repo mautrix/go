@@ -293,6 +293,9 @@ func (cli *Client) LogRequestDone(req *http.Request, resp *http.Response, handle
 	if handlerErr != nil {
 		evt.AnErr("body_parse_err", handlerErr)
 	}
+	if serverRequestID := resp.Header.Get("X-Beeper-Request-ID"); serverRequestID != "" {
+		evt.Str("beeper_request_id", serverRequestID)
+	}
 	evt.Msg("Request completed")
 }
 
@@ -1131,6 +1134,9 @@ func (cli *Client) CreateRoom(req *ReqCreateRoom) (resp *RespCreateRoom, err err
 		for _, invitee := range req.Invite {
 			cli.StateStore.SetMembership(resp.RoomID, invitee, inviteMembership)
 		}
+		for _, evt := range req.InitialState {
+			cli.updateStoreWithOutgoingEvent(resp.RoomID, evt.Type, evt.GetStateKey(), &evt.Content)
+		}
 	}
 	return
 }
@@ -1327,6 +1333,7 @@ func (cli *Client) State(roomID id.RoomID) (stateMap RoomStateMap, err error) {
 		Handler:      parseRoomStateArray,
 	})
 	if err == nil && cli.StateStore != nil {
+		cli.StateStore.ClearCachedMembers(roomID)
 		for _, evts := range stateMap {
 			for _, evt := range evts {
 				UpdateStateStore(cli.StateStore, evt)
@@ -1593,6 +1600,7 @@ func (cli *Client) JoinedMembers(roomID id.RoomID) (resp *RespJoinedMembers, err
 	u := cli.BuildClientURL("v3", "rooms", roomID, "joined_members")
 	_, err = cli.MakeRequest("GET", u, nil, &resp)
 	if err == nil && cli.StateStore != nil {
+		cli.StateStore.ClearCachedMembers(roomID, event.MembershipJoin)
 		for userID, member := range resp.Joined {
 			cli.StateStore.SetMember(roomID, userID, &event.MemberEventContent{
 				Membership:  event.MembershipJoin,
@@ -1622,6 +1630,13 @@ func (cli *Client) Members(roomID id.RoomID, req ...ReqMembers) (resp *RespMembe
 	u := cli.BuildURLWithQuery(ClientURLPath{"v3", "rooms", roomID, "members"}, query)
 	_, err = cli.MakeRequest("GET", u, nil, &resp)
 	if err == nil && cli.StateStore != nil {
+		var clearMemberships []event.Membership
+		if extra.Membership != "" {
+			clearMemberships = append(clearMemberships, extra.Membership)
+		}
+		if extra.NotMembership == "" {
+			cli.StateStore.ClearCachedMembers(roomID, clearMemberships...)
+		}
 		for _, evt := range resp.Chunk {
 			UpdateStateStore(cli.StateStore, evt)
 		}
@@ -1978,7 +1993,7 @@ func (cli *Client) BatchSend(roomID id.RoomID, req *ReqBatchSend) (resp *RespBat
 func (cli *Client) AppservicePing(id, txnID string) (resp *RespAppservicePing, err error) {
 	_, err = cli.MakeFullRequest(FullRequest{
 		Method:       http.MethodPost,
-		URL:          cli.BuildClientURL("unstable", "fi.mau.msc2659", "appservice", id, "ping"),
+		URL:          cli.BuildClientURL("v1", "appservice", id, "ping"),
 		RequestJSON:  &ReqAppservicePing{TxnID: txnID},
 		ResponseJSON: &resp,
 		// This endpoint intentionally returns 50x, so don't retry

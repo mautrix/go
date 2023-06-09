@@ -22,5 +22,5 @@ func NewCryptoHelper(bridge *Bridge) Crypto {
 }
 
 var NoSessionFound = errors.New("nil")
-var ErrGroupSessionWithheld = NoSessionFound
 var UnknownMessageIndex = NoSessionFound
+var DuplicateMessageIndex = NoSessionFound

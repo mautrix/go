@@ -189,7 +189,7 @@ func (helper *CryptoHelper) Init() error {
 
 func (helper *CryptoHelper) Close() error {
 	if helper != nil && helper.dbForManagedStores != nil {
-		err := helper.dbForManagedStores.RawDB.Close()
+		err := helper.dbForManagedStores.Close()
 		if err != nil {
 			return err
 		}
@@ -361,8 +361,7 @@ func (helper *CryptoHelper) Encrypt(roomID id.RoomID, evtType event.Type, conten
 			Str("room_id", roomID.String()).
 			Msg("Got session error while encrypting event, sharing group session and trying again")
 		var users []id.UserID
-		// TODO don't use managedStateStore
-		users, err = helper.managedStateStore.GetRoomJoinedOrInvitedMembers(roomID)
+		users, err = helper.client.StateStore.GetRoomJoinedOrInvitedMembers(roomID)
 		if err != nil {
 			err = fmt.Errorf("failed to get room member list: %w", err)
 		} else if err = helper.mach.ShareGroupSession(ctx, roomID, users); err != nil {

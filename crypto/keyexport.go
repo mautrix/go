@@ -103,7 +103,7 @@ func exportSessions(sessions []*InboundGroupSession) ([]ExportedSession, error) 
 			SenderKey:         session.SenderKey,
 			SenderClaimedKeys: SenderClaimedKeys{},
 			SessionID:         session.ID(),
-			SessionKey:        key,
+			SessionKey:        string(key),
 		}
 	}
 	return export, nil
