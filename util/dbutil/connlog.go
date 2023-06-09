@@ -106,7 +106,10 @@ type LoggingTxn struct {
 func (lt *LoggingTxn) Commit() error {
 	start := time.Now()
 	err := lt.UnderlyingTx.Commit()
-	lt.endLog()
+	lt.EndTime = time.Now()
+	if !lt.noTotalLog {
+		lt.db.Log.QueryTiming(lt.ctx, "<Transaction>", "", nil, -1, lt.EndTime.Sub(lt.StartTime), nil)
+	}
 	lt.db.Log.QueryTiming(lt.ctx, "Commit", "", nil, -1, time.Since(start), err)
 	return err
 }
@@ -114,16 +117,12 @@ func (lt *LoggingTxn) Commit() error {
 func (lt *LoggingTxn) Rollback() error {
 	start := time.Now()
 	err := lt.UnderlyingTx.Rollback()
-	lt.endLog()
-	lt.db.Log.QueryTiming(lt.ctx, "Rollback", "", nil, -1, time.Since(start), err)
-	return err
-}
-
-func (lt *LoggingTxn) endLog() {
 	lt.EndTime = time.Now()
 	if !lt.noTotalLog {
 		lt.db.Log.QueryTiming(lt.ctx, "<Transaction>", "", nil, -1, lt.EndTime.Sub(lt.StartTime), nil)
 	}
+	lt.db.Log.QueryTiming(lt.ctx, "Rollback", "", nil, -1, time.Since(start), err)
+	return err
 }
 
 type LoggingRows struct {
