@@ -5,6 +5,9 @@
   to replace it.
 * *(client)* Added `MoveInviteState` sync handler for moving state events in
   the invite section of sync inside the invite event itself.
+* *(client)* Stabilized support for asynchronous uploads.
+  * `UnstableCreateMXC` and `UnstableUploadAsync` were renamed to `CreateMXC`
+    and `UploadAsync` respectively.
 
 ## v0.15.2 (2023-05-16)
 
