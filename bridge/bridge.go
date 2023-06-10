@@ -15,6 +15,7 @@ import (
 	"os/signal"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -28,6 +29,7 @@ import (
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/appservice"
 	"maunium.net/go/mautrix/bridge/bridgeconfig"
+	"maunium.net/go/mautrix/bridge/status"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/sqlstatestore"
@@ -138,6 +140,11 @@ type PreInitableBridge interface {
 	PreInit()
 }
 
+type WebsocketStartingBridge interface {
+	ChildOverride
+	OnWebsocketConnect()
+}
+
 type CSFeatureRequirer interface {
 	CheckFeatures(versions *mautrix.RespVersions) (string, bool)
 }
@@ -185,6 +192,16 @@ type Bridge struct {
 	Child ChildOverride
 
 	manualStop chan int
+	Stopping   bool
+
+	latestState *status.BridgeState
+
+	Websocket                      bool
+	wsStopPinger                   chan struct{}
+	wsStarted                      chan struct{}
+	wsStopped                      chan struct{}
+	wsShortCircuitReconnectBackoff chan struct{}
+	wsStartupWait                  *sync.WaitGroup
 }
 
 type Crypto interface {
@@ -305,7 +322,7 @@ func (br *Bridge) ensureConnection() {
 		os.Exit(17)
 	}
 
-	if !br.AS.Host.IsConfigured() {
+	if br.Websocket {
 		br.ZLog.Debug().Msg("Websocket mode: no need to check status of homeserver -> bridge connection")
 		return
 	} else if !br.SpecVersions.UnstableFeatures["fi.mau.msc2659.stable"] && !br.SpecVersions.ContainsGreaterOrEqual(mautrix.SpecV17) {
@@ -551,6 +568,12 @@ func (br *Bridge) LogDBUpgradeErrorAndExit(name string, err error) {
 	os.Exit(15)
 }
 
+func (br *Bridge) WaitWebsocketConnected() {
+	if br.wsStartupWait != nil {
+		br.wsStartupWait.Wait()
+	}
+}
+
 func (br *Bridge) start() {
 	br.ZLog.Debug().Msg("Running database upgrades")
 	err := br.DB.Upgrade()
@@ -560,11 +583,20 @@ func (br *Bridge) start() {
 		br.LogDBUpgradeErrorAndExit("matrix_state", err)
 	}
 
-	if br.AS.Host.IsConfigured() {
+	if br.Config.Homeserver.Websocket || len(br.Config.Homeserver.WSProxy) > 0 {
+		br.Websocket = true
+		br.ZLog.Debug().Msg("Starting application service websocket")
+		var wg sync.WaitGroup
+		wg.Add(1)
+		br.wsStartupWait = &wg
+		br.wsShortCircuitReconnectBackoff = make(chan struct{})
+		go br.startWebsocket(&wg)
+	} else if br.AS.Host.IsConfigured() {
 		br.ZLog.Debug().Msg("Starting application service HTTP server")
 		go br.AS.Start()
 	} else {
-		br.ZLog.Debug().Msg("Appservice config doesn't have port nor unix socket path, not starting HTTP server")
+		br.ZLog.WithLevel(zerolog.FatalLevel).Msg("Neither appservice HTTP listener nor websocket is enabled")
+		os.Exit(23)
 	}
 	br.ZLog.Debug().Msg("Checking connection to homeserver")
 	br.ensureConnection()
@@ -587,10 +619,15 @@ func (br *Bridge) start() {
 	}
 
 	br.Child.Start()
+	br.WaitWebsocketConnected()
 	br.AS.Ready = true
 
 	if br.Config.Bridge.GetResendBridgeInfo() {
 		go br.ResendBridgeInfo()
+	}
+	if br.Websocket && br.Config.Homeserver.WSPingInterval > 0 {
+		br.wsStopPinger = make(chan struct{}, 1)
+		go br.websocketServerPinger()
 	}
 }
 
@@ -612,16 +649,41 @@ func (br *Bridge) ResendBridgeInfo() {
 	br.ZLog.Info().Msg("Finished re-sending bridge info state events")
 }
 
+func sendStopSignal(ch chan struct{}) {
+	if ch != nil {
+		select {
+		case ch <- struct{}{}:
+		default:
+		}
+	}
+}
+
 func (br *Bridge) stop() {
+	br.Stopping = true
 	if br.Crypto != nil {
 		br.Crypto.Stop()
 	}
+	waitForWS := false
+	if br.AS.StopWebsocket != nil {
+		br.ZLog.Debug().Msg("Stopping application service websocket")
+		br.AS.StopWebsocket(appservice.ErrWebsocketManualStop)
+		waitForWS = true
+	}
 	br.AS.Stop()
+	sendStopSignal(br.wsStopPinger)
+	sendStopSignal(br.wsShortCircuitReconnectBackoff)
 	br.EventProcessor.Stop()
 	br.Child.Stop()
-	err := br.DB.RawDB.Close()
+	err := br.DB.Close()
 	if err != nil {
 		br.ZLog.Warn().Err(err).Msg("Error closing database")
+	}
+	if waitForWS {
+		select {
+		case <-br.wsStopped:
+		case <-time.After(4 * time.Second):
+			br.ZLog.Warn().Msg("Timed out waiting for websocket to close")
+		}
 	}
 }
 

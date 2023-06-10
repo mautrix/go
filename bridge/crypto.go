@@ -103,6 +103,7 @@ func (helper *CryptoHelper) Init() error {
 	helper.mach.DeleteFullyUsedKeysOnDecrypt = encryptionConfig.DeleteKeys.DeleteFullyUsedOnDecrypt
 	helper.mach.DeletePreviousKeysOnReceive = encryptionConfig.DeleteKeys.DeletePrevOnNewSession
 	helper.mach.DeleteKeysOnDeviceDelete = encryptionConfig.DeleteKeys.DeleteOnDeviceDelete
+	helper.mach.DisableDeviceChangeKeyRotation = encryptionConfig.Rotation.DisableDeviceChangeKeyRotation
 	if encryptionConfig.DeleteKeys.PeriodicallyDeleteExpired {
 		ctx, cancel := context.WithCancel(context.Background())
 		helper.cancelPeriodicDeleteLoop = cancel

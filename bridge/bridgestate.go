@@ -13,24 +13,43 @@ import (
 
 	"github.com/rs/zerolog"
 
+	"maunium.net/go/mautrix/appservice"
 	"maunium.net/go/mautrix/bridge/status"
 )
 
 func (br *Bridge) SendBridgeState(ctx context.Context, state *status.BridgeState) error {
-	return state.Send(ctx, br.Config.Homeserver.StatusEndpoint, br.Config.AppService.ASToken)
+	if br.Websocket {
+		// FIXME this doesn't account for multiple users
+		br.latestState = state
+
+		return br.AS.SendWebsocket(&appservice.WebsocketRequest{
+			Command: "bridge_status",
+			Data:    state,
+		})
+	} else if br.Config.Homeserver.StatusEndpoint != "" {
+		return state.SendHTTP(ctx, br.Config.Homeserver.StatusEndpoint, br.Config.AppService.ASToken)
+	} else {
+		return nil
+	}
 }
 
 func (br *Bridge) SendGlobalBridgeState(state status.BridgeState) {
-	if len(br.Config.Homeserver.StatusEndpoint) == 0 {
+	if len(br.Config.Homeserver.StatusEndpoint) == 0 && !br.Websocket {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	if err := br.SendBridgeState(ctx, &state); err != nil {
-		br.ZLog.Warn().Err(err).Msg("Failed to update global bridge state")
-	} else {
-		br.ZLog.Debug().Interface("bridge_state", state).Msg("Sent new global bridge state")
+	for {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		if err := br.SendBridgeState(ctx, &state); err != nil {
+			br.ZLog.Warn().Err(err).Msg("Failed to update global bridge state")
+			cancel()
+			time.Sleep(5 * time.Second)
+			continue
+		} else {
+			br.ZLog.Debug().Interface("bridge_state", state).Msg("Sent new global bridge state")
+			cancel()
+			break
+		}
 	}
 }
 

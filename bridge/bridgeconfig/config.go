@@ -50,6 +50,7 @@ type HomeserverConfig struct {
 	StatusEndpoint                string `yaml:"status_endpoint"`
 	MessageSendCheckpointEndpoint string `yaml:"message_send_checkpoint_endpoint"`
 
+	Websocket      bool   `yaml:"websocket"`
 	WSProxy        string `yaml:"websocket_proxy"`
 	WSPingInterval int    `yaml:"ping_interval_seconds"`
 }
@@ -196,6 +197,8 @@ type EncryptionConfig struct {
 		EnableCustom bool  `yaml:"enable_custom"`
 		Milliseconds int64 `yaml:"milliseconds"`
 		Messages     int   `yaml:"messages"`
+
+		DisableDeviceChangeKeyRotation bool `yaml:"disable_device_change_key_rotation"`
 	} `yaml:"rotation"`
 }
 
@@ -225,10 +228,11 @@ func doUpgrade(helper *up.Helper) {
 	helper.Copy(up.Str|up.Null, "homeserver", "message_send_checkpoint_endpoint")
 	helper.Copy(up.Bool, "homeserver", "async_media")
 	helper.Copy(up.Str|up.Null, "homeserver", "websocket_proxy")
+	helper.Copy(up.Bool, "homeserver", "websocket")
 	helper.Copy(up.Int, "homeserver", "ping_interval_seconds")
 
-	helper.Copy(up.Str, "appservice", "address")
-	helper.Copy(up.Str, "appservice", "hostname")
+	helper.Copy(up.Str|up.Null, "appservice", "address")
+	helper.Copy(up.Str|up.Null, "appservice", "hostname")
 	helper.Copy(up.Int|up.Null, "appservice", "port")
 	if dbType, ok := helper.Get(up.Str, "appservice", "database", "type"); ok && dbType == "sqlite3" {
 		helper.Set(up.Str, "sqlite3-fk-wal", "appservice", "database", "type")
