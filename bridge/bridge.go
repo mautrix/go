@@ -329,24 +329,44 @@ func (br *Bridge) ensureConnection() {
 		br.ZLog.Debug().Msg("Homeserver does not support checking status of homeserver -> bridge connection")
 		return
 	}
-	txnID := br.Bot.TxnID()
-	pingResp, err := br.Bot.AppservicePing(br.Config.AppService.ID, txnID)
-	if err != nil {
-		evt := br.ZLog.WithLevel(zerolog.FatalLevel).Err(err).Str("txn_id", txnID)
+	var pingResp *mautrix.RespAppservicePing
+	var txnID string
+	var retryCount int
+	const maxRetries = 6
+	for {
+		txnID = br.Bot.TxnID()
+		pingResp, err = br.Bot.AppservicePing(br.Config.AppService.ID, txnID)
+		if err == nil {
+			break
+		}
 		var httpErr mautrix.HTTPError
+		var pingErrBody string
 		if errors.As(err, &httpErr) && httpErr.RespError != nil {
 			if val, ok := httpErr.RespError.ExtraData["body"].(string); ok {
-				val = strings.TrimSpace(val)
-				valBytes := []byte(val)
-				if json.Valid(valBytes) {
-					evt.RawJSON("body", valBytes)
-				} else {
-					evt.Str("body", val)
-				}
+				pingErrBody = strings.TrimSpace(val)
 			}
 		}
-		evt.Msg("Homeserver -> bridge connection is not working")
-		os.Exit(13)
+		outOfRetries := retryCount >= maxRetries
+		level := zerolog.ErrorLevel
+		if outOfRetries {
+			level = zerolog.FatalLevel
+		}
+		evt := br.ZLog.WithLevel(level).Err(err).Str("txn_id", txnID)
+		if pingErrBody != "" {
+			bodyBytes := []byte(pingErrBody)
+			if json.Valid(bodyBytes) {
+				evt.RawJSON("body", bodyBytes)
+			} else {
+				evt.Str("body", pingErrBody)
+			}
+		}
+		if outOfRetries {
+			evt.Msg("Homeserver -> bridge connection is not working")
+			os.Exit(13)
+		}
+		evt.Msg("Homeserver -> bridge connection is not working, retrying in 5 seconds...")
+		time.Sleep(5 * time.Second)
+		retryCount++
 	}
 	br.ZLog.Debug().
 		Str("txn_id", txnID).
