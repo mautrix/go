@@ -11,7 +11,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"time"
 
@@ -192,11 +191,12 @@ func (cj *CheckpointsJSON) SendHTTP(endpoint string, token string) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		respBody, _ := io.ReadAll(resp.Body)
-		if respBody != nil {
-			respBody = bytes.ReplaceAll(respBody, []byte("\n"), []byte("\\n"))
+		return mautrix.HTTPError{
+			Request:  req,
+			Response: resp,
+
+			Message: "failed to send message checkpoint",
 		}
-		return fmt.Errorf("unexpected status code %d sending message checkpoint: %s", resp.StatusCode, respBody)
 	}
 	return nil
 }
