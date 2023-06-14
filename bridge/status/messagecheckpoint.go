@@ -191,7 +191,8 @@ func (cj *CheckpointsJSON) SendHTTP(endpoint string, token string) error {
 			Request:  req,
 			Response: resp,
 
-			Message: "failed to send message checkpoint",
+			WrappedError: err,
+			Message:      "failed to send message checkpoint",
 		}
 	}
 	defer resp.Body.Close()
