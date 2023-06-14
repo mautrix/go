@@ -403,7 +403,7 @@ func (cli *Client) MakeFullRequest(params FullRequest) ([]byte, error) {
 		return nil, err
 	}
 	if params.Handler == nil {
-		params.Handler = cli.handleNormalResponse
+		params.Handler = handleNormalResponse
 	}
 	req.Header.Set("User-Agent", cli.UserAgent)
 	if len(cli.AccessToken) > 0 {
@@ -441,7 +441,7 @@ func (cli *Client) doRetry(req *http.Request, cause error, retries int, backoff 
 	return cli.executeCompiledRequest(req, retries-1, backoff*2, responseJSON, handler)
 }
 
-func (cli *Client) readRequestBody(req *http.Request, res *http.Response) ([]byte, error) {
+func readRequestBody(req *http.Request, res *http.Response) ([]byte, error) {
 	contents, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, HTTPError{
@@ -468,7 +468,7 @@ func (cli *Client) streamResponse(req *http.Request, res *http.Response, respons
 	file, err := os.CreateTemp("", "mautrix-response-")
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to create temporary file for streaming response")
-		_, err = cli.handleNormalResponse(req, res, responseJSON)
+		_, err = handleNormalResponse(req, res, responseJSON)
 		return nil, err
 	}
 	defer closeTemp(log, file)
@@ -483,8 +483,8 @@ func (cli *Client) streamResponse(req *http.Request, res *http.Response, respons
 	}
 }
 
-func (cli *Client) handleNormalResponse(req *http.Request, res *http.Response, responseJSON interface{}) ([]byte, error) {
-	if contents, err := cli.readRequestBody(req, res); err != nil {
+func handleNormalResponse(req *http.Request, res *http.Response, responseJSON interface{}) ([]byte, error) {
+	if contents, err := readRequestBody(req, res); err != nil {
 		return nil, err
 	} else if responseJSON == nil {
 		return contents, nil
@@ -502,8 +502,8 @@ func (cli *Client) handleNormalResponse(req *http.Request, res *http.Response, r
 	}
 }
 
-func (cli *Client) handleResponseError(req *http.Request, res *http.Response) ([]byte, error) {
-	contents, err := cli.readRequestBody(req, res)
+func ParseErrorResponse(req *http.Request, res *http.Response) ([]byte, error) {
+	contents, err := readRequestBody(req, res)
 	if err != nil {
 		return contents, err
 	}
@@ -580,7 +580,7 @@ func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backof
 
 	var body []byte
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		body, err = cli.handleResponseError(req, res)
+		body, err = ParseErrorResponse(req, res)
 		cli.LogRequestDone(req, res, nil, len(body), duration)
 	} else {
 		body, err = handler(req, res, responseJSON)
