@@ -463,7 +463,7 @@ func closeTemp(log *zerolog.Logger, file *os.File) {
 	}
 }
 
-func (cli *Client) streamResponse(req *http.Request, res *http.Response, responseJSON interface{}) ([]byte, error) {
+func streamResponse(req *http.Request, res *http.Response, responseJSON interface{}) ([]byte, error) {
 	log := zerolog.Ctx(req.Context())
 	file, err := os.CreateTemp("", "mautrix-response-")
 	if err != nil {
@@ -522,7 +522,7 @@ func ParseErrorResponse(req *http.Request, res *http.Response) ([]byte, error) {
 
 // parseBackoffFromResponse extracts the backoff time specified in the Retry-After header if present. See
 // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Retry-After.
-func (cli *Client) parseBackoffFromResponse(req *http.Request, res *http.Response, now time.Time, fallback time.Duration) time.Duration {
+func parseBackoffFromResponse(req *http.Request, res *http.Response, now time.Time, fallback time.Duration) time.Duration {
 	retryAfterHeaderValue := res.Header.Get("Retry-After")
 	if retryAfterHeaderValue == "" {
 		return fallback
@@ -573,7 +573,7 @@ func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backof
 
 	if retries > 0 && cli.shouldRetry(res) {
 		if res.StatusCode == http.StatusTooManyRequests {
-			backoff = cli.parseBackoffFromResponse(req, res, time.Now(), backoff)
+			backoff = parseBackoffFromResponse(req, res, time.Now(), backoff)
 		}
 		return cli.doRetry(req, fmt.Errorf("HTTP %d", res.StatusCode), retries, backoff, responseJSON, handler)
 	}
@@ -657,7 +657,7 @@ func (cli *Client) FullSyncRequest(req ReqSync) (resp *RespSync, err error) {
 		MaxAttempts: 1,
 	}
 	if req.StreamResponse {
-		fullReq.Handler = cli.streamResponse
+		fullReq.Handler = streamResponse
 	}
 	start := time.Now()
 	_, err = cli.MakeFullRequest(fullReq)
