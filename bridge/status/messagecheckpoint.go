@@ -187,7 +187,12 @@ func (cj *CheckpointsJSON) SendHTTP(endpoint string, token string) error {
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to send message checkpoint: %w", err)
+		return mautrix.HTTPError{
+			Request:  req,
+			Response: resp,
+
+			Message: "failed to send message checkpoint",
+		}
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
