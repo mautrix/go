@@ -1,10 +1,11 @@
-## v0.15.3 (unreleased)
+## v0.15.3 (2023-06-16)
 
 * *(synapseadmin)* Added wrappers for some Synapse admin API endpoints.
 * *(pushrules)* Implemented new `event_property_is` and `event_property_contains`
   push rule condition kinds as per MSC3758 and MSC3966.
 * *(bridge)* Moved websocket code from mautrix-imessage to enable all bridges
   to use appservice websockets easily.
+* *(bridge)* Added retrying for appservice pings.
 * *(types)* Removed unstable field for MSC3952 (intentional mentions).
 * *(client)* Deprecated `OldEventIgnorer` and added `Client.DontProcessOldEvents`
   to replace it.
