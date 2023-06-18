@@ -235,17 +235,7 @@ func (as *AppService) handleEvents(ctx context.Context, evts []*event.Event, def
 		}
 
 		if evt.Type.IsState() {
-			// TODO remove this check after making sure the log doesn't happen
-			historical, ok := evt.Content.Raw["org.matrix.msc2716.historical"].(bool)
-			if ok && historical {
-				log.Warn().
-					Str("event_id", evt.ID.String()).
-					Str("event_type", evt.Type.Type).
-					Str("state_key", evt.GetStateKey()).
-					Msg("Received historical state event")
-			} else {
-				mautrix.UpdateStateStore(as.StateStore, evt)
-			}
+			mautrix.UpdateStateStore(as.StateStore, evt)
 		}
 		var ch chan *event.Event
 		if evt.Type.Class == event.ToDeviceEventType {

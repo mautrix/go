@@ -1980,7 +1980,7 @@ func (cli *Client) PutPushRule(scope string, kind pushrules.PushRuleType, ruleID
 
 // BatchSend sends a batch of historical events into a room. This is only available for appservices.
 //
-// See https://github.com/matrix-org/matrix-doc/pull/2716 for more info.
+// Deprecated: MSC2716 has been abandoned, so this is now Beeper-specific. BeeperBatchSend should be used instead.
 func (cli *Client) BatchSend(roomID id.RoomID, req *ReqBatchSend) (resp *RespBatchSend, err error) {
 	path := ClientURLPath{"unstable", "org.matrix.msc2716", "rooms", roomID, "batch_send"}
 	query := map[string]string{
@@ -2008,6 +2008,12 @@ func (cli *Client) AppservicePing(id, txnID string) (resp *RespAppservicePing, e
 		// This endpoint intentionally returns 50x, so don't retry
 		MaxAttempts: 1,
 	})
+	return
+}
+
+func (cli *Client) BeeperBatchSend(roomID id.RoomID, req *ReqBeeperBatchSend) (resp *RespBeeperBatchSend, err error) {
+	u := cli.BuildClientURL("unstable", "com.beeper.backfill", "rooms", roomID, "batch_send")
+	_, err = cli.MakeRequest(http.MethodPost, u, req, &resp)
 	return
 }
 

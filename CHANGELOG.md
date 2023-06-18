@@ -1,3 +1,8 @@
+## v0.15.4 (unreleased)
+
+* *(client)* Deprecated MSC2716 methods and added new Beeper-specific batch
+  send methods, as upstream MSC2716 support has been abandoned.
+
 ## v0.15.3 (2023-06-16)
 
 * *(synapseadmin)* Added wrappers for some Synapse admin API endpoints.

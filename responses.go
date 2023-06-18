@@ -402,6 +402,7 @@ type RespDeviceInfo struct {
 	LastSeenTS  int64       `json:"last_seen_ts"`
 }
 
+// Deprecated: MSC2716 was abandoned
 type RespBatchSend struct {
 	StateEventIDs []id.EventID `json:"state_event_ids"`
 	EventIDs      []id.EventID `json:"event_ids"`
@@ -411,6 +412,10 @@ type RespBatchSend struct {
 	BaseInsertionEventID id.EventID `json:"base_insertion_event_id"`
 
 	NextBatchID id.BatchID `json:"next_batch_id"`
+}
+
+type RespBeeperBatchSend struct {
+	EventIDs []id.EventID `json:"event_ids"`
 }
 
 // RespCapabilities is the JSON response for https://spec.matrix.org/v1.3/client-server-api/#get_matrixclientv3capabilities
