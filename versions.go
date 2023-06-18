@@ -48,6 +48,24 @@ func (versions *RespVersions) GetLatest() (latest SpecVersion) {
 	return
 }
 
+type UnstableFeature struct {
+	UnstableFlag string
+	SpecVersion  SpecVersion
+}
+
+var (
+	FeatureAppservicePing = UnstableFeature{UnstableFlag: "fi.mau.msc2659.stable", SpecVersion: SpecV17}
+
+	BeeperFeatureHungry       = UnstableFeature{UnstableFlag: "com.beeper.hungry"}
+	BeeperFeatureBatchSending = UnstableFeature{UnstableFlag: "com.beeper.batch_sending"}
+	BeeperFeatureRoomYeeting  = UnstableFeature{UnstableFlag: "com.beeper.room_yeeting"}
+)
+
+func (versions *RespVersions) Supports(feature UnstableFeature) bool {
+	return versions.UnstableFeatures[feature.UnstableFlag] ||
+		(!feature.SpecVersion.IsEmpty() && versions.ContainsGreaterOrEqual(feature.SpecVersion))
+}
+
 type SpecVersionFormat int
 
 const (
@@ -141,6 +159,10 @@ func (sv SpecVersion) String() string {
 	default:
 		return sv.Raw
 	}
+}
+
+func (sv SpecVersion) IsEmpty() bool {
+	return sv.Format == SpecVersionFormatUnknown && sv.Raw == ""
 }
 
 func (sv SpecVersion) LessThan(other SpecVersion) bool {

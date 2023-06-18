@@ -288,7 +288,7 @@ func (br *Bridge) ensureConnection() {
 		}
 	}
 
-	if br.Config.Homeserver.Software == bridgeconfig.SoftwareHungry && !br.SpecVersions.UnstableFeatures["com.beeper.hungry"] {
+	if br.Config.Homeserver.Software == bridgeconfig.SoftwareHungry && !br.SpecVersions.Supports(mautrix.BeeperFeatureHungry) {
 		br.ZLog.WithLevel(zerolog.FatalLevel).Msg("The config claims the homeserver is hungryserv, but the /versions response didn't confirm it")
 		os.Exit(18)
 	} else if !br.SpecVersions.ContainsGreaterOrEqual(MinSpecVersion) {
@@ -325,7 +325,7 @@ func (br *Bridge) ensureConnection() {
 	if br.Websocket {
 		br.ZLog.Debug().Msg("Websocket mode: no need to check status of homeserver -> bridge connection")
 		return
-	} else if !br.SpecVersions.UnstableFeatures["fi.mau.msc2659.stable"] && !br.SpecVersions.ContainsGreaterOrEqual(mautrix.SpecV17) {
+	} else if !br.SpecVersions.Supports(mautrix.FeatureAppservicePing) {
 		br.ZLog.Debug().Msg("Homeserver does not support checking status of homeserver -> bridge connection")
 		return
 	}
