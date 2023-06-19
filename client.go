@@ -1372,6 +1372,9 @@ func (cli *Client) Download(mxcURL id.ContentURI) (io.ReadCloser, error) {
 
 func (cli *Client) DownloadContext(ctx context.Context, mxcURL id.ContentURI) (io.ReadCloser, error) {
 	_, resp, err := cli.downloadContext(ctx, mxcURL)
+	if err != nil {
+		return nil, err
+	}
 	return resp.Body, err
 }
 
@@ -1388,6 +1391,13 @@ func (cli *Client) downloadContext(ctx context.Context, mxcURL id.ContentURI) (*
 	cli.LogRequest(req)
 	if resp, err := cli.Client.Do(req); err != nil {
 		return req, nil, err
+	} else if resp.StatusCode != 200 {
+		defer resp.Body.Close()
+		respErr := &RespError{}
+		if _ = json.NewDecoder(resp.Body).Decode(respErr); respErr.ErrCode == "" {
+			respErr = nil
+		}
+		return req, nil, HTTPError{Request: req, Response: resp, RespError: respErr}
 	} else {
 		return req, resp, nil
 	}
