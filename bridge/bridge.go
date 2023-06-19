@@ -407,7 +407,7 @@ func (br *Bridge) UpdateBotProfile() {
 		br.ZLog.Warn().Err(err).Msg("Failed to update bot displayname")
 	}
 
-	if br.Config.Homeserver.Software == bridgeconfig.SoftwareHungry && br.BeeperNetworkName != "" {
+	if br.SpecVersions.Supports(mautrix.BeeperFeatureArbitraryProfileMeta) && br.BeeperNetworkName != "" {
 		br.ZLog.Debug().Msg("Setting contact info on the appservice bot")
 		br.Bot.BeeperUpdateProfile(map[string]any{
 			"com.beeper.bridge.service":       br.BeeperServiceName,
