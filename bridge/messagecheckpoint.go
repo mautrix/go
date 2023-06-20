@@ -45,7 +45,7 @@ func (br *Bridge) SendRawMessageCheckpoint(cp *status.MessageCheckpoint) {
 func (br *Bridge) SendMessageCheckpoints(checkpoints []*status.MessageCheckpoint) error {
 	checkpointsJSON := status.CheckpointsJSON{Checkpoints: checkpoints}
 
-	if br.AS.HasWebsocket() {
+	if br.Websocket {
 		return br.AS.SendWebsocket(&appservice.WebsocketRequest{
 			Command: "message_checkpoint",
 			Data:    checkpointsJSON,

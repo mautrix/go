@@ -4,6 +4,8 @@ package olm
 
 import (
 	"errors"
+
+	"codeberg.org/DerLukas/goolm"
 )
 
 // Error codes from go-olm
@@ -13,4 +15,9 @@ var (
 	ErrNotEnoughGoRandom  = errors.New("couldn't get enough randomness from crypto/rand")
 	ErrSignatureNotFound  = errors.New("input JSON doesn't contain signature from specified device")
 	ErrInputNotJSONString = errors.New("input doesn't look like a JSON string")
+)
+
+// Error codes from olm code
+var (
+	UnknownMessageIndex = goolm.ErrRatchetNotAvailable
 )

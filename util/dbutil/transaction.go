@@ -49,7 +49,7 @@ func (db *Database) DoTxn(ctx context.Context, opts *sql.TxOptions, fn func(ctx 
 			log.Warn().
 				Float64("duration_seconds", dur.Seconds()).
 				Caller(callerSkip).
-				Msg("Transaction took a long time")
+				Msg("Transaction took long")
 		}
 	}()
 	tx, err := db.BeginTx(ctx, opts)

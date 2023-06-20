@@ -185,10 +185,10 @@ func (s *InboundGroupSession) IsVerified() uint {
 // if we do not have a session key corresponding to the given index (ie, it was
 // sent before the session key was shared with us) the error will be
 // returned.
-func (s *InboundGroupSession) Export(messageIndex uint32) (string, error) {
+func (s *InboundGroupSession) Export(messageIndex uint32) ([]byte, error) {
 	res, err := s.MegolmInboundSession.SessionExportMessage(messageIndex)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return string(res), nil
+	return res, nil
 }

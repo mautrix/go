@@ -46,7 +46,7 @@ func TestBackoffFromResponse(t *testing.T) {
 			var out bytes.Buffer
 			c := &Client{Log: zerolog.New(&out)}
 
-			actual := c.parseBackoffFromResponse(
+			actual := parseBackoffFromResponse(
 				(&http.Request{}).WithContext(c.Log.WithContext(context.Background())),
 				&http.Response{
 					Header: http.Header{

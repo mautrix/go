@@ -13,15 +13,28 @@ import (
 
 	"github.com/rs/zerolog"
 
+	"maunium.net/go/mautrix/appservice"
 	"maunium.net/go/mautrix/bridge/status"
 )
 
 func (br *Bridge) SendBridgeState(ctx context.Context, state *status.BridgeState) error {
-	return state.Send(ctx, br.Config.Homeserver.StatusEndpoint, br.Config.AppService.ASToken)
+	if br.Websocket {
+		// FIXME this doesn't account for multiple users
+		br.latestState = state
+
+		return br.AS.SendWebsocket(&appservice.WebsocketRequest{
+			Command: "bridge_status",
+			Data:    state,
+		})
+	} else if br.Config.Homeserver.StatusEndpoint != "" {
+		return state.SendHTTP(ctx, br.Config.Homeserver.StatusEndpoint, br.Config.AppService.ASToken)
+	} else {
+		return nil
+	}
 }
 
 func (br *Bridge) SendGlobalBridgeState(state status.BridgeState) {
-	if len(br.Config.Homeserver.StatusEndpoint) == 0 {
+	if len(br.Config.Homeserver.StatusEndpoint) == 0 && !br.Websocket {
 		return
 	}
 

@@ -15,6 +15,7 @@ import (
 	"os/signal"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -28,6 +29,7 @@ import (
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/appservice"
 	"maunium.net/go/mautrix/bridge/bridgeconfig"
+	"maunium.net/go/mautrix/bridge/status"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/sqlstatestore"
@@ -138,6 +140,11 @@ type PreInitableBridge interface {
 	PreInit()
 }
 
+type WebsocketStartingBridge interface {
+	ChildOverride
+	OnWebsocketConnect()
+}
+
 type CSFeatureRequirer interface {
 	CheckFeatures(versions *mautrix.RespVersions) (string, bool)
 }
@@ -185,6 +192,16 @@ type Bridge struct {
 	Child ChildOverride
 
 	manualStop chan int
+	Stopping   bool
+
+	latestState *status.BridgeState
+
+	Websocket                      bool
+	wsStopPinger                   chan struct{}
+	wsStarted                      chan struct{}
+	wsStopped                      chan struct{}
+	wsShortCircuitReconnectBackoff chan struct{}
+	wsStartupWait                  *sync.WaitGroup
 }
 
 type Crypto interface {
@@ -271,7 +288,7 @@ func (br *Bridge) ensureConnection() {
 		}
 	}
 
-	if br.Config.Homeserver.Software == bridgeconfig.SoftwareHungry && !br.SpecVersions.UnstableFeatures["com.beeper.hungry"] {
+	if br.Config.Homeserver.Software == bridgeconfig.SoftwareHungry && !br.SpecVersions.Supports(mautrix.BeeperFeatureHungry) {
 		br.ZLog.WithLevel(zerolog.FatalLevel).Msg("The config claims the homeserver is hungryserv, but the /versions response didn't confirm it")
 		os.Exit(18)
 	} else if !br.SpecVersions.ContainsGreaterOrEqual(MinSpecVersion) {
@@ -305,31 +322,51 @@ func (br *Bridge) ensureConnection() {
 		os.Exit(17)
 	}
 
-	if !br.AS.Host.IsConfigured() {
+	if br.Websocket {
 		br.ZLog.Debug().Msg("Websocket mode: no need to check status of homeserver -> bridge connection")
 		return
-	} else if !br.SpecVersions.UnstableFeatures["fi.mau.msc2659.stable"] && !br.SpecVersions.ContainsGreaterOrEqual(mautrix.SpecV17) {
+	} else if !br.SpecVersions.Supports(mautrix.FeatureAppservicePing) {
 		br.ZLog.Debug().Msg("Homeserver does not support checking status of homeserver -> bridge connection")
 		return
 	}
-	txnID := br.Bot.TxnID()
-	pingResp, err := br.Bot.AppservicePing(br.Config.AppService.ID, txnID)
-	if err != nil {
-		evt := br.ZLog.WithLevel(zerolog.FatalLevel).Err(err).Str("txn_id", txnID)
+	var pingResp *mautrix.RespAppservicePing
+	var txnID string
+	var retryCount int
+	const maxRetries = 6
+	for {
+		txnID = br.Bot.TxnID()
+		pingResp, err = br.Bot.AppservicePing(br.Config.AppService.ID, txnID)
+		if err == nil {
+			break
+		}
 		var httpErr mautrix.HTTPError
+		var pingErrBody string
 		if errors.As(err, &httpErr) && httpErr.RespError != nil {
 			if val, ok := httpErr.RespError.ExtraData["body"].(string); ok {
-				val = strings.TrimSpace(val)
-				valBytes := []byte(val)
-				if json.Valid(valBytes) {
-					evt.RawJSON("body", valBytes)
-				} else {
-					evt.Str("body", val)
-				}
+				pingErrBody = strings.TrimSpace(val)
 			}
 		}
-		evt.Msg("Homeserver -> bridge connection is not working")
-		os.Exit(13)
+		outOfRetries := retryCount >= maxRetries
+		level := zerolog.ErrorLevel
+		if outOfRetries {
+			level = zerolog.FatalLevel
+		}
+		evt := br.ZLog.WithLevel(level).Err(err).Str("txn_id", txnID)
+		if pingErrBody != "" {
+			bodyBytes := []byte(pingErrBody)
+			if json.Valid(bodyBytes) {
+				evt.RawJSON("body", bodyBytes)
+			} else {
+				evt.Str("body", pingErrBody)
+			}
+		}
+		if outOfRetries {
+			evt.Msg("Homeserver -> bridge connection is not working")
+			os.Exit(13)
+		}
+		evt.Msg("Homeserver -> bridge connection is not working, retrying in 5 seconds...")
+		time.Sleep(5 * time.Second)
+		retryCount++
 	}
 	br.ZLog.Debug().
 		Str("txn_id", txnID).
@@ -370,7 +407,7 @@ func (br *Bridge) UpdateBotProfile() {
 		br.ZLog.Warn().Err(err).Msg("Failed to update bot displayname")
 	}
 
-	if br.Config.Homeserver.Software == bridgeconfig.SoftwareHungry && br.BeeperNetworkName != "" {
+	if br.SpecVersions.Supports(mautrix.BeeperFeatureArbitraryProfileMeta) && br.BeeperNetworkName != "" {
 		br.ZLog.Debug().Msg("Setting contact info on the appservice bot")
 		br.Bot.BeeperUpdateProfile(map[string]any{
 			"com.beeper.bridge.service":       br.BeeperServiceName,
@@ -551,6 +588,12 @@ func (br *Bridge) LogDBUpgradeErrorAndExit(name string, err error) {
 	os.Exit(15)
 }
 
+func (br *Bridge) WaitWebsocketConnected() {
+	if br.wsStartupWait != nil {
+		br.wsStartupWait.Wait()
+	}
+}
+
 func (br *Bridge) start() {
 	br.ZLog.Debug().Msg("Running database upgrades")
 	err := br.DB.Upgrade()
@@ -560,11 +603,20 @@ func (br *Bridge) start() {
 		br.LogDBUpgradeErrorAndExit("matrix_state", err)
 	}
 
-	if br.AS.Host.IsConfigured() {
+	if br.Config.Homeserver.Websocket || len(br.Config.Homeserver.WSProxy) > 0 {
+		br.Websocket = true
+		br.ZLog.Debug().Msg("Starting application service websocket")
+		var wg sync.WaitGroup
+		wg.Add(1)
+		br.wsStartupWait = &wg
+		br.wsShortCircuitReconnectBackoff = make(chan struct{})
+		go br.startWebsocket(&wg)
+	} else if br.AS.Host.IsConfigured() {
 		br.ZLog.Debug().Msg("Starting application service HTTP server")
 		go br.AS.Start()
 	} else {
-		br.ZLog.Debug().Msg("Appservice config doesn't have port nor unix socket path, not starting HTTP server")
+		br.ZLog.WithLevel(zerolog.FatalLevel).Msg("Neither appservice HTTP listener nor websocket is enabled")
+		os.Exit(23)
 	}
 	br.ZLog.Debug().Msg("Checking connection to homeserver")
 	br.ensureConnection()
@@ -587,10 +639,15 @@ func (br *Bridge) start() {
 	}
 
 	br.Child.Start()
+	br.WaitWebsocketConnected()
 	br.AS.Ready = true
 
 	if br.Config.Bridge.GetResendBridgeInfo() {
 		go br.ResendBridgeInfo()
+	}
+	if br.Websocket && br.Config.Homeserver.WSPingInterval > 0 {
+		br.wsStopPinger = make(chan struct{}, 1)
+		go br.websocketServerPinger()
 	}
 }
 
@@ -612,16 +669,41 @@ func (br *Bridge) ResendBridgeInfo() {
 	br.ZLog.Info().Msg("Finished re-sending bridge info state events")
 }
 
+func sendStopSignal(ch chan struct{}) {
+	if ch != nil {
+		select {
+		case ch <- struct{}{}:
+		default:
+		}
+	}
+}
+
 func (br *Bridge) stop() {
+	br.Stopping = true
 	if br.Crypto != nil {
 		br.Crypto.Stop()
 	}
+	waitForWS := false
+	if br.AS.StopWebsocket != nil {
+		br.ZLog.Debug().Msg("Stopping application service websocket")
+		br.AS.StopWebsocket(appservice.ErrWebsocketManualStop)
+		waitForWS = true
+	}
 	br.AS.Stop()
+	sendStopSignal(br.wsStopPinger)
+	sendStopSignal(br.wsShortCircuitReconnectBackoff)
 	br.EventProcessor.Stop()
 	br.Child.Stop()
 	err := br.DB.Close()
 	if err != nil {
 		br.ZLog.Warn().Err(err).Msg("Error closing database")
+	}
+	if waitForWS {
+		select {
+		case <-br.wsStopped:
+		case <-time.After(4 * time.Second):
+			br.ZLog.Warn().Msg("Timed out waiting for websocket to close")
+		}
 	}
 }
 

@@ -1,10 +1,33 @@
-## v0.15.3 (unreleased)
+## v0.15.4 (unreleased)
+
+* *(client)* Deprecated MSC2716 methods and added new Beeper-specific batch
+  send methods, as upstream MSC2716 support has been abandoned.
+
+## v0.15.3 (2023-06-16)
 
 * *(synapseadmin)* Added wrappers for some Synapse admin API endpoints.
+* *(pushrules)* Implemented new `event_property_is` and `event_property_contains`
+  push rule condition kinds as per MSC3758 and MSC3966.
+* *(bridge)* Moved websocket code from mautrix-imessage to enable all bridges
+  to use appservice websockets easily.
+* *(bridge)* Added retrying for appservice pings.
+* *(types)* Removed unstable field for MSC3952 (intentional mentions).
 * *(client)* Deprecated `OldEventIgnorer` and added `Client.DontProcessOldEvents`
   to replace it.
 * *(client)* Added `MoveInviteState` sync handler for moving state events in
   the invite section of sync inside the invite event itself.
+* *(crypto)* Added option to not rotate keys when devices change.
+* *(crypto)* Added additional duplicate message index check if decryption fails
+  because the keys had been ratcheted forward.
+* *(client)* Stabilized support for asynchronous uploads.
+  * `UnstableCreateMXC` and `UnstableUploadAsync` were renamed to `CreateMXC`
+    and `UploadAsync` respectively.
+* *(util/dbutil)* Added option to use a separate database connection pool for
+  read-only transactions.
+  * This is mostly meant for SQLite and it enables read-only transactions that
+    don't lock the database, even when normal transactions are configured to
+    acquire a write lock immediately.
+* *(util/dbutil)* Enabled caller info in zerolog by default.
 
 ## v0.15.2 (2023-05-16)
 

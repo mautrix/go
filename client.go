@@ -403,7 +403,7 @@ func (cli *Client) MakeFullRequest(params FullRequest) ([]byte, error) {
 		return nil, err
 	}
 	if params.Handler == nil {
-		params.Handler = cli.handleNormalResponse
+		params.Handler = handleNormalResponse
 	}
 	req.Header.Set("User-Agent", cli.UserAgent)
 	if len(cli.AccessToken) > 0 {
@@ -441,7 +441,7 @@ func (cli *Client) doRetry(req *http.Request, cause error, retries int, backoff 
 	return cli.executeCompiledRequest(req, retries-1, backoff*2, responseJSON, handler)
 }
 
-func (cli *Client) readRequestBody(req *http.Request, res *http.Response) ([]byte, error) {
+func readRequestBody(req *http.Request, res *http.Response) ([]byte, error) {
 	contents, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, HTTPError{
@@ -463,12 +463,12 @@ func closeTemp(log *zerolog.Logger, file *os.File) {
 	}
 }
 
-func (cli *Client) streamResponse(req *http.Request, res *http.Response, responseJSON interface{}) ([]byte, error) {
+func streamResponse(req *http.Request, res *http.Response, responseJSON interface{}) ([]byte, error) {
 	log := zerolog.Ctx(req.Context())
 	file, err := os.CreateTemp("", "mautrix-response-")
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to create temporary file for streaming response")
-		_, err = cli.handleNormalResponse(req, res, responseJSON)
+		_, err = handleNormalResponse(req, res, responseJSON)
 		return nil, err
 	}
 	defer closeTemp(log, file)
@@ -483,8 +483,8 @@ func (cli *Client) streamResponse(req *http.Request, res *http.Response, respons
 	}
 }
 
-func (cli *Client) handleNormalResponse(req *http.Request, res *http.Response, responseJSON interface{}) ([]byte, error) {
-	if contents, err := cli.readRequestBody(req, res); err != nil {
+func handleNormalResponse(req *http.Request, res *http.Response, responseJSON interface{}) ([]byte, error) {
+	if contents, err := readRequestBody(req, res); err != nil {
 		return nil, err
 	} else if responseJSON == nil {
 		return contents, nil
@@ -502,8 +502,8 @@ func (cli *Client) handleNormalResponse(req *http.Request, res *http.Response, r
 	}
 }
 
-func (cli *Client) handleResponseError(req *http.Request, res *http.Response) ([]byte, error) {
-	contents, err := cli.readRequestBody(req, res)
+func ParseErrorResponse(req *http.Request, res *http.Response) ([]byte, error) {
+	contents, err := readRequestBody(req, res)
 	if err != nil {
 		return contents, err
 	}
@@ -522,7 +522,7 @@ func (cli *Client) handleResponseError(req *http.Request, res *http.Response) ([
 
 // parseBackoffFromResponse extracts the backoff time specified in the Retry-After header if present. See
 // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Retry-After.
-func (cli *Client) parseBackoffFromResponse(req *http.Request, res *http.Response, now time.Time, fallback time.Duration) time.Duration {
+func parseBackoffFromResponse(req *http.Request, res *http.Response, now time.Time, fallback time.Duration) time.Duration {
 	retryAfterHeaderValue := res.Header.Get("Retry-After")
 	if retryAfterHeaderValue == "" {
 		return fallback
@@ -573,14 +573,14 @@ func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backof
 
 	if retries > 0 && cli.shouldRetry(res) {
 		if res.StatusCode == http.StatusTooManyRequests {
-			backoff = cli.parseBackoffFromResponse(req, res, time.Now(), backoff)
+			backoff = parseBackoffFromResponse(req, res, time.Now(), backoff)
 		}
 		return cli.doRetry(req, fmt.Errorf("HTTP %d", res.StatusCode), retries, backoff, responseJSON, handler)
 	}
 
 	var body []byte
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		body, err = cli.handleResponseError(req, res)
+		body, err = ParseErrorResponse(req, res)
 		cli.LogRequestDone(req, res, nil, len(body), duration)
 	} else {
 		body, err = handler(req, res, responseJSON)
@@ -657,7 +657,7 @@ func (cli *Client) FullSyncRequest(req ReqSync) (resp *RespSync, err error) {
 		MaxAttempts: 1,
 	}
 	if req.StreamResponse {
-		fullReq.Handler = cli.streamResponse
+		fullReq.Handler = streamResponse
 	}
 	start := time.Now()
 	_, err = cli.MakeFullRequest(fullReq)
@@ -1413,10 +1413,11 @@ func (cli *Client) DownloadBytesContext(ctx context.Context, mxcURL id.ContentUR
 	return io.ReadAll(resp.Body)
 }
 
-// UnstableCreateMXC creates a blank Matrix content URI to allow uploading the content asynchronously later.
-// See https://github.com/matrix-org/matrix-spec-proposals/pull/2246
-func (cli *Client) UnstableCreateMXC() (*RespCreateMXC, error) {
-	u, _ := url.Parse(cli.BuildURL(MediaURLPath{"unstable", "fi.mau.msc2246", "create"}))
+// CreateMXC creates a blank Matrix content URI to allow uploading the content asynchronously later.
+//
+// See https://spec.matrix.org/v1.7/client-server-api/#post_matrixmediav1create
+func (cli *Client) CreateMXC() (*RespCreateMXC, error) {
+	u, _ := url.Parse(cli.BuildURL(MediaURLPath{"v1", "create"}))
 	var m RespCreateMXC
 	_, err := cli.MakeFullRequest(FullRequest{
 		Method:       http.MethodPost,
@@ -1426,19 +1427,22 @@ func (cli *Client) UnstableCreateMXC() (*RespCreateMXC, error) {
 	return &m, err
 }
 
-// UnstableUploadAsync creates a blank content URI with UnstableCreateMXC, starts uploading the data in the background
-// and returns the created MXC immediately. See https://github.com/matrix-org/matrix-spec-proposals/pull/2246 for more info.
-func (cli *Client) UnstableUploadAsync(req ReqUploadMedia) (*RespCreateMXC, error) {
-	resp, err := cli.UnstableCreateMXC()
+// UploadAsync creates a blank content URI with CreateMXC, starts uploading the data in the background
+// and returns the created MXC immediately.
+//
+// See https://spec.matrix.org/v1.7/client-server-api/#post_matrixmediav1create
+// and https://spec.matrix.org/v1.7/client-server-api/#put_matrixmediav3uploadservernamemediaid
+func (cli *Client) UploadAsync(req ReqUploadMedia) (*RespCreateMXC, error) {
+	resp, err := cli.CreateMXC()
 	if err != nil {
 		return nil, err
 	}
-	req.UnstableMXC = resp.ContentURI
-	req.UploadURL = resp.UploadURL
+	req.MXC = resp.ContentURI
+	req.UnstableUploadURL = resp.UnstableUploadURL
 	go func() {
 		_, err = cli.UploadMedia(req)
 		if err != nil {
-			cli.Log.Error().Str("mxc", req.UnstableMXC.String()).Err(err).Msg("Async upload of media failed")
+			cli.Log.Error().Str("mxc", req.MXC.String()).Err(err).Msg("Async upload of media failed")
 		}
 	}()
 	return resp, nil
@@ -1474,13 +1478,13 @@ type ReqUploadMedia struct {
 	ContentType   string
 	FileName      string
 
-	// UnstableMXC specifies an existing MXC URI which doesn't have content yet to upload into.
-	// See https://github.com/matrix-org/matrix-spec-proposals/pull/2246 for more info.
-	UnstableMXC id.ContentURI
+	// MXC specifies an existing MXC URI which doesn't have content yet to upload into.
+	// See https://spec.matrix.org/unstable/client-server-api/#put_matrixmediav3uploadservernamemediaid
+	MXC id.ContentURI
 
-	// UploadURL specifies the URL to upload the content to (MSC3870)
+	// UnstableUploadURL specifies the URL to upload the content to. MXC must also be set.
 	// see https://github.com/matrix-org/matrix-spec-proposals/pull/3870 for more info
-	UploadURL string
+	UnstableUploadURL string
 }
 
 func (cli *Client) tryUploadMediaToURL(url, contentType string, content io.Reader) (*http.Response, error) {
@@ -1508,7 +1512,7 @@ func (cli *Client) uploadMediaToURL(data ReqUploadMedia) (*RespMediaUpload, erro
 		} else {
 			data.Content = nil
 		}
-		resp, err := cli.tryUploadMediaToURL(data.UploadURL, data.ContentType, reader)
+		resp, err := cli.tryUploadMediaToURL(data.UnstableUploadURL, data.ContentType, reader)
 		if err == nil {
 			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 				// Everything is fine
@@ -1517,10 +1521,12 @@ func (cli *Client) uploadMediaToURL(data ReqUploadMedia) (*RespMediaUpload, erro
 			err = fmt.Errorf("HTTP %d", resp.StatusCode)
 		}
 		if retries <= 0 {
-			cli.Log.Warn().Str("url", data.UploadURL).Err(err).Msg("Error uploading media to external URL, not retrying")
+			cli.Log.Warn().Str("url", data.UnstableUploadURL).Err(err).
+				Msg("Error uploading media to external URL, not retrying")
 			return nil, err
 		}
-		cli.Log.Warn().Str("url", data.UploadURL).Err(err).Msg("Error uploading media to external URL, retrying")
+		cli.Log.Warn().Str("url", data.UnstableUploadURL).Err(err).
+			Msg("Error uploading media to external URL, retrying")
 		retries--
 	}
 
@@ -1529,7 +1535,7 @@ func (cli *Client) uploadMediaToURL(data ReqUploadMedia) (*RespMediaUpload, erro
 		query["filename"] = data.FileName
 	}
 
-	notifyURL := cli.BuildURLWithQuery(MediaURLPath{"unstable", "fi.mau.msc2246", "upload", data.UnstableMXC.Homeserver, data.UnstableMXC.FileID, "complete"}, query)
+	notifyURL := cli.BuildURLWithQuery(MediaURLPath{"unstable", "com.beeper.msc3870", "upload", data.MXC.Homeserver, data.MXC.FileID, "complete"}, query)
 
 	var m *RespMediaUpload
 	_, err := cli.MakeFullRequest(FullRequest{
@@ -1545,15 +1551,18 @@ func (cli *Client) uploadMediaToURL(data ReqUploadMedia) (*RespMediaUpload, erro
 }
 
 // UploadMedia uploads the given data to the content repository and returns an MXC URI.
-// See https://spec.matrix.org/v1.2/client-server-api/#post_matrixmediav3upload
+// See https://spec.matrix.org/v1.7/client-server-api/#post_matrixmediav3upload
 func (cli *Client) UploadMedia(data ReqUploadMedia) (*RespMediaUpload, error) {
-	if data.UploadURL != "" {
+	if data.UnstableUploadURL != "" {
+		if data.MXC.IsEmpty() {
+			return nil, errors.New("MXC must also be set when uploading to external URL")
+		}
 		return cli.uploadMediaToURL(data)
 	}
 	u, _ := url.Parse(cli.BuildURL(MediaURLPath{"v3", "upload"}))
 	method := http.MethodPost
-	if !data.UnstableMXC.IsEmpty() {
-		u, _ = url.Parse(cli.BuildURL(MediaURLPath{"unstable", "fi.mau.msc2246", "upload", data.UnstableMXC.Homeserver, data.UnstableMXC.FileID}))
+	if !data.MXC.IsEmpty() {
+		u, _ = url.Parse(cli.BuildURL(MediaURLPath{"v3", "upload", data.MXC.Homeserver, data.MXC.FileID}))
 		method = http.MethodPut
 	}
 	if len(data.FileName) > 0 {
@@ -1971,7 +1980,7 @@ func (cli *Client) PutPushRule(scope string, kind pushrules.PushRuleType, ruleID
 
 // BatchSend sends a batch of historical events into a room. This is only available for appservices.
 //
-// See https://github.com/matrix-org/matrix-doc/pull/2716 for more info.
+// Deprecated: MSC2716 has been abandoned, so this is now Beeper-specific. BeeperBatchSend should be used instead.
 func (cli *Client) BatchSend(roomID id.RoomID, req *ReqBatchSend) (resp *RespBatchSend, err error) {
 	path := ClientURLPath{"unstable", "org.matrix.msc2716", "rooms", roomID, "batch_send"}
 	query := map[string]string{
@@ -1999,6 +2008,12 @@ func (cli *Client) AppservicePing(id, txnID string) (resp *RespAppservicePing, e
 		// This endpoint intentionally returns 50x, so don't retry
 		MaxAttempts: 1,
 	})
+	return
+}
+
+func (cli *Client) BeeperBatchSend(roomID id.RoomID, req *ReqBeeperBatchSend) (resp *RespBeeperBatchSend, err error) {
+	u := cli.BuildClientURL("unstable", "com.beeper.backfill", "rooms", roomID, "batch_send")
+	_, err = cli.MakeRequest(http.MethodPost, u, req, &resp)
 	return
 }
 
