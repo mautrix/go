@@ -62,18 +62,18 @@ func (mcs MessageCheckpointStep) IsValid() bool {
 type MessageCheckpointStatus string
 
 const (
-	MsgStatusSuccess      MessageCheckpointStatus = "SUCCESS"
-	MsgStatusWillRetry    MessageCheckpointStatus = "WILL_RETRY"
-	MsgStatusPermFailure  MessageCheckpointStatus = "PERM_FAILURE"
-	MsgStatusUnsupported  MessageCheckpointStatus = "UNSUPPORTED"
-	MsgStatusTimeout      MessageCheckpointStatus = "TIMEOUT"
-	MsgStepDelivered      MessageCheckpointStatus = "DELIVERED"
-	MsgStepDeliveryFailed MessageCheckpointStatus = "DELIVERY_FAILED"
+	MsgStatusSuccess        MessageCheckpointStatus = "SUCCESS"
+	MsgStatusWillRetry      MessageCheckpointStatus = "WILL_RETRY"
+	MsgStatusPermFailure    MessageCheckpointStatus = "PERM_FAILURE"
+	MsgStatusUnsupported    MessageCheckpointStatus = "UNSUPPORTED"
+	MsgStatusTimeout        MessageCheckpointStatus = "TIMEOUT"
+	MsgStatusDelivered      MessageCheckpointStatus = "DELIVERED"
+	MsgStatusDeliveryFailed MessageCheckpointStatus = "DELIVERY_FAILED"
 )
 
 func (mcs MessageCheckpointStatus) IsValid() bool {
 	switch mcs {
-	case MsgStatusSuccess, MsgStatusWillRetry, MsgStatusPermFailure, MsgStatusUnsupported, MsgStatusTimeout, MsgStepDelivered, MsgStepDeliveryFailed:
+	case MsgStatusSuccess, MsgStatusWillRetry, MsgStatusPermFailure, MsgStatusUnsupported, MsgStatusTimeout, MsgStatusDelivered, MsgStatusDeliveryFailed:
 		return true
 	}
 	return false
