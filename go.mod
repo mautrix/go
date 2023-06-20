@@ -3,7 +3,7 @@ module maunium.net/go/mautrix
 go 1.19
 
 require (
-	codeberg.org/DerLukas/goolm v0.2.2
+	codeberg.org/DerLukas/goolm v0.2.3
 	github.com/DATA-DOG/go-sqlmock v1.5.0
 	github.com/gorilla/mux v1.8.0
 	github.com/gorilla/websocket v1.5.0

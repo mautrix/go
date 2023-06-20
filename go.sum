@@ -1,5 +1,5 @@
-codeberg.org/DerLukas/goolm v0.2.2 h1:4vPk7Fcjn5gav1gUq7vkdPUUkITSlihb9BklivjB6co=
-codeberg.org/DerLukas/goolm v0.2.2/go.mod h1:Z2YCbHmFaj2gpmifi7/lTGkRRoQ3/I1fki9pHrTRgwU=
+codeberg.org/DerLukas/goolm v0.2.3 h1:VD3MrLo6FDvNEUdFq7b+BYtcPJE38fvhrUJo9y8HzLc=
+codeberg.org/DerLukas/goolm v0.2.3/go.mod h1:Z2YCbHmFaj2gpmifi7/lTGkRRoQ3/I1fki9pHrTRgwU=
 github.com/DATA-DOG/go-sqlmock v1.5.0 h1:Shsta01QNfFxHCfpW6YH2STWB0MudeXXEWMr20OEh60=
 github.com/DATA-DOG/go-sqlmock v1.5.0/go.mod h1:f/Ixk793poVmq4qj/V1dPUg2JEAKC73Q5eFN3EC/SaM=
 github.com/coreos/go-systemd/v22 v22.5.0 h1:RrqgGjYQKalulkV8NGVIfkXQf6YYmOyiJKk8iXXhfZs=
