@@ -59,6 +59,8 @@ type Store interface {
 	RedactGroupSessions(id.RoomID, id.SenderKey, string) ([]id.SessionID, error)
 	// RedactExpiredGroupSessions removes the session data for all inbound Megolm sessions that have expired.
 	RedactExpiredGroupSessions() ([]id.SessionID, error)
+	// RedactOutdatedGroupSessions removes the session data for all inbound Megolm sessions that are lacking the expiration metadata.
+	RedactOutdatedGroupSessions() ([]id.SessionID, error)
 	// PutWithheldGroupSession tells the store that a specific Megolm session was withheld.
 	PutWithheldGroupSession(event.RoomKeyWithheldEventContent) error
 	// GetWithheldGroupSession gets the event content that was previously inserted with PutWithheldGroupSession.
@@ -314,6 +316,10 @@ func (gs *MemoryStore) RedactGroupSessions(roomID id.RoomID, senderKey id.Sender
 }
 
 func (gs *MemoryStore) RedactExpiredGroupSessions() ([]id.SessionID, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (gs *MemoryStore) RedactOutdatedGroupSessions() ([]id.SessionID, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
