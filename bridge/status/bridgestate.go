@@ -88,13 +88,13 @@ func (pong BridgeState) Fill(user BridgeStateFiller) BridgeState {
 	pong.Timestamp = jsontime.UnixNow()
 	pong.Source = "bridge"
 	if len(pong.Error) > 0 {
-		pong.TTL = 60
+		pong.TTL = 3600
 		msg, ok := BridgeStateHumanErrors[pong.Error]
 		if ok {
 			pong.Message = msg
 		}
 	} else {
-		pong.TTL = 240
+		pong.TTL = 21600
 	}
 	return pong
 }
@@ -141,5 +141,5 @@ func (pong *BridgeState) ShouldDeduplicate(newPong *BridgeState) bool {
 	if pong == nil || pong.StateEvent != newPong.StateEvent || pong.Error != newPong.Error {
 		return false
 	}
-	return pong.Timestamp.Add(time.Duration(pong.TTL/5) * time.Second).After(time.Now())
+	return pong.Timestamp.Add(time.Duration(pong.TTL) * time.Second).After(time.Now())
 }
