@@ -23,7 +23,7 @@ func TrimReplyFallbackHTML(html string) string {
 }
 
 func TrimReplyFallbackText(text string) string {
-	if !strings.HasPrefix(text, "> <") || !strings.Contains(text, "\n") {
+	if (!strings.HasPrefix(text, "> <") && !strings.HasPrefix(text, "> * <")) || !strings.Contains(text, "\n") {
 		return text
 	}
 
