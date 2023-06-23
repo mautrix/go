@@ -110,6 +110,16 @@ func (helper *CryptoHelper) Init() error {
 		go helper.mach.ExpiredKeyDeleteLoop(ctx)
 	}
 
+	if encryptionConfig.DeleteKeys.DeleteOutdatedInbound {
+		deleted, err := helper.store.RedactOutdatedGroupSessions()
+		if err != nil {
+			return err
+		}
+		if len(deleted) > 0 {
+			helper.log.Debug().Int("deleted", len(deleted)).Msg("Deleted inbound keys which lacked expiration metadata")
+		}
+	}
+
 	helper.client.Syncer = &cryptoSyncer{helper.mach}
 	helper.client.Store = helper.store
 

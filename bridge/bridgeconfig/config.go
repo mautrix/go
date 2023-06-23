@@ -184,6 +184,7 @@ type EncryptionConfig struct {
 		DeletePrevOnNewSession    bool `yaml:"delete_prev_on_new_session"`
 		DeleteOnDeviceDelete      bool `yaml:"delete_on_device_delete"`
 		PeriodicallyDeleteExpired bool `yaml:"periodically_delete_expired"`
+		DeleteOutdatedInbound     bool `yaml:"delete_outdated_inbound"`
 	} `yaml:"delete_keys"`
 
 	VerificationLevels struct {
