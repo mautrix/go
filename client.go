@@ -1371,35 +1371,32 @@ func (cli *Client) Download(mxcURL id.ContentURI) (io.ReadCloser, error) {
 }
 
 func (cli *Client) DownloadContext(ctx context.Context, mxcURL id.ContentURI) (io.ReadCloser, error) {
-	_, resp, err := cli.downloadContext(ctx, mxcURL)
+	resp, err := cli.downloadContext(ctx, mxcURL)
 	if err != nil {
 		return nil, err
 	}
-	return resp.Body, err
+	return resp.Body, nil
 }
 
-func (cli *Client) downloadContext(ctx context.Context, mxcURL id.ContentURI) (*http.Request, *http.Response, error) {
+func (cli *Client) downloadContext(ctx context.Context, mxcURL id.ContentURI) (*http.Response, error) {
 	ctxLog := zerolog.Ctx(ctx)
 	if ctxLog.GetLevel() == zerolog.Disabled || ctxLog == zerolog.DefaultContextLogger {
 		ctx = cli.Log.WithContext(ctx)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, cli.GetDownloadURL(mxcURL), nil)
 	if err != nil {
-		return req, nil, err
+		return nil, err
 	}
 	req.Header.Set("User-Agent", cli.UserAgent+" (media downloader)")
 	cli.LogRequest(req)
 	if resp, err := cli.Client.Do(req); err != nil {
-		return req, nil, err
-	} else if resp.StatusCode != 200 {
-		defer resp.Body.Close()
-		respErr := &RespError{}
-		if _ = json.NewDecoder(resp.Body).Decode(respErr); respErr.ErrCode == "" {
-			respErr = nil
-		}
-		return req, nil, HTTPError{Request: req, Response: resp, RespError: respErr}
+		return nil, err
+	} else if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		_, err = ParseErrorResponse(req, resp)
+		_ = resp.Body.Close()
+		return nil, err
 	} else {
-		return req, resp, nil
+		return resp, nil
 	}
 }
 
@@ -1408,18 +1405,11 @@ func (cli *Client) DownloadBytes(mxcURL id.ContentURI) ([]byte, error) {
 }
 
 func (cli *Client) DownloadBytesContext(ctx context.Context, mxcURL id.ContentURI) ([]byte, error) {
-	req, resp, err := cli.downloadContext(ctx, mxcURL)
+	resp, err := cli.downloadContext(ctx, mxcURL)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode >= 300 || resp.StatusCode < 200 {
-		respErr := &RespError{}
-		if _ = json.NewDecoder(resp.Body).Decode(respErr); respErr.ErrCode == "" {
-			respErr = nil
-		}
-		return nil, HTTPError{Request: req, Response: resp, RespError: respErr}
-	}
 	return io.ReadAll(resp.Body)
 }
 
