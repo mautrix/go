@@ -70,6 +70,10 @@ type zeroLogger struct {
 type ZeroLogSettings struct {
 	CallerSkipFrame int
 	Caller          bool
+
+	// TraceLogAllQueries specifies whether or not all queries should be logged
+	// at the TRACE level.
+	TraceLogAllQueries bool
 }
 
 func ZeroLogger(log zerolog.Logger, cfg ...ZeroLogSettings) DatabaseLogger {
@@ -125,7 +129,7 @@ func (z zeroLogger) QueryTiming(ctx context.Context, method, query string, args 
 	if log.GetLevel() == zerolog.Disabled || log == zerolog.DefaultContextLogger {
 		log = z.l
 	}
-	if log.GetLevel() != zerolog.TraceLevel && duration < 1*time.Second {
+	if (!z.TraceLogAllQueries || log.GetLevel() != zerolog.TraceLevel) && duration < 1*time.Second {
 		return
 	}
 	if nrows > -1 {
