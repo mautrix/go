@@ -11,8 +11,6 @@ import (
 	"regexp"
 	"strings"
 
-	"golang.org/x/net/html"
-
 	"maunium.net/go/mautrix/id"
 )
 
@@ -59,7 +57,7 @@ func (evt *Event) GenerateReplyFallbackHTML() string {
 	parsedContent.RemoveReplyFallback()
 	body := parsedContent.FormattedBody
 	if len(body) == 0 {
-		body = strings.ReplaceAll(html.EscapeString(parsedContent.Body), "\n", "<br/>")
+		body = TextToHTML(parsedContent.Body)
 	}
 
 	senderDisplayName := evt.Sender
