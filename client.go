@@ -14,7 +14,6 @@ import (
 	"net/url"
 	"os"
 	"strconv"
-	"strings"
 	"sync/atomic"
 	"time"
 
@@ -258,45 +257,52 @@ const (
 	LogRequestIDContextKey
 )
 
-func (cli *Client) LogRequest(req *http.Request) {
+func (cli *Client) RequestStart(req *http.Request) {
 	if cli.RequestHook != nil {
 		cli.RequestHook(req)
 	}
-	evt := zerolog.Ctx(req.Context()).Debug().
-		Str("method", req.Method).
-		Str("url", req.URL.String())
-	body := req.Context().Value(LogBodyContextKey)
-	if body != nil {
-		evt.Interface("body", body)
-	}
-	evt.Msg("Sending request")
 }
 
-func (cli *Client) LogRequestDone(req *http.Request, resp *http.Response, handlerErr error, contentLength int, duration time.Duration) {
-	if cli.ResponseHook != nil {
-		cli.ResponseHook(req, resp, duration)
+func (cli *Client) LogRequestDone(req *http.Request, resp *http.Response, err error, handlerErr error, contentLength int, duration time.Duration) {
+	var evt *zerolog.Event
+	if err != nil {
+		evt = zerolog.Ctx(req.Context()).Err(err)
+	} else if handlerErr != nil {
+		evt = zerolog.Ctx(req.Context()).Warn().
+			AnErr("body_parse_err", handlerErr)
+	} else {
+		evt = zerolog.Ctx(req.Context()).Debug()
 	}
-	mime := resp.Header.Get("Content-Type")
-	length := resp.ContentLength
-	if length == -1 && contentLength > 0 {
-		length = int64(contentLength)
-	}
-	path := strings.TrimPrefix(req.URL.Path, cli.HomeserverURL.Path)
-	path = strings.TrimPrefix(path, "/_matrix/client")
-	evt := zerolog.Ctx(req.Context()).Debug().
+	evt = evt.
 		Str("method", req.Method).
-		Str("path", path).
-		Int("status_code", resp.StatusCode).
-		Int64("response_length", length).
-		Str("response_mime", mime).
+		Str("url", req.URL.String()).
 		Dur("duration", duration)
-	if handlerErr != nil {
-		evt.AnErr("body_parse_err", handlerErr)
+	if resp != nil {
+		if cli.ResponseHook != nil {
+			cli.ResponseHook(req, resp, duration)
+		}
+		mime := resp.Header.Get("Content-Type")
+		length := resp.ContentLength
+		if length == -1 && contentLength > 0 {
+			length = int64(contentLength)
+		}
+		evt = evt.Int("status_code", resp.StatusCode).
+			Int64("response_length", length).
+			Str("response_mime", mime)
+		if serverRequestID := resp.Header.Get("X-Beeper-Request-ID"); serverRequestID != "" {
+			evt.Str("beeper_request_id", serverRequestID)
+		}
 	}
-	if serverRequestID := resp.Header.Get("X-Beeper-Request-ID"); serverRequestID != "" {
-		evt.Str("beeper_request_id", serverRequestID)
+	if body := req.Context().Value(LogBodyContextKey); body != nil {
+		evt.Interface("req_body", body)
 	}
-	evt.Msg("Request completed")
+	if err != nil {
+		evt.Msg("Request failed")
+	} else if handlerErr != nil {
+		evt.Msg("Request parsing failed")
+	} else {
+		evt.Msg("Request completed")
+	}
 }
 
 func (cli *Client) MakeRequest(method string, httpURL string, reqBody interface{}, resBody interface{}) ([]byte, error) {
@@ -551,7 +557,7 @@ func (cli *Client) shouldRetry(res *http.Response) bool {
 }
 
 func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backoff time.Duration, responseJSON interface{}, handler ClientResponseHandler) ([]byte, error) {
-	cli.LogRequest(req)
+	cli.RequestStart(req)
 	startTime := time.Now()
 	res, err := cli.Client.Do(req)
 	duration := time.Now().Sub(startTime)
@@ -562,13 +568,15 @@ func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backof
 		if retries > 0 {
 			return cli.doRetry(req, err, retries, backoff, responseJSON, handler)
 		}
-		return nil, HTTPError{
+		err = HTTPError{
 			Request:  req,
 			Response: res,
 
 			Message:      "request error",
 			WrappedError: err,
 		}
+		cli.LogRequestDone(req, res, err, nil, 0, duration)
+		return nil, err
 	}
 
 	if retries > 0 && cli.shouldRetry(res) {
@@ -581,10 +589,10 @@ func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backof
 	var body []byte
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		body, err = ParseErrorResponse(req, res)
-		cli.LogRequestDone(req, res, nil, len(body), duration)
+		cli.LogRequestDone(req, res, nil, nil, len(body), duration)
 	} else {
 		body, err = handler(req, res, responseJSON)
-		cli.LogRequestDone(req, res, err, len(body), duration)
+		cli.LogRequestDone(req, res, nil, err, len(body), duration)
 	}
 	return body, err
 }
@@ -1388,14 +1396,18 @@ func (cli *Client) downloadContext(ctx context.Context, mxcURL id.ContentURI) (*
 		return nil, err
 	}
 	req.Header.Set("User-Agent", cli.UserAgent+" (media downloader)")
-	cli.LogRequest(req)
+	cli.RequestStart(req)
+	downloadStart := time.Now()
 	if resp, err := cli.Client.Do(req); err != nil {
+		cli.LogRequestDone(req, resp, err, nil, 0, time.Since(downloadStart))
 		return nil, err
 	} else if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		_, err = ParseErrorResponse(req, resp)
+		body, err := ParseErrorResponse(req, resp)
 		_ = resp.Body.Close()
+		cli.LogRequestDone(req, resp, err, nil, len(body), time.Since(downloadStart))
 		return nil, err
 	} else {
+		cli.LogRequestDone(req, resp, nil, nil, -1, time.Since(downloadStart))
 		return resp, nil
 	}
 }
