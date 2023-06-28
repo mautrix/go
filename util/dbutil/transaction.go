@@ -33,7 +33,7 @@ const (
 
 func (db *Database) DoTxn(ctx context.Context, opts *sql.TxOptions, fn func(ctx context.Context) error) error {
 	if ctx.Value(ContextKeyDatabaseTransaction) != nil {
-		zerolog.Ctx(ctx).Debug().Msg("Already in a transaction, not creating a new one")
+		zerolog.Ctx(ctx).Trace().Msg("Already in a transaction, not creating a new one")
 		return fn(ctx)
 	}
 	log := zerolog.Ctx(ctx).With().Str("db_txn_id", util.RandomString(12)).Logger()
