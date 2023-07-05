@@ -374,7 +374,15 @@ func (as *AppService) StartWebsocket(baseURL string, onConnect func()) error {
 	closeChanOnce := sync.Once{}
 	stopFunc := func(err error) {
 		closeChanOnce.Do(func() {
-			closeChan <- err
+			select {
+			case closeChan <- err:
+			default:
+				as.Log.Warn().
+					AnErr("close_error", err).
+					Msg("Nothing is reading on close channel")
+				closeChan <- err
+				as.Log.Warn().Msg("Websocket close completed after being stuck")
+			}
 		})
 	}
 	as.ws = ws
@@ -384,11 +392,20 @@ func (as *AppService) StartWebsocket(baseURL string, onConnect func()) error {
 
 	go as.consumeWebsocket(stopFunc, ws)
 
+	var onConnectDone atomic.Bool
 	if onConnect != nil {
-		onConnect()
+		go func() {
+			onConnect()
+			onConnectDone.Store(true)
+		}()
+	} else {
+		onConnectDone.Store(true)
 	}
 
 	closeErr := <-closeChan
+	if onConnectDone.Load() {
+		as.Log.Warn().Msg("Websocket closed before onConnect returned, things may explode")
+	}
 
 	if as.ws == ws {
 		as.clearWebsocketResponseWaiters()
