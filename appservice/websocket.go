@@ -403,7 +403,7 @@ func (as *AppService) StartWebsocket(baseURL string, onConnect func()) error {
 	}
 
 	closeErr := <-closeChan
-	if onConnectDone.Load() {
+	if !onConnectDone.Load() {
 		as.Log.Warn().Msg("Websocket closed before onConnect returned, things may explode")
 	}
 
