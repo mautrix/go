@@ -1412,9 +1412,6 @@ func (cli *Client) doMediaRequest(req *http.Request, retries int, backoff time.D
 	startTime := time.Now()
 	res, err := cli.Client.Do(req)
 	duration := time.Now().Sub(startTime)
-	if res != nil {
-		defer res.Body.Close()
-	}
 	if err != nil {
 		if retries > 0 {
 			return cli.doMediaRetry(req, err, retries, backoff)
@@ -1429,6 +1426,7 @@ func (cli *Client) doMediaRequest(req *http.Request, retries int, backoff time.D
 		cli.LogRequestDone(req, res, err, nil, 0, duration)
 		return nil, err
 	}
+	defer res.Body.Close()
 
 	if retries > 0 && cli.shouldRetry(res) {
 		if res.StatusCode == http.StatusTooManyRequests {
@@ -1437,8 +1435,8 @@ func (cli *Client) doMediaRequest(req *http.Request, retries int, backoff time.D
 		return cli.doMediaRetry(req, fmt.Errorf("HTTP %d", res.StatusCode), retries, backoff)
 	}
 
-	var body []byte
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		var body []byte
 		body, err = ParseErrorResponse(req, res)
 		cli.LogRequestDone(req, res, err, nil, len(body), duration)
 	} else {
@@ -1452,14 +1450,12 @@ func (cli *Client) downloadContext(ctx context.Context, mxcURL id.ContentURI) (*
 	if ctxLog.GetLevel() == zerolog.Disabled || ctxLog == zerolog.DefaultContextLogger {
 		ctx = cli.Log.WithContext(ctx)
 	}
-
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, cli.GetDownloadURL(mxcURL), nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", cli.UserAgent+" (media downloader)")
-	resp, err := cli.doMediaRequest(req, cli.DefaultHTTPRetries, 4*time.Second)
-	return resp, err
+	return cli.doMediaRequest(req, cli.DefaultHTTPRetries, 4*time.Second)
 }
 
 func (cli *Client) DownloadBytes(mxcURL id.ContentURI) ([]byte, error) {
