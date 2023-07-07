@@ -1426,7 +1426,6 @@ func (cli *Client) doMediaRequest(req *http.Request, retries int, backoff time.D
 		cli.LogRequestDone(req, res, err, nil, 0, duration)
 		return nil, err
 	}
-	defer res.Body.Close()
 
 	if retries > 0 && cli.shouldRetry(res) {
 		if res.StatusCode == http.StatusTooManyRequests {
