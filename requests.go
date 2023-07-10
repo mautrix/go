@@ -344,9 +344,12 @@ type ReqBatchSend struct {
 }
 
 type ReqBeeperBatchSend struct {
-	Forward    bool           `json:"forward"`
-	MarkReadBy id.UserID      `json:"mark_read_by,omitempty"`
-	Events     []*event.Event `json:"events"`
+	// ForwardIfNoMessages should be set to true if the batch should be forward
+	// backfilled if there are no messages currently in the room.
+	ForwardIfNoMessages bool           `json:"forward_if_no_messages"`
+	Forward             bool           `json:"forward"`
+	MarkReadBy          id.UserID      `json:"mark_read_by,omitempty"`
+	Events              []*event.Event `json:"events"`
 }
 
 type ReqSetReadMarkers struct {
