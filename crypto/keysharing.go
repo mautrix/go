@@ -339,6 +339,9 @@ func (mach *OlmMachine) handleBeeperRoomKeyAck(ctx context.Context, sender id.Us
 			log.Err(err).Msg("Failed to get group session to check if it should be redacted")
 		}
 		return
+	} else if sess == nil {
+		log.Warn().Msg("Got key backup ack for unknown session")
+		return
 	}
 	log = log.With().
 		Str("sender_key", sess.SenderKey.String()).
