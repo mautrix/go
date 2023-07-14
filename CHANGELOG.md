@@ -2,6 +2,12 @@
 
 * *(client)* Deprecated MSC2716 methods and added new Beeper-specific batch
   send methods, as upstream MSC2716 support has been abandoned.
+* *(client)* Added proper error handling and automatic retries to media
+  downloads.
+* *(crypto, bridge)* Added option to remove all keys that were received before
+  the automatic ratcheting was implemented (in v0.15.1).
+* *(dbutil)* Added `JSON` utility for writing/reading arbitrary JSON objects to
+  the db conveniently without manually de/serializing.
 
 ## v0.15.3 (2023-06-16)
 
