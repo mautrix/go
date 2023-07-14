@@ -78,11 +78,20 @@ type BridgeStateFiller interface {
 	GetRemoteName() string
 }
 
+type CustomBridgeStateFiller interface {
+	BridgeStateFiller
+	FillBridgeState(BridgeState) BridgeState
+}
+
 func (pong BridgeState) Fill(user BridgeStateFiller) BridgeState {
 	if user != nil {
 		pong.UserID = user.GetMXID()
 		pong.RemoteID = user.GetRemoteID()
 		pong.RemoteName = user.GetRemoteName()
+
+		if custom, ok := user.(CustomBridgeStateFiller); ok {
+			pong = custom.FillBridgeState(pong)
+		}
 	}
 
 	pong.Timestamp = jsontime.UnixNow()
