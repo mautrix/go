@@ -1,4 +1,4 @@
-## v0.15.4 (unreleased)
+## v0.15.4 (2023-07-16)
 
 * *(client)* Deprecated MSC2716 methods and added new Beeper-specific batch
   send methods, as upstream MSC2716 support has been abandoned.
