@@ -166,6 +166,7 @@ func (as *AppService) PrepareWebsocket() {
 	defer as.websocketHandlersLock.Unlock()
 	if as.websocketHandlers == nil {
 		as.websocketHandlers = make(map[string]WebsocketHandler, 32)
+		as.websocketHandlers[WebsocketCommandHTTPProxy] = as.WebsocketHTTPProxy
 		as.websocketRequests = make(map[int]chan<- *WebsocketCommand)
 	}
 }
