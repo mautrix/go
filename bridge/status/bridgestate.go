@@ -149,8 +149,9 @@ func (pong *BridgeState) SendHTTP(ctx context.Context, url, token string) error 
 }
 
 func (pong *BridgeState) ShouldDeduplicate(newPong *BridgeState) bool {
-	if pong == nil || pong.StateEvent != newPong.StateEvent || pong.Error != newPong.Error || !maps.EqualFunc(pong.Info, newPong.Info, reflect.DeepEqual) {
-		return false
-	}
-	return pong.Timestamp.Add(time.Duration(pong.TTL) * time.Second).After(time.Now())
+	return pong != nil &&
+		pong.StateEvent == newPong.StateEvent &&
+		pong.Error == newPong.Error &&
+		maps.EqualFunc(pong.Info, newPong.Info, reflect.DeepEqual) &&
+		pong.Timestamp.Add(time.Duration(pong.TTL)*time.Second).After(time.Now())
 }
