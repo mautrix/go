@@ -13,9 +13,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"reflect"
 	"time"
 
 	"github.com/tidwall/sjson"
+	"golang.org/x/exp/maps"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/id"
@@ -147,7 +149,7 @@ func (pong *BridgeState) SendHTTP(ctx context.Context, url, token string) error 
 }
 
 func (pong *BridgeState) ShouldDeduplicate(newPong *BridgeState) bool {
-	if pong == nil || pong.StateEvent != newPong.StateEvent || pong.Error != newPong.Error {
+	if pong == nil || pong.StateEvent != newPong.StateEvent || pong.Error != newPong.Error || !maps.EqualFunc(pong.Info, newPong.Info, reflect.DeepEqual) {
 		return false
 	}
 	return pong.Timestamp.Add(time.Duration(pong.TTL) * time.Second).After(time.Now())
