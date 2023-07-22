@@ -31,6 +31,8 @@ func (br *Bridge) startWebsocket(wg *sync.WaitGroup) {
 				err := br.SendBridgeState(ctx, br.latestState)
 				if err != nil {
 					log.Err(err).Msg("Failed to resend latest bridge state after websocket reconnect")
+				} else {
+					log.Debug().Any("bridge_state", br.latestState).Msg("Resent bridge state after websocket reconnect")
 				}
 			}()
 		}

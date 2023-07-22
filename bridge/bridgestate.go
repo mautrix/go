@@ -61,7 +61,7 @@ type BridgeStateQueue struct {
 }
 
 func (br *Bridge) NewBridgeStateQueue(user status.BridgeStateFiller) *BridgeStateQueue {
-	if len(br.Config.Homeserver.StatusEndpoint) == 0 {
+	if len(br.Config.Homeserver.StatusEndpoint) == 0 && !br.Websocket {
 		return nil
 	}
 	bsq := &BridgeStateQueue{
