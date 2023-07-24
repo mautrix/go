@@ -55,6 +55,12 @@ type ReqRegister struct {
 	Type AuthType `json:"type,omitempty"`
 }
 
+type ReqChangePassword struct {
+	Auth          any    `json:"auth"`
+	LogoutDevices bool   `json:"logout_devices"`
+	NewPassword   string `json:"new_password"`
+}
+
 type BaseAuthData struct {
 	Type    AuthType `json:"type"`
 	Session string   `json:"session,omitempty"`

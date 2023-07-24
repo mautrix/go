@@ -789,6 +789,27 @@ func (cli *Client) RegisterDummy(req *ReqRegister) (*RespRegister, error) {
 	return res, nil
 }
 
+func (cli *Client) ChangePassword(req *ReqChangePassword) (resp *RespChangePassword, uiaResp *RespUserInteractive, err error) {
+	var bodyBytes []byte
+	bodyBytes, err = cli.MakeFullRequest(FullRequest{
+		Method:           http.MethodPost,
+		URL:              cli.BuildClientURL("v3", "account", "password"),
+		RequestJSON:      req,
+		SensitiveContent: len(req.NewPassword) > 0,
+	})
+	if err != nil {
+		httpErr, ok := err.(HTTPError)
+		// if response has a 401 status, but doesn't have the errcode field, it's probably a UIA response.
+		if ok && httpErr.IsStatus(http.StatusUnauthorized) && httpErr.RespError == nil {
+			err = json.Unmarshal(bodyBytes, &uiaResp)
+		}
+	} else {
+		// body should be RespRegister
+		err = json.Unmarshal(bodyBytes, &resp)
+	}
+	return
+}
+
 // GetLoginFlows fetches the login flows that the homeserver supports using https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3login
 func (cli *Client) GetLoginFlows() (resp *RespLoginFlows, err error) {
 	urlPath := cli.BuildClientURL("v3", "login")

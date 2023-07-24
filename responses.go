@@ -184,6 +184,8 @@ type RespRegister struct {
 	HomeServer string `json:"home_server,omitempty"`
 }
 
+type RespChangePassword struct{}
+
 type LoginFlow struct {
 	Type AuthType `json:"type"`
 }
