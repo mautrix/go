@@ -44,6 +44,7 @@ var dontSaveConfig = flag.MakeFull("n", "no-update", "Don't save updated config 
 var registrationPath = flag.MakeFull("r", "registration", "The path where to save the appservice registration.", "registration.yaml").String()
 var generateRegistration = flag.MakeFull("g", "generate-registration", "Generate registration and quit.", "false").Bool()
 var version = flag.MakeFull("v", "version", "View bridge version and quit.", "false").Bool()
+var versionJSON = flag.Make().LongKey("version-json").Usage("Print a JSON object representing the bridge version and quit.").Default("false").Bool()
 var ignoreUnsupportedDatabase = flag.Make().LongKey("ignore-unsupported-database").Usage("Run even if the database schema is too new").Default("false").Bool()
 var ignoreForeignTables = flag.Make().LongKey("ignore-foreign-tables").Usage("Run even if the database contains tables from other programs (like Synapse)").Default("false").Bool()
 var wantHelp, _ = flag.MakeHelpFlag()
@@ -164,6 +165,8 @@ type Bridge struct {
 	VersionDesc      string
 	LinkifiedVersion string
 	BuildTime        string
+	commit           string
+	baseVersion      string
 
 	PublicHSAddress *url.URL
 
@@ -248,6 +251,7 @@ func (br *Bridge) GenerateRegistration() {
 }
 
 func (br *Bridge) InitVersion(tag, commit, buildTime string) {
+	br.baseVersion = br.Version
 	if len(tag) > 0 && tag[0] == 'v' {
 		tag = tag[1:]
 	}
@@ -271,6 +275,7 @@ func (br *Bridge) InitVersion(tag, commit, buildTime string) {
 	}
 	mautrix.DefaultUserAgent = fmt.Sprintf("%s/%s %s", br.Name, br.Version, mautrix.DefaultUserAgent)
 	br.VersionDesc = fmt.Sprintf("%s %s (%s with %s)", br.Name, br.Version, buildTime, runtime.Version())
+	br.commit = commit
 	br.BuildTime = buildTime
 }
 
@@ -715,6 +720,22 @@ func (br *Bridge) ManualStop(exitCode int) {
 	}
 }
 
+type VersionJSONOutput struct {
+	Name string
+	URL  string
+
+	Version          string
+	IsRelease        bool
+	Commit           string
+	FormattedVersion string
+	BuildTime        string
+
+	Mautrix struct {
+		Version string
+		Commit  string
+	}
+}
+
 func (br *Bridge) Main() {
 	flag.SetHelpTitles(
 		fmt.Sprintf("%s - %s", br.Name, br.Description),
@@ -732,6 +753,21 @@ func (br *Bridge) Main() {
 		os.Exit(0)
 	} else if *version {
 		fmt.Println(br.VersionDesc)
+		return
+	} else if *versionJSON {
+		output := VersionJSONOutput{
+			URL:  br.URL,
+			Name: br.Name,
+
+			Version:          br.baseVersion,
+			IsRelease:        br.Version == br.baseVersion,
+			Commit:           br.commit,
+			FormattedVersion: br.Version,
+			BuildTime:        br.BuildTime,
+		}
+		output.Mautrix.Commit = mautrix.Commit
+		output.Mautrix.Version = mautrix.Version
+		_ = json.NewEncoder(os.Stdout).Encode(output)
 		return
 	} else if flagHandler, ok := br.Child.(FlagHandlingBridge); ok && flagHandler.HandleFlags() {
 		return
