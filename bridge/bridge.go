@@ -730,6 +730,9 @@ type VersionJSONOutput struct {
 	FormattedVersion string
 	BuildTime        string
 
+	OS   string
+	Arch string
+
 	Mautrix struct {
 		Version string
 		Commit  string
@@ -764,6 +767,9 @@ func (br *Bridge) Main() {
 			Commit:           br.commit,
 			FormattedVersion: br.Version,
 			BuildTime:        br.BuildTime,
+
+			OS:   runtime.GOOS,
+			Arch: runtime.GOARCH,
 		}
 		output.Mautrix.Commit = mautrix.Commit
 		output.Mautrix.Version = mautrix.Version
