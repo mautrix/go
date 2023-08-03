@@ -622,8 +622,8 @@ func (mach *OlmMachine) ShareKeys(ctx context.Context, currentOTKCount int) erro
 	start := time.Now()
 	mach.otkUploadLock.Lock()
 	defer mach.otkUploadLock.Unlock()
-	if mach.lastOTKUpload.Add(1 * time.Minute).After(start) {
-		log.Debug().Msg("Checking OTK count from server due to suspiciously close share keys requests")
+	if mach.lastOTKUpload.Add(1*time.Minute).After(start) || currentOTKCount < 0 {
+		log.Debug().Msg("Checking OTK count from server due to suspiciously close share keys requests or negative OTK count")
 		resp, err := mach.Client.UploadKeys(&mautrix.ReqUploadKeys{})
 		if err != nil {
 			return fmt.Errorf("failed to check current OTK counts: %w", err)

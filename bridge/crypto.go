@@ -436,6 +436,11 @@ func (helper *CryptoHelper) HandleMemberEvent(evt *event.Event) {
 	helper.mach.HandleMemberEvent(0, evt)
 }
 
+// ShareKeys uploads the given number of one-time-keys to the server.
+func (helper *CryptoHelper) ShareKeys(ctx context.Context) error {
+	return helper.mach.ShareKeys(ctx, -1)
+}
+
 type cryptoSyncer struct {
 	*crypto.OlmMachine
 }

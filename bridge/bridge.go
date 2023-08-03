@@ -7,6 +7,7 @@
 package bridge
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -219,6 +220,7 @@ type Crypto interface {
 	Stop()
 	Reset(startAfterReset bool)
 	Client() *mautrix.Client
+	ShareKeys(context.Context) error
 }
 
 func (br *Bridge) GenerateRegistration() {
