@@ -3,7 +3,7 @@ package sqlstatestore
 import (
 	"fmt"
 
-	"maunium.net/go/mautrix/util/dbutil"
+	"go.mau.fi/util/dbutil"
 )
 
 func init() {

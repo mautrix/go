@@ -13,10 +13,10 @@ import (
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
+	"go.mau.fi/util/dbutil"
 
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
-	"maunium.net/go/mautrix/util/dbutil"
 )
 
 const olmSessID = "sJlikQQKXp7UQjmS9/lyZCNUVJ2AmKyHbufPBaC7tpk"

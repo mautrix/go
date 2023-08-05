@@ -15,9 +15,10 @@ import (
 	"strconv"
 	"strings"
 
+	"go.mau.fi/util/dbutil"
+
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
-	"maunium.net/go/mautrix/util/dbutil"
 )
 
 //go:embed *.sql

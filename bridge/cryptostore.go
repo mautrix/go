@@ -10,10 +10,10 @@ package bridge
 
 import (
 	"github.com/lib/pq"
+	"go.mau.fi/util/dbutil"
 
 	"maunium.net/go/mautrix/crypto"
 	"maunium.net/go/mautrix/id"
-	"maunium.net/go/mautrix/util/dbutil"
 )
 
 func init() {
