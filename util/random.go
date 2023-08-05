@@ -10,7 +10,6 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"hash/crc32"
-	"strings"
 	"unsafe"
 )
 
@@ -48,17 +47,30 @@ func RandomString(n int) string {
 	return *(*string)(unsafe.Pointer(&str))
 }
 
-func base62Encode(val uint32, minWidth int) string {
-	var buf strings.Builder
+func base62Encode(val uint32, minWidth int) []byte {
+	out := make([]byte, 0, minWidth)
 	for val > 0 {
-		buf.WriteByte(letters[val%uint32(len(letters))])
+		out = append(out, letters[val%uint32(len(letters))])
 		val /= 62
 	}
-	return strings.Repeat("0", minWidth-buf.Len()) + buf.String()
+	if len(out) < minWidth {
+		paddedOut := make([]byte, minWidth)
+		copy(paddedOut[minWidth-len(out):], out)
+		for i := 0; i < minWidth-len(out); i++ {
+			paddedOut[i] = '0'
+		}
+		out = paddedOut
+	}
+	return out
 }
 
 func RandomToken(namespace string, randomLength int) string {
-	token := namespace + "_" + RandomString(randomLength)
-	checksum := base62Encode(crc32.ChecksumIEEE([]byte(token)), 6)
-	return token + "_" + checksum
+	token := make([]byte, len(namespace)+1+randomLength+1+6)
+	copy(token, namespace)
+	token[len(namespace)] = '_'
+	copy(token[len(namespace)+1:], RandomStringBytes(randomLength))
+	token[len(namespace)+randomLength+1] = '_'
+	checksum := base62Encode(crc32.ChecksumIEEE(token[:len(token)-7]), 6)
+	copy(token[len(token)-6:], checksum)
+	return *(*string)(unsafe.Pointer(&token))
 }
