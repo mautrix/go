@@ -11,10 +11,10 @@ import (
 
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
+	"go.mau.fi/util/exgjson"
 
 	"maunium.net/go/mautrix/crypto/canonicaljson"
 	"maunium.net/go/mautrix/id"
-	"maunium.net/go/mautrix/util"
 )
 
 // Utility stores the necessary state to perform hash and signature
@@ -115,7 +115,7 @@ func (u *Utility) VerifySignatureJSON(obj interface{}, userID id.UserID, keyName
 			return false, err
 		}
 	}
-	sig := gjson.GetBytes(objJSON, util.GJSONPath("signatures", string(userID), fmt.Sprintf("ed25519:%s", keyName)))
+	sig := gjson.GetBytes(objJSON, exgjson.Path("signatures", string(userID), fmt.Sprintf("ed25519:%s", keyName)))
 	if !sig.Exists() || sig.Type != gjson.String {
 		return false, SignatureNotFound
 	}

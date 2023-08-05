@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog"
+	up "go.mau.fi/util/configupgrade"
 	"go.mau.fi/util/dbutil"
 	"go.mau.fi/util/random"
 	"go.mau.fi/zeroconfig"
@@ -21,7 +22,6 @@ import (
 
 	"maunium.net/go/mautrix/appservice"
 	"maunium.net/go/mautrix/id"
-	up "maunium.net/go/mautrix/util/configupgrade"
 )
 
 type HomeserverSoftware string

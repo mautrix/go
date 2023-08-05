@@ -17,11 +17,11 @@ import (
 	"time"
 
 	"github.com/tidwall/sjson"
+	"go.mau.fi/util/jsontime"
 	"golang.org/x/exp/maps"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/id"
-	"maunium.net/go/mautrix/util/jsontime"
 )
 
 type BridgeStateEvent string

@@ -12,7 +12,7 @@ require (
 	github.com/tidwall/gjson v1.14.4
 	github.com/tidwall/sjson v1.2.5
 	github.com/yuin/goldmark v1.5.4
-	go.mau.fi/util v0.0.0-20230805154123-3981666a86f1
+	go.mau.fi/util v0.0.0-20230805161919-cf42c11d39c3
 	go.mau.fi/zeroconfig v0.1.2
 	golang.org/x/crypto v0.11.0
 	golang.org/x/exp v0.0.0-20230713183714-613f0c0eb8a1

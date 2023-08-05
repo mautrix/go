@@ -8,11 +8,11 @@ import (
 	"strings"
 
 	"github.com/tidwall/gjson"
+	"go.mau.fi/util/jsontime"
 
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/util"
-	"maunium.net/go/mautrix/util/jsontime"
 )
 
 // RespWhoami is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3accountwhoami

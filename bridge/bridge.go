@@ -21,8 +21,10 @@ import (
 
 	"github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/configupgrade"
 	"go.mau.fi/util/dbutil"
 	_ "go.mau.fi/util/dbutil/litestream"
+	"go.mau.fi/util/exzerolog"
 	"gopkg.in/yaml.v3"
 	flag "maunium.net/go/mauflag"
 	"maunium.net/go/maulogger/v2"
@@ -35,8 +37,6 @@ import (
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/sqlstatestore"
-	"maunium.net/go/mautrix/util"
-	"maunium.net/go/mautrix/util/configupgrade"
 )
 
 var configPath = flag.MakeFull("c", "config", "The path to your config file.", "config.yaml").String()
@@ -498,7 +498,7 @@ func (br *Bridge) init() {
 	}
 	defaultCtxLog := br.ZLog.With().Bool("default_context_log", true).Caller().Logger()
 	zerolog.TimeFieldFormat = time.RFC3339Nano
-	zerolog.CallerMarshalFunc = util.CallerWithFunctionName
+	zerolog.CallerMarshalFunc = exzerolog.CallerWithFunctionName
 	zerolog.DefaultContextLogger = &defaultCtxLog
 	br.Log = maulogadapt.ZeroAsMau(br.ZLog)
 
