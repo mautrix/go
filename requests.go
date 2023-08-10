@@ -348,6 +348,7 @@ type ReqBeeperBatchSend struct {
 	// backfilled if there are no messages currently in the room.
 	ForwardIfNoMessages bool           `json:"forward_if_no_messages"`
 	Forward             bool           `json:"forward"`
+	SendNotification    bool           `json:"send_notification"`
 	MarkReadBy          id.UserID      `json:"mark_read_by,omitempty"`
 	Events              []*event.Event `json:"events"`
 }
