@@ -148,6 +148,8 @@ type AppService struct {
 	// ProcessID is an identifier sent to the websocket proxy for debugging connections
 	ProcessID string
 
+	WebsocketTransactionHandler WebsocketTransactionHandler
+
 	DoublePuppetValue string
 	GetProfile        func(userID id.UserID, roomID id.RoomID) *event.MemberEventContent
 }
@@ -164,6 +166,9 @@ func getDefaultProcessID() string {
 func (as *AppService) PrepareWebsocket() {
 	as.websocketHandlersLock.Lock()
 	defer as.websocketHandlersLock.Unlock()
+	if as.WebsocketTransactionHandler == nil {
+		as.WebsocketTransactionHandler = as.defaultHandleWebsocketTransaction
+	}
 	if as.websocketHandlers == nil {
 		as.websocketHandlers = make(map[string]WebsocketHandler, 32)
 		as.websocketHandlers[WebsocketCommandHTTPProxy] = as.WebsocketHTTPProxy

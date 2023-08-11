@@ -265,6 +265,19 @@ func (as *AppService) SetWebsocketCommandHandler(cmd string, handler WebsocketHa
 	as.websocketHandlersLock.Unlock()
 }
 
+type WebsocketTransactionHandler func(ctx context.Context, msg WebsocketMessage) (bool, any)
+
+func (as *AppService) defaultHandleWebsocketTransaction(ctx context.Context, msg WebsocketMessage) (bool, any) {
+	if msg.TxnID == "" || !as.txnIDC.IsProcessed(msg.TxnID) {
+		as.handleTransaction(ctx, msg.TxnID, &msg.Transaction)
+	} else {
+		zerolog.Ctx(ctx).Debug().
+			Object("content", &msg.Transaction).
+			Msg("Ignoring duplicate transaction")
+	}
+	return true, &WebsocketTransactionResponse{TxnID: msg.TxnID}
+}
+
 func (as *AppService) consumeWebsocket(stopFunc func(error), ws *websocket.Conn) {
 	defer stopFunc(ErrWebsocketUnknownError)
 	ctx := context.Background()
@@ -285,15 +298,9 @@ func (as *AppService) consumeWebsocket(stopFunc func(error), ws *websocket.Conn)
 		log := with.Logger()
 		ctx = log.WithContext(ctx)
 		if msg.Command == "" || msg.Command == "transaction" {
-			if msg.TxnID == "" || !as.txnIDC.IsProcessed(msg.TxnID) {
-				as.handleTransaction(ctx, msg.TxnID, &msg.Transaction)
-			} else {
-				log.Debug().
-					Object("content", &msg.Transaction).
-					Msg("Ignoring duplicate transaction")
-			}
+			ok, resp := as.WebsocketTransactionHandler(ctx, msg)
 			go func() {
-				err = as.SendWebsocket(msg.MakeResponse(true, &WebsocketTransactionResponse{TxnID: msg.TxnID}))
+				err := as.SendWebsocket(msg.MakeResponse(ok, resp))
 				if err != nil {
 					log.Warn().Err(err).Msg("Failed to send response to websocket transaction")
 				} else {
@@ -325,7 +332,7 @@ func (as *AppService) consumeWebsocket(stopFunc func(error), ws *websocket.Conn)
 			}
 			go func() {
 				okResp, data := handler(msg.WebsocketCommand)
-				err = as.SendWebsocket(msg.MakeResponse(okResp, data))
+				err := as.SendWebsocket(msg.MakeResponse(okResp, data))
 				if err != nil {
 					log.Error().Err(err).Msg("Failed to send response to websocket command")
 				} else if okResp {
@@ -339,9 +346,16 @@ func (as *AppService) consumeWebsocket(stopFunc func(error), ws *websocket.Conn)
 }
 
 func (as *AppService) StartWebsocket(baseURL string, onConnect func()) error {
-	parsed, err := url.Parse(baseURL)
-	if err != nil {
-		return fmt.Errorf("failed to parse URL: %w", err)
+	var parsed *url.URL
+	if baseURL != "" {
+		var err error
+		parsed, err = url.Parse(baseURL)
+		if err != nil {
+			return fmt.Errorf("failed to parse URL: %w", err)
+		}
+	} else {
+		copiedURL := *as.hsURLForClient
+		parsed = &copiedURL
 	}
 	parsed.Path = filepath.Join(parsed.Path, "_matrix/client/unstable/fi.mau.as_sync")
 	if parsed.Scheme == "http" {
