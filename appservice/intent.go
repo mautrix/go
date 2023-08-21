@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
@@ -22,6 +23,8 @@ type IntentAPI struct {
 	as        *AppService
 	Localpart string
 	UserID    id.UserID
+
+	registerLock sync.Mutex
 
 	IsCustomPuppet bool
 }
@@ -53,6 +56,8 @@ func (intent *IntentAPI) Register() error {
 }
 
 func (intent *IntentAPI) EnsureRegistered() error {
+	intent.registerLock.Lock()
+	defer intent.registerLock.Unlock()
 	if intent.IsCustomPuppet || intent.as.StateStore.IsRegistered(intent.UserID) {
 		return nil
 	}
