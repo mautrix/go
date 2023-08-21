@@ -162,10 +162,17 @@ type BridgeConfig interface {
 	GetEncryptionConfig() EncryptionConfig
 	GetCommandPrefix() string
 	GetManagementRoomTexts() ManagementRoomTexts
+	GetDoublePuppetConfig() DoublePuppetConfig
 	GetResendBridgeInfo() bool
 	EnableMessageStatusEvents() bool
 	EnableMessageErrorNotices() bool
 	Validate() error
+}
+
+type DoublePuppetConfig struct {
+	ServerMap       map[string]string `yaml:"double_puppet_server_map"`
+	AllowDiscovery  bool              `yaml:"double_puppet_allow_discovery"`
+	SharedSecretMap map[string]string `yaml:"login_shared_secret_map"`
 }
 
 type EncryptionConfig struct {

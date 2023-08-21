@@ -78,10 +78,6 @@ func fnLogoutMatrix(ce *Event) {
 		ce.Reply("You don't have double puppeting enabled.")
 		return
 	}
-	err := puppet.SwitchCustomMXID("", "")
-	if err != nil {
-		ce.Reply("Failed to disable double puppeting: %v", err)
-		return
-	}
+	puppet.ClearCustomMXID()
 	ce.Reply("Successfully disabled double puppeting.")
 }

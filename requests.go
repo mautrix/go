@@ -23,6 +23,8 @@ const (
 	AuthTypeAppservice AuthType = "m.login.application_service"
 
 	AuthTypeSynapseJWT AuthType = "org.matrix.login.jwt"
+
+	AuthTypeDevtureSharedSecret AuthType = "com.devture.shared_secret_auth"
 )
 
 type IdentifierType string

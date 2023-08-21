@@ -102,6 +102,7 @@ type User interface {
 type DoublePuppet interface {
 	CustomIntent() *appservice.IntentAPI
 	SwitchCustomMXID(accessToken string, userID id.UserID) error
+	ClearCustomMXID()
 }
 
 type Ghost interface {
@@ -170,6 +171,8 @@ type Bridge struct {
 	baseVersion      string
 
 	PublicHSAddress *url.URL
+
+	DoublePuppet *doublePuppetUtil
 
 	AS               *appservice.AppService
 	EventProcessor   *appservice.EventProcessor
@@ -503,6 +506,8 @@ func (br *Bridge) init() {
 	zerolog.CallerMarshalFunc = exzerolog.CallerWithFunctionName
 	zerolog.DefaultContextLogger = &defaultCtxLog
 	br.Log = maulogadapt.ZeroAsMau(br.ZLog)
+
+	br.DoublePuppet = &doublePuppetUtil{br: br, log: br.ZLog.With().Str("component", "double puppet").Logger()}
 
 	err = br.validateConfig()
 	if err != nil {
