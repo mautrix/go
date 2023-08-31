@@ -66,8 +66,8 @@ func TestUserID_ParseAndValidate_NotLong(t *testing.T) {
 }
 
 func TestUserIDEncoding(t *testing.T) {
-	const inputLocalpart = "This localpart contains IlLeGaL chäracters 🚨"
-	const encodedLocalpart = "_this=20localpart=20contains=20_il_le_ga_l=20ch=c3=a4racters=20=f0=9f=9a=a8"
+	const inputLocalpart = "This local+part contains IlLeGaL chäracters 🚨"
+	const encodedLocalpart = "_this=20local+part=20contains=20_il_le_ga_l=20ch=c3=a4racters=20=f0=9f=9a=a8"
 	const inputServerName = "example.com"
 	userID := id.NewEncodedUserID(inputLocalpart, inputServerName)
 	parsedLocalpart, parsedServerName, err := userID.ParseAndValidate()

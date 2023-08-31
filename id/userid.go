@@ -72,7 +72,7 @@ func (userID UserID) URI() *MatrixURI {
 	}
 }
 
-var ValidLocalpartRegex = regexp.MustCompile("^[0-9a-z-.=_/]+$")
+var ValidLocalpartRegex = regexp.MustCompile("^[0-9a-z-.=_/+]+$")
 
 // ValidateUserLocalpart validates a Matrix user ID localpart using the grammar
 // in https://matrix.org/docs/spec/appendices#user-identifier
@@ -132,7 +132,7 @@ func escape(buf *bytes.Buffer, b byte) {
 }
 
 func shouldEncode(b byte) bool {
-	return b != '-' && b != '.' && b != '_' && !(b >= '0' && b <= '9') && !(b >= 'a' && b <= 'z') && !(b >= 'A' && b <= 'Z')
+	return b != '-' && b != '.' && b != '_' && b != '+' && !(b >= '0' && b <= '9') && !(b >= 'a' && b <= 'z') && !(b >= 'A' && b <= 'Z')
 }
 
 func shouldEscape(b byte) bool {
@@ -140,7 +140,7 @@ func shouldEscape(b byte) bool {
 }
 
 func isValidByte(b byte) bool {
-	return isValidEscapedChar(b) || (b >= '0' && b <= '9') || b == '.' || b == '=' || b == '-'
+	return isValidEscapedChar(b) || (b >= '0' && b <= '9') || b == '.' || b == '=' || b == '-' || b == '+'
 }
 
 func isValidEscapedChar(b byte) bool {
