@@ -147,14 +147,16 @@ func (p *PkDecryption) Decrypt(ephemeralKey []byte, mac []byte, ciphertext []byt
 	maxPlaintextLength := uint(C.olm_pk_max_plaintext_length((*C.OlmPkDecryption)(p.int), C.size_t(len(ciphertext))))
 	plaintext := make([]byte, maxPlaintextLength)
 
-	if C.olm_pk_decrypt((*C.OlmPkDecryption)(p.int),
+	size := C.olm_pk_decrypt((*C.OlmPkDecryption)(p.int),
 		unsafe.Pointer(&ephemeralKey[0]), C.size_t(len(ephemeralKey)),
 		unsafe.Pointer(&mac[0]), C.size_t(len(mac)),
 		unsafe.Pointer(&ciphertext[0]), C.size_t(len(ciphertext)),
-		unsafe.Pointer(&plaintext[0]), C.size_t(len(plaintext))) == errorVal() {
+		unsafe.Pointer(&plaintext[0]), C.size_t(len(plaintext)))
+	if size == errorVal() {
 		return nil, p.lastError()
 	}
-	return plaintext, nil
+
+	return plaintext[:size], nil
 }
 
 // Clear clears the underlying memory of a PkDecryption object.
