@@ -33,6 +33,8 @@ const (
 	MsgFile     MessageType = "m.file"
 
 	MsgVerificationRequest MessageType = "m.key.verification.request"
+
+	MsgBeeperGallery MessageType = "com.beeper.gallery"
 )
 
 // Format specifies the format of the formatted_body in m.room.message events.
@@ -110,7 +112,10 @@ type MessageEventContent struct {
 
 	replyFallbackRemoved bool
 
-	MessageSendRetry *BeeperRetryMetadata `json:"com.beeper.message_send_retry,omitempty"`
+	MessageSendRetry         *BeeperRetryMetadata   `json:"com.beeper.message_send_retry,omitempty"`
+	BeeperGalleryImages      []*MessageEventContent `json:"com.beeper.gallery.images,omitempty"`
+	BeeperGalleryCaption     string                 `json:"com.beeper.gallery.caption,omitempty"`
+	BeeperGalleryCaptionHTML string                 `json:"com.beeper.gallery.caption_html,omitempty"`
 }
 
 func (content *MessageEventContent) GetRelatesTo() *RelatesTo {
