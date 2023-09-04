@@ -110,6 +110,8 @@ func FormatHelp(ce *Event) string {
 	}
 	_, _ = fmt.Fprintf(&output, prefixMsg, ce.Bridge.Config.Bridge.GetCommandPrefix())
 	output.WriteByte('\n')
+	output.WriteString("Parameters in [square brackets] are optional, while parameters in <angle brackets> are required.")
+	output.WriteByte('\n')
 	output.WriteByte('\n')
 
 	for _, section := range sortedSections {
