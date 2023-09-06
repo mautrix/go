@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/retryafter"
 	"maunium.net/go/maulogger/v2/maulogadapt"
 
 	"maunium.net/go/mautrix/event"
@@ -526,36 +527,6 @@ func ParseErrorResponse(req *http.Request, res *http.Response) ([]byte, error) {
 	}
 }
 
-// parseBackoffFromResponse extracts the backoff time specified in the Retry-After header if present. See
-// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Retry-After.
-func parseBackoffFromResponse(req *http.Request, res *http.Response, now time.Time, fallback time.Duration) time.Duration {
-	retryAfterHeaderValue := res.Header.Get("Retry-After")
-	if retryAfterHeaderValue == "" {
-		return fallback
-	}
-
-	if t, err := time.Parse(http.TimeFormat, retryAfterHeaderValue); err == nil {
-		return t.Sub(now)
-	}
-
-	if seconds, err := strconv.Atoi(retryAfterHeaderValue); err == nil {
-		return time.Duration(seconds) * time.Second
-	}
-
-	zerolog.Ctx(req.Context()).Warn().
-		Str("retry_after", retryAfterHeaderValue).
-		Msg("Failed to parse Retry-After header value")
-
-	return fallback
-}
-
-func (cli *Client) shouldRetry(res *http.Response) bool {
-	return res.StatusCode == http.StatusBadGateway ||
-		res.StatusCode == http.StatusServiceUnavailable ||
-		res.StatusCode == http.StatusGatewayTimeout ||
-		(res.StatusCode == http.StatusTooManyRequests && !cli.IgnoreRateLimit)
-}
-
 func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backoff time.Duration, responseJSON interface{}, handler ClientResponseHandler) ([]byte, error) {
 	cli.RequestStart(req)
 	startTime := time.Now()
@@ -579,10 +550,8 @@ func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backof
 		return nil, err
 	}
 
-	if retries > 0 && cli.shouldRetry(res) {
-		if res.StatusCode == http.StatusTooManyRequests {
-			backoff = parseBackoffFromResponse(req, res, time.Now(), backoff)
-		}
+	if retries > 0 && retryafter.Should(res.StatusCode, !cli.IgnoreRateLimit) {
+		backoff = retryafter.Parse(res.Header.Get("Retry-After"), backoff)
 		return cli.doRetry(req, fmt.Errorf("HTTP %d", res.StatusCode), retries, backoff, responseJSON, handler)
 	}
 
@@ -1427,10 +1396,8 @@ func (cli *Client) doMediaRequest(req *http.Request, retries int, backoff time.D
 		return nil, err
 	}
 
-	if retries > 0 && cli.shouldRetry(res) {
-		if res.StatusCode == http.StatusTooManyRequests {
-			backoff = parseBackoffFromResponse(req, res, time.Now(), backoff)
-		}
+	if retries > 0 && retryafter.Should(res.StatusCode, !cli.IgnoreRateLimit) {
+		backoff = retryafter.Parse(res.Header.Get("Retry-After"), backoff)
 		return cli.doMediaRetry(req, fmt.Errorf("HTTP %d", res.StatusCode), retries, backoff)
 	}
 
