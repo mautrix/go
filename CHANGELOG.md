@@ -1,3 +1,10 @@
+## unreleased
+
+* **Breaking change *(id)*** Updated user ID localpart encoding to not encode
+  `+` as per [MSC4009].
+
+[MSC4009]: https://github.com/matrix-org/matrix-spec-proposals/pull/4009
+
 ## v0.16.0 (2023-08-16)
 
 * Bumped minimum Go version to 1.20.
