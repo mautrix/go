@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"runtime/debug"
+	"slices"
 	"time"
 
 	"maunium.net/go/mautrix/event"
@@ -298,19 +299,29 @@ func dontProcessOldEvents(userID id.UserID, resp *RespSync, since string) bool {
 	//
 	// Work around this by inspecting each room's timeline and seeing if an m.room.member event for us
 	// exists and is "join" and then discard processing that room entirely if so.
-	// TODO: We probably want to process messages from after the last join event in the timeline.
 	for roomID, roomData := range resp.Rooms.Join {
 		for i := len(roomData.Timeline.Events) - 1; i >= 0; i-- {
 			evt := roomData.Timeline.Events[i]
 			if evt.Type == event.StateMember && evt.GetStateKey() == string(userID) {
 				membership, _ := evt.Content.Raw["membership"].(string)
 				if membership == "join" {
-					_, ok := resp.Rooms.Join[roomID]
-					if !ok {
-						continue
+					// Move dropped state events to the state event list, so they're not lost
+					for _, droppedEvt := range roomData.Timeline.Events[:i] {
+						if droppedEvt.StateKey != nil {
+							roomData.State.Events = slices.DeleteFunc(roomData.State.Events, func(item *event.Event) bool {
+								return item.Type == droppedEvt.Type && item.GetStateKey() == droppedEvt.GetStateKey()
+							})
+							roomData.State.Events = append(roomData.State.Events, droppedEvt)
+						}
 					}
-					delete(resp.Rooms.Join, roomID)   // don't re-process messages
-					delete(resp.Rooms.Invite, roomID) // don't re-process invites
+					// Drop timeline until the point of the join (don't drop any events after the join).
+					if i == len(roomData.Timeline.Events)-1 {
+						roomData.Timeline.Events = nil
+					} else {
+						roomData.Timeline.Events = roomData.Timeline.Events[i+1:]
+					}
+					// Don't re-process invites if the room is also there.
+					delete(resp.Rooms.Invite, roomID)
 					break
 				}
 			}
