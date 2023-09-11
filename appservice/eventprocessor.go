@@ -9,6 +9,7 @@ package appservice
 import (
 	"encoding/json"
 	"runtime/debug"
+	"time"
 
 	"github.com/rs/zerolog"
 
@@ -31,6 +32,9 @@ type DeviceListHandler = func(lists *mautrix.DeviceLists, since string)
 type EventProcessor struct {
 	ExecMode ExecMode
 
+	ExecSyncWarnTime time.Duration
+	ExecSyncTimeout  time.Duration
+
 	as       *AppService
 	stop     chan struct{}
 	handlers map[event.Type][]EventHandler
@@ -45,6 +49,9 @@ func NewEventProcessor(as *AppService) *EventProcessor {
 		as:       as,
 		stop:     make(chan struct{}, 1),
 		handlers: make(map[event.Type][]EventHandler),
+
+		ExecSyncWarnTime: 30 * time.Second,
+		ExecSyncTimeout:  15 * time.Minute,
 
 		otkHandlers:        make([]OTKHandler, 0),
 		deviceListHandlers: make([]DeviceListHandler, 0),
@@ -134,8 +141,34 @@ func (ep *EventProcessor) Dispatch(evt *event.Event) {
 			}
 		}()
 	case Sync:
-		for _, handler := range handlers {
-			ep.callHandler(handler, evt)
+		if ep.ExecSyncWarnTime == 0 && ep.ExecSyncTimeout == 0 {
+			for _, handler := range handlers {
+				ep.callHandler(handler, evt)
+			}
+			return
+		}
+		doneChan := make(chan struct{})
+		go func() {
+			for _, handler := range handlers {
+				ep.callHandler(handler, evt)
+			}
+			close(doneChan)
+		}()
+		select {
+		case <-doneChan:
+			return
+		case <-time.After(ep.ExecSyncWarnTime):
+			log := ep.as.Log.With().
+				Str("event_id", evt.ID.String()).
+				Str("event_type", evt.Type.String()).
+				Logger()
+			log.Warn().Msg("Handling event in appservice transaction channel is taking long")
+			select {
+			case <-doneChan:
+				return
+			case <-time.After(ep.ExecSyncTimeout):
+				log.Error().Msg("Giving up waiting for event handler")
+			}
 		}
 	}
 }
