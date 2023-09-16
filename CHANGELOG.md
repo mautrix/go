@@ -1,7 +1,15 @@
-## unreleased
+## v0.16.1 (2023-09-16)
 
 * **Breaking change *(id)*** Updated user ID localpart encoding to not encode
   `+` as per [MSC4009].
+* *(bridge)* Added bridge utility to handle double puppeting logins.
+  * The utility supports automatic logins with all three current methods
+    (shared secret, legacy appservice, new appservice).
+* *(appservice)* Added warning logs and timeout on appservice event handling.
+  * Defaults to warning after 30 seconds and timeout 15 minutes after that.
+  * Timeouts can be adjusted or disabled by setting `ExecSync` variables in the
+    `EventProcessor`.
+* *(crypto/olm)* Added `PkDecryption` wrapper.
 
 [MSC4009]: https://github.com/matrix-org/matrix-spec-proposals/pull/4009
 
