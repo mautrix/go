@@ -55,6 +55,7 @@ type Client struct {
 	Client        *http.Client // The underlying HTTP client which will be used to make HTTP requests.
 	Syncer        Syncer       // The thing which can process /sync responses
 	Store         SyncStore    // The thing which can store tokens/ids
+	Store2        SyncStore2   // The thing which can store tokens/ids, can be used instead of Store if error handling is needed.
 	StateStore    StateStore
 	Crypto        CryptoHelper
 
@@ -174,8 +175,23 @@ func (cli *Client) SyncWithContext(ctx context.Context) error {
 	// We will keep syncing until the syncing state changes. Either because
 	// Sync is called or StopSync is called.
 	syncingID := cli.incrementSyncingID()
-	nextBatch := cli.Store.LoadNextBatch(cli.UserID)
-	filterID := cli.Store.LoadFilterID(cli.UserID)
+	var nextBatch string
+	var filterID string
+	if cli.Store2 != nil {
+		batch, err := cli.Store2.LoadNextBatch(ctx, cli.UserID)
+		if err != nil {
+			return err
+		}
+		filter, err := cli.Store2.LoadFilterID(ctx, cli.UserID)
+		if err != nil {
+			return err
+		}
+		nextBatch = batch
+		filterID = filter
+	} else {
+		nextBatch = cli.Store.LoadNextBatch(cli.UserID)
+		filterID = cli.Store.LoadFilterID(cli.UserID)
+	}
 	if filterID == "" {
 		filterJSON := cli.Syncer.GetFilterJSON(cli.UserID)
 		resFilter, err := cli.CreateFilter(filterJSON)
@@ -183,7 +199,14 @@ func (cli *Client) SyncWithContext(ctx context.Context) error {
 			return err
 		}
 		filterID = resFilter.FilterID
-		cli.Store.SaveFilterID(cli.UserID, filterID)
+
+		if cli.Store2 != nil {
+			if err := cli.Store2.SaveFilterID(ctx, cli.UserID, filterID); err != nil {
+				return err
+			}
+		} else {
+			cli.Store.SaveFilterID(cli.UserID, filterID)
+		}
 	}
 	lastSuccessfulSync := time.Now().Add(-cli.StreamSyncMinAge - 1*time.Hour)
 	for {
@@ -228,7 +251,13 @@ func (cli *Client) SyncWithContext(ctx context.Context) error {
 		// Save the token now *before* processing it. This means it's possible
 		// to not process some events, but it means that we won't get constantly stuck processing
 		// a malformed/buggy event which keeps making us panic.
-		cli.Store.SaveNextBatch(cli.UserID, resSync.NextBatch)
+		if cli.Store2 != nil {
+			if err := cli.Store2.SaveNextBatch(ctx, cli.UserID, resSync.NextBatch); err != nil {
+				return err
+			}
+		} else {
+			cli.Store.SaveNextBatch(cli.UserID, resSync.NextBatch)
+		}
 		if err = cli.Syncer.ProcessResponse(resSync, nextBatch); err != nil {
 			return err
 		}

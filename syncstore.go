@@ -1,6 +1,7 @@
 package mautrix
 
 import (
+	"context"
 	"errors"
 
 	"maunium.net/go/mautrix/id"
@@ -16,6 +17,20 @@ type SyncStore interface {
 	LoadFilterID(userID id.UserID) string
 	SaveNextBatch(userID id.UserID, nextBatchToken string)
 	LoadNextBatch(userID id.UserID) string
+}
+
+// SyncStore2 is an interface which must be satisfied to store client data.
+//
+// This can be used instead of SyncStore when context propagation and error handling
+// is needed.
+// You can either write a struct which persists this data to disk, or you can use the
+// provided "MemorySyncStore" which just keeps data around in-memory which is lost on
+// restarts.
+type SyncStore2 interface {
+	SaveFilterID(ctx context.Context, userID id.UserID, filterID string) error
+	LoadFilterID(ctx context.Context, userID id.UserID) (string, error)
+	SaveNextBatch(ctx context.Context, userID id.UserID, nextBatchToken string) error
+	LoadNextBatch(ctx context.Context, userID id.UserID) (string, error)
 }
 
 // Deprecated: renamed to SyncStore
