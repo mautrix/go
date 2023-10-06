@@ -151,8 +151,16 @@ func (content *MessageEventContent) SetEdit(original id.EventID) {
 	}
 }
 
+// TextToHTML converts the given text to a HTML-safe representation by escaping HTML characters
+// and replacing newlines with <br/> tags.
 func TextToHTML(text string) string {
 	return strings.ReplaceAll(html.EscapeString(text), "\n", "<br/>")
+}
+
+// ReverseTextToHTML reverses the modifications made by TextToHTML, i.e. replaces <br/> tags with newlines
+// and unescapes HTML escape codes. For actually parsing HTML, use the format package instead.
+func ReverseTextToHTML(input string) string {
+	return html.UnescapeString(strings.ReplaceAll(input, "<br/>", "\n"))
 }
 
 func (content *MessageEventContent) EnsureHasHTML() {
