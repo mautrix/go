@@ -83,7 +83,7 @@ func (mach *OlmMachine) createOutboundSessions(ctx context.Context, input map[id
 	if len(request) == 0 {
 		return nil
 	}
-	resp, err := mach.Client.ClaimKeys(&mautrix.ReqClaimKeys{
+	resp, err := mach.Client.ClaimKeys(ctx, &mautrix.ReqClaimKeys{
 		OneTimeKeys: request,
 		Timeout:     10 * 1000,
 	})

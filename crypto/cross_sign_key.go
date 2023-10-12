@@ -8,6 +8,7 @@
 package crypto
 
 import (
+	"context"
 	"fmt"
 
 	"maunium.net/go/mautrix"
@@ -89,7 +90,7 @@ func (mach *OlmMachine) GenerateCrossSigningKeys() (*CrossSigningKeysCache, erro
 }
 
 // PublishCrossSigningKeys signs and uploads the public keys of the given cross-signing keys to the server.
-func (mach *OlmMachine) PublishCrossSigningKeys(keys *CrossSigningKeysCache, uiaCallback mautrix.UIACallback) error {
+func (mach *OlmMachine) PublishCrossSigningKeys(ctx context.Context, keys *CrossSigningKeysCache, uiaCallback mautrix.UIACallback) error {
 	userID := mach.Client.UserID
 	masterKeyID := id.NewKeyID(id.KeyAlgorithmEd25519, keys.MasterKey.PublicKey.String())
 	masterKey := mautrix.CrossSigningKeys{
@@ -134,7 +135,7 @@ func (mach *OlmMachine) PublishCrossSigningKeys(keys *CrossSigningKeysCache, uia
 		},
 	}
 
-	err = mach.Client.UploadCrossSigningKeys(&mautrix.UploadCrossSigningKeysReq{
+	err = mach.Client.UploadCrossSigningKeys(ctx, &mautrix.UploadCrossSigningKeysReq{
 		Master:      masterKey,
 		SelfSigning: selfKey,
 		UserSigning: userKey,

@@ -108,7 +108,7 @@ func (mach *OlmMachine) fetchKeys(ctx context.Context, users []id.UserID, sinceT
 		req.DeviceKeys[userID] = mautrix.DeviceIDList{}
 	}
 	log.Debug().Strs("users", strishArray(users)).Msg("Querying keys for users")
-	resp, err := mach.Client.QueryKeys(req)
+	resp, err := mach.Client.QueryKeys(ctx, req)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to query keys")
 		return

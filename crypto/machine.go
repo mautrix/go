@@ -381,17 +381,17 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 		mach.handleBeeperRoomKeyAck(ctx, evt.Sender, content)
 	// verification cases
 	case *event.VerificationStartEventContent:
-		mach.handleVerificationStart(evt.Sender, content, content.TransactionID, 10*time.Minute, "")
+		mach.handleVerificationStart(ctx, evt.Sender, content, content.TransactionID, 10*time.Minute, "")
 	case *event.VerificationAcceptEventContent:
-		mach.handleVerificationAccept(evt.Sender, content, content.TransactionID)
+		mach.handleVerificationAccept(ctx, evt.Sender, content, content.TransactionID)
 	case *event.VerificationKeyEventContent:
-		mach.handleVerificationKey(evt.Sender, content, content.TransactionID)
+		mach.handleVerificationKey(ctx, evt.Sender, content, content.TransactionID)
 	case *event.VerificationMacEventContent:
-		mach.handleVerificationMAC(evt.Sender, content, content.TransactionID)
+		mach.handleVerificationMAC(ctx, evt.Sender, content, content.TransactionID)
 	case *event.VerificationCancelEventContent:
 		mach.handleVerificationCancel(evt.Sender, content, content.TransactionID)
 	case *event.VerificationRequestEventContent:
-		mach.handleVerificationRequest(evt.Sender, content, content.TransactionID, "")
+		mach.handleVerificationRequest(ctx, evt.Sender, content, content.TransactionID, "")
 	case *event.RoomKeyWithheldEventContent:
 		mach.handleRoomKeyWithheld(ctx, content)
 	default:
@@ -473,7 +473,7 @@ func (mach *OlmMachine) SendEncryptedToDevice(ctx context.Context, device *id.De
 		Str("to_identity_key", device.IdentityKey.String()).
 		Str("olm_session_id", olmSess.ID().String()).
 		Msg("Sending encrypted to-device event")
-	_, err = mach.Client.SendToDevice(event.ToDeviceEncrypted,
+	_, err = mach.Client.SendToDevice(ctx, event.ToDeviceEncrypted,
 		&mautrix.ReqSendToDevice{
 			Messages: map[id.UserID]map[id.DeviceID]*event.Content{
 				device.UserID: {
@@ -624,7 +624,7 @@ func (mach *OlmMachine) ShareKeys(ctx context.Context, currentOTKCount int) erro
 	defer mach.otkUploadLock.Unlock()
 	if mach.lastOTKUpload.Add(1*time.Minute).After(start) || currentOTKCount < 0 {
 		log.Debug().Msg("Checking OTK count from server due to suspiciously close share keys requests or negative OTK count")
-		resp, err := mach.Client.UploadKeys(&mautrix.ReqUploadKeys{})
+		resp, err := mach.Client.UploadKeys(ctx, &mautrix.ReqUploadKeys{})
 		if err != nil {
 			return fmt.Errorf("failed to check current OTK counts: %w", err)
 		}
@@ -649,7 +649,7 @@ func (mach *OlmMachine) ShareKeys(ctx context.Context, currentOTKCount int) erro
 		OneTimeKeys: oneTimeKeys,
 	}
 	log.Debug().Int("count", len(oneTimeKeys)).Msg("Uploading one-time keys")
-	_, err := mach.Client.UploadKeys(req)
+	_, err := mach.Client.UploadKeys(ctx, req)
 	if err != nil {
 		return err
 	}

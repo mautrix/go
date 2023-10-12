@@ -7,6 +7,7 @@
 package commands
 
 import (
+	"context"
 	"strconv"
 
 	"maunium.net/go/mautrix/id"
@@ -57,7 +58,7 @@ func fnSetPowerLevel(ce *Event) {
 		ce.Reply("**Usage:** `set-pl [user] <level>`")
 		return
 	}
-	_, err = ce.Portal.MainIntent().SetPowerLevel(ce.RoomID, userID, level)
+	_, err = ce.Portal.MainIntent().SetPowerLevel(context.Background(), ce.RoomID, userID, level)
 	if err != nil {
 		ce.Reply("Failed to set power levels: %v", err)
 	}

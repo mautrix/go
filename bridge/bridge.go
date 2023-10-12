@@ -216,7 +216,7 @@ type Crypto interface {
 	Decrypt(*event.Event) (*event.Event, error)
 	Encrypt(id.RoomID, event.Type, *event.Content) error
 	WaitForSession(id.RoomID, id.SenderKey, id.SessionID, time.Duration) bool
-	RequestSession(id.RoomID, id.SenderKey, id.SessionID, id.UserID, id.DeviceID)
+	RequestSession(context.Context, id.RoomID, id.SenderKey, id.SessionID, id.UserID, id.DeviceID)
 	ResetSession(id.RoomID)
 	Init() error
 	Start()
@@ -286,9 +286,9 @@ func (br *Bridge) InitVersion(tag, commit, buildTime string) {
 
 var MinSpecVersion = mautrix.SpecV11
 
-func (br *Bridge) ensureConnection() {
+func (br *Bridge) ensureConnection(ctx context.Context) {
 	for {
-		versions, err := br.Bot.Versions()
+		versions, err := br.Bot.Versions(ctx)
 		if err != nil {
 			br.ZLog.Err(err).Msg("Failed to connect to homeserver, retrying in 10 seconds...")
 			time.Sleep(10 * time.Second)
@@ -314,7 +314,7 @@ func (br *Bridge) ensureConnection() {
 		}
 	}
 
-	resp, err := br.Bot.Whoami()
+	resp, err := br.Bot.Whoami(ctx)
 	if err != nil {
 		if errors.Is(err, mautrix.MUnknownToken) {
 			br.ZLog.WithLevel(zerolog.FatalLevel).Msg("The as_token was not accepted. Is the registration file installed in your homeserver correctly?")
@@ -345,7 +345,7 @@ func (br *Bridge) ensureConnection() {
 	const maxRetries = 6
 	for {
 		txnID = br.Bot.TxnID()
-		pingResp, err = br.Bot.AppservicePing(br.Config.AppService.ID, txnID)
+		pingResp, err = br.Bot.AppservicePing(ctx, br.Config.AppService.ID, txnID)
 		if err == nil {
 			break
 		}
@@ -384,8 +384,8 @@ func (br *Bridge) ensureConnection() {
 		Msg("Homeserver -> bridge connection works")
 }
 
-func (br *Bridge) fetchMediaConfig() {
-	cfg, err := br.Bot.GetMediaConfig()
+func (br *Bridge) fetchMediaConfig(ctx context.Context) {
+	cfg, err := br.Bot.GetMediaConfig(ctx)
 	if err != nil {
 		br.ZLog.Warn().Err(err).Msg("Failed to fetch media config")
 	} else {
@@ -393,25 +393,25 @@ func (br *Bridge) fetchMediaConfig() {
 	}
 }
 
-func (br *Bridge) UpdateBotProfile() {
+func (br *Bridge) UpdateBotProfile(ctx context.Context) {
 	br.ZLog.Debug().Msg("Updating bot profile")
 	botConfig := &br.Config.AppService.Bot
 
 	var err error
 	var mxc id.ContentURI
 	if botConfig.Avatar == "remove" {
-		err = br.Bot.SetAvatarURL(mxc)
+		err = br.Bot.SetAvatarURL(ctx, mxc)
 	} else if !botConfig.ParsedAvatar.IsEmpty() {
-		err = br.Bot.SetAvatarURL(botConfig.ParsedAvatar)
+		err = br.Bot.SetAvatarURL(ctx, botConfig.ParsedAvatar)
 	}
 	if err != nil {
 		br.ZLog.Warn().Err(err).Msg("Failed to update bot avatar")
 	}
 
 	if botConfig.Displayname == "remove" {
-		err = br.Bot.SetDisplayName("")
+		err = br.Bot.SetDisplayName(ctx, "")
 	} else if len(botConfig.Displayname) > 0 {
-		err = br.Bot.SetDisplayName(botConfig.Displayname)
+		err = br.Bot.SetDisplayName(ctx, botConfig.Displayname)
 	}
 	if err != nil {
 		br.ZLog.Warn().Err(err).Msg("Failed to update bot displayname")
@@ -419,7 +419,7 @@ func (br *Bridge) UpdateBotProfile() {
 
 	if br.SpecVersions.Supports(mautrix.BeeperFeatureArbitraryProfileMeta) && br.BeeperNetworkName != "" {
 		br.ZLog.Debug().Msg("Setting contact info on the appservice bot")
-		br.Bot.BeeperUpdateProfile(map[string]any{
+		br.Bot.BeeperUpdateProfile(ctx, map[string]any{
 			"com.beeper.bridge.service":       br.BeeperServiceName,
 			"com.beeper.bridge.network":       br.BeeperNetworkName,
 			"com.beeper.bridge.is_bridge_bot": true,
@@ -631,8 +631,10 @@ func (br *Bridge) start() {
 		os.Exit(23)
 	}
 	br.ZLog.Debug().Msg("Checking connection to homeserver")
-	br.ensureConnection()
-	go br.fetchMediaConfig()
+
+	ctx := context.Background()
+	br.ensureConnection(ctx)
+	go br.fetchMediaConfig(ctx)
 
 	if br.Crypto != nil {
 		err = br.Crypto.Init()
@@ -645,7 +647,7 @@ func (br *Bridge) start() {
 	br.ZLog.Debug().Msg("Starting event processor")
 	br.EventProcessor.Start()
 
-	go br.UpdateBotProfile()
+	go br.UpdateBotProfile(ctx)
 	if br.Crypto != nil {
 		go br.Crypto.Start()
 	}
