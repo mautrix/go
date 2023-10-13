@@ -55,7 +55,7 @@ func TestPutNextBatch(t *testing.T) {
 	stores := getCryptoStores(t)
 	store := stores["sql"].(*SQLCryptoStore)
 	store.PutNextBatch(context.Background(), "batch1")
-	if batch, _ := store.GetNextBatch(); batch != "batch1" {
+	if batch, _ := store.GetNextBatch(context.Background()); batch != "batch1" {
 		t.Errorf("Expected batch1, got %v", batch)
 	}
 }
