@@ -592,6 +592,8 @@ func (mx *MatrixHandler) HandleMessage(evt *event.Event) {
 	portal := mx.bridge.Child.GetIPortal(evt.RoomID)
 	if portal != nil {
 		portal.ReceiveMatrixEvent(user, evt)
+	} else {
+		mx.bridge.SendMessageErrorCheckpoint(evt, status.MsgStepRemote, fmt.Errorf("unknown room"), true, 0)
 	}
 }
 
@@ -609,6 +611,8 @@ func (mx *MatrixHandler) HandleReaction(evt *event.Event) {
 	portal := mx.bridge.Child.GetIPortal(evt.RoomID)
 	if portal != nil {
 		portal.ReceiveMatrixEvent(user, evt)
+	} else {
+		mx.bridge.SendMessageErrorCheckpoint(evt, status.MsgStepRemote, fmt.Errorf("unknown room"), true, 0)
 	}
 }
 
@@ -626,6 +630,8 @@ func (mx *MatrixHandler) HandleRedaction(evt *event.Event) {
 	portal := mx.bridge.Child.GetIPortal(evt.RoomID)
 	if portal != nil {
 		portal.ReceiveMatrixEvent(user, evt)
+	} else {
+		mx.bridge.SendMessageErrorCheckpoint(evt, status.MsgStepRemote, fmt.Errorf("unknown room"), true, 0)
 	}
 }
 
