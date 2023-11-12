@@ -371,8 +371,11 @@ func (mx *MatrixHandler) sendCryptoStatusError(ctx context.Context, evt *event.E
 		if errors.Is(err, errNoCrypto) {
 			update.Body = "🔒 This bridge has not been configured to support encryption"
 		}
+		relatable, ok := evt.Content.Parsed.(event.Relatable)
 		if editEvent != "" {
 			update.SetEdit(editEvent)
+		} else if ok && relatable.OptionalGetRelatesTo().GetThreadParent() != "" {
+			update.GetRelatesTo().SetThread(relatable.OptionalGetRelatesTo().GetThreadParent(), evt.ID)
 		}
 		resp, sendErr := mx.bridge.Bot.SendMessageEvent(evt.RoomID, event.EventMessage, &update)
 		if sendErr != nil {
