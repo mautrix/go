@@ -181,7 +181,8 @@ type EncryptionConfig struct {
 	Require    bool `yaml:"require"`
 	Appservice bool `yaml:"appservice"`
 
-	PlaintextMentions bool `yaml:"plaintext_mentions"`
+	PlaintextMentions  bool `yaml:"plaintext_mentions"`
+	EncryptedReactions bool `yaml:"encrypted_reactions"`
 
 	DeleteKeys struct {
 		DeleteOutboundOnAck       bool `yaml:"delete_outbound_on_ack"`

@@ -96,6 +96,7 @@ func (helper *CryptoHelper) Init() error {
 	encryptionConfig := helper.bridge.Config.Bridge.GetEncryptionConfig()
 	helper.mach.SendKeysMinTrust = encryptionConfig.VerificationLevels.Receive
 	helper.mach.PlaintextMentions = encryptionConfig.PlaintextMentions
+	helper.mach.EncryptedReactions = encryptionConfig.EncryptedReactions
 
 	helper.mach.DeleteOutboundKeysOnAck = encryptionConfig.DeleteKeys.DeleteOutboundOnAck
 	helper.mach.DontStoreOutboundKeys = encryptionConfig.DeleteKeys.DontStoreOutbound

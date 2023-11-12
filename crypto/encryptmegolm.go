@@ -133,6 +133,9 @@ func (mach *OlmMachine) EncryptMegolmEvent(ctx context.Context, roomID id.RoomID
 	if mach.PlaintextMentions {
 		encrypted.Mentions = getMentions(content)
 	}
+	if encrypted.RelatesTo != nil && encrypted.RelatesTo.Type == event.RelAnnotation && mach.EncryptedReactions {
+		encrypted.RelatesTo = nil
+	}
 	return encrypted, nil
 }
 

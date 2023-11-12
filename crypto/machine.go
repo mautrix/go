@@ -31,7 +31,8 @@ type OlmMachine struct {
 	CryptoStore Store
 	StateStore  StateStore
 
-	PlaintextMentions bool
+	PlaintextMentions  bool
+	EncryptedReactions bool
 
 	SendKeysMinTrust  id.TrustState
 	ShareKeysMinTrust id.TrustState
@@ -99,6 +100,8 @@ func NewOlmMachine(client *mautrix.Client, log *zerolog.Logger, cryptoStore Stor
 		Log:         log,
 		CryptoStore: cryptoStore,
 		StateStore:  stateStore,
+
+		//EncryptedReactions: true,
 
 		SendKeysMinTrust:  id.TrustStateUnset,
 		ShareKeysMinTrust: id.TrustStateCrossSignedTOFU,

@@ -1000,7 +1000,7 @@ func (cli *Client) SendMessageEvent(roomID id.RoomID, eventType event.Type, cont
 		queryParams["fi.mau.event_id"] = req.MeowEventID.String()
 	}
 
-	if !req.DontEncrypt && cli.Crypto != nil && eventType != event.EventReaction && eventType != event.EventEncrypted && cli.StateStore.IsEncrypted(roomID) {
+	if !req.DontEncrypt && cli.Crypto != nil && eventType != event.EventEncrypted && cli.StateStore.IsEncrypted(roomID) {
 		contentJSON, err = cli.Crypto.Encrypt(roomID, eventType, contentJSON)
 		if err != nil {
 			err = fmt.Errorf("failed to encrypt event: %w", err)

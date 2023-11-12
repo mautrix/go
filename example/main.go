@@ -71,6 +71,12 @@ func main() {
 			Str("id", evt.ID.String()).
 			Str("body", evt.Content.AsMessage().Body).
 			Msg("Received message")
+		client.JoinedMembers(evt.RoomID)
+		client.StateStore.SetEncryptionEvent(evt.RoomID, &event.EncryptionEventContent{
+			Algorithm: id.AlgorithmMegolmV1,
+		})
+		time.Sleep(1 * time.Second)
+		_, _ = client.SendReaction(evt.RoomID, evt.ID, "👍️")
 	})
 	syncer.OnEventType(event.StateMember, func(source mautrix.EventSource, evt *event.Event) {
 		if evt.GetStateKey() == client.UserID.String() && evt.Content.AsMember().Membership == event.MembershipInvite {
