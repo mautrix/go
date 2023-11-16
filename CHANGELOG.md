@@ -1,10 +1,12 @@
-## v0.16.2 (unreleased)
+## v0.16.2 (2023-11-16)
 
 * *(event)* Added `Redacts` field to `RedactionEventContent` for room v11+.
 * *(event)* Added `ReverseTextToHTML` which reverses the changes made by
   `TextToHTML` (i.e. unescapes HTML characters and replaces `<br/>` with `\n`).
 * *(bridge)* Added global zerologger to ensure all logs go through the bridge
   logger.
+* *(bridge)* Changed encryption error messages to be sent in a thread if the
+  message that failed to decrypt was in a thread.
 
 ## v0.16.1 (2023-09-16)
 
