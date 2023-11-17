@@ -65,9 +65,9 @@ type Portal interface {
 
 type MembershipHandlingPortal interface {
 	Portal
-	HandleMatrixLeave(sender User)
-	HandleMatrixKick(sender User, ghost Ghost)
-	HandleMatrixInvite(sender User, ghost Ghost)
+	HandleMatrixLeave(sender User, evt *event.Event)
+	HandleMatrixKick(sender User, ghost Ghost, evt *event.Event)
+	HandleMatrixInvite(sender User, ghost Ghost, evt *event.Event)
 }
 
 type ReadReceiptHandlingPortal interface {

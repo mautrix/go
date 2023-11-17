@@ -290,12 +290,12 @@ func (mx *MatrixHandler) HandleMembership(evt *event.Event) {
 			}
 		}
 		if isSelf {
-			mhp.HandleMatrixLeave(user)
+			mhp.HandleMatrixLeave(user, evt)
 		} else if ghost != nil {
-			mhp.HandleMatrixKick(user, ghost)
+			mhp.HandleMatrixKick(user, ghost, evt)
 		}
 	} else if content.Membership == event.MembershipInvite && !isSelf && ghost != nil {
-		mhp.HandleMatrixInvite(user, ghost)
+		mhp.HandleMatrixInvite(user, ghost, evt)
 	}
 	// TODO kicking/inviting non-ghost users users
 }
