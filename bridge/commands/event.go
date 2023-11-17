@@ -7,6 +7,7 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -35,6 +36,7 @@ type Event struct {
 	Args      []string
 	RawArgs   string
 	ReplyTo   id.EventID
+	Ctx       context.Context
 	ZLog      *zerolog.Logger
 	// Deprecated: switch to ZLog
 	Log maulogger.Logger

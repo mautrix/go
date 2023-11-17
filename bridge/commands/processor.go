@@ -7,6 +7,7 @@
 package commands
 
 import (
+	"context"
 	"runtime/debug"
 	"strings"
 
@@ -58,14 +59,13 @@ func (proc *Processor) AddHandler(handler Handler) {
 }
 
 // Handle handles messages to the bridge
-func (proc *Processor) Handle(roomID id.RoomID, eventID id.EventID, user bridge.User, message string, replyTo id.EventID) {
+func (proc *Processor) Handle(ctx context.Context, roomID id.RoomID, eventID id.EventID, user bridge.User, message string, replyTo id.EventID) {
 	defer func() {
 		err := recover()
 		if err != nil {
-			proc.log.Error().
+			zerolog.Ctx(ctx).Error().
 				Str(zerolog.ErrorStackFieldName, string(debug.Stack())).
 				Interface(zerolog.ErrorFieldName, err).
-				Str("event_id", eventID.String()).
 				Msg("Panic in Matrix command handler")
 		}
 	}()
@@ -75,12 +75,8 @@ func (proc *Processor) Handle(roomID id.RoomID, eventID id.EventID, user bridge.
 	}
 	command := strings.ToLower(args[0])
 	rawArgs := strings.TrimLeft(strings.TrimPrefix(message, command), " ")
-	log := proc.log.With().
-		Str("user_id", user.GetMXID().String()).
-		Str("event_id", eventID.String()).
-		Str("room_id", roomID.String()).
-		Str("mx_command", command).
-		Logger()
+	log := zerolog.Ctx(ctx).With().Str("mx_command", command).Logger()
+	ctx = log.WithContext(ctx)
 	ce := &Event{
 		Bot:       proc.bridge.Bot,
 		Bridge:    proc.bridge,
@@ -93,6 +89,7 @@ func (proc *Processor) Handle(roomID id.RoomID, eventID id.EventID, user bridge.
 		Args:      args[1:],
 		RawArgs:   rawArgs,
 		ReplyTo:   replyTo,
+		Ctx:       ctx,
 		ZLog:      &log,
 		Log:       maulogadapt.ZeroAsMau(&log),
 	}
