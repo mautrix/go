@@ -1,3 +1,12 @@
+## v0.17.0 (unreleased)
+
+* **Breaking change *(bridge)*** Added raw event to portal membership handling
+  functions.
+* *(bridge)* Added context parameter for bridge command events.
+* *(client)* Changed default syncer to not drop unknown events.
+  * The syncer will still drop known events if parsing the content fails.
+  * The behavior can be changed by changing the `ParseErrorHandler` function.
+
 ## v0.16.2 (2023-11-16)
 
 * *(event)* Added `Redacts` field to `RedactionEventContent` for room v11+.
