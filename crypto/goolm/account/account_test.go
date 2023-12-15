@@ -12,38 +12,6 @@ import (
 	"maunium.net/go/mautrix/crypto/goolm/utilities"
 )
 
-type mockRandom struct {
-	tag     byte
-	current byte
-}
-
-func (m *mockRandom) get(length int) []byte {
-	res := make([]byte, length)
-	baseIndex := 0
-	for length > 32 {
-		res[baseIndex] = m.tag
-		for i := 1; i < 32; i++ {
-			res[baseIndex+i] = m.current
-		}
-		length -= 32
-		baseIndex += 32
-		m.current++
-	}
-	if length != 0 {
-		res[baseIndex] = m.tag
-		for i := 1; i < length-1; i++ {
-			res[baseIndex+i] = m.current
-		}
-		m.current++
-	}
-	return res
-}
-
-func (m *mockRandom) Read(target []byte) (int, error) {
-	res := m.get(len(target))
-	return copy(target, res), nil
-}
-
 func TestAccount(t *testing.T) {
 	firstAccount, err := account.NewAccount(nil)
 	if err != nil {
@@ -260,24 +228,16 @@ func TestOldAccountPickle(t *testing.T) {
 }
 
 func TestLoopback(t *testing.T) {
-	mockA := mockRandom{
-		tag:     []byte("A")[0],
-		current: 0x00,
-	}
-	mockB := mockRandom{
-		tag:     []byte("B")[0],
-		current: 0x80,
-	}
-	accountA, err := account.NewAccount(&mockA)
+	accountA, err := account.NewAccount(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	accountB, err := account.NewAccount(&mockB)
+	accountB, err := account.NewAccount(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = accountB.GenOneTimeKeys(&mockB, 42)
+	err = accountB.GenOneTimeKeys(nil, 42)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -288,7 +248,7 @@ func TestLoopback(t *testing.T) {
 	}
 
 	plainText := []byte("Hello, World")
-	msgType, message1, err := aliceSession.Encrypt(plainText, &mockA)
+	msgType, message1, err := aliceSession.Encrypt(plainText, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -335,7 +295,7 @@ func TestLoopback(t *testing.T) {
 		t.Fatal("messages are not the same")
 	}
 
-	msgTyp2, message2, err := bobSession.Encrypt(plainText, &mockB)
+	msgTyp2, message2, err := bobSession.Encrypt(plainText, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -364,24 +324,16 @@ func TestLoopback(t *testing.T) {
 }
 
 func TestMoreMessages(t *testing.T) {
-	mockA := mockRandom{
-		tag:     []byte("A")[0],
-		current: 0x00,
-	}
-	mockB := mockRandom{
-		tag:     []byte("B")[0],
-		current: 0x80,
-	}
-	accountA, err := account.NewAccount(&mockA)
+	accountA, err := account.NewAccount(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	accountB, err := account.NewAccount(&mockB)
+	accountB, err := account.NewAccount(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = accountB.GenOneTimeKeys(&mockB, 42)
+	err = accountB.GenOneTimeKeys(nil, 42)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -392,7 +344,7 @@ func TestMoreMessages(t *testing.T) {
 	}
 
 	plainText := []byte("Hello, World")
-	msgType, message1, err := aliceSession.Encrypt(plainText, &mockA)
+	msgType, message1, err := aliceSession.Encrypt(plainText, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -414,7 +366,7 @@ func TestMoreMessages(t *testing.T) {
 
 	for i := 0; i < 8; i++ {
 		//alice sends, bob reveices
-		msgType, message, err := aliceSession.Encrypt(plainText, &mockA)
+		msgType, message, err := aliceSession.Encrypt(plainText, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -437,7 +389,7 @@ func TestMoreMessages(t *testing.T) {
 		}
 
 		//now bob sends, alice receives
-		msgType, message, err = bobSession.Encrypt(plainText, &mockA)
+		msgType, message, err = bobSession.Encrypt(plainText, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -455,24 +407,16 @@ func TestMoreMessages(t *testing.T) {
 }
 
 func TestFallbackKey(t *testing.T) {
-	mockA := mockRandom{
-		tag:     []byte("A")[0],
-		current: 0x00,
-	}
-	mockB := mockRandom{
-		tag:     []byte("B")[0],
-		current: 0x80,
-	}
-	accountA, err := account.NewAccount(&mockA)
+	accountA, err := account.NewAccount(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	accountB, err := account.NewAccount(&mockB)
+	accountB, err := account.NewAccount(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = accountB.GenFallbackKey(&mockB)
+	err = accountB.GenFallbackKey(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -487,7 +431,7 @@ func TestFallbackKey(t *testing.T) {
 	}
 
 	plainText := []byte("Hello, World")
-	msgType, message1, err := aliceSession.Encrypt(plainText, &mockA)
+	msgType, message1, err := aliceSession.Encrypt(plainText, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -535,7 +479,7 @@ func TestFallbackKey(t *testing.T) {
 	}
 
 	// create a new fallback key for B (the old fallback should still be usable)
-	err = accountB.GenFallbackKey(&mockB)
+	err = accountB.GenFallbackKey(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -545,7 +489,7 @@ func TestFallbackKey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgType2, message2, err := aliceSession2.Encrypt(plainText, &mockA)
+	msgType2, message2, err := aliceSession2.Encrypt(plainText, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -605,7 +549,7 @@ func TestFallbackKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	msgType3, message3, err := aliceSession3.Encrypt(plainText, &mockA)
+	msgType3, message3, err := aliceSession3.Encrypt(plainText, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -654,11 +598,7 @@ func TestOldV3AccountPickle(t *testing.T) {
 }
 
 func TestAccountSign(t *testing.T) {
-	mockA := mockRandom{
-		tag:     []byte("A")[0],
-		current: 0x00,
-	}
-	accountA, err := account.NewAccount(&mockA)
+	accountA, err := account.NewAccount(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
