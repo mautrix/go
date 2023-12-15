@@ -1,3 +1,5 @@
+//go:build !goolm
+
 package olm
 
 // #cgo LDFLAGS: -lolm -lstdc++
@@ -26,7 +28,7 @@ type OutboundGroupSession struct {
 // base64 couldn't be decoded then the error will be "INVALID_BASE64".
 func OutboundGroupSessionFromPickled(pickled, key []byte) (*OutboundGroupSession, error) {
 	if len(pickled) == 0 {
-		return nil, EmptyInput
+		return nil, ErrEmptyInput
 	}
 	s := NewBlankOutboundGroupSession()
 	return s, s.Unpickle(pickled, key)
@@ -38,7 +40,7 @@ func NewOutboundGroupSession() *OutboundGroupSession {
 	random := make([]byte, s.createRandomLen()+1)
 	_, err := rand.Read(random)
 	if err != nil {
-		panic(NotEnoughGoRandom)
+		panic(ErrNotEnoughGoRandom)
 	}
 	r := C.olm_init_outbound_group_session(
 		(*C.OlmOutboundGroupSession)(s.int),
@@ -91,7 +93,7 @@ func (s *OutboundGroupSession) pickleLen() uint {
 // OutboundGroupSession using the supplied key.
 func (s *OutboundGroupSession) Pickle(key []byte) []byte {
 	if len(key) == 0 {
-		panic(NoKeyProvided)
+		panic(ErrNoKeyProvided)
 	}
 	pickled := make([]byte, s.pickleLen())
 	r := C.olm_pickle_outbound_group_session(
@@ -108,7 +110,7 @@ func (s *OutboundGroupSession) Pickle(key []byte) []byte {
 
 func (s *OutboundGroupSession) Unpickle(pickled, key []byte) error {
 	if len(key) == 0 {
-		return NoKeyProvided
+		return ErrNoKeyProvided
 	}
 	r := C.olm_unpickle_outbound_group_session(
 		(*C.OlmOutboundGroupSession)(s.int),
@@ -151,7 +153,7 @@ func (s *OutboundGroupSession) MarshalJSON() ([]byte, error) {
 
 func (s *OutboundGroupSession) UnmarshalJSON(data []byte) error {
 	if len(data) == 0 || data[0] != '"' || data[len(data)-1] != '"' {
-		return InputNotJSONString
+		return ErrInputNotJSONString
 	}
 	if s == nil || s.int == nil {
 		*s = *NewBlankOutboundGroupSession()
@@ -175,7 +177,7 @@ func (s *OutboundGroupSession) encryptMsgLen(plainTextLen int) uint {
 // as base64.
 func (s *OutboundGroupSession) Encrypt(plaintext []byte) []byte {
 	if len(plaintext) == 0 {
-		panic(EmptyInput)
+		panic(ErrEmptyInput)
 	}
 	message := make([]byte, s.encryptMsgLen(len(plaintext)))
 	r := C.olm_group_encrypt(

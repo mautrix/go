@@ -1,3 +1,5 @@
+//go:build !nosas && !goolm
+
 package olm
 
 // #cgo LDFLAGS: -lolm -lstdc++
@@ -41,7 +43,7 @@ func NewSAS() *SAS {
 	random := make([]byte, sas.sasRandomLength()+1)
 	_, err := rand.Read(random)
 	if err != nil {
-		panic(NotEnoughGoRandom)
+		panic(ErrNotEnoughGoRandom)
 	}
 	r := C.olm_create_sas(
 		(*C.OlmSAS)(sas.int),

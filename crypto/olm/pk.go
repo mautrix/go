@@ -1,3 +1,5 @@
+//go:build !goolm
+
 package olm
 
 // #cgo LDFLAGS: -lolm -lstdc++
@@ -74,7 +76,7 @@ func NewPkSigning() (*PkSigning, error) {
 	seed := make([]byte, pkSigningSeedLength())
 	_, err := rand.Read(seed)
 	if err != nil {
-		panic(NotEnoughGoRandom)
+		panic(ErrNotEnoughGoRandom)
 	}
 	pk, err := NewPkSigningFromSeed(seed)
 	return pk, err

@@ -1,3 +1,5 @@
+//go:build !goolm
+
 package olm
 
 import (
@@ -7,11 +9,11 @@ import (
 
 // Error codes from go-olm
 var (
-	EmptyInput         = errors.New("empty input")
-	NoKeyProvided      = errors.New("no pickle key provided")
-	NotEnoughGoRandom  = errors.New("couldn't get enough randomness from crypto/rand")
-	SignatureNotFound  = errors.New("input JSON doesn't contain signature from specified device")
-	InputNotJSONString = errors.New("input doesn't look like a JSON string")
+	ErrEmptyInput         = errors.New("empty input")
+	ErrNoKeyProvided      = errors.New("no pickle key provided")
+	ErrNotEnoughGoRandom  = errors.New("couldn't get enough randomness from crypto/rand")
+	ErrSignatureNotFound  = errors.New("input JSON doesn't contain signature from specified device")
+	ErrInputNotJSONString = errors.New("input doesn't look like a JSON string")
 )
 
 // Error codes from olm code
