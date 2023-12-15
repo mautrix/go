@@ -1,7 +1,7 @@
 package message
 
 import (
-	"codeberg.org/DerLukas/goolm/crypto"
+	"maunium.net/go/mautrix/crypto/goolm/crypto"
 )
 
 const (

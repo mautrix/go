@@ -4,17 +4,17 @@ import (
 	"bytes"
 	"io"
 
-	"codeberg.org/DerLukas/goolm/crypto"
+	"maunium.net/go/mautrix/crypto/goolm/crypto"
 )
 
-// derivedAESKeys stores the derived keys for the AESSha256 cipher
+// derivedAESKeys stores the derived keys for the AESSHA256 cipher
 type derivedAESKeys struct {
 	key     []byte
 	hmacKey []byte
 	iv      []byte
 }
 
-// deriveAESKeys derives three keys for the AESSha256 cipher
+// deriveAESKeys derives three keys for the AESSHA256 cipher
 func deriveAESKeys(kdfInfo []byte, key []byte) (*derivedAESKeys, error) {
 	hkdf := crypto.HKDFSHA256(key, nil, kdfInfo)
 	keys := &derivedAESKeys{
@@ -34,25 +34,25 @@ func deriveAESKeys(kdfInfo []byte, key []byte) (*derivedAESKeys, error) {
 	return keys, nil
 }
 
-// AESSha512BlockSize resturns the blocksize of the cipher AESSha256.
+// AESSha512BlockSize resturns the blocksize of the cipher AESSHA256.
 func AESSha512BlockSize() int {
 	return crypto.AESCBCBlocksize()
 }
 
-// AESSha256 is a valid cipher using AES with CBC and HKDFSha256.
-type AESSha256 struct {
+// AESSHA256 is a valid cipher using AES with CBC and HKDFSha256.
+type AESSHA256 struct {
 	kdfInfo []byte
 }
 
-// NewAESSha256 returns a new AESSha256 cipher with the key derive function info (kdfInfo).
-func NewAESSha256(kdfInfo []byte) *AESSha256 {
-	return &AESSha256{
+// NewAESSHA256 returns a new AESSHA256 cipher with the key derive function info (kdfInfo).
+func NewAESSHA256(kdfInfo []byte) *AESSHA256 {
+	return &AESSHA256{
 		kdfInfo: kdfInfo,
 	}
 }
 
 // Encrypt encrypts the plaintext with the key. The key is used to derive the actual encryption key (32 bytes) as well as the iv (16 bytes).
-func (c AESSha256) Encrypt(key, plaintext []byte) (ciphertext []byte, err error) {
+func (c AESSHA256) Encrypt(key, plaintext []byte) (ciphertext []byte, err error) {
 	keys, err := deriveAESKeys(c.kdfInfo, key)
 	if err != nil {
 		return nil, err
@@ -65,7 +65,7 @@ func (c AESSha256) Encrypt(key, plaintext []byte) (ciphertext []byte, err error)
 }
 
 // Decrypt decrypts the ciphertext with the key. The key is used to derive the actual encryption key (32 bytes) as well as the iv (16 bytes).
-func (c AESSha256) Decrypt(key, ciphertext []byte) (plaintext []byte, err error) {
+func (c AESSHA256) Decrypt(key, ciphertext []byte) (plaintext []byte, err error) {
 	keys, err := deriveAESKeys(c.kdfInfo, key)
 	if err != nil {
 		return nil, err
@@ -78,7 +78,7 @@ func (c AESSha256) Decrypt(key, ciphertext []byte) (plaintext []byte, err error)
 }
 
 // MAC returns the MAC for the message using the key. The key is used to derive the actual mac key (32 bytes).
-func (c AESSha256) MAC(key, message []byte) ([]byte, error) {
+func (c AESSHA256) MAC(key, message []byte) ([]byte, error) {
 	keys, err := deriveAESKeys(c.kdfInfo, key)
 	if err != nil {
 		return nil, err
@@ -87,7 +87,7 @@ func (c AESSha256) MAC(key, message []byte) ([]byte, error) {
 }
 
 // Verify checks the MAC of the message using the key against the givenMAC. The key is used to derive the actual mac key (32 bytes).
-func (c AESSha256) Verify(key, message, givenMAC []byte) (bool, error) {
+func (c AESSHA256) Verify(key, message, givenMAC []byte) (bool, error) {
 	mac, err := c.MAC(key, message)
 	if err != nil {
 		return false, err

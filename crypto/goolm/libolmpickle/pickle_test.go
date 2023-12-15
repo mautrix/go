@@ -1,8 +1,10 @@
-package libolmpickle
+package libolmpickle_test
 
 import (
 	"bytes"
 	"testing"
+
+	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
 )
 
 func TestPickleUInt32(t *testing.T) {
@@ -20,8 +22,8 @@ func TestPickleUInt32(t *testing.T) {
 	}
 	for curIndex := range values {
 		response := make([]byte, 4)
-		resPLen := PickleUInt32(values[curIndex], response)
-		if resPLen != PickleUInt32Len(values[curIndex]) {
+		resPLen := libolmpickle.PickleUInt32(values[curIndex], response)
+		if resPLen != libolmpickle.PickleUInt32Len(values[curIndex]) {
 			t.Fatal("written bytes not correct")
 		}
 		if !bytes.Equal(response, expected[curIndex]) {
@@ -41,8 +43,8 @@ func TestPickleBool(t *testing.T) {
 	}
 	for curIndex := range values {
 		response := make([]byte, 1)
-		resPLen := PickleBool(values[curIndex], response)
-		if resPLen != PickleBoolLen(values[curIndex]) {
+		resPLen := libolmpickle.PickleBool(values[curIndex], response)
+		if resPLen != libolmpickle.PickleBoolLen(values[curIndex]) {
 			t.Fatal("written bytes not correct")
 		}
 		if !bytes.Equal(response, expected[curIndex]) {
@@ -62,8 +64,8 @@ func TestPickleUInt8(t *testing.T) {
 	}
 	for curIndex := range values {
 		response := make([]byte, 1)
-		resPLen := PickleUInt8(values[curIndex], response)
-		if resPLen != PickleUInt8Len(values[curIndex]) {
+		resPLen := libolmpickle.PickleUInt8(values[curIndex], response)
+		if resPLen != libolmpickle.PickleUInt8Len(values[curIndex]) {
 			t.Fatal("written bytes not correct")
 		}
 		if !bytes.Equal(response, expected[curIndex]) {
@@ -85,8 +87,8 @@ func TestPickleBytes(t *testing.T) {
 	}
 	for curIndex := range values {
 		response := make([]byte, len(values[curIndex]))
-		resPLen := PickleBytes(values[curIndex], response)
-		if resPLen != PickleBytesLen(values[curIndex]) {
+		resPLen := libolmpickle.PickleBytes(values[curIndex], response)
+		if resPLen != libolmpickle.PickleBytesLen(values[curIndex]) {
 			t.Fatal("written bytes not correct")
 		}
 		if !bytes.Equal(response, expected[curIndex]) {

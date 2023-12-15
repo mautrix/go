@@ -1,12 +1,14 @@
-package crypto
+package crypto_test
 
 import (
 	"bytes"
 	"testing"
+
+	"maunium.net/go/mautrix/crypto/goolm/crypto"
 )
 
 func TestEd25519(t *testing.T) {
-	keypair, err := Ed25519GenerateKey(nil)
+	keypair, err := crypto.Ed25519GenerateKey(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -19,13 +21,13 @@ func TestEd25519(t *testing.T) {
 
 func TestEd25519Case1(t *testing.T) {
 	//64 bytes for ed25519 package
-	keyPair, err := Ed25519GenerateKey(nil)
+	keyPair, err := crypto.Ed25519GenerateKey(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	message := []byte("Hello, World")
 
-	keyPair2 := Ed25519GenerateFromPrivate(keyPair.PrivateKey)
+	keyPair2 := crypto.Ed25519GenerateFromPrivate(keyPair.PrivateKey)
 	if !bytes.Equal(keyPair.PublicKey, keyPair2.PublicKey) {
 		t.Fatal("not equal key pairs")
 	}
@@ -44,7 +46,7 @@ func TestEd25519Case1(t *testing.T) {
 
 func TestEd25519Pickle(t *testing.T) {
 	//create keypair
-	keyPair, err := Ed25519GenerateKey(nil)
+	keyPair, err := crypto.Ed25519GenerateKey(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +59,7 @@ func TestEd25519Pickle(t *testing.T) {
 		t.Fatal("written bytes not correct")
 	}
 
-	unpickledKeyPair := Ed25519KeyPair{}
+	unpickledKeyPair := crypto.Ed25519KeyPair{}
 	readBytes, err := unpickledKeyPair.UnpickleLibOlm(target)
 	if err != nil {
 		t.Fatal(err)
@@ -75,7 +77,7 @@ func TestEd25519Pickle(t *testing.T) {
 
 func TestEd25519PicklePubKeyOnly(t *testing.T) {
 	//create keypair
-	keyPair, err := Ed25519GenerateKey(nil)
+	keyPair, err := crypto.Ed25519GenerateKey(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +91,7 @@ func TestEd25519PicklePubKeyOnly(t *testing.T) {
 	if writtenBytes != len(target) {
 		t.Fatal("written bytes not correct")
 	}
-	unpickledKeyPair := Ed25519KeyPair{}
+	unpickledKeyPair := crypto.Ed25519KeyPair{}
 	readBytes, err := unpickledKeyPair.UnpickleLibOlm(target)
 	if err != nil {
 		t.Fatal(err)
@@ -107,7 +109,7 @@ func TestEd25519PicklePubKeyOnly(t *testing.T) {
 
 func TestEd25519PicklePrivKeyOnly(t *testing.T) {
 	//create keypair
-	keyPair, err := Ed25519GenerateKey(nil)
+	keyPair, err := crypto.Ed25519GenerateKey(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +123,7 @@ func TestEd25519PicklePrivKeyOnly(t *testing.T) {
 	if writtenBytes != len(target) {
 		t.Fatal("written bytes not correct")
 	}
-	unpickledKeyPair := Ed25519KeyPair{}
+	unpickledKeyPair := crypto.Ed25519KeyPair{}
 	readBytes, err := unpickledKeyPair.UnpickleLibOlm(target)
 	if err != nil {
 		t.Fatal(err)

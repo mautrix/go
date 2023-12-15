@@ -1,11 +1,13 @@
-package megolm
+package megolm_test
 
 import (
 	"bytes"
 	"testing"
+
+	"maunium.net/go/mautrix/crypto/goolm/megolm"
 )
 
-var startData [RatchetParts * RatchetPartLength]byte
+var startData [megolm.RatchetParts * megolm.RatchetPartLength]byte
 
 func init() {
 	startValue := []byte("0123456789ABCDEF0123456789ABCDEF")
@@ -16,12 +18,12 @@ func init() {
 }
 
 func TestAdvance(t *testing.T) {
-	m, err := New(0, startData)
+	m, err := megolm.New(0, startData)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	expectedData := [RatchetParts * RatchetPartLength]byte{
+	expectedData := [megolm.RatchetParts * megolm.RatchetPartLength]byte{
 		0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46,
 		0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46,
 		0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46,
@@ -38,7 +40,7 @@ func TestAdvance(t *testing.T) {
 
 	//repeat with complex advance
 	m.Data = startData
-	expectedData = [RatchetParts * RatchetPartLength]byte{
+	expectedData = [megolm.RatchetParts * megolm.RatchetPartLength]byte{
 		0x54, 0x02, 0x2d, 0x7d, 0xc0, 0x29, 0x8e, 0x16, 0x37, 0xe2, 0x1c, 0x97, 0x15, 0x30, 0x92, 0xf9,
 		0x33, 0xc0, 0x56, 0xff, 0x74, 0xfe, 0x1b, 0x92, 0x2d, 0x97, 0x1f, 0x24, 0x82, 0xc2, 0x85, 0x9c,
 		0x70, 0x04, 0xc0, 0x1e, 0xe4, 0x9b, 0xd6, 0xef, 0xe0, 0x07, 0x35, 0x25, 0xaf, 0x9b, 0x16, 0x32,
@@ -52,7 +54,7 @@ func TestAdvance(t *testing.T) {
 	if !bytes.Equal(m.Data[:], expectedData[:]) {
 		t.Fatal("result after advancing the ratchet is not as expected")
 	}
-	expectedData = [RatchetParts * RatchetPartLength]byte{
+	expectedData = [megolm.RatchetParts * megolm.RatchetPartLength]byte{
 		0x54, 0x02, 0x2d, 0x7d, 0xc0, 0x29, 0x8e, 0x16, 0x37, 0xe2, 0x1c, 0x97, 0x15, 0x30, 0x92, 0xf9,
 		0x33, 0xc0, 0x56, 0xff, 0x74, 0xfe, 0x1b, 0x92, 0x2d, 0x97, 0x1f, 0x24, 0x82, 0xc2, 0x85, 0x9c,
 		0x55, 0x58, 0x8d, 0xf5, 0xb7, 0xa4, 0x88, 0x78, 0x42, 0x89, 0x27, 0x86, 0x81, 0x64, 0x58, 0x9f,
@@ -69,7 +71,7 @@ func TestAdvance(t *testing.T) {
 }
 
 func TestAdvanceWraparound(t *testing.T) {
-	m, err := New(0xffffffff, startData)
+	m, err := megolm.New(0xffffffff, startData)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +80,7 @@ func TestAdvanceWraparound(t *testing.T) {
 		t.Fatal("counter not correct")
 	}
 
-	m2, err := New(0, startData)
+	m2, err := megolm.New(0, startData)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +94,7 @@ func TestAdvanceWraparound(t *testing.T) {
 }
 
 func TestAdvanceOverflowByOne(t *testing.T) {
-	m, err := New(0xffffffff, startData)
+	m, err := megolm.New(0xffffffff, startData)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +103,7 @@ func TestAdvanceOverflowByOne(t *testing.T) {
 		t.Fatal("counter not correct")
 	}
 
-	m2, err := New(0xffffffff, startData)
+	m2, err := megolm.New(0xffffffff, startData)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +117,7 @@ func TestAdvanceOverflowByOne(t *testing.T) {
 }
 
 func TestAdvanceOverflow(t *testing.T) {
-	m, err := New(0x1, startData)
+	m, err := megolm.New(0x1, startData)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +127,7 @@ func TestAdvanceOverflow(t *testing.T) {
 		t.Fatal("counter not correct")
 	}
 
-	m2, err := New(0x1, startData)
+	m2, err := megolm.New(0x1, startData)
 	if err != nil {
 		t.Fatal(err)
 	}

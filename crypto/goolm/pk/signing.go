@@ -3,8 +3,8 @@ package pk
 import (
 	"crypto/rand"
 
-	"codeberg.org/DerLukas/goolm"
-	"codeberg.org/DerLukas/goolm/crypto"
+	"maunium.net/go/mautrix/crypto/goolm"
+	"maunium.net/go/mautrix/crypto/goolm/crypto"
 	"maunium.net/go/mautrix/id"
 )
 

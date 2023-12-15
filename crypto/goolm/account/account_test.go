@@ -1,13 +1,15 @@
-package account
+package account_test
 
 import (
 	"bytes"
 	"errors"
 	"testing"
 
-	"codeberg.org/DerLukas/goolm"
-	"codeberg.org/DerLukas/goolm/utilities"
 	"maunium.net/go/mautrix/id"
+
+	"maunium.net/go/mautrix/crypto/goolm"
+	"maunium.net/go/mautrix/crypto/goolm/account"
+	"maunium.net/go/mautrix/crypto/goolm/utilities"
 )
 
 type mockRandom struct {
@@ -43,7 +45,7 @@ func (m *mockRandom) Read(target []byte) (int, error) {
 }
 
 func TestAccount(t *testing.T) {
-	firstAccount, err := NewAccount(nil)
+	firstAccount, err := account.NewAccount(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +64,7 @@ func TestAccount(t *testing.T) {
 		t.Fatal(err)
 	}
 	//now unpickle into new Account
-	unpickledAccount, err := AccountFromJSONPickled(pickled, encryptionKey)
+	unpickledAccount, err := account.AccountFromJSONPickled(pickled, encryptionKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +131,7 @@ func TestAccountPickleJSON(t *testing.T) {
 	*/
 
 	pickledData := []byte("fZG5DhZ0+uhVFEcdgo/dyWNy1BlSKo+W18D/QLBcZfvP0rByRzjgJM5yeDIO9N6jYFp2MbV1Y1DikFlDctwq7PhIRvbtLdrzxT94WoLrUdiNtQkw6NRNXvsFYo4NKoAgl1yQauttnGRBHCCPVV6e9d4kvnPVRkZNkbbANnadF0Tld/SMMWWoPI3L7dy+oiRh6nqNKvZz+upvgmOSm6gu2xV0yx9RJpkvLz8oHMDui1VQ1T2wTpfk5vdw0Cx4BXspf8WDnntdv0Ui4qBzUFmsB4lfqLviuhnAxu+qQrrKcZz/EyzbPwmI+P4Tn5KznxzEx2Nw/AjKKPxqVAKpx8+nV7rKKzlah71wX2CHyEsp2ptcNTJ1lr6tJxkOLdy8Rw285jpKw4MrgghnhqZ9Hh3y5P6KnRrq6zom9zfkCtCXs2h8BK+I0tkMPXO+JZoJKVOWzS+n7FIrC9XC9nAu19G5cnxv+tJdPb3p")
-	account, err := AccountFromJSONPickled(pickledData, key)
+	account, err := account.AccountFromJSONPickled(pickledData, key)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +146,7 @@ func TestAccountPickleJSON(t *testing.T) {
 }
 
 func TestSessions(t *testing.T) {
-	aliceAccount, err := NewAccount(nil)
+	aliceAccount, err := account.NewAccount(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +154,7 @@ func TestSessions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bobAccount, err := NewAccount(nil)
+	bobAccount, err := account.NewAccount(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +190,7 @@ func TestSessions(t *testing.T) {
 
 func TestAccountPickle(t *testing.T) {
 	pickleKey := []byte("secret_key")
-	account, err := AccountFromPickled(pickledDataFromLibOlm, pickleKey)
+	account, err := account.AccountFromPickled(pickledDataFromLibOlm, pickleKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -243,7 +245,7 @@ func TestOldAccountPickle(t *testing.T) {
 		"K/A/8TOu9iK2hDFszy6xETiousHnHgh2ZGbRUh4pQx+YMm8ZdNZeRnwFGLnrWyf9" +
 		"O5TmXua1FcU")
 	pickleKey := []byte("")
-	account, err := NewAccount(nil)
+	account, err := account.NewAccount(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -266,12 +268,12 @@ func TestLoopback(t *testing.T) {
 		tag:     []byte("B")[0],
 		current: 0x80,
 	}
-	accountA, err := NewAccount(&mockA)
+	accountA, err := account.NewAccount(&mockA)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	accountB, err := NewAccount(&mockB)
+	accountB, err := account.NewAccount(&mockB)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -370,12 +372,12 @@ func TestMoreMessages(t *testing.T) {
 		tag:     []byte("B")[0],
 		current: 0x80,
 	}
-	accountA, err := NewAccount(&mockA)
+	accountA, err := account.NewAccount(&mockA)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	accountB, err := NewAccount(&mockB)
+	accountB, err := account.NewAccount(&mockB)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -461,12 +463,12 @@ func TestFallbackKey(t *testing.T) {
 		tag:     []byte("B")[0],
 		current: 0x80,
 	}
-	accountA, err := NewAccount(&mockA)
+	accountA, err := account.NewAccount(&mockA)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	accountB, err := NewAccount(&mockB)
+	accountB, err := account.NewAccount(&mockB)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -631,7 +633,7 @@ func TestOldV3AccountPickle(t *testing.T) {
 	expectedFallbackJSON := []byte("{\"curve25519\":{\"AAAAAQ\":\"dr98y6VOWt6lJaQgFVZeWY2ky76mga9MEMbdItJTdng\"}}")
 	expectedUnpublishedFallbackJSON := []byte("{\"curve25519\":{}}")
 
-	account, err := AccountFromPickled(pickledData, pickleKey)
+	account, err := account.AccountFromPickled(pickledData, pickleKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -656,7 +658,7 @@ func TestAccountSign(t *testing.T) {
 		tag:     []byte("A")[0],
 		current: 0x00,
 	}
-	accountA, err := NewAccount(&mockA)
+	accountA, err := account.NewAccount(&mockA)
 	if err != nil {
 		t.Fatal(err)
 	}

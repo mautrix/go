@@ -1,13 +1,14 @@
-package sas
+package sas_test
 
 import (
 	"bytes"
 	"testing"
 
-	"codeberg.org/DerLukas/goolm/crypto"
+	"maunium.net/go/mautrix/crypto/goolm/crypto"
+	"maunium.net/go/mautrix/crypto/goolm/sas"
 )
 
-func initSAS() (*SAS, *SAS, error) {
+func initSAS() (*sas.SAS, *sas.SAS, error) {
 	alicePrivate := crypto.Curve25519PrivateKey([]byte{
 		0x77, 0x07, 0x6D, 0x0A, 0x73, 0x18, 0xA5, 0x7D,
 		0x3C, 0x16, 0xC1, 0x72, 0x51, 0xB2, 0x66, 0x45,
@@ -21,7 +22,7 @@ func initSAS() (*SAS, *SAS, error) {
 		0x1C, 0x2F, 0x8B, 0x27, 0xFF, 0x88, 0xE0, 0xEB,
 	})
 
-	aliceSAS, err := New()
+	aliceSAS, err := sas.New()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -31,7 +32,7 @@ func initSAS() (*SAS, *SAS, error) {
 		return nil, nil, err
 	}
 
-	bobSAS, err := New()
+	bobSAS, err := sas.New()
 	if err != nil {
 		return nil, nil, err
 	}

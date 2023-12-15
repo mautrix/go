@@ -3,8 +3,8 @@ package message
 import (
 	"bytes"
 
-	"codeberg.org/DerLukas/goolm/cipher"
-	"codeberg.org/DerLukas/goolm/crypto"
+	"maunium.net/go/mautrix/crypto/goolm/cipher"
+	"maunium.net/go/mautrix/crypto/goolm/crypto"
 )
 
 const (

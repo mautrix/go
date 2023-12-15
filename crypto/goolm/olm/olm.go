@@ -2,15 +2,15 @@
 package olm
 
 import (
+	"fmt"
 	"io"
 
-	"codeberg.org/DerLukas/goolm"
-	"codeberg.org/DerLukas/goolm/cipher"
-	"codeberg.org/DerLukas/goolm/crypto"
-	libolmpickle "codeberg.org/DerLukas/goolm/libolmPickle"
-	"codeberg.org/DerLukas/goolm/message"
-	"codeberg.org/DerLukas/goolm/utilities"
-	"github.com/pkg/errors"
+	"maunium.net/go/mautrix/crypto/goolm"
+	"maunium.net/go/mautrix/crypto/goolm/cipher"
+	"maunium.net/go/mautrix/crypto/goolm/crypto"
+	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
+	"maunium.net/go/mautrix/crypto/goolm/message"
+	"maunium.net/go/mautrix/crypto/goolm/utilities"
 )
 
 const (
@@ -36,7 +36,7 @@ var KdfInfo = struct {
 	Ratchet: []byte("OLM_RATCHET"),
 }
 
-var RatchetCipher = cipher.NewAESSha256([]byte("OLM_KEYS"))
+var RatchetCipher = cipher.NewAESSHA256([]byte("OLM_KEYS"))
 
 // Ratchet represents the olm ratchet as described in
 //
@@ -115,7 +115,7 @@ func (r *Ratchet) Encrypt(plaintext []byte, reader io.Reader) ([]byte, error) {
 
 	encryptedText, err := RatchetCipher.Encrypt(messageKey.Key, plaintext)
 	if err != nil {
-		return nil, errors.Wrap(err, "cipher encrypt")
+		return nil, fmt.Errorf("cipher encrypt: %w", err)
 	}
 
 	message := &message.Message{}
@@ -141,10 +141,10 @@ func (r *Ratchet) Decrypt(input []byte) ([]byte, error) {
 		return nil, err
 	}
 	if message.Version != protocolVersion {
-		return nil, errors.Wrap(goolm.ErrWrongProtocolVersion, "decrypt")
+		return nil, fmt.Errorf("decrypt: %w", goolm.ErrWrongProtocolVersion)
 	}
 	if !message.HasCounter || len(message.RatchetKey) == 0 || len(message.Ciphertext) == 0 {
-		return nil, errors.Wrap(goolm.ErrBadMessageFormat, "decrypt")
+		return nil, fmt.Errorf("decrypt: %w", goolm.ErrBadMessageFormat)
 	}
 	var receiverChainFromMessage *receiverChain
 	for curChainIndex := range r.ReceiverChains {
@@ -173,11 +173,11 @@ func (r *Ratchet) Decrypt(input []byte) ([]byte, error) {
 					return nil, err
 				}
 				if !verified {
-					return nil, errors.Wrap(goolm.ErrBadMAC, "decrypt from skipped message keys")
+					return nil, fmt.Errorf("decrypt from skipped message keys: %w", goolm.ErrBadMAC)
 				}
 				result, err = RatchetCipher.Decrypt(r.SkippedMessageKeys[curSkippedIndex].MKey.Key, message.Ciphertext)
 				if err != nil {
-					return nil, errors.Wrap(err, "cipher decrypt")
+					return nil, fmt.Errorf("cipher decrypt: %w", err)
 				}
 				if len(result) != 0 {
 					// Remove the key from the skipped keys now that we've
@@ -189,7 +189,7 @@ func (r *Ratchet) Decrypt(input []byte) ([]byte, error) {
 			}
 		}
 		if !foundSkippedKey {
-			return nil, errors.Wrap(goolm.ErrMessageKeyNotFound, "decrypt")
+			return nil, fmt.Errorf("decrypt: %w", goolm.ErrMessageKeyNotFound)
 		}
 	} else {
 		//Advancing the chain is done in this method
@@ -228,11 +228,11 @@ func (r Ratchet) createMessageKeys(chainKey chainKey) messageKey {
 // decryptForExistingChain returns the decrypted message by using the chain. The MAC of the rawMessage is verified.
 func (r *Ratchet) decryptForExistingChain(chain *receiverChain, message *message.Message, rawMessage []byte) ([]byte, error) {
 	if message.Counter < chain.CKey.Index {
-		return nil, errors.Wrap(goolm.ErrChainTooHigh, "decrypt")
+		return nil, fmt.Errorf("decrypt: %w", goolm.ErrChainTooHigh)
 	}
 	// Limit the number of hashes we're prepared to compute
 	if message.Counter-chain.CKey.Index > maxMessageGap {
-		return nil, errors.Wrap(goolm.ErrMsgIndexTooHigh, "decrypt from existing chain")
+		return nil, fmt.Errorf("decrypt from existing chain: %w", goolm.ErrMsgIndexTooHigh)
 	}
 	for chain.CKey.Index < message.Counter {
 		messageKey := r.createMessageKeys(chain.chainKey())
@@ -250,7 +250,7 @@ func (r *Ratchet) decryptForExistingChain(chain *receiverChain, message *message
 		return nil, err
 	}
 	if !verified {
-		return nil, errors.Wrap(goolm.ErrBadMAC, "decrypt from existing chain")
+		return nil, fmt.Errorf("decrypt from existing chain: %w", goolm.ErrBadMAC)
 	}
 	return RatchetCipher.Decrypt(messageKey.Key, message.Ciphertext)
 }
@@ -260,11 +260,11 @@ func (r *Ratchet) decryptForNewChain(message *message.Message, rawMessage []byte
 	// They shouldn't move to a new chain until we've sent them a message
 	// acknowledging the last one
 	if !r.SenderChains.IsSet {
-		return nil, errors.Wrap(goolm.ErrProtocolViolation, "decrypt for new chain")
+		return nil, fmt.Errorf("decrypt for new chain: %w", goolm.ErrProtocolViolation)
 	}
 	// Limit the number of hashes we're prepared to compute
 	if message.Counter > maxMessageGap {
-		return nil, errors.Wrap(goolm.ErrMsgIndexTooHigh, "decrypt for new chain")
+		return nil, fmt.Errorf("decrypt for new chain: %w", goolm.ErrMsgIndexTooHigh)
 	}
 
 	newChainKey, err := r.advanceRootKey(r.SenderChains.ratchetKey(), message.RatchetKey)
@@ -371,17 +371,17 @@ func (r *Ratchet) UnpickleLibOlm(value []byte, includesChainIndex bool) (int, er
 // It returns the number of bytes written.
 func (r Ratchet) PickleLibOlm(target []byte) (int, error) {
 	if len(target) < r.PickleLen() {
-		return 0, errors.Wrap(goolm.ErrValueTooShort, "pickle ratchet")
+		return 0, fmt.Errorf("pickle ratchet: %w", goolm.ErrValueTooShort)
 	}
 	written, err := r.RootKey.PickleLibOlm(target)
 	if err != nil {
-		return 0, errors.Wrap(err, "pickle ratchet")
+		return 0, fmt.Errorf("pickle ratchet: %w", err)
 	}
 	if r.SenderChains.IsSet {
 		written += libolmpickle.PickleUInt32(1, target[written:]) //Length of sender chain, always 1
 		writtenSender, err := r.SenderChains.PickleLibOlm(target[written:])
 		if err != nil {
-			return 0, errors.Wrap(err, "pickle ratchet")
+			return 0, fmt.Errorf("pickle ratchet: %w", err)
 		}
 		written += writtenSender
 	} else {
@@ -391,7 +391,7 @@ func (r Ratchet) PickleLibOlm(target []byte) (int, error) {
 	for _, curChain := range r.ReceiverChains {
 		writtenChain, err := curChain.PickleLibOlm(target[written:])
 		if err != nil {
-			return 0, errors.Wrap(err, "pickle ratchet")
+			return 0, fmt.Errorf("pickle ratchet: %w", err)
 		}
 		written += writtenChain
 	}
@@ -399,7 +399,7 @@ func (r Ratchet) PickleLibOlm(target []byte) (int, error) {
 	for _, curChain := range r.SkippedMessageKeys {
 		writtenChain, err := curChain.PickleLibOlm(target[written:])
 		if err != nil {
-			return 0, errors.Wrap(err, "pickle ratchet")
+			return 0, fmt.Errorf("pickle ratchet: %w", err)
 		}
 		written += writtenChain
 	}

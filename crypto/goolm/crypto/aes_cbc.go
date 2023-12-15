@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
+	"fmt"
 
-	"codeberg.org/DerLukas/goolm"
-	"github.com/pkg/errors"
+	"maunium.net/go/mautrix/crypto/goolm"
 )
 
 // AESCBCBlocksize returns the blocksize of the encryption method
@@ -17,15 +17,15 @@ func AESCBCBlocksize() int {
 // AESCBCEncrypt encrypts the plaintext with the key and iv. len(iv) must be equal to the blocksize!
 func AESCBCEncrypt(key, iv, plaintext []byte) ([]byte, error) {
 	if len(key) == 0 {
-		return nil, errors.Wrap(goolm.ErrNoKeyProvided, "AESCBCEncrypt")
+		return nil, fmt.Errorf("AESCBCEncrypt: %w", goolm.ErrNoKeyProvided)
 	}
 	if len(iv) != AESCBCBlocksize() {
-		return nil, errors.Wrap(goolm.ErrNotBlocksize, "iv")
+		return nil, fmt.Errorf("iv: %w", goolm.ErrNotBlocksize)
 	}
 	var cipherText []byte
 	plaintext = pkcs5Padding(plaintext, AESCBCBlocksize())
 	if len(plaintext)%AESCBCBlocksize() != 0 {
-		return nil, errors.Wrap(goolm.ErrNotMultipleBlocksize, "message")
+		return nil, fmt.Errorf("message: %w", goolm.ErrNotMultipleBlocksize)
 	}
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -40,10 +40,10 @@ func AESCBCEncrypt(key, iv, plaintext []byte) ([]byte, error) {
 // AESCBCDecrypt decrypts the ciphertext with the key and iv. len(iv) must be equal to the blocksize!
 func AESCBCDecrypt(key, iv, ciphertext []byte) ([]byte, error) {
 	if len(key) == 0 {
-		return nil, errors.Wrap(goolm.ErrNoKeyProvided, "AESCBCEncrypt")
+		return nil, fmt.Errorf("AESCBCEncrypt: %w", goolm.ErrNoKeyProvided)
 	}
 	if len(iv) != AESCBCBlocksize() {
-		return nil, errors.Wrap(goolm.ErrNotBlocksize, "iv")
+		return nil, fmt.Errorf("iv: %w", goolm.ErrNotBlocksize)
 	}
 	var block cipher.Block
 	var err error
@@ -52,7 +52,7 @@ func AESCBCDecrypt(key, iv, ciphertext []byte) ([]byte, error) {
 		return nil, err
 	}
 	if len(ciphertext) < AESCBCBlocksize() {
-		return nil, errors.Wrap(goolm.ErrNotMultipleBlocksize, "ciphertext")
+		return nil, fmt.Errorf("ciphertext: %w", goolm.ErrNotMultipleBlocksize)
 	}
 
 	cbc := cipher.NewCBCDecrypter(block, iv)

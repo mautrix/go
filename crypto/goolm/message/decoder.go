@@ -3,18 +3,17 @@ package message
 import (
 	"encoding/binary"
 
-	"codeberg.org/DerLukas/goolm"
-	"github.com/pkg/errors"
+	"maunium.net/go/mautrix/crypto/goolm"
 )
 
 // checkDecodeErr checks if there was an error during decode.
 func checkDecodeErr(readBytes int) error {
 	if readBytes == 0 {
 		//end reached
-		return errors.Wrap(goolm.ErrInputToSmall, "")
+		return goolm.ErrInputToSmall
 	}
 	if readBytes < 0 {
-		return errors.Wrap(goolm.ErrOverflow, "")
+		return goolm.ErrOverflow
 	}
 	return nil
 }

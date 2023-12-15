@@ -1,12 +1,14 @@
-package session
+package session_test
 
 import (
 	"bytes"
+	"encoding/base64"
 	"errors"
 	"testing"
 
-	"codeberg.org/DerLukas/goolm"
-	"codeberg.org/DerLukas/goolm/crypto"
+	"maunium.net/go/mautrix/crypto/goolm"
+	"maunium.net/go/mautrix/crypto/goolm/crypto"
+	"maunium.net/go/mautrix/crypto/goolm/session"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -24,7 +26,7 @@ func TestOlmSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	aliceSession, err := NewOutboundOlmSession(aliceKeyPair, bobKeyPair.PublicKey, bobOneTimeKey.PublicKey)
+	aliceSession, err := session.NewOutboundOlmSession(aliceKeyPair, bobKeyPair.PublicKey, bobOneTimeKey.PublicKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +51,7 @@ func TestOlmSession(t *testing.T) {
 		return nil
 	}
 	//bob receives message
-	bobSession, err := NewInboundOlmSession(nil, message, searchFunc, bobKeyPair)
+	bobSession, err := session.NewInboundOlmSession(nil, message, searchFunc, bobKeyPair)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +80,7 @@ func TestOlmSession(t *testing.T) {
 	}
 
 	//Alice unpickles session
-	newAliceSession, err := OlmSessionFromJSONPickled(pickled, pickleKey)
+	newAliceSession, err := session.OlmSessionFromJSONPickled(pickled, pickleKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,11 +122,11 @@ func TestOlmSession(t *testing.T) {
 func TestSessionPickle(t *testing.T) {
 	pickledDataFromLibOlm := []byte("icDKYm0b4aO23WgUuOxdpPoxC0UlEOYPVeuduNH3IkpFsmnWx5KuEOpxGiZw5IuB/sSn2RZUCTiJ90IvgC7AClkYGHep9O8lpiqQX73XVKD9okZDCAkBc83eEq0DKYC7HBkGRAU/4T6QPIBBY3UK4QZwULLE/fLsi3j4YZBehMtnlsqgHK0q1bvX4cRznZItVKR4ro0O9EAk6LLxJtSnRu5elSUk7YXT")
 	pickleKey := []byte("secret_key")
-	session, err := OlmSessionFromPickled(pickledDataFromLibOlm, pickleKey)
+	sess, err := session.OlmSessionFromPickled(pickledDataFromLibOlm, pickleKey)
 	if err != nil {
 		t.Fatal(err)
 	}
-	newPickled, err := session.Pickle(pickleKey)
+	newPickled, err := sess.Pickle(pickleKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +134,7 @@ func TestSessionPickle(t *testing.T) {
 		t.Fatal("pickled version does not equal libolm version")
 	}
 	pickledDataFromLibOlm = append(pickledDataFromLibOlm, []byte("a")...)
-	_, err = OlmSessionFromPickled(pickledDataFromLibOlm, pickleKey)
+	_, err = session.OlmSessionFromPickled(pickledDataFromLibOlm, pickleKey)
 	if err == nil {
 		t.Fatal("should have gotten an error")
 	}
@@ -147,9 +149,10 @@ func TestDecrypts(t *testing.T) {
 	}
 	expectedErr := []error{
 		goolm.ErrInputToSmall,
-		goolm.ErrBadBase64,
-		goolm.ErrBadBase64,
-		goolm.ErrBadBase64,
+		// Why are these being tested 🤔
+		base64.CorruptInputError(0),
+		base64.CorruptInputError(0),
+		base64.CorruptInputError(0),
 	}
 	sessionPickled := []byte("E0p44KO2y2pzp9FIjv0rud2wIvWDi2dx367kP4Fz/9JCMrH+aG369HGymkFtk0+PINTLB9lQRt" +
 		"ohea5d7G/UXQx3r5y4IWuyh1xaRnojEZQ9a5HRZSNtvmZ9NY1f1gutYa4UtcZcbvczN8b/5Bqg" +
@@ -157,12 +160,12 @@ func TestDecrypts(t *testing.T) {
 		"rfjLdzQrgjOTxN8Pf6iuP+WFPvfnR9lDmNCFxJUVAdLIMnLuAdxf1TGcS+zzCzEE8btIZ99mHF" +
 		"dGvPXeH8qLeNZA")
 	pickleKey := []byte("")
-	session, err := OlmSessionFromPickled(sessionPickled, pickleKey)
+	sess, err := session.OlmSessionFromPickled(sessionPickled, pickleKey)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for curIndex, curMessage := range messages {
-		_, err := session.Decrypt(curMessage, id.OlmMsgTypePreKey)
+		_, err := sess.Decrypt(curMessage, id.OlmMsgTypePreKey)
 		if err != nil {
 			if !errors.Is(err, expectedErr[curIndex]) {
 				t.Fatal(err)

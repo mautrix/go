@@ -1,7 +1,7 @@
 package goolm
 
 import (
-	"github.com/pkg/errors"
+	"errors"
 )
 
 // Those are the most common used errors

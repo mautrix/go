@@ -1,8 +1,10 @@
-package message
+package message_test
 
 import (
 	"bytes"
 	"testing"
+
+	"maunium.net/go/mautrix/crypto/goolm/message"
 )
 
 func TestGroupMessageDecode(t *testing.T) {
@@ -12,7 +14,7 @@ func TestGroupMessageDecode(t *testing.T) {
 	expectedMessageIndex := uint32(200)
 	expectedCipherText := []byte("ciphertext")
 
-	msg := GroupMessage{}
+	msg := message.GroupMessage{}
 	err := msg.Decode(messageRaw)
 	if err != nil {
 		t.Fatal(err)
@@ -32,7 +34,7 @@ func TestGroupMessageEncode(t *testing.T) {
 	expectedRaw := []byte("\x03\x08\xC8\x01\x12\x0aciphertexthmacsha2signature")
 	hmacsha256 := []byte("hmacsha2")
 	sign := []byte("signature")
-	msg := GroupMessage{
+	msg := message.GroupMessage{
 		Version:      3,
 		MessageIndex: 200,
 		Ciphertext:   []byte("ciphertext"),

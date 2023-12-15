@@ -1,29 +1,30 @@
-package olm
+package olm_test
 
 import (
 	"bytes"
 	"encoding/json"
 	"testing"
 
-	"codeberg.org/DerLukas/goolm/cipher"
-	"codeberg.org/DerLukas/goolm/crypto"
+	"maunium.net/go/mautrix/crypto/goolm/cipher"
+	"maunium.net/go/mautrix/crypto/goolm/crypto"
+	"maunium.net/go/mautrix/crypto/goolm/olm"
 )
 
 var (
 	sharedSecret = []byte("A secret")
 )
 
-func initializeRatchets() (*Ratchet, *Ratchet, error) {
-	KdfInfo = struct {
+func initializeRatchets() (*olm.Ratchet, *olm.Ratchet, error) {
+	olm.KdfInfo = struct {
 		Root    []byte
 		Ratchet []byte
 	}{
 		Root:    []byte("Olm"),
 		Ratchet: []byte("OlmRatchet"),
 	}
-	RatchetCipher = cipher.NewAESSha256([]byte("OlmMessageKeys"))
-	aliceRatchet := New()
-	bobRatchet := New()
+	olm.RatchetCipher = cipher.NewAESSHA256([]byte("OlmMessageKeys"))
+	aliceRatchet := olm.New()
+	bobRatchet := olm.New()
 
 	aliceKey, err := crypto.Curve25519GenerateKey(nil)
 	if err != nil {
@@ -162,7 +163,7 @@ func TestJSONEncoding(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	newRatcher := Ratchet{}
+	newRatcher := olm.Ratchet{}
 	err = json.Unmarshal(marshaled, &newRatcher)
 	if err != nil {
 		t.Fatal(err)

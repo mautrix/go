@@ -2,10 +2,10 @@ package message
 
 import (
 	"encoding/binary"
+	"fmt"
 
-	"codeberg.org/DerLukas/goolm"
-	"codeberg.org/DerLukas/goolm/crypto"
-	"github.com/pkg/errors"
+	"maunium.net/go/mautrix/crypto/goolm"
+	"maunium.net/go/mautrix/crypto/goolm/crypto"
 )
 
 const (
@@ -32,10 +32,10 @@ func (s MegolmSessionExport) Encode() []byte {
 // Decode populates the struct with the data encoded in input.
 func (s *MegolmSessionExport) Decode(input []byte) error {
 	if len(input) != 165 {
-		return errors.Wrap(goolm.ErrBadInput, "decrypt")
+		return fmt.Errorf("decrypt: %w", goolm.ErrBadInput)
 	}
 	if input[0] != sessionExportVersion {
-		return errors.Wrap(goolm.ErrBadVersion, "decrypt")
+		return fmt.Errorf("decrypt: %w", goolm.ErrBadVersion)
 	}
 	s.Counter = binary.BigEndian.Uint32(input[1:5])
 	copy(s.RatchetData[:], input[5:133])

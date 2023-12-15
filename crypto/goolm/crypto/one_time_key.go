@@ -1,11 +1,12 @@
 package crypto
 
 import (
+	"encoding/base64"
 	"encoding/binary"
+	"fmt"
 
-	"codeberg.org/DerLukas/goolm"
-	libolmpickle "codeberg.org/DerLukas/goolm/libolmPickle"
-	"github.com/pkg/errors"
+	"maunium.net/go/mautrix/crypto/goolm"
+	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -37,13 +38,13 @@ func (otk OneTimeKey) Equal(s OneTimeKey) bool {
 // It returns the number of bytes written.
 func (c OneTimeKey) PickleLibOlm(target []byte) (int, error) {
 	if len(target) < c.PickleLen() {
-		return 0, errors.Wrap(goolm.ErrValueTooShort, "pickle one time key")
+		return 0, fmt.Errorf("pickle one time key: %w", goolm.ErrValueTooShort)
 	}
 	written := libolmpickle.PickleUInt32(uint32(c.ID), target)
 	written += libolmpickle.PickleBool(c.Published, target[written:])
 	writtenKey, err := c.Key.PickleLibOlm(target[written:])
 	if err != nil {
-		return 0, errors.Wrap(err, "pickle one time key")
+		return 0, fmt.Errorf("pickle one time key: %w", err)
 	}
 	written += writtenKey
 	return written, nil
@@ -85,8 +86,7 @@ func (c OneTimeKey) PickleLen() int {
 func (c OneTimeKey) KeyIDEncoded() string {
 	resSlice := make([]byte, 4)
 	binary.BigEndian.PutUint32(resSlice, c.ID)
-	encoded := goolm.Base64Encode(resSlice)
-	return string(encoded)
+	return base64.RawStdEncoding.EncodeToString(resSlice)
 }
 
 // PublicKeyEncoded returns the base64 encoded public key

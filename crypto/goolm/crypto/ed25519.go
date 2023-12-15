@@ -3,11 +3,12 @@ package crypto
 import (
 	"bytes"
 	"crypto/ed25519"
+	"encoding/base64"
+	"fmt"
 	"io"
 
-	"codeberg.org/DerLukas/goolm"
-	libolmpickle "codeberg.org/DerLukas/goolm/libolmPickle"
-	"github.com/pkg/errors"
+	"maunium.net/go/mautrix/crypto/goolm"
+	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -52,7 +53,7 @@ type Ed25519KeyPair struct {
 
 // B64Encoded returns a base64 encoded string of the public key.
 func (c Ed25519KeyPair) B64Encoded() id.Ed25519 {
-	return id.Ed25519(goolm.Base64Encode(c.PublicKey))
+	return id.Ed25519(base64.RawStdEncoding.EncodeToString(c.PublicKey))
 }
 
 // Sign returns the signature for the message.
@@ -69,11 +70,11 @@ func (c Ed25519KeyPair) Verify(message, givenSignature []byte) bool {
 // It returns the number of bytes written.
 func (c Ed25519KeyPair) PickleLibOlm(target []byte) (int, error) {
 	if len(target) < c.PickleLen() {
-		return 0, errors.Wrap(goolm.ErrValueTooShort, "pickle ed25519 key pair")
+		return 0, fmt.Errorf("pickle ed25519 key pair: %w", goolm.ErrValueTooShort)
 	}
 	written, err := c.PublicKey.PickleLibOlm(target)
 	if err != nil {
-		return 0, errors.Wrap(err, "pickle ed25519 key pair")
+		return 0, fmt.Errorf("pickle ed25519 key pair: %w", err)
 	}
 
 	if len(c.PrivateKey) != ed25519.PrivateKeySize {
@@ -141,7 +142,7 @@ func (c Ed25519PublicKey) Equal(x Ed25519PublicKey) bool {
 
 // B64Encoded returns a base64 encoded string of the public key.
 func (c Ed25519PublicKey) B64Encoded() id.Curve25519 {
-	return id.Curve25519(goolm.Base64Encode(c))
+	return id.Curve25519(base64.RawStdEncoding.EncodeToString(c))
 }
 
 // Verify checks the signature of the message against the givenSignature
@@ -153,7 +154,7 @@ func (c Ed25519PublicKey) Verify(message, givenSignature []byte) bool {
 // It returns the number of bytes written.
 func (c Ed25519PublicKey) PickleLibOlm(target []byte) (int, error) {
 	if len(target) < c.PickleLen() {
-		return 0, errors.Wrap(goolm.ErrValueTooShort, "pickle ed25519 public key")
+		return 0, fmt.Errorf("pickle ed25519 public key: %w", goolm.ErrValueTooShort)
 	}
 	if len(c) != ed25519.PublicKeySize {
 		return libolmpickle.PickleBytes(make([]byte, ed25519.PublicKeySize), target), nil

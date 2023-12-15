@@ -3,12 +3,14 @@ package crypto
 import (
 	"bytes"
 	"crypto/rand"
+	"encoding/base64"
+	"fmt"
 	"io"
 
-	"codeberg.org/DerLukas/goolm"
-	libolmpickle "codeberg.org/DerLukas/goolm/libolmPickle"
-	"github.com/pkg/errors"
 	"golang.org/x/crypto/curve25519"
+
+	"maunium.net/go/mautrix/crypto/goolm"
+	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -76,11 +78,11 @@ func (c Curve25519KeyPair) SharedSecret(pubKey Curve25519PublicKey) ([]byte, err
 // It returns the number of bytes written.
 func (c Curve25519KeyPair) PickleLibOlm(target []byte) (int, error) {
 	if len(target) < c.PickleLen() {
-		return 0, errors.Wrap(goolm.ErrValueTooShort, "pickle curve25519 key pair")
+		return 0, fmt.Errorf("pickle curve25519 key pair: %w", goolm.ErrValueTooShort)
 	}
 	written, err := c.PublicKey.PickleLibOlm(target)
 	if err != nil {
-		return 0, errors.Wrap(err, "pickle curve25519 key pair")
+		return 0, fmt.Errorf("pickle curve25519 key pair: %w", err)
 	}
 	if len(c.PrivateKey) != Curve25519KeyLength {
 		written += libolmpickle.PickleBytes(make([]byte, Curve25519KeyLength), target[written:])
@@ -150,14 +152,14 @@ func (c Curve25519PublicKey) Equal(x Curve25519PublicKey) bool {
 
 // B64Encoded returns a base64 encoded string of the public key.
 func (c Curve25519PublicKey) B64Encoded() id.Curve25519 {
-	return id.Curve25519(goolm.Base64Encode(c))
+	return id.Curve25519(base64.RawStdEncoding.EncodeToString(c))
 }
 
 // PickleLibOlm encodes the public key into target. target has to have a size of at least PickleLen() and is written to from index 0.
 // It returns the number of bytes written.
 func (c Curve25519PublicKey) PickleLibOlm(target []byte) (int, error) {
 	if len(target) < c.PickleLen() {
-		return 0, errors.Wrap(goolm.ErrValueTooShort, "pickle curve25519 public key")
+		return 0, fmt.Errorf("pickle curve25519 public key: %w", goolm.ErrValueTooShort)
 	}
 	if len(c) != curve25519PubKeyLength {
 		return libolmpickle.PickleBytes(make([]byte, curve25519PubKeyLength), target), nil

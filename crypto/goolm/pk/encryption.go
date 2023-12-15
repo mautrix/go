@@ -1,10 +1,13 @@
 package pk
 
 import (
-	"codeberg.org/DerLukas/goolm"
-	"codeberg.org/DerLukas/goolm/cipher"
-	"codeberg.org/DerLukas/goolm/crypto"
+	"encoding/base64"
+
 	"maunium.net/go/mautrix/id"
+
+	"maunium.net/go/mautrix/crypto/goolm"
+	"maunium.net/go/mautrix/crypto/goolm/cipher"
+	"maunium.net/go/mautrix/crypto/goolm/crypto"
 )
 
 // Encryption is used to encrypt pk messages
@@ -14,7 +17,7 @@ type Encryption struct {
 
 // NewEncryption returns a new Encryption with the base64 encoded public key of the recipient
 func NewEncryption(pubKey id.Curve25519) (*Encryption, error) {
-	pubKeyDecoded, err := goolm.Base64Decode([]byte(pubKey))
+	pubKeyDecoded, err := base64.RawStdEncoding.DecodeString(string(pubKey))
 	if err != nil {
 		return nil, err
 	}
@@ -33,7 +36,7 @@ func (e Encryption) Encrypt(plaintext []byte, privateKey crypto.Curve25519Privat
 	if err != nil {
 		return nil, nil, err
 	}
-	cipher := cipher.NewAESSha256(nil)
+	cipher := cipher.NewAESSHA256(nil)
 	ciphertext, err = cipher.Encrypt(sharedSecret, plaintext)
 	if err != nil {
 		return nil, nil, err

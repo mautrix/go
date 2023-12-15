@@ -1,16 +1,18 @@
-package crypto
+package crypto_test
 
 import (
 	"bytes"
 	"testing"
+
+	"maunium.net/go/mautrix/crypto/goolm/crypto"
 )
 
 func TestCurve25519(t *testing.T) {
-	firstKeypair, err := Curve25519GenerateKey(nil)
+	firstKeypair, err := crypto.Curve25519GenerateKey(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	secondKeypair, err := Curve25519GenerateKey(nil)
+	secondKeypair, err := crypto.Curve25519GenerateKey(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -25,7 +27,7 @@ func TestCurve25519(t *testing.T) {
 	if !bytes.Equal(sharedSecretFromFirst, sharedSecretFromSecond) {
 		t.Fatal("shared secret not equal")
 	}
-	fromPrivate, err := Curve25519GenerateFromPrivate(firstKeypair.PrivateKey)
+	fromPrivate, err := crypto.Curve25519GenerateFromPrivate(firstKeypair.PrivateKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,11 +67,11 @@ func TestCurve25519Case1(t *testing.T) {
 		0xE0, 0x7E, 0x21, 0xC9, 0x47, 0xD1, 0x9E, 0x33,
 		0x76, 0xF0, 0x9B, 0x3C, 0x1E, 0x16, 0x17, 0x42,
 	}
-	aliceKeyPair := Curve25519KeyPair{
+	aliceKeyPair := crypto.Curve25519KeyPair{
 		PrivateKey: alicePrivate,
 		PublicKey:  alicePublic,
 	}
-	bobKeyPair := Curve25519KeyPair{
+	bobKeyPair := crypto.Curve25519KeyPair{
 		PrivateKey: bobPrivate,
 		PublicKey:  bobPublic,
 	}
@@ -91,7 +93,7 @@ func TestCurve25519Case1(t *testing.T) {
 
 func TestCurve25519Pickle(t *testing.T) {
 	//create keypair
-	keyPair, err := Curve25519GenerateKey(nil)
+	keyPair, err := crypto.Curve25519GenerateKey(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +106,7 @@ func TestCurve25519Pickle(t *testing.T) {
 		t.Fatal("written bytes not correct")
 	}
 
-	unpickledKeyPair := Curve25519KeyPair{}
+	unpickledKeyPair := crypto.Curve25519KeyPair{}
 	readBytes, err := unpickledKeyPair.UnpickleLibOlm(target)
 	if err != nil {
 		t.Fatal(err)
@@ -122,7 +124,7 @@ func TestCurve25519Pickle(t *testing.T) {
 
 func TestCurve25519PicklePubKeyOnly(t *testing.T) {
 	//create keypair
-	keyPair, err := Curve25519GenerateKey(nil)
+	keyPair, err := crypto.Curve25519GenerateKey(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +138,7 @@ func TestCurve25519PicklePubKeyOnly(t *testing.T) {
 	if writtenBytes != len(target) {
 		t.Fatal("written bytes not correct")
 	}
-	unpickledKeyPair := Curve25519KeyPair{}
+	unpickledKeyPair := crypto.Curve25519KeyPair{}
 	readBytes, err := unpickledKeyPair.UnpickleLibOlm(target)
 	if err != nil {
 		t.Fatal(err)
@@ -154,7 +156,7 @@ func TestCurve25519PicklePubKeyOnly(t *testing.T) {
 
 func TestCurve25519PicklePrivKeyOnly(t *testing.T) {
 	//create keypair
-	keyPair, err := Curve25519GenerateKey(nil)
+	keyPair, err := crypto.Curve25519GenerateKey(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +170,7 @@ func TestCurve25519PicklePrivKeyOnly(t *testing.T) {
 	if writtenBytes != len(target) {
 		t.Fatal("written bytes not correct")
 	}
-	unpickledKeyPair := Curve25519KeyPair{}
+	unpickledKeyPair := crypto.Curve25519KeyPair{}
 	readBytes, err := unpickledKeyPair.UnpickleLibOlm(target)
 	if err != nil {
 		t.Fatal(err)

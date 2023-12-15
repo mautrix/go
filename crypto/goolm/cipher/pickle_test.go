@@ -1,9 +1,11 @@
-package cipher
+package cipher_test
 
 import (
 	"bytes"
 	"crypto/aes"
 	"testing"
+
+	"maunium.net/go/mautrix/crypto/goolm/cipher"
 )
 
 func TestEncoding(t *testing.T) {
@@ -16,12 +18,12 @@ func TestEncoding(t *testing.T) {
 		toEncrypt = make([]byte, len(input)+padding)
 		copy(toEncrypt, input)
 	}
-	encoded, err := Pickle(key, toEncrypt)
+	encoded, err := cipher.Pickle(key, toEncrypt)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	decoded, err := Unpickle(key, encoded)
+	decoded, err := cipher.Unpickle(key, encoded)
 	if err != nil {
 		t.Fatal(err)
 	}

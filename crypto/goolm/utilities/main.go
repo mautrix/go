@@ -1,18 +1,16 @@
 package utilities
 
 import (
-	"codeberg.org/DerLukas/goolm"
-	"codeberg.org/DerLukas/goolm/crypto"
+	"encoding/base64"
+
+	"maunium.net/go/mautrix/crypto/goolm"
+	"maunium.net/go/mautrix/crypto/goolm/crypto"
 	"maunium.net/go/mautrix/id"
 )
 
-func Sha256(value []byte) []byte {
-	return goolm.Base64Encode(crypto.SHA256((value)))
-}
-
 // VerifySignature verifies an ed25519 signature.
 func VerifySignature(message []byte, key id.Ed25519, signature []byte) (ok bool, err error) {
-	keyDecoded, err := goolm.Base64Decode([]byte(key))
+	keyDecoded, err := base64.RawStdEncoding.DecodeString(string(key))
 	if err != nil {
 		return false, err
 	}

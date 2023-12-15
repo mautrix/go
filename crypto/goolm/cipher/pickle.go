@@ -1,8 +1,9 @@
 package cipher
 
 import (
-	"codeberg.org/DerLukas/goolm"
-	"github.com/pkg/errors"
+	"fmt"
+
+	"maunium.net/go/mautrix/crypto/goolm"
 )
 
 const (
@@ -15,9 +16,9 @@ func PickleBlockSize() int {
 	return AESSha512BlockSize()
 }
 
-// Pickle encrypts the input with the key and the cipher AESSha256. The result is then encoded in base64.
+// Pickle encrypts the input with the key and the cipher AESSHA256. The result is then encoded in base64.
 func Pickle(key, input []byte) ([]byte, error) {
-	pickleCipher := NewAESSha256([]byte(kdfPickle))
+	pickleCipher := NewAESSHA256([]byte(kdfPickle))
 	ciphertext, err := pickleCipher.Encrypt(key, input)
 	if err != nil {
 		return nil, err
@@ -31,9 +32,9 @@ func Pickle(key, input []byte) ([]byte, error) {
 	return encoded, nil
 }
 
-// Unpickle decodes the input from base64 and decrypts the decoded input with the key and the cipher AESSha256.
+// Unpickle decodes the input from base64 and decrypts the decoded input with the key and the cipher AESSHA256.
 func Unpickle(key, input []byte) ([]byte, error) {
-	pickleCipher := NewAESSha256([]byte(kdfPickle))
+	pickleCipher := NewAESSHA256([]byte(kdfPickle))
 	ciphertext, err := goolm.Base64Decode(input)
 	if err != nil {
 		return nil, err
@@ -44,7 +45,7 @@ func Unpickle(key, input []byte) ([]byte, error) {
 		return nil, err
 	}
 	if !verified {
-		return nil, errors.Wrap(goolm.ErrBadMAC, "decrypt pickle")
+		return nil, fmt.Errorf("decrypt pickle: %w", goolm.ErrBadMAC)
 	}
 	//Set to next block size
 	targetCipherText := make([]byte, int(len(ciphertext)/PickleBlockSize())*PickleBlockSize())

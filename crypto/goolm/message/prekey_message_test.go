@@ -1,10 +1,11 @@
-package message
+package message_test
 
 import (
 	"bytes"
 	"testing"
 
-	"codeberg.org/DerLukas/goolm/crypto"
+	"maunium.net/go/mautrix/crypto/goolm/crypto"
+	"maunium.net/go/mautrix/crypto/goolm/message"
 )
 
 func TestPreKeyMessageDecode(t *testing.T) {
@@ -16,7 +17,7 @@ func TestPreKeyMessageDecode(t *testing.T) {
 	expectedbaseKey := []byte("baseKey-.-.-.-.-.-.-.-.-.-.-.-.-")
 	expectedmessage := []byte("message")
 
-	msg := PreKeyMessage{}
+	msg := message.PreKeyMessage{}
 	err := msg.Decode(messageRaw)
 	if err != nil {
 		t.Fatal(err)
@@ -45,7 +46,7 @@ func TestPreKeyMessageDecode(t *testing.T) {
 
 func TestPreKeyMessageEncode(t *testing.T) {
 	expectedRaw := []byte("\x03\x0a\x0aonetimeKey\x1a\x05idKey\x12\x07baseKey\x22\x07message")
-	msg := PreKeyMessage{
+	msg := message.PreKeyMessage{
 		Version:     3,
 		IdentityKey: []byte("idKey"),
 		BaseKey:     []byte("baseKey"),

@@ -4,8 +4,8 @@ package sas
 import (
 	"io"
 
-	"codeberg.org/DerLukas/goolm"
-	"codeberg.org/DerLukas/goolm/crypto"
+	"maunium.net/go/mautrix/crypto/goolm"
+	"maunium.net/go/mautrix/crypto/goolm/crypto"
 )
 
 // SAS contains the key pair and secret for SAS.

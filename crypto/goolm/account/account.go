@@ -2,17 +2,20 @@
 package account
 
 import (
+	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 
-	"codeberg.org/DerLukas/goolm"
-	"codeberg.org/DerLukas/goolm/cipher"
-	"codeberg.org/DerLukas/goolm/crypto"
-	libolmpickle "codeberg.org/DerLukas/goolm/libolmPickle"
-	"codeberg.org/DerLukas/goolm/session"
-	"codeberg.org/DerLukas/goolm/utilities"
-	"github.com/pkg/errors"
 	"maunium.net/go/mautrix/id"
+
+	"maunium.net/go/mautrix/crypto/goolm"
+	"maunium.net/go/mautrix/crypto/goolm/cipher"
+	"maunium.net/go/mautrix/crypto/goolm/crypto"
+	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
+	"maunium.net/go/mautrix/crypto/goolm/session"
+	"maunium.net/go/mautrix/crypto/goolm/utilities"
 )
 
 const (
@@ -39,7 +42,7 @@ type Account struct {
 // AccountFromJSONPickled loads the Account details from a pickled base64 string. The input is decrypted with the supplied key.
 func AccountFromJSONPickled(pickled, key []byte) (*Account, error) {
 	if len(pickled) == 0 {
-		return nil, errors.Wrap(goolm.ErrEmptyInput, "accountFromPickled")
+		return nil, fmt.Errorf("accountFromPickled: %w", goolm.ErrEmptyInput)
 	}
 	a := &Account{}
 	err := a.UnpickleAsJSON(pickled, key)
@@ -52,7 +55,7 @@ func AccountFromJSONPickled(pickled, key []byte) (*Account, error) {
 // AccountFromPickled loads the Account details from a pickled base64 string. The input is decrypted with the supplied key.
 func AccountFromPickled(pickled, key []byte) (*Account, error) {
 	if len(pickled) == 0 {
-		return nil, errors.Wrap(goolm.ErrEmptyInput, "accountFromPickled")
+		return nil, fmt.Errorf("accountFromPickled: %w", goolm.ErrEmptyInput)
 	}
 	a := &Account{}
 	err := a.Unpickle(pickled, key)
@@ -102,15 +105,15 @@ func (a Account) IdentityKeysJSON() ([]byte, error) {
 
 // IdentityKeys returns the public parts of the Ed25519 and Curve25519 identity keys for the Account.
 func (a Account) IdentityKeys() (id.Ed25519, id.Curve25519) {
-	ed25519 := id.Ed25519(goolm.Base64Encode(a.IdKeys.Ed25519.PublicKey))
-	curve25519 := id.Curve25519(goolm.Base64Encode(a.IdKeys.Curve25519.PublicKey))
+	ed25519 := id.Ed25519(base64.RawStdEncoding.EncodeToString(a.IdKeys.Ed25519.PublicKey))
+	curve25519 := id.Curve25519(base64.RawStdEncoding.EncodeToString(a.IdKeys.Curve25519.PublicKey))
 	return ed25519, curve25519
 }
 
 // Sign returns the signature of a message using the Ed25519 key for this Account.
 func (a Account) Sign(message []byte) ([]byte, error) {
 	if len(message) == 0 {
-		return nil, errors.Wrap(goolm.ErrEmptyInput, "sign")
+		return nil, fmt.Errorf("sign: %w", goolm.ErrEmptyInput)
 	}
 	return goolm.Base64Encode(a.IdKeys.Ed25519.Sign(message)), nil
 }
@@ -184,13 +187,13 @@ func (a *Account) GenOneTimeKeys(reader io.Reader, num uint) error {
 // given curve25519 identity Key and one time key.
 func (a Account) NewOutboundSession(theirIdentityKey, theirOneTimeKey id.Curve25519) (*session.OlmSession, error) {
 	if len(theirIdentityKey) == 0 || len(theirOneTimeKey) == 0 {
-		return nil, errors.Wrap(goolm.ErrEmptyInput, "outbound session")
+		return nil, fmt.Errorf("outbound session: %w", goolm.ErrEmptyInput)
 	}
-	theirIdentityKeyDecoded, err := goolm.Base64Decode([]byte(theirIdentityKey))
+	theirIdentityKeyDecoded, err := base64.RawStdEncoding.DecodeString(string(theirIdentityKey))
 	if err != nil {
 		return nil, err
 	}
-	theirOneTimeKeyDecoded, err := goolm.Base64Decode([]byte(theirOneTimeKey))
+	theirOneTimeKeyDecoded, err := base64.RawStdEncoding.DecodeString(string(theirOneTimeKey))
 	if err != nil {
 		return nil, err
 	}
@@ -204,12 +207,12 @@ func (a Account) NewOutboundSession(theirIdentityKey, theirOneTimeKey id.Curve25
 // NewInboundSession creates a new inbound session from an incoming PRE_KEY message.
 func (a Account) NewInboundSession(theirIdentityKey *id.Curve25519, oneTimeKeyMsg []byte) (*session.OlmSession, error) {
 	if len(oneTimeKeyMsg) == 0 {
-		return nil, errors.Wrap(goolm.ErrEmptyInput, "inbound session")
+		return nil, fmt.Errorf("inbound session: %w", goolm.ErrEmptyInput)
 	}
 	var theirIdentityKeyDecoded *crypto.Curve25519PublicKey
 	var err error
 	if theirIdentityKey != nil {
-		theirIdentityKeyDecodedByte, err := goolm.Base64Decode([]byte(*theirIdentityKey))
+		theirIdentityKeyDecodedByte, err := base64.RawStdEncoding.DecodeString(string(*theirIdentityKey))
 		if err != nil {
 			return nil, err
 		}
@@ -356,7 +359,7 @@ func (a *Account) UnpickleLibOlm(value []byte) (int, error) {
 	switch pickledVersion {
 	case accountPickleVersionLibOLM, 3, 2:
 	default:
-		return 0, errors.Wrap(goolm.ErrBadVersion, "unpickle account")
+		return 0, fmt.Errorf("unpickle account: %w", goolm.ErrBadVersion)
 	}
 	//read ed25519 key pair
 	readBytes, err := a.IdKeys.Ed25519.UnpickleLibOlm(value[curPos:])
@@ -464,24 +467,24 @@ func (a Account) Pickle(key []byte) ([]byte, error) {
 // It returns the number of bytes written.
 func (a Account) PickleLibOlm(target []byte) (int, error) {
 	if len(target) < a.PickleLen() {
-		return 0, errors.Wrap(goolm.ErrValueTooShort, "pickle account")
+		return 0, fmt.Errorf("pickle account: %w", goolm.ErrValueTooShort)
 	}
 	written := libolmpickle.PickleUInt32(accountPickleVersionLibOLM, target)
 	writtenEdKey, err := a.IdKeys.Ed25519.PickleLibOlm(target[written:])
 	if err != nil {
-		return 0, errors.Wrap(err, "pickle account")
+		return 0, fmt.Errorf("pickle account: %w", err)
 	}
 	written += writtenEdKey
 	writtenCurveKey, err := a.IdKeys.Curve25519.PickleLibOlm(target[written:])
 	if err != nil {
-		return 0, errors.Wrap(err, "pickle account")
+		return 0, fmt.Errorf("pickle account: %w", err)
 	}
 	written += writtenCurveKey
 	written += libolmpickle.PickleUInt32(uint32(len(a.OTKeys)), target[written:])
 	for _, curOTKey := range a.OTKeys {
 		writtenOT, err := curOTKey.PickleLibOlm(target[written:])
 		if err != nil {
-			return 0, errors.Wrap(err, "pickle account")
+			return 0, fmt.Errorf("pickle account: %w", err)
 		}
 		written += writtenOT
 	}
@@ -489,14 +492,14 @@ func (a Account) PickleLibOlm(target []byte) (int, error) {
 	if a.NumFallbackKeys >= 1 {
 		writtenOT, err := a.CurrentFallbackKey.PickleLibOlm(target[written:])
 		if err != nil {
-			return 0, errors.Wrap(err, "pickle account")
+			return 0, fmt.Errorf("pickle account: %w", err)
 		}
 		written += writtenOT
 
 		if a.NumFallbackKeys >= 2 {
 			writtenOT, err := a.PrevFallbackKey.PickleLibOlm(target[written:])
 			if err != nil {
-				return 0, errors.Wrap(err, "pickle account")
+				return 0, fmt.Errorf("pickle account: %w", err)
 			}
 			written += writtenOT
 		}

@@ -1,8 +1,10 @@
-package message
+package message_test
 
 import (
 	"bytes"
 	"testing"
+
+	"maunium.net/go/mautrix/crypto/goolm/message"
 )
 
 func TestMessageDecode(t *testing.T) {
@@ -10,7 +12,7 @@ func TestMessageDecode(t *testing.T) {
 	expectedRatchetKey := []byte("ratchetkey")
 	expectedCipherText := []byte("ciphertext")
 
-	msg := Message{}
+	msg := message.Message{}
 	err := msg.Decode(messageRaw)
 	if err != nil {
 		t.Fatal(err)
@@ -35,7 +37,7 @@ func TestMessageDecode(t *testing.T) {
 func TestMessageEncode(t *testing.T) {
 	expectedRaw := []byte("\x03\n\nratchetkey\x10\x01\"\nciphertexthmacsha2")
 	hmacsha256 := []byte("hmacsha2")
-	msg := Message{
+	msg := message.Message{
 		Version:    3,
 		Counter:    1,
 		RatchetKey: []byte("ratchetkey"),

@@ -51,7 +51,7 @@ func TestDeriveAESKeys(t *testing.T) {
 
 func TestCipherAESSha256(t *testing.T) {
 	key := []byte("test key")
-	cipher := NewAESSha256([]byte("testKDFinfo"))
+	cipher := NewAESSHA256([]byte("testKDFinfo"))
 	message := []byte("this is a random message for testing the implementation")
 	//increase to next block size
 	for len(message)%aes.BlockSize != 0 {

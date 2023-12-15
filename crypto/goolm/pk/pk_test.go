@@ -1,11 +1,13 @@
-package pk
+package pk_test
 
 import (
 	"bytes"
+	"encoding/base64"
 	"testing"
 
-	"codeberg.org/DerLukas/goolm"
-	"codeberg.org/DerLukas/goolm/crypto"
+	"maunium.net/go/mautrix/crypto/goolm"
+	"maunium.net/go/mautrix/crypto/goolm/crypto"
+	"maunium.net/go/mautrix/crypto/goolm/pk"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -24,7 +26,7 @@ func TestEncryptionDecryption(t *testing.T) {
 		0x1C, 0x2F, 0x8B, 0x27, 0xFF, 0x88, 0xE0, 0xEB,
 	}
 	bobPublic := []byte("3p7bfXt9wbTTW2HC7OQ1Nz+DQ8hbeGdNrfx+FG+IK08")
-	decryption, err := NewDecriptionFromPrivate(alicePrivate)
+	decryption, err := pk.NewDecriptionFromPrivate(alicePrivate)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +37,7 @@ func TestEncryptionDecryption(t *testing.T) {
 		t.Fatal("private key not correct")
 	}
 
-	encryption, err := NewEncryption(decryption.PubKey())
+	encryption, err := pk.NewEncryption(decryption.PubKey())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,14 +65,14 @@ func TestSigning(t *testing.T) {
 		0xB1, 0x77, 0xFB, 0xA5, 0x1D, 0xB9, 0x2C, 0x2A,
 	}
 	message := []byte("We hold these truths to be self-evident, that all men are created equal, that they are endowed by their Creator with certain unalienable Rights, that among these are Life, Liberty and the pursuit of Happiness.")
-	signing, _ := NewSigningFromSeed(seed)
+	signing, _ := pk.NewSigningFromSeed(seed)
 	signature := signing.Sign(message)
 	signatureDecoded, err := goolm.Base64Decode(signature)
 	if err != nil {
 		t.Fatal(err)
 	}
 	pubKeyEncoded := signing.PublicKey()
-	pubKeyDecoded, err := goolm.Base64Decode([]byte(pubKeyEncoded))
+	pubKeyDecoded, err := base64.RawStdEncoding.DecodeString(string(pubKeyEncoded))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +97,7 @@ func TestDecryptionPickling(t *testing.T) {
 		0xB1, 0x77, 0xFB, 0xA5, 0x1D, 0xB9, 0x2C, 0x2A,
 	}
 	alicePublic := []byte("hSDwCYkwp1R0i33ctD73Wg2/Og0mOBr066SpjqqbTmo")
-	decryption, err := NewDecriptionFromPrivate(alicePrivate)
+	decryption, err := pk.NewDecriptionFromPrivate(alicePrivate)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +117,7 @@ func TestDecryptionPickling(t *testing.T) {
 		t.Fatalf("pickle not as expected:\n%v\n%v\n", pickled, expectedPickle)
 	}
 
-	newDecription, err := NewDecription()
+	newDecription, err := pk.NewDecription()
 	if err != nil {
 		t.Fatal(err)
 	}

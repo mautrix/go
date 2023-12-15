@@ -3,14 +3,14 @@ package megolm
 
 import (
 	"crypto/rand"
+	"fmt"
 
-	"codeberg.org/DerLukas/goolm"
-	"codeberg.org/DerLukas/goolm/cipher"
-	"codeberg.org/DerLukas/goolm/crypto"
-	libolmpickle "codeberg.org/DerLukas/goolm/libolmPickle"
-	"codeberg.org/DerLukas/goolm/message"
-	"codeberg.org/DerLukas/goolm/utilities"
-	"github.com/pkg/errors"
+	"maunium.net/go/mautrix/crypto/goolm"
+	"maunium.net/go/mautrix/crypto/goolm/cipher"
+	"maunium.net/go/mautrix/crypto/goolm/crypto"
+	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
+	"maunium.net/go/mautrix/crypto/goolm/message"
+	"maunium.net/go/mautrix/crypto/goolm/utilities"
 )
 
 const (
@@ -23,7 +23,7 @@ const (
 	RatchetPartLength = 256 / 8 // length of each ratchet part in bytes
 )
 
-var RatchetCipher = cipher.NewAESSha256([]byte("MEGOLM_KEYS"))
+var RatchetCipher = cipher.NewAESSHA256([]byte("MEGOLM_KEYS"))
 
 // hasKeySeed are the seed for the different ratchet parts
 var hashKeySeeds [RatchetParts][]byte = [RatchetParts][]byte{
@@ -136,7 +136,7 @@ func (r *Ratchet) Encrypt(plaintext []byte, key *crypto.Ed25519KeyPair) ([]byte,
 	var err error
 	encryptedText, err := RatchetCipher.Encrypt(r.Data[:], plaintext)
 	if err != nil {
-		return nil, errors.Wrap(err, "cipher encrypt")
+		return nil, fmt.Errorf("cipher encrypt: %w", err)
 	}
 
 	message := &message.GroupMessage{}
@@ -179,7 +179,7 @@ func (r Ratchet) Decrypt(ciphertext []byte, signingkey *crypto.Ed25519PublicKey,
 		return nil, err
 	}
 	if !verifiedMAC {
-		return nil, errors.Wrap(goolm.ErrBadMAC, "decrypt")
+		return nil, fmt.Errorf("decrypt: %w", goolm.ErrBadMAC)
 	}
 
 	return RatchetCipher.Decrypt(r.Data[:], msg.Ciphertext)
@@ -219,7 +219,7 @@ func (r *Ratchet) UnpickleLibOlm(unpickled []byte) (int, error) {
 // It returns the number of bytes written.
 func (r Ratchet) PickleLibOlm(target []byte) (int, error) {
 	if len(target) < r.PickleLen() {
-		return 0, errors.Wrap(goolm.ErrValueTooShort, "pickle account")
+		return 0, fmt.Errorf("pickle account: %w", goolm.ErrValueTooShort)
 	}
 	written := libolmpickle.PickleBytes(r.Data[:], target)
 	written += libolmpickle.PickleUInt32(r.Counter, target[written:])

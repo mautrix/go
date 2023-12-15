@@ -1,10 +1,11 @@
 package olm
 
 import (
-	"codeberg.org/DerLukas/goolm"
-	"codeberg.org/DerLukas/goolm/crypto"
-	libolmpickle "codeberg.org/DerLukas/goolm/libolmPickle"
-	"github.com/pkg/errors"
+	"fmt"
+
+	"maunium.net/go/mautrix/crypto/goolm"
+	"maunium.net/go/mautrix/crypto/goolm/crypto"
+	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
 )
 
 const (
@@ -44,11 +45,11 @@ func (r *chainKey) UnpickleLibOlm(value []byte) (int, error) {
 // It returns the number of bytes written.
 func (r chainKey) PickleLibOlm(target []byte) (int, error) {
 	if len(target) < r.PickleLen() {
-		return 0, errors.Wrap(goolm.ErrValueTooShort, "pickle chain key")
+		return 0, fmt.Errorf("pickle chain key: %w", goolm.ErrValueTooShort)
 	}
 	written, err := r.Key.PickleLibOlm(target)
 	if err != nil {
-		return 0, errors.Wrap(err, "pickle chain key")
+		return 0, fmt.Errorf("pickle chain key: %w", err)
 	}
 	written += libolmpickle.PickleUInt32(r.Index, target[written:])
 	return written, nil
@@ -115,15 +116,15 @@ func (r *senderChain) UnpickleLibOlm(value []byte) (int, error) {
 // It returns the number of bytes written.
 func (r senderChain) PickleLibOlm(target []byte) (int, error) {
 	if len(target) < r.PickleLen() {
-		return 0, errors.Wrap(goolm.ErrValueTooShort, "pickle sender chain")
+		return 0, fmt.Errorf("pickle sender chain: %w", goolm.ErrValueTooShort)
 	}
 	written, err := r.RKey.PickleLibOlm(target)
 	if err != nil {
-		return 0, errors.Wrap(err, "pickle sender chain")
+		return 0, fmt.Errorf("pickle sender chain: %w", err)
 	}
 	writtenChain, err := r.CKey.PickleLibOlm(target[written:])
 	if err != nil {
-		return 0, errors.Wrap(err, "pickle sender chain")
+		return 0, fmt.Errorf("pickle sender chain: %w", err)
 	}
 	written += writtenChain
 	return written, nil
@@ -188,15 +189,15 @@ func (r *receiverChain) UnpickleLibOlm(value []byte) (int, error) {
 // It returns the number of bytes written.
 func (r receiverChain) PickleLibOlm(target []byte) (int, error) {
 	if len(target) < r.PickleLen() {
-		return 0, errors.Wrap(goolm.ErrValueTooShort, "pickle sender chain")
+		return 0, fmt.Errorf("pickle sender chain: %w", goolm.ErrValueTooShort)
 	}
 	written, err := r.RKey.PickleLibOlm(target)
 	if err != nil {
-		return 0, errors.Wrap(err, "pickle sender chain")
+		return 0, fmt.Errorf("pickle sender chain: %w", err)
 	}
 	writtenChain, err := r.CKey.PickleLibOlm(target)
 	if err != nil {
-		return 0, errors.Wrap(err, "pickle sender chain")
+		return 0, fmt.Errorf("pickle sender chain: %w", err)
 	}
 	written += writtenChain
 	return written, nil
@@ -237,7 +238,7 @@ func (m *messageKey) UnpickleLibOlm(value []byte) (int, error) {
 // It returns the number of bytes written.
 func (m messageKey) PickleLibOlm(target []byte) (int, error) {
 	if len(target) < m.PickleLen() {
-		return 0, errors.Wrap(goolm.ErrValueTooShort, "pickle message key")
+		return 0, fmt.Errorf("pickle message key: %w", goolm.ErrValueTooShort)
 	}
 	written := 0
 	if len(m.Key) != messageKeyLength {
