@@ -22,7 +22,7 @@ type OutboundGroupSession struct {
 // base64 couldn't be decoded then the error will be "INVALID_BASE64".
 func OutboundGroupSessionFromPickled(pickled, key []byte) (*OutboundGroupSession, error) {
 	if len(pickled) == 0 {
-		return nil, ErrEmptyInput
+		return nil, EmptyInput
 	}
 	lenKey := len(key)
 	if lenKey == 0 {
@@ -63,7 +63,7 @@ func (s *OutboundGroupSession) Clear() error {
 // OutboundGroupSession using the supplied key.
 func (s *OutboundGroupSession) Pickle(key []byte) []byte {
 	if len(key) == 0 {
-		panic(ErrNoKeyProvided)
+		panic(NoKeyProvided)
 	}
 	pickled, err := s.MegolmOutboundSession.Pickle(key)
 	if err != nil {
@@ -74,7 +74,7 @@ func (s *OutboundGroupSession) Pickle(key []byte) []byte {
 
 func (s *OutboundGroupSession) Unpickle(pickled, key []byte) error {
 	if len(key) == 0 {
-		return ErrNoKeyProvided
+		return NoKeyProvided
 	}
 	return s.MegolmOutboundSession.Unpickle(pickled, key)
 }
@@ -114,7 +114,7 @@ func (s *OutboundGroupSession) MarshalJSON() ([]byte, error) {
 
 func (s *OutboundGroupSession) UnmarshalJSON(data []byte) error {
 	if len(data) == 0 || data[0] != '"' || data[len(data)-1] != '"' {
-		return ErrInputNotJSONString
+		return InputNotJSONString
 	}
 	if s == nil {
 		*s = *NewBlankOutboundGroupSession()
@@ -126,7 +126,7 @@ func (s *OutboundGroupSession) UnmarshalJSON(data []byte) error {
 // as base64.
 func (s *OutboundGroupSession) Encrypt(plaintext []byte) []byte {
 	if len(plaintext) == 0 {
-		panic(ErrEmptyInput)
+		panic(EmptyInput)
 	}
 	message, err := s.MegolmOutboundSession.Encrypt(plaintext)
 	if err != nil {

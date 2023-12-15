@@ -43,7 +43,7 @@ func (a *Account) Clear() error {
 // supplied key.
 func (a *Account) Pickle(key []byte) []byte {
 	if len(key) == 0 {
-		panic(ErrNoKeyProvided)
+		panic(NoKeyProvided)
 	}
 	pickled, err := a.Account.Pickle(key)
 	if err != nil {
@@ -84,7 +84,7 @@ func (a *Account) MarshalJSON() ([]byte, error) {
 
 func (a *Account) UnmarshalJSON(data []byte) error {
 	if len(data) == 0 || data[0] != '"' || data[len(data)-1] != '"' {
-		return ErrInputNotJSONString
+		return InputNotJSONString
 	}
 	return a.Unpickle(data[1:len(data)-1], pickleKey)
 }
@@ -102,7 +102,7 @@ func (a *Account) IdentityKeysJSON() []byte {
 // Account.
 func (a *Account) Sign(message []byte) []byte {
 	if len(message) == 0 {
-		panic(ErrEmptyInput)
+		panic(EmptyInput)
 	}
 	signature, err := a.Account.Sign(message)
 	if err != nil {
@@ -143,7 +143,7 @@ func (a *Account) GenOneTimeKeys(num uint) {
 // given curve25519 identityKey and oneTimeKey. Returns error on failure.
 func (a *Account) NewOutboundSession(theirIdentityKey, theirOneTimeKey id.Curve25519) (*Session, error) {
 	if len(theirIdentityKey) == 0 || len(theirOneTimeKey) == 0 {
-		return nil, ErrEmptyInput
+		return nil, EmptyInput
 	}
 	s := &Session{}
 	newSession, err := a.Account.NewOutboundSession(theirIdentityKey, theirOneTimeKey)
@@ -158,7 +158,7 @@ func (a *Account) NewOutboundSession(theirIdentityKey, theirOneTimeKey id.Curve2
 // messages from an incoming PRE_KEY message. Returns error on failure.
 func (a *Account) NewInboundSession(oneTimeKeyMsg string) (*Session, error) {
 	if len(oneTimeKeyMsg) == 0 {
-		return nil, ErrEmptyInput
+		return nil, EmptyInput
 	}
 	s := &Session{}
 	newSession, err := a.Account.NewInboundSession(nil, []byte(oneTimeKeyMsg))
@@ -173,7 +173,7 @@ func (a *Account) NewInboundSession(oneTimeKeyMsg string) (*Session, error) {
 // messages from an incoming PRE_KEY message. Returns error on failure.
 func (a *Account) NewInboundSessionFrom(theirIdentityKey id.Curve25519, oneTimeKeyMsg string) (*Session, error) {
 	if len(theirIdentityKey) == 0 || len(oneTimeKeyMsg) == 0 {
-		return nil, ErrEmptyInput
+		return nil, EmptyInput
 	}
 	s := &Session{}
 	newSession, err := a.Account.NewInboundSession(&theirIdentityKey, []byte(oneTimeKeyMsg))

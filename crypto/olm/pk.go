@@ -76,7 +76,7 @@ func NewPkSigning() (*PkSigning, error) {
 	seed := make([]byte, pkSigningSeedLength())
 	_, err := rand.Read(seed)
 	if err != nil {
-		panic(ErrNotEnoughGoRandom)
+		panic(NotEnoughGoRandom)
 	}
 	pk, err := NewPkSigningFromSeed(seed)
 	return pk, err

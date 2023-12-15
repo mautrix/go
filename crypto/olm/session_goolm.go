@@ -18,7 +18,7 @@ type Session struct {
 // the Session using the supplied key.  Returns error on failure.
 func SessionFromPickled(pickled, key []byte) (*Session, error) {
 	if len(pickled) == 0 {
-		return nil, ErrEmptyInput
+		return nil, EmptyInput
 	}
 	s := NewBlankSession()
 	return s, s.Unpickle(pickled, key)
@@ -38,7 +38,7 @@ func (s *Session) Clear() error {
 // supplied key.
 func (s *Session) Pickle(key []byte) []byte {
 	if len(key) == 0 {
-		panic(ErrNoKeyProvided)
+		panic(NoKeyProvided)
 	}
 	pickled, err := s.OlmSession.Pickle(key)
 	if err != nil {
@@ -49,9 +49,9 @@ func (s *Session) Pickle(key []byte) []byte {
 
 func (s *Session) Unpickle(pickled, key []byte) error {
 	if len(key) == 0 {
-		return ErrNoKeyProvided
+		return NoKeyProvided
 	} else if len(pickled) == 0 {
-		return ErrEmptyInput
+		return EmptyInput
 	}
 	sOlm, err := session.OlmSessionFromPickled(pickled, key)
 	if err != nil {
@@ -96,7 +96,7 @@ func (s *Session) MarshalJSON() ([]byte, error) {
 
 func (s *Session) UnmarshalJSON(data []byte) error {
 	if len(data) == 0 || data[0] != '"' || data[len(data)-1] != '"' {
-		return ErrInputNotJSONString
+		return InputNotJSONString
 	}
 	if s == nil {
 		*s = *NewBlankSession()
@@ -131,7 +131,7 @@ func (s *Session) MatchesInboundSessionFrom(theirIdentityKey, oneTimeKeyMsg stri
 // as base64.
 func (s *Session) Encrypt(plaintext []byte) (id.OlmMsgType, []byte) {
 	if len(plaintext) == 0 {
-		panic(ErrEmptyInput)
+		panic(EmptyInput)
 	}
 	messageType, message, err := s.OlmSession.Encrypt(plaintext, nil)
 	if err != nil {
@@ -144,7 +144,7 @@ func (s *Session) Encrypt(plaintext []byte) (id.OlmMsgType, []byte) {
 // success.  Returns error on failure.
 func (s *Session) Decrypt(message string, msgType id.OlmMsgType) ([]byte, error) {
 	if len(message) == 0 {
-		return nil, ErrEmptyInput
+		return nil, EmptyInput
 	}
 	return s.OlmSession.Decrypt([]byte(message), msgType)
 }

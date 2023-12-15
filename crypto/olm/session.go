@@ -42,7 +42,7 @@ func sessionSize() uint {
 // "INVALID_BASE64".
 func SessionFromPickled(pickled, key []byte) (*Session, error) {
 	if len(pickled) == 0 {
-		return nil, ErrEmptyInput
+		return nil, EmptyInput
 	}
 	s := NewBlankSession()
 	return s, s.Unpickle(pickled, key)
@@ -109,7 +109,7 @@ func (s *Session) encryptMsgLen(plainTextLen int) uint {
 // will be "BAD_MESSAGE_FORMAT".
 func (s *Session) decryptMaxPlaintextLen(message string, msgType id.OlmMsgType) (uint, error) {
 	if len(message) == 0 {
-		return 0, ErrEmptyInput
+		return 0, EmptyInput
 	}
 	r := C.olm_decrypt_max_plaintext_length(
 		(*C.OlmSession)(s.int),
@@ -126,7 +126,7 @@ func (s *Session) decryptMaxPlaintextLen(message string, msgType id.OlmMsgType) 
 // supplied key.
 func (s *Session) Pickle(key []byte) []byte {
 	if len(key) == 0 {
-		panic(ErrNoKeyProvided)
+		panic(NoKeyProvided)
 	}
 	pickled := make([]byte, s.pickleLen())
 	r := C.olm_pickle_session(
@@ -143,7 +143,7 @@ func (s *Session) Pickle(key []byte) []byte {
 
 func (s *Session) Unpickle(pickled, key []byte) error {
 	if len(key) == 0 {
-		return ErrNoKeyProvided
+		return NoKeyProvided
 	}
 	r := C.olm_unpickle_session(
 		(*C.OlmSession)(s.int),
@@ -186,7 +186,7 @@ func (s *Session) MarshalJSON() ([]byte, error) {
 
 func (s *Session) UnmarshalJSON(data []byte) error {
 	if len(data) == 0 || len(data) == 0 || data[0] != '"' || data[len(data)-1] != '"' {
-		return ErrInputNotJSONString
+		return InputNotJSONString
 	}
 	if s == nil || s.int == nil {
 		*s = *NewBlankSession()
@@ -228,7 +228,7 @@ func (s *Session) HasReceivedMessage() bool {
 // decoded then then the error will be "BAD_MESSAGE_FORMAT".
 func (s *Session) MatchesInboundSession(oneTimeKeyMsg string) (bool, error) {
 	if len(oneTimeKeyMsg) == 0 {
-		return false, ErrEmptyInput
+		return false, EmptyInput
 	}
 	r := C.olm_matches_inbound_session(
 		(*C.OlmSession)(s.int),
@@ -253,7 +253,7 @@ func (s *Session) MatchesInboundSession(oneTimeKeyMsg string) (bool, error) {
 // decoded then then the error will be "BAD_MESSAGE_FORMAT".
 func (s *Session) MatchesInboundSessionFrom(theirIdentityKey, oneTimeKeyMsg string) (bool, error) {
 	if len(theirIdentityKey) == 0 || len(oneTimeKeyMsg) == 0 {
-		return false, ErrEmptyInput
+		return false, EmptyInput
 	}
 	r := C.olm_matches_inbound_session_from(
 		(*C.OlmSession)(s.int),
@@ -289,13 +289,13 @@ func (s *Session) EncryptMsgType() id.OlmMsgType {
 // as base64.
 func (s *Session) Encrypt(plaintext []byte) (id.OlmMsgType, []byte) {
 	if len(plaintext) == 0 {
-		panic(ErrEmptyInput)
+		panic(EmptyInput)
 	}
 	// Make the slice be at least length 1
 	random := make([]byte, s.encryptRandomLen()+1)
 	_, err := rand.Read(random)
 	if err != nil {
-		panic(ErrNotEnoughGoRandom)
+		panic(NotEnoughGoRandom)
 	}
 	messageType := s.EncryptMsgType()
 	message := make([]byte, s.encryptMsgLen(len(plaintext)))
@@ -322,7 +322,7 @@ func (s *Session) Encrypt(plaintext []byte) (id.OlmMsgType, []byte) {
 // "BAD_MESSAGE_MAC".
 func (s *Session) Decrypt(message string, msgType id.OlmMsgType) ([]byte, error) {
 	if len(message) == 0 {
-		return nil, ErrEmptyInput
+		return nil, EmptyInput
 	}
 	decryptMaxPlaintextLen, err := s.decryptMaxPlaintextLen(message, msgType)
 	if err != nil {

@@ -34,7 +34,7 @@ func NewUtility() *Utility {
 // Sha256 calculates the SHA-256 hash of the input and encodes it as base64.
 func (u *Utility) Sha256(input string) string {
 	if len(input) == 0 {
-		panic(ErrEmptyInput)
+		panic(EmptyInput)
 	}
 	hash := sha256.Sum256([]byte(input))
 	return base64.RawStdEncoding.EncodeToString(hash[:])
@@ -45,7 +45,7 @@ func (u *Utility) Sha256(input string) string {
 // small then the error will be "INVALID_BASE64".
 func (u *Utility) VerifySignature(message string, key id.Ed25519, signature string) (ok bool, err error) {
 	if len(message) == 0 || len(key) == 0 || len(signature) == 0 {
-		return false, ErrEmptyInput
+		return false, EmptyInput
 	}
 	return utilities.VerifySignature([]byte(message), key, []byte(signature))
 }
@@ -65,7 +65,7 @@ func (u *Utility) VerifySignatureJSON(obj interface{}, userID id.UserID, keyName
 	}
 	sig := gjson.GetBytes(objJSON, exgjson.Path("signatures", string(userID), fmt.Sprintf("ed25519:%s", keyName)))
 	if !sig.Exists() || sig.Type != gjson.String {
-		return false, ErrSignatureNotFound
+		return false, SignatureNotFound
 	}
 	objJSON, err = sjson.DeleteBytes(objJSON, "unsigned")
 	if err != nil {

@@ -43,7 +43,7 @@ func NewSAS() *SAS {
 	random := make([]byte, sas.sasRandomLength()+1)
 	_, err := rand.Read(random)
 	if err != nil {
-		panic(ErrNotEnoughGoRandom)
+		panic(NotEnoughGoRandom)
 	}
 	r := C.olm_create_sas(
 		(*C.OlmSAS)(sas.int),

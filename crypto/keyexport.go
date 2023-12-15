@@ -69,7 +69,7 @@ func makeExportIV() []byte {
 	iv := make([]byte, 16)
 	_, err := rand.Read(iv)
 	if err != nil {
-		panic(olm.ErrNotEnoughGoRandom)
+		panic(olm.NotEnoughGoRandom)
 	}
 	// Set bit 63 to zero
 	iv[7] &= 0b11111110
@@ -80,7 +80,7 @@ func makeExportKeys(passphrase string) (encryptionKey, hashKey, salt, iv []byte)
 	salt = make([]byte, 16)
 	_, err := rand.Read(salt)
 	if err != nil {
-		panic(olm.ErrNotEnoughGoRandom)
+		panic(olm.NotEnoughGoRandom)
 	}
 
 	encryptionKey, hashKey = computeKey(passphrase, salt, defaultPassphraseRounds)

@@ -20,7 +20,7 @@ type InboundGroupSession struct {
 // Returns error on failure.
 func InboundGroupSessionFromPickled(pickled, key []byte) (*InboundGroupSession, error) {
 	if len(pickled) == 0 {
-		return nil, ErrEmptyInput
+		return nil, EmptyInput
 	}
 	lenKey := len(key)
 	if lenKey == 0 {
@@ -39,7 +39,7 @@ func InboundGroupSessionFromPickled(pickled, key []byte) (*InboundGroupSession, 
 // exported from OutboundGroupSession.Key(). Returns error on failure.
 func NewInboundGroupSession(sessionKey []byte) (*InboundGroupSession, error) {
 	if len(sessionKey) == 0 {
-		return nil, ErrEmptyInput
+		return nil, EmptyInput
 	}
 	megolmSession, err := session.NewMegolmInboundSession(sessionKey)
 	if err != nil {
@@ -54,7 +54,7 @@ func NewInboundGroupSession(sessionKey []byte) (*InboundGroupSession, error) {
 // export. Returns error on failure.
 func InboundGroupSessionImport(sessionKey []byte) (*InboundGroupSession, error) {
 	if len(sessionKey) == 0 {
-		return nil, ErrEmptyInput
+		return nil, EmptyInput
 	}
 	megolmSession, err := session.NewMegolmInboundSessionFromExport(sessionKey)
 	if err != nil {
@@ -79,7 +79,7 @@ func (s *InboundGroupSession) Clear() error {
 // InboundGroupSession using the supplied key.
 func (s *InboundGroupSession) Pickle(key []byte) []byte {
 	if len(key) == 0 {
-		panic(ErrNoKeyProvided)
+		panic(NoKeyProvided)
 	}
 	pickled, err := s.MegolmInboundSession.Pickle(key)
 	if err != nil {
@@ -90,9 +90,9 @@ func (s *InboundGroupSession) Pickle(key []byte) []byte {
 
 func (s *InboundGroupSession) Unpickle(pickled, key []byte) error {
 	if len(key) == 0 {
-		return ErrNoKeyProvided
+		return NoKeyProvided
 	} else if len(pickled) == 0 {
-		return ErrEmptyInput
+		return EmptyInput
 	}
 	sOlm, err := session.MegolmInboundSessionFromPickled(pickled, key)
 	if err != nil {
@@ -137,7 +137,7 @@ func (s *InboundGroupSession) MarshalJSON() ([]byte, error) {
 
 func (s *InboundGroupSession) UnmarshalJSON(data []byte) error {
 	if len(data) == 0 || data[0] != '"' || data[len(data)-1] != '"' {
-		return ErrInputNotJSONString
+		return InputNotJSONString
 	}
 	if s == nil {
 		*s = *NewBlankInboundGroupSession()
@@ -149,7 +149,7 @@ func (s *InboundGroupSession) UnmarshalJSON(data []byte) error {
 // plain-text and message index on success. Returns error on failure.
 func (s *InboundGroupSession) Decrypt(message []byte) ([]byte, uint, error) {
 	if len(message) == 0 {
-		return nil, 0, ErrEmptyInput
+		return nil, 0, EmptyInput
 	}
 	plaintext, messageIndex, err := s.MegolmInboundSession.Decrypt(message)
 	if err != nil {
