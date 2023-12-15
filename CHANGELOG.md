@@ -1,3 +1,27 @@
+## v0.17.0 (unreleased)
+
+* **Breaking change *(bridge)*** Added raw event to portal membership handling
+  functions.
+* *(crypto)* Added `goolm` build tag to use a pure Go implementation of Olm
+  instead of using libolm via cgo. Thanks to [@DerLukas15] in [#106].
+* *(bridge)* Added context parameter for bridge command events.
+* *(client)* Changed default syncer to not drop unknown events.
+  * The syncer will still drop known events if parsing the content fails.
+  * The behavior can be changed by changing the `ParseErrorHandler` function.
+
+[@DerLukas15]: https://github.com/DerLukas15
+[#106]: https://github.com/mautrix/go/pull/106
+
+## v0.16.2 (2023-11-16)
+
+* *(event)* Added `Redacts` field to `RedactionEventContent` for room v11+.
+* *(event)* Added `ReverseTextToHTML` which reverses the changes made by
+  `TextToHTML` (i.e. unescapes HTML characters and replaces `<br/>` with `\n`).
+* *(bridge)* Added global zerologger to ensure all logs go through the bridge
+  logger.
+* *(bridge)* Changed encryption error messages to be sent in a thread if the
+  message that failed to decrypt was in a thread.
+
 ## v0.16.1 (2023-09-16)
 
 * **Breaking change *(id)*** Updated user ID localpart encoding to not encode

@@ -22,6 +22,7 @@ import (
 
 	"github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
+	deflog "github.com/rs/zerolog/log"
 	"go.mau.fi/util/configupgrade"
 	"go.mau.fi/util/dbutil"
 	_ "go.mau.fi/util/dbutil/litestream"
@@ -64,9 +65,9 @@ type Portal interface {
 
 type MembershipHandlingPortal interface {
 	Portal
-	HandleMatrixLeave(sender User)
-	HandleMatrixKick(sender User, ghost Ghost)
-	HandleMatrixInvite(sender User, ghost Ghost)
+	HandleMatrixLeave(sender User, evt *event.Event)
+	HandleMatrixKick(sender User, ghost Ghost, evt *event.Event)
+	HandleMatrixInvite(sender User, ghost Ghost, evt *event.Event)
 }
 
 type ReadReceiptHandlingPortal interface {
@@ -505,6 +506,7 @@ func (br *Bridge) init() {
 	zerolog.TimeFieldFormat = time.RFC3339Nano
 	zerolog.CallerMarshalFunc = exzerolog.CallerWithFunctionName
 	zerolog.DefaultContextLogger = &defaultCtxLog
+	deflog.Logger = br.ZLog.With().Bool("global_log", true).Caller().Logger()
 	br.Log = maulogadapt.ZeroAsMau(br.ZLog)
 
 	br.DoublePuppet = &doublePuppetUtil{br: br, log: br.ZLog.With().Str("component", "double puppet").Logger()}

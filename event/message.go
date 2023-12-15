@@ -48,12 +48,12 @@ const (
 
 // RedactionEventContent represents the content of a m.room.redaction message event.
 //
-// The redacted event ID is still at the top level, but will move in a future room version.
-// See https://github.com/matrix-org/matrix-doc/pull/2244 and https://github.com/matrix-org/matrix-doc/pull/2174
-//
-// https://spec.matrix.org/v1.2/client-server-api/#mroomredaction
+// https://spec.matrix.org/v1.8/client-server-api/#mroomredaction
 type RedactionEventContent struct {
 	Reason string `json:"reason,omitempty"`
+
+	// The event ID is here as of room v11. In old servers it may only be at the top level.
+	Redacts id.EventID `json:"redacts,omitempty"`
 }
 
 // ReactionEventContent represents the content of a m.reaction message event.
@@ -151,8 +151,16 @@ func (content *MessageEventContent) SetEdit(original id.EventID) {
 	}
 }
 
+// TextToHTML converts the given text to a HTML-safe representation by escaping HTML characters
+// and replacing newlines with <br/> tags.
 func TextToHTML(text string) string {
 	return strings.ReplaceAll(html.EscapeString(text), "\n", "<br/>")
+}
+
+// ReverseTextToHTML reverses the modifications made by TextToHTML, i.e. replaces <br/> tags with newlines
+// and unescapes HTML escape codes. For actually parsing HTML, use the format package instead.
+func ReverseTextToHTML(input string) string {
+	return html.UnescapeString(strings.ReplaceAll(input, "<br/>", "\n"))
 }
 
 func (content *MessageEventContent) EnsureHasHTML() {

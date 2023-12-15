@@ -79,7 +79,7 @@ func (mach *OlmMachine) DecryptMegolmEvent(ctx context.Context, evt *event.Event
 			trustLevel = id.TrustStateUnknownDevice
 		} else if len(sess.ForwardingChains) == 0 || (len(sess.ForwardingChains) == 1 && sess.ForwardingChains[0] == sess.SenderKey.String()) {
 			if device == nil {
-				log.Debug().Err(err).
+				log.Debug().
 					Str("session_sender_key", sess.SenderKey.String()).
 					Msg("Couldn't resolve trust level of session: sent by unknown device")
 				trustLevel = id.TrustStateUnknownDevice

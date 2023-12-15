@@ -25,7 +25,7 @@ import (
 )
 
 type CommandProcessor interface {
-	Handle(roomID id.RoomID, eventID id.EventID, user User, message string, replyTo id.EventID)
+	Handle(ctx context.Context, roomID id.RoomID, eventID id.EventID, user User, message string, replyTo id.EventID)
 }
 
 type MatrixHandler struct {
@@ -290,12 +290,12 @@ func (mx *MatrixHandler) HandleMembership(evt *event.Event) {
 			}
 		}
 		if isSelf {
-			mhp.HandleMatrixLeave(user)
+			mhp.HandleMatrixLeave(user, evt)
 		} else if ghost != nil {
-			mhp.HandleMatrixKick(user, ghost)
+			mhp.HandleMatrixKick(user, ghost, evt)
 		}
 	} else if content.Membership == event.MembershipInvite && !isSelf && ghost != nil {
-		mhp.HandleMatrixInvite(user, ghost)
+		mhp.HandleMatrixInvite(user, ghost, evt)
 	}
 	// TODO kicking/inviting non-ghost users users
 }
@@ -371,8 +371,11 @@ func (mx *MatrixHandler) sendCryptoStatusError(ctx context.Context, evt *event.E
 		if errors.Is(err, errNoCrypto) {
 			update.Body = "🔒 This bridge has not been configured to support encryption"
 		}
+		relatable, ok := evt.Content.Parsed.(event.Relatable)
 		if editEvent != "" {
 			update.SetEdit(editEvent)
+		} else if ok && relatable.OptionalGetRelatesTo().GetThreadParent() != "" {
+			update.GetRelatesTo().SetThread(relatable.OptionalGetRelatesTo().GetThreadParent(), evt.ID)
 		}
 		resp, sendErr := mx.bridge.Bot.SendMessageEvent(ctx, evt.RoomID, event.EventMessage, &update)
 		if sendErr != nil {
@@ -544,14 +547,17 @@ func (mx *MatrixHandler) waitLongerForSession(ctx context.Context, evt *event.Ev
 }
 
 func (mx *MatrixHandler) HandleMessage(evt *event.Event) {
-	ctx := context.Background()
 	defer mx.TrackEventDuration(evt.Type)()
+	log := mx.log.With().
+		Str("event_id", evt.ID.String()).
+		Str("room_id", evt.RoomID.String()).
+		Str("sender", evt.Sender.String()).
+		Logger()
+	ctx := log.WithContext(context.Background())
 	if mx.shouldIgnoreEvent(evt) {
 		return
 	} else if !evt.Mautrix.WasEncrypted && mx.bridge.Config.Bridge.GetEncryptionConfig().Require {
-		log := mx.log.With().Str("event_id", evt.ID.String()).Logger()
 		log.Warn().Msg("Dropping unencrypted event")
-		ctx := log.WithContext(ctx)
 		mx.sendCryptoStatusError(ctx, evt, "", errMessageNotEncrypted, 0, true)
 		return
 	}
@@ -570,7 +576,7 @@ func (mx *MatrixHandler) HandleMessage(evt *event.Event) {
 			content.Body = strings.TrimLeft(strings.TrimPrefix(content.Body, commandPrefix), " ")
 		}
 		if hasCommandPrefix || evt.RoomID == user.GetManagementRoomID() {
-			go mx.bridge.CommandProcessor.Handle(evt.RoomID, evt.ID, user, content.Body, content.RelatesTo.GetReplyTo())
+			go mx.bridge.CommandProcessor.Handle(ctx, evt.RoomID, evt.ID, user, content.Body, content.RelatesTo.GetReplyTo())
 			go mx.bridge.SendMessageSuccessCheckpoint(evt, status.MsgStepCommand, 0)
 			if mx.bridge.Config.Bridge.EnableMessageStatusEvents() {
 				statusEvent := &event.BeeperMessageStatusEventContent{
@@ -583,7 +589,7 @@ func (mx *MatrixHandler) HandleMessage(evt *event.Event) {
 				}
 				_, sendErr := mx.bridge.Bot.SendMessageEvent(ctx, evt.RoomID, event.BeeperMessageStatus, statusEvent)
 				if sendErr != nil {
-					mx.log.Warn().Str("event_id", evt.ID.String()).Err(sendErr).Msg("Failed to send message status event for command")
+					log.Warn().Err(sendErr).Msg("Failed to send message status event for command")
 				}
 			}
 			return
@@ -593,6 +599,8 @@ func (mx *MatrixHandler) HandleMessage(evt *event.Event) {
 	portal := mx.bridge.Child.GetIPortal(evt.RoomID)
 	if portal != nil {
 		portal.ReceiveMatrixEvent(user, evt)
+	} else {
+		mx.bridge.SendMessageErrorCheckpoint(evt, status.MsgStepRemote, fmt.Errorf("unknown room"), true, 0)
 	}
 }
 
@@ -610,6 +618,8 @@ func (mx *MatrixHandler) HandleReaction(evt *event.Event) {
 	portal := mx.bridge.Child.GetIPortal(evt.RoomID)
 	if portal != nil {
 		portal.ReceiveMatrixEvent(user, evt)
+	} else {
+		mx.bridge.SendMessageErrorCheckpoint(evt, status.MsgStepRemote, fmt.Errorf("unknown room"), true, 0)
 	}
 }
 
@@ -627,6 +637,8 @@ func (mx *MatrixHandler) HandleRedaction(evt *event.Event) {
 	portal := mx.bridge.Child.GetIPortal(evt.RoomID)
 	if portal != nil {
 		portal.ReceiveMatrixEvent(user, evt)
+	} else {
+		mx.bridge.SendMessageErrorCheckpoint(evt, status.MsgStepRemote, fmt.Errorf("unknown room"), true, 0)
 	}
 }
 

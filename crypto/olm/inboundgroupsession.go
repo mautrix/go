@@ -1,3 +1,5 @@
+//go:build !goolm
+
 package olm
 
 // #cgo LDFLAGS: -lolm -lstdc++
@@ -147,6 +149,7 @@ func (s *InboundGroupSession) Unpickle(pickled, key []byte) error {
 	return nil
 }
 
+// Deprecated
 func (s *InboundGroupSession) GobEncode() ([]byte, error) {
 	pickled := s.Pickle(pickleKey)
 	length := base64.RawStdEncoding.DecodedLen(len(pickled))
@@ -155,6 +158,7 @@ func (s *InboundGroupSession) GobEncode() ([]byte, error) {
 	return rawPickled, err
 }
 
+// Deprecated
 func (s *InboundGroupSession) GobDecode(rawPickled []byte) error {
 	if s == nil || s.int == nil {
 		*s = *NewBlankInboundGroupSession()
@@ -165,6 +169,7 @@ func (s *InboundGroupSession) GobDecode(rawPickled []byte) error {
 	return s.Unpickle(pickled, pickleKey)
 }
 
+// Deprecated
 func (s *InboundGroupSession) MarshalJSON() ([]byte, error) {
 	pickled := s.Pickle(pickleKey)
 	quotes := make([]byte, len(pickled)+2)
@@ -174,6 +179,7 @@ func (s *InboundGroupSession) MarshalJSON() ([]byte, error) {
 	return quotes, nil
 }
 
+// Deprecated
 func (s *InboundGroupSession) UnmarshalJSON(data []byte) error {
 	if len(data) == 0 || data[0] != '"' || data[len(data)-1] != '"' {
 		return InputNotJSONString

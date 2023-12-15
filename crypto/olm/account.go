@@ -1,3 +1,5 @@
+//go:build !goolm
+
 package olm
 
 // #cgo LDFLAGS: -lolm -lstdc++
@@ -155,6 +157,7 @@ func (a *Account) Unpickle(pickled, key []byte) error {
 	return nil
 }
 
+// Deprecated
 func (a *Account) GobEncode() ([]byte, error) {
 	pickled := a.Pickle(pickleKey)
 	length := base64.RawStdEncoding.DecodedLen(len(pickled))
@@ -163,6 +166,7 @@ func (a *Account) GobEncode() ([]byte, error) {
 	return rawPickled, err
 }
 
+// Deprecated
 func (a *Account) GobDecode(rawPickled []byte) error {
 	if a.int == nil {
 		*a = *NewBlankAccount()
@@ -173,6 +177,7 @@ func (a *Account) GobDecode(rawPickled []byte) error {
 	return a.Unpickle(pickled, pickleKey)
 }
 
+// Deprecated
 func (a *Account) MarshalJSON() ([]byte, error) {
 	pickled := a.Pickle(pickleKey)
 	quotes := make([]byte, len(pickled)+2)
@@ -182,6 +187,7 @@ func (a *Account) MarshalJSON() ([]byte, error) {
 	return quotes, nil
 }
 
+// Deprecated
 func (a *Account) UnmarshalJSON(data []byte) error {
 	if len(data) == 0 || data[0] != '"' || data[len(data)-1] != '"' {
 		return InputNotJSONString

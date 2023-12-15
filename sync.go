@@ -134,7 +134,10 @@ func NewDefaultSyncer() *DefaultSyncer {
 		globalListeners:   []EventHandler{},
 		ParseEventContent: true,
 		ParseErrorHandler: func(evt *event.Event, err error) bool {
-			return false
+			// By default, drop known events that can't be parsed, but let unknown events through
+			return errors.Is(err, event.ErrUnsupportedContentType) ||
+				// Also allow events that had their content already parsed by some other function
+				errors.Is(err, event.ErrContentAlreadyParsed)
 		},
 	}
 }
