@@ -18,7 +18,7 @@ type GroupMessage struct {
 	Version         byte   `json:"version"`
 	MessageIndex    uint32 `json:"index"`
 	Ciphertext      []byte `json:"ciphertext"`
-	HasMessageIndex bool   `json:"hasIndex"`
+	HasMessageIndex bool   `json:"has_index"`
 }
 
 // Decodes decodes the input and populates the corresponding fileds. MAC and signature are ignored but have to be present.

@@ -31,12 +31,12 @@ type Account struct {
 	IdKeys struct {
 		Ed25519    crypto.Ed25519KeyPair    `json:"ed25519,omitempty"`
 		Curve25519 crypto.Curve25519KeyPair `json:"curve25519,omitempty"`
-	} `json:"identityKeys"`
-	OTKeys             []crypto.OneTimeKey `json:"oneTimeKeys"`
-	CurrentFallbackKey crypto.OneTimeKey   `json:"currentFallbackKey,omitempty"`
-	PrevFallbackKey    crypto.OneTimeKey   `json:"prevFallbackKey,omitempty"`
-	NextOneTimeKeyID   uint32              `json:"nextOneTimeKeyID,omitempty"`
-	NumFallbackKeys    uint8               `json:"numberFallbackKeys"`
+	} `json:"identity_keys"`
+	OTKeys             []crypto.OneTimeKey `json:"one_time_keys"`
+	CurrentFallbackKey crypto.OneTimeKey   `json:"current_fallback_key,omitempty"`
+	PrevFallbackKey    crypto.OneTimeKey   `json:"prev_fallback_key,omitempty"`
+	NextOneTimeKeyID   uint32              `json:"next_one_time_key_id,omitempty"`
+	NumFallbackKeys    uint8               `json:"number_fallback_keys"`
 }
 
 // AccountFromJSONPickled loads the Account details from a pickled base64 string. The input is decrypted with the supplied key.

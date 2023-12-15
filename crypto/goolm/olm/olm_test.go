@@ -31,8 +31,8 @@ func initializeRatchets() (*olm.Ratchet, *olm.Ratchet, error) {
 		return nil, nil, err
 	}
 
-	aliceRatchet.InitialiseAsAlice(sharedSecret, aliceKey)
-	bobRatchet.InitialiseAsBob(sharedSecret, aliceKey.PublicKey)
+	aliceRatchet.InitializeAsAlice(sharedSecret, aliceKey)
+	bobRatchet.InitializeAsBob(sharedSecret, aliceKey.PublicKey)
 	return aliceRatchet, bobRatchet, nil
 }
 

@@ -12,7 +12,7 @@ import (
 
 // Encryption is used to encrypt pk messages
 type Encryption struct {
-	RecipientKey crypto.Curve25519PublicKey
+	RecipientKey crypto.Curve25519PublicKey `json:"recipient_key"`
 }
 
 // NewEncryption returns a new Encryption with the base64 encoded public key of the recipient

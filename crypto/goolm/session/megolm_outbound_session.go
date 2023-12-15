@@ -24,7 +24,7 @@ const (
 // MegolmOutboundSession stores information about the sessions to send.
 type MegolmOutboundSession struct {
 	Ratchet    megolm.Ratchet        `json:"ratchet"`
-	SigningKey crypto.Ed25519KeyPair `json:"signingKey"`
+	SigningKey crypto.Ed25519KeyPair `json:"signing_key"`
 }
 
 // NewMegolmOutboundSession creates a new MegolmOutboundSession.

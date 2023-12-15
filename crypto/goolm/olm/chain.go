@@ -64,8 +64,8 @@ func (r chainKey) PickleLen() int {
 
 // senderChain is a chain for sending messages
 type senderChain struct {
-	RKey  crypto.Curve25519KeyPair `json:"ratchetKey"`
-	CKey  chainKey                 `json:"chainKey"`
+	RKey  crypto.Curve25519KeyPair `json:"ratchet_key"`
+	CKey  chainKey                 `json:"chain_key"`
 	IsSet bool                     `json:"set"`
 }
 
@@ -139,8 +139,8 @@ func (r senderChain) PickleLen() int {
 
 // senderChain is a chain for receiving messages
 type receiverChain struct {
-	RKey crypto.Curve25519PublicKey `json:"ratchetKey"`
-	CKey chainKey                   `json:"chainKey"`
+	RKey crypto.Curve25519PublicKey `json:"ratchet_key"`
+	CKey chainKey                   `json:"chain_key"`
 }
 
 // newReceiverChain returns a receiver chain initialized with chainKey and ratchet public key.

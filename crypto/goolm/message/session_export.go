@@ -16,7 +16,7 @@ const (
 type MegolmSessionExport struct {
 	Counter     uint32                  `json:"counter"`
 	RatchetData [128]byte               `json:"data"`
-	PublicKey   crypto.Ed25519PublicKey `json:"kPub"`
+	PublicKey   crypto.Ed25519PublicKey `json:"public_key"`
 }
 
 // Encode returns the encoded message in the correct format.

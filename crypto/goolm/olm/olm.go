@@ -44,22 +44,22 @@ var RatchetCipher = cipher.NewAESSHA256([]byte("OLM_KEYS"))
 type Ratchet struct {
 	// The root key is used to generate chain keys from the ephemeral keys.
 	// A new root_key is derived each time a new chain is started.
-	RootKey crypto.Curve25519PublicKey `json:"rootKey"`
+	RootKey crypto.Curve25519PublicKey `json:"root_key"`
 
 	// The sender chain is used to send messages. Each time a new ephemeral
 	// key is received from the remote server we generate a new sender chain
 	// with a new ephemeral key when we next send a message.
-	SenderChains senderChain `json:"senderChain"`
+	SenderChains senderChain `json:"sender_chain"`
 
 	// The receiver chain is used to decrypt received messages. We store the
 	// last few chains so we can decrypt any out of order messages we haven't
 	// received yet.
 	// New chains are prepended for easier access.
-	ReceiverChains []receiverChain `json:"receiverChains"`
+	ReceiverChains []receiverChain `json:"receiver_chains"`
 
 	// Storing the keys of missed messages for future use.
 	// The order of the elements is not important.
-	SkippedMessageKeys []skippedMessageKey `json:"skippedMessageKeys"`
+	SkippedMessageKeys []skippedMessageKey `json:"skipped_message_keys"`
 }
 
 // New creates a new ratchet, setting the kdfInfos and cipher.
@@ -68,8 +68,8 @@ func New() *Ratchet {
 	return r
 }
 
-// InitialiseAsBob initialises this ratchet from a receiving point of view (only first message).
-func (r *Ratchet) InitialiseAsBob(sharedSecret []byte, theirRatchetKey crypto.Curve25519PublicKey) error {
+// InitializeAsBob initializes this ratchet from a receiving point of view (only first message).
+func (r *Ratchet) InitializeAsBob(sharedSecret []byte, theirRatchetKey crypto.Curve25519PublicKey) error {
 	derivedSecretsReader := crypto.HKDFSHA256(sharedSecret, nil, KdfInfo.Root)
 	derivedSecrets := make([]byte, 2*sharedKeyLength)
 	if _, err := io.ReadFull(derivedSecretsReader, derivedSecrets); err != nil {
@@ -81,8 +81,8 @@ func (r *Ratchet) InitialiseAsBob(sharedSecret []byte, theirRatchetKey crypto.Cu
 	return nil
 }
 
-// InitialiseAsAlice initialises this ratchet from a sending point of view (only first message).
-func (r *Ratchet) InitialiseAsAlice(sharedSecret []byte, ourRatchetKey crypto.Curve25519KeyPair) error {
+// InitializeAsAlice initializes this ratchet from a sending point of view (only first message).
+func (r *Ratchet) InitializeAsAlice(sharedSecret []byte, ourRatchetKey crypto.Curve25519KeyPair) error {
 	derivedSecretsReader := crypto.HKDFSHA256(sharedSecret, nil, KdfInfo.Root)
 	derivedSecrets := make([]byte, 2*sharedKeyLength)
 	if _, err := io.ReadFull(derivedSecretsReader, derivedSecrets); err != nil {

@@ -17,9 +17,9 @@ const (
 // GroupMessage represents a message in the message format.
 type Message struct {
 	Version    byte                       `json:"version"`
-	HasCounter bool                       `json:"hasCounter"`
+	HasCounter bool                       `json:"has_counter"`
 	Counter    uint32                     `json:"counter"`
-	RatchetKey crypto.Curve25519PublicKey `json:"ratchetKey"`
+	RatchetKey crypto.Curve25519PublicKey `json:"ratchet_key"`
 	Ciphertext []byte                     `json:"ciphertext"`
 }
 

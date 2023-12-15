@@ -3,7 +3,6 @@
 package olm
 
 import (
-	"maunium.net/go/mautrix/crypto/goolm"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -12,7 +11,7 @@ type Signatures map[id.UserID]map[id.DeviceKeyID]string
 
 // Version returns the version number of the olm library.
 func Version() (major, minor, patch uint8) {
-	return goolm.GetLibaryVersion()
+	return 3, 2, 15
 }
 
 // SetPickleKey sets the global pickle key used when encoding structs with Gob or JSON.

@@ -10,7 +10,7 @@ import (
 
 // Signing is used for signing a pk
 type Signing struct {
-	KeyPair crypto.Ed25519KeyPair `json:"keyPair"`
+	KeyPair crypto.Ed25519KeyPair `json:"key_pair"`
 	Seed    []byte                `json:"seed"`
 }
 

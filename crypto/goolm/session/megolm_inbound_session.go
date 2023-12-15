@@ -23,9 +23,9 @@ const (
 // MegolmInboundSession stores information about the sessions of receive.
 type MegolmInboundSession struct {
 	Ratchet            megolm.Ratchet          `json:"ratchet"`
-	SigningKey         crypto.Ed25519PublicKey `json:"signingKey"`
-	InitialRatchet     megolm.Ratchet          `json:"initalRatchet"`
-	SigningKeyVerified bool                    `json:"signingKeyVerified"` //not used for now
+	SigningKey         crypto.Ed25519PublicKey `json:"signing_key"`
+	InitialRatchet     megolm.Ratchet          `json:"initial_ratchet"`
+	SigningKeyVerified bool                    `json:"signing_key_verified"` //not used for now
 }
 
 // NewMegolmInboundSession creates a new MegolmInboundSession from a base64 encoded session sharing message.

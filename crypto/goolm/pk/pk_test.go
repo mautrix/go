@@ -26,7 +26,7 @@ func TestEncryptionDecryption(t *testing.T) {
 		0x1C, 0x2F, 0x8B, 0x27, 0xFF, 0x88, 0xE0, 0xEB,
 	}
 	bobPublic := []byte("3p7bfXt9wbTTW2HC7OQ1Nz+DQ8hbeGdNrfx+FG+IK08")
-	decryption, err := pk.NewDecriptionFromPrivate(alicePrivate)
+	decryption, err := pk.NewDecryptionFromPrivate(alicePrivate)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +97,7 @@ func TestDecryptionPickling(t *testing.T) {
 		0xB1, 0x77, 0xFB, 0xA5, 0x1D, 0xB9, 0x2C, 0x2A,
 	}
 	alicePublic := []byte("hSDwCYkwp1R0i33ctD73Wg2/Og0mOBr066SpjqqbTmo")
-	decryption, err := pk.NewDecriptionFromPrivate(alicePrivate)
+	decryption, err := pk.NewDecryptionFromPrivate(alicePrivate)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +117,7 @@ func TestDecryptionPickling(t *testing.T) {
 		t.Fatalf("pickle not as expected:\n%v\n%v\n", pickled, expectedPickle)
 	}
 
-	newDecription, err := pk.NewDecription()
+	newDecription, err := pk.NewDecryption()
 	if err != nil {
 		t.Fatal(err)
 	}

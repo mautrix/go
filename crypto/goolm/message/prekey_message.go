@@ -13,9 +13,9 @@ const (
 
 type PreKeyMessage struct {
 	Version     byte                       `json:"version"`
-	IdentityKey crypto.Curve25519PublicKey `json:"idKey"`
-	BaseKey     crypto.Curve25519PublicKey `json:"baseKey"`
-	OneTimeKey  crypto.Curve25519PublicKey `json:"otKey"`
+	IdentityKey crypto.Curve25519PublicKey `json:"id_key"`
+	BaseKey     crypto.Curve25519PublicKey `json:"base_key"`
+	OneTimeKey  crypto.Curve25519PublicKey `json:"one_time_key"`
 	Message     []byte                     `json:"message"`
 }
 

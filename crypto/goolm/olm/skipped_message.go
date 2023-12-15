@@ -9,8 +9,8 @@ import (
 
 // skippedMessageKey stores a skipped message key
 type skippedMessageKey struct {
-	RKey crypto.Curve25519PublicKey `json:"ratchetKey"`
-	MKey messageKey                 `json:"messageKey"`
+	RKey crypto.Curve25519PublicKey `json:"ratchet_key"`
+	MKey messageKey                 `json:"message_key"`
 }
 
 // UnpickleLibOlm decodes the unencryted value and populates the chain accordingly. It returns the number of bytes read.
