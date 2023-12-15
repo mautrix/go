@@ -2,10 +2,15 @@
 
 * **Breaking change *(bridge)*** Added raw event to portal membership handling
   functions.
+* *(crypto)* Added `goolm` build tag to use a pure Go implementation of Olm
+  instead of using libolm via cgo. Thanks to [@DerLukas15] in [#106].
 * *(bridge)* Added context parameter for bridge command events.
 * *(client)* Changed default syncer to not drop unknown events.
   * The syncer will still drop known events if parsing the content fails.
   * The behavior can be changed by changing the `ParseErrorHandler` function.
+
+[@DerLukas15]: https://github.com/DerLukas15
+[#106]: https://github.com/mautrix/go/pull/106
 
 ## v0.16.2 (2023-11-16)
 
