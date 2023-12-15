@@ -47,5 +47,5 @@ golang.org/x/sys v0.14.0/go.mod h1:/VUhepiaJMQUp4+oa/7Zr1D23ma6VTLIYjOOTFZPUcA=
 gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
 maunium.net/go/maulogger/v2 v2.4.1 h1:N7zSdd0mZkB2m2JtFUsiGTQQAdP0YeFWT7YMc80yAL8=
 maunium.net/go/maulogger/v2 v2.4.1/go.mod h1:omPuYwYBILeVQobz8uO3XC8DIRuEb5rXYlQSuqrbCho=
-maunium.net/go/mautrix v0.16.3-0.20231215135638-893afc725981 h1:KrMb5QyuMh2ZqfRLFiKRhYRV95aPCpaAepOful5EHvg=
-maunium.net/go/mautrix v0.16.3-0.20231215135638-893afc725981/go.mod h1:YL4l4rZB46/vj/ifRMEjcibbvHjgxHftOF1SgmruLu4=
+maunium.net/go/mautrix v0.16.3-0.20231215142331-753cdb2e1cb0 h1:2ZWtBcTScQfMwpcoGeY4mLYXC6OmYN/4Qh2yhBiVNV4=
+maunium.net/go/mautrix v0.16.3-0.20231215142331-753cdb2e1cb0/go.mod h1:YL4l4rZB46/vj/ifRMEjcibbvHjgxHftOF1SgmruLu4=

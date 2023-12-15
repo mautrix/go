@@ -74,7 +74,7 @@ func main() {
 	})
 	syncer.OnEventType(event.StateMember, func(source mautrix.EventSource, evt *event.Event) {
 		if evt.GetStateKey() == client.UserID.String() && evt.Content.AsMember().Membership == event.MembershipInvite {
-			_, err := client.JoinRoomByID(evt.RoomID)
+			_, err := client.JoinRoomByID(context.TODO(), evt.RoomID)
 			if err == nil {
 				lastRoomID = evt.RoomID
 				rl.SetPrompt(fmt.Sprintf("%s> ", lastRoomID))
@@ -137,7 +137,7 @@ func main() {
 			log.Error().Msg("Wait for an incoming message before sending messages")
 			continue
 		}
-		resp, err := client.SendText(lastRoomID, line)
+		resp, err := client.SendText(context.TODO(), lastRoomID, line)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to send event")
 		} else {
