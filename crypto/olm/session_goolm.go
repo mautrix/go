@@ -3,8 +3,6 @@
 package olm
 
 import (
-	"encoding/base64"
-
 	"maunium.net/go/mautrix/crypto/goolm/session"
 	"maunium.net/go/mautrix/id"
 )
@@ -59,49 +57,6 @@ func (s *Session) Unpickle(pickled, key []byte) error {
 	}
 	s.OlmSession = *sOlm
 	return nil
-}
-
-func (s *Session) GobEncode() ([]byte, error) {
-	pickled, err := s.OlmSession.Pickle(pickleKey)
-	if err != nil {
-		return nil, err
-	}
-	length := base64.RawStdEncoding.DecodedLen(len(pickled))
-	rawPickled := make([]byte, length)
-	_, err = base64.RawStdEncoding.Decode(rawPickled, pickled)
-	return rawPickled, err
-}
-
-func (s *Session) GobDecode(rawPickled []byte) error {
-	if s == nil {
-		*s = *NewBlankSession()
-	}
-	length := base64.RawStdEncoding.EncodedLen(len(rawPickled))
-	pickled := make([]byte, length)
-	base64.RawStdEncoding.Encode(pickled, rawPickled)
-	return s.Unpickle(pickled, pickleKey)
-}
-
-func (s *Session) MarshalJSON() ([]byte, error) {
-	pickled, err := s.OlmSession.Pickle(pickleKey)
-	if err != nil {
-		return nil, err
-	}
-	quotes := make([]byte, len(pickled)+2)
-	quotes[0] = '"'
-	quotes[len(quotes)-1] = '"'
-	copy(quotes[1:len(quotes)-1], pickled)
-	return quotes, nil
-}
-
-func (s *Session) UnmarshalJSON(data []byte) error {
-	if len(data) == 0 || data[0] != '"' || data[len(data)-1] != '"' {
-		return InputNotJSONString
-	}
-	if s == nil {
-		*s = *NewBlankSession()
-	}
-	return s.Unpickle(data[1:len(data)-1], pickleKey)
 }
 
 // MatchesInboundSession checks if the PRE_KEY message is for this in-bound

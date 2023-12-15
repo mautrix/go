@@ -15,9 +15,7 @@ func Version() (major, minor, patch uint8) {
 	return goolm.GetLibaryVersion()
 }
 
-var pickleKey = []byte("maunium.net/go/mautrix/crypto/olm")
-
 // SetPickleKey sets the global pickle key used when encoding structs with Gob or JSON.
 func SetPickleKey(key []byte) {
-	pickleKey = key
+	panic("gob and json encoding is deprecated and not supported with goolm")
 }

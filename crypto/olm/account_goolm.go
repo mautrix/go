@@ -3,7 +3,6 @@
 package olm
 
 import (
-	"encoding/base64"
 	"encoding/json"
 
 	"github.com/tidwall/sjson"
@@ -50,43 +49,6 @@ func (a *Account) Pickle(key []byte) []byte {
 		panic(err)
 	}
 	return pickled
-}
-
-func (a *Account) GobEncode() ([]byte, error) {
-	pickled, err := a.Account.Pickle(pickleKey)
-	if err != nil {
-		return nil, err
-	}
-	length := base64.RawStdEncoding.DecodedLen(len(pickled))
-	rawPickled := make([]byte, length)
-	_, err = base64.RawStdEncoding.Decode(rawPickled, pickled)
-	return rawPickled, err
-}
-
-func (a *Account) GobDecode(rawPickled []byte) error {
-	length := base64.RawStdEncoding.EncodedLen(len(rawPickled))
-	pickled := make([]byte, length)
-	base64.RawStdEncoding.Encode(pickled, rawPickled)
-	return a.Unpickle(pickled, pickleKey)
-}
-
-func (a *Account) MarshalJSON() ([]byte, error) {
-	pickled, err := a.Account.Pickle(pickleKey)
-	if err != nil {
-		return nil, err
-	}
-	quotes := make([]byte, len(pickled)+2)
-	quotes[0] = '"'
-	quotes[len(quotes)-1] = '"'
-	copy(quotes[1:len(quotes)-1], pickled)
-	return quotes, nil
-}
-
-func (a *Account) UnmarshalJSON(data []byte) error {
-	if len(data) == 0 || data[0] != '"' || data[len(data)-1] != '"' {
-		return InputNotJSONString
-	}
-	return a.Unpickle(data[1:len(data)-1], pickleKey)
 }
 
 // IdentityKeysJSON returns the public parts of the identity keys for the Account.

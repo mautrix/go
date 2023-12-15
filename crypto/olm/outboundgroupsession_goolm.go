@@ -3,8 +3,6 @@
 package olm
 
 import (
-	"encoding/base64"
-
 	"maunium.net/go/mautrix/crypto/goolm/session"
 	"maunium.net/go/mautrix/id"
 )
@@ -77,49 +75,6 @@ func (s *OutboundGroupSession) Unpickle(pickled, key []byte) error {
 		return NoKeyProvided
 	}
 	return s.MegolmOutboundSession.Unpickle(pickled, key)
-}
-
-func (s *OutboundGroupSession) GobEncode() ([]byte, error) {
-	pickled, err := s.MegolmOutboundSession.Pickle(pickleKey)
-	if err != nil {
-		return nil, err
-	}
-	length := base64.RawStdEncoding.DecodedLen(len(pickled))
-	rawPickled := make([]byte, length)
-	_, err = base64.RawStdEncoding.Decode(rawPickled, pickled)
-	return rawPickled, err
-}
-
-func (s *OutboundGroupSession) GobDecode(rawPickled []byte) error {
-	if s == nil {
-		*s = *NewBlankOutboundGroupSession()
-	}
-	length := base64.RawStdEncoding.EncodedLen(len(rawPickled))
-	pickled := make([]byte, length)
-	base64.RawStdEncoding.Encode(pickled, rawPickled)
-	return s.Unpickle(pickled, pickleKey)
-}
-
-func (s *OutboundGroupSession) MarshalJSON() ([]byte, error) {
-	pickled, err := s.MegolmOutboundSession.Pickle(pickleKey)
-	if err != nil {
-		return nil, err
-	}
-	quotes := make([]byte, len(pickled)+2)
-	quotes[0] = '"'
-	quotes[len(quotes)-1] = '"'
-	copy(quotes[1:len(quotes)-1], pickled)
-	return quotes, nil
-}
-
-func (s *OutboundGroupSession) UnmarshalJSON(data []byte) error {
-	if len(data) == 0 || data[0] != '"' || data[len(data)-1] != '"' {
-		return InputNotJSONString
-	}
-	if s == nil {
-		*s = *NewBlankOutboundGroupSession()
-	}
-	return s.Unpickle(data[1:len(data)-1], pickleKey)
 }
 
 // Encrypt encrypts a message using the Session. Returns the encrypted message
