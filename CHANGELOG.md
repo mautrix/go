@@ -3,9 +3,9 @@
 * **Breaking change *(bridge)*** Added raw event to portal membership handling
   functions.
 * **Breaking change *(client)*** Added context parameters to all functions
-+  (thanks to [@recht] in [#144]).
+  (thanks to [@recht] in [#144]).
 * *(crypto)* Added experimental pure Go Olm implementation to replace libolm
-  Thanks to [@DerLukas15] in [#106].
+  (thanks to [@DerLukas15] in [#106]).
   * You can use the `goolm` build tag to the new implementation.
 * *(bridge)* Added context parameter for bridge command events.
 * *(client)* Changed default syncer to not drop unknown events.
