@@ -7,6 +7,7 @@
 package crypto
 
 import (
+	"context"
 	"fmt"
 
 	"maunium.net/go/mautrix"
@@ -19,7 +20,7 @@ type CrossSigningPublicKeysCache struct {
 	UserSigningKey id.Ed25519
 }
 
-func (mach *OlmMachine) GetOwnCrossSigningPublicKeys() *CrossSigningPublicKeysCache {
+func (mach *OlmMachine) GetOwnCrossSigningPublicKeys(ctx context.Context) *CrossSigningPublicKeysCache {
 	if mach.crossSigningPubkeys != nil {
 		return mach.crossSigningPubkeys
 	}
@@ -30,7 +31,7 @@ func (mach *OlmMachine) GetOwnCrossSigningPublicKeys() *CrossSigningPublicKeysCa
 	if mach.crossSigningPubkeysFetched {
 		return nil
 	}
-	cspk, err := mach.GetCrossSigningPublicKeys(mach.Client.UserID)
+	cspk, err := mach.GetCrossSigningPublicKeys(ctx, mach.Client.UserID)
 	if err != nil {
 		mach.Log.Error().Err(err).Msg("Failed to get own cross-signing public keys")
 		return nil
@@ -40,7 +41,7 @@ func (mach *OlmMachine) GetOwnCrossSigningPublicKeys() *CrossSigningPublicKeysCa
 	return mach.crossSigningPubkeys
 }
 
-func (mach *OlmMachine) GetCrossSigningPublicKeys(userID id.UserID) (*CrossSigningPublicKeysCache, error) {
+func (mach *OlmMachine) GetCrossSigningPublicKeys(ctx context.Context, userID id.UserID) (*CrossSigningPublicKeysCache, error) {
 	dbKeys, err := mach.CryptoStore.GetCrossSigningKeys(userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get keys from database: %w", err)
@@ -58,7 +59,7 @@ func (mach *OlmMachine) GetCrossSigningPublicKeys(userID id.UserID) (*CrossSigni
 		}
 	}
 
-	keys, err := mach.Client.QueryKeys(&mautrix.ReqQueryKeys{
+	keys, err := mach.Client.QueryKeys(ctx, &mautrix.ReqQueryKeys{
 		DeviceKeys: mautrix.DeviceKeysRequest{
 			userID: mautrix.DeviceIDList{},
 		},

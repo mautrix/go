@@ -67,17 +67,17 @@ func (store *SQLCryptoStore) Flush() error {
 }
 
 // PutNextBatch stores the next sync batch token for the current account.
-func (store *SQLCryptoStore) PutNextBatch(nextBatch string) error {
+func (store *SQLCryptoStore) PutNextBatch(ctx context.Context, nextBatch string) error {
 	store.SyncToken = nextBatch
-	_, err := store.DB.Exec(`UPDATE crypto_account SET sync_token=$1 WHERE account_id=$2`, store.SyncToken, store.AccountID)
+	_, err := store.DB.ExecContext(ctx, `UPDATE crypto_account SET sync_token=$1 WHERE account_id=$2`, store.SyncToken, store.AccountID)
 	return err
 }
 
 // GetNextBatch retrieves the next sync batch token for the current account.
-func (store *SQLCryptoStore) GetNextBatch() (string, error) {
+func (store *SQLCryptoStore) GetNextBatch(ctx context.Context) (string, error) {
 	if store.SyncToken == "" {
 		err := store.DB.
-			QueryRow("SELECT sync_token FROM crypto_account WHERE account_id=$1", store.AccountID).
+			QueryRowContext(ctx, "SELECT sync_token FROM crypto_account WHERE account_id=$1", store.AccountID).
 			Scan(&store.SyncToken)
 		if !errors.Is(err, sql.ErrNoRows) {
 			return "", err
@@ -88,18 +88,18 @@ func (store *SQLCryptoStore) GetNextBatch() (string, error) {
 
 var _ mautrix.SyncStore = (*SQLCryptoStore)(nil)
 
-func (store *SQLCryptoStore) SaveFilterID(_ id.UserID, _ string) {}
-func (store *SQLCryptoStore) LoadFilterID(_ id.UserID) string    { return "" }
+func (store *SQLCryptoStore) SaveFilterID(ctx context.Context, _ id.UserID, _ string) {}
+func (store *SQLCryptoStore) LoadFilterID(ctx context.Context, _ id.UserID) string    { return "" }
 
-func (store *SQLCryptoStore) SaveNextBatch(_ id.UserID, nextBatchToken string) {
-	err := store.PutNextBatch(nextBatchToken)
+func (store *SQLCryptoStore) SaveNextBatch(ctx context.Context, _ id.UserID, nextBatchToken string) {
+	err := store.PutNextBatch(ctx, nextBatchToken)
 	if err != nil {
 		// TODO handle error
 	}
 }
 
-func (store *SQLCryptoStore) LoadNextBatch(_ id.UserID) string {
-	nb, err := store.GetNextBatch()
+func (store *SQLCryptoStore) LoadNextBatch(ctx context.Context, _ id.UserID) string {
+	nb, err := store.GetNextBatch(ctx)
 	if err != nil {
 		// TODO handle error
 	}

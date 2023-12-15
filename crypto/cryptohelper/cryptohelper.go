@@ -124,6 +124,7 @@ func (helper *CryptoHelper) Init() error {
 	} else {
 		stateStore = helper.client.StateStore.(crypto.StateStore)
 	}
+	ctx := context.Background()
 	var cryptoStore crypto.Store
 	if helper.unmanagedCryptoStore == nil {
 		managedCryptoStore := crypto.NewSQLCryptoStore(helper.dbForManagedStores, dbutil.ZeroLogger(helper.log.With().Str("db_section", "crypto").Logger()), helper.DBAccountID, helper.client.DeviceID, helper.pickleKey)
@@ -146,7 +147,7 @@ func (helper *CryptoHelper) Init() error {
 				Str("username", helper.LoginAs.Identifier.User).
 				Str("device_id", helper.LoginAs.DeviceID.String()).
 				Msg("Logging in")
-			_, err = helper.client.Login(helper.LoginAs)
+			_, err = helper.client.Login(ctx, helper.LoginAs)
 			if err != nil {
 				return err
 			}
@@ -170,7 +171,7 @@ func (helper *CryptoHelper) Init() error {
 	err := helper.mach.Load()
 	if err != nil {
 		return fmt.Errorf("failed to load olm account: %w", err)
-	} else if err = helper.verifyDeviceKeysOnServer(); err != nil {
+	} else if err = helper.verifyDeviceKeysOnServer(ctx); err != nil {
 		return err
 	}
 
@@ -204,9 +205,9 @@ func (helper *CryptoHelper) Machine() *crypto.OlmMachine {
 	return helper.mach
 }
 
-func (helper *CryptoHelper) verifyDeviceKeysOnServer() error {
+func (helper *CryptoHelper) verifyDeviceKeysOnServer(ctx context.Context) error {
 	helper.log.Debug().Msg("Making sure our device has the expected keys on the server")
-	resp, err := helper.client.QueryKeys(&mautrix.ReqQueryKeys{
+	resp, err := helper.client.QueryKeys(ctx, &mautrix.ReqQueryKeys{
 		DeviceKeys: map[id.UserID]mautrix.DeviceIDList{
 			helper.client.UserID: {helper.client.DeviceID},
 		},
@@ -278,7 +279,7 @@ func (helper *CryptoHelper) postDecrypt(src mautrix.EventSource, decrypted *even
 	helper.client.Syncer.(mautrix.DispatchableSyncer).Dispatch(src|mautrix.EventSourceDecrypted, decrypted)
 }
 
-func (helper *CryptoHelper) RequestSession(roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID, userID id.UserID, deviceID id.DeviceID) {
+func (helper *CryptoHelper) RequestSession(ctx context.Context, roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID, userID id.UserID, deviceID id.DeviceID) {
 	if helper == nil {
 		return
 	}
@@ -294,7 +295,7 @@ func (helper *CryptoHelper) RequestSession(roomID id.RoomID, senderKey id.Sender
 		Str("device_id", deviceID.String()).
 		Str("room_id", roomID.String()).
 		Logger()
-	err := helper.mach.SendRoomKeyRequest(roomID, senderKey, sessionID, "", map[id.UserID][]id.DeviceID{
+	err := helper.mach.SendRoomKeyRequest(ctx, roomID, senderKey, sessionID, "", map[id.UserID][]id.DeviceID{
 		userID:               {deviceID},
 		helper.client.UserID: {"*"},
 	})
@@ -309,7 +310,7 @@ func (helper *CryptoHelper) waitLongerForSession(log zerolog.Logger, src mautrix
 	content := evt.Content.AsEncrypted()
 	log.Debug().Int("wait_seconds", int(extendedSessionWaitTimeout.Seconds())).Msg("Couldn't find session, requesting keys and waiting longer...")
 
-	go helper.RequestSession(evt.RoomID, content.SenderKey, content.SessionID, evt.Sender, content.DeviceID)
+	go helper.RequestSession(context.Background(), evt.RoomID, content.SenderKey, content.SessionID, evt.Sender, content.DeviceID)
 
 	if !helper.mach.WaitForSession(evt.RoomID, content.SenderKey, content.SessionID, extendedSessionWaitTimeout) {
 		log.Debug().Msg("Didn't get session, giving up")

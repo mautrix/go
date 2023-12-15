@@ -73,11 +73,10 @@ func (req *ReqSharedSecretRegister) Sign(secret string) string {
 // This does not need to be called manually as SharedSecretRegister will automatically call this if no nonce is provided.
 func (cli *Client) GetRegisterNonce(ctx context.Context) (string, error) {
 	var resp respGetRegisterNonce
-	_, err := cli.MakeFullRequest(mautrix.FullRequest{
+	_, err := cli.MakeFullRequest(ctx, mautrix.FullRequest{
 		Method:       http.MethodGet,
 		URL:          cli.BuildURL(mautrix.SynapseAdminURLPath{"v1", "register"}),
 		ResponseJSON: &resp,
-		Context:      ctx,
 	})
 	if err != nil {
 		return "", err
@@ -98,12 +97,11 @@ func (cli *Client) SharedSecretRegister(ctx context.Context, sharedSecret string
 	}
 	req.SHA1Checksum = req.Sign(sharedSecret)
 	var resp mautrix.RespRegister
-	_, err = cli.MakeFullRequest(mautrix.FullRequest{
+	_, err = cli.MakeFullRequest(ctx, mautrix.FullRequest{
 		Method:       http.MethodPost,
 		URL:          cli.BuildURL(mautrix.SynapseAdminURLPath{"v1", "register"}),
 		RequestJSON:  req,
 		ResponseJSON: &resp,
-		Context:      ctx,
 	})
 	if err != nil {
 		return nil, err

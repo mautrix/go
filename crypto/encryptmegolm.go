@@ -280,11 +280,11 @@ func (mach *OlmMachine) ShareGroupSession(ctx context.Context, roomID id.RoomID,
 			Int("user_count", len(toDeviceWithheld.Messages)).
 			Msg("Sending to-device messages to report withheld key")
 		// TODO remove the next 4 lines once clients support m.room_key.withheld
-		_, err = mach.Client.SendToDevice(event.ToDeviceOrgMatrixRoomKeyWithheld, toDeviceWithheld)
+		_, err = mach.Client.SendToDevice(ctx, event.ToDeviceOrgMatrixRoomKeyWithheld, toDeviceWithheld)
 		if err != nil {
 			log.Warn().Err(err).Msg("Failed to report withheld keys (legacy event type)")
 		}
-		_, err = mach.Client.SendToDevice(event.ToDeviceRoomKeyWithheld, toDeviceWithheld)
+		_, err = mach.Client.SendToDevice(ctx, event.ToDeviceRoomKeyWithheld, toDeviceWithheld)
 		if err != nil {
 			log.Warn().Err(err).Msg("Failed to report withheld keys")
 		}
@@ -327,7 +327,7 @@ func (mach *OlmMachine) encryptAndSendGroupSession(ctx context.Context, session 
 		Int("device_count", deviceCount).
 		Int("user_count", len(toDevice.Messages)).
 		Msg("Sending to-device messages to share group session")
-	_, err := mach.Client.SendToDevice(event.ToDeviceEncrypted, toDevice)
+	_, err := mach.Client.SendToDevice(ctx, event.ToDeviceEncrypted, toDevice)
 	return err
 }
 
