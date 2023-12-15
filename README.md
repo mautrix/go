@@ -17,8 +17,3 @@ In addition to the basic client API features the original project has, this fram
 * Structs for parsing event content
 * Helpers for parsing and generating Matrix HTML
 * Helpers for handling push rules
-
-This project contains modules that are licensed under Apache 2.0:
-
-* [maunium.net/go/mautrix/crypto/canonicaljson](crypto/canonicaljson)
-* [maunium.net/go/mautrix/crypto/olm](crypto/olm)
