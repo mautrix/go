@@ -12,10 +12,10 @@ require (
 	github.com/tidwall/gjson v1.17.0
 	github.com/tidwall/sjson v1.2.5
 	github.com/yuin/goldmark v1.6.0
-	go.mau.fi/util v0.2.1
+	go.mau.fi/util v0.2.2-0.20231228160422-22fdd4bbddeb
 	go.mau.fi/zeroconfig v0.1.2
 	golang.org/x/crypto v0.15.0
-	golang.org/x/exp v0.0.0-20231110203233-9a3e6036ecaa
+	golang.org/x/exp v0.0.0-20231219180239-dc181d75b848
 	golang.org/x/net v0.18.0
 	gopkg.in/yaml.v3 v3.0.1
 	maunium.net/go/mauflag v1.0.0
