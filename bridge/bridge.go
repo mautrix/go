@@ -586,10 +586,14 @@ func (br *Bridge) init() {
 }
 
 func (br *Bridge) LogDBUpgradeErrorAndExit(name string, err error) {
-	br.ZLog.WithLevel(zerolog.FatalLevel).
+	logEvt := br.ZLog.WithLevel(zerolog.FatalLevel).
 		Err(err).
-		Str("db_section", name).
-		Msg("Failed to initialize database")
+		Str("db_section", name)
+	var errWithLine *dbutil.PQErrorWithLine
+	if errors.As(err, &errWithLine) {
+		logEvt.Str("sql_line", errWithLine.Line)
+	}
+	logEvt.Msg("Failed to initialize database")
 	if sqlError := (&sqlite3.Error{}); errors.As(err, sqlError) && sqlError.Code == sqlite3.ErrCorrupt {
 		os.Exit(18)
 	} else if errors.Is(err, dbutil.ErrForeignTables) {
