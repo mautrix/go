@@ -20,6 +20,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/lib/pq"
 	"github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
 	deflog "github.com/rs/zerolog/log"
@@ -585,6 +586,37 @@ func (br *Bridge) init() {
 	br.Child.Init()
 }
 
+type zerologPQError pq.Error
+
+func (zpe *zerologPQError) MarshalZerologObject(evt *zerolog.Event) {
+	maybeStr := func(field, value string) {
+		if value != "" {
+			evt.Str(field, value)
+		}
+	}
+	maybeStr("severity", zpe.Severity)
+	if name := zpe.Code.Name(); name != "" {
+		evt.Str("code", name)
+	} else if zpe.Code != "" {
+		evt.Str("code", string(zpe.Code))
+	}
+	//maybeStr("message", zpe.Message)
+	maybeStr("detail", zpe.Detail)
+	maybeStr("hint", zpe.Hint)
+	maybeStr("position", zpe.Position)
+	maybeStr("internal_position", zpe.InternalPosition)
+	maybeStr("internal_query", zpe.InternalQuery)
+	maybeStr("where", zpe.Where)
+	maybeStr("schema", zpe.Schema)
+	maybeStr("table", zpe.Table)
+	maybeStr("column", zpe.Column)
+	maybeStr("data_type_name", zpe.DataTypeName)
+	maybeStr("constraint", zpe.Constraint)
+	maybeStr("file", zpe.File)
+	maybeStr("line", zpe.Line)
+	maybeStr("routine", zpe.Routine)
+}
+
 func (br *Bridge) LogDBUpgradeErrorAndExit(name string, err error) {
 	logEvt := br.ZLog.WithLevel(zerolog.FatalLevel).
 		Err(err).
@@ -592,6 +624,10 @@ func (br *Bridge) LogDBUpgradeErrorAndExit(name string, err error) {
 	var errWithLine *dbutil.PQErrorWithLine
 	if errors.As(err, &errWithLine) {
 		logEvt.Str("sql_line", errWithLine.Line)
+	}
+	var pqe *pq.Error
+	if errors.As(err, &pqe) {
+		logEvt.Object("pq_error", (*zerologPQError)(pqe))
 	}
 	logEvt.Msg("Failed to initialize database")
 	if sqlError := (&sqlite3.Error{}); errors.As(err, sqlError) && sqlError.Code == sqlite3.ErrCorrupt {
