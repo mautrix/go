@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog"
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto/canonicaljson"
 	"maunium.net/go/mautrix/crypto/olm"
@@ -560,6 +561,12 @@ func (mach *OlmMachine) handleVerificationCancel(userID id.UserID, content *even
 
 // handleVerificationRequest handles an incoming m.key.verification.request message.
 func (mach *OlmMachine) handleVerificationRequest(ctx context.Context, userID id.UserID, content *event.VerificationRequestEventContent, transactionID string, inRoomID id.RoomID) {
+	log := zerolog.Ctx(ctx).With().
+		Str("action", "handle_in_room_verification_ready").
+		Str("user_id", userID.String()).
+		Logger()
+	ctx = log.WithContext(ctx)
+
 	mach.Log.Debug().Msgf("Received verification request from %v", content.FromDevice)
 	otherDevice, err := mach.GetOrFetchDevice(ctx, userID, content.FromDevice)
 	if err != nil {
