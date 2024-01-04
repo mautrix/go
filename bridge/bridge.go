@@ -61,7 +61,7 @@ type Portal interface {
 	MainIntent() *appservice.IntentAPI
 
 	ReceiveMatrixEvent(user User, evt *event.Event)
-	UpdateBridgeInfo()
+	UpdateBridgeInfo(ctx context.Context)
 }
 
 type MembershipHandlingPortal interface {
@@ -720,7 +720,7 @@ func (br *Bridge) ResendBridgeInfo() {
 	}
 	br.ZLog.Info().Msg("Re-sending bridge info state event to all portals")
 	for _, portal := range br.Child.GetAllIPortals() {
-		portal.UpdateBridgeInfo()
+		portal.UpdateBridgeInfo(context.TODO())
 	}
 	br.ZLog.Info().Msg("Finished re-sending bridge info state events")
 }
