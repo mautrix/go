@@ -3,6 +3,7 @@ package mautrix
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"maunium.net/go/mautrix/id"
 )
@@ -16,10 +17,10 @@ var _ SyncStore = (*AccountDataStore)(nil)
 // provided "MemorySyncStore" which just keeps data around in-memory which is lost on
 // restarts.
 type SyncStore interface {
-	SaveFilterID(ctx context.Context, userID id.UserID, filterID string)
-	LoadFilterID(ctx context.Context, userID id.UserID) string
-	SaveNextBatch(ctx context.Context, userID id.UserID, nextBatchToken string)
-	LoadNextBatch(ctx context.Context, userID id.UserID) string
+	SaveFilterID(ctx context.Context, userID id.UserID, filterID string) error
+	LoadFilterID(ctx context.Context, userID id.UserID) (string, error)
+	SaveNextBatch(ctx context.Context, userID id.UserID, nextBatchToken string) error
+	LoadNextBatch(ctx context.Context, userID id.UserID) (string, error)
 }
 
 // Deprecated: renamed to SyncStore
@@ -36,23 +37,25 @@ type MemorySyncStore struct {
 }
 
 // SaveFilterID to memory.
-func (s *MemorySyncStore) SaveFilterID(ctx context.Context, userID id.UserID, filterID string) {
+func (s *MemorySyncStore) SaveFilterID(ctx context.Context, userID id.UserID, filterID string) error {
 	s.Filters[userID] = filterID
+	return nil
 }
 
 // LoadFilterID from memory.
-func (s *MemorySyncStore) LoadFilterID(ctx context.Context, userID id.UserID) string {
-	return s.Filters[userID]
+func (s *MemorySyncStore) LoadFilterID(ctx context.Context, userID id.UserID) (string, error) {
+	return s.Filters[userID], nil
 }
 
 // SaveNextBatch to memory.
-func (s *MemorySyncStore) SaveNextBatch(ctx context.Context, userID id.UserID, nextBatchToken string) {
+func (s *MemorySyncStore) SaveNextBatch(ctx context.Context, userID id.UserID, nextBatchToken string) error {
 	s.NextBatch[userID] = nextBatchToken
+	return nil
 }
 
 // LoadNextBatch from memory.
-func (s *MemorySyncStore) LoadNextBatch(ctx context.Context, userID id.UserID) string {
-	return s.NextBatch[userID]
+func (s *MemorySyncStore) LoadNextBatch(ctx context.Context, userID id.UserID) (string, error) {
+	return s.NextBatch[userID], nil
 }
 
 // NewMemorySyncStore constructs a new MemorySyncStore.
@@ -76,25 +79,26 @@ type accountData struct {
 	NextBatch string `json:"next_batch"`
 }
 
-func (s *AccountDataStore) SaveFilterID(ctx context.Context, userID id.UserID, filterID string) {
+func (s *AccountDataStore) SaveFilterID(ctx context.Context, userID id.UserID, filterID string) error {
 	if userID.String() != s.client.UserID.String() {
 		panic("AccountDataStore must only be used with a single account")
 	}
 	s.FilterID = filterID
+	return nil
 }
 
-func (s *AccountDataStore) LoadFilterID(ctx context.Context, userID id.UserID) string {
+func (s *AccountDataStore) LoadFilterID(ctx context.Context, userID id.UserID) (string, error) {
 	if userID.String() != s.client.UserID.String() {
 		panic("AccountDataStore must only be used with a single account")
 	}
-	return s.FilterID
+	return s.FilterID, nil
 }
 
-func (s *AccountDataStore) SaveNextBatch(ctx context.Context, userID id.UserID, nextBatchToken string) {
+func (s *AccountDataStore) SaveNextBatch(ctx context.Context, userID id.UserID, nextBatchToken string) error {
 	if userID.String() != s.client.UserID.String() {
 		panic("AccountDataStore must only be used with a single account")
 	} else if nextBatchToken == s.nextBatch {
-		return
+		return nil
 	}
 
 	data := accountData{
@@ -103,7 +107,7 @@ func (s *AccountDataStore) SaveNextBatch(ctx context.Context, userID id.UserID, 
 
 	err := s.client.SetAccountData(ctx, s.EventType, data)
 	if err != nil {
-		s.client.Log.Warn().Err(err).Msg("Failed to save next batch token to account data")
+		return fmt.Errorf("failed to save next batch token to account data: %w", err)
 	} else {
 		s.client.Log.Debug().
 			Str("old_token", s.nextBatch).
@@ -111,9 +115,10 @@ func (s *AccountDataStore) SaveNextBatch(ctx context.Context, userID id.UserID, 
 			Msg("Saved next batch token")
 		s.nextBatch = nextBatchToken
 	}
+	return nil
 }
 
-func (s *AccountDataStore) LoadNextBatch(ctx context.Context, userID id.UserID) string {
+func (s *AccountDataStore) LoadNextBatch(ctx context.Context, userID id.UserID) (string, error) {
 	if userID.String() != s.client.UserID.String() {
 		panic("AccountDataStore must only be used with a single account")
 	}
@@ -124,15 +129,15 @@ func (s *AccountDataStore) LoadNextBatch(ctx context.Context, userID id.UserID) 
 	if err != nil {
 		if errors.Is(err, MNotFound) {
 			s.client.Log.Debug().Msg("No next batch token found in account data")
+			return "", nil
 		} else {
-			s.client.Log.Warn().Err(err).Msg("Failed to load next batch token from account data")
+			return "", fmt.Errorf("failed to load next batch token from account data: %w", err)
 		}
-		return ""
 	}
 	s.nextBatch = data.NextBatch
 	s.client.Log.Debug().Str("next_batch", data.NextBatch).Msg("Loaded next batch token from account data")
 
-	return s.nextBatch
+	return s.nextBatch, nil
 }
 
 // NewAccountDataStore returns a new AccountDataStore, which stores

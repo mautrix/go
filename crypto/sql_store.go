@@ -88,22 +88,27 @@ func (store *SQLCryptoStore) GetNextBatch(ctx context.Context) (string, error) {
 
 var _ mautrix.SyncStore = (*SQLCryptoStore)(nil)
 
-func (store *SQLCryptoStore) SaveFilterID(ctx context.Context, _ id.UserID, _ string) {}
-func (store *SQLCryptoStore) LoadFilterID(ctx context.Context, _ id.UserID) string    { return "" }
-
-func (store *SQLCryptoStore) SaveNextBatch(ctx context.Context, _ id.UserID, nextBatchToken string) {
-	err := store.PutNextBatch(ctx, nextBatchToken)
-	if err != nil {
-		// TODO handle error
-	}
+func (store *SQLCryptoStore) SaveFilterID(ctx context.Context, _ id.UserID, _ string) error {
+	return nil
+}
+func (store *SQLCryptoStore) LoadFilterID(ctx context.Context, _ id.UserID) (string, error) {
+	return "", nil
 }
 
-func (store *SQLCryptoStore) LoadNextBatch(ctx context.Context, _ id.UserID) string {
+func (store *SQLCryptoStore) SaveNextBatch(ctx context.Context, _ id.UserID, nextBatchToken string) error {
+	err := store.PutNextBatch(ctx, nextBatchToken)
+	if err != nil {
+		return fmt.Errorf("unable to store batch: %w", err)
+	}
+	return nil
+}
+
+func (store *SQLCryptoStore) LoadNextBatch(ctx context.Context, _ id.UserID) (string, error) {
 	nb, err := store.GetNextBatch(ctx)
 	if err != nil {
-		// TODO handle error
+		return "", fmt.Errorf("unable to load batch: %w", err)
 	}
-	return nb
+	return nb, nil
 }
 
 func (store *SQLCryptoStore) FindDeviceID() (deviceID id.DeviceID) {

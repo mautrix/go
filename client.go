@@ -174,8 +174,15 @@ func (cli *Client) SyncWithContext(ctx context.Context) error {
 	// We will keep syncing until the syncing state changes. Either because
 	// Sync is called or StopSync is called.
 	syncingID := cli.incrementSyncingID()
-	nextBatch := cli.Store.LoadNextBatch(ctx, cli.UserID)
-	filterID := cli.Store.LoadFilterID(ctx, cli.UserID)
+	nextBatch, err := cli.Store.LoadNextBatch(ctx, cli.UserID)
+	if err != nil {
+		return err
+	}
+	filterID, err := cli.Store.LoadFilterID(ctx, cli.UserID)
+	if err != nil {
+		return err
+	}
+
 	if filterID == "" {
 		filterJSON := cli.Syncer.GetFilterJSON(cli.UserID)
 		resFilter, err := cli.CreateFilter(ctx, filterJSON)
@@ -183,7 +190,9 @@ func (cli *Client) SyncWithContext(ctx context.Context) error {
 			return err
 		}
 		filterID = resFilter.FilterID
-		cli.Store.SaveFilterID(ctx, cli.UserID, filterID)
+		if err := cli.Store.SaveFilterID(ctx, cli.UserID, filterID); err != nil {
+			return err
+		}
 	}
 	lastSuccessfulSync := time.Now().Add(-cli.StreamSyncMinAge - 1*time.Hour)
 	for {
