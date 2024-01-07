@@ -399,6 +399,13 @@ func (intent *IntentAPI) SetAvatarURL(ctx context.Context, avatarURL id.ContentU
 		// No need to update
 		return nil
 	}
+	if !avatarURL.IsEmpty() {
+		// Some homeservers require the avatar to be downloaded before setting it
+		body, _ := intent.Client.Download(ctx, avatarURL)
+		if body != nil {
+			_ = body.Close()
+		}
+	}
 	return intent.Client.SetAvatarURL(ctx, avatarURL)
 }
 
