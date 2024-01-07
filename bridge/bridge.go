@@ -215,15 +215,15 @@ type Bridge struct {
 
 type Crypto interface {
 	HandleMemberEvent(*event.Event)
-	Decrypt(*event.Event) (*event.Event, error)
-	Encrypt(id.RoomID, event.Type, *event.Content) error
-	WaitForSession(id.RoomID, id.SenderKey, id.SessionID, time.Duration) bool
+	Decrypt(context.Context, *event.Event) (*event.Event, error)
+	Encrypt(context.Context, id.RoomID, event.Type, *event.Content) error
+	WaitForSession(context.Context, id.RoomID, id.SenderKey, id.SessionID, time.Duration) bool
 	RequestSession(context.Context, id.RoomID, id.SenderKey, id.SessionID, id.UserID, id.DeviceID)
-	ResetSession(id.RoomID)
-	Init() error
+	ResetSession(context.Context, id.RoomID)
+	Init(ctx context.Context) error
 	Start()
 	Stop()
-	Reset(startAfterReset bool)
+	Reset(ctx context.Context, startAfterReset bool)
 	Client() *mautrix.Client
 	ShareKeys(context.Context) error
 }
@@ -650,10 +650,10 @@ func (br *Bridge) WaitWebsocketConnected() {
 
 func (br *Bridge) start() {
 	br.ZLog.Debug().Msg("Running database upgrades")
-	err := br.DB.Upgrade()
+	err := br.DB.Upgrade(br.ZLog.With().Str("db_section", "main").Logger().WithContext(context.TODO()))
 	if err != nil {
 		br.LogDBUpgradeErrorAndExit("main", err)
-	} else if err = br.StateStore.Upgrade(); err != nil {
+	} else if err = br.StateStore.Upgrade(br.ZLog.With().Str("db_section", "matrix_state").Logger().WithContext(context.TODO())); err != nil {
 		br.LogDBUpgradeErrorAndExit("matrix_state", err)
 	}
 
@@ -679,7 +679,7 @@ func (br *Bridge) start() {
 	go br.fetchMediaConfig(ctx)
 
 	if br.Crypto != nil {
-		err = br.Crypto.Init()
+		err = br.Crypto.Init(ctx)
 		if err != nil {
 			br.ZLog.WithLevel(zerolog.FatalLevel).Err(err).Msg("Error initializing end-to-bridge encryption")
 			os.Exit(19)

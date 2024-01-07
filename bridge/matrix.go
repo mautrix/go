@@ -494,7 +494,7 @@ func (mx *MatrixHandler) HandleEncrypted(evt *event.Event) {
 	log.Debug().Msg("Decrypting received event")
 
 	decryptionStart := time.Now()
-	decrypted, err := mx.bridge.Crypto.Decrypt(evt)
+	decrypted, err := mx.bridge.Crypto.Decrypt(ctx, evt)
 	decryptionRetryCount := 0
 	if errors.Is(err, NoSessionFound) {
 		decryptionRetryCount = 1
@@ -502,9 +502,9 @@ func (mx *MatrixHandler) HandleEncrypted(evt *event.Event) {
 			Int("wait_seconds", int(initialSessionWaitTimeout.Seconds())).
 			Msg("Couldn't find session, waiting for keys to arrive...")
 		mx.bridge.SendMessageErrorCheckpoint(evt, status.MsgStepDecrypted, err, false, 0)
-		if mx.bridge.Crypto.WaitForSession(evt.RoomID, content.SenderKey, content.SessionID, initialSessionWaitTimeout) {
+		if mx.bridge.Crypto.WaitForSession(ctx, evt.RoomID, content.SenderKey, content.SessionID, initialSessionWaitTimeout) {
 			log.Debug().Msg("Got keys after waiting, trying to decrypt event again")
-			decrypted, err = mx.bridge.Crypto.Decrypt(evt)
+			decrypted, err = mx.bridge.Crypto.Decrypt(ctx, evt)
 		} else {
 			go mx.waitLongerForSession(ctx, evt, decryptionStart)
 			return
@@ -529,14 +529,14 @@ func (mx *MatrixHandler) waitLongerForSession(ctx context.Context, evt *event.Ev
 	go mx.bridge.Crypto.RequestSession(ctx, evt.RoomID, content.SenderKey, content.SessionID, evt.Sender, content.DeviceID)
 	errorEventID := mx.sendCryptoStatusError(ctx, evt, "", fmt.Errorf("%w. The bridge will retry for %d seconds", errNoDecryptionKeys, int(extendedSessionWaitTimeout.Seconds())), 1, false)
 
-	if !mx.bridge.Crypto.WaitForSession(evt.RoomID, content.SenderKey, content.SessionID, extendedSessionWaitTimeout) {
+	if !mx.bridge.Crypto.WaitForSession(ctx, evt.RoomID, content.SenderKey, content.SessionID, extendedSessionWaitTimeout) {
 		log.Debug().Msg("Didn't get session, giving up trying to decrypt event")
 		mx.sendCryptoStatusError(ctx, evt, errorEventID, errNoDecryptionKeys, 2, true)
 		return
 	}
 
 	log.Debug().Msg("Got keys after waiting longer, trying to decrypt event again")
-	decrypted, err := mx.bridge.Crypto.Decrypt(evt)
+	decrypted, err := mx.bridge.Crypto.Decrypt(ctx, evt)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to decrypt event")
 		mx.sendCryptoStatusError(ctx, evt, errorEventID, err, 2, true)

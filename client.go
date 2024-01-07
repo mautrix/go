@@ -27,11 +27,11 @@ import (
 )
 
 type CryptoHelper interface {
-	Encrypt(id.RoomID, event.Type, any) (*event.EncryptedEventContent, error)
-	Decrypt(*event.Event) (*event.Event, error)
-	WaitForSession(id.RoomID, id.SenderKey, id.SessionID, time.Duration) bool
+	Encrypt(context.Context, id.RoomID, event.Type, any) (*event.EncryptedEventContent, error)
+	Decrypt(context.Context, *event.Event) (*event.Event, error)
+	WaitForSession(context.Context, id.RoomID, id.SenderKey, id.SessionID, time.Duration) bool
 	RequestSession(context.Context, id.RoomID, id.SenderKey, id.SessionID, id.UserID, id.DeviceID)
-	Init() error
+	Init(context.Context) error
 }
 
 // Deprecated: switch to zerolog
@@ -846,7 +846,10 @@ func (cli *Client) JoinRoom(ctx context.Context, roomIDorAlias, serverName strin
 	}
 	_, err = cli.MakeRequest(ctx, "POST", urlPath, content, &resp)
 	if err == nil && cli.StateStore != nil {
-		cli.StateStore.SetMembership(resp.RoomID, cli.UserID, event.MembershipJoin)
+		err = cli.StateStore.SetMembership(ctx, resp.RoomID, cli.UserID, event.MembershipJoin)
+		if err != nil {
+			err = fmt.Errorf("failed to update state store: %w", err)
+		}
 	}
 	return
 }
@@ -858,7 +861,10 @@ func (cli *Client) JoinRoom(ctx context.Context, roomIDorAlias, serverName strin
 func (cli *Client) JoinRoomByID(ctx context.Context, roomID id.RoomID) (resp *RespJoinRoom, err error) {
 	_, err = cli.MakeRequest(ctx, "POST", cli.BuildClientURL("v3", "rooms", roomID, "join"), nil, &resp)
 	if err == nil && cli.StateStore != nil {
-		cli.StateStore.SetMembership(resp.RoomID, cli.UserID, event.MembershipJoin)
+		err = cli.StateStore.SetMembership(ctx, resp.RoomID, cli.UserID, event.MembershipJoin)
+		if err != nil {
+			err = fmt.Errorf("failed to update state store: %w", err)
+		}
 	}
 	return
 }
@@ -1000,13 +1006,20 @@ func (cli *Client) SendMessageEvent(ctx context.Context, roomID id.RoomID, event
 		queryParams["fi.mau.event_id"] = req.MeowEventID.String()
 	}
 
-	if !req.DontEncrypt && cli.Crypto != nil && eventType != event.EventReaction && eventType != event.EventEncrypted && cli.StateStore.IsEncrypted(roomID) {
-		contentJSON, err = cli.Crypto.Encrypt(roomID, eventType, contentJSON)
+	if !req.DontEncrypt && cli.Crypto != nil && eventType != event.EventReaction && eventType != event.EventEncrypted {
+		var isEncrypted bool
+		isEncrypted, err = cli.StateStore.IsEncrypted(ctx, roomID)
 		if err != nil {
-			err = fmt.Errorf("failed to encrypt event: %w", err)
+			err = fmt.Errorf("failed to check if room is encrypted: %w", err)
 			return
 		}
-		eventType = event.EventEncrypted
+		if isEncrypted {
+			if contentJSON, err = cli.Crypto.Encrypt(ctx, roomID, eventType, contentJSON); err != nil {
+				err = fmt.Errorf("failed to encrypt event: %w", err)
+				return
+			}
+			eventType = event.EventEncrypted
+		}
 	}
 
 	urlData := ClientURLPath{"v3", "rooms", roomID, "send", eventType.String(), txnID}
@@ -1021,7 +1034,7 @@ func (cli *Client) SendStateEvent(ctx context.Context, roomID id.RoomID, eventTy
 	urlPath := cli.BuildClientURL("v3", "rooms", roomID, "state", eventType.String(), stateKey)
 	_, err = cli.MakeRequest(ctx, "PUT", urlPath, contentJSON, &resp)
 	if err == nil && cli.StateStore != nil {
-		cli.updateStoreWithOutgoingEvent(roomID, eventType, stateKey, contentJSON)
+		cli.updateStoreWithOutgoingEvent(ctx, roomID, eventType, stateKey, contentJSON)
 	}
 	return
 }
@@ -1034,7 +1047,7 @@ func (cli *Client) SendMassagedStateEvent(ctx context.Context, roomID id.RoomID,
 	})
 	_, err = cli.MakeRequest(ctx, "PUT", urlPath, contentJSON, &resp)
 	if err == nil && cli.StateStore != nil {
-		cli.updateStoreWithOutgoingEvent(roomID, eventType, stateKey, contentJSON)
+		cli.updateStoreWithOutgoingEvent(ctx, roomID, eventType, stateKey, contentJSON)
 	}
 	return
 }
@@ -1100,19 +1113,29 @@ func (cli *Client) CreateRoom(ctx context.Context, req *ReqCreateRoom) (resp *Re
 	urlPath := cli.BuildClientURL("v3", "createRoom")
 	_, err = cli.MakeRequest(ctx, "POST", urlPath, req, &resp)
 	if err == nil && cli.StateStore != nil {
-		cli.StateStore.SetMembership(resp.RoomID, cli.UserID, event.MembershipJoin)
+		storeErr := cli.StateStore.SetMembership(ctx, resp.RoomID, cli.UserID, event.MembershipJoin)
+		if storeErr != nil {
+			cli.cliOrContextLog(ctx).Warn().Err(storeErr).
+				Stringer("creator_user_id", cli.UserID).
+				Msg("Failed to update creator membership in state store after creating room")
+		}
 		for _, evt := range req.InitialState {
-			UpdateStateStore(cli.StateStore, evt)
+			UpdateStateStore(ctx, cli.StateStore, evt)
 		}
 		inviteMembership := event.MembershipInvite
 		if req.BeeperAutoJoinInvites {
 			inviteMembership = event.MembershipJoin
 		}
 		for _, invitee := range req.Invite {
-			cli.StateStore.SetMembership(resp.RoomID, invitee, inviteMembership)
+			storeErr = cli.StateStore.SetMembership(ctx, resp.RoomID, invitee, inviteMembership)
+			if storeErr != nil {
+				cli.cliOrContextLog(ctx).Warn().Err(storeErr).
+					Stringer("invitee_user_id", invitee).
+					Msg("Failed to update membership in state store after creating room")
+			}
 		}
 		for _, evt := range req.InitialState {
-			cli.updateStoreWithOutgoingEvent(resp.RoomID, evt.Type, evt.GetStateKey(), &evt.Content)
+			cli.updateStoreWithOutgoingEvent(ctx, resp.RoomID, evt.Type, evt.GetStateKey(), &evt.Content)
 		}
 	}
 	return
@@ -1129,7 +1152,10 @@ func (cli *Client) LeaveRoom(ctx context.Context, roomID id.RoomID, optionalReq 
 	u := cli.BuildClientURL("v3", "rooms", roomID, "leave")
 	_, err = cli.MakeRequest(ctx, "POST", u, req, &resp)
 	if err == nil && cli.StateStore != nil {
-		cli.StateStore.SetMembership(roomID, cli.UserID, event.MembershipLeave)
+		err = cli.StateStore.SetMembership(ctx, roomID, cli.UserID, event.MembershipLeave)
+		if err != nil {
+			err = fmt.Errorf("failed to update membership in state store: %w", err)
+		}
 	}
 	return
 }
@@ -1146,7 +1172,10 @@ func (cli *Client) InviteUser(ctx context.Context, roomID id.RoomID, req *ReqInv
 	u := cli.BuildClientURL("v3", "rooms", roomID, "invite")
 	_, err = cli.MakeRequest(ctx, "POST", u, req, &resp)
 	if err == nil && cli.StateStore != nil {
-		cli.StateStore.SetMembership(roomID, req.UserID, event.MembershipInvite)
+		err = cli.StateStore.SetMembership(ctx, roomID, req.UserID, event.MembershipInvite)
+		if err != nil {
+			err = fmt.Errorf("failed to update membership in state store: %w", err)
+		}
 	}
 	return
 }
@@ -1163,7 +1192,10 @@ func (cli *Client) KickUser(ctx context.Context, roomID id.RoomID, req *ReqKickU
 	u := cli.BuildClientURL("v3", "rooms", roomID, "kick")
 	_, err = cli.MakeRequest(ctx, "POST", u, req, &resp)
 	if err == nil && cli.StateStore != nil {
-		cli.StateStore.SetMembership(roomID, req.UserID, event.MembershipLeave)
+		err = cli.StateStore.SetMembership(ctx, roomID, req.UserID, event.MembershipLeave)
+		if err != nil {
+			err = fmt.Errorf("failed to update membership in state store: %w", err)
+		}
 	}
 	return
 }
@@ -1173,7 +1205,10 @@ func (cli *Client) BanUser(ctx context.Context, roomID id.RoomID, req *ReqBanUse
 	u := cli.BuildClientURL("v3", "rooms", roomID, "ban")
 	_, err = cli.MakeRequest(ctx, "POST", u, req, &resp)
 	if err == nil && cli.StateStore != nil {
-		cli.StateStore.SetMembership(roomID, req.UserID, event.MembershipBan)
+		err = cli.StateStore.SetMembership(ctx, roomID, req.UserID, event.MembershipBan)
+		if err != nil {
+			err = fmt.Errorf("failed to update membership in state store: %w", err)
+		}
 	}
 	return
 }
@@ -1183,7 +1218,10 @@ func (cli *Client) UnbanUser(ctx context.Context, roomID id.RoomID, req *ReqUnba
 	u := cli.BuildClientURL("v3", "rooms", roomID, "unban")
 	_, err = cli.MakeRequest(ctx, "POST", u, req, &resp)
 	if err == nil && cli.StateStore != nil {
-		cli.StateStore.SetMembership(roomID, req.UserID, event.MembershipLeave)
+		err = cli.StateStore.SetMembership(ctx, roomID, req.UserID, event.MembershipLeave)
+		if err != nil {
+			err = fmt.Errorf("failed to update membership in state store: %w", err)
+		}
 	}
 	return
 }
@@ -1216,7 +1254,7 @@ func (cli *Client) SetPresence(ctx context.Context, status event.Presence) (err 
 	return
 }
 
-func (cli *Client) updateStoreWithOutgoingEvent(roomID id.RoomID, eventType event.Type, stateKey string, contentJSON interface{}) {
+func (cli *Client) updateStoreWithOutgoingEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string, contentJSON interface{}) {
 	if cli.StateStore == nil {
 		return
 	}
@@ -1246,7 +1284,7 @@ func (cli *Client) updateStoreWithOutgoingEvent(roomID id.RoomID, eventType even
 		}
 		return
 	}
-	UpdateStateStore(cli.StateStore, fakeEvt)
+	UpdateStateStore(ctx, cli.StateStore, fakeEvt)
 }
 
 // StateEvent gets a single state event in a room. It will attempt to JSON unmarshal into the given "outContent" struct with
@@ -1256,7 +1294,7 @@ func (cli *Client) StateEvent(ctx context.Context, roomID id.RoomID, eventType e
 	u := cli.BuildClientURL("v3", "rooms", roomID, "state", eventType.String(), stateKey)
 	_, err = cli.MakeRequest(ctx, "GET", u, nil, outContent)
 	if err == nil && cli.StateStore != nil {
-		cli.updateStoreWithOutgoingEvent(roomID, eventType, stateKey, outContent)
+		cli.updateStoreWithOutgoingEvent(ctx, roomID, eventType, stateKey, outContent)
 	}
 	return
 }
@@ -1310,10 +1348,13 @@ func (cli *Client) State(ctx context.Context, roomID id.RoomID) (stateMap RoomSt
 		Handler:      parseRoomStateArray,
 	})
 	if err == nil && cli.StateStore != nil {
-		cli.StateStore.ClearCachedMembers(roomID)
+		clearErr := cli.StateStore.ClearCachedMembers(ctx, roomID)
+		cli.cliOrContextLog(ctx).Warn().Err(clearErr).
+			Stringer("room_id", roomID).
+			Msg("Failed to clear cached member list after fetching state")
 		for _, evts := range stateMap {
 			for _, evt := range evts {
-				UpdateStateStore(cli.StateStore, evt)
+				UpdateStateStore(ctx, cli.StateStore, evt)
 			}
 		}
 	}
@@ -1630,13 +1671,22 @@ func (cli *Client) JoinedMembers(ctx context.Context, roomID id.RoomID) (resp *R
 	u := cli.BuildClientURL("v3", "rooms", roomID, "joined_members")
 	_, err = cli.MakeRequest(ctx, "GET", u, nil, &resp)
 	if err == nil && cli.StateStore != nil {
-		cli.StateStore.ClearCachedMembers(roomID, event.MembershipJoin)
+		clearErr := cli.StateStore.ClearCachedMembers(ctx, roomID, event.MembershipJoin)
+		cli.cliOrContextLog(ctx).Warn().Err(clearErr).
+			Stringer("room_id", roomID).
+			Msg("Failed to clear cached member list after fetching joined members")
 		for userID, member := range resp.Joined {
-			cli.StateStore.SetMember(roomID, userID, &event.MemberEventContent{
+			updateErr := cli.StateStore.SetMember(ctx, roomID, userID, &event.MemberEventContent{
 				Membership:  event.MembershipJoin,
 				AvatarURL:   id.ContentURIString(member.AvatarURL),
 				Displayname: member.DisplayName,
 			})
+			if updateErr != nil {
+				cli.cliOrContextLog(ctx).Warn().Err(clearErr).
+					Stringer("room_id", roomID).
+					Stringer("user_id", userID).
+					Msg("Failed to update membership in state store after fetching joined members")
+			}
 		}
 	}
 	return
@@ -1665,10 +1715,13 @@ func (cli *Client) Members(ctx context.Context, roomID id.RoomID, req ...ReqMemb
 			clearMemberships = append(clearMemberships, extra.Membership)
 		}
 		if extra.NotMembership == "" {
-			cli.StateStore.ClearCachedMembers(roomID, clearMemberships...)
+			clearErr := cli.StateStore.ClearCachedMembers(ctx, roomID, clearMemberships...)
+			cli.cliOrContextLog(ctx).Warn().Err(clearErr).
+				Stringer("room_id", roomID).
+				Msg("Failed to clear cached member list after fetching joined members")
 		}
 		for _, evt := range resp.Chunk {
-			UpdateStateStore(cli.StateStore, evt)
+			UpdateStateStore(ctx, cli.StateStore, evt)
 		}
 	}
 	return

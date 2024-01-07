@@ -507,7 +507,7 @@ func (mach *OlmMachine) handleVerificationMAC(ctx context.Context, userID id.Use
 
 		// we can finally trust this device
 		device.Trust = id.TrustStateVerified
-		err = mach.CryptoStore.PutDevice(device.UserID, device)
+		err = mach.CryptoStore.PutDevice(ctx, device.UserID, device)
 		if err != nil {
 			mach.Log.Warn().Msgf("Failed to put device after verifying: %v", err)
 		}
@@ -521,7 +521,7 @@ func (mach *OlmMachine) handleVerificationMAC(ctx context.Context, userID id.Use
 					mach.Log.Debug().Msgf("Cross-signed own device %v after SAS verification", device.DeviceID)
 				}
 			} else {
-				masterKey, err := mach.fetchMasterKey(device, content, verState, transactionID)
+				masterKey, err := mach.fetchMasterKey(ctx, device, content, verState, transactionID)
 				if err != nil {
 					mach.Log.Warn().Msgf("Failed to fetch %s's master key: %v", device.UserID, err)
 				} else {

@@ -236,7 +236,7 @@ func (as *AppService) handleEvents(ctx context.Context, evts []*event.Event, def
 		}
 
 		if evt.Type.IsState() {
-			mautrix.UpdateStateStore(as.StateStore, evt)
+			mautrix.UpdateStateStore(ctx, as.StateStore, evt)
 		}
 		var ch chan *event.Event
 		if evt.Type.Class == event.ToDeviceEventType {

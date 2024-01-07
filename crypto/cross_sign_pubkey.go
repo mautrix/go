@@ -1,4 +1,4 @@
-// Copyright (c) 2023 Tulir Asokan
+// Copyright (c) 2024 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -42,7 +42,7 @@ func (mach *OlmMachine) GetOwnCrossSigningPublicKeys(ctx context.Context) *Cross
 }
 
 func (mach *OlmMachine) GetCrossSigningPublicKeys(ctx context.Context, userID id.UserID) (*CrossSigningPublicKeysCache, error) {
-	dbKeys, err := mach.CryptoStore.GetCrossSigningKeys(userID)
+	dbKeys, err := mach.CryptoStore.GetCrossSigningKeys(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get keys from database: %w", err)
 	}

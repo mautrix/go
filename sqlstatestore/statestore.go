@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Tulir Asokan
+// Copyright (c) 2024 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,6 +7,7 @@
 package sqlstatestore
 
 import (
+	"context"
 	"database/sql"
 	"embed"
 	"encoding/json"
@@ -15,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/rs/zerolog"
 	"go.mau.fi/util/dbutil"
 
 	"maunium.net/go/mautrix/event"
@@ -44,26 +46,28 @@ func NewSQLStateStore(db *dbutil.Database, log dbutil.DatabaseLogger, isBridge b
 	}
 }
 
-func (store *SQLStateStore) IsRegistered(userID id.UserID) bool {
+func (store *SQLStateStore) IsRegistered(ctx context.Context, userID id.UserID) (bool, error) {
 	var isRegistered bool
 	err := store.
-		QueryRow("SELECT EXISTS(SELECT 1 FROM mx_registrations WHERE user_id=$1)", userID).
+		QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM mx_registrations WHERE user_id=$1)", userID).
 		Scan(&isRegistered)
-	if err != nil {
-		store.Log.Warn("Failed to scan registration existence for %s: %v", userID, err)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = nil
 	}
-	return isRegistered
+	return isRegistered, err
 }
 
-func (store *SQLStateStore) MarkRegistered(userID id.UserID) {
-	_, err := store.Exec("INSERT INTO mx_registrations (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING", userID)
-	if err != nil {
-		store.Log.Warn("Failed to mark %s as registered: %v", userID, err)
-	}
+func (store *SQLStateStore) MarkRegistered(ctx context.Context, userID id.UserID) error {
+	_, err := store.Exec(ctx, "INSERT INTO mx_registrations (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING", userID)
+	return err
 }
 
-func (store *SQLStateStore) GetRoomMembers(roomID id.RoomID, memberships ...event.Membership) map[id.UserID]*event.MemberEventContent {
-	members := make(map[id.UserID]*event.MemberEventContent)
+type Member struct {
+	id.UserID
+	event.MemberEventContent
+}
+
+func (store *SQLStateStore) GetRoomMembers(ctx context.Context, roomID id.RoomID, memberships ...event.Membership) (map[id.UserID]*event.MemberEventContent, error) {
 	args := make([]any, len(memberships)+1)
 	args[0] = roomID
 	query := "SELECT user_id, membership, displayname, avatar_url FROM mx_user_profile WHERE room_id=$1"
@@ -75,25 +79,26 @@ func (store *SQLStateStore) GetRoomMembers(roomID id.RoomID, memberships ...even
 		}
 		query = fmt.Sprintf("%s AND membership IN (%s)", query, strings.Join(placeholders, ","))
 	}
-	rows, err := store.Query(query, args...)
+	rows, err := store.Query(ctx, query, args...)
 	if err != nil {
-		return members
+		return nil, err
 	}
-	var userID id.UserID
-	var member event.MemberEventContent
-	for rows.Next() {
-		err = rows.Scan(&userID, &member.Membership, &member.Displayname, &member.AvatarURL)
-		if err != nil {
-			store.Log.Warn("Failed to scan member in %s: %v", roomID, err)
-		} else {
-			members[userID] = &member
-		}
-	}
-	return members
+	members := make(map[id.UserID]*event.MemberEventContent)
+	return members, dbutil.NewRowIter(rows, func(row dbutil.Scannable) (ret Member, err error) {
+		err = row.Scan(&ret.UserID, &ret.Membership, &ret.Displayname, &ret.AvatarURL)
+		return
+	}).Iter(func(m Member) (bool, error) {
+		members[m.UserID] = &m.MemberEventContent
+		return true, nil
+	})
 }
 
-func (store *SQLStateStore) GetRoomJoinedOrInvitedMembers(roomID id.RoomID) (members []id.UserID, err error) {
-	memberMap := store.GetRoomMembers(roomID, event.MembershipJoin, event.MembershipInvite)
+func (store *SQLStateStore) GetRoomJoinedOrInvitedMembers(ctx context.Context, roomID id.RoomID) (members []id.UserID, err error) {
+	var memberMap map[id.UserID]*event.MemberEventContent
+	memberMap, err = store.GetRoomMembers(ctx, roomID, event.MembershipJoin, event.MembershipInvite)
+	if err != nil {
+		return
+	}
 	members = make([]id.UserID, len(memberMap))
 	i := 0
 	for userID := range memberMap {
@@ -103,37 +108,39 @@ func (store *SQLStateStore) GetRoomJoinedOrInvitedMembers(roomID id.RoomID) (mem
 	return
 }
 
-func (store *SQLStateStore) GetMembership(roomID id.RoomID, userID id.UserID) event.Membership {
-	membership := event.MembershipLeave
-	err := store.
-		QueryRow("SELECT membership FROM mx_user_profile WHERE room_id=$1 AND user_id=$2", roomID, userID).
+func (store *SQLStateStore) GetMembership(ctx context.Context, roomID id.RoomID, userID id.UserID) (membership event.Membership, err error) {
+	err = store.
+		QueryRow(ctx, "SELECT membership FROM mx_user_profile WHERE room_id=$1 AND user_id=$2", roomID, userID).
 		Scan(&membership)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		store.Log.Warn("Failed to scan membership of %s in %s: %v", userID, roomID, err)
+	if errors.Is(err, sql.ErrNoRows) {
+		membership = event.MembershipLeave
+		err = nil
 	}
-	return membership
+	return
 }
 
-func (store *SQLStateStore) GetMember(roomID id.RoomID, userID id.UserID) *event.MemberEventContent {
-	member, ok := store.TryGetMember(roomID, userID)
-	if !ok {
-		member.Membership = event.MembershipLeave
+func (store *SQLStateStore) GetMember(ctx context.Context, roomID id.RoomID, userID id.UserID) (*event.MemberEventContent, error) {
+	member, err := store.TryGetMember(ctx, roomID, userID)
+	if member == nil && err == nil {
+		member = &event.MemberEventContent{Membership: event.MembershipLeave}
 	}
-	return member
+	return member, err
 }
 
-func (store *SQLStateStore) TryGetMember(roomID id.RoomID, userID id.UserID) (*event.MemberEventContent, bool) {
+func (store *SQLStateStore) TryGetMember(ctx context.Context, roomID id.RoomID, userID id.UserID) (*event.MemberEventContent, error) {
 	var member event.MemberEventContent
 	err := store.
-		QueryRow("SELECT membership, displayname, avatar_url FROM mx_user_profile WHERE room_id=$1 AND user_id=$2", roomID, userID).
+		QueryRow(ctx, "SELECT membership, displayname, avatar_url FROM mx_user_profile WHERE room_id=$1 AND user_id=$2", roomID, userID).
 		Scan(&member.Membership, &member.Displayname, &member.AvatarURL)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		store.Log.Warn("Failed to scan member info of %s in %s: %v", userID, roomID, err)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
 	}
-	return &member, err == nil
+	return &member, nil
 }
 
-func (store *SQLStateStore) FindSharedRooms(userID id.UserID) (rooms []id.RoomID) {
+func (store *SQLStateStore) FindSharedRooms(ctx context.Context, userID id.UserID) ([]id.RoomID, error) {
 	query := `
 		SELECT room_id FROM mx_user_profile
 		LEFT JOIN portal ON portal.mxid=mx_user_profile.room_id
@@ -141,38 +148,32 @@ func (store *SQLStateStore) FindSharedRooms(userID id.UserID) (rooms []id.RoomID
 	`
 	if !store.IsBridge {
 		query = `
-		SELECT mx_user_profile.room_id FROM mx_user_profile
-		LEFT JOIN mx_room_state ON mx_room_state.room_id=mx_user_profile.room_id
-		WHERE mx_user_profile.user_id=$1 AND mx_room_state.encryption IS NOT NULL
-	`
+			SELECT mx_user_profile.room_id FROM mx_user_profile
+			LEFT JOIN mx_room_state ON mx_room_state.room_id=mx_user_profile.room_id
+			WHERE mx_user_profile.user_id=$1 AND mx_room_state.encryption IS NOT NULL
+		`
 	}
-	rows, err := store.Query(query, userID)
+	rows, err := store.Query(ctx, query, userID)
 	if err != nil {
-		store.Log.Warn("Failed to query shared rooms with %s: %v", userID, err)
-		return
+		return nil, err
 	}
-	for rows.Next() {
-		var roomID id.RoomID
-		err = rows.Scan(&roomID)
-		if err != nil {
-			store.Log.Warn("Failed to scan room ID: %v", err)
-		} else {
-			rooms = append(rooms, roomID)
-		}
+	return dbutil.NewRowIter(rows, dbutil.ScanSingleColumn[id.RoomID]).AsList()
+}
+
+func (store *SQLStateStore) IsInRoom(ctx context.Context, roomID id.RoomID, userID id.UserID) bool {
+	return store.IsMembership(ctx, roomID, userID, "join")
+}
+
+func (store *SQLStateStore) IsInvited(ctx context.Context, roomID id.RoomID, userID id.UserID) bool {
+	return store.IsMembership(ctx, roomID, userID, "join", "invite")
+}
+
+func (store *SQLStateStore) IsMembership(ctx context.Context, roomID id.RoomID, userID id.UserID, allowedMemberships ...event.Membership) bool {
+	membership, err := store.GetMembership(ctx, roomID, userID)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to get membership")
+		return false
 	}
-	return
-}
-
-func (store *SQLStateStore) IsInRoom(roomID id.RoomID, userID id.UserID) bool {
-	return store.IsMembership(roomID, userID, "join")
-}
-
-func (store *SQLStateStore) IsInvited(roomID id.RoomID, userID id.UserID) bool {
-	return store.IsMembership(roomID, userID, "join", "invite")
-}
-
-func (store *SQLStateStore) IsMembership(roomID id.RoomID, userID id.UserID, allowedMemberships ...event.Membership) bool {
-	membership := store.GetMembership(roomID, userID)
 	for _, allowedMembership := range allowedMemberships {
 		if allowedMembership == membership {
 			return true
@@ -181,27 +182,23 @@ func (store *SQLStateStore) IsMembership(roomID id.RoomID, userID id.UserID, all
 	return false
 }
 
-func (store *SQLStateStore) SetMembership(roomID id.RoomID, userID id.UserID, membership event.Membership) {
-	_, err := store.Exec(`
+func (store *SQLStateStore) SetMembership(ctx context.Context, roomID id.RoomID, userID id.UserID, membership event.Membership) error {
+	_, err := store.Exec(ctx, `
 		INSERT INTO mx_user_profile (room_id, user_id, membership, displayname, avatar_url) VALUES ($1, $2, $3, '', '')
 		ON CONFLICT (room_id, user_id) DO UPDATE SET membership=excluded.membership
 	`, roomID, userID, membership)
-	if err != nil {
-		store.Log.Warn("Failed to set membership of %s in %s to %s: %v", userID, roomID, membership, err)
-	}
+	return err
 }
 
-func (store *SQLStateStore) SetMember(roomID id.RoomID, userID id.UserID, member *event.MemberEventContent) {
-	_, err := store.Exec(`
+func (store *SQLStateStore) SetMember(ctx context.Context, roomID id.RoomID, userID id.UserID, member *event.MemberEventContent) error {
+	_, err := store.Exec(ctx, `
 		INSERT INTO mx_user_profile (room_id, user_id, membership, displayname, avatar_url) VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (room_id, user_id) DO UPDATE SET membership=excluded.membership, displayname=excluded.displayname, avatar_url=excluded.avatar_url
 	`, roomID, userID, member.Membership, member.Displayname, member.AvatarURL)
-	if err != nil {
-		store.Log.Warn("Failed to set membership of %s in %s to %s: %v", userID, roomID, member, err)
-	}
+	return err
 }
 
-func (store *SQLStateStore) ClearCachedMembers(roomID id.RoomID, memberships ...event.Membership) {
+func (store *SQLStateStore) ClearCachedMembers(ctx context.Context, roomID id.RoomID, memberships ...event.Membership) error {
 	query := "DELETE FROM mx_user_profile WHERE room_id=$1"
 	params := make([]any, len(memberships)+1)
 	params[0] = roomID
@@ -213,109 +210,85 @@ func (store *SQLStateStore) ClearCachedMembers(roomID id.RoomID, memberships ...
 		}
 		query += fmt.Sprintf(" AND membership IN (%s)", strings.Join(placeholders, ","))
 	}
-	_, err := store.Exec(query, params...)
-	if err != nil {
-		store.Log.Warn("Failed to clear cached members of %s: %v", roomID, err)
-	}
+	_, err := store.Exec(ctx, query, params...)
+	return err
 }
 
-func (store *SQLStateStore) SetEncryptionEvent(roomID id.RoomID, content *event.EncryptionEventContent) {
+func (store *SQLStateStore) SetEncryptionEvent(ctx context.Context, roomID id.RoomID, content *event.EncryptionEventContent) error {
 	contentBytes, err := json.Marshal(content)
 	if err != nil {
-		store.Log.Warn("Failed to marshal encryption config of %s: %v", roomID, err)
-		return
+		return fmt.Errorf("failed to marshal content JSON: %w", err)
 	}
-	_, err = store.Exec(`
+	_, err = store.Exec(ctx, `
 		INSERT INTO mx_room_state (room_id, encryption) VALUES ($1, $2)
 		ON CONFLICT (room_id) DO UPDATE SET encryption=excluded.encryption
 	`, roomID, contentBytes)
-	if err != nil {
-		store.Log.Warn("Failed to store encryption config of %s: %v", roomID, err)
-	}
+	return err
 }
 
-func (store *SQLStateStore) GetEncryptionEvent(roomID id.RoomID) *event.EncryptionEventContent {
+func (store *SQLStateStore) GetEncryptionEvent(ctx context.Context, roomID id.RoomID) (*event.EncryptionEventContent, error) {
 	var data []byte
 	err := store.
-		QueryRow("SELECT encryption FROM mx_room_state WHERE room_id=$1", roomID).
+		QueryRow(ctx, "SELECT encryption FROM mx_room_state WHERE room_id=$1", roomID).
 		Scan(&data)
-	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
-			store.Log.Warn("Failed to scan encryption config of %s: %v", roomID, err)
-		}
-		return nil
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
 	} else if data == nil {
-		return nil
+		return nil, nil
 	}
-	content := &event.EncryptionEventContent{}
-	err = json.Unmarshal(data, content)
+	var content event.EncryptionEventContent
+	err = json.Unmarshal(data, &content)
 	if err != nil {
-		store.Log.Warn("Failed to parse encryption config of %s: %v", roomID, err)
-		return nil
+		return nil, fmt.Errorf("failed to parse content JSON: %w", err)
 	}
-	return content
+	return &content, nil
 }
 
-func (store *SQLStateStore) IsEncrypted(roomID id.RoomID) bool {
-	cfg := store.GetEncryptionEvent(roomID)
-	return cfg != nil && cfg.Algorithm == id.AlgorithmMegolmV1
+func (store *SQLStateStore) IsEncrypted(ctx context.Context, roomID id.RoomID) (bool, error) {
+	cfg, err := store.GetEncryptionEvent(ctx, roomID)
+	return cfg != nil && cfg.Algorithm == id.AlgorithmMegolmV1, err
 }
 
-func (store *SQLStateStore) SetPowerLevels(roomID id.RoomID, levels *event.PowerLevelsEventContent) {
-	levelsBytes, err := json.Marshal(levels)
-	if err != nil {
-		store.Log.Warn("Failed to marshal power levels of %s: %v", roomID, err)
-		return
-	}
-	_, err = store.Exec(`
+func (store *SQLStateStore) SetPowerLevels(ctx context.Context, roomID id.RoomID, levels *event.PowerLevelsEventContent) error {
+	_, err := store.Exec(ctx, `
 		INSERT INTO mx_room_state (room_id, power_levels) VALUES ($1, $2)
 		ON CONFLICT (room_id) DO UPDATE SET power_levels=excluded.power_levels
-	`, roomID, levelsBytes)
-	if err != nil {
-		store.Log.Warn("Failed to store power levels of %s: %v", roomID, err)
-	}
+	`, roomID, dbutil.JSON{Data: levels})
+	return err
 }
 
-func (store *SQLStateStore) GetPowerLevels(roomID id.RoomID) (levels *event.PowerLevelsEventContent) {
-	var data []byte
-	err := store.
-		QueryRow("SELECT power_levels FROM mx_room_state WHERE room_id=$1", roomID).
-		Scan(&data)
-	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
-			store.Log.Warn("Failed to scan power levels of %s: %v", roomID, err)
-		}
-		return
-	} else if data == nil {
-		return
-	}
-	levels = &event.PowerLevelsEventContent{}
-	err = json.Unmarshal(data, levels)
-	if err != nil {
-		store.Log.Warn("Failed to parse power levels of %s: %v", roomID, err)
-		return nil
+func (store *SQLStateStore) GetPowerLevels(ctx context.Context, roomID id.RoomID) (levels *event.PowerLevelsEventContent, err error) {
+	err = store.
+		QueryRow(ctx, "SELECT power_levels FROM mx_room_state WHERE room_id=$1", roomID).
+		Scan(&dbutil.JSON{Data: &levels})
+	if errors.Is(err, sql.ErrNoRows) {
+		err = nil
 	}
 	return
 }
 
-func (store *SQLStateStore) GetPowerLevel(roomID id.RoomID, userID id.UserID) int {
+func (store *SQLStateStore) GetPowerLevel(ctx context.Context, roomID id.RoomID, userID id.UserID) (int, error) {
 	if store.Dialect == dbutil.Postgres {
 		var powerLevel int
 		err := store.
-			QueryRow(`
+			QueryRow(ctx, `
 				SELECT COALESCE((power_levels->'users'->$2)::int, (power_levels->'users_default')::int, 0)
 				FROM mx_room_state WHERE room_id=$1
 			`, roomID, userID).
 			Scan(&powerLevel)
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			store.Log.Warn("Failed to scan power level of %s in %s: %v", userID, roomID, err)
+		return powerLevel, err
+	} else {
+		levels, err := store.GetPowerLevels(ctx, roomID)
+		if err != nil {
+			return 0, err
 		}
-		return powerLevel
+		return levels.GetUserLevel(userID), nil
 	}
-	return store.GetPowerLevels(roomID).GetUserLevel(userID)
 }
 
-func (store *SQLStateStore) GetPowerLevelRequirement(roomID id.RoomID, eventType event.Type) int {
+func (store *SQLStateStore) GetPowerLevelRequirement(ctx context.Context, roomID id.RoomID, eventType event.Type) (int, error) {
 	if store.Dialect == dbutil.Postgres {
 		defaultType := "events_default"
 		defaultValue := 0
@@ -325,23 +298,26 @@ func (store *SQLStateStore) GetPowerLevelRequirement(roomID id.RoomID, eventType
 		}
 		var powerLevel int
 		err := store.
-			QueryRow(`
+			QueryRow(ctx, `
 				SELECT COALESCE((power_levels->'events'->$2)::int, (power_levels->'$3')::int, $4)
 				FROM mx_room_state WHERE room_id=$1
 			`, roomID, eventType.Type, defaultType, defaultValue).
 			Scan(&powerLevel)
-		if err != nil {
-			if !errors.Is(err, sql.ErrNoRows) {
-				store.Log.Warn("Failed to scan power level for %s in %s: %v", eventType, roomID, err)
-			}
-			return defaultValue
+		if errors.Is(err, sql.ErrNoRows) {
+			err = nil
+			powerLevel = defaultValue
 		}
-		return powerLevel
+		return powerLevel, err
+	} else {
+		levels, err := store.GetPowerLevels(ctx, roomID)
+		if err != nil {
+			return 0, err
+		}
+		return levels.GetEventLevel(eventType), nil
 	}
-	return store.GetPowerLevels(roomID).GetEventLevel(eventType)
 }
 
-func (store *SQLStateStore) HasPowerLevel(roomID id.RoomID, userID id.UserID, eventType event.Type) bool {
+func (store *SQLStateStore) HasPowerLevel(ctx context.Context, roomID id.RoomID, userID id.UserID, eventType event.Type) (bool, error) {
 	if store.Dialect == dbutil.Postgres {
 		defaultType := "events_default"
 		defaultValue := 0
@@ -351,19 +327,22 @@ func (store *SQLStateStore) HasPowerLevel(roomID id.RoomID, userID id.UserID, ev
 		}
 		var hasPower bool
 		err := store.
-			QueryRow(`SELECT
+			QueryRow(ctx, `SELECT
 				COALESCE((power_levels->'users'->$2)::int, (power_levels->'users_default')::int, 0)
 				>=
 				COALESCE((power_levels->'events'->$3)::int, (power_levels->'$4')::int, $5)
 				FROM mx_room_state WHERE room_id=$1`, roomID, userID, eventType.Type, defaultType, defaultValue).
 			Scan(&hasPower)
-		if err != nil {
-			if !errors.Is(err, sql.ErrNoRows) {
-				store.Log.Warn("Failed to scan power level for %s in %s: %v", eventType, roomID, err)
-			}
-			return defaultValue == 0
+		if errors.Is(err, sql.ErrNoRows) {
+			err = nil
+			hasPower = defaultValue == 0
 		}
-		return hasPower
+		return hasPower, err
+	} else {
+		levels, err := store.GetPowerLevels(ctx, roomID)
+		if err != nil {
+			return false, err
+		}
+		return levels.GetUserLevel(userID) >= levels.GetEventLevel(eventType), nil
 	}
-	return store.GetPowerLevel(roomID, userID) >= store.GetPowerLevelRequirement(roomID, eventType)
 }

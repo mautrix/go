@@ -1,4 +1,4 @@
-// Copyright (c) 2023 Tulir Asokan
+// Copyright (c) 2024 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,6 +8,7 @@ package crypto
 
 import (
 	"bytes"
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/hmac"
@@ -91,7 +92,7 @@ func decryptKeyExport(passphrase string, exportData []byte) ([]ExportedSession, 
 	return sessionsJSON, nil
 }
 
-func (mach *OlmMachine) importExportedRoomKey(session ExportedSession) (bool, error) {
+func (mach *OlmMachine) importExportedRoomKey(ctx context.Context, session ExportedSession) (bool, error) {
 	if session.Algorithm != id.AlgorithmMegolmV1 {
 		return false, ErrInvalidExportedAlgorithm
 	}
@@ -112,12 +113,12 @@ func (mach *OlmMachine) importExportedRoomKey(session ExportedSession) (bool, er
 
 		ReceivedAt: time.Now().UTC(),
 	}
-	existingIGS, _ := mach.CryptoStore.GetGroupSession(igs.RoomID, igs.SenderKey, igs.ID())
+	existingIGS, _ := mach.CryptoStore.GetGroupSession(ctx, igs.RoomID, igs.SenderKey, igs.ID())
 	if existingIGS != nil && existingIGS.Internal.FirstKnownIndex() <= igs.Internal.FirstKnownIndex() {
 		// We already have an equivalent or better session in the store, so don't override it.
 		return false, nil
 	}
-	err = mach.CryptoStore.PutGroupSession(igs.RoomID, igs.SenderKey, igs.ID(), igs)
+	err = mach.CryptoStore.PutGroupSession(ctx, igs.RoomID, igs.SenderKey, igs.ID(), igs)
 	if err != nil {
 		return false, fmt.Errorf("failed to store imported session: %w", err)
 	}
@@ -127,7 +128,7 @@ func (mach *OlmMachine) importExportedRoomKey(session ExportedSession) (bool, er
 
 // ImportKeys imports data that was exported with the format specified in the Matrix spec.
 // See https://spec.matrix.org/v1.2/client-server-api/#key-exports
-func (mach *OlmMachine) ImportKeys(passphrase string, data []byte) (int, int, error) {
+func (mach *OlmMachine) ImportKeys(ctx context.Context, passphrase string, data []byte) (int, int, error) {
 	exportData, err := decodeKeyExport(data)
 	if err != nil {
 		return 0, 0, err
@@ -143,8 +144,11 @@ func (mach *OlmMachine) ImportKeys(passphrase string, data []byte) (int, int, er
 			Str("room_id", session.RoomID.String()).
 			Str("session_id", session.SessionID.String()).
 			Logger()
-		imported, err := mach.importExportedRoomKey(session)
+		imported, err := mach.importExportedRoomKey(ctx, session)
 		if err != nil {
+			if ctx.Err() != nil {
+				return count, len(sessions), ctx.Err()
+			}
 			log.Error().Err(err).Msg("Failed to import Megolm session from file")
 		} else if imported {
 			log.Debug().Msg("Imported Megolm session from file")

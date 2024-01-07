@@ -1,5 +1,5 @@
 // Copyright (c) 2020 Nikos Filippakis
-// Copyright (c) 2023 Tulir Asokan
+// Copyright (c) 2024 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -34,8 +34,8 @@ var (
 	ErrMismatchingMasterKeyMAC       = errors.New("mismatching cross-signing master key MAC")
 )
 
-func (mach *OlmMachine) fetchMasterKey(device *id.Device, content *event.VerificationMacEventContent, verState *verificationState, transactionID string) (id.Ed25519, error) {
-	crossSignKeys, err := mach.CryptoStore.GetCrossSigningKeys(device.UserID)
+func (mach *OlmMachine) fetchMasterKey(ctx context.Context, device *id.Device, content *event.VerificationMacEventContent, verState *verificationState, transactionID string) (id.Ed25519, error) {
+	crossSignKeys, err := mach.CryptoStore.GetCrossSigningKeys(ctx, device.UserID)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch cross-signing keys: %w", err)
 	}
@@ -85,7 +85,7 @@ func (mach *OlmMachine) SignUser(ctx context.Context, userID id.UserID, masterKe
 		Str("signature", signature).
 		Msg("Signed master key of user with our user-signing key")
 
-	if err := mach.CryptoStore.PutSignature(userID, masterKey, mach.Client.UserID, mach.CrossSigningKeys.UserSigningKey.PublicKey, signature); err != nil {
+	if err := mach.CryptoStore.PutSignature(ctx, userID, masterKey, mach.Client.UserID, mach.CrossSigningKeys.UserSigningKey.PublicKey, signature); err != nil {
 		return fmt.Errorf("error storing signature in crypto store: %w", err)
 	}
 
@@ -137,7 +137,7 @@ func (mach *OlmMachine) SignOwnMasterKey(ctx context.Context) error {
 		return fmt.Errorf("%w: %+v", ErrSignatureUploadFail, resp.Failures)
 	}
 
-	if err := mach.CryptoStore.PutSignature(userID, masterKey, userID, mach.account.SigningKey(), signature); err != nil {
+	if err := mach.CryptoStore.PutSignature(ctx, userID, masterKey, userID, mach.account.SigningKey(), signature); err != nil {
 		return fmt.Errorf("error storing signature in crypto store: %w", err)
 	}
 
@@ -178,7 +178,7 @@ func (mach *OlmMachine) SignOwnDevice(ctx context.Context, device *id.Device) er
 		Str("signature", signature).
 		Msg("Signed own device key with self-signing key")
 
-	if err := mach.CryptoStore.PutSignature(device.UserID, device.SigningKey, mach.Client.UserID, mach.CrossSigningKeys.SelfSigningKey.PublicKey, signature); err != nil {
+	if err := mach.CryptoStore.PutSignature(ctx, device.UserID, device.SigningKey, mach.Client.UserID, mach.CrossSigningKeys.SelfSigningKey.PublicKey, signature); err != nil {
 		return fmt.Errorf("error storing signature in crypto store: %w", err)
 	}
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2023 Tulir Asokan
+// Copyright (c) 2024 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -53,7 +53,7 @@ func (mach *OlmMachine) storeDeviceSelfSignatures(ctx context.Context, userID id
 								Str("signed_device_id", deviceID.String()).
 								Str("signature", signature).
 								Msg("Verified self-signing signature")
-							err = mach.CryptoStore.PutSignature(userID, id.Ed25519(signKey), signerUserID, pubKey, signature)
+							err = mach.CryptoStore.PutSignature(ctx, userID, id.Ed25519(signKey), signerUserID, pubKey, signature)
 							if err != nil {
 								log.Warn().Err(err).
 									Str("signer_user_id", signerUserID.String()).
@@ -74,7 +74,7 @@ func (mach *OlmMachine) storeDeviceSelfSignatures(ctx context.Context, userID id
 			}
 			// save signature of device made by its own device signing key
 			if signKey, ok := deviceKeys.Keys[id.DeviceKeyID(signerKey)]; ok {
-				err := mach.CryptoStore.PutSignature(userID, id.Ed25519(signKey), signerUserID, id.Ed25519(signKey), signature)
+				err := mach.CryptoStore.PutSignature(ctx, userID, id.Ed25519(signKey), signerUserID, id.Ed25519(signKey), signature)
 				if err != nil {
 					log.Warn().Err(err).
 						Str("signer_user_id", signerUserID.String()).
@@ -96,7 +96,7 @@ func (mach *OlmMachine) fetchKeys(ctx context.Context, users []id.UserID, sinceT
 	log := mach.machOrContextLog(ctx)
 	if !includeUntracked {
 		var err error
-		users, err = mach.CryptoStore.FilterTrackedUsers(users)
+		users, err = mach.CryptoStore.FilterTrackedUsers(ctx, users)
 		if err != nil {
 			log.Warn().Err(err).Msg("Failed to filter tracked user list")
 		}
@@ -123,7 +123,7 @@ func (mach *OlmMachine) fetchKeys(ctx context.Context, users []id.UserID, sinceT
 		delete(req.DeviceKeys, userID)
 
 		newDevices := make(map[id.DeviceID]*id.Device)
-		existingDevices, err := mach.CryptoStore.GetDevices(userID)
+		existingDevices, err := mach.CryptoStore.GetDevices(ctx, userID)
 		if err != nil {
 			log.Warn().Err(err).Msg("Failed to get existing devices for user")
 			existingDevices = make(map[id.DeviceID]*id.Device)
@@ -151,7 +151,7 @@ func (mach *OlmMachine) fetchKeys(ctx context.Context, users []id.UserID, sinceT
 			}
 		}
 		log.Trace().Int("new_device_count", len(newDevices)).Msg("Storing new device list")
-		err = mach.CryptoStore.PutDevices(userID, newDevices)
+		err = mach.CryptoStore.PutDevices(ctx, userID, newDevices)
 		if err != nil {
 			log.Warn().Err(err).Msg("Failed to update device list")
 		}
@@ -169,7 +169,7 @@ func (mach *OlmMachine) fetchKeys(ctx context.Context, users []id.UserID, sinceT
 						Str("identity_key", device.IdentityKey.String()).
 						Str("signing_key", device.SigningKey.String()).
 						Logger()
-					sessionIDs, err := mach.CryptoStore.RedactGroupSessions("", device.IdentityKey, "device removed")
+					sessionIDs, err := mach.CryptoStore.RedactGroupSessions(ctx, "", device.IdentityKey, "device removed")
 					if err != nil {
 						log.Err(err).Msg("Failed to redact megolm sessions from deleted device")
 					} else {
@@ -179,7 +179,7 @@ func (mach *OlmMachine) fetchKeys(ctx context.Context, users []id.UserID, sinceT
 					}
 				}
 			}
-			mach.OnDevicesChanged(userID)
+			mach.OnDevicesChanged(ctx, userID)
 		}
 	}
 	for userID := range req.DeviceKeys {
@@ -197,18 +197,25 @@ func (mach *OlmMachine) fetchKeys(ctx context.Context, users []id.UserID, sinceT
 //
 // This is called automatically whenever a device list change is noticed in ProcessSyncResponse and usually does
 // not need to be called manually.
-func (mach *OlmMachine) OnDevicesChanged(userID id.UserID) {
+func (mach *OlmMachine) OnDevicesChanged(ctx context.Context, userID id.UserID) {
 	if mach.DisableDeviceChangeKeyRotation {
 		return
 	}
-	for _, roomID := range mach.StateStore.FindSharedRooms(userID) {
-		mach.Log.Debug().
+	rooms, err := mach.StateStore.FindSharedRooms(ctx, userID)
+	if err != nil {
+		mach.machOrContextLog(ctx).Err(err).
+			Stringer("with_user_id", userID).
+			Msg("Failed to find shared rooms to invalidate group sessions")
+		return
+	}
+	for _, roomID := range rooms {
+		mach.machOrContextLog(ctx).Debug().
 			Str("user_id", userID.String()).
 			Str("room_id", roomID.String()).
 			Msg("Invalidating group session in room due to device change notification")
-		err := mach.CryptoStore.RemoveOutboundGroupSession(roomID)
+		err = mach.CryptoStore.RemoveOutboundGroupSession(ctx, roomID)
 		if err != nil {
-			mach.Log.Warn().Err(err).
+			mach.machOrContextLog(ctx).Err(err).
 				Str("user_id", userID.String()).
 				Str("room_id", roomID.String()).
 				Msg("Failed to invalidate outbound group session")

@@ -105,7 +105,7 @@ func NewCryptoHelper(cli *mautrix.Client, pickleKey []byte, store any) (*CryptoH
 	}, nil
 }
 
-func (helper *CryptoHelper) Init() error {
+func (helper *CryptoHelper) Init(ctx context.Context) error {
 	if helper == nil {
 		return fmt.Errorf("crypto helper is nil")
 	}
@@ -116,7 +116,7 @@ func (helper *CryptoHelper) Init() error {
 
 	var stateStore crypto.StateStore
 	if helper.managedStateStore != nil {
-		err := helper.managedStateStore.Upgrade()
+		err := helper.managedStateStore.Upgrade(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to upgrade client state store: %w", err)
 		}
@@ -124,7 +124,6 @@ func (helper *CryptoHelper) Init() error {
 	} else {
 		stateStore = helper.client.StateStore.(crypto.StateStore)
 	}
-	ctx := context.TODO()
 	var cryptoStore crypto.Store
 	if helper.unmanagedCryptoStore == nil {
 		managedCryptoStore := crypto.NewSQLCryptoStore(helper.dbForManagedStores, dbutil.ZeroLogger(helper.log.With().Str("db_section", "crypto").Logger()), helper.DBAccountID, helper.client.DeviceID, helper.pickleKey)
@@ -133,11 +132,14 @@ func (helper *CryptoHelper) Init() error {
 		} else if _, isMemory := helper.client.Store.(*mautrix.MemorySyncStore); isMemory {
 			helper.client.Store = managedCryptoStore
 		}
-		err := managedCryptoStore.DB.Upgrade()
+		err := managedCryptoStore.DB.Upgrade(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to upgrade crypto state store: %w", err)
 		}
-		storedDeviceID := managedCryptoStore.FindDeviceID()
+		storedDeviceID, err := managedCryptoStore.FindDeviceID(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to find existing device ID: %w", err)
+		}
 		if helper.LoginAs != nil {
 			if storedDeviceID != "" {
 				helper.LoginAs.DeviceID = storedDeviceID
@@ -168,7 +170,7 @@ func (helper *CryptoHelper) Init() error {
 		return fmt.Errorf("the client must be logged in")
 	}
 	helper.mach = crypto.NewOlmMachine(helper.client, &helper.log, cryptoStore, stateStore)
-	err := helper.mach.Load()
+	err := helper.mach.Load(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to load olm account: %w", err)
 	} else if err = helper.verifyDeviceKeysOnServer(ctx); err != nil {
@@ -253,17 +255,18 @@ func (helper *CryptoHelper) HandleEncrypted(src mautrix.EventSource, evt *event.
 		Str("session_id", content.SessionID.String()).
 		Logger()
 	log.Debug().Msg("Decrypting received event")
+	ctx := log.WithContext(context.TODO())
 
-	decrypted, err := helper.Decrypt(evt)
+	decrypted, err := helper.Decrypt(ctx, evt)
 	if errors.Is(err, NoSessionFound) {
 		log.Debug().
 			Int("wait_seconds", int(initialSessionWaitTimeout.Seconds())).
 			Msg("Couldn't find session, waiting for keys to arrive...")
-		if helper.mach.WaitForSession(evt.RoomID, content.SenderKey, content.SessionID, initialSessionWaitTimeout) {
+		if helper.mach.WaitForSession(ctx, evt.RoomID, content.SenderKey, content.SessionID, initialSessionWaitTimeout) {
 			log.Debug().Msg("Got keys after waiting, trying to decrypt event again")
-			decrypted, err = helper.Decrypt(evt)
+			decrypted, err = helper.Decrypt(ctx, evt)
 		} else {
-			go helper.waitLongerForSession(log, src, evt)
+			go helper.waitLongerForSession(ctx, log, src, evt)
 			return
 		}
 	}
@@ -306,20 +309,20 @@ func (helper *CryptoHelper) RequestSession(ctx context.Context, roomID id.RoomID
 	}
 }
 
-func (helper *CryptoHelper) waitLongerForSession(log zerolog.Logger, src mautrix.EventSource, evt *event.Event) {
+func (helper *CryptoHelper) waitLongerForSession(ctx context.Context, log zerolog.Logger, src mautrix.EventSource, evt *event.Event) {
 	content := evt.Content.AsEncrypted()
 	log.Debug().Int("wait_seconds", int(extendedSessionWaitTimeout.Seconds())).Msg("Couldn't find session, requesting keys and waiting longer...")
 
 	go helper.RequestSession(context.TODO(), evt.RoomID, content.SenderKey, content.SessionID, evt.Sender, content.DeviceID)
 
-	if !helper.mach.WaitForSession(evt.RoomID, content.SenderKey, content.SessionID, extendedSessionWaitTimeout) {
+	if !helper.mach.WaitForSession(ctx, evt.RoomID, content.SenderKey, content.SessionID, extendedSessionWaitTimeout) {
 		log.Debug().Msg("Didn't get session, giving up")
 		helper.DecryptErrorCallback(evt, NoSessionFound)
 		return
 	}
 
 	log.Debug().Msg("Got keys after waiting longer, trying to decrypt event again")
-	decrypted, err := helper.Decrypt(evt)
+	decrypted, err := helper.Decrypt(ctx, evt)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to decrypt event")
 		helper.DecryptErrorCallback(evt, err)
@@ -329,32 +332,31 @@ func (helper *CryptoHelper) waitLongerForSession(log zerolog.Logger, src mautrix
 	helper.postDecrypt(src, decrypted)
 }
 
-func (helper *CryptoHelper) WaitForSession(roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID, timeout time.Duration) bool {
+func (helper *CryptoHelper) WaitForSession(ctx context.Context, roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID, timeout time.Duration) bool {
 	if helper == nil {
 		return false
 	}
 	helper.lock.RLock()
 	defer helper.lock.RUnlock()
-	return helper.mach.WaitForSession(roomID, senderKey, sessionID, timeout)
+	return helper.mach.WaitForSession(ctx, roomID, senderKey, sessionID, timeout)
 }
 
-func (helper *CryptoHelper) Decrypt(evt *event.Event) (*event.Event, error) {
+func (helper *CryptoHelper) Decrypt(ctx context.Context, evt *event.Event) (*event.Event, error) {
 	if helper == nil {
 		return nil, fmt.Errorf("crypto helper is nil")
 	}
-	return helper.mach.DecryptMegolmEvent(context.TODO(), evt)
+	return helper.mach.DecryptMegolmEvent(ctx, evt)
 }
 
-func (helper *CryptoHelper) Encrypt(roomID id.RoomID, evtType event.Type, content any) (encrypted *event.EncryptedEventContent, err error) {
+func (helper *CryptoHelper) Encrypt(ctx context.Context, roomID id.RoomID, evtType event.Type, content any) (encrypted *event.EncryptedEventContent, err error) {
 	if helper == nil {
 		return nil, fmt.Errorf("crypto helper is nil")
 	}
 	helper.lock.RLock()
 	defer helper.lock.RUnlock()
-	ctx := context.TODO()
 	encrypted, err = helper.mach.EncryptMegolmEvent(ctx, roomID, evtType, content)
 	if err != nil {
-		if err != crypto.SessionExpired && err != crypto.SessionNotShared && err != crypto.NoGroupSession {
+		if !errors.Is(err, crypto.SessionExpired) && err != crypto.NoGroupSession && !errors.Is(err, crypto.SessionNotShared) {
 			return
 		}
 		helper.log.Debug().
@@ -362,7 +364,7 @@ func (helper *CryptoHelper) Encrypt(roomID id.RoomID, evtType event.Type, conten
 			Str("room_id", roomID.String()).
 			Msg("Got session error while encrypting event, sharing group session and trying again")
 		var users []id.UserID
-		users, err = helper.client.StateStore.GetRoomJoinedOrInvitedMembers(roomID)
+		users, err = helper.client.StateStore.GetRoomJoinedOrInvitedMembers(ctx, roomID)
 		if err != nil {
 			err = fmt.Errorf("failed to get room member list: %w", err)
 		} else if err = helper.mach.ShareGroupSession(ctx, roomID, users); err != nil {

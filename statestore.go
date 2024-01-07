@@ -7,7 +7,11 @@
 package mautrix
 
 import (
+	"context"
 	"sync"
+
+	"github.com/rs/zerolog"
+	"go.mau.fi/util/exerrors"
 
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -15,25 +19,25 @@ import (
 
 // StateStore is an interface for storing basic room state information.
 type StateStore interface {
-	IsInRoom(roomID id.RoomID, userID id.UserID) bool
-	IsInvited(roomID id.RoomID, userID id.UserID) bool
-	IsMembership(roomID id.RoomID, userID id.UserID, allowedMemberships ...event.Membership) bool
-	GetMember(roomID id.RoomID, userID id.UserID) *event.MemberEventContent
-	TryGetMember(roomID id.RoomID, userID id.UserID) (*event.MemberEventContent, bool)
-	SetMembership(roomID id.RoomID, userID id.UserID, membership event.Membership)
-	SetMember(roomID id.RoomID, userID id.UserID, member *event.MemberEventContent)
-	ClearCachedMembers(roomID id.RoomID, memberships ...event.Membership)
+	IsInRoom(ctx context.Context, roomID id.RoomID, userID id.UserID) bool
+	IsInvited(ctx context.Context, roomID id.RoomID, userID id.UserID) bool
+	IsMembership(ctx context.Context, roomID id.RoomID, userID id.UserID, allowedMemberships ...event.Membership) bool
+	GetMember(ctx context.Context, roomID id.RoomID, userID id.UserID) (*event.MemberEventContent, error)
+	TryGetMember(ctx context.Context, roomID id.RoomID, userID id.UserID) (*event.MemberEventContent, error)
+	SetMembership(ctx context.Context, roomID id.RoomID, userID id.UserID, membership event.Membership) error
+	SetMember(ctx context.Context, roomID id.RoomID, userID id.UserID, member *event.MemberEventContent) error
+	ClearCachedMembers(ctx context.Context, roomID id.RoomID, memberships ...event.Membership) error
 
-	SetPowerLevels(roomID id.RoomID, levels *event.PowerLevelsEventContent)
-	GetPowerLevels(roomID id.RoomID) *event.PowerLevelsEventContent
+	SetPowerLevels(ctx context.Context, roomID id.RoomID, levels *event.PowerLevelsEventContent) error
+	GetPowerLevels(ctx context.Context, roomID id.RoomID) (*event.PowerLevelsEventContent, error)
 
-	SetEncryptionEvent(roomID id.RoomID, content *event.EncryptionEventContent)
-	IsEncrypted(roomID id.RoomID) bool
+	SetEncryptionEvent(ctx context.Context, roomID id.RoomID, content *event.EncryptionEventContent) error
+	IsEncrypted(ctx context.Context, roomID id.RoomID) (bool, error)
 
-	GetRoomJoinedOrInvitedMembers(roomID id.RoomID) ([]id.UserID, error)
+	GetRoomJoinedOrInvitedMembers(ctx context.Context, roomID id.RoomID) ([]id.UserID, error)
 }
 
-func UpdateStateStore(store StateStore, evt *event.Event) {
+func UpdateStateStore(ctx context.Context, store StateStore, evt *event.Event) {
 	if store == nil || evt == nil || evt.StateKey == nil {
 		return
 	}
@@ -41,13 +45,20 @@ func UpdateStateStore(store StateStore, evt *event.Event) {
 	if evt.Type != event.StateMember && evt.GetStateKey() != "" {
 		return
 	}
+	var err error
 	switch content := evt.Content.Parsed.(type) {
 	case *event.MemberEventContent:
-		store.SetMember(evt.RoomID, id.UserID(evt.GetStateKey()), content)
+		err = store.SetMember(ctx, evt.RoomID, id.UserID(evt.GetStateKey()), content)
 	case *event.PowerLevelsEventContent:
-		store.SetPowerLevels(evt.RoomID, content)
+		err = store.SetPowerLevels(ctx, evt.RoomID, content)
 	case *event.EncryptionEventContent:
-		store.SetEncryptionEvent(evt.RoomID, content)
+		err = store.SetEncryptionEvent(ctx, evt.RoomID, content)
+	}
+	if err != nil {
+		zerolog.Ctx(ctx).Warn().Err(err).
+			Stringer("event_id", evt.ID).
+			Str("event_type", evt.Type.Type).
+			Msg("Failed to update state store")
 	}
 }
 
@@ -57,7 +68,7 @@ func UpdateStateStore(store StateStore, evt *event.Event) {
 //
 // DefaultSyncer.ParseEventContent must also be true for this to work (which it is by default).
 func (cli *Client) StateStoreSyncHandler(_ EventSource, evt *event.Event) {
-	UpdateStateStore(cli.StateStore, evt)
+	UpdateStateStore(cli.Log.WithContext(context.TODO()), cli.StateStore, evt)
 }
 
 type MemoryStateStore struct {
@@ -81,20 +92,21 @@ func NewMemoryStateStore() StateStore {
 	}
 }
 
-func (store *MemoryStateStore) IsRegistered(userID id.UserID) bool {
+func (store *MemoryStateStore) IsRegistered(_ context.Context, userID id.UserID) (bool, error) {
 	store.registrationsLock.RLock()
 	defer store.registrationsLock.RUnlock()
 	registered, ok := store.Registrations[userID]
-	return ok && registered
+	return ok && registered, nil
 }
 
-func (store *MemoryStateStore) MarkRegistered(userID id.UserID) {
+func (store *MemoryStateStore) MarkRegistered(_ context.Context, userID id.UserID) error {
 	store.registrationsLock.Lock()
 	defer store.registrationsLock.Unlock()
 	store.Registrations[userID] = true
+	return nil
 }
 
-func (store *MemoryStateStore) GetRoomMembers(roomID id.RoomID) map[id.UserID]*event.MemberEventContent {
+func (store *MemoryStateStore) GetRoomMembers(_ context.Context, roomID id.RoomID) (map[id.UserID]*event.MemberEventContent, error) {
 	store.membersLock.RLock()
 	members, ok := store.Members[roomID]
 	store.membersLock.RUnlock()
@@ -104,11 +116,14 @@ func (store *MemoryStateStore) GetRoomMembers(roomID id.RoomID) map[id.UserID]*e
 		store.Members[roomID] = members
 		store.membersLock.Unlock()
 	}
-	return members
+	return members, nil
 }
 
-func (store *MemoryStateStore) GetRoomJoinedOrInvitedMembers(roomID id.RoomID) ([]id.UserID, error) {
-	members := store.GetRoomMembers(roomID)
+func (store *MemoryStateStore) GetRoomJoinedOrInvitedMembers(ctx context.Context, roomID id.RoomID) ([]id.UserID, error) {
+	members, err := store.GetRoomMembers(ctx, roomID)
+	if err != nil {
+		return nil, err
+	}
 	ids := make([]id.UserID, 0, len(members))
 	for id := range members {
 		ids = append(ids, id)
@@ -116,39 +131,39 @@ func (store *MemoryStateStore) GetRoomJoinedOrInvitedMembers(roomID id.RoomID) (
 	return ids, nil
 }
 
-func (store *MemoryStateStore) GetMembership(roomID id.RoomID, userID id.UserID) event.Membership {
-	return store.GetMember(roomID, userID).Membership
+func (store *MemoryStateStore) GetMembership(ctx context.Context, roomID id.RoomID, userID id.UserID) (event.Membership, error) {
+	return exerrors.Must(store.GetMember(ctx, roomID, userID)).Membership, nil
 }
 
-func (store *MemoryStateStore) GetMember(roomID id.RoomID, userID id.UserID) *event.MemberEventContent {
-	member, ok := store.TryGetMember(roomID, userID)
-	if !ok {
+func (store *MemoryStateStore) GetMember(ctx context.Context, roomID id.RoomID, userID id.UserID) (*event.MemberEventContent, error) {
+	member, err := store.TryGetMember(ctx, roomID, userID)
+	if member == nil && err == nil {
 		member = &event.MemberEventContent{Membership: event.MembershipLeave}
 	}
-	return member
+	return member, err
 }
 
-func (store *MemoryStateStore) TryGetMember(roomID id.RoomID, userID id.UserID) (member *event.MemberEventContent, ok bool) {
+func (store *MemoryStateStore) TryGetMember(_ context.Context, roomID id.RoomID, userID id.UserID) (member *event.MemberEventContent, err error) {
 	store.membersLock.RLock()
 	defer store.membersLock.RUnlock()
 	members, membersOk := store.Members[roomID]
 	if !membersOk {
 		return
 	}
-	member, ok = members[userID]
+	member = members[userID]
 	return
 }
 
-func (store *MemoryStateStore) IsInRoom(roomID id.RoomID, userID id.UserID) bool {
-	return store.IsMembership(roomID, userID, "join")
+func (store *MemoryStateStore) IsInRoom(ctx context.Context, roomID id.RoomID, userID id.UserID) bool {
+	return store.IsMembership(ctx, roomID, userID, "join")
 }
 
-func (store *MemoryStateStore) IsInvited(roomID id.RoomID, userID id.UserID) bool {
-	return store.IsMembership(roomID, userID, "join", "invite")
+func (store *MemoryStateStore) IsInvited(ctx context.Context, roomID id.RoomID, userID id.UserID) bool {
+	return store.IsMembership(ctx, roomID, userID, "join", "invite")
 }
 
-func (store *MemoryStateStore) IsMembership(roomID id.RoomID, userID id.UserID, allowedMemberships ...event.Membership) bool {
-	membership := store.GetMembership(roomID, userID)
+func (store *MemoryStateStore) IsMembership(ctx context.Context, roomID id.RoomID, userID id.UserID, allowedMemberships ...event.Membership) bool {
+	membership := exerrors.Must(store.GetMembership(ctx, roomID, userID))
 	for _, allowedMembership := range allowedMemberships {
 		if allowedMembership == membership {
 			return true
@@ -157,7 +172,7 @@ func (store *MemoryStateStore) IsMembership(roomID id.RoomID, userID id.UserID, 
 	return false
 }
 
-func (store *MemoryStateStore) SetMembership(roomID id.RoomID, userID id.UserID, membership event.Membership) {
+func (store *MemoryStateStore) SetMembership(_ context.Context, roomID id.RoomID, userID id.UserID, membership event.Membership) error {
 	store.membersLock.Lock()
 	members, ok := store.Members[roomID]
 	if !ok {
@@ -175,9 +190,10 @@ func (store *MemoryStateStore) SetMembership(roomID id.RoomID, userID id.UserID,
 	}
 	store.Members[roomID] = members
 	store.membersLock.Unlock()
+	return nil
 }
 
-func (store *MemoryStateStore) SetMember(roomID id.RoomID, userID id.UserID, member *event.MemberEventContent) {
+func (store *MemoryStateStore) SetMember(_ context.Context, roomID id.RoomID, userID id.UserID, member *event.MemberEventContent) error {
 	store.membersLock.Lock()
 	members, ok := store.Members[roomID]
 	if !ok {
@@ -189,14 +205,15 @@ func (store *MemoryStateStore) SetMember(roomID id.RoomID, userID id.UserID, mem
 	}
 	store.Members[roomID] = members
 	store.membersLock.Unlock()
+	return nil
 }
 
-func (store *MemoryStateStore) ClearCachedMembers(roomID id.RoomID, memberships ...event.Membership) {
+func (store *MemoryStateStore) ClearCachedMembers(_ context.Context, roomID id.RoomID, memberships ...event.Membership) error {
 	store.membersLock.Lock()
 	defer store.membersLock.Unlock()
 	members, ok := store.Members[roomID]
 	if !ok {
-		return
+		return nil
 	}
 	for userID, member := range members {
 		for _, membership := range memberships {
@@ -206,46 +223,49 @@ func (store *MemoryStateStore) ClearCachedMembers(roomID id.RoomID, memberships 
 			}
 		}
 	}
+	return nil
 }
 
-func (store *MemoryStateStore) SetPowerLevels(roomID id.RoomID, levels *event.PowerLevelsEventContent) {
+func (store *MemoryStateStore) SetPowerLevels(_ context.Context, roomID id.RoomID, levels *event.PowerLevelsEventContent) error {
 	store.powerLevelsLock.Lock()
 	store.PowerLevels[roomID] = levels
 	store.powerLevelsLock.Unlock()
+	return nil
 }
 
-func (store *MemoryStateStore) GetPowerLevels(roomID id.RoomID) (levels *event.PowerLevelsEventContent) {
+func (store *MemoryStateStore) GetPowerLevels(_ context.Context, roomID id.RoomID) (levels *event.PowerLevelsEventContent, err error) {
 	store.powerLevelsLock.RLock()
 	levels = store.PowerLevels[roomID]
 	store.powerLevelsLock.RUnlock()
 	return
 }
 
-func (store *MemoryStateStore) GetPowerLevel(roomID id.RoomID, userID id.UserID) int {
-	return store.GetPowerLevels(roomID).GetUserLevel(userID)
+func (store *MemoryStateStore) GetPowerLevel(ctx context.Context, roomID id.RoomID, userID id.UserID) (int, error) {
+	return exerrors.Must(store.GetPowerLevels(ctx, roomID)).GetUserLevel(userID), nil
 }
 
-func (store *MemoryStateStore) GetPowerLevelRequirement(roomID id.RoomID, eventType event.Type) int {
-	return store.GetPowerLevels(roomID).GetEventLevel(eventType)
+func (store *MemoryStateStore) GetPowerLevelRequirement(ctx context.Context, roomID id.RoomID, eventType event.Type) (int, error) {
+	return exerrors.Must(store.GetPowerLevels(ctx, roomID)).GetEventLevel(eventType), nil
 }
 
-func (store *MemoryStateStore) HasPowerLevel(roomID id.RoomID, userID id.UserID, eventType event.Type) bool {
-	return store.GetPowerLevel(roomID, userID) >= store.GetPowerLevelRequirement(roomID, eventType)
+func (store *MemoryStateStore) HasPowerLevel(ctx context.Context, roomID id.RoomID, userID id.UserID, eventType event.Type) (bool, error) {
+	return exerrors.Must(store.GetPowerLevel(ctx, roomID, userID)) >= exerrors.Must(store.GetPowerLevelRequirement(ctx, roomID, eventType)), nil
 }
 
-func (store *MemoryStateStore) SetEncryptionEvent(roomID id.RoomID, content *event.EncryptionEventContent) {
+func (store *MemoryStateStore) SetEncryptionEvent(_ context.Context, roomID id.RoomID, content *event.EncryptionEventContent) error {
 	store.encryptionLock.Lock()
 	store.Encryption[roomID] = content
 	store.encryptionLock.Unlock()
+	return nil
 }
 
-func (store *MemoryStateStore) GetEncryptionEvent(roomID id.RoomID) *event.EncryptionEventContent {
+func (store *MemoryStateStore) GetEncryptionEvent(_ context.Context, roomID id.RoomID) (*event.EncryptionEventContent, error) {
 	store.encryptionLock.RLock()
 	defer store.encryptionLock.RUnlock()
-	return store.Encryption[roomID]
+	return store.Encryption[roomID], nil
 }
 
-func (store *MemoryStateStore) IsEncrypted(roomID id.RoomID) bool {
-	cfg := store.GetEncryptionEvent(roomID)
-	return cfg != nil && cfg.Algorithm == id.AlgorithmMegolmV1
+func (store *MemoryStateStore) IsEncrypted(ctx context.Context, roomID id.RoomID) (bool, error) {
+	cfg, err := store.GetEncryptionEvent(ctx, roomID)
+	return cfg != nil && cfg.Algorithm == id.AlgorithmMegolmV1, err
 }

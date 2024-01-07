@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/rs/zerolog"
+
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -57,17 +59,26 @@ func (intent *IntentAPI) Register(ctx context.Context) error {
 }
 
 func (intent *IntentAPI) EnsureRegistered(ctx context.Context) error {
+	if intent.IsCustomPuppet {
+		return nil
+	}
 	intent.registerLock.Lock()
 	defer intent.registerLock.Unlock()
-	if intent.IsCustomPuppet || intent.as.StateStore.IsRegistered(intent.UserID) {
+	isRegistered, err := intent.as.StateStore.IsRegistered(ctx, intent.UserID)
+	if err != nil {
+		return fmt.Errorf("failed to check if user is registered: %w", err)
+	} else if isRegistered {
 		return nil
 	}
 
-	err := intent.Register(ctx)
+	err = intent.Register(ctx)
 	if err != nil && !errors.Is(err, mautrix.MUserInUse) {
 		return fmt.Errorf("failed to ensure registered: %w", err)
 	}
-	intent.as.StateStore.MarkRegistered(intent.UserID)
+	err = intent.as.StateStore.MarkRegistered(ctx, intent.UserID)
+	if err != nil {
+		return fmt.Errorf("failed to mark user as registered in state store: %w", err)
+	}
 	return nil
 }
 
@@ -83,7 +94,7 @@ func (intent *IntentAPI) EnsureJoined(ctx context.Context, roomID id.RoomID, ext
 	} else if len(extra) == 1 {
 		params = extra[0]
 	}
-	if intent.as.StateStore.IsInRoom(roomID, intent.UserID) && !params.IgnoreCache {
+	if intent.as.StateStore.IsInRoom(ctx, roomID, intent.UserID) && !params.IgnoreCache {
 		return nil
 	}
 
@@ -111,7 +122,10 @@ func (intent *IntentAPI) EnsureJoined(ctx context.Context, roomID id.RoomID, ext
 			return fmt.Errorf("failed to ensure joined after invite: %w", err)
 		}
 	}
-	intent.as.StateStore.SetMembership(resp.RoomID, intent.UserID, event.MembershipJoin)
+	err = intent.as.StateStore.SetMembership(ctx, resp.RoomID, intent.UserID, event.MembershipJoin)
+	if err != nil {
+		return fmt.Errorf("failed to set membership in state store: %w", err)
+	}
 	return nil
 }
 
@@ -205,13 +219,14 @@ func (intent *IntentAPI) SendCustomMembershipEvent(ctx context.Context, roomID i
 		Membership: membership,
 		Reason:     reason,
 	}
-	memberContent, ok := intent.as.StateStore.TryGetMember(roomID, target)
-	if !ok {
+	memberContent, err := intent.as.StateStore.TryGetMember(ctx, roomID, target)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get old member content from state store: %w", err)
+	} else if memberContent == nil {
 		if intent.as.GetProfile != nil {
 			memberContent = intent.as.GetProfile(target, roomID)
-			ok = memberContent != nil
 		}
-		if !ok {
+		if memberContent == nil {
 			profile, err := intent.GetProfile(ctx, target)
 			if err != nil {
 				intent.Log.Debug().Err(err).
@@ -224,7 +239,7 @@ func (intent *IntentAPI) SendCustomMembershipEvent(ctx context.Context, roomID i
 			}
 		}
 	}
-	if ok && memberContent != nil {
+	if memberContent != nil {
 		content.Displayname = memberContent.Displayname
 		content.AvatarURL = memberContent.AvatarURL
 	}
@@ -297,15 +312,25 @@ func (intent *IntentAPI) UnbanUser(ctx context.Context, roomID id.RoomID, req *m
 }
 
 func (intent *IntentAPI) Member(ctx context.Context, roomID id.RoomID, userID id.UserID) *event.MemberEventContent {
-	member, ok := intent.as.StateStore.TryGetMember(roomID, userID)
-	if !ok {
+	member, err := intent.as.StateStore.TryGetMember(ctx, roomID, userID)
+	if err != nil {
+		zerolog.Ctx(ctx).Warn().Err(err).
+			Str("room_id", roomID.String()).
+			Str("user_id", userID.String()).
+			Msg("Failed to get member from state store")
+	}
+	if member == nil {
 		_ = intent.StateEvent(ctx, roomID, event.StateMember, string(userID), &member)
 	}
 	return member
 }
 
 func (intent *IntentAPI) PowerLevels(ctx context.Context, roomID id.RoomID) (pl *event.PowerLevelsEventContent, err error) {
-	pl = intent.as.StateStore.GetPowerLevels(roomID)
+	pl, err = intent.as.StateStore.GetPowerLevels(ctx, roomID)
+	if err != nil {
+		err = fmt.Errorf("failed to get cached power levels: %w", err)
+		return
+	}
 	if pl == nil {
 		pl = &event.PowerLevelsEventContent{}
 		err = intent.StateEvent(ctx, roomID, event.StatePowerLevels, "", pl)
@@ -417,7 +442,7 @@ func (intent *IntentAPI) Whoami(ctx context.Context) (*mautrix.RespWhoami, error
 }
 
 func (intent *IntentAPI) EnsureInvited(ctx context.Context, roomID id.RoomID, userID id.UserID) error {
-	if !intent.as.StateStore.IsInvited(roomID, userID) {
+	if !intent.as.StateStore.IsInvited(ctx, roomID, userID) {
 		_, err := intent.InviteUser(ctx, roomID, &mautrix.ReqInviteUser{
 			UserID: userID,
 		})

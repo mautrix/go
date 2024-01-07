@@ -17,7 +17,7 @@ var CommandDiscardMegolmSession = &FullHandler{
 		if ce.Bridge.Crypto == nil {
 			ce.Reply("This bridge instance doesn't have end-to-bridge encryption enabled")
 		} else {
-			ce.Bridge.Crypto.ResetSession(ce.RoomID)
+			ce.Bridge.Crypto.ResetSession(ce.Ctx, ce.RoomID)
 			ce.Reply("Successfully reset Megolm session in this room. New decryption keys will be shared the next time a message is sent from the remote network.")
 		}
 	},
