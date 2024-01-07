@@ -81,7 +81,7 @@ func (helper *CryptoHelper) Init() error {
 	}
 
 	var isExistingDevice bool
-	helper.client, isExistingDevice, err = helper.loginBot()
+	helper.client, isExistingDevice, err = helper.loginBot(context.TODO())
 	if err != nil {
 		return err
 	}
@@ -128,16 +128,15 @@ func (helper *CryptoHelper) Init() error {
 		return err
 	}
 	if isExistingDevice {
-		helper.verifyKeysAreOnServer()
+		helper.verifyKeysAreOnServer(context.TODO())
 	}
 
-	go helper.resyncEncryptionInfo()
+	go helper.resyncEncryptionInfo(context.TODO())
 
 	return nil
 }
 
-func (helper *CryptoHelper) resyncEncryptionInfo() {
-	ctx := context.Background()
+func (helper *CryptoHelper) resyncEncryptionInfo(ctx context.Context) {
 	log := helper.log.With().Str("action", "resync encryption event").Logger()
 	rows, err := helper.bridge.DB.QueryContext(ctx, `SELECT room_id FROM mx_room_state WHERE encryption='{"resync":true}'`)
 	if err != nil {
@@ -223,8 +222,7 @@ func (helper *CryptoHelper) allowKeyShare(ctx context.Context, device *id.Device
 	}
 }
 
-func (helper *CryptoHelper) loginBot() (*mautrix.Client, bool, error) {
-	ctx := context.Background()
+func (helper *CryptoHelper) loginBot(ctx context.Context) (*mautrix.Client, bool, error) {
 	deviceID := helper.store.FindDeviceID()
 	if len(deviceID) > 0 {
 		helper.log.Debug().Str("device_id", deviceID.String()).Msg("Found existing device ID for bot in database")
@@ -256,8 +254,7 @@ func (helper *CryptoHelper) loginBot() (*mautrix.Client, bool, error) {
 	return client, deviceID != "", nil
 }
 
-func (helper *CryptoHelper) verifyKeysAreOnServer() {
-	ctx := context.Background()
+func (helper *CryptoHelper) verifyKeysAreOnServer(ctx context.Context) {
 	helper.log.Debug().Msg("Making sure keys are still on server")
 	resp, err := helper.client.QueryKeys(ctx, &mautrix.ReqQueryKeys{
 		DeviceKeys: map[id.UserID]mautrix.DeviceIDList{
@@ -336,7 +333,7 @@ func (helper *CryptoHelper) Reset(startAfterReset bool) {
 	helper.log.Debug().Msg("Crypto syncer stopped, clearing database")
 	helper.clearDatabase()
 	helper.log.Debug().Msg("Crypto database cleared, logging out of all sessions")
-	_, err := helper.client.LogoutAll(context.Background())
+	_, err := helper.client.LogoutAll(context.TODO())
 	if err != nil {
 		helper.log.Warn().Err(err).Msg("Failed to log out all devices")
 	}

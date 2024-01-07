@@ -124,7 +124,7 @@ func (helper *CryptoHelper) Init() error {
 	} else {
 		stateStore = helper.client.StateStore.(crypto.StateStore)
 	}
-	ctx := context.Background()
+	ctx := context.TODO()
 	var cryptoStore crypto.Store
 	if helper.unmanagedCryptoStore == nil {
 		managedCryptoStore := crypto.NewSQLCryptoStore(helper.dbForManagedStores, dbutil.ZeroLogger(helper.log.With().Str("db_section", "crypto").Logger()), helper.DBAccountID, helper.client.DeviceID, helper.pickleKey)
@@ -310,7 +310,7 @@ func (helper *CryptoHelper) waitLongerForSession(log zerolog.Logger, src mautrix
 	content := evt.Content.AsEncrypted()
 	log.Debug().Int("wait_seconds", int(extendedSessionWaitTimeout.Seconds())).Msg("Couldn't find session, requesting keys and waiting longer...")
 
-	go helper.RequestSession(context.Background(), evt.RoomID, content.SenderKey, content.SessionID, evt.Sender, content.DeviceID)
+	go helper.RequestSession(context.TODO(), evt.RoomID, content.SenderKey, content.SessionID, evt.Sender, content.DeviceID)
 
 	if !helper.mach.WaitForSession(evt.RoomID, content.SenderKey, content.SessionID, extendedSessionWaitTimeout) {
 		log.Debug().Msg("Didn't get session, giving up")

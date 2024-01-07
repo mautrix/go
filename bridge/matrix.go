@@ -87,7 +87,7 @@ func (mx *MatrixHandler) HandleEncryption(evt *event.Event) {
 			Msg("Encryption was enabled in room")
 		portal.MarkEncrypted()
 		if portal.IsPrivateChat() {
-			err := mx.as.BotIntent().EnsureJoined(context.Background(), evt.RoomID, appservice.EnsureJoinedParams{BotOverride: portal.MainIntent().Client})
+			err := mx.as.BotIntent().EnsureJoined(context.TODO(), evt.RoomID, appservice.EnsureJoinedParams{BotOverride: portal.MainIntent().Client})
 			if err != nil {
 				mx.log.Err(err).
 					Str("room_id", evt.RoomID.String()).
@@ -237,7 +237,7 @@ func (mx *MatrixHandler) HandleMembership(evt *event.Event) {
 		return
 	}
 	defer mx.TrackEventDuration(evt.Type)()
-	ctx := context.Background()
+	ctx := context.TODO()
 
 	if mx.bridge.Crypto != nil {
 		mx.bridge.Crypto.HandleMemberEvent(evt)
@@ -481,7 +481,7 @@ func (mx *MatrixHandler) HandleEncrypted(evt *event.Event) {
 		return
 	}
 	content := evt.Content.AsEncrypted()
-	ctx := context.Background()
+	ctx := context.TODO()
 	log := mx.log.With().
 		Str("event_id", evt.ID.String()).
 		Str("session_id", content.SessionID.String()).
@@ -526,7 +526,7 @@ func (mx *MatrixHandler) waitLongerForSession(ctx context.Context, evt *event.Ev
 		Int("wait_seconds", int(extendedSessionWaitTimeout.Seconds())).
 		Msg("Couldn't find session, requesting keys and waiting longer...")
 
-	go mx.bridge.Crypto.RequestSession(context.Background(), evt.RoomID, content.SenderKey, content.SessionID, evt.Sender, content.DeviceID)
+	go mx.bridge.Crypto.RequestSession(ctx, evt.RoomID, content.SenderKey, content.SessionID, evt.Sender, content.DeviceID)
 	errorEventID := mx.sendCryptoStatusError(ctx, evt, "", fmt.Errorf("%w. The bridge will retry for %d seconds", errNoDecryptionKeys, int(extendedSessionWaitTimeout.Seconds())), 1, false)
 
 	if !mx.bridge.Crypto.WaitForSession(evt.RoomID, content.SenderKey, content.SessionID, extendedSessionWaitTimeout) {
@@ -553,7 +553,7 @@ func (mx *MatrixHandler) HandleMessage(evt *event.Event) {
 		Str("room_id", evt.RoomID.String()).
 		Str("sender", evt.Sender.String()).
 		Logger()
-	ctx := log.WithContext(context.Background())
+	ctx := log.WithContext(context.TODO())
 	if mx.shouldIgnoreEvent(evt) {
 		return
 	} else if !evt.Mautrix.WasEncrypted && mx.bridge.Config.Bridge.GetEncryptionConfig().Require {

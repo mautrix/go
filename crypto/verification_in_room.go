@@ -38,7 +38,7 @@ func (mach *OlmMachine) ProcessInRoomVerification(evt *event.Event) error {
 		return ErrNoRelatesTo
 	}
 
-	ctx := context.Background()
+	ctx := context.TODO()
 	switch content := evt.Content.Parsed.(type) {
 	case *event.MessageEventContent:
 		if content.MsgType == event.MsgVerificationRequest {

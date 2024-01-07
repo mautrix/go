@@ -118,12 +118,11 @@ var (
 const useConfigASToken = "appservice-config"
 const asTokenModePrefix = "as_token:"
 
-func (dp *doublePuppetUtil) Setup(mxid id.UserID, savedAccessToken string, reloginOnFail bool) (intent *appservice.IntentAPI, newAccessToken string, err error) {
+func (dp *doublePuppetUtil) Setup(ctx context.Context, mxid id.UserID, savedAccessToken string, reloginOnFail bool) (intent *appservice.IntentAPI, newAccessToken string, err error) {
 	if len(mxid) == 0 {
 		err = ErrNoMXID
 		return
 	}
-	ctx := context.Background()
 	_, homeserver, _ := mxid.Parse()
 	loginSecret, hasSecret := dp.br.Config.Bridge.GetDoublePuppetConfig().SharedSecretMap[homeserver]
 	// Special case appservice: prefix to not login and use it as an as_token directly.

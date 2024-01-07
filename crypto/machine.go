@@ -243,7 +243,7 @@ func (mach *OlmMachine) HandleOTKCounts(otkCount *mautrix.OTKCount) {
 	if otkCount.SignedCurve25519 < int(minCount) {
 		traceID := time.Now().Format("15:04:05.000000")
 		log := mach.Log.With().Str("trace_id", traceID).Logger()
-		ctx := log.WithContext(context.Background())
+		ctx := log.WithContext(context.TODO())
 		log.Debug().
 			Int("keys_left", otkCount.Curve25519).
 			Msg("Sync response said we have less than 50 signed curve25519 keys left, sharing new ones...")
@@ -334,7 +334,7 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 		Str("sender", evt.Sender.String()).
 		Str("type", evt.Type.Type).
 		Logger()
-	ctx := log.WithContext(context.Background())
+	ctx := log.WithContext(context.TODO())
 	if evt.Type != event.ToDeviceEncrypted {
 		log.Debug().Msg("Starting handling to-device event")
 	}
@@ -344,7 +344,7 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 			Str("sender_key", content.SenderKey.String()).
 			Logger()
 		log.Debug().Msg("Handling encrypted to-device event")
-		ctx = log.WithContext(context.Background())
+		ctx = log.WithContext(ctx)
 		decryptedEvt, err := mach.decryptOlmEvent(ctx, evt)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to decrypt to-device event")
