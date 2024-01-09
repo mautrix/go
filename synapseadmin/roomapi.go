@@ -17,8 +17,13 @@ import (
 //
 // https://matrix-org.github.io/synapse/latest/admin_api/rooms.html
 func (cli *Client) ListRoom(ctx context.Context, alias string) (*mautrix.RoomsResponse ,error) {
-	reqURL := cli.BuildURLWithQuery(mautrix.SynapseAdminURLPath{"v1", "rooms"}, map[string]string{"search_term": alias})
 	var resp mautrix.RoomsResponse
+	var reqURL string
+	if (alias == "") {
+		reqURL = cli.BuildAdminURL("v1", "rooms")
+	} else {
+		reqURL = cli.BuildURLWithQuery(mautrix.SynapseAdminURLPath{"v1", "rooms"}, map[string]string{"search_term": alias})
+	}
 	_, err := cli.MakeFullRequest(ctx, mautrix.FullRequest{
 		Method:       http.MethodGet,
 		URL:          reqURL,
