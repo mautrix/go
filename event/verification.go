@@ -7,6 +7,8 @@
 package event
 
 import (
+	"golang.org/x/exp/slices"
+
 	"maunium.net/go/mautrix/id"
 )
 
@@ -36,13 +38,8 @@ type VerificationRequestEventContent struct {
 	RelatesTo *RelatesTo `json:"m.relates_to,omitempty"`
 }
 
-func (vrec *VerificationRequestEventContent) SupportsVerificationMethod(meth VerificationMethod) bool {
-	for _, supportedMeth := range vrec.Methods {
-		if supportedMeth == meth {
-			return true
-		}
-	}
-	return false
+func (vrec *VerificationRequestEventContent) SupportsVerificationMethod(method VerificationMethod) bool {
+	return slices.Contains(vrec.Methods, method)
 }
 
 type KeyAgreementProtocol string
@@ -91,39 +88,19 @@ type VerificationStartEventContent struct {
 }
 
 func (vsec *VerificationStartEventContent) SupportsKeyAgreementProtocol(proto KeyAgreementProtocol) bool {
-	for _, supportedProto := range vsec.KeyAgreementProtocols {
-		if supportedProto == proto {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(vsec.KeyAgreementProtocols, proto)
 }
 
 func (vsec *VerificationStartEventContent) SupportsHashMethod(alg VerificationHashMethod) bool {
-	for _, supportedAlg := range vsec.Hashes {
-		if supportedAlg == alg {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(vsec.Hashes, alg)
 }
 
 func (vsec *VerificationStartEventContent) SupportsMACMethod(meth MACMethod) bool {
-	for _, supportedMeth := range vsec.MessageAuthenticationCodes {
-		if supportedMeth == meth {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(vsec.MessageAuthenticationCodes, meth)
 }
 
 func (vsec *VerificationStartEventContent) SupportsSASMethod(meth SASMethod) bool {
-	for _, supportedMeth := range vsec.ShortAuthenticationString {
-		if supportedMeth == meth {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(vsec.ShortAuthenticationString, meth)
 }
 
 func (vsec *VerificationStartEventContent) GetRelatesTo() *RelatesTo {
