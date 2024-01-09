@@ -623,3 +623,41 @@ type RespRoomKeysUpdate struct {
 	Count int    `json:"count"`
 	ETag  string `json:"etag"`
 }
+
+// Room represents the structure of each room
+type RoomInfos struct {
+    RoomID             string `json:"room_id"`
+    Name               string `json:"name"`
+    CanonicalAlias     string `json:"canonical_alias"`
+    JoinedMembers      int    `json:"joined_members"`
+    JoinedLocalMembers int    `json:"joined_local_members"`
+    Version            string `json:"version"`
+    Creator            string `json:"creator"`
+    Encryption         string `json:"encryption"`
+    Federatable        bool   `json:"federatable"`
+    Public             bool   `json:"public"`
+    JoinRules          string `json:"join_rules"`
+    GuestAccess        string `json:"guest_access"`
+    HistoryVisibility  string `json:"history_visibility"`
+    StateEvents        int    `json:"state_events"`
+    RoomType           string `json:"room_type"`
+}
+
+// RoomsResponse represents the response containing a list of rooms
+type RoomsResponse struct {
+    Rooms      []RoomInfos `json:"rooms"`
+    Offset     int    `json:"offset"`
+    TotalRooms int    `json:"total_rooms"`
+}
+
+// RoomsMembersResponse represents the response containing a list of members of a room
+type RoomsMembersResponse struct {
+    Members		[]string	`json:"members"`
+    Total		int			`json:"total"`
+}
+
+// RoomsBlockResponse represents the response containing wether a room is blocked or not
+type RoomsBlockResponse struct {
+    Block		bool			`json:"block"`
+    UserId		string			`json:"user_id"`
+}

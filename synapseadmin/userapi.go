@@ -21,12 +21,12 @@ import (
 type ReqResetPassword struct {
 	// The user whose password to reset.
 	UserID id.UserID `json:"-"`
-
 	// The new password for the user. Required.
 	NewPassword string `json:"new_password"`
 	// Whether all the user's existing devices should be logged out after the password change.
 	LogoutDevices bool `json:"logout_devices"`
 }
+
 
 // ResetPassword changes the password of another user using
 //
@@ -86,7 +86,7 @@ type RespUserInfo struct {
 	UserID       id.UserID           `json:"name"`
 	DisplayName  string              `json:"displayname"`
 	AvatarURL    id.ContentURIString `json:"avatar_url"`
-	Guest        int                 `json:"is_guest"`
+	Guest        bool                `json:"is_guest"`
 	Admin        bool                `json:"admin"`
 	Deactivated  bool                `json:"deactivated"`
 	Erased       bool                `json:"erased"`
@@ -109,3 +109,101 @@ func (cli *Client) GetUserInfo(ctx context.Context, userID id.UserID) (resp *Res
 	})
 	return
 }
+
+// ReqDeleteUser is the request content to deactivate account.
+type ReqDeleteUser struct {
+	// The user to deactivate
+	UserID id.UserID `json:"-"`
+	// true if message hidden for new users in room after actual user is deactivated
+	Erase bool `json:"erase"`
+}
+
+// DeactivateAccount deactivate a specific user account.
+//
+// https://matrix-org.github.io/synapse/latest/admin_api/user_admin_api.html#deactivate-account
+func (cli *Client) DeactivateAccount(ctx context.Context, req ReqDeleteUser) error {
+	reqURL := cli.BuildAdminURL("v1", "deactivate", req.UserID)
+	_, err := cli.MakeFullRequest(ctx, mautrix.FullRequest{
+		Method:      http.MethodPost,
+		URL:         reqURL,
+		RequestJSON: &req,
+	})
+	return err
+}
+
+// ReqUpdateUser is the request content to reactivate an account
+type ReqActivateUser struct {
+	// The user to deactivate
+	UserID id.UserID `json:"-"`
+	// new password for user
+	Password string `json:"password"`
+	// false if we want to re-activate the user
+	Deactivated bool `json:"deactivated"`
+}
+
+// ActivateAccount re-activate a specific user account that has been deactivated.
+//
+// https://matrix-org.github.io/synapse/latest/admin_api/user_admin_api.html#create-or-modify-account
+func (cli *Client) ActivateAccount(ctx context.Context, req ReqActivateUser) error {
+	reqURL := cli.BuildAdminURL("v2", "users", req.UserID)
+	_, err := cli.MakeFullRequest(ctx, mautrix.FullRequest{
+		Method:      http.MethodPut,
+		URL:         reqURL,
+		RequestJSON: &req,
+	})
+	return err
+}
+
+// ReqOverrideRatelimit is the request content to OverrideRatelimit an account
+type ReqOverrideRatelimit struct {
+	// The user to override rate limit
+	UserID string `json:"-"`
+	// ratelimite message per second
+	MessagesPerSecond int `json:"messages_per_second"`
+	// How many actions that can be performed before being limited
+	BurstCount int `json:"burst_count"`
+}
+
+// Override RateLimits for a specific user.
+//
+// https://matrix-org.github.io/synapse/latest/admin_api/user_admin_api.html#set-ratelimit
+func (cli *Client) OverrideRatelimit(ctx context.Context, req ReqOverrideRatelimit) error {
+	reqURL := cli.BuildAdminURL("v1", "users", req.UserID, "override_ratelimit")
+	_, err := cli.MakeFullRequest(ctx, mautrix.FullRequest{
+		Method:      http.MethodPost,
+		URL:         reqURL,
+		RequestJSON: &req,
+	})
+	return err
+}
+
+type RespRateLimit struct {
+	// ratelimite message per second
+	MessagePerSecond int `json:"messages_per_second"`
+	// How many actions that can be performed before being limited
+	BurstCount int `json:"burst_count"`
+}
+
+// GetUserRateLimit gets RateLimit from a specific user.
+//
+// https://matrix-org.github.io/synapse/latest/admin_api/user_admin_api.html#query-user-account
+func (cli *Client) GetUserRateLimit(ctx context.Context, userID string) (resp *RespRateLimit, err error) {
+	_, err = cli.MakeFullRequest(ctx, mautrix.FullRequest{
+		Method:       http.MethodGet,
+		URL:          cli.BuildAdminURL("v1", "users", userID, "override_ratelimit"),
+		ResponseJSON: &resp,
+	})
+	return
+}
+
+// DelUserRateLimit delete RateLimit from a specific user.
+//
+// https://matrix-org.github.io/synapse/latest/admin_api/user_admin_api.html#query-user-account
+func (cli *Client) DelUserRateLimit(ctx context.Context, userID string) (err error) {
+	_, err = cli.MakeFullRequest(ctx, mautrix.FullRequest{
+		Method:       http.MethodDelete,
+		URL:          cli.BuildAdminURL("v1", "users", userID, "override_ratelimit"),
+	})
+	return
+}
+
