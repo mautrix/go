@@ -1,4 +1,4 @@
--- v0 -> v10: Latest revision
+-- v0 -> v11: Latest revision
 CREATE TABLE IF NOT EXISTS crypto_account (
 	account_id TEXT    PRIMARY KEY,
 	device_id  TEXT    NOT NULL,
@@ -17,7 +17,8 @@ CREATE TABLE IF NOT EXISTS crypto_message_index (
 );
 
 CREATE TABLE IF NOT EXISTS crypto_tracked_user (
-	user_id TEXT PRIMARY KEY
+	user_id          TEXT PRIMARY KEY,
+	devices_outdated BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 CREATE TABLE IF NOT EXISTS crypto_device (

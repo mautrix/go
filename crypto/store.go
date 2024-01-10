@@ -108,6 +108,10 @@ type Store interface {
 	// FilterTrackedUsers returns a filtered version of the given list that only includes user IDs whose device lists
 	// have been stored with PutDevices. A user is considered tracked even if the PutDevices list was empty.
 	FilterTrackedUsers(context.Context, []id.UserID) ([]id.UserID, error)
+	// MarkTrackedUsersOutdated flags that the device list for given users are outdated.
+	MarkTrackedUsersOutdated(context.Context, []id.UserID) error
+	// GetOutdatedTrackerUsers gets all tracked users whose devices need to be updated.
+	GetOutdatedTrackedUsers(context.Context) ([]id.UserID, error)
 
 	// PutCrossSigningKey stores a cross-signing key of some user along with its usage.
 	PutCrossSigningKey(context.Context, id.UserID, id.CrossSigningUsage, id.Ed25519) error
@@ -148,6 +152,7 @@ type MemoryStore struct {
 	Devices               map[id.UserID]map[id.DeviceID]*id.Device
 	CrossSigningKeys      map[id.UserID]map[id.CrossSigningUsage]id.CrossSigningKey
 	KeySignatures         map[id.UserID]map[id.Ed25519]map[id.UserID]map[id.Ed25519]string
+	OutdatedUsers         map[id.UserID]struct{}
 }
 
 var _ Store = (*MemoryStore)(nil)
@@ -167,6 +172,7 @@ func NewMemoryStore(saveCallback func() error) *MemoryStore {
 		Devices:               make(map[id.UserID]map[id.DeviceID]*id.Device),
 		CrossSigningKeys:      make(map[id.UserID]map[id.CrossSigningUsage]id.CrossSigningKey),
 		KeySignatures:         make(map[id.UserID]map[id.Ed25519]map[id.UserID]map[id.Ed25519]string),
+		OutdatedUsers:         make(map[id.UserID]struct{}),
 	}
 }
 
@@ -499,6 +505,9 @@ func (gs *MemoryStore) PutDevices(_ context.Context, userID id.UserID, devices m
 	gs.lock.Lock()
 	gs.Devices[userID] = devices
 	err := gs.save()
+	if err == nil {
+		delete(gs.OutdatedUsers, userID)
+	}
 	gs.lock.Unlock()
 	return err
 }
@@ -515,6 +524,27 @@ func (gs *MemoryStore) FilterTrackedUsers(_ context.Context, users []id.UserID) 
 	}
 	gs.lock.RUnlock()
 	return users[:ptr], nil
+}
+
+func (gs *MemoryStore) MarkTrackedUsersOutdated(_ context.Context, users []id.UserID) error {
+	gs.lock.Lock()
+	for _, userID := range users {
+		if _, ok := gs.Devices[userID]; ok {
+			gs.OutdatedUsers[userID] = struct{}{}
+		}
+	}
+	gs.lock.Unlock()
+	return nil
+}
+
+func (gs *MemoryStore) GetOutdatedTrackedUsers(_ context.Context) ([]id.UserID, error) {
+	gs.lock.RLock()
+	users := make([]id.UserID, 0, len(gs.OutdatedUsers))
+	for userID := range gs.OutdatedUsers {
+		users = append(users, userID)
+	}
+	gs.lock.RUnlock()
+	return users, nil
 }
 
 func (gs *MemoryStore) PutCrossSigningKey(_ context.Context, userID id.UserID, usage id.CrossSigningUsage, key id.Ed25519) error {
