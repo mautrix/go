@@ -438,7 +438,7 @@ func (mach *OlmMachine) GetOrFetchDeviceByKey(ctx context.Context, userID id.Use
 		Str("user_id", userID.String()).
 		Str("identity_key", identityKey.String()).
 		Msg("Didn't find identity in crypto store, fetching from server")
-	devices := mach.LoadDevices(userID)
+	devices := mach.LoadDevices(ctx, userID)
 	for _, device := range devices {
 		if device.IdentityKey == identityKey {
 			return device, nil

@@ -27,9 +27,8 @@ var (
 	InvalidKeySignature   = errors.New("invalid signature on device keys")
 )
 
-func (mach *OlmMachine) LoadDevices(user id.UserID) map[id.DeviceID]*id.Device {
-	// TODO proper context?
-	return mach.fetchKeys(context.TODO(), []id.UserID{user}, "", true)[user]
+func (mach *OlmMachine) LoadDevices(ctx context.Context, user id.UserID) map[id.DeviceID]*id.Device {
+	return mach.fetchKeys(ctx, []id.UserID{user}, "", true)[user]
 }
 
 func (mach *OlmMachine) storeDeviceSelfSignatures(ctx context.Context, userID id.UserID, deviceID id.DeviceID, resp *mautrix.RespQueryKeys) {
