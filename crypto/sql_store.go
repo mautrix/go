@@ -665,12 +665,19 @@ func (store *SQLCryptoStore) PutDevice(ctx context.Context, userID id.UserID, de
 	return err
 }
 
+const trackedUserUpsertQuery = `
+INSERT INTO crypto_tracked_user (user_id, devices_outdated)
+VALUES ($1, false)
+ON CONFLICT (user_id) DO UPDATE
+	SET devices_outdated = EXCLUDED.devices_outdated
+`
+
 // PutDevices stores the device identity information for the given user ID.
 func (store *SQLCryptoStore) PutDevices(ctx context.Context, userID id.UserID, devices map[id.DeviceID]*id.Device) error {
 	return store.DB.DoTxn(ctx, nil, func(ctx context.Context) error {
-		_, err := store.DB.Exec(ctx, "INSERT INTO crypto_tracked_user (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING", userID)
+		_, err := store.DB.Exec(ctx, trackedUserUpsertQuery, userID)
 		if err != nil {
-			return fmt.Errorf("failed to add user to tracked users list: %w", err)
+			return fmt.Errorf("failed to upsert user to tracked users list: %w", err)
 		}
 
 		_, err = store.DB.Exec(ctx, "UPDATE crypto_device SET deleted=true WHERE user_id=$1", userID)
@@ -730,6 +737,30 @@ func (store *SQLCryptoStore) FilterTrackedUsers(ctx context.Context, users []id.
 	}
 	if err != nil {
 		return users, err
+	}
+	return dbutil.NewRowIter(rows, dbutil.ScanSingleColumn[id.UserID]).AsList()
+}
+
+// MarkTrackedUsersOutdated flags that the device list for given users are outdated.
+func (store *SQLCryptoStore) MarkTrackedUsersOutdated(ctx context.Context, users []id.UserID) error {
+	return store.DB.DoTxn(ctx, nil, func(ctx context.Context) error {
+		// TODO refactor to use a single query
+		for _, userID := range users {
+			_, err := store.DB.Exec(ctx, "UPDATE crypto_tracked_user SET devices_outdated = true WHERE user_id = $1", userID)
+			if err != nil {
+				return fmt.Errorf("failed to update user in the tracked users list: %w", err)
+			}
+		}
+
+		return nil
+	})
+}
+
+// GetOutdatedTrackerUsers gets all tracked users whose devices need to be updated.
+func (store *SQLCryptoStore) GetOutdatedTrackedUsers(ctx context.Context) ([]id.UserID, error) {
+	rows, err := store.DB.Query(ctx, "SELECT user_id FROM crypto_tracked_user WHERE devices_outdated = TRUE")
+	if err != nil {
+		return nil, err
 	}
 	return dbutil.NewRowIter(rows, dbutil.ScanSingleColumn[id.UserID]).AsList()
 }

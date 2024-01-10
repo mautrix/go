@@ -27,8 +27,16 @@ var (
 	InvalidKeySignature   = errors.New("invalid signature on device keys")
 )
 
-func (mach *OlmMachine) LoadDevices(ctx context.Context, user id.UserID) map[id.DeviceID]*id.Device {
-	return mach.fetchKeys(ctx, []id.UserID{user}, "", true)[user]
+func (mach *OlmMachine) LoadDevices(ctx context.Context, user id.UserID) (keys map[id.DeviceID]*id.Device) {
+	log := zerolog.Ctx(ctx)
+
+	if keys, err := mach.FetchKeys(ctx, []id.UserID{user}, true); err != nil {
+		log.Err(err).Msg("Failed to load devices")
+	} else if keys != nil {
+		return keys[user]
+	}
+
+	return nil
 }
 
 func (mach *OlmMachine) storeDeviceSelfSignatures(ctx context.Context, userID id.UserID, deviceID id.DeviceID, resp *mautrix.RespQueryKeys) {
@@ -85,19 +93,16 @@ func (mach *OlmMachine) storeDeviceSelfSignatures(ctx context.Context, userID id
 	}
 }
 
-func (mach *OlmMachine) fetchKeys(ctx context.Context, users []id.UserID, sinceToken string, includeUntracked bool) (data map[id.UserID]map[id.DeviceID]*id.Device) {
-	// TODO this function should probably return errors
+func (mach *OlmMachine) FetchKeys(ctx context.Context, users []id.UserID, includeUntracked bool) (data map[id.UserID]map[id.DeviceID]*id.Device, err error) {
 	req := &mautrix.ReqQueryKeys{
 		DeviceKeys: mautrix.DeviceKeysRequest{},
 		Timeout:    10 * 1000,
-		Token:      sinceToken,
 	}
 	log := mach.machOrContextLog(ctx)
 	if !includeUntracked {
-		var err error
 		users, err = mach.CryptoStore.FilterTrackedUsers(ctx, users)
 		if err != nil {
-			log.Warn().Err(err).Msg("Failed to filter tracked user list")
+			return nil, fmt.Errorf("failed to filter tracked user list: %w", err)
 		}
 	}
 	if len(users) == 0 {
@@ -109,8 +114,7 @@ func (mach *OlmMachine) fetchKeys(ctx context.Context, users []id.UserID, sinceT
 	log.Debug().Strs("users", strishArray(users)).Msg("Querying keys for users")
 	resp, err := mach.Client.QueryKeys(ctx, req)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to query keys")
-		return
+		return nil, fmt.Errorf("failed to query keys: %w", err)
 	}
 	for server, err := range resp.Failures {
 		log.Warn().Interface("query_error", err).Str("server", server).Msg("Query keys failure for server")
@@ -189,7 +193,7 @@ func (mach *OlmMachine) fetchKeys(ctx context.Context, users []id.UserID, sinceT
 	mach.storeCrossSigningKeys(ctx, resp.SelfSigningKeys, resp.DeviceKeys)
 	mach.storeCrossSigningKeys(ctx, resp.UserSigningKeys, resp.DeviceKeys)
 
-	return data
+	return data, nil
 }
 
 // OnDevicesChanged finds all shared rooms with the given user and invalidates outbound sessions in those rooms.

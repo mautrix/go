@@ -33,6 +33,9 @@ type OlmMachine struct {
 
 	PlaintextMentions bool
 
+	// Never ask the server for keys automatically as a side effect.
+	DisableKeyFetching bool
+
 	SendKeysMinTrust  id.TrustState
 	ShareKeysMinTrust id.TrustState
 
@@ -224,7 +227,11 @@ func (mach *OlmMachine) HandleDeviceLists(dl *mautrix.DeviceLists, since string)
 			Str("trace_id", traceID).
 			Interface("changes", dl.Changed).
 			Msg("Device list changes in /sync")
-		mach.fetchKeys(context.TODO(), dl.Changed, since, false)
+		if mach.DisableKeyFetching {
+			mach.CryptoStore.MarkTrackedUsersOutdated(context.TODO(), dl.Changed)
+		} else {
+			mach.FetchKeys(context.TODO(), dl.Changed, false)
+		}
 		mach.Log.Debug().Str("trace_id", traceID).Msg("Finished handling device list changes")
 	}
 }
@@ -413,11 +420,12 @@ func (mach *OlmMachine) GetOrFetchDevice(ctx context.Context, userID id.UserID, 
 	device, err := mach.CryptoStore.GetDevice(ctx, userID, deviceID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get sender device from store: %w", err)
-	} else if device != nil {
+	} else if device != nil || mach.DisableKeyFetching {
 		return device, nil
 	}
-	usersToDevices := mach.fetchKeys(ctx, []id.UserID{userID}, "", true)
-	if devices, ok := usersToDevices[userID]; ok {
+	if usersToDevices, err := mach.FetchKeys(ctx, []id.UserID{userID}, true); err != nil {
+		return nil, fmt.Errorf("failed to fetch keys: %w", err)
+	} else if devices, ok := usersToDevices[userID]; ok {
 		if device, ok = devices[deviceID]; ok {
 			return device, nil
 		}
@@ -431,7 +439,7 @@ func (mach *OlmMachine) GetOrFetchDevice(ctx context.Context, userID id.UserID, 
 // the given identity key.
 func (mach *OlmMachine) GetOrFetchDeviceByKey(ctx context.Context, userID id.UserID, identityKey id.IdentityKey) (*id.Device, error) {
 	deviceIdentity, err := mach.CryptoStore.FindDeviceByKey(ctx, userID, identityKey)
-	if err != nil || deviceIdentity != nil {
+	if err != nil || deviceIdentity != nil || mach.DisableKeyFetching {
 		return deviceIdentity, err
 	}
 	mach.machOrContextLog(ctx).Debug().

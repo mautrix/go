@@ -221,6 +221,13 @@ func TestStoreDevices(t *testing.T) {
 	stores := getCryptoStores(t)
 	for storeName, store := range stores {
 		t.Run(storeName, func(t *testing.T) {
+			outdated, err := store.GetOutdatedTrackedUsers(context.TODO())
+			if err != nil {
+				t.Errorf("Error filtering tracked users: %v", err)
+			}
+			if len(outdated) > 0 {
+				t.Errorf("Got %d outdated tracked users when expected none", len(outdated))
+			}
 			deviceMap := make(map[id.DeviceID]*id.Device)
 			for i := 0; i < 17; i++ {
 				iStr := strconv.Itoa(i)
@@ -232,9 +239,9 @@ func TestStoreDevices(t *testing.T) {
 					SigningKey:  acc.SigningKey(),
 				}
 			}
-			err := store.PutDevices(context.TODO(), "user1", deviceMap)
+			err = store.PutDevices(context.TODO(), "user1", deviceMap)
 			if err != nil {
-				t.Errorf("Error string devices: %v", err)
+				t.Errorf("Error storing devices: %v", err)
 			}
 			devs, err := store.GetDevices(context.TODO(), "user1")
 			if err != nil {
@@ -255,6 +262,36 @@ func TestStoreDevices(t *testing.T) {
 				t.Errorf("Error filtering tracked users: %v", err)
 			} else if len(filtered) != 1 || filtered[0] != "user1" {
 				t.Errorf("Expected to get 'user1' from filter, got %v", filtered)
+			}
+
+			outdated, err = store.GetOutdatedTrackedUsers(context.TODO())
+			if err != nil {
+				t.Errorf("Error filtering tracked users: %v", err)
+			}
+			if len(outdated) > 0 {
+				t.Errorf("Got %d outdated tracked users when expected none", len(outdated))
+			}
+			err = store.MarkTrackedUsersOutdated(context.TODO(), []id.UserID{"user0", "user1"})
+			if err != nil {
+				t.Errorf("Error marking tracked users outdated: %v", err)
+			}
+			outdated, err = store.GetOutdatedTrackedUsers(context.TODO())
+			if err != nil {
+				t.Errorf("Error filtering tracked users: %v", err)
+			}
+			if len(outdated) != 1 || outdated[0] != id.UserID("user1") {
+				t.Errorf("Got outdated tracked users %v when expected 'user1'", outdated)
+			}
+			err = store.PutDevices(context.TODO(), "user1", deviceMap)
+			if err != nil {
+				t.Errorf("Error storing devices: %v", err)
+			}
+			outdated, err = store.GetOutdatedTrackedUsers(context.TODO())
+			if err != nil {
+				t.Errorf("Error filtering tracked users: %v", err)
+			}
+			if len(outdated) > 0 {
+				t.Errorf("Got outdated tracked users %v when expected none", outdated)
 			}
 		})
 	}

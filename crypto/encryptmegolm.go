@@ -229,12 +229,16 @@ func (mach *OlmMachine) ShareGroupSession(ctx context.Context, roomID id.RoomID,
 
 	if len(fetchKeys) > 0 {
 		log.Debug().Strs("users", strishArray(fetchKeys)).Msg("Fetching missing keys")
-		for userID, devices := range mach.fetchKeys(ctx, fetchKeys, "", true) {
-			log.Debug().
-				Int("device_count", len(devices)).
-				Str("target_user_id", userID.String()).
-				Msg("Got device keys for user")
-			missingSessions[userID] = devices
+		if keys, err := mach.FetchKeys(ctx, fetchKeys, true); err != nil {
+			log.Err(err).Strs("users", strishArray(fetchKeys)).Msg("Failed to fetch missing keys")
+		} else if keys != nil {
+			for userID, devices := range keys {
+				log.Debug().
+					Int("device_count", len(devices)).
+					Str("target_user_id", userID.String()).
+					Msg("Got device keys for user")
+				missingSessions[userID] = devices
+			}
 		}
 	}
 
