@@ -605,14 +605,14 @@ type RespRoomKeysVersion struct {
 }
 
 type RespRoomKeys struct {
-	Rooms map[id.RoomID]RespRoomKeysRoom `json:"rooms"`
+	Rooms map[id.RoomID]RespRoomKeyBackup `json:"rooms"`
 }
 
-type RespRoomKeysRoom struct {
-	Sessions map[id.SessionID]RespRoomKeysSession `json:"sessions"`
+type RespRoomKeyBackup struct {
+	Sessions map[id.SessionID]RespKeyBackupData `json:"sessions"`
 }
 
-type RespRoomKeysSession struct {
+type RespKeyBackupData struct {
 	FirstMessageIndex int             `json:"first_message_index"`
 	ForwardedCount    int             `json:"forwarded_count"`
 	IsVerified        bool            `json:"is_verified"`

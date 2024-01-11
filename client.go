@@ -1944,6 +1944,154 @@ func (cli *Client) GetKeyChanges(ctx context.Context, from, to string) (resp *Re
 	return
 }
 
+// GetKeyBackup retrieves the keys from the backup.
+//
+// See: https://spec.matrix.org/v1.9/client-server-api/#get_matrixclientv3room_keyskeys
+func (cli *Client) GetKeyBackup(ctx context.Context, version string) (resp *RespRoomKeys, err error) {
+	urlPath := cli.BuildURLWithQuery(ClientURLPath{"v3", "room_keys", "keys"}, map[string]string{
+		"version": version,
+	})
+	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
+	return
+}
+
+// PutKeysInBackup stores several keys in the backup.
+//
+// See: https://spec.matrix.org/v1.9/client-server-api/#put_matrixclientv3room_keyskeys
+func (cli *Client) PutKeysInBackup(ctx context.Context, version string, req *ReqKeyBackup) (resp *RespRoomKeysUpdate, err error) {
+	urlPath := cli.BuildURLWithQuery(ClientURLPath{"v3", "room_keys", "keys"}, map[string]string{
+		"version": version,
+	})
+	_, err = cli.MakeRequest(ctx, http.MethodPut, urlPath, req, &resp)
+	return
+}
+
+// DeleteKeyBackup deletes all keys from the backup.
+//
+// See: https://spec.matrix.org/v1.9/client-server-api/#delete_matrixclientv3room_keyskeys
+func (cli *Client) DeleteKeyBackup(ctx context.Context, version string) (resp *RespRoomKeysUpdate, err error) {
+	urlPath := cli.BuildURLWithQuery(ClientURLPath{"v3", "room_keys", "keys"}, map[string]string{
+		"version": version,
+	})
+	_, err = cli.MakeRequest(ctx, http.MethodDelete, urlPath, nil, &resp)
+	return
+}
+
+// GetKeyBackupForRoom retrieves the keys from the backup for the given room.
+//
+// See: https://spec.matrix.org/v1.9/client-server-api/#get_matrixclientv3room_keyskeysroomid
+func (cli *Client) GetKeyBackupForRoom(ctx context.Context, version string, roomID id.RoomID) (resp *RespRoomKeyBackup, err error) {
+	urlPath := cli.BuildURLWithQuery(ClientURLPath{"v3", "room_keys", "keys", roomID.String()}, map[string]string{
+		"version": version,
+	})
+	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
+	return
+}
+
+// PutKeysInBackupForRoom stores several keys in the backup for the given room.
+//
+// See: https://spec.matrix.org/v1.9/client-server-api/#put_matrixclientv3room_keyskeysroomid
+func (cli *Client) PutKeysInBackupForRoom(ctx context.Context, version string, roomID id.RoomID, req *ReqRoomKeyBackup) (resp *RespRoomKeysUpdate, err error) {
+	urlPath := cli.BuildURLWithQuery(ClientURLPath{"v3", "room_keys", "keys", roomID.String()}, map[string]string{
+		"version": version,
+	})
+	_, err = cli.MakeRequest(ctx, http.MethodPut, urlPath, req, &resp)
+	return
+}
+
+// DeleteKeysFromBackupForRoom deletes all the keys in the backup for the given
+// room.
+//
+// See: https://spec.matrix.org/v1.9/client-server-api/#delete_matrixclientv3room_keyskeysroomid
+func (cli *Client) DeleteKeysFromBackupForRoom(ctx context.Context, version string, roomID id.RoomID) (resp *RespRoomKeysUpdate, err error) {
+	urlPath := cli.BuildURLWithQuery(ClientURLPath{"v3", "room_keys", "keys", roomID.String()}, map[string]string{
+		"version": version,
+	})
+	_, err = cli.MakeRequest(ctx, http.MethodDelete, urlPath, nil, &resp)
+	return
+}
+
+// GetKeyBackupForRoomAndSession retrieves a key from the backup.
+//
+// See: https://spec.matrix.org/v1.9/client-server-api/#get_matrixclientv3room_keyskeysroomidsessionid
+func (cli *Client) GetKeyBackupForRoomAndSession(ctx context.Context, version string, roomID id.RoomID, sessionID id.SessionID) (resp *RespKeyBackupData, err error) {
+	urlPath := cli.BuildURLWithQuery(ClientURLPath{"v3", "room_keys", "keys", roomID.String(), sessionID.String()}, map[string]string{
+		"version": version,
+	})
+	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
+	return
+}
+
+// PutKeysInBackupForRoomAndSession stores a key in the backup.
+//
+// See: https://spec.matrix.org/v1.9/client-server-api/#put_matrixclientv3room_keyskeysroomidsessionid
+func (cli *Client) PutKeysInBackupForRoomAndSession(ctx context.Context, version string, roomID id.RoomID, sessionID id.SessionID, req *ReqKeyBackupData) (resp *RespRoomKeysUpdate, err error) {
+	urlPath := cli.BuildURLWithQuery(ClientURLPath{"v3", "room_keys", "keys", roomID.String(), sessionID.String()}, map[string]string{
+		"version": version,
+	})
+	_, err = cli.MakeRequest(ctx, http.MethodPut, urlPath, req, &resp)
+	return
+}
+
+// DeleteKeysInBackupForRoomAndSession deletes a key from the backup.
+//
+// See: https://spec.matrix.org/v1.9/client-server-api/#delete_matrixclientv3room_keyskeysroomidsessionid
+func (cli *Client) DeleteKeysInBackupForRoomAndSession(ctx context.Context, version string, roomID id.RoomID, sessionID id.SessionID) (resp *RespRoomKeysUpdate, err error) {
+	urlPath := cli.BuildURLWithQuery(ClientURLPath{"v3", "room_keys", "keys", roomID.String(), sessionID.String()}, map[string]string{
+		"version": version,
+	})
+	_, err = cli.MakeRequest(ctx, http.MethodDelete, urlPath, nil, &resp)
+	return
+}
+
+// GetKeyBackupLatestVersion returns information about the latest backup version.
+//
+// See: https://spec.matrix.org/v1.9/client-server-api/#get_matrixclientv3room_keysversion
+func (cli *Client) GetKeyBackupLatestVersion(ctx context.Context) (resp *RespRoomKeysVersion, err error) {
+	urlPath := cli.BuildClientURL("v3", "room_keys", "version")
+	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
+	return
+}
+
+// CreateKeyBackupVersion creates a new key backup.
+//
+// See: https://spec.matrix.org/v1.9/client-server-api/#post_matrixclientv3room_keysversion
+func (cli *Client) CreateKeyBackupVersion(ctx context.Context, req *ReqRoomKeysVersionCreate) (resp *RespRoomKeysVersionCreate, err error) {
+	urlPath := cli.BuildClientURL("v3", "room_keys", "version")
+	_, err = cli.MakeRequest(ctx, http.MethodPost, urlPath, req, &resp)
+	return
+}
+
+// GetKeyBackupVersion returns information about an existing key backup.
+//
+// See: https://spec.matrix.org/v1.9/client-server-api/#get_matrixclientv3room_keysversionversion
+func (cli *Client) GetKeyBackupVersion(ctx context.Context, version string) (resp *RespRoomKeysVersion, err error) {
+	urlPath := cli.BuildClientURL("v3", "room_keys", "version", version)
+	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
+	return
+}
+
+// UpdateKeyBackupVersion updates information about an existing key backup. Only
+// the auth_data can be modified.
+//
+// See: https://spec.matrix.org/v1.9/client-server-api/#put_matrixclientv3room_keysversionversion
+func (cli *Client) UpdateKeyBackupVersion(ctx context.Context, version string, req *ReqRoomKeysVersionUpdate) error {
+	urlPath := cli.BuildClientURL("v3", "room_keys", "version", version)
+	_, err := cli.MakeRequest(ctx, http.MethodPut, urlPath, nil, nil)
+	return err
+}
+
+// DeleteKeyBackupVersion deletes an existing key backup. Both the information
+// about the backup, as well as all key data related to the backup will be
+// deleted.
+//
+// See: https://spec.matrix.org/v1.1/client-server-api/#delete_matrixclientv3room_keysversionversion
+func (cli *Client) DeleteKeyBackupVersion(ctx context.Context, version string) error {
+	urlPath := cli.BuildClientURL("v3", "room_keys", "version", version)
+	_, err := cli.MakeRequest(ctx, http.MethodDelete, urlPath, nil, nil)
+	return err
+}
+
 func (cli *Client) SendToDevice(ctx context.Context, eventType event.Type, req *ReqSendToDevice) (resp *RespSendToDevice, err error) {
 	urlPath := cli.BuildClientURL("v3", "sendToDevice", eventType.String(), cli.TxnID())
 	_, err = cli.MakeRequest(ctx, "PUT", urlPath, req, &resp)

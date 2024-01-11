@@ -434,15 +434,21 @@ type ReqRoomKeysVersionCreate struct {
 	AuthData  json.RawMessage `json:"auth_data"`
 }
 
-type ReqRoomKeysUpdate struct {
-	Rooms map[id.RoomID]ReqRoomKeysRoomUpdate `json:"rooms"`
+type ReqRoomKeysVersionUpdate struct {
+	Algorithm string          `json:"algorithm"`
+	AuthData  json.RawMessage `json:"auth_data"`
+	Version   string          `json:"version,omitempty"`
 }
 
-type ReqRoomKeysRoomUpdate struct {
-	Sessions map[id.SessionID]ReqRoomKeysSessionUpdate `json:"sessions"`
+type ReqKeyBackup struct {
+	Rooms map[id.RoomID]ReqRoomKeyBackup `json:"rooms"`
 }
 
-type ReqRoomKeysSessionUpdate struct {
+type ReqRoomKeyBackup struct {
+	Sessions map[id.SessionID]ReqKeyBackupData `json:"sessions"`
+}
+
+type ReqKeyBackupData struct {
 	FirstMessageIndex int             `json:"first_message_index"`
 	ForwardedCount    int             `json:"forwarded_count"`
 	IsVerified        bool            `json:"is_verified"`
