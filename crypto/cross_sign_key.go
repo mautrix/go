@@ -13,6 +13,7 @@ import (
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto/olm"
+	"maunium.net/go/mautrix/crypto/signatures"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -112,11 +113,7 @@ func (mach *OlmMachine) PublishCrossSigningKeys(ctx context.Context, keys *Cross
 	if err != nil {
 		return fmt.Errorf("failed to sign self-signing key: %w", err)
 	}
-	selfKey.Signatures = map[id.UserID]map[id.KeyID]string{
-		userID: {
-			masterKeyID: selfSig,
-		},
-	}
+	selfKey.Signatures = signatures.NewSingleSignature(userID, id.KeyAlgorithmEd25519, keys.MasterKey.PublicKey.String(), selfSig)
 
 	userKey := mautrix.CrossSigningKeys{
 		UserID: userID,
@@ -129,11 +126,7 @@ func (mach *OlmMachine) PublishCrossSigningKeys(ctx context.Context, keys *Cross
 	if err != nil {
 		return fmt.Errorf("failed to sign user-signing key: %w", err)
 	}
-	userKey.Signatures = map[id.UserID]map[id.KeyID]string{
-		userID: {
-			masterKeyID: userSig,
-		},
-	}
+	userKey.Signatures = signatures.NewSingleSignature(userID, id.KeyAlgorithmEd25519, keys.MasterKey.PublicKey.String(), userSig)
 
 	err = mach.Client.UploadCrossSigningKeys(ctx, &mautrix.UploadCrossSigningKeysReq{
 		Master:      masterKey,

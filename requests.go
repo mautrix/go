@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strconv"
 
+	"maunium.net/go/mautrix/crypto/signatures"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/pushrules"
@@ -184,11 +185,11 @@ type ReqAliasCreate struct {
 }
 
 type OneTimeKey struct {
-	Key        id.Curve25519  `json:"key"`
-	Fallback   bool           `json:"fallback,omitempty"`
-	Signatures Signatures     `json:"signatures,omitempty"`
-	Unsigned   map[string]any `json:"unsigned,omitempty"`
-	IsSigned   bool           `json:"-"`
+	Key        id.Curve25519         `json:"key"`
+	Fallback   bool                  `json:"fallback,omitempty"`
+	Signatures signatures.Signatures `json:"signatures,omitempty"`
+	Unsigned   map[string]any        `json:"unsigned,omitempty"`
+	IsSigned   bool                  `json:"-"`
 
 	// Raw data in the one-time key. This must be used for signature verification to ensure unrecognized fields
 	// aren't thrown away (because that would invalidate the signature).
@@ -230,7 +231,7 @@ type ReqKeysSignatures struct {
 	Algorithms []id.Algorithm         `json:"algorithms,omitempty"`
 	Usage      []id.CrossSigningUsage `json:"usage,omitempty"`
 	Keys       map[id.KeyID]string    `json:"keys"`
-	Signatures Signatures             `json:"signatures"`
+	Signatures signatures.Signatures  `json:"signatures"`
 }
 
 type ReqUploadSignatures map[id.UserID]map[string]ReqKeysSignatures
@@ -240,15 +241,15 @@ type DeviceKeys struct {
 	DeviceID   id.DeviceID            `json:"device_id"`
 	Algorithms []id.Algorithm         `json:"algorithms"`
 	Keys       KeyMap                 `json:"keys"`
-	Signatures Signatures             `json:"signatures"`
+	Signatures signatures.Signatures  `json:"signatures"`
 	Unsigned   map[string]interface{} `json:"unsigned,omitempty"`
 }
 
 type CrossSigningKeys struct {
-	UserID     id.UserID                         `json:"user_id"`
-	Usage      []id.CrossSigningUsage            `json:"usage"`
-	Keys       map[id.KeyID]id.Ed25519           `json:"keys"`
-	Signatures map[id.UserID]map[id.KeyID]string `json:"signatures,omitempty"`
+	UserID     id.UserID               `json:"user_id"`
+	Usage      []id.CrossSigningUsage  `json:"usage"`
+	Keys       map[id.KeyID]id.Ed25519 `json:"keys"`
+	Signatures signatures.Signatures   `json:"signatures,omitempty"`
 }
 
 func (csk *CrossSigningKeys) FirstKey() id.Ed25519 {
@@ -282,8 +283,6 @@ func (km KeyMap) GetCurve25519(deviceID id.DeviceID) id.Curve25519 {
 	}
 	return id.Curve25519(val)
 }
-
-type Signatures map[id.UserID]map[id.KeyID]string
 
 type ReqQueryKeys struct {
 	DeviceKeys DeviceKeysRequest `json:"device_keys"`

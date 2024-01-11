@@ -14,6 +14,7 @@ import (
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto/olm"
+	"maunium.net/go/mautrix/crypto/signatures"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
@@ -115,11 +116,7 @@ func (mach *OlmMachine) SignOwnMasterKey(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to sign JSON: %w", err)
 	}
-	masterKeyObj.Signatures = mautrix.Signatures{
-		userID: map[id.KeyID]string{
-			id.NewKeyID(id.KeyAlgorithmEd25519, deviceID.String()): signature,
-		},
-	}
+	masterKeyObj.Signatures = signatures.NewSingleSignature(userID, id.KeyAlgorithmEd25519, deviceID.String(), signature)
 	mach.Log.Debug().
 		Str("device_id", deviceID.String()).
 		Str("signature", signature).
@@ -214,11 +211,7 @@ func (mach *OlmMachine) signAndUpload(ctx context.Context, req mautrix.ReqKeysSi
 	if err != nil {
 		return "", fmt.Errorf("failed to sign JSON: %w", err)
 	}
-	req.Signatures = mautrix.Signatures{
-		mach.Client.UserID: map[id.KeyID]string{
-			id.NewKeyID(id.KeyAlgorithmEd25519, key.PublicKey.String()): signature,
-		},
-	}
+	req.Signatures = signatures.NewSingleSignature(mach.Client.UserID, id.KeyAlgorithmEd25519, key.PublicKey.String(), signature)
 
 	resp, err := mach.Client.UploadSignatures(ctx, &mautrix.ReqUploadSignatures{
 		userID: map[string]mautrix.ReqKeysSignatures{
