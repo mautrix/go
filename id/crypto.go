@@ -44,6 +44,12 @@ const (
 	XSUsageUserSigning CrossSigningUsage = "user_signing"
 )
 
+type KeyBackupAlgorithm string
+
+const (
+	KeyBackupAlgorithmMegolmBackupV1 KeyBackupAlgorithm = "m.megolm_backup.v1.curve25519-aes-sha2"
+)
+
 // A SessionID is an arbitrary string that identifies an Olm or Megolm session.
 type SessionID string
 

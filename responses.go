@@ -597,11 +597,11 @@ type RespRoomKeysVersionCreate struct {
 }
 
 type RespRoomKeysVersion struct {
-	Algorithm string          `json:"algorithm"`
-	AuthData  json.RawMessage `json:"auth_data"`
-	Count     int             `json:"count"`
-	ETag      string          `json:"etag"`
-	Version   string          `json:"version"`
+	Algorithm id.KeyBackupAlgorithm `json:"algorithm"`
+	AuthData  json.RawMessage       `json:"auth_data"`
+	Count     int                   `json:"count"`
+	ETag      string                `json:"etag"`
+	Version   string                `json:"version"`
 }
 
 type RespRoomKeys struct {
