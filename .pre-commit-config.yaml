@@ -12,4 +12,8 @@ repos:
     rev: v1.0.0-rc.1
     hooks:
       - id: go-imports-repo
+        args:
+          - "-local"
+          - "maunium.net/go/mautrix"
+          - "-w"
       - id: go-vet-repo-mod
