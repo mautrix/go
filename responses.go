@@ -596,27 +596,27 @@ type RespRoomKeysVersionCreate struct {
 	Version string `json:"version"`
 }
 
-type RespRoomKeysVersion struct {
+type RespRoomKeysVersion[A any] struct {
 	Algorithm id.KeyBackupAlgorithm `json:"algorithm"`
-	AuthData  json.RawMessage       `json:"auth_data"`
+	AuthData  A                     `json:"auth_data"`
 	Count     int                   `json:"count"`
 	ETag      string                `json:"etag"`
 	Version   string                `json:"version"`
 }
 
-type RespRoomKeys struct {
-	Rooms map[id.RoomID]RespRoomKeyBackup `json:"rooms"`
+type RespRoomKeys[S any] struct {
+	Rooms map[id.RoomID]RespRoomKeyBackup[S] `json:"rooms"`
 }
 
-type RespRoomKeyBackup struct {
-	Sessions map[id.SessionID]RespKeyBackupData `json:"sessions"`
+type RespRoomKeyBackup[S any] struct {
+	Sessions map[id.SessionID]RespKeyBackupData[S] `json:"sessions"`
 }
 
-type RespKeyBackupData struct {
-	FirstMessageIndex int             `json:"first_message_index"`
-	ForwardedCount    int             `json:"forwarded_count"`
-	IsVerified        bool            `json:"is_verified"`
-	SessionData       json.RawMessage `json:"session_data"`
+type RespKeyBackupData[S any] struct {
+	FirstMessageIndex int  `json:"first_message_index"`
+	ForwardedCount    int  `json:"forwarded_count"`
+	IsVerified        bool `json:"is_verified"`
+	SessionData       S    `json:"session_data"`
 }
 
 type RespRoomKeysUpdate struct {
