@@ -68,13 +68,13 @@ func NewMatrixHandler(br *Bridge) *MatrixHandler {
 	return handler
 }
 
-func (mx *MatrixHandler) sendBridgeCheckpoint(evt *event.Event) {
+func (mx *MatrixHandler) sendBridgeCheckpoint(_ context.Context, evt *event.Event) {
 	if !evt.Mautrix.CheckpointSent {
 		go mx.bridge.SendMessageSuccessCheckpoint(evt, status.MsgStepBridge, 0)
 	}
 }
 
-func (mx *MatrixHandler) HandleEncryption(evt *event.Event) {
+func (mx *MatrixHandler) HandleEncryption(ctx context.Context, evt *event.Event) {
 	defer mx.TrackEventDuration(evt.Type)()
 	if evt.Content.AsEncryption().Algorithm != id.AlgorithmMegolmV1 {
 		return
@@ -87,7 +87,7 @@ func (mx *MatrixHandler) HandleEncryption(evt *event.Event) {
 			Msg("Encryption was enabled in room")
 		portal.MarkEncrypted()
 		if portal.IsPrivateChat() {
-			err := mx.as.BotIntent().EnsureJoined(context.TODO(), evt.RoomID, appservice.EnsureJoinedParams{BotOverride: portal.MainIntent().Client})
+			err := mx.as.BotIntent().EnsureJoined(ctx, evt.RoomID, appservice.EnsureJoinedParams{BotOverride: portal.MainIntent().Client})
 			if err != nil {
 				mx.log.Err(err).
 					Str("room_id", evt.RoomID.String()).
@@ -232,15 +232,14 @@ func (mx *MatrixHandler) HandleGhostInvite(ctx context.Context, evt *event.Event
 	}
 }
 
-func (mx *MatrixHandler) HandleMembership(evt *event.Event) {
+func (mx *MatrixHandler) HandleMembership(ctx context.Context, evt *event.Event) {
 	if evt.Sender == mx.bridge.Bot.UserID || mx.bridge.Child.IsGhost(evt.Sender) {
 		return
 	}
 	defer mx.TrackEventDuration(evt.Type)()
-	ctx := context.TODO()
 
 	if mx.bridge.Crypto != nil {
-		mx.bridge.Crypto.HandleMemberEvent(evt)
+		mx.bridge.Crypto.HandleMemberEvent(ctx, evt)
 	}
 
 	log := mx.log.With().
@@ -300,7 +299,7 @@ func (mx *MatrixHandler) HandleMembership(evt *event.Event) {
 	// TODO kicking/inviting non-ghost users users
 }
 
-func (mx *MatrixHandler) HandleRoomMetadata(evt *event.Event) {
+func (mx *MatrixHandler) HandleRoomMetadata(ctx context.Context, evt *event.Event) {
 	defer mx.TrackEventDuration(evt.Type)()
 	if mx.shouldIgnoreEvent(evt) {
 		return
@@ -469,20 +468,20 @@ func (mx *MatrixHandler) postDecrypt(ctx context.Context, original, decrypted *e
 	mx.bridge.SendMessageSuccessCheckpoint(decrypted, status.MsgStepDecrypted, retryCount)
 	decrypted.Mautrix.CheckpointSent = true
 	decrypted.Mautrix.DecryptionDuration = duration
-	mx.bridge.EventProcessor.Dispatch(decrypted)
+	decrypted.Mautrix.EventSource |= event.SourceDecrypted
+	mx.bridge.EventProcessor.Dispatch(ctx, decrypted)
 	if errorEventID != "" {
 		_, _ = mx.bridge.Bot.RedactEvent(ctx, decrypted.RoomID, errorEventID)
 	}
 }
 
-func (mx *MatrixHandler) HandleEncrypted(evt *event.Event) {
+func (mx *MatrixHandler) HandleEncrypted(ctx context.Context, evt *event.Event) {
 	defer mx.TrackEventDuration(evt.Type)()
 	if mx.shouldIgnoreEvent(evt) {
 		return
 	}
 	content := evt.Content.AsEncrypted()
-	ctx := context.TODO()
-	log := mx.log.With().
+	log := zerolog.Ctx(ctx).With().
 		Str("event_id", evt.ID.String()).
 		Str("session_id", content.SessionID.String()).
 		Logger()
@@ -546,14 +545,14 @@ func (mx *MatrixHandler) waitLongerForSession(ctx context.Context, evt *event.Ev
 	mx.postDecrypt(ctx, evt, decrypted, 2, errorEventID, time.Since(decryptionStart))
 }
 
-func (mx *MatrixHandler) HandleMessage(evt *event.Event) {
+func (mx *MatrixHandler) HandleMessage(ctx context.Context, evt *event.Event) {
 	defer mx.TrackEventDuration(evt.Type)()
-	log := mx.log.With().
+	log := zerolog.Ctx(ctx).With().
 		Str("event_id", evt.ID.String()).
 		Str("room_id", evt.RoomID.String()).
 		Str("sender", evt.Sender.String()).
 		Logger()
-	ctx := log.WithContext(context.TODO())
+	ctx = log.WithContext(ctx)
 	if mx.shouldIgnoreEvent(evt) {
 		return
 	} else if !evt.Mautrix.WasEncrypted && mx.bridge.Config.Bridge.GetEncryptionConfig().Require {
@@ -604,7 +603,7 @@ func (mx *MatrixHandler) HandleMessage(evt *event.Event) {
 	}
 }
 
-func (mx *MatrixHandler) HandleReaction(evt *event.Event) {
+func (mx *MatrixHandler) HandleReaction(_ context.Context, evt *event.Event) {
 	defer mx.TrackEventDuration(evt.Type)()
 	if mx.shouldIgnoreEvent(evt) {
 		return
@@ -623,7 +622,7 @@ func (mx *MatrixHandler) HandleReaction(evt *event.Event) {
 	}
 }
 
-func (mx *MatrixHandler) HandleRedaction(evt *event.Event) {
+func (mx *MatrixHandler) HandleRedaction(_ context.Context, evt *event.Event) {
 	defer mx.TrackEventDuration(evt.Type)()
 	if mx.shouldIgnoreEvent(evt) {
 		return
@@ -642,7 +641,7 @@ func (mx *MatrixHandler) HandleRedaction(evt *event.Event) {
 	}
 }
 
-func (mx *MatrixHandler) HandleReceipt(evt *event.Event) {
+func (mx *MatrixHandler) HandleReceipt(_ context.Context, evt *event.Event) {
 	portal := mx.bridge.Child.GetIPortal(evt.RoomID)
 	if portal == nil {
 		return
@@ -676,7 +675,7 @@ func (mx *MatrixHandler) HandleReceipt(evt *event.Event) {
 	}
 }
 
-func (mx *MatrixHandler) HandleTyping(evt *event.Event) {
+func (mx *MatrixHandler) HandleTyping(_ context.Context, evt *event.Event) {
 	portal := mx.bridge.Child.GetIPortal(evt.RoomID)
 	if portal == nil {
 		return

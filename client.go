@@ -236,8 +236,11 @@ func (cli *Client) SyncWithContext(ctx context.Context) error {
 		// Save the token now *before* processing it. This means it's possible
 		// to not process some events, but it means that we won't get constantly stuck processing
 		// a malformed/buggy event which keeps making us panic.
-		cli.Store.SaveNextBatch(ctx, cli.UserID, resSync.NextBatch)
-		if err = cli.Syncer.ProcessResponse(resSync, nextBatch); err != nil {
+		err = cli.Store.SaveNextBatch(ctx, cli.UserID, resSync.NextBatch)
+		if err != nil {
+			return err
+		}
+		if err = cli.Syncer.ProcessResponse(ctx, resSync, nextBatch); err != nil {
 			return err
 		}
 

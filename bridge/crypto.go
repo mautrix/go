@@ -425,10 +425,10 @@ func (helper *CryptoHelper) ResetSession(ctx context.Context, roomID id.RoomID) 
 	}
 }
 
-func (helper *CryptoHelper) HandleMemberEvent(evt *event.Event) {
+func (helper *CryptoHelper) HandleMemberEvent(ctx context.Context, evt *event.Event) {
 	helper.lock.RLock()
 	defer helper.lock.RUnlock()
-	helper.mach.HandleMemberEvent(0, evt)
+	helper.mach.HandleMemberEvent(ctx, evt)
 }
 
 // ShareKeys uploads the given number of one-time-keys to the server.
@@ -440,7 +440,7 @@ type cryptoSyncer struct {
 	*crypto.OlmMachine
 }
 
-func (syncer *cryptoSyncer) ProcessResponse(resp *mautrix.RespSync, since string) error {
+func (syncer *cryptoSyncer) ProcessResponse(ctx context.Context, resp *mautrix.RespSync, since string) error {
 	done := make(chan struct{})
 	go func() {
 		defer func() {
@@ -454,7 +454,7 @@ func (syncer *cryptoSyncer) ProcessResponse(resp *mautrix.RespSync, since string
 			done <- struct{}{}
 		}()
 		syncer.Log.Trace().Str("since", since).Msg("Starting sync response handling")
-		syncer.ProcessSyncResponse(resp, since)
+		syncer.ProcessSyncResponse(ctx, resp, since)
 		syncer.Log.Trace().Str("since", since).Msg("Successfully handled sync response")
 	}()
 	select {

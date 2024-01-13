@@ -245,17 +245,18 @@ var NoSessionFound = crypto.NoSessionFound
 const initialSessionWaitTimeout = 3 * time.Second
 const extendedSessionWaitTimeout = 22 * time.Second
 
-func (helper *CryptoHelper) HandleEncrypted(src mautrix.EventSource, evt *event.Event) {
+func (helper *CryptoHelper) HandleEncrypted(ctx context.Context, evt *event.Event) {
 	if helper == nil {
 		return
 	}
 	content := evt.Content.AsEncrypted()
+	// TODO use context log instead of helper?
 	log := helper.log.With().
 		Str("event_id", evt.ID.String()).
 		Str("session_id", content.SessionID.String()).
 		Logger()
 	log.Debug().Msg("Decrypting received event")
-	ctx := log.WithContext(context.TODO())
+	ctx = log.WithContext(ctx)
 
 	decrypted, err := helper.Decrypt(ctx, evt)
 	if errors.Is(err, NoSessionFound) {
@@ -266,7 +267,7 @@ func (helper *CryptoHelper) HandleEncrypted(src mautrix.EventSource, evt *event.
 			log.Debug().Msg("Got keys after waiting, trying to decrypt event again")
 			decrypted, err = helper.Decrypt(ctx, evt)
 		} else {
-			go helper.waitLongerForSession(ctx, log, src, evt)
+			go helper.waitLongerForSession(ctx, log, evt)
 			return
 		}
 	}
@@ -275,11 +276,12 @@ func (helper *CryptoHelper) HandleEncrypted(src mautrix.EventSource, evt *event.
 		helper.DecryptErrorCallback(evt, err)
 		return
 	}
-	helper.postDecrypt(src, decrypted)
+	helper.postDecrypt(ctx, decrypted)
 }
 
-func (helper *CryptoHelper) postDecrypt(src mautrix.EventSource, decrypted *event.Event) {
-	helper.client.Syncer.(mautrix.DispatchableSyncer).Dispatch(src|mautrix.EventSourceDecrypted, decrypted)
+func (helper *CryptoHelper) postDecrypt(ctx context.Context, decrypted *event.Event) {
+	decrypted.Mautrix.EventSource |= event.SourceDecrypted
+	helper.client.Syncer.(mautrix.DispatchableSyncer).Dispatch(ctx, decrypted)
 }
 
 func (helper *CryptoHelper) RequestSession(ctx context.Context, roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID, userID id.UserID, deviceID id.DeviceID) {
@@ -309,7 +311,7 @@ func (helper *CryptoHelper) RequestSession(ctx context.Context, roomID id.RoomID
 	}
 }
 
-func (helper *CryptoHelper) waitLongerForSession(ctx context.Context, log zerolog.Logger, src mautrix.EventSource, evt *event.Event) {
+func (helper *CryptoHelper) waitLongerForSession(ctx context.Context, log zerolog.Logger, evt *event.Event) {
 	content := evt.Content.AsEncrypted()
 	log.Debug().Int("wait_seconds", int(extendedSessionWaitTimeout.Seconds())).Msg("Couldn't find session, requesting keys and waiting longer...")
 
@@ -329,7 +331,7 @@ func (helper *CryptoHelper) waitLongerForSession(ctx context.Context, log zerolo
 		return
 	}
 
-	helper.postDecrypt(src, decrypted)
+	helper.postDecrypt(ctx, decrypted)
 }
 
 func (helper *CryptoHelper) WaitForSession(ctx context.Context, roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID, timeout time.Duration) bool {

@@ -197,9 +197,9 @@ func (mach *OlmMachine) OwnIdentity() *id.Device {
 }
 
 type asEventProcessor interface {
-	On(evtType event.Type, handler func(evt *event.Event))
-	OnOTK(func(otk *mautrix.OTKCount))
-	OnDeviceList(func(lists *mautrix.DeviceLists, since string))
+	On(evtType event.Type, handler func(ctx context.Context, evt *event.Event))
+	OnOTK(func(ctx context.Context, otk *mautrix.OTKCount))
+	OnDeviceList(func(ctx context.Context, lists *mautrix.DeviceLists, since string))
 }
 
 func (mach *OlmMachine) AddAppserviceListener(ep asEventProcessor) {
@@ -220,7 +220,7 @@ func (mach *OlmMachine) AddAppserviceListener(ep asEventProcessor) {
 	mach.Log.Debug().Msg("Added listeners for encryption data coming from appservice transactions")
 }
 
-func (mach *OlmMachine) HandleDeviceLists(dl *mautrix.DeviceLists, since string) {
+func (mach *OlmMachine) HandleDeviceLists(ctx context.Context, dl *mautrix.DeviceLists, since string) {
 	if len(dl.Changed) > 0 {
 		traceID := time.Now().Format("15:04:05.000000")
 		mach.Log.Debug().
@@ -228,15 +228,15 @@ func (mach *OlmMachine) HandleDeviceLists(dl *mautrix.DeviceLists, since string)
 			Interface("changes", dl.Changed).
 			Msg("Device list changes in /sync")
 		if mach.DisableKeyFetching {
-			mach.CryptoStore.MarkTrackedUsersOutdated(context.TODO(), dl.Changed)
+			mach.CryptoStore.MarkTrackedUsersOutdated(ctx, dl.Changed)
 		} else {
-			mach.FetchKeys(context.TODO(), dl.Changed, false)
+			mach.FetchKeys(ctx, dl.Changed, false)
 		}
 		mach.Log.Debug().Str("trace_id", traceID).Msg("Finished handling device list changes")
 	}
 }
 
-func (mach *OlmMachine) HandleOTKCounts(otkCount *mautrix.OTKCount) {
+func (mach *OlmMachine) HandleOTKCounts(ctx context.Context, otkCount *mautrix.OTKCount) {
 	if (len(otkCount.UserID) > 0 && otkCount.UserID != mach.Client.UserID) || (len(otkCount.DeviceID) > 0 && otkCount.DeviceID != mach.Client.DeviceID) {
 		// TODO This log probably needs to be silence-able if someone wants to use encrypted appservices with multiple e2ee sessions
 		mach.Log.Warn().
@@ -250,7 +250,7 @@ func (mach *OlmMachine) HandleOTKCounts(otkCount *mautrix.OTKCount) {
 	if otkCount.SignedCurve25519 < int(minCount) {
 		traceID := time.Now().Format("15:04:05.000000")
 		log := mach.Log.With().Str("trace_id", traceID).Logger()
-		ctx := log.WithContext(context.TODO())
+		ctx = log.WithContext(ctx)
 		log.Debug().
 			Int("keys_left", otkCount.Curve25519).
 			Msg("Sync response said we have less than 50 signed curve25519 keys left, sharing new ones...")
@@ -268,8 +268,8 @@ func (mach *OlmMachine) HandleOTKCounts(otkCount *mautrix.OTKCount) {
 // This can be easily registered into a mautrix client using .OnSync():
 //
 //	client.Syncer.(mautrix.ExtensibleSyncer).OnSync(c.crypto.ProcessSyncResponse)
-func (mach *OlmMachine) ProcessSyncResponse(resp *mautrix.RespSync, since string) bool {
-	mach.HandleDeviceLists(&resp.DeviceLists, since)
+func (mach *OlmMachine) ProcessSyncResponse(ctx context.Context, resp *mautrix.RespSync, since string) bool {
+	mach.HandleDeviceLists(ctx, &resp.DeviceLists, since)
 
 	for _, evt := range resp.ToDevice.Events {
 		evt.Type.Class = event.ToDeviceEventType
@@ -278,10 +278,10 @@ func (mach *OlmMachine) ProcessSyncResponse(resp *mautrix.RespSync, since string
 			mach.Log.Warn().Str("event_type", evt.Type.Type).Err(err).Msg("Failed to parse to-device event")
 			continue
 		}
-		mach.HandleToDeviceEvent(evt)
+		mach.HandleToDeviceEvent(ctx, evt)
 	}
 
-	mach.HandleOTKCounts(&resp.DeviceOTKCount)
+	mach.HandleOTKCounts(ctx, &resp.DeviceOTKCount)
 	return true
 }
 
@@ -290,8 +290,7 @@ func (mach *OlmMachine) ProcessSyncResponse(resp *mautrix.RespSync, since string
 // Currently this is not automatically called, so you must add a listener yourself:
 //
 //	client.Syncer.(mautrix.ExtensibleSyncer).OnEventType(event.StateMember, c.crypto.HandleMemberEvent)
-func (mach *OlmMachine) HandleMemberEvent(_ mautrix.EventSource, evt *event.Event) {
-	ctx := context.TODO()
+func (mach *OlmMachine) HandleMemberEvent(ctx context.Context, evt *event.Event) {
 	if isEncrypted, err := mach.StateStore.IsEncrypted(ctx, evt.RoomID); err != nil {
 		mach.machOrContextLog(ctx).Err(err).Stringer("room_id", evt.RoomID).
 			Msg("Failed to check if room is encrypted to handle member event")
@@ -331,7 +330,7 @@ func (mach *OlmMachine) HandleMemberEvent(_ mautrix.EventSource, evt *event.Even
 
 // HandleToDeviceEvent handles a single to-device event. This is automatically called by ProcessSyncResponse, so you
 // don't need to add any custom handlers if you use that method.
-func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
+func (mach *OlmMachine) HandleToDeviceEvent(ctx context.Context, evt *event.Event) {
 	if len(evt.ToUserID) > 0 && (evt.ToUserID != mach.Client.UserID || evt.ToDeviceID != mach.Client.DeviceID) {
 		// TODO This log probably needs to be silence-able if someone wants to use encrypted appservices with multiple e2ee sessions
 		mach.Log.Debug().
@@ -341,12 +340,13 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 		return
 	}
 	traceID := time.Now().Format("15:04:05.000000")
+	// TODO use context log?
 	log := mach.Log.With().
 		Str("trace_id", traceID).
 		Str("sender", evt.Sender.String()).
 		Str("type", evt.Type.Type).
 		Logger()
-	ctx := log.WithContext(context.TODO())
+	ctx = log.WithContext(ctx)
 	if evt.Type != event.ToDeviceEncrypted {
 		log.Debug().Msg("Starting handling to-device event")
 	}

@@ -4,6 +4,7 @@
   functions.
 * **Breaking change *(everything)*** Added context parameters to all functions
   (started by [@recht] in [#144]).
+* *(client)* Moved `EventSource` to `event.Source`.
 * *(crypto)* Added experimental pure Go Olm implementation to replace libolm
   (thanks to [@DerLukas15] in [#106]).
   * You can use the `goolm` build tag to the new implementation.

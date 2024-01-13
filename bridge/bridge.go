@@ -214,7 +214,7 @@ type Bridge struct {
 }
 
 type Crypto interface {
-	HandleMemberEvent(*event.Event)
+	HandleMemberEvent(context.Context, *event.Event)
 	Decrypt(context.Context, *event.Event) (*event.Event, error)
 	Encrypt(context.Context, id.RoomID, event.Type, *event.Content) error
 	WaitForSession(context.Context, id.RoomID, id.SenderKey, id.SessionID, time.Duration) bool
@@ -321,7 +321,7 @@ func (br *Bridge) ensureConnection(ctx context.Context) {
 		if errors.Is(err, mautrix.MUnknownToken) {
 			br.ZLog.WithLevel(zerolog.FatalLevel).Msg("The as_token was not accepted. Is the registration file installed in your homeserver correctly?")
 		} else if errors.Is(err, mautrix.MExclusive) {
-			br.ZLog.WithLevel(zerolog.FatalLevel).Msg("The as_token was accepted, but the /register request was not. Are the homeserver domain and username template in the config correct, and do they match the values in the registration?")
+			br.ZLog.WithLevel(zerolog.FatalLevel).Msg("The as_token was accepted, but the /register request was not. Are the homeserver domain, bot username and username template in the config correct, and do they match the values in the registration?")
 		} else {
 			br.ZLog.WithLevel(zerolog.FatalLevel).Err(err).Msg("/whoami request failed with unknown error")
 		}
@@ -674,7 +674,7 @@ func (br *Bridge) start() {
 	}
 	br.ZLog.Debug().Msg("Checking connection to homeserver")
 
-	ctx := context.Background()
+	ctx := br.ZLog.WithContext(context.Background())
 	br.ensureConnection(ctx)
 	go br.fetchMediaConfig(ctx)
 
@@ -687,7 +687,7 @@ func (br *Bridge) start() {
 	}
 
 	br.ZLog.Debug().Msg("Starting event processor")
-	br.EventProcessor.Start()
+	br.EventProcessor.Start(ctx)
 
 	go br.UpdateBotProfile(ctx)
 	if br.Crypto != nil {

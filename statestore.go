@@ -67,8 +67,8 @@ func UpdateStateStore(ctx context.Context, store StateStore, evt *event.Event) {
 //	client.Syncer.(mautrix.ExtensibleSyncer).OnEvent(client.StateStoreSyncHandler)
 //
 // DefaultSyncer.ParseEventContent must also be true for this to work (which it is by default).
-func (cli *Client) StateStoreSyncHandler(_ EventSource, evt *event.Event) {
-	UpdateStateStore(cli.Log.WithContext(context.TODO()), cli.StateStore, evt)
+func (cli *Client) StateStoreSyncHandler(ctx context.Context, evt *event.Event) {
+	UpdateStateStore(ctx, cli.StateStore, evt)
 }
 
 type MemoryStateStore struct {
