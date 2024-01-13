@@ -62,7 +62,7 @@ func main() {
 	var lastRoomID id.RoomID
 
 	syncer := client.Syncer.(*mautrix.DefaultSyncer)
-	syncer.OnEventType(event.EventMessage, func(source mautrix.EventSource, evt *event.Event) {
+	syncer.OnEventType(event.EventMessage, func(ctx context.Context, evt *event.Event) {
 		lastRoomID = evt.RoomID
 		rl.SetPrompt(fmt.Sprintf("%s> ", lastRoomID))
 		log.Info().
@@ -72,9 +72,9 @@ func main() {
 			Str("body", evt.Content.AsMessage().Body).
 			Msg("Received message")
 	})
-	syncer.OnEventType(event.StateMember, func(source mautrix.EventSource, evt *event.Event) {
+	syncer.OnEventType(event.StateMember, func(ctx context.Context, evt *event.Event) {
 		if evt.GetStateKey() == client.UserID.String() && evt.Content.AsMember().Membership == event.MembershipInvite {
-			_, err := client.JoinRoomByID(context.TODO(), evt.RoomID)
+			_, err := client.JoinRoomByID(ctx, evt.RoomID)
 			if err == nil {
 				lastRoomID = evt.RoomID
 				rl.SetPrompt(fmt.Sprintf("%s> ", lastRoomID))
@@ -108,7 +108,7 @@ func main() {
 	}
 	// If you want to use multiple clients with the same DB, you should set a distinct database account ID for each one.
 	//cryptoHelper.DBAccountID = ""
-	err = cryptoHelper.Init()
+	err = cryptoHelper.Init(context.TODO())
 	if err != nil {
 		panic(err)
 	}
