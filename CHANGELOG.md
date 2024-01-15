@@ -1,3 +1,8 @@
+## unreleased
+
+* *(appservice)* Dropped support for legacy non-prefixed appservice paths
+  (e.g. `/transactions` instead of `/_matrix/app/v1/transactions`).
+
 ## v0.17.0 (2024-01-16)
 
 * **Breaking change *(bridge)*** Added raw event to portal membership handling
