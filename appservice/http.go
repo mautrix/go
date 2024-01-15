@@ -82,27 +82,20 @@ func (as *AppService) Stop() {
 // CheckServerToken checks if the given request originated from the Matrix homeserver.
 func (as *AppService) CheckServerToken(w http.ResponseWriter, r *http.Request) (isValid bool) {
 	authHeader := r.Header.Get("Authorization")
-	if len(authHeader) > 0 && strings.HasPrefix(authHeader, "Bearer ") {
-		isValid = authHeader[len("Bearer "):] == as.Registration.ServerToken
-	} else {
-		queryToken := r.URL.Query().Get("access_token")
-		if len(queryToken) > 0 {
-			isValid = queryToken == as.Registration.ServerToken
-		} else {
-			Error{
-				ErrorCode:  ErrUnknownToken,
-				HTTPStatus: http.StatusForbidden,
-				Message:    "Missing access token",
-			}.Write(w)
-			return
-		}
-	}
-	if !isValid {
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		Error{
+			ErrorCode:  ErrUnknownToken,
+			HTTPStatus: http.StatusForbidden,
+			Message:    "Missing access token",
+		}.Write(w)
+	} else if authHeader[len("Bearer "):] != as.Registration.ServerToken {
 		Error{
 			ErrorCode:  ErrUnknownToken,
 			HTTPStatus: http.StatusForbidden,
 			Message:    "Incorrect access token",
 		}.Write(w)
+	} else {
+		isValid = true
 	}
 	return
 }

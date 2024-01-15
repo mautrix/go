@@ -291,7 +291,7 @@ func (br *Bridge) InitVersion(tag, commit, buildTime string) {
 	br.BuildTime = buildTime
 }
 
-var MinSpecVersion = mautrix.SpecV11
+var MinSpecVersion = mautrix.SpecV14
 
 func (br *Bridge) ensureConnection(ctx context.Context) {
 	for {

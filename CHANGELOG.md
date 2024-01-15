@@ -2,6 +2,9 @@
 
 * *(appservice)* Dropped support for legacy non-prefixed appservice paths
   (e.g. `/transactions` instead of `/_matrix/app/v1/transactions`).
+* *(appservice)* Dropped support for legacy `access_token` authorization in
+  appservice endpoints.
+* *(bridge)* Bumped minimum Matrix spec version to v1.4.
 
 ## v0.17.0 (2024-01-16)
 
