@@ -10,10 +10,10 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/base64"
-	"math/rand"
 	"strings"
 
 	"go.mau.fi/util/base58"
