@@ -145,8 +145,8 @@ func (mach *OlmMachine) Load(ctx context.Context) (err error) {
 	return nil
 }
 
-func (mach *OlmMachine) saveAccount() {
-	err := mach.CryptoStore.PutAccount(context.TODO(), mach.account)
+func (mach *OlmMachine) saveAccount(ctx context.Context) {
+	err := mach.CryptoStore.PutAccount(ctx, mach.account)
 	if err != nil {
 		mach.Log.Error().Err(err).Msg("Failed to save account")
 	}
@@ -655,6 +655,15 @@ func (mach *OlmMachine) ShareKeys(ctx context.Context, currentOTKCount int) erro
 	var deviceKeys *mautrix.DeviceKeys
 	if !mach.account.Shared {
 		deviceKeys = mach.account.getInitialKeys(mach.Client.UserID, mach.Client.DeviceID)
+		err := mach.CryptoStore.PutDevice(ctx, mach.Client.UserID, &id.Device{
+			UserID:      mach.Client.UserID,
+			DeviceID:    mach.Client.DeviceID,
+			IdentityKey: deviceKeys.Keys.GetCurve25519(mach.Client.DeviceID),
+			SigningKey:  deviceKeys.Keys.GetEd25519(mach.Client.DeviceID),
+		})
+		if err != nil {
+			return fmt.Errorf("failed to save initial keys: %w", err)
+		}
 		log.Debug().Msg("Going to upload initial account keys")
 	}
 	oneTimeKeys := mach.account.getOneTimeKeys(mach.Client.UserID, mach.Client.DeviceID, currentOTKCount)
@@ -673,7 +682,7 @@ func (mach *OlmMachine) ShareKeys(ctx context.Context, currentOTKCount int) erro
 	}
 	mach.lastOTKUpload = time.Now()
 	mach.account.Shared = true
-	mach.saveAccount()
+	mach.saveAccount(ctx)
 	return nil
 }
 

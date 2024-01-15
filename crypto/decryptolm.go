@@ -216,7 +216,7 @@ func (mach *OlmMachine) createInboundSession(ctx context.Context, senderKey id.S
 	if err != nil {
 		return nil, err
 	}
-	mach.saveAccount()
+	mach.saveAccount(ctx)
 	err = mach.CryptoStore.AddSession(ctx, senderKey, session)
 	if err != nil {
 		zerolog.Ctx(ctx).Error().Err(err).Msg("Failed to store created inbound session")
