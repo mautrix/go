@@ -2,8 +2,8 @@ package session_test
 
 import (
 	"bytes"
+	"crypto/rand"
 	"errors"
-	"math/rand"
 	"testing"
 
 	"maunium.net/go/mautrix/crypto/goolm"

@@ -1,10 +1,10 @@
 package session
 
 import (
+	"crypto/rand"
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"math/rand"
 
 	"maunium.net/go/mautrix/id"
 
