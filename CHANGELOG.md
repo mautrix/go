@@ -5,6 +5,7 @@
 * *(appservice)* Dropped support for legacy `access_token` authorization in
   appservice endpoints.
 * *(bridge)* Bumped minimum Matrix spec version to v1.4.
+* *(bridge)* Fixed `RawArgs` field in command events of command state callbacks.
 
 ## v0.17.0 (2024-01-16)
 
