@@ -1,10 +1,10 @@
-## v0.17.0 (unreleased)
+## v0.17.0 (2024-01-16)
 
 * **Breaking change *(bridge)*** Added raw event to portal membership handling
   functions.
 * **Breaking change *(everything)*** Added context parameters to all functions
   (started by [@recht] in [#144]).
-* *(client)* Moved `EventSource` to `event.Source`.
+* **Breaking change *(client)*** Moved `EventSource` to `event.Source`.
 * *(client)* Removed deprecated `OldEventIgnorer`. The non-deprecated version
   (`Client.DontProcessOldEvents`) is still available.
 * *(crypto)* Added experimental pure Go Olm implementation to replace libolm
