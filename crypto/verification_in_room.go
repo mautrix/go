@@ -168,7 +168,7 @@ func (mach *OlmMachine) SendInRoomSASVerificationAccept(ctx context.Context, roo
 	if err != nil {
 		return err
 	}
-	hash := olm.NewUtility().Sha256(string(publicKey) + string(canonical))
+	hash := olm.SHA256B64(append(publicKey, canonical...))
 	sasMethods := make([]event.SASMethod, len(methods))
 	for i, method := range methods {
 		sasMethods[i] = method.Type()

@@ -367,7 +367,7 @@ func (mach *OlmMachine) handleVerificationKey(ctx context.Context, userID id.Use
 
 	if verState.initiatedByUs {
 		// verify commitment string from accept message now
-		expectedCommitment := olm.NewUtility().Sha256(content.Key + verState.startEventCanonical)
+		expectedCommitment := olm.SHA256B64([]byte(content.Key + verState.startEventCanonical))
 		mach.Log.Debug().Msgf("Received commitment: %v Expected: %v", verState.commitment, expectedCommitment)
 		if expectedCommitment != verState.commitment {
 			mach.Log.Warn().Msgf("Canceling verification transaction %v due to commitment mismatch", transactionID)
@@ -716,7 +716,7 @@ func (mach *OlmMachine) SendSASVerificationAccept(ctx context.Context, fromUser 
 	if err != nil {
 		return err
 	}
-	hash := olm.NewUtility().Sha256(string(publicKey) + string(canonical))
+	hash := olm.SHA256B64(append(publicKey, canonical...))
 	sasMethods := make([]event.SASMethod, len(methods))
 	for i, method := range methods {
 		sasMethods[i] = method.Type()

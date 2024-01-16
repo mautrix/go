@@ -11,7 +11,7 @@ import (
 	"context"
 
 	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/crypto/olm"
+	"maunium.net/go/mautrix/crypto/signatures"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -80,7 +80,7 @@ func (mach *OlmMachine) storeCrossSigningKeys(ctx context.Context, crossSigningK
 					}
 
 					log.Debug().Msg("Verifying cross-signing key signature")
-					if verified, err := olm.VerifySignatureJSON(userKeys, signUserID, signKeyName, signingKey); err != nil {
+					if verified, err := signatures.VerifySignatureJSON(userKeys, signUserID, signKeyName, signingKey); err != nil {
 						log.Warn().Err(err).Msg("Error verifying cross-signing key signature")
 					} else {
 						if verified {
