@@ -110,12 +110,13 @@ func (a Account) IdentityKeys() (id.Ed25519, id.Curve25519) {
 	return ed25519, curve25519
 }
 
-// Sign returns the signature of a message using the Ed25519 key for this Account.
+// Sign returns the base64-encoded signature of a message using the Ed25519 key
+// for this Account.
 func (a Account) Sign(message []byte) ([]byte, error) {
 	if len(message) == 0 {
 		return nil, fmt.Errorf("sign: %w", goolm.ErrEmptyInput)
 	}
-	return goolm.Base64Encode(a.IdKeys.Ed25519.Sign(message)), nil
+	return []byte(base64.RawStdEncoding.EncodeToString(a.IdKeys.Ed25519.Sign(message))), nil
 }
 
 // OneTimeKeys returns the public parts of the unpublished one time keys of the Account.
