@@ -11,9 +11,11 @@
   (thanks to [@DerLukas15] in [#106]).
   * You can use the `goolm` build tag to the new implementation.
 * *(bridge)* Added context parameter for bridge command events.
+* *(bridge)* Added method to allow custom validation for the entire config.
 * *(client)* Changed default syncer to not drop unknown events.
   * The syncer will still drop known events if parsing the content fails.
   * The behavior can be changed by changing the `ParseErrorHandler` function.
+* *(crypto)* Fixed some places using math/rand instead of crypto/rand.
 
 [@DerLukas15]: https://github.com/DerLukas15
 [@recht]: https://github.com/recht

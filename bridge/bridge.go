@@ -135,6 +135,11 @@ type ChildOverride interface {
 	CreatePrivatePortal(id.RoomID, User, Ghost)
 }
 
+type ConfigValidatingBridge interface {
+	ChildOverride
+	ValidateConfig() error
+}
+
 type FlagHandlingBridge interface {
 	ChildOverride
 	HandleFlags() bool
@@ -469,7 +474,15 @@ func (br *Bridge) validateConfig() error {
 	case br.Config.AppService.Database.URI == "postgres://user:password@host/database?sslmode=disable":
 		return errors.New("appservice.database not configured")
 	default:
-		return br.Config.Bridge.Validate()
+		err := br.Config.Bridge.Validate()
+		if err != nil {
+			return err
+		}
+		validator, ok := br.Child.(ConfigValidatingBridge)
+		if ok {
+			return validator.ValidateConfig()
+		}
+		return nil
 	}
 }
 
