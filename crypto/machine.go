@@ -324,6 +324,44 @@ func (mach *OlmMachine) HandleMemberEvent(ctx context.Context, evt *event.Event)
 	}
 }
 
+func (mach *OlmMachine) HandleEncryptedEvent(ctx context.Context, evt *event.Event) {
+	if _, ok := evt.Content.Parsed.(*event.EncryptedEventContent); !ok {
+		mach.machOrContextLog(ctx).Warn().Msg("Passed invalid event to encrypted handler")
+		return
+	}
+
+	decryptedEvt, err := mach.decryptOlmEvent(ctx, evt)
+	if err != nil {
+		mach.machOrContextLog(ctx).Error().Err(err).Msg("Failed to decrypt to-device event")
+		return
+	}
+
+	log := mach.machOrContextLog(ctx).With().
+		Str("decrypted_type", decryptedEvt.Type.Type).
+		Str("sender_device", decryptedEvt.SenderDevice.String()).
+		Str("sender_signing_key", decryptedEvt.Keys.Ed25519.String()).
+		Logger()
+	log.Trace().Msg("Successfully decrypted to-device event")
+
+	switch decryptedContent := decryptedEvt.Content.Parsed.(type) {
+	case *event.RoomKeyEventContent:
+		mach.receiveRoomKey(ctx, decryptedEvt, decryptedContent)
+		log.Trace().Msg("Handled room key event")
+	case *event.ForwardedRoomKeyEventContent:
+		if mach.importForwardedRoomKey(ctx, decryptedEvt, decryptedContent) {
+			if ch, ok := mach.roomKeyRequestFilled.Load(decryptedContent.SessionID); ok {
+				// close channel to notify listener that the key was received
+				close(ch.(chan struct{}))
+			}
+		}
+		log.Trace().Msg("Handled forwarded room key event")
+	case *event.DummyEventContent:
+		log.Debug().Msg("Received encrypted dummy event")
+	default:
+		log.Debug().Msg("Unhandled encrypted to-device event")
+	}
+}
+
 // HandleToDeviceEvent handles a single to-device event. This is automatically called by ProcessSyncResponse, so you
 // don't need to add any custom handlers if you use that method.
 func (mach *OlmMachine) HandleToDeviceEvent(ctx context.Context, evt *event.Event) {
@@ -348,45 +386,12 @@ func (mach *OlmMachine) HandleToDeviceEvent(ctx context.Context, evt *event.Even
 	}
 	switch content := evt.Content.Parsed.(type) {
 	case *event.EncryptedEventContent:
-		log = log.With().
-			Str("sender_key", content.SenderKey.String()).
-			Logger()
-		log.Debug().Msg("Handling encrypted to-device event")
-		ctx = log.WithContext(ctx)
-		decryptedEvt, err := mach.decryptOlmEvent(ctx, evt)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to decrypt to-device event")
-			return
-		}
-		log = log.With().
-			Str("decrypted_type", decryptedEvt.Type.Type).
-			Str("sender_device", decryptedEvt.SenderDevice.String()).
-			Str("sender_signing_key", decryptedEvt.Keys.Ed25519.String()).
-			Logger()
-		log.Trace().Msg("Successfully decrypted to-device event")
-
-		switch decryptedContent := decryptedEvt.Content.Parsed.(type) {
-		case *event.RoomKeyEventContent:
-			mach.receiveRoomKey(ctx, decryptedEvt, decryptedContent)
-			log.Trace().Msg("Handled room key event")
-		case *event.ForwardedRoomKeyEventContent:
-			if mach.importForwardedRoomKey(ctx, decryptedEvt, decryptedContent) {
-				if ch, ok := mach.roomKeyRequestFilled.Load(decryptedContent.SessionID); ok {
-					// close channel to notify listener that the key was received
-					close(ch.(chan struct{}))
-				}
-			}
-			log.Trace().Msg("Handled forwarded room key event")
-		case *event.DummyEventContent:
-			log.Debug().Msg("Received encrypted dummy event")
-		default:
-			log.Debug().Msg("Unhandled encrypted to-device event")
-		}
+		mach.HandleEncryptedEvent(ctx, evt)
 		return
 	case *event.RoomKeyRequestEventContent:
-		go mach.handleRoomKeyRequest(ctx, evt.Sender, content)
+		go mach.HandleRoomKeyRequest(ctx, evt.Sender, content)
 	case *event.BeeperRoomKeyAckEventContent:
-		mach.handleBeeperRoomKeyAck(ctx, evt.Sender, content)
+		mach.HandleBeeperRoomKeyAck(ctx, evt.Sender, content)
 	// verification cases
 	case *event.VerificationStartEventContent:
 		mach.handleVerificationStart(ctx, evt.Sender, content, content.TransactionID, 10*time.Minute, "")
@@ -401,7 +406,7 @@ func (mach *OlmMachine) HandleToDeviceEvent(ctx context.Context, evt *event.Even
 	case *event.VerificationRequestEventContent:
 		mach.handleVerificationRequest(ctx, evt.Sender, content, content.TransactionID, "")
 	case *event.RoomKeyWithheldEventContent:
-		mach.handleRoomKeyWithheld(ctx, content)
+		mach.HandleRoomKeyWithheld(ctx, content)
 	default:
 		deviceID, _ := evt.Content.Raw["device_id"].(string)
 		log.Debug().Str("maybe_device_id", deviceID).Msg("Unhandled to-device event")
@@ -615,7 +620,7 @@ func (mach *OlmMachine) receiveRoomKey(ctx context.Context, evt *DecryptedOlmEve
 	mach.createGroupSession(ctx, evt.SenderKey, evt.Keys.Ed25519, content.RoomID, content.SessionID, content.SessionKey, maxAge, maxMessages, content.IsScheduled)
 }
 
-func (mach *OlmMachine) handleRoomKeyWithheld(ctx context.Context, content *event.RoomKeyWithheldEventContent) {
+func (mach *OlmMachine) HandleRoomKeyWithheld(ctx context.Context, content *event.RoomKeyWithheldEventContent) {
 	if content.Algorithm != id.AlgorithmMegolmV1 {
 		zerolog.Ctx(ctx).Debug().Interface("content", content).Msg("Non-megolm room key withheld event")
 		return

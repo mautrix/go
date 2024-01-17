@@ -248,7 +248,7 @@ func (mach *OlmMachine) defaultAllowKeyShare(ctx context.Context, device *id.Dev
 	}
 }
 
-func (mach *OlmMachine) handleRoomKeyRequest(ctx context.Context, sender id.UserID, content *event.RoomKeyRequestEventContent) {
+func (mach *OlmMachine) HandleRoomKeyRequest(ctx context.Context, sender id.UserID, content *event.RoomKeyRequestEventContent) {
 	log := zerolog.Ctx(ctx).With().
 		Str("request_id", content.RequestID).
 		Str("device_id", content.RequestingDeviceID.String()).
@@ -327,7 +327,7 @@ func (mach *OlmMachine) handleRoomKeyRequest(ctx context.Context, sender id.User
 	}
 }
 
-func (mach *OlmMachine) handleBeeperRoomKeyAck(ctx context.Context, sender id.UserID, content *event.BeeperRoomKeyAckEventContent) {
+func (mach *OlmMachine) HandleBeeperRoomKeyAck(ctx context.Context, sender id.UserID, content *event.BeeperRoomKeyAckEventContent) {
 	log := mach.machOrContextLog(ctx).With().
 		Str("room_id", content.RoomID.String()).
 		Str("session_id", content.SessionID.String()).
