@@ -121,7 +121,7 @@ func (mach *OlmMachine) importRoomKeyFromBackup(ctx context.Context, roomID id.R
 
 	igsInternal, err := olm.InboundGroupSessionImport(encoded)
 	if err != nil {
-		return fmt.Errorf("failed to import inbound group session: %w sessionid was %s", err, string(encoded))
+		return fmt.Errorf("failed to import inbound group session: %w", err)
 	} else if igsInternal.ID() != sessionID {
 		log.Warn().
 			Stringer("actual_session_id", igsInternal.ID()).
