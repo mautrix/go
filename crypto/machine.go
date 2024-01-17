@@ -33,8 +33,8 @@ type OlmMachine struct {
 
 	PlaintextMentions bool
 
-	// Never ask the server for keys automatically as a side effect.
-	DisableKeyFetching bool
+	// Never ask the server for keys automatically as a side effect during Megolm decryption.
+	DisableDecryptKeyFetching bool
 
 	SendKeysMinTrust  id.TrustState
 	ShareKeysMinTrust id.TrustState
@@ -227,11 +227,7 @@ func (mach *OlmMachine) HandleDeviceLists(ctx context.Context, dl *mautrix.Devic
 			Str("trace_id", traceID).
 			Interface("changes", dl.Changed).
 			Msg("Device list changes in /sync")
-		if mach.DisableKeyFetching {
-			mach.CryptoStore.MarkTrackedUsersOutdated(ctx, dl.Changed)
-		} else {
-			mach.FetchKeys(ctx, dl.Changed, false)
-		}
+		mach.FetchKeys(ctx, dl.Changed, false)
 		mach.Log.Debug().Str("trace_id", traceID).Msg("Finished handling device list changes")
 	}
 }
@@ -420,7 +416,7 @@ func (mach *OlmMachine) GetOrFetchDevice(ctx context.Context, userID id.UserID, 
 	device, err := mach.CryptoStore.GetDevice(ctx, userID, deviceID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get sender device from store: %w", err)
-	} else if device != nil || mach.DisableKeyFetching {
+	} else if device != nil {
 		return device, nil
 	}
 	if usersToDevices, err := mach.FetchKeys(ctx, []id.UserID{userID}, true); err != nil {
@@ -439,7 +435,7 @@ func (mach *OlmMachine) GetOrFetchDevice(ctx context.Context, userID id.UserID, 
 // the given identity key.
 func (mach *OlmMachine) GetOrFetchDeviceByKey(ctx context.Context, userID id.UserID, identityKey id.IdentityKey) (*id.Device, error) {
 	deviceIdentity, err := mach.CryptoStore.FindDeviceByKey(ctx, userID, identityKey)
-	if err != nil || deviceIdentity != nil || mach.DisableKeyFetching {
+	if err != nil || deviceIdentity != nil {
 		return deviceIdentity, err
 	}
 	mach.machOrContextLog(ctx).Debug().
