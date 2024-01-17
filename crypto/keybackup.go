@@ -2,6 +2,7 @@ package crypto
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"time"
 
@@ -84,6 +85,8 @@ func (mach *OlmMachine) DownloadAndStoreLatestKeyBackup(ctx context.Context, meg
 		return err
 	}
 
+	var count int
+
 	for roomID, backup := range keys.Rooms {
 		for sessionID, keyBackupData := range backup.Sessions {
 			sessionData, err := keyBackupData.SessionData.Decrypt(megolmBackupKey)
@@ -95,8 +98,11 @@ func (mach *OlmMachine) DownloadAndStoreLatestKeyBackup(ctx context.Context, meg
 			if err != nil {
 				return err
 			}
+			count++
 		}
 	}
+
+	log.Info().Int("count", count).Msg("successfully imported sessions from backup")
 
 	return nil
 }
@@ -110,9 +116,12 @@ func (mach *OlmMachine) importRoomKeyFromBackup(ctx context.Context, roomID id.R
 		return fmt.Errorf("ignoring room key in backup with weird algorithm %s", keyBackupData.Algorithm)
 	}
 
-	igsInternal, err := olm.InboundGroupSessionImport([]byte(keyBackupData.SessionKey))
+	encoded := make([]byte, base64.StdEncoding.EncodedLen(len(keyBackupData.SessionKey)))
+	base64.StdEncoding.Encode(encoded, keyBackupData.SessionKey)
+
+	igsInternal, err := olm.InboundGroupSessionImport(encoded)
 	if err != nil {
-		return fmt.Errorf("failed to import inbound group session: %w", err)
+		return fmt.Errorf("failed to import inbound group session: %w sessionid was %s", err, string(encoded))
 	} else if igsInternal.ID() != sessionID {
 		log.Warn().
 			Stringer("actual_session_id", igsInternal.ID()).
