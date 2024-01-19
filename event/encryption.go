@@ -176,4 +176,27 @@ func (withheld *RoomKeyWithheldEventContent) Is(other error) bool {
 	return withheld.Code == "" || otherWithheld.Code == "" || withheld.Code == otherWithheld.Code
 }
 
+type SecretRequestAction string
+
+func (a SecretRequestAction) String() string {
+	return string(a)
+}
+
+const (
+	SecretRequestRequest      = "request"
+	SecretRequestCancellation = "request_cancellation"
+)
+
+type SecretRequestEventContent struct {
+	Name               id.Secret           `json:"name,omitempty"`
+	Action             SecretRequestAction `json:"action"`
+	RequestingDeviceID id.DeviceID         `json:"requesting_device_id"`
+	RequestID          string              `json:"request_id"`
+}
+
+type SecretSendEventContent struct {
+	RequestID string `json:"request_id"`
+	Secret    string `json:"secret"`
+}
+
 type DummyEventContent struct{}

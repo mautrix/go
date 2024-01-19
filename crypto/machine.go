@@ -78,6 +78,9 @@ type OlmMachine struct {
 	DeleteKeysOnDeviceDelete     bool
 
 	DisableDeviceChangeKeyRotation bool
+
+	secretLock      sync.Mutex
+	secretListeners map[string]chan<- string
 }
 
 // StateStore is used by OlmMachine to get room state information that's needed for encryption.
@@ -119,6 +122,7 @@ func NewOlmMachine(client *mautrix.Client, log *zerolog.Logger, cryptoStore Stor
 
 		devicesToUnwedge: make(map[id.IdentityKey]bool),
 		recentlyUnwedged: make(map[id.IdentityKey]time.Time),
+		secretListeners:  make(map[string]chan<- string),
 	}
 	mach.AllowKeyShare = mach.defaultAllowKeyShare
 	return mach
@@ -357,6 +361,9 @@ func (mach *OlmMachine) HandleEncryptedEvent(ctx context.Context, evt *event.Eve
 		log.Trace().Msg("Handled forwarded room key event")
 	case *event.DummyEventContent:
 		log.Debug().Msg("Received encrypted dummy event")
+	case *event.SecretSendEventContent:
+		mach.receiveSecret(ctx, decryptedEvt, decryptedContent)
+		log.Trace().Msg("Handled secret send event")
 	default:
 		log.Debug().Msg("Unhandled encrypted to-device event")
 	}
@@ -407,6 +414,11 @@ func (mach *OlmMachine) HandleToDeviceEvent(ctx context.Context, evt *event.Even
 		mach.handleVerificationRequest(ctx, evt.Sender, content, content.TransactionID, "")
 	case *event.RoomKeyWithheldEventContent:
 		mach.HandleRoomKeyWithheld(ctx, content)
+	case *event.SecretRequestEventContent:
+		if content.Action == event.SecretRequestRequest {
+			mach.HandleSecretRequest(ctx, evt.Sender, content)
+			log.Trace().Msg("Handled secret request event")
+		}
 	default:
 		deviceID, _ := evt.Content.Raw["device_id"].(string)
 		log.Debug().Str("maybe_device_id", deviceID).Msg("Unhandled to-device event")

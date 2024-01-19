@@ -153,3 +153,17 @@ type CrossSigningKey struct {
 	Key   Ed25519
 	First Ed25519
 }
+
+// Secret storage keys
+type Secret string
+
+func (s Secret) String() string {
+	return string(s)
+}
+
+const (
+	SecretXSMaster       Secret = "m.cross_signing.master"
+	SecretXSSelfSigning  Secret = "m.cross_signing.self_signing"
+	SecretXSUserSigning  Secret = "m.cross_signing.user_signing"
+	SecretMegolmBackupV1 Secret = "m.megolm_backup.v1"
+)

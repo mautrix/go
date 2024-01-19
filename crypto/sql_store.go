@@ -21,6 +21,7 @@ import (
 	"go.mau.fi/util/dbutil"
 
 	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/crypto/goolm/cipher"
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/crypto/sql_store_upgrade"
 	"maunium.net/go/mautrix/event"
@@ -844,4 +845,31 @@ func (store *SQLCryptoStore) DropSignaturesByKey(ctx context.Context, userID id.
 		return 0, err
 	}
 	return count, nil
+}
+
+func (store *SQLCryptoStore) PutSecret(ctx context.Context, name id.Secret, value string) error {
+	bytes, err := cipher.Pickle(store.PickleKey, []byte(value))
+	if err != nil {
+		return err
+	}
+	_, err = store.DB.Exec(ctx, `
+		INSERT INTO crypto_secrets (name, secret) VALUES ($1, $2)
+		ON CONFLICT (name) DO UPDATE SET secret=excluded.secret
+	`, name, bytes)
+	return err
+}
+
+func (store *SQLCryptoStore) GetSecret(ctx context.Context, name id.Secret) (value string, err error) {
+	var bytes []byte
+	err = store.DB.QueryRow(ctx, `SELECT secret FROM crypto_secrets WHERE name=$1`, name).Scan(&bytes)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	bytes, err = cipher.Unpickle(store.PickleKey, bytes)
+	return string(bytes), err
+}
+
+func (store *SQLCryptoStore) DeleteSecret(ctx context.Context, name id.Secret) (err error) {
+	_, err = store.DB.Exec(ctx, "DELETE FROM crypto_secrets WHERE name=$1", name)
+	return
 }

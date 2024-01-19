@@ -123,6 +123,13 @@ type Store interface {
 	IsKeySignedBy(ctx context.Context, userID id.UserID, key id.Ed25519, signedByUser id.UserID, signedByKey id.Ed25519) (bool, error)
 	// DropSignaturesByKey deletes the signatures made by the given user and key from the store. It returns the number of signatures deleted.
 	DropSignaturesByKey(context.Context, id.UserID, id.Ed25519) (int64, error)
+
+	// PutSecret stores a named secret, replacing it if it exists already.
+	PutSecret(context.Context, id.Secret, string) error
+	// GetSecret returns a named secret.
+	GetSecret(context.Context, id.Secret) (string, error)
+	// DeleteSecret removes a named secret.
+	DeleteSecret(context.Context, id.Secret) error
 }
 
 type messageIndexKey struct {
@@ -153,6 +160,7 @@ type MemoryStore struct {
 	CrossSigningKeys      map[id.UserID]map[id.CrossSigningUsage]id.CrossSigningKey
 	KeySignatures         map[id.UserID]map[id.Ed25519]map[id.UserID]map[id.Ed25519]string
 	OutdatedUsers         map[id.UserID]struct{}
+	Secrets               map[id.Secret]string
 }
 
 var _ Store = (*MemoryStore)(nil)
@@ -173,6 +181,7 @@ func NewMemoryStore(saveCallback func() error) *MemoryStore {
 		CrossSigningKeys:      make(map[id.UserID]map[id.CrossSigningUsage]id.CrossSigningKey),
 		KeySignatures:         make(map[id.UserID]map[id.Ed25519]map[id.UserID]map[id.Ed25519]string),
 		OutdatedUsers:         make(map[id.UserID]struct{}),
+		Secrets:               make(map[id.Secret]string),
 	}
 }
 
@@ -644,4 +653,25 @@ func (gs *MemoryStore) DropSignaturesByKey(_ context.Context, userID id.UserID, 
 	}
 	gs.lock.RUnlock()
 	return count, nil
+}
+
+func (gs *MemoryStore) PutSecret(_ context.Context, name id.Secret, value string) error {
+	gs.lock.Lock()
+	gs.Secrets[name] = value
+	gs.lock.Unlock()
+	return nil
+}
+
+func (gs *MemoryStore) GetSecret(_ context.Context, name id.Secret) (value string, _ error) {
+	gs.lock.RLock()
+	value = gs.Secrets[name]
+	gs.lock.RUnlock()
+	return
+}
+
+func (gs *MemoryStore) DeleteSecret(_ context.Context, name id.Secret) error {
+	gs.lock.Lock()
+	delete(gs.Secrets, name)
+	gs.lock.Unlock()
+	return nil
 }
