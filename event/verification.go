@@ -12,7 +12,13 @@ import (
 
 type VerificationMethod string
 
-const VerificationMethodSAS VerificationMethod = "m.sas.v1"
+const (
+	VerificationMethodSAS VerificationMethod = "m.sas.v1"
+
+	VerificationMethodReciprocate VerificationMethod = "m.reciprocate.v1"
+	VerificationMethodQRCodeShow  VerificationMethod = "m.qr_code.show.v1"
+	VerificationMethodQRCodeScan  VerificationMethod = "m.qr_code.scan.v1"
+)
 
 // VerificationRequestEventContent represents the content of a m.key.verification.request to_device event.
 // https://spec.matrix.org/v1.2/client-server-api/#mkeyverificationrequest
