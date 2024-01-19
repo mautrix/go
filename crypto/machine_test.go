@@ -114,12 +114,14 @@ func TestOlmMachineOlmMegolmSessions(t *testing.T) {
 
 	for _, content := range content.OlmCiphertext {
 		// decrypt olm ciphertext
-		decrypted, err := machineIn.decryptAndParseOlmCiphertext(context.TODO(), "user1", senderKey, content.Type, content.Body)
+		decrypted, err := machineIn.decryptAndParseOlmCiphertext(context.TODO(), &event.Event{
+			Type:   event.ToDeviceEncrypted,
+			Sender: "user1",
+		}, senderKey, content.Type, content.Body)
 		if err != nil {
 			t.Errorf("Error decrypting olm content: %v", err)
 		}
 		// store room key in new inbound group session
-		decrypted.Content.ParseRaw(event.ToDeviceRoomKey)
 		roomKeyEvt := decrypted.Content.AsRoomKey()
 		igs, err := NewInboundGroupSession(senderKey, signingKey, "room1", roomKeyEvt.SessionKey, 0, 0, false)
 		if err != nil {

@@ -57,7 +57,7 @@ func (mach *OlmMachine) decryptOlmEvent(ctx context.Context, evt *event.Event) (
 	if !ok {
 		return nil, NotEncryptedForMe
 	}
-	decrypted, err := mach.decryptAndParseOlmCiphertext(ctx, evt.Sender, content.SenderKey, ownContent.Type, ownContent.Body)
+	decrypted, err := mach.decryptAndParseOlmCiphertext(ctx, evt, content.SenderKey, ownContent.Type, ownContent.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -69,13 +69,13 @@ type OlmEventKeys struct {
 	Ed25519 id.Ed25519 `json:"ed25519"`
 }
 
-func (mach *OlmMachine) decryptAndParseOlmCiphertext(ctx context.Context, sender id.UserID, senderKey id.SenderKey, olmType id.OlmMsgType, ciphertext string) (*DecryptedOlmEvent, error) {
+func (mach *OlmMachine) decryptAndParseOlmCiphertext(ctx context.Context, evt *event.Event, senderKey id.SenderKey, olmType id.OlmMsgType, ciphertext string) (*DecryptedOlmEvent, error) {
 	if olmType != id.OlmMsgTypePreKey && olmType != id.OlmMsgTypeMsg {
 		return nil, UnsupportedOlmMessageType
 	}
 
 	endTimeTrace := mach.timeTrace(ctx, "decrypting olm ciphertext", 5*time.Second)
-	plaintext, err := mach.tryDecryptOlmCiphertext(ctx, sender, senderKey, olmType, ciphertext)
+	plaintext, err := mach.tryDecryptOlmCiphertext(ctx, evt.Sender, senderKey, olmType, ciphertext)
 	endTimeTrace()
 	if err != nil {
 		return nil, err
@@ -88,7 +88,8 @@ func (mach *OlmMachine) decryptAndParseOlmCiphertext(ctx context.Context, sender
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse olm payload: %w", err)
 	}
-	if sender != olmEvt.Sender {
+	olmEvt.Type.Class = evt.Type.Class
+	if evt.Sender != olmEvt.Sender {
 		return nil, SenderMismatch
 	} else if mach.Client.UserID != olmEvt.Recipient {
 		return nil, RecipientMismatch
