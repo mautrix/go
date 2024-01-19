@@ -57,12 +57,14 @@ var TypeMap = map[Type]reflect.Type{
 	EphemeralEventReceipt:  reflect.TypeOf(ReceiptEventContent{}),
 	EphemeralEventPresence: reflect.TypeOf(PresenceEventContent{}),
 
-	InRoomVerificationStart:  reflect.TypeOf(VerificationStartEventContent{}),
 	InRoomVerificationReady:  reflect.TypeOf(VerificationReadyEventContent{}),
+	InRoomVerificationStart:  reflect.TypeOf(VerificationStartEventContent{}),
+	InRoomVerificationDone:   reflect.TypeOf(VerificationDoneEventContent{}),
+	InRoomVerificationCancel: reflect.TypeOf(VerificationCancelEventContent{}),
+
 	InRoomVerificationAccept: reflect.TypeOf(VerificationAcceptEventContent{}),
 	InRoomVerificationKey:    reflect.TypeOf(VerificationKeyEventContent{}),
 	InRoomVerificationMAC:    reflect.TypeOf(VerificationMacEventContent{}),
-	InRoomVerificationCancel: reflect.TypeOf(VerificationCancelEventContent{}),
 
 	ToDeviceRoomKey:          reflect.TypeOf(RoomKeyEventContent{}),
 	ToDeviceForwardedRoomKey: reflect.TypeOf(ForwardedRoomKeyEventContent{}),
@@ -73,13 +75,15 @@ var TypeMap = map[Type]reflect.Type{
 	ToDeviceSecretSend:       reflect.TypeOf(SecretSendEventContent{}),
 	ToDeviceDummy:            reflect.TypeOf(DummyEventContent{}),
 
-	ToDeviceVerificationStart:   reflect.TypeOf(VerificationStartEventContent{}),
-	ToDeviceVerificationAccept:  reflect.TypeOf(VerificationAcceptEventContent{}),
-	ToDeviceVerificationKey:     reflect.TypeOf(VerificationKeyEventContent{}),
-	ToDeviceVerificationMAC:     reflect.TypeOf(VerificationMacEventContent{}),
-	ToDeviceVerificationCancel:  reflect.TypeOf(VerificationCancelEventContent{}),
 	ToDeviceVerificationRequest: reflect.TypeOf(VerificationRequestEventContent{}),
 	ToDeviceVerificationReady:   reflect.TypeOf(VerificationReadyEventContent{}),
+	ToDeviceVerificationStart:   reflect.TypeOf(VerificationStartEventContent{}),
+	ToDeviceVerificationDone:    reflect.TypeOf(VerificationDoneEventContent{}),
+	ToDeviceVerificationCancel:  reflect.TypeOf(VerificationCancelEventContent{}),
+
+	ToDeviceVerificationAccept: reflect.TypeOf(VerificationAcceptEventContent{}),
+	ToDeviceVerificationKey:    reflect.TypeOf(VerificationKeyEventContent{}),
+	ToDeviceVerificationMAC:    reflect.TypeOf(VerificationMacEventContent{}),
 
 	ToDeviceOrgMatrixRoomKeyWithheld: reflect.TypeOf(RoomKeyWithheldEventContent{}),
 

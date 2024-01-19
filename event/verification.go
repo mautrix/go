@@ -166,6 +166,64 @@ func (vrec *VerificationReadyEventContent) SetRelatesTo(rel *RelatesTo) {
 	vrec.RelatesTo = rel
 }
 
+// VerificationDoneEventContent represents the content of a
+// m.key.verification.done event as described in [Section 11.12.2.1] of the
+// Matrix Spec.
+//
+// [Section 11.12.2.1]: https://spec.matrix.org/v1.9/client-server-api/#mkeyverificationdone
+type VerificationDoneEventContent struct {
+	// The opaque identifier for the verification process/request.
+	TransactionID string `json:"transaction_id,omitempty"`
+	// Original event ID for in-room verification.
+	RelatesTo *RelatesTo `json:"m.relates_to,omitempty"`
+}
+
+type VerificationCancelCode string
+
+const (
+	VerificationCancelByUser             VerificationCancelCode = "m.user"
+	VerificationCancelByTimeout          VerificationCancelCode = "m.timeout"
+	VerificationCancelUnknownTransaction VerificationCancelCode = "m.unknown_transaction"
+	VerificationCancelUnknownMethod      VerificationCancelCode = "m.unknown_method"
+	VerificationCancelUnexpectedMessage  VerificationCancelCode = "m.unexpected_message"
+	VerificationCancelKeyMismatch        VerificationCancelCode = "m.key_mismatch"
+	VerificationCancelUserMismatch       VerificationCancelCode = "m.user_mismatch"
+	VerificationCancelInvalidMessage     VerificationCancelCode = "m.invalid_message"
+	VerificationCancelAccepted           VerificationCancelCode = "m.accepted"
+	VerificationCancelSASMismatch        VerificationCancelCode = "m.mismatched_sas"
+	VerificationCancelCommitmentMismatch VerificationCancelCode = "m.mismatched_commitment"
+)
+
+// VerificationCancelEventContent represents the content of a m.key.verification.cancel to_device event.
+// https://spec.matrix.org/v1.2/client-server-api/#mkeyverificationcancel
+type VerificationCancelEventContent struct {
+	// The opaque identifier for the verification process/request.
+	TransactionID string `json:"transaction_id,omitempty"`
+	// A human readable description of the code. The client should only rely on this string if it does not understand the code.
+	Reason string `json:"reason"`
+	// The error code for why the process/request was cancelled by the user.
+	Code VerificationCancelCode `json:"code"`
+	// The user that the event is sent to for in-room verification.
+	To id.UserID `json:"to,omitempty"`
+	// Original event ID for in-room verification.
+	RelatesTo *RelatesTo `json:"m.relates_to,omitempty"`
+}
+
+func (vcec *VerificationCancelEventContent) GetRelatesTo() *RelatesTo {
+	if vcec.RelatesTo == nil {
+		vcec.RelatesTo = &RelatesTo{}
+	}
+	return vcec.RelatesTo
+}
+
+func (vcec *VerificationCancelEventContent) OptionalGetRelatesTo() *RelatesTo {
+	return vcec.RelatesTo
+}
+
+func (vcec *VerificationCancelEventContent) SetRelatesTo(rel *RelatesTo) {
+	vcec.RelatesTo = rel
+}
+
 // VerificationAcceptEventContent represents the content of a m.key.verification.accept to_device event.
 // https://spec.matrix.org/v1.2/client-server-api/#mkeyverificationaccept
 type VerificationAcceptEventContent struct {
@@ -260,50 +318,4 @@ func (vmec *VerificationMacEventContent) OptionalGetRelatesTo() *RelatesTo {
 
 func (vmec *VerificationMacEventContent) SetRelatesTo(rel *RelatesTo) {
 	vmec.RelatesTo = rel
-}
-
-type VerificationCancelCode string
-
-const (
-	VerificationCancelByUser             VerificationCancelCode = "m.user"
-	VerificationCancelByTimeout          VerificationCancelCode = "m.timeout"
-	VerificationCancelUnknownTransaction VerificationCancelCode = "m.unknown_transaction"
-	VerificationCancelUnknownMethod      VerificationCancelCode = "m.unknown_method"
-	VerificationCancelUnexpectedMessage  VerificationCancelCode = "m.unexpected_message"
-	VerificationCancelKeyMismatch        VerificationCancelCode = "m.key_mismatch"
-	VerificationCancelUserMismatch       VerificationCancelCode = "m.user_mismatch"
-	VerificationCancelInvalidMessage     VerificationCancelCode = "m.invalid_message"
-	VerificationCancelAccepted           VerificationCancelCode = "m.accepted"
-	VerificationCancelSASMismatch        VerificationCancelCode = "m.mismatched_sas"
-	VerificationCancelCommitmentMismatch VerificationCancelCode = "m.mismatched_commitment"
-)
-
-// VerificationCancelEventContent represents the content of a m.key.verification.cancel to_device event.
-// https://spec.matrix.org/v1.2/client-server-api/#mkeyverificationcancel
-type VerificationCancelEventContent struct {
-	// The opaque identifier for the verification process/request.
-	TransactionID string `json:"transaction_id,omitempty"`
-	// A human readable description of the code. The client should only rely on this string if it does not understand the code.
-	Reason string `json:"reason"`
-	// The error code for why the process/request was cancelled by the user.
-	Code VerificationCancelCode `json:"code"`
-	// The user that the event is sent to for in-room verification.
-	To id.UserID `json:"to,omitempty"`
-	// Original event ID for in-room verification.
-	RelatesTo *RelatesTo `json:"m.relates_to,omitempty"`
-}
-
-func (vcec *VerificationCancelEventContent) GetRelatesTo() *RelatesTo {
-	if vcec.RelatesTo == nil {
-		vcec.RelatesTo = &RelatesTo{}
-	}
-	return vcec.RelatesTo
-}
-
-func (vcec *VerificationCancelEventContent) OptionalGetRelatesTo() *RelatesTo {
-	return vcec.RelatesTo
-}
-
-func (vcec *VerificationCancelEventContent) SetRelatesTo(rel *RelatesTo) {
-	vcec.RelatesTo = rel
 }
