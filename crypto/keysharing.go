@@ -222,6 +222,21 @@ func (mach *OlmMachine) rejectKeyRequest(ctx context.Context, rejection KeyShare
 	}
 }
 
+// sendToOneDevice sends a to-device event to a single device.
+func (mach *OlmMachine) sendToOneDevice(ctx context.Context, userID id.UserID, deviceID id.DeviceID, eventType event.Type, content interface{}) error {
+	_, err := mach.Client.SendToDevice(ctx, eventType, &mautrix.ReqSendToDevice{
+		Messages: map[id.UserID]map[id.DeviceID]*event.Content{
+			userID: {
+				deviceID: {
+					Parsed: content,
+				},
+			},
+		},
+	})
+
+	return err
+}
+
 func (mach *OlmMachine) defaultAllowKeyShare(ctx context.Context, device *id.Device, evt event.RequestedKeyInfo) *KeyShareRejection {
 	log := mach.machOrContextLog(ctx)
 	if mach.Client.UserID != device.UserID {

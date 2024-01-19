@@ -44,10 +44,6 @@ type OlmMachine struct {
 
 	AllowKeyShare func(context.Context, *id.Device, event.RequestedKeyInfo) *KeyShareRejection
 
-	DefaultSASTimeout time.Duration
-	// AcceptVerificationFrom determines whether the machine will accept verification requests from this device.
-	AcceptVerificationFrom func(string, *id.Device, id.RoomID) (VerificationRequestResponse, VerificationHooks)
-
 	account *OlmAccount
 
 	roomKeyRequestFilled            *sync.Map
@@ -111,12 +107,6 @@ func NewOlmMachine(client *mautrix.Client, log *zerolog.Logger, cryptoStore Stor
 
 		SendKeysMinTrust:  id.TrustStateUnset,
 		ShareKeysMinTrust: id.TrustStateCrossSignedTOFU,
-
-		DefaultSASTimeout: 10 * time.Minute,
-		AcceptVerificationFrom: func(string, *id.Device, id.RoomID) (VerificationRequestResponse, VerificationHooks) {
-			// Reject requests by default. Users need to override this to return appropriate verification hooks.
-			return RejectRequest, nil
-		},
 
 		roomKeyRequestFilled:            &sync.Map{},
 		keyVerificationTransactionState: &sync.Map{},
@@ -412,19 +402,6 @@ func (mach *OlmMachine) HandleToDeviceEvent(ctx context.Context, evt *event.Even
 		go mach.HandleRoomKeyRequest(ctx, evt.Sender, content)
 	case *event.BeeperRoomKeyAckEventContent:
 		mach.HandleBeeperRoomKeyAck(ctx, evt.Sender, content)
-	// verification cases
-	case *event.VerificationStartEventContent:
-		mach.handleVerificationStart(ctx, evt.Sender, content, content.TransactionID, 10*time.Minute, "")
-	case *event.VerificationAcceptEventContent:
-		mach.handleVerificationAccept(ctx, evt.Sender, content, content.TransactionID)
-	case *event.VerificationKeyEventContent:
-		mach.handleVerificationKey(ctx, evt.Sender, content, content.TransactionID)
-	case *event.VerificationMacEventContent:
-		mach.handleVerificationMAC(ctx, evt.Sender, content, content.TransactionID)
-	case *event.VerificationCancelEventContent:
-		mach.handleVerificationCancel(evt.Sender, content, content.TransactionID)
-	case *event.VerificationRequestEventContent:
-		mach.handleVerificationRequest(ctx, evt.Sender, content, content.TransactionID, "")
 	case *event.RoomKeyWithheldEventContent:
 		mach.HandleRoomKeyWithheld(ctx, content)
 	case *event.SecretRequestEventContent:
