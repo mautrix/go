@@ -10,6 +10,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"maunium.net/go/mautrix/id"
 )
 
 type RoomType string
@@ -235,9 +237,9 @@ var (
 
 	AccountDataSecretStorageDefaultKey = Type{"m.secret_storage.default_key", AccountDataEventType}
 	AccountDataSecretStorageKey        = Type{"m.secret_storage.key", AccountDataEventType}
-	AccountDataCrossSigningMaster      = Type{"m.cross_signing.master", AccountDataEventType}
-	AccountDataCrossSigningUser        = Type{"m.cross_signing.user_signing", AccountDataEventType}
-	AccountDataCrossSigningSelf        = Type{"m.cross_signing.self_signing", AccountDataEventType}
+	AccountDataCrossSigningMaster      = Type{string(id.SecretXSMaster), AccountDataEventType}
+	AccountDataCrossSigningUser        = Type{string(id.SecretXSUserSigning), AccountDataEventType}
+	AccountDataCrossSigningSelf        = Type{string(id.SecretXSSelfSigning), AccountDataEventType}
 	AccountDataMegolmBackupKey         = Type{"m.megolm_backup.v1", AccountDataEventType}
 )
 
@@ -248,6 +250,8 @@ var (
 	ToDeviceForwardedRoomKey    = Type{"m.forwarded_room_key", ToDeviceEventType}
 	ToDeviceEncrypted           = Type{"m.room.encrypted", ToDeviceEventType}
 	ToDeviceRoomKeyWithheld     = Type{"m.room_key.withheld", ToDeviceEventType}
+	ToDeviceSecretRequest       = Type{"m.secret.request", ToDeviceEventType}
+	ToDeviceSecretSend          = Type{"m.secret.send", ToDeviceEventType}
 	ToDeviceDummy               = Type{"m.dummy", ToDeviceEventType}
 	ToDeviceVerificationRequest = Type{"m.key.verification.request", ToDeviceEventType}
 	ToDeviceVerificationStart   = Type{"m.key.verification.start", ToDeviceEventType}
