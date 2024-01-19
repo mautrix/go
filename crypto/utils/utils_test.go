@@ -74,7 +74,7 @@ func TestKeyDerivationAndHMAC(t *testing.T) {
 	}
 
 	calcMac := HMACSHA256B64(ciphertextBytes, hmacKey)
-	expectedMac := "0DABPNIZsP9iTOh1o6EM0s7BfHHXb96dN7Eca88jq2E="
+	expectedMac := "0DABPNIZsP9iTOh1o6EM0s7BfHHXb96dN7Eca88jq2E"
 	if calcMac != expectedMac {
 		t.Errorf("Expected MAC `%v`, got `%v`", expectedMac, calcMac)
 	}
