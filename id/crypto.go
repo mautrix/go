@@ -9,6 +9,8 @@ package id
 import (
 	"fmt"
 	"strings"
+
+	"go.mau.fi/util/random"
 )
 
 // OlmMsgType is an Olm message type
@@ -174,3 +176,15 @@ const (
 	SecretXSUserSigning  Secret = "m.cross_signing.user_signing"
 	SecretMegolmBackupV1 Secret = "m.megolm_backup.v1"
 )
+
+// VerificationTransactionID is a unique identifier for a verification
+// transaction.
+type VerificationTransactionID string
+
+func NewVerificationTransactionID() VerificationTransactionID {
+	return VerificationTransactionID(random.String(32))
+}
+
+func (t VerificationTransactionID) String() string {
+	return string(t)
+}
