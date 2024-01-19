@@ -87,8 +87,11 @@ func (key *Key) Encrypt(eventType string, data []byte) EncryptedKeyData {
 	aesKey, hmacKey := utils.DeriveKeysSHA256(key.Key, eventType)
 
 	iv := utils.GenA256CTRIV()
-	// TODO is the data inside the payload supposed to be unpadded or padded?
-	//      Which part of the spec even says to base64 encode the data inside?
+	// For some reason, keys in secret storage are base64 encoded before encrypting.
+	// Even more confusingly, it's a part of each key type's spec rather than the secrets spec.
+	// Key backup (`m.megolm_backup.v1`): https://spec.matrix.org/v1.9/client-server-api/#recovery-key
+	// Cross-signing (master, etc): https://spec.matrix.org/v1.9/client-server-api/#cross-signing (the very last paragraph)
+	// It's also not clear whether unpadded base64 is the right option, but assuming it is because everything else is unpadded.
 	payload := make([]byte, base64.RawStdEncoding.EncodedLen(len(data)))
 	base64.RawStdEncoding.Encode(payload, data)
 	utils.XorA256CTR(payload, aesKey, iv)
