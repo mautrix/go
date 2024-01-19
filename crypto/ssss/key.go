@@ -67,12 +67,12 @@ func NewKey(passphrase string) (*Key, error) {
 	if _, err := rand.Read(ivBytes[:]); err != nil {
 		return nil, fmt.Errorf("failed to get random bytes for IV: %w", err)
 	}
-	keyData.IV = base64.StdEncoding.EncodeToString(ivBytes[:])
+	keyData.IV = base64.RawStdEncoding.EncodeToString(ivBytes[:])
 	keyData.MAC = keyData.calculateHash(ssssKey)
 
 	return &Key{
 		Key:      ssssKey,
-		ID:       base64.StdEncoding.EncodeToString(keyIDBytes),
+		ID:       base64.RawStdEncoding.EncodeToString(keyIDBytes),
 		Metadata: &keyData,
 	}, nil
 }
@@ -87,13 +87,15 @@ func (key *Key) Encrypt(eventType string, data []byte) EncryptedKeyData {
 	aesKey, hmacKey := utils.DeriveKeysSHA256(key.Key, eventType)
 
 	iv := utils.GenA256CTRIV()
-	payload := make([]byte, base64.StdEncoding.EncodedLen(len(data)))
-	base64.StdEncoding.Encode(payload, data)
+	// TODO is the data inside the payload supposed to be unpadded or padded?
+	//      Which part of the spec even says to base64 encode the data inside?
+	payload := make([]byte, base64.RawStdEncoding.EncodedLen(len(data)))
+	base64.RawStdEncoding.Encode(payload, data)
 	utils.XorA256CTR(payload, aesKey, iv)
 
 	return EncryptedKeyData{
-		Ciphertext: base64.StdEncoding.EncodeToString(payload),
-		IV:         base64.StdEncoding.EncodeToString(iv[:]),
+		Ciphertext: base64.RawStdEncoding.EncodeToString(payload),
+		IV:         base64.RawStdEncoding.EncodeToString(iv[:]),
 		MAC:        utils.HMACSHA256B64(payload, hmacKey),
 	}
 }
@@ -101,10 +103,10 @@ func (key *Key) Encrypt(eventType string, data []byte) EncryptedKeyData {
 // Decrypt decrypts the given encrypted data with this key.
 func (key *Key) Decrypt(eventType string, data EncryptedKeyData) ([]byte, error) {
 	var ivBytes [utils.AESCTRIVLength]byte
-	decodedIV, _ := base64.StdEncoding.DecodeString(data.IV)
+	decodedIV, _ := base64.RawStdEncoding.DecodeString(strings.TrimRight(data.IV, "="))
 	copy(ivBytes[:], decodedIV)
 
-	payload, err := base64.StdEncoding.DecodeString(data.Ciphertext)
+	payload, err := base64.RawStdEncoding.DecodeString(strings.TrimRight(data.Ciphertext, "="))
 	if err != nil {
 		return nil, err
 	}
@@ -114,11 +116,11 @@ func (key *Key) Decrypt(eventType string, data EncryptedKeyData) ([]byte, error)
 
 	// compare the stored MAC with the one we calculated from the ciphertext
 	calcMac := utils.HMACSHA256B64(payload, hmacKey)
-	if strings.ReplaceAll(data.MAC, "=", "") != strings.ReplaceAll(calcMac, "=", "") {
+	if strings.TrimRight(data.MAC, "=") != calcMac {
 		return nil, ErrKeyDataMACMismatch
 	}
 
 	utils.XorA256CTR(payload, aesKey, ivBytes)
-	decryptedDecoded, err := base64.StdEncoding.DecodeString(string(payload))
+	decryptedDecoded, err := base64.RawStdEncoding.DecodeString(strings.TrimRight(string(payload), "="))
 	return decryptedDecoded, err
 }

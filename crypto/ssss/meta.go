@@ -19,9 +19,14 @@ import (
 type KeyMetadata struct {
 	id string
 
-	Algorithm  Algorithm           `json:"algorithm"`
-	IV         string              `json:"iv"`
-	MAC        string              `json:"mac"`
+	Name      string    `json:"name"`
+	Algorithm Algorithm `json:"algorithm"`
+
+	// Note: as per https://spec.matrix.org/v1.9/client-server-api/#msecret_storagev1aes-hmac-sha2,
+	// these fields are "maybe padded" base64, so both unpadded and padded values must be supported.
+	IV  string `json:"iv"`
+	MAC string `json:"mac"`
+
 	Passphrase *PassphraseMetadata `json:"passphrase,omitempty"`
 }
 
@@ -59,7 +64,7 @@ func (kd *KeyMetadata) VerifyRecoveryKey(recoverKey string) (*Key, error) {
 
 // VerifyKey verifies the SSSS key is valid by calculating and comparing its MAC.
 func (kd *KeyMetadata) VerifyKey(key []byte) bool {
-	return strings.ReplaceAll(kd.MAC, "=", "") == strings.ReplaceAll(kd.calculateHash(key), "=", "")
+	return strings.TrimRight(kd.MAC, "=") == kd.calculateHash(key)
 }
 
 // calculateHash calculates the hash used for checking if the key is entered correctly as described
@@ -68,7 +73,7 @@ func (kd *KeyMetadata) calculateHash(key []byte) string {
 	aesKey, hmacKey := utils.DeriveKeysSHA256(key, "")
 
 	var ivBytes [utils.AESCTRIVLength]byte
-	_, _ = base64.StdEncoding.Decode(ivBytes[:], []byte(kd.IV))
+	_, _ = base64.RawStdEncoding.Decode(ivBytes[:], []byte(strings.TrimRight(kd.IV, "=")))
 
 	cipher := utils.XorA256CTR(make([]byte, utils.AESCTRKeyLength), aesKey, ivBytes)
 
