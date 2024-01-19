@@ -6,34 +6,16 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 
+	"go.mau.fi/util/jsonbytes"
 	"golang.org/x/crypto/hkdf"
 
 	"maunium.net/go/mautrix/crypto/aescbc"
 )
 
 var ErrInvalidMAC = errors.New("invalid MAC")
-
-// UnpaddedBytes is a byte slice that is encoded and decoded using
-// [base64.RawStdEncoding].
-type UnpaddedBytes []byte
-
-func (b UnpaddedBytes) MarshalJSON() ([]byte, error) {
-	return json.Marshal(base64.RawStdEncoding.EncodeToString(b))
-}
-
-func (b *UnpaddedBytes) UnmarshalJSON(data []byte) error {
-	var b64str string
-	err := json.Unmarshal(data, &b64str)
-	if err != nil {
-		return err
-	}
-	*b, err = base64.RawStdEncoding.DecodeString(b64str)
-	return err
-}
 
 // EncryptedSessionData is the encrypted session_data field of a key backup as
 // defined in [Section 11.12.3.2.2 of the Spec].
@@ -43,9 +25,9 @@ func (b *UnpaddedBytes) UnmarshalJSON(data []byte) error {
 //
 // [Section 11.12.3.2.2 of the Spec]: https://spec.matrix.org/v1.9/client-server-api/#backup-algorithm-mmegolm_backupv1curve25519-aes-sha2
 type EncryptedSessionData[T any] struct {
-	Ciphertext UnpaddedBytes `json:"ciphertext"`
-	Ephemeral  EphemeralKey  `json:"ephemeral"`
-	MAC        UnpaddedBytes `json:"mac"`
+	Ciphertext jsonbytes.UnpaddedBytes `json:"ciphertext"`
+	Ephemeral  EphemeralKey            `json:"ephemeral"`
+	MAC        jsonbytes.UnpaddedBytes `json:"mac"`
 }
 
 func calculateEncryptionParameters(sharedSecret []byte) (key, macKey, iv []byte, err error) {
