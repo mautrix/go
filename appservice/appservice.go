@@ -56,6 +56,8 @@ func Create() *AppService {
 		OTKCounts:      make(chan *mautrix.OTKCount, OTKChannelSize),
 		DeviceLists:    make(chan *mautrix.DeviceLists, EventChannelSize),
 		QueryHandler:   &QueryHandlerStub{},
+
+		DefaultHTTPRetries: 4,
 	}
 
 	as.Router.HandleFunc("/_matrix/app/v1/transactions/{txnID}", as.PutTransaction).Methods(http.MethodPut)
@@ -67,6 +69,47 @@ func Create() *AppService {
 
 	return as
 }
+
+// CreateOpts contains the options for initializing a new [AppService] instance.
+type CreateOpts struct {
+	// Required, the registration file data for this appservice.
+	Registration *Registration
+	// Required, the homeserver's server_name.
+	HomeserverDomain string
+	// Required, the homeserver URL to connect to. May be an unix:/path/to/socket URL.
+	HomeserverURL string
+	// Required if you want to use the standard HTTP server, optional for websockets (non-standard)
+	HostConfig HostConfig
+	// Optional, defaults to a memory state store
+	StateStore StateStore
+}
+
+// CreateFull creates a fully configured appservice instance that can be [Start]ed and used directly.
+func CreateFull(opts CreateOpts) (*AppService, error) {
+	if opts.HomeserverDomain == "" {
+		return nil, fmt.Errorf("missing homeserver domain")
+	} else if opts.HomeserverURL == "" {
+		return nil, fmt.Errorf("missing homeserver URL")
+	} else if opts.Registration == nil {
+		return nil, fmt.Errorf("missing registration")
+	}
+	as := Create()
+	as.HomeserverDomain = opts.HomeserverDomain
+	as.Host = opts.HostConfig
+	as.Registration = opts.Registration
+	err := as.SetHomeserverURL(opts.HomeserverURL)
+	if err != nil {
+		return nil, err
+	}
+	if opts.StateStore != nil {
+		as.StateStore = opts.StateStore
+	} else {
+		as.StateStore = mautrix.NewMemoryStateStore().(StateStore)
+	}
+	return as, nil
+}
+
+var _ StateStore = (*mautrix.MemoryStateStore)(nil)
 
 // QueryHandler handles room alias and user ID queries from the homeserver.
 type QueryHandler interface {

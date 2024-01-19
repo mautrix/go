@@ -6,6 +6,8 @@
   appservice endpoints.
 * *(bridge)* Bumped minimum Matrix spec version to v1.4.
 * *(bridge)* Fixed `RawArgs` field in command events of command state callbacks.
+* *(appservice)* Added `CreateFull` helper function for creating an `AppService`
+  instance with all the mandatory fields set.
 
 ## v0.17.0 (2024-01-16)
 

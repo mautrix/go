@@ -567,11 +567,24 @@ func (br *Bridge) init() {
 	br.ZLog.Debug().Msg("Initializing state store")
 	br.StateStore = sqlstatestore.NewSQLStateStore(br.DB, dbutil.ZeroLogger(br.ZLog.With().Str("db_section", "matrix_state").Logger()), true)
 
-	br.AS = br.Config.MakeAppService()
+	br.AS, err = appservice.CreateFull(appservice.CreateOpts{
+		Registration:     br.Config.AppService.GetRegistration(),
+		HomeserverDomain: br.Config.Homeserver.Domain,
+		HomeserverURL:    br.Config.Homeserver.Address,
+		HostConfig: appservice.HostConfig{
+			Hostname: br.Config.AppService.Hostname,
+			Port:     br.Config.AppService.Port,
+		},
+		StateStore: br.StateStore,
+	})
+	if err != nil {
+		br.ZLog.WithLevel(zerolog.FatalLevel).Err(err).
+			Msg("Failed to initialize appservice")
+		os.Exit(15)
+	}
+	br.AS.Log = *br.ZLog
 	br.AS.DoublePuppetValue = br.Name
 	br.AS.GetProfile = br.getProfile
-	br.AS.Log = *br.ZLog
-	br.AS.StateStore = br.StateStore
 	br.Bot = br.AS.BotIntent()
 
 	br.ZLog.Debug().Msg("Initializing Matrix event processor")

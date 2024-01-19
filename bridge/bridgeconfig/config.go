@@ -106,7 +106,6 @@ func (config *BaseConfig) MakeAppService() *appservice.AppService {
 	_ = as.SetHomeserverURL(config.Homeserver.Address)
 	as.Host.Hostname = config.AppService.Hostname
 	as.Host.Port = config.AppService.Port
-	as.DefaultHTTPRetries = 4
 	as.Registration = config.AppService.GetRegistration()
 	return as
 }
