@@ -35,6 +35,19 @@ type CryptoHelper interface {
 	Init(context.Context) error
 }
 
+type VerificationHelper interface {
+	Init(context.Context) error
+	StartVerification(ctx context.Context, to id.UserID) (id.VerificationTransactionID, error)
+	StartInRoomVerification(ctx context.Context, roomID id.RoomID, to id.UserID) (id.VerificationTransactionID, error)
+	AcceptVerification(ctx context.Context, txnID id.VerificationTransactionID) error
+
+	HandleScannedQRData(ctx context.Context, data []byte) error
+	ConfirmQRCodeScanned(ctx context.Context, txnID id.VerificationTransactionID) error
+
+	StartSAS(ctx context.Context, txnID id.VerificationTransactionID) error
+	ConfirmSAS(ctx context.Context, txnID id.VerificationTransactionID) error
+}
+
 // Deprecated: switch to zerolog
 type Logger interface {
 	Debugfln(message string, args ...interface{})
@@ -58,6 +71,7 @@ type Client struct {
 	Store         SyncStore    // The thing which can store tokens/ids
 	StateStore    StateStore
 	Crypto        CryptoHelper
+	Verification  VerificationHelper
 
 	Log zerolog.Logger
 	// Deprecated: switch to the zerolog instance in Log

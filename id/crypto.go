@@ -7,6 +7,7 @@
 package id
 
 import (
+	"encoding/base64"
 	"fmt"
 	"strings"
 
@@ -74,6 +75,12 @@ func (ed25519 Ed25519) String() string {
 	return string(ed25519)
 }
 
+func (ed25519 Ed25519) Bytes() []byte {
+	val, _ := base64.RawStdEncoding.DecodeString(string(ed25519))
+	// TODO handle errors
+	return val
+}
+
 func (ed25519 Ed25519) Fingerprint() string {
 	spacedSigningKey := make([]byte, len(ed25519)+(len(ed25519)-1)/4)
 	var ptr = 0
@@ -95,6 +102,12 @@ type IdentityKey = Curve25519
 
 func (curve25519 Curve25519) String() string {
 	return string(curve25519)
+}
+
+func (curve25519 Curve25519) Bytes() []byte {
+	val, _ := base64.RawStdEncoding.DecodeString(string(curve25519))
+	// TODO handle errors
+	return val
 }
 
 // A DeviceID is an arbitrary string that references a specific device.

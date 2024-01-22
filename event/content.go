@@ -513,3 +513,38 @@ func (content *Content) AsModPolicy() *ModPolicyContent {
 	}
 	return casted
 }
+func (content *Content) AsVerificationRequest() *VerificationRequestEventContent {
+	casted, ok := content.Parsed.(*VerificationRequestEventContent)
+	if !ok {
+		return &VerificationRequestEventContent{}
+	}
+	return casted
+}
+func (content *Content) AsVerificationReady() *VerificationReadyEventContent {
+	casted, ok := content.Parsed.(*VerificationReadyEventContent)
+	if !ok {
+		return &VerificationReadyEventContent{}
+	}
+	return casted
+}
+func (content *Content) AsVerificationStart() *VerificationStartEventContent {
+	casted, ok := content.Parsed.(*VerificationStartEventContent)
+	if !ok {
+		return &VerificationStartEventContent{}
+	}
+	return casted
+}
+func (content *Content) AsVerificationDone() *VerificationDoneEventContent {
+	casted, ok := content.Parsed.(*VerificationDoneEventContent)
+	if !ok {
+		return &VerificationDoneEventContent{}
+	}
+	return casted
+}
+func (content *Content) AsVerificationCancel() *VerificationCancelEventContent {
+	casted, ok := content.Parsed.(*VerificationCancelEventContent)
+	if !ok {
+		return &VerificationCancelEventContent{}
+	}
+	return casted
+}
