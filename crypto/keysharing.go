@@ -222,11 +222,19 @@ func (mach *OlmMachine) rejectKeyRequest(ctx context.Context, rejection KeyShare
 	}
 }
 
-func (mach *OlmMachine) defaultAllowKeyShare(ctx context.Context, device *id.Device, _ event.RequestedKeyInfo) *KeyShareRejection {
+func (mach *OlmMachine) defaultAllowKeyShare(ctx context.Context, device *id.Device, evt event.RequestedKeyInfo) *KeyShareRejection {
 	log := mach.machOrContextLog(ctx)
 	if mach.Client.UserID != device.UserID {
-		log.Debug().Msg("Rejecting key request from a different user")
-		return &KeyShareRejectOtherUser
+		isShared, err := mach.CryptoStore.IsOutboundGroupSessionShared(ctx, device.UserID, device.IdentityKey, evt.SessionID)
+		if err != nil {
+			log.Err(err).Msg("Rejecting key request due to internal error when checking session sharing")
+			return &KeyShareRejectNoResponse
+		} else if !isShared {
+			log.Debug().Msg("Rejecting key request for unshared session")
+			return &KeyShareRejectOtherUser
+		}
+		log.Debug().Msg("Accepting key request for shared session")
+		return nil
 	} else if mach.Client.DeviceID == device.DeviceID {
 		log.Debug().Msg("Ignoring key request from ourselves")
 		return &KeyShareRejectNoResponse

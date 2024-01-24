@@ -84,6 +84,10 @@ type Store interface {
 	GetOutboundGroupSession(context.Context, id.RoomID) (*OutboundGroupSession, error)
 	// RemoveOutboundGroupSession removes the stored outbound Megolm session for the given room ID.
 	RemoveOutboundGroupSession(context.Context, id.RoomID) error
+	// MarkOutboutGroupSessionShared flags that the currently known device has been shared the keys for the specified session.
+	MarkOutboundGroupSessionShared(context.Context, id.UserID, id.IdentityKey, id.SessionID) error
+	// IsOutboutGroupSessionShared checks if the specified session has been shared with the device.
+	IsOutboundGroupSessionShared(context.Context, id.UserID, id.IdentityKey, id.SessionID) (bool, error)
 
 	// ValidateMessageIndex validates that the given message details aren't from a replay attack.
 	//
@@ -155,6 +159,7 @@ type MemoryStore struct {
 	GroupSessions         map[id.RoomID]map[id.SenderKey]map[id.SessionID]*InboundGroupSession
 	WithheldGroupSessions map[id.RoomID]map[id.SenderKey]map[id.SessionID]*event.RoomKeyWithheldEventContent
 	OutGroupSessions      map[id.RoomID]*OutboundGroupSession
+	SharedGroupSessions   map[id.UserID]map[id.IdentityKey]map[id.SessionID]struct{}
 	MessageIndices        map[messageIndexKey]messageIndexValue
 	Devices               map[id.UserID]map[id.DeviceID]*id.Device
 	CrossSigningKeys      map[id.UserID]map[id.CrossSigningUsage]id.CrossSigningKey
@@ -176,6 +181,7 @@ func NewMemoryStore(saveCallback func() error) *MemoryStore {
 		GroupSessions:         make(map[id.RoomID]map[id.SenderKey]map[id.SessionID]*InboundGroupSession),
 		WithheldGroupSessions: make(map[id.RoomID]map[id.SenderKey]map[id.SessionID]*event.RoomKeyWithheldEventContent),
 		OutGroupSessions:      make(map[id.RoomID]*OutboundGroupSession),
+		SharedGroupSessions:   make(map[id.UserID]map[id.IdentityKey]map[id.SessionID]struct{}),
 		MessageIndices:        make(map[messageIndexKey]messageIndexValue),
 		Devices:               make(map[id.UserID]map[id.DeviceID]*id.Device),
 		CrossSigningKeys:      make(map[id.UserID]map[id.CrossSigningUsage]id.CrossSigningKey),
@@ -433,6 +439,41 @@ func (gs *MemoryStore) RemoveOutboundGroupSession(_ context.Context, roomID id.R
 	delete(gs.OutGroupSessions, roomID)
 	gs.lock.Unlock()
 	return nil
+}
+
+func (gs *MemoryStore) MarkOutboundGroupSessionShared(_ context.Context, userID id.UserID, identityKey id.IdentityKey, sessionID id.SessionID) error {
+	gs.lock.Lock()
+
+	if _, ok := gs.SharedGroupSessions[userID]; !ok {
+		gs.SharedGroupSessions[userID] = make(map[id.IdentityKey]map[id.SessionID]struct{})
+	}
+	identities := gs.SharedGroupSessions[userID]
+
+	if _, ok := identities[identityKey]; !ok {
+		identities[identityKey] = make(map[id.SessionID]struct{})
+	}
+
+	identities[identityKey][sessionID] = struct{}{}
+
+	gs.lock.Unlock()
+	return nil
+}
+
+func (gs *MemoryStore) IsOutboundGroupSessionShared(_ context.Context, userID id.UserID, identityKey id.IdentityKey, sessionID id.SessionID) (isShared bool, err error) {
+	gs.lock.Lock()
+	defer gs.lock.Unlock()
+
+	if _, ok := gs.SharedGroupSessions[userID]; !ok {
+		return
+	}
+	identities := gs.SharedGroupSessions[userID]
+
+	if _, ok := identities[identityKey]; !ok {
+		return
+	}
+
+	_, isShared = identities[identityKey][sessionID]
+	return
 }
 
 func (gs *MemoryStore) ValidateMessageIndex(_ context.Context, senderKey id.SenderKey, sessionID id.SessionID, eventID id.EventID, index uint, timestamp int64) (bool, error) {

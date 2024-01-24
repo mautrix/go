@@ -36,6 +36,9 @@ type OlmMachine struct {
 	// Never ask the server for keys automatically as a side effect during Megolm decryption.
 	DisableDecryptKeyFetching bool
 
+	// Don't mark outbound Olm sessions as shared for devices they were initially sent to.
+	DisableSharedGroupSessionTracking bool
+
 	SendKeysMinTrust  id.TrustState
 	ShareKeysMinTrust id.TrustState
 
