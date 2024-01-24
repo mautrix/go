@@ -1,4 +1,4 @@
--- v0 -> v12 (compatible with v9+): Latest revision
+-- v0 -> v13 (compatible with v9+): Latest revision
 CREATE TABLE IF NOT EXISTS crypto_account (
 	account_id TEXT    PRIMARY KEY,
 	device_id  TEXT    NOT NULL,
@@ -73,6 +73,14 @@ CREATE TABLE IF NOT EXISTS crypto_megolm_outbound_session (
 	created_at    timestamp NOT NULL,
 	last_used     timestamp NOT NULL,
 	PRIMARY KEY (account_id, room_id)
+);
+
+CREATE TABLE IF NOT EXISTS crypto_megolm_outbound_session_shared (
+	user_id      TEXT     NOT NULL,
+	identity_key CHAR(43) NOT NULL,
+	session_id   CHAR(43) NOT NULL,
+
+	PRIMARY KEY (user_id, identity_key, session_id)
 );
 
 CREATE TABLE IF NOT EXISTS crypto_cross_signing_keys (

@@ -569,6 +569,20 @@ func (store *SQLCryptoStore) RemoveOutboundGroupSession(ctx context.Context, roo
 	return err
 }
 
+func (store *SQLCryptoStore) MarkOutboundGroupSessionShared(ctx context.Context, userID id.UserID, identityKey id.IdentityKey, sessionID id.SessionID) error {
+	_, err := store.DB.Exec(ctx, "INSERT INTO crypto_megolm_outbound_session_shared (user_id, identity_key, session_id) VALUES ($1, $2, $3)", userID, identityKey, sessionID)
+	return err
+}
+
+func (store *SQLCryptoStore) IsOutboundGroupSessionShared(ctx context.Context, userID id.UserID, identityKey id.IdentityKey, sessionID id.SessionID) (shared bool, err error) {
+	err = store.DB.QueryRow(ctx, `SELECT TRUE FROM crypto_megolm_outbound_session_shared WHERE user_id=$1 AND identity_key=$2 AND session_id=$3`,
+		userID, identityKey, sessionID).Scan(&shared)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = nil
+	}
+	return
+}
+
 // ValidateMessageIndex returns whether the given event information match the ones stored in the database
 // for the given sender key, session ID and index. If the index hasn't been stored, this will store it.
 func (store *SQLCryptoStore) ValidateMessageIndex(ctx context.Context, senderKey id.SenderKey, sessionID id.SessionID, eventID id.EventID, index uint, timestamp int64) (bool, error) {
