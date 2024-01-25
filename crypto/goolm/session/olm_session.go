@@ -117,7 +117,7 @@ func NewOutboundOlmSession(identityKeyAlice crypto.Curve25519KeyPair, identityKe
 
 // NewInboundOlmSession creates a new inbound session from receiving the first message.
 func NewInboundOlmSession(identityKeyAlice *crypto.Curve25519PublicKey, receivedOTKMsg []byte, searchBobOTK SearchOTKFunc, identityKeyBob crypto.Curve25519KeyPair) (*OlmSession, error) {
-	decodedOTKMsg, err := goolm.Base64Decode(receivedOTKMsg)
+	decodedOTKMsg, err := base64.RawStdEncoding.DecodeString(string(receivedOTKMsg))
 	if err != nil {
 		return nil, err
 	}
@@ -210,8 +210,7 @@ func (s OlmSession) ID() id.SessionID {
 	copy(message[crypto.Curve25519KeyLength:], s.AliceBaseKey)
 	copy(message[2*crypto.Curve25519KeyLength:], s.BobOneTimeKey)
 	hash := crypto.SHA256(message)
-	res := id.SessionID(goolm.Base64Encode(hash))
-	return res
+	return id.SessionID(base64.RawStdEncoding.EncodeToString(hash))
 }
 
 // HasReceivedMessage returns true if this session has received any message.
@@ -227,7 +226,7 @@ func (s OlmSession) MatchesInboundSessionFrom(theirIdentityKeyEncoded *id.Curve2
 	if len(receivedOTKMsg) == 0 {
 		return false, fmt.Errorf("inbound match: %w", goolm.ErrEmptyInput)
 	}
-	decodedOTKMsg, err := goolm.Base64Decode(receivedOTKMsg)
+	decodedOTKMsg, err := base64.RawStdEncoding.DecodeString(string(receivedOTKMsg))
 	if err != nil {
 		return false, err
 	}
@@ -300,7 +299,7 @@ func (s *OlmSession) Encrypt(plaintext []byte, reader io.Reader) (id.OlmMsgType,
 		result = messageBody
 	}
 
-	return messageType, goolm.Base64Encode(result), nil
+	return messageType, []byte(base64.RawStdEncoding.EncodeToString(result)), nil
 }
 
 // Decrypt decrypts a base64 encoded message using the Session.
@@ -308,7 +307,7 @@ func (s *OlmSession) Decrypt(crypttext []byte, msgType id.OlmMsgType) ([]byte, e
 	if len(crypttext) == 0 {
 		return nil, fmt.Errorf("decrypt: %w", goolm.ErrEmptyInput)
 	}
-	decodedCrypttext, err := goolm.Base64Decode(crypttext)
+	decodedCrypttext, err := base64.RawStdEncoding.DecodeString(string(crypttext))
 	if err != nil {
 		return nil, err
 	}

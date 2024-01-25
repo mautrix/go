@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"testing"
 
-	"maunium.net/go/mautrix/crypto/goolm"
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
 	"maunium.net/go/mautrix/crypto/goolm/pk"
 	"maunium.net/go/mautrix/id"
@@ -67,7 +66,7 @@ func TestSigning(t *testing.T) {
 	message := []byte("We hold these truths to be self-evident, that all men are created equal, that they are endowed by their Creator with certain unalienable Rights, that among these are Life, Liberty and the pursuit of Happiness.")
 	signing, _ := pk.NewSigningFromSeed(seed)
 	signature := signing.Sign(message)
-	signatureDecoded, err := goolm.Base64Decode(signature)
+	signatureDecoded, err := base64.RawStdEncoding.DecodeString(string(signature))
 	if err != nil {
 		t.Fatal(err)
 	}

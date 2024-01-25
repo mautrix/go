@@ -5,7 +5,6 @@ import (
 
 	"maunium.net/go/mautrix/id"
 
-	"maunium.net/go/mautrix/crypto/goolm"
 	"maunium.net/go/mautrix/crypto/goolm/cipher"
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
 )
@@ -45,5 +44,5 @@ func (e Encryption) Encrypt(plaintext []byte, privateKey crypto.Curve25519Privat
 	if err != nil {
 		return nil, nil, err
 	}
-	return ciphertext, goolm.Base64Encode(mac), nil
+	return ciphertext, []byte(base64.RawStdEncoding.EncodeToString(mac)), nil
 }
