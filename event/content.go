@@ -548,3 +548,24 @@ func (content *Content) AsVerificationCancel() *VerificationCancelEventContent {
 	}
 	return casted
 }
+func (content *Content) AsVerificationAccept() *VerificationAcceptEventContent {
+	casted, ok := content.Parsed.(*VerificationAcceptEventContent)
+	if !ok {
+		return &VerificationAcceptEventContent{}
+	}
+	return casted
+}
+func (content *Content) AsVerificationKey() *VerificationKeyEventContent {
+	casted, ok := content.Parsed.(*VerificationKeyEventContent)
+	if !ok {
+		return &VerificationKeyEventContent{}
+	}
+	return casted
+}
+func (content *Content) AsVerificationMAC() *VerificationMacEventContent {
+	casted, ok := content.Parsed.(*VerificationMacEventContent)
+	if !ok {
+		return &VerificationMacEventContent{}
+	}
+	return casted
+}

@@ -12,6 +12,7 @@ import (
 	"crypto/ecdh"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/jsontime"
@@ -79,6 +80,7 @@ type verificationTransaction struct {
 	StartedByUs              bool                                 // Whether the verification was started by us
 	StartEventContent        *event.VerificationStartEventContent // The m.key.verification.start event content
 	Commitment               []byte                               // The commitment from the m.key.verification.accept event
+	MACMethod                event.MACMethod                      // The method used to calculate the MAC
 	EphemeralKey             *ecdh.PrivateKey                     // The ephemeral key
 	EphemeralPublicKeyShared bool                                 // Whether this device's ephemeral public key has been shared
 	OtherPublicKey           *ecdh.PublicKey                      // The other device's ephemeral public key
@@ -103,9 +105,9 @@ type RequiredCallbacks interface {
 }
 
 type showSASCallbacks interface {
-	// ShowSAS is called when the SAS verification has generated a short
-	// authentication string to show. It is guaranteed that either the emojis
-	// list, or the decimals list, or both will be present.
+	// ShowSAS is a callback that is called when the SAS verification has
+	// generated a short authentication string to show. It is guaranteed that
+	// either the emojis list, or the decimals list, or both will be present.
 	ShowSAS(ctx context.Context, txnID id.VerificationTransactionID, emojis []rune, decimals []int)
 }
 
@@ -163,13 +165,9 @@ func NewVerificationHelper(client *mautrix.Client, mach *crypto.OlmMachine, call
 		helper.verificationDone = c.VerificationDone
 	}
 
-	if c, ok := callbacks.(showEmojiCallbacks); ok {
+	if c, ok := callbacks.(showSASCallbacks); ok {
 		helper.supportedMethods = append(helper.supportedMethods, event.VerificationMethodSAS)
-		helper.showEmojis = c.ShowEmojis
-	}
-	if c, ok := callbacks.(showDecimalCallbacks); ok {
-		helper.supportedMethods = append(helper.supportedMethods, event.VerificationMethodSAS)
-		helper.showDecimal = c.ShowDecimal
+		helper.showSAS = c.ShowSAS
 	}
 	if c, ok := callbacks.(showQRCodeCallbacks); ok {
 		helper.supportedMethods = append(helper.supportedMethods,
@@ -579,6 +577,7 @@ func (vh *VerificationHelper) onVerificationStart(ctx context.Context, txn *veri
 		Str("verification_action", "verification start").
 		Str("method", string(startEvt.Method)).
 		Logger()
+	ctx = log.WithContext(ctx)
 
 	if txn.VerificationStep != verificationStepReady {
 		log.Warn().Msg("Ignoring verification start event for a transaction that is not in the ready state")
@@ -590,11 +589,7 @@ func (vh *VerificationHelper) onVerificationStart(ctx context.Context, txn *veri
 
 	switch startEvt.Method {
 	case event.VerificationMethodSAS:
-		// TODO
-		log.Info().Msg("Received SAS verification start event")
-		err := vh.onVerificationStartSAS(ctx, txn, evt)
-		if err != nil {
-			// TODO should we cancel on all errors?
+		if err := vh.onVerificationStartSAS(ctx, txn, evt); err != nil {
 			vh.verificationError(ctx, txn.TransactionID, fmt.Errorf("failed to handle SAS verification start: %w", err))
 		}
 	case event.VerificationMethodReciprocate:
@@ -622,6 +617,7 @@ func (vh *VerificationHelper) onVerificationDone(ctx context.Context, txn *verif
 	vh.activeTransactionsLock.Lock()
 	defer vh.activeTransactionsLock.Unlock()
 	delete(vh.activeTransactions, txn.TransactionID)
+	vh.verificationDone(ctx, txn.TransactionID)
 }
 
 func (vh *VerificationHelper) onVerificationCancel(ctx context.Context, txn *verificationTransaction, evt *event.Event) {
@@ -636,20 +632,4 @@ func (vh *VerificationHelper) onVerificationCancel(ctx context.Context, txn *ver
 	defer vh.activeTransactionsLock.Unlock()
 	delete(vh.activeTransactions, txn.TransactionID)
 	vh.verificationCancelled(ctx, txn.TransactionID, cancelEvt.Code, cancelEvt.Reason)
-}
-
-// SAS verification events
-func (vh *VerificationHelper) onVerificationAccept(ctx context.Context, txn *verificationTransaction, evt *event.Event) {
-	// TODO
-	vh.getLog(ctx).Error().Any("evt", evt).Msg("ACCEPT UNIMPLEMENTED")
-}
-
-func (vh *VerificationHelper) onVerificationKey(ctx context.Context, txn *verificationTransaction, evt *event.Event) {
-	// TODO
-	vh.getLog(ctx).Error().Any("evt", evt).Msg("KEY UNIMPLEMENTED")
-}
-
-func (vh *VerificationHelper) onVerificationMAC(ctx context.Context, txn *verificationTransaction, evt *event.Event) {
-	// TODO
-	vh.getLog(ctx).Error().Any("evt", evt).Msg("MAC UNIMPLEMENTED")
 }
