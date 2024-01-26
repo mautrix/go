@@ -8,6 +8,7 @@ import (
 
 	"github.com/rs/zerolog"
 
+	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto/backup"
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/crypto/signatures"
@@ -18,16 +19,30 @@ func (mach *OlmMachine) DownloadAndStoreLatestKeyBackup(ctx context.Context, meg
 	log := mach.machOrContextLog(ctx).With().
 		Str("action", "download and store latest key backup").
 		Logger()
-	versionInfo, err := mach.Client.GetKeyBackupLatestVersion(ctx)
+
+	ctx = log.WithContext(ctx)
+
+	versionInfo, err := mach.GetAndVerifyLatestKeyBackupVersion(ctx)
 	if err != nil {
 		return err
+	} else if versionInfo == nil {
+		return nil
+	}
+
+	return mach.GetAndStoreKeyBackup(ctx, versionInfo.Version, megolmBackupKey)
+}
+
+func (mach *OlmMachine) GetAndVerifyLatestKeyBackupVersion(ctx context.Context) (*mautrix.RespRoomKeysVersion[backup.MegolmAuthData], error) {
+	versionInfo, err := mach.Client.GetKeyBackupLatestVersion(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	if versionInfo.Algorithm != id.KeyBackupAlgorithmMegolmBackupV1 {
-		return fmt.Errorf("unsupported key backup algorithm: %s", versionInfo.Algorithm)
+		return nil, fmt.Errorf("unsupported key backup algorithm: %s", versionInfo.Algorithm)
 	}
 
-	log = log.With().
+	log := mach.machOrContextLog(ctx).With().
 		Int("count", versionInfo.Count).
 		Str("etag", versionInfo.ETag).
 		Str("key_backup_version", versionInfo.Version).
@@ -35,12 +50,12 @@ func (mach *OlmMachine) DownloadAndStoreLatestKeyBackup(ctx context.Context, meg
 
 	if versionInfo.Count == 0 {
 		log.Debug().Msg("No keys found in key backup")
-		return nil
+		return nil, nil
 	}
 
 	userSignatures, ok := versionInfo.AuthData.Signatures[mach.Client.UserID]
 	if !ok {
-		return fmt.Errorf("no signature from user %s found in key backup", mach.Client.UserID)
+		return nil, fmt.Errorf("no signature from user %s found in key backup", mach.Client.UserID)
 	}
 
 	crossSigningPubkeys := mach.GetOwnCrossSigningPublicKeys(ctx)
@@ -77,13 +92,19 @@ func (mach *OlmMachine) DownloadAndStoreLatestKeyBackup(ctx context.Context, meg
 		}
 	}
 	if !signatureVerified {
-		return fmt.Errorf("no valid signature from user %s found in key backup", mach.Client.UserID)
+		return nil, fmt.Errorf("no valid signature from user %s found in key backup", mach.Client.UserID)
 	}
 
-	keys, err := mach.Client.GetKeyBackup(ctx, versionInfo.Version)
+	return versionInfo, nil
+}
+
+func (mach *OlmMachine) GetAndStoreKeyBackup(ctx context.Context, version string, megolmBackupKey *backup.MegolmBackupKey) error {
+	keys, err := mach.Client.GetKeyBackup(ctx, version)
 	if err != nil {
 		return err
 	}
+
+	log := zerolog.Ctx(ctx)
 
 	var count, failedCount int
 
@@ -96,7 +117,7 @@ func (mach *OlmMachine) DownloadAndStoreLatestKeyBackup(ctx context.Context, meg
 				continue
 			}
 
-			err = mach.importRoomKeyFromBackup(ctx, roomID, sessionID, sessionData)
+			err = mach.ImportRoomKeyFromBackup(ctx, roomID, sessionID, sessionData)
 			if err != nil {
 				log.Warn().Err(err).Msg("Failed to import room key from backup")
 				failedCount++
@@ -114,7 +135,7 @@ func (mach *OlmMachine) DownloadAndStoreLatestKeyBackup(ctx context.Context, meg
 	return nil
 }
 
-func (mach *OlmMachine) importRoomKeyFromBackup(ctx context.Context, roomID id.RoomID, sessionID id.SessionID, keyBackupData *backup.MegolmSessionData) error {
+func (mach *OlmMachine) ImportRoomKeyFromBackup(ctx context.Context, roomID id.RoomID, sessionID id.SessionID, keyBackupData *backup.MegolmSessionData) error {
 	log := zerolog.Ctx(ctx).With().
 		Str("room_id", roomID.String()).
 		Str("session_id", sessionID.String()).
