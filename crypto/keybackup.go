@@ -85,24 +85,31 @@ func (mach *OlmMachine) DownloadAndStoreLatestKeyBackup(ctx context.Context, meg
 		return err
 	}
 
-	var count int
+	var count, failedCount int
 
 	for roomID, backup := range keys.Rooms {
 		for sessionID, keyBackupData := range backup.Sessions {
 			sessionData, err := keyBackupData.SessionData.Decrypt(megolmBackupKey)
 			if err != nil {
-				return err
+				log.Warn().Err(err).Msg("Failed to decrypt session data")
+				failedCount++
+				continue
 			}
 
 			err = mach.importRoomKeyFromBackup(ctx, roomID, sessionID, sessionData)
 			if err != nil {
-				return err
+				log.Warn().Err(err).Msg("Failed to import room key from backup")
+				failedCount++
+				continue
 			}
 			count++
 		}
 	}
 
-	log.Info().Int("count", count).Msg("successfully imported sessions from backup")
+	log.Info().
+		Int("count", count).
+		Int("failed_count", failedCount).
+		Msg("successfully imported sessions from backup")
 
 	return nil
 }
