@@ -352,3 +352,23 @@ func TestStoreDevices(t *testing.T) {
 		})
 	}
 }
+
+func TestStoreSecrets(t *testing.T) {
+	stores := getCryptoStores(t)
+	for storeName, store := range stores {
+		t.Run(storeName, func(t *testing.T) {
+			storedSecret := "trustno1"
+			err := store.PutSecret(context.TODO(), id.SecretMegolmBackupV1, storedSecret)
+			if err != nil {
+				t.Errorf("Error storing secret: %v", err)
+			}
+
+			secret, err := store.GetSecret(context.TODO(), id.SecretMegolmBackupV1)
+			if err != nil {
+				t.Errorf("Error storing secret: %v", err)
+			} else if secret != storedSecret {
+				t.Errorf("Stored secret did not match: '%s' != '%s'", secret, storedSecret)
+			}
+		})
+	}
+}
