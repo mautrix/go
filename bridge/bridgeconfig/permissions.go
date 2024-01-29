@@ -20,13 +20,15 @@ type PermissionLevel int
 const (
 	PermissionLevelBlock PermissionLevel = 0
 	PermissionLevelRelay PermissionLevel = 5
-	PermissionLevelUser  PermissionLevel = 10
+	PermissionLevelLogin PermissionLevel = 10
+	PermissionLevelUser  PermissionLevel = 15
 	PermissionLevelAdmin PermissionLevel = 100
 )
 
 var namesToLevels = map[string]PermissionLevel{
 	"block": PermissionLevelBlock,
 	"relay": PermissionLevelRelay,
+	"login": PermissionLevelLogin,
 	"user":  PermissionLevelUser,
 	"admin": PermissionLevelAdmin,
 }
