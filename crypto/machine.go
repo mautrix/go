@@ -152,11 +152,21 @@ func (mach *OlmMachine) Load(ctx context.Context) (err error) {
 	return nil
 }
 
-func (mach *OlmMachine) saveAccount(ctx context.Context) {
+func (mach *OlmMachine) saveAccount(ctx context.Context) error {
 	err := mach.CryptoStore.PutAccount(ctx, mach.account)
 	if err != nil {
 		mach.Log.Error().Err(err).Msg("Failed to save account")
 	}
+	return err
+}
+
+func (mach *OlmMachine) KeyBackupVersion() id.KeyBackupVersion {
+	return mach.account.KeyBackupVersion
+}
+
+func (mach *OlmMachine) SetKeyBackupVersion(ctx context.Context, version id.KeyBackupVersion) error {
+	mach.account.KeyBackupVersion = version
+	return mach.saveAccount(ctx)
 }
 
 // FlushStore calls the Flush method of the CryptoStore.
@@ -698,8 +708,7 @@ func (mach *OlmMachine) ShareKeys(ctx context.Context, currentOTKCount int) erro
 	}
 	mach.lastOTKUpload = time.Now()
 	mach.account.Shared = true
-	mach.saveAccount(ctx)
-	return nil
+	return mach.saveAccount(ctx)
 }
 
 func (mach *OlmMachine) ExpiredKeyDeleteLoop(ctx context.Context) {

@@ -1,10 +1,11 @@
--- v0 -> v13 (compatible with v9+): Latest revision
+-- v0 -> v14 (compatible with v9+): Latest revision
 CREATE TABLE IF NOT EXISTS crypto_account (
-	account_id TEXT    PRIMARY KEY,
-	device_id  TEXT    NOT NULL,
-	shared     BOOLEAN NOT NULL,
-	sync_token TEXT    NOT NULL,
-	account    bytea   NOT NULL
+	account_id         TEXT    PRIMARY KEY,
+	device_id          TEXT    NOT NULL,
+	shared             BOOLEAN NOT NULL,
+	sync_token         TEXT    NOT NULL,
+	account            bytea   NOT NULL,
+	key_backup_version TEXT    NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS crypto_message_index (
@@ -44,20 +45,21 @@ CREATE TABLE IF NOT EXISTS crypto_olm_session (
 );
 
 CREATE TABLE IF NOT EXISTS crypto_megolm_inbound_session (
-	account_id        TEXT,
-	session_id        CHAR(43),
-	sender_key        CHAR(43) NOT NULL,
-	signing_key       CHAR(43),
-	room_id           TEXT     NOT NULL,
-	session           bytea,
-	forwarding_chains bytea,
-	withheld_code     TEXT,
-	withheld_reason   TEXT,
-	ratchet_safety    jsonb,
-	received_at       timestamp,
-	max_age           BIGINT,
-	max_messages      INTEGER,
-	is_scheduled      BOOLEAN NOT NULL DEFAULT false,
+	account_id         TEXT,
+	session_id         CHAR(43),
+	sender_key         CHAR(43) NOT NULL,
+	signing_key        CHAR(43),
+	room_id            TEXT     NOT NULL,
+	session            bytea,
+	forwarding_chains  bytea,
+	withheld_code      TEXT,
+	withheld_reason    TEXT,
+	ratchet_safety     jsonb,
+	received_at        timestamp,
+	max_age            BIGINT,
+	max_messages       INTEGER,
+	is_scheduled       BOOLEAN NOT NULL DEFAULT false,
+	key_backup_version TEXT NOT NULL DEFAULT '',
 	PRIMARY KEY (account_id, session_id)
 );
 

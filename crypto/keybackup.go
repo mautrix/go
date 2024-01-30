@@ -15,7 +15,7 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-func (mach *OlmMachine) DownloadAndStoreLatestKeyBackup(ctx context.Context, megolmBackupKey *backup.MegolmBackupKey) error {
+func (mach *OlmMachine) DownloadAndStoreLatestKeyBackup(ctx context.Context, megolmBackupKey *backup.MegolmBackupKey) (id.KeyBackupVersion, error) {
 	log := mach.machOrContextLog(ctx).With().
 		Str("action", "download and store latest key backup").
 		Logger()
@@ -24,12 +24,13 @@ func (mach *OlmMachine) DownloadAndStoreLatestKeyBackup(ctx context.Context, meg
 
 	versionInfo, err := mach.GetAndVerifyLatestKeyBackupVersion(ctx)
 	if err != nil {
-		return err
+		return "", err
 	} else if versionInfo == nil {
-		return nil
+		return "", nil
 	}
 
-	return mach.GetAndStoreKeyBackup(ctx, versionInfo.Version, megolmBackupKey)
+	err = mach.GetAndStoreKeyBackup(ctx, versionInfo.Version, megolmBackupKey)
+	return versionInfo.Version, err
 }
 
 func (mach *OlmMachine) GetAndVerifyLatestKeyBackupVersion(ctx context.Context) (*mautrix.RespRoomKeysVersion[backup.MegolmAuthData], error) {
@@ -45,7 +46,7 @@ func (mach *OlmMachine) GetAndVerifyLatestKeyBackupVersion(ctx context.Context) 
 	log := mach.machOrContextLog(ctx).With().
 		Int("count", versionInfo.Count).
 		Str("etag", versionInfo.ETag).
-		Str("key_backup_version", versionInfo.Version).
+		Stringer("key_backup_version", versionInfo.Version).
 		Logger()
 
 	userSignatures, ok := versionInfo.AuthData.Signatures[mach.Client.UserID]
@@ -93,7 +94,7 @@ func (mach *OlmMachine) GetAndVerifyLatestKeyBackupVersion(ctx context.Context) 
 	return versionInfo, nil
 }
 
-func (mach *OlmMachine) GetAndStoreKeyBackup(ctx context.Context, version string, megolmBackupKey *backup.MegolmBackupKey) error {
+func (mach *OlmMachine) GetAndStoreKeyBackup(ctx context.Context, version id.KeyBackupVersion, megolmBackupKey *backup.MegolmBackupKey) error {
 	keys, err := mach.Client.GetKeyBackup(ctx, version)
 	if err != nil {
 		return err
@@ -112,7 +113,7 @@ func (mach *OlmMachine) GetAndStoreKeyBackup(ctx context.Context, version string
 				continue
 			}
 
-			err = mach.ImportRoomKeyFromBackup(ctx, roomID, sessionID, sessionData)
+			err = mach.ImportRoomKeyFromBackup(ctx, version, roomID, sessionID, sessionData)
 			if err != nil {
 				log.Warn().Err(err).Msg("Failed to import room key from backup")
 				failedCount++
@@ -130,7 +131,7 @@ func (mach *OlmMachine) GetAndStoreKeyBackup(ctx context.Context, version string
 	return nil
 }
 
-func (mach *OlmMachine) ImportRoomKeyFromBackup(ctx context.Context, roomID id.RoomID, sessionID id.SessionID, keyBackupData *backup.MegolmSessionData) error {
+func (mach *OlmMachine) ImportRoomKeyFromBackup(ctx context.Context, version id.KeyBackupVersion, roomID id.RoomID, sessionID id.SessionID, keyBackupData *backup.MegolmSessionData) error {
 	log := zerolog.Ctx(ctx).With().
 		Str("room_id", roomID.String()).
 		Str("session_id", sessionID.String()).
@@ -166,9 +167,10 @@ func (mach *OlmMachine) ImportRoomKeyFromBackup(ctx context.Context, roomID id.R
 		ForwardingChains: append(keyBackupData.ForwardingKeyChain, keyBackupData.SenderKey.String()),
 		id:               sessionID,
 
-		ReceivedAt:  time.Now().UTC(),
-		MaxAge:      maxAge.Milliseconds(),
-		MaxMessages: maxMessages,
+		ReceivedAt:       time.Now().UTC(),
+		MaxAge:           maxAge.Milliseconds(),
+		MaxMessages:      maxMessages,
+		KeyBackupVersion: version,
 	}
 	err = mach.CryptoStore.PutGroupSession(ctx, roomID, keyBackupData.SenderKey, sessionID, igs)
 	if err != nil {

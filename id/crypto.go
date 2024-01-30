@@ -50,6 +50,13 @@ const (
 	KeyBackupAlgorithmMegolmBackupV1 KeyBackupAlgorithm = "m.megolm_backup.v1.curve25519-aes-sha2"
 )
 
+// BackupVersion is an arbitrary string that identifies a server side key backup.
+type KeyBackupVersion string
+
+func (version KeyBackupVersion) String() string {
+	return string(version)
+}
+
 // A SessionID is an arbitrary string that identifies an Olm or Megolm session.
 type SessionID string
 

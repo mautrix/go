@@ -12,6 +12,8 @@ import (
 	"sort"
 	"sync"
 
+	"go.mau.fi/util/dbutil"
+
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
@@ -68,10 +70,12 @@ type Store interface {
 
 	// GetGroupSessionsForRoom gets all the inbound Megolm sessions for a specific room. This is used for creating key
 	// export files. Unlike GetGroupSession, this should not return any errors about withheld keys.
-	GetGroupSessionsForRoom(context.Context, id.RoomID) ([]*InboundGroupSession, error)
+	GetGroupSessionsForRoom(context.Context, id.RoomID) dbutil.RowIter[*InboundGroupSession]
 	// GetAllGroupSessions gets all the inbound Megolm sessions in the store. This is used for creating key export
 	// files. Unlike GetGroupSession, this should not return any errors about withheld keys.
-	GetAllGroupSessions(context.Context) ([]*InboundGroupSession, error)
+	GetAllGroupSessions(context.Context) dbutil.RowIter[*InboundGroupSession]
+	// GetGroupSessionsWithoutKeyBackupVersion gets all the inbound Megolm sessions in the store that do not match given key backup version.
+	GetGroupSessionsWithoutKeyBackupVersion(context.Context, id.KeyBackupVersion) dbutil.RowIter[*InboundGroupSession]
 
 	// AddOutboundGroupSession inserts the given outbound Megolm session into the store.
 	//
@@ -376,12 +380,12 @@ func (gs *MemoryStore) GetWithheldGroupSession(_ context.Context, roomID id.Room
 	return session, nil
 }
 
-func (gs *MemoryStore) GetGroupSessionsForRoom(_ context.Context, roomID id.RoomID) ([]*InboundGroupSession, error) {
+func (gs *MemoryStore) GetGroupSessionsForRoom(_ context.Context, roomID id.RoomID) dbutil.RowIter[*InboundGroupSession] {
 	gs.lock.Lock()
 	defer gs.lock.Unlock()
 	room, ok := gs.GroupSessions[roomID]
 	if !ok {
-		return []*InboundGroupSession{}, nil
+		return nil
 	}
 	var result []*InboundGroupSession
 	for _, sessions := range room {
@@ -389,10 +393,10 @@ func (gs *MemoryStore) GetGroupSessionsForRoom(_ context.Context, roomID id.Room
 			result = append(result, session)
 		}
 	}
-	return result, nil
+	return dbutil.NewSliceIter[*InboundGroupSession](result)
 }
 
-func (gs *MemoryStore) GetAllGroupSessions(_ context.Context) ([]*InboundGroupSession, error) {
+func (gs *MemoryStore) GetAllGroupSessions(_ context.Context) dbutil.RowIter[*InboundGroupSession] {
 	gs.lock.Lock()
 	var result []*InboundGroupSession
 	for _, room := range gs.GroupSessions {
@@ -403,7 +407,23 @@ func (gs *MemoryStore) GetAllGroupSessions(_ context.Context) ([]*InboundGroupSe
 		}
 	}
 	gs.lock.Unlock()
-	return result, nil
+	return dbutil.NewSliceIter[*InboundGroupSession](result)
+}
+
+func (gs *MemoryStore) GetGroupSessionsWithoutKeyBackupVersion(_ context.Context, version id.KeyBackupVersion) dbutil.RowIter[*InboundGroupSession] {
+	gs.lock.Lock()
+	var result []*InboundGroupSession
+	for _, room := range gs.GroupSessions {
+		for _, sessions := range room {
+			for _, session := range sessions {
+				if session.KeyBackupVersion != version {
+					result = append(result, session)
+				}
+			}
+		}
+	}
+	gs.lock.Unlock()
+	return dbutil.NewSliceIter[*InboundGroupSession](result)
 }
 
 func (gs *MemoryStore) AddOutboundGroupSession(_ context.Context, session *OutboundGroupSession) error {
