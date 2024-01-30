@@ -72,7 +72,7 @@ func (fh *FullHandler) GetAliases() []string {
 	return fh.Aliases
 }
 
-func (fh *FullHandler) GetMinPermission() bridgeconfig.PermissionLevel {
+func (fh *FullHandler) GetMinPermissionLevel() bridgeconfig.PermissionLevel {
 	if fh.RequiresAdmin {
 		return bridgeconfig.PermissionLevelAdmin
 	} else if fh.RequiresMatrixPuppeting {
@@ -85,7 +85,7 @@ func (fh *FullHandler) GetMinPermission() bridgeconfig.PermissionLevel {
 }
 
 func (fh *FullHandler) ShowInHelp(ce *Event) bool {
-	return ce.User.GetPermissionLevel() >= fh.GetMinPermission()
+	return ce.User.GetPermissionLevel() >= fh.GetMinPermissionLevel()
 }
 
 func (fh *FullHandler) userHasRoomPermission(ce *Event) bool {
