@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"maunium.net/go/mautrix/id"
+	"github.com/element-hq/mautrix-go/id"
 )
 
 type PermissionConfig map[string]PermissionLevel

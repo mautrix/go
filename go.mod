@@ -1,4 +1,4 @@
-module maunium.net/go/mautrix
+module github.com/element-hq/mautrix-go
 
 go 1.20
 

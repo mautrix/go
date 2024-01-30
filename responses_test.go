@@ -14,8 +14,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/crypto/canonicaljson"
+	"github.com/element-hq/mautrix-go"
+	"github.com/element-hq/mautrix-go/crypto/canonicaljson"
 )
 
 const sampleData = `{

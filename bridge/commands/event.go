@@ -13,12 +13,12 @@ import (
 	"github.com/rs/zerolog"
 	"maunium.net/go/maulogger/v2"
 
-	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/appservice"
-	"maunium.net/go/mautrix/bridge"
-	"maunium.net/go/mautrix/event"
-	"maunium.net/go/mautrix/format"
-	"maunium.net/go/mautrix/id"
+	"github.com/element-hq/mautrix-go"
+	"github.com/element-hq/mautrix-go/appservice"
+	"github.com/element-hq/mautrix-go/bridge"
+	"github.com/element-hq/mautrix-go/event"
+	"github.com/element-hq/mautrix-go/format"
+	"github.com/element-hq/mautrix-go/id"
 )
 
 // Event stores all data which might be used to handle commands

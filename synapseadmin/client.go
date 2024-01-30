@@ -7,7 +7,7 @@
 package synapseadmin
 
 import (
-	"maunium.net/go/mautrix"
+	"github.com/element-hq/mautrix-go"
 )
 
 // Client is a wrapper for the mautrix.Client struct that includes methods for accessing the Synapse admin API.

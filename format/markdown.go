@@ -14,8 +14,8 @@ import (
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/renderer/html"
 
-	"maunium.net/go/mautrix/event"
-	"maunium.net/go/mautrix/format/mdext"
+	"github.com/element-hq/mautrix-go/event"
+	"github.com/element-hq/mautrix-go/format/mdext"
 )
 
 const paragraphStart = "<p>"

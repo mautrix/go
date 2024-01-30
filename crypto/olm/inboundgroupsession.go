@@ -8,7 +8,7 @@ import (
 	"encoding/base64"
 	"unsafe"
 
-	"maunium.net/go/mautrix/id"
+	"github.com/element-hq/mautrix-go/id"
 )
 
 // InboundGroupSession stores an inbound encrypted messaging session for a

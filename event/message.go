@@ -13,8 +13,8 @@ import (
 
 	"golang.org/x/net/html"
 
-	"maunium.net/go/mautrix/crypto/attachment"
-	"maunium.net/go/mautrix/id"
+	"github.com/element-hq/mautrix-go/crypto/attachment"
+	"github.com/element-hq/mautrix-go/id"
 )
 
 // MessageType is the sub-type of a m.room.message event.

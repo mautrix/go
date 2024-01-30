@@ -15,7 +15,7 @@ import (
 	"hash"
 	"io"
 
-	"maunium.net/go/mautrix/crypto/utils"
+	"github.com/element-hq/mautrix-go/crypto/utils"
 )
 
 var (

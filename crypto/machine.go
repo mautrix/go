@@ -15,11 +15,11 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"maunium.net/go/mautrix/crypto/ssss"
-	"maunium.net/go/mautrix/id"
+	"github.com/element-hq/mautrix-go/crypto/ssss"
+	"github.com/element-hq/mautrix-go/id"
 
-	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/event"
+	"github.com/element-hq/mautrix-go"
+	"github.com/element-hq/mautrix-go/event"
 )
 
 // OlmMachine is the main struct for handling Matrix end-to-end encryption.

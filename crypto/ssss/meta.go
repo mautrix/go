@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"strings"
 
-	"maunium.net/go/mautrix/crypto/utils"
+	"github.com/element-hq/mautrix-go/crypto/utils"
 )
 
 // KeyMetadata represents server-side metadata about a SSSS key. The metadata can be used to get

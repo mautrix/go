@@ -9,7 +9,7 @@ package commands
 import (
 	"strconv"
 
-	"maunium.net/go/mautrix/id"
+	"github.com/element-hq/mautrix-go/id"
 )
 
 var CommandDiscardMegolmSession = &FullHandler{

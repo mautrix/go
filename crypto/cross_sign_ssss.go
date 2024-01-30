@@ -9,10 +9,10 @@ package crypto
 import (
 	"fmt"
 
-	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/crypto/ssss"
-	"maunium.net/go/mautrix/crypto/utils"
-	"maunium.net/go/mautrix/event"
+	"github.com/element-hq/mautrix-go"
+	"github.com/element-hq/mautrix-go/crypto/ssss"
+	"github.com/element-hq/mautrix-go/crypto/utils"
+	"github.com/element-hq/mautrix-go/event"
 )
 
 // FetchCrossSigningKeysFromSSSS fetches all the cross-signing keys from SSSS, decrypts them using the given key and stores them in the olm machine.
