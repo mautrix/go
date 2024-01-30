@@ -140,7 +140,7 @@ func (mx *MatrixHandler) HandleBotInvite(ctx context.Context, evt *event.Event) 
 		return
 	}
 
-	if user.GetPermissionLevel() < bridgeconfig.PermissionLevelUser {
+	if user.GetPermissionLevel() < bridgeconfig.PermissionLevelLogin {
 		_, _ = intent.SendNotice(ctx, evt.RoomID, "You are not whitelisted to use this bridge.\n"+
 			"If you're the owner of this bridge, see the bridge.permissions section in your config file.")
 		_, _ = intent.LeaveRoom(ctx, evt.RoomID)
@@ -174,7 +174,7 @@ func (mx *MatrixHandler) HandleGhostInvite(ctx context.Context, evt *event.Event
 	log := zerolog.Ctx(ctx)
 	intent := ghost.DefaultIntent()
 
-	if inviter.GetPermissionLevel() < bridgeconfig.PermissionLevelUser {
+	if inviter.GetPermissionLevel() < bridgeconfig.PermissionLevelLogin {
 		log.Debug().Msg("Rejecting invite: inviter is not whitelisted")
 		_, err := intent.LeaveRoom(ctx, evt.RoomID, &mautrix.ReqLeave{
 			Reason: "You're not whitelisted to use this bridge",
@@ -271,7 +271,7 @@ func (mx *MatrixHandler) HandleMembership(ctx context.Context, evt *event.Event)
 			mx.HandleGhostInvite(ctx, evt, user, ghost)
 		}
 		return
-	} else if user.GetPermissionLevel() < bridgeconfig.PermissionLevelUser || !user.IsLoggedIn() {
+	} else if user.GetPermissionLevel() < bridgeconfig.PermissionLevelLogin || !user.IsLoggedIn() {
 		return
 	}
 
@@ -568,7 +568,7 @@ func (mx *MatrixHandler) HandleMessage(ctx context.Context, evt *event.Event) {
 
 	content := evt.Content.AsMessage()
 	content.RemoveReplyFallback()
-	if user.GetPermissionLevel() >= bridgeconfig.PermissionLevelUser && content.MsgType == event.MsgText {
+	if user.GetPermissionLevel() >= bridgeconfig.PermissionLevelLogin && content.MsgType == event.MsgText {
 		commandPrefix := mx.bridge.Config.Bridge.GetCommandPrefix()
 		hasCommandPrefix := strings.HasPrefix(content.Body, commandPrefix)
 		if hasCommandPrefix {
@@ -610,7 +610,7 @@ func (mx *MatrixHandler) HandleReaction(_ context.Context, evt *event.Event) {
 	}
 
 	user := mx.bridge.Child.GetIUser(evt.Sender, true)
-	if user == nil || user.GetPermissionLevel() < bridgeconfig.PermissionLevelUser || !user.IsLoggedIn() {
+	if user == nil || user.GetPermissionLevel() < bridgeconfig.PermissionLevelLogin || !user.IsLoggedIn() {
 		return
 	}
 
