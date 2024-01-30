@@ -14,10 +14,11 @@ import (
 )
 
 type OlmAccount struct {
-	Internal    olm.Account
-	signingKey  id.SigningKey
-	identityKey id.IdentityKey
-	Shared      bool
+	Internal         olm.Account
+	signingKey       id.SigningKey
+	identityKey      id.IdentityKey
+	Shared           bool
+	KeyBackupVersion id.KeyBackupVersion
 }
 
 func NewOlmAccount() *OlmAccount {

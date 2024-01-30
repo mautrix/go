@@ -429,14 +429,14 @@ type ReqBeeperSplitRoom struct {
 }
 
 type ReqRoomKeysVersionCreate struct {
-	Algorithm string          `json:"algorithm"`
-	AuthData  json.RawMessage `json:"auth_data"`
+	Algorithm id.KeyBackupAlgorithm `json:"algorithm"`
+	AuthData  json.RawMessage       `json:"auth_data"`
 }
 
 type ReqRoomKeysVersionUpdate struct {
-	Algorithm string          `json:"algorithm"`
-	AuthData  json.RawMessage `json:"auth_data"`
-	Version   string          `json:"version,omitempty"`
+	Algorithm id.KeyBackupAlgorithm `json:"algorithm"`
+	AuthData  json.RawMessage       `json:"auth_data"`
+	Version   id.KeyBackupVersion   `json:"version,omitempty"`
 }
 
 type ReqKeyBackup struct {

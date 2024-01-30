@@ -105,10 +105,11 @@ type InboundGroupSession struct {
 	ForwardingChains []string
 	RatchetSafety    RatchetSafety
 
-	ReceivedAt  time.Time
-	MaxAge      int64
-	MaxMessages int
-	IsScheduled bool
+	ReceivedAt       time.Time
+	MaxAge           int64
+	MaxMessages      int
+	IsScheduled      bool
+	KeyBackupVersion id.KeyBackupVersion
 
 	id id.SessionID
 }

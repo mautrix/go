@@ -593,7 +593,7 @@ type RespTimestampToEvent struct {
 }
 
 type RespRoomKeysVersionCreate struct {
-	Version string `json:"version"`
+	Version id.KeyBackupVersion `json:"version"`
 }
 
 type RespRoomKeysVersion[A any] struct {
@@ -601,7 +601,7 @@ type RespRoomKeysVersion[A any] struct {
 	AuthData  A                     `json:"auth_data"`
 	Count     int                   `json:"count"`
 	ETag      string                `json:"etag"`
-	Version   string                `json:"version"`
+	Version   id.KeyBackupVersion   `json:"version"`
 }
 
 type RespRoomKeys[S any] struct {
