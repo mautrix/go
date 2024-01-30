@@ -14,6 +14,7 @@ var CommandLoginMatrix = &FullHandler{
 		Description: "Enable double puppeting.",
 		Args:        "<_access token_>",
 	},
+	RequiresLogin:           true,
 	RequiresMatrixPuppeting: true,
 }
 
@@ -45,6 +46,7 @@ var CommandPingMatrix = &FullHandler{
 		Section:     HelpSectionAuth,
 		Description: "Ping the Matrix server with the double puppet.",
 	},
+	RequiresLogin:           true,
 	RequiresMatrixPuppeting: true,
 }
 
@@ -69,6 +71,7 @@ var CommandLogoutMatrix = &FullHandler{
 		Section:     HelpSectionAuth,
 		Description: "Disable double puppeting.",
 	},
+	RequiresLogin:           true,
 	RequiresMatrixPuppeting: true,
 }
 
