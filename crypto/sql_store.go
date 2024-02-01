@@ -878,6 +878,8 @@ func (store *SQLCryptoStore) GetSecret(ctx context.Context, name id.Secret) (val
 	err = store.DB.QueryRow(ctx, `SELECT secret FROM crypto_secrets WHERE name=$1`, name).Scan(&bytes)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", nil
+	} else if err != nil {
+		return "", err
 	}
 	bytes, err = cipher.Unpickle(store.PickleKey, bytes)
 	return string(bytes), err
