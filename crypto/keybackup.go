@@ -48,11 +48,6 @@ func (mach *OlmMachine) GetAndVerifyLatestKeyBackupVersion(ctx context.Context) 
 		Str("key_backup_version", versionInfo.Version).
 		Logger()
 
-	if versionInfo.Count == 0 {
-		log.Debug().Msg("No keys found in key backup")
-		return nil, nil
-	}
-
 	userSignatures, ok := versionInfo.AuthData.Signatures[mach.Client.UserID]
 	if !ok {
 		return nil, fmt.Errorf("no signature from user %s found in key backup", mach.Client.UserID)
