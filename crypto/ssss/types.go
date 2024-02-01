@@ -74,4 +74,5 @@ func init() {
 	event.TypeMap[event.AccountDataCrossSigningUser] = encryptedContent
 	event.TypeMap[event.AccountDataSecretStorageDefaultKey] = reflect.TypeOf(&DefaultSecretStorageKeyContent{})
 	event.TypeMap[event.AccountDataSecretStorageKey] = reflect.TypeOf(&KeyMetadata{})
+	event.TypeMap[event.AccountDataMegolmBackupKey] = reflect.TypeOf(&EncryptedAccountDataEventContent{})
 }
