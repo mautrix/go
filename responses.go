@@ -662,3 +662,11 @@ type RoomsBlockResponse struct {
     Block		bool			`json:"block"`
     UserId		string			`json:"user_id"`
 }
+
+// https://matrix-org.github.io/synapse/latest/admin_api/rooms.html#room-messages-api
+type RespSyncRoomMessagesAdmin struct {
+    Chunk []*event.Event `json:"chunk"`
+    End   string     `json:"end"`
+    Start string      `json:"start"`
+}
+
