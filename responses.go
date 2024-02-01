@@ -648,6 +648,7 @@ type RoomsResponse struct {
     Rooms      []RoomInfos `json:"rooms"`
     Offset     int    `json:"offset"`
     TotalRooms int    `json:"total_rooms"`
+	NextBatch  int	  `json:"next_batch"`
 }
 
 // RoomsMembersResponse represents the response containing a list of members of a room

@@ -11,19 +11,41 @@ import (
 	"net/http"
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/id"
+	"strconv"
 )
+
+type ReqListRoom struct {
+	Alias	string
+	From	int
+	Limit   int
+}
+
+func (cli *Client) NewReqListRoom() ReqListRoom {
+   req := ReqListRoom{}
+   req.Alias = ""
+   req.From = 0
+   req.Limit = 100
+   return req
+}
+
+func (req *ReqListRoom) BuildQuery() map[string]string {
+	query := map[string]string{
+		"limit": strconv.Itoa(req.Limit),
+	}
+	if req.Alias != "" {
+		query["search_term"] = req.Alias
+	}
+	query["from"] = strconv.Itoa(req.From)
+	return query
+}
 
 //  Get room info based on alias
 //
 // https://matrix-org.github.io/synapse/latest/admin_api/rooms.html
-func (cli *Client) ListRoom(ctx context.Context, alias string) (*mautrix.RoomsResponse ,error) {
+func (cli *Client) ListRoom(ctx context.Context, req ReqListRoom) (*mautrix.RoomsResponse ,error) {
 	var resp mautrix.RoomsResponse
 	var reqURL string
-	if (alias == "") {
-		reqURL = cli.BuildAdminURL("v1", "rooms")
-	} else {
-		reqURL = cli.BuildURLWithQuery(mautrix.SynapseAdminURLPath{"v1", "rooms"}, map[string]string{"search_term": alias})
-	}
+	reqURL = cli.BuildURLWithQuery(mautrix.SynapseAdminURLPath{"v1", "rooms"}, req.BuildQuery())//map[string]string{"search_term": alias})
 	_, err := cli.MakeFullRequest(ctx, mautrix.FullRequest{
 		Method:       http.MethodGet,
 		URL:          reqURL,
