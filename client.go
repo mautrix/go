@@ -2061,7 +2061,7 @@ func (cli *Client) GetKeyBackupLatestVersion(ctx context.Context) (resp *RespRoo
 // CreateKeyBackupVersion creates a new key backup.
 //
 // See: https://spec.matrix.org/v1.9/client-server-api/#post_matrixclientv3room_keysversion
-func (cli *Client) CreateKeyBackupVersion(ctx context.Context, req *ReqRoomKeysVersionCreate) (resp *RespRoomKeysVersionCreate, err error) {
+func (cli *Client) CreateKeyBackupVersion(ctx context.Context, req *ReqRoomKeysVersionCreate[backup.MegolmAuthData]) (resp *RespRoomKeysVersionCreate, err error) {
 	urlPath := cli.BuildClientURL("v3", "room_keys", "version")
 	_, err = cli.MakeRequest(ctx, http.MethodPost, urlPath, req, &resp)
 	return
@@ -2080,7 +2080,7 @@ func (cli *Client) GetKeyBackupVersion(ctx context.Context, version id.KeyBackup
 // the auth_data can be modified.
 //
 // See: https://spec.matrix.org/v1.9/client-server-api/#put_matrixclientv3room_keysversionversion
-func (cli *Client) UpdateKeyBackupVersion(ctx context.Context, version id.KeyBackupVersion, req *ReqRoomKeysVersionUpdate) error {
+func (cli *Client) UpdateKeyBackupVersion(ctx context.Context, version id.KeyBackupVersion, req *ReqRoomKeysVersionUpdate[backup.MegolmAuthData]) error {
 	urlPath := cli.BuildClientURL("v3", "room_keys", "version", version)
 	_, err := cli.MakeRequest(ctx, http.MethodPut, urlPath, nil, nil)
 	return err
@@ -2145,7 +2145,7 @@ func (cli *Client) UploadCrossSigningKeys(ctx context.Context, keys *UploadCross
 		RequestJSON:      keys,
 		SensitiveContent: keys.Auth != nil,
 	})
-	if respErr, ok := err.(HTTPError); ok && respErr.IsStatus(http.StatusUnauthorized) {
+	if respErr, ok := err.(HTTPError); ok && respErr.IsStatus(http.StatusUnauthorized) && uiaCallback != nil {
 		// try again with UI auth
 		var uiAuthResp RespUserInteractive
 		if err := json.Unmarshal(content, &uiAuthResp); err != nil {
@@ -2154,7 +2154,7 @@ func (cli *Client) UploadCrossSigningKeys(ctx context.Context, keys *UploadCross
 		auth := uiaCallback(&uiAuthResp)
 		if auth != nil {
 			keys.Auth = auth
-			return cli.UploadCrossSigningKeys(ctx, keys, uiaCallback)
+			return cli.UploadCrossSigningKeys(ctx, keys, nil)
 		}
 	}
 	return err
