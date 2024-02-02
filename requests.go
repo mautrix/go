@@ -97,8 +97,9 @@ type ReqUIAuthFallback struct {
 
 type ReqUIAuthLogin struct {
 	BaseAuthData
-	User     string `json:"user"`
-	Password string `json:"password"`
+	User     string `json:"user,omitempty"`
+	Password string `json:"password,omitempty"`
+	Token    string `json:"token,omitempty"`
 }
 
 // ReqCreateRoom is the JSON request for https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3createroom
@@ -428,14 +429,14 @@ type ReqBeeperSplitRoom struct {
 	Parts []BeeperSplitRoomPart `json:"parts"`
 }
 
-type ReqRoomKeysVersionCreate struct {
+type ReqRoomKeysVersionCreate[A any] struct {
 	Algorithm id.KeyBackupAlgorithm `json:"algorithm"`
-	AuthData  json.RawMessage       `json:"auth_data"`
+	AuthData  A                     `json:"auth_data"`
 }
 
-type ReqRoomKeysVersionUpdate struct {
+type ReqRoomKeysVersionUpdate[A any] struct {
 	Algorithm id.KeyBackupAlgorithm `json:"algorithm"`
-	AuthData  json.RawMessage       `json:"auth_data"`
+	AuthData  A                     `json:"auth_data"`
 	Version   id.KeyBackupVersion   `json:"version,omitempty"`
 }
 
