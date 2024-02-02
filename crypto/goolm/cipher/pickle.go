@@ -1,6 +1,7 @@
 package cipher
 
 import (
+	"encoding/base64"
 	"fmt"
 
 	"maunium.net/go/mautrix/crypto/goolm"
@@ -28,14 +29,13 @@ func Pickle(key, input []byte) ([]byte, error) {
 		return nil, err
 	}
 	ciphertext = append(ciphertext, mac[:pickleMACLength]...)
-	encoded := goolm.Base64Encode(ciphertext)
-	return encoded, nil
+	return []byte(base64.RawStdEncoding.EncodeToString(ciphertext)), nil
 }
 
 // Unpickle decodes the input from base64 and decrypts the decoded input with the key and the cipher AESSHA256.
 func Unpickle(key, input []byte) ([]byte, error) {
 	pickleCipher := NewAESSHA256([]byte(kdfPickle))
-	ciphertext, err := goolm.Base64Decode(input)
+	ciphertext, err := base64.RawStdEncoding.DecodeString(string(input))
 	if err != nil {
 		return nil, err
 	}

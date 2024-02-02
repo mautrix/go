@@ -65,7 +65,7 @@ func (s Decryption) Decrypt(ciphertext, mac []byte, key id.Curve25519) ([]byte, 
 	if err != nil {
 		return nil, err
 	}
-	decodedMAC, err := goolm.Base64Decode(mac)
+	decodedMAC, err := base64.RawStdEncoding.DecodeString(string(mac))
 	if err != nil {
 		return nil, err
 	}
