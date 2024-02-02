@@ -106,6 +106,11 @@ type DoublePuppet interface {
 	ClearCustomMXID()
 }
 
+type RefreshableDoublePuppet interface {
+	DoublePuppet
+	RefreshCustomMXID() error
+}
+
 type Ghost interface {
 	DoublePuppet
 	DefaultIntent() *appservice.IntentAPI

@@ -36,7 +36,7 @@ func NewProcessor(bridge *bridge.Bridge) *Processor {
 	}
 	proc.AddHandlers(
 		CommandHelp, CommandVersion, CommandCancel,
-		CommandLoginMatrix, CommandLogoutMatrix, CommandPingMatrix,
+		CommandLoginMatrix, CommandLogoutMatrix, CommandPingMatrix, CommandRefreshMatrix,
 		CommandDiscardMegolmSession, CommandSetPowerLevel)
 	return proc
 }
