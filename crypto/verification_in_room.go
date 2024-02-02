@@ -12,6 +12,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/rs/zerolog"
 	"maunium.net/go/mautrix/crypto/canonicaljson"
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/event"
@@ -210,6 +211,15 @@ func (mach *OlmMachine) SendInRoomSASVerificationKey(ctx context.Context, roomID
 
 // SendInRoomSASVerificationMAC sends the MAC of a device's key to the partner device for an in-room verification.
 func (mach *OlmMachine) SendInRoomSASVerificationMAC(ctx context.Context, roomID id.RoomID, userID id.UserID, deviceID id.DeviceID, transactionID string, sas *olm.SAS) error {
+	log := zerolog.Ctx(ctx).With().
+		Str("action", "send_in_room_sas_verification_mac").
+		Str("room_id", roomID.String()).
+		Str("user_id", userID.String()).
+		Str("device_id", deviceID.String()).
+		Str("transaction_id", transactionID).
+		Logger()
+	ctx = log.WithContext(ctx)
+
 	keyID := id.NewKeyID(id.KeyAlgorithmEd25519, mach.Client.DeviceID.String())
 
 	signingKey := mach.account.SigningKey()
@@ -224,9 +234,12 @@ func (mach *OlmMachine) SendInRoomSASVerificationMAC(ctx context.Context, roomID
 		masterKeyMAC, _, err := mach.getPKAndKeysMAC(sas, mach.Client.UserID, mach.Client.DeviceID,
 			userID, deviceID, transactionID, masterKey, masterKeyID, keyIDsMap)
 		if err != nil {
-			mach.Log.Error().Msgf("Error generating master key MAC: %v", err)
+			log.Err(err).Msg("Error generating master key MAC")
 		} else {
-			mach.Log.Debug().Msgf("Generated master key `%v` MAC: %v", masterKey, masterKeyMAC)
+			log.Debug().
+				Any("master_key", masterKey).
+				Any("master_key_mac", masterKeyMAC).
+				Msg("Generated master key and MAC")
 			macMap[masterKeyID] = masterKeyMAC
 		}
 	}
@@ -235,8 +248,12 @@ func (mach *OlmMachine) SendInRoomSASVerificationMAC(ctx context.Context, roomID
 	if err != nil {
 		return err
 	}
-	mach.Log.Debug().Msgf("MAC of key %s is: %s", signingKey, pubKeyMac)
-	mach.Log.Debug().Msgf("MAC of key ID(s) %s is: %s", keyID, keysMac)
+	log.Debug().
+		Any("signing_key", signingKey).
+		Any("pub_key_mac", pubKeyMac).
+		Any("key_id", keyID).
+		Any("keys_mac", keysMac).
+		Msg("Computed public key and keys MAC")
 	macMap[keyID] = pubKeyMac
 
 	content := &event.VerificationMacEventContent{
@@ -257,11 +274,16 @@ func (mach *OlmMachine) SendInRoomSASVerificationMAC(ctx context.Context, roomID
 // NewInRoomSASVerificationWith starts the in-room SAS verification process with another user in the given room.
 // It returns the generated transaction ID.
 func (mach *OlmMachine) NewInRoomSASVerificationWith(ctx context.Context, inRoomID id.RoomID, userID id.UserID, hooks VerificationHooks, timeout time.Duration) (string, error) {
+	log := zerolog.Ctx(ctx).With().
+		Str("action", "new_in_room_sas_verification_with").
+		Str("user_id", userID.String()).
+		Logger()
+	ctx = log.WithContext(ctx)
 	return mach.newInRoomSASVerificationWithInner(ctx, inRoomID, &id.Device{UserID: userID}, hooks, "", timeout)
 }
 
 func (mach *OlmMachine) newInRoomSASVerificationWithInner(ctx context.Context, inRoomID id.RoomID, device *id.Device, hooks VerificationHooks, transactionID string, timeout time.Duration) (string, error) {
-	mach.Log.Debug().Msgf("Starting new in-room verification transaction user %v", device.UserID)
+	zerolog.Ctx(ctx).Debug().Msg("Starting new in-room verification transaction")
 
 	request := transactionID == ""
 	if request {
@@ -312,15 +334,22 @@ func (mach *OlmMachine) newInRoomSASVerificationWithInner(ctx context.Context, i
 }
 
 func (mach *OlmMachine) handleInRoomVerificationReady(ctx context.Context, userID id.UserID, roomID id.RoomID, content *event.VerificationReadyEventContent, transactionID string) {
+	log := zerolog.Ctx(ctx).With().
+		Str("action", "handle_in_room_verification_ready").
+		Str("user_id", userID.String()).
+		Str("from_device", content.FromDevice.String()).
+		Logger()
+	ctx = log.WithContext(ctx)
+
 	device, err := mach.GetOrFetchDevice(ctx, userID, content.FromDevice)
 	if err != nil {
-		mach.Log.Error().Msgf("Error fetching device %v of user %v: %v", content.FromDevice, userID, err)
+		log.Err(err).Msg("Error fetching device")
 		return
 	}
 
 	verState, err := mach.getTransactionState(ctx, transactionID, userID)
 	if err != nil {
-		mach.Log.Error().Msgf("Error getting transaction state: %v", err)
+		log.Err(err).Msg("Error getting transaction state")
 		return
 	}
 	//mach.keyVerificationTransactionState.Delete(userID.String() + ":" + transactionID)

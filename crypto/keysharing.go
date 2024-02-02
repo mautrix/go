@@ -43,6 +43,14 @@ var (
 // Deprecated: this only supports a single key request target, so the whole automatic cancelling feature isn't very useful.
 func (mach *OlmMachine) RequestRoomKey(ctx context.Context, toUser id.UserID, toDevice id.DeviceID,
 	roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID) (chan bool, error) {
+	log := zerolog.Ctx(ctx).With().
+		Str("action", "request_room_key").
+		Str("to_user", toUser.String()).
+		Str("to_device", toDevice.String()).
+		Str("room_id", roomID.String()).
+		Str("sender_key", senderKey.String()).
+		Str("session_id", sessionID.String()).
+		Logger()
 
 	requestID := mach.Client.TxnID()
 	keyResponseReceived := make(chan struct{})
@@ -58,11 +66,11 @@ func (mach *OlmMachine) RequestRoomKey(ctx context.Context, toUser id.UserID, to
 		select {
 		case <-keyResponseReceived:
 			// key request successful
-			mach.Log.Debug().Msgf("Key for session %v was received, cancelling other key requests", sessionID)
+			log.Debug().Msg("Key for session was received, cancelling other key requests")
 			resChan <- true
 		case <-ctx.Done():
 			// if the context is done, key request was unsuccessful
-			mach.Log.Debug().Msgf("Context closed (%v) before forwared key for session %v received, sending key request cancellation", ctx.Err(), sessionID)
+			log.Debug().Err(err).Msg("Context closed before forwared key for session received, sending key request cancellation")
 			resChan <- false
 		}
 
