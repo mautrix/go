@@ -20,6 +20,7 @@ import (
 	"github.com/chzyer/readline"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/exzerolog"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto/cryptohelper"
@@ -57,6 +58,7 @@ func main() {
 	if !*debug {
 		log = log.Level(zerolog.InfoLevel)
 	}
+	exzerolog.SetupDefaults(&log)
 	client.Log = log
 
 	var lastRoomID id.RoomID
