@@ -101,6 +101,11 @@ func (mach *OlmMachine) PublishCrossSigningKeys(ctx context.Context, keys *Cross
 			masterKeyID: keys.MasterKey.PublicKey,
 		},
 	}
+	masterSig, err := mach.account.Internal.SignJSON(masterKey)
+	if err != nil {
+		return fmt.Errorf("failed to sign master key: %w", err)
+	}
+	masterKey.Signatures = signatures.NewSingleSignature(userID, id.KeyAlgorithmEd25519, mach.Client.DeviceID.String(), masterSig)
 
 	selfKey := mautrix.CrossSigningKeys{
 		UserID: userID,
