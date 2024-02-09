@@ -5,6 +5,7 @@ on: [push, pull_request]
 jobs:
   lint:
     runs-on: ubuntu-latest
+    name: Lint (latest)
     steps:
       - uses: actions/checkout@v4
 
@@ -34,6 +35,7 @@ jobs:
       fail-fast: false
       matrix:
         go-version: ["1.21", "1.22"]
+    name: Build ${{ matrix.go-version == '1.22' && '(latest)' || '(old)' }}
 
     steps:
       - uses: actions/checkout@v4
