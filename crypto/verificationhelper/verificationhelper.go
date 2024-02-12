@@ -128,6 +128,7 @@ type VerificationHelper struct {
 	activeTransactions     map[id.VerificationTransactionID]*verificationTransaction
 	activeTransactionsLock sync.Mutex
 
+	// supportedMethods are the methods that *we* support
 	supportedMethods      []event.VerificationMethod
 	verificationRequested func(ctx context.Context, txnID id.VerificationTransactionID, from id.UserID)
 	verificationError     func(ctx context.Context, txnID id.VerificationTransactionID, err error)

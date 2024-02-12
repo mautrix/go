@@ -187,7 +187,7 @@ func (vh *VerificationHelper) generateAndShowQRCode(ctx context.Context, txn *ve
 		Str("verification_action", "generate and show QR code").
 		Stringer("transaction_id", txn.TransactionID).
 		Logger()
-	if vh.showQRCode == nil || !slices.Contains(txn.SupportedMethods, event.VerificationMethodQRCodeShow) {
+	if vh.showQRCode == nil || !slices.Contains(txn.SupportedMethods, event.VerificationMethodQRCodeScan) {
 		log.Warn().Msg("Ignoring QR code generation request as showing a QR code is not enabled")
 		return nil
 	}
