@@ -45,9 +45,8 @@ func (vh *VerificationHelper) HandleScannedQRData(ctx context.Context, data []by
 
 	switch qrCode.Mode {
 	case QRCodeModeCrossSigning:
-		// TODO
 		panic("unimplemented")
-		// TODO sign their master key
+		// TODO verify and sign their master key
 	case QRCodeModeSelfVerifyingMasterKeyTrusted:
 		// The QR was created by a device that trusts the master key, which
 		// means that we don't trust the key. Key1 is the master key public
@@ -111,7 +110,11 @@ func (vh *VerificationHelper) HandleScannedQRData(ctx context.Context, data []by
 			return fmt.Errorf("failed to update device trust state after verifying: %w", err)
 		}
 
-		// TODO Cross-sign their device with the cross-signing key
+		// Cross-sign their device with the self-signing key
+		err = vh.mach.SignOwnDevice(ctx, theirDevice)
+		if err != nil {
+			return fmt.Errorf("failed to sign their device: %w", err)
+		}
 	default:
 		return fmt.Errorf("unknown QR code mode %d", qrCode.Mode)
 	}
