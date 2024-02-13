@@ -162,7 +162,31 @@ func (vh *VerificationHelper) ConfirmQRCodeScanned(ctx context.Context, txnID id
 	}
 	log.Info().Msg("Confirming QR code scanned")
 
-	// TODO trust the keys somehow
+	if txn.TheirUser == vh.client.UserID {
+		// Self-signing situation. Trust their device.
+
+		// Get their device
+		theirDevice, err := vh.mach.GetOrFetchDevice(ctx, txn.TheirUser, txn.TheirDevice)
+		if err != nil {
+			return err
+		}
+
+		// Trust their device
+		theirDevice.Trust = id.TrustStateVerified
+		err = vh.mach.CryptoStore.PutDevice(ctx, txn.TheirUser, theirDevice)
+		if err != nil {
+			return fmt.Errorf("failed to update device trust state after verifying: %w", err)
+		}
+
+		// Cross-sign their device with the self-signing key
+		if vh.mach.CrossSigningKeys != nil {
+			err = vh.mach.SignOwnDevice(ctx, theirDevice)
+			if err != nil {
+				return fmt.Errorf("failed to sign their device: %w", err)
+			}
+		}
+	}
+	// TODO: handle QR codes that are not self-signing situations
 
 	err := vh.sendVerificationEvent(ctx, txn, event.InRoomVerificationDone, &event.VerificationDoneEventContent{})
 	if err != nil {
