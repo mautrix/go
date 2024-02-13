@@ -42,6 +42,7 @@ func (vh *VerificationHelper) StartSAS(ctx context.Context, txnID id.Verificatio
 	if !ok {
 		return fmt.Errorf("unknown transaction ID")
 	}
+	txn.VerificationStep = verificationStepStarted
 	txn.StartedByUs = true
 	if !slices.Contains(txn.SupportedMethods, event.VerificationMethodSAS) {
 		return fmt.Errorf("the other device does not support SAS verification")

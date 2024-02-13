@@ -580,12 +580,15 @@ func (vh *VerificationHelper) onVerificationStart(ctx context.Context, txn *veri
 		Logger()
 	ctx = log.WithContext(ctx)
 
-	if txn.VerificationStep != verificationStepReady {
+	vh.activeTransactionsLock.Lock()
+	defer vh.activeTransactionsLock.Unlock()
+
+	if txn.VerificationStep == verificationStepStarted {
+		log.Info().Msg("Got a verification start request from the other device, but the verification is already in progress")
+	} else if txn.VerificationStep != verificationStepReady {
 		log.Warn().Msg("Ignoring verification start event for a transaction that is not in the ready state")
 		return
 	}
-	vh.activeTransactionsLock.Lock()
-	defer vh.activeTransactionsLock.Unlock()
 	txn.VerificationStep = verificationStepStarted
 
 	switch startEvt.Method {

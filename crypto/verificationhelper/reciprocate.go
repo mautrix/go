@@ -98,8 +98,7 @@ func (vh *VerificationHelper) HandleScannedQRData(ctx context.Context, data []by
 		}
 
 		// Verify that what they think the master key is is correct.
-		crossSigningPubkeys := vh.mach.GetOwnCrossSigningPublicKeys(ctx)
-		if bytes.Equal(crossSigningPubkeys.MasterKey.Bytes(), qrCode.Key2[:]) {
+		if bytes.Equal(vh.mach.GetOwnCrossSigningPublicKeys(ctx).MasterKey.Bytes(), qrCode.Key2[:]) {
 			log.Info().Msg("Verified that the other device has the correct master key")
 		} else {
 			return fmt.Errorf("the master key does not match")
@@ -141,9 +140,6 @@ func (vh *VerificationHelper) HandleScannedQRData(ctx context.Context, data []by
 
 	// Broadcast that the verification is complete.
 	vh.verificationDone(ctx, txn.TransactionID)
-	// TODO do we need to also somehow broadcast that we are now a trusted
-	// device?
-
 	return nil
 }
 
@@ -176,9 +172,6 @@ func (vh *VerificationHelper) ConfirmQRCodeScanned(ctx context.Context, txnID id
 
 	// Broadcast that the verification is complete.
 	vh.verificationDone(ctx, txn.TransactionID)
-	// TODO do we need to also somehow broadcast that we are now a trusted
-	// device?
-
 	return nil
 }
 
@@ -201,8 +194,13 @@ func (vh *VerificationHelper) generateAndShowQRCode(ctx context.Context, txn *ve
 	mode := QRCodeModeCrossSigning
 	if vh.client.UserID == txn.TheirUser {
 		// This is a self-signing situation.
-		// TODO determine if it's trusted or not.
-		mode = QRCodeModeSelfVerifyingMasterKeyUntrusted
+		if trusted, err := vh.mach.IsUserTrusted(ctx, vh.client.UserID); err != nil {
+			return err
+		} else if trusted {
+			mode = QRCodeModeSelfVerifyingMasterKeyTrusted
+		} else {
+			mode = QRCodeModeSelfVerifyingMasterKeyUntrusted
+		}
 	}
 
 	var key1, key2 []byte
