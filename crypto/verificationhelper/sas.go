@@ -15,6 +15,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -41,10 +42,13 @@ func (vh *VerificationHelper) StartSAS(ctx context.Context, txnID id.Verificatio
 	txn, ok := vh.activeTransactions[txnID]
 	if !ok {
 		return fmt.Errorf("unknown transaction ID")
+	} else if txn.VerificationState != verificationStateReady {
+		return errors.New("transaction is not in ready state")
 	}
-	txn.VerificationStep = verificationStepStarted
+
+	txn.VerificationState = verificationStateSASStarted
 	txn.StartedByUs = true
-	if !slices.Contains(txn.SupportedMethods, event.VerificationMethodSAS) {
+	if !slices.Contains(txn.TheirSupportedMethods, event.VerificationMethodSAS) {
 		return fmt.Errorf("the other device does not support SAS verification")
 	}
 
@@ -54,6 +58,8 @@ func (vh *VerificationHelper) StartSAS(ctx context.Context, txnID id.Verificatio
 		log.Err(err).Msg("Failed to fetch device")
 		return err
 	}
+
+	// TODO check if the other device already has sent a start event
 
 	log.Info().Msg("Sending start event")
 	txn.StartEventContent = &event.VerificationStartEventContent{
@@ -129,6 +135,11 @@ func (vh *VerificationHelper) ConfirmSAS(ctx context.Context, txnID id.Verificat
 //
 // [Section 11.12.2.2]: https://spec.matrix.org/v1.9/client-server-api/#short-authentication-string-sas-verification
 func (vh *VerificationHelper) onVerificationStartSAS(ctx context.Context, txn *verificationTransaction, evt *event.Event) error {
+	if txn.VerificationState != verificationStateReady {
+		vh.unexpectedEvent(ctx, txn)
+		return nil // return nil since we already sent a cancellation event in vh.unexpectedEvent
+	}
+
 	startEvt := evt.Content.AsVerificationStart()
 	log := vh.getLog(ctx)
 	log.Info().Msg("Received SAS verification start event")
@@ -172,8 +183,6 @@ func (vh *VerificationHelper) onVerificationStartSAS(ctx context.Context, txn *v
 	if err != nil {
 		return fmt.Errorf("failed to generate ephemeral key: %w", err)
 	}
-	vh.activeTransactionsLock.Lock()
-	defer vh.activeTransactionsLock.Unlock()
 	txn.MACMethod = macMethod
 	txn.EphemeralKey = ephemeralKey
 	txn.StartEventContent = startEvt
@@ -193,6 +202,7 @@ func (vh *VerificationHelper) onVerificationStartSAS(ctx context.Context, txn *v
 	if err != nil {
 		return fmt.Errorf("failed to send accept event: %w", err)
 	}
+	txn.VerificationState = verificationStateSASAccepted
 	return nil
 }
 
@@ -231,6 +241,13 @@ func (vh *VerificationHelper) onVerificationAccept(ctx context.Context, txn *ver
 		Logger()
 	log.Info().Msg("Received SAS verification accept event")
 
+	vh.activeTransactionsLock.Lock()
+	defer vh.activeTransactionsLock.Unlock()
+	if txn.VerificationState != verificationStateSASStarted {
+		vh.unexpectedEvent(ctx, txn)
+		return
+	}
+
 	ephemeralKey, err := ecdh.X25519().GenerateKey(rand.Reader)
 	if err != nil {
 		log.Err(err).Msg("Failed to generate ephemeral key")
@@ -245,8 +262,7 @@ func (vh *VerificationHelper) onVerificationAccept(ctx context.Context, txn *ver
 		return
 	}
 
-	vh.activeTransactionsLock.Lock()
-	defer vh.activeTransactionsLock.Unlock()
+	txn.VerificationState = verificationStateSASAccepted
 	txn.MACMethod = acceptEvt.MessageAuthenticationCode
 	txn.Commitment = acceptEvt.Commitment
 	txn.EphemeralKey = ephemeralKey
@@ -260,6 +276,11 @@ func (vh *VerificationHelper) onVerificationKey(ctx context.Context, txn *verifi
 	keyEvt := evt.Content.AsVerificationKey()
 	vh.activeTransactionsLock.Lock()
 	defer vh.activeTransactionsLock.Unlock()
+
+	if txn.VerificationState != verificationStateSASAccepted {
+		vh.unexpectedEvent(ctx, txn)
+		return
+	}
 
 	var err error
 	txn.OtherPublicKey, err = ecdh.X25519().NewPublicKey(keyEvt.Key)
@@ -295,6 +316,7 @@ func (vh *VerificationHelper) onVerificationKey(ctx context.Context, txn *verifi
 		}
 		txn.EphemeralPublicKeyShared = true
 	}
+	txn.VerificationState = verificationStateSASKeysExchanged
 
 	sasBytes, err := vh.verificationSASHKDF(txn)
 	if err != nil {

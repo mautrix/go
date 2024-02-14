@@ -35,10 +35,11 @@ func (vh *VerificationHelper) HandleScannedQRData(ctx context.Context, data []by
 	if !ok {
 		log.Warn().Msg("Ignoring QR code scan for an unknown transaction")
 		return nil
-	} else if txn.VerificationStep != verificationStepReady {
+	} else if txn.VerificationState != verificationStateReady {
 		log.Warn().Msg("Ignoring QR code scan for a transaction that is not in the ready state")
 		return nil
 	}
+	txn.VerificationState = verificationStateTheirQRScanned
 
 	// Verify the keys
 	log.Info().Msg("Verifying keys from QR code")
@@ -120,46 +121,40 @@ func (vh *VerificationHelper) HandleScannedQRData(ctx context.Context, data []by
 	}
 
 	// Send a m.key.verification.start event with the secret
-	startEvt := &event.VerificationStartEventContent{
+	txn.StartEventContent = &event.VerificationStartEventContent{
 		FromDevice: vh.client.DeviceID,
 		Method:     event.VerificationMethodReciprocate,
 		Secret:     qrCode.SharedSecret,
 	}
-	err = vh.sendVerificationEvent(ctx, txn, event.InRoomVerificationStart, startEvt)
+	err = vh.sendVerificationEvent(ctx, txn, event.InRoomVerificationStart, txn.StartEventContent)
 	if err != nil {
 		return err
 	}
 
 	// Immediately send the m.key.verification.done event, as our side of the
 	// transaction is done.
-	err = vh.sendVerificationEvent(ctx, txn, event.InRoomVerificationDone, &event.VerificationDoneEventContent{})
-	if err != nil {
-		return err
-	}
-
-	vh.activeTransactionsLock.Lock()
-	defer vh.activeTransactionsLock.Unlock()
-	delete(vh.activeTransactions, txn.TransactionID)
-
-	// Broadcast that the verification is complete.
-	vh.verificationDone(ctx, txn.TransactionID)
-	return nil
+	return vh.sendVerificationEvent(ctx, txn, event.InRoomVerificationDone, &event.VerificationDoneEventContent{})
 }
 
+// ConfirmQRCodeScanned confirms that our QR code has been scanned and sends the
+// m.key.verification.done event to the other device.
 func (vh *VerificationHelper) ConfirmQRCodeScanned(ctx context.Context, txnID id.VerificationTransactionID) error {
 	log := vh.getLog(ctx).With().
 		Str("verification_action", "confirm QR code scanned").
 		Stringer("transaction_id", txnID).
 		Logger()
 
+	vh.activeTransactionsLock.Lock()
+	defer vh.activeTransactionsLock.Unlock()
 	txn, ok := vh.activeTransactions[txnID]
 	if !ok {
 		log.Warn().Msg("Ignoring QR code scan confirmation for an unknown transaction")
 		return nil
-	} else if txn.VerificationStep != verificationStepStarted {
+	} else if txn.VerificationState != verificationStateOurQRScanned {
 		log.Warn().Msg("Ignoring QR code scan confirmation for a transaction that is not in the started state")
 		return nil
 	}
+
 	log.Info().Msg("Confirming QR code scanned")
 
 	if txn.TheirUser == vh.client.UserID {
@@ -193,9 +188,7 @@ func (vh *VerificationHelper) ConfirmQRCodeScanned(ctx context.Context, txnID id
 		return err
 	}
 
-	vh.activeTransactionsLock.Lock()
-	defer vh.activeTransactionsLock.Unlock()
-	delete(vh.activeTransactions, txn.TransactionID)
+	txn.VerificationState = verificationStateDone
 
 	// Broadcast that the verification is complete.
 	vh.verificationDone(ctx, txn.TransactionID)
@@ -211,7 +204,7 @@ func (vh *VerificationHelper) generateAndShowQRCode(ctx context.Context, txn *ve
 		log.Warn().Msg("Ignoring QR code generation request as showing a QR code is not enabled on this device")
 		return nil
 	}
-	if !slices.Contains(txn.SupportedMethods, event.VerificationMethodQRCodeScan) {
+	if !slices.Contains(txn.TheirSupportedMethods, event.VerificationMethodQRCodeScan) {
 		log.Warn().Msg("Ignoring QR code generation request as other device cannot scan QR codes")
 		return nil
 	}
