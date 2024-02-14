@@ -135,23 +135,23 @@ func (dp *doublePuppetUtil) Setup(ctx context.Context, mxid id.UserID, savedAcce
 		return
 	}
 	loginSecret, hasSecret := dp.getLoginSecret(mxid)
-	if savedAccessToken == "" || savedAccessToken == useConfigASToken {
-		// Special case appservice: prefix to not login and use it as an as_token directly.
-		if hasSecret && strings.HasPrefix(loginSecret, asTokenModePrefix) {
-			intent, err = dp.newIntent(ctx, mxid, strings.TrimPrefix(loginSecret, asTokenModePrefix))
-			if err != nil {
-				return
-			}
-			intent.SetAppServiceUserID = true
-			if savedAccessToken != useConfigASToken {
-				var resp *mautrix.RespWhoami
-				resp, err = intent.Whoami(ctx)
-				if err == nil && resp.UserID != mxid {
-					err = ErrMismatchingMXID
-				}
-			}
-			return intent, useConfigASToken, err
+	// Special case appservice: prefix to not login and use it as an as_token directly.
+	if hasSecret && strings.HasPrefix(loginSecret, asTokenModePrefix) {
+		intent, err = dp.newIntent(ctx, mxid, strings.TrimPrefix(loginSecret, asTokenModePrefix))
+		if err != nil {
+			return
 		}
+		intent.SetAppServiceUserID = true
+		if savedAccessToken != useConfigASToken {
+			var resp *mautrix.RespWhoami
+			resp, err = intent.Whoami(ctx)
+			if err == nil && resp.UserID != mxid {
+				err = ErrMismatchingMXID
+			}
+		}
+		return intent, useConfigASToken, err
+	}
+	if savedAccessToken == "" || savedAccessToken == useConfigASToken {
 		if reloginOnFail && hasSecret {
 			savedAccessToken, err = dp.autoLogin(ctx, mxid, loginSecret)
 		} else {

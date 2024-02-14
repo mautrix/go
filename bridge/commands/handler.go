@@ -55,9 +55,7 @@ type FullHandler struct {
 	RequiresPortal bool
 	RequiresLogin  bool
 
-	RequiresRefreshableMatrixLogin bool
-	RequiresManualDoublePuppeting  bool
-	RequiresNoAutoDoublePuppeting  bool
+	RequiresManualDoublePuppeting bool
 
 	RequiresEventLevel event.Type
 }
@@ -79,34 +77,12 @@ func (fh *FullHandler) satisfiesAdmin(ce *Event) bool {
 	return !fh.RequiresAdmin || ce.User.GetPermissionLevel() >= bridgeconfig.PermissionLevelAdmin
 }
 
-func (fh *FullHandler) satisfiesRefreshableMatrixLogin(ce *Event) bool {
-	if !fh.RequiresRefreshableMatrixLogin {
-		return true
-	} else if !ce.Bridge.DoublePuppet.CanAutoDoublePuppet(ce.User.GetMXID()) {
-		return false
-	} else if puppet := ce.User.GetIDoublePuppet(); puppet == nil {
-		return true
-	} else if intent := puppet.CustomIntent(); intent == nil {
-		return true
-	} else {
-		_, ok := puppet.(bridge.RefreshableDoublePuppet)
-		return ok && !intent.SetAppServiceUserID
-	}
-}
-
 func (fh *FullHandler) satisfiesManualDoublePuppeting(ce *Event) bool {
 	return !fh.RequiresManualDoublePuppeting || ce.Bridge.Config.Bridge.GetDoublePuppetConfig().AllowManual
 }
 
-func (fh *FullHandler) satisfiesNoAutoDoublePuppeting(ce *Event) bool {
-	return !fh.RequiresNoAutoDoublePuppeting || !ce.Bridge.DoublePuppet.CanAutoDoublePuppet(ce.User.GetMXID())
-}
-
 func (fh *FullHandler) ShowInHelp(ce *Event) bool {
-	return fh.satisfiesAdmin(ce) &&
-		fh.satisfiesRefreshableMatrixLogin(ce) &&
-		fh.satisfiesManualDoublePuppeting(ce) &&
-		fh.satisfiesNoAutoDoublePuppeting(ce)
+	return fh.satisfiesAdmin(ce) && fh.satisfiesManualDoublePuppeting(ce)
 }
 
 func (fh *FullHandler) userHasRoomPermission(ce *Event) bool {
@@ -124,7 +100,7 @@ func (fh *FullHandler) Run(ce *Event) {
 		ce.Reply("That command is limited to bridge administrators.")
 	} else if !fh.satisfiesManualDoublePuppeting(ce) {
 		ce.Reply("This bridge instance has disabled manual management of double puppeting.")
-	} else if !fh.satisfiesNoAutoDoublePuppeting(ce) {
+	} else if fh.RequiresManualDoublePuppeting && ce.Bridge.DoublePuppet.CanAutoDoublePuppet(ce.User.GetMXID()) {
 		ce.Reply("That command is not available because the bridge is managing your double puppet sessions.")
 	} else if fh.RequiresEventLevel.Type != "" && ce.User.GetPermissionLevel() < bridgeconfig.PermissionLevelAdmin && !fh.userHasRoomPermission(ce) {
 		ce.Reply("That command requires room admin rights.")
