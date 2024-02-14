@@ -55,7 +55,6 @@ type FullHandler struct {
 	RequiresPortal bool
 	RequiresLogin  bool
 
-	RequiresMatrixLogin            bool
 	RequiresRefreshableMatrixLogin bool
 	RequiresManualDoublePuppeting  bool
 	RequiresNoAutoDoublePuppeting  bool
@@ -78,15 +77,6 @@ func (fh *FullHandler) GetAliases() []string {
 
 func (fh *FullHandler) satisfiesAdmin(ce *Event) bool {
 	return !fh.RequiresAdmin || ce.User.GetPermissionLevel() >= bridgeconfig.PermissionLevelAdmin
-}
-
-func (fh *FullHandler) satisfiesMatrixLogin(ce *Event) bool {
-	if !fh.RequiresMatrixLogin {
-		return true
-	} else {
-		puppet := ce.User.GetIDoublePuppet()
-		return puppet != nil && puppet.CustomIntent() != nil
-	}
 }
 
 func (fh *FullHandler) satisfiesRefreshableMatrixLogin(ce *Event) bool {
@@ -114,7 +104,6 @@ func (fh *FullHandler) satisfiesNoAutoDoublePuppeting(ce *Event) bool {
 
 func (fh *FullHandler) ShowInHelp(ce *Event) bool {
 	return fh.satisfiesAdmin(ce) &&
-		fh.satisfiesMatrixLogin(ce) &&
 		fh.satisfiesRefreshableMatrixLogin(ce) &&
 		fh.satisfiesManualDoublePuppeting(ce) &&
 		fh.satisfiesNoAutoDoublePuppeting(ce)
@@ -133,8 +122,6 @@ func (fh *FullHandler) userHasRoomPermission(ce *Event) bool {
 func (fh *FullHandler) Run(ce *Event) {
 	if !fh.satisfiesAdmin(ce) {
 		ce.Reply("That command is limited to bridge administrators.")
-	} else if !fh.satisfiesMatrixLogin(ce) {
-		ce.Reply("You are not logged in with your Matrix account.")
 	} else if !fh.satisfiesManualDoublePuppeting(ce) {
 		ce.Reply("This bridge instance has disabled manual management of double puppeting.")
 	} else if !fh.satisfiesNoAutoDoublePuppeting(ce) {

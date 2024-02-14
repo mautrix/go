@@ -57,12 +57,16 @@ var CommandPingMatrix = &FullHandler{
 		Section:     HelpSectionAuth,
 		Description: "Ping the Matrix server with your double puppet.",
 	},
-	RequiresLogin:       true,
-	RequiresMatrixLogin: true,
+	RequiresLogin: true,
 }
 
 func fnPingMatrix(ce *Event) {
-	resp, err := ce.User.GetIDoublePuppet().CustomIntent().Whoami(ce.Ctx)
+	puppet := ce.User.GetIDoublePuppet()
+	if puppet == nil || puppet.CustomIntent() == nil {
+		ce.Reply("You are not logged in with your Matrix account.")
+		return
+	}
+	resp, err := puppet.CustomIntent().Whoami(ce.Ctx)
 	if err != nil {
 		ce.Reply("Failed to validate Matrix login: %v", err)
 	} else if resp.DeviceID == "" {
@@ -80,13 +84,17 @@ var CommandLogoutMatrix = &FullHandler{
 		Description: "Disable double puppeting.",
 	},
 	RequiresLogin:                 true,
-	RequiresMatrixLogin:           true,
 	RequiresManualDoublePuppeting: true,
 	RequiresNoAutoDoublePuppeting: true,
 }
 
 func fnLogoutMatrix(ce *Event) {
-	ce.User.GetIDoublePuppet().ClearCustomMXID()
+	puppet := ce.User.GetIDoublePuppet()
+	if puppet == nil || puppet.CustomIntent() == nil {
+		ce.Reply("You don't have double puppeting enabled.")
+		return
+	}
+	puppet.ClearCustomMXID()
 	ce.Reply("Successfully disabled double puppeting.")
 }
 
