@@ -6,8 +6,6 @@
 
 package commands
 
-import "maunium.net/go/mautrix/bridge"
-
 var CommandLoginMatrix = &FullHandler{
 	Func: fnLoginMatrix,
 	Name: "login-matrix",
@@ -36,15 +34,6 @@ func fnLoginMatrix(ce *Event) {
 	err := puppet.SwitchCustomMXID(ce.Args[0], ce.User.GetMXID())
 	if err != nil {
 		ce.Reply("Failed to enable double puppeting: %v", err)
-		if ce.Bridge.DoublePuppet.CanAutoDoublePuppet(ce.User.GetMXID()) {
-			ce.Reply("Attempting to refresh double puppeting...")
-			err = ce.User.GetIGhost().SwitchCustomMXID("", ce.User.GetMXID())
-			if err != nil {
-				ce.Reply("Failed to refresh double puppeting: %v", err)
-			} else {
-				ce.Reply("Successfully refreshed double puppeting")
-			}
-		}
 	} else {
 		ce.Reply("Successfully switched puppet")
 	}
@@ -57,7 +46,8 @@ var CommandPingMatrix = &FullHandler{
 		Section:     HelpSectionAuth,
 		Description: "Ping the Matrix server with your double puppet.",
 	},
-	RequiresLogin: true,
+	RequiresLogin:                 true,
+	RequiresManualDoublePuppeting: true,
 }
 
 func fnPingMatrix(ce *Event) {
@@ -85,7 +75,6 @@ var CommandLogoutMatrix = &FullHandler{
 	},
 	RequiresLogin:                 true,
 	RequiresManualDoublePuppeting: true,
-	RequiresNoAutoDoublePuppeting: true,
 }
 
 func fnLogoutMatrix(ce *Event) {
@@ -96,44 +85,4 @@ func fnLogoutMatrix(ce *Event) {
 	}
 	puppet.ClearCustomMXID()
 	ce.Reply("Successfully disabled double puppeting.")
-}
-
-var CommandRefreshMatrix = &FullHandler{
-	Func: fnRefreshMatrix,
-	Name: "refresh-matrix",
-	Help: HelpMeta{
-		Section:     HelpSectionAuth,
-		Description: "Refresh double puppeting with an access token managed by the bridge.",
-	},
-	RequiresLogin:                  true,
-	RequiresRefreshableMatrixLogin: true,
-}
-
-func fnRefreshMatrix(ce *Event) {
-	if !ce.Bridge.DoublePuppet.CanAutoDoublePuppet(ce.User.GetMXID()) {
-		ce.Reply("This bridge instance has disabled automatic double puppeting for your Matrix server.")
-		return
-	}
-	var err error
-	puppet := ce.User.GetIDoublePuppet()
-	if puppet != nil {
-		intent := puppet.CustomIntent()
-		if intent != nil && intent.SetAppServiceUserID {
-			ce.Reply("There is no need to refresh your double puppet, as it is currently managed by the bridge.")
-			return
-		}
-		puppet, ok := puppet.(bridge.RefreshableDoublePuppet)
-		if !ok {
-			ce.Reply("The bridge does not support refreshing your double puppet.")
-			return
-		}
-		err = puppet.RefreshCustomMXID()
-	} else {
-		err = ce.User.GetIGhost().SwitchCustomMXID("", ce.User.GetMXID())
-	}
-	if err != nil {
-		ce.Reply("Failed to refresh double puppeting: %v", err)
-	} else {
-		ce.Reply("Successfully refreshed double puppeting")
-	}
 }
