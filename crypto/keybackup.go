@@ -159,6 +159,10 @@ func (mach *OlmMachine) ImportRoomKeyFromBackup(ctx context.Context, version id.
 		maxMessages = config.RotationPeriodMessages
 	}
 
+	if firstKnownIndex := igsInternal.FirstKnownIndex(); firstKnownIndex > 0 {
+		log.Warn().Uint32("first_known_index", firstKnownIndex).Msg("Importing partial session")
+	}
+
 	igs := &InboundGroupSession{
 		Internal:         *igsInternal,
 		SigningKey:       keyBackupData.SenderClaimedKeys.Ed25519,
