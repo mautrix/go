@@ -168,6 +168,9 @@ func (mach *OlmMachine) importForwardedRoomKey(ctx context.Context, evt *Decrypt
 	if content.MaxMessages != 0 {
 		maxMessages = content.MaxMessages
 	}
+	if firstKnownIndex := igsInternal.FirstKnownIndex(); firstKnownIndex > 0 {
+		log.Warn().Uint32("first_known_index", firstKnownIndex).Msg("Importing partial session")
+	}
 	igs := &InboundGroupSession{
 		Internal:         *igsInternal,
 		SigningKey:       evt.Keys.Ed25519,
