@@ -157,11 +157,6 @@ func (vh *VerificationHelper) ConfirmSAS(ctx context.Context, txnID id.Verificat
 //
 // [Section 11.12.2.2]: https://spec.matrix.org/v1.9/client-server-api/#short-authentication-string-sas-verification
 func (vh *VerificationHelper) onVerificationStartSAS(ctx context.Context, txn *verificationTransaction, evt *event.Event) error {
-	if txn.VerificationState != verificationStateReady {
-		vh.unexpectedEvent(ctx, txn)
-		return nil // return nil since we already sent a cancellation event in vh.unexpectedEvent
-	}
-
 	startEvt := evt.Content.AsVerificationStart()
 	log := vh.getLog(ctx).With().
 		Str("verification_action", "start_sas").
@@ -269,7 +264,8 @@ func (vh *VerificationHelper) onVerificationAccept(ctx context.Context, txn *ver
 	vh.activeTransactionsLock.Lock()
 	defer vh.activeTransactionsLock.Unlock()
 	if txn.VerificationState != verificationStateSASStarted {
-		vh.unexpectedEvent(ctx, txn)
+		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnexpectedMessage,
+			"received accept event for a transaction that is not in the started state")
 		return
 	}
 
@@ -303,7 +299,8 @@ func (vh *VerificationHelper) onVerificationKey(ctx context.Context, txn *verifi
 	defer vh.activeTransactionsLock.Unlock()
 
 	if txn.VerificationState != verificationStateSASAccepted {
-		vh.unexpectedEvent(ctx, txn)
+		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnexpectedMessage,
+			"received key event for a transaction that is not in the accepted state")
 		return
 	}
 
@@ -583,15 +580,15 @@ func (vh *VerificationHelper) onVerificationMAC(ctx context.Context, txn *verifi
 	slices.Sort(keyIDs)
 	expectedKeyMAC, err := vh.verificationMACHKDF(txn, txn.TheirUser, txn.TheirDevice, vh.client.UserID, vh.client.DeviceID, "KEY_IDS", strings.Join(keyIDs, ","))
 	if err != nil {
-		vh.verificationError(ctx, txn.TransactionID, fmt.Errorf("failed to calculate key list MAC: %w", err))
+		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeSASMismatch, "failed to calculate key list MAC: %v", err)
 		return
 	}
 	if !bytes.Equal(expectedKeyMAC, macEvt.Keys) {
-		vh.verificationError(ctx, txn.TransactionID, fmt.Errorf("key list MAC mismatch"))
+		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeSASMismatch, "key list MAC mismatch")
 		return
 	}
 	if !hasTheirDeviceKey {
-		vh.verificationError(ctx, txn.TransactionID, fmt.Errorf("their device key not found"))
+		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeSASMismatch, "their device key not found in list of keys")
 		return
 	}
 
@@ -601,7 +598,7 @@ func (vh *VerificationHelper) onVerificationMAC(ctx context.Context, txn *verifi
 
 		alg, kID := keyID.Parse()
 		if alg != id.KeyAlgorithmEd25519 {
-			vh.verificationError(ctx, txn.TransactionID, fmt.Errorf("unsupported key algorithm %s", alg))
+			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnknownMethod, "unsupported key algorithm %s", alg)
 			return
 		}
 
@@ -610,18 +607,18 @@ func (vh *VerificationHelper) onVerificationMAC(ctx context.Context, txn *verifi
 		if kID == txn.TheirDevice.String() {
 			theirDevice, err = vh.mach.GetOrFetchDevice(ctx, txn.TheirUser, txn.TheirDevice)
 			if err != nil {
-				vh.verificationError(ctx, txn.TransactionID, fmt.Errorf("failed to fetch their device: %w", err))
+				vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUser, "failed to fetch their device: %v", err)
 				return
 			}
 			key = theirDevice.SigningKey.String()
 		} else { // This is the master key
 			crossSigningKeys := vh.mach.GetOwnCrossSigningPublicKeys(ctx)
 			if crossSigningKeys == nil {
-				vh.verificationError(ctx, txn.TransactionID, errors.New("cross-signing keys not found"))
+				vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUser, "cross-signing keys not found")
 				return
 			}
 			if kID != crossSigningKeys.MasterKey.String() {
-				vh.verificationError(ctx, txn.TransactionID, fmt.Errorf("unknown key ID %s", keyID))
+				vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUser, "unknown key ID %s", keyID)
 				return
 			}
 			key = crossSigningKeys.MasterKey.String()
@@ -629,11 +626,11 @@ func (vh *VerificationHelper) onVerificationMAC(ctx context.Context, txn *verifi
 
 		expectedMAC, err := vh.verificationMACHKDF(txn, txn.TheirUser, txn.TheirDevice, vh.client.UserID, vh.client.DeviceID, keyID.String(), key)
 		if err != nil {
-			vh.verificationError(ctx, txn.TransactionID, fmt.Errorf("failed to calculate key MAC: %w", err))
+			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUser, "failed to calculate key MAC: %v", err)
 			return
 		}
 		if !bytes.Equal(expectedMAC, mac) {
-			vh.verificationError(ctx, txn.TransactionID, fmt.Errorf("MAC mismatch for key %s", keyID))
+			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeSASMismatch, "MAC mismatch for key %s", keyID)
 			return
 		}
 
@@ -642,7 +639,7 @@ func (vh *VerificationHelper) onVerificationMAC(ctx context.Context, txn *verifi
 			theirDevice.Trust = id.TrustStateVerified
 			err = vh.mach.CryptoStore.PutDevice(ctx, txn.TheirUser, theirDevice)
 			if err != nil {
-				vh.verificationError(ctx, txn.TransactionID, fmt.Errorf("failed to update device trust state after verifying: %w", err))
+				vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUser, "failed to update device trust state after verifying: %v", err)
 				return
 			}
 		}
@@ -656,7 +653,7 @@ func (vh *VerificationHelper) onVerificationMAC(ctx context.Context, txn *verifi
 		txn.VerificationState = verificationStateSASMACExchanged
 		err := vh.sendVerificationEvent(ctx, txn, event.InRoomVerificationDone, &event.VerificationDoneEventContent{})
 		if err != nil {
-			vh.verificationError(ctx, txn.TransactionID, fmt.Errorf("failed to send verification done event: %w", err))
+			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUser, "failed to send verification done event: %v", err)
 			return
 		}
 		txn.SentOurDone = true
