@@ -122,7 +122,7 @@ func (vh *VerificationHelper) ConfirmSAS(ctx context.Context, txnID id.Verificat
 		return err
 	}
 
-	macEventContent := &event.VerificationMacEventContent{
+	macEventContent := &event.VerificationMACEventContent{
 		Keys: keysMAC,
 		MAC:  keys,
 	}

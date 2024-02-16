@@ -308,13 +308,13 @@ type VerificationKeyEventContent struct {
 	Key jsonbytes.UnpaddedBytes `json:"key"`
 }
 
-// VerificationMacEventContent represents the content of an
+// VerificationMACEventContent represents the content of an
 // [m.key.verification.mac] event (both the to-device and the in-room version)
 // as described in [Section 11.12.2.2.2] of the Spec.
 //
 // [m.key.verification.mac]: https://spec.matrix.org/v1.9/client-server-api/#mkeyverificationmac
 // [Section 11.12.2.2.2]: https://spec.matrix.org/v1.9/client-server-api/#verification-messages-specific-to-sas
-type VerificationMacEventContent struct {
+type VerificationMACEventContent struct {
 	ToDeviceVerificationEvent
 	InRoomVerificationEvent
 

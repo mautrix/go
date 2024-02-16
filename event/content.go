@@ -64,7 +64,7 @@ var TypeMap = map[Type]reflect.Type{
 
 	InRoomVerificationAccept: reflect.TypeOf(VerificationAcceptEventContent{}),
 	InRoomVerificationKey:    reflect.TypeOf(VerificationKeyEventContent{}),
-	InRoomVerificationMAC:    reflect.TypeOf(VerificationMacEventContent{}),
+	InRoomVerificationMAC:    reflect.TypeOf(VerificationMACEventContent{}),
 
 	ToDeviceRoomKey:          reflect.TypeOf(RoomKeyEventContent{}),
 	ToDeviceForwardedRoomKey: reflect.TypeOf(ForwardedRoomKeyEventContent{}),
@@ -83,7 +83,7 @@ var TypeMap = map[Type]reflect.Type{
 
 	ToDeviceVerificationAccept: reflect.TypeOf(VerificationAcceptEventContent{}),
 	ToDeviceVerificationKey:    reflect.TypeOf(VerificationKeyEventContent{}),
-	ToDeviceVerificationMAC:    reflect.TypeOf(VerificationMacEventContent{}),
+	ToDeviceVerificationMAC:    reflect.TypeOf(VerificationMACEventContent{}),
 
 	ToDeviceOrgMatrixRoomKeyWithheld: reflect.TypeOf(RoomKeyWithheldEventContent{}),
 
@@ -562,10 +562,10 @@ func (content *Content) AsVerificationKey() *VerificationKeyEventContent {
 	}
 	return casted
 }
-func (content *Content) AsVerificationMAC() *VerificationMacEventContent {
-	casted, ok := content.Parsed.(*VerificationMacEventContent)
+func (content *Content) AsVerificationMAC() *VerificationMACEventContent {
+	casted, ok := content.Parsed.(*VerificationMACEventContent)
 	if !ok {
-		return &VerificationMacEventContent{}
+		return &VerificationMACEventContent{}
 	}
 	return casted
 }
