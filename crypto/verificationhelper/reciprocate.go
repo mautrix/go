@@ -133,7 +133,16 @@ func (vh *VerificationHelper) HandleScannedQRData(ctx context.Context, data []by
 
 	// Immediately send the m.key.verification.done event, as our side of the
 	// transaction is done.
-	return vh.sendVerificationEvent(ctx, txn, event.InRoomVerificationDone, &event.VerificationDoneEventContent{})
+	err = vh.sendVerificationEvent(ctx, txn, event.InRoomVerificationDone, &event.VerificationDoneEventContent{})
+	if err != nil {
+		return err
+	}
+	txn.SentOurDone = true
+	if txn.ReceivedTheirDone {
+		txn.VerificationState = verificationStateDone
+		vh.verificationDone(ctx, txn.TransactionID)
+	}
+	return nil
 }
 
 // ConfirmQRCodeScanned confirms that our QR code has been scanned and sends the
@@ -187,11 +196,11 @@ func (vh *VerificationHelper) ConfirmQRCodeScanned(ctx context.Context, txnID id
 	if err != nil {
 		return err
 	}
-
-	txn.VerificationState = verificationStateDone
-
-	// Broadcast that the verification is complete.
-	vh.verificationDone(ctx, txn.TransactionID)
+	txn.SentOurDone = true
+	if txn.ReceivedTheirDone {
+		txn.VerificationState = verificationStateDone
+		vh.verificationDone(ctx, txn.TransactionID)
+	}
 	return nil
 }
 

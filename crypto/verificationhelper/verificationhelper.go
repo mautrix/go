@@ -40,7 +40,7 @@ const (
 	verificationStateSASStarted       // An SAS verification has been started
 	verificationStateSASAccepted      // An SAS verification has been accepted
 	verificationStateSASKeysExchanged // An SAS verification has exchanged keys
-	verificationStateSASMAC           // An SAS verification has exchanged MACs
+	verificationStateSASMACExchanged  // An SAS verification has exchanged MACs
 )
 
 func (step verificationState) String() string {
@@ -61,7 +61,7 @@ func (step verificationState) String() string {
 		return "sas_accepted"
 	case verificationStateSASKeysExchanged:
 		return "sas_keys_exchanged"
-	case verificationStateSASMAC:
+	case verificationStateSASMACExchanged:
 		return "sas_mac"
 	default:
 		return fmt.Sprintf("verificationStep(%d)", step)
@@ -104,6 +104,10 @@ type verificationTransaction struct {
 	EphemeralKey             *ecdh.PrivateKey                     // The ephemeral key
 	EphemeralPublicKeyShared bool                                 // Whether this device's ephemeral public key has been shared
 	OtherPublicKey           *ecdh.PublicKey                      // The other device's ephemeral public key
+	ReceivedTheirMAC         bool                                 // Whether we have received their MAC
+	SentOurMAC               bool                                 // Whether we have sent our MAC
+	ReceivedTheirDone        bool                                 // Whether we have received their done event
+	SentOurDone              bool                                 // Whether we have sent our done event
 }
 
 // RequiredCallbacks is an interface representing the callbacks required for
@@ -151,6 +155,7 @@ type VerificationHelper struct {
 	// supportedMethods are the methods that *we* support
 	supportedMethods      []event.VerificationMethod
 	verificationRequested func(ctx context.Context, txnID id.VerificationTransactionID, from id.UserID)
+	// TODO maybe just only have verificationCancelled instead of verifictionError?
 	verificationError     func(ctx context.Context, txnID id.VerificationTransactionID, err error)
 	verificationCancelled func(ctx context.Context, txnID id.VerificationTransactionID, code event.VerificationCancelCode, reason string)
 	verificationDone      func(ctx context.Context, txnID id.VerificationTransactionID)
@@ -207,9 +212,9 @@ func NewVerificationHelper(client *mautrix.Client, mach *crypto.OlmMachine, call
 }
 
 func (vh *VerificationHelper) getLog(ctx context.Context) *zerolog.Logger {
-	logger := vh.client.Log.With().
-		Any("supported_methods", vh.supportedMethods).
+	logger := zerolog.Ctx(ctx).With().
 		Str("component", "verification").
+		Any("supported_methods", vh.supportedMethods).
 		Logger()
 	return &logger
 }
@@ -680,11 +685,15 @@ func (vh *VerificationHelper) onVerificationDone(ctx context.Context, txn *verif
 	vh.activeTransactionsLock.Lock()
 	defer vh.activeTransactionsLock.Unlock()
 
-	if txn.VerificationState == verificationStateTheirQRScanned || txn.VerificationState == verificationStateSASMAC {
-		txn.VerificationState = verificationStateDone
-		vh.verificationDone(ctx, txn.TransactionID)
-	} else {
+	if txn.VerificationState != verificationStateTheirQRScanned && txn.VerificationState != verificationStateSASMACExchanged {
 		vh.unexpectedEvent(ctx, txn)
+		return
+	}
+
+	txn.VerificationState = verificationStateDone
+	txn.ReceivedTheirDone = true
+	if txn.SentOurDone {
+		vh.verificationDone(ctx, txn.TransactionID)
 	}
 }
 

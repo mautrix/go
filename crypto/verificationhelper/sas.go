@@ -93,6 +93,8 @@ func (vh *VerificationHelper) ConfirmSAS(ctx context.Context, txnID id.Verificat
 	txn, ok := vh.activeTransactions[txnID]
 	if !ok {
 		return fmt.Errorf("unknown transaction ID")
+	} else if txn.VerificationState != verificationStateSASKeysExchanged {
+		return errors.New("transaction is not in keys exchanged state")
 	}
 
 	var err error
@@ -100,17 +102,23 @@ func (vh *VerificationHelper) ConfirmSAS(ctx context.Context, txnID id.Verificat
 
 	log.Info().Msg("Signing keys")
 
-	// TODO actually sign some keys
 	// My device key
 	myDevice := vh.mach.OwnIdentity()
 	myDeviceKeyID := id.NewKeyID(id.KeyAlgorithmEd25519, myDevice.DeviceID.String())
-	keys[myDeviceKeyID], err = vh.verificationMACHKDF(txn, vh.client.UserID, vh.client.DeviceID, txn.TheirUser, txn.TheirDevice, myDeviceKeyID.String(), myDevice.IdentityKey.String())
+	keys[myDeviceKeyID], err = vh.verificationMACHKDF(txn, vh.client.UserID, vh.client.DeviceID, txn.TheirUser, txn.TheirDevice, myDeviceKeyID.String(), myDevice.SigningKey.String())
 	if err != nil {
 		return err
 	}
 
 	// Master signing key
-	// TODO how to detect whether or not we trust the master key?
+	crossSigningKeys := vh.mach.GetOwnCrossSigningPublicKeys(ctx)
+	if crossSigningKeys != nil {
+		crossSigningKeyID := id.NewKeyID(id.KeyAlgorithmEd25519, crossSigningKeys.MasterKey.String())
+		keys[crossSigningKeyID], err = vh.verificationMACHKDF(txn, vh.client.UserID, vh.client.DeviceID, txn.TheirUser, txn.TheirDevice, crossSigningKeyID.String(), crossSigningKeys.MasterKey.String())
+		if err != nil {
+			return err
+		}
+	}
 
 	var keyIDs []string
 	for keyID := range keys {
@@ -126,7 +134,21 @@ func (vh *VerificationHelper) ConfirmSAS(ctx context.Context, txnID id.Verificat
 		Keys: keysMAC,
 		MAC:  keys,
 	}
-	return vh.sendVerificationEvent(ctx, txn, event.InRoomVerificationMAC, macEventContent)
+	err = vh.sendVerificationEvent(ctx, txn, event.InRoomVerificationMAC, macEventContent)
+	if err != nil {
+		return err
+	}
+
+	txn.SentOurMAC = true
+	if txn.ReceivedTheirMAC {
+		txn.VerificationState = verificationStateSASMACExchanged
+		err := vh.sendVerificationEvent(ctx, txn, event.InRoomVerificationDone, &event.VerificationDoneEventContent{})
+		if err != nil {
+			return err
+		}
+		txn.SentOurDone = true
+	}
+	return nil
 }
 
 // onVerificationStartSAS handles the m.key.verification.start events with
@@ -141,7 +163,10 @@ func (vh *VerificationHelper) onVerificationStartSAS(ctx context.Context, txn *v
 	}
 
 	startEvt := evt.Content.AsVerificationStart()
-	log := vh.getLog(ctx)
+	log := vh.getLog(ctx).With().
+		Str("verification_action", "start_sas").
+		Stringer("transaction_id", txn.TransactionID).
+		Logger()
 	log.Info().Msg("Received SAS verification start event")
 
 	_, err := vh.mach.GetOrFetchDevice(ctx, evt.Sender, startEvt.FromDevice)
@@ -441,8 +466,6 @@ func (vh *VerificationHelper) verificationMACHKDF(txn *verificationTransaction, 
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("KEYID %s\n", keyID)
-	fmt.Printf("KEY   %s\n", key)
 
 	var infoBuf bytes.Buffer
 	infoBuf.WriteString("MATRIX_KEY_VERIFICATION_MAC")
@@ -464,13 +487,10 @@ func (vh *VerificationHelper) verificationMACHKDF(txn *verificationTransaction, 
 	hash.Write([]byte(key))
 	sum := hash.Sum(nil)
 	if txn.MACMethod == event.MACMethodHKDFHMACSHA256 {
-		fmt.Printf("MANGLING %v\n", sum)
-		fmt.Printf("%s\n", BrokenB64Encode(sum))
 		sum, err = base64.RawStdEncoding.DecodeString(BrokenB64Encode(sum))
 		if err != nil {
 			panic(err)
 		}
-		fmt.Printf("MANGLING %v\n", sum)
 	}
 	return sum, nil
 }
@@ -548,38 +568,97 @@ func (vh *VerificationHelper) onVerificationMAC(ctx context.Context, txn *verifi
 		Logger()
 	log.Info().Msg("Received SAS verification MAC event")
 	macEvt := evt.Content.AsVerificationMAC()
-	jsonBytes, _ := json.Marshal(macEvt)
-	fmt.Printf("%s\n", jsonBytes)
-	var keyIDs []string
-	// for keyID, mac := range macEvt.MAC {
-	// 	log.Info().Str("key_id", keyID.String()).Msg("Received MAC for key")
-	// 	keyIDs = append(keyIDs, keyID.String())
 
-	// 	var key string
-
-	// 	expectedMAC, err := vh.verificationMACHKDF(txn, txn.TheirUser, txn.TheirDevice, vh.client.UserID, vh.client.DeviceID, keyID.String(), key)
-	// 	if err != nil {
-	// 		vh.verificationError(ctx, txn.TransactionID, fmt.Errorf("failed to calculate key MAC: %w", err))
-	// 		return
-	// 	}
-	// 	if !bytes.Equal(expectedMAC, mac) {
-	// 		vh.verificationError(ctx, txn.TransactionID, fmt.Errorf("MAC mismatch for key %s", keyID))
-	// 		return
-	// 	}
-	// }
-
+	// Verifying Keys MAC
 	log.Info().Msg("Verifying MAC for all sent keys")
+	var hasTheirDeviceKey bool
+	var keyIDs []string
+	for keyID := range macEvt.MAC {
+		keyIDs = append(keyIDs, keyID.String())
+		_, kID := keyID.Parse()
+		if kID == txn.TheirDevice.String() {
+			hasTheirDeviceKey = true
+		}
+	}
+	slices.Sort(keyIDs)
 	expectedKeyMAC, err := vh.verificationMACHKDF(txn, txn.TheirUser, txn.TheirDevice, vh.client.UserID, vh.client.DeviceID, "KEY_IDS", strings.Join(keyIDs, ","))
 	if err != nil {
 		vh.verificationError(ctx, txn.TransactionID, fmt.Errorf("failed to calculate key list MAC: %w", err))
 		return
 	}
-	fmt.Printf("%d %v\n", len(expectedKeyMAC), expectedKeyMAC)
-	fmt.Printf("%d %v\n", len(macEvt.Keys), macEvt.Keys)
 	if !bytes.Equal(expectedKeyMAC, macEvt.Keys) {
 		vh.verificationError(ctx, txn.TransactionID, fmt.Errorf("key list MAC mismatch"))
 		return
 	}
+	if !hasTheirDeviceKey {
+		vh.verificationError(ctx, txn.TransactionID, fmt.Errorf("their device key not found"))
+		return
+	}
 
-	// TODO actually do a trust thing
+	// Verify the MAC for each key
+	for keyID, mac := range macEvt.MAC {
+		log.Info().Str("key_id", keyID.String()).Msg("Received MAC for key")
+
+		alg, kID := keyID.Parse()
+		if alg != id.KeyAlgorithmEd25519 {
+			vh.verificationError(ctx, txn.TransactionID, fmt.Errorf("unsupported key algorithm %s", alg))
+			return
+		}
+
+		var key string
+		var theirDevice *id.Device
+		if kID == txn.TheirDevice.String() {
+			theirDevice, err = vh.mach.GetOrFetchDevice(ctx, txn.TheirUser, txn.TheirDevice)
+			if err != nil {
+				vh.verificationError(ctx, txn.TransactionID, fmt.Errorf("failed to fetch their device: %w", err))
+				return
+			}
+			key = theirDevice.SigningKey.String()
+		} else { // This is the master key
+			crossSigningKeys := vh.mach.GetOwnCrossSigningPublicKeys(ctx)
+			if crossSigningKeys == nil {
+				vh.verificationError(ctx, txn.TransactionID, errors.New("cross-signing keys not found"))
+				return
+			}
+			if kID != crossSigningKeys.MasterKey.String() {
+				vh.verificationError(ctx, txn.TransactionID, fmt.Errorf("unknown key ID %s", keyID))
+				return
+			}
+			key = crossSigningKeys.MasterKey.String()
+		}
+
+		expectedMAC, err := vh.verificationMACHKDF(txn, txn.TheirUser, txn.TheirDevice, vh.client.UserID, vh.client.DeviceID, keyID.String(), key)
+		if err != nil {
+			vh.verificationError(ctx, txn.TransactionID, fmt.Errorf("failed to calculate key MAC: %w", err))
+			return
+		}
+		if !bytes.Equal(expectedMAC, mac) {
+			vh.verificationError(ctx, txn.TransactionID, fmt.Errorf("MAC mismatch for key %s", keyID))
+			return
+		}
+
+		// Trust their device
+		if kID == txn.TheirDevice.String() {
+			theirDevice.Trust = id.TrustStateVerified
+			err = vh.mach.CryptoStore.PutDevice(ctx, txn.TheirUser, theirDevice)
+			if err != nil {
+				vh.verificationError(ctx, txn.TransactionID, fmt.Errorf("failed to update device trust state after verifying: %w", err))
+				return
+			}
+		}
+	}
+	log.Info().Msg("All MACs verified")
+
+	vh.activeTransactionsLock.Lock()
+	defer vh.activeTransactionsLock.Unlock()
+	txn.ReceivedTheirMAC = true
+	if txn.SentOurMAC {
+		txn.VerificationState = verificationStateSASMACExchanged
+		err := vh.sendVerificationEvent(ctx, txn, event.InRoomVerificationDone, &event.VerificationDoneEventContent{})
+		if err != nil {
+			vh.verificationError(ctx, txn.TransactionID, fmt.Errorf("failed to send verification done event: %w", err))
+			return
+		}
+		txn.SentOurDone = true
+	}
 }
