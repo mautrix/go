@@ -49,6 +49,7 @@ var version = flag.MakeFull("v", "version", "View bridge version and quit.", "fa
 var versionJSON = flag.Make().LongKey("version-json").Usage("Print a JSON object representing the bridge version and quit.").Default("false").Bool()
 var ignoreUnsupportedDatabase = flag.Make().LongKey("ignore-unsupported-database").Usage("Run even if the database schema is too new").Default("false").Bool()
 var ignoreForeignTables = flag.Make().LongKey("ignore-foreign-tables").Usage("Run even if the database contains tables from other programs (like Synapse)").Default("false").Bool()
+var ignoreUnsupportedServer = flag.Make().LongKey("ignore-unsupported-server").Usage("Run even if the Matrix homeserver is outdated").Default("false").Bool()
 var wantHelp, _ = flag.MakeHelpFlag()
 
 var _ appservice.StateStore = (*sqlstatestore.SQLStateStore)(nil)
@@ -304,19 +305,27 @@ func (br *Bridge) ensureConnection(ctx context.Context) {
 		}
 	}
 
+	unsupportedServerLogLevel := zerolog.FatalLevel
+	if *ignoreUnsupportedServer {
+		unsupportedServerLogLevel = zerolog.ErrorLevel
+	}
 	if br.Config.Homeserver.Software == bridgeconfig.SoftwareHungry && !br.SpecVersions.Supports(mautrix.BeeperFeatureHungry) {
 		br.ZLog.WithLevel(zerolog.FatalLevel).Msg("The config claims the homeserver is hungryserv, but the /versions response didn't confirm it")
 		os.Exit(18)
 	} else if !br.SpecVersions.ContainsGreaterOrEqual(MinSpecVersion) {
-		br.ZLog.WithLevel(zerolog.FatalLevel).
+		br.ZLog.WithLevel(unsupportedServerLogLevel).
 			Stringer("server_supports", br.SpecVersions.GetLatest()).
 			Stringer("bridge_requires", MinSpecVersion).
 			Msg("The homeserver is outdated (supported spec versions are below minimum required by bridge)")
-		os.Exit(18)
+		if !*ignoreUnsupportedServer {
+			os.Exit(18)
+		}
 	} else if fr, ok := br.Child.(CSFeatureRequirer); ok {
 		if msg, hasFeatures := fr.CheckFeatures(&br.SpecVersions); !hasFeatures {
-			br.ZLog.WithLevel(zerolog.FatalLevel).Msg(msg)
-			os.Exit(18)
+			br.ZLog.WithLevel(unsupportedServerLogLevel).Msg(msg)
+			if !*ignoreUnsupportedServer {
+				os.Exit(18)
+			}
 		}
 	}
 
