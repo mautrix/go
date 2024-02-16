@@ -626,8 +626,55 @@ func (vh *VerificationHelper) onVerificationStart(ctx context.Context, txn *veri
 	vh.activeTransactionsLock.Lock()
 	defer vh.activeTransactionsLock.Unlock()
 
-	if txn.VerificationState != verificationStateReady {
-		log.Warn().Msg("Ignoring verification start event for a transaction that is not in the ready state")
+	if txn.VerificationState == verificationStateSASStarted || txn.VerificationState == verificationStateOurQRScanned || txn.VerificationState == verificationStateTheirQRScanned {
+		// We might have sent the event, and they also sent an event.
+		if txn.StartEventContent == nil || !txn.StartedByUs {
+			// We didn't sent a start event yet, so we have gotten ourselves
+			// into a bad state. They've either sent two start events, or we
+			// have gone on to a new state.
+			vh.unexpectedEvent(ctx, txn)
+			return
+		}
+
+		// Otherwise, we need to implement the following algorithm from Section
+		// 11.12.2.1 of the Spec:
+		// https://spec.matrix.org/v1.9/client-server-api/#key-verification-framework
+		//
+		// If Alice's and Bob's clients both send an m.key.verification.start
+		// message, and both specify the same verification method, then the
+		// m.key.verification.start message sent by the user whose ID is the
+		// lexicographically largest user ID should be ignored, and the
+		// situation should be treated the same as if only the user with the
+		// lexicographically smallest user ID had sent the
+		// m.key.verification.start message. In the case where the user IDs are
+		// the same (that is, when a user is verifying their own device), then
+		// the device IDs should be compared instead. If the two
+		// m.key.verification.start messages do not specify the same
+		// verification method, then the verification should be cancelled with
+		// a code of m.unexpected_message.
+
+		if txn.StartEventContent.Method != startEvt.Method {
+			cancelEvt := event.VerificationCancelEventContent{
+				Code:   event.VerificationCancelCodeUnexpectedMessage,
+				Reason: "The start events have different verification methods.",
+			}
+			err := vh.sendVerificationEvent(ctx, txn, event.InRoomVerificationCancel, &cancelEvt)
+			if err != nil {
+				log.Err(err).Msg("Failed to send cancellation event")
+			}
+			txn.VerificationState = verificationStateCancelled
+			vh.verificationCancelled(ctx, txn.TransactionID, cancelEvt.Code, cancelEvt.Reason)
+			return
+		}
+
+		if txn.TheirUser < vh.client.UserID || (txn.TheirUser == vh.client.UserID && txn.TheirDevice < vh.client.DeviceID) {
+			// Use their start event instead of ours
+			txn.StartedByUs = false
+			txn.StartEventContent = startEvt
+		}
+
+	} else if txn.VerificationState != verificationStateReady {
+		vh.unexpectedEvent(ctx, txn)
 		return
 	}
 

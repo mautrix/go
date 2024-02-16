@@ -30,6 +30,8 @@ func (vh *VerificationHelper) HandleScannedQRData(ctx context.Context, data []by
 		Stringer("transaction_id", qrCode.TransactionID).
 		Int("mode", int(qrCode.Mode)).
 		Logger()
+	vh.activeTransactionsLock.Lock()
+	defer vh.activeTransactionsLock.Unlock()
 
 	txn, ok := vh.activeTransactions[qrCode.TransactionID]
 	if !ok {
@@ -121,6 +123,7 @@ func (vh *VerificationHelper) HandleScannedQRData(ctx context.Context, data []by
 	}
 
 	// Send a m.key.verification.start event with the secret
+	txn.StartedByUs = true
 	txn.StartEventContent = &event.VerificationStartEventContent{
 		FromDevice: vh.client.DeviceID,
 		Method:     event.VerificationMethodReciprocate,

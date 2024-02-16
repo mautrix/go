@@ -44,6 +44,8 @@ func (vh *VerificationHelper) StartSAS(ctx context.Context, txnID id.Verificatio
 		return fmt.Errorf("unknown transaction ID")
 	} else if txn.VerificationState != verificationStateReady {
 		return errors.New("transaction is not in ready state")
+	} else if txn.StartEventContent != nil {
+		return errors.New("start event already sent or received")
 	}
 
 	txn.VerificationState = verificationStateSASStarted
@@ -58,8 +60,6 @@ func (vh *VerificationHelper) StartSAS(ctx context.Context, txnID id.Verificatio
 		log.Err(err).Msg("Failed to fetch device")
 		return err
 	}
-
-	// TODO check if the other device already has sent a start event
 
 	log.Info().Msg("Sending start event")
 	txn.StartEventContent = &event.VerificationStartEventContent{
