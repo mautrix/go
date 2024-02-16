@@ -8,10 +8,7 @@ package synapseadmin
 
 import (
 	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/event"
 	"context"
-	"time"
-	"maunium.net/go/mautrix/id"
 	"net/http"
 )
 
@@ -26,36 +23,20 @@ func (cli *Client) BuildAdminURL(path ...any) string {
 	return cli.BuildURL(mautrix.SynapseAdminURLPath(path))
 }
 
-func (cli *Client) SyncRoomWithContextAdmin(ctx context.Context, nextBatch string, roomID string) error {
-	// Use Admin API to pseudo sync specific room messages
-	for {
-		resSyncAdmin, err := cli.FullSyncRequest(ctx, ReqSyncAdmin{
-			from: nextBatch,
-		}, roomID)
-		if err != nil {
-			return err
-		}
-		/*
-		remplacer par stockage sur fichier bbolt
-		err = cli.Store.SaveNextBatch(ctx, cli.UserID, resSyncAdmin.End)
-		if err != nil {
-			return err
-		}
-		*/
-
-		resSync := RespSyncAdminToRespSync(resSyncAdmin)
-		if err = cli.Syncer.ProcessResponse(ctx, resSync, nextBatch); err != nil {
-			return err
-		}
-		if (resSync.NextBatch != "") {
-			nextBatch = resSync.NextBatch
-		}
-		time.Sleep(2 * time.Second)
+func (cli *Client) SyncRoomWithContextAdmin(ctx context.Context, nextBatch string, roomID string, prevBatch string) (*mautrix.RespSyncRoomMessagesAdmin, error) {
+	resSyncAdmin, err := cli.FullAdminSyncRequest(ctx, ReqSyncAdmin{
+		from: nextBatch,
+		to: prevBatch,
+	}, roomID)
+	if err != nil {
+		return &mautrix.RespSyncRoomMessagesAdmin{}, err
 	}
+	return resSyncAdmin, nil
 }
 
 type ReqSyncAdmin struct {
 	from	string
+	to		string
 }
 
 func (req *ReqSyncAdmin) BuildQuery() map[string]string {
@@ -63,39 +44,13 @@ func (req *ReqSyncAdmin) BuildQuery() map[string]string {
 	if req.from != "" {
 		query["from"] = req.from
 	}
+	if req.to != "" {
+		query["to"] = req.to
+	}
 	return query
 }
 
-func RespSyncAdminToRespSync(respSyncAdmin *mautrix.RespSyncRoomMessagesAdmin) *mautrix.RespSync {
-    respSync := &mautrix.RespSync{}
-	respSync.NextBatch = respSyncAdmin.End
-	respSync.Presence.Events = append(respSync.Presence.Events, &event.Event{Type: event.Type{Type: "RoomMessagesAdmin"}})
-    // Populate Rooms field
-    respSync.Rooms = mautrix.RespSyncRooms{
-        Join: make(map[id.RoomID]*mautrix.SyncJoinedRoom),
-    }
-
-    // Iterate over events in Chunk and populate Join field
-    for _, room_event := range respSyncAdmin.Chunk {
-        roomID := room_event.RoomID
-        joinedRoom, ok := respSync.Rooms.Join[roomID]
-        if !ok {
-            joinedRoom = &mautrix.SyncJoinedRoom{
-                Timeline: mautrix.SyncTimeline{
-                    SyncEventsList: mautrix.SyncEventsList{Events: []*event.Event{}},
-                    Limited:        true,
-                    PrevBatch:      "",
-                },
-            }
-            respSync.Rooms.Join[roomID] = joinedRoom
-        }
-        joinedRoom.Timeline.Events = append(joinedRoom.Timeline.Events, room_event)
-    }
-
-    return respSync
-}
-
-func (cli *Client) FullSyncRequest(ctx context.Context, req ReqSyncAdmin, roomID string) (resp *mautrix.RespSyncRoomMessagesAdmin, err error) {
+func (cli *Client) FullAdminSyncRequest(ctx context.Context, req ReqSyncAdmin, roomID string) (resp *mautrix.RespSyncRoomMessagesAdmin, err error) {
 	urlPath := cli.BuildURLWithQuery(mautrix.SynapseAdminURLPath{"v1", "rooms", roomID, "messages"}, req.BuildQuery())
 	fullReq := mautrix.FullRequest{
 		Method:       http.MethodGet,
@@ -104,6 +59,5 @@ func (cli *Client) FullSyncRequest(ctx context.Context, req ReqSyncAdmin, roomID
 		MaxAttempts: 1,
 	}
 	_, err = cli.MakeFullRequest(ctx, fullReq)
-	return
+	return resp, err
 }
-
