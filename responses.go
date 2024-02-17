@@ -118,19 +118,7 @@ type RespCreateMXC struct {
 }
 
 // RespPreviewURL is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#get_matrixmediav3preview_url
-type RespPreviewURL struct {
-	CanonicalURL string `json:"og:url,omitempty"`
-	Title        string `json:"og:title,omitempty"`
-	Type         string `json:"og:type,omitempty"`
-	Description  string `json:"og:description,omitempty"`
-
-	ImageURL id.ContentURIString `json:"og:image,omitempty"`
-
-	ImageSize   int    `json:"matrix:image:size,omitempty"`
-	ImageWidth  int    `json:"og:image:width,omitempty"`
-	ImageHeight int    `json:"og:image:height,omitempty"`
-	ImageType   string `json:"og:image:type,omitempty"`
-}
+type RespPreviewURL = event.LinkPreview
 
 // RespUserInteractive is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#user-interactive-authentication-api
 type RespUserInteractive struct {

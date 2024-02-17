@@ -116,6 +116,8 @@ type MessageEventContent struct {
 	BeeperGalleryImages      []*MessageEventContent `json:"com.beeper.gallery.images,omitempty"`
 	BeeperGalleryCaption     string                 `json:"com.beeper.gallery.caption,omitempty"`
 	BeeperGalleryCaptionHTML string                 `json:"com.beeper.gallery.caption_html,omitempty"`
+
+	BeeperLinkPreviews []*BeeperLinkPreview `json:"com.beeper.linkpreviews,omitempty"`
 }
 
 func (content *MessageEventContent) GetRelatesTo() *RelatesTo {

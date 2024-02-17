@@ -61,3 +61,27 @@ type BeeperRoomKeyAckEventContent struct {
 	SessionID         id.SessionID `json:"session_id"`
 	FirstMessageIndex int          `json:"first_message_index"`
 }
+
+type LinkPreview struct {
+	CanonicalURL string `json:"og:url,omitempty"`
+	Title        string `json:"og:title,omitempty"`
+	Type         string `json:"og:type,omitempty"`
+	Description  string `json:"og:description,omitempty"`
+
+	ImageURL id.ContentURIString `json:"og:image,omitempty"`
+
+	ImageSize   int    `json:"matrix:image:size,omitempty"`
+	ImageWidth  int    `json:"og:image:width,omitempty"`
+	ImageHeight int    `json:"og:image:height,omitempty"`
+	ImageType   string `json:"og:image:type,omitempty"`
+}
+
+// BeeperLinkPreview contains the data for a bundled URL preview as specified in MSC4095
+//
+// https://github.com/matrix-org/matrix-spec-proposals/pull/4095
+type BeeperLinkPreview struct {
+	LinkPreview
+
+	MatchedURL      string             `json:"matched_url"`
+	ImageEncryption *EncryptedFileInfo `json:"beeper:image:encryption,omitempty"`
+}
