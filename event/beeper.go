@@ -82,6 +82,6 @@ type LinkPreview struct {
 type BeeperLinkPreview struct {
 	LinkPreview
 
-	MatchedURL      string             `json:"matched_url"`
+	MatchedURL      string             `json:"matched_url,omitempty"`
 	ImageEncryption *EncryptedFileInfo `json:"beeper:image:encryption,omitempty"`
 }
