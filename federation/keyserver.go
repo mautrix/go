@@ -53,9 +53,22 @@ type KeyServer struct {
 func (ks *KeyServer) Register(r *mux.Router) {
 	r.HandleFunc("/.well-known/matrix/server", ks.GetWellKnown).Methods(http.MethodGet)
 	r.HandleFunc("/_matrix/federation/v1/version", ks.GetServerVersion).Methods(http.MethodGet)
-	r.HandleFunc("/_matrix/key/v2/server", ks.GetServerKey).Methods(http.MethodGet)
-	r.HandleFunc("/_matrix/key/v2/query/{serverName}", ks.GetQueryKeys).Methods(http.MethodGet)
-	r.HandleFunc("/_matrix/key/v2/query", ks.PostQueryKeys).Methods(http.MethodPost)
+	keyRouter := r.PathPrefix("/_matrix/key").Subrouter()
+	keyRouter.HandleFunc("/v2/server", ks.GetServerKey).Methods(http.MethodGet)
+	keyRouter.HandleFunc("/v2/query/{serverName}", ks.GetQueryKeys).Methods(http.MethodGet)
+	keyRouter.HandleFunc("/v2/query", ks.PostQueryKeys).Methods(http.MethodPost)
+	keyRouter.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		jsonResponse(w, http.StatusNotFound, mautrix.RespError{
+			ErrCode: mautrix.MUnrecognized.ErrCode,
+			Err:     "Unrecognized endpoint",
+		})
+	})
+	keyRouter.MethodNotAllowedHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		jsonResponse(w, http.StatusMethodNotAllowed, mautrix.RespError{
+			ErrCode: mautrix.MUnrecognized.ErrCode,
+			Err:     "Invalid method for endpoint",
+		})
+	})
 }
 
 func jsonResponse(w http.ResponseWriter, code int, data any) {
