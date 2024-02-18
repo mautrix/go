@@ -79,7 +79,7 @@ func jsonResponse(w http.ResponseWriter, code int, data any) {
 
 // RespWellKnown is the response body for the `GET /.well-known/matrix/server` endpoint.
 type RespWellKnown struct {
-	Server string `json:"server"`
+	Server string `json:"m.server"`
 }
 
 // GetWellKnown implements the `GET /.well-known/matrix/server` endpoint
