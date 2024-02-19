@@ -130,6 +130,11 @@ type showSASCallbacks interface {
 }
 
 type showQRCodeCallbacks interface {
+	// ScanQRCode is called when another device has sent a
+	// m.key.verification.ready event and indicated that they are capable of
+	// showing a QR code.
+	ScanQRCode(ctx context.Context, txnID id.VerificationTransactionID)
+
 	// ShowQRCode is called when the verification has been accepted and a QR
 	// code should be shown to the user.
 	ShowQRCode(ctx context.Context, txnID id.VerificationTransactionID, qrCode *QRCode)
@@ -154,6 +159,7 @@ type VerificationHelper struct {
 
 	showSAS func(ctx context.Context, txnID id.VerificationTransactionID, emojis []rune, decimals []int)
 
+	scanQRCode   func(ctx context.Context, txnID id.VerificationTransactionID)
 	showQRCode   func(ctx context.Context, txnID id.VerificationTransactionID, qrCode *QRCode)
 	qrCodeScaned func(ctx context.Context, txnID id.VerificationTransactionID)
 }
@@ -186,6 +192,7 @@ func NewVerificationHelper(client *mautrix.Client, mach *crypto.OlmMachine, call
 	if c, ok := callbacks.(showQRCodeCallbacks); ok {
 		helper.supportedMethods = append(helper.supportedMethods,
 			event.VerificationMethodQRCodeShow, event.VerificationMethodReciprocate)
+		helper.scanQRCode = c.ScanQRCode
 		helper.showQRCode = c.ShowQRCode
 		helper.qrCodeScaned = c.QRCodeScanned
 	}
@@ -442,6 +449,10 @@ func (vh *VerificationHelper) AcceptVerification(ctx context.Context, txnID id.V
 	}
 	txn.VerificationState = verificationStateReady
 
+	if slices.Contains(txn.TheirSupportedMethods, event.VerificationMethodQRCodeShow) {
+		vh.scanQRCode(ctx, txn.TransactionID)
+	}
+
 	return vh.generateAndShowQRCode(ctx, txn)
 }
 
@@ -627,6 +638,10 @@ func (vh *VerificationHelper) onVerificationReady(ctx context.Context, txn *veri
 		if err != nil {
 			log.Warn().Err(err).Msg("Failed to send cancellation requests")
 		}
+	}
+
+	if slices.Contains(txn.TheirSupportedMethods, event.VerificationMethodQRCodeShow) {
+		vh.scanQRCode(ctx, txn.TransactionID)
 	}
 
 	err := vh.generateAndShowQRCode(ctx, txn)
