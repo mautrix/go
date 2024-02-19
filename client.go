@@ -40,6 +40,7 @@ type VerificationHelper interface {
 	StartVerification(ctx context.Context, to id.UserID) (id.VerificationTransactionID, error)
 	StartInRoomVerification(ctx context.Context, roomID id.RoomID, to id.UserID) (id.VerificationTransactionID, error)
 	AcceptVerification(ctx context.Context, txnID id.VerificationTransactionID) error
+	CancelVerification(ctx context.Context, txnID id.VerificationTransactionID, code event.VerificationCancelCode, reason string) error
 
 	HandleScannedQRData(ctx context.Context, data []byte) error
 	ConfirmQRCodeScanned(ctx context.Context, txnID id.VerificationTransactionID) error
