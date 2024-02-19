@@ -8,6 +8,7 @@ package synapseadmin
 
 import (
 	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/id"
 	"context"
 	"net/http"
 )
@@ -23,13 +24,14 @@ func (cli *Client) BuildAdminURL(path ...any) string {
 	return cli.BuildURL(mautrix.SynapseAdminURLPath(path))
 }
 
-func (cli *Client) SyncRoomWithContextAdmin(ctx context.Context, nextBatch string, roomID string, prevBatch string) (*mautrix.RespSyncRoomMessagesAdmin, error) {
+//func (cli *Client) MessagesAdmin(ctx context.Context, roomID string, from, to string) (RespMessagesAdmin, error) {
+func (cli *Client) MessagesAdmin(ctx context.Context, roomID id.RoomID, from, to string) (RespMessagesAdmin, error) {
 	resSyncAdmin, err := cli.FullAdminSyncRequest(ctx, ReqSyncAdmin{
-		from: nextBatch,
-		to: prevBatch,
+		from: from,
+		to: to,
 	}, roomID)
 	if err != nil {
-		return &mautrix.RespSyncRoomMessagesAdmin{}, err
+		return nil, err
 	}
 	return resSyncAdmin, nil
 }
@@ -50,7 +52,7 @@ func (req *ReqSyncAdmin) BuildQuery() map[string]string {
 	return query
 }
 
-func (cli *Client) FullAdminSyncRequest(ctx context.Context, req ReqSyncAdmin, roomID string) (resp *mautrix.RespSyncRoomMessagesAdmin, err error) {
+func (cli *Client) FullAdminSyncRequest(ctx context.Context, req ReqSyncAdmin, roomID id.RoomID) (resp RespMessagesAdmin, err error) {
 	urlPath := cli.BuildURLWithQuery(mautrix.SynapseAdminURLPath{"v1", "rooms", roomID, "messages"}, req.BuildQuery())
 	fullReq := mautrix.FullRequest{
 		Method:       http.MethodGet,
