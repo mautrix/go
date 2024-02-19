@@ -171,18 +171,18 @@ func (vh *VerificationHelper) onVerificationStartSAS(ctx context.Context, txn *v
 	}
 
 	keyAggreementProtocol := event.KeyAgreementProtocolCurve25519HKDFSHA256
-	if !startEvt.SupportsKeyAgreementProtocol(keyAggreementProtocol) {
+	if !slices.Contains(startEvt.KeyAgreementProtocols, keyAggreementProtocol) {
 		return fmt.Errorf("the other device does not support any key agreement protocols that we support")
 	}
 
 	hashAlgorithm := event.VerificationHashMethodSHA256
-	if !startEvt.SupportsHashMethod(hashAlgorithm) {
+	if !slices.Contains(startEvt.Hashes, hashAlgorithm) {
 		return fmt.Errorf("the other device does not support any hash algorithms that we support")
 	}
 
 	macMethod := event.MACMethodHKDFHMACSHA256V2
-	if !startEvt.SupportsMACMethod(macMethod) {
-		if startEvt.SupportsMACMethod(event.MACMethodHKDFHMACSHA256) {
+	if !slices.Contains(startEvt.MessageAuthenticationCodes, macMethod) {
+		if slices.Contains(startEvt.MessageAuthenticationCodes, event.MACMethodHKDFHMACSHA256) {
 			macMethod = event.MACMethodHKDFHMACSHA256
 		} else {
 			return fmt.Errorf("the other device does not support any message authentication codes that we support")
@@ -348,14 +348,14 @@ func (vh *VerificationHelper) onVerificationKey(ctx context.Context, txn *verifi
 
 	var decimals []int
 	var emojis []rune
-	if txn.StartEventContent.SupportsSASMethod(event.SASMethodDecimal) {
+	if slices.Contains(txn.StartEventContent.ShortAuthenticationString, event.SASMethodDecimal) {
 		decimals = []int{
 			(int(sasBytes[0])<<5 | int(sasBytes[1])>>3) + 1000,
 			((int(sasBytes[1])&0x07)<<10 | int(sasBytes[2])<<2 | int(sasBytes[3])>>6) + 1000,
 			((int(sasBytes[3])&0x3f)<<7 | int(sasBytes[4])>>1) + 1000,
 		}
 	}
-	if txn.StartEventContent.SupportsSASMethod(event.SASMethodEmoji) {
+	if slices.Contains(txn.StartEventContent.ShortAuthenticationString, event.SASMethodEmoji) {
 		sasNum := uint64(sasBytes[0])<<40 | uint64(sasBytes[1])<<32 | uint64(sasBytes[2])<<24 |
 			uint64(sasBytes[3])<<16 | uint64(sasBytes[4])<<8 | uint64(sasBytes[5])
 

@@ -9,7 +9,6 @@ package event
 import (
 	"go.mau.fi/util/jsonbytes"
 	"go.mau.fi/util/jsontime"
-	"golang.org/x/exp/slices"
 
 	"maunium.net/go/mautrix/id"
 )
@@ -105,12 +104,6 @@ func VerificationRequestEventContentFromMessage(evt *Event) *VerificationRequest
 	}
 }
 
-// SupportsVerificationMethod returns whether the given verification method is
-// supported by the sender.
-func (vrec *VerificationRequestEventContent) SupportsVerificationMethod(method VerificationMethod) bool {
-	return slices.Contains(vrec.Methods, method)
-}
-
 // VerificationReadyEventContent represents the content of an
 // [m.key.verification.ready] event (both the to-device and the in-room
 // version) as described in [Section 11.12.2.1] of the Spec.
@@ -197,22 +190,6 @@ type VerificationStartEventContent struct {
 	// Secret is the shared secret from the QR code. This field is only
 	// applicable when the method is m.reciprocate.v1.
 	Secret jsonbytes.UnpaddedBytes `json:"secret,omitempty"`
-}
-
-func (vsec *VerificationStartEventContent) SupportsKeyAgreementProtocol(proto KeyAgreementProtocol) bool {
-	return slices.Contains(vsec.KeyAgreementProtocols, proto)
-}
-
-func (vsec *VerificationStartEventContent) SupportsHashMethod(alg VerificationHashMethod) bool {
-	return slices.Contains(vsec.Hashes, alg)
-}
-
-func (vsec *VerificationStartEventContent) SupportsMACMethod(meth MACMethod) bool {
-	return slices.Contains(vsec.MessageAuthenticationCodes, meth)
-}
-
-func (vsec *VerificationStartEventContent) SupportsSASMethod(meth SASMethod) bool {
-	return slices.Contains(vsec.ShortAuthenticationString, meth)
 }
 
 // VerificationDoneEventContent represents the content of an
