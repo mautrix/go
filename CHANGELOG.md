@@ -30,6 +30,7 @@
 * **Breaking change *(everything)*** Added context parameters to all functions
   (started by [@recht] in [#144]).
 * **Breaking change *(client)*** Moved `EventSource` to `event.Source`.
+* **Breaking change *(sync)*** The source parameter was removed on the `EventHandler` type.
 * *(client)* Removed deprecated `OldEventIgnorer`. The non-deprecated version
   (`Client.DontProcessOldEvents`) is still available.
 * *(crypto)* Added experimental pure Go Olm implementation to replace libolm
