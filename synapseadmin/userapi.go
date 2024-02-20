@@ -27,7 +27,6 @@ type ReqResetPassword struct {
 	LogoutDevices bool `json:"logout_devices"`
 }
 
-
 // ResetPassword changes the password of another user using
 //
 // https://matrix-org.github.io/synapse/latest/admin_api/user_admin_api.html#reset-password
@@ -195,9 +194,8 @@ func (cli *Client) GetUserRateLimit(ctx context.Context, userID id.UserID) (resp
 // https://matrix-org.github.io/synapse/latest/admin_api/user_admin_api.html#query-user-account
 func (cli *Client) DeleteUserRateLimit(ctx context.Context, userID id.UserID) (err error) {
 	_, err = cli.MakeFullRequest(ctx, mautrix.FullRequest{
-		Method:       http.MethodDelete,
-		URL:          cli.BuildAdminURL("v1", "users", userID, "override_ratelimit"),
+		Method: http.MethodDelete,
+		URL:    cli.BuildAdminURL("v1", "users", userID, "override_ratelimit"),
 	})
 	return
 }
-

@@ -7,10 +7,11 @@
 package synapseadmin
 
 import (
-	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/id"
 	"context"
 	"net/http"
+
+	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/id"
 )
 
 // Client is a wrapper for the mautrix.Client struct that includes methods for accessing the Synapse admin API.
@@ -24,21 +25,22 @@ func (cli *Client) BuildAdminURL(path ...any) string {
 	return cli.BuildURL(mautrix.SynapseAdminURLPath(path))
 }
 
-//func (cli *Client) MessagesAdmin(ctx context.Context, roomID string, from, to string) (RespMessagesAdmin, error) {
-func (cli *Client) MessagesAdmin(ctx context.Context, roomID id.RoomID, from, to string) (RespMessagesAdmin, error) {
-	resSyncAdmin, err := cli.FullAdminSyncRequest(ctx, ReqSyncAdmin{
-		from: from,
-		to: to,
-	}, roomID)
-	if err != nil {
-		return nil, err
+func (cli *Client) MessagesAdmin(ctx context.Context, roomID id.RoomID, from, to string) (resp RespMessagesAdmin, err error) {
+	req := ReqSyncAdmin{from: from, to: to}
+	urlPath := cli.BuildURLWithQuery(mautrix.SynapseAdminURLPath{"v1", "rooms", roomID, "messages"}, req.BuildQuery())
+	fullReq := mautrix.FullRequest{
+		Method:       http.MethodGet,
+		URL:          urlPath,
+		ResponseJSON: &resp,
+		MaxAttempts:  1,
 	}
-	return resSyncAdmin, nil
+	_, err = cli.MakeFullRequest(ctx, fullReq)
+	return resp, err
 }
 
 type ReqSyncAdmin struct {
-	from	string
-	to		string
+	from string
+	to   string
 }
 
 func (req *ReqSyncAdmin) BuildQuery() map[string]string {
@@ -50,16 +52,4 @@ func (req *ReqSyncAdmin) BuildQuery() map[string]string {
 		query["to"] = req.to
 	}
 	return query
-}
-
-func (cli *Client) FullAdminSyncRequest(ctx context.Context, req ReqSyncAdmin, roomID id.RoomID) (resp RespMessagesAdmin, err error) {
-	urlPath := cli.BuildURLWithQuery(mautrix.SynapseAdminURLPath{"v1", "rooms", roomID, "messages"}, req.BuildQuery())
-	fullReq := mautrix.FullRequest{
-		Method:       http.MethodGet,
-		URL:          urlPath,
-		ResponseJSON: &resp,
-		MaxAttempts: 1,
-	}
-	_, err = cli.MakeFullRequest(ctx, fullReq)
-	return resp, err
 }
