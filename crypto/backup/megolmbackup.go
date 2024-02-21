@@ -35,5 +35,5 @@ type MegolmSessionData struct {
 	ForwardingKeyChain []string          `json:"forwarding_curve25519_key_chain"`
 	SenderClaimedKeys  SenderClaimedKeys `json:"sender_claimed_keys"`
 	SenderKey          id.SenderKey      `json:"sender_key"`
-	SessionKey         []byte            `json:"session_key"`
+	SessionKey         string            `json:"session_key"`
 }
