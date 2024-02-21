@@ -2,7 +2,6 @@ package crypto
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"time"
 
@@ -140,7 +139,7 @@ func (mach *OlmMachine) ImportRoomKeyFromBackup(ctx context.Context, version id.
 		return fmt.Errorf("ignoring room key in backup with weird algorithm %s", keyBackupData.Algorithm)
 	}
 
-	igsInternal, err := olm.InboundGroupSessionImport([]byte(base64.RawStdEncoding.EncodeToString(keyBackupData.SessionKey)))
+	igsInternal, err := olm.InboundGroupSessionImport([]byte(keyBackupData.SessionKey))
 	if err != nil {
 		return fmt.Errorf("failed to import inbound group session: %w", err)
 	} else if igsInternal.ID() != sessionID {
