@@ -404,6 +404,9 @@ func (br *Bridge) fetchMediaConfig(ctx context.Context) {
 	if err != nil {
 		br.ZLog.Warn().Err(err).Msg("Failed to fetch media config")
 	} else {
+		if cfg.UploadSize == 0 {
+			cfg.UploadSize = 50 * 1024 * 1024
+		}
 		br.MediaConfig = *cfg
 	}
 }
