@@ -1691,9 +1691,11 @@ func (cli *Client) JoinedMembers(ctx context.Context, roomID id.RoomID) (resp *R
 	_, err = cli.MakeRequest(ctx, http.MethodGet, u, nil, &resp)
 	if err == nil && cli.StateStore != nil {
 		clearErr := cli.StateStore.ClearCachedMembers(ctx, roomID, event.MembershipJoin)
-		cli.cliOrContextLog(ctx).Warn().Err(clearErr).
-			Stringer("room_id", roomID).
-			Msg("Failed to clear cached member list after fetching joined members")
+		if clearErr != nil {
+			cli.cliOrContextLog(ctx).Warn().Err(clearErr).
+				Stringer("room_id", roomID).
+				Msg("Failed to clear cached member list after fetching joined members")
+		}
 		for userID, member := range resp.Joined {
 			updateErr := cli.StateStore.SetMember(ctx, roomID, userID, &event.MemberEventContent{
 				Membership:  event.MembershipJoin,
@@ -1701,7 +1703,7 @@ func (cli *Client) JoinedMembers(ctx context.Context, roomID id.RoomID) (resp *R
 				Displayname: member.DisplayName,
 			})
 			if updateErr != nil {
-				cli.cliOrContextLog(ctx).Warn().Err(clearErr).
+				cli.cliOrContextLog(ctx).Warn().Err(updateErr).
 					Stringer("room_id", roomID).
 					Stringer("user_id", userID).
 					Msg("Failed to update membership in state store after fetching joined members")
@@ -1735,9 +1737,11 @@ func (cli *Client) Members(ctx context.Context, roomID id.RoomID, req ...ReqMemb
 		}
 		if extra.NotMembership == "" {
 			clearErr := cli.StateStore.ClearCachedMembers(ctx, roomID, clearMemberships...)
-			cli.cliOrContextLog(ctx).Warn().Err(clearErr).
-				Stringer("room_id", roomID).
-				Msg("Failed to clear cached member list after fetching joined members")
+			if clearErr != nil {
+				cli.cliOrContextLog(ctx).Warn().Err(clearErr).
+					Stringer("room_id", roomID).
+					Msg("Failed to clear cached member list after fetching joined members")
+			}
 		}
 		for _, evt := range resp.Chunk {
 			UpdateStateStore(ctx, cli.StateStore, evt)
