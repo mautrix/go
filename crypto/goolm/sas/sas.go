@@ -1,4 +1,4 @@
-// sas provides the means to do SAS between keys
+// Package sas provides the means to do SAS between keys
 package sas
 
 import (

@@ -10,6 +10,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/element-hq/mautrix-go/id"
 )
 
 type RoomType string
@@ -116,7 +118,8 @@ func (et *Type) GuessClass() TypeClass {
 		return EphemeralEventType
 	case AccountDataDirectChats.Type, AccountDataPushRules.Type, AccountDataRoomTags.Type,
 		AccountDataSecretStorageKey.Type, AccountDataSecretStorageDefaultKey.Type,
-		AccountDataCrossSigningMaster.Type, AccountDataCrossSigningSelf.Type, AccountDataCrossSigningUser.Type:
+		AccountDataCrossSigningMaster.Type, AccountDataCrossSigningSelf.Type, AccountDataCrossSigningUser.Type,
+		AccountDataFullyRead.Type, AccountDataMegolmBackupKey.Type:
 		return AccountDataEventType
 	case EventRedaction.Type, EventMessage.Type, EventEncrypted.Type, EventReaction.Type, EventSticker.Type,
 		InRoomVerificationStart.Type, InRoomVerificationReady.Type, InRoomVerificationAccept.Type,
@@ -200,12 +203,15 @@ var (
 	EventReaction  = Type{"m.reaction", MessageEventType}
 	EventSticker   = Type{"m.sticker", MessageEventType}
 
-	InRoomVerificationStart  = Type{"m.key.verification.start", MessageEventType}
 	InRoomVerificationReady  = Type{"m.key.verification.ready", MessageEventType}
+	InRoomVerificationStart  = Type{"m.key.verification.start", MessageEventType}
+	InRoomVerificationDone   = Type{"m.key.verification.done", MessageEventType}
+	InRoomVerificationCancel = Type{"m.key.verification.cancel", MessageEventType}
+
+	// SAS Verification Events
 	InRoomVerificationAccept = Type{"m.key.verification.accept", MessageEventType}
 	InRoomVerificationKey    = Type{"m.key.verification.key", MessageEventType}
 	InRoomVerificationMAC    = Type{"m.key.verification.mac", MessageEventType}
-	InRoomVerificationCancel = Type{"m.key.verification.cancel", MessageEventType}
 
 	CallInvite       = Type{"m.call.invite", MessageEventType}
 	CallCandidates   = Type{"m.call.candidates", MessageEventType}
@@ -235,25 +241,33 @@ var (
 
 	AccountDataSecretStorageDefaultKey = Type{"m.secret_storage.default_key", AccountDataEventType}
 	AccountDataSecretStorageKey        = Type{"m.secret_storage.key", AccountDataEventType}
-	AccountDataCrossSigningMaster      = Type{"m.cross_signing.master", AccountDataEventType}
-	AccountDataCrossSigningUser        = Type{"m.cross_signing.user_signing", AccountDataEventType}
-	AccountDataCrossSigningSelf        = Type{"m.cross_signing.self_signing", AccountDataEventType}
+	AccountDataCrossSigningMaster      = Type{string(id.SecretXSMaster), AccountDataEventType}
+	AccountDataCrossSigningUser        = Type{string(id.SecretXSUserSigning), AccountDataEventType}
+	AccountDataCrossSigningSelf        = Type{string(id.SecretXSSelfSigning), AccountDataEventType}
+	AccountDataMegolmBackupKey         = Type{"m.megolm_backup.v1", AccountDataEventType}
 )
 
 // Device-to-device events
 var (
-	ToDeviceRoomKey             = Type{"m.room_key", ToDeviceEventType}
-	ToDeviceRoomKeyRequest      = Type{"m.room_key_request", ToDeviceEventType}
-	ToDeviceForwardedRoomKey    = Type{"m.forwarded_room_key", ToDeviceEventType}
-	ToDeviceEncrypted           = Type{"m.room.encrypted", ToDeviceEventType}
-	ToDeviceRoomKeyWithheld     = Type{"m.room_key.withheld", ToDeviceEventType}
-	ToDeviceDummy               = Type{"m.dummy", ToDeviceEventType}
+	ToDeviceRoomKey          = Type{"m.room_key", ToDeviceEventType}
+	ToDeviceRoomKeyRequest   = Type{"m.room_key_request", ToDeviceEventType}
+	ToDeviceForwardedRoomKey = Type{"m.forwarded_room_key", ToDeviceEventType}
+	ToDeviceEncrypted        = Type{"m.room.encrypted", ToDeviceEventType}
+	ToDeviceRoomKeyWithheld  = Type{"m.room_key.withheld", ToDeviceEventType}
+	ToDeviceSecretRequest    = Type{"m.secret.request", ToDeviceEventType}
+	ToDeviceSecretSend       = Type{"m.secret.send", ToDeviceEventType}
+	ToDeviceDummy            = Type{"m.dummy", ToDeviceEventType}
+
 	ToDeviceVerificationRequest = Type{"m.key.verification.request", ToDeviceEventType}
+	ToDeviceVerificationReady   = Type{"m.key.verification.ready", ToDeviceEventType}
 	ToDeviceVerificationStart   = Type{"m.key.verification.start", ToDeviceEventType}
-	ToDeviceVerificationAccept  = Type{"m.key.verification.accept", ToDeviceEventType}
-	ToDeviceVerificationKey     = Type{"m.key.verification.key", ToDeviceEventType}
-	ToDeviceVerificationMAC     = Type{"m.key.verification.mac", ToDeviceEventType}
+	ToDeviceVerificationDone    = Type{"m.key.verification.done", ToDeviceEventType}
 	ToDeviceVerificationCancel  = Type{"m.key.verification.cancel", ToDeviceEventType}
+
+	// SAS Verification Events
+	ToDeviceVerificationAccept = Type{"m.key.verification.accept", ToDeviceEventType}
+	ToDeviceVerificationKey    = Type{"m.key.verification.key", ToDeviceEventType}
+	ToDeviceVerificationMAC    = Type{"m.key.verification.mac", ToDeviceEventType}
 
 	ToDeviceOrgMatrixRoomKeyWithheld = Type{"org.matrix.room_key.withheld", ToDeviceEventType}
 

@@ -35,7 +35,7 @@ import (
 var EventChannelSize = 64
 var OTKChannelSize = 4
 
-// Create a blank appservice instance.
+// Create creates a blank appservice instance.
 func Create() *AppService {
 	jar, _ := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
 	as := &AppService{
@@ -56,21 +56,60 @@ func Create() *AppService {
 		OTKCounts:      make(chan *mautrix.OTKCount, OTKChannelSize),
 		DeviceLists:    make(chan *mautrix.DeviceLists, EventChannelSize),
 		QueryHandler:   &QueryHandlerStub{},
+
+		DefaultHTTPRetries: 4,
 	}
 
-	as.Router.HandleFunc("/transactions/{txnID}", as.PutTransaction).Methods(http.MethodPut)
-	as.Router.HandleFunc("/rooms/{roomAlias}", as.GetRoom).Methods(http.MethodGet)
-	as.Router.HandleFunc("/users/{userID}", as.GetUser).Methods(http.MethodGet)
 	as.Router.HandleFunc("/_matrix/app/v1/transactions/{txnID}", as.PutTransaction).Methods(http.MethodPut)
 	as.Router.HandleFunc("/_matrix/app/v1/rooms/{roomAlias}", as.GetRoom).Methods(http.MethodGet)
 	as.Router.HandleFunc("/_matrix/app/v1/users/{userID}", as.GetUser).Methods(http.MethodGet)
 	as.Router.HandleFunc("/_matrix/app/v1/ping", as.PostPing).Methods(http.MethodPost)
-	as.Router.HandleFunc("/_matrix/app/unstable/fi.mau.msc2659/ping", as.PostPing).Methods(http.MethodPost)
 	as.Router.HandleFunc("/_matrix/mau/live", as.GetLive).Methods(http.MethodGet)
 	as.Router.HandleFunc("/_matrix/mau/ready", as.GetReady).Methods(http.MethodGet)
 
 	return as
 }
+
+// CreateOpts contains the options for initializing a new [AppService] instance.
+type CreateOpts struct {
+	// Required, the registration file data for this appservice.
+	Registration *Registration
+	// Required, the homeserver's server_name.
+	HomeserverDomain string
+	// Required, the homeserver URL to connect to. Should be either https://address or unix:path
+	HomeserverURL string
+	// Required if you want to use the standard HTTP server, optional for websockets (non-standard)
+	HostConfig HostConfig
+	// Optional, defaults to a memory state store
+	StateStore StateStore
+}
+
+// CreateFull creates a fully configured appservice instance that can be [Start]ed and used directly.
+func CreateFull(opts CreateOpts) (*AppService, error) {
+	if opts.HomeserverDomain == "" {
+		return nil, fmt.Errorf("missing homeserver domain")
+	} else if opts.HomeserverURL == "" {
+		return nil, fmt.Errorf("missing homeserver URL")
+	} else if opts.Registration == nil {
+		return nil, fmt.Errorf("missing registration")
+	}
+	as := Create()
+	as.HomeserverDomain = opts.HomeserverDomain
+	as.Host = opts.HostConfig
+	as.Registration = opts.Registration
+	err := as.SetHomeserverURL(opts.HomeserverURL)
+	if err != nil {
+		return nil, err
+	}
+	if opts.StateStore != nil {
+		as.StateStore = opts.StateStore
+	} else {
+		as.StateStore = mautrix.NewMemoryStateStore().(StateStore)
+	}
+	return as, nil
+}
+
+var _ StateStore = (*mautrix.MemoryStateStore)(nil)
 
 // QueryHandler handles room alias and user ID queries from the homeserver.
 type QueryHandler interface {
@@ -178,10 +217,13 @@ func (as *AppService) PrepareWebsocket() {
 
 // HostConfig contains info about how to host the appservice.
 type HostConfig struct {
+	// Hostname can be an IP address or an absolute path for a unix socket.
 	Hostname string `yaml:"hostname"`
-	Port     uint16 `yaml:"port"`
-	TLSKey   string `yaml:"tls_key,omitempty"`
-	TLSCert  string `yaml:"tls_cert,omitempty"`
+	// Port is required when Hostname is an IP address, optional for unix sockets
+	Port uint16 `yaml:"port"`
+
+	TLSKey  string `yaml:"tls_key,omitempty"`
+	TLSCert string `yaml:"tls_cert,omitempty"`
 }
 
 // Address gets the whole address of the Appservice.
@@ -215,6 +257,7 @@ func (as *AppService) YAML() (string, error) {
 	return string(data), nil
 }
 
+// BotMXID returns the user ID corresponding to the appservice's sender_localpart
 func (as *AppService) BotMXID() id.UserID {
 	return id.NewUserID(as.Registration.SenderLocalpart, as.HomeserverDomain)
 }
@@ -251,6 +294,12 @@ func (as *AppService) makeIntent(userID id.UserID) *IntentAPI {
 	return intent
 }
 
+// Intent returns an [IntentAPI] object for the given user ID.
+//
+// This will return nil if the given user ID has an empty localpart,
+// or if the server name is not the same as the appservice's HomeserverDomain.
+// It does not currently validate that the given user ID is actually in the
+// appservice's namespace. Validation may be added later.
 func (as *AppService) Intent(userID id.UserID) *IntentAPI {
 	as.intentsLock.RLock()
 	intent, ok := as.intents[userID]
@@ -261,6 +310,7 @@ func (as *AppService) Intent(userID id.UserID) *IntentAPI {
 	return intent
 }
 
+// BotIntent returns an [IntentAPI] object for the appservice's sender_localpart user.
 func (as *AppService) BotIntent() *IntentAPI {
 	if as.botIntent == nil {
 		as.botIntent = as.makeIntent(as.BotMXID())
@@ -268,6 +318,10 @@ func (as *AppService) BotIntent() *IntentAPI {
 	return as.botIntent
 }
 
+// SetHomeserverURL updates the appservice's homeserver URL.
+//
+// Note that this does not affect already-created [IntentAPI] or [mautrix.Client] objects,
+// so it should not be called after Intent or Client are called.
 func (as *AppService) SetHomeserverURL(homeserverURL string) error {
 	parsedURL, err := url.Parse(homeserverURL)
 	if err != nil {
@@ -296,6 +350,10 @@ func (as *AppService) SetHomeserverURL(homeserverURL string) error {
 	return nil
 }
 
+// NewMautrixClient creates a new [mautrix.Client] instance for the given user ID.
+//
+// This does not do any validation, and it does not cache the client.
+// Usually you should prefer [AppService.Client] or [AppService.Intent] over this method.
 func (as *AppService) NewMautrixClient(userID id.UserID) *mautrix.Client {
 	client := &mautrix.Client{
 		HomeserverURL:       as.hsURLForClient,
@@ -312,6 +370,11 @@ func (as *AppService) NewMautrixClient(userID id.UserID) *mautrix.Client {
 	return client
 }
 
+// NewExternalMautrixClient creates a new [mautrix.Client] instance for an external user,
+// with a token and homeserver URL separate from the main appservice.
+//
+// This is primarily meant to facilitate double puppeting in bridges, and is used by [bridge.doublePuppetUtil].
+// Non-bridge appservices will likely not need this.
 func (as *AppService) NewExternalMautrixClient(userID id.UserID, token string, homeserverURL string) (*mautrix.Client, error) {
 	client := as.NewMautrixClient(userID)
 	client.AccessToken = token
@@ -339,6 +402,11 @@ func (as *AppService) makeClient(userID id.UserID) *mautrix.Client {
 	return client
 }
 
+// Client returns the [mautrix.Client] instance for the given user ID.
+//
+// Unlike [AppService.Intent], this does not do any validation, and will always return a value.
+// Usually you should prefer creating intents and using intent methods over direct client methods.
+// You can always access the client inside an intent with [IntentAPI.Client].
 func (as *AppService) Client(userID id.UserID) *mautrix.Client {
 	as.clientsLock.RLock()
 	client, ok := as.clients[userID]
@@ -349,6 +417,9 @@ func (as *AppService) Client(userID id.UserID) *mautrix.Client {
 	return client
 }
 
+// BotClient returns the [mautrix.Client] instance for the appservice's sender_localpart user.
+//
+// Like with the generic Client method, [AppService.BotIntent] should be preferred over this.
 func (as *AppService) BotClient() *mautrix.Client {
 	if as.botClient == nil {
 		as.botClient = as.makeClient(as.BotMXID())

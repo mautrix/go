@@ -330,6 +330,17 @@ func (mach *OlmMachine) encryptAndSendGroupSession(ctx context.Context, session 
 				Str("target_user_id", userID.String()).
 				Str("target_device_id", deviceID.String()).
 				Msg("Encrypted group session for device")
+			if !mach.DisableSharedGroupSessionTracking {
+				err := mach.CryptoStore.MarkOutboundGroupSessionShared(ctx, userID, device.identity.IdentityKey, session.id)
+				if err != nil {
+					log.Warn().
+						Err(err).
+						Str("target_user_id", userID.String()).
+						Str("target_device_id", deviceID.String()).
+						Stringer("target_session_id", session.id).
+						Msg("Failed to mark outbound group session shared")
+				}
+			}
 		}
 	}
 

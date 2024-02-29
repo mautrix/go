@@ -9,14 +9,16 @@ package crypto
 import (
 	"github.com/element-hq/mautrix-go"
 	"github.com/element-hq/mautrix-go/crypto/olm"
+	"github.com/element-hq/mautrix-go/crypto/signatures"
 	"github.com/element-hq/mautrix-go/id"
 )
 
 type OlmAccount struct {
-	Internal    olm.Account
-	signingKey  id.SigningKey
-	identityKey id.IdentityKey
-	Shared      bool
+	Internal         olm.Account
+	signingKey       id.SigningKey
+	identityKey      id.IdentityKey
+	Shared           bool
+	KeyBackupVersion id.KeyBackupVersion
 }
 
 func NewOlmAccount() *OlmAccount {
@@ -62,11 +64,7 @@ func (account *OlmAccount) getInitialKeys(userID id.UserID, deviceID id.DeviceID
 		panic(err)
 	}
 
-	deviceKeys.Signatures = mautrix.Signatures{
-		userID: {
-			id.NewKeyID(id.KeyAlgorithmEd25519, deviceID.String()): signature,
-		},
-	}
+	deviceKeys.Signatures = signatures.NewSingleSignature(userID, id.KeyAlgorithmEd25519, deviceID.String(), signature)
 	return deviceKeys
 }
 
@@ -79,11 +77,7 @@ func (account *OlmAccount) getOneTimeKeys(userID id.UserID, deviceID id.DeviceID
 	for keyID, key := range account.Internal.OneTimeKeys() {
 		key := mautrix.OneTimeKey{Key: key}
 		signature, _ := account.Internal.SignJSON(key)
-		key.Signatures = mautrix.Signatures{
-			userID: {
-				id.NewKeyID(id.KeyAlgorithmEd25519, deviceID.String()): signature,
-			},
-		}
+		key.Signatures = signatures.NewSingleSignature(userID, id.KeyAlgorithmEd25519, deviceID.String(), signature)
 		key.IsSigned = true
 		oneTimeKeys[id.NewKeyID(id.KeyAlgorithmSignedCurve25519, keyID)] = key
 	}

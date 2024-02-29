@@ -23,7 +23,6 @@ import (
 	"github.com/lib/pq"
 	"github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
-	deflog "github.com/rs/zerolog/log"
 	"go.mau.fi/util/configupgrade"
 	"go.mau.fi/util/dbutil"
 	_ "go.mau.fi/util/dbutil/litestream"
@@ -50,6 +49,7 @@ var version = flag.MakeFull("v", "version", "View bridge version and quit.", "fa
 var versionJSON = flag.Make().LongKey("version-json").Usage("Print a JSON object representing the bridge version and quit.").Default("false").Bool()
 var ignoreUnsupportedDatabase = flag.Make().LongKey("ignore-unsupported-database").Usage("Run even if the database schema is too new").Default("false").Bool()
 var ignoreForeignTables = flag.Make().LongKey("ignore-foreign-tables").Usage("Run even if the database contains tables from other programs (like Synapse)").Default("false").Bool()
+var ignoreUnsupportedServer = flag.Make().LongKey("ignore-unsupported-server").Usage("Run even if the Matrix homeserver is outdated").Default("false").Bool()
 var wantHelp, _ = flag.MakeHelpFlag()
 
 var _ appservice.StateStore = (*sqlstatestore.SQLStateStore)(nil)
@@ -291,7 +291,7 @@ func (br *Bridge) InitVersion(tag, commit, buildTime string) {
 	br.BuildTime = buildTime
 }
 
-var MinSpecVersion = mautrix.SpecV11
+var MinSpecVersion = mautrix.SpecV14
 
 func (br *Bridge) ensureConnection(ctx context.Context) {
 	for {
@@ -305,19 +305,27 @@ func (br *Bridge) ensureConnection(ctx context.Context) {
 		}
 	}
 
+	unsupportedServerLogLevel := zerolog.FatalLevel
+	if *ignoreUnsupportedServer {
+		unsupportedServerLogLevel = zerolog.ErrorLevel
+	}
 	if br.Config.Homeserver.Software == bridgeconfig.SoftwareHungry && !br.SpecVersions.Supports(mautrix.BeeperFeatureHungry) {
 		br.ZLog.WithLevel(zerolog.FatalLevel).Msg("The config claims the homeserver is hungryserv, but the /versions response didn't confirm it")
 		os.Exit(18)
 	} else if !br.SpecVersions.ContainsGreaterOrEqual(MinSpecVersion) {
-		br.ZLog.WithLevel(zerolog.FatalLevel).
+		br.ZLog.WithLevel(unsupportedServerLogLevel).
 			Stringer("server_supports", br.SpecVersions.GetLatest()).
 			Stringer("bridge_requires", MinSpecVersion).
 			Msg("The homeserver is outdated (supported spec versions are below minimum required by bridge)")
-		os.Exit(18)
+		if !*ignoreUnsupportedServer {
+			os.Exit(18)
+		}
 	} else if fr, ok := br.Child.(CSFeatureRequirer); ok {
 		if msg, hasFeatures := fr.CheckFeatures(&br.SpecVersions); !hasFeatures {
-			br.ZLog.WithLevel(zerolog.FatalLevel).Msg(msg)
-			os.Exit(18)
+			br.ZLog.WithLevel(unsupportedServerLogLevel).Msg(msg)
+			if !*ignoreUnsupportedServer {
+				os.Exit(18)
+			}
 		}
 	}
 
@@ -516,11 +524,7 @@ func (br *Bridge) init() {
 		_, _ = fmt.Fprintln(os.Stderr, "Failed to initialize logger:", err)
 		os.Exit(12)
 	}
-	defaultCtxLog := br.ZLog.With().Bool("default_context_log", true).Caller().Logger()
-	zerolog.TimeFieldFormat = time.RFC3339Nano
-	zerolog.CallerMarshalFunc = exzerolog.CallerWithFunctionName
-	zerolog.DefaultContextLogger = &defaultCtxLog
-	deflog.Logger = br.ZLog.With().Bool("global_log", true).Caller().Logger()
+	exzerolog.SetupDefaults(br.ZLog)
 	br.Log = maulogadapt.ZeroAsMau(br.ZLog)
 
 	br.DoublePuppet = &doublePuppetUtil{br: br, log: br.ZLog.With().Str("component", "double puppet").Logger()}
@@ -567,11 +571,24 @@ func (br *Bridge) init() {
 	br.ZLog.Debug().Msg("Initializing state store")
 	br.StateStore = sqlstatestore.NewSQLStateStore(br.DB, dbutil.ZeroLogger(br.ZLog.With().Str("db_section", "matrix_state").Logger()), true)
 
-	br.AS = br.Config.MakeAppService()
+	br.AS, err = appservice.CreateFull(appservice.CreateOpts{
+		Registration:     br.Config.AppService.GetRegistration(),
+		HomeserverDomain: br.Config.Homeserver.Domain,
+		HomeserverURL:    br.Config.Homeserver.Address,
+		HostConfig: appservice.HostConfig{
+			Hostname: br.Config.AppService.Hostname,
+			Port:     br.Config.AppService.Port,
+		},
+		StateStore: br.StateStore,
+	})
+	if err != nil {
+		br.ZLog.WithLevel(zerolog.FatalLevel).Err(err).
+			Msg("Failed to initialize appservice")
+		os.Exit(15)
+	}
+	br.AS.Log = *br.ZLog
 	br.AS.DoublePuppetValue = br.Name
 	br.AS.GetProfile = br.getProfile
-	br.AS.Log = *br.ZLog
-	br.AS.StateStore = br.StateStore
 	br.Bot = br.AS.BotIntent()
 
 	br.ZLog.Debug().Msg("Initializing Matrix event processor")

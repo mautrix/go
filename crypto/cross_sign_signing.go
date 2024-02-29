@@ -14,7 +14,7 @@ import (
 
 	"github.com/element-hq/mautrix-go"
 	"github.com/element-hq/mautrix-go/crypto/olm"
-	"github.com/element-hq/mautrix-go/event"
+	"github.com/element-hq/mautrix-go/crypto/signatures"
 	"github.com/element-hq/mautrix-go/id"
 )
 
@@ -33,31 +33,6 @@ var (
 	ErrMasterKeyMACNotFound          = errors.New("found cross-signing master key, but didn't find corresponding MAC in verification request")
 	ErrMismatchingMasterKeyMAC       = errors.New("mismatching cross-signing master key MAC")
 )
-
-func (mach *OlmMachine) fetchMasterKey(ctx context.Context, device *id.Device, content *event.VerificationMacEventContent, verState *verificationState, transactionID string) (id.Ed25519, error) {
-	crossSignKeys, err := mach.CryptoStore.GetCrossSigningKeys(ctx, device.UserID)
-	if err != nil {
-		return "", fmt.Errorf("failed to fetch cross-signing keys: %w", err)
-	}
-	masterKey, ok := crossSignKeys[id.XSUsageMaster]
-	if !ok {
-		return "", ErrCrossSigningMasterKeyNotFound
-	}
-	masterKeyID := id.NewKeyID(id.KeyAlgorithmEd25519, masterKey.Key.String())
-	masterKeyMAC, ok := content.Mac[masterKeyID]
-	if !ok {
-		return masterKey.Key, ErrMasterKeyMACNotFound
-	}
-	expectedMasterKeyMAC, _, err := mach.getPKAndKeysMAC(verState.sas, device.UserID, device.DeviceID,
-		mach.Client.UserID, mach.Client.DeviceID, transactionID, masterKey.Key, masterKeyID, content.Mac)
-	if err != nil {
-		return masterKey.Key, fmt.Errorf("failed to calculate expected MAC for master key: %w", err)
-	}
-	if masterKeyMAC != expectedMasterKeyMAC {
-		err = fmt.Errorf("%w: expected %s, got %s", ErrMismatchingMasterKeyMAC, expectedMasterKeyMAC, masterKeyMAC)
-	}
-	return masterKey.Key, err
-}
 
 // SignUser creates a cross-signing signature for a user, stores it and uploads it to the server.
 func (mach *OlmMachine) SignUser(ctx context.Context, userID id.UserID, masterKey id.Ed25519) error {
@@ -115,11 +90,7 @@ func (mach *OlmMachine) SignOwnMasterKey(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to sign JSON: %w", err)
 	}
-	masterKeyObj.Signatures = mautrix.Signatures{
-		userID: map[id.KeyID]string{
-			id.NewKeyID(id.KeyAlgorithmEd25519, deviceID.String()): signature,
-		},
-	}
+	masterKeyObj.Signatures = signatures.NewSingleSignature(userID, id.KeyAlgorithmEd25519, deviceID.String(), signature)
 	mach.Log.Debug().
 		Str("device_id", deviceID.String()).
 		Str("signature", signature).
@@ -214,11 +185,7 @@ func (mach *OlmMachine) signAndUpload(ctx context.Context, req mautrix.ReqKeysSi
 	if err != nil {
 		return "", fmt.Errorf("failed to sign JSON: %w", err)
 	}
-	req.Signatures = mautrix.Signatures{
-		mach.Client.UserID: map[id.KeyID]string{
-			id.NewKeyID(id.KeyAlgorithmEd25519, key.PublicKey.String()): signature,
-		},
-	}
+	req.Signatures = signatures.NewSingleSignature(mach.Client.UserID, id.KeyAlgorithmEd25519, key.PublicKey.String(), signature)
 
 	resp, err := mach.Client.UploadSignatures(ctx, &mautrix.ReqUploadSignatures{
 		userID: map[string]mautrix.ReqKeysSignatures{

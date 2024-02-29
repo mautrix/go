@@ -12,7 +12,7 @@ import (
 	"fmt"
 
 	"github.com/element-hq/mautrix-go"
-	"github.com/element-hq/mautrix-go/crypto/olm"
+	"github.com/element-hq/mautrix-go/crypto/signatures"
 	"github.com/element-hq/mautrix-go/event"
 	"github.com/element-hq/mautrix-go/id"
 )
@@ -109,7 +109,7 @@ func (mach *OlmMachine) createOutboundSessions(ctx context.Context, input map[id
 				continue
 			}
 			identity := input[userID][deviceID]
-			if ok, err := olm.VerifySignatureJSON(oneTimeKey.RawData, userID, deviceID.String(), identity.SigningKey); err != nil {
+			if ok, err := signatures.VerifySignatureJSON(oneTimeKey.RawData, userID, deviceID.String(), identity.SigningKey); err != nil {
 				log.Error().Err(err).Msg("Failed to verify signature of one-time key")
 			} else if !ok {
 				log.Warn().Msg("One-time key has invalid signature from device")

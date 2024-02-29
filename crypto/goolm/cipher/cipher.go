@@ -1,4 +1,5 @@
-// cipher provides the methods and structs to do encryptions for olm/megolm.
+// Package cipher provides the methods and structs to do encryptions for
+// olm/megolm.
 package cipher
 
 // Cipher defines a valid cipher.

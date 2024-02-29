@@ -72,7 +72,11 @@ func (mach *OlmMachine) DecryptMegolmEvent(ctx context.Context, evt *event.Event
 	if sess.SigningKey == ownSigningKey && sess.SenderKey == ownIdentityKey && len(sess.ForwardingChains) == 0 {
 		trustLevel = id.TrustStateVerified
 	} else {
-		device, err = mach.GetOrFetchDeviceByKey(ctx, evt.Sender, sess.SenderKey)
+		if mach.DisableDecryptKeyFetching {
+			device, err = mach.CryptoStore.FindDeviceByKey(ctx, evt.Sender, sess.SenderKey)
+		} else {
+			device, err = mach.GetOrFetchDeviceByKey(ctx, evt.Sender, sess.SenderKey)
+		}
 		if err != nil {
 			// We don't want to throw these errors as the message can still be decrypted.
 			log.Debug().Err(err).Msg("Failed to get device to verify session")

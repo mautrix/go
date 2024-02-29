@@ -2,8 +2,10 @@ package cipher
 
 import (
 	"bytes"
+	"crypto/aes"
 	"io"
 
+	"github.com/element-hq/mautrix-go/crypto/aescbc"
 	"github.com/element-hq/mautrix-go/crypto/goolm/crypto"
 )
 
@@ -36,7 +38,7 @@ func deriveAESKeys(kdfInfo []byte, key []byte) (*derivedAESKeys, error) {
 
 // AESSha512BlockSize resturns the blocksize of the cipher AESSHA256.
 func AESSha512BlockSize() int {
-	return crypto.AESCBCBlocksize()
+	return aes.BlockSize
 }
 
 // AESSHA256 is a valid cipher using AES with CBC and HKDFSha256.
@@ -57,7 +59,7 @@ func (c AESSHA256) Encrypt(key, plaintext []byte) (ciphertext []byte, err error)
 	if err != nil {
 		return nil, err
 	}
-	ciphertext, err = crypto.AESCBCEncrypt(keys.key, keys.iv, plaintext)
+	ciphertext, err = aescbc.Encrypt(keys.key, keys.iv, plaintext)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +72,7 @@ func (c AESSHA256) Decrypt(key, ciphertext []byte) (plaintext []byte, err error)
 	if err != nil {
 		return nil, err
 	}
-	plaintext, err = crypto.AESCBCDecrypt(keys.key, keys.iv, ciphertext)
+	plaintext, err = aescbc.Decrypt(keys.key, keys.iv, ciphertext)
 	if err != nil {
 		return nil, err
 	}

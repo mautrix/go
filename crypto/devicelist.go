@@ -14,7 +14,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/element-hq/mautrix-go"
-	"github.com/element-hq/mautrix-go/crypto/olm"
+	"github.com/element-hq/mautrix-go/crypto/signatures"
 	"github.com/element-hq/mautrix-go/id"
 )
 
@@ -52,7 +52,7 @@ func (mach *OlmMachine) storeDeviceSelfSignatures(ctx context.Context, userID id
 					} else if _, ok := selfSigs[id.NewKeyID(id.KeyAlgorithmEd25519, pubKey.String())]; !ok {
 						continue
 					}
-					if verified, err := olm.VerifySignatureJSON(deviceKeys, signerUserID, pubKey.String(), pubKey); verified {
+					if verified, err := signatures.VerifySignatureJSON(deviceKeys, signerUserID, pubKey.String(), pubKey); verified {
 						if signKey, ok := deviceKeys.Keys[id.DeviceKeyID(signerKey)]; ok {
 							signature := deviceKeys.Signatures[signerUserID][id.NewKeyID(id.KeyAlgorithmEd25519, pubKey.String())]
 							log.Trace().Err(err).
@@ -245,7 +245,7 @@ func (mach *OlmMachine) validateDevice(userID id.UserID, deviceID id.DeviceID, d
 		return existing, fmt.Errorf("%w (expected %s, got %s)", MismatchingSigningKey, existing.SigningKey, signingKey)
 	}
 
-	ok, err := olm.VerifySignatureJSON(deviceKeys, userID, deviceID.String(), signingKey)
+	ok, err := signatures.VerifySignatureJSON(deviceKeys, userID, deviceID.String(), signingKey)
 	if err != nil {
 		return existing, fmt.Errorf("failed to verify signature: %w", err)
 	} else if !ok {

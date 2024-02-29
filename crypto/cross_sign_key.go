@@ -13,6 +13,7 @@ import (
 
 	"github.com/element-hq/mautrix-go"
 	"github.com/element-hq/mautrix-go/crypto/olm"
+	"github.com/element-hq/mautrix-go/crypto/signatures"
 	"github.com/element-hq/mautrix-go/id"
 )
 
@@ -100,6 +101,11 @@ func (mach *OlmMachine) PublishCrossSigningKeys(ctx context.Context, keys *Cross
 			masterKeyID: keys.MasterKey.PublicKey,
 		},
 	}
+	masterSig, err := mach.account.Internal.SignJSON(masterKey)
+	if err != nil {
+		return fmt.Errorf("failed to sign master key: %w", err)
+	}
+	masterKey.Signatures = signatures.NewSingleSignature(userID, id.KeyAlgorithmEd25519, mach.Client.DeviceID.String(), masterSig)
 
 	selfKey := mautrix.CrossSigningKeys{
 		UserID: userID,
@@ -112,11 +118,7 @@ func (mach *OlmMachine) PublishCrossSigningKeys(ctx context.Context, keys *Cross
 	if err != nil {
 		return fmt.Errorf("failed to sign self-signing key: %w", err)
 	}
-	selfKey.Signatures = map[id.UserID]map[id.KeyID]string{
-		userID: {
-			masterKeyID: selfSig,
-		},
-	}
+	selfKey.Signatures = signatures.NewSingleSignature(userID, id.KeyAlgorithmEd25519, keys.MasterKey.PublicKey.String(), selfSig)
 
 	userKey := mautrix.CrossSigningKeys{
 		UserID: userID,
@@ -129,11 +131,7 @@ func (mach *OlmMachine) PublishCrossSigningKeys(ctx context.Context, keys *Cross
 	if err != nil {
 		return fmt.Errorf("failed to sign user-signing key: %w", err)
 	}
-	userKey.Signatures = map[id.UserID]map[id.KeyID]string{
-		userID: {
-			masterKeyID: userSig,
-		},
-	}
+	userKey.Signatures = signatures.NewSingleSignature(userID, id.KeyAlgorithmEd25519, keys.MasterKey.PublicKey.String(), userSig)
 
 	err = mach.Client.UploadCrossSigningKeys(ctx, &mautrix.UploadCrossSigningKeysReq{
 		Master:      masterKey,

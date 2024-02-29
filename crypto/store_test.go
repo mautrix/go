@@ -217,6 +217,62 @@ func TestStoreOutboundMegolmSession(t *testing.T) {
 	}
 }
 
+func TestStoreOutboundMegolmSessionSharing(t *testing.T) {
+	stores := getCryptoStores(t)
+
+	resetDevice := func() *id.Device {
+		acc := NewOlmAccount()
+		return &id.Device{
+			UserID:      "user1",
+			DeviceID:    id.DeviceID("dev1"),
+			IdentityKey: acc.IdentityKey(),
+			SigningKey:  acc.SigningKey(),
+		}
+	}
+
+	for storeName, store := range stores {
+		t.Run(storeName, func(t *testing.T) {
+			device := resetDevice()
+			err := store.PutDevice(context.TODO(), "user1", device)
+			if err != nil {
+				t.Errorf("Error storing devices: %v", err)
+			}
+
+			shared, err := store.IsOutboundGroupSessionShared(context.TODO(), device.UserID, device.IdentityKey, "session1")
+			if err != nil {
+				t.Errorf("Error checking if outbound group session is shared: %v", err)
+			} else if shared {
+				t.Errorf("Outbound group session shared when it shouldn't")
+			}
+
+			err = store.MarkOutboundGroupSessionShared(context.TODO(), device.UserID, device.IdentityKey, "session1")
+			if err != nil {
+				t.Errorf("Error marking outbound group session as shared: %v", err)
+			}
+
+			shared, err = store.IsOutboundGroupSessionShared(context.TODO(), device.UserID, device.IdentityKey, "session1")
+			if err != nil {
+				t.Errorf("Error checking if outbound group session is shared: %v", err)
+			} else if !shared {
+				t.Errorf("Outbound group session not shared when it should")
+			}
+
+			device = resetDevice()
+			err = store.PutDevice(context.TODO(), "user1", device)
+			if err != nil {
+				t.Errorf("Error storing devices: %v", err)
+			}
+
+			shared, err = store.IsOutboundGroupSessionShared(context.TODO(), device.UserID, device.IdentityKey, "session1")
+			if err != nil {
+				t.Errorf("Error checking if outbound group session is shared: %v", err)
+			} else if shared {
+				t.Errorf("Outbound group session shared when it shouldn't")
+			}
+		})
+	}
+}
+
 func TestStoreDevices(t *testing.T) {
 	stores := getCryptoStores(t)
 	for storeName, store := range stores {
@@ -292,6 +348,26 @@ func TestStoreDevices(t *testing.T) {
 			}
 			if len(outdated) > 0 {
 				t.Errorf("Got outdated tracked users %v when expected none", outdated)
+			}
+		})
+	}
+}
+
+func TestStoreSecrets(t *testing.T) {
+	stores := getCryptoStores(t)
+	for storeName, store := range stores {
+		t.Run(storeName, func(t *testing.T) {
+			storedSecret := "trustno1"
+			err := store.PutSecret(context.TODO(), id.SecretMegolmBackupV1, storedSecret)
+			if err != nil {
+				t.Errorf("Error storing secret: %v", err)
+			}
+
+			secret, err := store.GetSecret(context.TODO(), id.SecretMegolmBackupV1)
+			if err != nil {
+				t.Errorf("Error storing secret: %v", err)
+			} else if secret != storedSecret {
+				t.Errorf("Stored secret did not match: '%s' != '%s'", secret, storedSecret)
 			}
 		})
 	}

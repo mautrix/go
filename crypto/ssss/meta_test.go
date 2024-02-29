@@ -24,8 +24,8 @@ const key1Meta = `
     "iterations": 500000,
     "salt": "y863BOoqOadgDp8S3FtHXikDJEalsQ7d"
   },
-  "iv": "xxkTK0L4UzxgAFkQ6XPwsw==",
-  "mac": "MEhooO0ZhFJNxUhvRMSxBnJfL20wkLgle3ocY0ee/eA="
+  "iv": "xxkTK0L4UzxgAFkQ6XPwsw",
+  "mac": "MEhooO0ZhFJNxUhvRMSxBnJfL20wkLgle3ocY0ee/eA"
 }
 `
 const key1ID = "gEJqbfSEMnP5JXXcukpXEX1l0aI3MDs0"

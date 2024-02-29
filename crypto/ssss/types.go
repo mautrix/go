@@ -47,6 +47,8 @@ const (
 )
 
 type EncryptedKeyData struct {
+	// Note: as per https://spec.matrix.org/v1.9/client-server-api/#msecret_storagev1aes-hmac-sha2-1,
+	// these fields are "maybe padded" base64, so both unpadded and padded values must be supported.
 	Ciphertext string `json:"ciphertext"`
 	IV         string `json:"iv"`
 	MAC        string `json:"mac"`
@@ -72,4 +74,5 @@ func init() {
 	event.TypeMap[event.AccountDataCrossSigningUser] = encryptedContent
 	event.TypeMap[event.AccountDataSecretStorageDefaultKey] = reflect.TypeOf(&DefaultSecretStorageKeyContent{})
 	event.TypeMap[event.AccountDataSecretStorageKey] = reflect.TypeOf(&KeyMetadata{})
+	event.TypeMap[event.AccountDataMegolmBackupKey] = reflect.TypeOf(&EncryptedAccountDataEventContent{})
 }

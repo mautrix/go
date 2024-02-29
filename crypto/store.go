@@ -12,6 +12,8 @@ import (
 	"sort"
 	"sync"
 
+	"go.mau.fi/util/dbutil"
+
 	"github.com/element-hq/mautrix-go/event"
 	"github.com/element-hq/mautrix-go/id"
 )
@@ -68,10 +70,12 @@ type Store interface {
 
 	// GetGroupSessionsForRoom gets all the inbound Megolm sessions for a specific room. This is used for creating key
 	// export files. Unlike GetGroupSession, this should not return any errors about withheld keys.
-	GetGroupSessionsForRoom(context.Context, id.RoomID) ([]*InboundGroupSession, error)
+	GetGroupSessionsForRoom(context.Context, id.RoomID) dbutil.RowIter[*InboundGroupSession]
 	// GetAllGroupSessions gets all the inbound Megolm sessions in the store. This is used for creating key export
 	// files. Unlike GetGroupSession, this should not return any errors about withheld keys.
-	GetAllGroupSessions(context.Context) ([]*InboundGroupSession, error)
+	GetAllGroupSessions(context.Context) dbutil.RowIter[*InboundGroupSession]
+	// GetGroupSessionsWithoutKeyBackupVersion gets all the inbound Megolm sessions in the store that do not match given key backup version.
+	GetGroupSessionsWithoutKeyBackupVersion(context.Context, id.KeyBackupVersion) dbutil.RowIter[*InboundGroupSession]
 
 	// AddOutboundGroupSession inserts the given outbound Megolm session into the store.
 	//
@@ -84,6 +88,10 @@ type Store interface {
 	GetOutboundGroupSession(context.Context, id.RoomID) (*OutboundGroupSession, error)
 	// RemoveOutboundGroupSession removes the stored outbound Megolm session for the given room ID.
 	RemoveOutboundGroupSession(context.Context, id.RoomID) error
+	// MarkOutboutGroupSessionShared flags that the currently known device has been shared the keys for the specified session.
+	MarkOutboundGroupSessionShared(context.Context, id.UserID, id.IdentityKey, id.SessionID) error
+	// IsOutboutGroupSessionShared checks if the specified session has been shared with the device.
+	IsOutboundGroupSessionShared(context.Context, id.UserID, id.IdentityKey, id.SessionID) (bool, error)
 
 	// ValidateMessageIndex validates that the given message details aren't from a replay attack.
 	//
@@ -123,6 +131,13 @@ type Store interface {
 	IsKeySignedBy(ctx context.Context, userID id.UserID, key id.Ed25519, signedByUser id.UserID, signedByKey id.Ed25519) (bool, error)
 	// DropSignaturesByKey deletes the signatures made by the given user and key from the store. It returns the number of signatures deleted.
 	DropSignaturesByKey(context.Context, id.UserID, id.Ed25519) (int64, error)
+
+	// PutSecret stores a named secret, replacing it if it exists already.
+	PutSecret(context.Context, id.Secret, string) error
+	// GetSecret returns a named secret.
+	GetSecret(context.Context, id.Secret) (string, error)
+	// DeleteSecret removes a named secret.
+	DeleteSecret(context.Context, id.Secret) error
 }
 
 type messageIndexKey struct {
@@ -148,11 +163,13 @@ type MemoryStore struct {
 	GroupSessions         map[id.RoomID]map[id.SenderKey]map[id.SessionID]*InboundGroupSession
 	WithheldGroupSessions map[id.RoomID]map[id.SenderKey]map[id.SessionID]*event.RoomKeyWithheldEventContent
 	OutGroupSessions      map[id.RoomID]*OutboundGroupSession
+	SharedGroupSessions   map[id.UserID]map[id.IdentityKey]map[id.SessionID]struct{}
 	MessageIndices        map[messageIndexKey]messageIndexValue
 	Devices               map[id.UserID]map[id.DeviceID]*id.Device
 	CrossSigningKeys      map[id.UserID]map[id.CrossSigningUsage]id.CrossSigningKey
 	KeySignatures         map[id.UserID]map[id.Ed25519]map[id.UserID]map[id.Ed25519]string
 	OutdatedUsers         map[id.UserID]struct{}
+	Secrets               map[id.Secret]string
 }
 
 var _ Store = (*MemoryStore)(nil)
@@ -168,11 +185,13 @@ func NewMemoryStore(saveCallback func() error) *MemoryStore {
 		GroupSessions:         make(map[id.RoomID]map[id.SenderKey]map[id.SessionID]*InboundGroupSession),
 		WithheldGroupSessions: make(map[id.RoomID]map[id.SenderKey]map[id.SessionID]*event.RoomKeyWithheldEventContent),
 		OutGroupSessions:      make(map[id.RoomID]*OutboundGroupSession),
+		SharedGroupSessions:   make(map[id.UserID]map[id.IdentityKey]map[id.SessionID]struct{}),
 		MessageIndices:        make(map[messageIndexKey]messageIndexValue),
 		Devices:               make(map[id.UserID]map[id.DeviceID]*id.Device),
 		CrossSigningKeys:      make(map[id.UserID]map[id.CrossSigningUsage]id.CrossSigningKey),
 		KeySignatures:         make(map[id.UserID]map[id.Ed25519]map[id.UserID]map[id.Ed25519]string),
 		OutdatedUsers:         make(map[id.UserID]struct{}),
+		Secrets:               make(map[id.Secret]string),
 	}
 }
 
@@ -361,12 +380,12 @@ func (gs *MemoryStore) GetWithheldGroupSession(_ context.Context, roomID id.Room
 	return session, nil
 }
 
-func (gs *MemoryStore) GetGroupSessionsForRoom(_ context.Context, roomID id.RoomID) ([]*InboundGroupSession, error) {
+func (gs *MemoryStore) GetGroupSessionsForRoom(_ context.Context, roomID id.RoomID) dbutil.RowIter[*InboundGroupSession] {
 	gs.lock.Lock()
 	defer gs.lock.Unlock()
 	room, ok := gs.GroupSessions[roomID]
 	if !ok {
-		return []*InboundGroupSession{}, nil
+		return nil
 	}
 	var result []*InboundGroupSession
 	for _, sessions := range room {
@@ -374,10 +393,10 @@ func (gs *MemoryStore) GetGroupSessionsForRoom(_ context.Context, roomID id.Room
 			result = append(result, session)
 		}
 	}
-	return result, nil
+	return dbutil.NewSliceIter[*InboundGroupSession](result)
 }
 
-func (gs *MemoryStore) GetAllGroupSessions(_ context.Context) ([]*InboundGroupSession, error) {
+func (gs *MemoryStore) GetAllGroupSessions(_ context.Context) dbutil.RowIter[*InboundGroupSession] {
 	gs.lock.Lock()
 	var result []*InboundGroupSession
 	for _, room := range gs.GroupSessions {
@@ -388,7 +407,23 @@ func (gs *MemoryStore) GetAllGroupSessions(_ context.Context) ([]*InboundGroupSe
 		}
 	}
 	gs.lock.Unlock()
-	return result, nil
+	return dbutil.NewSliceIter[*InboundGroupSession](result)
+}
+
+func (gs *MemoryStore) GetGroupSessionsWithoutKeyBackupVersion(_ context.Context, version id.KeyBackupVersion) dbutil.RowIter[*InboundGroupSession] {
+	gs.lock.Lock()
+	var result []*InboundGroupSession
+	for _, room := range gs.GroupSessions {
+		for _, sessions := range room {
+			for _, session := range sessions {
+				if session.KeyBackupVersion != version {
+					result = append(result, session)
+				}
+			}
+		}
+	}
+	gs.lock.Unlock()
+	return dbutil.NewSliceIter[*InboundGroupSession](result)
 }
 
 func (gs *MemoryStore) AddOutboundGroupSession(_ context.Context, session *OutboundGroupSession) error {
@@ -424,6 +459,41 @@ func (gs *MemoryStore) RemoveOutboundGroupSession(_ context.Context, roomID id.R
 	delete(gs.OutGroupSessions, roomID)
 	gs.lock.Unlock()
 	return nil
+}
+
+func (gs *MemoryStore) MarkOutboundGroupSessionShared(_ context.Context, userID id.UserID, identityKey id.IdentityKey, sessionID id.SessionID) error {
+	gs.lock.Lock()
+
+	if _, ok := gs.SharedGroupSessions[userID]; !ok {
+		gs.SharedGroupSessions[userID] = make(map[id.IdentityKey]map[id.SessionID]struct{})
+	}
+	identities := gs.SharedGroupSessions[userID]
+
+	if _, ok := identities[identityKey]; !ok {
+		identities[identityKey] = make(map[id.SessionID]struct{})
+	}
+
+	identities[identityKey][sessionID] = struct{}{}
+
+	gs.lock.Unlock()
+	return nil
+}
+
+func (gs *MemoryStore) IsOutboundGroupSessionShared(_ context.Context, userID id.UserID, identityKey id.IdentityKey, sessionID id.SessionID) (isShared bool, err error) {
+	gs.lock.Lock()
+	defer gs.lock.Unlock()
+
+	if _, ok := gs.SharedGroupSessions[userID]; !ok {
+		return
+	}
+	identities := gs.SharedGroupSessions[userID]
+
+	if _, ok := identities[identityKey]; !ok {
+		return
+	}
+
+	_, isShared = identities[identityKey][sessionID]
+	return
 }
 
 func (gs *MemoryStore) ValidateMessageIndex(_ context.Context, senderKey id.SenderKey, sessionID id.SessionID, eventID id.EventID, index uint, timestamp int64) (bool, error) {
@@ -644,4 +714,25 @@ func (gs *MemoryStore) DropSignaturesByKey(_ context.Context, userID id.UserID, 
 	}
 	gs.lock.RUnlock()
 	return count, nil
+}
+
+func (gs *MemoryStore) PutSecret(_ context.Context, name id.Secret, value string) error {
+	gs.lock.Lock()
+	gs.Secrets[name] = value
+	gs.lock.Unlock()
+	return nil
+}
+
+func (gs *MemoryStore) GetSecret(_ context.Context, name id.Secret) (value string, _ error) {
+	gs.lock.RLock()
+	value = gs.Secrets[name]
+	gs.lock.RUnlock()
+	return
+}
+
+func (gs *MemoryStore) DeleteSecret(_ context.Context, name id.Secret) error {
+	gs.lock.Lock()
+	delete(gs.Secrets, name)
+	gs.lock.Unlock()
+	return nil
 }

@@ -7,8 +7,11 @@
 package id
 
 import (
+	"encoding/base64"
 	"fmt"
 	"strings"
+
+	"go.mau.fi/util/random"
 )
 
 // OlmMsgType is an Olm message type
@@ -44,6 +47,19 @@ const (
 	XSUsageUserSigning CrossSigningUsage = "user_signing"
 )
 
+type KeyBackupAlgorithm string
+
+const (
+	KeyBackupAlgorithmMegolmBackupV1 KeyBackupAlgorithm = "m.megolm_backup.v1.curve25519-aes-sha2"
+)
+
+// BackupVersion is an arbitrary string that identifies a server side key backup.
+type KeyBackupVersion string
+
+func (version KeyBackupVersion) String() string {
+	return string(version)
+}
+
 // A SessionID is an arbitrary string that identifies an Olm or Megolm session.
 type SessionID string
 
@@ -57,6 +73,12 @@ type SigningKey = Ed25519
 
 func (ed25519 Ed25519) String() string {
 	return string(ed25519)
+}
+
+func (ed25519 Ed25519) Bytes() []byte {
+	val, _ := base64.RawStdEncoding.DecodeString(string(ed25519))
+	// TODO handle errors
+	return val
 }
 
 func (ed25519 Ed25519) Fingerprint() string {
@@ -80,6 +102,12 @@ type IdentityKey = Curve25519
 
 func (curve25519 Curve25519) String() string {
 	return string(curve25519)
+}
+
+func (curve25519 Curve25519) Bytes() []byte {
+	val, _ := base64.RawStdEncoding.DecodeString(string(curve25519))
+	// TODO handle errors
+	return val
 }
 
 // A DeviceID is an arbitrary string that references a specific device.
@@ -146,4 +174,30 @@ func (device *Device) Fingerprint() string {
 type CrossSigningKey struct {
 	Key   Ed25519
 	First Ed25519
+}
+
+// Secret storage keys
+type Secret string
+
+func (s Secret) String() string {
+	return string(s)
+}
+
+const (
+	SecretXSMaster       Secret = "m.cross_signing.master"
+	SecretXSSelfSigning  Secret = "m.cross_signing.self_signing"
+	SecretXSUserSigning  Secret = "m.cross_signing.user_signing"
+	SecretMegolmBackupV1 Secret = "m.megolm_backup.v1"
+)
+
+// VerificationTransactionID is a unique identifier for a verification
+// transaction.
+type VerificationTransactionID string
+
+func NewVerificationTransactionID() VerificationTransactionID {
+	return VerificationTransactionID(random.String(32))
+}
+
+func (t VerificationTransactionID) String() string {
+	return string(t)
 }

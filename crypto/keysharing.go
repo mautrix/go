@@ -168,6 +168,9 @@ func (mach *OlmMachine) importForwardedRoomKey(ctx context.Context, evt *Decrypt
 	if content.MaxMessages != 0 {
 		maxMessages = content.MaxMessages
 	}
+	if firstKnownIndex := igsInternal.FirstKnownIndex(); firstKnownIndex > 0 {
+		log.Warn().Uint32("first_known_index", firstKnownIndex).Msg("Importing partial session")
+	}
 	igs := &InboundGroupSession{
 		Internal:         *igsInternal,
 		SigningKey:       evt.Keys.Ed25519,
@@ -222,11 +225,34 @@ func (mach *OlmMachine) rejectKeyRequest(ctx context.Context, rejection KeyShare
 	}
 }
 
-func (mach *OlmMachine) defaultAllowKeyShare(ctx context.Context, device *id.Device, _ event.RequestedKeyInfo) *KeyShareRejection {
+// sendToOneDevice sends a to-device event to a single device.
+func (mach *OlmMachine) sendToOneDevice(ctx context.Context, userID id.UserID, deviceID id.DeviceID, eventType event.Type, content interface{}) error {
+	_, err := mach.Client.SendToDevice(ctx, eventType, &mautrix.ReqSendToDevice{
+		Messages: map[id.UserID]map[id.DeviceID]*event.Content{
+			userID: {
+				deviceID: {
+					Parsed: content,
+				},
+			},
+		},
+	})
+
+	return err
+}
+
+func (mach *OlmMachine) defaultAllowKeyShare(ctx context.Context, device *id.Device, evt event.RequestedKeyInfo) *KeyShareRejection {
 	log := mach.machOrContextLog(ctx)
 	if mach.Client.UserID != device.UserID {
-		log.Debug().Msg("Rejecting key request from a different user")
-		return &KeyShareRejectOtherUser
+		isShared, err := mach.CryptoStore.IsOutboundGroupSessionShared(ctx, device.UserID, device.IdentityKey, evt.SessionID)
+		if err != nil {
+			log.Err(err).Msg("Rejecting key request due to internal error when checking session sharing")
+			return &KeyShareRejectNoResponse
+		} else if !isShared {
+			log.Debug().Msg("Rejecting key request for unshared session")
+			return &KeyShareRejectOtherUser
+		}
+		log.Debug().Msg("Accepting key request for shared session")
+		return nil
 	} else if mach.Client.DeviceID == device.DeviceID {
 		log.Debug().Msg("Ignoring key request from ourselves")
 		return &KeyShareRejectNoResponse
@@ -248,7 +274,7 @@ func (mach *OlmMachine) defaultAllowKeyShare(ctx context.Context, device *id.Dev
 	}
 }
 
-func (mach *OlmMachine) handleRoomKeyRequest(ctx context.Context, sender id.UserID, content *event.RoomKeyRequestEventContent) {
+func (mach *OlmMachine) HandleRoomKeyRequest(ctx context.Context, sender id.UserID, content *event.RoomKeyRequestEventContent) {
 	log := zerolog.Ctx(ctx).With().
 		Str("request_id", content.RequestID).
 		Str("device_id", content.RequestingDeviceID.String()).
@@ -327,7 +353,7 @@ func (mach *OlmMachine) handleRoomKeyRequest(ctx context.Context, sender id.User
 	}
 }
 
-func (mach *OlmMachine) handleBeeperRoomKeyAck(ctx context.Context, sender id.UserID, content *event.BeeperRoomKeyAckEventContent) {
+func (mach *OlmMachine) HandleBeeperRoomKeyAck(ctx context.Context, sender id.UserID, content *event.BeeperRoomKeyAckEventContent) {
 	log := mach.machOrContextLog(ctx).With().
 		Str("room_id", content.RoomID.String()).
 		Str("session_id", content.SessionID.String()).

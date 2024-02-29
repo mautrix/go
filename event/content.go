@@ -57,26 +57,33 @@ var TypeMap = map[Type]reflect.Type{
 	EphemeralEventReceipt:  reflect.TypeOf(ReceiptEventContent{}),
 	EphemeralEventPresence: reflect.TypeOf(PresenceEventContent{}),
 
-	InRoomVerificationStart:  reflect.TypeOf(VerificationStartEventContent{}),
 	InRoomVerificationReady:  reflect.TypeOf(VerificationReadyEventContent{}),
+	InRoomVerificationStart:  reflect.TypeOf(VerificationStartEventContent{}),
+	InRoomVerificationDone:   reflect.TypeOf(VerificationDoneEventContent{}),
+	InRoomVerificationCancel: reflect.TypeOf(VerificationCancelEventContent{}),
+
 	InRoomVerificationAccept: reflect.TypeOf(VerificationAcceptEventContent{}),
 	InRoomVerificationKey:    reflect.TypeOf(VerificationKeyEventContent{}),
 	InRoomVerificationMAC:    reflect.TypeOf(VerificationMacEventContent{}),
-	InRoomVerificationCancel: reflect.TypeOf(VerificationCancelEventContent{}),
 
 	ToDeviceRoomKey:          reflect.TypeOf(RoomKeyEventContent{}),
 	ToDeviceForwardedRoomKey: reflect.TypeOf(ForwardedRoomKeyEventContent{}),
 	ToDeviceRoomKeyRequest:   reflect.TypeOf(RoomKeyRequestEventContent{}),
 	ToDeviceEncrypted:        reflect.TypeOf(EncryptedEventContent{}),
 	ToDeviceRoomKeyWithheld:  reflect.TypeOf(RoomKeyWithheldEventContent{}),
+	ToDeviceSecretRequest:    reflect.TypeOf(SecretRequestEventContent{}),
+	ToDeviceSecretSend:       reflect.TypeOf(SecretSendEventContent{}),
 	ToDeviceDummy:            reflect.TypeOf(DummyEventContent{}),
 
-	ToDeviceVerificationStart:   reflect.TypeOf(VerificationStartEventContent{}),
-	ToDeviceVerificationAccept:  reflect.TypeOf(VerificationAcceptEventContent{}),
-	ToDeviceVerificationKey:     reflect.TypeOf(VerificationKeyEventContent{}),
-	ToDeviceVerificationMAC:     reflect.TypeOf(VerificationMacEventContent{}),
-	ToDeviceVerificationCancel:  reflect.TypeOf(VerificationCancelEventContent{}),
 	ToDeviceVerificationRequest: reflect.TypeOf(VerificationRequestEventContent{}),
+	ToDeviceVerificationReady:   reflect.TypeOf(VerificationReadyEventContent{}),
+	ToDeviceVerificationStart:   reflect.TypeOf(VerificationStartEventContent{}),
+	ToDeviceVerificationDone:    reflect.TypeOf(VerificationDoneEventContent{}),
+	ToDeviceVerificationCancel:  reflect.TypeOf(VerificationCancelEventContent{}),
+
+	ToDeviceVerificationAccept: reflect.TypeOf(VerificationAcceptEventContent{}),
+	ToDeviceVerificationKey:    reflect.TypeOf(VerificationKeyEventContent{}),
+	ToDeviceVerificationMAC:    reflect.TypeOf(VerificationMacEventContent{}),
 
 	ToDeviceOrgMatrixRoomKeyWithheld: reflect.TypeOf(RoomKeyWithheldEventContent{}),
 
@@ -503,6 +510,62 @@ func (content *Content) AsModPolicy() *ModPolicyContent {
 	casted, ok := content.Parsed.(*ModPolicyContent)
 	if !ok {
 		return &ModPolicyContent{}
+	}
+	return casted
+}
+func (content *Content) AsVerificationRequest() *VerificationRequestEventContent {
+	casted, ok := content.Parsed.(*VerificationRequestEventContent)
+	if !ok {
+		return &VerificationRequestEventContent{}
+	}
+	return casted
+}
+func (content *Content) AsVerificationReady() *VerificationReadyEventContent {
+	casted, ok := content.Parsed.(*VerificationReadyEventContent)
+	if !ok {
+		return &VerificationReadyEventContent{}
+	}
+	return casted
+}
+func (content *Content) AsVerificationStart() *VerificationStartEventContent {
+	casted, ok := content.Parsed.(*VerificationStartEventContent)
+	if !ok {
+		return &VerificationStartEventContent{}
+	}
+	return casted
+}
+func (content *Content) AsVerificationDone() *VerificationDoneEventContent {
+	casted, ok := content.Parsed.(*VerificationDoneEventContent)
+	if !ok {
+		return &VerificationDoneEventContent{}
+	}
+	return casted
+}
+func (content *Content) AsVerificationCancel() *VerificationCancelEventContent {
+	casted, ok := content.Parsed.(*VerificationCancelEventContent)
+	if !ok {
+		return &VerificationCancelEventContent{}
+	}
+	return casted
+}
+func (content *Content) AsVerificationAccept() *VerificationAcceptEventContent {
+	casted, ok := content.Parsed.(*VerificationAcceptEventContent)
+	if !ok {
+		return &VerificationAcceptEventContent{}
+	}
+	return casted
+}
+func (content *Content) AsVerificationKey() *VerificationKeyEventContent {
+	casted, ok := content.Parsed.(*VerificationKeyEventContent)
+	if !ok {
+		return &VerificationKeyEventContent{}
+	}
+	return casted
+}
+func (content *Content) AsVerificationMAC() *VerificationMacEventContent {
+	casted, ok := content.Parsed.(*VerificationMacEventContent)
+	if !ok {
+		return &VerificationMacEventContent{}
 	}
 	return casted
 }

@@ -21,8 +21,6 @@ var (
 	ErrChainTooHigh         = errors.New("chain index too high")
 	ErrBadInput             = errors.New("bad input")
 	ErrBadVersion           = errors.New("wrong version")
-	ErrNotBlocksize         = errors.New("length != blocksize")
-	ErrNotMultipleBlocksize = errors.New("length not a multiple of the blocksize")
 	ErrWrongPickleVersion   = errors.New("wrong pickle version")
 	ErrValueTooShort        = errors.New("value too short")
 	ErrInputToSmall         = errors.New("input too small (truncated?)")

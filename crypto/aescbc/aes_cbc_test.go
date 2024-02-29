@@ -1,4 +1,4 @@
-package crypto_test
+package aescbc_test
 
 import (
 	"bytes"
@@ -6,7 +6,7 @@ import (
 	"crypto/rand"
 	"testing"
 
-	"github.com/element-hq/mautrix-go/crypto/goolm/crypto"
+	"github.com/element-hq/mautrix-go/crypto/aescbc"
 )
 
 func TestAESCBC(t *testing.T) {
@@ -30,11 +30,11 @@ func TestAESCBC(t *testing.T) {
 		plaintext = append(plaintext, []byte("-")...)
 	}
 
-	if ciphertext, err = crypto.AESCBCEncrypt(key, iv, plaintext); err != nil {
+	if ciphertext, err = aescbc.Encrypt(key, iv, plaintext); err != nil {
 		t.Fatal(err)
 	}
 
-	resultPlainText, err := crypto.AESCBCDecrypt(key, iv, ciphertext)
+	resultPlainText, err := aescbc.Decrypt(key, iv, ciphertext)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +54,7 @@ func TestAESCBCCase1(t *testing.T) {
 	input := make([]byte, 16)
 	key := make([]byte, 32)
 	iv := make([]byte, aes.BlockSize)
-	encrypted, err := crypto.AESCBCEncrypt(key, iv, input)
+	encrypted, err := aescbc.Encrypt(key, iv, input)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,7 @@ func TestAESCBCCase1(t *testing.T) {
 		t.Fatalf("encrypted did not match expected:\n%v\n%v\n", encrypted, expected)
 	}
 
-	decrypted, err := crypto.AESCBCDecrypt(key, iv, encrypted)
+	decrypted, err := aescbc.Decrypt(key, iv, encrypted)
 	if err != nil {
 		t.Fatal(err)
 	}

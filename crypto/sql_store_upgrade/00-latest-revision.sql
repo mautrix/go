@@ -1,10 +1,11 @@
--- v0 -> v11: Latest revision
+-- v0 -> v14 (compatible with v9+): Latest revision
 CREATE TABLE IF NOT EXISTS crypto_account (
-	account_id TEXT    PRIMARY KEY,
-	device_id  TEXT    NOT NULL,
-	shared     BOOLEAN NOT NULL,
-	sync_token TEXT    NOT NULL,
-	account    bytea   NOT NULL
+	account_id         TEXT    PRIMARY KEY,
+	device_id          TEXT    NOT NULL,
+	shared             BOOLEAN NOT NULL,
+	sync_token         TEXT    NOT NULL,
+	account            bytea   NOT NULL,
+	key_backup_version TEXT    NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS crypto_message_index (
@@ -44,20 +45,21 @@ CREATE TABLE IF NOT EXISTS crypto_olm_session (
 );
 
 CREATE TABLE IF NOT EXISTS crypto_megolm_inbound_session (
-	account_id        TEXT,
-	session_id        CHAR(43),
-	sender_key        CHAR(43) NOT NULL,
-	signing_key       CHAR(43),
-	room_id           TEXT     NOT NULL,
-	session           bytea,
-	forwarding_chains bytea,
-	withheld_code     TEXT,
-	withheld_reason   TEXT,
-	ratchet_safety    jsonb,
-	received_at       timestamp,
-	max_age           BIGINT,
-	max_messages      INTEGER,
-	is_scheduled      BOOLEAN NOT NULL DEFAULT false,
+	account_id         TEXT,
+	session_id         CHAR(43),
+	sender_key         CHAR(43) NOT NULL,
+	signing_key        CHAR(43),
+	room_id            TEXT     NOT NULL,
+	session            bytea,
+	forwarding_chains  bytea,
+	withheld_code      TEXT,
+	withheld_reason    TEXT,
+	ratchet_safety     jsonb,
+	received_at        timestamp,
+	max_age            BIGINT,
+	max_messages       INTEGER,
+	is_scheduled       BOOLEAN NOT NULL DEFAULT false,
+	key_backup_version TEXT NOT NULL DEFAULT '',
 	PRIMARY KEY (account_id, session_id)
 );
 
@@ -73,6 +75,14 @@ CREATE TABLE IF NOT EXISTS crypto_megolm_outbound_session (
 	created_at    timestamp NOT NULL,
 	last_used     timestamp NOT NULL,
 	PRIMARY KEY (account_id, room_id)
+);
+
+CREATE TABLE IF NOT EXISTS crypto_megolm_outbound_session_shared (
+	user_id      TEXT     NOT NULL,
+	identity_key CHAR(43) NOT NULL,
+	session_id   CHAR(43) NOT NULL,
+
+	PRIMARY KEY (user_id, identity_key, session_id)
 );
 
 CREATE TABLE IF NOT EXISTS crypto_cross_signing_keys (
@@ -92,4 +102,9 @@ CREATE TABLE IF NOT EXISTS crypto_cross_signing_signatures (
 	signer_key     TEXT,
 	signature      CHAR(88) NOT NULL,
 	PRIMARY KEY (signed_user_id, signed_key, signer_user_id, signer_key)
+);
+
+CREATE TABLE IF NOT EXISTS crypto_secrets (
+	name   TEXT  PRIMARY KEY NOT NULL,
+	secret bytea NOT NULL
 );

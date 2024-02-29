@@ -8,6 +8,7 @@ package ssss
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/element-hq/mautrix-go"
@@ -34,7 +35,7 @@ func (mach *Machine) GetDefaultKeyID(ctx context.Context) (string, error) {
 	var data DefaultSecretStorageKeyContent
 	err := mach.Client.GetAccountData(ctx, event.AccountDataSecretStorageDefaultKey.Type, &data)
 	if err != nil {
-		if httpErr, ok := err.(mautrix.HTTPError); ok && httpErr.RespError != nil && httpErr.RespError.ErrCode == "M_NOT_FOUND" {
+		if httpErr, ok := err.(mautrix.HTTPError); ok && errors.Is(httpErr.RespError, mautrix.MNotFound) {
 			return "", ErrNoDefaultKeyAccountDataEvent
 		}
 		return "", fmt.Errorf("failed to get default key account data from server: %w", err)

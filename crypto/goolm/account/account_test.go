@@ -2,14 +2,18 @@ package account_test
 
 import (
 	"bytes"
+	"encoding/base64"
 	"errors"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/element-hq/mautrix-go/id"
 
 	"github.com/element-hq/mautrix-go/crypto/goolm"
 	"github.com/element-hq/mautrix-go/crypto/goolm/account"
-	"github.com/element-hq/mautrix-go/crypto/goolm/utilities"
+	"github.com/element-hq/mautrix-go/crypto/signatures"
 )
 
 func TestAccount(t *testing.T) {
@@ -599,19 +603,14 @@ func TestOldV3AccountPickle(t *testing.T) {
 
 func TestAccountSign(t *testing.T) {
 	accountA, err := account.NewAccount(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	plainText := []byte("Hello, World")
-	signature, err := accountA.Sign(plainText)
-	if err != nil {
-		t.Fatal(err)
-	}
-	verified, err := utilities.VerifySignature(plainText, accountA.IdKeys.Ed25519.B64Encoded(), signature)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !verified {
-		t.Fatal("signature did not verify")
-	}
+	signatureB64, err := accountA.Sign(plainText)
+	require.NoError(t, err)
+	signature, err := base64.RawStdEncoding.DecodeString(string(signatureB64))
+	require.NoError(t, err)
+
+	verified, err := signatures.VerifySignature(plainText, accountA.IdKeys.Ed25519.B64Encoded(), signature)
+	assert.NoError(t, err)
+	assert.True(t, verified)
 }

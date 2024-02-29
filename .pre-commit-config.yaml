@@ -17,3 +17,8 @@ repos:
           - "github.com/element-hq/mautrix-go"
           - "-w"
       - id: go-vet-repo-mod
+
+  - repo: https://github.com/beeper/pre-commit-go
+    rev: v0.3.1
+    hooks:
+      - id: prevent-literal-http-methods

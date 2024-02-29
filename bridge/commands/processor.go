@@ -110,6 +110,7 @@ func (proc *Processor) Handle(ctx context.Context, roomID id.RoomID, eventID id.
 		}
 		if state != nil && state.Next != nil {
 			ce.Command = ""
+			ce.RawArgs = message
 			ce.Args = args
 			ce.Handler = state.Next
 			state.Next.Run(ce)

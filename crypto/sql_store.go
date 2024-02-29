@@ -21,6 +21,7 @@ import (
 	"go.mau.fi/util/dbutil"
 
 	"github.com/element-hq/mautrix-go"
+	"github.com/element-hq/mautrix-go/crypto/goolm/cipher"
 	"github.com/element-hq/mautrix-go/crypto/olm"
 	"github.com/element-hq/mautrix-go/crypto/sql_store_upgrade"
 	"github.com/element-hq/mautrix-go/event"
@@ -124,20 +125,21 @@ func (store *SQLCryptoStore) PutAccount(ctx context.Context, account *OlmAccount
 	store.Account = account
 	bytes := account.Internal.Pickle(store.PickleKey)
 	_, err := store.DB.Exec(ctx, `
-		INSERT INTO crypto_account (device_id, shared, sync_token, account, account_id) VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO crypto_account (device_id, shared, sync_token, account, account_id, key_backup_version) VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (account_id) DO UPDATE SET shared=excluded.shared, sync_token=excluded.sync_token,
-											   account=excluded.account, account_id=excluded.account_id
-	`, store.DeviceID, account.Shared, store.SyncToken, bytes, store.AccountID)
+											   account=excluded.account, account_id=excluded.account_id,
+											   key_backup_version=excluded.key_backup_version
+	`, store.DeviceID, account.Shared, store.SyncToken, bytes, store.AccountID, account.KeyBackupVersion)
 	return err
 }
 
 // GetAccount retrieves an OlmAccount from the database.
 func (store *SQLCryptoStore) GetAccount(ctx context.Context) (*OlmAccount, error) {
 	if store.Account == nil {
-		row := store.DB.QueryRow(ctx, "SELECT shared, sync_token, account FROM crypto_account WHERE account_id=$1", store.AccountID)
+		row := store.DB.QueryRow(ctx, "SELECT shared, sync_token, account, key_backup_version FROM crypto_account WHERE account_id=$1", store.AccountID)
 		acc := &OlmAccount{Internal: *olm.NewBlankAccount()}
 		var accountBytes []byte
-		err := row.Scan(&acc.Shared, &store.SyncToken, &accountBytes)
+		err := row.Scan(&acc.Shared, &store.SyncToken, &accountBytes, &acc.KeyBackupVersion)
 		if err == sql.ErrNoRows {
 			return nil, nil
 		} else if err != nil {
@@ -284,17 +286,18 @@ func (store *SQLCryptoStore) PutGroupSession(ctx context.Context, roomID id.Room
 	_, err = store.DB.Exec(ctx, `
 		INSERT INTO crypto_megolm_inbound_session (
 			session_id, sender_key, signing_key, room_id, session, forwarding_chains,
-			ratchet_safety, received_at, max_age, max_messages, is_scheduled, account_id
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+			ratchet_safety, received_at, max_age, max_messages, is_scheduled, key_backup_version, account_id
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		ON CONFLICT (session_id, account_id) DO UPDATE
 		    SET withheld_code=NULL, withheld_reason=NULL, sender_key=excluded.sender_key, signing_key=excluded.signing_key,
 		        room_id=excluded.room_id, session=excluded.session, forwarding_chains=excluded.forwarding_chains,
 		        ratchet_safety=excluded.ratchet_safety, received_at=excluded.received_at,
-		        max_age=excluded.max_age, max_messages=excluded.max_messages, is_scheduled=excluded.is_scheduled
+		        max_age=excluded.max_age, max_messages=excluded.max_messages, is_scheduled=excluded.is_scheduled,
+				key_backup_version=excluded.key_backup_version
 	`,
 		sessionID, senderKey, session.SigningKey, roomID, sessionBytes, forwardingChains,
 		ratchetSafety, datePtr(session.ReceivedAt), intishPtr(session.MaxAge), intishPtr(session.MaxMessages),
-		session.IsScheduled, store.AccountID,
+		session.IsScheduled, session.KeyBackupVersion, store.AccountID,
 	)
 	return err
 }
@@ -306,12 +309,13 @@ func (store *SQLCryptoStore) GetGroupSession(ctx context.Context, roomID id.Room
 	var receivedAt sql.NullTime
 	var maxAge, maxMessages sql.NullInt64
 	var isScheduled bool
+	var version id.KeyBackupVersion
 	err := store.DB.QueryRow(ctx, `
-		SELECT sender_key, signing_key, session, forwarding_chains, withheld_code, withheld_reason, ratchet_safety, received_at, max_age, max_messages, is_scheduled
+		SELECT sender_key, signing_key, session, forwarding_chains, withheld_code, withheld_reason, ratchet_safety, received_at, max_age, max_messages, is_scheduled, key_backup_version
 		FROM crypto_megolm_inbound_session
 		WHERE room_id=$1 AND (sender_key=$2 OR $2 = '') AND session_id=$3 AND account_id=$4`,
 		roomID, senderKey, sessionID, store.AccountID,
-	).Scan(&senderKeyDB, &signingKey, &sessionBytes, &forwardingChains, &withheldCode, &withheldReason, &ratchetSafetyBytes, &receivedAt, &maxAge, &maxMessages, &isScheduled)
+	).Scan(&senderKeyDB, &signingKey, &sessionBytes, &forwardingChains, &withheldCode, &withheldReason, &ratchetSafetyBytes, &receivedAt, &maxAge, &maxMessages, &isScheduled, &version)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	} else if err != nil {
@@ -341,6 +345,7 @@ func (store *SQLCryptoStore) GetGroupSession(ctx context.Context, roomID id.Room
 		MaxAge:           maxAge.Int64,
 		MaxMessages:      int(maxMessages.Int64),
 		IsScheduled:      isScheduled,
+		KeyBackupVersion: version,
 	}, nil
 }
 
@@ -468,7 +473,8 @@ func (store *SQLCryptoStore) scanInboundGroupSession(rows dbutil.Scannable) (*In
 	var receivedAt sql.NullTime
 	var maxAge, maxMessages sql.NullInt64
 	var isScheduled bool
-	err := rows.Scan(&roomID, &senderKey, &signingKey, &sessionBytes, &forwardingChains, &ratchetSafetyBytes, &receivedAt, &maxAge, &maxMessages, &isScheduled)
+	var version id.KeyBackupVersion
+	err := rows.Scan(&roomID, &senderKey, &signingKey, &sessionBytes, &forwardingChains, &ratchetSafetyBytes, &receivedAt, &maxAge, &maxMessages, &isScheduled, &version)
 	if err != nil {
 		return nil, err
 	}
@@ -484,31 +490,35 @@ func (store *SQLCryptoStore) scanInboundGroupSession(rows dbutil.Scannable) (*In
 		MaxAge:           maxAge.Int64,
 		MaxMessages:      int(maxMessages.Int64),
 		IsScheduled:      isScheduled,
+		KeyBackupVersion: version,
 	}, nil
 }
 
-func (store *SQLCryptoStore) GetGroupSessionsForRoom(ctx context.Context, roomID id.RoomID) ([]*InboundGroupSession, error) {
+func (store *SQLCryptoStore) GetGroupSessionsForRoom(ctx context.Context, roomID id.RoomID) dbutil.RowIter[*InboundGroupSession] {
 	rows, err := store.DB.Query(ctx, `
-		SELECT room_id, sender_key, signing_key, session, forwarding_chains, withheld_code, withheld_reason, ratchet_safety, received_at, max_age, max_messages, is_scheduled
+		SELECT room_id, sender_key, signing_key, session, forwarding_chains, ratchet_safety, received_at, max_age, max_messages, is_scheduled, key_backup_version
 		FROM crypto_megolm_inbound_session WHERE room_id=$1 AND account_id=$2 AND session IS NOT NULL`,
 		roomID, store.AccountID,
 	)
-	if err != nil {
-		return nil, err
-	}
-	return dbutil.NewRowIter(rows, store.scanInboundGroupSession).AsList()
+	return dbutil.NewRowIterWithError(rows, store.scanInboundGroupSession, err)
 }
 
-func (store *SQLCryptoStore) GetAllGroupSessions(ctx context.Context) ([]*InboundGroupSession, error) {
+func (store *SQLCryptoStore) GetAllGroupSessions(ctx context.Context) dbutil.RowIter[*InboundGroupSession] {
 	rows, err := store.DB.Query(ctx, `
-		SELECT room_id, sender_key, signing_key, session, forwarding_chains, withheld_code, withheld_reason, ratchet_safety, received_at, max_age, max_messages, is_scheduled
-		FROM crypto_megolm_inbound_session WHERE account_id=$2 AND session IS NOT NULL`,
+		SELECT room_id, sender_key, signing_key, session, forwarding_chains, ratchet_safety, received_at, max_age, max_messages, is_scheduled, key_backup_version
+		FROM crypto_megolm_inbound_session WHERE account_id=$1 AND session IS NOT NULL`,
 		store.AccountID,
 	)
-	if err != nil {
-		return nil, err
-	}
-	return dbutil.NewRowIter(rows, store.scanInboundGroupSession).AsList()
+	return dbutil.NewRowIterWithError(rows, store.scanInboundGroupSession, err)
+}
+
+func (store *SQLCryptoStore) GetGroupSessionsWithoutKeyBackupVersion(ctx context.Context, version id.KeyBackupVersion) dbutil.RowIter[*InboundGroupSession] {
+	rows, err := store.DB.Query(ctx, `
+		SELECT room_id, sender_key, signing_key, session, forwarding_chains, ratchet_safety, received_at, max_age, max_messages, is_scheduled, key_backup_version
+		FROM crypto_megolm_inbound_session WHERE account_id=$1 AND session IS NOT NULL AND key_backup_version != $2`,
+		store.AccountID, version,
+	)
+	return dbutil.NewRowIterWithError(rows, store.scanInboundGroupSession, err)
 }
 
 // AddOutboundGroupSession stores an outbound Megolm session, along with the information about the room and involved devices.
@@ -566,6 +576,20 @@ func (store *SQLCryptoStore) RemoveOutboundGroupSession(ctx context.Context, roo
 	_, err := store.DB.Exec(ctx, "DELETE FROM crypto_megolm_outbound_session WHERE room_id=$1 AND account_id=$2",
 		roomID, store.AccountID)
 	return err
+}
+
+func (store *SQLCryptoStore) MarkOutboundGroupSessionShared(ctx context.Context, userID id.UserID, identityKey id.IdentityKey, sessionID id.SessionID) error {
+	_, err := store.DB.Exec(ctx, "INSERT INTO crypto_megolm_outbound_session_shared (user_id, identity_key, session_id) VALUES ($1, $2, $3)", userID, identityKey, sessionID)
+	return err
+}
+
+func (store *SQLCryptoStore) IsOutboundGroupSessionShared(ctx context.Context, userID id.UserID, identityKey id.IdentityKey, sessionID id.SessionID) (shared bool, err error) {
+	err = store.DB.QueryRow(ctx, `SELECT TRUE FROM crypto_megolm_outbound_session_shared WHERE user_id=$1 AND identity_key=$2 AND session_id=$3`,
+		userID, identityKey, sessionID).Scan(&shared)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = nil
+	}
+	return
 }
 
 // ValidateMessageIndex returns whether the given event information match the ones stored in the database
@@ -844,4 +868,33 @@ func (store *SQLCryptoStore) DropSignaturesByKey(ctx context.Context, userID id.
 		return 0, err
 	}
 	return count, nil
+}
+
+func (store *SQLCryptoStore) PutSecret(ctx context.Context, name id.Secret, value string) error {
+	bytes, err := cipher.Pickle(store.PickleKey, []byte(value))
+	if err != nil {
+		return err
+	}
+	_, err = store.DB.Exec(ctx, `
+		INSERT INTO crypto_secrets (name, secret) VALUES ($1, $2)
+		ON CONFLICT (name) DO UPDATE SET secret=excluded.secret
+	`, name, bytes)
+	return err
+}
+
+func (store *SQLCryptoStore) GetSecret(ctx context.Context, name id.Secret) (value string, err error) {
+	var bytes []byte
+	err = store.DB.QueryRow(ctx, `SELECT secret FROM crypto_secrets WHERE name=$1`, name).Scan(&bytes)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	} else if err != nil {
+		return "", err
+	}
+	bytes, err = cipher.Unpickle(store.PickleKey, bytes)
+	return string(bytes), err
+}
+
+func (store *SQLCryptoStore) DeleteSecret(ctx context.Context, name id.Secret) (err error) {
+	_, err = store.DB.Exec(ctx, "DELETE FROM crypto_secrets WHERE name=$1", name)
+	return
 }

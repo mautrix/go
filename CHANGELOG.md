@@ -1,3 +1,28 @@
+## v0.18.0 (unreleased)
+
+### beta.1 (2024-02-16)
+
+* Bumped minimum Go version to 1.21.
+* *(bridge)* Bumped minimum Matrix spec version to v1.4.
+* **Breaking change *(crypto)*** Deleted old half-broken interactive
+  verification code and replaced it with a new `verificationhelper`.
+  * The new verification helper is still experimental.
+  * Both QR and emoji verification are supported (in theory).
+* *(crypto)* Added support for server-side key backup.
+* *(crypto)* Added support for receiving and sending secrets like cross-signing
+  private keys via secret sharing.
+* *(crypto)* Added support for tracking which devices megolm sessions were
+  initially shared to, and allowing re-sharing the keys to those sessions.
+* *(client)* Changed cross-signing key upload method to accept a callback for
+  user-interactive auth instead of only hardcoding password support.
+* *(appservice)* Dropped support for legacy non-prefixed appservice paths
+  (e.g. `/transactions` instead of `/_matrix/app/v1/transactions`).
+* *(appservice)* Dropped support for legacy `access_token` authorization in
+  appservice endpoints.
+* *(bridge)* Fixed `RawArgs` field in command events of command state callbacks.
+* *(appservice)* Added `CreateFull` helper function for creating an `AppService`
+  instance with all the mandatory fields set.
+
 ## v0.17.0 (2024-01-16)
 
 * **Breaking change *(bridge)*** Added raw event to portal membership handling

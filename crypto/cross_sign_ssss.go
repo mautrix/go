@@ -14,6 +14,7 @@ import (
 	"github.com/element-hq/mautrix-go/crypto/ssss"
 	"github.com/element-hq/mautrix-go/crypto/utils"
 	"github.com/element-hq/mautrix-go/event"
+	"github.com/element-hq/mautrix-go/id"
 )
 
 // FetchCrossSigningKeysFromSSSS fetches all the cross-signing keys from SSSS, decrypts them using the given key and stores them in the olm machine.
@@ -57,33 +58,8 @@ func (mach *OlmMachine) retrieveDecryptXSigningKey(ctx context.Context, keyName 
 	return decryptedKey, nil
 }
 
-// GenerateAndUploadCrossSigningKeys generates a new key with all corresponding cross-signing keys.
-//
-// A passphrase can be provided to generate the SSSS key. If the passphrase is empty, a random key
-// is used. The base58-formatted recovery key is the first return parameter.
-//
-// The account password of the user is required for uploading keys to the server.
-func (mach *OlmMachine) GenerateAndUploadCrossSigningKeys(ctx context.Context, userPassword, passphrase string) (string, error) {
-	key, err := mach.SSSS.GenerateAndUploadKey(ctx, passphrase)
-	if err != nil {
-		return "", fmt.Errorf("failed to generate and upload SSSS key: %w", err)
-	}
-
-	// generate the three cross-signing keys
-	keysCache, err := mach.GenerateCrossSigningKeys()
-	if err != nil {
-		return "", err
-	}
-
-	recoveryKey := key.RecoveryKey()
-
-	// Store the private keys in SSSS
-	if err := mach.UploadCrossSigningKeysToSSSS(ctx, key, keysCache); err != nil {
-		return recoveryKey, fmt.Errorf("failed to upload cross-signing keys to SSSS: %w", err)
-	}
-
-	// Publish cross-signing keys
-	err = mach.PublishCrossSigningKeys(ctx, keysCache, func(uiResp *mautrix.RespUserInteractive) interface{} {
+func (mach *OlmMachine) GenerateAndUploadCrossSigningKeysWithPassword(ctx context.Context, userPassword, passphrase string) (string, *CrossSigningKeysCache, error) {
+	return mach.GenerateAndUploadCrossSigningKeys(ctx, func(uiResp *mautrix.RespUserInteractive) interface{} {
 		return &mautrix.ReqUIAuthLogin{
 			BaseAuthData: mautrix.BaseAuthData{
 				Type:    mautrix.AuthTypePassword,
@@ -92,17 +68,44 @@ func (mach *OlmMachine) GenerateAndUploadCrossSigningKeys(ctx context.Context, u
 			User:     mach.Client.UserID.String(),
 			Password: userPassword,
 		}
-	})
+	}, passphrase)
+}
+
+// GenerateAndUploadCrossSigningKeys generates a new key with all corresponding cross-signing keys.
+//
+// A passphrase can be provided to generate the SSSS key. If the passphrase is empty, a random key
+// is used. The base58-formatted recovery key is the first return parameter.
+//
+// The account password of the user is required for uploading keys to the server.
+func (mach *OlmMachine) GenerateAndUploadCrossSigningKeys(ctx context.Context, uiaCallback mautrix.UIACallback, passphrase string) (string, *CrossSigningKeysCache, error) {
+	key, err := mach.SSSS.GenerateAndUploadKey(ctx, passphrase)
 	if err != nil {
-		return recoveryKey, fmt.Errorf("failed to publish cross-signing keys: %w", err)
+		return "", nil, fmt.Errorf("failed to generate and upload SSSS key: %w", err)
+	}
+
+	// generate the three cross-signing keys
+	keysCache, err := mach.GenerateCrossSigningKeys()
+	if err != nil {
+		return "", nil, err
+	}
+
+	// Store the private keys in SSSS
+	if err := mach.UploadCrossSigningKeysToSSSS(ctx, key, keysCache); err != nil {
+		return "", nil, fmt.Errorf("failed to upload cross-signing keys to SSSS: %w", err)
+	}
+
+	// Publish cross-signing keys
+	err = mach.PublishCrossSigningKeys(ctx, keysCache, uiaCallback)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to publish cross-signing keys: %w", err)
 	}
 
 	err = mach.SSSS.SetDefaultKeyID(ctx, key.ID)
 	if err != nil {
-		return recoveryKey, fmt.Errorf("failed to mark %s as the default key: %w", key.ID, err)
+		return "", nil, fmt.Errorf("failed to mark %s as the default key: %w", key.ID, err)
 	}
 
-	return recoveryKey, nil
+	return key.RecoveryKey(), keysCache, nil
 }
 
 // UploadCrossSigningKeysToSSSS stores the given cross-signing keys on the server encrypted with the given key.
@@ -116,5 +119,17 @@ func (mach *OlmMachine) UploadCrossSigningKeysToSSSS(ctx context.Context, key *s
 	if err := mach.SSSS.SetEncryptedAccountData(ctx, event.AccountDataCrossSigningUser, keys.UserSigningKey.Seed, key); err != nil {
 		return err
 	}
+
+	// Also store these locally
+	if err := mach.CryptoStore.PutCrossSigningKey(ctx, mach.Client.UserID, id.XSUsageMaster, keys.MasterKey.PublicKey); err != nil {
+		return err
+	}
+	if err := mach.CryptoStore.PutCrossSigningKey(ctx, mach.Client.UserID, id.XSUsageSelfSigning, keys.SelfSigningKey.PublicKey); err != nil {
+		return err
+	}
+	if err := mach.CryptoStore.PutCrossSigningKey(ctx, mach.Client.UserID, id.XSUsageUserSigning, keys.UserSigningKey.PublicKey); err != nil {
+		return err
+	}
+
 	return nil
 }
