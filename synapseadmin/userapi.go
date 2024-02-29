@@ -33,11 +33,10 @@ type ReqResetPassword struct {
 // https://matrix-org.github.io/synapse/latest/admin_api/user_admin_api.html#reset-password
 func (cli *Client) ResetPassword(ctx context.Context, req ReqResetPassword) error {
 	reqURL := cli.BuildAdminURL("v1", "reset_password", req.UserID)
-	_, err := cli.MakeFullRequest(mautrix.FullRequest{
+	_, err := cli.MakeFullRequest(ctx, mautrix.FullRequest{
 		Method:      http.MethodPost,
 		URL:         reqURL,
 		RequestJSON: &req,
-		Context:     ctx,
 	})
 	return err
 }
@@ -50,11 +49,10 @@ func (cli *Client) ResetPassword(ctx context.Context, req ReqResetPassword) erro
 // https://matrix-org.github.io/synapse/latest/admin_api/user_admin_api.html#check-username-availability
 func (cli *Client) UsernameAvailable(ctx context.Context, username string) (resp *mautrix.RespRegisterAvailable, err error) {
 	u := cli.BuildURLWithQuery(mautrix.SynapseAdminURLPath{"v1", "username_available"}, map[string]string{"username": username})
-	_, err = cli.MakeFullRequest(mautrix.FullRequest{
+	_, err = cli.MakeFullRequest(ctx, mautrix.FullRequest{
 		Method:       http.MethodGet,
 		URL:          u,
 		ResponseJSON: &resp,
-		Context:      ctx,
 	})
 	if err == nil && !resp.Available {
 		err = fmt.Errorf(`request returned OK status without "available": true`)
@@ -76,11 +74,10 @@ type RespListDevices struct {
 //
 // https://matrix-org.github.io/synapse/latest/admin_api/user_admin_api.html#list-all-devices
 func (cli *Client) ListDevices(ctx context.Context, userID id.UserID) (resp *RespListDevices, err error) {
-	_, err = cli.MakeFullRequest(mautrix.FullRequest{
+	_, err = cli.MakeFullRequest(ctx, mautrix.FullRequest{
 		Method:       http.MethodGet,
 		URL:          cli.BuildAdminURL("v2", "users", userID, "devices"),
 		ResponseJSON: &resp,
-		Context:      ctx,
 	})
 	return
 }
@@ -105,11 +102,10 @@ type RespUserInfo struct {
 //
 // https://matrix-org.github.io/synapse/latest/admin_api/user_admin_api.html#query-user-account
 func (cli *Client) GetUserInfo(ctx context.Context, userID id.UserID) (resp *RespUserInfo, err error) {
-	_, err = cli.MakeFullRequest(mautrix.FullRequest{
+	_, err = cli.MakeFullRequest(ctx, mautrix.FullRequest{
 		Method:       http.MethodGet,
 		URL:          cli.BuildAdminURL("v2", "users", userID),
 		ResponseJSON: &resp,
-		Context:      ctx,
 	})
 	return
 }

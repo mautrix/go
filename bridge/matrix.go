@@ -25,7 +25,7 @@ import (
 )
 
 type CommandProcessor interface {
-	Handle(roomID id.RoomID, eventID id.EventID, user User, message string, replyTo id.EventID)
+	Handle(ctx context.Context, roomID id.RoomID, eventID id.EventID, user User, message string, replyTo id.EventID)
 }
 
 type MatrixHandler struct {
@@ -68,13 +68,13 @@ func NewMatrixHandler(br *Bridge) *MatrixHandler {
 	return handler
 }
 
-func (mx *MatrixHandler) sendBridgeCheckpoint(evt *event.Event) {
+func (mx *MatrixHandler) sendBridgeCheckpoint(_ context.Context, evt *event.Event) {
 	if !evt.Mautrix.CheckpointSent {
 		go mx.bridge.SendMessageSuccessCheckpoint(evt, status.MsgStepBridge, 0)
 	}
 }
 
-func (mx *MatrixHandler) HandleEncryption(evt *event.Event) {
+func (mx *MatrixHandler) HandleEncryption(ctx context.Context, evt *event.Event) {
 	defer mx.TrackEventDuration(evt.Type)()
 	if evt.Content.AsEncryption().Algorithm != id.AlgorithmMegolmV1 {
 		return
@@ -87,7 +87,7 @@ func (mx *MatrixHandler) HandleEncryption(evt *event.Event) {
 			Msg("Encryption was enabled in room")
 		portal.MarkEncrypted()
 		if portal.IsPrivateChat() {
-			err := mx.as.BotIntent().EnsureJoined(evt.RoomID, appservice.EnsureJoinedParams{BotOverride: portal.MainIntent().Client})
+			err := mx.as.BotIntent().EnsureJoined(ctx, evt.RoomID, appservice.EnsureJoinedParams{BotOverride: portal.MainIntent().Client})
 			if err != nil {
 				mx.log.Err(err).
 					Str("room_id", evt.RoomID.String()).
@@ -99,32 +99,32 @@ func (mx *MatrixHandler) HandleEncryption(evt *event.Event) {
 
 func (mx *MatrixHandler) joinAndCheckMembers(ctx context.Context, evt *event.Event, intent *appservice.IntentAPI) *mautrix.RespJoinedMembers {
 	log := zerolog.Ctx(ctx)
-	resp, err := intent.JoinRoomByID(evt.RoomID)
+	resp, err := intent.JoinRoomByID(ctx, evt.RoomID)
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to join room with invite")
 		return nil
 	}
 
-	members, err := intent.JoinedMembers(resp.RoomID)
+	members, err := intent.JoinedMembers(ctx, resp.RoomID)
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to get members in room after accepting invite, leaving room")
-		_, _ = intent.LeaveRoom(resp.RoomID)
+		_, _ = intent.LeaveRoom(ctx, resp.RoomID)
 		return nil
 	}
 
 	if len(members.Joined) < 2 {
 		log.Debug().Msg("Leaving empty room after accepting invite")
-		_, _ = intent.LeaveRoom(resp.RoomID)
+		_, _ = intent.LeaveRoom(ctx, resp.RoomID)
 		return nil
 	}
 	return members
 }
 
-func (mx *MatrixHandler) sendNoticeWithMarkdown(roomID id.RoomID, message string) (*mautrix.RespSendEvent, error) {
+func (mx *MatrixHandler) sendNoticeWithMarkdown(ctx context.Context, roomID id.RoomID, message string) (*mautrix.RespSendEvent, error) {
 	intent := mx.as.BotIntent()
 	content := format.RenderMarkdown(message, true, false)
 	content.MsgType = event.MsgNotice
-	return intent.SendMessageEvent(roomID, event.EventMessage, content)
+	return intent.SendMessageEvent(ctx, roomID, event.EventMessage, content)
 }
 
 func (mx *MatrixHandler) HandleBotInvite(ctx context.Context, evt *event.Event) {
@@ -141,31 +141,31 @@ func (mx *MatrixHandler) HandleBotInvite(ctx context.Context, evt *event.Event) 
 	}
 
 	if user.GetPermissionLevel() < bridgeconfig.PermissionLevelUser {
-		_, _ = intent.SendNotice(evt.RoomID, "You are not whitelisted to use this bridge.\n"+
+		_, _ = intent.SendNotice(ctx, evt.RoomID, "You are not whitelisted to use this bridge.\n"+
 			"If you're the owner of this bridge, see the bridge.permissions section in your config file.")
-		_, _ = intent.LeaveRoom(evt.RoomID)
+		_, _ = intent.LeaveRoom(ctx, evt.RoomID)
 		return
 	}
 
 	texts := mx.bridge.Config.Bridge.GetManagementRoomTexts()
-	_, _ = mx.sendNoticeWithMarkdown(evt.RoomID, texts.Welcome)
+	_, _ = mx.sendNoticeWithMarkdown(ctx, evt.RoomID, texts.Welcome)
 
 	if len(members.Joined) == 2 && (len(user.GetManagementRoomID()) == 0 || evt.Content.AsMember().IsDirect) {
 		user.SetManagementRoom(evt.RoomID)
-		_, _ = intent.SendNotice(user.GetManagementRoomID(), "This room has been registered as your bridge management/status room.")
+		_, _ = intent.SendNotice(ctx, user.GetManagementRoomID(), "This room has been registered as your bridge management/status room.")
 		zerolog.Ctx(ctx).Debug().Msg("Registered room as management room with inviter")
 	}
 
 	if evt.RoomID == user.GetManagementRoomID() {
 		if user.IsLoggedIn() {
-			_, _ = mx.sendNoticeWithMarkdown(evt.RoomID, texts.WelcomeConnected)
+			_, _ = mx.sendNoticeWithMarkdown(ctx, evt.RoomID, texts.WelcomeConnected)
 		} else {
-			_, _ = mx.sendNoticeWithMarkdown(evt.RoomID, texts.WelcomeUnconnected)
+			_, _ = mx.sendNoticeWithMarkdown(ctx, evt.RoomID, texts.WelcomeUnconnected)
 		}
 
 		additionalHelp := texts.AdditionalHelp
 		if len(additionalHelp) > 0 {
-			_, _ = mx.sendNoticeWithMarkdown(evt.RoomID, additionalHelp)
+			_, _ = mx.sendNoticeWithMarkdown(ctx, evt.RoomID, additionalHelp)
 		}
 	}
 }
@@ -176,7 +176,7 @@ func (mx *MatrixHandler) HandleGhostInvite(ctx context.Context, evt *event.Event
 
 	if inviter.GetPermissionLevel() < bridgeconfig.PermissionLevelUser {
 		log.Debug().Msg("Rejecting invite: inviter is not whitelisted")
-		_, err := intent.LeaveRoom(evt.RoomID, &mautrix.ReqLeave{
+		_, err := intent.LeaveRoom(ctx, evt.RoomID, &mautrix.ReqLeave{
 			Reason: "You're not whitelisted to use this bridge",
 		})
 		if err != nil {
@@ -185,7 +185,7 @@ func (mx *MatrixHandler) HandleGhostInvite(ctx context.Context, evt *event.Event
 		return
 	} else if !inviter.IsLoggedIn() {
 		log.Debug().Msg("Rejecting invite: inviter is not logged in")
-		_, err := intent.LeaveRoom(evt.RoomID, &mautrix.ReqLeave{
+		_, err := intent.LeaveRoom(ctx, evt.RoomID, &mautrix.ReqLeave{
 			Reason: "You're not logged into this bridge",
 		})
 		if err != nil {
@@ -199,11 +199,11 @@ func (mx *MatrixHandler) HandleGhostInvite(ctx context.Context, evt *event.Event
 		return
 	}
 	var createEvent event.CreateEventContent
-	if err := intent.StateEvent(evt.RoomID, event.StateCreate, "", &createEvent); err != nil {
+	if err := intent.StateEvent(ctx, evt.RoomID, event.StateCreate, "", &createEvent); err != nil {
 		log.Warn().Err(err).Msg("Failed to check m.room.create event in room")
 	} else if createEvent.Type != "" {
 		log.Warn().Str("room_type", string(createEvent.Type)).Msg("Non-standard room type, leaving room")
-		_, err = intent.LeaveRoom(evt.RoomID, &mautrix.ReqLeave{
+		_, err = intent.LeaveRoom(ctx, evt.RoomID, &mautrix.ReqLeave{
 			Reason: "Unsupported room type",
 		})
 		if err != nil {
@@ -225,24 +225,23 @@ func (mx *MatrixHandler) HandleGhostInvite(ctx context.Context, evt *event.Event
 		mx.bridge.Child.CreatePrivatePortal(evt.RoomID, inviter, ghost)
 	} else if !hasBridgeBot {
 		log.Debug().Msg("Leaving multi-user room after accepting invite")
-		_, _ = intent.SendNotice(evt.RoomID, "Please invite the bridge bot first if you want to bridge to a remote chat.")
-		_, _ = intent.LeaveRoom(evt.RoomID)
+		_, _ = intent.SendNotice(ctx, evt.RoomID, "Please invite the bridge bot first if you want to bridge to a remote chat.")
+		_, _ = intent.LeaveRoom(ctx, evt.RoomID)
 	} else {
-		_, _ = intent.SendNotice(evt.RoomID, "This puppet will remain inactive until this room is bridged to a remote chat.")
+		_, _ = intent.SendNotice(ctx, evt.RoomID, "This puppet will remain inactive until this room is bridged to a remote chat.")
 	}
 }
 
-func (mx *MatrixHandler) HandleMembership(evt *event.Event) {
+func (mx *MatrixHandler) HandleMembership(ctx context.Context, evt *event.Event) {
 	if evt.Sender == mx.bridge.Bot.UserID || mx.bridge.Child.IsGhost(evt.Sender) {
 		return
 	}
 	defer mx.TrackEventDuration(evt.Type)()
 
 	if mx.bridge.Crypto != nil {
-		mx.bridge.Crypto.HandleMemberEvent(evt)
+		mx.bridge.Crypto.HandleMemberEvent(ctx, evt)
 	}
 
-	ctx := context.Background()
 	log := mx.log.With().
 		Str("sender", evt.Sender.String()).
 		Str("target", evt.GetStateKey()).
@@ -290,17 +289,17 @@ func (mx *MatrixHandler) HandleMembership(evt *event.Event) {
 			}
 		}
 		if isSelf {
-			mhp.HandleMatrixLeave(user)
+			mhp.HandleMatrixLeave(user, evt)
 		} else if ghost != nil {
-			mhp.HandleMatrixKick(user, ghost)
+			mhp.HandleMatrixKick(user, ghost, evt)
 		}
 	} else if content.Membership == event.MembershipInvite && !isSelf && ghost != nil {
-		mhp.HandleMatrixInvite(user, ghost)
+		mhp.HandleMatrixInvite(user, ghost, evt)
 	}
 	// TODO kicking/inviting non-ghost users users
 }
 
-func (mx *MatrixHandler) HandleRoomMetadata(evt *event.Event) {
+func (mx *MatrixHandler) HandleRoomMetadata(ctx context.Context, evt *event.Event) {
 	defer mx.TrackEventDuration(evt.Type)()
 	if mx.shouldIgnoreEvent(evt) {
 		return
@@ -358,7 +357,7 @@ func (mx *MatrixHandler) sendCryptoStatusError(ctx context.Context, evt *event.E
 		if !isFinal {
 			statusEvent.Status = event.MessageStatusPending
 		}
-		_, sendErr := mx.bridge.Bot.SendMessageEvent(evt.RoomID, event.BeeperMessageStatus, statusEvent)
+		_, sendErr := mx.bridge.Bot.SendMessageEvent(ctx, evt.RoomID, event.BeeperMessageStatus, statusEvent)
 		if sendErr != nil {
 			zerolog.Ctx(ctx).Error().Err(err).Msg("Failed to send message status event")
 		}
@@ -377,7 +376,7 @@ func (mx *MatrixHandler) sendCryptoStatusError(ctx context.Context, evt *event.E
 		} else if ok && relatable.OptionalGetRelatesTo().GetThreadParent() != "" {
 			update.GetRelatesTo().SetThread(relatable.OptionalGetRelatesTo().GetThreadParent(), evt.ID)
 		}
-		resp, sendErr := mx.bridge.Bot.SendMessageEvent(evt.RoomID, event.EventMessage, &update)
+		resp, sendErr := mx.bridge.Bot.SendMessageEvent(ctx, evt.RoomID, event.EventMessage, &update)
 		if sendErr != nil {
 			zerolog.Ctx(ctx).Error().Err(sendErr).Msg("Failed to send decryption error notice")
 		} else if resp != nil {
@@ -469,20 +468,20 @@ func (mx *MatrixHandler) postDecrypt(ctx context.Context, original, decrypted *e
 	mx.bridge.SendMessageSuccessCheckpoint(decrypted, status.MsgStepDecrypted, retryCount)
 	decrypted.Mautrix.CheckpointSent = true
 	decrypted.Mautrix.DecryptionDuration = duration
-	mx.bridge.EventProcessor.Dispatch(decrypted)
+	decrypted.Mautrix.EventSource |= event.SourceDecrypted
+	mx.bridge.EventProcessor.Dispatch(ctx, decrypted)
 	if errorEventID != "" {
-		_, _ = mx.bridge.Bot.RedactEvent(decrypted.RoomID, errorEventID)
+		_, _ = mx.bridge.Bot.RedactEvent(ctx, decrypted.RoomID, errorEventID)
 	}
 }
 
-func (mx *MatrixHandler) HandleEncrypted(evt *event.Event) {
+func (mx *MatrixHandler) HandleEncrypted(ctx context.Context, evt *event.Event) {
 	defer mx.TrackEventDuration(evt.Type)()
 	if mx.shouldIgnoreEvent(evt) {
 		return
 	}
 	content := evt.Content.AsEncrypted()
-	ctx := context.Background()
-	log := mx.log.With().
+	log := zerolog.Ctx(ctx).With().
 		Str("event_id", evt.ID.String()).
 		Str("session_id", content.SessionID.String()).
 		Logger()
@@ -494,7 +493,7 @@ func (mx *MatrixHandler) HandleEncrypted(evt *event.Event) {
 	log.Debug().Msg("Decrypting received event")
 
 	decryptionStart := time.Now()
-	decrypted, err := mx.bridge.Crypto.Decrypt(evt)
+	decrypted, err := mx.bridge.Crypto.Decrypt(ctx, evt)
 	decryptionRetryCount := 0
 	if errors.Is(err, NoSessionFound) {
 		decryptionRetryCount = 1
@@ -502,9 +501,9 @@ func (mx *MatrixHandler) HandleEncrypted(evt *event.Event) {
 			Int("wait_seconds", int(initialSessionWaitTimeout.Seconds())).
 			Msg("Couldn't find session, waiting for keys to arrive...")
 		mx.bridge.SendMessageErrorCheckpoint(evt, status.MsgStepDecrypted, err, false, 0)
-		if mx.bridge.Crypto.WaitForSession(evt.RoomID, content.SenderKey, content.SessionID, initialSessionWaitTimeout) {
+		if mx.bridge.Crypto.WaitForSession(ctx, evt.RoomID, content.SenderKey, content.SessionID, initialSessionWaitTimeout) {
 			log.Debug().Msg("Got keys after waiting, trying to decrypt event again")
-			decrypted, err = mx.bridge.Crypto.Decrypt(evt)
+			decrypted, err = mx.bridge.Crypto.Decrypt(ctx, evt)
 		} else {
 			go mx.waitLongerForSession(ctx, evt, decryptionStart)
 			return
@@ -526,17 +525,17 @@ func (mx *MatrixHandler) waitLongerForSession(ctx context.Context, evt *event.Ev
 		Int("wait_seconds", int(extendedSessionWaitTimeout.Seconds())).
 		Msg("Couldn't find session, requesting keys and waiting longer...")
 
-	go mx.bridge.Crypto.RequestSession(evt.RoomID, content.SenderKey, content.SessionID, evt.Sender, content.DeviceID)
+	go mx.bridge.Crypto.RequestSession(ctx, evt.RoomID, content.SenderKey, content.SessionID, evt.Sender, content.DeviceID)
 	errorEventID := mx.sendCryptoStatusError(ctx, evt, "", fmt.Errorf("%w. The bridge will retry for %d seconds", errNoDecryptionKeys, int(extendedSessionWaitTimeout.Seconds())), 1, false)
 
-	if !mx.bridge.Crypto.WaitForSession(evt.RoomID, content.SenderKey, content.SessionID, extendedSessionWaitTimeout) {
+	if !mx.bridge.Crypto.WaitForSession(ctx, evt.RoomID, content.SenderKey, content.SessionID, extendedSessionWaitTimeout) {
 		log.Debug().Msg("Didn't get session, giving up trying to decrypt event")
 		mx.sendCryptoStatusError(ctx, evt, errorEventID, errNoDecryptionKeys, 2, true)
 		return
 	}
 
 	log.Debug().Msg("Got keys after waiting longer, trying to decrypt event again")
-	decrypted, err := mx.bridge.Crypto.Decrypt(evt)
+	decrypted, err := mx.bridge.Crypto.Decrypt(ctx, evt)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to decrypt event")
 		mx.sendCryptoStatusError(ctx, evt, errorEventID, err, 2, true)
@@ -546,14 +545,18 @@ func (mx *MatrixHandler) waitLongerForSession(ctx context.Context, evt *event.Ev
 	mx.postDecrypt(ctx, evt, decrypted, 2, errorEventID, time.Since(decryptionStart))
 }
 
-func (mx *MatrixHandler) HandleMessage(evt *event.Event) {
+func (mx *MatrixHandler) HandleMessage(ctx context.Context, evt *event.Event) {
 	defer mx.TrackEventDuration(evt.Type)()
+	log := zerolog.Ctx(ctx).With().
+		Str("event_id", evt.ID.String()).
+		Str("room_id", evt.RoomID.String()).
+		Str("sender", evt.Sender.String()).
+		Logger()
+	ctx = log.WithContext(ctx)
 	if mx.shouldIgnoreEvent(evt) {
 		return
 	} else if !evt.Mautrix.WasEncrypted && mx.bridge.Config.Bridge.GetEncryptionConfig().Require {
-		log := mx.log.With().Str("event_id", evt.ID.String()).Logger()
 		log.Warn().Msg("Dropping unencrypted event")
-		ctx := log.WithContext(context.Background())
 		mx.sendCryptoStatusError(ctx, evt, "", errMessageNotEncrypted, 0, true)
 		return
 	}
@@ -572,7 +575,7 @@ func (mx *MatrixHandler) HandleMessage(evt *event.Event) {
 			content.Body = strings.TrimLeft(strings.TrimPrefix(content.Body, commandPrefix), " ")
 		}
 		if hasCommandPrefix || evt.RoomID == user.GetManagementRoomID() {
-			go mx.bridge.CommandProcessor.Handle(evt.RoomID, evt.ID, user, content.Body, content.RelatesTo.GetReplyTo())
+			go mx.bridge.CommandProcessor.Handle(ctx, evt.RoomID, evt.ID, user, content.Body, content.RelatesTo.GetReplyTo())
 			go mx.bridge.SendMessageSuccessCheckpoint(evt, status.MsgStepCommand, 0)
 			if mx.bridge.Config.Bridge.EnableMessageStatusEvents() {
 				statusEvent := &event.BeeperMessageStatusEventContent{
@@ -583,9 +586,9 @@ func (mx *MatrixHandler) HandleMessage(evt *event.Event) {
 					},
 					Status: event.MessageStatusSuccess,
 				}
-				_, sendErr := mx.bridge.Bot.SendMessageEvent(evt.RoomID, event.BeeperMessageStatus, statusEvent)
+				_, sendErr := mx.bridge.Bot.SendMessageEvent(ctx, evt.RoomID, event.BeeperMessageStatus, statusEvent)
 				if sendErr != nil {
-					mx.log.Warn().Str("event_id", evt.ID.String()).Err(sendErr).Msg("Failed to send message status event for command")
+					log.Warn().Err(sendErr).Msg("Failed to send message status event for command")
 				}
 			}
 			return
@@ -600,7 +603,7 @@ func (mx *MatrixHandler) HandleMessage(evt *event.Event) {
 	}
 }
 
-func (mx *MatrixHandler) HandleReaction(evt *event.Event) {
+func (mx *MatrixHandler) HandleReaction(_ context.Context, evt *event.Event) {
 	defer mx.TrackEventDuration(evt.Type)()
 	if mx.shouldIgnoreEvent(evt) {
 		return
@@ -619,7 +622,7 @@ func (mx *MatrixHandler) HandleReaction(evt *event.Event) {
 	}
 }
 
-func (mx *MatrixHandler) HandleRedaction(evt *event.Event) {
+func (mx *MatrixHandler) HandleRedaction(_ context.Context, evt *event.Event) {
 	defer mx.TrackEventDuration(evt.Type)()
 	if mx.shouldIgnoreEvent(evt) {
 		return
@@ -638,7 +641,7 @@ func (mx *MatrixHandler) HandleRedaction(evt *event.Event) {
 	}
 }
 
-func (mx *MatrixHandler) HandleReceipt(evt *event.Event) {
+func (mx *MatrixHandler) HandleReceipt(_ context.Context, evt *event.Event) {
 	portal := mx.bridge.Child.GetIPortal(evt.RoomID)
 	if portal == nil {
 		return
@@ -672,7 +675,7 @@ func (mx *MatrixHandler) HandleReceipt(evt *event.Event) {
 	}
 }
 
-func (mx *MatrixHandler) HandleTyping(evt *event.Event) {
+func (mx *MatrixHandler) HandleTyping(_ context.Context, evt *event.Event) {
 	portal := mx.bridge.Child.GetIPortal(evt.RoomID)
 	if portal == nil {
 		return

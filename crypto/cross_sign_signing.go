@@ -1,5 +1,5 @@
 // Copyright (c) 2020 Nikos Filippakis
-// Copyright (c) 2023 Tulir Asokan
+// Copyright (c) 2024 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,6 +8,7 @@
 package crypto
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -33,8 +34,8 @@ var (
 	ErrMismatchingMasterKeyMAC       = errors.New("mismatching cross-signing master key MAC")
 )
 
-func (mach *OlmMachine) fetchMasterKey(device *id.Device, content *event.VerificationMacEventContent, verState *verificationState, transactionID string) (id.Ed25519, error) {
-	crossSignKeys, err := mach.CryptoStore.GetCrossSigningKeys(device.UserID)
+func (mach *OlmMachine) fetchMasterKey(ctx context.Context, device *id.Device, content *event.VerificationMacEventContent, verState *verificationState, transactionID string) (id.Ed25519, error) {
+	crossSignKeys, err := mach.CryptoStore.GetCrossSigningKeys(ctx, device.UserID)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch cross-signing keys: %w", err)
 	}
@@ -59,7 +60,7 @@ func (mach *OlmMachine) fetchMasterKey(device *id.Device, content *event.Verific
 }
 
 // SignUser creates a cross-signing signature for a user, stores it and uploads it to the server.
-func (mach *OlmMachine) SignUser(userID id.UserID, masterKey id.Ed25519) error {
+func (mach *OlmMachine) SignUser(ctx context.Context, userID id.UserID, masterKey id.Ed25519) error {
 	if userID == mach.Client.UserID {
 		return ErrCantSignOwnMasterKey
 	} else if mach.CrossSigningKeys == nil || mach.CrossSigningKeys.UserSigningKey == nil {
@@ -74,7 +75,7 @@ func (mach *OlmMachine) SignUser(userID id.UserID, masterKey id.Ed25519) error {
 		},
 	}
 
-	signature, err := mach.signAndUpload(masterKeyObj, userID, masterKey.String(), mach.CrossSigningKeys.UserSigningKey)
+	signature, err := mach.signAndUpload(ctx, masterKeyObj, userID, masterKey.String(), mach.CrossSigningKeys.UserSigningKey)
 	if err != nil {
 		return err
 	}
@@ -84,7 +85,7 @@ func (mach *OlmMachine) SignUser(userID id.UserID, masterKey id.Ed25519) error {
 		Str("signature", signature).
 		Msg("Signed master key of user with our user-signing key")
 
-	if err := mach.CryptoStore.PutSignature(userID, masterKey, mach.Client.UserID, mach.CrossSigningKeys.UserSigningKey.PublicKey, signature); err != nil {
+	if err := mach.CryptoStore.PutSignature(ctx, userID, masterKey, mach.Client.UserID, mach.CrossSigningKeys.UserSigningKey.PublicKey, signature); err != nil {
 		return fmt.Errorf("error storing signature in crypto store: %w", err)
 	}
 
@@ -92,7 +93,7 @@ func (mach *OlmMachine) SignUser(userID id.UserID, masterKey id.Ed25519) error {
 }
 
 // SignOwnMasterKey uses the current account for signing the current user's master key and uploads the signature.
-func (mach *OlmMachine) SignOwnMasterKey() error {
+func (mach *OlmMachine) SignOwnMasterKey(ctx context.Context) error {
 	if mach.CrossSigningKeys == nil {
 		return ErrCrossSigningKeysNotCached
 	} else if mach.account == nil {
@@ -124,7 +125,7 @@ func (mach *OlmMachine) SignOwnMasterKey() error {
 		Str("signature", signature).
 		Msg("Signed own master key with own device key")
 
-	resp, err := mach.Client.UploadSignatures(&mautrix.ReqUploadSignatures{
+	resp, err := mach.Client.UploadSignatures(ctx, &mautrix.ReqUploadSignatures{
 		userID: map[string]mautrix.ReqKeysSignatures{
 			masterKey.String(): masterKeyObj,
 		},
@@ -136,7 +137,7 @@ func (mach *OlmMachine) SignOwnMasterKey() error {
 		return fmt.Errorf("%w: %+v", ErrSignatureUploadFail, resp.Failures)
 	}
 
-	if err := mach.CryptoStore.PutSignature(userID, masterKey, userID, mach.account.SigningKey(), signature); err != nil {
+	if err := mach.CryptoStore.PutSignature(ctx, userID, masterKey, userID, mach.account.SigningKey(), signature); err != nil {
 		return fmt.Errorf("error storing signature in crypto store: %w", err)
 	}
 
@@ -144,14 +145,14 @@ func (mach *OlmMachine) SignOwnMasterKey() error {
 }
 
 // SignOwnDevice creates a cross-signing signature for a device belonging to the current user and uploads it to the server.
-func (mach *OlmMachine) SignOwnDevice(device *id.Device) error {
+func (mach *OlmMachine) SignOwnDevice(ctx context.Context, device *id.Device) error {
 	if device.UserID != mach.Client.UserID {
 		return ErrCantSignOtherDevice
 	} else if mach.CrossSigningKeys == nil || mach.CrossSigningKeys.SelfSigningKey == nil {
 		return ErrSelfSigningKeyNotCached
 	}
 
-	deviceKeys, err := mach.getFullDeviceKeys(device)
+	deviceKeys, err := mach.getFullDeviceKeys(ctx, device)
 	if err != nil {
 		return err
 	}
@@ -166,7 +167,7 @@ func (mach *OlmMachine) SignOwnDevice(device *id.Device) error {
 		deviceKeyObj.Keys[id.KeyID(keyID)] = key
 	}
 
-	signature, err := mach.signAndUpload(deviceKeyObj, device.UserID, device.DeviceID.String(), mach.CrossSigningKeys.SelfSigningKey)
+	signature, err := mach.signAndUpload(ctx, deviceKeyObj, device.UserID, device.DeviceID.String(), mach.CrossSigningKeys.SelfSigningKey)
 	if err != nil {
 		return err
 	}
@@ -177,7 +178,7 @@ func (mach *OlmMachine) SignOwnDevice(device *id.Device) error {
 		Str("signature", signature).
 		Msg("Signed own device key with self-signing key")
 
-	if err := mach.CryptoStore.PutSignature(device.UserID, device.SigningKey, mach.Client.UserID, mach.CrossSigningKeys.SelfSigningKey.PublicKey, signature); err != nil {
+	if err := mach.CryptoStore.PutSignature(ctx, device.UserID, device.SigningKey, mach.Client.UserID, mach.CrossSigningKeys.SelfSigningKey.PublicKey, signature); err != nil {
 		return fmt.Errorf("error storing signature in crypto store: %w", err)
 	}
 
@@ -186,8 +187,8 @@ func (mach *OlmMachine) SignOwnDevice(device *id.Device) error {
 
 // getFullDeviceKeys gets the full device keys object for the given device.
 // This is used because we don't cache some of the details like list of algorithms and unsupported key types.
-func (mach *OlmMachine) getFullDeviceKeys(device *id.Device) (*mautrix.DeviceKeys, error) {
-	devicesKeys, err := mach.Client.QueryKeys(&mautrix.ReqQueryKeys{
+func (mach *OlmMachine) getFullDeviceKeys(ctx context.Context, device *id.Device) (*mautrix.DeviceKeys, error) {
+	devicesKeys, err := mach.Client.QueryKeys(ctx, &mautrix.ReqQueryKeys{
 		DeviceKeys: mautrix.DeviceKeysRequest{
 			device.UserID: mautrix.DeviceIDList{device.DeviceID},
 		},
@@ -208,7 +209,7 @@ func (mach *OlmMachine) getFullDeviceKeys(device *id.Device) (*mautrix.DeviceKey
 }
 
 // signAndUpload signs the given key signatures object and uploads it to the server.
-func (mach *OlmMachine) signAndUpload(req mautrix.ReqKeysSignatures, userID id.UserID, signedThing string, key *olm.PkSigning) (string, error) {
+func (mach *OlmMachine) signAndUpload(ctx context.Context, req mautrix.ReqKeysSignatures, userID id.UserID, signedThing string, key *olm.PkSigning) (string, error) {
 	signature, err := key.SignJSON(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to sign JSON: %w", err)
@@ -219,7 +220,7 @@ func (mach *OlmMachine) signAndUpload(req mautrix.ReqKeysSignatures, userID id.U
 		},
 	}
 
-	resp, err := mach.Client.UploadSignatures(&mautrix.ReqUploadSignatures{
+	resp, err := mach.Client.UploadSignatures(ctx, &mautrix.ReqUploadSignatures{
 		userID: map[string]mautrix.ReqKeysSignatures{
 			signedThing: req,
 		},

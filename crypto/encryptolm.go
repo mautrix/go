@@ -1,4 +1,4 @@
-// Copyright (c) 2023 Tulir Asokan
+// Copyright (c) 2024 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -38,7 +38,7 @@ func (mach *OlmMachine) encryptOlmEvent(ctx context.Context, session *OlmSession
 		Str("olm_session_description", session.Describe()).
 		Msg("Encrypting olm message")
 	msgType, ciphertext := session.Encrypt(plaintext)
-	err = mach.CryptoStore.UpdateSession(recipient.IdentityKey, session)
+	err = mach.CryptoStore.UpdateSession(ctx, recipient.IdentityKey, session)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to update olm session in crypto store after encrypting")
 	}
@@ -54,8 +54,8 @@ func (mach *OlmMachine) encryptOlmEvent(ctx context.Context, session *OlmSession
 	}
 }
 
-func (mach *OlmMachine) shouldCreateNewSession(identityKey id.IdentityKey) bool {
-	if !mach.CryptoStore.HasSession(identityKey) {
+func (mach *OlmMachine) shouldCreateNewSession(ctx context.Context, identityKey id.IdentityKey) bool {
+	if !mach.CryptoStore.HasSession(ctx, identityKey) {
 		return true
 	}
 	mach.devicesToUnwedgeLock.Lock()
@@ -72,7 +72,7 @@ func (mach *OlmMachine) createOutboundSessions(ctx context.Context, input map[id
 	for userID, devices := range input {
 		request[userID] = make(map[id.DeviceID]id.KeyAlgorithm)
 		for deviceID, identity := range devices {
-			if mach.shouldCreateNewSession(identity.IdentityKey) {
+			if mach.shouldCreateNewSession(ctx, identity.IdentityKey) {
 				request[userID][deviceID] = id.KeyAlgorithmSignedCurve25519
 			}
 		}
@@ -83,7 +83,7 @@ func (mach *OlmMachine) createOutboundSessions(ctx context.Context, input map[id
 	if len(request) == 0 {
 		return nil
 	}
-	resp, err := mach.Client.ClaimKeys(&mautrix.ReqClaimKeys{
+	resp, err := mach.Client.ClaimKeys(ctx, &mautrix.ReqClaimKeys{
 		OneTimeKeys: request,
 		Timeout:     10 * 1000,
 	})
@@ -117,7 +117,7 @@ func (mach *OlmMachine) createOutboundSessions(ctx context.Context, input map[id
 				log.Error().Err(err).Msg("Failed to create outbound session with claimed one-time key")
 			} else {
 				wrapped := wrapSession(sess)
-				err = mach.CryptoStore.AddSession(identity.IdentityKey, wrapped)
+				err = mach.CryptoStore.AddSession(ctx, identity.IdentityKey, wrapped)
 				if err != nil {
 					log.Error().Err(err).Msg("Failed to store created outbound session")
 				} else {

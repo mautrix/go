@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tulir Asokan
+// Copyright (c) 2024 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,6 +7,7 @@
 package mautrix
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"runtime/debug"
@@ -16,78 +17,17 @@ import (
 	"github.com/element-hq/mautrix-go/id"
 )
 
-// EventSource represents the part of the sync response that an event came from.
-type EventSource int
-
-const (
-	EventSourcePresence EventSource = 1 << iota
-	EventSourceJoin
-	EventSourceInvite
-	EventSourceLeave
-	EventSourceAccountData
-	EventSourceTimeline
-	EventSourceState
-	EventSourceEphemeral
-	EventSourceToDevice
-	EventSourceDecrypted
-)
-
-const primaryTypes = EventSourcePresence | EventSourceAccountData | EventSourceToDevice | EventSourceTimeline | EventSourceState
-const roomSections = EventSourceJoin | EventSourceInvite | EventSourceLeave
-const roomableTypes = EventSourceAccountData | EventSourceTimeline | EventSourceState
-const encryptableTypes = roomableTypes | EventSourceToDevice
-
-func (es EventSource) String() string {
-	var typeName string
-	switch es & primaryTypes {
-	case EventSourcePresence:
-		typeName = "presence"
-	case EventSourceAccountData:
-		typeName = "account data"
-	case EventSourceToDevice:
-		typeName = "to-device"
-	case EventSourceTimeline:
-		typeName = "timeline"
-	case EventSourceState:
-		typeName = "state"
-	default:
-		return fmt.Sprintf("unknown (%d)", es)
-	}
-	if es&roomableTypes != 0 {
-		switch es & roomSections {
-		case EventSourceJoin:
-			typeName = "joined room " + typeName
-		case EventSourceInvite:
-			typeName = "invited room " + typeName
-		case EventSourceLeave:
-			typeName = "left room " + typeName
-		default:
-			return fmt.Sprintf("unknown (%s+%d)", typeName, es)
-		}
-		es &^= roomSections
-	}
-	if es&encryptableTypes != 0 && es&EventSourceDecrypted != 0 {
-		typeName += " (decrypted)"
-		es &^= EventSourceDecrypted
-	}
-	es &^= primaryTypes
-	if es != 0 {
-		return fmt.Sprintf("unknown (%s+%d)", typeName, es)
-	}
-	return typeName
-}
-
 // EventHandler handles a single event from a sync response.
-type EventHandler func(source EventSource, evt *event.Event)
+type EventHandler func(ctx context.Context, evt *event.Event)
 
 // SyncHandler handles a whole sync response. If the return value is false, handling will be stopped completely.
-type SyncHandler func(resp *RespSync, since string) bool
+type SyncHandler func(ctx context.Context, resp *RespSync, since string) bool
 
 // Syncer is an interface that must be satisfied in order to do /sync requests on a client.
 type Syncer interface {
 	// ProcessResponse processes the /sync response. The since parameter is the since= value that was used to produce the response.
 	// This is useful for detecting the very first sync (since=""). If an error is return, Syncing will be stopped permanently.
-	ProcessResponse(resp *RespSync, since string) error
+	ProcessResponse(ctx context.Context, resp *RespSync, since string) error
 	// OnFailedSync returns either the time to wait before retrying or an error to stop syncing permanently.
 	OnFailedSync(res *RespSync, err error) (time.Duration, error)
 	// GetFilterJSON for the given user ID. NOT the filter ID.
@@ -101,7 +41,7 @@ type ExtensibleSyncer interface {
 }
 
 type DispatchableSyncer interface {
-	Dispatch(source EventSource, evt *event.Event)
+	Dispatch(ctx context.Context, evt *event.Event)
 }
 
 // DefaultSyncer is the default syncing implementation. You can either write your own syncer, or selectively
@@ -134,14 +74,17 @@ func NewDefaultSyncer() *DefaultSyncer {
 		globalListeners:   []EventHandler{},
 		ParseEventContent: true,
 		ParseErrorHandler: func(evt *event.Event, err error) bool {
-			return false
+			// By default, drop known events that can't be parsed, but let unknown events through
+			return errors.Is(err, event.ErrUnsupportedContentType) ||
+				// Also allow events that had their content already parsed by some other function
+				errors.Is(err, event.ErrContentAlreadyParsed)
 		},
 	}
 }
 
 // ProcessResponse processes the /sync response in a way suitable for bots. "Suitable for bots" means a stream of
 // unrepeating events. Returns a fatal error if a listener panics.
-func (s *DefaultSyncer) ProcessResponse(res *RespSync, since string) (err error) {
+func (s *DefaultSyncer) ProcessResponse(ctx context.Context, res *RespSync, since string) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("ProcessResponse panicked! since=%s panic=%s\n%s", since, r, debug.Stack())
@@ -149,38 +92,38 @@ func (s *DefaultSyncer) ProcessResponse(res *RespSync, since string) (err error)
 	}()
 
 	for _, listener := range s.syncListeners {
-		if !listener(res, since) {
+		if !listener(ctx, res, since) {
 			return
 		}
 	}
 
-	s.processSyncEvents("", res.ToDevice.Events, EventSourceToDevice)
-	s.processSyncEvents("", res.Presence.Events, EventSourcePresence)
-	s.processSyncEvents("", res.AccountData.Events, EventSourceAccountData)
+	s.processSyncEvents(ctx, "", res.ToDevice.Events, event.SourceToDevice)
+	s.processSyncEvents(ctx, "", res.Presence.Events, event.SourcePresence)
+	s.processSyncEvents(ctx, "", res.AccountData.Events, event.SourceAccountData)
 
 	for roomID, roomData := range res.Rooms.Join {
-		s.processSyncEvents(roomID, roomData.State.Events, EventSourceJoin|EventSourceState)
-		s.processSyncEvents(roomID, roomData.Timeline.Events, EventSourceJoin|EventSourceTimeline)
-		s.processSyncEvents(roomID, roomData.Ephemeral.Events, EventSourceJoin|EventSourceEphemeral)
-		s.processSyncEvents(roomID, roomData.AccountData.Events, EventSourceJoin|EventSourceAccountData)
+		s.processSyncEvents(ctx, roomID, roomData.State.Events, event.SourceJoin|event.SourceState)
+		s.processSyncEvents(ctx, roomID, roomData.Timeline.Events, event.SourceJoin|event.SourceTimeline)
+		s.processSyncEvents(ctx, roomID, roomData.Ephemeral.Events, event.SourceJoin|event.SourceEphemeral)
+		s.processSyncEvents(ctx, roomID, roomData.AccountData.Events, event.SourceJoin|event.SourceAccountData)
 	}
 	for roomID, roomData := range res.Rooms.Invite {
-		s.processSyncEvents(roomID, roomData.State.Events, EventSourceInvite|EventSourceState)
+		s.processSyncEvents(ctx, roomID, roomData.State.Events, event.SourceInvite|event.SourceState)
 	}
 	for roomID, roomData := range res.Rooms.Leave {
-		s.processSyncEvents(roomID, roomData.State.Events, EventSourceLeave|EventSourceState)
-		s.processSyncEvents(roomID, roomData.Timeline.Events, EventSourceLeave|EventSourceTimeline)
+		s.processSyncEvents(ctx, roomID, roomData.State.Events, event.SourceLeave|event.SourceState)
+		s.processSyncEvents(ctx, roomID, roomData.Timeline.Events, event.SourceLeave|event.SourceTimeline)
 	}
 	return
 }
 
-func (s *DefaultSyncer) processSyncEvents(roomID id.RoomID, events []*event.Event, source EventSource) {
+func (s *DefaultSyncer) processSyncEvents(ctx context.Context, roomID id.RoomID, events []*event.Event, source event.Source) {
 	for _, evt := range events {
-		s.processSyncEvent(roomID, evt, source)
+		s.processSyncEvent(ctx, roomID, evt, source)
 	}
 }
 
-func (s *DefaultSyncer) processSyncEvent(roomID id.RoomID, evt *event.Event, source EventSource) {
+func (s *DefaultSyncer) processSyncEvent(ctx context.Context, roomID id.RoomID, evt *event.Event, source event.Source) {
 	evt.RoomID = roomID
 
 	// Ensure the type class is correct. It's safe to mutate the class since the event type is not a pointer.
@@ -188,11 +131,11 @@ func (s *DefaultSyncer) processSyncEvent(roomID id.RoomID, evt *event.Event, sou
 	switch {
 	case evt.StateKey != nil:
 		evt.Type.Class = event.StateEventType
-	case source == EventSourcePresence, source&EventSourceEphemeral != 0:
+	case source == event.SourcePresence, source&event.SourceEphemeral != 0:
 		evt.Type.Class = event.EphemeralEventType
-	case source&EventSourceAccountData != 0:
+	case source&event.SourceAccountData != 0:
 		evt.Type.Class = event.AccountDataEventType
-	case source == EventSourceToDevice:
+	case source == event.SourceToDevice:
 		evt.Type.Class = event.ToDeviceEventType
 	default:
 		evt.Type.Class = event.MessageEventType
@@ -205,17 +148,18 @@ func (s *DefaultSyncer) processSyncEvent(roomID id.RoomID, evt *event.Event, sou
 		}
 	}
 
-	s.Dispatch(source, evt)
+	evt.Mautrix.EventSource = source
+	s.Dispatch(ctx, evt)
 }
 
-func (s *DefaultSyncer) Dispatch(source EventSource, evt *event.Event) {
+func (s *DefaultSyncer) Dispatch(ctx context.Context, evt *event.Event) {
 	for _, fn := range s.globalListeners {
-		fn(source, evt)
+		fn(ctx, evt)
 	}
 	listeners, exists := s.listeners[evt.Type]
 	if exists {
 		for _, fn := range listeners {
-			fn(source, evt)
+			fn(ctx, evt)
 		}
 	}
 }
@@ -263,30 +207,17 @@ func (s *DefaultSyncer) GetFilterJSON(userID id.UserID) *Filter {
 	return s.FilterJSON
 }
 
-// OldEventIgnorer is a utility struct for bots to ignore events from before the bot joined the room.
-//
-// Deprecated: Use Client.DontProcessOldEvents instead.
-type OldEventIgnorer struct {
-	UserID id.UserID
-}
-
-func (oei *OldEventIgnorer) Register(syncer ExtensibleSyncer) {
-	syncer.OnSync(oei.DontProcessOldEvents)
-}
-
-func (oei *OldEventIgnorer) DontProcessOldEvents(resp *RespSync, since string) bool {
-	return dontProcessOldEvents(oei.UserID, resp, since)
-}
-
 // DontProcessOldEvents is a sync handler that removes rooms that the user just joined.
 // It's meant for bots to ignore events from before the bot joined the room.
 //
 // To use it, register it with your Syncer, e.g.:
 //
 //	cli.Syncer.(mautrix.ExtensibleSyncer).OnSync(cli.DontProcessOldEvents)
-func (cli *Client) DontProcessOldEvents(resp *RespSync, since string) bool {
+func (cli *Client) DontProcessOldEvents(_ context.Context, resp *RespSync, since string) bool {
 	return dontProcessOldEvents(cli.UserID, resp, since)
 }
+
+var _ SyncHandler = (*Client)(nil).DontProcessOldEvents
 
 func dontProcessOldEvents(userID id.UserID, resp *RespSync, since string) bool {
 	if since == "" {
@@ -324,7 +255,7 @@ func dontProcessOldEvents(userID id.UserID, resp *RespSync, since string) bool {
 // To use it, register it with your Syncer, e.g.:
 //
 //	cli.Syncer.(mautrix.ExtensibleSyncer).OnSync(cli.MoveInviteState)
-func (cli *Client) MoveInviteState(resp *RespSync, _ string) bool {
+func (cli *Client) MoveInviteState(ctx context.Context, resp *RespSync, _ string) bool {
 	for _, meta := range resp.Rooms.Invite {
 		var inviteState []event.StrippedState
 		var inviteEvt *event.Event
@@ -349,3 +280,5 @@ func (cli *Client) MoveInviteState(resp *RespSync, _ string) bool {
 	}
 	return true
 }
+
+var _ SyncHandler = (*Client)(nil).MoveInviteState

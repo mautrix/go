@@ -1,4 +1,4 @@
-// Copyright (c) 2023 Tulir Asokan
+// Copyright (c) 2024 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -32,6 +32,9 @@ type OlmMachine struct {
 	StateStore  StateStore
 
 	PlaintextMentions bool
+
+	// Never ask the server for keys automatically as a side effect.
+	DisableKeyFetching bool
 
 	SendKeysMinTrust  id.TrustState
 	ShareKeysMinTrust id.TrustState
@@ -80,11 +83,11 @@ type OlmMachine struct {
 // StateStore is used by OlmMachine to get room state information that's needed for encryption.
 type StateStore interface {
 	// IsEncrypted returns whether a room is encrypted.
-	IsEncrypted(id.RoomID) bool
+	IsEncrypted(context.Context, id.RoomID) (bool, error)
 	// GetEncryptionEvent returns the encryption event's content for an encrypted room.
-	GetEncryptionEvent(id.RoomID) *event.EncryptionEventContent
+	GetEncryptionEvent(context.Context, id.RoomID) (*event.EncryptionEventContent, error)
 	// FindSharedRooms returns the encrypted rooms that another user is also in for a user ID.
-	FindSharedRooms(id.UserID) []id.RoomID
+	FindSharedRooms(context.Context, id.UserID) ([]id.RoomID, error)
 }
 
 // NewOlmMachine creates an OlmMachine with the given client, logger and stores.
@@ -131,8 +134,8 @@ func (mach *OlmMachine) machOrContextLog(ctx context.Context) *zerolog.Logger {
 
 // Load loads the Olm account information from the crypto store. If there's no olm account, a new one is created.
 // This must be called before using the machine.
-func (mach *OlmMachine) Load() (err error) {
-	mach.account, err = mach.CryptoStore.GetAccount()
+func (mach *OlmMachine) Load(ctx context.Context) (err error) {
+	mach.account, err = mach.CryptoStore.GetAccount(ctx)
 	if err != nil {
 		return
 	}
@@ -142,16 +145,16 @@ func (mach *OlmMachine) Load() (err error) {
 	return nil
 }
 
-func (mach *OlmMachine) saveAccount() {
-	err := mach.CryptoStore.PutAccount(mach.account)
+func (mach *OlmMachine) saveAccount(ctx context.Context) {
+	err := mach.CryptoStore.PutAccount(ctx, mach.account)
 	if err != nil {
 		mach.Log.Error().Err(err).Msg("Failed to save account")
 	}
 }
 
 // FlushStore calls the Flush method of the CryptoStore.
-func (mach *OlmMachine) FlushStore() error {
-	return mach.CryptoStore.Flush()
+func (mach *OlmMachine) FlushStore(ctx context.Context) error {
+	return mach.CryptoStore.Flush(ctx)
 }
 
 func (mach *OlmMachine) timeTrace(ctx context.Context, thing string, expectedDuration time.Duration) func() {
@@ -194,9 +197,9 @@ func (mach *OlmMachine) OwnIdentity() *id.Device {
 }
 
 type asEventProcessor interface {
-	On(evtType event.Type, handler func(evt *event.Event))
-	OnOTK(func(otk *mautrix.OTKCount))
-	OnDeviceList(func(lists *mautrix.DeviceLists, since string))
+	On(evtType event.Type, handler func(ctx context.Context, evt *event.Event))
+	OnOTK(func(ctx context.Context, otk *mautrix.OTKCount))
+	OnDeviceList(func(ctx context.Context, lists *mautrix.DeviceLists, since string))
 }
 
 func (mach *OlmMachine) AddAppserviceListener(ep asEventProcessor) {
@@ -217,19 +220,23 @@ func (mach *OlmMachine) AddAppserviceListener(ep asEventProcessor) {
 	mach.Log.Debug().Msg("Added listeners for encryption data coming from appservice transactions")
 }
 
-func (mach *OlmMachine) HandleDeviceLists(dl *mautrix.DeviceLists, since string) {
+func (mach *OlmMachine) HandleDeviceLists(ctx context.Context, dl *mautrix.DeviceLists, since string) {
 	if len(dl.Changed) > 0 {
 		traceID := time.Now().Format("15:04:05.000000")
 		mach.Log.Debug().
 			Str("trace_id", traceID).
 			Interface("changes", dl.Changed).
 			Msg("Device list changes in /sync")
-		mach.fetchKeys(context.TODO(), dl.Changed, since, false)
+		if mach.DisableKeyFetching {
+			mach.CryptoStore.MarkTrackedUsersOutdated(ctx, dl.Changed)
+		} else {
+			mach.FetchKeys(ctx, dl.Changed, false)
+		}
 		mach.Log.Debug().Str("trace_id", traceID).Msg("Finished handling device list changes")
 	}
 }
 
-func (mach *OlmMachine) HandleOTKCounts(otkCount *mautrix.OTKCount) {
+func (mach *OlmMachine) HandleOTKCounts(ctx context.Context, otkCount *mautrix.OTKCount) {
 	if (len(otkCount.UserID) > 0 && otkCount.UserID != mach.Client.UserID) || (len(otkCount.DeviceID) > 0 && otkCount.DeviceID != mach.Client.DeviceID) {
 		// TODO This log probably needs to be silence-able if someone wants to use encrypted appservices with multiple e2ee sessions
 		mach.Log.Warn().
@@ -243,7 +250,7 @@ func (mach *OlmMachine) HandleOTKCounts(otkCount *mautrix.OTKCount) {
 	if otkCount.SignedCurve25519 < int(minCount) {
 		traceID := time.Now().Format("15:04:05.000000")
 		log := mach.Log.With().Str("trace_id", traceID).Logger()
-		ctx := log.WithContext(context.Background())
+		ctx = log.WithContext(ctx)
 		log.Debug().
 			Int("keys_left", otkCount.Curve25519).
 			Msg("Sync response said we have less than 50 signed curve25519 keys left, sharing new ones...")
@@ -261,8 +268,8 @@ func (mach *OlmMachine) HandleOTKCounts(otkCount *mautrix.OTKCount) {
 // This can be easily registered into a mautrix client using .OnSync():
 //
 //	client.Syncer.(mautrix.ExtensibleSyncer).OnSync(c.crypto.ProcessSyncResponse)
-func (mach *OlmMachine) ProcessSyncResponse(resp *mautrix.RespSync, since string) bool {
-	mach.HandleDeviceLists(&resp.DeviceLists, since)
+func (mach *OlmMachine) ProcessSyncResponse(ctx context.Context, resp *mautrix.RespSync, since string) bool {
+	mach.HandleDeviceLists(ctx, &resp.DeviceLists, since)
 
 	for _, evt := range resp.ToDevice.Events {
 		evt.Type.Class = event.ToDeviceEventType
@@ -271,10 +278,10 @@ func (mach *OlmMachine) ProcessSyncResponse(resp *mautrix.RespSync, since string
 			mach.Log.Warn().Str("event_type", evt.Type.Type).Err(err).Msg("Failed to parse to-device event")
 			continue
 		}
-		mach.HandleToDeviceEvent(evt)
+		mach.HandleToDeviceEvent(ctx, evt)
 	}
 
-	mach.HandleOTKCounts(&resp.DeviceOTKCount)
+	mach.HandleOTKCounts(ctx, &resp.DeviceOTKCount)
 	return true
 }
 
@@ -283,8 +290,12 @@ func (mach *OlmMachine) ProcessSyncResponse(resp *mautrix.RespSync, since string
 // Currently this is not automatically called, so you must add a listener yourself:
 //
 //	client.Syncer.(mautrix.ExtensibleSyncer).OnEventType(event.StateMember, c.crypto.HandleMemberEvent)
-func (mach *OlmMachine) HandleMemberEvent(_ mautrix.EventSource, evt *event.Event) {
-	if !mach.StateStore.IsEncrypted(evt.RoomID) {
+func (mach *OlmMachine) HandleMemberEvent(ctx context.Context, evt *event.Event) {
+	if isEncrypted, err := mach.StateStore.IsEncrypted(ctx, evt.RoomID); err != nil {
+		mach.machOrContextLog(ctx).Err(err).Stringer("room_id", evt.RoomID).
+			Msg("Failed to check if room is encrypted to handle member event")
+		return
+	} else if !isEncrypted {
 		return
 	}
 	content := evt.Content.AsMember()
@@ -311,7 +322,7 @@ func (mach *OlmMachine) HandleMemberEvent(_ mautrix.EventSource, evt *event.Even
 		Str("prev_membership", string(prevContent.Membership)).
 		Str("new_membership", string(content.Membership)).
 		Msg("Got membership state change, invalidating group session in room")
-	err := mach.CryptoStore.RemoveOutboundGroupSession(evt.RoomID)
+	err := mach.CryptoStore.RemoveOutboundGroupSession(ctx, evt.RoomID)
 	if err != nil {
 		mach.Log.Warn().Str("room_id", evt.RoomID.String()).Msg("Failed to invalidate outbound group session")
 	}
@@ -319,7 +330,7 @@ func (mach *OlmMachine) HandleMemberEvent(_ mautrix.EventSource, evt *event.Even
 
 // HandleToDeviceEvent handles a single to-device event. This is automatically called by ProcessSyncResponse, so you
 // don't need to add any custom handlers if you use that method.
-func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
+func (mach *OlmMachine) HandleToDeviceEvent(ctx context.Context, evt *event.Event) {
 	if len(evt.ToUserID) > 0 && (evt.ToUserID != mach.Client.UserID || evt.ToDeviceID != mach.Client.DeviceID) {
 		// TODO This log probably needs to be silence-able if someone wants to use encrypted appservices with multiple e2ee sessions
 		mach.Log.Debug().
@@ -329,12 +340,13 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 		return
 	}
 	traceID := time.Now().Format("15:04:05.000000")
+	// TODO use context log?
 	log := mach.Log.With().
 		Str("trace_id", traceID).
 		Str("sender", evt.Sender.String()).
 		Str("type", evt.Type.Type).
 		Logger()
-	ctx := log.WithContext(context.Background())
+	ctx = log.WithContext(ctx)
 	if evt.Type != event.ToDeviceEncrypted {
 		log.Debug().Msg("Starting handling to-device event")
 	}
@@ -344,7 +356,7 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 			Str("sender_key", content.SenderKey.String()).
 			Logger()
 		log.Debug().Msg("Handling encrypted to-device event")
-		ctx = log.WithContext(context.Background())
+		ctx = log.WithContext(ctx)
 		decryptedEvt, err := mach.decryptOlmEvent(ctx, evt)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to decrypt to-device event")
@@ -381,17 +393,17 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 		mach.handleBeeperRoomKeyAck(ctx, evt.Sender, content)
 	// verification cases
 	case *event.VerificationStartEventContent:
-		mach.handleVerificationStart(evt.Sender, content, content.TransactionID, 10*time.Minute, "")
+		mach.handleVerificationStart(ctx, evt.Sender, content, content.TransactionID, 10*time.Minute, "")
 	case *event.VerificationAcceptEventContent:
-		mach.handleVerificationAccept(evt.Sender, content, content.TransactionID)
+		mach.handleVerificationAccept(ctx, evt.Sender, content, content.TransactionID)
 	case *event.VerificationKeyEventContent:
-		mach.handleVerificationKey(evt.Sender, content, content.TransactionID)
+		mach.handleVerificationKey(ctx, evt.Sender, content, content.TransactionID)
 	case *event.VerificationMacEventContent:
-		mach.handleVerificationMAC(evt.Sender, content, content.TransactionID)
+		mach.handleVerificationMAC(ctx, evt.Sender, content, content.TransactionID)
 	case *event.VerificationCancelEventContent:
 		mach.handleVerificationCancel(evt.Sender, content, content.TransactionID)
 	case *event.VerificationRequestEventContent:
-		mach.handleVerificationRequest(evt.Sender, content, content.TransactionID, "")
+		mach.handleVerificationRequest(ctx, evt.Sender, content, content.TransactionID, "")
 	case *event.RoomKeyWithheldEventContent:
 		mach.handleRoomKeyWithheld(ctx, content)
 	default:
@@ -405,14 +417,15 @@ func (mach *OlmMachine) HandleToDeviceEvent(evt *event.Event) {
 // GetOrFetchDevice attempts to retrieve the device identity for the given device from the store
 // and if it's not found it asks the server for it.
 func (mach *OlmMachine) GetOrFetchDevice(ctx context.Context, userID id.UserID, deviceID id.DeviceID) (*id.Device, error) {
-	device, err := mach.CryptoStore.GetDevice(userID, deviceID)
+	device, err := mach.CryptoStore.GetDevice(ctx, userID, deviceID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get sender device from store: %w", err)
-	} else if device != nil {
+	} else if device != nil || mach.DisableKeyFetching {
 		return device, nil
 	}
-	usersToDevices := mach.fetchKeys(ctx, []id.UserID{userID}, "", true)
-	if devices, ok := usersToDevices[userID]; ok {
+	if usersToDevices, err := mach.FetchKeys(ctx, []id.UserID{userID}, true); err != nil {
+		return nil, fmt.Errorf("failed to fetch keys: %w", err)
+	} else if devices, ok := usersToDevices[userID]; ok {
 		if device, ok = devices[deviceID]; ok {
 			return device, nil
 		}
@@ -425,15 +438,15 @@ func (mach *OlmMachine) GetOrFetchDevice(ctx context.Context, userID id.UserID, 
 // store and if it's not found it asks the server for it. This returns nil if the server doesn't return a device with
 // the given identity key.
 func (mach *OlmMachine) GetOrFetchDeviceByKey(ctx context.Context, userID id.UserID, identityKey id.IdentityKey) (*id.Device, error) {
-	deviceIdentity, err := mach.CryptoStore.FindDeviceByKey(userID, identityKey)
-	if err != nil || deviceIdentity != nil {
+	deviceIdentity, err := mach.CryptoStore.FindDeviceByKey(ctx, userID, identityKey)
+	if err != nil || deviceIdentity != nil || mach.DisableKeyFetching {
 		return deviceIdentity, err
 	}
 	mach.machOrContextLog(ctx).Debug().
 		Str("user_id", userID.String()).
 		Str("identity_key", identityKey.String()).
 		Msg("Didn't find identity in crypto store, fetching from server")
-	devices := mach.LoadDevices(userID)
+	devices := mach.LoadDevices(ctx, userID)
 	for _, device := range devices {
 		if device.IdentityKey == identityKey {
 			return device, nil
@@ -455,7 +468,7 @@ func (mach *OlmMachine) SendEncryptedToDevice(ctx context.Context, device *id.De
 	mach.olmLock.Lock()
 	defer mach.olmLock.Unlock()
 
-	olmSess, err := mach.CryptoStore.GetLatestSession(device.IdentityKey)
+	olmSess, err := mach.CryptoStore.GetLatestSession(ctx, device.IdentityKey)
 	if err != nil {
 		return err
 	}
@@ -473,7 +486,7 @@ func (mach *OlmMachine) SendEncryptedToDevice(ctx context.Context, device *id.De
 		Str("to_identity_key", device.IdentityKey.String()).
 		Str("olm_session_id", olmSess.ID().String()).
 		Msg("Sending encrypted to-device event")
-	_, err = mach.Client.SendToDevice(event.ToDeviceEncrypted,
+	_, err = mach.Client.SendToDevice(ctx, event.ToDeviceEncrypted,
 		&mautrix.ReqSendToDevice{
 			Messages: map[id.UserID]map[id.DeviceID]*event.Content{
 				device.UserID: {
@@ -499,7 +512,7 @@ func (mach *OlmMachine) createGroupSession(ctx context.Context, senderKey id.Sen
 			Msg("Mismatched session ID while creating inbound group session")
 		return
 	}
-	err = mach.CryptoStore.PutGroupSession(roomID, senderKey, sessionID, igs)
+	err = mach.CryptoStore.PutGroupSession(ctx, roomID, senderKey, sessionID, igs)
 	if err != nil {
 		log.Error().Err(err).Str("session_id", sessionID.String()).Msg("Failed to store new inbound group session")
 		return
@@ -525,7 +538,7 @@ func (mach *OlmMachine) markSessionReceived(id id.SessionID) {
 }
 
 // WaitForSession waits for the given Megolm session to arrive.
-func (mach *OlmMachine) WaitForSession(roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID, timeout time.Duration) bool {
+func (mach *OlmMachine) WaitForSession(ctx context.Context, roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID, timeout time.Duration) bool {
 	mach.keyWaitersLock.Lock()
 	ch, ok := mach.keyWaiters[sessionID]
 	if !ok {
@@ -534,7 +547,7 @@ func (mach *OlmMachine) WaitForSession(roomID id.RoomID, senderKey id.SenderKey,
 	}
 	mach.keyWaitersLock.Unlock()
 	// Handle race conditions where a session appears between the failed decryption and WaitForSession call.
-	sess, err := mach.CryptoStore.GetGroupSession(roomID, senderKey, sessionID)
+	sess, err := mach.CryptoStore.GetGroupSession(ctx, roomID, senderKey, sessionID)
 	if sess != nil || errors.Is(err, ErrGroupSessionWithheld) {
 		return true
 	}
@@ -542,10 +555,12 @@ func (mach *OlmMachine) WaitForSession(roomID id.RoomID, senderKey id.SenderKey,
 	case <-ch:
 		return true
 	case <-time.After(timeout):
-		sess, err = mach.CryptoStore.GetGroupSession(roomID, senderKey, sessionID)
+		sess, err = mach.CryptoStore.GetGroupSession(ctx, roomID, senderKey, sessionID)
 		// Check if the session somehow appeared in the store without telling us
 		// We accept withheld sessions as received, as then the decryption attempt will show the error.
 		return sess != nil || errors.Is(err, ErrGroupSessionWithheld)
+	case <-ctx.Done():
+		return false
 	}
 }
 
@@ -568,7 +583,10 @@ func (mach *OlmMachine) receiveRoomKey(ctx context.Context, evt *DecryptedOlmEve
 		return
 	}
 
-	config := mach.StateStore.GetEncryptionEvent(content.RoomID)
+	config, err := mach.StateStore.GetEncryptionEvent(ctx, content.RoomID)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get encryption event for room")
+	}
 	var maxAge time.Duration
 	var maxMessages int
 	if config != nil {
@@ -589,7 +607,7 @@ func (mach *OlmMachine) receiveRoomKey(ctx context.Context, evt *DecryptedOlmEve
 	}
 	if mach.DeletePreviousKeysOnReceive && !content.IsScheduled {
 		log.Debug().Msg("Redacting previous megolm sessions from sender in room")
-		sessionIDs, err := mach.CryptoStore.RedactGroupSessions(content.RoomID, evt.SenderKey, "received new key from device")
+		sessionIDs, err := mach.CryptoStore.RedactGroupSessions(ctx, content.RoomID, evt.SenderKey, "received new key from device")
 		if err != nil {
 			log.Err(err).Msg("Failed to redact previous megolm sessions")
 		} else {
@@ -606,7 +624,7 @@ func (mach *OlmMachine) handleRoomKeyWithheld(ctx context.Context, content *even
 		zerolog.Ctx(ctx).Debug().Interface("content", content).Msg("Non-megolm room key withheld event")
 		return
 	}
-	err := mach.CryptoStore.PutWithheldGroupSession(*content)
+	err := mach.CryptoStore.PutWithheldGroupSession(ctx, *content)
 	if err != nil {
 		zerolog.Ctx(ctx).Error().Err(err).Msg("Failed to save room key withheld event")
 	}
@@ -624,7 +642,7 @@ func (mach *OlmMachine) ShareKeys(ctx context.Context, currentOTKCount int) erro
 	defer mach.otkUploadLock.Unlock()
 	if mach.lastOTKUpload.Add(1*time.Minute).After(start) || currentOTKCount < 0 {
 		log.Debug().Msg("Checking OTK count from server due to suspiciously close share keys requests or negative OTK count")
-		resp, err := mach.Client.UploadKeys(&mautrix.ReqUploadKeys{})
+		resp, err := mach.Client.UploadKeys(ctx, &mautrix.ReqUploadKeys{})
 		if err != nil {
 			return fmt.Errorf("failed to check current OTK counts: %w", err)
 		}
@@ -637,6 +655,15 @@ func (mach *OlmMachine) ShareKeys(ctx context.Context, currentOTKCount int) erro
 	var deviceKeys *mautrix.DeviceKeys
 	if !mach.account.Shared {
 		deviceKeys = mach.account.getInitialKeys(mach.Client.UserID, mach.Client.DeviceID)
+		err := mach.CryptoStore.PutDevice(ctx, mach.Client.UserID, &id.Device{
+			UserID:      mach.Client.UserID,
+			DeviceID:    mach.Client.DeviceID,
+			IdentityKey: deviceKeys.Keys.GetCurve25519(mach.Client.DeviceID),
+			SigningKey:  deviceKeys.Keys.GetEd25519(mach.Client.DeviceID),
+		})
+		if err != nil {
+			return fmt.Errorf("failed to save initial keys: %w", err)
+		}
 		log.Debug().Msg("Going to upload initial account keys")
 	}
 	oneTimeKeys := mach.account.getOneTimeKeys(mach.Client.UserID, mach.Client.DeviceID, currentOTKCount)
@@ -649,20 +676,20 @@ func (mach *OlmMachine) ShareKeys(ctx context.Context, currentOTKCount int) erro
 		OneTimeKeys: oneTimeKeys,
 	}
 	log.Debug().Int("count", len(oneTimeKeys)).Msg("Uploading one-time keys")
-	_, err := mach.Client.UploadKeys(req)
+	_, err := mach.Client.UploadKeys(ctx, req)
 	if err != nil {
 		return err
 	}
 	mach.lastOTKUpload = time.Now()
 	mach.account.Shared = true
-	mach.saveAccount()
+	mach.saveAccount(ctx)
 	return nil
 }
 
 func (mach *OlmMachine) ExpiredKeyDeleteLoop(ctx context.Context) {
 	log := mach.Log.With().Str("action", "redact expired sessions").Logger()
 	for {
-		sessionIDs, err := mach.CryptoStore.RedactExpiredGroupSessions()
+		sessionIDs, err := mach.CryptoStore.RedactExpiredGroupSessions(ctx)
 		if err != nil {
 			log.Err(err).Msg("Failed to redact expired megolm sessions")
 		} else if len(sessionIDs) > 0 {

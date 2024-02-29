@@ -134,6 +134,7 @@ func (as *AppService) PutTransaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log := as.Log.With().Str("transaction_id", txnID).Logger()
+	// Don't use request context, handling shouldn't be stopped even if the request times out
 	ctx := context.Background()
 	ctx = log.WithContext(ctx)
 	if as.txnIDC.IsProcessed(txnID) {
@@ -235,7 +236,7 @@ func (as *AppService) handleEvents(ctx context.Context, evts []*event.Event, def
 		}
 
 		if evt.Type.IsState() {
-			mautrix.UpdateStateStore(as.StateStore, evt)
+			mautrix.UpdateStateStore(ctx, as.StateStore, evt)
 		}
 		var ch chan *event.Event
 		if evt.Type.Class == event.ToDeviceEventType {

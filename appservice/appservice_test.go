@@ -1,6 +1,7 @@
 package appservice
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -35,7 +36,7 @@ func TestClient_UnixSocket(t *testing.T) {
 	err = as.SetHomeserverURL(fmt.Sprintf("unix://%s", socket))
 	assert.NoError(t, err)
 	client := as.Client("user1")
-	resp, err := client.Whoami()
+	resp, err := client.Whoami(context.Background())
 	assert.NoError(t, err)
 	assert.Equal(t, "@joe:example.org", string(resp.UserID))
 }

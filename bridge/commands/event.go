@@ -7,6 +7,7 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -35,6 +36,7 @@ type Event struct {
 	Args      []string
 	RawArgs   string
 	ReplyTo   id.EventID
+	Ctx       context.Context
 	ZLog      *zerolog.Logger
 	// Deprecated: switch to ZLog
 	Log maulogger.Logger
@@ -65,7 +67,7 @@ func (ce *Event) Reply(msg string, args ...interface{}) {
 func (ce *Event) ReplyAdvanced(msg string, allowMarkdown, allowHTML bool) {
 	content := format.RenderMarkdown(msg, allowMarkdown, allowHTML)
 	content.MsgType = event.MsgNotice
-	_, err := ce.MainIntent().SendMessageEvent(ce.RoomID, event.EventMessage, content)
+	_, err := ce.MainIntent().SendMessageEvent(ce.Ctx, ce.RoomID, event.EventMessage, content)
 	if err != nil {
 		ce.ZLog.Error().Err(err).Msgf("Failed to reply to command")
 	}
@@ -73,7 +75,7 @@ func (ce *Event) ReplyAdvanced(msg string, allowMarkdown, allowHTML bool) {
 
 // React sends a reaction to the command.
 func (ce *Event) React(key string) {
-	_, err := ce.MainIntent().SendReaction(ce.RoomID, ce.EventID, key)
+	_, err := ce.MainIntent().SendReaction(ce.Ctx, ce.RoomID, ce.EventID, key)
 	if err != nil {
 		ce.ZLog.Error().Err(err).Msgf("Failed to react to command")
 	}
@@ -81,7 +83,7 @@ func (ce *Event) React(key string) {
 
 // Redact redacts the command.
 func (ce *Event) Redact(req ...mautrix.ReqRedact) {
-	_, err := ce.MainIntent().RedactEvent(ce.RoomID, ce.EventID, req...)
+	_, err := ce.MainIntent().RedactEvent(ce.Ctx, ce.RoomID, ce.EventID, req...)
 	if err != nil {
 		ce.ZLog.Error().Err(err).Msgf("Failed to redact command")
 	}
@@ -89,7 +91,7 @@ func (ce *Event) Redact(req ...mautrix.ReqRedact) {
 
 // MarkRead marks the command event as read.
 func (ce *Event) MarkRead() {
-	err := ce.MainIntent().SendReceipt(ce.RoomID, ce.EventID, event.ReceiptTypeRead, nil)
+	err := ce.MainIntent().SendReceipt(ce.Ctx, ce.RoomID, ce.EventID, event.ReceiptTypeRead, nil)
 	if err != nil {
 		ce.ZLog.Error().Err(err).Msgf("Failed to mark command as read")
 	}

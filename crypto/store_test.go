@@ -36,7 +36,7 @@ func getCryptoStores(t *testing.T) map[string]Store {
 		t.Fatalf("Error opening db: %v", err)
 	}
 	sqlStore := NewSQLCryptoStore(db, nil, "accid", id.DeviceID("dev"), []byte("test"))
-	if err = sqlStore.DB.Upgrade(); err != nil {
+	if err = sqlStore.DB.Upgrade(context.TODO()); err != nil {
 		t.Fatalf("Error creating tables: %v", err)
 	}
 
@@ -54,8 +54,8 @@ func getCryptoStores(t *testing.T) map[string]Store {
 func TestPutNextBatch(t *testing.T) {
 	stores := getCryptoStores(t)
 	store := stores["sql"].(*SQLCryptoStore)
-	store.PutNextBatch("batch1")
-	if batch, _ := store.GetNextBatch(); batch != "batch1" {
+	store.PutNextBatch(context.Background(), "batch1")
+	if batch, _ := store.GetNextBatch(context.Background()); batch != "batch1" {
 		t.Errorf("Expected batch1, got %v", batch)
 	}
 }
@@ -65,8 +65,8 @@ func TestPutAccount(t *testing.T) {
 	for storeName, store := range stores {
 		t.Run(storeName, func(t *testing.T) {
 			acc := NewOlmAccount()
-			store.PutAccount(acc)
-			retrieved, err := store.GetAccount()
+			store.PutAccount(context.TODO(), acc)
+			retrieved, err := store.GetAccount(context.TODO())
 			if err != nil {
 				t.Fatalf("Error retrieving account: %v", err)
 			}
@@ -105,7 +105,7 @@ func TestStoreOlmSession(t *testing.T) {
 	stores := getCryptoStores(t)
 	for storeName, store := range stores {
 		t.Run(storeName, func(t *testing.T) {
-			if store.HasSession(olmSessID) {
+			if store.HasSession(context.TODO(), olmSessID) {
 				t.Error("Found Olm session before inserting it")
 			}
 			olmInternal, err := olm.SessionFromPickled([]byte(olmPickled), []byte("test"))
@@ -117,15 +117,15 @@ func TestStoreOlmSession(t *testing.T) {
 				id:       olmSessID,
 				Internal: *olmInternal,
 			}
-			err = store.AddSession(olmSessID, &olmSess)
+			err = store.AddSession(context.TODO(), olmSessID, &olmSess)
 			if err != nil {
 				t.Errorf("Error storing Olm session: %v", err)
 			}
-			if !store.HasSession(olmSessID) {
+			if !store.HasSession(context.TODO(), olmSessID) {
 				t.Error("Not found Olm session after inserting it")
 			}
 
-			retrieved, err := store.GetLatestSession(olmSessID)
+			retrieved, err := store.GetLatestSession(context.TODO(), olmSessID)
 			if err != nil {
 				t.Errorf("Failed retrieving Olm session: %v", err)
 			}
@@ -158,12 +158,12 @@ func TestStoreMegolmSession(t *testing.T) {
 				RoomID:     "room1",
 			}
 
-			err = store.PutGroupSession("room1", acc.IdentityKey(), igs.ID(), igs)
+			err = store.PutGroupSession(context.TODO(), "room1", acc.IdentityKey(), igs.ID(), igs)
 			if err != nil {
 				t.Errorf("Error storing inbound group session: %v", err)
 			}
 
-			retrieved, err := store.GetGroupSession("room1", acc.IdentityKey(), igs.ID())
+			retrieved, err := store.GetGroupSession(context.TODO(), "room1", acc.IdentityKey(), igs.ID())
 			if err != nil {
 				t.Errorf("Error retrieving inbound group session: %v", err)
 			}
@@ -179,7 +179,7 @@ func TestStoreOutboundMegolmSession(t *testing.T) {
 	stores := getCryptoStores(t)
 	for storeName, store := range stores {
 		t.Run(storeName, func(t *testing.T) {
-			sess, err := store.GetOutboundGroupSession("room1")
+			sess, err := store.GetOutboundGroupSession(context.TODO(), "room1")
 			if sess != nil {
 				t.Error("Got outbound session before inserting")
 			}
@@ -188,12 +188,12 @@ func TestStoreOutboundMegolmSession(t *testing.T) {
 			}
 
 			outbound := NewOutboundGroupSession("room1", nil)
-			err = store.AddOutboundGroupSession(outbound)
+			err = store.AddOutboundGroupSession(context.TODO(), outbound)
 			if err != nil {
 				t.Errorf("Error inserting outbound session: %v", err)
 			}
 
-			sess, err = store.GetOutboundGroupSession("room1")
+			sess, err = store.GetOutboundGroupSession(context.TODO(), "room1")
 			if sess == nil {
 				t.Error("Did not get outbound session after inserting")
 			}
@@ -201,12 +201,12 @@ func TestStoreOutboundMegolmSession(t *testing.T) {
 				t.Errorf("Error retrieving outbound session: %v", err)
 			}
 
-			err = store.RemoveOutboundGroupSession("room1")
+			err = store.RemoveOutboundGroupSession(context.TODO(), "room1")
 			if err != nil {
 				t.Errorf("Error deleting outbound session: %v", err)
 			}
 
-			sess, err = store.GetOutboundGroupSession("room1")
+			sess, err = store.GetOutboundGroupSession(context.TODO(), "room1")
 			if sess != nil {
 				t.Error("Got outbound session after deleting")
 			}
@@ -221,6 +221,13 @@ func TestStoreDevices(t *testing.T) {
 	stores := getCryptoStores(t)
 	for storeName, store := range stores {
 		t.Run(storeName, func(t *testing.T) {
+			outdated, err := store.GetOutdatedTrackedUsers(context.TODO())
+			if err != nil {
+				t.Errorf("Error filtering tracked users: %v", err)
+			}
+			if len(outdated) > 0 {
+				t.Errorf("Got %d outdated tracked users when expected none", len(outdated))
+			}
 			deviceMap := make(map[id.DeviceID]*id.Device)
 			for i := 0; i < 17; i++ {
 				iStr := strconv.Itoa(i)
@@ -232,11 +239,11 @@ func TestStoreDevices(t *testing.T) {
 					SigningKey:  acc.SigningKey(),
 				}
 			}
-			err := store.PutDevices("user1", deviceMap)
+			err = store.PutDevices(context.TODO(), "user1", deviceMap)
 			if err != nil {
-				t.Errorf("Error string devices: %v", err)
+				t.Errorf("Error storing devices: %v", err)
 			}
-			devs, err := store.GetDevices("user1")
+			devs, err := store.GetDevices(context.TODO(), "user1")
 			if err != nil {
 				t.Errorf("Error getting devices: %v", err)
 			}
@@ -250,11 +257,41 @@ func TestStoreDevices(t *testing.T) {
 				t.Errorf("Last device identity key does not match")
 			}
 
-			filtered, err := store.FilterTrackedUsers([]id.UserID{"user0", "user1", "user2"})
+			filtered, err := store.FilterTrackedUsers(context.TODO(), []id.UserID{"user0", "user1", "user2"})
 			if err != nil {
 				t.Errorf("Error filtering tracked users: %v", err)
 			} else if len(filtered) != 1 || filtered[0] != "user1" {
 				t.Errorf("Expected to get 'user1' from filter, got %v", filtered)
+			}
+
+			outdated, err = store.GetOutdatedTrackedUsers(context.TODO())
+			if err != nil {
+				t.Errorf("Error filtering tracked users: %v", err)
+			}
+			if len(outdated) > 0 {
+				t.Errorf("Got %d outdated tracked users when expected none", len(outdated))
+			}
+			err = store.MarkTrackedUsersOutdated(context.TODO(), []id.UserID{"user0", "user1"})
+			if err != nil {
+				t.Errorf("Error marking tracked users outdated: %v", err)
+			}
+			outdated, err = store.GetOutdatedTrackedUsers(context.TODO())
+			if err != nil {
+				t.Errorf("Error filtering tracked users: %v", err)
+			}
+			if len(outdated) != 1 || outdated[0] != id.UserID("user1") {
+				t.Errorf("Got outdated tracked users %v when expected 'user1'", outdated)
+			}
+			err = store.PutDevices(context.TODO(), "user1", deviceMap)
+			if err != nil {
+				t.Errorf("Error storing devices: %v", err)
+			}
+			outdated, err = store.GetOutdatedTrackedUsers(context.TODO())
+			if err != nil {
+				t.Errorf("Error filtering tracked users: %v", err)
+			}
+			if len(outdated) > 0 {
+				t.Errorf("Got outdated tracked users %v when expected none", outdated)
 			}
 		})
 	}

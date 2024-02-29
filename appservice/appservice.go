@@ -93,12 +93,12 @@ type WebsocketHandler func(WebsocketCommand) (ok bool, data interface{})
 type StateStore interface {
 	mautrix.StateStore
 
-	IsRegistered(userID id.UserID) bool
-	MarkRegistered(userID id.UserID)
+	IsRegistered(ctx context.Context, userID id.UserID) (bool, error)
+	MarkRegistered(ctx context.Context, userID id.UserID) error
 
-	GetPowerLevel(roomID id.RoomID, userID id.UserID) int
-	GetPowerLevelRequirement(roomID id.RoomID, eventType event.Type) int
-	HasPowerLevel(roomID id.RoomID, userID id.UserID, eventType event.Type) bool
+	GetPowerLevel(ctx context.Context, roomID id.RoomID, userID id.UserID) (int, error)
+	GetPowerLevelRequirement(ctx context.Context, roomID id.RoomID, eventType event.Type) (int, error)
+	HasPowerLevel(ctx context.Context, roomID id.RoomID, userID id.UserID, eventType event.Type) (bool, error)
 }
 
 // AppService is the main config for all appservices.

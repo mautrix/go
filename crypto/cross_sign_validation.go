@@ -1,5 +1,5 @@
 // Copyright (c) 2020 Nikos Filippakis
-// Copyright (c) 2023 Tulir Asokan
+// Copyright (c) 2024 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -23,7 +23,7 @@ func (mach *OlmMachine) ResolveTrustContext(ctx context.Context, device *id.Devi
 	if device.Trust == id.TrustStateVerified || device.Trust == id.TrustStateBlacklisted {
 		return device.Trust, nil
 	}
-	theirKeys, err := mach.CryptoStore.GetCrossSigningKeys(device.UserID)
+	theirKeys, err := mach.CryptoStore.GetCrossSigningKeys(ctx, device.UserID)
 	if err != nil {
 		mach.machOrContextLog(ctx).Error().Err(err).
 			Str("user_id", device.UserID.String()).
@@ -44,7 +44,7 @@ func (mach *OlmMachine) ResolveTrustContext(ctx context.Context, device *id.Devi
 			Msg("Self-signing key of user not found")
 		return id.TrustStateUnset, nil
 	}
-	sskSigExists, err := mach.CryptoStore.IsKeySignedBy(device.UserID, theirSSK.Key, device.UserID, theirMSK.Key)
+	sskSigExists, err := mach.CryptoStore.IsKeySignedBy(ctx, device.UserID, theirSSK.Key, device.UserID, theirMSK.Key)
 	if err != nil {
 		mach.machOrContextLog(ctx).Error().Err(err).
 			Str("user_id", device.UserID.String()).
@@ -57,7 +57,7 @@ func (mach *OlmMachine) ResolveTrustContext(ctx context.Context, device *id.Devi
 			Msg("Self-signing key of user is not signed by their master key")
 		return id.TrustStateUnset, nil
 	}
-	deviceSigExists, err := mach.CryptoStore.IsKeySignedBy(device.UserID, device.SigningKey, device.UserID, theirSSK.Key)
+	deviceSigExists, err := mach.CryptoStore.IsKeySignedBy(ctx, device.UserID, device.SigningKey, device.UserID, theirSSK.Key)
 	if err != nil {
 		mach.machOrContextLog(ctx).Error().Err(err).
 			Str("user_id", device.UserID.String()).
@@ -89,7 +89,7 @@ func (mach *OlmMachine) IsDeviceTrusted(device *id.Device) bool {
 // IsUserTrusted returns whether a user has been determined to be trusted by our user-signing key having signed their master key.
 // In the case the user ID is our own and we have successfully retrieved our cross-signing keys, we trust our own user.
 func (mach *OlmMachine) IsUserTrusted(ctx context.Context, userID id.UserID) (bool, error) {
-	csPubkeys := mach.GetOwnCrossSigningPublicKeys()
+	csPubkeys := mach.GetOwnCrossSigningPublicKeys(ctx)
 	if csPubkeys == nil {
 		return false, nil
 	}
@@ -97,14 +97,14 @@ func (mach *OlmMachine) IsUserTrusted(ctx context.Context, userID id.UserID) (bo
 		return true, nil
 	}
 	// first we verify our user-signing key
-	ourUserSigningKeyTrusted, err := mach.CryptoStore.IsKeySignedBy(mach.Client.UserID, csPubkeys.UserSigningKey, mach.Client.UserID, csPubkeys.MasterKey)
+	ourUserSigningKeyTrusted, err := mach.CryptoStore.IsKeySignedBy(ctx, mach.Client.UserID, csPubkeys.UserSigningKey, mach.Client.UserID, csPubkeys.MasterKey)
 	if err != nil {
 		mach.machOrContextLog(ctx).Error().Err(err).Msg("Error retrieving our self-signing key signatures from database")
 		return false, err
 	} else if !ourUserSigningKeyTrusted {
 		return false, nil
 	}
-	theirKeys, err := mach.CryptoStore.GetCrossSigningKeys(userID)
+	theirKeys, err := mach.CryptoStore.GetCrossSigningKeys(ctx, userID)
 	if err != nil {
 		mach.machOrContextLog(ctx).Error().Err(err).
 			Str("user_id", userID.String()).
@@ -118,7 +118,7 @@ func (mach *OlmMachine) IsUserTrusted(ctx context.Context, userID id.UserID) (bo
 			Msg("Master key of user not found")
 		return false, nil
 	}
-	sigExists, err := mach.CryptoStore.IsKeySignedBy(userID, theirMskKey.Key, mach.Client.UserID, csPubkeys.UserSigningKey)
+	sigExists, err := mach.CryptoStore.IsKeySignedBy(ctx, userID, theirMskKey.Key, mach.Client.UserID, csPubkeys.UserSigningKey)
 	if err != nil {
 		mach.machOrContextLog(ctx).Error().Err(err).
 			Str("user_id", userID.String()).

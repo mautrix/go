@@ -1,3 +1,27 @@
+## v0.17.0 (2024-01-16)
+
+* **Breaking change *(bridge)*** Added raw event to portal membership handling
+  functions.
+* **Breaking change *(everything)*** Added context parameters to all functions
+  (started by [@recht] in [#144]).
+* **Breaking change *(client)*** Moved `EventSource` to `event.Source`.
+* *(client)* Removed deprecated `OldEventIgnorer`. The non-deprecated version
+  (`Client.DontProcessOldEvents`) is still available.
+* *(crypto)* Added experimental pure Go Olm implementation to replace libolm
+  (thanks to [@DerLukas15] in [#106]).
+  * You can use the `goolm` build tag to the new implementation.
+* *(bridge)* Added context parameter for bridge command events.
+* *(bridge)* Added method to allow custom validation for the entire config.
+* *(client)* Changed default syncer to not drop unknown events.
+  * The syncer will still drop known events if parsing the content fails.
+  * The behavior can be changed by changing the `ParseErrorHandler` function.
+* *(crypto)* Fixed some places using math/rand instead of crypto/rand.
+
+[@DerLukas15]: https://github.com/DerLukas15
+[@recht]: https://github.com/recht
+[#106]: https://github.com/mautrix/go/pull/106
+[#144]: https://github.com/mautrix/go/pull/144
+
 ## v0.16.2 (2023-11-16)
 
 * *(event)* Added `Redacts` field to `RedactionEventContent` for room v11+.

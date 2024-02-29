@@ -7,6 +7,7 @@
 package appservice
 
 import (
+	"context"
 	"encoding/json"
 	"runtime/debug"
 	"time"
@@ -25,9 +26,9 @@ const (
 	Sync
 )
 
-type EventHandler = func(evt *event.Event)
-type OTKHandler = func(otk *mautrix.OTKCount)
-type DeviceListHandler = func(lists *mautrix.DeviceLists, since string)
+type EventHandler = func(ctx context.Context, evt *event.Event)
+type OTKHandler = func(ctx context.Context, otk *mautrix.OTKCount)
+type DeviceListHandler = func(ctx context.Context, lists *mautrix.DeviceLists, since string)
 
 type EventProcessor struct {
 	ExecMode ExecMode
@@ -97,34 +98,34 @@ func (ep *EventProcessor) recoverFunc(data interface{}) {
 	}
 }
 
-func (ep *EventProcessor) callHandler(handler EventHandler, evt *event.Event) {
+func (ep *EventProcessor) callHandler(ctx context.Context, handler EventHandler, evt *event.Event) {
 	defer ep.recoverFunc(evt)
-	handler(evt)
+	handler(ctx, evt)
 }
 
-func (ep *EventProcessor) callOTKHandler(handler OTKHandler, otk *mautrix.OTKCount) {
+func (ep *EventProcessor) callOTKHandler(ctx context.Context, handler OTKHandler, otk *mautrix.OTKCount) {
 	defer ep.recoverFunc(otk)
-	handler(otk)
+	handler(ctx, otk)
 }
 
-func (ep *EventProcessor) callDeviceListHandler(handler DeviceListHandler, dl *mautrix.DeviceLists) {
+func (ep *EventProcessor) callDeviceListHandler(ctx context.Context, handler DeviceListHandler, dl *mautrix.DeviceLists) {
 	defer ep.recoverFunc(dl)
-	handler(dl, "")
+	handler(ctx, dl, "")
 }
 
-func (ep *EventProcessor) DispatchOTK(otk *mautrix.OTKCount) {
+func (ep *EventProcessor) DispatchOTK(ctx context.Context, otk *mautrix.OTKCount) {
 	for _, handler := range ep.otkHandlers {
-		go ep.callOTKHandler(handler, otk)
+		go ep.callOTKHandler(ctx, handler, otk)
 	}
 }
 
-func (ep *EventProcessor) DispatchDeviceList(dl *mautrix.DeviceLists) {
+func (ep *EventProcessor) DispatchDeviceList(ctx context.Context, dl *mautrix.DeviceLists) {
 	for _, handler := range ep.deviceListHandlers {
-		go ep.callDeviceListHandler(handler, dl)
+		go ep.callDeviceListHandler(ctx, handler, dl)
 	}
 }
 
-func (ep *EventProcessor) Dispatch(evt *event.Event) {
+func (ep *EventProcessor) Dispatch(ctx context.Context, evt *event.Event) {
 	handlers, ok := ep.handlers[evt.Type]
 	if !ok {
 		return
@@ -132,25 +133,25 @@ func (ep *EventProcessor) Dispatch(evt *event.Event) {
 	switch ep.ExecMode {
 	case AsyncHandlers:
 		for _, handler := range handlers {
-			go ep.callHandler(handler, evt)
+			go ep.callHandler(ctx, handler, evt)
 		}
 	case AsyncLoop:
 		go func() {
 			for _, handler := range handlers {
-				ep.callHandler(handler, evt)
+				ep.callHandler(ctx, handler, evt)
 			}
 		}()
 	case Sync:
 		if ep.ExecSyncWarnTime == 0 && ep.ExecSyncTimeout == 0 {
 			for _, handler := range handlers {
-				ep.callHandler(handler, evt)
+				ep.callHandler(ctx, handler, evt)
 			}
 			return
 		}
 		doneChan := make(chan struct{})
 		go func() {
 			for _, handler := range handlers {
-				ep.callHandler(handler, evt)
+				ep.callHandler(ctx, handler, evt)
 			}
 			close(doneChan)
 		}()
@@ -172,35 +173,35 @@ func (ep *EventProcessor) Dispatch(evt *event.Event) {
 		}
 	}
 }
-func (ep *EventProcessor) startEvents() {
+func (ep *EventProcessor) startEvents(ctx context.Context) {
 	for {
 		select {
 		case evt := <-ep.as.Events:
-			ep.Dispatch(evt)
+			ep.Dispatch(ctx, evt)
 		case <-ep.stop:
 			return
 		}
 	}
 }
 
-func (ep *EventProcessor) startEncryption() {
+func (ep *EventProcessor) startEncryption(ctx context.Context) {
 	for {
 		select {
 		case evt := <-ep.as.ToDeviceEvents:
-			ep.Dispatch(evt)
+			ep.Dispatch(ctx, evt)
 		case otk := <-ep.as.OTKCounts:
-			ep.DispatchOTK(otk)
+			ep.DispatchOTK(ctx, otk)
 		case dl := <-ep.as.DeviceLists:
-			ep.DispatchDeviceList(dl)
+			ep.DispatchDeviceList(ctx, dl)
 		case <-ep.stop:
 			return
 		}
 	}
 }
 
-func (ep *EventProcessor) Start() {
-	go ep.startEvents()
-	go ep.startEncryption()
+func (ep *EventProcessor) Start(ctx context.Context) {
+	go ep.startEvents(ctx)
+	go ep.startEncryption(ctx)
 }
 
 func (ep *EventProcessor) Stop() {

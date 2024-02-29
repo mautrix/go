@@ -1,4 +1,4 @@
-// Copyright (c) 2023 Tulir Asokan
+// Copyright (c) 2024 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -84,7 +84,7 @@ func parseMessageIndex(ciphertext []byte) (uint, error) {
 func (mach *OlmMachine) EncryptMegolmEvent(ctx context.Context, roomID id.RoomID, evtType event.Type, content interface{}) (*event.EncryptedEventContent, error) {
 	mach.megolmEncryptLock.Lock()
 	defer mach.megolmEncryptLock.Unlock()
-	session, err := mach.CryptoStore.GetOutboundGroupSession(roomID)
+	session, err := mach.CryptoStore.GetOutboundGroupSession(ctx, roomID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get outbound group session: %w", err)
 	} else if session == nil {
@@ -116,7 +116,7 @@ func (mach *OlmMachine) EncryptMegolmEvent(ctx context.Context, roomID id.RoomID
 		log = log.With().Uint("message_index", idx).Logger()
 	}
 	log.Debug().Msg("Encrypted event successfully")
-	err = mach.CryptoStore.UpdateOutboundGroupSession(session)
+	err = mach.CryptoStore.UpdateOutboundGroupSession(ctx, session)
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to update megolm session in crypto store after encrypting")
 	}
@@ -137,7 +137,13 @@ func (mach *OlmMachine) EncryptMegolmEvent(ctx context.Context, roomID id.RoomID
 }
 
 func (mach *OlmMachine) newOutboundGroupSession(ctx context.Context, roomID id.RoomID) *OutboundGroupSession {
-	session := NewOutboundGroupSession(roomID, mach.StateStore.GetEncryptionEvent(roomID))
+	encryptionEvent, err := mach.StateStore.GetEncryptionEvent(ctx, roomID)
+	if err != nil {
+		mach.machOrContextLog(ctx).Err(err).
+			Stringer("room_id", roomID).
+			Msg("Failed to get encryption event in room")
+	}
+	session := NewOutboundGroupSession(roomID, encryptionEvent)
 	if !mach.DontStoreOutboundKeys {
 		signingKey, idKey := mach.account.Keys()
 		mach.createGroupSession(ctx, idKey, signingKey, roomID, session.ID(), session.Internal.Key(), session.MaxAge, session.MaxMessages, false)
@@ -165,7 +171,7 @@ func strishArray[T ~string](arr []T) []string {
 func (mach *OlmMachine) ShareGroupSession(ctx context.Context, roomID id.RoomID, users []id.UserID) error {
 	mach.megolmEncryptLock.Lock()
 	defer mach.megolmEncryptLock.Unlock()
-	session, err := mach.CryptoStore.GetOutboundGroupSession(roomID)
+	session, err := mach.CryptoStore.GetOutboundGroupSession(ctx, roomID)
 	if err != nil {
 		return fmt.Errorf("failed to get previous outbound group session: %w", err)
 	} else if session != nil && session.Shared && !session.Expired() {
@@ -192,7 +198,7 @@ func (mach *OlmMachine) ShareGroupSession(ctx context.Context, roomID id.RoomID,
 
 	for _, userID := range users {
 		log := log.With().Str("target_user_id", userID.String()).Logger()
-		devices, err := mach.CryptoStore.GetDevices(userID)
+		devices, err := mach.CryptoStore.GetDevices(ctx, userID)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to get devices of user")
 		} else if devices == nil {
@@ -223,12 +229,16 @@ func (mach *OlmMachine) ShareGroupSession(ctx context.Context, roomID id.RoomID,
 
 	if len(fetchKeys) > 0 {
 		log.Debug().Strs("users", strishArray(fetchKeys)).Msg("Fetching missing keys")
-		for userID, devices := range mach.fetchKeys(ctx, fetchKeys, "", true) {
-			log.Debug().
-				Int("device_count", len(devices)).
-				Str("target_user_id", userID.String()).
-				Msg("Got device keys for user")
-			missingSessions[userID] = devices
+		if keys, err := mach.FetchKeys(ctx, fetchKeys, true); err != nil {
+			log.Err(err).Strs("users", strishArray(fetchKeys)).Msg("Failed to fetch missing keys")
+		} else if keys != nil {
+			for userID, devices := range keys {
+				log.Debug().
+					Int("device_count", len(devices)).
+					Str("target_user_id", userID.String()).
+					Msg("Got device keys for user")
+				missingSessions[userID] = devices
+			}
 		}
 	}
 
@@ -280,11 +290,11 @@ func (mach *OlmMachine) ShareGroupSession(ctx context.Context, roomID id.RoomID,
 			Int("user_count", len(toDeviceWithheld.Messages)).
 			Msg("Sending to-device messages to report withheld key")
 		// TODO remove the next 4 lines once clients support m.room_key.withheld
-		_, err = mach.Client.SendToDevice(event.ToDeviceOrgMatrixRoomKeyWithheld, toDeviceWithheld)
+		_, err = mach.Client.SendToDevice(ctx, event.ToDeviceOrgMatrixRoomKeyWithheld, toDeviceWithheld)
 		if err != nil {
 			log.Warn().Err(err).Msg("Failed to report withheld keys (legacy event type)")
 		}
-		_, err = mach.Client.SendToDevice(event.ToDeviceRoomKeyWithheld, toDeviceWithheld)
+		_, err = mach.Client.SendToDevice(ctx, event.ToDeviceRoomKeyWithheld, toDeviceWithheld)
 		if err != nil {
 			log.Warn().Err(err).Msg("Failed to report withheld keys")
 		}
@@ -292,7 +302,7 @@ func (mach *OlmMachine) ShareGroupSession(ctx context.Context, roomID id.RoomID,
 
 	log.Debug().Msg("Group session successfully shared")
 	session.Shared = true
-	return mach.CryptoStore.AddOutboundGroupSession(session)
+	return mach.CryptoStore.AddOutboundGroupSession(ctx, session)
 }
 
 func (mach *OlmMachine) encryptAndSendGroupSession(ctx context.Context, session *OutboundGroupSession, olmSessions map[id.UserID]map[id.DeviceID]deviceSessionWrapper) error {
@@ -327,7 +337,7 @@ func (mach *OlmMachine) encryptAndSendGroupSession(ctx context.Context, session 
 		Int("device_count", deviceCount).
 		Int("user_count", len(toDevice.Messages)).
 		Msg("Sending to-device messages to share group session")
-	_, err := mach.Client.SendToDevice(event.ToDeviceEncrypted, toDevice)
+	_, err := mach.Client.SendToDevice(ctx, event.ToDeviceEncrypted, toDevice)
 	return err
 }
 
@@ -367,7 +377,7 @@ func (mach *OlmMachine) findOlmSessionsForUser(ctx context.Context, session *Out
 				Reason:    "This device does not encrypt messages for unverified devices",
 			}}
 			session.Users[userKey] = OGSIgnored
-		} else if deviceSession, err := mach.CryptoStore.GetLatestSession(device.IdentityKey); err != nil {
+		} else if deviceSession, err := mach.CryptoStore.GetLatestSession(ctx, device.IdentityKey); err != nil {
 			log.Error().Err(err).Msg("Failed to get olm session to encrypt group session")
 		} else if deviceSession == nil {
 			log.Warn().Err(err).Msg("Didn't find olm session to encrypt group session")

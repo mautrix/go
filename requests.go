@@ -287,9 +287,7 @@ type Signatures map[id.UserID]map[id.KeyID]string
 
 type ReqQueryKeys struct {
 	DeviceKeys DeviceKeysRequest `json:"device_keys"`
-
-	Timeout int64  `json:"timeout,omitempty"`
-	Token   string `json:"token,omitempty"`
+	Timeout    int64             `json:"timeout,omitempty"`
 }
 
 type DeviceKeysRequest map[id.UserID]DeviceIDList

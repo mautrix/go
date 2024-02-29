@@ -32,7 +32,7 @@ func getOlmMachine(t *testing.T) *OlmMachine {
 		t.Fatalf("Error opening db: %v", err)
 	}
 	sqlStore := NewSQLCryptoStore(db, nil, "accid", id.DeviceID("dev"), []byte("test"))
-	if err = sqlStore.DB.Upgrade(); err != nil {
+	if err = sqlStore.DB.Upgrade(context.TODO()); err != nil {
 		t.Fatalf("Error creating tables: %v", err)
 	}
 
@@ -41,9 +41,9 @@ func getOlmMachine(t *testing.T) *OlmMachine {
 	ssk, _ := olm.NewPkSigning()
 	usk, _ := olm.NewPkSigning()
 
-	sqlStore.PutCrossSigningKey(userID, id.XSUsageMaster, mk.PublicKey)
-	sqlStore.PutCrossSigningKey(userID, id.XSUsageSelfSigning, ssk.PublicKey)
-	sqlStore.PutCrossSigningKey(userID, id.XSUsageUserSigning, usk.PublicKey)
+	sqlStore.PutCrossSigningKey(context.TODO(), userID, id.XSUsageMaster, mk.PublicKey)
+	sqlStore.PutCrossSigningKey(context.TODO(), userID, id.XSUsageSelfSigning, ssk.PublicKey)
+	sqlStore.PutCrossSigningKey(context.TODO(), userID, id.XSUsageUserSigning, usk.PublicKey)
 
 	return &OlmMachine{
 		CryptoStore: sqlStore,
@@ -70,9 +70,9 @@ func TestTrustOwnDevice(t *testing.T) {
 		t.Error("Own device trusted while it shouldn't be")
 	}
 
-	m.CryptoStore.PutSignature(ownDevice.UserID, m.CrossSigningKeys.SelfSigningKey.PublicKey,
+	m.CryptoStore.PutSignature(context.TODO(), ownDevice.UserID, m.CrossSigningKeys.SelfSigningKey.PublicKey,
 		ownDevice.UserID, m.CrossSigningKeys.MasterKey.PublicKey, "sig1")
-	m.CryptoStore.PutSignature(ownDevice.UserID, ownDevice.SigningKey,
+	m.CryptoStore.PutSignature(context.TODO(), ownDevice.UserID, ownDevice.SigningKey,
 		ownDevice.UserID, m.CrossSigningKeys.SelfSigningKey.PublicKey, "sig2")
 
 	if trusted, _ := m.IsUserTrusted(context.TODO(), ownDevice.UserID); !trusted {
@@ -91,20 +91,20 @@ func TestTrustOtherUser(t *testing.T) {
 	}
 
 	theirMasterKey, _ := olm.NewPkSigning()
-	m.CryptoStore.PutCrossSigningKey(otherUser, id.XSUsageMaster, theirMasterKey.PublicKey)
+	m.CryptoStore.PutCrossSigningKey(context.TODO(), otherUser, id.XSUsageMaster, theirMasterKey.PublicKey)
 
-	m.CryptoStore.PutSignature(m.Client.UserID, m.CrossSigningKeys.UserSigningKey.PublicKey,
+	m.CryptoStore.PutSignature(context.TODO(), m.Client.UserID, m.CrossSigningKeys.UserSigningKey.PublicKey,
 		m.Client.UserID, m.CrossSigningKeys.MasterKey.PublicKey, "sig1")
 
 	// sign them with self-signing instead of user-signing key
-	m.CryptoStore.PutSignature(otherUser, theirMasterKey.PublicKey,
+	m.CryptoStore.PutSignature(context.TODO(), otherUser, theirMasterKey.PublicKey,
 		m.Client.UserID, m.CrossSigningKeys.SelfSigningKey.PublicKey, "invalid_sig")
 
 	if trusted, _ := m.IsUserTrusted(context.TODO(), otherUser); trusted {
 		t.Error("Other user trusted before their master key has been signed with our user-signing key")
 	}
 
-	m.CryptoStore.PutSignature(otherUser, theirMasterKey.PublicKey,
+	m.CryptoStore.PutSignature(context.TODO(), otherUser, theirMasterKey.PublicKey,
 		m.Client.UserID, m.CrossSigningKeys.UserSigningKey.PublicKey, "sig2")
 
 	if trusted, _ := m.IsUserTrusted(context.TODO(), otherUser); !trusted {
@@ -128,27 +128,27 @@ func TestTrustOtherDevice(t *testing.T) {
 	}
 
 	theirMasterKey, _ := olm.NewPkSigning()
-	m.CryptoStore.PutCrossSigningKey(otherUser, id.XSUsageMaster, theirMasterKey.PublicKey)
+	m.CryptoStore.PutCrossSigningKey(context.TODO(), otherUser, id.XSUsageMaster, theirMasterKey.PublicKey)
 	theirSSK, _ := olm.NewPkSigning()
-	m.CryptoStore.PutCrossSigningKey(otherUser, id.XSUsageSelfSigning, theirSSK.PublicKey)
+	m.CryptoStore.PutCrossSigningKey(context.TODO(), otherUser, id.XSUsageSelfSigning, theirSSK.PublicKey)
 
-	m.CryptoStore.PutSignature(m.Client.UserID, m.CrossSigningKeys.UserSigningKey.PublicKey,
+	m.CryptoStore.PutSignature(context.TODO(), m.Client.UserID, m.CrossSigningKeys.UserSigningKey.PublicKey,
 		m.Client.UserID, m.CrossSigningKeys.MasterKey.PublicKey, "sig1")
-	m.CryptoStore.PutSignature(otherUser, theirMasterKey.PublicKey,
+	m.CryptoStore.PutSignature(context.TODO(), otherUser, theirMasterKey.PublicKey,
 		m.Client.UserID, m.CrossSigningKeys.UserSigningKey.PublicKey, "sig2")
 
 	if trusted, _ := m.IsUserTrusted(context.TODO(), otherUser); !trusted {
 		t.Error("Other user not trusted while they should be")
 	}
 
-	m.CryptoStore.PutSignature(otherUser, theirSSK.PublicKey,
+	m.CryptoStore.PutSignature(context.TODO(), otherUser, theirSSK.PublicKey,
 		otherUser, theirMasterKey.PublicKey, "sig3")
 
 	if m.IsDeviceTrusted(theirDevice) {
 		t.Error("Other device trusted before it has been signed with user's SSK")
 	}
 
-	m.CryptoStore.PutSignature(otherUser, theirDevice.SigningKey,
+	m.CryptoStore.PutSignature(context.TODO(), otherUser, theirDevice.SigningKey,
 		otherUser, theirSSK.PublicKey, "sig4")
 
 	if !m.IsDeviceTrusted(theirDevice) {

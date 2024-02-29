@@ -54,8 +54,8 @@ const (
 )
 
 // sendToOneDevice sends a to-device event to a single device.
-func (mach *OlmMachine) sendToOneDevice(userID id.UserID, deviceID id.DeviceID, eventType event.Type, content interface{}) error {
-	_, err := mach.Client.SendToDevice(eventType, &mautrix.ReqSendToDevice{
+func (mach *OlmMachine) sendToOneDevice(ctx context.Context, userID id.UserID, deviceID id.DeviceID, eventType event.Type, content interface{}) error {
+	_, err := mach.Client.SendToDevice(ctx, eventType, &mautrix.ReqSendToDevice{
 		Messages: map[id.UserID]map[id.DeviceID]*event.Content{
 			userID: {
 				deviceID: {
@@ -118,19 +118,19 @@ type verificationState struct {
 }
 
 // getTransactionState retrieves the given transaction's state, or cancels the transaction if it cannot be found or there is a mismatch.
-func (mach *OlmMachine) getTransactionState(transactionID string, userID id.UserID) (*verificationState, error) {
+func (mach *OlmMachine) getTransactionState(ctx context.Context, transactionID string, userID id.UserID) (*verificationState, error) {
 	verStateInterface, ok := mach.keyVerificationTransactionState.Load(userID.String() + ":" + transactionID)
 	if !ok {
-		_ = mach.SendSASVerificationCancel(userID, id.DeviceID("*"), transactionID, "Unknown transaction: "+transactionID, event.VerificationCancelUnknownTransaction)
+		_ = mach.SendSASVerificationCancel(ctx, userID, id.DeviceID("*"), transactionID, "Unknown transaction: "+transactionID, event.VerificationCancelUnknownTransaction)
 		return nil, ErrUnknownTransaction
 	}
 	verState := verStateInterface.(*verificationState)
 	if verState.otherDevice.UserID != userID {
 		reason := fmt.Sprintf("Unknown user for transaction %v: %v", transactionID, userID)
 		if verState.inRoomID == "" {
-			_ = mach.SendSASVerificationCancel(userID, id.DeviceID("*"), transactionID, reason, event.VerificationCancelUserMismatch)
+			_ = mach.SendSASVerificationCancel(ctx, userID, id.DeviceID("*"), transactionID, reason, event.VerificationCancelUserMismatch)
 		} else {
-			_ = mach.SendInRoomSASVerificationCancel(verState.inRoomID, userID, transactionID, reason, event.VerificationCancelUserMismatch)
+			_ = mach.SendInRoomSASVerificationCancel(ctx, verState.inRoomID, userID, transactionID, reason, event.VerificationCancelUserMismatch)
 		}
 		mach.keyVerificationTransactionState.Delete(userID.String() + ":" + transactionID)
 		return nil, fmt.Errorf("%w %s: %s", ErrUnknownUserForTransaction, transactionID, userID)
@@ -140,9 +140,9 @@ func (mach *OlmMachine) getTransactionState(transactionID string, userID id.User
 
 // handleVerificationStart handles an incoming m.key.verification.start message.
 // It initializes the state for this SAS verification process and stores it.
-func (mach *OlmMachine) handleVerificationStart(userID id.UserID, content *event.VerificationStartEventContent, transactionID string, timeout time.Duration, inRoomID id.RoomID) {
+func (mach *OlmMachine) handleVerificationStart(ctx context.Context, userID id.UserID, content *event.VerificationStartEventContent, transactionID string, timeout time.Duration, inRoomID id.RoomID) {
 	mach.Log.Debug().Msgf("Received verification start from %v", content.FromDevice)
-	otherDevice, err := mach.GetOrFetchDevice(context.TODO(), userID, content.FromDevice)
+	otherDevice, err := mach.GetOrFetchDevice(ctx, userID, content.FromDevice)
 	if err != nil {
 		mach.Log.Error().Msgf("Could not find device %v of user %v", content.FromDevice, userID)
 		return
@@ -150,9 +150,9 @@ func (mach *OlmMachine) handleVerificationStart(userID id.UserID, content *event
 	warnAndCancel := func(logReason, cancelReason string) {
 		mach.Log.Warn().Msgf("Canceling verification transaction %v as it %s", transactionID, logReason)
 		if inRoomID == "" {
-			_ = mach.SendSASVerificationCancel(otherDevice.UserID, otherDevice.DeviceID, transactionID, cancelReason, event.VerificationCancelUnknownMethod)
+			_ = mach.SendSASVerificationCancel(ctx, otherDevice.UserID, otherDevice.DeviceID, transactionID, cancelReason, event.VerificationCancelUnknownMethod)
 		} else {
-			_ = mach.SendInRoomSASVerificationCancel(inRoomID, otherDevice.UserID, transactionID, cancelReason, event.VerificationCancelUnknownMethod)
+			_ = mach.SendInRoomSASVerificationCancel(ctx, inRoomID, otherDevice.UserID, transactionID, cancelReason, event.VerificationCancelUnknownMethod)
 		}
 	}
 	switch {
@@ -168,21 +168,21 @@ func (mach *OlmMachine) handleVerificationStart(userID id.UserID, content *event
 	case !content.SupportsSASMethod(event.SASDecimal):
 		warnAndCancel("does not support decimal SAS", "Decimal SAS method must be supported")
 	default:
-		mach.actuallyStartVerification(userID, content, otherDevice, transactionID, timeout, inRoomID)
+		mach.actuallyStartVerification(ctx, userID, content, otherDevice, transactionID, timeout, inRoomID)
 	}
 }
 
-func (mach *OlmMachine) actuallyStartVerification(userID id.UserID, content *event.VerificationStartEventContent, otherDevice *id.Device, transactionID string, timeout time.Duration, inRoomID id.RoomID) {
+func (mach *OlmMachine) actuallyStartVerification(ctx context.Context, userID id.UserID, content *event.VerificationStartEventContent, otherDevice *id.Device, transactionID string, timeout time.Duration, inRoomID id.RoomID) {
 	if inRoomID != "" && transactionID != "" {
-		verState, err := mach.getTransactionState(transactionID, userID)
+		verState, err := mach.getTransactionState(ctx, transactionID, userID)
 		if err != nil {
 			mach.Log.Error().Msgf("Failed to get transaction state for in-room verification %s start: %v", transactionID, err)
-			_ = mach.SendInRoomSASVerificationCancel(inRoomID, otherDevice.UserID, transactionID, "Internal state error in gomuks :(", "net.maunium.internal_error")
+			_ = mach.SendInRoomSASVerificationCancel(ctx, inRoomID, otherDevice.UserID, transactionID, "Internal state error in gomuks :(", "net.maunium.internal_error")
 			return
 		}
-		mach.timeoutAfter(verState, transactionID, timeout)
+		mach.timeoutAfter(ctx, verState, transactionID, timeout)
 		sasMethods := commonSASMethods(verState.hooks, content.ShortAuthenticationString)
-		err = mach.SendInRoomSASVerificationAccept(inRoomID, userID, content, transactionID, verState.sas.GetPubkey(), sasMethods)
+		err = mach.SendInRoomSASVerificationAccept(ctx, inRoomID, userID, content, transactionID, verState.sas.GetPubkey(), sasMethods)
 		if err != nil {
 			mach.Log.Error().Msgf("Error accepting in-room SAS verification: %v", err)
 		}
@@ -196,9 +196,9 @@ func (mach *OlmMachine) actuallyStartVerification(userID id.UserID, content *eve
 		if len(sasMethods) == 0 {
 			mach.Log.Error().Msgf("No common SAS methods: %v", content.ShortAuthenticationString)
 			if inRoomID == "" {
-				_ = mach.SendSASVerificationCancel(otherDevice.UserID, otherDevice.DeviceID, transactionID, "No common SAS methods", event.VerificationCancelUnknownMethod)
+				_ = mach.SendSASVerificationCancel(ctx, otherDevice.UserID, otherDevice.DeviceID, transactionID, "No common SAS methods", event.VerificationCancelUnknownMethod)
 			} else {
-				_ = mach.SendInRoomSASVerificationCancel(inRoomID, otherDevice.UserID, transactionID, "No common SAS methods", event.VerificationCancelUnknownMethod)
+				_ = mach.SendInRoomSASVerificationCancel(ctx, inRoomID, otherDevice.UserID, transactionID, "No common SAS methods", event.VerificationCancelUnknownMethod)
 			}
 			return
 		}
@@ -221,20 +221,20 @@ func (mach *OlmMachine) actuallyStartVerification(userID id.UserID, content *eve
 			// transaction already exists
 			mach.Log.Error().Msgf("Transaction %v already exists, canceling", transactionID)
 			if inRoomID == "" {
-				_ = mach.SendSASVerificationCancel(otherDevice.UserID, otherDevice.DeviceID, transactionID, "Transaction already exists", event.VerificationCancelUnexpectedMessage)
+				_ = mach.SendSASVerificationCancel(ctx, otherDevice.UserID, otherDevice.DeviceID, transactionID, "Transaction already exists", event.VerificationCancelUnexpectedMessage)
 			} else {
-				_ = mach.SendInRoomSASVerificationCancel(inRoomID, otherDevice.UserID, transactionID, "Transaction already exists", event.VerificationCancelUnexpectedMessage)
+				_ = mach.SendInRoomSASVerificationCancel(ctx, inRoomID, otherDevice.UserID, transactionID, "Transaction already exists", event.VerificationCancelUnexpectedMessage)
 			}
 			return
 		}
 
-		mach.timeoutAfter(verState, transactionID, timeout)
+		mach.timeoutAfter(ctx, verState, transactionID, timeout)
 
 		var err error
 		if inRoomID == "" {
-			err = mach.SendSASVerificationAccept(userID, content, verState.sas.GetPubkey(), sasMethods)
+			err = mach.SendSASVerificationAccept(ctx, userID, content, verState.sas.GetPubkey(), sasMethods)
 		} else {
-			err = mach.SendInRoomSASVerificationAccept(inRoomID, userID, content, transactionID, verState.sas.GetPubkey(), sasMethods)
+			err = mach.SendInRoomSASVerificationAccept(ctx, inRoomID, userID, content, transactionID, verState.sas.GetPubkey(), sasMethods)
 		}
 		if err != nil {
 			mach.Log.Error().Msgf("Error accepting SAS verification: %v", err)
@@ -243,9 +243,9 @@ func (mach *OlmMachine) actuallyStartVerification(userID id.UserID, content *eve
 		mach.Log.Debug().Msgf("Not accepting SAS verification %v from %v of user %v", transactionID, otherDevice.DeviceID, otherDevice.UserID)
 		var err error
 		if inRoomID == "" {
-			err = mach.SendSASVerificationCancel(otherDevice.UserID, otherDevice.DeviceID, transactionID, "Not accepted by user", event.VerificationCancelByUser)
+			err = mach.SendSASVerificationCancel(ctx, otherDevice.UserID, otherDevice.DeviceID, transactionID, "Not accepted by user", event.VerificationCancelByUser)
 		} else {
-			err = mach.SendInRoomSASVerificationCancel(inRoomID, otherDevice.UserID, transactionID, "Not accepted by user", event.VerificationCancelByUser)
+			err = mach.SendInRoomSASVerificationCancel(ctx, inRoomID, otherDevice.UserID, transactionID, "Not accepted by user", event.VerificationCancelByUser)
 		}
 		if err != nil {
 			mach.Log.Error().Msgf("Error canceling SAS verification: %v", err)
@@ -255,8 +255,8 @@ func (mach *OlmMachine) actuallyStartVerification(userID id.UserID, content *eve
 	}
 }
 
-func (mach *OlmMachine) timeoutAfter(verState *verificationState, transactionID string, timeout time.Duration) {
-	timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(), timeout)
+func (mach *OlmMachine) timeoutAfter(ctx context.Context, verState *verificationState, transactionID string, timeout time.Duration) {
+	timeoutCtx, timeoutCancel := context.WithTimeout(ctx, timeout)
 	verState.extendTimeout = timeoutCancel
 	go func() {
 		mapKey := verState.otherDevice.UserID.String() + ":" + transactionID
@@ -272,7 +272,7 @@ func (mach *OlmMachine) timeoutAfter(verState *verificationState, transactionID 
 			if timeoutCtx.Err() == context.DeadlineExceeded {
 				// if deadline exceeded cancel due to timeout
 				mach.keyVerificationTransactionState.Delete(mapKey)
-				_ = mach.callbackAndCancelSASVerification(verState, transactionID, "Timed out", event.VerificationCancelByTimeout)
+				_ = mach.callbackAndCancelSASVerification(ctx, verState, transactionID, "Timed out", event.VerificationCancelByTimeout)
 				mach.Log.Warn().Msgf("Verification transaction %v is canceled due to timing out", transactionID)
 				verState.lock.Unlock()
 				return
@@ -288,9 +288,9 @@ func (mach *OlmMachine) timeoutAfter(verState *verificationState, transactionID 
 
 // handleVerificationAccept handles an incoming m.key.verification.accept message.
 // It continues the SAS verification process by sending the SAS key message to the other device.
-func (mach *OlmMachine) handleVerificationAccept(userID id.UserID, content *event.VerificationAcceptEventContent, transactionID string) {
+func (mach *OlmMachine) handleVerificationAccept(ctx context.Context, userID id.UserID, content *event.VerificationAcceptEventContent, transactionID string) {
 	mach.Log.Debug().Msgf("Received verification accept for transaction %v", transactionID)
-	verState, err := mach.getTransactionState(transactionID, userID)
+	verState, err := mach.getTransactionState(ctx, transactionID, userID)
 	if err != nil {
 		mach.Log.Error().Msgf("Error getting transaction state: %v", err)
 		return
@@ -303,7 +303,7 @@ func (mach *OlmMachine) handleVerificationAccept(userID id.UserID, content *even
 		// unexpected accept at this point
 		mach.Log.Warn().Msgf("Unexpected verification accept message for transaction %v", transactionID)
 		mach.keyVerificationTransactionState.Delete(userID.String() + ":" + transactionID)
-		_ = mach.callbackAndCancelSASVerification(verState, transactionID, "Unexpected accept message", event.VerificationCancelUnexpectedMessage)
+		_ = mach.callbackAndCancelSASVerification(ctx, verState, transactionID, "Unexpected accept message", event.VerificationCancelUnexpectedMessage)
 		return
 	}
 
@@ -315,7 +315,7 @@ func (mach *OlmMachine) handleVerificationAccept(userID id.UserID, content *even
 
 		mach.Log.Warn().Msgf("Canceling verification transaction %v due to unknown parameter", transactionID)
 		mach.keyVerificationTransactionState.Delete(userID.String() + ":" + transactionID)
-		_ = mach.callbackAndCancelSASVerification(verState, transactionID, "Verification uses unknown method", event.VerificationCancelUnknownMethod)
+		_ = mach.callbackAndCancelSASVerification(ctx, verState, transactionID, "Verification uses unknown method", event.VerificationCancelUnknownMethod)
 		return
 	}
 
@@ -325,9 +325,9 @@ func (mach *OlmMachine) handleVerificationAccept(userID id.UserID, content *even
 	verState.verificationStarted = true
 
 	if verState.inRoomID == "" {
-		err = mach.SendSASVerificationKey(userID, verState.otherDevice.DeviceID, transactionID, string(key))
+		err = mach.SendSASVerificationKey(ctx, userID, verState.otherDevice.DeviceID, transactionID, string(key))
 	} else {
-		err = mach.SendInRoomSASVerificationKey(verState.inRoomID, userID, transactionID, string(key))
+		err = mach.SendInRoomSASVerificationKey(ctx, verState.inRoomID, userID, transactionID, string(key))
 	}
 	if err != nil {
 		mach.Log.Error().Msgf("Error sending SAS key to other device: %v", err)
@@ -337,9 +337,9 @@ func (mach *OlmMachine) handleVerificationAccept(userID id.UserID, content *even
 
 // handleVerificationKey handles an incoming m.key.verification.key message.
 // It stores the other device's public key in order to acquire the SAS shared secret.
-func (mach *OlmMachine) handleVerificationKey(userID id.UserID, content *event.VerificationKeyEventContent, transactionID string) {
+func (mach *OlmMachine) handleVerificationKey(ctx context.Context, userID id.UserID, content *event.VerificationKeyEventContent, transactionID string) {
 	mach.Log.Debug().Msgf("Got verification key for transaction %v: %v", transactionID, content.Key)
-	verState, err := mach.getTransactionState(transactionID, userID)
+	verState, err := mach.getTransactionState(ctx, transactionID, userID)
 	if err != nil {
 		mach.Log.Error().Msgf("Error getting transaction state: %v", err)
 		return
@@ -354,7 +354,7 @@ func (mach *OlmMachine) handleVerificationKey(userID id.UserID, content *event.V
 		// unexpected key at this point
 		mach.Log.Warn().Msgf("Unexpected verification key message for transaction %v", transactionID)
 		mach.keyVerificationTransactionState.Delete(userID.String() + ":" + transactionID)
-		_ = mach.callbackAndCancelSASVerification(verState, transactionID, "Unexpected key message", event.VerificationCancelUnexpectedMessage)
+		_ = mach.callbackAndCancelSASVerification(ctx, verState, transactionID, "Unexpected key message", event.VerificationCancelUnexpectedMessage)
 		return
 	}
 
@@ -372,7 +372,7 @@ func (mach *OlmMachine) handleVerificationKey(userID id.UserID, content *event.V
 		if expectedCommitment != verState.commitment {
 			mach.Log.Warn().Msgf("Canceling verification transaction %v due to commitment mismatch", transactionID)
 			mach.keyVerificationTransactionState.Delete(userID.String() + ":" + transactionID)
-			_ = mach.callbackAndCancelSASVerification(verState, transactionID, "Commitment mismatch", event.VerificationCancelCommitmentMismatch)
+			_ = mach.callbackAndCancelSASVerification(ctx, verState, transactionID, "Commitment mismatch", event.VerificationCancelCommitmentMismatch)
 			return
 		}
 	} else {
@@ -380,9 +380,9 @@ func (mach *OlmMachine) handleVerificationKey(userID id.UserID, content *event.V
 		key := verState.sas.GetPubkey()
 
 		if verState.inRoomID == "" {
-			err = mach.SendSASVerificationKey(userID, device.DeviceID, transactionID, string(key))
+			err = mach.SendSASVerificationKey(ctx, userID, device.DeviceID, transactionID, string(key))
 		} else {
-			err = mach.SendInRoomSASVerificationKey(verState.inRoomID, userID, transactionID, string(key))
+			err = mach.SendInRoomSASVerificationKey(ctx, verState.inRoomID, userID, transactionID, string(key))
 		}
 		if err != nil {
 			mach.Log.Error().Msgf("Error sending SAS key to other device: %v", err)
@@ -419,13 +419,13 @@ func (mach *OlmMachine) handleVerificationKey(userID id.UserID, content *event.V
 	mach.Log.Debug().Msgf("Generated SAS (%v): %v", sasMethod.Type(), sas)
 	go func() {
 		result := verState.hooks.VerifySASMatch(device, sas)
-		mach.sasCompared(result, transactionID, verState)
+		mach.sasCompared(ctx, result, transactionID, verState)
 	}()
 }
 
 // sasCompared is called asynchronously. It waits for the SAS to be compared for the verification to proceed.
 // If the SAS match, then our MAC is sent out. Otherwise the transaction is canceled.
-func (mach *OlmMachine) sasCompared(didMatch bool, transactionID string, verState *verificationState) {
+func (mach *OlmMachine) sasCompared(ctx context.Context, didMatch bool, transactionID string, verState *verificationState) {
 	verState.lock.Lock()
 	defer verState.lock.Unlock()
 	verState.extendTimeout()
@@ -433,9 +433,9 @@ func (mach *OlmMachine) sasCompared(didMatch bool, transactionID string, verStat
 		verState.sasMatched <- true
 		var err error
 		if verState.inRoomID == "" {
-			err = mach.SendSASVerificationMAC(verState.otherDevice.UserID, verState.otherDevice.DeviceID, transactionID, verState.sas)
+			err = mach.SendSASVerificationMAC(ctx, verState.otherDevice.UserID, verState.otherDevice.DeviceID, transactionID, verState.sas)
 		} else {
-			err = mach.SendInRoomSASVerificationMAC(verState.inRoomID, verState.otherDevice.UserID, verState.otherDevice.DeviceID, transactionID, verState.sas)
+			err = mach.SendInRoomSASVerificationMAC(ctx, verState.inRoomID, verState.otherDevice.UserID, verState.otherDevice.DeviceID, transactionID, verState.sas)
 		}
 		if err != nil {
 			mach.Log.Error().Msgf("Error sending verification MAC to other device: %v", err)
@@ -447,9 +447,9 @@ func (mach *OlmMachine) sasCompared(didMatch bool, transactionID string, verStat
 
 // handleVerificationMAC handles an incoming m.key.verification.mac message.
 // It verifies the other device's MAC and if the MAC is valid it marks the device as trusted.
-func (mach *OlmMachine) handleVerificationMAC(userID id.UserID, content *event.VerificationMacEventContent, transactionID string) {
+func (mach *OlmMachine) handleVerificationMAC(ctx context.Context, userID id.UserID, content *event.VerificationMacEventContent, transactionID string) {
 	mach.Log.Debug().Msgf("Got MAC for verification %v: %v, MAC for keys: %v", transactionID, content.Mac, content.Keys)
-	verState, err := mach.getTransactionState(transactionID, userID)
+	verState, err := mach.getTransactionState(ctx, transactionID, userID)
 	if err != nil {
 		mach.Log.Error().Msgf("Error getting transaction state: %v", err)
 		return
@@ -466,7 +466,7 @@ func (mach *OlmMachine) handleVerificationMAC(userID id.UserID, content *event.V
 	if !verState.verificationStarted || !verState.keyReceived {
 		// unexpected MAC at this point
 		mach.Log.Warn().Msgf("Unexpected MAC message for transaction %v", transactionID)
-		_ = mach.callbackAndCancelSASVerification(verState, transactionID, "Unexpected MAC message", event.VerificationCancelUnexpectedMessage)
+		_ = mach.callbackAndCancelSASVerification(ctx, verState, transactionID, "Unexpected MAC message", event.VerificationCancelUnexpectedMessage)
 		return
 	}
 
@@ -478,7 +478,7 @@ func (mach *OlmMachine) handleVerificationMAC(userID id.UserID, content *event.V
 
 		if !matched {
 			mach.Log.Warn().Msgf("SAS do not match! Canceling transaction %v", transactionID)
-			_ = mach.callbackAndCancelSASVerification(verState, transactionID, "SAS do not match", event.VerificationCancelSASMismatch)
+			_ = mach.callbackAndCancelSASVerification(ctx, verState, transactionID, "SAS do not match", event.VerificationCancelSASMismatch)
 			return
 		}
 
@@ -494,38 +494,38 @@ func (mach *OlmMachine) handleVerificationMAC(userID id.UserID, content *event.V
 		mach.Log.Debug().Msgf("Expected %s keys MAC, got %s", expectedKeysMAC, content.Keys)
 		if content.Keys != expectedKeysMAC {
 			mach.Log.Warn().Msgf("Canceling verification transaction %v due to mismatched keys MAC", transactionID)
-			_ = mach.callbackAndCancelSASVerification(verState, transactionID, "Mismatched keys MACs", event.VerificationCancelKeyMismatch)
+			_ = mach.callbackAndCancelSASVerification(ctx, verState, transactionID, "Mismatched keys MACs", event.VerificationCancelKeyMismatch)
 			return
 		}
 
 		mach.Log.Debug().Msgf("Expected %s PK MAC, got %s", expectedPKMAC, content.Mac[keyID])
 		if content.Mac[keyID] != expectedPKMAC {
 			mach.Log.Warn().Msgf("Canceling verification transaction %v due to mismatched PK MAC", transactionID)
-			_ = mach.callbackAndCancelSASVerification(verState, transactionID, "Mismatched PK MACs", event.VerificationCancelKeyMismatch)
+			_ = mach.callbackAndCancelSASVerification(ctx, verState, transactionID, "Mismatched PK MACs", event.VerificationCancelKeyMismatch)
 			return
 		}
 
 		// we can finally trust this device
 		device.Trust = id.TrustStateVerified
-		err = mach.CryptoStore.PutDevice(device.UserID, device)
+		err = mach.CryptoStore.PutDevice(ctx, device.UserID, device)
 		if err != nil {
 			mach.Log.Warn().Msgf("Failed to put device after verifying: %v", err)
 		}
 
 		if mach.CrossSigningKeys != nil {
 			if device.UserID == mach.Client.UserID {
-				err := mach.SignOwnDevice(device)
+				err := mach.SignOwnDevice(ctx, device)
 				if err != nil {
 					mach.Log.Error().Msgf("Failed to cross-sign own device %s: %v", device.DeviceID, err)
 				} else {
 					mach.Log.Debug().Msgf("Cross-signed own device %v after SAS verification", device.DeviceID)
 				}
 			} else {
-				masterKey, err := mach.fetchMasterKey(device, content, verState, transactionID)
+				masterKey, err := mach.fetchMasterKey(ctx, device, content, verState, transactionID)
 				if err != nil {
 					mach.Log.Warn().Msgf("Failed to fetch %s's master key: %v", device.UserID, err)
 				} else {
-					if err := mach.SignUser(device.UserID, masterKey); err != nil {
+					if err := mach.SignUser(ctx, device.UserID, masterKey); err != nil {
 						mach.Log.Error().Msgf("Failed to cross-sign master key of %s: %v", device.UserID, err)
 					} else {
 						mach.Log.Debug().Msgf("Cross-signed master key of %v after SAS verification", device.UserID)
@@ -559,9 +559,9 @@ func (mach *OlmMachine) handleVerificationCancel(userID id.UserID, content *even
 }
 
 // handleVerificationRequest handles an incoming m.key.verification.request message.
-func (mach *OlmMachine) handleVerificationRequest(userID id.UserID, content *event.VerificationRequestEventContent, transactionID string, inRoomID id.RoomID) {
+func (mach *OlmMachine) handleVerificationRequest(ctx context.Context, userID id.UserID, content *event.VerificationRequestEventContent, transactionID string, inRoomID id.RoomID) {
 	mach.Log.Debug().Msgf("Received verification request from %v", content.FromDevice)
-	otherDevice, err := mach.GetOrFetchDevice(context.TODO(), userID, content.FromDevice)
+	otherDevice, err := mach.GetOrFetchDevice(ctx, userID, content.FromDevice)
 	if err != nil {
 		mach.Log.Error().Msgf("Could not find device %v of user %v", content.FromDevice, userID)
 		return
@@ -569,9 +569,9 @@ func (mach *OlmMachine) handleVerificationRequest(userID id.UserID, content *eve
 	if !content.SupportsVerificationMethod(event.VerificationMethodSAS) {
 		mach.Log.Warn().Msgf("Canceling verification transaction %v as SAS is not supported", transactionID)
 		if inRoomID == "" {
-			_ = mach.SendSASVerificationCancel(otherDevice.UserID, otherDevice.DeviceID, transactionID, "Only SAS method is supported", event.VerificationCancelUnknownMethod)
+			_ = mach.SendSASVerificationCancel(ctx, otherDevice.UserID, otherDevice.DeviceID, transactionID, "Only SAS method is supported", event.VerificationCancelUnknownMethod)
 		} else {
-			_ = mach.SendInRoomSASVerificationCancel(inRoomID, otherDevice.UserID, transactionID, "Only SAS method is supported", event.VerificationCancelUnknownMethod)
+			_ = mach.SendInRoomSASVerificationCancel(ctx, inRoomID, otherDevice.UserID, transactionID, "Only SAS method is supported", event.VerificationCancelUnknownMethod)
 		}
 		return
 	}
@@ -579,14 +579,14 @@ func (mach *OlmMachine) handleVerificationRequest(userID id.UserID, content *eve
 	if resp == AcceptRequest {
 		mach.Log.Debug().Msgf("Accepting SAS verification %v from %v of user %v", transactionID, otherDevice.DeviceID, otherDevice.UserID)
 		if inRoomID == "" {
-			_, err = mach.NewSASVerificationWith(otherDevice, hooks, transactionID, mach.DefaultSASTimeout)
+			_, err = mach.NewSASVerificationWith(ctx, otherDevice, hooks, transactionID, mach.DefaultSASTimeout)
 		} else {
-			if err := mach.SendInRoomSASVerificationReady(inRoomID, transactionID); err != nil {
+			if err := mach.SendInRoomSASVerificationReady(ctx, inRoomID, transactionID); err != nil {
 				mach.Log.Error().Msgf("Error sending in-room SAS verification ready: %v", err)
 			}
 			if mach.Client.UserID < otherDevice.UserID {
 				// up to us to send the start message
-				_, err = mach.newInRoomSASVerificationWithInner(inRoomID, otherDevice, hooks, transactionID, mach.DefaultSASTimeout)
+				_, err = mach.newInRoomSASVerificationWithInner(ctx, inRoomID, otherDevice, hooks, transactionID, mach.DefaultSASTimeout)
 			}
 		}
 		if err != nil {
@@ -595,9 +595,9 @@ func (mach *OlmMachine) handleVerificationRequest(userID id.UserID, content *eve
 	} else if resp == RejectRequest {
 		mach.Log.Debug().Msgf("Rejecting SAS verification %v from %v of user %v", transactionID, otherDevice.DeviceID, otherDevice.UserID)
 		if inRoomID == "" {
-			_ = mach.SendSASVerificationCancel(otherDevice.UserID, otherDevice.DeviceID, transactionID, "Not accepted by user", event.VerificationCancelByUser)
+			_ = mach.SendSASVerificationCancel(ctx, otherDevice.UserID, otherDevice.DeviceID, transactionID, "Not accepted by user", event.VerificationCancelByUser)
 		} else {
-			_ = mach.SendInRoomSASVerificationCancel(inRoomID, otherDevice.UserID, transactionID, "Not accepted by user", event.VerificationCancelByUser)
+			_ = mach.SendInRoomSASVerificationCancel(ctx, inRoomID, otherDevice.UserID, transactionID, "Not accepted by user", event.VerificationCancelByUser)
 		}
 	} else {
 		mach.Log.Debug().Msgf("Ignoring SAS verification %v from %v of user %v", transactionID, otherDevice.DeviceID, otherDevice.UserID)
@@ -606,14 +606,14 @@ func (mach *OlmMachine) handleVerificationRequest(userID id.UserID, content *eve
 
 // NewSimpleSASVerificationWith starts the SAS verification process with another device with a default timeout,
 // a generated transaction ID and support for both emoji and decimal SAS methods.
-func (mach *OlmMachine) NewSimpleSASVerificationWith(device *id.Device, hooks VerificationHooks) (string, error) {
-	return mach.NewSASVerificationWith(device, hooks, "", mach.DefaultSASTimeout)
+func (mach *OlmMachine) NewSimpleSASVerificationWith(ctx context.Context, device *id.Device, hooks VerificationHooks) (string, error) {
+	return mach.NewSASVerificationWith(ctx, device, hooks, "", mach.DefaultSASTimeout)
 }
 
 // NewSASVerificationWith starts the SAS verification process with another device.
 // If the other device accepts the verification transaction, the methods in `hooks` will be used to verify the SAS match and to complete the transaction..
 // If the transaction ID is empty, a new one is generated.
-func (mach *OlmMachine) NewSASVerificationWith(device *id.Device, hooks VerificationHooks, transactionID string, timeout time.Duration) (string, error) {
+func (mach *OlmMachine) NewSASVerificationWith(ctx context.Context, device *id.Device, hooks VerificationHooks, transactionID string, timeout time.Duration) (string, error) {
 	if transactionID == "" {
 		transactionID = strconv.Itoa(rand.Int())
 	}
@@ -631,7 +631,7 @@ func (mach *OlmMachine) NewSASVerificationWith(device *id.Device, hooks Verifica
 	verState.lock.Lock()
 	defer verState.lock.Unlock()
 
-	startEvent, err := mach.SendSASVerificationStart(device.UserID, device.DeviceID, transactionID, hooks.VerificationMethods())
+	startEvent, err := mach.SendSASVerificationStart(ctx, device.UserID, device.DeviceID, transactionID, hooks.VerificationMethods())
 	if err != nil {
 		return "", err
 	}
@@ -651,13 +651,13 @@ func (mach *OlmMachine) NewSASVerificationWith(device *id.Device, hooks Verifica
 		return "", ErrTransactionAlreadyExists
 	}
 
-	mach.timeoutAfter(verState, transactionID, timeout)
+	mach.timeoutAfter(ctx, verState, transactionID, timeout)
 
 	return transactionID, nil
 }
 
 // CancelSASVerification is used by the user to cancel a SAS verification process with the given reason.
-func (mach *OlmMachine) CancelSASVerification(userID id.UserID, transactionID, reason string) error {
+func (mach *OlmMachine) CancelSASVerification(ctx context.Context, userID id.UserID, transactionID, reason string) error {
 	mapKey := userID.String() + ":" + transactionID
 	verStateInterface, ok := mach.keyVerificationTransactionState.Load(mapKey)
 	if !ok {
@@ -668,21 +668,21 @@ func (mach *OlmMachine) CancelSASVerification(userID id.UserID, transactionID, r
 	defer verState.lock.Unlock()
 	mach.Log.Trace().Msgf("User canceled verification transaction %v with reason: %v", transactionID, reason)
 	mach.keyVerificationTransactionState.Delete(mapKey)
-	return mach.callbackAndCancelSASVerification(verState, transactionID, reason, event.VerificationCancelByUser)
+	return mach.callbackAndCancelSASVerification(ctx, verState, transactionID, reason, event.VerificationCancelByUser)
 }
 
 // SendSASVerificationCancel is used to manually send a SAS cancel message process with the given reason and cancellation code.
-func (mach *OlmMachine) SendSASVerificationCancel(userID id.UserID, deviceID id.DeviceID, transactionID string, reason string, code event.VerificationCancelCode) error {
+func (mach *OlmMachine) SendSASVerificationCancel(ctx context.Context, userID id.UserID, deviceID id.DeviceID, transactionID string, reason string, code event.VerificationCancelCode) error {
 	content := &event.VerificationCancelEventContent{
 		TransactionID: transactionID,
 		Reason:        reason,
 		Code:          code,
 	}
-	return mach.sendToOneDevice(userID, deviceID, event.ToDeviceVerificationCancel, content)
+	return mach.sendToOneDevice(ctx, userID, deviceID, event.ToDeviceVerificationCancel, content)
 }
 
 // SendSASVerificationStart is used to manually send the SAS verification start message to another device.
-func (mach *OlmMachine) SendSASVerificationStart(toUserID id.UserID, toDeviceID id.DeviceID, transactionID string, methods []VerificationMethod) (*event.VerificationStartEventContent, error) {
+func (mach *OlmMachine) SendSASVerificationStart(ctx context.Context, toUserID id.UserID, toDeviceID id.DeviceID, transactionID string, methods []VerificationMethod) (*event.VerificationStartEventContent, error) {
 	sasMethods := make([]event.SASMethod, len(methods))
 	for i, method := range methods {
 		sasMethods[i] = method.Type()
@@ -696,14 +696,14 @@ func (mach *OlmMachine) SendSASVerificationStart(toUserID id.UserID, toDeviceID 
 		MessageAuthenticationCodes: []event.MACMethod{event.HKDFHMACSHA256},
 		ShortAuthenticationString:  sasMethods,
 	}
-	return content, mach.sendToOneDevice(toUserID, toDeviceID, event.ToDeviceVerificationStart, content)
+	return content, mach.sendToOneDevice(ctx, toUserID, toDeviceID, event.ToDeviceVerificationStart, content)
 }
 
 // SendSASVerificationAccept is used to manually send an accept for a SAS verification process from a received m.key.verification.start event.
-func (mach *OlmMachine) SendSASVerificationAccept(fromUser id.UserID, startEvent *event.VerificationStartEventContent, publicKey []byte, methods []VerificationMethod) error {
+func (mach *OlmMachine) SendSASVerificationAccept(ctx context.Context, fromUser id.UserID, startEvent *event.VerificationStartEventContent, publicKey []byte, methods []VerificationMethod) error {
 	if startEvent.Method != event.VerificationMethodSAS {
 		reason := "Unknown verification method: " + string(startEvent.Method)
-		if err := mach.SendSASVerificationCancel(fromUser, startEvent.FromDevice, startEvent.TransactionID, reason, event.VerificationCancelUnknownMethod); err != nil {
+		if err := mach.SendSASVerificationCancel(ctx, fromUser, startEvent.FromDevice, startEvent.TransactionID, reason, event.VerificationCancelUnknownMethod); err != nil {
 			return err
 		}
 		return ErrUnknownVerificationMethod
@@ -730,25 +730,25 @@ func (mach *OlmMachine) SendSASVerificationAccept(fromUser id.UserID, startEvent
 		ShortAuthenticationString: sasMethods,
 		Commitment:                hash,
 	}
-	return mach.sendToOneDevice(fromUser, startEvent.FromDevice, event.ToDeviceVerificationAccept, content)
+	return mach.sendToOneDevice(ctx, fromUser, startEvent.FromDevice, event.ToDeviceVerificationAccept, content)
 }
 
-func (mach *OlmMachine) callbackAndCancelSASVerification(verState *verificationState, transactionID, reason string, code event.VerificationCancelCode) error {
+func (mach *OlmMachine) callbackAndCancelSASVerification(ctx context.Context, verState *verificationState, transactionID, reason string, code event.VerificationCancelCode) error {
 	go verState.hooks.OnCancel(true, reason, code)
-	return mach.SendSASVerificationCancel(verState.otherDevice.UserID, verState.otherDevice.DeviceID, transactionID, reason, code)
+	return mach.SendSASVerificationCancel(ctx, verState.otherDevice.UserID, verState.otherDevice.DeviceID, transactionID, reason, code)
 }
 
 // SendSASVerificationKey sends the ephemeral public key for a device to the partner device.
-func (mach *OlmMachine) SendSASVerificationKey(userID id.UserID, deviceID id.DeviceID, transactionID string, key string) error {
+func (mach *OlmMachine) SendSASVerificationKey(ctx context.Context, userID id.UserID, deviceID id.DeviceID, transactionID string, key string) error {
 	content := &event.VerificationKeyEventContent{
 		TransactionID: transactionID,
 		Key:           key,
 	}
-	return mach.sendToOneDevice(userID, deviceID, event.ToDeviceVerificationKey, content)
+	return mach.sendToOneDevice(ctx, userID, deviceID, event.ToDeviceVerificationKey, content)
 }
 
 // SendSASVerificationMAC is use the MAC of a device's key to the partner device.
-func (mach *OlmMachine) SendSASVerificationMAC(userID id.UserID, deviceID id.DeviceID, transactionID string, sas *olm.SAS) error {
+func (mach *OlmMachine) SendSASVerificationMAC(ctx context.Context, userID id.UserID, deviceID id.DeviceID, transactionID string, sas *olm.SAS) error {
 	keyID := id.NewKeyID(id.KeyAlgorithmEd25519, mach.Client.DeviceID.String())
 
 	signingKey := mach.account.SigningKey()
@@ -784,7 +784,7 @@ func (mach *OlmMachine) SendSASVerificationMAC(userID id.UserID, deviceID id.Dev
 		Mac:           macMap,
 	}
 
-	return mach.sendToOneDevice(userID, deviceID, event.ToDeviceVerificationMAC, content)
+	return mach.sendToOneDevice(ctx, userID, deviceID, event.ToDeviceVerificationMAC, content)
 }
 
 func commonSASMethods(hooks VerificationHooks, otherDeviceMethods []event.SASMethod) []VerificationMethod {

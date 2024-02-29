@@ -7,6 +7,7 @@
 package sql_store_upgrade
 
 import (
+	"context"
 	"embed"
 	"fmt"
 
@@ -21,7 +22,7 @@ const VersionTableName = "crypto_version"
 var fs embed.FS
 
 func init() {
-	Table.Register(-1, 3, 0, "Unsupported version", false, func(tx dbutil.Execable, database *dbutil.Database) error {
+	Table.Register(-1, 3, 0, "Unsupported version", false, func(ctx context.Context, database *dbutil.Database) error {
 		return fmt.Errorf("upgrading from versions 1 and 2 of the crypto store is no longer supported in mautrix-go v0.12+")
 	})
 	Table.RegisterFS(fs)

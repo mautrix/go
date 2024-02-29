@@ -10,9 +10,8 @@ import (
 	"os"
 	"regexp"
 
-	"gopkg.in/yaml.v3"
-
 	"go.mau.fi/util/random"
+	"gopkg.in/yaml.v3"
 )
 
 // Registration contains the data in a Matrix appservice registration.

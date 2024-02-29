@@ -1,4 +1,4 @@
-// Copyright (c) 2023 Tulir Asokan
+// Copyright (c) 2024 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -61,7 +61,7 @@ func NewCryptoHelper(bridge *Bridge) Crypto {
 	}
 }
 
-func (helper *CryptoHelper) Init() error {
+func (helper *CryptoHelper) Init(ctx context.Context) error {
 	if len(helper.bridge.CryptoPickleKey) == 0 {
 		panic("CryptoPickleKey not set")
 	}
@@ -75,13 +75,13 @@ func (helper *CryptoHelper) Init() error {
 		helper.bridge.CryptoPickleKey,
 	)
 
-	err := helper.store.DB.Upgrade()
+	err := helper.store.DB.Upgrade(ctx)
 	if err != nil {
 		helper.bridge.LogDBUpgradeErrorAndExit("crypto", err)
 	}
 
 	var isExistingDevice bool
-	helper.client, isExistingDevice, err = helper.loginBot()
+	helper.client, isExistingDevice, err = helper.loginBot(ctx)
 	if err != nil {
 		return err
 	}
@@ -111,7 +111,7 @@ func (helper *CryptoHelper) Init() error {
 	}
 
 	if encryptionConfig.DeleteKeys.DeleteOutdatedInbound {
-		deleted, err := helper.store.RedactOutdatedGroupSessions()
+		deleted, err := helper.store.RedactOutdatedGroupSessions(ctx)
 		if err != nil {
 			return err
 		}
@@ -123,45 +123,39 @@ func (helper *CryptoHelper) Init() error {
 	helper.client.Syncer = &cryptoSyncer{helper.mach}
 	helper.client.Store = helper.store
 
-	err = helper.mach.Load()
+	err = helper.mach.Load(ctx)
 	if err != nil {
 		return err
 	}
 	if isExistingDevice {
-		helper.verifyKeysAreOnServer()
+		helper.verifyKeysAreOnServer(ctx)
 	}
 
-	go helper.resyncEncryptionInfo()
+	go helper.resyncEncryptionInfo(context.TODO())
 
 	return nil
 }
 
-func (helper *CryptoHelper) resyncEncryptionInfo() {
+func (helper *CryptoHelper) resyncEncryptionInfo(ctx context.Context) {
 	log := helper.log.With().Str("action", "resync encryption event").Logger()
-	rows, err := helper.bridge.DB.Query(`SELECT room_id FROM mx_room_state WHERE encryption='{"resync":true}'`)
+	rows, err := helper.bridge.DB.Query(ctx, `SELECT room_id FROM mx_room_state WHERE encryption='{"resync":true}'`)
 	if err != nil {
 		log.Err(err).Msg("Failed to query rooms for resync")
 		return
 	}
-	var roomIDs []id.RoomID
-	for rows.Next() {
-		var roomID id.RoomID
-		err = rows.Scan(&roomID)
-		if err != nil {
-			log.Err(err).Msg("Failed to scan room ID")
-			continue
-		}
-		roomIDs = append(roomIDs, roomID)
+	roomIDs, err := dbutil.NewRowIter(rows, dbutil.ScanSingleColumn[id.RoomID]).AsList()
+	if err != nil {
+		log.Err(err).Msg("Failed to scan rooms for resync")
+		return
 	}
-	_ = rows.Close()
 	if len(roomIDs) > 0 {
 		log.Debug().Interface("room_ids", roomIDs).Msg("Resyncing rooms")
 		for _, roomID := range roomIDs {
 			var evt event.EncryptionEventContent
-			err = helper.client.StateEvent(roomID, event.StateEncryption, "", &evt)
+			err = helper.client.StateEvent(ctx, roomID, event.StateEncryption, "", &evt)
 			if err != nil {
 				log.Err(err).Str("room_id", roomID.String()).Msg("Failed to get encryption event")
-				_, err = helper.bridge.DB.Exec(`
+				_, err = helper.bridge.DB.Exec(ctx, `
 					UPDATE mx_room_state SET encryption=NULL WHERE room_id=$1 AND encryption='{"resync":true}'
 				`, roomID)
 				if err != nil {
@@ -182,7 +176,7 @@ func (helper *CryptoHelper) resyncEncryptionInfo() {
 					Int("max_messages", maxMessages).
 					Interface("content", &evt).
 					Msg("Resynced encryption event")
-				_, err = helper.bridge.DB.Exec(`
+				_, err = helper.bridge.DB.Exec(ctx, `
 					UPDATE crypto_megolm_inbound_session
 					SET max_age=$1, max_messages=$2
 					WHERE room_id=$3 AND max_age IS NULL AND max_messages IS NULL
@@ -222,21 +216,23 @@ func (helper *CryptoHelper) allowKeyShare(ctx context.Context, device *id.Device
 	}
 }
 
-func (helper *CryptoHelper) loginBot() (*mautrix.Client, bool, error) {
-	deviceID := helper.store.FindDeviceID()
-	if len(deviceID) > 0 {
+func (helper *CryptoHelper) loginBot(ctx context.Context) (*mautrix.Client, bool, error) {
+	deviceID, err := helper.store.FindDeviceID(ctx)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to find existing device ID: %w", err)
+	} else if len(deviceID) > 0 {
 		helper.log.Debug().Str("device_id", deviceID.String()).Msg("Found existing device ID for bot in database")
 	}
 	// Create a new client instance with the default AS settings (including as_token),
 	// the Login call will then override the access token in the client.
 	client := helper.bridge.AS.NewMautrixClient(helper.bridge.AS.BotMXID())
-	flows, err := client.GetLoginFlows()
+	flows, err := client.GetLoginFlows(ctx)
 	if err != nil {
 		return nil, deviceID != "", fmt.Errorf("failed to get supported login flows: %w", err)
 	} else if !flows.HasFlow(mautrix.AuthTypeAppservice) {
 		return nil, deviceID != "", fmt.Errorf("homeserver does not support appservice login")
 	}
-	resp, err := client.Login(&mautrix.ReqLogin{
+	resp, err := client.Login(ctx, &mautrix.ReqLogin{
 		Type: mautrix.AuthTypeAppservice,
 		Identifier: mautrix.UserIdentifier{
 			Type: mautrix.IdentifierTypeUser,
@@ -254,9 +250,9 @@ func (helper *CryptoHelper) loginBot() (*mautrix.Client, bool, error) {
 	return client, deviceID != "", nil
 }
 
-func (helper *CryptoHelper) verifyKeysAreOnServer() {
+func (helper *CryptoHelper) verifyKeysAreOnServer(ctx context.Context) {
 	helper.log.Debug().Msg("Making sure keys are still on server")
-	resp, err := helper.client.QueryKeys(&mautrix.ReqQueryKeys{
+	resp, err := helper.client.QueryKeys(ctx, &mautrix.ReqQueryKeys{
 		DeviceKeys: map[id.UserID]mautrix.DeviceIDList{
 			helper.client.UserID: {helper.client.DeviceID},
 		},
@@ -270,7 +266,7 @@ func (helper *CryptoHelper) verifyKeysAreOnServer() {
 		return
 	}
 	helper.log.Warn().Msg("Existing device doesn't have keys on server, resetting crypto")
-	helper.Reset(false)
+	helper.Reset(ctx, false)
 }
 
 func (helper *CryptoHelper) Start() {
@@ -306,16 +302,16 @@ func (helper *CryptoHelper) Stop() {
 	helper.syncDone.Wait()
 }
 
-func (helper *CryptoHelper) clearDatabase() {
-	_, err := helper.store.DB.Exec("DELETE FROM crypto_account")
+func (helper *CryptoHelper) clearDatabase(ctx context.Context) {
+	_, err := helper.store.DB.Exec(ctx, "DELETE FROM crypto_account")
 	if err != nil {
 		helper.log.Warn().Err(err).Msg("Failed to clear crypto_account table")
 	}
-	_, err = helper.store.DB.Exec("DELETE FROM crypto_olm_session")
+	_, err = helper.store.DB.Exec(ctx, "DELETE FROM crypto_olm_session")
 	if err != nil {
 		helper.log.Warn().Err(err).Msg("Failed to clear crypto_olm_session table")
 	}
-	_, err = helper.store.DB.Exec("DELETE FROM crypto_megolm_outbound_session")
+	_, err = helper.store.DB.Exec(ctx, "DELETE FROM crypto_megolm_outbound_session")
 	if err != nil {
 		helper.log.Warn().Err(err).Msg("Failed to clear crypto_megolm_outbound_session table")
 	}
@@ -325,22 +321,22 @@ func (helper *CryptoHelper) clearDatabase() {
 	//_, _ = helper.store.DB.Exec("DELETE FROM crypto_cross_signing_signatures")
 }
 
-func (helper *CryptoHelper) Reset(startAfterReset bool) {
+func (helper *CryptoHelper) Reset(ctx context.Context, startAfterReset bool) {
 	helper.lock.Lock()
 	defer helper.lock.Unlock()
 	helper.log.Info().Msg("Resetting end-to-bridge encryption device")
 	helper.Stop()
 	helper.log.Debug().Msg("Crypto syncer stopped, clearing database")
-	helper.clearDatabase()
+	helper.clearDatabase(ctx)
 	helper.log.Debug().Msg("Crypto database cleared, logging out of all sessions")
-	_, err := helper.client.LogoutAll()
+	_, err := helper.client.LogoutAll(ctx)
 	if err != nil {
 		helper.log.Warn().Err(err).Msg("Failed to log out all devices")
 	}
 	helper.client = nil
 	helper.store = nil
 	helper.mach = nil
-	err = helper.Init()
+	err = helper.Init(ctx)
 	if err != nil {
 		helper.log.WithLevel(zerolog.FatalLevel).Err(err).Msg("Error reinitializing end-to-bridge encryption")
 		os.Exit(50)
@@ -355,25 +351,24 @@ func (helper *CryptoHelper) Client() *mautrix.Client {
 	return helper.client
 }
 
-func (helper *CryptoHelper) Decrypt(evt *event.Event) (*event.Event, error) {
-	return helper.mach.DecryptMegolmEvent(context.TODO(), evt)
+func (helper *CryptoHelper) Decrypt(ctx context.Context, evt *event.Event) (*event.Event, error) {
+	return helper.mach.DecryptMegolmEvent(ctx, evt)
 }
 
-func (helper *CryptoHelper) Encrypt(roomID id.RoomID, evtType event.Type, content *event.Content) (err error) {
+func (helper *CryptoHelper) Encrypt(ctx context.Context, roomID id.RoomID, evtType event.Type, content *event.Content) (err error) {
 	helper.lock.RLock()
 	defer helper.lock.RUnlock()
 	var encrypted *event.EncryptedEventContent
-	ctx := context.TODO()
 	encrypted, err = helper.mach.EncryptMegolmEvent(ctx, roomID, evtType, content)
 	if err != nil {
-		if err != crypto.SessionExpired && err != crypto.SessionNotShared && err != crypto.NoGroupSession {
+		if !errors.Is(err, crypto.SessionExpired) && !errors.Is(err, crypto.SessionNotShared) && !errors.Is(err, crypto.NoGroupSession) {
 			return
 		}
 		helper.log.Debug().Err(err).
 			Str("room_id", roomID.String()).
 			Msg("Got error while encrypting event for room, sharing group session and trying again...")
 		var users []id.UserID
-		users, err = helper.store.GetRoomJoinedOrInvitedMembers(roomID)
+		users, err = helper.store.GetRoomJoinedOrInvitedMembers(ctx, roomID)
 		if err != nil {
 			err = fmt.Errorf("failed to get room member list: %w", err)
 		} else if err = helper.mach.ShareGroupSession(ctx, roomID, users); err != nil {
@@ -389,19 +384,19 @@ func (helper *CryptoHelper) Encrypt(roomID id.RoomID, evtType event.Type, conten
 	return
 }
 
-func (helper *CryptoHelper) WaitForSession(roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID, timeout time.Duration) bool {
+func (helper *CryptoHelper) WaitForSession(ctx context.Context, roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID, timeout time.Duration) bool {
 	helper.lock.RLock()
 	defer helper.lock.RUnlock()
-	return helper.mach.WaitForSession(roomID, senderKey, sessionID, timeout)
+	return helper.mach.WaitForSession(ctx, roomID, senderKey, sessionID, timeout)
 }
 
-func (helper *CryptoHelper) RequestSession(roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID, userID id.UserID, deviceID id.DeviceID) {
+func (helper *CryptoHelper) RequestSession(ctx context.Context, roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID, userID id.UserID, deviceID id.DeviceID) {
 	helper.lock.RLock()
 	defer helper.lock.RUnlock()
 	if deviceID == "" {
 		deviceID = "*"
 	}
-	err := helper.mach.SendRoomKeyRequest(roomID, senderKey, sessionID, "", map[id.UserID][]id.DeviceID{userID: {deviceID}})
+	err := helper.mach.SendRoomKeyRequest(ctx, roomID, senderKey, sessionID, "", map[id.UserID][]id.DeviceID{userID: {deviceID}})
 	if err != nil {
 		helper.log.Warn().Err(err).
 			Str("user_id", userID.String()).
@@ -419,10 +414,10 @@ func (helper *CryptoHelper) RequestSession(roomID id.RoomID, senderKey id.Sender
 	}
 }
 
-func (helper *CryptoHelper) ResetSession(roomID id.RoomID) {
+func (helper *CryptoHelper) ResetSession(ctx context.Context, roomID id.RoomID) {
 	helper.lock.RLock()
 	defer helper.lock.RUnlock()
-	err := helper.mach.CryptoStore.RemoveOutboundGroupSession(roomID)
+	err := helper.mach.CryptoStore.RemoveOutboundGroupSession(ctx, roomID)
 	if err != nil {
 		helper.log.Debug().Err(err).
 			Str("room_id", roomID.String()).
@@ -430,10 +425,10 @@ func (helper *CryptoHelper) ResetSession(roomID id.RoomID) {
 	}
 }
 
-func (helper *CryptoHelper) HandleMemberEvent(evt *event.Event) {
+func (helper *CryptoHelper) HandleMemberEvent(ctx context.Context, evt *event.Event) {
 	helper.lock.RLock()
 	defer helper.lock.RUnlock()
-	helper.mach.HandleMemberEvent(0, evt)
+	helper.mach.HandleMemberEvent(ctx, evt)
 }
 
 // ShareKeys uploads the given number of one-time-keys to the server.
@@ -445,7 +440,7 @@ type cryptoSyncer struct {
 	*crypto.OlmMachine
 }
 
-func (syncer *cryptoSyncer) ProcessResponse(resp *mautrix.RespSync, since string) error {
+func (syncer *cryptoSyncer) ProcessResponse(ctx context.Context, resp *mautrix.RespSync, since string) error {
 	done := make(chan struct{})
 	go func() {
 		defer func() {
@@ -459,7 +454,7 @@ func (syncer *cryptoSyncer) ProcessResponse(resp *mautrix.RespSync, since string
 			done <- struct{}{}
 		}()
 		syncer.Log.Trace().Str("since", since).Msg("Starting sync response handling")
-		syncer.ProcessSyncResponse(resp, since)
+		syncer.ProcessSyncResponse(ctx, resp, since)
 		syncer.Log.Trace().Str("since", since).Msg("Successfully handled sync response")
 	}()
 	select {
@@ -499,18 +494,18 @@ type cryptoStateStore struct {
 
 var _ crypto.StateStore = (*cryptoStateStore)(nil)
 
-func (c *cryptoStateStore) IsEncrypted(id id.RoomID) bool {
+func (c *cryptoStateStore) IsEncrypted(ctx context.Context, id id.RoomID) (bool, error) {
 	portal := c.bridge.Child.GetIPortal(id)
 	if portal != nil {
-		return portal.IsEncrypted()
+		return portal.IsEncrypted(), nil
 	}
-	return c.bridge.StateStore.IsEncrypted(id)
+	return c.bridge.StateStore.IsEncrypted(ctx, id)
 }
 
-func (c *cryptoStateStore) FindSharedRooms(id id.UserID) []id.RoomID {
-	return c.bridge.StateStore.FindSharedRooms(id)
+func (c *cryptoStateStore) FindSharedRooms(ctx context.Context, id id.UserID) ([]id.RoomID, error) {
+	return c.bridge.StateStore.FindSharedRooms(ctx, id)
 }
 
-func (c *cryptoStateStore) GetEncryptionEvent(id id.RoomID) *event.EncryptionEventContent {
-	return c.bridge.StateStore.GetEncryptionEvent(id)
+func (c *cryptoStateStore) GetEncryptionEvent(ctx context.Context, id id.RoomID) (*event.EncryptionEventContent, error) {
+	return c.bridge.StateStore.GetEncryptionEvent(ctx, id)
 }
