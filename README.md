@@ -1,7 +1,10 @@
 ## Element fork
 
-Some changes that appear here may get upstreamed to https://github.com/mautrix/go. Any changes that do not
-get upstreamed will be listed here.
+The Element fork includes the following changes:
+- [Add config to disallow manual double puppeting](https://github.com/element-hq/mautrix-go/pull/1)
+
+Some changes that appear here may get upstreamed to https://github.com/mautrix/go, and will be removed from
+the list when they appear in both versions.
 
 Tagged versions will appear as `v{UPSTREAM-VERSION}-mod-{VERSION}`
 
