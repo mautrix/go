@@ -333,8 +333,10 @@ func (br *Bridge) ensureConnection(ctx context.Context) {
 	if err != nil {
 		if errors.Is(err, mautrix.MUnknownToken) {
 			br.ZLog.WithLevel(zerolog.FatalLevel).Msg("The as_token was not accepted. Is the registration file installed in your homeserver correctly?")
+			br.ZLog.Info().Msg("See https://docs.mau.fi/faq/as-token for more info")
 		} else if errors.Is(err, mautrix.MExclusive) {
 			br.ZLog.WithLevel(zerolog.FatalLevel).Msg("The as_token was accepted, but the /register request was not. Are the homeserver domain, bot username and username template in the config correct, and do they match the values in the registration?")
+			br.ZLog.Info().Msg("See https://docs.mau.fi/faq/as-register for more info")
 		} else {
 			br.ZLog.WithLevel(zerolog.FatalLevel).Err(err).Msg("/whoami request failed with unknown error")
 		}
@@ -387,6 +389,7 @@ func (br *Bridge) ensureConnection(ctx context.Context) {
 		}
 		if outOfRetries {
 			evt.Msg("Homeserver -> bridge connection is not working")
+			br.ZLog.Info().Msg("See https://docs.mau.fi/faq/as-ping for more info")
 			os.Exit(13)
 		}
 		evt.Msg("Homeserver -> bridge connection is not working, retrying in 5 seconds...")
@@ -535,6 +538,7 @@ func (br *Bridge) init() {
 	err = br.validateConfig()
 	if err != nil {
 		br.ZLog.WithLevel(zerolog.FatalLevel).Err(err).Msg("Configuration error")
+		br.ZLog.Info().Msg("See https://docs.mau.fi/faq/field-unconfigured for more info")
 		os.Exit(11)
 	}
 
@@ -667,6 +671,7 @@ func (br *Bridge) LogDBUpgradeErrorAndExit(name string, err error) {
 		os.Exit(18)
 	} else if errors.Is(err, dbutil.ErrForeignTables) {
 		br.ZLog.Info().Msg("You can use --ignore-foreign-tables to ignore this error")
+		br.ZLog.Info().Msg("See https://docs.mau.fi/faq/foreign-tables for more info")
 	} else if errors.Is(err, dbutil.ErrNotOwned) {
 		br.ZLog.Info().Msg("Sharing the same database with different programs is not supported")
 	} else if errors.Is(err, dbutil.ErrUnsupportedDatabaseVersion) {
