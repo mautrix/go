@@ -91,7 +91,7 @@ type DisappearingPortal interface {
 	ScheduleDisappearing()
 }
 
-type PowerLevelPortal interface {
+type PowerLevelHandlingPortal interface {
 	Portal
 	HandleMatrixPowerLevels(sender User, evt *event.Event)
 }
