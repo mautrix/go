@@ -91,6 +91,11 @@ type DisappearingPortal interface {
 	ScheduleDisappearing()
 }
 
+type PowerLevelPortal interface {
+	Portal
+	HandleMatrixPowerLevels(sender User, evt *event.Event)
+}
+
 type User interface {
 	GetPermissionLevel() bridgeconfig.PermissionLevel
 	IsLoggedIn() bool
