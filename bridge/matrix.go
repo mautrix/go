@@ -696,7 +696,7 @@ func (mx *MatrixHandler) HandlePowerLevels(_ context.Context, evt *event.Event) 
 	if portal == nil {
 		return
 	}
-	powerLevelPortal, ok := portal.(PowerLevelPortal)
+	powerLevelPortal, ok := portal.(PowerLevelHandlingPortal)
 	if ok {
 		user := mx.bridge.Child.GetIUser(evt.Sender, true)
 		powerLevelPortal.HandleMatrixPowerLevels(user, evt)
