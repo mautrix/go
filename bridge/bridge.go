@@ -96,6 +96,11 @@ type PowerLevelHandlingPortal interface {
 	HandleMatrixPowerLevels(sender User, evt *event.Event)
 }
 
+type JoinRuleHandlingPortal interface {
+	Portal
+	HandleMatrixJoinRule(sender User, evt *event.Event)
+}
+
 type User interface {
 	GetPermissionLevel() bridgeconfig.PermissionLevel
 	IsLoggedIn() bool

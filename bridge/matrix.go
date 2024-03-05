@@ -66,6 +66,7 @@ func NewMatrixHandler(br *Bridge) *MatrixHandler {
 	br.EventProcessor.On(event.EphemeralEventReceipt, handler.HandleReceipt)
 	br.EventProcessor.On(event.EphemeralEventTyping, handler.HandleTyping)
 	br.EventProcessor.On(event.StatePowerLevels, handler.HandlePowerLevels)
+	br.EventProcessor.On(event.StateJoinRules, handler.HandleJoinRule)
 	return handler
 }
 
@@ -700,5 +701,20 @@ func (mx *MatrixHandler) HandlePowerLevels(_ context.Context, evt *event.Event) 
 	if ok {
 		user := mx.bridge.Child.GetIUser(evt.Sender, true)
 		powerLevelPortal.HandleMatrixPowerLevels(user, evt)
+	}
+}
+
+func (mx *MatrixHandler) HandleJoinRule(_ context.Context, evt *event.Event) {
+	if mx.shouldIgnoreEvent(evt) {
+		return
+	}
+	portal := mx.bridge.Child.GetIPortal(evt.RoomID)
+	if portal == nil {
+		return
+	}
+	joinRulePortal, ok := portal.(JoinRuleHandlingPortal)
+	if ok {
+		user := mx.bridge.Child.GetIUser(evt.Sender, true)
+		joinRulePortal.HandleMatrixJoinRule(user, evt)
 	}
 }
