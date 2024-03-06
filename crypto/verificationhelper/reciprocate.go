@@ -9,6 +9,7 @@ package verificationhelper
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
 
 	"golang.org/x/exp/slices"
@@ -60,8 +61,7 @@ func (vh *VerificationHelper) HandleScannedQRData(ctx context.Context, data []by
 		}
 
 		// Verify the master key is correct
-		crossSigningPubkeys := vh.mach.GetOwnCrossSigningPublicKeys(ctx)
-		if bytes.Equal(crossSigningPubkeys.MasterKey.Bytes(), qrCode.Key1[:]) {
+		if bytes.Equal(vh.mach.GetOwnCrossSigningPublicKeys(ctx).MasterKey.Bytes(), qrCode.Key1[:]) {
 			log.Info().Msg("Verified that the other device has the same master key")
 		} else {
 			return fmt.Errorf("the master key does not match")
@@ -100,6 +100,11 @@ func (vh *VerificationHelper) HandleScannedQRData(ctx context.Context, data []by
 		}
 
 		// Verify that what they think the master key is is correct.
+		log.Info().
+			Stringer("master_key", vh.mach.GetOwnCrossSigningPublicKeys(ctx).MasterKey).
+			Str("key2", base64.StdEncoding.EncodeToString(qrCode.Key2[:])).
+			Msg("verifying master key")
+
 		if bytes.Equal(vh.mach.GetOwnCrossSigningPublicKeys(ctx).MasterKey.Bytes(), qrCode.Key2[:]) {
 			log.Info().Msg("Verified that the other device has the correct master key")
 		} else {
