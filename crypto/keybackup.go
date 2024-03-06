@@ -179,6 +179,6 @@ func (mach *OlmMachine) ImportRoomKeyFromBackup(ctx context.Context, version id.
 	if err != nil {
 		return fmt.Errorf("failed to store new inbound group session: %w", err)
 	}
-	mach.markSessionReceived(sessionID)
+	mach.markSessionReceived(ctx, sessionID)
 	return nil
 }
