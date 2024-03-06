@@ -122,7 +122,7 @@ func (mach *OlmMachine) importExportedRoomKey(ctx context.Context, session Expor
 	if err != nil {
 		return false, fmt.Errorf("failed to store imported session: %w", err)
 	}
-	mach.markSessionReceived(igs.ID())
+	mach.markSessionReceived(ctx, igs.ID())
 	return true, nil
 }
 
