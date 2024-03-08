@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"sync"
 
@@ -50,11 +51,11 @@ func (as *AppService) NewIntentAPI(localpart string) *IntentAPI {
 }
 
 func (intent *IntentAPI) Register(ctx context.Context) error {
-	_, _, err := intent.Client.Register(ctx, &mautrix.ReqRegister{
+	_, err := intent.Client.MakeRequest(ctx, http.MethodPost, intent.BuildClientURL("v3", "register"), &mautrix.ReqRegister{
 		Username:     intent.Localpart,
 		Type:         mautrix.AuthTypeAppservice,
 		InhibitLogin: true,
-	})
+	}, nil)
 	return err
 }
 
