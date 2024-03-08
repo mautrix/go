@@ -45,8 +45,8 @@ func NewDecryptionFromPrivate(privateKey crypto.Curve25519PrivateKey) (*Decrypti
 	return s, nil
 }
 
-// PubKey returns the public key base 64 encoded.
-func (s Decryption) PubKey() id.Curve25519 {
+// PublicKey returns the public key base 64 encoded.
+func (s Decryption) PublicKey() id.Curve25519 {
 	return s.KeyPair.B64Encoded()
 }
 

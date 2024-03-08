@@ -30,14 +30,14 @@ func TestEncryptionDecryption(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal([]byte(decryption.PubKey()), alicePublic) {
+	if !bytes.Equal([]byte(decryption.PublicKey()), alicePublic) {
 		t.Fatal("public key not correct")
 	}
 	if !bytes.Equal(decryption.PrivateKey(), alicePrivate) {
 		t.Fatal("private key not correct")
 	}
 
-	encryption, err := pk.NewEncryption(decryption.PubKey())
+	encryption, err := pk.NewEncryption(decryption.PublicKey())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +66,10 @@ func TestSigning(t *testing.T) {
 	}
 	message := []byte("We hold these truths to be self-evident, that all men are created equal, that they are endowed by their Creator with certain unalienable Rights, that among these are Life, Liberty and the pursuit of Happiness.")
 	signing, _ := pk.NewSigningFromSeed(seed)
-	signature := signing.Sign(message)
+	signature, err := signing.Sign(message)
+	if err != nil {
+		t.Fatal(err)
+	}
 	signatureDecoded, err := goolm.Base64Decode(signature)
 	if err != nil {
 		t.Fatal(err)
@@ -101,7 +104,7 @@ func TestDecryptionPickling(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal([]byte(decryption.PubKey()), alicePublic) {
+	if !bytes.Equal([]byte(decryption.PublicKey()), alicePublic) {
 		t.Fatal("public key not correct")
 	}
 	if !bytes.Equal(decryption.PrivateKey(), alicePrivate) {
@@ -125,7 +128,7 @@ func TestDecryptionPickling(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal([]byte(newDecription.PubKey()), alicePublic) {
+	if !bytes.Equal([]byte(newDecription.PublicKey()), alicePublic) {
 		t.Fatal("public key not correct")
 	}
 	if !bytes.Equal(newDecription.PrivateKey(), alicePrivate) {

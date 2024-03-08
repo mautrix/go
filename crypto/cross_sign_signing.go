@@ -60,7 +60,7 @@ func (mach *OlmMachine) SignUser(ctx context.Context, userID id.UserID, masterKe
 		Str("signature", signature).
 		Msg("Signed master key of user with our user-signing key")
 
-	if err := mach.CryptoStore.PutSignature(ctx, userID, masterKey, mach.Client.UserID, mach.CrossSigningKeys.UserSigningKey.PublicKey, signature); err != nil {
+	if err := mach.CryptoStore.PutSignature(ctx, userID, masterKey, mach.Client.UserID, mach.CrossSigningKeys.UserSigningKey.PublicKey(), signature); err != nil {
 		return fmt.Errorf("error storing signature in crypto store: %w", err)
 	}
 
@@ -77,7 +77,7 @@ func (mach *OlmMachine) SignOwnMasterKey(ctx context.Context) error {
 
 	userID := mach.Client.UserID
 	deviceID := mach.Client.DeviceID
-	masterKey := mach.CrossSigningKeys.MasterKey.PublicKey
+	masterKey := mach.CrossSigningKeys.MasterKey.PublicKey()
 
 	masterKeyObj := mautrix.ReqKeysSignatures{
 		UserID: userID,
@@ -149,7 +149,7 @@ func (mach *OlmMachine) SignOwnDevice(ctx context.Context, device *id.Device) er
 		Str("signature", signature).
 		Msg("Signed own device key with self-signing key")
 
-	if err := mach.CryptoStore.PutSignature(ctx, device.UserID, device.SigningKey, mach.Client.UserID, mach.CrossSigningKeys.SelfSigningKey.PublicKey, signature); err != nil {
+	if err := mach.CryptoStore.PutSignature(ctx, device.UserID, device.SigningKey, mach.Client.UserID, mach.CrossSigningKeys.SelfSigningKey.PublicKey(), signature); err != nil {
 		return fmt.Errorf("error storing signature in crypto store: %w", err)
 	}
 
@@ -180,12 +180,12 @@ func (mach *OlmMachine) getFullDeviceKeys(ctx context.Context, device *id.Device
 }
 
 // signAndUpload signs the given key signatures object and uploads it to the server.
-func (mach *OlmMachine) signAndUpload(ctx context.Context, req mautrix.ReqKeysSignatures, userID id.UserID, signedThing string, key *olm.PkSigning) (string, error) {
+func (mach *OlmMachine) signAndUpload(ctx context.Context, req mautrix.ReqKeysSignatures, userID id.UserID, signedThing string, key olm.PKSigning) (string, error) {
 	signature, err := key.SignJSON(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to sign JSON: %w", err)
 	}
-	req.Signatures = signatures.NewSingleSignature(mach.Client.UserID, id.KeyAlgorithmEd25519, key.PublicKey.String(), signature)
+	req.Signatures = signatures.NewSingleSignature(mach.Client.UserID, id.KeyAlgorithmEd25519, key.PublicKey().String(), signature)
 
 	resp, err := mach.Client.UploadSignatures(ctx, &mautrix.ReqUploadSignatures{
 		userID: map[string]mautrix.ReqKeysSignatures{
