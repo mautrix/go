@@ -35,7 +35,7 @@ jobs:
       fail-fast: false
       matrix:
         go-version: ["1.21", "1.22"]
-    name: Build ${{ matrix.go-version == '1.22' && '(latest)' || '(old)' }}
+    name: Build (${{ matrix.go-version == '1.22' && 'latest' || 'old' }}, libolm)
 
     steps:
       - uses: actions/checkout@v4
@@ -59,3 +59,31 @@ jobs:
 
       - name: Test
         run: go test -json -v ./... 2>&1 | gotestfmt
+
+  build-goolm:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        go-version: ["1.21", "1.22"]
+    name: Build (${{ matrix.go-version == '1.22' && 'latest' || 'old' }}, goolm)
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go ${{ matrix.go-version }}
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+          cache: true
+
+      - name: Set up gotestfmt
+        uses: GoTestTools/gotestfmt-action@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build
+        run: go build -tags=goolm -v ./...
+
+      - name: Test
+        run: go test -tags=goolm -json -v ./... 2>&1 | gotestfmt
