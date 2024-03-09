@@ -276,27 +276,37 @@ func (mx *MatrixHandler) HandleMembership(ctx context.Context, evt *event.Event)
 	} else if user.GetPermissionLevel() < bridgeconfig.PermissionLevelUser || !user.IsLoggedIn() {
 		return
 	}
-
-	mhp, ok := portal.(MembershipHandlingPortal)
-	if !ok {
+	bhp, bhpOk := portal.(BanHandlingPortal)
+	mhp, mhpOk := portal.(MembershipHandlingPortal)
+	if !(mhpOk || bhpOk) {
 		return
 	}
-
-	if content.Membership == event.MembershipLeave {
-		if evt.Unsigned.PrevContent != nil {
-			_ = evt.Unsigned.PrevContent.ParseRaw(evt.Type)
-			prevContent, ok := evt.Unsigned.PrevContent.Parsed.(*event.MemberEventContent)
-			if ok && prevContent.Membership != "join" {
-				return
+	var prevContent *event.MemberEventContent
+	if evt.Unsigned.PrevContent != nil {
+		_ = evt.Unsigned.PrevContent.ParseRaw(evt.Type)
+		var ok bool
+		prevContent, ok = evt.Unsigned.PrevContent.Parsed.(*event.MemberEventContent)
+		if !ok {
+			prevContent = &event.MemberEventContent{Membership: event.MembershipLeave}
+		}
+	}
+	if bhpOk {
+		if content.Membership == event.MembershipBan {
+			bhp.HandleMatrixBan(user, ghost, evt)
+		} else if content.Membership == event.MembershipLeave && prevContent.Membership == event.MembershipBan {
+			bhp.HandleMatrixUnban(user, ghost, evt)
+		}
+	}
+	if mhpOk {
+		if content.Membership == event.MembershipLeave && prevContent.Membership == event.MembershipJoin {
+			if isSelf {
+				mhp.HandleMatrixLeave(user, evt)
+			} else if ghost != nil {
+				mhp.HandleMatrixKick(user, ghost, evt)
 			}
+		} else if content.Membership == event.MembershipInvite && !isSelf && ghost != nil {
+			mhp.HandleMatrixInvite(user, ghost, evt)
 		}
-		if isSelf {
-			mhp.HandleMatrixLeave(user, evt)
-		} else if ghost != nil {
-			mhp.HandleMatrixKick(user, ghost, evt)
-		}
-	} else if content.Membership == event.MembershipInvite && !isSelf && ghost != nil {
-		mhp.HandleMatrixInvite(user, ghost, evt)
 	}
 	// TODO kicking/inviting non-ghost users users
 }

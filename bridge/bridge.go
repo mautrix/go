@@ -101,6 +101,12 @@ type JoinRuleHandlingPortal interface {
 	HandleMatrixJoinRule(sender User, evt *event.Event)
 }
 
+type BanHandlingPortal interface {
+	Portal
+	HandleMatrixBan(sender User, ghost Ghost, evt *event.Event)
+	HandleMatrixUnban(sender User, ghost Ghost, evt *event.Event)
+}
+
 type User interface {
 	GetPermissionLevel() bridgeconfig.PermissionLevel
 	IsLoggedIn() bool
