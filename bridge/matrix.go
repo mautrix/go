@@ -65,6 +65,7 @@ func NewMatrixHandler(br *Bridge) *MatrixHandler {
 	br.EventProcessor.On(event.StateEncryption, handler.HandleEncryption)
 	br.EventProcessor.On(event.EphemeralEventReceipt, handler.HandleReceipt)
 	br.EventProcessor.On(event.EphemeralEventTyping, handler.HandleTyping)
+	br.EventProcessor.On(event.StatePowerLevels, handler.HandlePowerLevels)
 	return handler
 }
 
@@ -685,4 +686,19 @@ func (mx *MatrixHandler) HandleTyping(_ context.Context, evt *event.Event) {
 		return
 	}
 	typingPortal.HandleMatrixTyping(evt.Content.AsTyping().UserIDs)
+}
+
+func (mx *MatrixHandler) HandlePowerLevels(_ context.Context, evt *event.Event) {
+	if mx.shouldIgnoreEvent(evt) {
+		return
+	}
+	portal := mx.bridge.Child.GetIPortal(evt.RoomID)
+	if portal == nil {
+		return
+	}
+	powerLevelPortal, ok := portal.(PowerLevelHandlingPortal)
+	if ok {
+		user := mx.bridge.Child.GetIUser(evt.Sender, true)
+		powerLevelPortal.HandleMatrixPowerLevels(user, evt)
+	}
 }
