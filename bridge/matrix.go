@@ -278,7 +278,8 @@ func (mx *MatrixHandler) HandleMembership(ctx context.Context, evt *event.Event)
 	}
 	bhp, bhpOk := portal.(BanHandlingPortal)
 	mhp, mhpOk := portal.(MembershipHandlingPortal)
-	if !(mhpOk || bhpOk) {
+	khp, khpOk := portal.(KnockHandlingPortal)
+	if !(mhpOk || bhpOk || khpOk) {
 		return
 	}
 	var prevContent *event.MemberEventContent
@@ -290,11 +291,26 @@ func (mx *MatrixHandler) HandleMembership(ctx context.Context, evt *event.Event)
 			prevContent = &event.MemberEventContent{Membership: event.MembershipLeave}
 		}
 	}
-	if bhpOk {
+	if bhpOk && ghost != nil {
 		if content.Membership == event.MembershipBan {
 			bhp.HandleMatrixBan(user, ghost, evt)
 		} else if content.Membership == event.MembershipLeave && prevContent.Membership == event.MembershipBan {
 			bhp.HandleMatrixUnban(user, ghost, evt)
+		}
+	}
+	if khpOk {
+		if content.Membership == event.MembershipKnock {
+			khp.HandleMatrixKnock(user, evt)
+		} else if prevContent.Membership == event.MembershipKnock {
+			if content.Membership == event.MembershipInvite && ghost != nil {
+				khp.HandleMatrixAcceptKnock(user, ghost, evt)
+			} else if content.Membership == event.MembershipLeave {
+				if isSelf {
+					khp.HandleMatrixRetractKnock(user, evt)
+				} else if ghost != nil {
+					khp.HandleMatrixRejectKnock(user, ghost, evt)
+				}
+			}
 		}
 	}
 	if mhpOk {

@@ -107,6 +107,14 @@ type BanHandlingPortal interface {
 	HandleMatrixUnban(sender User, ghost Ghost, evt *event.Event)
 }
 
+type KnockHandlingPortal interface {
+	Portal
+	HandleMatrixKnock(sender User, evt *event.Event)
+	HandleMatrixRetractKnock(sender User, evt *event.Event)
+	HandleMatrixAcceptKnock(sender User, ghost Ghost, evt *event.Event)
+	HandleMatrixRejectKnock(sender User, ghost Ghost, evt *event.Event)
+}
+
 type User interface {
 	GetPermissionLevel() bridgeconfig.PermissionLevel
 	IsLoggedIn() bool
