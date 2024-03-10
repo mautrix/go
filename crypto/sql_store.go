@@ -183,7 +183,7 @@ func (store *SQLCryptoStore) GetSessions(ctx context.Context, key id.SenderKey) 
 	defer store.olmSessionCacheLock.Unlock()
 	cache := store.getOlmSessionCache(key)
 	for rows.Next() {
-		sess := OlmSession{Internal: *olm.NewBlankSession()}
+		sess := OlmSession{Internal: olm.NewBlankSession()}
 		var sessionBytes []byte
 		var sessionID id.SessionID
 		err = rows.Scan(&sessionID, &sessionBytes, &sess.CreationTime, &sess.LastEncryptedTime, &sess.LastDecryptedTime)
@@ -220,7 +220,7 @@ func (store *SQLCryptoStore) GetLatestSession(ctx context.Context, key id.Sender
 	row := store.DB.QueryRow(ctx, "SELECT session_id, session, created_at, last_encrypted, last_decrypted FROM crypto_olm_session WHERE sender_key=$1 AND account_id=$2 ORDER BY last_decrypted DESC LIMIT 1",
 		key, store.AccountID)
 
-	sess := OlmSession{Internal: *olm.NewBlankSession()}
+	sess := OlmSession{Internal: olm.NewBlankSession()}
 	var sessionBytes []byte
 	var sessionID id.SessionID
 
@@ -246,8 +246,11 @@ func (store *SQLCryptoStore) GetLatestSession(ctx context.Context, key id.Sender
 func (store *SQLCryptoStore) AddSession(ctx context.Context, key id.SenderKey, session *OlmSession) error {
 	store.olmSessionCacheLock.Lock()
 	defer store.olmSessionCacheLock.Unlock()
-	sessionBytes := session.Internal.Pickle(store.PickleKey)
-	_, err := store.DB.Exec(ctx, "INSERT INTO crypto_olm_session (session_id, sender_key, session, created_at, last_encrypted, last_decrypted, account_id) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+	sessionBytes, err := session.Internal.Pickle(store.PickleKey)
+	if err != nil {
+		return err
+	}
+	_, err = store.DB.Exec(ctx, "INSERT INTO crypto_olm_session (session_id, sender_key, session, created_at, last_encrypted, last_decrypted, account_id) VALUES ($1, $2, $3, $4, $5, $6, $7)",
 		session.ID(), key, sessionBytes, session.CreationTime, session.LastEncryptedTime, session.LastDecryptedTime, store.AccountID)
 	store.getOlmSessionCache(key)[session.ID()] = session
 	return err
@@ -255,8 +258,11 @@ func (store *SQLCryptoStore) AddSession(ctx context.Context, key id.SenderKey, s
 
 // UpdateSession replaces the Olm session for a sender in the database.
 func (store *SQLCryptoStore) UpdateSession(ctx context.Context, _ id.SenderKey, session *OlmSession) error {
-	sessionBytes := session.Internal.Pickle(store.PickleKey)
-	_, err := store.DB.Exec(ctx, "UPDATE crypto_olm_session SET session=$1, last_encrypted=$2, last_decrypted=$3 WHERE session_id=$4 AND account_id=$5",
+	sessionBytes, err := session.Internal.Pickle(store.PickleKey)
+	if err != nil {
+		return err
+	}
+	_, err = store.DB.Exec(ctx, "UPDATE crypto_olm_session SET session=$1, last_encrypted=$2, last_decrypted=$3 WHERE session_id=$4 AND account_id=$5",
 		sessionBytes, session.LastEncryptedTime, session.LastDecryptedTime, session.ID(), store.AccountID)
 	return err
 }

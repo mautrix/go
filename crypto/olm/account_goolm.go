@@ -9,6 +9,7 @@ import (
 
 	"maunium.net/go/mautrix/crypto/canonicaljson"
 	"maunium.net/go/mautrix/crypto/goolm/account"
+	"maunium.net/go/mautrix/crypto/goolm/session"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -75,7 +76,7 @@ func (a *Account) Sign(message []byte) []byte {
 
 // SignJSON signs the given JSON object following the Matrix specification:
 // https://matrix.org/docs/spec/appendices#signing-json
-func (a *Account) SignJSON(obj interface{}) (string, error) {
+func (a *Account) SignJSON(obj any) (string, error) {
 	objJSON, err := json.Marshal(obj)
 	if err != nil {
 		return "", err
@@ -103,52 +104,34 @@ func (a *Account) GenOneTimeKeys(num uint) {
 
 // NewOutboundSession creates a new out-bound session for sending messages to a
 // given curve25519 identityKey and oneTimeKey. Returns error on failure.
-func (a *Account) NewOutboundSession(theirIdentityKey, theirOneTimeKey id.Curve25519) (*Session, error) {
+func (a *Account) NewOutboundSession(theirIdentityKey, theirOneTimeKey id.Curve25519) (*session.OlmSession, error) {
 	if len(theirIdentityKey) == 0 || len(theirOneTimeKey) == 0 {
 		return nil, EmptyInput
 	}
-	s := &Session{}
-	newSession, err := a.Account.NewOutboundSession(theirIdentityKey, theirOneTimeKey)
-	if err != nil {
-		return nil, err
-	}
-	s.OlmSession = *newSession
-	return s, nil
+	return a.Account.NewOutboundSession(theirIdentityKey, theirOneTimeKey)
 }
 
 // NewInboundSession creates a new in-bound session for sending/receiving
 // messages from an incoming PRE_KEY message. Returns error on failure.
-func (a *Account) NewInboundSession(oneTimeKeyMsg string) (*Session, error) {
+func (a *Account) NewInboundSession(oneTimeKeyMsg string) (*session.OlmSession, error) {
 	if len(oneTimeKeyMsg) == 0 {
 		return nil, EmptyInput
 	}
-	s := &Session{}
-	newSession, err := a.Account.NewInboundSession(nil, []byte(oneTimeKeyMsg))
-	if err != nil {
-		return nil, err
-	}
-	s.OlmSession = *newSession
-	return s, nil
+	return a.Account.NewInboundSession(nil, []byte(oneTimeKeyMsg))
 }
 
 // NewInboundSessionFrom creates a new in-bound session for sending/receiving
 // messages from an incoming PRE_KEY message. Returns error on failure.
-func (a *Account) NewInboundSessionFrom(theirIdentityKey id.Curve25519, oneTimeKeyMsg string) (*Session, error) {
+func (a *Account) NewInboundSessionFrom(theirIdentityKey id.Curve25519, oneTimeKeyMsg string) (*session.OlmSession, error) {
 	if len(theirIdentityKey) == 0 || len(oneTimeKeyMsg) == 0 {
 		return nil, EmptyInput
 	}
-	s := &Session{}
-	newSession, err := a.Account.NewInboundSession(&theirIdentityKey, []byte(oneTimeKeyMsg))
-	if err != nil {
-		return nil, err
-	}
-	s.OlmSession = *newSession
-	return s, nil
+	return a.Account.NewInboundSession(&theirIdentityKey, []byte(oneTimeKeyMsg))
 }
 
 // RemoveOneTimeKeys removes the one time keys that the session used from the
 // Account. Returns error on failure.
-func (a *Account) RemoveOneTimeKeys(s *Session) error {
-	a.Account.RemoveOneTimeKeys(&s.OlmSession)
+func (a *Account) RemoveOneTimeKeys(s *session.OlmSession) error {
+	a.Account.RemoveOneTimeKeys(s)
 	return nil
 }

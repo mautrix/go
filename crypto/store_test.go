@@ -115,7 +115,7 @@ func TestStoreOlmSession(t *testing.T) {
 
 			olmSess := OlmSession{
 				id:       olmSessID,
-				Internal: *olmInternal,
+				Internal: olmInternal,
 			}
 			err = store.AddSession(context.TODO(), olmSessID, &olmSess)
 			if err != nil {
@@ -133,7 +133,13 @@ func TestStoreOlmSession(t *testing.T) {
 			if retrieved.ID() != olmSessID {
 				t.Errorf("Expected session ID to be %v, got %v", olmSessID, retrieved.ID())
 			}
-			if pickled := string(retrieved.Internal.Pickle([]byte("test"))); pickled != olmPickled {
+
+			pickled, err := retrieved.Internal.Pickle([]byte("test"))
+			if err != nil {
+				t.Fatalf("Error pickling Olm session: %v", err)
+			}
+
+			if string(pickled) != olmPickled {
 				t.Error("Pickled Olm session does not match original")
 			}
 		})

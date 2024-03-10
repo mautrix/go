@@ -317,11 +317,11 @@ func (a *Account) GenOneTimeKeys(num uint) {
 // NewOutboundSession creates a new out-bound session for sending messages to a
 // given curve25519 identityKey and oneTimeKey.  Returns error on failure.  If the
 // keys couldn't be decoded as base64 then the error will be "INVALID_BASE64"
-func (a *Account) NewOutboundSession(theirIdentityKey, theirOneTimeKey id.Curve25519) (*Session, error) {
+func (a *Account) NewOutboundSession(theirIdentityKey, theirOneTimeKey id.Curve25519) (*LibOlmSession, error) {
 	if len(theirIdentityKey) == 0 || len(theirOneTimeKey) == 0 {
 		return nil, EmptyInput
 	}
-	s := NewBlankSession()
+	s := NewBlankLibOlmSession()
 	random := make([]byte, s.createOutboundRandomLen()+1)
 	_, err := rand.Read(random)
 	if err != nil {
@@ -349,11 +349,11 @@ func (a *Account) NewOutboundSession(theirIdentityKey, theirOneTimeKey id.Curve2
 // "BAD_MESSAGE_VERSION".  If the message couldn't be decoded then then the
 // error will be "BAD_MESSAGE_FORMAT".  If the message refers to an unknown one
 // time key then the error will be "BAD_MESSAGE_KEY_ID".
-func (a *Account) NewInboundSession(oneTimeKeyMsg string) (*Session, error) {
+func (a *Account) NewInboundSession(oneTimeKeyMsg string) (*LibOlmSession, error) {
 	if len(oneTimeKeyMsg) == 0 {
 		return nil, EmptyInput
 	}
-	s := NewBlankSession()
+	s := NewBlankLibOlmSession()
 	r := C.olm_create_inbound_session(
 		(*C.OlmSession)(s.int),
 		(*C.OlmAccount)(a.int),
@@ -372,11 +372,11 @@ func (a *Account) NewInboundSession(oneTimeKeyMsg string) (*Session, error) {
 // "BAD_MESSAGE_VERSION".  If the message couldn't be decoded then then the
 // error will be "BAD_MESSAGE_FORMAT".  If the message refers to an unknown one
 // time key then the error will be "BAD_MESSAGE_KEY_ID".
-func (a *Account) NewInboundSessionFrom(theirIdentityKey id.Curve25519, oneTimeKeyMsg string) (*Session, error) {
+func (a *Account) NewInboundSessionFrom(theirIdentityKey id.Curve25519, oneTimeKeyMsg string) (*LibOlmSession, error) {
 	if len(theirIdentityKey) == 0 || len(oneTimeKeyMsg) == 0 {
 		return nil, EmptyInput
 	}
-	s := NewBlankSession()
+	s := NewBlankLibOlmSession()
 	r := C.olm_create_inbound_session_from(
 		(*C.OlmSession)(s.int),
 		(*C.OlmAccount)(a.int),
@@ -393,7 +393,7 @@ func (a *Account) NewInboundSessionFrom(theirIdentityKey id.Curve25519, oneTimeK
 // RemoveOneTimeKeys removes the one time keys that the session used from the
 // Account.  Returns error on failure.  If the Account doesn't have any
 // matching one time keys then the error will be "BAD_MESSAGE_KEY_ID".
-func (a *Account) RemoveOneTimeKeys(s *Session) error {
+func (a *Account) RemoveOneTimeKeys(s *LibOlmSession) error {
 	r := C.olm_remove_one_time_keys(
 		(*C.OlmAccount)(a.int),
 		(*C.OlmSession)(s.int))
