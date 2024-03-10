@@ -45,7 +45,7 @@ func TestSendReceive(t *testing.T) {
 	plainText := []byte("Hello Bob")
 
 	//Alice sends Bob a message
-	encryptedMessage, err := aliceRatchet.Encrypt(plainText, nil)
+	encryptedMessage, err := aliceRatchet.Encrypt(plainText)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestSendReceive(t *testing.T) {
 
 	//Bob sends Alice a message
 	plainText = []byte("Hello Alice")
-	encryptedMessage, err = bobRatchet.Encrypt(plainText, nil)
+	encryptedMessage, err = bobRatchet.Encrypt(plainText)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,11 +83,11 @@ func TestOutOfOrder(t *testing.T) {
 	plainText2 := []byte("Second Messsage. A bit longer than the first.")
 
 	/* Alice sends Bob two messages and they arrive out of order */
-	message1Encrypted, err := aliceRatchet.Encrypt(plainText1, nil)
+	message1Encrypted, err := aliceRatchet.Encrypt(plainText1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	message2Encrypted, err := aliceRatchet.Encrypt(plainText2, nil)
+	message2Encrypted, err := aliceRatchet.Encrypt(plainText2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +115,7 @@ func TestMoreMessages(t *testing.T) {
 	}
 	plainText := []byte("These 15 bytes")
 	for i := 0; i < 8; i++ {
-		messageEncrypted, err := aliceRatchet.Encrypt(plainText, nil)
+		messageEncrypted, err := aliceRatchet.Encrypt(plainText)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -128,7 +128,7 @@ func TestMoreMessages(t *testing.T) {
 		}
 	}
 	for i := 0; i < 8; i++ {
-		messageEncrypted, err := bobRatchet.Encrypt(plainText, nil)
+		messageEncrypted, err := bobRatchet.Encrypt(plainText)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -140,7 +140,7 @@ func TestMoreMessages(t *testing.T) {
 			t.Fatalf("expected '%v' from decryption but got '%v'", plainText, decrypted)
 		}
 	}
-	messageEncrypted, err := aliceRatchet.Encrypt(plainText, nil)
+	messageEncrypted, err := aliceRatchet.Encrypt(plainText)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +171,7 @@ func TestJSONEncoding(t *testing.T) {
 
 	plainText := []byte("These 15 bytes")
 
-	messageEncrypted, err := newRatcher.Encrypt(plainText, nil)
+	messageEncrypted, err := newRatcher.Encrypt(plainText)
 	if err != nil {
 		t.Fatal(err)
 	}

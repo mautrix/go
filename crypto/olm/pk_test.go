@@ -4,7 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-// Only run this test if goo is disabled (that is, libolm is used).
+// Only run this test if goolm is disabled (that is, libolm is used).
 //go:build !goolm
 
 package olm_test
