@@ -139,7 +139,7 @@ func TestSessions(t *testing.T) {
 		t.Fatal(err)
 	}
 	plaintext := []byte("test message")
-	msgType, crypttext, err := aliceSession.Encrypt(plaintext, nil)
+	msgType, crypttext, err := aliceSession.Encrypt(plaintext)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,7 +252,7 @@ func TestLoopback(t *testing.T) {
 	}
 
 	plainText := []byte("Hello, World")
-	msgType, message1, err := aliceSession.Encrypt(plainText, nil)
+	msgType, message1, err := aliceSession.Encrypt(plainText)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -299,7 +299,7 @@ func TestLoopback(t *testing.T) {
 		t.Fatal("messages are not the same")
 	}
 
-	msgTyp2, message2, err := bobSession.Encrypt(plainText, nil)
+	msgTyp2, message2, err := bobSession.Encrypt(plainText)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -348,7 +348,7 @@ func TestMoreMessages(t *testing.T) {
 	}
 
 	plainText := []byte("Hello, World")
-	msgType, message1, err := aliceSession.Encrypt(plainText, nil)
+	msgType, message1, err := aliceSession.Encrypt(plainText)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -370,7 +370,7 @@ func TestMoreMessages(t *testing.T) {
 
 	for i := 0; i < 8; i++ {
 		//alice sends, bob reveices
-		msgType, message, err := aliceSession.Encrypt(plainText, nil)
+		msgType, message, err := aliceSession.Encrypt(plainText)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -393,7 +393,7 @@ func TestMoreMessages(t *testing.T) {
 		}
 
 		//now bob sends, alice receives
-		msgType, message, err = bobSession.Encrypt(plainText, nil)
+		msgType, message, err = bobSession.Encrypt(plainText)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -435,7 +435,7 @@ func TestFallbackKey(t *testing.T) {
 	}
 
 	plainText := []byte("Hello, World")
-	msgType, message1, err := aliceSession.Encrypt(plainText, nil)
+	msgType, message1, err := aliceSession.Encrypt(plainText)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -493,7 +493,7 @@ func TestFallbackKey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgType2, message2, err := aliceSession2.Encrypt(plainText, nil)
+	msgType2, message2, err := aliceSession2.Encrypt(plainText)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -553,7 +553,7 @@ func TestFallbackKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	msgType3, message3, err := aliceSession3.Encrypt(plainText, nil)
+	msgType3, message3, err := aliceSession3.Encrypt(plainText)
 	if err != nil {
 		t.Fatal(err)
 	}

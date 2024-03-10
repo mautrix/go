@@ -32,7 +32,7 @@ func TestOlmSession(t *testing.T) {
 	}
 	//create a message so that there are more keys to marshal
 	plaintext := []byte("Test message from Alice to Bob")
-	msgType, message, err := aliceSession.Encrypt(plaintext, nil)
+	msgType, message, err := aliceSession.Encrypt(plaintext)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestOlmSession(t *testing.T) {
 
 	//bob sends a message
 	plaintext = []byte("A message from Bob to Alice")
-	msgType, message, err = bobSession.Encrypt(plaintext, nil)
+	msgType, message, err = bobSession.Encrypt(plaintext)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestOlmSession(t *testing.T) {
 
 	//Alice sends another message
 	plaintext = []byte("A second message to Bob")
-	msgType, message, err = newAliceSession.Encrypt(plaintext, nil)
+	msgType, message, err = newAliceSession.Encrypt(plaintext)
 	if err != nil {
 		t.Fatal(err)
 	}

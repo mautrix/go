@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"io"
 
 	"maunium.net/go/mautrix/crypto/goolm"
 	"maunium.net/go/mautrix/crypto/goolm/cipher"
@@ -273,13 +272,13 @@ func (s OlmSession) EncryptMsgType() id.OlmMsgType {
 	return id.OlmMsgTypePreKey
 }
 
-// Encrypt encrypts a message using the Session. Returns the encrypted message base64 encoded.  If reader is nil, crypto/rand is used for key generations.
-func (s *OlmSession) Encrypt(plaintext []byte, reader io.Reader) (id.OlmMsgType, []byte, error) {
+// Encrypt encrypts a message using the Session. Returns the encrypted message base64 encoded.
+func (s *OlmSession) Encrypt(plaintext []byte) (id.OlmMsgType, []byte, error) {
 	if len(plaintext) == 0 {
 		return 0, nil, fmt.Errorf("encrypt: %w", goolm.ErrEmptyInput)
 	}
 	messageType := s.EncryptMsgType()
-	encrypted, err := s.Ratchet.Encrypt(plaintext, reader)
+	encrypted, err := s.Ratchet.Encrypt(plaintext)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -304,7 +303,7 @@ func (s *OlmSession) Encrypt(plaintext []byte, reader io.Reader) (id.OlmMsgType,
 }
 
 // Decrypt decrypts a base64 encoded message using the Session.
-func (s *OlmSession) Decrypt(crypttext []byte, msgType id.OlmMsgType) ([]byte, error) {
+func (s *OlmSession) Decrypt(crypttext string, msgType id.OlmMsgType) ([]byte, error) {
 	if len(crypttext) == 0 {
 		return nil, fmt.Errorf("decrypt: %w", goolm.ErrEmptyInput)
 	}

@@ -38,7 +38,7 @@ func (o OlmSessionList) Swap(i, j int) {
 }
 
 type OlmSession struct {
-	Internal olm.Session
+	Internal olm.LibOlmSession
 	ExpirationMixin
 	id id.SessionID
 }
@@ -54,7 +54,7 @@ func (session *OlmSession) Describe() string {
 	return session.Internal.Describe()
 }
 
-func wrapSession(session *olm.Session) *OlmSession {
+func wrapSession(session *olm.LibOlmSession) *OlmSession {
 	return &OlmSession{
 		Internal: *session,
 		ExpirationMixin: ExpirationMixin{
@@ -76,7 +76,7 @@ func (account *OlmAccount) NewInboundSessionFrom(senderKey id.Curve25519, cipher
 	return wrapSession(session), nil
 }
 
-func (session *OlmSession) Encrypt(plaintext []byte) (id.OlmMsgType, []byte) {
+func (session *OlmSession) Encrypt(plaintext []byte) (id.OlmMsgType, []byte, error) {
 	session.LastEncryptedTime = time.Now()
 	return session.Internal.Encrypt(plaintext)
 }

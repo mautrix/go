@@ -1,5 +1,3 @@
-//go:build goolm
-
 package olm
 
 import (
@@ -7,23 +5,18 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-// Session stores an end to end encrypted messaging session.
-type Session struct {
-	session.OlmSession
-}
-
 // SessionFromPickled loads a Session from a pickled base64 string.  Decrypts
 // the Session using the supplied key.  Returns error on failure.
-func SessionFromPickled(pickled, key []byte) (*Session, error) {
+func SessionFromPickled(pickled, key []byte) (Session, error) {
 	if len(pickled) == 0 {
 		return nil, EmptyInput
 	}
-	s := NewBlankSession()
+	s := session.NewOlmSession()
 	return s, s.Unpickle(pickled, key)
 }
 
-func NewBlankSession() *Session {
-	return &Session{}
+func NewBlankSession() Session {
+	return &session.OlmSession{}
 }
 
 // Clear clears the memory used to back this Session.
@@ -93,18 +86,4 @@ func (s *Session) Encrypt(plaintext []byte) (id.OlmMsgType, []byte) {
 		panic(err)
 	}
 	return messageType, message
-}
-
-// Decrypt decrypts a message using the Session. Returns the the plain-text on
-// success.  Returns error on failure.
-func (s *Session) Decrypt(message string, msgType id.OlmMsgType) ([]byte, error) {
-	if len(message) == 0 {
-		return nil, EmptyInput
-	}
-	return s.OlmSession.Decrypt([]byte(message), msgType)
-}
-
-// Describe generates a string describing the internal state of an olm session for debugging and logging purposes.
-func (s *Session) Describe() string {
-	return s.OlmSession.Describe()
 }

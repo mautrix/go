@@ -24,11 +24,14 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-// Session stores an end to end encrypted messaging session.
-type Session struct {
+// LibOlmSession stores an end to end encrypted messaging session.
+type LibOlmSession struct {
 	int *C.OlmSession
 	mem []byte
 }
+
+// Ensure that LibOlmSession implements Session.
+var _ Session = (*LibOlmSession)(nil)
 
 // sessionSize is the size of a session object in bytes.
 func sessionSize() uint {
@@ -40,7 +43,7 @@ func sessionSize() uint {
 // doesn't match the one used to encrypt the Session then the error will be
 // "BAD_SESSION_KEY".  If the base64 couldn't be decoded then the error will be
 // "INVALID_BASE64".
-func SessionFromPickled(pickled, key []byte) (*Session, error) {
+func SessionFromPickled(pickled, key []byte) (Session, error) {
 	if len(pickled) == 0 {
 		return nil, EmptyInput
 	}
@@ -48,22 +51,26 @@ func SessionFromPickled(pickled, key []byte) (*Session, error) {
 	return s, s.Unpickle(pickled, key)
 }
 
-func NewBlankSession() *Session {
+func NewBlankLibOlmSession() *LibOlmSession {
 	memory := make([]byte, sessionSize())
-	return &Session{
+	return &LibOlmSession{
 		int: C.olm_session(unsafe.Pointer(&memory[0])),
 		mem: memory,
 	}
 }
 
+func NewBlankSession() Session {
+	return NewBlankLibOlmSession()
+}
+
 // lastError returns an error describing the most recent error to happen to a
 // session.
-func (s *Session) lastError() error {
+func (s *LibOlmSession) lastError() error {
 	return convertError(C.GoString(C.olm_session_last_error((*C.OlmSession)(s.int))))
 }
 
 // Clear clears the memory used to back this Session.
-func (s *Session) Clear() error {
+func (s *LibOlmSession) Clear() error {
 	r := C.olm_clear_session((*C.OlmSession)(s.int))
 	if r == errorVal() {
 		return s.lastError()
@@ -72,31 +79,31 @@ func (s *Session) Clear() error {
 }
 
 // pickleLen returns the number of bytes needed to store a session.
-func (s *Session) pickleLen() uint {
+func (s *LibOlmSession) pickleLen() uint {
 	return uint(C.olm_pickle_session_length((*C.OlmSession)(s.int)))
 }
 
 // createOutboundRandomLen returns the number of random bytes needed to create
 // an outbound session.
-func (s *Session) createOutboundRandomLen() uint {
+func (s *LibOlmSession) createOutboundRandomLen() uint {
 	return uint(C.olm_create_outbound_session_random_length((*C.OlmSession)(s.int)))
 }
 
 // idLen returns the length of the buffer needed to return the id for this
 // session.
-func (s *Session) idLen() uint {
+func (s *LibOlmSession) idLen() uint {
 	return uint(C.olm_session_id_length((*C.OlmSession)(s.int)))
 }
 
 // encryptRandomLen returns the number of random bytes needed to encrypt the
 // next message.
-func (s *Session) encryptRandomLen() uint {
+func (s *LibOlmSession) encryptRandomLen() uint {
 	return uint(C.olm_encrypt_random_length((*C.OlmSession)(s.int)))
 }
 
 // encryptMsgLen returns the size of the next message in bytes for the given
 // number of plain-text bytes.
-func (s *Session) encryptMsgLen(plainTextLen int) uint {
+func (s *LibOlmSession) encryptMsgLen(plainTextLen int) uint {
 	return uint(C.olm_encrypt_message_length((*C.OlmSession)(s.int), C.size_t(plainTextLen)))
 }
 
@@ -107,7 +114,7 @@ func (s *Session) encryptMsgLen(plainTextLen int) uint {
 // unsupported version of the protocol then the error will be
 // "BAD_MESSAGE_VERSION".  If the message couldn't be decoded then the error
 // will be "BAD_MESSAGE_FORMAT".
-func (s *Session) decryptMaxPlaintextLen(message string, msgType id.OlmMsgType) (uint, error) {
+func (s *LibOlmSession) decryptMaxPlaintextLen(message string, msgType id.OlmMsgType) (uint, error) {
 	if len(message) == 0 {
 		return 0, EmptyInput
 	}
@@ -124,7 +131,7 @@ func (s *Session) decryptMaxPlaintextLen(message string, msgType id.OlmMsgType) 
 
 // Pickle returns a Session as a base64 string.  Encrypts the Session using the
 // supplied key.
-func (s *Session) Pickle(key []byte) []byte {
+func (s *LibOlmSession) Pickle(key []byte) []byte {
 	if len(key) == 0 {
 		panic(NoKeyProvided)
 	}
@@ -141,7 +148,7 @@ func (s *Session) Pickle(key []byte) []byte {
 	return pickled[:r]
 }
 
-func (s *Session) Unpickle(pickled, key []byte) error {
+func (s *LibOlmSession) Unpickle(pickled, key []byte) error {
 	if len(key) == 0 {
 		return NoKeyProvided
 	}
@@ -158,7 +165,7 @@ func (s *Session) Unpickle(pickled, key []byte) error {
 }
 
 // Deprecated
-func (s *Session) GobEncode() ([]byte, error) {
+func (s *LibOlmSession) GobEncode() ([]byte, error) {
 	pickled := s.Pickle(pickleKey)
 	length := base64.RawStdEncoding.DecodedLen(len(pickled))
 	rawPickled := make([]byte, length)
@@ -167,9 +174,9 @@ func (s *Session) GobEncode() ([]byte, error) {
 }
 
 // Deprecated
-func (s *Session) GobDecode(rawPickled []byte) error {
+func (s *LibOlmSession) GobDecode(rawPickled []byte) error {
 	if s == nil || s.int == nil {
-		*s = *NewBlankSession()
+		*s = *NewBlankLibOlmSession()
 	}
 	length := base64.RawStdEncoding.EncodedLen(len(rawPickled))
 	pickled := make([]byte, length)
@@ -178,7 +185,7 @@ func (s *Session) GobDecode(rawPickled []byte) error {
 }
 
 // Deprecated
-func (s *Session) MarshalJSON() ([]byte, error) {
+func (s *LibOlmSession) MarshalJSON() ([]byte, error) {
 	pickled := s.Pickle(pickleKey)
 	quotes := make([]byte, len(pickled)+2)
 	quotes[0] = '"'
@@ -188,19 +195,19 @@ func (s *Session) MarshalJSON() ([]byte, error) {
 }
 
 // Deprecated
-func (s *Session) UnmarshalJSON(data []byte) error {
-	if len(data) == 0 || len(data) == 0 || data[0] != '"' || data[len(data)-1] != '"' {
+func (s *LibOlmSession) UnmarshalJSON(data []byte) error {
+	if len(data) == 0 || data[0] != '"' || data[len(data)-1] != '"' {
 		return InputNotJSONString
 	}
 	if s == nil || s.int == nil {
-		*s = *NewBlankSession()
+		*s = *NewBlankLibOlmSession()
 	}
 	return s.Unpickle(data[1:len(data)-1], pickleKey)
 }
 
 // Id returns an identifier for this Session.  Will be the same for both ends
 // of the conversation.
-func (s *Session) ID() id.SessionID {
+func (s *LibOlmSession) ID() id.SessionID {
 	sessionID := make([]byte, s.idLen())
 	r := C.olm_session_id(
 		(*C.OlmSession)(s.int),
@@ -213,7 +220,7 @@ func (s *Session) ID() id.SessionID {
 }
 
 // HasReceivedMessage returns true if this session has received any message.
-func (s *Session) HasReceivedMessage() bool {
+func (s *LibOlmSession) HasReceivedMessage() bool {
 	switch C.olm_session_has_received_message((*C.OlmSession)(s.int)) {
 	case 0:
 		return false
@@ -230,7 +237,7 @@ func (s *Session) HasReceivedMessage() bool {
 // "INVALID_BASE64".  If the message was for an unsupported protocol version
 // then the error will be "BAD_MESSAGE_VERSION".  If the message couldn't be
 // decoded then then the error will be "BAD_MESSAGE_FORMAT".
-func (s *Session) MatchesInboundSession(oneTimeKeyMsg string) (bool, error) {
+func (s *LibOlmSession) MatchesInboundSession(oneTimeKeyMsg string) (bool, error) {
 	if len(oneTimeKeyMsg) == 0 {
 		return false, EmptyInput
 	}
@@ -255,7 +262,7 @@ func (s *Session) MatchesInboundSession(oneTimeKeyMsg string) (bool, error) {
 // "INVALID_BASE64".  If the message was for an unsupported protocol version
 // then the error will be "BAD_MESSAGE_VERSION".  If the message couldn't be
 // decoded then then the error will be "BAD_MESSAGE_FORMAT".
-func (s *Session) MatchesInboundSessionFrom(theirIdentityKey, oneTimeKeyMsg string) (bool, error) {
+func (s *LibOlmSession) MatchesInboundSessionFrom(theirIdentityKey, oneTimeKeyMsg string) (bool, error) {
 	if len(theirIdentityKey) == 0 || len(oneTimeKeyMsg) == 0 {
 		return false, EmptyInput
 	}
@@ -278,7 +285,7 @@ func (s *Session) MatchesInboundSessionFrom(theirIdentityKey, oneTimeKeyMsg stri
 // return.  Returns MsgTypePreKey if the message will be a PRE_KEY message.
 // Returns MsgTypeMsg if the message will be a normal message.  Returns error
 // on failure.
-func (s *Session) EncryptMsgType() id.OlmMsgType {
+func (s *LibOlmSession) EncryptMsgType() id.OlmMsgType {
 	switch C.olm_encrypt_message_type((*C.OlmSession)(s.int)) {
 	case C.size_t(id.OlmMsgTypePreKey):
 		return id.OlmMsgTypePreKey
@@ -291,15 +298,16 @@ func (s *Session) EncryptMsgType() id.OlmMsgType {
 
 // Encrypt encrypts a message using the Session.  Returns the encrypted message
 // as base64.
-func (s *Session) Encrypt(plaintext []byte) (id.OlmMsgType, []byte) {
+func (s *LibOlmSession) Encrypt(plaintext []byte) (id.OlmMsgType, []byte, error) {
 	if len(plaintext) == 0 {
-		panic(EmptyInput)
+		return 0, nil, EmptyInput
 	}
 	// Make the slice be at least length 1
 	random := make([]byte, s.encryptRandomLen()+1)
 	_, err := rand.Read(random)
 	if err != nil {
-		panic(NotEnoughGoRandom)
+		// TODO can we just return err here?
+		return 0, nil, NotEnoughGoRandom
 	}
 	messageType := s.EncryptMsgType()
 	message := make([]byte, s.encryptMsgLen(len(plaintext)))
@@ -312,9 +320,9 @@ func (s *Session) Encrypt(plaintext []byte) (id.OlmMsgType, []byte) {
 		unsafe.Pointer(&message[0]),
 		C.size_t(len(message)))
 	if r == errorVal() {
-		panic(s.lastError())
+		return 0, nil, s.lastError()
 	}
-	return messageType, message[:r]
+	return messageType, message[:r], nil
 }
 
 // Decrypt decrypts a message using the Session.  Returns the the plain-text on
@@ -324,7 +332,7 @@ func (s *Session) Encrypt(plaintext []byte) (id.OlmMsgType, []byte) {
 // the message couldn't be decoded then the error will be BAD_MESSAGE_FORMAT".
 // If the MAC on the message was invalid then the error will be
 // "BAD_MESSAGE_MAC".
-func (s *Session) Decrypt(message string, msgType id.OlmMsgType) ([]byte, error) {
+func (s *LibOlmSession) Decrypt(message string, msgType id.OlmMsgType) ([]byte, error) {
 	if len(message) == 0 {
 		return nil, EmptyInput
 	}
@@ -351,7 +359,7 @@ func (s *Session) Decrypt(message string, msgType id.OlmMsgType) ([]byte, error)
 const maxDescribeSize = 600
 
 // Describe generates a string describing the internal state of an olm session for debugging and logging purposes.
-func (s *Session) Describe() string {
+func (s *LibOlmSession) Describe() string {
 	desc := (*C.char)(C.malloc(C.size_t(maxDescribeSize)))
 	defer C.free(unsafe.Pointer(desc))
 	C.meowlm_session_describe(
