@@ -48,7 +48,7 @@ func TestEncryptionDecryption(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	decrypted, err := decryption.Decrypt(ciphertext, mac, id.Curve25519(bobPublic))
+	decrypted, err := decryption.Decrypt(id.Curve25519(bobPublic), ciphertext, mac)
 	if err != nil {
 		t.Fatal(err)
 	}

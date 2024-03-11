@@ -25,5 +25,5 @@ func NewPKSigning() (PKSigning, error) {
 }
 
 func NewPKDecryption(privateKey []byte) (PKDecryption, error) {
-	return pk.NewDecryption()
+	return pk.NewDecryptionFromPrivate(privateKey)
 }

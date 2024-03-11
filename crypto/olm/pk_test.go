@@ -43,3 +43,33 @@ func FuzzSign(f *testing.F) {
 		assert.Equal(t, goolmResult, libolmResult)
 	})
 }
+
+// func FuzzDecrypt(f *testing.F) {
+// 	f.Add([]byte("plaintext"))
+
+// 	f.Fuzz(func(t *testing.T, plaintext []byte) {
+// 		keyPair, err := crypto.Curve25519GenerateKey(nil)
+// 		require.NoError(t, err)
+
+// 		goolmEncryption, err := pk.NewEncryption(keyPair.B64Encoded())
+// 		require.NoError(t, err)
+
+// 		ciphertext, mac, err := goolmEncryption.Encrypt(plaintext, keyPair.PrivateKey)
+// 		assert.NoError(t, err)
+
+// 		goolmPkDecryption, err := pk.NewDecryptionFromPrivate(keyPair.PrivateKey)
+// 		require.NoError(t, err)
+
+// 		libolmPkDecryption, err := olm.NewPkDecryption(keyPair.PrivateKey)
+// 		require.NoError(t, err)
+
+// 		fmt.Printf("mac=%s\n", mac)
+// 		fmt.Printf("ciphertext=%v\n", ciphertext)
+
+// 		libolmResult, libolmErr := libolmPkDecryption.Decrypt([]byte(keyPair.B64Encoded().String()), mac, []byte(base64.RawStdEncoding.EncodeToString(ciphertext)))
+// 		goolmResult, goolmErr := goolmPkDecryption.Decrypt(keyPair.B64Encoded(), mac, ciphertext)
+
+// 		assert.Equal(t, libolmErr, goolmErr)
+// 		assert.Equal(t, libolmResult, goolmResult)
+// 	})
+// }

@@ -34,7 +34,7 @@ func NewDecryption() (*Decryption, error) {
 	}, nil
 }
 
-// NewDescriptionFromPrivate resturns a new Decryption with the private key fixed.
+// NewDescriptionFromPrivate returns a new Decryption with the private key fixed.
 func NewDecryptionFromPrivate(privateKey crypto.Curve25519PrivateKey) (*Decryption, error) {
 	s := &Decryption{}
 	keyPair, err := crypto.Curve25519GenerateFromPrivate(privateKey)
@@ -56,7 +56,7 @@ func (s Decryption) PrivateKey() crypto.Curve25519PrivateKey {
 }
 
 // Decrypt decrypts the ciphertext and verifies the MAC. The base64 encoded key is used to construct the shared secret.
-func (s Decryption) Decrypt(ciphertext, mac []byte, key id.Curve25519) ([]byte, error) {
+func (s Decryption) Decrypt(key id.Curve25519, mac, ciphertext []byte) ([]byte, error) {
 	keyDecoded, err := base64.RawStdEncoding.DecodeString(string(key))
 	if err != nil {
 		return nil, err

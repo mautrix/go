@@ -35,7 +35,7 @@ type PKDecryption interface {
 	PublicKey() id.Curve25519
 
 	// Decrypt verifies and decrypts the given message.
-	Decrypt(ciphertext, mac []byte, key id.Curve25519) ([]byte, error)
+	Decrypt(key id.Curve25519, ciphertext, mac []byte) ([]byte, error)
 }
 
 var _ PKDecryption = (*pk.Decryption)(nil)
