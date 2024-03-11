@@ -121,9 +121,11 @@ func (mach *OlmMachine) HandleSecretRequest(ctx context.Context, userID id.UserI
 		return
 	} else if secret != "" {
 		log.Debug().Msg("Responding to secret request")
-		mach.sendToOneDevice(ctx, mach.Client.UserID, content.RequestingDeviceID, event.ToDeviceSecretRequest, &event.SecretSendEventContent{
-			RequestID: content.RequestID,
-			Secret:    secret,
+		mach.SendEncryptedToDevice(ctx, device, event.ToDeviceSecretSend, event.Content{
+			Parsed: event.SecretSendEventContent{
+				RequestID: content.RequestID,
+				Secret:    secret,
+			},
 		})
 	} else {
 		log.Debug().Msg("No stored secret found, secret request ignored")
