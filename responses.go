@@ -309,6 +309,12 @@ func (slr SyncLeftRoom) MarshalJSON() ([]byte, error) {
 	return marshalAndDeleteEmpty((marshalableSyncLeftRoom)(slr), syncLeftRoomPathsToDelete)
 }
 
+type BeeperInboxPreviewEvent struct {
+	EventID   id.EventID         `json:"event_id"`
+	Timestamp jsontime.UnixMilli `json:"origin_server_ts"`
+	Event     *event.Event       `json:"event,omitempty"`
+}
+
 type SyncJoinedRoom struct {
 	Summary     LazyLoadSummary `json:"summary"`
 	State       SyncEventsList  `json:"state"`
@@ -319,6 +325,8 @@ type SyncJoinedRoom struct {
 	UnreadNotifications *UnreadNotificationCounts `json:"unread_notifications,omitempty"`
 	// https://github.com/matrix-org/matrix-spec-proposals/pull/2654
 	MSC2654UnreadCount *int `json:"org.matrix.msc2654.unread_count,omitempty"`
+	// Beeper extension
+	BeeperInboxPreview *BeeperInboxPreviewEvent `json:"com.beeper.inbox.preview,omitempty"`
 }
 
 type UnreadNotificationCounts struct {
