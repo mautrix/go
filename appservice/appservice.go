@@ -24,7 +24,6 @@ import (
 	"github.com/rs/zerolog"
 	"golang.org/x/net/publicsuffix"
 	"gopkg.in/yaml.v3"
-	"maunium.net/go/maulogger/v2/maulogadapt"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
@@ -355,7 +354,7 @@ func (as *AppService) SetHomeserverURL(homeserverURL string) error {
 // This does not do any validation, and it does not cache the client.
 // Usually you should prefer [AppService.Client] or [AppService.Intent] over this method.
 func (as *AppService) NewMautrixClient(userID id.UserID) *mautrix.Client {
-	client := &mautrix.Client{
+	return &mautrix.Client{
 		HomeserverURL:       as.hsURLForClient,
 		UserID:              userID,
 		SetAppServiceUserID: true,
@@ -366,8 +365,6 @@ func (as *AppService) NewMautrixClient(userID id.UserID) *mautrix.Client {
 		Client:              as.HTTPClient,
 		DefaultHTTPRetries:  as.DefaultHTTPRetries,
 	}
-	client.Logger = maulogadapt.ZeroAsMau(&client.Log)
-	return client
 }
 
 // NewExternalMautrixClient creates a new [mautrix.Client] instance for an external user,

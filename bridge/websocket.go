@@ -119,7 +119,7 @@ func (br *Bridge) PingServer() (start, serverTs, end time.Time) {
 	}
 	start = time.Now()
 	var resp wsPingData
-	br.Log.Debugln("Pinging appservice websocket")
+	br.ZLog.Debug().Msg("Pinging appservice websocket")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	err := br.AS.RequestWebsocket(ctx, &appservice.WebsocketRequest{

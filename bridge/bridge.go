@@ -29,8 +29,6 @@ import (
 	"go.mau.fi/util/exzerolog"
 	"gopkg.in/yaml.v3"
 	flag "maunium.net/go/mauflag"
-	"maunium.net/go/maulogger/v2"
-	"maunium.net/go/maulogger/v2/maulogadapt"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/appservice"
@@ -201,8 +199,6 @@ type Bridge struct {
 	Crypto           Crypto
 	CryptoPickleKey  string
 
-	// Deprecated: Switch to ZLog
-	Log  maulogger.Logger
 	ZLog *zerolog.Logger
 
 	MediaConfig  mautrix.RespMediaConfig
@@ -536,7 +532,6 @@ func (br *Bridge) init() {
 		os.Exit(12)
 	}
 	exzerolog.SetupDefaults(br.ZLog)
-	br.Log = maulogadapt.ZeroAsMau(br.ZLog)
 
 	br.DoublePuppet = &doublePuppetUtil{br: br, log: br.ZLog.With().Str("component", "double puppet").Logger()}
 

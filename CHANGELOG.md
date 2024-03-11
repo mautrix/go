@@ -1,5 +1,7 @@
 ## v0.18.0 (unreleased)
 
+* **Breaking change *(client, bridge, appservice)*** Dropped support for
+  maulogger. Only zerolog loggers are now provided by default.
 * *(bridge)* Fixed upload size limit not having a default if the server
   returned no value.
 * *(synapseadmin)* Added wrappers for some room and user admin APIs.
