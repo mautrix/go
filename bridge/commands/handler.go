@@ -51,9 +51,10 @@ type FullHandler struct {
 	Aliases []string
 	Help    HelpMeta
 
-	RequiresAdmin  bool
-	RequiresPortal bool
-	RequiresLogin  bool
+	RequiresAdmin           bool
+	RequiresMatrixPuppeting bool
+	RequiresPortal          bool
+	RequiresLogin           bool
 
 	RequiresEventLevel event.Type
 }
@@ -71,8 +72,20 @@ func (fh *FullHandler) GetAliases() []string {
 	return fh.Aliases
 }
 
+func (fh *FullHandler) GetMinPermissionLevel() bridgeconfig.PermissionLevel {
+	if fh.RequiresAdmin {
+		return bridgeconfig.PermissionLevelAdmin
+	} else if fh.RequiresMatrixPuppeting {
+		return bridgeconfig.PermissionLevelUser
+	} else if fh.RequiresLogin {
+		return bridgeconfig.PermissionLevelLogin
+	} else {
+		return bridgeconfig.PermissionLevelBlock
+	}
+}
+
 func (fh *FullHandler) ShowInHelp(ce *Event) bool {
-	return !fh.RequiresAdmin || ce.User.GetPermissionLevel() >= bridgeconfig.PermissionLevelAdmin
+	return ce.User.GetPermissionLevel() >= fh.GetMinPermissionLevel()
 }
 
 func (fh *FullHandler) userHasRoomPermission(ce *Event) bool {
@@ -86,9 +99,14 @@ func (fh *FullHandler) userHasRoomPermission(ce *Event) bool {
 }
 
 func (fh *FullHandler) Run(ce *Event) {
-	if fh.RequiresAdmin && ce.User.GetPermissionLevel() < bridgeconfig.PermissionLevelAdmin {
+	permissionLevel := ce.User.GetPermissionLevel()
+	if fh.RequiresLogin && permissionLevel < bridgeconfig.PermissionLevelLogin {
+		ce.Reply("That command is limited to users with puppeting privileges.")
+	} else if fh.RequiresMatrixPuppeting && permissionLevel < bridgeconfig.PermissionLevelUser {
+		ce.Reply("That command is limited to users with full puppeting privileges.")
+	} else if fh.RequiresAdmin && permissionLevel < bridgeconfig.PermissionLevelAdmin {
 		ce.Reply("That command is limited to bridge administrators.")
-	} else if fh.RequiresEventLevel.Type != "" && ce.User.GetPermissionLevel() < bridgeconfig.PermissionLevelAdmin && !fh.userHasRoomPermission(ce) {
+	} else if fh.RequiresEventLevel.Type != "" && permissionLevel < bridgeconfig.PermissionLevelAdmin && !fh.userHasRoomPermission(ce) {
 		ce.Reply("That command requires room admin rights.")
 	} else if fh.RequiresPortal && ce.Portal == nil {
 		ce.Reply("That command can only be ran in portal rooms.")
