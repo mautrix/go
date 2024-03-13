@@ -8,9 +8,16 @@
   (thanks to [@grvn-ht] in [#181]).
 * *(crypto/verificationhelper)* Fixed bugs.
 * *(crypto)* Fixed key backup uploading doing too much base64.
+* *(crypto)* Changed `EncryptMegolmEvent` to return an error if persisting the
+  megolm session fails. This ensures that database errors won't cause messages
+  to be sent with duplicate indexes.
+* *(id)* Added `ParseCommonIdentifier` function to parse any Matrix identifier
+  in the [Common Identifier Format].
+* *(federation)* Added simple key server that passes the federation tester.
 
 [@grvn-ht]: https://github.com/grvn-ht
 [#181]: https://github.com/mautrix/go/pull/181
+[Common Identifier Format]: https://spec.matrix.org/v1.9/appendices/#common-identifier-format
 
 ### beta.1 (2024-02-16)
 
