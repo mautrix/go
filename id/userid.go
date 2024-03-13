@@ -34,7 +34,25 @@ var (
 	ErrNoncompliantLocalpart = errors.New("contains characters that are not allowed")
 	ErrUserIDTooLong         = errors.New("the given user ID is longer than 255 characters")
 	ErrEmptyLocalpart        = errors.New("empty localparts are not allowed")
+	ErrEmptyIdentifier       = errors.New("identifier is empty")
 )
+
+// ParseCommonIdentifier parses a common identifier according to https://spec.matrix.org/v1.9/appendices/#common-identifier-format
+func ParseCommonIdentifier[Stringish ~string](identifier Stringish) (sigil byte, localpart, homeserver string, err error) {
+	if len(identifier) == 0 {
+		return 0, "", "", ErrEmptyIdentifier
+	}
+	sigil = identifier[0]
+	strIdentifier := string(identifier)
+	if strings.ContainsRune(strIdentifier, ':') {
+		parts := strings.SplitN(strIdentifier, ":", 2)
+		localpart = parts[0][1:]
+		homeserver = parts[1]
+	} else {
+		localpart = strIdentifier[1:]
+	}
+	return
+}
 
 // Parse parses the user ID into the localpart and server name.
 //
@@ -42,13 +60,11 @@ var (
 // a @, and contain a : after the @. If you want to enforce localpart validity, see the
 // ParseAndValidate and ValidateUserLocalpart functions.
 func (userID UserID) Parse() (localpart, homeserver string, err error) {
-	if len(userID) == 0 || userID[0] != '@' || !strings.ContainsRune(string(userID), ':') {
-		// This error wrapping lets you use errors.Is() nicely even though the message contains the user ID
+	var sigil byte
+	sigil, localpart, homeserver, err = ParseCommonIdentifier(userID)
+	if err != nil || sigil != '@' || homeserver == "" {
 		err = fmt.Errorf("'%s' %w", userID, ErrInvalidUserID)
-		return
 	}
-	parts := strings.SplitN(string(userID), ":", 2)
-	localpart, homeserver = strings.TrimPrefix(parts[0], "@"), parts[1]
 	return
 }
 
