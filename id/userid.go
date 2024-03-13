@@ -34,13 +34,12 @@ var (
 	ErrNoncompliantLocalpart = errors.New("contains characters that are not allowed")
 	ErrUserIDTooLong         = errors.New("the given user ID is longer than 255 characters")
 	ErrEmptyLocalpart        = errors.New("empty localparts are not allowed")
-	ErrEmptyIdentifier       = errors.New("identifier is empty")
 )
 
 // ParseCommonIdentifier parses a common identifier according to https://spec.matrix.org/v1.9/appendices/#common-identifier-format
-func ParseCommonIdentifier[Stringish ~string](identifier Stringish) (sigil byte, localpart, homeserver string, err error) {
+func ParseCommonIdentifier[Stringish ~string](identifier Stringish) (sigil byte, localpart, homeserver string) {
 	if len(identifier) == 0 {
-		return 0, "", "", ErrEmptyIdentifier
+		return
 	}
 	sigil = identifier[0]
 	strIdentifier := string(identifier)
@@ -61,8 +60,8 @@ func ParseCommonIdentifier[Stringish ~string](identifier Stringish) (sigil byte,
 // ParseAndValidate and ValidateUserLocalpart functions.
 func (userID UserID) Parse() (localpart, homeserver string, err error) {
 	var sigil byte
-	sigil, localpart, homeserver, err = ParseCommonIdentifier(userID)
-	if err != nil || sigil != '@' || homeserver == "" {
+	sigil, localpart, homeserver = ParseCommonIdentifier(userID)
+	if sigil != '@' || homeserver == "" {
 		err = fmt.Errorf("'%s' %w", userID, ErrInvalidUserID)
 	}
 	return
