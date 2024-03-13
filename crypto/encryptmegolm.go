@@ -118,7 +118,7 @@ func (mach *OlmMachine) EncryptMegolmEvent(ctx context.Context, roomID id.RoomID
 	log.Debug().Msg("Encrypted event successfully")
 	err = mach.CryptoStore.UpdateOutboundGroupSession(ctx, session)
 	if err != nil {
-		log.Warn().Err(err).Msg("Failed to update megolm session in crypto store after encrypting")
+		return nil, fmt.Errorf("failed to update outbound group session after encrypting: %w", err)
 	}
 	encrypted := &event.EncryptedEventContent{
 		Algorithm:        id.AlgorithmMegolmV1,
