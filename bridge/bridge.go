@@ -115,6 +115,13 @@ type KnockHandlingPortal interface {
 	HandleMatrixRejectKnock(sender User, ghost Ghost, evt *event.Event)
 }
 
+type InviteHandlingPortal interface {
+	Portal
+	HandleMatrixAcceptInvite(sender User, evt *event.Event)
+	HandleMatrixRejectInvite(sender User, evt *event.Event)
+	HandleMatrixRetractInvite(sender User, ghost Ghost, evt *event.Event)
+}
+
 type User interface {
 	GetPermissionLevel() bridgeconfig.PermissionLevel
 	IsLoggedIn() bool
