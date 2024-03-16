@@ -1,4 +1,4 @@
-## v0.18.0 (unreleased)
+## v0.18.0 (2024-03-16)
 
 * **Breaking change *(client, bridge, appservice)*** Dropped support for
   maulogger. Only zerolog loggers are now provided by default.
@@ -11,6 +11,9 @@
 * *(crypto)* Changed `EncryptMegolmEvent` to return an error if persisting the
   megolm session fails. This ensures that database errors won't cause messages
   to be sent with duplicate indexes.
+* *(crypto)* Changed `GetOrRequestSecret` to use a callback instead of returning
+  the value directly. This allows validating the value in order to ignore
+  invalid secrets.
 * *(id)* Added `ParseCommonIdentifier` function to parse any Matrix identifier
   in the [Common Identifier Format].
 * *(federation)* Added simple key server that passes the federation tester.
