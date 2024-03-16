@@ -149,5 +149,6 @@ type Unsigned struct {
 
 func (us *Unsigned) IsEmpty() bool {
 	return us.PrevContent == nil && us.PrevSender == "" && us.ReplacesState == "" && us.Age == 0 &&
-		us.TransactionID == "" && us.RedactedBecause == nil && us.InviteRoomState == nil && us.Relations == nil
+		us.TransactionID == "" && us.RedactedBecause == nil && us.InviteRoomState == nil && us.Relations == nil &&
+		us.BeeperHSOrder == 0
 }
