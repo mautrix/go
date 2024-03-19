@@ -109,6 +109,12 @@ func (dp *doublePuppetUtil) autoLogin(ctx context.Context, mxid id.UserID, login
 	return resp.AccessToken, nil
 }
 
+func (dp *doublePuppetUtil) getLoginSecret(mxid id.UserID) (loginSecret string, hasSecret bool) {
+	_, homeserver, _ := mxid.Parse()
+	loginSecret, hasSecret = dp.br.Config.Bridge.GetDoublePuppetConfig().SharedSecretMap[homeserver]
+	return
+}
+
 var (
 	ErrMismatchingMXID = errors.New("whoami result does not match custom mxid")
 	ErrNoAccessToken   = errors.New("no access token provided")
@@ -118,13 +124,17 @@ var (
 const useConfigASToken = "appservice-config"
 const asTokenModePrefix = "as_token:"
 
+func (dp *doublePuppetUtil) CanAutoDoublePuppet(mxid id.UserID) bool {
+	_, hasSecret := dp.getLoginSecret(mxid)
+	return hasSecret
+}
+
 func (dp *doublePuppetUtil) Setup(ctx context.Context, mxid id.UserID, savedAccessToken string, reloginOnFail bool) (intent *appservice.IntentAPI, newAccessToken string, err error) {
 	if len(mxid) == 0 {
 		err = ErrNoMXID
 		return
 	}
-	_, homeserver, _ := mxid.Parse()
-	loginSecret, hasSecret := dp.br.Config.Bridge.GetDoublePuppetConfig().SharedSecretMap[homeserver]
+	loginSecret, hasSecret := dp.getLoginSecret(mxid)
 	// Special case appservice: prefix to not login and use it as an as_token directly.
 	if hasSecret && strings.HasPrefix(loginSecret, asTokenModePrefix) {
 		intent, err = dp.newIntent(ctx, mxid, strings.TrimPrefix(loginSecret, asTokenModePrefix))

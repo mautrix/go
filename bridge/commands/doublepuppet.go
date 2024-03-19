@@ -11,10 +11,11 @@ var CommandLoginMatrix = &FullHandler{
 	Name: "login-matrix",
 	Help: HelpMeta{
 		Section:     HelpSectionAuth,
-		Description: "Enable double puppeting.",
+		Description: "Enable double puppeting with an access token for your Matrix account.",
 		Args:        "<_access token_>",
 	},
-	RequiresLogin: true,
+	RequiresLogin:                 true,
+	RequiresManualDoublePuppeting: true,
 }
 
 func fnLoginMatrix(ce *Event) {
@@ -43,9 +44,10 @@ var CommandPingMatrix = &FullHandler{
 	Name: "ping-matrix",
 	Help: HelpMeta{
 		Section:     HelpSectionAuth,
-		Description: "Ping the Matrix server with the double puppet.",
+		Description: "Ping the Matrix server with your double puppet.",
 	},
-	RequiresLogin: true,
+	RequiresLogin:                 true,
+	RequiresManualDoublePuppeting: true,
 }
 
 func fnPingMatrix(ce *Event) {
@@ -57,6 +59,8 @@ func fnPingMatrix(ce *Event) {
 	resp, err := puppet.CustomIntent().Whoami(ce.Ctx)
 	if err != nil {
 		ce.Reply("Failed to validate Matrix login: %v", err)
+	} else if resp.DeviceID == "" {
+		ce.Reply("Confirmed valid access token for %s", resp.UserID)
 	} else {
 		ce.Reply("Confirmed valid access token for %s / %s", resp.UserID, resp.DeviceID)
 	}
@@ -69,7 +73,8 @@ var CommandLogoutMatrix = &FullHandler{
 		Section:     HelpSectionAuth,
 		Description: "Disable double puppeting.",
 	},
-	RequiresLogin: true,
+	RequiresLogin:                 true,
+	RequiresManualDoublePuppeting: true,
 }
 
 func fnLogoutMatrix(ce *Event) {

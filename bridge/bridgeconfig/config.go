@@ -172,6 +172,7 @@ type DoublePuppetConfig struct {
 	ServerMap       map[string]string `yaml:"double_puppet_server_map"`
 	AllowDiscovery  bool              `yaml:"double_puppet_allow_discovery"`
 	SharedSecretMap map[string]string `yaml:"login_shared_secret_map"`
+	AllowManual     bool              `yaml:"allow_manual_double_puppeting"`
 }
 
 type EncryptionConfig struct {
