@@ -94,6 +94,32 @@ type PowerLevelHandlingPortal interface {
 	HandleMatrixPowerLevels(sender User, evt *event.Event)
 }
 
+type JoinRuleHandlingPortal interface {
+	Portal
+	HandleMatrixJoinRule(sender User, evt *event.Event)
+}
+
+type BanHandlingPortal interface {
+	Portal
+	HandleMatrixBan(sender User, ghost Ghost, evt *event.Event)
+	HandleMatrixUnban(sender User, ghost Ghost, evt *event.Event)
+}
+
+type KnockHandlingPortal interface {
+	Portal
+	HandleMatrixKnock(sender User, evt *event.Event)
+	HandleMatrixRetractKnock(sender User, evt *event.Event)
+	HandleMatrixAcceptKnock(sender User, ghost Ghost, evt *event.Event)
+	HandleMatrixRejectKnock(sender User, ghost Ghost, evt *event.Event)
+}
+
+type InviteHandlingPortal interface {
+	Portal
+	HandleMatrixAcceptInvite(sender User, evt *event.Event)
+	HandleMatrixRejectInvite(sender User, evt *event.Event)
+	HandleMatrixRetractInvite(sender User, ghost Ghost, evt *event.Event)
+}
+
 type User interface {
 	GetPermissionLevel() bridgeconfig.PermissionLevel
 	IsLoggedIn() bool
