@@ -66,8 +66,10 @@ func (mach *OlmMachine) GetAndVerifyLatestKeyBackupVersion(ctx context.Context) 
 		var key id.Ed25519
 		if keyName == crossSigningPubkeys.MasterKey.String() {
 			key = crossSigningPubkeys.MasterKey
-		} else if device, err := mach.GetOrFetchDevice(ctx, mach.Client.UserID, id.DeviceID(keyName)); err != nil {
-			log.Warn().Err(err).Msg("Failed to fetch device")
+		} else if device, err := mach.CryptoStore.GetDevice(ctx, mach.Client.UserID, id.DeviceID(keyName)); err != nil {
+			return nil, fmt.Errorf("failed to get device %s/%s from store: %w", mach.Client.UserID, keyName, err)
+		} else if device == nil {
+			log.Warn().Err(err).Msg("Device does not exist, ignoring signature")
 			continue
 		} else if !mach.IsDeviceTrusted(device) {
 			log.Warn().Err(err).Msg("Device is not trusted")
