@@ -96,5 +96,12 @@ func (mach *OlmMachine) storeCrossSigningKeys(ctx context.Context, crossSigningK
 				}
 			}
 		}
+
+		// Clear internal cache so that it refreshes from crypto store
+		if userID == mach.Client.UserID && mach.crossSigningPubkeys != nil {
+			log.Debug().Msg("Resetting internal cross-signing key cache")
+			mach.crossSigningPubkeys = nil
+			mach.crossSigningPubkeysFetched = false
+		}
 	}
 }
