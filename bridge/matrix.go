@@ -283,13 +283,11 @@ func (mx *MatrixHandler) HandleMembership(ctx context.Context, evt *event.Event)
 	if !(mhpOk || bhpOk || khpOk) {
 		return
 	}
-	var prevContent *event.MemberEventContent
+	prevContent := &event.MemberEventContent{Membership: event.MembershipLeave}
 	if evt.Unsigned.PrevContent != nil {
-		_ = evt.Unsigned.PrevContent.ParseRaw(evt.Type)
-		var ok bool
-		prevContent, ok = evt.Unsigned.PrevContent.Parsed.(*event.MemberEventContent)
-		if !ok {
-			prevContent = &event.MemberEventContent{Membership: event.MembershipLeave}
+		err := evt.Unsigned.PrevContent.ParseRaw(evt.Type)
+		if err != nil {
+			prevContent, _ = evt.Unsigned.PrevContent.Parsed.(*event.MemberEventContent)
 		}
 	}
 	if ihpOk && ghost != nil && prevContent.Membership == event.MembershipInvite && content.Membership != event.MembershipBan {
