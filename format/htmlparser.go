@@ -7,6 +7,7 @@
 package format
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"strconv"
@@ -33,14 +34,16 @@ func (ts TagStack) Has(tag string) bool {
 }
 
 type Context struct {
+	Ctx        context.Context
 	ReturnData map[string]any
 	TagStack   TagStack
 
 	PreserveWhitespace bool
 }
 
-func NewContext() Context {
+func NewContext(ctx context.Context) Context {
 	return Context{
+		Ctx:        ctx,
 		ReturnData: map[string]any{},
 		TagStack:   make(TagStack, 0, 4),
 	}
@@ -411,7 +414,7 @@ func HTMLToText(html string) string {
 		Newline:        "\n",
 		HorizontalLine: "\n---\n",
 		PillConverter:  DefaultPillConverter,
-	}).Parse(html, NewContext())
+	}).Parse(html, NewContext(context.TODO()))
 }
 
 // HTMLToMarkdown converts Matrix HTML into markdown with the default settings.
@@ -429,5 +432,5 @@ func HTMLToMarkdown(html string) string {
 			}
 			return fmt.Sprintf("[%s](%s)", text, href)
 		},
-	}).Parse(html, NewContext())
+	}).Parse(html, NewContext(context.TODO()))
 }
