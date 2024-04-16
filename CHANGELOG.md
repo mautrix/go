@@ -1,3 +1,20 @@
+## v0.18.1 (2024-04-16)
+
+* *(format)* Added a `context.Context` field to HTMLParser's Context struct.
+* *(bridge)* Added support for handling join rules, knocks, invites and bans
+  (thanks to [@maltee1] in [#193] and [#204]).
+* *(crypto)* Changed forwarded room key handling to only accept keys with a
+  lower first known index than the existing session if there is one.
+* *(crypto)* Changed key backup restore to assume own device list is up to date
+  to avoid re-requesting device list for every deleted device that has signed
+  key backup.
+* *(crypto)* Fixed memory cache not being invalidated when storing own
+  cross-signing keys
+
+[@maltee1]: https://github.com/maltee1
+[#193]: https://github.com/mautrix/go/pull/193
+[#204]: https://github.com/mautrix/go/pull/204
+
 ## v0.18.0 (2024-03-16)
 
 * **Breaking change *(client, bridge, appservice)*** Dropped support for

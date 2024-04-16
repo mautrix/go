@@ -32,7 +32,7 @@ func (mach *OlmMachine) ResolveTrustContext(ctx context.Context, device *id.Devi
 	}
 	theirMSK, ok := theirKeys[id.XSUsageMaster]
 	if !ok {
-		mach.machOrContextLog(ctx).Error().
+		mach.machOrContextLog(ctx).Debug().
 			Str("user_id", device.UserID.String()).
 			Msg("Master key of user not found")
 		return id.TrustStateUnset, nil
