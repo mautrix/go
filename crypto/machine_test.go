@@ -77,6 +77,7 @@ func TestOlmMachineOlmMegolmSessions(t *testing.T) {
 		otk = otkTmp
 		break
 	}
+	machineIn.account.Internal.MarkKeysAsPublished()
 
 	// create outbound olm session for sending machine using OTK
 	olmSession, err := machineOut.account.Internal.NewOutboundSession(machineIn.account.IdentityKey(), otk.Key)

@@ -681,6 +681,11 @@ func (mach *OlmMachine) ShareKeys(ctx context.Context, currentOTKCount int) erro
 		log.Debug().Msg("No one-time keys nor device keys got when trying to share keys")
 		return nil
 	}
+	// Save the keys before sending the upload request in case there is a
+	// network failure.
+	if err := mach.saveAccount(ctx); err != nil {
+		return err
+	}
 	req := &mautrix.ReqUploadKeys{
 		DeviceKeys:  deviceKeys,
 		OneTimeKeys: oneTimeKeys,
@@ -691,6 +696,7 @@ func (mach *OlmMachine) ShareKeys(ctx context.Context, currentOTKCount int) erro
 		return err
 	}
 	mach.lastOTKUpload = time.Now()
+	mach.account.Internal.MarkKeysAsPublished()
 	mach.account.Shared = true
 	return mach.saveAccount(ctx)
 }

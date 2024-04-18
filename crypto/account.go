@@ -81,6 +81,5 @@ func (account *OlmAccount) getOneTimeKeys(userID id.UserID, deviceID id.DeviceID
 		key.IsSigned = true
 		oneTimeKeys[id.NewKeyID(id.KeyAlgorithmSignedCurve25519, keyID)] = key
 	}
-	account.Internal.MarkKeysAsPublished()
 	return oneTimeKeys
 }
