@@ -126,6 +126,38 @@ func (cli *Client) DeactivateAccount(ctx context.Context, userID id.UserID, req 
 	return err
 }
 
+type PushData struct {
+	Format string `json:"format"`
+	URL    string `json:"url"`
+}
+
+type ReqSetPushers struct {
+	AppDisplayName    string   `json:"app_display_name"`
+	AppID             string   `json:"app_id"`
+	Append            bool     `json:"append"`
+	Data              PushData `json:"data"`
+	DeviceDisplayName string   `json:"device_display_name"`
+	Kind              string   `json:"kind"`
+	Lang              string   `json:"lang"`
+	ProfileTag        string   `json:"profile_tag"`
+	PushKey           string   `json:"pushkey"`
+}
+
+func (cli *Client) SetPushers(ctx context.Context, req ReqSetPushers) error {
+	reqURL := cli.BuildClientURL("v3", "pushers", "set")
+	_, err := cli.MakeFullRequest(ctx, mautrix.FullRequest{
+		Method:      http.MethodPost,
+		URL:         reqURL,
+		RequestJSON: &req,
+	})
+	return err
+}
+
+type Threepid struct {
+	Medium  string `json:"medium"`
+	Address string `json:"address"`
+}
+
 type ReqCreateOrModifyAccount struct {
 	Password      string `json:"password,omitempty"`
 	LogoutDevices *bool  `json:"logout_devices,omitempty"`
@@ -137,6 +169,8 @@ type ReqCreateOrModifyAccount struct {
 	Displayname string              `json:"displayname,omitempty"`
 	AvatarURL   id.ContentURIString `json:"avatar_url,omitempty"`
 	UserType    string              `json:"user_type,omitempty"`
+
+	Threepids []Threepid `json:"threepids,omitempty"`
 }
 
 // CreateOrModifyAccount creates or modifies an account on the server.
