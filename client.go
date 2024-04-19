@@ -2299,3 +2299,16 @@ func NewClient(homeserverURL string, userID id.UserID, accessToken string) (*Cli
 		Store: NewMemorySyncStore(),
 	}, nil
 }
+
+// SetPushers modifies the user pushers.
+//
+// https://spec.matrix.org/latest/client-server-api/#post_matrixclientv3pushersset
+func (cli *Client) SetPushers(ctx context.Context, req ReqSetPushers) error {
+	reqURL := cli.BuildClientURL("v3", "pushers", "set")
+	_, err := cli.MakeFullRequest(ctx, FullRequest{
+		Method:      http.MethodPost,
+		URL:         reqURL,
+		RequestJSON: &req,
+	})
+	return err
+}

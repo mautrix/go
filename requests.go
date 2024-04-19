@@ -454,3 +454,20 @@ type ReqKeyBackupData struct {
 	IsVerified        bool            `json:"is_verified"`
 	SessionData       json.RawMessage `json:"session_data"`
 }
+
+type PushData struct {
+	Format string `json:"format"`
+	URL    string `json:"url"`
+}
+
+type ReqSetPushers struct {
+	AppDisplayName    string   `json:"app_display_name"`
+	AppID             string   `json:"app_id"`
+	Append            bool     `json:"append"`
+	Data              PushData `json:"data"`
+	DeviceDisplayName string   `json:"device_display_name"`
+	Kind              string   `json:"kind"`
+	Lang              string   `json:"lang"`
+	ProfileTag        string   `json:"profile_tag"`
+	PushKey           string   `json:"pushkey"`
+}
