@@ -288,14 +288,14 @@ func (mx *MatrixHandler) HandleMembership(ctx context.Context, evt *event.Event)
 		_ = evt.Unsigned.PrevContent.ParseRaw(evt.Type)
 		prevContent, _ = evt.Unsigned.PrevContent.Parsed.(*event.MemberEventContent)
 	}
-	if ihpOk && ghost != nil && prevContent.Membership == event.MembershipInvite && content.Membership != event.MembershipBan {
+	if ihpOk && prevContent.Membership == event.MembershipInvite && content.Membership != event.MembershipBan {
 		if content.Membership == event.MembershipJoin {
 			ihp.HandleMatrixAcceptInvite(user, evt)
 		}
 		if content.Membership == event.MembershipLeave {
 			if isSelf {
 				ihp.HandleMatrixRejectInvite(user, evt)
-			} else {
+			} else if ghost != nil {
 				ihp.HandleMatrixRetractInvite(user, ghost, evt)
 			}
 		}
