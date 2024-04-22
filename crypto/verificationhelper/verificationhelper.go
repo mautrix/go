@@ -611,6 +611,9 @@ func (vh *VerificationHelper) onVerificationReady(ctx context.Context, txn *veri
 
 	// If we sent this verification request, send cancellations to all of the
 	// other devices.
+	log.Info().
+		Any("sent_to_device_ids", txn.SentToDeviceIDs).
+		Msg("Determining which cancellation events to send")
 	if len(txn.SentToDeviceIDs) > 0 {
 		content := &event.Content{
 			Parsed: &event.VerificationCancelEventContent{
@@ -619,13 +622,8 @@ func (vh *VerificationHelper) onVerificationReady(ctx context.Context, txn *veri
 				Reason:                    "The verification was accepted on another device.",
 			},
 		}
-		devices, err := vh.mach.CryptoStore.GetDevices(ctx, txn.TheirUser)
-		if err != nil {
-			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUser, "failed to get devices for %s: %v", txn.TheirUser, err)
-			return
-		}
 		req := mautrix.ReqSendToDevice{Messages: map[id.UserID]map[id.DeviceID]*event.Content{txn.TheirUser: {}}}
-		for deviceID := range devices {
+		for _, deviceID := range txn.SentToDeviceIDs {
 			if deviceID == txn.TheirDevice {
 				// Don't ever send a cancellation to the device that accepted
 				// the request.
@@ -634,7 +632,10 @@ func (vh *VerificationHelper) onVerificationReady(ctx context.Context, txn *veri
 
 			req.Messages[txn.TheirUser][deviceID] = content
 		}
-		_, err = vh.client.SendToDevice(ctx, event.ToDeviceVerificationRequest, &req)
+		log.Info().
+			Any("cancellation_device_ids", maps.Keys(req.Messages[txn.TheirUser])).
+			Msg("Sending cancellations to devices")
+		_, err := vh.client.SendToDevice(ctx, event.ToDeviceVerificationRequest, &req)
 		if err != nil {
 			log.Warn().Err(err).Msg("Failed to send cancellation requests")
 		}
