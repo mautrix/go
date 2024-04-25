@@ -93,6 +93,10 @@ func (mach *OlmMachine) storeDeviceSelfSignatures(ctx context.Context, userID id
 	}
 }
 
+// FetchKeys fetches the devices of a list of other users. If includeUntracked
+// is set to false, then the users are filtered to to only include user IDs
+// whose device lists have been stored with the PutDevices function on the
+// [Store]. See the FilterTrackedUsers function on [Store] for details.
 func (mach *OlmMachine) FetchKeys(ctx context.Context, users []id.UserID, includeUntracked bool) (data map[id.UserID]map[id.DeviceID]*id.Device, err error) {
 	req := &mautrix.ReqQueryKeys{
 		DeviceKeys: mautrix.DeviceKeysRequest{},

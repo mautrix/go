@@ -337,6 +337,12 @@ func (vh *VerificationHelper) StartVerification(ctx context.Context, to id.UserI
 	devices, err := vh.mach.CryptoStore.GetDevices(ctx, to)
 	if err != nil {
 		return "", fmt.Errorf("failed to get devices for user: %w", err)
+	} else if len(devices) == 0 {
+		// HACK: we are doing this because the client doesn't wait until it has
+		// the devices before starting verification.
+		if _, err := vh.mach.FetchKeys(ctx, []id.UserID{to}, true); err != nil {
+			return "", err
+		}
 	}
 
 	vh.getLog(ctx).Info().
