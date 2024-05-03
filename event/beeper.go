@@ -36,8 +36,11 @@ type BeeperMessageStatusEventContent struct {
 	RelatesTo RelatesTo           `json:"m.relates_to"`
 	Status    MessageStatus       `json:"status"`
 	Reason    MessageStatusReason `json:"reason,omitempty"`
-	Error     string              `json:"error,omitempty"`
-	Message   string              `json:"message,omitempty"`
+	// Deprecated: clients were showing this to users even though they aren't supposed to.
+	// Use InternalError for error messages that should be included in bug reports, but not shown in the UI.
+	Error         string `json:"error,omitempty"`
+	InternalError string `json:"internal_error,omitempty"`
+	Message       string `json:"message,omitempty"`
 
 	LastRetry id.EventID `json:"last_retry,omitempty"`
 
