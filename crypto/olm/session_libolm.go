@@ -154,6 +154,8 @@ func (s *LibOlmSession) Pickle(key []byte) ([]byte, error) {
 	return pickled[:r], nil
 }
 
+// Unpickle unpickles the base64-encoded Olm session decrypting it with the
+// provided key. This function mutates the input pickled data slice.
 func (s *LibOlmSession) Unpickle(pickled, key []byte) error {
 	if len(key) == 0 {
 		return NoKeyProvided
