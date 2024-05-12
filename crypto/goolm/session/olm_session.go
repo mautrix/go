@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"strings"
 
 	"maunium.net/go/mautrix/crypto/goolm"
 	"maunium.net/go/mautrix/crypto/goolm/cipher"
@@ -484,19 +485,16 @@ func (o *OlmSession) PickleLenMin() int {
 
 // Describe returns a string describing the current state of the session for debugging.
 func (o *OlmSession) Describe() string {
-	var res string
-	if o.Ratchet.SenderChains.IsSet {
-		res += fmt.Sprintf("sender chain index: %d ", o.Ratchet.SenderChains.CKey.Index)
-	} else {
-		res += "sender chain index: "
-	}
-	res += "receiver chain indicies:"
+	var builder strings.Builder
+	builder.WriteString("sender chain index: ")
+	builder.WriteString(fmt.Sprint(o.Ratchet.SenderChains.CKey.Index))
+	builder.WriteString(" receiver chain indices:")
 	for _, curChain := range o.Ratchet.ReceiverChains {
-		res += fmt.Sprintf(" %d", curChain.CKey.Index)
+		builder.WriteString(fmt.Sprintf(" %d", curChain.CKey.Index))
 	}
-	res += " skipped message keys:"
+	builder.WriteString(" skipped message keys:")
 	for _, curSkip := range o.Ratchet.SkippedMessageKeys {
-		res += fmt.Sprintf(" %d", curSkip.MKey.Index)
+		builder.WriteString(fmt.Sprintf(" %d", curSkip.MKey.Index))
 	}
-	return res
+	return builder.String()
 }
