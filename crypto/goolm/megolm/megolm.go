@@ -11,6 +11,7 @@ import (
 	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
 	"maunium.net/go/mautrix/crypto/goolm/message"
 	"maunium.net/go/mautrix/crypto/goolm/utilities"
+	"maunium.net/go/mautrix/crypto/olm"
 )
 
 const (
@@ -179,7 +180,7 @@ func (r Ratchet) Decrypt(ciphertext []byte, signingkey *crypto.Ed25519PublicKey,
 		return nil, err
 	}
 	if !verifiedMAC {
-		return nil, fmt.Errorf("decrypt: %w", goolm.ErrBadMAC)
+		return nil, fmt.Errorf("decrypt: %w", olm.ErrBadMAC)
 	}
 
 	return RatchetCipher.Decrypt(r.Data[:], msg.Ciphertext)
@@ -219,7 +220,7 @@ func (r *Ratchet) UnpickleLibOlm(unpickled []byte) (int, error) {
 // It returns the number of bytes written.
 func (r Ratchet) PickleLibOlm(target []byte) (int, error) {
 	if len(target) < r.PickleLen() {
-		return 0, fmt.Errorf("pickle account: %w", goolm.ErrValueTooShort)
+		return 0, fmt.Errorf("pickle account: %w", olm.ErrValueTooShort)
 	}
 	written := libolmpickle.PickleBytes(r.Data[:], target)
 	written += libolmpickle.PickleUInt32(r.Counter, target[written:])

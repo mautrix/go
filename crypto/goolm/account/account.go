@@ -13,7 +13,6 @@ import (
 	"maunium.net/go/mautrix/id"
 
 	"maunium.net/go/mautrix/crypto/canonicaljson"
-	"maunium.net/go/mautrix/crypto/goolm"
 	"maunium.net/go/mautrix/crypto/goolm/cipher"
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
 	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
@@ -49,7 +48,7 @@ var _ olm.Account = (*Account)(nil)
 // AccountFromJSONPickled loads the Account details from a pickled base64 string. The input is decrypted with the supplied key.
 func AccountFromJSONPickled(pickled, key []byte) (*Account, error) {
 	if len(pickled) == 0 {
-		return nil, fmt.Errorf("accountFromPickled: %w", goolm.ErrEmptyInput)
+		return nil, fmt.Errorf("accountFromPickled: %w", olm.ErrEmptyInput)
 	}
 	a := &Account{}
 	err := a.UnpickleAsJSON(pickled, key)
@@ -62,7 +61,7 @@ func AccountFromJSONPickled(pickled, key []byte) (*Account, error) {
 // AccountFromPickled loads the Account details from a pickled base64 string. The input is decrypted with the supplied key.
 func AccountFromPickled(pickled, key []byte) (*Account, error) {
 	if len(pickled) == 0 {
-		return nil, fmt.Errorf("accountFromPickled: %w", goolm.ErrEmptyInput)
+		return nil, fmt.Errorf("accountFromPickled: %w", olm.ErrEmptyInput)
 	}
 	a := &Account{}
 	err := a.Unpickle(pickled, key)
@@ -124,7 +123,7 @@ func (a *Account) IdentityKeys() (id.Ed25519, id.Curve25519, error) {
 // for this Account.
 func (a *Account) Sign(message []byte) ([]byte, error) {
 	if len(message) == 0 {
-		return nil, fmt.Errorf("sign: %w", goolm.ErrEmptyInput)
+		return nil, fmt.Errorf("sign: %w", olm.ErrEmptyInput)
 	}
 	return []byte(base64.RawStdEncoding.EncodeToString(a.IdKeys.Ed25519.Sign(message))), nil
 }
@@ -214,7 +213,7 @@ func (a *Account) GenOneTimeKeys(reader io.Reader, num uint) error {
 // given curve25519 identity Key and one time key.
 func (a *Account) NewOutboundSession(theirIdentityKey, theirOneTimeKey id.Curve25519) (olm.Session, error) {
 	if len(theirIdentityKey) == 0 || len(theirOneTimeKey) == 0 {
-		return nil, fmt.Errorf("outbound session: %w", goolm.ErrEmptyInput)
+		return nil, fmt.Errorf("outbound session: %w", olm.ErrEmptyInput)
 	}
 	theirIdentityKeyDecoded, err := base64.RawStdEncoding.DecodeString(string(theirIdentityKey))
 	if err != nil {
@@ -240,7 +239,7 @@ func (a *Account) NewInboundSession(oneTimeKeyMsg string) (olm.Session, error) {
 // NewInboundSessionFrom creates a new inbound session from an incoming PRE_KEY message.
 func (a *Account) NewInboundSessionFrom(theirIdentityKey *id.Curve25519, oneTimeKeyMsg string) (olm.Session, error) {
 	if len(oneTimeKeyMsg) == 0 {
-		return nil, fmt.Errorf("inbound session: %w", goolm.ErrEmptyInput)
+		return nil, fmt.Errorf("inbound session: %w", olm.ErrEmptyInput)
 	}
 	var theirIdentityKeyDecoded *crypto.Curve25519PublicKey
 	if theirIdentityKey != nil {
@@ -388,7 +387,7 @@ func (a *Account) UnpickleLibOlm(value []byte) (int, error) {
 	switch pickledVersion {
 	case accountPickleVersionLibOLM, 3, 2:
 	default:
-		return 0, fmt.Errorf("unpickle account: %w", goolm.ErrBadVersion)
+		return 0, fmt.Errorf("unpickle account: %w", olm.ErrBadVersion)
 	}
 	//read ed25519 key pair
 	readBytes, err := a.IdKeys.Ed25519.UnpickleLibOlm(value[curPos:])
@@ -478,7 +477,7 @@ func (a *Account) UnpickleLibOlm(value []byte) (int, error) {
 // Pickle returns a base64 encoded and with key encrypted pickled account using PickleLibOlm().
 func (a *Account) Pickle(key []byte) ([]byte, error) {
 	if len(key) == 0 {
-		return nil, goolm.ErrNoKeyProvided
+		return nil, olm.ErrNoKeyProvided
 	}
 	pickeledBytes := make([]byte, a.PickleLen())
 	written, err := a.PickleLibOlm(pickeledBytes)
@@ -499,7 +498,7 @@ func (a *Account) Pickle(key []byte) ([]byte, error) {
 // It returns the number of bytes written.
 func (a *Account) PickleLibOlm(target []byte) (int, error) {
 	if len(target) < a.PickleLen() {
-		return 0, fmt.Errorf("pickle account: %w", goolm.ErrValueTooShort)
+		return 0, fmt.Errorf("pickle account: %w", olm.ErrValueTooShort)
 	}
 	written := libolmpickle.PickleUInt32(accountPickleVersionLibOLM, target)
 	writtenEdKey, err := a.IdKeys.Ed25519.PickleLibOlm(target[written:])

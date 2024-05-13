@@ -54,7 +54,7 @@ func NewMegolmOutboundSession() (*MegolmOutboundSession, error) {
 // MegolmOutboundSessionFromPickled loads the MegolmOutboundSession details from a pickled base64 string. The input is decrypted with the supplied key.
 func MegolmOutboundSessionFromPickled(pickled, key []byte) (*MegolmOutboundSession, error) {
 	if len(pickled) == 0 {
-		return nil, fmt.Errorf("megolmOutboundSessionFromPickled: %w", goolm.ErrEmptyInput)
+		return nil, fmt.Errorf("megolmOutboundSessionFromPickled: %w", olm.ErrEmptyInput)
 	}
 	a := &MegolmOutboundSession{}
 	err := a.Unpickle(pickled, key)
@@ -64,7 +64,7 @@ func MegolmOutboundSessionFromPickled(pickled, key []byte) (*MegolmOutboundSessi
 // Encrypt encrypts the plaintext as a base64 encoded group message.
 func (o *MegolmOutboundSession) Encrypt(plaintext []byte) ([]byte, error) {
 	if len(plaintext) == 0 {
-		return nil, goolm.ErrEmptyInput
+		return nil, olm.ErrEmptyInput
 	}
 	encrypted, err := o.Ratchet.Encrypt(plaintext, &o.SigningKey)
 	if err != nil {
@@ -92,7 +92,7 @@ func (o *MegolmOutboundSession) UnpickleAsJSON(pickled, key []byte) error {
 // The decrypted value is then passed to UnpickleLibOlm.
 func (o *MegolmOutboundSession) Unpickle(pickled, key []byte) error {
 	if len(key) == 0 {
-		return goolm.ErrNoKeyProvided
+		return olm.ErrNoKeyProvided
 	}
 	decrypted, err := cipher.Unpickle(key, pickled)
 	if err != nil {
@@ -112,7 +112,7 @@ func (o *MegolmOutboundSession) UnpickleLibOlm(value []byte) (int, error) {
 	switch pickledVersion {
 	case megolmOutboundSessionPickleVersionLibOlm:
 	default:
-		return 0, fmt.Errorf("unpickle MegolmInboundSession: %w", goolm.ErrBadVersion)
+		return 0, fmt.Errorf("unpickle MegolmInboundSession: %w", olm.ErrBadVersion)
 	}
 	readBytes, err := o.Ratchet.UnpickleLibOlm(value[curPos:])
 	if err != nil {
@@ -130,7 +130,7 @@ func (o *MegolmOutboundSession) UnpickleLibOlm(value []byte) (int, error) {
 // Pickle returns a base64 encoded and with key encrypted pickled MegolmOutboundSession using PickleLibOlm().
 func (o *MegolmOutboundSession) Pickle(key []byte) ([]byte, error) {
 	if len(key) == 0 {
-		return nil, goolm.ErrNoKeyProvided
+		return nil, olm.ErrNoKeyProvided
 	}
 	pickeledBytes := make([]byte, o.PickleLen())
 	written, err := o.PickleLibOlm(pickeledBytes)
@@ -151,7 +151,7 @@ func (o *MegolmOutboundSession) Pickle(key []byte) ([]byte, error) {
 // It returns the number of bytes written.
 func (o *MegolmOutboundSession) PickleLibOlm(target []byte) (int, error) {
 	if len(target) < o.PickleLen() {
-		return 0, fmt.Errorf("pickle MegolmOutboundSession: %w", goolm.ErrValueTooShort)
+		return 0, fmt.Errorf("pickle MegolmOutboundSession: %w", olm.ErrValueTooShort)
 	}
 	written := libolmpickle.PickleUInt32(megolmOutboundSessionPickleVersionLibOlm, target)
 	writtenRatchet, err := o.Ratchet.PickleLibOlm(target[written:])

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"maunium.net/go/mautrix/crypto/goolm"
+	"maunium.net/go/mautrix/crypto/olm"
 )
 
 const (
@@ -45,7 +46,7 @@ func Unpickle(key, input []byte) ([]byte, error) {
 		return nil, err
 	}
 	if !verified {
-		return nil, fmt.Errorf("decrypt pickle: %w", goolm.ErrBadMAC)
+		return nil, fmt.Errorf("decrypt pickle: %w", olm.ErrBadMAC)
 	}
 	//Set to next block size
 	targetCipherText := make([]byte, int(len(ciphertext)/PickleBlockSize())*PickleBlockSize())

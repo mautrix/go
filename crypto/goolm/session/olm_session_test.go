@@ -6,9 +6,9 @@ import (
 	"errors"
 	"testing"
 
-	"maunium.net/go/mautrix/crypto/goolm"
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
 	"maunium.net/go/mautrix/crypto/goolm/session"
+	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -148,7 +148,7 @@ func TestDecrypts(t *testing.T) {
 		{0xe9, 0xe9, 0xc9, 0xc1, 0xe9, 0xe9, 0xc9, 0xe9, 0xc9, 0xc1, 0xe9, 0xe9, 0xc9, 0xc1},
 	}
 	expectedErr := []error{
-		goolm.ErrInputToSmall,
+		olm.ErrInputToSmall,
 		// Why are these being tested 🤔
 		base64.CorruptInputError(0),
 		base64.CorruptInputError(0),

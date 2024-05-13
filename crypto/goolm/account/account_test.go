@@ -11,8 +11,8 @@ import (
 
 	"maunium.net/go/mautrix/id"
 
-	"maunium.net/go/mautrix/crypto/goolm"
 	"maunium.net/go/mautrix/crypto/goolm/account"
+	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/crypto/signatures"
 )
 
@@ -225,7 +225,7 @@ func TestOldAccountPickle(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	} else {
-		if !errors.Is(err, goolm.ErrBadVersion) {
+		if !errors.Is(err, olm.ErrBadVersion) {
 			t.Fatal(err)
 		}
 	}
@@ -564,7 +564,7 @@ func TestFallbackKey(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if !errors.Is(err, goolm.ErrBadMessageKeyID) {
+	if !errors.Is(err, olm.ErrBadMessageKeyID) {
 		t.Fatal(err)
 	}
 }

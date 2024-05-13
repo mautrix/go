@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"io"
 
-	"maunium.net/go/mautrix/crypto/goolm"
 	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
+	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -69,7 +69,7 @@ func (c Ed25519KeyPair) Verify(message, givenSignature []byte) bool {
 // It returns the number of bytes written.
 func (c Ed25519KeyPair) PickleLibOlm(target []byte) (int, error) {
 	if len(target) < c.PickleLen() {
-		return 0, fmt.Errorf("pickle ed25519 key pair: %w", goolm.ErrValueTooShort)
+		return 0, fmt.Errorf("pickle ed25519 key pair: %w", olm.ErrValueTooShort)
 	}
 	written, err := c.PublicKey.PickleLibOlm(target)
 	if err != nil {
@@ -153,7 +153,7 @@ func (c Ed25519PublicKey) Verify(message, givenSignature []byte) bool {
 // It returns the number of bytes written.
 func (c Ed25519PublicKey) PickleLibOlm(target []byte) (int, error) {
 	if len(target) < c.PickleLen() {
-		return 0, fmt.Errorf("pickle ed25519 public key: %w", goolm.ErrValueTooShort)
+		return 0, fmt.Errorf("pickle ed25519 public key: %w", olm.ErrValueTooShort)
 	}
 	if len(c) != ed25519.PublicKeySize {
 		return libolmpickle.PickleBytes(make([]byte, ed25519.PublicKeySize), target), nil

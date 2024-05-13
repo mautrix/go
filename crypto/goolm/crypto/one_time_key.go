@@ -5,8 +5,8 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"maunium.net/go/mautrix/crypto/goolm"
 	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
+	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -38,7 +38,7 @@ func (otk OneTimeKey) Equal(s OneTimeKey) bool {
 // It returns the number of bytes written.
 func (c OneTimeKey) PickleLibOlm(target []byte) (int, error) {
 	if len(target) < c.PickleLen() {
-		return 0, fmt.Errorf("pickle one time key: %w", goolm.ErrValueTooShort)
+		return 0, fmt.Errorf("pickle one time key: %w", olm.ErrValueTooShort)
 	}
 	written := libolmpickle.PickleUInt32(uint32(c.ID), target)
 	written += libolmpickle.PickleBool(c.Published, target[written:])
