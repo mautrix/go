@@ -1,137 +1,20 @@
+// Copyright (c) 2024 Sumner Evans
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 //go:build goolm
 
 package olm
 
-import (
-	"encoding/json"
-
-	"github.com/tidwall/sjson"
-
-	"maunium.net/go/mautrix/crypto/canonicaljson"
-	"maunium.net/go/mautrix/crypto/goolm/account"
-	"maunium.net/go/mautrix/crypto/goolm/session"
-	"maunium.net/go/mautrix/id"
-)
-
-// Account stores a device account for end to end encrypted messaging.
-type Account struct {
-	account.Account
-}
+import "maunium.net/go/mautrix/crypto/goolm/account"
 
 // NewAccount creates a new Account.
-func NewAccount() *Account {
-	a, err := account.NewAccount(nil)
-	if err != nil {
-		panic(err)
-	}
-	ac := &Account{}
-	ac.Account = *a
-	return ac
+func NewAccount() Account {
+	return account.NewAccount()
 }
 
-func NewBlankAccount() *Account {
-	return &Account{}
-}
-
-// Clear clears the memory used to back this Account.
-func (a *Account) Clear() error {
-	a.Account = account.Account{}
-	return nil
-}
-
-// Pickle returns an Account as a base64 string. Encrypts the Account using the
-// supplied key.
-func (a *Account) Pickle(key []byte) []byte {
-	if len(key) == 0 {
-		panic(NoKeyProvided)
-	}
-	pickled, err := a.Account.Pickle(key)
-	if err != nil {
-		panic(err)
-	}
-	return pickled
-}
-
-// IdentityKeysJSON returns the public parts of the identity keys for the Account.
-func (a *Account) IdentityKeysJSON() []byte {
-	identityKeys, err := a.Account.IdentityKeysJSON()
-	if err != nil {
-		panic(err)
-	}
-	return identityKeys
-}
-
-// Sign returns the signature of a message using the ed25519 key for this
-// Account.
-func (a *Account) Sign(message []byte) []byte {
-	if len(message) == 0 {
-		panic(EmptyInput)
-	}
-	signature, err := a.Account.Sign(message)
-	if err != nil {
-		panic(err)
-	}
-	return signature
-}
-
-// SignJSON signs the given JSON object following the Matrix specification:
-// https://matrix.org/docs/spec/appendices#signing-json
-func (a *Account) SignJSON(obj any) (string, error) {
-	objJSON, err := json.Marshal(obj)
-	if err != nil {
-		return "", err
-	}
-	objJSON, _ = sjson.DeleteBytes(objJSON, "unsigned")
-	objJSON, _ = sjson.DeleteBytes(objJSON, "signatures")
-	return string(a.Sign(canonicaljson.CanonicalJSONAssumeValid(objJSON))), nil
-}
-
-// MaxNumberOfOneTimeKeys returns the largest number of one time keys this
-// Account can store.
-func (a *Account) MaxNumberOfOneTimeKeys() uint {
-	return uint(account.MaxOneTimeKeys)
-}
-
-// GenOneTimeKeys generates a number of new one time keys.  If the total number
-// of keys stored by this Account exceeds MaxNumberOfOneTimeKeys then the old
-// keys are discarded.
-func (a *Account) GenOneTimeKeys(num uint) {
-	err := a.Account.GenOneTimeKeys(nil, num)
-	if err != nil {
-		panic(err)
-	}
-}
-
-// NewOutboundSession creates a new out-bound session for sending messages to a
-// given curve25519 identityKey and oneTimeKey. Returns error on failure.
-func (a *Account) NewOutboundSession(theirIdentityKey, theirOneTimeKey id.Curve25519) (*session.OlmSession, error) {
-	if len(theirIdentityKey) == 0 || len(theirOneTimeKey) == 0 {
-		return nil, EmptyInput
-	}
-	return a.Account.NewOutboundSession(theirIdentityKey, theirOneTimeKey)
-}
-
-// NewInboundSession creates a new in-bound session for sending/receiving
-// messages from an incoming PRE_KEY message. Returns error on failure.
-func (a *Account) NewInboundSession(oneTimeKeyMsg string) (*session.OlmSession, error) {
-	if len(oneTimeKeyMsg) == 0 {
-		return nil, EmptyInput
-	}
-	return a.Account.NewInboundSession(nil, []byte(oneTimeKeyMsg))
-}
-
-// NewInboundSessionFrom creates a new in-bound session for sending/receiving
-// messages from an incoming PRE_KEY message. Returns error on failure.
-func (a *Account) NewInboundSessionFrom(theirIdentityKey id.Curve25519, oneTimeKeyMsg string) (*session.OlmSession, error) {
-	if len(theirIdentityKey) == 0 || len(oneTimeKeyMsg) == 0 {
-		return nil, EmptyInput
-	}
-	return a.Account.NewInboundSession(&theirIdentityKey, []byte(oneTimeKeyMsg))
-}
-
-// RemoveOneTimeKeys removes the one time keys that the session used from the
-// Account. Returns error on failure.
-func (a *Account) RemoveOneTimeKeys(s *session.OlmSession) error {
-	a.Account.RemoveOneTimeKeys(s)
-	return nil
+func NewBlankAccount() Account {
+	return &account.Account{}
 }

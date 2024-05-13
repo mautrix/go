@@ -23,27 +23,39 @@ type OlmAccount struct {
 
 func NewOlmAccount() *OlmAccount {
 	return &OlmAccount{
-		Internal: *olm.NewAccount(),
+		Internal: olm.NewAccount(),
 	}
 }
 
 func (account *OlmAccount) Keys() (id.SigningKey, id.IdentityKey) {
 	if len(account.signingKey) == 0 || len(account.identityKey) == 0 {
-		account.signingKey, account.identityKey = account.Internal.IdentityKeys()
+		var err error
+		account.signingKey, account.identityKey, err = account.Internal.IdentityKeys()
+		if err != nil {
+			panic(err)
+		}
 	}
 	return account.signingKey, account.identityKey
 }
 
 func (account *OlmAccount) SigningKey() id.SigningKey {
 	if len(account.signingKey) == 0 {
-		account.signingKey, account.identityKey = account.Internal.IdentityKeys()
+		var err error
+		account.signingKey, account.identityKey, err = account.Internal.IdentityKeys()
+		if err != nil {
+			panic(err)
+		}
 	}
 	return account.signingKey
 }
 
 func (account *OlmAccount) IdentityKey() id.IdentityKey {
 	if len(account.identityKey) == 0 {
-		account.signingKey, account.identityKey = account.Internal.IdentityKeys()
+		var err error
+		account.signingKey, account.identityKey, err = account.Internal.IdentityKeys()
+		if err != nil {
+			panic(err)
+		}
 	}
 	return account.identityKey
 }
@@ -71,10 +83,14 @@ func (account *OlmAccount) getInitialKeys(userID id.UserID, deviceID id.DeviceID
 func (account *OlmAccount) getOneTimeKeys(userID id.UserID, deviceID id.DeviceID, currentOTKCount int) map[id.KeyID]mautrix.OneTimeKey {
 	newCount := int(account.Internal.MaxNumberOfOneTimeKeys()/2) - currentOTKCount
 	if newCount > 0 {
-		account.Internal.GenOneTimeKeys(uint(newCount))
+		account.Internal.GenOneTimeKeys(nil, uint(newCount))
 	}
 	oneTimeKeys := make(map[id.KeyID]mautrix.OneTimeKey)
-	for keyID, key := range account.Internal.OneTimeKeys() {
+	internalKeys, err := account.Internal.OneTimeKeys()
+	if err != nil {
+		panic(err)
+	}
+	for keyID, key := range internalKeys {
 		key := mautrix.OneTimeKey{Key: key}
 		signature, _ := account.Internal.SignJSON(key)
 		key.Signatures = signatures.NewSingleSignature(userID, id.KeyAlgorithmEd25519, deviceID.String(), signature)

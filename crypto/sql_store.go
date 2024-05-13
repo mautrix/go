@@ -123,8 +123,11 @@ func (store *SQLCryptoStore) FindDeviceID(ctx context.Context) (deviceID id.Devi
 // PutAccount stores an OlmAccount in the database.
 func (store *SQLCryptoStore) PutAccount(ctx context.Context, account *OlmAccount) error {
 	store.Account = account
-	bytes := account.Internal.Pickle(store.PickleKey)
-	_, err := store.DB.Exec(ctx, `
+	bytes, err := account.Internal.Pickle(store.PickleKey)
+	if err != nil {
+		return err
+	}
+	_, err = store.DB.Exec(ctx, `
 		INSERT INTO crypto_account (device_id, shared, sync_token, account, account_id, key_backup_version) VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (account_id) DO UPDATE SET shared=excluded.shared, sync_token=excluded.sync_token,
 											   account=excluded.account, account_id=excluded.account_id,
@@ -137,7 +140,7 @@ func (store *SQLCryptoStore) PutAccount(ctx context.Context, account *OlmAccount
 func (store *SQLCryptoStore) GetAccount(ctx context.Context) (*OlmAccount, error) {
 	if store.Account == nil {
 		row := store.DB.QueryRow(ctx, "SELECT shared, sync_token, account, key_backup_version FROM crypto_account WHERE account_id=$1", store.AccountID)
-		acc := &OlmAccount{Internal: *olm.NewBlankAccount()}
+		acc := &OlmAccount{Internal: olm.NewBlankAccount()}
 		var accountBytes []byte
 		err := row.Scan(&acc.Shared, &store.SyncToken, &accountBytes, &acc.KeyBackupVersion)
 		if err == sql.ErrNoRows {
