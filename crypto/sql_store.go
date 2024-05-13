@@ -547,8 +547,11 @@ func (store *SQLCryptoStore) GetGroupSessionsWithoutKeyBackupVersion(ctx context
 
 // AddOutboundGroupSession stores an outbound Megolm session, along with the information about the room and involved devices.
 func (store *SQLCryptoStore) AddOutboundGroupSession(ctx context.Context, session *OutboundGroupSession) error {
-	sessionBytes := session.Internal.Pickle(store.PickleKey)
-	_, err := store.DB.Exec(ctx, `
+	sessionBytes, err := session.Internal.Pickle(store.PickleKey)
+	if err != nil {
+		return err
+	}
+	_, err = store.DB.Exec(ctx, `
 		INSERT INTO crypto_megolm_outbound_session
 			(room_id, session_id, session, shared, max_messages, message_count, max_age, created_at, last_used, account_id)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -563,8 +566,11 @@ func (store *SQLCryptoStore) AddOutboundGroupSession(ctx context.Context, sessio
 
 // UpdateOutboundGroupSession replaces an outbound Megolm session with for same room and session ID.
 func (store *SQLCryptoStore) UpdateOutboundGroupSession(ctx context.Context, session *OutboundGroupSession) error {
-	sessionBytes := session.Internal.Pickle(store.PickleKey)
-	_, err := store.DB.Exec(ctx, "UPDATE crypto_megolm_outbound_session SET session=$1, message_count=$2, last_used=$3 WHERE room_id=$4 AND session_id=$5 AND account_id=$6",
+	sessionBytes, err := session.Internal.Pickle(store.PickleKey)
+	if err != nil {
+		return err
+	}
+	_, err = store.DB.Exec(ctx, "UPDATE crypto_megolm_outbound_session SET session=$1, message_count=$2, last_used=$3 WHERE room_id=$4 AND session_id=$5 AND account_id=$6",
 		sessionBytes, session.MessageCount, session.LastEncryptedTime, session.RoomID, session.ID(), store.AccountID)
 	return err
 }
@@ -589,7 +595,7 @@ func (store *SQLCryptoStore) GetOutboundGroupSession(ctx context.Context, roomID
 	if err != nil {
 		return nil, err
 	}
-	ogs.Internal = *intOGS
+	ogs.Internal = intOGS
 	ogs.RoomID = roomID
 	ogs.MaxAge = time.Duration(maxAgeMS) * time.Millisecond
 	return &ogs, nil

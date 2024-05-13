@@ -182,7 +182,7 @@ type OutboundGroupSession struct {
 
 func NewOutboundGroupSession(roomID id.RoomID, encryptionContent *event.EncryptionEventContent) *OutboundGroupSession {
 	ogs := &OutboundGroupSession{
-		Internal: *olm.NewOutboundGroupSession(),
+		Internal: olm.NewOutboundGroupSession(),
 		ExpirationMixin: ExpirationMixin{
 			TimeMixin: TimeMixin{
 				CreationTime:      time.Now(),
@@ -240,7 +240,7 @@ func (ogs *OutboundGroupSession) Encrypt(plaintext []byte) ([]byte, error) {
 	}
 	ogs.MessageCount++
 	ogs.LastEncryptedTime = time.Now()
-	return ogs.Internal.Encrypt(plaintext), nil
+	return ogs.Internal.Encrypt(plaintext)
 }
 
 type TimeMixin struct {

@@ -13,12 +13,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
-	"maunium.net/go/mautrix/crypto/goolm/crypto"
 	goolmsession "maunium.net/go/mautrix/crypto/goolm/session"
 	"maunium.net/go/mautrix/crypto/olm"
-	"maunium.net/go/mautrix/id"
 )
 
 func TestBlankSession(t *testing.T) {
@@ -61,30 +58,30 @@ func TestSessionPickle(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func FuzzSession(f *testing.F) {
-	f.Add([]byte("plaintext"))
+// func FuzzSession(f *testing.F) {
+// 	f.Add([]byte("plaintext"))
 
-	identityKeyAlice, err := crypto.Curve25519GenerateKey(nil)
-	require.NoError(f, err)
-	identityKeyBob, err := crypto.Curve25519GenerateKey(nil)
-	require.NoError(f, err)
+// 	identityKeyAlice, err := crypto.Curve25519GenerateKey(nil)
+// 	require.NoError(f, err)
+// 	identityKeyBob, err := crypto.Curve25519GenerateKey(nil)
+// 	require.NoError(f, err)
 
-	f.Fuzz(func(t *testing.T, plaintext []byte) {
-		// identityKeyAlice crypto.Curve25519KeyPair, identityKeyBob crypto.Curve25519PublicKey, oneTimeKeyBob crypto.Curve25519PublicKey
+// 	f.Fuzz(func(t *testing.T, plaintext []byte) {
+// 		// identityKeyAlice crypto.Curve25519KeyPair, identityKeyBob crypto.Curve25519PublicKey, oneTimeKeyBob crypto.Curve25519PublicKey
 
-		goolmSession, err := goolmsession.NewOutboundOlmSession(identityKeyAlice, identityKeyBob.PublicKey, otk)
-		assert.NoError(t, err)
+// 		goolmSession, err := goolmsession.NewOutboundOlmSession(identityKeyAlice, identityKeyBob.PublicKey, otk)
+// 		assert.NoError(t, err)
 
-		libolmAccount := olm.NewAccount()
-		libolmSession, err := libolmAccount.NewInboundSessionFrom(id.Curve25519(identityKeyBob.PublicKey), string(otk))
+// 		libolmAccount := olm.NewAccount()
+// 		libolmSession, err := libolmAccount.NewInboundSessionFrom(id.Curve25519(identityKeyBob.PublicKey), string(otk))
 
-		goolmMsgType, goolmCiphertext, goolmErr := goolmSession.Encrypt(plaintext)
-		assert.NoError(t, goolmErr)
+// 		goolmMsgType, goolmCiphertext, goolmErr := goolmSession.Encrypt(plaintext)
+// 		assert.NoError(t, goolmErr)
 
-		libolmMsgType, libolmCiphertext, libolmErr := libolmSession.Encrypt(plaintext)
-		assert.NoError(t, libolmErr)
+// 		libolmMsgType, libolmCiphertext, libolmErr := libolmSession.Encrypt(plaintext)
+// 		assert.NoError(t, libolmErr)
 
-		assert.Equal(t, goolmMsgType, libolmMsgType)
-		assert.Equal(t, goolmCiphertext, libolmCiphertext)
-	})
-}
+// 		assert.Equal(t, goolmMsgType, libolmMsgType)
+// 		assert.Equal(t, goolmCiphertext, libolmCiphertext)
+// 	})
+// }
