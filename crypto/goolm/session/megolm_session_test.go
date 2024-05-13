@@ -6,10 +6,10 @@ import (
 	"errors"
 	"testing"
 
-	"maunium.net/go/mautrix/crypto/goolm"
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
 	"maunium.net/go/mautrix/crypto/goolm/megolm"
 	"maunium.net/go/mautrix/crypto/goolm/session"
+	"maunium.net/go/mautrix/crypto/olm"
 )
 
 func TestOutboundPickleJSON(t *testing.T) {
@@ -236,7 +236,7 @@ func TestBadSignatureGroupMessage(t *testing.T) {
 	if err == nil {
 		t.Fatal("Signature was changed but did not cause an error")
 	}
-	if !errors.Is(err, goolm.ErrBadSignature) {
+	if !errors.Is(err, olm.ErrBadSignature) {
 		t.Fatalf("wrong error %s", err.Error())
 	}
 }

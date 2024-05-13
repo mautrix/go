@@ -9,8 +9,8 @@ import (
 
 	"golang.org/x/crypto/curve25519"
 
-	"maunium.net/go/mautrix/crypto/goolm"
 	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
+	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -78,7 +78,7 @@ func (c Curve25519KeyPair) SharedSecret(pubKey Curve25519PublicKey) ([]byte, err
 // It returns the number of bytes written.
 func (c Curve25519KeyPair) PickleLibOlm(target []byte) (int, error) {
 	if len(target) < c.PickleLen() {
-		return 0, fmt.Errorf("pickle curve25519 key pair: %w", goolm.ErrValueTooShort)
+		return 0, fmt.Errorf("pickle curve25519 key pair: %w", olm.ErrValueTooShort)
 	}
 	written, err := c.PublicKey.PickleLibOlm(target)
 	if err != nil {
@@ -159,7 +159,7 @@ func (c Curve25519PublicKey) B64Encoded() id.Curve25519 {
 // It returns the number of bytes written.
 func (c Curve25519PublicKey) PickleLibOlm(target []byte) (int, error) {
 	if len(target) < c.PickleLen() {
-		return 0, fmt.Errorf("pickle curve25519 public key: %w", goolm.ErrValueTooShort)
+		return 0, fmt.Errorf("pickle curve25519 public key: %w", olm.ErrValueTooShort)
 	}
 	if len(c) != curve25519PubKeyLength {
 		return libolmpickle.PickleBytes(make([]byte, curve25519PubKeyLength), target), nil

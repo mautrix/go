@@ -3,7 +3,7 @@ package libolmpickle
 import (
 	"fmt"
 
-	"maunium.net/go/mautrix/crypto/goolm"
+	"maunium.net/go/mautrix/crypto/olm"
 )
 
 func isZeroByteSlice(bytes []byte) bool {
@@ -16,21 +16,21 @@ func isZeroByteSlice(bytes []byte) bool {
 
 func UnpickleUInt8(value []byte) (uint8, int, error) {
 	if len(value) < 1 {
-		return 0, 0, fmt.Errorf("unpickle uint8: %w", goolm.ErrValueTooShort)
+		return 0, 0, fmt.Errorf("unpickle uint8: %w", olm.ErrValueTooShort)
 	}
 	return value[0], 1, nil
 }
 
 func UnpickleBool(value []byte) (bool, int, error) {
 	if len(value) < 1 {
-		return false, 0, fmt.Errorf("unpickle bool: %w", goolm.ErrValueTooShort)
+		return false, 0, fmt.Errorf("unpickle bool: %w", olm.ErrValueTooShort)
 	}
 	return value[0] != uint8(0x00), 1, nil
 }
 
 func UnpickleBytes(value []byte, length int) ([]byte, int, error) {
 	if len(value) < length {
-		return nil, 0, fmt.Errorf("unpickle bytes: %w", goolm.ErrValueTooShort)
+		return nil, 0, fmt.Errorf("unpickle bytes: %w", olm.ErrValueTooShort)
 	}
 	resp := value[:length]
 	if isZeroByteSlice(resp) {
@@ -41,7 +41,7 @@ func UnpickleBytes(value []byte, length int) ([]byte, int, error) {
 
 func UnpickleUInt32(value []byte) (uint32, int, error) {
 	if len(value) < 4 {
-		return 0, 0, fmt.Errorf("unpickle uint32: %w", goolm.ErrValueTooShort)
+		return 0, 0, fmt.Errorf("unpickle uint32: %w", olm.ErrValueTooShort)
 	}
 	var res uint32
 	count := 0
