@@ -1,5 +1,5 @@
-// olm provides the ratchet used by the olm protocol
-package olm
+// Package ratchet provides the ratchet used by the olm protocol
+package ratchet
 
 import (
 	"fmt"

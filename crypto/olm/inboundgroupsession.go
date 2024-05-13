@@ -6,10 +6,7 @@
 
 package olm
 
-import (
-	"maunium.net/go/mautrix/crypto/goolm/session"
-	"maunium.net/go/mautrix/id"
-)
+import "maunium.net/go/mautrix/id"
 
 type InboundGroupSession interface {
 	// Pickle returns an InboundGroupSession as a base64 string.  Encrypts the
@@ -54,4 +51,30 @@ type InboundGroupSession interface {
 	Export(messageIndex uint32) ([]byte, error)
 }
 
-var _ InboundGroupSession = (*session.MegolmInboundSession)(nil)
+var InitInboundGroupSessionFromPickled func(pickled, key []byte) (InboundGroupSession, error)
+var InitNewInboundGroupSession func(sessionKey []byte) (InboundGroupSession, error)
+var InitInboundGroupSessionImport func(sessionKey []byte) (InboundGroupSession, error)
+var InitBlankInboundGroupSession func() InboundGroupSession
+
+// InboundGroupSessionFromPickled loads an InboundGroupSession from a pickled
+// base64 string. Decrypts the InboundGroupSession using the supplied key.
+// Returns error on failure.
+func InboundGroupSessionFromPickled(pickled, key []byte) (InboundGroupSession, error) {
+	return InitInboundGroupSessionFromPickled(pickled, key)
+}
+
+// NewInboundGroupSession creates a new inbound group session from a key
+// exported from OutboundGroupSession.Key(). Returns error on failure.
+func NewInboundGroupSession(sessionKey []byte) (InboundGroupSession, error) {
+	return InitNewInboundGroupSession(sessionKey)
+}
+
+// InboundGroupSessionImport imports an inbound group session from a previous
+// export. Returns error on failure.
+func InboundGroupSessionImport(sessionKey []byte) (InboundGroupSession, error) {
+	return InitInboundGroupSessionImport(sessionKey)
+}
+
+func NewBlankInboundGroupSession() InboundGroupSession {
+	return InitBlankInboundGroupSession()
+}

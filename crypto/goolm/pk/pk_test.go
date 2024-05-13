@@ -8,7 +8,6 @@ import (
 	"maunium.net/go/mautrix/crypto/goolm"
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
 	"maunium.net/go/mautrix/crypto/goolm/pk"
-	"maunium.net/go/mautrix/id"
 )
 
 func TestEncryptionDecryption(t *testing.T) {
@@ -48,7 +47,7 @@ func TestEncryptionDecryption(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	decrypted, err := decryption.Decrypt(ciphertext, mac, id.Curve25519(bobPublic))
+	decrypted, err := decryption.Decrypt(bobPublic, mac, ciphertext)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -14,6 +14,7 @@ import (
 	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
 	"maunium.net/go/mautrix/crypto/goolm/megolm"
 	"maunium.net/go/mautrix/crypto/goolm/utilities"
+	"maunium.net/go/mautrix/crypto/olm"
 )
 
 const (
@@ -26,6 +27,8 @@ type MegolmOutboundSession struct {
 	Ratchet    megolm.Ratchet        `json:"ratchet"`
 	SigningKey crypto.Ed25519KeyPair `json:"signing_key"`
 }
+
+var _ olm.OutboundGroupSession = (*MegolmOutboundSession)(nil)
 
 // NewMegolmOutboundSession creates a new MegolmOutboundSession.
 func NewMegolmOutboundSession() (*MegolmOutboundSession, error) {

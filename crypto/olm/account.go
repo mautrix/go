@@ -93,3 +93,25 @@ type Account interface {
 	// matching one time keys then the error will be "BAD_MESSAGE_KEY_ID".
 	RemoveOneTimeKeys(s Session) error
 }
+
+var InitBlankAccount func() Account
+var InitNewAccount func(io.Reader) (Account, error)
+var InitNewAccountFromPickled func(pickled, key []byte) (Account, error)
+
+// NewAccount creates a new Account.
+func NewAccount(r io.Reader) (Account, error) {
+	return InitNewAccount(r)
+}
+
+func NewBlankAccount() Account {
+	return InitBlankAccount()
+}
+
+// AccountFromPickled loads an Account from a pickled base64 string.  Decrypts
+// the Account using the supplied key.  Returns error on failure.  If the key
+// doesn't match the one used to encrypt the Account then the error will be
+// "BAD_ACCOUNT_KEY".  If the base64 couldn't be decoded then the error will be
+// "INVALID_BASE64".
+func AccountFromPickled(pickled, key []byte) (Account, error) {
+	return InitNewAccountFromPickled(pickled, key)
+}

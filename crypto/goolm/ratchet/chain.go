@@ -1,4 +1,4 @@
-package olm
+package ratchet
 
 import (
 	"fmt"

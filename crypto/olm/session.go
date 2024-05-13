@@ -6,10 +6,7 @@
 
 package olm
 
-import (
-	"maunium.net/go/mautrix/crypto/goolm/session"
-	"maunium.net/go/mautrix/id"
-)
+import "maunium.net/go/mautrix/id"
 
 type Session interface {
 	// Pickle returns a Session as a base64 string. Encrypts the Session using
@@ -72,4 +69,15 @@ type Session interface {
 	Describe() string
 }
 
-var _ Session = (*session.OlmSession)(nil)
+var InitSessionFromPickled func(pickled, key []byte) (Session, error)
+var InitNewBlankSession func() Session
+
+// SessionFromPickled loads a Session from a pickled base64 string.  Decrypts
+// the Session using the supplied key.  Returns error on failure.
+func SessionFromPickled(pickled, key []byte) (Session, error) {
+	return InitSessionFromPickled(pickled, key)
+}
+
+func NewBlankSession() Session {
+	return InitNewBlankSession()
+}

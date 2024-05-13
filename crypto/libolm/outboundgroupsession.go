@@ -1,6 +1,4 @@
-//go:build !goolm
-
-package olm
+package libolm
 
 // #cgo LDFLAGS: -lolm -lstdc++
 // #include <olm/olm.h>
@@ -11,39 +9,42 @@ import (
 	"encoding/base64"
 	"unsafe"
 
+	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
 )
 
-// LibOlmOutboundGroupSession stores an outbound encrypted messaging session
+// OutboundGroupSession stores an outbound encrypted messaging session
 // for a group.
-type LibOlmOutboundGroupSession struct {
+type OutboundGroupSession struct {
 	int *C.OlmOutboundGroupSession
 	mem []byte
 }
 
-// Ensure that LibOlmOutboundGroupSession implements OutboundGroupSession.
-var _ OutboundGroupSession = (*LibOlmOutboundGroupSession)(nil)
-
-// OutboundGroupSessionFromPickled loads an OutboundGroupSession from a pickled
-// base64 string.  Decrypts the OutboundGroupSession using the supplied key.
-// Returns error on failure.  If the key doesn't match the one used to encrypt
-// the OutboundGroupSession then the error will be "BAD_SESSION_KEY".  If the
-// base64 couldn't be decoded then the error will be "INVALID_BASE64".
-func OutboundGroupSessionFromPickled(pickled, key []byte) (OutboundGroupSession, error) {
-	if len(pickled) == 0 {
-		return nil, EmptyInput
+func init() {
+	olm.InitNewOutboundGroupSessionFromPickled = func(pickled, key []byte) (olm.OutboundGroupSession, error) {
+		if len(pickled) == 0 {
+			return nil, olm.EmptyInput
+		}
+		s := NewBlankOutboundGroupSession()
+		return s, s.Unpickle(pickled, key)
 	}
-	s := NewBlankLibOlmOutboundGroupSession()
-	return s, s.Unpickle(pickled, key)
+	olm.InitNewOutboundGroupSession = func() olm.OutboundGroupSession {
+		return NewOutboundGroupSession()
+	}
+	olm.InitNewBlankOutboundGroupSession = func() olm.OutboundGroupSession {
+		return NewBlankOutboundGroupSession()
+	}
 }
 
-// NewOutboundGroupSession creates a new outbound group session.
-func NewOutboundGroupSession() OutboundGroupSession {
-	s := NewBlankLibOlmOutboundGroupSession()
+// Ensure that [OutboundGroupSession] implements [olm.OutboundGroupSession].
+var _ olm.OutboundGroupSession = (*OutboundGroupSession)(nil)
+
+func NewOutboundGroupSession() *OutboundGroupSession {
+	s := NewBlankOutboundGroupSession()
 	random := make([]byte, s.createRandomLen()+1)
 	_, err := rand.Read(random)
 	if err != nil {
-		panic(NotEnoughGoRandom)
+		panic(olm.NotEnoughGoRandom)
 	}
 	r := C.olm_init_outbound_group_session(
 		(*C.OlmOutboundGroupSession)(s.int),
@@ -61,29 +62,23 @@ func outboundGroupSessionSize() uint {
 	return uint(C.olm_outbound_group_session_size())
 }
 
-// NewBlankLibOlmOutboundGroupSession initialises an empty
-// LibOlmOutboundGroupSession.
-func NewBlankLibOlmOutboundGroupSession() *LibOlmOutboundGroupSession {
+// NewBlankOutboundGroupSession initialises an empty [OutboundGroupSession].
+func NewBlankOutboundGroupSession() *OutboundGroupSession {
 	memory := make([]byte, outboundGroupSessionSize())
-	return &LibOlmOutboundGroupSession{
+	return &OutboundGroupSession{
 		int: C.olm_outbound_group_session(unsafe.Pointer(&memory[0])),
 		mem: memory,
 	}
 }
 
-// NewBlankOutboundGroupSession initialises an empty OutboundGroupSession.
-func NewBlankOutboundGroupSession() OutboundGroupSession {
-	return NewBlankLibOlmOutboundGroupSession()
-}
-
 // lastError returns an error describing the most recent error to happen to an
 // outbound group session.
-func (s *LibOlmOutboundGroupSession) lastError() error {
+func (s *OutboundGroupSession) lastError() error {
 	return convertError(C.GoString(C.olm_outbound_group_session_last_error((*C.OlmOutboundGroupSession)(s.int))))
 }
 
 // Clear clears the memory used to back this OutboundGroupSession.
-func (s *LibOlmOutboundGroupSession) Clear() error {
+func (s *OutboundGroupSession) Clear() error {
 	r := C.olm_clear_outbound_group_session((*C.OlmOutboundGroupSession)(s.int))
 	if r == errorVal() {
 		return s.lastError()
@@ -94,15 +89,15 @@ func (s *LibOlmOutboundGroupSession) Clear() error {
 
 // pickleLen returns the number of bytes needed to store an outbound group
 // session.
-func (s *LibOlmOutboundGroupSession) pickleLen() uint {
+func (s *OutboundGroupSession) pickleLen() uint {
 	return uint(C.olm_pickle_outbound_group_session_length((*C.OlmOutboundGroupSession)(s.int)))
 }
 
 // Pickle returns an OutboundGroupSession as a base64 string.  Encrypts the
 // OutboundGroupSession using the supplied key.
-func (s *LibOlmOutboundGroupSession) Pickle(key []byte) ([]byte, error) {
+func (s *OutboundGroupSession) Pickle(key []byte) ([]byte, error) {
 	if len(key) == 0 {
-		return nil, NoKeyProvided
+		return nil, olm.NoKeyProvided
 	}
 	pickled := make([]byte, s.pickleLen())
 	r := C.olm_pickle_outbound_group_session(
@@ -117,9 +112,9 @@ func (s *LibOlmOutboundGroupSession) Pickle(key []byte) ([]byte, error) {
 	return pickled[:r], nil
 }
 
-func (s *LibOlmOutboundGroupSession) Unpickle(pickled, key []byte) error {
+func (s *OutboundGroupSession) Unpickle(pickled, key []byte) error {
 	if len(key) == 0 {
-		return NoKeyProvided
+		return olm.NoKeyProvided
 	}
 	r := C.olm_unpickle_outbound_group_session(
 		(*C.OlmOutboundGroupSession)(s.int),
@@ -134,7 +129,7 @@ func (s *LibOlmOutboundGroupSession) Unpickle(pickled, key []byte) error {
 }
 
 // Deprecated
-func (s *LibOlmOutboundGroupSession) GobEncode() ([]byte, error) {
+func (s *OutboundGroupSession) GobEncode() ([]byte, error) {
 	pickled, err := s.Pickle(pickleKey)
 	if err != nil {
 		return nil, err
@@ -146,9 +141,9 @@ func (s *LibOlmOutboundGroupSession) GobEncode() ([]byte, error) {
 }
 
 // Deprecated
-func (s *LibOlmOutboundGroupSession) GobDecode(rawPickled []byte) error {
+func (s *OutboundGroupSession) GobDecode(rawPickled []byte) error {
 	if s == nil || s.int == nil {
-		*s = *NewBlankLibOlmOutboundGroupSession()
+		*s = *NewBlankOutboundGroupSession()
 	}
 	length := base64.RawStdEncoding.EncodedLen(len(rawPickled))
 	pickled := make([]byte, length)
@@ -157,7 +152,7 @@ func (s *LibOlmOutboundGroupSession) GobDecode(rawPickled []byte) error {
 }
 
 // Deprecated
-func (s *LibOlmOutboundGroupSession) MarshalJSON() ([]byte, error) {
+func (s *OutboundGroupSession) MarshalJSON() ([]byte, error) {
 	pickled, err := s.Pickle(pickleKey)
 	if err != nil {
 		return nil, err
@@ -170,33 +165,33 @@ func (s *LibOlmOutboundGroupSession) MarshalJSON() ([]byte, error) {
 }
 
 // Deprecated
-func (s *LibOlmOutboundGroupSession) UnmarshalJSON(data []byte) error {
+func (s *OutboundGroupSession) UnmarshalJSON(data []byte) error {
 	if len(data) == 0 || data[0] != '"' || data[len(data)-1] != '"' {
-		return InputNotJSONString
+		return olm.InputNotJSONString
 	}
 	if s == nil || s.int == nil {
-		*s = *NewBlankLibOlmOutboundGroupSession()
+		*s = *NewBlankOutboundGroupSession()
 	}
 	return s.Unpickle(data[1:len(data)-1], pickleKey)
 }
 
 // createRandomLen returns the number of random bytes needed to create an
 // Account.
-func (s *LibOlmOutboundGroupSession) createRandomLen() uint {
+func (s *OutboundGroupSession) createRandomLen() uint {
 	return uint(C.olm_init_outbound_group_session_random_length((*C.OlmOutboundGroupSession)(s.int)))
 }
 
 // encryptMsgLen returns the size of the next message in bytes for the given
 // number of plain-text bytes.
-func (s *LibOlmOutboundGroupSession) encryptMsgLen(plainTextLen int) uint {
+func (s *OutboundGroupSession) encryptMsgLen(plainTextLen int) uint {
 	return uint(C.olm_group_encrypt_message_length((*C.OlmOutboundGroupSession)(s.int), C.size_t(plainTextLen)))
 }
 
 // Encrypt encrypts a message using the Session.  Returns the encrypted message
 // as base64.
-func (s *LibOlmOutboundGroupSession) Encrypt(plaintext []byte) ([]byte, error) {
+func (s *OutboundGroupSession) Encrypt(plaintext []byte) ([]byte, error) {
 	if len(plaintext) == 0 {
-		return nil, EmptyInput
+		return nil, olm.EmptyInput
 	}
 	message := make([]byte, s.encryptMsgLen(len(plaintext)))
 	r := C.olm_group_encrypt(
@@ -212,12 +207,12 @@ func (s *LibOlmOutboundGroupSession) Encrypt(plaintext []byte) ([]byte, error) {
 }
 
 // sessionIdLen returns the number of bytes needed to store a session ID.
-func (s *LibOlmOutboundGroupSession) sessionIdLen() uint {
+func (s *OutboundGroupSession) sessionIdLen() uint {
 	return uint(C.olm_outbound_group_session_id_length((*C.OlmOutboundGroupSession)(s.int)))
 }
 
 // ID returns a base64-encoded identifier for this session.
-func (s *LibOlmOutboundGroupSession) ID() id.SessionID {
+func (s *OutboundGroupSession) ID() id.SessionID {
 	sessionID := make([]byte, s.sessionIdLen())
 	r := C.olm_outbound_group_session_id(
 		(*C.OlmOutboundGroupSession)(s.int),
@@ -231,17 +226,17 @@ func (s *LibOlmOutboundGroupSession) ID() id.SessionID {
 
 // MessageIndex returns the message index for this session.  Each message is
 // sent with an increasing index; this returns the index for the next message.
-func (s *LibOlmOutboundGroupSession) MessageIndex() uint {
+func (s *OutboundGroupSession) MessageIndex() uint {
 	return uint(C.olm_outbound_group_session_message_index((*C.OlmOutboundGroupSession)(s.int)))
 }
 
 // sessionKeyLen returns the number of bytes needed to store a session key.
-func (s *LibOlmOutboundGroupSession) sessionKeyLen() uint {
+func (s *OutboundGroupSession) sessionKeyLen() uint {
 	return uint(C.olm_outbound_group_session_key_length((*C.OlmOutboundGroupSession)(s.int)))
 }
 
 // Key returns the base64-encoded current ratchet key for this session.
-func (s *LibOlmOutboundGroupSession) Key() string {
+func (s *OutboundGroupSession) Key() string {
 	sessionKey := make([]byte, s.sessionKeyLen())
 	r := C.olm_outbound_group_session_key(
 		(*C.OlmOutboundGroupSession)(s.int),
