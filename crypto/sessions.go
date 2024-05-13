@@ -120,7 +120,7 @@ func NewInboundGroupSession(senderKey id.SenderKey, signingKey id.Ed25519, roomI
 		return nil, err
 	}
 	return &InboundGroupSession{
-		Internal:         *igs,
+		Internal:         igs,
 		SigningKey:       signingKey,
 		SenderKey:        senderKey,
 		RoomID:           roomID,
@@ -148,7 +148,7 @@ func (igs *InboundGroupSession) RatchetTo(index uint32) error {
 	if err != nil {
 		return err
 	}
-	igs.Internal = *imported
+	igs.Internal = imported
 	return nil
 }
 

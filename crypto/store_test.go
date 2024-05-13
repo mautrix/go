@@ -158,7 +158,7 @@ func TestStoreMegolmSession(t *testing.T) {
 			}
 
 			igs := &InboundGroupSession{
-				Internal:   *internal,
+				Internal:   internal,
 				SigningKey: acc.SigningKey(),
 				SenderKey:  acc.IdentityKey(),
 				RoomID:     "room1",
@@ -174,7 +174,9 @@ func TestStoreMegolmSession(t *testing.T) {
 				t.Errorf("Error retrieving inbound group session: %v", err)
 			}
 
-			if pickled := string(retrieved.Internal.Pickle([]byte("test"))); pickled != groupSession {
+			if pickled, err := retrieved.Internal.Pickle([]byte("test")); err != nil {
+				t.Fatalf("Error pickling inbound group session: %v", err)
+			} else if string(pickled) != groupSession {
 				t.Error("Pickled inbound group session does not match original")
 			}
 		})

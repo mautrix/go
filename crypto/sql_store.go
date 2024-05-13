@@ -283,7 +283,10 @@ func datePtr(t time.Time) *time.Time {
 
 // PutGroupSession stores an inbound Megolm group session for a room, sender and session.
 func (store *SQLCryptoStore) PutGroupSession(ctx context.Context, session *InboundGroupSession) error {
-	sessionBytes := session.Internal.Pickle(store.PickleKey)
+	sessionBytes, err := session.Internal.Pickle(store.PickleKey)
+	if err != nil {
+		return err
+	}
 	forwardingChains := strings.Join(session.ForwardingChains, ",")
 	ratchetSafety, err := json.Marshal(&session.RatchetSafety)
 	if err != nil {
@@ -353,7 +356,7 @@ func (store *SQLCryptoStore) GetGroupSession(ctx context.Context, roomID id.Room
 		return nil, err
 	}
 	return &InboundGroupSession{
-		Internal:         *igs,
+		Internal:         igs,
 		SigningKey:       id.Ed25519(signingKey.String),
 		SenderKey:        id.Curve25519(senderKey.String),
 		RoomID:           roomID,
@@ -468,7 +471,7 @@ func (store *SQLCryptoStore) GetWithheldGroupSession(ctx context.Context, roomID
 	}, nil
 }
 
-func (store *SQLCryptoStore) postScanInboundGroupSession(sessionBytes, ratchetSafetyBytes []byte, forwardingChains string) (igs *olm.InboundGroupSession, chains []string, safety RatchetSafety, err error) {
+func (store *SQLCryptoStore) postScanInboundGroupSession(sessionBytes, ratchetSafetyBytes []byte, forwardingChains string) (igs olm.InboundGroupSession, chains []string, safety RatchetSafety, err error) {
 	igs = olm.NewBlankInboundGroupSession()
 	err = igs.Unpickle(sessionBytes, store.PickleKey)
 	if err != nil {
@@ -504,7 +507,7 @@ func (store *SQLCryptoStore) scanInboundGroupSession(rows dbutil.Scannable) (*In
 		return nil, err
 	}
 	return &InboundGroupSession{
-		Internal:         *igs,
+		Internal:         igs,
 		SigningKey:       id.Ed25519(signingKey.String),
 		SenderKey:        id.Curve25519(senderKey.String),
 		RoomID:           roomID,

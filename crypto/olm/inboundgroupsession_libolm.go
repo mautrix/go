@@ -13,19 +13,22 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-// InboundGroupSession stores an inbound encrypted messaging session for a
+// LibOlmInboundGroupSession stores an inbound encrypted messaging session for a
 // group.
-type InboundGroupSession struct {
+type LibOlmInboundGroupSession struct {
 	int *C.OlmInboundGroupSession
 	mem []byte
 }
+
+// Ensure that LibOlmInboundGroupSession implements InboundGroupSession.
+var _ InboundGroupSession = (*LibOlmInboundGroupSession)(nil)
 
 // InboundGroupSessionFromPickled loads an InboundGroupSession from a pickled
 // base64 string.  Decrypts the InboundGroupSession using the supplied key.
 // Returns error on failure.  If the key doesn't match the one used to encrypt
 // the InboundGroupSession then the error will be "BAD_SESSION_KEY".  If the
 // base64 couldn't be decoded then the error will be "INVALID_BASE64".
-func InboundGroupSessionFromPickled(pickled, key []byte) (*InboundGroupSession, error) {
+func InboundGroupSessionFromPickled(pickled, key []byte) (InboundGroupSession, error) {
 	if len(pickled) == 0 {
 		return nil, EmptyInput
 	}
@@ -42,7 +45,7 @@ func InboundGroupSessionFromPickled(pickled, key []byte) (*InboundGroupSession, 
 // If the sessionKey is not valid base64 the error will be
 // "OLM_INVALID_BASE64".  If the session_key is invalid the error will be
 // "OLM_BAD_SESSION_KEY".
-func NewInboundGroupSession(sessionKey []byte) (*InboundGroupSession, error) {
+func NewInboundGroupSession(sessionKey []byte) (*LibOlmInboundGroupSession, error) {
 	if len(sessionKey) == 0 {
 		return nil, EmptyInput
 	}
@@ -61,7 +64,7 @@ func NewInboundGroupSession(sessionKey []byte) (*InboundGroupSession, error) {
 // export.  Returns error on failure.  If the sessionKey is not valid base64
 // the error will be "OLM_INVALID_BASE64".  If the session_key is invalid the
 // error will be "OLM_BAD_SESSION_KEY".
-func InboundGroupSessionImport(sessionKey []byte) (*InboundGroupSession, error) {
+func InboundGroupSessionImport(sessionKey []byte) (*LibOlmInboundGroupSession, error) {
 	if len(sessionKey) == 0 {
 		return nil, EmptyInput
 	}
@@ -83,9 +86,9 @@ func inboundGroupSessionSize() uint {
 }
 
 // newInboundGroupSession initialises an empty InboundGroupSession.
-func NewBlankInboundGroupSession() *InboundGroupSession {
+func NewBlankInboundGroupSession() *LibOlmInboundGroupSession {
 	memory := make([]byte, inboundGroupSessionSize())
-	return &InboundGroupSession{
+	return &LibOlmInboundGroupSession{
 		int: C.olm_inbound_group_session(unsafe.Pointer(&memory[0])),
 		mem: memory,
 	}
@@ -93,12 +96,12 @@ func NewBlankInboundGroupSession() *InboundGroupSession {
 
 // lastError returns an error describing the most recent error to happen to an
 // inbound group session.
-func (s *InboundGroupSession) lastError() error {
+func (s *LibOlmInboundGroupSession) lastError() error {
 	return convertError(C.GoString(C.olm_inbound_group_session_last_error((*C.OlmInboundGroupSession)(s.int))))
 }
 
 // Clear clears the memory used to back this InboundGroupSession.
-func (s *InboundGroupSession) Clear() error {
+func (s *LibOlmInboundGroupSession) Clear() error {
 	r := C.olm_clear_inbound_group_session((*C.OlmInboundGroupSession)(s.int))
 	if r == errorVal() {
 		return s.lastError()
@@ -108,15 +111,15 @@ func (s *InboundGroupSession) Clear() error {
 
 // pickleLen returns the number of bytes needed to store an inbound group
 // session.
-func (s *InboundGroupSession) pickleLen() uint {
+func (s *LibOlmInboundGroupSession) pickleLen() uint {
 	return uint(C.olm_pickle_inbound_group_session_length((*C.OlmInboundGroupSession)(s.int)))
 }
 
 // Pickle returns an InboundGroupSession as a base64 string.  Encrypts the
 // InboundGroupSession using the supplied key.
-func (s *InboundGroupSession) Pickle(key []byte) []byte {
+func (s *LibOlmInboundGroupSession) Pickle(key []byte) ([]byte, error) {
 	if len(key) == 0 {
-		panic(NoKeyProvided)
+		return nil, NoKeyProvided
 	}
 	pickled := make([]byte, s.pickleLen())
 	r := C.olm_pickle_inbound_group_session(
@@ -126,12 +129,12 @@ func (s *InboundGroupSession) Pickle(key []byte) []byte {
 		unsafe.Pointer(&pickled[0]),
 		C.size_t(len(pickled)))
 	if r == errorVal() {
-		panic(s.lastError())
+		return nil, s.lastError()
 	}
-	return pickled[:r]
+	return pickled[:r], nil
 }
 
-func (s *InboundGroupSession) Unpickle(pickled, key []byte) error {
+func (s *LibOlmInboundGroupSession) Unpickle(pickled, key []byte) error {
 	if len(key) == 0 {
 		return NoKeyProvided
 	} else if len(pickled) == 0 {
@@ -150,16 +153,19 @@ func (s *InboundGroupSession) Unpickle(pickled, key []byte) error {
 }
 
 // Deprecated
-func (s *InboundGroupSession) GobEncode() ([]byte, error) {
-	pickled := s.Pickle(pickleKey)
+func (s *LibOlmInboundGroupSession) GobEncode() ([]byte, error) {
+	pickled, err := s.Pickle(pickleKey)
+	if err != nil {
+		return nil, err
+	}
 	length := base64.RawStdEncoding.DecodedLen(len(pickled))
 	rawPickled := make([]byte, length)
-	_, err := base64.RawStdEncoding.Decode(rawPickled, pickled)
+	_, err = base64.RawStdEncoding.Decode(rawPickled, pickled)
 	return rawPickled, err
 }
 
 // Deprecated
-func (s *InboundGroupSession) GobDecode(rawPickled []byte) error {
+func (s *LibOlmInboundGroupSession) GobDecode(rawPickled []byte) error {
 	if s == nil || s.int == nil {
 		*s = *NewBlankInboundGroupSession()
 	}
@@ -170,8 +176,11 @@ func (s *InboundGroupSession) GobDecode(rawPickled []byte) error {
 }
 
 // Deprecated
-func (s *InboundGroupSession) MarshalJSON() ([]byte, error) {
-	pickled := s.Pickle(pickleKey)
+func (s *LibOlmInboundGroupSession) MarshalJSON() ([]byte, error) {
+	pickled, err := s.Pickle(pickleKey)
+	if err != nil {
+		return nil, err
+	}
 	quotes := make([]byte, len(pickled)+2)
 	quotes[0] = '"'
 	quotes[len(quotes)-1] = '"'
@@ -180,7 +189,7 @@ func (s *InboundGroupSession) MarshalJSON() ([]byte, error) {
 }
 
 // Deprecated
-func (s *InboundGroupSession) UnmarshalJSON(data []byte) error {
+func (s *LibOlmInboundGroupSession) UnmarshalJSON(data []byte) error {
 	if len(data) == 0 || data[0] != '"' || data[len(data)-1] != '"' {
 		return InputNotJSONString
 	}
@@ -203,7 +212,7 @@ func clone(original []byte) []byte {
 // unsupported version of the protocol then the error will be
 // "BAD_MESSAGE_VERSION".  If the message couldn't be decoded then the error
 // will be "BAD_MESSAGE_FORMAT".
-func (s *InboundGroupSession) decryptMaxPlaintextLen(message []byte) (uint, error) {
+func (s *LibOlmInboundGroupSession) decryptMaxPlaintextLen(message []byte) (uint, error) {
 	if len(message) == 0 {
 		return 0, EmptyInput
 	}
@@ -228,7 +237,7 @@ func (s *InboundGroupSession) decryptMaxPlaintextLen(message []byte) (uint, erro
 // error will be "BAD_MESSAGE_MAC".  If we do not have a session key
 // corresponding to the message's index (ie, it was sent before the session key
 // was shared with us) the error will be "OLM_UNKNOWN_MESSAGE_INDEX".
-func (s *InboundGroupSession) Decrypt(message []byte) ([]byte, uint, error) {
+func (s *LibOlmInboundGroupSession) Decrypt(message []byte) ([]byte, uint, error) {
 	if len(message) == 0 {
 		return nil, 0, EmptyInput
 	}
@@ -254,12 +263,12 @@ func (s *InboundGroupSession) Decrypt(message []byte) ([]byte, uint, error) {
 }
 
 // sessionIdLen returns the number of bytes needed to store a session ID.
-func (s *InboundGroupSession) sessionIdLen() uint {
+func (s *LibOlmInboundGroupSession) sessionIdLen() uint {
 	return uint(C.olm_inbound_group_session_id_length((*C.OlmInboundGroupSession)(s.int)))
 }
 
 // ID returns a base64-encoded identifier for this session.
-func (s *InboundGroupSession) ID() id.SessionID {
+func (s *LibOlmInboundGroupSession) ID() id.SessionID {
 	sessionID := make([]byte, s.sessionIdLen())
 	r := C.olm_inbound_group_session_id(
 		(*C.OlmInboundGroupSession)(s.int),
@@ -272,20 +281,20 @@ func (s *InboundGroupSession) ID() id.SessionID {
 }
 
 // FirstKnownIndex returns the first message index we know how to decrypt.
-func (s *InboundGroupSession) FirstKnownIndex() uint32 {
+func (s *LibOlmInboundGroupSession) FirstKnownIndex() uint32 {
 	return uint32(C.olm_inbound_group_session_first_known_index((*C.OlmInboundGroupSession)(s.int)))
 }
 
 // IsVerified check if the session has been verified as a valid session.  (A
 // session is verified either because the original session share was signed, or
 // because we have subsequently successfully decrypted a message.)
-func (s *InboundGroupSession) IsVerified() uint {
-	return uint(C.olm_inbound_group_session_is_verified((*C.OlmInboundGroupSession)(s.int)))
+func (s *LibOlmInboundGroupSession) IsVerified() bool {
+	return uint(C.olm_inbound_group_session_is_verified((*C.OlmInboundGroupSession)(s.int))) == 1
 }
 
 // exportLen returns the number of bytes needed to export an inbound group
 // session.
-func (s *InboundGroupSession) exportLen() uint {
+func (s *LibOlmInboundGroupSession) exportLen() uint {
 	return uint(C.olm_export_inbound_group_session_length((*C.OlmInboundGroupSession)(s.int)))
 }
 
@@ -296,7 +305,7 @@ func (s *InboundGroupSession) exportLen() uint {
 // if we do not have a session key corresponding to the given index (ie, it was
 // sent before the session key was shared with us) the error will be
 // "OLM_UNKNOWN_MESSAGE_INDEX".
-func (s *InboundGroupSession) Export(messageIndex uint32) ([]byte, error) {
+func (s *LibOlmInboundGroupSession) Export(messageIndex uint32) ([]byte, error) {
 	key := make([]byte, s.exportLen())
 	r := C.olm_export_inbound_group_session(
 		(*C.OlmInboundGroupSession)(s.int),

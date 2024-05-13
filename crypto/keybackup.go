@@ -169,7 +169,7 @@ func (mach *OlmMachine) ImportRoomKeyFromBackup(ctx context.Context, version id.
 	}
 
 	igs := &InboundGroupSession{
-		Internal:         *igsInternal,
+		Internal:         igsInternal,
 		SigningKey:       keyBackupData.SenderClaimedKeys.Ed25519,
 		SenderKey:        keyBackupData.SenderKey,
 		RoomID:           roomID,
