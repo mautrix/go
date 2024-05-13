@@ -22,8 +22,12 @@ type OlmAccount struct {
 }
 
 func NewOlmAccount() *OlmAccount {
+	account, err := olm.NewAccount(nil)
+	if err != nil {
+		panic(err)
+	}
 	return &OlmAccount{
-		Internal: olm.NewAccount(),
+		Internal: account,
 	}
 }
 

@@ -12,8 +12,9 @@ import (
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
 	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
 	"maunium.net/go/mautrix/crypto/goolm/message"
-	"maunium.net/go/mautrix/crypto/goolm/olm"
+	"maunium.net/go/mautrix/crypto/goolm/ratchet"
 	"maunium.net/go/mautrix/crypto/goolm/utilities"
+	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -32,8 +33,10 @@ type OlmSession struct {
 	AliceIdentityKey crypto.Curve25519PublicKey `json:"alice_id_key"`
 	AliceBaseKey     crypto.Curve25519PublicKey `json:"alice_base_key"`
 	BobOneTimeKey    crypto.Curve25519PublicKey `json:"bob_one_time_key"`
-	Ratchet          olm.Ratchet                `json:"ratchet"`
+	Ratchet          ratchet.Ratchet            `json:"ratchet"`
 }
+
+var _ olm.Session = (*OlmSession)(nil)
 
 // SearchOTKFunc is used to retrieve a crypto.OneTimeKey from a public key.
 type SearchOTKFunc = func(crypto.Curve25519PublicKey) *crypto.OneTimeKey
@@ -68,7 +71,7 @@ func OlmSessionFromPickled(pickled, key []byte) (*OlmSession, error) {
 // NewOlmSession creates a new Session.
 func NewOlmSession() *OlmSession {
 	s := &OlmSession{}
-	s.Ratchet = *olm.New()
+	s.Ratchet = *ratchet.New()
 	return s
 }
 

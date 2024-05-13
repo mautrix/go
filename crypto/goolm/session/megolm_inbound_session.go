@@ -12,6 +12,7 @@ import (
 	"maunium.net/go/mautrix/crypto/goolm/megolm"
 	"maunium.net/go/mautrix/crypto/goolm/message"
 	"maunium.net/go/mautrix/crypto/goolm/utilities"
+	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -27,6 +28,10 @@ type MegolmInboundSession struct {
 	InitialRatchet     megolm.Ratchet          `json:"initial_ratchet"`
 	SigningKeyVerified bool                    `json:"signing_key_verified"` //not used for now
 }
+
+// Ensure that MegolmInboundSession implements the [olm.InboundGroupSession]
+// interface.
+var _ olm.InboundGroupSession = (*MegolmInboundSession)(nil)
 
 // NewMegolmInboundSession creates a new MegolmInboundSession from a base64 encoded session sharing message.
 func NewMegolmInboundSession(input []byte) (*MegolmInboundSession, error) {

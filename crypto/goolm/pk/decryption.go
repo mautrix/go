@@ -56,8 +56,8 @@ func (s Decryption) PrivateKey() crypto.Curve25519PrivateKey {
 }
 
 // Decrypt decrypts the ciphertext and verifies the MAC. The base64 encoded key is used to construct the shared secret.
-func (s Decryption) Decrypt(ciphertext, mac []byte, key id.Curve25519) ([]byte, error) {
-	keyDecoded, err := base64.RawStdEncoding.DecodeString(string(key))
+func (s Decryption) Decrypt(ephemeralKey, mac, ciphertext []byte) ([]byte, error) {
+	keyDecoded, err := base64.RawStdEncoding.DecodeString(string(ephemeralKey))
 	if err != nil {
 		return nil, err
 	}

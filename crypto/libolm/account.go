@@ -1,6 +1,4 @@
-//go:build !goolm
-
-package olm
+package libolm
 
 // #cgo LDFLAGS: -lolm -lstdc++
 // #include <olm/olm.h>
@@ -17,59 +15,71 @@ import (
 	"github.com/tidwall/sjson"
 
 	"maunium.net/go/mautrix/crypto/canonicaljson"
+	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
 )
 
-// LibOlmAccount stores a device account for end to end encrypted messaging.
-type LibOlmAccount struct {
+// Account stores a device account for end to end encrypted messaging.
+type Account struct {
 	int *C.OlmAccount
 	mem []byte
 }
 
-// Ensure that LibOlmAccount implements Account.
-var _ Account = (*LibOlmAccount)(nil)
+func init() {
+	olm.InitNewAccount = func(r io.Reader) (olm.Account, error) {
+		return NewAccount(r)
+	}
+	olm.InitBlankAccount = func() olm.Account {
+		return NewBlankAccount()
+	}
+	olm.InitNewAccountFromPickled = func(pickled, key []byte) (olm.Account, error) {
+		return AccountFromPickled(pickled, key)
+	}
+}
+
+// Ensure that [Account] implements [olm.Account].
+var _ olm.Account = (*Account)(nil)
 
 // AccountFromPickled loads an Account from a pickled base64 string.  Decrypts
 // the Account using the supplied key.  Returns error on failure.  If the key
 // doesn't match the one used to encrypt the Account then the error will be
 // "BAD_ACCOUNT_KEY".  If the base64 couldn't be decoded then the error will be
 // "INVALID_BASE64".
-func AccountFromPickled(pickled, key []byte) (Account, error) {
+func AccountFromPickled(pickled, key []byte) (*Account, error) {
 	if len(pickled) == 0 {
-		return nil, EmptyInput
+		return nil, olm.EmptyInput
 	}
 	a := NewBlankAccount()
 	return a, a.Unpickle(pickled, key)
 }
 
-func NewBlankLibOlmAccount() *LibOlmAccount {
+func NewBlankAccount() *Account {
 	memory := make([]byte, accountSize())
-	return &LibOlmAccount{
+	return &Account{
 		int: C.olm_account(unsafe.Pointer(&memory[0])),
 		mem: memory,
 	}
 }
 
-func NewBlankAccount() Account {
-	return NewBlankLibOlmAccount()
-}
-
-// NewAccount creates a new Account.
-func NewAccount() Account {
-	a := NewBlankLibOlmAccount()
+// NewAccount creates a new [Account].
+func NewAccount(r io.Reader) (*Account, error) {
+	a := NewBlankAccount()
 	random := make([]byte, a.createRandomLen()+1)
-	_, err := rand.Read(random)
-	if err != nil {
-		panic(NotEnoughGoRandom)
+	if r == nil {
+		r = rand.Reader
 	}
-	r := C.olm_create_account(
+	_, err := r.Read(random)
+	if err != nil {
+		panic(olm.NotEnoughGoRandom)
+	}
+	ret := C.olm_create_account(
 		(*C.OlmAccount)(a.int),
 		unsafe.Pointer(&random[0]),
 		C.size_t(len(random)))
-	if r == errorVal() {
-		panic(a.lastError())
+	if ret == errorVal() {
+		return nil, a.lastError()
 	} else {
-		return a
+		return a, nil
 	}
 }
 
@@ -80,12 +90,12 @@ func accountSize() uint {
 
 // lastError returns an error describing the most recent error to happen to an
 // account.
-func (a *LibOlmAccount) lastError() error {
+func (a *Account) lastError() error {
 	return convertError(C.GoString(C.olm_account_last_error((*C.OlmAccount)(a.int))))
 }
 
 // Clear clears the memory used to back this Account.
-func (a *LibOlmAccount) Clear() error {
+func (a *Account) Clear() error {
 	r := C.olm_clear_account((*C.OlmAccount)(a.int))
 	if r == errorVal() {
 		return a.lastError()
@@ -95,36 +105,36 @@ func (a *LibOlmAccount) Clear() error {
 }
 
 // pickleLen returns the number of bytes needed to store an Account.
-func (a *LibOlmAccount) pickleLen() uint {
+func (a *Account) pickleLen() uint {
 	return uint(C.olm_pickle_account_length((*C.OlmAccount)(a.int)))
 }
 
 // createRandomLen returns the number of random bytes needed to create an
 // Account.
-func (a *LibOlmAccount) createRandomLen() uint {
+func (a *Account) createRandomLen() uint {
 	return uint(C.olm_create_account_random_length((*C.OlmAccount)(a.int)))
 }
 
 // identityKeysLen returns the size of the output buffer needed to hold the
 // identity keys.
-func (a *LibOlmAccount) identityKeysLen() uint {
+func (a *Account) identityKeysLen() uint {
 	return uint(C.olm_account_identity_keys_length((*C.OlmAccount)(a.int)))
 }
 
 // signatureLen returns the length of an ed25519 signature encoded as base64.
-func (a *LibOlmAccount) signatureLen() uint {
+func (a *Account) signatureLen() uint {
 	return uint(C.olm_account_signature_length((*C.OlmAccount)(a.int)))
 }
 
 // oneTimeKeysLen returns the size of the output buffer needed to hold the one
 // time keys.
-func (a *LibOlmAccount) oneTimeKeysLen() uint {
+func (a *Account) oneTimeKeysLen() uint {
 	return uint(C.olm_account_one_time_keys_length((*C.OlmAccount)(a.int)))
 }
 
 // genOneTimeKeysRandomLen returns the number of random bytes needed to
 // generate a given number of new one time keys.
-func (a *LibOlmAccount) genOneTimeKeysRandomLen(num uint) uint {
+func (a *Account) genOneTimeKeysRandomLen(num uint) uint {
 	return uint(C.olm_account_generate_one_time_keys_random_length(
 		(*C.OlmAccount)(a.int),
 		C.size_t(num)))
@@ -132,9 +142,9 @@ func (a *LibOlmAccount) genOneTimeKeysRandomLen(num uint) uint {
 
 // Pickle returns an Account as a base64 string. Encrypts the Account using the
 // supplied key.
-func (a *LibOlmAccount) Pickle(key []byte) ([]byte, error) {
+func (a *Account) Pickle(key []byte) ([]byte, error) {
 	if len(key) == 0 {
-		return nil, NoKeyProvided
+		return nil, olm.NoKeyProvided
 	}
 	pickled := make([]byte, a.pickleLen())
 	r := C.olm_pickle_account(
@@ -149,9 +159,9 @@ func (a *LibOlmAccount) Pickle(key []byte) ([]byte, error) {
 	return pickled[:r], nil
 }
 
-func (a *LibOlmAccount) Unpickle(pickled, key []byte) error {
+func (a *Account) Unpickle(pickled, key []byte) error {
 	if len(key) == 0 {
-		return NoKeyProvided
+		return olm.NoKeyProvided
 	}
 	r := C.olm_unpickle_account(
 		(*C.OlmAccount)(a.int),
@@ -166,7 +176,7 @@ func (a *LibOlmAccount) Unpickle(pickled, key []byte) error {
 }
 
 // Deprecated
-func (a *LibOlmAccount) GobEncode() ([]byte, error) {
+func (a *Account) GobEncode() ([]byte, error) {
 	pickled, err := a.Pickle(pickleKey)
 	if err != nil {
 		return nil, err
@@ -178,9 +188,9 @@ func (a *LibOlmAccount) GobEncode() ([]byte, error) {
 }
 
 // Deprecated
-func (a *LibOlmAccount) GobDecode(rawPickled []byte) error {
+func (a *Account) GobDecode(rawPickled []byte) error {
 	if a.int == nil {
-		*a = *NewBlankLibOlmAccount()
+		*a = *NewBlankAccount()
 	}
 	length := base64.RawStdEncoding.EncodedLen(len(rawPickled))
 	pickled := make([]byte, length)
@@ -189,7 +199,7 @@ func (a *LibOlmAccount) GobDecode(rawPickled []byte) error {
 }
 
 // Deprecated
-func (a *LibOlmAccount) MarshalJSON() ([]byte, error) {
+func (a *Account) MarshalJSON() ([]byte, error) {
 	pickled, err := a.Pickle(pickleKey)
 	if err != nil {
 		return nil, err
@@ -202,18 +212,18 @@ func (a *LibOlmAccount) MarshalJSON() ([]byte, error) {
 }
 
 // Deprecated
-func (a *LibOlmAccount) UnmarshalJSON(data []byte) error {
+func (a *Account) UnmarshalJSON(data []byte) error {
 	if len(data) == 0 || data[0] != '"' || data[len(data)-1] != '"' {
-		return InputNotJSONString
+		return olm.InputNotJSONString
 	}
 	if a.int == nil {
-		*a = *NewBlankLibOlmAccount()
+		*a = *NewBlankAccount()
 	}
 	return a.Unpickle(data[1:len(data)-1], pickleKey)
 }
 
 // IdentityKeysJSON returns the public parts of the identity keys for the Account.
-func (a *LibOlmAccount) IdentityKeysJSON() ([]byte, error) {
+func (a *Account) IdentityKeysJSON() ([]byte, error) {
 	identityKeys := make([]byte, a.identityKeysLen())
 	r := C.olm_account_identity_keys(
 		(*C.OlmAccount)(a.int),
@@ -228,7 +238,7 @@ func (a *LibOlmAccount) IdentityKeysJSON() ([]byte, error) {
 
 // IdentityKeys returns the public parts of the Ed25519 and Curve25519 identity
 // keys for the Account.
-func (a *LibOlmAccount) IdentityKeys() (id.Ed25519, id.Curve25519, error) {
+func (a *Account) IdentityKeys() (id.Ed25519, id.Curve25519, error) {
 	identityKeysJSON, err := a.IdentityKeysJSON()
 	if err != nil {
 		return "", "", err
@@ -239,9 +249,9 @@ func (a *LibOlmAccount) IdentityKeys() (id.Ed25519, id.Curve25519, error) {
 
 // Sign returns the signature of a message using the ed25519 key for this
 // Account.
-func (a *LibOlmAccount) Sign(message []byte) ([]byte, error) {
+func (a *Account) Sign(message []byte) ([]byte, error) {
 	if len(message) == 0 {
-		panic(EmptyInput)
+		panic(olm.EmptyInput)
 	}
 	signature := make([]byte, a.signatureLen())
 	r := C.olm_account_sign(
@@ -258,7 +268,7 @@ func (a *LibOlmAccount) Sign(message []byte) ([]byte, error) {
 
 // SignJSON signs the given JSON object following the Matrix specification:
 // https://matrix.org/docs/spec/appendices#signing-json
-func (a *LibOlmAccount) SignJSON(obj interface{}) (string, error) {
+func (a *Account) SignJSON(obj interface{}) (string, error) {
 	objJSON, err := json.Marshal(obj)
 	if err != nil {
 		return "", err
@@ -282,7 +292,7 @@ func (a *LibOlmAccount) SignJSON(obj interface{}) (string, error) {
 //	        "AAAAAB": "LRvjo46L1X2vx69sS9QNFD29HWulxrmW11Up5AfAjgU"
 //	    }
 //	}
-func (a *LibOlmAccount) OneTimeKeys() (map[string]id.Curve25519, error) {
+func (a *Account) OneTimeKeys() (map[string]id.Curve25519, error) {
 	oneTimeKeysJSON := make([]byte, a.oneTimeKeysLen())
 	r := C.olm_account_one_time_keys(
 		(*C.OlmAccount)(a.int),
@@ -299,27 +309,27 @@ func (a *LibOlmAccount) OneTimeKeys() (map[string]id.Curve25519, error) {
 
 // MarkKeysAsPublished marks the current set of one time keys as being
 // published.
-func (a *LibOlmAccount) MarkKeysAsPublished() {
+func (a *Account) MarkKeysAsPublished() {
 	C.olm_account_mark_keys_as_published((*C.OlmAccount)(a.int))
 }
 
 // MaxNumberOfOneTimeKeys returns the largest number of one time keys this
 // Account can store.
-func (a *LibOlmAccount) MaxNumberOfOneTimeKeys() uint {
+func (a *Account) MaxNumberOfOneTimeKeys() uint {
 	return uint(C.olm_account_max_number_of_one_time_keys((*C.OlmAccount)(a.int)))
 }
 
 // GenOneTimeKeys generates a number of new one time keys.  If the total number
 // of keys stored by this Account exceeds MaxNumberOfOneTimeKeys then the old
 // keys are discarded.
-func (a *LibOlmAccount) GenOneTimeKeys(reader io.Reader, num uint) error {
+func (a *Account) GenOneTimeKeys(reader io.Reader, num uint) error {
 	random := make([]byte, a.genOneTimeKeysRandomLen(num)+1)
 	if reader == nil {
 		reader = rand.Reader
 	}
 	_, err := reader.Read(random)
 	if err != nil {
-		return NotEnoughGoRandom
+		return olm.NotEnoughGoRandom
 	}
 	r := C.olm_account_generate_one_time_keys(
 		(*C.OlmAccount)(a.int),
@@ -335,15 +345,15 @@ func (a *LibOlmAccount) GenOneTimeKeys(reader io.Reader, num uint) error {
 // NewOutboundSession creates a new out-bound session for sending messages to a
 // given curve25519 identityKey and oneTimeKey.  Returns error on failure.  If the
 // keys couldn't be decoded as base64 then the error will be "INVALID_BASE64"
-func (a *LibOlmAccount) NewOutboundSession(theirIdentityKey, theirOneTimeKey id.Curve25519) (Session, error) {
+func (a *Account) NewOutboundSession(theirIdentityKey, theirOneTimeKey id.Curve25519) (olm.Session, error) {
 	if len(theirIdentityKey) == 0 || len(theirOneTimeKey) == 0 {
-		return nil, EmptyInput
+		return nil, olm.EmptyInput
 	}
-	s := NewBlankLibOlmSession()
+	s := NewBlankSession()
 	random := make([]byte, s.createOutboundRandomLen()+1)
 	_, err := rand.Read(random)
 	if err != nil {
-		panic(NotEnoughGoRandom)
+		panic(olm.NotEnoughGoRandom)
 	}
 	r := C.olm_create_outbound_session(
 		(*C.OlmSession)(s.int),
@@ -367,11 +377,11 @@ func (a *LibOlmAccount) NewOutboundSession(theirIdentityKey, theirOneTimeKey id.
 // "BAD_MESSAGE_VERSION".  If the message couldn't be decoded then then the
 // error will be "BAD_MESSAGE_FORMAT".  If the message refers to an unknown one
 // time key then the error will be "BAD_MESSAGE_KEY_ID".
-func (a *LibOlmAccount) NewInboundSession(oneTimeKeyMsg string) (Session, error) {
+func (a *Account) NewInboundSession(oneTimeKeyMsg string) (olm.Session, error) {
 	if len(oneTimeKeyMsg) == 0 {
-		return nil, EmptyInput
+		return nil, olm.EmptyInput
 	}
-	s := NewBlankLibOlmSession()
+	s := NewBlankSession()
 	r := C.olm_create_inbound_session(
 		(*C.OlmSession)(s.int),
 		(*C.OlmAccount)(a.int),
@@ -390,11 +400,11 @@ func (a *LibOlmAccount) NewInboundSession(oneTimeKeyMsg string) (Session, error)
 // "BAD_MESSAGE_VERSION".  If the message couldn't be decoded then then the
 // error will be "BAD_MESSAGE_FORMAT".  If the message refers to an unknown one
 // time key then the error will be "BAD_MESSAGE_KEY_ID".
-func (a *LibOlmAccount) NewInboundSessionFrom(theirIdentityKey *id.Curve25519, oneTimeKeyMsg string) (Session, error) {
+func (a *Account) NewInboundSessionFrom(theirIdentityKey *id.Curve25519, oneTimeKeyMsg string) (olm.Session, error) {
 	if theirIdentityKey == nil || len(oneTimeKeyMsg) == 0 {
-		return nil, EmptyInput
+		return nil, olm.EmptyInput
 	}
-	s := NewBlankLibOlmSession()
+	s := NewBlankSession()
 	r := C.olm_create_inbound_session_from(
 		(*C.OlmSession)(s.int),
 		(*C.OlmAccount)(a.int),
@@ -411,10 +421,10 @@ func (a *LibOlmAccount) NewInboundSessionFrom(theirIdentityKey *id.Curve25519, o
 // RemoveOneTimeKeys removes the one time keys that the session used from the
 // Account.  Returns error on failure.  If the Account doesn't have any
 // matching one time keys then the error will be "BAD_MESSAGE_KEY_ID".
-func (a *LibOlmAccount) RemoveOneTimeKeys(s Session) error {
+func (a *Account) RemoveOneTimeKeys(s olm.Session) error {
 	r := C.olm_remove_one_time_keys(
 		(*C.OlmAccount)(a.int),
-		(*C.OlmSession)(s.(*LibOlmSession).int))
+		(*C.OlmSession)(s.(*Session).int))
 	if r == errorVal() {
 		return a.lastError()
 	}

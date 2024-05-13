@@ -1,4 +1,4 @@
-package olm_test
+package ratchet_test
 
 import (
 	"bytes"
@@ -7,24 +7,24 @@ import (
 
 	"maunium.net/go/mautrix/crypto/goolm/cipher"
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
-	"maunium.net/go/mautrix/crypto/goolm/olm"
+	"maunium.net/go/mautrix/crypto/goolm/ratchet"
 )
 
 var (
 	sharedSecret = []byte("A secret")
 )
 
-func initializeRatchets() (*olm.Ratchet, *olm.Ratchet, error) {
-	olm.KdfInfo = struct {
+func initializeRatchets() (*ratchet.Ratchet, *ratchet.Ratchet, error) {
+	ratchet.KdfInfo = struct {
 		Root    []byte
 		Ratchet []byte
 	}{
 		Root:    []byte("Olm"),
 		Ratchet: []byte("OlmRatchet"),
 	}
-	olm.RatchetCipher = cipher.NewAESSHA256([]byte("OlmMessageKeys"))
-	aliceRatchet := olm.New()
-	bobRatchet := olm.New()
+	ratchet.RatchetCipher = cipher.NewAESSHA256([]byte("OlmMessageKeys"))
+	aliceRatchet := ratchet.New()
+	bobRatchet := ratchet.New()
 
 	aliceKey, err := crypto.Curve25519GenerateKey(nil)
 	if err != nil {
@@ -163,7 +163,7 @@ func TestJSONEncoding(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	newRatcher := olm.Ratchet{}
+	newRatcher := ratchet.Ratchet{}
 	err = json.Unmarshal(marshaled, &newRatcher)
 	if err != nil {
 		t.Fatal(err)

@@ -1,28 +1,20 @@
-//go:build !goolm
+// Copyright (c) 2024 Sumner Evans
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 package olm
 
-// #cgo LDFLAGS: -lolm -lstdc++
-// #include <olm/olm.h>
-import "C"
+var GetVersion func() (major, minor, patch uint8)
+var SetPickleKeyImpl func(key []byte)
 
 // Version returns the version number of the olm library.
 func Version() (major, minor, patch uint8) {
-	C.olm_get_library_version(
-		(*C.uint8_t)(&major),
-		(*C.uint8_t)(&minor),
-		(*C.uint8_t)(&patch))
-	return
+	return GetVersion()
 }
-
-// errorVal returns the value that olm functions return if there was an error.
-func errorVal() C.size_t {
-	return C.olm_error()
-}
-
-var pickleKey = []byte("maunium.net/go/mautrix/crypto/olm")
 
 // SetPickleKey sets the global pickle key used when encoding structs with Gob or JSON.
 func SetPickleKey(key []byte) {
-	pickleKey = key
+	SetPickleKeyImpl(key)
 }
