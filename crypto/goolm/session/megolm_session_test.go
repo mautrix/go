@@ -75,7 +75,7 @@ func TestInboundPickleJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if sess.SessionID() != newSession.SessionID() {
+	if sess.ID() != newSession.ID() {
 		t.Fatal("sess ids not equal")
 	}
 	if !bytes.Equal(sess.SigningKey, newSession.SigningKey) {
@@ -128,7 +128,7 @@ func TestGroupSendReceive(t *testing.T) {
 	if !inboundSession.SigningKeyVerified {
 		t.Fatal("key not verified")
 	}
-	if inboundSession.SessionID() != outboundSession.ID() {
+	if inboundSession.ID() != outboundSession.ID() {
 		t.Fatal("session ids not equal")
 	}
 
@@ -174,7 +174,7 @@ func TestGroupSessionExportImport(t *testing.T) {
 	}
 
 	//Export the keys
-	exported, err := inboundSession.SessionExportMessage(0)
+	exported, err := inboundSession.Export(0)
 	if err != nil {
 		t.Fatal(err)
 	}
