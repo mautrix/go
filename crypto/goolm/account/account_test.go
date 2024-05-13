@@ -71,7 +71,7 @@ func TestAccount(t *testing.T) {
 		t.Fatal("IdentityKeys Ed25519 public unequal")
 	}
 
-	if len(firstAccount.OneTimeKeys()) != 2 {
+	if otks, err := firstAccount.OneTimeKeys(); err != nil || len(otks) != 2 {
 		t.Fatal("should get 2 unpublished oneTimeKeys")
 	}
 	if len(firstAccount.FallbackKeyUnpublished()) == 0 {
@@ -84,7 +84,7 @@ func TestAccount(t *testing.T) {
 	if len(firstAccount.FallbackKeyUnpublished()) != 0 {
 		t.Fatal("should get no fallbackKey")
 	}
-	if len(firstAccount.OneTimeKeys()) != 0 {
+	if otks, err := firstAccount.OneTimeKeys(); err != nil || len(otks) != 0 {
 		t.Fatal("should get no oneTimeKeys")
 	}
 }
@@ -147,7 +147,7 @@ func TestSessions(t *testing.T) {
 		t.Fatal("wrong message type")
 	}
 
-	bobSession, err := bobAccount.NewInboundSession(nil, crypttext)
+	bobSession, err := bobAccount.NewInboundSession(string(crypttext))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -260,7 +260,7 @@ func TestLoopback(t *testing.T) {
 		t.Fatal("wrong message type")
 	}
 
-	bobSession, err := accountB.NewInboundSession(nil, message1)
+	bobSession, err := accountB.NewInboundSession(string(message1))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -356,7 +356,7 @@ func TestMoreMessages(t *testing.T) {
 		t.Fatal("wrong message type")
 	}
 
-	bobSession, err := accountB.NewInboundSession(nil, message1)
+	bobSession, err := accountB.NewInboundSession(string(message1))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -443,7 +443,7 @@ func TestFallbackKey(t *testing.T) {
 		t.Fatal("wrong message type")
 	}
 
-	bobSession, err := accountB.NewInboundSession(nil, message1)
+	bobSession, err := accountB.NewInboundSession(string(message1))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -509,7 +509,7 @@ func TestFallbackKey(t *testing.T) {
 	if sessionIsOK {
 		t.Fatal("session was detected to be valid but should not")
 	}
-	bobSession2, err := accountB.NewInboundSession(nil, message2)
+	bobSession2, err := accountB.NewInboundSession(string(message2))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -560,7 +560,7 @@ func TestFallbackKey(t *testing.T) {
 	if msgType3 != id.OlmMsgTypePreKey {
 		t.Fatal("wrong message type")
 	}
-	_, err = accountB.NewInboundSession(nil, message3)
+	_, err = accountB.NewInboundSession(string(message3))
 	if err == nil {
 		t.Fatal("expected error")
 	}

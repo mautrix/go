@@ -8,14 +8,18 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/tidwall/sjson"
+
 	"maunium.net/go/mautrix/id"
 
+	"maunium.net/go/mautrix/crypto/canonicaljson"
 	"maunium.net/go/mautrix/crypto/goolm"
 	"maunium.net/go/mautrix/crypto/goolm/cipher"
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
 	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
 	"maunium.net/go/mautrix/crypto/goolm/session"
 	"maunium.net/go/mautrix/crypto/goolm/utilities"
+	"maunium.net/go/mautrix/crypto/olm"
 )
 
 const (
@@ -38,6 +42,9 @@ type Account struct {
 	NextOneTimeKeyID   uint32              `json:"next_one_time_key_id,omitempty"`
 	NumFallbackKeys    uint8               `json:"number_fallback_keys"`
 }
+
+// Ensure that Account adheres to the olm.Account interface.
+var _ olm.Account = (*Account)(nil)
 
 // AccountFromJSONPickled loads the Account details from a pickled base64 string. The input is decrypted with the supplied key.
 func AccountFromJSONPickled(pickled, key []byte) (*Account, error) {
@@ -82,7 +89,7 @@ func NewAccount(reader io.Reader) (*Account, error) {
 }
 
 // PickleAsJSON returns an Account as a base64 string encrypted using the supplied key. The unencrypted representation of the Account is in JSON format.
-func (a Account) PickleAsJSON(key []byte) ([]byte, error) {
+func (a *Account) PickleAsJSON(key []byte) ([]byte, error) {
 	return utilities.PickleAsJSON(a, accountPickleVersionJSON, key)
 }
 
@@ -92,44 +99,60 @@ func (a *Account) UnpickleAsJSON(pickled, key []byte) error {
 }
 
 // IdentityKeysJSON returns the public parts of the identity keys for the Account in a JSON string.
-func (a Account) IdentityKeysJSON() ([]byte, error) {
+func (a *Account) IdentityKeysJSON() ([]byte, error) {
 	res := struct {
 		Ed25519    string `json:"ed25519"`
 		Curve25519 string `json:"curve25519"`
 	}{}
-	ed25519, curve25519 := a.IdentityKeys()
+	ed25519, curve25519, err := a.IdentityKeys()
+	if err != nil {
+		return nil, err
+	}
 	res.Ed25519 = string(ed25519)
 	res.Curve25519 = string(curve25519)
 	return json.Marshal(res)
 }
 
 // IdentityKeys returns the public parts of the Ed25519 and Curve25519 identity keys for the Account.
-func (a Account) IdentityKeys() (id.Ed25519, id.Curve25519) {
+func (a *Account) IdentityKeys() (id.Ed25519, id.Curve25519, error) {
 	ed25519 := id.Ed25519(base64.RawStdEncoding.EncodeToString(a.IdKeys.Ed25519.PublicKey))
 	curve25519 := id.Curve25519(base64.RawStdEncoding.EncodeToString(a.IdKeys.Curve25519.PublicKey))
-	return ed25519, curve25519
+	return ed25519, curve25519, nil
 }
 
 // Sign returns the base64-encoded signature of a message using the Ed25519 key
 // for this Account.
-func (a Account) Sign(message []byte) ([]byte, error) {
+func (a *Account) Sign(message []byte) ([]byte, error) {
 	if len(message) == 0 {
 		return nil, fmt.Errorf("sign: %w", goolm.ErrEmptyInput)
 	}
 	return []byte(base64.RawStdEncoding.EncodeToString(a.IdKeys.Ed25519.Sign(message))), nil
 }
 
+// SignJSON signs the given JSON object following the Matrix specification:
+// https://matrix.org/docs/spec/appendices#signing-json
+func (a *Account) SignJSON(obj any) (string, error) {
+	objJSON, err := json.Marshal(obj)
+	if err != nil {
+		return "", err
+	}
+	objJSON, _ = sjson.DeleteBytes(objJSON, "unsigned")
+	objJSON, _ = sjson.DeleteBytes(objJSON, "signatures")
+	signed, err := a.Sign(canonicaljson.CanonicalJSONAssumeValid(objJSON))
+	return string(signed), err
+}
+
 // OneTimeKeys returns the public parts of the unpublished one time keys of the Account.
 //
 // The returned data is a map with the mapping of key id to base64-encoded Curve25519 key.
-func (a Account) OneTimeKeys() map[string]id.Curve25519 {
+func (a *Account) OneTimeKeys() (map[string]id.Curve25519, error) {
 	oneTimeKeys := make(map[string]id.Curve25519)
 	for _, curKey := range a.OTKeys {
 		if !curKey.Published {
 			oneTimeKeys[curKey.KeyIDEncoded()] = id.Curve25519(curKey.PublicKeyEncoded())
 		}
 	}
-	return oneTimeKeys
+	return oneTimeKeys, nil
 }
 
 //OneTimeKeysJSON returns the public parts of the unpublished one time keys of the Account as a JSON string.
@@ -143,9 +166,12 @@ func (a Account) OneTimeKeys() map[string]id.Curve25519 {
 	    }
 	}
 */
-func (a Account) OneTimeKeysJSON() ([]byte, error) {
+func (a *Account) OneTimeKeysJSON() ([]byte, error) {
 	res := make(map[string]map[string]id.Curve25519)
-	otKeys := a.OneTimeKeys()
+	otKeys, err := a.OneTimeKeys()
+	if err != nil {
+		return nil, err
+	}
 	res["Curve25519"] = otKeys
 	return json.Marshal(res)
 }
@@ -186,7 +212,7 @@ func (a *Account) GenOneTimeKeys(reader io.Reader, num uint) error {
 
 // NewOutboundSession creates a new outbound session to a
 // given curve25519 identity Key and one time key.
-func (a Account) NewOutboundSession(theirIdentityKey, theirOneTimeKey id.Curve25519) (*session.OlmSession, error) {
+func (a *Account) NewOutboundSession(theirIdentityKey, theirOneTimeKey id.Curve25519) (olm.Session, error) {
 	if len(theirIdentityKey) == 0 || len(theirOneTimeKey) == 0 {
 		return nil, fmt.Errorf("outbound session: %w", goolm.ErrEmptyInput)
 	}
@@ -205,13 +231,18 @@ func (a Account) NewOutboundSession(theirIdentityKey, theirOneTimeKey id.Curve25
 	return s, nil
 }
 
-// NewInboundSession creates a new inbound session from an incoming PRE_KEY message.
-func (a Account) NewInboundSession(theirIdentityKey *id.Curve25519, oneTimeKeyMsg []byte) (*session.OlmSession, error) {
+// NewInboundSession creates a new in-bound session for sending/receiving
+// messages from an incoming PRE_KEY message. Returns error on failure.
+func (a *Account) NewInboundSession(oneTimeKeyMsg string) (olm.Session, error) {
+	return a.NewInboundSessionFrom(nil, oneTimeKeyMsg)
+}
+
+// NewInboundSessionFrom creates a new inbound session from an incoming PRE_KEY message.
+func (a *Account) NewInboundSessionFrom(theirIdentityKey *id.Curve25519, oneTimeKeyMsg string) (olm.Session, error) {
 	if len(oneTimeKeyMsg) == 0 {
 		return nil, fmt.Errorf("inbound session: %w", goolm.ErrEmptyInput)
 	}
 	var theirIdentityKeyDecoded *crypto.Curve25519PublicKey
-	var err error
 	if theirIdentityKey != nil {
 		theirIdentityKeyDecodedByte, err := base64.RawStdEncoding.DecodeString(string(*theirIdentityKey))
 		if err != nil {
@@ -221,14 +252,10 @@ func (a Account) NewInboundSession(theirIdentityKey *id.Curve25519, oneTimeKeyMs
 		theirIdentityKeyDecoded = &theirIdentityKeyCurve
 	}
 
-	s, err := session.NewInboundOlmSession(theirIdentityKeyDecoded, oneTimeKeyMsg, a.searchOTKForOur, a.IdKeys.Curve25519)
-	if err != nil {
-		return nil, err
-	}
-	return s, nil
+	return session.NewInboundOlmSession(theirIdentityKeyDecoded, []byte(oneTimeKeyMsg), a.searchOTKForOur, a.IdKeys.Curve25519)
 }
 
-func (a Account) searchOTKForOur(toFind crypto.Curve25519PublicKey) *crypto.OneTimeKey {
+func (a *Account) searchOTKForOur(toFind crypto.Curve25519PublicKey) *crypto.OneTimeKey {
 	for curIndex := range a.OTKeys {
 		if a.OTKeys[curIndex].Key.PublicKey.Equal(toFind) {
 			return &a.OTKeys[curIndex]
@@ -244,16 +271,17 @@ func (a Account) searchOTKForOur(toFind crypto.Curve25519PublicKey) *crypto.OneT
 }
 
 // RemoveOneTimeKeys removes the one time key in this Account which matches the one time key in the session s.
-func (a *Account) RemoveOneTimeKeys(s *session.OlmSession) {
-	toFind := s.BobOneTimeKey
+func (a *Account) RemoveOneTimeKeys(s olm.Session) error {
+	toFind := s.(*session.OlmSession).BobOneTimeKey
 	for curIndex := range a.OTKeys {
 		if a.OTKeys[curIndex].Key.PublicKey.Equal(toFind) {
 			//Remove and return
 			a.OTKeys[curIndex] = a.OTKeys[len(a.OTKeys)-1]
 			a.OTKeys = a.OTKeys[:len(a.OTKeys)-1]
-			return
+			return nil
 		}
 	}
+	return nil
 	//if the key is a fallback or prevFallback, don't remove it
 }
 
@@ -279,7 +307,7 @@ func (a *Account) GenFallbackKey(reader io.Reader) error {
 
 // FallbackKey returns the public part of the current fallback key of the Account.
 // The returned data is a map with the mapping of key id to base64-encoded Curve25519 key.
-func (a Account) FallbackKey() map[string]id.Curve25519 {
+func (a *Account) FallbackKey() map[string]id.Curve25519 {
 	keys := make(map[string]id.Curve25519)
 	if a.NumFallbackKeys >= 1 {
 		keys[a.CurrentFallbackKey.KeyIDEncoded()] = id.Curve25519(a.CurrentFallbackKey.PublicKeyEncoded())
@@ -297,7 +325,7 @@ func (a Account) FallbackKey() map[string]id.Curve25519 {
 	    }
 	}
 */
-func (a Account) FallbackKeyJSON() ([]byte, error) {
+func (a *Account) FallbackKeyJSON() ([]byte, error) {
 	res := make(map[string]map[string]id.Curve25519)
 	fbk := a.FallbackKey()
 	res["curve25519"] = fbk
@@ -306,7 +334,7 @@ func (a Account) FallbackKeyJSON() ([]byte, error) {
 
 // FallbackKeyUnpublished returns the public part of the current fallback key of the Account only if it is unpublished.
 // The returned data is a map with the mapping of key id to base64-encoded Curve25519 key.
-func (a Account) FallbackKeyUnpublished() map[string]id.Curve25519 {
+func (a *Account) FallbackKeyUnpublished() map[string]id.Curve25519 {
 	keys := make(map[string]id.Curve25519)
 	if a.NumFallbackKeys >= 1 && !a.CurrentFallbackKey.Published {
 		keys[a.CurrentFallbackKey.KeyIDEncoded()] = id.Curve25519(a.CurrentFallbackKey.PublicKeyEncoded())
@@ -324,7 +352,7 @@ func (a Account) FallbackKeyUnpublished() map[string]id.Curve25519 {
 	    }
 	}
 */
-func (a Account) FallbackKeyUnpublishedJSON() ([]byte, error) {
+func (a *Account) FallbackKeyUnpublishedJSON() ([]byte, error) {
 	res := make(map[string]map[string]id.Curve25519)
 	fbk := a.FallbackKeyUnpublished()
 	res["curve25519"] = fbk
@@ -448,7 +476,10 @@ func (a *Account) UnpickleLibOlm(value []byte) (int, error) {
 }
 
 // Pickle returns a base64 encoded and with key encrypted pickled account using PickleLibOlm().
-func (a Account) Pickle(key []byte) ([]byte, error) {
+func (a *Account) Pickle(key []byte) ([]byte, error) {
+	if len(key) == 0 {
+		return nil, goolm.ErrNoKeyProvided
+	}
 	pickeledBytes := make([]byte, a.PickleLen())
 	written, err := a.PickleLibOlm(pickeledBytes)
 	if err != nil {
@@ -466,7 +497,7 @@ func (a Account) Pickle(key []byte) ([]byte, error) {
 
 // PickleLibOlm encodes the Account into target. target has to have a size of at least PickleLen() and is written to from index 0.
 // It returns the number of bytes written.
-func (a Account) PickleLibOlm(target []byte) (int, error) {
+func (a *Account) PickleLibOlm(target []byte) (int, error) {
 	if len(target) < a.PickleLen() {
 		return 0, fmt.Errorf("pickle account: %w", goolm.ErrValueTooShort)
 	}
@@ -510,7 +541,7 @@ func (a Account) PickleLibOlm(target []byte) (int, error) {
 }
 
 // PickleLen returns the number of bytes the pickled Account will have.
-func (a Account) PickleLen() int {
+func (a *Account) PickleLen() int {
 	length := libolmpickle.PickleUInt32Len(accountPickleVersionLibOLM)
 	length += a.IdKeys.Ed25519.PickleLen()
 	length += a.IdKeys.Curve25519.PickleLen()
@@ -520,4 +551,10 @@ func (a Account) PickleLen() int {
 	length += (int(a.NumFallbackKeys) * (&crypto.OneTimeKey{}).PickleLen())
 	length += libolmpickle.PickleUInt32Len(a.NextOneTimeKeyID)
 	return length
+}
+
+// MaxNumberOfOneTimeKeys returns the largest number of one time keys this
+// Account can store.
+func (a *Account) MaxNumberOfOneTimeKeys() uint {
+	return uint(MaxOneTimeKeys)
 }

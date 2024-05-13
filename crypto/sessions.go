@@ -68,7 +68,7 @@ func wrapSession(session olm.Session) *OlmSession {
 }
 
 func (account *OlmAccount) NewInboundSessionFrom(senderKey id.Curve25519, ciphertext string) (*OlmSession, error) {
-	session, err := account.Internal.NewInboundSessionFrom(senderKey, ciphertext)
+	session, err := account.Internal.NewInboundSessionFrom(&senderKey, ciphertext)
 	if err != nil {
 		return nil, err
 	}
