@@ -340,8 +340,10 @@ func (vh *VerificationHelper) StartVerification(ctx context.Context, to id.UserI
 	} else if len(devices) == 0 {
 		// HACK: we are doing this because the client doesn't wait until it has
 		// the devices before starting verification.
-		if _, err := vh.mach.FetchKeys(ctx, []id.UserID{to}, true); err != nil {
+		if keys, err := vh.mach.FetchKeys(ctx, []id.UserID{to}, true); err != nil {
 			return "", err
+		} else {
+			devices = keys[to]
 		}
 	}
 
