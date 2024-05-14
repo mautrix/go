@@ -50,13 +50,13 @@ type Store interface {
 	// PutGroupSession inserts an inbound Megolm session into the store. If an earlier withhold event has been inserted
 	// with PutWithheldGroupSession, this call should replace that. However, PutWithheldGroupSession must not replace
 	// sessions inserted with this call.
-	PutGroupSession(context.Context, id.RoomID, id.SenderKey, id.SessionID, *InboundGroupSession) error
+	PutGroupSession(context.Context, *InboundGroupSession) error
 	// GetGroupSession gets an inbound Megolm session from the store. If the group session has been withheld
 	// (i.e. a room key withheld event has been saved with PutWithheldGroupSession), this should return the
 	// ErrGroupSessionWithheld error. The caller may use GetWithheldGroupSession to find more details.
-	GetGroupSession(context.Context, id.RoomID, id.SenderKey, id.SessionID) (*InboundGroupSession, error)
+	GetGroupSession(context.Context, id.RoomID, id.SessionID) (*InboundGroupSession, error)
 	// RedactGroupSession removes the session data for the given inbound Megolm session from the store.
-	RedactGroupSession(context.Context, id.RoomID, id.SenderKey, id.SessionID, string) error
+	RedactGroupSession(context.Context, id.RoomID, id.SessionID, string) error
 	// RedactGroupSessions removes the session data for all inbound Megolm sessions from a specific device and/or in a specific room.
 	RedactGroupSessions(context.Context, id.RoomID, id.SenderKey, string) ([]id.SessionID, error)
 	// RedactExpiredGroupSessions removes the session data for all inbound Megolm sessions that have expired.
@@ -66,7 +66,7 @@ type Store interface {
 	// PutWithheldGroupSession tells the store that a specific Megolm session was withheld.
 	PutWithheldGroupSession(context.Context, event.RoomKeyWithheldEventContent) error
 	// GetWithheldGroupSession gets the event content that was previously inserted with PutWithheldGroupSession.
-	GetWithheldGroupSession(context.Context, id.RoomID, id.SenderKey, id.SessionID) (*event.RoomKeyWithheldEventContent, error)
+	GetWithheldGroupSession(context.Context, id.RoomID, id.SessionID) (*event.RoomKeyWithheldEventContent, error)
 
 	// GetGroupSessionsForRoom gets all the inbound Megolm sessions for a specific room. This is used for creating key
 	// export files. Unlike GetGroupSession, this should not return any errors about withheld keys.
