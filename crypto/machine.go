@@ -505,23 +505,22 @@ func (mach *OlmMachine) SendEncryptedToDevice(ctx context.Context, device *id.De
 	return err
 }
 
-func (mach *OlmMachine) createGroupSession(ctx context.Context, senderKey id.SenderKey, signingKey id.Ed25519, roomID id.RoomID, sessionID id.SessionID, sessionKey string, maxAge time.Duration, maxMessages int, isScheduled bool) {
+func (mach *OlmMachine) createGroupSession(ctx context.Context, senderKey id.SenderKey, signingKey id.Ed25519, roomID id.RoomID, sessionID id.SessionID, sessionKey string, maxAge time.Duration, maxMessages int, isScheduled bool) error {
 	log := zerolog.Ctx(ctx)
 	igs, err := NewInboundGroupSession(senderKey, signingKey, roomID, sessionKey, maxAge, maxMessages, isScheduled)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to create inbound group session")
-		return
+		return fmt.Errorf("failed to create inbound group session: %w", err)
 	} else if igs.ID() != sessionID {
 		log.Warn().
 			Str("expected_session_id", sessionID.String()).
 			Str("actual_session_id", igs.ID().String()).
 			Msg("Mismatched session ID while creating inbound group session")
-		return
+		return fmt.Errorf("mismatched session ID while creating inbound group session")
 	}
 	err = mach.CryptoStore.PutGroupSession(ctx, roomID, senderKey, sessionID, igs)
 	if err != nil {
-		log.Error().Err(err).Str("session_id", sessionID.String()).Msg("Failed to store new inbound group session")
-		return
+		log.Err(err).Str("session_id", sessionID.String()).Msg("Failed to store new inbound group session")
+		return fmt.Errorf("failed to store new inbound group session: %w", err)
 	}
 	mach.markSessionReceived(ctx, sessionID)
 	log.Debug().
@@ -531,6 +530,7 @@ func (mach *OlmMachine) createGroupSession(ctx context.Context, senderKey id.Sen
 		Int("max_messages", maxMessages).
 		Bool("is_scheduled", isScheduled).
 		Msg("Received inbound group session")
+	return nil
 }
 
 func (mach *OlmMachine) markSessionReceived(ctx context.Context, id id.SessionID) {
@@ -626,7 +626,10 @@ func (mach *OlmMachine) receiveRoomKey(ctx context.Context, evt *DecryptedOlmEve
 				Msg("Redacted previous megolm sessions")
 		}
 	}
-	mach.createGroupSession(ctx, evt.SenderKey, evt.Keys.Ed25519, content.RoomID, content.SessionID, content.SessionKey, maxAge, maxMessages, content.IsScheduled)
+	err = mach.createGroupSession(ctx, evt.SenderKey, evt.Keys.Ed25519, content.RoomID, content.SessionID, content.SessionKey, maxAge, maxMessages, content.IsScheduled)
+	if err != nil {
+		log.Err(err).Msg("Failed to create inbound group session")
+	}
 }
 
 func (mach *OlmMachine) HandleRoomKeyWithheld(ctx context.Context, content *event.RoomKeyWithheldEventContent) {

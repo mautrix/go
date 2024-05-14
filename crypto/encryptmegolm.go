@@ -136,19 +136,23 @@ func (mach *OlmMachine) EncryptMegolmEvent(ctx context.Context, roomID id.RoomID
 	return encrypted, nil
 }
 
-func (mach *OlmMachine) newOutboundGroupSession(ctx context.Context, roomID id.RoomID) *OutboundGroupSession {
+func (mach *OlmMachine) newOutboundGroupSession(ctx context.Context, roomID id.RoomID) (*OutboundGroupSession, error) {
 	encryptionEvent, err := mach.StateStore.GetEncryptionEvent(ctx, roomID)
 	if err != nil {
 		mach.machOrContextLog(ctx).Err(err).
 			Stringer("room_id", roomID).
 			Msg("Failed to get encryption event in room")
+		return nil, fmt.Errorf("failed to get encryption event in room %s: %w", roomID, err)
 	}
 	session := NewOutboundGroupSession(roomID, encryptionEvent)
 	if !mach.DontStoreOutboundKeys {
 		signingKey, idKey := mach.account.Keys()
-		mach.createGroupSession(ctx, idKey, signingKey, roomID, session.ID(), session.Internal.Key(), session.MaxAge, session.MaxMessages, false)
+		err := mach.createGroupSession(ctx, idKey, signingKey, roomID, session.ID(), session.Internal.Key(), session.MaxAge, session.MaxMessages, false)
+		if err != nil {
+			return nil, err
+		}
 	}
-	return session
+	return session, err
 }
 
 type deviceSessionWrapper struct {
@@ -183,7 +187,9 @@ func (mach *OlmMachine) ShareGroupSession(ctx context.Context, roomID id.RoomID,
 		Logger()
 	ctx = log.WithContext(ctx)
 	if session == nil || session.Expired() {
-		session = mach.newOutboundGroupSession(ctx, roomID)
+		if session, err = mach.newOutboundGroupSession(ctx, roomID); err != nil {
+			return err
+		}
 	}
 	log = log.With().Str("session_id", session.ID().String()).Logger()
 	ctx = log.WithContext(ctx)

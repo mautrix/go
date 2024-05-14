@@ -56,7 +56,8 @@ func newMachine(t *testing.T, userID id.UserID) *OlmMachine {
 
 func TestRatchetMegolmSession(t *testing.T) {
 	mach := newMachine(t, "user1")
-	outSess := mach.newOutboundGroupSession(context.TODO(), "meow")
+	outSess, err := mach.newOutboundGroupSession(context.TODO(), "meow")
+	assert.NoError(t, err)
 	inSess, err := mach.CryptoStore.GetGroupSession(context.TODO(), "meow", mach.OwnIdentity().IdentityKey, outSess.ID())
 	require.NoError(t, err)
 	assert.Equal(t, uint32(0), inSess.Internal.FirstKnownIndex())
@@ -96,7 +97,8 @@ func TestOlmMachineOlmMegolmSessions(t *testing.T) {
 	})
 
 	// create & store outbound megolm session for sending the event later
-	megolmOutSession := machineOut.newOutboundGroupSession(context.TODO(), "room1")
+	megolmOutSession, err := machineOut.newOutboundGroupSession(context.TODO(), "room1")
+	assert.NoError(t, err)
 	megolmOutSession.Shared = true
 	machineOut.CryptoStore.AddOutboundGroupSession(context.TODO(), megolmOutSession)
 
