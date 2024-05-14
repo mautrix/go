@@ -331,6 +331,9 @@ func (store *SQLCryptoStore) GetGroupSession(ctx context.Context, roomID id.Room
 		}
 	}
 	igs, chains, rs, err := store.postScanInboundGroupSession(sessionBytes, ratchetSafetyBytes, forwardingChains.String)
+	if err != nil {
+		return nil, err
+	}
 	if senderKey == "" {
 		senderKey = id.Curve25519(senderKeyDB.String)
 	}
@@ -479,6 +482,9 @@ func (store *SQLCryptoStore) scanInboundGroupSession(rows dbutil.Scannable) (*In
 		return nil, err
 	}
 	igs, chains, rs, err := store.postScanInboundGroupSession(sessionBytes, ratchetSafetyBytes, forwardingChains.String)
+	if err != nil {
+		return nil, err
+	}
 	return &InboundGroupSession{
 		Internal:         *igs,
 		SigningKey:       id.Ed25519(signingKey.String),
