@@ -315,7 +315,7 @@ func (store *SQLCryptoStore) PutGroupSession(ctx context.Context, roomID id.Room
 }
 
 // GetGroupSession retrieves an inbound Megolm group session for a room, sender and session.
-func (store *SQLCryptoStore) GetGroupSession(ctx context.Context, roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID) (*InboundGroupSession, error) {
+func (store *SQLCryptoStore) GetGroupSession(ctx context.Context, roomID id.RoomID, _ id.SenderKey, sessionID id.SessionID) (*InboundGroupSession, error) {
 	var senderKeyDB, signingKey, forwardingChains, withheldCode, withheldReason sql.NullString
 	var sessionBytes, ratchetSafetyBytes []byte
 	var receivedAt sql.NullTime
@@ -325,8 +325,8 @@ func (store *SQLCryptoStore) GetGroupSession(ctx context.Context, roomID id.Room
 	err := store.DB.QueryRow(ctx, `
 		SELECT sender_key, signing_key, session, forwarding_chains, withheld_code, withheld_reason, ratchet_safety, received_at, max_age, max_messages, is_scheduled, key_backup_version
 		FROM crypto_megolm_inbound_session
-		WHERE room_id=$1 AND (sender_key=$2 OR $2 = '') AND session_id=$3 AND account_id=$4`,
-		roomID, senderKey, sessionID, store.AccountID,
+		WHERE room_id=$1 AND session_id=$2 AND account_id=$3`,
+		roomID, sessionID, store.AccountID,
 	).Scan(&senderKeyDB, &signingKey, &sessionBytes, &forwardingChains, &withheldCode, &withheldReason, &ratchetSafetyBytes, &receivedAt, &maxAge, &maxMessages, &isScheduled, &version)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -337,7 +337,7 @@ func (store *SQLCryptoStore) GetGroupSession(ctx context.Context, roomID id.Room
 			RoomID:    roomID,
 			Algorithm: id.AlgorithmMegolmV1,
 			SessionID: sessionID,
-			SenderKey: senderKey,
+			SenderKey: id.Curve25519(senderKeyDB.String),
 			Code:      event.RoomKeyWithheldCode(withheldCode.String),
 			Reason:    withheldReason.String,
 		}
@@ -346,13 +346,10 @@ func (store *SQLCryptoStore) GetGroupSession(ctx context.Context, roomID id.Room
 	if err != nil {
 		return nil, err
 	}
-	if senderKey == "" {
-		senderKey = id.Curve25519(senderKeyDB.String)
-	}
 	return &InboundGroupSession{
 		Internal:         *igs,
 		SigningKey:       id.Ed25519(signingKey.String),
-		SenderKey:        senderKey,
+		SenderKey:        id.Curve25519(senderKeyDB.String),
 		RoomID:           roomID,
 		ForwardingChains: chains,
 		RatchetSafety:    rs,
