@@ -517,7 +517,7 @@ func (mach *OlmMachine) createGroupSession(ctx context.Context, senderKey id.Sen
 			Msg("Mismatched session ID while creating inbound group session")
 		return fmt.Errorf("mismatched session ID while creating inbound group session")
 	}
-	err = mach.CryptoStore.PutGroupSession(ctx, roomID, senderKey, sessionID, igs)
+	err = mach.CryptoStore.PutGroupSession(ctx, igs)
 	if err != nil {
 		log.Err(err).Str("session_id", sessionID.String()).Msg("Failed to store new inbound group session")
 		return fmt.Errorf("failed to store new inbound group session: %w", err)
@@ -557,7 +557,7 @@ func (mach *OlmMachine) WaitForSession(ctx context.Context, roomID id.RoomID, se
 	}
 	mach.keyWaitersLock.Unlock()
 	// Handle race conditions where a session appears between the failed decryption and WaitForSession call.
-	sess, err := mach.CryptoStore.GetGroupSession(ctx, roomID, senderKey, sessionID)
+	sess, err := mach.CryptoStore.GetGroupSession(ctx, roomID, sessionID)
 	if sess != nil || errors.Is(err, ErrGroupSessionWithheld) {
 		return true
 	}
@@ -565,7 +565,7 @@ func (mach *OlmMachine) WaitForSession(ctx context.Context, roomID id.RoomID, se
 	case <-ch:
 		return true
 	case <-time.After(timeout):
-		sess, err = mach.CryptoStore.GetGroupSession(ctx, roomID, senderKey, sessionID)
+		sess, err = mach.CryptoStore.GetGroupSession(ctx, roomID, sessionID)
 		// Check if the session somehow appeared in the store without telling us
 		// We accept withheld sessions as received, as then the decryption attempt will show the error.
 		return sess != nil || errors.Is(err, ErrGroupSessionWithheld)

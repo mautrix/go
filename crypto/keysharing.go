@@ -184,12 +184,12 @@ func (mach *OlmMachine) importForwardedRoomKey(ctx context.Context, evt *Decrypt
 		MaxMessages: maxMessages,
 		IsScheduled: content.IsScheduled,
 	}
-	existingIGS, _ := mach.CryptoStore.GetGroupSession(ctx, igs.RoomID, igs.SenderKey, igs.ID())
+	existingIGS, _ := mach.CryptoStore.GetGroupSession(ctx, igs.RoomID, igs.ID())
 	if existingIGS != nil && existingIGS.Internal.FirstKnownIndex() <= igs.Internal.FirstKnownIndex() {
 		// We already have an equivalent or better session in the store, so don't override it.
 		return false
 	}
-	err = mach.CryptoStore.PutGroupSession(ctx, content.RoomID, content.SenderKey, content.SessionID, igs)
+	err = mach.CryptoStore.PutGroupSession(ctx, igs)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to store new inbound group session")
 		return false
@@ -308,7 +308,7 @@ func (mach *OlmMachine) HandleRoomKeyRequest(ctx context.Context, sender id.User
 		return
 	}
 
-	igs, err := mach.CryptoStore.GetGroupSession(ctx, content.Body.RoomID, content.Body.SenderKey, content.Body.SessionID)
+	igs, err := mach.CryptoStore.GetGroupSession(ctx, content.Body.RoomID, content.Body.SessionID)
 	if err != nil {
 		if errors.Is(err, ErrGroupSessionWithheld) {
 			log.Debug().Err(err).Msg("Requested group session not available")
@@ -365,7 +365,7 @@ func (mach *OlmMachine) HandleBeeperRoomKeyAck(ctx context.Context, sender id.Us
 		Int("first_message_index", content.FirstMessageIndex).
 		Logger()
 
-	sess, err := mach.CryptoStore.GetGroupSession(ctx, content.RoomID, "", content.SessionID)
+	sess, err := mach.CryptoStore.GetGroupSession(ctx, content.RoomID, content.SessionID)
 	if err != nil {
 		if errors.Is(err, ErrGroupSessionWithheld) {
 			log.Debug().Err(err).Msg("Acked group session was already redacted")
@@ -385,7 +385,7 @@ func (mach *OlmMachine) HandleBeeperRoomKeyAck(ctx context.Context, sender id.Us
 	isInbound := sess.SenderKey == mach.OwnIdentity().IdentityKey
 	if isInbound && mach.DeleteOutboundKeysOnAck && content.FirstMessageIndex == 0 {
 		log.Debug().Msg("Redacting inbound copy of outbound group session after ack")
-		err = mach.CryptoStore.RedactGroupSession(ctx, content.RoomID, sess.SenderKey, content.SessionID, "outbound session acked")
+		err = mach.CryptoStore.RedactGroupSession(ctx, content.RoomID, content.SessionID, "outbound session acked")
 		if err != nil {
 			log.Err(err).Msg("Failed to redact group session")
 		}

@@ -158,12 +158,12 @@ func TestStoreMegolmSession(t *testing.T) {
 				RoomID:     "room1",
 			}
 
-			err = store.PutGroupSession(context.TODO(), "room1", acc.IdentityKey(), igs.ID(), igs)
+			err = store.PutGroupSession(context.TODO(), igs)
 			if err != nil {
 				t.Errorf("Error storing inbound group session: %v", err)
 			}
 
-			retrieved, err := store.GetGroupSession(context.TODO(), "room1", acc.IdentityKey(), igs.ID())
+			retrieved, err := store.GetGroupSession(context.TODO(), "room1", igs.ID())
 			if err != nil {
 				t.Errorf("Error retrieving inbound group session: %v", err)
 			}

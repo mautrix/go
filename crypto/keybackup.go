@@ -177,7 +177,7 @@ func (mach *OlmMachine) ImportRoomKeyFromBackup(ctx context.Context, version id.
 		MaxMessages:      maxMessages,
 		KeyBackupVersion: version,
 	}
-	err = mach.CryptoStore.PutGroupSession(ctx, roomID, keyBackupData.SenderKey, sessionID, igs)
+	err = mach.CryptoStore.PutGroupSession(ctx, igs)
 	if err != nil {
 		return fmt.Errorf("failed to store new inbound group session: %w", err)
 	}

@@ -58,7 +58,7 @@ func TestRatchetMegolmSession(t *testing.T) {
 	mach := newMachine(t, "user1")
 	outSess, err := mach.newOutboundGroupSession(context.TODO(), "meow")
 	assert.NoError(t, err)
-	inSess, err := mach.CryptoStore.GetGroupSession(context.TODO(), "meow", mach.OwnIdentity().IdentityKey, outSess.ID())
+	inSess, err := mach.CryptoStore.GetGroupSession(context.TODO(), "meow", outSess.ID())
 	require.NoError(t, err)
 	assert.Equal(t, uint32(0), inSess.Internal.FirstKnownIndex())
 	err = inSess.RatchetTo(10)
@@ -130,7 +130,7 @@ func TestOlmMachineOlmMegolmSessions(t *testing.T) {
 		if err != nil {
 			t.Errorf("Error creating inbound megolm session: %v", err)
 		}
-		if err = machineIn.CryptoStore.PutGroupSession(context.TODO(), "room1", senderKey, igs.ID(), igs); err != nil {
+		if err = machineIn.CryptoStore.PutGroupSession(context.TODO(), igs); err != nil {
 			t.Errorf("Error storing inbound megolm session: %v", err)
 		}
 	}

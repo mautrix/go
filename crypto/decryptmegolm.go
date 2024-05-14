@@ -192,7 +192,7 @@ func (mach *OlmMachine) actuallyDecryptMegolmEvent(ctx context.Context, evt *eve
 	mach.megolmDecryptLock.Lock()
 	defer mach.megolmDecryptLock.Unlock()
 
-	sess, err := mach.CryptoStore.GetGroupSession(ctx, encryptionRoomID, content.SenderKey, content.SessionID)
+	sess, err := mach.CryptoStore.GetGroupSession(ctx, encryptionRoomID, content.SessionID)
 	if err != nil {
 		return nil, nil, 0, fmt.Errorf("failed to get group session: %w", err)
 	} else if sess == nil {
@@ -254,7 +254,7 @@ func (mach *OlmMachine) actuallyDecryptMegolmEvent(ctx context.Context, evt *eve
 		Int("max_messages", sess.MaxMessages).
 		Logger()
 	if sess.MaxMessages > 0 && int(ratchetTargetIndex) >= sess.MaxMessages && len(sess.RatchetSafety.MissedIndices) == 0 && mach.DeleteFullyUsedKeysOnDecrypt {
-		err = mach.CryptoStore.RedactGroupSession(ctx, sess.RoomID, sess.SenderKey, sess.ID(), "maximum messages reached")
+		err = mach.CryptoStore.RedactGroupSession(ctx, sess.RoomID, sess.ID(), "maximum messages reached")
 		if err != nil {
 			log.Err(err).Msg("Failed to delete fully used session")
 			return sess, plaintext, messageIndex, RatchetError
@@ -265,14 +265,14 @@ func (mach *OlmMachine) actuallyDecryptMegolmEvent(ctx context.Context, evt *eve
 		if err = sess.RatchetTo(ratchetTargetIndex); err != nil {
 			log.Err(err).Msg("Failed to ratchet session")
 			return sess, plaintext, messageIndex, RatchetError
-		} else if err = mach.CryptoStore.PutGroupSession(ctx, sess.RoomID, sess.SenderKey, sess.ID(), sess); err != nil {
+		} else if err = mach.CryptoStore.PutGroupSession(ctx, sess); err != nil {
 			log.Err(err).Msg("Failed to store ratcheted session")
 			return sess, plaintext, messageIndex, RatchetError
 		} else {
 			log.Info().Msg("Ratcheted session forward")
 		}
 	} else if didModify {
-		if err = mach.CryptoStore.PutGroupSession(ctx, sess.RoomID, sess.SenderKey, sess.ID(), sess); err != nil {
+		if err = mach.CryptoStore.PutGroupSession(ctx, sess); err != nil {
 			log.Err(err).Msg("Failed to store updated ratchet safety data")
 			return sess, plaintext, messageIndex, RatchetError
 		} else {
