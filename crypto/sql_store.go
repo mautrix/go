@@ -276,7 +276,7 @@ func datePtr(t time.Time) *time.Time {
 }
 
 // PutGroupSession stores an inbound Megolm group session for a room, sender and session.
-func (store *SQLCryptoStore) PutGroupSession(ctx context.Context, roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID, session *InboundGroupSession) error {
+func (store *SQLCryptoStore) PutGroupSession(ctx context.Context, session *InboundGroupSession) error {
 	sessionBytes := session.Internal.Pickle(store.PickleKey)
 	forwardingChains := strings.Join(session.ForwardingChains, ",")
 	ratchetSafety, err := json.Marshal(&session.RatchetSafety)
@@ -284,11 +284,11 @@ func (store *SQLCryptoStore) PutGroupSession(ctx context.Context, roomID id.Room
 		return fmt.Errorf("failed to marshal ratchet safety info: %w", err)
 	}
 	zerolog.Ctx(ctx).Debug().
-		Stringer("session_id", sessionID).
+		Stringer("session_id", session.ID()).
 		Str("account_id", store.AccountID).
-		Stringer("sender_key", senderKey).
+		Stringer("sender_key", session.SenderKey).
 		Stringer("signing_key", session.SigningKey).
-		Stringer("room_id", roomID).
+		Stringer("room_id", session.RoomID).
 		Time("received_at", session.ReceivedAt).
 		Int64("max_age", session.MaxAge).
 		Int("max_messages", session.MaxMessages).
@@ -307,7 +307,7 @@ func (store *SQLCryptoStore) PutGroupSession(ctx context.Context, roomID id.Room
 		        max_age=excluded.max_age, max_messages=excluded.max_messages, is_scheduled=excluded.is_scheduled,
 		        key_backup_version=excluded.key_backup_version
 	`,
-		sessionID, senderKey, session.SigningKey, roomID, sessionBytes, forwardingChains,
+		session.ID(), session.SenderKey, session.SigningKey, session.RoomID, sessionBytes, forwardingChains,
 		ratchetSafety, datePtr(session.ReceivedAt), intishPtr(session.MaxAge), intishPtr(session.MaxMessages),
 		session.IsScheduled, session.KeyBackupVersion, store.AccountID,
 	)
@@ -315,8 +315,8 @@ func (store *SQLCryptoStore) PutGroupSession(ctx context.Context, roomID id.Room
 }
 
 // GetGroupSession retrieves an inbound Megolm group session for a room, sender and session.
-func (store *SQLCryptoStore) GetGroupSession(ctx context.Context, roomID id.RoomID, _ id.SenderKey, sessionID id.SessionID) (*InboundGroupSession, error) {
-	var senderKeyDB, signingKey, forwardingChains, withheldCode, withheldReason sql.NullString
+func (store *SQLCryptoStore) GetGroupSession(ctx context.Context, roomID id.RoomID, sessionID id.SessionID) (*InboundGroupSession, error) {
+	var senderKey, signingKey, forwardingChains, withheldCode, withheldReason sql.NullString
 	var sessionBytes, ratchetSafetyBytes []byte
 	var receivedAt sql.NullTime
 	var maxAge, maxMessages sql.NullInt64
@@ -327,7 +327,7 @@ func (store *SQLCryptoStore) GetGroupSession(ctx context.Context, roomID id.Room
 		FROM crypto_megolm_inbound_session
 		WHERE room_id=$1 AND session_id=$2 AND account_id=$3`,
 		roomID, sessionID, store.AccountID,
-	).Scan(&senderKeyDB, &signingKey, &sessionBytes, &forwardingChains, &withheldCode, &withheldReason, &ratchetSafetyBytes, &receivedAt, &maxAge, &maxMessages, &isScheduled, &version)
+	).Scan(&senderKey, &signingKey, &sessionBytes, &forwardingChains, &withheldCode, &withheldReason, &ratchetSafetyBytes, &receivedAt, &maxAge, &maxMessages, &isScheduled, &version)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	} else if err != nil {
@@ -337,7 +337,7 @@ func (store *SQLCryptoStore) GetGroupSession(ctx context.Context, roomID id.Room
 			RoomID:    roomID,
 			Algorithm: id.AlgorithmMegolmV1,
 			SessionID: sessionID,
-			SenderKey: id.Curve25519(senderKeyDB.String),
+			SenderKey: id.Curve25519(senderKey.String),
 			Code:      event.RoomKeyWithheldCode(withheldCode.String),
 			Reason:    withheldReason.String,
 		}
@@ -349,7 +349,7 @@ func (store *SQLCryptoStore) GetGroupSession(ctx context.Context, roomID id.Room
 	return &InboundGroupSession{
 		Internal:         *igs,
 		SigningKey:       id.Ed25519(signingKey.String),
-		SenderKey:        id.Curve25519(senderKeyDB.String),
+		SenderKey:        id.Curve25519(senderKey.String),
 		RoomID:           roomID,
 		ForwardingChains: chains,
 		RatchetSafety:    rs,
@@ -361,7 +361,7 @@ func (store *SQLCryptoStore) GetGroupSession(ctx context.Context, roomID id.Room
 	}, nil
 }
 
-func (store *SQLCryptoStore) RedactGroupSession(ctx context.Context, _ id.RoomID, _ id.SenderKey, sessionID id.SessionID, reason string) error {
+func (store *SQLCryptoStore) RedactGroupSession(ctx context.Context, _ id.RoomID, sessionID id.SessionID, reason string) error {
 	_, err := store.DB.Exec(ctx, `
 		UPDATE crypto_megolm_inbound_session
 		SET withheld_code=$1, withheld_reason=$2, session=NULL, forwarding_chains=NULL
@@ -437,13 +437,13 @@ func (store *SQLCryptoStore) PutWithheldGroupSession(ctx context.Context, conten
 	return err
 }
 
-func (store *SQLCryptoStore) GetWithheldGroupSession(ctx context.Context, roomID id.RoomID, senderKey id.SenderKey, sessionID id.SessionID) (*event.RoomKeyWithheldEventContent, error) {
-	var code, reason sql.NullString
+func (store *SQLCryptoStore) GetWithheldGroupSession(ctx context.Context, roomID id.RoomID, sessionID id.SessionID) (*event.RoomKeyWithheldEventContent, error) {
+	var senderKey, code, reason sql.NullString
 	err := store.DB.QueryRow(ctx, `
-		SELECT withheld_code, withheld_reason FROM crypto_megolm_inbound_session
-		WHERE room_id=$1 AND sender_key=$2 AND session_id=$3 AND account_id=$4`,
-		roomID, senderKey, sessionID, store.AccountID,
-	).Scan(&code, &reason)
+		SELECT withheld_code, withheld_reason, sender_key FROM crypto_megolm_inbound_session
+		WHERE room_id=$1 AND session_id=$2 AND account_id=$3`,
+		roomID, sessionID, store.AccountID,
+	).Scan(&code, &reason, &senderKey)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	} else if err != nil || !code.Valid {
@@ -453,7 +453,7 @@ func (store *SQLCryptoStore) GetWithheldGroupSession(ctx context.Context, roomID
 		RoomID:    roomID,
 		Algorithm: id.AlgorithmMegolmV1,
 		SessionID: sessionID,
-		SenderKey: senderKey,
+		SenderKey: id.Curve25519(senderKey.String),
 		Code:      event.RoomKeyWithheldCode(code.String),
 		Reason:    reason.String,
 	}, nil
