@@ -65,7 +65,7 @@ type Client struct {
 	Log zerolog.Logger
 
 	RequestHook  func(req *http.Request)
-	ResponseHook func(req *http.Request, resp *http.Response, duration time.Duration)
+	ResponseHook func(req *http.Request, resp *http.Response, err error, duration time.Duration)
 
 	SyncPresence event.Presence
 
@@ -291,10 +291,10 @@ func (cli *Client) LogRequestDone(req *http.Request, resp *http.Response, err er
 		Str("method", req.Method).
 		Str("url", req.URL.String()).
 		Dur("duration", duration)
+	if cli.ResponseHook != nil {
+		cli.ResponseHook(req, resp, err, duration)
+	}
 	if resp != nil {
-		if cli.ResponseHook != nil {
-			cli.ResponseHook(req, resp, duration)
-		}
 		mime := resp.Header.Get("Content-Type")
 		length := resp.ContentLength
 		if length == -1 && contentLength > 0 {
