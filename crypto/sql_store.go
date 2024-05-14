@@ -283,6 +283,18 @@ func (store *SQLCryptoStore) PutGroupSession(ctx context.Context, roomID id.Room
 	if err != nil {
 		return fmt.Errorf("failed to marshal ratchet safety info: %w", err)
 	}
+	zerolog.Ctx(ctx).Debug().
+		Stringer("session_id", sessionID).
+		Str("account_id", store.AccountID).
+		Stringer("sender_key", senderKey).
+		Stringer("signing_key", session.SigningKey).
+		Stringer("room_id", roomID).
+		Time("received_at", session.ReceivedAt).
+		Int64("max_age", session.MaxAge).
+		Int("max_messages", session.MaxMessages).
+		Bool("is_scheduled", session.IsScheduled).
+		Stringer("key_backup_version", session.KeyBackupVersion).
+		Msg("Upserting megolm inbound group session")
 	_, err = store.DB.Exec(ctx, `
 		INSERT INTO crypto_megolm_inbound_session (
 			session_id, sender_key, signing_key, room_id, session, forwarding_chains,
@@ -293,7 +305,7 @@ func (store *SQLCryptoStore) PutGroupSession(ctx context.Context, roomID id.Room
 		        room_id=excluded.room_id, session=excluded.session, forwarding_chains=excluded.forwarding_chains,
 		        ratchet_safety=excluded.ratchet_safety, received_at=excluded.received_at,
 		        max_age=excluded.max_age, max_messages=excluded.max_messages, is_scheduled=excluded.is_scheduled,
-				key_backup_version=excluded.key_backup_version
+		        key_backup_version=excluded.key_backup_version
 	`,
 		sessionID, senderKey, session.SigningKey, roomID, sessionBytes, forwardingChains,
 		ratchetSafety, datePtr(session.ReceivedAt), intishPtr(session.MaxAge), intishPtr(session.MaxMessages),
