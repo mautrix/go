@@ -200,16 +200,17 @@ func (mach *OlmMachine) ShareGroupSession(ctx context.Context, roomID id.RoomID,
 	olmSessions := make(map[id.UserID]map[id.DeviceID]deviceSessionWrapper)
 	missingSessions := make(map[id.UserID]map[id.DeviceID]*id.Device)
 	missingUserSessions := make(map[id.DeviceID]*id.Device)
-	var fetchKeys []id.UserID
+	var fetchKeysForUsers []id.UserID
 
 	for _, userID := range users {
 		log := log.With().Str("target_user_id", userID.String()).Logger()
 		devices, err := mach.CryptoStore.GetDevices(ctx, userID)
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to get devices of user")
+			log.Err(err).Msg("Failed to get devices of user")
+			return fmt.Errorf("failed to get devices of user %s: %w", userID, err)
 		} else if devices == nil {
 			log.Debug().Msg("GetDevices returned nil, will fetch keys and retry")
-			fetchKeys = append(fetchKeys, userID)
+			fetchKeysForUsers = append(fetchKeysForUsers, userID)
 		} else if len(devices) == 0 {
 			log.Trace().Msg("User has no devices, skipping")
 		} else {
@@ -233,18 +234,19 @@ func (mach *OlmMachine) ShareGroupSession(ctx context.Context, roomID id.RoomID,
 		}
 	}
 
-	if len(fetchKeys) > 0 {
-		log.Debug().Strs("users", strishArray(fetchKeys)).Msg("Fetching missing keys")
-		if keys, err := mach.FetchKeys(ctx, fetchKeys, true); err != nil {
-			log.Err(err).Strs("users", strishArray(fetchKeys)).Msg("Failed to fetch missing keys")
-		} else if keys != nil {
-			for userID, devices := range keys {
-				log.Debug().
-					Int("device_count", len(devices)).
-					Str("target_user_id", userID.String()).
-					Msg("Got device keys for user")
-				missingSessions[userID] = devices
-			}
+	if len(fetchKeysForUsers) > 0 {
+		log.Debug().Strs("users", strishArray(fetchKeysForUsers)).Msg("Fetching missing keys")
+		keys, err := mach.FetchKeys(ctx, fetchKeysForUsers, true)
+		if err != nil {
+			log.Err(err).Strs("users", strishArray(fetchKeysForUsers)).Msg("Failed to fetch missing keys")
+			return fmt.Errorf("failed to fetch missing keys: %w", err)
+		}
+		for userID, devices := range keys {
+			log.Debug().
+				Int("device_count", len(devices)).
+				Str("target_user_id", userID.String()).
+				Msg("Got device keys for user")
+			missingSessions[userID] = devices
 		}
 	}
 
@@ -252,7 +254,8 @@ func (mach *OlmMachine) ShareGroupSession(ctx context.Context, roomID id.RoomID,
 		log.Debug().Msg("Creating missing olm sessions")
 		err = mach.createOutboundSessions(ctx, missingSessions)
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to create missing olm sessions")
+			log.Err(err).Msg("Failed to create missing olm sessions")
+			return fmt.Errorf("failed to create missing olm sessions: %w", err)
 		}
 	}
 
