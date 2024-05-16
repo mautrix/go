@@ -213,6 +213,11 @@ func (mach *OlmMachine) actuallyDecryptMegolmEvent(ctx context.Context, evt *eve
 		return sess, nil, messageIndex, fmt.Errorf("%w %d", DuplicateMessageIndex, messageIndex)
 	}
 
+	// Normal clients don't care about tracking the ratchet state, so let them bypass the rest of the function
+	if mach.DisableRatchetTracking {
+		return sess, plaintext, messageIndex, nil
+	}
+
 	expectedMessageIndex := sess.RatchetSafety.NextIndex
 	didModify := false
 	switch {

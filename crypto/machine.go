@@ -78,6 +78,7 @@ type OlmMachine struct {
 	RatchetKeysOnDecrypt         bool
 	DeleteFullyUsedKeysOnDecrypt bool
 	DeleteKeysOnDeviceDelete     bool
+	DisableRatchetTracking       bool
 
 	DisableDeviceChangeKeyRotation bool
 
