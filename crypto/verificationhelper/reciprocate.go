@@ -76,6 +76,9 @@ func (vh *VerificationHelper) HandleScannedQRData(ctx context.Context, data []by
 			return fmt.Errorf("the other device has the wrong key for this device")
 		}
 
+		if err := vh.mach.SignOwnMasterKey(ctx); err != nil {
+			return fmt.Errorf("failed to sign own master key: %w", err)
+		}
 	case QRCodeModeSelfVerifyingMasterKeyUntrusted:
 		// The QR was created by a device that does not trust the master key,
 		// which means that we do trust the master key. Key1 is the other
@@ -192,8 +195,10 @@ func (vh *VerificationHelper) ConfirmQRCodeScanned(ctx context.Context, txnID id
 				return fmt.Errorf("failed to sign their device: %w", err)
 			}
 		}
+	} else {
+		// TODO: handle QR codes that are not self-signing situations
+		panic("unimplemented")
 	}
-	// TODO: handle QR codes that are not self-signing situations
 
 	err := vh.sendVerificationEvent(ctx, txn, event.InRoomVerificationDone, &event.VerificationDoneEventContent{})
 	if err != nil {
