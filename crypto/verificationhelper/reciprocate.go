@@ -231,7 +231,7 @@ func (vh *VerificationHelper) generateAndShowQRCode(ctx context.Context, txn *ve
 	mode := QRCodeModeCrossSigning
 	if vh.client.UserID == txn.TheirUser {
 		// This is a self-signing situation.
-		if trusted, err := vh.mach.IsUserTrusted(ctx, vh.client.UserID); err != nil {
+		if trusted, err := vh.mach.CryptoStore.IsKeySignedBy(ctx, vh.client.UserID, ownCrossSigningPublicKeys.MasterKey, vh.client.UserID, vh.mach.OwnIdentity().SigningKey); err != nil {
 			return err
 		} else if trusted {
 			mode = QRCodeModeSelfVerifyingMasterKeyTrusted
