@@ -46,6 +46,7 @@ func (vh *VerificationHelper) HandleScannedQRData(ctx context.Context, data []by
 	// Verify the keys
 	log.Info().Msg("Verifying keys from QR code")
 
+	ownCrossSigningPublicKeys := vh.mach.GetOwnCrossSigningPublicKeys(ctx)
 	switch qrCode.Mode {
 	case QRCodeModeCrossSigning:
 		panic("unimplemented")
@@ -60,8 +61,7 @@ func (vh *VerificationHelper) HandleScannedQRData(ctx context.Context, data []by
 		}
 
 		// Verify the master key is correct
-		crossSigningPubkeys := vh.mach.GetOwnCrossSigningPublicKeys(ctx)
-		if bytes.Equal(crossSigningPubkeys.MasterKey.Bytes(), qrCode.Key1[:]) {
+		if bytes.Equal(ownCrossSigningPublicKeys.MasterKey.Bytes(), qrCode.Key1[:]) {
 			log.Info().Msg("Verified that the other device has the same master key")
 		} else {
 			return fmt.Errorf("the master key does not match")
@@ -84,6 +84,13 @@ func (vh *VerificationHelper) HandleScannedQRData(ctx context.Context, data []by
 		// which means that we do trust the master key. Key1 is the other
 		// device's device key, and Key2 is what the other device thinks the
 		// master key is.
+
+		// Check that we actually trust the master key.
+		if trusted, err := vh.mach.CryptoStore.IsKeySignedBy(ctx, vh.client.UserID, ownCrossSigningPublicKeys.MasterKey, vh.client.UserID, vh.mach.OwnIdentity().SigningKey); err != nil {
+			return err
+		} else if !trusted {
+			return fmt.Errorf("the master key is not trusted by this device")
+		}
 
 		if vh.client.UserID != txn.TheirUser {
 			return fmt.Errorf("mode %d is only allowed when the other user is the same as the current user", qrCode.Mode)
