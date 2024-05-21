@@ -67,6 +67,8 @@ type Client struct {
 	RequestHook  func(req *http.Request)
 	ResponseHook func(req *http.Request, resp *http.Response, err error, duration time.Duration)
 
+	UpdateRequestOnRetry func(req *http.Request, cause error) *http.Request
+
 	SyncPresence event.Presence
 
 	StreamSyncMinAge time.Duration
@@ -457,6 +459,9 @@ func (cli *Client) doRetry(req *http.Request, cause error, retries int, backoff 
 		Int("retry_in_seconds", int(backoff.Seconds())).
 		Msg("Request failed, retrying")
 	time.Sleep(backoff)
+	if cli.UpdateRequestOnRetry != nil {
+		req = cli.UpdateRequestOnRetry(req, cause)
+	}
 	return cli.executeCompiledRequest(req, retries-1, backoff*2, responseJSON, handler, client)
 }
 
