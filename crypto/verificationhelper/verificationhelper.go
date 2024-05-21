@@ -573,7 +573,11 @@ func (vh *VerificationHelper) onVerificationRequest(ctx context.Context, evt *ev
 		return
 	}
 
-	log = log.With().Any("requested_methods", verificationRequest.Methods).Logger()
+	log = log.With().
+		Any("requested_methods", verificationRequest.Methods).
+		Stringer("transaction_id", verificationRequest.TransactionID).
+		Stringer("from_device", verificationRequest.FromDevice).
+		Logger()
 	ctx = log.WithContext(ctx)
 	log.Info().Msg("Received verification request")
 
