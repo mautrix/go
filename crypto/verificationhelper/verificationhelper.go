@@ -178,31 +178,31 @@ func NewVerificationHelper(client *mautrix.Client, mach *crypto.OlmMachine, call
 	}
 
 	if c, ok := callbacks.(RequiredCallbacks); !ok {
-		panic("callbacks must implement VerificationRequested")
+		panic("callbacks must implement RequiredCallbacks")
 	} else {
 		helper.verificationRequested = c.VerificationRequested
 		helper.verificationCancelledCallback = c.VerificationCancelled
 		helper.verificationDone = c.VerificationDone
 	}
 
+	supportedMethods := map[event.VerificationMethod]struct{}{}
 	if c, ok := callbacks.(showSASCallbacks); ok {
-		helper.supportedMethods = append(helper.supportedMethods, event.VerificationMethodSAS)
+		supportedMethods[event.VerificationMethodSAS] = struct{}{}
 		helper.showSAS = c.ShowSAS
 	}
 	if c, ok := callbacks.(showQRCodeCallbacks); ok {
-		helper.supportedMethods = append(helper.supportedMethods,
-			event.VerificationMethodQRCodeShow, event.VerificationMethodReciprocate)
+		supportedMethods[event.VerificationMethodQRCodeShow] = struct{}{}
+		supportedMethods[event.VerificationMethodReciprocate] = struct{}{}
 		helper.scanQRCode = c.ScanQRCode
 		helper.showQRCode = c.ShowQRCode
 		helper.qrCodeScaned = c.QRCodeScanned
 	}
 	if supportsScan {
-		helper.supportedMethods = append(helper.supportedMethods,
-			event.VerificationMethodQRCodeScan, event.VerificationMethodReciprocate)
+		supportedMethods[event.VerificationMethodQRCodeScan] = struct{}{}
+		supportedMethods[event.VerificationMethodReciprocate] = struct{}{}
 	}
 
-	slices.Sort(helper.supportedMethods)
-	helper.supportedMethods = slices.Compact(helper.supportedMethods)
+	helper.supportedMethods = maps.Keys(supportedMethods)
 	return &helper
 }
 
@@ -332,6 +332,10 @@ func (vh *VerificationHelper) Init(ctx context.Context) error {
 // StartVerification starts an interactive verification flow with the given
 // user via a to-device event.
 func (vh *VerificationHelper) StartVerification(ctx context.Context, to id.UserID) (id.VerificationTransactionID, error) {
+	if len(vh.supportedMethods) == 0 {
+		return "", fmt.Errorf("no supported verification methods")
+	}
+
 	txnID := id.NewVerificationTransactionID()
 
 	devices, err := vh.mach.CryptoStore.GetDevices(ctx, to)
@@ -389,8 +393,8 @@ func (vh *VerificationHelper) StartVerification(ctx context.Context, to id.UserI
 	return txnID, nil
 }
 
-// StartVerification starts an interactive verification flow with the given
-// user in the given room.
+// StartInRoomVerification starts an interactive verification flow with the
+// given user in the given room.
 func (vh *VerificationHelper) StartInRoomVerification(ctx context.Context, roomID id.RoomID, to id.UserID) (id.VerificationTransactionID, error) {
 	log := vh.getLog(ctx).With().
 		Str("verification_action", "start in-room verification").
@@ -441,15 +445,34 @@ func (vh *VerificationHelper) AcceptVerification(ctx context.Context, txnID id.V
 	txn, ok := vh.activeTransactions[txnID]
 	if !ok {
 		return fmt.Errorf("unknown transaction ID")
-	}
-	if txn.VerificationState != verificationStateRequested {
+	} else if txn.VerificationState != verificationStateRequested {
 		return fmt.Errorf("transaction is not in the requested state")
+	}
+
+	supportedMethods := map[event.VerificationMethod]struct{}{}
+	for _, method := range txn.TheirSupportedMethods {
+		switch method {
+		case event.VerificationMethodSAS:
+			if slices.Contains(vh.supportedMethods, event.VerificationMethodSAS) {
+				supportedMethods[event.VerificationMethodSAS] = struct{}{}
+			}
+		case event.VerificationMethodQRCodeShow:
+			if slices.Contains(vh.supportedMethods, event.VerificationMethodQRCodeScan) {
+				supportedMethods[event.VerificationMethodQRCodeScan] = struct{}{}
+				supportedMethods[event.VerificationMethodReciprocate] = struct{}{}
+			}
+		case event.VerificationMethodQRCodeScan:
+			if slices.Contains(vh.supportedMethods, event.VerificationMethodQRCodeShow) {
+				supportedMethods[event.VerificationMethodQRCodeShow] = struct{}{}
+				supportedMethods[event.VerificationMethodReciprocate] = struct{}{}
+			}
+		}
 	}
 
 	log.Info().Msg("Sending ready event")
 	readyEvt := &event.VerificationReadyEventContent{
 		FromDevice: vh.client.DeviceID,
-		Methods:    vh.supportedMethods,
+		Methods:    maps.Keys(supportedMethods),
 	}
 	err := vh.sendVerificationEvent(ctx, txn, event.InRoomVerificationReady, readyEvt)
 	if err != nil {
@@ -457,7 +480,7 @@ func (vh *VerificationHelper) AcceptVerification(ctx context.Context, txnID id.V
 	}
 	txn.VerificationState = verificationStateReady
 
-	if slices.Contains(txn.TheirSupportedMethods, event.VerificationMethodQRCodeShow) {
+	if vh.scanQRCode != nil && slices.Contains(txn.TheirSupportedMethods, event.VerificationMethodQRCodeShow) {
 		vh.scanQRCode(ctx, txn.TransactionID)
 	}
 
@@ -497,7 +520,7 @@ func (vh *VerificationHelper) sendVerificationEvent(ctx context.Context, txn *ve
 			Parsed: content,
 		})
 		if err != nil {
-			return fmt.Errorf("failed to send start event: %w", err)
+			return fmt.Errorf("failed to send %s event to %s: %w", evtType.String(), txn.RoomID, err)
 		}
 	} else {
 		content.(event.VerificationTransactionable).SetTransactionID(txn.TransactionID)
@@ -508,15 +531,19 @@ func (vh *VerificationHelper) sendVerificationEvent(ctx context.Context, txn *ve
 		}}
 		_, err := vh.client.SendToDevice(ctx, evtType, &req)
 		if err != nil {
-			return fmt.Errorf("failed to send start event: %w", err)
+			return fmt.Errorf("failed to send %s event to %s: %w", evtType.String(), txn.TheirDevice, err)
 		}
 	}
 	return nil
 }
 
+// cancelVerificationTxn cancels a verification transaction with the given code
+// and reason. It always returns an error, which is the formatted error message
+// (this is allows the caller to return the result of this function call
+// directly to expose the error to its caller).
 func (vh *VerificationHelper) cancelVerificationTxn(ctx context.Context, txn *verificationTransaction, code event.VerificationCancelCode, reasonFmtStr string, fmtArgs ...any) error {
 	log := vh.getLog(ctx)
-	reason := fmt.Sprintf(reasonFmtStr, fmtArgs...)
+	reason := fmt.Errorf(reasonFmtStr, fmtArgs...).Error()
 	log.Info().
 		Stringer("transaction_id", txn.TransactionID).
 		Str("code", string(code)).
@@ -528,11 +555,11 @@ func (vh *VerificationHelper) cancelVerificationTxn(ctx context.Context, txn *ve
 	}
 	err := vh.sendVerificationEvent(ctx, txn, event.InRoomVerificationCancel, cancelEvt)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to send cancel verification event (code: %s, reason: %s): %w", code, reason, err)
 	}
 	txn.VerificationState = verificationStateCancelled
 	vh.verificationCancelledCallback(ctx, txn.TransactionID, code, reason)
-	return nil
+	return fmt.Errorf("verification cancelled (code: %s): %s", code, reason)
 }
 
 func (vh *VerificationHelper) onVerificationRequest(ctx context.Context, evt *event.Event) {
@@ -568,7 +595,7 @@ func (vh *VerificationHelper) onVerificationRequest(ctx context.Context, evt *ev
 		return
 	}
 
-	if verificationRequest.TransactionID == "" {
+	if len(verificationRequest.TransactionID) == 0 {
 		log.Warn().Msg("Ignoring verification request without a transaction ID")
 		return
 	}
@@ -581,11 +608,33 @@ func (vh *VerificationHelper) onVerificationRequest(ctx context.Context, evt *ev
 	ctx = log.WithContext(ctx)
 	log.Info().Msg("Received verification request")
 
+	// Check if we support any of the methods listed
+	var supportsAnyMethod bool
+	for _, method := range verificationRequest.Methods {
+		switch method {
+		case event.VerificationMethodSAS:
+			supportsAnyMethod = slices.Contains(vh.supportedMethods, event.VerificationMethodSAS)
+		case event.VerificationMethodQRCodeScan:
+			supportsAnyMethod = slices.Contains(vh.supportedMethods, event.VerificationMethodQRCodeShow) &&
+				slices.Contains(verificationRequest.Methods, event.VerificationMethodReciprocate)
+		case event.VerificationMethodQRCodeShow:
+			supportsAnyMethod = slices.Contains(vh.supportedMethods, event.VerificationMethodQRCodeScan) &&
+				slices.Contains(verificationRequest.Methods, event.VerificationMethodReciprocate)
+		}
+		if supportsAnyMethod {
+			break
+		}
+	}
+	if !supportsAnyMethod {
+		log.Warn().Msg("Ignoring verification request that doesn't have any methods we support")
+		return
+	}
+
 	vh.activeTransactionsLock.Lock()
-	_, ok := vh.activeTransactions[verificationRequest.TransactionID]
+	existing, ok := vh.activeTransactions[verificationRequest.TransactionID]
 	if ok {
 		vh.activeTransactionsLock.Unlock()
-		log.Info().Msg("Ignoring verification request for an already active transaction")
+		vh.cancelVerificationTxn(ctx, existing, event.VerificationCancelCodeUnexpectedMessage, "received a new verification request for the same transaction ID")
 		return
 	}
 	vh.activeTransactions[verificationRequest.TransactionID] = &verificationTransaction{
@@ -607,7 +656,7 @@ func (vh *VerificationHelper) onVerificationReady(ctx context.Context, txn *veri
 		Logger()
 
 	if txn.VerificationState != verificationStateRequested {
-		log.Warn().Msg("Ignoring verification ready event for a transaction that is not in the requested state")
+		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnexpectedMessage, "verification ready event received for a transaction that is not in the requested state")
 		return
 	}
 
@@ -633,7 +682,7 @@ func (vh *VerificationHelper) onVerificationReady(ctx context.Context, txn *veri
 		}
 		devices, err := vh.mach.CryptoStore.GetDevices(ctx, txn.TheirUser)
 		if err != nil {
-			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUser, "failed to get devices for %s: %v", txn.TheirUser, err)
+			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUser, "failed to get devices for %s: %w", txn.TheirUser, err)
 			return
 		}
 		req := mautrix.ReqSendToDevice{Messages: map[id.UserID]map[id.DeviceID]*event.Content{txn.TheirUser: {}}}
@@ -653,13 +702,13 @@ func (vh *VerificationHelper) onVerificationReady(ctx context.Context, txn *veri
 		}
 	}
 
-	if slices.Contains(txn.TheirSupportedMethods, event.VerificationMethodQRCodeShow) {
+	if vh.scanQRCode != nil && slices.Contains(txn.TheirSupportedMethods, event.VerificationMethodQRCodeShow) {
 		vh.scanQRCode(ctx, txn.TransactionID)
 	}
 
 	err := vh.generateAndShowQRCode(ctx, txn)
 	if err != nil {
-		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUser, "failed to generate and show QR code: %v", err)
+		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUser, "failed to generate and show QR code: %w", err)
 	}
 }
 
@@ -680,8 +729,7 @@ func (vh *VerificationHelper) onVerificationStart(ctx context.Context, txn *veri
 			// We didn't sent a start event yet, so we have gotten ourselves
 			// into a bad state. They've either sent two start events, or we
 			// have gone on to a new state.
-			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnexpectedMessage,
-				"got repeat start event from other user")
+			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnexpectedMessage, "got repeat start event from other user")
 			return
 		}
 
@@ -713,8 +761,7 @@ func (vh *VerificationHelper) onVerificationStart(ctx context.Context, txn *veri
 			txn.StartEventContent = startEvt
 		}
 	} else if txn.VerificationState != verificationStateReady {
-		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnexpectedMessage,
-			"got start event for transaction that is not in ready state")
+		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnexpectedMessage, "got start event for transaction that is not in ready state")
 		return
 	}
 
@@ -722,7 +769,7 @@ func (vh *VerificationHelper) onVerificationStart(ctx context.Context, txn *veri
 	case event.VerificationMethodSAS:
 		txn.VerificationState = verificationStateSASStarted
 		if err := vh.onVerificationStartSAS(ctx, txn, evt); err != nil {
-			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUser, "failed to handle SAS verification start: %v", err)
+			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUser, "failed to handle SAS verification start: %w", err)
 		}
 	case event.VerificationMethodReciprocate:
 		log.Info().Msg("Received reciprocate start event")
@@ -749,9 +796,10 @@ func (vh *VerificationHelper) onVerificationDone(ctx context.Context, txn *verif
 	vh.activeTransactionsLock.Lock()
 	defer vh.activeTransactionsLock.Unlock()
 
-	if txn.VerificationState != verificationStateTheirQRScanned && txn.VerificationState != verificationStateSASMACExchanged {
-		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnexpectedMessage,
-			"got done event for transaction that is not in QR-scanned or MAC-exchanged state")
+	if !slices.Contains([]verificationState{
+		verificationStateTheirQRScanned, verificationStateOurQRScanned, verificationStateSASMACExchanged,
+	}, txn.VerificationState) {
+		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnexpectedMessage, "got done event for transaction that is not in QR-scanned or MAC-exchanged state")
 		return
 	}
 

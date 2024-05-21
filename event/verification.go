@@ -220,6 +220,10 @@ const (
 	VerificationCancelCodeAccepted           VerificationCancelCode = "m.accepted"
 	VerificationCancelCodeSASMismatch        VerificationCancelCode = "m.mismatched_sas"
 	VerificationCancelCodeCommitmentMismatch VerificationCancelCode = "m.mismatched_commitment"
+
+	// Non-spec codes
+	VerificationCancelCodeInternalError       VerificationCancelCode = "com.beeper.internal_error"
+	VerificationCancelCodeMasterKeyNotTrusted VerificationCancelCode = "com.beeper.master_key_not_trusted" // the master key is not trusted by this device, but the QR code that was scanned was from a device that doesn't trust the master key
 )
 
 // VerificationCancelEventContent represents the content of an
