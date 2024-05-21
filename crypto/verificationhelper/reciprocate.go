@@ -70,7 +70,7 @@ func (vh *VerificationHelper) HandleScannedQRData(ctx context.Context, data []by
 		// Verify that the device key that the other device things we have is
 		// correct.
 		myKeys := vh.mach.OwnIdentity()
-		if bytes.Equal(myKeys.SigningKey.Bytes(), qrCode.Key2[:]) {
+		if bytes.Equal(myKeys.IdentityKey.Bytes(), qrCode.Key2[:]) {
 			log.Info().Msg("Verified that the other device has the correct key for this device")
 		} else {
 			return fmt.Errorf("the other device has the wrong key for this device")
