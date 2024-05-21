@@ -269,3 +269,14 @@ func (store *MemoryStateStore) IsEncrypted(ctx context.Context, roomID id.RoomID
 	cfg, err := store.GetEncryptionEvent(ctx, roomID)
 	return cfg != nil && cfg.Algorithm == id.AlgorithmMegolmV1, err
 }
+
+func (store *MemoryStateStore) FindSharedRooms(ctx context.Context, userID id.UserID) (rooms []id.RoomID, err error) {
+	store.membersLock.RLock()
+	defer store.membersLock.RUnlock()
+	for roomID, members := range store.Members {
+		if _, ok := members[userID]; ok {
+			rooms = append(rooms, roomID)
+		}
+	}
+	return rooms, nil
+}
