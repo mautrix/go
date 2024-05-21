@@ -103,7 +103,7 @@ func (vh *VerificationHelper) HandleScannedQRData(ctx context.Context, data []by
 		}
 
 		// Verify that the other device's key is what we expect.
-		if bytes.Equal(theirDevice.SigningKey.Bytes(), qrCode.Key1[:]) {
+		if bytes.Equal(theirDevice.IdentityKey.Bytes(), qrCode.Key1[:]) {
 			log.Info().Msg("Verified that the other device key is what we expected")
 		} else {
 			return fmt.Errorf("the other device's key is not what we expected")
