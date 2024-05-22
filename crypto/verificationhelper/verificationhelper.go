@@ -646,7 +646,7 @@ func (vh *VerificationHelper) onVerificationReady(ctx context.Context, txn *veri
 
 			req.Messages[txn.TheirUser][deviceID] = content
 		}
-		_, err = vh.client.SendToDevice(ctx, event.ToDeviceVerificationRequest, &req)
+		_, err = vh.client.SendToDevice(ctx, event.ToDeviceVerificationCancel, &req)
 		if err != nil {
 			log.Warn().Err(err).Msg("Failed to send cancellation requests")
 		}
