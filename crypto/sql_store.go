@@ -891,15 +891,15 @@ func (store *SQLCryptoStore) PutSecret(ctx context.Context, name id.Secret, valu
 		return err
 	}
 	_, err = store.DB.Exec(ctx, `
-		INSERT INTO crypto_secrets (name, secret) VALUES ($1, $2)
-		ON CONFLICT (name) DO UPDATE SET secret=excluded.secret
-	`, name, bytes)
+		INSERT INTO crypto_secrets (account_id, name, secret) VALUES ($1, $2, $3)
+		ON CONFLICT (account_id, name) DO UPDATE SET secret=excluded.secret
+	`, store.AccountID, name, bytes)
 	return err
 }
 
 func (store *SQLCryptoStore) GetSecret(ctx context.Context, name id.Secret) (value string, err error) {
 	var bytes []byte
-	err = store.DB.QueryRow(ctx, `SELECT secret FROM crypto_secrets WHERE name=$1`, name).Scan(&bytes)
+	err = store.DB.QueryRow(ctx, `SELECT secret FROM crypto_secrets WHERE account_id=$1 AND name=$2`, store.AccountID, name).Scan(&bytes)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", nil
 	} else if err != nil {
@@ -910,6 +910,6 @@ func (store *SQLCryptoStore) GetSecret(ctx context.Context, name id.Secret) (val
 }
 
 func (store *SQLCryptoStore) DeleteSecret(ctx context.Context, name id.Secret) (err error) {
-	_, err = store.DB.Exec(ctx, "DELETE FROM crypto_secrets WHERE name=$1", name)
+	_, err = store.DB.Exec(ctx, "DELETE FROM crypto_secrets WHERE account_id=$1 AND name=$2", store.AccountID, name)
 	return
 }
