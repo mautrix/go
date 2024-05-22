@@ -174,8 +174,7 @@ func (vh *VerificationHelper) ConfirmQRCodeScanned(ctx context.Context, txnID id
 		log.Warn().Msg("Ignoring QR code scan confirmation for an unknown transaction")
 		return nil
 	} else if txn.VerificationState != verificationStateOurQRScanned {
-		log.Warn().Msg("Ignoring QR code scan confirmation for a transaction that is not in the started state")
-		return nil
+		return fmt.Errorf("transaction is not in the scanned state")
 	}
 
 	log.Info().Msg("Confirming QR code scanned")
