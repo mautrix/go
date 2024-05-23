@@ -1626,8 +1626,9 @@ func (cli *Client) uploadMediaToURL(ctx context.Context, data ReqUploadMedia) (*
 	return m, nil
 }
 
-// UploadMedia uploads the given data to the content repository and returns an MXC URI.
+// UploadMedia uploads the given data to the content repository and returns an MXC URI if one is not already supplied.
 // See https://spec.matrix.org/v1.7/client-server-api/#post_matrixmediav3upload
+// See https://spec.matrix.org/v1.10/client-server-api/#put_matrixmediav3uploadservernamemediaid
 func (cli *Client) UploadMedia(ctx context.Context, data ReqUploadMedia) (*RespMediaUpload, error) {
 	if data.UnstableUploadURL != "" {
 		if data.MXC.IsEmpty() {
