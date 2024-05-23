@@ -100,6 +100,12 @@ func (mach *OlmMachine) GenerateAndUploadCrossSigningKeys(ctx context.Context, u
 		return "", nil, fmt.Errorf("failed to publish cross-signing keys: %w", err)
 	}
 
+	// Trust the master key
+	err = mach.SignOwnMasterKey(ctx)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to sign own master key: %w", err)
+	}
+
 	err = mach.SSSS.SetDefaultKeyID(ctx, key.ID)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to mark %s as the default key: %w", key.ID, err)
