@@ -638,9 +638,10 @@ func (vh *VerificationHelper) onVerificationReady(ctx context.Context, txn *veri
 		}
 		req := mautrix.ReqSendToDevice{Messages: map[id.UserID]map[id.DeviceID]*event.Content{txn.TheirUser: {}}}
 		for deviceID := range devices {
-			if deviceID == txn.TheirDevice {
+			if deviceID == txn.TheirDevice || deviceID == vh.client.DeviceID {
 				// Don't ever send a cancellation to the device that accepted
-				// the request.
+				// the request or to our own device (which can happen if this
+				// is a self-verification).
 				continue
 			}
 
