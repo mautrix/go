@@ -19,15 +19,15 @@ import (
 )
 
 var (
-	ErrCrossSigningKeysNotCached = errors.New("cross-signing private keys not in cache")
-	ErrUserSigningKeyNotCached   = errors.New("user-signing private key not in cache")
-	ErrSelfSigningKeyNotCached   = errors.New("self-signing private key not in cache")
-	ErrSignatureUploadFail       = errors.New("server-side failure uploading signatures")
-	ErrCantSignOwnMasterKey      = errors.New("signing your own master key is not allowed")
-	ErrCantSignOtherDevice       = errors.New("signing other users' devices is not allowed")
-	ErrUserNotInQueryResponse    = errors.New("could not find user in query keys response")
-	ErrDeviceNotInQueryResponse  = errors.New("could not find device in query keys response")
-	ErrOlmAccountNotLoaded       = errors.New("olm account has not been loaded")
+	ErrCrossSigningPubkeysNotCached = errors.New("cross-signing public keys not in cache")
+	ErrUserSigningKeyNotCached      = errors.New("user-signing private key not in cache")
+	ErrSelfSigningKeyNotCached      = errors.New("self-signing private key not in cache")
+	ErrSignatureUploadFail          = errors.New("server-side failure uploading signatures")
+	ErrCantSignOwnMasterKey         = errors.New("signing your own master key is not allowed")
+	ErrCantSignOtherDevice          = errors.New("signing other users' devices is not allowed")
+	ErrUserNotInQueryResponse       = errors.New("could not find user in query keys response")
+	ErrDeviceNotInQueryResponse     = errors.New("could not find device in query keys response")
+	ErrOlmAccountNotLoaded          = errors.New("olm account has not been loaded")
 
 	ErrCrossSigningMasterKeyNotFound = errors.New("cross-signing master key not found")
 	ErrMasterKeyMACNotFound          = errors.New("found cross-signing master key, but didn't find corresponding MAC in verification request")
@@ -69,15 +69,16 @@ func (mach *OlmMachine) SignUser(ctx context.Context, userID id.UserID, masterKe
 
 // SignOwnMasterKey uses the current account for signing the current user's master key and uploads the signature.
 func (mach *OlmMachine) SignOwnMasterKey(ctx context.Context) error {
-	if mach.CrossSigningKeys == nil {
-		return ErrCrossSigningKeysNotCached
+	crossSigningPubkeys := mach.GetOwnCrossSigningPublicKeys(ctx)
+	if crossSigningPubkeys == nil {
+		return ErrCrossSigningPubkeysNotCached
 	} else if mach.account == nil {
 		return ErrOlmAccountNotLoaded
 	}
 
 	userID := mach.Client.UserID
 	deviceID := mach.Client.DeviceID
-	masterKey := mach.CrossSigningKeys.MasterKey.PublicKey()
+	masterKey := crossSigningPubkeys.MasterKey
 
 	masterKeyObj := mautrix.ReqKeysSignatures{
 		UserID: userID,
