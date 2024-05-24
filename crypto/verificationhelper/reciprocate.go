@@ -103,7 +103,7 @@ func (vh *VerificationHelper) HandleScannedQRData(ctx context.Context, data []by
 		}
 
 		// Verify that the other device's key is what we expect.
-		if bytes.Equal(theirDevice.IdentityKey.Bytes(), qrCode.Key1[:]) {
+		if bytes.Equal(theirDevice.SigningKey.Bytes(), qrCode.Key1[:]) {
 			log.Info().Msg("Verified that the other device key is what we expected")
 		} else {
 			return fmt.Errorf("the other device's key is not what we expected")
@@ -268,10 +268,10 @@ func (vh *VerificationHelper) generateAndShowQRCode(ctx context.Context, txn *ve
 		if err != nil {
 			return err
 		}
-		key2 = theirDevice.IdentityKey.Bytes()
+		key2 = theirDevice.SigningKey.Bytes()
 	case QRCodeModeSelfVerifyingMasterKeyUntrusted:
 		// Key 1 is the current device's key
-		key1 = vh.mach.OwnIdentity().IdentityKey.Bytes()
+		key1 = vh.mach.OwnIdentity().SigningKey.Bytes()
 
 		// Key 2 is the master signing key.
 		key2 = ownCrossSigningPublicKeys.MasterKey.Bytes()
