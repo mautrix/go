@@ -755,9 +755,9 @@ func (vh *VerificationHelper) onVerificationDone(ctx context.Context, txn *verif
 		return
 	}
 
-	txn.VerificationState = verificationStateDone
 	txn.ReceivedTheirDone = true
 	if txn.SentOurDone {
+		txn.VerificationState = verificationStateDone
 		vh.verificationDone(ctx, txn.TransactionID)
 	}
 }
