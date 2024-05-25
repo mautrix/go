@@ -61,7 +61,7 @@ func IsShareError(err error) bool {
 	return err == SessionExpired || err == SessionNotShared || err == NoGroupSession
 }
 
-func parseMessageIndex(ciphertext []byte) (uint, error) {
+func ParseMegolmMessageIndex(ciphertext []byte) (uint, error) {
 	decoded := make([]byte, base64.RawStdEncoding.DecodedLen(len(ciphertext)))
 	var err error
 	_, err = base64.RawStdEncoding.Decode(decoded, ciphertext)
@@ -109,7 +109,7 @@ func (mach *OlmMachine) EncryptMegolmEvent(ctx context.Context, roomID id.RoomID
 	if err != nil {
 		return nil, err
 	}
-	idx, err := parseMessageIndex(ciphertext)
+	idx, err := ParseMegolmMessageIndex(ciphertext)
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to get megolm message index of encrypted event")
 	} else {

@@ -182,7 +182,7 @@ const missedIndexCutoff = 10
 
 func (mach *OlmMachine) checkUndecryptableMessageIndexDuplication(ctx context.Context, sess *InboundGroupSession, evt *event.Event, content *event.EncryptedEventContent) (uint, error) {
 	log := *zerolog.Ctx(ctx)
-	messageIndex, decodeErr := parseMessageIndex(content.MegolmCiphertext)
+	messageIndex, decodeErr := ParseMegolmMessageIndex(content.MegolmCiphertext)
 	if decodeErr != nil {
 		log.Warn().Err(decodeErr).Msg("Failed to parse message index to check if it's a duplicate for message that failed to decrypt")
 		return 0, fmt.Errorf("%w (also failed to parse message index)", olm.UnknownMessageIndex)
