@@ -14,6 +14,9 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog"
+	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
+	"go.mau.fi/util/exgjson"
 
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/event"
@@ -35,6 +38,8 @@ type megolmEvent struct {
 	Type    event.Type    `json:"type"`
 	Content event.Content `json:"content"`
 }
+
+var relatesToPath = exgjson.Path("m.relates_to")
 
 // DecryptMegolmEvent decrypts an m.room.encrypted event where the algorithm is m.megolm.v1.aes-sha2
 func (mach *OlmMachine) DecryptMegolmEvent(ctx context.Context, evt *event.Event) (*event.Event, error) {
@@ -107,6 +112,26 @@ func (mach *OlmMachine) DecryptMegolmEvent(ctx context.Context, evt *event.Event
 		}
 	}
 
+	if content.RelatesTo != nil {
+		relation := gjson.GetBytes(evt.Content.VeryRaw, relatesToPath)
+		if relation.Exists() {
+			var raw []byte
+			if relation.Index > 0 {
+				raw = evt.Content.VeryRaw[relation.Index : relation.Index+len(relation.Raw)]
+			} else {
+				raw = []byte(relation.Raw)
+			}
+			updatedPlaintext, err := sjson.SetRawBytes(plaintext, relatesToPath, raw)
+			if err != nil {
+				log.Warn().Msg("Failed to copy m.relates_to to decrypted payload")
+			} else if updatedPlaintext != nil {
+				plaintext = updatedPlaintext
+			}
+		} else {
+			log.Warn().Msg("Failed to find m.relates_to in raw encrypted event even though it was present in parsed content")
+		}
+	}
+
 	megolmEvt := &megolmEvent{}
 	err = json.Unmarshal(plaintext, &megolmEvt)
 	if err != nil {
@@ -122,19 +147,6 @@ func (mach *OlmMachine) DecryptMegolmEvent(ctx context.Context, evt *event.Event
 			log.Warn().Msg("Unsupported event type in encrypted event")
 		} else {
 			return nil, fmt.Errorf("failed to parse content of megolm payload event: %w", err)
-		}
-	}
-	if content.RelatesTo != nil {
-		relatable, ok := megolmEvt.Content.Parsed.(event.Relatable)
-		if ok {
-			if relatable.OptionalGetRelatesTo() == nil {
-				relatable.SetRelatesTo(content.RelatesTo)
-			} else {
-				log.Trace().Msg("Not overriding relation data as encrypted payload already has it")
-			}
-		}
-		if _, hasRelation := megolmEvt.Content.Raw["m.relates_to"]; !hasRelation {
-			megolmEvt.Content.Raw["m.relates_to"] = evt.Content.Raw["m.relates_to"]
 		}
 	}
 	log.Debug().Msg("Event decrypted successfully")
