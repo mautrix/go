@@ -244,7 +244,7 @@ var (
 	AccountDataCrossSigningMaster      = Type{string(id.SecretXSMaster), AccountDataEventType}
 	AccountDataCrossSigningUser        = Type{string(id.SecretXSUserSigning), AccountDataEventType}
 	AccountDataCrossSigningSelf        = Type{string(id.SecretXSSelfSigning), AccountDataEventType}
-	AccountDataMegolmBackupKey         = Type{"m.megolm_backup.v1", AccountDataEventType}
+	AccountDataMegolmBackupKey         = Type{string(id.SecretMegolmBackupV1), AccountDataEventType}
 )
 
 // Device-to-device events
