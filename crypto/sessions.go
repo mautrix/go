@@ -196,11 +196,14 @@ func NewOutboundGroupSession(roomID id.RoomID, encryptionContent *event.Encrypti
 		RoomID:      roomID,
 	}
 	if encryptionContent != nil {
+		// Clamp rotation period to prevent unreasonable values
+		// Similar to https://github.com/matrix-org/matrix-rust-sdk/blob/matrix-sdk-crypto-0.7.1/crates/matrix-sdk-crypto/src/olm/group_sessions/outbound.rs#L415-L441
 		if encryptionContent.RotationPeriodMillis != 0 {
 			ogs.MaxAge = time.Duration(encryptionContent.RotationPeriodMillis) * time.Millisecond
+			ogs.MaxAge = min(max(ogs.MaxAge, 1*time.Hour), 365*24*time.Hour)
 		}
 		if encryptionContent.RotationPeriodMessages != 0 {
-			ogs.MaxMessages = encryptionContent.RotationPeriodMessages
+			ogs.MaxMessages = min(max(encryptionContent.RotationPeriodMessages, 1), 10000)
 		}
 	}
 	return ogs
