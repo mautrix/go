@@ -199,14 +199,20 @@ func (cli *Client) SyncWithContext(ctx context.Context) error {
 		}
 	}
 	lastSuccessfulSync := time.Now().Add(-cli.StreamSyncMinAge - 1*time.Hour)
+	// Always do first sync with 0 timeout
+	isFailing := true
 	for {
 		streamResp := false
 		if cli.StreamSyncMinAge > 0 && time.Since(lastSuccessfulSync) > cli.StreamSyncMinAge {
 			cli.Log.Debug().Msg("Last sync is old, will stream next response")
 			streamResp = true
 		}
+		timeout := 30000
+		if isFailing {
+			timeout = 0
+		}
 		resSync, err := cli.FullSyncRequest(ctx, ReqSync{
-			Timeout:        30000,
+			Timeout:        timeout,
 			Since:          nextBatch,
 			FilterID:       filterID,
 			FullState:      false,
@@ -214,12 +220,16 @@ func (cli *Client) SyncWithContext(ctx context.Context) error {
 			StreamResponse: streamResp,
 		})
 		if err != nil {
+			isFailing = true
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
 			duration, err2 := cli.Syncer.OnFailedSync(resSync, err)
 			if err2 != nil {
 				return err2
+			}
+			if duration <= 0 {
+				continue
 			}
 			select {
 			case <-ctx.Done():
@@ -228,6 +238,7 @@ func (cli *Client) SyncWithContext(ctx context.Context) error {
 				continue
 			}
 		}
+		isFailing = false
 		lastSuccessfulSync = time.Now()
 
 		// Check that the syncing state hasn't changed
