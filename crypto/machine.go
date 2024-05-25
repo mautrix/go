@@ -53,7 +53,7 @@ type OlmMachine struct {
 	keyWaitersLock sync.Mutex
 
 	// Optional callback which is called when we save a session to store
-	SessionReceived func(context.Context, id.SessionID)
+	SessionReceived func(context.Context, id.RoomID, id.SessionID, uint32)
 
 	devicesToUnwedge     map[id.IdentityKey]bool
 	devicesToUnwedgeLock sync.Mutex
@@ -523,7 +523,7 @@ func (mach *OlmMachine) createGroupSession(ctx context.Context, senderKey id.Sen
 		log.Err(err).Str("session_id", sessionID.String()).Msg("Failed to store new inbound group session")
 		return fmt.Errorf("failed to store new inbound group session: %w", err)
 	}
-	mach.markSessionReceived(ctx, sessionID)
+	mach.markSessionReceived(ctx, roomID, sessionID, igs.Internal.FirstKnownIndex())
 	log.Debug().
 		Str("session_id", sessionID.String()).
 		Str("sender_key", senderKey.String()).
@@ -534,9 +534,9 @@ func (mach *OlmMachine) createGroupSession(ctx context.Context, senderKey id.Sen
 	return nil
 }
 
-func (mach *OlmMachine) markSessionReceived(ctx context.Context, id id.SessionID) {
+func (mach *OlmMachine) markSessionReceived(ctx context.Context, roomID id.RoomID, id id.SessionID, firstKnownIndex uint32) {
 	if mach.SessionReceived != nil {
-		mach.SessionReceived(ctx, id)
+		mach.SessionReceived(ctx, roomID, id, firstKnownIndex)
 	}
 
 	mach.keyWaitersLock.Lock()

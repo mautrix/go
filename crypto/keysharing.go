@@ -168,7 +168,8 @@ func (mach *OlmMachine) importForwardedRoomKey(ctx context.Context, evt *Decrypt
 	if content.MaxMessages != 0 {
 		maxMessages = content.MaxMessages
 	}
-	if firstKnownIndex := igsInternal.FirstKnownIndex(); firstKnownIndex > 0 {
+	firstKnownIndex := igsInternal.FirstKnownIndex()
+	if firstKnownIndex > 0 {
 		log.Warn().Uint32("first_known_index", firstKnownIndex).Msg("Importing partial session")
 	}
 	igs := &InboundGroupSession{
@@ -194,7 +195,7 @@ func (mach *OlmMachine) importForwardedRoomKey(ctx context.Context, evt *Decrypt
 		log.Error().Err(err).Msg("Failed to store new inbound group session")
 		return false
 	}
-	mach.markSessionReceived(ctx, content.SessionID)
+	mach.markSessionReceived(ctx, content.RoomID, content.SessionID, firstKnownIndex)
 	log.Debug().Msg("Received forwarded inbound group session")
 	return true
 }

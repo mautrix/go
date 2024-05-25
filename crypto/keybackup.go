@@ -160,7 +160,8 @@ func (mach *OlmMachine) ImportRoomKeyFromBackup(ctx context.Context, version id.
 		maxMessages = config.RotationPeriodMessages
 	}
 
-	if firstKnownIndex := igsInternal.FirstKnownIndex(); firstKnownIndex > 0 {
+	firstKnownIndex := igsInternal.FirstKnownIndex()
+	if firstKnownIndex > 0 {
 		log.Warn().Uint32("first_known_index", firstKnownIndex).Msg("Importing partial session")
 	}
 
@@ -181,6 +182,6 @@ func (mach *OlmMachine) ImportRoomKeyFromBackup(ctx context.Context, version id.
 	if err != nil {
 		return fmt.Errorf("failed to store new inbound group session: %w", err)
 	}
-	mach.markSessionReceived(ctx, sessionID)
+	mach.markSessionReceived(ctx, roomID, sessionID, firstKnownIndex)
 	return nil
 }
