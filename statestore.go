@@ -37,8 +37,16 @@ type StateStore interface {
 	GetRoomJoinedOrInvitedMembers(ctx context.Context, roomID id.RoomID) ([]id.UserID, error)
 }
 
+type StateStoreUpdater interface {
+	UpdateState(ctx context.Context, evt *event.Event)
+}
+
 func UpdateStateStore(ctx context.Context, store StateStore, evt *event.Event) {
 	if store == nil || evt == nil || evt.StateKey == nil {
+		return
+	}
+	if directUpdater, ok := store.(StateStoreUpdater); ok {
+		directUpdater.UpdateState(ctx, evt)
 		return
 	}
 	// We only care about events without a state key (power levels, encryption) or member events with state key
