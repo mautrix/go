@@ -432,8 +432,11 @@ func (store *SQLCryptoStore) RedactOutdatedGroupSessions(ctx context.Context) ([
 }
 
 func (store *SQLCryptoStore) PutWithheldGroupSession(ctx context.Context, content event.RoomKeyWithheldEventContent) error {
-	_, err := store.DB.Exec(ctx, "INSERT INTO crypto_megolm_inbound_session (session_id, sender_key, room_id, withheld_code, withheld_reason, received_at, account_id) VALUES ($1, $2, $3, $4, $5, $6, $7)",
-		content.SessionID, content.SenderKey, content.RoomID, content.Code, content.Reason, time.Now().UTC(), store.AccountID)
+	_, err := store.DB.Exec(ctx, `
+		INSERT INTO crypto_megolm_inbound_session (session_id, sender_key, room_id, withheld_code, withheld_reason, received_at, account_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		ON CONFLICT (session_id, account_id) DO NOTHING
+	`, content.SessionID, content.SenderKey, content.RoomID, content.Code, content.Reason, time.Now().UTC(), store.AccountID)
 	return err
 }
 

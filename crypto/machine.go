@@ -638,6 +638,7 @@ func (mach *OlmMachine) HandleRoomKeyWithheld(ctx context.Context, content *even
 		zerolog.Ctx(ctx).Debug().Interface("content", content).Msg("Non-megolm room key withheld event")
 		return
 	}
+	// TODO log if there's a conflict? (currently ignored)
 	err := mach.CryptoStore.PutWithheldGroupSession(ctx, *content)
 	if err != nil {
 		zerolog.Ctx(ctx).Error().Err(err).Msg("Failed to save room key withheld event")
