@@ -139,6 +139,56 @@ func TestVerification_Start(t *testing.T) {
 	}
 }
 
+func TestVerification_StartThenCancel(t *testing.T) {
+	ctx := log.Logger.WithContext(context.TODO())
+
+	for _, sendingCancels := range []bool{true, false} {
+		t.Run(fmt.Sprintf("sendingCancels=%t", sendingCancels), func(t *testing.T) {
+			ts, sendingClient, receivingClient, _, _, sendingMachine, receivingMachine := initServerAndLoginTwoAlice(t, ctx)
+			defer ts.Close()
+			_, _, sendingHelper, receivingHelper := initDefaultCallbacks(t, ctx, sendingClient, receivingClient, sendingMachine, receivingMachine)
+
+			txnID, err := sendingHelper.StartVerification(ctx, aliceUserID)
+			require.NoError(t, err)
+
+			assert.Empty(t, ts.DeviceInbox[aliceUserID][sendingDeviceID])
+
+			// Process the request event on the receiving device.
+			receivingInbox := ts.DeviceInbox[aliceUserID][receivingDeviceID]
+			assert.Len(t, receivingInbox, 1)
+			assert.Equal(t, txnID, receivingInbox[0].Content.AsVerificationRequest().TransactionID)
+			ts.dispatchToDevice(t, ctx, receivingClient)
+
+			// Cancel the verification request on the sending device.
+			var cancelEvt *event.VerificationCancelEventContent
+			if sendingCancels {
+				err = sendingHelper.CancelVerification(ctx, txnID, event.VerificationCancelCodeUser, "Recovery code preferred")
+				assert.NoError(t, err)
+
+				// The sending device should not have a cancellation event.
+				assert.Empty(t, ts.DeviceInbox[aliceUserID][sendingDeviceID])
+
+				// Ensure that the cancellation event was sent to the receiving device.
+				assert.Len(t, ts.DeviceInbox[aliceUserID][receivingDeviceID], 1)
+				cancelEvt = ts.DeviceInbox[aliceUserID][receivingDeviceID][0].Content.AsVerificationCancel()
+			} else {
+				err = receivingHelper.CancelVerification(ctx, txnID, event.VerificationCancelCodeUser, "Recovery code preferred")
+				assert.NoError(t, err)
+
+				// The receiving device should not have a cancellation event.
+				assert.Empty(t, ts.DeviceInbox[aliceUserID][receivingDeviceID])
+
+				// Ensure that the cancellation event was sent to the sending device.
+				assert.Len(t, ts.DeviceInbox[aliceUserID][sendingDeviceID], 1)
+				cancelEvt = ts.DeviceInbox[aliceUserID][sendingDeviceID][0].Content.AsVerificationCancel()
+			}
+			assert.Equal(t, txnID, cancelEvt.TransactionID)
+			assert.Equal(t, event.VerificationCancelCodeUser, cancelEvt.Code)
+			assert.Equal(t, "Recovery code preferred", cancelEvt.Reason)
+		})
+	}
+}
+
 func TestVerification_Accept_NoSupportedMethods(t *testing.T) {
 	ctx := log.Logger.WithContext(context.TODO())
 

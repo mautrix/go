@@ -491,17 +491,52 @@ func (vh *VerificationHelper) AcceptVerification(ctx context.Context, txnID id.V
 // be the transaction ID of a verification request that was received via the
 // VerificationRequested callback in [RequiredCallbacks].
 func (vh *VerificationHelper) CancelVerification(ctx context.Context, txnID id.VerificationTransactionID, code event.VerificationCancelCode, reason string) error {
-	log := vh.getLog(ctx).With().
-		Str("verification_action", "cancel verification").
-		Stringer("transaction_id", txnID).
-		Logger()
-	ctx = log.WithContext(ctx)
-
 	txn, ok := vh.activeTransactions[txnID]
 	if !ok {
 		return fmt.Errorf("unknown transaction ID")
 	}
-	return vh.cancelVerificationTxn(ctx, txn, code, reason)
+	log := vh.getLog(ctx).With().
+		Str("verification_action", "cancel verification").
+		Stringer("transaction_id", txnID).
+		Str("code", string(code)).
+		Str("reason", reason).
+		Logger()
+	ctx = log.WithContext(ctx)
+
+	log.Info().Msg("Sending cancellation event")
+	cancelEvt := &event.VerificationCancelEventContent{Code: code, Reason: reason}
+	if len(txn.RoomID) > 0 {
+		// Sending the cancellation event to the room.
+		err := vh.sendVerificationEvent(ctx, txn, event.InRoomVerificationCancel, cancelEvt)
+		if err != nil {
+			return fmt.Errorf("failed to send cancel verification event (code: %s, reason: %s): %w", code, reason, err)
+		}
+	} else {
+		cancelEvt.SetTransactionID(txn.TransactionID)
+		req := mautrix.ReqSendToDevice{Messages: map[id.UserID]map[id.DeviceID]*event.Content{
+			txn.TheirUser: {},
+		}}
+		if len(txn.TheirDevice) > 0 {
+			// Send the cancellation event to only the device that accepted the
+			// verification request. All of the other devices already received a
+			// cancellation event with code "m.acceped".
+			req.Messages[txn.TheirUser][txn.TheirDevice] = &event.Content{Parsed: cancelEvt}
+		} else {
+			// Send the cancellation event to all of the devices that we sent the
+			// request to.
+			for _, deviceID := range txn.SentToDeviceIDs {
+				if deviceID != vh.client.DeviceID {
+					req.Messages[txn.TheirUser][deviceID] = &event.Content{Parsed: cancelEvt}
+				}
+			}
+		}
+		_, err := vh.client.SendToDevice(ctx, event.ToDeviceVerificationCancel, &req)
+		if err != nil {
+			return fmt.Errorf("failed to send m.key.verification.cancel event to %v: %w", maps.Keys(req.Messages[txn.TheirUser]), err)
+		}
+	}
+	txn.VerificationState = verificationStateCancelled
+	return nil
 }
 
 // sendVerificationEvent sends a verification event to the other user's device
@@ -549,10 +584,7 @@ func (vh *VerificationHelper) cancelVerificationTxn(ctx context.Context, txn *ve
 		Str("code", string(code)).
 		Str("reason", reason).
 		Msg("Sending cancellation event")
-	cancelEvt := &event.VerificationCancelEventContent{
-		Code:   code,
-		Reason: reason,
-	}
+	cancelEvt := &event.VerificationCancelEventContent{Code: code, Reason: reason}
 	err := vh.sendVerificationEvent(ctx, txn, event.InRoomVerificationCancel, cancelEvt)
 	if err != nil {
 		return fmt.Errorf("failed to send cancel verification event (code: %s, reason: %s): %w", code, reason, err)
