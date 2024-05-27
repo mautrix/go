@@ -27,6 +27,8 @@ type baseVerificationCallbacks struct {
 	qrCodesScanned           map[id.VerificationTransactionID]struct{}
 	doneTransactions         map[id.VerificationTransactionID]struct{}
 	verificationCancellation map[id.VerificationTransactionID]*event.VerificationCancelEventContent
+	emojisShown              map[id.VerificationTransactionID][]rune
+	decimalsShown            map[id.VerificationTransactionID][]int
 }
 
 func newBaseVerificationCallbacks() *baseVerificationCallbacks {
@@ -36,6 +38,8 @@ func newBaseVerificationCallbacks() *baseVerificationCallbacks {
 		qrCodesScanned:           map[id.VerificationTransactionID]struct{}{},
 		doneTransactions:         map[id.VerificationTransactionID]struct{}{},
 		verificationCancellation: map[id.VerificationTransactionID]*event.VerificationCancelEventContent{},
+		emojisShown:              map[id.VerificationTransactionID][]rune{},
+		decimalsShown:            map[id.VerificationTransactionID][]int{},
 	}
 }
 
@@ -65,6 +69,14 @@ func (c *baseVerificationCallbacks) GetVerificationCancellation(txnID id.Verific
 	return c.verificationCancellation[txnID]
 }
 
+func (c *baseVerificationCallbacks) GetEmojisShown(txnID id.VerificationTransactionID) []rune {
+	return c.emojisShown[txnID]
+}
+
+func (c *baseVerificationCallbacks) GetDecimalsShown(txnID id.VerificationTransactionID) []int {
+	return c.decimalsShown[txnID]
+}
+
 func (c *baseVerificationCallbacks) VerificationRequested(ctx context.Context, txnID id.VerificationTransactionID, from id.UserID) {
 	c.verificationsRequested[from] = append(c.verificationsRequested[from], txnID)
 }
@@ -92,8 +104,9 @@ func newSASVerificationCallbacksWithBase(base *baseVerificationCallbacks) *sasVe
 	return &sasVerificationCallbacks{base}
 }
 
-func (*sasVerificationCallbacks) ShowSAS(ctx context.Context, txnID id.VerificationTransactionID, emojis []rune, decimals []int) {
-	panic("show sas")
+func (c *sasVerificationCallbacks) ShowSAS(ctx context.Context, txnID id.VerificationTransactionID, emojis []rune, decimals []int) {
+	c.emojisShown[txnID] = emojis
+	c.decimalsShown[txnID] = decimals
 }
 
 type qrCodeVerificationCallbacks struct {
