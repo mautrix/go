@@ -177,7 +177,7 @@ func (vh *VerificationHelper) HandleScannedQRData(ctx context.Context, data []by
 	txn.SentOurDone = true
 	if txn.ReceivedTheirDone {
 		log.Debug().Msg("We already received their done event. Setting verification state to done.")
-		txn.VerificationState = verificationStateDone
+		delete(vh.activeTransactions, txn.TransactionID)
 		vh.verificationDone(ctx, txn.TransactionID)
 	}
 	return nil
@@ -244,7 +244,7 @@ func (vh *VerificationHelper) ConfirmQRCodeScanned(ctx context.Context, txnID id
 	}
 	txn.SentOurDone = true
 	if txn.ReceivedTheirDone {
-		txn.VerificationState = verificationStateDone
+		delete(vh.activeTransactions, txn.TransactionID)
 		vh.verificationDone(ctx, txn.TransactionID)
 	}
 	return nil

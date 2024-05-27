@@ -564,6 +564,8 @@ func (vh *VerificationHelper) onVerificationMAC(ctx context.Context, txn *verifi
 		Str("verification_action", "mac").
 		Logger()
 	log.Info().Msg("Received SAS verification MAC event")
+	vh.activeTransactionsLock.Lock()
+	defer vh.activeTransactionsLock.Unlock()
 	macEvt := evt.Content.AsVerificationMAC()
 
 	// Verifying Keys MAC
@@ -646,8 +648,6 @@ func (vh *VerificationHelper) onVerificationMAC(ctx context.Context, txn *verifi
 	}
 	log.Info().Msg("All MACs verified")
 
-	vh.activeTransactionsLock.Lock()
-	defer vh.activeTransactionsLock.Unlock()
 	txn.ReceivedTheirMAC = true
 	if txn.SentOurMAC {
 		txn.VerificationState = verificationStateSASMACExchanged

@@ -29,8 +29,6 @@ type verificationState int
 const (
 	verificationStateRequested verificationState = iota
 	verificationStateReady
-	verificationStateCancelled
-	verificationStateDone
 
 	verificationStateTheirQRScanned // We scanned their QR code
 	verificationStateOurQRScanned   // They scanned our QR code
@@ -47,8 +45,6 @@ func (step verificationState) String() string {
 		return "requested"
 	case verificationStateReady:
 		return "ready"
-	case verificationStateCancelled:
-		return "cancelled"
 	case verificationStateTheirQRScanned:
 		return "their_qr_scanned"
 	case verificationStateOurQRScanned:
@@ -249,54 +245,49 @@ func (vh *VerificationHelper) Init(ctx context.Context) error {
 			if evt.ID != "" {
 				transactionID = id.VerificationTransactionID(evt.ID)
 			} else {
-				txnID, ok := evt.Content.Raw["transaction_id"].(string)
-				if !ok {
+				if txnID, ok := evt.Content.Parsed.(event.VerificationTransactionable); !ok {
 					log.Warn().Msg("Ignoring verification event without a transaction ID")
 					return
+				} else {
+					transactionID = txnID.GetTransactionID()
 				}
-				transactionID = id.VerificationTransactionID(txnID)
 			}
 			log = log.With().Stringer("transaction_id", transactionID).Logger()
 
 			vh.activeTransactionsLock.Lock()
 			txn, ok := vh.activeTransactions[transactionID]
-			vh.activeTransactionsLock.Unlock()
-			if !ok || txn.VerificationState == verificationStateCancelled || txn.VerificationState == verificationStateDone {
-				var code event.VerificationCancelCode
-				var reason string
-				if !ok {
-					log.Warn().Msg("Ignoring verification event for an unknown transaction and sending cancellation")
-
-					// We have to create a fake transaction so that the call to
-					// verificationCancelled works.
-					txn = &verificationTransaction{
-						RoomID:    evt.RoomID,
-						TheirUser: evt.Sender,
-					}
-					txn.TransactionID = evt.Content.Parsed.(event.VerificationTransactionable).GetTransactionID()
-					if txn.TransactionID == "" {
-						txn.TransactionID = id.VerificationTransactionID(evt.ID)
-					}
-					if fromDevice, ok := evt.Content.Raw["from_device"]; ok {
-						txn.TheirDevice = id.DeviceID(fromDevice.(string))
-					}
-					code = event.VerificationCancelCodeUnknownTransaction
-					reason = "The transaction ID was not recognized."
-				} else if txn.VerificationState == verificationStateCancelled {
-					log.Warn().Msg("Ignoring verification event for a cancelled transaction")
-					code = event.VerificationCancelCodeUnexpectedMessage
-					reason = "The transaction is cancelled."
-				} else if txn.VerificationState == verificationStateDone {
-					code = event.VerificationCancelCodeUnexpectedMessage
-					reason = "The transaction is done."
+			if !ok {
+				// If it's a cancellation event for an unknown transaction, we
+				// can just ignore it.
+				if evt.Type == event.ToDeviceVerificationCancel || evt.Type == event.InRoomVerificationCancel {
+					log.Info().Msg("Ignoring verification cancellation event for an unknown transaction")
+					return
 				}
 
-				// Send the actual cancellation event.
-				vh.cancelVerificationTxn(ctx, txn, code, reason)
+				// We have to create a fake transaction so that the call to
+				// verificationCancelled works.
+				txn = &verificationTransaction{
+					RoomID:    evt.RoomID,
+					TheirUser: evt.Sender,
+				}
+				if transactionable, ok := evt.Content.Parsed.(event.VerificationTransactionable); ok {
+					txn.TransactionID = transactionable.GetTransactionID()
+				} else {
+					txn.TransactionID = id.VerificationTransactionID(evt.ID)
+				}
+				if fromDevice, ok := evt.Content.Raw["from_device"]; ok {
+					txn.TheirDevice = id.DeviceID(fromDevice.(string))
+				}
+
+				// Send a cancellation event.
+				vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnknownTransaction, "The transaction ID was not recognized.")
+				vh.activeTransactionsLock.Unlock()
 				return
+			} else {
+				vh.activeTransactionsLock.Unlock()
 			}
 
-			logCtx := vh.getLog(ctx).With().
+			logCtx := log.With().
 				Stringer("transaction_step", txn.VerificationState).
 				Stringer("sender", evt.Sender)
 			if evt.RoomID != "" {
@@ -491,6 +482,9 @@ func (vh *VerificationHelper) AcceptVerification(ctx context.Context, txnID id.V
 // be the transaction ID of a verification request that was received via the
 // VerificationRequested callback in [RequiredCallbacks].
 func (vh *VerificationHelper) CancelVerification(ctx context.Context, txnID id.VerificationTransactionID, code event.VerificationCancelCode, reason string) error {
+	vh.activeTransactionsLock.Lock()
+	defer vh.activeTransactionsLock.Unlock()
+
 	txn, ok := vh.activeTransactions[txnID]
 	if !ok {
 		return fmt.Errorf("unknown transaction ID")
@@ -535,7 +529,7 @@ func (vh *VerificationHelper) CancelVerification(ctx context.Context, txnID id.V
 			return fmt.Errorf("failed to send m.key.verification.cancel event to %v: %w", maps.Keys(req.Messages[txn.TheirUser]), err)
 		}
 	}
-	txn.VerificationState = verificationStateCancelled
+	delete(vh.activeTransactions, txn.TransactionID)
 	return nil
 }
 
@@ -576,6 +570,8 @@ func (vh *VerificationHelper) sendVerificationEvent(ctx context.Context, txn *ve
 // and reason. It always returns an error, which is the formatted error message
 // (this is allows the caller to return the result of this function call
 // directly to expose the error to its caller).
+//
+// Must always be called with the activeTransactionsLock held.
 func (vh *VerificationHelper) cancelVerificationTxn(ctx context.Context, txn *verificationTransaction, code event.VerificationCancelCode, reasonFmtStr string, fmtArgs ...any) error {
 	log := vh.getLog(ctx)
 	reason := fmt.Errorf(reasonFmtStr, fmtArgs...).Error()
@@ -589,7 +585,7 @@ func (vh *VerificationHelper) cancelVerificationTxn(ctx context.Context, txn *ve
 	if err != nil {
 		return fmt.Errorf("failed to send cancel verification event (code: %s, reason: %s): %w", code, reason, err)
 	}
-	txn.VerificationState = verificationStateCancelled
+	delete(vh.activeTransactions, txn.TransactionID)
 	vh.verificationCancelledCallback(ctx, txn.TransactionID, code, reason)
 	return fmt.Errorf("verification cancelled (code: %s): %s", code, reason)
 }
@@ -698,13 +694,13 @@ func (vh *VerificationHelper) onVerificationReady(ctx context.Context, txn *veri
 		Str("verification_action", "verification ready").
 		Logger()
 
+	vh.activeTransactionsLock.Lock()
+	defer vh.activeTransactionsLock.Unlock()
+
 	if txn.VerificationState != verificationStateRequested {
 		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnexpectedMessage, "verification ready event received for a transaction that is not in the requested state")
 		return
 	}
-
-	vh.activeTransactionsLock.Lock()
-	defer vh.activeTransactionsLock.Unlock()
 
 	readyEvt := evt.Content.AsVerificationReady()
 
@@ -848,7 +844,7 @@ func (vh *VerificationHelper) onVerificationDone(ctx context.Context, txn *verif
 
 	txn.ReceivedTheirDone = true
 	if txn.SentOurDone {
-		txn.VerificationState = verificationStateDone
+		delete(vh.activeTransactions, txn.TransactionID)
 		vh.verificationDone(ctx, txn.TransactionID)
 	}
 }
@@ -863,6 +859,6 @@ func (vh *VerificationHelper) onVerificationCancel(ctx context.Context, txn *ver
 		Msg("Verification was cancelled")
 	vh.activeTransactionsLock.Lock()
 	defer vh.activeTransactionsLock.Unlock()
-	txn.VerificationState = verificationStateCancelled
+	delete(vh.activeTransactions, txn.TransactionID)
 	vh.verificationCancelledCallback(ctx, txn.TransactionID, cancelEvt.Code, cancelEvt.Reason)
 }
