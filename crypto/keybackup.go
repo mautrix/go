@@ -54,6 +54,9 @@ func (mach *OlmMachine) GetAndVerifyLatestKeyBackupVersion(ctx context.Context) 
 	}
 
 	crossSigningPubkeys := mach.GetOwnCrossSigningPublicKeys(ctx)
+	if crossSigningPubkeys == nil {
+		return nil, ErrCrossSigningPubkeysNotCached
+	}
 
 	signatureVerified := false
 	for keyID := range userSignatures {
