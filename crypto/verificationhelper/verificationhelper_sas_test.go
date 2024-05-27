@@ -35,7 +35,7 @@ func TestVerification_SAS(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("sendingGenerated=%t sendingStartsSAS=%t sendingConfirmsFirst=%t", tc.sendingGeneratedCrossSigningKeys, tc.sendingStartsSAS, tc.sendingConfirmsFirst), func(t *testing.T) {
-			ts, sendingClient, receivingClient, _, _, sendingMachine, receivingMachine := initServerAndLogin(t, ctx)
+			ts, sendingClient, receivingClient, _, _, sendingMachine, receivingMachine := initServerAndLoginTwoAlice(t, ctx)
 			defer ts.Close()
 			sendingCallbacks, receivingCallbacks, sendingHelper, receivingHelper := initDefaultCallbacks(t, ctx, sendingClient, receivingClient, sendingMachine, receivingMachine)
 			var err error

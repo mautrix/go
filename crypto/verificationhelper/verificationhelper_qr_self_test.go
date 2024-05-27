@@ -35,7 +35,7 @@ func TestSelfVerification_Accept_QRContents(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("sendingGenerated=%t receivingGenerated=%t err=%s", tc.sendingGeneratedCrossSigningKeys, tc.receivingGeneratedCrossSigningKeys, tc.expectedAcceptError), func(t *testing.T) {
-			ts, sendingClient, receivingClient, _, _, sendingMachine, receivingMachine := initServerAndLogin(t, ctx)
+			ts, sendingClient, receivingClient, _, _, sendingMachine, receivingMachine := initServerAndLoginTwoAlice(t, ctx)
 			defer ts.Close()
 			sendingCallbacks, receivingCallbacks, sendingHelper, receivingHelper := initDefaultCallbacks(t, ctx, sendingClient, receivingClient, sendingMachine, receivingMachine)
 			var err error
@@ -134,7 +134,7 @@ func TestSelfVerification_ScanQRAndConfirmScan(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("sendingGeneratedCrossSigningKeys=%t sendingScansQR=%t", tc.sendingGeneratedCrossSigningKeys, tc.sendingScansQR), func(t *testing.T) {
-			ts, sendingClient, receivingClient, _, _, sendingMachine, receivingMachine := initServerAndLogin(t, ctx)
+			ts, sendingClient, receivingClient, _, _, sendingMachine, receivingMachine := initServerAndLoginTwoAlice(t, ctx)
 			defer ts.Close()
 			sendingCallbacks, receivingCallbacks, sendingHelper, receivingHelper := initDefaultCallbacks(t, ctx, sendingClient, receivingClient, sendingMachine, receivingMachine)
 			var err error
@@ -250,7 +250,7 @@ func TestSelfVerification_ScanQRAndConfirmScan(t *testing.T) {
 func TestSelfVerification_ScanQRTransactionIDCorrupted(t *testing.T) {
 	ctx := log.Logger.WithContext(context.TODO())
 
-	ts, sendingClient, receivingClient, _, _, sendingMachine, receivingMachine := initServerAndLogin(t, ctx)
+	ts, sendingClient, receivingClient, _, _, sendingMachine, receivingMachine := initServerAndLoginTwoAlice(t, ctx)
 	defer ts.Close()
 	sendingCallbacks, receivingCallbacks, sendingHelper, receivingHelper := initDefaultCallbacks(t, ctx, sendingClient, receivingClient, sendingMachine, receivingMachine)
 	var err error
@@ -309,7 +309,7 @@ func TestSelfVerification_ScanQRKeyCorrupted(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("sendingGeneratedCrossSigningKeys=%t sendingScansQR=%t corrupt=%d", tc.sendingGeneratedCrossSigningKeys, tc.sendingScansQR, tc.corruptByte), func(t *testing.T) {
-			ts, sendingClient, receivingClient, _, _, sendingMachine, receivingMachine := initServerAndLogin(t, ctx)
+			ts, sendingClient, receivingClient, _, _, sendingMachine, receivingMachine := initServerAndLoginTwoAlice(t, ctx)
 			defer ts.Close()
 			sendingCallbacks, receivingCallbacks, sendingHelper, receivingHelper := initDefaultCallbacks(t, ctx, sendingClient, receivingClient, sendingMachine, receivingMachine)
 			var err error

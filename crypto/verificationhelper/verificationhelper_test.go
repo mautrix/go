@@ -21,6 +21,7 @@ import (
 )
 
 var aliceUserID = id.UserID("@alice:example.org")
+var bobUserID = id.UserID("@bob:example.org")
 var sendingDeviceID = id.DeviceID("sending")
 var receivingDeviceID = id.DeviceID("receiving")
 
@@ -29,7 +30,7 @@ func init() {
 	zerolog.DefaultContextLogger = &log.Logger
 }
 
-func initServerAndLogin(t *testing.T, ctx context.Context) (ts *mockServer, sendingClient, receivingClient *mautrix.Client, sendingCryptoStore, receivingCryptoStore crypto.Store, sendingMachine, receivingMachine *crypto.OlmMachine) {
+func initServerAndLoginTwoAlice(t *testing.T, ctx context.Context) (ts *mockServer, sendingClient, receivingClient *mautrix.Client, sendingCryptoStore, receivingCryptoStore crypto.Store, sendingMachine, receivingMachine *crypto.OlmMachine) {
 	t.Helper()
 	ts = createMockServer(t)
 
@@ -38,14 +39,26 @@ func initServerAndLogin(t *testing.T, ctx context.Context) (ts *mockServer, send
 	receivingClient, receivingCryptoStore = ts.Login(t, ctx, aliceUserID, receivingDeviceID)
 	receivingMachine = receivingClient.Crypto.(*cryptohelper.CryptoHelper).Machine()
 
-	err := sendingCryptoStore.PutDevice(ctx, aliceUserID, sendingMachine.OwnIdentity())
-	require.NoError(t, err)
-	err = sendingCryptoStore.PutDevice(ctx, aliceUserID, receivingMachine.OwnIdentity())
-	require.NoError(t, err)
-	err = receivingCryptoStore.PutDevice(ctx, aliceUserID, sendingMachine.OwnIdentity())
-	require.NoError(t, err)
-	err = receivingCryptoStore.PutDevice(ctx, aliceUserID, receivingMachine.OwnIdentity())
-	require.NoError(t, err)
+	require.NoError(t, sendingCryptoStore.PutDevice(ctx, aliceUserID, sendingMachine.OwnIdentity()))
+	require.NoError(t, sendingCryptoStore.PutDevice(ctx, aliceUserID, receivingMachine.OwnIdentity()))
+	require.NoError(t, receivingCryptoStore.PutDevice(ctx, aliceUserID, sendingMachine.OwnIdentity()))
+	require.NoError(t, receivingCryptoStore.PutDevice(ctx, aliceUserID, receivingMachine.OwnIdentity()))
+	return
+}
+
+func initServerAndLoginAliceBob(t *testing.T, ctx context.Context) (ts *mockServer, sendingClient, receivingClient *mautrix.Client, sendingCryptoStore, receivingCryptoStore crypto.Store, sendingMachine, receivingMachine *crypto.OlmMachine) {
+	t.Helper()
+	ts = createMockServer(t)
+
+	sendingClient, sendingCryptoStore = ts.Login(t, ctx, aliceUserID, sendingDeviceID)
+	sendingMachine = sendingClient.Crypto.(*cryptohelper.CryptoHelper).Machine()
+	receivingClient, receivingCryptoStore = ts.Login(t, ctx, bobUserID, receivingDeviceID)
+	receivingMachine = receivingClient.Crypto.(*cryptohelper.CryptoHelper).Machine()
+
+	require.NoError(t, sendingCryptoStore.PutDevice(ctx, aliceUserID, sendingMachine.OwnIdentity()))
+	require.NoError(t, sendingCryptoStore.PutDevice(ctx, bobUserID, receivingMachine.OwnIdentity()))
+	require.NoError(t, receivingCryptoStore.PutDevice(ctx, aliceUserID, sendingMachine.OwnIdentity()))
+	require.NoError(t, receivingCryptoStore.PutDevice(ctx, bobUserID, receivingMachine.OwnIdentity()))
 	return
 }
 
@@ -183,7 +196,7 @@ func TestVerification_Accept_CorrectMethodsPresented(t *testing.T) {
 
 	for i, tc := range testCases {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
-			ts, sendingClient, receivingClient, _, _, sendingMachine, receivingMachine := initServerAndLogin(t, ctx)
+			ts, sendingClient, receivingClient, _, _, sendingMachine, receivingMachine := initServerAndLoginTwoAlice(t, ctx)
 			defer ts.Close()
 
 			recoveryKey, sendingCrossSigningKeysCache, err := sendingMachine.GenerateAndUploadCrossSigningKeys(ctx, nil, "")
@@ -270,7 +283,7 @@ func TestVerification_Accept_CorrectMethodsPresented(t *testing.T) {
 // not regress https://github.com/mautrix/go/pull/230.
 func TestVerification_Accept_CancelOnNonParticipatingDevices(t *testing.T) {
 	ctx := log.Logger.WithContext(context.TODO())
-	ts, sendingClient, receivingClient, sendingCryptoStore, receivingCryptoStore, sendingMachine, receivingMachine := initServerAndLogin(t, ctx)
+	ts, sendingClient, receivingClient, sendingCryptoStore, receivingCryptoStore, sendingMachine, receivingMachine := initServerAndLoginTwoAlice(t, ctx)
 	defer ts.Close()
 	_, _, sendingHelper, receivingHelper := initDefaultCallbacks(t, ctx, sendingClient, receivingClient, sendingMachine, receivingMachine)
 
@@ -312,7 +325,7 @@ func TestVerification_Accept_CancelOnNonParticipatingDevices(t *testing.T) {
 
 func TestVerification_ErrorOnDoubleAccept(t *testing.T) {
 	ctx := log.Logger.WithContext(context.TODO())
-	ts, sendingClient, receivingClient, _, _, sendingMachine, receivingMachine := initServerAndLogin(t, ctx)
+	ts, sendingClient, receivingClient, _, _, sendingMachine, receivingMachine := initServerAndLoginTwoAlice(t, ctx)
 	defer ts.Close()
 	_, _, sendingHelper, receivingHelper := initDefaultCallbacks(t, ctx, sendingClient, receivingClient, sendingMachine, receivingMachine)
 

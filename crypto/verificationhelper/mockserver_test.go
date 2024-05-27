@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	"github.com/gorilla/mux"
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/require"
 	"go.mau.fi/util/random"
 
@@ -221,6 +222,12 @@ func (ms *mockServer) Login(t *testing.T, ctx context.Context, userID id.UserID,
 
 	err = cryptoHelper.Init(ctx)
 	require.NoError(t, err)
+
+	machineLog := log.Logger.With().
+		Stringer("my_user_id", userID).
+		Stringer("my_device_id", deviceID).
+		Logger()
+	cryptoHelper.Machine().Log = &machineLog
 
 	err = cryptoHelper.Machine().ShareKeys(ctx, 50)
 	require.NoError(t, err)
