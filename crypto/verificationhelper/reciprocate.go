@@ -14,6 +14,7 @@ import (
 
 	"golang.org/x/exp/slices"
 
+	"maunium.net/go/mautrix/crypto"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
@@ -46,6 +47,10 @@ func (vh *VerificationHelper) HandleScannedQRData(ctx context.Context, data []by
 	log.Info().Msg("Verifying keys from QR code")
 
 	ownCrossSigningPublicKeys := vh.mach.GetOwnCrossSigningPublicKeys(ctx)
+	if ownCrossSigningPublicKeys == nil {
+		return crypto.ErrCrossSigningPubkeysNotCached
+	}
+
 	switch qrCode.Mode {
 	case QRCodeModeCrossSigning:
 		theirSigningKeys, err := vh.mach.GetCrossSigningPublicKeys(ctx, txn.TheirUser)
@@ -127,7 +132,7 @@ func (vh *VerificationHelper) HandleScannedQRData(ctx context.Context, data []by
 		}
 
 		// Verify that what they think the master key is is correct.
-		if bytes.Equal(vh.mach.GetOwnCrossSigningPublicKeys(ctx).MasterKey.Bytes(), qrCode.Key2[:]) {
+		if bytes.Equal(ownCrossSigningPublicKeys.MasterKey.Bytes(), qrCode.Key2[:]) {
 			log.Info().Msg("Verified that the other device has the correct master key")
 		} else {
 			return vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeKeyMismatch, "the master key does not match")
