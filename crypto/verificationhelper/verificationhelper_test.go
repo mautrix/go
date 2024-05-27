@@ -388,5 +388,58 @@ func TestVerification_ErrorOnDoubleAccept(t *testing.T) {
 	err = receivingHelper.AcceptVerification(ctx, txnID)
 	require.NoError(t, err)
 	err = receivingHelper.AcceptVerification(ctx, txnID)
-	require.ErrorContains(t, err, "transaction is not in the requested state")
+	assert.ErrorContains(t, err, "transaction is not in the requested state")
+}
+
+// TestVerification_CancelOnDoubleStart ensures that the receiving device
+// cancels both transactions if the sending device starts two verifications.
+//
+// This test ensures that the following bullet point from [Section 10.12.2.2.1
+// of the Spec] is followed:
+//
+//   - When the same device attempts to initiate multiple verification attempts,
+//     the recipient should cancel all attempts with that device.
+//
+// [Section 10.12.2.2.1 of the Spec]: https://spec.matrix.org/v1.10/client-server-api/#error-and-exception-handling
+func TestVerification_CancelOnDoubleStart(t *testing.T) {
+	ctx := log.Logger.WithContext(context.TODO())
+	ts, sendingClient, receivingClient, _, _, sendingMachine, receivingMachine := initServerAndLoginTwoAlice(t, ctx)
+	defer ts.Close()
+	sendingCallbacks, receivingCallbacks, sendingHelper, receivingHelper := initDefaultCallbacks(t, ctx, sendingClient, receivingClient, sendingMachine, receivingMachine)
+
+	_, _, err := sendingMachine.GenerateAndUploadCrossSigningKeys(ctx, nil, "")
+	require.NoError(t, err)
+
+	// Send and accept the first verification request.
+	txnID1, err := sendingHelper.StartVerification(ctx, aliceUserID)
+	require.NoError(t, err)
+	ts.dispatchToDevice(t, ctx, receivingClient)
+	err = receivingHelper.AcceptVerification(ctx, txnID1)
+	require.NoError(t, err)
+	ts.dispatchToDevice(t, ctx, sendingClient) // Process the m.key.verification.ready event
+
+	// Send a second verification request
+	txnID2, err := sendingHelper.StartVerification(ctx, aliceUserID)
+	require.NoError(t, err)
+	ts.dispatchToDevice(t, ctx, receivingClient)
+
+	// Ensure that the sending device received a cancellation event for both of
+	// the ongoing transactions.
+	sendingInbox := ts.DeviceInbox[aliceUserID][sendingDeviceID]
+	require.Len(t, sendingInbox, 2)
+	cancelEvt1 := sendingInbox[0].Content.AsVerificationCancel()
+	cancelEvt2 := sendingInbox[1].Content.AsVerificationCancel()
+	cancelledTxnIDs := []id.VerificationTransactionID{cancelEvt1.TransactionID, cancelEvt2.TransactionID}
+	assert.Contains(t, cancelledTxnIDs, txnID1)
+	assert.Contains(t, cancelledTxnIDs, txnID2)
+	assert.Equal(t, event.VerificationCancelCodeUnexpectedMessage, cancelEvt1.Code)
+	assert.Equal(t, event.VerificationCancelCodeUnexpectedMessage, cancelEvt2.Code)
+	assert.Equal(t, "received multiple verification requests from the same device", cancelEvt1.Reason)
+	assert.Equal(t, "received multiple verification requests from the same device", cancelEvt2.Reason)
+
+	assert.NotNil(t, receivingCallbacks.GetVerificationCancellation(txnID1))
+	assert.NotNil(t, receivingCallbacks.GetVerificationCancellation(txnID2))
+	ts.dispatchToDevice(t, ctx, sendingClient) // Process the m.key.verification.cancel events
+	assert.NotNil(t, sendingCallbacks.GetVerificationCancellation(txnID1))
+	assert.NotNil(t, sendingCallbacks.GetVerificationCancellation(txnID2))
 }

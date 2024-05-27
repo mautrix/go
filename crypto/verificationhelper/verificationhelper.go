@@ -663,13 +663,7 @@ func (vh *VerificationHelper) onVerificationRequest(ctx context.Context, evt *ev
 	}
 
 	vh.activeTransactionsLock.Lock()
-	existing, ok := vh.activeTransactions[verificationRequest.TransactionID]
-	if ok {
-		vh.activeTransactionsLock.Unlock()
-		vh.cancelVerificationTxn(ctx, existing, event.VerificationCancelCodeUnexpectedMessage, "received a new verification request for the same transaction ID")
-		return
-	}
-	vh.activeTransactions[verificationRequest.TransactionID] = &verificationTransaction{
+	newTxn := &verificationTransaction{
 		RoomID:                evt.RoomID,
 		VerificationState:     verificationStateRequested,
 		TransactionID:         verificationRequest.TransactionID,
@@ -677,6 +671,23 @@ func (vh *VerificationHelper) onVerificationRequest(ctx context.Context, evt *ev
 		TheirUser:             evt.Sender,
 		TheirSupportedMethods: verificationRequest.Methods,
 	}
+	for existingTxnID, existingTxn := range vh.activeTransactions {
+		if existingTxn.TheirUser == evt.Sender && existingTxn.TheirDevice == verificationRequest.FromDevice {
+			vh.cancelVerificationTxn(ctx, existingTxn, event.VerificationCancelCodeUnexpectedMessage, "received multiple verification requests from the same device")
+			vh.cancelVerificationTxn(ctx, newTxn, event.VerificationCancelCodeUnexpectedMessage, "received multiple verification requests from the same device")
+			delete(vh.activeTransactions, existingTxnID)
+			vh.activeTransactionsLock.Unlock()
+			return
+		}
+
+		if existingTxnID == verificationRequest.TransactionID {
+			vh.cancelVerificationTxn(ctx, existingTxn, event.VerificationCancelCodeUnexpectedMessage, "received a new verification request for the same transaction ID")
+			delete(vh.activeTransactions, existingTxnID)
+			vh.activeTransactionsLock.Unlock()
+			return
+		}
+	}
+	vh.activeTransactions[verificationRequest.TransactionID] = newTxn
 	vh.activeTransactionsLock.Unlock()
 
 	vh.verificationRequested(ctx, verificationRequest.TransactionID, evt.Sender)
