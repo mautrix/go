@@ -8,12 +8,17 @@ package bridgev2
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
+	"net/http"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/exmime"
+	"golang.org/x/exp/slices"
 
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
+	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -84,4 +89,138 @@ func (br *Bridge) GetGhostByID(ctx context.Context, id networkid.UserID) (*Ghost
 func (ghost *Ghost) IntentFor(portal *Portal) MatrixAPI {
 	// TODO use user double puppet intent if appropriate
 	return ghost.Intent
+}
+
+type Avatar struct {
+	ID     networkid.AvatarID
+	Get    func(ctx context.Context) ([]byte, error)
+	Remove bool
+}
+
+func (a *Avatar) Reupload(ctx context.Context, intent MatrixAPI, currentHash [32]byte) (id.ContentURIString, [32]byte, error) {
+	data, err := a.Get(ctx)
+	if err != nil {
+		return "", [32]byte{}, err
+	}
+	hash := sha256.Sum256(data)
+	if hash == currentHash {
+		return "", hash, nil
+	}
+	mime := http.DetectContentType(data)
+	fileName := "avatar" + exmime.ExtensionFromMimetype(mime)
+	uri, _, err := intent.UploadMedia(ctx, "", data, fileName, mime)
+	if err != nil {
+		return "", hash, err
+	}
+	return uri, hash, nil
+}
+
+type UserInfo struct {
+	Identifiers []string
+	Name        *string
+	Avatar      *Avatar
+	IsBot       *bool
+}
+
+func (ghost *Ghost) UpdateName(ctx context.Context, name string) bool {
+	if ghost.Name == name && ghost.NameSet {
+		return false
+	}
+	ghost.Name = name
+	ghost.NameSet = false
+	err := ghost.Intent.SetDisplayName(ctx, name)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to set display name")
+	} else {
+		ghost.NameSet = true
+	}
+	return true
+}
+
+func (ghost *Ghost) UpdateAvatar(ctx context.Context, avatar *Avatar) bool {
+	if ghost.AvatarID == avatar.ID && ghost.AvatarSet {
+		return false
+	}
+	ghost.AvatarID = avatar.ID
+	if !avatar.Remove {
+		newMXC, newHash, err := avatar.Reupload(ctx, ghost.Intent, ghost.AvatarHash)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to reupload avatar")
+			return true
+		} else if newHash == ghost.AvatarHash {
+			return true
+		}
+		ghost.AvatarMXC = newMXC
+	} else {
+		ghost.AvatarMXC = ""
+	}
+	ghost.AvatarSet = false
+	if err := ghost.Intent.SetAvatarURL(ctx, ghost.AvatarMXC); err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to set avatar URL")
+	} else {
+		ghost.AvatarSet = true
+	}
+	return true
+}
+
+func (ghost *Ghost) UpdateContactInfo(ctx context.Context, identifiers []string, isBot *bool) bool {
+	if identifiers != nil {
+		slices.Sort(identifiers)
+	}
+	if ghost.Metadata.ContactInfoSet &&
+		(identifiers == nil || slices.Equal(identifiers, ghost.Metadata.Identifiers)) &&
+		(isBot == nil || *isBot == ghost.Metadata.IsBot) {
+		return false
+	}
+	if identifiers != nil {
+		ghost.Metadata.Identifiers = identifiers
+	}
+	if isBot != nil {
+		ghost.Metadata.IsBot = *isBot
+	}
+	meta := &event.BeeperProfileExtra{
+		RemoteID:     string(ghost.ID),
+		Identifiers:  ghost.Metadata.Identifiers,
+		Service:      "", // TODO set
+		Network:      "", // TODO set
+		IsBridgeBot:  false,
+		IsNetworkBot: ghost.Metadata.IsBot,
+	}
+	err := ghost.Intent.SetExtraProfileMeta(ctx, meta)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to set extra profile metadata")
+	} else {
+		ghost.Metadata.ContactInfoSet = true
+	}
+	return true
+}
+
+func (ghost *Ghost) UpdateInfoIfNecessary(ctx context.Context, source *UserLogin) {
+	if ghost.Name != "" && ghost.NameSet {
+		return
+	}
+	info, err := source.Client.GetUserInfo(ctx, ghost)
+	if err != nil {
+		zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to get info to update ghost")
+	}
+	ghost.UpdateInfo(ctx, info)
+}
+
+func (ghost *Ghost) UpdateInfo(ctx context.Context, info *UserInfo) {
+	update := false
+	if info.Name != nil {
+		update = ghost.UpdateName(ctx, *info.Name) || update
+	}
+	if info.Avatar != nil {
+		update = ghost.UpdateAvatar(ctx, info.Avatar) || update
+	}
+	if info.Identifiers != nil || info.IsBot != nil {
+		update = ghost.UpdateContactInfo(ctx, info.Identifiers, info.IsBot) || update
+	}
+	if update {
+		err := ghost.Bridge.DB.Ghost.Update(ctx, ghost.Ghost)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to update ghost in database after updating info")
+		}
+	}
 }

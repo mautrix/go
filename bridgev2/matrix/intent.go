@@ -135,6 +135,13 @@ func (as *ASIntent) SetAvatarURL(ctx context.Context, avatarURL id.ContentURIStr
 	return as.Matrix.SetAvatarURL(ctx, parsedAvatarURL)
 }
 
+func (as *ASIntent) SetExtraProfileMeta(ctx context.Context, data any) error {
+	if !as.Connector.SpecVersions.Supports(mautrix.BeeperFeatureArbitraryProfileMeta) {
+		return nil
+	}
+	return as.Matrix.BeeperUpdateProfile(ctx, data)
+}
+
 func (as *ASIntent) GetMXID() id.UserID {
 	return as.Matrix.UserID
 }

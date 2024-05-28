@@ -88,3 +88,12 @@ type BeeperLinkPreview struct {
 	MatchedURL      string             `json:"matched_url,omitempty"`
 	ImageEncryption *EncryptedFileInfo `json:"beeper:image:encryption,omitempty"`
 }
+
+type BeeperProfileExtra struct {
+	RemoteID     string   `json:"com.beeper.bridge.remote_id,omitempty"`
+	Identifiers  []string `json:"com.beeper.bridge.identifiers,omitempty"`
+	Service      string   `json:"com.beeper.bridge.service,omitempty"`
+	Network      string   `json:"com.beeper.bridge.network,omitempty"`
+	IsBridgeBot  bool     `json:"com.beeper.bridge.is_bridge_bot,omitempty"`
+	IsNetworkBot bool     `json:"com.beeper.bridge.is_network_bot,omitempty"`
+}

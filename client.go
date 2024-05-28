@@ -946,9 +946,9 @@ func (cli *Client) SetAvatarURL(ctx context.Context, url id.ContentURI) (err err
 }
 
 // BeeperUpdateProfile sets custom fields in the user's profile.
-func (cli *Client) BeeperUpdateProfile(ctx context.Context, data map[string]any) (err error) {
+func (cli *Client) BeeperUpdateProfile(ctx context.Context, data any) (err error) {
 	urlPath := cli.BuildClientURL("v3", "profile", cli.UserID)
-	_, err = cli.MakeRequest(ctx, http.MethodPatch, urlPath, &data, nil)
+	_, err = cli.MakeRequest(ctx, http.MethodPatch, urlPath, data, nil)
 	return
 }
 

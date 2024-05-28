@@ -79,7 +79,7 @@ func (br *Bridge) QueueRemoteEvent(login *UserLogin, evt RemoteEvent) {
 	ctx := log.WithContext(context.TODO())
 	portal, err := br.GetPortalByID(ctx, evt.GetPortalID())
 	if err != nil {
-		log.Err(err).Str("portal_id", string(portal.ID)).
+		log.Err(err).Str("portal_id", string(evt.GetPortalID())).
 			Msg("Failed to get portal to handle remote event")
 		return
 	}

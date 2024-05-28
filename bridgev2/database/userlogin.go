@@ -37,9 +37,14 @@ const (
 	getUserLoginBaseQuery = `
 		SELECT bridge_id, user_mxid, id, space_room, metadata FROM user_login
 	`
-	getAllLoginsQuery        = getUserLoginBaseQuery + `WHERE bridge_id=$1`
-	getAllLoginsForUserQuery = getUserLoginBaseQuery + `WHERE bridge_id=$1 AND user_mxid=$2`
-	insertUserLoginQuery     = `
+	getAllLoginsQuery         = getUserLoginBaseQuery + `WHERE bridge_id=$1`
+	getAllLoginsForUserQuery  = getUserLoginBaseQuery + `WHERE bridge_id=$1 AND user_mxid=$2`
+	getAllLoginsInPortalQuery = `
+		SELECT ul.bridge_id, ul.user_mxid, ul.id, ul.space_room, ul.metadata FROM user_portal
+		LEFT JOIN user_login ul ON user_portal.bridge_id=ul.bridge_id AND user_portal.user_mxid=ul.user_mxid AND user_portal.login_id=ul.id
+		WHERE user_portal.bridge_id=$1 AND user_portal.portal_id=$2
+	`
+	insertUserLoginQuery = `
 		INSERT INTO user_login (bridge_id, user_mxid, id, space_room, metadata)
 		VALUES ($1, $2, $3, $4, $5)
 	`
@@ -64,6 +69,10 @@ const (
 
 func (uq *UserLoginQuery) GetAll(ctx context.Context) ([]*UserLogin, error) {
 	return uq.QueryMany(ctx, getAllLoginsQuery, uq.BridgeID)
+}
+
+func (uq *UserLoginQuery) GetAllInPortal(ctx context.Context, portalID networkid.PortalID) ([]*UserLogin, error) {
+	return uq.QueryMany(ctx, getAllLoginsInPortalQuery, uq.BridgeID, portalID)
 }
 
 func (uq *UserLoginQuery) GetAllForUser(ctx context.Context, userID id.UserID) ([]*UserLogin, error) {

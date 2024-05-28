@@ -9,6 +9,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"encoding/hex"
 
 	"go.mau.fi/util/dbutil"
 
@@ -26,16 +27,17 @@ type Portal struct {
 	ID       networkid.PortalID
 	MXID     id.RoomID
 
-	ParentID  networkid.PortalID
-	Name      string
-	Topic     string
-	AvatarID  networkid.AvatarID
-	AvatarMXC id.ContentURIString
-	NameSet   bool
-	TopicSet  bool
-	AvatarSet bool
-	InSpace   bool
-	Metadata  map[string]any
+	ParentID   networkid.PortalID
+	Name       string
+	Topic      string
+	AvatarID   networkid.AvatarID
+	AvatarHash [32]byte
+	AvatarMXC  id.ContentURIString
+	NameSet    bool
+	TopicSet   bool
+	AvatarSet  bool
+	InSpace    bool
+	Metadata   map[string]any
 }
 
 func newPortal(_ *dbutil.QueryHelper[*Portal]) *Portal {
@@ -44,7 +46,7 @@ func newPortal(_ *dbutil.QueryHelper[*Portal]) *Portal {
 
 const (
 	getPortalBaseQuery = `
-		SELECT bridge_id, id, mxid, parent_id, name, topic, avatar_id, avatar_mxc,
+		SELECT bridge_id, id, mxid, parent_id, name, topic, avatar_id, avatar_hash, avatar_mxc,
 		       name_set, topic_set, avatar_set, in_space,
 		       metadata
 		FROM portal
@@ -56,15 +58,15 @@ const (
 	insertPortalQuery = `
 		INSERT INTO portal (
 			bridge_id, id, mxid,
-			parent_id, name, topic, avatar_id, avatar_mxc,
+			parent_id, name, topic, avatar_id, avatar_hash, avatar_mxc,
 			name_set, avatar_set, topic_set, in_space,
 			metadata
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 	`
 	updatePortalQuery = `
 		UPDATE portal
-		SET mxid=$3, parent_id=$4, name=$5, topic=$6, avatar_id=$7, avatar_mxc=$8,
-		    name_set=$9, avatar_set=$10, topic_set=$11, in_space=$12, metadata=$13
+		SET mxid=$3, parent_id=$4, name=$5, topic=$6, avatar_id=$7, avatar_hash=$8, avatar_mxc=$9,
+		    name_set=$10, avatar_set=$11, topic_set=$12, in_space=$13, metadata=$14
 		WHERE bridge_id=$1 AND id=$2
 	`
 	reIDPortalQuery = `UPDATE portal SET id=$3 WHERE bridge_id=$1 AND id=$2`
@@ -98,9 +100,10 @@ func (pq *PortalQuery) Update(ctx context.Context, p *Portal) error {
 
 func (p *Portal) Scan(row dbutil.Scannable) (*Portal, error) {
 	var mxid, parentID sql.NullString
+	var avatarHash string
 	err := row.Scan(
 		&p.BridgeID, &p.ID, &mxid,
-		&parentID, &p.Name, &p.Topic, &p.AvatarID, &p.AvatarMXC,
+		&parentID, &p.Name, &p.Topic, &p.AvatarID, &avatarHash, &p.AvatarMXC,
 		&p.NameSet, &p.TopicSet, &p.AvatarSet, &p.InSpace,
 		dbutil.JSON{Data: &p.Metadata},
 	)
@@ -109,6 +112,12 @@ func (p *Portal) Scan(row dbutil.Scannable) (*Portal, error) {
 	}
 	if p.Metadata == nil {
 		p.Metadata = make(map[string]any)
+	}
+	if avatarHash != "" {
+		data, _ := hex.DecodeString(avatarHash)
+		if len(data) == 32 {
+			p.AvatarHash = *(*[32]byte)(data)
+		}
 	}
 	p.MXID = id.RoomID(mxid.String)
 	p.ParentID = networkid.PortalID(parentID.String)
@@ -119,9 +128,13 @@ func (p *Portal) sqlVariables() []any {
 	if p.Metadata == nil {
 		p.Metadata = make(map[string]any)
 	}
+	var avatarHash string
+	if p.AvatarHash != [32]byte{} {
+		avatarHash = hex.EncodeToString(p.AvatarHash[:])
+	}
 	return []any{
 		p.BridgeID, p.ID, dbutil.StrPtr(p.MXID),
-		dbutil.StrPtr(p.ParentID), p.Name, p.Topic, p.AvatarID, p.AvatarMXC,
+		dbutil.StrPtr(p.ParentID), p.Name, p.Topic, p.AvatarID, avatarHash, p.AvatarMXC,
 		p.NameSet, p.TopicSet, p.AvatarSet, p.InSpace,
 		dbutil.JSON{Data: p.Metadata},
 	}

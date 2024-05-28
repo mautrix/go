@@ -51,7 +51,10 @@ type NetworkConnector interface {
 type NetworkAPI interface {
 	Connect(ctx context.Context) error
 	IsLoggedIn() bool
+
+	IsThisUser(ctx context.Context, userID networkid.UserID) bool
 	GetChatInfo(ctx context.Context, portal *Portal) (*PortalInfo, error)
+	GetUserInfo(ctx context.Context, ghost *Ghost) (*UserInfo, error)
 
 	HandleMatrixMessage(ctx context.Context, msg *MatrixMessage) (message *database.Message, err error)
 	HandleMatrixEdit(ctx context.Context, msg *MatrixEdit) error

@@ -1,19 +1,20 @@
 -- v0 -> v1: Latest revision
 CREATE TABLE portal (
-	bridge_id  TEXT    NOT NULL,
-	id         TEXT    NOT NULL,
-	mxid       TEXT,
+	bridge_id   TEXT    NOT NULL,
+	id          TEXT    NOT NULL,
+	mxid        TEXT,
 
-	parent_id  TEXT,
-	name       TEXT    NOT NULL,
-	topic      TEXT    NOT NULL,
-	avatar_id  TEXT    NOT NULL,
-	avatar_mxc TEXT    NOT NULL,
-	name_set   BOOLEAN NOT NULL,
-	avatar_set BOOLEAN NOT NULL,
-	topic_set  BOOLEAN NOT NULL,
-	in_space   BOOLEAN NOT NULL,
-	metadata   jsonb   NOT NULL,
+	parent_id   TEXT,
+	name        TEXT    NOT NULL,
+	topic       TEXT    NOT NULL,
+	avatar_id   TEXT    NOT NULL,
+	avatar_hash TEXT    NOT NULL,
+	avatar_mxc  TEXT    NOT NULL,
+	name_set    BOOLEAN NOT NULL,
+	avatar_set  BOOLEAN NOT NULL,
+	topic_set   BOOLEAN NOT NULL,
+	in_space    BOOLEAN NOT NULL,
+	metadata    jsonb   NOT NULL,
 
 	PRIMARY KEY (bridge_id, id),
 	CONSTRAINT portal_parent_fkey FOREIGN KEY (bridge_id, parent_id)
@@ -23,15 +24,16 @@ CREATE TABLE portal (
 );
 
 CREATE TABLE ghost (
-	bridge_id  TEXT    NOT NULL,
-	id         TEXT    NOT NULL,
+	bridge_id   TEXT    NOT NULL,
+	id          TEXT    NOT NULL,
 
-	name       TEXT    NOT NULL,
-	avatar_id  TEXT    NOT NULL,
-	avatar_mxc TEXT    NOT NULL,
-	name_set   BOOLEAN NOT NULL,
-	avatar_set BOOLEAN NOT NULL,
-	metadata   jsonb   NOT NULL,
+	name        TEXT    NOT NULL,
+	avatar_id   TEXT    NOT NULL,
+	avatar_hash TEXT    NOT NULL,
+	avatar_mxc  TEXT    NOT NULL,
+	name_set    BOOLEAN NOT NULL,
+	avatar_set  BOOLEAN NOT NULL,
+	metadata    jsonb   NOT NULL,
 
 	PRIMARY KEY (bridge_id, id)
 );

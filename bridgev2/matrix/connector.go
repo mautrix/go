@@ -51,6 +51,8 @@ type Connector struct {
 	Config     *bridgeconfig.Config
 	Bridge     *bridgev2.Bridge
 
+	SpecVersions *mautrix.RespVersions
+
 	EventProcessor *appservice.EventProcessor
 
 	userIDRegex *regexp.Regexp
@@ -102,6 +104,10 @@ func (br *Connector) Start(ctx context.Context) error {
 		return err
 	}
 	go br.AS.Start()
+	br.SpecVersions, err = br.Bot.Versions(ctx)
+	if err != nil {
+		return err
+	}
 	if br.Crypto != nil {
 		err = br.Crypto.Init(ctx)
 		if err != nil {
@@ -171,6 +177,20 @@ func (br *Connector) UserIntent(user *bridgev2.User) bridgev2.MatrixAPI {
 
 func (br *Connector) BotIntent() bridgev2.MatrixAPI {
 	return &ASIntent{Connector: br, Matrix: br.Bot}
+}
+
+func (br *Connector) GetMembers(ctx context.Context, roomID id.RoomID) (map[id.UserID]*event.MemberEventContent, error) {
+	// TODO use cache?
+	members, err := br.Bot.Members(ctx, roomID)
+	if err != nil {
+		return nil, err
+	}
+	output := make(map[id.UserID]*event.MemberEventContent, len(members.Chunk))
+	for _, evt := range members.Chunk {
+		_ = evt.Content.ParseRaw(evt.Type)
+		output[id.UserID(evt.GetStateKey())] = evt.Content.AsMember()
+	}
+	return output, nil
 }
 
 func (br *Connector) GetMemberInfo(ctx context.Context, roomID id.RoomID, userID id.UserID) (*event.MemberEventContent, error) {

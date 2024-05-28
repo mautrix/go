@@ -29,6 +29,7 @@ type MatrixConnector interface {
 
 	SendMessageStatus(ctx context.Context, status MessageStatus)
 
+	GetMembers(ctx context.Context, roomID id.RoomID) (map[id.UserID]*event.MemberEventContent, error)
 	GetMemberInfo(ctx context.Context, roomID id.RoomID, userID id.UserID) (*event.MemberEventContent, error)
 
 	ServerName() string
@@ -44,6 +45,7 @@ type MatrixAPI interface {
 
 	SetDisplayName(ctx context.Context, name string) error
 	SetAvatarURL(ctx context.Context, avatarURL id.ContentURIString) error
+	SetExtraProfileMeta(ctx context.Context, data any) error
 
 	CreateRoom(ctx context.Context, req *mautrix.ReqCreateRoom) (id.RoomID, error)
 	DeleteRoom(ctx context.Context, roomID id.RoomID) error
