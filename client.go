@@ -1403,14 +1403,6 @@ func (cli *Client) GetDownloadURL(mxcURL id.ContentURI) string {
 	return cli.BuildURLWithQuery(MediaURLPath{"v3", "download", mxcURL.Homeserver, mxcURL.FileID}, map[string]string{"allow_redirect": "true"})
 }
 
-func (cli *Client) Download(ctx context.Context, mxcURL id.ContentURI) (io.ReadCloser, error) {
-	resp, err := cli.download(ctx, mxcURL)
-	if err != nil {
-		return nil, err
-	}
-	return resp.Body, nil
-}
-
 func (cli *Client) doMediaRetry(req *http.Request, cause error, retries int, backoff time.Duration) (*http.Response, error) {
 	log := zerolog.Ctx(req.Context())
 	if req.Body != nil {
@@ -1467,7 +1459,7 @@ func (cli *Client) doMediaRequest(req *http.Request, retries int, backoff time.D
 	return res, err
 }
 
-func (cli *Client) download(ctx context.Context, mxcURL id.ContentURI) (*http.Response, error) {
+func (cli *Client) Download(ctx context.Context, mxcURL id.ContentURI) (*http.Response, error) {
 	ctxLog := zerolog.Ctx(ctx)
 	if ctxLog.GetLevel() == zerolog.Disabled || ctxLog == zerolog.DefaultContextLogger {
 		ctx = cli.Log.WithContext(ctx)
@@ -1481,7 +1473,7 @@ func (cli *Client) download(ctx context.Context, mxcURL id.ContentURI) (*http.Re
 }
 
 func (cli *Client) DownloadBytes(ctx context.Context, mxcURL id.ContentURI) ([]byte, error) {
-	resp, err := cli.download(ctx, mxcURL)
+	resp, err := cli.Download(ctx, mxcURL)
 	if err != nil {
 		return nil, err
 	}
