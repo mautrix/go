@@ -12,6 +12,7 @@ import (
 	"crypto/ecdh"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/jsontime"
@@ -349,14 +350,16 @@ func (vh *VerificationHelper) StartVerification(ctx context.Context, to id.UserI
 		Any("device_ids", maps.Keys(devices)).
 		Msg("Sending verification request")
 
+	now := time.Now()
 	content := &event.Content{
 		Parsed: &event.VerificationRequestEventContent{
 			ToDeviceVerificationEvent: event.ToDeviceVerificationEvent{TransactionID: txnID},
 			FromDevice:                vh.client.DeviceID,
 			Methods:                   vh.supportedMethods,
-			Timestamp:                 jsontime.UnixMilliNow(),
+			Timestamp:                 jsontime.UM(now),
 		},
 	}
+	vh.expireTransactionAt(txnID, now.Add(time.Minute*10))
 
 	req := mautrix.ReqSendToDevice{Messages: map[id.UserID]map[id.DeviceID]*event.Content{to: {}}}
 	for deviceID := range devices {
@@ -583,6 +586,7 @@ func (vh *VerificationHelper) cancelVerificationTxn(ctx context.Context, txn *ve
 	cancelEvt := &event.VerificationCancelEventContent{Code: code, Reason: reason}
 	err := vh.sendVerificationEvent(ctx, txn, event.InRoomVerificationCancel, cancelEvt)
 	if err != nil {
+		log.Err(err).Msg("failed to send cancellation event")
 		return fmt.Errorf("failed to send cancel verification event (code: %s, reason: %s): %w", code, reason, err)
 	}
 	delete(vh.activeTransactions, txn.TransactionID)
@@ -620,6 +624,11 @@ func (vh *VerificationHelper) onVerificationRequest(ctx context.Context, evt *ev
 
 	if verificationRequest.FromDevice == vh.client.DeviceID {
 		log.Warn().Msg("Ignoring verification request from our own device. Why did it even get sent to us?")
+		return
+	}
+
+	if verificationRequest.Timestamp.Add(10 * time.Minute).Before(time.Now()) {
+		log.Warn().Msg("Ignoring verification request that is over ten minutes old")
 		return
 	}
 
@@ -686,7 +695,24 @@ func (vh *VerificationHelper) onVerificationRequest(ctx context.Context, evt *ev
 	vh.activeTransactions[verificationRequest.TransactionID] = newTxn
 	vh.activeTransactionsLock.Unlock()
 
+	vh.expireTransactionAt(verificationRequest.TransactionID, verificationRequest.Timestamp.Add(time.Minute*10))
 	vh.verificationRequested(ctx, verificationRequest.TransactionID, evt.Sender)
+}
+
+func (vh *VerificationHelper) expireTransactionAt(txnID id.VerificationTransactionID, expireAt time.Time) {
+	go func() {
+		time.Sleep(time.Until(expireAt))
+
+		vh.activeTransactionsLock.Lock()
+		defer vh.activeTransactionsLock.Unlock()
+
+		txn, ok := vh.activeTransactions[txnID]
+		if !ok {
+			return
+		}
+
+		vh.cancelVerificationTxn(context.Background(), txn, event.VerificationCancelCodeTimeout, "verification timed out")
+	}()
 }
 
 func (vh *VerificationHelper) onVerificationReady(ctx context.Context, txn *verificationTransaction, evt *event.Event) {
