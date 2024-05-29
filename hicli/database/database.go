@@ -22,6 +22,7 @@ type Database struct {
 	CurrentState   CurrentStateQuery
 	Timeline       TimelineQuery
 	SessionRequest SessionRequestQuery
+	Receipt        ReceiptQuery
 }
 
 func New(rawDB *dbutil.Database) *Database {
@@ -36,6 +37,7 @@ func New(rawDB *dbutil.Database) *Database {
 		CurrentState:   CurrentStateQuery{Database: rawDB},
 		Timeline:       TimelineQuery{Database: rawDB},
 		SessionRequest: SessionRequestQuery{QueryHelper: dbutil.MakeQueryHelper(rawDB, newSessionRequest)},
+		Receipt:        ReceiptQuery{QueryHelper: dbutil.MakeQueryHelper(rawDB, newReceipt)},
 	}
 }
 
@@ -49,6 +51,10 @@ func newEvent(_ *dbutil.QueryHelper[*Event]) *Event {
 
 func newRoom(_ *dbutil.QueryHelper[*Room]) *Room {
 	return &Room{}
+}
+
+func newReceipt(_ *dbutil.QueryHelper[*Receipt]) *Receipt {
+	return &Receipt{}
 }
 
 func newAccountData(_ *dbutil.QueryHelper[*AccountData]) *AccountData {

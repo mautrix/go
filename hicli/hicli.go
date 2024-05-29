@@ -9,6 +9,7 @@ package hicli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -46,6 +47,15 @@ type HiClient struct {
 	encryptLock       sync.Mutex
 
 	requestQueueWakeup chan struct{}
+
+	paginationInterrupterLock sync.Mutex
+	paginationInterrupter     map[id.RoomID]context.CancelCauseFunc
+}
+
+var ErrTimelineReset = errors.New("got limited timeline sync response")
+
+func (h *HiClient) DispatchEvent(evt any) {
+	// TODO
 }
 
 func New(rawDB *dbutil.Database, log zerolog.Logger, pickleKey []byte) *HiClient {

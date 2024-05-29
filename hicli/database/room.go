@@ -9,6 +9,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"time"
 
 	"go.mau.fi/util/dbutil"
 
@@ -18,10 +19,12 @@ import (
 )
 
 const (
-	getRoomByIDQuery = `
-		SELECT room_id, creation_content, name, avatar, topic, lazy_load_summary, encryption_event, has_member_list, prev_batch
-		FROM room WHERE room_id = $1
+	getRoomBaseQuery = `
+		SELECT room_id, creation_content, name, avatar, topic, lazy_load_summary, encryption_event, has_member_list,
+		       preview_event_rowid, sorting_timestamp, prev_batch
+		FROM room
 	`
+	getRoomByIDQuery      = getRoomBaseQuery + `WHERE room_id = $1`
 	ensureRoomExistsQuery = `
 		INSERT INTO room (room_id) VALUES ($1)
 		ON CONFLICT (room_id) DO NOTHING
@@ -35,12 +38,20 @@ const (
 			lazy_load_summary = COALESCE($6, room.lazy_load_summary),
 			encryption_event = COALESCE($7, room.encryption_event),
 			has_member_list = room.has_member_list OR $8,
-			prev_batch = COALESCE(room.prev_batch, $9)
+			preview_event_rowid = COALESCE($9, room.preview_event_rowid),
+			sorting_timestamp = COALESCE($10, room.sorting_timestamp),
+			prev_batch = COALESCE($11, room.prev_batch)
 		WHERE room_id = $1
 	`
 	setRoomPrevBatchQuery = `
-		INSERT INTO room (room_id, prev_batch) VALUES ($1, $2)
-		ON CONFLICT (room_id) DO UPDATE SET prev_batch = excluded.prev_batch
+		UPDATE room SET prev_batch = $2 WHERE room_id = $1
+	`
+	updateRoomPreviewIfLaterOnTimelineQuery = `
+		UPDATE room
+		SET preview_event_rowid = $2
+		WHERE room_id = $1
+		  AND COALESCE((SELECT rowid FROM timeline WHERE event_rowid = $2), -1)
+		          > COALESCE((SELECT rowid FROM timeline WHERE event_rowid = preview_event_rowid), 0)
 	`
 )
 
@@ -64,6 +75,10 @@ func (rq *RoomQuery) SetPrevBatch(ctx context.Context, roomID id.RoomID, prevBat
 	return rq.Exec(ctx, setRoomPrevBatchQuery, roomID, prevBatch)
 }
 
+func (rq *RoomQuery) UpdatePreviewIfLaterOnTimeline(ctx context.Context, roomID id.RoomID, rowID EventRowID) error {
+	return rq.Exec(ctx, updateRoomPreviewIfLaterOnTimelineQuery, roomID, rowID)
+}
+
 type Room struct {
 	ID              id.RoomID
 	CreationContent *event.CreateEventContent
@@ -77,11 +92,15 @@ type Room struct {
 	EncryptionEvent *event.EncryptionEventContent
 	HasMemberList   bool
 
+	PreviewEventRowID EventRowID
+	SortingTimestamp  time.Time
+
 	PrevBatch string
 }
 
 func (r *Room) Scan(row dbutil.Scannable) (*Room, error) {
 	var prevBatch sql.NullString
+	var previewEventRowID, sortingTimestamp sql.NullInt64
 	err := row.Scan(
 		&r.ID,
 		dbutil.JSON{Data: &r.CreationContent},
@@ -91,12 +110,16 @@ func (r *Room) Scan(row dbutil.Scannable) (*Room, error) {
 		dbutil.JSON{Data: &r.LazyLoadSummary},
 		dbutil.JSON{Data: &r.EncryptionEvent},
 		&r.HasMemberList,
+		&previewEventRowID,
+		&sortingTimestamp,
 		&prevBatch,
 	)
 	if err != nil {
 		return nil, err
 	}
 	r.PrevBatch = prevBatch.String
+	r.PreviewEventRowID = EventRowID(previewEventRowID.Int64)
+	r.SortingTimestamp = time.UnixMilli(sortingTimestamp.Int64)
 	return r, nil
 }
 
@@ -110,6 +133,20 @@ func (r *Room) sqlVariables() []any {
 		dbutil.JSONPtr(r.LazyLoadSummary),
 		dbutil.JSONPtr(r.EncryptionEvent),
 		r.HasMemberList,
+		dbutil.NumPtr(r.PreviewEventRowID),
+		dbutil.UnixMilliPtr(r.SortingTimestamp),
 		dbutil.StrPtr(r.PrevBatch),
 	}
+}
+
+func (r *Room) BumpSortingTimestamp(evt *Event) bool {
+	if !evt.BumpsSortingTimestamp() || evt.Timestamp.Before(r.SortingTimestamp) {
+		return false
+	}
+	r.SortingTimestamp = evt.Timestamp
+	now := time.Now()
+	if r.SortingTimestamp.After(now) {
+		r.SortingTimestamp = now
+	}
+	return true
 }

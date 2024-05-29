@@ -29,6 +29,7 @@ import (
 var writerTypeReadline zeroconfig.WriterType = "hitest_readline"
 
 func main() {
+	hicli.InitialDeviceDisplayName = "mautrix hitest"
 	rl := exerrors.Must(readline.New("> "))
 	defer func() {
 		_ = rl.Close()

@@ -9,20 +9,26 @@ CREATE TABLE account (
 ) STRICT;
 
 CREATE TABLE room (
-	room_id           TEXT    NOT NULL PRIMARY KEY,
-	creation_content  TEXT,
+	room_id             TEXT    NOT NULL PRIMARY KEY,
+	creation_content    TEXT,
 
-	name              TEXT,
-	avatar            TEXT,
-	topic             TEXT,
-	lazy_load_summary TEXT,
+	name                TEXT,
+	avatar              TEXT,
+	topic               TEXT,
+	lazy_load_summary   TEXT,
 
-	encryption_event  TEXT,
-	has_member_list   INTEGER NOT NULL DEFAULT false,
+	encryption_event    TEXT,
+	has_member_list     INTEGER NOT NULL DEFAULT false,
 
-	prev_batch        TEXT
+	preview_event_rowid INTEGER,
+	sorting_timestamp   INTEGER,
+
+	prev_batch          TEXT,
+
+	CONSTRAINT room_preview_event_fkey FOREIGN KEY (preview_event_rowid) REFERENCES event (rowid) ON DELETE SET NULL
 ) STRICT;
 CREATE INDEX room_type_idx ON room (creation_content ->> 'type');
+CREATE INDEX room_sorting_timestamp_idx ON room (sorting_timestamp DESC);
 
 CREATE TABLE account_data (
 	user_id TEXT NOT NULL,
@@ -59,9 +65,13 @@ CREATE TABLE event (
 
 	redacted_by       TEXT,
 	relates_to        TEXT,
+	relation_type     TEXT,
 
 	megolm_session_id TEXT,
 	decryption_error  TEXT,
+
+	reactions         TEXT,
+	last_edit_rowid   INTEGER,
 
 	CONSTRAINT event_id_unique_key UNIQUE (event_id),
 	CONSTRAINT event_room_fkey FOREIGN KEY (room_id) REFERENCES room (room_id) ON DELETE CASCADE
@@ -70,6 +80,92 @@ CREATE INDEX event_room_id_idx ON event (room_id);
 CREATE INDEX event_redacted_by_idx ON event (room_id, redacted_by);
 CREATE INDEX event_relates_to_idx ON event (room_id, relates_to);
 CREATE INDEX event_megolm_session_id_idx ON event (room_id, megolm_session_id);
+
+CREATE TRIGGER event_update_redacted_by
+	AFTER INSERT
+	ON event
+	WHEN NEW.type = 'm.room.redaction'
+BEGIN
+	UPDATE event SET redacted_by = NEW.event_id WHERE room_id = NEW.room_id AND event_id = NEW.content ->> 'redacts';
+END;
+
+CREATE TRIGGER event_update_last_edit_when_redacted
+	AFTER UPDATE
+	ON event
+	WHEN OLD.redacted_by IS NULL
+		AND NEW.redacted_by IS NOT NULL
+		AND NEW.relation_type = 'm.replace'
+BEGIN
+	UPDATE event
+	SET last_edit_rowid = (SELECT rowid
+						   FROM event edit
+						   WHERE edit.room_id = event.room_id
+							 AND edit.relates_to = event.event_id
+							 AND edit.relation_type = 'm.replace'
+							 AND edit.type = event.type
+							 AND edit.sender = event.sender
+							 AND edit.redacted_by IS NULL
+						   ORDER BY edit.timestamp DESC
+						   LIMIT 1)
+	WHERE event_id = NEW.relates_to
+	  AND last_edit_rowid = NEW.rowid;
+END;
+
+CREATE TRIGGER event_insert_update_last_edit
+	AFTER INSERT
+	ON event
+	WHEN NEW.relation_type = 'm.replace'
+		AND NEW.redacted_by IS NULL
+BEGIN
+	UPDATE event
+	SET last_edit_rowid = NEW.rowid
+	WHERE event_id = NEW.relates_to
+	  AND type = NEW.type
+	  AND sender = NEW.sender
+	  AND state_key IS NULL
+	  AND NEW.timestamp > COALESCE((SELECT prev_edit.timestamp FROM event prev_edit WHERE prev_edit.rowid = event.last_edit_rowid), 0);
+END;
+
+CREATE TRIGGER event_insert_fill_reactions
+	AFTER INSERT
+	ON event
+	WHEN NEW.type = 'm.reaction'
+		AND NEW.relation_type = 'm.annotation'
+		AND NEW.redacted_by IS NULL
+		AND typeof(NEW.content ->> '$."m.relates_to".key') = 'text'
+BEGIN
+	UPDATE event
+	SET reactions=json_set(
+		reactions,
+		'$.' || json_quote(NEW.content ->> '$."m.relates_to".key'),
+		coalesce(
+			reactions ->> ('$.' || json_quote(NEW.content ->> '$."m.relates_to".key')),
+			0
+		) + 1)
+	WHERE event_id = NEW.relates_to
+	  AND reactions IS NOT NULL;
+END;
+
+CREATE TRIGGER event_redact_fill_reactions
+	AFTER UPDATE
+	ON event
+	WHEN NEW.type = 'm.reaction'
+		AND NEW.relation_type = 'm.annotation'
+		AND NEW.redacted_by IS NOT NULL
+		AND OLD.redacted_by IS NULL
+		AND typeof(NEW.content ->> '$."m.relates_to".key') = 'text'
+BEGIN
+	UPDATE event
+	SET reactions=json_set(
+		reactions,
+		'$.' || json_quote(NEW.content ->> '$."m.relates_to".key'),
+		coalesce(
+			reactions ->> ('$.' || json_quote(NEW.content ->> '$."m.relates_to".key')),
+			0
+		) - 1)
+	WHERE event_id = NEW.relates_to
+	  AND reactions IS NOT NULL;
+END;
 
 CREATE TABLE session_request (
 	room_id        TEXT    NOT NULL,
@@ -99,9 +195,22 @@ CREATE TABLE current_state (
 	state_key   TEXT    NOT NULL,
 	event_rowid INTEGER NOT NULL,
 
-	membership TEXT,
+	membership  TEXT,
 
 	PRIMARY KEY (room_id, event_type, state_key),
 	CONSTRAINT current_state_room_fkey FOREIGN KEY (room_id) REFERENCES room (room_id) ON DELETE CASCADE,
 	CONSTRAINT current_state_event_fkey FOREIGN KEY (event_rowid) REFERENCES event (rowid)
 ) STRICT, WITHOUT ROWID;
+
+CREATE TABLE receipt (
+	room_id      TEXT    NOT NULL,
+	user_id      TEXT    NOT NULL,
+	receipt_type TEXT    NOT NULL,
+	thread_id    TEXT    NOT NULL,
+	event_id     TEXT    NOT NULL,
+	timestamp    INTEGER NOT NULL,
+
+	PRIMARY KEY (room_id, user_id, receipt_type, thread_id),
+	CONSTRAINT receipt_room_fkey FOREIGN KEY (room_id) REFERENCES room (room_id) ON DELETE CASCADE
+	-- note: there's no foreign key on event ID because receipts could point at events that are too far in history.
+) STRICT;

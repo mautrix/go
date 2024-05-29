@@ -57,13 +57,13 @@ func (h *HiClient) preProcessSyncResponse(ctx context.Context, resp *mautrix.Res
 	return nil
 }
 
-func (h *HiClient) postProcessSyncResponse(ctx context.Context, resp *mautrix.RespSync, since string) error {
+func (h *HiClient) postProcessSyncResponse(ctx context.Context, resp *mautrix.RespSync, since string) {
 	h.Crypto.HandleOTKCounts(ctx, &resp.DeviceOTKCount)
 	go h.asyncPostProcessSyncResponse(ctx, resp, since)
 	if ctx.Value(syncContextKey).(*syncContext).shouldWakeupRequestQueue {
 		h.WakeupRequestQueue()
 	}
-	return nil
+	h.firstSyncReceived = true
 }
 
 func (h *HiClient) asyncPostProcessSyncResponse(ctx context.Context, resp *mautrix.RespSync, since string) {
@@ -116,6 +116,24 @@ func (h *HiClient) processSyncResponse(ctx context.Context, resp *mautrix.RespSy
 	return nil
 }
 
+func receiptsToList(content *event.ReceiptEventContent) []*database.Receipt {
+	receiptList := make([]*database.Receipt, 0)
+	for eventID, receipts := range *content {
+		for receiptType, users := range receipts {
+			for userID, receiptInfo := range users {
+				receiptList = append(receiptList, &database.Receipt{
+					UserID:      userID,
+					ReceiptType: receiptType,
+					ThreadID:    receiptInfo.ThreadID,
+					EventID:     eventID,
+					Timestamp:   receiptInfo.Timestamp,
+				})
+			}
+		}
+	}
+	return receiptList
+}
+
 func (h *HiClient) processSyncJoinedRoom(ctx context.Context, roomID id.RoomID, room *mautrix.SyncJoinedRoom) error {
 	existingRoomData, err := h.DB.Room.Get(ctx, roomID)
 	if err != nil {
@@ -139,6 +157,29 @@ func (h *HiClient) processSyncJoinedRoom(ctx context.Context, roomID id.RoomID, 
 	err = h.processStateAndTimeline(ctx, existingRoomData, &room.State, &room.Timeline, &room.Summary)
 	if err != nil {
 		return err
+	}
+	for _, evt := range room.Ephemeral.Events {
+		evt.Type.Class = event.EphemeralEventType
+		err = evt.Content.ParseRaw(evt.Type)
+		if err != nil {
+			zerolog.Ctx(ctx).Debug().Err(err).Msg("Failed to parse ephemeral event content")
+			continue
+		}
+		switch evt.Type {
+		case event.EphemeralEventReceipt:
+			err = h.DB.Receipt.PutMany(ctx, roomID, receiptsToList(evt.Content.AsReceipt())...)
+			if err != nil {
+				return fmt.Errorf("failed to save receipts: %w", err)
+			}
+		case event.EphemeralEventTyping:
+			go h.DispatchEvent(&Typing{
+				RoomID:             roomID,
+				TypingEventContent: *evt.Content.AsTyping(),
+			})
+		}
+		if evt.Type != event.EphemeralEventReceipt {
+			continue
+		}
 	}
 	return nil
 }
@@ -164,11 +205,8 @@ func removeReplyFallback(evt *event.Event) []byte {
 		content.RemoveReplyFallback()
 		if content.FormattedBody != prevFormattedBody {
 			bytes, err := sjson.SetBytes(evt.Content.VeryRaw, "formatted_body", content.FormattedBody)
-			if err == nil {
-				return bytes
-			}
-			bytes, err = sjson.SetBytes(evt.Content.VeryRaw, "body", content.Body)
-			if err == nil {
+			bytes, err2 := sjson.SetBytes(bytes, "body", content.Body)
+			if err == nil && err2 == nil {
 				return bytes
 			}
 		}
@@ -192,70 +230,104 @@ func (h *HiClient) decryptEvent(ctx context.Context, evt *event.Event) ([]byte, 
 	return decrypted.Content.VeryRaw, decrypted.Type.Type, nil
 }
 
-func (h *HiClient) processStateAndTimeline(ctx context.Context, room *database.Room, state *mautrix.SyncEventsList, timeline *mautrix.SyncTimeline, summary *mautrix.LazyLoadSummary) error {
-	decryptionQueue := make(map[id.SessionID]*database.SessionRequest)
-	roomDataChanged := false
-	processEvent := func(evt *event.Event) (database.MassInsertableRowID, error) {
-		evt.RoomID = room.ID
-		dbEvt := database.MautrixToEvent(evt)
-		contentWithoutFallback := removeReplyFallback(evt)
-		if contentWithoutFallback != nil {
-			dbEvt.Content = contentWithoutFallback
-		}
-		var decryptionErr error
-		if evt.Type == event.EventEncrypted {
-			dbEvt.Decrypted, dbEvt.DecryptedType, decryptionErr = h.decryptEvent(ctx, evt)
-			if decryptionErr != nil {
-				dbEvt.DecryptionError = decryptionErr.Error()
-			}
-		}
-		rowID, err := h.DB.Event.Upsert(ctx, dbEvt)
+func (h *HiClient) processEvent(ctx context.Context, evt *event.Event, decryptionQueue map[id.SessionID]*database.SessionRequest, checkDB bool) (*database.Event, error) {
+	if checkDB {
+		dbEvt, err := h.DB.Event.GetByID(ctx, evt.ID)
 		if err != nil {
-			return -1, fmt.Errorf("failed to save event %s: %w", evt.ID, err)
+			return nil, fmt.Errorf("failed to check if event %s exists: %w", evt.ID, err)
+		} else if dbEvt != nil {
+			return dbEvt, nil
 		}
-		if decryptionErr != nil && isDecryptionErrorRetryable(decryptionErr) {
-			req, ok := decryptionQueue[dbEvt.MegolmSessionID]
-			if !ok {
-				req = &database.SessionRequest{
-					RoomID:    room.ID,
-					SessionID: dbEvt.MegolmSessionID,
-					Sender:    evt.Sender,
-				}
+	}
+	dbEvt := database.MautrixToEvent(evt)
+	contentWithoutFallback := removeReplyFallback(evt)
+	if contentWithoutFallback != nil {
+		dbEvt.Content = contentWithoutFallback
+	}
+	var decryptionErr error
+	if evt.Type == event.EventEncrypted {
+		dbEvt.Decrypted, dbEvt.DecryptedType, decryptionErr = h.decryptEvent(ctx, evt)
+		if decryptionErr != nil {
+			dbEvt.DecryptionError = decryptionErr.Error()
+		}
+	} else if evt.Type == event.EventRedaction {
+		if evt.Redacts != "" && gjson.GetBytes(evt.Content.VeryRaw, "redacts").Str != evt.Redacts.String() {
+			var err error
+			evt.Content.VeryRaw, err = sjson.SetBytes(evt.Content.VeryRaw, "redacts", evt.Redacts)
+			if err != nil {
+				return dbEvt, fmt.Errorf("failed to set redacts field: %w", err)
 			}
-			minIndex, _ := crypto.ParseMegolmMessageIndex(evt.Content.AsEncrypted().MegolmCiphertext)
-			req.MinIndex = min(uint32(minIndex), req.MinIndex)
-			decryptionQueue[dbEvt.MegolmSessionID] = req
+		}
+	}
+	_, err := h.DB.Event.Upsert(ctx, dbEvt)
+	if err != nil {
+		return dbEvt, fmt.Errorf("failed to save event %s: %w", evt.ID, err)
+	}
+	if decryptionErr != nil && isDecryptionErrorRetryable(decryptionErr) {
+		req, ok := decryptionQueue[dbEvt.MegolmSessionID]
+		if !ok {
+			req = &database.SessionRequest{
+				RoomID:    evt.RoomID,
+				SessionID: dbEvt.MegolmSessionID,
+				Sender:    evt.Sender,
+			}
+		}
+		minIndex, _ := crypto.ParseMegolmMessageIndex(evt.Content.AsEncrypted().MegolmCiphertext)
+		req.MinIndex = min(uint32(minIndex), req.MinIndex)
+		decryptionQueue[dbEvt.MegolmSessionID] = req
+	}
+	return dbEvt, err
+}
+
+func (h *HiClient) processStateAndTimeline(ctx context.Context, room *database.Room, state *mautrix.SyncEventsList, timeline *mautrix.SyncTimeline, summary *mautrix.LazyLoadSummary) error {
+	updatedRoom := &database.Room{
+		ID: room.ID,
+
+		SortingTimestamp: room.SortingTimestamp,
+	}
+	decryptionQueue := make(map[id.SessionID]*database.SessionRequest)
+	processNewEvent := func(evt *event.Event, isTimeline bool) (database.EventRowID, error) {
+		evt.RoomID = room.ID
+		dbEvt, err := h.processEvent(ctx, evt, decryptionQueue, false)
+		if err != nil {
+			return -1, err
+		}
+		if isTimeline {
+			if dbEvt.CanUseForPreview() {
+				updatedRoom.PreviewEventRowID = dbEvt.RowID
+			}
+			updatedRoom.BumpSortingTimestamp(dbEvt)
 		}
 		if evt.StateKey != nil {
 			var membership event.Membership
 			if evt.Type == event.StateMember {
 				membership = event.Membership(gjson.GetBytes(evt.Content.VeryRaw, "membership").Str)
 			}
-			err = h.DB.CurrentState.Set(ctx, room.ID, evt.Type, *evt.StateKey, rowID, membership)
+			err = h.DB.CurrentState.Set(ctx, room.ID, evt.Type, *evt.StateKey, dbEvt.RowID, membership)
 			if err != nil {
 				return -1, fmt.Errorf("failed to save current state event ID %s for %s/%s: %w", evt.ID, evt.Type.Type, *evt.StateKey, err)
 			}
-			roomDataChanged = processImportantEvent(ctx, evt, room) || roomDataChanged
+			processImportantEvent(ctx, evt, room, updatedRoom)
 		}
-		return database.MassInsertableRowID(rowID), nil
+		return dbEvt.RowID, nil
 	}
 	var err error
 	for _, evt := range state.Events {
 		evt.Type.Class = event.StateEventType
-		_, err = processEvent(evt)
+		_, err = processNewEvent(evt, false)
 		if err != nil {
 			return err
 		}
 	}
 	if len(timeline.Events) > 0 {
-		timelineIDs := make([]database.MassInsertableRowID, len(timeline.Events))
+		timelineIDs := make([]database.EventRowID, len(timeline.Events))
 		for i, evt := range timeline.Events {
 			if evt.StateKey != nil {
 				evt.Type.Class = event.StateEventType
 			} else {
 				evt.Type.Class = event.MessageEventType
 			}
-			timelineIDs[i], err = processEvent(evt)
+			timelineIDs[i], err = processNewEvent(evt, true)
 			if err != nil {
 				return err
 			}
@@ -274,6 +346,12 @@ func (h *HiClient) processStateAndTimeline(ctx context.Context, room *database.R
 			if err != nil {
 				return fmt.Errorf("failed to clear old timeline: %w", err)
 			}
+			updatedRoom.PrevBatch = timeline.PrevBatch
+			h.paginationInterrupterLock.Lock()
+			if interrupt, ok := h.paginationInterrupter[room.ID]; ok {
+				interrupt(ErrTimelineReset)
+			}
+			h.paginationInterrupterLock.Unlock()
 		}
 		err = h.DB.Timeline.Append(ctx, room.ID, timelineIDs)
 		if err != nil {
@@ -281,18 +359,17 @@ func (h *HiClient) processStateAndTimeline(ctx context.Context, room *database.R
 		}
 	}
 	if timeline.PrevBatch != "" && room.PrevBatch == "" {
-		room.PrevBatch = timeline.PrevBatch
-		roomDataChanged = true
+		updatedRoom.PrevBatch = timeline.PrevBatch
 	}
-	if summary.Heroes != nil {
-		roomDataChanged = roomDataChanged || room.LazyLoadSummary == nil ||
-			!slices.Equal(summary.Heroes, room.LazyLoadSummary.Heroes) ||
-			!intPtrEqual(summary.JoinedMemberCount, room.LazyLoadSummary.JoinedMemberCount) ||
-			!intPtrEqual(summary.InvitedMemberCount, room.LazyLoadSummary.InvitedMemberCount)
-		room.LazyLoadSummary = summary
+	if summary.Heroes != nil && (room.LazyLoadSummary == nil ||
+		!slices.Equal(summary.Heroes, room.LazyLoadSummary.Heroes) ||
+		!intPtrEqual(summary.JoinedMemberCount, room.LazyLoadSummary.JoinedMemberCount) ||
+		!intPtrEqual(summary.InvitedMemberCount, room.LazyLoadSummary.InvitedMemberCount)) {
+		updatedRoom.LazyLoadSummary = summary
 	}
-	if roomDataChanged {
-		err = h.DB.Room.Upsert(ctx, room)
+	// TODO check if updatedRoom contains anything
+	if true {
+		err = h.DB.Room.Upsert(ctx, updatedRoom)
 		if err != nil {
 			return fmt.Errorf("failed to save room data: %w", err)
 		}
@@ -307,7 +384,7 @@ func intPtrEqual(a, b *int) bool {
 	return *a == *b
 }
 
-func processImportantEvent(ctx context.Context, evt *event.Event, existingRoomData *database.Room) (roomDataChanged bool) {
+func processImportantEvent(ctx context.Context, evt *event.Event, existingRoomData, updatedRoom *database.Room) (roomDataChanged bool) {
 	if evt.StateKey == nil {
 		return
 	}
@@ -329,33 +406,26 @@ func processImportantEvent(ctx context.Context, evt *event.Event, existingRoomDa
 	}
 	switch evt.Type {
 	case event.StateCreate:
-		if existingRoomData.CreationContent == nil {
-			roomDataChanged = true
-		}
-		existingRoomData.CreationContent, _ = evt.Content.Parsed.(*event.CreateEventContent)
+		updatedRoom.CreationContent, _ = evt.Content.Parsed.(*event.CreateEventContent)
 	case event.StateEncryption:
 		newEncryption, _ := evt.Content.Parsed.(*event.EncryptionEventContent)
 		if existingRoomData.EncryptionEvent == nil || existingRoomData.EncryptionEvent.Algorithm == newEncryption.Algorithm {
-			roomDataChanged = true
-			existingRoomData.EncryptionEvent = newEncryption
+			updatedRoom.EncryptionEvent = newEncryption
 		}
 	case event.StateRoomName:
 		content, ok := evt.Content.Parsed.(*event.RoomNameEventContent)
-		if ok {
-			roomDataChanged = existingRoomData.Name == nil || *existingRoomData.Name != content.Name
-			existingRoomData.Name = &content.Name
+		if ok && (existingRoomData.Name == nil || *existingRoomData.Name != content.Name) {
+			updatedRoom.Name = &content.Name
 		}
 	case event.StateRoomAvatar:
 		content, ok := evt.Content.Parsed.(*event.RoomAvatarEventContent)
-		if ok {
-			roomDataChanged = existingRoomData.Avatar == nil || *existingRoomData.Avatar != content.URL
-			existingRoomData.Avatar = &content.URL
+		if ok && (existingRoomData.Avatar == nil || *existingRoomData.Avatar != content.URL) {
+			updatedRoom.Avatar = &content.URL
 		}
 	case event.StateTopic:
 		content, ok := evt.Content.Parsed.(*event.TopicEventContent)
-		if ok {
-			roomDataChanged = existingRoomData.Topic == nil || *existingRoomData.Topic != content.Topic
-			existingRoomData.Topic = &content.Topic
+		if ok && (existingRoomData.Topic == nil || *existingRoomData.Topic != content.Topic) {
+			updatedRoom.Topic = &content.Topic
 		}
 	}
 	return

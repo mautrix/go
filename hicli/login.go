@@ -13,7 +13,10 @@ import (
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/hicli/database"
+	"maunium.net/go/mautrix/id"
 )
+
+var InitialDeviceDisplayName = "mautrix hiclient"
 
 func (h *HiClient) LoginPassword(ctx context.Context, homeserverURL, username, password string) error {
 	var err error
@@ -28,7 +31,7 @@ func (h *HiClient) LoginPassword(ctx context.Context, homeserverURL, username, p
 			User: username,
 		},
 		Password:                 password,
-		InitialDeviceDisplayName: "mautrix client",
+		InitialDeviceDisplayName: InitialDeviceDisplayName,
 	})
 }
 
@@ -58,6 +61,10 @@ func (h *HiClient) Login(ctx context.Context, req *mautrix.ReqLogin) error {
 	err = h.Crypto.ShareKeys(ctx, 0)
 	if err != nil {
 		return err
+	}
+	_, err = h.Crypto.FetchKeys(ctx, []id.UserID{h.Account.UserID}, true)
+	if err != nil {
+		return fmt.Errorf("failed to fetch own devices: %w", err)
 	}
 	return nil
 }

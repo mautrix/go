@@ -32,17 +32,13 @@ func (h *hiSyncer) ProcessResponse(ctx context.Context, resp *mautrix.RespSync, 
 	if err != nil {
 		return err
 	}
-	err = h.DB.DoTxn(ctx, nil, func(ctx context.Context) error {
+	err = c.DB.DoTxn(ctx, nil, func(ctx context.Context) error {
 		return c.processSyncResponse(ctx, resp, since)
 	})
 	if err != nil {
 		return err
 	}
-	err = c.postProcessSyncResponse(ctx, resp, since)
-	if err != nil {
-		return err
-	}
-	c.firstSyncReceived = true
+	c.postProcessSyncResponse(ctx, resp, since)
 	return nil
 }
 
