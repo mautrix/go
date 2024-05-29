@@ -9,6 +9,7 @@ package bridgeconfig
 import (
 	"go.mau.fi/util/dbutil"
 	"go.mau.fi/zeroconfig"
+	"gopkg.in/yaml.v3"
 )
 
 type Config struct {
@@ -22,6 +23,7 @@ type Config struct {
 	Permissions         PermissionConfig    `yaml:"permissions"`
 	ManagementRoomTexts ManagementRoomTexts `yaml:"management_room_texts"`
 	Logging             zeroconfig.Config   `yaml:"logging"`
+	Network             yaml.Node           `yaml:"network"`
 }
 
 type BridgeConfig struct {
