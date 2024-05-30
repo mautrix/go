@@ -1084,14 +1084,14 @@ func (cli *Client) SendNotice(ctx context.Context, roomID id.RoomID, text string
 	})
 }
 
-func (cli *Client) SendReaction(ctx context.Context, roomID id.RoomID, eventID id.EventID, reaction string) (*RespSendEvent, error) {
+func (cli *Client) SendReaction(ctx context.Context, roomID id.RoomID, eventID id.EventID, reaction string, extra ...ReqSendEvent) (*RespSendEvent, error) {
 	return cli.SendMessageEvent(ctx, roomID, event.EventReaction, &event.ReactionEventContent{
 		RelatesTo: event.RelatesTo{
 			EventID: eventID,
 			Type:    event.RelAnnotation,
 			Key:     reaction,
 		},
-	})
+	}, extra...)
 }
 
 // RedactEvent redacts the given event. See https://spec.matrix.org/v1.2/client-server-api/#put_matrixclientv3roomsroomidredacteventidtxnid
