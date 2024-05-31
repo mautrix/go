@@ -4,14 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"maunium.net/go/mautrix/crypto/goolm"
 	"maunium.net/go/mautrix/crypto/goolm/cipher"
+	"maunium.net/go/mautrix/crypto/olm"
 )
 
 // PickleAsJSON returns an object as a base64 string encrypted using the supplied key. The unencrypted representation of the object is in JSON format.
 func PickleAsJSON(object any, pickleVersion byte, key []byte) ([]byte, error) {
 	if len(key) == 0 {
-		return nil, fmt.Errorf("pickle: %w", goolm.ErrNoKeyProvided)
+		return nil, fmt.Errorf("pickle: %w", olm.ErrNoKeyProvided)
 	}
 	marshaled, err := json.Marshal(object)
 	if err != nil {
@@ -36,7 +36,7 @@ func PickleAsJSON(object any, pickleVersion byte, key []byte) ([]byte, error) {
 // UnpickleAsJSON updates the object by a base64 encrypted string using the supplied key. The unencrypted representation has to be in JSON format.
 func UnpickleAsJSON(object any, pickled, key []byte, pickleVersion byte) error {
 	if len(key) == 0 {
-		return fmt.Errorf("unpickle: %w", goolm.ErrNoKeyProvided)
+		return fmt.Errorf("unpickle: %w", olm.ErrNoKeyProvided)
 	}
 	decrypted, err := cipher.Unpickle(key, pickled)
 	if err != nil {
@@ -50,7 +50,7 @@ func UnpickleAsJSON(object any, pickled, key []byte, pickleVersion byte) error {
 		}
 	}
 	if decrypted[0] != pickleVersion {
-		return fmt.Errorf("unpickle: %w", goolm.ErrWrongPickleVersion)
+		return fmt.Errorf("unpickle: %w", olm.ErrWrongPickleVersion)
 	}
 	err = json.Unmarshal(decrypted[1:], object)
 	if err != nil {

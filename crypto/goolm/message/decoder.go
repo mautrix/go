@@ -3,17 +3,17 @@ package message
 import (
 	"encoding/binary"
 
-	"maunium.net/go/mautrix/crypto/goolm"
+	"maunium.net/go/mautrix/crypto/olm"
 )
 
 // checkDecodeErr checks if there was an error during decode.
 func checkDecodeErr(readBytes int) error {
 	if readBytes == 0 {
 		//end reached
-		return goolm.ErrInputToSmall
+		return olm.ErrInputToSmall
 	}
 	if readBytes < 0 {
-		return goolm.ErrOverflow
+		return olm.ErrOverflow
 	}
 	return nil
 }

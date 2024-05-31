@@ -87,7 +87,7 @@ func (mach *OlmMachine) SignOwnMasterKey(ctx context.Context) error {
 			id.NewKeyID(id.KeyAlgorithmEd25519, masterKey.String()): masterKey.String(),
 		},
 	}
-	signature, err := mach.account.Internal.SignJSON(masterKeyObj)
+	signature, err := mach.account.SignJSON(masterKeyObj)
 	if err != nil {
 		return fmt.Errorf("failed to sign JSON: %w", err)
 	}

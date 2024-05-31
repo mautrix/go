@@ -4,8 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-// Only run this test if goo is disabled (that is, libolm is used).
-//go:build !goolm
+// Only run this test if goolm is disabled (that is, libolm is used).
 
 package olm_test
 
@@ -16,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"maunium.net/go/mautrix/crypto/goolm/pk"
-	"maunium.net/go/mautrix/crypto/olm"
+	"maunium.net/go/mautrix/crypto/libolm"
 )
 
 func FuzzSign(f *testing.F) {
@@ -24,7 +23,7 @@ func FuzzSign(f *testing.F) {
 	goolmPkSigning, err := pk.NewSigningFromSeed(seed)
 	require.NoError(f, err)
 
-	libolmPkSigning, err := olm.NewPKSigningFromSeed(seed)
+	libolmPkSigning, err := libolm.NewPKSigningFromSeed(seed)
 	require.NoError(f, err)
 
 	f.Add([]byte("message"))

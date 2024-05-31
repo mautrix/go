@@ -101,7 +101,7 @@ func (mach *OlmMachine) PublishCrossSigningKeys(ctx context.Context, keys *Cross
 			masterKeyID: keys.MasterKey.PublicKey(),
 		},
 	}
-	masterSig, err := mach.account.Internal.SignJSON(masterKey)
+	masterSig, err := mach.account.SignJSON(masterKey)
 	if err != nil {
 		return fmt.Errorf("failed to sign master key: %w", err)
 	}

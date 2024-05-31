@@ -4,8 +4,8 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"maunium.net/go/mautrix/crypto/goolm"
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
+	"maunium.net/go/mautrix/crypto/olm"
 )
 
 const (
@@ -34,15 +34,15 @@ func (s MegolmSessionSharing) EncodeAndSign(key crypto.Ed25519KeyPair) []byte {
 // VerifyAndDecode verifies the input and populates the struct with the data encoded in input.
 func (s *MegolmSessionSharing) VerifyAndDecode(input []byte) error {
 	if len(input) != 229 {
-		return fmt.Errorf("verify: %w", goolm.ErrBadInput)
+		return fmt.Errorf("verify: %w", olm.ErrBadInput)
 	}
 	publicKey := crypto.Ed25519PublicKey(input[133:165])
 	if !publicKey.Verify(input[:165], input[165:]) {
-		return fmt.Errorf("verify: %w", goolm.ErrBadVerification)
+		return fmt.Errorf("verify: %w", olm.ErrBadVerification)
 	}
 	s.PublicKey = publicKey
 	if input[0] != sessionSharingVersion {
-		return fmt.Errorf("verify: %w", goolm.ErrBadVersion)
+		return fmt.Errorf("verify: %w", olm.ErrBadVersion)
 	}
 	s.Counter = binary.BigEndian.Uint32(input[1:5])
 	copy(s.RatchetData[:], input[5:133])

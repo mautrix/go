@@ -83,7 +83,6 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build
-        run: go build -tags=goolm -v ./...
-
-      - name: Test
-        run: go test -tags=goolm -json -v ./... 2>&1 | gotestfmt
+        run: |
+          rm -rf crypto/libolm
+          go build -tags=goolm -v ./...

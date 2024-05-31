@@ -5,9 +5,9 @@ import (
 
 	"maunium.net/go/mautrix/id"
 
-	"maunium.net/go/mautrix/crypto/goolm"
 	"maunium.net/go/mautrix/crypto/goolm/cipher"
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
+	"maunium.net/go/mautrix/crypto/goolm/goolmbase64"
 )
 
 // Encryption is used to encrypt pk messages
@@ -45,5 +45,5 @@ func (e Encryption) Encrypt(plaintext []byte, privateKey crypto.Curve25519Privat
 	if err != nil {
 		return nil, nil, err
 	}
-	return ciphertext, goolm.Base64Encode(mac), nil
+	return ciphertext, goolmbase64.Encode(mac), nil
 }

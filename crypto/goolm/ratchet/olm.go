@@ -1,16 +1,16 @@
-// olm provides the ratchet used by the olm protocol
-package olm
+// Package ratchet provides the ratchet used by the olm protocol
+package ratchet
 
 import (
 	"fmt"
 	"io"
 
-	"maunium.net/go/mautrix/crypto/goolm"
 	"maunium.net/go/mautrix/crypto/goolm/cipher"
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
 	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
 	"maunium.net/go/mautrix/crypto/goolm/message"
 	"maunium.net/go/mautrix/crypto/goolm/utilities"
+	"maunium.net/go/mautrix/crypto/olm"
 )
 
 const (
@@ -95,10 +95,10 @@ func (r *Ratchet) InitializeAsAlice(sharedSecret []byte, ourRatchetKey crypto.Cu
 }
 
 // Encrypt encrypts the message in a message.Message with MAC. If reader is nil, crypto/rand is used for key generations.
-func (r *Ratchet) Encrypt(plaintext []byte, reader io.Reader) ([]byte, error) {
+func (r *Ratchet) Encrypt(plaintext []byte) ([]byte, error) {
 	var err error
 	if !r.SenderChains.IsSet {
-		newRatchetKey, err := crypto.Curve25519GenerateKey(reader)
+		newRatchetKey, err := crypto.Curve25519GenerateKey(nil)
 		if err != nil {
 			return nil, err
 		}
@@ -141,10 +141,10 @@ func (r *Ratchet) Decrypt(input []byte) ([]byte, error) {
 		return nil, err
 	}
 	if message.Version != protocolVersion {
-		return nil, fmt.Errorf("decrypt: %w", goolm.ErrWrongProtocolVersion)
+		return nil, fmt.Errorf("decrypt: %w", olm.ErrWrongProtocolVersion)
 	}
 	if !message.HasCounter || len(message.RatchetKey) == 0 || len(message.Ciphertext) == 0 {
-		return nil, fmt.Errorf("decrypt: %w", goolm.ErrBadMessageFormat)
+		return nil, fmt.Errorf("decrypt: %w", olm.ErrBadMessageFormat)
 	}
 	var receiverChainFromMessage *receiverChain
 	for curChainIndex := range r.ReceiverChains {
@@ -173,7 +173,7 @@ func (r *Ratchet) Decrypt(input []byte) ([]byte, error) {
 					return nil, err
 				}
 				if !verified {
-					return nil, fmt.Errorf("decrypt from skipped message keys: %w", goolm.ErrBadMAC)
+					return nil, fmt.Errorf("decrypt from skipped message keys: %w", olm.ErrBadMAC)
 				}
 				result, err = RatchetCipher.Decrypt(r.SkippedMessageKeys[curSkippedIndex].MKey.Key, message.Ciphertext)
 				if err != nil {
@@ -189,7 +189,7 @@ func (r *Ratchet) Decrypt(input []byte) ([]byte, error) {
 			}
 		}
 		if !foundSkippedKey {
-			return nil, fmt.Errorf("decrypt: %w", goolm.ErrMessageKeyNotFound)
+			return nil, fmt.Errorf("decrypt: %w", olm.ErrMessageKeyNotFound)
 		}
 	} else {
 		//Advancing the chain is done in this method
@@ -228,11 +228,11 @@ func (r Ratchet) createMessageKeys(chainKey chainKey) messageKey {
 // decryptForExistingChain returns the decrypted message by using the chain. The MAC of the rawMessage is verified.
 func (r *Ratchet) decryptForExistingChain(chain *receiverChain, message *message.Message, rawMessage []byte) ([]byte, error) {
 	if message.Counter < chain.CKey.Index {
-		return nil, fmt.Errorf("decrypt: %w", goolm.ErrChainTooHigh)
+		return nil, fmt.Errorf("decrypt: %w", olm.ErrChainTooHigh)
 	}
 	// Limit the number of hashes we're prepared to compute
 	if message.Counter-chain.CKey.Index > maxMessageGap {
-		return nil, fmt.Errorf("decrypt from existing chain: %w", goolm.ErrMsgIndexTooHigh)
+		return nil, fmt.Errorf("decrypt from existing chain: %w", olm.ErrMsgIndexTooHigh)
 	}
 	for chain.CKey.Index < message.Counter {
 		messageKey := r.createMessageKeys(chain.chainKey())
@@ -250,7 +250,7 @@ func (r *Ratchet) decryptForExistingChain(chain *receiverChain, message *message
 		return nil, err
 	}
 	if !verified {
-		return nil, fmt.Errorf("decrypt from existing chain: %w", goolm.ErrBadMAC)
+		return nil, fmt.Errorf("decrypt from existing chain: %w", olm.ErrBadMAC)
 	}
 	return RatchetCipher.Decrypt(messageKey.Key, message.Ciphertext)
 }
@@ -260,11 +260,11 @@ func (r *Ratchet) decryptForNewChain(message *message.Message, rawMessage []byte
 	// They shouldn't move to a new chain until we've sent them a message
 	// acknowledging the last one
 	if !r.SenderChains.IsSet {
-		return nil, fmt.Errorf("decrypt for new chain: %w", goolm.ErrProtocolViolation)
+		return nil, fmt.Errorf("decrypt for new chain: %w", olm.ErrProtocolViolation)
 	}
 	// Limit the number of hashes we're prepared to compute
 	if message.Counter > maxMessageGap {
-		return nil, fmt.Errorf("decrypt for new chain: %w", goolm.ErrMsgIndexTooHigh)
+		return nil, fmt.Errorf("decrypt for new chain: %w", olm.ErrMsgIndexTooHigh)
 	}
 
 	newChainKey, err := r.advanceRootKey(r.SenderChains.ratchetKey(), message.RatchetKey)
@@ -371,7 +371,7 @@ func (r *Ratchet) UnpickleLibOlm(value []byte, includesChainIndex bool) (int, er
 // It returns the number of bytes written.
 func (r Ratchet) PickleLibOlm(target []byte) (int, error) {
 	if len(target) < r.PickleLen() {
-		return 0, fmt.Errorf("pickle ratchet: %w", goolm.ErrValueTooShort)
+		return 0, fmt.Errorf("pickle ratchet: %w", olm.ErrValueTooShort)
 	}
 	written, err := r.RootKey.PickleLibOlm(target)
 	if err != nil {

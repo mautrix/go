@@ -6,10 +6,10 @@ import (
 	"errors"
 	"testing"
 
-	"maunium.net/go/mautrix/crypto/goolm"
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
 	"maunium.net/go/mautrix/crypto/goolm/megolm"
 	"maunium.net/go/mautrix/crypto/goolm/session"
+	"maunium.net/go/mautrix/crypto/olm"
 )
 
 func TestOutboundPickleJSON(t *testing.T) {
@@ -33,7 +33,7 @@ func TestOutboundPickleJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if sess.SessionID() != newSession.SessionID() {
+	if sess.ID() != newSession.ID() {
 		t.Fatal("session ids not equal")
 	}
 	if !bytes.Equal(sess.SigningKey.PrivateKey, newSession.SigningKey.PrivateKey) {
@@ -75,7 +75,7 @@ func TestInboundPickleJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if sess.SessionID() != newSession.SessionID() {
+	if sess.ID() != newSession.ID() {
 		t.Fatal("sess ids not equal")
 	}
 	if !bytes.Equal(sess.SigningKey, newSession.SigningKey) {
@@ -128,7 +128,7 @@ func TestGroupSendReceive(t *testing.T) {
 	if !inboundSession.SigningKeyVerified {
 		t.Fatal("key not verified")
 	}
-	if inboundSession.SessionID() != outboundSession.SessionID() {
+	if inboundSession.ID() != outboundSession.ID() {
 		t.Fatal("session ids not equal")
 	}
 
@@ -174,7 +174,7 @@ func TestGroupSessionExportImport(t *testing.T) {
 	}
 
 	//Export the keys
-	exported, err := inboundSession.SessionExportMessage(0)
+	exported, err := inboundSession.Export(0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -236,7 +236,7 @@ func TestBadSignatureGroupMessage(t *testing.T) {
 	if err == nil {
 		t.Fatal("Signature was changed but did not cause an error")
 	}
-	if !errors.Is(err, goolm.ErrBadSignature) {
+	if !errors.Is(err, olm.ErrBadSignature) {
 		t.Fatalf("wrong error %s", err.Error())
 	}
 }

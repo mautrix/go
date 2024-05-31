@@ -174,7 +174,7 @@ func (mach *OlmMachine) importForwardedRoomKey(ctx context.Context, evt *Decrypt
 		log.Warn().Uint32("first_known_index", firstKnownIndex).Msg("Importing partial session")
 	}
 	igs := &InboundGroupSession{
-		Internal:         *igsInternal,
+		Internal:         igsInternal,
 		SigningKey:       evt.Keys.Ed25519,
 		SenderKey:        content.SenderKey,
 		RoomID:           content.RoomID,
