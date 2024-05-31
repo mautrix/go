@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 
-	"maunium.net/go/mautrix/id"
+	"go.mau.fi/util/exerrors"
 
 	"maunium.net/go/mautrix/crypto/goolm/cipher"
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
@@ -15,6 +15,7 @@ import (
 	"maunium.net/go/mautrix/crypto/goolm/megolm"
 	"maunium.net/go/mautrix/crypto/goolm/utilities"
 	"maunium.net/go/mautrix/crypto/olm"
+	"maunium.net/go/mautrix/id"
 )
 
 const (
@@ -187,9 +188,5 @@ func (s *MegolmOutboundSession) MessageIndex() uint {
 
 // Key returns the base64-encoded current ratchet key for this session.
 func (s *MegolmOutboundSession) Key() string {
-	message, err := s.SessionSharingMessage()
-	if err != nil {
-		panic(err)
-	}
-	return string(message)
+	return string(exerrors.Must(s.SessionSharingMessage()))
 }

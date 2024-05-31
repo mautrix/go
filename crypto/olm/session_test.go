@@ -7,12 +7,20 @@
 package olm_test
 
 import (
+	"bytes"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.mau.fi/util/exerrors"
+	"golang.org/x/exp/maps"
 
+	"maunium.net/go/mautrix/crypto/goolm/account"
 	"maunium.net/go/mautrix/crypto/goolm/session"
 	"maunium.net/go/mautrix/crypto/libolm"
+	"maunium.net/go/mautrix/crypto/olm"
+	"maunium.net/go/mautrix/id"
 )
 
 func TestBlankSession(t *testing.T) {
@@ -35,22 +43,77 @@ func TestSessionPickle(t *testing.T) {
 	pickledDataFromLibOlm := []byte("icDKYm0b4aO23WgUuOxdpPoxC0UlEOYPVeuduNH3IkpFsmnWx5KuEOpxGiZw5IuB/sSn2RZUCTiJ90IvgC7AClkYGHep9O8lpiqQX73XVKD9okZDCAkBc83eEq0DKYC7HBkGRAU/4T6QPIBBY3UK4QZwULLE/fLsi3j4YZBehMtnlsqgHK0q1bvX4cRznZItVKR4ro0O9EAk6LLxJtSnRu5elSUk7YXT")
 	pickleKey := []byte("secret_key")
 
-	goolmSession := session.NewOlmSession()
-	err := goolmSession.Unpickle(pickledDataFromLibOlm, pickleKey)
+	goolmSession, err := session.OlmSessionFromPickled(bytes.Clone(pickledDataFromLibOlm), pickleKey)
 	assert.NoError(t, err)
 
-	libolmSession := libolm.NewBlankSession()
-	err = libolmSession.Unpickle(pickledDataFromLibOlm, pickleKey)
+	libolmSession, err := libolm.SessionFromPickled(bytes.Clone(pickledDataFromLibOlm), pickleKey)
 	assert.NoError(t, err)
-
-	// Reset the pickle data since libolmSession.Unpickle modifies it.
-	pickledDataFromLibOlm = []byte("icDKYm0b4aO23WgUuOxdpPoxC0UlEOYPVeuduNH3IkpFsmnWx5KuEOpxGiZw5IuB/sSn2RZUCTiJ90IvgC7AClkYGHep9O8lpiqQX73XVKD9okZDCAkBc83eEq0DKYC7HBkGRAU/4T6QPIBBY3UK4QZwULLE/fLsi3j4YZBehMtnlsqgHK0q1bvX4cRznZItVKR4ro0O9EAk6LLxJtSnRu5elSUk7YXT")
 
 	goolmPickled, err := goolmSession.Pickle(pickleKey)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, pickledDataFromLibOlm, goolmPickled)
 
 	libolmPickled, err := libolmSession.Pickle(pickleKey)
+	require.NoError(t, err)
 	assert.Equal(t, pickledDataFromLibOlm, libolmPickled)
-	assert.NoError(t, err)
+}
+
+func TestSession_EncryptDecrypt(t *testing.T) {
+	combos := [][2]olm.Account{
+		{exerrors.Must(libolm.NewAccount(nil)), exerrors.Must(libolm.NewAccount(nil))},
+		{exerrors.Must(account.NewAccount(nil)), exerrors.Must(account.NewAccount(nil))},
+		{exerrors.Must(libolm.NewAccount(nil)), exerrors.Must(account.NewAccount(nil))},
+		{exerrors.Must(account.NewAccount(nil)), exerrors.Must(libolm.NewAccount(nil))},
+	}
+
+	for _, combo := range combos {
+		receiver, sender := combo[0], combo[1]
+		require.NoError(t, receiver.GenOneTimeKeys(nil, 50))
+		require.NoError(t, sender.GenOneTimeKeys(nil, 50))
+
+		_, receiverCurve25519, err := receiver.IdentityKeys()
+		require.NoError(t, err)
+		accountAOTKs, err := receiver.OneTimeKeys()
+		require.NoError(t, err)
+
+		senderSession, err := sender.NewOutboundSession(receiverCurve25519, accountAOTKs[maps.Keys(accountAOTKs)[0]])
+		require.NoError(t, err)
+
+		// Send a couple pre-key messages from sender -> receiver.
+		var receiverSession olm.Session
+		for i := 0; i < 10; i++ {
+			msgType, ciphertext, err := senderSession.Encrypt([]byte(fmt.Sprintf("prekey %d", i)))
+			require.NoError(t, err)
+			assert.Equal(t, id.OlmMsgTypePreKey, msgType)
+
+			receiverSession, err = receiver.NewInboundSession(string(ciphertext))
+			require.NoError(t, err)
+
+			decrypted, err := receiverSession.Decrypt(string(ciphertext), msgType)
+			require.NoError(t, err)
+			assert.Equal(t, []byte(fmt.Sprintf("prekey %d", i)), decrypted)
+		}
+
+		// Send some messages from receiver -> sender.
+		for i := 0; i < 10; i++ {
+			msgType, ciphertext, err := receiverSession.Encrypt([]byte(fmt.Sprintf("response %d", i)))
+			require.NoError(t, err)
+			assert.Equal(t, id.OlmMsgTypeMsg, msgType)
+
+			decrypted, err := senderSession.Decrypt(string(ciphertext), msgType)
+			require.NoError(t, err)
+			assert.Equal(t, []byte(fmt.Sprintf("response %d", i)), decrypted)
+		}
+
+		// Send some more messages from sender -> receiver
+		for i := 0; i < 10; i++ {
+			msgType, ciphertext, err := senderSession.Encrypt([]byte(fmt.Sprintf("%d", i)))
+			require.NoError(t, err)
+			assert.Equal(t, id.OlmMsgTypeMsg, msgType)
+
+			decrypted, err := receiverSession.Decrypt(string(ciphertext), msgType)
+			require.NoError(t, err)
+			assert.Equal(t, []byte(fmt.Sprintf("%d", i)), decrypted)
+		}
+	}
 }
