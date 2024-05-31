@@ -610,12 +610,13 @@ func (cli *Client) SyncRequest(ctx context.Context, timeout int, since, filterID
 }
 
 type ReqSync struct {
-	Timeout        int
-	Since          string
-	FilterID       string
-	FullState      bool
-	SetPresence    event.Presence
-	StreamResponse bool
+	Timeout         int
+	Since           string
+	FilterID        string
+	FullState       bool
+	SetPresence     event.Presence
+	StreamResponse  bool
+	BeeperStreaming bool
 }
 
 func (req *ReqSync) BuildQuery() map[string]string {
@@ -633,6 +634,11 @@ func (req *ReqSync) BuildQuery() map[string]string {
 	}
 	if req.FullState {
 		query["full_state"] = "true"
+	}
+	if req.BeeperStreaming {
+		// TODO remove this
+		query["streaming"] = ""
+		query["com.beeper.streaming"] = "true"
 	}
 	return query
 }
