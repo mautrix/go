@@ -128,7 +128,11 @@ func (c Ed25519PrivateKey) PubKey() Ed25519PublicKey {
 
 // Sign returns the signature for the message.
 func (c Ed25519PrivateKey) Sign(message []byte) []byte {
-	return ed25519.Sign(ed25519.PrivateKey(c), message)
+	signature, err := ed25519.PrivateKey(c).Sign(nil, message, &ed25519.Options{})
+	if err != nil {
+		panic(err)
+	}
+	return signature
 }
 
 // Ed25519PublicKey represents the public key for ed25519 usage. This is just a wrapper.
