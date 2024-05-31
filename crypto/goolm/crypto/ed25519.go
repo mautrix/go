@@ -1,7 +1,6 @@
 package crypto
 
 import (
-	"bytes"
 	"crypto/ed25519"
 	"encoding/base64"
 	"fmt"
@@ -118,7 +117,7 @@ type Ed25519PrivateKey ed25519.PrivateKey
 
 // Equal compares the private key to the given private key.
 func (c Ed25519PrivateKey) Equal(x Ed25519PrivateKey) bool {
-	return bytes.Equal(c, x)
+	return ed25519.PrivateKey(c).Equal(ed25519.PrivateKey(x))
 }
 
 // PubKey returns the public key derived from the private key.
@@ -137,7 +136,7 @@ type Ed25519PublicKey ed25519.PublicKey
 
 // Equal compares the public key to the given public key.
 func (c Ed25519PublicKey) Equal(x Ed25519PublicKey) bool {
-	return bytes.Equal(c, x)
+	return ed25519.PublicKey(c).Equal(ed25519.PublicKey(x))
 }
 
 // B64Encoded returns a base64 encoded string of the public key.
