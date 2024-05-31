@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"strings"
 
-	"maunium.net/go/mautrix/crypto/goolm"
 	"maunium.net/go/mautrix/crypto/goolm/cipher"
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
+	"maunium.net/go/mautrix/crypto/goolm/goolmbase64"
 	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
 	"maunium.net/go/mautrix/crypto/goolm/message"
 	"maunium.net/go/mautrix/crypto/goolm/ratchet"
@@ -120,7 +120,7 @@ func NewOutboundOlmSession(identityKeyAlice crypto.Curve25519KeyPair, identityKe
 
 // NewInboundOlmSession creates a new inbound session from receiving the first message.
 func NewInboundOlmSession(identityKeyAlice *crypto.Curve25519PublicKey, receivedOTKMsg []byte, searchBobOTK SearchOTKFunc, identityKeyBob crypto.Curve25519KeyPair) (*OlmSession, error) {
-	decodedOTKMsg, err := goolm.Base64Decode(receivedOTKMsg)
+	decodedOTKMsg, err := goolmbase64.Decode(receivedOTKMsg)
 	if err != nil {
 		return nil, err
 	}
@@ -213,7 +213,7 @@ func (s *OlmSession) ID() id.SessionID {
 	copy(message[crypto.Curve25519KeyLength:], s.AliceBaseKey)
 	copy(message[2*crypto.Curve25519KeyLength:], s.BobOneTimeKey)
 	hash := crypto.SHA256(message)
-	res := id.SessionID(goolm.Base64Encode(hash))
+	res := id.SessionID(goolmbase64.Encode(hash))
 	return res
 }
 
@@ -254,7 +254,7 @@ func (s *OlmSession) matchesInboundSession(theirIdentityKeyEncoded *id.Curve2551
 	if len(receivedOTKMsg) == 0 {
 		return false, fmt.Errorf("inbound match: %w", olm.ErrEmptyInput)
 	}
-	decodedOTKMsg, err := goolm.Base64Decode(receivedOTKMsg)
+	decodedOTKMsg, err := goolmbase64.Decode(receivedOTKMsg)
 	if err != nil {
 		return false, err
 	}
@@ -327,7 +327,7 @@ func (s *OlmSession) Encrypt(plaintext []byte) (id.OlmMsgType, []byte, error) {
 		result = messageBody
 	}
 
-	return messageType, goolm.Base64Encode(result), nil
+	return messageType, goolmbase64.Encode(result), nil
 }
 
 // Decrypt decrypts a base64 encoded message using the Session.
@@ -335,7 +335,7 @@ func (s *OlmSession) Decrypt(crypttext string, msgType id.OlmMsgType) ([]byte, e
 	if len(crypttext) == 0 {
 		return nil, fmt.Errorf("decrypt: %w", olm.ErrEmptyInput)
 	}
-	decodedCrypttext, err := goolm.Base64Decode([]byte(crypttext))
+	decodedCrypttext, err := goolmbase64.Decode([]byte(crypttext))
 	if err != nil {
 		return nil, err
 	}

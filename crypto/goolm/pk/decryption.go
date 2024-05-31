@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 
-	"maunium.net/go/mautrix/crypto/goolm"
 	"maunium.net/go/mautrix/crypto/goolm/cipher"
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
+	"maunium.net/go/mautrix/crypto/goolm/goolmbase64"
 	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
 	"maunium.net/go/mautrix/crypto/goolm/utilities"
 	"maunium.net/go/mautrix/crypto/olm"
@@ -66,7 +66,7 @@ func (s Decryption) Decrypt(ephemeralKey, mac, ciphertext []byte) ([]byte, error
 	if err != nil {
 		return nil, err
 	}
-	decodedMAC, err := goolm.Base64Decode(mac)
+	decodedMAC, err := goolmbase64.Decode(mac)
 	if err != nil {
 		return nil, err
 	}

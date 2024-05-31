@@ -8,9 +8,9 @@ import (
 
 	"maunium.net/go/mautrix/id"
 
-	"maunium.net/go/mautrix/crypto/goolm"
 	"maunium.net/go/mautrix/crypto/goolm/cipher"
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
+	"maunium.net/go/mautrix/crypto/goolm/goolmbase64"
 	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
 	"maunium.net/go/mautrix/crypto/goolm/megolm"
 	"maunium.net/go/mautrix/crypto/goolm/utilities"
@@ -70,7 +70,7 @@ func (o *MegolmOutboundSession) Encrypt(plaintext []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return goolm.Base64Encode(encrypted), nil
+	return goolmbase64.Encode(encrypted), nil
 }
 
 // SessionID returns the base64 endoded public signing key

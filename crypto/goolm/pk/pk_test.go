@@ -5,8 +5,8 @@ import (
 	"encoding/base64"
 	"testing"
 
-	"maunium.net/go/mautrix/crypto/goolm"
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
+	"maunium.net/go/mautrix/crypto/goolm/goolmbase64"
 	"maunium.net/go/mautrix/crypto/goolm/pk"
 )
 
@@ -69,7 +69,7 @@ func TestSigning(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	signatureDecoded, err := goolm.Base64Decode(signature)
+	signatureDecoded, err := goolmbase64.Decode(signature)
 	if err != nil {
 		t.Fatal(err)
 	}
