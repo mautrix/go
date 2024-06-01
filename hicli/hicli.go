@@ -41,6 +41,8 @@ type HiClient struct {
 	KeyBackupVersion id.KeyBackupVersion
 	KeyBackupKey     *backup.MegolmBackupKey
 
+	EventHandler func(evt any)
+
 	firstSyncReceived bool
 	syncingID         int
 	syncLock          sync.Mutex
@@ -55,11 +57,7 @@ type HiClient struct {
 
 var ErrTimelineReset = errors.New("got limited timeline sync response")
 
-func (h *HiClient) DispatchEvent(evt any) {
-	// TODO
-}
-
-func New(rawDB *dbutil.Database, log zerolog.Logger, pickleKey []byte) *HiClient {
+func New(rawDB *dbutil.Database, log zerolog.Logger, pickleKey []byte, evtHandler func(any)) *HiClient {
 	rawDB.Owner = "hicli"
 	rawDB.IgnoreForeignTables = true
 	db := database.New(rawDB)
@@ -69,6 +67,8 @@ func New(rawDB *dbutil.Database, log zerolog.Logger, pickleKey []byte) *HiClient
 		Log: log,
 
 		requestQueueWakeup: make(chan struct{}, 1),
+
+		EventHandler: evtHandler,
 	}
 	c.ClientStore = &database.ClientStateStore{Database: db}
 	c.Client = &mautrix.Client{

@@ -28,6 +28,7 @@ const (
 		       redacted_by, relates_to, relation_type, megolm_session_id, decryption_error, reactions, last_edit_rowid
 		FROM event
 	`
+	getManyEventsByRowID             = getEventBaseQuery + `WHERE rowid IN (%s)`
 	getEventByID                     = getEventBaseQuery + `WHERE event_id = $1`
 	getFailedEventsByMegolmSessionID = getEventBaseQuery + `WHERE room_id = $1 AND megolm_session_id = $2 AND decryption_error IS NOT NULL`
 	upsertEventQuery                 = `
@@ -79,6 +80,11 @@ func (eq *EventQuery) GetByID(ctx context.Context, eventID id.EventID) (*Event, 
 	return eq.QueryOne(ctx, getEventByID, eventID)
 }
 
+func (eq *EventQuery) GetByRowIDs(ctx context.Context, rowIDs ...EventRowID) ([]*Event, error) {
+	query, params := buildMultiEventGetFunction(nil, rowIDs, getManyEventsByRowID)
+	return eq.QueryMany(ctx, query, params...)
+}
+
 func (eq *EventQuery) Upsert(ctx context.Context, evt *Event) (rowID EventRowID, err error) {
 	err = eq.GetDB().QueryRow(ctx, upsertEventQuery, evt.sqlVariables()...).Scan(&rowID)
 	if err == nil {
@@ -114,7 +120,7 @@ func (eq *EventQuery) FillLastEditRowIDs(ctx context.Context, roomID id.RoomID, 
 	eventIDs := make([]id.EventID, 0)
 	eventMap := make(map[id.EventID]*Event)
 	for i, evt := range events {
-		if evt.LastEditRowID == 0 {
+		if evt.LastEditRowID == nil {
 			eventIDs[i] = evt.ID
 			eventMap[evt.ID] = evt
 		}
@@ -126,8 +132,17 @@ func (eq *EventQuery) FillLastEditRowIDs(ctx context.Context, roomID id.RoomID, 
 		}
 		for evtID, res := range result {
 			lastEditRowID := res[len(res)-1]
-			eventMap[evtID].LastEditRowID = lastEditRowID
+			eventMap[evtID].LastEditRowID = &lastEditRowID
+			delete(eventMap, evtID)
 			err = eq.Exec(ctx, setLastEditRowIDQuery, evtID, lastEditRowID)
+			if err != nil {
+				return err
+			}
+		}
+		var zero EventRowID
+		for evtID, evt := range eventMap {
+			evt.LastEditRowID = &zero
+			err = eq.Exec(ctx, setLastEditRowIDQuery, evtID, zero)
 			if err != nil {
 				return err
 			}
@@ -143,11 +158,11 @@ type GetReactionsResult struct {
 	Counts map[string]int
 }
 
-func buildMultiEventGetFunction(roomID id.RoomID, eventIDs []id.EventID, query string) (string, []any) {
-	params := make([]any, len(eventIDs)+1)
-	params[0] = roomID
+func buildMultiEventGetFunction[T any](preParams []any, eventIDs []T, query string) (string, []any) {
+	params := make([]any, len(preParams)+len(eventIDs))
+	copy(params, preParams)
 	for i, evtID := range eventIDs {
-		params[i+1] = evtID
+		params[i+len(preParams)] = evtID
 	}
 	placeholders := strings.Repeat("?,", len(eventIDs))
 	placeholders = placeholders[:len(placeholders)-1]
@@ -160,7 +175,7 @@ type editRowIDTuple struct {
 }
 
 func (eq *EventQuery) GetEditRowIDs(ctx context.Context, roomID id.RoomID, eventIDs ...id.EventID) (map[id.EventID][]EventRowID, error) {
-	query, params := buildMultiEventGetFunction(roomID, eventIDs, getEventEditRowIDsQuery)
+	query, params := buildMultiEventGetFunction([]any{roomID}, eventIDs, getEventEditRowIDsQuery)
 	rows, err := eq.GetDB().Query(ctx, query, params...)
 	output := make(map[id.EventID][]EventRowID)
 	return output, dbutil.NewRowIterWithError(rows, func(row dbutil.Scannable) (tuple editRowIDTuple, err error) {
@@ -178,7 +193,7 @@ func (eq *EventQuery) GetReactions(ctx context.Context, roomID id.RoomID, eventI
 		result[evtID] = &GetReactionsResult{Counts: make(map[string]int)}
 	}
 	return result, eq.GetDB().DoTxn(ctx, nil, func(ctx context.Context) error {
-		query, params := buildMultiEventGetFunction(roomID, eventIDs, getEventReactionsQuery)
+		query, params := buildMultiEventGetFunction([]any{roomID}, eventIDs, getEventReactionsQuery)
 		events, err := eq.QueryMany(ctx, query, params...)
 		if err != nil {
 			return err
@@ -212,8 +227,8 @@ func (m EventRowID) GetMassInsertValues() [1]any {
 }
 
 type Event struct {
-	RowID         EventRowID    `json:"fi.mau.hicli.rowid"`
-	TimelineRowID TimelineRowID `json:"fi.mau.hicli.timeline_rowid"`
+	RowID         EventRowID    `json:"rowid"`
+	TimelineRowID TimelineRowID `json:"timeline_rowid"`
 
 	RoomID    id.RoomID  `json:"room_id"`
 	ID        id.EventID `json:"event_id"`
@@ -235,7 +250,7 @@ type Event struct {
 	DecryptionError string
 
 	Reactions     map[string]int
-	LastEditRowID EventRowID
+	LastEditRowID *EventRowID
 }
 
 func MautrixToEvent(evt *event.Event) *Event {
@@ -282,7 +297,6 @@ func (e *Event) AsRawMautrix() *event.Event {
 func (e *Event) Scan(row dbutil.Scannable) (*Event, error) {
 	var timestamp int64
 	var redactedBy, relatesTo, relationType, megolmSessionID, decryptionError, decryptedType sql.NullString
-	var lastEditRowID sql.NullInt64
 	err := row.Scan(
 		&e.RowID,
 		&e.TimelineRowID,
@@ -302,7 +316,7 @@ func (e *Event) Scan(row dbutil.Scannable) (*Event, error) {
 		&megolmSessionID,
 		&decryptionError,
 		dbutil.JSON{Data: &e.Reactions},
-		&lastEditRowID,
+		&e.LastEditRowID,
 	)
 	if err != nil {
 		return nil, err
@@ -314,7 +328,6 @@ func (e *Event) Scan(row dbutil.Scannable) (*Event, error) {
 	e.MegolmSessionID = id.SessionID(megolmSessionID.String)
 	e.DecryptedType = decryptedType.String
 	e.DecryptionError = decryptionError.String
-	e.LastEditRowID = EventRowID(lastEditRowID.Int64)
 	return e, nil
 }
 
@@ -365,7 +378,7 @@ func (e *Event) sqlVariables() []any {
 		dbutil.StrPtr(e.MegolmSessionID),
 		dbutil.StrPtr(e.DecryptionError),
 		dbutil.JSON{Data: reactions},
-		dbutil.NumPtr(e.LastEditRowID),
+		e.LastEditRowID,
 	}
 }
 

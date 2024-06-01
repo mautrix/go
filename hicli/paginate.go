@@ -18,6 +18,36 @@ import (
 
 var ErrPaginationAlreadyInProgress = errors.New("pagination is already in progress")
 
+func (h *HiClient) GetEventsByRowIDs(ctx context.Context, rowIDs []database.EventRowID) ([]*database.Event, error) {
+	events, err := h.DB.Event.GetByRowIDs(ctx, rowIDs...)
+	if err != nil {
+		return nil, err
+	} else if len(events) == 0 {
+		return events, nil
+	}
+	firstRoomID := events[0].RoomID
+	allInSameRoom := true
+	for _, evt := range events {
+		if evt.RoomID != firstRoomID {
+			allInSameRoom = false
+			break
+		}
+	}
+	if allInSameRoom {
+		err = h.DB.Event.FillLastEditRowIDs(ctx, firstRoomID, events)
+		if err != nil {
+			return events, fmt.Errorf("failed to fill last edit row IDs: %w", err)
+		}
+		err = h.DB.Event.FillReactionCounts(ctx, firstRoomID, events)
+		if err != nil {
+			return events, fmt.Errorf("failed to fill reaction counts: %w", err)
+		}
+	} else {
+		// TODO slow path where events are collected and filling is done one room at a time?
+	}
+	return events, nil
+}
+
 func (h *HiClient) Paginate(ctx context.Context, roomID id.RoomID, maxTimelineID database.TimelineRowID, limit int) ([]*database.Event, error) {
 	evts, err := h.DB.Timeline.Get(ctx, roomID, limit, maxTimelineID)
 	if err != nil {
@@ -82,9 +112,13 @@ func (h *HiClient) PaginateServer(ctx context.Context, roomID id.RoomID, limit i
 		if err != nil {
 			return fmt.Errorf("failed to set prev_batch: %w", err)
 		}
-		err = h.DB.Timeline.Prepend(ctx, room.ID, eventRowIDs)
+		var tuples []database.TimelineRowTuple
+		tuples, err = h.DB.Timeline.Prepend(ctx, room.ID, eventRowIDs)
 		if err != nil {
 			return fmt.Errorf("failed to prepend events to timeline: %w", err)
+		}
+		for i, evt := range events {
+			evt.TimelineRowID = tuples[i].Timeline
 		}
 		return nil
 	})

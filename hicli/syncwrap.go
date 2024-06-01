@@ -27,7 +27,7 @@ const (
 
 func (h *hiSyncer) ProcessResponse(ctx context.Context, resp *mautrix.RespSync, since string) error {
 	c := (*HiClient)(h)
-	ctx = context.WithValue(ctx, syncContextKey, &syncContext{})
+	ctx = context.WithValue(ctx, syncContextKey, &syncContext{evt: &SyncComplete{Rooms: make(map[id.RoomID]*SyncRoom, len(resp.Rooms.Join))}})
 	err := c.preProcessSyncResponse(ctx, resp, since)
 	if err != nil {
 		return err

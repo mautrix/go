@@ -22,7 +22,7 @@ const (
 		DELETE FROM timeline WHERE room_id = $1
 	`
 	appendTimelineQuery = `
-		INSERT INTO timeline (room_id, event_rowid) VALUES ($1, $2)
+		INSERT INTO timeline (room_id, event_rowid) VALUES ($1, $2) RETURNING rowid, event_rowid
 	`
 	prependTimelineQuery = `
 		INSERT INTO timeline (room_id, rowid, event_rowid) VALUES ($1, $2, $3)
@@ -42,12 +42,17 @@ const (
 type TimelineRowID int64
 
 type TimelineRowTuple struct {
-	Timeline TimelineRowID
-	Event    EventRowID
+	Timeline TimelineRowID `json:"timeline_rowid"`
+	Event    EventRowID    `json:"event_rowid"`
 }
 
-func (tp TimelineRowTuple) GetMassInsertValues() [2]any {
-	return [2]any{tp.Timeline, tp.Event}
+var timelineRowTupleScanner = dbutil.ConvertRowFn[TimelineRowTuple](func(row dbutil.Scannable) (trt TimelineRowTuple, err error) {
+	err = row.Scan(&trt.Timeline, &trt.Event)
+	return
+})
+
+func (trt TimelineRowTuple) GetMassInsertValues() [2]any {
+	return [2]any{trt.Timeline, trt.Event}
 }
 
 var appendTimelineQueryBuilder = dbutil.NewMassInsertBuilder[EventRowID, [1]any](appendTimelineQuery, "($1, $%d)")
@@ -89,12 +94,13 @@ func (tq *TimelineQuery) reserveRowIDs(ctx context.Context, count int) (startFro
 
 // Prepend adds the given event row IDs to the beginning of the timeline.
 // The events must be sorted in reverse chronological order (newest event first).
-func (tq *TimelineQuery) Prepend(ctx context.Context, roomID id.RoomID, rowIDs []EventRowID) error {
-	startFrom, err := tq.reserveRowIDs(ctx, len(rowIDs))
+func (tq *TimelineQuery) Prepend(ctx context.Context, roomID id.RoomID, rowIDs []EventRowID) (prependEntries []TimelineRowTuple, err error) {
+	var startFrom TimelineRowID
+	startFrom, err = tq.reserveRowIDs(ctx, len(rowIDs))
 	if err != nil {
-		return err
+		return
 	}
-	prependEntries := make([]TimelineRowTuple, len(rowIDs))
+	prependEntries = make([]TimelineRowTuple, len(rowIDs))
 	for i, rowID := range rowIDs {
 		prependEntries[i] = TimelineRowTuple{
 			Timeline: startFrom - TimelineRowID(i),
@@ -102,13 +108,14 @@ func (tq *TimelineQuery) Prepend(ctx context.Context, roomID id.RoomID, rowIDs [
 		}
 	}
 	query, params := prependTimelineQueryBuilder.Build([1]any{roomID}, prependEntries)
-	return tq.Exec(ctx, query, params...)
+	err = tq.Exec(ctx, query, params...)
+	return
 }
 
 // Append adds the given event row IDs to the end of the timeline.
-func (tq *TimelineQuery) Append(ctx context.Context, roomID id.RoomID, rowIDs []EventRowID) error {
+func (tq *TimelineQuery) Append(ctx context.Context, roomID id.RoomID, rowIDs []EventRowID) ([]TimelineRowTuple, error) {
 	query, params := appendTimelineQueryBuilder.Build([1]any{roomID}, rowIDs)
-	return tq.Exec(ctx, query, params...)
+	return timelineRowTupleScanner.NewRowIter(tq.GetDB().Query(ctx, query, params...)).AsList()
 }
 
 func (tq *TimelineQuery) Get(ctx context.Context, roomID id.RoomID, limit int, before TimelineRowID) ([]*Event, error) {

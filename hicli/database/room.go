@@ -55,6 +55,7 @@ const (
 		WHERE room_id = $1
 		  AND COALESCE((SELECT rowid FROM timeline WHERE event_rowid = $2), -1)
 		          > COALESCE((SELECT rowid FROM timeline WHERE event_rowid = preview_event_rowid), 0)
+		RETURNING preview_event_rowid
 	`
 )
 
@@ -78,8 +79,11 @@ func (rq *RoomQuery) SetPrevBatch(ctx context.Context, roomID id.RoomID, prevBat
 	return rq.Exec(ctx, setRoomPrevBatchQuery, roomID, prevBatch)
 }
 
-func (rq *RoomQuery) UpdatePreviewIfLaterOnTimeline(ctx context.Context, roomID id.RoomID, rowID EventRowID) error {
-	return rq.Exec(ctx, updateRoomPreviewIfLaterOnTimelineQuery, roomID, rowID)
+func (rq *RoomQuery) UpdatePreviewIfLaterOnTimeline(ctx context.Context, roomID id.RoomID, rowID EventRowID) (previewChanged bool, err error) {
+	var newPreviewRowID EventRowID
+	err = rq.GetDB().QueryRow(ctx, updateRoomPreviewIfLaterOnTimelineQuery, roomID, rowID).Scan(&newPreviewRowID)
+	previewChanged = newPreviewRowID == rowID
+	return
 }
 
 type NameQuality int

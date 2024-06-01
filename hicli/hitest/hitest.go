@@ -8,6 +8,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"os/signal"
@@ -50,7 +51,30 @@ func main() {
 
 	rawDB := exerrors.Must(dbutil.NewWithDialect("hicli.db", "sqlite3-fk-wal"))
 	ctx := log.WithContext(context.Background())
-	cli := hicli.New(rawDB, *log, []byte("meow"))
+	cli := hicli.New(rawDB, *log, []byte("meow"), func(a any) {
+		_, _ = fmt.Fprintf(rl, "Received event of type %T\n", a)
+		switch evt := a.(type) {
+		case *hicli.SyncComplete:
+			for _, room := range evt.Rooms {
+				name := "name unset"
+				if room.Meta.Name != nil {
+					name = *room.Meta.Name
+				}
+				_, _ = fmt.Fprintf(rl, "Room %s (%s) in sync:\n", name, room.Meta.ID)
+				_, _ = fmt.Fprintf(rl, "  Preview: %d, sort: %v\n", room.Meta.PreviewEventRowID, room.Meta.SortingTimestamp)
+				_, _ = fmt.Fprintf(rl, "  Timeline: +%d %v, reset: %t\n", len(room.Timeline), room.Timeline, room.Reset)
+			}
+		case *hicli.EventsDecrypted:
+			for _, decrypted := range evt.Events {
+				_, _ = fmt.Fprintf(rl, "Delayed decryption of %s completed: %s / %s\n", decrypted.ID, decrypted.DecryptedType, decrypted.Decrypted)
+			}
+			if len(evt.PreviewRowIDs) > 0 {
+				_, _ = fmt.Fprintf(rl, "Room previews updated: %+v\n", evt.PreviewRowIDs)
+			}
+		case *hicli.Typing:
+			_, _ = fmt.Fprintf(rl, "Typing list in %s: %+v\n", evt.RoomID, evt.UserIDs)
+		}
+	})
 	userID, _ := cli.DB.Account.GetFirstUserID(ctx)
 	exerrors.PanicIfNotNil(cli.Start(ctx, userID))
 	if !cli.IsLoggedIn() {

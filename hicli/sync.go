@@ -28,6 +28,8 @@ import (
 
 type syncContext struct {
 	shouldWakeupRequestQueue bool
+
+	evt *SyncComplete
 }
 
 func (h *HiClient) preProcessSyncResponse(ctx context.Context, resp *mautrix.RespSync, since string) error {
@@ -61,10 +63,12 @@ func (h *HiClient) preProcessSyncResponse(ctx context.Context, resp *mautrix.Res
 func (h *HiClient) postProcessSyncResponse(ctx context.Context, resp *mautrix.RespSync, since string) {
 	h.Crypto.HandleOTKCounts(ctx, &resp.DeviceOTKCount)
 	go h.asyncPostProcessSyncResponse(ctx, resp, since)
-	if ctx.Value(syncContextKey).(*syncContext).shouldWakeupRequestQueue {
+	syncCtx := ctx.Value(syncContextKey).(*syncContext)
+	if syncCtx.shouldWakeupRequestQueue {
 		h.WakeupRequestQueue()
 	}
 	h.firstSyncReceived = true
+	h.EventHandler(syncCtx.evt)
 }
 
 func (h *HiClient) asyncPostProcessSyncResponse(ctx context.Context, resp *mautrix.RespSync, since string) {
@@ -173,7 +177,7 @@ func (h *HiClient) processSyncJoinedRoom(ctx context.Context, roomID id.RoomID, 
 				return fmt.Errorf("failed to save receipts: %w", err)
 			}
 		case event.EphemeralEventTyping:
-			go h.DispatchEvent(&Typing{
+			go h.EventHandler(&Typing{
 				RoomID:             roomID,
 				TypingEventContent: *evt.Content.AsTyping(),
 			})
@@ -246,7 +250,7 @@ func (h *HiClient) processEvent(ctx context.Context, evt *event.Event, decryptio
 		dbEvt.Content = contentWithoutFallback
 	}
 	var decryptionErr error
-	if evt.Type == event.EventEncrypted {
+	if evt.Type == event.EventEncrypted && dbEvt.RedactedBy == "" {
 		dbEvt.Decrypted, dbEvt.DecryptedType, decryptionErr = h.decryptEvent(ctx, evt)
 		if decryptionErr != nil {
 			dbEvt.DecryptionError = decryptionErr.Error()
@@ -336,6 +340,7 @@ func (h *HiClient) processStateAndTimeline(ctx context.Context, room *database.R
 			return err
 		}
 	}
+	var timelineRowTuples []database.TimelineRowTuple
 	if len(timeline.Events) > 0 {
 		timelineIDs := make([]database.EventRowID, len(timeline.Events))
 		for i, evt := range timeline.Events {
@@ -370,7 +375,7 @@ func (h *HiClient) processStateAndTimeline(ctx context.Context, room *database.R
 			}
 			h.paginationInterrupterLock.Unlock()
 		}
-		err = h.DB.Timeline.Append(ctx, room.ID, timelineIDs)
+		timelineRowTuples, err = h.DB.Timeline.Append(ctx, room.ID, timelineIDs)
 		if err != nil {
 			return fmt.Errorf("failed to append timeline: %w", err)
 		}
@@ -387,10 +392,18 @@ func (h *HiClient) processStateAndTimeline(ctx context.Context, room *database.R
 	if timeline.PrevBatch != "" && room.PrevBatch == "" {
 		updatedRoom.PrevBatch = timeline.PrevBatch
 	}
-	if updatedRoom.CheckChangesAndCopyInto(room) {
+	roomChanged := updatedRoom.CheckChangesAndCopyInto(room)
+	if roomChanged {
 		err = h.DB.Room.Upsert(ctx, updatedRoom)
 		if err != nil {
 			return fmt.Errorf("failed to save room data: %w", err)
+		}
+	}
+	if roomChanged || len(timelineRowTuples) > 0 {
+		ctx.Value(syncContextKey).(*syncContext).evt.Rooms[room.ID] = &SyncRoom{
+			Meta:     room,
+			Timeline: timelineRowTuples,
+			Reset:    timeline.Limited,
 		}
 	}
 	return nil

@@ -100,16 +100,18 @@ CREATE TRIGGER event_update_last_edit_when_redacted
 		AND NEW.relation_type = 'm.replace'
 BEGIN
 	UPDATE event
-	SET last_edit_rowid = (SELECT rowid
-						   FROM event edit
-						   WHERE edit.room_id = event.room_id
-							 AND edit.relates_to = event.event_id
-							 AND edit.relation_type = 'm.replace'
-							 AND edit.type = event.type
-							 AND edit.sender = event.sender
-							 AND edit.redacted_by IS NULL
-						   ORDER BY edit.timestamp DESC
-						   LIMIT 1)
+	SET last_edit_rowid = COALESCE(
+		(SELECT rowid
+		 FROM event edit
+		 WHERE edit.room_id = event.room_id
+		   AND edit.relates_to = event.event_id
+		   AND edit.relation_type = 'm.replace'
+		   AND edit.type = event.type
+		   AND edit.sender = event.sender
+		   AND edit.redacted_by IS NULL
+		 ORDER BY edit.timestamp DESC
+		 LIMIT 1),
+		0)
 	WHERE event_id = NEW.relates_to
 	  AND last_edit_rowid = NEW.rowid;
 END;
@@ -190,7 +192,8 @@ CREATE TABLE timeline (
 	event_rowid INTEGER NOT NULL,
 
 	CONSTRAINT timeline_room_fkey FOREIGN KEY (room_id) REFERENCES room (room_id) ON DELETE CASCADE,
-	CONSTRAINT timeline_event_fkey FOREIGN KEY (event_rowid) REFERENCES event (rowid) ON DELETE CASCADE
+	CONSTRAINT timeline_event_fkey FOREIGN KEY (event_rowid) REFERENCES event (rowid) ON DELETE CASCADE,
+	CONSTRAINT timeline_event_unique_key UNIQUE (event_rowid)
 ) STRICT;
 CREATE INDEX timeline_room_id_idx ON timeline (room_id);
 

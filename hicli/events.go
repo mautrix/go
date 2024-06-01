@@ -12,11 +12,19 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
+type SyncRoom struct {
+	Meta     *database.Room              `json:"meta"`
+	Timeline []database.TimelineRowTuple `json:"timeline"`
+	Reset    bool                        `json:"reset"`
+}
+
 type SyncComplete struct {
+	Rooms map[id.RoomID]*SyncRoom `json:"rooms"`
 }
 
 type EventsDecrypted struct {
-	Events []*database.Event
+	PreviewRowIDs map[id.RoomID]database.EventRowID `json:"room_preview_rowids"`
+	Events        []*database.Event                 `json:"events"`
 }
 
 type Typing struct {

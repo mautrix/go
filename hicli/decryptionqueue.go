@@ -60,6 +60,7 @@ func (h *HiClient) handleReceivedMegolmSession(ctx context.Context, roomID id.Ro
 		}
 	}
 	if len(decrypted) > 0 {
+		previewRowIDChanges := make(map[id.RoomID]database.EventRowID)
 		err = h.DB.DoTxn(ctx, nil, func(ctx context.Context) error {
 			for _, evt := range decrypted {
 				err = h.DB.Event.UpdateDecrypted(ctx, evt.RowID, evt.Decrypted, evt.DecryptedType)
@@ -67,9 +68,12 @@ func (h *HiClient) handleReceivedMegolmSession(ctx context.Context, roomID id.Ro
 					return fmt.Errorf("failed to save decrypted content for %s: %w", evt.ID, err)
 				}
 				if evt.CanUseForPreview() {
-					err = h.DB.Room.UpdatePreviewIfLaterOnTimeline(ctx, evt.RoomID, evt.RowID)
+					var previewChanged bool
+					previewChanged, err = h.DB.Room.UpdatePreviewIfLaterOnTimeline(ctx, evt.RoomID, evt.RowID)
 					if err != nil {
 						return fmt.Errorf("failed to update room %s preview to %d: %w", evt.RoomID, evt.RowID, err)
+					} else if previewChanged {
+						previewRowIDChanges[evt.RoomID] = evt.RowID
 					}
 				}
 			}
@@ -78,7 +82,7 @@ func (h *HiClient) handleReceivedMegolmSession(ctx context.Context, roomID id.Ro
 		if err != nil {
 			log.Err(err).Msg("Failed to save decrypted events")
 		} else {
-			h.DispatchEvent(&EventsDecrypted{Events: decrypted})
+			h.EventHandler(&EventsDecrypted{Events: decrypted, PreviewRowIDs: previewRowIDChanges})
 		}
 	}
 }
