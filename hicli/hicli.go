@@ -44,6 +44,7 @@ type HiClient struct {
 	firstSyncReceived bool
 	syncingID         int
 	syncLock          sync.Mutex
+	stopSync          context.CancelFunc
 	encryptLock       sync.Mutex
 
 	requestQueueWakeup chan struct{}
@@ -150,6 +151,9 @@ func (h *HiClient) Start(ctx context.Context, userID id.UserID) error {
 
 func (h *HiClient) Sync() {
 	h.Client.StopSync()
+	if fn := h.stopSync; fn != nil {
+		fn()
+	}
 	h.syncLock.Lock()
 	defer h.syncLock.Unlock()
 	h.syncingID++
@@ -158,12 +162,26 @@ func (h *HiClient) Sync() {
 		Str("action", "sync").
 		Int("sync_id", syncingID).
 		Logger()
-	ctx := log.WithContext(context.Background())
+	ctx, cancel := context.WithCancel(log.WithContext(context.Background()))
+	h.stopSync = cancel
 	log.Info().Msg("Starting syncing")
 	err := h.Client.SyncWithContext(ctx)
-	if err != nil {
+	if err != nil && ctx.Err() == nil {
 		log.Err(err).Msg("Fatal error in syncer")
 	} else {
 		log.Info().Msg("Syncing stopped")
+	}
+}
+
+func (h *HiClient) Stop() {
+	h.Client.StopSync()
+	if fn := h.stopSync; fn != nil {
+		fn()
+	}
+	h.syncLock.Lock()
+	h.syncLock.Unlock()
+	err := h.DB.Close()
+	if err != nil {
+		h.Log.Err(err).Msg("Failed to close database cleanly")
 	}
 }

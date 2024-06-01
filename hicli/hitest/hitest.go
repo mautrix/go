@@ -15,6 +15,7 @@ import (
 
 	"github.com/chzyer/readline"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/rs/zerolog"
 	"go.mau.fi/util/dbutil"
 	_ "go.mau.fi/util/dbutil/litestream"
 	"go.mau.fi/util/exerrors"
@@ -37,7 +38,9 @@ func main() {
 	zeroconfig.RegisterWriter(writerTypeReadline, func(config *zeroconfig.WriterConfig) (io.Writer, error) {
 		return rl.Stdout(), nil
 	})
+	debug := zerolog.DebugLevel
 	log := exerrors.Must((&zeroconfig.Config{
+		MinLevel: &debug,
 		Writers: []zeroconfig.WriterConfig{{
 			Type:   writerTypeReadline,
 			Format: zeroconfig.LogFormatPrettyColored,
@@ -54,10 +57,7 @@ func main() {
 		rl.SetPrompt("User ID: ")
 		userID := id.UserID(exerrors.Must(rl.Readline()))
 		_, serverName := exerrors.Must2(userID.Parse())
-		discovery, err := mautrix.DiscoverClientAPI(ctx, serverName)
-		if discovery == nil {
-			log.Fatal().Err(err).Msg("Failed to discover homeserver")
-		}
+		discovery := exerrors.Must(mautrix.DiscoverClientAPI(ctx, serverName))
 		password := exerrors.Must(rl.ReadPassword("Password: "))
 		recoveryCode := exerrors.Must(rl.ReadPassword("Recovery code: "))
 		exerrors.PanicIfNotNil(cli.LoginAndVerify(ctx, discovery.Homeserver.BaseURL, userID.String(), string(password), string(recoveryCode)))
@@ -67,4 +67,5 @@ func main() {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	<-c
+	cli.Stop()
 }

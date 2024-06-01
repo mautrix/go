@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"go.mau.fi/util/dbutil"
+	"go.mau.fi/util/exslices"
 
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -37,6 +38,17 @@ func (rq *ReceiptQuery) Put(ctx context.Context, receipt *Receipt) error {
 }
 
 func (rq *ReceiptQuery) PutMany(ctx context.Context, roomID id.RoomID, receipts ...*Receipt) error {
+	if len(receipts) > 1000 {
+		return rq.GetDB().DoTxn(ctx, nil, func(ctx context.Context) error {
+			for _, receiptChunk := range exslices.Chunk(receipts, 200) {
+				err := rq.PutMany(ctx, roomID, receiptChunk...)
+				if err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+	}
 	query, params := receiptMassInserter.Build([1]any{roomID}, receipts)
 	return rq.Exec(ctx, query, params...)
 }

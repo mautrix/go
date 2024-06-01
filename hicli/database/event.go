@@ -41,16 +41,7 @@ const (
 		RETURNING rowid
 	`
 	updateEventDecryptedQuery = `UPDATE event SET decrypted = $1, decrypted_type = $2, decryption_error = NULL WHERE rowid = $3`
-	getTimelineQuery          = `
-		SELECT event.rowid, timeline.rowid, event.room_id, event_id, sender, type, state_key, timestamp, content, decrypted, decrypted_type, unsigned,
-		       redacted_by, relates_to, relation_type, megolm_session_id, decryption_error, reactions, last_edit_rowid
-		FROM timeline
-		JOIN event ON event.rowid = timeline.event_rowid
-		WHERE timeline.room_id = $1 AND timeline.rowid < $2
-		ORDER BY timeline.rowid DESC
-		LIMIT $3
-	`
-	getEventReactionsQuery = getEventBaseQuery + `
+	getEventReactionsQuery    = getEventBaseQuery + `
 		WHERE room_id = ?
 		  AND type = 'm.reaction'
 		  AND relation_type = 'm.annotation'
@@ -60,9 +51,10 @@ const (
 	getEventEditRowIDsQuery = `
 		SELECT main.event_id, edit.rowid
 		FROM event main
-		JOIN event edit ON edit.room_id = main.room_id
-		                       AND edit.relates_to = main.event_id
-		                       AND edit.relation_type = 'm.replace'
+		JOIN event edit ON
+			edit.room_id = main.room_id
+			AND edit.relates_to = main.event_id
+			AND edit.relation_type = 'm.replace'
 		AND edit.type = main.type
 		AND edit.sender = main.sender
 		AND edit.redacted_by IS NULL
@@ -97,10 +89,6 @@ func (eq *EventQuery) Upsert(ctx context.Context, evt *Event) (rowID EventRowID,
 
 func (eq *EventQuery) UpdateDecrypted(ctx context.Context, rowID EventRowID, decrypted json.RawMessage, decryptedType string) error {
 	return eq.Exec(ctx, updateEventDecryptedQuery, unsafeJSONString(decrypted), decryptedType, rowID)
-}
-
-func (eq *EventQuery) GetTimeline(ctx context.Context, roomID id.RoomID, limit int, before TimelineRowID) ([]*Event, error) {
-	return eq.QueryMany(ctx, getTimelineQuery, roomID, before, limit)
 }
 
 func (eq *EventQuery) FillReactionCounts(ctx context.Context, roomID id.RoomID, events []*Event) error {

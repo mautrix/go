@@ -191,3 +191,7 @@ type InsertionMarkerContent struct {
 	InsertionID id.EventID `json:"org.matrix.msc2716.marker.insertion"`
 	Timestamp   int64      `json:"com.beeper.timestamp,omitempty"`
 }
+
+type ElementFunctionalMembersContent struct {
+	FunctionalMembers []id.UserID `json:"functional_members"`
+}

@@ -20,13 +20,28 @@ const (
 		INSERT INTO current_state (room_id, event_type, state_key, event_rowid, membership) VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (room_id, event_type, state_key) DO UPDATE SET event_rowid = excluded.event_rowid, membership = excluded.membership
 	`
+	getCurrentRoomStateQuery = `
+		SELECT event.rowid, -1, event.room_id, event.event_id, sender, event.type, event.state_key, timestamp, content, decrypted, decrypted_type, unsigned,
+		       redacted_by, relates_to, relation_type, megolm_session_id, decryption_error, reactions, last_edit_rowid
+		FROM current_state cs
+		JOIN event ON cs.event_rowid = event.rowid
+		WHERE cs.room_id = $1
+	`
+	getCurrentStateEventQuery = getCurrentRoomStateQuery + `AND cs.event_type = $2 AND cs.state_key = $3`
 )
 
 type CurrentStateQuery struct {
-	*dbutil.Database
+	*dbutil.QueryHelper[*Event]
 }
 
 func (csq *CurrentStateQuery) Set(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string, eventRowID EventRowID, membership event.Membership) error {
-	_, err := csq.Exec(ctx, setCurrentStateQuery, roomID, eventType.Type, stateKey, eventRowID, dbutil.StrPtr(membership))
-	return err
+	return csq.Exec(ctx, setCurrentStateQuery, roomID, eventType.Type, stateKey, eventRowID, dbutil.StrPtr(membership))
+}
+
+func (csq *CurrentStateQuery) Get(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string) (*Event, error) {
+	return csq.QueryOne(ctx, getCurrentStateEventQuery, roomID, eventType.Type, stateKey)
+}
+
+func (csq *CurrentStateQuery) GetAll(ctx context.Context, roomID id.RoomID) ([]*Event, error) {
+	return csq.QueryMany(ctx, getCurrentRoomStateQuery, roomID)
 }

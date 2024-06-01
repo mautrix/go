@@ -27,15 +27,16 @@ type Database struct {
 
 func New(rawDB *dbutil.Database) *Database {
 	rawDB.UpgradeTable = upgrades.Table
+	eventQH := dbutil.MakeQueryHelper(rawDB, newEvent)
 	return &Database{
 		Database: rawDB,
 
 		Account:        AccountQuery{QueryHelper: dbutil.MakeQueryHelper(rawDB, newAccount)},
 		AccountData:    AccountDataQuery{QueryHelper: dbutil.MakeQueryHelper(rawDB, newAccountData)},
 		Room:           RoomQuery{QueryHelper: dbutil.MakeQueryHelper(rawDB, newRoom)},
-		Event:          EventQuery{QueryHelper: dbutil.MakeQueryHelper(rawDB, newEvent)},
-		CurrentState:   CurrentStateQuery{Database: rawDB},
-		Timeline:       TimelineQuery{Database: rawDB},
+		Event:          EventQuery{QueryHelper: eventQH},
+		CurrentState:   CurrentStateQuery{QueryHelper: eventQH},
+		Timeline:       TimelineQuery{QueryHelper: eventQH},
 		SessionRequest: SessionRequestQuery{QueryHelper: dbutil.MakeQueryHelper(rawDB, newSessionRequest)},
 		Receipt:        ReceiptQuery{QueryHelper: dbutil.MakeQueryHelper(rawDB, newReceipt)},
 	}

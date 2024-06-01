@@ -20,7 +20,8 @@ import (
 
 const (
 	getRoomBaseQuery = `
-		SELECT room_id, creation_content, name, avatar, topic, lazy_load_summary, encryption_event, has_member_list,
+		SELECT room_id, creation_content, name, name_quality, avatar, topic, canonical_alias,
+		       lazy_load_summary, encryption_event, has_member_list,
 		       preview_event_rowid, sorting_timestamp, prev_batch
 		FROM room
 	`
@@ -33,14 +34,16 @@ const (
 		UPDATE room
 		SET creation_content = COALESCE(room.creation_content, $2),
 			name = COALESCE($3, room.name),
-			avatar = COALESCE($4, room.avatar),
-			topic = COALESCE($5, room.topic),
-			lazy_load_summary = COALESCE($6, room.lazy_load_summary),
-			encryption_event = COALESCE($7, room.encryption_event),
-			has_member_list = room.has_member_list OR $8,
-			preview_event_rowid = COALESCE($9, room.preview_event_rowid),
-			sorting_timestamp = COALESCE($10, room.sorting_timestamp),
-			prev_batch = COALESCE($11, room.prev_batch)
+			name_quality = CASE WHEN $3 IS NOT NULL THEN $4 ELSE room.name_quality END,
+			avatar = COALESCE($5, room.avatar),
+			topic = COALESCE($6, room.topic),
+			canonical_alias = COALESCE($7, room.canonical_alias),
+			lazy_load_summary = COALESCE($8, room.lazy_load_summary),
+			encryption_event = COALESCE($9, room.encryption_event),
+			has_member_list = room.has_member_list OR $10,
+			preview_event_rowid = COALESCE($11, room.preview_event_rowid),
+			sorting_timestamp = COALESCE($12, room.sorting_timestamp),
+			prev_batch = COALESCE($13, room.prev_batch)
 		WHERE room_id = $1
 	`
 	setRoomPrevBatchQuery = `
@@ -79,13 +82,24 @@ func (rq *RoomQuery) UpdatePreviewIfLaterOnTimeline(ctx context.Context, roomID 
 	return rq.Exec(ctx, updateRoomPreviewIfLaterOnTimelineQuery, roomID, rowID)
 }
 
+type NameQuality int
+
+const (
+	NameQualityNil NameQuality = iota
+	NameQualityParticipants
+	NameQualityCanonicalAlias
+	NameQualityExplicit
+)
+
 type Room struct {
 	ID              id.RoomID
 	CreationContent *event.CreateEventContent
 
-	Name   *string
-	Avatar *id.ContentURI
-	Topic  *string
+	Name           *string
+	NameQuality    NameQuality
+	Avatar         *id.ContentURI
+	Topic          *string
+	CanonicalAlias *id.RoomAlias
 
 	LazyLoadSummary *mautrix.LazyLoadSummary
 
@@ -98,6 +112,48 @@ type Room struct {
 	PrevBatch string
 }
 
+func (r *Room) CheckChangesAndCopyInto(other *Room) (hasChanges bool) {
+	if r.Name != nil && r.NameQuality >= other.NameQuality {
+		other.Name = r.Name
+		other.NameQuality = r.NameQuality
+		hasChanges = true
+	}
+	if r.Avatar != nil {
+		other.Avatar = r.Avatar
+		hasChanges = true
+	}
+	if r.Topic != nil {
+		other.Topic = r.Topic
+		hasChanges = true
+	}
+	if r.CanonicalAlias != nil {
+		other.CanonicalAlias = r.CanonicalAlias
+		hasChanges = true
+	}
+	if r.LazyLoadSummary != nil {
+		other.LazyLoadSummary = r.LazyLoadSummary
+		hasChanges = true
+	}
+	if r.EncryptionEvent != nil && other.EncryptionEvent == nil {
+		other.EncryptionEvent = r.EncryptionEvent
+		hasChanges = true
+	}
+	other.HasMemberList = other.HasMemberList || r.HasMemberList
+	if r.PreviewEventRowID > other.PreviewEventRowID {
+		other.PreviewEventRowID = r.PreviewEventRowID
+		hasChanges = true
+	}
+	if r.SortingTimestamp.After(other.SortingTimestamp) {
+		other.SortingTimestamp = r.SortingTimestamp
+		hasChanges = true
+	}
+	if r.PrevBatch != "" && other.PrevBatch == "" {
+		other.PrevBatch = r.PrevBatch
+		hasChanges = true
+	}
+	return
+}
+
 func (r *Room) Scan(row dbutil.Scannable) (*Room, error) {
 	var prevBatch sql.NullString
 	var previewEventRowID, sortingTimestamp sql.NullInt64
@@ -105,8 +161,10 @@ func (r *Room) Scan(row dbutil.Scannable) (*Room, error) {
 		&r.ID,
 		dbutil.JSON{Data: &r.CreationContent},
 		&r.Name,
+		&r.NameQuality,
 		&r.Avatar,
 		&r.Topic,
+		&r.CanonicalAlias,
 		dbutil.JSON{Data: &r.LazyLoadSummary},
 		dbutil.JSON{Data: &r.EncryptionEvent},
 		&r.HasMemberList,
@@ -128,8 +186,10 @@ func (r *Room) sqlVariables() []any {
 		r.ID,
 		dbutil.JSONPtr(r.CreationContent),
 		r.Name,
+		r.NameQuality,
 		r.Avatar,
 		r.Topic,
+		r.CanonicalAlias,
 		dbutil.JSONPtr(r.LazyLoadSummary),
 		dbutil.JSONPtr(r.EncryptionEvent),
 		r.HasMemberList,

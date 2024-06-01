@@ -28,24 +28,33 @@ const (
 		INSERT INTO timeline (room_id, rowid, event_rowid) VALUES ($1, $2, $3)
 	`
 	findMinRowIDQuery = `SELECT MIN(rowid) FROM timeline`
+	getTimelineQuery  = `
+		SELECT event.rowid, timeline.rowid, event.room_id, event_id, sender, type, state_key, timestamp, content, decrypted, decrypted_type, unsigned,
+		       redacted_by, relates_to, relation_type, megolm_session_id, decryption_error, reactions, last_edit_rowid
+		FROM timeline
+		JOIN event ON event.rowid = timeline.event_rowid
+		WHERE timeline.room_id = $1 AND timeline.rowid < $2
+		ORDER BY timeline.rowid DESC
+		LIMIT $3
+	`
 )
 
 type TimelineRowID int64
 
-type TimelinePrepend struct {
+type TimelineRowTuple struct {
 	Timeline TimelineRowID
 	Event    EventRowID
 }
 
-func (tp TimelinePrepend) GetMassInsertValues() [2]any {
+func (tp TimelineRowTuple) GetMassInsertValues() [2]any {
 	return [2]any{tp.Timeline, tp.Event}
 }
 
 var appendTimelineQueryBuilder = dbutil.NewMassInsertBuilder[EventRowID, [1]any](appendTimelineQuery, "($1, $%d)")
-var prependTimelineQueryBuilder = dbutil.NewMassInsertBuilder[TimelinePrepend, [1]any](prependTimelineQuery, "($1, $%d, $%d)")
+var prependTimelineQueryBuilder = dbutil.NewMassInsertBuilder[TimelineRowTuple, [1]any](prependTimelineQuery, "($1, $%d, $%d)")
 
 type TimelineQuery struct {
-	*dbutil.Database
+	*dbutil.QueryHelper[*Event]
 
 	minRowID      TimelineRowID
 	minRowIDFound bool
@@ -54,15 +63,14 @@ type TimelineQuery struct {
 
 // Clear clears the timeline of a given room.
 func (tq *TimelineQuery) Clear(ctx context.Context, roomID id.RoomID) error {
-	_, err := tq.Exec(ctx, clearTimelineQuery, roomID)
-	return err
+	return tq.Exec(ctx, clearTimelineQuery, roomID)
 }
 
 func (tq *TimelineQuery) reserveRowIDs(ctx context.Context, count int) (startFrom TimelineRowID, err error) {
 	tq.prependLock.Lock()
 	defer tq.prependLock.Unlock()
 	if !tq.minRowIDFound {
-		err = tq.QueryRow(ctx, findMinRowIDQuery).Scan(&tq.minRowID)
+		err = tq.GetDB().QueryRow(ctx, findMinRowIDQuery).Scan(&tq.minRowID)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return
 		}
@@ -86,21 +94,23 @@ func (tq *TimelineQuery) Prepend(ctx context.Context, roomID id.RoomID, rowIDs [
 	if err != nil {
 		return err
 	}
-	prependEntries := make([]TimelinePrepend, len(rowIDs))
+	prependEntries := make([]TimelineRowTuple, len(rowIDs))
 	for i, rowID := range rowIDs {
-		prependEntries[i] = TimelinePrepend{
+		prependEntries[i] = TimelineRowTuple{
 			Timeline: startFrom - TimelineRowID(i),
 			Event:    rowID,
 		}
 	}
 	query, params := prependTimelineQueryBuilder.Build([1]any{roomID}, prependEntries)
-	_, err = tq.Exec(ctx, query, params...)
-	return err
+	return tq.Exec(ctx, query, params...)
 }
 
 // Append adds the given event row IDs to the end of the timeline.
 func (tq *TimelineQuery) Append(ctx context.Context, roomID id.RoomID, rowIDs []EventRowID) error {
 	query, params := appendTimelineQueryBuilder.Build([1]any{roomID}, rowIDs)
-	_, err := tq.Exec(ctx, query, params...)
-	return err
+	return tq.Exec(ctx, query, params...)
+}
+
+func (tq *TimelineQuery) Get(ctx context.Context, roomID id.RoomID, limit int, before TimelineRowID) ([]*Event, error) {
+	return tq.QueryMany(ctx, getTimelineQuery, roomID, before, limit)
 }

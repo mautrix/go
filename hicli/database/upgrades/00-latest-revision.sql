@@ -13,8 +13,10 @@ CREATE TABLE room (
 	creation_content    TEXT,
 
 	name                TEXT,
+	name_quality        INTEGER NOT NULL DEFAULT 0,
 	avatar              TEXT,
 	topic               TEXT,
+	canonical_alias     TEXT,
 	lazy_load_summary   TEXT,
 
 	encryption_event    TEXT,
@@ -47,6 +49,7 @@ CREATE TABLE room_account_data (
 	PRIMARY KEY (user_id, room_id, type),
 	CONSTRAINT room_account_data_room_fkey FOREIGN KEY (room_id) REFERENCES room (room_id) ON DELETE CASCADE
 ) STRICT;
+CREATE INDEX room_account_data_room_id_idx ON room_account_data (room_id);
 
 CREATE TABLE event (
 	rowid             INTEGER PRIMARY KEY,
@@ -123,7 +126,8 @@ BEGIN
 	  AND type = NEW.type
 	  AND sender = NEW.sender
 	  AND state_key IS NULL
-	  AND NEW.timestamp > COALESCE((SELECT prev_edit.timestamp FROM event prev_edit WHERE prev_edit.rowid = event.last_edit_rowid), 0);
+	  AND NEW.timestamp >
+		  COALESCE((SELECT prev_edit.timestamp FROM event prev_edit WHERE prev_edit.rowid = event.last_edit_rowid), 0);
 END;
 
 CREATE TRIGGER event_insert_fill_reactions
@@ -178,6 +182,7 @@ CREATE TABLE session_request (
 	PRIMARY KEY (session_id),
 	CONSTRAINT session_request_queue_room_fkey FOREIGN KEY (room_id) REFERENCES room (room_id) ON DELETE CASCADE
 ) STRICT;
+CREATE INDEX session_request_room_idx ON session_request (room_id);
 
 CREATE TABLE timeline (
 	rowid       INTEGER PRIMARY KEY,

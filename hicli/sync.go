@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/rs/zerolog"
 	"github.com/tidwall/gjson"
@@ -284,6 +285,17 @@ func (h *HiClient) processStateAndTimeline(ctx context.Context, room *database.R
 		ID: room.ID,
 
 		SortingTimestamp: room.SortingTimestamp,
+		NameQuality:      room.NameQuality,
+	}
+	heroesChanged := false
+	if summary.Heroes == nil && summary.JoinedMemberCount == nil && summary.InvitedMemberCount == nil {
+		summary = room.LazyLoadSummary
+	} else if room.LazyLoadSummary == nil ||
+		!slices.Equal(summary.Heroes, room.LazyLoadSummary.Heroes) ||
+		!intPtrEqual(summary.JoinedMemberCount, room.LazyLoadSummary.JoinedMemberCount) ||
+		!intPtrEqual(summary.InvitedMemberCount, room.LazyLoadSummary.InvitedMemberCount) {
+		updatedRoom.LazyLoadSummary = summary
+		heroesChanged = true
 	}
 	decryptionQueue := make(map[id.SessionID]*database.SessionRequest)
 	processNewEvent := func(evt *event.Event, isTimeline bool) (database.EventRowID, error) {
@@ -302,6 +314,11 @@ func (h *HiClient) processStateAndTimeline(ctx context.Context, room *database.R
 			var membership event.Membership
 			if evt.Type == event.StateMember {
 				membership = event.Membership(gjson.GetBytes(evt.Content.VeryRaw, "membership").Str)
+				if summary != nil && slices.Contains(summary.Heroes, id.UserID(*evt.StateKey)) {
+					heroesChanged = true
+				}
+			} else if evt.Type == event.StateElementFunctionalMembers {
+				heroesChanged = true
 			}
 			err = h.DB.CurrentState.Set(ctx, room.ID, evt.Type, *evt.StateKey, dbEvt.RowID, membership)
 			if err != nil {
@@ -358,23 +375,89 @@ func (h *HiClient) processStateAndTimeline(ctx context.Context, room *database.R
 			return fmt.Errorf("failed to append timeline: %w", err)
 		}
 	}
+	// Calculate name from participants if participants changed and current name was generated from participants, or if the room name was unset
+	if (heroesChanged && updatedRoom.NameQuality <= database.NameQualityParticipants) || updatedRoom.NameQuality == database.NameQualityNil {
+		name, err := h.calculateRoomParticipantName(ctx, room.ID, summary)
+		if err != nil {
+			return fmt.Errorf("failed to calculate room name: %w", err)
+		}
+		updatedRoom.Name = &name
+		updatedRoom.NameQuality = database.NameQualityParticipants
+	}
 	if timeline.PrevBatch != "" && room.PrevBatch == "" {
 		updatedRoom.PrevBatch = timeline.PrevBatch
 	}
-	if summary.Heroes != nil && (room.LazyLoadSummary == nil ||
-		!slices.Equal(summary.Heroes, room.LazyLoadSummary.Heroes) ||
-		!intPtrEqual(summary.JoinedMemberCount, room.LazyLoadSummary.JoinedMemberCount) ||
-		!intPtrEqual(summary.InvitedMemberCount, room.LazyLoadSummary.InvitedMemberCount)) {
-		updatedRoom.LazyLoadSummary = summary
-	}
-	// TODO check if updatedRoom contains anything
-	if true {
+	if updatedRoom.CheckChangesAndCopyInto(room) {
 		err = h.DB.Room.Upsert(ctx, updatedRoom)
 		if err != nil {
 			return fmt.Errorf("failed to save room data: %w", err)
 		}
 	}
 	return nil
+}
+
+func joinMemberNames(names []string, totalCount int) string {
+	if len(names) == 1 {
+		return names[0]
+	} else if len(names) < 5 || (len(names) == 5 && totalCount <= 6) {
+		return strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1]
+	} else {
+		return fmt.Sprintf("%s and %d others", strings.Join(names[:4], ", "), totalCount-5)
+	}
+}
+
+func (h *HiClient) calculateRoomParticipantName(ctx context.Context, roomID id.RoomID, summary *mautrix.LazyLoadSummary) (string, error) {
+	if summary == nil || len(summary.Heroes) == 0 {
+		return "Empty room", nil
+	}
+	var functionalMembers []id.UserID
+	functionalMembersEvt, err := h.DB.CurrentState.Get(ctx, roomID, event.StateElementFunctionalMembers, "")
+	if err != nil {
+		return "", fmt.Errorf("failed to get %s event: %w", event.StateElementFunctionalMembers.Type, err)
+	} else if functionalMembersEvt != nil {
+		mautrixEvt := functionalMembersEvt.AsRawMautrix()
+		_ = mautrixEvt.Content.ParseRaw(mautrixEvt.Type)
+		content, ok := mautrixEvt.Content.Parsed.(*event.ElementFunctionalMembersContent)
+		if ok {
+			functionalMembers = content.FunctionalMembers
+		}
+	}
+	var members, leftMembers []string
+	var memberCount int
+	if summary.JoinedMemberCount != nil && *summary.JoinedMemberCount > 0 {
+		memberCount = *summary.JoinedMemberCount
+	} else if summary.InvitedMemberCount != nil {
+		memberCount = *summary.InvitedMemberCount
+	}
+	for _, hero := range summary.Heroes {
+		if slices.Contains(functionalMembers, hero) {
+			memberCount--
+			continue
+		} else if len(members) >= 5 {
+			break
+		}
+		heroEvt, err := h.DB.CurrentState.Get(ctx, roomID, event.StateMember, hero.String())
+		if err != nil {
+			return "", fmt.Errorf("failed to get %s's member event: %w", hero, err)
+		}
+		results := gjson.GetManyBytes(heroEvt.Content, "membership", "displayname")
+		name := results[1].Str
+		if name == "" {
+			name = hero.String()
+		}
+		if results[0].Str == "join" || results[0].Str == "invite" {
+			members = append(members, name)
+		} else {
+			leftMembers = append(leftMembers, name)
+		}
+	}
+	if len(members) > 0 {
+		return joinMemberNames(members, memberCount), nil
+	} else if len(leftMembers) > 0 {
+		return fmt.Sprintf("Empty room (was %s)", joinMemberNames(leftMembers, memberCount)), nil
+	} else {
+		return "Empty room", nil
+	}
 }
 
 func intPtrEqual(a, b *int) bool {
@@ -389,7 +472,7 @@ func processImportantEvent(ctx context.Context, evt *event.Event, existingRoomDa
 		return
 	}
 	switch evt.Type {
-	case event.StateCreate, event.StateRoomName, event.StateRoomAvatar, event.StateTopic, event.StateEncryption:
+	case event.StateCreate, event.StateRoomName, event.StateCanonicalAlias, event.StateRoomAvatar, event.StateTopic, event.StateEncryption:
 		if *evt.StateKey != "" {
 			return
 		}
@@ -414,17 +497,41 @@ func processImportantEvent(ctx context.Context, evt *event.Event, existingRoomDa
 		}
 	case event.StateRoomName:
 		content, ok := evt.Content.Parsed.(*event.RoomNameEventContent)
-		if ok && (existingRoomData.Name == nil || *existingRoomData.Name != content.Name) {
+		if ok {
 			updatedRoom.Name = &content.Name
+			updatedRoom.NameQuality = database.NameQualityExplicit
+			if content.Name == "" {
+				if updatedRoom.CanonicalAlias != nil && *updatedRoom.CanonicalAlias != "" {
+					updatedRoom.Name = (*string)(updatedRoom.CanonicalAlias)
+					updatedRoom.NameQuality = database.NameQualityCanonicalAlias
+				} else if existingRoomData.CanonicalAlias != nil && *existingRoomData.CanonicalAlias != "" {
+					updatedRoom.Name = (*string)(existingRoomData.CanonicalAlias)
+					updatedRoom.NameQuality = database.NameQualityCanonicalAlias
+				} else {
+					updatedRoom.NameQuality = database.NameQualityNil
+				}
+			}
+		}
+	case event.StateCanonicalAlias:
+		content, ok := evt.Content.Parsed.(*event.CanonicalAliasEventContent)
+		if ok {
+			updatedRoom.CanonicalAlias = &content.Alias
+			if updatedRoom.NameQuality <= database.NameQualityCanonicalAlias {
+				updatedRoom.Name = (*string)(&content.Alias)
+				updatedRoom.NameQuality = database.NameQualityCanonicalAlias
+				if content.Alias == "" {
+					updatedRoom.NameQuality = database.NameQualityNil
+				}
+			}
 		}
 	case event.StateRoomAvatar:
 		content, ok := evt.Content.Parsed.(*event.RoomAvatarEventContent)
-		if ok && (existingRoomData.Avatar == nil || *existingRoomData.Avatar != content.URL) {
+		if ok {
 			updatedRoom.Avatar = &content.URL
 		}
 	case event.StateTopic:
 		content, ok := evt.Content.Parsed.(*event.TopicEventContent)
-		if ok && (existingRoomData.Topic == nil || *existingRoomData.Topic != content.Topic) {
+		if ok {
 			updatedRoom.Topic = &content.Topic
 		}
 	}

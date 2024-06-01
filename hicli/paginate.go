@@ -18,8 +18,8 @@ import (
 
 var ErrPaginationAlreadyInProgress = errors.New("pagination is already in progress")
 
-func (h *HiClient) Paginate(ctx context.Context, roomID id.RoomID, minTimelineID database.TimelineRowID, limit int) ([]*database.Event, error) {
-	evts, err := h.DB.Event.GetTimeline(ctx, roomID, limit, minTimelineID)
+func (h *HiClient) Paginate(ctx context.Context, roomID id.RoomID, maxTimelineID database.TimelineRowID, limit int) ([]*database.Event, error) {
+	evts, err := h.DB.Timeline.Get(ctx, roomID, limit, maxTimelineID)
 	if err != nil {
 		return nil, err
 	} else if len(evts) > 0 {
@@ -73,6 +73,10 @@ func (h *HiClient) PaginateServer(ctx context.Context, roomID id.RoomID, limit i
 			if err != nil {
 				return fmt.Errorf("failed to save session request for %s: %w", entry.SessionID, err)
 			}
+		}
+		err = h.DB.Event.FillLastEditRowIDs(ctx, roomID, events)
+		if err != nil {
+			return fmt.Errorf("failed to fill last edit row IDs: %w", err)
 		}
 		err = h.DB.Room.SetPrevBatch(ctx, room.ID, resp.End)
 		if err != nil {
