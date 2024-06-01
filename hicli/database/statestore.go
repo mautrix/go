@@ -30,6 +30,10 @@ const (
 		LEFT JOIN event ON event.rowid = cs.event_rowid
 		WHERE cs.room_id = $1 AND cs.event_type = $2 AND cs.state_key = $3
 	`
+	getRoomJoinedMembersQuery = `
+		SELECT state_key FROM current_state
+		WHERE room_id = $1 AND event_type = 'm.room.member' AND membership = 'join'
+	`
 	getRoomJoinedOrInvitedMembersQuery = `
 		SELECT state_key FROM current_state
 		WHERE room_id = $1 AND event_type = 'm.room.member' AND membership IN ('join', 'invite')
@@ -94,6 +98,11 @@ func (c *ClientStateStore) GetPowerLevels(ctx context.Context, roomID id.RoomID)
 		err = nil
 	}
 	return
+}
+
+func (c *ClientStateStore) GetRoomJoinedMembers(ctx context.Context, roomID id.RoomID) ([]id.UserID, error) {
+	rows, err := c.Query(ctx, getRoomJoinedMembersQuery, roomID)
+	return dbutil.NewRowIterWithError(rows, dbutil.ScanSingleColumn[id.UserID], err).AsList()
 }
 
 func (c *ClientStateStore) GetRoomJoinedOrInvitedMembers(ctx context.Context, roomID id.RoomID) ([]id.UserID, error) {

@@ -31,3 +31,8 @@ type Typing struct {
 	RoomID id.RoomID `json:"room_id"`
 	event.TypingEventContent
 }
+
+type SendComplete struct {
+	Event *database.Event `json:"event"`
+	Error error           `json:"error"`
+}

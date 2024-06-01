@@ -25,22 +25,35 @@ import (
 const (
 	getEventBaseQuery = `
 		SELECT rowid, -1, room_id, event_id, sender, type, state_key, timestamp, content, decrypted, decrypted_type, unsigned,
-		       redacted_by, relates_to, relation_type, megolm_session_id, decryption_error, reactions, last_edit_rowid
+		       transaction_id, redacted_by, relates_to, relation_type, megolm_session_id, decryption_error, reactions, last_edit_rowid
 		FROM event
 	`
 	getManyEventsByRowID             = getEventBaseQuery + `WHERE rowid IN (%s)`
 	getEventByID                     = getEventBaseQuery + `WHERE event_id = $1`
 	getFailedEventsByMegolmSessionID = getEventBaseQuery + `WHERE room_id = $1 AND megolm_session_id = $2 AND decryption_error IS NOT NULL`
-	upsertEventQuery                 = `
-		INSERT INTO event (room_id, event_id, sender, type, state_key, timestamp, content, decrypted, decrypted_type, unsigned, redacted_by, relates_to, relation_type, megolm_session_id, decryption_error)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+	insertEventBaseQuery             = `
+		INSERT INTO event (
+			room_id, event_id, sender, type, state_key, timestamp, content, decrypted, decrypted_type, unsigned,
+			transaction_id, redacted_by, relates_to, relation_type, megolm_session_id, decryption_error
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+	`
+	insertEventQuery = insertEventBaseQuery + `RETURNING rowid`
+	upsertEventQuery = insertEventBaseQuery + `
 		ON CONFLICT (event_id) DO UPDATE
 			SET decrypted=COALESCE(event.decrypted, excluded.decrypted),
 			    decrypted_type=COALESCE(event.decrypted_type, excluded.decrypted_type),
 			    redacted_by=COALESCE(event.redacted_by, excluded.redacted_by),
-			    decryption_error=CASE WHEN COALESCE(event.decrypted, excluded.decrypted) IS NULL THEN COALESCE(excluded.decryption_error, event.decryption_error) END
+			    decryption_error=CASE WHEN COALESCE(event.decrypted, excluded.decrypted) IS NULL THEN COALESCE(excluded.decryption_error, event.decryption_error) END,
+				timestamp=excluded.timestamp,
+				unsigned=COALESCE(excluded.unsigned, event.unsigned)
+		ON CONFLICT (transaction_id) DO UPDATE
+			SET event_id=excluded.event_id,
+				timestamp=excluded.timestamp,
+				unsigned=excluded.unsigned
 		RETURNING rowid
 	`
+	updateEventIDQuery        = `UPDATE event SET event_id=$2 WHERE rowid=$1`
 	updateEventDecryptedQuery = `UPDATE event SET decrypted = $1, decrypted_type = $2, decryption_error = NULL WHERE rowid = $3`
 	getEventReactionsQuery    = getEventBaseQuery + `
 		WHERE room_id = ?
@@ -91,6 +104,18 @@ func (eq *EventQuery) Upsert(ctx context.Context, evt *Event) (rowID EventRowID,
 		evt.RowID = rowID
 	}
 	return
+}
+
+func (eq *EventQuery) Insert(ctx context.Context, evt *Event) (rowID EventRowID, err error) {
+	err = eq.GetDB().QueryRow(ctx, insertEventQuery, evt.sqlVariables()...).Scan(&rowID)
+	if err == nil {
+		evt.RowID = rowID
+	}
+	return
+}
+
+func (eq *EventQuery) UpdateID(ctx context.Context, rowID EventRowID, newID id.EventID) error {
+	return eq.Exec(ctx, updateEventIDQuery, rowID, newID)
 }
 
 func (eq *EventQuery) UpdateDecrypted(ctx context.Context, rowID EventRowID, decrypted json.RawMessage, decryptedType string) error {
@@ -242,6 +267,8 @@ type Event struct {
 	DecryptedType string          `json:"decrypted_type,omitempty"`
 	Unsigned      json.RawMessage `json:"unsigned,omitempty"`
 
+	TransactionID string `json:"transaction_id,omitempty"`
+
 	RedactedBy   id.EventID         `json:"redacted_by,omitempty"`
 	RelatesTo    id.EventID         `json:"relates_to,omitempty"`
 	RelationType event.RelationType `json:"relation_type,omitempty"`
@@ -263,8 +290,12 @@ func MautrixToEvent(evt *event.Event) *Event {
 		Timestamp:       time.UnixMilli(evt.Timestamp),
 		Content:         evt.Content.VeryRaw,
 		MegolmSessionID: getMegolmSessionID(evt),
+		TransactionID:   evt.Unsigned.TransactionID,
 	}
-	dbEvt.RelatesTo, dbEvt.RelationType = getRelatesTo(evt)
+	if !strings.HasPrefix(dbEvt.TransactionID, "hicli-mautrix-go_") {
+		dbEvt.TransactionID = ""
+	}
+	dbEvt.RelatesTo, dbEvt.RelationType = getRelatesToFromEvent(evt)
 	dbEvt.Unsigned, _ = json.Marshal(&evt.Unsigned)
 	if evt.Unsigned.RedactedBecause != nil {
 		dbEvt.RedactedBy = evt.Unsigned.RedactedBecause.ID
@@ -296,7 +327,7 @@ func (e *Event) AsRawMautrix() *event.Event {
 
 func (e *Event) Scan(row dbutil.Scannable) (*Event, error) {
 	var timestamp int64
-	var redactedBy, relatesTo, relationType, megolmSessionID, decryptionError, decryptedType sql.NullString
+	var transactionID, redactedBy, relatesTo, relationType, megolmSessionID, decryptionError, decryptedType sql.NullString
 	err := row.Scan(
 		&e.RowID,
 		&e.TimelineRowID,
@@ -310,6 +341,7 @@ func (e *Event) Scan(row dbutil.Scannable) (*Event, error) {
 		(*[]byte)(&e.Decrypted),
 		&decryptedType,
 		(*[]byte)(&e.Unsigned),
+		&transactionID,
 		&redactedBy,
 		&relatesTo,
 		&relationType,
@@ -322,6 +354,7 @@ func (e *Event) Scan(row dbutil.Scannable) (*Event, error) {
 		return nil, err
 	}
 	e.Timestamp = time.UnixMilli(timestamp)
+	e.TransactionID = transactionID.String
 	e.RedactedBy = id.EventID(redactedBy.String)
 	e.RelatesTo = id.EventID(relatesTo.String)
 	e.RelationType = event.RelationType(relatesTo.String)
@@ -334,11 +367,15 @@ func (e *Event) Scan(row dbutil.Scannable) (*Event, error) {
 var relatesToPath = exgjson.Path("m.relates_to", "event_id")
 var relationTypePath = exgjson.Path("m.relates_to", "rel_type")
 
-func getRelatesTo(evt *event.Event) (id.EventID, event.RelationType) {
+func getRelatesToFromEvent(evt *event.Event) (id.EventID, event.RelationType) {
 	if evt.StateKey != nil {
 		return "", ""
 	}
-	results := gjson.GetManyBytes(evt.Content.VeryRaw, relatesToPath, relationTypePath)
+	return GetRelatesToFromBytes(evt.Content.VeryRaw)
+}
+
+func GetRelatesToFromBytes(content []byte) (id.EventID, event.RelationType) {
+	results := gjson.GetManyBytes(content, relatesToPath, relationTypePath)
 	if len(results) == 2 && results[0].Exists() && results[1].Exists() && results[0].Type == gjson.String && results[1].Type == gjson.String {
 		return id.EventID(results[0].Str), event.RelationType(results[1].Str)
 	}
@@ -372,6 +409,7 @@ func (e *Event) sqlVariables() []any {
 		unsafeJSONString(e.Decrypted),
 		dbutil.StrPtr(e.DecryptedType),
 		unsafeJSONString(e.Unsigned),
+		dbutil.StrPtr(e.TransactionID),
 		dbutil.StrPtr(e.RedactedBy),
 		dbutil.StrPtr(e.RelatesTo),
 		dbutil.StrPtr(e.RelationType),

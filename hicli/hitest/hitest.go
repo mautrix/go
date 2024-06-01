@@ -10,9 +10,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
-	"os/signal"
-	"syscall"
+	"strings"
 
 	"github.com/chzyer/readline"
 	_ "github.com/mattn/go-sqlite3"
@@ -24,6 +22,7 @@ import (
 	"go.mau.fi/zeroconfig"
 
 	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/hicli"
 	"maunium.net/go/mautrix/id"
 )
@@ -88,8 +87,21 @@ func main() {
 	}
 	rl.SetPrompt("> ")
 
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	<-c
+	for {
+		line, err := rl.Readline()
+		if err != nil {
+			break
+		}
+		fields := strings.Fields(line)
+		switch strings.ToLower(fields[0]) {
+		case "send":
+			resp, err := cli.Send(ctx, id.RoomID(fields[1]), event.EventMessage, &event.MessageEventContent{
+				Body:    strings.Join(fields[2:], " "),
+				MsgType: event.MsgText,
+			})
+			_, _ = fmt.Fprintln(rl, err)
+			_, _ = fmt.Fprintf(rl, "%+v\n", resp)
+		}
+	}
 	cli.Stop()
 }

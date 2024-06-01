@@ -66,6 +66,8 @@ CREATE TABLE event (
 	decrypted_type    TEXT,
 	unsigned          TEXT    NOT NULL,
 
+	transaction_id    TEXT,
+
 	redacted_by       TEXT,
 	relates_to        TEXT,
 	relation_type     TEXT,
@@ -77,6 +79,7 @@ CREATE TABLE event (
 	last_edit_rowid   INTEGER,
 
 	CONSTRAINT event_id_unique_key UNIQUE (event_id),
+	CONSTRAINT transaction_id_unique_key UNIQUE (transaction_id),
 	CONSTRAINT event_room_fkey FOREIGN KEY (room_id) REFERENCES room (room_id) ON DELETE CASCADE
 ) STRICT;
 CREATE INDEX event_room_id_idx ON event (room_id);

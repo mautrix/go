@@ -8,14 +8,12 @@ package hicli
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
 	"github.com/rs/zerolog"
 
 	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/crypto"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
@@ -24,29 +22,14 @@ type hiCryptoHelper HiClient
 
 var _ mautrix.CryptoHelper = (*hiCryptoHelper)(nil)
 
-func (h *hiCryptoHelper) Encrypt(ctx context.Context, roomID id.RoomID, evtType event.Type, content any) (encrypted *event.EncryptedEventContent, err error) {
-	h.encryptLock.Lock()
-	defer h.encryptLock.Unlock()
-	encrypted, err = h.Crypto.EncryptMegolmEvent(ctx, roomID, evtType, content)
+func (h *hiCryptoHelper) Encrypt(ctx context.Context, roomID id.RoomID, evtType event.Type, content any) (*event.EncryptedEventContent, error) {
+	roomMeta, err := h.DB.Room.Get(ctx, roomID)
 	if err != nil {
-		if !errors.Is(err, crypto.SessionExpired) && !errors.Is(err, crypto.NoGroupSession) && !errors.Is(err, crypto.SessionNotShared) {
-			return
-		}
-		h.Log.Debug().
-			Err(err).
-			Str("room_id", roomID.String()).
-			Msg("Got session error while encrypting event, sharing group session and trying again")
-		var users []id.UserID
-		users, err = h.ClientStore.GetRoomJoinedOrInvitedMembers(ctx, roomID)
-		if err != nil {
-			err = fmt.Errorf("failed to get room member list: %w", err)
-		} else if err = h.Crypto.ShareGroupSession(ctx, roomID, users); err != nil {
-			err = fmt.Errorf("failed to share group session: %w", err)
-		} else if encrypted, err = h.Crypto.EncryptMegolmEvent(ctx, roomID, evtType, content); err != nil {
-			err = fmt.Errorf("failed to encrypt event after re-sharing group session: %w", err)
-		}
+		return nil, fmt.Errorf("failed to get room metadata: %w", err)
+	} else if roomMeta == nil {
+		return nil, fmt.Errorf("unknown room")
 	}
-	return
+	return (*HiClient)(h).Encrypt(ctx, roomMeta, evtType, content)
 }
 
 func (h *hiCryptoHelper) Decrypt(ctx context.Context, evt *event.Event) (*event.Event, error) {
