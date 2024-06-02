@@ -52,6 +52,49 @@ func TestSessionPickle(t *testing.T) {
 	assert.Equal(t, pickledDataFromLibOlm, libolmPickled)
 }
 
+func TestSessionPickle_RoundtripThroughGoolm(t *testing.T) {
+	libolmSession := libolm.NewOutboundGroupSession()
+	libolmPickled, err := libolmSession.Pickle([]byte("test"))
+	require.NoError(t, err)
+
+	goolmSession, err := session.MegolmOutboundSessionFromPickled(libolmPickled, []byte("test"))
+	require.NoError(t, err)
+
+	goolmPickled, err := goolmSession.Pickle([]byte("test"))
+	require.NoError(t, err)
+
+	assert.Equal(t, libolmPickled, goolmPickled, "pickled versions are not the same")
+
+	libolmSession2 := libolm.NewOutboundGroupSession()
+	err = libolmSession2.Unpickle(bytes.Clone(goolmPickled), []byte("test"))
+	require.NoError(t, err)
+
+	assert.Equal(t, libolmSession.Key(), libolmSession2.Key())
+}
+
+func TestSessionPickle_RoundtripThroughLibolm(t *testing.T) {
+	goolmSession, err := session.NewMegolmOutboundSession()
+	require.NoError(t, err)
+
+	goolmPickled, err := goolmSession.Pickle([]byte("test"))
+	require.NoError(t, err)
+
+	libolmSession := libolm.NewOutboundGroupSession()
+	err = libolmSession.Unpickle(bytes.Clone(goolmPickled), []byte("test"))
+	require.NoError(t, err)
+
+	libolmPickled, err := libolmSession.Pickle([]byte("test"))
+	require.NoError(t, err)
+
+	assert.Equal(t, goolmPickled, libolmPickled, "pickled versions are not the same")
+
+	goolmSession2, err := session.MegolmOutboundSessionFromPickled(libolmPickled, []byte("test"))
+	require.NoError(t, err)
+
+	assert.Equal(t, goolmSession.Key(), goolmSession2.Key())
+	assert.Equal(t, goolmSession.SigningKey.PrivateKey, goolmSession2.SigningKey.PrivateKey)
+}
+
 func TestMegolmSessionPickleLibolm(t *testing.T) {
 	libolmSession := libolm.NewOutboundGroupSession()
 	libolmPickled, err := libolmSession.Pickle([]byte("test"))

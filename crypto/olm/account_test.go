@@ -8,7 +8,6 @@ package olm_test
 
 import (
 	"bytes"
-	"crypto/ed25519"
 	"encoding/base64"
 	"testing"
 
@@ -16,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.mau.fi/util/exerrors"
 
+	"maunium.net/go/mautrix/crypto/ed25519"
 	"maunium.net/go/mautrix/crypto/goolm/account"
 	"maunium.net/go/mautrix/crypto/libolm"
 )
