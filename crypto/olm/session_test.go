@@ -7,9 +7,11 @@
 package olm_test
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"maunium.net/go/mautrix/crypto/goolm/session"
 	"maunium.net/go/mautrix/crypto/libolm"
@@ -35,22 +37,53 @@ func TestSessionPickle(t *testing.T) {
 	pickledDataFromLibOlm := []byte("icDKYm0b4aO23WgUuOxdpPoxC0UlEOYPVeuduNH3IkpFsmnWx5KuEOpxGiZw5IuB/sSn2RZUCTiJ90IvgC7AClkYGHep9O8lpiqQX73XVKD9okZDCAkBc83eEq0DKYC7HBkGRAU/4T6QPIBBY3UK4QZwULLE/fLsi3j4YZBehMtnlsqgHK0q1bvX4cRznZItVKR4ro0O9EAk6LLxJtSnRu5elSUk7YXT")
 	pickleKey := []byte("secret_key")
 
-	goolmSession := session.NewOlmSession()
-	err := goolmSession.Unpickle(pickledDataFromLibOlm, pickleKey)
+	goolmSession, err := session.OlmSessionFromPickled(bytes.Clone(pickledDataFromLibOlm), pickleKey)
 	assert.NoError(t, err)
 
-	libolmSession := libolm.NewBlankSession()
-	err = libolmSession.Unpickle(pickledDataFromLibOlm, pickleKey)
+	libolmSession, err := libolm.SessionFromPickled(bytes.Clone(pickledDataFromLibOlm), pickleKey)
 	assert.NoError(t, err)
-
-	// Reset the pickle data since libolmSession.Unpickle modifies it.
-	pickledDataFromLibOlm = []byte("icDKYm0b4aO23WgUuOxdpPoxC0UlEOYPVeuduNH3IkpFsmnWx5KuEOpxGiZw5IuB/sSn2RZUCTiJ90IvgC7AClkYGHep9O8lpiqQX73XVKD9okZDCAkBc83eEq0DKYC7HBkGRAU/4T6QPIBBY3UK4QZwULLE/fLsi3j4YZBehMtnlsqgHK0q1bvX4cRznZItVKR4ro0O9EAk6LLxJtSnRu5elSUk7YXT")
 
 	goolmPickled, err := goolmSession.Pickle(pickleKey)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, pickledDataFromLibOlm, goolmPickled)
 
 	libolmPickled, err := libolmSession.Pickle(pickleKey)
+	require.NoError(t, err)
 	assert.Equal(t, pickledDataFromLibOlm, libolmPickled)
-	assert.NoError(t, err)
+}
+
+func TestMegolmSessionPickleLibolm(t *testing.T) {
+	libolmSession := libolm.NewOutboundGroupSession()
+	libolmPickled, err := libolmSession.Pickle([]byte("test"))
+	require.NoError(t, err)
+
+	goolmSession, err := session.MegolmOutboundSessionFromPickled(bytes.Clone(libolmPickled), []byte("test"))
+	require.NoError(t, err)
+	goolmPickled, err := goolmSession.Pickle([]byte("test"))
+	require.NoError(t, err)
+
+	assert.Equal(t, libolmPickled, goolmPickled, "pickled versions are not the same")
+	assert.Equal(t, goolmSession.SigningKey.PrivateKey.PubKey(), goolmSession.SigningKey.PublicKey)
+
+	// Ensure that the key export is the same and that the pickle is the same
+	assert.Equal(t, libolmSession.Key(), goolmSession.Key(), "keys are not the same")
+}
+
+func TestMegolmSessionPickleGoolm(t *testing.T) {
+	goolmSession, err := session.NewMegolmOutboundSession()
+	require.NoError(t, err)
+	goolmPickled, err := goolmSession.Pickle([]byte("test"))
+	require.NoError(t, err)
+
+	libolmSession := libolm.NewOutboundGroupSession()
+	err = libolmSession.Unpickle(bytes.Clone(goolmPickled), []byte("test"))
+	require.NoError(t, err)
+	libolmPickled, err := libolmSession.Pickle([]byte("test"))
+	require.NoError(t, err)
+
+	assert.Equal(t, libolmPickled, goolmPickled, "pickled versions are not the same")
+	assert.Equal(t, goolmSession.SigningKey.PrivateKey.PubKey(), goolmSession.SigningKey.PublicKey)
+
+	// Ensure that the key export is the same and that the pickle is the same
+	assert.Equal(t, libolmSession.Key(), goolmSession.Key(), "keys are not the same")
 }
