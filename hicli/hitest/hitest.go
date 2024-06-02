@@ -50,7 +50,7 @@ func main() {
 
 	rawDB := exerrors.Must(dbutil.NewWithDialect("hicli.db", "sqlite3-fk-wal"))
 	ctx := log.WithContext(context.Background())
-	cli := hicli.New(rawDB, *log, []byte("meow"), func(a any) {
+	cli := hicli.New(rawDB, nil, *log, []byte("meow"), func(a any) {
 		_, _ = fmt.Fprintf(rl, "Received event of type %T\n", a)
 		switch evt := a.(type) {
 		case *hicli.SyncComplete:
@@ -75,7 +75,7 @@ func main() {
 		}
 	})
 	userID, _ := cli.DB.Account.GetFirstUserID(ctx)
-	exerrors.PanicIfNotNil(cli.Start(ctx, userID))
+	exerrors.PanicIfNotNil(cli.Start(ctx, userID, nil))
 	if !cli.IsLoggedIn() {
 		rl.SetPrompt("User ID: ")
 		userID := id.UserID(exerrors.Must(rl.Readline()))

@@ -133,33 +133,44 @@ func (h *HiClient) EnsureGroupSessionShared(ctx context.Context, roomID id.RoomI
 	}
 }
 
-func (h *HiClient) shareGroupSession(ctx context.Context, room *database.Room) error {
-	if !room.HasMemberList {
-		resp, err := h.Client.Members(ctx, room.ID)
-		if err != nil {
-			return fmt.Errorf("failed to get room member list: %w", err)
-		}
-		err = h.DB.DoTxn(ctx, nil, func(ctx context.Context) error {
-			for _, evt := range resp.Chunk {
-				dbEvt, err := h.processEvent(ctx, evt, nil, true)
-				if err != nil {
-					return err
-				}
-				membership := event.Membership(evt.Content.Raw["membership"].(string))
-				err = h.DB.CurrentState.Set(ctx, room.ID, evt.Type, *evt.StateKey, dbEvt.RowID, membership)
-				if err != nil {
-					return err
-				}
+func (h *HiClient) loadMembers(ctx context.Context, room *database.Room) error {
+	if room.HasMemberList {
+		return nil
+	}
+	resp, err := h.Client.Members(ctx, room.ID)
+	if err != nil {
+		return fmt.Errorf("failed to get room member list: %w", err)
+	}
+	err = h.DB.DoTxn(ctx, nil, func(ctx context.Context) error {
+		for _, evt := range resp.Chunk {
+			dbEvt, err := h.processEvent(ctx, evt, nil, true)
+			if err != nil {
+				return err
 			}
-			return nil
-		})
-		if err != nil {
-			return fmt.Errorf("failed to process room member list: %w", err)
+			membership := event.Membership(evt.Content.Raw["membership"].(string))
+			err = h.DB.CurrentState.Set(ctx, room.ID, evt.Type, *evt.StateKey, dbEvt.RowID, membership)
+			if err != nil {
+				return err
+			}
 		}
+		return h.DB.Room.Upsert(ctx, &database.Room{
+			ID:            room.ID,
+			HasMemberList: true,
+		})
+	})
+	if err != nil {
+		return fmt.Errorf("failed to process room member list: %w", err)
+	}
+	return nil
+}
+
+func (h *HiClient) shareGroupSession(ctx context.Context, room *database.Room) error {
+	err := h.loadMembers(ctx, room)
+	if err != nil {
+		return err
 	}
 	shareToInvited := h.shouldShareKeysToInvitedUsers(ctx, room.ID)
 	var users []id.UserID
-	var err error
 	if shareToInvited {
 		users, err = h.ClientStore.GetRoomJoinedOrInvitedMembers(ctx, room.ID)
 	} else {

@@ -57,11 +57,18 @@ type HiClient struct {
 
 var ErrTimelineReset = errors.New("got limited timeline sync response")
 
-func New(rawDB *dbutil.Database, log zerolog.Logger, pickleKey []byte, evtHandler func(any)) *HiClient {
-	rawDB.Owner = "hicli"
-	rawDB.IgnoreForeignTables = true
+func New(rawDB, cryptoDB *dbutil.Database, log zerolog.Logger, pickleKey []byte, evtHandler func(any)) *HiClient {
+	if cryptoDB == nil {
+		cryptoDB = rawDB
+	}
+	if rawDB.Owner == "" {
+		rawDB.Owner = "hicli"
+		rawDB.IgnoreForeignTables = true
+	}
+	if rawDB.Log == nil {
+		rawDB.Log = dbutil.ZeroLogger(log.With().Str("db_section", "hicli").Logger())
+	}
 	db := database.New(rawDB)
-	db.Log = dbutil.ZeroLogger(log.With().Str("db_section", "hicli").Logger())
 	c := &HiClient{
 		DB:  db,
 		Log: log,
@@ -88,7 +95,7 @@ func New(rawDB *dbutil.Database, log zerolog.Logger, pickleKey []byte, evtHandle
 		StateStore: c.ClientStore,
 		Log:        log.With().Str("component", "mautrix client").Logger(),
 	}
-	c.CryptoStore = crypto.NewSQLCryptoStore(rawDB, dbutil.ZeroLogger(log.With().Str("db_section", "crypto").Logger()), "", "", pickleKey)
+	c.CryptoStore = crypto.NewSQLCryptoStore(cryptoDB, dbutil.ZeroLogger(log.With().Str("db_section", "crypto").Logger()), "", "", pickleKey)
 	cryptoLog := log.With().Str("component", "crypto").Logger()
 	c.Crypto = crypto.NewOlmMachine(c.Client, &cryptoLog, c.CryptoStore, c.ClientStore)
 	c.Crypto.SessionReceived = c.handleReceivedMegolmSession
@@ -102,7 +109,10 @@ func (h *HiClient) IsLoggedIn() bool {
 	return h.Account != nil
 }
 
-func (h *HiClient) Start(ctx context.Context, userID id.UserID) error {
+func (h *HiClient) Start(ctx context.Context, userID id.UserID, expectedAccount *database.Account) error {
+	if expectedAccount != nil && userID != expectedAccount.UserID {
+		panic(fmt.Errorf("invalid parameters: different user ID in expected account and user ID"))
+	}
 	err := h.DB.Upgrade(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to upgrade hicli db: %w", err)
@@ -114,6 +124,14 @@ func (h *HiClient) Start(ctx context.Context, userID id.UserID) error {
 	account, err := h.DB.Account.Get(ctx, userID)
 	if err != nil {
 		return err
+	} else if account == nil && expectedAccount != nil {
+		err = h.DB.Account.Put(ctx, expectedAccount)
+		if err != nil {
+			return err
+		}
+		account = expectedAccount
+	} else if expectedAccount != nil && expectedAccount.DeviceID != account.DeviceID {
+		return fmt.Errorf("device ID mismatch: expected %s, got %s", expectedAccount.DeviceID, account.DeviceID)
 	}
 	if account != nil {
 		zerolog.Ctx(ctx).Debug().Stringer("user_id", account.UserID).Msg("Preparing client with existing credentials")
