@@ -24,6 +24,7 @@ type CommandState struct {
 	Next   MinimalCommandHandler
 	Action string
 	Meta   any
+	Cancel func()
 }
 
 type CommandHandler interface {

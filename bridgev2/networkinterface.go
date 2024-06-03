@@ -45,7 +45,10 @@ type ConvertedMessage struct {
 type NetworkConnector interface {
 	Init(*Bridge)
 	Start(context.Context) error
-	PrepareLogin(ctx context.Context, login *UserLogin) error
+	LoadUserLogin(ctx context.Context, login *UserLogin) error
+
+	GetLoginFlows() []LoginFlow
+	CreateLogin(ctx context.Context, user *User, flowID string) (LoginProcess, error)
 }
 
 type NetworkAPI interface {

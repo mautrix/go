@@ -43,13 +43,14 @@ type Crypto interface {
 
 type Connector struct {
 	//DB         *dbutil.Database
-	AS         *appservice.AppService
-	Bot        *appservice.IntentAPI
-	StateStore *sqlstatestore.SQLStateStore
-	Crypto     Crypto
-	Log        *zerolog.Logger
-	Config     *bridgeconfig.Config
-	Bridge     *bridgev2.Bridge
+	AS           *appservice.AppService
+	Bot          *appservice.IntentAPI
+	StateStore   *sqlstatestore.SQLStateStore
+	Crypto       Crypto
+	Log          *zerolog.Logger
+	Config       *bridgeconfig.Config
+	Bridge       *bridgev2.Bridge
+	Provisioning *ProvisioningAPI
 
 	SpecVersions *mautrix.RespVersions
 
@@ -95,9 +96,11 @@ func (br *Connector) Init(bridge *bridgev2.Bridge) {
 	br.Bot = br.AS.BotIntent()
 	br.Crypto = NewCryptoHelper(br)
 	br.Bridge.Commands.AddHandlers(CommandDiscardMegolmSession, CommandSetPowerLevel)
+	br.Provisioning = &ProvisioningAPI{br: br}
 }
 
 func (br *Connector) Start(ctx context.Context) error {
+	br.Provisioning.Init()
 	br.EventProcessor.Start(ctx)
 	err := br.StateStore.Upgrade(ctx)
 	if err != nil {

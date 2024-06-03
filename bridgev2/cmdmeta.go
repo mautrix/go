@@ -37,6 +37,9 @@ var CommandCancel = &FullHandler{
 			if action == "" {
 				action = "Unknown action"
 			}
+			if state.Cancel != nil {
+				state.Cancel()
+			}
 			ce.Reply("%s cancelled.", action)
 		} else {
 			ce.Reply("No ongoing command.")

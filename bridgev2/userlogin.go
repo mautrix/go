@@ -39,7 +39,7 @@ func (br *Bridge) loadUserLogin(ctx context.Context, user *User, dbUserLogin *da
 		User:      user,
 		Log:       user.Log.With().Str("login_id", string(dbUserLogin.ID)).Logger(),
 	}
-	err := br.Network.PrepareLogin(ctx, userLogin)
+	err := br.Network.LoadUserLogin(ctx, userLogin)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare: %w", err)
 	}
