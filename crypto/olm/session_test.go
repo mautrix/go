@@ -128,8 +128,7 @@ func TestMegolmSessionPickleGoolm(t *testing.T) {
 	assert.Equal(t, goolmSession.SigningKey.PrivateKey.PubKey(), goolmSession.SigningKey.PublicKey)
 
 	// Ensure that the key export is the same and that the pickle is the same
-	// TODO this is the next thing to work on
-	// assert.Equal(t, libolmSession.Key(), goolmSession.Key(), "keys are not the same")
+	assert.Equal(t, libolmSession.Key(), goolmSession.Key(), "keys are not the same")
 }
 
 func FuzzMegolmSession_Encrypt(f *testing.F) {
