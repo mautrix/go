@@ -6,8 +6,9 @@
 // Package ed25519 implements the Ed25519 signature algorithm. See
 // https://ed25519.cr.yp.to/.
 //
-// This package stores the private key in a different format than the
-// [crypto/ed25519] package in the standard library.
+// This package stores the private key in the NaCl format, which is a different
+// format than that used by the [crypto/ed25519] package in the standard
+// library.
 //
 // This picture will help with the rest of the explanation:
 // https://blog.mozilla.org/warner/files/2011/11/key-formats.png
@@ -15,8 +16,9 @@
 // The private key in the [crypto/ed25519] package is a 64-byte value where the
 // first 32-bytes are the seed and the last 32-bytes are the public key.
 //
-// The private key in this package is stored as a 64-byte value that results
-// from the SHA512 of the seed.
+// The private key in this package is stored in the NaCl format. That is, the
+// left 32-bytes are the private scalar A and the right 32-bytes are the right
+// half of the SHA512 result.
 //
 // The contents of this package are mostly copied from the standard library,
 // and as such the source code is licensed under the BSD license of the
@@ -187,6 +189,12 @@ func newKeyFromSeed(privateKey, seed []byte) {
 	}
 
 	h := sha512.Sum512(seed)
+
+	// Apply clamping to get A in the left half, and leave the right half
+	// as-is. This gets the private key into the NaCl format.
+	h[0] &= 248
+	h[31] &= 63
+	h[31] |= 64
 	copy(privateKey, h[:])
 }
 
