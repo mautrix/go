@@ -40,8 +40,13 @@
 							},
 							"name": {
 								"type": "string",
-								"description": "The name of the field",
+								"description": "The name of the field shown to the user",
 								"examples": ["Username", "Password",  "Phone number",  "2FA code", "Meow"]
+							},
+							"description": {
+								"type": "string",
+								"description": "The description of the field shown to the user",
+								"examples": ["Include the country code with a +"]
 							},
 							"pattern": {
 								"type": "string",

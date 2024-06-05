@@ -111,6 +111,8 @@ type LoginInputDataField struct {
 	ID string `json:"id"`
 	// The name of the field shown to the user.
 	Name string `json:"name"`
+	// The description of the field shown to the user.
+	Description string `json:"description"`
 	// A regex pattern that the client can use to validate input client-side.
 	Pattern string `json:"pattern,omitempty"`
 	// A function that validates the input and optionally cleans it up before it's submitted to the connector.
