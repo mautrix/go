@@ -94,6 +94,7 @@ func (uilcs *userInputLoginCommandState) promptNext(ce *CommandEvent) {
 
 func (uilcs *userInputLoginCommandState) submitNext(ce *CommandEvent) {
 	field := uilcs.RemainingFields[0]
+	field.FillDefaultValidate()
 	var err error
 	uilcs.Data[field.ID], err = field.Validate(ce.RawArgs)
 	if err != nil {

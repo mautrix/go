@@ -8,6 +8,9 @@ package bridgev2
 
 import (
 	"context"
+	"fmt"
+	"regexp"
+	"strings"
 
 	"maunium.net/go/mautrix/bridgev2/networkid"
 )
@@ -117,6 +120,34 @@ type LoginInputDataField struct {
 	Pattern string `json:"pattern,omitempty"`
 	// A function that validates the input and optionally cleans it up before it's submitted to the connector.
 	Validate func(string) (string, error) `json:"-"`
+}
+
+var phoneNumberRe = regexp.MustCompile(`\+\d+`)
+
+func (f *LoginInputDataField) FillDefaultValidate() {
+	noopValidate := func(input string) (string, error) { return input, nil }
+	if f.Validate != nil {
+		return
+	}
+	switch f.Type {
+	case LoginInputFieldTypePhoneNumber:
+		f.Validate = func(phone string) (string, error) {
+			phone = strings.ReplaceAll(phone, " ", "")
+			if !phoneNumberRe.MatchString(phone) {
+				return "", fmt.Errorf("invalid phone number")
+			}
+			return phone, nil
+		}
+	case LoginInputFieldTypeEmail:
+		f.Validate = func(email string) (string, error) {
+			if !strings.ContainsRune(email, '@') {
+				return "", fmt.Errorf("invalid email")
+			}
+			return email, nil
+		}
+	default:
+		f.Validate = noopValidate
+	}
 }
 
 type LoginUserInputParams struct {
