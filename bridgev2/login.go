@@ -105,14 +105,20 @@ const (
 )
 
 type LoginInputDataField struct {
-	Type     LoginInputFieldType          `json:"type"`
-	ID       string                       `json:"id"`
-	Name     string                       `json:"name"`
-	Pattern  string                       `json:"pattern,omitempty"`
+	// The type of input field as a hint for the client.
+	Type LoginInputFieldType `json:"type"`
+	// The ID of the field to be used as the key in the map that is submitted to the connector.
+	ID string `json:"id"`
+	// The name of the field shown to the user.
+	Name string `json:"name"`
+	// A regex pattern that the client can use to validate input client-side.
+	Pattern string `json:"pattern,omitempty"`
+	// A function that validates the input and optionally cleans it up before it's submitted to the connector.
 	Validate func(string) (string, error) `json:"-"`
 }
 
 type LoginUserInputParams struct {
+	// The fields that the user needs to fill in.
 	Fields []LoginInputDataField `json:"fields"`
 }
 

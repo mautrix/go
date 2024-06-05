@@ -18,6 +18,7 @@ import (
 	"github.com/skip2/go-qrcode"
 	"golang.org/x/net/html"
 
+	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
@@ -28,6 +29,7 @@ var CommandLogin = &FullHandler{
 	Help: HelpMeta{
 		Section:     HelpSectionAuth,
 		Description: "Log into the bridge",
+		Args:        "[_flow ID_]",
 	},
 }
 
@@ -284,5 +286,69 @@ func doLoginStep(ce *CommandEvent, login LoginProcess, step *LoginStep) {
 		// Nothing to do other than instructions
 	default:
 		panic(fmt.Errorf("unknown login step type %q", step.Type))
+	}
+}
+
+var CommandLogout = &FullHandler{
+	Func: fnLogout,
+	Name: "logout",
+	Help: HelpMeta{
+		Section:     HelpSectionAuth,
+		Description: "Log out of the bridge",
+		Args:        "<_login ID_>",
+	},
+}
+
+func getUserLogins(user *User) string {
+	user.Bridge.cacheLock.Lock()
+	logins := make([]string, len(user.logins))
+	for key := range user.logins {
+		logins = append(logins, fmt.Sprintf("* `%s`", key))
+	}
+	user.Bridge.cacheLock.Unlock()
+	return strings.Join(logins, "\n")
+}
+
+func fnLogout(ce *CommandEvent) {
+	if len(ce.Args) == 0 {
+		ce.Reply("Usage: `$cmdprefix logout <login ID>`\n\nYour logins:\n\n%s", getUserLogins(ce.User))
+		return
+	}
+	login := ce.Bridge.GetCachedUserLoginByID(networkid.UserLoginID(ce.Args[0]))
+	if login == nil || login.UserMXID != ce.User.MXID {
+		ce.Reply("Login `%s` not found", ce.Args[0])
+		return
+	}
+	login.Logout(ce.Ctx)
+	ce.Reply("Logged out")
+}
+
+var CommandSetPreferredLogin = &FullHandler{
+	Func:    fnSetPreferredLogin,
+	Name:    "set-preferred-login",
+	Aliases: []string{"prefer"},
+	Help: HelpMeta{
+		Section:     HelpSectionAuth,
+		Description: "Set the preferred login ID for sending messages to this portal (only relevant when logged into multiple accounts via the bridge)",
+		Args:        "<_login ID_>",
+	},
+	RequiresPortal: true,
+}
+
+func fnSetPreferredLogin(ce *CommandEvent) {
+	if len(ce.Args) == 0 {
+		ce.Reply("Usage: `$cmdprefix set-preferred-login <login ID>`\n\nYour logins:\n\n%s", getUserLogins(ce.User))
+		return
+	}
+	login := ce.Bridge.GetCachedUserLoginByID(networkid.UserLoginID(ce.Args[0]))
+	if login == nil || login.UserMXID != ce.User.MXID {
+		ce.Reply("Login `%s` not found", ce.Args[0])
+		return
+	}
+	err := login.MarkAsPreferredIn(ce.Ctx, ce.Portal)
+	if err != nil {
+		ce.Reply("Failed to set preferred login: %v", err)
+	} else {
+		ce.Reply("Preferred login set")
 	}
 }

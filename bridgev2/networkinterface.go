@@ -54,6 +54,7 @@ type NetworkConnector interface {
 type NetworkAPI interface {
 	Connect(ctx context.Context) error
 	IsLoggedIn() bool
+	LogoutRemote(ctx context.Context)
 
 	IsThisUser(ctx context.Context, userID networkid.UserID) bool
 	GetChatInfo(ctx context.Context, portal *Portal) (*PortalInfo, error)

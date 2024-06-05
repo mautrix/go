@@ -52,6 +52,9 @@ const (
 		UPDATE user_login SET space_room=$4, metadata=$5
 		WHERE bridge_id=$1 AND user_mxid=$2 AND id=$3
 	`
+	deleteUserLoginQuery = `
+		DELETE FROM user_login WHERE bridge_id=$1 AND id=$2
+	`
 	insertUserPortalQuery = `
 		INSERT INTO user_portal (bridge_id, user_mxid, login_id, portal_id, in_space, preferred)
 		VALUES ($1, $2, $3, $4, false, false)
@@ -87,6 +90,10 @@ func (uq *UserLoginQuery) Insert(ctx context.Context, login *UserLogin) error {
 func (uq *UserLoginQuery) Update(ctx context.Context, login *UserLogin) error {
 	ensureBridgeIDMatches(&login.BridgeID, uq.BridgeID)
 	return uq.Exec(ctx, updateUserLoginQuery, login.sqlVariables()...)
+}
+
+func (uq *UserLoginQuery) Delete(ctx context.Context, loginID networkid.UserLoginID) error {
+	return uq.Exec(ctx, deleteUserLoginQuery, uq.BridgeID, loginID)
 }
 
 func (uq *UserLoginQuery) EnsureUserPortalExists(ctx context.Context, login *UserLogin, portalID networkid.PortalID) error {

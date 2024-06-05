@@ -58,9 +58,6 @@ type Connector struct {
 
 	userIDRegex *regexp.Regexp
 
-	// TODO move to config
-	AsyncUploads bool
-
 	Websocket                      bool
 	wsStopPinger                   chan struct{}
 	wsStarted                      chan struct{}

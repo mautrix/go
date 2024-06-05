@@ -103,7 +103,7 @@ func (as *ASIntent) UploadMedia(ctx context.Context, roomID id.RoomID, data []by
 		ContentType:  mimeType,
 		FileName:     fileName,
 	}
-	if as.Connector.AsyncUploads {
+	if as.Connector.Config.Homeserver.AsyncMedia {
 		var resp *mautrix.RespCreateMXC
 		resp, err = as.Matrix.UploadAsync(ctx, req)
 		if resp != nil {

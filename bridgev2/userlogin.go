@@ -119,3 +119,24 @@ func (user *User) NewLogin(ctx context.Context, data *database.UserLogin, client
 	user.logins[ul.ID] = ul
 	return ul, nil
 }
+
+func (ul *UserLogin) Save(ctx context.Context) error {
+	return ul.Bridge.DB.UserLogin.Update(ctx, ul.UserLogin)
+}
+
+func (ul *UserLogin) Logout(ctx context.Context) {
+	ul.Client.LogoutRemote(ctx)
+	err := ul.Bridge.DB.UserLogin.Delete(ctx, ul.ID)
+	if err != nil {
+		ul.Log.Err(err).Msg("Failed to delete user login")
+	}
+	ul.Bridge.cacheLock.Lock()
+	defer ul.Bridge.cacheLock.Unlock()
+	delete(ul.User.logins, ul.ID)
+	delete(ul.Bridge.userLoginsByID, ul.ID)
+	// TODO kick user out of rooms?
+}
+
+func (ul *UserLogin) MarkAsPreferredIn(ctx context.Context, portal *Portal) error {
+	return ul.Bridge.DB.UserLogin.MarkLoginAsPreferredInPortal(ctx, ul.UserLogin, portal.ID)
+}

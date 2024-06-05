@@ -33,7 +33,10 @@ func NewProcessor(bridge *Bridge) *CommandProcessor {
 		handlers: make(map[string]CommandHandler),
 		aliases:  make(map[string]string),
 	}
-	proc.AddHandlers(CommandHelp, CommandVersion, CommandCancel)
+	proc.AddHandlers(
+		CommandHelp, CommandVersion, CommandCancel,
+		CommandLogin, CommandLogout, CommandSetPreferredLogin,
+	)
 	return proc
 }
 
