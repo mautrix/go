@@ -32,8 +32,9 @@ type EventSender struct {
 }
 
 type ConvertedMessage struct {
-	ID networkid.MessageID
-	EventSender
+	// TODO are these ever ambiguous at the time of forming the RemoteMessage?
+	//ID networkid.MessageID
+	//EventSender
 	Timestamp  time.Time
 	ReplyTo    *networkid.MessageOptionalPartID
 	ThreadRoot *networkid.MessageOptionalPartID
@@ -82,36 +83,35 @@ type RemoteEvent interface {
 	GetPortalID() networkid.PortalID
 	ShouldCreatePortal() bool
 	AddLogContext(c zerolog.Context) zerolog.Context
+	GetSender() EventSender
 }
 
 type RemoteMessage interface {
 	RemoteEvent
-	ConvertMessage(ctx context.Context, portal *Portal) (*ConvertedMessage, error)
+	GetID() networkid.MessageID
+	ConvertMessage(ctx context.Context, portal *Portal, intent MatrixAPI) (*ConvertedMessage, error)
 }
 
 type RemoteEdit interface {
 	RemoteEvent
 	GetTargetMessage() networkid.MessageID
-	ConvertEdit(ctx context.Context, portal *Portal, existing []*database.Message) (*ConvertedMessage, error)
+	ConvertEdit(ctx context.Context, portal *Portal, intent MatrixAPI, existing []*database.Message) (*ConvertedMessage, error)
 }
 
 type RemoteReaction interface {
 	RemoteEvent
-	GetSender() EventSender
 	GetTargetMessage() networkid.MessageID
 	GetReactionEmoji() (string, networkid.EmojiID)
 }
 
 type RemoteReactionRemove interface {
 	RemoteEvent
-	GetSender() EventSender
 	GetTargetMessage() networkid.MessageID
 	GetRemovedEmojiID() networkid.EmojiID
 }
 
 type RemoteMessageRemove interface {
 	RemoteEvent
-	GetSender() EventSender
 	GetTargetMessage() networkid.MessageID
 }
 
@@ -123,13 +123,14 @@ type SimpleRemoteEvent[T any] struct {
 	Data         T
 	CreatePortal bool
 
+	ID            networkid.MessageID
 	Sender        EventSender
 	TargetMessage networkid.MessageID
 	EmojiID       networkid.EmojiID
 	Emoji         string
 
-	ConvertMessageFunc func(ctx context.Context, portal *Portal, data T) (*ConvertedMessage, error)
-	ConvertEditFunc    func(ctx context.Context, portal *Portal, existing []*database.Message, data T) (*ConvertedMessage, error)
+	ConvertMessageFunc func(ctx context.Context, portal *Portal, intent MatrixAPI, data T) (*ConvertedMessage, error)
+	ConvertEditFunc    func(ctx context.Context, portal *Portal, intent MatrixAPI, existing []*database.Message, data T) (*ConvertedMessage, error)
 }
 
 var (
@@ -148,12 +149,16 @@ func (sre *SimpleRemoteEvent[T]) GetPortalID() networkid.PortalID {
 	return sre.PortalID
 }
 
-func (sre *SimpleRemoteEvent[T]) ConvertMessage(ctx context.Context, portal *Portal) (*ConvertedMessage, error) {
-	return sre.ConvertMessageFunc(ctx, portal, sre.Data)
+func (sre *SimpleRemoteEvent[T]) ConvertMessage(ctx context.Context, portal *Portal, intent MatrixAPI) (*ConvertedMessage, error) {
+	return sre.ConvertMessageFunc(ctx, portal, intent, sre.Data)
 }
 
-func (sre *SimpleRemoteEvent[T]) ConvertEdit(ctx context.Context, portal *Portal, existing []*database.Message) (*ConvertedMessage, error) {
-	return sre.ConvertEditFunc(ctx, portal, existing, sre.Data)
+func (sre *SimpleRemoteEvent[T]) ConvertEdit(ctx context.Context, portal *Portal, intent MatrixAPI, existing []*database.Message) (*ConvertedMessage, error) {
+	return sre.ConvertEditFunc(ctx, portal, intent, existing, sre.Data)
+}
+
+func (sre *SimpleRemoteEvent[T]) GetID() networkid.MessageID {
+	return sre.ID
 }
 
 func (sre *SimpleRemoteEvent[T]) GetSender() EventSender {

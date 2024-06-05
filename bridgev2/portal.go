@@ -490,7 +490,18 @@ func (portal *Portal) getIntentFor(ctx context.Context, sender EventSender, sour
 
 func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin, evt RemoteMessage) {
 	log := zerolog.Ctx(ctx)
-	converted, err := evt.ConvertMessage(ctx, portal)
+	existing, err := portal.Bridge.DB.Message.GetFirstPartByID(ctx, evt.GetID())
+	if err != nil {
+		log.Err(err).Msg("Failed to check if message is a duplicate")
+	} else if existing != nil {
+		log.Debug().Stringer("existing_mxid", existing.MXID).Msg("Ignoring duplicate message")
+		return
+	}
+	intent := portal.getIntentFor(ctx, evt.GetSender(), source)
+	if intent == nil {
+		return
+	}
+	converted, err := evt.ConvertMessage(ctx, portal, intent)
 	if err != nil {
 		// TODO log and notify room?
 		return
@@ -517,10 +528,6 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 
 		// TODO 2 fetch last event in thread properly
 		prevThreadEvent = threadRoot
-	}
-	intent := portal.getIntentFor(ctx, converted.EventSender, source)
-	if intent == nil {
-		return
 	}
 	for _, part := range converted.Parts {
 		if threadRoot != nil && prevThreadEvent != nil {
@@ -550,11 +557,11 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 		// TODO make metadata fields less hacky
 		part.DBMetadata["sender_mxid"] = intent.GetMXID()
 		dbMessage := &database.Message{
-			ID:             converted.ID,
+			ID:             evt.GetID(),
 			PartID:         part.ID,
 			MXID:           resp.EventID,
 			RoomID:         portal.ID,
-			SenderID:       converted.Sender,
+			SenderID:       evt.GetSender().Sender,
 			Timestamp:      converted.Timestamp,
 			RelatesToRowID: relatesToRowID,
 			Metadata:       part.DBMetadata,
