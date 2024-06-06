@@ -373,6 +373,15 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 		// TODO send metrics here or inside HandleMatrixMessage?
 		return
 	}
+	if message.MXID == "" {
+		message.MXID = evt.ID
+	}
+	if message.RoomID == "" {
+		message.RoomID = portal.ID
+	}
+	if message.Timestamp.IsZero() {
+		message.Timestamp = time.UnixMilli(evt.Timestamp)
+	}
 	if message.Metadata == nil {
 		message.Metadata = make(map[string]any)
 	}
@@ -454,30 +463,66 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 	log.UpdateContext(func(c zerolog.Context) zerolog.Context {
 		return c.Str("reaction_target_remote_id", string(reactionTarget.ID))
 	})
-	dbReaction, err := sender.Client.HandleMatrixReaction(ctx, &MatrixReaction{
+	react := &MatrixReaction{
 		MatrixEventBase: MatrixEventBase[*event.ReactionEventContent]{
 			Event:   evt,
 			Content: content,
 			Portal:  portal,
 		},
 		TargetMessage: reactionTarget,
-		GetExisting: func(ctx context.Context, senderID networkid.UserID, emojiID networkid.EmojiID) (*database.Reaction, error) {
-			return portal.Bridge.DB.Reaction.GetByID(ctx, reactionTarget.ID, reactionTarget.PartID, senderID, emojiID)
-		},
-	})
+	}
+	preResp, err := sender.Client.PreHandleMatrixReaction(ctx, react)
+	if err != nil {
+		log.Err(err).Msg("Failed to pre-handle Matrix reaction")
+		// TODO send metrics
+		return
+	}
+	existing, err := portal.Bridge.DB.Reaction.GetByID(ctx, reactionTarget.ID, reactionTarget.PartID, preResp.SenderID, preResp.EmojiID)
+	if err != nil {
+		log.Err(err).Msg("Failed to check if reaction is a duplicate")
+		return
+	} else if existing != nil {
+		if existing.EmojiID != "" || existing.Metadata["emoji"] == preResp.Emoji {
+			log.Debug().Msg("Ignoring duplicate reaction")
+			// TODO send metrics
+			return
+		}
+		_, err = portal.Bridge.Bot.SendMessage(ctx, portal.MXID, event.EventRedaction, &event.Content{
+			Parsed: &event.RedactionEventContent{
+				Redacts: existing.MXID,
+			},
+		}, time.Now())
+		if err != nil {
+			log.Err(err).Msg("Failed to remove old reaction")
+		}
+	}
+	if preResp.MaxReactions > 0 {
+		// TODO get all reactions to message by sender in order to remove oldest ones
+		//      (this is necessary for telegram where reaction limit is 1 or 3 based on premium status)
+	}
+	dbReaction, err := sender.Client.HandleMatrixReaction(ctx, react)
 	if err != nil {
 		log.Err(err).Msg("Failed to handle Matrix reaction")
 		// TODO send metrics here or inside HandleMatrixReaction?
 		return
 	}
-	// TODO figure out how to delete outdated reactions if appropriate
-	if dbReaction != nil {
-		err = portal.Bridge.DB.Reaction.Upsert(ctx, dbReaction)
-		if err != nil {
-			log.Err(err).Msg("Failed to save reaction to database")
-		}
-	} else {
-		log.Debug().Msg("Reaction was ignored")
+	// Fill all fields that are known to allow omitting them in connector code
+	if dbReaction.RoomID == "" {
+		dbReaction.RoomID = portal.ID
+	}
+	if dbReaction.MessageID == "" {
+		dbReaction.MessageID = reactionTarget.ID
+		dbReaction.MessagePartID = reactionTarget.PartID
+	}
+	if dbReaction.MXID == "" {
+		dbReaction.MXID = evt.ID
+	}
+	if dbReaction.Timestamp.IsZero() {
+		dbReaction.Timestamp = time.UnixMilli(evt.Timestamp)
+	}
+	err = portal.Bridge.DB.Reaction.Upsert(ctx, dbReaction)
+	if err != nil {
+		log.Err(err).Msg("Failed to save reaction to database")
 	}
 	// TODO send success metrics
 }
@@ -766,9 +811,17 @@ func (portal *Portal) handleRemoteReaction(ctx context.Context, source *UserLogi
 		log.Err(err).Msg("Failed to get target message for reaction")
 		return
 	}
+	emoji, emojiID := evt.GetReactionEmoji()
+	existingReaction, err := portal.Bridge.DB.Reaction.GetByID(ctx, targetMessage.ID, targetMessage.PartID, evt.GetSender().Sender, emojiID)
+	if err != nil {
+		log.Err(err).Msg("Failed to check if reaction is a duplicate")
+		return
+	} else if existingReaction != nil && (emojiID != "" || existingReaction.Metadata["emoji"] == emoji) {
+		log.Debug().Msg("Ignoring duplicate reaction")
+		return
+	}
 	ts := getEventTS(evt)
 	intent := portal.getIntentFor(ctx, evt.GetSender(), source)
-	emoji, emojiID := evt.GetReactionEmoji()
 	resp, err := intent.SendMessage(ctx, portal.MXID, event.EventReaction, &event.Content{
 		Parsed: &event.ReactionEventContent{
 			RelatesTo: event.RelatesTo{
@@ -793,10 +846,24 @@ func (portal *Portal) handleRemoteReaction(ctx context.Context, source *UserLogi
 	}
 	if metaProvider, ok := evt.(RemoteReactionWithMeta); ok {
 		dbReaction.Metadata = metaProvider.GetReactionDBMetadata()
+	} else if emojiID == "" {
+		dbReaction.Metadata = map[string]any{
+			"emoji": emoji,
+		}
 	}
 	err = portal.Bridge.DB.Reaction.Upsert(ctx, dbReaction)
 	if err != nil {
 		log.Err(err).Msg("Failed to save reaction to database")
+	}
+	if existingReaction != nil {
+		_, err = intent.SendMessage(ctx, portal.MXID, event.EventRedaction, &event.Content{
+			Parsed: &event.RedactionEventContent{
+				Redacts: existingReaction.MXID,
+			},
+		}, ts)
+		if err != nil {
+			log.Err(err).Msg("Failed to redact old reaction")
+		}
 	}
 }
 

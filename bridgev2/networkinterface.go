@@ -74,6 +74,7 @@ type NetworkAPI interface {
 
 	HandleMatrixMessage(ctx context.Context, msg *MatrixMessage) (message *database.Message, err error)
 	HandleMatrixEdit(ctx context.Context, msg *MatrixEdit) error
+	PreHandleMatrixReaction(ctx context.Context, msg *MatrixReaction) (MatrixReactionPreResponse, error)
 	HandleMatrixReaction(ctx context.Context, msg *MatrixReaction) (reaction *database.Reaction, err error)
 	HandleMatrixReactionRemove(ctx context.Context, msg *MatrixReactionRemove) error
 	HandleMatrixMessageRemove(ctx context.Context, msg *MatrixMessageRemove) error
@@ -259,7 +260,13 @@ type MatrixEdit struct {
 type MatrixReaction struct {
 	MatrixEventBase[*event.ReactionEventContent]
 	TargetMessage *database.Message
-	GetExisting   func(ctx context.Context, senderID networkid.UserID, emojiID networkid.EmojiID) (*database.Reaction, error)
+}
+
+type MatrixReactionPreResponse struct {
+	SenderID     networkid.UserID
+	EmojiID      networkid.EmojiID
+	Emoji        string
+	MaxReactions int
 }
 
 type MatrixReactionRemove struct {
