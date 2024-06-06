@@ -73,8 +73,6 @@ func (proc *CommandProcessor) Handle(ctx context.Context, roomID id.RoomID, even
 	}
 	command := strings.ToLower(args[0])
 	rawArgs := strings.TrimLeft(strings.TrimPrefix(message, command), " ")
-	log := zerolog.Ctx(ctx).With().Str("mx_command", command).Logger()
-	ctx = log.WithContext(ctx)
 	portal, err := proc.bridge.GetPortalByMXID(ctx, roomID)
 	if err != nil {
 		// :(
@@ -92,9 +90,7 @@ func (proc *CommandProcessor) Handle(ctx context.Context, roomID id.RoomID, even
 		RawArgs:   rawArgs,
 		ReplyTo:   replyTo,
 		Ctx:       ctx,
-		Log:       &log,
 	}
-	log.Debug().Msg("Received command")
 
 	realCommand, ok := proc.aliases[ce.Command]
 	if !ok {
@@ -110,11 +106,21 @@ func (proc *CommandProcessor) Handle(ctx context.Context, roomID id.RoomID, even
 			ce.RawArgs = message
 			ce.Args = args
 			ce.Handler = state.Next
+			log := zerolog.Ctx(ctx).With().Str("action", state.Action).Logger()
+			ce.Log = &log
+			ce.Ctx = log.WithContext(ctx)
+			log.Debug().Msg("Received reply to command state")
 			state.Next.Run(ce)
 		} else {
+			zerolog.Ctx(ctx).Debug().Str("mx_command", command).Msg("Received unknown command")
 			ce.Reply("Unknown command, use the `help` command for help.")
 		}
 	} else {
+		log := zerolog.Ctx(ctx).With().Str("mx_command", command).Logger()
+		ctx = log.WithContext(ctx)
+		ce.Log = &log
+		ce.Ctx = ctx
+		log.Debug().Msg("Received command")
 		ce.Handler = handler
 		handler.Run(ce)
 	}
