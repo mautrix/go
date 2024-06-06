@@ -32,10 +32,6 @@ type EventSender struct {
 }
 
 type ConvertedMessage struct {
-	// TODO are these ever ambiguous at the time of forming the RemoteMessage?
-	//ID networkid.MessageID
-	//EventSender
-	Timestamp  time.Time
 	ReplyTo    *networkid.MessageOptionalPartID
 	ThreadRoot *networkid.MessageOptionalPartID
 	Parts      []*ConvertedMessagePart
@@ -54,7 +50,6 @@ type ConvertedEditPart struct {
 }
 
 type ConvertedEdit struct {
-	Timestamp     time.Time
 	ModifiedParts []*ConvertedEditPart
 	DeletedParts  []*database.Message
 }
@@ -87,7 +82,8 @@ type NetworkAPI interface {
 type RemoteEventType int
 
 const (
-	RemoteEventMessage RemoteEventType = iota
+	RemoteEventUnknown RemoteEventType = iota
+	RemoteEventMessage
 	RemoteEventEdit
 	RemoteEventReaction
 	RemoteEventReactionRemove
@@ -102,6 +98,21 @@ type RemoteEvent interface {
 	GetSender() EventSender
 }
 
+type RemoteEventWithTargetMessage interface {
+	RemoteEvent
+	GetTargetMessage() networkid.MessageID
+}
+
+type RemoteEventWithTargetPart interface {
+	RemoteEventWithTargetMessage
+	GetTargetMessagePart() networkid.PartID
+}
+
+type RemoteEventWithTimestamp interface {
+	RemoteEvent
+	GetTimestamp() time.Time
+}
+
 type RemoteMessage interface {
 	RemoteEvent
 	GetID() networkid.MessageID
@@ -109,26 +120,27 @@ type RemoteMessage interface {
 }
 
 type RemoteEdit interface {
-	RemoteEvent
-	GetTargetMessage() networkid.MessageID
+	RemoteEventWithTargetMessage
 	ConvertEdit(ctx context.Context, portal *Portal, intent MatrixAPI, existing []*database.Message) (*ConvertedEdit, error)
 }
 
 type RemoteReaction interface {
-	RemoteEvent
-	GetTargetMessage() networkid.MessageID
+	RemoteEventWithTargetMessage
 	GetReactionEmoji() (string, networkid.EmojiID)
 }
 
+type RemoteReactionWithMeta interface {
+	RemoteReaction
+	GetReactionDBMetadata() map[string]any
+}
+
 type RemoteReactionRemove interface {
-	RemoteEvent
-	GetTargetMessage() networkid.MessageID
+	RemoteEventWithTargetMessage
 	GetRemovedEmojiID() networkid.EmojiID
 }
 
 type RemoteMessageRemove interface {
-	RemoteEvent
-	GetTargetMessage() networkid.MessageID
+	RemoteEventWithTargetMessage
 }
 
 // SimpleRemoteEvent is a simple implementation of RemoteEvent that can be used with struct fields and some callbacks.
@@ -139,22 +151,26 @@ type SimpleRemoteEvent[T any] struct {
 	Data         T
 	CreatePortal bool
 
-	ID            networkid.MessageID
-	Sender        EventSender
-	TargetMessage networkid.MessageID
-	EmojiID       networkid.EmojiID
-	Emoji         string
+	ID             networkid.MessageID
+	Sender         EventSender
+	TargetMessage  networkid.MessageID
+	EmojiID        networkid.EmojiID
+	Emoji          string
+	ReactionDBMeta map[string]any
+	Timestamp      time.Time
 
 	ConvertMessageFunc func(ctx context.Context, portal *Portal, intent MatrixAPI, data T) (*ConvertedMessage, error)
 	ConvertEditFunc    func(ctx context.Context, portal *Portal, intent MatrixAPI, existing []*database.Message, data T) (*ConvertedEdit, error)
 }
 
 var (
-	_ RemoteMessage        = (*SimpleRemoteEvent[any])(nil)
-	_ RemoteEdit           = (*SimpleRemoteEvent[any])(nil)
-	_ RemoteReaction       = (*SimpleRemoteEvent[any])(nil)
-	_ RemoteReactionRemove = (*SimpleRemoteEvent[any])(nil)
-	_ RemoteMessageRemove  = (*SimpleRemoteEvent[any])(nil)
+	_ RemoteMessage            = (*SimpleRemoteEvent[any])(nil)
+	_ RemoteEdit               = (*SimpleRemoteEvent[any])(nil)
+	_ RemoteEventWithTimestamp = (*SimpleRemoteEvent[any])(nil)
+	_ RemoteReaction           = (*SimpleRemoteEvent[any])(nil)
+	_ RemoteReactionWithMeta   = (*SimpleRemoteEvent[any])(nil)
+	_ RemoteReactionRemove     = (*SimpleRemoteEvent[any])(nil)
+	_ RemoteMessageRemove      = (*SimpleRemoteEvent[any])(nil)
 )
 
 func (sre *SimpleRemoteEvent[T]) AddLogContext(c zerolog.Context) zerolog.Context {
@@ -163,6 +179,13 @@ func (sre *SimpleRemoteEvent[T]) AddLogContext(c zerolog.Context) zerolog.Contex
 
 func (sre *SimpleRemoteEvent[T]) GetPortalID() networkid.PortalID {
 	return sre.PortalID
+}
+
+func (sre *SimpleRemoteEvent[T]) GetTimestamp() time.Time {
+	if sre.Timestamp.IsZero() {
+		return time.Now()
+	}
+	return sre.Timestamp
 }
 
 func (sre *SimpleRemoteEvent[T]) ConvertMessage(ctx context.Context, portal *Portal, intent MatrixAPI) (*ConvertedMessage, error) {
@@ -191,6 +214,10 @@ func (sre *SimpleRemoteEvent[T]) GetReactionEmoji() (string, networkid.EmojiID) 
 
 func (sre *SimpleRemoteEvent[T]) GetRemovedEmojiID() networkid.EmojiID {
 	return sre.EmojiID
+}
+
+func (sre *SimpleRemoteEvent[T]) GetReactionDBMetadata() map[string]any {
+	return sre.ReactionDBMeta
 }
 
 func (sre *SimpleRemoteEvent[T]) GetType() RemoteEventType {

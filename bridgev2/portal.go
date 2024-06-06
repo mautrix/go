@@ -16,6 +16,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/exslices"
+	"go.mau.fi/util/variationselector"
 	"golang.org/x/exp/slices"
 
 	"maunium.net/go/mautrix"
@@ -637,6 +638,7 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 		// TODO 2 fetch last event in thread properly
 		prevThreadEvent = threadRoot
 	}
+	ts := getEventTS(evt)
 	for _, part := range converted.Parts {
 		if threadRoot != nil && prevThreadEvent != nil {
 			part.Content.GetRelatesTo().SetThread(threadRoot.MXID, prevThreadEvent.MXID)
@@ -654,7 +656,7 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 		resp, err := intent.SendMessage(ctx, portal.MXID, part.Type, &event.Content{
 			Parsed: part.Content,
 			Raw:    part.Extra,
-		}, converted.Timestamp)
+		}, ts)
 		if err != nil {
 			log.Err(err).Str("part_id", string(part.ID)).Msg("Failed to send message part to Matrix")
 			continue
@@ -670,7 +672,7 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 			MXID:           resp.EventID,
 			RoomID:         portal.ID,
 			SenderID:       evt.GetSender().Sender,
-			Timestamp:      converted.Timestamp,
+			Timestamp:      ts,
 			RelatesToRowID: relatesToRowID,
 			Metadata:       part.DBMetadata,
 		}
@@ -703,6 +705,7 @@ func (portal *Portal) handleRemoteEdit(ctx context.Context, source *UserLogin, e
 		// TODO log and notify room?
 		return
 	}
+	ts := getEventTS(evt)
 	for _, part := range converted.ModifiedParts {
 		part.Content.SetEdit(part.Part.MXID)
 		if part.TopLevelExtra == nil {
@@ -715,7 +718,7 @@ func (portal *Portal) handleRemoteEdit(ctx context.Context, source *UserLogin, e
 			Parsed: part.Content,
 			Raw:    part.TopLevelExtra,
 		}
-		_, err = intent.SendMessage(ctx, portal.MXID, part.Type, wrappedContent, converted.Timestamp)
+		_, err = intent.SendMessage(ctx, portal.MXID, part.Type, wrappedContent, ts)
 		if err != nil {
 			log.Err(err).Stringer("part_mxid", part.Part.MXID).Msg("Failed to edit message part")
 		}
@@ -730,7 +733,7 @@ func (portal *Portal) handleRemoteEdit(ctx context.Context, source *UserLogin, e
 				Redacts: part.MXID,
 			},
 		}
-		_, err = intent.SendMessage(ctx, portal.MXID, event.EventRedaction, redactContent, converted.Timestamp)
+		_, err = intent.SendMessage(ctx, portal.MXID, event.EventRedaction, redactContent, ts)
 		if err != nil {
 			log.Err(err).Stringer("part_mxid", part.MXID).Msg("Failed to redact message part deleted in edit")
 		}
@@ -741,8 +744,60 @@ func (portal *Portal) handleRemoteEdit(ctx context.Context, source *UserLogin, e
 	}
 }
 
-func (portal *Portal) handleRemoteReaction(ctx context.Context, source *UserLogin, evt RemoteReaction) {
+func (portal *Portal) getTargetMessagePart(ctx context.Context, evt RemoteEventWithTargetMessage) (*database.Message, error) {
+	if partTargeter, ok := evt.(RemoteEventWithTargetPart); ok {
+		return portal.Bridge.DB.Message.GetPartByID(ctx, evt.GetTargetMessage(), partTargeter.GetTargetMessagePart())
+	} else {
+		return portal.Bridge.DB.Message.GetFirstPartByID(ctx, evt.GetTargetMessage())
+	}
+}
 
+func getEventTS(evt RemoteEvent) time.Time {
+	if tsProvider, ok := evt.(RemoteEventWithTimestamp); ok {
+		return tsProvider.GetTimestamp()
+	}
+	return time.Now()
+}
+
+func (portal *Portal) handleRemoteReaction(ctx context.Context, source *UserLogin, evt RemoteReaction) {
+	log := zerolog.Ctx(ctx)
+	targetMessage, err := portal.getTargetMessagePart(ctx, evt)
+	if err != nil {
+		log.Err(err).Msg("Failed to get target message for reaction")
+		return
+	}
+	ts := getEventTS(evt)
+	intent := portal.getIntentFor(ctx, evt.GetSender(), source)
+	emoji, emojiID := evt.GetReactionEmoji()
+	resp, err := intent.SendMessage(ctx, portal.MXID, event.EventReaction, &event.Content{
+		Parsed: &event.ReactionEventContent{
+			RelatesTo: event.RelatesTo{
+				Type:    event.RelAnnotation,
+				EventID: targetMessage.MXID,
+				Key:     variationselector.Add(emoji),
+			},
+		},
+	}, ts)
+	if err != nil {
+		log.Err(err).Msg("Failed to send reaction to Matrix")
+		return
+	}
+	dbReaction := &database.Reaction{
+		RoomID:        portal.ID,
+		MessageID:     targetMessage.ID,
+		MessagePartID: targetMessage.PartID,
+		SenderID:      evt.GetSender().Sender,
+		EmojiID:       emojiID,
+		MXID:          resp.EventID,
+		Timestamp:     ts,
+	}
+	if metaProvider, ok := evt.(RemoteReactionWithMeta); ok {
+		dbReaction.Metadata = metaProvider.GetReactionDBMetadata()
+	}
+	err = portal.Bridge.DB.Reaction.Upsert(ctx, dbReaction)
+	if err != nil {
+		log.Err(err).Msg("Failed to save reaction to database")
+	}
 }
 
 func (portal *Portal) handleRemoteReactionRemove(ctx context.Context, source *UserLogin, evt RemoteReactionRemove) {
