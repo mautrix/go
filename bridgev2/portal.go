@@ -496,6 +496,7 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 			log.Err(err).Msg("Failed to remove old reaction")
 		}
 	}
+	react.PreHandleResp = &preResp
 	if preResp.MaxReactions > 0 {
 		// TODO get all reactions to message by sender in order to remove oldest ones
 		//      (this is necessary for telegram where reaction limit is 1 or 3 based on premium status)
@@ -519,6 +520,19 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 	}
 	if dbReaction.Timestamp.IsZero() {
 		dbReaction.Timestamp = time.UnixMilli(evt.Timestamp)
+	}
+	if dbReaction.Metadata == nil {
+		dbReaction.Metadata = make(map[string]any)
+	}
+	if preResp.EmojiID == "" && dbReaction.EmojiID == "" {
+		if _, alreadySet := dbReaction.Metadata["emoji"]; !alreadySet {
+			dbReaction.Metadata["emoji"] = preResp.Emoji
+		}
+	} else if dbReaction.EmojiID == "" {
+		dbReaction.EmojiID = preResp.EmojiID
+	}
+	if dbReaction.SenderID == "" {
+		dbReaction.SenderID = preResp.SenderID
 	}
 	err = portal.Bridge.DB.Reaction.Upsert(ctx, dbReaction)
 	if err != nil {

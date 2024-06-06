@@ -260,6 +260,7 @@ type MatrixEdit struct {
 type MatrixReaction struct {
 	MatrixEventBase[*event.ReactionEventContent]
 	TargetMessage *database.Message
+	PreHandleResp *MatrixReactionPreResponse
 }
 
 type MatrixReactionPreResponse struct {
