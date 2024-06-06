@@ -44,9 +44,13 @@ type ConvertedMessage struct {
 type ConvertedEditPart struct {
 	Part *database.Message
 
-	Type    event.Type
+	Type event.Type
+	// The Content and Extra fields will be put inside `m.new_content` automatically.
+	// SetEdit must NOT be called by the network connector.
 	Content *event.MessageEventContent
 	Extra   map[string]any
+	// TopLevelExtra can be used to specify custom fields at the top level of the content rather than inside `m.new_content`.
+	TopLevelExtra map[string]any
 }
 
 type ConvertedEdit struct {

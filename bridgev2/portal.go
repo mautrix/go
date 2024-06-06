@@ -685,7 +685,60 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 }
 
 func (portal *Portal) handleRemoteEdit(ctx context.Context, source *UserLogin, evt RemoteEdit) {
-
+	log := zerolog.Ctx(ctx)
+	existing, err := portal.Bridge.DB.Message.GetAllPartsByID(ctx, evt.GetTargetMessage())
+	if err != nil {
+		log.Err(err).Msg("Failed to get edit target message")
+		return
+	} else if existing == nil {
+		log.Warn().Msg("Edit target message not found")
+		return
+	}
+	intent := portal.getIntentFor(ctx, evt.GetSender(), source)
+	if intent == nil {
+		return
+	}
+	converted, err := evt.ConvertEdit(ctx, portal, intent, existing)
+	if err != nil {
+		// TODO log and notify room?
+		return
+	}
+	for _, part := range converted.ModifiedParts {
+		part.Content.SetEdit(part.Part.MXID)
+		if part.TopLevelExtra == nil {
+			part.TopLevelExtra = make(map[string]any)
+		}
+		if part.Extra != nil {
+			part.TopLevelExtra["m.new_content"] = part.Extra
+		}
+		wrappedContent := &event.Content{
+			Parsed: part.Content,
+			Raw:    part.TopLevelExtra,
+		}
+		_, err = intent.SendMessage(ctx, portal.MXID, part.Type, wrappedContent, converted.Timestamp)
+		if err != nil {
+			log.Err(err).Stringer("part_mxid", part.Part.MXID).Msg("Failed to edit message part")
+		}
+		err = portal.Bridge.DB.Message.Update(ctx, part.Part)
+		if err != nil {
+			log.Err(err).Int64("part_rowid", part.Part.RowID).Msg("Failed to update message part in database")
+		}
+	}
+	for _, part := range converted.DeletedParts {
+		redactContent := &event.Content{
+			Parsed: &event.RedactionEventContent{
+				Redacts: part.MXID,
+			},
+		}
+		_, err = intent.SendMessage(ctx, portal.MXID, event.EventRedaction, redactContent, converted.Timestamp)
+		if err != nil {
+			log.Err(err).Stringer("part_mxid", part.MXID).Msg("Failed to redact message part deleted in edit")
+		}
+		err = portal.Bridge.DB.Message.Delete(ctx, part.RowID)
+		if err != nil {
+			log.Err(err).Int64("part_rowid", part.RowID).Msg("Failed to delete message part from database")
+		}
+	}
 }
 
 func (portal *Portal) handleRemoteReaction(ctx context.Context, source *UserLogin, evt RemoteReaction) {
