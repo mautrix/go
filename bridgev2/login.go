@@ -89,12 +89,14 @@ type LoginDisplayAndWaitParams struct {
 }
 
 type LoginCookiesParams struct {
-	URL string `json:"url"`
+	URL       string `json:"url"`
+	UserAgent string `json:"user_agent,omitempty"`
 
 	CookieDomain     string   `json:"cookie_domain,omitempty"`
 	CookieKeys       []string `json:"cookie_keys,omitempty"`
 	LocalStorageKeys []string `json:"local_storage_keys,omitempty"`
 	SpecialKeys      []string `json:"special_keys,omitempty"`
+	SpecialExtractJS string   `json:"special_extract_js,omitempty"`
 }
 
 type LoginInputFieldType string

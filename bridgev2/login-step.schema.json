@@ -68,6 +68,10 @@
 					"type": "string",
 					"description": "The URL to open when using a webview to extract cookies"
 				},
+				"user_agent": {
+					"type": "string",
+					"description": "The user agent to use when opening the URL"
+				},
 				"cookie_domain": {
 					"type": "string",
 					"description": "The domain of the cookies to extract"
@@ -92,6 +96,10 @@
 					"items": {
 						"type": "string"
 					}
+				},
+				"special_extract_js": {
+					"type": "string",
+					"description": "JavaScript code that can be evaluated inside the webview to extract the special keys"
 				}
 			},
 			"required": ["url"]
