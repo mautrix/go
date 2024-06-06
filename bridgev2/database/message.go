@@ -48,6 +48,7 @@ const (
 	`
 	getAllMessagePartsByIDQuery  = getMessageBaseQuery + `WHERE bridge_id=$1 AND id=$2`
 	getMessagePartByIDQuery      = getMessageBaseQuery + `WHERE bridge_id=$1 AND id=$2 AND part_id=$3`
+	getMessagePartByRowIDQuery   = getMessageBaseQuery + `WHERE bridge_id=$1 AND rowid=$2`
 	getMessageByMXIDQuery        = getMessageBaseQuery + `WHERE bridge_id=$1 AND mxid=$2`
 	getLastMessagePartByIDQuery  = getMessageBaseQuery + `WHERE bridge_id=$1 AND id=$2 ORDER BY part_id DESC LIMIT 1`
 	getFirstMessagePartByIDQuery = getMessageBaseQuery + `WHERE bridge_id=$1 AND id=$2 ORDER BY part_id ASC LIMIT 1`
@@ -87,6 +88,10 @@ func (mq *MessageQuery) GetLastPartByID(ctx context.Context, id networkid.Messag
 
 func (mq *MessageQuery) GetFirstPartByID(ctx context.Context, id networkid.MessageID) (*Message, error) {
 	return mq.QueryOne(ctx, getFirstMessagePartByIDQuery, mq.BridgeID, id)
+}
+
+func (mq *MessageQuery) GetByRowID(ctx context.Context, rowID int64) (*Message, error) {
+	return mq.QueryOne(ctx, getMessagePartByRowIDQuery, mq.BridgeID, rowID)
 }
 
 func (mq *MessageQuery) GetFirstOrSpecificPartByID(ctx context.Context, id networkid.MessageOptionalPartID) (*Message, error) {
