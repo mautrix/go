@@ -39,8 +39,20 @@ type ConvertedMessage struct {
 	ReplyTo    *networkid.MessageOptionalPartID
 	ThreadRoot *networkid.MessageOptionalPartID
 	Parts      []*ConvertedMessagePart
-	// For edits, set this field to skip editing the event
-	Unchanged bool
+}
+
+type ConvertedEditPart struct {
+	Part *database.Message
+
+	Type    event.Type
+	Content *event.MessageEventContent
+	Extra   map[string]any
+}
+
+type ConvertedEdit struct {
+	Timestamp     time.Time
+	ModifiedParts []*ConvertedEditPart
+	DeletedParts  []*database.Message
 }
 
 type NetworkConnector interface {
@@ -95,7 +107,7 @@ type RemoteMessage interface {
 type RemoteEdit interface {
 	RemoteEvent
 	GetTargetMessage() networkid.MessageID
-	ConvertEdit(ctx context.Context, portal *Portal, intent MatrixAPI, existing []*database.Message) (*ConvertedMessage, error)
+	ConvertEdit(ctx context.Context, portal *Portal, intent MatrixAPI, existing []*database.Message) (*ConvertedEdit, error)
 }
 
 type RemoteReaction interface {
@@ -130,7 +142,7 @@ type SimpleRemoteEvent[T any] struct {
 	Emoji         string
 
 	ConvertMessageFunc func(ctx context.Context, portal *Portal, intent MatrixAPI, data T) (*ConvertedMessage, error)
-	ConvertEditFunc    func(ctx context.Context, portal *Portal, intent MatrixAPI, existing []*database.Message, data T) (*ConvertedMessage, error)
+	ConvertEditFunc    func(ctx context.Context, portal *Portal, intent MatrixAPI, existing []*database.Message, data T) (*ConvertedEdit, error)
 }
 
 var (
@@ -153,7 +165,7 @@ func (sre *SimpleRemoteEvent[T]) ConvertMessage(ctx context.Context, portal *Por
 	return sre.ConvertMessageFunc(ctx, portal, intent, sre.Data)
 }
 
-func (sre *SimpleRemoteEvent[T]) ConvertEdit(ctx context.Context, portal *Portal, intent MatrixAPI, existing []*database.Message) (*ConvertedMessage, error) {
+func (sre *SimpleRemoteEvent[T]) ConvertEdit(ctx context.Context, portal *Portal, intent MatrixAPI, existing []*database.Message) (*ConvertedEdit, error) {
 	return sre.ConvertEditFunc(ctx, portal, intent, existing, sre.Data)
 }
 
