@@ -498,6 +498,32 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 	}
 	react.PreHandleResp = &preResp
 	if preResp.MaxReactions > 0 {
+		allReactions, err := portal.Bridge.DB.Reaction.GetAllToMessageBySender(ctx, reactionTarget.ID, preResp.SenderID)
+		if err != nil {
+			log.Err(err).Msg("Failed to get all reactions to message by sender")
+			// TODO send metrics
+			return
+		}
+		if len(allReactions) < preResp.MaxReactions {
+			react.ExistingReactionsToKeep = allReactions
+		} else {
+			// Keep n-1 previous reactions and remove the rest
+			react.ExistingReactionsToKeep = allReactions[:preResp.MaxReactions-1]
+			for _, oldReaction := range allReactions[preResp.MaxReactions-1:] {
+				_, err = portal.Bridge.Bot.SendMessage(ctx, portal.MXID, event.EventRedaction, &event.Content{
+					Parsed: &event.RedactionEventContent{
+						Redacts: oldReaction.MXID,
+					},
+				}, time.Now())
+				if err != nil {
+					log.Err(err).Msg("Failed to remove previous reaction after limit was exceeded")
+				}
+				err = portal.Bridge.DB.Reaction.Delete(ctx, oldReaction)
+				if err != nil {
+					log.Err(err).Msg("Failed to delete previous reaction from database after limit was exceeded")
+				}
+			}
+		}
 		// TODO get all reactions to message by sender in order to remove oldest ones
 		//      (this is necessary for telegram where reaction limit is 1 or 3 based on premium status)
 	}

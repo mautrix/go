@@ -261,6 +261,9 @@ type MatrixReaction struct {
 	MatrixEventBase[*event.ReactionEventContent]
 	TargetMessage *database.Message
 	PreHandleResp *MatrixReactionPreResponse
+
+	// When MaxReactions is >0 in the pre-response, this is the list of previous reactions that should be preserved.
+	ExistingReactionsToKeep []*database.Reaction
 }
 
 type MatrixReactionPreResponse struct {
