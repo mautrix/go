@@ -811,6 +811,14 @@ func (portal *Portal) getTargetMessagePart(ctx context.Context, evt RemoteEventW
 	}
 }
 
+func (portal *Portal) getTargetReaction(ctx context.Context, evt RemoteReactionRemove) (*database.Reaction, error) {
+	if partTargeter, ok := evt.(RemoteEventWithTargetPart); ok {
+		return portal.Bridge.DB.Reaction.GetByID(ctx, evt.GetTargetMessage(), partTargeter.GetTargetMessagePart(), evt.GetSender().Sender, evt.GetRemovedEmojiID())
+	} else {
+		return portal.Bridge.DB.Reaction.GetByIDWithoutMessagePart(ctx, evt.GetTargetMessage(), evt.GetSender().Sender, evt.GetRemovedEmojiID())
+	}
+}
+
 func getEventTS(evt RemoteEvent) time.Time {
 	if tsProvider, ok := evt.(RemoteEventWithTimestamp); ok {
 		return tsProvider.GetTimestamp()
@@ -882,11 +890,54 @@ func (portal *Portal) handleRemoteReaction(ctx context.Context, source *UserLogi
 }
 
 func (portal *Portal) handleRemoteReactionRemove(ctx context.Context, source *UserLogin, evt RemoteReactionRemove) {
-
+	log := zerolog.Ctx(ctx)
+	targetReaction, err := portal.getTargetReaction(ctx, evt)
+	if err != nil {
+		log.Err(err).Msg("Failed to get target reaction for removal")
+		return
+	} else if targetReaction == nil {
+		log.Warn().Msg("Target reaction not found")
+		return
+	}
+	intent := portal.getIntentFor(ctx, evt.GetSender(), source)
+	ts := getEventTS(evt)
+	_, err = intent.SendMessage(ctx, portal.MXID, event.EventRedaction, &event.Content{
+		Parsed: &event.RedactionEventContent{
+			Redacts: targetReaction.MXID,
+		},
+	}, ts)
+	if err != nil {
+		log.Err(err).Stringer("reaction_mxid", targetReaction.MXID).Msg("Failed to redact reaction")
+	}
+	err = portal.Bridge.DB.Reaction.Delete(ctx, targetReaction)
+	if err != nil {
+		log.Err(err).Msg("Failed to delete target reaction from database")
+	}
 }
 
 func (portal *Portal) handleRemoteMessageRemove(ctx context.Context, source *UserLogin, evt RemoteMessageRemove) {
-
+	log := zerolog.Ctx(ctx)
+	targetParts, err := portal.Bridge.DB.Message.GetAllPartsByID(ctx, evt.GetTargetMessage())
+	if err != nil {
+		log.Err(err).Msg("Failed to get target message for removal")
+		return
+	}
+	intent := portal.getIntentFor(ctx, evt.GetSender(), source)
+	ts := getEventTS(evt)
+	for _, part := range targetParts {
+		_, err = intent.SendMessage(ctx, portal.MXID, event.EventRedaction, &event.Content{
+			Parsed: &event.RedactionEventContent{
+				Redacts: part.MXID,
+			},
+		}, ts)
+		if err != nil {
+			log.Err(err).Stringer("part_mxid", part.MXID).Msg("Failed to redact message part")
+		}
+	}
+	err = portal.Bridge.DB.Message.DeleteAllParts(ctx, evt.GetTargetMessage())
+	if err != nil {
+		log.Err(err).Msg("Failed to delete target message from database")
+	}
 }
 
 var stateElementFunctionalMembers = event.Type{Class: event.StateEventType, Type: "io.element.functional_members"}
