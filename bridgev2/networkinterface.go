@@ -93,7 +93,7 @@ const (
 
 type RemoteEvent interface {
 	GetType() RemoteEventType
-	GetPortalID() networkid.PortalID
+	GetPortalKey() networkid.PortalKey
 	ShouldCreatePortal() bool
 	AddLogContext(c zerolog.Context) zerolog.Context
 	GetSender() EventSender
@@ -148,7 +148,7 @@ type RemoteMessageRemove interface {
 type SimpleRemoteEvent[T any] struct {
 	Type         RemoteEventType
 	LogContext   func(c zerolog.Context) zerolog.Context
-	PortalID     networkid.PortalID
+	PortalKey    networkid.PortalKey
 	Data         T
 	CreatePortal bool
 
@@ -178,8 +178,8 @@ func (sre *SimpleRemoteEvent[T]) AddLogContext(c zerolog.Context) zerolog.Contex
 	return sre.LogContext(c)
 }
 
-func (sre *SimpleRemoteEvent[T]) GetPortalID() networkid.PortalID {
-	return sre.PortalID
+func (sre *SimpleRemoteEvent[T]) GetPortalKey() networkid.PortalKey {
+	return sre.PortalKey
 }
 
 func (sre *SimpleRemoteEvent[T]) GetTimestamp() time.Time {

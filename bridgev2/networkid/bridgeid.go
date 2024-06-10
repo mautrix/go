@@ -6,15 +6,43 @@
 
 package networkid
 
+import (
+	"fmt"
+
+	"github.com/rs/zerolog"
+)
+
 // BridgeID is an opaque identifier for a bridge
 type BridgeID string
 
 // PortalID is the ID of a room on the remote network.
-//
-// Portal IDs must be globally unique and refer to a single chat.
-// This means that user IDs can't be used directly as DM chat IDs, instead the ID must contain both user IDs (e.g. "user1-user2").
-// If generating such IDs manually, sorting the users is recommended to ensure they're consistent.
 type PortalID string
+
+// PortalKey is the unique key of a room on the remote network. It combines a portal ID and a receiver ID.
+//
+// The Receiver field is generally only used for DMs, and should be empty for group chats.
+// The purpose is to segregate DMs by receiver, so that the same DM has separate rooms even
+// if both sides are logged into the bridge. Also, for networks that use user IDs as DM chat IDs,
+// the receiver is necessary to have separate rooms for separate users who have a DM with the same
+// remote user.
+type PortalKey struct {
+	ID       PortalID
+	Receiver UserLoginID
+}
+
+func (pk PortalKey) String() string {
+	if pk.Receiver == "" {
+		return string(pk.ID)
+	}
+	return fmt.Sprintf("%s/%s", pk.ID, pk.Receiver)
+}
+
+func (pk PortalKey) MarshalZerologObject(evt *zerolog.Event) {
+	evt.Str("portal_id", string(pk.ID))
+	if pk.Receiver != "" {
+		evt.Str("portal_receiver", string(pk.Receiver))
+	}
+}
 
 // UserID is the ID of a user on the remote network.
 type UserID string

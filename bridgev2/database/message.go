@@ -29,7 +29,7 @@ type Message struct {
 	PartID   networkid.PartID
 	MXID     id.EventID
 
-	RoomID    networkid.PortalID
+	Room      networkid.PortalKey
 	SenderID  networkid.UserID
 	Timestamp time.Time
 
@@ -44,7 +44,7 @@ func newMessage(_ *dbutil.QueryHelper[*Message]) *Message {
 
 const (
 	getMessageBaseQuery = `
-		SELECT rowid, bridge_id, id, part_id, mxid, room_id, sender_id, timestamp, relates_to, metadata FROM message
+		SELECT rowid, bridge_id, id, part_id, mxid, room_id, room_receiver, sender_id, timestamp, relates_to, metadata FROM message
 	`
 	getAllMessagePartsByIDQuery  = getMessageBaseQuery + `WHERE bridge_id=$1 AND id=$2`
 	getMessagePartByIDQuery      = getMessageBaseQuery + `WHERE bridge_id=$1 AND id=$2 AND part_id=$3`
@@ -52,15 +52,15 @@ const (
 	getMessageByMXIDQuery        = getMessageBaseQuery + `WHERE bridge_id=$1 AND mxid=$2`
 	getLastMessagePartByIDQuery  = getMessageBaseQuery + `WHERE bridge_id=$1 AND id=$2 ORDER BY part_id DESC LIMIT 1`
 	getFirstMessagePartByIDQuery = getMessageBaseQuery + `WHERE bridge_id=$1 AND id=$2 ORDER BY part_id ASC LIMIT 1`
-	getMessagesBetweenTimeQuery  = getMessageBaseQuery + `WHERE bridge_id=$1 AND room_id=$2 AND timestamp>$3 AND timestamp<=$4`
+	getMessagesBetweenTimeQuery  = getMessageBaseQuery + `WHERE bridge_id=$1 AND room_id=$2 AND room_receiver=$3 AND timestamp>$4 AND timestamp<=$5`
 	insertMessageQuery           = `
-		INSERT INTO message (bridge_id, id, part_id, mxid, room_id, sender_id, timestamp, relates_to, metadata)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO message (bridge_id, id, part_id, mxid, room_id, room_receiver, sender_id, timestamp, relates_to, metadata)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		RETURNING rowid
 	`
 	updateMessageQuery = `
-		UPDATE message SET id=$2, part_id=$3, mxid=$4, room_id=$5, sender_id=$6, timestamp=$7, relates_to=$8, metadata=$9
-		WHERE bridge_id=$1 AND rowid=$10
+		UPDATE message SET id=$2, part_id=$3, mxid=$4, room_id=$5, room_receiver=$6, sender_id=$7, timestamp=$8, relates_to=$9, metadata=$10
+		WHERE bridge_id=$1 AND rowid=$11
 	`
 	deleteAllMessagePartsByIDQuery = `
 		DELETE FROM message WHERE bridge_id=$1 AND id=$2
@@ -102,8 +102,8 @@ func (mq *MessageQuery) GetFirstOrSpecificPartByID(ctx context.Context, id netwo
 	}
 }
 
-func (mq *MessageQuery) GetMessagesBetweenTimeQuery(ctx context.Context, start, end time.Time) ([]*Message, error) {
-	return mq.QueryMany(ctx, getMessagesBetweenTimeQuery, mq.BridgeID, start.UnixNano(), end.UnixNano())
+func (mq *MessageQuery) GetMessagesBetweenTimeQuery(ctx context.Context, portal networkid.PortalKey, start, end time.Time) ([]*Message, error) {
+	return mq.QueryMany(ctx, getMessagesBetweenTimeQuery, mq.BridgeID, portal.ID, portal.Receiver, start.UnixNano(), end.UnixNano())
 }
 
 func (mq *MessageQuery) Insert(ctx context.Context, msg *Message) error {
@@ -128,7 +128,7 @@ func (m *Message) Scan(row dbutil.Scannable) (*Message, error) {
 	var timestamp int64
 	var relatesTo sql.NullInt64
 	err := row.Scan(
-		&m.RowID, &m.BridgeID, &m.ID, &m.PartID, &m.MXID, &m.RoomID, &m.SenderID,
+		&m.RowID, &m.BridgeID, &m.ID, &m.PartID, &m.MXID, &m.Room.ID, &m.Room.Receiver, &m.SenderID,
 		&timestamp, &relatesTo, dbutil.JSON{Data: &m.Metadata},
 	)
 	if err != nil {
@@ -141,7 +141,7 @@ func (m *Message) Scan(row dbutil.Scannable) (*Message, error) {
 
 func (m *Message) sqlVariables() []any {
 	return []any{
-		m.BridgeID, m.ID, m.PartID, m.MXID, m.RoomID, m.SenderID,
+		m.BridgeID, m.ID, m.PartID, m.MXID, m.Room.ID, m.Room.Receiver, m.SenderID,
 		m.Timestamp.UnixNano(), dbutil.NumPtr(m.RelatesToRowID), dbutil.JSON{Data: m.Metadata},
 	}
 }

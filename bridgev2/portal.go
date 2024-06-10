@@ -60,7 +60,7 @@ type Portal struct {
 
 const PortalEventBuffer = 64
 
-func (br *Bridge) loadPortal(ctx context.Context, dbPortal *database.Portal, queryErr error, id *networkid.PortalID) (*Portal, error) {
+func (br *Bridge) loadPortal(ctx context.Context, dbPortal *database.Portal, queryErr error, id *networkid.PortalKey) (*Portal, error) {
 	if queryErr != nil {
 		return nil, fmt.Errorf("failed to query db: %w", queryErr)
 	}
@@ -69,8 +69,8 @@ func (br *Bridge) loadPortal(ctx context.Context, dbPortal *database.Portal, que
 			return nil, nil
 		}
 		dbPortal = &database.Portal{
-			BridgeID: br.ID,
-			ID:       *id,
+			BridgeID:  br.ID,
+			PortalKey: *id,
 		}
 		err := br.DB.Portal.Insert(ctx, dbPortal)
 		if err != nil {
@@ -83,13 +83,13 @@ func (br *Bridge) loadPortal(ctx context.Context, dbPortal *database.Portal, que
 
 		events: make(chan portalEvent, PortalEventBuffer),
 	}
-	br.portalsByID[portal.ID] = portal
+	br.portalsByKey[portal.PortalKey] = portal
 	if portal.MXID != "" {
 		br.portalsByMXID[portal.MXID] = portal
 	}
 	if portal.ParentID != "" {
 		var err error
-		portal.Parent, err = br.unlockedGetPortalByID(ctx, portal.ParentID, false)
+		portal.Parent, err = br.unlockedGetPortalByID(ctx, networkid.PortalKey{ID: portal.ParentID}, false)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load parent portal (%s): %w", portal.ParentID, err)
 		}
@@ -107,8 +107,8 @@ func (portal *Portal) updateLogger() {
 	portal.Log = logWith.Logger()
 }
 
-func (br *Bridge) unlockedGetPortalByID(ctx context.Context, id networkid.PortalID, onlyIfExists bool) (*Portal, error) {
-	cached, ok := br.portalsByID[id]
+func (br *Bridge) unlockedGetPortalByID(ctx context.Context, id networkid.PortalKey, onlyIfExists bool) (*Portal, error) {
+	cached, ok := br.portalsByKey[id]
 	if ok {
 		return cached, nil
 	}
@@ -131,16 +131,28 @@ func (br *Bridge) GetPortalByMXID(ctx context.Context, mxid id.RoomID) (*Portal,
 	return br.loadPortal(ctx, db, err, nil)
 }
 
-func (br *Bridge) GetPortalByID(ctx context.Context, id networkid.PortalID) (*Portal, error) {
+func (br *Bridge) GetPortalByID(ctx context.Context, id networkid.PortalKey) (*Portal, error) {
 	br.cacheLock.Lock()
 	defer br.cacheLock.Unlock()
 	return br.unlockedGetPortalByID(ctx, id, false)
 }
 
-func (br *Bridge) GetExistingPortalByID(ctx context.Context, id networkid.PortalID) (*Portal, error) {
+func (br *Bridge) GetExistingPortalByID(ctx context.Context, id networkid.PortalKey) (*Portal, error) {
 	br.cacheLock.Lock()
 	defer br.cacheLock.Unlock()
-	return br.unlockedGetPortalByID(ctx, id, true)
+	if id.Receiver == "" {
+		return br.unlockedGetPortalByID(ctx, id, true)
+	}
+	cached, ok := br.portalsByKey[id]
+	if ok {
+		return cached, nil
+	}
+	cached, ok = br.portalsByKey[networkid.PortalKey{ID: id.ID}]
+	if ok {
+		return cached, nil
+	}
+	db, err := br.DB.Portal.GetByIDWithUncertainReceiver(ctx, id)
+	return br.loadPortal(ctx, db, err, nil)
 }
 
 func (portal *Portal) queueEvent(ctx context.Context, evt portalEvent) {
@@ -167,7 +179,7 @@ func (portal *Portal) eventLoop() {
 }
 
 func (portal *Portal) FindPreferredLogin(ctx context.Context, user *User) (*UserLogin, error) {
-	logins, err := portal.Bridge.DB.User.FindLoginsByPortalID(ctx, user.MXID, portal.ID)
+	logins, err := portal.Bridge.DB.User.FindLoginsByPortalID(ctx, user.MXID, portal.PortalKey)
 	if err != nil {
 		return nil, err
 	}
@@ -394,8 +406,8 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 	if message.MXID == "" {
 		message.MXID = evt.ID
 	}
-	if message.RoomID == "" {
-		message.RoomID = portal.ID
+	if message.Room.ID == "" {
+		message.Room = portal.PortalKey
 	}
 	if message.Timestamp.IsZero() {
 		message.Timestamp = time.UnixMilli(evt.Timestamp)
@@ -550,8 +562,8 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 		return
 	}
 	// Fill all fields that are known to allow omitting them in connector code
-	if dbReaction.RoomID == "" {
-		dbReaction.RoomID = portal.ID
+	if dbReaction.Room.ID == "" {
+		dbReaction.Room = portal.PortalKey
 	}
 	if dbReaction.MessageID == "" {
 		dbReaction.MessageID = reactionTarget.ID
@@ -777,7 +789,7 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 			ID:             evt.GetID(),
 			PartID:         part.ID,
 			MXID:           resp.EventID,
-			RoomID:         portal.ID,
+			Room:           portal.PortalKey,
 			SenderID:       evt.GetSender().Sender,
 			Timestamp:      ts,
 			RelatesToRowID: relatesToRowID,
@@ -939,7 +951,7 @@ func (portal *Portal) handleRemoteReaction(ctx context.Context, source *UserLogi
 		Stringer("event_id", resp.EventID).
 		Msg("Sent reaction to Matrix")
 	dbReaction := &database.Reaction{
-		RoomID:        portal.ID,
+		Room:          portal.PortalKey,
 		MessageID:     targetMessage.ID,
 		MessagePartID: targetMessage.PartID,
 		SenderID:      evt.GetSender().Sender,
@@ -1163,17 +1175,20 @@ func (portal *Portal) sendRoomMeta(ctx context.Context, sender *Ghost, ts time.T
 	return true
 }
 
-func (portal *Portal) SyncParticipants(ctx context.Context, members []networkid.UserID, source *UserLogin) ([]id.UserID, error) {
-	loginsInPortal, err := portal.Bridge.GetUserLoginsInPortal(ctx, portal.ID)
+func (portal *Portal) SyncParticipants(ctx context.Context, members []networkid.UserID, source *UserLogin) ([]id.UserID, []id.UserID, error) {
+	loginsInPortal, err := portal.Bridge.GetUserLoginsInPortal(ctx, portal.PortalKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get user logins in portal: %w", err)
+		return nil, nil, fmt.Errorf("failed to get user logins in portal: %w", err)
 	}
 	expectedUserIDs := make([]id.UserID, 0, len(members))
 	expectedExtraUsers := make([]id.UserID, 0)
 	expectedIntents := make([]MatrixAPI, len(members))
+	extraFunctionalMembers := make([]id.UserID, 0)
 	for i, member := range members {
+		isLoggedInUser := false
 		for _, login := range loginsInPortal {
 			if login.Client.IsThisUser(ctx, member) {
+				isLoggedInUser = true
 				userIntent := portal.Bridge.Matrix.UserIntent(login.User)
 				if userIntent != nil {
 					expectedIntents[i] = userIntent
@@ -1186,16 +1201,19 @@ func (portal *Portal) SyncParticipants(ctx context.Context, members []networkid.
 		}
 		ghost, err := portal.Bridge.GetGhostByID(ctx, member)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get ghost for %s: %w", member, err)
+			return nil, nil, fmt.Errorf("failed to get ghost for %s: %w", member, err)
 		}
 		ghost.UpdateInfoIfNecessary(ctx, source)
 		if expectedIntents[i] == nil {
 			expectedIntents[i] = ghost.Intent
+			if isLoggedInUser {
+				extraFunctionalMembers = append(extraFunctionalMembers, ghost.Intent.GetMXID())
+			}
 		}
 		expectedUserIDs = append(expectedUserIDs, expectedIntents[i].GetMXID())
 	}
 	if portal.MXID == "" {
-		return expectedUserIDs, nil
+		return expectedUserIDs, extraFunctionalMembers, nil
 	}
 	currentMembers, err := portal.Bridge.Matrix.GetMembers(ctx, portal.MXID)
 	for _, intent := range expectedIntents {
@@ -1243,7 +1261,7 @@ func (portal *Portal) SyncParticipants(ctx context.Context, members []networkid.
 			}
 		}
 	}
-	return expectedUserIDs, nil
+	return expectedUserIDs, extraFunctionalMembers, nil
 }
 
 func (portal *Portal) UpdateInfo(ctx context.Context, info *PortalInfo, sender *Ghost, ts time.Time) {
@@ -1290,7 +1308,7 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin) e
 		return err
 	}
 	portal.UpdateInfo(ctx, info, nil, time.Time{})
-	initialMembers, err := portal.SyncParticipants(ctx, info.Members, source)
+	initialMembers, extraFunctionalMembers, err := portal.SyncParticipants(ctx, info.Members, source)
 	if err != nil {
 		log.Err(err).Msg("Failed to process participant list for portal creation")
 		return err
@@ -1327,7 +1345,7 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin) e
 		StateKey: &emptyString,
 		Type:     stateElementFunctionalMembers,
 		Content: event.Content{Raw: map[string]any{
-			"service_members": []id.UserID{portal.Bridge.Bot.GetMXID()},
+			"service_members": append(extraFunctionalMembers, portal.Bridge.Bot.GetMXID()),
 		}},
 	})
 	if req.Topic == "" {
@@ -1380,7 +1398,7 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin) e
 		// TODO add m.space.child event
 	}
 	if !isBeeper {
-		_, err = portal.SyncParticipants(ctx, info.Members, source)
+		_, _, err = portal.SyncParticipants(ctx, info.Members, source)
 		if err != nil {
 			log.Err(err).Msg("Failed to sync participants after room creation")
 		}

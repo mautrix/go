@@ -49,7 +49,7 @@ const (
 	findUserLoginsByPortalIDQuery = `
 		SELECT login_id
 		FROM user_portal
-		WHERE bridge_id=$1 AND user_mxid=$2 AND portal_id=$3
+		WHERE bridge_id=$1 AND user_mxid=$2 AND portal_id=$3 AND portal_receiver=$4
 		ORDER BY CASE WHEN preferred THEN 0 ELSE 1 END, login_id
 	`
 )
@@ -68,8 +68,8 @@ func (uq *UserQuery) Update(ctx context.Context, user *User) error {
 	return uq.Exec(ctx, updateUserQuery, user.sqlVariables()...)
 }
 
-func (uq *UserQuery) FindLoginsByPortalID(ctx context.Context, userID id.UserID, portalID networkid.PortalID) ([]networkid.UserLoginID, error) {
-	rows, err := uq.GetDB().Query(ctx, findUserLoginsByPortalIDQuery, uq.BridgeID, userID, portalID)
+func (uq *UserQuery) FindLoginsByPortalID(ctx context.Context, userID id.UserID, portal networkid.PortalKey) ([]networkid.UserLoginID, error) {
+	rows, err := uq.GetDB().Query(ctx, findUserLoginsByPortalIDQuery, uq.BridgeID, userID, portal.ID, portal.Receiver)
 	return dbutil.NewRowIterWithError(rows, dbutil.ScanSingleColumn[networkid.UserLoginID], err).AsList()
 }
 

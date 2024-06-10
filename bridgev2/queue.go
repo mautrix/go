@@ -85,14 +85,17 @@ func (br *Bridge) QueueMatrixEvent(ctx context.Context, evt *event.Event) {
 func (br *Bridge) QueueRemoteEvent(login *UserLogin, evt RemoteEvent) {
 	log := login.Log
 	ctx := log.WithContext(context.TODO())
-	portal, err := br.GetPortalByID(ctx, evt.GetPortalID())
+	portal, err := br.GetPortalByID(ctx, evt.GetPortalKey())
 	if err != nil {
-		log.Err(err).Str("portal_id", string(evt.GetPortalID())).
+		log.Err(err).Object("portal_id", evt.GetPortalKey()).
 			Msg("Failed to get portal to handle remote event")
 		return
 	}
 	// TODO put this in a better place, and maybe cache to avoid constant db queries
-	br.DB.UserLogin.EnsureUserPortalExists(ctx, login.UserLogin, portal.ID)
+	err = br.DB.UserLogin.EnsureUserPortalExists(ctx, login.UserLogin, portal.PortalKey)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to ensure user portal row exists")
+	}
 	portal.queueEvent(ctx, &portalRemoteEvent{
 		evt:    evt,
 		source: login,

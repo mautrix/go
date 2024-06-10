@@ -41,7 +41,7 @@ type Bridge struct {
 
 	usersByMXID    map[id.UserID]*User
 	userLoginsByID map[networkid.UserLoginID]*UserLogin
-	portalsByID    map[networkid.PortalID]*Portal
+	portalsByKey   map[networkid.PortalKey]*Portal
 	portalsByMXID  map[id.RoomID]*Portal
 	ghostsByID     map[networkid.UserID]*Ghost
 	cacheLock      sync.Mutex
@@ -58,7 +58,7 @@ func NewBridge(bridgeID networkid.BridgeID, db *dbutil.Database, log zerolog.Log
 
 		usersByMXID:    make(map[id.UserID]*User),
 		userLoginsByID: make(map[networkid.UserLoginID]*UserLogin),
-		portalsByID:    make(map[networkid.PortalID]*Portal),
+		portalsByKey:   make(map[networkid.PortalKey]*Portal),
 		portalsByMXID:  make(map[id.RoomID]*Portal),
 		ghostsByID:     make(map[networkid.UserID]*Ghost),
 	}

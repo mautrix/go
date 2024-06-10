@@ -83,8 +83,8 @@ func (br *Bridge) GetAllUserLogins(ctx context.Context) ([]*UserLogin, error) {
 	return br.loadManyUserLogins(ctx, nil, logins)
 }
 
-func (br *Bridge) GetUserLoginsInPortal(ctx context.Context, portalID networkid.PortalID) ([]*UserLogin, error) {
-	logins, err := br.DB.UserLogin.GetAllInPortal(ctx, portalID)
+func (br *Bridge) GetUserLoginsInPortal(ctx context.Context, portal networkid.PortalKey) ([]*UserLogin, error) {
+	logins, err := br.DB.UserLogin.GetAllInPortal(ctx, portal)
 	if err != nil {
 		return nil, err
 	}
@@ -138,5 +138,5 @@ func (ul *UserLogin) Logout(ctx context.Context) {
 }
 
 func (ul *UserLogin) MarkAsPreferredIn(ctx context.Context, portal *Portal) error {
-	return ul.Bridge.DB.UserLogin.MarkLoginAsPreferredInPortal(ctx, ul.UserLogin, portal.ID)
+	return ul.Bridge.DB.UserLogin.MarkLoginAsPreferredInPortal(ctx, ul.UserLogin, portal.PortalKey)
 }
