@@ -26,8 +26,8 @@ type RoomNameEventContent struct {
 // RoomAvatarEventContent represents the content of a m.room.avatar state event.
 // https://spec.matrix.org/v1.2/client-server-api/#mroomavatar
 type RoomAvatarEventContent struct {
-	URL  id.ContentURI `json:"url"`
-	Info *FileInfo     `json:"info,omitempty"`
+	URL  id.ContentURIString `json:"url"`
+	Info *FileInfo           `json:"info,omitempty"`
 }
 
 // ServerACLEventContent represents the content of a m.room.server_acl state event.
@@ -149,6 +149,8 @@ type BridgeEventContent struct {
 	Protocol  BridgeInfoSection  `json:"protocol"`
 	Network   *BridgeInfoSection `json:"network,omitempty"`
 	Channel   BridgeInfoSection  `json:"channel"`
+
+	BeeperRoomType string `json:"com.beeper.room_type,omitempty"`
 }
 
 type SpaceChildEventContent struct {

@@ -54,6 +54,7 @@ type UnstableFeature struct {
 }
 
 var (
+	FeatureAsyncUploads   = UnstableFeature{UnstableFlag: "fi.mau.msc2246.stable", SpecVersion: SpecV17}
 	FeatureAppservicePing = UnstableFeature{UnstableFlag: "fi.mau.msc2659.stable", SpecVersion: SpecV17}
 
 	BeeperFeatureHungry               = UnstableFeature{UnstableFlag: "com.beeper.hungry"}
