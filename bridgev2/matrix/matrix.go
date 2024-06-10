@@ -9,10 +9,12 @@ package matrix
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/rs/zerolog"
 
+	"maunium.net/go/mautrix/bridge/status"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -24,7 +26,7 @@ func (br *Connector) handleRoomEvent(ctx context.Context, evt *event.Event) {
 	}
 	if (evt.Type == event.EventMessage || evt.Type == event.EventSticker) && !evt.Mautrix.WasEncrypted && br.Config.Encryption.Require {
 		zerolog.Ctx(ctx).Warn().Msg("Dropping unencrypted event as encryption is configured to be required")
-		// TODO send metrics
+		br.sendCryptoStatusError(ctx, evt, errMessageNotEncrypted, nil, 0, true)
 		return
 	}
 	br.Bridge.QueueMatrixEvent(ctx, evt)
@@ -48,7 +50,7 @@ func (br *Connector) handleEncryptedEvent(ctx context.Context, evt *event.Event)
 		Logger()
 	ctx = log.WithContext(ctx)
 	if br.Crypto == nil {
-		// TODO send metrics
+		br.sendCryptoStatusError(ctx, evt, errNoCrypto, nil, 0, true)
 		log.Error().Msg("Can't decrypt message: no crypto")
 		return
 	}
@@ -62,7 +64,7 @@ func (br *Connector) handleEncryptedEvent(ctx context.Context, evt *event.Event)
 		log.Debug().
 			Int("wait_seconds", int(initialSessionWaitTimeout.Seconds())).
 			Msg("Couldn't find session, waiting for keys to arrive...")
-		// TODO send metrics
+		go br.sendCryptoStatusError(ctx, evt, err, nil, 0, false)
 		if br.Crypto.WaitForSession(ctx, evt.RoomID, content.SenderKey, content.SessionID, initialSessionWaitTimeout) {
 			log.Debug().Msg("Got keys after waiting, trying to decrypt event again")
 			decrypted, err = br.Crypto.Decrypt(ctx, evt)
@@ -73,10 +75,10 @@ func (br *Connector) handleEncryptedEvent(ctx context.Context, evt *event.Event)
 	}
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to decrypt event")
-		// TODO send metrics
+		go br.sendCryptoStatusError(ctx, evt, err, nil, decryptionRetryCount, true)
 		return
 	}
-	br.postDecrypt(ctx, evt, decrypted, decryptionRetryCount, "", time.Since(decryptionStart))
+	br.postDecrypt(ctx, evt, decrypted, decryptionRetryCount, nil, time.Since(decryptionStart))
 }
 
 func (br *Connector) waitLongerForSession(ctx context.Context, evt *event.Event, decryptionStart time.Time) {
@@ -87,12 +89,12 @@ func (br *Connector) waitLongerForSession(ctx context.Context, evt *event.Event,
 		Msg("Couldn't find session, requesting keys and waiting longer...")
 
 	go br.Crypto.RequestSession(ctx, evt.RoomID, content.SenderKey, content.SessionID, evt.Sender, content.DeviceID)
-	var errorEventID id.EventID
-	// TODO send metrics
+	var errorEventID *id.EventID
+	go br.sendCryptoStatusError(ctx, evt, fmt.Errorf("%w. The bridge will retry for %d seconds", errNoDecryptionKeys, int(extendedSessionWaitTimeout.Seconds())), errorEventID, 1, false)
 
 	if !br.Crypto.WaitForSession(ctx, evt.RoomID, content.SenderKey, content.SessionID, extendedSessionWaitTimeout) {
 		log.Debug().Msg("Didn't get session, giving up trying to decrypt event")
-		// TODO send metrics
+		go br.sendCryptoStatusError(ctx, evt, errNoDecryptionKeys, errorEventID, 2, true)
 		return
 	}
 
@@ -100,7 +102,7 @@ func (br *Connector) waitLongerForSession(ctx context.Context, evt *event.Event,
 	decrypted, err := br.Crypto.Decrypt(ctx, evt)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to decrypt event")
-		// TODO send metrics
+		go br.sendCryptoStatusError(ctx, evt, err, errorEventID, 2, true)
 		return
 	}
 
@@ -111,9 +113,25 @@ type CommandProcessor interface {
 	Handle(ctx context.Context, roomID id.RoomID, eventID id.EventID, user bridgev2.User, message string, replyTo id.EventID)
 }
 
-func (br *Connector) sendBridgeCheckpoint(_ context.Context, evt *event.Event) {
+func (br *Connector) sendSuccessCheckpoint(ctx context.Context, evt *event.Event, step status.MessageCheckpointStep, retryNum int) {
+	err := br.SendMessageCheckpoints([]*status.MessageCheckpoint{{
+		RoomID:      evt.RoomID,
+		EventID:     evt.ID,
+		EventType:   evt.Type,
+		MessageType: evt.Content.AsMessage().MsgType,
+		Step:        step,
+		Status:      status.MsgStatusSuccess,
+		ReportedBy:  status.MsgReportedByBridge,
+		RetryNum:    retryNum,
+	}})
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Str("checkpoint_step", string(step)).Msg("Failed to send checkpoint")
+	}
+}
+
+func (br *Connector) sendBridgeCheckpoint(ctx context.Context, evt *event.Event) {
 	if !evt.Mautrix.CheckpointSent {
-		//go br.SendMessageSuccessCheckpoint(evt, status.MsgStepBridge, 0)
+		go br.sendSuccessCheckpoint(ctx, evt, status.MsgStepBridge, 0)
 	}
 }
 
@@ -140,7 +158,7 @@ func copySomeKeys(original, decrypted *event.Event) {
 	}
 }
 
-func (br *Connector) postDecrypt(ctx context.Context, original, decrypted *event.Event, retryCount int, errorEventID id.EventID, duration time.Duration) {
+func (br *Connector) postDecrypt(ctx context.Context, original, decrypted *event.Event, retryCount int, errorEventID *id.EventID, duration time.Duration) {
 	log := zerolog.Ctx(ctx)
 	minLevel := br.Config.Encryption.VerificationLevels.Send
 	if decrypted.Mautrix.TrustState < minLevel {
@@ -158,18 +176,18 @@ func (br *Connector) postDecrypt(ctx context.Context, original, decrypted *event
 			logEvt.Str("device_id", "unknown")
 		}
 		logEvt.Msg("Dropping event due to insufficient verification level")
-		//err := deviceUnverifiedErrorWithExplanation(decrypted.Mautrix.TrustState)
-		//go mx.sendCryptoStatusError(ctx, decrypted, errorEventID, err, retryCount, true)
+		err := deviceUnverifiedErrorWithExplanation(decrypted.Mautrix.TrustState)
+		go br.sendCryptoStatusError(ctx, decrypted, err, errorEventID, retryCount, true)
 		return
 	}
 	copySomeKeys(original, decrypted)
 
-	// TODO checkpoint
+	go br.sendSuccessCheckpoint(ctx, decrypted, status.MsgStepDecrypted, retryCount)
 	decrypted.Mautrix.CheckpointSent = true
 	decrypted.Mautrix.DecryptionDuration = duration
 	decrypted.Mautrix.EventSource |= event.SourceDecrypted
 	br.EventProcessor.Dispatch(ctx, decrypted)
-	if errorEventID != "" {
-		_, _ = br.Bot.RedactEvent(ctx, decrypted.RoomID, errorEventID)
+	if errorEventID != nil && *errorEventID != "" {
+		_, _ = br.Bot.RedactEvent(ctx, decrypted.RoomID, *errorEventID)
 	}
 }

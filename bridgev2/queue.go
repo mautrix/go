@@ -8,6 +8,8 @@ package bridgev2
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/rs/zerolog"
@@ -25,13 +27,15 @@ func (br *Bridge) QueueMatrixEvent(ctx context.Context, evt *event.Event) {
 		sender, err = br.GetUserByMXID(ctx, evt.Sender)
 		if err != nil {
 			log.Err(err).Msg("Failed to get sender user for incoming Matrix event")
-			// TODO send metrics
+			status := WrapErrorInStatus(fmt.Errorf("%w: failed to get sender user: %w", ErrDatabaseError, err))
+			br.Matrix.SendMessageStatus(ctx, &status, StatusEventInfoFromEvent(evt))
 			return
 		}
 	}
 	if sender == nil && evt.Type.Class != event.EphemeralEventType {
 		log.Error().Msg("Missing sender for incoming non-ephemeral Matrix event")
-		// TODO send metrics
+		status := WrapErrorInStatus(errors.New("sender not found for event")).WithIsCertain(true).WithErrorAsMessage()
+		br.Matrix.SendMessageStatus(ctx, &status, StatusEventInfoFromEvent(evt))
 		return
 	}
 	if evt.Type == event.EventMessage {
@@ -64,13 +68,17 @@ func (br *Bridge) QueueMatrixEvent(ctx context.Context, evt *event.Event) {
 	portal, err := br.GetPortalByMXID(ctx, evt.RoomID)
 	if err != nil {
 		log.Err(err).Msg("Failed to get portal for incoming Matrix event")
-		// TODO send metrics
+		status := WrapErrorInStatus(fmt.Errorf("%w: failed to get portal: %w", ErrDatabaseError, err))
+		br.Matrix.SendMessageStatus(ctx, &status, StatusEventInfoFromEvent(evt))
 		return
 	} else if portal != nil {
 		portal.queueEvent(ctx, &portalMatrixEvent{
 			evt:    evt,
 			sender: sender,
 		})
+	} else {
+		status := WrapErrorInStatus(ErrNoPortal)
+		br.Matrix.SendMessageStatus(ctx, &status, StatusEventInfoFromEvent(evt))
 	}
 }
 

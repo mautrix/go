@@ -27,7 +27,7 @@ type MatrixConnector interface {
 	UserIntent(user *User) MatrixAPI
 	BotIntent() MatrixAPI
 
-	SendMessageStatus(ctx context.Context, status MessageStatus)
+	SendMessageStatus(ctx context.Context, status *MessageStatus, evt *MessageStatusEventInfo)
 
 	GetMembers(ctx context.Context, roomID id.RoomID) (map[id.UserID]*event.MemberEventContent, error)
 	GetMemberInfo(ctx context.Context, roomID id.RoomID, userID id.UserID) (*event.MemberEventContent, error)

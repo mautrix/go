@@ -8,11 +8,14 @@ package bridgev2
 
 import (
 	"context"
+	"fmt"
 	"runtime/debug"
 	"strings"
 
 	"github.com/rs/zerolog"
 
+	"maunium.net/go/mautrix/bridge/status"
+	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -59,13 +62,32 @@ func (proc *CommandProcessor) AddHandler(handler CommandHandler) {
 // Handle handles messages to the bridge
 func (proc *CommandProcessor) Handle(ctx context.Context, roomID id.RoomID, eventID id.EventID, user *User, message string, replyTo id.EventID) {
 	defer func() {
+		statusInfo := &MessageStatusEventInfo{
+			RoomID:    roomID,
+			EventID:   eventID,
+			EventType: event.EventMessage,
+			Sender:    user.MXID,
+		}
+		ms := MessageStatus{
+			Step:   status.MsgStepCommand,
+			Status: event.MessageStatusSuccess,
+		}
 		err := recover()
 		if err != nil {
 			zerolog.Ctx(ctx).Error().
-				Str(zerolog.ErrorStackFieldName, string(debug.Stack())).
-				Interface(zerolog.ErrorFieldName, err).
+				Bytes(zerolog.ErrorStackFieldName, debug.Stack()).
+				Any(zerolog.ErrorFieldName, err).
 				Msg("Panic in Matrix command handler")
+			ms.Status = event.MessageStatusFail
+			ms.IsCertain = true
+			if realErr, ok := err.(error); ok {
+				ms.InternalError = realErr
+			} else {
+				ms.InternalError = fmt.Errorf("%v", err)
+			}
+			ms.ErrorAsMessage = true
 		}
+		proc.bridge.Matrix.SendMessageStatus(ctx, &ms, statusInfo)
 	}()
 	args := strings.Fields(message)
 	if len(args) == 0 {

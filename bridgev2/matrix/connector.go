@@ -127,12 +127,35 @@ func (br *Connector) GhostIntent(userID id.UserID) bridgev2.MatrixAPI {
 	}
 }
 
-func (br *Connector) SendMessageStatus(ctx context.Context, evt bridgev2.MessageStatus) {
+func (br *Connector) SendMessageStatus(ctx context.Context, ms *bridgev2.MessageStatus, evt *bridgev2.MessageStatusEventInfo) {
+	br.internalSendMessageStatus(ctx, ms, evt, "")
+}
+
+func (br *Connector) internalSendMessageStatus(ctx context.Context, ms *bridgev2.MessageStatus, evt *bridgev2.MessageStatusEventInfo, editEvent id.EventID) id.EventID {
 	log := zerolog.Ctx(ctx)
-	err := br.SendMessageCheckpoints([]*status.MessageCheckpoint{evt.ToCheckpoint()})
+	err := br.SendMessageCheckpoints([]*status.MessageCheckpoint{ms.ToCheckpoint(evt)})
 	if err != nil {
 		log.Err(err).Msg("Failed to send message checkpoint")
 	}
+	if br.Config.Bridge.MessageStatusEvents {
+		_, err = br.Bot.SendMessageEvent(ctx, evt.RoomID, event.BeeperMessageStatus, ms.ToMSSEvent(evt))
+		if err != nil {
+			log.Err(err).Msg("Failed to send MSS event")
+		}
+	}
+	if ms.SendNotice && br.Config.Bridge.MessageErrorNotices && (ms.Status == event.MessageStatusFail || ms.Status == event.MessageStatusRetriable || ms.Step == status.MsgStepDecrypted) {
+		content := ms.ToNoticeEvent(evt)
+		if editEvent != "" {
+			content.SetEdit(editEvent)
+		}
+		resp, err := br.Bot.SendMessageEvent(ctx, evt.RoomID, event.EventMessage, content)
+		if err != nil {
+			log.Err(err).Msg("Failed to send notice event")
+		} else {
+			return resp.EventID
+		}
+	}
+	return ""
 }
 
 func (br *Connector) SendMessageCheckpoints(checkpoints []*status.MessageCheckpoint) error {
