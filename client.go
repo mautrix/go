@@ -337,6 +337,7 @@ type FullRequest struct {
 	RequestLength    int64
 	ResponseJSON     interface{}
 	MaxAttempts      int
+	BackoffDuration  time.Duration
 	SensitiveContent bool
 	Handler          ClientResponseHandler
 	Logger           *zerolog.Logger
@@ -413,6 +414,9 @@ func (cli *Client) MakeFullRequest(ctx context.Context, params FullRequest) ([]b
 	if params.MaxAttempts == 0 {
 		params.MaxAttempts = 1 + cli.DefaultHTTPRetries
 	}
+	if params.BackoffDuration == 0 {
+		params.BackoffDuration = 4 * time.Second
+	}
 	if params.Logger == nil {
 		params.Logger = &cli.Log
 	}
@@ -430,7 +434,7 @@ func (cli *Client) MakeFullRequest(ctx context.Context, params FullRequest) ([]b
 	if params.Client == nil {
 		params.Client = cli.Client
 	}
-	return cli.executeCompiledRequest(req, params.MaxAttempts-1, 4*time.Second, params.ResponseJSON, params.Handler, params.Client)
+	return cli.executeCompiledRequest(req, params.MaxAttempts-1, params.BackoffDuration, params.ResponseJSON, params.Handler, params.Client)
 }
 
 func (cli *Client) cliOrContextLog(ctx context.Context) *zerolog.Logger {
