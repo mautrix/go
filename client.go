@@ -76,6 +76,8 @@ type Client struct {
 	// Number of times that mautrix will retry any HTTP request
 	// if the request fails entirely or returns a HTTP gateway error (502-504)
 	DefaultHTTPRetries int
+	// Amount of time to wait between HTTP retries, defaults to 4 seconds
+	DefaultHTTPBackoff time.Duration
 	// Set to true to disable automatically sleeping on 429 errors.
 	IgnoreRateLimit bool
 
@@ -415,7 +417,11 @@ func (cli *Client) MakeFullRequest(ctx context.Context, params FullRequest) ([]b
 		params.MaxAttempts = 1 + cli.DefaultHTTPRetries
 	}
 	if params.BackoffDuration == 0 {
-		params.BackoffDuration = 4 * time.Second
+		if cli.DefaultHTTPBackoff == 0 {
+			params.BackoffDuration = 4 * time.Second
+		} else {
+			params.BackoffDuration = cli.DefaultHTTPBackoff
+		}
 	}
 	if params.Logger == nil {
 		params.Logger = &cli.Log
