@@ -621,6 +621,7 @@ type ReqSync struct {
 	SetPresence     event.Presence
 	StreamResponse  bool
 	BeeperStreaming bool
+	Client          *http.Client
 }
 
 func (req *ReqSync) BuildQuery() map[string]string {
@@ -654,6 +655,7 @@ func (cli *Client) FullSyncRequest(ctx context.Context, req ReqSync) (resp *Resp
 		Method:       http.MethodGet,
 		URL:          urlPath,
 		ResponseJSON: &resp,
+		Client:       req.Client,
 		// We don't want automatic retries for SyncRequest, the Sync() wrapper handles those.
 		MaxAttempts: 1,
 	}
