@@ -26,12 +26,12 @@ func fnLoginMatrix(ce *bridgev2.CommandEvent) {
 		ce.Reply("**Usage:** `login-matrix <access token>`")
 		return
 	}
-	//err := ce.User.SwitchCustomMXID(ce.Args[0], ce.User.GetMXID())
-	//if err != nil {
-	//	ce.Reply("Failed to enable double puppeting: %v", err)
-	//} else {
-	//	ce.Reply("Successfully switched puppet")
-	//}
+	err := ce.User.LoginDoublePuppet(ce.Ctx, ce.Args[0])
+	if err != nil {
+		ce.Reply("Failed to enable double puppeting: %v", err)
+	} else {
+		ce.Reply("Successfully switched puppets")
+	}
 }
 
 var CommandPingMatrix = &bridgev2.FullHandler{
@@ -41,16 +41,25 @@ var CommandPingMatrix = &bridgev2.FullHandler{
 		Section:     bridgev2.HelpSectionAuth,
 		Description: "Ping the Matrix server with the double puppet.",
 	},
-	RequiresLogin: true,
 }
 
 func fnPingMatrix(ce *bridgev2.CommandEvent) {
-	//resp, err := puppet.CustomIntent().Whoami(ce.Ctx)
-	//if err != nil {
-	//	ce.Reply("Failed to validate Matrix login: %v", err)
-	//} else {
-	//	ce.Reply("Confirmed valid access token for %s / %s", resp.UserID, resp.DeviceID)
-	//}
+	intent := ce.User.DoublePuppet(ce.Ctx)
+	if intent == nil {
+		ce.Reply("You don't have double puppeting enabled.")
+		return
+	}
+	asIntent := intent.(*ASIntent)
+	resp, err := asIntent.Matrix.Whoami(ce.Ctx)
+	if err != nil {
+		ce.Reply("Failed to validate Matrix login: %v", err)
+	} else {
+		if asIntent.Matrix.SetAppServiceUserID && resp.DeviceID == "" {
+			ce.Reply("Confirmed valid access token for %s (appservice double puppeting)", resp.UserID)
+		} else {
+			ce.Reply("Confirmed valid access token for %s / %s", resp.UserID, resp.DeviceID)
+		}
+	}
 }
 
 var CommandLogoutMatrix = &bridgev2.FullHandler{
@@ -64,11 +73,10 @@ var CommandLogoutMatrix = &bridgev2.FullHandler{
 }
 
 func fnLogoutMatrix(ce *bridgev2.CommandEvent) {
-	//puppet := ce.User.GetIDoublePuppet()
-	//if puppet == nil || puppet.CustomIntent() == nil {
-	//	ce.Reply("You don't have double puppeting enabled.")
-	//	return
-	//}
-	//puppet.ClearCustomMXID()
-	//ce.Reply("Successfully disabled double puppeting.")
+	if ce.User.AccessToken == "" {
+		ce.Reply("You don't have double puppeting enabled.")
+		return
+	}
+	ce.User.LogoutDoublePuppet(ce.Ctx)
+	ce.Reply("Successfully disabled double puppeting.")
 }

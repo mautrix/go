@@ -24,7 +24,7 @@ type MatrixConnector interface {
 	FormatGhostMXID(userID networkid.UserID) id.UserID
 
 	GhostIntent(userID id.UserID) MatrixAPI
-	UserIntent(user *User) MatrixAPI
+	NewUserIntent(ctx context.Context, userID id.UserID, accessToken string) (MatrixAPI, string, error)
 	BotIntent() MatrixAPI
 
 	SendMessageStatus(ctx context.Context, status *MessageStatus, evt *MessageStatusEventInfo)

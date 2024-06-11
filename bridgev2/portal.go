@@ -691,12 +691,12 @@ func (portal *Portal) handleRemoteEvent(source *UserLogin, evt RemoteEvent) {
 func (portal *Portal) getIntentFor(ctx context.Context, sender EventSender, source *UserLogin) MatrixAPI {
 	var intent MatrixAPI
 	if sender.IsFromMe {
-		intent = portal.Bridge.Matrix.UserIntent(source.User)
+		intent = source.User.DoublePuppet(ctx)
 	}
 	if intent == nil && sender.SenderLogin != "" {
 		senderLogin := portal.Bridge.GetCachedUserLoginByID(sender.SenderLogin)
 		if senderLogin != nil {
-			intent = portal.Bridge.Matrix.UserIntent(senderLogin.User)
+			intent = senderLogin.User.DoublePuppet(ctx)
 		}
 	}
 	if intent == nil {
@@ -1184,7 +1184,7 @@ func (portal *Portal) SyncParticipants(ctx context.Context, members []networkid.
 		for _, login := range loginsInPortal {
 			if login.Client.IsThisUser(ctx, member) {
 				isLoggedInUser = true
-				userIntent := portal.Bridge.Matrix.UserIntent(login.User)
+				userIntent := login.User.DoublePuppet(ctx)
 				if userIntent != nil {
 					expectedIntents[i] = userIntent
 				} else {

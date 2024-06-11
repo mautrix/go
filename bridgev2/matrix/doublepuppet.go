@@ -8,9 +8,6 @@ package matrix
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/sha512"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
@@ -24,8 +21,7 @@ import (
 )
 
 type doublePuppetUtil struct {
-	br  *Connector
-	log zerolog.Logger
+	br *Connector
 
 	discoveryCache     map[string]string
 	discoveryCacheLock sync.Mutex
@@ -34,7 +30,6 @@ type doublePuppetUtil struct {
 func newDoublePuppetUtil(br *Connector) *doublePuppetUtil {
 	return &doublePuppetUtil{
 		br:             br,
-		log:            br.Log.With().Str("component", "double puppet").Logger(),
 		discoveryCache: make(map[string]string),
 	}
 }
@@ -58,7 +53,7 @@ func (dp *doublePuppetUtil) newClient(ctx context.Context, mxid id.UserID, acces
 				}
 				homeserverURL = resp.Homeserver.BaseURL
 				dp.discoveryCache[homeserver] = homeserverURL
-				dp.log.Debug().
+				zerolog.Ctx(ctx).Debug().
 					Str("homeserver", homeserver).
 					Str("url", homeserverURL).
 					Str("user_id", mxid.String()).
@@ -85,47 +80,6 @@ func (dp *doublePuppetUtil) newIntent(ctx context.Context, mxid id.UserID, acces
 	return ia, nil
 }
 
-func (dp *doublePuppetUtil) autoLogin(ctx context.Context, mxid id.UserID, loginSecret string) (string, error) {
-	dp.log.Debug().Str("user_id", mxid.String()).Msg("Logging into user account with shared secret")
-	client, err := dp.newClient(ctx, mxid, "")
-	if err != nil {
-		return "", fmt.Errorf("failed to create mautrix client to log in: %v", err)
-	}
-	bridgeName := fmt.Sprintf("%s Bridge", dp.br.Bridge.Network.GetName().DisplayName)
-	req := mautrix.ReqLogin{
-		Identifier:               mautrix.UserIdentifier{Type: mautrix.IdentifierTypeUser, User: string(mxid)},
-		DeviceID:                 id.DeviceID(bridgeName),
-		InitialDeviceDisplayName: bridgeName,
-	}
-	if loginSecret == "appservice" {
-		client.AccessToken = dp.br.AS.Registration.AppToken
-		req.Type = mautrix.AuthTypeAppservice
-	} else {
-		loginFlows, err := client.GetLoginFlows(ctx)
-		if err != nil {
-			return "", fmt.Errorf("failed to get supported login flows: %w", err)
-		}
-		mac := hmac.New(sha512.New, []byte(loginSecret))
-		mac.Write([]byte(mxid))
-		token := hex.EncodeToString(mac.Sum(nil))
-		switch {
-		case loginFlows.HasFlow(mautrix.AuthTypeDevtureSharedSecret):
-			req.Type = mautrix.AuthTypeDevtureSharedSecret
-			req.Token = token
-		case loginFlows.HasFlow(mautrix.AuthTypePassword):
-			req.Type = mautrix.AuthTypePassword
-			req.Password = token
-		default:
-			return "", fmt.Errorf("no supported auth types for shared secret auth found")
-		}
-	}
-	resp, err := client.Login(ctx, &req)
-	if err != nil {
-		return "", err
-	}
-	return resp.AccessToken, nil
-}
-
 var (
 	ErrMismatchingMXID = errors.New("whoami result does not match custom mxid")
 	ErrNoAccessToken   = errors.New("no access token provided")
@@ -135,14 +89,13 @@ var (
 const useConfigASToken = "appservice-config"
 const asTokenModePrefix = "as_token:"
 
-func (dp *doublePuppetUtil) Setup(ctx context.Context, mxid id.UserID, savedAccessToken string, reloginOnFail bool) (intent *appservice.IntentAPI, newAccessToken string, err error) {
+func (dp *doublePuppetUtil) Setup(ctx context.Context, mxid id.UserID, savedAccessToken string) (intent *appservice.IntentAPI, newAccessToken string, err error) {
 	if len(mxid) == 0 {
 		err = ErrNoMXID
 		return
 	}
 	_, homeserver, _ := mxid.Parse()
 	loginSecret, hasSecret := dp.br.Config.DoublePuppet.Secrets[homeserver]
-	// Special case appservice: prefix to not login and use it as an as_token directly.
 	if hasSecret && strings.HasPrefix(loginSecret, asTokenModePrefix) {
 		intent, err = dp.newIntent(ctx, mxid, strings.TrimPrefix(loginSecret, asTokenModePrefix))
 		if err != nil {
@@ -157,16 +110,9 @@ func (dp *doublePuppetUtil) Setup(ctx context.Context, mxid id.UserID, savedAcce
 			}
 		}
 		return intent, useConfigASToken, err
-	}
-	if savedAccessToken == "" || savedAccessToken == useConfigASToken {
-		if reloginOnFail && hasSecret {
-			savedAccessToken, err = dp.autoLogin(ctx, mxid, loginSecret)
-		} else {
-			err = ErrNoAccessToken
-		}
-		if err != nil {
-			return
-		}
+	} else if savedAccessToken == "" || savedAccessToken == useConfigASToken {
+		err = ErrNoAccessToken
+		return
 	}
 	intent, err = dp.newIntent(ctx, mxid, savedAccessToken)
 	if err != nil {
@@ -174,17 +120,12 @@ func (dp *doublePuppetUtil) Setup(ctx context.Context, mxid id.UserID, savedAcce
 	}
 	var resp *mautrix.RespWhoami
 	resp, err = intent.Whoami(ctx)
-	if err != nil {
-		if reloginOnFail && hasSecret && errors.Is(err, mautrix.MUnknownToken) {
-			intent.AccessToken, err = dp.autoLogin(ctx, mxid, loginSecret)
-			if err == nil {
-				newAccessToken = intent.AccessToken
-			}
+	if err == nil {
+		if resp.UserID != mxid {
+			err = ErrMismatchingMXID
+		} else {
+			newAccessToken = savedAccessToken
 		}
-	} else if resp.UserID != mxid {
-		err = ErrMismatchingMXID
-	} else {
-		newAccessToken = savedAccessToken
 	}
 	return
 }

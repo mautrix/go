@@ -105,7 +105,10 @@ func (br *Connector) Init(bridge *bridgev2.Bridge) {
 	br.EventProcessor.On(event.StateMember, br.handleRoomEvent)
 	br.Bot = br.AS.BotIntent()
 	br.Crypto = NewCryptoHelper(br)
-	br.Bridge.Commands.AddHandlers(CommandDiscardMegolmSession, CommandSetPowerLevel)
+	br.Bridge.Commands.AddHandlers(
+		CommandDiscardMegolmSession, CommandSetPowerLevel,
+		CommandLoginMatrix, CommandPingMatrix, CommandLogoutMatrix,
+	)
 	br.Provisioning = &ProvisioningAPI{br: br}
 	br.DoublePuppet = newDoublePuppetUtil(br)
 }
@@ -367,9 +370,15 @@ func (br *Connector) FormatGhostMXID(userID networkid.UserID) id.UserID {
 	return id.NewUserID(localpart, br.Config.Homeserver.Domain)
 }
 
-func (br *Connector) UserIntent(user *bridgev2.User) bridgev2.MatrixAPI {
-	// TODO implement double puppeting
-	return nil
+func (br *Connector) NewUserIntent(ctx context.Context, userID id.UserID, accessToken string) (bridgev2.MatrixAPI, string, error) {
+	intent, newToken, err := br.DoublePuppet.Setup(ctx, userID, accessToken)
+	if err != nil {
+		if errors.Is(err, ErrNoAccessToken) {
+			err = nil
+		}
+		return nil, accessToken, err
+	}
+	return &ASIntent{Connector: br, Matrix: intent}, newToken, nil
 }
 
 func (br *Connector) BotIntent() bridgev2.MatrixAPI {
