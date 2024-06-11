@@ -13,17 +13,6 @@ import (
 
 // Information to find out exactly which commit the bridge was built from.
 // These are filled at build time with the -X linker flag.
-//
-// For example:
-//
-//	go build -ldflags "-X main.Tag=$(git describe --exact-match --tags 2>/dev/null) -X main.Commit=$(git rev-parse HEAD) -X 'main.BuildTime=`date -Iseconds`'"
-//
-// You may additionally want to fill the mautrix-go version using another ldflag:
-//
-//	export MAUTRIX_VERSION=$(cat go.mod | grep 'maunium.net/go/mautrix ' | head -n1 | awk '{ print $2 }')
-//	go build -ldflags "-X 'maunium.net/go/mautrix.GoModVersion=$MAUTRIX_VERSION'"
-//
-// (to use both at the same time, merge the ldflags into one, `-ldflags "-X ... -X ..."`)
 var (
 	Tag       = "unknown"
 	Commit    = "unknown"
@@ -31,7 +20,9 @@ var (
 )
 
 func ExampleBridgeMain() {
+	// Set this yourself
 	var yourConnector bridgev2.NetworkConnector
+
 	m := mxmain.BridgeMain{
 		Name:        "example-matrix-bridge",
 		URL:         "https://github.com/octocat/matrix-bridge",

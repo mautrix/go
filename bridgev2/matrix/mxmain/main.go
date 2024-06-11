@@ -351,7 +351,24 @@ func (br *BridgeMain) Stop() {
 // InitVersion formats the bridge version and build time nicely for things like
 // the `version` bridge command on Matrix and the `--version` CLI flag.
 //
-// The values should generally be set by the build system. See the [BridgeMain] example for usage.
+// The values should generally be set by the build system. For example, assuming you have
+//
+//	var (
+//		Tag       = "unknown"
+//		Commit    = "unknown"
+//		BuildTime = "unknown"
+//	)
+//
+// in your main package, then you'd use the following ldflags to fill them appropriately:
+//
+//	go build -ldflags "-X main.Tag=$(git describe --exact-match --tags 2>/dev/null) -X main.Commit=$(git rev-parse HEAD) -X 'main.BuildTime=`date -Iseconds`'"
+//
+// You may additionally want to fill the mautrix-go version using another ldflag:
+//
+//	export MAUTRIX_VERSION=$(cat go.mod | grep 'maunium.net/go/mautrix ' | head -n1 | awk '{ print $2 }')
+//	go build -ldflags "-X 'maunium.net/go/mautrix.GoModVersion=$MAUTRIX_VERSION'"
+//
+// (to use both at the same time, simply merge the ldflags into one, `-ldflags "-X '...' -X ..."`)
 func (br *BridgeMain) InitVersion(tag, commit, rawBuildTime string) {
 	br.baseVersion = br.Version
 	if len(tag) > 0 && tag[0] == 'v' {
