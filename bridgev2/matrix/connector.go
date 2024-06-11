@@ -308,7 +308,7 @@ func (br *Connector) internalSendMessageStatus(ctx context.Context, ms *bridgev2
 	if err != nil {
 		log.Err(err).Msg("Failed to send message checkpoint")
 	}
-	if br.Config.Matrix.MessageStatusEvents {
+	if !ms.DisableMSS && br.Config.Matrix.MessageStatusEvents {
 		_, err = br.Bot.SendMessageEvent(ctx, evt.RoomID, event.BeeperMessageStatus, ms.ToMSSEvent(evt))
 		if err != nil {
 			log.Err(err).Msg("Failed to send MSS event")

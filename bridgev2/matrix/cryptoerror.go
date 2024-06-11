@@ -80,6 +80,7 @@ func (br *Connector) sendCryptoStatusError(ctx context.Context, evt *event.Event
 		// Don't send notice for first error
 		if retryNum == 0 {
 			ms.SendNotice = false
+			ms.DisableMSS = true
 		}
 	}
 	var editEventID id.EventID

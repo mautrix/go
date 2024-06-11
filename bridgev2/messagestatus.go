@@ -60,6 +60,7 @@ type MessageStatus struct {
 	ErrorAsMessage bool
 	IsCertain      bool
 	SendNotice     bool
+	DisableMSS     bool
 }
 
 func WrapErrorInStatus(err error) MessageStatus {
