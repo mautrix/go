@@ -4,6 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+// Package mxmain contains initialization code for a single-network Matrix bridge using the bridgev2 package.
 package mxmain
 
 import (
@@ -45,20 +46,34 @@ var ignoreForeignTables = flag.Make().LongKey("ignore-foreign-tables").Usage("Ru
 var ignoreUnsupportedServer = flag.Make().LongKey("ignore-unsupported-server").Usage("Run even if the Matrix homeserver is outdated").Default("false").Bool()
 var wantHelp, _ = flag.MakeHelpFlag()
 
+// BridgeMain contains the main function for a Matrix bridge.
 type BridgeMain struct {
-	Name        string
+	// Name is the name of the bridge project, e.g. mautrix-signal.
+	// Note that when making your own bridges that isn't under github.com/mautrix,
+	// you should invent your own name and not use the mautrix-* naming scheme.
+	Name string
+	// Description is a brief description of the bridge, usually of the form "A Matrix-OtherPlatform puppeting bridge."
 	Description string
-	URL         string
-	Version     string
+	// URL is the Git repository address for the bridge.
+	URL string
+	// Version is the latest release of the bridge. InitVersion will compare this to the provided
+	// git tag to see if the built version is the release or a dev build.
+	// You can either bump this right after a release or right before, as long as it matches on the release commit.
+	Version string
 
+	// PostInit is a function that will be called after the bridge has been initialized but before it is started.
 	PostInit func()
 
+	// Connector is the network connector for the bridge.
 	Connector bridgev2.NetworkConnector
-	Log       *zerolog.Logger
-	DB        *dbutil.Database
-	Config    *bridgeconfig.Config
-	Matrix    *matrix.Connector
-	Bridge    *bridgev2.Bridge
+
+	// All fields below are set automatically in Run or InitVersion should not be set manually.
+
+	Log    *zerolog.Logger
+	DB     *dbutil.Database
+	Config *bridgeconfig.Config
+	Matrix *matrix.Connector
+	Bridge *bridgev2.Bridge
 
 	ConfigPath       string
 	RegistrationPath string
@@ -93,7 +108,19 @@ type VersionJSONOutput struct {
 	}
 }
 
+// Run runs the bridge and waits for SIGTERM before stopping.
 func (br *BridgeMain) Run() {
+	br.PreInit()
+	br.Init()
+	br.Start()
+	br.WaitForInterrupt()
+	br.Stop()
+}
+
+// PreInit parses CLI flags and loads the config file. This is called by [Run] and does not need to be called manually.
+//
+// This also handles all flags that cause the bridge to exit immediately (e.g. `--version` and `--generate-registration`).
+func (br *BridgeMain) PreInit() {
 	flag.SetHelpTitles(
 		fmt.Sprintf("%s - %s", br.Name, br.Description),
 		fmt.Sprintf("%s [-hgvn%s] [-c <path>] [-r <path>]%s", br.Name, br.AdditionalShortFlags, br.AdditionalLongFlags))
@@ -134,28 +161,11 @@ func (br *BridgeMain) Run() {
 		exerrors.PanicIfNotNil(os.WriteFile(*configPath, []byte(br.makeFullExampleConfig(networkExample)), 0600))
 		return
 	}
-
-	br.loadConfig()
+	br.LoadConfig()
 	if *generateRegistration {
 		br.GenerateRegistration()
 		return
 	}
-
-	br.Init()
-	err = br.Bridge.Start()
-	if err != nil {
-		var dbUpgradeErr bridgev2.DBUpgradeError
-		if errors.As(err, &dbUpgradeErr) {
-			br.LogDBUpgradeErrorAndExit(dbUpgradeErr.Section, dbUpgradeErr.Err)
-		} else {
-			br.Log.Fatal().Err(err).Msg("Failed to start bridge")
-		}
-	}
-
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	<-c
-	br.Log.Info().Msg("Shutting down bridge")
 }
 
 func (br *BridgeMain) GenerateRegistration() {
@@ -188,6 +198,8 @@ func (br *BridgeMain) GenerateRegistration() {
 	os.Exit(0)
 }
 
+// Init sets up logging, database connection and creates the Matrix connector and central Bridge struct.
+// This is called by [Run] and does not need to be called manually.
 func (br *BridgeMain) Init() {
 	var err error
 	br.Log, err = br.Config.Logging.Compile()
@@ -283,7 +295,9 @@ func (br *BridgeMain) getConfigUpgrader() (configupgrade.BaseUpgrader, any) {
 	return upgrader, networkData
 }
 
-func (br *BridgeMain) loadConfig() {
+// LoadConfig upgrades and loads the config file.
+// This is called by [Run] and does not need to be called manually.
+func (br *BridgeMain) LoadConfig() {
 	upgrader, networkData := br.getConfigUpgrader()
 	configData, upgraded, err := configupgrade.Do(br.ConfigPath, br.SaveConfig, upgrader)
 	if err != nil {
@@ -307,6 +321,37 @@ func (br *BridgeMain) loadConfig() {
 	br.Config = &cfg
 }
 
+// Start starts the bridge after everything has been initialized.
+// This is called by [Run] and does not need to be called manually.
+func (br *BridgeMain) Start() {
+	err := br.Bridge.Start()
+	if err != nil {
+		var dbUpgradeErr bridgev2.DBUpgradeError
+		if errors.As(err, &dbUpgradeErr) {
+			br.LogDBUpgradeErrorAndExit(dbUpgradeErr.Section, dbUpgradeErr.Err)
+		} else {
+			br.Log.Fatal().Err(err).Msg("Failed to start bridge")
+		}
+	}
+}
+
+// WaitForInterrupt waits for a SIGINT or SIGTERM signal.
+func (br *BridgeMain) WaitForInterrupt() {
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	<-c
+}
+
+// Stop cleanly stops the bridge. This is called by [Run] and does not need to be called manually.
+func (br *BridgeMain) Stop() {
+	br.Log.Info().Msg("Shutting down bridge")
+	// TODO actually stop cleanly
+}
+
+// InitVersion formats the bridge version and build time nicely for things like
+// the `version` bridge command on Matrix and the `--version` CLI flag.
+//
+// The values should generally be set by the build system. See the [BridgeMain] example for usage.
 func (br *BridgeMain) InitVersion(tag, commit, rawBuildTime string) {
 	br.baseVersion = br.Version
 	if len(tag) > 0 && tag[0] == 'v' {
