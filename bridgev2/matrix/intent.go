@@ -40,6 +40,9 @@ func (as *ASIntent) SendMessage(ctx context.Context, roomID id.RoomID, eventType
 		if encrypted, err := as.Matrix.StateStore.IsEncrypted(ctx, roomID); err != nil {
 			return nil, fmt.Errorf("failed to check if room is encrypted: %w", err)
 		} else if encrypted {
+			if as.Matrix.IsCustomPuppet {
+				as.Matrix.AddDoublePuppetValueWithTS(content, ts.UnixMilli())
+			}
 			err = as.Connector.Crypto.Encrypt(ctx, roomID, eventType, content)
 			if err != nil {
 				return nil, err

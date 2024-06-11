@@ -14,6 +14,7 @@ import (
 
 	"github.com/rs/zerolog"
 
+	"maunium.net/go/mautrix/appservice"
 	"maunium.net/go/mautrix/bridge/status"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/event"
@@ -143,7 +144,13 @@ func (br *Connector) shouldIgnoreEvent(evt *event.Event) bool {
 	if isGhost {
 		return true
 	}
-	// TODO exclude double puppeted events
+	dpVal, ok := evt.Content.Raw[appservice.DoublePuppetKey]
+	if ok && dpVal == br.AS.DoublePuppetValue {
+		dpTS, ok := evt.Content.Raw[appservice.DoublePuppetTSKey].(float64)
+		if !ok || int64(dpTS) == evt.Timestamp {
+			return true
+		}
+	}
 	return false
 }
 

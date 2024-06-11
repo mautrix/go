@@ -86,7 +86,7 @@ func NewConnector(cfg *bridgeconfig.Config) *Connector {
 func (br *Connector) Init(bridge *bridgev2.Bridge) {
 	br.Bridge = bridge
 	br.Log = &bridge.Log
-	br.StateStore = sqlstatestore.NewSQLStateStore(bridge.DB.Database, dbutil.ZeroLogger(br.Log.With().Str("db_section", "matrix").Logger()), false)
+	br.StateStore = sqlstatestore.NewSQLStateStore(bridge.DB.Database, dbutil.ZeroLogger(br.Log.With().Str("db_section", "matrix_state").Logger()), false)
 	br.AS = br.Config.MakeAppService()
 	br.AS.Log = bridge.Log
 	br.AS.StateStore = br.StateStore

@@ -214,6 +214,7 @@ func (br *BridgeMain) Init() {
 	br.Matrix = matrix.NewConnector(br.Config)
 	br.Matrix.IgnoreUnsupportedServer = *ignoreUnsupportedServer
 	br.Bridge = bridgev2.NewBridge("", br.DB, *br.Log, &br.Config.Bridge, br.Matrix, br.Connector)
+	br.Matrix.AS.DoublePuppetValue = br.Name
 	if br.PostInit != nil {
 		br.PostInit()
 	}
