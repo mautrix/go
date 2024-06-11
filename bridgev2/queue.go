@@ -43,13 +43,13 @@ func (br *Bridge) QueueMatrixEvent(ctx context.Context, evt *event.Event) {
 		if msg != nil {
 			msg.RemoveReplyFallback()
 
-			if strings.HasPrefix(msg.Body, br.CommandPrefix) || evt.RoomID == sender.ManagementRoom {
+			if strings.HasPrefix(msg.Body, br.Config.CommandPrefix) || evt.RoomID == sender.ManagementRoom {
 				br.Commands.Handle(
 					ctx,
 					evt.RoomID,
 					evt.ID,
 					sender,
-					strings.TrimPrefix(msg.Body, br.CommandPrefix+" "),
+					strings.TrimPrefix(msg.Body, br.Config.CommandPrefix+" "),
 					msg.RelatesTo.GetReplyTo(),
 				)
 				return

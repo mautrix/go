@@ -108,7 +108,7 @@ func FormatHelp(ce *CommandEvent) string {
 	} else {
 		prefixMsg = "This is not your management room: prefixing commands with `%s` is required."
 	}
-	_, _ = fmt.Fprintf(&output, prefixMsg, ce.Bridge.CommandPrefix)
+	_, _ = fmt.Fprintf(&output, prefixMsg, ce.Bridge.Config.CommandPrefix)
 	output.WriteByte('\n')
 	output.WriteString("Parameters in [square brackets] are optional, while parameters in <angle brackets> are required.")
 	output.WriteByte('\n')

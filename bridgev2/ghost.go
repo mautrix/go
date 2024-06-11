@@ -178,11 +178,12 @@ func (ghost *Ghost) UpdateContactInfo(ctx context.Context, identifiers []string,
 	if isBot != nil {
 		ghost.Metadata.IsBot = *isBot
 	}
+	bridgeName := ghost.Bridge.Network.GetName()
 	meta := &event.BeeperProfileExtra{
 		RemoteID:     string(ghost.ID),
 		Identifiers:  ghost.Metadata.Identifiers,
-		Service:      "", // TODO set
-		Network:      "", // TODO set
+		Service:      bridgeName.BeeperBridgeType,
+		Network:      bridgeName.NetworkID,
 		IsBridgeBot:  false,
 		IsNetworkBot: ghost.Metadata.IsBot,
 	}

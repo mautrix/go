@@ -1111,12 +1111,7 @@ func (portal *Portal) getBridgeInfo() (string, event.BridgeEventContent) {
 	bridgeInfo := event.BridgeEventContent{
 		BridgeBot: portal.Bridge.Bot.GetMXID(),
 		Creator:   portal.Bridge.Bot.GetMXID(),
-		Protocol: event.BridgeInfoSection{
-			ID:          "signal",              // TODO fill properly
-			DisplayName: "Signal",              // TODO fill properly
-			AvatarURL:   "",                    // TODO fill properly
-			ExternalURL: "https://signal.org/", // TODO fill properly
-		},
+		Protocol:  portal.Bridge.Network.GetName().AsBridgeInfoSection(),
 		Channel: event.BridgeInfoSection{
 			ID:          string(portal.ID),
 			DisplayName: portal.Name,

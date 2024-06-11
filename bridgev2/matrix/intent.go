@@ -172,6 +172,12 @@ func (as *ASIntent) CreateRoom(ctx context.Context, req *mautrix.ReqCreateRoom) 
 			},
 		})
 	}
+	if !as.Connector.Config.Matrix.FederateRooms {
+		if req.CreationContent == nil {
+			req.CreationContent = make(map[string]any)
+		}
+		req.CreationContent["m.federate"] = false
+	}
 	resp, err := as.Matrix.CreateRoom(ctx, req)
 	if err != nil {
 		return "", err

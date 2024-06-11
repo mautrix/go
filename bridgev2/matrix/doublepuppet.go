@@ -74,9 +74,7 @@ func (dp *doublePuppetUtil) autoLogin(ctx context.Context, mxid id.UserID, login
 	if err != nil {
 		return "", fmt.Errorf("failed to create mautrix client to log in: %v", err)
 	}
-	// TODO proper bridge name
-	//bridgeName := fmt.Sprintf("%s Bridge", dp.br.ProtocolName)
-	bridgeName := "Megabridge"
+	bridgeName := fmt.Sprintf("%s Bridge", dp.br.Bridge.Network.GetName().DisplayName)
 	req := mautrix.ReqLogin{
 		Identifier:               mautrix.UserIdentifier{Type: mautrix.IdentifierTypeUser, User: string(mxid)},
 		DeviceID:                 id.DeviceID(bridgeName),

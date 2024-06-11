@@ -40,7 +40,7 @@ type CommandEvent struct {
 
 // Reply sends a reply to command as notice, with optional string formatting and automatic $cmdprefix replacement.
 func (ce *CommandEvent) Reply(msg string, args ...any) {
-	msg = strings.ReplaceAll(msg, "$cmdprefix ", ce.Bridge.CommandPrefix+" ")
+	msg = strings.ReplaceAll(msg, "$cmdprefix ", ce.Bridge.Config.CommandPrefix+" ")
 	if len(args) > 0 {
 		msg = fmt.Sprintf(msg, args...)
 	}

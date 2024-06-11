@@ -9,18 +9,15 @@ package bridgev2
 import (
 	"context"
 	"errors"
-	"os"
-	"os/signal"
+	"fmt"
 	"sync"
-	"syscall"
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/dbutil"
-	"go.mau.fi/util/exerrors"
 
+	"maunium.net/go/mautrix/bridgev2/bridgeconfig"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
-
 	"maunium.net/go/mautrix/id"
 )
 
@@ -35,9 +32,7 @@ type Bridge struct {
 	Bot      MatrixAPI
 	Network  NetworkConnector
 	Commands *CommandProcessor
-
-	// TODO move to config
-	CommandPrefix string
+	Config   *bridgeconfig.BridgeConfig
 
 	usersByMXID    map[id.UserID]*User
 	userLoginsByID map[networkid.UserLoginID]*UserLogin
@@ -47,7 +42,7 @@ type Bridge struct {
 	cacheLock      sync.Mutex
 }
 
-func NewBridge(bridgeID networkid.BridgeID, db *dbutil.Database, log zerolog.Logger, matrix MatrixConnector, network NetworkConnector) *Bridge {
+func NewBridge(bridgeID networkid.BridgeID, db *dbutil.Database, log zerolog.Logger, cfg *bridgeconfig.BridgeConfig, matrix MatrixConnector, network NetworkConnector) *Bridge {
 	br := &Bridge{
 		ID:  bridgeID,
 		DB:  database.New(bridgeID, db),
@@ -55,12 +50,16 @@ func NewBridge(bridgeID networkid.BridgeID, db *dbutil.Database, log zerolog.Log
 
 		Matrix:  matrix,
 		Network: network,
+		Config:  cfg,
 
 		usersByMXID:    make(map[id.UserID]*User),
 		userLoginsByID: make(map[networkid.UserLoginID]*UserLogin),
 		portalsByKey:   make(map[networkid.PortalKey]*Portal),
 		portalsByMXID:  make(map[id.RoomID]*Portal),
 		ghostsByID:     make(map[networkid.UserID]*Ghost),
+	}
+	if br.Config == nil {
+		br.Config = &bridgeconfig.BridgeConfig{CommandPrefix: "!bridge"}
 	}
 	br.Commands = NewProcessor(br)
 	br.Matrix.Init(br)
@@ -69,19 +68,41 @@ func NewBridge(bridgeID networkid.BridgeID, db *dbutil.Database, log zerolog.Log
 	return br
 }
 
-func (br *Bridge) Start() {
+type DBUpgradeError struct {
+	Err     error
+	Section string
+}
+
+func (e DBUpgradeError) Error() string {
+	return e.Err.Error()
+}
+
+func (e DBUpgradeError) Unwrap() error {
+	return e.Err
+}
+
+func (br *Bridge) Start() error {
 	br.Log.Info().Msg("Starting bridge")
 	ctx := br.Log.WithContext(context.Background())
 
-	exerrors.PanicIfNotNil(br.DB.Upgrade(ctx))
+	err := br.DB.Upgrade(ctx)
+	if err != nil {
+		return DBUpgradeError{Err: err, Section: "main"}
+	}
 	br.Log.Info().Msg("Starting Matrix connector")
-	exerrors.PanicIfNotNil(br.Matrix.Start(ctx))
+	err = br.Matrix.Start(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to start Matrix connector: %w", err)
+	}
 	br.Log.Info().Msg("Starting network connector")
-	exerrors.PanicIfNotNil(br.Network.Start(ctx))
+	err = br.Network.Start(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to start network connector: %w", err)
+	}
 
 	logins, err := br.GetAllUserLogins(ctx)
 	if err != nil {
-		br.Log.Fatal().Err(err).Msg("Failed to get user logins")
+		return fmt.Errorf("failed to get user logins: %w", err)
 	}
 	for _, login := range logins {
 		br.Log.Info().Str("id", string(login.ID)).Msg("Starting user login")
@@ -92,11 +113,9 @@ func (br *Bridge) Start() {
 	}
 	if len(logins) == 0 {
 		br.Log.Info().Msg("No user logins found")
+		// TODO send UNCONFIGURED bridge state
 	}
 
 	br.Log.Info().Msg("Bridge started")
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	<-c
-	br.Log.Info().Msg("Shutting down bridge")
+	return nil
 }

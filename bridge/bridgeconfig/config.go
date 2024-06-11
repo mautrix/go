@@ -223,7 +223,7 @@ type BaseConfig struct {
 	Logging    zeroconfig.Config `yaml:"logging"`
 }
 
-func doUpgrade(helper *up.Helper) {
+func doUpgrade(helper up.Helper) {
 	helper.Copy(up.Str, "homeserver", "address")
 	helper.Copy(up.Str, "homeserver", "domain")
 	if legacyAsmuxFlag, ok := helper.Get(up.Bool, "homeserver", "asmux"); ok && legacyAsmuxFlag == "true" {
@@ -283,7 +283,7 @@ type legacyLogConfig struct {
 	JSONFile        bool   `yaml:"file_json"`
 }
 
-func migrateLegacyLogConfig(helper *up.Helper) {
+func migrateLegacyLogConfig(helper up.Helper) {
 	var llc legacyLogConfig
 	var newConfig zeroconfig.Config
 	err := helper.GetBaseNode("logging").Decode(&newConfig)

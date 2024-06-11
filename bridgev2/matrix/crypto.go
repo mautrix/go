@@ -21,6 +21,7 @@ import (
 	"go.mau.fi/util/dbutil"
 
 	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/crypto"
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/event"
@@ -77,9 +78,7 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 
 	err := helper.store.DB.Upgrade(ctx)
 	if err != nil {
-		// TODO copy this function back
-		//helper.bridge.LogDBUpgradeErrorAndExit("crypto", err)
-		panic(err)
+		return bridgev2.DBUpgradeError{Section: "crypto", Err: err}
 	}
 
 	var isExistingDevice bool

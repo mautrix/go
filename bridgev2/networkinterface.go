@@ -11,10 +11,12 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/configupgrade"
 
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/id"
 )
 
 type ConvertedMessagePart struct {
@@ -54,13 +56,47 @@ type ConvertedEdit struct {
 	DeletedParts  []*database.Message
 }
 
+type BridgeName struct {
+	// The displayname of the network, e.g. `Discord`
+	DisplayName string
+	// The URL to the website of the network, e.g. `https://discord.com`
+	NetworkURL string
+	// The icon of the network as a mxc:// URI
+	NetworkIcon id.ContentURIString
+	// An identifier uniquely identifying the network, e.g. `discord`
+	NetworkID string
+	// An identifier uniquely identifying the bridge software, e.g. `discordgo`
+	BeeperBridgeType string
+	// The default appservice port to use in the example config, defaults to 8080 if unset
+	DefaultPort uint16
+	// The default command prefix to use in the example config, defaults to NetworkID if unset. Must include the ! prefix.
+	DefaultCommandPrefix string
+}
+
+func (bn BridgeName) AsBridgeInfoSection() event.BridgeInfoSection {
+	return event.BridgeInfoSection{
+		ID:          bn.BeeperBridgeType,
+		DisplayName: bn.DisplayName,
+		AvatarURL:   bn.NetworkIcon,
+		ExternalURL: bn.NetworkURL,
+	}
+}
+
 type NetworkConnector interface {
 	Init(*Bridge)
 	Start(context.Context) error
 	LoadUserLogin(ctx context.Context, login *UserLogin) error
 
+	GetName() BridgeName
+	GetConfig() (example string, data any, upgrader configupgrade.Upgrader)
+
 	GetLoginFlows() []LoginFlow
 	CreateLogin(ctx context.Context, user *User, flowID string) (LoginProcess, error)
+}
+
+type ConfigValidatingNetwork interface {
+	NetworkConnector
+	ValidateConfig() error
 }
 
 type NetworkAPI interface {

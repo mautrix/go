@@ -13,20 +13,26 @@ import (
 )
 
 type Config struct {
-	Homeserver          HomeserverConfig    `yaml:"homeserver"`
-	AppService          AppserviceConfig    `yaml:"appservice"`
-	Database            dbutil.Config       `yaml:"database"`
-	Bridge              BridgeConfig        `yaml:"bridge"` // TODO this is more like matrix than bridge
-	Provisioning        ProvisioningConfig  `yaml:"provisioning"`
-	DoublePuppet        DoublePuppetConfig  `yaml:"double_puppet"`
-	Encryption          EncryptionConfig    `yaml:"encryption"`
+	Network      yaml.Node          `yaml:"network"`
+	Bridge       BridgeConfig       `yaml:"bridge"`
+	Database     dbutil.Config      `yaml:"database"`
+	Homeserver   HomeserverConfig   `yaml:"homeserver"`
+	AppService   AppserviceConfig   `yaml:"appservice"`
+	Matrix       MatrixConfig       `yaml:"matrix"`
+	Provisioning ProvisioningConfig `yaml:"provisioning"`
+	DoublePuppet DoublePuppetConfig `yaml:"double_puppet"`
+	Encryption   EncryptionConfig   `yaml:"encryption"`
+	Logging      zeroconfig.Config  `yaml:"logging"`
+
 	Permissions         PermissionConfig    `yaml:"permissions"`
 	ManagementRoomTexts ManagementRoomTexts `yaml:"management_room_texts"`
-	Logging             zeroconfig.Config   `yaml:"logging"`
-	Network             yaml.Node           `yaml:"network"`
 }
 
 type BridgeConfig struct {
+	CommandPrefix string `yaml:"command_prefix"`
+}
+
+type MatrixConfig struct {
 	MessageStatusEvents bool `yaml:"message_status_events"`
 	DeliveryReceipts    bool `yaml:"delivery_receipts"`
 	MessageErrorNotices bool `yaml:"message_error_notices"`
