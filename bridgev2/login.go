@@ -9,7 +9,6 @@ package bridgev2
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"strings"
 
 	"maunium.net/go/mautrix/bridgev2/networkid"
@@ -124,7 +123,16 @@ type LoginInputDataField struct {
 	Validate func(string) (string, error) `json:"-"`
 }
 
-var phoneNumberRe = regexp.MustCompile(`\+\d+`)
+var numberCleaner = strings.NewReplacer("-", "", " ", "", "(", "", ")", "")
+
+func isOnlyNumbers(input string) bool {
+	for _, r := range input {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
 
 func (f *LoginInputDataField) FillDefaultValidate() {
 	noopValidate := func(input string) (string, error) { return input, nil }
@@ -134,9 +142,13 @@ func (f *LoginInputDataField) FillDefaultValidate() {
 	switch f.Type {
 	case LoginInputFieldTypePhoneNumber:
 		f.Validate = func(phone string) (string, error) {
-			phone = strings.ReplaceAll(phone, " ", "")
-			if !phoneNumberRe.MatchString(phone) {
-				return "", fmt.Errorf("invalid phone number")
+			phone = numberCleaner.Replace(phone)
+			if len(phone) < 2 {
+				return "", fmt.Errorf("phone number must start with + and contain numbers")
+			} else if phone[0] != '+' {
+				return "", fmt.Errorf("phone number must start with +")
+			} else if !isOnlyNumbers(phone[1:]) {
+				return "", fmt.Errorf("phone number must only contain numbers")
 			}
 			return phone, nil
 		}
