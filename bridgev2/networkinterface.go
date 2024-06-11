@@ -56,6 +56,7 @@ type ConvertedEdit struct {
 	DeletedParts  []*database.Message
 }
 
+// BridgeName contains information about the network that a connector bridges to.
 type BridgeName struct {
 	// The displayname of the network, e.g. `Discord`
 	DisplayName string
@@ -82,23 +83,50 @@ func (bn BridgeName) AsBridgeInfoSection() event.BridgeInfoSection {
 	}
 }
 
+// NetworkConnector is the main interface that a network connector must implement.
 type NetworkConnector interface {
+	// Init is called when the bridge is initialized. The connector should store the bridge instance for later use.
+	// This should not do any network calls or other blocking operations.
 	Init(*Bridge)
+	// Start is called when the bridge is starting.
+	// The connector should do any non-user-specific startup actions necessary.
+	// User logins will be loaded separately, so the connector should not load them here.
 	Start(context.Context) error
+	// LoadUserLogin is called when a UserLogin is loaded from the database in order to fill the [UserLogin.Client] field.
+	//
+	// This is called within the bridge's global cache lock, so it must not do any slow operations,
+	// such as connecting to the network. Instead, connecting should happen when [NetworkAPI.Connect] is called later.
 	LoadUserLogin(ctx context.Context, login *UserLogin) error
 
 	GetName() BridgeName
+	// GetConfig returns all the parts of the network connector's config file. Specifically:
+	// - example: a string containing an example config file
+	// - data: an interface to unmarshal the actual config into
+	// - upgrader: a config upgrader to ensure all fields are present and to do any migrations from old configs
 	GetConfig() (example string, data any, upgrader configupgrade.Upgrader)
 
+	// GetLoginFlows returns a list of login flows that the network supports.
 	GetLoginFlows() []LoginFlow
+	// CreateLogin is called when a user wants to log in to the network.
+	//
+	// This should generally not do any work, it should just return a LoginProcess that remembers
+	// the user and will execute the requested flow. The actual work should start when [LoginProcess.Start] is called.
 	CreateLogin(ctx context.Context, user *User, flowID string) (LoginProcess, error)
 }
 
+// ConfigValidatingNetwork is an optional interface that network connectors can implement to validate config fields
+// before the bridge is started.
+//
+// When the ValidateConfig method is called, the config data will already be unmarshaled into the
+// object returned by [NetworkConnector.GetConfig].
+//
+// This mechanism is usually used to refuse bridge startup if a mandatory field has an invalid value.
 type ConfigValidatingNetwork interface {
 	NetworkConnector
 	ValidateConfig() error
 }
 
+// NetworkAPI is an interface representing a remote network client for a single user login.
 type NetworkAPI interface {
 	Connect(ctx context.Context) error
 	IsLoggedIn() bool
@@ -127,6 +155,10 @@ const (
 	RemoteEventMessageRemove
 )
 
+// RemoteEvent represents a single event from the remote network, such as a message or a reaction.
+//
+// When a [NetworkAPI] receives an event from the remote network, it should convert it into a [RemoteEvent]
+// and pass it to the bridge for processing using [Bridge.QueueRemoteEvent].
 type RemoteEvent interface {
 	GetType() RemoteEventType
 	GetPortalKey() networkid.PortalKey

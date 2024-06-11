@@ -1,0 +1,23 @@
+title Bridge v2 incoming Matrix message
+
+participant Network Library
+participant Network Connector
+participant Bridge
+participant Portal
+participant Database
+participant Matrix
+
+Matrix->Bridge: QueueMatrixEvent(evt)
+note over Bridge: GetPortalByID(evt.GetPortalID())
+Bridge->Portal: portal.events <- evt
+loop event queue consumer
+  Portal->+Portal: \n        evt := <-portal.events
+  note over Portal: Check for edit, reply/thread, etc
+  Portal->+Network Connector: HandleMatrixMessage(evt, replyTo)
+  Network Connector->Network Connector: msg := ConvertMatrixMessage(evt)
+  Network Connector->+Network Library: SendMessage(msg)
+  Network Library->-Network Connector: OK
+  Network Connector->-Portal: *database.Message{msg.ID}
+  Portal->-Database: Message.Insert()
+  Portal->Matrix: Success checkpoint
+end

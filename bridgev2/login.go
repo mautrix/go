@@ -14,8 +14,20 @@ import (
 	"maunium.net/go/mautrix/bridgev2/networkid"
 )
 
+// LoginProcess represents a single occurrence of a user logging into the remote network.
 type LoginProcess interface {
+	// Start starts the process and returns the first step.
+	//
+	// For example, a network using QR login may connect to the network, fetch a QR code,
+	// and return a DisplayAndWait-type step.
+	//
+	// This will only ever be called once.
 	Start(ctx context.Context) (*LoginStep, error)
+	// Cancel stops the login process and cleans up any resources.
+	// No other methods will be called after cancel.
+	//
+	// Cancel will not be called if any other method returned an error:
+	// errors are always treated as fatal and the process is assumed to be automatically cancelled.
 	Cancel()
 }
 

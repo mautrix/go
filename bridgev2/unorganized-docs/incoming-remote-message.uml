@@ -1,0 +1,22 @@
+title Bridge v2 incoming remote message
+
+participant Network Library
+participant Network Connector
+participant Bridge
+participant Portal
+participant Database
+participant Matrix
+
+Network Library->Network Connector: New event
+Network Connector->Bridge: QueueRemoteEvent(evt)
+note over Bridge: GetPortalByID(evt.GetPortalID())
+Bridge->Portal: portal.events <- evt
+loop event queue consumer
+  Portal->+Portal: \n        evt := <-portal.events
+  note over Portal: CreateMatrixRoom() if applicable
+  Portal->+Network Connector: ConvertRemoteMessage(evt)
+  Network Connector->-Portal: *ConvertedMessage
+  Portal->+Matrix: SendMessage(convertedMsg)
+  Matrix->-Portal: event ID
+  Portal->-Database: Message.Insert()
+end
