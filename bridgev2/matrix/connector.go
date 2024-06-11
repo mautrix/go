@@ -46,7 +46,6 @@ type Crypto interface {
 }
 
 type Connector struct {
-	//DB         *dbutil.Database
 	AS           *appservice.AppService
 	Bot          *appservice.IntentAPI
 	StateStore   *sqlstatestore.SQLStateStore
@@ -71,6 +70,7 @@ type Connector struct {
 	wsStopped                      chan struct{}
 	wsShortCircuitReconnectBackoff chan struct{}
 	wsStartupWait                  *sync.WaitGroup
+	latestState                    *status.BridgeState
 }
 
 var _ bridgev2.MatrixConnector = (*Connector)(nil)
@@ -295,6 +295,22 @@ func (br *Connector) GhostIntent(userID id.UserID) bridgev2.MatrixAPI {
 	return &ASIntent{
 		Matrix:    br.AS.Intent(userID),
 		Connector: br,
+	}
+}
+
+func (br *Connector) SendBridgeStatus(ctx context.Context, state *status.BridgeState) error {
+	if br.Websocket {
+		// FIXME this doesn't account for multiple users
+		br.latestState = state
+
+		return br.AS.SendWebsocket(&appservice.WebsocketRequest{
+			Command: "bridge_status",
+			Data:    state,
+		})
+	} else if br.Config.Homeserver.StatusEndpoint != "" {
+		return state.SendHTTP(ctx, br.Config.Homeserver.StatusEndpoint, br.Config.AppService.ASToken)
+	} else {
+		return nil
 	}
 }
 

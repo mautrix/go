@@ -15,6 +15,7 @@ import (
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/dbutil"
 
+	"maunium.net/go/mautrix/bridge/status"
 	"maunium.net/go/mautrix/bridgev2/bridgeconfig"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
@@ -113,7 +114,7 @@ func (br *Bridge) Start() error {
 	}
 	if len(logins) == 0 {
 		br.Log.Info().Msg("No user logins found")
-		// TODO send UNCONFIGURED bridge state
+		br.SendGlobalBridgeState(status.BridgeState{StateEvent: status.StateUnconfigured})
 	}
 
 	br.Log.Info().Msg("Bridge started")

@@ -195,6 +195,7 @@ func (br *BridgeMain) Init() {
 		_, _ = fmt.Fprintln(os.Stderr, "Failed to initialize logger:", err)
 		os.Exit(12)
 	}
+	exzerolog.SetupDefaults(br.Log)
 	err = br.validateConfig()
 	if err != nil {
 		br.Log.WithLevel(zerolog.FatalLevel).Err(err).Msg("Configuration error")
@@ -209,7 +210,6 @@ func (br *BridgeMain) Init() {
 		Str("go_version", runtime.Version()).
 		Msg("Initializing bridge")
 
-	exzerolog.SetupDefaults(br.Log)
 	br.initDB()
 	br.Matrix = matrix.NewConnector(br.Config)
 	br.Matrix.IgnoreUnsupportedServer = *ignoreUnsupportedServer

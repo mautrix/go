@@ -12,8 +12,10 @@ import (
 
 	"github.com/rs/zerolog"
 
+	"maunium.net/go/mautrix/bridge/status"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
+	"maunium.net/go/mautrix/id"
 )
 
 type UserLogin struct {
@@ -22,7 +24,8 @@ type UserLogin struct {
 	User   *User
 	Log    zerolog.Logger
 
-	Client NetworkAPI
+	Client      NetworkAPI
+	BridgeState *BridgeStateQueue
 }
 
 func (br *Bridge) loadUserLogin(ctx context.Context, user *User, dbUserLogin *database.UserLogin) (*UserLogin, error) {
@@ -45,6 +48,7 @@ func (br *Bridge) loadUserLogin(ctx context.Context, user *User, dbUserLogin *da
 	}
 	user.logins[userLogin.ID] = userLogin
 	br.userLoginsByID[userLogin.ID] = userLogin
+	userLogin.BridgeState = br.NewBridgeStateQueue(userLogin)
 	return userLogin, nil
 }
 
@@ -135,8 +139,24 @@ func (ul *UserLogin) Logout(ctx context.Context) {
 	delete(ul.User.logins, ul.ID)
 	delete(ul.Bridge.userLoginsByID, ul.ID)
 	// TODO kick user out of rooms?
+	ul.BridgeState.Send(status.BridgeState{StateEvent: status.StateLoggedOut})
 }
 
 func (ul *UserLogin) MarkAsPreferredIn(ctx context.Context, portal *Portal) error {
 	return ul.Bridge.DB.UserLogin.MarkLoginAsPreferredInPortal(ctx, ul.UserLogin, portal.PortalKey)
+}
+
+var _ status.BridgeStateFiller = (*UserLogin)(nil)
+
+func (ul *UserLogin) GetMXID() id.UserID {
+	return ul.UserMXID
+}
+
+func (ul *UserLogin) GetRemoteID() string {
+	return string(ul.ID)
+}
+
+func (ul *UserLogin) GetRemoteName() string {
+	name, _ := ul.Metadata["remote_name"].(string)
+	return name
 }

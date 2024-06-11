@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/bridge/status"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -27,6 +28,7 @@ type MatrixConnector interface {
 	NewUserIntent(ctx context.Context, userID id.UserID, accessToken string) (MatrixAPI, string, error)
 	BotIntent() MatrixAPI
 
+	SendBridgeStatus(ctx context.Context, state *status.BridgeState) error
 	SendMessageStatus(ctx context.Context, status *MessageStatus, evt *MessageStatusEventInfo)
 
 	GetMembers(ctx context.Context, roomID id.RoomID) (map[id.UserID]*event.MemberEventContent, error)
