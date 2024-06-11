@@ -14,7 +14,7 @@ require (
 	github.com/tidwall/gjson v1.17.1
 	github.com/tidwall/sjson v1.2.5
 	github.com/yuin/goldmark v1.7.1
-	go.mau.fi/util v0.4.3-0.20240611114927-6ef09885dd97
+	go.mau.fi/util v0.4.3-0.20240611132549-e72a5f4745e7
 	go.mau.fi/zeroconfig v0.1.2
 	golang.org/x/crypto v0.24.0
 	golang.org/x/exp v0.0.0-20240604190554-fc45aab8b7f8

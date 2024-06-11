@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/rs/zerolog"
 
@@ -25,6 +26,17 @@ import (
 type doublePuppetUtil struct {
 	br  *Connector
 	log zerolog.Logger
+
+	discoveryCache     map[string]string
+	discoveryCacheLock sync.Mutex
+}
+
+func newDoublePuppetUtil(br *Connector) *doublePuppetUtil {
+	return &doublePuppetUtil{
+		br:             br,
+		log:            br.Log.With().Str("component", "double puppet").Logger(),
+		discoveryCache: make(map[string]string),
+	}
 }
 
 func (dp *doublePuppetUtil) newClient(ctx context.Context, mxid id.UserID, accessToken string) (*mautrix.Client, error) {
@@ -37,16 +49,21 @@ func (dp *doublePuppetUtil) newClient(ctx context.Context, mxid id.UserID, acces
 		if homeserver == dp.br.AS.HomeserverDomain {
 			homeserverURL = ""
 		} else if dp.br.Config.DoublePuppet.AllowDiscovery {
-			resp, err := mautrix.DiscoverClientAPI(ctx, homeserver)
-			if err != nil {
-				return nil, fmt.Errorf("failed to find homeserver URL for %s: %v", homeserver, err)
+			dp.discoveryCacheLock.Lock()
+			defer dp.discoveryCacheLock.Unlock()
+			if homeserverURL, found = dp.discoveryCache[homeserver]; !found {
+				resp, err := mautrix.DiscoverClientAPI(ctx, homeserver)
+				if err != nil {
+					return nil, fmt.Errorf("failed to find homeserver URL for %s: %v", homeserver, err)
+				}
+				homeserverURL = resp.Homeserver.BaseURL
+				dp.discoveryCache[homeserver] = homeserverURL
+				dp.log.Debug().
+					Str("homeserver", homeserver).
+					Str("url", homeserverURL).
+					Str("user_id", mxid.String()).
+					Msg("Discovered URL to enable double puppeting for user")
 			}
-			homeserverURL = resp.Homeserver.BaseURL
-			dp.log.Debug().
-				Str("homeserver", homeserver).
-				Str("url", homeserverURL).
-				Str("user_id", mxid.String()).
-				Msg("Discovered URL to enable double puppeting for user")
 		} else {
 			return nil, fmt.Errorf("double puppeting from %s is not allowed", homeserver)
 		}

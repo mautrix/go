@@ -110,6 +110,10 @@ provisioning:
     # Shared secret for authentication. If set to "generate" or null, a random secret will be generated,
     # or if set to "disable", the provisioning API will be disabled.
     shared_secret: generate
+    # Whether to allow provisioning API requests to be authed using Matrix access tokens.
+    # This follows the same rules as double puppeting to determine which server to contact to check the token,
+    # which means that by default, it only works for users on the same server as the bridge.
+    allow_matrix_auth: true
     # Enable debug API at /debug with provisioning authentication.
     debug_endpoints: true
 
@@ -118,7 +122,7 @@ double_puppet:
     # Servers to always allow double puppeting from.
     # This is only for other servers and should NOT contain the server the bridge is on.
     servers:
-        matrix.org: https://matrix-client.matrix.org
+        anotherserver.example.org: https://matrix.anotherserver.example.org
     # Whether to allow client API URL discovery for other servers. When using this option,
     # users on other servers can use double puppeting even if their server URLs aren't
     # explicitly added to the servers map above.

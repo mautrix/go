@@ -9,20 +9,27 @@ package matrix
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/rs/xid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/hlog"
-	"github.com/rs/zerolog/log"
+	"go.mau.fi/util/requestlog"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/id"
 )
+
+type matrixAuthCacheEntry struct {
+	Expires time.Time
+	UserID  id.UserID
+}
 
 type ProvisioningAPI struct {
 	br  *Connector
@@ -31,6 +38,9 @@ type ProvisioningAPI struct {
 
 	logins     map[string]*ProvLogin
 	loginsLock sync.RWMutex
+
+	matrixAuthCache     map[string]matrixAuthCacheEntry
+	matrixAuthCacheLock sync.Mutex
 }
 
 type ProvLogin struct {
@@ -48,12 +58,13 @@ const (
 )
 
 func (prov *ProvisioningAPI) Init() {
+	prov.matrixAuthCache = make(map[string]matrixAuthCacheEntry)
+	prov.logins = make(map[string]*ProvLogin)
 	prov.net = prov.br.Bridge.Network
 	prov.log = prov.br.Log.With().Str("component", "provisioning").Logger()
 	router := prov.br.AS.Router.PathPrefix(prov.br.Config.Provisioning.Prefix).Subrouter()
 	router.Use(hlog.NewHandler(prov.log))
-	// TODO add access logger
-	//router.Use(requestlog.AccessLogger(true))
+	router.Use(requestlog.AccessLogger(false))
 	router.Use(prov.AuthMiddleware)
 	router.Path("/v3/login/flows").Methods(http.MethodGet).HandlerFunc(prov.GetLoginFlows)
 	router.Path("/v3/login/start/{flowID}").Methods(http.MethodPost).HandlerFunc(prov.PostLoginStart)
@@ -61,7 +72,7 @@ func (prov *ProvisioningAPI) Init() {
 	router.Path("/v3/login/step/{loginID}/{stepID}/{stepType:wait}").Methods(http.MethodPost).HandlerFunc(prov.PostLoginWait)
 
 	if prov.br.Config.Provisioning.DebugEndpoints {
-		log.Debug().Msg("Enabling debug API at /debug")
+		prov.log.Debug().Msg("Enabling debug API at /debug")
 		r := prov.br.AS.Router.PathPrefix("/debug").Subrouter()
 		r.Use(prov.AuthMiddleware)
 		r.PathPrefix("/pprof").Handler(http.DefaultServeMux)
@@ -74,19 +85,43 @@ func jsonResponse(w http.ResponseWriter, status int, response any) {
 	_ = json.NewEncoder(w).Encode(response)
 }
 
+func (prov *ProvisioningAPI) checkMatrixAuth(ctx context.Context, userID id.UserID, token string) error {
+	prov.matrixAuthCacheLock.Lock()
+	defer prov.matrixAuthCacheLock.Unlock()
+	if cached, ok := prov.matrixAuthCache[token]; ok && cached.Expires.After(time.Now()) && cached.UserID == userID {
+		return nil
+	} else if client, err := prov.br.DoublePuppet.newClient(ctx, userID, token); err != nil {
+		return err
+	} else if whoami, err := client.Whoami(ctx); err != nil {
+		return err
+	} else if whoami.UserID != userID {
+		return fmt.Errorf("mismatching user ID (%q != %q)", whoami.UserID, userID)
+	} else {
+		prov.matrixAuthCache[token] = matrixAuthCacheEntry{
+			Expires: time.Now().Add(5 * time.Minute),
+			UserID:  whoami.UserID,
+		}
+		return nil
+	}
+}
+
 func (prov *ProvisioningAPI) AuthMiddleware(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		auth := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		userID := id.UserID(r.URL.Query().Get("user_id"))
 		if auth != prov.br.Config.Provisioning.SharedSecret {
-			zerolog.Ctx(r.Context()).Warn().Msg("Authentication token does not match shared secret")
-			jsonResponse(w, http.StatusForbidden, &mautrix.RespError{
-				Err:     "Authentication token does not match shared secret",
-				ErrCode: mautrix.MForbidden.ErrCode,
-			})
-			return
+			err := prov.checkMatrixAuth(r.Context(), userID, auth)
+			if err != nil {
+				zerolog.Ctx(r.Context()).Warn().Err(err).
+					Msg("Provisioning API request contained invalid auth")
+				jsonResponse(w, http.StatusForbidden, &mautrix.RespError{
+					Err:     "Invalid auth token",
+					ErrCode: mautrix.MForbidden.ErrCode,
+				})
+				return
+			}
 		}
-		userID := r.URL.Query().Get("user_id")
-		user, err := prov.br.Bridge.GetUserByMXID(r.Context(), id.UserID(userID))
+		user, err := prov.br.Bridge.GetUserByMXID(r.Context(), userID)
 		if err != nil {
 			zerolog.Ctx(r.Context()).Err(err).Msg("Failed to get user")
 			jsonResponse(w, http.StatusInternalServerError, &mautrix.RespError{

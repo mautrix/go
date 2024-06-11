@@ -55,6 +55,7 @@ type Connector struct {
 	Config       *bridgeconfig.Config
 	Bridge       *bridgev2.Bridge
 	Provisioning *ProvisioningAPI
+	DoublePuppet *doublePuppetUtil
 
 	MediaConfig             mautrix.RespMediaConfig
 	SpecVersions            *mautrix.RespVersions
@@ -106,6 +107,7 @@ func (br *Connector) Init(bridge *bridgev2.Bridge) {
 	br.Crypto = NewCryptoHelper(br)
 	br.Bridge.Commands.AddHandlers(CommandDiscardMegolmSession, CommandSetPowerLevel)
 	br.Provisioning = &ProvisioningAPI{br: br}
+	br.DoublePuppet = newDoublePuppetUtil(br)
 }
 
 func (br *Connector) Start(ctx context.Context) error {
