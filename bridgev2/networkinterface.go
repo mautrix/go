@@ -126,6 +126,16 @@ type ConfigValidatingNetwork interface {
 	ValidateConfig() error
 }
 
+// MaxFileSizeingNetwork is an optional interface that network connectors can implement
+// to find out the maximum file size that can be uploaded to Matrix.
+//
+// The SetMaxFileSize will be called asynchronously soon after startup.
+// Before the function is called, the connector may assume a default limit of 50 MiB.
+type MaxFileSizeingNetwork interface {
+	NetworkConnector
+	SetMaxFileSize(maxSize int64)
+}
+
 // NetworkAPI is an interface representing a remote network client for a single user login.
 type NetworkAPI interface {
 	Connect(ctx context.Context) error

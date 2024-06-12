@@ -250,6 +250,10 @@ func (br *Connector) fetchMediaConfig(ctx context.Context) {
 			cfg.UploadSize = 50 * 1024 * 1024
 		}
 		br.MediaConfig = *cfg
+		mfsn, ok := br.Bridge.Network.(bridgev2.MaxFileSizeingNetwork)
+		if ok {
+			mfsn.SetMaxFileSize(br.MediaConfig.UploadSize)
+		}
 	}
 }
 
