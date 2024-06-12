@@ -454,14 +454,21 @@ func (cli *Client) cliOrContextLog(ctx context.Context) *zerolog.Logger {
 func (cli *Client) doRetry(req *http.Request, cause error, retries int, backoff time.Duration, responseJSON interface{}, handler ClientResponseHandler, client *http.Client) ([]byte, error) {
 	log := zerolog.Ctx(req.Context())
 	if req.Body != nil {
-		if req.GetBody == nil {
-			log.Warn().Msg("Failed to get new body to retry request: GetBody is nil")
-			return nil, cause
-		}
 		var err error
-		req.Body, err = req.GetBody()
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to get new body to retry request")
+		if req.GetBody != nil {
+			req.Body, err = req.GetBody()
+			if err != nil {
+				log.Warn().Err(err).Msg("Failed to get new body to retry request")
+				return nil, cause
+			}
+		} else if bodySeeker, ok := req.Body.(io.ReadSeeker); ok {
+			_, err = bodySeeker.Seek(0, io.SeekStart)
+			if err != nil {
+				log.Warn().Err(err).Msg("Failed to seek to beginning of request body")
+				return nil, cause
+			}
+		} else {
+			log.Warn().Msg("Failed to get new body to retry request: GetBody is nil and Body is not an io.ReadSeeker")
 			return nil, cause
 		}
 	}
@@ -1424,14 +1431,21 @@ func (cli *Client) GetDownloadURL(mxcURL id.ContentURI) string {
 func (cli *Client) doMediaRetry(req *http.Request, cause error, retries int, backoff time.Duration) (*http.Response, error) {
 	log := zerolog.Ctx(req.Context())
 	if req.Body != nil {
-		if req.GetBody == nil {
-			log.Warn().Msg("Failed to get new body to retry request: GetBody is nil")
-			return nil, cause
-		}
 		var err error
-		req.Body, err = req.GetBody()
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to get new body to retry request")
+		if req.GetBody != nil {
+			req.Body, err = req.GetBody()
+			if err != nil {
+				log.Warn().Err(err).Msg("Failed to get new body to retry request")
+				return nil, cause
+			}
+		} else if bodySeeker, ok := req.Body.(io.ReadSeeker); ok {
+			_, err = bodySeeker.Seek(0, io.SeekStart)
+			if err != nil {
+				log.Warn().Err(err).Msg("Failed to seek to beginning of request body")
+				return nil, cause
+			}
+		} else {
+			log.Warn().Msg("Failed to get new body to retry request: GetBody is nil and Body is not an io.ReadSeeker")
 			return nil, cause
 		}
 	}
@@ -1573,12 +1587,13 @@ type ReqUploadMedia struct {
 	UnstableUploadURL string
 }
 
-func (cli *Client) tryUploadMediaToURL(ctx context.Context, url, contentType string, content io.Reader) (*http.Response, error) {
+func (cli *Client) tryUploadMediaToURL(ctx context.Context, url, contentType string, content io.Reader, contentLength int64) (*http.Response, error) {
 	cli.Log.Debug().Str("url", url).Msg("Uploading media to external URL")
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, content)
 	if err != nil {
 		return nil, err
 	}
+	req.ContentLength = contentLength
 	req.Header.Set("Content-Type", contentType)
 	req.Header.Set("User-Agent", cli.UserAgent+" (external media uploader)")
 
@@ -1587,18 +1602,17 @@ func (cli *Client) tryUploadMediaToURL(ctx context.Context, url, contentType str
 
 func (cli *Client) uploadMediaToURL(ctx context.Context, data ReqUploadMedia) (*RespMediaUpload, error) {
 	retries := cli.DefaultHTTPRetries
-	if data.ContentBytes == nil {
-		// Can't retry with a reader
+	reader := data.Content
+	if data.ContentBytes != nil {
+		data.ContentLength = int64(len(data.ContentBytes))
+		reader = bytes.NewReader(data.ContentBytes)
+	}
+	readerSeeker, canSeek := reader.(io.ReadSeeker)
+	if !canSeek {
 		retries = 0
 	}
 	for {
-		reader := data.Content
-		if reader == nil {
-			reader = bytes.NewReader(data.ContentBytes)
-		} else {
-			data.Content = nil
-		}
-		resp, err := cli.tryUploadMediaToURL(ctx, data.UnstableUploadURL, data.ContentType, reader)
+		resp, err := cli.tryUploadMediaToURL(ctx, data.UnstableUploadURL, data.ContentType, reader, data.ContentLength)
 		if err == nil {
 			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 				// Everything is fine
@@ -1614,6 +1628,10 @@ func (cli *Client) uploadMediaToURL(ctx context.Context, data ReqUploadMedia) (*
 		cli.Log.Warn().Str("url", data.UnstableUploadURL).Err(err).
 			Msg("Error uploading media to external URL, retrying")
 		retries--
+		_, err = readerSeeker.Seek(0, io.SeekStart)
+		if err != nil {
+			return nil, fmt.Errorf("failed to seek back to start of reader: %w", err)
+		}
 	}
 
 	query := map[string]string{}
