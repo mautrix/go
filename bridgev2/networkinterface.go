@@ -152,6 +152,7 @@ type NetworkAPI interface {
 	HandleMatrixReaction(ctx context.Context, msg *MatrixReaction) (reaction *database.Reaction, err error)
 	HandleMatrixReactionRemove(ctx context.Context, msg *MatrixReactionRemove) error
 	HandleMatrixMessageRemove(ctx context.Context, msg *MatrixMessageRemove) error
+	HandleMatrixReadReceipt(ctx context.Context, msg *MatrixReadReceipt) error
 }
 
 type RemoteEventType int
@@ -163,6 +164,9 @@ const (
 	RemoteEventReaction
 	RemoteEventReactionRemove
 	RemoteEventMessageRemove
+	RemoteEventReadReceipt
+	RemoteEventDeliveryReceipt
+	RemoteEventTyping
 )
 
 // RemoteEvent represents a single event from the remote network, such as a message or a reaction.
@@ -172,9 +176,13 @@ const (
 type RemoteEvent interface {
 	GetType() RemoteEventType
 	GetPortalKey() networkid.PortalKey
-	ShouldCreatePortal() bool
 	AddLogContext(c zerolog.Context) zerolog.Context
 	GetSender() EventSender
+}
+
+type RemoteEventThatMayCreatePortal interface {
+	RemoteEvent
+	ShouldCreatePortal() bool
 }
 
 type RemoteEventWithTargetMessage interface {
@@ -220,6 +228,17 @@ type RemoteReactionRemove interface {
 
 type RemoteMessageRemove interface {
 	RemoteEventWithTargetMessage
+}
+
+type RemoteReceipt interface {
+	RemoteEvent
+	GetLastReceiptTarget() networkid.MessageID
+	GetReceiptTargets() []networkid.MessageID
+}
+
+type RemoteTyping interface {
+	RemoteEvent
+	GetTimeout() time.Duration
 }
 
 // SimpleRemoteEvent is a simple implementation of RemoteEvent that can be used with struct fields and some callbacks.
@@ -360,3 +379,20 @@ type MatrixMessageRemove struct {
 	MatrixEventBase[*event.RedactionEventContent]
 	TargetMessage *database.Message
 }
+
+type MatrixReadReceipt struct {
+	Portal *Portal
+	// The event ID that the receipt is targeting
+	EventID id.EventID
+	// The exact message that was read. This may be nil if the event ID isn't a message.
+	ExactMessage *database.Message
+	// The timestamp that the user has read up to. This is either the timestamp of the message
+	// (if one is present) or the timestamp of the receipt.
+	ReadUpTo time.Time
+	// The ReadUpTo timestamp of the previous message
+	LastRead time.Time
+	// The receipt metadata.
+	Receipt event.ReadReceipt
+}
+
+type MatrixTyping struct{}

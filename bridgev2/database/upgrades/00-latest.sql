@@ -132,6 +132,7 @@ CREATE TABLE user_portal (
 	portal_receiver TEXT    NOT NULL,
 	in_space        BOOLEAN NOT NULL,
 	preferred       BOOLEAN NOT NULL,
+	last_read       BIGINT,
 
 	PRIMARY KEY (bridge_id, user_mxid, login_id, portal_id, portal_receiver),
 	CONSTRAINT user_portal_user_login_fkey FOREIGN KEY (bridge_id, user_mxid, login_id)

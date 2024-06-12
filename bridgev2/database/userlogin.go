@@ -55,19 +55,6 @@ const (
 	deleteUserLoginQuery = `
 		DELETE FROM user_login WHERE bridge_id=$1 AND id=$2
 	`
-	insertUserPortalQuery = `
-		INSERT INTO user_portal (bridge_id, user_mxid, login_id, portal_id, portal_receiver, in_space, preferred)
-		VALUES ($1, $2, $3, $4, $5, false, false)
-		ON CONFLICT (bridge_id, user_mxid, login_id, portal_id, portal_receiver) DO NOTHING
-	`
-	upsertUserPortalQuery = `
-		INSERT INTO user_portal (bridge_id, user_mxid, login_id, portal_id, portal_receiver, in_space, preferred)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		ON CONFLICT (bridge_id, user_mxid, login_id, portal_id, portal_receiver) DO UPDATE SET in_space=excluded.in_space, preferred=excluded.preferred
-	`
-	markLoginAsPreferredQuery = `
-		UPDATE user_portal SET preferred=(login_id=$3) WHERE bridge_id=$1 AND user_mxid=$2 AND portal_id=$4 AND portal_receiver=$5
-	`
 )
 
 func (uq *UserLoginQuery) GetAll(ctx context.Context) ([]*UserLogin, error) {
@@ -94,16 +81,6 @@ func (uq *UserLoginQuery) Update(ctx context.Context, login *UserLogin) error {
 
 func (uq *UserLoginQuery) Delete(ctx context.Context, loginID networkid.UserLoginID) error {
 	return uq.Exec(ctx, deleteUserLoginQuery, uq.BridgeID, loginID)
-}
-
-func (uq *UserLoginQuery) EnsureUserPortalExists(ctx context.Context, login *UserLogin, portal networkid.PortalKey) error {
-	ensureBridgeIDMatches(&login.BridgeID, uq.BridgeID)
-	return uq.Exec(ctx, insertUserPortalQuery, login.BridgeID, login.UserMXID, login.ID, portal.ID, portal.Receiver)
-}
-
-func (uq *UserLoginQuery) MarkLoginAsPreferredInPortal(ctx context.Context, login *UserLogin, portal networkid.PortalKey) error {
-	ensureBridgeIDMatches(&login.BridgeID, uq.BridgeID)
-	return uq.Exec(ctx, markLoginAsPreferredQuery, login.BridgeID, login.UserMXID, login.ID, portal.ID, portal.Receiver)
 }
 
 func (u *UserLogin) Scan(row dbutil.Scannable) (*UserLogin, error) {

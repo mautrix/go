@@ -34,8 +34,26 @@ func (br *Connector) handleRoomEvent(ctx context.Context, evt *event.Event) {
 }
 
 func (br *Connector) handleEphemeralEvent(ctx context.Context, evt *event.Event) {
-	if br.shouldIgnoreEvent(evt) {
-		return
+	if evt.Type == event.EphemeralEventReceipt {
+		receiptContent := *evt.Content.AsReceipt()
+		for eventID, receipts := range receiptContent {
+			for receiptType, userReceipts := range receipts {
+				for userID, receipt := range userReceipts {
+					if br.AS.DoublePuppetValue != "" && receipt.Extra[appservice.DoublePuppetKey] == br.AS.DoublePuppetValue {
+						delete(userReceipts, userID)
+					}
+				}
+				if len(userReceipts) == 0 {
+					delete(receipts, receiptType)
+				}
+			}
+			if len(receipts) == 0 {
+				delete(receiptContent, eventID)
+			}
+		}
+		if len(receiptContent) == 0 {
+			return
+		}
 	}
 	br.Bridge.QueueMatrixEvent(ctx, evt)
 }

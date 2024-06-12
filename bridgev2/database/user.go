@@ -46,12 +46,6 @@ const (
 		UPDATE "user" SET management_room=$3, access_token=$4
 		WHERE bridge_id=$1 AND mxid=$2
 	`
-	findUserLoginsByPortalIDQuery = `
-		SELECT login_id
-		FROM user_portal
-		WHERE bridge_id=$1 AND user_mxid=$2 AND portal_id=$3 AND portal_receiver=$4
-		ORDER BY CASE WHEN preferred THEN 0 ELSE 1 END, login_id
-	`
 )
 
 func (uq *UserQuery) GetByMXID(ctx context.Context, userID id.UserID) (*User, error) {
@@ -66,11 +60,6 @@ func (uq *UserQuery) Insert(ctx context.Context, user *User) error {
 func (uq *UserQuery) Update(ctx context.Context, user *User) error {
 	ensureBridgeIDMatches(&user.BridgeID, uq.BridgeID)
 	return uq.Exec(ctx, updateUserQuery, user.sqlVariables()...)
-}
-
-func (uq *UserQuery) FindLoginsByPortalID(ctx context.Context, userID id.UserID, portal networkid.PortalKey) ([]networkid.UserLoginID, error) {
-	rows, err := uq.GetDB().Query(ctx, findUserLoginsByPortalIDQuery, uq.BridgeID, userID, portal.ID, portal.Receiver)
-	return dbutil.NewRowIterWithError(rows, dbutil.ScanSingleColumn[networkid.UserLoginID], err).AsList()
 }
 
 func (u *User) Scan(row dbutil.Scannable) (*User, error) {

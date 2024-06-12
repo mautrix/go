@@ -178,22 +178,25 @@ func (portal *Portal) eventLoop() {
 	}
 }
 
-func (portal *Portal) FindPreferredLogin(ctx context.Context, user *User) (*UserLogin, error) {
-	logins, err := portal.Bridge.DB.User.FindLoginsByPortalID(ctx, user.MXID, portal.PortalKey)
+func (portal *Portal) FindPreferredLogin(ctx context.Context, user *User, allowRelay bool) (*UserLogin, *database.UserPortal, error) {
+	logins, err := portal.Bridge.DB.UserPortal.GetAllByUser(ctx, user.MXID, portal.PortalKey)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	portal.Bridge.cacheLock.Lock()
 	defer portal.Bridge.cacheLock.Unlock()
-	for _, loginID := range logins {
-		login, ok := user.logins[loginID]
+	for _, up := range logins {
+		login, ok := user.logins[up.LoginID]
 		if ok && login.Client != nil {
-			return login, nil
+			return login, up, nil
 		}
+	}
+	if !allowRelay {
+		return nil, nil, ErrNotLoggedIn
 	}
 	// Portal has relay, use it
 	if portal.Relay != nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 	var firstLogin *UserLogin
 	for _, login := range user.logins {
@@ -204,9 +207,9 @@ func (portal *Portal) FindPreferredLogin(ctx context.Context, user *User) (*User
 		zerolog.Ctx(ctx).Warn().
 			Str("chosen_login_id", string(firstLogin.ID)).
 			Msg("No usable user portal rows found, returning random login")
-		return firstLogin, nil
+		return firstLogin, nil, nil
 	} else {
-		return nil, ErrNotLoggedIn
+		return nil, nil, ErrNotLoggedIn
 	}
 }
 
@@ -244,7 +247,7 @@ func (portal *Portal) handleMatrixEvent(sender *User, evt *event.Event) {
 		Stringer("sender", sender.MXID).
 		Logger()
 	ctx := log.WithContext(context.TODO())
-	login, err := portal.FindPreferredLogin(ctx, sender)
+	login, _, err := portal.FindPreferredLogin(ctx, sender, true)
 	if err != nil {
 		log.Err(err).Msg("Failed to get user login to handle Matrix event")
 		portal.sendErrorStatus(ctx, evt, WrapErrorInStatus(err).WithMessage("Failed to get login to handle event").WithIsCertain(true).WithSendNotice(true))
@@ -287,29 +290,71 @@ func (portal *Portal) handleMatrixEvent(sender *User, evt *event.Event) {
 }
 
 func (portal *Portal) handleMatrixReceipts(evt *event.Event) {
-	content, ok := evt.Content.Parsed.(event.ReceiptEventContent)
+	content, ok := evt.Content.Parsed.(*event.ReceiptEventContent)
 	if !ok {
 		return
 	}
-	ctx := context.TODO()
-	for evtID, receipts := range content {
+	for evtID, receipts := range *content {
 		readReceipts, ok := receipts[event.ReceiptTypeRead]
 		if !ok {
 			continue
 		}
 		for userID, receipt := range readReceipts {
-			sender, err := portal.Bridge.GetUserByMXID(ctx, userID)
+			sender, err := portal.Bridge.GetUserByMXID(context.TODO(), userID)
 			if err != nil {
 				// TODO log
 				return
 			}
-			portal.handleMatrixReadReceipt(ctx, sender, evtID, receipt)
+			portal.handleMatrixReadReceipt(sender, evtID, receipt)
 		}
 	}
 }
 
-func (portal *Portal) handleMatrixReadReceipt(ctx context.Context, user *User, eventID id.EventID, receipt event.ReadReceipt) {
-	// TODO send read receipt(s) to network
+func (portal *Portal) handleMatrixReadReceipt(user *User, eventID id.EventID, receipt event.ReadReceipt) {
+	log := portal.Log.With().
+		Str("action", "handle matrix read receipt").
+		Stringer("event_id", eventID).
+		Stringer("user_id", user.MXID).
+		Logger()
+	ctx := log.WithContext(context.TODO())
+	login, userPortal, err := portal.FindPreferredLogin(ctx, user, false)
+	if err != nil {
+		log.Err(err).Msg("Failed to get preferred login for user")
+		return
+	}
+	evt := &MatrixReadReceipt{
+		Portal:  portal,
+		EventID: eventID,
+		Receipt: receipt,
+	}
+	if userPortal == nil {
+		userPortal = database.UserPortalFor(login.UserLogin, portal.PortalKey)
+	} else {
+		evt.LastRead = userPortal.LastRead
+	}
+	evt.ExactMessage, err = portal.Bridge.DB.Message.GetPartByMXID(ctx, eventID)
+	if err != nil {
+		log.Err(err).Msg("Failed to get exact message from database")
+	} else if evt.ExactMessage != nil {
+		evt.ReadUpTo = evt.ExactMessage.Timestamp
+	} else {
+		evt.ReadUpTo = receipt.Timestamp
+	}
+	err = login.Client.HandleMatrixReadReceipt(ctx, evt)
+	if err != nil {
+		log.Err(err).Msg("Failed to handle read receipt")
+		return
+	}
+	userPortal.ResetValues()
+	if evt.ExactMessage != nil {
+		userPortal.LastRead = evt.ExactMessage.Timestamp
+	} else {
+		userPortal.LastRead = receipt.Timestamp
+	}
+	err = portal.Bridge.DB.UserPortal.Put(ctx, userPortal)
+	if err != nil {
+		log.Err(err).Msg("Failed to save user portal metadata")
+	}
 }
 
 func (portal *Portal) handleMatrixTyping(evt *event.Event) {
@@ -660,7 +705,8 @@ func (portal *Portal) handleRemoteEvent(source *UserLogin, evt RemoteEvent) {
 	log.UpdateContext(evt.AddLogContext)
 	ctx := log.WithContext(context.TODO())
 	if portal.MXID == "" {
-		if !evt.ShouldCreatePortal() {
+		mcp, ok := evt.(RemoteEventThatMayCreatePortal)
+		if !ok || !mcp.ShouldCreatePortal() {
 			return
 		}
 		err := portal.CreateMatrixRoom(ctx, source)
@@ -683,6 +729,12 @@ func (portal *Portal) handleRemoteEvent(source *UserLogin, evt RemoteEvent) {
 		portal.handleRemoteReactionRemove(ctx, source, evt.(RemoteReactionRemove))
 	case RemoteEventMessageRemove:
 		portal.handleRemoteMessageRemove(ctx, source, evt.(RemoteMessageRemove))
+	case RemoteEventReadReceipt:
+		portal.handleRemoteReadReceipt(ctx, source, evt.(RemoteReceipt))
+	case RemoteEventDeliveryReceipt:
+		portal.handleRemoteDeliveryReceipt(ctx, source, evt.(RemoteReceipt))
+	case RemoteEventTyping:
+		portal.handleRemoteTyping(ctx, source, evt.(RemoteTyping))
 	default:
 		log.Warn().Int("type", int(evt.GetType())).Msg("Got remote event with unknown type")
 	}
@@ -1037,6 +1089,54 @@ func (portal *Portal) handleRemoteMessageRemove(ctx context.Context, source *Use
 	if err != nil {
 		log.Err(err).Msg("Failed to delete target message from database")
 	}
+}
+
+func (portal *Portal) handleRemoteReadReceipt(ctx context.Context, source *UserLogin, evt RemoteReceipt) {
+	log := zerolog.Ctx(ctx)
+	var err error
+	var lastTarget *database.Message
+	if lastTargetID := evt.GetLastReceiptTarget(); lastTargetID != "" {
+		lastTarget, err = portal.Bridge.DB.Message.GetLastPartByID(ctx, lastTargetID)
+		if err != nil {
+			log.Err(err).Str("last_target_id", string(lastTargetID)).
+				Msg("Failed to get last target message for read receipt")
+			return
+		} else if lastTarget == nil {
+			log.Debug().Str("last_target_id", string(lastTargetID)).
+				Msg("Last target message not found")
+		}
+	}
+	if lastTarget == nil {
+		for _, targetID := range evt.GetReceiptTargets() {
+			target, err := portal.Bridge.DB.Message.GetLastPartByID(ctx, targetID)
+			if err != nil {
+				log.Err(err).Str("target_id", string(targetID)).
+					Msg("Failed to get target message for read receipt")
+				return
+			} else if target != nil && (lastTarget == nil || target.Timestamp.After(lastTarget.Timestamp)) {
+				lastTarget = target
+			}
+		}
+	}
+	if lastTarget == nil {
+		log.Warn().Msg("No target message found for read receipt")
+		return
+	}
+	intent := portal.getIntentFor(ctx, evt.GetSender(), source)
+	err = intent.MarkRead(ctx, portal.MXID, lastTarget.MXID, getEventTS(evt))
+	if err != nil {
+		log.Err(err).Stringer("target_mxid", lastTarget.MXID).Msg("Failed to bridge read receipt")
+	} else {
+		log.Debug().Stringer("target_mxid", lastTarget.MXID).Msg("Bridged read receipt")
+	}
+}
+
+func (portal *Portal) handleRemoteDeliveryReceipt(ctx context.Context, source *UserLogin, evt RemoteReceipt) {
+
+}
+
+func (portal *Portal) handleRemoteTyping(ctx context.Context, source *UserLogin, evt RemoteTyping) {
+
 }
 
 var stateElementFunctionalMembers = event.Type{Class: event.StateEventType, Type: "io.element.functional_members"}

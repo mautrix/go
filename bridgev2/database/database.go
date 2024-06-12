@@ -17,26 +17,28 @@ import (
 type Database struct {
 	*dbutil.Database
 
-	BridgeID  networkid.BridgeID
-	Portal    *PortalQuery
-	Ghost     *GhostQuery
-	Message   *MessageQuery
-	Reaction  *ReactionQuery
-	User      *UserQuery
-	UserLogin *UserLoginQuery
+	BridgeID   networkid.BridgeID
+	Portal     *PortalQuery
+	Ghost      *GhostQuery
+	Message    *MessageQuery
+	Reaction   *ReactionQuery
+	User       *UserQuery
+	UserLogin  *UserLoginQuery
+	UserPortal *UserPortalQuery
 }
 
 func New(bridgeID networkid.BridgeID, db *dbutil.Database) *Database {
 	db.UpgradeTable = upgrades.Table
 	return &Database{
-		Database:  db,
-		BridgeID:  bridgeID,
-		Portal:    &PortalQuery{bridgeID, dbutil.MakeQueryHelper(db, newPortal)},
-		Ghost:     &GhostQuery{bridgeID, dbutil.MakeQueryHelper(db, newGhost)},
-		Message:   &MessageQuery{bridgeID, dbutil.MakeQueryHelper(db, newMessage)},
-		Reaction:  &ReactionQuery{bridgeID, dbutil.MakeQueryHelper(db, newReaction)},
-		User:      &UserQuery{bridgeID, dbutil.MakeQueryHelper(db, newUser)},
-		UserLogin: &UserLoginQuery{bridgeID, dbutil.MakeQueryHelper(db, newUserLogin)},
+		Database:   db,
+		BridgeID:   bridgeID,
+		Portal:     &PortalQuery{bridgeID, dbutil.MakeQueryHelper(db, newPortal)},
+		Ghost:      &GhostQuery{bridgeID, dbutil.MakeQueryHelper(db, newGhost)},
+		Message:    &MessageQuery{bridgeID, dbutil.MakeQueryHelper(db, newMessage)},
+		Reaction:   &ReactionQuery{bridgeID, dbutil.MakeQueryHelper(db, newReaction)},
+		User:       &UserQuery{bridgeID, dbutil.MakeQueryHelper(db, newUser)},
+		UserLogin:  &UserLoginQuery{bridgeID, dbutil.MakeQueryHelper(db, newUserLogin)},
+		UserPortal: &UserPortalQuery{bridgeID, dbutil.MakeQueryHelper(db, newUserPortal)},
 	}
 }
 

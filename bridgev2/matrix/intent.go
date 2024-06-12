@@ -65,6 +65,23 @@ func (as *ASIntent) SendState(ctx context.Context, roomID id.RoomID, eventType e
 	}
 }
 
+func (as *ASIntent) MarkRead(ctx context.Context, roomID id.RoomID, eventID id.EventID, ts time.Time) error {
+	extraData := map[string]any{}
+	if !ts.IsZero() {
+		extraData["ts"] = ts.UnixMilli()
+	}
+	as.Matrix.AddDoublePuppetValue(extraData)
+	req := mautrix.ReqSetReadMarkers{
+		Read:            eventID,
+		BeeperReadExtra: extraData,
+	}
+	if as.Matrix.IsCustomPuppet {
+		req.FullyRead = eventID
+		req.BeeperFullyReadExtra = extraData
+	}
+	return as.Matrix.SetReadMarkers(ctx, roomID, &req)
+}
+
 func (as *ASIntent) DownloadMedia(ctx context.Context, uri id.ContentURIString, file *event.EncryptedFileInfo) ([]byte, error) {
 	if file != nil {
 		uri = file.URL

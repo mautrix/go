@@ -143,7 +143,7 @@ func (ul *UserLogin) Logout(ctx context.Context) {
 }
 
 func (ul *UserLogin) MarkAsPreferredIn(ctx context.Context, portal *Portal) error {
-	return ul.Bridge.DB.UserLogin.MarkLoginAsPreferredInPortal(ctx, ul.UserLogin, portal.PortalKey)
+	return ul.Bridge.DB.UserPortal.MarkAsPreferred(ctx, ul.UserLogin, portal.PortalKey)
 }
 
 var _ status.BridgeStateFiller = (*UserLogin)(nil)
