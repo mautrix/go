@@ -137,7 +137,7 @@ func (br *BridgeMain) PreInit() {
 		os.Exit(0)
 	} else if *version {
 		fmt.Println(br.VersionDesc)
-		return
+		os.Exit(0)
 	} else if *versionJSON {
 		output := VersionJSONOutput{
 			URL:  br.URL,
@@ -155,16 +155,16 @@ func (br *BridgeMain) PreInit() {
 		output.Mautrix.Commit = mautrix.Commit
 		output.Mautrix.Version = mautrix.Version
 		_ = json.NewEncoder(os.Stdout).Encode(output)
-		return
+		os.Exit(0)
 	} else if *writeExampleConfig {
 		networkExample, _, _ := br.Connector.GetConfig()
 		exerrors.PanicIfNotNil(os.WriteFile(*configPath, []byte(br.makeFullExampleConfig(networkExample)), 0600))
-		return
+		os.Exit(0)
 	}
 	br.LoadConfig()
 	if *generateRegistration {
 		br.GenerateRegistration()
-		return
+		os.Exit(0)
 	}
 }
 
