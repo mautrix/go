@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/lib/pq"
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/dbutil"
 
@@ -28,6 +29,10 @@ import (
 	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/sqlstatestore"
 )
+
+func init() {
+	crypto.PostgresArrayWrapper = pq.Array
+}
 
 var _ crypto.StateStore = (*sqlstatestore.SQLStateStore)(nil)
 

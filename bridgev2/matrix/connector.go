@@ -16,8 +16,10 @@ import (
 	"sync"
 	"time"
 
+	_ "github.com/lib/pq"
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/dbutil"
+	_ "go.mau.fi/util/dbutil/litestream"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/appservice"
