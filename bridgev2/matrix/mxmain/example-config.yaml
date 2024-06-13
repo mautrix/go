@@ -36,13 +36,13 @@ homeserver:
     # The URL to push real-time bridge status to.
     # If set, the bridge will make POST requests to this URL whenever a user's remote network connection state changes.
     # The bridge will use the appservice as_token to authorize requests.
-    status_endpoint: http://localhost:4001
+    status_endpoint:
     # Endpoint for reporting per-message status.
     # If set, the bridge will make POST requests to this URL when processing a message from Matrix.
     # It will make one request when receiving the message (step BRIDGE), one after decrypting if applicable
     # (step DECRYPTED) and one after sending to the remote network (step REMOTE). Errors will also be reported.
     # The bridge will use the appservice as_token to authorize requests.
-    message_send_checkpoint_endpoint: http://localhost:4001
+    message_send_checkpoint_endpoint:
     # Does the homeserver support https://github.com/matrix-org/matrix-spec-proposals/pull/2246?
     async_media: false
 
@@ -101,7 +101,7 @@ matrix:
     sync_direct_chat_list: false
     # Whether created rooms should have federation enabled. If false, created portal rooms
     # will never be federated. Changing this option requires recreating rooms.
-    federate_rooms: false
+    federate_rooms: true
 
 # Settings for provisioning API
 provisioning:
@@ -115,7 +115,7 @@ provisioning:
     # which means that by default, it only works for users on the same server as the bridge.
     allow_matrix_auth: true
     # Enable debug API at /debug with provisioning authentication.
-    debug_endpoints: true
+    debug_endpoints: false
 
 # Settings for enabling double puppeting
 double_puppet:
