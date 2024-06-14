@@ -117,6 +117,7 @@ func (user *User) NewLogin(ctx context.Context, data *database.UserLogin, client
 	if err != nil {
 		return nil, err
 	}
+	ul.BridgeState = user.Bridge.NewBridgeStateQueue(ul)
 	user.Bridge.cacheLock.Lock()
 	defer user.Bridge.cacheLock.Unlock()
 	user.Bridge.userLoginsByID[ul.ID] = ul
