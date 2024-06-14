@@ -327,6 +327,9 @@ func (br *Connector) SendMessageStatus(ctx context.Context, ms *bridgev2.Message
 }
 
 func (br *Connector) internalSendMessageStatus(ctx context.Context, ms *bridgev2.MessageStatus, evt *bridgev2.MessageStatusEventInfo, editEvent id.EventID) id.EventID {
+	if evt.EventType.IsEphemeral() {
+		return ""
+	}
 	log := zerolog.Ctx(ctx)
 	err := br.SendMessageCheckpoints([]*status.MessageCheckpoint{ms.ToCheckpoint(evt)})
 	if err != nil {
