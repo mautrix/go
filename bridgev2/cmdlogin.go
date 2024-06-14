@@ -303,8 +303,9 @@ var CommandLogout = &FullHandler{
 func getUserLogins(user *User) string {
 	user.Bridge.cacheLock.Lock()
 	logins := make([]string, len(user.logins))
-	for key := range user.logins {
-		logins = append(logins, fmt.Sprintf("* `%s`", key))
+	for key, val := range user.logins {
+		remoteName, _ := val.Metadata["remote_name"].(string)
+		logins = append(logins, fmt.Sprintf("* `%s` (%s)", key, remoteName))
 	}
 	user.Bridge.cacheLock.Unlock()
 	return strings.Join(logins, "\n")
