@@ -17,18 +17,6 @@ var CommandHelp = &FullHandler{
 	},
 }
 
-var CommandVersion = &FullHandler{
-	Func: func(ce *CommandEvent) {
-		ce.Reply("Bridge versions are not yet implemented")
-		//ce.Reply("[%s](%s) %s (%s)", ce.Bridge.Name, ce.Bridge.URL, ce.Bridge.LinkifiedVersion, ce.Bridge.BuildTime)
-	},
-	Name: "version",
-	Help: HelpMeta{
-		Section:     HelpSectionGeneral,
-		Description: "Get the bridge version.",
-	},
-}
-
 var CommandCancel = &FullHandler{
 	Func: func(ce *CommandEvent) {
 		state := ce.User.CommandState.Swap(nil)

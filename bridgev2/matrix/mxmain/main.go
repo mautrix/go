@@ -227,6 +227,16 @@ func (br *BridgeMain) Init() {
 	br.Matrix.IgnoreUnsupportedServer = *ignoreUnsupportedServer
 	br.Bridge = bridgev2.NewBridge("", br.DB, *br.Log, &br.Config.Bridge, br.Matrix, br.Connector)
 	br.Matrix.AS.DoublePuppetValue = br.Name
+	br.Bridge.Commands.AddHandler(&bridgev2.FullHandler{
+		Func: func(ce *bridgev2.CommandEvent) {
+			ce.Reply("[%s](%s) %s (%s)", br.Name, br.URL, br.LinkifiedVersion, br.BuildTime.Format(time.RFC1123))
+		},
+		Name: "version",
+		Help: bridgev2.HelpMeta{
+			Section:     bridgev2.HelpSectionGeneral,
+			Description: "Get the bridge version.",
+		},
+	})
 	if br.PostInit != nil {
 		br.PostInit()
 	}
