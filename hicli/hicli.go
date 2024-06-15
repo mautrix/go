@@ -19,6 +19,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/dbutil"
+	"go.mau.fi/util/exerrors"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto"
@@ -145,6 +146,10 @@ func (h *HiClient) Start(ctx context.Context, userID id.UserID, expectedAccount 
 		if err != nil {
 			return err
 		}
+		err = h.CheckServerVersions(ctx)
+		if err != nil {
+			return err
+		}
 		err = h.Crypto.Load(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to load olm machine: %w", err)
@@ -163,6 +168,20 @@ func (h *HiClient) Start(ctx context.Context, userID id.UserID, expectedAccount 
 			go h.Sync()
 			go h.RunRequestQueue(ctx)
 		}
+	}
+	return nil
+}
+
+var ErrFailedToCheckServerVersions = errors.New("failed to check server versions")
+var ErrOutdatedServer = errors.New("homeserver is outdated")
+var MinimumSpecVersion = mautrix.SpecV11
+
+func (h *HiClient) CheckServerVersions(ctx context.Context) error {
+	versions, err := h.Client.Versions(ctx)
+	if err != nil {
+		return exerrors.NewDualError(ErrFailedToCheckServerVersions, err)
+	} else if !versions.Contains(MinimumSpecVersion) {
+		return fmt.Errorf("%w (minimum: %s, highest supported: %s)", ErrOutdatedServer, MinimumSpecVersion, versions.GetLatest())
 	}
 	return nil
 }

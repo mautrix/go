@@ -36,6 +36,10 @@ func (h *HiClient) LoginPassword(ctx context.Context, homeserverURL, username, p
 }
 
 func (h *HiClient) Login(ctx context.Context, req *mautrix.ReqLogin) error {
+	err := h.CheckServerVersions(ctx)
+	if err != nil {
+		return err
+	}
 	req.StoreCredentials = true
 	req.StoreHomeserverURL = true
 	resp, err := h.Client.Login(ctx, req)
