@@ -1443,6 +1443,7 @@ func (cli *Client) UploadLink(ctx context.Context, link string) (*RespMediaUploa
 	return cli.Upload(ctx, res.Body, res.Header.Get("Content-Type"), res.ContentLength)
 }
 
+// Deprecated: unauthenticated media is deprecated as of Matrix v1.11. Use [Download] or [DownloadBytes] instead.
 func (cli *Client) GetDownloadURL(mxcURL id.ContentURI) string {
 	return cli.BuildURLWithQuery(MediaURLPath{"v3", "download", mxcURL.Homeserver, mxcURL.FileID}, map[string]string{"allow_redirect": "true"})
 }
@@ -1515,12 +1516,21 @@ func (cli *Client) Download(ctx context.Context, mxcURL id.ContentURI) (*http.Re
 	if ctxLog.GetLevel() == zerolog.Disabled || ctxLog == zerolog.DefaultContextLogger {
 		ctx = cli.Log.WithContext(ctx)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, cli.GetDownloadURL(mxcURL), nil)
-	if err != nil {
-		return nil, err
+	if cli.SpecVersions.ContainsGreaterOrEqual(SpecV111) {
+		_, resp, err := cli.MakeFullRequest(ctx, FullRequest{
+			Method:           http.MethodGet,
+			URL:              cli.BuildClientURL("v1", "media", "download", mxcURL.Homeserver, mxcURL.FileID),
+			DontReadResponse: true,
+		})
+		return resp, err
+	} else {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, cli.GetDownloadURL(mxcURL), nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("User-Agent", cli.UserAgent+" (media downloader)")
+		return cli.doMediaRequest(req, cli.DefaultHTTPRetries, 4*time.Second)
 	}
-	req.Header.Set("User-Agent", cli.UserAgent+" (media downloader)")
-	return cli.doMediaRequest(req, cli.DefaultHTTPRetries, 4*time.Second)
 }
 
 func (cli *Client) DownloadBytes(ctx context.Context, mxcURL id.ContentURI) ([]byte, error) {
