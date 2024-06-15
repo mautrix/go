@@ -1,0 +1,151 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://go.mau.fi/mautrix/bridgev2/login-step.json",
+	"title": "Login step data",
+	"type": "object",
+	"properties": {
+		"type": {
+			"type": "string",
+			"enum": ["user_input", "cookies", "display_and_wait", "complete"]
+		},
+		"step_id": {
+			"type": "string",
+			"description": "An unique ID identifying this step. This can be used to implement special behavior in clients."
+		},
+		"instructions": {
+			"type": "string",
+			"description": "Human-readable instructions for completing this login step."
+		},
+		"user_input": {
+			"type": "object",
+			"title": "User input params",
+			"description": "Parameters for the `user_input` login type",
+			"properties": {
+				"fields": {
+					"type": "array",
+					"description": "The list of fields that the user must fill",
+					"items": {
+						"title": "Field",
+						"description": "A field that the user must fill",
+						"type": "object",
+						"properties": {
+							"type": {
+								"type": "string",
+								"enum": ["username", "phone_number", "email", "password", "2fa_code"]
+							},
+							"id": {
+								"type": "string",
+								"description": "The ID of the field. This should be used when submitting the form.",
+								"examples": ["uid", "email", "2fa_password", "meow"]
+							},
+							"name": {
+								"type": "string",
+								"description": "The name of the field shown to the user",
+								"examples": ["Username", "Password",  "Phone number",  "2FA code", "Meow"]
+							},
+							"description": {
+								"type": "string",
+								"description": "The description of the field shown to the user",
+								"examples": ["Include the country code with a +"]
+							},
+							"pattern": {
+								"type": "string",
+								"description": "A regular expression that the field value must match"
+							}
+						},
+						"required": ["type", "id", "name"]
+					}
+				}
+			},
+			"required": ["fields"]
+		},
+		"cookies": {
+			"type": "object",
+			"title": "Cookie params",
+			"description": "Parameters for the `cookies` login type",
+			"properties": {
+				"url": {
+					"type": "string",
+					"description": "The URL to open when using a webview to extract cookies"
+				},
+				"user_agent": {
+					"type": "string",
+					"description": "The user agent to use when opening the URL"
+				},
+				"cookie_domain": {
+					"type": "string",
+					"description": "The domain of the cookies to extract"
+				},
+				"cookie_keys": {
+					"type": "array",
+					"description": "The cookie names to extract",
+					"items": {
+						"type": "string"
+					}
+				},
+				"local_storage_keys": {
+					"type": "array",
+					"description": "The local storage keys to extract",
+					"items": {
+						"type": "string"
+					}
+				},
+				"special_keys": {
+					"type": "array",
+					"description": "Special-cased extraction types that clients must support individually",
+					"items": {
+						"type": "string"
+					}
+				},
+				"special_extract_js": {
+					"type": "string",
+					"description": "JavaScript code that can be evaluated inside the webview to extract the special keys"
+				}
+			},
+			"required": ["url"]
+		},
+		"display_and_wait": {
+			"type": "object",
+			"title": "Display and wait params",
+			"description": "Parameters for the `display_and_wait` login type",
+			"properties": {
+				"type": {
+					"type": "string",
+					"description": "The type of thing to display",
+					"enum": ["qr", "emoji", "code"]
+				},
+				"data": {
+					"type": "string",
+					"description": "The thing to display (raw data for QR, unicode emoji for emoji, plain string for code)"
+				},
+				"image_url": {
+					"type": "string",
+					"description": "An image containing the thing to display. If present, this is recommended over using data directly. For emojis, the URL to the canonical image representation of the emoji"
+				}
+			},
+			"required": ["type", "data"]
+		},
+		"complete": {
+			"type": "object",
+			"title": "Login complete information",
+			"description": "Information about a successful login",
+			"properties": {
+				"user_login_id": {
+					"type": "string",
+					"description": "The ID of the user login entry"
+				}
+			}
+		}
+	},
+	"required": [
+		"type",
+		"step_id",
+		"instructions"
+	],
+	"oneOf": [
+		{"title":"User input type","properties":{"type": {"type":"string","const": "user_input"}}, "required": ["user_input"]},
+		{"title":"Cookies type","properties":{"type": {"type":"string","const": "cookies"}}, "required": ["cookies"]},
+		{"title":"Display and wait type","properties":{"type": {"type":"string","const": "display_and_wait"}}, "required": ["display_and_wait"]},
+		{"title":"Login complete","properties":{"type": {"type":"string","const": "complete"}}}
+	]
+}

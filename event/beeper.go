@@ -36,8 +36,11 @@ type BeeperMessageStatusEventContent struct {
 	RelatesTo RelatesTo           `json:"m.relates_to"`
 	Status    MessageStatus       `json:"status"`
 	Reason    MessageStatusReason `json:"reason,omitempty"`
-	Error     string              `json:"error,omitempty"`
-	Message   string              `json:"message,omitempty"`
+	// Deprecated: clients were showing this to users even though they aren't supposed to.
+	// Use InternalError for error messages that should be included in bug reports, but not shown in the UI.
+	Error         string `json:"error,omitempty"`
+	InternalError string `json:"internal_error,omitempty"`
+	Message       string `json:"message,omitempty"`
 
 	LastRetry id.EventID `json:"last_retry,omitempty"`
 
@@ -84,4 +87,13 @@ type BeeperLinkPreview struct {
 
 	MatchedURL      string             `json:"matched_url,omitempty"`
 	ImageEncryption *EncryptedFileInfo `json:"beeper:image:encryption,omitempty"`
+}
+
+type BeeperProfileExtra struct {
+	RemoteID     string   `json:"com.beeper.bridge.remote_id,omitempty"`
+	Identifiers  []string `json:"com.beeper.bridge.identifiers,omitempty"`
+	Service      string   `json:"com.beeper.bridge.service,omitempty"`
+	Network      string   `json:"com.beeper.bridge.network,omitempty"`
+	IsBridgeBot  bool     `json:"com.beeper.bridge.is_bridge_bot,omitempty"`
+	IsNetworkBot bool     `json:"com.beeper.bridge.is_network_bot,omitempty"`
 }

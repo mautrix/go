@@ -211,10 +211,17 @@ func (as *AppService) handleEvents(ctx context.Context, evts []*event.Event, def
 	for _, evt := range evts {
 		evt.Mautrix.ReceivedAt = time.Now()
 		if defaultTypeClass != event.UnknownEventType {
+			if defaultTypeClass == event.EphemeralEventType {
+				evt.Mautrix.EventSource = event.SourceEphemeral
+			} else if defaultTypeClass == event.ToDeviceEventType {
+				evt.Mautrix.EventSource = event.SourceToDevice
+			}
 			evt.Type.Class = defaultTypeClass
 		} else if evt.StateKey != nil {
+			evt.Mautrix.EventSource = event.SourceTimeline & event.SourceJoin
 			evt.Type.Class = event.StateEventType
 		} else {
+			evt.Mautrix.EventSource = event.SourceTimeline
 			evt.Type.Class = event.MessageEventType
 		}
 		err := evt.Content.ParseRaw(evt.Type)

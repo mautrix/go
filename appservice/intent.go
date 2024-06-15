@@ -130,40 +130,64 @@ func (intent *IntentAPI) EnsureJoined(ctx context.Context, roomID id.RoomID, ext
 	return nil
 }
 
-func (intent *IntentAPI) AddDoublePuppetValue(into interface{}) interface{} {
+func (intent *IntentAPI) AddDoublePuppetValue(into any) any {
+	return intent.AddDoublePuppetValueWithTS(into, 0)
+}
+
+func (intent *IntentAPI) AddDoublePuppetValueWithTS(into any, ts int64) any {
 	if !intent.IsCustomPuppet || intent.as.DoublePuppetValue == "" {
 		return into
 	}
+	// Only use ts deduplication feature with appservice double puppeting
+	if !intent.SetAppServiceUserID {
+		ts = 0
+	}
 	switch val := into.(type) {
-	case *map[string]interface{}:
+	case *map[string]any:
 		if *val == nil {
-			valNonPtr := make(map[string]interface{})
+			valNonPtr := make(map[string]any)
 			*val = valNonPtr
 		}
 		(*val)[DoublePuppetKey] = intent.as.DoublePuppetValue
+		if ts != 0 {
+			(*val)[DoublePuppetTSKey] = ts
+		}
 		return val
-	case map[string]interface{}:
+	case map[string]any:
 		val[DoublePuppetKey] = intent.as.DoublePuppetValue
+		if ts != 0 {
+			val[DoublePuppetTSKey] = ts
+		}
 		return val
 	case *event.Content:
 		if val.Raw == nil {
-			val.Raw = make(map[string]interface{})
+			val.Raw = make(map[string]any)
 		}
 		val.Raw[DoublePuppetKey] = intent.as.DoublePuppetValue
+		if ts != 0 {
+			val.Raw[DoublePuppetTSKey] = ts
+		}
 		return val
 	case event.Content:
 		if val.Raw == nil {
-			val.Raw = make(map[string]interface{})
+			val.Raw = make(map[string]any)
 		}
 		val.Raw[DoublePuppetKey] = intent.as.DoublePuppetValue
+		if ts != 0 {
+			val.Raw[DoublePuppetTSKey] = ts
+		}
 		return val
 	default:
-		return &event.Content{
-			Raw: map[string]interface{}{
+		content := &event.Content{
+			Raw: map[string]any{
 				DoublePuppetKey: intent.as.DoublePuppetValue,
 			},
 			Parsed: val,
 		}
+		if ts != 0 {
+			content.Raw[DoublePuppetTSKey] = ts
+		}
+		return content
 	}
 }
 
@@ -179,7 +203,7 @@ func (intent *IntentAPI) SendMassagedMessageEvent(ctx context.Context, roomID id
 	if err := intent.EnsureJoined(ctx, roomID); err != nil {
 		return nil, err
 	}
-	contentJSON = intent.AddDoublePuppetValue(contentJSON)
+	contentJSON = intent.AddDoublePuppetValueWithTS(contentJSON, ts)
 	return intent.Client.SendMessageEvent(ctx, roomID, eventType, contentJSON, mautrix.ReqSendEvent{Timestamp: ts})
 }
 
@@ -197,7 +221,7 @@ func (intent *IntentAPI) SendMassagedStateEvent(ctx context.Context, roomID id.R
 	if err := intent.EnsureJoined(ctx, roomID); err != nil {
 		return nil, err
 	}
-	contentJSON = intent.AddDoublePuppetValue(contentJSON)
+	contentJSON = intent.AddDoublePuppetValueWithTS(contentJSON, ts)
 	return intent.Client.SendMassagedStateEvent(ctx, roomID, eventType, stateKey, contentJSON, ts)
 }
 
@@ -427,9 +451,9 @@ func (intent *IntentAPI) SetAvatarURL(ctx context.Context, avatarURL id.ContentU
 	}
 	if !avatarURL.IsEmpty() {
 		// Some homeservers require the avatar to be downloaded before setting it
-		body, _ := intent.Client.Download(ctx, avatarURL)
-		if body != nil {
-			_ = body.Close()
+		resp, _ := intent.Download(ctx, avatarURL)
+		if resp != nil {
+			_ = resp.Body.Close()
 		}
 	}
 	return intent.Client.SetAvatarURL(ctx, avatarURL)

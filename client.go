@@ -76,6 +76,8 @@ type Client struct {
 	// Number of times that mautrix will retry any HTTP request
 	// if the request fails entirely or returns a HTTP gateway error (502-504)
 	DefaultHTTPRetries int
+	// Amount of time to wait between HTTP retries, defaults to 4 seconds
+	DefaultHTTPBackoff time.Duration
 	// Set to true to disable automatically sleeping on 429 errors.
 	IgnoreRateLimit bool
 
@@ -348,6 +350,7 @@ type FullRequest struct {
 	RequestLength    int64
 	ResponseJSON     interface{}
 	MaxAttempts      int
+	BackoffDuration  time.Duration
 	SensitiveContent bool
 	Handler          ClientResponseHandler
 	Logger           *zerolog.Logger
@@ -424,6 +427,13 @@ func (cli *Client) MakeFullRequest(ctx context.Context, params FullRequest) ([]b
 	if params.MaxAttempts == 0 {
 		params.MaxAttempts = 1 + cli.DefaultHTTPRetries
 	}
+	if params.BackoffDuration == 0 {
+		if cli.DefaultHTTPBackoff == 0 {
+			params.BackoffDuration = 4 * time.Second
+		} else {
+			params.BackoffDuration = cli.DefaultHTTPBackoff
+		}
+	}
 	if params.Logger == nil {
 		params.Logger = &cli.Log
 	}
@@ -441,7 +451,7 @@ func (cli *Client) MakeFullRequest(ctx context.Context, params FullRequest) ([]b
 	if params.Client == nil {
 		params.Client = cli.Client
 	}
-	return cli.executeCompiledRequest(req, params.MaxAttempts-1, 4*time.Second, params.ResponseJSON, params.Handler, params.Client)
+	return cli.executeCompiledRequest(req, params.MaxAttempts-1, params.BackoffDuration, params.ResponseJSON, params.Handler, params.Client)
 }
 
 func (cli *Client) cliOrContextLog(ctx context.Context) *zerolog.Logger {
@@ -455,14 +465,21 @@ func (cli *Client) cliOrContextLog(ctx context.Context) *zerolog.Logger {
 func (cli *Client) doRetry(req *http.Request, cause error, retries int, backoff time.Duration, responseJSON interface{}, handler ClientResponseHandler, client *http.Client) ([]byte, error) {
 	log := zerolog.Ctx(req.Context())
 	if req.Body != nil {
-		if req.GetBody == nil {
-			log.Warn().Msg("Failed to get new body to retry request: GetBody is nil")
-			return nil, cause
-		}
 		var err error
-		req.Body, err = req.GetBody()
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to get new body to retry request")
+		if req.GetBody != nil {
+			req.Body, err = req.GetBody()
+			if err != nil {
+				log.Warn().Err(err).Msg("Failed to get new body to retry request")
+				return nil, cause
+			}
+		} else if bodySeeker, ok := req.Body.(io.ReadSeeker); ok {
+			_, err = bodySeeker.Seek(0, io.SeekStart)
+			if err != nil {
+				log.Warn().Err(err).Msg("Failed to seek to beginning of request body")
+				return nil, cause
+			}
+		} else {
+			log.Warn().Msg("Failed to get new body to retry request: GetBody is nil and Body is not an io.ReadSeeker")
 			return nil, cause
 		}
 	}
@@ -621,12 +638,14 @@ func (cli *Client) SyncRequest(ctx context.Context, timeout int, since, filterID
 }
 
 type ReqSync struct {
-	Timeout        int
-	Since          string
-	FilterID       string
-	FullState      bool
-	SetPresence    event.Presence
-	StreamResponse bool
+	Timeout         int
+	Since           string
+	FilterID        string
+	FullState       bool
+	SetPresence     event.Presence
+	StreamResponse  bool
+	BeeperStreaming bool
+	Client          *http.Client
 }
 
 func (req *ReqSync) BuildQuery() map[string]string {
@@ -645,6 +664,11 @@ func (req *ReqSync) BuildQuery() map[string]string {
 	if req.FullState {
 		query["full_state"] = "true"
 	}
+	if req.BeeperStreaming {
+		// TODO remove this
+		query["streaming"] = ""
+		query["com.beeper.streaming"] = "true"
+	}
 	return query
 }
 
@@ -655,6 +679,7 @@ func (cli *Client) FullSyncRequest(ctx context.Context, req ReqSync) (resp *Resp
 		Method:       http.MethodGet,
 		URL:          urlPath,
 		ResponseJSON: &resp,
+		Client:       req.Client,
 		// We don't want automatic retries for SyncRequest, the Sync() wrapper handles those.
 		MaxAttempts: 1,
 	}
@@ -957,9 +982,9 @@ func (cli *Client) SetAvatarURL(ctx context.Context, url id.ContentURI) (err err
 }
 
 // BeeperUpdateProfile sets custom fields in the user's profile.
-func (cli *Client) BeeperUpdateProfile(ctx context.Context, data map[string]any) (err error) {
+func (cli *Client) BeeperUpdateProfile(ctx context.Context, data any) (err error) {
 	urlPath := cli.BuildClientURL("v3", "profile", cli.UserID)
-	_, err = cli.MakeRequest(ctx, http.MethodPatch, urlPath, &data, nil)
+	_, err = cli.MakeRequest(ctx, http.MethodPatch, urlPath, data, nil)
 	return
 }
 
@@ -1414,25 +1439,24 @@ func (cli *Client) GetDownloadURL(mxcURL id.ContentURI) string {
 	return cli.BuildURLWithQuery(MediaURLPath{"v3", "download", mxcURL.Homeserver, mxcURL.FileID}, map[string]string{"allow_redirect": "true"})
 }
 
-func (cli *Client) Download(ctx context.Context, mxcURL id.ContentURI) (io.ReadCloser, error) {
-	resp, err := cli.download(ctx, mxcURL)
-	if err != nil {
-		return nil, err
-	}
-	return resp.Body, nil
-}
-
 func (cli *Client) doMediaRetry(req *http.Request, cause error, retries int, backoff time.Duration) (*http.Response, error) {
 	log := zerolog.Ctx(req.Context())
 	if req.Body != nil {
-		if req.GetBody == nil {
-			log.Warn().Msg("Failed to get new body to retry request: GetBody is nil")
-			return nil, cause
-		}
 		var err error
-		req.Body, err = req.GetBody()
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to get new body to retry request")
+		if req.GetBody != nil {
+			req.Body, err = req.GetBody()
+			if err != nil {
+				log.Warn().Err(err).Msg("Failed to get new body to retry request")
+				return nil, cause
+			}
+		} else if bodySeeker, ok := req.Body.(io.ReadSeeker); ok {
+			_, err = bodySeeker.Seek(0, io.SeekStart)
+			if err != nil {
+				log.Warn().Err(err).Msg("Failed to seek to beginning of request body")
+				return nil, cause
+			}
+		} else {
+			log.Warn().Msg("Failed to get new body to retry request: GetBody is nil and Body is not an io.ReadSeeker")
 			return nil, cause
 		}
 	}
@@ -1478,7 +1502,7 @@ func (cli *Client) doMediaRequest(req *http.Request, retries int, backoff time.D
 	return res, err
 }
 
-func (cli *Client) download(ctx context.Context, mxcURL id.ContentURI) (*http.Response, error) {
+func (cli *Client) Download(ctx context.Context, mxcURL id.ContentURI) (*http.Response, error) {
 	ctxLog := zerolog.Ctx(ctx)
 	if ctxLog.GetLevel() == zerolog.Disabled || ctxLog == zerolog.DefaultContextLogger {
 		ctx = cli.Log.WithContext(ctx)
@@ -1492,7 +1516,7 @@ func (cli *Client) download(ctx context.Context, mxcURL id.ContentURI) (*http.Re
 }
 
 func (cli *Client) DownloadBytes(ctx context.Context, mxcURL id.ContentURI) ([]byte, error) {
-	resp, err := cli.download(ctx, mxcURL)
+	resp, err := cli.Download(ctx, mxcURL)
 	if err != nil {
 		return nil, err
 	}
@@ -1574,12 +1598,13 @@ type ReqUploadMedia struct {
 	UnstableUploadURL string
 }
 
-func (cli *Client) tryUploadMediaToURL(ctx context.Context, url, contentType string, content io.Reader) (*http.Response, error) {
+func (cli *Client) tryUploadMediaToURL(ctx context.Context, url, contentType string, content io.Reader, contentLength int64) (*http.Response, error) {
 	cli.Log.Debug().Str("url", url).Msg("Uploading media to external URL")
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, content)
 	if err != nil {
 		return nil, err
 	}
+	req.ContentLength = contentLength
 	req.Header.Set("Content-Type", contentType)
 	req.Header.Set("User-Agent", cli.UserAgent+" (external media uploader)")
 
@@ -1588,18 +1613,17 @@ func (cli *Client) tryUploadMediaToURL(ctx context.Context, url, contentType str
 
 func (cli *Client) uploadMediaToURL(ctx context.Context, data ReqUploadMedia) (*RespMediaUpload, error) {
 	retries := cli.DefaultHTTPRetries
-	if data.ContentBytes == nil {
-		// Can't retry with a reader
+	reader := data.Content
+	if data.ContentBytes != nil {
+		data.ContentLength = int64(len(data.ContentBytes))
+		reader = bytes.NewReader(data.ContentBytes)
+	}
+	readerSeeker, canSeek := reader.(io.ReadSeeker)
+	if !canSeek {
 		retries = 0
 	}
 	for {
-		reader := data.Content
-		if reader == nil {
-			reader = bytes.NewReader(data.ContentBytes)
-		} else {
-			data.Content = nil
-		}
-		resp, err := cli.tryUploadMediaToURL(ctx, data.UnstableUploadURL, data.ContentType, reader)
+		resp, err := cli.tryUploadMediaToURL(ctx, data.UnstableUploadURL, data.ContentType, reader, data.ContentLength)
 		if err == nil {
 			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 				// Everything is fine
@@ -1615,6 +1639,10 @@ func (cli *Client) uploadMediaToURL(ctx context.Context, data ReqUploadMedia) (*
 		cli.Log.Warn().Str("url", data.UnstableUploadURL).Err(err).
 			Msg("Error uploading media to external URL, retrying")
 		retries--
+		_, err = readerSeeker.Seek(0, io.SeekStart)
+		if err != nil {
+			return nil, fmt.Errorf("failed to seek back to start of reader: %w", err)
+		}
 	}
 
 	query := map[string]string{}

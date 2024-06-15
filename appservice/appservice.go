@@ -193,6 +193,7 @@ type AppService struct {
 }
 
 const DoublePuppetKey = "fi.mau.double_puppet_source"
+const DoublePuppetTSKey = "fi.mau.double_puppet_ts"
 
 func getDefaultProcessID() string {
 	pid := syscall.Getpid()

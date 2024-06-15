@@ -540,7 +540,8 @@ func processImportantEvent(ctx context.Context, evt *event.Event, existingRoomDa
 	case event.StateRoomAvatar:
 		content, ok := evt.Content.Parsed.(*event.RoomAvatarEventContent)
 		if ok {
-			updatedRoom.Avatar = &content.URL
+			url, _ := content.URL.Parse()
+			updatedRoom.Avatar = &url
 		}
 	case event.StateTopic:
 		content, ok := evt.Content.Parsed.(*event.TopicEventContent)

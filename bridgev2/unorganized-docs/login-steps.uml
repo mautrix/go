@@ -1,0 +1,43 @@
+title Login flows
+
+participant User
+participant Client
+participant Bridge
+participant User's device
+
+alt Username+Password/Phone number/2FA code
+    Client->+Bridge: /login
+    Bridge->-Client: step=user_input, fields=[...]
+    Client->User: input box(es)
+    User->Client: submit input
+    Client->+Bridge: /login/user_input
+    Bridge->-Client: success=true, step=next step
+end
+
+alt Cookies
+    Client->+Bridge: /login
+    Bridge->-Client: step=cookies, url=..., cookies=[...]
+    Client->User: webview
+    User->Client: login in webview
+    Client->Bridge: /login/cookies
+    Bridge->-Client: success=true, step=next step
+end
+
+alt QR/Emoji/Code
+    Client->+Bridge: /login
+    Bridge->-Client: step=display_and_wait, data=...
+    Client->+Bridge: /login/wait
+    Client->User: display QR/emoji/code
+    loop Refresh QR
+        Bridge->-Client: step=display_and_wait, data=new QR
+        Client->User: display new QR
+        Client->+Bridge: /login/wait
+    end
+else Successful case
+    User->User's device: Scan QR/tap emoji/enter code
+    User's device->Bridge: Login successful
+    Bridge->-Client: success=true, step=next step
+else Error
+    Bridge->Client: error=timeout
+    Client->User: error
+end

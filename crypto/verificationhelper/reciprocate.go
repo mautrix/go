@@ -9,10 +9,12 @@ package verificationhelper
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 
 	"golang.org/x/exp/slices"
 
+	"maunium.net/go/mautrix/crypto"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
@@ -45,10 +47,32 @@ func (vh *VerificationHelper) HandleScannedQRData(ctx context.Context, data []by
 	log.Info().Msg("Verifying keys from QR code")
 
 	ownCrossSigningPublicKeys := vh.mach.GetOwnCrossSigningPublicKeys(ctx)
+	if ownCrossSigningPublicKeys == nil {
+		return crypto.ErrCrossSigningPubkeysNotCached
+	}
+
 	switch qrCode.Mode {
 	case QRCodeModeCrossSigning:
-		panic("unimplemented")
-		// TODO verify and sign their master key
+		theirSigningKeys, err := vh.mach.GetCrossSigningPublicKeys(ctx, txn.TheirUser)
+		if err != nil {
+			return vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeKeyMismatch, "couldn't get %s's cross-signing keys: %w", txn.TheirUser, err)
+		}
+		if bytes.Equal(theirSigningKeys.MasterKey.Bytes(), qrCode.Key1[:]) {
+			log.Info().Msg("Verified that the other device has the master key we expected")
+		} else {
+			return vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeKeyMismatch, "the other device does not have the master key we expected")
+		}
+
+		// Verify the master key is correct
+		if bytes.Equal(ownCrossSigningPublicKeys.MasterKey.Bytes(), qrCode.Key2[:]) {
+			log.Info().Msg("Verified that the other device has the same master key")
+		} else {
+			return vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeKeyMismatch, "the master key does not match")
+		}
+
+		if err := vh.mach.SignUser(ctx, txn.TheirUser, theirSigningKeys.MasterKey); err != nil {
+			return vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeInternalError, "failed to sign their master key: %w", err)
+		}
 	case QRCodeModeSelfVerifyingMasterKeyTrusted:
 		// The QR was created by a device that trusts the master key, which
 		// means that we don't trust the key. Key1 is the master key public
@@ -75,7 +99,7 @@ func (vh *VerificationHelper) HandleScannedQRData(ctx context.Context, data []by
 		}
 
 		if err := vh.mach.SignOwnMasterKey(ctx); err != nil {
-			return vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeKeyMismatch, "failed to sign own master key: %w", err)
+			return vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeInternalError, "failed to sign own master key: %w", err)
 		}
 	case QRCodeModeSelfVerifyingMasterKeyUntrusted:
 		// The QR was created by a device that does not trust the master key,
@@ -108,7 +132,7 @@ func (vh *VerificationHelper) HandleScannedQRData(ctx context.Context, data []by
 		}
 
 		// Verify that what they think the master key is is correct.
-		if bytes.Equal(vh.mach.GetOwnCrossSigningPublicKeys(ctx).MasterKey.Bytes(), qrCode.Key2[:]) {
+		if bytes.Equal(ownCrossSigningPublicKeys.MasterKey.Bytes(), qrCode.Key2[:]) {
 			log.Info().Msg("Verified that the other device has the correct master key")
 		} else {
 			return vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeKeyMismatch, "the master key does not match")
@@ -153,7 +177,7 @@ func (vh *VerificationHelper) HandleScannedQRData(ctx context.Context, data []by
 	txn.SentOurDone = true
 	if txn.ReceivedTheirDone {
 		log.Debug().Msg("We already received their done event. Setting verification state to done.")
-		txn.VerificationState = verificationStateDone
+		delete(vh.activeTransactions, txn.TransactionID)
 		vh.verificationDone(ctx, txn.TransactionID)
 	}
 	return nil
@@ -203,8 +227,15 @@ func (vh *VerificationHelper) ConfirmQRCodeScanned(ctx context.Context, txnID id
 			}
 		}
 	} else {
-		// TODO: handle QR codes that are not self-signing situations
-		panic("unimplemented")
+		// Cross-signing situation. Sign their master key.
+		theirSigningKeys, err := vh.mach.GetCrossSigningPublicKeys(ctx, txn.TheirUser)
+		if err != nil {
+			return vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeKeyMismatch, "couldn't get %s's cross-signing keys: %w", txn.TheirUser, err)
+		}
+
+		if err := vh.mach.SignUser(ctx, txn.TheirUser, theirSigningKeys.MasterKey); err != nil {
+			return vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeInternalError, "failed to sign their master key: %w", err)
+		}
 	}
 
 	err := vh.sendVerificationEvent(ctx, txn, event.InRoomVerificationDone, &event.VerificationDoneEventContent{})
@@ -213,7 +244,7 @@ func (vh *VerificationHelper) ConfirmQRCodeScanned(ctx context.Context, txnID id
 	}
 	txn.SentOurDone = true
 	if txn.ReceivedTheirDone {
-		txn.VerificationState = verificationStateDone
+		delete(vh.activeTransactions, txn.TransactionID)
 		vh.verificationDone(ctx, txn.TransactionID)
 	}
 	return nil
@@ -234,21 +265,27 @@ func (vh *VerificationHelper) generateAndShowQRCode(ctx context.Context, txn *ve
 
 	ownCrossSigningPublicKeys := vh.mach.GetOwnCrossSigningPublicKeys(ctx)
 	if ownCrossSigningPublicKeys == nil || len(ownCrossSigningPublicKeys.MasterKey) == 0 {
-		return fmt.Errorf("failed to get own cross-signing master public key")
+		return errors.New("failed to get own cross-signing master public key")
 	}
 
+	ownMasterKeyTrusted, err := vh.mach.CryptoStore.IsKeySignedBy(ctx, vh.client.UserID, ownCrossSigningPublicKeys.MasterKey, vh.client.UserID, vh.mach.OwnIdentity().SigningKey)
+	if err != nil {
+		return err
+	}
 	mode := QRCodeModeCrossSigning
 	if vh.client.UserID == txn.TheirUser {
 		// This is a self-signing situation.
-		if trusted, err := vh.mach.CryptoStore.IsKeySignedBy(ctx, vh.client.UserID, ownCrossSigningPublicKeys.MasterKey, vh.client.UserID, vh.mach.OwnIdentity().SigningKey); err != nil {
-			return err
-		} else if trusted {
+		if ownMasterKeyTrusted {
 			mode = QRCodeModeSelfVerifyingMasterKeyTrusted
 		} else {
 			mode = QRCodeModeSelfVerifyingMasterKeyUntrusted
 		}
 	} else {
-		panic("unimplemented")
+		// This is a cross-signing situation.
+		if !ownMasterKeyTrusted {
+			return errors.New("cannot cross-sign other device when own master key is not trusted")
+		}
+		mode = QRCodeModeCrossSigning
 	}
 
 	var key1, key2 []byte

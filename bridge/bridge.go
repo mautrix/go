@@ -276,7 +276,7 @@ func (br *Bridge) GenerateRegistration() {
 		os.Exit(21)
 	}
 
-	updateTokens := func(helper *configupgrade.Helper) {
+	updateTokens := func(helper configupgrade.Helper) {
 		helper.Set(configupgrade.Str, reg.AppToken, "appservice", "as_token")
 		helper.Set(configupgrade.Str, reg.ServerToken, "appservice", "hs_token")
 	}
@@ -775,7 +775,7 @@ func (br *Bridge) ResendBridgeInfo() {
 	if !br.SaveConfig {
 		br.ZLog.Warn().Msg("Not setting resend_bridge_info to false in config due to --no-update flag")
 	} else {
-		_, _, err := configupgrade.Do(br.ConfigPath, true, br.ConfigUpgrader, configupgrade.SimpleUpgrader(func(helper *configupgrade.Helper) {
+		_, _, err := configupgrade.Do(br.ConfigPath, true, br.ConfigUpgrader, configupgrade.SimpleUpgrader(func(helper configupgrade.Helper) {
 			helper.Set(configupgrade.Bool, "false", "bridge", "resend_bridge_info")
 		}))
 		if err != nil {
