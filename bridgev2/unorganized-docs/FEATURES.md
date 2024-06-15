@@ -19,6 +19,8 @@
 * [x] Read receipts
 * [ ] Presence
 * [ ] Typing notifications
+* [ ] Spaces
+* [ ] Relay mode
 * [ ] Chat metadata
   * [ ] Archive/low priority
   * [ ] Pin/favorite
