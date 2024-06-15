@@ -334,7 +334,7 @@ func (cli *Client) LogRequestDone(req *http.Request, resp *http.Response, err er
 	}
 }
 
-func (cli *Client) MakeRequest(ctx context.Context, method string, httpURL string, reqBody interface{}, resBody interface{}) ([]byte, error) {
+func (cli *Client) MakeRequest(ctx context.Context, method string, httpURL string, reqBody any, resBody any) ([]byte, error) {
 	return cli.MakeFullRequest(ctx, FullRequest{Method: method, URL: httpURL, RequestJSON: reqBody, ResponseJSON: resBody})
 }
 
@@ -1528,13 +1528,8 @@ func (cli *Client) DownloadBytes(ctx context.Context, mxcURL id.ContentURI) ([]b
 //
 // See https://spec.matrix.org/v1.7/client-server-api/#post_matrixmediav1create
 func (cli *Client) CreateMXC(ctx context.Context) (*RespCreateMXC, error) {
-	u, _ := url.Parse(cli.BuildURL(MediaURLPath{"v1", "create"}))
 	var m RespCreateMXC
-	_, err := cli.MakeFullRequest(ctx, FullRequest{
-		Method:       http.MethodPost,
-		URL:          u.String(),
-		ResponseJSON: &m,
-	})
+	_, err := cli.MakeRequest(ctx, http.MethodPost, cli.BuildURL(MediaURLPath{"v1", "create"}), nil, &m)
 	return &m, err
 }
 
@@ -1653,11 +1648,7 @@ func (cli *Client) uploadMediaToURL(ctx context.Context, data ReqUploadMedia) (*
 	notifyURL := cli.BuildURLWithQuery(MediaURLPath{"unstable", "com.beeper.msc3870", "upload", data.MXC.Homeserver, data.MXC.FileID, "complete"}, query)
 
 	var m *RespMediaUpload
-	_, err := cli.MakeFullRequest(ctx, FullRequest{
-		Method:       http.MethodPost,
-		URL:          notifyURL,
-		ResponseJSON: m,
-	})
+	_, err := cli.MakeRequest(ctx, http.MethodPost, notifyURL, nil, &m)
 	if err != nil {
 		return nil, err
 	}

@@ -77,11 +77,7 @@ func (cli *Client) ListRooms(ctx context.Context, req ReqListRoom) (RespListRoom
 	var resp RespListRooms
 	var reqURL string
 	reqURL = cli.BuildURLWithQuery(mautrix.SynapseAdminURLPath{"v1", "rooms"}, req.BuildQuery())
-	_, err := cli.MakeFullRequest(ctx, mautrix.FullRequest{
-		Method:       http.MethodGet,
-		URL:          reqURL,
-		ResponseJSON: &resp,
-	})
+	_, err := cli.MakeRequest(ctx, http.MethodGet, reqURL, nil, &resp)
 	return resp, err
 }
 
@@ -109,11 +105,7 @@ func (cli *Client) RoomMessages(ctx context.Context, roomID id.RoomID, from, to 
 		query["limit"] = strconv.Itoa(limit)
 	}
 	urlPath := cli.BuildURLWithQuery(mautrix.SynapseAdminURLPath{"v1", "rooms", roomID, "messages"}, query)
-	_, err = cli.MakeFullRequest(ctx, mautrix.FullRequest{
-		Method:       http.MethodGet,
-		URL:          urlPath,
-		ResponseJSON: &resp,
-	})
+	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
 	return resp, err
 }
 
@@ -137,12 +129,7 @@ type RespDeleteRoom struct {
 func (cli *Client) DeleteRoom(ctx context.Context, roomID id.RoomID, req ReqDeleteRoom) (RespDeleteRoom, error) {
 	reqURL := cli.BuildAdminURL("v2", "rooms", roomID)
 	var resp RespDeleteRoom
-	_, err := cli.MakeFullRequest(ctx, mautrix.FullRequest{
-		Method:       http.MethodDelete,
-		URL:          reqURL,
-		ResponseJSON: &resp,
-		RequestJSON:  &req,
-	})
+	_, err := cli.MakeRequest(ctx, http.MethodDelete, reqURL, &req, &resp)
 	return resp, err
 }
 
@@ -157,11 +144,7 @@ type RespRoomsMembers struct {
 func (cli *Client) RoomMembers(ctx context.Context, roomID id.RoomID) (RespRoomsMembers, error) {
 	reqURL := cli.BuildAdminURL("v1", "rooms", roomID, "members")
 	var resp RespRoomsMembers
-	_, err := cli.MakeFullRequest(ctx, mautrix.FullRequest{
-		Method:       http.MethodGet,
-		URL:          reqURL,
-		ResponseJSON: &resp,
-	})
+	_, err := cli.MakeRequest(ctx, http.MethodGet, reqURL, nil, &resp)
 	return resp, err
 }
 
@@ -174,11 +157,7 @@ type ReqMakeRoomAdmin struct {
 // https://matrix-org.github.io/synapse/latest/admin_api/rooms.html#make-room-admin-api
 func (cli *Client) MakeRoomAdmin(ctx context.Context, roomIDOrAlias string, req ReqMakeRoomAdmin) error {
 	reqURL := cli.BuildAdminURL("v1", "rooms", roomIDOrAlias, "make_room_admin")
-	_, err := cli.MakeFullRequest(ctx, mautrix.FullRequest{
-		Method:      http.MethodPost,
-		URL:         reqURL,
-		RequestJSON: &req,
-	})
+	_, err := cli.MakeRequest(ctx, http.MethodPost, reqURL, &req, nil)
 	return err
 }
 
@@ -191,11 +170,7 @@ type ReqJoinUserToRoom struct {
 // https://matrix-org.github.io/synapse/latest/admin_api/room_membership.html
 func (cli *Client) JoinUserToRoom(ctx context.Context, roomID id.RoomID, req ReqJoinUserToRoom) error {
 	reqURL := cli.BuildAdminURL("v1", "join", roomID)
-	_, err := cli.MakeFullRequest(ctx, mautrix.FullRequest{
-		Method:      http.MethodPost,
-		URL:         reqURL,
-		RequestJSON: &req,
-	})
+	_, err := cli.MakeRequest(ctx, http.MethodPost, reqURL, &req, nil)
 	return err
 }
 
@@ -208,11 +183,7 @@ type ReqBlockRoom struct {
 // https://matrix-org.github.io/synapse/latest/admin_api/rooms.html#block-room-api
 func (cli *Client) BlockRoom(ctx context.Context, roomID id.RoomID, req ReqBlockRoom) error {
 	reqURL := cli.BuildAdminURL("v1", "rooms", roomID, "block")
-	_, err := cli.MakeFullRequest(ctx, mautrix.FullRequest{
-		Method:      http.MethodPut,
-		URL:         reqURL,
-		RequestJSON: &req,
-	})
+	_, err := cli.MakeRequest(ctx, http.MethodPut, reqURL, &req, nil)
 	return err
 }
 
@@ -228,10 +199,6 @@ type RoomsBlockResponse struct {
 func (cli *Client) GetRoomBlockStatus(ctx context.Context, roomID id.RoomID) (RoomsBlockResponse, error) {
 	var resp RoomsBlockResponse
 	reqURL := cli.BuildAdminURL("v1", "rooms", roomID, "block")
-	_, err := cli.MakeFullRequest(ctx, mautrix.FullRequest{
-		Method:       http.MethodGet,
-		URL:          reqURL,
-		ResponseJSON: &resp,
-	})
+	_, err := cli.MakeRequest(ctx, http.MethodGet, reqURL, nil, &resp)
 	return resp, err
 }

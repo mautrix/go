@@ -32,11 +32,7 @@ type ReqResetPassword struct {
 // https://matrix-org.github.io/synapse/latest/admin_api/user_admin_api.html#reset-password
 func (cli *Client) ResetPassword(ctx context.Context, req ReqResetPassword) error {
 	reqURL := cli.BuildAdminURL("v1", "reset_password", req.UserID)
-	_, err := cli.MakeFullRequest(ctx, mautrix.FullRequest{
-		Method:      http.MethodPost,
-		URL:         reqURL,
-		RequestJSON: &req,
-	})
+	_, err := cli.MakeRequest(ctx, http.MethodPost, reqURL, &req, nil)
 	return err
 }
 
@@ -48,11 +44,7 @@ func (cli *Client) ResetPassword(ctx context.Context, req ReqResetPassword) erro
 // https://matrix-org.github.io/synapse/latest/admin_api/user_admin_api.html#check-username-availability
 func (cli *Client) UsernameAvailable(ctx context.Context, username string) (resp *mautrix.RespRegisterAvailable, err error) {
 	u := cli.BuildURLWithQuery(mautrix.SynapseAdminURLPath{"v1", "username_available"}, map[string]string{"username": username})
-	_, err = cli.MakeFullRequest(ctx, mautrix.FullRequest{
-		Method:       http.MethodGet,
-		URL:          u,
-		ResponseJSON: &resp,
-	})
+	_, err = cli.MakeRequest(ctx, http.MethodGet, u, nil, &resp)
 	if err == nil && !resp.Available {
 		err = fmt.Errorf(`request returned OK status without "available": true`)
 	}
@@ -73,11 +65,7 @@ type RespListDevices struct {
 //
 // https://matrix-org.github.io/synapse/latest/admin_api/user_admin_api.html#list-all-devices
 func (cli *Client) ListDevices(ctx context.Context, userID id.UserID) (resp *RespListDevices, err error) {
-	_, err = cli.MakeFullRequest(ctx, mautrix.FullRequest{
-		Method:       http.MethodGet,
-		URL:          cli.BuildAdminURL("v2", "users", userID, "devices"),
-		ResponseJSON: &resp,
-	})
+	_, err = cli.MakeRequest(ctx, http.MethodGet, cli.BuildAdminURL("v2", "users", userID, "devices"), nil, &resp)
 	return
 }
 
@@ -101,11 +89,7 @@ type RespUserInfo struct {
 //
 // https://matrix-org.github.io/synapse/latest/admin_api/user_admin_api.html#query-user-account
 func (cli *Client) GetUserInfo(ctx context.Context, userID id.UserID) (resp *RespUserInfo, err error) {
-	_, err = cli.MakeFullRequest(ctx, mautrix.FullRequest{
-		Method:       http.MethodGet,
-		URL:          cli.BuildAdminURL("v2", "users", userID),
-		ResponseJSON: &resp,
-	})
+	_, err = cli.MakeRequest(ctx, http.MethodGet, cli.BuildAdminURL("v2", "users", userID), nil, &resp)
 	return
 }
 
@@ -118,11 +102,7 @@ type ReqDeleteUser struct {
 // https://matrix-org.github.io/synapse/latest/admin_api/user_admin_api.html#deactivate-account
 func (cli *Client) DeactivateAccount(ctx context.Context, userID id.UserID, req ReqDeleteUser) error {
 	reqURL := cli.BuildAdminURL("v1", "deactivate", userID)
-	_, err := cli.MakeFullRequest(ctx, mautrix.FullRequest{
-		Method:      http.MethodPost,
-		URL:         reqURL,
-		RequestJSON: &req,
-	})
+	_, err := cli.MakeRequest(ctx, http.MethodPost, reqURL, &req, nil)
 	return err
 }
 
@@ -144,11 +124,7 @@ type ReqCreateOrModifyAccount struct {
 // https://matrix-org.github.io/synapse/latest/admin_api/user_admin_api.html#create-or-modify-account
 func (cli *Client) CreateOrModifyAccount(ctx context.Context, userID id.UserID, req ReqCreateOrModifyAccount) error {
 	reqURL := cli.BuildAdminURL("v2", "users", userID)
-	_, err := cli.MakeFullRequest(ctx, mautrix.FullRequest{
-		Method:      http.MethodPut,
-		URL:         reqURL,
-		RequestJSON: &req,
-	})
+	_, err := cli.MakeRequest(ctx, http.MethodPut, reqURL, &req, nil)
 	return err
 }
 
@@ -164,11 +140,7 @@ type ReqSetRatelimit = RatelimitOverride
 // https://matrix-org.github.io/synapse/latest/admin_api/user_admin_api.html#set-ratelimit
 func (cli *Client) SetUserRatelimit(ctx context.Context, userID id.UserID, req ReqSetRatelimit) error {
 	reqURL := cli.BuildAdminURL("v1", "users", userID, "override_ratelimit")
-	_, err := cli.MakeFullRequest(ctx, mautrix.FullRequest{
-		Method:      http.MethodPost,
-		URL:         reqURL,
-		RequestJSON: &req,
-	})
+	_, err := cli.MakeRequest(ctx, http.MethodPost, reqURL, &req, nil)
 	return err
 }
 
@@ -178,11 +150,7 @@ type RespUserRatelimit = RatelimitOverride
 //
 // https://matrix-org.github.io/synapse/latest/admin_api/user_admin_api.html#get-status-of-ratelimit
 func (cli *Client) GetUserRatelimit(ctx context.Context, userID id.UserID) (resp RespUserRatelimit, err error) {
-	_, err = cli.MakeFullRequest(ctx, mautrix.FullRequest{
-		Method:       http.MethodGet,
-		URL:          cli.BuildAdminURL("v1", "users", userID, "override_ratelimit"),
-		ResponseJSON: &resp,
-	})
+	_, err = cli.MakeRequest(ctx, http.MethodGet, cli.BuildAdminURL("v1", "users", userID, "override_ratelimit"), nil, &resp)
 	return
 }
 
@@ -190,9 +158,6 @@ func (cli *Client) GetUserRatelimit(ctx context.Context, userID id.UserID) (resp
 //
 // https://matrix-org.github.io/synapse/latest/admin_api/user_admin_api.html#delete-ratelimit
 func (cli *Client) DeleteUserRatelimit(ctx context.Context, userID id.UserID) (err error) {
-	_, err = cli.MakeFullRequest(ctx, mautrix.FullRequest{
-		Method: http.MethodDelete,
-		URL:    cli.BuildAdminURL("v1", "users", userID, "override_ratelimit"),
-	})
+	_, err = cli.MakeRequest(ctx, http.MethodDelete, cli.BuildAdminURL("v1", "users", userID, "override_ratelimit"), nil, nil)
 	return
 }
