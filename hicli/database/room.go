@@ -9,6 +9,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 
 	"go.mau.fi/util/dbutil"
@@ -82,7 +83,11 @@ func (rq *RoomQuery) SetPrevBatch(ctx context.Context, roomID id.RoomID, prevBat
 func (rq *RoomQuery) UpdatePreviewIfLaterOnTimeline(ctx context.Context, roomID id.RoomID, rowID EventRowID) (previewChanged bool, err error) {
 	var newPreviewRowID EventRowID
 	err = rq.GetDB().QueryRow(ctx, updateRoomPreviewIfLaterOnTimelineQuery, roomID, rowID).Scan(&newPreviewRowID)
-	previewChanged = newPreviewRowID == rowID
+	if errors.Is(err, sql.ErrNoRows) {
+		err = nil
+	} else if err == nil {
+		previewChanged = newPreviewRowID == rowID
+	}
 	return
 }
 

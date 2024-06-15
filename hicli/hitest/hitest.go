@@ -93,6 +93,9 @@ func main() {
 			break
 		}
 		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
 		switch strings.ToLower(fields[0]) {
 		case "send":
 			resp, err := cli.Send(ctx, id.RoomID(fields[1]), event.EventMessage, &event.MessageEventContent{
