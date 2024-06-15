@@ -15,6 +15,7 @@ import (
 type SyncRoom struct {
 	Meta     *database.Room              `json:"meta"`
 	Timeline []database.TimelineRowTuple `json:"timeline"`
+	Events   []*database.Event           `json:"events"`
 	Reset    bool                        `json:"reset"`
 }
 

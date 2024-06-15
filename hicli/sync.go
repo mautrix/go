@@ -302,6 +302,7 @@ func (h *HiClient) processStateAndTimeline(ctx context.Context, room *database.R
 		heroesChanged = true
 	}
 	decryptionQueue := make(map[id.SessionID]*database.SessionRequest)
+	allNewEvents := make([]*database.Event, 0, len(state.Events)+len(timeline.Events))
 	processNewEvent := func(evt *event.Event, isTimeline bool) (database.EventRowID, error) {
 		evt.RoomID = room.ID
 		dbEvt, err := h.processEvent(ctx, evt, decryptionQueue, false)
@@ -330,6 +331,7 @@ func (h *HiClient) processStateAndTimeline(ctx context.Context, room *database.R
 			}
 			processImportantEvent(ctx, evt, room, updatedRoom)
 		}
+		allNewEvents = append(allNewEvents, dbEvt)
 		return dbEvt.RowID, nil
 	}
 	var err error
@@ -399,11 +401,12 @@ func (h *HiClient) processStateAndTimeline(ctx context.Context, room *database.R
 			return fmt.Errorf("failed to save room data: %w", err)
 		}
 	}
-	if roomChanged || len(timelineRowTuples) > 0 {
+	if roomChanged || len(timelineRowTuples) > 0 || len(allNewEvents) > 0 {
 		ctx.Value(syncContextKey).(*syncContext).evt.Rooms[room.ID] = &SyncRoom{
 			Meta:     room,
 			Timeline: timelineRowTuples,
 			Reset:    timeline.Limited,
+			Events:   allNewEvents,
 		}
 	}
 	return nil
