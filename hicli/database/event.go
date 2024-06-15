@@ -28,6 +28,7 @@ const (
 		       transaction_id, redacted_by, relates_to, relation_type, megolm_session_id, decryption_error, reactions, last_edit_rowid
 		FROM event
 	`
+	getEventByRowID                  = getEventBaseQuery + `WHERE rowid = $1`
 	getManyEventsByRowID             = getEventBaseQuery + `WHERE rowid IN (%s)`
 	getEventByID                     = getEventBaseQuery + `WHERE event_id = $1`
 	getFailedEventsByMegolmSessionID = getEventBaseQuery + `WHERE room_id = $1 AND megolm_session_id = $2 AND decryption_error IS NOT NULL`
@@ -91,6 +92,10 @@ func (eq *EventQuery) GetFailedByMegolmSessionID(ctx context.Context, roomID id.
 
 func (eq *EventQuery) GetByID(ctx context.Context, eventID id.EventID) (*Event, error) {
 	return eq.QueryOne(ctx, getEventByID, eventID)
+}
+
+func (eq *EventQuery) GetByRowID(ctx context.Context, rowID EventRowID) (*Event, error) {
+	return eq.QueryOne(ctx, getEventByRowID, rowID)
 }
 
 func (eq *EventQuery) GetByRowIDs(ctx context.Context, rowIDs ...EventRowID) ([]*Event, error) {
@@ -274,10 +279,10 @@ type Event struct {
 	RelationType event.RelationType `json:"relation_type,omitempty"`
 
 	MegolmSessionID id.SessionID `json:"-,omitempty"`
-	DecryptionError string
+	DecryptionError string       `json:"decryption_error,omitempty"`
 
-	Reactions     map[string]int
-	LastEditRowID *EventRowID
+	Reactions     map[string]int `json:"reactions,omitempty"`
+	LastEditRowID *EventRowID    `json:"last_edit_rowid,omitempty"`
 }
 
 func MautrixToEvent(evt *event.Event) *Event {

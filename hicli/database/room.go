@@ -101,24 +101,24 @@ const (
 )
 
 type Room struct {
-	ID              id.RoomID
-	CreationContent *event.CreateEventContent
+	ID              id.RoomID                 `json:"room_id"`
+	CreationContent *event.CreateEventContent `json:"creation_content,omitempty"`
 
-	Name           *string
-	NameQuality    NameQuality
-	Avatar         *id.ContentURI
-	Topic          *string
-	CanonicalAlias *id.RoomAlias
+	Name           *string        `json:"name,omitempty"`
+	NameQuality    NameQuality    `json:"name_quality"`
+	Avatar         *id.ContentURI `json:"avatar,omitempty"`
+	Topic          *string        `json:"topic,omitempty"`
+	CanonicalAlias *id.RoomAlias  `json:"canonical_alias,omitempty"`
 
-	LazyLoadSummary *mautrix.LazyLoadSummary
+	LazyLoadSummary *mautrix.LazyLoadSummary `json:"lazy_load_summary,omitempty"`
 
-	EncryptionEvent *event.EncryptionEventContent
-	HasMemberList   bool
+	EncryptionEvent *event.EncryptionEventContent `json:"encryption_event,omitempty"`
+	HasMemberList   bool                          `json:"has_member_list"`
 
-	PreviewEventRowID EventRowID
-	SortingTimestamp  time.Time
+	PreviewEventRowID EventRowID `json:"preview_event_rowid"`
+	SortingTimestamp  time.Time  `json:"sorting_timestamp"`
 
-	PrevBatch string
+	PrevBatch string `json:"prev_batch"`
 }
 
 func (r *Room) CheckChangesAndCopyInto(other *Room) (hasChanges bool) {

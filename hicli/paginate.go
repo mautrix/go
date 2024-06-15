@@ -48,6 +48,18 @@ func (h *HiClient) GetEventsByRowIDs(ctx context.Context, rowIDs []database.Even
 	return events, nil
 }
 
+func (h *HiClient) GetEvent(ctx context.Context, roomID id.RoomID, eventID id.EventID) (*database.Event, error) {
+	if evt, err := h.DB.Event.GetByID(ctx, eventID); err != nil {
+		return nil, fmt.Errorf("failed to get event from database: %w", err)
+	} else if evt != nil {
+		return evt, nil
+	} else if serverEvt, err := h.Client.GetEvent(ctx, roomID, eventID); err != nil {
+		return nil, fmt.Errorf("failed to get event from server: %w", err)
+	} else {
+		return h.processEvent(ctx, serverEvt, nil, false)
+	}
+}
+
 func (h *HiClient) Paginate(ctx context.Context, roomID id.RoomID, maxTimelineID database.TimelineRowID, limit int) ([]*database.Event, error) {
 	evts, err := h.DB.Timeline.Get(ctx, roomID, limit, maxTimelineID)
 	if err != nil {
