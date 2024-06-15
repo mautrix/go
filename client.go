@@ -61,6 +61,7 @@ type Client struct {
 	StateStore    StateStore
 	Crypto        CryptoHelper
 	Verification  VerificationHelper
+	SpecVersions  *RespVersions
 
 	Log zerolog.Logger
 
@@ -871,6 +872,9 @@ func (cli *Client) LogoutAll(ctx context.Context) (resp *RespLogout, err error) 
 func (cli *Client) Versions(ctx context.Context) (resp *RespVersions, err error) {
 	urlPath := cli.BuildClientURL("versions")
 	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
+	if resp != nil {
+		cli.SpecVersions = resp
+	}
 	return
 }
 
