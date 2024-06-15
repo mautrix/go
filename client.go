@@ -336,7 +336,8 @@ func (cli *Client) LogRequestDone(req *http.Request, resp *http.Response, err er
 }
 
 func (cli *Client) MakeRequest(ctx context.Context, method string, httpURL string, reqBody any, resBody any) ([]byte, error) {
-	return cli.MakeFullRequest(ctx, FullRequest{Method: method, URL: httpURL, RequestJSON: reqBody, ResponseJSON: resBody})
+	data, _, err := cli.MakeFullRequest(ctx, FullRequest{Method: method, URL: httpURL, RequestJSON: reqBody, ResponseJSON: resBody})
+	return data, err
 }
 
 type ClientResponseHandler = func(req *http.Request, res *http.Response, responseJSON interface{}) ([]byte, error)
@@ -354,6 +355,7 @@ type FullRequest struct {
 	BackoffDuration  time.Duration
 	SensitiveContent bool
 	Handler          ClientResponseHandler
+	DontReadResponse bool
 	Logger           *zerolog.Logger
 	Client           *http.Client
 }
@@ -418,13 +420,7 @@ func (params *FullRequest) compileRequest(ctx context.Context) (*http.Request, e
 	return req, nil
 }
 
-// MakeFullRequest makes a JSON HTTP request to the given URL.
-// If "resBody" is not nil, the response body will be json.Unmarshalled into it.
-//
-// Returns the HTTP body as bytes on 2xx with a nil error. Returns an error if the response is not 2xx along
-// with the HTTP body bytes if it got that far. This error is an HTTPError which includes the returned
-// HTTP status code and possibly a RespError as the WrappedError, if the HTTP body could be decoded as a RespError.
-func (cli *Client) MakeFullRequest(ctx context.Context, params FullRequest) ([]byte, error) {
+func (cli *Client) MakeFullRequest(ctx context.Context, params FullRequest) ([]byte, *http.Response, error) {
 	if params.MaxAttempts == 0 {
 		params.MaxAttempts = 1 + cli.DefaultHTTPRetries
 	}
@@ -440,10 +436,14 @@ func (cli *Client) MakeFullRequest(ctx context.Context, params FullRequest) ([]b
 	}
 	req, err := params.compileRequest(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if params.Handler == nil {
-		params.Handler = handleNormalResponse
+		if params.DontReadResponse {
+			params.Handler = noopHandleResponse
+		} else {
+			params.Handler = handleNormalResponse
+		}
 	}
 	req.Header.Set("User-Agent", cli.UserAgent)
 	if len(cli.AccessToken) > 0 {
@@ -452,7 +452,7 @@ func (cli *Client) MakeFullRequest(ctx context.Context, params FullRequest) ([]b
 	if params.Client == nil {
 		params.Client = cli.Client
 	}
-	return cli.executeCompiledRequest(req, params.MaxAttempts-1, params.BackoffDuration, params.ResponseJSON, params.Handler, params.Client)
+	return cli.executeCompiledRequest(req, params.MaxAttempts-1, params.BackoffDuration, params.ResponseJSON, params.Handler, params.DontReadResponse, params.Client)
 }
 
 func (cli *Client) cliOrContextLog(ctx context.Context) *zerolog.Logger {
@@ -463,7 +463,7 @@ func (cli *Client) cliOrContextLog(ctx context.Context) *zerolog.Logger {
 	return log
 }
 
-func (cli *Client) doRetry(req *http.Request, cause error, retries int, backoff time.Duration, responseJSON interface{}, handler ClientResponseHandler, client *http.Client) ([]byte, error) {
+func (cli *Client) doRetry(req *http.Request, cause error, retries int, backoff time.Duration, responseJSON any, handler ClientResponseHandler, dontReadResponse bool, client *http.Client) ([]byte, *http.Response, error) {
 	log := zerolog.Ctx(req.Context())
 	if req.Body != nil {
 		var err error
@@ -471,17 +471,17 @@ func (cli *Client) doRetry(req *http.Request, cause error, retries int, backoff 
 			req.Body, err = req.GetBody()
 			if err != nil {
 				log.Warn().Err(err).Msg("Failed to get new body to retry request")
-				return nil, cause
+				return nil, nil, cause
 			}
 		} else if bodySeeker, ok := req.Body.(io.ReadSeeker); ok {
 			_, err = bodySeeker.Seek(0, io.SeekStart)
 			if err != nil {
 				log.Warn().Err(err).Msg("Failed to seek to beginning of request body")
-				return nil, cause
+				return nil, nil, cause
 			}
 		} else {
 			log.Warn().Msg("Failed to get new body to retry request: GetBody is nil and Body is not an io.ReadSeeker")
-			return nil, cause
+			return nil, nil, cause
 		}
 	}
 	log.Warn().Err(cause).
@@ -491,10 +491,10 @@ func (cli *Client) doRetry(req *http.Request, cause error, retries int, backoff 
 	if cli.UpdateRequestOnRetry != nil {
 		req = cli.UpdateRequestOnRetry(req, cause)
 	}
-	return cli.executeCompiledRequest(req, retries-1, backoff*2, responseJSON, handler, client)
+	return cli.executeCompiledRequest(req, retries-1, backoff*2, responseJSON, handler, dontReadResponse, client)
 }
 
-func readRequestBody(req *http.Request, res *http.Response) ([]byte, error) {
+func readResponseBody(req *http.Request, res *http.Response) ([]byte, error) {
 	contents, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, HTTPError{
@@ -536,8 +536,12 @@ func streamResponse(req *http.Request, res *http.Response, responseJSON interfac
 	}
 }
 
+func noopHandleResponse(req *http.Request, res *http.Response, responseJSON interface{}) ([]byte, error) {
+	return nil, nil
+}
+
 func handleNormalResponse(req *http.Request, res *http.Response, responseJSON interface{}) ([]byte, error) {
-	if contents, err := readRequestBody(req, res); err != nil {
+	if contents, err := readResponseBody(req, res); err != nil {
 		return nil, err
 	} else if responseJSON == nil {
 		return contents, nil
@@ -556,7 +560,7 @@ func handleNormalResponse(req *http.Request, res *http.Response, responseJSON in
 }
 
 func ParseErrorResponse(req *http.Request, res *http.Response) ([]byte, error) {
-	contents, err := readRequestBody(req, res)
+	contents, err := readResponseBody(req, res)
 	if err != nil {
 		return contents, err
 	}
@@ -573,17 +577,17 @@ func ParseErrorResponse(req *http.Request, res *http.Response) ([]byte, error) {
 	}
 }
 
-func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backoff time.Duration, responseJSON interface{}, handler ClientResponseHandler, client *http.Client) ([]byte, error) {
+func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backoff time.Duration, responseJSON any, handler ClientResponseHandler, dontReadResponse bool, client *http.Client) ([]byte, *http.Response, error) {
 	cli.RequestStart(req)
 	startTime := time.Now()
 	res, err := client.Do(req)
 	duration := time.Now().Sub(startTime)
-	if res != nil {
+	if res != nil && !dontReadResponse {
 		defer res.Body.Close()
 	}
 	if err != nil {
 		if retries > 0 {
-			return cli.doRetry(req, err, retries, backoff, responseJSON, handler, client)
+			return cli.doRetry(req, err, retries, backoff, responseJSON, handler, dontReadResponse, client)
 		}
 		err = HTTPError{
 			Request:  req,
@@ -593,12 +597,12 @@ func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backof
 			WrappedError: err,
 		}
 		cli.LogRequestDone(req, res, err, nil, 0, duration)
-		return nil, err
+		return nil, res, err
 	}
 
 	if retries > 0 && retryafter.Should(res.StatusCode, !cli.IgnoreRateLimit) {
 		backoff = retryafter.Parse(res.Header.Get("Retry-After"), backoff)
-		return cli.doRetry(req, fmt.Errorf("HTTP %d", res.StatusCode), retries, backoff, responseJSON, handler, client)
+		return cli.doRetry(req, fmt.Errorf("HTTP %d", res.StatusCode), retries, backoff, responseJSON, handler, dontReadResponse, client)
 	}
 
 	var body []byte
@@ -609,7 +613,7 @@ func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backof
 		body, err = handler(req, res, responseJSON)
 		cli.LogRequestDone(req, res, nil, err, len(body), duration)
 	}
-	return body, err
+	return body, res, err
 }
 
 // Whoami gets the user ID of the current user. See https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3accountwhoami
@@ -688,7 +692,7 @@ func (cli *Client) FullSyncRequest(ctx context.Context, req ReqSync) (resp *Resp
 		fullReq.Handler = streamResponse
 	}
 	start := time.Now()
-	_, err = cli.MakeFullRequest(ctx, fullReq)
+	_, _, err = cli.MakeFullRequest(ctx, fullReq)
 	duration := time.Now().Sub(start)
 	timeout := time.Duration(req.Timeout) * time.Millisecond
 	buffer := 10 * time.Second
@@ -738,7 +742,7 @@ func (cli *Client) RegisterAvailable(ctx context.Context, username string) (resp
 
 func (cli *Client) register(ctx context.Context, url string, req *ReqRegister) (resp *RespRegister, uiaResp *RespUserInteractive, err error) {
 	var bodyBytes []byte
-	bodyBytes, err = cli.MakeFullRequest(ctx, FullRequest{
+	bodyBytes, _, err = cli.MakeFullRequest(ctx, FullRequest{
 		Method:           http.MethodPost,
 		URL:              url,
 		RequestJSON:      req,
@@ -818,7 +822,7 @@ func (cli *Client) GetLoginFlows(ctx context.Context) (resp *RespLoginFlows, err
 
 // Login a user to the homeserver according to https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3login
 func (cli *Client) Login(ctx context.Context, req *ReqLogin) (resp *RespLogin, err error) {
-	_, err = cli.MakeFullRequest(ctx, FullRequest{
+	_, _, err = cli.MakeFullRequest(ctx, FullRequest{
 		Method:           http.MethodPost,
 		URL:              cli.BuildClientURL("v3", "login"),
 		RequestJSON:      req,
@@ -1395,7 +1399,7 @@ func parseRoomStateArray(_ *http.Request, res *http.Response, responseJSON inter
 // State gets all state in a room.
 // See https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3roomsroomidstate
 func (cli *Client) State(ctx context.Context, roomID id.RoomID) (stateMap RoomStateMap, err error) {
-	_, err = cli.MakeFullRequest(ctx, FullRequest{
+	_, _, err = cli.MakeFullRequest(ctx, FullRequest{
 		Method:       http.MethodGet,
 		URL:          cli.BuildClientURL("v3", "rooms", roomID, "state"),
 		ResponseJSON: &stateMap,
@@ -1687,7 +1691,7 @@ func (cli *Client) UploadMedia(ctx context.Context, data ReqUploadMedia) (*RespM
 	}
 
 	var m RespMediaUpload
-	_, err := cli.MakeFullRequest(ctx, FullRequest{
+	_, _, err := cli.MakeFullRequest(ctx, FullRequest{
 		Method:        method,
 		URL:           u.String(),
 		Headers:       headers,
@@ -2187,7 +2191,7 @@ type UIACallback = func(*RespUserInteractive) interface{}
 // Because the endpoint requires user-interactive authentication a callback must be provided that,
 // given the UI auth parameters, produces the required result (or nil to end the flow).
 func (cli *Client) UploadCrossSigningKeys(ctx context.Context, keys *UploadCrossSigningKeysReq, uiaCallback UIACallback) error {
-	content, err := cli.MakeFullRequest(ctx, FullRequest{
+	content, _, err := cli.MakeFullRequest(ctx, FullRequest{
 		Method:           http.MethodPost,
 		URL:              cli.BuildClientURL("v3", "keys", "device_signing", "upload"),
 		RequestJSON:      keys,
@@ -2278,7 +2282,7 @@ func (cli *Client) BatchSend(ctx context.Context, roomID id.RoomID, req *ReqBatc
 }
 
 func (cli *Client) AppservicePing(ctx context.Context, id, txnID string) (resp *RespAppservicePing, err error) {
-	_, err = cli.MakeFullRequest(ctx, FullRequest{
+	_, _, err = cli.MakeFullRequest(ctx, FullRequest{
 		Method:       http.MethodPost,
 		URL:          cli.BuildClientURL("v1", "appservice", id, "ping"),
 		RequestJSON:  &ReqAppservicePing{TxnID: txnID},
