@@ -40,6 +40,8 @@ var TypeMap = map[Type]reflect.Type{
 	StateSpaceChild:        reflect.TypeOf(SpaceChildEventContent{}),
 	StateInsertionMarker:   reflect.TypeOf(InsertionMarkerContent{}),
 
+	StateElementFunctionalMembers: reflect.TypeOf(ElementFunctionalMembersContent{}),
+
 	EventMessage:   reflect.TypeOf(MessageEventContent{}),
 	EventSticker:   reflect.TypeOf(MessageEventContent{}),
 	EventEncrypted: reflect.TypeOf(EncryptedEventContent{}),
@@ -211,6 +213,7 @@ func init() {
 	gob.Register(&BridgeEventContent{})
 	gob.Register(&SpaceChildEventContent{})
 	gob.Register(&SpaceParentEventContent{})
+	gob.Register(&ElementFunctionalMembersContent{})
 	gob.Register(&RoomNameEventContent{})
 	gob.Register(&RoomAvatarEventContent{})
 	gob.Register(&TopicEventContent{})
@@ -349,6 +352,13 @@ func (content *Content) AsSpaceParent() *SpaceParentEventContent {
 	casted, ok := content.Parsed.(*SpaceParentEventContent)
 	if !ok {
 		return &SpaceParentEventContent{}
+	}
+	return casted
+}
+func (content *Content) AsElementFunctionalMembers() *ElementFunctionalMembersContent {
+	casted, ok := content.Parsed.(*ElementFunctionalMembersContent)
+	if !ok {
+		return &ElementFunctionalMembersContent{}
 	}
 	return casted
 }

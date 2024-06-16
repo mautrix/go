@@ -117,13 +117,6 @@ func exportSessionsJSON(sessions []*InboundGroupSession) ([]byte, error) {
 	return json.Marshal(exportedSessions)
 }
 
-func min(a, b int) int {
-	if a > b {
-		return b
-	}
-	return a
-}
-
 func formatKeyExportData(data []byte) []byte {
 	base64Data := make([]byte, base64.StdEncoding.EncodedLen(len(data)))
 	base64.StdEncoding.Encode(base64Data, data)

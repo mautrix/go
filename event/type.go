@@ -112,7 +112,7 @@ func (et *Type) GuessClass() TypeClass {
 		StatePowerLevels.Type, StateRoomName.Type, StateRoomAvatar.Type, StateServerACL.Type, StateTopic.Type,
 		StatePinnedEvents.Type, StateTombstone.Type, StateEncryption.Type, StateBridge.Type, StateHalfShotBridge.Type,
 		StateSpaceParent.Type, StateSpaceChild.Type, StatePolicyRoom.Type, StatePolicyServer.Type, StatePolicyUser.Type,
-		StateInsertionMarker.Type:
+		StateInsertionMarker.Type, StateElementFunctionalMembers.Type:
 		return StateEventType
 	case EphemeralEventReceipt.Type, EphemeralEventTyping.Type, EphemeralEventPresence.Type:
 		return EphemeralEventType
@@ -193,6 +193,8 @@ var (
 
 	// Deprecated: MSC2716 has been abandoned
 	StateInsertionMarker = Type{"org.matrix.msc2716.marker", StateEventType}
+
+	StateElementFunctionalMembers = Type{"io.element.functional_members", StateEventType}
 )
 
 // Message events
@@ -244,7 +246,7 @@ var (
 	AccountDataCrossSigningMaster      = Type{string(id.SecretXSMaster), AccountDataEventType}
 	AccountDataCrossSigningUser        = Type{string(id.SecretXSUserSigning), AccountDataEventType}
 	AccountDataCrossSigningSelf        = Type{string(id.SecretXSSelfSigning), AccountDataEventType}
-	AccountDataMegolmBackupKey         = Type{"m.megolm_backup.v1", AccountDataEventType}
+	AccountDataMegolmBackupKey         = Type{string(id.SecretMegolmBackupV1), AccountDataEventType}
 )
 
 // Device-to-device events

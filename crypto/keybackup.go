@@ -117,7 +117,7 @@ func (mach *OlmMachine) GetAndStoreKeyBackup(ctx context.Context, version id.Key
 				continue
 			}
 
-			err = mach.ImportRoomKeyFromBackup(ctx, version, roomID, sessionID, sessionData)
+			_, err = mach.ImportRoomKeyFromBackup(ctx, version, roomID, sessionID, sessionData)
 			if err != nil {
 				log.Warn().Err(err).Msg("Failed to import room key from backup")
 				failedCount++
@@ -135,23 +135,23 @@ func (mach *OlmMachine) GetAndStoreKeyBackup(ctx context.Context, version id.Key
 	return nil
 }
 
-func (mach *OlmMachine) ImportRoomKeyFromBackup(ctx context.Context, version id.KeyBackupVersion, roomID id.RoomID, sessionID id.SessionID, keyBackupData *backup.MegolmSessionData) error {
+func (mach *OlmMachine) ImportRoomKeyFromBackup(ctx context.Context, version id.KeyBackupVersion, roomID id.RoomID, sessionID id.SessionID, keyBackupData *backup.MegolmSessionData) (*InboundGroupSession, error) {
 	log := zerolog.Ctx(ctx).With().
 		Str("room_id", roomID.String()).
 		Str("session_id", sessionID.String()).
 		Logger()
 	if keyBackupData.Algorithm != id.AlgorithmMegolmV1 {
-		return fmt.Errorf("ignoring room key in backup with weird algorithm %s", keyBackupData.Algorithm)
+		return nil, fmt.Errorf("ignoring room key in backup with weird algorithm %s", keyBackupData.Algorithm)
 	}
 
 	igsInternal, err := olm.InboundGroupSessionImport([]byte(keyBackupData.SessionKey))
 	if err != nil {
-		return fmt.Errorf("failed to import inbound group session: %w", err)
+		return nil, fmt.Errorf("failed to import inbound group session: %w", err)
 	} else if igsInternal.ID() != sessionID {
 		log.Warn().
 			Stringer("actual_session_id", igsInternal.ID()).
 			Msg("Mismatched session ID while creating inbound group session from key backup")
-		return fmt.Errorf("mismatched session ID while creating inbound group session from key backup")
+		return nil, fmt.Errorf("mismatched session ID while creating inbound group session from key backup")
 	}
 
 	var maxAge time.Duration
@@ -163,7 +163,8 @@ func (mach *OlmMachine) ImportRoomKeyFromBackup(ctx context.Context, version id.
 		maxMessages = config.RotationPeriodMessages
 	}
 
-	if firstKnownIndex := igsInternal.FirstKnownIndex(); firstKnownIndex > 0 {
+	firstKnownIndex := igsInternal.FirstKnownIndex()
+	if firstKnownIndex > 0 {
 		log.Warn().Uint32("first_known_index", firstKnownIndex).Msg("Importing partial session")
 	}
 
@@ -182,8 +183,8 @@ func (mach *OlmMachine) ImportRoomKeyFromBackup(ctx context.Context, version id.
 	}
 	err = mach.CryptoStore.PutGroupSession(ctx, igs)
 	if err != nil {
-		return fmt.Errorf("failed to store new inbound group session: %w", err)
+		return nil, fmt.Errorf("failed to store new inbound group session: %w", err)
 	}
-	mach.markSessionReceived(ctx, sessionID)
-	return nil
+	mach.markSessionReceived(ctx, roomID, sessionID, firstKnownIndex)
+	return igs, nil
 }

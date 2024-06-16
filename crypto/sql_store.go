@@ -432,8 +432,11 @@ func (store *SQLCryptoStore) RedactOutdatedGroupSessions(ctx context.Context) ([
 }
 
 func (store *SQLCryptoStore) PutWithheldGroupSession(ctx context.Context, content event.RoomKeyWithheldEventContent) error {
-	_, err := store.DB.Exec(ctx, "INSERT INTO crypto_megolm_inbound_session (session_id, sender_key, room_id, withheld_code, withheld_reason, received_at, account_id) VALUES ($1, $2, $3, $4, $5, $6, $7)",
-		content.SessionID, content.SenderKey, content.RoomID, content.Code, content.Reason, time.Now().UTC(), store.AccountID)
+	_, err := store.DB.Exec(ctx, `
+		INSERT INTO crypto_megolm_inbound_session (session_id, sender_key, room_id, withheld_code, withheld_reason, received_at, account_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		ON CONFLICT (session_id, account_id) DO NOTHING
+	`, content.SessionID, content.SenderKey, content.RoomID, content.Code, content.Reason, time.Now().UTC(), store.AccountID)
 	return err
 }
 
@@ -759,6 +762,17 @@ func (store *SQLCryptoStore) PutDevices(ctx context.Context, userID id.UserID, d
 	})
 }
 
+func userIDsToParams(users []id.UserID) (placeholders string, params []any) {
+	queryString := make([]string, len(users))
+	params = make([]any, len(users))
+	for i, user := range users {
+		queryString[i] = fmt.Sprintf("$%d", i+1)
+		params[i] = user
+	}
+	placeholders = strings.Join(queryString, ",")
+	return
+}
+
 // FilterTrackedUsers finds all the user IDs out of the given ones for which the database contains identity information.
 func (store *SQLCryptoStore) FilterTrackedUsers(ctx context.Context, users []id.UserID) ([]id.UserID, error) {
 	var rows dbutil.Rows
@@ -766,13 +780,8 @@ func (store *SQLCryptoStore) FilterTrackedUsers(ctx context.Context, users []id.
 	if store.DB.Dialect == dbutil.Postgres && PostgresArrayWrapper != nil {
 		rows, err = store.DB.Query(ctx, "SELECT user_id FROM crypto_tracked_user WHERE user_id = ANY($1)", PostgresArrayWrapper(users))
 	} else {
-		queryString := make([]string, len(users))
-		params := make([]interface{}, len(users))
-		for i, user := range users {
-			queryString[i] = fmt.Sprintf("?%d", i+1)
-			params[i] = user
-		}
-		rows, err = store.DB.Query(ctx, "SELECT user_id FROM crypto_tracked_user WHERE user_id IN ("+strings.Join(queryString, ",")+")", params...)
+		placeholders, params := userIDsToParams(users)
+		rows, err = store.DB.Query(ctx, "SELECT user_id FROM crypto_tracked_user WHERE user_id IN ("+placeholders+")", params...)
 	}
 	if err != nil {
 		return users, err
@@ -781,18 +790,14 @@ func (store *SQLCryptoStore) FilterTrackedUsers(ctx context.Context, users []id.
 }
 
 // MarkTrackedUsersOutdated flags that the device list for given users are outdated.
-func (store *SQLCryptoStore) MarkTrackedUsersOutdated(ctx context.Context, users []id.UserID) error {
-	return store.DB.DoTxn(ctx, nil, func(ctx context.Context) error {
-		// TODO refactor to use a single query
-		for _, userID := range users {
-			_, err := store.DB.Exec(ctx, "UPDATE crypto_tracked_user SET devices_outdated = true WHERE user_id = $1", userID)
-			if err != nil {
-				return fmt.Errorf("failed to update user in the tracked users list: %w", err)
-			}
-		}
-
-		return nil
-	})
+func (store *SQLCryptoStore) MarkTrackedUsersOutdated(ctx context.Context, users []id.UserID) (err error) {
+	if store.DB.Dialect == dbutil.Postgres && PostgresArrayWrapper != nil {
+		_, err = store.DB.Exec(ctx, "UPDATE crypto_tracked_user SET devices_outdated = true WHERE user_id = ANY($1)", PostgresArrayWrapper(users))
+	} else {
+		placeholders, params := userIDsToParams(users)
+		_, err = store.DB.Exec(ctx, "UPDATE crypto_tracked_user SET devices_outdated = true WHERE user_id IN ("+placeholders+")", params...)
+	}
+	return
 }
 
 // GetOutdatedTrackerUsers gets all tracked users whose devices need to be updated.
@@ -891,15 +896,15 @@ func (store *SQLCryptoStore) PutSecret(ctx context.Context, name id.Secret, valu
 		return err
 	}
 	_, err = store.DB.Exec(ctx, `
-		INSERT INTO crypto_secrets (name, secret) VALUES ($1, $2)
-		ON CONFLICT (name) DO UPDATE SET secret=excluded.secret
-	`, name, bytes)
+		INSERT INTO crypto_secrets (account_id, name, secret) VALUES ($1, $2, $3)
+		ON CONFLICT (account_id, name) DO UPDATE SET secret=excluded.secret
+	`, store.AccountID, name, bytes)
 	return err
 }
 
 func (store *SQLCryptoStore) GetSecret(ctx context.Context, name id.Secret) (value string, err error) {
 	var bytes []byte
-	err = store.DB.QueryRow(ctx, `SELECT secret FROM crypto_secrets WHERE name=$1`, name).Scan(&bytes)
+	err = store.DB.QueryRow(ctx, `SELECT secret FROM crypto_secrets WHERE account_id=$1 AND name=$2`, store.AccountID, name).Scan(&bytes)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", nil
 	} else if err != nil {
@@ -910,6 +915,6 @@ func (store *SQLCryptoStore) GetSecret(ctx context.Context, name id.Secret) (val
 }
 
 func (store *SQLCryptoStore) DeleteSecret(ctx context.Context, name id.Secret) (err error) {
-	_, err = store.DB.Exec(ctx, "DELETE FROM crypto_secrets WHERE name=$1", name)
+	_, err = store.DB.Exec(ctx, "DELETE FROM crypto_secrets WHERE account_id=$1 AND name=$2", store.AccountID, name)
 	return
 }

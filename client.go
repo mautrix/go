@@ -61,6 +61,7 @@ type Client struct {
 	StateStore    StateStore
 	Crypto        CryptoHelper
 	Verification  VerificationHelper
+	SpecVersions  *RespVersions
 
 	Log zerolog.Logger
 
@@ -201,14 +202,20 @@ func (cli *Client) SyncWithContext(ctx context.Context) error {
 		}
 	}
 	lastSuccessfulSync := time.Now().Add(-cli.StreamSyncMinAge - 1*time.Hour)
+	// Always do first sync with 0 timeout
+	isFailing := true
 	for {
 		streamResp := false
 		if cli.StreamSyncMinAge > 0 && time.Since(lastSuccessfulSync) > cli.StreamSyncMinAge {
 			cli.Log.Debug().Msg("Last sync is old, will stream next response")
 			streamResp = true
 		}
+		timeout := 30000
+		if isFailing {
+			timeout = 0
+		}
 		resSync, err := cli.FullSyncRequest(ctx, ReqSync{
-			Timeout:        30000,
+			Timeout:        timeout,
 			Since:          nextBatch,
 			FilterID:       filterID,
 			FullState:      false,
@@ -216,12 +223,16 @@ func (cli *Client) SyncWithContext(ctx context.Context) error {
 			StreamResponse: streamResp,
 		})
 		if err != nil {
+			isFailing = true
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
 			duration, err2 := cli.Syncer.OnFailedSync(resSync, err)
 			if err2 != nil {
 				return err2
+			}
+			if duration <= 0 {
+				continue
 			}
 			select {
 			case <-ctx.Done():
@@ -230,6 +241,7 @@ func (cli *Client) SyncWithContext(ctx context.Context) error {
 				continue
 			}
 		}
+		isFailing = false
 		lastSuccessfulSync = time.Now()
 
 		// Check that the syncing state hasn't changed
@@ -323,7 +335,7 @@ func (cli *Client) LogRequestDone(req *http.Request, resp *http.Response, err er
 	}
 }
 
-func (cli *Client) MakeRequest(ctx context.Context, method string, httpURL string, reqBody interface{}, resBody interface{}) ([]byte, error) {
+func (cli *Client) MakeRequest(ctx context.Context, method string, httpURL string, reqBody any, resBody any) ([]byte, error) {
 	return cli.MakeFullRequest(ctx, FullRequest{Method: method, URL: httpURL, RequestJSON: reqBody, ResponseJSON: resBody})
 }
 
@@ -342,6 +354,7 @@ type FullRequest struct {
 	BackoffDuration  time.Duration
 	SensitiveContent bool
 	Handler          ClientResponseHandler
+	DontReadResponse bool
 	Logger           *zerolog.Logger
 	Client           *http.Client
 }
@@ -406,13 +419,12 @@ func (params *FullRequest) compileRequest(ctx context.Context) (*http.Request, e
 	return req, nil
 }
 
-// MakeFullRequest makes a JSON HTTP request to the given URL.
-// If "resBody" is not nil, the response body will be json.Unmarshalled into it.
-//
-// Returns the HTTP body as bytes on 2xx with a nil error. Returns an error if the response is not 2xx along
-// with the HTTP body bytes if it got that far. This error is an HTTPError which includes the returned
-// HTTP status code and possibly a RespError as the WrappedError, if the HTTP body could be decoded as a RespError.
 func (cli *Client) MakeFullRequest(ctx context.Context, params FullRequest) ([]byte, error) {
+	data, _, err := cli.MakeFullRequestWithResp(ctx, params)
+	return data, err
+}
+
+func (cli *Client) MakeFullRequestWithResp(ctx context.Context, params FullRequest) ([]byte, *http.Response, error) {
 	if params.MaxAttempts == 0 {
 		params.MaxAttempts = 1 + cli.DefaultHTTPRetries
 	}
@@ -428,10 +440,14 @@ func (cli *Client) MakeFullRequest(ctx context.Context, params FullRequest) ([]b
 	}
 	req, err := params.compileRequest(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if params.Handler == nil {
-		params.Handler = handleNormalResponse
+		if params.DontReadResponse {
+			params.Handler = noopHandleResponse
+		} else {
+			params.Handler = handleNormalResponse
+		}
 	}
 	req.Header.Set("User-Agent", cli.UserAgent)
 	if len(cli.AccessToken) > 0 {
@@ -440,7 +456,7 @@ func (cli *Client) MakeFullRequest(ctx context.Context, params FullRequest) ([]b
 	if params.Client == nil {
 		params.Client = cli.Client
 	}
-	return cli.executeCompiledRequest(req, params.MaxAttempts-1, params.BackoffDuration, params.ResponseJSON, params.Handler, params.Client)
+	return cli.executeCompiledRequest(req, params.MaxAttempts-1, params.BackoffDuration, params.ResponseJSON, params.Handler, params.DontReadResponse, params.Client)
 }
 
 func (cli *Client) cliOrContextLog(ctx context.Context) *zerolog.Logger {
@@ -451,7 +467,7 @@ func (cli *Client) cliOrContextLog(ctx context.Context) *zerolog.Logger {
 	return log
 }
 
-func (cli *Client) doRetry(req *http.Request, cause error, retries int, backoff time.Duration, responseJSON interface{}, handler ClientResponseHandler, client *http.Client) ([]byte, error) {
+func (cli *Client) doRetry(req *http.Request, cause error, retries int, backoff time.Duration, responseJSON any, handler ClientResponseHandler, dontReadResponse bool, client *http.Client) ([]byte, *http.Response, error) {
 	log := zerolog.Ctx(req.Context())
 	if req.Body != nil {
 		var err error
@@ -459,17 +475,17 @@ func (cli *Client) doRetry(req *http.Request, cause error, retries int, backoff 
 			req.Body, err = req.GetBody()
 			if err != nil {
 				log.Warn().Err(err).Msg("Failed to get new body to retry request")
-				return nil, cause
+				return nil, nil, cause
 			}
 		} else if bodySeeker, ok := req.Body.(io.ReadSeeker); ok {
 			_, err = bodySeeker.Seek(0, io.SeekStart)
 			if err != nil {
 				log.Warn().Err(err).Msg("Failed to seek to beginning of request body")
-				return nil, cause
+				return nil, nil, cause
 			}
 		} else {
 			log.Warn().Msg("Failed to get new body to retry request: GetBody is nil and Body is not an io.ReadSeeker")
-			return nil, cause
+			return nil, nil, cause
 		}
 	}
 	log.Warn().Err(cause).
@@ -479,10 +495,10 @@ func (cli *Client) doRetry(req *http.Request, cause error, retries int, backoff 
 	if cli.UpdateRequestOnRetry != nil {
 		req = cli.UpdateRequestOnRetry(req, cause)
 	}
-	return cli.executeCompiledRequest(req, retries-1, backoff*2, responseJSON, handler, client)
+	return cli.executeCompiledRequest(req, retries-1, backoff*2, responseJSON, handler, dontReadResponse, client)
 }
 
-func readRequestBody(req *http.Request, res *http.Response) ([]byte, error) {
+func readResponseBody(req *http.Request, res *http.Response) ([]byte, error) {
 	contents, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, HTTPError{
@@ -524,8 +540,12 @@ func streamResponse(req *http.Request, res *http.Response, responseJSON interfac
 	}
 }
 
+func noopHandleResponse(req *http.Request, res *http.Response, responseJSON interface{}) ([]byte, error) {
+	return nil, nil
+}
+
 func handleNormalResponse(req *http.Request, res *http.Response, responseJSON interface{}) ([]byte, error) {
-	if contents, err := readRequestBody(req, res); err != nil {
+	if contents, err := readResponseBody(req, res); err != nil {
 		return nil, err
 	} else if responseJSON == nil {
 		return contents, nil
@@ -544,7 +564,7 @@ func handleNormalResponse(req *http.Request, res *http.Response, responseJSON in
 }
 
 func ParseErrorResponse(req *http.Request, res *http.Response) ([]byte, error) {
-	contents, err := readRequestBody(req, res)
+	contents, err := readResponseBody(req, res)
 	if err != nil {
 		return contents, err
 	}
@@ -561,17 +581,17 @@ func ParseErrorResponse(req *http.Request, res *http.Response) ([]byte, error) {
 	}
 }
 
-func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backoff time.Duration, responseJSON interface{}, handler ClientResponseHandler, client *http.Client) ([]byte, error) {
+func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backoff time.Duration, responseJSON any, handler ClientResponseHandler, dontReadResponse bool, client *http.Client) ([]byte, *http.Response, error) {
 	cli.RequestStart(req)
 	startTime := time.Now()
 	res, err := client.Do(req)
 	duration := time.Now().Sub(startTime)
-	if res != nil {
+	if res != nil && !dontReadResponse {
 		defer res.Body.Close()
 	}
 	if err != nil {
 		if retries > 0 {
-			return cli.doRetry(req, err, retries, backoff, responseJSON, handler, client)
+			return cli.doRetry(req, err, retries, backoff, responseJSON, handler, dontReadResponse, client)
 		}
 		err = HTTPError{
 			Request:  req,
@@ -581,12 +601,12 @@ func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backof
 			WrappedError: err,
 		}
 		cli.LogRequestDone(req, res, err, nil, 0, duration)
-		return nil, err
+		return nil, res, err
 	}
 
 	if retries > 0 && retryafter.Should(res.StatusCode, !cli.IgnoreRateLimit) {
 		backoff = retryafter.Parse(res.Header.Get("Retry-After"), backoff)
-		return cli.doRetry(req, fmt.Errorf("HTTP %d", res.StatusCode), retries, backoff, responseJSON, handler, client)
+		return cli.doRetry(req, fmt.Errorf("HTTP %d", res.StatusCode), retries, backoff, responseJSON, handler, dontReadResponse, client)
 	}
 
 	var body []byte
@@ -597,7 +617,7 @@ func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backof
 		body, err = handler(req, res, responseJSON)
 		cli.LogRequestDone(req, res, nil, err, len(body), duration)
 	}
-	return body, err
+	return body, res, err
 }
 
 // Whoami gets the user ID of the current user. See https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3accountwhoami
@@ -860,6 +880,9 @@ func (cli *Client) LogoutAll(ctx context.Context) (resp *RespLogout, err error) 
 func (cli *Client) Versions(ctx context.Context) (resp *RespVersions, err error) {
 	urlPath := cli.BuildClientURL("versions")
 	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
+	if resp != nil {
+		cli.SpecVersions = resp
+	}
 	return
 }
 
@@ -1424,6 +1447,7 @@ func (cli *Client) UploadLink(ctx context.Context, link string) (*RespMediaUploa
 	return cli.Upload(ctx, res.Body, res.Header.Get("Content-Type"), res.ContentLength)
 }
 
+// Deprecated: unauthenticated media is deprecated as of Matrix v1.11. Use [Download] or [DownloadBytes] instead.
 func (cli *Client) GetDownloadURL(mxcURL id.ContentURI) string {
 	return cli.BuildURLWithQuery(MediaURLPath{"v3", "download", mxcURL.Homeserver, mxcURL.FileID}, map[string]string{"allow_redirect": "true"})
 }
@@ -1496,12 +1520,21 @@ func (cli *Client) Download(ctx context.Context, mxcURL id.ContentURI) (*http.Re
 	if ctxLog.GetLevel() == zerolog.Disabled || ctxLog == zerolog.DefaultContextLogger {
 		ctx = cli.Log.WithContext(ctx)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, cli.GetDownloadURL(mxcURL), nil)
-	if err != nil {
-		return nil, err
+	if cli.SpecVersions.ContainsGreaterOrEqual(SpecV111) {
+		_, resp, err := cli.MakeFullRequestWithResp(ctx, FullRequest{
+			Method:           http.MethodGet,
+			URL:              cli.BuildClientURL("v1", "media", "download", mxcURL.Homeserver, mxcURL.FileID),
+			DontReadResponse: true,
+		})
+		return resp, err
+	} else {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, cli.GetDownloadURL(mxcURL), nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("User-Agent", cli.UserAgent+" (media downloader)")
+		return cli.doMediaRequest(req, cli.DefaultHTTPRetries, 4*time.Second)
 	}
-	req.Header.Set("User-Agent", cli.UserAgent+" (media downloader)")
-	return cli.doMediaRequest(req, cli.DefaultHTTPRetries, 4*time.Second)
 }
 
 func (cli *Client) DownloadBytes(ctx context.Context, mxcURL id.ContentURI) ([]byte, error) {
@@ -1517,13 +1550,8 @@ func (cli *Client) DownloadBytes(ctx context.Context, mxcURL id.ContentURI) ([]b
 //
 // See https://spec.matrix.org/v1.7/client-server-api/#post_matrixmediav1create
 func (cli *Client) CreateMXC(ctx context.Context) (*RespCreateMXC, error) {
-	u, _ := url.Parse(cli.BuildURL(MediaURLPath{"v1", "create"}))
 	var m RespCreateMXC
-	_, err := cli.MakeFullRequest(ctx, FullRequest{
-		Method:       http.MethodPost,
-		URL:          u.String(),
-		ResponseJSON: &m,
-	})
+	_, err := cli.MakeRequest(ctx, http.MethodPost, cli.BuildURL(MediaURLPath{"v1", "create"}), nil, &m)
 	return &m, err
 }
 
@@ -1642,11 +1670,7 @@ func (cli *Client) uploadMediaToURL(ctx context.Context, data ReqUploadMedia) (*
 	notifyURL := cli.BuildURLWithQuery(MediaURLPath{"unstable", "com.beeper.msc3870", "upload", data.MXC.Homeserver, data.MXC.FileID, "complete"}, query)
 
 	var m *RespMediaUpload
-	_, err := cli.MakeFullRequest(ctx, FullRequest{
-		Method:       http.MethodPost,
-		URL:          notifyURL,
-		ResponseJSON: m,
-	})
+	_, err := cli.MakeRequest(ctx, http.MethodPost, notifyURL, nil, &m)
 	if err != nil {
 		return nil, err
 	}

@@ -151,6 +151,7 @@ func (br *Connector) ensureConnection(ctx context.Context) {
 			time.Sleep(10 * time.Second)
 		} else {
 			br.SpecVersions = versions
+			*br.AS.SpecVersions = *versions
 			break
 		}
 	}

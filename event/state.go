@@ -56,13 +56,29 @@ type Predecessor struct {
 	EventID id.EventID `json:"event_id"`
 }
 
+type RoomVersion string
+
+const (
+	RoomV1  RoomVersion = "1"
+	RoomV2  RoomVersion = "2"
+	RoomV3  RoomVersion = "3"
+	RoomV4  RoomVersion = "4"
+	RoomV5  RoomVersion = "5"
+	RoomV6  RoomVersion = "6"
+	RoomV7  RoomVersion = "7"
+	RoomV8  RoomVersion = "8"
+	RoomV9  RoomVersion = "9"
+	RoomV10 RoomVersion = "10"
+	RoomV11 RoomVersion = "11"
+)
+
 // CreateEventContent represents the content of a m.room.create state event.
 // https://spec.matrix.org/v1.2/client-server-api/#mroomcreate
 type CreateEventContent struct {
 	Type        RoomType     `json:"type,omitempty"`
 	Creator     id.UserID    `json:"creator,omitempty"`
 	Federate    bool         `json:"m.federate,omitempty"`
-	RoomVersion string       `json:"room_version,omitempty"`
+	RoomVersion RoomVersion  `json:"room_version,omitempty"`
 	Predecessor *Predecessor `json:"predecessor,omitempty"`
 }
 
@@ -176,4 +192,8 @@ type ModPolicyContent struct {
 type InsertionMarkerContent struct {
 	InsertionID id.EventID `json:"org.matrix.msc2716.marker.insertion"`
 	Timestamp   int64      `json:"com.beeper.timestamp,omitempty"`
+}
+
+type ElementFunctionalMembersContent struct {
+	FunctionalMembers []id.UserID `json:"functional_members"`
 }
