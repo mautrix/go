@@ -336,8 +336,7 @@ func (cli *Client) LogRequestDone(req *http.Request, resp *http.Response, err er
 }
 
 func (cli *Client) MakeRequest(ctx context.Context, method string, httpURL string, reqBody any, resBody any) ([]byte, error) {
-	data, _, err := cli.MakeFullRequest(ctx, FullRequest{Method: method, URL: httpURL, RequestJSON: reqBody, ResponseJSON: resBody})
-	return data, err
+	return cli.MakeFullRequest(ctx, FullRequest{Method: method, URL: httpURL, RequestJSON: reqBody, ResponseJSON: resBody})
 }
 
 type ClientResponseHandler = func(req *http.Request, res *http.Response, responseJSON interface{}) ([]byte, error)
@@ -420,7 +419,12 @@ func (params *FullRequest) compileRequest(ctx context.Context) (*http.Request, e
 	return req, nil
 }
 
-func (cli *Client) MakeFullRequest(ctx context.Context, params FullRequest) ([]byte, *http.Response, error) {
+func (cli *Client) MakeFullRequest(ctx context.Context, params FullRequest) ([]byte, error) {
+	data, _, err := cli.MakeFullRequestWithResp(ctx, params)
+	return data, err
+}
+
+func (cli *Client) MakeFullRequestWithResp(ctx context.Context, params FullRequest) ([]byte, *http.Response, error) {
 	if params.MaxAttempts == 0 {
 		params.MaxAttempts = 1 + cli.DefaultHTTPRetries
 	}
@@ -692,7 +696,7 @@ func (cli *Client) FullSyncRequest(ctx context.Context, req ReqSync) (resp *Resp
 		fullReq.Handler = streamResponse
 	}
 	start := time.Now()
-	_, _, err = cli.MakeFullRequest(ctx, fullReq)
+	_, err = cli.MakeFullRequest(ctx, fullReq)
 	duration := time.Now().Sub(start)
 	timeout := time.Duration(req.Timeout) * time.Millisecond
 	buffer := 10 * time.Second
@@ -742,7 +746,7 @@ func (cli *Client) RegisterAvailable(ctx context.Context, username string) (resp
 
 func (cli *Client) register(ctx context.Context, url string, req *ReqRegister) (resp *RespRegister, uiaResp *RespUserInteractive, err error) {
 	var bodyBytes []byte
-	bodyBytes, _, err = cli.MakeFullRequest(ctx, FullRequest{
+	bodyBytes, err = cli.MakeFullRequest(ctx, FullRequest{
 		Method:           http.MethodPost,
 		URL:              url,
 		RequestJSON:      req,
@@ -822,7 +826,7 @@ func (cli *Client) GetLoginFlows(ctx context.Context) (resp *RespLoginFlows, err
 
 // Login a user to the homeserver according to https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3login
 func (cli *Client) Login(ctx context.Context, req *ReqLogin) (resp *RespLogin, err error) {
-	_, _, err = cli.MakeFullRequest(ctx, FullRequest{
+	_, err = cli.MakeFullRequest(ctx, FullRequest{
 		Method:           http.MethodPost,
 		URL:              cli.BuildClientURL("v3", "login"),
 		RequestJSON:      req,
@@ -1399,7 +1403,7 @@ func parseRoomStateArray(_ *http.Request, res *http.Response, responseJSON inter
 // State gets all state in a room.
 // See https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3roomsroomidstate
 func (cli *Client) State(ctx context.Context, roomID id.RoomID) (stateMap RoomStateMap, err error) {
-	_, _, err = cli.MakeFullRequest(ctx, FullRequest{
+	_, err = cli.MakeFullRequest(ctx, FullRequest{
 		Method:       http.MethodGet,
 		URL:          cli.BuildClientURL("v3", "rooms", roomID, "state"),
 		ResponseJSON: &stateMap,
@@ -1517,7 +1521,7 @@ func (cli *Client) Download(ctx context.Context, mxcURL id.ContentURI) (*http.Re
 		ctx = cli.Log.WithContext(ctx)
 	}
 	if cli.SpecVersions.ContainsGreaterOrEqual(SpecV111) {
-		_, resp, err := cli.MakeFullRequest(ctx, FullRequest{
+		_, resp, err := cli.MakeFullRequestWithResp(ctx, FullRequest{
 			Method:           http.MethodGet,
 			URL:              cli.BuildClientURL("v1", "media", "download", mxcURL.Homeserver, mxcURL.FileID),
 			DontReadResponse: true,
@@ -1701,7 +1705,7 @@ func (cli *Client) UploadMedia(ctx context.Context, data ReqUploadMedia) (*RespM
 	}
 
 	var m RespMediaUpload
-	_, _, err := cli.MakeFullRequest(ctx, FullRequest{
+	_, err := cli.MakeFullRequest(ctx, FullRequest{
 		Method:        method,
 		URL:           u.String(),
 		Headers:       headers,
@@ -2201,7 +2205,7 @@ type UIACallback = func(*RespUserInteractive) interface{}
 // Because the endpoint requires user-interactive authentication a callback must be provided that,
 // given the UI auth parameters, produces the required result (or nil to end the flow).
 func (cli *Client) UploadCrossSigningKeys(ctx context.Context, keys *UploadCrossSigningKeysReq, uiaCallback UIACallback) error {
-	content, _, err := cli.MakeFullRequest(ctx, FullRequest{
+	content, err := cli.MakeFullRequest(ctx, FullRequest{
 		Method:           http.MethodPost,
 		URL:              cli.BuildClientURL("v3", "keys", "device_signing", "upload"),
 		RequestJSON:      keys,
@@ -2292,7 +2296,7 @@ func (cli *Client) BatchSend(ctx context.Context, roomID id.RoomID, req *ReqBatc
 }
 
 func (cli *Client) AppservicePing(ctx context.Context, id, txnID string) (resp *RespAppservicePing, err error) {
-	_, _, err = cli.MakeFullRequest(ctx, FullRequest{
+	_, err = cli.MakeFullRequest(ctx, FullRequest{
 		Method:       http.MethodPost,
 		URL:          cli.BuildClientURL("v1", "appservice", id, "ping"),
 		RequestJSON:  &ReqAppservicePing{TxnID: txnID},
