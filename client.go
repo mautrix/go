@@ -1425,7 +1425,12 @@ func (cli *Client) State(ctx context.Context, roomID id.RoomID) (stateMap RoomSt
 
 // GetMediaConfig fetches the configuration of the content repository, such as upload limitations.
 func (cli *Client) GetMediaConfig(ctx context.Context) (resp *RespMediaConfig, err error) {
-	u := cli.BuildURL(MediaURLPath{"v3", "config"})
+	var u string
+	if cli.SpecVersions.ContainsGreaterOrEqual(SpecV111) {
+		u = cli.BuildClientURL("v1", "media", "config")
+	} else {
+		u = cli.BuildURL(MediaURLPath{"v3", "config"})
+	}
 	_, err = cli.MakeRequest(ctx, http.MethodGet, u, nil, &resp)
 	return
 }
@@ -1721,7 +1726,13 @@ func (cli *Client) UploadMedia(ctx context.Context, data ReqUploadMedia) (*RespM
 //
 // See https://spec.matrix.org/v1.2/client-server-api/#get_matrixmediav3preview_url
 func (cli *Client) GetURLPreview(ctx context.Context, url string) (*RespPreviewURL, error) {
-	reqURL := cli.BuildURLWithQuery(MediaURLPath{"v3", "preview_url"}, map[string]string{
+	var urlPath PrefixableURLPath
+	if cli.SpecVersions.ContainsGreaterOrEqual(SpecV111) {
+		urlPath = ClientURLPath{"v1", "media", "preview_url"}
+	} else {
+		urlPath = MediaURLPath{"v3", "preview_url"}
+	}
+	reqURL := cli.BuildURLWithQuery(urlPath, map[string]string{
 		"url": url,
 	})
 	var output RespPreviewURL
