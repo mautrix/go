@@ -14,11 +14,11 @@ require (
 	github.com/stretchr/testify v1.9.0
 	github.com/tidwall/gjson v1.17.1
 	github.com/tidwall/sjson v1.2.5
-	github.com/yuin/goldmark v1.7.1
-	go.mau.fi/util v0.4.3-0.20240611132549-e72a5f4745e7
+	github.com/yuin/goldmark v1.7.2
+	go.mau.fi/util v0.5.0
 	go.mau.fi/zeroconfig v0.1.2
 	golang.org/x/crypto v0.24.0
-	golang.org/x/exp v0.0.0-20240604190554-fc45aab8b7f8
+	golang.org/x/exp v0.0.0-20240613232115-7f521ea00fb8
 	golang.org/x/net v0.26.0
 	gopkg.in/yaml.v3 v3.0.1
 	maunium.net/go/mauflag v1.0.0
