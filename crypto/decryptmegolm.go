@@ -39,7 +39,10 @@ type megolmEvent struct {
 	Content event.Content `json:"content"`
 }
 
-var relatesToPath = exgjson.Path("m.relates_to")
+var (
+	relatesToContentPath  = exgjson.Path("m.relates_to")
+	relatesToTopLevelPath = exgjson.Path("content", "m.relates_to")
+)
 
 // DecryptMegolmEvent decrypts an m.room.encrypted event where the algorithm is m.megolm.v1.aes-sha2
 func (mach *OlmMachine) DecryptMegolmEvent(ctx context.Context, evt *event.Event) (*event.Event, error) {
@@ -113,15 +116,15 @@ func (mach *OlmMachine) DecryptMegolmEvent(ctx context.Context, evt *event.Event
 	}
 
 	if content.RelatesTo != nil {
-		relation := gjson.GetBytes(evt.Content.VeryRaw, relatesToPath)
-		if relation.Exists() {
+		relation := gjson.GetBytes(evt.Content.VeryRaw, relatesToContentPath)
+		if relation.Exists() && !gjson.GetBytes(plaintext, relatesToTopLevelPath).IsObject() {
 			var raw []byte
 			if relation.Index > 0 {
 				raw = evt.Content.VeryRaw[relation.Index : relation.Index+len(relation.Raw)]
 			} else {
 				raw = []byte(relation.Raw)
 			}
-			updatedPlaintext, err := sjson.SetRawBytes(plaintext, relatesToPath, raw)
+			updatedPlaintext, err := sjson.SetRawBytes(plaintext, relatesToTopLevelPath, raw)
 			if err != nil {
 				log.Warn().Msg("Failed to copy m.relates_to to decrypted payload")
 			} else if updatedPlaintext != nil {
