@@ -300,7 +300,7 @@ var CommandLogout = &FullHandler{
 	},
 }
 
-func getUserLogins(user *User) string {
+func (user *User) GetFormattedUserLogins() string {
 	user.Bridge.cacheLock.Lock()
 	logins := make([]string, len(user.logins))
 	for key, val := range user.logins {
@@ -313,7 +313,7 @@ func getUserLogins(user *User) string {
 
 func fnLogout(ce *CommandEvent) {
 	if len(ce.Args) == 0 {
-		ce.Reply("Usage: `$cmdprefix logout <login ID>`\n\nYour logins:\n\n%s", getUserLogins(ce.User))
+		ce.Reply("Usage: `$cmdprefix logout <login ID>`\n\nYour logins:\n\n%s", ce.User.GetFormattedUserLogins())
 		return
 	}
 	login := ce.Bridge.GetCachedUserLoginByID(networkid.UserLoginID(ce.Args[0]))
@@ -339,7 +339,7 @@ var CommandSetPreferredLogin = &FullHandler{
 
 func fnSetPreferredLogin(ce *CommandEvent) {
 	if len(ce.Args) == 0 {
-		ce.Reply("Usage: `$cmdprefix set-preferred-login <login ID>`\n\nYour logins:\n\n%s", getUserLogins(ce.User))
+		ce.Reply("Usage: `$cmdprefix set-preferred-login <login ID>`\n\nYour logins:\n\n%s", ce.User.GetFormattedUserLogins())
 		return
 	}
 	login := ce.Bridge.GetCachedUserLoginByID(networkid.UserLoginID(ce.Args[0]))

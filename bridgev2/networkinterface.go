@@ -9,6 +9,7 @@ package bridgev2
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -160,6 +161,19 @@ type PushType int
 
 func (pt PushType) String() string {
 	return pt.GoString()
+}
+
+func PushTypeFromString(str string) PushType {
+	switch strings.TrimPrefix(strings.ToLower(str), "pushtype") {
+	case "web":
+		return PushTypeWeb
+	case "apns":
+		return PushTypeAPNs
+	case "fcm":
+		return PushTypeFCM
+	default:
+		return PushTypeUnknown
+	}
 }
 
 func (pt PushType) GoString() string {
