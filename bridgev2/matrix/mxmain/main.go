@@ -354,8 +354,7 @@ func (br *BridgeMain) WaitForInterrupt() {
 
 // Stop cleanly stops the bridge. This is called by [Run] and does not need to be called manually.
 func (br *BridgeMain) Stop() {
-	br.Log.Info().Msg("Shutting down bridge")
-	// TODO actually stop cleanly
+	br.Bridge.Stop()
 }
 
 // InitVersion formats the bridge version and build time nicely for things like

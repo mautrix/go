@@ -141,6 +141,14 @@ func (br *Connector) Start(ctx context.Context) error {
 	return nil
 }
 
+func (br *Connector) Stop() {
+	br.AS.Stop()
+	br.EventProcessor.Stop()
+	if br.Crypto != nil {
+		br.Crypto.Stop()
+	}
+}
+
 var MinSpecVersion = mautrix.SpecV14
 
 func (br *Connector) ensureConnection(ctx context.Context) {

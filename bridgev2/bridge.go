@@ -120,3 +120,21 @@ func (br *Bridge) Start() error {
 	br.Log.Info().Msg("Bridge started")
 	return nil
 }
+
+func (br *Bridge) Stop() {
+	br.Log.Info().Msg("Shutting down bridge")
+	br.Matrix.Stop()
+	br.cacheLock.Lock()
+	var wg sync.WaitGroup
+	wg.Add(len(br.userLoginsByID))
+	for _, login := range br.userLoginsByID {
+		go login.Disconnect(wg.Done)
+	}
+	wg.Wait()
+	br.cacheLock.Unlock()
+	err := br.DB.Close()
+	if err != nil {
+		br.Log.Warn().Err(err).Msg("Failed to close database")
+	}
+	br.Log.Info().Msg("Shutdown complete")
+}

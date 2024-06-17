@@ -141,6 +141,7 @@ type MaxFileSizeingNetwork interface {
 // NetworkAPI is an interface representing a remote network client for a single user login.
 type NetworkAPI interface {
 	Connect(ctx context.Context) error
+	Disconnect()
 	IsLoggedIn() bool
 	LogoutRemote(ctx context.Context)
 

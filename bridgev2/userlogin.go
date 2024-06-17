@@ -9,6 +9,7 @@ package bridgev2
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/rs/zerolog"
 
@@ -160,4 +161,21 @@ func (ul *UserLogin) GetRemoteID() string {
 func (ul *UserLogin) GetRemoteName() string {
 	name, _ := ul.Metadata["remote_name"].(string)
 	return name
+}
+
+func (ul *UserLogin) Disconnect(done func()) {
+	defer done()
+	if ul.Client != nil {
+		disconnected := make(chan struct{})
+		go func() {
+			ul.Client.Disconnect()
+			ul.Client = nil
+			close(disconnected)
+		}()
+		select {
+		case <-disconnected:
+		case <-time.After(5 * time.Second):
+			ul.Log.Warn().Msg("Client disconnection timed out")
+		}
+	}
 }
