@@ -8,6 +8,7 @@ package bridgev2
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -153,6 +154,57 @@ type NetworkAPI interface {
 	HandleMatrixReactionRemove(ctx context.Context, msg *MatrixReactionRemove) error
 	HandleMatrixMessageRemove(ctx context.Context, msg *MatrixMessageRemove) error
 	HandleMatrixReadReceipt(ctx context.Context, msg *MatrixReadReceipt) error
+}
+
+type PushType int
+
+func (pt PushType) String() string {
+	return pt.GoString()
+}
+
+func (pt PushType) GoString() string {
+	switch pt {
+	case PushTypeUnknown:
+		return "PushTypeUnknown"
+	case PushTypeWeb:
+		return "PushTypeWeb"
+	case PushTypeAPNs:
+		return "PushTypeAPNs"
+	case PushTypeFCM:
+		return "PushTypeFCM"
+	default:
+		return fmt.Sprintf("PushType(%d)", int(pt))
+	}
+}
+
+const (
+	PushTypeUnknown PushType = iota
+	PushTypeWeb
+	PushTypeAPNs
+	PushTypeFCM
+)
+
+type WebPushConfig struct {
+	VapidKey string `json:"vapid_key"`
+}
+
+type FCMPushConfig struct {
+	SenderID string `json:"sender_id"`
+}
+
+type APNsPushConfig struct {
+	BundleID string `json:"bundle_id"`
+}
+
+type PushConfig struct {
+	Web  *WebPushConfig  `json:"web,omitempty"`
+	FCM  *FCMPushConfig  `json:"fcm,omitempty"`
+	APNs *APNsPushConfig `json:"apns,omitempty"`
+}
+
+type PushableNetworkAPI interface {
+	RegisterPushNotifications(ctx context.Context, pushType PushType, token string) error
+	GetPushConfigs() *PushConfig
 }
 
 type RemoteEventType int
