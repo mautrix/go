@@ -1,4 +1,4 @@
--- v0 -> v1: Latest revision
+-- v0 -> v2 (compatible with v1+): Latest revision
 CREATE TABLE portal (
 	bridge_id       TEXT    NOT NULL,
 	id              TEXT    NOT NULL,
@@ -74,6 +74,17 @@ CREATE TABLE message (
 		REFERENCES ghost (bridge_id, id)
 		ON DELETE CASCADE ON UPDATE CASCADE,
 	CONSTRAINT message_real_pkey UNIQUE (bridge_id, id, part_id)
+);
+
+CREATE TABLE disappearing_message (
+	bridge_id    TEXT   NOT NULL,
+	mx_room      TEXT   NOT NULL,
+	mxid         TEXT   NOT NULL,
+	type         TEXT   NOT NULL,
+	timer        BIGINT NOT NULL,
+	disappear_at BIGINT,
+
+	PRIMARY KEY (bridge_id, mxid)
 );
 
 CREATE TABLE reaction (

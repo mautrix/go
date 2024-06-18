@@ -39,6 +39,7 @@ type ConvertedMessage struct {
 	ReplyTo    *networkid.MessageOptionalPartID
 	ThreadRoot *networkid.MessageOptionalPartID
 	Parts      []*ConvertedMessagePart
+	Disappear  database.DisappearingSetting
 }
 
 type ConvertedEditPart struct {

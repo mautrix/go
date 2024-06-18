@@ -355,6 +355,7 @@ func (portal *Portal) handleMatrixReadReceipt(user *User, eventID id.EventID, re
 	if err != nil {
 		log.Err(err).Msg("Failed to save user portal metadata")
 	}
+	portal.Bridge.DisappearLoop.StartAll(ctx, portal.MXID)
 }
 
 func (portal *Portal) handleMatrixTyping(evt *event.Event) {
@@ -465,6 +466,17 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 	err = portal.Bridge.DB.Message.Insert(ctx, message)
 	if err != nil {
 		log.Err(err).Msg("Failed to save message to database")
+	}
+	if portal.Metadata.DisappearType != database.DisappearingTypeNone {
+		go portal.Bridge.DisappearLoop.Add(ctx, &database.DisappearingMessage{
+			RoomID:  portal.MXID,
+			EventID: message.MXID,
+			DisappearingSetting: database.DisappearingSetting{
+				Type:        portal.Metadata.DisappearType,
+				Timer:       portal.Metadata.DisappearTimer,
+				DisappearAt: message.Timestamp.Add(portal.Metadata.DisappearTimer),
+			},
+		})
 	}
 	portal.sendSuccessStatus(ctx, evt)
 }
@@ -841,6 +853,13 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 		if err != nil {
 			log.Err(err).Str("part_id", string(part.ID)).Msg("Failed to save message part to database")
 		}
+		if converted.Disappear.Type != database.DisappearingTypeNone {
+			go portal.Bridge.DisappearLoop.Add(ctx, &database.DisappearingMessage{
+				RoomID:              portal.MXID,
+				EventID:             dbMessage.MXID,
+				DisappearingSetting: converted.Disappear,
+			})
+		}
 		if prevThreadEvent != nil {
 			prevThreadEvent = dbMessage
 		}
@@ -1111,12 +1130,16 @@ func (portal *Portal) handleRemoteReadReceipt(ctx context.Context, source *UserL
 		log.Warn().Msg("No target message found for read receipt")
 		return
 	}
-	intent := portal.getIntentFor(ctx, evt.GetSender(), source)
+	sender := evt.GetSender()
+	intent := portal.getIntentFor(ctx, sender, source)
 	err = intent.MarkRead(ctx, portal.MXID, lastTarget.MXID, getEventTS(evt))
 	if err != nil {
 		log.Err(err).Stringer("target_mxid", lastTarget.MXID).Msg("Failed to bridge read receipt")
 	} else {
 		log.Debug().Stringer("target_mxid", lastTarget.MXID).Msg("Bridged read receipt")
+	}
+	if sender.IsFromMe {
+		portal.Bridge.DisappearLoop.StartAll(ctx, portal.MXID)
 	}
 }
 
@@ -1367,7 +1390,7 @@ func (portal *Portal) UpdateInfo(ctx context.Context, info *PortalInfo, sender *
 	//}
 	if changed {
 		portal.UpdateBridgeInfo(ctx)
-		err := portal.Bridge.DB.Portal.Update(ctx, portal.Portal)
+		err := portal.Save(ctx)
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to save portal to database after updating info")
 		}
@@ -1473,7 +1496,7 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin) e
 	portal.Bridge.portalsByMXID[roomID] = portal
 	portal.Bridge.cacheLock.Unlock()
 	portal.updateLogger()
-	err = portal.Bridge.DB.Portal.Update(ctx, portal.Portal)
+	err = portal.Save(ctx)
 	if err != nil {
 		log.Err(err).Msg("Failed to save portal to database after creating Matrix room")
 		return err
@@ -1488,4 +1511,8 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin) e
 		}
 	}
 	return nil
+}
+
+func (portal *Portal) Save(ctx context.Context) error {
+	return portal.Bridge.DB.Portal.Update(ctx, portal.Portal)
 }

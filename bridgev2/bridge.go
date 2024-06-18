@@ -35,6 +35,8 @@ type Bridge struct {
 	Commands *CommandProcessor
 	Config   *bridgeconfig.BridgeConfig
 
+	DisappearLoop *DisappearLoop
+
 	usersByMXID    map[id.UserID]*User
 	userLoginsByID map[networkid.UserLoginID]*UserLogin
 	portalsByKey   map[networkid.PortalKey]*Portal
@@ -66,6 +68,7 @@ func NewBridge(bridgeID networkid.BridgeID, db *dbutil.Database, log zerolog.Log
 	br.Matrix.Init(br)
 	br.Bot = br.Matrix.BotIntent()
 	br.Network.Init(br)
+	br.DisappearLoop = &DisappearLoop{br: br}
 	return br
 }
 
@@ -100,6 +103,8 @@ func (br *Bridge) Start() error {
 	if err != nil {
 		return fmt.Errorf("failed to start network connector: %w", err)
 	}
+	// TODO only start if the network supports disappearing messages?
+	go br.DisappearLoop.Start()
 
 	logins, err := br.GetAllUserLogins(ctx)
 	if err != nil {

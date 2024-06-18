@@ -10,6 +10,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/hex"
+	"time"
 
 	"go.mau.fi/util/dbutil"
 
@@ -23,6 +24,8 @@ type PortalQuery struct {
 }
 
 type StandardPortalMetadata struct {
+	DisappearType  DisappearingType `json:"disappear_type,omitempty"`
+	DisappearTimer time.Duration    `json:"disappear_timer,omitempty"`
 }
 
 type PortalMetadata struct {
