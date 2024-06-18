@@ -22,6 +22,23 @@ type MessageQuery struct {
 	*dbutil.QueryHelper[*Message]
 }
 
+type StandardMessageMetadata struct {
+	SenderMXID id.UserID `json:"sender_mxid,omitempty"`
+}
+
+type MessageMetadata struct {
+	StandardMessageMetadata
+	Extra map[string]any
+}
+
+func (mm *MessageMetadata) UnmarshalJSON(data []byte) error {
+	return unmarshalMerge(data, &mm.StandardMessageMetadata, &mm.Extra)
+}
+
+func (mm *MessageMetadata) MarshalJSON() ([]byte, error) {
+	return marshalMerge(&mm.StandardMessageMetadata, mm.Extra)
+}
+
 type Message struct {
 	RowID    int64
 	BridgeID networkid.BridgeID
@@ -35,7 +52,7 @@ type Message struct {
 
 	RelatesToRowID int64
 
-	Metadata map[string]any
+	Metadata MessageMetadata
 }
 
 func newMessage(_ *dbutil.QueryHelper[*Message]) *Message {
@@ -134,12 +151,18 @@ func (m *Message) Scan(row dbutil.Scannable) (*Message, error) {
 	if err != nil {
 		return nil, err
 	}
+	if m.Metadata.Extra == nil {
+		m.Metadata.Extra = make(map[string]any)
+	}
 	m.Timestamp = time.Unix(0, timestamp)
 	m.RelatesToRowID = relatesTo.Int64
 	return m, nil
 }
 
 func (m *Message) sqlVariables() []any {
+	if m.Metadata.Extra == nil {
+		m.Metadata.Extra = make(map[string]any)
+	}
 	return []any{
 		m.BridgeID, m.ID, m.PartID, m.MXID, m.Room.ID, m.Room.Receiver, m.SenderID,
 		m.Timestamp.UnixNano(), dbutil.NumPtr(m.RelatesToRowID), dbutil.JSON{Data: m.Metadata},

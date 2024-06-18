@@ -22,6 +22,22 @@ type PortalQuery struct {
 	*dbutil.QueryHelper[*Portal]
 }
 
+type StandardPortalMetadata struct {
+}
+
+type PortalMetadata struct {
+	StandardPortalMetadata
+	Extra map[string]any
+}
+
+func (pm *PortalMetadata) UnmarshalJSON(data []byte) error {
+	return unmarshalMerge(data, &pm.StandardPortalMetadata, &pm.Extra)
+}
+
+func (pm *PortalMetadata) MarshalJSON() ([]byte, error) {
+	return marshalMerge(&pm.StandardPortalMetadata, pm.Extra)
+}
+
 type Portal struct {
 	BridgeID networkid.BridgeID
 	networkid.PortalKey
@@ -37,7 +53,7 @@ type Portal struct {
 	TopicSet   bool
 	AvatarSet  bool
 	InSpace    bool
-	Metadata   map[string]any
+	Metadata   PortalMetadata
 }
 
 func newPortal(_ *dbutil.QueryHelper[*Portal]) *Portal {
@@ -115,8 +131,8 @@ func (p *Portal) Scan(row dbutil.Scannable) (*Portal, error) {
 	if err != nil {
 		return nil, err
 	}
-	if p.Metadata == nil {
-		p.Metadata = make(map[string]any)
+	if p.Metadata.Extra == nil {
+		p.Metadata.Extra = make(map[string]any)
 	}
 	if avatarHash != "" {
 		data, _ := hex.DecodeString(avatarHash)
@@ -130,8 +146,8 @@ func (p *Portal) Scan(row dbutil.Scannable) (*Portal, error) {
 }
 
 func (p *Portal) sqlVariables() []any {
-	if p.Metadata == nil {
-		p.Metadata = make(map[string]any)
+	if p.Metadata.Extra == nil {
+		p.Metadata.Extra = make(map[string]any)
 	}
 	var avatarHash string
 	if p.AvatarHash != [32]byte{} {

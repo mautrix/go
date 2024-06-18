@@ -433,7 +433,7 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 		}
 	}
 
-	message, err := sender.Client.HandleMatrixMessage(ctx, &MatrixMessage{
+	resp, err := sender.Client.HandleMatrixMessage(ctx, &MatrixMessage{
 		MatrixEventBase: MatrixEventBase[*event.MessageEventContent]{
 			Event:      evt,
 			Content:    content,
@@ -448,6 +448,7 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 		portal.sendErrorStatus(ctx, evt, err)
 		return
 	}
+	message := resp.DB
 	if message.MXID == "" {
 		message.MXID = evt.ID
 	}
@@ -457,10 +458,7 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 	if message.Timestamp.IsZero() {
 		message.Timestamp = time.UnixMilli(evt.Timestamp)
 	}
-	if message.Metadata == nil {
-		message.Metadata = make(map[string]any)
-	}
-	message.Metadata["sender_mxid"] = evt.Sender
+	message.Metadata.SenderMXID = evt.Sender
 	// Hack to ensure the ghost row exists
 	// TODO move to better place (like login)
 	portal.Bridge.GetGhostByID(ctx, message.SenderID)
@@ -557,7 +555,7 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 		log.Err(err).Msg("Failed to check if reaction is a duplicate")
 		return
 	} else if existing != nil {
-		if existing.EmojiID != "" || existing.Metadata["emoji"] == preResp.Emoji {
+		if existing.EmojiID != "" || existing.Metadata.Emoji == preResp.Emoji {
 			log.Debug().Msg("Ignoring duplicate reaction")
 			portal.sendSuccessStatus(ctx, evt)
 			return
@@ -620,12 +618,9 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 	if dbReaction.Timestamp.IsZero() {
 		dbReaction.Timestamp = time.UnixMilli(evt.Timestamp)
 	}
-	if dbReaction.Metadata == nil {
-		dbReaction.Metadata = make(map[string]any)
-	}
 	if preResp.EmojiID == "" && dbReaction.EmojiID == "" {
-		if _, alreadySet := dbReaction.Metadata["emoji"]; !alreadySet {
-			dbReaction.Metadata["emoji"] = preResp.Emoji
+		if dbReaction.Metadata.Emoji == "" {
+			dbReaction.Metadata.Emoji = preResp.Emoji
 		}
 	} else if dbReaction.EmojiID == "" {
 		dbReaction.EmojiID = preResp.EmojiID
@@ -815,9 +810,8 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 			if part.Content.Mentions == nil {
 				part.Content.Mentions = &event.Mentions{}
 			}
-			replyTargetSenderMXID, ok := replyTo.Metadata["sender_mxid"].(string)
-			if ok && !slices.Contains(part.Content.Mentions.UserIDs, id.UserID(replyTargetSenderMXID)) {
-				part.Content.Mentions.UserIDs = append(part.Content.Mentions.UserIDs, id.UserID(replyTargetSenderMXID))
+			if !slices.Contains(part.Content.Mentions.UserIDs, replyTo.Metadata.SenderMXID) {
+				part.Content.Mentions.UserIDs = append(part.Content.Mentions.UserIDs, replyTo.Metadata.SenderMXID)
 			}
 		}
 		resp, err := intent.SendMessage(ctx, portal.MXID, part.Type, &event.Content{
@@ -832,11 +826,6 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 			Stringer("event_id", resp.EventID).
 			Str("part_id", string(part.ID)).
 			Msg("Sent message part to Matrix")
-		if part.DBMetadata == nil {
-			part.DBMetadata = make(map[string]any)
-		}
-		// TODO make metadata fields less hacky
-		part.DBMetadata["sender_mxid"] = intent.GetMXID()
 		dbMessage := &database.Message{
 			ID:             evt.GetID(),
 			PartID:         part.ID,
@@ -845,8 +834,9 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 			SenderID:       evt.GetSender().Sender,
 			Timestamp:      ts,
 			RelatesToRowID: relatesToRowID,
-			Metadata:       part.DBMetadata,
 		}
+		dbMessage.Metadata.SenderMXID = intent.GetMXID()
+		dbMessage.Metadata.Extra = part.DBMetadata
 		err = portal.Bridge.DB.Message.Insert(ctx, dbMessage)
 		if err != nil {
 			log.Err(err).Str("part_id", string(part.ID)).Msg("Failed to save message part to database")
@@ -980,7 +970,7 @@ func (portal *Portal) handleRemoteReaction(ctx context.Context, source *UserLogi
 	if err != nil {
 		log.Err(err).Msg("Failed to check if reaction is a duplicate")
 		return
-	} else if existingReaction != nil && (emojiID != "" || existingReaction.Metadata["emoji"] == emoji) {
+	} else if existingReaction != nil && (emojiID != "" || existingReaction.Metadata.Emoji == emoji) {
 		log.Debug().Msg("Ignoring duplicate reaction")
 		return
 	}
@@ -1012,11 +1002,10 @@ func (portal *Portal) handleRemoteReaction(ctx context.Context, source *UserLogi
 		Timestamp:     ts,
 	}
 	if metaProvider, ok := evt.(RemoteReactionWithMeta); ok {
-		dbReaction.Metadata = metaProvider.GetReactionDBMetadata()
-	} else if emojiID == "" {
-		dbReaction.Metadata = map[string]any{
-			"emoji": emoji,
-		}
+		dbReaction.Metadata.Extra = metaProvider.GetReactionDBMetadata()
+	}
+	if emojiID == "" {
+		dbReaction.Metadata.Emoji = emoji
 	}
 	err = portal.Bridge.DB.Reaction.Upsert(ctx, dbReaction)
 	if err != nil {

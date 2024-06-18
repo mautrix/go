@@ -21,12 +21,23 @@ type GhostQuery struct {
 	*dbutil.QueryHelper[*Ghost]
 }
 
-type GhostMetadata struct {
+type StandardGhostMetadata struct {
 	IsBot          bool     `json:"is_bot,omitempty"`
 	Identifiers    []string `json:"identifiers,omitempty"`
 	ContactInfoSet bool     `json:"contact_info_set,omitempty"`
+}
 
-	Extra map[string]any `json:"extra"`
+type GhostMetadata struct {
+	StandardGhostMetadata
+	Extra map[string]any
+}
+
+func (gm *GhostMetadata) UnmarshalJSON(data []byte) error {
+	return unmarshalMerge(data, &gm.StandardGhostMetadata, &gm.Extra)
+}
+
+func (gm *GhostMetadata) MarshalJSON() ([]byte, error) {
+	return marshalMerge(&gm.StandardGhostMetadata, gm.Extra)
 }
 
 type Ghost struct {

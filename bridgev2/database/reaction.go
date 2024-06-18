@@ -21,6 +21,23 @@ type ReactionQuery struct {
 	*dbutil.QueryHelper[*Reaction]
 }
 
+type StandardReactionMetadata struct {
+	Emoji string `json:"emoji,omitempty"`
+}
+
+type ReactionMetadata struct {
+	StandardReactionMetadata
+	Extra map[string]any
+}
+
+func (rm *ReactionMetadata) UnmarshalJSON(data []byte) error {
+	return unmarshalMerge(data, &rm.StandardReactionMetadata, &rm.Extra)
+}
+
+func (rm *ReactionMetadata) MarshalJSON() ([]byte, error) {
+	return marshalMerge(&rm.StandardReactionMetadata, rm.Extra)
+}
+
 type Reaction struct {
 	BridgeID      networkid.BridgeID
 	Room          networkid.PortalKey
@@ -31,7 +48,7 @@ type Reaction struct {
 	MXID          id.EventID
 
 	Timestamp time.Time
-	Metadata  map[string]any
+	Metadata  ReactionMetadata
 }
 
 func newReaction(_ *dbutil.QueryHelper[*Reaction]) *Reaction {
@@ -97,16 +114,16 @@ func (r *Reaction) Scan(row dbutil.Scannable) (*Reaction, error) {
 	if err != nil {
 		return nil, err
 	}
-	if r.Metadata == nil {
-		r.Metadata = make(map[string]any)
+	if r.Metadata.Extra == nil {
+		r.Metadata.Extra = make(map[string]any)
 	}
 	r.Timestamp = time.Unix(0, timestamp)
 	return r, nil
 }
 
 func (r *Reaction) sqlVariables() []any {
-	if r.Metadata == nil {
-		r.Metadata = make(map[string]any)
+	if r.Metadata.Extra == nil {
+		r.Metadata.Extra = make(map[string]any)
 	}
 	return []any{
 		r.BridgeID, r.MessageID, r.MessagePartID, r.SenderID, r.EmojiID,

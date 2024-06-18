@@ -138,6 +138,10 @@ type MaxFileSizeingNetwork interface {
 	SetMaxFileSize(maxSize int64)
 }
 
+type MatrixMessageResponse struct {
+	DB *database.Message
+}
+
 // NetworkAPI is an interface representing a remote network client for a single user login.
 type NetworkAPI interface {
 	Connect(ctx context.Context) error
@@ -149,7 +153,7 @@ type NetworkAPI interface {
 	GetChatInfo(ctx context.Context, portal *Portal) (*PortalInfo, error)
 	GetUserInfo(ctx context.Context, ghost *Ghost) (*UserInfo, error)
 
-	HandleMatrixMessage(ctx context.Context, msg *MatrixMessage) (message *database.Message, err error)
+	HandleMatrixMessage(ctx context.Context, msg *MatrixMessage) (message *MatrixMessageResponse, err error)
 	HandleMatrixEdit(ctx context.Context, msg *MatrixEdit) error
 	PreHandleMatrixReaction(ctx context.Context, msg *MatrixReaction) (MatrixReactionPreResponse, error)
 	HandleMatrixReaction(ctx context.Context, msg *MatrixReaction) (reaction *database.Reaction, err error)

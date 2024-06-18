@@ -21,12 +21,29 @@ type UserLoginQuery struct {
 	*dbutil.QueryHelper[*UserLogin]
 }
 
+type StandardUserLoginMetadata struct {
+	RemoteName string `json:"remote_name,omitempty"`
+}
+
+type UserLoginMetadata struct {
+	StandardUserLoginMetadata
+	Extra map[string]any
+}
+
+func (ulm *UserLoginMetadata) UnmarshalJSON(data []byte) error {
+	return unmarshalMerge(data, &ulm.StandardUserLoginMetadata, &ulm.Extra)
+}
+
+func (ulm *UserLoginMetadata) MarshalJSON() ([]byte, error) {
+	return marshalMerge(&ulm.StandardUserLoginMetadata, ulm.Extra)
+}
+
 type UserLogin struct {
 	BridgeID  networkid.BridgeID
 	UserMXID  id.UserID
 	ID        networkid.UserLoginID
 	SpaceRoom id.RoomID
-	Metadata  map[string]any
+	Metadata  UserLoginMetadata
 }
 
 func newUserLogin(_ *dbutil.QueryHelper[*UserLogin]) *UserLogin {
@@ -89,16 +106,16 @@ func (u *UserLogin) Scan(row dbutil.Scannable) (*UserLogin, error) {
 	if err != nil {
 		return nil, err
 	}
-	if u.Metadata == nil {
-		u.Metadata = make(map[string]any)
+	if u.Metadata.Extra == nil {
+		u.Metadata.Extra = make(map[string]any)
 	}
 	u.SpaceRoom = id.RoomID(spaceRoom.String)
 	return u, nil
 }
 
 func (u *UserLogin) sqlVariables() []any {
-	if u.Metadata == nil {
-		u.Metadata = make(map[string]any)
+	if u.Metadata.Extra == nil {
+		u.Metadata.Extra = make(map[string]any)
 	}
 	return []any{u.BridgeID, u.UserMXID, u.ID, dbutil.StrPtr(u.SpaceRoom), dbutil.JSON{Data: u.Metadata}}
 }

@@ -7,7 +7,13 @@
 package database
 
 import (
+	"encoding/json"
+	"reflect"
+	"strings"
+
 	"go.mau.fi/util/dbutil"
+	"golang.org/x/exp/constraints"
+	"golang.org/x/exp/maps"
 
 	"maunium.net/go/mautrix/bridgev2/networkid"
 
@@ -48,4 +54,56 @@ func ensureBridgeIDMatches(ptr *networkid.BridgeID, expected networkid.BridgeID)
 	} else if *ptr != expected {
 		panic("bridge ID mismatch")
 	}
+}
+
+func GetNumberFromMap[T constraints.Integer | constraints.Float](m map[string]any, key string) (T, bool) {
+	if val, found := m[key]; found {
+		floatVal, ok := val.(float64)
+		if ok {
+			return T(floatVal), true
+		}
+		tVal, ok := val.(T)
+		if ok {
+			return tVal, true
+		}
+	}
+	return 0, false
+}
+
+func unmarshalMerge(input []byte, data any, extra *map[string]any) error {
+	err := json.Unmarshal(input, data)
+	if err != nil {
+		return err
+	}
+	err = json.Unmarshal(input, extra)
+	if err != nil {
+		return err
+	}
+	if *extra == nil {
+		*extra = make(map[string]any)
+	}
+	return nil
+}
+
+func marshalMerge(data any, extra map[string]any) ([]byte, error) {
+	if extra == nil {
+		return json.Marshal(data)
+	}
+	merged := make(map[string]any)
+	maps.Copy(merged, extra)
+	dataRef := reflect.ValueOf(data).Elem()
+	dataType := dataRef.Type()
+	for _, field := range reflect.VisibleFields(dataType) {
+		parts := strings.Split(field.Tag.Get("json"), ",")
+		if len(parts) == 0 || len(parts[0]) == 0 || parts[0] == "-" {
+			continue
+		}
+		fieldVal := dataRef.FieldByIndex(field.Index)
+		if fieldVal.IsZero() {
+			delete(merged, parts[0])
+		} else {
+			merged[parts[0]] = fieldVal.Interface()
+		}
+	}
+	return json.Marshal(merged)
 }

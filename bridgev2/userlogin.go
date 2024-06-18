@@ -159,8 +159,7 @@ func (ul *UserLogin) GetRemoteID() string {
 }
 
 func (ul *UserLogin) GetRemoteName() string {
-	name, _ := ul.Metadata["remote_name"].(string)
-	return name
+	return ul.Metadata.RemoteName
 }
 
 func (ul *UserLogin) Disconnect(done func()) {
