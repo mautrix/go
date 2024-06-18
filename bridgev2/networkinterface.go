@@ -8,6 +8,7 @@ package bridgev2
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
+	"maunium.net/go/mautrix/mediaproxy"
 )
 
 type ConvertedMessagePart struct {
@@ -115,6 +117,20 @@ type NetworkConnector interface {
 	// This should generally not do any work, it should just return a LoginProcess that remembers
 	// the user and will execute the requested flow. The actual work should start when [LoginProcess.Start] is called.
 	CreateLogin(ctx context.Context, user *User, flowID string) (LoginProcess, error)
+}
+
+var ErrDirectMediaNotEnabled = errors.New("direct media is not enabled")
+
+// DirectMediableNetwork is an optional interface that network connectors can implement to support direct media access.
+//
+// If the Matrix connector has direct media enabled, SetUseDirectMedia will be called
+// before the Start method of the network connector. Download will then be called
+// whenever someone wants to download a direct media `mxc://` URI which was generated
+// by calling GenerateContentURI on the Matrix connector.
+type DirectMediableNetwork interface {
+	NetworkConnector
+	SetUseDirectMedia()
+	Download(ctx context.Context, mediaID networkid.MediaID) (mediaproxy.GetMediaResponse, error)
 }
 
 // ConfigValidatingNetwork is an optional interface that network connectors can implement to validate config fields

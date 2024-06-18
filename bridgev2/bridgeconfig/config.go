@@ -20,6 +20,7 @@ type Config struct {
 	AppService   AppserviceConfig   `yaml:"appservice"`
 	Matrix       MatrixConfig       `yaml:"matrix"`
 	Provisioning ProvisioningConfig `yaml:"provisioning"`
+	DirectMedia  DirectMediaConfig  `yaml:"direct_media"`
 	DoublePuppet DoublePuppetConfig `yaml:"double_puppet"`
 	Encryption   EncryptionConfig   `yaml:"encryption"`
 	Logging      zeroconfig.Config  `yaml:"logging"`
@@ -44,6 +45,14 @@ type ProvisioningConfig struct {
 	Prefix         string `yaml:"prefix"`
 	SharedSecret   string `yaml:"shared_secret"`
 	DebugEndpoints bool   `yaml:"debug_endpoints"`
+}
+
+type DirectMediaConfig struct {
+	Enabled           bool   `yaml:"enabled"`
+	AllowProxy        bool   `yaml:"allow_proxy"`
+	ServerName        string `yaml:"server_name"`
+	WellKnownResponse string `yaml:"well_known_response"`
+	ServerKey         string `yaml:"server_key"`
 }
 
 type DoublePuppetConfig struct {

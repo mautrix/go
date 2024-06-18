@@ -12,6 +12,8 @@ import (
 
 	up "go.mau.fi/util/configupgrade"
 	"go.mau.fi/util/random"
+
+	"maunium.net/go/mautrix/federation"
 )
 
 func doUpgrade(helper up.Helper) {
@@ -65,6 +67,17 @@ func doUpgrade(helper up.Helper) {
 		helper.Copy(up.Str, "provisioning", "shared_secret")
 	}
 	helper.Copy(up.Bool, "provisioning", "debug_endpoints")
+
+	helper.Copy(up.Bool, "direct_media", "enabled")
+	helper.Copy(up.Str, "direct_media", "server_name")
+	helper.Copy(up.Str|up.Null, "direct_media", "well_known_response")
+	helper.Copy(up.Bool, "direct_media", "allow_proxy")
+	if serverKey, ok := helper.Get(up.Str, "direct_media", "server_key"); !ok || serverKey == "generate" {
+		serverKey = federation.GenerateSigningKey().SynapseString()
+		helper.Set(up.Str, serverKey, "direct_media", "server_key")
+	} else {
+		helper.Copy(up.Str, "direct_media", "server_key")
+	}
 
 	helper.Copy(up.Map, "double_puppet", "servers")
 	helper.Copy(up.Bool, "double_puppet", "allow_discovery")

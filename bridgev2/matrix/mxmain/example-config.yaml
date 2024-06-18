@@ -117,6 +117,26 @@ provisioning:
     # Enable debug API at /debug with provisioning authentication.
     debug_endpoints: false
 
+# Settings for converting remote media to custom mxc:// URIs instead of reuploading.
+# More details can be found at https://docs.mau.fi/bridges/go/discord/direct-media.html
+direct_media:
+    # Should custom mxc:// URIs be used instead of reuploading media?
+    enabled: false
+    # The server name to use for the custom mxc:// URIs.
+    # This server name will effectively be a real Matrix server, it just won't implement anything other than media.
+    # You must either set up .well-known delegation from this domain to the bridge, or proxy the domain directly to the bridge.
+    server_name: discord-media.example.com
+    # Optionally a custom .well-known response. This defaults to `server_name:443`
+    well_known_response:
+    # If the remote network supports media downloads over HTTP, then the bridge will use MSC3860/MSC3916
+    # media download redirects if the requester supports it. Optionally, you can force redirects
+    # and not allow proxying at all by setting this to false.
+    # This option does nothing if the remote network does not support media downloads over HTTP.
+    allow_proxy: true
+    # Matrix server signing key to make the federation tester pass, same format as synapse's .signing.key file.
+    # This key is also used to sign the mxc:// URIs to ensure only the bridge can generate them.
+    server_key: generate
+
 # Settings for enabling double puppeting
 double_puppet:
     # Servers to always allow double puppeting from.
