@@ -23,6 +23,7 @@ import (
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2"
+	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -54,7 +55,8 @@ type provisioningContextKey int
 
 const (
 	provisioningUserKey provisioningContextKey = iota
-	provisioningLoginKey
+	provisioningUserLoginKey
+	provisioningLoginProcessKey
 )
 
 func (prov *ProvisioningAPI) Init() {
@@ -68,8 +70,11 @@ func (prov *ProvisioningAPI) Init() {
 	router.Use(prov.AuthMiddleware)
 	router.Path("/v3/login/flows").Methods(http.MethodGet).HandlerFunc(prov.GetLoginFlows)
 	router.Path("/v3/login/start/{flowID}").Methods(http.MethodPost).HandlerFunc(prov.PostLoginStart)
-	router.Path("/v3/login/step/{loginID}/{stepID}/{stepType:user_input|cookies}").Methods(http.MethodPost).HandlerFunc(prov.PostLoginSubmitInput)
-	router.Path("/v3/login/step/{loginID}/{stepID}/{stepType:wait}").Methods(http.MethodPost).HandlerFunc(prov.PostLoginWait)
+	router.Path("/v3/login/step/{loginProcessID}/{stepID}/{stepType:user_input|cookies}").Methods(http.MethodPost).HandlerFunc(prov.PostLoginSubmitInput)
+	router.Path("/v3/login/step/{loginProcessID}/{stepID}/{stepType:wait}").Methods(http.MethodPost).HandlerFunc(prov.PostLoginWait)
+	router.Path("/v3/resolve_identifier/{identifier}").Methods(http.MethodGet).HandlerFunc(prov.GetResolveIdentifier)
+	router.Path("/v3/create_dm").Methods(http.MethodPost).HandlerFunc(prov.PostCreateDM)
+	router.Path("/v3/create_group").Methods(http.MethodPost).HandlerFunc(prov.PostCreateGroup)
 
 	if prov.br.Config.Provisioning.DebugEndpoints {
 		prov.log.Debug().Msg("Enabling debug API at /debug")
@@ -133,7 +138,7 @@ func (prov *ProvisioningAPI) AuthMiddleware(h http.Handler) http.Handler {
 		// TODO handle user being nil?
 
 		ctx := context.WithValue(r.Context(), provisioningUserKey, user)
-		if loginID, ok := mux.Vars(r)["loginID"]; ok {
+		if loginID, ok := mux.Vars(r)["loginProcessID"]; ok {
 			prov.loginsLock.RLock()
 			login, ok := prov.logins[loginID]
 			prov.loginsLock.RUnlock()
@@ -172,7 +177,7 @@ func (prov *ProvisioningAPI) AuthMiddleware(h http.Handler) http.Handler {
 				})
 				return
 			}
-			ctx = context.WithValue(r.Context(), provisioningLoginKey, login)
+			ctx = context.WithValue(r.Context(), provisioningLoginProcessKey, login)
 		}
 		h.ServeHTTP(w, r.WithContext(ctx))
 	})
@@ -238,7 +243,7 @@ func (prov *ProvisioningAPI) PostLoginSubmitInput(w http.ResponseWriter, r *http
 		})
 		return
 	}
-	login := r.Context().Value(provisioningLoginKey).(*ProvLogin)
+	login := r.Context().Value(provisioningLoginProcessKey).(*ProvLogin)
 	var nextStep *bridgev2.LoginStep
 	switch login.NextStep.Type {
 	case bridgev2.LoginStepTypeUserInput:
@@ -261,7 +266,7 @@ func (prov *ProvisioningAPI) PostLoginSubmitInput(w http.ResponseWriter, r *http
 }
 
 func (prov *ProvisioningAPI) PostLoginWait(w http.ResponseWriter, r *http.Request) {
-	login := r.Context().Value(provisioningLoginKey).(*ProvLogin)
+	login := r.Context().Value(provisioningLoginProcessKey).(*ProvLogin)
 	nextStep, err := login.Process.(bridgev2.LoginProcessDisplayAndWait).Wait(r.Context())
 	if err != nil {
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to submit input")
@@ -273,4 +278,109 @@ func (prov *ProvisioningAPI) PostLoginWait(w http.ResponseWriter, r *http.Reques
 	}
 	login.NextStep = nextStep
 	jsonResponse(w, http.StatusOK, &RespSubmitLogin{LoginID: login.ID, LoginStep: nextStep})
+}
+
+func (prov *ProvisioningAPI) getLoginForCall(w http.ResponseWriter, r *http.Request) *bridgev2.UserLogin {
+	user := r.Context().Value(provisioningUserKey).(*bridgev2.User)
+	userLogin := prov.br.Bridge.GetCachedUserLoginByID(networkid.UserLoginID(r.URL.Query().Get("login_id")))
+	if userLogin == nil || userLogin.UserMXID != user.MXID {
+		userLogin = user.GetDefaultLogin()
+	}
+	if userLogin == nil {
+		jsonResponse(w, http.StatusBadRequest, &mautrix.RespError{
+			Err:     "Not logged in",
+			ErrCode: "FI.MAU.NOT_LOGGED_IN",
+		})
+		return nil
+	}
+	return userLogin
+}
+
+type RespResolveIdentifier struct {
+	ID        networkid.UserID    `json:"id,omitempty"`
+	Name      string              `json:"name,omitempty"`
+	AvatarURL id.ContentURIString `json:"avatar_url,omitempty"`
+	MXID      id.UserID           `json:"mxid,omitempty"`
+	DMRoomID  id.RoomID           `json:"dm_room_mxid,omitempty"`
+}
+
+func (prov *ProvisioningAPI) doResolveIdentifier(w http.ResponseWriter, r *http.Request, createChat bool) {
+	login := prov.getLoginForCall(w, r)
+	if login == nil {
+		return
+	}
+	api, ok := login.Client.(bridgev2.IdentifierResolvingNetworkAPI)
+	if !ok {
+		jsonResponse(w, http.StatusNotImplemented, &mautrix.RespError{
+			Err:     "This bridge does not support resolving identifiers",
+			ErrCode: mautrix.MUnrecognized.ErrCode,
+		})
+		return
+	}
+	resp, err := api.ResolveIdentifier(r.Context(), mux.Vars(r)["identifier"], createChat)
+	if err != nil {
+		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to resolve identifier")
+		jsonResponse(w, http.StatusNotImplemented, &mautrix.RespError{
+			Err:     fmt.Sprintf("Failed to resolve identifier: %v", err),
+			ErrCode: "M_UNKNOWN",
+		})
+	}
+	apiResp := &RespResolveIdentifier{}
+	status := http.StatusOK
+	if resp.Ghost != nil {
+		if resp.UserInfo != nil {
+			resp.Ghost.UpdateInfo(r.Context(), resp.UserInfo)
+		}
+		apiResp.Name = resp.Ghost.Name
+		apiResp.AvatarURL = resp.Ghost.AvatarMXC
+		apiResp.MXID = resp.Ghost.MXID
+	} else if resp.UserInfo != nil && resp.UserInfo.Name != nil {
+		apiResp.Name = *resp.UserInfo.Name
+	}
+	if resp.Chat != nil {
+		if resp.Chat.Portal == nil {
+			resp.Chat.Portal, err = prov.br.Bridge.GetPortalByID(r.Context(), resp.Chat.PortalID)
+			if err != nil {
+				zerolog.Ctx(r.Context()).Err(err).Msg("Failed to get portal")
+				jsonResponse(w, http.StatusNotImplemented, &mautrix.RespError{
+					Err:     "Failed to get portal",
+					ErrCode: "M_UNKNOWN",
+				})
+				return
+			}
+		}
+		if createChat && resp.Chat.Portal.MXID == "" {
+			status = http.StatusCreated
+			err = resp.Chat.Portal.CreateMatrixRoom(r.Context(), login, resp.Chat.PortalInfo)
+			if err != nil {
+				zerolog.Ctx(r.Context()).Err(err).Msg("Failed to create portal room")
+				jsonResponse(w, http.StatusNotImplemented, &mautrix.RespError{
+					Err:     "Failed to create portal room",
+					ErrCode: "M_UNKNOWN",
+				})
+				return
+			}
+		}
+		apiResp.DMRoomID = resp.Chat.Portal.MXID
+	}
+	jsonResponse(w, status, resp)
+}
+
+func (prov *ProvisioningAPI) GetResolveIdentifier(w http.ResponseWriter, r *http.Request) {
+	prov.doResolveIdentifier(w, r, false)
+}
+
+func (prov *ProvisioningAPI) PostCreateDM(w http.ResponseWriter, r *http.Request) {
+	prov.doResolveIdentifier(w, r, true)
+}
+
+func (prov *ProvisioningAPI) PostCreateGroup(w http.ResponseWriter, r *http.Request) {
+	login := prov.getLoginForCall(w, r)
+	if login == nil {
+		return
+	}
+	jsonResponse(w, http.StatusNotImplemented, &mautrix.RespError{
+		Err:     "Creating groups is not yet implemented",
+		ErrCode: mautrix.MUnrecognized.ErrCode,
+	})
 }
