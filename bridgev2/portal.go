@@ -916,6 +916,9 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 			log.Err(err).Str("part_id", string(part.ID)).Msg("Failed to save message part to database")
 		}
 		if converted.Disappear.Type != database.DisappearingTypeNone {
+			if converted.Disappear.Type == database.DisappearingTypeAfterSend && converted.Disappear.DisappearAt.IsZero() {
+				converted.Disappear.DisappearAt = dbMessage.Timestamp.Add(converted.Disappear.Timer)
+			}
 			go portal.Bridge.DisappearLoop.Add(ctx, &database.DisappearingMessage{
 				RoomID:              portal.MXID,
 				EventID:             dbMessage.MXID,
