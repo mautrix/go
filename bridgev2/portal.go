@@ -50,8 +50,9 @@ type Portal struct {
 	Parent *Portal
 	Relay  *UserLogin
 
-	currentlyTyping     []id.UserID
-	currentlyTypingLock sync.Mutex
+	currentlyTyping       []id.UserID
+	currentlyTypingLogins map[id.UserID]*UserLogin
+	currentlyTypingLock   sync.Mutex
 
 	roomCreateLock sync.Mutex
 
@@ -60,17 +61,17 @@ type Portal struct {
 
 const PortalEventBuffer = 64
 
-func (br *Bridge) loadPortal(ctx context.Context, dbPortal *database.Portal, queryErr error, id *networkid.PortalKey) (*Portal, error) {
+func (br *Bridge) loadPortal(ctx context.Context, dbPortal *database.Portal, queryErr error, key *networkid.PortalKey) (*Portal, error) {
 	if queryErr != nil {
 		return nil, fmt.Errorf("failed to query db: %w", queryErr)
 	}
 	if dbPortal == nil {
-		if id == nil {
+		if key == nil {
 			return nil, nil
 		}
 		dbPortal = &database.Portal{
 			BridgeID:  br.ID,
-			PortalKey: *id,
+			PortalKey: *key,
 		}
 		err := br.DB.Portal.Insert(ctx, dbPortal)
 		if err != nil {
@@ -82,6 +83,8 @@ func (br *Bridge) loadPortal(ctx context.Context, dbPortal *database.Portal, que
 		Bridge: br,
 
 		events: make(chan portalEvent, PortalEventBuffer),
+
+		currentlyTypingLogins: make(map[id.UserID]*UserLogin),
 	}
 	br.portalsByKey[portal.PortalKey] = portal
 	if portal.MXID != "" {
@@ -369,16 +372,57 @@ func (portal *Portal) handleMatrixTyping(evt *event.Event) {
 	stoppedTyping, startedTyping := exslices.SortedDiff(portal.currentlyTyping, content.UserIDs, func(a, b id.UserID) int {
 		return strings.Compare(string(a), string(b))
 	})
-	for range stoppedTyping {
-		// TODO send typing stop events
-	}
-	for range startedTyping {
-		// TODO send typing start events
-	}
+	ctx := portal.Log.WithContext(context.TODO())
+	portal.sendTypings(ctx, stoppedTyping, false)
+	portal.sendTypings(ctx, startedTyping, true)
 	portal.currentlyTyping = content.UserIDs
 }
 
+func (portal *Portal) sendTypings(ctx context.Context, userIDs []id.UserID, typing bool) {
+	for _, userID := range userIDs {
+		login, ok := portal.currentlyTypingLogins[userID]
+		if !ok && !typing {
+			continue
+		} else if !ok {
+			user, err := portal.Bridge.GetUserByMXID(ctx, userID)
+			if err != nil {
+				zerolog.Ctx(ctx).Err(err).Stringer("user_id", userID).Msg("Failed to get user to send typing event")
+				continue
+			} else if user == nil {
+				continue
+			}
+			login, _, err = portal.FindPreferredLogin(ctx, user, false)
+			if err != nil {
+				zerolog.Ctx(ctx).Err(err).Stringer("user_id", userID).Msg("Failed to get user login to send typing event")
+				continue
+			} else if login == nil {
+				continue
+			}
+			portal.currentlyTypingLogins[userID] = login
+		}
+		if !typing {
+			delete(portal.currentlyTypingLogins, userID)
+		}
+		err := login.Client.HandleMatrixTyping(ctx, &MatrixTyping{
+			Portal:   portal,
+			IsTyping: typing,
+			Type:     TypingTypeText,
+		})
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Stringer("user_id", userID).Msg("Failed to bridge Matrix typing event")
+		} else {
+			zerolog.Ctx(ctx).Debug().
+				Stringer("user_id", userID).
+				Bool("typing", typing).
+				Msg("Sent typing event")
+		}
+	}
+}
+
 func (portal *Portal) periodicTypingUpdater() {
+	// TODO actually call this function
+	log := portal.Log.With().Str("component", "typing updater").Logger()
+	ctx := log.WithContext(context.Background())
 	for {
 		// TODO make delay configurable by network connector
 		time.Sleep(5 * time.Second)
@@ -387,7 +431,25 @@ func (portal *Portal) periodicTypingUpdater() {
 			portal.currentlyTypingLock.Unlock()
 			continue
 		}
-		// TODO send typing events
+		for _, userID := range portal.currentlyTyping {
+			login, ok := portal.currentlyTypingLogins[userID]
+			if !ok {
+				continue
+			}
+			err := login.Client.HandleMatrixTyping(ctx, &MatrixTyping{
+				Portal:   portal,
+				IsTyping: true,
+				Type:     TypingTypeText,
+			})
+			if err != nil {
+				log.Err(err).Stringer("user_id", userID).Msg("Failed to repeat Matrix typing event")
+			} else {
+				log.Debug().
+					Stringer("user_id", userID).
+					Bool("typing", true).
+					Msg("Sent repeatedtyping event")
+			}
+		}
 		portal.currentlyTypingLock.Unlock()
 	}
 }
@@ -1148,7 +1210,15 @@ func (portal *Portal) handleRemoteDeliveryReceipt(ctx context.Context, source *U
 }
 
 func (portal *Portal) handleRemoteTyping(ctx context.Context, source *UserLogin, evt RemoteTyping) {
-
+	var typingType TypingType
+	if typedEvt, ok := evt.(RemoteTypingWithType); ok {
+		typingType = typedEvt.GetTypingType()
+	}
+	intent := portal.getIntentFor(ctx, evt.GetSender(), source)
+	err := intent.MarkTyping(ctx, portal.MXID, typingType, evt.GetTimeout())
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to bridge typing event")
+	}
 }
 
 var stateElementFunctionalMembers = event.Type{Class: event.StateEventType, Type: "io.element.functional_members"}

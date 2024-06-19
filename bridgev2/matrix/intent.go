@@ -82,6 +82,17 @@ func (as *ASIntent) MarkRead(ctx context.Context, roomID id.RoomID, eventID id.E
 	return as.Matrix.SetReadMarkers(ctx, roomID, &req)
 }
 
+func (as *ASIntent) MarkTyping(ctx context.Context, roomID id.RoomID, typingType bridgev2.TypingType, timeout time.Duration) error {
+	if typingType != bridgev2.TypingTypeText {
+		return nil
+	} else if as.Matrix.IsCustomPuppet {
+		// Don't send double puppeted typing notifications, there's no good way to prevent echoing them
+		return nil
+	}
+	_, err := as.Matrix.UserTyping(ctx, roomID, timeout > 0, timeout)
+	return err
+}
+
 func (as *ASIntent) DownloadMedia(ctx context.Context, uri id.ContentURIString, file *event.EncryptedFileInfo) ([]byte, error) {
 	if file != nil {
 		uri = file.URL

@@ -177,6 +177,7 @@ type NetworkAPI interface {
 	HandleMatrixReactionRemove(ctx context.Context, msg *MatrixReactionRemove) error
 	HandleMatrixMessageRemove(ctx context.Context, msg *MatrixMessageRemove) error
 	HandleMatrixReadReceipt(ctx context.Context, msg *MatrixReadReceipt) error
+	HandleMatrixTyping(ctx context.Context, msg *MatrixTyping) error
 }
 
 type PushType int
@@ -327,6 +328,19 @@ type RemoteReceipt interface {
 type RemoteTyping interface {
 	RemoteEvent
 	GetTimeout() time.Duration
+}
+
+type TypingType int
+
+const (
+	TypingTypeText TypingType = iota
+	TypingTypeUploadingMedia
+	TypingTypeRecordingMedia
+)
+
+type RemoteTypingWithType interface {
+	RemoteTyping
+	GetTypingType() TypingType
 }
 
 // SimpleRemoteEvent is a simple implementation of RemoteEvent that can be used with struct fields and some callbacks.
@@ -483,4 +497,8 @@ type MatrixReadReceipt struct {
 	Receipt event.ReadReceipt
 }
 
-type MatrixTyping struct{}
+type MatrixTyping struct {
+	Portal   *Portal
+	IsTyping bool
+	Type     TypingType
+}
