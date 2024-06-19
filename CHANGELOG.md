@@ -1,5 +1,11 @@
 ## v0.19.0 (unreleased)
 
+* *(crypto)* Fixed bug with copying `m.relates_to` from wire content to
+  decrypted content.
+* *(bridgev2)* Added more features.
+* *(mediaproxy)* Added module for implementing simple media repos that proxy
+  requests elsewhere.
+
 ### beta.1 (2024-06-16)
 
 * *(bridgev2)* Added experimental high-level bridge framework.
