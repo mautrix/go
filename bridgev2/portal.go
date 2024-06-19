@@ -1224,8 +1224,6 @@ func (portal *Portal) handleRemoteTyping(ctx context.Context, source *UserLogin,
 	}
 }
 
-var stateElementFunctionalMembers = event.Type{Class: event.StateEventType, Type: "io.element.functional_members"}
-
 type PortalInfo struct {
 	Name   *string
 	Topic  *string
@@ -1286,8 +1284,8 @@ func (portal *Portal) UpdateAvatar(ctx context.Context, avatar *Avatar, sender *
 func (portal *Portal) GetTopLevelParent() *Portal {
 	// TODO ensure there's no infinite recursion?
 	if portal.Parent == nil {
-		// TODO only return self if this is a space portal
-		return portal
+		// TODO return self if this is a space portal?
+		return nil
 	}
 	return portal.Parent.GetTopLevelParent()
 }
@@ -1513,7 +1511,7 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 		Name:            portal.Name,
 		Topic:           portal.Topic,
 		CreationContent: make(map[string]any),
-		InitialState:    make([]*event.Event, 0, 4),
+		InitialState:    make([]*event.Event, 0, 6),
 		Preset:          "private_chat",
 		IsDirect:        *info.IsDirectChat,
 		PowerLevelOverride: &event.PowerLevelsEventContent{
@@ -1534,13 +1532,23 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 	if *info.IsSpace {
 		req.CreationContent["type"] = event.RoomTypeSpace
 	}
+	bridgeInfoStateKey, bridgeInfo := portal.getBridgeInfo()
 	emptyString := ""
+
 	req.InitialState = append(req.InitialState, &event.Event{
 		StateKey: &emptyString,
-		Type:     stateElementFunctionalMembers,
-		Content: event.Content{Raw: map[string]any{
-			"service_members": append(extraFunctionalMembers, portal.Bridge.Bot.GetMXID()),
+		Type:     event.StateElementFunctionalMembers,
+		Content: event.Content{Parsed: &event.ElementFunctionalMembersContent{
+			FunctionalMembers: append(extraFunctionalMembers, portal.Bridge.Bot.GetMXID()),
 		}},
+	}, &event.Event{
+		StateKey: &bridgeInfoStateKey,
+		Type:     event.StateHalfShotBridge,
+		Content:  event.Content{Parsed: &bridgeInfo},
+	}, &event.Event{
+		StateKey: &bridgeInfoStateKey,
+		Type:     event.StateBridge,
+		Content:  event.Content{Parsed: &bridgeInfo},
 	})
 	if req.Topic == "" {
 		// Add explicit topic event if topic is empty to ensure the event is set.
