@@ -447,7 +447,7 @@ func (portal *Portal) periodicTypingUpdater() {
 				log.Debug().
 					Stringer("user_id", userID).
 					Bool("typing", true).
-					Msg("Sent repeatedtyping event")
+					Msg("Sent repeated typing event")
 			}
 		}
 		portal.currentlyTypingLock.Unlock()
