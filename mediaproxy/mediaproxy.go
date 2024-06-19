@@ -52,6 +52,8 @@ type MediaProxy struct {
 	KeyServer   *federation.KeyServer
 	ProxyClient *http.Client
 
+	ForceProxyLegacyFederation bool
+
 	GetMedia            GetMediaFunc
 	PrepareProxyRequest func(*http.Request)
 
@@ -196,6 +198,7 @@ func (mp *MediaProxy) proxyDownload(ctx context.Context, w http.ResponseWriter, 
 		})
 		return
 	}
+	req.Header.Set("User-Agent", mautrix.DefaultUserAgent+" (media proxy)")
 	if mp.PrepareProxyRequest != nil {
 		mp.PrepareProxyRequest(req)
 	}
@@ -355,7 +358,8 @@ func (mp *MediaProxy) DownloadMedia(w http.ResponseWriter, r *http.Request) {
 	if urlResp, ok := resp.(*GetMediaResponseURL); ok {
 		// Proxy if the config allows proxying and the request doesn't allow redirects.
 		// In any other case, redirect to the URL.
-		if mp.ProxyClient != nil && r.URL.Query().Get("allow_redirect") != "true" {
+		isFederated := strings.HasPrefix(r.Header.Get("Authorization"), "X-Matrix")
+		if mp.ProxyClient != nil && (r.URL.Query().Get("allow_redirect") != "true" || (mp.ForceProxyLegacyFederation && isFederated)) {
 			mp.proxyDownload(ctx, w, urlResp.URL, vars["fileName"])
 			return
 		}
