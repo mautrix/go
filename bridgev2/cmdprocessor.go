@@ -40,6 +40,7 @@ func NewProcessor(bridge *Bridge) *CommandProcessor {
 		CommandHelp, CommandCancel,
 		CommandRegisterPush,
 		CommandLogin, CommandLogout, CommandSetPreferredLogin,
+		CommandResolveIdentifier, CommandStartChat,
 	)
 	return proc
 }

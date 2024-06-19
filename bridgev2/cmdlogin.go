@@ -300,16 +300,6 @@ var CommandLogout = &FullHandler{
 	},
 }
 
-func (user *User) GetFormattedUserLogins() string {
-	user.Bridge.cacheLock.Lock()
-	logins := make([]string, len(user.logins))
-	for key, val := range user.logins {
-		logins = append(logins, fmt.Sprintf("* `%s` (%s)", key, val.Metadata.RemoteName))
-	}
-	user.Bridge.cacheLock.Unlock()
-	return strings.Join(logins, "\n")
-}
-
 func fnLogout(ce *CommandEvent) {
 	if len(ce.Args) == 0 {
 		ce.Reply("Usage: `$cmdprefix logout <login ID>`\n\nYour logins:\n\n%s", ce.User.GetFormattedUserLogins())

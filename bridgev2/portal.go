@@ -1357,6 +1357,9 @@ func (portal *Portal) SyncParticipants(ctx context.Context, members []networkid.
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get user logins in portal: %w", err)
 	}
+	if !slices.Contains(loginsInPortal, source) {
+		loginsInPortal = append(loginsInPortal, source)
+	}
 	expectedUserIDs := make([]id.UserID, 0, len(members))
 	expectedExtraUsers := make([]id.UserID, 0)
 	expectedIntents := make([]MatrixAPI, len(members))
@@ -1458,6 +1461,13 @@ func (portal *Portal) UpdateInfo(ctx context.Context, info *PortalInfo, source *
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to sync room members")
 		}
 		// TODO detect changes to functional members list?
+	}
+	if source != nil {
+		// TODO is this a good place for this call? there's another one in QueueRemoteEvent
+		err := portal.Bridge.DB.UserPortal.EnsureExists(ctx, source.UserLogin, portal.PortalKey)
+		if err != nil {
+			zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to ensure user portal row exists")
+		}
 	}
 	if changed {
 		portal.UpdateBridgeInfo(ctx)

@@ -29,6 +29,9 @@ const (
 )
 
 func (br *Bridge) ReIDPortal(ctx context.Context, source, target networkid.PortalKey) (ReIDResult, *Portal, error) {
+	if source == target {
+		return ReIDResultError, nil, fmt.Errorf("illegal re-ID call: source and target are the same")
+	}
 	log := zerolog.Ctx(ctx)
 	log.Debug().Msg("Re-ID'ing portal")
 	defer func() {

@@ -180,6 +180,37 @@ type NetworkAPI interface {
 	HandleMatrixTyping(ctx context.Context, msg *MatrixTyping) error
 }
 
+type ResolveIdentifierResponse struct {
+	Ghost *Ghost
+
+	UserID   networkid.UserID
+	UserInfo *UserInfo
+
+	Chat *CreateChatResponse
+}
+
+type CreateChatResponse struct {
+	Portal *Portal
+
+	PortalID   networkid.PortalKey
+	PortalInfo *PortalInfo
+}
+
+type IdentifierResolvingNetworkAPI interface {
+	NetworkAPI
+	ResolveIdentifier(ctx context.Context, identifier string, createChat bool) (*ResolveIdentifierResponse, error)
+}
+
+type UserSearchingNetworkAPI interface {
+	IdentifierResolvingNetworkAPI
+	SearchUsers(ctx context.Context, query string) ([]*ResolveIdentifierResponse, error)
+}
+
+type GroupCreatingNetworkAPI interface {
+	IdentifierResolvingNetworkAPI
+	CreateGroup(ctx context.Context, name string, users ...networkid.UserID) (*CreateChatResponse, error)
+}
+
 type PushType int
 
 func (pt PushType) String() string {

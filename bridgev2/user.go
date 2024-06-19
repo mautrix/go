@@ -9,10 +9,13 @@ package bridgev2
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 
 	"github.com/rs/zerolog"
+	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
 
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
@@ -147,6 +150,27 @@ func (user *User) DoublePuppet(ctx context.Context) MatrixAPI {
 		}
 	}
 	return intent
+}
+
+func (user *User) GetFormattedUserLogins() string {
+	user.Bridge.cacheLock.Lock()
+	logins := make([]string, len(user.logins))
+	for key, val := range user.logins {
+		logins = append(logins, fmt.Sprintf("* `%s` (%s)", key, val.Metadata.RemoteName))
+	}
+	user.Bridge.cacheLock.Unlock()
+	return strings.Join(logins, "\n")
+}
+
+func (user *User) GetDefaultLogin() *UserLogin {
+	user.Bridge.cacheLock.Lock()
+	defer user.Bridge.cacheLock.Unlock()
+	if len(user.logins) == 0 {
+		return nil
+	}
+	loginKeys := maps.Keys(user.logins)
+	slices.Sort(loginKeys)
+	return user.logins[loginKeys[0]]
 }
 
 func (user *User) Save(ctx context.Context) error {

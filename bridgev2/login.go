@@ -146,6 +146,18 @@ func isOnlyNumbers(input string) bool {
 	return true
 }
 
+func CleanPhoneNumber(phone string) (string, error) {
+	phone = numberCleaner.Replace(phone)
+	if len(phone) < 2 {
+		return "", fmt.Errorf("phone number must start with + and contain numbers")
+	} else if phone[0] != '+' {
+		return "", fmt.Errorf("phone number must start with +")
+	} else if !isOnlyNumbers(phone[1:]) {
+		return "", fmt.Errorf("phone number must only contain numbers")
+	}
+	return phone, nil
+}
+
 func (f *LoginInputDataField) FillDefaultValidate() {
 	noopValidate := func(input string) (string, error) { return input, nil }
 	if f.Validate != nil {
@@ -153,17 +165,7 @@ func (f *LoginInputDataField) FillDefaultValidate() {
 	}
 	switch f.Type {
 	case LoginInputFieldTypePhoneNumber:
-		f.Validate = func(phone string) (string, error) {
-			phone = numberCleaner.Replace(phone)
-			if len(phone) < 2 {
-				return "", fmt.Errorf("phone number must start with + and contain numbers")
-			} else if phone[0] != '+' {
-				return "", fmt.Errorf("phone number must start with +")
-			} else if !isOnlyNumbers(phone[1:]) {
-				return "", fmt.Errorf("phone number must only contain numbers")
-			}
-			return phone, nil
-		}
+		f.Validate = CleanPhoneNumber
 	case LoginInputFieldTypeEmail:
 		f.Validate = func(email string) (string, error) {
 			if !strings.ContainsRune(email, '@') {
