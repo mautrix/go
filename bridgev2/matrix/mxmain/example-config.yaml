@@ -128,6 +128,8 @@ direct_media:
     server_name: discord-media.example.com
     # Optionally a custom .well-known response. This defaults to `server_name:443`
     well_known_response:
+    # Optionally specify a custom prefix for the media ID part of the MXC URI.
+    media_id_prefix:
     # If the remote network supports media downloads over HTTP, then the bridge will use MSC3860/MSC3916
     # media download redirects if the requester supports it. Optionally, you can force redirects
     # and not allow proxying at all by setting this to false.

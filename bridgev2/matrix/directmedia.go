@@ -14,6 +14,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2"
@@ -63,7 +64,7 @@ func (br *Connector) GenerateContentURI(ctx context.Context, mediaID networkid.M
 	copy(buf[len(MediaIDPrefix)+len(mediaID):], truncatedHash)
 	mxc := id.ContentURI{
 		Homeserver: br.MediaProxy.GetServerName(),
-		FileID:     base64.RawURLEncoding.EncodeToString(buf),
+		FileID:     br.Config.DirectMedia.MediaIDPrefix + base64.RawURLEncoding.EncodeToString(buf),
 	}.CUString()
 	if len(mxc) > ContentURIMaxLength {
 		return "", fmt.Errorf("content URI too long (%d > %d)", len(mxc), ContentURIMaxLength)
@@ -72,7 +73,7 @@ func (br *Connector) GenerateContentURI(ctx context.Context, mediaID networkid.M
 }
 
 func (br *Connector) getDirectMedia(ctx context.Context, mediaIDStr string) (response mediaproxy.GetMediaResponse, err error) {
-	mediaID, err := base64.RawURLEncoding.DecodeString(mediaIDStr)
+	mediaID, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(mediaIDStr, br.Config.DirectMedia.MediaIDPrefix))
 	if err != nil || !bytes.HasPrefix(mediaID, []byte(MediaIDPrefix)) || len(mediaID) < len(MediaIDPrefix)+MediaIDTruncatedHashLength+1 {
 		return nil, mediaproxy.ErrInvalidMediaIDSyntax
 	}

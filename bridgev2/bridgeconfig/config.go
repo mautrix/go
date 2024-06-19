@@ -50,7 +50,8 @@ type ProvisioningConfig struct {
 }
 
 type DirectMediaConfig struct {
-	Enabled                bool `yaml:"enabled"`
+	Enabled                bool   `yaml:"enabled"`
+	MediaIDPrefix          string `yaml:"media_id_prefix"`
 	mediaproxy.BasicConfig `yaml:",inline"`
 }
 
