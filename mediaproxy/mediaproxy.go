@@ -88,7 +88,7 @@ func New(serverName string, serverKey string, getMedia GetMediaFunc) (*MediaProx
 			WellKnownTarget: fmt.Sprintf("%s:443", serverName),
 			Version: federation.ServerVersion{
 				Name:    "mautrix-go media proxy",
-				Version: mautrix.Version,
+				Version: strings.TrimPrefix(mautrix.VersionWithCommit, "v"),
 			},
 		},
 	}, nil
