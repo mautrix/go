@@ -95,9 +95,16 @@ type Avatar struct {
 	ID     networkid.AvatarID
 	Get    func(ctx context.Context) ([]byte, error)
 	Remove bool
+
+	// For pre-uploaded avatars, the MXC URI and hash can be provided directly
+	MXC  id.ContentURIString
+	Hash [32]byte
 }
 
 func (a *Avatar) Reupload(ctx context.Context, intent MatrixAPI, currentHash [32]byte) (id.ContentURIString, [32]byte, error) {
+	if a.MXC != "" {
+		return a.MXC, a.Hash, nil
+	}
 	data, err := a.Get(ctx)
 	if err != nil {
 		return "", [32]byte{}, err
