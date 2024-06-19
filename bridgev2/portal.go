@@ -778,7 +778,7 @@ func (portal *Portal) handleRemoteEvent(source *UserLogin, evt RemoteEvent) {
 		if !ok || !mcp.ShouldCreatePortal() {
 			return
 		}
-		err := portal.CreateMatrixRoom(ctx, source)
+		err := portal.CreateMatrixRoom(ctx, source, nil)
 		if err != nil {
 			log.Err(err).Msg("Failed to create portal to handle event")
 			// TODO error
@@ -1441,7 +1441,7 @@ func (portal *Portal) SyncParticipants(ctx context.Context, members []networkid.
 	return expectedUserIDs, extraFunctionalMembers, nil
 }
 
-func (portal *Portal) UpdateInfo(ctx context.Context, info *PortalInfo, sender *Ghost, ts time.Time) {
+func (portal *Portal) UpdateInfo(ctx context.Context, info *PortalInfo, source *UserLogin, sender *Ghost, ts time.Time) {
 	changed := false
 	if info.Name != nil {
 		changed = portal.UpdateName(ctx, *info.Name, sender, ts) || changed
@@ -1452,12 +1452,13 @@ func (portal *Portal) UpdateInfo(ctx context.Context, info *PortalInfo, sender *
 	if info.Avatar != nil {
 		changed = portal.UpdateAvatar(ctx, info.Avatar, sender, ts) || changed
 	}
-	//if info.Members != nil && portal.MXID != "" {
-	//	_, err := portal.SyncParticipants(ctx, info.Members, source)
-	//	if err != nil {
-	//		zerolog.Ctx(ctx).Err(err).Msg("Failed to sync room members")
-	//	}
-	//}
+	if info.Members != nil && portal.MXID != "" && source != nil {
+		_, _, err := portal.SyncParticipants(ctx, info.Members, source)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to sync room members")
+		}
+		// TODO detect changes to functional members list?
+	}
 	if changed {
 		portal.UpdateBridgeInfo(ctx)
 		err := portal.Save(ctx)
@@ -1467,7 +1468,7 @@ func (portal *Portal) UpdateInfo(ctx context.Context, info *PortalInfo, sender *
 	}
 }
 
-func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin) error {
+func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, info *PortalInfo) error {
 	portal.roomCreateLock.Lock()
 	defer portal.roomCreateLock.Unlock()
 	if portal.MXID != "" {
@@ -1479,12 +1480,15 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin) e
 	ctx = log.WithContext(ctx)
 	log.Info().Msg("Creating Matrix room")
 
-	info, err := source.Client.GetChatInfo(ctx, portal)
-	if err != nil {
-		log.Err(err).Msg("Failed to update portal info for creation")
-		return err
+	var err error
+	if info == nil {
+		info, err = source.Client.GetChatInfo(ctx, portal)
+		if err != nil {
+			log.Err(err).Msg("Failed to update portal info for creation")
+			return err
+		}
 	}
-	portal.UpdateInfo(ctx, info, nil, time.Time{})
+	portal.UpdateInfo(ctx, info, source, nil, time.Time{})
 	initialMembers, extraFunctionalMembers, err := portal.SyncParticipants(ctx, info.Members, source)
 	if err != nil {
 		log.Err(err).Msg("Failed to process participant list for portal creation")
@@ -1581,6 +1585,34 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin) e
 		}
 	}
 	return nil
+}
+
+func (portal *Portal) Delete(ctx context.Context) error {
+	err := portal.Bridge.DB.Portal.Delete(ctx, portal.PortalKey)
+	if err != nil {
+		return err
+	}
+	portal.Bridge.cacheLock.Lock()
+	defer portal.Bridge.cacheLock.Unlock()
+	portal.unlockedDeleteCache()
+	return nil
+}
+
+func (portal *Portal) unlockedDelete(ctx context.Context) error {
+	// TODO delete child portals?
+	err := portal.Bridge.DB.Portal.Delete(ctx, portal.PortalKey)
+	if err != nil {
+		return err
+	}
+	portal.unlockedDeleteCache()
+	return nil
+}
+
+func (portal *Portal) unlockedDeleteCache() {
+	delete(portal.Bridge.portalsByKey, portal.PortalKey)
+	if portal.MXID != "" {
+		delete(portal.Bridge.portalsByMXID, portal.MXID)
+	}
 }
 
 func (portal *Portal) Save(ctx context.Context) error {

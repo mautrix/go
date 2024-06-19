@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/rs/zerolog"
+
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/appservice"
 	"maunium.net/go/mautrix/bridgev2"
@@ -216,7 +218,34 @@ func (as *ASIntent) CreateRoom(ctx context.Context, req *mautrix.ReqCreateRoom) 
 	return resp.RoomID, nil
 }
 
-func (as *ASIntent) DeleteRoom(ctx context.Context, roomID id.RoomID) error {
-	// TODO implement non-beeper delete
-	return as.Matrix.BeeperDeleteRoom(ctx, roomID)
+func (as *ASIntent) DeleteRoom(ctx context.Context, roomID id.RoomID, puppetsOnly bool) error {
+	if as.Connector.SpecVersions.Supports(mautrix.BeeperFeatureRoomYeeting) {
+		return as.Matrix.BeeperDeleteRoom(ctx, roomID)
+	}
+	members, err := as.Matrix.JoinedMembers(ctx, roomID)
+	if err != nil {
+		return fmt.Errorf("failed to get portal members for cleanup: %w", err)
+	}
+	for member := range members.Joined {
+		if member == as.Matrix.UserID {
+			continue
+		}
+		_, isGhost := as.Connector.ParseGhostMXID(member)
+		if isGhost {
+			_, err = as.Connector.AS.Intent(member).LeaveRoom(ctx, roomID)
+			if err != nil {
+				zerolog.Ctx(ctx).Err(err).Stringer("user_id", member).Msg("Failed to leave room while cleaning up portal")
+			}
+		} else if !puppetsOnly {
+			_, err = as.Matrix.KickUser(ctx, roomID, &mautrix.ReqKickUser{UserID: member, Reason: "Deleting portal"})
+			if err != nil {
+				zerolog.Ctx(ctx).Err(err).Stringer("user_id", member).Msg("Failed to kick user while cleaning up portal")
+			}
+		}
+	}
+	_, err = as.Matrix.LeaveRoom(ctx, roomID)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to leave room while cleaning up portal")
+	}
+	return nil
 }

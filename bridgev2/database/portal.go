@@ -89,7 +89,11 @@ const (
 		    name_set=$11, avatar_set=$12, topic_set=$13, in_space=$14, metadata=$15
 		WHERE bridge_id=$1 AND id=$2 AND receiver=$3
 	`
-	reIDPortalQuery = `UPDATE portal SET id=$3 WHERE bridge_id=$1 AND id=$2`
+	deletePortalQuery = `
+		DELETE FROM portal
+		WHERE bridge_id=$1 AND id=$2 AND receiver=$3
+	`
+	reIDPortalQuery = `UPDATE portal SET id=$4, receiver=$5 WHERE bridge_id=$1 AND id=$2 AND receiver=$3`
 )
 
 func (pq *PortalQuery) GetByID(ctx context.Context, key networkid.PortalKey) (*Portal, error) {
@@ -108,8 +112,8 @@ func (pq *PortalQuery) GetChildren(ctx context.Context, parentID networkid.Porta
 	return pq.QueryMany(ctx, getChildPortalsQuery, pq.BridgeID, parentID)
 }
 
-func (pq *PortalQuery) ReID(ctx context.Context, oldID, newID networkid.PortalID) error {
-	return pq.Exec(ctx, reIDPortalQuery, pq.BridgeID, oldID, newID)
+func (pq *PortalQuery) ReID(ctx context.Context, oldID, newID networkid.PortalKey) error {
+	return pq.Exec(ctx, reIDPortalQuery, pq.BridgeID, oldID.ID, oldID.Receiver, newID.ID, newID.Receiver)
 }
 
 func (pq *PortalQuery) Insert(ctx context.Context, p *Portal) error {
@@ -120,6 +124,10 @@ func (pq *PortalQuery) Insert(ctx context.Context, p *Portal) error {
 func (pq *PortalQuery) Update(ctx context.Context, p *Portal) error {
 	ensureBridgeIDMatches(&p.BridgeID, pq.BridgeID)
 	return pq.Exec(ctx, updatePortalQuery, p.sqlVariables()...)
+}
+
+func (pq *PortalQuery) Delete(ctx context.Context, key networkid.PortalKey) error {
+	return pq.Exec(ctx, deletePortalQuery, pq.BridgeID, key.ID, key.Receiver)
 }
 
 func (p *Portal) Scan(row dbutil.Scannable) (*Portal, error) {

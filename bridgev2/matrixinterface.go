@@ -55,7 +55,7 @@ type MatrixAPI interface {
 	SetExtraProfileMeta(ctx context.Context, data any) error
 
 	CreateRoom(ctx context.Context, req *mautrix.ReqCreateRoom) (id.RoomID, error)
-	DeleteRoom(ctx context.Context, roomID id.RoomID) error
+	DeleteRoom(ctx context.Context, roomID id.RoomID, puppetsOnly bool) error
 	InviteUser(ctx context.Context, roomID id.RoomID, userID id.UserID) error
 	EnsureJoined(ctx context.Context, roomID id.RoomID) error
 }
