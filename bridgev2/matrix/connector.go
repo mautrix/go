@@ -29,6 +29,7 @@ import (
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
+	"maunium.net/go/mautrix/mediaproxy"
 	"maunium.net/go/mautrix/sqlstatestore"
 )
 
@@ -57,6 +58,8 @@ type Connector struct {
 	Bridge       *bridgev2.Bridge
 	Provisioning *ProvisioningAPI
 	DoublePuppet *doublePuppetUtil
+	MediaProxy   *mediaproxy.MediaProxy
+	dmaSigKey    [32]byte
 
 	MediaConfig             mautrix.RespMediaConfig
 	SpecVersions            *mautrix.RespVersions
@@ -119,7 +122,11 @@ func (br *Connector) Init(bridge *bridgev2.Bridge) {
 
 func (br *Connector) Start(ctx context.Context) error {
 	br.Provisioning.Init()
-	err := br.StateStore.Upgrade(ctx)
+	err := br.initDirectMedia()
+	if err != nil {
+		return err
+	}
+	err = br.StateStore.Upgrade(ctx)
 	if err != nil {
 		return bridgev2.DBUpgradeError{Section: "matrix_state", Err: err}
 	}

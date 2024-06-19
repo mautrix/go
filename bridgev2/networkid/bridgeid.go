@@ -117,3 +117,10 @@ type AvatarID string
 // to apply the unique constraints in the database appropriately.
 // On networks that allow multiple emojis, this is the unicode emoji or a network-specific shortcode.
 type EmojiID string
+
+// MediaID represents a media identifier that can be downloaded from the remote network at any point in the future.
+//
+// This is used to implement on-demand media downloads. The network connector can ask the Matrix connector
+// to generate a content URI from a media ID. Then, when the Matrix connector wants to download the media,
+// it will parse the content URI and ask the network connector for the data using the media ID.
+type MediaID []byte
