@@ -10,6 +10,8 @@ import (
 	"go.mau.fi/util/dbutil"
 	"go.mau.fi/zeroconfig"
 	"gopkg.in/yaml.v3"
+
+	"maunium.net/go/mautrix/mediaproxy"
 )
 
 type Config struct {
@@ -48,11 +50,8 @@ type ProvisioningConfig struct {
 }
 
 type DirectMediaConfig struct {
-	Enabled           bool   `yaml:"enabled"`
-	AllowProxy        bool   `yaml:"allow_proxy"`
-	ServerName        string `yaml:"server_name"`
-	WellKnownResponse string `yaml:"well_known_response"`
-	ServerKey         string `yaml:"server_key"`
+	Enabled                bool `yaml:"enabled"`
+	mediaproxy.BasicConfig `yaml:",inline"`
 }
 
 type DoublePuppetConfig struct {

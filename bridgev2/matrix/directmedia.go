@@ -35,15 +35,9 @@ func (br *Connector) initDirectMedia() error {
 		return fmt.Errorf("direct media is enabled in config, but the network connector does not support it")
 	}
 	var err error
-	br.MediaProxy, err = mediaproxy.New(br.Config.DirectMedia.ServerName, br.Config.DirectMedia.ServerKey, br.getDirectMedia)
+	br.MediaProxy, err = mediaproxy.NewFromConfig(br.Config.DirectMedia.BasicConfig, br.getDirectMedia)
 	if err != nil {
 		return fmt.Errorf("failed to initialize media proxy: %w", err)
-	}
-	if br.Config.DirectMedia.WellKnownResponse != "" {
-		br.MediaProxy.KeyServer.WellKnownTarget = br.Config.DirectMedia.WellKnownResponse
-	}
-	if !br.Config.DirectMedia.AllowProxy {
-		br.MediaProxy.DisallowProxying()
 	}
 	br.MediaProxy.RegisterRoutes(br.AS.Router)
 	br.dmaSigKey = sha256.Sum256(br.MediaProxy.GetServerKey().Priv.Seed())

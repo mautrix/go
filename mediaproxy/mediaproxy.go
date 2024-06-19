@@ -94,6 +94,38 @@ func New(serverName string, serverKey string, getMedia GetMediaFunc) (*MediaProx
 	}, nil
 }
 
+type BasicConfig struct {
+	ServerName        string `yaml:"server_name" json:"server_name"`
+	ServerKey         string `yaml:"server_key" json:"server_key"`
+	AllowProxy        bool   `yaml:"allow_proxy" json:"allow_proxy"`
+	WellKnownResponse string `yaml:"well_known_response" json:"well_known_response"`
+}
+
+func NewFromConfig(cfg BasicConfig, getMedia GetMediaFunc) (*MediaProxy, error) {
+	mp, err := New(cfg.ServerName, cfg.ServerKey, getMedia)
+	if err != nil {
+		return nil, err
+	}
+	if !cfg.AllowProxy {
+		mp.DisallowProxying()
+	}
+	if cfg.WellKnownResponse != "" {
+		mp.KeyServer.WellKnownTarget = cfg.WellKnownResponse
+	}
+	return mp, nil
+}
+
+type ServerConfig struct {
+	Hostname string `yaml:"hostname" json:"hostname"`
+	Port     uint16 `yaml:"port" json:"port"`
+}
+
+func (mp *MediaProxy) Listen(cfg ServerConfig) error {
+	router := mux.NewRouter()
+	mp.RegisterRoutes(router)
+	return http.ListenAndServe(fmt.Sprintf("%s:%d", cfg.Hostname, cfg.Port), router)
+}
+
 func (mp *MediaProxy) GetServerName() string {
 	return mp.serverName
 }
