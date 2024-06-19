@@ -30,7 +30,7 @@ func (br *Connector) initDirectMedia() error {
 	if !br.Config.DirectMedia.Enabled {
 		return nil
 	}
-	dmn, ok := br.Bridge.Matrix.(bridgev2.DirectMediableNetwork)
+	dmn, ok := br.Bridge.Network.(bridgev2.DirectMediableNetwork)
 	if !ok {
 		return fmt.Errorf("direct media is enabled in config, but the network connector does not support it")
 	}
