@@ -60,11 +60,11 @@ func (dl *DisappearLoop) StartAll(ctx context.Context, roomID id.RoomID) {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to start disappearing messages")
 		return
 	}
+	startedMessages = slices.DeleteFunc(startedMessages, func(dm *database.DisappearingMessage) bool {
+		return dm.DisappearAt.After(dl.NextCheck)
+	})
 	slices.SortFunc(startedMessages, func(a, b *database.DisappearingMessage) int {
 		return a.DisappearAt.Compare(b.DisappearAt)
-	})
-	slices.DeleteFunc(startedMessages, func(dm *database.DisappearingMessage) bool {
-		return dm.DisappearAt.After(dl.NextCheck)
 	})
 	if len(startedMessages) > 0 {
 		go dl.sleepAndDisappear(ctx, startedMessages...)
