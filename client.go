@@ -67,6 +67,8 @@ type Client struct {
 
 	SyncPresence event.Presence
 
+	SpecVersions *RespVersions
+
 	StreamSyncMinAge time.Duration
 
 	// Number of times that mautrix will retry any HTTP request
@@ -821,6 +823,9 @@ func (cli *Client) LogoutAll() (resp *RespLogout, err error) {
 func (cli *Client) Versions() (resp *RespVersions, err error) {
 	urlPath := cli.BuildClientURL("versions")
 	_, err = cli.MakeRequest("GET", urlPath, nil, &resp)
+	if err == nil {
+		cli.SpecVersions = resp
+	}
 	return
 }
 
@@ -1322,7 +1327,12 @@ func (cli *Client) State(roomID id.RoomID) (stateMap RoomStateMap, err error) {
 
 // GetMediaConfig fetches the configuration of the content repository, such as upload limitations.
 func (cli *Client) GetMediaConfig() (resp *RespMediaConfig, err error) {
-	u := cli.BuildURL(MediaURLPath{"v3", "config"})
+	var u string
+	if cli.SpecVersions.ContainsGreaterOrEqual(SpecV111) {
+		u = cli.BuildClientURL("v1", "media", "config")
+	} else {
+		u = cli.BuildURL(MediaURLPath{"v3", "config"})
+	}
 	_, err = cli.MakeRequest("GET", u, nil, &resp)
 	return
 }
@@ -1416,11 +1426,19 @@ func (cli *Client) downloadContext(ctx context.Context, mxcURL id.ContentURI) (*
 	if ctxLog.GetLevel() == zerolog.Disabled || ctxLog == zerolog.DefaultContextLogger {
 		ctx = cli.Log.WithContext(ctx)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, cli.GetDownloadURL(mxcURL), nil)
+	url := cli.GetDownloadURL(mxcURL)
+	authedMedia := cli.SpecVersions.ContainsGreaterOrEqual(SpecV111)
+	if authedMedia {
+		url = cli.BuildClientURL("v1", "media", "download", mxcURL.Homeserver, mxcURL.FileID)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", cli.UserAgent+" (media downloader)")
+	if authedMedia {
+		req.Header.Set("Authorization", "Bearer "+cli.AccessToken)
+	}
 	return cli.doMediaRequest(req, cli.DefaultHTTPRetries, 4*time.Second)
 }
 

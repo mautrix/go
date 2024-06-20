@@ -113,6 +113,8 @@ type AppService struct {
 
 	txnIDC *TransactionIDCache
 
+	SpecVersions *mautrix.RespVersions
+
 	Events         chan *event.Event
 	ToDeviceEvents chan *event.Event
 	DeviceLists    chan *mautrix.DeviceLists
@@ -307,6 +309,7 @@ func (as *AppService) NewMautrixClient(userID id.UserID) *mautrix.Client {
 		Log:                 as.Log.With().Str("as_user_id", userID.String()).Logger(),
 		Client:              as.HTTPClient,
 		DefaultHTTPRetries:  as.DefaultHTTPRetries,
+		SpecVersions:        as.SpecVersions,
 	}
 	client.Logger = maulogadapt.ZeroAsMau(&client.Log)
 	return client
