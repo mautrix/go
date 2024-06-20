@@ -57,6 +57,8 @@ type Client struct {
 	Logger        Logger
 	SyncPresence  event.Presence
 
+	SpecVersions *RespVersions
+
 	StreamSyncMinAge time.Duration
 
 	// Number of times that mautrix will retry any HTTP request
@@ -727,6 +729,9 @@ func (cli *Client) LogoutAll() (resp *RespLogout, err error) {
 func (cli *Client) Versions() (resp *RespVersions, err error) {
 	urlPath := cli.BuildClientURL("versions")
 	_, err = cli.MakeRequest("GET", urlPath, nil, &resp)
+	if err == nil {
+		cli.SpecVersions = resp
+	}
 	return
 }
 
@@ -1143,11 +1148,24 @@ func (cli *Client) GetDownloadURL(mxcURL id.ContentURI) string {
 }
 
 func (cli *Client) Download(mxcURL id.ContentURI) (io.ReadCloser, error) {
-	resp, err := cli.Client.Get(cli.GetDownloadURL(mxcURL))
-	if err != nil {
-		return nil, err
+	if cli.SpecVersions.ContainsGreaterOrEqual(SpecV111) {
+		req, err := http.NewRequest(http.MethodGet, cli.BuildClientURL("v1", "media", "download", mxcURL.Homeserver, mxcURL.FileID), nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Authorization", "Bearer "+cli.AccessToken)
+		resp, err := cli.Client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		return resp.Body, nil
+	} else {
+		resp, err := cli.Client.Get(cli.GetDownloadURL(mxcURL))
+		if err != nil {
+			return nil, err
+		}
+		return resp.Body, nil
 	}
-	return resp.Body, nil
 }
 
 func (cli *Client) DownloadBytes(mxcURL id.ContentURI) ([]byte, error) {
