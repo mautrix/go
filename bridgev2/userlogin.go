@@ -98,6 +98,16 @@ func (br *Bridge) GetUserLoginsInPortal(ctx context.Context, portal networkid.Po
 	return br.loadManyUserLogins(ctx, nil, logins)
 }
 
+func (br *Bridge) GetUserLoginByID(ctx context.Context, id networkid.UserLoginID) (*UserLogin, error) {
+	login, err := br.DB.UserLogin.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	br.cacheLock.Lock()
+	defer br.cacheLock.Unlock()
+	return br.loadUserLogin(ctx, nil, login)
+}
+
 func (br *Bridge) GetCachedUserLoginByID(id networkid.UserLoginID) *UserLogin {
 	br.cacheLock.Lock()
 	defer br.cacheLock.Unlock()

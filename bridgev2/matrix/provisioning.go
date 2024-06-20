@@ -72,6 +72,7 @@ func (prov *ProvisioningAPI) Init() {
 	router.Path("/v3/login/start/{flowID}").Methods(http.MethodPost).HandlerFunc(prov.PostLoginStart)
 	router.Path("/v3/login/step/{loginProcessID}/{stepID}/{stepType:user_input|cookies}").Methods(http.MethodPost).HandlerFunc(prov.PostLoginSubmitInput)
 	router.Path("/v3/login/step/{loginProcessID}/{stepID}/{stepType:wait}").Methods(http.MethodPost).HandlerFunc(prov.PostLoginWait)
+	router.Path("/v3/logout/{loginID}").Methods(http.MethodPost).HandlerFunc(prov.PostLogout)
 	router.Path("/v3/resolve_identifier/{identifier}").Methods(http.MethodGet).HandlerFunc(prov.GetResolveIdentifier)
 	router.Path("/v3/create_dm").Methods(http.MethodPost).HandlerFunc(prov.PostCreateDM)
 	router.Path("/v3/create_group").Methods(http.MethodPost).HandlerFunc(prov.PostCreateGroup)
@@ -280,20 +281,55 @@ func (prov *ProvisioningAPI) PostLoginWait(w http.ResponseWriter, r *http.Reques
 	jsonResponse(w, http.StatusOK, &RespSubmitLogin{LoginID: login.ID, LoginStep: nextStep})
 }
 
+func (prov *ProvisioningAPI) PostLogout(w http.ResponseWriter, r *http.Request) {
+	user := r.Context().Value(provisioningUserKey).(*bridgev2.User)
+	userLoginID := networkid.UserLoginID(mux.Vars(r)["loginID"])
+	if userLoginID == "all" {
+		for {
+			login := user.GetDefaultLogin()
+			if login == nil {
+				break
+			}
+			login.Logout(r.Context())
+		}
+	} else {
+		userLogin := prov.br.Bridge.GetCachedUserLoginByID(userLoginID)
+		if userLogin == nil || userLogin.UserMXID != user.MXID {
+			jsonResponse(w, http.StatusNotFound, &mautrix.RespError{
+				Err:     "Login not found",
+				ErrCode: mautrix.MNotFound.ErrCode,
+			})
+			return
+		}
+		userLogin.Logout(r.Context())
+	}
+	jsonResponse(w, http.StatusOK, json.RawMessage("{}"))
+}
+
 func (prov *ProvisioningAPI) getLoginForCall(w http.ResponseWriter, r *http.Request) *bridgev2.UserLogin {
 	user := r.Context().Value(provisioningUserKey).(*bridgev2.User)
-	userLogin := prov.br.Bridge.GetCachedUserLoginByID(networkid.UserLoginID(r.URL.Query().Get("login_id")))
-	if userLogin == nil || userLogin.UserMXID != user.MXID {
-		userLogin = user.GetDefaultLogin()
+	userLoginID := networkid.UserLoginID(r.URL.Query().Get("login_id"))
+	if userLoginID != "" {
+		userLogin := prov.br.Bridge.GetCachedUserLoginByID(userLoginID)
+		if userLogin == nil || userLogin.UserMXID != user.MXID {
+			jsonResponse(w, http.StatusNotFound, &mautrix.RespError{
+				Err:     "Login not found",
+				ErrCode: mautrix.MNotFound.ErrCode,
+			})
+			return nil
+		}
+		return userLogin
+	} else {
+		userLogin := user.GetDefaultLogin()
+		if userLogin == nil {
+			jsonResponse(w, http.StatusBadRequest, &mautrix.RespError{
+				Err:     "Not logged in",
+				ErrCode: "FI.MAU.NOT_LOGGED_IN",
+			})
+			return nil
+		}
+		return userLogin
 	}
-	if userLogin == nil {
-		jsonResponse(w, http.StatusBadRequest, &mautrix.RespError{
-			Err:     "Not logged in",
-			ErrCode: "FI.MAU.NOT_LOGGED_IN",
-		})
-		return nil
-	}
-	return userLogin
 }
 
 type RespResolveIdentifier struct {

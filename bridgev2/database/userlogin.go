@@ -54,6 +54,7 @@ const (
 	getUserLoginBaseQuery = `
 		SELECT bridge_id, user_mxid, id, space_room, metadata FROM user_login
 	`
+	getLoginByIDQuery         = getUserLoginBaseQuery + `WHERE bridge_id=$1 AND id=$2`
 	getAllLoginsQuery         = getUserLoginBaseQuery + `WHERE bridge_id=$1`
 	getAllLoginsForUserQuery  = getUserLoginBaseQuery + `WHERE bridge_id=$1 AND user_mxid=$2`
 	getAllLoginsInPortalQuery = `
@@ -73,6 +74,10 @@ const (
 		DELETE FROM user_login WHERE bridge_id=$1 AND id=$2
 	`
 )
+
+func (uq *UserLoginQuery) GetByID(ctx context.Context, id networkid.UserLoginID) (*UserLogin, error) {
+	return uq.QueryOne(ctx, getLoginByIDQuery, uq.BridgeID, id)
+}
 
 func (uq *UserLoginQuery) GetAll(ctx context.Context) ([]*UserLogin, error) {
 	return uq.QueryMany(ctx, getAllLoginsQuery, uq.BridgeID)
