@@ -291,6 +291,7 @@ func (br *Bridge) ensureConnection() {
 			time.Sleep(10 * time.Second)
 		} else {
 			br.SpecVersions = *versions
+			br.AS.SpecVersions = versions
 			break
 		}
 	}
