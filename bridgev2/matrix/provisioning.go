@@ -168,6 +168,9 @@ func (prov *ProvisioningAPI) AuthMiddleware(h http.Handler) http.Handler {
 				return
 			}
 			stepType := mux.Vars(r)["stepType"]
+			if stepType == "wait" {
+				stepType = "display_and_wait"
+			}
 			if login.NextStep.Type != bridgev2.LoginStepType(stepType) {
 				zerolog.Ctx(r.Context()).Warn().
 					Str("request_step_type", stepType).

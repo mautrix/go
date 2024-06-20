@@ -83,10 +83,10 @@ type LoginStep struct {
 
 	// Exactly one of the following structs must be filled depending on the step type.
 
-	DisplayAndWaitParams *LoginDisplayAndWaitParams `json:"display_and_wait"`
-	CookiesParams        *LoginCookiesParams        `json:"cookies"`
-	UserInputParams      *LoginUserInputParams      `json:"user_input"`
-	CompleteParams       *LoginCompleteParams       `json:"complete"`
+	DisplayAndWaitParams *LoginDisplayAndWaitParams `json:"display_and_wait,omitempty"`
+	CookiesParams        *LoginCookiesParams        `json:"cookies,omitempty"`
+	UserInputParams      *LoginUserInputParams      `json:"user_input,omitempty"`
+	CompleteParams       *LoginCompleteParams       `json:"complete,omitempty"`
 }
 
 type LoginDisplayAndWaitParams struct {
