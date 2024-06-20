@@ -46,6 +46,7 @@ type MatrixAPI interface {
 	SendMessage(ctx context.Context, roomID id.RoomID, eventType event.Type, content *event.Content, ts time.Time) (*mautrix.RespSendEvent, error)
 	SendState(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string, content *event.Content, ts time.Time) (*mautrix.RespSendEvent, error)
 	MarkRead(ctx context.Context, roomID id.RoomID, eventID id.EventID, ts time.Time) error
+	MarkUnread(ctx context.Context, roomID id.RoomID, unread bool) error
 	MarkTyping(ctx context.Context, roomID id.RoomID, typingType TypingType, timeout time.Duration) error
 	DownloadMedia(ctx context.Context, uri id.ContentURIString, file *event.EncryptedFileInfo) ([]byte, error)
 	UploadMedia(ctx context.Context, roomID id.RoomID, data []byte, fileName, mimeType string) (url id.ContentURIString, file *event.EncryptedFileInfo, err error)

@@ -286,6 +286,7 @@ const (
 	RemoteEventMessageRemove
 	RemoteEventReadReceipt
 	RemoteEventDeliveryReceipt
+	RemoteEventMarkUnread
 	RemoteEventTyping
 	RemoteEventChatTag
 	RemoteEventChatMute
@@ -356,6 +357,11 @@ type RemoteReceipt interface {
 	RemoteEvent
 	GetLastReceiptTarget() networkid.MessageID
 	GetReceiptTargets() []networkid.MessageID
+}
+
+type RemoteMarkUnread interface {
+	RemoteEvent
+	GetUnread() bool
 }
 
 type RemoteTyping interface {

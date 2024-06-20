@@ -117,6 +117,7 @@ func (et *Type) GuessClass() TypeClass {
 	case EphemeralEventReceipt.Type, EphemeralEventTyping.Type, EphemeralEventPresence.Type:
 		return EphemeralEventType
 	case AccountDataDirectChats.Type, AccountDataPushRules.Type, AccountDataRoomTags.Type,
+		AccountDataFullyRead.Type, AccountDataIgnoredUserList.Type, AccountDataMarkedUnread.Type,
 		AccountDataSecretStorageKey.Type, AccountDataSecretStorageDefaultKey.Type,
 		AccountDataCrossSigningMaster.Type, AccountDataCrossSigningSelf.Type, AccountDataCrossSigningUser.Type,
 		AccountDataFullyRead.Type, AccountDataMegolmBackupKey.Type:
@@ -240,6 +241,7 @@ var (
 	AccountDataRoomTags        = Type{"m.tag", AccountDataEventType}
 	AccountDataFullyRead       = Type{"m.fully_read", AccountDataEventType}
 	AccountDataIgnoredUserList = Type{"m.ignored_user_list", AccountDataEventType}
+	AccountDataMarkedUnread    = Type{"m.marked_unread", AccountDataEventType}
 
 	AccountDataSecretStorageDefaultKey = Type{"m.secret_storage.default_key", AccountDataEventType}
 	AccountDataSecretStorageKey        = Type{"m.secret_storage.key", AccountDataEventType}

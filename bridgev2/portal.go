@@ -800,6 +800,8 @@ func (portal *Portal) handleRemoteEvent(source *UserLogin, evt RemoteEvent) {
 		portal.handleRemoteMessageRemove(ctx, source, evt.(RemoteMessageRemove))
 	case RemoteEventReadReceipt:
 		portal.handleRemoteReadReceipt(ctx, source, evt.(RemoteReceipt))
+	case RemoteEventMarkUnread:
+		portal.handleRemoteMarkUnread(ctx, source, evt.(RemoteMarkUnread))
 	case RemoteEventDeliveryReceipt:
 		portal.handleRemoteDeliveryReceipt(ctx, source, evt.(RemoteReceipt))
 	case RemoteEventTyping:
@@ -1209,6 +1211,21 @@ func (portal *Portal) handleRemoteReadReceipt(ctx context.Context, source *UserL
 	}
 	if sender.IsFromMe {
 		portal.Bridge.DisappearLoop.StartAll(ctx, portal.MXID)
+	}
+}
+
+func (portal *Portal) handleRemoteMarkUnread(ctx context.Context, source *UserLogin, evt RemoteMarkUnread) {
+	if !evt.GetSender().IsFromMe {
+		zerolog.Ctx(ctx).Warn().Msg("Ignoring mark unread event from non-self user")
+		return
+	}
+	dp := source.User.DoublePuppet(ctx)
+	if dp == nil {
+		return
+	}
+	err := dp.MarkUnread(ctx, portal.MXID, evt.GetUnread())
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to bridge mark unread event")
 	}
 }
 

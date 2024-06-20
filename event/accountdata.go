@@ -81,3 +81,7 @@ type IgnoredUserListEventContent struct {
 type IgnoredUser struct {
 	// This is an empty object
 }
+
+type MarkedUnreadEventContent struct {
+	Unread bool `json:"unread"`
+}

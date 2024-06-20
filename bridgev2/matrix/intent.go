@@ -83,7 +83,25 @@ func (as *ASIntent) MarkRead(ctx context.Context, roomID id.RoomID, eventID id.E
 		req.FullyRead = eventID
 		req.BeeperFullyReadExtra = extraData
 	}
-	return as.Matrix.SetReadMarkers(ctx, roomID, &req)
+	err := as.Matrix.SetReadMarkers(ctx, roomID, &req)
+	if err != nil {
+		return err
+	}
+	if as.Matrix.IsCustomPuppet {
+		err = as.Matrix.SetRoomAccountData(ctx, roomID, event.AccountDataMarkedUnread.Type, &event.MarkedUnreadEventContent{
+			Unread: false,
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (as *ASIntent) MarkUnread(ctx context.Context, roomID id.RoomID, unread bool) error {
+	return as.Matrix.SetRoomAccountData(ctx, roomID, event.AccountDataMarkedUnread.Type, &event.MarkedUnreadEventContent{
+		Unread: unread,
+	})
 }
 
 func (as *ASIntent) MarkTyping(ctx context.Context, roomID id.RoomID, typingType bridgev2.TypingType, timeout time.Duration) error {

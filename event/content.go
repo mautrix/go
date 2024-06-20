@@ -54,6 +54,7 @@ var TypeMap = map[Type]reflect.Type{
 	AccountDataDirectChats:     reflect.TypeOf(DirectChatsEventContent{}),
 	AccountDataFullyRead:       reflect.TypeOf(FullyReadEventContent{}),
 	AccountDataIgnoredUserList: reflect.TypeOf(IgnoredUserListEventContent{}),
+	AccountDataMarkedUnread:    reflect.TypeOf(MarkedUnreadEventContent{}),
 
 	EphemeralEventTyping:   reflect.TypeOf(TypingEventContent{}),
 	EphemeralEventReceipt:  reflect.TypeOf(ReceiptEventContent{}),
@@ -415,6 +416,13 @@ func (content *Content) AsIgnoredUserList() *IgnoredUserListEventContent {
 	casted, ok := content.Parsed.(*IgnoredUserListEventContent)
 	if !ok {
 		return &IgnoredUserListEventContent{}
+	}
+	return casted
+}
+func (content *Content) AsMarkedUnread() *MarkedUnreadEventContent {
+	casted, ok := content.Parsed.(*MarkedUnreadEventContent)
+	if !ok {
+		return &MarkedUnreadEventContent{}
 	}
 	return casted
 }
