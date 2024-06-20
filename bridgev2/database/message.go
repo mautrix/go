@@ -165,7 +165,7 @@ func (m *Message) sqlVariables() []any {
 	}
 	return []any{
 		m.BridgeID, m.ID, m.PartID, m.MXID, m.Room.ID, m.Room.Receiver, m.SenderID,
-		m.Timestamp.UnixNano(), dbutil.NumPtr(m.RelatesToRowID), dbutil.JSON{Data: m.Metadata},
+		m.Timestamp.UnixNano(), dbutil.NumPtr(m.RelatesToRowID), dbutil.JSON{Data: &m.Metadata},
 	}
 }
 

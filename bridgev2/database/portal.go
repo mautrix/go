@@ -168,6 +168,6 @@ func (p *Portal) sqlVariables() []any {
 		p.BridgeID, p.ID, p.Receiver, dbutil.StrPtr(p.MXID),
 		dbutil.StrPtr(p.ParentID), p.Name, p.Topic, p.AvatarID, avatarHash, p.AvatarMXC,
 		p.NameSet, p.TopicSet, p.AvatarSet, p.InSpace,
-		dbutil.JSON{Data: p.Metadata},
+		dbutil.JSON{Data: &p.Metadata},
 	}
 }

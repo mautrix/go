@@ -122,5 +122,5 @@ func (u *UserLogin) sqlVariables() []any {
 	if u.Metadata.Extra == nil {
 		u.Metadata.Extra = make(map[string]any)
 	}
-	return []any{u.BridgeID, u.UserMXID, u.ID, dbutil.StrPtr(u.SpaceRoom), dbutil.JSON{Data: u.Metadata}}
+	return []any{u.BridgeID, u.UserMXID, u.ID, dbutil.StrPtr(u.SpaceRoom), dbutil.JSON{Data: &u.Metadata}}
 }

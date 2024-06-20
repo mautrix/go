@@ -127,6 +127,6 @@ func (r *Reaction) sqlVariables() []any {
 	}
 	return []any{
 		r.BridgeID, r.MessageID, r.MessagePartID, r.SenderID, r.EmojiID,
-		r.Room.ID, r.Room.Receiver, r.MXID, r.Timestamp.UnixNano(), dbutil.JSON{Data: r.Metadata},
+		r.Room.ID, r.Room.Receiver, r.MXID, r.Timestamp.UnixNano(), dbutil.JSON{Data: &r.Metadata},
 	}
 }
