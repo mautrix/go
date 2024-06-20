@@ -804,6 +804,10 @@ func (portal *Portal) handleRemoteEvent(source *UserLogin, evt RemoteEvent) {
 		portal.handleRemoteDeliveryReceipt(ctx, source, evt.(RemoteReceipt))
 	case RemoteEventTyping:
 		portal.handleRemoteTyping(ctx, source, evt.(RemoteTyping))
+	case RemoteEventChatTag:
+		portal.handleRemoteChatTag(ctx, source, evt.(RemoteChatTag))
+	case RemoteEventChatMute:
+		portal.handleRemoteChatMute(ctx, source, evt.(RemoteChatMute))
 	default:
 		log.Warn().Int("type", int(evt.GetType())).Msg("Got remote event with unknown type")
 	}
@@ -1224,6 +1228,37 @@ func (portal *Portal) handleRemoteTyping(ctx context.Context, source *UserLogin,
 	}
 }
 
+func (portal *Portal) handleRemoteChatTag(ctx context.Context, source *UserLogin, evt RemoteChatTag) {
+	if !evt.GetSender().IsFromMe {
+		zerolog.Ctx(ctx).Warn().Msg("Ignoring chat tag event from non-self user")
+		return
+	}
+	dp := source.User.DoublePuppet(ctx)
+	if dp == nil {
+		return
+	}
+	tag, isTagged := evt.GetTag()
+	err := dp.TagRoom(ctx, portal.MXID, tag, isTagged)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to bridge chat tag event")
+	}
+}
+
+func (portal *Portal) handleRemoteChatMute(ctx context.Context, source *UserLogin, evt RemoteChatMute) {
+	if !evt.GetSender().IsFromMe {
+		zerolog.Ctx(ctx).Warn().Msg("Ignoring chat mute event from non-self user")
+		return
+	}
+	dp := source.User.DoublePuppet(ctx)
+	if dp == nil {
+		return
+	}
+	err := dp.MuteRoom(ctx, portal.MXID, evt.GetMutedUntil())
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to bridge chat mute event")
+	}
+}
+
 type PortalInfo struct {
 	Name   *string
 	Topic  *string
@@ -1233,6 +1268,13 @@ type PortalInfo struct {
 
 	IsDirectChat *bool
 	IsSpace      *bool
+
+	UserLocal *UserLocalPortalInfo
+}
+
+type UserLocalPortalInfo struct {
+	MutedUntil *time.Time
+	Tag        *event.RoomTag
 }
 
 func (portal *Portal) UpdateName(ctx context.Context, name string, sender *Ghost, ts time.Time) bool {
@@ -1445,6 +1487,28 @@ func (portal *Portal) SyncParticipants(ctx context.Context, members []networkid.
 	return expectedUserIDs, extraFunctionalMembers, nil
 }
 
+func (portal *Portal) updateUserLocalInfo(ctx context.Context, info *UserLocalPortalInfo, source *UserLogin) {
+	if portal.MXID == "" || info == nil {
+		return
+	}
+	dp := source.User.DoublePuppet(ctx)
+	if dp == nil {
+		return
+	}
+	if info.MutedUntil != nil {
+		err := dp.MuteRoom(ctx, portal.MXID, *info.MutedUntil)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to mute room")
+		}
+	}
+	if info.Tag != nil {
+		err := dp.TagRoom(ctx, portal.MXID, *info.Tag, *info.Tag != "")
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to tag room")
+		}
+	}
+}
+
 func (portal *Portal) UpdateInfo(ctx context.Context, info *PortalInfo, source *UserLogin, sender *Ghost, ts time.Time) {
 	changed := false
 	if info.Name != nil {
@@ -1469,6 +1533,7 @@ func (portal *Portal) UpdateInfo(ctx context.Context, info *PortalInfo, source *
 		if err != nil {
 			zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to ensure user portal row exists")
 		}
+		portal.updateUserLocalInfo(ctx, info.UserLocal, source)
 	}
 	if changed {
 		portal.UpdateBridgeInfo(ctx)
@@ -1599,6 +1664,7 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 	if portal.Parent != nil {
 		// TODO add m.space.child event
 	}
+	portal.updateUserLocalInfo(ctx, info.UserLocal, source)
 	if !isBeeper {
 		_, _, err = portal.SyncParticipants(ctx, info.Members, source)
 		if err != nil {

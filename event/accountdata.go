@@ -8,6 +8,7 @@ package event
 
 import (
 	"encoding/json"
+	"strings"
 
 	"maunium.net/go/mautrix/id"
 )
@@ -18,10 +19,47 @@ type TagEventContent struct {
 	Tags Tags `json:"tags"`
 }
 
-type Tags map[string]Tag
+type Tags map[RoomTag]TagMetadata
 
-type Tag struct {
+type RoomTag string
+
+const (
+	RoomTagFavourite    RoomTag = "m.favourite"
+	RoomTagLowPriority  RoomTag = "m.lowpriority"
+	RoomTagServerNotice RoomTag = "m.server_notice"
+)
+
+func (rt RoomTag) IsUserDefined() bool {
+	return strings.HasPrefix(string(rt), "u.")
+}
+
+func (rt RoomTag) String() string {
+	return string(rt)
+}
+
+func (rt RoomTag) Name() string {
+	if rt.IsUserDefined() {
+		return string(rt[2:])
+	}
+	switch rt {
+	case RoomTagFavourite:
+		return "Favourite"
+	case RoomTagLowPriority:
+		return "Low priority"
+	case RoomTagServerNotice:
+		return "Server notice"
+	default:
+		return ""
+	}
+}
+
+// Deprecated: type alias
+type Tag = TagMetadata
+
+type TagMetadata struct {
 	Order json.Number `json:"order,omitempty"`
+
+	MauDoublePuppetSource string `json:"fi.mau.double_puppet_source,omitempty"`
 }
 
 // DirectChatsEventContent represents the content of a m.direct account data event.

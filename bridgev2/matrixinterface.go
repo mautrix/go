@@ -58,4 +58,7 @@ type MatrixAPI interface {
 	DeleteRoom(ctx context.Context, roomID id.RoomID, puppetsOnly bool) error
 	InviteUser(ctx context.Context, roomID id.RoomID, userID id.UserID) error
 	EnsureJoined(ctx context.Context, roomID id.RoomID) error
+
+	TagRoom(ctx context.Context, roomID id.RoomID, tag event.RoomTag, isTagged bool) error
+	MuteRoom(ctx context.Context, roomID id.RoomID, until time.Time) error
 }

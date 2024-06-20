@@ -1925,15 +1925,13 @@ func (cli *Client) SetReadMarkers(ctx context.Context, roomID id.RoomID, content
 	return
 }
 
-func (cli *Client) AddTag(ctx context.Context, roomID id.RoomID, tag string, order float64) error {
-	var tagData event.Tag
-	if order == order {
-		tagData.Order = json.Number(strconv.FormatFloat(order, 'e', -1, 64))
-	}
-	return cli.AddTagWithCustomData(ctx, roomID, tag, tagData)
+func (cli *Client) AddTag(ctx context.Context, roomID id.RoomID, tag event.RoomTag, order float64) error {
+	return cli.AddTagWithCustomData(ctx, roomID, tag, &event.TagMetadata{
+		Order: json.Number(strconv.FormatFloat(order, 'e', -1, 64)),
+	})
 }
 
-func (cli *Client) AddTagWithCustomData(ctx context.Context, roomID id.RoomID, tag string, data interface{}) (err error) {
+func (cli *Client) AddTagWithCustomData(ctx context.Context, roomID id.RoomID, tag event.RoomTag, data any) (err error) {
 	urlPath := cli.BuildClientURL("v3", "user", cli.UserID, "rooms", roomID, "tags", tag)
 	_, err = cli.MakeRequest(ctx, http.MethodPut, urlPath, data, nil)
 	return
@@ -1944,13 +1942,13 @@ func (cli *Client) GetTags(ctx context.Context, roomID id.RoomID) (tags event.Ta
 	return
 }
 
-func (cli *Client) GetTagsWithCustomData(ctx context.Context, roomID id.RoomID, resp interface{}) (err error) {
+func (cli *Client) GetTagsWithCustomData(ctx context.Context, roomID id.RoomID, resp any) (err error) {
 	urlPath := cli.BuildClientURL("v3", "user", cli.UserID, "rooms", roomID, "tags")
 	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
 	return
 }
 
-func (cli *Client) RemoveTag(ctx context.Context, roomID id.RoomID, tag string) (err error) {
+func (cli *Client) RemoveTag(ctx context.Context, roomID id.RoomID, tag event.RoomTag) (err error) {
 	urlPath := cli.BuildClientURL("v3", "user", cli.UserID, "rooms", roomID, "tags", tag)
 	_, err = cli.MakeRequest(ctx, http.MethodDelete, urlPath, nil, nil)
 	return

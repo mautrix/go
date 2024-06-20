@@ -8,6 +8,7 @@ package matrix
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	"maunium.net/go/mautrix/crypto/attachment"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
+	"maunium.net/go/mautrix/pushrules"
 )
 
 // ASIntent implements the bridge ghost API interface using a real Matrix homeserver as the backend.
@@ -248,4 +250,32 @@ func (as *ASIntent) DeleteRoom(ctx context.Context, roomID id.RoomID, puppetsOnl
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to leave room while cleaning up portal")
 	}
 	return nil
+}
+
+func (as *ASIntent) TagRoom(ctx context.Context, roomID id.RoomID, tag event.RoomTag, isTagged bool) error {
+	if isTagged {
+		return as.Matrix.AddTagWithCustomData(ctx, roomID, tag, &event.TagMetadata{
+			MauDoublePuppetSource: as.Connector.AS.DoublePuppetValue,
+		})
+	} else {
+		if tag == "" {
+			// TODO clear all tags?
+		}
+		return as.Matrix.RemoveTag(ctx, roomID, tag)
+	}
+}
+
+func (as *ASIntent) MuteRoom(ctx context.Context, roomID id.RoomID, until time.Time) error {
+	if !until.IsZero() && until.Before(time.Now()) {
+		err := as.Matrix.DeletePushRule(ctx, "global", pushrules.RoomRule, string(roomID))
+		// If the push rule doesn't exist, everything is fine
+		if errors.Is(err, mautrix.MNotFound) {
+			err = nil
+		}
+		return err
+	} else {
+		return as.Matrix.PutPushRule(ctx, "global", pushrules.RoomRule, string(roomID), &mautrix.ReqPutPushRule{
+			Actions: []pushrules.PushActionType{pushrules.ActionDontNotify},
+		})
+	}
 }
