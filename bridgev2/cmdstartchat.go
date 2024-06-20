@@ -76,9 +76,6 @@ func fnResolveIdentifier(ce *CommandEvent) {
 		}
 		targetName = resp.Ghost.Name
 		targetMXID = resp.Ghost.MXID
-		if !createChat {
-			ce.Reply("Found `%s` / [%s](%s)", resp.Ghost.ID, resp.Ghost.Name, resp.Ghost.MXID.URI().MatrixToURL())
-		}
 	} else if resp.UserInfo != nil && resp.UserInfo.Name != nil {
 		targetName = *resp.UserInfo.Name
 	}
