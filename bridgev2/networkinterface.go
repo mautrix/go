@@ -201,6 +201,11 @@ type IdentifierResolvingNetworkAPI interface {
 	ResolveIdentifier(ctx context.Context, identifier string, createChat bool) (*ResolveIdentifierResponse, error)
 }
 
+type ContactListingNetworkAPI interface {
+	NetworkAPI
+	GetContactList(ctx context.Context) ([]*ResolveIdentifierResponse, error)
+}
+
 type UserSearchingNetworkAPI interface {
 	IdentifierResolvingNetworkAPI
 	SearchUsers(ctx context.Context, query string) ([]*ResolveIdentifierResponse, error)

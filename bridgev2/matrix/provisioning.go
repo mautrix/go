@@ -74,6 +74,7 @@ func (prov *ProvisioningAPI) Init() {
 	router.Path("/v3/login/step/{loginProcessID}/{stepID}/{stepType:wait}").Methods(http.MethodPost).HandlerFunc(prov.PostLoginWait)
 	router.Path("/v3/logout/{loginID}").Methods(http.MethodPost).HandlerFunc(prov.PostLogout)
 	router.Path("/v3/logins").Methods(http.MethodGet).HandlerFunc(prov.GetLogins)
+	router.Path("/v3/contacts").Methods(http.MethodGet).HandlerFunc(prov.GetContactList)
 	router.Path("/v3/resolve_identifier/{identifier}").Methods(http.MethodGet).HandlerFunc(prov.GetResolveIdentifier)
 	router.Path("/v3/create_dm").Methods(http.MethodPost).HandlerFunc(prov.PostCreateDM)
 	router.Path("/v3/create_group").Methods(http.MethodPost).HandlerFunc(prov.PostCreateGroup)
@@ -346,11 +347,12 @@ func (prov *ProvisioningAPI) getLoginForCall(w http.ResponseWriter, r *http.Requ
 }
 
 type RespResolveIdentifier struct {
-	ID        networkid.UserID    `json:"id,omitempty"`
-	Name      string              `json:"name,omitempty"`
-	AvatarURL id.ContentURIString `json:"avatar_url,omitempty"`
-	MXID      id.UserID           `json:"mxid,omitempty"`
-	DMRoomID  id.RoomID           `json:"dm_room_mxid,omitempty"`
+	ID          networkid.UserID    `json:"id,omitempty"`
+	Name        string              `json:"name,omitempty"`
+	AvatarURL   id.ContentURIString `json:"avatar_url,omitempty"`
+	Identifiers []string            `json:"identifiers,omitempty"`
+	MXID        id.UserID           `json:"mxid,omitempty"`
+	DMRoomID    id.RoomID           `json:"dm_room_mxid,omitempty"`
 }
 
 func (prov *ProvisioningAPI) doResolveIdentifier(w http.ResponseWriter, r *http.Request, createChat bool) {
@@ -369,12 +371,14 @@ func (prov *ProvisioningAPI) doResolveIdentifier(w http.ResponseWriter, r *http.
 	resp, err := api.ResolveIdentifier(r.Context(), mux.Vars(r)["identifier"], createChat)
 	if err != nil {
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to resolve identifier")
-		jsonResponse(w, http.StatusNotImplemented, &mautrix.RespError{
+		jsonResponse(w, http.StatusInternalServerError, &mautrix.RespError{
 			Err:     fmt.Sprintf("Failed to resolve identifier: %v", err),
 			ErrCode: "M_UNKNOWN",
 		})
 	}
-	apiResp := &RespResolveIdentifier{}
+	apiResp := &RespResolveIdentifier{
+		ID: resp.UserID,
+	}
 	status := http.StatusOK
 	if resp.Ghost != nil {
 		if resp.UserInfo != nil {
@@ -382,6 +386,7 @@ func (prov *ProvisioningAPI) doResolveIdentifier(w http.ResponseWriter, r *http.
 		}
 		apiResp.Name = resp.Ghost.Name
 		apiResp.AvatarURL = resp.Ghost.AvatarMXC
+		apiResp.Identifiers = resp.Ghost.Metadata.Identifiers
 		apiResp.MXID = resp.Ghost.MXID
 	} else if resp.UserInfo != nil && resp.UserInfo.Name != nil {
 		apiResp.Name = *resp.UserInfo.Name
@@ -391,7 +396,7 @@ func (prov *ProvisioningAPI) doResolveIdentifier(w http.ResponseWriter, r *http.
 			resp.Chat.Portal, err = prov.br.Bridge.GetPortalByID(r.Context(), resp.Chat.PortalID)
 			if err != nil {
 				zerolog.Ctx(r.Context()).Err(err).Msg("Failed to get portal")
-				jsonResponse(w, http.StatusNotImplemented, &mautrix.RespError{
+				jsonResponse(w, http.StatusInternalServerError, &mautrix.RespError{
 					Err:     "Failed to get portal",
 					ErrCode: "M_UNKNOWN",
 				})
@@ -403,7 +408,7 @@ func (prov *ProvisioningAPI) doResolveIdentifier(w http.ResponseWriter, r *http.
 			err = resp.Chat.Portal.CreateMatrixRoom(r.Context(), login, resp.Chat.PortalInfo)
 			if err != nil {
 				zerolog.Ctx(r.Context()).Err(err).Msg("Failed to create portal room")
-				jsonResponse(w, http.StatusNotImplemented, &mautrix.RespError{
+				jsonResponse(w, http.StatusInternalServerError, &mautrix.RespError{
 					Err:     "Failed to create portal room",
 					ErrCode: "M_UNKNOWN",
 				})
@@ -413,6 +418,77 @@ func (prov *ProvisioningAPI) doResolveIdentifier(w http.ResponseWriter, r *http.
 		apiResp.DMRoomID = resp.Chat.Portal.MXID
 	}
 	jsonResponse(w, status, resp)
+}
+
+type RespGetContactList struct {
+	Contacts []*RespResolveIdentifier `json:"contacts"`
+}
+
+func (prov *ProvisioningAPI) GetContactList(w http.ResponseWriter, r *http.Request) {
+	login := prov.getLoginForCall(w, r)
+	if login == nil {
+		return
+	}
+	api, ok := login.Client.(bridgev2.ContactListingNetworkAPI)
+	if !ok {
+		jsonResponse(w, http.StatusNotImplemented, &mautrix.RespError{
+			Err:     "This bridge does not support listing contacts",
+			ErrCode: mautrix.MUnrecognized.ErrCode,
+		})
+		return
+	}
+	resp, err := api.GetContactList(r.Context())
+	if err != nil {
+		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to get contact list")
+		jsonResponse(w, http.StatusNotImplemented, &mautrix.RespError{
+			Err:     fmt.Sprintf("Failed to get contact list: %v", err),
+			ErrCode: "M_UNKNOWN",
+		})
+		return
+	}
+	apiResp := &RespGetContactList{
+		Contacts: make([]*RespResolveIdentifier, len(resp)),
+	}
+	for i, contact := range resp {
+		apiContact := &RespResolveIdentifier{
+			ID: contact.UserID,
+		}
+		fmt.Println(contact.UserInfo.Identifiers)
+		apiResp.Contacts[i] = apiContact
+		if contact.UserInfo != nil {
+			if contact.UserInfo.Name != nil {
+				apiContact.Name = *contact.UserInfo.Name
+			}
+			if contact.UserInfo.Identifiers != nil {
+				apiContact.Identifiers = contact.UserInfo.Identifiers
+			}
+		}
+		if contact.Ghost != nil {
+			if contact.Ghost.Name != "" {
+				apiContact.Name = contact.Ghost.Name
+			}
+			if len(contact.Ghost.Metadata.Identifiers) >= len(apiContact.Identifiers) {
+				apiContact.Identifiers = contact.Ghost.Metadata.Identifiers
+			}
+			apiContact.AvatarURL = contact.Ghost.AvatarMXC
+			apiContact.MXID = contact.Ghost.MXID
+		}
+		if contact.Chat != nil {
+			if contact.Chat.Portal == nil {
+				contact.Chat.Portal, err = prov.br.Bridge.GetPortalByID(r.Context(), contact.Chat.PortalID)
+				if err != nil {
+					zerolog.Ctx(r.Context()).Err(err).Msg("Failed to get portal")
+					jsonResponse(w, http.StatusInternalServerError, &mautrix.RespError{
+						Err:     "Failed to get portal",
+						ErrCode: "M_UNKNOWN",
+					})
+					return
+				}
+			}
+			apiContact.DMRoomID = contact.Chat.Portal.MXID
+		}
+	}
+	jsonResponse(w, http.StatusOK, apiResp)
 }
 
 func (prov *ProvisioningAPI) GetResolveIdentifier(w http.ResponseWriter, r *http.Request) {
