@@ -106,6 +106,11 @@ func (cli *Client) DeactivateAccount(ctx context.Context, userID id.UserID, req 
 	return err
 }
 
+type Threepid struct {
+	Medium  string `json:"medium"`
+	Address string `json:"address"`
+}
+
 type ReqCreateOrModifyAccount struct {
 	Password      string `json:"password,omitempty"`
 	LogoutDevices *bool  `json:"logout_devices,omitempty"`
@@ -117,6 +122,8 @@ type ReqCreateOrModifyAccount struct {
 	Displayname string              `json:"displayname,omitempty"`
 	AvatarURL   id.ContentURIString `json:"avatar_url,omitempty"`
 	UserType    string              `json:"user_type,omitempty"`
+
+	Threepids []Threepid `json:"threepids,omitempty"`
 }
 
 // CreateOrModifyAccount creates or modifies an account on the server.
