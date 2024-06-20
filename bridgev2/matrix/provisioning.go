@@ -73,6 +73,7 @@ func (prov *ProvisioningAPI) Init() {
 	router.Path("/v3/login/step/{loginProcessID}/{stepID}/{stepType:user_input|cookies}").Methods(http.MethodPost).HandlerFunc(prov.PostLoginSubmitInput)
 	router.Path("/v3/login/step/{loginProcessID}/{stepID}/{stepType:wait}").Methods(http.MethodPost).HandlerFunc(prov.PostLoginWait)
 	router.Path("/v3/logout/{loginID}").Methods(http.MethodPost).HandlerFunc(prov.PostLogout)
+	router.Path("/v3/logins").Methods(http.MethodGet).HandlerFunc(prov.GetLogins)
 	router.Path("/v3/resolve_identifier/{identifier}").Methods(http.MethodGet).HandlerFunc(prov.GetResolveIdentifier)
 	router.Path("/v3/create_dm").Methods(http.MethodPost).HandlerFunc(prov.PostCreateDM)
 	router.Path("/v3/create_group").Methods(http.MethodPost).HandlerFunc(prov.PostCreateGroup)
@@ -304,6 +305,15 @@ func (prov *ProvisioningAPI) PostLogout(w http.ResponseWriter, r *http.Request) 
 		userLogin.Logout(r.Context())
 	}
 	jsonResponse(w, http.StatusOK, json.RawMessage("{}"))
+}
+
+type RespGetLogins struct {
+	LoginIDs []networkid.UserLoginID `json:"login_ids"`
+}
+
+func (prov *ProvisioningAPI) GetLogins(w http.ResponseWriter, r *http.Request) {
+	user := r.Context().Value(provisioningUserKey).(*bridgev2.User)
+	jsonResponse(w, http.StatusOK, &RespGetLogins{LoginIDs: user.GetUserLoginIDs()})
 }
 
 func (prov *ProvisioningAPI) getLoginForCall(w http.ResponseWriter, r *http.Request) *bridgev2.UserLogin {

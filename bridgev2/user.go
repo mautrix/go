@@ -152,6 +152,12 @@ func (user *User) DoublePuppet(ctx context.Context) MatrixAPI {
 	return intent
 }
 
+func (user *User) GetUserLoginIDs() []networkid.UserLoginID {
+	user.Bridge.cacheLock.Lock()
+	defer user.Bridge.cacheLock.Unlock()
+	return maps.Keys(user.logins)
+}
+
 func (user *User) GetFormattedUserLogins() string {
 	user.Bridge.cacheLock.Lock()
 	logins := make([]string, len(user.logins))
