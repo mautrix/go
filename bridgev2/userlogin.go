@@ -30,6 +30,9 @@ type UserLogin struct {
 }
 
 func (br *Bridge) loadUserLogin(ctx context.Context, user *User, dbUserLogin *database.UserLogin) (*UserLogin, error) {
+	if dbUserLogin == nil {
+		return nil, nil
+	}
 	if user == nil {
 		var err error
 		user, err = br.unlockedGetUserByMXID(ctx, dbUserLogin.UserMXID, true)
@@ -98,7 +101,7 @@ func (br *Bridge) GetUserLoginsInPortal(ctx context.Context, portal networkid.Po
 	return br.loadManyUserLogins(ctx, nil, logins)
 }
 
-func (br *Bridge) GetUserLoginByID(ctx context.Context, id networkid.UserLoginID) (*UserLogin, error) {
+func (br *Bridge) GetExistingUserLoginByID(ctx context.Context, id networkid.UserLoginID) (*UserLogin, error) {
 	login, err := br.DB.UserLogin.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
