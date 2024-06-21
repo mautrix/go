@@ -7,8 +7,8 @@ import (
 	"github.com/tidwall/sjson"
 
 	"maunium.net/go/mautrix/crypto/canonicaljson"
-	"maunium.net/go/mautrix/crypto/goolm"
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
+	"maunium.net/go/mautrix/crypto/goolm/goolmbase64"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -49,7 +49,7 @@ func (s Signing) PublicKey() id.Ed25519 {
 // Sign returns the signature of the message base64 encoded.
 func (s Signing) Sign(message []byte) ([]byte, error) {
 	signature := s.keyPair.Sign(message)
-	return goolm.Base64Encode(signature), nil
+	return goolmbase64.Encode(signature), nil
 }
 
 // SignJSON creates a signature for the given object after encoding it to

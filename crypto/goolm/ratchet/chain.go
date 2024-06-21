@@ -1,11 +1,11 @@
-package olm
+package ratchet
 
 import (
 	"fmt"
 
-	"maunium.net/go/mautrix/crypto/goolm"
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
 	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
+	"maunium.net/go/mautrix/crypto/olm"
 )
 
 const (
@@ -45,7 +45,7 @@ func (r *chainKey) UnpickleLibOlm(value []byte) (int, error) {
 // It returns the number of bytes written.
 func (r chainKey) PickleLibOlm(target []byte) (int, error) {
 	if len(target) < r.PickleLen() {
-		return 0, fmt.Errorf("pickle chain key: %w", goolm.ErrValueTooShort)
+		return 0, fmt.Errorf("pickle chain key: %w", olm.ErrValueTooShort)
 	}
 	written, err := r.Key.PickleLibOlm(target)
 	if err != nil {
@@ -116,7 +116,7 @@ func (r *senderChain) UnpickleLibOlm(value []byte) (int, error) {
 // It returns the number of bytes written.
 func (r senderChain) PickleLibOlm(target []byte) (int, error) {
 	if len(target) < r.PickleLen() {
-		return 0, fmt.Errorf("pickle sender chain: %w", goolm.ErrValueTooShort)
+		return 0, fmt.Errorf("pickle sender chain: %w", olm.ErrValueTooShort)
 	}
 	written, err := r.RKey.PickleLibOlm(target)
 	if err != nil {
@@ -189,7 +189,7 @@ func (r *receiverChain) UnpickleLibOlm(value []byte) (int, error) {
 // It returns the number of bytes written.
 func (r receiverChain) PickleLibOlm(target []byte) (int, error) {
 	if len(target) < r.PickleLen() {
-		return 0, fmt.Errorf("pickle sender chain: %w", goolm.ErrValueTooShort)
+		return 0, fmt.Errorf("pickle sender chain: %w", olm.ErrValueTooShort)
 	}
 	written, err := r.RKey.PickleLibOlm(target)
 	if err != nil {
@@ -238,7 +238,7 @@ func (m *messageKey) UnpickleLibOlm(value []byte) (int, error) {
 // It returns the number of bytes written.
 func (m messageKey) PickleLibOlm(target []byte) (int, error) {
 	if len(target) < m.PickleLen() {
-		return 0, fmt.Errorf("pickle message key: %w", goolm.ErrValueTooShort)
+		return 0, fmt.Errorf("pickle message key: %w", olm.ErrValueTooShort)
 	}
 	written := 0
 	if len(m.Key) != messageKeyLength {

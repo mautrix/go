@@ -1,10 +1,10 @@
-package olm
+package ratchet
 
 import (
 	"fmt"
 
-	"maunium.net/go/mautrix/crypto/goolm"
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
+	"maunium.net/go/mautrix/crypto/olm"
 )
 
 // skippedMessageKey stores a skipped message key
@@ -33,7 +33,7 @@ func (r *skippedMessageKey) UnpickleLibOlm(value []byte) (int, error) {
 // It returns the number of bytes written.
 func (r skippedMessageKey) PickleLibOlm(target []byte) (int, error) {
 	if len(target) < r.PickleLen() {
-		return 0, fmt.Errorf("pickle sender chain: %w", goolm.ErrValueTooShort)
+		return 0, fmt.Errorf("pickle sender chain: %w", olm.ErrValueTooShort)
 	}
 	written, err := r.RKey.PickleLibOlm(target)
 	if err != nil {

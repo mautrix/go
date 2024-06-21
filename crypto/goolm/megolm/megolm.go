@@ -5,12 +5,13 @@ import (
 	"crypto/rand"
 	"fmt"
 
-	"maunium.net/go/mautrix/crypto/goolm"
 	"maunium.net/go/mautrix/crypto/goolm/cipher"
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
+	"maunium.net/go/mautrix/crypto/goolm/goolmbase64"
 	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
 	"maunium.net/go/mautrix/crypto/goolm/message"
 	"maunium.net/go/mautrix/crypto/goolm/utilities"
+	"maunium.net/go/mautrix/crypto/olm"
 )
 
 const (
@@ -158,7 +159,7 @@ func (r Ratchet) SessionSharingMessage(key crypto.Ed25519KeyPair) ([]byte, error
 	m.Counter = r.Counter
 	m.RatchetData = r.Data
 	encoded := m.EncodeAndSign(key)
-	return goolm.Base64Encode(encoded), nil
+	return goolmbase64.Encode(encoded), nil
 }
 
 // SessionExportMessage creates a message in the session export format.
@@ -168,7 +169,7 @@ func (r Ratchet) SessionExportMessage(key crypto.Ed25519PublicKey) ([]byte, erro
 	m.RatchetData = r.Data
 	m.PublicKey = key
 	encoded := m.Encode()
-	return goolm.Base64Encode(encoded), nil
+	return goolmbase64.Encode(encoded), nil
 }
 
 // Decrypt decrypts the ciphertext and verifies the MAC but not the signature.
@@ -179,7 +180,7 @@ func (r Ratchet) Decrypt(ciphertext []byte, signingkey *crypto.Ed25519PublicKey,
 		return nil, err
 	}
 	if !verifiedMAC {
-		return nil, fmt.Errorf("decrypt: %w", goolm.ErrBadMAC)
+		return nil, fmt.Errorf("decrypt: %w", olm.ErrBadMAC)
 	}
 
 	return RatchetCipher.Decrypt(r.Data[:], msg.Ciphertext)
@@ -219,7 +220,7 @@ func (r *Ratchet) UnpickleLibOlm(unpickled []byte) (int, error) {
 // It returns the number of bytes written.
 func (r Ratchet) PickleLibOlm(target []byte) (int, error) {
 	if len(target) < r.PickleLen() {
-		return 0, fmt.Errorf("pickle account: %w", goolm.ErrValueTooShort)
+		return 0, fmt.Errorf("pickle account: %w", olm.ErrValueTooShort)
 	}
 	written := libolmpickle.PickleBytes(r.Data[:], target)
 	written += libolmpickle.PickleUInt32(r.Counter, target[written:])

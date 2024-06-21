@@ -5,11 +5,12 @@ import (
 	"errors"
 	"fmt"
 
-	"maunium.net/go/mautrix/crypto/goolm"
 	"maunium.net/go/mautrix/crypto/goolm/cipher"
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
+	"maunium.net/go/mautrix/crypto/goolm/goolmbase64"
 	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
 	"maunium.net/go/mautrix/crypto/goolm/utilities"
+	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -56,8 +57,8 @@ func (s Decryption) PrivateKey() crypto.Curve25519PrivateKey {
 }
 
 // Decrypt decrypts the ciphertext and verifies the MAC. The base64 encoded key is used to construct the shared secret.
-func (s Decryption) Decrypt(ciphertext, mac []byte, key id.Curve25519) ([]byte, error) {
-	keyDecoded, err := base64.RawStdEncoding.DecodeString(string(key))
+func (s Decryption) Decrypt(ephemeralKey, mac, ciphertext []byte) ([]byte, error) {
+	keyDecoded, err := base64.RawStdEncoding.DecodeString(string(ephemeralKey))
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +66,7 @@ func (s Decryption) Decrypt(ciphertext, mac []byte, key id.Curve25519) ([]byte, 
 	if err != nil {
 		return nil, err
 	}
-	decodedMAC, err := goolm.Base64Decode(mac)
+	decodedMAC, err := goolmbase64.Decode(mac)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +76,7 @@ func (s Decryption) Decrypt(ciphertext, mac []byte, key id.Curve25519) ([]byte, 
 		return nil, err
 	}
 	if !verified {
-		return nil, fmt.Errorf("decrypt: %w", goolm.ErrBadMAC)
+		return nil, fmt.Errorf("decrypt: %w", olm.ErrBadMAC)
 	}
 	plaintext, err := cipher.Decrypt(sharedSecret, ciphertext)
 	if err != nil {
@@ -115,7 +116,7 @@ func (a *Decryption) UnpickleLibOlm(value []byte) (int, error) {
 	switch pickledVersion {
 	case decryptionPickleVersionLibOlm:
 	default:
-		return 0, fmt.Errorf("unpickle olmSession: %w", goolm.ErrBadVersion)
+		return 0, fmt.Errorf("unpickle olmSession: %w", olm.ErrBadVersion)
 	}
 	readBytes, err := a.KeyPair.UnpickleLibOlm(value[curPos:])
 	if err != nil {
@@ -146,7 +147,7 @@ func (a Decryption) Pickle(key []byte) ([]byte, error) {
 // It returns the number of bytes written.
 func (a Decryption) PickleLibOlm(target []byte) (int, error) {
 	if len(target) < a.PickleLen() {
-		return 0, fmt.Errorf("pickle Decryption: %w", goolm.ErrValueTooShort)
+		return 0, fmt.Errorf("pickle Decryption: %w", olm.ErrValueTooShort)
 	}
 	written := libolmpickle.PickleUInt32(decryptionPickleVersionLibOlm, target)
 	writtenKey, err := a.KeyPair.PickleLibOlm(target[written:])

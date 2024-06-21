@@ -7,7 +7,12 @@
 package crypto
 
 import (
+	"encoding/json"
+
+	"github.com/tidwall/sjson"
+
 	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/crypto/canonicaljson"
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/crypto/signatures"
 	"maunium.net/go/mautrix/id"
@@ -22,30 +27,59 @@ type OlmAccount struct {
 }
 
 func NewOlmAccount() *OlmAccount {
+	account, err := olm.NewAccount(nil)
+	if err != nil {
+		panic(err)
+	}
 	return &OlmAccount{
-		Internal: *olm.NewAccount(),
+		Internal: account,
 	}
 }
 
 func (account *OlmAccount) Keys() (id.SigningKey, id.IdentityKey) {
 	if len(account.signingKey) == 0 || len(account.identityKey) == 0 {
-		account.signingKey, account.identityKey = account.Internal.IdentityKeys()
+		var err error
+		account.signingKey, account.identityKey, err = account.Internal.IdentityKeys()
+		if err != nil {
+			panic(err)
+		}
 	}
 	return account.signingKey, account.identityKey
 }
 
 func (account *OlmAccount) SigningKey() id.SigningKey {
 	if len(account.signingKey) == 0 {
-		account.signingKey, account.identityKey = account.Internal.IdentityKeys()
+		var err error
+		account.signingKey, account.identityKey, err = account.Internal.IdentityKeys()
+		if err != nil {
+			panic(err)
+		}
 	}
 	return account.signingKey
 }
 
 func (account *OlmAccount) IdentityKey() id.IdentityKey {
 	if len(account.identityKey) == 0 {
-		account.signingKey, account.identityKey = account.Internal.IdentityKeys()
+		var err error
+		account.signingKey, account.identityKey, err = account.Internal.IdentityKeys()
+		if err != nil {
+			panic(err)
+		}
 	}
 	return account.identityKey
+}
+
+// SignJSON signs the given JSON object following the Matrix specification:
+// https://matrix.org/docs/spec/appendices#signing-json
+func (account *OlmAccount) SignJSON(obj any) (string, error) {
+	objJSON, err := json.Marshal(obj)
+	if err != nil {
+		return "", err
+	}
+	objJSON, _ = sjson.DeleteBytes(objJSON, "unsigned")
+	objJSON, _ = sjson.DeleteBytes(objJSON, "signatures")
+	signed, err := account.Internal.Sign(canonicaljson.CanonicalJSONAssumeValid(objJSON))
+	return string(signed), err
 }
 
 func (account *OlmAccount) getInitialKeys(userID id.UserID, deviceID id.DeviceID) *mautrix.DeviceKeys {
@@ -59,7 +93,7 @@ func (account *OlmAccount) getInitialKeys(userID id.UserID, deviceID id.DeviceID
 		},
 	}
 
-	signature, err := account.Internal.SignJSON(deviceKeys)
+	signature, err := account.SignJSON(deviceKeys)
 	if err != nil {
 		panic(err)
 	}
@@ -71,12 +105,16 @@ func (account *OlmAccount) getInitialKeys(userID id.UserID, deviceID id.DeviceID
 func (account *OlmAccount) getOneTimeKeys(userID id.UserID, deviceID id.DeviceID, currentOTKCount int) map[id.KeyID]mautrix.OneTimeKey {
 	newCount := int(account.Internal.MaxNumberOfOneTimeKeys()/2) - currentOTKCount
 	if newCount > 0 {
-		account.Internal.GenOneTimeKeys(uint(newCount))
+		account.Internal.GenOneTimeKeys(nil, uint(newCount))
 	}
 	oneTimeKeys := make(map[id.KeyID]mautrix.OneTimeKey)
-	for keyID, key := range account.Internal.OneTimeKeys() {
+	internalKeys, err := account.Internal.OneTimeKeys()
+	if err != nil {
+		panic(err)
+	}
+	for keyID, key := range internalKeys {
 		key := mautrix.OneTimeKey{Key: key}
-		signature, _ := account.Internal.SignJSON(key)
+		signature, _ := account.SignJSON(key)
 		key.Signatures = signatures.NewSingleSignature(userID, id.KeyAlgorithmEd25519, deviceID.String(), signature)
 		key.IsSigned = true
 		oneTimeKeys[id.NewKeyID(id.KeyAlgorithmSignedCurve25519, keyID)] = key

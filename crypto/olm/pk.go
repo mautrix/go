@@ -7,7 +7,6 @@
 package olm
 
 import (
-	"maunium.net/go/mautrix/crypto/goolm/pk"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -27,15 +26,32 @@ type PKSigning interface {
 	SignJSON(obj any) (string, error)
 }
 
-var _ PKSigning = (*pk.Signing)(nil)
-
 // PKDecryption is an interface for decrypting messages.
 type PKDecryption interface {
 	// PublicKey returns the public key.
 	PublicKey() id.Curve25519
 
 	// Decrypt verifies and decrypts the given message.
-	Decrypt(ciphertext, mac []byte, key id.Curve25519) ([]byte, error)
+	Decrypt(ephemeralKey, mac, ciphertext []byte) ([]byte, error)
 }
 
-var _ PKDecryption = (*pk.Decryption)(nil)
+var InitNewPKSigning func() (PKSigning, error)
+var InitNewPKSigningFromSeed func(seed []byte) (PKSigning, error)
+var InitNewPKDecryptionFromPrivateKey func(privateKey []byte) (PKDecryption, error)
+
+// NewPKSigning creates a new [PKSigning] object, containing a key pair for
+// signing messages.
+func NewPKSigning() (PKSigning, error) {
+	return InitNewPKSigning()
+}
+
+// NewPKSigningFromSeed creates a new PKSigning object using the given seed.
+func NewPKSigningFromSeed(seed []byte) (PKSigning, error) {
+	return InitNewPKSigningFromSeed(seed)
+}
+
+// NewPKDecryptionFromPrivateKey creates a new [PKDecryption] from a
+// base64-encoded private key.
+func NewPKDecryptionFromPrivateKey(privateKey []byte) (PKDecryption, error) {
+	return InitNewPKDecryptionFromPrivateKey(privateKey)
+}
