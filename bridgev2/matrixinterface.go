@@ -29,16 +29,14 @@ type MatrixConnector interface {
 	GetCapabilities() *MatrixCapabilities
 
 	ParseGhostMXID(userID id.UserID) (networkid.UserID, bool)
-	FormatGhostMXID(userID networkid.UserID) id.UserID
-
-	GenerateContentURI(ctx context.Context, mediaID networkid.MediaID) (id.ContentURIString, error)
-
-	GhostIntent(userID id.UserID) MatrixAPI
+	GhostIntent(userID networkid.UserID) MatrixAPI
 	NewUserIntent(ctx context.Context, userID id.UserID, accessToken string) (MatrixAPI, string, error)
 	BotIntent() MatrixAPI
 
 	SendBridgeStatus(ctx context.Context, state *status.BridgeState) error
 	SendMessageStatus(ctx context.Context, status *MessageStatus, evt *MessageStatusEventInfo)
+
+	GenerateContentURI(ctx context.Context, mediaID networkid.MediaID) (id.ContentURIString, error)
 
 	GetMembers(ctx context.Context, roomID id.RoomID) (map[id.UserID]*event.MemberEventContent, error)
 	GetMemberInfo(ctx context.Context, roomID id.RoomID, userID id.UserID) (*event.MemberEventContent, error)

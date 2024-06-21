@@ -406,7 +406,7 @@ func (prov *ProvisioningAPI) doResolveIdentifier(w http.ResponseWriter, r *http.
 		apiResp.Name = resp.Ghost.Name
 		apiResp.AvatarURL = resp.Ghost.AvatarMXC
 		apiResp.Identifiers = resp.Ghost.Metadata.Identifiers
-		apiResp.MXID = resp.Ghost.MXID
+		apiResp.MXID = resp.Ghost.Intent.GetMXID()
 	} else if resp.UserInfo != nil && resp.UserInfo.Name != nil {
 		apiResp.Name = *resp.UserInfo.Name
 	}
@@ -490,7 +490,7 @@ func (prov *ProvisioningAPI) GetContactList(w http.ResponseWriter, r *http.Reque
 				apiContact.Identifiers = contact.Ghost.Metadata.Identifiers
 			}
 			apiContact.AvatarURL = contact.Ghost.AvatarMXC
-			apiContact.MXID = contact.Ghost.MXID
+			apiContact.MXID = contact.Ghost.Intent.GetMXID()
 		}
 		if contact.Chat != nil {
 			if contact.Chat.Portal == nil {

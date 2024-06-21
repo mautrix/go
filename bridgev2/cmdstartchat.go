@@ -75,7 +75,7 @@ func fnResolveIdentifier(ce *CommandEvent) {
 			resp.Ghost.UpdateInfo(ce.Ctx, resp.UserInfo)
 		}
 		targetName = resp.Ghost.Name
-		targetMXID = resp.Ghost.MXID
+		targetMXID = resp.Ghost.Intent.GetMXID()
 	} else if resp.UserInfo != nil && resp.UserInfo.Name != nil {
 		targetName = *resp.UserInfo.Name
 	}

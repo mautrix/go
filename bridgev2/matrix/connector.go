@@ -322,9 +322,9 @@ func (br *Connector) UpdateBotProfile(ctx context.Context) {
 	}
 }
 
-func (br *Connector) GhostIntent(userID id.UserID) bridgev2.MatrixAPI {
+func (br *Connector) GhostIntent(userID networkid.UserID) bridgev2.MatrixAPI {
 	return &ASIntent{
-		Matrix:    br.AS.Intent(userID),
+		Matrix:    br.AS.Intent(br.FormatGhostMXID(userID)),
 		Connector: br,
 	}
 }

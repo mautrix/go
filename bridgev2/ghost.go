@@ -27,7 +27,6 @@ type Ghost struct {
 	Bridge *Bridge
 	Log    zerolog.Logger
 	Intent MatrixAPI
-	MXID   id.UserID
 }
 
 func (br *Bridge) loadGhost(ctx context.Context, dbGhost *database.Ghost, queryErr error, id *networkid.UserID) (*Ghost, error) {
@@ -47,13 +46,11 @@ func (br *Bridge) loadGhost(ctx context.Context, dbGhost *database.Ghost, queryE
 			return nil, fmt.Errorf("failed to insert new ghost: %w", err)
 		}
 	}
-	mxid := br.Matrix.FormatGhostMXID(dbGhost.ID)
 	ghost := &Ghost{
 		Ghost:  dbGhost,
 		Bridge: br,
 		Log:    br.Log.With().Str("ghost_id", string(dbGhost.ID)).Logger(),
-		Intent: br.Matrix.GhostIntent(mxid),
-		MXID:   mxid,
+		Intent: br.Matrix.GhostIntent(dbGhost.ID),
 	}
 	br.ghostsByID[ghost.ID] = ghost
 	return ghost, nil
