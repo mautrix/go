@@ -141,17 +141,47 @@ func (ul *UserLogin) Save(ctx context.Context) error {
 }
 
 func (ul *UserLogin) Logout(ctx context.Context) {
-	ul.Client.LogoutRemote(ctx)
-	err := ul.Bridge.DB.UserLogin.Delete(ctx, ul.ID)
+	ul.Delete(ctx, status.BridgeState{StateEvent: status.StateLoggedOut}, true)
+}
+
+func (ul *UserLogin) Delete(ctx context.Context, state status.BridgeState, logoutRemote bool) {
+	if logoutRemote {
+		ul.Client.LogoutRemote(ctx)
+	} else {
+		ul.Disconnect(nil)
+	}
+	portals, err := ul.Bridge.DB.UserPortal.GetAllForLogin(ctx, ul.UserLogin)
+	if err != nil {
+		ul.Log.Err(err).Msg("Failed to get user portals")
+	}
+	err = ul.Bridge.DB.UserLogin.Delete(ctx, ul.ID)
 	if err != nil {
 		ul.Log.Err(err).Msg("Failed to delete user login")
 	}
 	ul.Bridge.cacheLock.Lock()
-	defer ul.Bridge.cacheLock.Unlock()
 	delete(ul.User.logins, ul.ID)
 	delete(ul.Bridge.userLoginsByID, ul.ID)
-	// TODO kick user out of rooms?
-	ul.BridgeState.Send(status.BridgeState{StateEvent: status.StateLoggedOut})
+	ul.Bridge.cacheLock.Unlock()
+	go ul.deleteSpace(ctx)
+	go ul.kickUserFromPortals(ctx, portals)
+	if state.StateEvent != "" {
+		ul.BridgeState.Send(state)
+	}
+	ul.BridgeState.Destroy()
+}
+
+func (ul *UserLogin) deleteSpace(ctx context.Context) {
+	if ul.SpaceRoom == "" {
+		return
+	}
+	err := ul.Bridge.Bot.DeleteRoom(ctx, ul.SpaceRoom, false)
+	if err != nil {
+		ul.Log.Err(err).Msg("Failed to delete space room")
+	}
+}
+
+func (ul *UserLogin) kickUserFromPortals(ctx context.Context, portals []*database.UserPortal) {
+	// TODO kick user out of rooms
 }
 
 func (ul *UserLogin) MarkAsPreferredIn(ctx context.Context, portal *Portal) error {
@@ -173,12 +203,15 @@ func (ul *UserLogin) GetRemoteName() string {
 }
 
 func (ul *UserLogin) Disconnect(done func()) {
-	defer done()
-	if ul.Client != nil {
+	if done != nil {
+		defer done()
+	}
+	client := ul.Client
+	if client != nil {
+		ul.Client = nil
 		disconnected := make(chan struct{})
 		go func() {
-			ul.Client.Disconnect()
-			ul.Client = nil
+			client.Disconnect()
 			close(disconnected)
 		}()
 		select {

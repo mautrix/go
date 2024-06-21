@@ -49,6 +49,10 @@ func (br *Bridge) NewBridgeStateQueue(user status.BridgeStateFiller) *BridgeStat
 	return bsq
 }
 
+func (bsq *BridgeStateQueue) Destroy() {
+	close(bsq.ch)
+}
+
 func (bsq *BridgeStateQueue) loop() {
 	defer func() {
 		err := recover()

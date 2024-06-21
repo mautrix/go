@@ -48,6 +48,9 @@ const (
 		WHERE bridge_id=$1 AND user_mxid=$2 AND portal_id=$3 AND portal_receiver=$4
 		ORDER BY CASE WHEN preferred THEN 0 ELSE 1 END, login_id
 	`
+	getAllPortalsForLoginQuery = getUserPortalBaseQuery + `
+		WHERE bridge_id=$1 AND user_mxid=$2 AND login_id=$3
+	`
 	insertUserPortalQuery = `
 		INSERT INTO user_portal (bridge_id, user_mxid, login_id, portal_id, portal_receiver, in_space, preferred)
 		VALUES ($1, $2, $3, $4, $5, false, false)
@@ -77,6 +80,10 @@ func UserPortalFor(ul *UserLogin, portal networkid.PortalKey) *UserPortal {
 
 func (upq *UserPortalQuery) GetAllByUser(ctx context.Context, userID id.UserID, portal networkid.PortalKey) ([]*UserPortal, error) {
 	return upq.QueryMany(ctx, findUserLoginsByPortalIDQuery, upq.BridgeID, userID, portal.ID, portal.Receiver)
+}
+
+func (upq *UserPortalQuery) GetAllForLogin(ctx context.Context, login *UserLogin) ([]*UserPortal, error) {
+	return upq.QueryMany(ctx, getUserPortalQuery, upq.BridgeID, login.UserMXID, login.ID)
 }
 
 func (upq *UserPortalQuery) Get(ctx context.Context, login *UserLogin, portal networkid.PortalKey) (*UserPortal, error) {
