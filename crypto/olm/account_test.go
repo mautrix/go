@@ -28,6 +28,8 @@ func TestAccount_UnpickleLibolmToGoolm(t *testing.T) {
 	libolmEd25519, libolmCurve25519, err := libolmAccount.IdentityKeys()
 	require.NoError(t, err)
 
+	require.NoError(t, libolmAccount.GenOneTimeKeys(nil, 50))
+
 	libolmPickled, err := libolmAccount.Pickle([]byte("test"))
 	require.NoError(t, err)
 
@@ -38,6 +40,18 @@ func TestAccount_UnpickleLibolmToGoolm(t *testing.T) {
 
 	assert.Equal(t, libolmEd25519, goolmEd25519)
 	assert.Equal(t, libolmCurve25519, goolmCurve25519)
+
+	libolmIdentityKeysJSON, err := libolmAccount.IdentityKeysJSON()
+	require.NoError(t, err)
+	goolmIdentityKeysJSON, err := goolmAccount.IdentityKeysJSON()
+	require.NoError(t, err)
+	assert.JSONEq(t, string(libolmIdentityKeysJSON), string(goolmIdentityKeysJSON))
+
+	libolmOTKs, err := libolmAccount.OneTimeKeys()
+	require.NoError(t, err)
+	goolmOTKs, err := goolmAccount.OneTimeKeys()
+	require.NoError(t, err)
+	assert.Equal(t, libolmOTKs, goolmOTKs)
 
 	goolmPickled, err := goolmAccount.Pickle([]byte("test"))
 	require.NoError(t, err)
@@ -52,6 +66,8 @@ func TestAccount_UnpickleGoolmToLibolm(t *testing.T) {
 	goolmEd25519, goolmCurve25519, err := goolmAccount.IdentityKeys()
 	require.NoError(t, err)
 
+	require.NoError(t, goolmAccount.GenOneTimeKeys(nil, 50))
+
 	goolmPickled, err := goolmAccount.Pickle([]byte("test"))
 	require.NoError(t, err)
 
@@ -62,6 +78,18 @@ func TestAccount_UnpickleGoolmToLibolm(t *testing.T) {
 
 	assert.Equal(t, libolmEd25519, goolmEd25519)
 	assert.Equal(t, libolmCurve25519, goolmCurve25519)
+
+	libolmIdentityKeysJSON, err := libolmAccount.IdentityKeysJSON()
+	require.NoError(t, err)
+	goolmIdentityKeysJSON, err := goolmAccount.IdentityKeysJSON()
+	require.NoError(t, err)
+	assert.JSONEq(t, string(libolmIdentityKeysJSON), string(goolmIdentityKeysJSON))
+
+	libolmOTKs, err := libolmAccount.OneTimeKeys()
+	require.NoError(t, err)
+	goolmOTKs, err := goolmAccount.OneTimeKeys()
+	require.NoError(t, err)
+	assert.Equal(t, libolmOTKs, goolmOTKs)
 
 	libolmPickled, err := libolmAccount.Pickle([]byte("test"))
 	require.NoError(t, err)
