@@ -138,27 +138,6 @@ func (a *Account) OneTimeKeys() (map[string]id.Curve25519, error) {
 	return oneTimeKeys, nil
 }
 
-//OneTimeKeysJSON returns the public parts of the unpublished one time keys of the Account as a JSON string.
-//
-//The returned JSON is of format:
-/*
-	{
-	    Curve25519: {
-	        "AAAAAA": "wo76WcYtb0Vk/pBOdmduiGJ0wIEjW4IBMbbQn7aSnTo",
-	        "AAAAAB": "LRvjo46L1X2vx69sS9QNFD29HWulxrmW11Up5AfAjgU"
-	    }
-	}
-*/
-func (a *Account) OneTimeKeysJSON() ([]byte, error) {
-	res := make(map[string]map[string]id.Curve25519)
-	otKeys, err := a.OneTimeKeys()
-	if err != nil {
-		return nil, err
-	}
-	res["Curve25519"] = otKeys
-	return json.Marshal(res)
-}
-
 // MarkKeysAsPublished marks the current set of one time keys and the fallback key as being
 // published.
 func (a *Account) MarkKeysAsPublished() {
