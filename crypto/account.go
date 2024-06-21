@@ -7,7 +7,12 @@
 package crypto
 
 import (
+	"encoding/json"
+
+	"github.com/tidwall/sjson"
+
 	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/crypto/canonicaljson"
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/crypto/signatures"
 	"maunium.net/go/mautrix/id"
@@ -64,6 +69,19 @@ func (account *OlmAccount) IdentityKey() id.IdentityKey {
 	return account.identityKey
 }
 
+// SignJSON signs the given JSON object following the Matrix specification:
+// https://matrix.org/docs/spec/appendices#signing-json
+func (account *OlmAccount) SignJSON(obj any) (string, error) {
+	objJSON, err := json.Marshal(obj)
+	if err != nil {
+		return "", err
+	}
+	objJSON, _ = sjson.DeleteBytes(objJSON, "unsigned")
+	objJSON, _ = sjson.DeleteBytes(objJSON, "signatures")
+	signed, err := account.Internal.Sign(canonicaljson.CanonicalJSONAssumeValid(objJSON))
+	return string(signed), err
+}
+
 func (account *OlmAccount) getInitialKeys(userID id.UserID, deviceID id.DeviceID) *mautrix.DeviceKeys {
 	deviceKeys := &mautrix.DeviceKeys{
 		UserID:     userID,
@@ -75,7 +93,7 @@ func (account *OlmAccount) getInitialKeys(userID id.UserID, deviceID id.DeviceID
 		},
 	}
 
-	signature, err := account.Internal.SignJSON(deviceKeys)
+	signature, err := account.SignJSON(deviceKeys)
 	if err != nil {
 		panic(err)
 	}
@@ -96,7 +114,7 @@ func (account *OlmAccount) getOneTimeKeys(userID id.UserID, deviceID id.DeviceID
 	}
 	for keyID, key := range internalKeys {
 		key := mautrix.OneTimeKey{Key: key}
-		signature, _ := account.Internal.SignJSON(key)
+		signature, _ := account.SignJSON(key)
 		key.Signatures = signatures.NewSingleSignature(userID, id.KeyAlgorithmEd25519, deviceID.String(), signature)
 		key.IsSigned = true
 		oneTimeKeys[id.NewKeyID(id.KeyAlgorithmSignedCurve25519, keyID)] = key

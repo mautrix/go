@@ -12,9 +12,7 @@ import (
 	"unsafe"
 
 	"github.com/tidwall/gjson"
-	"github.com/tidwall/sjson"
 
-	"maunium.net/go/mautrix/crypto/canonicaljson"
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
 )
@@ -264,19 +262,6 @@ func (a *Account) Sign(message []byte) ([]byte, error) {
 		panic(a.lastError())
 	}
 	return signature, nil
-}
-
-// SignJSON signs the given JSON object following the Matrix specification:
-// https://matrix.org/docs/spec/appendices#signing-json
-func (a *Account) SignJSON(obj interface{}) (string, error) {
-	objJSON, err := json.Marshal(obj)
-	if err != nil {
-		return "", err
-	}
-	objJSON, _ = sjson.DeleteBytes(objJSON, "unsigned")
-	objJSON, _ = sjson.DeleteBytes(objJSON, "signatures")
-	signed, err := a.Sign(canonicaljson.CanonicalJSONAssumeValid(objJSON))
-	return string(signed), err
 }
 
 // OneTimeKeys returns the public parts of the unpublished one time keys for

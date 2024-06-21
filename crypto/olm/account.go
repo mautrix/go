@@ -32,10 +32,6 @@ type Account interface {
 	// Account.
 	Sign(message []byte) ([]byte, error)
 
-	// SignJSON signs the given JSON object following the Matrix specification:
-	// https://matrix.org/docs/spec/appendices#signing-json
-	SignJSON(obj any) (string, error)
-
 	// OneTimeKeys returns the public parts of the unpublished one time keys for
 	// the Account.
 	//
