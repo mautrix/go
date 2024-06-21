@@ -24,6 +24,7 @@ type MessageQuery struct {
 
 type StandardMessageMetadata struct {
 	SenderMXID id.UserID `json:"sender_mxid,omitempty"`
+	EditCount  int       `json:"edit_count,omitempty"`
 }
 
 type MessageMetadata struct {

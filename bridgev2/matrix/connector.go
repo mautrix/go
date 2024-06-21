@@ -63,6 +63,7 @@ type Connector struct {
 
 	MediaConfig             mautrix.RespMediaConfig
 	SpecVersions            *mautrix.RespVersions
+	Capabilities            *bridgev2.MatrixCapabilities
 	IgnoreUnsupportedServer bool
 
 	EventProcessor *appservice.EventProcessor
@@ -85,6 +86,7 @@ func NewConnector(cfg *bridgeconfig.Config) *Connector {
 	c.Config = cfg
 	c.userIDRegex = cfg.MakeUserIDRegex("(.+)")
 	c.MediaConfig.UploadSize = 50 * 1024 * 1024
+	c.Capabilities = &bridgev2.MatrixCapabilities{}
 	return c
 }
 
@@ -148,6 +150,10 @@ func (br *Connector) Start(ctx context.Context) error {
 	return nil
 }
 
+func (br *Connector) GetCapabilities() *bridgev2.MatrixCapabilities {
+	return br.Capabilities
+}
+
 func (br *Connector) Stop() {
 	br.AS.Stop()
 	br.EventProcessor.Stop()
@@ -167,6 +173,7 @@ func (br *Connector) ensureConnection(ctx context.Context) {
 		} else {
 			br.SpecVersions = versions
 			*br.AS.SpecVersions = *versions
+			br.Capabilities.AutoJoinInvites = br.SpecVersions.Supports(mautrix.BeeperFeatureAutojoinInvites)
 			break
 		}
 	}

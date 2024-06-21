@@ -159,6 +159,39 @@ type MatrixMessageResponse struct {
 	DB *database.Message
 }
 
+type FileRestriction struct {
+	MaxSize   int64
+	MimeTypes []string
+}
+
+type NetworkRoomCapabilities struct {
+	FormattedText bool
+	UserMentions  bool
+	RoomMentions  bool
+
+	LocationMessages bool
+	Captions         bool
+	MaxTextLength    int
+	MaxCaptionLength int
+
+	Threads      bool
+	Replies      bool
+	Edits        bool
+	EditMaxCount int
+	EditMaxAge   time.Duration
+	Deletes      bool
+	DeleteMaxAge time.Duration
+
+	DefaultFileRestriction *FileRestriction
+	Files                  map[event.MessageType]FileRestriction
+
+	ReadReceipts bool
+
+	Reactions        bool
+	ReactionCount    int
+	AllowedReactions []string
+}
+
 // NetworkAPI is an interface representing a remote network client for a single user login.
 type NetworkAPI interface {
 	Connect(ctx context.Context) error
@@ -169,14 +202,35 @@ type NetworkAPI interface {
 	IsThisUser(ctx context.Context, userID networkid.UserID) bool
 	GetChatInfo(ctx context.Context, portal *Portal) (*PortalInfo, error)
 	GetUserInfo(ctx context.Context, ghost *Ghost) (*UserInfo, error)
+	GetCapabilities(ctx context.Context, portal *Portal) *NetworkRoomCapabilities
 
 	HandleMatrixMessage(ctx context.Context, msg *MatrixMessage) (message *MatrixMessageResponse, err error)
+}
+
+type EditHandlingNetworkAPI interface {
+	NetworkAPI
 	HandleMatrixEdit(ctx context.Context, msg *MatrixEdit) error
+}
+
+type ReactionHandlingNetworkAPI interface {
+	NetworkAPI
 	PreHandleMatrixReaction(ctx context.Context, msg *MatrixReaction) (MatrixReactionPreResponse, error)
 	HandleMatrixReaction(ctx context.Context, msg *MatrixReaction) (reaction *database.Reaction, err error)
 	HandleMatrixReactionRemove(ctx context.Context, msg *MatrixReactionRemove) error
+}
+
+type RedactionHandlingNetworkAPI interface {
+	NetworkAPI
 	HandleMatrixMessageRemove(ctx context.Context, msg *MatrixMessageRemove) error
+}
+
+type ReadReceiptHandlingNetworkAPI interface {
+	NetworkAPI
 	HandleMatrixReadReceipt(ctx context.Context, msg *MatrixReadReceipt) error
+}
+
+type TypingHandlingNetworkAPI interface {
+	NetworkAPI
 	HandleMatrixTyping(ctx context.Context, msg *MatrixTyping) error
 }
 

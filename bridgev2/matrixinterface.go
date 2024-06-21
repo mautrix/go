@@ -17,10 +17,16 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
+type MatrixCapabilities struct {
+	AutoJoinInvites bool
+}
+
 type MatrixConnector interface {
 	Init(*Bridge)
 	Start(ctx context.Context) error
 	Stop()
+
+	GetCapabilities() *MatrixCapabilities
 
 	ParseGhostMXID(userID id.UserID) (networkid.UserID, bool)
 	FormatGhostMXID(userID networkid.UserID) id.UserID

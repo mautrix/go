@@ -325,6 +325,10 @@ func (portal *Portal) handleMatrixReadReceipt(user *User, eventID id.EventID, re
 		log.Err(err).Msg("Failed to get preferred login for user")
 		return
 	}
+	rrClient, ok := login.Client.(ReadReceiptHandlingNetworkAPI)
+	if !ok {
+		return
+	}
 	evt := &MatrixReadReceipt{
 		Portal:  portal,
 		EventID: eventID,
@@ -343,7 +347,7 @@ func (portal *Portal) handleMatrixReadReceipt(user *User, eventID id.EventID, re
 	} else {
 		evt.ReadUpTo = receipt.Timestamp
 	}
-	err = login.Client.HandleMatrixReadReceipt(ctx, evt)
+	err = rrClient.HandleMatrixReadReceipt(ctx, evt)
 	if err != nil {
 		log.Err(err).Msg("Failed to handle read receipt")
 		return
@@ -397,13 +401,19 @@ func (portal *Portal) sendTypings(ctx context.Context, userIDs []id.UserID, typi
 				continue
 			} else if login == nil {
 				continue
+			} else if _, ok = login.Client.(TypingHandlingNetworkAPI); !ok {
+				continue
 			}
 			portal.currentlyTypingLogins[userID] = login
 		}
 		if !typing {
 			delete(portal.currentlyTypingLogins, userID)
 		}
-		err := login.Client.HandleMatrixTyping(ctx, &MatrixTyping{
+		typingAPI, ok := login.Client.(TypingHandlingNetworkAPI)
+		if !ok {
+			continue
+		}
+		err := typingAPI.HandleMatrixTyping(ctx, &MatrixTyping{
 			Portal:   portal,
 			IsTyping: typing,
 			Type:     TypingTypeText,
@@ -436,7 +446,11 @@ func (portal *Portal) periodicTypingUpdater() {
 			if !ok {
 				continue
 			}
-			err := login.Client.HandleMatrixTyping(ctx, &MatrixTyping{
+			typingAPI, ok := login.Client.(TypingHandlingNetworkAPI)
+			if !ok {
+				continue
+			}
+			err := typingAPI.HandleMatrixTyping(ctx, &MatrixTyping{
 				Portal:   portal,
 				IsTyping: true,
 				Type:     TypingTypeText,
@@ -454,6 +468,27 @@ func (portal *Portal) periodicTypingUpdater() {
 	}
 }
 
+func (portal *Portal) checkMessageContentCaps(ctx context.Context, caps *NetworkRoomCapabilities, content *event.MessageEventContent, evt *event.Event) bool {
+	switch content.MsgType {
+	case event.MsgText, event.MsgNotice, event.MsgEmote:
+		// No checks for now, message length is safer to check after conversion inside connector
+	case event.MsgLocation:
+		if !caps.LocationMessages {
+			portal.sendErrorStatus(ctx, evt, ErrLocationMessagesNotAllowed)
+			return false
+		}
+	case event.MsgImage, event.MsgAudio, event.MsgVideo, event.MsgFile:
+		if content.FileName != "" && content.Body != content.FileName {
+			if !caps.Captions {
+				portal.sendErrorStatus(ctx, evt, ErrCaptionsNotAllowed)
+				return false
+			}
+		}
+	default:
+	}
+	return true
+}
+
 func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) {
 	log := zerolog.Ctx(ctx)
 	content, ok := evt.Content.Parsed.(*event.MessageEventContent)
@@ -462,17 +497,19 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 		portal.sendErrorStatus(ctx, evt, fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed))
 		return
 	}
+	caps := sender.Client.GetCapabilities(ctx, portal)
+
 	if content.RelatesTo.GetReplaceID() != "" {
-		portal.handleMatrixEdit(ctx, sender, origSender, evt, content)
+		portal.handleMatrixEdit(ctx, sender, origSender, evt, content, caps)
+		return
+	}
+	if !portal.checkMessageContentCaps(ctx, caps, content, evt) {
 		return
 	}
 
-	// TODO get capabilities from network connector
-	threadsSupported := true
-	repliesSupported := true
 	var threadRoot, replyTo *database.Message
 	var err error
-	if threadsSupported {
+	if caps.Threads {
 		threadRootID := content.RelatesTo.GetThreadParent()
 		if threadRootID != "" {
 			threadRoot, err = portal.Bridge.DB.Message.GetPartByMXID(ctx, threadRootID)
@@ -481,9 +518,9 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 			}
 		}
 	}
-	if repliesSupported {
+	if caps.Replies {
 		var replyToID id.EventID
-		if threadsSupported {
+		if caps.Threads {
 			replyToID = content.RelatesTo.GetNonFallbackReplyTo()
 		} else {
 			replyToID = content.RelatesTo.GetReplyTo()
@@ -543,14 +580,27 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 	portal.sendSuccessStatus(ctx, evt)
 }
 
-func (portal *Portal) handleMatrixEdit(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event, content *event.MessageEventContent) {
-	editTargetID := content.RelatesTo.GetReplaceID()
+func (portal *Portal) handleMatrixEdit(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event, content *event.MessageEventContent, caps *NetworkRoomCapabilities) {
 	log := zerolog.Ctx(ctx)
+	editTargetID := content.RelatesTo.GetReplaceID()
 	log.UpdateContext(func(c zerolog.Context) zerolog.Context {
 		return c.Stringer("edit_target_mxid", editTargetID)
 	})
 	if content.NewContent != nil {
 		content = content.NewContent
+	}
+
+	editingAPI, ok := sender.Client.(EditHandlingNetworkAPI)
+	if !ok {
+		log.Debug().Msg("Ignoring edit as network connector doesn't implement EditHandlingNetworkAPI")
+		portal.sendErrorStatus(ctx, evt, ErrEditsNotSupported)
+		return
+	} else if !caps.Edits {
+		log.Debug().Msg("Ignoring edit as room doesn't support edits")
+		portal.sendErrorStatus(ctx, evt, ErrEditsNotSupportedInPortal)
+		return
+	} else if !portal.checkMessageContentCaps(ctx, caps, content, evt) {
+		return
 	}
 	editTarget, err := portal.Bridge.DB.Message.GetPartByMXID(ctx, editTargetID)
 	if err != nil {
@@ -561,11 +611,17 @@ func (portal *Portal) handleMatrixEdit(ctx context.Context, sender *UserLogin, o
 		log.Warn().Msg("Edit target message not found in database")
 		portal.sendErrorStatus(ctx, evt, fmt.Errorf("edit %w", ErrTargetMessageNotFound))
 		return
+	} else if caps.EditMaxAge > 0 && time.Since(editTarget.Timestamp) > caps.EditMaxAge {
+		portal.sendErrorStatus(ctx, evt, ErrEditTargetTooOld)
+		return
+	} else if caps.EditMaxCount > 0 && editTarget.Metadata.EditCount >= caps.EditMaxCount {
+		portal.sendErrorStatus(ctx, evt, ErrEditTargetTooManyEdits)
+		return
 	}
 	log.UpdateContext(func(c zerolog.Context) zerolog.Context {
 		return c.Str("edit_target_remote_id", string(editTarget.ID))
 	})
-	err = sender.Client.HandleMatrixEdit(ctx, &MatrixEdit{
+	err = editingAPI.HandleMatrixEdit(ctx, &MatrixEdit{
 		MatrixEventBase: MatrixEventBase[*event.MessageEventContent]{
 			Event:      evt,
 			Content:    content,
@@ -588,6 +644,12 @@ func (portal *Portal) handleMatrixEdit(ctx context.Context, sender *UserLogin, o
 
 func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogin, evt *event.Event) {
 	log := zerolog.Ctx(ctx)
+	reactingAPI, ok := sender.Client.(ReactionHandlingNetworkAPI)
+	if !ok {
+		log.Debug().Msg("Ignoring reaction as network connector doesn't implement ReactionHandlingNetworkAPI")
+		portal.sendErrorStatus(ctx, evt, ErrReactionsNotSupported)
+		return
+	}
 	content, ok := evt.Content.Parsed.(*event.ReactionEventContent)
 	if !ok {
 		log.Error().Type("content_type", evt.Content.Parsed).Msg("Unexpected parsed content type")
@@ -618,7 +680,7 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 		},
 		TargetMessage: reactionTarget,
 	}
-	preResp, err := sender.Client.PreHandleMatrixReaction(ctx, react)
+	preResp, err := reactingAPI.PreHandleMatrixReaction(ctx, react)
 	if err != nil {
 		log.Err(err).Msg("Failed to pre-handle Matrix reaction")
 		portal.sendErrorStatus(ctx, evt, err)
@@ -672,7 +734,7 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 			}
 		}
 	}
-	dbReaction, err := sender.Client.HandleMatrixReaction(ctx, react)
+	dbReaction, err := reactingAPI.HandleMatrixReaction(ctx, react)
 	if err != nil {
 		log.Err(err).Msg("Failed to handle Matrix reaction")
 		portal.sendErrorStatus(ctx, evt, err)
@@ -723,13 +785,25 @@ func (portal *Portal) handleMatrixRedaction(ctx context.Context, sender *UserLog
 	log.UpdateContext(func(c zerolog.Context) zerolog.Context {
 		return c.Stringer("redaction_target_mxid", content.Redacts)
 	})
+	deletingAPI, deleteOK := sender.Client.(RedactionHandlingNetworkAPI)
+	reactingAPI, reactOK := sender.Client.(ReactionHandlingNetworkAPI)
+	if !deleteOK && !reactOK {
+		log.Debug().Msg("Ignoring redaction without checking target as network connector doesn't implement RedactionHandlingNetworkAPI nor ReactionHandlingNetworkAPI")
+		portal.sendErrorStatus(ctx, evt, ErrRedactionsNotSupported)
+		return
+	}
 	redactionTargetMsg, err := portal.Bridge.DB.Message.GetPartByMXID(ctx, content.Redacts)
 	if err != nil {
 		log.Err(err).Msg("Failed to get redaction target message from database")
 		portal.sendErrorStatus(ctx, evt, fmt.Errorf("%w: failed to get redaction target message: %w", ErrDatabaseError, err))
 		return
 	} else if redactionTargetMsg != nil {
-		err = sender.Client.HandleMatrixMessageRemove(ctx, &MatrixMessageRemove{
+		if !deleteOK {
+			log.Debug().Msg("Ignoring message redaction event as network connector doesn't implement RedactionHandlingNetworkAPI")
+			portal.sendErrorStatus(ctx, evt, ErrRedactionsNotSupported)
+			return
+		}
+		err = deletingAPI.HandleMatrixMessageRemove(ctx, &MatrixMessageRemove{
 			MatrixEventBase: MatrixEventBase[*event.RedactionEventContent]{
 				Event:      evt,
 				Content:    content,
@@ -743,7 +817,12 @@ func (portal *Portal) handleMatrixRedaction(ctx context.Context, sender *UserLog
 		portal.sendErrorStatus(ctx, evt, fmt.Errorf("%w: failed to get redaction target message reaction: %w", ErrDatabaseError, err))
 		return
 	} else if redactionTargetReaction != nil {
-		err = sender.Client.HandleMatrixReactionRemove(ctx, &MatrixReactionRemove{
+		if !reactOK {
+			log.Debug().Msg("Ignoring reaction redaction event as network connector doesn't implement ReactionHandlingNetworkAPI")
+			portal.sendErrorStatus(ctx, evt, ErrReactionsNotSupported)
+			return
+		}
+		err = reactingAPI.HandleMatrixReactionRemove(ctx, &MatrixReactionRemove{
 			MatrixEventBase: MatrixEventBase[*event.RedactionEventContent]{
 				Event:      evt,
 				Content:    content,
@@ -1605,9 +1684,9 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 		BeeperInitialMembers: initialMembers,
 	}
 	// TODO find this properly from the matrix connector
-	isBeeper := true
+	autoJoinInvites := portal.Bridge.Matrix.GetCapabilities().AutoJoinInvites
 	// TODO remove this after initial_members is supported in hungryserv
-	if isBeeper {
+	if autoJoinInvites {
 		req.BeeperAutoJoinInvites = true
 		req.Invite = initialMembers
 	}
@@ -1682,7 +1761,7 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 		// TODO add m.space.child event
 	}
 	portal.updateUserLocalInfo(ctx, info.UserLocal, source)
-	if !isBeeper {
+	if !autoJoinInvites {
 		_, _, err = portal.SyncParticipants(ctx, info.Members, source)
 		if err != nil {
 			log.Err(err).Msg("Failed to sync participants after room creation")
