@@ -33,6 +33,8 @@ type matrixAuthCacheEntry struct {
 }
 
 type ProvisioningAPI struct {
+	Router *mux.Router
+
 	br  *Connector
 	log zerolog.Logger
 	net bridgev2.NetworkConnector
@@ -59,25 +61,42 @@ const (
 	provisioningLoginProcessKey
 )
 
+func (prov *ProvisioningAPI) GetUser(r *http.Request) *bridgev2.User {
+	return r.Context().Value(provisioningUserKey).(*bridgev2.User)
+}
+
+func (prov *ProvisioningAPI) GetRouter() *mux.Router {
+	return prov.Router
+}
+
+type IProvisioningAPI interface {
+	GetRouter() *mux.Router
+	GetUser(r *http.Request) *bridgev2.User
+}
+
+func (br *Connector) GetProvisioning() IProvisioningAPI {
+	return br.Provisioning
+}
+
 func (prov *ProvisioningAPI) Init() {
 	prov.matrixAuthCache = make(map[string]matrixAuthCacheEntry)
 	prov.logins = make(map[string]*ProvLogin)
 	prov.net = prov.br.Bridge.Network
 	prov.log = prov.br.Log.With().Str("component", "provisioning").Logger()
-	router := prov.br.AS.Router.PathPrefix(prov.br.Config.Provisioning.Prefix).Subrouter()
-	router.Use(hlog.NewHandler(prov.log))
-	router.Use(requestlog.AccessLogger(false))
-	router.Use(prov.AuthMiddleware)
-	router.Path("/v3/login/flows").Methods(http.MethodGet).HandlerFunc(prov.GetLoginFlows)
-	router.Path("/v3/login/start/{flowID}").Methods(http.MethodPost).HandlerFunc(prov.PostLoginStart)
-	router.Path("/v3/login/step/{loginProcessID}/{stepID}/{stepType:user_input|cookies}").Methods(http.MethodPost).HandlerFunc(prov.PostLoginSubmitInput)
-	router.Path("/v3/login/step/{loginProcessID}/{stepID}/{stepType:wait}").Methods(http.MethodPost).HandlerFunc(prov.PostLoginWait)
-	router.Path("/v3/logout/{loginID}").Methods(http.MethodPost).HandlerFunc(prov.PostLogout)
-	router.Path("/v3/logins").Methods(http.MethodGet).HandlerFunc(prov.GetLogins)
-	router.Path("/v3/contacts").Methods(http.MethodGet).HandlerFunc(prov.GetContactList)
-	router.Path("/v3/resolve_identifier/{identifier}").Methods(http.MethodGet).HandlerFunc(prov.GetResolveIdentifier)
-	router.Path("/v3/create_dm").Methods(http.MethodPost).HandlerFunc(prov.PostCreateDM)
-	router.Path("/v3/create_group").Methods(http.MethodPost).HandlerFunc(prov.PostCreateGroup)
+	prov.Router = prov.br.AS.Router.PathPrefix(prov.br.Config.Provisioning.Prefix).Subrouter()
+	prov.Router.Use(hlog.NewHandler(prov.log))
+	prov.Router.Use(requestlog.AccessLogger(false))
+	prov.Router.Use(prov.AuthMiddleware)
+	prov.Router.Path("/v3/login/flows").Methods(http.MethodGet).HandlerFunc(prov.GetLoginFlows)
+	prov.Router.Path("/v3/login/start/{flowID}").Methods(http.MethodPost).HandlerFunc(prov.PostLoginStart)
+	prov.Router.Path("/v3/login/step/{loginProcessID}/{stepID}/{stepType:user_input|cookies}").Methods(http.MethodPost).HandlerFunc(prov.PostLoginSubmitInput)
+	prov.Router.Path("/v3/login/step/{loginProcessID}/{stepID}/{stepType:wait}").Methods(http.MethodPost).HandlerFunc(prov.PostLoginWait)
+	prov.Router.Path("/v3/logout/{loginID}").Methods(http.MethodPost).HandlerFunc(prov.PostLogout)
+	prov.Router.Path("/v3/logins").Methods(http.MethodGet).HandlerFunc(prov.GetLogins)
+	prov.Router.Path("/v3/contacts").Methods(http.MethodGet).HandlerFunc(prov.GetContactList)
+	prov.Router.Path("/v3/resolve_identifier/{identifier}").Methods(http.MethodGet).HandlerFunc(prov.GetResolveIdentifier)
+	prov.Router.Path("/v3/create_dm").Methods(http.MethodPost).HandlerFunc(prov.PostCreateDM)
+	prov.Router.Path("/v3/create_group").Methods(http.MethodPost).HandlerFunc(prov.PostCreateGroup)
 
 	if prov.br.Config.Provisioning.DebugEndpoints {
 		prov.log.Debug().Msg("Enabling debug API at /debug")
@@ -207,7 +226,7 @@ func (prov *ProvisioningAPI) GetLoginFlows(w http.ResponseWriter, r *http.Reques
 func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Request) {
 	login, err := prov.net.CreateLogin(
 		r.Context(),
-		r.Context().Value(provisioningUserKey).(*bridgev2.User),
+		prov.GetUser(r),
 		mux.Vars(r)["flowID"],
 	)
 	if err != nil {
@@ -287,7 +306,7 @@ func (prov *ProvisioningAPI) PostLoginWait(w http.ResponseWriter, r *http.Reques
 }
 
 func (prov *ProvisioningAPI) PostLogout(w http.ResponseWriter, r *http.Request) {
-	user := r.Context().Value(provisioningUserKey).(*bridgev2.User)
+	user := prov.GetUser(r)
 	userLoginID := networkid.UserLoginID(mux.Vars(r)["loginID"])
 	if userLoginID == "all" {
 		for {
@@ -316,12 +335,12 @@ type RespGetLogins struct {
 }
 
 func (prov *ProvisioningAPI) GetLogins(w http.ResponseWriter, r *http.Request) {
-	user := r.Context().Value(provisioningUserKey).(*bridgev2.User)
+	user := prov.GetUser(r)
 	jsonResponse(w, http.StatusOK, &RespGetLogins{LoginIDs: user.GetUserLoginIDs()})
 }
 
 func (prov *ProvisioningAPI) getLoginForCall(w http.ResponseWriter, r *http.Request) *bridgev2.UserLogin {
-	user := r.Context().Value(provisioningUserKey).(*bridgev2.User)
+	user := prov.GetUser(r)
 	userLoginID := networkid.UserLoginID(r.URL.Query().Get("login_id"))
 	if userLoginID != "" {
 		userLogin := prov.br.Bridge.GetCachedUserLoginByID(userLoginID)

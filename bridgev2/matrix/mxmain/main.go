@@ -62,7 +62,8 @@ type BridgeMain struct {
 	Version string
 
 	// PostInit is a function that will be called after the bridge has been initialized but before it is started.
-	PostInit func()
+	PostInit  func()
+	PostStart func()
 
 	// Connector is the network connector for the bridge.
 	Connector bridgev2.NetworkConnector
@@ -342,6 +343,9 @@ func (br *BridgeMain) Start() {
 		} else {
 			br.Log.Fatal().Err(err).Msg("Failed to start bridge")
 		}
+	}
+	if br.PostStart != nil {
+		br.PostStart()
 	}
 }
 
