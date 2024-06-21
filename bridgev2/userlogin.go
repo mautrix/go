@@ -9,6 +9,7 @@ package bridgev2
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -27,6 +28,8 @@ type UserLogin struct {
 
 	Client      NetworkAPI
 	BridgeState *BridgeStateQueue
+
+	spaceCreateLock sync.Mutex
 }
 
 func (br *Bridge) loadUserLogin(ctx context.Context, user *User, dbUserLogin *database.UserLogin) (*UserLogin, error) {
