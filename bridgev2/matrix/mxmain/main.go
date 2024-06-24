@@ -260,7 +260,7 @@ func (br *BridgeMain) initDB() {
 			Msg("Using SQLite without _txlock=immediate is not recommended")
 	}
 	var err error
-	br.DB, err = dbutil.NewFromConfig(br.Name, dbConfig, dbutil.ZeroLogger(br.Log.With().Str("db_section", "main").Logger()))
+	br.DB, err = dbutil.NewFromConfig("megabridge/"+br.Name, dbConfig, dbutil.ZeroLogger(br.Log.With().Str("db_section", "main").Logger()))
 	if err != nil {
 		br.Log.WithLevel(zerolog.FatalLevel).Err(err).Msg("Failed to initialize database connection")
 		if sqlError := (&sqlite3.Error{}); errors.As(err, sqlError) && sqlError.Code == sqlite3.ErrCorrupt {
