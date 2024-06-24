@@ -103,6 +103,8 @@ type NetworkConnector interface {
 	// such as connecting to the network. Instead, connecting should happen when [NetworkAPI.Connect] is called later.
 	LoadUserLogin(ctx context.Context, login *UserLogin) error
 
+	GetCapabilities() *NetworkGeneralCapabilities
+
 	GetName() BridgeName
 	// GetConfig returns all the parts of the network connector's config file. Specifically:
 	// - example: a string containing an example config file
@@ -162,6 +164,10 @@ type MatrixMessageResponse struct {
 type FileRestriction struct {
 	MaxSize   int64
 	MimeTypes []string
+}
+
+type NetworkGeneralCapabilities struct {
+	DisappearingMessages bool
 }
 
 type NetworkRoomCapabilities struct {

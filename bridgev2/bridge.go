@@ -103,8 +103,9 @@ func (br *Bridge) Start() error {
 	if err != nil {
 		return fmt.Errorf("failed to start network connector: %w", err)
 	}
-	// TODO only start if the network supports disappearing messages?
-	go br.DisappearLoop.Start()
+	if br.Network.GetCapabilities().DisappearingMessages {
+		go br.DisappearLoop.Start()
+	}
 
 	logins, err := br.GetAllUserLogins(ctx)
 	if err != nil {
