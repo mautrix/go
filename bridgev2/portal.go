@@ -894,7 +894,7 @@ func (portal *Portal) handleRemoteEvent(source *UserLogin, evt RemoteEvent) {
 	}
 }
 
-func (portal *Portal) getIntentFor(ctx context.Context, sender EventSender, source *UserLogin) MatrixAPI {
+func (portal *Portal) getIntentFor(ctx context.Context, sender EventSender, source *UserLogin, evtType RemoteEventType) MatrixAPI {
 	var intent MatrixAPI
 	if sender.IsFromMe {
 		intent = source.User.DoublePuppet(ctx)
@@ -911,7 +911,7 @@ func (portal *Portal) getIntentFor(ctx context.Context, sender EventSender, sour
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to get ghost for message sender")
 			return nil
 		}
-		ghost.UpdateInfoIfNecessary(ctx, source)
+		ghost.UpdateInfoIfNecessary(ctx, source, evtType)
 		intent = ghost.Intent
 	}
 	return intent
@@ -926,7 +926,7 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 		log.Debug().Stringer("existing_mxid", existing.MXID).Msg("Ignoring duplicate message")
 		return
 	}
-	intent := portal.getIntentFor(ctx, evt.GetSender(), source)
+	intent := portal.getIntentFor(ctx, evt.GetSender(), source, RemoteEventMessage)
 	if intent == nil {
 		return
 	}
@@ -1044,7 +1044,7 @@ func (portal *Portal) handleRemoteEdit(ctx context.Context, source *UserLogin, e
 		log.Warn().Msg("Edit target message not found")
 		return
 	}
-	intent := portal.getIntentFor(ctx, evt.GetSender(), source)
+	intent := portal.getIntentFor(ctx, evt.GetSender(), source, RemoteEventEdit)
 	if intent == nil {
 		return
 	}
@@ -1144,7 +1144,7 @@ func (portal *Portal) handleRemoteReaction(ctx context.Context, source *UserLogi
 		return
 	}
 	ts := getEventTS(evt)
-	intent := portal.getIntentFor(ctx, evt.GetSender(), source)
+	intent := portal.getIntentFor(ctx, evt.GetSender(), source, RemoteEventReaction)
 	resp, err := intent.SendMessage(ctx, portal.MXID, event.EventReaction, &event.Content{
 		Parsed: &event.ReactionEventContent{
 			RelatesTo: event.RelatesTo{
@@ -1202,7 +1202,7 @@ func (portal *Portal) handleRemoteReactionRemove(ctx context.Context, source *Us
 		log.Warn().Msg("Target reaction not found")
 		return
 	}
-	intent := portal.getIntentFor(ctx, evt.GetSender(), source)
+	intent := portal.getIntentFor(ctx, evt.GetSender(), source, RemoteEventReactionRemove)
 	ts := getEventTS(evt)
 	_, err = intent.SendMessage(ctx, portal.MXID, event.EventRedaction, &event.Content{
 		Parsed: &event.RedactionEventContent{
@@ -1225,7 +1225,7 @@ func (portal *Portal) handleRemoteMessageRemove(ctx context.Context, source *Use
 		log.Err(err).Msg("Failed to get target message for removal")
 		return
 	}
-	intent := portal.getIntentFor(ctx, evt.GetSender(), source)
+	intent := portal.getIntentFor(ctx, evt.GetSender(), source, RemoteEventMessageRemove)
 	ts := getEventTS(evt)
 	for _, part := range targetParts {
 		resp, err := intent.SendMessage(ctx, portal.MXID, event.EventRedaction, &event.Content{
@@ -1281,7 +1281,7 @@ func (portal *Portal) handleRemoteReadReceipt(ctx context.Context, source *UserL
 		return
 	}
 	sender := evt.GetSender()
-	intent := portal.getIntentFor(ctx, sender, source)
+	intent := portal.getIntentFor(ctx, sender, source, RemoteEventReadReceipt)
 	err = intent.MarkRead(ctx, portal.MXID, lastTarget.MXID, getEventTS(evt))
 	if err != nil {
 		log.Err(err).Stringer("target_mxid", lastTarget.MXID).Msg("Failed to bridge read receipt")
@@ -1317,7 +1317,7 @@ func (portal *Portal) handleRemoteTyping(ctx context.Context, source *UserLogin,
 	if typedEvt, ok := evt.(RemoteTypingWithType); ok {
 		typingType = typedEvt.GetTypingType()
 	}
-	intent := portal.getIntentFor(ctx, evt.GetSender(), source)
+	intent := portal.getIntentFor(ctx, evt.GetSender(), source, RemoteEventTyping)
 	err := intent.MarkTyping(ctx, portal.MXID, typingType, evt.GetTimeout())
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to bridge typing event")
@@ -1522,7 +1522,7 @@ func (portal *Portal) SyncParticipants(ctx context.Context, members []networkid.
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to get ghost for %s: %w", member, err)
 		}
-		ghost.UpdateInfoIfNecessary(ctx, source)
+		ghost.UpdateInfoIfNecessary(ctx, source, 0)
 		if expectedIntents[i] == nil {
 			expectedIntents[i] = ghost.Intent
 			if isLoggedInUser {

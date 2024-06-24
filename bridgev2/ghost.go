@@ -200,15 +200,28 @@ func (ghost *Ghost) UpdateContactInfo(ctx context.Context, identifiers []string,
 	return true
 }
 
-func (ghost *Ghost) UpdateInfoIfNecessary(ctx context.Context, source *UserLogin) {
-	if ghost.Name != "" && ghost.NameSet {
+func (br *Bridge) allowAggressiveUpdateForType(evtType RemoteEventType) bool {
+	if !br.Network.GetCapabilities().AggressiveUpdateInfo {
+		return false
+	}
+	switch evtType {
+	case RemoteEventUnknown, RemoteEventMessage, RemoteEventEdit, RemoteEventReaction:
+		return true
+	default:
+		return false
+	}
+}
+
+func (ghost *Ghost) UpdateInfoIfNecessary(ctx context.Context, source *UserLogin, evtType RemoteEventType) {
+	if ghost.Name != "" && ghost.NameSet && !ghost.Bridge.allowAggressiveUpdateForType(evtType) {
 		return
 	}
 	info, err := source.Client.GetUserInfo(ctx, ghost)
 	if err != nil {
-		zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to get info to update ghost")
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to get info to update ghost")
+	} else if info != nil {
+		ghost.UpdateInfo(ctx, info)
 	}
-	ghost.UpdateInfo(ctx, info)
 }
 
 func (ghost *Ghost) UpdateInfo(ctx context.Context, info *UserInfo) {

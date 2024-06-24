@@ -167,7 +167,12 @@ type FileRestriction struct {
 }
 
 type NetworkGeneralCapabilities struct {
+	// Does the network connector support disappearing messages?
+	// This flag enables the message disappearing loop in the bridge.
 	DisappearingMessages bool
+	// Should the bridge re-request user info on incoming messages even if the ghost already has info?
+	// By default, info is only requested for ghosts with no name, and other updating is left to events.
+	AggressiveUpdateInfo bool
 }
 
 type NetworkRoomCapabilities struct {
