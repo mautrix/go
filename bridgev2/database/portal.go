@@ -26,6 +26,8 @@ type PortalQuery struct {
 type StandardPortalMetadata struct {
 	DisappearType  DisappearingType `json:"disappear_type,omitempty"`
 	DisappearTimer time.Duration    `json:"disappear_timer,omitempty"`
+	IsDirect       bool             `json:"is_direct,omitempty"`
+	IsSpace        bool             `json:"is_space,omitempty"`
 }
 
 type PortalMetadata struct {

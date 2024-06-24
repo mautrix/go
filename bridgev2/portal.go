@@ -1441,6 +1441,11 @@ func (portal *Portal) getBridgeInfo() (string, event.BridgeEventContent) {
 		},
 		// TODO room type
 	}
+	if portal.Metadata.IsDirect {
+		bridgeInfo.BeeperRoomType = "dm"
+	} else if portal.Metadata.IsSpace {
+		bridgeInfo.BeeperRoomType = "space"
+	}
 	parent := portal.GetTopLevelParent()
 	if parent != nil {
 		bridgeInfo.Network = &event.BridgeInfoSection{
@@ -1623,6 +1628,10 @@ func (portal *Portal) UpdateInfo(ctx context.Context, info *PortalInfo, source *
 		}
 		// TODO detect changes to functional members list?
 	}
+	if info.IsDirectChat != nil && portal.Metadata.IsDirect != *info.IsDirectChat {
+		changed = true
+		portal.Metadata.IsDirect = *info.IsDirectChat
+	}
 	if source != nil {
 		// TODO is this a good place for this call? there's another one in QueueRemoteEvent
 		err := portal.Bridge.DB.UserPortal.EnsureExists(ctx, source.UserLogin, portal.PortalKey)
@@ -1674,7 +1683,7 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 		CreationContent: make(map[string]any),
 		InitialState:    make([]*event.Event, 0, 6),
 		Preset:          "private_chat",
-		IsDirect:        *info.IsDirectChat,
+		IsDirect:        portal.Metadata.IsDirect,
 		PowerLevelOverride: &event.PowerLevelsEventContent{
 			Users: map[id.UserID]int{
 				portal.Bridge.Bot.GetMXID(): 9001,
@@ -1692,6 +1701,7 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 	}
 	if *info.IsSpace {
 		req.CreationContent["type"] = event.RoomTypeSpace
+		portal.Metadata.IsSpace = true
 	}
 	bridgeInfoStateKey, bridgeInfo := portal.getBridgeInfo()
 	emptyString := ""
