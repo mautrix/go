@@ -1693,7 +1693,6 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 		BeeperLocalRoomID:    id.RoomID(fmt.Sprintf("!%s:%s", portal.ID, portal.Bridge.Matrix.ServerName())),
 		BeeperInitialMembers: initialMembers,
 	}
-	// TODO find this properly from the matrix connector
 	autoJoinInvites := portal.Bridge.Matrix.GetCapabilities().AutoJoinInvites
 	// TODO remove this after initial_members is supported in hungryserv
 	if autoJoinInvites {
