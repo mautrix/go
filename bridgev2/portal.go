@@ -905,7 +905,7 @@ func (portal *Portal) getIntentFor(ctx context.Context, sender EventSender, sour
 			intent = senderLogin.User.DoublePuppet(ctx)
 		}
 	}
-	if intent == nil {
+	if intent == nil && sender.Sender != "" {
 		ghost, err := portal.Bridge.GetGhostByID(ctx, sender.Sender)
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to get ghost for message sender")
@@ -913,6 +913,9 @@ func (portal *Portal) getIntentFor(ctx context.Context, sender EventSender, sour
 		}
 		ghost.UpdateInfoIfNecessary(ctx, source, evtType)
 		intent = ghost.Intent
+	}
+	if intent == nil {
+		intent = portal.Bridge.Bot
 	}
 	return intent
 }
