@@ -339,7 +339,7 @@ func (br *BridgeMain) Start() {
 	if err != nil {
 		var dbUpgradeErr bridgev2.DBUpgradeError
 		if errors.As(err, &dbUpgradeErr) {
-			br.LogDBUpgradeErrorAndExit(dbUpgradeErr.Section, dbUpgradeErr.Err)
+			br.LogDBUpgradeErrorAndExit(dbUpgradeErr.Section, dbUpgradeErr.Err, "Failed to initialize database")
 		} else {
 			br.Log.Fatal().Err(err).Msg("Failed to start bridge")
 		}

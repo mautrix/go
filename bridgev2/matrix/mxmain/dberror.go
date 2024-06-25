@@ -48,7 +48,7 @@ func (zpe *zerologPQError) MarshalZerologObject(evt *zerolog.Event) {
 	maybeStr("routine", zpe.Routine)
 }
 
-func (br *BridgeMain) LogDBUpgradeErrorAndExit(name string, err error) {
+func (br *BridgeMain) LogDBUpgradeErrorAndExit(name string, err error, message string) {
 	logEvt := br.Log.WithLevel(zerolog.FatalLevel).
 		Err(err).
 		Str("db_section", name)
@@ -60,7 +60,7 @@ func (br *BridgeMain) LogDBUpgradeErrorAndExit(name string, err error) {
 	if errors.As(err, &pqe) {
 		logEvt.Object("pq_error", (*zerologPQError)(pqe))
 	}
-	logEvt.Msg("Failed to initialize database")
+	logEvt.Msg(message)
 	if sqlError := (&sqlite3.Error{}); errors.As(err, sqlError) && sqlError.Code == sqlite3.ErrCorrupt {
 		os.Exit(18)
 	} else if errors.Is(err, dbutil.ErrForeignTables) {
