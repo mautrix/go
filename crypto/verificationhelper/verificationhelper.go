@@ -262,6 +262,7 @@ func (vh *VerificationHelper) Init(ctx context.Context) error {
 				// can just ignore it.
 				if evt.Type == event.ToDeviceVerificationCancel || evt.Type == event.InRoomVerificationCancel {
 					log.Info().Msg("Ignoring verification cancellation event for an unknown transaction")
+					vh.activeTransactionsLock.Unlock()
 					return
 				}
 
