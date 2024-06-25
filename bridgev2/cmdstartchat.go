@@ -123,3 +123,23 @@ func fnResolveIdentifier(ce *CommandEvent) {
 		ce.Reply("Found %s", formattedName)
 	}
 }
+
+var CommandDeletePortal = &FullHandler{
+	Func: func(ce *CommandEvent) {
+		err := ce.Portal.Delete(ce.Ctx)
+		if err != nil {
+			ce.Reply("Failed to delete portal: %v", err)
+		}
+		err = ce.Bot.DeleteRoom(ce.Ctx, ce.Portal.MXID, false)
+		if err != nil {
+			ce.Reply("Failed to clean up room: %v", err)
+		}
+	},
+	Name: "delete-portal",
+	Help: HelpMeta{
+		Section:     HelpSectionAdmin,
+		Description: "Delete the current portal room",
+	},
+	RequiresAdmin:  true,
+	RequiresPortal: true,
+}
