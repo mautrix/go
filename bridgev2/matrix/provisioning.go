@@ -339,7 +339,7 @@ func (prov *ProvisioningAPI) GetLogins(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, http.StatusOK, &RespGetLogins{LoginIDs: user.GetUserLoginIDs()})
 }
 
-func (prov *ProvisioningAPI) getLoginForCall(w http.ResponseWriter, r *http.Request) *bridgev2.UserLogin {
+func (prov *ProvisioningAPI) GetLoginForRequest(w http.ResponseWriter, r *http.Request) *bridgev2.UserLogin {
 	user := prov.GetUser(r)
 	userLoginID := networkid.UserLoginID(r.URL.Query().Get("login_id"))
 	if userLoginID != "" {
@@ -375,7 +375,7 @@ type RespResolveIdentifier struct {
 }
 
 func (prov *ProvisioningAPI) doResolveIdentifier(w http.ResponseWriter, r *http.Request, createChat bool) {
-	login := prov.getLoginForCall(w, r)
+	login := prov.GetLoginForRequest(w, r)
 	if login == nil {
 		return
 	}
@@ -394,6 +394,13 @@ func (prov *ProvisioningAPI) doResolveIdentifier(w http.ResponseWriter, r *http.
 			Err:     fmt.Sprintf("Failed to resolve identifier: %v", err),
 			ErrCode: "M_UNKNOWN",
 		})
+		return
+	} else if resp == nil {
+		jsonResponse(w, http.StatusNotFound, &mautrix.RespError{
+			ErrCode: mautrix.MNotFound.ErrCode,
+			Err:     "Identifier not found",
+		})
+		return
 	}
 	apiResp := &RespResolveIdentifier{
 		ID: resp.UserID,
@@ -444,7 +451,7 @@ type RespGetContactList struct {
 }
 
 func (prov *ProvisioningAPI) GetContactList(w http.ResponseWriter, r *http.Request) {
-	login := prov.getLoginForCall(w, r)
+	login := prov.GetLoginForRequest(w, r)
 	if login == nil {
 		return
 	}
@@ -519,7 +526,7 @@ func (prov *ProvisioningAPI) PostCreateDM(w http.ResponseWriter, r *http.Request
 }
 
 func (prov *ProvisioningAPI) PostCreateGroup(w http.ResponseWriter, r *http.Request) {
-	login := prov.getLoginForCall(w, r)
+	login := prov.GetLoginForRequest(w, r)
 	if login == nil {
 		return
 	}
