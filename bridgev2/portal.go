@@ -943,6 +943,8 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 		replyTo, err = portal.Bridge.DB.Message.GetFirstOrSpecificPartByID(ctx, *converted.ReplyTo)
 		if err != nil {
 			log.Err(err).Msg("Failed to get reply target message from database")
+		} else if replyTo == nil {
+			log.Warn().Any("reply_to", converted.ReplyTo).Msg("Reply target message not found in database")
 		} else {
 			relatesToRowID = replyTo.RowID
 		}
@@ -951,6 +953,8 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 		threadRoot, err = portal.Bridge.DB.Message.GetFirstOrSpecificPartByID(ctx, *converted.ThreadRoot)
 		if err != nil {
 			log.Err(err).Msg("Failed to get thread root message from database")
+		} else if threadRoot == nil {
+			log.Warn().Any("thread_root", converted.ThreadRoot).Msg("Thread root message not found in database")
 		} else {
 			relatesToRowID = threadRoot.RowID
 		}
