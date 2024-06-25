@@ -1711,7 +1711,7 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 		StateKey: &emptyString,
 		Type:     event.StateElementFunctionalMembers,
 		Content: event.Content{Parsed: &event.ElementFunctionalMembersContent{
-			FunctionalMembers: append(extraFunctionalMembers, portal.Bridge.Bot.GetMXID()),
+			ServiceMembers: append(extraFunctionalMembers, portal.Bridge.Bot.GetMXID()),
 		}},
 	}, &event.Event{
 		StateKey: &bridgeInfoStateKey,

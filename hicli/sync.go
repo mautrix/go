@@ -435,7 +435,7 @@ func (h *HiClient) calculateRoomParticipantName(ctx context.Context, roomID id.R
 		_ = mautrixEvt.Content.ParseRaw(mautrixEvt.Type)
 		content, ok := mautrixEvt.Content.Parsed.(*event.ElementFunctionalMembersContent)
 		if ok {
-			functionalMembers = content.FunctionalMembers
+			functionalMembers = content.ServiceMembers
 		}
 	}
 	var members, leftMembers []string

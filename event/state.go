@@ -195,5 +195,5 @@ type InsertionMarkerContent struct {
 }
 
 type ElementFunctionalMembersContent struct {
-	FunctionalMembers []id.UserID `json:"functional_members"`
+	ServiceMembers []id.UserID `json:"service_members"`
 }
