@@ -1540,6 +1540,7 @@ func (portal *Portal) SyncParticipants(ctx context.Context, members []networkid.
 		return expectedUserIDs, extraFunctionalMembers, nil
 	}
 	currentMembers, err := portal.Bridge.Matrix.GetMembers(ctx, portal.MXID)
+	delete(currentMembers, portal.Bridge.Bot.GetMXID())
 	for _, intent := range expectedIntents {
 		mxid := intent.GetMXID()
 		memberEvt, ok := currentMembers[mxid]
