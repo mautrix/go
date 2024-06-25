@@ -1788,6 +1788,11 @@ func (cli *Client) Members(ctx context.Context, roomID id.RoomID, req ...ReqMemb
 	}
 	u := cli.BuildURLWithQuery(ClientURLPath{"v3", "rooms", roomID, "members"}, query)
 	_, err = cli.MakeRequest(ctx, http.MethodGet, u, nil, &resp)
+	if err == nil {
+		for _, evt := range resp.Chunk {
+			_ = evt.Content.ParseRaw(evt.Type)
+		}
+	}
 	if err == nil && cli.StateStore != nil {
 		var clearMemberships []event.Membership
 		if extra.Membership != "" {
