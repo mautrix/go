@@ -185,6 +185,7 @@ type LoginUserInputParams struct {
 
 type LoginCompleteParams struct {
 	UserLoginID networkid.UserLoginID `json:"user_login_id"`
+	UserLogin   *UserLogin            `json:"-"`
 }
 
 type LoginSubmit struct {
