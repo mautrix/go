@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/exsync"
 
 	"maunium.net/go/mautrix/bridge/status"
 	"maunium.net/go/mautrix/bridgev2/database"
@@ -28,6 +29,8 @@ type UserLogin struct {
 
 	Client      NetworkAPI
 	BridgeState *BridgeStateQueue
+
+	inPortalCache *exsync.Set[networkid.PortalKey]
 
 	spaceCreateLock sync.Mutex
 }
@@ -48,6 +51,8 @@ func (br *Bridge) loadUserLogin(ctx context.Context, user *User, dbUserLogin *da
 		Bridge:    br,
 		User:      user,
 		Log:       user.Log.With().Str("login_id", string(dbUserLogin.ID)).Logger(),
+
+		inPortalCache: exsync.NewSet[networkid.PortalKey](),
 	}
 	err := br.Network.LoadUserLogin(ctx, userLogin)
 	if err != nil {

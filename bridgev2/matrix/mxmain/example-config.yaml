@@ -2,6 +2,8 @@
 bridge:
     # The prefix for commands. Only required in non-management rooms.
     command_prefix: '$<<or .DefaultCommandPrefix (printf "!%s" .NetworkID)>>'
+    # Should the bridge create a space for each login containing the rooms that account is in?
+    personal_filtering_spaces: true
 
 # Config for the bridge's database.
 database:

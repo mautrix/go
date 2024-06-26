@@ -51,10 +51,11 @@ const (
 	getAllPortalsForLoginQuery = getUserPortalBaseQuery + `
 		WHERE bridge_id=$1 AND user_mxid=$2 AND login_id=$3
 	`
-	insertUserPortalQuery = `
+	getOrCreateUserPortalQuery = `
 		INSERT INTO user_portal (bridge_id, user_mxid, login_id, portal_id, portal_receiver, in_space, preferred)
 		VALUES ($1, $2, $3, $4, $5, false, false)
-		ON CONFLICT (bridge_id, user_mxid, login_id, portal_id, portal_receiver) DO NOTHING
+		ON CONFLICT (bridge_id, user_mxid, login_id, portal_id, portal_receiver) DO UPDATE SET portal_id=user_portal.portal_id
+		RETURNING bridge_id, user_mxid, login_id, portal_id, portal_receiver, in_space, preferred, last_read
 	`
 	upsertUserPortalQuery = `
 		INSERT INTO user_portal (bridge_id, user_mxid, login_id, portal_id, portal_receiver, in_space, preferred, last_read)
@@ -90,13 +91,13 @@ func (upq *UserPortalQuery) Get(ctx context.Context, login *UserLogin, portal ne
 	return upq.QueryOne(ctx, getUserPortalQuery, upq.BridgeID, login.UserMXID, login.ID, portal.ID, portal.Receiver)
 }
 
+func (upq *UserPortalQuery) GetOrCreate(ctx context.Context, login *UserLogin, portal networkid.PortalKey) (*UserPortal, error) {
+	return upq.QueryOne(ctx, getOrCreateUserPortalQuery, upq.BridgeID, login.UserMXID, login.ID, portal.ID, portal.Receiver)
+}
+
 func (upq *UserPortalQuery) Put(ctx context.Context, up *UserPortal) error {
 	ensureBridgeIDMatches(&up.BridgeID, upq.BridgeID)
 	return upq.Exec(ctx, upsertUserPortalQuery, up.sqlVariables()...)
-}
-
-func (upq *UserPortalQuery) EnsureExists(ctx context.Context, login *UserLogin, portal networkid.PortalKey) error {
-	return upq.Exec(ctx, insertUserPortalQuery, upq.BridgeID, login.UserMXID, login.ID, portal.ID, portal.Receiver)
 }
 
 func (upq *UserPortalQuery) MarkAsPreferred(ctx context.Context, login *UserLogin, portal networkid.PortalKey) error {
@@ -127,8 +128,11 @@ func (up *UserPortal) sqlVariables() []any {
 	}
 }
 
-func (up *UserPortal) ResetValues() {
-	up.InSpace = nil
-	up.Preferred = nil
-	up.LastRead = time.Time{}
+func (up *UserPortal) CopyWithoutValues() *UserPortal {
+	return &UserPortal{
+		BridgeID: up.BridgeID,
+		UserMXID: up.UserMXID,
+		LoginID:  up.LoginID,
+		Portal:   up.Portal,
+	}
 }

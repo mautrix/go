@@ -32,7 +32,8 @@ type Config struct {
 }
 
 type BridgeConfig struct {
-	CommandPrefix string `yaml:"command_prefix"`
+	CommandPrefix           string `yaml:"command_prefix"`
+	PersonalFilteringSpaces bool   `yaml:"personal_filtering_spaces"`
 }
 
 type MatrixConfig struct {

@@ -164,6 +164,7 @@ func doMigrateLegacy(helper up.Helper) {
 	helper.Copy(up.Str, "appservice", "hs_token")
 
 	helper.Copy(up.Str, "bridge", "command_prefix")
+	helper.Copy(up.Bool, "bridge", "personal_filtering_spaces")
 
 	CopyToOtherLocation(helper, up.Str, []string{"appservice", "database", "type"}, []string{"database", "type"})
 	CopyToOtherLocation(helper, up.Str, []string{"appservice", "database", "uri"}, []string{"database", "uri"})

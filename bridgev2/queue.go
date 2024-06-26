@@ -92,10 +92,7 @@ func (br *Bridge) QueueRemoteEvent(login *UserLogin, evt RemoteEvent) {
 		return
 	}
 	// TODO put this in a better place, and maybe cache to avoid constant db queries
-	err = br.DB.UserPortal.EnsureExists(ctx, login.UserLogin, portal.PortalKey)
-	if err != nil {
-		log.Warn().Err(err).Msg("Failed to ensure user portal row exists")
-	}
+	login.MarkInPortal(ctx, portal)
 	portal.queueEvent(ctx, &portalRemoteEvent{
 		evt:    evt,
 		source: login,

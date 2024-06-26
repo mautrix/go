@@ -337,6 +337,7 @@ func (portal *Portal) handleMatrixReadReceipt(user *User, eventID id.EventID, re
 	if userPortal == nil {
 		userPortal = database.UserPortalFor(login.UserLogin, portal.PortalKey)
 	} else {
+		userPortal = userPortal.CopyWithoutValues()
 		evt.LastRead = userPortal.LastRead
 	}
 	evt.ExactMessage, err = portal.Bridge.DB.Message.GetPartByMXID(ctx, eventID)
@@ -352,7 +353,6 @@ func (portal *Portal) handleMatrixReadReceipt(user *User, eventID id.EventID, re
 		log.Err(err).Msg("Failed to handle read receipt")
 		return
 	}
-	userPortal.ResetValues()
 	if evt.ExactMessage != nil {
 		userPortal.LastRead = evt.ExactMessage.Timestamp
 	} else {
@@ -1641,11 +1641,7 @@ func (portal *Portal) UpdateInfo(ctx context.Context, info *PortalInfo, source *
 		portal.Metadata.IsDirect = *info.IsDirectChat
 	}
 	if source != nil {
-		// TODO is this a good place for this call? there's another one in QueueRemoteEvent
-		err := portal.Bridge.DB.UserPortal.EnsureExists(ctx, source.UserLogin, portal.PortalKey)
-		if err != nil {
-			zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to ensure user portal row exists")
-		}
+		source.MarkInPortal(ctx, portal)
 		portal.updateUserLocalInfo(ctx, info.UserLocal, source)
 	}
 	if changed {
