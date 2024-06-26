@@ -7,6 +7,7 @@
 package mxmain
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
@@ -25,6 +26,10 @@ func (br *BridgeMain) LegacyMigrateSimple(renameTablesQuery, copyDataQuery strin
 		}
 		if upgradesTo < newDBVersion || compat > newDBVersion {
 			return fmt.Errorf("unexpected new database version (%d/c:%d, expected %d)", upgradesTo, compat, newDBVersion)
+		}
+		copyDataQuery, err = br.DB.Internals().FilterSQLUpgrade(bytes.Split([]byte(copyDataQuery), []byte("\n")))
+		if err != nil {
+			return err
 		}
 		_, err = br.DB.Exec(ctx, copyDataQuery)
 		if err != nil {
