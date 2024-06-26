@@ -112,9 +112,21 @@ func (intent *IntentAPI) EnsureJoined(ctx context.Context, roomID id.RoomID, ext
 		if !errors.Is(err, mautrix.MForbidden) || bot == nil {
 			return fmt.Errorf("failed to ensure joined: %w", err)
 		}
-		_, inviteErr := bot.InviteUser(ctx, roomID, &mautrix.ReqInviteUser{
-			UserID: intent.UserID,
-		})
+		var inviteErr error
+		if intent.IsCustomPuppet {
+			_, err = bot.SendStateEvent(ctx, roomID, event.StateMember, intent.UserID.String(), &event.Content{
+				Raw: map[string]any{
+					"fi.mau.will_auto_accept": true,
+				},
+				Parsed: &event.MemberEventContent{
+					Membership: event.MembershipInvite,
+				},
+			})
+		} else {
+			_, inviteErr = bot.InviteUser(ctx, roomID, &mautrix.ReqInviteUser{
+				UserID: intent.UserID,
+			})
+		}
 		if inviteErr != nil {
 			return fmt.Errorf("failed to invite in ensure joined: %w", inviteErr)
 		}
