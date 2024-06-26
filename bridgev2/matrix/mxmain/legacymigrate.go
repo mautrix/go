@@ -10,9 +10,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 )
 
-func (br *BridgeMain) LegacyMigrateSimple(renameTablesQuery, copyDataQuery string) func(ctx context.Context) error {
+func (br *BridgeMain) LegacyMigrateSimple(renameTablesQuery, copyDataQuery string, newDBVersion int) func(ctx context.Context) error {
 	return func(ctx context.Context) error {
 		_, err := br.DB.Exec(ctx, renameTablesQuery)
 		if err != nil {
@@ -21,6 +22,9 @@ func (br *BridgeMain) LegacyMigrateSimple(renameTablesQuery, copyDataQuery strin
 		upgradesTo, compat, err := br.DB.UpgradeTable[0].DangerouslyRun(ctx, br.DB)
 		if err != nil {
 			return err
+		}
+		if upgradesTo < newDBVersion || compat > newDBVersion {
+			return fmt.Errorf("unexpected new database version (%d/c:%d, expected %d)", upgradesTo, compat, newDBVersion)
 		}
 		_, err = br.DB.Exec(ctx, copyDataQuery)
 		if err != nil {
