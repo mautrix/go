@@ -83,7 +83,7 @@ func (upq *UserPortalQuery) GetAllByUser(ctx context.Context, userID id.UserID, 
 }
 
 func (upq *UserPortalQuery) GetAllForLogin(ctx context.Context, login *UserLogin) ([]*UserPortal, error) {
-	return upq.QueryMany(ctx, getUserPortalQuery, upq.BridgeID, login.UserMXID, login.ID)
+	return upq.QueryMany(ctx, getAllPortalsForLoginQuery, upq.BridgeID, login.UserMXID, login.ID)
 }
 
 func (upq *UserPortalQuery) Get(ctx context.Context, login *UserLogin, portal networkid.PortalKey) (*UserPortal, error) {
