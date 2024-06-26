@@ -64,9 +64,10 @@ const (
 type LoginDisplayType string
 
 const (
-	LoginDisplayTypeQR    LoginDisplayType = "qr"
-	LoginDisplayTypeEmoji LoginDisplayType = "emoji"
-	LoginDisplayTypeCode  LoginDisplayType = "code"
+	LoginDisplayTypeQR      LoginDisplayType = "qr"
+	LoginDisplayTypeEmoji   LoginDisplayType = "emoji"
+	LoginDisplayTypeCode    LoginDisplayType = "code"
+	LoginDisplayTypeNothing LoginDisplayType = "nothing"
 )
 
 type LoginStep struct {
@@ -92,8 +93,8 @@ type LoginStep struct {
 type LoginDisplayAndWaitParams struct {
 	// The type of thing to display (QR, emoji or text code)
 	Type LoginDisplayType `json:"type"`
-	// The thing to display (raw data for QR, unicode emoji for emoji, plain string for code)
-	Data string `json:"data"`
+	// The thing to display (raw data for QR, unicode emoji for emoji, plain string for code, omitted for nothing)
+	Data string `json:"data,omitempty"`
 	// An image containing the thing to display. If present, this is recommended over using data directly.
 	// For emojis, the URL to the canonical image representation of the emoji
 	ImageURL string `json:"image_url,omitempty"`

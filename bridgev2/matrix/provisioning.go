@@ -90,7 +90,7 @@ func (prov *ProvisioningAPI) Init() {
 	prov.Router.Path("/v3/login/flows").Methods(http.MethodGet).HandlerFunc(prov.GetLoginFlows)
 	prov.Router.Path("/v3/login/start/{flowID}").Methods(http.MethodPost).HandlerFunc(prov.PostLoginStart)
 	prov.Router.Path("/v3/login/step/{loginProcessID}/{stepID}/{stepType:user_input|cookies}").Methods(http.MethodPost).HandlerFunc(prov.PostLoginSubmitInput)
-	prov.Router.Path("/v3/login/step/{loginProcessID}/{stepID}/{stepType:wait}").Methods(http.MethodPost).HandlerFunc(prov.PostLoginWait)
+	prov.Router.Path("/v3/login/step/{loginProcessID}/{stepID}/{stepType:display_and_wait}").Methods(http.MethodPost).HandlerFunc(prov.PostLoginWait)
 	prov.Router.Path("/v3/logout/{loginID}").Methods(http.MethodPost).HandlerFunc(prov.PostLogout)
 	prov.Router.Path("/v3/logins").Methods(http.MethodGet).HandlerFunc(prov.GetLogins)
 	prov.Router.Path("/v3/contacts").Methods(http.MethodGet).HandlerFunc(prov.GetContactList)
@@ -188,9 +188,6 @@ func (prov *ProvisioningAPI) AuthMiddleware(h http.Handler) http.Handler {
 				return
 			}
 			stepType := mux.Vars(r)["stepType"]
-			if stepType == "wait" {
-				stepType = "display_and_wait"
-			}
 			if login.NextStep.Type != bridgev2.LoginStepType(stepType) {
 				zerolog.Ctx(r.Context()).Warn().
 					Str("request_step_type", stepType).
@@ -294,9 +291,9 @@ func (prov *ProvisioningAPI) PostLoginWait(w http.ResponseWriter, r *http.Reques
 	login := r.Context().Value(provisioningLoginProcessKey).(*ProvLogin)
 	nextStep, err := login.Process.(bridgev2.LoginProcessDisplayAndWait).Wait(r.Context())
 	if err != nil {
-		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to submit input")
+		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to wait")
 		jsonResponse(w, http.StatusInternalServerError, &mautrix.RespError{
-			Err:     "Failed to submit input",
+			Err:     "Failed to wait",
 			ErrCode: "M_UNKNOWN",
 		})
 		return

@@ -171,6 +171,8 @@ func doLoginDisplayAndWait(ce *CommandEvent, login LoginProcessDisplayAndWait, s
 		ce.ReplyAdvanced(step.DisplayAndWaitParams.Data, false, false)
 	case LoginDisplayTypeCode:
 		ce.ReplyAdvanced(fmt.Sprintf("<code>%s</code>", html.EscapeString(step.DisplayAndWaitParams.Data)), false, true)
+	case LoginDisplayTypeNothing:
+		// Do nothing
 	default:
 		ce.Reply("Unsupported display type %q", step.DisplayAndWaitParams.Type)
 		login.Cancel()

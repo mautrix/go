@@ -112,7 +112,7 @@
 				"type": {
 					"type": "string",
 					"description": "The type of thing to display",
-					"enum": ["qr", "emoji", "code"]
+					"enum": ["qr", "emoji", "code", "nothing"]
 				},
 				"data": {
 					"type": "string",
@@ -123,7 +123,7 @@
 					"description": "An image containing the thing to display. If present, this is recommended over using data directly. For emojis, the URL to the canonical image representation of the emoji"
 				}
 			},
-			"required": ["type", "data"]
+			"required": ["type"]
 		},
 		"complete": {
 			"type": "object",
