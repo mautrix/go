@@ -38,6 +38,7 @@ type MatrixConnector interface {
 
 	GenerateContentURI(ctx context.Context, mediaID networkid.MediaID) (id.ContentURIString, error)
 
+	GetPowerLevels(ctx context.Context, roomID id.RoomID) (*event.PowerLevelsEventContent, error)
 	GetMembers(ctx context.Context, roomID id.RoomID) (map[id.UserID]*event.MemberEventContent, error)
 	GetMemberInfo(ctx context.Context, roomID id.RoomID, userID id.UserID) (*event.MemberEventContent, error)
 

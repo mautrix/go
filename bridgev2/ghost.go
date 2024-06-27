@@ -84,11 +84,6 @@ func (br *Bridge) GetGhostByID(ctx context.Context, id networkid.UserID) (*Ghost
 	return br.unlockedGetGhostByID(ctx, id, false)
 }
 
-func (ghost *Ghost) IntentFor(portal *Portal) MatrixAPI {
-	// TODO use user double puppet intent if appropriate
-	return ghost.Intent
-}
-
 type Avatar struct {
 	ID     networkid.AvatarID
 	Get    func(ctx context.Context) ([]byte, error)

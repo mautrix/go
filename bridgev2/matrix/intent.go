@@ -61,7 +61,43 @@ func (as *ASIntent) SendMessage(ctx context.Context, roomID id.RoomID, eventType
 	}
 }
 
+func (as *ASIntent) fillMemberEvent(ctx context.Context, roomID id.RoomID, userID id.UserID, content *event.Content) {
+	targetContent := content.Parsed.(*event.MemberEventContent)
+	if targetContent.Displayname != "" || targetContent.AvatarURL != "" {
+		return
+	}
+	memberContent, err := as.Matrix.StateStore.TryGetMember(ctx, roomID, userID)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).
+			Stringer("target_user_id", userID).
+			Str("membership", string(targetContent.Membership)).
+			Msg("Failed to get old member content from state store to fill new membership event")
+	} else if memberContent != nil {
+		targetContent.Displayname = memberContent.Displayname
+		targetContent.AvatarURL = memberContent.AvatarURL
+	} else if ghost, err := as.Connector.Bridge.GetGhostByMXID(ctx, userID); err != nil {
+		zerolog.Ctx(ctx).Err(err).
+			Stringer("target_user_id", userID).
+			Str("membership", string(targetContent.Membership)).
+			Msg("Failed to get ghost to fill new membership event")
+	} else if ghost != nil {
+		targetContent.Displayname = ghost.Name
+		targetContent.AvatarURL = ghost.AvatarMXC
+	} else if profile, err := as.Matrix.GetProfile(ctx, userID); err != nil {
+		zerolog.Ctx(ctx).Debug().Err(err).
+			Stringer("target_user_id", userID).
+			Str("membership", string(targetContent.Membership)).
+			Msg("Failed to get profile to fill new membership event")
+	} else if profile != nil {
+		targetContent.Displayname = profile.DisplayName
+		targetContent.AvatarURL = profile.AvatarURL.CUString()
+	}
+}
+
 func (as *ASIntent) SendState(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string, content *event.Content, ts time.Time) (*mautrix.RespSendEvent, error) {
+	if eventType == event.StateMember {
+		as.fillMemberEvent(ctx, roomID, id.UserID(stateKey), content)
+	}
 	if ts.IsZero() {
 		return as.Matrix.SendStateEvent(ctx, roomID, eventType, stateKey, content)
 	} else {

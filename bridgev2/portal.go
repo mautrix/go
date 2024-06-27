@@ -897,26 +897,47 @@ func (portal *Portal) handleRemoteEvent(source *UserLogin, evt RemoteEvent) {
 	}
 }
 
-func (portal *Portal) GetIntentFor(ctx context.Context, sender EventSender, source *UserLogin, evtType RemoteEventType) MatrixAPI {
-	var intent MatrixAPI
+func (portal *Portal) getIntentAndUserMXIDFor(ctx context.Context, sender EventSender, source *UserLogin, otherLogins []*UserLogin, evtType RemoteEventType) (intent MatrixAPI, extraUserID id.UserID) {
 	if sender.IsFromMe {
 		intent = source.User.DoublePuppet(ctx)
-	}
-	if intent == nil && sender.SenderLogin != "" {
+		if intent != nil {
+			return
+		}
+		extraUserID = source.UserMXID
+	} else if sender.SenderLogin != "" {
 		senderLogin := portal.Bridge.GetCachedUserLoginByID(sender.SenderLogin)
 		if senderLogin != nil {
 			intent = senderLogin.User.DoublePuppet(ctx)
+			if intent != nil {
+				return
+			}
+			extraUserID = senderLogin.UserMXID
 		}
 	}
-	if intent == nil && sender.Sender != "" {
+	if sender.Sender != "" {
+		for _, login := range otherLogins {
+			if login.Client.IsThisUser(ctx, sender.Sender) {
+				intent = login.User.DoublePuppet(ctx)
+				if intent != nil {
+					return
+				}
+				extraUserID = login.UserMXID
+			}
+		}
 		ghost, err := portal.Bridge.GetGhostByID(ctx, sender.Sender)
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to get ghost for message sender")
-			return nil
+			return
+		} else {
+			ghost.UpdateInfoIfNecessary(ctx, source, evtType)
+			intent = ghost.Intent
 		}
-		ghost.UpdateInfoIfNecessary(ctx, source, evtType)
-		intent = ghost.Intent
 	}
+	return
+}
+
+func (portal *Portal) GetIntentFor(ctx context.Context, sender EventSender, source *UserLogin, evtType RemoteEventType) MatrixAPI {
+	intent, _ := portal.getIntentAndUserMXIDFor(ctx, sender, source, nil, evtType)
 	if intent == nil {
 		intent = portal.Bridge.Bot
 	}
@@ -1344,8 +1365,12 @@ func (portal *Portal) handleRemoteChatInfoChange(ctx context.Context, source *Us
 }
 
 type ChatInfoChange struct {
+	// The chat info that changed. Any fields that did not change can be left as nil.
 	ChatInfo *ChatInfo
-	// TODO member event changes
+	// A list of member changes.
+	// This list should only include changes, not the whole member list.
+	// To resync the whole list, use the field inside ChatInfo.
+	MemberChanges *ChatMemberList
 }
 
 func (portal *Portal) ProcessChatInfoChange(ctx context.Context, sender EventSender, source *UserLogin, change *ChatInfoChange, ts time.Time) {
@@ -1353,17 +1378,99 @@ func (portal *Portal) ProcessChatInfoChange(ctx context.Context, sender EventSen
 	if change.ChatInfo != nil {
 		portal.UpdateInfo(ctx, change.ChatInfo, source, intent, ts)
 	}
+	if change.MemberChanges != nil {
+		err := portal.SyncParticipants(ctx, change.MemberChanges, source, intent, ts)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to sync room members")
+		}
+	}
 }
 
 // Deprecated: Renamed to ChatInfo
 type PortalInfo = ChatInfo
+
+type ChatMember struct {
+	EventSender
+	Membership event.Membership
+	Nickname   string
+	PowerLevel int
+
+	PrevMembership event.Membership
+}
+
+type ChatMemberList struct {
+	// Whether this is the full member list.
+	// If true, any extra members not listed here will be removed from the portal.
+	IsFull bool
+	// Should the bridge call IsThisUser for every member in the list?
+	// This should be used when SenderLogin can't be filled accurately.
+	CheckAllLogins bool
+
+	Members     []ChatMember
+	PowerLevels *PowerLevelChanges
+}
+
+type PowerLevelChanges struct {
+	Events        map[event.Type]int
+	UsersDefault  *int
+	EventsDefault *int
+	StateDefault  *int
+	Invite        *int
+	Kick          *int
+	Ban           *int
+	Redact        *int
+
+	Custom func(*event.PowerLevelsEventContent) bool
+}
+
+func (plc *PowerLevelChanges) Apply(content *event.PowerLevelsEventContent) (changed bool) {
+	if plc == nil || content == nil {
+		return
+	}
+	for evtType, level := range plc.Events {
+		changed = content.EnsureEventLevel(evtType, level) || changed
+	}
+	if plc.UsersDefault != nil {
+		changed = content.UsersDefault != *plc.UsersDefault
+		content.UsersDefault = *plc.UsersDefault
+	}
+	if plc.EventsDefault != nil {
+		changed = content.EventsDefault != *plc.EventsDefault
+		content.EventsDefault = *plc.EventsDefault
+	}
+	if plc.StateDefault != nil {
+		changed = content.StateDefault() != *plc.StateDefault
+		content.StateDefaultPtr = plc.StateDefault
+	}
+	if plc.Invite != nil {
+		changed = content.Invite() != *plc.Invite
+		content.InvitePtr = plc.Invite
+	}
+	if plc.Kick != nil {
+		changed = content.Kick() != *plc.Kick
+		content.KickPtr = plc.Kick
+	}
+	if plc.Ban != nil {
+		changed = content.Ban() != *plc.Ban
+		content.BanPtr = plc.Ban
+	}
+	if plc.Redact != nil {
+		changed = content.Redact() != *plc.Redact
+		content.RedactPtr = plc.Redact
+	}
+	if plc.Custom != nil {
+		changed = plc.Custom(content) || changed
+	}
+	return changed
+}
 
 type ChatInfo struct {
 	Name   *string
 	Topic  *string
 	Avatar *Avatar
 
-	Members []networkid.UserID
+	Members  *ChatMemberList
+	JoinRule *event.JoinRulesEventContent
 
 	IsDirectChat *bool
 	IsSpace      *bool
@@ -1477,22 +1584,26 @@ func (portal *Portal) UpdateBridgeInfo(ctx context.Context) {
 	portal.sendRoomMeta(ctx, nil, time.Now(), event.StateHalfShotBridge, stateKey, &bridgeInfo)
 }
 
+func (portal *Portal) sendStateWithIntentOrBot(ctx context.Context, sender MatrixAPI, eventType event.Type, stateKey string, content *event.Content, ts time.Time) (resp *mautrix.RespSendEvent, err error) {
+	if sender == nil {
+		sender = portal.Bridge.Bot
+	}
+	resp, err = sender.SendState(ctx, portal.MXID, eventType, stateKey, content, ts)
+	if errors.Is(err, mautrix.MForbidden) && sender != portal.Bridge.Bot {
+		if content.Raw == nil {
+			content.Raw = make(map[string]any)
+		}
+		content.Raw["fi.mau.bridge.set_by"] = sender.GetMXID()
+		resp, err = portal.Bridge.Bot.SendState(ctx, portal.MXID, event.StateRoomName, "", content, ts)
+	}
+	return
+}
+
 func (portal *Portal) sendRoomMeta(ctx context.Context, sender MatrixAPI, ts time.Time, eventType event.Type, stateKey string, content any) bool {
 	if portal.MXID == "" {
 		return false
 	}
-
-	if sender == nil {
-		sender = portal.Bridge.Bot
-	}
-	wrappedContent := &event.Content{Parsed: content}
-	_, err := sender.SendState(ctx, portal.MXID, eventType, stateKey, wrappedContent, ts)
-	if errors.Is(err, mautrix.MForbidden) && sender != portal.Bridge.Bot {
-		wrappedContent.Raw = map[string]any{
-			"fi.mau.bridge.set_by": sender.GetMXID(),
-		}
-		_, err = portal.Bridge.Bot.SendState(ctx, portal.MXID, event.StateRoomName, "", wrappedContent, ts)
-	}
+	_, err := portal.sendStateWithIntentOrBot(ctx, sender, eventType, stateKey, &event.Content{Parsed: content}, ts)
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).
 			Str("event_type", eventType.Type).
@@ -1502,79 +1613,171 @@ func (portal *Portal) sendRoomMeta(ctx context.Context, sender MatrixAPI, ts tim
 	return true
 }
 
-func (portal *Portal) SyncParticipants(ctx context.Context, members []networkid.UserID, source *UserLogin) ([]id.UserID, []id.UserID, error) {
-	loginsInPortal, err := portal.Bridge.GetUserLoginsInPortal(ctx, portal.PortalKey)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get user logins in portal: %w", err)
+func (portal *Portal) GetInitialMemberList(ctx context.Context, members *ChatMemberList, source *UserLogin, pl *event.PowerLevelsEventContent) (invite, functional []id.UserID, err error) {
+	if members == nil {
+		invite = []id.UserID{source.UserMXID}
+		return
 	}
-	if !slices.Contains(loginsInPortal, source) {
-		loginsInPortal = append(loginsInPortal, source)
-	}
-	expectedUserIDs := make([]id.UserID, 0, len(members))
-	expectedExtraUsers := make([]id.UserID, 0)
-	expectedIntents := make([]MatrixAPI, len(members))
-	extraFunctionalMembers := make([]id.UserID, 0)
-	for i, member := range members {
-		isLoggedInUser := false
-		for _, login := range loginsInPortal {
-			if login.Client.IsThisUser(ctx, member) {
-				isLoggedInUser = true
-				userIntent := login.User.DoublePuppet(ctx)
-				if userIntent != nil {
-					expectedIntents[i] = userIntent
-				} else {
-					expectedExtraUsers = append(expectedExtraUsers, login.UserMXID)
-					expectedUserIDs = append(expectedUserIDs, login.UserMXID)
-				}
-				break
-			}
-		}
-		ghost, err := portal.Bridge.GetGhostByID(ctx, member)
+	var loginsInPortal []*UserLogin
+	if members.CheckAllLogins {
+		loginsInPortal, err = portal.Bridge.GetUserLoginsInPortal(ctx, portal.PortalKey)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to get ghost for %s: %w", member, err)
+			err = fmt.Errorf("failed to get user logins in portal: %w", err)
+			return
 		}
-		ghost.UpdateInfoIfNecessary(ctx, source, 0)
-		if expectedIntents[i] == nil {
-			expectedIntents[i] = ghost.Intent
-			if isLoggedInUser {
-				extraFunctionalMembers = append(extraFunctionalMembers, ghost.Intent.GetMXID())
+	}
+	members.PowerLevels.Apply(pl)
+	for _, member := range members.Members {
+		intent, extraUserID := portal.getIntentAndUserMXIDFor(ctx, member.EventSender, source, loginsInPortal, 0)
+		if extraUserID != "" {
+			invite = append(invite, extraUserID)
+			pl.EnsureUserLevel(extraUserID, member.PowerLevel)
+			if intent != nil {
+				// If intent is present along with a user ID, it's the ghost of a logged-in user,
+				// so add it to the functional members list
+				functional = append(functional, intent.GetMXID())
 			}
 		}
-		expectedUserIDs = append(expectedUserIDs, expectedIntents[i].GetMXID())
+		if intent != nil {
+			invite = append(invite, intent.GetMXID())
+			pl.EnsureUserLevel(intent.GetMXID(), member.PowerLevel)
+		}
 	}
-	if portal.MXID == "" {
-		return expectedUserIDs, extraFunctionalMembers, nil
+	return
+}
+
+func (portal *Portal) SyncParticipants(ctx context.Context, members *ChatMemberList, source *UserLogin, sender MatrixAPI, ts time.Time) error {
+	var loginsInPortal []*UserLogin
+	var err error
+	if members.CheckAllLogins {
+		loginsInPortal, err = portal.Bridge.GetUserLoginsInPortal(ctx, portal.PortalKey)
+		if err != nil {
+			return fmt.Errorf("failed to get user logins in portal: %w", err)
+		}
+	}
+	if sender == nil {
+		sender = portal.Bridge.Bot
+	}
+	log := zerolog.Ctx(ctx)
+	currentPower, err := portal.Bridge.Matrix.GetPowerLevels(ctx, portal.MXID)
+	if err != nil {
+		return fmt.Errorf("failed to get current power levels: %w", err)
 	}
 	currentMembers, err := portal.Bridge.Matrix.GetMembers(ctx, portal.MXID)
+	if err != nil {
+		return fmt.Errorf("failed to get current members: %w", err)
+	}
 	delete(currentMembers, portal.Bridge.Bot.GetMXID())
-	for _, intent := range expectedIntents {
-		mxid := intent.GetMXID()
-		memberEvt, ok := currentMembers[mxid]
-		delete(currentMembers, mxid)
-		if !ok || memberEvt.Membership != event.MembershipJoin {
+	powerChanged := members.PowerLevels.Apply(currentPower)
+	syncUser := func(extraUserID id.UserID, member ChatMember, hasIntent bool) bool {
+		powerChanged = currentPower.EnsureUserLevel(extraUserID, member.PowerLevel) || powerChanged
+		currentMember, ok := currentMembers[extraUserID]
+		delete(currentMembers, extraUserID)
+		if ok && currentMember.Membership == member.Membership {
+			return false
+		}
+		if currentMember == nil {
+			currentMember = &event.MemberEventContent{Membership: event.MembershipLeave}
+		}
+		if member.PrevMembership != "" && member.PrevMembership != currentMember.Membership {
+			log.Trace().
+				Stringer("user_id", extraUserID).
+				Str("expected_prev_membership", string(member.PrevMembership)).
+				Str("actual_prev_membership", string(currentMember.Membership)).
+				Str("target_membership", string(member.Membership)).
+				Msg("Not updating membership: prev membership mismatch")
+			return false
+		}
+		content := &event.MemberEventContent{
+			Membership:  member.Membership,
+			Displayname: currentMember.Displayname,
+			AvatarURL:   currentMember.AvatarURL,
+		}
+		wrappedContent := &event.Content{Parsed: content, Raw: make(map[string]any)}
+		thisEvtSender := sender
+		if member.Membership == event.MembershipJoin {
+			content.Membership = event.MembershipInvite
+			if hasIntent {
+				wrappedContent.Raw["fi.mau.will_auto_accept"] = true
+			}
+			if thisEvtSender.GetMXID() == extraUserID {
+				thisEvtSender = portal.Bridge.Bot
+			}
+		}
+		if currentMember != nil && currentMember.Membership == event.MembershipBan && member.Membership != event.MembershipLeave {
+			unbanContent := *content
+			unbanContent.Membership = event.MembershipLeave
+			wrappedUnbanContent := &event.Content{Parsed: &unbanContent}
+			_, err = portal.sendStateWithIntentOrBot(ctx, thisEvtSender, event.StateMember, extraUserID.String(), wrappedUnbanContent, ts)
+			if err != nil {
+				log.Err(err).
+					Stringer("target_user_id", extraUserID).
+					Stringer("sender_user_id", thisEvtSender.GetMXID()).
+					Str("prev_membership", string(currentMember.Membership)).
+					Str("membership", string(member.Membership)).
+					Msg("Failed to unban user to update membership")
+			} else {
+				log.Trace().
+					Stringer("target_user_id", extraUserID).
+					Stringer("sender_user_id", thisEvtSender.GetMXID()).
+					Str("prev_membership", string(currentMember.Membership)).
+					Str("membership", string(member.Membership)).
+					Msg("Unbanned user to update membership")
+			}
+		}
+		_, err = portal.sendStateWithIntentOrBot(ctx, thisEvtSender, event.StateMember, extraUserID.String(), wrappedContent, ts)
+		if err != nil {
+			log.Err(err).
+				Stringer("target_user_id", extraUserID).
+				Stringer("sender_user_id", thisEvtSender.GetMXID()).
+				Str("prev_membership", string(currentMember.Membership)).
+				Str("membership", string(member.Membership)).
+				Msg("Failed to update user membership")
+		} else {
+			log.Trace().
+				Stringer("target_user_id", extraUserID).
+				Stringer("sender_user_id", thisEvtSender.GetMXID()).
+				Str("prev_membership", string(currentMember.Membership)).
+				Str("membership", string(member.Membership)).
+				Msg("Updating membership in room")
+		}
+		return true
+	}
+	syncIntent := func(intent MatrixAPI, member ChatMember) {
+		if !syncUser(intent.GetMXID(), member, true) {
+			return
+		}
+		if member.Membership == event.MembershipJoin {
 			err = intent.EnsureJoined(ctx, portal.MXID)
 			if err != nil {
-				zerolog.Ctx(ctx).Err(err).
-					Stringer("user_id", mxid).
+				log.Err(err).
+					Stringer("user_id", intent.GetMXID()).
 					Msg("Failed to ensure user is joined to room")
 			}
 		}
 	}
-	for _, mxid := range expectedExtraUsers {
-		memberEvt, ok := currentMembers[mxid]
-		delete(currentMembers, mxid)
-		if !ok || (memberEvt.Membership != event.MembershipJoin && memberEvt.Membership != event.MembershipInvite) {
-			err = portal.Bridge.Bot.InviteUser(ctx, portal.MXID, mxid)
-			if err != nil {
-				zerolog.Ctx(ctx).Err(err).
-					Stringer("user_id", mxid).
-					Msg("Failed to invite user to room")
-			}
+	for _, member := range members.Members {
+		intent, extraUserID := portal.getIntentAndUserMXIDFor(ctx, member.EventSender, source, loginsInPortal, 0)
+		if intent != nil {
+			syncIntent(intent, member)
+		}
+		if extraUserID != "" {
+			syncUser(extraUserID, member, false)
 		}
 	}
-	if portal.Relay == nil {
+	if powerChanged {
+		_, err = portal.sendStateWithIntentOrBot(ctx, sender, event.StatePowerLevels, "", &event.Content{Parsed: currentPower}, ts)
+		if err != nil {
+			log.Err(err).Msg("Failed to update power levels")
+		}
+	}
+	if members.IsFull {
 		for extraMember, memberEvt := range currentMembers {
 			if memberEvt.Membership == event.MembershipLeave || memberEvt.Membership == event.MembershipBan {
+				continue
+			}
+			_, isGhost := portal.Bridge.Matrix.ParseGhostMXID(extraMember)
+			if !isGhost && portal.Relay != nil {
 				continue
 			}
 			_, err = portal.Bridge.Bot.SendState(ctx, portal.MXID, event.StateMember, extraMember.String(), &event.Content{
@@ -1592,7 +1795,7 @@ func (portal *Portal) SyncParticipants(ctx context.Context, members []networkid.
 			}
 		}
 	}
-	return expectedUserIDs, extraFunctionalMembers, nil
+	return nil
 }
 
 func (portal *Portal) updateUserLocalInfo(ctx context.Context, info *UserLocalPortalInfo, source *UserLogin) {
@@ -1672,8 +1875,12 @@ func (portal *Portal) UpdateInfo(ctx context.Context, info *ChatInfo, source *Us
 	if info.Disappear != nil {
 		changed = portal.UpdateDisappearingSetting(ctx, *info.Disappear, sender, ts, false, false) || changed
 	}
+	if info.JoinRule != nil {
+		// TODO change detection instead of spamming this every time?
+		portal.sendRoomMeta(ctx, sender, ts, event.StateJoinRules, "", info.JoinRule)
+	}
 	if info.Members != nil && portal.MXID != "" && source != nil {
-		_, _, err := portal.SyncParticipants(ctx, info.Members, source)
+		err := portal.SyncParticipants(ctx, info.Members, source, nil, time.Time{})
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to sync room members")
 		}
@@ -1720,25 +1927,29 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 		}
 	}
 	portal.UpdateInfo(ctx, info, source, nil, time.Time{})
-	initialMembers, extraFunctionalMembers, err := portal.SyncParticipants(ctx, info.Members, source)
+	powerLevels := &event.PowerLevelsEventContent{
+		Events: map[string]int{
+			event.StateTombstone.Type:  100,
+			event.StateServerACL.Type:  100,
+			event.StateEncryption.Type: 100,
+		},
+	}
+	initialMembers, extraFunctionalMembers, err := portal.GetInitialMemberList(ctx, info.Members, source, powerLevels)
 	if err != nil {
 		log.Err(err).Msg("Failed to process participant list for portal creation")
 		return err
 	}
+	powerLevels.EnsureUserLevel(portal.Bridge.Bot.GetMXID(), 9001)
 
 	req := mautrix.ReqCreateRoom{
-		Visibility:      "private",
-		Name:            portal.Name,
-		Topic:           portal.Topic,
-		CreationContent: make(map[string]any),
-		InitialState:    make([]*event.Event, 0, 6),
-		Preset:          "private_chat",
-		IsDirect:        portal.Metadata.IsDirect,
-		PowerLevelOverride: &event.PowerLevelsEventContent{
-			Users: map[id.UserID]int{
-				portal.Bridge.Bot.GetMXID(): 9001,
-			},
-		},
+		Visibility:           "private",
+		Name:                 portal.Name,
+		Topic:                portal.Topic,
+		CreationContent:      make(map[string]any),
+		InitialState:         make([]*event.Event, 0, 6),
+		Preset:               "private_chat",
+		IsDirect:             portal.Metadata.IsDirect,
+		PowerLevelOverride:   powerLevels,
 		BeeperLocalRoomID:    id.RoomID(fmt.Sprintf("!%s:%s", portal.ID, portal.Bridge.Matrix.ServerName())),
 		BeeperInitialMembers: initialMembers,
 	}
@@ -1797,6 +2008,12 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 			}},
 		})
 	}
+	if info.JoinRule != nil {
+		req.InitialState = append(req.InitialState, &event.Event{
+			Type:    event.StateJoinRules,
+			Content: event.Content{Parsed: info.JoinRule},
+		})
+	}
 	roomID, err := portal.Bridge.Bot.CreateRoom(ctx, &req)
 	if err != nil {
 		log.Err(err).Msg("Failed to create Matrix room")
@@ -1821,9 +2038,19 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 	}
 	portal.updateUserLocalInfo(ctx, info.UserLocal, source)
 	if !autoJoinInvites {
-		_, _, err = portal.SyncParticipants(ctx, info.Members, source)
-		if err != nil {
-			log.Err(err).Msg("Failed to sync participants after room creation")
+		if info.Members == nil {
+			dp := source.User.DoublePuppet(ctx)
+			if dp != nil {
+				err = dp.EnsureJoined(ctx, portal.MXID)
+				if err != nil {
+					log.Err(err).Msg("Failed to ensure user is joined to room after creation")
+				}
+			}
+		} else {
+			err = portal.SyncParticipants(ctx, info.Members, source, nil, time.Time{})
+			if err != nil {
+				log.Err(err).Msg("Failed to sync participants after room creation")
+			}
 		}
 	}
 	return nil

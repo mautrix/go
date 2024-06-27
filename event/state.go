@@ -87,11 +87,12 @@ type CreateEventContent struct {
 type JoinRule string
 
 const (
-	JoinRulePublic     JoinRule = "public"
-	JoinRuleKnock      JoinRule = "knock"
-	JoinRuleInvite     JoinRule = "invite"
-	JoinRuleRestricted JoinRule = "restricted"
-	JoinRulePrivate    JoinRule = "private"
+	JoinRulePublic          JoinRule = "public"
+	JoinRuleKnock           JoinRule = "knock"
+	JoinRuleInvite          JoinRule = "invite"
+	JoinRuleRestricted      JoinRule = "restricted"
+	JoinRuleKnockRestricted JoinRule = "knock_restricted"
+	JoinRulePrivate         JoinRule = "private"
 )
 
 // JoinRulesEventContent represents the content of a m.room.join_rules state event.

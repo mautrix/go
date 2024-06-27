@@ -435,6 +435,10 @@ func (br *Connector) BotIntent() bridgev2.MatrixAPI {
 	return &ASIntent{Connector: br, Matrix: br.Bot}
 }
 
+func (br *Connector) GetPowerLevels(ctx context.Context, roomID id.RoomID) (*event.PowerLevelsEventContent, error) {
+	return br.Bot.PowerLevels(ctx, roomID)
+}
+
 func (br *Connector) GetMembers(ctx context.Context, roomID id.RoomID) (map[id.UserID]*event.MemberEventContent, error) {
 	// TODO use cache?
 	members, err := br.Bot.Members(ctx, roomID)
@@ -443,7 +447,6 @@ func (br *Connector) GetMembers(ctx context.Context, roomID id.RoomID) (map[id.U
 	}
 	output := make(map[id.UserID]*event.MemberEventContent, len(members.Chunk))
 	for _, evt := range members.Chunk {
-		_ = evt.Content.ParseRaw(evt.Type)
 		output[id.UserID(evt.GetStateKey())] = evt.Content.AsMember()
 	}
 	return output, nil
