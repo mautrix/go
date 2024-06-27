@@ -865,6 +865,10 @@ func (portal *Portal) handleRemoteEvent(source *UserLogin, evt RemoteEvent) {
 			return
 		}
 	}
+	preHandler, ok := evt.(RemotePreHandler)
+	if ok {
+		preHandler.PreHandle(ctx, portal)
+	}
 	switch evt.GetType() {
 	case RemoteEventUnknown:
 		log.Debug().Msg("Ignoring remote event with type unknown")
@@ -890,12 +894,14 @@ func (portal *Portal) handleRemoteEvent(source *UserLogin, evt RemoteEvent) {
 		portal.handleRemoteChatTag(ctx, source, evt.(RemoteChatTag))
 	case RemoteEventChatMute:
 		portal.handleRemoteChatMute(ctx, source, evt.(RemoteChatMute))
+	case RemoteEventChatInfoChange:
+		portal.handleRemoteChatInfoChange(ctx, source, evt.(RemoteChatInfoChange))
 	default:
 		log.Warn().Int("type", int(evt.GetType())).Msg("Got remote event with unknown type")
 	}
 }
 
-func (portal *Portal) getIntentFor(ctx context.Context, sender EventSender, source *UserLogin, evtType RemoteEventType) MatrixAPI {
+func (portal *Portal) GetIntentFor(ctx context.Context, sender EventSender, source *UserLogin, evtType RemoteEventType) MatrixAPI {
 	var intent MatrixAPI
 	if sender.IsFromMe {
 		intent = source.User.DoublePuppet(ctx)
@@ -930,7 +936,7 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 		log.Debug().Stringer("existing_mxid", existing.MXID).Msg("Ignoring duplicate message")
 		return
 	}
-	intent := portal.getIntentFor(ctx, evt.GetSender(), source, RemoteEventMessage)
+	intent := portal.GetIntentFor(ctx, evt.GetSender(), source, RemoteEventMessage)
 	if intent == nil {
 		return
 	}
@@ -1052,7 +1058,7 @@ func (portal *Portal) handleRemoteEdit(ctx context.Context, source *UserLogin, e
 		log.Warn().Msg("Edit target message not found")
 		return
 	}
-	intent := portal.getIntentFor(ctx, evt.GetSender(), source, RemoteEventEdit)
+	intent := portal.GetIntentFor(ctx, evt.GetSender(), source, RemoteEventEdit)
 	if intent == nil {
 		return
 	}
@@ -1152,7 +1158,7 @@ func (portal *Portal) handleRemoteReaction(ctx context.Context, source *UserLogi
 		return
 	}
 	ts := getEventTS(evt)
-	intent := portal.getIntentFor(ctx, evt.GetSender(), source, RemoteEventReaction)
+	intent := portal.GetIntentFor(ctx, evt.GetSender(), source, RemoteEventReaction)
 	resp, err := intent.SendMessage(ctx, portal.MXID, event.EventReaction, &event.Content{
 		Parsed: &event.ReactionEventContent{
 			RelatesTo: event.RelatesTo{
@@ -1210,7 +1216,7 @@ func (portal *Portal) handleRemoteReactionRemove(ctx context.Context, source *Us
 		log.Warn().Msg("Target reaction not found")
 		return
 	}
-	intent := portal.getIntentFor(ctx, evt.GetSender(), source, RemoteEventReactionRemove)
+	intent := portal.GetIntentFor(ctx, evt.GetSender(), source, RemoteEventReactionRemove)
 	ts := getEventTS(evt)
 	_, err = intent.SendMessage(ctx, portal.MXID, event.EventRedaction, &event.Content{
 		Parsed: &event.RedactionEventContent{
@@ -1233,7 +1239,7 @@ func (portal *Portal) handleRemoteMessageRemove(ctx context.Context, source *Use
 		log.Err(err).Msg("Failed to get target message for removal")
 		return
 	}
-	intent := portal.getIntentFor(ctx, evt.GetSender(), source, RemoteEventMessageRemove)
+	intent := portal.GetIntentFor(ctx, evt.GetSender(), source, RemoteEventMessageRemove)
 	ts := getEventTS(evt)
 	for _, part := range targetParts {
 		resp, err := intent.SendMessage(ctx, portal.MXID, event.EventRedaction, &event.Content{
@@ -1289,7 +1295,7 @@ func (portal *Portal) handleRemoteReadReceipt(ctx context.Context, source *UserL
 		return
 	}
 	sender := evt.GetSender()
-	intent := portal.getIntentFor(ctx, sender, source, RemoteEventReadReceipt)
+	intent := portal.GetIntentFor(ctx, sender, source, RemoteEventReadReceipt)
 	err = intent.MarkRead(ctx, portal.MXID, lastTarget.MXID, getEventTS(evt))
 	if err != nil {
 		log.Err(err).Stringer("target_mxid", lastTarget.MXID).Msg("Failed to bridge read receipt")
@@ -1325,7 +1331,7 @@ func (portal *Portal) handleRemoteTyping(ctx context.Context, source *UserLogin,
 	if typedEvt, ok := evt.(RemoteTypingWithType); ok {
 		typingType = typedEvt.GetTypingType()
 	}
-	intent := portal.getIntentFor(ctx, evt.GetSender(), source, RemoteEventTyping)
+	intent := portal.GetIntentFor(ctx, evt.GetSender(), source, RemoteEventTyping)
 	err := intent.MarkTyping(ctx, portal.MXID, typingType, evt.GetTimeout())
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to bridge typing event")
@@ -1363,6 +1369,27 @@ func (portal *Portal) handleRemoteChatMute(ctx context.Context, source *UserLogi
 	}
 }
 
+func (portal *Portal) handleRemoteChatInfoChange(ctx context.Context, source *UserLogin, evt RemoteChatInfoChange) {
+	info, err := evt.GetChatInfoChange(ctx)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to get chat info change")
+		return
+	}
+	portal.ProcessChatInfoChange(ctx, evt.GetSender(), source, info, getEventTS(evt))
+}
+
+type ChatInfoChange struct {
+	PortalInfo *PortalInfo
+	// TODO member event changes
+}
+
+func (portal *Portal) ProcessChatInfoChange(ctx context.Context, sender EventSender, source *UserLogin, change *ChatInfoChange, ts time.Time) {
+	intent := portal.GetIntentFor(ctx, sender, source, RemoteEventChatInfoChange)
+	if change.PortalInfo != nil {
+		portal.UpdateInfo(ctx, change.PortalInfo, source, intent, ts)
+	}
+}
+
 type PortalInfo struct {
 	Name   *string
 	Topic  *string
@@ -1375,6 +1402,8 @@ type PortalInfo struct {
 	Disappear    *database.DisappearingSetting
 
 	UserLocal *UserLocalPortalInfo
+
+	ExtraUpdates func(context.Context, *Portal) bool
 }
 
 type UserLocalPortalInfo struct {
@@ -1382,7 +1411,7 @@ type UserLocalPortalInfo struct {
 	Tag        *event.RoomTag
 }
 
-func (portal *Portal) UpdateName(ctx context.Context, name string, sender *Ghost, ts time.Time) bool {
+func (portal *Portal) UpdateName(ctx context.Context, name string, sender MatrixAPI, ts time.Time) bool {
 	if portal.Name == name && (portal.NameSet || portal.MXID == "") {
 		return false
 	}
@@ -1391,7 +1420,7 @@ func (portal *Portal) UpdateName(ctx context.Context, name string, sender *Ghost
 	return true
 }
 
-func (portal *Portal) UpdateTopic(ctx context.Context, topic string, sender *Ghost, ts time.Time) bool {
+func (portal *Portal) UpdateTopic(ctx context.Context, topic string, sender MatrixAPI, ts time.Time) bool {
 	if portal.Topic == topic && (portal.TopicSet || portal.MXID == "") {
 		return false
 	}
@@ -1400,20 +1429,19 @@ func (portal *Portal) UpdateTopic(ctx context.Context, topic string, sender *Gho
 	return true
 }
 
-func (portal *Portal) UpdateAvatar(ctx context.Context, avatar *Avatar, sender *Ghost, ts time.Time) bool {
+func (portal *Portal) UpdateAvatar(ctx context.Context, avatar *Avatar, sender MatrixAPI, ts time.Time) bool {
 	if portal.AvatarID == avatar.ID && (portal.AvatarSet || portal.MXID == "") {
 		return false
 	}
 	portal.AvatarID = avatar.ID
-	intent := portal.Bridge.Bot
-	if sender != nil {
-		intent = sender.IntentFor(portal)
+	if sender == nil {
+		sender = portal.Bridge.Bot
 	}
 	if avatar.Remove {
 		portal.AvatarMXC = ""
 		portal.AvatarHash = [32]byte{}
 	} else {
-		newMXC, newHash, err := avatar.Reupload(ctx, intent, portal.AvatarHash)
+		newMXC, newHash, err := avatar.Reupload(ctx, sender, portal.AvatarHash)
 		if err != nil {
 			portal.AvatarSet = false
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to reupload room avatar")
@@ -1479,20 +1507,19 @@ func (portal *Portal) UpdateBridgeInfo(ctx context.Context) {
 	portal.sendRoomMeta(ctx, nil, time.Now(), event.StateHalfShotBridge, stateKey, &bridgeInfo)
 }
 
-func (portal *Portal) sendRoomMeta(ctx context.Context, sender *Ghost, ts time.Time, eventType event.Type, stateKey string, content any) bool {
+func (portal *Portal) sendRoomMeta(ctx context.Context, sender MatrixAPI, ts time.Time, eventType event.Type, stateKey string, content any) bool {
 	if portal.MXID == "" {
 		return false
 	}
 
-	intent := portal.Bridge.Bot
-	if sender != nil {
-		intent = sender.IntentFor(portal)
+	if sender == nil {
+		sender = portal.Bridge.Bot
 	}
 	wrappedContent := &event.Content{Parsed: content}
-	_, err := intent.SendState(ctx, portal.MXID, eventType, stateKey, wrappedContent, ts)
-	if errors.Is(err, mautrix.MForbidden) && intent != portal.Bridge.Bot {
+	_, err := sender.SendState(ctx, portal.MXID, eventType, stateKey, wrappedContent, ts)
+	if errors.Is(err, mautrix.MForbidden) && sender != portal.Bridge.Bot {
 		wrappedContent.Raw = map[string]any{
-			"fi.mau.bridge.set_by": intent.GetMXID(),
+			"fi.mau.bridge.set_by": sender.GetMXID(),
 		}
 		_, err = portal.Bridge.Bot.SendState(ctx, portal.MXID, event.StateRoomName, "", wrappedContent, ts)
 	}
@@ -1620,15 +1647,15 @@ func (portal *Portal) updateUserLocalInfo(ctx context.Context, info *UserLocalPo
 	}
 }
 
-func (portal *Portal) UpdateDisappearingSetting(ctx context.Context, setting database.DisappearingSetting, sender *Ghost, ts time.Time, implicit, save bool) bool {
-	if portal.Metadata.DisappearTimer == setting.Timer {
+func (portal *Portal) UpdateDisappearingSetting(ctx context.Context, setting database.DisappearingSetting, sender MatrixAPI, ts time.Time, implicit, save bool) bool {
+	if setting.Timer == 0 {
+		setting.Type = ""
+	}
+	if portal.Metadata.DisappearTimer == setting.Timer && portal.Metadata.DisappearType == setting.Type {
 		return false
 	}
 	portal.Metadata.DisappearType = setting.Type
 	portal.Metadata.DisappearTimer = setting.Timer
-	if setting.Timer == 0 {
-		portal.Metadata.DisappearType = ""
-	}
 	if save {
 		err := portal.Save(ctx)
 		if err != nil {
@@ -1644,11 +1671,10 @@ func (portal *Portal) UpdateDisappearingSetting(ctx context.Context, setting dat
 	} else if setting.Timer == 0 {
 		content.Body = "Disappearing messages disabled"
 	}
-	intent := portal.Bridge.Bot
-	if sender != nil {
-		intent = sender.IntentFor(portal)
+	if sender == nil {
+		sender = portal.Bridge.Bot
 	}
-	_, err := intent.SendMessage(ctx, portal.MXID, event.EventMessage, &event.Content{
+	_, err := sender.SendMessage(ctx, portal.MXID, event.EventMessage, &event.Content{
 		Parsed: content,
 	}, ts)
 	if err != nil {
@@ -1662,7 +1688,7 @@ func (portal *Portal) UpdateDisappearingSetting(ctx context.Context, setting dat
 	return true
 }
 
-func (portal *Portal) UpdateInfo(ctx context.Context, info *PortalInfo, source *UserLogin, sender *Ghost, ts time.Time) {
+func (portal *Portal) UpdateInfo(ctx context.Context, info *PortalInfo, source *UserLogin, sender MatrixAPI, ts time.Time) {
 	changed := false
 	if info.Name != nil {
 		changed = portal.UpdateName(ctx, *info.Name, sender, ts) || changed
@@ -1690,6 +1716,9 @@ func (portal *Portal) UpdateInfo(ctx context.Context, info *PortalInfo, source *
 	if source != nil {
 		source.MarkInPortal(ctx, portal)
 		portal.updateUserLocalInfo(ctx, info.UserLocal, source)
+	}
+	if info.ExtraUpdates != nil {
+		changed = info.ExtraUpdates(ctx, portal) || changed
 	}
 	if changed {
 		portal.UpdateBridgeInfo(ctx)

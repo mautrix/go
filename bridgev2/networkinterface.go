@@ -360,6 +360,7 @@ const (
 	RemoteEventTyping
 	RemoteEventChatTag
 	RemoteEventChatMute
+	RemoteEventChatInfoChange
 )
 
 // RemoteEvent represents a single event from the remote network, such as a message or a reaction.
@@ -371,6 +372,16 @@ type RemoteEvent interface {
 	GetPortalKey() networkid.PortalKey
 	AddLogContext(c zerolog.Context) zerolog.Context
 	GetSender() EventSender
+}
+
+type RemotePreHandler interface {
+	RemoteEvent
+	PreHandle(ctx context.Context, portal *Portal)
+}
+
+type RemoteChatInfoChange interface {
+	RemoteEvent
+	GetChatInfoChange(ctx context.Context) (*ChatInfoChange, error)
 }
 
 type RemoteEventThatMayCreatePortal interface {
