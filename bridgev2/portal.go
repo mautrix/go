@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/exfmt"
 	"go.mau.fi/util/exslices"
 	"go.mau.fi/util/variationselector"
 	"golang.org/x/exp/slices"
@@ -1371,6 +1372,7 @@ type PortalInfo struct {
 
 	IsDirectChat *bool
 	IsSpace      *bool
+	Disappear    *database.DisappearingSetting
 
 	UserLocal *UserLocalPortalInfo
 }
@@ -1618,6 +1620,48 @@ func (portal *Portal) updateUserLocalInfo(ctx context.Context, info *UserLocalPo
 	}
 }
 
+func (portal *Portal) UpdateDisappearingSetting(ctx context.Context, setting database.DisappearingSetting, sender *Ghost, ts time.Time, implicit, save bool) bool {
+	if portal.Metadata.DisappearTimer == setting.Timer {
+		return false
+	}
+	portal.Metadata.DisappearType = setting.Type
+	portal.Metadata.DisappearTimer = setting.Timer
+	if setting.Timer == 0 {
+		portal.Metadata.DisappearType = ""
+	}
+	if save {
+		err := portal.Save(ctx)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to save portal to database after updating disappearing setting")
+		}
+	}
+	content := &event.MessageEventContent{
+		MsgType: event.MsgNotice,
+		Body:    fmt.Sprintf("Disappearing messages set to %s", exfmt.Duration(setting.Timer)),
+	}
+	if implicit {
+		content.Body = fmt.Sprintf("Automatically enabled disappearing message timer (%s) because incoming message is disappearing", exfmt.Duration(setting.Timer))
+	} else if setting.Timer == 0 {
+		content.Body = "Disappearing messages disabled"
+	}
+	intent := portal.Bridge.Bot
+	if sender != nil {
+		intent = sender.IntentFor(portal)
+	}
+	_, err := intent.SendMessage(ctx, portal.MXID, event.EventMessage, &event.Content{
+		Parsed: content,
+	}, ts)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to send disappearing messages notice")
+	} else {
+		zerolog.Ctx(ctx).Debug().
+			Dur("new_timer", portal.Metadata.DisappearTimer).
+			Bool("implicit", implicit).
+			Msg("Sent disappearing messages notice")
+	}
+	return true
+}
+
 func (portal *Portal) UpdateInfo(ctx context.Context, info *PortalInfo, source *UserLogin, sender *Ghost, ts time.Time) {
 	changed := false
 	if info.Name != nil {
@@ -1628,6 +1672,9 @@ func (portal *Portal) UpdateInfo(ctx context.Context, info *PortalInfo, source *
 	}
 	if info.Avatar != nil {
 		changed = portal.UpdateAvatar(ctx, info.Avatar, sender, ts) || changed
+	}
+	if info.Disappear != nil {
+		changed = portal.UpdateDisappearingSetting(ctx, *info.Disappear, sender, ts, false, false) || changed
 	}
 	if info.Members != nil && portal.MXID != "" && source != nil {
 		_, _, err := portal.SyncParticipants(ctx, info.Members, source)
