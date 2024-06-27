@@ -14,6 +14,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/exmime"
+	"golang.org/x/exp/constraints"
 	"golang.org/x/exp/slices"
 
 	"maunium.net/go/mautrix/bridgev2/database"
@@ -223,6 +224,45 @@ func (ghost *Ghost) UpdateInfoIfNecessary(ctx context.Context, source *UserLogin
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to get info to update ghost")
 	} else if info != nil {
 		ghost.UpdateInfo(ctx, info)
+	}
+}
+
+func MergeExtraUpdaters[T any](funcs ...func(context.Context, T) bool) func(context.Context, T) bool {
+	return func(ctx context.Context, obj T) bool {
+		update := false
+		for _, f := range funcs {
+			update = f(ctx, obj) || update
+		}
+		return update
+	}
+}
+
+func NumberMetadataUpdater[T *Ghost | *Portal, MetaType constraints.Integer | constraints.Float](key string, value MetaType) func(context.Context, T) bool {
+	return simpleMetadataUpdater[T, MetaType](key, value, database.GetNumberFromMap[MetaType])
+}
+
+func SimpleMetadataUpdater[T *Ghost | *Portal, MetaType comparable](key string, value MetaType) func(context.Context, T) bool {
+	return simpleMetadataUpdater[T, MetaType](key, value, func(m map[string]any, key string) (MetaType, bool) {
+		val, ok := m[key].(MetaType)
+		return val, ok
+	})
+}
+
+func simpleMetadataUpdater[T *Ghost | *Portal, MetaType comparable](key string, value MetaType, getter func(map[string]any, string) (MetaType, bool)) func(context.Context, T) bool {
+	return func(ctx context.Context, obj T) bool {
+		var meta map[string]any
+		switch typedObj := any(obj).(type) {
+		case *Ghost:
+			meta = typedObj.Metadata.Extra
+		case *Portal:
+			meta = typedObj.Metadata.Extra
+		}
+		currentVal, ok := getter(meta, key)
+		if ok && currentVal == value {
+			return false
+		}
+		meta[key] = value
+		return true
 	}
 }
 
