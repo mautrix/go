@@ -358,8 +358,6 @@ const (
 	RemoteEventDeliveryReceipt
 	RemoteEventMarkUnread
 	RemoteEventTyping
-	RemoteEventChatTag
-	RemoteEventChatMute
 	RemoteEventChatInfoChange
 )
 
@@ -461,18 +459,6 @@ const (
 type RemoteTypingWithType interface {
 	RemoteTyping
 	GetTypingType() TypingType
-}
-
-type RemoteChatTag interface {
-	RemoteEvent
-	GetTag() (tag event.RoomTag, remove bool)
-}
-
-var Unmuted = time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-
-type RemoteChatMute interface {
-	RemoteEvent
-	GetMutedUntil() time.Time
 }
 
 // SimpleRemoteEvent is a simple implementation of RemoteEvent that can be used with struct fields and some callbacks.

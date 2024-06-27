@@ -890,10 +890,6 @@ func (portal *Portal) handleRemoteEvent(source *UserLogin, evt RemoteEvent) {
 		portal.handleRemoteDeliveryReceipt(ctx, source, evt.(RemoteReceipt))
 	case RemoteEventTyping:
 		portal.handleRemoteTyping(ctx, source, evt.(RemoteTyping))
-	case RemoteEventChatTag:
-		portal.handleRemoteChatTag(ctx, source, evt.(RemoteChatTag))
-	case RemoteEventChatMute:
-		portal.handleRemoteChatMute(ctx, source, evt.(RemoteChatMute))
 	case RemoteEventChatInfoChange:
 		portal.handleRemoteChatInfoChange(ctx, source, evt.(RemoteChatInfoChange))
 	default:
@@ -1338,37 +1334,6 @@ func (portal *Portal) handleRemoteTyping(ctx context.Context, source *UserLogin,
 	}
 }
 
-func (portal *Portal) handleRemoteChatTag(ctx context.Context, source *UserLogin, evt RemoteChatTag) {
-	if !evt.GetSender().IsFromMe {
-		zerolog.Ctx(ctx).Warn().Msg("Ignoring chat tag event from non-self user")
-		return
-	}
-	dp := source.User.DoublePuppet(ctx)
-	if dp == nil {
-		return
-	}
-	tag, isTagged := evt.GetTag()
-	err := dp.TagRoom(ctx, portal.MXID, tag, isTagged)
-	if err != nil {
-		zerolog.Ctx(ctx).Err(err).Msg("Failed to bridge chat tag event")
-	}
-}
-
-func (portal *Portal) handleRemoteChatMute(ctx context.Context, source *UserLogin, evt RemoteChatMute) {
-	if !evt.GetSender().IsFromMe {
-		zerolog.Ctx(ctx).Warn().Msg("Ignoring chat mute event from non-self user")
-		return
-	}
-	dp := source.User.DoublePuppet(ctx)
-	if dp == nil {
-		return
-	}
-	err := dp.MuteRoom(ctx, portal.MXID, evt.GetMutedUntil())
-	if err != nil {
-		zerolog.Ctx(ctx).Err(err).Msg("Failed to bridge chat mute event")
-	}
-}
-
 func (portal *Portal) handleRemoteChatInfoChange(ctx context.Context, source *UserLogin, evt RemoteChatInfoChange) {
 	info, err := evt.GetChatInfoChange(ctx)
 	if err != nil {
@@ -1405,6 +1370,8 @@ type PortalInfo struct {
 
 	ExtraUpdates func(context.Context, *Portal) bool
 }
+
+var Unmuted = time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 
 type UserLocalPortalInfo struct {
 	MutedUntil *time.Time
