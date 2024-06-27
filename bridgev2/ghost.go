@@ -124,6 +124,8 @@ type UserInfo struct {
 	Name        *string
 	Avatar      *Avatar
 	IsBot       *bool
+
+	ExtraUpdates func(context.Context, *Ghost) bool
 }
 
 func (ghost *Ghost) UpdateName(ctx context.Context, name string) bool {
@@ -234,6 +236,9 @@ func (ghost *Ghost) UpdateInfo(ctx context.Context, info *UserInfo) {
 	}
 	if info.Identifiers != nil || info.IsBot != nil {
 		update = ghost.UpdateContactInfo(ctx, info.Identifiers, info.IsBot) || update
+	}
+	if info.ExtraUpdates != nil {
+		update = info.ExtraUpdates(ctx, ghost) || update
 	}
 	if update {
 		err := ghost.Bridge.DB.Ghost.Update(ctx, ghost.Ghost)
