@@ -54,10 +54,10 @@ const (
 	getUserLoginBaseQuery = `
 		SELECT bridge_id, user_mxid, id, space_room, metadata FROM user_login
 	`
-	getLoginByIDQuery         = getUserLoginBaseQuery + `WHERE bridge_id=$1 AND id=$2`
-	getAllLoginsQuery         = getUserLoginBaseQuery + `WHERE bridge_id=$1`
-	getAllLoginsForUserQuery  = getUserLoginBaseQuery + `WHERE bridge_id=$1 AND user_mxid=$2`
-	getAllLoginsInPortalQuery = `
+	getLoginByIDQuery          = getUserLoginBaseQuery + `WHERE bridge_id=$1 AND id=$2`
+	getAllUsersWithLoginsQuery = `SELECT DISTINCT user_mxid FROM user_login WHERE bridge_id=$1`
+	getAllLoginsForUserQuery   = getUserLoginBaseQuery + `WHERE bridge_id=$1 AND user_mxid=$2`
+	getAllLoginsInPortalQuery  = `
 		SELECT ul.bridge_id, ul.user_mxid, ul.id, ul.space_room, ul.metadata FROM user_portal
 		LEFT JOIN user_login ul ON user_portal.bridge_id=ul.bridge_id AND user_portal.user_mxid=ul.user_mxid AND user_portal.login_id=ul.id
 		WHERE user_portal.bridge_id=$1 AND user_portal.portal_id=$2 AND user_portal.portal_receiver=$3
@@ -79,8 +79,9 @@ func (uq *UserLoginQuery) GetByID(ctx context.Context, id networkid.UserLoginID)
 	return uq.QueryOne(ctx, getLoginByIDQuery, uq.BridgeID, id)
 }
 
-func (uq *UserLoginQuery) GetAll(ctx context.Context) ([]*UserLogin, error) {
-	return uq.QueryMany(ctx, getAllLoginsQuery, uq.BridgeID)
+func (uq *UserLoginQuery) GetAllUserIDsWithLogins(ctx context.Context) ([]id.UserID, error) {
+	rows, err := uq.GetDB().Query(ctx, getAllUsersWithLoginsQuery, uq.BridgeID)
+	return dbutil.NewRowIterWithError(rows, dbutil.ScanSingleColumn[id.UserID], err).AsList()
 }
 
 func (uq *UserLoginQuery) GetAllInPortal(ctx context.Context, portal networkid.PortalKey) ([]*UserLogin, error) {

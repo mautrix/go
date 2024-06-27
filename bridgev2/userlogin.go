@@ -56,7 +56,8 @@ func (br *Bridge) loadUserLogin(ctx context.Context, user *User, dbUserLogin *da
 	}
 	err := br.Network.LoadUserLogin(ctx, userLogin)
 	if err != nil {
-		return nil, fmt.Errorf("failed to prepare: %w", err)
+		userLogin.Log.Err(err).Msg("Failed to load user login")
+		return nil, nil
 	}
 	user.logins[userLogin.ID] = userLogin
 	br.userLoginsByID[userLogin.ID] = userLogin
@@ -65,16 +66,17 @@ func (br *Bridge) loadUserLogin(ctx context.Context, user *User, dbUserLogin *da
 }
 
 func (br *Bridge) loadManyUserLogins(ctx context.Context, user *User, logins []*database.UserLogin) ([]*UserLogin, error) {
-	output := make([]*UserLogin, len(logins))
-	for i, dbLogin := range logins {
+	output := make([]*UserLogin, 0, len(logins))
+	for _, dbLogin := range logins {
 		if cached, ok := br.userLoginsByID[dbLogin.ID]; ok {
-			output[i] = cached
+			output = append(output, cached)
 		} else {
 			loaded, err := br.loadUserLogin(ctx, user, dbLogin)
 			if err != nil {
-				return nil, fmt.Errorf("failed to load user login: %w", err)
+				return nil, err
+			} else if loaded != nil {
+				output = append(output, loaded)
 			}
-			output[i] = loaded
 		}
 	}
 	return output, nil
@@ -87,16 +89,6 @@ func (br *Bridge) unlockedLoadUserLoginsByMXID(ctx context.Context, user *User) 
 	}
 	_, err = br.loadManyUserLogins(ctx, user, logins)
 	return err
-}
-
-func (br *Bridge) GetAllUserLogins(ctx context.Context) ([]*UserLogin, error) {
-	logins, err := br.DB.UserLogin.GetAll(ctx)
-	if err != nil {
-		return nil, err
-	}
-	br.cacheLock.Lock()
-	defer br.cacheLock.Unlock()
-	return br.loadManyUserLogins(ctx, nil, logins)
 }
 
 func (br *Bridge) GetUserLoginsInPortal(ctx context.Context, portal networkid.PortalKey) ([]*UserLogin, error) {

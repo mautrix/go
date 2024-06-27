@@ -158,6 +158,12 @@ func (user *User) GetUserLoginIDs() []networkid.UserLoginID {
 	return maps.Keys(user.logins)
 }
 
+func (user *User) GetCachedUserLogins() []*UserLogin {
+	user.Bridge.cacheLock.Lock()
+	defer user.Bridge.cacheLock.Unlock()
+	return maps.Values(user.logins)
+}
+
 func (user *User) GetFormattedUserLogins() string {
 	user.Bridge.cacheLock.Lock()
 	logins := make([]string, len(user.logins))

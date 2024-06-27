@@ -107,18 +107,29 @@ func (br *Bridge) Start() error {
 		go br.DisappearLoop.Start()
 	}
 
-	logins, err := br.GetAllUserLogins(ctx)
+	userIDs, err := br.DB.UserLogin.GetAllUserIDsWithLogins(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get user logins: %w", err)
+		return fmt.Errorf("failed to get users with logins: %w", err)
 	}
-	for _, login := range logins {
-		br.Log.Info().Str("id", string(login.ID)).Msg("Starting user login")
-		err = login.Client.Connect(login.Log.WithContext(ctx))
+	startedAny := false
+	for _, userID := range userIDs {
+		br.Log.Info().Stringer("user_id", userID).Msg("Loading user")
+		var user *User
+		user, err = br.GetUserByMXID(ctx, userID)
 		if err != nil {
-			br.Log.Err(err).Msg("Failed to connect existing client")
+			br.Log.Err(err).Stringer("user_id", userID).Msg("Failed to load user")
+		} else {
+			for _, login := range user.GetCachedUserLogins() {
+				startedAny = true
+				br.Log.Info().Str("id", string(login.ID)).Msg("Starting user login")
+				err = login.Client.Connect(login.Log.WithContext(ctx))
+				if err != nil {
+					br.Log.Err(err).Msg("Failed to connect existing client")
+				}
+			}
 		}
 	}
-	if len(logins) == 0 {
+	if !startedAny {
 		br.Log.Info().Msg("No user logins found")
 		br.SendGlobalBridgeState(status.BridgeState{StateEvent: status.StateUnconfigured})
 	}
