@@ -271,16 +271,31 @@ func (as *ASIntent) DeleteRoom(ctx context.Context, roomID id.RoomID, puppetsOnl
 }
 
 func (as *ASIntent) TagRoom(ctx context.Context, roomID id.RoomID, tag event.RoomTag, isTagged bool) error {
+	tags, err := as.Matrix.GetTags(ctx, roomID)
+	if err != nil {
+		return fmt.Errorf("failed to get room tags: %w", err)
+	}
 	if isTagged {
-		return as.Matrix.AddTagWithCustomData(ctx, roomID, tag, &event.TagMetadata{
+		_, alreadyTagged := tags.Tags[tag]
+		if alreadyTagged {
+			return nil
+		}
+		err = as.Matrix.AddTagWithCustomData(ctx, roomID, tag, &event.TagMetadata{
 			MauDoublePuppetSource: as.Connector.AS.DoublePuppetValue,
 		})
-	} else {
-		if tag == "" {
-			// TODO clear all tags?
+		if err != nil {
+			return err
 		}
-		return as.Matrix.RemoveTag(ctx, roomID, tag)
 	}
+	for extraTag := range tags.Tags {
+		if extraTag == event.RoomTagFavourite || extraTag == event.RoomTagLowPriority {
+			err = as.Matrix.RemoveTag(ctx, roomID, extraTag)
+			if err != nil {
+				return fmt.Errorf("failed to remove extra tag %s: %w", extraTag, err)
+			}
+		}
+	}
+	return nil
 }
 
 func (as *ASIntent) MuteRoom(ctx context.Context, roomID id.RoomID, until time.Time) error {
