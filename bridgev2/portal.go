@@ -1344,18 +1344,21 @@ func (portal *Portal) handleRemoteChatInfoChange(ctx context.Context, source *Us
 }
 
 type ChatInfoChange struct {
-	PortalInfo *PortalInfo
+	ChatInfo *ChatInfo
 	// TODO member event changes
 }
 
 func (portal *Portal) ProcessChatInfoChange(ctx context.Context, sender EventSender, source *UserLogin, change *ChatInfoChange, ts time.Time) {
 	intent := portal.GetIntentFor(ctx, sender, source, RemoteEventChatInfoChange)
-	if change.PortalInfo != nil {
-		portal.UpdateInfo(ctx, change.PortalInfo, source, intent, ts)
+	if change.ChatInfo != nil {
+		portal.UpdateInfo(ctx, change.ChatInfo, source, intent, ts)
 	}
 }
 
-type PortalInfo struct {
+// Deprecated: Renamed to ChatInfo
+type PortalInfo = ChatInfo
+
+type ChatInfo struct {
 	Name   *string
 	Topic  *string
 	Avatar *Avatar
@@ -1655,7 +1658,7 @@ func (portal *Portal) UpdateDisappearingSetting(ctx context.Context, setting dat
 	return true
 }
 
-func (portal *Portal) UpdateInfo(ctx context.Context, info *PortalInfo, source *UserLogin, sender MatrixAPI, ts time.Time) {
+func (portal *Portal) UpdateInfo(ctx context.Context, info *ChatInfo, source *UserLogin, sender MatrixAPI, ts time.Time) {
 	changed := false
 	if info.Name != nil {
 		changed = portal.UpdateName(ctx, *info.Name, sender, ts) || changed
@@ -1696,7 +1699,7 @@ func (portal *Portal) UpdateInfo(ctx context.Context, info *PortalInfo, source *
 	}
 }
 
-func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, info *PortalInfo) error {
+func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, info *ChatInfo) error {
 	portal.roomCreateLock.Lock()
 	defer portal.roomCreateLock.Unlock()
 	if portal.MXID != "" {

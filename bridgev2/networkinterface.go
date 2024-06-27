@@ -211,7 +211,7 @@ type NetworkAPI interface {
 	LogoutRemote(ctx context.Context)
 
 	IsThisUser(ctx context.Context, userID networkid.UserID) bool
-	GetChatInfo(ctx context.Context, portal *Portal) (*PortalInfo, error)
+	GetChatInfo(ctx context.Context, portal *Portal) (*ChatInfo, error)
 	GetUserInfo(ctx context.Context, ghost *Ghost) (*UserInfo, error)
 	GetCapabilities(ctx context.Context, portal *Portal) *NetworkRoomCapabilities
 
@@ -258,7 +258,7 @@ type CreateChatResponse struct {
 	Portal *Portal
 
 	PortalID   networkid.PortalKey
-	PortalInfo *PortalInfo
+	PortalInfo *ChatInfo
 }
 
 type IdentifierResolvingNetworkAPI interface {
