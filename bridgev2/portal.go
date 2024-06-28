@@ -247,6 +247,7 @@ func (portal *Portal) handleMatrixEvent(sender *User, evt *event.Event) {
 	}
 	log := portal.Log.With().
 		Str("action", "handle matrix event").
+		Str("event_type", evt.Type.Type).
 		Stringer("event_id", evt.ID).
 		Stringer("sender", sender.MXID).
 		Logger()
@@ -287,8 +288,11 @@ func (portal *Portal) handleMatrixEvent(sender *User, evt *event.Event) {
 	case event.EventRedaction:
 		portal.handleMatrixRedaction(ctx, login, origSender, evt)
 	case event.StateRoomName:
+		handleMatrixRoomMeta(portal, ctx, login, origSender, evt, RoomNameHandlingNetworkAPI.HandleMatrixRoomName)
 	case event.StateTopic:
+		handleMatrixRoomMeta(portal, ctx, login, origSender, evt, RoomTopicHandlingNetworkAPI.HandleMatrixRoomTopic)
 	case event.StateRoomAvatar:
+		handleMatrixRoomMeta(portal, ctx, login, origSender, evt, RoomAvatarHandlingNetworkAPI.HandleMatrixRoomAvatar)
 	case event.StateEncryption:
 	}
 }
@@ -772,6 +776,73 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 	portal.sendSuccessStatus(ctx, evt)
 }
 
+func handleMatrixRoomMeta[APIType any, ContentType RoomMetaEventContent](
+	portal *Portal,
+	ctx context.Context,
+	sender *UserLogin,
+	origSender *OrigSender,
+	evt *event.Event,
+	fn func(APIType, context.Context, *MatrixRoomMeta[ContentType]) (bool, error),
+) {
+	api, ok := sender.Client.(APIType)
+	if !ok {
+		portal.sendErrorStatus(ctx, evt, ErrRoomMetadataNotSupported)
+		return
+	}
+	log := zerolog.Ctx(ctx)
+	content, ok := evt.Content.Parsed.(ContentType)
+	if !ok {
+		log.Error().Type("content_type", evt.Content.Parsed).Msg("Unexpected parsed content type")
+		portal.sendErrorStatus(ctx, evt, fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed))
+		return
+	}
+	switch typedContent := evt.Content.Parsed.(type) {
+	case *event.RoomNameEventContent:
+		if typedContent.Name == portal.Name {
+			portal.sendSuccessStatus(ctx, evt)
+			return
+		}
+	case *event.TopicEventContent:
+		if typedContent.Topic == portal.Topic {
+			portal.sendSuccessStatus(ctx, evt)
+			return
+		}
+	case *event.RoomAvatarEventContent:
+		if typedContent.URL == portal.AvatarMXC {
+			portal.sendSuccessStatus(ctx, evt)
+			return
+		}
+	}
+	var prevContent ContentType
+	if evt.Unsigned.PrevContent != nil {
+		_ = evt.Unsigned.PrevContent.ParseRaw(evt.Type)
+		prevContent, _ = evt.Unsigned.PrevContent.Parsed.(ContentType)
+	}
+
+	changed, err := fn(api, ctx, &MatrixRoomMeta[ContentType]{
+		MatrixEventBase: MatrixEventBase[ContentType]{
+			Event:      evt,
+			Content:    content,
+			Portal:     portal,
+			OrigSender: origSender,
+		},
+		PrevContent: prevContent,
+	})
+	if err != nil {
+		log.Err(err).Msg("Failed to handle Matrix room metadata")
+		portal.sendErrorStatus(ctx, evt, err)
+		return
+	}
+	if changed {
+		portal.UpdateBridgeInfo(ctx)
+		err = portal.Save(ctx)
+		if err != nil {
+			log.Err(err).Msg("Failed to save portal after updating room metadata")
+		}
+	}
+	portal.sendSuccessStatus(ctx, evt)
+}
+
 func (portal *Portal) handleMatrixRedaction(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) {
 	log := zerolog.Ctx(ctx)
 	content, ok := evt.Content.Parsed.(*event.RedactionEventContent)
@@ -823,6 +894,7 @@ func (portal *Portal) handleMatrixRedaction(ctx context.Context, sender *UserLog
 			portal.sendErrorStatus(ctx, evt, ErrReactionsNotSupported)
 			return
 		}
+		// TODO ignore if sender doesn't match?
 		err = reactingAPI.HandleMatrixReactionRemove(ctx, &MatrixReactionRemove{
 			MatrixEventBase: MatrixEventBase[*event.RedactionEventContent]{
 				Event:      evt,

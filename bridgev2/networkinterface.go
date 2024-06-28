@@ -245,6 +245,21 @@ type TypingHandlingNetworkAPI interface {
 	HandleMatrixTyping(ctx context.Context, msg *MatrixTyping) error
 }
 
+type RoomNameHandlingNetworkAPI interface {
+	NetworkAPI
+	HandleMatrixRoomName(ctx context.Context, msg *MatrixRoomName) (bool, error)
+}
+
+type RoomAvatarHandlingNetworkAPI interface {
+	NetworkAPI
+	HandleMatrixRoomAvatar(ctx context.Context, msg *MatrixRoomAvatar) (bool, error)
+}
+
+type RoomTopicHandlingNetworkAPI interface {
+	NetworkAPI
+	HandleMatrixRoomTopic(ctx context.Context, msg *MatrixRoomTopic) (bool, error)
+}
+
 type ResolveIdentifierResponse struct {
 	Ghost *Ghost
 
@@ -599,6 +614,19 @@ type MatrixMessageRemove struct {
 	MatrixEventBase[*event.RedactionEventContent]
 	TargetMessage *database.Message
 }
+
+type RoomMetaEventContent interface {
+	*event.RoomNameEventContent | *event.RoomAvatarEventContent | *event.TopicEventContent
+}
+
+type MatrixRoomMeta[ContentType RoomMetaEventContent] struct {
+	MatrixEventBase[ContentType]
+	PrevContent ContentType
+}
+
+type MatrixRoomName = MatrixRoomMeta[*event.RoomNameEventContent]
+type MatrixRoomAvatar = MatrixRoomMeta[*event.RoomAvatarEventContent]
+type MatrixRoomTopic = MatrixRoomMeta[*event.TopicEventContent]
 
 type MatrixReadReceipt struct {
 	Portal *Portal

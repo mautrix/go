@@ -25,6 +25,7 @@ var (
 	ErrEditTargetTooOld                error = WrapErrorInStatus(errors.New("the message is too old to be edited")).WithIsCertain(true)
 	ErrEditTargetTooManyEdits          error = WrapErrorInStatus(errors.New("the message has been edited too many times")).WithIsCertain(true)
 	ErrReactionsNotSupported           error = WrapErrorInStatus(errors.New("this bridge does not support reactions")).WithIsCertain(true)
+	ErrRoomMetadataNotSupported        error = WrapErrorInStatus(errors.New("this bridge does not support changing room metadata")).WithIsCertain(true).WithSendNotice(false)
 	ErrRedactionsNotSupported          error = WrapErrorInStatus(errors.New("this bridge does not support deleting messages")).WithIsCertain(true)
 	ErrUnexpectedParsedContentType     error = WrapErrorInStatus(errors.New("unexpected parsed content type")).WithErrorAsMessage().WithIsCertain(true).WithSendNotice(true)
 	ErrDatabaseError                   error = WrapErrorInStatus(errors.New("database error")).WithMessage("internal database error").WithIsCertain(true).WithSendNotice(true)
