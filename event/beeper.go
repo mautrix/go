@@ -32,7 +32,7 @@ const (
 )
 
 type BeeperMessageStatusEventContent struct {
-	Network   string              `json:"network"`
+	Network   string              `json:"network,omitempty"`
 	RelatesTo RelatesTo           `json:"m.relates_to"`
 	Status    MessageStatus       `json:"status"`
 	Reason    MessageStatusReason `json:"reason,omitempty"`
