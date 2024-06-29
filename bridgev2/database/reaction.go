@@ -67,7 +67,7 @@ const (
 	upsertReactionQuery                    = `
 		INSERT INTO reaction (bridge_id, message_id, message_part_id, sender_id, emoji_id, room_id, room_receiver, mxid, timestamp, metadata)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-		ON CONFLICT (bridge_id, message_id, message_part_id, sender_id, emoji_id)
+		ON CONFLICT (bridge_id, room_receiver, message_id, message_part_id, sender_id, emoji_id)
 		DO UPDATE SET mxid=excluded.mxid, timestamp=excluded.timestamp, metadata=excluded.metadata
 	`
 	deleteReactionQuery = `
