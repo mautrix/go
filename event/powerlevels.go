@@ -143,6 +143,9 @@ func (pl *PowerLevelsEventContent) SetUserLevel(userID id.UserID, level int) {
 	if level == pl.UsersDefault {
 		delete(pl.Users, userID)
 	} else {
+		if pl.Users == nil {
+			pl.Users = make(map[id.UserID]int)
+		}
 		pl.Users[userID] = level
 	}
 }
@@ -175,6 +178,9 @@ func (pl *PowerLevelsEventContent) SetEventLevel(eventType Type, level int) {
 	if (eventType.IsState() && level == pl.StateDefault()) || (!eventType.IsState() && level == pl.EventsDefault) {
 		delete(pl.Events, eventType.String())
 	} else {
+		if pl.Events == nil {
+			pl.Events = make(map[string]int)
+		}
 		pl.Events[eventType.String()] = level
 	}
 }

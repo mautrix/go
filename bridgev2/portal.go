@@ -2028,6 +2028,7 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 			event.StateServerACL.Type:  100,
 			event.StateEncryption.Type: 100,
 		},
+		Users: map[id.UserID]int{},
 	}
 	initialMembers, extraFunctionalMembers, err := portal.GetInitialMemberList(ctx, info.Members, source, powerLevels)
 	if err != nil {
