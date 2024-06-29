@@ -136,6 +136,7 @@ var CommandDeletePortal = &FullHandler{
 		if err != nil {
 			ce.Reply("Failed to clean up room: %v", err)
 		}
+		ce.MessageStatus.DisableMSS = true
 	},
 	Name: "delete-portal",
 	Help: HelpMeta{

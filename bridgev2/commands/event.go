@@ -38,6 +38,8 @@ type Event struct {
 	ReplyTo   id.EventID
 	Ctx       context.Context
 	Log       *zerolog.Logger
+
+	MessageStatus *bridgev2.MessageStatus
 }
 
 // Reply sends a reply to command as notice, with optional string formatting and automatic $cmdprefix replacement.

@@ -68,16 +68,16 @@ func (proc *Processor) AddHandler(handler CommandHandler) {
 
 // Handle handles messages to the bridge
 func (proc *Processor) Handle(ctx context.Context, roomID id.RoomID, eventID id.EventID, user *bridgev2.User, message string, replyTo id.EventID) {
+	ms := &bridgev2.MessageStatus{
+		Step:   status.MsgStepCommand,
+		Status: event.MessageStatusSuccess,
+	}
 	defer func() {
 		statusInfo := &bridgev2.MessageStatusEventInfo{
 			RoomID:    roomID,
 			EventID:   eventID,
 			EventType: event.EventMessage,
 			Sender:    user.MXID,
-		}
-		ms := bridgev2.MessageStatus{
-			Step:   status.MsgStepCommand,
-			Status: event.MessageStatusSuccess,
 		}
 		err := recover()
 		if err != nil {
@@ -94,7 +94,7 @@ func (proc *Processor) Handle(ctx context.Context, roomID id.RoomID, eventID id.
 			}
 			ms.ErrorAsMessage = true
 		}
-		proc.bridge.Matrix.SendMessageStatus(ctx, &ms, statusInfo)
+		proc.bridge.Matrix.SendMessageStatus(ctx, ms, statusInfo)
 	}()
 	args := strings.Fields(message)
 	if len(args) == 0 {
@@ -119,6 +119,8 @@ func (proc *Processor) Handle(ctx context.Context, roomID id.RoomID, eventID id.
 		RawArgs:   rawArgs,
 		ReplyTo:   replyTo,
 		Ctx:       ctx,
+
+		MessageStatus: ms,
 	}
 
 	realCommand, ok := proc.aliases[ce.Command]
