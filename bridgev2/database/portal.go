@@ -48,17 +48,18 @@ type Portal struct {
 	networkid.PortalKey
 	MXID id.RoomID
 
-	ParentID   networkid.PortalID
-	Name       string
-	Topic      string
-	AvatarID   networkid.AvatarID
-	AvatarHash [32]byte
-	AvatarMXC  id.ContentURIString
-	NameSet    bool
-	TopicSet   bool
-	AvatarSet  bool
-	InSpace    bool
-	Metadata   PortalMetadata
+	ParentID     networkid.PortalID
+	RelayLoginID networkid.UserLoginID
+	Name         string
+	Topic        string
+	AvatarID     networkid.AvatarID
+	AvatarHash   [32]byte
+	AvatarMXC    id.ContentURIString
+	NameSet      bool
+	TopicSet     bool
+	AvatarSet    bool
+	InSpace      bool
+	Metadata     PortalMetadata
 }
 
 func newPortal(_ *dbutil.QueryHelper[*Portal]) *Portal {
@@ -67,7 +68,8 @@ func newPortal(_ *dbutil.QueryHelper[*Portal]) *Portal {
 
 const (
 	getPortalBaseQuery = `
-		SELECT bridge_id, id, receiver, mxid, parent_id, name, topic, avatar_id, avatar_hash, avatar_mxc,
+		SELECT bridge_id, id, receiver, mxid, parent_id, relay_login_id,
+		       name, topic, avatar_id, avatar_hash, avatar_mxc,
 		       name_set, topic_set, avatar_set, in_space,
 		       metadata
 		FROM portal
@@ -80,15 +82,20 @@ const (
 	insertPortalQuery = `
 		INSERT INTO portal (
 			bridge_id, id, receiver, mxid,
-			parent_id, name, topic, avatar_id, avatar_hash, avatar_mxc,
+			parent_id, relay_login_id,
+			name, topic, avatar_id, avatar_hash, avatar_mxc,
 			name_set, avatar_set, topic_set, in_space,
-			metadata
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+			metadata, relay_bridge_id
+		) VALUES (
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
+			CASE WHEN $6 IS NULL THEN NULL ELSE $1 END
+		)
 	`
 	updatePortalQuery = `
 		UPDATE portal
-		SET mxid=$4, parent_id=$5, name=$6, topic=$7, avatar_id=$8, avatar_hash=$9, avatar_mxc=$10,
-		    name_set=$11, avatar_set=$12, topic_set=$13, in_space=$14, metadata=$15
+		SET mxid=$4, parent_id=$5, relay_bridge_id=CASE WHEN $6 IS NULL THEN NULL ELSE bridge_id END, relay_login_id=$6,
+		    name=$7, topic=$8, avatar_id=$9, avatar_hash=$10, avatar_mxc=$11,
+		    name_set=$12, avatar_set=$13, topic_set=$14, in_space=$15, metadata=$16
 		WHERE bridge_id=$1 AND id=$2 AND receiver=$3
 	`
 	deletePortalQuery = `
@@ -133,11 +140,11 @@ func (pq *PortalQuery) Delete(ctx context.Context, key networkid.PortalKey) erro
 }
 
 func (p *Portal) Scan(row dbutil.Scannable) (*Portal, error) {
-	var mxid, parentID sql.NullString
+	var mxid, parentID, relayLoginID sql.NullString
 	var avatarHash string
 	err := row.Scan(
 		&p.BridgeID, &p.ID, &p.Receiver, &mxid,
-		&parentID, &p.Name, &p.Topic, &p.AvatarID, &avatarHash, &p.AvatarMXC,
+		&parentID, &relayLoginID, &p.Name, &p.Topic, &p.AvatarID, &avatarHash, &p.AvatarMXC,
 		&p.NameSet, &p.TopicSet, &p.AvatarSet, &p.InSpace,
 		dbutil.JSON{Data: &p.Metadata},
 	)
@@ -155,6 +162,7 @@ func (p *Portal) Scan(row dbutil.Scannable) (*Portal, error) {
 	}
 	p.MXID = id.RoomID(mxid.String)
 	p.ParentID = networkid.PortalID(parentID.String)
+	p.RelayLoginID = networkid.UserLoginID(relayLoginID.String)
 	return p, nil
 }
 
@@ -168,7 +176,8 @@ func (p *Portal) sqlVariables() []any {
 	}
 	return []any{
 		p.BridgeID, p.ID, p.Receiver, dbutil.StrPtr(p.MXID),
-		dbutil.StrPtr(p.ParentID), p.Name, p.Topic, p.AvatarID, avatarHash, p.AvatarMXC,
+		dbutil.StrPtr(p.ParentID), dbutil.StrPtr(p.RelayLoginID),
+		p.Name, p.Topic, p.AvatarID, avatarHash, p.AvatarMXC,
 		p.NameSet, p.TopicSet, p.AvatarSet, p.InSpace,
 		dbutil.JSON{Data: &p.Metadata},
 	}

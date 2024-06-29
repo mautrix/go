@@ -4,6 +4,25 @@ bridge:
     command_prefix: '$<<or .DefaultCommandPrefix (printf "!%s" .NetworkID)>>'
     # Should the bridge create a space for each login containing the rooms that account is in?
     personal_filtering_spaces: true
+    # Settings for relay mode
+    relay:
+        # Whether relay mode should be allowed. If allowed, the set-relay command can be used to turn any
+        # authenticated user into a relaybot for that chat.
+        enabled: false
+        # Should only admins be allowed to set themselves as relay users?
+        admin_only: true
+        # List of user login IDs which anyone can set as a relay using set-default-relay as long as they're in the room.
+        default_relays: []
+        # The formats to use when sending messages via the relaybot.
+        message_formats:
+            m.text: "<b>{{ .Sender.Displayname }}</b>: {{ .Message }}"
+            m.notice: "<b>{{ .Sender.Displayname }}</b>: {{ .Message }}"
+            m.emote: "* <b>{{ .Sender.Displayname }}</b> {{ .Message }}"
+            m.file: "<b>{{ .Sender.Displayname }}</b> sent a file{{ if .Caption }}: {{ .Caption }}{{ end }}"
+            m.image: "<b>{{ .Sender.Displayname }}</b> sent an image{{ if .Caption }}: {{ .Caption }}{{ end }}"
+            m.audio: "<b>{{ .Sender.Displayname }}</b> sent an audio file{{ if .Caption }}: {{ .Caption }}{{ end }}"
+            m.video: "<b>{{ .Sender.Displayname }}</b> sent a video{{ if .Caption }}: {{ .Caption }}{{ end }}"
+            m.location: "<b>{{ .Sender.Displayname }}</b> sent a location{{ if .Caption }}: {{ .Caption }}{{ end }}"
 
 # Config for the bridge's database.
 database:

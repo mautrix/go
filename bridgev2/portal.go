@@ -91,11 +91,17 @@ func (br *Bridge) loadPortal(ctx context.Context, dbPortal *database.Portal, que
 	if portal.MXID != "" {
 		br.portalsByMXID[portal.MXID] = portal
 	}
+	var err error
 	if portal.ParentID != "" {
-		var err error
 		portal.Parent, err = br.unlockedGetPortalByID(ctx, networkid.PortalKey{ID: portal.ParentID}, false)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load parent portal (%s): %w", portal.ParentID, err)
+		}
+	}
+	if portal.RelayLoginID != "" {
+		portal.Relay, err = br.unlockedGetExistingUserLoginByID(ctx, portal.RelayLoginID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load relay login (%s): %w", portal.RelayLoginID, err)
 		}
 	}
 	portal.updateLogger()
@@ -508,12 +514,20 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 		portal.handleMatrixEdit(ctx, sender, origSender, evt, content, caps)
 		return
 	}
+	var err error
+	if origSender != nil {
+		content, err = portal.Bridge.Config.Relay.FormatMessage(content, origSender)
+		if err != nil {
+			log.Err(err).Msg("Failed to format message for relaying")
+			portal.sendErrorStatus(ctx, evt, err)
+			return
+		}
+	}
 	if !portal.checkMessageContentCaps(ctx, caps, content, evt) {
 		return
 	}
 
 	var threadRoot, replyTo *database.Message
-	var err error
 	if caps.Threads {
 		threadRootID := content.RelatesTo.GetThreadParent()
 		if threadRootID != "" {
@@ -593,6 +607,15 @@ func (portal *Portal) handleMatrixEdit(ctx context.Context, sender *UserLogin, o
 	})
 	if content.NewContent != nil {
 		content = content.NewContent
+	}
+	if origSender != nil {
+		var err error
+		content, err = portal.Bridge.Config.Relay.FormatMessage(content, origSender)
+		if err != nil {
+			log.Err(err).Msg("Failed to format message for relaying")
+			portal.sendErrorStatus(ctx, evt, err)
+			return
+		}
 	}
 
 	editingAPI, ok := sender.Client.(EditHandlingNetworkAPI)

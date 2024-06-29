@@ -1,4 +1,4 @@
--- v0 -> v2 (compatible with v1+): Latest revision
+-- v0 -> v4 (compatible with v1+): Latest revision
 CREATE TABLE portal (
 	bridge_id       TEXT    NOT NULL,
 	id              TEXT    NOT NULL,
@@ -9,6 +9,9 @@ CREATE TABLE portal (
 	-- This is not accessed by the bridge, it's only used for the portal parent foreign key.
 	-- Parent groups are probably never DMs, so they don't need a receiver.
 	parent_receiver TEXT    NOT NULL DEFAULT '',
+
+	relay_bridge_id TEXT,
+	relay_login_id  TEXT,
 
 	name            TEXT    NOT NULL,
 	topic           TEXT    NOT NULL,
@@ -25,7 +28,10 @@ CREATE TABLE portal (
 	CONSTRAINT portal_parent_fkey FOREIGN KEY (bridge_id, parent_id, parent_receiver)
 		-- Deletes aren't allowed to cascade here:
 		-- children should be re-parented or cleaned up manually
-		REFERENCES portal (bridge_id, id, receiver) ON UPDATE CASCADE
+		REFERENCES portal (bridge_id, id, receiver) ON UPDATE CASCADE,
+	CONSTRAINT portal_relay_fkey FOREIGN KEY (relay_bridge_id, relay_login_id)
+		REFERENCES user_login (bridge_id, id)
+		ON DELETE SET NULL ON UPDATE CASCADE
 );
 
 CREATE TABLE ghost (
@@ -129,7 +135,7 @@ CREATE TABLE user_login (
 	space_room TEXT,
 	metadata   jsonb NOT NULL,
 
-	PRIMARY KEY (bridge_id, user_mxid, id),
+	PRIMARY KEY (bridge_id, id),
 	CONSTRAINT user_login_user_fkey FOREIGN KEY (bridge_id, user_mxid)
 		REFERENCES "user" (bridge_id, mxid)
 		ON DELETE CASCADE ON UPDATE CASCADE
@@ -146,8 +152,8 @@ CREATE TABLE user_portal (
 	last_read       BIGINT,
 
 	PRIMARY KEY (bridge_id, user_mxid, login_id, portal_id, portal_receiver),
-	CONSTRAINT user_portal_user_login_fkey FOREIGN KEY (bridge_id, user_mxid, login_id)
-		REFERENCES user_login (bridge_id, user_mxid, id)
+	CONSTRAINT user_portal_user_login_fkey FOREIGN KEY (bridge_id, login_id)
+		REFERENCES user_login (bridge_id, id)
 		ON DELETE CASCADE ON UPDATE CASCADE,
 	CONSTRAINT user_portal_portal_fkey FOREIGN KEY (bridge_id, portal_id, portal_receiver)
 		REFERENCES portal (bridge_id, id, receiver)
