@@ -999,7 +999,7 @@ func (portal *Portal) getIntentAndUserMXIDFor(ctx context.Context, sender EventS
 			return
 		}
 		extraUserID = source.UserMXID
-	} else if sender.SenderLogin != "" {
+	} else if sender.SenderLogin != "" && portal.Receiver == "" {
 		senderLogin := portal.Bridge.GetCachedUserLoginByID(sender.SenderLogin)
 		if senderLogin != nil {
 			intent = senderLogin.User.DoublePuppet(ctx)
@@ -1010,13 +1010,15 @@ func (portal *Portal) getIntentAndUserMXIDFor(ctx context.Context, sender EventS
 		}
 	}
 	if sender.Sender != "" {
-		for _, login := range otherLogins {
-			if login.Client.IsThisUser(ctx, sender.Sender) {
-				intent = login.User.DoublePuppet(ctx)
-				if intent != nil {
-					return
+		if portal.Receiver == "" {
+			for _, login := range otherLogins {
+				if login.Client.IsThisUser(ctx, sender.Sender) {
+					intent = login.User.DoublePuppet(ctx)
+					if intent != nil {
+						return
+					}
+					extraUserID = login.UserMXID
 				}
-				extraUserID = login.UserMXID
 			}
 		}
 		ghost, err := portal.Bridge.GetGhostByID(ctx, sender.Sender)
