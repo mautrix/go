@@ -1043,7 +1043,7 @@ func (portal *Portal) GetIntentFor(ctx context.Context, sender EventSender, sour
 
 func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin, evt RemoteMessage) {
 	log := zerolog.Ctx(ctx)
-	existing, err := portal.Bridge.DB.Message.GetFirstPartByID(ctx, evt.GetID())
+	existing, err := portal.Bridge.DB.Message.GetFirstPartByID(ctx, portal.Receiver, evt.GetID())
 	if err != nil {
 		log.Err(err).Msg("Failed to check if message is a duplicate")
 	} else if existing != nil {
@@ -1064,7 +1064,7 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 	var relatesToRowID int64
 	var replyTo, threadRoot, prevThreadEvent *database.Message
 	if converted.ReplyTo != nil {
-		replyTo, err = portal.Bridge.DB.Message.GetFirstOrSpecificPartByID(ctx, *converted.ReplyTo)
+		replyTo, err = portal.Bridge.DB.Message.GetFirstOrSpecificPartByID(ctx, portal.Receiver, *converted.ReplyTo)
 		if err != nil {
 			log.Err(err).Msg("Failed to get reply target message from database")
 		} else if replyTo == nil {
@@ -1074,7 +1074,7 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 		}
 	}
 	if converted.ThreadRoot != nil {
-		threadRoot, err = portal.Bridge.DB.Message.GetFirstOrSpecificPartByID(ctx, *converted.ThreadRoot)
+		threadRoot, err = portal.Bridge.DB.Message.GetFirstOrSpecificPartByID(ctx, portal.Receiver, *converted.ThreadRoot)
 		if err != nil {
 			log.Err(err).Msg("Failed to get thread root message from database")
 		} else if threadRoot == nil {
@@ -1164,7 +1164,7 @@ func (portal *Portal) sendRemoteErrorNotice(ctx context.Context, intent MatrixAP
 
 func (portal *Portal) handleRemoteEdit(ctx context.Context, source *UserLogin, evt RemoteEdit) {
 	log := zerolog.Ctx(ctx)
-	existing, err := portal.Bridge.DB.Message.GetAllPartsByID(ctx, evt.GetTargetMessage())
+	existing, err := portal.Bridge.DB.Message.GetAllPartsByID(ctx, portal.Receiver, evt.GetTargetMessage())
 	if err != nil {
 		log.Err(err).Msg("Failed to get edit target message")
 		return
@@ -1234,9 +1234,9 @@ func (portal *Portal) handleRemoteEdit(ctx context.Context, source *UserLogin, e
 
 func (portal *Portal) getTargetMessagePart(ctx context.Context, evt RemoteEventWithTargetMessage) (*database.Message, error) {
 	if partTargeter, ok := evt.(RemoteEventWithTargetPart); ok {
-		return portal.Bridge.DB.Message.GetPartByID(ctx, evt.GetTargetMessage(), partTargeter.GetTargetMessagePart())
+		return portal.Bridge.DB.Message.GetPartByID(ctx, portal.Receiver, evt.GetTargetMessage(), partTargeter.GetTargetMessagePart())
 	} else {
-		return portal.Bridge.DB.Message.GetFirstPartByID(ctx, evt.GetTargetMessage())
+		return portal.Bridge.DB.Message.GetFirstPartByID(ctx, portal.Receiver, evt.GetTargetMessage())
 	}
 }
 
@@ -1348,7 +1348,7 @@ func (portal *Portal) handleRemoteReactionRemove(ctx context.Context, source *Us
 
 func (portal *Portal) handleRemoteMessageRemove(ctx context.Context, source *UserLogin, evt RemoteMessageRemove) {
 	log := zerolog.Ctx(ctx)
-	targetParts, err := portal.Bridge.DB.Message.GetAllPartsByID(ctx, evt.GetTargetMessage())
+	targetParts, err := portal.Bridge.DB.Message.GetAllPartsByID(ctx, portal.Receiver, evt.GetTargetMessage())
 	if err != nil {
 		log.Err(err).Msg("Failed to get target message for removal")
 		return
@@ -1371,7 +1371,7 @@ func (portal *Portal) handleRemoteMessageRemove(ctx context.Context, source *Use
 				Msg("Sent redaction of message part to Matrix")
 		}
 	}
-	err = portal.Bridge.DB.Message.DeleteAllParts(ctx, evt.GetTargetMessage())
+	err = portal.Bridge.DB.Message.DeleteAllParts(ctx, portal.Receiver, evt.GetTargetMessage())
 	if err != nil {
 		log.Err(err).Msg("Failed to delete target message from database")
 	}
@@ -1382,7 +1382,7 @@ func (portal *Portal) handleRemoteReadReceipt(ctx context.Context, source *UserL
 	var err error
 	var lastTarget *database.Message
 	if lastTargetID := evt.GetLastReceiptTarget(); lastTargetID != "" {
-		lastTarget, err = portal.Bridge.DB.Message.GetLastPartByID(ctx, lastTargetID)
+		lastTarget, err = portal.Bridge.DB.Message.GetLastPartByID(ctx, portal.Receiver, lastTargetID)
 		if err != nil {
 			log.Err(err).Str("last_target_id", string(lastTargetID)).
 				Msg("Failed to get last target message for read receipt")
@@ -1394,7 +1394,7 @@ func (portal *Portal) handleRemoteReadReceipt(ctx context.Context, source *UserL
 	}
 	if lastTarget == nil {
 		for _, targetID := range evt.GetReceiptTargets() {
-			target, err := portal.Bridge.DB.Message.GetLastPartByID(ctx, targetID)
+			target, err := portal.Bridge.DB.Message.GetLastPartByID(ctx, portal.Receiver, targetID)
 			if err != nil {
 				log.Err(err).Str("target_id", string(targetID)).
 					Msg("Failed to get target message for read receipt")

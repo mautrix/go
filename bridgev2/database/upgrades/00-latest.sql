@@ -1,4 +1,4 @@
--- v0 -> v4 (compatible with v1+): Latest revision
+-- v0 -> v6 (compatible with v1+): Latest revision
 CREATE TABLE portal (
 	bridge_id       TEXT    NOT NULL,
 	id              TEXT    NOT NULL,
@@ -79,7 +79,7 @@ CREATE TABLE message (
 	CONSTRAINT message_sender_fkey FOREIGN KEY (bridge_id, sender_id)
 		REFERENCES ghost (bridge_id, id)
 		ON DELETE CASCADE ON UPDATE CASCADE,
-	CONSTRAINT message_real_pkey UNIQUE (bridge_id, id, part_id)
+	CONSTRAINT message_real_pkey UNIQUE (bridge_id, room_receiver, id, part_id)
 );
 
 CREATE TABLE disappearing_message (
@@ -106,12 +106,12 @@ CREATE TABLE reaction (
 	timestamp       BIGINT NOT NULL,
 	metadata        jsonb  NOT NULL,
 
-	PRIMARY KEY (bridge_id, message_id, message_part_id, sender_id, emoji_id),
+	PRIMARY KEY (bridge_id, room_receiver, message_id, message_part_id, sender_id, emoji_id),
 	CONSTRAINT reaction_room_fkey FOREIGN KEY (bridge_id, room_id, room_receiver)
 		REFERENCES portal (bridge_id, id, receiver)
 		ON DELETE CASCADE ON UPDATE CASCADE,
-	CONSTRAINT reaction_message_fkey FOREIGN KEY (bridge_id, message_id, message_part_id)
-		REFERENCES message (bridge_id, id, part_id)
+	CONSTRAINT reaction_message_fkey FOREIGN KEY (bridge_id, room_receiver, message_id, message_part_id)
+		REFERENCES message (bridge_id, room_receiver, id, part_id)
 		ON DELETE CASCADE ON UPDATE CASCADE,
 	CONSTRAINT reaction_sender_fkey FOREIGN KEY (bridge_id, sender_id)
 		REFERENCES ghost (bridge_id, id)

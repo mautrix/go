@@ -64,12 +64,12 @@ const (
 	getMessageBaseQuery = `
 		SELECT rowid, bridge_id, id, part_id, mxid, room_id, room_receiver, sender_id, timestamp, relates_to, metadata FROM message
 	`
-	getAllMessagePartsByIDQuery  = getMessageBaseQuery + `WHERE bridge_id=$1 AND id=$2`
-	getMessagePartByIDQuery      = getMessageBaseQuery + `WHERE bridge_id=$1 AND id=$2 AND part_id=$3`
+	getAllMessagePartsByIDQuery  = getMessageBaseQuery + `WHERE bridge_id=$1 AND (room_receiver=$2 OR room_receiver='') AND id=$3`
+	getMessagePartByIDQuery      = getMessageBaseQuery + `WHERE bridge_id=$1 AND (room_receiver=$2 OR room_receiver='') AND id=$3 AND part_id=$4`
 	getMessagePartByRowIDQuery   = getMessageBaseQuery + `WHERE bridge_id=$1 AND rowid=$2`
 	getMessageByMXIDQuery        = getMessageBaseQuery + `WHERE bridge_id=$1 AND mxid=$2`
-	getLastMessagePartByIDQuery  = getMessageBaseQuery + `WHERE bridge_id=$1 AND id=$2 ORDER BY part_id DESC LIMIT 1`
-	getFirstMessagePartByIDQuery = getMessageBaseQuery + `WHERE bridge_id=$1 AND id=$2 ORDER BY part_id ASC LIMIT 1`
+	getLastMessagePartByIDQuery  = getMessageBaseQuery + `WHERE bridge_id=$1 AND (room_receiver=$2 OR room_receiver='') AND id=$3 ORDER BY part_id DESC LIMIT 1`
+	getFirstMessagePartByIDQuery = getMessageBaseQuery + `WHERE bridge_id=$1 AND (room_receiver=$2 OR room_receiver='') AND id=$3 ORDER BY part_id ASC LIMIT 1`
 	getMessagesBetweenTimeQuery  = getMessageBaseQuery + `WHERE bridge_id=$1 AND room_id=$2 AND room_receiver=$3 AND timestamp>$4 AND timestamp<=$5`
 	insertMessageQuery           = `
 		INSERT INTO message (bridge_id, id, part_id, mxid, room_id, room_receiver, sender_id, timestamp, relates_to, metadata)
@@ -81,42 +81,42 @@ const (
 		WHERE bridge_id=$1 AND rowid=$11
 	`
 	deleteAllMessagePartsByIDQuery = `
-		DELETE FROM message WHERE bridge_id=$1 AND id=$2
+		DELETE FROM message WHERE bridge_id=$1 AND (room_receiver=$2 OR room_receiver='') AND id=$3
 	`
 	deleteMessagePartByRowIDQuery = `
 		DELETE FROM message WHERE bridge_id=$1 AND rowid=$2
 	`
 )
 
-func (mq *MessageQuery) GetAllPartsByID(ctx context.Context, id networkid.MessageID) ([]*Message, error) {
-	return mq.QueryMany(ctx, getAllMessagePartsByIDQuery, mq.BridgeID, id)
+func (mq *MessageQuery) GetAllPartsByID(ctx context.Context, receiver networkid.UserLoginID, id networkid.MessageID) ([]*Message, error) {
+	return mq.QueryMany(ctx, getAllMessagePartsByIDQuery, mq.BridgeID, receiver, id)
 }
 
-func (mq *MessageQuery) GetPartByID(ctx context.Context, id networkid.MessageID, partID networkid.PartID) (*Message, error) {
-	return mq.QueryOne(ctx, getMessagePartByIDQuery, mq.BridgeID, id, partID)
+func (mq *MessageQuery) GetPartByID(ctx context.Context, receiver networkid.UserLoginID, id networkid.MessageID, partID networkid.PartID) (*Message, error) {
+	return mq.QueryOne(ctx, getMessagePartByIDQuery, mq.BridgeID, receiver, id, partID)
 }
 
 func (mq *MessageQuery) GetPartByMXID(ctx context.Context, mxid id.EventID) (*Message, error) {
 	return mq.QueryOne(ctx, getMessageByMXIDQuery, mq.BridgeID, mxid)
 }
 
-func (mq *MessageQuery) GetLastPartByID(ctx context.Context, id networkid.MessageID) (*Message, error) {
-	return mq.QueryOne(ctx, getLastMessagePartByIDQuery, mq.BridgeID, id)
+func (mq *MessageQuery) GetLastPartByID(ctx context.Context, receiver networkid.UserLoginID, id networkid.MessageID) (*Message, error) {
+	return mq.QueryOne(ctx, getLastMessagePartByIDQuery, mq.BridgeID, receiver, id)
 }
 
-func (mq *MessageQuery) GetFirstPartByID(ctx context.Context, id networkid.MessageID) (*Message, error) {
-	return mq.QueryOne(ctx, getFirstMessagePartByIDQuery, mq.BridgeID, id)
+func (mq *MessageQuery) GetFirstPartByID(ctx context.Context, receiver networkid.UserLoginID, id networkid.MessageID) (*Message, error) {
+	return mq.QueryOne(ctx, getFirstMessagePartByIDQuery, mq.BridgeID, receiver, id)
 }
 
 func (mq *MessageQuery) GetByRowID(ctx context.Context, rowID int64) (*Message, error) {
 	return mq.QueryOne(ctx, getMessagePartByRowIDQuery, mq.BridgeID, rowID)
 }
 
-func (mq *MessageQuery) GetFirstOrSpecificPartByID(ctx context.Context, id networkid.MessageOptionalPartID) (*Message, error) {
+func (mq *MessageQuery) GetFirstOrSpecificPartByID(ctx context.Context, receiver networkid.UserLoginID, id networkid.MessageOptionalPartID) (*Message, error) {
 	if id.PartID == nil {
-		return mq.GetFirstPartByID(ctx, id.MessageID)
+		return mq.GetFirstPartByID(ctx, receiver, id.MessageID)
 	} else {
-		return mq.GetPartByID(ctx, id.MessageID, *id.PartID)
+		return mq.GetPartByID(ctx, receiver, id.MessageID, *id.PartID)
 	}
 }
 
@@ -134,8 +134,8 @@ func (mq *MessageQuery) Update(ctx context.Context, msg *Message) error {
 	return mq.Exec(ctx, updateMessageQuery, msg.updateSQLVariables()...)
 }
 
-func (mq *MessageQuery) DeleteAllParts(ctx context.Context, id networkid.MessageID) error {
-	return mq.Exec(ctx, deleteAllMessagePartsByIDQuery, mq.BridgeID, id)
+func (mq *MessageQuery) DeleteAllParts(ctx context.Context, receiver networkid.UserLoginID, id networkid.MessageID) error {
+	return mq.Exec(ctx, deleteAllMessagePartsByIDQuery, mq.BridgeID, receiver, id)
 }
 
 func (mq *MessageQuery) Delete(ctx context.Context, rowID int64) error {
