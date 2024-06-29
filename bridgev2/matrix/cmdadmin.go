@@ -9,12 +9,12 @@ package matrix
 import (
 	"strconv"
 
-	"maunium.net/go/mautrix/bridgev2"
+	"maunium.net/go/mautrix/bridgev2/commands"
 	"maunium.net/go/mautrix/id"
 )
 
-var CommandDiscardMegolmSession = &bridgev2.FullHandler{
-	Func: func(ce *bridgev2.CommandEvent) {
+var CommandDiscardMegolmSession = &commands.FullHandler{
+	Func: func(ce *commands.Event) {
 		matrix := ce.Bridge.Matrix.(*Connector)
 		if matrix.Crypto == nil {
 			ce.Reply("This bridge instance doesn't have end-to-bridge encryption enabled")
@@ -25,14 +25,14 @@ var CommandDiscardMegolmSession = &bridgev2.FullHandler{
 	},
 	Name:    "discard-megolm-session",
 	Aliases: []string{"discard-session"},
-	Help: bridgev2.HelpMeta{
-		Section:     bridgev2.HelpSectionAdmin,
+	Help: commands.HelpMeta{
+		Section:     commands.HelpSectionAdmin,
 		Description: "Discard the Megolm session in the room",
 	},
 	RequiresAdmin: true,
 }
 
-func fnSetPowerLevel(ce *bridgev2.CommandEvent) {
+func fnSetPowerLevel(ce *commands.Event) {
 	var level int
 	var userID id.UserID
 	var err error
@@ -65,12 +65,12 @@ func fnSetPowerLevel(ce *bridgev2.CommandEvent) {
 	}
 }
 
-var CommandSetPowerLevel = &bridgev2.FullHandler{
+var CommandSetPowerLevel = &commands.FullHandler{
 	Func:    fnSetPowerLevel,
 	Name:    "set-pl",
 	Aliases: []string{"set-power-level"},
-	Help: bridgev2.HelpMeta{
-		Section:     bridgev2.HelpSectionAdmin,
+	Help: commands.HelpMeta{
+		Section:     commands.HelpSectionAdmin,
 		Description: "Change the power level in a portal room.",
 		Args:        "[_user ID_] <_power level_>",
 	},

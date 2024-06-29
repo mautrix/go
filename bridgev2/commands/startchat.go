@@ -4,7 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-package bridgev2
+package commands
 
 import (
 	"fmt"
@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"golang.org/x/net/html"
+
+	"maunium.net/go/mautrix/bridgev2"
 
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/id"
@@ -39,7 +41,7 @@ var CommandStartChat = &FullHandler{
 	RequiresLogin: true,
 }
 
-func getClientForStartingChat[T IdentifierResolvingNetworkAPI](ce *CommandEvent, thing string) (*UserLogin, T, []string) {
+func getClientForStartingChat[T bridgev2.IdentifierResolvingNetworkAPI](ce *Event, thing string) (*bridgev2.UserLogin, T, []string) {
 	remainingArgs := ce.Args[1:]
 	login := ce.Bridge.GetCachedUserLoginByID(networkid.UserLoginID(ce.Args[0]))
 	if login == nil || login.UserMXID != ce.User.MXID {
@@ -53,8 +55,8 @@ func getClientForStartingChat[T IdentifierResolvingNetworkAPI](ce *CommandEvent,
 	return login, api, remainingArgs
 }
 
-func fnResolveIdentifier(ce *CommandEvent) {
-	login, api, identifierParts := getClientForStartingChat[IdentifierResolvingNetworkAPI](ce, "resolving identifiers")
+func fnResolveIdentifier(ce *Event) {
+	login, api, identifierParts := getClientForStartingChat[bridgev2.IdentifierResolvingNetworkAPI](ce, "resolving identifiers")
 	if api == nil {
 		return
 	}
@@ -125,7 +127,7 @@ func fnResolveIdentifier(ce *CommandEvent) {
 }
 
 var CommandDeletePortal = &FullHandler{
-	Func: func(ce *CommandEvent) {
+	Func: func(ce *Event) {
 		err := ce.Portal.Delete(ce.Ctx)
 		if err != nil {
 			ce.Reply("Failed to delete portal: %v", err)

@@ -4,7 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-package bridgev2
+package commands
 
 import (
 	"fmt"
@@ -15,7 +15,7 @@ import (
 type HelpfulHandler interface {
 	CommandHandler
 	GetHelp() HelpMeta
-	ShowInHelp(*CommandEvent) bool
+	ShowInHelp(*Event) bool
 }
 
 type HelpSection struct {
@@ -78,7 +78,7 @@ func (h helpMetaList) Swap(i, j int) {
 var _ sort.Interface = (helpSectionList)(nil)
 var _ sort.Interface = (helpMetaList)(nil)
 
-func FormatHelp(ce *CommandEvent) string {
+func FormatHelp(ce *Event) string {
 	sections := make(map[HelpSection]helpMetaList)
 	for _, handler := range ce.Processor.handlers {
 		helpfulHandler, ok := handler.(HelpfulHandler)
@@ -127,4 +127,15 @@ func FormatHelp(ce *CommandEvent) string {
 		output.WriteByte('\n')
 	}
 	return output.String()
+}
+
+var CommandHelp = &FullHandler{
+	Func: func(ce *Event) {
+		ce.Reply(FormatHelp(ce))
+	},
+	Name: "help",
+	Help: HelpMeta{
+		Section:     HelpSectionGeneral,
+		Description: "Show this help message.",
+	},
 }

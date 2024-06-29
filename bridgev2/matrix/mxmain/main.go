@@ -31,6 +31,7 @@ import (
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/bridgeconfig"
+	"maunium.net/go/mautrix/bridgev2/commands"
 	"maunium.net/go/mautrix/bridgev2/matrix"
 )
 
@@ -226,15 +227,15 @@ func (br *BridgeMain) Init() {
 	br.initDB()
 	br.Matrix = matrix.NewConnector(br.Config)
 	br.Matrix.IgnoreUnsupportedServer = *ignoreUnsupportedServer
-	br.Bridge = bridgev2.NewBridge("", br.DB, *br.Log, &br.Config.Bridge, br.Matrix, br.Connector)
+	br.Bridge = bridgev2.NewBridge("", br.DB, *br.Log, &br.Config.Bridge, br.Matrix, br.Connector, commands.NewProcessor)
 	br.Matrix.AS.DoublePuppetValue = br.Name
-	br.Bridge.Commands.AddHandler(&bridgev2.FullHandler{
-		Func: func(ce *bridgev2.CommandEvent) {
+	br.Bridge.Commands.(*commands.Processor).AddHandler(&commands.FullHandler{
+		Func: func(ce *commands.Event) {
 			ce.Reply("[%s](%s) %s (%s)", br.Name, br.URL, br.LinkifiedVersion, br.BuildTime.Format(time.RFC1123))
 		},
 		Name: "version",
-		Help: bridgev2.HelpMeta{
-			Section:     bridgev2.HelpSectionGeneral,
+		Help: commands.HelpMeta{
+			Section:     commands.HelpSectionGeneral,
 			Description: "Get the bridge version.",
 		},
 	})

@@ -24,6 +24,10 @@ import (
 
 var ErrNotLoggedIn = errors.New("not logged in")
 
+type CommandProcessor interface {
+	Handle(ctx context.Context, roomID id.RoomID, eventID id.EventID, user *User, message string, replyTo id.EventID)
+}
+
 type Bridge struct {
 	ID  networkid.BridgeID
 	DB  *database.Database
@@ -32,7 +36,7 @@ type Bridge struct {
 	Matrix   MatrixConnector
 	Bot      MatrixAPI
 	Network  NetworkConnector
-	Commands *CommandProcessor
+	Commands CommandProcessor
 	Config   *bridgeconfig.BridgeConfig
 
 	DisappearLoop *DisappearLoop
@@ -45,7 +49,15 @@ type Bridge struct {
 	cacheLock      sync.Mutex
 }
 
-func NewBridge(bridgeID networkid.BridgeID, db *dbutil.Database, log zerolog.Logger, cfg *bridgeconfig.BridgeConfig, matrix MatrixConnector, network NetworkConnector) *Bridge {
+func NewBridge(
+	bridgeID networkid.BridgeID,
+	db *dbutil.Database,
+	log zerolog.Logger,
+	cfg *bridgeconfig.BridgeConfig,
+	matrix MatrixConnector,
+	network NetworkConnector,
+	newCommandProcessor func(*Bridge) CommandProcessor,
+) *Bridge {
 	br := &Bridge{
 		ID:  bridgeID,
 		DB:  database.New(bridgeID, db),
@@ -64,7 +76,7 @@ func NewBridge(bridgeID networkid.BridgeID, db *dbutil.Database, log zerolog.Log
 	if br.Config == nil {
 		br.Config = &bridgeconfig.BridgeConfig{CommandPrefix: "!bridge"}
 	}
-	br.Commands = NewProcessor(br)
+	br.Commands = newCommandProcessor(br)
 	br.Matrix.Init(br)
 	br.Bot = br.Matrix.BotIntent()
 	br.Network.Init(br)

@@ -4,22 +4,23 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-package bridgev2
+package commands
 
 import (
 	"strings"
 
+	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 )
 
 var CommandRegisterPush = &FullHandler{
-	Func: func(ce *CommandEvent) {
+	Func: func(ce *Event) {
 		if len(ce.Args) < 3 {
 			ce.Reply("Usage: `$cmdprefix debug-register-push <login ID> <push type> <push token>`\n\nYour logins:\n\n%s", ce.User.GetFormattedUserLogins())
 			return
 		}
-		pushType := PushTypeFromString(ce.Args[1])
-		if pushType == PushTypeUnknown {
+		pushType := bridgev2.PushTypeFromString(ce.Args[1])
+		if pushType == bridgev2.PushTypeUnknown {
 			ce.Reply("Unknown push type `%s`. Allowed types: `web`, `apns`, `fcm`", ce.Args[1])
 			return
 		}
@@ -28,7 +29,7 @@ var CommandRegisterPush = &FullHandler{
 			ce.Reply("Login `%s` not found", ce.Args[0])
 			return
 		}
-		pushable, ok := login.Client.(PushableNetworkAPI)
+		pushable, ok := login.Client.(bridgev2.PushableNetworkAPI)
 		if !ok {
 			ce.Reply("This network connector does not support push registration")
 			return

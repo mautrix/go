@@ -4,32 +4,36 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-package bridgev2
+package commands
 
 import (
 	"context"
 	"fmt"
 	"runtime/debug"
 	"strings"
+	"sync/atomic"
+	"unsafe"
 
 	"github.com/rs/zerolog"
+
+	"maunium.net/go/mautrix/bridgev2"
 
 	"maunium.net/go/mautrix/bridge/status"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
-type CommandProcessor struct {
-	bridge *Bridge
+type Processor struct {
+	bridge *bridgev2.Bridge
 	log    *zerolog.Logger
 
 	handlers map[string]CommandHandler
 	aliases  map[string]string
 }
 
-// NewProcessor creates a CommandProcessor
-func NewProcessor(bridge *Bridge) *CommandProcessor {
-	proc := &CommandProcessor{
+// NewProcessor creates a Processor
+func NewProcessor(bridge *bridgev2.Bridge) bridgev2.CommandProcessor {
+	proc := &Processor{
 		bridge: bridge,
 		log:    &bridge.Log,
 
@@ -45,13 +49,13 @@ func NewProcessor(bridge *Bridge) *CommandProcessor {
 	return proc
 }
 
-func (proc *CommandProcessor) AddHandlers(handlers ...CommandHandler) {
+func (proc *Processor) AddHandlers(handlers ...CommandHandler) {
 	for _, handler := range handlers {
 		proc.AddHandler(handler)
 	}
 }
 
-func (proc *CommandProcessor) AddHandler(handler CommandHandler) {
+func (proc *Processor) AddHandler(handler CommandHandler) {
 	proc.handlers[handler.GetName()] = handler
 	aliased, ok := handler.(AliasedCommandHandler)
 	if ok {
@@ -62,15 +66,15 @@ func (proc *CommandProcessor) AddHandler(handler CommandHandler) {
 }
 
 // Handle handles messages to the bridge
-func (proc *CommandProcessor) Handle(ctx context.Context, roomID id.RoomID, eventID id.EventID, user *User, message string, replyTo id.EventID) {
+func (proc *Processor) Handle(ctx context.Context, roomID id.RoomID, eventID id.EventID, user *bridgev2.User, message string, replyTo id.EventID) {
 	defer func() {
-		statusInfo := &MessageStatusEventInfo{
+		statusInfo := &bridgev2.MessageStatusEventInfo{
 			RoomID:    roomID,
 			EventID:   eventID,
 			EventType: event.EventMessage,
 			Sender:    user.MXID,
 		}
-		ms := MessageStatus{
+		ms := bridgev2.MessageStatus{
 			Step:   status.MsgStepCommand,
 			Status: event.MessageStatusSuccess,
 		}
@@ -101,7 +105,7 @@ func (proc *CommandProcessor) Handle(ctx context.Context, roomID id.RoomID, even
 	if err != nil {
 		// :(
 	}
-	ce := &CommandEvent{
+	ce := &Event{
 		Bot:       proc.bridge.Bot,
 		Bridge:    proc.bridge,
 		Portal:    portal,
@@ -124,7 +128,7 @@ func (proc *CommandProcessor) Handle(ctx context.Context, roomID id.RoomID, even
 	var handler MinimalCommandHandler
 	handler, ok = proc.handlers[realCommand]
 	if !ok {
-		state := ce.User.CommandState.Load()
+		state := LoadCommandState(ce.User)
 		if state != nil && state.Next != nil {
 			ce.Command = ""
 			ce.RawArgs = message
@@ -148,4 +152,39 @@ func (proc *CommandProcessor) Handle(ctx context.Context, roomID id.RoomID, even
 		ce.Handler = handler
 		handler.Run(ce)
 	}
+}
+
+func LoadCommandState(user *bridgev2.User) *CommandState {
+	return (*CommandState)(atomic.LoadPointer(&user.CommandState))
+}
+
+func StoreCommandState(user *bridgev2.User, cs *CommandState) {
+	atomic.StorePointer(&user.CommandState, unsafe.Pointer(cs))
+}
+
+func SwapCommandState(user *bridgev2.User, cs *CommandState) *CommandState {
+	return (*CommandState)(atomic.SwapPointer(&user.CommandState, unsafe.Pointer(cs)))
+}
+
+var CommandCancel = &FullHandler{
+	Func: func(ce *Event) {
+		state := SwapCommandState(ce.User, nil)
+		if state != nil {
+			action := state.Action
+			if action == "" {
+				action = "Unknown action"
+			}
+			if state.Cancel != nil {
+				state.Cancel()
+			}
+			ce.Reply("%s cancelled.", action)
+		} else {
+			ce.Reply("No ongoing command.")
+		}
+	},
+	Name: "cancel",
+	Help: HelpMeta{
+		Section:     HelpSectionGeneral,
+		Description: "Cancel an ongoing action.",
+	},
 }

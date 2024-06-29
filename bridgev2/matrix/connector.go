@@ -26,6 +26,7 @@ import (
 	"maunium.net/go/mautrix/bridge/status"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/bridgeconfig"
+	"maunium.net/go/mautrix/bridgev2/commands"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -117,7 +118,7 @@ func (br *Connector) Init(bridge *bridgev2.Bridge) {
 	br.EventProcessor.On(event.EphemeralEventTyping, br.handleEphemeralEvent)
 	br.Bot = br.AS.BotIntent()
 	br.Crypto = NewCryptoHelper(br)
-	br.Bridge.Commands.AddHandlers(
+	br.Bridge.Commands.(*commands.Processor).AddHandlers(
 		CommandDiscardMegolmSession, CommandSetPowerLevel,
 		CommandLoginMatrix, CommandPingMatrix, CommandLogoutMatrix,
 	)

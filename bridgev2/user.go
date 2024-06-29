@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-	"sync/atomic"
+	"unsafe"
 
 	"github.com/rs/zerolog"
 	"golang.org/x/exp/maps"
@@ -27,7 +27,7 @@ type User struct {
 	Bridge *Bridge
 	Log    zerolog.Logger
 
-	CommandState atomic.Pointer[CommandState]
+	CommandState unsafe.Pointer
 
 	doublePuppetIntent      MatrixAPI
 	doublePuppetInitialized bool

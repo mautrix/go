@@ -4,19 +4,19 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-package bridgev2
+package commands
 
 import (
 	"maunium.net/go/mautrix/event"
 )
 
 type MinimalCommandHandler interface {
-	Run(*CommandEvent)
+	Run(*Event)
 }
 
-type MinimalCommandHandlerFunc func(*CommandEvent)
+type MinimalCommandHandlerFunc func(*Event)
 
-func (mhf MinimalCommandHandlerFunc) Run(ce *CommandEvent) {
+func (mhf MinimalCommandHandlerFunc) Run(ce *Event) {
 	mhf(ce)
 }
 
@@ -38,7 +38,7 @@ type AliasedCommandHandler interface {
 }
 
 type FullHandler struct {
-	Func func(*CommandEvent)
+	Func func(*Event)
 
 	Name    string
 	Aliases []string
@@ -64,12 +64,12 @@ func (fh *FullHandler) GetAliases() []string {
 	return fh.Aliases
 }
 
-func (fh *FullHandler) ShowInHelp(ce *CommandEvent) bool {
+func (fh *FullHandler) ShowInHelp(ce *Event) bool {
 	return true
 	//return !fh.RequiresAdmin || ce.User.GetPermissionLevel() >= bridgeconfig.PermissionLevelAdmin
 }
 
-func (fh *FullHandler) userHasRoomPermission(ce *CommandEvent) bool {
+func (fh *FullHandler) userHasRoomPermission(ce *Event) bool {
 	return true
 	//levels, err := ce.MainIntent().PowerLevels(ce.Ctx, ce.RoomID)
 	//if err != nil {
@@ -80,7 +80,7 @@ func (fh *FullHandler) userHasRoomPermission(ce *CommandEvent) bool {
 	//return levels.GetUserLevel(ce.User.GetMXID()) >= levels.GetEventLevel(fh.RequiresEventLevel)
 }
 
-func (fh *FullHandler) Run(ce *CommandEvent) {
+func (fh *FullHandler) Run(ce *Event) {
 	//if fh.RequiresAdmin && ce.User.GetPermissionLevel() < bridgeconfig.PermissionLevelAdmin {
 	//	ce.Reply("That command is limited to bridge administrators.")
 	//} else if fh.RequiresEventLevel.Type != "" && ce.User.GetPermissionLevel() < bridgeconfig.PermissionLevelAdmin && !fh.userHasRoomPermission(ce) {

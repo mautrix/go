@@ -4,7 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-package bridgev2
+package commands
 
 import (
 	"context"
@@ -17,6 +17,8 @@ import (
 
 	"github.com/skip2/go-qrcode"
 	"golang.org/x/net/html"
+
+	"maunium.net/go/mautrix/bridgev2"
 
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
@@ -33,7 +35,7 @@ var CommandLogin = &FullHandler{
 	},
 }
 
-func formatFlowsReply(flows []LoginFlow) string {
+func formatFlowsReply(flows []bridgev2.LoginFlow) string {
 	var buf strings.Builder
 	for _, flow := range flows {
 		_, _ = fmt.Fprintf(&buf, "* `%s` - %s\n", flow.ID, flow.Description)
@@ -41,7 +43,7 @@ func formatFlowsReply(flows []LoginFlow) string {
 	return buf.String()
 }
 
-func fnLogin(ce *CommandEvent) {
+func fnLogin(ce *Event) {
 	flows := ce.Bridge.Network.GetLoginFlows()
 	var chosenFlowID string
 	if len(ce.Args) > 0 {
@@ -77,14 +79,14 @@ func fnLogin(ce *CommandEvent) {
 }
 
 type userInputLoginCommandState struct {
-	Login           LoginProcessUserInput
+	Login           bridgev2.LoginProcessUserInput
 	Data            map[string]string
-	RemainingFields []LoginInputDataField
+	RemainingFields []bridgev2.LoginInputDataField
 }
 
-func (uilcs *userInputLoginCommandState) promptNext(ce *CommandEvent) {
+func (uilcs *userInputLoginCommandState) promptNext(ce *Event) {
 	// TODO reply prompting field
-	ce.User.CommandState.Store(&CommandState{
+	StoreCommandState(ce.User, &CommandState{
 		Next:   MinimalCommandHandlerFunc(uilcs.submitNext),
 		Action: "Login",
 		Meta:   uilcs,
@@ -92,7 +94,7 @@ func (uilcs *userInputLoginCommandState) promptNext(ce *CommandEvent) {
 	})
 }
 
-func (uilcs *userInputLoginCommandState) submitNext(ce *CommandEvent) {
+func (uilcs *userInputLoginCommandState) submitNext(ce *Event) {
 	field := uilcs.RemainingFields[0]
 	field.FillDefaultValidate()
 	var err error
@@ -105,7 +107,7 @@ func (uilcs *userInputLoginCommandState) submitNext(ce *CommandEvent) {
 		uilcs.promptNext(ce)
 		return
 	}
-	ce.User.CommandState.Store(nil)
+	StoreCommandState(ce.User, nil)
 	if nextStep, err := uilcs.Login.SubmitUserInput(ce.Ctx, uilcs.Data); err != nil {
 		ce.Reply("Failed to submit input: %v", err)
 	} else {
@@ -115,7 +117,7 @@ func (uilcs *userInputLoginCommandState) submitNext(ce *CommandEvent) {
 
 const qrSizePx = 512
 
-func sendQR(ce *CommandEvent, qr string, prevEventID *id.EventID) error {
+func sendQR(ce *Event, qr string, prevEventID *id.EventID) error {
 	qrData, err := qrcode.Encode(qr, qrcode.Low, qrSizePx)
 	if err != nil {
 		return fmt.Errorf("failed to encode QR code: %w", err)
@@ -153,25 +155,25 @@ const (
 	contextKeyPrevEventID contextKey = iota
 )
 
-func doLoginDisplayAndWait(ce *CommandEvent, login LoginProcessDisplayAndWait, step *LoginStep) {
+func doLoginDisplayAndWait(ce *Event, login bridgev2.LoginProcessDisplayAndWait, step *bridgev2.LoginStep) {
 	prevEvent, ok := ce.Ctx.Value(contextKeyPrevEventID).(*id.EventID)
 	if !ok {
 		prevEvent = new(id.EventID)
 		ce.Ctx = context.WithValue(ce.Ctx, contextKeyPrevEventID, prevEvent)
 	}
 	switch step.DisplayAndWaitParams.Type {
-	case LoginDisplayTypeQR:
+	case bridgev2.LoginDisplayTypeQR:
 		err := sendQR(ce, step.DisplayAndWaitParams.Data, prevEvent)
 		if err != nil {
 			ce.Reply("Failed to send QR code: %v", err)
 			login.Cancel()
 			return
 		}
-	case LoginDisplayTypeEmoji:
+	case bridgev2.LoginDisplayTypeEmoji:
 		ce.ReplyAdvanced(step.DisplayAndWaitParams.Data, false, false)
-	case LoginDisplayTypeCode:
+	case bridgev2.LoginDisplayTypeCode:
 		ce.ReplyAdvanced(fmt.Sprintf("<code>%s</code>", html.EscapeString(step.DisplayAndWaitParams.Data)), false, true)
-	case LoginDisplayTypeNothing:
+	case bridgev2.LoginDisplayTypeNothing:
 		// Do nothing
 	default:
 		ce.Reply("Unsupported display type %q", step.DisplayAndWaitParams.Type)
@@ -196,12 +198,12 @@ func doLoginDisplayAndWait(ce *CommandEvent, login LoginProcessDisplayAndWait, s
 }
 
 type cookieLoginCommandState struct {
-	Login LoginProcessCookies
-	Data  *LoginCookiesParams
+	Login bridgev2.LoginProcessCookies
+	Data  *bridgev2.LoginCookiesParams
 }
 
-func (clcs *cookieLoginCommandState) prompt(ce *CommandEvent) {
-	ce.User.CommandState.Store(&CommandState{
+func (clcs *cookieLoginCommandState) prompt(ce *Event) {
+	StoreCommandState(ce.User, &CommandState{
 		Next:   MinimalCommandHandlerFunc(clcs.submit),
 		Action: "Login",
 		Meta:   clcs,
@@ -220,7 +222,7 @@ func missingKeys(required []string, data map[string]string) (missing []string) {
 	return
 }
 
-func (clcs *cookieLoginCommandState) submit(ce *CommandEvent) {
+func (clcs *cookieLoginCommandState) submit(ce *Event) {
 	ce.Redact()
 
 	cookies := make(map[string]string)
@@ -260,7 +262,7 @@ func (clcs *cookieLoginCommandState) submit(ce *CommandEvent) {
 		ce.Reply("Missing required special keys: %+v", missingSpecial)
 		return
 	}
-	ce.User.CommandState.Store(nil)
+	StoreCommandState(ce.User, nil)
 	nextStep, err := clcs.Login.SubmitCookies(ce.Ctx, cookies)
 	if err != nil {
 		ce.Reply("Login failed: %v", err)
@@ -268,24 +270,24 @@ func (clcs *cookieLoginCommandState) submit(ce *CommandEvent) {
 	doLoginStep(ce, clcs.Login, nextStep)
 }
 
-func doLoginStep(ce *CommandEvent, login LoginProcess, step *LoginStep) {
+func doLoginStep(ce *Event, login bridgev2.LoginProcess, step *bridgev2.LoginStep) {
 	ce.Reply(step.Instructions)
 
 	switch step.Type {
-	case LoginStepTypeDisplayAndWait:
-		doLoginDisplayAndWait(ce, login.(LoginProcessDisplayAndWait), step)
-	case LoginStepTypeCookies:
+	case bridgev2.LoginStepTypeDisplayAndWait:
+		doLoginDisplayAndWait(ce, login.(bridgev2.LoginProcessDisplayAndWait), step)
+	case bridgev2.LoginStepTypeCookies:
 		(&cookieLoginCommandState{
-			Login: login.(LoginProcessCookies),
+			Login: login.(bridgev2.LoginProcessCookies),
 			Data:  step.CookiesParams,
 		}).prompt(ce)
-	case LoginStepTypeUserInput:
+	case bridgev2.LoginStepTypeUserInput:
 		(&userInputLoginCommandState{
-			Login:           login.(LoginProcessUserInput),
+			Login:           login.(bridgev2.LoginProcessUserInput),
 			RemainingFields: step.UserInputParams.Fields,
 			Data:            make(map[string]string),
 		}).promptNext(ce)
-	case LoginStepTypeComplete:
+	case bridgev2.LoginStepTypeComplete:
 		// Nothing to do other than instructions
 	default:
 		panic(fmt.Errorf("unknown login step type %q", step.Type))
@@ -302,7 +304,7 @@ var CommandLogout = &FullHandler{
 	},
 }
 
-func fnLogout(ce *CommandEvent) {
+func fnLogout(ce *Event) {
 	if len(ce.Args) == 0 {
 		ce.Reply("Usage: `$cmdprefix logout <login ID>`\n\nYour logins:\n\n%s", ce.User.GetFormattedUserLogins())
 		return
@@ -328,7 +330,7 @@ var CommandSetPreferredLogin = &FullHandler{
 	RequiresPortal: true,
 }
 
-func fnSetPreferredLogin(ce *CommandEvent) {
+func fnSetPreferredLogin(ce *Event) {
 	if len(ce.Args) == 0 {
 		ce.Reply("Usage: `$cmdprefix set-preferred-login <login ID>`\n\nYour logins:\n\n%s", ce.User.GetFormattedUserLogins())
 		return
