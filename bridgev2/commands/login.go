@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Tulir Asokan
+// Copyright (c) 2024 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -292,6 +292,25 @@ func doLoginStep(ce *Event, login bridgev2.LoginProcess, step *bridgev2.LoginSte
 		// Nothing to do other than instructions
 	default:
 		panic(fmt.Errorf("unknown login step type %q", step.Type))
+	}
+}
+
+var CommandListLogins = &FullHandler{
+	Func: fnListLogins,
+	Name: "list-logins",
+	Help: HelpMeta{
+		Section:     HelpSectionAuth,
+		Description: "List your logins",
+	},
+	RequiresLoginPermission: true,
+}
+
+func fnListLogins(ce *Event) {
+	logins := ce.User.GetFormattedUserLogins()
+	if len(logins) == 0 {
+		ce.Reply("You're not logged in")
+	} else {
+		ce.Reply("%s", logins)
 	}
 }
 

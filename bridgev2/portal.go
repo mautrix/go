@@ -2182,3 +2182,17 @@ func (portal *Portal) unlockedDeleteCache() {
 func (portal *Portal) Save(ctx context.Context) error {
 	return portal.Bridge.DB.Portal.Update(ctx, portal.Portal)
 }
+
+func (portal *Portal) SetRelay(ctx context.Context, relay *UserLogin) error {
+	portal.Relay = relay
+	if relay == nil {
+		portal.RelayLoginID = ""
+	} else {
+		portal.RelayLoginID = relay.ID
+	}
+	err := portal.Save(ctx)
+	if err != nil {
+		return err
+	}
+	return nil
+}

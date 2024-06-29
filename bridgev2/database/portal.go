@@ -87,13 +87,13 @@ const (
 			name_set, avatar_set, topic_set, in_space,
 			metadata, relay_bridge_id
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
-			CASE WHEN $6 IS NULL THEN NULL ELSE $1 END
+			$1, $2, $3, $4, $5, cast($6 AS TEXT), $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
+			CASE WHEN cast($6 AS TEXT) IS NULL THEN NULL ELSE $1 END
 		)
 	`
 	updatePortalQuery = `
 		UPDATE portal
-		SET mxid=$4, parent_id=$5, relay_bridge_id=CASE WHEN $6 IS NULL THEN NULL ELSE bridge_id END, relay_login_id=$6,
+		SET mxid=$4, parent_id=$5, relay_login_id=cast($6 AS TEXT), relay_bridge_id=CASE WHEN cast($6 AS TEXT) IS NULL THEN NULL ELSE bridge_id END,
 		    name=$7, topic=$8, avatar_id=$9, avatar_hash=$10, avatar_mxc=$11,
 		    name_set=$12, avatar_set=$13, topic_set=$14, in_space=$15, metadata=$16
 		WHERE bridge_id=$1 AND id=$2 AND receiver=$3

@@ -12,7 +12,7 @@ bridge:
         enabled: false
         # Should only admins be allowed to set themselves as relay users?
         admin_only: true
-        # List of user login IDs which anyone can set as a relay using set-default-relay as long as they're in the room.
+        # List of user login IDs which anyone can set as a relay, as long as the relay user is in the room.
         default_relays: []
         # The formats to use when sending messages via the relaybot.
         message_formats:
