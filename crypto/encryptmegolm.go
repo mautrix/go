@@ -15,6 +15,7 @@ import (
 	"fmt"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/exzerolog"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
@@ -160,14 +161,6 @@ type deviceSessionWrapper struct {
 	identity *id.Device
 }
 
-func strishArray[T ~string](arr []T) []string {
-	out := make([]string, len(arr))
-	for i, item := range arr {
-		out[i] = string(item)
-	}
-	return out
-}
-
 // ShareGroupSession shares a group session for a specific room with all the devices of the given user list.
 //
 // For devices with TrustStateBlacklisted, a m.room_key.withheld event with code=m.blacklisted is sent.
@@ -193,7 +186,7 @@ func (mach *OlmMachine) ShareGroupSession(ctx context.Context, roomID id.RoomID,
 	}
 	log = log.With().Str("session_id", session.ID().String()).Logger()
 	ctx = log.WithContext(ctx)
-	log.Debug().Strs("users", strishArray(users)).Msg("Sharing group session for room")
+	log.Debug().Array("users", exzerolog.ArrayOfStrs(users)).Msg("Sharing group session for room")
 
 	withheldCount := 0
 	toDeviceWithheld := &mautrix.ReqSendToDevice{Messages: make(map[id.UserID]map[id.DeviceID]*event.Content)}
@@ -235,10 +228,10 @@ func (mach *OlmMachine) ShareGroupSession(ctx context.Context, roomID id.RoomID,
 	}
 
 	if len(fetchKeysForUsers) > 0 {
-		log.Debug().Strs("users", strishArray(fetchKeysForUsers)).Msg("Fetching missing keys")
+		log.Debug().Array("users", exzerolog.ArrayOfStrs(fetchKeysForUsers)).Msg("Fetching missing keys")
 		keys, err := mach.FetchKeys(ctx, fetchKeysForUsers, true)
 		if err != nil {
-			log.Err(err).Strs("users", strishArray(fetchKeysForUsers)).Msg("Failed to fetch missing keys")
+			log.Err(err).Array("users", exzerolog.ArrayOfStrs(fetchKeysForUsers)).Msg("Failed to fetch missing keys")
 			return fmt.Errorf("failed to fetch missing keys: %w", err)
 		}
 		for userID, devices := range keys {

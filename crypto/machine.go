@@ -15,11 +15,12 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"maunium.net/go/mautrix/crypto/ssss"
-	"maunium.net/go/mautrix/id"
+	"go.mau.fi/util/exzerolog"
 
 	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/crypto/ssss"
 	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/id"
 )
 
 // OlmMachine is the main struct for handling Matrix end-to-end encryption.
@@ -575,14 +576,6 @@ func (mach *OlmMachine) WaitForSession(ctx context.Context, roomID id.RoomID, se
 	}
 }
 
-func stringifyArray[T ~string](arr []T) []string {
-	strs := make([]string, len(arr))
-	for i, v := range arr {
-		strs[i] = string(v)
-	}
-	return strs
-}
-
 func (mach *OlmMachine) receiveRoomKey(ctx context.Context, evt *DecryptedOlmEvent, content *event.RoomKeyEventContent) {
 	log := zerolog.Ctx(ctx).With().
 		Str("algorithm", string(content.Algorithm)).
@@ -623,7 +616,7 @@ func (mach *OlmMachine) receiveRoomKey(ctx context.Context, evt *DecryptedOlmEve
 			log.Err(err).Msg("Failed to redact previous megolm sessions")
 		} else {
 			log.Info().
-				Strs("session_ids", stringifyArray(sessionIDs)).
+				Array("session_ids", exzerolog.ArrayOfStrs(sessionIDs)).
 				Msg("Redacted previous megolm sessions")
 		}
 	}
@@ -713,7 +706,7 @@ func (mach *OlmMachine) ExpiredKeyDeleteLoop(ctx context.Context) {
 		if err != nil {
 			log.Err(err).Msg("Failed to redact expired megolm sessions")
 		} else if len(sessionIDs) > 0 {
-			log.Info().Strs("session_ids", stringifyArray(sessionIDs)).Msg("Redacted expired megolm sessions")
+			log.Info().Array("session_ids", exzerolog.ArrayOfStrs(sessionIDs)).Msg("Redacted expired megolm sessions")
 		} else {
 			log.Debug().Msg("Didn't find any expired megolm sessions")
 		}

@@ -12,6 +12,7 @@ import (
 	"fmt"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/exzerolog"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto/signatures"
@@ -115,7 +116,7 @@ func (mach *OlmMachine) FetchKeys(ctx context.Context, users []id.UserID, includ
 	for _, userID := range users {
 		req.DeviceKeys[userID] = mautrix.DeviceIDList{}
 	}
-	log.Debug().Strs("users", strishArray(users)).Msg("Querying keys for users")
+	log.Debug().Array("users", exzerolog.ArrayOfStrs(users)).Msg("Querying keys for users")
 	resp, err := mach.Client.QueryKeys(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query keys: %w", err)
@@ -181,7 +182,7 @@ func (mach *OlmMachine) FetchKeys(ctx context.Context, users []id.UserID, includ
 						log.Err(err).Msg("Failed to redact megolm sessions from deleted device")
 					} else {
 						log.Info().
-							Strs("session_ids", stringifyArray(sessionIDs)).
+							Array("session_ids", exzerolog.ArrayOfStrs(sessionIDs)).
 							Msg("Redacted megolm sessions from deleted device")
 					}
 				}

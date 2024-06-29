@@ -10,6 +10,8 @@ package crypto
 import (
 	"context"
 
+	"go.mau.fi/util/exzerolog"
+
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto/signatures"
 	"maunium.net/go/mautrix/id"
@@ -47,7 +49,7 @@ func (mach *OlmMachine) storeCrossSigningKeys(ctx context.Context, crossSigningK
 		}
 
 		for _, key := range userKeys.Keys {
-			log := log.With().Str("key", key.String()).Strs("usages", strishArray(userKeys.Usage)).Logger()
+			log := log.With().Str("key", key.String()).Array("usages", exzerolog.ArrayOfStrs(userKeys.Usage)).Logger()
 			for _, usage := range userKeys.Usage {
 				log.Debug().Str("usage", string(usage)).Msg("Storing cross-signing key")
 				if err = mach.CryptoStore.PutCrossSigningKey(ctx, userID, usage, key); err != nil {
