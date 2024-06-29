@@ -181,7 +181,7 @@ func (ms *MessageStatus) ToCheckpoint(evt *MessageStatusEventInfo) *status.Messa
 func (ms *MessageStatus) ToMSSEvent(evt *MessageStatusEventInfo) *event.BeeperMessageStatusEventContent {
 	content := &event.BeeperMessageStatusEventContent{
 		RelatesTo: event.RelatesTo{
-			Type:    event.RelAnnotation,
+			Type:    event.RelReference,
 			EventID: evt.EventID,
 		},
 		Status:  ms.Status,
