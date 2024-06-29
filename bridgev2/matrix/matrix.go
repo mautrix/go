@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -34,12 +35,13 @@ func (br *Connector) handleRoomEvent(ctx context.Context, evt *event.Event) {
 }
 
 func (br *Connector) handleEphemeralEvent(ctx context.Context, evt *event.Event) {
-	if evt.Type == event.EphemeralEventReceipt {
+	switch evt.Type {
+	case event.EphemeralEventReceipt:
 		receiptContent := *evt.Content.AsReceipt()
 		for eventID, receipts := range receiptContent {
 			for receiptType, userReceipts := range receipts {
 				for userID, receipt := range userReceipts {
-					if br.AS.DoublePuppetValue != "" && receipt.Extra[appservice.DoublePuppetKey] == br.AS.DoublePuppetValue {
+					if br.shouldIgnoreEventFromUser(userID) || (br.AS.DoublePuppetValue != "" && receipt.Extra[appservice.DoublePuppetKey] == br.AS.DoublePuppetValue) {
 						delete(userReceipts, userID)
 					}
 				}
@@ -54,6 +56,9 @@ func (br *Connector) handleEphemeralEvent(ctx context.Context, evt *event.Event)
 		if len(receiptContent) == 0 {
 			return
 		}
+	case event.EphemeralEventTyping:
+		typingContent := evt.Content.AsTyping()
+		typingContent.UserIDs = slices.DeleteFunc(typingContent.UserIDs, br.shouldIgnoreEventFromUser)
 	}
 	br.Bridge.QueueMatrixEvent(ctx, evt)
 }
@@ -154,12 +159,19 @@ func (br *Connector) sendBridgeCheckpoint(ctx context.Context, evt *event.Event)
 	}
 }
 
-func (br *Connector) shouldIgnoreEvent(evt *event.Event) bool {
-	if evt.Sender == br.Bot.UserID {
+func (br *Connector) shouldIgnoreEventFromUser(userID id.UserID) bool {
+	if userID == br.Bot.UserID {
 		return true
 	}
-	_, isGhost := br.ParseGhostMXID(evt.Sender)
+	_, isGhost := br.ParseGhostMXID(userID)
 	if isGhost {
+		return true
+	}
+	return false
+}
+
+func (br *Connector) shouldIgnoreEvent(evt *event.Event) bool {
+	if br.shouldIgnoreEventFromUser(evt.Sender) {
 		return true
 	}
 	dpVal, ok := evt.Content.Raw[appservice.DoublePuppetKey]
