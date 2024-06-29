@@ -2158,6 +2158,7 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 		for _, up := range userPortals {
 			login := portal.Bridge.GetCachedUserLoginByID(up.LoginID)
 			if login != nil {
+				login.inPortalCache.Remove(portal.PortalKey)
 				go login.tryAddPortalToSpace(ctx, portal, up.CopyWithoutValues())
 			}
 		}

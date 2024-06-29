@@ -29,8 +29,22 @@ func (ul *UserLogin) MarkInPortal(ctx context.Context, portal *Portal) {
 		return
 	}
 	ul.inPortalCache.Add(portal.PortalKey)
-	if ul.Bridge.Config.PersonalFilteringSpaces && (userPortal.InSpace == nil || !*userPortal.InSpace) && portal.MXID != "" {
-		go ul.tryAddPortalToSpace(ctx, portal, userPortal.CopyWithoutValues())
+	if portal.MXID != "" {
+		dp := ul.User.DoublePuppet(ctx)
+		if dp != nil {
+			err = dp.EnsureJoined(ctx, portal.MXID)
+			if err != nil {
+				zerolog.Ctx(ctx).Err(err).Msg("Failed to ensure double puppet is joined to portal")
+			}
+		} else {
+			err = ul.Bridge.Bot.EnsureInvited(ctx, portal.MXID, ul.UserMXID)
+			if err != nil {
+				zerolog.Ctx(ctx).Err(err).Msg("Failed to ensure user is invited to portal")
+			}
+		}
+		if ul.Bridge.Config.PersonalFilteringSpaces && (userPortal.InSpace == nil || !*userPortal.InSpace) {
+			go ul.tryAddPortalToSpace(ctx, portal, userPortal.CopyWithoutValues())
+		}
 	}
 }
 

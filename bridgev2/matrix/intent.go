@@ -257,6 +257,10 @@ func (as *ASIntent) EnsureJoined(ctx context.Context, roomID id.RoomID) error {
 	return nil
 }
 
+func (as *ASIntent) EnsureInvited(ctx context.Context, roomID id.RoomID, userID id.UserID) error {
+	return as.Matrix.EnsureInvited(ctx, roomID, userID)
+}
+
 func (as *ASIntent) CreateRoom(ctx context.Context, req *mautrix.ReqCreateRoom) (id.RoomID, error) {
 	if as.Connector.Config.Encryption.Default {
 		content := &event.EncryptionEventContent{Algorithm: id.AlgorithmMegolmV1}
