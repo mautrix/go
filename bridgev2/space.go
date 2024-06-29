@@ -29,7 +29,7 @@ func (ul *UserLogin) MarkInPortal(ctx context.Context, portal *Portal) {
 		return
 	}
 	ul.inPortalCache.Add(portal.PortalKey)
-	if ul.Bridge.Config.PersonalFilteringSpaces && (userPortal.InSpace == nil || !*userPortal.InSpace) {
+	if ul.Bridge.Config.PersonalFilteringSpaces && (userPortal.InSpace == nil || !*userPortal.InSpace) && portal.MXID != "" {
 		go ul.tryAddPortalToSpace(ctx, portal, userPortal.CopyWithoutValues())
 	}
 }
@@ -42,6 +42,9 @@ func (ul *UserLogin) tryAddPortalToSpace(ctx context.Context, portal *Portal, us
 }
 
 func (ul *UserLogin) AddPortalToSpace(ctx context.Context, portal *Portal, userPortal *database.UserPortal) error {
+	if portal.MXID == "" {
+		return nil
+	}
 	spaceRoom, err := ul.GetSpaceRoom(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get space room: %w", err)

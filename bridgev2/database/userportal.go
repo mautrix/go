@@ -44,9 +44,12 @@ const (
 	getUserPortalQuery = getUserPortalBaseQuery + `
 		WHERE bridge_id=$1 AND user_mxid=$2 AND login_id=$3 AND portal_id=$4 AND portal_receiver=$5
 	`
-	findUserLoginsByPortalIDQuery = getUserPortalBaseQuery + `
+	findUserLoginsOfUserByPortalIDQuery = getUserPortalBaseQuery + `
 		WHERE bridge_id=$1 AND user_mxid=$2 AND portal_id=$3 AND portal_receiver=$4
 		ORDER BY CASE WHEN preferred THEN 0 ELSE 1 END, login_id
+	`
+	getAllUserLoginsInPortalQuery = getUserPortalBaseQuery + `
+		WHERE bridge_id=$1 AND portal_id=$2 AND portal_receiver=$3
 	`
 	getAllPortalsForLoginQuery = getUserPortalBaseQuery + `
 		WHERE bridge_id=$1 AND user_mxid=$2 AND login_id=$3
@@ -79,12 +82,16 @@ func UserPortalFor(ul *UserLogin, portal networkid.PortalKey) *UserPortal {
 	}
 }
 
-func (upq *UserPortalQuery) GetAllByUser(ctx context.Context, userID id.UserID, portal networkid.PortalKey) ([]*UserPortal, error) {
-	return upq.QueryMany(ctx, findUserLoginsByPortalIDQuery, upq.BridgeID, userID, portal.ID, portal.Receiver)
+func (upq *UserPortalQuery) GetAllForUserInPortal(ctx context.Context, userID id.UserID, portal networkid.PortalKey) ([]*UserPortal, error) {
+	return upq.QueryMany(ctx, findUserLoginsOfUserByPortalIDQuery, upq.BridgeID, userID, portal.ID, portal.Receiver)
 }
 
 func (upq *UserPortalQuery) GetAllForLogin(ctx context.Context, login *UserLogin) ([]*UserPortal, error) {
 	return upq.QueryMany(ctx, getAllPortalsForLoginQuery, upq.BridgeID, login.UserMXID, login.ID)
+}
+
+func (upq *UserPortalQuery) GetAllInPortal(ctx context.Context, portal networkid.PortalKey) ([]*UserPortal, error) {
+	return upq.QueryMany(ctx, getAllUserLoginsInPortalQuery, upq.BridgeID, portal.ID, portal.Receiver)
 }
 
 func (upq *UserPortalQuery) Get(ctx context.Context, login *UserLogin, portal networkid.PortalKey) (*UserPortal, error) {

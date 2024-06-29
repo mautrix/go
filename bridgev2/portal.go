@@ -189,7 +189,7 @@ func (portal *Portal) eventLoop() {
 }
 
 func (portal *Portal) FindPreferredLogin(ctx context.Context, user *User, allowRelay bool) (*UserLogin, *database.UserPortal, error) {
-	logins, err := portal.Bridge.DB.UserPortal.GetAllByUser(ctx, user.MXID, portal.PortalKey)
+	logins, err := portal.Bridge.DB.UserPortal.GetAllForUserInPortal(ctx, user.MXID, portal.PortalKey)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -2038,20 +2038,20 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 	powerLevels.EnsureUserLevel(portal.Bridge.Bot.GetMXID(), 9001)
 
 	req := mautrix.ReqCreateRoom{
-		Visibility:           "private",
-		Name:                 portal.Name,
-		Topic:                portal.Topic,
-		CreationContent:      make(map[string]any),
-		InitialState:         make([]*event.Event, 0, 6),
-		Preset:               "private_chat",
-		IsDirect:             portal.Metadata.IsDirect,
-		PowerLevelOverride:   powerLevels,
-		BeeperLocalRoomID:    id.RoomID(fmt.Sprintf("!%s:%s", portal.ID, portal.Bridge.Matrix.ServerName())),
-		BeeperInitialMembers: initialMembers,
+		Visibility:         "private",
+		Name:               portal.Name,
+		Topic:              portal.Topic,
+		CreationContent:    make(map[string]any),
+		InitialState:       make([]*event.Event, 0, 6),
+		Preset:             "private_chat",
+		IsDirect:           portal.Metadata.IsDirect,
+		PowerLevelOverride: powerLevels,
+		BeeperLocalRoomID:  id.RoomID(fmt.Sprintf("!%s:%s", portal.ID, portal.Bridge.Matrix.ServerName())),
 	}
 	autoJoinInvites := portal.Bridge.Matrix.GetCapabilities().AutoJoinInvites
-	// TODO remove this after initial_members is supported in hungryserv
 	if autoJoinInvites {
+		req.BeeperInitialMembers = initialMembers
+		// TODO remove this after initial_members is supported in hungryserv
 		req.BeeperAutoJoinInvites = true
 		req.Invite = initialMembers
 	}
@@ -2146,6 +2146,17 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 			err = portal.SyncParticipants(ctx, info.Members, source, nil, time.Time{})
 			if err != nil {
 				log.Err(err).Msg("Failed to sync participants after room creation")
+			}
+		}
+	}
+	userPortals, err := portal.Bridge.DB.UserPortal.GetAllInPortal(ctx, portal.PortalKey)
+	if err != nil {
+		log.Err(err).Msg("Failed to get user logins in portal to add portal to spaces")
+	} else {
+		for _, up := range userPortals {
+			login := portal.Bridge.GetCachedUserLoginByID(up.LoginID)
+			if login != nil {
+				go login.tryAddPortalToSpace(ctx, portal, up.CopyWithoutValues())
 			}
 		}
 	}
