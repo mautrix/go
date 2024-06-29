@@ -66,7 +66,7 @@ func fnSetRelay(ce *Event) {
 	} else {
 		relay = ce.Bridge.GetCachedUserLoginByID(networkid.UserLoginID(ce.Args[0]))
 		if relay == nil {
-			ce.Reply("User login with ID %q not found", ce.Args[0])
+			ce.Reply("User login with ID `%s` not found", ce.Args[0])
 			return
 		} else if !slices.Contains(ce.Bridge.Config.Relay.DefaultRelays, relay.ID) && relay.UserMXID != ce.User.MXID && !ce.User.Permissions.Admin {
 			ce.Reply("Only bridge admins can set another user's login as the relay")

@@ -261,7 +261,11 @@ func (portal *Portal) handleMatrixEvent(sender *User, evt *event.Event) {
 	login, _, err := portal.FindPreferredLogin(ctx, sender, true)
 	if err != nil {
 		log.Err(err).Msg("Failed to get user login to handle Matrix event")
-		portal.sendErrorStatus(ctx, evt, WrapErrorInStatus(err).WithMessage("Failed to get login to handle event").WithIsCertain(true).WithSendNotice(true))
+		if errors.Is(err, ErrNotLoggedIn) {
+			portal.sendErrorStatus(ctx, evt, WrapErrorInStatus(err).WithMessage("You're not logged in").WithIsCertain(true).WithSendNotice(true))
+		} else {
+			portal.sendErrorStatus(ctx, evt, WrapErrorInStatus(err).WithMessage("Failed to get login to handle event").WithIsCertain(true).WithSendNotice(true))
+		}
 		return
 	}
 	var origSender *OrigSender
@@ -333,7 +337,11 @@ func (portal *Portal) handleMatrixReadReceipt(user *User, eventID id.EventID, re
 	ctx := log.WithContext(context.TODO())
 	login, userPortal, err := portal.FindPreferredLogin(ctx, user, false)
 	if err != nil {
-		log.Err(err).Msg("Failed to get preferred login for user")
+		if !errors.Is(err, ErrNotLoggedIn) {
+			log.Err(err).Msg("Failed to get preferred login for user")
+		}
+		return
+	} else if login == nil {
 		return
 	}
 	rrClient, ok := login.Client.(ReadReceiptHandlingNetworkAPI)
@@ -408,7 +416,9 @@ func (portal *Portal) sendTypings(ctx context.Context, userIDs []id.UserID, typi
 			}
 			login, _, err = portal.FindPreferredLogin(ctx, user, false)
 			if err != nil {
-				zerolog.Ctx(ctx).Err(err).Stringer("user_id", userID).Msg("Failed to get user login to send typing event")
+				if !errors.Is(err, ErrNotLoggedIn) {
+					zerolog.Ctx(ctx).Err(err).Stringer("user_id", userID).Msg("Failed to get user login to send typing event")
+				}
 				continue
 			} else if login == nil {
 				continue
