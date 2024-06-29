@@ -16,6 +16,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/format"
 )
 
 func (br *Bridge) QueueMatrixEvent(ctx context.Context, evt *event.Event) {
@@ -68,30 +69,7 @@ func (br *Bridge) QueueMatrixEvent(ctx context.Context, evt *event.Event) {
 		}
 	}
 	if evt.Type == event.StateMember && evt.GetStateKey() == br.Bot.GetMXID().String() && evt.Content.AsMember().Membership == event.MembershipInvite && sender != nil {
-		if !sender.Permissions.Commands {
-			_, err := br.Bot.SendState(ctx, evt.RoomID, event.StateMember, br.Bot.GetMXID().String(), &event.Content{
-				Parsed: &event.MemberEventContent{
-					Membership: event.MembershipLeave,
-					Reason:     "You don't have permission to send commands to this bridge",
-				},
-			}, time.Time{})
-			if err != nil {
-				log.Err(err).Msg("Failed to reject invite from user with no permission")
-			} else {
-				log.Debug().Msg("Rejected invite from user with no permission")
-			}
-		} else if err := br.Bot.EnsureJoined(ctx, evt.RoomID); err != nil {
-			log.Err(err).Msg("Failed to accept invite to room")
-		} else {
-			log.Debug().Msg("Accepted invite to room as bot")
-			if sender.ManagementRoom == "" {
-				sender.ManagementRoom = evt.RoomID
-				err = br.DB.User.Update(ctx, sender.User)
-				if err != nil {
-					log.Err(err).Msg("Failed to update user's management room in database")
-				}
-			}
-		}
+		br.handleBotInvite(ctx, evt, sender)
 		return
 	}
 	portal, err := br.GetPortalByMXID(ctx, evt.RoomID)
@@ -108,6 +86,53 @@ func (br *Bridge) QueueMatrixEvent(ctx context.Context, evt *event.Event) {
 	} else {
 		status := WrapErrorInStatus(ErrNoPortal)
 		br.Matrix.SendMessageStatus(ctx, &status, StatusEventInfoFromEvent(evt))
+	}
+}
+
+func (br *Bridge) handleBotInvite(ctx context.Context, evt *event.Event, sender *User) {
+	log := zerolog.Ctx(ctx)
+	if !sender.Permissions.Commands {
+		_, err := br.Bot.SendState(ctx, evt.RoomID, event.StateMember, br.Bot.GetMXID().String(), &event.Content{
+			Parsed: &event.MemberEventContent{
+				Membership: event.MembershipLeave,
+				Reason:     "You don't have permission to send commands to this bridge",
+			},
+		}, time.Time{})
+		if err != nil {
+			log.Err(err).Msg("Failed to reject invite from user with no permission")
+		} else {
+			log.Debug().Msg("Rejected invite from user with no permission")
+		}
+		return
+	}
+	err := br.Bot.EnsureJoined(ctx, evt.RoomID)
+	if err != nil {
+		log.Err(err).Msg("Failed to accept invite to room")
+		return
+	}
+	log.Debug().Msg("Accepted invite to room as bot")
+	members, err := br.Matrix.GetMembers(ctx, evt.RoomID)
+	if err != nil {
+		log.Err(err).Msg("Failed to get members of room after accepting invite")
+	}
+	if len(members) == 2 {
+		var message string
+		if sender.ManagementRoom == "" {
+			message = fmt.Sprintf("Hello, I'm a %s bridge bot.\n\nUse `help` for help or `login` to log in.\n\nThis room has been marked as your management room.", br.Network.GetName().DisplayName)
+			sender.ManagementRoom = evt.RoomID
+			err = br.DB.User.Update(ctx, sender.User)
+			if err != nil {
+				log.Err(err).Msg("Failed to update user's management room in database")
+			}
+		} else {
+			message = fmt.Sprintf("Hello, I'm a %s bridge bot.\n\nUse `%s help` for help.", br.Network.GetName().DisplayName, br.Config.CommandPrefix)
+		}
+		_, err = br.Bot.SendMessage(ctx, evt.RoomID, event.EventMessage, &event.Content{
+			Parsed: format.RenderMarkdown(message, true, false),
+		}, time.Time{})
+		if err != nil {
+			log.Err(err).Msg("Failed to send welcome message to room")
+		}
 	}
 }
 

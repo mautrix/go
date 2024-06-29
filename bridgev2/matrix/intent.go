@@ -244,7 +244,17 @@ func (as *ASIntent) InviteUser(ctx context.Context, roomID id.RoomID, userID id.
 }
 
 func (as *ASIntent) EnsureJoined(ctx context.Context, roomID id.RoomID) error {
-	return as.Matrix.EnsureJoined(ctx, roomID)
+	err := as.Matrix.EnsureJoined(ctx, roomID)
+	if err != nil {
+		return err
+	}
+	if as.Connector.Bot.UserID == as.Matrix.UserID {
+		_, err = as.Matrix.State(ctx, roomID)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to get state after joining room with bot")
+		}
+	}
+	return nil
 }
 
 func (as *ASIntent) CreateRoom(ctx context.Context, req *mautrix.ReqCreateRoom) (id.RoomID, error) {
