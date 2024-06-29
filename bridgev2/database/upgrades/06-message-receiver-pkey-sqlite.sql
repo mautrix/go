@@ -1,4 +1,4 @@
--- v6 (compatible with v1+): Add room_receiver to message unique key
+-- v6 (compatible with v1+): Add room_receiver to message unique key (SQLite)
 -- transaction: off
 -- only: sqlite
 

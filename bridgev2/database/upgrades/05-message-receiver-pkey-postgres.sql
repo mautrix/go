@@ -1,4 +1,4 @@
--- v5 (compatible with v1+): Add room_receiver to message unique key
+-- v5 (compatible with v1+): Add room_receiver to message unique key (Postgres)
 -- only: postgres
 ALTER TABLE reaction DROP CONSTRAINT reaction_message_fkey;
 ALTER TABLE reaction DROP CONSTRAINT reaction_pkey1;
