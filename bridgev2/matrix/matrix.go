@@ -31,6 +31,9 @@ func (br *Connector) handleRoomEvent(ctx context.Context, evt *event.Event) {
 		br.sendCryptoStatusError(ctx, evt, errMessageNotEncrypted, nil, 0, true)
 		return
 	}
+	if evt.Type == event.StateMember && br.Crypto != nil {
+		br.Crypto.HandleMemberEvent(ctx, evt)
+	}
 	br.Bridge.QueueMatrixEvent(ctx, evt)
 }
 
