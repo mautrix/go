@@ -17,6 +17,7 @@ import (
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 
+	"maunium.net/go/mautrix/bridgev2/bridgeconfig"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/id"
@@ -28,6 +29,7 @@ type User struct {
 	Log    zerolog.Logger
 
 	CommandState unsafe.Pointer
+	Permissions  bridgeconfig.Permissions
 
 	doublePuppetIntent      MatrixAPI
 	doublePuppetInitialized bool
@@ -54,10 +56,11 @@ func (br *Bridge) loadUser(ctx context.Context, dbUser *database.User, queryErr 
 		}
 	}
 	user := &User{
-		User:   dbUser,
-		Bridge: br,
-		Log:    br.Log.With().Stringer("user_mxid", dbUser.MXID).Logger(),
-		logins: make(map[networkid.UserLoginID]*UserLogin),
+		User:        dbUser,
+		Bridge:      br,
+		Log:         br.Log.With().Stringer("user_mxid", dbUser.MXID).Logger(),
+		logins:      make(map[networkid.UserLoginID]*UserLogin),
+		Permissions: br.Config.Permissions.Get(dbUser.MXID),
 	}
 	br.usersByMXID[user.MXID] = user
 	err := br.unlockedLoadUserLoginsByMXID(ctx, user)

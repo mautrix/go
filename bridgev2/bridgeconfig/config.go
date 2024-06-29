@@ -27,14 +27,14 @@ type Config struct {
 	Encryption   EncryptionConfig   `yaml:"encryption"`
 	Logging      zeroconfig.Config  `yaml:"logging"`
 
-	Permissions         PermissionConfig    `yaml:"permissions"`
 	ManagementRoomTexts ManagementRoomTexts `yaml:"management_room_texts"`
 }
 
 type BridgeConfig struct {
-	CommandPrefix           string      `yaml:"command_prefix"`
-	PersonalFilteringSpaces bool        `yaml:"personal_filtering_spaces"`
-	Relay                   RelayConfig `yaml:"relay"`
+	CommandPrefix           string           `yaml:"command_prefix"`
+	PersonalFilteringSpaces bool             `yaml:"personal_filtering_spaces"`
+	Relay                   RelayConfig      `yaml:"relay"`
+	Permissions             PermissionConfig `yaml:"permissions"`
 }
 
 type MatrixConfig struct {

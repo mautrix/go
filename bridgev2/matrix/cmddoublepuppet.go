@@ -22,6 +22,10 @@ var CommandLoginMatrix = &commands.FullHandler{
 }
 
 func fnLoginMatrix(ce *commands.Event) {
+	if !ce.User.Permissions.DoublePuppet {
+		ce.Reply("You don't have permission to manage double puppeting.")
+		return
+	}
 	if len(ce.Args) == 0 {
 		ce.Reply("**Usage:** `login-matrix <access token>`")
 		return
@@ -73,6 +77,10 @@ var CommandLogoutMatrix = &commands.FullHandler{
 }
 
 func fnLogoutMatrix(ce *commands.Event) {
+	if !ce.User.Permissions.DoublePuppet {
+		ce.Reply("You don't have permission to manage double puppeting.")
+		return
+	}
 	if ce.User.AccessToken == "" {
 		ce.Reply("You don't have double puppeting enabled.")
 		return

@@ -28,6 +28,7 @@ func doUpgrade(helper up.Helper) {
 	helper.Copy(up.Bool, "bridge", "relay", "admin_only")
 	helper.Copy(up.List, "bridge", "relay", "default_relays")
 	helper.Copy(up.Map, "bridge", "relay", "message_formats")
+	helper.Copy(up.Map, "bridge", "permissions")
 
 	if dbType, ok := helper.Get(up.Str, "database", "type"); ok && dbType == "sqlite3" {
 		helper.Set(up.Str, "sqlite3-fk-wal", "database", "type")
@@ -172,6 +173,7 @@ func doMigrateLegacy(helper up.Helper) {
 	helper.Copy(up.Bool, "bridge", "personal_filtering_spaces")
 	helper.Copy(up.Bool, "bridge", "relay", "enabled")
 	helper.Copy(up.Bool, "bridge", "relay", "admin_only")
+	helper.Copy(up.Map, "bridge", "permissions")
 
 	CopyToOtherLocation(helper, up.Str, []string{"appservice", "database", "type"}, []string{"database", "type"})
 	CopyToOtherLocation(helper, up.Str, []string{"appservice", "database", "uri"}, []string{"database", "uri"})
@@ -232,6 +234,8 @@ func doMigrateLegacy(helper up.Helper) {
 
 var SpacedBlocks = [][]string{
 	{"bridge"},
+	{"bridge", "relay"},
+	{"bridge", "permissions"},
 	{"database"},
 	{"homeserver"},
 	{"homeserver", "software"},

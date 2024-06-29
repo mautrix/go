@@ -287,6 +287,10 @@ func (br *BridgeMain) validateConfig() error {
 		return errors.New("appservice.hs_token not configured. Did you forget to generate the registration? ")
 	case br.Config.Database.URI == "postgres://user:password@host/database?sslmode=disable":
 		return errors.New("appservice.database not configured")
+	case !br.Config.Bridge.Permissions.IsConfigured():
+		return errors.New("bridge.permissions not configured")
+	case !strings.Contains(br.Config.AppService.FormatUsername("1234567890"), "1234567890"):
+		return errors.New("username template is missing user ID placeholder")
 	default:
 		cfgValidator, ok := br.Connector.(bridgev2.ConfigValidatingNetwork)
 		if ok {

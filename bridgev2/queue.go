@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog"
 
@@ -30,38 +31,66 @@ func (br *Bridge) QueueMatrixEvent(ctx context.Context, evt *event.Event) {
 			status := WrapErrorInStatus(fmt.Errorf("%w: failed to get sender user: %w", ErrDatabaseError, err))
 			br.Matrix.SendMessageStatus(ctx, &status, StatusEventInfoFromEvent(evt))
 			return
+		} else if sender == nil {
+			log.Error().Msg("Couldn't get sender for incoming non-ephemeral Matrix event")
+			status := WrapErrorInStatus(errors.New("sender not found for event")).WithIsCertain(true).WithErrorAsMessage()
+			br.Matrix.SendMessageStatus(ctx, &status, StatusEventInfoFromEvent(evt))
+			return
+		} else if !sender.Permissions.SendEvents {
+			status := WrapErrorInStatus(errors.New("you don't have permission to send messages")).WithIsCertain(true).WithSendNotice(false).WithErrorAsMessage()
+			br.Matrix.SendMessageStatus(ctx, &status, StatusEventInfoFromEvent(evt))
+			return
 		}
-	}
-	if sender == nil && evt.Type.Class != event.EphemeralEventType {
+	} else if evt.Type.Class != event.EphemeralEventType {
 		log.Error().Msg("Missing sender for incoming non-ephemeral Matrix event")
 		status := WrapErrorInStatus(errors.New("sender not found for event")).WithIsCertain(true).WithErrorAsMessage()
 		br.Matrix.SendMessageStatus(ctx, &status, StatusEventInfoFromEvent(evt))
 		return
 	}
-	if evt.Type == event.EventMessage {
+	if evt.Type == event.EventMessage && sender != nil {
 		msg := evt.Content.AsMessage()
-		if msg != nil {
-			msg.RemoveReplyFallback()
-
-			if strings.HasPrefix(msg.Body, br.Config.CommandPrefix) || evt.RoomID == sender.ManagementRoom {
-				br.Commands.Handle(
-					ctx,
-					evt.RoomID,
-					evt.ID,
-					sender,
-					strings.TrimPrefix(msg.Body, br.Config.CommandPrefix+" "),
-					msg.RelatesTo.GetReplyTo(),
-				)
+		msg.RemoveReplyFallback()
+		if strings.HasPrefix(msg.Body, br.Config.CommandPrefix) || evt.RoomID == sender.ManagementRoom {
+			if !sender.Permissions.Commands {
+				status := WrapErrorInStatus(errors.New("you don't have permission to use commands")).WithIsCertain(true).WithSendNotice(false).WithErrorAsMessage()
+				br.Matrix.SendMessageStatus(ctx, &status, StatusEventInfoFromEvent(evt))
 				return
 			}
+			br.Commands.Handle(
+				ctx,
+				evt.RoomID,
+				evt.ID,
+				sender,
+				strings.TrimPrefix(msg.Body, br.Config.CommandPrefix+" "),
+				msg.RelatesTo.GetReplyTo(),
+			)
+			return
 		}
 	}
-	if evt.Type == event.StateMember && evt.GetStateKey() == br.Bot.GetMXID().String() && evt.Content.AsMember().Membership == event.MembershipInvite {
-		br.Bot.EnsureJoined(ctx, evt.RoomID)
-		// TODO handle errors
-		if sender.ManagementRoom == "" {
-			sender.ManagementRoom = evt.RoomID
-			br.DB.User.Update(ctx, sender.User)
+	if evt.Type == event.StateMember && evt.GetStateKey() == br.Bot.GetMXID().String() && evt.Content.AsMember().Membership == event.MembershipInvite && sender != nil {
+		if !sender.Permissions.Commands {
+			_, err := br.Bot.SendState(ctx, evt.RoomID, event.StateMember, br.Bot.GetMXID().String(), &event.Content{
+				Parsed: &event.MemberEventContent{
+					Membership: event.MembershipLeave,
+					Reason:     "You don't have permission to send commands to this bridge",
+				},
+			}, time.Time{})
+			if err != nil {
+				log.Err(err).Msg("Failed to reject invite from user with no permission")
+			} else {
+				log.Debug().Msg("Rejected invite from user with no permission")
+			}
+		} else if err := br.Bot.EnsureJoined(ctx, evt.RoomID); err != nil {
+			log.Err(err).Msg("Failed to accept invite to room")
+		} else {
+			log.Debug().Msg("Accepted invite to room as bot")
+			if sender.ManagementRoom == "" {
+				sender.ManagementRoom = evt.RoomID
+				err = br.DB.User.Update(ctx, sender.User)
+				if err != nil {
+					log.Err(err).Msg("Failed to update user's management room in database")
+				}
+			}
 		}
 		return
 	}

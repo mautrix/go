@@ -11,6 +11,8 @@ import (
 	"strings"
 	"text/template"
 
+	"gopkg.in/yaml.v3"
+
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/format"
@@ -26,15 +28,15 @@ type RelayConfig struct {
 
 type umRelayConfig RelayConfig
 
-func (rc *RelayConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	err := unmarshal((*umRelayConfig)(rc))
+func (rc *RelayConfig) UnmarshalYAML(node *yaml.Node) error {
+	err := node.Decode((*umRelayConfig)(rc))
 	if err != nil {
 		return err
 	}
 
 	rc.messageTemplates = template.New("messageTemplates")
-	for key, format := range rc.MessageFormats {
-		_, err = rc.messageTemplates.New(string(key)).Parse(format)
+	for key, template := range rc.MessageFormats {
+		_, err = rc.messageTemplates.New(string(key)).Parse(template)
 		if err != nil {
 			return err
 		}

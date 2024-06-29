@@ -7,65 +7,100 @@
 package bridgeconfig
 
 import (
-	"strconv"
+	"fmt"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 
 	"maunium.net/go/mautrix/id"
 )
 
-type PermissionConfig map[string]PermissionLevel
-
-type PermissionLevel int
-
-const (
-	PermissionLevelBlock PermissionLevel = 0
-	PermissionLevelRelay PermissionLevel = 5
-	PermissionLevelUser  PermissionLevel = 10
-	PermissionLevelAdmin PermissionLevel = 100
-)
-
-var namesToLevels = map[string]PermissionLevel{
-	"block": PermissionLevelBlock,
-	"relay": PermissionLevelRelay,
-	"user":  PermissionLevelUser,
-	"admin": PermissionLevelAdmin,
+type Permissions struct {
+	SendEvents   bool `yaml:"send_events"`
+	Commands     bool `yaml:"commands"`
+	Login        bool `yaml:"login"`
+	DoublePuppet bool `yaml:"double_puppet"`
+	Admin        bool `yaml:"admin"`
 }
 
-func RegisterPermissionLevel(name string, level PermissionLevel) {
-	namesToLevels[name] = level
+type PermissionConfig map[string]*Permissions
+
+func boolToInt(val bool) int {
+	if val {
+		return 1
+	}
+	return 0
 }
 
-func (pc *PermissionConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	rawPC := make(map[string]string)
-	err := unmarshal(&rawPC)
-	if err != nil {
-		return err
+func (pc PermissionConfig) IsConfigured() bool {
+	_, hasWildcard := pc["*"]
+	_, hasExampleDomain := pc["example.com"]
+	_, hasExampleUser := pc["@admin:example.com"]
+	exampleLen := boolToInt(hasWildcard) + boolToInt(hasExampleUser) + boolToInt(hasExampleDomain)
+	if len(pc) <= exampleLen {
+		return false
 	}
-
-	if *pc == nil {
-		*pc = make(map[string]PermissionLevel)
-	}
-	for key, value := range rawPC {
-		level, ok := namesToLevels[strings.ToLower(value)]
-		if ok {
-			(*pc)[key] = level
-		} else if val, err := strconv.Atoi(value); err == nil {
-			(*pc)[key] = PermissionLevel(val)
-		} else {
-			(*pc)[key] = PermissionLevelBlock
-		}
-	}
-	return nil
+	return true
 }
 
-func (pc PermissionConfig) Get(userID id.UserID) PermissionLevel {
+func (pc PermissionConfig) Get(userID id.UserID) Permissions {
 	if level, ok := pc[string(userID)]; ok {
-		return level
+		return *level
 	} else if level, ok = pc[userID.Homeserver()]; len(userID.Homeserver()) > 0 && ok {
-		return level
+		return *level
 	} else if level, ok = pc["*"]; ok {
-		return level
+		return *level
 	} else {
 		return PermissionLevelBlock
 	}
+}
+
+var (
+	PermissionLevelBlock    = Permissions{}
+	PermissionLevelRelay    = Permissions{SendEvents: true}
+	PermissionLevelCommands = Permissions{SendEvents: true, Commands: true}
+	PermissionLevelUser     = Permissions{SendEvents: true, Commands: true, Login: true, DoublePuppet: true}
+	PermissionLevelAdmin    = Permissions{SendEvents: true, Commands: true, Login: true, DoublePuppet: true, Admin: true}
+)
+
+var namesToLevels = map[string]Permissions{
+	"block":    PermissionLevelBlock,
+	"relay":    PermissionLevelRelay,
+	"commands": PermissionLevelCommands,
+	"user":     PermissionLevelUser,
+	"admin":    PermissionLevelAdmin,
+}
+
+var levelsToNames = map[Permissions]string{
+	PermissionLevelBlock:    "block",
+	PermissionLevelRelay:    "relay",
+	PermissionLevelCommands: "commands",
+	PermissionLevelUser:     "user",
+	PermissionLevelAdmin:    "admin",
+}
+
+type umPerm Permissions
+
+func (p *Permissions) UnmarshalYAML(perm *yaml.Node) error {
+	switch perm.Tag {
+	case "!!str":
+		var ok bool
+		*p, ok = namesToLevels[strings.ToLower(perm.Value)]
+		if !ok {
+			return fmt.Errorf("invalid permissions level %s", perm.Value)
+		}
+		return nil
+	case "!!map":
+		err := perm.Decode((*umPerm)(p))
+		return err
+	default:
+		return fmt.Errorf("invalid permissions type %s", perm.Tag)
+	}
+}
+
+func (p *Permissions) MarshalYAML() (any, error) {
+	if level, ok := levelsToNames[*p]; ok {
+		return level, nil
+	}
+	return umPerm(*p), nil
 }

@@ -33,6 +33,7 @@ var CommandLogin = &FullHandler{
 		Description: "Log into the bridge",
 		Args:        "[_flow ID_]",
 	},
+	RequiresLoginPermission: true,
 }
 
 func formatFlowsReply(flows []bridgev2.LoginFlow) string {
@@ -327,7 +328,8 @@ var CommandSetPreferredLogin = &FullHandler{
 		Description: "Set the preferred login ID for sending messages to this portal (only relevant when logged into multiple accounts via the bridge)",
 		Args:        "<_login ID_>",
 	},
-	RequiresPortal: true,
+	RequiresPortal:          true,
+	RequiresLoginPermission: true,
 }
 
 func fnSetPreferredLogin(ce *Event) {

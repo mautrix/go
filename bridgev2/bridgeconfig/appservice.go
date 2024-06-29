@@ -14,6 +14,7 @@ import (
 
 	"go.mau.fi/util/exerrors"
 	"go.mau.fi/util/random"
+	"gopkg.in/yaml.v3"
 
 	"maunium.net/go/mautrix/appservice"
 	"maunium.net/go/mautrix/id"
@@ -114,9 +115,9 @@ type BotUserConfig struct {
 
 type serializableBUC BotUserConfig
 
-func (buc *BotUserConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (buc *BotUserConfig) UnmarshalYAML(node *yaml.Node) error {
 	var sbuc serializableBUC
-	err := unmarshal(&sbuc)
+	err := node.Decode(&sbuc)
 	if err != nil {
 		return err
 	}

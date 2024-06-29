@@ -44,11 +44,11 @@ type FullHandler struct {
 	Aliases []string
 	Help    HelpMeta
 
-	RequiresAdmin  bool
-	RequiresPortal bool
-	RequiresLogin  bool
-
-	RequiresEventLevel event.Type
+	RequiresAdmin           bool
+	RequiresPortal          bool
+	RequiresLogin           bool
+	RequiresEventLevel      event.Type
+	RequiresLoginPermission bool
 }
 
 func (fh *FullHandler) GetHelp() HelpMeta {
@@ -70,26 +70,27 @@ func (fh *FullHandler) ShowInHelp(ce *Event) bool {
 }
 
 func (fh *FullHandler) userHasRoomPermission(ce *Event) bool {
-	return true
-	//levels, err := ce.MainIntent().PowerLevels(ce.Ctx, ce.RoomID)
-	//if err != nil {
-	//	ce.ZLog.Warn().Err(err).Msg("Failed to check room power levels")
-	//	ce.Reply("Failed to get room power levels to see if you're allowed to use that command")
-	//	return false
-	//}
-	//return levels.GetUserLevel(ce.User.GetMXID()) >= levels.GetEventLevel(fh.RequiresEventLevel)
+	levels, err := ce.Bridge.Matrix.GetPowerLevels(ce.Ctx, ce.RoomID)
+	if err != nil {
+		ce.Log.Warn().Err(err).Msg("Failed to check room power levels")
+		ce.Reply("Failed to get room power levels to see if you're allowed to use that command")
+		return false
+	}
+	return levels.GetUserLevel(ce.User.MXID) >= levels.GetEventLevel(fh.RequiresEventLevel)
 }
 
 func (fh *FullHandler) Run(ce *Event) {
-	//if fh.RequiresAdmin && ce.User.GetPermissionLevel() < bridgeconfig.PermissionLevelAdmin {
-	//	ce.Reply("That command is limited to bridge administrators.")
-	//} else if fh.RequiresEventLevel.Type != "" && ce.User.GetPermissionLevel() < bridgeconfig.PermissionLevelAdmin && !fh.userHasRoomPermission(ce) {
-	//	ce.Reply("That command requires room admin rights.")
-	//} else if fh.RequiresPortal && ce.Portal == nil {
-	//	ce.Reply("That command can only be ran in portal rooms.")
-	//} else if fh.RequiresLogin && !ce.User.IsLoggedIn() {
-	//	ce.Reply("That command requires you to be logged in.")
-	//} else {
-	fh.Func(ce)
-	//}
+	if fh.RequiresAdmin && !ce.User.Permissions.Admin {
+		ce.Reply("That command is limited to bridge administrators.")
+	} else if fh.RequiresLoginPermission && !ce.User.Permissions.Login {
+		ce.Reply("You do not have permissions to log into this bridge.")
+	} else if fh.RequiresEventLevel.Type != "" && !ce.User.Permissions.Admin && !fh.userHasRoomPermission(ce) {
+		ce.Reply("That command requires room admin rights.")
+	} else if fh.RequiresPortal && ce.Portal == nil {
+		ce.Reply("That command can only be ran in portal rooms.")
+	} else if fh.RequiresLogin && ce.User.GetDefaultLogin() == nil {
+		ce.Reply("That command requires you to be logged in.")
+	} else {
+		fh.Func(ce)
+	}
 }
