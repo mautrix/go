@@ -12,6 +12,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"hash"
 	"io"
 
@@ -134,6 +135,27 @@ type encryptingReader struct {
 	closed bool
 
 	isDecrypting bool
+}
+
+func (r *encryptingReader) Seek(offset int64, whence int) (int64, error) {
+	if r.closed {
+		return 0, ReaderClosed
+	}
+	if offset != 0 || whence != io.SeekStart {
+		return 0, fmt.Errorf("attachments.EncryptStream: only seeking to the beginning is supported")
+	}
+	seeker, ok := r.source.(io.ReadSeeker)
+	if !ok {
+		return 0, fmt.Errorf("attachments.EncryptStream: source reader (%T) is not an io.ReadSeeker", r.source)
+	}
+	n, err := seeker.Seek(offset, whence)
+	if err != nil {
+		return 0, err
+	}
+	block, _ := aes.NewCipher(r.file.decoded.key[:])
+	r.stream = cipher.NewCTR(block, r.file.decoded.iv[:])
+	r.hash.Reset()
+	return n, nil
 }
 
 func (r *encryptingReader) Read(dst []byte) (n int, err error) {
