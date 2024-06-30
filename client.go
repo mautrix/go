@@ -1411,9 +1411,11 @@ func (cli *Client) State(ctx context.Context, roomID id.RoomID) (stateMap RoomSt
 	})
 	if err == nil && cli.StateStore != nil {
 		clearErr := cli.StateStore.ClearCachedMembers(ctx, roomID)
-		cli.cliOrContextLog(ctx).Warn().Err(clearErr).
-			Stringer("room_id", roomID).
-			Msg("Failed to clear cached member list after fetching state")
+		if clearErr != nil {
+			cli.cliOrContextLog(ctx).Warn().Err(clearErr).
+				Stringer("room_id", roomID).
+				Msg("Failed to clear cached member list after fetching state")
+		}
 		for _, evts := range stateMap {
 			for _, evt := range evts {
 				UpdateStateStore(ctx, cli.StateStore, evt)
