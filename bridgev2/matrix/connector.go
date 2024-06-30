@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/dbutil"
@@ -80,7 +81,10 @@ type Connector struct {
 	latestState                    *status.BridgeState
 }
 
-var _ bridgev2.MatrixConnector = (*Connector)(nil)
+var (
+	_ bridgev2.MatrixConnector           = (*Connector)(nil)
+	_ bridgev2.MatrixConnectorWithServer = (*Connector)(nil)
+)
 
 func NewConnector(cfg *bridgeconfig.Config) *Connector {
 	c := &Connector{}
@@ -151,6 +155,20 @@ func (br *Connector) Start(ctx context.Context) error {
 		go br.Crypto.Start()
 	}
 	br.AS.Ready = true
+	return nil
+}
+
+func (br *Connector) GetPublicAddress() string {
+	if br.Config.AppService.PublicAddress == "https://bridge.example.com" {
+		return ""
+	}
+	return br.Config.AppService.PublicAddress
+}
+
+func (br *Connector) GetRouter() *mux.Router {
+	if br.GetPublicAddress() != "" {
+		return br.AS.Router
+	}
 	return nil
 }
 

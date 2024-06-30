@@ -21,9 +21,10 @@ import (
 )
 
 type AppserviceConfig struct {
-	Address  string `yaml:"address"`
-	Hostname string `yaml:"hostname"`
-	Port     uint16 `yaml:"port"`
+	Address       string `yaml:"address"`
+	PublicAddress string `yaml:"public_address"`
+	Hostname      string `yaml:"hostname"`
+	Port          uint16 `yaml:"port"`
 
 	ID  string        `yaml:"id"`
 	Bot BotUserConfig `yaml:"bot"`

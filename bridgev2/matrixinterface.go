@@ -10,6 +10,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/gorilla/mux"
+
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridge/status"
 	"maunium.net/go/mautrix/bridgev2/networkid"
@@ -43,6 +45,11 @@ type MatrixConnector interface {
 	GetMemberInfo(ctx context.Context, roomID id.RoomID, userID id.UserID) (*event.MemberEventContent, error)
 
 	ServerName() string
+}
+
+type MatrixConnectorWithServer interface {
+	GetPublicAddress() string
+	GetRouter() *mux.Router
 }
 
 type MatrixAPI interface {

@@ -52,6 +52,7 @@ func doUpgrade(helper up.Helper) {
 	helper.Copy(up.Int, "homeserver", "ping_interval_seconds")
 
 	helper.Copy(up.Str|up.Null, "appservice", "address")
+	helper.Copy(up.Str|up.Null, "appservice", "public_address")
 	helper.Copy(up.Str|up.Null, "appservice", "hostname")
 	helper.Copy(up.Int|up.Null, "appservice", "port")
 	helper.Copy(up.Str, "appservice", "id")
