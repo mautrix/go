@@ -9,6 +9,7 @@ package bridgev2
 import (
 	"context"
 	"fmt"
+	"maps"
 	"sync"
 	"time"
 
@@ -125,25 +126,67 @@ func (br *Bridge) GetCachedUserLoginByID(id networkid.UserLoginID) *UserLogin {
 	return br.userLoginsByID[id]
 }
 
-func (user *User) NewLogin(ctx context.Context, data *database.UserLogin, client NetworkAPI) (*UserLogin, error) {
+type NewLoginParams struct {
+	LoadUserLogin     func(context.Context, *UserLogin) error
+	DeleteOnConflict  bool
+	DontReuseExisting bool
+}
+
+func (user *User) NewLogin(ctx context.Context, data *database.UserLogin, params NewLoginParams) (*UserLogin, error) {
 	data.BridgeID = user.BridgeID
 	data.UserMXID = user.MXID
-	ul := &UserLogin{
-		UserLogin: data,
-		Bridge:    user.Bridge,
-		User:      user,
-		Log:       user.Log.With().Str("login_id", string(data.ID)).Logger(),
-		Client:    client,
+	if params.LoadUserLogin == nil {
+		params.LoadUserLogin = user.Bridge.Network.LoadUserLogin
 	}
-	err := user.Bridge.DB.UserLogin.Insert(ctx, ul.UserLogin)
+	ul, err := user.Bridge.GetExistingUserLoginByID(ctx, data.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check if login already exists: %w", err)
+	}
+	var doInsert bool
+	if ul != nil && ul.UserMXID != user.MXID {
+		if params.DeleteOnConflict {
+			ul.Delete(ctx, status.BridgeState{StateEvent: status.StateLoggedOut, Error: "overridden-by-another-user"}, false)
+			ul = nil
+		} else {
+			return nil, fmt.Errorf("%s is already logged in with that account", ul.UserMXID)
+		}
+	}
+	if ul != nil {
+		if params.DontReuseExisting {
+			return nil, fmt.Errorf("login already exists")
+		}
+		doInsert = false
+		ul.Metadata.RemoteName = data.Metadata.RemoteName
+		maps.Copy(ul.Metadata.Extra, data.Metadata.Extra)
+	} else {
+		doInsert = true
+		ul = &UserLogin{
+			UserLogin: data,
+			Bridge:    user.Bridge,
+			User:      user,
+			Log:       user.Log.With().Str("login_id", string(data.ID)).Logger(),
+		}
+		ul.BridgeState = user.Bridge.NewBridgeStateQueue(ul)
+	}
+	err = params.LoadUserLogin(ul.Log.WithContext(context.Background()), ul)
 	if err != nil {
 		return nil, err
 	}
-	ul.BridgeState = user.Bridge.NewBridgeStateQueue(ul)
-	user.Bridge.cacheLock.Lock()
-	defer user.Bridge.cacheLock.Unlock()
-	user.Bridge.userLoginsByID[ul.ID] = ul
-	user.logins[ul.ID] = ul
+	if doInsert {
+		err = user.Bridge.DB.UserLogin.Insert(ctx, ul.UserLogin)
+		if err != nil {
+			return nil, err
+		}
+		user.Bridge.cacheLock.Lock()
+		user.Bridge.userLoginsByID[ul.ID] = ul
+		user.logins[ul.ID] = ul
+		user.Bridge.cacheLock.Unlock()
+	} else {
+		err = ul.Save(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
 	return ul, nil
 }
 
