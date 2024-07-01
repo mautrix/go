@@ -71,7 +71,8 @@ type BridgeName struct {
 	NetworkIcon id.ContentURIString
 	// An identifier uniquely identifying the network, e.g. `discord`
 	NetworkID string
-	// An identifier uniquely identifying the bridge software, e.g. `discordgo`
+	// An identifier uniquely identifying the bridge software.
+	// The Go import path is a good choice here (e.g. github.com/octocat/discordbridge)
 	BeeperBridgeType string
 	// The default appservice port to use in the example config, defaults to 8080 if unset
 	DefaultPort uint16
@@ -97,20 +98,29 @@ type NetworkConnector interface {
 	// The connector should do any non-user-specific startup actions necessary.
 	// User logins will be loaded separately, so the connector should not load them here.
 	Start(context.Context) error
-	// LoadUserLogin is called when a UserLogin is loaded from the database in order to fill the [UserLogin.Client] field.
+
+	// GetName returns the name of the bridge and some additional metadata,
+	// which is used to fill `m.bridge` events among other things.
 	//
-	// This is called within the bridge's global cache lock, so it must not do any slow operations,
-	// such as connecting to the network. Instead, connecting should happen when [NetworkAPI.Connect] is called later.
-	LoadUserLogin(ctx context.Context, login *UserLogin) error
-
-	GetCapabilities() *NetworkGeneralCapabilities
-
+	// The first call happens *before* the config is loaded, because the data here is also used to
+	// fill parts of the example config (like the default username template and bot localpart).
+	// The output can still be adjusted based on config variables, but the function must have
+	// default values when called without a config.
 	GetName() BridgeName
+	// GetCapabilities returns the general capabilities of the network connector.
+	// Note that most capabilities are scoped to rooms and are returned by [NetworkAPI.GetCapabilities] instead.
+	GetCapabilities() *NetworkGeneralCapabilities
 	// GetConfig returns all the parts of the network connector's config file. Specifically:
 	// - example: a string containing an example config file
 	// - data: an interface to unmarshal the actual config into
 	// - upgrader: a config upgrader to ensure all fields are present and to do any migrations from old configs
 	GetConfig() (example string, data any, upgrader configupgrade.Upgrader)
+
+	// LoadUserLogin is called when a UserLogin is loaded from the database in order to fill the [UserLogin.Client] field.
+	//
+	// This is called within the bridge's global cache lock, so it must not do any slow operations,
+	// such as connecting to the network. Instead, connecting should happen when [NetworkAPI.Connect] is called later.
+	LoadUserLogin(ctx context.Context, login *UserLogin) error
 
 	// GetLoginFlows returns a list of login flows that the network supports.
 	GetLoginFlows() []LoginFlow
@@ -204,68 +214,144 @@ type NetworkRoomCapabilities struct {
 }
 
 // NetworkAPI is an interface representing a remote network client for a single user login.
+//
+// Implementations of this interface are stored in [UserLogin.Client].
+// The [NetworkConnector.LoadUserLogin] method is responsible for filling the Client field with a NetworkAPI.
 type NetworkAPI interface {
+	// Connect is called to actually connect to the remote network.
+	// If there's no persistent connection, this may just check access token validity, or even do nothing at all.
 	Connect(ctx context.Context) error
+	// Disconnect should disconnect from the remote network.
+	// A clean disconnection is preferred, but it should not take too long.
 	Disconnect()
+	// IsLoggedIn should return whether the access tokens in this NetworkAPI are valid.
+	// This should not do any IO operations, it should only return cached data which is updated elsewhere.
 	IsLoggedIn() bool
+	// LogoutRemote should invalidate the access tokens in this NetworkAPI if possible
+	// and disconnect from the remote network.
 	LogoutRemote(ctx context.Context)
 
+	// IsThisUser should return whether the given remote network user ID is the same as this login.
+	// This is used when the bridge wants to convert a user login ID to a user ID.
 	IsThisUser(ctx context.Context, userID networkid.UserID) bool
+	// GetChatInfo returns info for a given chat. Any fields that are nil will be ignored and not processed at all,
+	// while empty strings will change the relevant value in the room to be an empty string.
+	// For example, a nil name will mean the room name is not changed, while an empty string name will remove the name.
 	GetChatInfo(ctx context.Context, portal *Portal) (*ChatInfo, error)
+	// GetUserInfo returns info for a given user. Like chat info, fields can be nil to skip them.
 	GetUserInfo(ctx context.Context, ghost *Ghost) (*UserInfo, error)
+	// GetCapabilities returns the bridging capabilities in a given room.
+	// This can simply return a static list if the remote network has no per-chat capability differences,
+	// but all calls will include the portal, because some networks do have per-chat differences.
 	GetCapabilities(ctx context.Context, portal *Portal) *NetworkRoomCapabilities
 
+	// HandleMatrixMessage is called when a message is sent from Matrix in an existing portal room.
+	// This function should convert the message as appropriate, send it over to the remote network,
+	// and return the info so the central bridge can store it in the database.
+	//
+	// This is only called for normal non-edit messages. For other types of events, see the optional extra interfaces (`XHandlingNetworkAPI`).
 	HandleMatrixMessage(ctx context.Context, msg *MatrixMessage) (message *MatrixMessageResponse, err error)
 }
 
+// EditHandlingNetworkAPI is an optional interface that network connectors can implement to handle message edits.
 type EditHandlingNetworkAPI interface {
 	NetworkAPI
+	// HandleMatrixEdit is called when a previously bridged message is edited in a portal room.
+	// The central bridge module will save the [*database.Message] after this function returns,
+	// so the network connector is allowed to mutate the provided object.
 	HandleMatrixEdit(ctx context.Context, msg *MatrixEdit) error
 }
 
+// ReactionHandlingNetworkAPI is an optional interface that network connectors can implement to handle message reactions.
 type ReactionHandlingNetworkAPI interface {
 	NetworkAPI
+	// PreHandleMatrixReaction is called as the first step of handling a reaction. It returns the emoji ID,
+	// sender user ID and max reaction count to allow the central bridge module to de-duplicate the reaction
+	// if appropriate.
 	PreHandleMatrixReaction(ctx context.Context, msg *MatrixReaction) (MatrixReactionPreResponse, error)
+	// HandleMatrixReaction is called after confirming that the reaction is not a duplicate.
+	// This is the method that should actually send the reaction to the remote network.
+	// The returned [database.Reaction] object may be empty: the central bridge module already has
+	// all the required fields and will fill them automatically if they're empty. However, network
+	// connectors are allowed to set fields themselves if any extra fields are necessary.
 	HandleMatrixReaction(ctx context.Context, msg *MatrixReaction) (reaction *database.Reaction, err error)
+	// HandleMatrixReactionRemove is called when a redaction event is received pointing at a previously
+	// bridged reaction. The network connector should remove the reaction from the remote network.
 	HandleMatrixReactionRemove(ctx context.Context, msg *MatrixReactionRemove) error
 }
 
+// RedactionHandlingNetworkAPI is an optional interface that network connectors can implement to handle message deletions.
 type RedactionHandlingNetworkAPI interface {
 	NetworkAPI
+	// HandleMatrixMessageRemove is called when a previously bridged message is deleted in a portal room.
 	HandleMatrixMessageRemove(ctx context.Context, msg *MatrixMessageRemove) error
 }
 
+// ReadReceiptHandlingNetworkAPI is an optional interface that network connectors can implement to handle read receipts.
 type ReadReceiptHandlingNetworkAPI interface {
 	NetworkAPI
+	// HandleMatrixReadReceipt is called when a read receipt is sent in a portal room.
+	// This will be called even if the target message is not a bridged message.
+	// Network connectors must gracefully handle [MatrixReadReceipt.ExactMessage] being nil.
+	// The exact handling is up to the network connector.
 	HandleMatrixReadReceipt(ctx context.Context, msg *MatrixReadReceipt) error
 }
 
+// TypingHandlingNetworkAPI is an optional interface that network connectors can implement to handle typing events.
 type TypingHandlingNetworkAPI interface {
 	NetworkAPI
+	// HandleMatrixTyping is called when a user starts typing in a portal room.
+	// In the future, the central bridge module will likely get a loop to automatically repeat
+	// calls to this function until the user stops typing.
 	HandleMatrixTyping(ctx context.Context, msg *MatrixTyping) error
 }
 
+// RoomNameHandlingNetworkAPI is an optional interface that network connectors can implement to handle room name changes.
 type RoomNameHandlingNetworkAPI interface {
 	NetworkAPI
+	// HandleMatrixRoomName is called when the name of a portal room is changed.
+	// This method should update the Name and NameSet fields of the Portal with
+	// the new name and return true if the change was successful.
+	// If the change is not successful, then the fields should not be updated.
 	HandleMatrixRoomName(ctx context.Context, msg *MatrixRoomName) (bool, error)
 }
 
+// RoomAvatarHandlingNetworkAPI is an optional interface that network connectors can implement to handle room avatar changes.
 type RoomAvatarHandlingNetworkAPI interface {
 	NetworkAPI
+	// HandleMatrixRoomAvatar is called when the avatar of a portal room is changed.
+	// This method should update the AvatarID, AvatarHash and AvatarMXC fields
+	// with the new avatar details and return true if the change was successful.
+	// If the change is not successful, then the fields should not be updated.
 	HandleMatrixRoomAvatar(ctx context.Context, msg *MatrixRoomAvatar) (bool, error)
 }
 
+// RoomTopicHandlingNetworkAPI is an optional interface that network connectors can implement to handle room topic changes.
 type RoomTopicHandlingNetworkAPI interface {
 	NetworkAPI
+	// HandleMatrixRoomTopic is called when the topic of a portal room is changed.
+	// This method should update the Topic and TopicSet fields of the Portal with
+	// the new topic and return true if the change was successful.
+	// If the change is not successful, then the fields should not be updated.
 	HandleMatrixRoomTopic(ctx context.Context, msg *MatrixRoomTopic) (bool, error)
 }
 
 type ResolveIdentifierResponse struct {
+	// Ghost is the ghost of the user that the identifier resolves to.
+	// This field should be set whenever possible. However, it is not required,
+	// and the central bridge module will not try to create a ghost if it is not set.
 	Ghost *Ghost
 
-	UserID   networkid.UserID
+	// UserID is the user ID of the user that the identifier resolves to.
+	UserID networkid.UserID
+	// UserInfo contains the info of the user that the identifier resolves to.
+	// If both this and the Ghost field are set, the central bridge module will
+	// automatically update the ghost's info with the data here.
 	UserInfo *UserInfo
 
+	// Chat contains info about the direct chat with the resolved user.
+	// This field is required when createChat is true in the ResolveIdentifier call,
+	// and optional otherwise.
 	Chat *CreateChatResponse
 }
 
@@ -276,11 +362,16 @@ type CreateChatResponse struct {
 	PortalInfo *ChatInfo
 }
 
+// IdentifierResolvingNetworkAPI is an optional interface that network connectors can implement to support starting new direct chats.
 type IdentifierResolvingNetworkAPI interface {
 	NetworkAPI
+	// ResolveIdentifier is called when the user wants to start a new chat.
+	// This can happen via the `resolve-identifier` or `start-chat` bridge bot commands,
+	// or the corresponding provisioning API endpoints.
 	ResolveIdentifier(ctx context.Context, identifier string, createChat bool) (*ResolveIdentifierResponse, error)
 }
 
+// ContactListingNetworkAPI is an optional interface that network connectors can implement to provide the user's contact list.
 type ContactListingNetworkAPI interface {
 	NetworkAPI
 	GetContactList(ctx context.Context) ([]*ResolveIdentifierResponse, error)
