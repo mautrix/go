@@ -306,6 +306,9 @@ func (br *BridgeMain) validateConfig() error {
 func (br *BridgeMain) getConfigUpgrader() (configupgrade.BaseUpgrader, any) {
 	networkExample, networkData, networkUpgrader := br.Connector.GetConfig()
 	baseConfig := br.makeFullExampleConfig(networkExample)
+	if networkUpgrader == nil {
+		networkUpgrader = configupgrade.NoopUpgrader
+	}
 	networkUpgraderProxied := &configupgrade.ProxyUpgrader{Target: networkUpgrader, Prefix: []string{"network"}}
 	upgrader := configupgrade.MergeUpgraders(baseConfig, networkUpgraderProxied, bridgeconfig.Upgrader)
 	return upgrader, networkData
