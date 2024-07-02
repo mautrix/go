@@ -7,6 +7,7 @@ package olm
 import "C"
 
 import (
+	"bytes"
 	"encoding/base64"
 	"unsafe"
 
@@ -190,12 +191,6 @@ func (s *InboundGroupSession) UnmarshalJSON(data []byte) error {
 	return s.Unpickle(data[1:len(data)-1], pickleKey)
 }
 
-func clone(original []byte) []byte {
-	clone := make([]byte, len(original))
-	copy(clone, original)
-	return clone
-}
-
 // decryptMaxPlaintextLen returns the maximum number of bytes of plain-text a
 // given message could decode to.  The actual size could be different due to
 // padding.  Returns error on failure.  If the message base64 couldn't be
@@ -208,7 +203,7 @@ func (s *InboundGroupSession) decryptMaxPlaintextLen(message []byte) (uint, erro
 		return 0, EmptyInput
 	}
 	// olm_group_decrypt_max_plaintext_length destroys the input, so we have to clone it
-	message = clone(message)
+	message = bytes.Clone(message)
 	r := C.olm_group_decrypt_max_plaintext_length(
 		(*C.OlmInboundGroupSession)(s.int),
 		(*C.uint8_t)(&message[0]),

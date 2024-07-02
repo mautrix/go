@@ -9,6 +9,9 @@ package event
 import (
 	"sync"
 
+	"go.mau.fi/util/ptr"
+	"golang.org/x/exp/maps"
+
 	"maunium.net/go/mautrix/id"
 )
 
@@ -33,42 +36,23 @@ type PowerLevelsEventContent struct {
 	RedactPtr *int `json:"redact,omitempty"`
 }
 
-func copyPtr(ptr *int) *int {
-	if ptr == nil {
-		return nil
-	}
-	val := *ptr
-	return &val
-}
-
-func copyMap[Key comparable](m map[Key]int) map[Key]int {
-	if m == nil {
-		return nil
-	}
-	copied := make(map[Key]int, len(m))
-	for k, v := range m {
-		copied[k] = v
-	}
-	return copied
-}
-
 func (pl *PowerLevelsEventContent) Clone() *PowerLevelsEventContent {
 	if pl == nil {
 		return nil
 	}
 	return &PowerLevelsEventContent{
-		Users:           copyMap(pl.Users),
+		Users:           maps.Clone(pl.Users),
 		UsersDefault:    pl.UsersDefault,
-		Events:          copyMap(pl.Events),
+		Events:          maps.Clone(pl.Events),
 		EventsDefault:   pl.EventsDefault,
-		StateDefaultPtr: copyPtr(pl.StateDefaultPtr),
+		StateDefaultPtr: ptr.Clone(pl.StateDefaultPtr),
 
 		Notifications: pl.Notifications.Clone(),
 
-		InvitePtr: copyPtr(pl.InvitePtr),
-		KickPtr:   copyPtr(pl.KickPtr),
-		BanPtr:    copyPtr(pl.BanPtr),
-		RedactPtr: copyPtr(pl.RedactPtr),
+		InvitePtr: ptr.Clone(pl.InvitePtr),
+		KickPtr:   ptr.Clone(pl.KickPtr),
+		BanPtr:    ptr.Clone(pl.BanPtr),
+		RedactPtr: ptr.Clone(pl.RedactPtr),
 	}
 }
 
@@ -81,7 +65,7 @@ func (npl *NotificationPowerLevels) Clone() *NotificationPowerLevels {
 		return nil
 	}
 	return &NotificationPowerLevels{
-		RoomPtr: copyPtr(npl.RoomPtr),
+		RoomPtr: ptr.Clone(npl.RoomPtr),
 	}
 }
 

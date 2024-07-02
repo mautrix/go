@@ -11,7 +11,6 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/hmac"
-	"crypto/rand"
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/base64"
@@ -20,9 +19,9 @@ import (
 	"fmt"
 	"math"
 
+	"go.mau.fi/util/random"
 	"golang.org/x/crypto/pbkdf2"
 
-	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -66,25 +65,15 @@ func computeKey(passphrase string, salt []byte, rounds int) (encryptionKey, hash
 }
 
 func makeExportIV() []byte {
-	iv := make([]byte, 16)
-	_, err := rand.Read(iv)
-	if err != nil {
-		panic(olm.NotEnoughGoRandom)
-	}
+	iv := random.Bytes(16)
 	// Set bit 63 to zero
 	iv[7] &= 0b11111110
 	return iv
 }
 
 func makeExportKeys(passphrase string) (encryptionKey, hashKey, salt, iv []byte) {
-	salt = make([]byte, 16)
-	_, err := rand.Read(salt)
-	if err != nil {
-		panic(olm.NotEnoughGoRandom)
-	}
-
+	salt = random.Bytes(16)
 	encryptionKey, hashKey = computeKey(passphrase, salt, defaultPassphraseRounds)
-
 	iv = makeExportIV()
 	return
 }

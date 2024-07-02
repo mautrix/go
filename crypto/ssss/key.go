@@ -7,10 +7,11 @@
 package ssss
 
 import (
-	"crypto/rand"
 	"encoding/base64"
 	"fmt"
 	"strings"
+
+	"go.mau.fi/util/random"
 
 	"maunium.net/go/mautrix/crypto/utils"
 )
@@ -33,10 +34,7 @@ func NewKey(passphrase string) (*Key, error) {
 	if len(passphrase) > 0 {
 		// There's a passphrase. We need to generate a salt for it, set the metadata
 		// and then compute the key using the passphrase and the metadata.
-		saltBytes := make([]byte, 24)
-		if _, err := rand.Read(saltBytes); err != nil {
-			return nil, fmt.Errorf("failed to get random bytes for salt: %w", err)
-		}
+		saltBytes := random.Bytes(24)
 		keyData.Passphrase = &PassphraseMetadata{
 			Algorithm:  PassphraseAlgorithmPBKDF2,
 			Iterations: 500000,
@@ -50,24 +48,15 @@ func NewKey(passphrase string) (*Key, error) {
 		}
 	} else {
 		// No passphrase, just generate a random key
-		ssssKey = make([]byte, 32)
-		if _, err := rand.Read(ssssKey); err != nil {
-			return nil, fmt.Errorf("failed to get random bytes for key: %w", err)
-		}
+		ssssKey = random.Bytes(32)
 	}
 
 	// Generate a random ID for the key. It's what identifies the key in account data.
-	keyIDBytes := make([]byte, 24)
-	if _, err := rand.Read(keyIDBytes); err != nil {
-		return nil, fmt.Errorf("failed to get random bytes for key ID: %w", err)
-	}
+	keyIDBytes := random.Bytes(24)
 
 	// We store a certain hash in the key metadata so that clients can check if the user entered the correct key.
-	var ivBytes [utils.AESCTRIVLength]byte
-	if _, err := rand.Read(ivBytes[:]); err != nil {
-		return nil, fmt.Errorf("failed to get random bytes for IV: %w", err)
-	}
-	keyData.IV = base64.RawStdEncoding.EncodeToString(ivBytes[:])
+	ivBytes := random.Bytes(utils.AESCTRIVLength)
+	keyData.IV = base64.RawStdEncoding.EncodeToString(ivBytes)
 	keyData.MAC = keyData.calculateHash(ssssKey)
 
 	return &Key{

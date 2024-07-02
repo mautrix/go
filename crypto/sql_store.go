@@ -261,13 +261,6 @@ func (store *SQLCryptoStore) UpdateSession(ctx context.Context, _ id.SenderKey, 
 	return err
 }
 
-func intishPtr[T int | int64](i T) *T {
-	if i == 0 {
-		return nil
-	}
-	return &i
-}
-
 func datePtr(t time.Time) *time.Time {
 	if t.IsZero() {
 		return nil
@@ -308,7 +301,7 @@ func (store *SQLCryptoStore) PutGroupSession(ctx context.Context, session *Inbou
 		        key_backup_version=excluded.key_backup_version
 	`,
 		session.ID(), session.SenderKey, session.SigningKey, session.RoomID, sessionBytes, forwardingChains,
-		ratchetSafety, datePtr(session.ReceivedAt), intishPtr(session.MaxAge), intishPtr(session.MaxMessages),
+		ratchetSafety, datePtr(session.ReceivedAt), dbutil.NumPtr(session.MaxAge), dbutil.NumPtr(session.MaxMessages),
 		session.IsScheduled, session.KeyBackupVersion, store.AccountID,
 	)
 	return err
