@@ -132,9 +132,22 @@ type NewLoginParams struct {
 	DontReuseExisting bool
 }
 
-func (user *User) NewLogin(ctx context.Context, data *database.UserLogin, params NewLoginParams) (*UserLogin, error) {
+// NewLogin creates a UserLogin object for this user with the given parameters.
+//
+// If a login already exists with the same ID, it is reused after updating the remote name
+// and metadata from the provided data, unless DontReuseExisting is set in params.
+//
+// If the existing login belongs to another user, this returns an error,
+// unless DeleteOnConflict is set in the params, in which case the existing login is deleted.
+//
+// This will automatically call LoadUserLogin after creating the UserLogin object.
+// The load method defaults to the network connector's LoadUserLogin method, but it can be overridden in params.
+func (user *User) NewLogin(ctx context.Context, data *database.UserLogin, params *NewLoginParams) (*UserLogin, error) {
 	data.BridgeID = user.BridgeID
 	data.UserMXID = user.MXID
+	if params == nil {
+		params = &NewLoginParams{}
+	}
 	if params.LoadUserLogin == nil {
 		params.LoadUserLogin = user.Bridge.Network.LoadUserLogin
 	}
