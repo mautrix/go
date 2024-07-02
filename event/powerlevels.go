@@ -96,7 +96,7 @@ func (pl *PowerLevelsEventContent) Invite() int {
 	if pl.InvitePtr != nil {
 		return *pl.InvitePtr
 	}
-	return 50
+	return 0
 }
 
 func (pl *PowerLevelsEventContent) Kick() int {
