@@ -897,6 +897,7 @@ func (portal *Portal) handleMatrixRedaction(ctx context.Context, sender *UserLog
 		portal.sendErrorStatus(ctx, evt, ErrRedactionsNotSupported)
 		return
 	}
+	var redactionTargetReaction *database.Reaction
 	redactionTargetMsg, err := portal.Bridge.DB.Message.GetPartByMXID(ctx, content.Redacts)
 	if err != nil {
 		log.Err(err).Msg("Failed to get redaction target message from database")
@@ -917,7 +918,7 @@ func (portal *Portal) handleMatrixRedaction(ctx context.Context, sender *UserLog
 			},
 			TargetMessage: redactionTargetMsg,
 		})
-	} else if redactionTargetReaction, err := portal.Bridge.DB.Reaction.GetByMXID(ctx, content.Redacts); err != nil {
+	} else if redactionTargetReaction, err = portal.Bridge.DB.Reaction.GetByMXID(ctx, content.Redacts); err != nil {
 		log.Err(err).Msg("Failed to get redaction target reaction from database")
 		portal.sendErrorStatus(ctx, evt, fmt.Errorf("%w: failed to get redaction target message reaction: %w", ErrDatabaseError, err))
 		return
