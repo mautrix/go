@@ -114,7 +114,7 @@ func (intent *IntentAPI) EnsureJoined(ctx context.Context, roomID id.RoomID, ext
 		}
 		var inviteErr error
 		if intent.IsCustomPuppet {
-			_, err = bot.SendStateEvent(ctx, roomID, event.StateMember, intent.UserID.String(), &event.Content{
+			_, inviteErr = bot.SendStateEvent(ctx, roomID, event.StateMember, intent.UserID.String(), &event.Content{
 				Raw: map[string]any{
 					"fi.mau.will_auto_accept": true,
 				},
