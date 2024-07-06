@@ -337,10 +337,12 @@ func (br *BridgeMain) LoadConfig() {
 		_, _ = fmt.Fprintln(os.Stderr, "Failed to parse config:", err)
 		os.Exit(10)
 	}
-	err = cfg.Network.Decode(networkData)
-	if err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, "Failed to parse network config:", err)
-		os.Exit(10)
+	if networkData != nil {
+		err = cfg.Network.Decode(networkData)
+		if err != nil {
+			_, _ = fmt.Fprintln(os.Stderr, "Failed to parse network config:", err)
+			os.Exit(10)
+		}
 	}
 	br.Config = &cfg
 }
