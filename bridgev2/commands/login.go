@@ -103,6 +103,9 @@ func (uilcs *userInputLoginCommandState) promptNext(ce *Event) {
 func (uilcs *userInputLoginCommandState) submitNext(ce *Event) {
 	field := uilcs.RemainingFields[0]
 	field.FillDefaultValidate()
+	if field.Type == bridgev2.LoginInputFieldTypePassword {
+		ce.Redact()
+	}
 	var err error
 	uilcs.Data[field.ID], err = field.Validate(ce.RawArgs)
 	if err != nil {

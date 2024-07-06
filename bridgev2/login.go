@@ -185,13 +185,14 @@ func (f *LoginInputDataField) FillDefaultValidate() {
 				if err != nil {
 					return "", err
 				} else if !match {
-					return "", fmt.Errorf("invalid input")
+					return "", fmt.Errorf("doesn't match regex `%s`", f.Pattern)
 				} else {
 					return s, nil
 				}
 			}
+		} else {
+			f.Validate = noopValidate
 		}
-		f.Validate = noopValidate
 	}
 }
 
