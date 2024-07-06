@@ -75,6 +75,7 @@ type BridgeName struct {
 	// The Go import path is a good choice here (e.g. github.com/octocat/discordbridge)
 	BeeperBridgeType string
 	// The default appservice port to use in the example config, defaults to 8080 if unset
+	// Official mautrix bridges will use ports defined in https://mau.fi/ports
 	DefaultPort uint16
 	// The default command prefix to use in the example config, defaults to NetworkID if unset. Must include the ! prefix.
 	DefaultCommandPrefix string
