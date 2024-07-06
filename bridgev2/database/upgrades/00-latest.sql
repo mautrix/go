@@ -1,4 +1,27 @@
 -- v0 -> v6 (compatible with v1+): Latest revision
+CREATE TABLE "user" (
+	bridge_id       TEXT NOT NULL,
+	mxid            TEXT NOT NULL,
+
+	management_room TEXT,
+	access_token    TEXT,
+
+	PRIMARY KEY (bridge_id, mxid)
+);
+
+CREATE TABLE user_login (
+	bridge_id  TEXT  NOT NULL,
+	user_mxid  TEXT  NOT NULL,
+	id         TEXT  NOT NULL,
+	space_room TEXT,
+	metadata   jsonb NOT NULL,
+
+	PRIMARY KEY (bridge_id, id),
+	CONSTRAINT user_login_user_fkey FOREIGN KEY (bridge_id, user_mxid)
+		REFERENCES "user" (bridge_id, mxid)
+		ON DELETE CASCADE ON UPDATE CASCADE
+);
+
 CREATE TABLE portal (
 	bridge_id       TEXT    NOT NULL,
 	id              TEXT    NOT NULL,
@@ -115,29 +138,6 @@ CREATE TABLE reaction (
 		ON DELETE CASCADE ON UPDATE CASCADE,
 	CONSTRAINT reaction_sender_fkey FOREIGN KEY (bridge_id, sender_id)
 		REFERENCES ghost (bridge_id, id)
-		ON DELETE CASCADE ON UPDATE CASCADE
-);
-
-CREATE TABLE "user" (
-	bridge_id       TEXT NOT NULL,
-	mxid            TEXT NOT NULL,
-
-	management_room TEXT,
-	access_token    TEXT,
-
-	PRIMARY KEY (bridge_id, mxid)
-);
-
-CREATE TABLE user_login (
-	bridge_id  TEXT  NOT NULL,
-	user_mxid  TEXT  NOT NULL,
-	id         TEXT  NOT NULL,
-	space_room TEXT,
-	metadata   jsonb NOT NULL,
-
-	PRIMARY KEY (bridge_id, id),
-	CONSTRAINT user_login_user_fkey FOREIGN KEY (bridge_id, user_mxid)
-		REFERENCES "user" (bridge_id, mxid)
 		ON DELETE CASCADE ON UPDATE CASCADE
 );
 
