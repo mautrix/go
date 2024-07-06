@@ -1768,6 +1768,9 @@ func (portal *Portal) GetInitialMemberList(ctx context.Context, members *ChatMem
 	}
 	members.PowerLevels.Apply(pl)
 	for _, member := range members.Members {
+		if member.Membership != event.MembershipJoin && member.Membership != "" {
+			continue
+		}
 		intent, extraUserID := portal.getIntentAndUserMXIDFor(ctx, member.EventSender, source, loginsInPortal, 0)
 		if extraUserID != "" {
 			invite = append(invite, extraUserID)
@@ -1810,6 +1813,9 @@ func (portal *Portal) SyncParticipants(ctx context.Context, members *ChatMemberL
 	delete(currentMembers, portal.Bridge.Bot.GetMXID())
 	powerChanged := members.PowerLevels.Apply(currentPower)
 	syncUser := func(extraUserID id.UserID, member ChatMember, hasIntent bool) bool {
+		if member.Membership == "" {
+			member.Membership = event.MembershipJoin
+		}
 		powerChanged = currentPower.EnsureUserLevel(extraUserID, member.PowerLevel) || powerChanged
 		currentMember, ok := currentMembers[extraUserID]
 		delete(currentMembers, extraUserID)
