@@ -159,8 +159,13 @@ func (br *BridgeMain) PreInit() {
 		_ = json.NewEncoder(os.Stdout).Encode(output)
 		os.Exit(0)
 	} else if *writeExampleConfig {
+		if _, err = os.Stat(*configPath); !errors.Is(err, os.ErrNotExist) {
+			_, _ = fmt.Fprintln(os.Stderr, *configPath, "already exists, please remove it if you want to generate a new example")
+			os.Exit(1)
+		}
 		networkExample, _, _ := br.Connector.GetConfig()
 		exerrors.PanicIfNotNil(os.WriteFile(*configPath, []byte(br.makeFullExampleConfig(networkExample)), 0600))
+		fmt.Println("Wrote example config to", *configPath)
 		os.Exit(0)
 	}
 	br.LoadConfig()
