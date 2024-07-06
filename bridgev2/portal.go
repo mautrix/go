@@ -2106,7 +2106,7 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 		req.BeeperAutoJoinInvites = true
 		req.Invite = initialMembers
 	}
-	if *info.IsSpace {
+	if info.IsSpace != nil && *info.IsSpace {
 		req.CreationContent["type"] = event.RoomTypeSpace
 		portal.Metadata.IsSpace = true
 	}
