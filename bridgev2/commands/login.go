@@ -277,7 +277,9 @@ func (clcs *cookieLoginCommandState) submit(ce *Event) {
 }
 
 func doLoginStep(ce *Event, login bridgev2.LoginProcess, step *bridgev2.LoginStep) {
-	ce.Reply(step.Instructions)
+	if step.Instructions != "" {
+		ce.Reply(step.Instructions)
+	}
 
 	switch step.Type {
 	case bridgev2.LoginStepTypeDisplayAndWait:
