@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -242,22 +243,41 @@ func (portal *Portal) sendErrorStatus(ctx context.Context, evt *event.Event, err
 }
 
 func (portal *Portal) handleMatrixEvent(sender *User, evt *event.Event) {
-	if evt.Mautrix.EventSource&event.SourceEphemeral != 0 {
-		switch evt.Type {
-		case event.EphemeralEventReceipt:
-			portal.handleMatrixReceipts(evt)
-		case event.EphemeralEventTyping:
-			portal.handleMatrixTyping(evt)
-		}
-		return
-	}
 	log := portal.Log.With().
 		Str("action", "handle matrix event").
 		Str("event_type", evt.Type.Type).
-		Stringer("event_id", evt.ID).
-		Stringer("sender", sender.MXID).
 		Logger()
 	ctx := log.WithContext(context.TODO())
+	defer func() {
+		if err := recover(); err != nil {
+			logEvt := log.Error()
+			if realErr, ok := err.(error); ok {
+				logEvt = logEvt.Err(realErr)
+			} else {
+				logEvt = logEvt.Any(zerolog.ErrorFieldName, err)
+			}
+			logEvt.
+				Bytes("stack", debug.Stack()).
+				Msg("Matrix event handler panicked")
+			if evt.ID != "" {
+				go portal.sendErrorStatus(ctx, evt, ErrPanicInEventHandler)
+			}
+		}
+	}()
+	if evt.Mautrix.EventSource&event.SourceEphemeral != 0 {
+		switch evt.Type {
+		case event.EphemeralEventReceipt:
+			portal.handleMatrixReceipts(ctx, evt)
+		case event.EphemeralEventTyping:
+			portal.handleMatrixTyping(ctx, evt)
+		}
+		return
+	}
+	log.UpdateContext(func(c zerolog.Context) zerolog.Context {
+		return c.
+			Stringer("event_id", evt.ID).
+			Stringer("sender", sender.MXID)
+	})
 	login, _, err := portal.FindPreferredLogin(ctx, sender, true)
 	if err != nil {
 		log.Err(err).Msg("Failed to get user login to handle Matrix event")
@@ -307,7 +327,7 @@ func (portal *Portal) handleMatrixEvent(sender *User, evt *event.Event) {
 	}
 }
 
-func (portal *Portal) handleMatrixReceipts(evt *event.Event) {
+func (portal *Portal) handleMatrixReceipts(ctx context.Context, evt *event.Event) {
 	content, ok := evt.Content.Parsed.(*event.ReceiptEventContent)
 	if !ok {
 		return
@@ -318,23 +338,23 @@ func (portal *Portal) handleMatrixReceipts(evt *event.Event) {
 			continue
 		}
 		for userID, receipt := range readReceipts {
-			sender, err := portal.Bridge.GetUserByMXID(context.TODO(), userID)
+			sender, err := portal.Bridge.GetUserByMXID(ctx, userID)
 			if err != nil {
 				// TODO log
 				return
 			}
-			portal.handleMatrixReadReceipt(sender, evtID, receipt)
+			portal.handleMatrixReadReceipt(ctx, sender, evtID, receipt)
 		}
 	}
 }
 
-func (portal *Portal) handleMatrixReadReceipt(user *User, eventID id.EventID, receipt event.ReadReceipt) {
-	log := portal.Log.With().
-		Str("action", "handle matrix read receipt").
-		Stringer("event_id", eventID).
-		Stringer("user_id", user.MXID).
-		Logger()
-	ctx := log.WithContext(context.TODO())
+func (portal *Portal) handleMatrixReadReceipt(ctx context.Context, user *User, eventID id.EventID, receipt event.ReadReceipt) {
+	log := zerolog.Ctx(ctx)
+	log.UpdateContext(func(c zerolog.Context) zerolog.Context {
+		return c.
+			Stringer("event_id", eventID).
+			Stringer("user_id", user.MXID)
+	})
 	login, userPortal, err := portal.FindPreferredLogin(ctx, user, false)
 	if err != nil {
 		if !errors.Is(err, ErrNotLoggedIn) {
@@ -384,7 +404,7 @@ func (portal *Portal) handleMatrixReadReceipt(user *User, eventID id.EventID, re
 	portal.Bridge.DisappearLoop.StartAll(ctx, portal.MXID)
 }
 
-func (portal *Portal) handleMatrixTyping(evt *event.Event) {
+func (portal *Portal) handleMatrixTyping(ctx context.Context, evt *event.Event) {
 	content, ok := evt.Content.Parsed.(*event.TypingEventContent)
 	if !ok {
 		return
@@ -395,7 +415,6 @@ func (portal *Portal) handleMatrixTyping(evt *event.Event) {
 	stoppedTyping, startedTyping := exslices.SortedDiff(portal.currentlyTyping, content.UserIDs, func(a, b id.UserID) int {
 		return strings.Compare(string(a), string(b))
 	})
-	ctx := portal.Log.WithContext(context.TODO())
 	portal.sendTypings(ctx, stoppedTyping, false)
 	portal.sendTypings(ctx, startedTyping, true)
 	portal.currentlyTyping = content.UserIDs
@@ -957,6 +976,19 @@ func (portal *Portal) handleRemoteEvent(source *UserLogin, evt RemoteEvent) {
 		Str("source_id", string(source.ID)).
 		Str("action", "handle remote event").
 		Logger()
+	defer func() {
+		if err := recover(); err != nil {
+			logEvt := log.Error()
+			if realErr, ok := err.(error); ok {
+				logEvt = logEvt.Err(realErr)
+			} else {
+				logEvt = logEvt.Any(zerolog.ErrorFieldName, err)
+			}
+			logEvt.
+				Bytes("stack", debug.Stack()).
+				Msg("Remote event handler panicked")
+		}
+	}()
 	log.UpdateContext(evt.AddLogContext)
 	ctx := log.WithContext(context.TODO())
 	if portal.MXID == "" {
