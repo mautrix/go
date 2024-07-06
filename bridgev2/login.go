@@ -9,6 +9,7 @@ package bridgev2
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"maunium.net/go/mautrix/bridgev2/networkid"
@@ -159,8 +160,11 @@ func CleanPhoneNumber(phone string) (string, error) {
 	return phone, nil
 }
 
+func noopValidate(input string) (string, error) {
+	return input, nil
+}
+
 func (f *LoginInputDataField) FillDefaultValidate() {
-	noopValidate := func(input string) (string, error) { return input, nil }
 	if f.Validate != nil {
 		return
 	}
@@ -175,6 +179,18 @@ func (f *LoginInputDataField) FillDefaultValidate() {
 			return email, nil
 		}
 	default:
+		if f.Pattern != "" {
+			f.Validate = func(s string) (string, error) {
+				match, err := regexp.MatchString(f.Pattern, s)
+				if err != nil {
+					return "", err
+				} else if !match {
+					return "", fmt.Errorf("invalid input")
+				} else {
+					return s, nil
+				}
+			}
+		}
 		f.Validate = noopValidate
 	}
 }

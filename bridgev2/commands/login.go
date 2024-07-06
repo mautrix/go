@@ -86,7 +86,12 @@ type userInputLoginCommandState struct {
 }
 
 func (uilcs *userInputLoginCommandState) promptNext(ce *Event) {
-	// TODO reply prompting field
+	field := uilcs.RemainingFields[0]
+	if field.Description != "" {
+		ce.Reply("Please enter your %s\n%s", field.Name, field.Description)
+	} else {
+		ce.Reply("Please enter your %s", field.Name)
+	}
 	StoreCommandState(ce.User, &CommandState{
 		Next:   MinimalCommandHandlerFunc(uilcs.submitNext),
 		Action: "Login",
