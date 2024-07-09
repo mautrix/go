@@ -525,6 +525,11 @@ type RemoteReaction interface {
 	GetReactionEmoji() (string, networkid.EmojiID)
 }
 
+type RemoteReactionWithExtraContent interface {
+	RemoteReaction
+	GetReactionExtraContent() map[string]any
+}
+
 type RemoteReactionWithMeta interface {
 	RemoteReaction
 	GetReactionDBMetadata() map[string]any
@@ -543,6 +548,7 @@ type RemoteReceipt interface {
 	RemoteEvent
 	GetLastReceiptTarget() networkid.MessageID
 	GetReceiptTargets() []networkid.MessageID
+	GetReadUpTo() time.Time
 }
 
 type RemoteMarkUnread interface {
@@ -583,6 +589,7 @@ type SimpleRemoteEvent[T any] struct {
 	Emoji          string
 	ReactionDBMeta map[string]any
 	Timestamp      time.Time
+	ChatInfoChange *ChatInfoChange
 
 	ConvertMessageFunc func(ctx context.Context, portal *Portal, intent MatrixAPI, data T) (*ConvertedMessage, error)
 	ConvertEditFunc    func(ctx context.Context, portal *Portal, intent MatrixAPI, existing []*database.Message, data T) (*ConvertedEdit, error)
@@ -596,6 +603,7 @@ var (
 	_ RemoteReactionWithMeta   = (*SimpleRemoteEvent[any])(nil)
 	_ RemoteReactionRemove     = (*SimpleRemoteEvent[any])(nil)
 	_ RemoteMessageRemove      = (*SimpleRemoteEvent[any])(nil)
+	_ RemoteChatInfoChange     = (*SimpleRemoteEvent[any])(nil)
 )
 
 func (sre *SimpleRemoteEvent[T]) AddLogContext(c zerolog.Context) zerolog.Context {
@@ -643,6 +651,10 @@ func (sre *SimpleRemoteEvent[T]) GetRemovedEmojiID() networkid.EmojiID {
 
 func (sre *SimpleRemoteEvent[T]) GetReactionDBMetadata() map[string]any {
 	return sre.ReactionDBMeta
+}
+
+func (sre *SimpleRemoteEvent[T]) GetChatInfoChange(ctx context.Context) (*ChatInfoChange, error) {
+	return sre.ChatInfoChange, nil
 }
 
 func (sre *SimpleRemoteEvent[T]) GetType() RemoteEventType {

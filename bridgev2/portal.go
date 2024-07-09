@@ -1316,6 +1316,10 @@ func (portal *Portal) handleRemoteReaction(ctx context.Context, source *UserLogi
 	}
 	ts := getEventTS(evt)
 	intent := portal.GetIntentFor(ctx, evt.GetSender(), source, RemoteEventReaction)
+	var extra map[string]any
+	if extraContentProvider, ok := evt.(RemoteReactionWithExtraContent); ok {
+		extra = extraContentProvider.GetReactionExtraContent()
+	}
 	resp, err := intent.SendMessage(ctx, portal.MXID, event.EventReaction, &event.Content{
 		Parsed: &event.ReactionEventContent{
 			RelatesTo: event.RelatesTo{
@@ -1324,6 +1328,7 @@ func (portal *Portal) handleRemoteReaction(ctx context.Context, source *UserLogi
 				Key:     variationselector.Add(emoji),
 			},
 		},
+		Raw: extra,
 	}, ts)
 	if err != nil {
 		log.Err(err).Msg("Failed to send reaction to Matrix")
@@ -1445,6 +1450,13 @@ func (portal *Portal) handleRemoteReadReceipt(ctx context.Context, source *UserL
 			} else if target != nil && (lastTarget == nil || target.Timestamp.After(lastTarget.Timestamp)) {
 				lastTarget = target
 			}
+		}
+	}
+	readUpTo := evt.GetReadUpTo()
+	if lastTarget == nil && !readUpTo.IsZero() {
+		lastTarget, err = portal.Bridge.DB.Message.GetLastPartAtOrBeforeTime(ctx, portal.PortalKey, readUpTo)
+		if err != nil {
+			log.Err(err).Time("read_up_to", readUpTo).Msg("Failed to get target message for read receipt")
 		}
 	}
 	if lastTarget == nil {
