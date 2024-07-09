@@ -131,6 +131,35 @@ func (br *Bridge) unlockedGetPortalByID(ctx context.Context, id networkid.Portal
 	return br.loadPortal(ctx, db, err, idPtr)
 }
 
+func (br *Bridge) FindPortalReceiver(ctx context.Context, id networkid.PortalID, maybeReceiver networkid.UserLoginID) (networkid.PortalKey, error) {
+	key := br.FindCachedPortalReceiver(id, maybeReceiver)
+	if !key.IsEmpty() {
+		return key, nil
+	}
+	key, err := br.DB.Portal.FindReceiver(ctx, id, maybeReceiver)
+	if err != nil {
+		return networkid.PortalKey{}, err
+	}
+	return key, nil
+}
+
+func (br *Bridge) FindCachedPortalReceiver(id networkid.PortalID, maybeReceiver networkid.UserLoginID) networkid.PortalKey {
+	br.cacheLock.Lock()
+	defer br.cacheLock.Unlock()
+	portal, ok := br.portalsByKey[networkid.PortalKey{
+		ID:       id,
+		Receiver: maybeReceiver,
+	}]
+	if ok {
+		return portal.PortalKey
+	}
+	portal, ok = br.portalsByKey[networkid.PortalKey{ID: id}]
+	if ok {
+		return portal.PortalKey
+	}
+	return networkid.PortalKey{}
+}
+
 func (br *Bridge) GetPortalByMXID(ctx context.Context, mxid id.RoomID) (*Portal, error) {
 	br.cacheLock.Lock()
 	defer br.cacheLock.Unlock()

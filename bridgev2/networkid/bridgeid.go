@@ -48,6 +48,10 @@ type PortalKey struct {
 	Receiver UserLoginID
 }
 
+func (pk PortalKey) IsEmpty() bool {
+	return pk.ID == "" && pk.Receiver == ""
+}
+
 func (pk PortalKey) String() string {
 	if pk.Receiver == "" {
 		return string(pk.ID)
