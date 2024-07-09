@@ -257,6 +257,9 @@ func (vh *VerificationHelper) Init(ctx context.Context) error {
 
 			vh.activeTransactionsLock.Lock()
 			txn, ok := vh.activeTransactions[transactionID]
+			vh.activeTransactionsLock.Unlock()
+
+			// send cancellation events for unknown transactions
 			if !ok {
 				// If it's a cancellation event for an unknown transaction, we
 				// can just ignore it.
@@ -282,10 +285,8 @@ func (vh *VerificationHelper) Init(ctx context.Context) error {
 
 				// Send a cancellation event.
 				vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnknownTransaction, "The transaction ID was not recognized.")
-				vh.activeTransactionsLock.Unlock()
+
 				return
-			} else {
-				vh.activeTransactionsLock.Unlock()
 			}
 
 			logCtx := log.With().
