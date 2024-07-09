@@ -119,14 +119,14 @@ type RequiredCallbacks interface {
 	VerificationDone(ctx context.Context, txnID id.VerificationTransactionID)
 }
 
-type showSASCallbacks interface {
+type ShowSASCallbacks interface {
 	// ShowSAS is a callback that is called when the SAS verification has
 	// generated a short authentication string to show. It is guaranteed that
 	// either the emojis list, or the decimals list, or both will be present.
 	ShowSAS(ctx context.Context, txnID id.VerificationTransactionID, emojis []rune, decimals []int)
 }
 
-type showQRCodeCallbacks interface {
+type ShowQRCodeCallbacks interface {
 	// ScanQRCode is called when another device has sent a
 	// m.key.verification.ready event and indicated that they are capable of
 	// showing a QR code.
@@ -183,11 +183,11 @@ func NewVerificationHelper(client *mautrix.Client, mach *crypto.OlmMachine, call
 	}
 
 	supportedMethods := map[event.VerificationMethod]struct{}{}
-	if c, ok := callbacks.(showSASCallbacks); ok {
+	if c, ok := callbacks.(ShowSASCallbacks); ok {
 		supportedMethods[event.VerificationMethodSAS] = struct{}{}
 		helper.showSAS = c.ShowSAS
 	}
-	if c, ok := callbacks.(showQRCodeCallbacks); ok {
+	if c, ok := callbacks.(ShowQRCodeCallbacks); ok {
 		supportedMethods[event.VerificationMethodQRCodeShow] = struct{}{}
 		supportedMethods[event.VerificationMethodReciprocate] = struct{}{}
 		helper.scanQRCode = c.ScanQRCode
