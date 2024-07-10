@@ -94,7 +94,7 @@ func (br *Bridge) loadPortal(ctx context.Context, dbPortal *database.Portal, que
 	}
 	var err error
 	if portal.ParentID != "" {
-		portal.Parent, err = br.unlockedGetPortalByID(ctx, networkid.PortalKey{ID: portal.ParentID}, false)
+		portal.Parent, err = br.UnlockedGetPortalByID(ctx, networkid.PortalKey{ID: portal.ParentID}, false)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load parent portal (%s): %w", portal.ParentID, err)
 		}
@@ -118,7 +118,7 @@ func (portal *Portal) updateLogger() {
 	portal.Log = logWith.Logger()
 }
 
-func (br *Bridge) unlockedGetPortalByID(ctx context.Context, id networkid.PortalKey, onlyIfExists bool) (*Portal, error) {
+func (br *Bridge) UnlockedGetPortalByID(ctx context.Context, id networkid.PortalKey, onlyIfExists bool) (*Portal, error) {
 	cached, ok := br.portalsByKey[id]
 	if ok {
 		return cached, nil
@@ -174,14 +174,14 @@ func (br *Bridge) GetPortalByMXID(ctx context.Context, mxid id.RoomID) (*Portal,
 func (br *Bridge) GetPortalByID(ctx context.Context, id networkid.PortalKey) (*Portal, error) {
 	br.cacheLock.Lock()
 	defer br.cacheLock.Unlock()
-	return br.unlockedGetPortalByID(ctx, id, false)
+	return br.UnlockedGetPortalByID(ctx, id, false)
 }
 
 func (br *Bridge) GetExistingPortalByID(ctx context.Context, id networkid.PortalKey) (*Portal, error) {
 	br.cacheLock.Lock()
 	defer br.cacheLock.Unlock()
 	if id.Receiver == "" {
-		return br.unlockedGetPortalByID(ctx, id, true)
+		return br.UnlockedGetPortalByID(ctx, id, true)
 	}
 	cached, ok := br.portalsByKey[id]
 	if ok {

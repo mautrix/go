@@ -39,7 +39,7 @@ func (br *Bridge) ReIDPortal(ctx context.Context, source, target networkid.Porta
 	}()
 	br.cacheLock.Lock()
 	defer br.cacheLock.Unlock()
-	sourcePortal, err := br.unlockedGetPortalByID(ctx, source, true)
+	sourcePortal, err := br.UnlockedGetPortalByID(ctx, source, true)
 	if err != nil {
 		return ReIDResultError, nil, fmt.Errorf("failed to get source portal: %w", err)
 	} else if sourcePortal == nil {
@@ -59,7 +59,7 @@ func (br *Bridge) ReIDPortal(ctx context.Context, source, target networkid.Porta
 	log.UpdateContext(func(c zerolog.Context) zerolog.Context {
 		return c.Stringer("source_portal_mxid", sourcePortal.MXID)
 	})
-	targetPortal, err := br.unlockedGetPortalByID(ctx, target, true)
+	targetPortal, err := br.UnlockedGetPortalByID(ctx, target, true)
 	if err != nil {
 		return ReIDResultError, nil, fmt.Errorf("failed to get target portal: %w", err)
 	}

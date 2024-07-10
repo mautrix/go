@@ -143,6 +143,8 @@ type NewLoginParams struct {
 // This will automatically call LoadUserLogin after creating the UserLogin object.
 // The load method defaults to the network connector's LoadUserLogin method, but it can be overridden in params.
 func (user *User) NewLogin(ctx context.Context, data *database.UserLogin, params *NewLoginParams) (*UserLogin, error) {
+	user.Bridge.cacheLock.Lock()
+	defer user.Bridge.cacheLock.Unlock()
 	data.BridgeID = user.BridgeID
 	data.UserMXID = user.MXID
 	if params == nil {
@@ -151,14 +153,14 @@ func (user *User) NewLogin(ctx context.Context, data *database.UserLogin, params
 	if params.LoadUserLogin == nil {
 		params.LoadUserLogin = user.Bridge.Network.LoadUserLogin
 	}
-	ul, err := user.Bridge.GetExistingUserLoginByID(ctx, data.ID)
+	ul, err := user.Bridge.unlockedGetExistingUserLoginByID(ctx, data.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check if login already exists: %w", err)
 	}
 	var doInsert bool
 	if ul != nil && ul.UserMXID != user.MXID {
 		if params.DeleteOnConflict {
-			ul.Delete(ctx, status.BridgeState{StateEvent: status.StateLoggedOut, Error: "overridden-by-another-user"}, false)
+			ul.delete(ctx, status.BridgeState{StateEvent: status.StateLoggedOut, Error: "overridden-by-another-user"}, false, true)
 			ul = nil
 		} else {
 			return nil, fmt.Errorf("%s is already logged in with that account", ul.UserMXID)
@@ -190,10 +192,8 @@ func (user *User) NewLogin(ctx context.Context, data *database.UserLogin, params
 		if err != nil {
 			return nil, err
 		}
-		user.Bridge.cacheLock.Lock()
 		user.Bridge.userLoginsByID[ul.ID] = ul
 		user.logins[ul.ID] = ul
-		user.Bridge.cacheLock.Unlock()
 	} else {
 		err = ul.Save(ctx)
 		if err != nil {
@@ -212,6 +212,10 @@ func (ul *UserLogin) Logout(ctx context.Context) {
 }
 
 func (ul *UserLogin) Delete(ctx context.Context, state status.BridgeState, logoutRemote bool) {
+	ul.delete(ctx, state, logoutRemote, false)
+}
+
+func (ul *UserLogin) delete(ctx context.Context, state status.BridgeState, logoutRemote, unlocked bool) {
 	if logoutRemote {
 		ul.Client.LogoutRemote(ctx)
 	} else {
@@ -225,10 +229,14 @@ func (ul *UserLogin) Delete(ctx context.Context, state status.BridgeState, logou
 	if err != nil {
 		ul.Log.Err(err).Msg("Failed to delete user login")
 	}
-	ul.Bridge.cacheLock.Lock()
+	if !unlocked {
+		ul.Bridge.cacheLock.Lock()
+	}
 	delete(ul.User.logins, ul.ID)
 	delete(ul.Bridge.userLoginsByID, ul.ID)
-	ul.Bridge.cacheLock.Unlock()
+	if !unlocked {
+		ul.Bridge.cacheLock.Unlock()
+	}
 	go ul.deleteSpace(ctx)
 	go ul.kickUserFromPortals(ctx, portals)
 	if state.StateEvent != "" {
