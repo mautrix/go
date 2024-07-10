@@ -1587,6 +1587,9 @@ type ChatMemberList struct {
 	// This should be used when SenderLogin can't be filled accurately.
 	CheckAllLogins bool
 
+	// The total number of members in the chat, regardless of how many of those members are included in Members.
+	TotalMemberCount int
+
 	Members     []ChatMember
 	PowerLevels *PowerLevelChanges
 }
