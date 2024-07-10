@@ -130,7 +130,7 @@ func (mach *OlmMachine) DecryptMegolmEvent(ctx context.Context, evt *event.Event
 			} else if updatedPlaintext != nil {
 				plaintext = updatedPlaintext
 			}
-		} else {
+		} else if !relation.Exists() {
 			log.Warn().Msg("Failed to find m.relates_to in raw encrypted event even though it was present in parsed content")
 		}
 	}
