@@ -81,10 +81,14 @@ func (proc *Processor) Handle(ctx context.Context, roomID id.RoomID, eventID id.
 		}
 		err := recover()
 		if err != nil {
-			zerolog.Ctx(ctx).Error().
-				Bytes(zerolog.ErrorStackFieldName, debug.Stack()).
-				Any(zerolog.ErrorFieldName, err).
-				Msg("Panic in Matrix command handler")
+			logEvt := zerolog.Ctx(ctx).Error().
+				Bytes(zerolog.ErrorStackFieldName, debug.Stack())
+			if realErr, ok := err.(error); ok {
+				logEvt = logEvt.Err(realErr)
+			} else {
+				logEvt = logEvt.Any(zerolog.ErrorFieldName, err)
+			}
+			logEvt.Msg("Panic in Matrix command handler")
 			ms.Status = event.MessageStatusFail
 			ms.IsCertain = true
 			if realErr, ok := err.(error); ok {

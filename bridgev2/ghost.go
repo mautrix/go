@@ -216,7 +216,7 @@ func (ghost *Ghost) UpdateInfoIfNecessary(ctx context.Context, source *UserLogin
 	}
 	info, err := source.Client.GetUserInfo(ctx, ghost)
 	if err != nil {
-		zerolog.Ctx(ctx).Err(err).Msg("Failed to get info to update ghost")
+		zerolog.Ctx(ctx).Err(err).Str("ghost_id", string(ghost.ID)).Msg("Failed to get info to update ghost")
 	} else if info != nil {
 		ghost.UpdateInfo(ctx, info)
 	}
