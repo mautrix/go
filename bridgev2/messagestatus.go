@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	ErrPanicInEventHandler             error = WrapErrorInStatus(errors.New("panic in event handler")).WithSendNotice(true)
+	ErrPanicInEventHandler             error = WrapErrorInStatus(errors.New("panic in event handler")).WithSendNotice(true).WithErrorAsMessage()
 	ErrNoPortal                        error = WrapErrorInStatus(errors.New("room is not a portal")).WithIsCertain(true).WithSendNotice(false)
 	ErrIgnoringReactionFromRelayedUser error = WrapErrorInStatus(errors.New("ignoring reaction event from relayed user")).WithIsCertain(true).WithSendNotice(false)
 	ErrEditsNotSupported               error = WrapErrorInStatus(errors.New("this bridge does not support edits")).WithIsCertain(true)

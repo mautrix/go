@@ -827,6 +827,9 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 		portal.sendErrorStatus(ctx, evt, err)
 		return
 	}
+	if dbReaction == nil {
+		dbReaction = &database.Reaction{}
+	}
 	// Fill all fields that are known to allow omitting them in connector code
 	if dbReaction.Room.ID == "" {
 		dbReaction.Room = portal.PortalKey
