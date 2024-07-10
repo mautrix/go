@@ -636,6 +636,16 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 	if message.Timestamp.IsZero() {
 		message.Timestamp = time.UnixMilli(evt.Timestamp)
 	}
+	if message.ReplyTo.MessageID == "" && replyTo != nil {
+		message.ReplyTo.MessageID = replyTo.ID
+		message.ReplyTo.PartID = &replyTo.PartID
+	}
+	if message.ThreadRoot == "" && threadRoot != nil {
+		message.ThreadRoot = threadRoot.ID
+		if threadRoot.ThreadRoot != "" {
+			message.ThreadRoot = threadRoot.ThreadRoot
+		}
+	}
 	message.Metadata.SenderMXID = evt.Sender
 	// Hack to ensure the ghost row exists
 	// TODO move to better place (like login)
@@ -1139,32 +1149,32 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 		portal.sendRemoteErrorNotice(ctx, intent, err, ts, "message")
 		return
 	}
-	var relatesToRowID int64
+	var threadRootID networkid.MessageID
+	var replyToID networkid.MessageOptionalPartID
 	var replyTo, threadRoot, prevThreadEvent *database.Message
 	if converted.ReplyTo != nil {
+		replyToID = *converted.ReplyTo
 		replyTo, err = portal.Bridge.DB.Message.GetFirstOrSpecificPartByID(ctx, portal.Receiver, *converted.ReplyTo)
 		if err != nil {
 			log.Err(err).Msg("Failed to get reply target message from database")
 		} else if replyTo == nil {
 			log.Warn().Any("reply_to", converted.ReplyTo).Msg("Reply target message not found in database")
-		} else {
-			relatesToRowID = replyTo.RowID
 		}
 	}
 	if converted.ThreadRoot != nil {
-		threadRoot, err = portal.Bridge.DB.Message.GetFirstOrSpecificPartByID(ctx, portal.Receiver, *converted.ThreadRoot)
+		threadRootID = *converted.ThreadRoot
+		threadRoot, err = portal.Bridge.DB.Message.GetFirstThreadMessage(ctx, portal.PortalKey, threadRootID)
 		if err != nil {
 			log.Err(err).Msg("Failed to get thread root message from database")
 		} else if threadRoot == nil {
 			log.Warn().Any("thread_root", converted.ThreadRoot).Msg("Thread root message not found in database")
-		} else {
-			relatesToRowID = threadRoot.RowID
 		}
-		// TODO thread roots need to be saved in the database in a way that allows fetching
-		//      the first bridged thread message even if the original one isn't bridged
-
-		// TODO 2 fetch last event in thread properly
-		prevThreadEvent = threadRoot
+		prevThreadEvent, err = portal.Bridge.DB.Message.GetLastThreadMessage(ctx, portal.PortalKey, threadRootID)
+		if err != nil {
+			log.Err(err).Msg("Failed to get last thread message from database")
+		} else if prevThreadEvent == nil {
+			prevThreadEvent = threadRoot
+		}
 	}
 	for _, part := range converted.Parts {
 		if threadRoot != nil && prevThreadEvent != nil {
@@ -1192,13 +1202,14 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 			Str("part_id", string(part.ID)).
 			Msg("Sent message part to Matrix")
 		dbMessage := &database.Message{
-			ID:             evt.GetID(),
-			PartID:         part.ID,
-			MXID:           resp.EventID,
-			Room:           portal.PortalKey,
-			SenderID:       evt.GetSender().Sender,
-			Timestamp:      ts,
-			RelatesToRowID: relatesToRowID,
+			ID:         evt.GetID(),
+			PartID:     part.ID,
+			MXID:       resp.EventID,
+			Room:       portal.PortalKey,
+			SenderID:   evt.GetSender().Sender,
+			Timestamp:  ts,
+			ThreadRoot: threadRootID,
+			ReplyTo:    replyToID,
 		}
 		dbMessage.Metadata.SenderMXID = intent.GetMXID()
 		dbMessage.Metadata.Extra = part.DBMetadata

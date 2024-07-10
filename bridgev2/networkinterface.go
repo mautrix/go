@@ -39,7 +39,7 @@ type EventSender struct {
 
 type ConvertedMessage struct {
 	ReplyTo    *networkid.MessageOptionalPartID
-	ThreadRoot *networkid.MessageOptionalPartID
+	ThreadRoot *networkid.MessageID
 	Parts      []*ConvertedMessagePart
 	Disappear  database.DisappearingSetting
 }
