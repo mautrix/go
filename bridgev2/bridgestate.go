@@ -24,6 +24,7 @@ type BridgeStateQueue struct {
 }
 
 func (br *Bridge) SendGlobalBridgeState(state status.BridgeState) {
+	state.Fill(nil)
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		if err := br.Matrix.SendBridgeStatus(ctx, &state); err != nil {
