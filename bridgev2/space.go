@@ -65,11 +65,7 @@ func (ul *UserLogin) AddPortalToSpace(ctx context.Context, portal *Portal, userP
 	} else if spaceRoom == "" {
 		return nil
 	}
-	_, err = ul.Bridge.Bot.SendState(ctx, spaceRoom, event.StateSpaceChild, portal.MXID.String(), &event.Content{
-		Parsed: &event.SpaceChildEventContent{
-			Via: []string{ul.Bridge.Matrix.ServerName()},
-		},
-	}, time.Now())
+	err = portal.toggleSpace(ctx, spaceRoom, false, false)
 	if err != nil {
 		return fmt.Errorf("failed to add portal to space: %w", err)
 	}
@@ -80,6 +76,57 @@ func (ul *UserLogin) AddPortalToSpace(ctx context.Context, portal *Portal, userP
 		return fmt.Errorf("failed to save user portal row: %w", err)
 	}
 	zerolog.Ctx(ctx).Debug().Stringer("space_room_id", spaceRoom).Msg("Added portal to space")
+	return nil
+}
+
+func (portal *Portal) createParentAndAddToSpace(ctx context.Context, source *UserLogin) {
+	err := portal.Parent.CreateMatrixRoom(ctx, source, nil)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to create parent portal")
+	} else {
+		portal.addToParentSpaceAndSave(ctx, true)
+	}
+}
+
+func (portal *Portal) addToParentSpaceAndSave(ctx context.Context, save bool) {
+	err := portal.toggleSpace(ctx, portal.Parent.MXID, true, false)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Stringer("space_mxid", portal.Parent.MXID).Msg("Failed to add portal to space")
+	} else {
+		portal.InSpace = true
+		if save {
+			err = portal.Save(ctx)
+			if err != nil {
+				zerolog.Ctx(ctx).Err(err).Msg("Failed to save portal to database after adding to space")
+			}
+		}
+	}
+}
+
+func (portal *Portal) toggleSpace(ctx context.Context, spaceID id.RoomID, canonical, remove bool) error {
+	via := []string{portal.Bridge.Matrix.ServerName()}
+	if remove {
+		via = nil
+	}
+	_, err := portal.Bridge.Bot.SendState(ctx, spaceID, event.StateSpaceChild, portal.MXID.String(), &event.Content{
+		Parsed: &event.SpaceChildEventContent{
+			Via: via,
+		},
+	}, time.Now())
+	if err != nil {
+		return err
+	}
+	if canonical {
+		_, err = portal.Bridge.Bot.SendState(ctx, portal.MXID, event.StateSpaceParent, spaceID.String(), &event.Content{
+			Parsed: &event.SpaceParentEventContent{
+				Via:       via,
+				Canonical: !remove,
+			},
+		}, time.Now())
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

@@ -18,6 +18,7 @@ import (
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/exfmt"
 	"go.mau.fi/util/exslices"
+	"go.mau.fi/util/ptr"
 	"go.mau.fi/util/variationselector"
 	"golang.org/x/exp/slices"
 
@@ -1659,6 +1660,7 @@ type ChatInfo struct {
 	IsDirectChat *bool
 	IsSpace      *bool
 	Disappear    *database.DisappearingSetting
+	ParentID     *networkid.PortalID
 
 	UserLocal *UserLocalPortalInfo
 
@@ -2051,6 +2053,40 @@ func (portal *Portal) UpdateDisappearingSetting(ctx context.Context, setting dat
 	return true
 }
 
+func (portal *Portal) UpdateParent(ctx context.Context, newParent networkid.PortalID, source *UserLogin) bool {
+	if portal.ParentID == newParent {
+		return false
+	}
+	var err error
+	if portal.MXID != "" && portal.InSpace && portal.Parent != nil && portal.Parent.MXID != "" {
+		err = portal.toggleSpace(ctx, portal.Parent.MXID, false, true)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Stringer("old_space_mxid", portal.Parent.MXID).Msg("Failed to remove portal from old space")
+		}
+	}
+	portal.ParentID = newParent
+	portal.InSpace = false
+	if newParent != "" {
+		portal.Parent, err = portal.Bridge.GetPortalByID(ctx, networkid.PortalKey{ID: newParent})
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to get new parent portal")
+		}
+	}
+	if portal.MXID != "" && portal.Parent != nil && (source != nil || portal.Parent.MXID != "") {
+		if portal.Parent.MXID == "" {
+			zerolog.Ctx(ctx).Info().Msg("Parent portal doesn't exist, creating")
+			err = portal.Parent.CreateMatrixRoom(ctx, source, nil)
+			if err != nil {
+				zerolog.Ctx(ctx).Err(err).Msg("Failed to create parent portal")
+			}
+		}
+		if portal.Parent.MXID != "" {
+			portal.addToParentSpaceAndSave(ctx, false)
+		}
+	}
+	return true
+}
+
 func (portal *Portal) UpdateInfo(ctx context.Context, info *ChatInfo, source *UserLogin, sender MatrixAPI, ts time.Time) {
 	changed := false
 	if info.Name != nil {
@@ -2064,6 +2100,9 @@ func (portal *Portal) UpdateInfo(ctx context.Context, info *ChatInfo, source *Us
 	}
 	if info.Disappear != nil {
 		changed = portal.UpdateDisappearingSetting(ctx, *info.Disappear, sender, ts, false, false) || changed
+	}
+	if info.ParentID != nil {
+		changed = portal.UpdateParent(ctx, *info.ParentID, source) || changed
 	}
 	if info.JoinRule != nil {
 		// TODO change detection instead of spamming this every time?
@@ -2100,6 +2139,9 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 	portal.roomCreateLock.Lock()
 	defer portal.roomCreateLock.Unlock()
 	if portal.MXID != "" {
+		if source != nil {
+			source.MarkInPortal(ctx, portal)
+		}
 		return nil
 	}
 	log := zerolog.Ctx(ctx).With().
@@ -2155,11 +2197,9 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 		portal.Metadata.IsSpace = true
 	}
 	bridgeInfoStateKey, bridgeInfo := portal.getBridgeInfo()
-	emptyString := ""
 
 	req.InitialState = append(req.InitialState, &event.Event{
-		StateKey: &emptyString,
-		Type:     event.StateElementFunctionalMembers,
+		Type: event.StateElementFunctionalMembers,
 		Content: event.Content{Parsed: &event.ElementFunctionalMembersContent{
 			ServiceMembers: append(extraFunctionalMembers, portal.Bridge.Bot.GetMXID()),
 		}},
@@ -2176,22 +2216,19 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 		// Add explicit topic event if topic is empty to ensure the event is set.
 		// This ensures that there won't be an extra event later if PUT /state/... is called.
 		req.InitialState = append(req.InitialState, &event.Event{
-			StateKey: &emptyString,
-			Type:     event.StateTopic,
-			Content:  event.Content{Parsed: &event.TopicEventContent{Topic: ""}},
+			Type:    event.StateTopic,
+			Content: event.Content{Parsed: &event.TopicEventContent{Topic: ""}},
 		})
 	}
 	if portal.AvatarMXC != "" {
 		req.InitialState = append(req.InitialState, &event.Event{
-			StateKey: &emptyString,
-			Type:     event.StateRoomAvatar,
-			Content:  event.Content{Parsed: &event.RoomAvatarEventContent{URL: portal.AvatarMXC}},
+			Type:    event.StateRoomAvatar,
+			Content: event.Content{Parsed: &event.RoomAvatarEventContent{URL: portal.AvatarMXC}},
 		})
 	}
-	if portal.Parent != nil {
-		// TODO create parent portal if it doesn't exist?
+	if portal.Parent != nil && portal.Parent.MXID != "" {
 		req.InitialState = append(req.InitialState, &event.Event{
-			StateKey: (*string)(&portal.Parent.MXID),
+			StateKey: ptr.Ptr(portal.Parent.MXID.String()),
 			Type:     event.StateSpaceParent,
 			Content: event.Content{Parsed: &event.SpaceParentEventContent{
 				Via:       []string{portal.Bridge.Matrix.ServerName()},
@@ -2225,7 +2262,12 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 		return err
 	}
 	if portal.Parent != nil {
-		// TODO add m.space.child event
+		if portal.Parent.MXID != "" {
+			portal.addToParentSpaceAndSave(ctx, true)
+		} else {
+			log.Info().Msg("Parent portal doesn't exist, creating in background")
+			go portal.createParentAndAddToSpace(ctx, source)
+		}
 	}
 	portal.updateUserLocalInfo(ctx, info.UserLocal, source)
 	if !autoJoinInvites {
