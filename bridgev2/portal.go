@@ -2109,7 +2109,7 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 	log.Info().Msg("Creating Matrix room")
 
 	var err error
-	if info == nil {
+	if info == nil || info.Members == nil {
 		info, err = source.Client.GetChatInfo(ctx, portal)
 		if err != nil {
 			log.Err(err).Msg("Failed to update portal info for creation")
