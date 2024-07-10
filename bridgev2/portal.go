@@ -2286,15 +2286,17 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 			}
 		}
 	}
-	userPortals, err := portal.Bridge.DB.UserPortal.GetAllInPortal(ctx, portal.PortalKey)
-	if err != nil {
-		log.Err(err).Msg("Failed to get user logins in portal to add portal to spaces")
-	} else {
-		for _, up := range userPortals {
-			login := portal.Bridge.GetCachedUserLoginByID(up.LoginID)
-			if login != nil {
-				login.inPortalCache.Remove(portal.PortalKey)
-				go login.tryAddPortalToSpace(ctx, portal, up.CopyWithoutValues())
+	if portal.Parent == nil {
+		userPortals, err := portal.Bridge.DB.UserPortal.GetAllInPortal(ctx, portal.PortalKey)
+		if err != nil {
+			log.Err(err).Msg("Failed to get user logins in portal to add portal to spaces")
+		} else {
+			for _, up := range userPortals {
+				login := portal.Bridge.GetCachedUserLoginByID(up.LoginID)
+				if login != nil {
+					login.inPortalCache.Remove(portal.PortalKey)
+					go login.tryAddPortalToSpace(ctx, portal, up.CopyWithoutValues())
+				}
 			}
 		}
 	}

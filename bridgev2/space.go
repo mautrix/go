@@ -56,7 +56,7 @@ func (ul *UserLogin) tryAddPortalToSpace(ctx context.Context, portal *Portal, us
 }
 
 func (ul *UserLogin) AddPortalToSpace(ctx context.Context, portal *Portal, userPortal *database.UserPortal) error {
-	if portal.MXID == "" {
+	if portal.MXID == "" || portal.Parent != nil {
 		return nil
 	}
 	spaceRoom, err := ul.GetSpaceRoom(ctx)
