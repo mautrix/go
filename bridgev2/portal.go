@@ -1939,7 +1939,7 @@ func (portal *Portal) SyncParticipants(ctx context.Context, members *ChatMemberL
 		if !syncUser(intent.GetMXID(), member, true) {
 			return
 		}
-		if member.Membership == event.MembershipJoin {
+		if member.Membership == event.MembershipJoin || member.Membership == "" {
 			err = intent.EnsureJoined(ctx, portal.MXID)
 			if err != nil {
 				log.Err(err).
