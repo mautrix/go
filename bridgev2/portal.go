@@ -1037,7 +1037,9 @@ func (portal *Portal) handleRemoteEvent(source *UserLogin, evt RemoteEvent) {
 	if ok {
 		preHandler.PreHandle(ctx, portal)
 	}
-	switch evt.GetType() {
+	evtType := evt.GetType()
+	log.Debug().Stringer("bridge_evt_type", evtType).Msg("Handling remote event")
+	switch evtType {
 	case RemoteEventUnknown:
 		log.Debug().Msg("Ignoring remote event with type unknown")
 	case RemoteEventMessage:
@@ -1429,6 +1431,9 @@ func (portal *Portal) handleRemoteMessageRemove(ctx context.Context, source *Use
 	targetParts, err := portal.Bridge.DB.Message.GetAllPartsByID(ctx, portal.Receiver, evt.GetTargetMessage())
 	if err != nil {
 		log.Err(err).Msg("Failed to get target message for removal")
+		return
+	} else if len(targetParts) == 0 {
+		log.Debug().Msg("Target message not found")
 		return
 	}
 	intent := portal.GetIntentFor(ctx, evt.GetSender(), source, RemoteEventMessageRemove)

@@ -454,6 +454,35 @@ type PushableNetworkAPI interface {
 
 type RemoteEventType int
 
+func (ret RemoteEventType) String() string {
+	switch ret {
+	case RemoteEventUnknown:
+		return "RemoteEventUnknown"
+	case RemoteEventMessage:
+		return "RemoteEventMessage"
+	case RemoteEventEdit:
+		return "RemoteEventEdit"
+	case RemoteEventReaction:
+		return "RemoteEventReaction"
+	case RemoteEventReactionRemove:
+		return "RemoteEventReactionRemove"
+	case RemoteEventMessageRemove:
+		return "RemoteEventMessageRemove"
+	case RemoteEventReadReceipt:
+		return "RemoteEventReadReceipt"
+	case RemoteEventDeliveryReceipt:
+		return "RemoteEventDeliveryReceipt"
+	case RemoteEventMarkUnread:
+		return "RemoteEventMarkUnread"
+	case RemoteEventTyping:
+		return "RemoteEventTyping"
+	case RemoteEventChatInfoChange:
+		return "RemoteEventChatInfoChange"
+	default:
+		return fmt.Sprintf("RemoteEventType(%d)", int(ret))
+	}
+}
+
 const (
 	RemoteEventUnknown RemoteEventType = iota
 	RemoteEventMessage
