@@ -1720,10 +1720,11 @@ func (portal *Portal) UpdateAvatar(ctx context.Context, avatar *Avatar, sender M
 }
 
 func (portal *Portal) GetTopLevelParent() *Portal {
-	// TODO ensure there's no infinite recursion?
 	if portal.Parent == nil {
-		// TODO return self if this is a space portal?
-		return nil
+		if !portal.Metadata.IsSpace {
+			return nil
+		}
+		return portal
 	}
 	return portal.Parent.GetTopLevelParent()
 }
@@ -1739,9 +1740,9 @@ func (portal *Portal) getBridgeInfo() (string, event.BridgeEventContent) {
 			AvatarURL:   portal.AvatarMXC,
 			// TODO external URL?
 		},
-		// TODO room type
 	}
 	if portal.Metadata.IsDirect {
+		// TODO group dm type?
 		bridgeInfo.BeeperRoomType = "dm"
 	} else if portal.Metadata.IsSpace {
 		bridgeInfo.BeeperRoomType = "space"
