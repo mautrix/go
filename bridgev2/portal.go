@@ -587,26 +587,40 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 	}
 
 	var threadRoot, replyTo *database.Message
+	var replyToID id.EventID
 	if caps.Threads {
-		threadRootID := content.RelatesTo.GetThreadParent()
-		if threadRootID != "" {
-			threadRoot, err = portal.Bridge.DB.Message.GetPartByMXID(ctx, threadRootID)
-			if err != nil {
-				log.Err(err).Msg("Failed to get thread root message from database")
-			}
+		replyToID = content.RelatesTo.GetNonFallbackReplyTo()
+	} else {
+		replyToID = content.RelatesTo.GetReplyTo()
+	}
+	threadRootID := content.RelatesTo.GetThreadParent()
+	if caps.Threads && threadRootID != "" {
+		threadRoot, err = portal.Bridge.DB.Message.GetPartByMXID(ctx, threadRootID)
+		if err != nil {
+			log.Err(err).Msg("Failed to get thread root message from database")
 		}
 	}
-	if caps.Replies {
-		var replyToID id.EventID
-		if caps.Threads {
-			replyToID = content.RelatesTo.GetNonFallbackReplyTo()
+	if replyToID != "" && (caps.Replies || caps.Threads) {
+		replyTo, err = portal.Bridge.DB.Message.GetPartByMXID(ctx, replyToID)
+		if err != nil {
+			log.Err(err).Msg("Failed to get reply target message from database")
 		} else {
-			replyToID = content.RelatesTo.GetReplyTo()
-		}
-		if replyToID != "" {
-			replyTo, err = portal.Bridge.DB.Message.GetPartByMXID(ctx, replyToID)
-			if err != nil {
-				log.Err(err).Msg("Failed to get reply target message from database")
+			// Support replying to threads from non-thread-capable clients.
+			// The fallback happens if the message is not a Matrix thread and either
+			// * the replied-to message is in a thread, or
+			// * the network only supports threads (assume the user wants to start a new thread)
+			if caps.Threads && threadRoot == nil && (replyTo.ThreadRoot != "" || !caps.Replies) {
+				threadRootRemoteID := replyTo.ThreadRoot
+				if threadRootRemoteID == "" {
+					threadRootRemoteID = replyTo.ID
+				}
+				threadRoot, err = portal.Bridge.DB.Message.GetFirstThreadMessage(ctx, portal.PortalKey, threadRootRemoteID)
+				if err != nil {
+					log.Err(err).Msg("Failed to get thread root message from database (via reply fallback)")
+				}
+			}
+			if !caps.Replies {
+				replyTo = nil
 			}
 		}
 	}
