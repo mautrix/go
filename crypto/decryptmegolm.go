@@ -98,14 +98,20 @@ func (mach *OlmMachine) DecryptMegolmEvent(ctx context.Context, evt *event.Event
 			} else if device.SigningKey != sess.SigningKey || device.IdentityKey != sess.SenderKey {
 				return nil, DeviceKeyMismatch
 			} else {
-				trustLevel = mach.ResolveTrust(device)
+				trustLevel, err = mach.ResolveTrustContext(ctx, device)
+				if err != nil {
+					return nil, err
+				}
 			}
 		} else {
 			forwardedKeys = true
 			lastChainItem := sess.ForwardingChains[len(sess.ForwardingChains)-1]
 			device, _ = mach.CryptoStore.FindDeviceByKey(ctx, evt.Sender, id.IdentityKey(lastChainItem))
 			if device != nil {
-				trustLevel = mach.ResolveTrust(device)
+				trustLevel, err = mach.ResolveTrustContext(ctx, device)
+				if err != nil {
+					return nil, err
+				}
 			} else {
 				log.Debug().
 					Str("forward_last_sender_key", lastChainItem).
