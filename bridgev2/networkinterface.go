@@ -15,6 +15,8 @@ import (
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/configupgrade"
+	"go.mau.fi/util/ptr"
+	"golang.org/x/exp/maps"
 
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
@@ -31,6 +33,21 @@ type ConvertedMessagePart struct {
 	DBMetadata map[string]any
 }
 
+func (cmp *ConvertedMessagePart) ToEditPart(part *database.Message) *ConvertedEditPart {
+	if cmp == nil {
+		return nil
+	}
+	if cmp.DBMetadata != nil {
+		maps.Copy(part.Metadata.Extra, cmp.DBMetadata)
+	}
+	return &ConvertedEditPart{
+		Part:    part,
+		Type:    cmp.Type,
+		Content: cmp.Content,
+		Extra:   cmp.Extra,
+	}
+}
+
 type EventSender struct {
 	IsFromMe    bool
 	SenderLogin networkid.UserLoginID
@@ -42,6 +59,48 @@ type ConvertedMessage struct {
 	ThreadRoot *networkid.MessageID
 	Parts      []*ConvertedMessagePart
 	Disappear  database.DisappearingSetting
+}
+
+func MergeCaption(textPart, mediaPart *ConvertedMessagePart) *ConvertedMessagePart {
+	if textPart == nil {
+		return mediaPart
+	} else if mediaPart == nil {
+		return textPart
+	}
+	mediaPart = ptr.Clone(mediaPart)
+	if mediaPart.Content.Body != "" && mediaPart.Content.FileName != "" && mediaPart.Content.Body != mediaPart.Content.FileName {
+		textPart = ptr.Clone(textPart)
+		textPart.Content.EnsureHasHTML()
+		mediaPart.Content.EnsureHasHTML()
+		mediaPart.Content.Body += "\n\n" + textPart.Content.Body
+		mediaPart.Content.FormattedBody += "<br><br>" + textPart.Content.FormattedBody
+	} else {
+		mediaPart.Content.FileName = mediaPart.Content.Body
+		mediaPart.Content.Body = textPart.Content.Body
+		mediaPart.Content.Format = textPart.Content.Format
+		mediaPart.Content.FormattedBody = textPart.Content.FormattedBody
+	}
+	mediaPart.ID = textPart.ID
+	return mediaPart
+}
+
+func (cm *ConvertedMessage) MergeCaption() bool {
+	if len(cm.Parts) != 2 {
+		return false
+	}
+	textPart, mediaPart := cm.Parts[0], cm.Parts[1]
+	if textPart.Content.MsgType.IsMedia() {
+		textPart, mediaPart = mediaPart, textPart
+	}
+	if !mediaPart.Content.MsgType.IsMedia() || !textPart.Content.MsgType.IsText() {
+		return false
+	}
+	merged := MergeCaption(textPart, mediaPart)
+	if merged != nil {
+		cm.Parts = []*ConvertedMessagePart{merged}
+		return true
+	}
+	return false
 }
 
 type ConvertedEditPart struct {
@@ -357,9 +416,9 @@ type ResolveIdentifierResponse struct {
 }
 
 type CreateChatResponse struct {
-	Portal *Portal
-
-	PortalID   networkid.PortalKey
+	PortalID networkid.PortalKey
+	// Portal and PortalInfo are not required, the caller will fetch them automatically based on PortalID if necessary.
+	Portal     *Portal
 	PortalInfo *ChatInfo
 }
 

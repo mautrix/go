@@ -21,6 +21,24 @@ import (
 // https://spec.matrix.org/v1.2/client-server-api/#mroommessage-msgtypes
 type MessageType string
 
+func (mt MessageType) IsText() bool {
+	switch mt {
+	case MsgText, MsgNotice, MsgEmote:
+		return true
+	default:
+		return false
+	}
+}
+
+func (mt MessageType) IsMedia() bool {
+	switch mt {
+	case MsgImage, MsgVideo, MsgAudio, MsgFile, MessageType(EventSticker.Type):
+		return true
+	default:
+		return false
+	}
+}
+
 // Msgtypes
 const (
 	MsgText     MessageType = "m.text"
