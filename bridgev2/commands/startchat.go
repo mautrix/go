@@ -56,6 +56,10 @@ func getClientForStartingChat[T bridgev2.IdentifierResolvingNetworkAPI](ce *Even
 }
 
 func fnResolveIdentifier(ce *Event) {
+	if len(ce.Args) == 0 {
+		ce.Reply("Usage: `$cmdprefix %s <identifier>`", ce.Command)
+		return
+	}
 	login, api, identifierParts := getClientForStartingChat[bridgev2.IdentifierResolvingNetworkAPI](ce, "resolving identifiers")
 	if api == nil {
 		return
@@ -64,6 +68,7 @@ func fnResolveIdentifier(ce *Event) {
 	identifier := strings.Join(identifierParts, " ")
 	resp, err := api.ResolveIdentifier(ce.Ctx, identifier, createChat)
 	if err != nil {
+		ce.Log.Err(err).Msg("Failed to resolve identifier")
 		ce.Reply("Failed to resolve identifier: %v", err)
 		return
 	} else if resp == nil {
@@ -98,7 +103,16 @@ func fnResolveIdentifier(ce *Event) {
 		if portal == nil {
 			portal, err = ce.Bridge.GetPortalByID(ce.Ctx, resp.Chat.PortalID)
 			if err != nil {
+				ce.Log.Err(err).Msg("Failed to get portal")
 				ce.Reply("Failed to get portal: %v", err)
+				return
+			}
+		}
+		if resp.Chat.PortalInfo == nil {
+			resp.Chat.PortalInfo, err = api.GetChatInfo(ce.Ctx, portal)
+			if err != nil {
+				ce.Log.Err(err).Msg("Failed to get portal info")
+				ce.Reply("Failed to get portal info: %v", err)
 				return
 			}
 		}
@@ -112,6 +126,7 @@ func fnResolveIdentifier(ce *Event) {
 		} else {
 			err = portal.CreateMatrixRoom(ce.Ctx, login, resp.Chat.PortalInfo)
 			if err != nil {
+				ce.Log.Err(err).Msg("Failed to create room")
 				ce.Reply("Failed to create room: %v", err)
 				return
 			}
