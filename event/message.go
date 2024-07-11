@@ -8,6 +8,7 @@ package event
 
 import (
 	"encoding/json"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -210,6 +211,12 @@ func (content *MessageEventContent) GetInfo() *FileInfo {
 type Mentions struct {
 	UserIDs []id.UserID `json:"user_ids,omitempty"`
 	Room    bool        `json:"room,omitempty"`
+}
+
+func (m *Mentions) Add(userID id.UserID) {
+	if !slices.Contains(m.UserIDs, userID) {
+		m.UserIDs = append(m.UserIDs, userID)
+	}
 }
 
 type EncryptedFileInfo struct {
