@@ -383,7 +383,8 @@ func (portal *Portal) handleMatrixReadReceipt(ctx context.Context, user *User, e
 	log.UpdateContext(func(c zerolog.Context) zerolog.Context {
 		return c.
 			Stringer("event_id", eventID).
-			Stringer("user_id", user.MXID)
+			Stringer("user_id", user.MXID).
+			Stringer("receipt_ts", receipt.Timestamp)
 	})
 	login, userPortal, err := portal.FindPreferredLogin(ctx, user, false)
 	if err != nil {
@@ -398,6 +399,9 @@ func (portal *Portal) handleMatrixReadReceipt(ctx context.Context, user *User, e
 	if !ok {
 		return
 	}
+	log.UpdateContext(func(c zerolog.Context) zerolog.Context {
+		return c.Str("user_login_id", string(login.ID))
+	})
 	evt := &MatrixReadReceipt{
 		Portal:  portal,
 		EventID: eventID,
@@ -413,6 +417,9 @@ func (portal *Portal) handleMatrixReadReceipt(ctx context.Context, user *User, e
 	if err != nil {
 		log.Err(err).Msg("Failed to get exact message from database")
 	} else if evt.ExactMessage != nil {
+		log.UpdateContext(func(c zerolog.Context) zerolog.Context {
+			return c.Str("exact_message_id", string(evt.ExactMessage.ID)).Time("exact_message_ts", evt.ExactMessage.Timestamp)
+		})
 		evt.ReadUpTo = evt.ExactMessage.Timestamp
 	} else {
 		evt.ReadUpTo = receipt.Timestamp
@@ -1053,7 +1060,16 @@ func (portal *Portal) handleRemoteEvent(source *UserLogin, evt RemoteEvent) {
 		if !ok || !mcp.ShouldCreatePortal() {
 			return
 		}
-		err := portal.CreateMatrixRoom(ctx, source, nil)
+		infoProvider, ok := mcp.(RemoteChatResyncWithInfo)
+		var info *ChatInfo
+		var err error
+		if ok {
+			info, err = infoProvider.GetChatInfo(ctx, portal)
+			if err != nil {
+				log.Err(err).Msg("Failed to get chat info for portal creation from chat resync event")
+			}
+		}
+		err = portal.CreateMatrixRoom(ctx, source, info)
 		if err != nil {
 			log.Err(err).Msg("Failed to create portal to handle event")
 			// TODO error
@@ -1089,6 +1105,10 @@ func (portal *Portal) handleRemoteEvent(source *UserLogin, evt RemoteEvent) {
 		portal.handleRemoteTyping(ctx, source, evt.(RemoteTyping))
 	case RemoteEventChatInfoChange:
 		portal.handleRemoteChatInfoChange(ctx, source, evt.(RemoteChatInfoChange))
+	case RemoteEventChatResync:
+		portal.handleRemoteChatResync(ctx, source, evt.(RemoteChatResync))
+	case RemoteEventBackfill:
+		portal.handleRemoteBackfill(ctx, source, evt.(RemoteBackfill))
 	default:
 		log.Warn().Int("type", int(evt.GetType())).Msg("Got remote event with unknown type")
 	}
@@ -1143,66 +1163,70 @@ func (portal *Portal) GetIntentFor(ctx context.Context, sender EventSender, sour
 	return intent
 }
 
-func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin, evt RemoteMessage) {
+func (portal *Portal) getRelationMeta(ctx context.Context, replyToPtr *networkid.MessageOptionalPartID, threadRootPtr *networkid.MessageID, isBatchSend bool) (replyTo, threadRoot, prevThreadEvent *database.Message) {
 	log := zerolog.Ctx(ctx)
-	existing, err := portal.Bridge.DB.Message.GetFirstPartByID(ctx, portal.Receiver, evt.GetID())
-	if err != nil {
-		log.Err(err).Msg("Failed to check if message is a duplicate")
-	} else if existing != nil {
-		log.Debug().Stringer("existing_mxid", existing.MXID).Msg("Ignoring duplicate message")
-		return
-	}
-	intent := portal.GetIntentFor(ctx, evt.GetSender(), source, RemoteEventMessage)
-	if intent == nil {
-		return
-	}
-	ts := getEventTS(evt)
-	converted, err := evt.ConvertMessage(ctx, portal, intent)
-	if err != nil {
-		log.Err(err).Msg("Failed to convert remote message")
-		portal.sendRemoteErrorNotice(ctx, intent, err, ts, "message")
-		return
-	}
-	var threadRootID networkid.MessageID
-	var replyToID networkid.MessageOptionalPartID
-	var replyTo, threadRoot, prevThreadEvent *database.Message
-	if converted.ReplyTo != nil {
-		replyToID = *converted.ReplyTo
-		replyTo, err = portal.Bridge.DB.Message.GetFirstOrSpecificPartByID(ctx, portal.Receiver, *converted.ReplyTo)
+	var err error
+	if replyToPtr != nil {
+		replyTo, err = portal.Bridge.DB.Message.GetFirstOrSpecificPartByID(ctx, portal.Receiver, *replyToPtr)
 		if err != nil {
 			log.Err(err).Msg("Failed to get reply target message from database")
 		} else if replyTo == nil {
-			log.Warn().Any("reply_to", converted.ReplyTo).Msg("Reply target message not found in database")
+			if isBatchSend {
+				// This is somewhat evil
+				replyTo = &database.Message{
+					MXID: portal.Bridge.Matrix.GenerateDeterministicEventID(portal.MXID, portal.PortalKey, replyToPtr.MessageID, ptr.Val(replyToPtr.PartID)),
+				}
+			} else {
+				log.Warn().Any("reply_to", *replyToPtr).Msg("Reply target message not found in database")
+			}
 		}
 	}
-	if converted.ThreadRoot != nil {
-		threadRootID = *converted.ThreadRoot
-		threadRoot, err = portal.Bridge.DB.Message.GetFirstThreadMessage(ctx, portal.PortalKey, threadRootID)
+	if threadRootPtr != nil {
+		threadRoot, err = portal.Bridge.DB.Message.GetFirstThreadMessage(ctx, portal.PortalKey, *threadRootPtr)
 		if err != nil {
 			log.Err(err).Msg("Failed to get thread root message from database")
 		} else if threadRoot == nil {
-			log.Warn().Any("thread_root", converted.ThreadRoot).Msg("Thread root message not found in database")
-		}
-		prevThreadEvent, err = portal.Bridge.DB.Message.GetLastThreadMessage(ctx, portal.PortalKey, threadRootID)
-		if err != nil {
+			if isBatchSend {
+				threadRoot = &database.Message{
+					MXID: portal.Bridge.Matrix.GenerateDeterministicEventID(portal.MXID, portal.PortalKey, *threadRootPtr, ""),
+				}
+			} else {
+				log.Warn().Str("thread_root", string(*threadRootPtr)).Msg("Thread root message not found in database")
+			}
+		} else if prevThreadEvent, err = portal.Bridge.DB.Message.GetLastThreadMessage(ctx, portal.PortalKey, *threadRootPtr); err != nil {
 			log.Err(err).Msg("Failed to get last thread message from database")
-		} else if prevThreadEvent == nil {
+		}
+		if prevThreadEvent == nil {
 			prevThreadEvent = threadRoot
 		}
 	}
+	return
+}
+
+func (portal *Portal) applyRelationMeta(content *event.MessageEventContent, replyTo, threadRoot, prevThreadEvent *database.Message) {
+	if threadRoot != nil && prevThreadEvent != nil {
+		content.GetRelatesTo().SetThread(threadRoot.MXID, prevThreadEvent.MXID)
+	}
+	if replyTo != nil {
+		content.GetRelatesTo().SetReplyTo(replyTo.MXID)
+		if content.Mentions == nil {
+			content.Mentions = &event.Mentions{}
+		}
+		content.Mentions.Add(replyTo.Metadata.SenderMXID)
+	}
+}
+
+func (portal *Portal) sendConvertedMessage(ctx context.Context, id networkid.MessageID, intent MatrixAPI, sender EventSender, converted *ConvertedMessage, ts time.Time, logContext func(*zerolog.Event) *zerolog.Event) []*database.Message {
+	if logContext == nil {
+		logContext = func(e *zerolog.Event) *zerolog.Event {
+			return e
+		}
+	}
+	log := zerolog.Ctx(ctx)
+	replyTo, threadRoot, prevThreadEvent := portal.getRelationMeta(ctx, converted.ReplyTo, converted.ThreadRoot, false)
+	output := make([]*database.Message, 0, len(converted.Parts))
 	for _, part := range converted.Parts {
-		if threadRoot != nil && prevThreadEvent != nil {
-			part.Content.GetRelatesTo().SetThread(threadRoot.MXID, prevThreadEvent.MXID)
-		}
-		if replyTo != nil {
-			part.Content.GetRelatesTo().SetReplyTo(replyTo.MXID)
-			if part.Content.Mentions == nil {
-				part.Content.Mentions = &event.Mentions{}
-			}
-			if !slices.Contains(part.Content.Mentions.UserIDs, replyTo.Metadata.SenderMXID) {
-				part.Content.Mentions.UserIDs = append(part.Content.Mentions.UserIDs, replyTo.Metadata.SenderMXID)
-			}
-		}
+		portal.applyRelationMeta(part.Content, replyTo, threadRoot, prevThreadEvent)
 		resp, err := intent.SendMessage(ctx, portal.MXID, part.Type, &event.Content{
 			Parsed: part.Content,
 			Raw:    part.Extra,
@@ -1216,14 +1240,14 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 			Str("part_id", string(part.ID)).
 			Msg("Sent message part to Matrix")
 		dbMessage := &database.Message{
-			ID:         evt.GetID(),
+			ID:         id,
 			PartID:     part.ID,
 			MXID:       resp.EventID,
 			Room:       portal.PortalKey,
-			SenderID:   evt.GetSender().Sender,
+			SenderID:   sender.Sender,
 			Timestamp:  ts,
-			ThreadRoot: threadRootID,
-			ReplyTo:    replyToID,
+			ThreadRoot: ptr.Val(converted.ThreadRoot),
+			ReplyTo:    ptr.Val(converted.ReplyTo),
 		}
 		dbMessage.Metadata.SenderMXID = intent.GetMXID()
 		dbMessage.Metadata.Extra = part.DBMetadata
@@ -1244,7 +1268,32 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 		if prevThreadEvent != nil {
 			prevThreadEvent = dbMessage
 		}
+		output = append(output, dbMessage)
 	}
+	return output
+}
+
+func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin, evt RemoteMessage) {
+	log := zerolog.Ctx(ctx)
+	existing, err := portal.Bridge.DB.Message.GetFirstPartByID(ctx, portal.Receiver, evt.GetID())
+	if err != nil {
+		log.Err(err).Msg("Failed to check if message is a duplicate")
+	} else if existing != nil {
+		log.Debug().Stringer("existing_mxid", existing.MXID).Msg("Ignoring duplicate message")
+		return
+	}
+	intent := portal.GetIntentFor(ctx, evt.GetSender(), source, RemoteEventMessage)
+	if intent == nil {
+		return
+	}
+	ts := getEventTS(evt)
+	converted, err := evt.ConvertMessage(ctx, portal, intent)
+	if err != nil {
+		log.Err(err).Msg("Failed to convert remote message")
+		portal.sendRemoteErrorNotice(ctx, intent, err, ts, "message")
+		return
+	}
+	portal.sendConvertedMessage(ctx, evt.GetID(), intent, evt.GetSender(), converted, ts, nil)
 }
 
 func (portal *Portal) sendRemoteErrorNotice(ctx context.Context, intent MatrixAPI, err error, ts time.Time, evtTypeName string) {
@@ -1555,7 +1604,7 @@ func (portal *Portal) handleRemoteMarkUnread(ctx context.Context, source *UserLo
 }
 
 func (portal *Portal) handleRemoteDeliveryReceipt(ctx context.Context, source *UserLogin, evt RemoteReceipt) {
-
+	// TODO implement
 }
 
 func (portal *Portal) handleRemoteTyping(ctx context.Context, source *UserLogin, evt RemoteTyping) {
@@ -1577,6 +1626,38 @@ func (portal *Portal) handleRemoteChatInfoChange(ctx context.Context, source *Us
 		return
 	}
 	portal.ProcessChatInfoChange(ctx, evt.GetSender(), source, info, getEventTS(evt))
+}
+
+func (portal *Portal) handleRemoteChatResync(ctx context.Context, source *UserLogin, evt RemoteChatResync) {
+	log := zerolog.Ctx(ctx)
+	infoProvider, ok := evt.(RemoteChatResyncWithInfo)
+	if ok {
+		info, err := infoProvider.GetChatInfo(ctx, portal)
+		if err != nil {
+			log.Err(err).Msg("Failed to get chat info from resync event")
+		} else if info != nil {
+			portal.UpdateInfo(ctx, info, source, nil, time.Time{})
+		}
+	}
+	backfillChecker, ok := evt.(RemoteChatResyncBackfill)
+	if ok {
+		latestMessage, err := portal.Bridge.DB.Message.GetLastPartAtOrBeforeTime(ctx, portal.PortalKey, time.Now().Add(10*time.Second))
+		if err != nil {
+			log.Err(err).Msg("Failed to get last message in portal to check if backfill is necessary")
+		} else if needsBackfill, err := backfillChecker.CheckNeedsBackfill(ctx, latestMessage); err != nil {
+			log.Err(err).Msg("Failed to check if backfill is needed")
+		} else if needsBackfill {
+			portal.doForwardBackfill(ctx, source, latestMessage)
+		}
+	}
+}
+
+func (portal *Portal) handleRemoteBackfill(ctx context.Context, source *UserLogin, backfill RemoteBackfill) {
+	//data, err := backfill.GetBackfillData(ctx, portal)
+	//if err != nil {
+	//	zerolog.Ctx(ctx).Err(err).Msg("Failed to get backfill data")
+	//	return
+	//}
 }
 
 type ChatInfoChange struct {

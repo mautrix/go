@@ -8,19 +8,25 @@ package matrix
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"net/url"
 	"os"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/dbutil"
 	_ "go.mau.fi/util/dbutil/litestream"
+	"go.mau.fi/util/exsync"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/appservice"
@@ -63,6 +69,10 @@ type Connector struct {
 	MediaProxy   *mediaproxy.MediaProxy
 	dmaSigKey    [32]byte
 
+	doublePuppetIntents *exsync.Map[id.UserID, *appservice.IntentAPI]
+
+	deterministicEventIDServer string
+
 	MediaConfig             mautrix.RespMediaConfig
 	SpecVersions            *mautrix.RespVersions
 	Capabilities            *bridgev2.MatrixCapabilities
@@ -92,6 +102,7 @@ func NewConnector(cfg *bridgeconfig.Config) *Connector {
 	c.userIDRegex = cfg.MakeUserIDRegex("(.+)")
 	c.MediaConfig.UploadSize = 50 * 1024 * 1024
 	c.Capabilities = &bridgev2.MatrixCapabilities{}
+	c.doublePuppetIntents = exsync.NewMap[id.UserID, *appservice.IntentAPI]()
 	return c
 }
 
@@ -128,6 +139,7 @@ func (br *Connector) Init(bridge *bridgev2.Bridge) {
 	)
 	br.Provisioning = &ProvisioningAPI{br: br}
 	br.DoublePuppet = newDoublePuppetUtil(br)
+	br.deterministicEventIDServer = "backfill." + br.Config.Homeserver.Domain
 }
 
 func (br *Connector) Start(ctx context.Context) error {
@@ -153,6 +165,10 @@ func (br *Connector) Start(ctx context.Context) error {
 	go br.UpdateBotProfile(ctx)
 	if br.Crypto != nil {
 		go br.Crypto.Start()
+	}
+	parsed, _ := url.Parse(br.Bridge.Network.GetName().NetworkURL)
+	if parsed != nil {
+		br.deterministicEventIDServer = parsed.Hostname()
 	}
 	br.AS.Ready = true
 	return nil
@@ -196,6 +212,7 @@ func (br *Connector) ensureConnection(ctx context.Context) {
 			br.SpecVersions = versions
 			*br.AS.SpecVersions = *versions
 			br.Capabilities.AutoJoinInvites = br.SpecVersions.Supports(mautrix.BeeperFeatureAutojoinInvites)
+			br.Capabilities.BatchSending = br.SpecVersions.Supports(mautrix.BeeperFeatureBatchSending)
 			break
 		}
 	}
@@ -450,6 +467,7 @@ func (br *Connector) NewUserIntent(ctx context.Context, userID id.UserID, access
 		}
 		return nil, accessToken, err
 	}
+	br.doublePuppetIntents.Set(userID, intent)
 	return &ASIntent{Connector: br, Matrix: intent}, newToken, nil
 }
 
@@ -477,6 +495,43 @@ func (br *Connector) GetMembers(ctx context.Context, roomID id.RoomID) (map[id.U
 func (br *Connector) GetMemberInfo(ctx context.Context, roomID id.RoomID, userID id.UserID) (*event.MemberEventContent, error) {
 	// TODO fetch from network sometimes?
 	return br.AS.StateStore.GetMember(ctx, roomID, userID)
+}
+
+func (br *Connector) BatchSend(ctx context.Context, roomID id.RoomID, req *mautrix.ReqBeeperBatchSend) (*mautrix.RespBeeperBatchSend, error) {
+	if encrypted, err := br.StateStore.IsEncrypted(ctx, roomID); err != nil {
+		return nil, fmt.Errorf("failed to check if room is encrypted: %w", err)
+	} else if encrypted {
+		for _, evt := range req.Events {
+			intent, _ := br.doublePuppetIntents.Get(evt.Sender)
+			if intent != nil {
+				intent.AddDoublePuppetValueWithTS(evt.ID, evt.Timestamp)
+			}
+			err = br.Crypto.Encrypt(ctx, roomID, evt.Type, &evt.Content)
+			if err != nil {
+				return nil, err
+			}
+			evt.Type = event.EventEncrypted
+		}
+	}
+	return br.Bot.BeeperBatchSend(ctx, roomID, req)
+}
+
+func (br *Connector) GenerateDeterministicEventID(roomID id.RoomID, _ networkid.PortalKey, messageID networkid.MessageID, partID networkid.PartID) id.EventID {
+	data := make([]byte, 0, len(roomID)+len(messageID)+len(partID))
+	data = append(data, roomID...)
+	data = append(data, messageID...)
+	data = append(data, partID...)
+
+	hash := sha256.Sum256(data)
+	hashB64Len := base64.RawURLEncoding.EncodedLen(len(hash))
+
+	eventID := make([]byte, 1+hashB64Len+1+len(br.deterministicEventIDServer))
+	eventID[0] = '$'
+	base64.RawURLEncoding.Encode(eventID[1:1+hashB64Len], hash[:])
+	eventID[1+hashB64Len] = ':'
+	copy(eventID[1+hashB64Len+1:], br.deterministicEventIDServer)
+
+	return id.EventID(unsafe.String(unsafe.SliceData(eventID), len(eventID)))
 }
 
 func (br *Connector) ServerName() string {

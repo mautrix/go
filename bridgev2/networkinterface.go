@@ -313,6 +313,86 @@ type NetworkAPI interface {
 	HandleMatrixMessage(ctx context.Context, msg *MatrixMessage) (message *MatrixMessageResponse, err error)
 }
 
+// FetchMessagesParams contains the parameters for a message history pagination request.
+type FetchMessagesParams struct {
+	// The portal to fetch messages in. Always present.
+	Portal *Portal
+	// When fetching messages inside a thread, the ID of the thread.
+	ThreadRoot networkid.MessageID
+	// Whether to fetch new messages instead of old ones.
+	Forward bool
+	// The oldest known message in the thread or the portal. If Forward is true, this is the newest known message instead.
+	// If the portal doesn't have any bridged messages, this will be nil.
+	AnchorMessage *database.Message
+	// The cursor returned by the previous call to FetchMessages with the same portal and thread root.
+	// This will not be present in Forward calls.
+	Cursor networkid.PaginationCursor
+	// The preferred number of messages to return. The returned batch can be bigger or smaller
+	// without any side effects, but the network connector should aim for this number.
+	Count int
+}
+
+// BackfillReaction is an individual reaction to a message in a history pagination request.
+//
+// The target message is always the BackfillMessage that contains this item.
+// Optionally, the reaction can target a specific part by specifying TargetPart.
+// If not specified, the first part (sorted lexicographically) is targeted.
+type BackfillReaction struct {
+	// Optional part of the message that the reaction targets.
+	// If nil, the reaction targets the first part of the message.
+	TargetPart *networkid.PartID
+	// Optional timestamp for the reaction.
+	// If unset, the reaction will have a fake timestamp that is slightly after the message timestamp.
+	Timestamp time.Time
+
+	Sender       EventSender
+	EmojiID      networkid.EmojiID
+	Emoji        string
+	ExtraContent map[string]any
+	DBMetadata   map[string]any
+}
+
+// BackfillMessage is an individual message in a history pagination request.
+type BackfillMessage struct {
+	*ConvertedMessage
+	Sender    EventSender
+	ID        networkid.MessageID
+	Timestamp time.Time
+	Reactions []*BackfillReaction
+}
+
+// FetchMessagesResponse contains the response for a message history pagination request.
+type FetchMessagesResponse struct {
+	// The messages to backfill. Messages should always be sorted in chronological order (oldest to newest).
+	Messages []*BackfillMessage
+	// The next cursor to use for fetching more messages.
+	Cursor networkid.PaginationCursor
+	// Whether there are more messages that can be backfilled.
+	// This field is required. If it is false, FetchMessages will not be called again.
+	HasMore bool
+	// Whether the batch contains new messages rather than old ones.
+	// Cursor, HasMore and the progress fields will be ignored when this is present.
+	Forward bool
+	// When sending forward backfill (or the first batch in a room), this field can be set
+	// to mark the messages as read immediately after backfilling.
+	MarkRead bool
+
+	// When HasMore is true, one of the following fields can be set to report backfill progress:
+
+	// Approximate backfill progress as a number between 0 and 1.
+	ApproxProgress float64
+	// Approximate number of messages remaining that can be backfilled.
+	ApproxRemainingCount int
+	// Approximate total number of messages in the chat.
+	ApproxTotalCount int
+}
+
+// BackfillingNetworkAPI is an optional interface that network connectors can implement to support backfilling message history.
+type BackfillingNetworkAPI interface {
+	NetworkAPI
+	FetchMessages(ctx context.Context, fetchParams FetchMessagesParams) (*FetchMessagesResponse, error)
+}
+
 // EditHandlingNetworkAPI is an optional interface that network connectors can implement to handle message edits.
 type EditHandlingNetworkAPI interface {
 	NetworkAPI
@@ -537,6 +617,10 @@ func (ret RemoteEventType) String() string {
 		return "RemoteEventTyping"
 	case RemoteEventChatInfoChange:
 		return "RemoteEventChatInfoChange"
+	case RemoteEventChatResync:
+		return "RemoteEventChatResync"
+	case RemoteEventBackfill:
+		return "RemoteEventBackfill"
 	default:
 		return fmt.Sprintf("RemoteEventType(%d)", int(ret))
 	}
@@ -554,6 +638,8 @@ const (
 	RemoteEventMarkUnread
 	RemoteEventTyping
 	RemoteEventChatInfoChange
+	RemoteEventChatResync
+	RemoteEventBackfill
 )
 
 // RemoteEvent represents a single event from the remote network, such as a message or a reaction.
@@ -575,6 +661,20 @@ type RemotePreHandler interface {
 type RemoteChatInfoChange interface {
 	RemoteEvent
 	GetChatInfoChange(ctx context.Context) (*ChatInfoChange, error)
+}
+
+type RemoteChatResync interface {
+	RemoteEvent
+}
+
+type RemoteChatResyncWithInfo interface {
+	RemoteChatResync
+	GetChatInfo(ctx context.Context, portal *Portal) (*ChatInfo, error)
+}
+
+type RemoteChatResyncBackfill interface {
+	RemoteChatResync
+	CheckNeedsBackfill(ctx context.Context, latestMessage *database.Message) (bool, error)
 }
 
 type RemoteEventThatMayCreatePortal interface {
@@ -647,6 +747,11 @@ type RemoteMarkUnread interface {
 type RemoteTyping interface {
 	RemoteEvent
 	GetTimeout() time.Duration
+}
+
+type RemoteBackfill interface {
+	RemoteEvent
+	GetBackfillData(ctx context.Context, portal *Portal) (*FetchMessagesResponse, error)
 }
 
 type TypingType int

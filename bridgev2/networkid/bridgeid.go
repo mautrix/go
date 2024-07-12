@@ -105,6 +105,9 @@ type MessageOptionalPartID struct {
 	PartID    *PartID
 }
 
+// PaginationCursor is a cursor used for paginating message history.
+type PaginationCursor string
+
 // AvatarID is the ID of a user or room avatar on the remote network.
 //
 // It may be a real URL, an opaque identifier, or anything in between. It should be an identifier that

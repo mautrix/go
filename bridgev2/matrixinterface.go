@@ -21,6 +21,7 @@ import (
 
 type MatrixCapabilities struct {
 	AutoJoinInvites bool
+	BatchSending    bool
 }
 
 type MatrixConnector interface {
@@ -43,6 +44,9 @@ type MatrixConnector interface {
 	GetPowerLevels(ctx context.Context, roomID id.RoomID) (*event.PowerLevelsEventContent, error)
 	GetMembers(ctx context.Context, roomID id.RoomID) (map[id.UserID]*event.MemberEventContent, error)
 	GetMemberInfo(ctx context.Context, roomID id.RoomID, userID id.UserID) (*event.MemberEventContent, error)
+
+	BatchSend(ctx context.Context, roomID id.RoomID, req *mautrix.ReqBeeperBatchSend) (*mautrix.RespBeeperBatchSend, error)
+	GenerateDeterministicEventID(roomID id.RoomID, portalKey networkid.PortalKey, messageID networkid.MessageID, partID networkid.PartID) id.EventID
 
 	ServerName() string
 }
