@@ -229,8 +229,16 @@ func (br *Connector) ensureConnection(ctx context.Context) {
 	for {
 		versions, err := br.Bot.Versions(ctx)
 		if err != nil {
-			br.Log.Err(err).Msg("Failed to connect to homeserver, retrying in 10 seconds...")
-			time.Sleep(10 * time.Second)
+			if errors.Is(err, mautrix.MForbidden) {
+				br.Log.Debug().Msg("M_FORBIDDEN in /versions, trying to register before retrying")
+				err = br.Bot.EnsureRegistered(ctx)
+				if err != nil {
+					br.Log.Err(err).Msg("Failed to register after /versions failed")
+				}
+			} else {
+				br.Log.Err(err).Msg("Failed to connect to homeserver, retrying in 10 seconds...")
+				time.Sleep(10 * time.Second)
+			}
 		} else {
 			br.SpecVersions = versions
 			*br.AS.SpecVersions = *versions
