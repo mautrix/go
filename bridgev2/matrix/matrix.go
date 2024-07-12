@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/jsontime"
 
 	"maunium.net/go/mautrix/appservice"
 	"maunium.net/go/mautrix/bridge/status"
@@ -147,6 +148,7 @@ func (br *Connector) sendSuccessCheckpoint(ctx context.Context, evt *event.Event
 		EventType:   evt.Type,
 		MessageType: evt.Content.AsMessage().MsgType,
 		Step:        step,
+		Timestamp:   jsontime.UnixMilliNow(),
 		Status:      status.MsgStatusSuccess,
 		ReportedBy:  status.MsgReportedByBridge,
 		RetryNum:    retryNum,
