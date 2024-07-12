@@ -292,8 +292,16 @@ func (br *Bridge) ensureConnection() {
 	for {
 		versions, err := br.Bot.Versions()
 		if err != nil {
-			br.ZLog.Err(err).Msg("Failed to connect to homeserver, retrying in 10 seconds...")
-			time.Sleep(10 * time.Second)
+			if errors.Is(err, mautrix.MForbidden) {
+				br.ZLog.Debug().Msg("M_FORBIDDEN in /versions, trying to register before retrying")
+				err = br.Bot.EnsureRegistered()
+				if err != nil {
+					br.ZLog.Err(err).Msg("Failed to register after /versions failed")
+				}
+			} else {
+				br.ZLog.Err(err).Msg("Failed to connect to homeserver, retrying in 10 seconds...")
+				time.Sleep(10 * time.Second)
+			}
 		} else {
 			br.SpecVersions = *versions
 			br.AS.SpecVersions = versions
