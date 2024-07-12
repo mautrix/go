@@ -28,7 +28,13 @@ func (portal *Portal) doForwardBackfill(ctx context.Context, source *UserLogin, 
 		log.Debug().Msg("Network API does not support backfilling")
 		return
 	}
-	log.Info().Str("latest_message_id", string(lastMessage.ID)).Msg("Fetching messages for forward backfill")
+	logEvt := log.Info()
+	if lastMessage != nil {
+		logEvt = logEvt.Str("latest_message_id", string(lastMessage.ID))
+	} else {
+		logEvt = logEvt.Str("latest_message_id", "")
+	}
+	logEvt.Msg("Fetching messages for forward backfill")
 	resp, err := api.FetchMessages(ctx, FetchMessagesParams{
 		Portal:        portal,
 		ThreadRoot:    "",
@@ -65,20 +71,22 @@ func (portal *Portal) DoBackwardsBackfill(ctx context.Context, source *UserLogin
 }
 
 func (portal *Portal) sendBackfill(ctx context.Context, source *UserLogin, messages []*BackfillMessage, forceForward, markRead bool, lastMessage *database.Message) {
-	if forceForward {
-		var cutoff int
-		for i, msg := range messages {
-			if msg.Timestamp.Before(lastMessage.Timestamp) {
-				cutoff = i
+	if lastMessage != nil {
+		if forceForward {
+			var cutoff int
+			for i, msg := range messages {
+				if msg.Timestamp.Before(lastMessage.Timestamp) {
+					cutoff = i
+				}
 			}
-		}
-		if cutoff != 0 {
-			zerolog.Ctx(ctx).Debug().
-				Int("cutoff_count", cutoff).
-				Int("total_count", len(messages)).
-				Time("last_bridged_ts", lastMessage.Timestamp).
-				Msg("Cutting off forward backfill messages older than latest bridged message")
-			messages = messages[cutoff:]
+			if cutoff != 0 {
+				zerolog.Ctx(ctx).Debug().
+					Int("cutoff_count", cutoff).
+					Int("total_count", len(messages)).
+					Time("last_bridged_ts", lastMessage.Timestamp).
+					Msg("Cutting off forward backfill messages older than latest bridged message")
+				messages = messages[cutoff:]
+			}
 		}
 	}
 	canBatchSend := portal.Bridge.Matrix.GetCapabilities().BatchSending
