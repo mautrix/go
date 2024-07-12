@@ -10,6 +10,8 @@ import (
 	"errors"
 	"fmt"
 
+	"go.mau.fi/util/jsontime"
+
 	"maunium.net/go/mautrix/bridge/status"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -165,6 +167,7 @@ func (ms *MessageStatus) ToCheckpoint(evt *MessageStatusEventInfo) *status.Messa
 		RoomID:      evt.RoomID,
 		EventID:     evt.EventID,
 		Step:        step,
+		Timestamp:   jsontime.UnixMilliNow(),
 		Status:      ms.checkpointStatus(),
 		RetryNum:    ms.RetryNum,
 		ReportedBy:  status.MsgReportedByBridge,
