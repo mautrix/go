@@ -88,7 +88,9 @@ type Connector struct {
 	wsStopped                      chan struct{}
 	wsShortCircuitReconnectBackoff chan struct{}
 	wsStartupWait                  *sync.WaitGroup
-	latestState                    *status.BridgeState
+	stopping                       bool
+	hasSentAnyStates               bool
+	OnWebsocketReplaced            func()
 }
 
 var (
@@ -152,7 +154,23 @@ func (br *Connector) Start(ctx context.Context) error {
 	if err != nil {
 		return bridgev2.DBUpgradeError{Section: "matrix_state", Err: err}
 	}
-	go br.AS.Start()
+	if br.Config.Homeserver.Websocket || len(br.Config.Homeserver.WSProxy) > 0 {
+		br.Websocket = true
+		br.Log.Debug().Msg("Starting appservice websocket")
+		var wg sync.WaitGroup
+		wg.Add(1)
+		br.wsStartupWait = &wg
+		br.wsShortCircuitReconnectBackoff = make(chan struct{})
+		go br.startWebsocket(&wg)
+	} else if br.AS.Host.IsConfigured() {
+		br.Log.Debug().Msg("Starting appservice HTTP server")
+		go br.AS.Start()
+	} else {
+		br.Log.WithLevel(zerolog.FatalLevel).Msg("Neither appservice HTTP listener nor websocket is enabled")
+		os.Exit(23)
+	}
+
+	br.Log.Debug().Msg("Checking connection to homeserver")
 	br.ensureConnection(ctx)
 	go br.fetchMediaConfig(ctx)
 	if br.Crypto != nil {
@@ -171,6 +189,10 @@ func (br *Connector) Start(ctx context.Context) error {
 		br.deterministicEventIDServer = parsed.Hostname()
 	}
 	br.AS.Ready = true
+	if br.Websocket && br.Config.Homeserver.WSPingInterval > 0 {
+		br.wsStopPinger = make(chan struct{}, 1)
+		go br.websocketServerPinger()
+	}
 	return nil
 }
 
@@ -193,6 +215,7 @@ func (br *Connector) GetCapabilities() *bridgev2.MatrixCapabilities {
 }
 
 func (br *Connector) Stop() {
+	br.stopping = true
 	br.AS.Stop()
 	br.EventProcessor.Stop()
 	if br.Crypto != nil {
@@ -370,9 +393,7 @@ func (br *Connector) GhostIntent(userID networkid.UserID) bridgev2.MatrixAPI {
 
 func (br *Connector) SendBridgeStatus(ctx context.Context, state *status.BridgeState) error {
 	if br.Websocket {
-		// FIXME this doesn't account for multiple users
-		br.latestState = state
-
+		br.hasSentAnyStates = true
 		return br.AS.SendWebsocket(&appservice.WebsocketRequest{
 			Command: "bridge_status",
 			Data:    state,

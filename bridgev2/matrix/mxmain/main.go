@@ -89,6 +89,8 @@ type BridgeMain struct {
 
 	AdditionalShortFlags string
 	AdditionalLongFlags  string
+
+	manualStop chan int
 }
 
 type VersionJSONOutput struct {
@@ -115,14 +117,16 @@ func (br *BridgeMain) Run() {
 	br.PreInit()
 	br.Init()
 	br.Start()
-	br.WaitForInterrupt()
+	exitCode := br.WaitForInterrupt()
 	br.Stop()
+	os.Exit(exitCode)
 }
 
 // PreInit parses CLI flags and loads the config file. This is called by [Run] and does not need to be called manually.
 //
 // This also handles all flags that cause the bridge to exit immediately (e.g. `--version` and `--generate-registration`).
 func (br *BridgeMain) PreInit() {
+	br.manualStop = make(chan int, 1)
 	flag.SetHelpTitles(
 		fmt.Sprintf("%s - %s", br.Name, br.Description),
 		fmt.Sprintf("%s [-hgvn%s] [-c <path>] [-r <path>]%s", br.Name, br.AdditionalShortFlags, br.AdditionalLongFlags))
@@ -231,6 +235,9 @@ func (br *BridgeMain) Init() {
 
 	br.initDB()
 	br.Matrix = matrix.NewConnector(br.Config)
+	br.Matrix.OnWebsocketReplaced = func() {
+		br.TriggerStop(0)
+	}
 	br.Matrix.IgnoreUnsupportedServer = *ignoreUnsupportedServer
 	br.Bridge = bridgev2.NewBridge("", br.DB, *br.Log, &br.Config.Bridge, br.Matrix, br.Connector, commands.NewProcessor)
 	br.Matrix.AS.DoublePuppetValue = br.Name
@@ -365,10 +372,22 @@ func (br *BridgeMain) Start() {
 }
 
 // WaitForInterrupt waits for a SIGINT or SIGTERM signal.
-func (br *BridgeMain) WaitForInterrupt() {
+func (br *BridgeMain) WaitForInterrupt() int {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	<-c
+	select {
+	case <-c:
+		return 0
+	case exitCode := <-br.manualStop:
+		return exitCode
+	}
+}
+
+func (br *BridgeMain) TriggerStop(exitCode int) {
+	select {
+	case br.manualStop <- exitCode:
+	default:
+	}
 }
 
 // Stop cleanly stops the bridge. This is called by [Run] and does not need to be called manually.

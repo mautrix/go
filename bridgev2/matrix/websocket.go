@@ -1,13 +1,18 @@
+// Copyright (c) 2024 Tulir Asokan
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 package matrix
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"time"
-
-	"go.mau.fi/util/jsontime"
 
 	"maunium.net/go/mautrix/appservice"
 )
@@ -20,20 +25,17 @@ func (br *Connector) startWebsocket(wg *sync.WaitGroup) {
 	log := br.Log.With().Str("action", "appservice websocket").Logger()
 	var wgOnce sync.Once
 	onConnect := func() {
-		wssBr, ok := br.Child.(WebsocketStartingBridge)
-		if ok {
-			wssBr.OnWebsocketConnect()
-		}
-		if br.latestState != nil {
+		if br.hasSentAnyStates {
 			go func() {
 				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cancel()
-				br.latestState.Timestamp = jsontime.UnixNow()
-				err := br.SendBridgeState(ctx, br.latestState)
-				if err != nil {
-					log.Err(err).Msg("Failed to resend latest bridge state after websocket reconnect")
-				} else {
-					log.Debug().Any("bridge_state", br.latestState).Msg("Resent bridge state after websocket reconnect")
+				for _, state := range br.Bridge.GetCurrentBridgeStates() {
+					err := br.SendBridgeStatus(ctx, &state)
+					if err != nil {
+						log.Err(err).Msg("Failed to resend latest bridge state after websocket reconnect")
+					} else {
+						log.Debug().Any("bridge_state", state).Msg("Resent bridge state after websocket reconnect")
+					}
 				}
 			}()
 		}
@@ -60,12 +62,16 @@ func (br *Connector) startWebsocket(wg *sync.WaitGroup) {
 			return
 		} else if closeCommand := (&appservice.CloseCommand{}); errors.As(err, &closeCommand) && closeCommand.Status == appservice.MeowConnectionReplaced {
 			log.Info().Msg("Appservice websocket closed by another instance of the bridge, shutting down...")
-			br.ManualStop(0)
+			if br.OnWebsocketReplaced != nil {
+				br.OnWebsocketReplaced()
+			} else {
+				os.Exit(1)
+			}
 			return
 		} else if err != nil {
 			log.Err(err).Msg("Error in appservice websocket")
 		}
-		if br.Stopping {
+		if br.stopping {
 			return
 		}
 		now := time.Now().UnixNano()
@@ -86,7 +92,7 @@ func (br *Connector) startWebsocket(wg *sync.WaitGroup) {
 			log.Debug().Msg("Reconnect backoff was short-circuited")
 		case <-time.After(reconnectBackoff):
 		}
-		if br.Stopping {
+		if br.stopping {
 			return
 		}
 	}
@@ -156,7 +162,7 @@ func (br *Connector) websocketServerPinger() {
 		case <-br.wsStopPinger:
 			return
 		}
-		if br.Stopping {
+		if br.stopping {
 			return
 		}
 	}

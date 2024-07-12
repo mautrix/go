@@ -126,6 +126,23 @@ func (br *Bridge) GetCachedUserLoginByID(id networkid.UserLoginID) *UserLogin {
 	return br.userLoginsByID[id]
 }
 
+func (br *Bridge) GetCurrentBridgeStates() (states []status.BridgeState) {
+	br.cacheLock.Lock()
+	defer br.cacheLock.Unlock()
+	if len(br.userLoginsByID) == 0 {
+		return []status.BridgeState{{
+			StateEvent: status.StateUnconfigured,
+		}}
+	}
+	states = make([]status.BridgeState, len(br.userLoginsByID))
+	i := 0
+	for _, login := range br.userLoginsByID {
+		states[i] = login.BridgeState.GetPrev()
+		i++
+	}
+	return
+}
+
 type NewLoginParams struct {
 	LoadUserLogin     func(context.Context, *UserLogin) error
 	DeleteOnConflict  bool
