@@ -17,9 +17,11 @@ import (
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 
+	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2/bridgeconfig"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
+	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -34,6 +36,8 @@ type User struct {
 	doublePuppetIntent      MatrixAPI
 	doublePuppetInitialized bool
 	doublePuppetLock        sync.Mutex
+
+	managementCreateLock sync.Mutex
 
 	logins map[networkid.UserLoginID]*UserLogin
 }
@@ -186,6 +190,59 @@ func (user *User) GetDefaultLogin() *UserLogin {
 	loginKeys := maps.Keys(user.logins)
 	slices.Sort(loginKeys)
 	return user.logins[loginKeys[0]]
+}
+
+func (user *User) GetManagementRoom(ctx context.Context) (id.RoomID, error) {
+	user.managementCreateLock.Lock()
+	defer user.managementCreateLock.Unlock()
+	if user.ManagementRoom != "" {
+		return user.ManagementRoom, nil
+	}
+	netName := user.Bridge.Network.GetName()
+	var err error
+	autoJoin := user.Bridge.Matrix.GetCapabilities().AutoJoinInvites
+	doublePuppet := user.DoublePuppet(ctx)
+	req := &mautrix.ReqCreateRoom{
+		Visibility: "private",
+		Name:       netName.DisplayName,
+		Topic:      fmt.Sprintf("%s bridge management room", netName.DisplayName),
+		InitialState: []*event.Event{{
+			Type: event.StateRoomAvatar,
+			Content: event.Content{
+				Parsed: &event.RoomAvatarEventContent{
+					URL: netName.NetworkIcon,
+				},
+			},
+		}},
+		PowerLevelOverride: &event.PowerLevelsEventContent{
+			Users: map[id.UserID]int{
+				user.Bridge.Bot.GetMXID(): 9001,
+				user.MXID:                 50,
+			},
+		},
+		Invite:   []id.UserID{user.MXID},
+		IsDirect: true,
+	}
+	if autoJoin {
+		req.BeeperInitialMembers = []id.UserID{user.MXID}
+		// TODO remove this after initial_members is supported in hungryserv
+		req.BeeperAutoJoinInvites = true
+	}
+	user.ManagementRoom, err = user.Bridge.Bot.CreateRoom(ctx, req)
+	if err != nil {
+		return "", fmt.Errorf("failed to create management room: %w", err)
+	}
+	if !autoJoin && doublePuppet != nil {
+		err = doublePuppet.EnsureJoined(ctx, user.ManagementRoom)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to auto-join created management room with double puppet")
+		}
+	}
+	err = user.Save(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to save management room ID: %w", err)
+	}
+	return user.ManagementRoom, nil
 }
 
 func (user *User) Save(ctx context.Context) error {
