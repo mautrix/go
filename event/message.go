@@ -214,7 +214,7 @@ type Mentions struct {
 }
 
 func (m *Mentions) Add(userID id.UserID) {
-	if !slices.Contains(m.UserIDs, userID) {
+	if userID != "" && !slices.Contains(m.UserIDs, userID) {
 		m.UserIDs = append(m.UserIDs, userID)
 	}
 }
