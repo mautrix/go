@@ -1,4 +1,4 @@
--- v0 -> v10 (compatible with v9+): Latest revision
+-- v0 -> v11 (compatible with v9+): Latest revision
 CREATE TABLE "user" (
 	bridge_id       TEXT NOT NULL,
 	mxid            TEXT NOT NULL,
@@ -113,6 +113,7 @@ CREATE TABLE message (
 		ON DELETE CASCADE ON UPDATE CASCADE,
 	CONSTRAINT message_real_pkey UNIQUE (bridge_id, room_receiver, id, part_id)
 );
+CREATE INDEX message_room_idx ON message (bridge_id, room_id, room_receiver);
 
 CREATE TABLE disappearing_message (
 	bridge_id    TEXT   NOT NULL,
@@ -150,6 +151,7 @@ CREATE TABLE reaction (
 		REFERENCES ghost (bridge_id, id)
 		ON DELETE CASCADE ON UPDATE CASCADE
 );
+CREATE INDEX reaction_room_idx ON reaction (bridge_id, room_id, room_receiver);
 
 CREATE TABLE user_portal (
 	bridge_id       TEXT    NOT NULL,
@@ -169,3 +171,5 @@ CREATE TABLE user_portal (
 		REFERENCES portal (bridge_id, id, receiver)
 		ON DELETE CASCADE ON UPDATE CASCADE
 );
+CREATE INDEX user_portal_login_idx ON user_portal (bridge_id, login_id);
+CREATE INDEX user_portal_portal_idx ON user_portal (bridge_id, portal_id, portal_receiver);
