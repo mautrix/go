@@ -80,7 +80,7 @@ func fnSetRelay(ce *Event) {
 	} else {
 		ce.Reply(
 			"Messages sent by users who haven't logged in will now be relayed through %s ([%s](%s)'s login)",
-			relay.Metadata.RemoteName,
+			relay.RemoteName,
 			relay.UserMXID,
 			// TODO this will need to stop linkifying if we ever allow UserLogins that aren't bound to a real user.
 			relay.UserMXID.URI().MatrixToURL(),

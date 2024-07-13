@@ -29,10 +29,6 @@ type User struct {
 	AccessToken    string
 }
 
-func newUser(_ *dbutil.QueryHelper[*User]) *User {
-	return &User{}
-}
-
 const (
 	getUserBaseQuery = `
 		SELECT bridge_id, mxid, management_room, access_token FROM "user"

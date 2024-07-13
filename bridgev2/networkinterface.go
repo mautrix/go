@@ -16,7 +16,6 @@ import (
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/configupgrade"
 	"go.mau.fi/util/ptr"
-	"golang.org/x/exp/maps"
 
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
@@ -30,7 +29,7 @@ type ConvertedMessagePart struct {
 	Type       event.Type
 	Content    *event.MessageEventContent
 	Extra      map[string]any
-	DBMetadata map[string]any
+	DBMetadata any
 }
 
 func (cmp *ConvertedMessagePart) ToEditPart(part *database.Message) *ConvertedEditPart {
@@ -38,7 +37,12 @@ func (cmp *ConvertedMessagePart) ToEditPart(part *database.Message) *ConvertedEd
 		return nil
 	}
 	if cmp.DBMetadata != nil {
-		maps.Copy(part.Metadata.Extra, cmp.DBMetadata)
+		merger, ok := part.Metadata.(database.MetaMerger)
+		if ok {
+			merger.CopyFrom(cmp.DBMetadata)
+		} else {
+			part.Metadata = cmp.DBMetadata
+		}
 	}
 	return &ConvertedEditPart{
 		Part:    part,
@@ -167,6 +171,10 @@ type NetworkConnector interface {
 	// The output can still be adjusted based on config variables, but the function must have
 	// default values when called without a config.
 	GetName() BridgeName
+	// GetDBMetaTypes returns struct types that are used to store connector-specific metadata in various tables.
+	// All fields are optional. If a field isn't provided, then the corresponding table will have no custom metadata.
+	// This will be called before Init, it should have a hardcoded response.
+	GetDBMetaTypes() database.MetaTypes
 	// GetCapabilities returns the general capabilities of the network connector.
 	// Note that most capabilities are scoped to rooms and are returned by [NetworkAPI.GetCapabilities] instead.
 	GetCapabilities() *NetworkGeneralCapabilities
@@ -720,7 +728,7 @@ type RemoteReactionWithExtraContent interface {
 
 type RemoteReactionWithMeta interface {
 	RemoteReaction
-	GetReactionDBMetadata() map[string]any
+	GetReactionDBMetadata() any
 }
 
 type RemoteReactionRemove interface {
@@ -780,7 +788,7 @@ type SimpleRemoteEvent[T any] struct {
 	TargetMessage  networkid.MessageID
 	EmojiID        networkid.EmojiID
 	Emoji          string
-	ReactionDBMeta map[string]any
+	ReactionDBMeta any
 	Timestamp      time.Time
 	ChatInfoChange *ChatInfoChange
 
@@ -842,7 +850,7 @@ func (sre *SimpleRemoteEvent[T]) GetRemovedEmojiID() networkid.EmojiID {
 	return sre.EmojiID
 }
 
-func (sre *SimpleRemoteEvent[T]) GetReactionDBMetadata() map[string]any {
+func (sre *SimpleRemoteEvent[T]) GetReactionDBMetadata() any {
 	return sre.ReactionDBMeta
 }
 

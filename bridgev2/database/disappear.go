@@ -46,10 +46,6 @@ type DisappearingMessage struct {
 	DisappearingSetting
 }
 
-func newDisappearingMessage(_ *dbutil.QueryHelper[*DisappearingMessage]) *DisappearingMessage {
-	return &DisappearingMessage{}
-}
-
 const (
 	upsertDisappearingMessageQuery = `
 		INSERT INTO disappearing_message (bridge_id, mx_room, mxid, type, timer, disappear_at)

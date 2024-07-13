@@ -175,7 +175,7 @@ func (user *User) GetFormattedUserLogins() string {
 	user.Bridge.cacheLock.Lock()
 	logins := make([]string, len(user.logins))
 	for key, val := range user.logins {
-		logins = append(logins, fmt.Sprintf("* `%s` (%s)", key, val.Metadata.RemoteName))
+		logins = append(logins, fmt.Sprintf("* `%s` (%s)", key, val.RemoteName))
 	}
 	user.Bridge.cacheLock.Unlock()
 	return strings.Join(logins, "\n")

@@ -9,7 +9,6 @@ package bridgev2
 import (
 	"context"
 	"fmt"
-	"maps"
 	"sync"
 	"time"
 
@@ -188,8 +187,12 @@ func (user *User) NewLogin(ctx context.Context, data *database.UserLogin, params
 			return nil, fmt.Errorf("login already exists")
 		}
 		doInsert = false
-		ul.Metadata.RemoteName = data.Metadata.RemoteName
-		maps.Copy(ul.Metadata.Extra, data.Metadata.Extra)
+		ul.RemoteName = data.RemoteName
+		if merger, ok := ul.Metadata.(database.MetaMerger); ok {
+			merger.CopyFrom(data.Metadata)
+		} else {
+			ul.Metadata = data.Metadata
+		}
 	} else {
 		doInsert = true
 		ul = &UserLogin{
@@ -291,7 +294,7 @@ func (ul *UserLogin) GetRemoteID() string {
 }
 
 func (ul *UserLogin) GetRemoteName() string {
-	return ul.Metadata.RemoteName
+	return ul.RemoteName
 }
 
 func (ul *UserLogin) Disconnect(done func()) {

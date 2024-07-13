@@ -60,7 +60,7 @@ func NewBridge(
 ) *Bridge {
 	br := &Bridge{
 		ID:  bridgeID,
-		DB:  database.New(bridgeID, db),
+		DB:  database.New(bridgeID, network.GetDBMetaTypes(), db),
 		Log: log,
 
 		Matrix:  matrix,

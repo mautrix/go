@@ -18,24 +18,8 @@ import (
 
 type ReactionQuery struct {
 	BridgeID networkid.BridgeID
+	MetaType MetaTypeCreator
 	*dbutil.QueryHelper[*Reaction]
-}
-
-type StandardReactionMetadata struct {
-	Emoji string `json:"emoji,omitempty"`
-}
-
-type ReactionMetadata struct {
-	StandardReactionMetadata
-	Extra map[string]any
-}
-
-func (rm *ReactionMetadata) UnmarshalJSON(data []byte) error {
-	return unmarshalMerge(data, &rm.StandardReactionMetadata, &rm.Extra)
-}
-
-func (rm *ReactionMetadata) MarshalJSON() ([]byte, error) {
-	return marshalMerge(&rm.StandardReactionMetadata, rm.Extra)
 }
 
 type Reaction struct {
@@ -48,16 +32,13 @@ type Reaction struct {
 	MXID          id.EventID
 
 	Timestamp time.Time
-	Metadata  ReactionMetadata
-}
-
-func newReaction(_ *dbutil.QueryHelper[*Reaction]) *Reaction {
-	return &Reaction{}
+	Emoji     string
+	Metadata  any
 }
 
 const (
 	getReactionBaseQuery = `
-		SELECT bridge_id, message_id, message_part_id, sender_id, emoji_id, room_id, room_receiver, mxid, timestamp, metadata FROM reaction
+		SELECT bridge_id, message_id, message_part_id, sender_id, emoji_id, emoji, room_id, room_receiver, mxid, timestamp, metadata FROM reaction
 	`
 	getReactionByIDQuery                   = getReactionBaseQuery + `WHERE bridge_id=$1 AND message_id=$2 AND message_part_id=$3 AND sender_id=$4 AND emoji_id=$5`
 	getReactionByIDWithoutMessagePartQuery = getReactionBaseQuery + `WHERE bridge_id=$1 AND message_id=$2 AND sender_id=$3 AND emoji_id=$4 ORDER BY message_part_id ASC LIMIT 1`
@@ -65,10 +46,10 @@ const (
 	getAllReactionsToMessageQuery          = getReactionBaseQuery + `WHERE bridge_id=$1 AND message_id=$2`
 	getReactionByMXIDQuery                 = getReactionBaseQuery + `WHERE bridge_id=$1 AND mxid=$2`
 	upsertReactionQuery                    = `
-		INSERT INTO reaction (bridge_id, message_id, message_part_id, sender_id, emoji_id, room_id, room_receiver, mxid, timestamp, metadata)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		INSERT INTO reaction (bridge_id, message_id, message_part_id, sender_id, emoji_id, emoji, room_id, room_receiver, mxid, timestamp, metadata)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		ON CONFLICT (bridge_id, room_receiver, message_id, message_part_id, sender_id, emoji_id)
-		DO UPDATE SET mxid=excluded.mxid, timestamp=excluded.timestamp, metadata=excluded.metadata
+		DO UPDATE SET mxid=excluded.mxid, timestamp=excluded.timestamp, emoji=excluded.emoji, metadata=excluded.metadata
 	`
 	deleteReactionQuery = `
 		DELETE FROM reaction WHERE bridge_id=$1 AND message_id=$2 AND message_part_id=$3 AND sender_id=$4 AND emoji_id=$5
@@ -97,7 +78,7 @@ func (rq *ReactionQuery) GetByMXID(ctx context.Context, mxid id.EventID) (*React
 
 func (rq *ReactionQuery) Upsert(ctx context.Context, reaction *Reaction) error {
 	ensureBridgeIDMatches(&reaction.BridgeID, rq.BridgeID)
-	return rq.Exec(ctx, upsertReactionQuery, reaction.sqlVariables()...)
+	return rq.Exec(ctx, upsertReactionQuery, reaction.ensureHasMetadata(rq.MetaType).sqlVariables()...)
 }
 
 func (rq *ReactionQuery) Delete(ctx context.Context, reaction *Reaction) error {
@@ -108,25 +89,26 @@ func (rq *ReactionQuery) Delete(ctx context.Context, reaction *Reaction) error {
 func (r *Reaction) Scan(row dbutil.Scannable) (*Reaction, error) {
 	var timestamp int64
 	err := row.Scan(
-		&r.BridgeID, &r.MessageID, &r.MessagePartID, &r.SenderID, &r.EmojiID,
-		&r.Room.ID, &r.Room.Receiver, &r.MXID, &timestamp, dbutil.JSON{Data: &r.Metadata},
+		&r.BridgeID, &r.MessageID, &r.MessagePartID, &r.SenderID, &r.EmojiID, &r.Emoji,
+		&r.Room.ID, &r.Room.Receiver, &r.MXID, &timestamp, dbutil.JSON{Data: r.Metadata},
 	)
 	if err != nil {
 		return nil, err
-	}
-	if r.Metadata.Extra == nil {
-		r.Metadata.Extra = make(map[string]any)
 	}
 	r.Timestamp = time.Unix(0, timestamp)
 	return r, nil
 }
 
-func (r *Reaction) sqlVariables() []any {
-	if r.Metadata.Extra == nil {
-		r.Metadata.Extra = make(map[string]any)
+func (r *Reaction) ensureHasMetadata(metaType MetaTypeCreator) *Reaction {
+	if r.Metadata == nil {
+		r.Metadata = metaType()
 	}
+	return r
+}
+
+func (r *Reaction) sqlVariables() []any {
 	return []any{
-		r.BridgeID, r.MessageID, r.MessagePartID, r.SenderID, r.EmojiID,
-		r.Room.ID, r.Room.Receiver, r.MXID, r.Timestamp.UnixNano(), dbutil.JSON{Data: &r.Metadata},
+		r.BridgeID, r.MessageID, r.MessagePartID, r.SenderID, r.EmojiID, r.Emoji,
+		r.Room.ID, r.Room.Receiver, r.MXID, r.Timestamp.UnixNano(), dbutil.JSON{Data: r.Metadata},
 	}
 }

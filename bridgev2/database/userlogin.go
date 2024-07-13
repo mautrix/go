@@ -18,56 +18,37 @@ import (
 
 type UserLoginQuery struct {
 	BridgeID networkid.BridgeID
+	MetaType MetaTypeCreator
 	*dbutil.QueryHelper[*UserLogin]
 }
 
-type StandardUserLoginMetadata struct {
-	RemoteName string `json:"remote_name,omitempty"`
-}
-
-type UserLoginMetadata struct {
-	StandardUserLoginMetadata
-	Extra map[string]any
-}
-
-func (ulm *UserLoginMetadata) UnmarshalJSON(data []byte) error {
-	return unmarshalMerge(data, &ulm.StandardUserLoginMetadata, &ulm.Extra)
-}
-
-func (ulm *UserLoginMetadata) MarshalJSON() ([]byte, error) {
-	return marshalMerge(&ulm.StandardUserLoginMetadata, ulm.Extra)
-}
-
 type UserLogin struct {
-	BridgeID  networkid.BridgeID
-	UserMXID  id.UserID
-	ID        networkid.UserLoginID
-	SpaceRoom id.RoomID
-	Metadata  UserLoginMetadata
-}
-
-func newUserLogin(_ *dbutil.QueryHelper[*UserLogin]) *UserLogin {
-	return &UserLogin{}
+	BridgeID   networkid.BridgeID
+	UserMXID   id.UserID
+	ID         networkid.UserLoginID
+	RemoteName string
+	SpaceRoom  id.RoomID
+	Metadata   any
 }
 
 const (
 	getUserLoginBaseQuery = `
-		SELECT bridge_id, user_mxid, id, space_room, metadata FROM user_login
+		SELECT bridge_id, user_mxid, id, remote_name, space_room, metadata FROM user_login
 	`
 	getLoginByIDQuery          = getUserLoginBaseQuery + `WHERE bridge_id=$1 AND id=$2`
 	getAllUsersWithLoginsQuery = `SELECT DISTINCT user_mxid FROM user_login WHERE bridge_id=$1`
 	getAllLoginsForUserQuery   = getUserLoginBaseQuery + `WHERE bridge_id=$1 AND user_mxid=$2`
 	getAllLoginsInPortalQuery  = `
-		SELECT ul.bridge_id, ul.user_mxid, ul.id, ul.space_room, ul.metadata FROM user_portal
+		SELECT ul.bridge_id, ul.user_mxid, ul.id, ul.remote_name, ul.space_room, ul.metadata FROM user_portal
 		LEFT JOIN user_login ul ON user_portal.bridge_id=ul.bridge_id AND user_portal.user_mxid=ul.user_mxid AND user_portal.login_id=ul.id
 		WHERE user_portal.bridge_id=$1 AND user_portal.portal_id=$2 AND user_portal.portal_receiver=$3
 	`
 	insertUserLoginQuery = `
-		INSERT INTO user_login (bridge_id, user_mxid, id, space_room, metadata)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO user_login (bridge_id, user_mxid, id, remote_name, space_room, metadata)
+		VALUES ($1, $2, $3, $4, $5, $6)
 	`
 	updateUserLoginQuery = `
-		UPDATE user_login SET space_room=$4, metadata=$5
+		UPDATE user_login SET remote_name=$4, space_room=$5, metadata=$6
 		WHERE bridge_id=$1 AND user_mxid=$2 AND id=$3
 	`
 	deleteUserLoginQuery = `
@@ -94,12 +75,12 @@ func (uq *UserLoginQuery) GetAllForUser(ctx context.Context, userID id.UserID) (
 
 func (uq *UserLoginQuery) Insert(ctx context.Context, login *UserLogin) error {
 	ensureBridgeIDMatches(&login.BridgeID, uq.BridgeID)
-	return uq.Exec(ctx, insertUserLoginQuery, login.sqlVariables()...)
+	return uq.Exec(ctx, insertUserLoginQuery, login.ensureHasMetadata(uq.MetaType).sqlVariables()...)
 }
 
 func (uq *UserLoginQuery) Update(ctx context.Context, login *UserLogin) error {
 	ensureBridgeIDMatches(&login.BridgeID, uq.BridgeID)
-	return uq.Exec(ctx, updateUserLoginQuery, login.sqlVariables()...)
+	return uq.Exec(ctx, updateUserLoginQuery, login.ensureHasMetadata(uq.MetaType).sqlVariables()...)
 }
 
 func (uq *UserLoginQuery) Delete(ctx context.Context, loginID networkid.UserLoginID) error {
@@ -108,20 +89,21 @@ func (uq *UserLoginQuery) Delete(ctx context.Context, loginID networkid.UserLogi
 
 func (u *UserLogin) Scan(row dbutil.Scannable) (*UserLogin, error) {
 	var spaceRoom sql.NullString
-	err := row.Scan(&u.BridgeID, &u.UserMXID, &u.ID, &spaceRoom, dbutil.JSON{Data: &u.Metadata})
+	err := row.Scan(&u.BridgeID, &u.UserMXID, &u.ID, &u.RemoteName, &spaceRoom, dbutil.JSON{Data: u.Metadata})
 	if err != nil {
 		return nil, err
-	}
-	if u.Metadata.Extra == nil {
-		u.Metadata.Extra = make(map[string]any)
 	}
 	u.SpaceRoom = id.RoomID(spaceRoom.String)
 	return u, nil
 }
 
-func (u *UserLogin) sqlVariables() []any {
-	if u.Metadata.Extra == nil {
-		u.Metadata.Extra = make(map[string]any)
+func (u *UserLogin) ensureHasMetadata(metaType MetaTypeCreator) *UserLogin {
+	if u.Metadata == nil {
+		u.Metadata = metaType()
 	}
-	return []any{u.BridgeID, u.UserMXID, u.ID, dbutil.StrPtr(u.SpaceRoom), dbutil.JSON{Data: &u.Metadata}}
+	return u
+}
+
+func (u *UserLogin) sqlVariables() []any {
+	return []any{u.BridgeID, u.UserMXID, u.ID, u.RemoteName, dbutil.StrPtr(u.SpaceRoom), dbutil.JSON{Data: u.Metadata}}
 }

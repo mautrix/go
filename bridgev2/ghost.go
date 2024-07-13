@@ -14,7 +14,6 @@ import (
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/exmime"
-	"golang.org/x/exp/constraints"
 	"golang.org/x/exp/slices"
 
 	"maunium.net/go/mautrix/bridgev2/database"
@@ -169,31 +168,31 @@ func (ghost *Ghost) UpdateContactInfo(ctx context.Context, identifiers []string,
 	if identifiers != nil {
 		slices.Sort(identifiers)
 	}
-	if ghost.Metadata.ContactInfoSet &&
-		(identifiers == nil || slices.Equal(identifiers, ghost.Metadata.Identifiers)) &&
-		(isBot == nil || *isBot == ghost.Metadata.IsBot) {
+	if ghost.ContactInfoSet &&
+		(identifiers == nil || slices.Equal(identifiers, ghost.Identifiers)) &&
+		(isBot == nil || *isBot == ghost.IsBot) {
 		return false
 	}
 	if identifiers != nil {
-		ghost.Metadata.Identifiers = identifiers
+		ghost.Identifiers = identifiers
 	}
 	if isBot != nil {
-		ghost.Metadata.IsBot = *isBot
+		ghost.IsBot = *isBot
 	}
 	bridgeName := ghost.Bridge.Network.GetName()
 	meta := &event.BeeperProfileExtra{
 		RemoteID:     string(ghost.ID),
-		Identifiers:  ghost.Metadata.Identifiers,
+		Identifiers:  ghost.Identifiers,
 		Service:      bridgeName.BeeperBridgeType,
 		Network:      bridgeName.NetworkID,
 		IsBridgeBot:  false,
-		IsNetworkBot: ghost.Metadata.IsBot,
+		IsNetworkBot: ghost.IsBot,
 	}
 	err := ghost.Intent.SetExtraProfileMeta(ctx, meta)
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to set extra profile metadata")
 	} else {
-		ghost.Metadata.ContactInfoSet = true
+		ghost.ContactInfoSet = true
 	}
 	return true
 }
@@ -219,45 +218,6 @@ func (ghost *Ghost) UpdateInfoIfNecessary(ctx context.Context, source *UserLogin
 		zerolog.Ctx(ctx).Err(err).Str("ghost_id", string(ghost.ID)).Msg("Failed to get info to update ghost")
 	} else if info != nil {
 		ghost.UpdateInfo(ctx, info)
-	}
-}
-
-func MergeExtraUpdaters[T any](funcs ...func(context.Context, T) bool) func(context.Context, T) bool {
-	return func(ctx context.Context, obj T) bool {
-		update := false
-		for _, f := range funcs {
-			update = f(ctx, obj) || update
-		}
-		return update
-	}
-}
-
-func NumberMetadataUpdater[T *Ghost | *Portal, MetaType constraints.Integer | constraints.Float](key string, value MetaType) func(context.Context, T) bool {
-	return simpleMetadataUpdater[T, MetaType](key, value, database.GetNumberFromMap[MetaType])
-}
-
-func SimpleMetadataUpdater[T *Ghost | *Portal, MetaType comparable](key string, value MetaType) func(context.Context, T) bool {
-	return simpleMetadataUpdater[T, MetaType](key, value, func(m map[string]any, key string) (MetaType, bool) {
-		val, ok := m[key].(MetaType)
-		return val, ok
-	})
-}
-
-func simpleMetadataUpdater[T *Ghost | *Portal, MetaType comparable](key string, value MetaType, getter func(map[string]any, string) (MetaType, bool)) func(context.Context, T) bool {
-	return func(ctx context.Context, obj T) bool {
-		var meta map[string]any
-		switch typedObj := any(obj).(type) {
-		case *Ghost:
-			meta = typedObj.Metadata.Extra
-		case *Portal:
-			meta = typedObj.Metadata.Extra
-		}
-		currentVal, ok := getter(meta, key)
-		if ok && currentVal == value {
-			return false
-		}
-		meta[key] = value
-		return true
 	}
 }
 

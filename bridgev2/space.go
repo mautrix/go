@@ -145,8 +145,8 @@ func (ul *UserLogin) GetSpaceRoom(ctx context.Context) (id.RoomID, error) {
 	doublePuppet := ul.User.DoublePuppet(ctx)
 	req := &mautrix.ReqCreateRoom{
 		Visibility: "private",
-		Name:       fmt.Sprintf("%s (%s)", netName.DisplayName, ul.Metadata.RemoteName),
-		Topic:      fmt.Sprintf("Your %s bridged chats - %s", netName.DisplayName, ul.Metadata.RemoteName),
+		Name:       fmt.Sprintf("%s (%s)", netName.DisplayName, ul.RemoteName),
+		Topic:      fmt.Sprintf("Your %s bridged chats - %s", netName.DisplayName, ul.RemoteName),
 		InitialState: []*event.Event{{
 			Type: event.StateRoomAvatar,
 			Content: event.Content{

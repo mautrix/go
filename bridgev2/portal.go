@@ -667,7 +667,9 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 			message.ThreadRoot = threadRoot.ThreadRoot
 		}
 	}
-	message.Metadata.SenderMXID = evt.Sender
+	if message.SenderMXID == "" {
+		message.SenderMXID = evt.Sender
+	}
 	// Hack to ensure the ghost row exists
 	// TODO move to better place (like login)
 	portal.Bridge.GetGhostByID(ctx, message.SenderID)
@@ -675,14 +677,14 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 	if err != nil {
 		log.Err(err).Msg("Failed to save message to database")
 	}
-	if portal.Metadata.DisappearType != database.DisappearingTypeNone {
+	if portal.Disappear.Type != database.DisappearingTypeNone {
 		go portal.Bridge.DisappearLoop.Add(ctx, &database.DisappearingMessage{
 			RoomID:  portal.MXID,
 			EventID: message.MXID,
 			DisappearingSetting: database.DisappearingSetting{
-				Type:        portal.Metadata.DisappearType,
-				Timer:       portal.Metadata.DisappearTimer,
-				DisappearAt: message.Timestamp.Add(portal.Metadata.DisappearTimer),
+				Type:        portal.Disappear.Type,
+				Timer:       portal.Disappear.Timer,
+				DisappearAt: message.Timestamp.Add(portal.Disappear.Timer),
 			},
 		})
 	}
@@ -732,7 +734,7 @@ func (portal *Portal) handleMatrixEdit(ctx context.Context, sender *UserLogin, o
 	} else if caps.EditMaxAge > 0 && time.Since(editTarget.Timestamp) > caps.EditMaxAge {
 		portal.sendErrorStatus(ctx, evt, ErrEditTargetTooOld)
 		return
-	} else if caps.EditMaxCount > 0 && editTarget.Metadata.EditCount >= caps.EditMaxCount {
+	} else if caps.EditMaxCount > 0 && editTarget.EditCount >= caps.EditMaxCount {
 		portal.sendErrorStatus(ctx, evt, ErrEditTargetTooManyEdits)
 		return
 	}
@@ -809,7 +811,7 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 		log.Err(err).Msg("Failed to check if reaction is a duplicate")
 		return
 	} else if existing != nil {
-		if existing.EmojiID != "" || existing.Metadata.Emoji == preResp.Emoji {
+		if existing.EmojiID != "" || existing.Emoji == preResp.Emoji {
 			log.Debug().Msg("Ignoring duplicate reaction")
 			portal.sendSuccessStatus(ctx, evt)
 			return
@@ -876,8 +878,8 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 		dbReaction.Timestamp = time.UnixMilli(evt.Timestamp)
 	}
 	if preResp.EmojiID == "" && dbReaction.EmojiID == "" {
-		if dbReaction.Metadata.Emoji == "" {
-			dbReaction.Metadata.Emoji = preResp.Emoji
+		if dbReaction.Emoji == "" {
+			dbReaction.Emoji = preResp.Emoji
 		}
 	} else if dbReaction.EmojiID == "" {
 		dbReaction.EmojiID = preResp.EmojiID
@@ -1212,7 +1214,7 @@ func (portal *Portal) applyRelationMeta(content *event.MessageEventContent, repl
 		if content.Mentions == nil {
 			content.Mentions = &event.Mentions{}
 		}
-		content.Mentions.Add(replyTo.Metadata.SenderMXID)
+		content.Mentions.Add(replyTo.SenderMXID)
 	}
 }
 
@@ -1245,12 +1247,12 @@ func (portal *Portal) sendConvertedMessage(ctx context.Context, id networkid.Mes
 			MXID:       resp.EventID,
 			Room:       portal.PortalKey,
 			SenderID:   sender.Sender,
+			SenderMXID: intent.GetMXID(),
 			Timestamp:  ts,
 			ThreadRoot: ptr.Val(converted.ThreadRoot),
 			ReplyTo:    ptr.Val(converted.ReplyTo),
+			Metadata:   part.DBMetadata,
 		}
-		dbMessage.Metadata.SenderMXID = intent.GetMXID()
-		dbMessage.Metadata.Extra = part.DBMetadata
 		err = portal.Bridge.DB.Message.Insert(ctx, dbMessage)
 		if err != nil {
 			log.Err(err).Str("part_id", string(part.ID)).Msg("Failed to save message part to database")
@@ -1419,7 +1421,7 @@ func (portal *Portal) handleRemoteReaction(ctx context.Context, source *UserLogi
 	if err != nil {
 		log.Err(err).Msg("Failed to check if reaction is a duplicate")
 		return
-	} else if existingReaction != nil && (emojiID != "" || existingReaction.Metadata.Emoji == emoji) {
+	} else if existingReaction != nil && (emojiID != "" || existingReaction.Emoji == emoji) {
 		log.Debug().Msg("Ignoring duplicate reaction")
 		return
 	}
@@ -1456,10 +1458,10 @@ func (portal *Portal) handleRemoteReaction(ctx context.Context, source *UserLogi
 		Timestamp:     ts,
 	}
 	if metaProvider, ok := evt.(RemoteReactionWithMeta); ok {
-		dbReaction.Metadata.Extra = metaProvider.GetReactionDBMetadata()
+		dbReaction.Metadata = metaProvider.GetReactionDBMetadata()
 	}
 	if emojiID == "" {
-		dbReaction.Metadata.Emoji = emoji
+		dbReaction.Emoji = emoji
 	}
 	err = portal.Bridge.DB.Reaction.Upsert(ctx, dbReaction)
 	if err != nil {
@@ -1771,10 +1773,9 @@ type ChatInfo struct {
 	Members  *ChatMemberList
 	JoinRule *event.JoinRulesEventContent
 
-	IsDirectChat *bool
-	IsSpace      *bool
-	Disappear    *database.DisappearingSetting
-	ParentID     *networkid.PortalID
+	Type      *database.RoomType
+	Disappear *database.DisappearingSetting
+	ParentID  *networkid.PortalID
 
 	UserLocal *UserLocalPortalInfo
 
@@ -1835,7 +1836,7 @@ func (portal *Portal) UpdateAvatar(ctx context.Context, avatar *Avatar, sender M
 
 func (portal *Portal) GetTopLevelParent() *Portal {
 	if portal.Parent == nil {
-		if !portal.Metadata.IsSpace {
+		if portal.RoomType != database.RoomTypeSpace {
 			return nil
 		}
 		return portal
@@ -1854,12 +1855,7 @@ func (portal *Portal) getBridgeInfo() (string, event.BridgeEventContent) {
 			AvatarURL:   portal.AvatarMXC,
 			// TODO external URL?
 		},
-	}
-	if portal.Metadata.IsDirect {
-		// TODO group dm type?
-		bridgeInfo.BeeperRoomType = "dm"
-	} else if portal.Metadata.IsSpace {
-		bridgeInfo.BeeperRoomType = "space"
+		BeeperRoomType: string(portal.RoomType),
 	}
 	parent := portal.GetTopLevelParent()
 	if parent != nil {
@@ -2131,11 +2127,11 @@ func (portal *Portal) UpdateDisappearingSetting(ctx context.Context, setting dat
 	if setting.Timer == 0 {
 		setting.Type = ""
 	}
-	if portal.Metadata.DisappearTimer == setting.Timer && portal.Metadata.DisappearType == setting.Type {
+	if portal.Disappear.Timer == setting.Timer && portal.Disappear.Type == setting.Type {
 		return false
 	}
-	portal.Metadata.DisappearType = setting.Type
-	portal.Metadata.DisappearTimer = setting.Timer
+	portal.Disappear.Type = setting.Type
+	portal.Disappear.Timer = setting.Timer
 	if save {
 		err := portal.Save(ctx)
 		if err != nil {
@@ -2161,7 +2157,7 @@ func (portal *Portal) UpdateDisappearingSetting(ctx context.Context, setting dat
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to send disappearing messages notice")
 	} else {
 		zerolog.Ctx(ctx).Debug().
-			Dur("new_timer", portal.Metadata.DisappearTimer).
+			Dur("new_timer", portal.Disappear.Timer).
 			Bool("implicit", implicit).
 			Msg("Sent disappearing messages notice")
 	}
@@ -2230,9 +2226,16 @@ func (portal *Portal) UpdateInfo(ctx context.Context, info *ChatInfo, source *Us
 		}
 		// TODO detect changes to functional members list?
 	}
-	if info.IsDirectChat != nil && portal.Metadata.IsDirect != *info.IsDirectChat {
-		changed = true
-		portal.Metadata.IsDirect = *info.IsDirectChat
+	if info.Type != nil && portal.RoomType != *info.Type {
+		if portal.MXID != "" && (*info.Type == database.RoomTypeSpace || portal.RoomType == database.RoomTypeSpace) {
+			zerolog.Ctx(ctx).Warn().
+				Str("current_type", string(portal.RoomType)).
+				Str("target_type", string(*info.Type)).
+				Msg("Tried to change existing room type from/to space")
+		} else {
+			changed = true
+			portal.RoomType = *info.Type
+		}
 	}
 	if source != nil {
 		source.MarkInPortal(ctx, portal)
@@ -2296,7 +2299,7 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 		CreationContent:    make(map[string]any),
 		InitialState:       make([]*event.Event, 0, 6),
 		Preset:             "private_chat",
-		IsDirect:           portal.Metadata.IsDirect,
+		IsDirect:           portal.RoomType == database.RoomTypeDM,
 		PowerLevelOverride: powerLevels,
 		BeeperLocalRoomID:  id.RoomID(fmt.Sprintf("!%s:%s", portal.ID, portal.Bridge.Matrix.ServerName())),
 	}
@@ -2307,9 +2310,8 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 		req.BeeperAutoJoinInvites = true
 		req.Invite = initialMembers
 	}
-	if info.IsSpace != nil && *info.IsSpace {
+	if portal.RoomType == database.RoomTypeSpace {
 		req.CreationContent["type"] = event.RoomTypeSpace
-		portal.Metadata.IsSpace = true
 	}
 	bridgeInfoStateKey, bridgeInfo := portal.getBridgeInfo()
 

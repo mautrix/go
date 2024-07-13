@@ -32,10 +32,6 @@ type UserPortal struct {
 	LastRead  time.Time
 }
 
-func newUserPortal(_ *dbutil.QueryHelper[*UserPortal]) *UserPortal {
-	return &UserPortal{}
-}
-
 const (
 	getUserPortalBaseQuery = `
 		SELECT bridge_id, user_mxid, login_id, portal_id, portal_receiver, in_space, preferred, last_read

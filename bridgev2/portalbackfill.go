@@ -139,15 +139,11 @@ func (portal *Portal) sendBatch(ctx context.Context, source *UserLogin, messages
 				MXID:       evtID,
 				Room:       portal.PortalKey,
 				SenderID:   msg.Sender.Sender,
+				SenderMXID: intent.GetMXID(),
 				Timestamp:  msg.Timestamp,
 				ThreadRoot: ptr.Val(msg.ThreadRoot),
 				ReplyTo:    ptr.Val(msg.ReplyTo),
-				Metadata: database.MessageMetadata{
-					StandardMessageMetadata: database.StandardMessageMetadata{
-						SenderMXID: intent.GetMXID(),
-					},
-					Extra: part.DBMetadata,
-				},
+				Metadata:   part.DBMetadata,
 			})
 			if prevThreadEvent != nil {
 				prevThreadEvent.MXID = evtID

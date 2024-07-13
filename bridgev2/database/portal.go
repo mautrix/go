@@ -19,29 +19,19 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
+type RoomType string
+
+const (
+	RoomTypeDefault RoomType = ""
+	RoomTypeDM      RoomType = "dm"
+	RoomTypeGroupDM RoomType = "group_dm"
+	RoomTypeSpace   RoomType = "space"
+)
+
 type PortalQuery struct {
 	BridgeID networkid.BridgeID
+	MetaType MetaTypeCreator
 	*dbutil.QueryHelper[*Portal]
-}
-
-type StandardPortalMetadata struct {
-	DisappearType  DisappearingType `json:"disappear_type,omitempty"`
-	DisappearTimer time.Duration    `json:"disappear_timer,omitempty"`
-	IsDirect       bool             `json:"is_direct,omitempty"`
-	IsSpace        bool             `json:"is_space,omitempty"`
-}
-
-type PortalMetadata struct {
-	StandardPortalMetadata
-	Extra map[string]any
-}
-
-func (pm *PortalMetadata) UnmarshalJSON(data []byte) error {
-	return unmarshalMerge(data, &pm.StandardPortalMetadata, &pm.Extra)
-}
-
-func (pm *PortalMetadata) MarshalJSON() ([]byte, error) {
-	return marshalMerge(&pm.StandardPortalMetadata, pm.Extra)
 }
 
 type Portal struct {
@@ -60,11 +50,9 @@ type Portal struct {
 	TopicSet     bool
 	AvatarSet    bool
 	InSpace      bool
-	Metadata     PortalMetadata
-}
-
-func newPortal(_ *dbutil.QueryHelper[*Portal]) *Portal {
-	return &Portal{}
+	RoomType     RoomType
+	Disappear    DisappearingSetting
+	Metadata     any
 }
 
 const (
@@ -72,6 +60,7 @@ const (
 		SELECT bridge_id, id, receiver, mxid, parent_id, relay_login_id,
 		       name, topic, avatar_id, avatar_hash, avatar_mxc,
 		       name_set, topic_set, avatar_set, in_space,
+		       room_type, disappear_type, disappear_timer,
 		       metadata
 		FROM portal
 	`
@@ -88,9 +77,10 @@ const (
 			parent_id, relay_login_id,
 			name, topic, avatar_id, avatar_hash, avatar_mxc,
 			name_set, avatar_set, topic_set, in_space,
+			room_type, disappear_type, disappear_timer,
 			metadata, relay_bridge_id
 		) VALUES (
-			$1, $2, $3, $4, $5, cast($6 AS TEXT), $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
+			$1, $2, $3, $4, $5, cast($6 AS TEXT), $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19,
 			CASE WHEN cast($6 AS TEXT) IS NULL THEN NULL ELSE $1 END
 		)
 	`
@@ -98,7 +88,8 @@ const (
 		UPDATE portal
 		SET mxid=$4, parent_id=$5, relay_login_id=cast($6 AS TEXT), relay_bridge_id=CASE WHEN cast($6 AS TEXT) IS NULL THEN NULL ELSE bridge_id END,
 		    name=$7, topic=$8, avatar_id=$9, avatar_hash=$10, avatar_mxc=$11,
-		    name_set=$12, avatar_set=$13, topic_set=$14, in_space=$15, metadata=$16
+		    name_set=$12, avatar_set=$13, topic_set=$14, in_space=$15,
+		    room_type=$16, disappear_type=$17, disappear_timer=$18, metadata=$19
 		WHERE bridge_id=$1 AND id=$2 AND receiver=$3
 	`
 	deletePortalQuery = `
@@ -138,12 +129,12 @@ func (pq *PortalQuery) ReID(ctx context.Context, oldID, newID networkid.PortalKe
 
 func (pq *PortalQuery) Insert(ctx context.Context, p *Portal) error {
 	ensureBridgeIDMatches(&p.BridgeID, pq.BridgeID)
-	return pq.Exec(ctx, insertPortalQuery, p.sqlVariables()...)
+	return pq.Exec(ctx, insertPortalQuery, p.ensureHasMetadata(pq.MetaType).sqlVariables()...)
 }
 
 func (pq *PortalQuery) Update(ctx context.Context, p *Portal) error {
 	ensureBridgeIDMatches(&p.BridgeID, pq.BridgeID)
-	return pq.Exec(ctx, updatePortalQuery, p.sqlVariables()...)
+	return pq.Exec(ctx, updatePortalQuery, p.ensureHasMetadata(pq.MetaType).sqlVariables()...)
 }
 
 func (pq *PortalQuery) Delete(ctx context.Context, key networkid.PortalKey) error {
@@ -151,24 +142,29 @@ func (pq *PortalQuery) Delete(ctx context.Context, key networkid.PortalKey) erro
 }
 
 func (p *Portal) Scan(row dbutil.Scannable) (*Portal, error) {
-	var mxid, parentID, relayLoginID sql.NullString
+	var mxid, parentID, relayLoginID, disappearType sql.NullString
+	var disappearTimer sql.NullInt64
 	var avatarHash string
 	err := row.Scan(
 		&p.BridgeID, &p.ID, &p.Receiver, &mxid,
 		&parentID, &relayLoginID, &p.Name, &p.Topic, &p.AvatarID, &avatarHash, &p.AvatarMXC,
 		&p.NameSet, &p.TopicSet, &p.AvatarSet, &p.InSpace,
-		dbutil.JSON{Data: &p.Metadata},
+		&p.RoomType, &disappearType, &disappearTimer,
+		dbutil.JSON{Data: p.Metadata},
 	)
 	if err != nil {
 		return nil, err
-	}
-	if p.Metadata.Extra == nil {
-		p.Metadata.Extra = make(map[string]any)
 	}
 	if avatarHash != "" {
 		data, _ := hex.DecodeString(avatarHash)
 		if len(data) == 32 {
 			p.AvatarHash = *(*[32]byte)(data)
+		}
+	}
+	if disappearType.Valid {
+		p.Disappear = DisappearingSetting{
+			Type:  DisappearingType(disappearType.String),
+			Timer: time.Duration(disappearTimer.Int64),
 		}
 	}
 	p.MXID = id.RoomID(mxid.String)
@@ -177,10 +173,14 @@ func (p *Portal) Scan(row dbutil.Scannable) (*Portal, error) {
 	return p, nil
 }
 
-func (p *Portal) sqlVariables() []any {
-	if p.Metadata.Extra == nil {
-		p.Metadata.Extra = make(map[string]any)
+func (p *Portal) ensureHasMetadata(metaType MetaTypeCreator) *Portal {
+	if p.Metadata == nil {
+		p.Metadata = metaType()
 	}
+	return p
+}
+
+func (p *Portal) sqlVariables() []any {
 	var avatarHash string
 	if p.AvatarHash != [32]byte{} {
 		avatarHash = hex.EncodeToString(p.AvatarHash[:])
@@ -190,6 +190,6 @@ func (p *Portal) sqlVariables() []any {
 		dbutil.StrPtr(p.ParentID), dbutil.StrPtr(p.RelayLoginID),
 		p.Name, p.Topic, p.AvatarID, avatarHash, p.AvatarMXC,
 		p.NameSet, p.TopicSet, p.AvatarSet, p.InSpace,
-		dbutil.JSON{Data: &p.Metadata},
+		dbutil.JSON{Data: p.Metadata},
 	}
 }
