@@ -77,8 +77,8 @@ func (store *SQLCryptoStore) PutNextBatch(ctx context.Context, nextBatch string)
 // GetNextBatch retrieves the next sync batch token for the current account.
 func (store *SQLCryptoStore) GetNextBatch(ctx context.Context) (string, error) {
 	if store.SyncToken == "" {
-		err := store.DB.Conn(ctx).
-			QueryRowContext(ctx, "SELECT sync_token FROM crypto_account WHERE account_id=$1", store.AccountID).
+		err := store.DB.
+			QueryRow(ctx, "SELECT sync_token FROM crypto_account WHERE account_id=$1", store.AccountID).
 			Scan(&store.SyncToken)
 		if !errors.Is(err, sql.ErrNoRows) {
 			return "", err

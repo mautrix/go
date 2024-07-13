@@ -8,7 +8,7 @@ import (
 )
 
 func init() {
-	UpgradeTable.Register(-1, 5, 0, "Mark rooms that need crypto state event resynced", true, func(ctx context.Context, db *dbutil.Database) error {
+	UpgradeTable.Register(-1, 5, 0, "Mark rooms that need crypto state event resynced", dbutil.TxnModeOn, func(ctx context.Context, db *dbutil.Database) error {
 		portalExists, err := db.TableExists(ctx, "portal")
 		if err != nil {
 			return fmt.Errorf("failed to check if portal table exists")
