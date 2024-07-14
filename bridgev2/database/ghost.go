@@ -50,7 +50,7 @@ const (
 			bridge_id, id, name, avatar_id, avatar_hash, avatar_mxc,
 			name_set, avatar_set, contact_info_set, is_bot, identifiers, metadata
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 	`
 	updateGhostQuery = `
 		UPDATE ghost SET name=$3, avatar_id=$4, avatar_hash=$5, avatar_mxc=$6,

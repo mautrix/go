@@ -190,6 +190,7 @@ func (p *Portal) sqlVariables() []any {
 		dbutil.StrPtr(p.ParentID), dbutil.StrPtr(p.RelayLoginID),
 		p.Name, p.Topic, p.AvatarID, avatarHash, p.AvatarMXC,
 		p.NameSet, p.TopicSet, p.AvatarSet, p.InSpace,
+		p.RoomType, dbutil.StrPtr(p.Disappear.Type), dbutil.NumPtr(p.Disappear.Timer),
 		dbutil.JSON{Data: p.Metadata},
 	}
 }

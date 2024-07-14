@@ -178,7 +178,7 @@ func (m *Message) ensureHasMetadata(metaType MetaTypeCreator) *Message {
 func (m *Message) sqlVariables() []any {
 	return []any{
 		m.BridgeID, m.ID, m.PartID, m.MXID, m.Room.ID, m.Room.Receiver, m.SenderID, m.SenderMXID,
-		m.EditCount, m.Timestamp.UnixNano(), dbutil.StrPtr(m.ThreadRoot), dbutil.StrPtr(m.ReplyTo.MessageID), m.ReplyTo.PartID,
+		m.Timestamp.UnixNano(), m.EditCount, dbutil.StrPtr(m.ThreadRoot), dbutil.StrPtr(m.ReplyTo.MessageID), m.ReplyTo.PartID,
 		dbutil.JSON{Data: m.Metadata},
 	}
 }
