@@ -416,7 +416,7 @@ func (prov *ProvisioningAPI) doResolveIdentifier(w http.ResponseWriter, r *http.
 	}
 	if resp.Chat != nil {
 		if resp.Chat.Portal == nil {
-			resp.Chat.Portal, err = prov.br.Bridge.GetPortalByID(r.Context(), resp.Chat.PortalID)
+			resp.Chat.Portal, err = prov.br.Bridge.GetPortalByKey(r.Context(), resp.Chat.PortalKey)
 			if err != nil {
 				zerolog.Ctx(r.Context()).Err(err).Msg("Failed to get portal")
 				jsonResponse(w, http.StatusInternalServerError, &mautrix.RespError{
@@ -498,7 +498,7 @@ func (prov *ProvisioningAPI) GetContactList(w http.ResponseWriter, r *http.Reque
 		}
 		if contact.Chat != nil {
 			if contact.Chat.Portal == nil {
-				contact.Chat.Portal, err = prov.br.Bridge.GetPortalByID(r.Context(), contact.Chat.PortalID)
+				contact.Chat.Portal, err = prov.br.Bridge.GetPortalByKey(r.Context(), contact.Chat.PortalKey)
 				if err != nil {
 					zerolog.Ctx(r.Context()).Err(err).Msg("Failed to get portal")
 					jsonResponse(w, http.StatusInternalServerError, &mautrix.RespError{

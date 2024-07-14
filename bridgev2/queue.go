@@ -139,7 +139,7 @@ func (br *Bridge) handleBotInvite(ctx context.Context, evt *event.Event, sender 
 func (br *Bridge) QueueRemoteEvent(login *UserLogin, evt RemoteEvent) {
 	log := login.Log
 	ctx := log.WithContext(context.TODO())
-	portal, err := br.GetPortalByID(ctx, evt.GetPortalKey())
+	portal, err := br.GetPortalByKey(ctx, evt.GetPortalKey())
 	if err != nil {
 		log.Err(err).Object("portal_id", evt.GetPortalKey()).
 			Msg("Failed to get portal to handle remote event")

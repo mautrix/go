@@ -64,7 +64,7 @@ const (
 		       metadata
 		FROM portal
 	`
-	getPortalByIDQuery                      = getPortalBaseQuery + `WHERE bridge_id=$1 AND id=$2 AND receiver=$3`
+	getPortalByKeyQuery                     = getPortalBaseQuery + `WHERE bridge_id=$1 AND id=$2 AND receiver=$3`
 	getPortalByIDWithUncertainReceiverQuery = getPortalBaseQuery + `WHERE bridge_id=$1 AND id=$2 AND (receiver=$3 OR receiver='')`
 	getPortalByMXIDQuery                    = getPortalBaseQuery + `WHERE bridge_id=$1 AND mxid=$2`
 	getChildPortalsQuery                    = getPortalBaseQuery + `WHERE bridge_id=$1 AND parent_id=$2`
@@ -99,8 +99,8 @@ const (
 	reIDPortalQuery = `UPDATE portal SET id=$4, receiver=$5 WHERE bridge_id=$1 AND id=$2 AND receiver=$3`
 )
 
-func (pq *PortalQuery) GetByID(ctx context.Context, key networkid.PortalKey) (*Portal, error) {
-	return pq.QueryOne(ctx, getPortalByIDQuery, pq.BridgeID, key.ID, key.Receiver)
+func (pq *PortalQuery) GetByKey(ctx context.Context, key networkid.PortalKey) (*Portal, error) {
+	return pq.QueryOne(ctx, getPortalByKeyQuery, pq.BridgeID, key.ID, key.Receiver)
 }
 
 func (pq *PortalQuery) FindReceiver(ctx context.Context, id networkid.PortalID, maybeReceiver networkid.UserLoginID) (key networkid.PortalKey, err error) {

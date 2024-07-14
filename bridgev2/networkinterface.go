@@ -504,8 +504,8 @@ type ResolveIdentifierResponse struct {
 }
 
 type CreateChatResponse struct {
-	PortalID networkid.PortalKey
-	// Portal and PortalInfo are not required, the caller will fetch them automatically based on PortalID if necessary.
+	PortalKey networkid.PortalKey
+	// Portal and PortalInfo are not required, the caller will fetch them automatically based on PortalKey if necessary.
 	Portal     *Portal
 	PortalInfo *ChatInfo
 }

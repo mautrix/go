@@ -101,7 +101,7 @@ func fnResolveIdentifier(ce *Event) {
 		}
 		portal := resp.Chat.Portal
 		if portal == nil {
-			portal, err = ce.Bridge.GetPortalByID(ce.Ctx, resp.Chat.PortalID)
+			portal, err = ce.Bridge.GetPortalByKey(ce.Ctx, resp.Chat.PortalKey)
 			if err != nil {
 				ce.Log.Err(err).Msg("Failed to get portal")
 				ce.Reply("Failed to get portal: %v", err)
