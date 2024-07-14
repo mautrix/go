@@ -119,6 +119,23 @@ func (portal *Portal) updateLogger() {
 	portal.Log = logWith.Logger()
 }
 
+func (br *Bridge) loadManyPortals(ctx context.Context, portals []*database.Portal) ([]*Portal, error) {
+	output := make([]*Portal, 0, len(portals))
+	for _, dbPortal := range portals {
+		if cached, ok := br.portalsByKey[dbPortal.PortalKey]; ok {
+			output = append(output, cached)
+		} else {
+			loaded, err := br.loadPortal(ctx, dbPortal, nil, nil)
+			if err != nil {
+				return nil, err
+			} else if loaded != nil {
+				output = append(output, loaded)
+			}
+		}
+	}
+	return output, nil
+}
+
 func (br *Bridge) UnlockedGetPortalByKey(ctx context.Context, key networkid.PortalKey, onlyIfExists bool) (*Portal, error) {
 	cached, ok := br.portalsByKey[key]
 	if ok {
@@ -170,6 +187,16 @@ func (br *Bridge) GetPortalByMXID(ctx context.Context, mxid id.RoomID) (*Portal,
 	}
 	db, err := br.DB.Portal.GetByMXID(ctx, mxid)
 	return br.loadPortal(ctx, db, err, nil)
+}
+
+func (br *Bridge) GetAllPortalsWithMXID(ctx context.Context) ([]*Portal, error) {
+	br.cacheLock.Lock()
+	defer br.cacheLock.Unlock()
+	rows, err := br.DB.Portal.GetAllWithMXID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return br.loadManyPortals(ctx, rows)
 }
 
 func (br *Bridge) GetPortalByKey(ctx context.Context, key networkid.PortalKey) (*Portal, error) {
