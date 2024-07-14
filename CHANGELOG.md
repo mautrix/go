@@ -1,5 +1,6 @@
 ## v0.19.0 (unreleased)
 
+* Renamed `master` branch to `main`.
 * *(bridgev2)* Added more features.
 * *(crypto)* Fixed bug with copying `m.relates_to` from wire content to
   decrypted content.
