@@ -1,10 +1,29 @@
 ## v0.19.0 (unreleased)
 
+* *(bridgev2)* Added more features.
 * *(crypto)* Fixed bug with copying `m.relates_to` from wire content to
   decrypted content.
-* *(bridgev2)* Added more features.
 * *(mediaproxy)* Added module for implementing simple media repos that proxy
   requests elsewhere.
+* *(client)* Changed `Members()` to automatically parse event content for all
+  returned events.
+* *(bridge)* Added `/register` call if `/versions` fails with `M_FORBIDDEN`.
+* *(crypto)* Fixed `DecryptMegolmEvent` sometimes calling database without
+  transaction by using the non-context version of `ResolveTrust`.
+* *(crypto/attachment)* Implemented `io.Seeker` in `EncryptStream` to allow
+  using it in retriable HTTP requests.
+* *(event)* Added helper method to add user ID to a `Mentions` object.
+* *(event)* Fixed default power level for invites
+  (thanks to [@rudis] in [#250]).
+* *(client)* Fixed incorrect warning log in `State()` when state store returns
+  no error (thanks to [@rudis] in [#249]).
+* *(crypto/verificationhelper)* Fixed deadlock when ignoring unknown
+  cancellation events (thanks to [@rudis] in [#247]).
+
+[@rudis]: https://github.com/rudis
+[#250]: https://github.com/mautrix/go/pull/250
+[#249]: https://github.com/mautrix/go/pull/249
+[#247]: https://github.com/mautrix/go/pull/247
 
 ### beta.1 (2024-06-16)
 
