@@ -41,6 +41,7 @@ type Portal struct {
 
 	ParentID     networkid.PortalID
 	RelayLoginID networkid.UserLoginID
+	OtherUserID  networkid.UserID
 	Name         string
 	Topic        string
 	AvatarID     networkid.AvatarID
@@ -57,7 +58,7 @@ type Portal struct {
 
 const (
 	getPortalBaseQuery = `
-		SELECT bridge_id, id, receiver, mxid, parent_id, relay_login_id,
+		SELECT bridge_id, id, receiver, mxid, parent_id, relay_login_id, other_user_id,
 		       name, topic, avatar_id, avatar_hash, avatar_mxc,
 		       name_set, topic_set, avatar_set, in_space,
 		       room_type, disappear_type, disappear_timer,
@@ -75,22 +76,22 @@ const (
 	insertPortalQuery = `
 		INSERT INTO portal (
 			bridge_id, id, receiver, mxid,
-			parent_id, relay_login_id,
+			parent_id, relay_login_id, other_user_id,
 			name, topic, avatar_id, avatar_hash, avatar_mxc,
 			name_set, avatar_set, topic_set, in_space,
 			room_type, disappear_type, disappear_timer,
 			metadata, relay_bridge_id
 		) VALUES (
-			$1, $2, $3, $4, $5, cast($6 AS TEXT), $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19,
+			$1, $2, $3, $4, $5, cast($6 AS TEXT), $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
 			CASE WHEN cast($6 AS TEXT) IS NULL THEN NULL ELSE $1 END
 		)
 	`
 	updatePortalQuery = `
 		UPDATE portal
 		SET mxid=$4, parent_id=$5, relay_login_id=cast($6 AS TEXT), relay_bridge_id=CASE WHEN cast($6 AS TEXT) IS NULL THEN NULL ELSE bridge_id END,
-		    name=$7, topic=$8, avatar_id=$9, avatar_hash=$10, avatar_mxc=$11,
-		    name_set=$12, avatar_set=$13, topic_set=$14, in_space=$15,
-		    room_type=$16, disappear_type=$17, disappear_timer=$18, metadata=$19
+		    other_user_id=$7, name=$8, topic=$9, avatar_id=$10, avatar_hash=$11, avatar_mxc=$12,
+		    name_set=$13, avatar_set=$14, topic_set=$15, in_space=$16,
+		    room_type=$17, disappear_type=$18, disappear_timer=$19, metadata=$20
 		WHERE bridge_id=$1 AND id=$2 AND receiver=$3
 	`
 	deletePortalQuery = `
@@ -147,12 +148,13 @@ func (pq *PortalQuery) Delete(ctx context.Context, key networkid.PortalKey) erro
 }
 
 func (p *Portal) Scan(row dbutil.Scannable) (*Portal, error) {
-	var mxid, parentID, relayLoginID, disappearType sql.NullString
+	var mxid, parentID, relayLoginID, otherUserID, disappearType sql.NullString
 	var disappearTimer sql.NullInt64
 	var avatarHash string
 	err := row.Scan(
 		&p.BridgeID, &p.ID, &p.Receiver, &mxid,
-		&parentID, &relayLoginID, &p.Name, &p.Topic, &p.AvatarID, &avatarHash, &p.AvatarMXC,
+		&parentID, &relayLoginID, &otherUserID,
+		&p.Name, &p.Topic, &p.AvatarID, &avatarHash, &p.AvatarMXC,
 		&p.NameSet, &p.TopicSet, &p.AvatarSet, &p.InSpace,
 		&p.RoomType, &disappearType, &disappearTimer,
 		dbutil.JSON{Data: p.Metadata},
@@ -173,6 +175,7 @@ func (p *Portal) Scan(row dbutil.Scannable) (*Portal, error) {
 		}
 	}
 	p.MXID = id.RoomID(mxid.String)
+	p.OtherUserID = networkid.UserID(otherUserID.String)
 	p.ParentID = networkid.PortalID(parentID.String)
 	p.RelayLoginID = networkid.UserLoginID(relayLoginID.String)
 	return p, nil
@@ -192,7 +195,7 @@ func (p *Portal) sqlVariables() []any {
 	}
 	return []any{
 		p.BridgeID, p.ID, p.Receiver, dbutil.StrPtr(p.MXID),
-		dbutil.StrPtr(p.ParentID), dbutil.StrPtr(p.RelayLoginID),
+		dbutil.StrPtr(p.ParentID), dbutil.StrPtr(p.RelayLoginID), dbutil.StrPtr(p.OtherUserID),
 		p.Name, p.Topic, p.AvatarID, avatarHash, p.AvatarMXC,
 		p.NameSet, p.TopicSet, p.AvatarSet, p.InSpace,
 		p.RoomType, dbutil.StrPtr(p.Disappear.Type), dbutil.NumPtr(p.Disappear.Timer),

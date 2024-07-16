@@ -1734,6 +1734,10 @@ type ChatMemberList struct {
 	// The total number of members in the chat, regardless of how many of those members are included in Members.
 	TotalMemberCount int
 
+	// For DM portals, the ID of the recipient user.
+	// This field is optional and will be automatically filled from Members if there are only 2 entries in the list.
+	OtherUserID networkid.UserID
+
 	Members     []ChatMember
 	PowerLevels *PowerLevelChanges
 }
@@ -1970,7 +1974,32 @@ func (portal *Portal) GetInitialMemberList(ctx context.Context, members *ChatMem
 			pl.EnsureUserLevel(intent.GetMXID(), member.PowerLevel)
 		}
 	}
+	portal.updateOtherUser(ctx, members)
 	return
+}
+
+func (portal *Portal) updateOtherUser(ctx context.Context, members *ChatMemberList) (changed bool) {
+	var expectedUserID networkid.UserID
+	if portal.RoomType != database.RoomTypeDM {
+		// expected user ID is empty
+	} else if members.OtherUserID != "" {
+		expectedUserID = members.OtherUserID
+	} else if len(members.Members) == 2 && members.IsFull {
+		if members.Members[0].IsFromMe && !members.Members[1].IsFromMe {
+			expectedUserID = members.Members[1].Sender
+		} else if members.Members[1].IsFromMe && !members.Members[0].IsFromMe {
+			expectedUserID = members.Members[0].Sender
+		}
+	}
+	if portal.OtherUserID != expectedUserID {
+		zerolog.Ctx(ctx).Debug().
+			Str("old_other_user_id", string(portal.OtherUserID)).
+			Str("new_other_user_id", string(expectedUserID)).
+			Msg("Updating other user ID in DM portal")
+		portal.OtherUserID = expectedUserID
+		return true
+	}
+	return false
 }
 
 func (portal *Portal) SyncParticipants(ctx context.Context, members *ChatMemberList, source *UserLogin, sender MatrixAPI, ts time.Time) error {
@@ -2101,6 +2130,7 @@ func (portal *Portal) SyncParticipants(ctx context.Context, members *ChatMemberL
 			log.Err(err).Msg("Failed to update power levels")
 		}
 	}
+	portal.updateOtherUser(ctx, members)
 	if members.IsFull {
 		for extraMember, memberEvt := range currentMembers {
 			if memberEvt.Membership == event.MembershipLeave || memberEvt.Membership == event.MembershipBan {

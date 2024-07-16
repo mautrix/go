@@ -1,4 +1,4 @@
--- v0 -> v11 (compatible with v9+): Latest revision
+-- v0 -> v12 (compatible with v9+): Latest revision
 CREATE TABLE "user" (
 	bridge_id       TEXT NOT NULL,
 	mxid            TEXT NOT NULL,
@@ -36,6 +36,8 @@ CREATE TABLE portal (
 
 	relay_bridge_id TEXT,
 	relay_login_id  TEXT,
+
+	other_user_id TEXT,
 
 	name            TEXT    NOT NULL,
 	topic           TEXT    NOT NULL,
