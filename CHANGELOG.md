@@ -1,4 +1,4 @@
-## v0.19.0 (unreleased)
+## v0.19.0 (2024-07-16)
 
 * Renamed `master` branch to `main`.
 * *(bridgev2)* Added more features.
