@@ -367,6 +367,9 @@ type BackfillMessage struct {
 	ID        networkid.MessageID
 	Timestamp time.Time
 	Reactions []*BackfillReaction
+
+	ShouldBackfillThread bool
+	LastThreadMessage    networkid.MessageID
 }
 
 // FetchMessagesResponse contains the response for a message history pagination request.

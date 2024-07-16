@@ -40,7 +40,7 @@ func (portal *Portal) doForwardBackfill(ctx context.Context, source *UserLogin, 
 		ThreadRoot:    "",
 		Forward:       true,
 		AnchorMessage: lastMessage,
-		Count:         100,
+		Count:         100, // TODO make count configurable
 	})
 	if err != nil {
 		log.Err(err).Msg("Failed to fetch messages for forward backfill")
@@ -70,6 +70,31 @@ func (portal *Portal) DoBackwardsBackfill(ctx context.Context, source *UserLogin
 	//portal.sendBackfill(ctx, source, resp.Messages, false, resp.MarkRead, lastMessage)
 }
 
+func (portal *Portal) doThreadBackfill(ctx context.Context, source *UserLogin, threadID networkid.MessageID) {
+	log := zerolog.Ctx(ctx).With().
+		Str("subaction", "thread backfill").
+		Str("thread_id", string(threadID)).
+		Logger()
+	log.Info().Msg("Backfilling thread inside other backfill")
+	anchorMessage, err := portal.Bridge.DB.Message.GetLastThreadMessage(ctx, portal.PortalKey, threadID)
+	if err != nil {
+		log.Err(err).Msg("Failed to get last thread message")
+		return
+	}
+	resp, err := source.Client.(BackfillingNetworkAPI).FetchMessages(ctx, FetchMessagesParams{
+		Portal:        portal,
+		ThreadRoot:    threadID,
+		Forward:       true,
+		AnchorMessage: anchorMessage,
+		Count:         100, // TODO make count configurable
+	})
+	if err != nil {
+		log.Err(err).Msg("Failed to fetch messages for thread backfill")
+		return
+	}
+	portal.sendBackfill(ctx, source, resp.Messages, true, resp.MarkRead, anchorMessage)
+}
+
 func (portal *Portal) sendBackfill(ctx context.Context, source *UserLogin, messages []*BackfillMessage, forceForward, markRead bool, lastMessage *database.Message) {
 	if lastMessage != nil {
 		if forceForward {
@@ -97,6 +122,11 @@ func (portal *Portal) sendBackfill(ctx context.Context, source *UserLogin, messa
 		portal.sendLegacyBackfill(ctx, source, messages, markRead)
 	}
 	zerolog.Ctx(ctx).Debug().Msg("Backfill finished")
+	for _, msg := range messages {
+		if msg.ShouldBackfillThread {
+			portal.doThreadBackfill(ctx, source, msg.ID)
+		}
+	}
 }
 
 func (portal *Portal) sendBatch(ctx context.Context, source *UserLogin, messages []*BackfillMessage, forceForward, markRead bool) {
