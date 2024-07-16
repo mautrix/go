@@ -1719,6 +1719,7 @@ type ChatMember struct {
 	Membership event.Membership
 	Nickname   string
 	PowerLevel int
+	UserInfo   *UserInfo
 
 	PrevMembership event.Membership
 }
@@ -1959,6 +1960,14 @@ func (portal *Portal) GetInitialMemberList(ctx context.Context, members *ChatMem
 		if member.Membership != event.MembershipJoin && member.Membership != "" {
 			continue
 		}
+		if member.Sender != "" && member.UserInfo != nil {
+			ghost, err := portal.Bridge.GetGhostByID(ctx, member.Sender)
+			if err != nil {
+				zerolog.Ctx(ctx).Err(err).Str("ghost_id", string(member.Sender)).Msg("Failed to get ghost from member list to update info")
+			} else {
+				ghost.UpdateInfo(ctx, member.UserInfo)
+			}
+		}
 		intent, extraUserID := portal.getIntentAndUserMXIDFor(ctx, member.EventSender, source, loginsInPortal, 0)
 		if extraUserID != "" {
 			invite = append(invite, extraUserID)
@@ -2116,6 +2125,14 @@ func (portal *Portal) SyncParticipants(ctx context.Context, members *ChatMemberL
 		}
 	}
 	for _, member := range members.Members {
+		if member.Sender != "" && member.UserInfo != nil {
+			ghost, err := portal.Bridge.GetGhostByID(ctx, member.Sender)
+			if err != nil {
+				zerolog.Ctx(ctx).Err(err).Str("ghost_id", string(member.Sender)).Msg("Failed to get ghost from member list to update info")
+			} else {
+				ghost.UpdateInfo(ctx, member.UserInfo)
+			}
+		}
 		intent, extraUserID := portal.getIntentAndUserMXIDFor(ctx, member.EventSender, source, loginsInPortal, 0)
 		if intent != nil {
 			syncIntent(intent, member)
