@@ -220,8 +220,9 @@ func (user *User) GetManagementRoom(ctx context.Context) (id.RoomID, error) {
 				user.MXID:                 50,
 			},
 		},
-		Invite:   []id.UserID{user.MXID},
-		IsDirect: true,
+		BeeperLocalRoomID: id.RoomID(fmt.Sprintf("!management:%s", user.Bridge.Matrix.ServerName())),
+		Invite:            []id.UserID{user.MXID},
+		IsDirect:          true,
 	}
 	if autoJoin {
 		req.BeeperInitialMembers = []id.UserID{user.MXID}
