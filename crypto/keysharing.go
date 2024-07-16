@@ -337,6 +337,9 @@ func (mach *OlmMachine) HandleRoomKeyRequest(ctx context.Context, sender id.User
 		mach.rejectKeyRequest(ctx, KeyShareRejectInternalError, device, content.Body)
 		return
 	}
+	if igs.ForwardingChains == nil {
+		igs.ForwardingChains = []string{}
+	}
 
 	forwardedRoomKey := event.Content{
 		Parsed: &event.ForwardedRoomKeyEventContent{
