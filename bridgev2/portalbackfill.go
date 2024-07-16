@@ -46,7 +46,7 @@ func (portal *Portal) doForwardBackfill(ctx context.Context, source *UserLogin, 
 		log.Err(err).Msg("Failed to fetch messages for forward backfill")
 		return
 	}
-	portal.sendBackfill(ctx, source, resp.Messages, true, resp.MarkRead, lastMessage)
+	portal.sendBackfill(ctx, source, resp.Messages, true, resp.MarkRead, false, lastMessage)
 }
 
 func (portal *Portal) DoBackwardsBackfill(ctx context.Context, source *UserLogin) {
@@ -72,7 +72,7 @@ func (portal *Portal) DoBackwardsBackfill(ctx context.Context, source *UserLogin
 		log.Err(err).Msg("Failed to fetch messages for forward backfill")
 		return
 	}
-	portal.sendBackfill(ctx, source, resp.Messages, false, resp.MarkRead, firstMessage)
+	portal.sendBackfill(ctx, source, resp.Messages, false, resp.MarkRead, false, firstMessage)
 }
 
 func (portal *Portal) doThreadBackfill(ctx context.Context, source *UserLogin, threadID networkid.MessageID) {
@@ -97,15 +97,15 @@ func (portal *Portal) doThreadBackfill(ctx context.Context, source *UserLogin, t
 		log.Err(err).Msg("Failed to fetch messages for thread backfill")
 		return
 	}
-	portal.sendBackfill(ctx, source, resp.Messages, true, resp.MarkRead, anchorMessage)
+	portal.sendBackfill(ctx, source, resp.Messages, true, resp.MarkRead, true, anchorMessage)
 }
 
-func (portal *Portal) sendBackfill(ctx context.Context, source *UserLogin, messages []*BackfillMessage, forceForward, markRead bool, lastMessage *database.Message) {
+func (portal *Portal) sendBackfill(ctx context.Context, source *UserLogin, messages []*BackfillMessage, forceForward, markRead, inThread bool, lastMessage *database.Message) {
 	if lastMessage != nil {
 		if forceForward {
 			var cutoff int
 			for i, msg := range messages {
-				if msg.Timestamp.Before(lastMessage.Timestamp) {
+				if msg.ID == lastMessage.ID || msg.Timestamp.Before(lastMessage.Timestamp) {
 					cutoff = i
 				} else {
 					break
@@ -122,7 +122,7 @@ func (portal *Portal) sendBackfill(ctx context.Context, source *UserLogin, messa
 		} else {
 			cutoff := -1
 			for i := len(messages) - 1; i >= 0; i-- {
-				if messages[i].Timestamp.After(lastMessage.Timestamp) {
+				if messages[i].ID == lastMessage.ID || messages[i].Timestamp.After(lastMessage.Timestamp) {
 					cutoff = i
 				} else {
 					break
@@ -146,9 +146,11 @@ func (portal *Portal) sendBackfill(ctx context.Context, source *UserLogin, messa
 		portal.sendLegacyBackfill(ctx, source, messages, markRead)
 	}
 	zerolog.Ctx(ctx).Debug().Msg("Backfill finished")
-	for _, msg := range messages {
-		if msg.ShouldBackfillThread {
-			portal.doThreadBackfill(ctx, source, msg.ID)
+	if !inThread {
+		for _, msg := range messages {
+			if msg.ShouldBackfillThread {
+				portal.doThreadBackfill(ctx, source, msg.ID)
+			}
 		}
 	}
 }
@@ -169,7 +171,7 @@ func (portal *Portal) sendBatch(ctx context.Context, source *UserLogin, messages
 	var disappearingMessages []*database.DisappearingMessage
 	for _, msg := range messages {
 		intent := portal.GetIntentFor(ctx, msg.Sender, source, RemoteEventMessage)
-		replyTo, threadRoot, prevThreadEvent := portal.getRelationMeta(ctx, msg.ReplyTo, msg.ThreadRoot, true)
+		replyTo, threadRoot, prevThreadEvent := portal.getRelationMeta(ctx, msg.ID, msg.ReplyTo, msg.ThreadRoot, true)
 		if threadRoot != nil && prevThreadEvents[*msg.ThreadRoot] != "" {
 			prevThreadEvent.MXID = prevThreadEvents[*msg.ThreadRoot]
 		}

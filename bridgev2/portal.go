@@ -1192,7 +1192,7 @@ func (portal *Portal) GetIntentFor(ctx context.Context, sender EventSender, sour
 	return intent
 }
 
-func (portal *Portal) getRelationMeta(ctx context.Context, replyToPtr *networkid.MessageOptionalPartID, threadRootPtr *networkid.MessageID, isBatchSend bool) (replyTo, threadRoot, prevThreadEvent *database.Message) {
+func (portal *Portal) getRelationMeta(ctx context.Context, currentMsg networkid.MessageID, replyToPtr *networkid.MessageOptionalPartID, threadRootPtr *networkid.MessageID, isBatchSend bool) (replyTo, threadRoot, prevThreadEvent *database.Message) {
 	log := zerolog.Ctx(ctx)
 	var err error
 	if replyToPtr != nil {
@@ -1210,7 +1210,7 @@ func (portal *Portal) getRelationMeta(ctx context.Context, replyToPtr *networkid
 			}
 		}
 	}
-	if threadRootPtr != nil {
+	if threadRootPtr != nil && *threadRootPtr != currentMsg {
 		threadRoot, err = portal.Bridge.DB.Message.GetFirstThreadMessage(ctx, portal.PortalKey, *threadRootPtr)
 		if err != nil {
 			log.Err(err).Msg("Failed to get thread root message from database")
@@ -1252,7 +1252,7 @@ func (portal *Portal) sendConvertedMessage(ctx context.Context, id networkid.Mes
 		}
 	}
 	log := zerolog.Ctx(ctx)
-	replyTo, threadRoot, prevThreadEvent := portal.getRelationMeta(ctx, converted.ReplyTo, converted.ThreadRoot, false)
+	replyTo, threadRoot, prevThreadEvent := portal.getRelationMeta(ctx, id, converted.ReplyTo, converted.ThreadRoot, false)
 	output := make([]*database.Message, 0, len(converted.Parts))
 	for _, part := range converted.Parts {
 		portal.applyRelationMeta(part.Content, replyTo, threadRoot, prevThreadEvent)
@@ -1261,10 +1261,10 @@ func (portal *Portal) sendConvertedMessage(ctx context.Context, id networkid.Mes
 			Raw:    part.Extra,
 		}, ts)
 		if err != nil {
-			log.Err(err).Str("part_id", string(part.ID)).Msg("Failed to send message part to Matrix")
+			logContext(log.Err(err)).Str("part_id", string(part.ID)).Msg("Failed to send message part to Matrix")
 			continue
 		}
-		log.Debug().
+		logContext(log.Debug()).
 			Stringer("event_id", resp.EventID).
 			Str("part_id", string(part.ID)).
 			Msg("Sent message part to Matrix")
@@ -1282,7 +1282,7 @@ func (portal *Portal) sendConvertedMessage(ctx context.Context, id networkid.Mes
 		}
 		err = portal.Bridge.DB.Message.Insert(ctx, dbMessage)
 		if err != nil {
-			log.Err(err).Str("part_id", string(part.ID)).Msg("Failed to save message part to database")
+			logContext(log.Err(err)).Str("part_id", string(part.ID)).Msg("Failed to save message part to database")
 		}
 		if converted.Disappear.Type != database.DisappearingTypeNone {
 			if converted.Disappear.Type == database.DisappearingTypeAfterSend && converted.Disappear.DisappearAt.IsZero() {

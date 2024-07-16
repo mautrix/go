@@ -213,6 +213,10 @@ func (ghost *Ghost) UpdateInfoIfNecessary(ctx context.Context, source *UserLogin
 	if ghost.Name != "" && ghost.NameSet && !ghost.Bridge.allowAggressiveUpdateForType(evtType) {
 		return
 	}
+	zerolog.Ctx(ctx).Debug().
+		Bool("has_name", ghost.Name != "").
+		Bool("name_set", ghost.NameSet).
+		Msg("Updating ghost info in IfNecessary call")
 	info, err := source.Client.GetUserInfo(ctx, ghost)
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).Str("ghost_id", string(ghost.ID)).Msg("Failed to get info to update ghost")
