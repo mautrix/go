@@ -56,7 +56,7 @@ func (ce *Event) Reply(msg string, args ...any) {
 func (ce *Event) ReplyAdvanced(msg string, allowMarkdown, allowHTML bool) {
 	content := format.RenderMarkdown(msg, allowMarkdown, allowHTML)
 	content.MsgType = event.MsgNotice
-	_, err := ce.Bot.SendMessage(ce.Ctx, ce.RoomID, event.EventMessage, &event.Content{Parsed: content}, time.Now())
+	_, err := ce.Bot.SendMessage(ce.Ctx, ce.RoomID, event.EventMessage, &event.Content{Parsed: &content}, time.Now())
 	if err != nil {
 		ce.Log.Err(err).Msgf("Failed to reply to command")
 	}
