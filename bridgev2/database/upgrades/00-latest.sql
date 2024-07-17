@@ -1,4 +1,4 @@
--- v0 -> v12 (compatible with v9+): Latest revision
+-- v0 -> v13 (compatible with v9+): Latest revision
 CREATE TABLE "user" (
 	bridge_id       TEXT NOT NULL,
 	mxid            TEXT NOT NULL,
@@ -37,7 +37,7 @@ CREATE TABLE portal (
 	relay_bridge_id TEXT,
 	relay_login_id  TEXT,
 
-	other_user_id TEXT,
+	other_user_id   TEXT,
 
 	name            TEXT    NOT NULL,
 	topic           TEXT    NOT NULL,
@@ -175,3 +175,23 @@ CREATE TABLE user_portal (
 );
 CREATE INDEX user_portal_login_idx ON user_portal (bridge_id, login_id);
 CREATE INDEX user_portal_portal_idx ON user_portal (bridge_id, portal_id, portal_receiver);
+
+CREATE TABLE backfill_queue (
+	bridge_id            TEXT    NOT NULL,
+	portal_id            TEXT    NOT NULL,
+	portal_receiver      TEXT    NOT NULL,
+	user_login_id        TEXT    NOT NULL,
+
+	batch_count          INTEGER NOT NULL,
+	is_done              BOOLEAN NOT NULL,
+	cursor               TEXT,
+	oldest_message_id    TEXT,
+	dispatched_at        BIGINT,
+	completed_at         BIGINT,
+	next_dispatch_min_ts BIGINT  NOT NULL,
+
+	PRIMARY KEY (bridge_id, portal_id, portal_receiver),
+	CONSTRAINT backfill_queue_portal_fkey FOREIGN KEY (bridge_id, portal_id, portal_receiver)
+		REFERENCES portal (bridge_id, id, receiver)
+		ON DELETE CASCADE ON UPDATE CASCADE
+);

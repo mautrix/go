@@ -47,6 +47,8 @@ type Bridge struct {
 	portalsByMXID  map[id.RoomID]*Portal
 	ghostsByID     map[networkid.UserID]*Ghost
 	cacheLock      sync.Mutex
+
+	wakeupBackfillQueue chan struct{}
 }
 
 func NewBridge(
@@ -72,6 +74,8 @@ func NewBridge(
 		portalsByKey:   make(map[networkid.PortalKey]*Portal),
 		portalsByMXID:  make(map[id.RoomID]*Portal),
 		ghostsByID:     make(map[networkid.UserID]*Ghost),
+
+		wakeupBackfillQueue: make(chan struct{}),
 	}
 	if br.Config == nil {
 		br.Config = &bridgeconfig.BridgeConfig{CommandPrefix: "!bridge"}
