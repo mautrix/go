@@ -92,6 +92,16 @@ func doUpgrade(helper up.Helper) {
 		helper.Copy(up.Str, "direct_media", "server_key")
 	}
 
+	helper.Copy(up.Bool, "backfill", "enabled")
+	helper.Copy(up.Int, "backfill", "max_initial_messages")
+	helper.Copy(up.Int, "backfill", "max_catchup_messages")
+	helper.Copy(up.Int, "backfill", "unread_hours_threshold")
+	helper.Copy(up.Int, "backfill", "threads", "max_initial_messages")
+	helper.Copy(up.Int, "backfill", "queue", "batch_size")
+	helper.Copy(up.Int, "backfill", "queue", "batch_delay")
+	helper.Copy(up.Int, "backfill", "queue", "max_batches")
+	helper.Copy(up.Map, "backfill", "queue", "max_batches_override")
+
 	helper.Copy(up.Map, "double_puppet", "servers")
 	helper.Copy(up.Bool, "double_puppet", "allow_discovery")
 	helper.Copy(up.Map, "double_puppet", "secrets")
@@ -249,6 +259,7 @@ var SpacedBlocks = [][]string{
 	{"appservice", "username_template"},
 	{"matrix"},
 	{"provisioning"},
+	{"backfill"},
 	{"direct_media"},
 	{"double_puppet"},
 	{"encryption"},

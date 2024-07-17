@@ -29,10 +29,17 @@ func (portal *Portal) doForwardBackfill(ctx context.Context, source *UserLogin, 
 		return
 	}
 	logEvt := log.Info()
+	var limit int
 	if lastMessage != nil {
 		logEvt = logEvt.Str("latest_message_id", string(lastMessage.ID))
+		limit = portal.Bridge.Config.Backfill.MaxCatchupMessages
 	} else {
 		logEvt = logEvt.Str("latest_message_id", "")
+		limit = portal.Bridge.Config.Backfill.MaxInitialMessages
+	}
+	if limit <= 0 {
+		logEvt.Discard().Send()
+		return
 	}
 	logEvt.Msg("Fetching messages for forward backfill")
 	resp, err := api.FetchMessages(ctx, FetchMessagesParams{
@@ -40,7 +47,7 @@ func (portal *Portal) doForwardBackfill(ctx context.Context, source *UserLogin, 
 		ThreadRoot:    "",
 		Forward:       true,
 		AnchorMessage: lastMessage,
-		Count:         100, // TODO make count configurable
+		Count:         limit,
 	})
 	if err != nil {
 		log.Err(err).Msg("Failed to fetch messages for forward backfill")
@@ -66,7 +73,7 @@ func (portal *Portal) DoBackwardsBackfill(ctx context.Context, source *UserLogin
 		ThreadRoot:    "",
 		Forward:       false,
 		AnchorMessage: firstMessage,
-		Count:         100, // TODO make count configurable
+		Count:         portal.Bridge.Config.Backfill.Queue.BatchSize,
 	})
 	if err != nil {
 		log.Err(err).Msg("Failed to fetch messages for forward backfill")
@@ -91,7 +98,7 @@ func (portal *Portal) doThreadBackfill(ctx context.Context, source *UserLogin, t
 		ThreadRoot:    threadID,
 		Forward:       true,
 		AnchorMessage: anchorMessage,
-		Count:         100, // TODO make count configurable
+		Count:         portal.Bridge.Config.Backfill.Threads.MaxInitialMessages,
 	})
 	if err != nil {
 		log.Err(err).Msg("Failed to fetch messages for thread backfill")
@@ -146,7 +153,7 @@ func (portal *Portal) sendBackfill(ctx context.Context, source *UserLogin, messa
 		portal.sendLegacyBackfill(ctx, source, messages, markRead)
 	}
 	zerolog.Ctx(ctx).Debug().Msg("Backfill finished")
-	if !inThread {
+	if !inThread && portal.Bridge.Config.Backfill.Threads.MaxInitialMessages > 0 {
 		for _, msg := range messages {
 			if msg.ShouldBackfillThread {
 				portal.doThreadBackfill(ctx, source, msg.ID)

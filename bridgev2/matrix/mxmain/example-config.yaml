@@ -180,6 +180,37 @@ direct_media:
     # This key is also used to sign the mxc:// URIs to ensure only the bridge can generate them.
     server_key: generate
 
+# Settings for backfilling messages.
+# Note that the exact way settings are applied depends on the network connector.
+# See https://docs.mau.fi/bridges/general/backfill.html for more details.
+backfill:
+    # Whether to do backfilling at all.
+    enabled: false
+    # Maximum number of messages to backfill in empty rooms.
+    max_initial_messages: 50
+    # Maximum number of missed messages to backfill after bridge restarts.
+    max_catchup_messages: 500
+    # If a backfilled chat is older than this number of hours,
+    # mark it as read even if it's unread on the remote network.
+    unread_hours_threshold: 720
+    # Settings for backfilling threads within other backfills.
+    threads:
+        # Maximum number of messages to backfill in a new thread.
+        max_initial_messages: 50
+    # Settings for the backwards backfill queue. This only applies when connecting to
+    # Beeper as standard Matrix servers don't support inserting messages into history.
+    queue:
+        # Number of messages to backfill in one batch.
+        batch_size: 100
+        # Delay between batches in seconds.
+        batch_delay: 20
+        # Maximum number of batches to backfill per portal.
+        # If set to -1, all available messages will be backfilled.
+        max_batches: -1
+        # Optional network-specific overrides for max batches.
+        # Interpretation of this field depends on the network connector.
+        max_batches_override: {}
+
 # Settings for enabling double puppeting
 double_puppet:
     # Servers to always allow double puppeting from.

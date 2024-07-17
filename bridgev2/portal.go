@@ -1084,6 +1084,7 @@ func (portal *Portal) handleRemoteEvent(source *UserLogin, evt RemoteEvent) {
 	}()
 	log.UpdateContext(evt.AddLogContext)
 	ctx := log.WithContext(context.TODO())
+	evtType := evt.GetType()
 	if portal.MXID == "" {
 		mcp, ok := evt.(RemoteEventThatMayCreatePortal)
 		if !ok || !mcp.ShouldCreatePortal() {
@@ -1104,12 +1105,16 @@ func (portal *Portal) handleRemoteEvent(source *UserLogin, evt RemoteEvent) {
 			// TODO error
 			return
 		}
+		// TODO if CreateMatrixRoom is changed to backfill immediately, there's no need to handle chat resyncs further
+		//if evtType == RemoteEventChatResync {
+		//	log.Debug().Msg("Not handling chat resync event further as portal was created by it")
+		//	return
+		//}
 	}
 	preHandler, ok := evt.(RemotePreHandler)
 	if ok {
 		preHandler.PreHandle(ctx, portal)
 	}
-	evtType := evt.GetType()
 	log.Debug().Stringer("bridge_evt_type", evtType).Msg("Handling remote event")
 	switch evtType {
 	case RemoteEventUnknown:
@@ -2477,6 +2482,7 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 			}
 		}
 	}
+	// TODO backfill portal?
 	if portal.Parent == nil {
 		userPortals, err := portal.Bridge.DB.UserPortal.GetAllInPortal(ctx, portal.PortalKey)
 		if err != nil {

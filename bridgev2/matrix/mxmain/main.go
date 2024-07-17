@@ -351,6 +351,7 @@ func (br *BridgeMain) LoadConfig() {
 			os.Exit(10)
 		}
 	}
+	cfg.Bridge.Backfill = cfg.Backfill
 	br.Config = &cfg
 }
 

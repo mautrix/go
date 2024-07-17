@@ -23,6 +23,7 @@ type Config struct {
 	Matrix       MatrixConfig       `yaml:"matrix"`
 	Provisioning ProvisioningConfig `yaml:"provisioning"`
 	DirectMedia  DirectMediaConfig  `yaml:"direct_media"`
+	Backfill     BackfillConfig     `yaml:"backfill"`
 	DoublePuppet DoublePuppetConfig `yaml:"double_puppet"`
 	Encryption   EncryptionConfig   `yaml:"encryption"`
 	Logging      zeroconfig.Config  `yaml:"logging"`
@@ -35,6 +36,7 @@ type BridgeConfig struct {
 	PersonalFilteringSpaces bool             `yaml:"personal_filtering_spaces"`
 	Relay                   RelayConfig      `yaml:"relay"`
 	Permissions             PermissionConfig `yaml:"permissions"`
+	Backfill                BackfillConfig   `yaml:"backfill"`
 }
 
 type MatrixConfig struct {
