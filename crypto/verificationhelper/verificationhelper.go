@@ -115,6 +115,10 @@ type RequiredCallbacks interface {
 	// VerificationCancelled is called when the verification is cancelled.
 	VerificationCancelled(ctx context.Context, txnID id.VerificationTransactionID, code event.VerificationCancelCode, reason string)
 
+	// OtherReportsDone is called when the other user has reported that the
+	// verification is done.
+	OtherReportsDone(ctx context.Context, txnID id.VerificationTransactionID)
+
 	// VerificationDone is called when the verification is done.
 	VerificationDone(ctx context.Context, txnID id.VerificationTransactionID)
 }
@@ -152,6 +156,7 @@ type VerificationHelper struct {
 	supportedMethods              []event.VerificationMethod
 	verificationRequested         func(ctx context.Context, txnID id.VerificationTransactionID, from id.UserID)
 	verificationCancelledCallback func(ctx context.Context, txnID id.VerificationTransactionID, code event.VerificationCancelCode, reason string)
+	otherReportsDone              func(ctx context.Context, txnID id.VerificationTransactionID)
 	verificationDone              func(ctx context.Context, txnID id.VerificationTransactionID)
 
 	showSAS func(ctx context.Context, txnID id.VerificationTransactionID, emojis []rune, decimals []int)
@@ -179,6 +184,7 @@ func NewVerificationHelper(client *mautrix.Client, mach *crypto.OlmMachine, call
 	} else {
 		helper.verificationRequested = c.VerificationRequested
 		helper.verificationCancelledCallback = c.VerificationCancelled
+		helper.otherReportsDone = c.OtherReportsDone
 		helper.verificationDone = c.VerificationDone
 	}
 
@@ -880,6 +886,7 @@ func (vh *VerificationHelper) onVerificationDone(ctx context.Context, txn *verif
 	}
 
 	txn.ReceivedTheirDone = true
+	vh.otherReportsDone(ctx, txn.TransactionID)
 	if txn.SentOurDone {
 		delete(vh.activeTransactions, txn.TransactionID)
 		vh.verificationDone(ctx, txn.TransactionID)
