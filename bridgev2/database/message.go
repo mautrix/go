@@ -157,7 +157,7 @@ func (m *Message) Scan(row dbutil.Scannable) (*Message, error) {
 	var threadRootID, replyToID, replyToPartID sql.NullString
 	err := row.Scan(
 		&m.RowID, &m.BridgeID, &m.ID, &m.PartID, &m.MXID, &m.Room.ID, &m.Room.Receiver, &m.SenderID, &m.SenderMXID,
-		&m.EditCount, &timestamp, &threadRootID, &replyToID, &replyToPartID, dbutil.JSON{Data: m.Metadata},
+		&timestamp, &m.EditCount, &threadRootID, &replyToID, &replyToPartID, dbutil.JSON{Data: m.Metadata},
 	)
 	if err != nil {
 		return nil, err
