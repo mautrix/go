@@ -131,10 +131,11 @@ type MessageEventContent struct {
 
 	replyFallbackRemoved bool
 
-	MessageSendRetry         *BeeperRetryMetadata   `json:"com.beeper.message_send_retry,omitempty"`
-	BeeperGalleryImages      []*MessageEventContent `json:"com.beeper.gallery.images,omitempty"`
-	BeeperGalleryCaption     string                 `json:"com.beeper.gallery.caption,omitempty"`
-	BeeperGalleryCaptionHTML string                 `json:"com.beeper.gallery.caption_html,omitempty"`
+	MessageSendRetry         *BeeperRetryMetadata     `json:"com.beeper.message_send_retry,omitempty"`
+	BeeperGalleryImages      []*MessageEventContent   `json:"com.beeper.gallery.images,omitempty"`
+	BeeperGalleryCaption     string                   `json:"com.beeper.gallery.caption,omitempty"`
+	BeeperGalleryCaptionHTML string                   `json:"com.beeper.gallery.caption_html,omitempty"`
+	BeeperPerMessageProfile  *BeeperPerMessageProfile `json:"com.beeper.per_message_profile,omitempty"`
 
 	BeeperLinkPreviews []*BeeperLinkPreview `json:"com.beeper.linkpreviews,omitempty"`
 
