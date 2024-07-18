@@ -39,8 +39,16 @@ type portalRemoteEvent struct {
 	source *UserLogin
 }
 
+type portalCreateEvent struct {
+	ctx    context.Context
+	source *UserLogin
+	info   *ChatInfo
+	cb     func(error)
+}
+
 func (pme *portalMatrixEvent) isPortalEvent() {}
 func (pre *portalRemoteEvent) isPortalEvent() {}
+func (pre *portalCreateEvent) isPortalEvent() {}
 
 type portalEvent interface {
 	isPortalEvent()
@@ -250,10 +258,30 @@ func (portal *Portal) eventLoop() {
 			portal.handleMatrixEvent(evt.sender, evt.evt)
 		case *portalRemoteEvent:
 			portal.handleRemoteEvent(evt.source, evt.evt)
+		case *portalCreateEvent:
+			portal.handleCreateEvent(evt)
 		default:
 			panic(fmt.Errorf("illegal type %T in eventLoop", evt))
 		}
 	}
+}
+
+func (portal *Portal) handleCreateEvent(evt *portalCreateEvent) {
+	defer func() {
+		if err := recover(); err != nil {
+			logEvt := zerolog.Ctx(evt.ctx).Error()
+			if realErr, ok := err.(error); ok {
+				logEvt = logEvt.Err(realErr)
+			} else {
+				logEvt = logEvt.Any(zerolog.ErrorFieldName, err)
+			}
+			logEvt.
+				Bytes("stack", debug.Stack()).
+				Msg("Portal creation panicked")
+			evt.cb(fmt.Errorf("portal creation panicked"))
+		}
+	}()
+	evt.cb(portal.createMatrixRoomInLoop(evt.ctx, evt.source, evt.info))
 }
 
 func (portal *Portal) FindPreferredLogin(ctx context.Context, user *User, allowRelay bool) (*UserLogin, *database.UserPortal, error) {
@@ -1109,17 +1137,16 @@ func (portal *Portal) handleRemoteEvent(source *UserLogin, evt RemoteEvent) {
 				log.Err(err).Msg("Failed to get chat info for portal creation from chat resync event")
 			}
 		}
-		err = portal.CreateMatrixRoom(ctx, source, info)
+		err = portal.createMatrixRoomInLoop(ctx, source, info)
 		if err != nil {
 			log.Err(err).Msg("Failed to create portal to handle event")
 			// TODO error
 			return
 		}
-		// TODO if CreateMatrixRoom is changed to backfill immediately, there's no need to handle chat resyncs further
-		//if evtType == RemoteEventChatResync {
-		//	log.Debug().Msg("Not handling chat resync event further as portal was created by it")
-		//	return
-		//}
+		if evtType == RemoteEventChatResync {
+			log.Debug().Msg("Not handling chat resync event further as portal was created by it")
+			return
+		}
 	}
 	preHandler, ok := evt.(RemotePreHandler)
 	if ok {
@@ -2350,7 +2377,30 @@ func (portal *Portal) UpdateInfo(ctx context.Context, info *ChatInfo, source *Us
 	}
 }
 
-func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, info *ChatInfo) error {
+func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, info *ChatInfo) (retErr error) {
+	waiter := make(chan struct{})
+	closed := false
+	portal.events <- &portalCreateEvent{
+		ctx:    ctx,
+		source: source,
+		info:   info,
+		cb: func(err error) {
+			retErr = err
+			if !closed {
+				closed = true
+				close(waiter)
+			}
+		},
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-waiter:
+		return
+	}
+}
+
+func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLogin, info *ChatInfo) error {
 	portal.roomCreateLock.Lock()
 	defer portal.roomCreateLock.Unlock()
 	if portal.MXID != "" {
@@ -2510,7 +2560,6 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 			}
 		}
 	}
-	// TODO backfill portal?
 	if portal.Parent == nil {
 		userPortals, err := portal.Bridge.DB.UserPortal.GetAllInPortal(ctx, portal.PortalKey)
 		if err != nil {
@@ -2525,6 +2574,7 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 			}
 		}
 	}
+	portal.doForwardBackfill(ctx, source, nil)
 	return nil
 }
 
