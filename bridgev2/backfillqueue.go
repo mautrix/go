@@ -16,6 +16,10 @@ import (
 	"maunium.net/go/mautrix/bridgev2/database"
 )
 
+const BackfillMinBackoffAfterRoomCreate = 1 * time.Minute
+const BackfillQueueErrorBackoff = 1 * time.Minute
+const BackfillQueueMinEmptyBackoff = 10 * time.Minute
+
 func (br *Bridge) WakeupBackfillQueue() {
 	select {
 	case br.wakeupBackfillQueue <- struct{}{}:
@@ -35,14 +39,14 @@ func (br *Bridge) RunBackfillQueue() {
 		backfillTask, err := br.DB.BackfillQueue.GetNext(ctx)
 		if err != nil {
 			log.Err(err).Msg("Failed to get next backfill queue entry")
-			time.Sleep(1 * time.Minute)
+			time.Sleep(BackfillQueueErrorBackoff)
 			continue
 		} else if backfillTask != nil {
 			br.doBackfillTask(ctx, backfillTask)
 		}
 		nextDelay := batchDelay
 		if backfillTask == nil {
-			nextDelay = max(10*time.Minute, batchDelay)
+			nextDelay = max(BackfillQueueMinEmptyBackoff, batchDelay)
 		}
 		if !afterTimer.Stop() {
 			<-afterTimer.C
@@ -63,13 +67,13 @@ func (br *Bridge) doBackfillTask(ctx context.Context, task *database.BackfillTas
 	err := br.DB.BackfillQueue.MarkDispatched(ctx, task)
 	if err != nil {
 		log.Err(err).Msg("Failed to mark backfill task as dispatched")
-		time.Sleep(1 * time.Minute)
+		time.Sleep(BackfillQueueErrorBackoff)
 		return
 	}
 	completed, err := br.actuallyDoBackfillTask(ctx, task)
 	if err != nil {
 		log.Err(err).Msg("Failed to do backfill task")
-		time.Sleep(1 * time.Minute)
+		time.Sleep(BackfillQueueErrorBackoff)
 		return
 	} else if completed {
 		log.Info().Msg("Backfill task completed successfully")
@@ -79,8 +83,23 @@ func (br *Bridge) doBackfillTask(ctx context.Context, task *database.BackfillTas
 	err = br.DB.BackfillQueue.Update(ctx, task)
 	if err != nil {
 		log.Err(err).Msg("Failed to update backfill task")
-		time.Sleep(1 * time.Minute)
+		time.Sleep(BackfillQueueErrorBackoff)
 	}
+}
+
+func (portal *Portal) deleteBackfillQueueTaskIfRoomDoesNotExist(ctx context.Context) bool {
+	// Acquire the room create lock to ensure that task deletion doesn't race with room creation
+	portal.roomCreateLock.Lock()
+	defer portal.roomCreateLock.Unlock()
+	if portal.MXID == "" {
+		zerolog.Ctx(ctx).Debug().Msg("Portal for backfill task doesn't exist, deleting entry")
+		err := portal.Bridge.DB.BackfillQueue.Delete(ctx, portal.PortalKey)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to delete backfill task after portal wasn't found")
+		}
+		return true
+	}
+	return false
 }
 
 func (br *Bridge) actuallyDoBackfillTask(ctx context.Context, task *database.BackfillTask) (bool, error) {
@@ -93,13 +112,11 @@ func (br *Bridge) actuallyDoBackfillTask(ctx context.Context, task *database.Bac
 		err = br.DB.BackfillQueue.Delete(ctx, task.PortalKey)
 		if err != nil {
 			log.Err(err).Msg("Failed to delete backfill task after portal wasn't found")
-			time.Sleep(1 * time.Minute)
+			time.Sleep(BackfillQueueErrorBackoff)
 		}
 		return false, nil
 	} else if portal.MXID == "" {
-		log.Debug().Msg("Portal for backfill task doesn't exist")
-		task.NextDispatchMinTS = database.BackfillNextDispatchNever
-		task.UserLoginID = ""
+		portal.deleteBackfillQueueTaskIfRoomDoesNotExist(ctx)
 		return false, nil
 	}
 	login, err := br.GetExistingUserLoginByID(ctx, task.UserLoginID)
@@ -135,10 +152,12 @@ func (br *Bridge) actuallyDoBackfillTask(ctx context.Context, task *database.Bac
 	}
 	maxBatches := br.Config.Backfill.Queue.MaxBatches
 	// TODO apply max batch overrides
-	// TODO actually backfill
-	hasMoreMessages := true
+	err = portal.DoBackwardsBackfill(ctx, login, task)
+	if err != nil {
+		return false, fmt.Errorf("failed to backfill: %w", err)
+	}
 	task.BatchCount++
-	task.IsDone = task.BatchCount >= maxBatches || !hasMoreMessages
+	task.IsDone = task.IsDone || task.BatchCount >= maxBatches
 	batchDelay := time.Duration(br.Config.Backfill.Queue.BatchDelay) * time.Second
 	task.CompletedAt = time.Now()
 	task.NextDispatchMinTS = task.CompletedAt.Add(batchDelay)
