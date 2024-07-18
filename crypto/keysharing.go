@@ -283,6 +283,7 @@ func (mach *OlmMachine) defaultAllowKeyShare(ctx context.Context, device *id.Dev
 func (mach *OlmMachine) HandleRoomKeyRequest(ctx context.Context, sender id.UserID, content *event.RoomKeyRequestEventContent) {
 	log := zerolog.Ctx(ctx).With().
 		Str("request_id", content.RequestID).
+		Str("user_id", sender.String()).
 		Str("device_id", content.RequestingDeviceID.String()).
 		Str("room_id", content.Body.RoomID.String()).
 		Str("session_id", content.Body.SessionID.String()).
