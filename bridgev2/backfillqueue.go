@@ -28,11 +28,19 @@ func (br *Bridge) WakeupBackfillQueue() {
 }
 
 func (br *Bridge) RunBackfillQueue() {
-	if !br.Matrix.GetCapabilities().BatchSending {
+	if !br.Config.Backfill.Queue.Enabled || !br.Config.Backfill.Enabled {
 		return
 	}
 	log := br.Log.With().Str("component", "backfill queue").Logger()
-	ctx := log.WithContext(context.Background())
+	if !br.Matrix.GetCapabilities().BatchSending {
+		log.Warn().Msg("Backfill queue is enabled in config, but Matrix server doesn't support batch sending")
+		return
+	}
+	ctx, cancel := context.WithCancel(log.WithContext(context.Background()))
+	go func() {
+		<-br.stopBackfillQueue
+		cancel()
+	}()
 	batchDelay := time.Duration(br.Config.Backfill.Queue.BatchDelay) * time.Second
 	afterTimer := time.NewTimer(batchDelay)
 	for {
@@ -54,6 +62,10 @@ func (br *Bridge) RunBackfillQueue() {
 		afterTimer.Reset(nextDelay)
 		select {
 		case <-br.wakeupBackfillQueue:
+		case <-br.stopBackfillQueue:
+			afterTimer.Stop()
+			log.Info().Msg("Stopping backfill queue")
+			return
 		case <-afterTimer.C:
 		}
 	}

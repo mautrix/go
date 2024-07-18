@@ -1674,7 +1674,7 @@ func (portal *Portal) handleRemoteChatResync(ctx context.Context, source *UserLo
 		}
 	}
 	backfillChecker, ok := evt.(RemoteChatResyncBackfill)
-	if ok {
+	if portal.Bridge.Config.Backfill.Enabled && ok {
 		latestMessage, err := portal.Bridge.DB.Message.GetLastPartAtOrBeforeTime(ctx, portal.PortalKey, time.Now().Add(10*time.Second))
 		if err != nil {
 			log.Err(err).Msg("Failed to get last message in portal to check if backfill is necessary")

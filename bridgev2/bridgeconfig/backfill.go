@@ -21,9 +21,10 @@ type BackfillThreadsConfig struct {
 }
 
 type BackfillQueueConfig struct {
-	BatchSize  int `yaml:"batch_size"`
-	BatchDelay int `yaml:"batch_delay"`
-	MaxBatches int `yaml:"max_batches"`
+	Enabled    bool `yaml:"enabled"`
+	BatchSize  int  `yaml:"batch_size"`
+	BatchDelay int  `yaml:"batch_delay"`
+	MaxBatches int  `yaml:"max_batches"`
 
 	MaxBatchesOverride map[string]int `yaml:"max_batches_override"`
 }

@@ -49,6 +49,7 @@ type Bridge struct {
 	cacheLock      sync.Mutex
 
 	wakeupBackfillQueue chan struct{}
+	stopBackfillQueue   chan struct{}
 }
 
 func NewBridge(
@@ -76,6 +77,7 @@ func NewBridge(
 		ghostsByID:     make(map[networkid.UserID]*Ghost),
 
 		wakeupBackfillQueue: make(chan struct{}),
+		stopBackfillQueue:   make(chan struct{}),
 	}
 	if br.Config == nil {
 		br.Config = &bridgeconfig.BridgeConfig{CommandPrefix: "!bridge"}
@@ -149,6 +151,7 @@ func (br *Bridge) Start() error {
 		br.Log.Info().Msg("No user logins found")
 		br.SendGlobalBridgeState(status.BridgeState{StateEvent: status.StateUnconfigured})
 	}
+	go br.RunBackfillQueue()
 
 	br.Log.Info().Msg("Bridge started")
 	return nil
@@ -156,6 +159,7 @@ func (br *Bridge) Start() error {
 
 func (br *Bridge) Stop() {
 	br.Log.Info().Msg("Shutting down bridge")
+	close(br.stopBackfillQueue)
 	br.Matrix.Stop()
 	br.cacheLock.Lock()
 	var wg sync.WaitGroup
