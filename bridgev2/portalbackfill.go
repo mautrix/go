@@ -202,14 +202,18 @@ func cutoffMessages(log *zerolog.Logger, messages []*BackfillMessage, forward bo
 
 func (portal *Portal) sendBackfill(ctx context.Context, source *UserLogin, messages []*BackfillMessage, forceForward, markRead, inThread bool) {
 	canBatchSend := portal.Bridge.Matrix.GetCapabilities().BatchSending
+	unreadThreshold := time.Duration(portal.Bridge.Config.Backfill.UnreadHoursThreshold) * time.Hour
+	forceMarkRead := unreadThreshold > 0 && time.Since(messages[len(messages)-1].Timestamp) > unreadThreshold
 	zerolog.Ctx(ctx).Info().
 		Int("message_count", len(messages)).
 		Bool("batch_send", canBatchSend).
+		Bool("mark_read", markRead).
+		Bool("mark_read_past_threshold", forceMarkRead).
 		Msg("Sending backfill messages")
 	if canBatchSend {
-		portal.sendBatch(ctx, source, messages, forceForward, markRead)
+		portal.sendBatch(ctx, source, messages, forceForward, markRead || forceMarkRead)
 	} else {
-		portal.sendLegacyBackfill(ctx, source, messages, markRead)
+		portal.sendLegacyBackfill(ctx, source, messages, markRead || forceMarkRead)
 	}
 	zerolog.Ctx(ctx).Debug().Msg("Backfill finished")
 	if !inThread && portal.Bridge.Config.Backfill.Threads.MaxInitialMessages > 0 {
