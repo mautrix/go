@@ -27,6 +27,7 @@ import (
 	"go.mau.fi/util/dbutil"
 	_ "go.mau.fi/util/dbutil/litestream"
 	"go.mau.fi/util/exsync"
+	"go.mau.fi/util/random"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/appservice"
@@ -34,6 +35,7 @@ import (
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/bridgeconfig"
 	"maunium.net/go/mautrix/bridgev2/commands"
+	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -526,7 +528,7 @@ func (br *Connector) GetMemberInfo(ctx context.Context, roomID id.RoomID, userID
 	return br.AS.StateStore.GetMember(ctx, roomID, userID)
 }
 
-func (br *Connector) BatchSend(ctx context.Context, roomID id.RoomID, req *mautrix.ReqBeeperBatchSend) (*mautrix.RespBeeperBatchSend, error) {
+func (br *Connector) BatchSend(ctx context.Context, roomID id.RoomID, req *mautrix.ReqBeeperBatchSend, extras []*bridgev2.MatrixSendExtra) (*mautrix.RespBeeperBatchSend, error) {
 	if encrypted, err := br.StateStore.IsEncrypted(ctx, roomID); err != nil {
 		return nil, fmt.Errorf("failed to check if room is encrypted: %w", err)
 	} else if encrypted {
@@ -561,6 +563,11 @@ func (br *Connector) GenerateDeterministicEventID(roomID id.RoomID, _ networkid.
 	copy(eventID[1+hashB64Len+1:], br.deterministicEventIDServer)
 
 	return id.EventID(unsafe.String(unsafe.SliceData(eventID), len(eventID)))
+}
+
+func (br *Connector) GenerateReactionEventID(roomID id.RoomID, targetMessage *database.Message, sender networkid.UserID, emojiID networkid.EmojiID) id.EventID {
+	// We don't care about determinism for reactions
+	return id.EventID(fmt.Sprintf("$%s:%s", base64.RawURLEncoding.EncodeToString(random.Bytes(32)), br.deterministicEventIDServer))
 }
 
 func (br *Connector) ServerName() string {

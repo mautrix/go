@@ -357,7 +357,7 @@ type BackfillReaction struct {
 	EmojiID      networkid.EmojiID
 	Emoji        string
 	ExtraContent map[string]any
-	DBMetadata   map[string]any
+	DBMetadata   any
 }
 
 // BackfillMessage is an individual message in a history pagination request.

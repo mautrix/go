@@ -9,10 +9,12 @@ package bridgev2
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/ptr"
+	"go.mau.fi/util/variationselector"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2/database"
@@ -238,6 +240,8 @@ func (portal *Portal) sendBatch(ctx context.Context, source *UserLogin, messages
 	}
 	prevThreadEvents := make(map[networkid.MessageID]id.EventID)
 	dbMessages := make([]*database.Message, 0, len(messages))
+	dbReactions := make([]*database.Reaction, 0)
+	extras := make([]*MatrixSendExtra, 0, len(messages))
 	var disappearingMessages []*database.DisappearingMessage
 	for _, msg := range messages {
 		intent := portal.GetIntentFor(ctx, msg.Sender, source, RemoteEventMessage)
@@ -245,7 +249,10 @@ func (portal *Portal) sendBatch(ctx context.Context, source *UserLogin, messages
 		if threadRoot != nil && prevThreadEvents[*msg.ThreadRoot] != "" {
 			prevThreadEvent.MXID = prevThreadEvents[*msg.ThreadRoot]
 		}
+		var partIDs []networkid.PartID
+		partMap := make(map[networkid.PartID]*database.Message, len(msg.Parts))
 		for _, part := range msg.Parts {
+			partIDs = append(partIDs, part.ID)
 			portal.applyRelationMeta(part.Content, replyTo, threadRoot, prevThreadEvent)
 			evtID := portal.Bridge.Matrix.GenerateDeterministicEventID(portal.MXID, portal.PortalKey, msg.ID, part.ID)
 			req.Events = append(req.Events, &event.Event{
@@ -259,7 +266,7 @@ func (portal *Portal) sendBatch(ctx context.Context, source *UserLogin, messages
 					Raw:    part.Extra,
 				},
 			})
-			dbMessages = append(dbMessages, &database.Message{
+			dbMessage := &database.Message{
 				ID:         msg.ID,
 				PartID:     part.ID,
 				MXID:       evtID,
@@ -270,7 +277,10 @@ func (portal *Portal) sendBatch(ctx context.Context, source *UserLogin, messages
 				ThreadRoot: ptr.Val(msg.ThreadRoot),
 				ReplyTo:    ptr.Val(msg.ReplyTo),
 				Metadata:   part.DBMetadata,
-			})
+			}
+			partMap[part.ID] = dbMessage
+			extras = append(extras, &MatrixSendExtra{MessageMeta: dbMessage})
+			dbMessages = append(dbMessages, dbMessage)
 			if prevThreadEvent != nil {
 				prevThreadEvent.MXID = evtID
 				prevThreadEvents[*msg.ThreadRoot] = evtID
@@ -286,11 +296,53 @@ func (portal *Portal) sendBatch(ctx context.Context, source *UserLogin, messages
 				})
 			}
 		}
-		// TODO handle reactions
-		//for _, reaction := range msg.Reactions {
-		//}
+		slices.Sort(partIDs)
+		for _, reaction := range msg.Reactions {
+			reactionIntent := portal.GetIntentFor(ctx, reaction.Sender, source, RemoteEventReactionRemove)
+			if reaction.TargetPart == nil {
+				reaction.TargetPart = &partIDs[0]
+			}
+			if reaction.Timestamp.IsZero() {
+				reaction.Timestamp = msg.Timestamp.Add(10 * time.Millisecond)
+			}
+			targetPart, ok := partMap[*reaction.TargetPart]
+			if !ok {
+				// TODO warning log and/or skip reaction?
+			}
+			reactionMXID := portal.Bridge.Matrix.GenerateReactionEventID(portal.MXID, targetPart, reaction.Sender.Sender, reaction.EmojiID)
+			dbReaction := &database.Reaction{
+				Room:          portal.PortalKey,
+				MessageID:     msg.ID,
+				MessagePartID: *reaction.TargetPart,
+				SenderID:      reaction.Sender.Sender,
+				EmojiID:       reaction.EmojiID,
+				MXID:          reactionMXID,
+				Timestamp:     reaction.Timestamp,
+				Emoji:         reaction.Emoji,
+				Metadata:      reaction.DBMetadata,
+			}
+			req.Events = append(req.Events, &event.Event{
+				Sender:    reactionIntent.GetMXID(),
+				Type:      event.EventReaction,
+				Timestamp: reaction.Timestamp.UnixMilli(),
+				ID:        reactionMXID,
+				RoomID:    portal.MXID,
+				Content: event.Content{
+					Parsed: &event.ReactionEventContent{
+						RelatesTo: event.RelatesTo{
+							Type:    event.RelAnnotation,
+							EventID: portal.Bridge.Matrix.GenerateDeterministicEventID(portal.MXID, portal.PortalKey, msg.ID, *reaction.TargetPart),
+							Key:     variationselector.Add(reaction.Emoji),
+						},
+					},
+					Raw: reaction.ExtraContent,
+				},
+			})
+			dbReactions = append(dbReactions, dbReaction)
+			extras = append(extras, &MatrixSendExtra{ReactionMeta: dbReaction})
+		}
 	}
-	_, err := portal.Bridge.Matrix.BatchSend(ctx, portal.MXID, req)
+	_, err := portal.Bridge.Matrix.BatchSend(ctx, portal.MXID, req, extras)
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to send backfill messages")
 	}
@@ -326,10 +378,32 @@ func (portal *Portal) sendLegacyBackfill(ctx context.Context, source *UserLogin,
 		})
 		if len(dbMessages) > 0 {
 			lastPart = dbMessages[len(dbMessages)-1].MXID
+			for _, reaction := range msg.Reactions {
+				reactionIntent := portal.GetIntentFor(ctx, reaction.Sender, source, RemoteEventReaction)
+				targetPart := dbMessages[0]
+				if reaction.TargetPart != nil {
+					targetPartIdx := slices.IndexFunc(dbMessages, func(dbMsg *database.Message) bool {
+						return dbMsg.PartID == *reaction.TargetPart
+					})
+					if targetPartIdx != -1 {
+						targetPart = dbMessages[targetPartIdx]
+					} else {
+						// TODO warning log and/or skip reaction?
+					}
+				}
+				portal.sendConvertedReaction(
+					ctx, reaction.Sender.Sender, reactionIntent, targetPart, reaction.EmojiID, reaction.Emoji,
+					reaction.Timestamp, reaction.DBMetadata, reaction.ExtraContent,
+					func(z *zerolog.Event) *zerolog.Event {
+						return z.
+							Str("target_message_id", string(msg.ID)).
+							Str("target_part_id", string(targetPart.PartID)).
+							Any("reaction_sender_id", reaction.Sender).
+							Time("reaction_ts", reaction.Timestamp)
+					},
+				)
+			}
 		}
-		// TODO handle reactions
-		//for _, reaction := range msg.Reactions {
-		//}
 	}
 	if markRead {
 		dp := source.User.DoublePuppet(ctx)

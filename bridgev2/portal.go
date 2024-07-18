@@ -1510,45 +1510,11 @@ func (portal *Portal) handleRemoteReaction(ctx context.Context, source *UserLogi
 	if extraContentProvider, ok := evt.(RemoteReactionWithExtraContent); ok {
 		extra = extraContentProvider.GetReactionExtraContent()
 	}
-	dbReaction := &database.Reaction{
-		Room:          portal.PortalKey,
-		MessageID:     targetMessage.ID,
-		MessagePartID: targetMessage.PartID,
-		SenderID:      evt.GetSender().Sender,
-		EmojiID:       emojiID,
-		Timestamp:     ts,
-	}
-	if emojiID == "" {
-		dbReaction.Emoji = emoji
-	}
+	var dbMetadata any
 	if metaProvider, ok := evt.(RemoteReactionWithMeta); ok {
-		dbReaction.Metadata = metaProvider.GetReactionDBMetadata()
+		dbMetadata = metaProvider.GetReactionDBMetadata()
 	}
-	resp, err := intent.SendMessage(ctx, portal.MXID, event.EventReaction, &event.Content{
-		Parsed: &event.ReactionEventContent{
-			RelatesTo: event.RelatesTo{
-				Type:    event.RelAnnotation,
-				EventID: targetMessage.MXID,
-				Key:     variationselector.Add(emoji),
-			},
-		},
-		Raw: extra,
-	}, &MatrixSendExtra{
-		Timestamp:    ts,
-		ReactionMeta: dbReaction,
-	})
-	if err != nil {
-		log.Err(err).Msg("Failed to send reaction to Matrix")
-		return
-	}
-	log.Debug().
-		Stringer("event_id", resp.EventID).
-		Msg("Sent reaction to Matrix")
-	dbReaction.MXID = resp.EventID
-	err = portal.Bridge.DB.Reaction.Upsert(ctx, dbReaction)
-	if err != nil {
-		log.Err(err).Msg("Failed to save reaction to database")
-	}
+	portal.sendConvertedReaction(ctx, evt.GetSender().Sender, intent, targetMessage, emojiID, emoji, ts, dbMetadata, extra, nil)
 	if existingReaction != nil {
 		_, err = intent.SendMessage(ctx, portal.MXID, event.EventRedaction, &event.Content{
 			Parsed: &event.RedactionEventContent{
@@ -1558,6 +1524,56 @@ func (portal *Portal) handleRemoteReaction(ctx context.Context, source *UserLogi
 		if err != nil {
 			log.Err(err).Msg("Failed to redact old reaction")
 		}
+	}
+}
+
+func (portal *Portal) sendConvertedReaction(
+	ctx context.Context, senderID networkid.UserID, intent MatrixAPI, targetMessage *database.Message,
+	emojiID networkid.EmojiID, emoji string, ts time.Time, dbMetadata any, extraContent map[string]any,
+	logContext func(*zerolog.Event) *zerolog.Event,
+) {
+	if logContext == nil {
+		logContext = func(e *zerolog.Event) *zerolog.Event {
+			return e
+		}
+	}
+	log := zerolog.Ctx(ctx)
+	dbReaction := &database.Reaction{
+		Room:          portal.PortalKey,
+		MessageID:     targetMessage.ID,
+		MessagePartID: targetMessage.PartID,
+		SenderID:      senderID,
+		EmojiID:       emojiID,
+		Timestamp:     ts,
+		Metadata:      dbMetadata,
+	}
+	if emojiID == "" {
+		dbReaction.Emoji = emoji
+	}
+	resp, err := intent.SendMessage(ctx, portal.MXID, event.EventReaction, &event.Content{
+		Parsed: &event.ReactionEventContent{
+			RelatesTo: event.RelatesTo{
+				Type:    event.RelAnnotation,
+				EventID: targetMessage.MXID,
+				Key:     variationselector.Add(emoji),
+			},
+		},
+		Raw: extraContent,
+	}, &MatrixSendExtra{
+		Timestamp:    ts,
+		ReactionMeta: dbReaction,
+	})
+	if err != nil {
+		logContext(log.Err(err)).Msg("Failed to send reaction to Matrix")
+		return
+	}
+	logContext(log.Debug()).
+		Stringer("event_id", resp.EventID).
+		Msg("Sent reaction to Matrix")
+	dbReaction.MXID = resp.EventID
+	err = portal.Bridge.DB.Reaction.Upsert(ctx, dbReaction)
+	if err != nil {
+		logContext(log.Err(err)).Msg("Failed to save reaction to database")
 	}
 }
 
