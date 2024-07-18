@@ -41,13 +41,32 @@ const (
 	ensureBackfillExistsQuery = `
 		INSERT INTO backfill_queue (bridge_id, portal_id, portal_receiver, user_login_id, batch_count, is_done, next_dispatch_min_ts)
 		VALUES ($1, $2, $3, $4, 0, false, $5)
-		ON CONFLICT DO UPDATE
-			SET user_login_id=excluded.user_login_id,
+		ON CONFLICT (bridge_id, portal_id, portal_receiver) DO UPDATE
+			SET user_login_id=CASE
+					WHEN backfill_queue.user_login_id=''
+						THEN excluded.user_login_id
+					ELSE backfill_queue.user_login_id
+				END,
 			    next_dispatch_min_ts=CASE
-			        WHEN next_dispatch_min_ts=9223372036854775807
+			        WHEN backfill_queue.next_dispatch_min_ts=9223372036854775807
 			            THEN excluded.next_dispatch_min_ts
-			        ELSE next_dispatch_min_ts
+			        ELSE backfill_queue.next_dispatch_min_ts
 				END
+	`
+	upsertBackfillQueueQuery = `
+		INSERT INTO backfill_queue (
+			bridge_id, portal_id, portal_receiver, user_login_id, batch_count, is_done, cursor,
+			oldest_message_id, dispatched_at, completed_at, next_dispatch_min_ts
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		ON CONFLICT (bridge_id, portal_id, portal_receiver) DO UPDATE
+			SET user_login_id=excluded.user_login_id,
+				batch_count=excluded.batch_count,
+				is_done=excluded.is_done,
+				cursor=excluded.cursor,
+				oldest_message_id=excluded.oldest_message_id,
+				dispatched_at=excluded.dispatched_at,
+				completed_at=excluded.completed_at,
+				next_dispatch_min_ts=excluded.next_dispatch_min_ts
 	`
 	markBackfillDispatchedQuery = `
 		UPDATE backfill_queue SET dispatched_at=$4, completed_at=NULL, next_dispatch_min_ts=$5
@@ -73,8 +92,13 @@ const (
 	`
 )
 
-func (bqq *BackfillQueueQuery) EnsureExists(ctx context.Context, portal networkid.PortalKey) error {
-	return bqq.Exec(ctx, ensureBackfillExistsQuery, bqq.BridgeID, portal.ID, portal.Receiver, time.Now().UnixNano())
+func (bqq *BackfillQueueQuery) EnsureExists(ctx context.Context, portal networkid.PortalKey, loginID networkid.UserLoginID) error {
+	return bqq.Exec(ctx, ensureBackfillExistsQuery, bqq.BridgeID, portal.ID, portal.Receiver, loginID, time.Now().UnixNano())
+}
+
+func (bqq *BackfillQueueQuery) Upsert(ctx context.Context, bq *BackfillTask) error {
+	ensureBridgeIDMatches(&bq.BridgeID, bqq.BridgeID)
+	return bqq.Exec(ctx, upsertBackfillQueueQuery, bq.sqlVariables()...)
 }
 
 const UnfinishedBackfillBackoff = 1 * time.Hour

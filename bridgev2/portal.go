@@ -1816,6 +1816,8 @@ type ChatInfo struct {
 
 	UserLocal *UserLocalPortalInfo
 
+	CanBackfill bool
+
 	ExtraUpdates func(context.Context, *Portal) bool
 }
 
@@ -2320,6 +2322,12 @@ func (portal *Portal) UpdateInfo(ctx context.Context, info *ChatInfo, source *Us
 		source.MarkInPortal(ctx, portal)
 		portal.updateUserLocalInfo(ctx, info.UserLocal, source)
 	}
+	if info.CanBackfill && source != nil {
+		err := portal.Bridge.DB.BackfillQueue.EnsureExists(ctx, portal.PortalKey, source.ID)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to ensure backfill queue task exists")
+		}
+	}
 	if info.ExtraUpdates != nil {
 		changed = info.ExtraUpdates(ctx, portal) || changed
 	}
@@ -2456,6 +2464,16 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 	if err != nil {
 		log.Err(err).Msg("Failed to save portal to database after creating Matrix room")
 		return err
+	}
+	if info.CanBackfill {
+		err = portal.Bridge.DB.BackfillQueue.Upsert(ctx, &database.BackfillTask{
+			PortalKey:         portal.PortalKey,
+			UserLoginID:       source.ID,
+			NextDispatchMinTS: time.Now().Add(BackfillMinBackoffAfterRoomCreate),
+		})
+		if err != nil {
+			log.Err(err).Msg("Failed to create backfill queue task after creating room")
+		}
 	}
 	if portal.Parent != nil {
 		if portal.Parent.MXID != "" {
