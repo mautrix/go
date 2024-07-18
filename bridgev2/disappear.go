@@ -91,7 +91,7 @@ func (dl *DisappearLoop) sleepAndDisappear(ctx context.Context, dms ...*database
 				Redacts: msg.EventID,
 				Reason:  "Message disappeared",
 			},
-		}, time.Now())
+		}, nil)
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Stringer("target_event_id", msg.EventID).Msg("Failed to disappear message")
 		} else {

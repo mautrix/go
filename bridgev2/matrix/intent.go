@@ -31,7 +31,10 @@ type ASIntent struct {
 
 var _ bridgev2.MatrixAPI = (*ASIntent)(nil)
 
-func (as *ASIntent) SendMessage(ctx context.Context, roomID id.RoomID, eventType event.Type, content *event.Content, ts time.Time) (*mautrix.RespSendEvent, error) {
+func (as *ASIntent) SendMessage(ctx context.Context, roomID id.RoomID, eventType event.Type, content *event.Content, extra *bridgev2.MatrixSendExtra) (*mautrix.RespSendEvent, error) {
+	if extra == nil {
+		extra = &bridgev2.MatrixSendExtra{}
+	}
 	// TODO remove this once hungryserv and synapse support sending m.room.redactions directly in all room versions
 	if eventType == event.EventRedaction {
 		parsedContent := content.Parsed.(*event.RedactionEventContent)
@@ -45,7 +48,11 @@ func (as *ASIntent) SendMessage(ctx context.Context, roomID id.RoomID, eventType
 			return nil, fmt.Errorf("failed to check if room is encrypted: %w", err)
 		} else if encrypted {
 			if as.Matrix.IsCustomPuppet {
-				as.Matrix.AddDoublePuppetValueWithTS(content, ts.UnixMilli())
+				if extra.Timestamp.IsZero() {
+					as.Matrix.AddDoublePuppetValue(content)
+				} else {
+					as.Matrix.AddDoublePuppetValueWithTS(content, extra.Timestamp.UnixMilli())
+				}
 			}
 			err = as.Connector.Crypto.Encrypt(ctx, roomID, eventType, content)
 			if err != nil {
@@ -54,10 +61,10 @@ func (as *ASIntent) SendMessage(ctx context.Context, roomID id.RoomID, eventType
 			eventType = event.EventEncrypted
 		}
 	}
-	if ts.IsZero() {
+	if extra.Timestamp.IsZero() {
 		return as.Matrix.SendMessageEvent(ctx, roomID, eventType, content)
 	} else {
-		return as.Matrix.SendMassagedMessageEvent(ctx, roomID, eventType, content, ts.UnixMilli())
+		return as.Matrix.SendMassagedMessageEvent(ctx, roomID, eventType, content, extra.Timestamp.UnixMilli())
 	}
 }
 

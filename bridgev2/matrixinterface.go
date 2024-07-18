@@ -14,6 +14,7 @@ import (
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridge/status"
+	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -56,10 +57,16 @@ type MatrixConnectorWithServer interface {
 	GetRouter() *mux.Router
 }
 
+type MatrixSendExtra struct {
+	Timestamp    time.Time
+	MessageMeta  *database.Message
+	ReactionMeta *database.Reaction
+}
+
 type MatrixAPI interface {
 	GetMXID() id.UserID
 
-	SendMessage(ctx context.Context, roomID id.RoomID, eventType event.Type, content *event.Content, ts time.Time) (*mautrix.RespSendEvent, error)
+	SendMessage(ctx context.Context, roomID id.RoomID, eventType event.Type, content *event.Content, extra *MatrixSendExtra) (*mautrix.RespSendEvent, error)
 	SendState(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string, content *event.Content, ts time.Time) (*mautrix.RespSendEvent, error)
 	MarkRead(ctx context.Context, roomID id.RoomID, eventID id.EventID, ts time.Time) error
 	MarkUnread(ctx context.Context, roomID id.RoomID, unread bool) error

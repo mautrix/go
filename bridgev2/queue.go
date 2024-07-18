@@ -129,7 +129,7 @@ func (br *Bridge) handleBotInvite(ctx context.Context, evt *event.Event, sender 
 		}
 		_, err = br.Bot.SendMessage(ctx, evt.RoomID, event.EventMessage, &event.Content{
 			Parsed: format.RenderMarkdown(message, true, false),
-		}, time.Time{})
+		}, nil)
 		if err != nil {
 			log.Err(err).Msg("Failed to send welcome message to room")
 		}

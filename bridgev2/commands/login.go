@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/skip2/go-qrcode"
 	"golang.org/x/net/html"
@@ -148,7 +147,7 @@ func sendQR(ce *Event, qr string, prevEventID *id.EventID) error {
 	if *prevEventID != "" {
 		content.SetEdit(*prevEventID)
 	}
-	newEventID, err := ce.Bot.SendMessage(ce.Ctx, ce.RoomID, event.EventMessage, &event.Content{Parsed: content}, time.Now())
+	newEventID, err := ce.Bot.SendMessage(ce.Ctx, ce.RoomID, event.EventMessage, &event.Content{Parsed: content}, nil)
 	if err != nil {
 		return err
 	}
@@ -196,7 +195,7 @@ func doLoginDisplayAndWait(ce *Event, login bridgev2.LoginProcessDisplayAndWait,
 			Parsed: &event.RedactionEventContent{
 				Redacts: *prevEvent,
 			},
-		}, time.Now())
+		}, nil)
 		*prevEvent = ""
 	}
 	if err != nil {

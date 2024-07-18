@@ -885,7 +885,7 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 			Parsed: &event.RedactionEventContent{
 				Redacts: existing.MXID,
 			},
-		}, time.Now())
+		}, nil)
 		if err != nil {
 			log.Err(err).Msg("Failed to remove old reaction")
 		}
@@ -908,7 +908,7 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 					Parsed: &event.RedactionEventContent{
 						Redacts: oldReaction.MXID,
 					},
-				}, time.Now())
+				}, nil)
 				if err != nil {
 					log.Err(err).Msg("Failed to remove previous reaction after limit was exceeded")
 				}
@@ -1298,22 +1298,9 @@ func (portal *Portal) sendConvertedMessage(ctx context.Context, id networkid.Mes
 	output := make([]*database.Message, 0, len(converted.Parts))
 	for _, part := range converted.Parts {
 		portal.applyRelationMeta(part.Content, replyTo, threadRoot, prevThreadEvent)
-		resp, err := intent.SendMessage(ctx, portal.MXID, part.Type, &event.Content{
-			Parsed: part.Content,
-			Raw:    part.Extra,
-		}, ts)
-		if err != nil {
-			logContext(log.Err(err)).Str("part_id", string(part.ID)).Msg("Failed to send message part to Matrix")
-			continue
-		}
-		logContext(log.Debug()).
-			Stringer("event_id", resp.EventID).
-			Str("part_id", string(part.ID)).
-			Msg("Sent message part to Matrix")
 		dbMessage := &database.Message{
 			ID:         id,
 			PartID:     part.ID,
-			MXID:       resp.EventID,
 			Room:       portal.PortalKey,
 			SenderID:   sender.Sender,
 			SenderMXID: intent.GetMXID(),
@@ -1322,6 +1309,22 @@ func (portal *Portal) sendConvertedMessage(ctx context.Context, id networkid.Mes
 			ReplyTo:    ptr.Val(converted.ReplyTo),
 			Metadata:   part.DBMetadata,
 		}
+		resp, err := intent.SendMessage(ctx, portal.MXID, part.Type, &event.Content{
+			Parsed: part.Content,
+			Raw:    part.Extra,
+		}, &MatrixSendExtra{
+			Timestamp:   ts,
+			MessageMeta: dbMessage,
+		})
+		if err != nil {
+			logContext(log.Err(err)).Str("part_id", string(part.ID)).Msg("Failed to send message part to Matrix")
+			continue
+		}
+		logContext(log.Debug()).
+			Stringer("event_id", resp.EventID).
+			Str("part_id", string(part.ID)).
+			Msg("Sent message part to Matrix")
+		dbMessage.MXID = resp.EventID
 		err = portal.Bridge.DB.Message.Insert(ctx, dbMessage)
 		if err != nil {
 			logContext(log.Err(err)).Str("part_id", string(part.ID)).Msg("Failed to save message part to database")
@@ -1377,7 +1380,9 @@ func (portal *Portal) sendRemoteErrorNotice(ctx context.Context, intent MatrixAP
 		Raw: map[string]any{
 			"fi.mau.bridge.internal_error": err.Error(),
 		},
-	}, ts)
+	}, &MatrixSendExtra{
+		Timestamp: ts,
+	})
 	if sendErr != nil {
 		zerolog.Ctx(ctx).Err(sendErr).Msg("Failed to send error notice after remote event handling failed")
 	} else {
@@ -1418,7 +1423,10 @@ func (portal *Portal) handleRemoteEdit(ctx context.Context, source *UserLogin, e
 			Parsed: part.Content,
 			Raw:    part.TopLevelExtra,
 		}
-		resp, err := intent.SendMessage(ctx, portal.MXID, part.Type, wrappedContent, ts)
+		resp, err := intent.SendMessage(ctx, portal.MXID, part.Type, wrappedContent, &MatrixSendExtra{
+			Timestamp:   ts,
+			MessageMeta: part.Part,
+		})
 		if err != nil {
 			log.Err(err).Stringer("part_mxid", part.Part.MXID).Msg("Failed to edit message part")
 		} else {
@@ -1438,7 +1446,9 @@ func (portal *Portal) handleRemoteEdit(ctx context.Context, source *UserLogin, e
 				Redacts: part.MXID,
 			},
 		}
-		resp, err := intent.SendMessage(ctx, portal.MXID, event.EventRedaction, redactContent, ts)
+		resp, err := intent.SendMessage(ctx, portal.MXID, event.EventRedaction, redactContent, &MatrixSendExtra{
+			Timestamp: ts,
+		})
 		if err != nil {
 			log.Err(err).Stringer("part_mxid", part.MXID).Msg("Failed to redact message part deleted in edit")
 		} else {
@@ -1500,6 +1510,20 @@ func (portal *Portal) handleRemoteReaction(ctx context.Context, source *UserLogi
 	if extraContentProvider, ok := evt.(RemoteReactionWithExtraContent); ok {
 		extra = extraContentProvider.GetReactionExtraContent()
 	}
+	dbReaction := &database.Reaction{
+		Room:          portal.PortalKey,
+		MessageID:     targetMessage.ID,
+		MessagePartID: targetMessage.PartID,
+		SenderID:      evt.GetSender().Sender,
+		EmojiID:       emojiID,
+		Timestamp:     ts,
+	}
+	if emojiID == "" {
+		dbReaction.Emoji = emoji
+	}
+	if metaProvider, ok := evt.(RemoteReactionWithMeta); ok {
+		dbReaction.Metadata = metaProvider.GetReactionDBMetadata()
+	}
 	resp, err := intent.SendMessage(ctx, portal.MXID, event.EventReaction, &event.Content{
 		Parsed: &event.ReactionEventContent{
 			RelatesTo: event.RelatesTo{
@@ -1509,7 +1533,10 @@ func (portal *Portal) handleRemoteReaction(ctx context.Context, source *UserLogi
 			},
 		},
 		Raw: extra,
-	}, ts)
+	}, &MatrixSendExtra{
+		Timestamp:    ts,
+		ReactionMeta: dbReaction,
+	})
 	if err != nil {
 		log.Err(err).Msg("Failed to send reaction to Matrix")
 		return
@@ -1517,21 +1544,7 @@ func (portal *Portal) handleRemoteReaction(ctx context.Context, source *UserLogi
 	log.Debug().
 		Stringer("event_id", resp.EventID).
 		Msg("Sent reaction to Matrix")
-	dbReaction := &database.Reaction{
-		Room:          portal.PortalKey,
-		MessageID:     targetMessage.ID,
-		MessagePartID: targetMessage.PartID,
-		SenderID:      evt.GetSender().Sender,
-		EmojiID:       emojiID,
-		MXID:          resp.EventID,
-		Timestamp:     ts,
-	}
-	if metaProvider, ok := evt.(RemoteReactionWithMeta); ok {
-		dbReaction.Metadata = metaProvider.GetReactionDBMetadata()
-	}
-	if emojiID == "" {
-		dbReaction.Emoji = emoji
-	}
+	dbReaction.MXID = resp.EventID
 	err = portal.Bridge.DB.Reaction.Upsert(ctx, dbReaction)
 	if err != nil {
 		log.Err(err).Msg("Failed to save reaction to database")
@@ -1541,7 +1554,7 @@ func (portal *Portal) handleRemoteReaction(ctx context.Context, source *UserLogi
 			Parsed: &event.RedactionEventContent{
 				Redacts: existingReaction.MXID,
 			},
-		}, ts)
+		}, &MatrixSendExtra{Timestamp: ts})
 		if err != nil {
 			log.Err(err).Msg("Failed to redact old reaction")
 		}
@@ -1564,7 +1577,7 @@ func (portal *Portal) handleRemoteReactionRemove(ctx context.Context, source *Us
 		Parsed: &event.RedactionEventContent{
 			Redacts: targetReaction.MXID,
 		},
-	}, ts)
+	}, &MatrixSendExtra{Timestamp: ts})
 	if err != nil {
 		log.Err(err).Stringer("reaction_mxid", targetReaction.MXID).Msg("Failed to redact reaction")
 	}
@@ -1591,7 +1604,7 @@ func (portal *Portal) handleRemoteMessageRemove(ctx context.Context, source *Use
 			Parsed: &event.RedactionEventContent{
 				Redacts: part.MXID,
 			},
-		}, ts)
+		}, &MatrixSendExtra{Timestamp: ts})
 		if err != nil {
 			log.Err(err).Stringer("part_mxid", part.MXID).Msg("Failed to redact message part")
 		} else {
@@ -2270,7 +2283,7 @@ func (portal *Portal) UpdateDisappearingSetting(ctx context.Context, setting dat
 	}
 	_, err := sender.SendMessage(ctx, portal.MXID, event.EventMessage, &event.Content{
 		Parsed: content,
-	}, ts)
+	}, &MatrixSendExtra{Timestamp: ts})
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to send disappearing messages notice")
 	} else {

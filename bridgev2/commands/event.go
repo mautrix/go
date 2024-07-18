@@ -10,7 +10,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/rs/zerolog"
 
@@ -56,7 +55,7 @@ func (ce *Event) Reply(msg string, args ...any) {
 func (ce *Event) ReplyAdvanced(msg string, allowMarkdown, allowHTML bool) {
 	content := format.RenderMarkdown(msg, allowMarkdown, allowHTML)
 	content.MsgType = event.MsgNotice
-	_, err := ce.Bot.SendMessage(ce.Ctx, ce.RoomID, event.EventMessage, &event.Content{Parsed: &content}, time.Now())
+	_, err := ce.Bot.SendMessage(ce.Ctx, ce.RoomID, event.EventMessage, &event.Content{Parsed: &content}, nil)
 	if err != nil {
 		ce.Log.Err(err).Msgf("Failed to reply to command")
 	}
@@ -72,7 +71,7 @@ func (ce *Event) React(key string) {
 				Key:     key,
 			},
 		},
-	}, time.Now())
+	}, nil)
 	if err != nil {
 		ce.Log.Err(err).Msgf("Failed to react to command")
 	}
@@ -84,7 +83,7 @@ func (ce *Event) Redact(req ...mautrix.ReqRedact) {
 		Parsed: &event.RedactionEventContent{
 			Redacts: ce.EventID,
 		},
-	}, time.Now())
+	}, nil)
 	if err != nil {
 		ce.Log.Err(err).Msgf("Failed to redact command")
 	}
