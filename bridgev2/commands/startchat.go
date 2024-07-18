@@ -140,24 +140,3 @@ func fnResolveIdentifier(ce *Event) {
 		ce.Reply("Found %s", formattedName)
 	}
 }
-
-var CommandDeletePortal = &FullHandler{
-	Func: func(ce *Event) {
-		err := ce.Portal.Delete(ce.Ctx)
-		if err != nil {
-			ce.Reply("Failed to delete portal: %v", err)
-		}
-		err = ce.Bot.DeleteRoom(ce.Ctx, ce.Portal.MXID, false)
-		if err != nil {
-			ce.Reply("Failed to clean up room: %v", err)
-		}
-		ce.MessageStatus.DisableMSS = true
-	},
-	Name: "delete-portal",
-	Help: HelpMeta{
-		Section:     HelpSectionAdmin,
-		Description: "Delete the current portal room",
-	},
-	RequiresAdmin:  true,
-	RequiresPortal: true,
-}

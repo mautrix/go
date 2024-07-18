@@ -69,6 +69,7 @@ const (
 	getPortalByIDWithUncertainReceiverQuery = getPortalBaseQuery + `WHERE bridge_id=$1 AND id=$2 AND (receiver=$3 OR receiver='')`
 	getPortalByMXIDQuery                    = getPortalBaseQuery + `WHERE bridge_id=$1 AND mxid=$2`
 	getAllPortalsWithMXIDQuery              = getPortalBaseQuery + `WHERE bridge_id=$1 AND mxid IS NOT NULL`
+	getAllPortalsQuery                      = getPortalBaseQuery + `WHERE bridge_id=$1`
 	getChildPortalsQuery                    = getPortalBaseQuery + `WHERE bridge_id=$1 AND parent_id=$2`
 
 	findPortalReceiverQuery = `SELECT id, receiver FROM portal WHERE bridge_id=$1 AND id=$2 AND (receiver=$3 OR receiver='') LIMIT 1`
@@ -123,6 +124,10 @@ func (pq *PortalQuery) GetByMXID(ctx context.Context, mxid id.RoomID) (*Portal, 
 
 func (pq *PortalQuery) GetAllWithMXID(ctx context.Context) ([]*Portal, error) {
 	return pq.QueryMany(ctx, getAllPortalsWithMXIDQuery, pq.BridgeID)
+}
+
+func (pq *PortalQuery) GetAll(ctx context.Context) ([]*Portal, error) {
+	return pq.QueryMany(ctx, getAllPortalsQuery, pq.BridgeID)
 }
 
 func (pq *PortalQuery) GetChildren(ctx context.Context, parentID networkid.PortalID) ([]*Portal, error) {

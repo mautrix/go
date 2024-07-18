@@ -199,6 +199,16 @@ func (br *Bridge) GetAllPortalsWithMXID(ctx context.Context) ([]*Portal, error) 
 	return br.loadManyPortals(ctx, rows)
 }
 
+func (br *Bridge) GetAllPortals(ctx context.Context) ([]*Portal, error) {
+	br.cacheLock.Lock()
+	defer br.cacheLock.Unlock()
+	rows, err := br.DB.Portal.GetAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return br.loadManyPortals(ctx, rows)
+}
+
 func (br *Bridge) GetPortalByKey(ctx context.Context, key networkid.PortalKey) (*Portal, error) {
 	br.cacheLock.Lock()
 	defer br.cacheLock.Unlock()
