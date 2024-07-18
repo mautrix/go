@@ -2323,7 +2323,7 @@ func (portal *Portal) UpdateInfo(ctx context.Context, info *ChatInfo, source *Us
 		portal.updateUserLocalInfo(ctx, info.UserLocal, source)
 	}
 	if info.CanBackfill && source != nil {
-		err := portal.Bridge.DB.BackfillQueue.EnsureExists(ctx, portal.PortalKey, source.ID)
+		err := portal.Bridge.DB.BackfillTask.EnsureExists(ctx, portal.PortalKey, source.ID)
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to ensure backfill queue task exists")
 		}
@@ -2466,7 +2466,7 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 		return err
 	}
 	if info.CanBackfill {
-		err = portal.Bridge.DB.BackfillQueue.Upsert(ctx, &database.BackfillTask{
+		err = portal.Bridge.DB.BackfillTask.Upsert(ctx, &database.BackfillTask{
 			PortalKey:         portal.PortalKey,
 			UserLoginID:       source.ID,
 			NextDispatchMinTS: time.Now().Add(BackfillMinBackoffAfterRoomCreate),

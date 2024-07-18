@@ -32,7 +32,7 @@ type Database struct {
 	User                *UserQuery
 	UserLogin           *UserLoginQuery
 	UserPortal          *UserPortalQuery
-	BackfillQueue       *BackfillQueueQuery
+	BackfillTask        *BackfillTaskQuery
 }
 
 type MetaMerger interface {
@@ -130,7 +130,7 @@ func New(bridgeID networkid.BridgeID, mt MetaTypes, db *dbutil.Database) *Databa
 				return &UserPortal{}
 			}),
 		},
-		BackfillQueue: &BackfillQueueQuery{
+		BackfillTask: &BackfillTaskQuery{
 			BridgeID: bridgeID,
 			QueryHelper: dbutil.MakeQueryHelper(db, func(_ *dbutil.QueryHelper[*BackfillTask]) *BackfillTask {
 				return &BackfillTask{}

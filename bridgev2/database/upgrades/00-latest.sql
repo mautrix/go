@@ -176,7 +176,7 @@ CREATE TABLE user_portal (
 CREATE INDEX user_portal_login_idx ON user_portal (bridge_id, login_id);
 CREATE INDEX user_portal_portal_idx ON user_portal (bridge_id, portal_id, portal_receiver);
 
-CREATE TABLE backfill_queue (
+CREATE TABLE backfill_task (
 	bridge_id            TEXT    NOT NULL,
 	portal_id            TEXT    NOT NULL,
 	portal_receiver      TEXT    NOT NULL,

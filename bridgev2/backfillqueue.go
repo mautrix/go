@@ -45,7 +45,7 @@ func (br *Bridge) RunBackfillQueue() {
 	afterTimer := time.NewTimer(batchDelay)
 	log.Info().Stringer("batch_delay", batchDelay).Msg("Backfill queue starting")
 	for {
-		backfillTask, err := br.DB.BackfillQueue.GetNext(ctx)
+		backfillTask, err := br.DB.BackfillTask.GetNext(ctx)
 		if err != nil {
 			log.Err(err).Msg("Failed to get next backfill queue entry")
 			time.Sleep(BackfillQueueErrorBackoff)
@@ -77,7 +77,7 @@ func (br *Bridge) doBackfillTask(ctx context.Context, task *database.BackfillTas
 		Object("portal_key", task.PortalKey).
 		Str("login_id", string(task.UserLoginID)).
 		Logger()
-	err := br.DB.BackfillQueue.MarkDispatched(ctx, task)
+	err := br.DB.BackfillTask.MarkDispatched(ctx, task)
 	if err != nil {
 		log.Err(err).Msg("Failed to mark backfill task as dispatched")
 		time.Sleep(BackfillQueueErrorBackoff)
@@ -93,7 +93,7 @@ func (br *Bridge) doBackfillTask(ctx context.Context, task *database.BackfillTas
 	} else {
 		log.Info().Msg("Backfill task canceled")
 	}
-	err = br.DB.BackfillQueue.Update(ctx, task)
+	err = br.DB.BackfillTask.Update(ctx, task)
 	if err != nil {
 		log.Err(err).Msg("Failed to update backfill task")
 		time.Sleep(BackfillQueueErrorBackoff)
@@ -106,7 +106,7 @@ func (portal *Portal) deleteBackfillQueueTaskIfRoomDoesNotExist(ctx context.Cont
 	defer portal.roomCreateLock.Unlock()
 	if portal.MXID == "" {
 		zerolog.Ctx(ctx).Debug().Msg("Portal for backfill task doesn't exist, deleting entry")
-		err := portal.Bridge.DB.BackfillQueue.Delete(ctx, portal.PortalKey)
+		err := portal.Bridge.DB.BackfillTask.Delete(ctx, portal.PortalKey)
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to delete backfill task after portal wasn't found")
 		}
@@ -122,7 +122,7 @@ func (br *Bridge) actuallyDoBackfillTask(ctx context.Context, task *database.Bac
 		return false, fmt.Errorf("failed to get portal for backfill task: %w", err)
 	} else if portal == nil {
 		log.Warn().Msg("Portal not found for backfill task")
-		err = br.DB.BackfillQueue.Delete(ctx, task.PortalKey)
+		err = br.DB.BackfillTask.Delete(ctx, task.PortalKey)
 		if err != nil {
 			log.Err(err).Msg("Failed to delete backfill task after portal wasn't found")
 			time.Sleep(BackfillQueueErrorBackoff)

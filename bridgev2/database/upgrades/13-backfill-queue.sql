@@ -1,5 +1,5 @@
 -- v13 (compatible with v9+): Add backfill queue
-CREATE TABLE backfill_queue (
+CREATE TABLE backfill_task (
 	bridge_id            TEXT    NOT NULL,
 	portal_id            TEXT    NOT NULL,
 	portal_receiver      TEXT    NOT NULL,

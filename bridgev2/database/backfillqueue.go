@@ -16,7 +16,7 @@ import (
 	"maunium.net/go/mautrix/bridgev2/networkid"
 )
 
-type BackfillQueueQuery struct {
+type BackfillTaskQuery struct {
 	BridgeID networkid.BridgeID
 	*dbutil.QueryHelper[*BackfillTask]
 }
@@ -39,22 +39,22 @@ var BackfillNextDispatchNever = time.Unix(0, (1<<63)-1)
 
 const (
 	ensureBackfillExistsQuery = `
-		INSERT INTO backfill_queue (bridge_id, portal_id, portal_receiver, user_login_id, batch_count, is_done, next_dispatch_min_ts)
+		INSERT INTO backfill_task (bridge_id, portal_id, portal_receiver, user_login_id, batch_count, is_done, next_dispatch_min_ts)
 		VALUES ($1, $2, $3, $4, 0, false, $5)
 		ON CONFLICT (bridge_id, portal_id, portal_receiver) DO UPDATE
 			SET user_login_id=CASE
-					WHEN backfill_queue.user_login_id=''
+					WHEN backfill_task.user_login_id=''
 						THEN excluded.user_login_id
-					ELSE backfill_queue.user_login_id
+					ELSE backfill_task.user_login_id
 				END,
 			    next_dispatch_min_ts=CASE
-			        WHEN backfill_queue.next_dispatch_min_ts=9223372036854775807
+			        WHEN backfill_task.next_dispatch_min_ts=9223372036854775807
 			            THEN excluded.next_dispatch_min_ts
-			        ELSE backfill_queue.next_dispatch_min_ts
+			        ELSE backfill_task.next_dispatch_min_ts
 				END
 	`
 	upsertBackfillQueueQuery = `
-		INSERT INTO backfill_queue (
+		INSERT INTO backfill_task (
 			bridge_id, portal_id, portal_receiver, user_login_id, batch_count, is_done, cursor,
 			oldest_message_id, dispatched_at, completed_at, next_dispatch_min_ts
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
@@ -69,11 +69,11 @@ const (
 				next_dispatch_min_ts=excluded.next_dispatch_min_ts
 	`
 	markBackfillDispatchedQuery = `
-		UPDATE backfill_queue SET dispatched_at=$4, completed_at=NULL, next_dispatch_min_ts=$5
+		UPDATE backfill_task SET dispatched_at=$4, completed_at=NULL, next_dispatch_min_ts=$5
 		WHERE bridge_id = $1 AND portal_id = $2 AND portal_receiver = $3
 	`
 	updateBackfillQueueQuery = `
-		UPDATE backfill_queue
+		UPDATE backfill_task
 		SET user_login_id=$4, batch_count=$5, is_done=$6, cursor=$7, oldest_message_id=$8,
 			dispatched_at=$9, completed_at=$10, next_dispatch_min_ts=$11
 		WHERE bridge_id = $1 AND portal_id = $2 AND portal_receiver = $3
@@ -82,50 +82,50 @@ const (
 		SELECT
 			bridge_id, portal_id, portal_receiver, user_login_id, batch_count, is_done,
 			cursor, oldest_message_id, dispatched_at, completed_at, next_dispatch_min_ts
-		FROM backfill_queue
+		FROM backfill_task
 		WHERE bridge_id = $1 AND next_dispatch_min_ts < $2 AND is_done = false AND user_login_id <> ''
 		ORDER BY next_dispatch_min_ts LIMIT 1
 	`
 	deleteBackfillQueueQuery = `
-		DELETE FROM backfill_queue
+		DELETE FROM backfill_task
 		WHERE bridge_id = $1 AND portal_id = $2 AND portal_receiver = $3
 	`
 )
 
-func (bqq *BackfillQueueQuery) EnsureExists(ctx context.Context, portal networkid.PortalKey, loginID networkid.UserLoginID) error {
-	return bqq.Exec(ctx, ensureBackfillExistsQuery, bqq.BridgeID, portal.ID, portal.Receiver, loginID, time.Now().UnixNano())
+func (btq *BackfillTaskQuery) EnsureExists(ctx context.Context, portal networkid.PortalKey, loginID networkid.UserLoginID) error {
+	return btq.Exec(ctx, ensureBackfillExistsQuery, btq.BridgeID, portal.ID, portal.Receiver, loginID, time.Now().UnixNano())
 }
 
-func (bqq *BackfillQueueQuery) Upsert(ctx context.Context, bq *BackfillTask) error {
-	ensureBridgeIDMatches(&bq.BridgeID, bqq.BridgeID)
-	return bqq.Exec(ctx, upsertBackfillQueueQuery, bq.sqlVariables()...)
+func (btq *BackfillTaskQuery) Upsert(ctx context.Context, bq *BackfillTask) error {
+	ensureBridgeIDMatches(&bq.BridgeID, btq.BridgeID)
+	return btq.Exec(ctx, upsertBackfillQueueQuery, bq.sqlVariables()...)
 }
 
 const UnfinishedBackfillBackoff = 1 * time.Hour
 
-func (bqq *BackfillQueueQuery) MarkDispatched(ctx context.Context, bq *BackfillTask) error {
-	ensureBridgeIDMatches(&bq.BridgeID, bqq.BridgeID)
+func (btq *BackfillTaskQuery) MarkDispatched(ctx context.Context, bq *BackfillTask) error {
+	ensureBridgeIDMatches(&bq.BridgeID, btq.BridgeID)
 	bq.DispatchedAt = time.Now()
 	bq.CompletedAt = time.Time{}
 	bq.NextDispatchMinTS = bq.DispatchedAt.Add(UnfinishedBackfillBackoff)
-	return bqq.Exec(
+	return btq.Exec(
 		ctx, markBackfillDispatchedQuery,
 		bq.BridgeID, bq.PortalKey.ID, bq.PortalKey.Receiver,
 		bq.DispatchedAt.UnixNano(), bq.NextDispatchMinTS.UnixNano(),
 	)
 }
 
-func (bqq *BackfillQueueQuery) Update(ctx context.Context, bq *BackfillTask) error {
-	ensureBridgeIDMatches(&bq.BridgeID, bqq.BridgeID)
-	return bqq.Exec(ctx, updateBackfillQueueQuery, bq.sqlVariables()...)
+func (btq *BackfillTaskQuery) Update(ctx context.Context, bq *BackfillTask) error {
+	ensureBridgeIDMatches(&bq.BridgeID, btq.BridgeID)
+	return btq.Exec(ctx, updateBackfillQueueQuery, bq.sqlVariables()...)
 }
 
-func (bqq *BackfillQueueQuery) GetNext(ctx context.Context) (*BackfillTask, error) {
-	return bqq.QueryOne(ctx, getNextBackfillQuery, bqq.BridgeID, time.Now().UnixNano())
+func (btq *BackfillTaskQuery) GetNext(ctx context.Context) (*BackfillTask, error) {
+	return btq.QueryOne(ctx, getNextBackfillQuery, btq.BridgeID, time.Now().UnixNano())
 }
 
-func (bqq *BackfillQueueQuery) Delete(ctx context.Context, portalKey networkid.PortalKey) error {
-	return bqq.Exec(ctx, deleteBackfillQueueQuery, bqq.BridgeID, portalKey.ID, portalKey.Receiver)
+func (btq *BackfillTaskQuery) Delete(ctx context.Context, portalKey networkid.PortalKey) error {
+	return btq.Exec(ctx, deleteBackfillQueueQuery, btq.BridgeID, portalKey.ID, portalKey.Receiver)
 }
 
 func (bt *BackfillTask) Scan(row dbutil.Scannable) (*BackfillTask, error) {
