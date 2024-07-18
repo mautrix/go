@@ -43,6 +43,7 @@ func (br *Bridge) RunBackfillQueue() {
 	}()
 	batchDelay := time.Duration(br.Config.Backfill.Queue.BatchDelay) * time.Second
 	afterTimer := time.NewTimer(batchDelay)
+	log.Info().Stringer("batch_delay", batchDelay).Msg("Backfill queue starting")
 	for {
 		backfillTask, err := br.DB.BackfillQueue.GetNext(ctx)
 		if err != nil {

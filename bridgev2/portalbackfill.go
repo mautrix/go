@@ -76,6 +76,16 @@ func (portal *Portal) DoBackwardsBackfill(ctx context.Context, source *UserLogin
 	if err != nil {
 		return fmt.Errorf("failed to get first portal message: %w", err)
 	}
+	logEvt := log.Info().
+		Str("cursor", string(task.Cursor)).
+		Str("task_oldest_message_id", string(task.OldestMessageID)).
+		Int("current_batch_count", task.BatchCount)
+	if firstMessage != nil {
+		logEvt = logEvt.Str("db_oldest_message_id", string(firstMessage.ID))
+	} else {
+		logEvt = logEvt.Str("db_oldest_message_id", "")
+	}
+	logEvt.Msg("Fetching messages for backward backfill")
 	resp, err := api.FetchMessages(ctx, FetchMessagesParams{
 		Portal:        portal,
 		ThreadRoot:    "",
@@ -87,6 +97,11 @@ func (portal *Portal) DoBackwardsBackfill(ctx context.Context, source *UserLogin
 	if err != nil {
 		return fmt.Errorf("failed to fetch messages for backward backfill: %w", err)
 	}
+	log.Debug().
+		Str("new_cursor", string(resp.Cursor)).
+		Bool("has_more", resp.HasMore).
+		Int("message_count", len(resp.Messages)).
+		Msg("Fetched messages for backward backfill")
 	task.Cursor = resp.Cursor
 	if !resp.HasMore {
 		task.IsDone = true
@@ -187,7 +202,10 @@ func cutoffMessages(log *zerolog.Logger, messages []*BackfillMessage, forward bo
 
 func (portal *Portal) sendBackfill(ctx context.Context, source *UserLogin, messages []*BackfillMessage, forceForward, markRead, inThread bool) {
 	canBatchSend := portal.Bridge.Matrix.GetCapabilities().BatchSending
-	zerolog.Ctx(ctx).Info().Int("message_count", len(messages)).Bool("batch_send", canBatchSend).Msg("Sending backfill messages")
+	zerolog.Ctx(ctx).Info().
+		Int("message_count", len(messages)).
+		Bool("batch_send", canBatchSend).
+		Msg("Sending backfill messages")
 	if canBatchSend {
 		portal.sendBatch(ctx, source, messages, forceForward, markRead)
 	} else {
