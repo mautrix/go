@@ -18,7 +18,7 @@ import (
 
 const BackfillMinBackoffAfterRoomCreate = 1 * time.Minute
 const BackfillQueueErrorBackoff = 1 * time.Minute
-const BackfillQueueMinEmptyBackoff = 10 * time.Minute
+const BackfillQueueMaxEmptyBackoff = 10 * time.Minute
 
 func (br *Bridge) WakeupBackfillQueue() {
 	select {
@@ -42,8 +42,8 @@ func (br *Bridge) RunBackfillQueue() {
 		cancel()
 	}()
 	batchDelay := time.Duration(br.Config.Backfill.Queue.BatchDelay) * time.Second
-	afterTimer := time.NewTimer(batchDelay)
 	log.Info().Stringer("batch_delay", batchDelay).Msg("Backfill queue starting")
+	noTasksFoundCount := 0
 	for {
 		backfillTask, err := br.DB.BackfillTask.GetNext(ctx)
 		if err != nil {
@@ -52,22 +52,33 @@ func (br *Bridge) RunBackfillQueue() {
 			continue
 		} else if backfillTask != nil {
 			br.doBackfillTask(ctx, backfillTask)
+			noTasksFoundCount = 0
 		}
 		nextDelay := batchDelay
-		if backfillTask == nil {
-			nextDelay = max(BackfillQueueMinEmptyBackoff, batchDelay)
+		if noTasksFoundCount > 0 {
+			extraDelay := batchDelay * time.Duration(noTasksFoundCount)
+			nextDelay += min(BackfillQueueMaxEmptyBackoff, extraDelay)
 		}
-		if !afterTimer.Stop() {
-			<-afterTimer.C
-		}
-		afterTimer.Reset(nextDelay)
+		timer := time.NewTimer(nextDelay)
 		select {
 		case <-br.wakeupBackfillQueue:
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			noTasksFoundCount = 0
 		case <-br.stopBackfillQueue:
-			afterTimer.Stop()
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
 			log.Info().Msg("Stopping backfill queue")
 			return
-		case <-afterTimer.C:
+		case <-timer.C:
 		}
 	}
 }
