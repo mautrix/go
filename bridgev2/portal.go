@@ -217,6 +217,16 @@ func (br *Bridge) GetAllPortals(ctx context.Context) ([]*Portal, error) {
 	return br.loadManyPortals(ctx, rows)
 }
 
+func (br *Bridge) GetDMPortalsWith(ctx context.Context, otherUserID networkid.UserID) ([]*Portal, error) {
+	br.cacheLock.Lock()
+	defer br.cacheLock.Unlock()
+	rows, err := br.DB.Portal.GetAllDMsWith(ctx, otherUserID)
+	if err != nil {
+		return nil, err
+	}
+	return br.loadManyPortals(ctx, rows)
+}
+
 func (br *Bridge) GetPortalByKey(ctx context.Context, key networkid.PortalKey) (*Portal, error) {
 	br.cacheLock.Lock()
 	defer br.cacheLock.Unlock()
@@ -2005,7 +2015,16 @@ func (portal *Portal) sendRoomMeta(ctx context.Context, sender MatrixAPI, ts tim
 	if portal.MXID == "" {
 		return false
 	}
-	_, err := portal.sendStateWithIntentOrBot(ctx, sender, eventType, stateKey, &event.Content{Parsed: content}, ts)
+	var extra map[string]any
+	if !portal.NameIsCustom && (eventType == event.StateRoomName || eventType == event.StateRoomAvatar) {
+		extra = map[string]any{
+			"fi.mau.implicit_name": true,
+		}
+	}
+	_, err := portal.sendStateWithIntentOrBot(ctx, sender, eventType, stateKey, &event.Content{
+		Parsed: content,
+		Raw:    extra,
+	}, ts)
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).
 			Str("event_type", eventType.Type).
@@ -2345,17 +2364,47 @@ func (portal *Portal) UpdateParent(ctx context.Context, newParent networkid.Port
 	return true
 }
 
+func (portal *Portal) lockedUpdateInfoFromGhost(ctx context.Context, ghost *Ghost) {
+	portal.roomCreateLock.Lock()
+	defer portal.roomCreateLock.Unlock()
+	portal.UpdateInfoFromGhost(ctx, ghost)
+}
+
+func (portal *Portal) UpdateInfoFromGhost(ctx context.Context, ghost *Ghost) (changed bool) {
+	if portal.NameIsCustom || !portal.Bridge.Config.PrivateChatPortalMeta || (portal.OtherUserID == "" && ghost == nil) || portal.RoomType != database.RoomTypeDM {
+		return
+	}
+	var err error
+	if ghost == nil {
+		ghost, err = portal.Bridge.GetGhostByID(ctx, portal.OtherUserID)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to get ghost to update info from")
+			return
+		}
+	}
+	changed = portal.UpdateName(ctx, ghost.Name, nil, time.Time{}) || changed
+	changed = portal.UpdateAvatar(ctx, &Avatar{
+		ID:   ghost.AvatarID,
+		MXC:  ghost.AvatarMXC,
+		Hash: ghost.AvatarHash,
+	}, nil, time.Time{}) || changed
+	return
+}
+
 func (portal *Portal) UpdateInfo(ctx context.Context, info *ChatInfo, source *UserLogin, sender MatrixAPI, ts time.Time) {
 	changed := false
 	if info.Name != nil {
+		portal.NameIsCustom = true
 		changed = portal.UpdateName(ctx, *info.Name, sender, ts) || changed
 	}
 	if info.Topic != nil {
 		changed = portal.UpdateTopic(ctx, *info.Topic, sender, ts) || changed
 	}
 	if info.Avatar != nil {
+		portal.NameIsCustom = true
 		changed = portal.UpdateAvatar(ctx, info.Avatar, sender, ts) || changed
 	}
+	changed = portal.UpdateInfoFromGhost(ctx, nil) || changed
 	if info.Disappear != nil {
 		changed = portal.UpdateDisappearingSetting(ctx, *info.Disappear, sender, ts, false, false) || changed
 	}

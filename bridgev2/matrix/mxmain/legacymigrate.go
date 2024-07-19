@@ -152,6 +152,7 @@ func (br *BridgeMain) postMigrateDMPortal(ctx context.Context, portal *bridgev2.
 				Msg("Failed to set power levels")
 		}
 	}
+	portal.UpdateInfoFromGhost(ctx, ghost)
 	return nil
 }
 

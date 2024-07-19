@@ -50,6 +50,7 @@ type Portal struct {
 	NameSet      bool
 	TopicSet     bool
 	AvatarSet    bool
+	NameIsCustom bool
 	InSpace      bool
 	RoomType     RoomType
 	Disappear    DisappearingSetting
@@ -60,7 +61,7 @@ const (
 	getPortalBaseQuery = `
 		SELECT bridge_id, id, receiver, mxid, parent_id, relay_login_id, other_user_id,
 		       name, topic, avatar_id, avatar_hash, avatar_mxc,
-		       name_set, topic_set, avatar_set, in_space,
+		       name_set, topic_set, avatar_set, name_is_custom, in_space,
 		       room_type, disappear_type, disappear_timer,
 		       metadata
 		FROM portal
@@ -69,6 +70,7 @@ const (
 	getPortalByIDWithUncertainReceiverQuery = getPortalBaseQuery + `WHERE bridge_id=$1 AND id=$2 AND (receiver=$3 OR receiver='')`
 	getPortalByMXIDQuery                    = getPortalBaseQuery + `WHERE bridge_id=$1 AND mxid=$2`
 	getAllPortalsWithMXIDQuery              = getPortalBaseQuery + `WHERE bridge_id=$1 AND mxid IS NOT NULL`
+	getAllDMPortalsQuery                    = getPortalBaseQuery + `WHERE bridge_id=$1 AND room_type='dm' AND other_user_id<>''`
 	getAllPortalsQuery                      = getPortalBaseQuery + `WHERE bridge_id=$1`
 	getChildPortalsQuery                    = getPortalBaseQuery + `WHERE bridge_id=$1 AND parent_id=$2`
 
@@ -79,11 +81,11 @@ const (
 			bridge_id, id, receiver, mxid,
 			parent_id, relay_login_id, other_user_id,
 			name, topic, avatar_id, avatar_hash, avatar_mxc,
-			name_set, avatar_set, topic_set, in_space,
+			name_set, avatar_set, topic_set, name_is_custom, in_space,
 			room_type, disappear_type, disappear_timer,
 			metadata, relay_bridge_id
 		) VALUES (
-			$1, $2, $3, $4, $5, cast($6 AS TEXT), $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
+			$1, $2, $3, $4, $5, cast($6 AS TEXT), $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21,
 			CASE WHEN cast($6 AS TEXT) IS NULL THEN NULL ELSE $1 END
 		)
 	`
@@ -91,8 +93,8 @@ const (
 		UPDATE portal
 		SET mxid=$4, parent_id=$5, relay_login_id=cast($6 AS TEXT), relay_bridge_id=CASE WHEN cast($6 AS TEXT) IS NULL THEN NULL ELSE bridge_id END,
 		    other_user_id=$7, name=$8, topic=$9, avatar_id=$10, avatar_hash=$11, avatar_mxc=$12,
-		    name_set=$13, avatar_set=$14, topic_set=$15, in_space=$16,
-		    room_type=$17, disappear_type=$18, disappear_timer=$19, metadata=$20
+		    name_set=$13, avatar_set=$14, topic_set=$15, name_is_custom=$16, in_space=$17,
+		    room_type=$18, disappear_type=$19, disappear_timer=$20, metadata=$21
 		WHERE bridge_id=$1 AND id=$2 AND receiver=$3
 	`
 	deletePortalQuery = `
@@ -130,6 +132,10 @@ func (pq *PortalQuery) GetAll(ctx context.Context) ([]*Portal, error) {
 	return pq.QueryMany(ctx, getAllPortalsQuery, pq.BridgeID)
 }
 
+func (pq *PortalQuery) GetAllDMsWith(ctx context.Context, otherUserID networkid.UserID) ([]*Portal, error) {
+	return pq.QueryMany(ctx, getAllDMPortalsQuery, pq.BridgeID, otherUserID)
+}
+
 func (pq *PortalQuery) GetChildren(ctx context.Context, parentID networkid.PortalID) ([]*Portal, error) {
 	return pq.QueryMany(ctx, getChildPortalsQuery, pq.BridgeID, parentID)
 }
@@ -160,7 +166,7 @@ func (p *Portal) Scan(row dbutil.Scannable) (*Portal, error) {
 		&p.BridgeID, &p.ID, &p.Receiver, &mxid,
 		&parentID, &relayLoginID, &otherUserID,
 		&p.Name, &p.Topic, &p.AvatarID, &avatarHash, &p.AvatarMXC,
-		&p.NameSet, &p.TopicSet, &p.AvatarSet, &p.InSpace,
+		&p.NameSet, &p.TopicSet, &p.AvatarSet, &p.NameIsCustom, &p.InSpace,
 		&p.RoomType, &disappearType, &disappearTimer,
 		dbutil.JSON{Data: p.Metadata},
 	)
@@ -202,7 +208,7 @@ func (p *Portal) sqlVariables() []any {
 		p.BridgeID, p.ID, p.Receiver, dbutil.StrPtr(p.MXID),
 		dbutil.StrPtr(p.ParentID), dbutil.StrPtr(p.RelayLoginID), dbutil.StrPtr(p.OtherUserID),
 		p.Name, p.Topic, p.AvatarID, avatarHash, p.AvatarMXC,
-		p.NameSet, p.TopicSet, p.AvatarSet, p.InSpace,
+		p.NameSet, p.TopicSet, p.AvatarSet, p.NameIsCustom, p.InSpace,
 		p.RoomType, dbutil.StrPtr(p.Disappear.Type), dbutil.NumPtr(p.Disappear.Timer),
 		dbutil.JSON{Data: p.Metadata},
 	}

@@ -24,6 +24,7 @@ func doUpgrade(helper up.Helper) {
 
 	helper.Copy(up.Str, "bridge", "command_prefix")
 	helper.Copy(up.Bool, "bridge", "personal_filtering_spaces")
+	helper.Copy(up.Bool, "bridge", "private_chat_portal_meta")
 	helper.Copy(up.Bool, "bridge", "relay", "enabled")
 	helper.Copy(up.Bool, "bridge", "relay", "admin_only")
 	helper.Copy(up.List, "bridge", "relay", "default_relays")
@@ -183,6 +184,11 @@ func doMigrateLegacy(helper up.Helper) {
 
 	helper.Copy(up.Str, "bridge", "command_prefix")
 	helper.Copy(up.Bool, "bridge", "personal_filtering_spaces")
+	if oldPM, ok := helper.Get(up.Str, "bridge", "private_chat_portal_meta"); ok && (oldPM == "default" || oldPM == "always") {
+		helper.Set(up.Bool, "true", "bridge", "private_chat_portal_meta")
+	} else {
+		helper.Set(up.Bool, "false", "bridge", "private_chat_portal_meta")
+	}
 	helper.Copy(up.Bool, "bridge", "relay", "enabled")
 	helper.Copy(up.Bool, "bridge", "relay", "admin_only")
 	helper.Copy(up.Map, "bridge", "permissions")

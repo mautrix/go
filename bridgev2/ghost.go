@@ -230,6 +230,20 @@ func (ghost *Ghost) UpdateInfoIfNecessary(ctx context.Context, source *UserLogin
 	}
 }
 
+func (ghost *Ghost) updateDMPortals(ctx context.Context) {
+	if !ghost.Bridge.Config.PrivateChatPortalMeta {
+		return
+	}
+	dmPortals, err := ghost.Bridge.GetDMPortalsWith(ctx, ghost.ID)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to get DM portals to update info")
+		return
+	}
+	for _, portal := range dmPortals {
+		go portal.lockedUpdateInfoFromGhost(ctx, ghost)
+	}
+}
+
 func (ghost *Ghost) UpdateInfo(ctx context.Context, info *UserInfo) {
 	update := false
 	if info.Name != nil {
@@ -237,6 +251,9 @@ func (ghost *Ghost) UpdateInfo(ctx context.Context, info *UserInfo) {
 	}
 	if info.Avatar != nil {
 		update = ghost.UpdateAvatar(ctx, info.Avatar) || update
+	}
+	if update {
+		ghost.updateDMPortals(ctx)
 	}
 	if info.Identifiers != nil || info.IsBot != nil {
 		update = ghost.UpdateContactInfo(ctx, info.Identifiers, info.IsBot) || update

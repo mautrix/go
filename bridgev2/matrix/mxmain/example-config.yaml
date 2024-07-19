@@ -4,6 +4,8 @@ bridge:
     command_prefix: '$<<or .DefaultCommandPrefix (printf "!%s" .NetworkID)>>'
     # Should the bridge create a space for each login containing the rooms that account is in?
     personal_filtering_spaces: true
+    # Whether the bridge should set names and avatars explicitly for DM portals.
+    private_chat_portal_meta: false
 
     # Settings for relay mode
     relay:
@@ -139,6 +141,7 @@ matrix:
     delivery_receipts: false
     # Whether the bridge should send error notices via m.notice events when a message fails to bridge.
     message_error_notices: true
+    # Whether the bridge should update the m.direct account data event when double puppeting is enabled.
     sync_direct_chat_list: false
     # Whether created rooms should have federation enabled. If false, created portal rooms
     # will never be federated. Changing this option requires recreating rooms.

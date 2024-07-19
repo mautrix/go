@@ -34,6 +34,7 @@ type Config struct {
 type BridgeConfig struct {
 	CommandPrefix           string           `yaml:"command_prefix"`
 	PersonalFilteringSpaces bool             `yaml:"personal_filtering_spaces"`
+	PrivateChatPortalMeta   bool             `yaml:"private_chat_portal_meta"`
 	Relay                   RelayConfig      `yaml:"relay"`
 	Permissions             PermissionConfig `yaml:"permissions"`
 	Backfill                BackfillConfig   `yaml:"backfill"`
