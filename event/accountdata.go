@@ -9,6 +9,7 @@ package event
 import (
 	"encoding/json"
 	"strings"
+	"time"
 
 	"maunium.net/go/mautrix/id"
 )
@@ -84,4 +85,23 @@ type IgnoredUser struct {
 
 type MarkedUnreadEventContent struct {
 	Unread bool `json:"unread"`
+}
+
+type BeeperMuteEventContent struct {
+	MutedUntil int64 `json:"muted_until,omitempty"`
+}
+
+func (bmec *BeeperMuteEventContent) IsMuted() bool {
+	return bmec.MutedUntil < 0 || (bmec.MutedUntil > 0 && bmec.GetMutedUntilTime().After(time.Now()))
+}
+
+var MutedForever = time.Date(9999, 12, 31, 23, 59, 59, 999999999, time.UTC)
+
+func (bmec *BeeperMuteEventContent) GetMutedUntilTime() time.Time {
+	if bmec.MutedUntil < 0 {
+		return MutedForever
+	} else if bmec.MutedUntil > 0 {
+		return time.UnixMilli(bmec.MutedUntil)
+	}
+	return time.Time{}
 }

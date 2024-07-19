@@ -420,7 +420,7 @@ func (br *Connector) SendMessageStatus(ctx context.Context, ms *bridgev2.Message
 }
 
 func (br *Connector) internalSendMessageStatus(ctx context.Context, ms *bridgev2.MessageStatus, evt *bridgev2.MessageStatusEventInfo, editEvent id.EventID) id.EventID {
-	if evt.EventType.IsEphemeral() {
+	if evt.EventType.IsEphemeral() || evt.EventID == "" {
 		return ""
 	}
 	log := zerolog.Ctx(ctx)

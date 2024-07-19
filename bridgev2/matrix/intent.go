@@ -356,7 +356,20 @@ func (as *ASIntent) TagRoom(ctx context.Context, roomID id.RoomID, tag event.Roo
 }
 
 func (as *ASIntent) MuteRoom(ctx context.Context, roomID id.RoomID, until time.Time) error {
-	if !until.IsZero() && until.Before(time.Now()) {
+	var mutedUntil int64
+	if until.Before(time.Now()) {
+		mutedUntil = 0
+	} else if until == event.MutedForever {
+		mutedUntil = -1
+	} else {
+		mutedUntil = until.UnixMilli()
+	}
+	if as.Connector.SpecVersions.Supports(mautrix.BeeperFeatureAccountDataMute) {
+		return as.Matrix.SetRoomAccountData(ctx, roomID, event.AccountDataBeeperMute.Type, &event.BeeperMuteEventContent{
+			MutedUntil: mutedUntil,
+		})
+	}
+	if mutedUntil == 0 {
 		err := as.Matrix.DeletePushRule(ctx, "global", pushrules.RoomRule, string(roomID))
 		// If the push rule doesn't exist, everything is fine
 		if errors.Is(err, mautrix.MNotFound) {

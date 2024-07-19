@@ -429,6 +429,13 @@ func (portal *Portal) handleMatrixEvent(sender *User, evt *event.Event) {
 	case event.StateRoomAvatar:
 		handleMatrixRoomMeta(portal, ctx, login, origSender, evt, RoomAvatarHandlingNetworkAPI.HandleMatrixRoomAvatar)
 	case event.StateEncryption:
+		// TODO?
+	case event.AccountDataMarkedUnread:
+		handleMatrixAccountData(portal, ctx, login, evt, MarkedUnreadHandlingNetworkAPI.HandleMarkedUnread)
+	case event.AccountDataRoomTags:
+		handleMatrixAccountData(portal, ctx, login, evt, TagHandlingNetworkAPI.HandleRoomTag)
+	case event.AccountDataBeeperMute:
+		handleMatrixAccountData(portal, ctx, login, evt, MuteHandlingNetworkAPI.HandleMute)
 	}
 }
 
@@ -969,7 +976,7 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 	portal.sendSuccessStatus(ctx, evt)
 }
 
-func handleMatrixRoomMeta[APIType any, ContentType RoomMetaEventContent](
+func handleMatrixRoomMeta[APIType any, ContentType any](
 	portal *Portal,
 	ctx context.Context,
 	sender *UserLogin,
@@ -1034,6 +1041,39 @@ func handleMatrixRoomMeta[APIType any, ContentType RoomMetaEventContent](
 		}
 	}
 	portal.sendSuccessStatus(ctx, evt)
+}
+
+func handleMatrixAccountData[APIType any, ContentType any](
+	portal *Portal, ctx context.Context, sender *UserLogin, evt *event.Event,
+	fn func(APIType, context.Context, *MatrixRoomMeta[ContentType]) error,
+) {
+	api, ok := sender.Client.(APIType)
+	if !ok {
+		return
+	}
+	log := zerolog.Ctx(ctx)
+	content, ok := evt.Content.Parsed.(ContentType)
+	if !ok {
+		log.Error().Type("content_type", evt.Content.Parsed).Msg("Unexpected parsed content type")
+		return
+	}
+	var prevContent ContentType
+	if evt.Unsigned.PrevContent != nil {
+		_ = evt.Unsigned.PrevContent.ParseRaw(evt.Type)
+		prevContent, _ = evt.Unsigned.PrevContent.Parsed.(ContentType)
+	}
+
+	err := fn(api, ctx, &MatrixRoomMeta[ContentType]{
+		MatrixEventBase: MatrixEventBase[ContentType]{
+			Event:   evt,
+			Content: content,
+			Portal:  portal,
+		},
+		PrevContent: prevContent,
+	})
+	if err != nil {
+		log.Err(err).Msg("Failed to handle Matrix room account data")
+	}
 }
 
 func (portal *Portal) handleMatrixRedaction(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) {
@@ -1900,6 +1940,8 @@ type ChatInfo struct {
 var Unmuted = time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 
 type UserLocalPortalInfo struct {
+	// To signal an indefinite mute, use [event.MutedForever] as the value here.
+	// To unmute, set any time before now, e.g. [bridgev2.Unmuted].
 	MutedUntil *time.Time
 	Tag        *event.RoomTag
 }

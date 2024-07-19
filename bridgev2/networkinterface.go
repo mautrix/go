@@ -457,6 +457,21 @@ type TypingHandlingNetworkAPI interface {
 	HandleMatrixTyping(ctx context.Context, msg *MatrixTyping) error
 }
 
+type MarkedUnreadHandlingNetworkAPI interface {
+	NetworkAPI
+	HandleMarkedUnread(ctx context.Context, msg *MatrixMarkedUnread) error
+}
+
+type MuteHandlingNetworkAPI interface {
+	NetworkAPI
+	HandleMute(ctx context.Context, msg *MatrixMute) error
+}
+
+type TagHandlingNetworkAPI interface {
+	NetworkAPI
+	HandleRoomTag(ctx context.Context, msg *MatrixRoomTag) error
+}
+
 // RoomNameHandlingNetworkAPI is an optional interface that network connectors can implement to handle room name changes.
 type RoomNameHandlingNetworkAPI interface {
 	NetworkAPI
@@ -832,11 +847,7 @@ type MatrixMessageRemove struct {
 	TargetMessage *database.Message
 }
 
-type RoomMetaEventContent interface {
-	*event.RoomNameEventContent | *event.RoomAvatarEventContent | *event.TopicEventContent
-}
-
-type MatrixRoomMeta[ContentType RoomMetaEventContent] struct {
+type MatrixRoomMeta[ContentType any] struct {
 	MatrixEventBase[ContentType]
 	PrevContent ContentType
 }
@@ -865,3 +876,7 @@ type MatrixTyping struct {
 	IsTyping bool
 	Type     TypingType
 }
+
+type MatrixMarkedUnread = MatrixRoomMeta[*event.MarkedUnreadEventContent]
+type MatrixMute = MatrixRoomMeta[*event.BeeperMuteEventContent]
+type MatrixRoomTag = MatrixRoomMeta[*event.TagEventContent]
