@@ -2393,6 +2393,7 @@ func (portal *Portal) UpdateInfo(ctx context.Context, info *ChatInfo, source *Us
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to ensure backfill queue task exists")
 		}
+		// TODO wake up backfill queue if task was just created
 	}
 	if info.ExtraUpdates != nil {
 		changed = info.ExtraUpdates(ctx, portal) || changed
@@ -2563,6 +2564,7 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 		if err != nil {
 			log.Err(err).Msg("Failed to create backfill queue task after creating room")
 		}
+		portal.Bridge.WakeupBackfillQueue()
 	}
 	if portal.Parent != nil {
 		if portal.Parent.MXID != "" {
