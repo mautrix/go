@@ -8,6 +8,7 @@
 package mxmain
 
 import (
+	"context"
 	_ "embed"
 	"encoding/json"
 	"errors"
@@ -358,7 +359,7 @@ func (br *BridgeMain) LoadConfig() {
 // Start starts the bridge after everything has been initialized.
 // This is called by [Run] and does not need to be called manually.
 func (br *BridgeMain) Start() {
-	err := br.Bridge.Start()
+	err := br.Bridge.StartConnectors()
 	if err != nil {
 		var dbUpgradeErr bridgev2.DBUpgradeError
 		if errors.As(err, &dbUpgradeErr) {
@@ -366,6 +367,14 @@ func (br *BridgeMain) Start() {
 		} else {
 			br.Log.Fatal().Err(err).Msg("Failed to start bridge")
 		}
+	}
+	err = br.PostMigrate(br.Log.WithContext(context.Background()))
+	if err != nil {
+		br.Log.Fatal().Err(err).Msg("Failed to run post-migration updates")
+	}
+	err = br.Bridge.StartLogins()
+	if err != nil {
+		br.Log.Fatal().Err(err).Msg("Failed to start existing user logins")
 	}
 	if br.PostStart != nil {
 		br.PostStart()

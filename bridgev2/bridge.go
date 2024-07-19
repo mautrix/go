@@ -104,6 +104,18 @@ func (e DBUpgradeError) Unwrap() error {
 }
 
 func (br *Bridge) Start() error {
+	err := br.StartConnectors()
+	if err != nil {
+		return err
+	}
+	err = br.StartLogins()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (br *Bridge) StartConnectors() error {
 	br.Log.Info().Msg("Starting bridge")
 	ctx := br.Log.WithContext(context.Background())
 
@@ -124,6 +136,11 @@ func (br *Bridge) Start() error {
 	if br.Network.GetCapabilities().DisappearingMessages {
 		go br.DisappearLoop.Start()
 	}
+	return nil
+}
+
+func (br *Bridge) StartLogins() error {
+	ctx := br.Log.WithContext(context.Background())
 
 	userIDs, err := br.DB.UserLogin.GetAllUserIDsWithLogins(ctx)
 	if err != nil {

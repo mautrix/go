@@ -12,6 +12,15 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+
+	"github.com/rs/zerolog"
+
+	"maunium.net/go/mautrix/appservice"
+	"maunium.net/go/mautrix/bridgev2"
+	"maunium.net/go/mautrix/bridgev2/database"
+	"maunium.net/go/mautrix/bridgev2/matrix"
+	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/id"
 )
 
 func (br *BridgeMain) LegacyMigrateSimple(renameTablesQuery, copyDataQuery string, newDBVersion int) func(ctx context.Context) error {
@@ -40,6 +49,10 @@ func (br *BridgeMain) LegacyMigrateSimple(renameTablesQuery, copyDataQuery strin
 			return err
 		}
 		_, err = br.DB.Exec(ctx, "UPDATE version SET version = $1, compat = $2", upgradesTo, compat)
+		if err != nil {
+			return err
+		}
+		_, err = br.DB.Exec(ctx, "CREATE TABLE database_was_migrated()")
 		if err != nil {
 			return err
 		}
@@ -95,4 +108,86 @@ func (br *BridgeMain) CheckLegacyDB(expectedVersion int, minBridgeVersion, first
 	} else {
 		log.Info().Msg("Successfully migrated legacy database")
 	}
+}
+
+func (br *BridgeMain) postMigrateDMPortal(ctx context.Context, portal *bridgev2.Portal) error {
+	otherUserID := portal.OtherUserID
+	if otherUserID == "" {
+		zerolog.Ctx(ctx).Warn().
+			Str("portal_id", string(portal.ID)).
+			Msg("DM portal has no other user ID")
+		return nil
+	}
+	ghost, err := br.Bridge.GetGhostByID(ctx, otherUserID)
+	if err != nil {
+		return fmt.Errorf("failed to get ghost for %s: %w", otherUserID, err)
+	}
+	mx := ghost.Intent.(*matrix.ASIntent).Matrix
+	err = br.Matrix.Bot.EnsureJoined(ctx, portal.MXID, appservice.EnsureJoinedParams{
+		BotOverride: mx.Client,
+	})
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).
+			Str("portal_id", string(portal.ID)).
+			Stringer("room_id", portal.MXID).
+			Msg("Failed to ensure bot is joined to DM")
+	}
+	pls, err := mx.PowerLevels(ctx, portal.MXID)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).
+			Str("portal_id", string(portal.ID)).
+			Stringer("room_id", portal.MXID).
+			Msg("Failed to get power levels in room")
+	} else {
+		userLevel := pls.GetUserLevel(mx.UserID)
+		pls.EnsureUserLevel(br.Matrix.Bot.UserID, userLevel)
+		if userLevel > 50 {
+			pls.SetUserLevel(mx.UserID, 50)
+		}
+		_, err = mx.SetPowerLevels(ctx, portal.MXID, pls)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).
+				Str("portal_id", string(portal.ID)).
+				Stringer("room_id", portal.MXID).
+				Msg("Failed to set power levels")
+		}
+	}
+	return nil
+}
+
+func (br *BridgeMain) PostMigrate(ctx context.Context) error {
+	wasMigrated, err := br.DB.TableExists(ctx, "database_was_migrated")
+	if err != nil {
+		return fmt.Errorf("failed to check if database_was_migrated table exists: %w", err)
+	} else if !wasMigrated {
+		return nil
+	}
+	zerolog.Ctx(ctx).Info().Msg("Doing post-migration updates to Matrix rooms")
+
+	portals, err := br.Bridge.GetAllPortalsWithMXID(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get all portals: %w", err)
+	}
+	for _, portal := range portals {
+		switch portal.RoomType {
+		case database.RoomTypeDM:
+			err = br.postMigrateDMPortal(ctx, portal)
+			if err != nil {
+				return fmt.Errorf("failed to update DM portal %s: %w", portal.MXID, err)
+			}
+		}
+		_, err = br.Matrix.Bot.SendStateEvent(ctx, portal.MXID, event.StateElementFunctionalMembers, "", &event.ElementFunctionalMembersContent{
+			ServiceMembers: []id.UserID{br.Matrix.Bot.UserID},
+		})
+		if err != nil {
+			zerolog.Ctx(ctx).Warn().Err(err).Stringer("room_id", portal.MXID).Msg("Failed to set service members")
+		}
+	}
+
+	_, err = br.DB.Exec(ctx, "DROP TABLE database_was_migrated")
+	if err != nil {
+		return fmt.Errorf("failed to drop database_was_migrated table: %w", err)
+	}
+	zerolog.Ctx(ctx).Info().Msg("Post-migration updates complete")
+	return nil
 }
