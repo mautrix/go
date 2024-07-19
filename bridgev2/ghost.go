@@ -146,11 +146,13 @@ func (ghost *Ghost) UpdateAvatar(ctx context.Context, avatar *Avatar) bool {
 	if !avatar.Remove {
 		newMXC, newHash, err := avatar.Reupload(ctx, ghost.Intent, ghost.AvatarHash)
 		if err != nil {
+			ghost.AvatarSet = false
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to reupload avatar")
 			return true
-		} else if newHash == ghost.AvatarHash {
+		} else if newHash == ghost.AvatarHash && ghost.AvatarSet {
 			return true
 		}
+		ghost.AvatarHash = newHash
 		ghost.AvatarMXC = newMXC
 	} else {
 		ghost.AvatarMXC = ""

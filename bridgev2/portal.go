@@ -1939,7 +1939,7 @@ func (portal *Portal) UpdateAvatar(ctx context.Context, avatar *Avatar, sender M
 			portal.AvatarSet = false
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to reupload room avatar")
 			return true
-		} else if newHash == portal.AvatarHash {
+		} else if newHash == portal.AvatarHash && portal.AvatarSet {
 			return true
 		}
 		portal.AvatarMXC = newMXC
