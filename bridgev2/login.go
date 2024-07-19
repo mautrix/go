@@ -101,15 +101,53 @@ type LoginDisplayAndWaitParams struct {
 	ImageURL string `json:"image_url,omitempty"`
 }
 
+type LoginCookieFieldSourceType string
+
+const (
+	LoginCookieTypeCookie        LoginCookieFieldSourceType = "cookie"
+	LoginCookieTypeLocalStorage  LoginCookieFieldSourceType = "local_storage"
+	LoginCookieTypeRequestHeader LoginCookieFieldSourceType = "request_header"
+	LoginCookieTypeRequestBody   LoginCookieFieldSourceType = "request_body"
+	LoginCookieTypeSpecial       LoginCookieFieldSourceType = "special"
+)
+
+type LoginCookieFieldSource struct {
+	// The type of source.
+	Type LoginCookieFieldSourceType `json:"type"`
+	// The name of the field. The exact meaning depends on the type of source.
+	// Cookie:         cookie name
+	// Local storage:  key in local storage
+	// Request header: header name
+	// Request body:   field name inside body after it's parsed (as JSON or multipart form data)
+	// Special:        a namespaced identifier that clients can implement special handling for
+	Name string `json:"name"`
+
+	// For request header & body types, a regex matching request URLs where the value can be extracted from.
+	RequestURLRegex string `json:"request_url_regex,omitempty"`
+	// For cookie types, the domain the cookie is present on.
+	CookieDomain string `json:"cookie_domain,omitempty"`
+}
+
+type LoginCookieField struct {
+	// The key in the map that is submitted to the connector.
+	ID       string `json:"id"`
+	Required bool   `json:"required"`
+	// The sources that can be used to acquire the field value. Only one of these needs to be used.
+	Sources []LoginCookieFieldSource `json:"sources"`
+	// A regex pattern that the client can use to validate value client-side.
+	Pattern string `json:"pattern,omitempty"`
+}
+
 type LoginCookiesParams struct {
 	URL       string `json:"url"`
 	UserAgent string `json:"user_agent,omitempty"`
 
-	CookieDomain     string   `json:"cookie_domain,omitempty"`
-	CookieKeys       []string `json:"cookie_keys,omitempty"`
-	LocalStorageKeys []string `json:"local_storage_keys,omitempty"`
-	SpecialKeys      []string `json:"special_keys,omitempty"`
-	SpecialExtractJS string   `json:"special_extract_js,omitempty"`
+	// The fields that are needed for this cookie login.
+	Fields []LoginCookieField `json:"fields"`
+	// A JavaScript snippet that can extract some or all of the fields.
+	// The snippet will call `window.mautrixLoginCallback` with the extracted fields after they appear.
+	// Fields that are not present in the callback must be extracted another way.
+	ExtractJS string `json:"extract_js,omitempty"`
 }
 
 type LoginInputFieldType string

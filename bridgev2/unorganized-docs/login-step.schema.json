@@ -72,32 +72,36 @@
 					"type": "string",
 					"description": "The user agent to use when opening the URL"
 				},
-				"cookie_domain": {
-					"type": "string",
-					"description": "The domain of the cookies to extract"
-				},
-				"cookie_keys": {
+				"fields": {
 					"type": "array",
-					"description": "The cookie names to extract",
+					"description": "The list of cookies (or other stored data) that must be extracted",
 					"items": {
-						"type": "string"
+						"title": "Cookie Field",
+						"description": "A cookie (or other stored data) that must be extracted",
+						"type": "object",
+						"properties": {
+							"type": {
+								"type": "string",
+								"description": "The type of data to extract",
+								"enum": ["cookie", "local_storage", "request_header", "request_body", "special"]
+							},
+							"name": {
+								"type": "string",
+								"description": "The name of the cookie or key in the storage"
+							},
+							"request_url_regex": {
+								"type": "string",
+								"description": "For the `request_header` and `request_body` types, a regex that matches the URLs from which the values can be extracted."
+							},
+							"cookie_domain": {
+								"type": "string",
+								"description": "For the `cookie` type, the domain of the cookie"
+							}
+						},
+						"required": ["type", "name"]
 					}
 				},
-				"local_storage_keys": {
-					"type": "array",
-					"description": "The local storage keys to extract",
-					"items": {
-						"type": "string"
-					}
-				},
-				"special_keys": {
-					"type": "array",
-					"description": "Special-cased extraction types that clients must support individually",
-					"items": {
-						"type": "string"
-					}
-				},
-				"special_extract_js": {
+				"extract_js": {
 					"type": "string",
 					"description": "JavaScript code that can be evaluated inside the webview to extract the special keys"
 				}

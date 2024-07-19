@@ -263,6 +263,7 @@ func (ul *UserLogin) delete(ctx context.Context, state status.BridgeState, logou
 		ul.BridgeState.Send(state)
 	}
 	ul.BridgeState.Destroy()
+	ul.BridgeState = nil
 }
 
 func (ul *UserLogin) deleteSpace(ctx context.Context) {

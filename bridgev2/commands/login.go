@@ -10,15 +10,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 
 	"github.com/skip2/go-qrcode"
+	"go.mau.fi/util/curl"
 	"golang.org/x/net/html"
 
 	"maunium.net/go/mautrix/bridgev2"
-
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -48,6 +48,7 @@ func fnLogin(ce *Event) {
 	var chosenFlowID string
 	if len(ce.Args) > 0 {
 		inputFlowID := strings.ToLower(ce.Args[0])
+		ce.Args = ce.Args[1:]
 		for _, flow := range flows {
 			if flow.ID == inputFlowID {
 				chosenFlowID = flow.ID
@@ -75,7 +76,64 @@ func fnLogin(ce *Event) {
 		ce.Reply("Failed to start login: %v", err)
 		return
 	}
-	doLoginStep(ce, login, nextStep)
+
+	nextStep = checkLoginCommandDirectParams(ce, login, nextStep)
+	if nextStep != nil {
+		doLoginStep(ce, login, nextStep)
+	}
+}
+
+func checkLoginCommandDirectParams(ce *Event, login bridgev2.LoginProcess, nextStep *bridgev2.LoginStep) *bridgev2.LoginStep {
+	if len(ce.Args) == 0 {
+		return nextStep
+	}
+	var ok bool
+	defer func() {
+		if !ok {
+			login.Cancel()
+		}
+	}()
+	var err error
+	switch nextStep.Type {
+	case bridgev2.LoginStepTypeDisplayAndWait:
+		ce.Reply("Invalid extra parameters for display and wait login step")
+		return nil
+	case bridgev2.LoginStepTypeUserInput:
+		if len(ce.Args) != len(nextStep.UserInputParams.Fields) {
+			ce.Reply("Invalid number of extra parameters (expected 0 or %d, got %d)", len(nextStep.UserInputParams.Fields), len(ce.Args))
+			return nil
+		}
+		input := make(map[string]string)
+		for i, param := range nextStep.UserInputParams.Fields {
+			param.FillDefaultValidate()
+			input[param.ID], err = param.Validate(ce.Args[i])
+			if err != nil {
+				ce.Reply("Invalid value for %s: %v", param.Name, err)
+				return nil
+			}
+		}
+		nextStep, err = login.(bridgev2.LoginProcessUserInput).SubmitUserInput(ce.Ctx, input)
+	case bridgev2.LoginStepTypeCookies:
+		if len(ce.Args) != len(nextStep.CookiesParams.Fields) {
+			ce.Reply("Invalid number of extra parameters (expected 0 or %d, got %d)", len(nextStep.CookiesParams.Fields), len(ce.Args))
+			return nil
+		}
+		input := make(map[string]string)
+		for i, param := range nextStep.CookiesParams.Fields {
+			if match, _ := regexp.MatchString(param.Pattern, ce.Args[i]); !match {
+				ce.Reply("Invalid value for %s: doesn't match regex `%s`", param.ID, param.Pattern)
+				return nil
+			}
+			input[param.ID] = ce.Args[i]
+		}
+		nextStep, err = login.(bridgev2.LoginProcessCookies).SubmitCookies(ce.Ctx, input)
+	}
+	if err != nil {
+		ce.Reply("Failed to submit input: %v", err)
+		return nil
+	}
+	ok = true
+	return nextStep
 }
 
 type userInputLoginCommandState struct {
@@ -219,61 +277,98 @@ func (clcs *cookieLoginCommandState) prompt(ce *Event) {
 	})
 }
 
-var curlCookieRegex = regexp.MustCompile(`-H '[cC]ookie: ([^']*)'`)
-
-func missingKeys(required []string, data map[string]string) (missing []string) {
-	for _, requiredKey := range required {
-		if _, ok := data[requiredKey]; !ok {
-			missing = append(missing, requiredKey)
-		}
-	}
-	return
-}
-
 func (clcs *cookieLoginCommandState) submit(ce *Event) {
 	ce.Redact()
 
-	cookies := make(map[string]string)
+	cookiesInput := make(map[string]string)
 	if strings.HasPrefix(strings.TrimSpace(ce.RawArgs), "curl") {
-		if len(clcs.Data.LocalStorageKeys) > 0 || len(clcs.Data.SpecialKeys) > 0 {
-			ce.Reply("Special keys and localStorage keys can't be extracted from curl commands - please provide the data as JSON instead")
+		parsed, err := curl.Parse(ce.RawArgs)
+		if err != nil {
+			ce.Reply("Failed to parse curl: %v", err)
 			return
 		}
-		cookieHeader := curlCookieRegex.FindStringSubmatch(ce.RawArgs)
-		if len(cookieHeader) != 2 {
-			ce.Reply("Couldn't find `-H 'Cookie: ...'` in curl command")
-			return
+		reqCookies := make(map[string]string)
+		for _, cookie := range parsed.Cookies() {
+			reqCookies[cookie.Name], err = url.QueryUnescape(cookie.Value)
+			if err != nil {
+				ce.Reply("Failed to parse cookie %s: %v", cookie.Name, err)
+				return
+			}
 		}
-		parsed := (&http.Request{Header: http.Header{"Cookie": {cookieHeader[1]}}}).Cookies()
-		for _, cookie := range parsed {
-			cookies[cookie.Name] = cookie.Value
+		var missingKeys, unsupportedKeys []string
+		for _, field := range clcs.Data.Fields {
+			var value string
+			var supported bool
+			for _, src := range field.Sources {
+				switch src.Type {
+				case bridgev2.LoginCookieTypeCookie:
+					supported = true
+					value = reqCookies[src.Name]
+				case bridgev2.LoginCookieTypeRequestHeader:
+					supported = true
+					value = parsed.Header.Get(src.Name)
+				case bridgev2.LoginCookieTypeRequestBody:
+					supported = true
+					switch {
+					case parsed.MultipartForm != nil:
+						values, ok := parsed.MultipartForm.Value[src.Name]
+						if ok && len(values) > 0 {
+							value = values[0]
+						}
+					case parsed.ParsedJSON != nil:
+						untypedValue, ok := parsed.ParsedJSON[src.Name]
+						if ok {
+							value = fmt.Sprintf("%v", untypedValue)
+						}
+					}
+				}
+				if value != "" {
+					cookiesInput[field.ID] = value
+					break
+				}
+			}
+			if value == "" && field.Required {
+				if supported {
+					missingKeys = append(missingKeys, field.ID)
+				} else {
+					unsupportedKeys = append(unsupportedKeys, field.ID)
+				}
+			}
+		}
+		if len(unsupportedKeys) > 0 {
+			ce.Reply("Some keys can't be extracted from a cURL request: %+v\n\nPlease provide a JSON object instead.", unsupportedKeys)
+			return
+		} else if len(missingKeys) > 0 {
+			ce.Reply("Missing some keys: %+v", missingKeys)
+			return
 		}
 	} else {
-		err := json.Unmarshal([]byte(ce.RawArgs), &cookies)
+		err := json.Unmarshal([]byte(ce.RawArgs), &cookiesInput)
 		if err != nil {
 			ce.Reply("Failed to parse input as JSON: %v", err)
 			return
 		}
 	}
-	missingCookies := missingKeys(clcs.Data.CookieKeys, cookies)
-	if len(missingCookies) > 0 {
-		ce.Reply("Missing required cookies: %+v", missingCookies)
-		return
+	var missingKeys []string
+	for _, field := range clcs.Data.Fields {
+		val, ok := cookiesInput[field.ID]
+		if !ok && field.Required {
+			missingKeys = append(missingKeys, field.ID)
+		}
+		if match, _ := regexp.MatchString(field.Pattern, val); !match {
+			ce.Reply("Invalid value for %s: doesn't match regex `%s`", field.ID, field.Pattern)
+			return
+		}
 	}
-	missingLocalStorage := missingKeys(clcs.Data.LocalStorageKeys, cookies)
-	if len(missingLocalStorage) > 0 {
-		ce.Reply("Missing required localStorage keys: %+v", missingLocalStorage)
-		return
-	}
-	missingSpecial := missingKeys(clcs.Data.SpecialKeys, cookies)
-	if len(missingSpecial) > 0 {
-		ce.Reply("Missing required special keys: %+v", missingSpecial)
+	if len(missingKeys) > 0 {
+		ce.Reply("Missing some keys: %+v", missingKeys)
 		return
 	}
 	StoreCommandState(ce.User, nil)
-	nextStep, err := clcs.Login.SubmitCookies(ce.Ctx, cookies)
+	nextStep, err := clcs.Login.SubmitCookies(ce.Ctx, cookiesInput)
 	if err != nil {
 		ce.Reply("Login failed: %v", err)
+		return
 	}
 	doLoginStep(ce, clcs.Login, nextStep)
 }
