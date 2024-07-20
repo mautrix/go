@@ -144,9 +144,9 @@ func (prov *ProvisioningAPI) AuthMiddleware(h http.Handler) http.Handler {
 			if err != nil {
 				zerolog.Ctx(r.Context()).Warn().Err(err).
 					Msg("Provisioning API request contained invalid auth")
-				jsonResponse(w, http.StatusForbidden, &mautrix.RespError{
+				jsonResponse(w, http.StatusUnauthorized, &mautrix.RespError{
 					Err:     "Invalid auth token",
-					ErrCode: mautrix.MForbidden.ErrCode,
+					ErrCode: mautrix.MUnknownToken.ErrCode,
 				})
 				return
 			}
