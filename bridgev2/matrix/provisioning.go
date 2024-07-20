@@ -19,9 +19,11 @@ import (
 	"github.com/rs/xid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/hlog"
+	"go.mau.fi/util/jsontime"
 	"go.mau.fi/util/requestlog"
 
 	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/bridge/status"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/id"
@@ -87,6 +89,7 @@ func (prov *ProvisioningAPI) Init() {
 	prov.Router.Use(hlog.NewHandler(prov.log))
 	prov.Router.Use(requestlog.AccessLogger(false))
 	prov.Router.Use(prov.AuthMiddleware)
+	prov.Router.Path("/v3/whoami").Methods(http.MethodGet).HandlerFunc(prov.GetWhoami)
 	prov.Router.Path("/v3/login/flows").Methods(http.MethodGet).HandlerFunc(prov.GetLoginFlows)
 	prov.Router.Path("/v3/login/start/{flowID}").Methods(http.MethodPost).HandlerFunc(prov.PostLoginStart)
 	prov.Router.Path("/v3/login/step/{loginProcessID}/{stepID}/{stepType:user_input|cookies}").Methods(http.MethodPost).HandlerFunc(prov.PostLoginSubmitInput)
@@ -203,6 +206,48 @@ func (prov *ProvisioningAPI) AuthMiddleware(h http.Handler) http.Handler {
 		}
 		h.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+type RespWhoami struct {
+	Network       bridgev2.BridgeName `json:"network"`
+	Homeserver    string              `json:"homeserver"`
+	BridgeBot     id.UserID           `json:"bridge_bot"`
+	CommandPrefix string              `json:"command_prefix"`
+
+	ManagementRoom id.RoomID         `json:"management_room"`
+	Logins         []RespWhoamiLogin `json:"logins"`
+}
+
+type RespWhoamiLogin struct {
+	StateEvent status.BridgeStateEvent `json:"state_event"`
+	StateTS    jsontime.Unix           `json:"state_ts"`
+	ID         networkid.UserLoginID   `json:"id"`
+	Name       string                  `json:"name"`
+	SpaceRoom  id.RoomID               `json:"space_room"`
+}
+
+func (prov *ProvisioningAPI) GetWhoami(w http.ResponseWriter, r *http.Request) {
+	user := prov.GetUser(r)
+	resp := &RespWhoami{
+		Network:        prov.br.Bridge.Network.GetName(),
+		Homeserver:     prov.br.AS.HomeserverDomain,
+		BridgeBot:      prov.br.Bot.UserID,
+		CommandPrefix:  prov.br.Config.Bridge.CommandPrefix,
+		ManagementRoom: user.ManagementRoom,
+	}
+	logins := user.GetCachedUserLogins()
+	resp.Logins = make([]RespWhoamiLogin, len(logins))
+	for i, login := range logins {
+		prevState := login.BridgeState.GetPrevUnsent()
+		resp.Logins[i] = RespWhoamiLogin{
+			StateEvent: prevState.StateEvent,
+			StateTS:    prevState.Timestamp,
+			ID:         login.ID,
+			Name:       login.RemoteName,
+			SpaceRoom:  login.SpaceRoom,
+		}
+	}
+	jsonResponse(w, http.StatusOK, resp)
 }
 
 type RespLoginFlows struct {
@@ -363,7 +408,7 @@ func (prov *ProvisioningAPI) GetLoginForRequest(w http.ResponseWriter, r *http.R
 }
 
 type RespResolveIdentifier struct {
-	ID          networkid.UserID    `json:"id,omitempty"`
+	ID          networkid.UserID    `json:"id"`
 	Name        string              `json:"name,omitempty"`
 	AvatarURL   id.ContentURIString `json:"avatar_url,omitempty"`
 	Identifiers []string            `json:"identifiers,omitempty"`

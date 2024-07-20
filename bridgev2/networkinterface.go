@@ -127,21 +127,21 @@ type ConvertedEdit struct {
 // BridgeName contains information about the network that a connector bridges to.
 type BridgeName struct {
 	// The displayname of the network, e.g. `Discord`
-	DisplayName string
+	DisplayName string `json:"displayname"`
 	// The URL to the website of the network, e.g. `https://discord.com`
-	NetworkURL string
+	NetworkURL string `json:"network_url"`
 	// The icon of the network as a mxc:// URI
-	NetworkIcon id.ContentURIString
+	NetworkIcon id.ContentURIString `json:"network_icon"`
 	// An identifier uniquely identifying the network, e.g. `discord`
-	NetworkID string
+	NetworkID string `json:"network_id"`
 	// An identifier uniquely identifying the bridge software.
 	// The Go import path is a good choice here (e.g. github.com/octocat/discordbridge)
-	BeeperBridgeType string
+	BeeperBridgeType string `json:"beeper_bridge_type"`
 	// The default appservice port to use in the example config, defaults to 8080 if unset
 	// Official mautrix bridges will use ports defined in https://mau.fi/ports
-	DefaultPort uint16
+	DefaultPort uint16 `json:"default_port,omitempty"`
 	// The default command prefix to use in the example config, defaults to NetworkID if unset. Must include the ! prefix.
-	DefaultCommandPrefix string
+	DefaultCommandPrefix string `json:"default_command_prefix,omitempty"`
 }
 
 func (bn BridgeName) AsBridgeInfoSection() event.BridgeInfoSection {

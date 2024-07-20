@@ -17,10 +17,11 @@ import (
 )
 
 type BridgeStateQueue struct {
-	prev   *status.BridgeState
-	ch     chan status.BridgeState
-	bridge *Bridge
-	user   status.BridgeStateFiller
+	prevUnsent *status.BridgeState
+	prevSent   *status.BridgeState
+	ch         chan status.BridgeState
+	bridge     *Bridge
+	user       status.BridgeStateFiller
 }
 
 func (br *Bridge) SendGlobalBridgeState(state status.BridgeState) {
@@ -72,7 +73,7 @@ func (bsq *BridgeStateQueue) loop() {
 func (bsq *BridgeStateQueue) immediateSendBridgeState(state status.BridgeState) {
 	retryIn := 2
 	for {
-		if bsq.prev != nil && bsq.prev.ShouldDeduplicate(&state) {
+		if bsq.prevSent != nil && bsq.prevSent.ShouldDeduplicate(&state) {
 			bsq.bridge.Log.Debug().
 				Str("state_event", string(state.StateEvent)).
 				Msg("Not sending bridge state as it's a duplicate")
@@ -93,7 +94,7 @@ func (bsq *BridgeStateQueue) immediateSendBridgeState(state status.BridgeState) 
 				retryIn = 64
 			}
 		} else {
-			bsq.prev = &state
+			bsq.prevSent = &state
 			bsq.bridge.Log.Debug().
 				Any("bridge_state", state).
 				Msg("Sent new bridge state")
@@ -108,6 +109,7 @@ func (bsq *BridgeStateQueue) Send(state status.BridgeState) {
 	}
 
 	state = state.Fill(bsq.user)
+	bsq.prevUnsent = &state
 
 	if len(bsq.ch) >= 8 {
 		bsq.bridge.Log.Warn().Msg("Bridge state queue is nearly full, discarding an item")
@@ -124,14 +126,21 @@ func (bsq *BridgeStateQueue) Send(state status.BridgeState) {
 }
 
 func (bsq *BridgeStateQueue) GetPrev() status.BridgeState {
-	if bsq != nil && bsq.prev != nil {
-		return *bsq.prev
+	if bsq != nil && bsq.prevSent != nil {
+		return *bsq.prevSent
+	}
+	return status.BridgeState{}
+}
+
+func (bsq *BridgeStateQueue) GetPrevUnsent() status.BridgeState {
+	if bsq != nil && bsq.prevSent != nil {
+		return *bsq.prevUnsent
 	}
 	return status.BridgeState{}
 }
 
 func (bsq *BridgeStateQueue) SetPrev(prev status.BridgeState) {
 	if bsq != nil {
-		bsq.prev = &prev
+		bsq.prevSent = &prev
 	}
 }
