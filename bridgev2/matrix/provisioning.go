@@ -138,6 +138,13 @@ func (prov *ProvisioningAPI) checkMatrixAuth(ctx context.Context, userID id.User
 func (prov *ProvisioningAPI) AuthMiddleware(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		auth := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if auth == "" {
+			jsonResponse(w, http.StatusUnauthorized, &mautrix.RespError{
+				Err:     "Missing auth token",
+				ErrCode: mautrix.MMissingToken.ErrCode,
+			})
+			return
+		}
 		userID := id.UserID(r.URL.Query().Get("user_id"))
 		if auth != prov.br.Config.Provisioning.SharedSecret {
 			err := prov.checkMatrixAuth(r.Context(), userID, auth)
