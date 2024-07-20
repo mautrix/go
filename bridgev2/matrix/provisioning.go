@@ -98,7 +98,7 @@ func (prov *ProvisioningAPI) Init() {
 	prov.Router.Path("/v3/logins").Methods(http.MethodGet).HandlerFunc(prov.GetLogins)
 	prov.Router.Path("/v3/contacts").Methods(http.MethodGet).HandlerFunc(prov.GetContactList)
 	prov.Router.Path("/v3/resolve_identifier/{identifier}").Methods(http.MethodGet).HandlerFunc(prov.GetResolveIdentifier)
-	prov.Router.Path("/v3/create_dm").Methods(http.MethodPost).HandlerFunc(prov.PostCreateDM)
+	prov.Router.Path("/v3/create_dm/{identifier}").Methods(http.MethodPost).HandlerFunc(prov.PostCreateDM)
 	prov.Router.Path("/v3/create_group").Methods(http.MethodPost).HandlerFunc(prov.PostCreateGroup)
 
 	if prov.br.Config.Provisioning.DebugEndpoints {
