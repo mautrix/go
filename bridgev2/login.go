@@ -145,8 +145,8 @@ type LoginCookiesParams struct {
 	// The fields that are needed for this cookie login.
 	Fields []LoginCookieField `json:"fields"`
 	// A JavaScript snippet that can extract some or all of the fields.
-	// The snippet will call `window.mautrixLoginCallback` with the extracted fields after they appear.
-	// Fields that are not present in the callback must be extracted another way.
+	// The snippet will evaluate to a promise that resolves when the relevant fields are found.
+	// Fields that are not present in the promise result must be extracted another way.
 	ExtractJS string `json:"extract_js,omitempty"`
 }
 
