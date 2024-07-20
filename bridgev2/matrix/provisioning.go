@@ -87,19 +87,20 @@ func (prov *ProvisioningAPI) Init() {
 	prov.log = prov.br.Log.With().Str("component", "provisioning").Logger()
 	prov.Router = prov.br.AS.Router.PathPrefix(prov.br.Config.Provisioning.Prefix).Subrouter()
 	prov.Router.Use(hlog.NewHandler(prov.log))
+	prov.Router.Use(corsMiddleware)
 	prov.Router.Use(requestlog.AccessLogger(false))
 	prov.Router.Use(prov.AuthMiddleware)
-	prov.Router.Path("/v3/whoami").Methods(http.MethodGet).HandlerFunc(prov.GetWhoami)
-	prov.Router.Path("/v3/login/flows").Methods(http.MethodGet).HandlerFunc(prov.GetLoginFlows)
-	prov.Router.Path("/v3/login/start/{flowID}").Methods(http.MethodPost).HandlerFunc(prov.PostLoginStart)
-	prov.Router.Path("/v3/login/step/{loginProcessID}/{stepID}/{stepType:user_input|cookies}").Methods(http.MethodPost).HandlerFunc(prov.PostLoginSubmitInput)
-	prov.Router.Path("/v3/login/step/{loginProcessID}/{stepID}/{stepType:display_and_wait}").Methods(http.MethodPost).HandlerFunc(prov.PostLoginWait)
-	prov.Router.Path("/v3/logout/{loginID}").Methods(http.MethodPost).HandlerFunc(prov.PostLogout)
-	prov.Router.Path("/v3/logins").Methods(http.MethodGet).HandlerFunc(prov.GetLogins)
-	prov.Router.Path("/v3/contacts").Methods(http.MethodGet).HandlerFunc(prov.GetContactList)
-	prov.Router.Path("/v3/resolve_identifier/{identifier}").Methods(http.MethodGet).HandlerFunc(prov.GetResolveIdentifier)
-	prov.Router.Path("/v3/create_dm/{identifier}").Methods(http.MethodPost).HandlerFunc(prov.PostCreateDM)
-	prov.Router.Path("/v3/create_group").Methods(http.MethodPost).HandlerFunc(prov.PostCreateGroup)
+	prov.Router.Path("/v3/whoami").Methods(http.MethodGet, http.MethodOptions).HandlerFunc(prov.GetWhoami)
+	prov.Router.Path("/v3/login/flows").Methods(http.MethodGet, http.MethodOptions).HandlerFunc(prov.GetLoginFlows)
+	prov.Router.Path("/v3/login/start/{flowID}").Methods(http.MethodPost, http.MethodOptions).HandlerFunc(prov.PostLoginStart)
+	prov.Router.Path("/v3/login/step/{loginProcessID}/{stepID}/{stepType:user_input|cookies}").Methods(http.MethodPost, http.MethodOptions).HandlerFunc(prov.PostLoginSubmitInput)
+	prov.Router.Path("/v3/login/step/{loginProcessID}/{stepID}/{stepType:display_and_wait}").Methods(http.MethodPost, http.MethodOptions).HandlerFunc(prov.PostLoginWait)
+	prov.Router.Path("/v3/logout/{loginID}").Methods(http.MethodPost, http.MethodOptions).HandlerFunc(prov.PostLogout)
+	prov.Router.Path("/v3/logins").Methods(http.MethodGet, http.MethodOptions).HandlerFunc(prov.GetLogins)
+	prov.Router.Path("/v3/contacts").Methods(http.MethodGet, http.MethodOptions).HandlerFunc(prov.GetContactList)
+	prov.Router.Path("/v3/resolve_identifier/{identifier}").Methods(http.MethodGet, http.MethodOptions).HandlerFunc(prov.GetResolveIdentifier)
+	prov.Router.Path("/v3/create_dm/{identifier}").Methods(http.MethodPost, http.MethodOptions).HandlerFunc(prov.PostCreateDM)
+	prov.Router.Path("/v3/create_group").Methods(http.MethodPost, http.MethodOptions).HandlerFunc(prov.PostCreateGroup)
 
 	if prov.br.Config.Provisioning.DebugEndpoints {
 		prov.log.Debug().Msg("Enabling debug API at /debug")
@@ -107,6 +108,19 @@ func (prov *ProvisioningAPI) Init() {
 		r.Use(prov.AuthMiddleware)
 		r.PathPrefix("/pprof").Handler(http.DefaultServeMux)
 	}
+}
+
+func corsMiddleware(handler http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "X-Requested-With, Content-Type, Authorization")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		handler.ServeHTTP(w, r)
+	})
 }
 
 func jsonResponse(w http.ResponseWriter, status int, response any) {
