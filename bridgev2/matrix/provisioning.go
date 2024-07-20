@@ -230,10 +230,11 @@ func (prov *ProvisioningAPI) AuthMiddleware(h http.Handler) http.Handler {
 }
 
 type RespWhoami struct {
-	Network       bridgev2.BridgeName `json:"network"`
-	Homeserver    string              `json:"homeserver"`
-	BridgeBot     id.UserID           `json:"bridge_bot"`
-	CommandPrefix string              `json:"command_prefix"`
+	Network       bridgev2.BridgeName  `json:"network"`
+	LoginFlows    []bridgev2.LoginFlow `json:"login_flows"`
+	Homeserver    string               `json:"homeserver"`
+	BridgeBot     id.UserID            `json:"bridge_bot"`
+	CommandPrefix string               `json:"command_prefix"`
 
 	ManagementRoom id.RoomID         `json:"management_room"`
 	Logins         []RespWhoamiLogin `json:"logins"`
@@ -251,6 +252,7 @@ func (prov *ProvisioningAPI) GetWhoami(w http.ResponseWriter, r *http.Request) {
 	user := prov.GetUser(r)
 	resp := &RespWhoami{
 		Network:        prov.br.Bridge.Network.GetName(),
+		LoginFlows:     prov.br.Bridge.Network.GetLoginFlows(),
 		Homeserver:     prov.br.AS.HomeserverDomain,
 		BridgeBot:      prov.br.Bot.UserID,
 		CommandPrefix:  prov.br.Config.Bridge.CommandPrefix,
