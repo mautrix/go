@@ -1544,6 +1544,10 @@ func (portal *Portal) handleRemoteReaction(ctx context.Context, source *UserLogi
 	if err != nil {
 		log.Err(err).Msg("Failed to get target message for reaction")
 		return
+	} else if targetMessage == nil {
+		// TODO use deterministic event ID as target if applicable?
+		log.Warn().Msg("Target message for reaction not found")
+		return
 	}
 	emoji, emojiID := evt.GetReactionEmoji()
 	existingReaction, err := portal.Bridge.DB.Reaction.GetByID(ctx, targetMessage.ID, targetMessage.PartID, evt.GetSender().Sender, emojiID)
