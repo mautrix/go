@@ -52,7 +52,7 @@ func (br *BridgeMain) LegacyMigrateSimple(renameTablesQuery, copyDataQuery strin
 		if err != nil {
 			return err
 		}
-		_, err = br.DB.Exec(ctx, "CREATE TABLE database_was_migrated()")
+		_, err = br.DB.Exec(ctx, "CREATE TABLE database_was_migrated(empty INTEGER)")
 		if err != nil {
 			return err
 		}
