@@ -93,7 +93,7 @@ type Avatar struct {
 	Hash [32]byte
 }
 
-func (a *Avatar) Reupload(ctx context.Context, intent MatrixAPI, currentHash [32]byte) (id.ContentURIString, [32]byte, error) {
+func (a *Avatar) Reupload(ctx context.Context, intent MatrixAPI, currentHash [32]byte, currentMXC id.ContentURIString) (id.ContentURIString, [32]byte, error) {
 	if a.MXC != "" {
 		return a.MXC, a.Hash, nil
 	}
@@ -102,8 +102,8 @@ func (a *Avatar) Reupload(ctx context.Context, intent MatrixAPI, currentHash [32
 		return "", [32]byte{}, err
 	}
 	hash := sha256.Sum256(data)
-	if hash == currentHash {
-		return "", hash, nil
+	if hash == currentHash && currentMXC != "" {
+		return currentMXC, hash, nil
 	}
 	mime := http.DetectContentType(data)
 	fileName := "avatar" + exmime.ExtensionFromMimetype(mime)
@@ -144,7 +144,7 @@ func (ghost *Ghost) UpdateAvatar(ctx context.Context, avatar *Avatar) bool {
 	}
 	ghost.AvatarID = avatar.ID
 	if !avatar.Remove {
-		newMXC, newHash, err := avatar.Reupload(ctx, ghost.Intent, ghost.AvatarHash)
+		newMXC, newHash, err := avatar.Reupload(ctx, ghost.Intent, ghost.AvatarHash, ghost.AvatarMXC)
 		if err != nil {
 			ghost.AvatarSet = false
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to reupload avatar")

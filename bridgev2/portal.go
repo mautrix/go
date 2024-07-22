@@ -1976,7 +1976,7 @@ func (portal *Portal) UpdateAvatar(ctx context.Context, avatar *Avatar, sender M
 		portal.AvatarMXC = ""
 		portal.AvatarHash = [32]byte{}
 	} else {
-		newMXC, newHash, err := avatar.Reupload(ctx, sender, portal.AvatarHash)
+		newMXC, newHash, err := avatar.Reupload(ctx, sender, portal.AvatarHash, portal.AvatarMXC)
 		if err != nil {
 			portal.AvatarSet = false
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to reupload room avatar")
