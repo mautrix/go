@@ -73,7 +73,7 @@ func (rel *RelatesTo) GetReplyTo() id.EventID {
 }
 
 func (rel *RelatesTo) GetNonFallbackReplyTo() id.EventID {
-	if rel != nil && rel.InReplyTo != nil && !rel.IsFallingBack {
+	if rel != nil && rel.InReplyTo != nil && (rel.Type != RelThread || !rel.IsFallingBack) {
 		return rel.InReplyTo.EventID
 	}
 	return ""
