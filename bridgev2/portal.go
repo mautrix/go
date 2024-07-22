@@ -1643,7 +1643,7 @@ func (portal *Portal) handleRemoteReactionRemove(ctx context.Context, source *Us
 		Parsed: &event.RedactionEventContent{
 			Redacts: targetReaction.MXID,
 		},
-	}, &MatrixSendExtra{Timestamp: ts})
+	}, &MatrixSendExtra{Timestamp: ts, ReactionMeta: targetReaction})
 	if err != nil {
 		log.Err(err).Stringer("reaction_mxid", targetReaction.MXID).Msg("Failed to redact reaction")
 	}
@@ -1670,7 +1670,7 @@ func (portal *Portal) handleRemoteMessageRemove(ctx context.Context, source *Use
 			Parsed: &event.RedactionEventContent{
 				Redacts: part.MXID,
 			},
-		}, &MatrixSendExtra{Timestamp: ts})
+		}, &MatrixSendExtra{Timestamp: ts, MessageMeta: part})
 		if err != nil {
 			log.Err(err).Stringer("part_mxid", part.MXID).Msg("Failed to redact message part")
 		} else {
