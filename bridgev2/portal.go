@@ -2430,9 +2430,10 @@ func (portal *Portal) UpdateInfoFromGhost(ctx context.Context, ghost *Ghost) (ch
 	}
 	changed = portal.UpdateName(ctx, ghost.Name, nil, time.Time{}) || changed
 	changed = portal.UpdateAvatar(ctx, &Avatar{
-		ID:   ghost.AvatarID,
-		MXC:  ghost.AvatarMXC,
-		Hash: ghost.AvatarHash,
+		ID:     ghost.AvatarID,
+		MXC:    ghost.AvatarMXC,
+		Hash:   ghost.AvatarHash,
+		Remove: ghost.AvatarID == "",
 	}, nil, time.Time{}) || changed
 	return
 }

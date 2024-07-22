@@ -94,8 +94,10 @@ type Avatar struct {
 }
 
 func (a *Avatar) Reupload(ctx context.Context, intent MatrixAPI, currentHash [32]byte, currentMXC id.ContentURIString) (id.ContentURIString, [32]byte, error) {
-	if a.MXC != "" {
+	if a.MXC != "" || a.Hash != [32]byte{} {
 		return a.MXC, a.Hash, nil
+	} else if a.Get == nil {
+		return "", [32]byte{}, fmt.Errorf("no Get function provided for avatar")
 	}
 	data, err := a.Get(ctx)
 	if err != nil {
