@@ -535,13 +535,18 @@ func (br *Connector) BatchSend(ctx context.Context, roomID id.RoomID, req *mautr
 		for _, evt := range req.Events {
 			intent, _ := br.doublePuppetIntents.Get(evt.Sender)
 			if intent != nil {
-				intent.AddDoublePuppetValueWithTS(evt.ID, evt.Timestamp)
+				intent.AddDoublePuppetValueWithTS(&evt.Content, evt.Timestamp)
 			}
-			err = br.Crypto.Encrypt(ctx, roomID, evt.Type, &evt.Content)
-			if err != nil {
-				return nil, err
+			if evt.Type != event.EventEncrypted {
+				err = br.Crypto.Encrypt(ctx, roomID, evt.Type, &evt.Content)
+				if err != nil {
+					return nil, err
+				}
+				evt.Type = event.EventEncrypted
+				if intent != nil {
+					intent.AddDoublePuppetValueWithTS(&evt.Content, evt.Timestamp)
+				}
 			}
-			evt.Type = event.EventEncrypted
 		}
 	}
 	return br.Bot.BeeperBatchSend(ctx, roomID, req)
