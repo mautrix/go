@@ -1236,6 +1236,17 @@ func (portal *Portal) handleRemoteEvent(source *UserLogin, evt RemoteEvent) {
 }
 
 func (portal *Portal) getIntentAndUserMXIDFor(ctx context.Context, sender EventSender, source *UserLogin, otherLogins []*UserLogin, evtType RemoteEventType) (intent MatrixAPI, extraUserID id.UserID) {
+	var ghost *Ghost
+	if sender.Sender != "" {
+		var err error
+		ghost, err = portal.Bridge.GetGhostByID(ctx, sender.Sender)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to get ghost for message sender")
+			return
+		} else {
+			ghost.UpdateInfoIfNecessary(ctx, source, evtType)
+		}
+	}
 	if sender.IsFromMe {
 		intent = source.User.DoublePuppet(ctx)
 		if intent != nil {
@@ -1252,26 +1263,19 @@ func (portal *Portal) getIntentAndUserMXIDFor(ctx context.Context, sender EventS
 			extraUserID = senderLogin.UserMXID
 		}
 	}
-	if sender.Sender != "" {
-		if portal.Receiver == "" {
-			for _, login := range otherLogins {
-				if login.Client.IsThisUser(ctx, sender.Sender) {
-					intent = login.User.DoublePuppet(ctx)
-					if intent != nil {
-						return
-					}
-					extraUserID = login.UserMXID
+	if sender.Sender != "" && portal.Receiver == "" && otherLogins != nil {
+		for _, login := range otherLogins {
+			if login.Client.IsThisUser(ctx, sender.Sender) {
+				intent = login.User.DoublePuppet(ctx)
+				if intent != nil {
+					return
 				}
+				extraUserID = login.UserMXID
 			}
 		}
-		ghost, err := portal.Bridge.GetGhostByID(ctx, sender.Sender)
-		if err != nil {
-			zerolog.Ctx(ctx).Err(err).Msg("Failed to get ghost for message sender")
-			return
-		} else {
-			ghost.UpdateInfoIfNecessary(ctx, source, evtType)
-			intent = ghost.Intent
-		}
+	}
+	if ghost != nil {
+		intent = ghost.Intent
 	}
 	return
 }
