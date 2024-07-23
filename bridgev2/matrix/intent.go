@@ -10,9 +10,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
+	"golang.org/x/exp/slices"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/appservice"
@@ -27,9 +29,13 @@ import (
 type ASIntent struct {
 	Matrix    *appservice.IntentAPI
 	Connector *Connector
+
+	dmUpdateLock     sync.Mutex
+	directChatsCache event.DirectChatsEventContent
 }
 
 var _ bridgev2.MatrixAPI = (*ASIntent)(nil)
+var _ bridgev2.MarkAsDMMatrixAPI = (*ASIntent)(nil)
 
 func (as *ASIntent) SendMessage(ctx context.Context, roomID id.RoomID, eventType event.Type, content *event.Content, extra *bridgev2.MatrixSendExtra) (*mautrix.RespSendEvent, error) {
 	if extra == nil {
@@ -293,6 +299,39 @@ func (as *ASIntent) CreateRoom(ctx context.Context, req *mautrix.ReqCreateRoom) 
 		return "", err
 	}
 	return resp.RoomID, nil
+}
+
+func (as *ASIntent) MarkAsDM(ctx context.Context, roomID id.RoomID, withUser id.UserID) error {
+	if !as.Connector.Config.Matrix.SyncDirectChatList {
+		return nil
+	}
+	as.dmUpdateLock.Lock()
+	defer as.dmUpdateLock.Unlock()
+	cached, ok := as.directChatsCache[withUser]
+	if ok && slices.Contains(cached, roomID) {
+		return nil
+	}
+	var directChats event.DirectChatsEventContent
+	err := as.Matrix.GetAccountData(ctx, event.AccountDataDirectChats.Type, &directChats)
+	if err != nil {
+		return err
+	}
+	as.directChatsCache = directChats
+	rooms := directChats[withUser]
+	if slices.Contains(rooms, roomID) {
+		return nil
+	}
+	directChats[withUser] = append(rooms, roomID)
+	err = as.Matrix.SetAccountData(ctx, event.AccountDataDirectChats.Type, &directChats)
+	if err != nil {
+		if rooms == nil {
+			delete(directChats, withUser)
+		} else {
+			directChats[withUser] = rooms
+		}
+		return fmt.Errorf("failed to set direct chats account data: %w", err)
+	}
+	return nil
 }
 
 func (as *ASIntent) DeleteRoom(ctx context.Context, roomID id.RoomID, puppetsOnly bool) error {

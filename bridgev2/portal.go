@@ -2318,11 +2318,23 @@ func (portal *Portal) SyncParticipants(ctx context.Context, members *ChatMemberL
 }
 
 func (portal *Portal) updateUserLocalInfo(ctx context.Context, info *UserLocalPortalInfo, source *UserLogin) {
-	if portal.MXID == "" || info == nil {
+	if portal.MXID == "" {
 		return
 	}
 	dp := source.User.DoublePuppet(ctx)
 	if dp == nil {
+		return
+	}
+	dmMarkingMatrixAPI, canMarkDM := dp.(MarkAsDMMatrixAPI)
+	if canMarkDM && portal.OtherUserID != "" && portal.RoomType == database.RoomTypeDM {
+		dmGhost, err := portal.Bridge.GetGhostByID(ctx, portal.OtherUserID)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to get DM ghost to mark room as DM")
+		} else if err = dmMarkingMatrixAPI.MarkAsDM(ctx, portal.MXID, dmGhost.Intent.GetMXID()); err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to mark room as DM")
+		}
+	}
+	if info == nil {
 		return
 	}
 	if info.MutedUntil != nil {

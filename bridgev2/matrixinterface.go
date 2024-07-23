@@ -88,3 +88,7 @@ type MatrixAPI interface {
 	TagRoom(ctx context.Context, roomID id.RoomID, tag event.RoomTag, isTagged bool) error
 	MuteRoom(ctx context.Context, roomID id.RoomID, until time.Time) error
 }
+
+type MarkAsDMMatrixAPI interface {
+	MarkAsDM(ctx context.Context, roomID id.RoomID, otherUser id.UserID) error
+}
