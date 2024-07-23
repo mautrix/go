@@ -7,6 +7,33 @@ bridge:
     # Whether the bridge should set names and avatars explicitly for DM portals.
     private_chat_portal_meta: false
 
+    # What should be done to portal rooms when a user logs out or is logged out?
+    # Permitted values:
+    #   nothing - Do nothing, let the user stay in the portals
+    #   kick - Remove the user from the portal rooms, but don't delete them
+    #   unbridge - Remove all ghosts in the room and disassociate it from the remote chat
+    #   delete - Remove all ghosts and users from the room (i.e. delete it)
+    cleanup_on_logout:
+        # Should cleanup on logout be enabled at all?
+        enabled: false
+        # Settings for manual logouts (explicitly initiated by the Matrix user)
+        manual:
+            # Action for private portals which will never be shared with other Matrix users.
+            private: nothing
+            # Action for portals with a relay user configured.
+            relayed: nothing
+            # Action for portals which may be shared, but don't currently have any other Matrix users.
+            shared_no_users: nothing
+            # Action for portals which have other logged-in Matrix users.
+            shared_has_users: nothing
+        # Settings for credentials being invalidated (initiated by the remote network, possibly through user action).
+        # Keys have the same meanings as in the manual section.
+        bad_credentials:
+            private: nothing
+            relayed: nothing
+            shared_no_users: nothing
+            shared_has_users: nothing
+
     # Settings for relay mode
     relay:
         # Whether relay mode should be allowed. If allowed, the set-relay command can be used to turn any

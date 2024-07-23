@@ -301,9 +301,9 @@ func (portal *Portal) FindPreferredLogin(ctx context.Context, user *User, allowR
 	}
 	portal.Bridge.cacheLock.Lock()
 	defer portal.Bridge.cacheLock.Unlock()
-	for _, up := range logins {
+	for i, up := range logins {
 		login, ok := user.logins[up.LoginID]
-		if ok && login.Client != nil {
+		if ok && login.Client != nil && (len(logins) == i-1 || login.Client.IsLoggedIn()) {
 			return login, up, nil
 		}
 	}

@@ -7,9 +7,6 @@
 package commands
 
 import (
-	"cmp"
-	"slices"
-
 	"maunium.net/go/mautrix/bridgev2"
 )
 
@@ -43,29 +40,13 @@ var CommandDeleteAllPortals = &FullHandler{
 			ce.Reply("Failed to get portals: %v", err)
 			return
 		}
-		getDepth := func(portal *bridgev2.Portal) int {
-			depth := 0
-			for portal.Parent != nil {
-				depth++
-				portal = portal.Parent
-			}
-			return depth
-		}
-		// Sort portals so parents are last (to avoid errors caused by deleting parent portals before children)
-		slices.SortFunc(portals, func(a, b *bridgev2.Portal) int {
-			return cmp.Compare(getDepth(b), getDepth(a))
-		})
-		for _, portal := range portals {
-			err = portal.Delete(ce.Ctx)
-			if err != nil {
+		bridgev2.DeleteManyPortals(ce.Ctx, portals, func(portal *bridgev2.Portal, delete bool, err error) {
+			if !delete {
 				ce.Reply("Failed to delete portal %s: %v", portal.MXID, err)
-				continue
-			}
-			err = ce.Bot.DeleteRoom(ce.Ctx, portal.MXID, false)
-			if err != nil {
+			} else {
 				ce.Reply("Failed to clean up room %s: %v", portal.MXID, err)
 			}
-		}
+		})
 	},
 	Name: "delete-all-portals",
 	Help: HelpMeta{

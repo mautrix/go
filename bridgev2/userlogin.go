@@ -7,8 +7,10 @@
 package bridgev2
 
 import (
+	"cmp"
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -16,8 +18,10 @@ import (
 	"go.mau.fi/util/exsync"
 
 	"maunium.net/go/mautrix/bridge/status"
+	"maunium.net/go/mautrix/bridgev2/bridgeconfig"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
+	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -244,9 +248,13 @@ func (ul *UserLogin) delete(ctx context.Context, state status.BridgeState, logou
 	} else {
 		ul.Disconnect(nil)
 	}
-	portals, err := ul.Bridge.DB.UserPortal.GetAllForLogin(ctx, ul.UserLogin)
-	if err != nil {
-		ul.Log.Err(err).Msg("Failed to get user portals")
+	var portals []*database.UserPortal
+	var err error
+	if ul.Bridge.Config.CleanupOnLogout.Enabled {
+		portals, err = ul.Bridge.DB.UserPortal.GetAllForLogin(ctx, ul.UserLogin)
+		if err != nil {
+			ul.Log.Err(err).Msg("Failed to get user portals")
+		}
 	}
 	err = ul.Bridge.DB.UserLogin.Delete(ctx, ul.ID)
 	if err != nil {
@@ -260,8 +268,11 @@ func (ul *UserLogin) delete(ctx context.Context, state status.BridgeState, logou
 	if !unlocked {
 		ul.Bridge.cacheLock.Unlock()
 	}
-	go ul.deleteSpace(ctx)
-	go ul.kickUserFromPortals(ctx, portals)
+	backgroundCtx := context.WithoutCancel(ctx)
+	go ul.deleteSpace(backgroundCtx)
+	if portals != nil {
+		go ul.kickUserFromPortals(backgroundCtx, portals, state.StateEvent == status.StateBadCredentials, false)
+	}
 	if state.StateEvent != "" {
 		ul.BridgeState.Send(state)
 	}
@@ -279,8 +290,159 @@ func (ul *UserLogin) deleteSpace(ctx context.Context) {
 	}
 }
 
-func (ul *UserLogin) kickUserFromPortals(ctx context.Context, portals []*database.UserPortal) {
-	// TODO kick user out of rooms
+// KickUserFromPortalsForBadCredentials can be called to kick the user from portals without deleting the entire UserLogin object.
+func (ul *UserLogin) KickUserFromPortalsForBadCredentials(ctx context.Context) {
+	log := zerolog.Ctx(ctx)
+	portals, err := ul.Bridge.DB.UserPortal.GetAllForLogin(ctx, ul.UserLogin)
+	if err != nil {
+		log.Err(err).Msg("Failed to get user portals")
+	}
+	ul.kickUserFromPortals(ctx, portals, true, true)
+}
+
+func DeleteManyPortals(ctx context.Context, portals []*Portal, errorCallback func(portal *Portal, delete bool, err error)) {
+	// TODO is there a more sensible place/name for this function?
+	if len(portals) == 0 {
+		return
+	}
+	getDepth := func(portal *Portal) int {
+		depth := 0
+		for portal.Parent != nil {
+			depth++
+			portal = portal.Parent
+		}
+		return depth
+	}
+	// Sort portals so parents are last (to avoid errors caused by deleting parent portals before children)
+	slices.SortFunc(portals, func(a, b *Portal) int {
+		return cmp.Compare(getDepth(b), getDepth(a))
+	})
+	for _, portal := range portals {
+		err := portal.Delete(ctx)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).
+				Stringer("portal_mxid", portal.MXID).
+				Object("portal_key", portal.PortalKey).
+				Msg("Failed to delete portal row from database")
+			if errorCallback != nil {
+				errorCallback(portal, false, err)
+			}
+			continue
+		}
+		err = portal.Bridge.Bot.DeleteRoom(ctx, portal.MXID, false)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).
+				Stringer("portal_mxid", portal.MXID).
+				Msg("Failed to clean up portal room")
+			if errorCallback != nil {
+				errorCallback(portal, true, err)
+			}
+		}
+	}
+}
+
+func (ul *UserLogin) kickUserFromPortals(ctx context.Context, portals []*database.UserPortal, badCredentials, deleteRow bool) {
+	var portalsToDelete []*Portal
+	for _, up := range portals {
+		portalToDelete, err := ul.kickUserFromPortal(ctx, up, badCredentials, deleteRow)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).
+				Object("portal_key", up.Portal).
+				Stringer("user_mxid", up.UserMXID).
+				Msg("Failed to apply logout action")
+		} else if portalToDelete != nil {
+			portalsToDelete = append(portalsToDelete, portalToDelete)
+		}
+	}
+	DeleteManyPortals(ctx, portalsToDelete, nil)
+}
+
+func (ul *UserLogin) kickUserFromPortal(ctx context.Context, up *database.UserPortal, badCredentials, deleteRow bool) (*Portal, error) {
+	portal, action, reason, err := ul.getLogoutAction(ctx, up, badCredentials)
+	if err != nil {
+		return nil, err
+	}
+	zerolog.Ctx(ctx).Debug().
+		Str("login_id", string(ul.ID)).
+		Stringer("user_mxid", ul.UserMXID).
+		Str("logout_action", string(action)).
+		Str("action_reason", reason).
+		Object("portal_key", portal.PortalKey).
+		Stringer("portal_mxid", portal.MXID).
+		Msg("Calculated portal action for logout processing")
+	switch action {
+	case bridgeconfig.CleanupActionNull, bridgeconfig.CleanupActionNothing:
+		// do nothing
+	case bridgeconfig.CleanupActionKick:
+		_, err = ul.Bridge.Bot.SendState(ctx, portal.MXID, event.StateMember, ul.UserMXID.String(), &event.Content{
+			Parsed: &event.MemberEventContent{
+				Membership: event.MembershipLeave,
+				Reason:     "Logged out of bridge",
+			},
+		}, time.Time{})
+		if err != nil {
+			return nil, fmt.Errorf("failed to kick user from portal: %w", err)
+		}
+		zerolog.Ctx(ctx).Debug().
+			Str("login_id", string(ul.ID)).
+			Stringer("user_mxid", ul.UserMXID).
+			Stringer("portal_mxid", portal.MXID).
+			Msg("Kicked user from portal")
+		if deleteRow {
+			err = ul.Bridge.DB.UserPortal.Delete(ctx, up)
+			if err != nil {
+				zerolog.Ctx(ctx).Warn().
+					Str("login_id", string(ul.ID)).
+					Stringer("user_mxid", ul.UserMXID).
+					Stringer("portal_mxid", portal.MXID).
+					Msg("Failed to delete user portal row")
+			}
+		}
+	case bridgeconfig.CleanupActionDelete, bridgeconfig.CleanupActionUnbridge:
+		// return portal instead of deleting here to allow sorting by depth
+		return portal, nil
+	}
+	return nil, nil
+}
+
+func (ul *UserLogin) getLogoutAction(ctx context.Context, up *database.UserPortal, badCredentials bool) (*Portal, bridgeconfig.CleanupAction, string, error) {
+	portal, err := ul.Bridge.GetExistingPortalByKey(ctx, up.Portal)
+	if err != nil {
+		return nil, bridgeconfig.CleanupActionNull, "", fmt.Errorf("failed to get full portal: %w", err)
+	} else if portal == nil || portal.MXID == "" {
+		return nil, bridgeconfig.CleanupActionNull, "portal not found", nil
+	}
+	actionsSet := ul.Bridge.Config.CleanupOnLogout.Manual
+	if badCredentials {
+		actionsSet = ul.Bridge.Config.CleanupOnLogout.BadCredentials
+	}
+	if portal.Receiver == "" {
+		return portal, actionsSet.Private, "portal has receiver", nil
+	}
+	otherUPs, err := ul.Bridge.DB.UserPortal.GetAllInPortal(ctx, portal.PortalKey)
+	if err != nil {
+		return portal, bridgeconfig.CleanupActionNull, "", fmt.Errorf("failed to get other logins in portal: %w", err)
+	}
+	hasOtherUsers := false
+	for _, otherUP := range otherUPs {
+		if otherUP.LoginID == ul.ID {
+			continue
+		}
+		if otherUP.UserMXID == ul.UserMXID {
+			otherUL := ul.Bridge.GetCachedUserLoginByID(otherUP.LoginID)
+			if otherUL != nil && otherUL.Client.IsLoggedIn() {
+				return portal, bridgeconfig.CleanupActionNull, "user has another login in portal", nil
+			}
+		} else {
+			hasOtherUsers = true
+		}
+	}
+	if portal.RelayLoginID != "" {
+		return portal, actionsSet.Relayed, "portal has relay login", nil
+	} else if hasOtherUsers {
+		return portal, actionsSet.SharedHasUsers, "portal has logins of other users", nil
+	}
+	return portal, actionsSet.SharedNoUsers, "portal doesn't have logins of other users", nil
 }
 
 func (ul *UserLogin) MarkAsPreferredIn(ctx context.Context, portal *Portal) error {

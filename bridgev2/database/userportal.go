@@ -67,6 +67,9 @@ const (
 	markLoginAsPreferredQuery = `
 		UPDATE user_portal SET preferred=(login_id=$3) WHERE bridge_id=$1 AND user_mxid=$2 AND portal_id=$4 AND portal_receiver=$5
 	`
+	deleteUserPortalQuery = `
+		DELETE FROM user_portal WHERE bridge_id=$1 AND user_mxid=$2 AND login_id=$3 AND portal_id=$4 AND portal_receiver=$5
+	`
 )
 
 func UserPortalFor(ul *UserLogin, portal networkid.PortalKey) *UserPortal {
@@ -105,6 +108,10 @@ func (upq *UserPortalQuery) Put(ctx context.Context, up *UserPortal) error {
 
 func (upq *UserPortalQuery) MarkAsPreferred(ctx context.Context, login *UserLogin, portal networkid.PortalKey) error {
 	return upq.Exec(ctx, markLoginAsPreferredQuery, upq.BridgeID, login.UserMXID, login.ID, portal.ID, portal.Receiver)
+}
+
+func (upq *UserPortalQuery) Delete(ctx context.Context, up *UserPortal) error {
+	return upq.Exec(ctx, deleteUserPortalQuery, up.BridgeID, up.UserMXID, up.LoginID, up.Portal.ID, up.Portal.Receiver)
 }
 
 func (up *UserPortal) Scan(row dbutil.Scannable) (*UserPortal, error) {

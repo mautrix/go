@@ -31,10 +31,34 @@ type Config struct {
 	ManagementRoomTexts ManagementRoomTexts `yaml:"management_room_texts"`
 }
 
+type CleanupAction string
+
+const (
+	CleanupActionNull     CleanupAction = ""
+	CleanupActionNothing  CleanupAction = "nothing"
+	CleanupActionKick     CleanupAction = "kick"
+	CleanupActionUnbridge CleanupAction = "unbridge"
+	CleanupActionDelete   CleanupAction = "delete"
+)
+
+type CleanupOnLogout struct {
+	Private        CleanupAction `yaml:"private"`
+	Relayed        CleanupAction `yaml:"relayed"`
+	SharedNoUsers  CleanupAction `yaml:"shared_no_users"`
+	SharedHasUsers CleanupAction `yaml:"shared_has_users"`
+}
+
+type CleanupOnLogouts struct {
+	Enabled        bool            `yaml:"enabled"`
+	Manual         CleanupOnLogout `yaml:"manual"`
+	BadCredentials CleanupOnLogout `yaml:"bad_credentials"`
+}
+
 type BridgeConfig struct {
 	CommandPrefix           string           `yaml:"command_prefix"`
 	PersonalFilteringSpaces bool             `yaml:"personal_filtering_spaces"`
 	PrivateChatPortalMeta   bool             `yaml:"private_chat_portal_meta"`
+	CleanupOnLogout         CleanupOnLogouts `yaml:"cleanup_on_logout"`
 	Relay                   RelayConfig      `yaml:"relay"`
 	Permissions             PermissionConfig `yaml:"permissions"`
 	Backfill                BackfillConfig   `yaml:"backfill"`
