@@ -189,6 +189,15 @@ func doMigrateLegacy(helper up.Helper) {
 	} else {
 		helper.Set(up.Bool, "false", "bridge", "private_chat_portal_meta")
 	}
+	helper.Copy(up.Bool, "bridge", "cleanup_on_logout", "enabled")
+	helper.Copy(up.Str, "bridge", "cleanup_on_logout", "manual", "private")
+	helper.Copy(up.Str, "bridge", "cleanup_on_logout", "manual", "relayed")
+	helper.Copy(up.Str, "bridge", "cleanup_on_logout", "manual", "shared_no_users")
+	helper.Copy(up.Str, "bridge", "cleanup_on_logout", "manual", "shared_has_users")
+	helper.Copy(up.Str, "bridge", "cleanup_on_logout", "bad_credentials", "private")
+	helper.Copy(up.Str, "bridge", "cleanup_on_logout", "bad_credentials", "relayed")
+	helper.Copy(up.Str, "bridge", "cleanup_on_logout", "bad_credentials", "shared_no_users")
+	helper.Copy(up.Str, "bridge", "cleanup_on_logout", "bad_credentials", "shared_has_users")
 	helper.Copy(up.Bool, "bridge", "relay", "enabled")
 	helper.Copy(up.Bool, "bridge", "relay", "admin_only")
 	helper.Copy(up.Map, "bridge", "permissions")
