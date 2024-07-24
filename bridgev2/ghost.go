@@ -250,20 +250,22 @@ func (ghost *Ghost) updateDMPortals(ctx context.Context) {
 
 func (ghost *Ghost) UpdateInfo(ctx context.Context, info *UserInfo) {
 	update := false
+	oldName := ghost.Name
+	oldAvatar := ghost.AvatarMXC
 	if info.Name != nil {
 		update = ghost.UpdateName(ctx, *info.Name) || update
 	}
 	if info.Avatar != nil {
 		update = ghost.UpdateAvatar(ctx, info.Avatar) || update
 	}
-	if update {
-		ghost.updateDMPortals(ctx)
-	}
 	if info.Identifiers != nil || info.IsBot != nil {
 		update = ghost.UpdateContactInfo(ctx, info.Identifiers, info.IsBot) || update
 	}
 	if info.ExtraUpdates != nil {
 		update = info.ExtraUpdates(ctx, ghost) || update
+	}
+	if oldName != ghost.Name || oldAvatar != ghost.AvatarMXC {
+		ghost.updateDMPortals(ctx)
 	}
 	if update {
 		err := ghost.Bridge.DB.Ghost.Update(ctx, ghost.Ghost)
