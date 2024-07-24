@@ -303,7 +303,11 @@ func (portal *Portal) FindPreferredLogin(ctx context.Context, user *User, allowR
 	defer portal.Bridge.cacheLock.Unlock()
 	for i, up := range logins {
 		login, ok := user.logins[up.LoginID]
-		if ok && login.Client != nil && (len(logins) == i-1 || login.Client.IsLoggedIn()) {
+		if portal.Receiver != "" {
+			if login.ID == portal.Receiver {
+				return login, up, nil
+			}
+		} else if ok && login.Client != nil && (len(logins) == i-1 || login.Client.IsLoggedIn()) {
 			return login, up, nil
 		}
 	}
@@ -316,6 +320,9 @@ func (portal *Portal) FindPreferredLogin(ctx context.Context, user *User, allowR
 	}
 	var firstLogin *UserLogin
 	for _, login := range user.logins {
+		if portal.Receiver != "" && login.ID != portal.Receiver {
+			continue
+		}
 		firstLogin = login
 		break
 	}
