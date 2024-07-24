@@ -7,6 +7,7 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -14,7 +15,6 @@ import (
 	"golang.org/x/net/html"
 
 	"maunium.net/go/mautrix/bridgev2"
-
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/id"
 )
@@ -55,6 +55,27 @@ func getClientForStartingChat[T bridgev2.IdentifierResolvingNetworkAPI](ce *Even
 	return login, api, remainingArgs
 }
 
+func formatResolveIdentifierResult(ctx context.Context, resp *bridgev2.ResolveIdentifierResponse) string {
+	var targetName string
+	var targetMXID id.UserID
+	if resp.Ghost != nil {
+		if resp.UserInfo != nil {
+			resp.Ghost.UpdateInfo(ctx, resp.UserInfo)
+		}
+		targetName = resp.Ghost.Name
+		targetMXID = resp.Ghost.Intent.GetMXID()
+	} else if resp.UserInfo != nil && resp.UserInfo.Name != nil {
+		targetName = *resp.UserInfo.Name
+	}
+	if targetMXID != "" {
+		return fmt.Sprintf("`%s` / [%s](%s)", resp.UserID, targetName, targetMXID.URI().MatrixToURL())
+	} else if targetName != "" {
+		return fmt.Sprintf("`%s` / %s", resp.UserID, targetName)
+	} else {
+		return fmt.Sprintf("`%s`", resp.UserID)
+	}
+}
+
 func fnResolveIdentifier(ce *Event) {
 	if len(ce.Args) == 0 {
 		ce.Reply("Usage: `$cmdprefix %s <identifier>`", ce.Command)
@@ -75,25 +96,7 @@ func fnResolveIdentifier(ce *Event) {
 		ce.ReplyAdvanced(fmt.Sprintf("Identifier <code>%s</code> not found", html.EscapeString(identifier)), false, true)
 		return
 	}
-	var targetName string
-	var targetMXID id.UserID
-	if resp.Ghost != nil {
-		if resp.UserInfo != nil {
-			resp.Ghost.UpdateInfo(ce.Ctx, resp.UserInfo)
-		}
-		targetName = resp.Ghost.Name
-		targetMXID = resp.Ghost.Intent.GetMXID()
-	} else if resp.UserInfo != nil && resp.UserInfo.Name != nil {
-		targetName = *resp.UserInfo.Name
-	}
-	var formattedName string
-	if targetMXID != "" {
-		formattedName = fmt.Sprintf("`%s` / [%s](%s)", resp.UserID, targetName, targetMXID.URI().MatrixToURL())
-	} else if targetName != "" {
-		formattedName = fmt.Sprintf("`%s` / %s", resp.UserID, targetName)
-	} else {
-		formattedName = fmt.Sprintf("`%s`", resp.UserID)
-	}
+	formattedName := formatResolveIdentifierResult(ce.Ctx, resp)
 	if createChat {
 		if resp.Chat == nil {
 			ce.Reply("Interface error: network connector did not return chat for create chat request")
@@ -139,4 +142,53 @@ func fnResolveIdentifier(ce *Event) {
 	} else {
 		ce.Reply("Found %s", formattedName)
 	}
+}
+
+var CommandSearch = &FullHandler{
+	Func: fnSearch,
+	Name: "search",
+	Help: HelpMeta{
+		Section:     HelpSectionChats,
+		Description: "Search for users on the remote network",
+		Args:        "<_query_>",
+	},
+	RequiresLogin: true,
+}
+
+func fnSearch(ce *Event) {
+	if len(ce.Args) == 0 {
+		ce.Reply("Usage: `$cmdprefix search <query>`")
+		return
+	}
+	_, api, queryParts := getClientForStartingChat[bridgev2.UserSearchingNetworkAPI](ce, "searching users")
+	if api == nil {
+		return
+	}
+	results, err := api.SearchUsers(ce.Ctx, strings.Join(queryParts, " "))
+	if err != nil {
+		ce.Log.Err(err).Msg("Failed to search for users")
+		ce.Reply("Failed to search for users: %v", err)
+		return
+	}
+	resultsString := make([]string, len(results))
+	for i, res := range results {
+		formattedName := formatResolveIdentifierResult(ce.Ctx, res)
+		resultsString[i] = fmt.Sprintf("* %s", formattedName)
+		if res.Chat != nil {
+			if res.Chat.Portal == nil {
+				res.Chat.Portal, err = ce.Bridge.GetExistingPortalByKey(ce.Ctx, res.Chat.PortalKey)
+				if err != nil {
+					ce.Log.Err(err).Object("portal_key", res.Chat.PortalKey).Msg("Failed to get DM portal")
+				}
+			}
+			if res.Chat.Portal != nil {
+				portalName := res.Chat.Portal.Name
+				if portalName == "" {
+					portalName = res.Chat.Portal.MXID.String()
+				}
+				resultsString[i] = fmt.Sprintf("%s - DM portal: [%s](%s)", resultsString[i], portalName, res.Chat.Portal.MXID.URI().MatrixToURL())
+			}
+		}
+	}
+	ce.Reply("Search results:\n\n%s", strings.Join(resultsString, "\n"))
 }
