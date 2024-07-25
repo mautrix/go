@@ -20,6 +20,8 @@ import (
 //
 // Using this type is only recommended for simple bridges. More advanced ones should implement
 // the remote event interfaces themselves by wrapping the remote network library event types.
+//
+// Deprecated: use the types in the simplevent package instead.
 type SimpleRemoteEvent[T any] struct {
 	Type         RemoteEventType
 	LogContext   func(c zerolog.Context) zerolog.Context
