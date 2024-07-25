@@ -213,7 +213,7 @@ func (portal *Portal) sendBackfill(ctx context.Context, source *UserLogin, messa
 		Bool("mark_read_past_threshold", forceMarkRead).
 		Msg("Sending backfill messages")
 	if canBatchSend {
-		portal.sendBatch(ctx, source, messages, forceForward, markRead || forceMarkRead)
+		portal.sendBatch(ctx, source, messages, forceForward, markRead || forceMarkRead, !inThread)
 	} else {
 		portal.sendLegacyBackfill(ctx, source, messages, markRead || forceMarkRead)
 	}
@@ -227,16 +227,15 @@ func (portal *Portal) sendBackfill(ctx context.Context, source *UserLogin, messa
 	}
 }
 
-func (portal *Portal) sendBatch(ctx context.Context, source *UserLogin, messages []*BackfillMessage, forceForward, markRead bool) {
+func (portal *Portal) sendBatch(ctx context.Context, source *UserLogin, messages []*BackfillMessage, forceForward, markRead, allowNotification bool) {
 	req := &mautrix.ReqBeeperBatchSend{
 		ForwardIfNoMessages: !forceForward,
 		Forward:             forceForward,
 		Events:              make([]*event.Event, 0, len(messages)),
+		SendNotification:    !markRead && forceForward && allowNotification,
 	}
 	if markRead {
 		req.MarkReadBy = source.UserMXID
-	} else {
-		req.SendNotification = forceForward
 	}
 	prevThreadEvents := make(map[networkid.MessageID]id.EventID)
 	dbMessages := make([]*database.Message, 0, len(messages))
