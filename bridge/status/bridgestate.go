@@ -80,9 +80,13 @@ type BridgeStateFiller interface {
 	GetRemoteName() string
 }
 
+type StandaloneCustomBridgeStateFiller interface {
+	FillBridgeState(BridgeState) BridgeState
+}
+
 type CustomBridgeStateFiller interface {
 	BridgeStateFiller
-	FillBridgeState(BridgeState) BridgeState
+	StandaloneCustomBridgeStateFiller
 }
 
 func (pong BridgeState) Fill(user BridgeStateFiller) BridgeState {

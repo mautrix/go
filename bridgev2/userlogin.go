@@ -449,7 +449,7 @@ func (ul *UserLogin) MarkAsPreferredIn(ctx context.Context, portal *Portal) erro
 	return ul.Bridge.DB.UserPortal.MarkAsPreferred(ctx, ul.UserLogin, portal.PortalKey)
 }
 
-var _ status.BridgeStateFiller = (*UserLogin)(nil)
+var _ status.CustomBridgeStateFiller = (*UserLogin)(nil)
 
 func (ul *UserLogin) GetMXID() id.UserID {
 	return ul.UserMXID
@@ -461,6 +461,14 @@ func (ul *UserLogin) GetRemoteID() string {
 
 func (ul *UserLogin) GetRemoteName() string {
 	return ul.RemoteName
+}
+
+func (ul *UserLogin) FillBridgeState(state status.BridgeState) status.BridgeState {
+	filler, ok := ul.Client.(status.StandaloneCustomBridgeStateFiller)
+	if ok {
+		return filler.FillBridgeState(state)
+	}
+	return state
 }
 
 func (ul *UserLogin) Disconnect(done func()) {
