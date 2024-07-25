@@ -1235,6 +1235,8 @@ func (portal *Portal) handleRemoteEvent(source *UserLogin, evt RemoteEvent) {
 		portal.handleRemoteChatInfoChange(ctx, source, evt.(RemoteChatInfoChange))
 	case RemoteEventChatResync:
 		portal.handleRemoteChatResync(ctx, source, evt.(RemoteChatResync))
+	case RemoteEventChatDelete:
+		portal.handleRemoteChatDelete(ctx, source, evt.(RemoteChatDelete))
 	case RemoteEventBackfill:
 		portal.handleRemoteBackfill(ctx, source, evt.(RemoteBackfill))
 	default:
@@ -1814,6 +1816,21 @@ func (portal *Portal) handleRemoteChatResync(ctx context.Context, source *UserLo
 		} else if needsBackfill {
 			portal.doForwardBackfill(ctx, source, latestMessage)
 		}
+	}
+}
+
+func (portal *Portal) handleRemoteChatDelete(ctx context.Context, source *UserLogin, evt RemoteChatDelete) {
+	if portal.Receiver == "" && evt.DeleteOnlyForMe() {
+		// TODO check if there are other users
+	}
+	err := portal.Delete(ctx)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to delete portal from database")
+		return
+	}
+	err = portal.Bridge.Bot.DeleteRoom(ctx, portal.MXID, false)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to delete Matrix room")
 	}
 }
 
