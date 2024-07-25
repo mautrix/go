@@ -1177,9 +1177,12 @@ func (portal *Portal) handleRemoteEvent(source *UserLogin, evt RemoteEvent) {
 				Msg("Remote event handler panicked")
 		}
 	}()
+	evtType := evt.GetType()
+	log.UpdateContext(func(c zerolog.Context) zerolog.Context {
+		return c.Stringer("bridge_evt_type", evtType)
+	})
 	log.UpdateContext(evt.AddLogContext)
 	ctx := log.WithContext(context.TODO())
-	evtType := evt.GetType()
 	if portal.MXID == "" {
 		mcp, ok := evt.(RemoteEventThatMayCreatePortal)
 		if !ok || !mcp.ShouldCreatePortal() {
@@ -1209,7 +1212,7 @@ func (portal *Portal) handleRemoteEvent(source *UserLogin, evt RemoteEvent) {
 	if ok {
 		preHandler.PreHandle(ctx, portal)
 	}
-	log.Debug().Stringer("bridge_evt_type", evtType).Msg("Handling remote event")
+	log.Debug().Msg("Handling remote event")
 	switch evtType {
 	case RemoteEventUnknown:
 		log.Debug().Msg("Ignoring remote event with type unknown")
@@ -1240,7 +1243,7 @@ func (portal *Portal) handleRemoteEvent(source *UserLogin, evt RemoteEvent) {
 	case RemoteEventBackfill:
 		portal.handleRemoteBackfill(ctx, source, evt.(RemoteBackfill))
 	default:
-		log.Warn().Int("type", int(evt.GetType())).Msg("Got remote event with unknown type")
+		log.Warn().Msg("Got remote event with unknown type")
 	}
 }
 
