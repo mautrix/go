@@ -645,6 +645,8 @@ func (ret RemoteEventType) String() string {
 		return "RemoteEventChatInfoChange"
 	case RemoteEventChatResync:
 		return "RemoteEventChatResync"
+	case RemoteEventChatDelete:
+		return "RemoteEventChatDelete"
 	case RemoteEventBackfill:
 		return "RemoteEventBackfill"
 	default:
@@ -665,6 +667,7 @@ const (
 	RemoteEventTyping
 	RemoteEventChatInfoChange
 	RemoteEventChatResync
+	RemoteEventChatDelete
 	RemoteEventBackfill
 )
 
@@ -701,6 +704,11 @@ type RemoteChatResyncWithInfo interface {
 type RemoteChatResyncBackfill interface {
 	RemoteChatResync
 	CheckNeedsBackfill(ctx context.Context, latestMessage *database.Message) (bool, error)
+}
+
+type RemoteChatDelete interface {
+	RemoteEvent
+	DeleteOnlyForMe() bool
 }
 
 type RemoteEventThatMayCreatePortal interface {

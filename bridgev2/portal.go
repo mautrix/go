@@ -2739,6 +2739,21 @@ func (portal *Portal) Delete(ctx context.Context) error {
 	return nil
 }
 
+func (portal *Portal) RemoveMXID(ctx context.Context) error {
+	if portal.MXID == "" {
+		return nil
+	}
+	portal.MXID = ""
+	err := portal.Save(ctx)
+	if err != nil {
+		return err
+	}
+	portal.Bridge.cacheLock.Lock()
+	defer portal.Bridge.cacheLock.Unlock()
+	delete(portal.Bridge.portalsByMXID, portal.MXID)
+	return nil
+}
+
 func (portal *Portal) unlockedDelete(ctx context.Context) error {
 	// TODO delete child portals?
 	err := portal.Bridge.DB.Portal.Delete(ctx, portal.PortalKey)
