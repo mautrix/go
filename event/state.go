@@ -167,7 +167,8 @@ type BridgeEventContent struct {
 	Network   *BridgeInfoSection `json:"network,omitempty"`
 	Channel   BridgeInfoSection  `json:"channel"`
 
-	BeeperRoomType string `json:"com.beeper.room_type,omitempty"`
+	BeeperRoomType   string `json:"com.beeper.room_type,omitempty"`
+	BeeperRoomTypeV2 string `json:"com.beeper.room_type.v2,omitempty"`
 }
 
 type SpaceChildEventContent struct {

@@ -2047,7 +2047,10 @@ func (portal *Portal) getBridgeInfo() (string, event.BridgeEventContent) {
 			AvatarURL:   portal.AvatarMXC,
 			// TODO external URL?
 		},
-		BeeperRoomType: string(portal.RoomType),
+		BeeperRoomTypeV2: string(portal.RoomType),
+	}
+	if portal.RoomType == database.RoomTypeDM || portal.RoomType == database.RoomTypeGroupDM {
+		bridgeInfo.BeeperRoomType = "dm"
 	}
 	parent := portal.GetTopLevelParent()
 	if parent != nil {
