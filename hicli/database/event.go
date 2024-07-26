@@ -7,6 +7,7 @@
 package database
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -16,7 +17,6 @@ import (
 	"github.com/tidwall/gjson"
 	"go.mau.fi/util/dbutil"
 	"go.mau.fi/util/exgjson"
-	"golang.org/x/net/context"
 
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
