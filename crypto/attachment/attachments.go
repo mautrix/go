@@ -137,6 +137,8 @@ type encryptingReader struct {
 	isDecrypting bool
 }
 
+var _ io.ReadSeekCloser = (*encryptingReader)(nil)
+
 func (r *encryptingReader) Seek(offset int64, whence int) (int64, error) {
 	if r.closed {
 		return 0, ReaderClosed
