@@ -593,6 +593,52 @@ type GroupCreatingNetworkAPI interface {
 	CreateGroup(ctx context.Context, name string, users ...networkid.UserID) (*CreateChatResponse, error)
 }
 
+type MembershipChangeType string
+
+const (
+	AcceptInvite  MembershipChangeType = "invite,join,1"
+	RevokeInvite  MembershipChangeType = "invite,leave,0"
+	RejectInvite  MembershipChangeType = "invite,leave,1"
+	BanInvited    MembershipChangeType = "invite,ban,0"
+	ProfileChange MembershipChangeType = "join,join,1"
+	Leave         MembershipChangeType = "join,leave,1"
+	Kick          MembershipChangeType = "join,leave,0"
+	BanJoined     MembershipChangeType = "join,ban,0"
+	Invite        MembershipChangeType = "leave,invite,0"
+	Join          MembershipChangeType = "leave,join,1"
+	Ban           MembershipChangeType = "leave,ban,0"
+	Knock         MembershipChangeType = "leave,knock,1"
+	AcceptKnock   MembershipChangeType = "knock,invite,0"
+	RejectKnock   MembershipChangeType = "knock,leave,0"
+	RetractKnock  MembershipChangeType = "knock,leave,1"
+	BanKnocked    MembershipChangeType = "knock,ban,0"
+	Unban         MembershipChangeType = "ban,leave,0"
+)
+
+func (m *MembershipChangeType) GetFrom() event.Membership {
+	return event.Membership(strings.Split(string(*m), ",")[0])
+}
+
+func (m *MembershipChangeType) GetTo() event.Membership {
+	return event.Membership(strings.Split(string(*m), ",")[1])
+}
+
+func (m *MembershipChangeType) GetIsSelf() bool {
+	return strings.Split(string(*m), ",")[2] == "1"
+}
+
+type MatrixMembershipChange struct {
+	MatrixEventBase[*event.MemberEventContent]
+	TargetGhost     *Ghost
+	TargetUserLogin *UserLogin
+	Type            MembershipChangeType
+}
+
+type MembershipHandlingNetworkAPI interface {
+	NetworkAPI
+	HandleMatrixMembership(ctx context.Context, msg *MatrixMembershipChange) (bool, error)
+}
+
 type PushType int
 
 func (pt PushType) String() string {

@@ -63,6 +63,7 @@ type BridgeConfig struct {
 	Relay                   RelayConfig      `yaml:"relay"`
 	Permissions             PermissionConfig `yaml:"permissions"`
 	Backfill                BackfillConfig   `yaml:"backfill"`
+	BridgeMatrixLeave       bool             `yaml:"bridge_matrix_leave"`
 }
 
 type MatrixConfig struct {
