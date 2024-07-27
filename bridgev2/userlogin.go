@@ -168,7 +168,10 @@ func (user *User) NewLogin(ctx context.Context, data *database.UserLogin, params
 	data.BridgeID = user.BridgeID
 	data.UserMXID = user.MXID
 	if data.Metadata == nil {
-		data.Metadata = user.Bridge.Network.GetDBMetaTypes().UserLogin()
+		metaTypes := user.Bridge.Network.GetDBMetaTypes()
+		if metaTypes.UserLogin != nil {
+			data.Metadata = metaTypes.UserLogin()
+		}
 	}
 	if params == nil {
 		params = &NewLoginParams{}
