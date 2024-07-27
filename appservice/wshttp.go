@@ -61,6 +61,11 @@ func (as *AppService) WebsocketHTTPProxy(cmd WebsocketCommand) (bool, interface{
 	if err != nil {
 		return false, fmt.Errorf("failed to create fake HTTP request: %w", err)
 	}
+	httpReq.RequestURI = req.Path
+	if req.Query != "" {
+		httpReq.RequestURI += "?" + req.Query
+	}
+	httpReq.RemoteAddr = "websocket"
 	httpReq.Header = req.Headers
 
 	var resp HTTPProxyResponse
