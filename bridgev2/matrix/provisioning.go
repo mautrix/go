@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -43,7 +42,7 @@ type ProvisioningAPI struct {
 	log zerolog.Logger
 	net bridgev2.NetworkConnector
 
-	fedClient *http.Client
+	fedClient *federation.Client
 
 	logins     map[string]*ProvLogin
 	loginsLock sync.RWMutex
@@ -89,9 +88,9 @@ func (prov *ProvisioningAPI) Init() {
 	prov.logins = make(map[string]*ProvLogin)
 	prov.net = prov.br.Bridge.Network
 	prov.log = prov.br.Log.With().Str("component", "provisioning").Logger()
-	prov.fedClient = federation.NewFederationHTTPClient()
-	tp := prov.fedClient.Transport.(*federation.ServerResolvingTransport)
-	prov.fedClient.Timeout = 20 * time.Second
+	prov.fedClient = federation.NewClient("", nil)
+	prov.fedClient.HTTP.Timeout = 20 * time.Second
+	tp := prov.fedClient.HTTP.Transport.(*federation.ServerResolvingTransport)
 	tp.Dialer.Timeout = 10 * time.Second
 	tp.Transport.ResponseHeaderTimeout = 10 * time.Second
 	tp.Transport.TLSHandshakeTimeout = 10 * time.Second
@@ -159,10 +158,6 @@ func (prov *ProvisioningAPI) checkMatrixAuth(ctx context.Context, userID id.User
 	}
 }
 
-type respOpenIDUserInfo struct {
-	Sub id.UserID `json:"sub"`
-}
-
 func (prov *ProvisioningAPI) checkFederatedMatrixAuth(ctx context.Context, userID id.UserID, token string) error {
 	homeserver := userID.Homeserver()
 	wrappedToken := fmt.Sprintf("%s:%s", homeserver, token)
@@ -171,9 +166,9 @@ func (prov *ProvisioningAPI) checkFederatedMatrixAuth(ctx context.Context, userI
 	defer prov.matrixAuthCacheLock.Unlock()
 	if cached, ok := prov.matrixAuthCache[wrappedToken]; ok && cached.Expires.After(time.Now()) && cached.UserID == userID {
 		return nil
-	} else if validationResult, err := prov.validateOpenIDToken(ctx, homeserver, token); err != nil {
+	} else if validationResult, err := prov.fedClient.GetOpenIDUserInfo(ctx, homeserver, token); err != nil {
 		return fmt.Errorf("failed to validate OpenID token: %w", err)
-	} else if validationResult != userID {
+	} else if validationResult.Sub != userID {
 		return fmt.Errorf("mismatching user ID (%q != %q)", validationResult, userID)
 	} else {
 		prov.matrixAuthCache[wrappedToken] = matrixAuthCacheEntry{
@@ -182,35 +177,6 @@ func (prov *ProvisioningAPI) checkFederatedMatrixAuth(ctx context.Context, userI
 		}
 		return nil
 	}
-}
-
-func (prov *ProvisioningAPI) validateOpenIDToken(ctx context.Context, server string, token string) (id.UserID, error) {
-	reqURL := url.URL{
-		Scheme: "matrix-federation",
-		Host:   server,
-		Path:   "/_matrix/federation/v1/openid/userinfo",
-		RawQuery: (&url.Values{
-			"access_token": {token},
-		}).Encode(),
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL.String(), nil)
-	if err != nil {
-		return "", fmt.Errorf("failed to prepare request: %w", err)
-	}
-	resp, err := prov.fedClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("unexpected status code %d", resp.StatusCode)
-	}
-	var respData respOpenIDUserInfo
-	err = json.NewDecoder(resp.Body).Decode(&respData)
-	if err != nil {
-		return "", fmt.Errorf("failed to decode response: %w", err)
-	}
-	return respData.Sub, nil
 }
 
 func (prov *ProvisioningAPI) AuthMiddleware(h http.Handler) http.Handler {

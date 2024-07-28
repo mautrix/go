@@ -83,6 +83,10 @@ type ServerVerifyKey struct {
 	Key id.SigningKey `json:"key"`
 }
 
+func (svk *ServerVerifyKey) Decode() (ed25519.PublicKey, error) {
+	return base64.RawStdEncoding.DecodeString(string(svk.Key))
+}
+
 type OldVerifyKey struct {
 	Key       id.SigningKey      `json:"key"`
 	ExpiredTS jsontime.UnixMilli `json:"expired_ts"`

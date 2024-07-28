@@ -40,13 +40,6 @@ func NewServerResolvingTransport() *ServerResolvingTransport {
 	return srt
 }
 
-func NewFederationHTTPClient() *http.Client {
-	return &http.Client{
-		Transport: NewServerResolvingTransport(),
-		Timeout:   120 * time.Second,
-	}
-}
-
 var _ http.RoundTripper = (*ServerResolvingTransport)(nil)
 
 func (srt *ServerResolvingTransport) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
