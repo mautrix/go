@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -99,7 +100,6 @@ func (prov *ProvisioningAPI) Init() {
 	prov.Router.Use(corsMiddleware)
 	prov.Router.Use(requestlog.AccessLogger(false))
 	prov.Router.Use(prov.AuthMiddleware)
-	prov.Router.Path("/v3/exchange_token").Methods(http.MethodPost, http.MethodOptions).HandlerFunc(prov.PostExchangeToken)
 	prov.Router.Path("/v3/whoami").Methods(http.MethodGet, http.MethodOptions).HandlerFunc(prov.GetWhoami)
 	prov.Router.Path("/v3/login/flows").Methods(http.MethodGet, http.MethodOptions).HandlerFunc(prov.GetLoginFlows)
 	prov.Router.Path("/v3/login/start/{flowID}").Methods(http.MethodPost, http.MethodOptions).HandlerFunc(prov.PostLoginStart)
@@ -159,13 +159,62 @@ func (prov *ProvisioningAPI) checkMatrixAuth(ctx context.Context, userID id.User
 	}
 }
 
+type respOpenIDUserInfo struct {
+	Sub id.UserID `json:"sub"`
+}
+
+func (prov *ProvisioningAPI) checkFederatedMatrixAuth(ctx context.Context, userID id.UserID, token string) error {
+	homeserver := userID.Homeserver()
+	wrappedToken := fmt.Sprintf("%s:%s", homeserver, token)
+	// TODO smarter locking
+	prov.matrixAuthCacheLock.Lock()
+	defer prov.matrixAuthCacheLock.Unlock()
+	if cached, ok := prov.matrixAuthCache[wrappedToken]; ok && cached.Expires.After(time.Now()) && cached.UserID == userID {
+		return nil
+	} else if validationResult, err := prov.validateOpenIDToken(ctx, homeserver, token); err != nil {
+		return fmt.Errorf("failed to validate OpenID token: %w", err)
+	} else if validationResult != userID {
+		return fmt.Errorf("mismatching user ID (%q != %q)", validationResult, userID)
+	} else {
+		prov.matrixAuthCache[wrappedToken] = matrixAuthCacheEntry{
+			Expires: time.Now().Add(1 * time.Hour),
+			UserID:  userID,
+		}
+		return nil
+	}
+}
+
+func (prov *ProvisioningAPI) validateOpenIDToken(ctx context.Context, server string, token string) (id.UserID, error) {
+	reqURL := url.URL{
+		Scheme: "matrix-federation",
+		Host:   server,
+		Path:   "/_matrix/federation/v1/openid/userinfo",
+		RawQuery: (&url.Values{
+			"access_token": {token},
+		}).Encode(),
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL.String(), nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to prepare request: %w", err)
+	}
+	resp, err := prov.fedClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("unexpected status code %d", resp.StatusCode)
+	}
+	var respData respOpenIDUserInfo
+	err = json.NewDecoder(resp.Body).Decode(&respData)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode response: %w", err)
+	}
+	return respData.Sub, nil
+}
+
 func (prov *ProvisioningAPI) AuthMiddleware(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/v3/exchange_token" {
-			h.ServeHTTP(w, r)
-			return
-		}
-
 		auth := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 		if auth == "" {
 			jsonResponse(w, http.StatusUnauthorized, &mautrix.RespError{
@@ -180,7 +229,7 @@ func (prov *ProvisioningAPI) AuthMiddleware(h http.Handler) http.Handler {
 			if userID.Homeserver() == prov.br.AS.HomeserverDomain {
 				err = prov.checkMatrixAuth(r.Context(), userID, auth)
 			} else {
-				err = prov.checkJWTAuth(userID, auth)
+				err = prov.checkFederatedMatrixAuth(r.Context(), userID, auth)
 			}
 			if err != nil {
 				zerolog.Ctx(r.Context()).Warn().Err(err).
