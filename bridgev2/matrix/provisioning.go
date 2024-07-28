@@ -226,10 +226,10 @@ func (prov *ProvisioningAPI) AuthMiddleware(h http.Handler) http.Handler {
 		userID := id.UserID(r.URL.Query().Get("user_id"))
 		if auth != prov.br.Config.Provisioning.SharedSecret {
 			var err error
-			if userID.Homeserver() == prov.br.AS.HomeserverDomain {
-				err = prov.checkMatrixAuth(r.Context(), userID, auth)
+			if strings.HasPrefix(auth, "openid:") {
+				err = prov.checkFederatedMatrixAuth(r.Context(), userID, strings.TrimPrefix(auth, "openid:"))
 			} else {
-				err = prov.checkFederatedMatrixAuth(r.Context(), userID, auth)
+				err = prov.checkMatrixAuth(r.Context(), userID, auth)
 			}
 			if err != nil {
 				zerolog.Ctx(r.Context()).Warn().Err(err).
