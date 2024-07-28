@@ -26,6 +26,7 @@ import (
 	"maunium.net/go/mautrix/bridge/status"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/networkid"
+	"maunium.net/go/mautrix/federation"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -40,6 +41,8 @@ type ProvisioningAPI struct {
 	br  *Connector
 	log zerolog.Logger
 	net bridgev2.NetworkConnector
+
+	fedClient *http.Client
 
 	logins     map[string]*ProvLogin
 	loginsLock sync.RWMutex
@@ -85,11 +88,18 @@ func (prov *ProvisioningAPI) Init() {
 	prov.logins = make(map[string]*ProvLogin)
 	prov.net = prov.br.Bridge.Network
 	prov.log = prov.br.Log.With().Str("component", "provisioning").Logger()
+	prov.fedClient = federation.NewFederationHTTPClient()
+	tp := prov.fedClient.Transport.(*federation.ServerResolvingTransport)
+	prov.fedClient.Timeout = 20 * time.Second
+	tp.Dialer.Timeout = 10 * time.Second
+	tp.Transport.ResponseHeaderTimeout = 10 * time.Second
+	tp.Transport.TLSHandshakeTimeout = 10 * time.Second
 	prov.Router = prov.br.AS.Router.PathPrefix(prov.br.Config.Provisioning.Prefix).Subrouter()
 	prov.Router.Use(hlog.NewHandler(prov.log))
 	prov.Router.Use(corsMiddleware)
 	prov.Router.Use(requestlog.AccessLogger(false))
 	prov.Router.Use(prov.AuthMiddleware)
+	prov.Router.Path("/v3/exchange_token").Methods(http.MethodPost, http.MethodOptions).HandlerFunc(prov.PostExchangeToken)
 	prov.Router.Path("/v3/whoami").Methods(http.MethodGet, http.MethodOptions).HandlerFunc(prov.GetWhoami)
 	prov.Router.Path("/v3/login/flows").Methods(http.MethodGet, http.MethodOptions).HandlerFunc(prov.GetLoginFlows)
 	prov.Router.Path("/v3/login/start/{flowID}").Methods(http.MethodPost, http.MethodOptions).HandlerFunc(prov.PostLoginStart)
@@ -151,6 +161,11 @@ func (prov *ProvisioningAPI) checkMatrixAuth(ctx context.Context, userID id.User
 
 func (prov *ProvisioningAPI) AuthMiddleware(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v3/exchange_token" {
+			h.ServeHTTP(w, r)
+			return
+		}
+
 		auth := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 		if auth == "" {
 			jsonResponse(w, http.StatusUnauthorized, &mautrix.RespError{
@@ -161,7 +176,12 @@ func (prov *ProvisioningAPI) AuthMiddleware(h http.Handler) http.Handler {
 		}
 		userID := id.UserID(r.URL.Query().Get("user_id"))
 		if auth != prov.br.Config.Provisioning.SharedSecret {
-			err := prov.checkMatrixAuth(r.Context(), userID, auth)
+			var err error
+			if userID.Homeserver() == prov.br.AS.HomeserverDomain {
+				err = prov.checkMatrixAuth(r.Context(), userID, auth)
+			} else {
+				err = prov.checkJWTAuth(userID, auth)
+			}
 			if err != nil {
 				zerolog.Ctx(r.Context()).Warn().Err(err).
 					Msg("Provisioning API request contained invalid auth")
