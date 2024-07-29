@@ -295,6 +295,21 @@ func (portal *Portal) handleCreateEvent(evt *portalCreateEvent) {
 }
 
 func (portal *Portal) FindPreferredLogin(ctx context.Context, user *User, allowRelay bool) (*UserLogin, *database.UserPortal, error) {
+	if portal.Receiver != "" {
+		login, err := portal.Bridge.GetExistingUserLoginByID(ctx, portal.Receiver)
+		if err != nil {
+			return nil, nil, err
+		}
+		if login.UserMXID != user.MXID {
+			if allowRelay && portal.Relay != nil {
+				return nil, nil, nil
+			}
+			// TODO different error for this case?
+			return nil, nil, ErrNotLoggedIn
+		}
+		up, err := portal.Bridge.DB.UserPortal.Get(ctx, login.UserLogin, portal.PortalKey)
+		return login, up, err
+	}
 	logins, err := portal.Bridge.DB.UserPortal.GetAllForUserInPortal(ctx, user.MXID, portal.PortalKey)
 	if err != nil {
 		return nil, nil, err
@@ -303,11 +318,7 @@ func (portal *Portal) FindPreferredLogin(ctx context.Context, user *User, allowR
 	defer portal.Bridge.cacheLock.Unlock()
 	for i, up := range logins {
 		login, ok := user.logins[up.LoginID]
-		if portal.Receiver != "" {
-			if login.ID == portal.Receiver {
-				return login, up, nil
-			}
-		} else if ok && login.Client != nil && (len(logins) == i-1 || login.Client.IsLoggedIn()) {
+		if ok && login.Client != nil && (len(logins) == i-1 || login.Client.IsLoggedIn()) {
 			return login, up, nil
 		}
 	}
@@ -320,9 +331,6 @@ func (portal *Portal) FindPreferredLogin(ctx context.Context, user *User, allowR
 	}
 	var firstLogin *UserLogin
 	for _, login := range user.logins {
-		if portal.Receiver != "" && login.ID != portal.Receiver {
-			continue
-		}
 		firstLogin = login
 		break
 	}
