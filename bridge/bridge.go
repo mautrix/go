@@ -320,6 +320,18 @@ func (br *Bridge) InitVersion(tag, commit, buildTime string) {
 
 var MinSpecVersion = mautrix.SpecV14
 
+func (br *Bridge) logInitialRequestError(err error, defaultMessage string) {
+	if errors.Is(err, mautrix.MUnknownToken) {
+		br.ZLog.WithLevel(zerolog.FatalLevel).Msg("The as_token was not accepted. Is the registration file installed in your homeserver correctly?")
+		br.ZLog.Info().Msg("See https://docs.mau.fi/faq/as-token for more info")
+	} else if errors.Is(err, mautrix.MExclusive) {
+		br.ZLog.WithLevel(zerolog.FatalLevel).Msg("The as_token was accepted, but the /register request was not. Are the homeserver domain, bot username and username template in the config correct, and do they match the values in the registration?")
+		br.ZLog.Info().Msg("See https://docs.mau.fi/faq/as-register for more info")
+	} else {
+		br.ZLog.WithLevel(zerolog.FatalLevel).Err(err).Msg(defaultMessage)
+	}
+}
+
 func (br *Bridge) ensureConnection(ctx context.Context) {
 	for {
 		versions, err := br.Bot.Versions(ctx)
@@ -328,7 +340,8 @@ func (br *Bridge) ensureConnection(ctx context.Context) {
 				br.ZLog.Debug().Msg("M_FORBIDDEN in /versions, trying to register before retrying")
 				err = br.Bot.EnsureRegistered(ctx)
 				if err != nil {
-					br.ZLog.Err(err).Msg("Failed to register after /versions failed")
+					br.logInitialRequestError(err, "Failed to register after /versions failed with M_FORBIDDEN")
+					os.Exit(16)
 				}
 			} else {
 				br.ZLog.Err(err).Msg("Failed to connect to homeserver, retrying in 10 seconds...")
@@ -367,15 +380,7 @@ func (br *Bridge) ensureConnection(ctx context.Context) {
 
 	resp, err := br.Bot.Whoami(ctx)
 	if err != nil {
-		if errors.Is(err, mautrix.MUnknownToken) {
-			br.ZLog.WithLevel(zerolog.FatalLevel).Msg("The as_token was not accepted. Is the registration file installed in your homeserver correctly?")
-			br.ZLog.Info().Msg("See https://docs.mau.fi/faq/as-token for more info")
-		} else if errors.Is(err, mautrix.MExclusive) {
-			br.ZLog.WithLevel(zerolog.FatalLevel).Msg("The as_token was accepted, but the /register request was not. Are the homeserver domain, bot username and username template in the config correct, and do they match the values in the registration?")
-			br.ZLog.Info().Msg("See https://docs.mau.fi/faq/as-register for more info")
-		} else {
-			br.ZLog.WithLevel(zerolog.FatalLevel).Err(err).Msg("/whoami request failed with unknown error")
-		}
+		br.logInitialRequestError(err, "/whoami request failed with unknown error")
 		os.Exit(16)
 	} else if resp.UserID != br.Bot.UserID {
 		br.ZLog.WithLevel(zerolog.FatalLevel).
