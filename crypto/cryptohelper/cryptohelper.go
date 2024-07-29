@@ -351,12 +351,16 @@ func (helper *CryptoHelper) Decrypt(ctx context.Context, evt *event.Event) (*eve
 }
 
 func (helper *CryptoHelper) Encrypt(ctx context.Context, roomID id.RoomID, evtType event.Type, content any) (encrypted *event.EncryptedEventContent, err error) {
+	return helper.EncryptWithStateKey(ctx, roomID, evtType, nil, content)
+}
+
+func (helper *CryptoHelper) EncryptWithStateKey(ctx context.Context, roomID id.RoomID, evtType event.Type, stateKey *string, content any) (encrypted *event.EncryptedEventContent, err error) {
 	if helper == nil {
 		return nil, fmt.Errorf("crypto helper is nil")
 	}
 	helper.lock.RLock()
 	defer helper.lock.RUnlock()
-	encrypted, err = helper.mach.EncryptMegolmEvent(ctx, roomID, evtType, content)
+	encrypted, err = helper.mach.EncryptMegolmEventWithStateKey(ctx, roomID, evtType, stateKey, content)
 	if err != nil {
 		if !errors.Is(err, crypto.SessionExpired) && err != crypto.NoGroupSession && !errors.Is(err, crypto.SessionNotShared) {
 			return
@@ -371,7 +375,7 @@ func (helper *CryptoHelper) Encrypt(ctx context.Context, roomID id.RoomID, evtTy
 			err = fmt.Errorf("failed to get room member list: %w", err)
 		} else if err = helper.mach.ShareGroupSession(ctx, roomID, users); err != nil {
 			err = fmt.Errorf("failed to share group session: %w", err)
-		} else if encrypted, err = helper.mach.EncryptMegolmEvent(ctx, roomID, evtType, content); err != nil {
+		} else if encrypted, err = helper.mach.EncryptMegolmEventWithStateKey(ctx, roomID, evtType, stateKey, content); err != nil {
 			err = fmt.Errorf("failed to encrypt event after re-sharing group session: %w", err)
 		}
 	}

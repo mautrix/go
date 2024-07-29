@@ -52,9 +52,10 @@ func getMentions(content interface{}) *event.Mentions {
 }
 
 type rawMegolmEvent struct {
-	RoomID  id.RoomID   `json:"room_id"`
-	Type    event.Type  `json:"type"`
-	Content interface{} `json:"content"`
+	RoomID   id.RoomID   `json:"room_id"`
+	Type     event.Type  `json:"type"`
+	StateKey *string     `json:"state_key,omitempty"`
+	Content  interface{} `json:"content"`
 }
 
 // IsShareError returns true if the error is caused by the lack of an outgoing megolm session and can be solved with OlmMachine.ShareGroupSession
@@ -83,6 +84,14 @@ func ParseMegolmMessageIndex(ciphertext []byte) (uint, error) {
 // If you use the event.Content struct, make sure you pass a pointer to the struct,
 // as JSON serialization will not work correctly otherwise.
 func (mach *OlmMachine) EncryptMegolmEvent(ctx context.Context, roomID id.RoomID, evtType event.Type, content interface{}) (*event.EncryptedEventContent, error) {
+	return mach.EncryptMegolmEventWithStateKey(ctx, roomID, evtType, nil, content)
+}
+
+// EncryptMegolmEventWithStateKey encrypts data with the m.megolm.v1.aes-sha2 algorithm.
+//
+// If you use the event.Content struct, make sure you pass a pointer to the struct,
+// as JSON serialization will not work correctly otherwise.
+func (mach *OlmMachine) EncryptMegolmEventWithStateKey(ctx context.Context, roomID id.RoomID, evtType event.Type, stateKey *string, content interface{}) (*event.EncryptedEventContent, error) {
 	mach.megolmEncryptLock.Lock()
 	defer mach.megolmEncryptLock.Unlock()
 	session, err := mach.CryptoStore.GetOutboundGroupSession(ctx, roomID)
@@ -92,15 +101,17 @@ func (mach *OlmMachine) EncryptMegolmEvent(ctx context.Context, roomID id.RoomID
 		return nil, NoGroupSession
 	}
 	plaintext, err := json.Marshal(&rawMegolmEvent{
-		RoomID:  roomID,
-		Type:    evtType,
-		Content: content,
+		RoomID:   roomID,
+		Type:     evtType,
+		StateKey: stateKey,
+		Content:  content,
 	})
 	if err != nil {
 		return nil, err
 	}
 	log := mach.machOrContextLog(ctx).With().
 		Str("event_type", evtType.Type).
+		Any("state_key", stateKey).
 		Str("room_id", roomID.String()).
 		Str("session_id", session.ID().String()).
 		Uint("expected_index", session.Internal.MessageIndex()).

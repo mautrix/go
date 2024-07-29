@@ -34,9 +34,10 @@ var (
 )
 
 type megolmEvent struct {
-	RoomID  id.RoomID     `json:"room_id"`
-	Type    event.Type    `json:"type"`
-	Content event.Content `json:"content"`
+	RoomID   id.RoomID     `json:"room_id"`
+	Type     event.Type    `json:"type"`
+	StateKey *string       `json:"state_key"`
+	Content  event.Content `json:"content"`
 }
 
 var (
@@ -148,7 +149,12 @@ func (mach *OlmMachine) DecryptMegolmEvent(ctx context.Context, evt *event.Event
 	} else if megolmEvt.RoomID != encryptionRoomID {
 		return nil, WrongRoom
 	}
-	megolmEvt.Type.Class = evt.Type.Class
+	if evt.StateKey != nil && megolmEvt.StateKey != nil {
+		megolmEvt.Type.Class = event.StateEventType
+	} else {
+		megolmEvt.Type.Class = evt.Type.Class
+		megolmEvt.StateKey = nil
+	}
 	log = log.With().Str("decrypted_event_type", megolmEvt.Type.Repr()).Logger()
 	err = megolmEvt.Content.ParseRaw(megolmEvt.Type)
 	if err != nil {
@@ -163,6 +169,7 @@ func (mach *OlmMachine) DecryptMegolmEvent(ctx context.Context, evt *event.Event
 	return &event.Event{
 		Sender:    evt.Sender,
 		Type:      megolmEvt.Type,
+		StateKey:  megolmEvt.StateKey,
 		Timestamp: evt.Timestamp,
 		ID:        evt.ID,
 		RoomID:    evt.RoomID,
