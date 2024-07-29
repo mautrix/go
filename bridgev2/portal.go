@@ -1873,8 +1873,8 @@ type PortalInfo = ChatInfo
 type ChatMember struct {
 	EventSender
 	Membership event.Membership
-	Nickname   string
-	PowerLevel int
+	Nickname   *string
+	PowerLevel *int
 	UserInfo   *UserInfo
 
 	PrevMembership event.Membership
@@ -2143,7 +2143,9 @@ func (portal *Portal) GetInitialMemberList(ctx context.Context, members *ChatMem
 		intent, extraUserID := portal.getIntentAndUserMXIDFor(ctx, member.EventSender, source, loginsInPortal, 0)
 		if extraUserID != "" {
 			invite = append(invite, extraUserID)
-			pl.EnsureUserLevel(extraUserID, member.PowerLevel)
+			if member.PowerLevel != nil {
+				pl.EnsureUserLevel(extraUserID, *member.PowerLevel)
+			}
 			if intent != nil {
 				// If intent is present along with a user ID, it's the ghost of a logged-in user,
 				// so add it to the functional members list
@@ -2152,7 +2154,9 @@ func (portal *Portal) GetInitialMemberList(ctx context.Context, members *ChatMem
 		}
 		if intent != nil {
 			invite = append(invite, intent.GetMXID())
-			pl.EnsureUserLevel(intent.GetMXID(), member.PowerLevel)
+			if member.PowerLevel != nil {
+				pl.EnsureUserLevel(intent.GetMXID(), *member.PowerLevel)
+			}
 		}
 	}
 	portal.updateOtherUser(ctx, members)
@@ -2210,7 +2214,9 @@ func (portal *Portal) SyncParticipants(ctx context.Context, members *ChatMemberL
 		if member.Membership == "" {
 			member.Membership = event.MembershipJoin
 		}
-		powerChanged = currentPower.EnsureUserLevel(extraUserID, member.PowerLevel) || powerChanged
+		if member.PowerLevel != nil {
+			powerChanged = currentPower.EnsureUserLevel(extraUserID, *member.PowerLevel) || powerChanged
+		}
 		currentMember, ok := currentMembers[extraUserID]
 		delete(currentMembers, extraUserID)
 		if ok && currentMember.Membership == member.Membership {
