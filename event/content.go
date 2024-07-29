@@ -243,6 +243,15 @@ func init() {
 	gob.Register(&RoomKeyWithheldEventContent{})
 }
 
+func CastOrDefault[T any](content *Content) *T {
+	casted, ok := content.Parsed.(*T)
+	if ok {
+		return casted
+	}
+	casted2, _ := content.Parsed.(T)
+	return &casted2
+}
+
 // Helper cast functions below
 
 func (content *Content) AsMember() *MemberEventContent {
