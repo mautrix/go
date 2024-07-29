@@ -17,8 +17,8 @@ import (
 	"maunium.net/go/mautrix/bridgev2/networkid"
 )
 
-// SimpleRemoteEventMeta is a struct containing metadata fields used by most event types.
-type SimpleRemoteEventMeta struct {
+// EventMeta is a struct containing metadata fields used by most event types.
+type EventMeta struct {
 	Type         bridgev2.RemoteEventType
 	LogContext   func(c zerolog.Context) zerolog.Context
 	PortalKey    networkid.PortalKey
@@ -28,41 +28,41 @@ type SimpleRemoteEventMeta struct {
 }
 
 var (
-	_ bridgev2.RemoteEvent                    = (*SimpleRemoteEventMeta)(nil)
-	_ bridgev2.RemoteEventThatMayCreatePortal = (*SimpleRemoteEventMeta)(nil)
-	_ bridgev2.RemoteEventWithTimestamp       = (*SimpleRemoteEventMeta)(nil)
+	_ bridgev2.RemoteEvent                    = (*EventMeta)(nil)
+	_ bridgev2.RemoteEventThatMayCreatePortal = (*EventMeta)(nil)
+	_ bridgev2.RemoteEventWithTimestamp       = (*EventMeta)(nil)
 )
 
-func (evt *SimpleRemoteEventMeta) AddLogContext(c zerolog.Context) zerolog.Context {
+func (evt *EventMeta) AddLogContext(c zerolog.Context) zerolog.Context {
 	return evt.LogContext(c)
 }
 
-func (evt *SimpleRemoteEventMeta) GetPortalKey() networkid.PortalKey {
+func (evt *EventMeta) GetPortalKey() networkid.PortalKey {
 	return evt.PortalKey
 }
 
-func (evt *SimpleRemoteEventMeta) GetTimestamp() time.Time {
+func (evt *EventMeta) GetTimestamp() time.Time {
 	if evt.Timestamp.IsZero() {
 		return time.Now()
 	}
 	return evt.Timestamp
 }
 
-func (evt *SimpleRemoteEventMeta) GetSender() bridgev2.EventSender {
+func (evt *EventMeta) GetSender() bridgev2.EventSender {
 	return evt.Sender
 }
 
-func (evt *SimpleRemoteEventMeta) GetType() bridgev2.RemoteEventType {
+func (evt *EventMeta) GetType() bridgev2.RemoteEventType {
 	return evt.Type
 }
 
-func (evt *SimpleRemoteEventMeta) ShouldCreatePortal() bool {
+func (evt *EventMeta) ShouldCreatePortal() bool {
 	return evt.CreatePortal
 }
 
-// SimpleRemoteMessage is a simple implementation of [bridgev2.RemoteMessage] and [bridgev2.RemoteEdit].
-type SimpleRemoteMessage[T any] struct {
-	SimpleRemoteEventMeta
+// Message is a simple implementation of [bridgev2.RemoteMessage] and [bridgev2.RemoteEdit].
+type Message[T any] struct {
+	EventMeta
 	Data T
 
 	ID            networkid.MessageID
@@ -73,29 +73,29 @@ type SimpleRemoteMessage[T any] struct {
 }
 
 var (
-	_ bridgev2.RemoteMessage = (*SimpleRemoteMessage[any])(nil)
-	_ bridgev2.RemoteEdit    = (*SimpleRemoteMessage[any])(nil)
+	_ bridgev2.RemoteMessage = (*Message[any])(nil)
+	_ bridgev2.RemoteEdit    = (*Message[any])(nil)
 )
 
-func (evt *SimpleRemoteMessage[T]) ConvertMessage(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI) (*bridgev2.ConvertedMessage, error) {
+func (evt *Message[T]) ConvertMessage(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI) (*bridgev2.ConvertedMessage, error) {
 	return evt.ConvertMessageFunc(ctx, portal, intent, evt.Data)
 }
 
-func (evt *SimpleRemoteMessage[T]) ConvertEdit(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, existing []*database.Message) (*bridgev2.ConvertedEdit, error) {
+func (evt *Message[T]) ConvertEdit(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, existing []*database.Message) (*bridgev2.ConvertedEdit, error) {
 	return evt.ConvertEditFunc(ctx, portal, intent, existing, evt.Data)
 }
 
-func (evt *SimpleRemoteMessage[T]) GetID() networkid.MessageID {
+func (evt *Message[T]) GetID() networkid.MessageID {
 	return evt.ID
 }
 
-func (evt *SimpleRemoteMessage[T]) GetTargetMessage() networkid.MessageID {
+func (evt *Message[T]) GetTargetMessage() networkid.MessageID {
 	return evt.TargetMessage
 }
 
-// SimpleRemoteReaction is a simple implementation of [bridgev2.RemoteReaction] and [bridgev2.RemoteReactionRemove].
-type SimpleRemoteReaction struct {
-	SimpleRemoteEventMeta
+// Reaction is a simple implementation of [bridgev2.RemoteReaction] and [bridgev2.RemoteReactionRemove].
+type Reaction struct {
+	EventMeta
 	TargetMessage  networkid.MessageID
 	EmojiID        networkid.EmojiID
 	Emoji          string
@@ -103,28 +103,28 @@ type SimpleRemoteReaction struct {
 }
 
 var (
-	_ bridgev2.RemoteReaction         = (*SimpleRemoteReaction)(nil)
-	_ bridgev2.RemoteReactionWithMeta = (*SimpleRemoteReaction)(nil)
-	_ bridgev2.RemoteReactionRemove   = (*SimpleRemoteReaction)(nil)
+	_ bridgev2.RemoteReaction         = (*Reaction)(nil)
+	_ bridgev2.RemoteReactionWithMeta = (*Reaction)(nil)
+	_ bridgev2.RemoteReactionRemove   = (*Reaction)(nil)
 )
 
-func (evt *SimpleRemoteReaction) GetTargetMessage() networkid.MessageID {
+func (evt *Reaction) GetTargetMessage() networkid.MessageID {
 	return evt.TargetMessage
 }
 
-func (evt *SimpleRemoteReaction) GetReactionEmoji() (string, networkid.EmojiID) {
+func (evt *Reaction) GetReactionEmoji() (string, networkid.EmojiID) {
 	return evt.Emoji, evt.EmojiID
 }
 
-func (evt *SimpleRemoteReaction) GetRemovedEmojiID() networkid.EmojiID {
+func (evt *Reaction) GetRemovedEmojiID() networkid.EmojiID {
 	return evt.EmojiID
 }
 
-func (evt *SimpleRemoteReaction) GetReactionDBMetadata() any {
+func (evt *Reaction) GetReactionDBMetadata() any {
 	return evt.ReactionDBMeta
 }
 
-// SimpleRemoteChatResync is a simple implementation of [bridgev2.RemoteChatResync].
+// ChatResync is a simple implementation of [bridgev2.RemoteChatResync].
 //
 // If GetChatInfoFunc is set, it will be used to get the chat info. Otherwise, ChatInfo will be used.
 //
@@ -132,8 +132,8 @@ func (evt *SimpleRemoteReaction) GetReactionDBMetadata() any {
 // Otherwise, the latest database message timestamp is compared to LatestMessageTS.
 //
 // All four fields are optional.
-type SimpleRemoteChatResync struct {
-	SimpleRemoteEventMeta
+type ChatResync struct {
+	EventMeta
 
 	ChatInfo        *bridgev2.ChatInfo
 	GetChatInfoFunc func(ctx context.Context, portal *bridgev2.Portal) (*bridgev2.ChatInfo, error)
@@ -143,12 +143,12 @@ type SimpleRemoteChatResync struct {
 }
 
 var (
-	_ bridgev2.RemoteChatResync         = (*SimpleRemoteChatResync)(nil)
-	_ bridgev2.RemoteChatResyncWithInfo = (*SimpleRemoteChatResync)(nil)
-	_ bridgev2.RemoteChatResyncBackfill = (*SimpleRemoteChatResync)(nil)
+	_ bridgev2.RemoteChatResync         = (*ChatResync)(nil)
+	_ bridgev2.RemoteChatResyncWithInfo = (*ChatResync)(nil)
+	_ bridgev2.RemoteChatResyncBackfill = (*ChatResync)(nil)
 )
 
-func (evt *SimpleRemoteChatResync) CheckNeedsBackfill(ctx context.Context, latestMessage *database.Message) (bool, error) {
+func (evt *ChatResync) CheckNeedsBackfill(ctx context.Context, latestMessage *database.Message) (bool, error) {
 	if evt.CheckNeedsBackfillFunc != nil {
 		return evt.CheckNeedsBackfillFunc(ctx, latestMessage)
 	} else if latestMessage == nil {
@@ -158,34 +158,34 @@ func (evt *SimpleRemoteChatResync) CheckNeedsBackfill(ctx context.Context, lates
 	}
 }
 
-func (evt *SimpleRemoteChatResync) GetChatInfo(ctx context.Context, portal *bridgev2.Portal) (*bridgev2.ChatInfo, error) {
+func (evt *ChatResync) GetChatInfo(ctx context.Context, portal *bridgev2.Portal) (*bridgev2.ChatInfo, error) {
 	if evt.GetChatInfoFunc != nil {
 		return evt.GetChatInfoFunc(ctx, portal)
 	}
 	return evt.ChatInfo, nil
 }
 
-// SimpleRemoteChatDelete is a simple implementation of [bridgev2.RemoteChatDelete].
-type SimpleRemoteChatDelete struct {
-	SimpleRemoteEventMeta
+// ChatDelete is a simple implementation of [bridgev2.RemoteChatDelete].
+type ChatDelete struct {
+	EventMeta
 	OnlyForMe bool
 }
 
-var _ bridgev2.RemoteChatDelete = (*SimpleRemoteChatDelete)(nil)
+var _ bridgev2.RemoteChatDelete = (*ChatDelete)(nil)
 
-func (evt *SimpleRemoteChatDelete) DeleteOnlyForMe() bool {
+func (evt *ChatDelete) DeleteOnlyForMe() bool {
 	return evt.OnlyForMe
 }
 
-// SimpleRemoteChatInfoChange is a simple implementation of [bridgev2.RemoteChatInfoChange].
-type SimpleRemoteChatInfoChange struct {
-	SimpleRemoteEventMeta
+// ChatInfoChange is a simple implementation of [bridgev2.RemoteChatInfoChange].
+type ChatInfoChange struct {
+	EventMeta
 
 	ChatInfoChange *bridgev2.ChatInfoChange
 }
 
-var _ bridgev2.RemoteChatInfoChange = (*SimpleRemoteChatInfoChange)(nil)
+var _ bridgev2.RemoteChatInfoChange = (*ChatInfoChange)(nil)
 
-func (evt *SimpleRemoteChatInfoChange) GetChatInfoChange(ctx context.Context) (*bridgev2.ChatInfoChange, error) {
+func (evt *ChatInfoChange) GetChatInfoChange(ctx context.Context) (*bridgev2.ChatInfoChange, error) {
 	return evt.ChatInfoChange, nil
 }
