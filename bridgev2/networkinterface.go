@@ -241,6 +241,9 @@ type MaxFileSizeingNetwork interface {
 
 type MatrixMessageResponse struct {
 	DB *database.Message
+
+	Pending    networkid.TransactionID
+	HandleEcho func(RemoteMessage, *database.Message) (bool, error)
 }
 
 type FileRestriction struct {
@@ -629,6 +632,8 @@ func (ret RemoteEventType) String() string {
 		return "RemoteEventUnknown"
 	case RemoteEventMessage:
 		return "RemoteEventMessage"
+	case RemoteEventMessageUpsert:
+		return "RemoteEventMessageUpsert"
 	case RemoteEventEdit:
 		return "RemoteEventEdit"
 	case RemoteEventReaction:
@@ -663,6 +668,7 @@ func (ret RemoteEventType) String() string {
 const (
 	RemoteEventUnknown RemoteEventType = iota
 	RemoteEventMessage
+	RemoteEventMessageUpsert
 	RemoteEventEdit
 	RemoteEventReaction
 	RemoteEventReactionRemove
@@ -742,6 +748,21 @@ type RemoteMessage interface {
 	RemoteEvent
 	GetID() networkid.MessageID
 	ConvertMessage(ctx context.Context, portal *Portal, intent MatrixAPI) (*ConvertedMessage, error)
+}
+
+type UpsertResult struct {
+	SubEvents               []RemoteEvent
+	ContinueMessageHandling bool
+}
+
+type RemoteMessageUpsert interface {
+	RemoteMessage
+	HandleExisting(ctx context.Context, portal *Portal, intent MatrixAPI, existing []*database.Message) (UpsertResult, error)
+}
+
+type RemoteMessageWithTransactionID interface {
+	RemoteMessage
+	GetTransactionID() networkid.TransactionID
 }
 
 type RemoteEdit interface {

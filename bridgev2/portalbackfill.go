@@ -369,7 +369,7 @@ func (portal *Portal) sendLegacyBackfill(ctx context.Context, source *UserLogin,
 	var lastPart id.EventID
 	for _, msg := range messages {
 		intent := portal.GetIntentFor(ctx, msg.Sender, source, RemoteEventMessage)
-		dbMessages := portal.sendConvertedMessage(ctx, msg.ID, intent, msg.Sender, msg.ConvertedMessage, msg.Timestamp, func(z *zerolog.Event) *zerolog.Event {
+		dbMessages := portal.sendConvertedMessage(ctx, msg.ID, intent, msg.Sender.Sender, msg.ConvertedMessage, msg.Timestamp, func(z *zerolog.Event) *zerolog.Event {
 			return z.
 				Str("message_id", string(msg.ID)).
 				Any("sender_id", msg.Sender).

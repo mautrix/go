@@ -86,6 +86,11 @@ type UserLoginID string
 // Message IDs must be unique across rooms and consistent across users (i.e. globally unique within the bridge).
 type MessageID string
 
+// TransactionID is a client-generated identifier for a message send operation on the remote network.
+//
+// Transaction IDs must be unique across users in a room, but don't need to be unique across different rooms.
+type TransactionID string
+
 // PartID is the ID of a message part on the remote network (e.g. index of image in album).
 //
 // Part IDs are only unique within a message, not globally.
