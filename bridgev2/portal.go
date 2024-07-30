@@ -984,6 +984,9 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 	if dbReaction.SenderID == "" {
 		dbReaction.SenderID = preResp.SenderID
 	}
+	if dbReaction.SenderMXID == "" {
+		dbReaction.SenderMXID = evt.Sender
+	}
 	err = portal.Bridge.DB.Reaction.Upsert(ctx, dbReaction)
 	if err != nil {
 		log.Err(err).Msg("Failed to save reaction to database")
@@ -1621,6 +1624,7 @@ func (portal *Portal) sendConvertedReaction(
 		MessageID:     targetMessage.ID,
 		MessagePartID: targetMessage.PartID,
 		SenderID:      senderID,
+		SenderMXID:    intent.GetMXID(),
 		EmojiID:       emojiID,
 		Timestamp:     ts,
 		Metadata:      dbMetadata,
@@ -1655,6 +1659,22 @@ func (portal *Portal) sendConvertedReaction(
 	}
 }
 
+func (portal *Portal) getIntentForMXID(ctx context.Context, userID id.UserID) (MatrixAPI, error) {
+	if userID == "" {
+		return nil, nil
+	} else if ghost, err := portal.Bridge.GetGhostByMXID(ctx, userID); err != nil {
+		return nil, fmt.Errorf("failed to get ghost: %w", err)
+	} else if ghost != nil {
+		return ghost.Intent, nil
+	} else if user, err := portal.Bridge.GetExistingUserByMXID(ctx, userID); err != nil {
+		return nil, fmt.Errorf("failed to get user: %w", err)
+	} else if user != nil {
+		return user.DoublePuppet(ctx), nil
+	} else {
+		return nil, nil
+	}
+}
+
 func (portal *Portal) handleRemoteReactionRemove(ctx context.Context, source *UserLogin, evt RemoteReactionRemove) {
 	log := zerolog.Ctx(ctx)
 	targetReaction, err := portal.getTargetReaction(ctx, evt)
@@ -1665,7 +1685,13 @@ func (portal *Portal) handleRemoteReactionRemove(ctx context.Context, source *Us
 		log.Warn().Msg("Target reaction not found")
 		return
 	}
-	intent := portal.GetIntentFor(ctx, evt.GetSender(), source, RemoteEventReactionRemove)
+	intent, err := portal.getIntentForMXID(ctx, targetReaction.SenderMXID)
+	if err != nil {
+		log.Err(err).Stringer("sender_mxid", targetReaction.SenderMXID).Msg("Failed to get intent for removing reaction")
+	}
+	if intent == nil {
+		intent = portal.GetIntentFor(ctx, evt.GetSender(), source, RemoteEventReactionRemove)
+	}
 	ts := getEventTS(evt)
 	_, err = intent.SendMessage(ctx, portal.MXID, event.EventRedaction, &event.Content{
 		Parsed: &event.RedactionEventContent{

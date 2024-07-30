@@ -28,6 +28,7 @@ type Reaction struct {
 	MessageID     networkid.MessageID
 	MessagePartID networkid.PartID
 	SenderID      networkid.UserID
+	SenderMXID    id.UserID
 	EmojiID       networkid.EmojiID
 	MXID          id.EventID
 
@@ -38,18 +39,19 @@ type Reaction struct {
 
 const (
 	getReactionBaseQuery = `
-		SELECT bridge_id, message_id, message_part_id, sender_id, emoji_id, emoji, room_id, room_receiver, mxid, timestamp, metadata FROM reaction
+		SELECT bridge_id, message_id, message_part_id, sender_id, sender_mxid, emoji_id, emoji, room_id, room_receiver, mxid, timestamp, metadata FROM reaction
 	`
 	getReactionByIDQuery                   = getReactionBaseQuery + `WHERE bridge_id=$1 AND message_id=$2 AND message_part_id=$3 AND sender_id=$4 AND emoji_id=$5`
 	getReactionByIDWithoutMessagePartQuery = getReactionBaseQuery + `WHERE bridge_id=$1 AND message_id=$2 AND sender_id=$3 AND emoji_id=$4 ORDER BY message_part_id ASC LIMIT 1`
 	getAllReactionsToMessageBySenderQuery  = getReactionBaseQuery + `WHERE bridge_id=$1 AND message_id=$2 AND sender_id=$3 ORDER BY timestamp DESC`
 	getAllReactionsToMessageQuery          = getReactionBaseQuery + `WHERE bridge_id=$1 AND message_id=$2`
+	getAllReactionsToMessagePartQuery      = getReactionBaseQuery + `WHERE bridge_id=$1 AND message_id=$2 AND message_part_id=$3`
 	getReactionByMXIDQuery                 = getReactionBaseQuery + `WHERE bridge_id=$1 AND mxid=$2`
 	upsertReactionQuery                    = `
-		INSERT INTO reaction (bridge_id, message_id, message_part_id, sender_id, emoji_id, emoji, room_id, room_receiver, mxid, timestamp, metadata)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		INSERT INTO reaction (bridge_id, message_id, message_part_id, sender_id, sender_mxid, emoji_id, emoji, room_id, room_receiver, mxid, timestamp, metadata)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		ON CONFLICT (bridge_id, room_receiver, message_id, message_part_id, sender_id, emoji_id)
-		DO UPDATE SET mxid=excluded.mxid, timestamp=excluded.timestamp, emoji=excluded.emoji, metadata=excluded.metadata
+		DO UPDATE SET sender_mxid=excluded.sender_mxid, mxid=excluded.mxid, timestamp=excluded.timestamp, emoji=excluded.emoji, metadata=excluded.metadata
 	`
 	deleteReactionQuery = `
 		DELETE FROM reaction WHERE bridge_id=$1 AND message_id=$2 AND message_part_id=$3 AND sender_id=$4 AND emoji_id=$5
@@ -72,6 +74,10 @@ func (rq *ReactionQuery) GetAllToMessage(ctx context.Context, messageID networki
 	return rq.QueryMany(ctx, getAllReactionsToMessageQuery, rq.BridgeID, messageID)
 }
 
+func (rq *ReactionQuery) GetAllToMessagePart(ctx context.Context, messageID networkid.MessageID, partID networkid.PartID) ([]*Reaction, error) {
+	return rq.QueryMany(ctx, getAllReactionsToMessagePartQuery, rq.BridgeID, messageID, partID)
+}
+
 func (rq *ReactionQuery) GetByMXID(ctx context.Context, mxid id.EventID) (*Reaction, error) {
 	return rq.QueryOne(ctx, getReactionByMXIDQuery, rq.BridgeID, mxid)
 }
@@ -89,7 +95,7 @@ func (rq *ReactionQuery) Delete(ctx context.Context, reaction *Reaction) error {
 func (r *Reaction) Scan(row dbutil.Scannable) (*Reaction, error) {
 	var timestamp int64
 	err := row.Scan(
-		&r.BridgeID, &r.MessageID, &r.MessagePartID, &r.SenderID, &r.EmojiID, &r.Emoji,
+		&r.BridgeID, &r.MessageID, &r.MessagePartID, &r.SenderID, &r.SenderMXID, &r.EmojiID, &r.Emoji,
 		&r.Room.ID, &r.Room.Receiver, &r.MXID, &timestamp, dbutil.JSON{Data: r.Metadata},
 	)
 	if err != nil {
@@ -108,7 +114,7 @@ func (r *Reaction) ensureHasMetadata(metaType MetaTypeCreator) *Reaction {
 
 func (r *Reaction) sqlVariables() []any {
 	return []any{
-		r.BridgeID, r.MessageID, r.MessagePartID, r.SenderID, r.EmojiID, r.Emoji,
+		r.BridgeID, r.MessageID, r.MessagePartID, r.SenderID, r.SenderMXID, r.EmojiID, r.Emoji,
 		r.Room.ID, r.Room.Receiver, r.MXID, r.Timestamp.UnixNano(), dbutil.JSON{Data: r.Metadata},
 	}
 }

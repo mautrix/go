@@ -1,4 +1,4 @@
--- v0 -> v14 (compatible with v9+): Latest revision
+-- v0 -> v15 (compatible with v9+): Latest revision
 CREATE TABLE "user" (
 	bridge_id       TEXT NOT NULL,
 	mxid            TEXT NOT NULL,
@@ -134,6 +134,7 @@ CREATE TABLE reaction (
 	message_id      TEXT   NOT NULL,
 	message_part_id TEXT   NOT NULL,
 	sender_id       TEXT   NOT NULL,
+	sender_mxid     TEXT   NOT NULL DEFAULT '',
 	emoji_id        TEXT   NOT NULL,
 	room_id         TEXT   NOT NULL,
 	room_receiver   TEXT   NOT NULL,
