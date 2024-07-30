@@ -635,6 +635,8 @@ func (ret RemoteEventType) String() string {
 		return "RemoteEventReaction"
 	case RemoteEventReactionRemove:
 		return "RemoteEventReactionRemove"
+	case RemoteEventReactionSync:
+		return "RemoteEventReactionSync"
 	case RemoteEventMessageRemove:
 		return "RemoteEventMessageRemove"
 	case RemoteEventReadReceipt:
@@ -664,6 +666,7 @@ const (
 	RemoteEventEdit
 	RemoteEventReaction
 	RemoteEventReactionRemove
+	RemoteEventReactionSync
 	RemoteEventMessageRemove
 	RemoteEventReadReceipt
 	RemoteEventDeliveryReceipt
@@ -749,6 +752,23 @@ type RemoteEdit interface {
 type RemoteReaction interface {
 	RemoteEventWithTargetMessage
 	GetReactionEmoji() (string, networkid.EmojiID)
+}
+
+type ReactionSyncUser struct {
+	Reactions []*BackfillReaction
+	// Whether the list contains all reactions the user has sent
+	HasAllReactions bool
+}
+
+type ReactionSyncData struct {
+	Users map[networkid.UserID]*ReactionSyncUser
+	// Whether the map contains all users who have reacted to the message
+	HasAllUsers bool
+}
+
+type RemoteReactionSync interface {
+	RemoteEventWithTargetMessage
+	GetReactions() *ReactionSyncData
 }
 
 type RemoteReactionWithExtraContent interface {

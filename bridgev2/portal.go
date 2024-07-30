@@ -1235,6 +1235,8 @@ func (portal *Portal) handleRemoteEvent(source *UserLogin, evt RemoteEvent) {
 		portal.handleRemoteReaction(ctx, source, evt.(RemoteReaction))
 	case RemoteEventReactionRemove:
 		portal.handleRemoteReactionRemove(ctx, source, evt.(RemoteReactionRemove))
+	case RemoteEventReactionSync:
+		portal.handleRemoteReactionSync(ctx, source, evt.(RemoteReactionSync))
 	case RemoteEventMessageRemove:
 		portal.handleRemoteMessageRemove(ctx, source, evt.(RemoteMessageRemove))
 	case RemoteEventReadReceipt:
@@ -1567,6 +1569,109 @@ func getEventTS(evt RemoteEvent) time.Time {
 		return tsProvider.GetTimestamp()
 	}
 	return time.Now()
+}
+
+func (portal *Portal) handleRemoteReactionSync(ctx context.Context, source *UserLogin, evt RemoteReactionSync) {
+	log := zerolog.Ctx(ctx)
+	eventTS := getEventTS(evt)
+	targetMessage, err := portal.getTargetMessagePart(ctx, evt)
+	if err != nil {
+		log.Err(err).Msg("Failed to get target message for reaction")
+		return
+	} else if targetMessage == nil {
+		// TODO use deterministic event ID as target if applicable?
+		log.Warn().Msg("Target message for reaction not found")
+		return
+	}
+	var existingReactions []*database.Reaction
+	if partTargeter, ok := evt.(RemoteEventWithTargetPart); ok {
+		existingReactions, err = portal.Bridge.DB.Reaction.GetAllToMessagePart(ctx, evt.GetTargetMessage(), partTargeter.GetTargetMessagePart())
+	} else {
+		existingReactions, err = portal.Bridge.DB.Reaction.GetAllToMessage(ctx, evt.GetTargetMessage())
+	}
+	existing := make(map[networkid.UserID]map[networkid.EmojiID]*database.Reaction)
+	for _, existingReaction := range existingReactions {
+		if existing[existingReaction.SenderID] == nil {
+			existing[existingReaction.SenderID] = make(map[networkid.EmojiID]*database.Reaction)
+		}
+		existing[existingReaction.SenderID][existingReaction.EmojiID] = existingReaction
+	}
+
+	doAddReaction := func(new *BackfillReaction) MatrixAPI {
+		intent := portal.GetIntentFor(ctx, new.Sender, source, RemoteEventReactionSync)
+		portal.sendConvertedReaction(
+			ctx, new.Sender.Sender, intent, targetMessage, new.EmojiID, new.Emoji,
+			new.Timestamp, new.DBMetadata, new.ExtraContent,
+			func(z *zerolog.Event) *zerolog.Event {
+				return z.
+					Any("reaction_sender_id", new.Sender).
+					Time("reaction_ts", new.Timestamp)
+			},
+		)
+		return intent
+	}
+	doRemoveReaction := func(old *database.Reaction, intent MatrixAPI) {
+		if intent == nil && old.SenderMXID != "" {
+			intent, err = portal.getIntentForMXID(ctx, old.SenderMXID)
+			if err != nil {
+				log.Err(err).
+					Stringer("reaction_sender_mxid", old.SenderMXID).
+					Msg("Failed to get intent for removing reaction")
+			}
+		}
+		if intent == nil {
+			log.Warn().
+				Str("reaction_sender_id", string(old.SenderID)).
+				Stringer("reaction_sender_mxid", old.SenderMXID).
+				Msg("Didn't find intent for removing reaction, using bridge bot")
+			intent = portal.Bridge.Bot
+		}
+		_, err = intent.SendMessage(ctx, portal.MXID, event.EventRedaction, &event.Content{
+			Parsed: &event.RedactionEventContent{
+				Redacts: old.MXID,
+			},
+		}, &MatrixSendExtra{Timestamp: eventTS})
+		if err != nil {
+			log.Err(err).Msg("Failed to redact old reaction")
+		}
+	}
+	doOverwriteReaction := func(new *BackfillReaction, old *database.Reaction) {
+		intent := doAddReaction(new)
+		doRemoveReaction(old, intent)
+	}
+
+	newData := evt.GetReactions()
+	for userID, reactions := range newData.Users {
+		existingUserReactions := existing[userID]
+		delete(existing, userID)
+		for _, reaction := range reactions.Reactions {
+			if reaction.Timestamp.IsZero() {
+				reaction.Timestamp = eventTS
+			}
+			existingReaction, ok := existingUserReactions[reaction.EmojiID]
+			if ok {
+				delete(existingUserReactions, reaction.EmojiID)
+				if reaction.EmojiID != "" {
+					continue
+				}
+				doOverwriteReaction(reaction, existingReaction)
+			} else {
+				doAddReaction(reaction)
+			}
+		}
+		if reactions.HasAllReactions {
+			for _, existingReaction := range existingUserReactions {
+				doRemoveReaction(existingReaction, nil)
+			}
+		}
+	}
+	if newData.HasAllUsers {
+		for _, userReactions := range existing {
+			for _, existingReaction := range userReactions {
+				doRemoveReaction(existingReaction, nil)
+			}
+		}
+	}
 }
 
 func (portal *Portal) handleRemoteReaction(ctx context.Context, source *UserLogin, evt RemoteReaction) {
