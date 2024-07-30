@@ -46,10 +46,11 @@ func (cmp *ConvertedMessagePart) ToEditPart(part *database.Message) *ConvertedEd
 		}
 	}
 	return &ConvertedEditPart{
-		Part:    part,
-		Type:    cmp.Type,
-		Content: cmp.Content,
-		Extra:   cmp.Extra,
+		Part:       part,
+		Type:       cmp.Type,
+		Content:    cmp.Content,
+		Extra:      cmp.Extra,
+		DontBridge: cmp.DontBridge,
 	}
 }
 
@@ -121,11 +122,17 @@ type ConvertedEditPart struct {
 	Extra   map[string]any
 	// TopLevelExtra can be used to specify custom fields at the top level of the content rather than inside `m.new_content`.
 	TopLevelExtra map[string]any
+
+	DontBridge bool
 }
 
 type ConvertedEdit struct {
 	ModifiedParts []*ConvertedEditPart
 	DeletedParts  []*database.Message
+	// Warning: added parts will be sent at the end of the room.
+	// If other messages have been sent after the message being edited,
+	// these new parts will not be next to the existing parts.
+	AddedParts *ConvertedMessage
 }
 
 // BridgeName contains information about the network that a connector bridges to.
@@ -732,6 +739,11 @@ type RemoteEventThatMayCreatePortal interface {
 type RemoteEventWithTargetMessage interface {
 	RemoteEvent
 	GetTargetMessage() networkid.MessageID
+}
+
+type RemoteEventWithBundledParts interface {
+	RemoteEventWithTargetMessage
+	GetTargetDBMessage() []*database.Message
 }
 
 type RemoteEventWithTargetPart interface {

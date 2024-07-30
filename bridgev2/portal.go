@@ -1580,11 +1580,20 @@ func (portal *Portal) sendRemoteErrorNotice(ctx context.Context, intent MatrixAP
 
 func (portal *Portal) handleRemoteEdit(ctx context.Context, source *UserLogin, evt RemoteEdit) {
 	log := zerolog.Ctx(ctx)
-	existing, err := portal.Bridge.DB.Message.GetAllPartsByID(ctx, portal.Receiver, evt.GetTargetMessage())
-	if err != nil {
-		log.Err(err).Msg("Failed to get edit target message")
-		return
-	} else if existing == nil {
+	var existing []*database.Message
+	if bundledEvt, ok := evt.(RemoteEventWithBundledParts); ok {
+		existing = bundledEvt.GetTargetDBMessage()
+	}
+	if existing == nil {
+		targetID := evt.GetTargetMessage()
+		var err error
+		existing, err = portal.Bridge.DB.Message.GetAllPartsByID(ctx, portal.Receiver, targetID)
+		if err != nil {
+			log.Err(err).Msg("Failed to get edit target message")
+			return
+		}
+	}
+	if existing == nil {
 		log.Warn().Msg("Edit target message not found")
 		return
 	}
@@ -1599,8 +1608,19 @@ func (portal *Portal) handleRemoteEdit(ctx context.Context, source *UserLogin, e
 		portal.sendRemoteErrorNotice(ctx, intent, err, ts, "edit")
 		return
 	}
+	portal.sendConvertedEdit(ctx, existing[0].ID, evt.GetSender().Sender, converted, intent, ts)
+}
+
+func (portal *Portal) sendConvertedEdit(ctx context.Context, targetID networkid.MessageID, senderID networkid.UserID, converted *ConvertedEdit, intent MatrixAPI, ts time.Time) {
+	log := zerolog.Ctx(ctx)
 	for _, part := range converted.ModifiedParts {
-		part.Content.SetEdit(part.Part.MXID)
+		overrideMXID := true
+		if part.Part.Room != portal.PortalKey {
+			part.Part.Room = portal.PortalKey
+		} else if !part.Part.HasFakeMXID() {
+			part.Content.SetEdit(part.Part.MXID)
+			overrideMXID = false
+		}
 		if part.TopLevelExtra == nil {
 			part.TopLevelExtra = make(map[string]any)
 		}
@@ -1611,19 +1631,25 @@ func (portal *Portal) handleRemoteEdit(ctx context.Context, source *UserLogin, e
 			Parsed: part.Content,
 			Raw:    part.TopLevelExtra,
 		}
-		resp, err := intent.SendMessage(ctx, portal.MXID, part.Type, wrappedContent, &MatrixSendExtra{
-			Timestamp:   ts,
-			MessageMeta: part.Part,
-		})
-		if err != nil {
-			log.Err(err).Stringer("part_mxid", part.Part.MXID).Msg("Failed to edit message part")
-		} else {
-			log.Debug().
-				Stringer("event_id", resp.EventID).
-				Str("part_id", string(part.Part.ID)).
-				Msg("Sent message part edit to Matrix")
+		if !part.DontBridge {
+			resp, err := intent.SendMessage(ctx, portal.MXID, part.Type, wrappedContent, &MatrixSendExtra{
+				Timestamp:   ts,
+				MessageMeta: part.Part,
+			})
+			if err != nil {
+				log.Err(err).Stringer("part_mxid", part.Part.MXID).Msg("Failed to edit message part")
+				continue
+			} else {
+				log.Debug().
+					Stringer("event_id", resp.EventID).
+					Str("part_id", string(part.Part.ID)).
+					Msg("Sent message part edit to Matrix")
+				if overrideMXID {
+					part.Part.MXID = resp.EventID
+				}
+			}
 		}
-		err = portal.Bridge.DB.Message.Update(ctx, part.Part)
+		err := portal.Bridge.DB.Message.Update(ctx, part.Part)
 		if err != nil {
 			log.Err(err).Int64("part_rowid", part.Part.RowID).Msg("Failed to update message part in database")
 		}
@@ -1650,6 +1676,9 @@ func (portal *Portal) handleRemoteEdit(ctx context.Context, source *UserLogin, e
 		if err != nil {
 			log.Err(err).Int64("part_rowid", part.RowID).Msg("Failed to delete message part from database")
 		}
+	}
+	if converted.AddedParts != nil {
+		portal.sendConvertedMessage(ctx, targetID, intent, senderID, converted.AddedParts, ts, nil)
 	}
 }
 
