@@ -165,7 +165,7 @@ func cutoffMessages(log *zerolog.Logger, messages []*BackfillMessage, forward bo
 		return messages
 	}
 	if forward {
-		var cutoff int
+		cutoff := -1
 		for i, msg := range messages {
 			if msg.ID == lastMessage.ID || msg.Timestamp.Before(lastMessage.Timestamp) {
 				cutoff = i
@@ -173,13 +173,13 @@ func cutoffMessages(log *zerolog.Logger, messages []*BackfillMessage, forward bo
 				break
 			}
 		}
-		if cutoff != 0 {
+		if cutoff != -1 {
 			log.Debug().
-				Int("cutoff_count", cutoff).
+				Int("cutoff_count", cutoff+1).
 				Int("total_count", len(messages)).
 				Time("last_bridged_ts", lastMessage.Timestamp).
 				Msg("Cutting off forward backfill messages older than latest bridged message")
-			messages = messages[cutoff:]
+			messages = messages[cutoff+1:]
 		}
 	} else {
 		cutoff := -1
@@ -196,7 +196,7 @@ func cutoffMessages(log *zerolog.Logger, messages []*BackfillMessage, forward bo
 				Int("total_count", len(messages)).
 				Time("oldest_bridged_ts", lastMessage.Timestamp).
 				Msg("Cutting off backward backfill messages newer than oldest bridged message")
-			messages = messages[cutoff:]
+			messages = messages[:cutoff]
 		}
 	}
 	return messages
