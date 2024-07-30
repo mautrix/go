@@ -8,7 +8,10 @@ package database
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/base64"
+	"strings"
 	"time"
 
 	"go.mau.fi/util/dbutil"
@@ -190,4 +193,15 @@ func (m *Message) sqlVariables() []any {
 
 func (m *Message) updateSQLVariables() []any {
 	return append(m.sqlVariables(), m.RowID)
+}
+
+const FakeMXIDPrefix = "~fake:"
+
+func (m *Message) SetFakeMXID() {
+	hash := sha256.Sum256([]byte(m.ID))
+	m.MXID = id.EventID(FakeMXIDPrefix + base64.RawURLEncoding.EncodeToString(hash[:]))
+}
+
+func (m *Message) HasFakeMXID() bool {
+	return strings.HasPrefix(m.MXID.String(), FakeMXIDPrefix)
 }

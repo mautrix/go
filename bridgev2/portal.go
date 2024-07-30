@@ -1386,27 +1386,31 @@ func (portal *Portal) sendConvertedMessage(ctx context.Context, id networkid.Mes
 			ReplyTo:    ptr.Val(converted.ReplyTo),
 			Metadata:   part.DBMetadata,
 		}
-		resp, err := intent.SendMessage(ctx, portal.MXID, part.Type, &event.Content{
-			Parsed: part.Content,
-			Raw:    part.Extra,
-		}, &MatrixSendExtra{
-			Timestamp:   ts,
-			MessageMeta: dbMessage,
-		})
-		if err != nil {
-			logContext(log.Err(err)).Str("part_id", string(part.ID)).Msg("Failed to send message part to Matrix")
-			continue
+		if part.DontBridge {
+			dbMessage.SetFakeMXID()
+		} else {
+			resp, err := intent.SendMessage(ctx, portal.MXID, part.Type, &event.Content{
+				Parsed: part.Content,
+				Raw:    part.Extra,
+			}, &MatrixSendExtra{
+				Timestamp:   ts,
+				MessageMeta: dbMessage,
+			})
+			if err != nil {
+				logContext(log.Err(err)).Str("part_id", string(part.ID)).Msg("Failed to send message part to Matrix")
+				continue
+			}
+			logContext(log.Debug()).
+				Stringer("event_id", resp.EventID).
+				Str("part_id", string(part.ID)).
+				Msg("Sent message part to Matrix")
+			dbMessage.MXID = resp.EventID
 		}
-		logContext(log.Debug()).
-			Stringer("event_id", resp.EventID).
-			Str("part_id", string(part.ID)).
-			Msg("Sent message part to Matrix")
-		dbMessage.MXID = resp.EventID
-		err = portal.Bridge.DB.Message.Insert(ctx, dbMessage)
+		err := portal.Bridge.DB.Message.Insert(ctx, dbMessage)
 		if err != nil {
 			logContext(log.Err(err)).Str("part_id", string(part.ID)).Msg("Failed to save message part to database")
 		}
-		if converted.Disappear.Type != database.DisappearingTypeNone {
+		if converted.Disappear.Type != database.DisappearingTypeNone && !dbMessage.HasFakeMXID() {
 			if converted.Disappear.Type == database.DisappearingTypeAfterSend && converted.Disappear.DisappearAt.IsZero() {
 				converted.Disappear.DisappearAt = dbMessage.Timestamp.Add(converted.Disappear.Timer)
 			}
@@ -1416,7 +1420,7 @@ func (portal *Portal) sendConvertedMessage(ctx context.Context, id networkid.Mes
 				DisappearingSetting: converted.Disappear,
 			})
 		}
-		if prevThreadEvent != nil {
+		if prevThreadEvent != nil && !dbMessage.HasFakeMXID() {
 			prevThreadEvent = dbMessage
 		}
 		output = append(output, dbMessage)
@@ -1718,8 +1722,27 @@ func (portal *Portal) handleRemoteMessageRemove(ctx context.Context, source *Use
 		return
 	}
 	intent := portal.GetIntentFor(ctx, evt.GetSender(), source, RemoteEventMessageRemove)
-	ts := getEventTS(evt)
-	for _, part := range targetParts {
+	if intent == portal.Bridge.Bot && len(targetParts) > 0 {
+		senderIntent, err := portal.getIntentForMXID(ctx, targetParts[0].SenderMXID)
+		if err != nil {
+			log.Err(err).Stringer("sender_mxid", targetParts[0].SenderMXID).Msg("Failed to get intent for removing message")
+		} else if senderIntent != nil {
+			intent = senderIntent
+		}
+	}
+	portal.redactMessageParts(ctx, targetParts, intent, getEventTS(evt))
+	err = portal.Bridge.DB.Message.DeleteAllParts(ctx, portal.Receiver, evt.GetTargetMessage())
+	if err != nil {
+		log.Err(err).Msg("Failed to delete target message from database")
+	}
+}
+
+func (portal *Portal) redactMessageParts(ctx context.Context, parts []*database.Message, intent MatrixAPI, ts time.Time) {
+	log := zerolog.Ctx(ctx)
+	for _, part := range parts {
+		if part.HasFakeMXID() {
+			continue
+		}
 		resp, err := intent.SendMessage(ctx, portal.MXID, event.EventRedaction, &event.Content{
 			Parsed: &event.RedactionEventContent{
 				Redacts: part.MXID,
@@ -1735,13 +1758,10 @@ func (portal *Portal) handleRemoteMessageRemove(ctx context.Context, source *Use
 				Msg("Sent redaction of message part to Matrix")
 		}
 	}
-	err = portal.Bridge.DB.Message.DeleteAllParts(ctx, portal.Receiver, evt.GetTargetMessage())
-	if err != nil {
-		log.Err(err).Msg("Failed to delete target message from database")
-	}
 }
 
 func (portal *Portal) handleRemoteReadReceipt(ctx context.Context, source *UserLogin, evt RemoteReceipt) {
+	// TODO exclude fake mxids
 	log := zerolog.Ctx(ctx)
 	var err error
 	var lastTarget *database.Message

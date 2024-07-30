@@ -30,6 +30,7 @@ type ConvertedMessagePart struct {
 	Content    *event.MessageEventContent
 	Extra      map[string]any
 	DBMetadata any
+	DontBridge bool
 }
 
 func (cmp *ConvertedMessagePart) ToEditPart(part *database.Message) *ConvertedEditPart {
