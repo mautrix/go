@@ -73,7 +73,7 @@ func MergeCaption(textPart, mediaPart *ConvertedMessagePart) *ConvertedMessagePa
 		return textPart
 	}
 	mediaPart = ptr.Clone(mediaPart)
-	if mediaPart.Content.Body != "" && mediaPart.Content.FileName != "" && mediaPart.Content.Body != mediaPart.Content.FileName {
+	if mediaPart.Content.MsgType == event.MsgNotice || (mediaPart.Content.Body != "" && mediaPart.Content.FileName != "" && mediaPart.Content.Body != mediaPart.Content.FileName) {
 		textPart = ptr.Clone(textPart)
 		textPart.Content.EnsureHasHTML()
 		mediaPart.Content.EnsureHasHTML()
@@ -84,6 +84,9 @@ func MergeCaption(textPart, mediaPart *ConvertedMessagePart) *ConvertedMessagePa
 		mediaPart.Content.Body = textPart.Content.Body
 		mediaPart.Content.Format = textPart.Content.Format
 		mediaPart.Content.FormattedBody = textPart.Content.FormattedBody
+	}
+	if metaMerger, ok := mediaPart.DBMetadata.(database.MetaMerger); ok {
+		metaMerger.CopyFrom(textPart.DBMetadata)
 	}
 	mediaPart.ID = textPart.ID
 	return mediaPart
@@ -97,7 +100,7 @@ func (cm *ConvertedMessage) MergeCaption() bool {
 	if textPart.Content.MsgType.IsMedia() {
 		textPart, mediaPart = mediaPart, textPart
 	}
-	if !mediaPart.Content.MsgType.IsMedia() || !textPart.Content.MsgType.IsText() {
+	if (!mediaPart.Content.MsgType.IsMedia() && mediaPart.Content.MsgType != event.MsgNotice) || textPart.Content.MsgType != event.MsgText {
 		return false
 	}
 	merged := MergeCaption(textPart, mediaPart)
