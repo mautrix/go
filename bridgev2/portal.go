@@ -7,6 +7,7 @@
 package bridgev2
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -20,6 +21,7 @@ import (
 	"go.mau.fi/util/exslices"
 	"go.mau.fi/util/ptr"
 	"go.mau.fi/util/variationselector"
+	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 
 	"maunium.net/go/mautrix"
@@ -1796,6 +1798,19 @@ func (portal *Portal) handleRemoteReactionSync(ctx context.Context, source *User
 		if reactions.HasAllReactions {
 			for _, existingReaction := range existingUserReactions {
 				doRemoveReaction(existingReaction, nil)
+			}
+		} else if reactions.MaxCount > 0 && len(existingUserReactions)+len(reactions.Reactions) > reactions.MaxCount {
+			remainingReactionList := maps.Values(existingUserReactions)
+			slices.SortFunc(remainingReactionList, func(a, b *database.Reaction) int {
+				diff := a.Timestamp.Compare(b.Timestamp)
+				if diff == 0 {
+					return cmp.Compare(a.EmojiID, b.EmojiID)
+				}
+				return diff
+			})
+			numberToRemove := max(reactions.MaxCount-len(reactions.Reactions), len(remainingReactionList))
+			for i := 0; i < numberToRemove; i++ {
+				doRemoveReaction(remainingReactionList[i], nil)
 			}
 		}
 	}

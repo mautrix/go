@@ -791,6 +791,9 @@ type ReactionSyncUser struct {
 	Reactions []*BackfillReaction
 	// Whether the list contains all reactions the user has sent
 	HasAllReactions bool
+	// If the list doesn't contain all reactions from the user,
+	// then this field can be set to remove old reactions if there are more than a certain number.
+	MaxCount int
 }
 
 type ReactionSyncData struct {
