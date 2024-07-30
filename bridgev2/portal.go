@@ -2153,7 +2153,7 @@ func (portal *Portal) ProcessChatInfoChange(ctx context.Context, sender EventSen
 		portal.UpdateInfo(ctx, change.ChatInfo, source, intent, ts)
 	}
 	if change.MemberChanges != nil {
-		err := portal.SyncParticipants(ctx, change.MemberChanges, source, intent, ts)
+		err := portal.syncParticipants(ctx, change.MemberChanges, source, intent, ts)
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to sync room members")
 		}
@@ -2274,7 +2274,7 @@ type UserLocalPortalInfo struct {
 	Tag        *event.RoomTag
 }
 
-func (portal *Portal) UpdateName(ctx context.Context, name string, sender MatrixAPI, ts time.Time) bool {
+func (portal *Portal) updateName(ctx context.Context, name string, sender MatrixAPI, ts time.Time) bool {
 	if portal.Name == name && (portal.NameSet || portal.MXID == "") {
 		return false
 	}
@@ -2283,7 +2283,7 @@ func (portal *Portal) UpdateName(ctx context.Context, name string, sender Matrix
 	return true
 }
 
-func (portal *Portal) UpdateTopic(ctx context.Context, topic string, sender MatrixAPI, ts time.Time) bool {
+func (portal *Portal) updateTopic(ctx context.Context, topic string, sender MatrixAPI, ts time.Time) bool {
 	if portal.Topic == topic && (portal.TopicSet || portal.MXID == "") {
 		return false
 	}
@@ -2292,7 +2292,7 @@ func (portal *Portal) UpdateTopic(ctx context.Context, topic string, sender Matr
 	return true
 }
 
-func (portal *Portal) UpdateAvatar(ctx context.Context, avatar *Avatar, sender MatrixAPI, ts time.Time) bool {
+func (portal *Portal) updateAvatar(ctx context.Context, avatar *Avatar, sender MatrixAPI, ts time.Time) bool {
 	if portal.AvatarID == avatar.ID && (portal.AvatarSet || portal.MXID == "") {
 		return false
 	}
@@ -2407,7 +2407,7 @@ func (portal *Portal) sendRoomMeta(ctx context.Context, sender MatrixAPI, ts tim
 	return true
 }
 
-func (portal *Portal) GetInitialMemberList(ctx context.Context, members *ChatMemberList, source *UserLogin, pl *event.PowerLevelsEventContent) (invite, functional []id.UserID, err error) {
+func (portal *Portal) getInitialMemberList(ctx context.Context, members *ChatMemberList, source *UserLogin, pl *event.PowerLevelsEventContent) (invite, functional []id.UserID, err error) {
 	if members == nil {
 		invite = []id.UserID{source.UserMXID}
 		return
@@ -2480,7 +2480,7 @@ func (portal *Portal) updateOtherUser(ctx context.Context, members *ChatMemberLi
 	return false
 }
 
-func (portal *Portal) SyncParticipants(ctx context.Context, members *ChatMemberList, source *UserLogin, sender MatrixAPI, ts time.Time) error {
+func (portal *Portal) syncParticipants(ctx context.Context, members *ChatMemberList, source *UserLogin, sender MatrixAPI, ts time.Time) error {
 	var loginsInPortal []*UserLogin
 	var err error
 	if members.CheckAllLogins {
@@ -2721,7 +2721,7 @@ func (portal *Portal) UpdateDisappearingSetting(ctx context.Context, setting dat
 	return true
 }
 
-func (portal *Portal) UpdateParent(ctx context.Context, newParent networkid.PortalID, source *UserLogin) bool {
+func (portal *Portal) updateParent(ctx context.Context, newParent networkid.PortalID, source *UserLogin) bool {
 	if portal.ParentID == newParent {
 		return false
 	}
@@ -2773,8 +2773,8 @@ func (portal *Portal) UpdateInfoFromGhost(ctx context.Context, ghost *Ghost) (ch
 			return
 		}
 	}
-	changed = portal.UpdateName(ctx, ghost.Name, nil, time.Time{}) || changed
-	changed = portal.UpdateAvatar(ctx, &Avatar{
+	changed = portal.updateName(ctx, ghost.Name, nil, time.Time{}) || changed
+	changed = portal.updateAvatar(ctx, &Avatar{
 		ID:     ghost.AvatarID,
 		MXC:    ghost.AvatarMXC,
 		Hash:   ghost.AvatarHash,
@@ -2787,28 +2787,28 @@ func (portal *Portal) UpdateInfo(ctx context.Context, info *ChatInfo, source *Us
 	changed := false
 	if info.Name != nil {
 		portal.NameIsCustom = true
-		changed = portal.UpdateName(ctx, *info.Name, sender, ts) || changed
+		changed = portal.updateName(ctx, *info.Name, sender, ts) || changed
 	}
 	if info.Topic != nil {
-		changed = portal.UpdateTopic(ctx, *info.Topic, sender, ts) || changed
+		changed = portal.updateTopic(ctx, *info.Topic, sender, ts) || changed
 	}
 	if info.Avatar != nil {
 		portal.NameIsCustom = true
-		changed = portal.UpdateAvatar(ctx, info.Avatar, sender, ts) || changed
+		changed = portal.updateAvatar(ctx, info.Avatar, sender, ts) || changed
 	}
 	changed = portal.UpdateInfoFromGhost(ctx, nil) || changed
 	if info.Disappear != nil {
 		changed = portal.UpdateDisappearingSetting(ctx, *info.Disappear, sender, ts, false, false) || changed
 	}
 	if info.ParentID != nil {
-		changed = portal.UpdateParent(ctx, *info.ParentID, source) || changed
+		changed = portal.updateParent(ctx, *info.ParentID, source) || changed
 	}
 	if info.JoinRule != nil {
 		// TODO change detection instead of spamming this every time?
 		portal.sendRoomMeta(ctx, sender, ts, event.StateJoinRules, "", info.JoinRule)
 	}
 	if info.Members != nil && portal.MXID != "" && source != nil {
-		err := portal.SyncParticipants(ctx, info.Members, source, nil, time.Time{})
+		err := portal.syncParticipants(ctx, info.Members, source, nil, time.Time{})
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to sync room members")
 		}
@@ -2903,7 +2903,7 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 		},
 		Users: map[id.UserID]int{},
 	}
-	initialMembers, extraFunctionalMembers, err := portal.GetInitialMemberList(ctx, info.Members, source, powerLevels)
+	initialMembers, extraFunctionalMembers, err := portal.getInitialMemberList(ctx, info.Members, source, powerLevels)
 	if err != nil {
 		log.Err(err).Msg("Failed to process participant list for portal creation")
 		return err
@@ -3026,7 +3026,7 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 				}
 			}
 		} else {
-			err = portal.SyncParticipants(ctx, info.Members, source, nil, time.Time{})
+			err = portal.syncParticipants(ctx, info.Members, source, nil, time.Time{})
 			if err != nil {
 				log.Err(err).Msg("Failed to sync participants after room creation")
 			}
