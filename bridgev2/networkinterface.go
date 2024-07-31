@@ -764,6 +764,7 @@ type RemoteMessage interface {
 
 type UpsertResult struct {
 	SubEvents               []RemoteEvent
+	SaveParts               bool
 	ContinueMessageHandling bool
 }
 

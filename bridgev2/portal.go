@@ -1512,7 +1512,16 @@ func (portal *Portal) handleRemoteUpsert(ctx context.Context, source *UserLogin,
 	res, err := evt.HandleExisting(ctx, portal, intent, existing)
 	if err != nil {
 		log.Err(err).Msg("Failed to handle existing message in upsert event after receiving remote echo")
-	} else if len(res.SubEvents) > 0 {
+	}
+	if res.SaveParts {
+		for _, part := range existing {
+			err = portal.Bridge.DB.Message.Update(ctx, part)
+			if err != nil {
+				log.Err(err).Str("part_id", string(part.PartID)).Msg("Failed to update message part in database")
+			}
+		}
+	}
+	if len(res.SubEvents) > 0 {
 		for _, subEvt := range res.SubEvents {
 			portal.handleRemoteEvent(source, subEvt)
 		}
