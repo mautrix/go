@@ -47,25 +47,19 @@ func calculateEncryptionParameters(sharedSecret []byte) (key, macKey, iv []byte,
 	return encryptionParams[:32], encryptionParams[32:64], encryptionParams[64:], nil
 }
 
-// calculateCompatMAC calculates the MAC for compatibility with Olm and
-// Vodozemac which do not actually write the ciphertext when computing the MAC.
+// calculateCompatMAC calculates the MAC as described in step 5 of according to
+// [Section 11.12.3.2.2] of the Spec which was updated in spec version 1.10 to
+// reflect what is actually implemented in libolm and Vodozemac.
 //
-// Deprecated: Use [calculateMAC] instead.
+// Libolm implemented the MAC functionality incorrectly. The MAC is computed
+// over an empty string rather than the ciphertext. Vodozemac implemented this
+// functionality the same way as libolm for compatibility. In version 1.10 of
+// the spec, the description of step 5 was updated to reflect the de-facto
+// standard of libolm and Vodozemac.
+//
+// [Section 11.12.3.2.2]: https://spec.matrix.org/v1.11/client-server-api/#backup-algorithm-mmegolm_backupv1curve25519-aes-sha2
 func calculateCompatMAC(macKey []byte) []byte {
 	hash := hmac.New(sha256.New, macKey)
-	return hash.Sum(nil)[:8]
-}
-
-// calculateMAC calculates the MAC as described in step 5 of according to
-// [Section 11.12.3.2.2] of the Spec.
-//
-// [Section 11.12.3.2.2]: https://spec.matrix.org/v1.9/client-server-api/#backup-algorithm-mmegolm_backupv1curve25519-aes-sha2
-func calculateMAC(macKey, ciphertext []byte) []byte {
-	hash := hmac.New(sha256.New, macKey)
-	_, err := hash.Write(ciphertext)
-	if err != nil {
-		panic(err)
-	}
 	return hash.Sum(nil)[:8]
 }
 
