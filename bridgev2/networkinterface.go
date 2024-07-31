@@ -894,6 +894,8 @@ type MatrixReaction struct {
 	TargetMessage *database.Message
 	PreHandleResp *MatrixReactionPreResponse
 
+	// When EmojiID is blank and there's already an existing reaction, this is the old reaction that is being overridden.
+	ReactionToOverride *database.Reaction
 	// When MaxReactions is >0 in the pre-response, this is the list of previous reactions that should be preserved.
 	ExistingReactionsToKeep []*database.Reaction
 }

@@ -936,6 +936,7 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 			portal.sendSuccessStatus(ctx, evt)
 			return
 		}
+		react.ReactionToOverride = existing
 		_, err = portal.Bridge.Bot.SendMessage(ctx, portal.MXID, event.EventRedaction, &event.Content{
 			Parsed: &event.RedactionEventContent{
 				Redacts: existing.MXID,
