@@ -18,7 +18,8 @@ import (
 )
 
 var (
-	ErrIgnoringRemoteEvent error = errors.New("ignoring remote event")
+	ErrIgnoringRemoteEvent = errors.New("ignoring remote event")
+	ErrNoStatus            = errors.New("omit message status")
 
 	ErrPanicInEventHandler             error = WrapErrorInStatus(errors.New("panic in event handler")).WithSendNotice(true).WithErrorAsMessage()
 	ErrNoPortal                        error = WrapErrorInStatus(errors.New("room is not a portal")).WithIsCertain(true).WithSendNotice(false)

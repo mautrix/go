@@ -1492,10 +1492,12 @@ func (portal *Portal) checkPendingMessage(ctx context.Context, evt RemoteMessage
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to save message to database after receiving remote echo")
 		}
 	}
-	if statusErr != nil {
-		portal.sendErrorStatus(ctx, pending.evt, statusErr)
-	} else {
-		portal.sendSuccessStatus(ctx, pending.evt)
+	if !errors.Is(statusErr, ErrNoStatus) {
+		if statusErr != nil {
+			portal.sendErrorStatus(ctx, pending.evt, statusErr)
+		} else {
+			portal.sendSuccessStatus(ctx, pending.evt)
+		}
 	}
 	zerolog.Ctx(ctx).Debug().Stringer("event_id", pending.evt.ID).Msg("Received remote echo for message")
 	return true, pending.db
