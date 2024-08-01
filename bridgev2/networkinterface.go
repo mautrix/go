@@ -844,11 +844,19 @@ type RemoteMessageRemove interface {
 	RemoteEventWithTargetMessage
 }
 
-type RemoteReceipt interface {
+// Deprecated: Renamed to RemoteReadReceipt.
+type RemoteReceipt = RemoteReadReceipt
+
+type RemoteReadReceipt interface {
 	RemoteEvent
 	GetLastReceiptTarget() networkid.MessageID
 	GetReceiptTargets() []networkid.MessageID
 	GetReadUpTo() time.Time
+}
+
+type RemoteDeliveryReceipt interface {
+	RemoteEvent
+	GetReceiptTargets() []networkid.MessageID
 }
 
 type RemoteMarkUnread interface {

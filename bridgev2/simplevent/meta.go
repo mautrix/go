@@ -32,6 +32,9 @@ var (
 )
 
 func (evt *EventMeta) AddLogContext(c zerolog.Context) zerolog.Context {
+	if evt.LogContext == nil {
+		return c
+	}
 	return evt.LogContext(c)
 }
 

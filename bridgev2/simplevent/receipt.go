@@ -22,7 +22,8 @@ type Receipt struct {
 }
 
 var (
-	_ bridgev2.RemoteReceipt = (*Receipt)(nil)
+	_ bridgev2.RemoteReadReceipt     = (*Receipt)(nil)
+	_ bridgev2.RemoteDeliveryReceipt = (*Receipt)(nil)
 )
 
 func (evt *Receipt) GetLastReceiptTarget() networkid.MessageID {

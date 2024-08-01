@@ -1264,11 +1264,11 @@ func (portal *Portal) handleRemoteEvent(source *UserLogin, evt RemoteEvent) {
 	case RemoteEventMessageRemove:
 		portal.handleRemoteMessageRemove(ctx, source, evt.(RemoteMessageRemove))
 	case RemoteEventReadReceipt:
-		portal.handleRemoteReadReceipt(ctx, source, evt.(RemoteReceipt))
+		portal.handleRemoteReadReceipt(ctx, source, evt.(RemoteReadReceipt))
 	case RemoteEventMarkUnread:
 		portal.handleRemoteMarkUnread(ctx, source, evt.(RemoteMarkUnread))
 	case RemoteEventDeliveryReceipt:
-		portal.handleRemoteDeliveryReceipt(ctx, source, evt.(RemoteReceipt))
+		portal.handleRemoteDeliveryReceipt(ctx, source, evt.(RemoteDeliveryReceipt))
 	case RemoteEventTyping:
 		portal.handleRemoteTyping(ctx, source, evt.(RemoteTyping))
 	case RemoteEventChatInfoChange:
@@ -2033,7 +2033,7 @@ func (portal *Portal) redactMessageParts(ctx context.Context, parts []*database.
 	}
 }
 
-func (portal *Portal) handleRemoteReadReceipt(ctx context.Context, source *UserLogin, evt RemoteReceipt) {
+func (portal *Portal) handleRemoteReadReceipt(ctx context.Context, source *UserLogin, evt RemoteReadReceipt) {
 	// TODO exclude fake mxids
 	log := zerolog.Ctx(ctx)
 	var err error
@@ -2100,7 +2100,7 @@ func (portal *Portal) handleRemoteMarkUnread(ctx context.Context, source *UserLo
 	}
 }
 
-func (portal *Portal) handleRemoteDeliveryReceipt(ctx context.Context, source *UserLogin, evt RemoteReceipt) {
+func (portal *Portal) handleRemoteDeliveryReceipt(ctx context.Context, source *UserLogin, evt RemoteDeliveryReceipt) {
 	// TODO implement
 }
 
