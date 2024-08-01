@@ -100,9 +100,15 @@ func (br *Bridge) doBackfillTask(ctx context.Context, task *database.BackfillTas
 		time.Sleep(BackfillQueueErrorBackoff)
 		return
 	} else if completed {
-		log.Info().Msg("Backfill task completed successfully")
+		log.Info().
+			Int("batch_count", task.BatchCount).
+			Bool("is_done", task.IsDone).
+			Msg("Backfill task completed successfully")
 	} else {
-		log.Info().Msg("Backfill task canceled")
+		log.Info().
+			Int("batch_count", task.BatchCount).
+			Bool("is_done", task.IsDone).
+			Msg("Backfill task canceled")
 	}
 	err = br.DB.BackfillTask.Update(ctx, task)
 	if err != nil {
@@ -181,7 +187,7 @@ func (br *Bridge) actuallyDoBackfillTask(ctx context.Context, task *database.Bac
 		return false, fmt.Errorf("failed to backfill: %w", err)
 	}
 	task.BatchCount++
-	task.IsDone = task.IsDone || task.BatchCount >= maxBatches
+	task.IsDone = task.IsDone || (maxBatches > 0 && task.BatchCount >= maxBatches)
 	batchDelay := time.Duration(br.Config.Backfill.Queue.BatchDelay) * time.Second
 	task.CompletedAt = time.Now()
 	task.NextDispatchMinTS = task.CompletedAt.Add(batchDelay)
