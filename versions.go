@@ -69,6 +69,7 @@ var (
 	BeeperFeatureAutojoinInvites      = UnstableFeature{UnstableFlag: "com.beeper.room_create_autojoin_invites"}
 	BeeperFeatureArbitraryProfileMeta = UnstableFeature{UnstableFlag: "com.beeper.arbitrary_profile_meta"}
 	BeeperFeatureAccountDataMute      = UnstableFeature{UnstableFlag: "com.beeper.account_data_mute"}
+	BeeperFeatureInboxState           = UnstableFeature{UnstableFlag: "com.beeper.inbox_state"}
 )
 
 func (versions *RespVersions) Supports(feature UnstableFeature) bool {

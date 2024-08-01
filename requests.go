@@ -365,6 +365,16 @@ type ReqSetReadMarkers struct {
 	BeeperFullyReadExtra   interface{} `json:"com.beeper.fully_read.extra,omitempty"`
 }
 
+type BeeperInboxDone struct {
+	Delta int64 `json:"at_delta"`
+}
+
+type ReqSetBeeperInboxState struct {
+	MarkedUnread *bool              `json:"marked_unread,omitempty"`
+	Done         *BeeperInboxDone   `json:"done,omitempty"`
+	ReadMarkers  *ReqSetReadMarkers `json:"read_markers,omitempty"`
+}
+
 type ReqSendReceipt struct {
 	ThreadID string `json:"thread_id,omitempty"`
 }

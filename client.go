@@ -1932,6 +1932,12 @@ func (cli *Client) SetReadMarkers(ctx context.Context, roomID id.RoomID, content
 	return
 }
 
+func (cli *Client) SetBeeperInboxState(ctx context.Context, roomID id.RoomID, content *ReqSetBeeperInboxState) (err error) {
+	urlPath := cli.BuildClientURL("unstable", "com.beeper.inbox", "user", cli.UserID, "rooms", roomID, "inbox_state")
+	_, err = cli.MakeRequest(ctx, http.MethodPost, urlPath, content, nil)
+	return
+}
+
 func (cli *Client) AddTag(ctx context.Context, roomID id.RoomID, tag event.RoomTag, order float64) error {
 	return cli.AddTagWithCustomData(ctx, roomID, tag, &event.TagMetadata{
 		Order: json.Number(strconv.FormatFloat(order, 'e', -1, 64)),

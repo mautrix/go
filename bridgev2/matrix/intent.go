@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/ptr"
 	"golang.org/x/exp/slices"
 
 	"maunium.net/go/mautrix"
@@ -118,7 +119,7 @@ func (as *ASIntent) SendState(ctx context.Context, roomID id.RoomID, eventType e
 	}
 }
 
-func (as *ASIntent) MarkRead(ctx context.Context, roomID id.RoomID, eventID id.EventID, ts time.Time) error {
+func (as *ASIntent) MarkRead(ctx context.Context, roomID id.RoomID, eventID id.EventID, ts time.Time) (err error) {
 	extraData := map[string]any{}
 	if !ts.IsZero() {
 		extraData["ts"] = ts.UnixMilli()
@@ -132,25 +133,32 @@ func (as *ASIntent) MarkRead(ctx context.Context, roomID id.RoomID, eventID id.E
 		req.FullyRead = eventID
 		req.BeeperFullyReadExtra = extraData
 	}
-	err := as.Matrix.SetReadMarkers(ctx, roomID, &req)
-	if err != nil {
-		return err
-	}
-	if as.Matrix.IsCustomPuppet {
-		err = as.Matrix.SetRoomAccountData(ctx, roomID, event.AccountDataMarkedUnread.Type, &event.MarkedUnreadEventContent{
-			Unread: false,
+	if as.Matrix.IsCustomPuppet && as.Connector.SpecVersions.Supports(mautrix.BeeperFeatureInboxState) {
+		err = as.Matrix.SetBeeperInboxState(ctx, roomID, &mautrix.ReqSetBeeperInboxState{
+			MarkedUnread: ptr.Ptr(false),
+			ReadMarkers:  &req,
 		})
-		if err != nil {
-			return err
+	} else {
+		err = as.Matrix.SetReadMarkers(ctx, roomID, &req)
+		if err == nil && as.Matrix.IsCustomPuppet {
+			err = as.Matrix.SetRoomAccountData(ctx, roomID, event.AccountDataMarkedUnread.Type, &event.MarkedUnreadEventContent{
+				Unread: false,
+			})
 		}
 	}
-	return nil
+	return
 }
 
 func (as *ASIntent) MarkUnread(ctx context.Context, roomID id.RoomID, unread bool) error {
-	return as.Matrix.SetRoomAccountData(ctx, roomID, event.AccountDataMarkedUnread.Type, &event.MarkedUnreadEventContent{
-		Unread: unread,
-	})
+	if as.Matrix.IsCustomPuppet && as.Connector.SpecVersions.Supports(mautrix.BeeperFeatureInboxState) {
+		return as.Matrix.SetBeeperInboxState(ctx, roomID, &mautrix.ReqSetBeeperInboxState{
+			MarkedUnread: ptr.Ptr(unread),
+		})
+	} else {
+		return as.Matrix.SetRoomAccountData(ctx, roomID, event.AccountDataMarkedUnread.Type, &event.MarkedUnreadEventContent{
+			Unread: unread,
+		})
+	}
 }
 
 func (as *ASIntent) MarkTyping(ctx context.Context, roomID id.RoomID, typingType bridgev2.TypingType, timeout time.Duration) error {
