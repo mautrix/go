@@ -83,6 +83,12 @@ func (br *Bridge) GetGhostByID(ctx context.Context, id networkid.UserID) (*Ghost
 	return br.unlockedGetGhostByID(ctx, id, false)
 }
 
+func (br *Bridge) GetExistingGhostByID(ctx context.Context, id networkid.UserID) (*Ghost, error) {
+	br.cacheLock.Lock()
+	defer br.cacheLock.Unlock()
+	return br.unlockedGetGhostByID(ctx, id, true)
+}
+
 type Avatar struct {
 	ID     networkid.AvatarID
 	Get    func(ctx context.Context) ([]byte, error)
