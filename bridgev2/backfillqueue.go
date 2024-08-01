@@ -45,15 +45,6 @@ func (br *Bridge) RunBackfillQueue() {
 	log.Info().Stringer("batch_delay", batchDelay).Msg("Backfill queue starting")
 	noTasksFoundCount := 0
 	for {
-		backfillTask, err := br.DB.BackfillTask.GetNext(ctx)
-		if err != nil {
-			log.Err(err).Msg("Failed to get next backfill queue entry")
-			time.Sleep(BackfillQueueErrorBackoff)
-			continue
-		} else if backfillTask != nil {
-			br.doBackfillTask(ctx, backfillTask)
-			noTasksFoundCount = 0
-		}
 		nextDelay := batchDelay
 		if noTasksFoundCount > 0 {
 			extraDelay := batchDelay * time.Duration(noTasksFoundCount)
@@ -79,6 +70,15 @@ func (br *Bridge) RunBackfillQueue() {
 			log.Info().Msg("Stopping backfill queue")
 			return
 		case <-timer.C:
+		}
+		backfillTask, err := br.DB.BackfillTask.GetNext(ctx)
+		if err != nil {
+			log.Err(err).Msg("Failed to get next backfill queue entry")
+			time.Sleep(BackfillQueueErrorBackoff)
+			continue
+		} else if backfillTask != nil {
+			br.doBackfillTask(ctx, backfillTask)
+			noTasksFoundCount = 0
 		}
 	}
 }
