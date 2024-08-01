@@ -2913,6 +2913,12 @@ func (portal *Portal) UpdateInfo(ctx context.Context, info *ChatInfo, source *Us
 }
 
 func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, info *ChatInfo) (retErr error) {
+	if portal.MXID != "" {
+		if source != nil {
+			source.MarkInPortal(ctx, portal)
+		}
+		return nil
+	}
 	waiter := make(chan struct{})
 	closed := false
 	portal.events <- &portalCreateEvent{
