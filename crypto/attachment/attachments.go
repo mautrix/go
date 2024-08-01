@@ -197,7 +197,7 @@ func (r *encryptingReader) Close() (err error) {
 // The Close() method of the returned io.ReadCloser must be called for the SHA256 hash
 // in the EncryptedFile struct to be updated. The metadata is not valid before the hash
 // is filled.
-func (ef *EncryptedFile) EncryptStream(reader io.Reader) io.ReadCloser {
+func (ef *EncryptedFile) EncryptStream(reader io.Reader) io.ReadSeekCloser {
 	ef.decodeKeys(false)
 	block, _ := aes.NewCipher(ef.decoded.key[:])
 	return &encryptingReader{
@@ -252,7 +252,7 @@ func (ef *EncryptedFile) DecryptInPlace(data []byte) error {
 //
 // The Close call will validate the hash and return an error if it doesn't match.
 // In this case, the written data should be considered compromised and should not be used further.
-func (ef *EncryptedFile) DecryptStream(reader io.Reader) io.ReadCloser {
+func (ef *EncryptedFile) DecryptStream(reader io.Reader) io.ReadSeekCloser {
 	block, _ := aes.NewCipher(ef.decoded.key[:])
 	return &encryptingReader{
 		stream: cipher.NewCTR(block, ef.decoded.iv[:]),
