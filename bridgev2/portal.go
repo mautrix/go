@@ -2868,13 +2868,6 @@ func (portal *Portal) UpdateInfo(ctx context.Context, info *ChatInfo, source *Us
 		// TODO change detection instead of spamming this every time?
 		portal.sendRoomMeta(ctx, sender, ts, event.StateJoinRules, "", info.JoinRule)
 	}
-	if info.Members != nil && portal.MXID != "" && source != nil {
-		err := portal.syncParticipants(ctx, info.Members, source, nil, time.Time{})
-		if err != nil {
-			zerolog.Ctx(ctx).Err(err).Msg("Failed to sync room members")
-		}
-		// TODO detect changes to functional members list?
-	}
 	if info.Type != nil && portal.RoomType != *info.Type {
 		if portal.MXID != "" && (*info.Type == database.RoomTypeSpace || portal.RoomType == database.RoomTypeSpace) {
 			zerolog.Ctx(ctx).Warn().
@@ -2885,6 +2878,15 @@ func (portal *Portal) UpdateInfo(ctx context.Context, info *ChatInfo, source *Us
 			changed = true
 			portal.RoomType = *info.Type
 		}
+	}
+	if info.Members != nil && portal.MXID != "" && source != nil {
+		err := portal.syncParticipants(ctx, info.Members, source, nil, time.Time{})
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to sync room members")
+		}
+		// TODO detect changes to functional members list?
+	} else if info.Members != nil {
+		portal.updateOtherUser(ctx, info.Members)
 	}
 	changed = portal.UpdateInfoFromGhost(ctx, nil) || changed
 	if source != nil {
@@ -2959,6 +2961,9 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 			return err
 		}
 	}
+
+	portal.UpdateInfo(ctx, info, source, nil, time.Time{})
+
 	powerLevels := &event.PowerLevelsEventContent{
 		Events: map[string]int{
 			event.StateTombstone.Type:  100,
@@ -2973,8 +2978,6 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 		return err
 	}
 	powerLevels.EnsureUserLevel(portal.Bridge.Bot.GetMXID(), 9001)
-
-	portal.UpdateInfo(ctx, info, source, nil, time.Time{})
 
 	req := mautrix.ReqCreateRoom{
 		Visibility:         "private",
