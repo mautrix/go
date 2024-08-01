@@ -186,6 +186,14 @@ func isOnlyNumbers(input string) bool {
 	return true
 }
 
+func CleanNonInternationalPhoneNumber(phone string) (string, error) {
+	phone = numberCleaner.Replace(phone)
+	if !isOnlyNumbers(strings.TrimPrefix(phone, "+")) {
+		return "", fmt.Errorf("phone number must only contain numbers")
+	}
+	return phone, nil
+}
+
 func CleanPhoneNumber(phone string) (string, error) {
 	phone = numberCleaner.Replace(phone)
 	if len(phone) < 2 {
