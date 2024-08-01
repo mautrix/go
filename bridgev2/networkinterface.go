@@ -54,10 +54,27 @@ func (cmp *ConvertedMessagePart) ToEditPart(part *database.Message) *ConvertedEd
 	}
 }
 
+// EventSender represents a specific user in a chat.
 type EventSender struct {
-	IsFromMe    bool
+	// If IsFromMe is true, the UserLogin who the event was received through is used as the sender.
+	// Double puppeting will be used if available.
+	IsFromMe bool
+	// SenderLogin is the ID of the UserLogin who sent the event. This may be different from the
+	// login the event was received through. It is used to ensure double puppeting can still be
+	// used even if the event is received through another login.
 	SenderLogin networkid.UserLoginID
-	Sender      networkid.UserID
+	// Sender is the remote user ID of the user who sent the event.
+	// For new events, this will not be used for double puppeting.
+	//
+	// However, in the member list, [ChatMemberList.CheckAllLogins] can be specified to go through every login
+	// and call [NetworkAPI.IsThisUser] to check if this ID belongs to that login. This method is not recommended,
+	// it is better to fill the IsFromMe and SenderLogin fields appropriately.
+	Sender networkid.UserID
+
+	// ForceDMUser can be set if the event should be sent as the DM user even if the Sender is different.
+	// This only applies in DM rooms where [database.Portal.OtherUserID] is set and is ignored if IsFromMe is true.
+	// A warning will be logged if the sender is overridden due to this flag.
+	ForceDMUser bool
 }
 
 type ConvertedMessage struct {

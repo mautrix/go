@@ -1286,6 +1286,13 @@ func (portal *Portal) handleRemoteEvent(source *UserLogin, evt RemoteEvent) {
 
 func (portal *Portal) getIntentAndUserMXIDFor(ctx context.Context, sender EventSender, source *UserLogin, otherLogins []*UserLogin, evtType RemoteEventType) (intent MatrixAPI, extraUserID id.UserID) {
 	var ghost *Ghost
+	if !sender.IsFromMe && sender.ForceDMUser && portal.OtherUserID != "" && sender.Sender != portal.OtherUserID {
+		zerolog.Ctx(ctx).Warn().
+			Str("original_id", string(sender.Sender)).
+			Str("default_other_user", string(portal.OtherUserID)).
+			Msg("Overriding event sender with primary other user in DM portal")
+		sender.Sender = portal.OtherUserID
+	}
 	if sender.Sender != "" {
 		var err error
 		ghost, err = portal.Bridge.GetGhostByID(ctx, sender.Sender)
