@@ -146,7 +146,7 @@ func (ms MessageStatus) Unwrap() error {
 func (ms *MessageStatus) checkpointStatus() status.MessageCheckpointStatus {
 	switch ms.Status {
 	case event.MessageStatusSuccess:
-		if ms.DeliveredTo != nil {
+		if len(ms.DeliveredTo) > 0 {
 			return status.MsgStatusDelivered
 		}
 		return status.MsgStatusSuccess

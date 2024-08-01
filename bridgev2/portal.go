@@ -2104,7 +2104,32 @@ func (portal *Portal) handleRemoteMarkUnread(ctx context.Context, source *UserLo
 }
 
 func (portal *Portal) handleRemoteDeliveryReceipt(ctx context.Context, source *UserLogin, evt RemoteDeliveryReceipt) {
-	// TODO implement
+	if portal.RoomType != database.RoomTypeDM || evt.GetSender().Sender != portal.OtherUserID {
+		return
+	}
+	intent := portal.GetIntentFor(ctx, evt.GetSender(), source, RemoteEventDeliveryReceipt)
+	log := zerolog.Ctx(ctx)
+	for _, target := range evt.GetReceiptTargets() {
+		targetParts, err := portal.Bridge.DB.Message.GetAllPartsByID(ctx, portal.Receiver, target)
+		if err != nil {
+			log.Err(err).Str("target_id", string(target)).Msg("Failed to get target message for delivery receipt")
+			continue
+		} else if len(targetParts) == 0 {
+			continue
+		} else if _, sentByGhost := portal.Bridge.Matrix.ParseGhostMXID(targetParts[0].SenderMXID); sentByGhost {
+			continue
+		}
+		for _, part := range targetParts {
+			portal.Bridge.Matrix.SendMessageStatus(ctx, &MessageStatus{
+				Status:      event.MessageStatusSuccess,
+				DeliveredTo: []id.UserID{intent.GetMXID()},
+			}, &MessageStatusEventInfo{
+				RoomID:  portal.MXID,
+				EventID: part.MXID,
+				Sender:  part.SenderMXID,
+			})
+		}
+	}
 }
 
 func (portal *Portal) handleRemoteTyping(ctx context.Context, source *UserLogin, evt RemoteTyping) {
