@@ -37,6 +37,7 @@ type UserLogin struct {
 	inPortalCache *exsync.Set[networkid.PortalKey]
 
 	spaceCreateLock sync.Mutex
+	deleteLock      sync.Mutex
 }
 
 func (br *Bridge) loadUserLogin(ctx context.Context, user *User, dbUserLogin *database.UserLogin) (*UserLogin, error) {
@@ -63,9 +64,9 @@ func (br *Bridge) loadUserLogin(ctx context.Context, user *User, dbUserLogin *da
 		userLogin.Log.Err(err).Msg("Failed to load user login")
 		return nil, nil
 	}
+	userLogin.BridgeState = br.NewBridgeStateQueue(userLogin)
 	user.logins[userLogin.ID] = userLogin
 	br.userLoginsByID[userLogin.ID] = userLogin
-	userLogin.BridgeState = br.NewBridgeStateQueue(userLogin)
 	return userLogin, nil
 }
 
@@ -186,7 +187,7 @@ func (user *User) NewLogin(ctx context.Context, data *database.UserLogin, params
 	var doInsert bool
 	if ul != nil && ul.UserMXID != user.MXID {
 		if params.DeleteOnConflict {
-			ul.delete(ctx, status.BridgeState{StateEvent: status.StateLoggedOut, Error: "overridden-by-another-user"}, false, true)
+			ul.delete(ctx, status.BridgeState{StateEvent: status.StateLoggedOut, Reason: "LOGIN_OVERRIDDEN_ANOTHER_USER"}, false, true)
 			ul = nil
 		} else {
 			return nil, fmt.Errorf("%s is already logged in with that account", ul.UserMXID)
@@ -246,6 +247,11 @@ func (ul *UserLogin) Delete(ctx context.Context, state status.BridgeState, logou
 }
 
 func (ul *UserLogin) delete(ctx context.Context, state status.BridgeState, logoutRemote, unlocked bool) {
+	ul.deleteLock.Lock()
+	defer ul.deleteLock.Unlock()
+	if ul.BridgeState == nil {
+		return
+	}
 	if logoutRemote {
 		ul.Client.LogoutRemote(ctx)
 	} else {

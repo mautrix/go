@@ -55,6 +55,7 @@ type ProvLogin struct {
 	ID       string
 	Process  bridgev2.LoginProcess
 	NextStep *bridgev2.LoginStep
+	Override *bridgev2.UserLogin
 	Lock     sync.Mutex
 }
 
@@ -324,6 +325,10 @@ func (prov *ProvisioningAPI) GetLoginFlows(w http.ResponseWriter, r *http.Reques
 }
 
 func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Request) {
+	overrideLogin, failed := prov.GetExplicitLoginForRequest(w, r)
+	if failed {
+		return
+	}
 	login, err := prov.net.CreateLogin(
 		r.Context(),
 		prov.GetUser(r),
@@ -352,9 +357,24 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 		ID:       loginID,
 		Process:  login,
 		NextStep: firstStep,
+		Override: overrideLogin,
 	}
 	prov.loginsLock.Unlock()
 	jsonResponse(w, http.StatusOK, &RespSubmitLogin{LoginID: loginID, LoginStep: firstStep})
+}
+
+func (prov *ProvisioningAPI) handleCompleteStep(ctx context.Context, login *ProvLogin, step *bridgev2.LoginStep) {
+	if login.Override == nil || login.Override.ID == step.CompleteParams.UserLoginID {
+		return
+	}
+	zerolog.Ctx(ctx).Info().
+		Str("old_login_id", string(login.Override.ID)).
+		Str("new_login_id", string(step.CompleteParams.UserLoginID)).
+		Msg("Login resulted in different remote ID than what was being overridden. Deleting previous login")
+	login.Override.Delete(ctx, status.BridgeState{
+		StateEvent: status.StateLoggedOut,
+		Reason:     "LOGIN_OVERRIDDEN",
+	}, true)
 }
 
 func (prov *ProvisioningAPI) PostLoginSubmitInput(w http.ResponseWriter, r *http.Request) {
@@ -387,6 +407,9 @@ func (prov *ProvisioningAPI) PostLoginSubmitInput(w http.ResponseWriter, r *http
 		return
 	}
 	login.NextStep = nextStep
+	if nextStep.Type == bridgev2.LoginStepTypeComplete {
+		prov.handleCompleteStep(r.Context(), login, nextStep)
+	}
 	jsonResponse(w, http.StatusOK, &RespSubmitLogin{LoginID: login.ID, LoginStep: nextStep})
 }
 
@@ -402,6 +425,9 @@ func (prov *ProvisioningAPI) PostLoginWait(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	login.NextStep = nextStep
+	if nextStep.Type == bridgev2.LoginStepTypeComplete {
+		prov.handleCompleteStep(r.Context(), login, nextStep)
+	}
 	jsonResponse(w, http.StatusOK, &RespSubmitLogin{LoginID: login.ID, LoginStep: nextStep})
 }
 
@@ -439,30 +465,36 @@ func (prov *ProvisioningAPI) GetLogins(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, http.StatusOK, &RespGetLogins{LoginIDs: user.GetUserLoginIDs()})
 }
 
-func (prov *ProvisioningAPI) GetLoginForRequest(w http.ResponseWriter, r *http.Request) *bridgev2.UserLogin {
-	user := prov.GetUser(r)
+func (prov *ProvisioningAPI) GetExplicitLoginForRequest(w http.ResponseWriter, r *http.Request) (*bridgev2.UserLogin, bool) {
 	userLoginID := networkid.UserLoginID(r.URL.Query().Get("login_id"))
-	if userLoginID != "" {
-		userLogin := prov.br.Bridge.GetCachedUserLoginByID(userLoginID)
-		if userLogin == nil || userLogin.UserMXID != user.MXID {
-			jsonResponse(w, http.StatusNotFound, &mautrix.RespError{
-				Err:     "Login not found",
-				ErrCode: mautrix.MNotFound.ErrCode,
-			})
-			return nil
-		}
-		return userLogin
-	} else {
-		userLogin := user.GetDefaultLogin()
-		if userLogin == nil {
-			jsonResponse(w, http.StatusBadRequest, &mautrix.RespError{
-				Err:     "Not logged in",
-				ErrCode: "FI.MAU.NOT_LOGGED_IN",
-			})
-			return nil
-		}
+	if userLoginID == "" {
+		return nil, false
+	}
+	userLogin := prov.br.Bridge.GetCachedUserLoginByID(userLoginID)
+	if userLogin == nil || userLogin.UserMXID != prov.GetUser(r).MXID {
+		jsonResponse(w, http.StatusNotFound, &mautrix.RespError{
+			Err:     "Login not found",
+			ErrCode: mautrix.MNotFound.ErrCode,
+		})
+		return nil, true
+	}
+	return userLogin, false
+}
+
+func (prov *ProvisioningAPI) GetLoginForRequest(w http.ResponseWriter, r *http.Request) *bridgev2.UserLogin {
+	userLogin, failed := prov.GetExplicitLoginForRequest(w, r)
+	if userLogin != nil || failed {
 		return userLogin
 	}
+	userLogin = prov.GetUser(r).GetDefaultLogin()
+	if userLogin == nil {
+		jsonResponse(w, http.StatusBadRequest, &mautrix.RespError{
+			Err:     "Not logged in",
+			ErrCode: "FI.MAU.NOT_LOGGED_IN",
+		})
+		return nil
+	}
+	return userLogin
 }
 
 type RespResolveIdentifier struct {
