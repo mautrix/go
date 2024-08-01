@@ -1934,7 +1934,7 @@ func (cli *Client) SetReadMarkers(ctx context.Context, roomID id.RoomID, content
 
 func (cli *Client) SetBeeperInboxState(ctx context.Context, roomID id.RoomID, content *ReqSetBeeperInboxState) (err error) {
 	urlPath := cli.BuildClientURL("unstable", "com.beeper.inbox", "user", cli.UserID, "rooms", roomID, "inbox_state")
-	_, err = cli.MakeRequest(ctx, http.MethodPost, urlPath, content, nil)
+	_, err = cli.MakeRequest(ctx, http.MethodPut, urlPath, content, nil)
 	return
 }
 
