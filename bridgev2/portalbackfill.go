@@ -59,6 +59,7 @@ func (portal *Portal) doForwardBackfill(ctx context.Context, source *UserLogin, 
 		log.Debug().Msg("No messages to backfill")
 		return
 	}
+	// TODO check pending messages
 	// TODO mark backfill queue task as done if last message is nil (-> room was empty) and HasMore is false?
 	resp.Messages = cutoffMessages(&log, resp.Messages, true, lastMessage)
 	if len(resp.Messages) == 0 {

@@ -396,6 +396,7 @@ type BackfillMessage struct {
 	*ConvertedMessage
 	Sender    EventSender
 	ID        networkid.MessageID
+	TxnID     networkid.TransactionID
 	Timestamp time.Time
 	Reactions []*BackfillReaction
 
@@ -818,6 +819,14 @@ type ReactionSyncData struct {
 	Users map[networkid.UserID]*ReactionSyncUser
 	// Whether the map contains all users who have reacted to the message
 	HasAllUsers bool
+}
+
+func (rsd *ReactionSyncData) ToBackfill() []*BackfillReaction {
+	var reactions []*BackfillReaction
+	for _, user := range rsd.Users {
+		reactions = append(reactions, user.Reactions...)
+	}
+	return reactions
 }
 
 type RemoteReactionSync interface {
