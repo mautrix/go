@@ -20,6 +20,7 @@ import (
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/appservice"
 	"maunium.net/go/mautrix/bridgev2"
+	"maunium.net/go/mautrix/bridgev2/bridgeconfig"
 	"maunium.net/go/mautrix/crypto/attachment"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -135,12 +136,12 @@ func (as *ASIntent) MarkRead(ctx context.Context, roomID id.RoomID, eventID id.E
 	}
 	if as.Matrix.IsCustomPuppet && as.Connector.SpecVersions.Supports(mautrix.BeeperFeatureInboxState) {
 		err = as.Matrix.SetBeeperInboxState(ctx, roomID, &mautrix.ReqSetBeeperInboxState{
-			MarkedUnread: ptr.Ptr(false),
-			ReadMarkers:  &req,
+			//MarkedUnread: ptr.Ptr(false),
+			ReadMarkers: &req,
 		})
 	} else {
 		err = as.Matrix.SetReadMarkers(ctx, roomID, &req)
-		if err == nil && as.Matrix.IsCustomPuppet {
+		if err == nil && as.Matrix.IsCustomPuppet && as.Connector.Config.Homeserver.Software != bridgeconfig.SoftwareHungry {
 			err = as.Matrix.SetRoomAccountData(ctx, roomID, event.AccountDataMarkedUnread.Type, &event.MarkedUnreadEventContent{
 				Unread: false,
 			})
@@ -150,6 +151,9 @@ func (as *ASIntent) MarkRead(ctx context.Context, roomID id.RoomID, eventID id.E
 }
 
 func (as *ASIntent) MarkUnread(ctx context.Context, roomID id.RoomID, unread bool) error {
+	if as.Connector.Config.Homeserver.Software == bridgeconfig.SoftwareHungry {
+		return nil
+	}
 	if as.Matrix.IsCustomPuppet && as.Connector.SpecVersions.Supports(mautrix.BeeperFeatureInboxState) {
 		return as.Matrix.SetBeeperInboxState(ctx, roomID, &mautrix.ReqSetBeeperInboxState{
 			MarkedUnread: ptr.Ptr(unread),
