@@ -1483,7 +1483,10 @@ func (portal *Portal) checkPendingMessage(ctx context.Context, evt RemoteMessage
 	}
 	evtWithTimestamp, ok := evt.(RemoteEventWithTimestamp)
 	if ok {
-		pending.db.Timestamp = evtWithTimestamp.GetTimestamp()
+		ts := evtWithTimestamp.GetTimestamp()
+		if !ts.IsZero() {
+			pending.db.Timestamp = ts
+		}
 	}
 	var statusErr error
 	saveMessage := true
