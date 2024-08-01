@@ -2858,7 +2858,6 @@ func (portal *Portal) UpdateInfo(ctx context.Context, info *ChatInfo, source *Us
 		portal.NameIsCustom = true
 		changed = portal.updateAvatar(ctx, info.Avatar, sender, ts) || changed
 	}
-	changed = portal.UpdateInfoFromGhost(ctx, nil) || changed
 	if info.Disappear != nil {
 		changed = portal.UpdateDisappearingSetting(ctx, *info.Disappear, sender, ts, false, false) || changed
 	}
@@ -2887,6 +2886,7 @@ func (portal *Portal) UpdateInfo(ctx context.Context, info *ChatInfo, source *Us
 			portal.RoomType = *info.Type
 		}
 	}
+	changed = portal.UpdateInfoFromGhost(ctx, nil) || changed
 	if source != nil {
 		source.MarkInPortal(ctx, portal)
 		portal.updateUserLocalInfo(ctx, info.UserLocal, source)
@@ -2950,13 +2950,15 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 
 	var err error
 	if info == nil || info.Members == nil {
+		if info != nil {
+			log.Warn().Msg("CreateMatrixRoom got info without members. Refetching info")
+		}
 		info, err = source.Client.GetChatInfo(ctx, portal)
 		if err != nil {
 			log.Err(err).Msg("Failed to update portal info for creation")
 			return err
 		}
 	}
-	portal.UpdateInfo(ctx, info, source, nil, time.Time{})
 	powerLevels := &event.PowerLevelsEventContent{
 		Events: map[string]int{
 			event.StateTombstone.Type:  100,
@@ -2971,6 +2973,8 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 		return err
 	}
 	powerLevels.EnsureUserLevel(portal.Bridge.Bot.GetMXID(), 9001)
+
+	portal.UpdateInfo(ctx, info, source, nil, time.Time{})
 
 	req := mautrix.ReqCreateRoom{
 		Visibility:         "private",
