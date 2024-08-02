@@ -53,7 +53,7 @@ func (mach *Machine) SetDefaultKeyID(ctx context.Context, keyID string) error {
 
 // GetKeyData gets the details about the given key ID.
 func (mach *Machine) GetKeyData(ctx context.Context, keyID string) (keyData *KeyMetadata, err error) {
-	keyData = &KeyMetadata{id: keyID}
+	keyData = &KeyMetadata{}
 	err = mach.Client.GetAccountData(ctx, fmt.Sprintf("%s.%s", event.AccountDataSecretStorageKey.Type, keyID), keyData)
 	return
 }

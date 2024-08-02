@@ -55,7 +55,7 @@ func getKey1Meta() *ssss.KeyMetadata {
 
 func getKey1() *ssss.Key {
 	km := getKey1Meta()
-	key, err := km.VerifyRecoveryKey(key1RecoveryKey)
+	key, err := km.VerifyRecoveryKey(key1ID, key1RecoveryKey)
 	if err != nil {
 		panic(err)
 	}
@@ -74,7 +74,7 @@ func getKey2Meta() *ssss.KeyMetadata {
 
 func getKey2() *ssss.Key {
 	km := getKey2Meta()
-	key, err := km.VerifyRecoveryKey(key2RecoveryKey)
+	key, err := km.VerifyRecoveryKey(key2ID, key2RecoveryKey)
 	if err != nil {
 		panic(err)
 	}
@@ -84,7 +84,7 @@ func getKey2() *ssss.Key {
 
 func TestKeyMetadata_VerifyRecoveryKey_Correct(t *testing.T) {
 	km := getKey1Meta()
-	key, err := km.VerifyRecoveryKey(key1RecoveryKey)
+	key, err := km.VerifyRecoveryKey(key1ID, key1RecoveryKey)
 	assert.NoError(t, err)
 	assert.NotNil(t, key)
 	assert.Equal(t, key1RecoveryKey, key.RecoveryKey())
@@ -92,7 +92,7 @@ func TestKeyMetadata_VerifyRecoveryKey_Correct(t *testing.T) {
 
 func TestKeyMetadata_VerifyRecoveryKey_Correct2(t *testing.T) {
 	km := getKey2Meta()
-	key, err := km.VerifyRecoveryKey(key2RecoveryKey)
+	key, err := km.VerifyRecoveryKey(key2ID, key2RecoveryKey)
 	assert.NoError(t, err)
 	assert.NotNil(t, key)
 	assert.Equal(t, key2RecoveryKey, key.RecoveryKey())
@@ -100,21 +100,21 @@ func TestKeyMetadata_VerifyRecoveryKey_Correct2(t *testing.T) {
 
 func TestKeyMetadata_VerifyRecoveryKey_Invalid(t *testing.T) {
 	km := getKey1Meta()
-	key, err := km.VerifyRecoveryKey("foo")
+	key, err := km.VerifyRecoveryKey(key1ID, "foo")
 	assert.True(t, errors.Is(err, ssss.ErrInvalidRecoveryKey), "unexpected error: %v", err)
 	assert.Nil(t, key)
 }
 
 func TestKeyMetadata_VerifyRecoveryKey_Incorrect(t *testing.T) {
 	km := getKey1Meta()
-	key, err := km.VerifyRecoveryKey(key2RecoveryKey)
+	key, err := km.VerifyRecoveryKey(key2ID, key2RecoveryKey)
 	assert.True(t, errors.Is(err, ssss.ErrIncorrectSSSSKey), "unexpected error: %v", err)
 	assert.Nil(t, key)
 }
 
 func TestKeyMetadata_VerifyPassphrase_Correct(t *testing.T) {
 	km := getKey1Meta()
-	key, err := km.VerifyPassphrase(key1Passphrase)
+	key, err := km.VerifyPassphrase(key1ID, key1Passphrase)
 	assert.NoError(t, err)
 	assert.NotNil(t, key)
 	assert.Equal(t, key1RecoveryKey, key.RecoveryKey())
@@ -122,14 +122,14 @@ func TestKeyMetadata_VerifyPassphrase_Correct(t *testing.T) {
 
 func TestKeyMetadata_VerifyPassphrase_Incorrect(t *testing.T) {
 	km := getKey1Meta()
-	key, err := km.VerifyPassphrase("incorrect horse battery staple")
+	key, err := km.VerifyPassphrase(key1ID, "incorrect horse battery staple")
 	assert.True(t, errors.Is(err, ssss.ErrIncorrectSSSSKey), "unexpected error %v", err)
 	assert.Nil(t, key)
 }
 
 func TestKeyMetadata_VerifyPassphrase_NotSet(t *testing.T) {
 	km := getKey2Meta()
-	key, err := km.VerifyPassphrase("hmm")
+	key, err := km.VerifyPassphrase(key2ID, "hmm")
 	assert.True(t, errors.Is(err, ssss.ErrNoPassphrase), "unexpected error %v", err)
 	assert.Nil(t, key)
 }

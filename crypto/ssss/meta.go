@@ -17,8 +17,6 @@ import (
 // KeyMetadata represents server-side metadata about a SSSS key. The metadata can be used to get
 // the actual SSSS key from a passphrase or recovery key.
 type KeyMetadata struct {
-	id string
-
 	Name      string    `json:"name"`
 	Algorithm Algorithm `json:"algorithm"`
 
@@ -31,7 +29,7 @@ type KeyMetadata struct {
 }
 
 // VerifyRecoveryKey verifies that the given passphrase is valid and returns the computed SSSS key.
-func (kd *KeyMetadata) VerifyPassphrase(passphrase string) (*Key, error) {
+func (kd *KeyMetadata) VerifyPassphrase(keyID, passphrase string) (*Key, error) {
 	ssssKey, err := kd.Passphrase.GetKey(passphrase)
 	if err != nil {
 		return nil, err
@@ -40,15 +38,15 @@ func (kd *KeyMetadata) VerifyPassphrase(passphrase string) (*Key, error) {
 	}
 
 	return &Key{
-		ID:       kd.id,
+		ID:       keyID,
 		Key:      ssssKey,
 		Metadata: kd,
 	}, nil
 }
 
 // VerifyRecoveryKey verifies that the given recovery key is valid and returns the decoded SSSS key.
-func (kd *KeyMetadata) VerifyRecoveryKey(recoverKey string) (*Key, error) {
-	ssssKey := utils.DecodeBase58RecoveryKey(recoverKey)
+func (kd *KeyMetadata) VerifyRecoveryKey(keyID, recoveryKey string) (*Key, error) {
+	ssssKey := utils.DecodeBase58RecoveryKey(recoveryKey)
 	if ssssKey == nil {
 		return nil, ErrInvalidRecoveryKey
 	} else if !kd.VerifyKey(ssssKey) {
@@ -56,7 +54,7 @@ func (kd *KeyMetadata) VerifyRecoveryKey(recoverKey string) (*Key, error) {
 	}
 
 	return &Key{
-		ID:       kd.id,
+		ID:       keyID,
 		Key:      ssssKey,
 		Metadata: kd,
 	}, nil

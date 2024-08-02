@@ -125,11 +125,11 @@ func (h *HiClient) storeCrossSigningPrivateKeys(ctx context.Context) error {
 }
 
 func (h *HiClient) VerifyWithRecoveryCode(ctx context.Context, code string) error {
-	_, keyData, err := h.Crypto.SSSS.GetDefaultKeyData(ctx)
+	keyID, keyData, err := h.Crypto.SSSS.GetDefaultKeyData(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get default SSSS key data: %w", err)
 	}
-	key, err := keyData.VerifyRecoveryKey(code)
+	key, err := keyData.VerifyRecoveryKey(keyID, code)
 	if err != nil {
 		return err
 	}
