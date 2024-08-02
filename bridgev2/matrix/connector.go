@@ -533,6 +533,10 @@ func (br *Connector) GetMemberInfo(ctx context.Context, roomID id.RoomID, userID
 	return br.AS.StateStore.GetMember(ctx, roomID, userID)
 }
 
+func (br *Connector) IsConfusableName(ctx context.Context, roomID id.RoomID, userID id.UserID, name string) ([]id.UserID, error) {
+	return br.AS.StateStore.IsConfusableName(ctx, roomID, userID, name)
+}
+
 func (br *Connector) BatchSend(ctx context.Context, roomID id.RoomID, req *mautrix.ReqBeeperBatchSend, extras []*bridgev2.MatrixSendExtra) (*mautrix.RespBeeperBatchSend, error) {
 	if encrypted, err := br.StateStore.IsEncrypted(ctx, roomID); err != nil {
 		return nil, fmt.Errorf("failed to check if room is encrypted: %w", err)

@@ -45,15 +45,25 @@ bridge:
         # List of user login IDs which anyone can set as a relay, as long as the relay user is in the room.
         default_relays: []
         # The formats to use when sending messages via the relaybot.
+        # Available variables:
+        #   .Sender.UserID - The Matrix user ID of the sender.
+        #   .Sender.Displayname - The display name of the sender (if set).
+        #   .Sender.RequiresDisambiguation - Whether the sender's name may be confused with the name of another user in the room.
+        #   .Sender.DisambiguatedName - The disambiguated name of the sender. This will be the displayname if set,
+        #                               plus the user ID in parentheses if the displayname is not unique.
+        #                               If the displayname is not set, this is just the user ID.
+        #   .Message - The `formatted_body` field of the message.
+        #   .Caption - The `formatted_body` field of the message, if it's a caption. Otherwise an empty string.
+        #   .FileName - The name of the file being sent.
         message_formats:
-            m.text: "<b>{{ .Sender.Displayname }}</b>: {{ .Message }}"
-            m.notice: "<b>{{ .Sender.Displayname }}</b>: {{ .Message }}"
-            m.emote: "* <b>{{ .Sender.Displayname }}</b> {{ .Message }}"
-            m.file: "<b>{{ .Sender.Displayname }}</b> sent a file{{ if .Caption }}: {{ .Caption }}{{ end }}"
-            m.image: "<b>{{ .Sender.Displayname }}</b> sent an image{{ if .Caption }}: {{ .Caption }}{{ end }}"
-            m.audio: "<b>{{ .Sender.Displayname }}</b> sent an audio file{{ if .Caption }}: {{ .Caption }}{{ end }}"
-            m.video: "<b>{{ .Sender.Displayname }}</b> sent a video{{ if .Caption }}: {{ .Caption }}{{ end }}"
-            m.location: "<b>{{ .Sender.Displayname }}</b> sent a location{{ if .Caption }}: {{ .Caption }}{{ end }}"
+            m.text: "<b>{{ .Sender.DisambiguatedName }}</b>: {{ .Message }}"
+            m.notice: "<b>{{ .Sender.DisambiguatedName }}</b>: {{ .Message }}"
+            m.emote: "* <b>{{ .Sender.DisambiguatedName }}</b> {{ .Message }}"
+            m.file: "<b>{{ .Sender.DisambiguatedName }}</b> sent a file{{ if .Caption }}: {{ .Caption }}{{ end }}"
+            m.image: "<b>{{ .Sender.DisambiguatedName }}</b> sent an image{{ if .Caption }}: {{ .Caption }}{{ end }}"
+            m.audio: "<b>{{ .Sender.DisambiguatedName }}</b> sent an audio file{{ if .Caption }}: {{ .Caption }}{{ end }}"
+            m.video: "<b>{{ .Sender.DisambiguatedName }}</b> sent a video{{ if .Caption }}: {{ .Caption }}{{ end }}"
+            m.location: "<b>{{ .Sender.DisambiguatedName }}</b> sent a location{{ if .Caption }}: {{ .Caption }}{{ end }}"
 
     # Permissions for using the bridge.
     # Permitted values:

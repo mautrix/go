@@ -897,7 +897,12 @@ type RemoteTypingWithType interface {
 }
 
 type OrigSender struct {
-	User *User
+	User   *User
+	UserID id.UserID
+
+	RequiresDisambiguation bool
+	DisambiguatedName      string
+
 	event.MemberEventContent
 }
 

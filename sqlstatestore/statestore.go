@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/confusable"
 	"go.mau.fi/util/dbutil"
 
 	"maunium.net/go/mautrix/event"
@@ -37,6 +38,8 @@ const VersionTableName = "mx_version"
 type SQLStateStore struct {
 	*dbutil.Database
 	IsBridge bool
+
+	DisableNameDisambiguation bool
 }
 
 func NewSQLStateStore(db *dbutil.Database, log dbutil.DatabaseLogger, isBridge bool) *SQLStateStore {
@@ -65,6 +68,7 @@ func (store *SQLStateStore) MarkRegistered(ctx context.Context, userID id.UserID
 type Member struct {
 	id.UserID
 	event.MemberEventContent
+	NameSkeleton [32]byte
 }
 
 func (store *SQLStateStore) GetRoomMembers(ctx context.Context, roomID id.RoomID, memberships ...event.Membership) (map[id.UserID]*event.MemberEventContent, error) {
@@ -191,11 +195,30 @@ func (store *SQLStateStore) SetMembership(ctx context.Context, roomID id.RoomID,
 }
 
 func (store *SQLStateStore) SetMember(ctx context.Context, roomID id.RoomID, userID id.UserID, member *event.MemberEventContent) error {
+	var nameSkeleton []byte
+	if !store.DisableNameDisambiguation && len(member.Displayname) > 0 {
+		nameSkeletonArr := confusable.SkeletonHash(member.Displayname)
+		nameSkeleton = nameSkeletonArr[:]
+	}
 	_, err := store.Exec(ctx, `
-		INSERT INTO mx_user_profile (room_id, user_id, membership, displayname, avatar_url) VALUES ($1, $2, $3, $4, $5)
-		ON CONFLICT (room_id, user_id) DO UPDATE SET membership=excluded.membership, displayname=excluded.displayname, avatar_url=excluded.avatar_url
-	`, roomID, userID, member.Membership, member.Displayname, member.AvatarURL)
+		INSERT INTO mx_user_profile (room_id, user_id, membership, displayname, avatar_url, name_skeleton)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT (room_id, user_id) DO UPDATE
+			SET membership=excluded.membership,
+			    displayname=excluded.displayname,
+			    avatar_url=excluded.avatar_url,
+			    name_skeleton=excluded.name_skeleton
+	`, roomID, userID, member.Membership, member.Displayname, member.AvatarURL, nameSkeleton)
 	return err
+}
+
+func (store *SQLStateStore) IsConfusableName(ctx context.Context, roomID id.RoomID, currentUser id.UserID, name string) ([]id.UserID, error) {
+	if store.DisableNameDisambiguation {
+		return nil, nil
+	}
+	skeleton := confusable.SkeletonHash(name)
+	rows, err := store.Query(ctx, "SELECT user_id FROM mx_user_profile WHERE room_id=$1 AND name_skeleton=$2 AND user_id<>$3", roomID, skeleton[:], currentUser)
+	return dbutil.NewRowIterWithError(rows, dbutil.ScanSingleColumn[id.UserID], err).AsList()
 }
 
 func (store *SQLStateStore) ClearCachedMembers(ctx context.Context, roomID id.RoomID, memberships ...event.Membership) error {

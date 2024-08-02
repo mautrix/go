@@ -92,6 +92,11 @@ func (c *ClientStateStore) TryGetMember(ctx context.Context, roomID id.RoomID, u
 	return
 }
 
+func (c *ClientStateStore) IsConfusableName(ctx context.Context, roomID id.RoomID, currentUser id.UserID, name string) ([]id.UserID, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (c *ClientStateStore) GetPowerLevels(ctx context.Context, roomID id.RoomID) (content *event.PowerLevelsEventContent, err error) {
 	err = c.QueryRow(ctx, getStateEventContentQuery, roomID, event.StatePowerLevels.Type, "").Scan(&dbutil.JSON{Data: &content})
 	if errors.Is(err, sql.ErrNoRows) {

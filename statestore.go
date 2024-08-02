@@ -26,6 +26,7 @@ type StateStore interface {
 	TryGetMember(ctx context.Context, roomID id.RoomID, userID id.UserID) (*event.MemberEventContent, error)
 	SetMembership(ctx context.Context, roomID id.RoomID, userID id.UserID, membership event.Membership) error
 	SetMember(ctx context.Context, roomID id.RoomID, userID id.UserID, member *event.MemberEventContent) error
+	IsConfusableName(ctx context.Context, roomID id.RoomID, currentUser id.UserID, name string) ([]id.UserID, error)
 	ClearCachedMembers(ctx context.Context, roomID id.RoomID, memberships ...event.Membership) error
 
 	SetPowerLevels(ctx context.Context, roomID id.RoomID, levels *event.PowerLevelsEventContent) error
@@ -149,6 +150,11 @@ func (store *MemoryStateStore) GetMember(ctx context.Context, roomID id.RoomID, 
 		member = &event.MemberEventContent{Membership: event.MembershipLeave}
 	}
 	return member, err
+}
+
+func (store *MemoryStateStore) IsConfusableName(ctx context.Context, roomID id.RoomID, currentUser id.UserID, name string) ([]id.UserID, error) {
+	// TODO implement?
+	return nil, nil
 }
 
 func (store *MemoryStateStore) TryGetMember(_ context.Context, roomID id.RoomID, userID id.UserID) (member *event.MemberEventContent, err error) {

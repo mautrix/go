@@ -373,6 +373,26 @@ func (portal *Portal) sendErrorStatus(ctx context.Context, evt *event.Event, err
 	portal.Bridge.Matrix.SendMessageStatus(ctx, &status, StatusEventInfoFromEvent(evt))
 }
 
+func (portal *Portal) checkConfusableName(ctx context.Context, userID id.UserID, name string) bool {
+	conn, ok := portal.Bridge.Matrix.(MatrixConnectorWithNameDisambiguation)
+	if !ok {
+		return false
+	}
+	confusableWith, err := conn.IsConfusableName(ctx, portal.MXID, userID, name)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to check if name is confusable")
+		return true
+	}
+	for _, confusable := range confusableWith {
+		// Don't disambiguate names that only conflict with ghosts of this bridge
+		_, isGhost := portal.Bridge.Matrix.ParseGhostMXID(confusable)
+		if !isGhost {
+			return true
+		}
+	}
+	return false
+}
+
 func (portal *Portal) handleMatrixEvent(sender *User, evt *event.Event) {
 	log := portal.Log.With().
 		Str("action", "handle matrix event").
@@ -423,7 +443,8 @@ func (portal *Portal) handleMatrixEvent(sender *User, evt *event.Event) {
 	if login == nil {
 		login = portal.Relay
 		origSender = &OrigSender{
-			User: sender,
+			User:   sender,
+			UserID: sender.MXID,
 		}
 
 		memberInfo, err := portal.Bridge.Matrix.GetMemberInfo(ctx, portal.MXID, sender.MXID)
@@ -431,6 +452,15 @@ func (portal *Portal) handleMatrixEvent(sender *User, evt *event.Event) {
 			log.Warn().Err(err).Msg("Failed to get member info for user being relayed")
 		} else if memberInfo != nil {
 			origSender.MemberEventContent = *memberInfo
+			if memberInfo.Displayname == "" {
+				origSender.DisambiguatedName = sender.MXID.String()
+			} else if origSender.RequiresDisambiguation = portal.checkConfusableName(ctx, sender.MXID, memberInfo.Displayname); origSender.RequiresDisambiguation {
+				origSender.DisambiguatedName = fmt.Sprintf("%s (%s)", memberInfo.Displayname, sender.MXID)
+			} else {
+				origSender.DisambiguatedName = memberInfo.Displayname
+			}
+		} else {
+			origSender.DisambiguatedName = sender.MXID.String()
 		}
 	}
 	log.UpdateContext(func(c zerolog.Context) zerolog.Context {
