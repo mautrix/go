@@ -216,7 +216,7 @@ public_media:
     # Number of seconds that public media URLs are valid for.
     # If set to 0, URLs will never expire.
     expiry: 0
-    # Length of hash to use for public media URLs.
+    # Length of hash to use for public media URLs. Must be between 0 and 32.
     hash_length: 32
 
 # Settings for converting remote media to custom mxc:// URIs instead of reuploading.

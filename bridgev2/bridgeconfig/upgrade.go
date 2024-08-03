@@ -96,7 +96,7 @@ func doUpgrade(helper up.Helper) {
 
 	helper.Copy(up.Bool, "public_media", "enabled")
 	if signingKey, ok := helper.Get(up.Str, "public_media", "signing_key"); !ok || signingKey == "generate" {
-		helper.Set(up.Str, random.String(32), "public_media", "signing_key")
+		helper.Set(up.Str, random.String(64), "public_media", "signing_key")
 	} else {
 		helper.Copy(up.Str, "public_media", "signing_key")
 	}
@@ -285,8 +285,9 @@ var SpacedBlocks = [][]string{
 	{"appservice", "username_template"},
 	{"matrix"},
 	{"provisioning"},
-	{"backfill"},
+	{"public_media"},
 	{"direct_media"},
+	{"backfill"},
 	{"double_puppet"},
 	{"encryption"},
 	{"logging"},
