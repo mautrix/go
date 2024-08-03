@@ -161,7 +161,7 @@ func (uri ContentURI) IsEmpty() bool {
 var simpleHomeserverRegex = regexp.MustCompile(`^[a-zA-Z0-9.:-]+$`)
 
 func (uri ContentURI) IsValid() bool {
-	return IsValidMediaID(uri.Homeserver) && uri.Homeserver != "" && simpleHomeserverRegex.MatchString(uri.Homeserver)
+	return IsValidMediaID(uri.FileID) && uri.Homeserver != "" && simpleHomeserverRegex.MatchString(uri.Homeserver)
 }
 
 func IsValidMediaID(mediaID string) bool {
