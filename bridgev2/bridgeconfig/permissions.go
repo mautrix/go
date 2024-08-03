@@ -21,6 +21,7 @@ type Permissions struct {
 	Login        bool `yaml:"login"`
 	DoublePuppet bool `yaml:"double_puppet"`
 	Admin        bool `yaml:"admin"`
+	ManageRelay  bool `yaml:"manage_relay"`
 }
 
 type PermissionConfig map[string]*Permissions
@@ -58,9 +59,9 @@ func (pc PermissionConfig) Get(userID id.UserID) Permissions {
 var (
 	PermissionLevelBlock    = Permissions{}
 	PermissionLevelRelay    = Permissions{SendEvents: true}
-	PermissionLevelCommands = Permissions{SendEvents: true, Commands: true}
-	PermissionLevelUser     = Permissions{SendEvents: true, Commands: true, Login: true, DoublePuppet: true}
-	PermissionLevelAdmin    = Permissions{SendEvents: true, Commands: true, Login: true, DoublePuppet: true, Admin: true}
+	PermissionLevelCommands = Permissions{SendEvents: true, Commands: true, ManageRelay: true}
+	PermissionLevelUser     = Permissions{SendEvents: true, Commands: true, ManageRelay: true, Login: true, DoublePuppet: true}
+	PermissionLevelAdmin    = Permissions{SendEvents: true, Commands: true, ManageRelay: true, Login: true, DoublePuppet: true, Admin: true}
 )
 
 var namesToLevels = map[string]Permissions{

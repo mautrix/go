@@ -41,6 +41,7 @@ bridge:
         # authenticated user into a relaybot for that chat.
         enabled: false
         # Should only admins be allowed to set themselves as relay users?
+        # If true, non-admins can only set users listed in default_relays as relays in a room.
         admin_only: true
         # List of user login IDs which anyone can set as a relay, as long as the relay user is in the room.
         default_relays: []

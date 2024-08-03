@@ -35,9 +35,14 @@ func fnSetRelay(ce *Event) {
 		ce.Reply("You don't have permission to manage the relay in this room")
 		return
 	}
+	onlySetDefaultRelays := !ce.User.Permissions.Admin && ce.Bridge.Config.Relay.AdminOnly
 	var relay *bridgev2.UserLogin
 	if len(ce.Args) == 0 {
 		relay = ce.User.GetDefaultLogin()
+		isLoggedIn := relay != nil
+		if onlySetDefaultRelays {
+			relay = nil
+		}
 		if relay == nil {
 			if len(ce.Bridge.Config.Relay.DefaultRelays) == 0 {
 				ce.Reply("You're not logged in and there are no default relay users configured")
@@ -59,7 +64,11 @@ func fnSetRelay(ce *Event) {
 				}
 			}
 			if relay == nil {
-				ce.Reply("You're not logged in and none of the default relay users are in the chat")
+				if isLoggedIn {
+					ce.Reply("You're not allowed to use yourself as relay and none of the default relay users are in the chat")
+				} else {
+					ce.Reply("You're not logged in and none of the default relay users are in the chat")
+				}
 				return
 			}
 		}
@@ -68,8 +77,13 @@ func fnSetRelay(ce *Event) {
 		if relay == nil {
 			ce.Reply("User login with ID `%s` not found", ce.Args[0])
 			return
-		} else if !slices.Contains(ce.Bridge.Config.Relay.DefaultRelays, relay.ID) && relay.UserMXID != ce.User.MXID && !ce.User.Permissions.Admin {
+		} else if slices.Contains(ce.Bridge.Config.Relay.DefaultRelays, relay.ID) {
+			// All good
+		} else if relay.UserMXID != ce.User.MXID && !ce.User.Permissions.Admin {
 			ce.Reply("Only bridge admins can set another user's login as the relay")
+			return
+		} else if onlySetDefaultRelays {
+			ce.Reply("You're not allowed to use yourself as relay")
 			return
 		}
 	}
@@ -116,12 +130,10 @@ func fnUnsetRelay(ce *Event) {
 }
 
 func canManageRelay(ce *Event) bool {
-	if ce.Bridge.Config.Relay.AdminOnly {
-		return ce.User.Permissions.Admin
-	}
-	return ce.User.Permissions.Admin ||
-		(ce.Portal.Relay != nil && ce.Portal.Relay.UserMXID == ce.User.MXID) ||
-		hasRelayRoomPermissions(ce)
+	return ce.User.Permissions.ManageRelay &&
+		(ce.User.Permissions.Admin ||
+			(ce.Portal.Relay != nil && ce.Portal.Relay.UserMXID == ce.User.MXID) ||
+			hasRelayRoomPermissions(ce))
 }
 
 func hasRelayRoomPermissions(ce *Event) bool {
