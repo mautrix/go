@@ -158,6 +158,7 @@ const (
 	LoginInputFieldTypePhoneNumber LoginInputFieldType = "phone_number"
 	LoginInputFieldTypeEmail       LoginInputFieldType = "email"
 	LoginInputFieldType2FACode     LoginInputFieldType = "2fa_code"
+	LoginInputFieldTypeToken       LoginInputFieldType = "token"
 )
 
 type LoginInputDataField struct {

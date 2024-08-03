@@ -31,7 +31,7 @@
 						"properties": {
 							"type": {
 								"type": "string",
-								"enum": ["username", "phone_number", "email", "password", "2fa_code"]
+								"enum": ["username", "phone_number", "email", "password", "2fa_code", "token"]
 							},
 							"id": {
 								"type": "string",
