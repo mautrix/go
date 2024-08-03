@@ -19,11 +19,13 @@ import (
 )
 
 type RelayConfig struct {
-	Enabled          bool                         `yaml:"enabled"`
-	AdminOnly        bool                         `yaml:"admin_only"`
-	DefaultRelays    []networkid.UserLoginID      `yaml:"default_relays"`
-	MessageFormats   map[event.MessageType]string `yaml:"message_formats"`
-	messageTemplates *template.Template           `yaml:"-"`
+	Enabled           bool                         `yaml:"enabled"`
+	AdminOnly         bool                         `yaml:"admin_only"`
+	DefaultRelays     []networkid.UserLoginID      `yaml:"default_relays"`
+	MessageFormats    map[event.MessageType]string `yaml:"message_formats"`
+	DisplaynameFormat string                       `yaml:"displayname_format"`
+	messageTemplates  *template.Template           `yaml:"-"`
+	nameTemplate      *template.Template           `yaml:"-"`
 }
 
 type umRelayConfig RelayConfig
@@ -40,6 +42,11 @@ func (rc *RelayConfig) UnmarshalYAML(node *yaml.Node) error {
 		if err != nil {
 			return err
 		}
+	}
+
+	rc.nameTemplate, err = template.New("nameTemplate").Parse(rc.DisplaynameFormat)
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -93,4 +100,10 @@ func (rc *RelayConfig) FormatMessage(content *event.MessageEventContent, sender 
 	content.FormattedBody = output.String()
 	content.Body = format.HTMLToText(content.FormattedBody)
 	return content, nil
+}
+
+func (rc *RelayConfig) FormatName(sender any) string {
+	var buf strings.Builder
+	_ = rc.nameTemplate.Execute(&buf, sender)
+	return strings.TrimSpace(buf.String())
 }

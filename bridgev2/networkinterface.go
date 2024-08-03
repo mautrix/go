@@ -902,6 +902,7 @@ type OrigSender struct {
 
 	RequiresDisambiguation bool
 	DisambiguatedName      string
+	FormattedName          string
 
 	event.MemberEventContent
 }

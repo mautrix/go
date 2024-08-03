@@ -462,6 +462,7 @@ func (portal *Portal) handleMatrixEvent(sender *User, evt *event.Event) {
 		} else {
 			origSender.DisambiguatedName = sender.MXID.String()
 		}
+		origSender.FormattedName = portal.Bridge.Config.Relay.FormatName(origSender)
 	}
 	log.UpdateContext(func(c zerolog.Context) zerolog.Context {
 		return c.Str("login_id", string(login.ID))

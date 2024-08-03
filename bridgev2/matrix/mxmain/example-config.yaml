@@ -64,6 +64,10 @@ bridge:
             m.audio: "<b>{{ .Sender.DisambiguatedName }}</b> sent an audio file{{ if .Caption }}: {{ .Caption }}{{ end }}"
             m.video: "<b>{{ .Sender.DisambiguatedName }}</b> sent a video{{ if .Caption }}: {{ .Caption }}{{ end }}"
             m.location: "<b>{{ .Sender.DisambiguatedName }}</b> sent a location{{ if .Caption }}: {{ .Caption }}{{ end }}"
+        # For networks that support per-message displaynames (i.e. Slack and Discord), the template for those names.
+        # This has all the Sender variables available under message_formats (but without the .Sender prefix).
+        # Note that you need to manually remove the displayname from message_formats above.
+        displayname_format: "{{ .DisambiguatedName }}"
 
     # Permissions for using the bridge.
     # Permitted values:
