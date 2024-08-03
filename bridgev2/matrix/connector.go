@@ -69,7 +69,9 @@ type Connector struct {
 	Provisioning *ProvisioningAPI
 	DoublePuppet *doublePuppetUtil
 	MediaProxy   *mediaproxy.MediaProxy
-	dmaSigKey    [32]byte
+
+	dmaSigKey      [32]byte
+	pubMediaSigKey []byte
 
 	doublePuppetIntents *exsync.Map[id.UserID, *appservice.IntentAPI]
 
@@ -149,6 +151,10 @@ func (br *Connector) Init(bridge *bridgev2.Bridge) {
 func (br *Connector) Start(ctx context.Context) error {
 	br.Provisioning.Init()
 	err := br.initDirectMedia()
+	if err != nil {
+		return err
+	}
+	err = br.initPublicMedia()
 	if err != nil {
 		return err
 	}

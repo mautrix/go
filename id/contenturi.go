@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -155,4 +156,22 @@ func (uri ContentURI) CUString() ContentURIString {
 
 func (uri ContentURI) IsEmpty() bool {
 	return len(uri.Homeserver) == 0 || len(uri.FileID) == 0
+}
+
+var simpleHomeserverRegex = regexp.MustCompile(`^[a-zA-Z0-9.:-]+$`)
+
+func (uri ContentURI) IsValid() bool {
+	return IsValidMediaID(uri.Homeserver) && uri.Homeserver != "" && simpleHomeserverRegex.MatchString(uri.Homeserver)
+}
+
+func IsValidMediaID(mediaID string) bool {
+	if len(mediaID) == 0 {
+		return false
+	}
+	for _, char := range mediaID {
+		if (char < 'A' || char > 'Z') && (char < 'a' || char > 'z') && (char < '0' || char > '9') && char != '-' && char != '_' {
+			return false
+		}
+	}
+	return true
 }

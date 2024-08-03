@@ -93,6 +93,15 @@ func doUpgrade(helper up.Helper) {
 		helper.Copy(up.Str, "direct_media", "server_key")
 	}
 
+	helper.Copy(up.Bool, "public_media", "enabled")
+	if signingKey, ok := helper.Get(up.Str, "public_media", "signing_key"); !ok || signingKey == "generate" {
+		helper.Set(up.Str, random.String(32), "public_media", "signing_key")
+	} else {
+		helper.Copy(up.Str, "public_media", "signing_key")
+	}
+	helper.Copy(up.Int, "public_media", "expiry")
+	helper.Copy(up.Int, "public_media", "hash_length")
+
 	helper.Copy(up.Bool, "backfill", "enabled")
 	helper.Copy(up.Int, "backfill", "max_initial_messages")
 	helper.Copy(up.Int, "backfill", "max_catchup_messages")

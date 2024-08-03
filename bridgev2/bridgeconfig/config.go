@@ -22,6 +22,7 @@ type Config struct {
 	AppService   AppserviceConfig   `yaml:"appservice"`
 	Matrix       MatrixConfig       `yaml:"matrix"`
 	Provisioning ProvisioningConfig `yaml:"provisioning"`
+	PublicMedia  PublicMediaConfig  `yaml:"public_media"`
 	DirectMedia  DirectMediaConfig  `yaml:"direct_media"`
 	Backfill     BackfillConfig     `yaml:"backfill"`
 	DoublePuppet DoublePuppetConfig `yaml:"double_puppet"`
@@ -82,6 +83,13 @@ type DirectMediaConfig struct {
 	Enabled                bool   `yaml:"enabled"`
 	MediaIDPrefix          string `yaml:"media_id_prefix"`
 	mediaproxy.BasicConfig `yaml:",inline"`
+}
+
+type PublicMediaConfig struct {
+	Enabled    bool   `yaml:"enabled"`
+	SigningKey string `yaml:"signing_key"`
+	HashLength int    `yaml:"hash_length"`
+	Expiry     int    `yaml:"expiry"`
 }
 
 type DoublePuppetConfig struct {

@@ -199,6 +199,21 @@ provisioning:
     # Enable debug API at /debug with provisioning authentication.
     debug_endpoints: false
 
+# Some networks require publicly accessible media download links (e.g. for user avatars when using Discord webhooks).
+# These settings control whether the bridge will provide such public media access.
+public_media:
+    # Should public media be enabled at all?
+    # The public_address field under the appservice section MUST be set when enabling public media.
+    enabled: false
+    # A key for signing public media URLs.
+    # If set to "generate", a random key will be generated.
+    signing_key: generate
+    # Number of seconds that public media URLs are valid for.
+    # If set to 0, URLs will never expire.
+    expiry: 0
+    # Length of hash to use for public media URLs.
+    hash_length: 32
+
 # Settings for converting remote media to custom mxc:// URIs instead of reuploading.
 # More details can be found at https://docs.mau.fi/bridges/go/discord/direct-media.html
 direct_media:

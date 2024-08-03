@@ -58,6 +58,10 @@ type MatrixConnectorWithServer interface {
 	GetRouter() *mux.Router
 }
 
+type MatrixConnectorWithPublicMedia interface {
+	GetPublicMediaAddress(contentURI id.ContentURIString) string
+}
+
 type MatrixConnectorWithNameDisambiguation interface {
 	IsConfusableName(ctx context.Context, roomID id.RoomID, userID id.UserID, name string) ([]id.UserID, error)
 }
