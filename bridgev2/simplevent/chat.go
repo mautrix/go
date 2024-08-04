@@ -44,7 +44,7 @@ func (evt *ChatResync) CheckNeedsBackfill(ctx context.Context, latestMessage *da
 	} else if latestMessage == nil {
 		return !evt.LatestMessageTS.IsZero(), nil
 	} else {
-		return !evt.LatestMessageTS.IsZero() && evt.LatestMessageTS.Before(latestMessage.Timestamp), nil
+		return evt.LatestMessageTS.After(latestMessage.Timestamp), nil
 	}
 }
 
