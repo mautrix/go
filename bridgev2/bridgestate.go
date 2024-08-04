@@ -21,7 +21,7 @@ type BridgeStateQueue struct {
 	prevSent   *status.BridgeState
 	ch         chan status.BridgeState
 	bridge     *Bridge
-	user       status.BridgeStateFiller
+	user       status.StandaloneCustomBridgeStateFiller
 }
 
 func (br *Bridge) SendGlobalBridgeState(state status.BridgeState) {
@@ -41,7 +41,7 @@ func (br *Bridge) SendGlobalBridgeState(state status.BridgeState) {
 	}
 }
 
-func (br *Bridge) NewBridgeStateQueue(user status.BridgeStateFiller) *BridgeStateQueue {
+func (br *Bridge) NewBridgeStateQueue(user status.StandaloneCustomBridgeStateFiller) *BridgeStateQueue {
 	bsq := &BridgeStateQueue{
 		ch:     make(chan status.BridgeState, 10),
 		bridge: br,

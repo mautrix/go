@@ -52,6 +52,18 @@ const (
 	StateLoggedOut           BridgeStateEvent = "LOGGED_OUT"
 )
 
+type RemoteProfile struct {
+	Phone    string              `json:"phone,omitempty"`
+	Email    string              `json:"email,omitempty"`
+	Username string              `json:"username,omitempty"`
+	Name     string              `json:"name,omitempty"`
+	Avatar   id.ContentURIString `json:"avatar,omitempty"`
+}
+
+func (rp *RemoteProfile) IsEmpty() bool {
+	return rp == nil || (rp.Phone == "" && rp.Email == "" && rp.Username == "" && rp.Name == "" && rp.Avatar == "")
+}
+
 type BridgeState struct {
 	StateEvent BridgeStateEvent `json:"state_event"`
 	Timestamp  jsontime.Unix    `json:"timestamp"`
@@ -61,9 +73,10 @@ type BridgeState struct {
 	Error   BridgeStateErrorCode `json:"error,omitempty"`
 	Message string               `json:"message,omitempty"`
 
-	UserID     id.UserID `json:"user_id,omitempty"`
-	RemoteID   string    `json:"remote_id,omitempty"`
-	RemoteName string    `json:"remote_name,omitempty"`
+	UserID        id.UserID     `json:"user_id,omitempty"`
+	RemoteID      string        `json:"remote_id,omitempty"`
+	RemoteName    string        `json:"remote_name,omitempty"`
+	RemoteProfile RemoteProfile `json:"remote_profile,omitempty"`
 
 	Reason string                 `json:"reason,omitempty"`
 	Info   map[string]interface{} `json:"info,omitempty"`
@@ -89,13 +102,15 @@ type CustomBridgeStateFiller interface {
 	StandaloneCustomBridgeStateFiller
 }
 
-func (pong BridgeState) Fill(user BridgeStateFiller) BridgeState {
+func (pong BridgeState) Fill(user any) BridgeState {
 	if user != nil {
-		pong.UserID = user.GetMXID()
-		pong.RemoteID = user.GetRemoteID()
-		pong.RemoteName = user.GetRemoteName()
+		if std, ok := user.(BridgeStateFiller); ok {
+			pong.UserID = std.GetMXID()
+			pong.RemoteID = std.GetRemoteID()
+			pong.RemoteName = std.GetRemoteName()
+		}
 
-		if custom, ok := user.(CustomBridgeStateFiller); ok {
+		if custom, ok := user.(StandaloneCustomBridgeStateFiller); ok {
 			pong = custom.FillBridgeState(pong)
 		}
 	}

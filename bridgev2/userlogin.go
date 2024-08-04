@@ -22,7 +22,6 @@ import (
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
-	"maunium.net/go/mautrix/id"
 )
 
 type UserLogin struct {
@@ -460,21 +459,13 @@ func (ul *UserLogin) MarkAsPreferredIn(ctx context.Context, portal *Portal) erro
 	return ul.Bridge.DB.UserPortal.MarkAsPreferred(ctx, ul.UserLogin, portal.PortalKey)
 }
 
-var _ status.CustomBridgeStateFiller = (*UserLogin)(nil)
-
-func (ul *UserLogin) GetMXID() id.UserID {
-	return ul.UserMXID
-}
-
-func (ul *UserLogin) GetRemoteID() string {
-	return string(ul.ID)
-}
-
-func (ul *UserLogin) GetRemoteName() string {
-	return ul.RemoteName
-}
+var _ status.StandaloneCustomBridgeStateFiller = (*UserLogin)(nil)
 
 func (ul *UserLogin) FillBridgeState(state status.BridgeState) status.BridgeState {
+	state.UserID = ul.UserMXID
+	state.RemoteID = string(ul.ID)
+	state.RemoteName = ul.RemoteName
+	state.RemoteProfile = ul.RemoteProfile
 	filler, ok := ul.Client.(status.StandaloneCustomBridgeStateFiller)
 	if ok {
 		return filler.FillBridgeState(state)

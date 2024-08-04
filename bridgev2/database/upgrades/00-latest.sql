@@ -1,4 +1,4 @@
--- v0 -> v15 (compatible with v9+): Latest revision
+-- v0 -> v16 (compatible with v9+): Latest revision
 CREATE TABLE "user" (
 	bridge_id       TEXT NOT NULL,
 	mxid            TEXT NOT NULL,
@@ -10,12 +10,13 @@ CREATE TABLE "user" (
 );
 
 CREATE TABLE user_login (
-	bridge_id   TEXT  NOT NULL,
-	user_mxid   TEXT  NOT NULL,
-	id          TEXT  NOT NULL,
-	remote_name TEXT  NOT NULL,
-	space_room  TEXT,
-	metadata    jsonb NOT NULL,
+	bridge_id      TEXT  NOT NULL,
+	user_mxid      TEXT  NOT NULL,
+	id             TEXT  NOT NULL,
+	remote_name    TEXT  NOT NULL,
+	remote_profile jsonb,
+	space_room     TEXT,
+	metadata       jsonb NOT NULL,
 
 	PRIMARY KEY (bridge_id, id),
 	CONSTRAINT user_login_user_fkey FOREIGN KEY (bridge_id, user_mxid)
