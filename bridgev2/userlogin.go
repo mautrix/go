@@ -198,6 +198,7 @@ func (user *User) NewLogin(ctx context.Context, data *database.UserLogin, params
 		}
 		doInsert = false
 		ul.RemoteName = data.RemoteName
+		ul.RemoteProfile = ul.RemoteProfile.Merge(data.RemoteProfile)
 		if merger, ok := ul.Metadata.(database.MetaMerger); ok {
 			merger.CopyFrom(data.Metadata)
 		} else {

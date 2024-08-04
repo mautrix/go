@@ -60,6 +60,22 @@ type RemoteProfile struct {
 	Avatar   id.ContentURIString `json:"avatar,omitempty"`
 }
 
+func coalesce[T ~string](a, b T) T {
+	if a != "" {
+		return a
+	}
+	return b
+}
+
+func (rp *RemoteProfile) Merge(other RemoteProfile) RemoteProfile {
+	other.Phone = coalesce(rp.Phone, other.Phone)
+	other.Email = coalesce(rp.Email, other.Email)
+	other.Username = coalesce(rp.Username, other.Username)
+	other.Name = coalesce(rp.Name, other.Name)
+	other.Avatar = coalesce(rp.Avatar, other.Avatar)
+	return other
+}
+
 func (rp *RemoteProfile) IsEmpty() bool {
 	return rp == nil || (rp.Phone == "" && rp.Email == "" && rp.Username == "" && rp.Name == "" && rp.Avatar == "")
 }
