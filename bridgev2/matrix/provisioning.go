@@ -277,12 +277,14 @@ type RespWhoami struct {
 }
 
 type RespWhoamiLogin struct {
-	StateEvent status.BridgeStateEvent `json:"state_event"`
-	StateTS    jsontime.Unix           `json:"state_ts"`
-	ID         networkid.UserLoginID   `json:"id"`
-	Name       string                  `json:"name"`
-	Profile    status.RemoteProfile    `json:"profile"`
-	SpaceRoom  id.RoomID               `json:"space_room"`
+	StateEvent  status.BridgeStateEvent `json:"state_event"`
+	StateTS     jsontime.Unix           `json:"state_ts"`
+	StateReason string                  `json:"state_reason,omitempty"`
+	StateInfo   map[string]any          `json:"state_info,omitempty"`
+	ID          networkid.UserLoginID   `json:"id"`
+	Name        string                  `json:"name"`
+	Profile     status.RemoteProfile    `json:"profile"`
+	SpaceRoom   id.RoomID               `json:"space_room"`
 }
 
 func (prov *ProvisioningAPI) GetWhoami(w http.ResponseWriter, r *http.Request) {
@@ -300,12 +302,15 @@ func (prov *ProvisioningAPI) GetWhoami(w http.ResponseWriter, r *http.Request) {
 	for i, login := range logins {
 		prevState := login.BridgeState.GetPrevUnsent()
 		resp.Logins[i] = RespWhoamiLogin{
-			StateEvent: prevState.StateEvent,
-			StateTS:    prevState.Timestamp,
-			ID:         login.ID,
-			Name:       login.RemoteName,
-			Profile:    login.RemoteProfile,
-			SpaceRoom:  login.SpaceRoom,
+			StateEvent:  prevState.StateEvent,
+			StateTS:     prevState.Timestamp,
+			StateReason: prevState.Reason,
+			StateInfo:   prevState.Info,
+
+			ID:        login.ID,
+			Name:      login.RemoteName,
+			Profile:   login.RemoteProfile,
+			SpaceRoom: login.SpaceRoom,
 		}
 	}
 	jsonResponse(w, http.StatusOK, resp)
