@@ -186,6 +186,7 @@ func (pong *BridgeState) SendHTTP(ctx context.Context, url, token string) error 
 func (pong *BridgeState) ShouldDeduplicate(newPong *BridgeState) bool {
 	return pong != nil &&
 		pong.StateEvent == newPong.StateEvent &&
+		pong.RemoteProfile == newPong.RemoteProfile &&
 		pong.Error == newPong.Error &&
 		maps.EqualFunc(pong.Info, newPong.Info, reflect.DeepEqual) &&
 		pong.Timestamp.Add(time.Duration(pong.TTL)*time.Second).After(time.Now())

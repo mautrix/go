@@ -281,6 +281,7 @@ type RespWhoamiLogin struct {
 	StateTS    jsontime.Unix           `json:"state_ts"`
 	ID         networkid.UserLoginID   `json:"id"`
 	Name       string                  `json:"name"`
+	Profile    status.RemoteProfile    `json:"profile"`
 	SpaceRoom  id.RoomID               `json:"space_room"`
 }
 
@@ -303,6 +304,7 @@ func (prov *ProvisioningAPI) GetWhoami(w http.ResponseWriter, r *http.Request) {
 			StateTS:    prevState.Timestamp,
 			ID:         login.ID,
 			Name:       login.RemoteName,
+			Profile:    login.RemoteProfile,
 			SpaceRoom:  login.SpaceRoom,
 		}
 	}
