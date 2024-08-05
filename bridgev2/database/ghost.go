@@ -44,8 +44,9 @@ const (
 		       name_set, avatar_set, contact_info_set, is_bot, identifiers, metadata
 		FROM ghost
 	`
-	getGhostByIDQuery = getGhostBaseQuery + `WHERE bridge_id=$1 AND id=$2`
-	insertGhostQuery  = `
+	getGhostByIDQuery       = getGhostBaseQuery + `WHERE bridge_id=$1 AND id=$2`
+	getGhostByMetadataQuery = getGhostBaseQuery + `WHERE bridge_id=$1 AND metadata->>$2=$3`
+	insertGhostQuery        = `
 		INSERT INTO ghost (
 			bridge_id, id, name, avatar_id, avatar_hash, avatar_mxc,
 			name_set, avatar_set, contact_info_set, is_bot, identifiers, metadata
@@ -61,6 +62,12 @@ const (
 
 func (gq *GhostQuery) GetByID(ctx context.Context, id networkid.UserID) (*Ghost, error) {
 	return gq.QueryOne(ctx, getGhostByIDQuery, gq.BridgeID, id)
+}
+
+// GetByMetadata returns the ghosts whose metadata field at the given JSON key
+// matches the given value.
+func (gq *GhostQuery) GetByMetadata(ctx context.Context, key string, value any) ([]*Ghost, error) {
+	return gq.QueryMany(ctx, getGhostByMetadataQuery, gq.BridgeID, key, value)
 }
 
 func (gq *GhostQuery) Insert(ctx context.Context, ghost *Ghost) error {
