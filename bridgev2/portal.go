@@ -1848,11 +1848,12 @@ func (portal *Portal) handleRemoteReactionSync(ctx context.Context, source *User
 				doAddReaction(reaction)
 			}
 		}
+		totalReactionCount := len(existingUserReactions) + len(reactions.Reactions)
 		if reactions.HasAllReactions {
 			for _, existingReaction := range existingUserReactions {
 				doRemoveReaction(existingReaction, nil)
 			}
-		} else if reactions.MaxCount > 0 && len(existingUserReactions)+len(reactions.Reactions) > reactions.MaxCount {
+		} else if reactions.MaxCount > 0 && totalReactionCount > reactions.MaxCount {
 			remainingReactionList := maps.Values(existingUserReactions)
 			slices.SortFunc(remainingReactionList, func(a, b *database.Reaction) int {
 				diff := a.Timestamp.Compare(b.Timestamp)
@@ -1861,8 +1862,8 @@ func (portal *Portal) handleRemoteReactionSync(ctx context.Context, source *User
 				}
 				return diff
 			})
-			numberToRemove := max(reactions.MaxCount-len(reactions.Reactions), len(remainingReactionList))
-			for i := 0; i < numberToRemove; i++ {
+			numberToRemove := totalReactionCount - reactions.MaxCount
+			for i := 0; i < numberToRemove && i < len(remainingReactionList); i++ {
 				doRemoveReaction(remainingReactionList[i], nil)
 			}
 		}
