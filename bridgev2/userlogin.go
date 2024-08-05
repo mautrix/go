@@ -252,6 +252,11 @@ type DeleteOpts struct {
 }
 
 func (ul *UserLogin) Delete(ctx context.Context, state status.BridgeState, opts DeleteOpts) {
+	cleanupRooms := !opts.DontCleanupRooms && ul.Bridge.Config.CleanupOnLogout.Enabled
+	zerolog.Ctx(ctx).Info().Str("user_login_id", string(ul.ID)).
+		Bool("logout_remote", opts.LogoutRemote).
+		Bool("cleanup_rooms", cleanupRooms).
+		Msg("Deleting user login")
 	ul.deleteLock.Lock()
 	defer ul.deleteLock.Unlock()
 	if ul.BridgeState == nil {
@@ -264,7 +269,7 @@ func (ul *UserLogin) Delete(ctx context.Context, state status.BridgeState, opts 
 	}
 	var portals []*database.UserPortal
 	var err error
-	if !opts.DontCleanupRooms && ul.Bridge.Config.CleanupOnLogout.Enabled {
+	if cleanupRooms {
 		portals, err = ul.Bridge.DB.UserPortal.GetAllForLogin(ctx, ul.UserLogin)
 		if err != nil {
 			ul.Log.Err(err).Msg("Failed to get user portals")
