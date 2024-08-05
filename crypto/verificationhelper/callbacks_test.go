@@ -25,6 +25,7 @@ type baseVerificationCallbacks struct {
 	verificationsRequested   map[id.UserID][]id.VerificationTransactionID
 	qrCodesShown             map[id.VerificationTransactionID]*verificationhelper.QRCode
 	qrCodesScanned           map[id.VerificationTransactionID]struct{}
+	otherDoneTransactions    map[id.VerificationTransactionID]struct{}
 	doneTransactions         map[id.VerificationTransactionID]struct{}
 	verificationCancellation map[id.VerificationTransactionID]*event.VerificationCancelEventContent
 	emojisShown              map[id.VerificationTransactionID][]rune
@@ -36,6 +37,7 @@ func newBaseVerificationCallbacks() *baseVerificationCallbacks {
 		verificationsRequested:   map[id.UserID][]id.VerificationTransactionID{},
 		qrCodesShown:             map[id.VerificationTransactionID]*verificationhelper.QRCode{},
 		qrCodesScanned:           map[id.VerificationTransactionID]struct{}{},
+		otherDoneTransactions:    map[id.VerificationTransactionID]struct{}{},
 		doneTransactions:         map[id.VerificationTransactionID]struct{}{},
 		verificationCancellation: map[id.VerificationTransactionID]*event.VerificationCancelEventContent{},
 		emojisShown:              map[id.VerificationTransactionID][]rune{},
@@ -57,6 +59,11 @@ func (c *baseVerificationCallbacks) GetQRCodeShown(txnID id.VerificationTransact
 
 func (c *baseVerificationCallbacks) WasOurQRCodeScanned(txnID id.VerificationTransactionID) bool {
 	_, ok := c.qrCodesScanned[txnID]
+	return ok
+}
+
+func (c *baseVerificationCallbacks) OtherReportedDone(txnID id.VerificationTransactionID) bool {
+	_, ok := c.otherDoneTransactions[txnID]
 	return ok
 }
 
@@ -86,6 +93,10 @@ func (c *baseVerificationCallbacks) VerificationCancelled(ctx context.Context, t
 		Code:   code,
 		Reason: reason,
 	}
+}
+
+func (c *baseVerificationCallbacks) OtherReportsDone(ctx context.Context, txnID id.VerificationTransactionID) {
+	c.otherDoneTransactions[txnID] = struct{}{}
 }
 
 func (c *baseVerificationCallbacks) VerificationDone(ctx context.Context, txnID id.VerificationTransactionID) {
