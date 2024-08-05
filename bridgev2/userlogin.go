@@ -186,7 +186,10 @@ func (user *User) NewLogin(ctx context.Context, data *database.UserLogin, params
 	var doInsert bool
 	if ul != nil && ul.UserMXID != user.MXID {
 		if params.DeleteOnConflict {
-			ul.delete(ctx, status.BridgeState{StateEvent: status.StateLoggedOut, Reason: "LOGIN_OVERRIDDEN_ANOTHER_USER"}, false, true)
+			ul.Delete(ctx, status.BridgeState{StateEvent: status.StateLoggedOut, Reason: "LOGIN_OVERRIDDEN_ANOTHER_USER"}, DeleteOpts{
+				LogoutRemote: false,
+				unlocked:     true,
+			})
 			ul = nil
 		} else {
 			return nil, fmt.Errorf("%s is already logged in with that account", ul.UserMXID)
@@ -239,27 +242,29 @@ func (ul *UserLogin) Save(ctx context.Context) error {
 }
 
 func (ul *UserLogin) Logout(ctx context.Context) {
-	ul.Delete(ctx, status.BridgeState{StateEvent: status.StateLoggedOut}, true)
+	ul.Delete(ctx, status.BridgeState{StateEvent: status.StateLoggedOut}, DeleteOpts{LogoutRemote: true})
 }
 
-func (ul *UserLogin) Delete(ctx context.Context, state status.BridgeState, logoutRemote bool) {
-	ul.delete(ctx, state, logoutRemote, false)
+type DeleteOpts struct {
+	LogoutRemote     bool
+	DontCleanupRooms bool
+	unlocked         bool
 }
 
-func (ul *UserLogin) delete(ctx context.Context, state status.BridgeState, logoutRemote, unlocked bool) {
+func (ul *UserLogin) Delete(ctx context.Context, state status.BridgeState, opts DeleteOpts) {
 	ul.deleteLock.Lock()
 	defer ul.deleteLock.Unlock()
 	if ul.BridgeState == nil {
 		return
 	}
-	if logoutRemote {
+	if opts.LogoutRemote {
 		ul.Client.LogoutRemote(ctx)
 	} else {
 		ul.Disconnect(nil)
 	}
 	var portals []*database.UserPortal
 	var err error
-	if ul.Bridge.Config.CleanupOnLogout.Enabled {
+	if !opts.DontCleanupRooms && ul.Bridge.Config.CleanupOnLogout.Enabled {
 		portals, err = ul.Bridge.DB.UserPortal.GetAllForLogin(ctx, ul.UserLogin)
 		if err != nil {
 			ul.Log.Err(err).Msg("Failed to get user portals")
@@ -269,12 +274,12 @@ func (ul *UserLogin) delete(ctx context.Context, state status.BridgeState, logou
 	if err != nil {
 		ul.Log.Err(err).Msg("Failed to delete user login")
 	}
-	if !unlocked {
+	if !opts.unlocked {
 		ul.Bridge.cacheLock.Lock()
 	}
 	delete(ul.User.logins, ul.ID)
 	delete(ul.Bridge.userLoginsByID, ul.ID)
-	if !unlocked {
+	if !opts.unlocked {
 		ul.Bridge.cacheLock.Unlock()
 	}
 	backgroundCtx := context.WithoutCancel(ctx)

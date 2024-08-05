@@ -381,7 +381,7 @@ func (prov *ProvisioningAPI) handleCompleteStep(ctx context.Context, login *Prov
 	login.Override.Delete(ctx, status.BridgeState{
 		StateEvent: status.StateLoggedOut,
 		Reason:     "LOGIN_OVERRIDDEN",
-	}, true)
+	}, bridgev2.DeleteOpts{LogoutRemote: true})
 }
 
 func (prov *ProvisioningAPI) PostLoginSubmitInput(w http.ResponseWriter, r *http.Request) {
