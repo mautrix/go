@@ -64,7 +64,6 @@ func (br *BridgeMain) LogDBUpgradeErrorAndExit(name string, err error, message s
 	if sqlError := (&sqlite3.Error{}); errors.As(err, sqlError) && sqlError.Code == sqlite3.ErrCorrupt {
 		os.Exit(18)
 	} else if errors.Is(err, dbutil.ErrForeignTables) {
-		br.Log.Info().Msg("You can use --ignore-foreign-tables to ignore this error")
 		br.Log.Info().Msg("See https://docs.mau.fi/faq/foreign-tables for more info")
 	} else if errors.Is(err, dbutil.ErrNotOwned) {
 		br.Log.Info().Msg("Sharing the same database with different programs is not supported")
