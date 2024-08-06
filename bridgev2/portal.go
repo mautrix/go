@@ -1799,7 +1799,7 @@ func (portal *Portal) handleRemoteReactionSync(ctx context.Context, source *User
 		)
 		return intent
 	}
-	doRemoveReaction := func(old *database.Reaction, intent MatrixAPI) {
+	doRemoveReaction := func(old *database.Reaction, intent MatrixAPI, deleteRow bool) {
 		if intent == nil && old.SenderMXID != "" {
 			intent, err = portal.getIntentForMXID(ctx, old.SenderMXID)
 			if err != nil {
@@ -1823,10 +1823,16 @@ func (portal *Portal) handleRemoteReactionSync(ctx context.Context, source *User
 		if err != nil {
 			log.Err(err).Msg("Failed to redact old reaction")
 		}
+		if deleteRow {
+			err = portal.Bridge.DB.Reaction.Delete(ctx, old)
+			if err != nil {
+				log.Err(err).Msg("Failed to delete old reaction row")
+			}
+		}
 	}
 	doOverwriteReaction := func(new *BackfillReaction, old *database.Reaction) {
 		intent := doAddReaction(new)
-		doRemoveReaction(old, intent)
+		doRemoveReaction(old, intent, false)
 	}
 
 	newData := evt.GetReactions()
@@ -1851,7 +1857,7 @@ func (portal *Portal) handleRemoteReactionSync(ctx context.Context, source *User
 		totalReactionCount := len(existingUserReactions) + len(reactions.Reactions)
 		if reactions.HasAllReactions {
 			for _, existingReaction := range existingUserReactions {
-				doRemoveReaction(existingReaction, nil)
+				doRemoveReaction(existingReaction, nil, true)
 			}
 		} else if reactions.MaxCount > 0 && totalReactionCount > reactions.MaxCount {
 			remainingReactionList := maps.Values(existingUserReactions)
@@ -1864,14 +1870,14 @@ func (portal *Portal) handleRemoteReactionSync(ctx context.Context, source *User
 			})
 			numberToRemove := totalReactionCount - reactions.MaxCount
 			for i := 0; i < numberToRemove && i < len(remainingReactionList); i++ {
-				doRemoveReaction(remainingReactionList[i], nil)
+				doRemoveReaction(remainingReactionList[i], nil, true)
 			}
 		}
 	}
 	if newData.HasAllUsers {
 		for _, userReactions := range existing {
 			for _, existingReaction := range userReactions {
-				doRemoveReaction(existingReaction, nil)
+				doRemoveReaction(existingReaction, nil, true)
 			}
 		}
 	}
