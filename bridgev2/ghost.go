@@ -128,7 +128,7 @@ type UserInfo struct {
 	Avatar      *Avatar
 	IsBot       *bool
 
-	ExtraUpdates func(context.Context, *Ghost) bool
+	ExtraUpdates ExtraUpdater[*Ghost]
 }
 
 func (ghost *Ghost) UpdateName(ctx context.Context, name string) bool {

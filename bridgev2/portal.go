@@ -2362,7 +2362,27 @@ type ChatInfo struct {
 
 	CanBackfill bool
 
-	ExtraUpdates func(context.Context, *Portal) bool
+	ExtraUpdates ExtraUpdater[*Portal]
+}
+
+type ExtraUpdater[T any] func(context.Context, T) bool
+
+func MergeExtraUpdaters[T any](funcs ...ExtraUpdater[T]) ExtraUpdater[T] {
+	funcs = slices.DeleteFunc(funcs, func(f ExtraUpdater[T]) bool {
+		return f == nil
+	})
+	if len(funcs) == 0 {
+		return nil
+	} else if len(funcs) == 1 {
+		return funcs[0]
+	}
+	return func(ctx context.Context, p T) bool {
+		changed := false
+		for _, f := range funcs {
+			changed = f(ctx, p) || changed
+		}
+		return changed
+	}
 }
 
 var Unmuted = time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
