@@ -2499,7 +2499,7 @@ func (portal *Portal) sendStateWithIntentOrBot(ctx context.Context, sender Matri
 			content.Raw = make(map[string]any)
 		}
 		content.Raw["fi.mau.bridge.set_by"] = sender.GetMXID()
-		resp, err = portal.Bridge.Bot.SendState(ctx, portal.MXID, event.StateRoomName, "", content, ts)
+		resp, err = portal.Bridge.Bot.SendState(ctx, portal.MXID, eventType, "", content, ts)
 	}
 	return
 }
