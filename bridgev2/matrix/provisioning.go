@@ -618,7 +618,6 @@ func (prov *ProvisioningAPI) GetContactList(w http.ResponseWriter, r *http.Reque
 		apiContact := &RespResolveIdentifier{
 			ID: contact.UserID,
 		}
-		fmt.Println(contact.UserInfo.Identifiers)
 		apiResp.Contacts[i] = apiContact
 		if contact.UserInfo != nil {
 			if contact.UserInfo.Name != nil {
