@@ -123,8 +123,11 @@ func (store *SQLCryptoStore) FindDeviceID(ctx context.Context) (deviceID id.Devi
 // PutAccount stores an OlmAccount in the database.
 func (store *SQLCryptoStore) PutAccount(ctx context.Context, account *OlmAccount) error {
 	store.Account = account
-	bytes := account.Internal.Pickle(store.PickleKey)
-	_, err := store.DB.Exec(ctx, `
+	bytes, err := account.Internal.Pickle(store.PickleKey)
+	if err != nil {
+		return err
+	}
+	_, err = store.DB.Exec(ctx, `
 		INSERT INTO crypto_account (device_id, shared, sync_token, account, account_id, key_backup_version) VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (account_id) DO UPDATE SET shared=excluded.shared, sync_token=excluded.sync_token,
 											   account=excluded.account, account_id=excluded.account_id,
@@ -137,7 +140,7 @@ func (store *SQLCryptoStore) PutAccount(ctx context.Context, account *OlmAccount
 func (store *SQLCryptoStore) GetAccount(ctx context.Context) (*OlmAccount, error) {
 	if store.Account == nil {
 		row := store.DB.QueryRow(ctx, "SELECT shared, sync_token, account, key_backup_version FROM crypto_account WHERE account_id=$1", store.AccountID)
-		acc := &OlmAccount{Internal: *olm.NewBlankAccount()}
+		acc := &OlmAccount{Internal: olm.NewBlankAccount()}
 		var accountBytes []byte
 		err := row.Scan(&acc.Shared, &store.SyncToken, &accountBytes, &acc.KeyBackupVersion)
 		if err == sql.ErrNoRows {
@@ -183,7 +186,7 @@ func (store *SQLCryptoStore) GetSessions(ctx context.Context, key id.SenderKey) 
 	defer store.olmSessionCacheLock.Unlock()
 	cache := store.getOlmSessionCache(key)
 	for rows.Next() {
-		sess := OlmSession{Internal: *olm.NewBlankSession()}
+		sess := OlmSession{Internal: olm.NewBlankSession()}
 		var sessionBytes []byte
 		var sessionID id.SessionID
 		err = rows.Scan(&sessionID, &sessionBytes, &sess.CreationTime, &sess.LastEncryptedTime, &sess.LastDecryptedTime)
@@ -220,7 +223,7 @@ func (store *SQLCryptoStore) GetLatestSession(ctx context.Context, key id.Sender
 	row := store.DB.QueryRow(ctx, "SELECT session_id, session, created_at, last_encrypted, last_decrypted FROM crypto_olm_session WHERE sender_key=$1 AND account_id=$2 ORDER BY last_decrypted DESC LIMIT 1",
 		key, store.AccountID)
 
-	sess := OlmSession{Internal: *olm.NewBlankSession()}
+	sess := OlmSession{Internal: olm.NewBlankSession()}
 	var sessionBytes []byte
 	var sessionID id.SessionID
 
@@ -246,8 +249,11 @@ func (store *SQLCryptoStore) GetLatestSession(ctx context.Context, key id.Sender
 func (store *SQLCryptoStore) AddSession(ctx context.Context, key id.SenderKey, session *OlmSession) error {
 	store.olmSessionCacheLock.Lock()
 	defer store.olmSessionCacheLock.Unlock()
-	sessionBytes := session.Internal.Pickle(store.PickleKey)
-	_, err := store.DB.Exec(ctx, "INSERT INTO crypto_olm_session (session_id, sender_key, session, created_at, last_encrypted, last_decrypted, account_id) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+	sessionBytes, err := session.Internal.Pickle(store.PickleKey)
+	if err != nil {
+		return err
+	}
+	_, err = store.DB.Exec(ctx, "INSERT INTO crypto_olm_session (session_id, sender_key, session, created_at, last_encrypted, last_decrypted, account_id) VALUES ($1, $2, $3, $4, $5, $6, $7)",
 		session.ID(), key, sessionBytes, session.CreationTime, session.LastEncryptedTime, session.LastDecryptedTime, store.AccountID)
 	store.getOlmSessionCache(key)[session.ID()] = session
 	return err
@@ -255,8 +261,11 @@ func (store *SQLCryptoStore) AddSession(ctx context.Context, key id.SenderKey, s
 
 // UpdateSession replaces the Olm session for a sender in the database.
 func (store *SQLCryptoStore) UpdateSession(ctx context.Context, _ id.SenderKey, session *OlmSession) error {
-	sessionBytes := session.Internal.Pickle(store.PickleKey)
-	_, err := store.DB.Exec(ctx, "UPDATE crypto_olm_session SET session=$1, last_encrypted=$2, last_decrypted=$3 WHERE session_id=$4 AND account_id=$5",
+	sessionBytes, err := session.Internal.Pickle(store.PickleKey)
+	if err != nil {
+		return err
+	}
+	_, err = store.DB.Exec(ctx, "UPDATE crypto_olm_session SET session=$1, last_encrypted=$2, last_decrypted=$3 WHERE session_id=$4 AND account_id=$5",
 		sessionBytes, session.LastEncryptedTime, session.LastDecryptedTime, session.ID(), store.AccountID)
 	return err
 }
@@ -270,7 +279,10 @@ func datePtr(t time.Time) *time.Time {
 
 // PutGroupSession stores an inbound Megolm group session for a room, sender and session.
 func (store *SQLCryptoStore) PutGroupSession(ctx context.Context, session *InboundGroupSession) error {
-	sessionBytes := session.Internal.Pickle(store.PickleKey)
+	sessionBytes, err := session.Internal.Pickle(store.PickleKey)
+	if err != nil {
+		return err
+	}
 	forwardingChains := strings.Join(session.ForwardingChains, ",")
 	ratchetSafety, err := json.Marshal(&session.RatchetSafety)
 	if err != nil {
@@ -340,7 +352,7 @@ func (store *SQLCryptoStore) GetGroupSession(ctx context.Context, roomID id.Room
 		return nil, err
 	}
 	return &InboundGroupSession{
-		Internal:         *igs,
+		Internal:         igs,
 		SigningKey:       id.Ed25519(signingKey.String),
 		SenderKey:        id.Curve25519(senderKey.String),
 		RoomID:           roomID,
@@ -455,7 +467,7 @@ func (store *SQLCryptoStore) GetWithheldGroupSession(ctx context.Context, roomID
 	}, nil
 }
 
-func (store *SQLCryptoStore) postScanInboundGroupSession(sessionBytes, ratchetSafetyBytes []byte, forwardingChains string) (igs *olm.InboundGroupSession, chains []string, safety RatchetSafety, err error) {
+func (store *SQLCryptoStore) postScanInboundGroupSession(sessionBytes, ratchetSafetyBytes []byte, forwardingChains string) (igs olm.InboundGroupSession, chains []string, safety RatchetSafety, err error) {
 	igs = olm.NewBlankInboundGroupSession()
 	err = igs.Unpickle(sessionBytes, store.PickleKey)
 	if err != nil {
@@ -491,7 +503,7 @@ func (store *SQLCryptoStore) scanInboundGroupSession(rows dbutil.Scannable) (*In
 		return nil, err
 	}
 	return &InboundGroupSession{
-		Internal:         *igs,
+		Internal:         igs,
 		SigningKey:       id.Ed25519(signingKey.String),
 		SenderKey:        id.Curve25519(senderKey.String),
 		RoomID:           roomID,
@@ -534,8 +546,11 @@ func (store *SQLCryptoStore) GetGroupSessionsWithoutKeyBackupVersion(ctx context
 
 // AddOutboundGroupSession stores an outbound Megolm session, along with the information about the room and involved devices.
 func (store *SQLCryptoStore) AddOutboundGroupSession(ctx context.Context, session *OutboundGroupSession) error {
-	sessionBytes := session.Internal.Pickle(store.PickleKey)
-	_, err := store.DB.Exec(ctx, `
+	sessionBytes, err := session.Internal.Pickle(store.PickleKey)
+	if err != nil {
+		return err
+	}
+	_, err = store.DB.Exec(ctx, `
 		INSERT INTO crypto_megolm_outbound_session
 			(room_id, session_id, session, shared, max_messages, message_count, max_age, created_at, last_used, account_id)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -550,8 +565,11 @@ func (store *SQLCryptoStore) AddOutboundGroupSession(ctx context.Context, sessio
 
 // UpdateOutboundGroupSession replaces an outbound Megolm session with for same room and session ID.
 func (store *SQLCryptoStore) UpdateOutboundGroupSession(ctx context.Context, session *OutboundGroupSession) error {
-	sessionBytes := session.Internal.Pickle(store.PickleKey)
-	_, err := store.DB.Exec(ctx, "UPDATE crypto_megolm_outbound_session SET session=$1, message_count=$2, last_used=$3 WHERE room_id=$4 AND session_id=$5 AND account_id=$6",
+	sessionBytes, err := session.Internal.Pickle(store.PickleKey)
+	if err != nil {
+		return err
+	}
+	_, err = store.DB.Exec(ctx, "UPDATE crypto_megolm_outbound_session SET session=$1, message_count=$2, last_used=$3 WHERE room_id=$4 AND session_id=$5 AND account_id=$6",
 		sessionBytes, session.MessageCount, session.LastEncryptedTime, session.RoomID, session.ID(), store.AccountID)
 	return err
 }
@@ -576,7 +594,7 @@ func (store *SQLCryptoStore) GetOutboundGroupSession(ctx context.Context, roomID
 	if err != nil {
 		return nil, err
 	}
-	ogs.Internal = *intOGS
+	ogs.Internal = intOGS
 	ogs.RoomID = roomID
 	ogs.MaxAge = time.Duration(maxAgeMS) * time.Millisecond
 	return &ogs, nil

@@ -4,9 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-//go:build !goolm
-
-package olm
+package libolm
 
 // #cgo LDFLAGS: -lolm -lstdc++
 // #include <olm/olm.h>
@@ -21,19 +19,30 @@ import (
 	"github.com/tidwall/sjson"
 
 	"maunium.net/go/mautrix/crypto/canonicaljson"
+	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
 )
 
-// LibOlmPKSigning stores a key pair for signing messages.
-type LibOlmPKSigning struct {
+// PKSigning stores a key pair for signing messages.
+type PKSigning struct {
 	int       *C.OlmPkSigning
 	mem       []byte
 	publicKey id.Ed25519
 	seed      []byte
 }
 
-// Ensure that LibOlmPKSigning implements PKSigning.
-var _ PKSigning = (*LibOlmPKSigning)(nil)
+// Ensure that [PKSigning] implements [olm.PKSigning].
+var _ olm.PKSigning = (*PKSigning)(nil)
+
+func init() {
+	olm.InitNewPKSigning = func() (olm.PKSigning, error) { return NewPKSigning() }
+	olm.InitNewPKSigningFromSeed = func(seed []byte) (olm.PKSigning, error) {
+		return NewPKSigningFromSeed(seed)
+	}
+	olm.InitNewPKDecryptionFromPrivateKey = func(privateKey []byte) (olm.PKDecryption, error) {
+		return NewPkDecryption(privateKey)
+	}
+}
 
 func pkSigningSize() uint {
 	return uint(C.olm_pk_signing_size())
@@ -51,16 +60,16 @@ func pkSigningSignatureLength() uint {
 	return uint(C.olm_pk_signature_length())
 }
 
-func newBlankPKSigning() *LibOlmPKSigning {
+func newBlankPKSigning() *PKSigning {
 	memory := make([]byte, pkSigningSize())
-	return &LibOlmPKSigning{
+	return &PKSigning{
 		int: C.olm_pk_signing(unsafe.Pointer(&memory[0])),
 		mem: memory,
 	}
 }
 
 // NewPKSigningFromSeed creates a new [PKSigning] object using the given seed.
-func NewPKSigningFromSeed(seed []byte) (PKSigning, error) {
+func NewPKSigningFromSeed(seed []byte) (*PKSigning, error) {
 	p := newBlankPKSigning()
 	p.clear()
 	pubKey := make([]byte, pkSigningPublicKeyLength())
@@ -74,34 +83,34 @@ func NewPKSigningFromSeed(seed []byte) (PKSigning, error) {
 	return p, nil
 }
 
-// NewPKSigning creates a new LibOlmPKSigning object, containing a key pair for
+// NewPKSigning creates a new [PKSigning] object, containing a key pair for
 // signing messages.
-func NewPKSigning() (PKSigning, error) {
+func NewPKSigning() (*PKSigning, error) {
 	// Generate the seed
 	seed := make([]byte, pkSigningSeedLength())
 	_, err := rand.Read(seed)
 	if err != nil {
-		panic(NotEnoughGoRandom)
+		panic(olm.NotEnoughGoRandom)
 	}
 	pk, err := NewPKSigningFromSeed(seed)
 	return pk, err
 }
 
-func (p *LibOlmPKSigning) PublicKey() id.Ed25519 {
+func (p *PKSigning) PublicKey() id.Ed25519 {
 	return p.publicKey
 }
 
-func (p *LibOlmPKSigning) Seed() []byte {
+func (p *PKSigning) Seed() []byte {
 	return p.seed
 }
 
-// clear clears the underlying memory of a LibOlmPKSigning object.
-func (p *LibOlmPKSigning) clear() {
+// clear clears the underlying memory of a [PKSigning] object.
+func (p *PKSigning) clear() {
 	C.olm_clear_pk_signing((*C.OlmPkSigning)(p.int))
 }
 
 // Sign creates a signature for the given message using this key.
-func (p *LibOlmPKSigning) Sign(message []byte) ([]byte, error) {
+func (p *PKSigning) Sign(message []byte) ([]byte, error) {
 	signature := make([]byte, pkSigningSignatureLength())
 	if C.olm_pk_sign((*C.OlmPkSigning)(p.int), (*C.uint8_t)(unsafe.Pointer(&message[0])), C.size_t(len(message)),
 		(*C.uint8_t)(unsafe.Pointer(&signature[0])), C.size_t(len(signature))) == errorVal() {
@@ -111,7 +120,7 @@ func (p *LibOlmPKSigning) Sign(message []byte) ([]byte, error) {
 }
 
 // SignJSON creates a signature for the given object after encoding it to canonical JSON.
-func (p *LibOlmPKSigning) SignJSON(obj interface{}) (string, error) {
+func (p *PKSigning) SignJSON(obj interface{}) (string, error) {
 	objJSON, err := json.Marshal(obj)
 	if err != nil {
 		return "", err
@@ -126,15 +135,15 @@ func (p *LibOlmPKSigning) SignJSON(obj interface{}) (string, error) {
 }
 
 // lastError returns the last error that happened in relation to this
-// LibOlmPKSigning object.
-func (p *LibOlmPKSigning) lastError() error {
+// [PKSigning] object.
+func (p *PKSigning) lastError() error {
 	return convertError(C.GoString(C.olm_pk_signing_last_error((*C.OlmPkSigning)(p.int))))
 }
 
-type LibOlmPKDecryption struct {
+type PKDecryption struct {
 	int       *C.OlmPkDecryption
 	mem       []byte
-	PublicKey []byte
+	publicKey []byte
 }
 
 func pkDecryptionSize() uint {
@@ -145,9 +154,9 @@ func pkDecryptionPublicKeySize() uint {
 	return uint(C.olm_pk_key_length())
 }
 
-func NewPkDecryption(privateKey []byte) (*LibOlmPKDecryption, error) {
+func NewPkDecryption(privateKey []byte) (*PKDecryption, error) {
 	memory := make([]byte, pkDecryptionSize())
-	p := &LibOlmPKDecryption{
+	p := &PKDecryption{
 		int: C.olm_pk_decryption(unsafe.Pointer(&memory[0])),
 		mem: memory,
 	}
@@ -159,12 +168,16 @@ func NewPkDecryption(privateKey []byte) (*LibOlmPKDecryption, error) {
 		unsafe.Pointer(&privateKey[0]), C.size_t(len(privateKey))) == errorVal() {
 		return nil, p.lastError()
 	}
-	p.PublicKey = pubKey
+	p.publicKey = pubKey
 
 	return p, nil
 }
 
-func (p *LibOlmPKDecryption) Decrypt(ephemeralKey []byte, mac []byte, ciphertext []byte) ([]byte, error) {
+func (p *PKDecryption) PublicKey() id.Curve25519 {
+	return id.Curve25519(p.publicKey)
+}
+
+func (p *PKDecryption) Decrypt(ephemeralKey []byte, mac []byte, ciphertext []byte) ([]byte, error) {
 	maxPlaintextLength := uint(C.olm_pk_max_plaintext_length((*C.OlmPkDecryption)(p.int), C.size_t(len(ciphertext))))
 	plaintext := make([]byte, maxPlaintextLength)
 
@@ -181,12 +194,12 @@ func (p *LibOlmPKDecryption) Decrypt(ephemeralKey []byte, mac []byte, ciphertext
 }
 
 // Clear clears the underlying memory of a PkDecryption object.
-func (p *LibOlmPKDecryption) clear() {
+func (p *PKDecryption) clear() {
 	C.olm_clear_pk_decryption((*C.OlmPkDecryption)(p.int))
 }
 
 // lastError returns the last error that happened in relation to this
-// LibOlmPKDecryption object.
-func (p *LibOlmPKDecryption) lastError() error {
+// [PKDecryption] object.
+func (p *PKDecryption) lastError() error {
 	return convertError(C.GoString(C.olm_pk_decryption_last_error((*C.OlmPkDecryption)(p.int))))
 }

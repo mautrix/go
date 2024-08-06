@@ -11,8 +11,8 @@ import (
 
 	"maunium.net/go/mautrix/id"
 
-	"maunium.net/go/mautrix/crypto/goolm"
 	"maunium.net/go/mautrix/crypto/goolm/account"
+	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/crypto/signatures"
 )
 
@@ -71,7 +71,7 @@ func TestAccount(t *testing.T) {
 		t.Fatal("IdentityKeys Ed25519 public unequal")
 	}
 
-	if len(firstAccount.OneTimeKeys()) != 2 {
+	if otks, err := firstAccount.OneTimeKeys(); err != nil || len(otks) != 2 {
 		t.Fatal("should get 2 unpublished oneTimeKeys")
 	}
 	if len(firstAccount.FallbackKeyUnpublished()) == 0 {
@@ -84,7 +84,7 @@ func TestAccount(t *testing.T) {
 	if len(firstAccount.FallbackKeyUnpublished()) != 0 {
 		t.Fatal("should get no fallbackKey")
 	}
-	if len(firstAccount.OneTimeKeys()) != 0 {
+	if otks, err := firstAccount.OneTimeKeys(); err != nil || len(otks) != 0 {
 		t.Fatal("should get no oneTimeKeys")
 	}
 }
@@ -139,7 +139,7 @@ func TestSessions(t *testing.T) {
 		t.Fatal(err)
 	}
 	plaintext := []byte("test message")
-	msgType, crypttext, err := aliceSession.Encrypt(plaintext, nil)
+	msgType, crypttext, err := aliceSession.Encrypt(plaintext)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,11 +147,11 @@ func TestSessions(t *testing.T) {
 		t.Fatal("wrong message type")
 	}
 
-	bobSession, err := bobAccount.NewInboundSession(nil, crypttext)
+	bobSession, err := bobAccount.NewInboundSession(string(crypttext))
 	if err != nil {
 		t.Fatal(err)
 	}
-	decodedText, err := bobSession.Decrypt(crypttext, msgType)
+	decodedText, err := bobSession.Decrypt(string(crypttext), msgType)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -225,7 +225,7 @@ func TestOldAccountPickle(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	} else {
-		if !errors.Is(err, goolm.ErrBadVersion) {
+		if !errors.Is(err, olm.ErrBadVersion) {
 			t.Fatal(err)
 		}
 	}
@@ -252,7 +252,7 @@ func TestLoopback(t *testing.T) {
 	}
 
 	plainText := []byte("Hello, World")
-	msgType, message1, err := aliceSession.Encrypt(plainText, nil)
+	msgType, message1, err := aliceSession.Encrypt(plainText)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -260,12 +260,12 @@ func TestLoopback(t *testing.T) {
 		t.Fatal("wrong message type")
 	}
 
-	bobSession, err := accountB.NewInboundSession(nil, message1)
+	bobSession, err := accountB.NewInboundSession(string(message1))
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Check that the inbound session matches the message it was created from.
-	sessionIsOK, err := bobSession.MatchesInboundSessionFrom(nil, message1)
+	sessionIsOK, err := bobSession.MatchesInboundSessionFrom("", string(message1))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -274,7 +274,7 @@ func TestLoopback(t *testing.T) {
 	}
 	// Check that the inbound session matches the key this message is supposed to be from.
 	aIDKey := accountA.IdKeys.Curve25519.PublicKey.B64Encoded()
-	sessionIsOK, err = bobSession.MatchesInboundSessionFrom(&aIDKey, message1)
+	sessionIsOK, err = bobSession.MatchesInboundSessionFrom(string(aIDKey), string(message1))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -283,7 +283,7 @@ func TestLoopback(t *testing.T) {
 	}
 	// Check that the inbound session isn't from a different user.
 	bIDKey := accountB.IdKeys.Curve25519.PublicKey.B64Encoded()
-	sessionIsOK, err = bobSession.MatchesInboundSessionFrom(&bIDKey, message1)
+	sessionIsOK, err = bobSession.MatchesInboundSessionFrom(string(bIDKey), string(message1))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -291,7 +291,7 @@ func TestLoopback(t *testing.T) {
 		t.Fatal("session is sad to be from b but is from a")
 	}
 	// Check that we can decrypt the message.
-	decryptedMessage, err := bobSession.Decrypt(message1, msgType)
+	decryptedMessage, err := bobSession.Decrypt(string(message1), msgType)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -299,7 +299,7 @@ func TestLoopback(t *testing.T) {
 		t.Fatal("messages are not the same")
 	}
 
-	msgTyp2, message2, err := bobSession.Encrypt(plainText, nil)
+	msgTyp2, message2, err := bobSession.Encrypt(plainText)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -307,7 +307,7 @@ func TestLoopback(t *testing.T) {
 		t.Fatal("wrong message type")
 	}
 
-	decryptedMessage2, err := aliceSession.Decrypt(message2, msgTyp2)
+	decryptedMessage2, err := aliceSession.Decrypt(string(message2), msgTyp2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -316,7 +316,7 @@ func TestLoopback(t *testing.T) {
 	}
 
 	//decrypting again should fail, as the chain moved on
-	_, err = aliceSession.Decrypt(message2, msgTyp2)
+	_, err = aliceSession.Decrypt(string(message2), msgTyp2)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -348,7 +348,7 @@ func TestMoreMessages(t *testing.T) {
 	}
 
 	plainText := []byte("Hello, World")
-	msgType, message1, err := aliceSession.Encrypt(plainText, nil)
+	msgType, message1, err := aliceSession.Encrypt(plainText)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -356,11 +356,11 @@ func TestMoreMessages(t *testing.T) {
 		t.Fatal("wrong message type")
 	}
 
-	bobSession, err := accountB.NewInboundSession(nil, message1)
+	bobSession, err := accountB.NewInboundSession(string(message1))
 	if err != nil {
 		t.Fatal(err)
 	}
-	decryptedMessage, err := bobSession.Decrypt(message1, msgType)
+	decryptedMessage, err := bobSession.Decrypt(string(message1), msgType)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -370,7 +370,7 @@ func TestMoreMessages(t *testing.T) {
 
 	for i := 0; i < 8; i++ {
 		//alice sends, bob reveices
-		msgType, message, err := aliceSession.Encrypt(plainText, nil)
+		msgType, message, err := aliceSession.Encrypt(plainText)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -384,7 +384,7 @@ func TestMoreMessages(t *testing.T) {
 				t.Fatal("wrong message type")
 			}
 		}
-		decryptedMessage, err := bobSession.Decrypt(message, msgType)
+		decryptedMessage, err := bobSession.Decrypt(string(message), msgType)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -393,14 +393,14 @@ func TestMoreMessages(t *testing.T) {
 		}
 
 		//now bob sends, alice receives
-		msgType, message, err = bobSession.Encrypt(plainText, nil)
+		msgType, message, err = bobSession.Encrypt(plainText)
 		if err != nil {
 			t.Fatal(err)
 		}
 		if msgType == id.OlmMsgTypePreKey {
 			t.Fatal("wrong message type")
 		}
-		decryptedMessage, err = aliceSession.Decrypt(message, msgType)
+		decryptedMessage, err = aliceSession.Decrypt(string(message), msgType)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -435,7 +435,7 @@ func TestFallbackKey(t *testing.T) {
 	}
 
 	plainText := []byte("Hello, World")
-	msgType, message1, err := aliceSession.Encrypt(plainText, nil)
+	msgType, message1, err := aliceSession.Encrypt(plainText)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -443,12 +443,12 @@ func TestFallbackKey(t *testing.T) {
 		t.Fatal("wrong message type")
 	}
 
-	bobSession, err := accountB.NewInboundSession(nil, message1)
+	bobSession, err := accountB.NewInboundSession(string(message1))
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Check that the inbound session matches the message it was created from.
-	sessionIsOK, err := bobSession.MatchesInboundSessionFrom(nil, message1)
+	sessionIsOK, err := bobSession.MatchesInboundSessionFrom("", string(message1))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -457,7 +457,7 @@ func TestFallbackKey(t *testing.T) {
 	}
 	// Check that the inbound session matches the key this message is supposed to be from.
 	aIDKey := accountA.IdKeys.Curve25519.PublicKey.B64Encoded()
-	sessionIsOK, err = bobSession.MatchesInboundSessionFrom(&aIDKey, message1)
+	sessionIsOK, err = bobSession.MatchesInboundSessionFrom(string(aIDKey), string(message1))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -466,7 +466,7 @@ func TestFallbackKey(t *testing.T) {
 	}
 	// Check that the inbound session isn't from a different user.
 	bIDKey := accountB.IdKeys.Curve25519.PublicKey.B64Encoded()
-	sessionIsOK, err = bobSession.MatchesInboundSessionFrom(&bIDKey, message1)
+	sessionIsOK, err = bobSession.MatchesInboundSessionFrom(string(bIDKey), string(message1))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -474,7 +474,7 @@ func TestFallbackKey(t *testing.T) {
 		t.Fatal("session is sad to be from b but is from a")
 	}
 	// Check that we can decrypt the message.
-	decryptedMessage, err := bobSession.Decrypt(message1, msgType)
+	decryptedMessage, err := bobSession.Decrypt(string(message1), msgType)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -493,7 +493,7 @@ func TestFallbackKey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msgType2, message2, err := aliceSession2.Encrypt(plainText, nil)
+	msgType2, message2, err := aliceSession2.Encrypt(plainText)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -502,19 +502,19 @@ func TestFallbackKey(t *testing.T) {
 	}
 	// bobSession should not be valid for the message2
 	// Check that the inbound session matches the message it was created from.
-	sessionIsOK, err = bobSession.MatchesInboundSessionFrom(nil, message2)
+	sessionIsOK, err = bobSession.MatchesInboundSessionFrom("", string(message2))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if sessionIsOK {
 		t.Fatal("session was detected to be valid but should not")
 	}
-	bobSession2, err := accountB.NewInboundSession(nil, message2)
+	bobSession2, err := accountB.NewInboundSession(string(message2))
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Check that the inbound session matches the message it was created from.
-	sessionIsOK, err = bobSession2.MatchesInboundSessionFrom(nil, message2)
+	sessionIsOK, err = bobSession2.MatchesInboundSessionFrom("", string(message2))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -522,7 +522,7 @@ func TestFallbackKey(t *testing.T) {
 		t.Fatal("session was not detected to be valid")
 	}
 	// Check that the inbound session matches the key this message is supposed to be from.
-	sessionIsOK, err = bobSession2.MatchesInboundSessionFrom(&aIDKey, message2)
+	sessionIsOK, err = bobSession2.MatchesInboundSessionFrom(string(aIDKey), string(message2))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -530,7 +530,7 @@ func TestFallbackKey(t *testing.T) {
 		t.Fatal("session is sad to be not from a but it should")
 	}
 	// Check that the inbound session isn't from a different user.
-	sessionIsOK, err = bobSession2.MatchesInboundSessionFrom(&bIDKey, message2)
+	sessionIsOK, err = bobSession2.MatchesInboundSessionFrom(string(bIDKey), string(message2))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -538,7 +538,7 @@ func TestFallbackKey(t *testing.T) {
 		t.Fatal("session is sad to be from b but is from a")
 	}
 	// Check that we can decrypt the message.
-	decryptedMessage2, err := bobSession2.Decrypt(message2, msgType2)
+	decryptedMessage2, err := bobSession2.Decrypt(string(message2), msgType2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -553,18 +553,18 @@ func TestFallbackKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	msgType3, message3, err := aliceSession3.Encrypt(plainText, nil)
+	msgType3, message3, err := aliceSession3.Encrypt(plainText)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if msgType3 != id.OlmMsgTypePreKey {
 		t.Fatal("wrong message type")
 	}
-	_, err = accountB.NewInboundSession(nil, message3)
+	_, err = accountB.NewInboundSession(string(message3))
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if !errors.Is(err, goolm.ErrBadMessageKeyID) {
+	if !errors.Is(err, olm.ErrBadMessageKeyID) {
 		t.Fatal(err)
 	}
 }

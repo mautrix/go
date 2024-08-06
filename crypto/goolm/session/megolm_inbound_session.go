@@ -5,13 +5,14 @@ import (
 	"errors"
 	"fmt"
 
-	"maunium.net/go/mautrix/crypto/goolm"
 	"maunium.net/go/mautrix/crypto/goolm/cipher"
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
+	"maunium.net/go/mautrix/crypto/goolm/goolmbase64"
 	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
 	"maunium.net/go/mautrix/crypto/goolm/megolm"
 	"maunium.net/go/mautrix/crypto/goolm/message"
 	"maunium.net/go/mautrix/crypto/goolm/utilities"
+	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -28,10 +29,14 @@ type MegolmInboundSession struct {
 	SigningKeyVerified bool                    `json:"signing_key_verified"` //not used for now
 }
 
+// Ensure that MegolmInboundSession implements the [olm.InboundGroupSession]
+// interface.
+var _ olm.InboundGroupSession = (*MegolmInboundSession)(nil)
+
 // NewMegolmInboundSession creates a new MegolmInboundSession from a base64 encoded session sharing message.
 func NewMegolmInboundSession(input []byte) (*MegolmInboundSession, error) {
 	var err error
-	input, err = goolm.Base64Decode(input)
+	input, err = goolmbase64.Decode(input)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +60,7 @@ func NewMegolmInboundSession(input []byte) (*MegolmInboundSession, error) {
 // NewMegolmInboundSessionFromExport creates a new MegolmInboundSession from a base64 encoded session export message.
 func NewMegolmInboundSessionFromExport(input []byte) (*MegolmInboundSession, error) {
 	var err error
-	input, err = goolm.Base64Decode(input)
+	input, err = goolmbase64.Decode(input)
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +83,7 @@ func NewMegolmInboundSessionFromExport(input []byte) (*MegolmInboundSession, err
 // MegolmInboundSessionFromPickled loads the MegolmInboundSession details from a pickled base64 string. The input is decrypted with the supplied key.
 func MegolmInboundSessionFromPickled(pickled, key []byte) (*MegolmInboundSession, error) {
 	if len(pickled) == 0 {
-		return nil, fmt.Errorf("megolmInboundSessionFromPickled: %w", goolm.ErrEmptyInput)
+		return nil, fmt.Errorf("megolmInboundSessionFromPickled: %w", olm.ErrEmptyInput)
 	}
 	a := &MegolmInboundSession{}
 	err := a.Unpickle(pickled, key)
@@ -89,7 +94,7 @@ func MegolmInboundSessionFromPickled(pickled, key []byte) (*MegolmInboundSession
 }
 
 // getRatchet tries to find the correct ratchet for a messageIndex.
-func (o MegolmInboundSession) getRatchet(messageIndex uint32) (*megolm.Ratchet, error) {
+func (o *MegolmInboundSession) getRatchet(messageIndex uint32) (*megolm.Ratchet, error) {
 	// pick a megolm instance to use. if we are at or beyond the latest ratchet value, use that
 	if (messageIndex - o.Ratchet.Counter) < uint32(1<<31) {
 		o.Ratchet.AdvanceTo(messageIndex)
@@ -97,7 +102,7 @@ func (o MegolmInboundSession) getRatchet(messageIndex uint32) (*megolm.Ratchet, 
 	}
 	if (messageIndex - o.InitialRatchet.Counter) >= uint32(1<<31) {
 		// the counter is before our initial ratchet - we can't decode this
-		return nil, fmt.Errorf("decrypt: %w", goolm.ErrRatchetNotAvailable)
+		return nil, fmt.Errorf("decrypt: %w", olm.ErrRatchetNotAvailable)
 	}
 	// otherwise, start from the initial ratchet. Take a copy so that we don't overwrite the initial ratchet
 	copiedRatchet := o.InitialRatchet
@@ -107,11 +112,14 @@ func (o MegolmInboundSession) getRatchet(messageIndex uint32) (*megolm.Ratchet, 
 }
 
 // Decrypt decrypts a base64 encoded group message.
-func (o *MegolmInboundSession) Decrypt(ciphertext []byte) ([]byte, uint32, error) {
-	if o.SigningKey == nil {
-		return nil, 0, fmt.Errorf("decrypt: %w", goolm.ErrBadMessageFormat)
+func (o *MegolmInboundSession) Decrypt(ciphertext []byte) ([]byte, uint, error) {
+	if len(ciphertext) == 0 {
+		return nil, 0, olm.ErrEmptyInput
 	}
-	decoded, err := goolm.Base64Decode(ciphertext)
+	if o.SigningKey == nil {
+		return nil, 0, fmt.Errorf("decrypt: %w", olm.ErrBadMessageFormat)
+	}
+	decoded, err := goolmbase64.Decode(ciphertext)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -121,16 +129,16 @@ func (o *MegolmInboundSession) Decrypt(ciphertext []byte) ([]byte, uint32, error
 		return nil, 0, err
 	}
 	if msg.Version != protocolVersion {
-		return nil, 0, fmt.Errorf("decrypt: %w", goolm.ErrWrongProtocolVersion)
+		return nil, 0, fmt.Errorf("decrypt: %w", olm.ErrWrongProtocolVersion)
 	}
 	if msg.Ciphertext == nil || !msg.HasMessageIndex {
-		return nil, 0, fmt.Errorf("decrypt: %w", goolm.ErrBadMessageFormat)
+		return nil, 0, fmt.Errorf("decrypt: %w", olm.ErrBadMessageFormat)
 	}
 
 	// verify signature
 	verifiedSignature := msg.VerifySignatureInline(o.SigningKey, decoded)
 	if !verifiedSignature {
-		return nil, 0, fmt.Errorf("decrypt: %w", goolm.ErrBadSignature)
+		return nil, 0, fmt.Errorf("decrypt: %w", olm.ErrBadSignature)
 	}
 
 	targetRatch, err := o.getRatchet(msg.MessageIndex)
@@ -143,17 +151,17 @@ func (o *MegolmInboundSession) Decrypt(ciphertext []byte) ([]byte, uint32, error
 		return nil, 0, err
 	}
 	o.SigningKeyVerified = true
-	return decrypted, msg.MessageIndex, nil
+	return decrypted, uint(msg.MessageIndex), nil
 
 }
 
-// SessionID returns the base64 endoded signing key
-func (o MegolmInboundSession) SessionID() id.SessionID {
+// ID returns the base64 endoded signing key
+func (o *MegolmInboundSession) ID() id.SessionID {
 	return id.SessionID(base64.RawStdEncoding.EncodeToString(o.SigningKey))
 }
 
 // PickleAsJSON returns an MegolmInboundSession as a base64 string encrypted using the supplied key. The unencrypted representation of the Account is in JSON format.
-func (o MegolmInboundSession) PickleAsJSON(key []byte) ([]byte, error) {
+func (o *MegolmInboundSession) PickleAsJSON(key []byte) ([]byte, error) {
 	return utilities.PickleAsJSON(o, megolmInboundSessionPickleVersionJSON, key)
 }
 
@@ -162,8 +170,14 @@ func (o *MegolmInboundSession) UnpickleAsJSON(pickled, key []byte) error {
 	return utilities.UnpickleAsJSON(o, pickled, key, megolmInboundSessionPickleVersionJSON)
 }
 
-// SessionExportMessage creates an base64 encoded export of the session.
-func (o MegolmInboundSession) SessionExportMessage(messageIndex uint32) ([]byte, error) {
+// Export returns the base64-encoded ratchet key for this session, at the given
+// index, in a format which can be used by
+// InboundGroupSession.InboundGroupSessionImport().  Encrypts the
+// InboundGroupSession using the supplied key.  Returns error on failure.
+// if we do not have a session key corresponding to the given index (ie, it was
+// sent before the session key was shared with us) the error will be
+// returned.
+func (o *MegolmInboundSession) Export(messageIndex uint32) ([]byte, error) {
 	ratchet, err := o.getRatchet(messageIndex)
 	if err != nil {
 		return nil, err
@@ -174,6 +188,11 @@ func (o MegolmInboundSession) SessionExportMessage(messageIndex uint32) ([]byte,
 // Unpickle decodes the base64 encoded string and decrypts the result with the key.
 // The decrypted value is then passed to UnpickleLibOlm.
 func (o *MegolmInboundSession) Unpickle(pickled, key []byte) error {
+	if len(key) == 0 {
+		return olm.ErrNoKeyProvided
+	} else if len(pickled) == 0 {
+		return olm.ErrEmptyInput
+	}
 	decrypted, err := cipher.Unpickle(key, pickled)
 	if err != nil {
 		return err
@@ -192,7 +211,7 @@ func (o *MegolmInboundSession) UnpickleLibOlm(value []byte) (int, error) {
 	switch pickledVersion {
 	case megolmInboundSessionPickleVersionLibOlm, 1:
 	default:
-		return 0, fmt.Errorf("unpickle MegolmInboundSession: %w", goolm.ErrBadVersion)
+		return 0, fmt.Errorf("unpickle MegolmInboundSession: %w", olm.ErrBadVersion)
 	}
 	readBytes, err := o.InitialRatchet.UnpickleLibOlm(value[curPos:])
 	if err != nil {
@@ -223,7 +242,10 @@ func (o *MegolmInboundSession) UnpickleLibOlm(value []byte) (int, error) {
 }
 
 // Pickle returns a base64 encoded and with key encrypted pickled MegolmInboundSession using PickleLibOlm().
-func (o MegolmInboundSession) Pickle(key []byte) ([]byte, error) {
+func (o *MegolmInboundSession) Pickle(key []byte) ([]byte, error) {
+	if len(key) == 0 {
+		return nil, olm.ErrNoKeyProvided
+	}
 	pickeledBytes := make([]byte, o.PickleLen())
 	written, err := o.PickleLibOlm(pickeledBytes)
 	if err != nil {
@@ -241,9 +263,9 @@ func (o MegolmInboundSession) Pickle(key []byte) ([]byte, error) {
 
 // PickleLibOlm encodes the session into target. target has to have a size of at least PickleLen() and is written to from index 0.
 // It returns the number of bytes written.
-func (o MegolmInboundSession) PickleLibOlm(target []byte) (int, error) {
+func (o *MegolmInboundSession) PickleLibOlm(target []byte) (int, error) {
 	if len(target) < o.PickleLen() {
-		return 0, fmt.Errorf("pickle MegolmInboundSession: %w", goolm.ErrValueTooShort)
+		return 0, fmt.Errorf("pickle MegolmInboundSession: %w", olm.ErrValueTooShort)
 	}
 	written := libolmpickle.PickleUInt32(megolmInboundSessionPickleVersionLibOlm, target)
 	writtenInitRatchet, err := o.InitialRatchet.PickleLibOlm(target[written:])
@@ -266,11 +288,23 @@ func (o MegolmInboundSession) PickleLibOlm(target []byte) (int, error) {
 }
 
 // PickleLen returns the number of bytes the pickled session will have.
-func (o MegolmInboundSession) PickleLen() int {
+func (o *MegolmInboundSession) PickleLen() int {
 	length := libolmpickle.PickleUInt32Len(megolmInboundSessionPickleVersionLibOlm)
 	length += o.InitialRatchet.PickleLen()
 	length += o.Ratchet.PickleLen()
 	length += o.SigningKey.PickleLen()
 	length += libolmpickle.PickleBoolLen(o.SigningKeyVerified)
 	return length
+}
+
+// FirstKnownIndex returns the first message index we know how to decrypt.
+func (s *MegolmInboundSession) FirstKnownIndex() uint32 {
+	return s.InitialRatchet.Counter
+}
+
+// IsVerified check if the session has been verified as a valid session.  (A
+// session is verified either because the original session share was signed, or
+// because we have subsequently successfully decrypted a message.)
+func (s *MegolmInboundSession) IsVerified() bool {
+	return s.SigningKeyVerified
 }

@@ -6,9 +6,9 @@ import (
 	"errors"
 	"testing"
 
-	"maunium.net/go/mautrix/crypto/goolm"
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
 	"maunium.net/go/mautrix/crypto/goolm/session"
+	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -32,7 +32,7 @@ func TestOlmSession(t *testing.T) {
 	}
 	//create a message so that there are more keys to marshal
 	plaintext := []byte("Test message from Alice to Bob")
-	msgType, message, err := aliceSession.Encrypt(plaintext, nil)
+	msgType, message, err := aliceSession.Encrypt(plaintext)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +55,7 @@ func TestOlmSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	decryptedMsg, err := bobSession.Decrypt(message, msgType)
+	decryptedMsg, err := bobSession.Decrypt(string(message), msgType)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestOlmSession(t *testing.T) {
 
 	//bob sends a message
 	plaintext = []byte("A message from Bob to Alice")
-	msgType, message, err = bobSession.Encrypt(plaintext, nil)
+	msgType, message, err = bobSession.Encrypt(plaintext)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func TestOlmSession(t *testing.T) {
 	}
 
 	//Alice receives message
-	decryptedMsg, err = newAliceSession.Decrypt(message, msgType)
+	decryptedMsg, err = newAliceSession.Decrypt(string(message), msgType)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,14 +95,14 @@ func TestOlmSession(t *testing.T) {
 	}
 
 	//Alice receives message again
-	_, err = newAliceSession.Decrypt(message, msgType)
+	_, err = newAliceSession.Decrypt(string(message), msgType)
 	if err == nil {
 		t.Fatal("should have gotten an error")
 	}
 
 	//Alice sends another message
 	plaintext = []byte("A second message to Bob")
-	msgType, message, err = newAliceSession.Encrypt(plaintext, nil)
+	msgType, message, err = newAliceSession.Encrypt(plaintext)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +110,7 @@ func TestOlmSession(t *testing.T) {
 		t.Fatal("Wrong message type")
 	}
 	//bob receives message
-	decryptedMsg, err = bobSession.Decrypt(message, msgType)
+	decryptedMsg, err = bobSession.Decrypt(string(message), msgType)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,7 +148,7 @@ func TestDecrypts(t *testing.T) {
 		{0xe9, 0xe9, 0xc9, 0xc1, 0xe9, 0xe9, 0xc9, 0xe9, 0xc9, 0xc1, 0xe9, 0xe9, 0xc9, 0xc1},
 	}
 	expectedErr := []error{
-		goolm.ErrInputToSmall,
+		olm.ErrInputToSmall,
 		// Why are these being tested 🤔
 		base64.CorruptInputError(0),
 		base64.CorruptInputError(0),
@@ -165,7 +165,7 @@ func TestDecrypts(t *testing.T) {
 		t.Fatal(err)
 	}
 	for curIndex, curMessage := range messages {
-		_, err := sess.Decrypt(curMessage, id.OlmMsgTypePreKey)
+		_, err := sess.Decrypt(string(curMessage), id.OlmMsgTypePreKey)
 		if err != nil {
 			if !errors.Is(err, expectedErr[curIndex]) {
 				t.Fatal(err)

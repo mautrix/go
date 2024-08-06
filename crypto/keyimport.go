@@ -104,7 +104,7 @@ func (mach *OlmMachine) importExportedRoomKey(ctx context.Context, session Expor
 		return false, ErrMismatchingExportedSessionID
 	}
 	igs := &InboundGroupSession{
-		Internal:   *igsInternal,
+		Internal:   igsInternal,
 		SigningKey: session.SenderClaimedKeys.Ed25519,
 		SenderKey:  session.SenderKey,
 		RoomID:     session.RoomID,

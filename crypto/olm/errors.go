@@ -1,10 +1,34 @@
-//go:build !goolm
+// Copyright (c) 2024 Sumner Evans
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 package olm
 
-import (
-	"errors"
-	"fmt"
+import "errors"
+
+// Those are the most common used errors
+var (
+	ErrBadSignature         = errors.New("bad signature")
+	ErrBadMAC               = errors.New("bad mac")
+	ErrBadMessageFormat     = errors.New("bad message format")
+	ErrBadVerification      = errors.New("bad verification")
+	ErrWrongProtocolVersion = errors.New("wrong protocol version")
+	ErrEmptyInput           = errors.New("empty input")
+	ErrNoKeyProvided        = errors.New("no key")
+	ErrBadMessageKeyID      = errors.New("bad message key id")
+	ErrRatchetNotAvailable  = errors.New("ratchet not available: attempt to decode a message whose index is earlier than our earliest known session key")
+	ErrMsgIndexTooHigh      = errors.New("message index too high")
+	ErrProtocolViolation    = errors.New("not protocol message order")
+	ErrMessageKeyNotFound   = errors.New("message key not found")
+	ErrChainTooHigh         = errors.New("chain index too high")
+	ErrBadInput             = errors.New("bad input")
+	ErrBadVersion           = errors.New("wrong version")
+	ErrWrongPickleVersion   = errors.New("wrong pickle version")
+	ErrValueTooShort        = errors.New("value too short")
+	ErrInputToSmall         = errors.New("input too small (truncated?)")
+	ErrOverflow             = errors.New("overflow")
 )
 
 // Error codes from go-olm
@@ -34,29 +58,3 @@ var (
 	BadSignature           = errors.New("received message had a bad signature")
 	InputBufferTooSmall    = errors.New("the input data was too small to be valid")
 )
-
-var errorMap = map[string]error{
-	"NOT_ENOUGH_RANDOM":         NotEnoughRandom,
-	"OUTPUT_BUFFER_TOO_SMALL":   OutputBufferTooSmall,
-	"BAD_MESSAGE_VERSION":       BadMessageVersion,
-	"BAD_MESSAGE_FORMAT":        BadMessageFormat,
-	"BAD_MESSAGE_MAC":           BadMessageMAC,
-	"BAD_MESSAGE_KEY_ID":        BadMessageKeyID,
-	"INVALID_BASE64":            InvalidBase64,
-	"BAD_ACCOUNT_KEY":           BadAccountKey,
-	"UNKNOWN_PICKLE_VERSION":    UnknownPickleVersion,
-	"CORRUPTED_PICKLE":          CorruptedPickle,
-	"BAD_SESSION_KEY":           BadSessionKey,
-	"UNKNOWN_MESSAGE_INDEX":     UnknownMessageIndex,
-	"BAD_LEGACY_ACCOUNT_PICKLE": BadLegacyAccountPickle,
-	"BAD_SIGNATURE":             BadSignature,
-	"INPUT_BUFFER_TOO_SMALL":    InputBufferTooSmall,
-}
-
-func convertError(errCode string) error {
-	err, ok := errorMap[errCode]
-	if ok {
-		return err
-	}
-	return fmt.Errorf("unknown error: %s", errCode)
-}
