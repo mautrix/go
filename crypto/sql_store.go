@@ -624,7 +624,7 @@ func (store *SQLCryptoStore) ValidateMessageIndex(ctx context.Context, senderKey
 			Str("expected_event_id", expectedEventID.String()).
 			Int64("expected_timestamp", expectedTimestamp).
 			Int64("actual_timestamp", timestamp).
-			Msg("Failed to validate that message index wasn't duplicated")
+			Msg("Rejecting different event with duplicate message index")
 		return false, nil
 	}
 	return true, nil
