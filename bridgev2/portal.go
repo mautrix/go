@@ -385,8 +385,7 @@ func (portal *Portal) checkConfusableName(ctx context.Context, userID id.UserID,
 	}
 	for _, confusable := range confusableWith {
 		// Don't disambiguate names that only conflict with ghosts of this bridge
-		_, isGhost := portal.Bridge.Matrix.ParseGhostMXID(confusable)
-		if !isGhost {
+		if !portal.Bridge.IsGhostMXID(confusable) {
 			return true
 		}
 	}
@@ -2745,8 +2744,7 @@ func (portal *Portal) syncParticipants(ctx context.Context, members *ChatMemberL
 			if memberEvt.Membership == event.MembershipLeave || memberEvt.Membership == event.MembershipBan {
 				continue
 			}
-			_, isGhost := portal.Bridge.Matrix.ParseGhostMXID(extraMember)
-			if !isGhost && portal.Relay != nil {
+			if !portal.Bridge.IsGhostMXID(extraMember) && portal.Relay != nil {
 				continue
 			}
 			_, err = portal.Bridge.Bot.SendState(ctx, portal.MXID, event.StateMember, extraMember.String(), &event.Content{

@@ -165,14 +165,7 @@ func (br *Connector) sendBridgeCheckpoint(ctx context.Context, evt *event.Event)
 }
 
 func (br *Connector) shouldIgnoreEventFromUser(userID id.UserID) bool {
-	if userID == br.Bot.UserID {
-		return true
-	}
-	_, isGhost := br.ParseGhostMXID(userID)
-	if isGhost {
-		return true
-	}
-	return false
+	return userID == br.Bot.UserID || br.Bridge.IsGhostMXID(userID)
 }
 
 func (br *Connector) shouldIgnoreEvent(evt *event.Event) bool {

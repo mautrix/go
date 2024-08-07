@@ -69,6 +69,11 @@ func (br *Bridge) unlockedGetGhostByID(ctx context.Context, id networkid.UserID,
 	return br.loadGhost(ctx, db, err, idPtr)
 }
 
+func (br *Bridge) IsGhostMXID(userID id.UserID) bool {
+	_, isGhost := br.Matrix.ParseGhostMXID(userID)
+	return isGhost
+}
+
 func (br *Bridge) GetGhostByMXID(ctx context.Context, mxid id.UserID) (*Ghost, error) {
 	ghostID, ok := br.Matrix.ParseGhostMXID(mxid)
 	if !ok {

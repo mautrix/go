@@ -358,8 +358,7 @@ func (as *ASIntent) DeleteRoom(ctx context.Context, roomID id.RoomID, puppetsOnl
 		if member == as.Matrix.UserID {
 			continue
 		}
-		_, isGhost := as.Connector.ParseGhostMXID(member)
-		if isGhost {
+		if as.Connector.Bridge.IsGhostMXID(member) {
 			_, err = as.Connector.AS.Intent(member).LeaveRoom(ctx, roomID)
 			if err != nil {
 				zerolog.Ctx(ctx).Err(err).Stringer("user_id", member).Msg("Failed to leave room while cleaning up portal")
