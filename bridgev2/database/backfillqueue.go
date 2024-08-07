@@ -40,7 +40,7 @@ var BackfillNextDispatchNever = time.Unix(0, (1<<63)-1)
 const (
 	ensureBackfillExistsQuery = `
 		INSERT INTO backfill_task (bridge_id, portal_id, portal_receiver, user_login_id, batch_count, is_done, next_dispatch_min_ts)
-		VALUES ($1, $2, $3, $4, 0, false, $5)
+		VALUES ($1, $2, $3, $4, -1, false, $5)
 		ON CONFLICT (bridge_id, portal_id, portal_receiver) DO UPDATE
 			SET user_login_id=CASE
 					WHEN backfill_task.user_login_id=''

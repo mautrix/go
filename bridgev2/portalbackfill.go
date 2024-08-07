@@ -96,6 +96,7 @@ func (portal *Portal) DoBackwardsBackfill(ctx context.Context, source *UserLogin
 		Cursor:        task.Cursor,
 		AnchorMessage: firstMessage,
 		Count:         portal.Bridge.Config.Backfill.Queue.BatchSize,
+		Task:          task,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to fetch messages for backward backfill: %w", err)

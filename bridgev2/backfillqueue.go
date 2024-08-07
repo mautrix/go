@@ -180,13 +180,39 @@ func (br *Bridge) actuallyDoBackfillTask(ctx context.Context, task *database.Bac
 			return false, nil
 		}
 	}
-	maxBatches := br.Config.Backfill.Queue.MaxBatches
-	// TODO apply max batch overrides
-	err = portal.DoBackwardsBackfill(ctx, login, task)
-	if err != nil {
-		return false, fmt.Errorf("failed to backfill: %w", err)
+	if task.BatchCount < 0 {
+		var msgCount int
+		msgCount, err = br.DB.Message.CountMessagesInPortal(ctx, task.PortalKey)
+		if err != nil {
+			return false, fmt.Errorf("failed to count messages in portal: %w", err)
+		}
+		task.BatchCount = msgCount / br.Config.Backfill.Queue.BatchSize
+		log.Debug().
+			Int("message_count", msgCount).
+			Int("batch_count", task.BatchCount).
+			Msg("Calculated existing batch count")
 	}
-	task.BatchCount++
+	maxBatches := br.Config.Backfill.Queue.MaxBatches
+	api, ok := login.Client.(BackfillingNetworkAPI)
+	if !ok {
+		return false, fmt.Errorf("network API does not support backfilling")
+	}
+	limiterAPI, ok := api.(BackfillingNetworkAPIWithLimits)
+	if ok {
+		maxBatches = limiterAPI.GetBackfillMaxBatchCount(ctx, portal, task)
+	}
+	if maxBatches < 0 || maxBatches > task.BatchCount {
+		err = portal.DoBackwardsBackfill(ctx, login, task)
+		if err != nil {
+			return false, fmt.Errorf("failed to backfill: %w", err)
+		}
+		task.BatchCount++
+	} else {
+		log.Debug().
+			Int("max_batches", maxBatches).
+			Int("batch_count", task.BatchCount).
+			Msg("Not actually backfilling: max batches reached")
+	}
 	task.IsDone = task.IsDone || (maxBatches > 0 && task.BatchCount >= maxBatches)
 	batchDelay := time.Duration(br.Config.Backfill.Queue.BatchDelay) * time.Second
 	task.CompletedAt = time.Now()

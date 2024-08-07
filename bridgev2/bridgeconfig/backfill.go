@@ -28,3 +28,11 @@ type BackfillQueueConfig struct {
 
 	MaxBatchesOverride map[string]int `yaml:"max_batches_override"`
 }
+
+func (bqc *BackfillQueueConfig) GetOverride(name string) int {
+	override, ok := bqc.MaxBatchesOverride[name]
+	if !ok {
+		return bqc.MaxBatches
+	}
+	return override
+}

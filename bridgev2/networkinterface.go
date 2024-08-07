@@ -114,8 +114,8 @@ func (cm *ConvertedMessage) MergeCaption() bool {
 	if len(cm.Parts) != 2 {
 		return false
 	}
-	textPart, mediaPart := cm.Parts[0], cm.Parts[1]
-	if textPart.Content.MsgType.IsMedia() {
+	textPart, mediaPart := cm.Parts[1], cm.Parts[0]
+	if textPart.Content.MsgType != event.MsgText {
 		textPart, mediaPart = mediaPart, textPart
 	}
 	if (!mediaPart.Content.MsgType.IsMedia() && mediaPart.Content.MsgType != event.MsgNotice) || textPart.Content.MsgType != event.MsgText {
@@ -369,6 +369,9 @@ type FetchMessagesParams struct {
 	// The preferred number of messages to return. The returned batch can be bigger or smaller
 	// without any side effects, but the network connector should aim for this number.
 	Count int
+
+	// When the messages are being fetched for a queued backfill, this is the task object.
+	Task *database.BackfillTask
 }
 
 // BackfillReaction is an individual reaction to a message in a history pagination request.
@@ -434,6 +437,11 @@ type FetchMessagesResponse struct {
 type BackfillingNetworkAPI interface {
 	NetworkAPI
 	FetchMessages(ctx context.Context, fetchParams FetchMessagesParams) (*FetchMessagesResponse, error)
+}
+
+type BackfillingNetworkAPIWithLimits interface {
+	BackfillingNetworkAPI
+	GetBackfillMaxBatchCount(ctx context.Context, portal *Portal, task *database.BackfillTask) int
 }
 
 // EditHandlingNetworkAPI is an optional interface that network connectors can implement to handle message edits.

@@ -64,6 +64,10 @@ const (
 
 	getLastMessagePartAtOrBeforeTimeQuery = getMessageBaseQuery + `WHERE bridge_id = $1 AND room_id=$2 AND room_receiver=$3 AND timestamp<=$4 ORDER BY timestamp DESC, part_id DESC LIMIT 1`
 
+	countMessagesInPortalQuery = `
+		SELECT COUNT(*) FROM message WHERE bridge_id=$1 AND room_id=$2 AND room_receiver=$3
+	`
+
 	insertMessageQuery = `
 		INSERT INTO message (
 			bridge_id, id, part_id, mxid, room_id, room_receiver, sender_id, sender_mxid,
@@ -153,6 +157,11 @@ func (mq *MessageQuery) DeleteAllParts(ctx context.Context, receiver networkid.U
 
 func (mq *MessageQuery) Delete(ctx context.Context, rowID int64) error {
 	return mq.Exec(ctx, deleteMessagePartByRowIDQuery, mq.BridgeID, rowID)
+}
+
+func (mq *MessageQuery) CountMessagesInPortal(ctx context.Context, key networkid.PortalKey) (count int, err error) {
+	err = mq.GetDB().QueryRow(ctx, countMessagesInPortalQuery, mq.BridgeID, key.ID, key.Receiver).Scan(&count)
+	return
 }
 
 func (m *Message) Scan(row dbutil.Scannable) (*Message, error) {
