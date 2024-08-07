@@ -54,12 +54,18 @@ func (evt *MarkUnread) GetUnread() bool {
 type Typing struct {
 	EventMeta
 	Timeout time.Duration
+	Type    bridgev2.TypingType
 }
 
 var (
-	_ bridgev2.RemoteTyping = (*Typing)(nil)
+	_ bridgev2.RemoteTyping         = (*Typing)(nil)
+	_ bridgev2.RemoteTypingWithType = (*Typing)(nil)
 )
 
 func (evt *Typing) GetTimeout() time.Duration {
 	return evt.Timeout
+}
+
+func (evt *Typing) GetTypingType() bridgev2.TypingType {
+	return evt.Type
 }
