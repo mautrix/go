@@ -1252,6 +1252,7 @@ func (portal *Portal) handleRemoteEvent(source *UserLogin, evt RemoteEvent) {
 	if portal.MXID == "" {
 		mcp, ok := evt.(RemoteEventThatMayCreatePortal)
 		if !ok || !mcp.ShouldCreatePortal() {
+			log.Debug().Msg("Dropping event as portal doesn't exist")
 			return
 		}
 		infoProvider, ok := mcp.(RemoteChatResyncWithInfo)
