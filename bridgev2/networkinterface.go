@@ -241,6 +241,11 @@ type DirectMediableNetwork interface {
 	Download(ctx context.Context, mediaID networkid.MediaID) (mediaproxy.GetMediaResponse, error)
 }
 
+type IdentifierValidatingNetwork interface {
+	NetworkConnector
+	ValidateUserID(id networkid.UserID) bool
+}
+
 // ConfigValidatingNetwork is an optional interface that network connectors can implement to validate config fields
 // before the bridge is started.
 //
