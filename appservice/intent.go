@@ -436,6 +436,20 @@ func (intent *IntentAPI) SetRoomTopic(ctx context.Context, roomID id.RoomID, top
 	})
 }
 
+func (intent *IntentAPI) UploadMedia(ctx context.Context, data mautrix.ReqUploadMedia) (*mautrix.RespMediaUpload, error) {
+	if err := intent.EnsureRegistered(ctx); err != nil {
+		return nil, err
+	}
+	return intent.Client.UploadMedia(ctx, data)
+}
+
+func (intent *IntentAPI) UploadAsync(ctx context.Context, data mautrix.ReqUploadMedia) (*mautrix.RespCreateMXC, error) {
+	if err := intent.EnsureRegistered(ctx); err != nil {
+		return nil, err
+	}
+	return intent.Client.UploadAsync(ctx, data)
+}
+
 func (intent *IntentAPI) SetDisplayName(ctx context.Context, displayName string) error {
 	if err := intent.EnsureRegistered(ctx); err != nil {
 		return err
