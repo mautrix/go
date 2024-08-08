@@ -362,6 +362,9 @@ func (portal *Portal) sendBatch(ctx context.Context, source *UserLogin, messages
 			zerolog.Ctx(ctx).Err(err).
 				Str("message_id", string(msg.ID)).
 				Str("part_id", string(msg.PartID)).
+				Str("sender_id", string(msg.SenderID)).
+				Str("portal_id", string(msg.Room.ID)).
+				Str("portal_receiver", string(msg.Room.Receiver)).
 				Msg("Failed to insert backfilled message to database")
 		}
 	}
