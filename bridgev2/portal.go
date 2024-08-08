@@ -1244,9 +1244,9 @@ func (portal *Portal) handleRemoteEvent(source *UserLogin, evt RemoteEvent) {
 	}()
 	evtType := evt.GetType()
 	log.UpdateContext(func(c zerolog.Context) zerolog.Context {
-		return c.Stringer("bridge_evt_type", evtType)
+		c = c.Stringer("bridge_evt_type", evtType)
+		return evt.AddLogContext(c)
 	})
-	log.UpdateContext(evt.AddLogContext)
 	ctx := log.WithContext(context.TODO())
 	if portal.MXID == "" {
 		mcp, ok := evt.(RemoteEventThatMayCreatePortal)
@@ -1603,7 +1603,7 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 	converted, err := evt.ConvertMessage(ctx, portal, intent)
 	if err != nil {
 		if errors.Is(err, ErrIgnoringRemoteEvent) {
-			log.Debug().Err(err).Msg("Remote event handling was cancelled by convert function")
+			log.Debug().Err(err).Msg("Remote message handling was cancelled by convert function")
 		} else {
 			log.Err(err).Msg("Failed to convert remote message")
 			portal.sendRemoteErrorNotice(ctx, intent, err, ts, "message")
@@ -1658,7 +1658,10 @@ func (portal *Portal) handleRemoteEdit(ctx context.Context, source *UserLogin, e
 	}
 	ts := getEventTS(evt)
 	converted, err := evt.ConvertEdit(ctx, portal, intent, existing)
-	if err != nil {
+	if errors.Is(err, ErrIgnoringRemoteEvent) {
+		log.Debug().Err(err).Msg("Remote edit handling was cancelled by convert function")
+		return
+	} else if err != nil {
 		log.Err(err).Msg("Failed to convert remote edit")
 		portal.sendRemoteErrorNotice(ctx, intent, err, ts, "edit")
 		return
