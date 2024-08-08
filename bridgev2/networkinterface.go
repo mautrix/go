@@ -593,39 +593,31 @@ type GroupCreatingNetworkAPI interface {
 	CreateGroup(ctx context.Context, name string, users ...networkid.UserID) (*CreateChatResponse, error)
 }
 
-type MembershipChangeType string
+type MembershipChangeType struct {
+	From   event.Membership
+	To     event.Membership
+	IsSelf bool
+}
 
-const (
-	AcceptInvite  MembershipChangeType = "invite,join,1"
-	RevokeInvite  MembershipChangeType = "invite,leave,0"
-	RejectInvite  MembershipChangeType = "invite,leave,1"
-	BanInvited    MembershipChangeType = "invite,ban,0"
-	ProfileChange MembershipChangeType = "join,join,1"
-	Leave         MembershipChangeType = "join,leave,1"
-	Kick          MembershipChangeType = "join,leave,0"
-	BanJoined     MembershipChangeType = "join,ban,0"
-	Invite        MembershipChangeType = "leave,invite,0"
-	Join          MembershipChangeType = "leave,join,1"
-	Ban           MembershipChangeType = "leave,ban,0"
-	Knock         MembershipChangeType = "leave,knock,1"
-	AcceptKnock   MembershipChangeType = "knock,invite,0"
-	RejectKnock   MembershipChangeType = "knock,leave,0"
-	RetractKnock  MembershipChangeType = "knock,leave,1"
-	BanKnocked    MembershipChangeType = "knock,ban,0"
-	Unban         MembershipChangeType = "ban,leave,0"
+var (
+	AcceptInvite  = MembershipChangeType{From: event.MembershipInvite, To: event.MembershipJoin, IsSelf: true}
+	RevokeInvite  = MembershipChangeType{From: event.MembershipInvite, To: event.MembershipLeave}
+	RejectInvite  = MembershipChangeType{From: event.MembershipInvite, To: event.MembershipLeave, IsSelf: true}
+	BanInvited    = MembershipChangeType{From: event.MembershipInvite, To: event.MembershipBan}
+	ProfileChange = MembershipChangeType{From: event.MembershipJoin, To: event.MembershipJoin, IsSelf: true}
+	Leave         = MembershipChangeType{From: event.MembershipJoin, To: event.MembershipLeave, IsSelf: true}
+	Kick          = MembershipChangeType{From: event.MembershipJoin, To: event.MembershipLeave}
+	BanJoined     = MembershipChangeType{From: event.MembershipJoin, To: event.MembershipBan}
+	Invite        = MembershipChangeType{From: event.MembershipLeave, To: event.MembershipInvite}
+	Join          = MembershipChangeType{From: event.MembershipLeave, To: event.MembershipJoin}
+	Ban           = MembershipChangeType{From: event.MembershipLeave, To: event.MembershipBan}
+	Knock         = MembershipChangeType{From: event.MembershipLeave, To: event.MembershipKnock, IsSelf: true}
+	AcceptKnock   = MembershipChangeType{From: event.MembershipKnock, To: event.MembershipInvite}
+	RejectKnock   = MembershipChangeType{From: event.MembershipKnock, To: event.MembershipLeave}
+	RetractKnock  = MembershipChangeType{From: event.MembershipKnock, To: event.MembershipLeave, IsSelf: true}
+	BanKnocked    = MembershipChangeType{From: event.MembershipKnock, To: event.MembershipBan}
+	Unban         = MembershipChangeType{From: event.MembershipBan, To: event.MembershipLeave}
 )
-
-func (m *MembershipChangeType) GetFrom() event.Membership {
-	return event.Membership(strings.Split(string(*m), ",")[0])
-}
-
-func (m *MembershipChangeType) GetTo() event.Membership {
-	return event.Membership(strings.Split(string(*m), ",")[1])
-}
-
-func (m *MembershipChangeType) GetIsSelf() bool {
-	return strings.Split(string(*m), ",")[2] == "1"
-}
 
 type MatrixMembershipChange struct {
 	MatrixEventBase[*event.MemberEventContent]

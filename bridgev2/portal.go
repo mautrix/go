@@ -3285,12 +3285,9 @@ func handleMatrixMembership(
 		_ = evt.Unsigned.PrevContent.ParseRaw(evt.Type)
 		prevContent, _ = evt.Unsigned.PrevContent.Parsed.(*event.MemberEventContent)
 	}
-	isSelfString := "0"
-	if isSelf {
-		isSelfString = "1"
-	}
+
 	content := evt.Content.AsMember()
-	membershipChangeType := MembershipChangeType(string(prevContent.Membership) + "," + string(content.Membership) + "," + isSelfString)
+	membershipChangeType := MembershipChangeType{From: prevContent.Membership, To: content.Membership, IsSelf: isSelf}
 	if !portal.Bridge.Config.BridgeMatrixLeave && membershipChangeType == Leave {
 		log.Debug().Msg("Dropping leave event")
 		return
