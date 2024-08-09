@@ -3271,7 +3271,7 @@ func (portal *Portal) handleMatrixMembership(
 	if targetGhost == nil {
 		targetUser, err := portal.Bridge.GetUserByMXID(ctx, targetMXID)
 		if err != nil {
-			log.Err(err).Stringer("mxid", targetMXID).Msg("failed getting target user")
+			log.Err(err).Stringer("mxid", targetMXID).Msg("Failed to get target user")
 			return
 		}
 		targetUserLogin, _, err = portal.FindPreferredLogin(ctx, targetUser, false)
