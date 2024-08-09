@@ -2310,38 +2310,48 @@ type PowerLevelChanges struct {
 	Custom func(*event.PowerLevelsEventContent) bool
 }
 
-func (plc *PowerLevelChanges) Apply(content *event.PowerLevelsEventContent) (changed bool) {
+func allowChange(newLevel, oldLevel, actorLevel int) bool {
+	return newLevel <= actorLevel && oldLevel <= actorLevel
+}
+
+func (plc *PowerLevelChanges) Apply(actor id.UserID, content *event.PowerLevelsEventContent) (changed bool) {
 	if plc == nil || content == nil {
 		return
 	}
 	for evtType, level := range plc.Events {
-		changed = content.EnsureEventLevel(evtType, level) || changed
+		changed = content.EnsureEventLevelAs(actor, evtType, level) || changed
 	}
-	if plc.UsersDefault != nil {
+	var actorLevel int
+	if actor != "" {
+		actorLevel = content.GetUserLevel(actor)
+	} else {
+		actorLevel = (1 << 31) - 1
+	}
+	if plc.UsersDefault != nil && allowChange(*plc.UsersDefault, content.UsersDefault, actorLevel) {
 		changed = content.UsersDefault != *plc.UsersDefault
 		content.UsersDefault = *plc.UsersDefault
 	}
-	if plc.EventsDefault != nil {
+	if plc.EventsDefault != nil && allowChange(*plc.EventsDefault, content.EventsDefault, actorLevel) {
 		changed = content.EventsDefault != *plc.EventsDefault
 		content.EventsDefault = *plc.EventsDefault
 	}
-	if plc.StateDefault != nil {
+	if plc.StateDefault != nil && allowChange(*plc.StateDefault, content.StateDefault(), actorLevel) {
 		changed = content.StateDefault() != *plc.StateDefault
 		content.StateDefaultPtr = plc.StateDefault
 	}
-	if plc.Invite != nil {
+	if plc.Invite != nil && allowChange(*plc.Invite, content.Invite(), actorLevel) {
 		changed = content.Invite() != *plc.Invite
 		content.InvitePtr = plc.Invite
 	}
-	if plc.Kick != nil {
+	if plc.Kick != nil && allowChange(*plc.Kick, content.Kick(), actorLevel) {
 		changed = content.Kick() != *plc.Kick
 		content.KickPtr = plc.Kick
 	}
-	if plc.Ban != nil {
+	if plc.Ban != nil && allowChange(*plc.Ban, content.Ban(), actorLevel) {
 		changed = content.Ban() != *plc.Ban
 		content.BanPtr = plc.Ban
 	}
-	if plc.Redact != nil {
+	if plc.Redact != nil && allowChange(*plc.Redact, content.Redact(), actorLevel) {
 		changed = content.Redact() != *plc.Redact
 		content.RedactPtr = plc.Redact
 	}
@@ -2545,7 +2555,7 @@ func (portal *Portal) getInitialMemberList(ctx context.Context, members *ChatMem
 			return
 		}
 	}
-	members.PowerLevels.Apply(pl)
+	members.PowerLevels.Apply("", pl)
 	for _, member := range members.Members {
 		if member.Membership != event.MembershipJoin && member.Membership != "" {
 			continue
@@ -2627,13 +2637,13 @@ func (portal *Portal) syncParticipants(ctx context.Context, members *ChatMemberL
 		return fmt.Errorf("failed to get current members: %w", err)
 	}
 	delete(currentMembers, portal.Bridge.Bot.GetMXID())
-	powerChanged := members.PowerLevels.Apply(currentPower)
+	powerChanged := members.PowerLevels.Apply(portal.Bridge.Bot.GetMXID(), currentPower)
 	syncUser := func(extraUserID id.UserID, member ChatMember, hasIntent bool) bool {
 		if member.Membership == "" {
 			member.Membership = event.MembershipJoin
 		}
 		if member.PowerLevel != nil {
-			powerChanged = currentPower.EnsureUserLevel(extraUserID, *member.PowerLevel) || powerChanged
+			powerChanged = currentPower.EnsureUserLevelAs(portal.Bridge.Bot.GetMXID(), extraUserID, *member.PowerLevel) || powerChanged
 		}
 		currentMember, ok := currentMembers[extraUserID]
 		delete(currentMembers, extraUserID)
@@ -3038,7 +3048,9 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 			event.StateServerACL.Type:  100,
 			event.StateEncryption.Type: 100,
 		},
-		Users: map[id.UserID]int{},
+		Users: map[id.UserID]int{
+			portal.Bridge.Bot.GetMXID(): 9001,
+		},
 	}
 	initialMembers, extraFunctionalMembers, err := portal.getInitialMemberList(ctx, info.Members, source, powerLevels)
 	if err != nil {

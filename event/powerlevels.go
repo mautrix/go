@@ -134,10 +134,20 @@ func (pl *PowerLevelsEventContent) SetUserLevel(userID id.UserID, level int) {
 	}
 }
 
-func (pl *PowerLevelsEventContent) EnsureUserLevel(userID id.UserID, level int) bool {
-	existingLevel := pl.GetUserLevel(userID)
+func (pl *PowerLevelsEventContent) EnsureUserLevel(target id.UserID, level int) bool {
+	return pl.EnsureUserLevelAs("", target, level)
+}
+
+func (pl *PowerLevelsEventContent) EnsureUserLevelAs(actor, target id.UserID, level int) bool {
+	existingLevel := pl.GetUserLevel(target)
+	if actor != "" {
+		actorLevel := pl.GetUserLevel(actor)
+		if actorLevel <= existingLevel || actorLevel < level {
+			return false
+		}
+	}
 	if existingLevel != level {
-		pl.SetUserLevel(userID, level)
+		pl.SetUserLevel(target, level)
 		return true
 	}
 	return false
@@ -170,7 +180,17 @@ func (pl *PowerLevelsEventContent) SetEventLevel(eventType Type, level int) {
 }
 
 func (pl *PowerLevelsEventContent) EnsureEventLevel(eventType Type, level int) bool {
+	return pl.EnsureEventLevelAs("", eventType, level)
+}
+
+func (pl *PowerLevelsEventContent) EnsureEventLevelAs(actor id.UserID, eventType Type, level int) bool {
 	existingLevel := pl.GetEventLevel(eventType)
+	if actor != "" {
+		actorLevel := pl.GetUserLevel(actor)
+		if existingLevel > actorLevel || level > actorLevel {
+			return false
+		}
+	}
 	if existingLevel != level {
 		pl.SetEventLevel(eventType, level)
 		return true
