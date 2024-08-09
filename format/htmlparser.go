@@ -15,6 +15,7 @@ import (
 
 	"golang.org/x/net/html"
 
+	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -66,9 +67,13 @@ type ColorConverter func(text, fg, bg string, ctx Context) string
 type CodeBlockConverter func(code, language string, ctx Context) string
 type PillConverter func(displayname, mxid, eventID string, ctx Context) string
 
-func DefaultPillConverter(displayname, mxid, eventID string, _ Context) string {
+const ContextKeyMentions = "_mentions"
+
+func DefaultPillConverter(displayname, mxid, eventID string, ctx Context) string {
 	switch {
 	case len(mxid) == 0, mxid[0] == '@':
+		existingMentions, _ := ctx.ReturnData[ContextKeyMentions].([]id.UserID)
+		ctx.ReturnData[ContextKeyMentions] = append(existingMentions, id.UserID(mxid))
 		// User link, always just show the displayname
 		return displayname
 	case len(eventID) > 0:
@@ -417,11 +422,9 @@ func HTMLToText(html string) string {
 	}).Parse(html, NewContext(context.TODO()))
 }
 
-// HTMLToMarkdown converts Matrix HTML into markdown with the default settings.
-//
-// Currently, the only difference to HTMLToText is how links are formatted.
-func HTMLToMarkdown(html string) string {
-	return (&HTMLParser{
+func HTMLToMarkdownAndMentions(html string) (parsed string, mentions *event.Mentions) {
+	ctx := NewContext(context.TODO())
+	parsed = (&HTMLParser{
 		TabsToSpaces:   4,
 		Newline:        "\n",
 		HorizontalLine: "\n---\n",
@@ -432,5 +435,18 @@ func HTMLToMarkdown(html string) string {
 			}
 			return fmt.Sprintf("[%s](%s)", text, href)
 		},
-	}).Parse(html, NewContext(context.TODO()))
+	}).Parse(html, ctx)
+	mentionList, _ := ctx.ReturnData[ContextKeyMentions].([]id.UserID)
+	mentions = &event.Mentions{
+		UserIDs: mentionList,
+	}
+	return
+}
+
+// HTMLToMarkdown converts Matrix HTML into markdown with the default settings.
+//
+// Currently, the only difference to HTMLToText is how links are formatted.
+func HTMLToMarkdown(html string) string {
+	parsed, _ := HTMLToMarkdownAndMentions(html)
+	return parsed
 }
