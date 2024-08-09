@@ -17,18 +17,20 @@ import (
 
 // EventMeta is a struct containing metadata fields used by most event types.
 type EventMeta struct {
-	Type         bridgev2.RemoteEventType
-	LogContext   func(c zerolog.Context) zerolog.Context
-	PortalKey    networkid.PortalKey
-	Sender       bridgev2.EventSender
-	CreatePortal bool
-	Timestamp    time.Time
+	Type              bridgev2.RemoteEventType
+	LogContext        func(c zerolog.Context) zerolog.Context
+	PortalKey         networkid.PortalKey
+	UncertainReceiver bool
+	Sender            bridgev2.EventSender
+	CreatePortal      bool
+	Timestamp         time.Time
 }
 
 var (
-	_ bridgev2.RemoteEvent                    = (*EventMeta)(nil)
-	_ bridgev2.RemoteEventThatMayCreatePortal = (*EventMeta)(nil)
-	_ bridgev2.RemoteEventWithTimestamp       = (*EventMeta)(nil)
+	_ bridgev2.RemoteEvent                            = (*EventMeta)(nil)
+	_ bridgev2.RemoteEventWithUncertainPortalReceiver = (*EventMeta)(nil)
+	_ bridgev2.RemoteEventThatMayCreatePortal         = (*EventMeta)(nil)
+	_ bridgev2.RemoteEventWithTimestamp               = (*EventMeta)(nil)
 )
 
 func (evt *EventMeta) AddLogContext(c zerolog.Context) zerolog.Context {
@@ -40,6 +42,10 @@ func (evt *EventMeta) AddLogContext(c zerolog.Context) zerolog.Context {
 
 func (evt *EventMeta) GetPortalKey() networkid.PortalKey {
 	return evt.PortalKey
+}
+
+func (evt *EventMeta) PortalReceiverIsUncertain() bool {
+	return evt.UncertainReceiver
 }
 
 func (evt *EventMeta) GetTimestamp() time.Time {

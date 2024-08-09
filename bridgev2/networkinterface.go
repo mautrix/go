@@ -771,6 +771,11 @@ type RemoteEvent interface {
 	GetSender() EventSender
 }
 
+type RemoteEventWithUncertainPortalReceiver interface {
+	RemoteEvent
+	PortalReceiverIsUncertain() bool
+}
+
 type RemotePreHandler interface {
 	RemoteEvent
 	PreHandle(ctx context.Context, portal *Portal)

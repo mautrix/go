@@ -139,10 +139,26 @@ func (br *Bridge) handleBotInvite(ctx context.Context, evt *event.Event, sender 
 func (br *Bridge) QueueRemoteEvent(login *UserLogin, evt RemoteEvent) {
 	log := login.Log
 	ctx := log.WithContext(context.TODO())
-	portal, err := br.GetPortalByKey(ctx, evt.GetPortalKey())
+	maybeUncertain, ok := evt.(RemoteEventWithUncertainPortalReceiver)
+	isUncertain := ok && maybeUncertain.PortalReceiverIsUncertain()
+	key := evt.GetPortalKey()
+	var portal *Portal
+	var err error
+	if isUncertain {
+		portal, err = br.GetExistingPortalByKey(ctx, key)
+	} else {
+		portal, err = br.GetPortalByKey(ctx, key)
+	}
 	if err != nil {
-		log.Err(err).Object("portal_id", evt.GetPortalKey()).
+		log.Err(err).Object("portal_key", key).Bool("uncertain_receiver", isUncertain).
 			Msg("Failed to get portal to handle remote event")
+		return
+	} else if portal == nil {
+		log.Warn().
+			Stringer("event_type", evt.GetType()).
+			Object("portal_key", key).
+			Bool("uncertain_receiver", isUncertain).
+			Msg("Portal not found to handle remote event")
 		return
 	}
 	// TODO put this in a better place, and maybe cache to avoid constant db queries
