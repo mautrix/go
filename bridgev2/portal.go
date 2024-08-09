@@ -3248,12 +3248,12 @@ func (portal *Portal) SetRelay(ctx context.Context, relay *UserLogin) error {
 	return nil
 }
 
-func handleMatrixMembership(
-	portal *Portal,
+func (portal *Portal) handleMatrixMembership(
 	ctx context.Context,
 	sender *UserLogin,
 	origSender *OrigSender,
-	evt *event.Event) {
+	evt *event.Event,
+) {
 	api, ok := sender.Client.(MembershipHandlingNetworkAPI)
 	if !ok {
 		portal.sendErrorStatus(ctx, evt, ErrMembershipNotSupported)
