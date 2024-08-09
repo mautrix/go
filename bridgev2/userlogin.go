@@ -437,7 +437,7 @@ func (ul *UserLogin) getLogoutAction(ctx context.Context, up *database.UserPorta
 	if badCredentials {
 		actionsSet = ul.Bridge.Config.CleanupOnLogout.BadCredentials
 	}
-	if portal.Receiver == "" {
+	if portal.Receiver != "" {
 		return portal, actionsSet.Private, "portal has receiver", nil
 	}
 	otherUPs, err := ul.Bridge.DB.UserPortal.GetAllInPortal(ctx, portal.PortalKey)
