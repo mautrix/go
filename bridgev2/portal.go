@@ -3265,7 +3265,7 @@ func (portal *Portal) handleMatrixMembership(
 	var targetUserLogin *UserLogin
 	targetGhost, err := portal.Bridge.GetGhostByMXID(ctx, targetMXID)
 	if err != nil {
-		log.Err(err).Stringer("mxid", targetMXID).Msg("failed getting target ghost")
+		log.Err(err).Stringer("mxid", targetMXID).Msg("Failed to get target ghost")
 		return
 	}
 	if targetGhost == nil {
