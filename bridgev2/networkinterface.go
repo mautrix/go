@@ -598,6 +598,44 @@ type GroupCreatingNetworkAPI interface {
 	CreateGroup(ctx context.Context, name string, users ...networkid.UserID) (*CreateChatResponse, error)
 }
 
+type MembershipChangeType struct {
+	From   event.Membership
+	To     event.Membership
+	IsSelf bool
+}
+
+var (
+	AcceptInvite  = MembershipChangeType{From: event.MembershipInvite, To: event.MembershipJoin, IsSelf: true}
+	RevokeInvite  = MembershipChangeType{From: event.MembershipInvite, To: event.MembershipLeave}
+	RejectInvite  = MembershipChangeType{From: event.MembershipInvite, To: event.MembershipLeave, IsSelf: true}
+	BanInvited    = MembershipChangeType{From: event.MembershipInvite, To: event.MembershipBan}
+	ProfileChange = MembershipChangeType{From: event.MembershipJoin, To: event.MembershipJoin, IsSelf: true}
+	Leave         = MembershipChangeType{From: event.MembershipJoin, To: event.MembershipLeave, IsSelf: true}
+	Kick          = MembershipChangeType{From: event.MembershipJoin, To: event.MembershipLeave}
+	BanJoined     = MembershipChangeType{From: event.MembershipJoin, To: event.MembershipBan}
+	Invite        = MembershipChangeType{From: event.MembershipLeave, To: event.MembershipInvite}
+	Join          = MembershipChangeType{From: event.MembershipLeave, To: event.MembershipJoin}
+	BanLeft       = MembershipChangeType{From: event.MembershipLeave, To: event.MembershipBan}
+	Knock         = MembershipChangeType{From: event.MembershipLeave, To: event.MembershipKnock, IsSelf: true}
+	AcceptKnock   = MembershipChangeType{From: event.MembershipKnock, To: event.MembershipInvite}
+	RejectKnock   = MembershipChangeType{From: event.MembershipKnock, To: event.MembershipLeave}
+	RetractKnock  = MembershipChangeType{From: event.MembershipKnock, To: event.MembershipLeave, IsSelf: true}
+	BanKnocked    = MembershipChangeType{From: event.MembershipKnock, To: event.MembershipBan}
+	Unban         = MembershipChangeType{From: event.MembershipBan, To: event.MembershipLeave}
+)
+
+type MatrixMembershipChange struct {
+	MatrixEventBase[*event.MemberEventContent]
+	TargetGhost     *Ghost
+	TargetUserLogin *UserLogin
+	Type            MembershipChangeType
+}
+
+type MembershipHandlingNetworkAPI interface {
+	NetworkAPI
+	HandleMatrixMembership(ctx context.Context, msg *MatrixMembershipChange) (bool, error)
+}
+
 type PushType int
 
 func (pt PushType) String() string {

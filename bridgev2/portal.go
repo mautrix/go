@@ -492,6 +492,8 @@ func (portal *Portal) handleMatrixEvent(sender *User, evt *event.Event) {
 		handleMatrixAccountData(portal, ctx, login, evt, TagHandlingNetworkAPI.HandleRoomTag)
 	case event.AccountDataBeeperMute:
 		handleMatrixAccountData(portal, ctx, login, evt, MuteHandlingNetworkAPI.HandleMute)
+	case event.StateMember:
+		portal.handleMatrixMembership(ctx, login, origSender, evt)
 	}
 }
 
@@ -3244,4 +3246,68 @@ func (portal *Portal) SetRelay(ctx context.Context, relay *UserLogin) error {
 		return err
 	}
 	return nil
+}
+
+func (portal *Portal) handleMatrixMembership(
+	ctx context.Context,
+	sender *UserLogin,
+	origSender *OrigSender,
+	evt *event.Event,
+) {
+	api, ok := sender.Client.(MembershipHandlingNetworkAPI)
+	if !ok {
+		portal.sendErrorStatus(ctx, evt, ErrMembershipNotSupported)
+		return
+	}
+	log := zerolog.Ctx(ctx)
+	targetMXID := id.UserID(*evt.StateKey)
+	isSelf := sender.User.MXID == targetMXID
+	var err error
+	var targetUserLogin *UserLogin
+	targetGhost, err := portal.Bridge.GetGhostByMXID(ctx, targetMXID)
+	if err != nil {
+		log.Err(err).Stringer("mxid", targetMXID).Msg("Failed to get target ghost")
+		return
+	}
+	if targetGhost == nil {
+		targetUser, err := portal.Bridge.GetUserByMXID(ctx, targetMXID)
+		if err != nil {
+			log.Err(err).Stringer("mxid", targetMXID).Msg("Failed to get target user")
+			return
+		}
+		targetUserLogin, _, err = portal.FindPreferredLogin(ctx, targetUser, false)
+		if err != nil {
+			log.Err(err).Stringer("mxid", targetMXID).Msg("Failed to get target user login")
+			return
+		}
+	}
+	prevContent := &event.MemberEventContent{Membership: event.MembershipLeave}
+	if evt.Unsigned.PrevContent != nil {
+		_ = evt.Unsigned.PrevContent.ParseRaw(evt.Type)
+		prevContent, _ = evt.Unsigned.PrevContent.Parsed.(*event.MemberEventContent)
+	}
+
+	content := evt.Content.AsMember()
+	membershipChangeType := MembershipChangeType{From: prevContent.Membership, To: content.Membership, IsSelf: isSelf}
+	if !portal.Bridge.Config.BridgeMatrixLeave && membershipChangeType == Leave {
+		log.Debug().Msg("Dropping leave event")
+		return
+	}
+	membershipChange := &MatrixMembershipChange{
+		MatrixEventBase: MatrixEventBase[*event.MemberEventContent]{
+			Event:      evt,
+			Content:    content,
+			Portal:     portal,
+			OrigSender: origSender,
+		},
+		TargetGhost:     targetGhost,
+		TargetUserLogin: targetUserLogin,
+		Type:            membershipChangeType,
+	}
+	_, err = api.HandleMatrixMembership(ctx, membershipChange)
+	if err != nil {
+		log.Err(err).Msg("Failed to handle Matrix Membership Change")
+		portal.sendErrorStatus(ctx, evt, err)
+		return
+	}
 }
