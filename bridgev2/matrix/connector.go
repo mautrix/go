@@ -441,9 +441,14 @@ func (br *Connector) internalSendMessageStatus(ctx context.Context, ms *bridgev2
 		log.Err(err).Msg("Failed to send message checkpoint")
 	}
 	if !ms.DisableMSS && br.Config.Matrix.MessageStatusEvents {
-		_, err = br.Bot.SendMessageEvent(ctx, evt.RoomID, event.BeeperMessageStatus, ms.ToMSSEvent(evt))
+		mssEvt := ms.ToMSSEvent(evt)
+		_, err = br.Bot.SendMessageEvent(ctx, evt.RoomID, event.BeeperMessageStatus, mssEvt)
 		if err != nil {
-			log.Err(err).Msg("Failed to send MSS event")
+			log.Err(err).
+				Stringer("room_id", evt.RoomID).
+				Stringer("event_id", evt.EventID).
+				Any("mss_content", mssEvt).
+				Msg("Failed to send MSS event")
 		}
 	}
 	if ms.SendNotice && br.Config.Matrix.MessageErrorNotices && (ms.Status == event.MessageStatusFail || ms.Status == event.MessageStatusRetriable || ms.Step == status.MsgStepDecrypted) {
@@ -453,7 +458,11 @@ func (br *Connector) internalSendMessageStatus(ctx context.Context, ms *bridgev2
 		}
 		resp, err := br.Bot.SendMessageEvent(ctx, evt.RoomID, event.EventMessage, content)
 		if err != nil {
-			log.Err(err).Msg("Failed to send notice event")
+			log.Err(err).
+				Stringer("room_id", evt.RoomID).
+				Stringer("event_id", evt.EventID).
+				Str("notice_message", content.Body).
+				Msg("Failed to send notice event")
 		} else {
 			return resp.EventID
 		}
@@ -461,7 +470,10 @@ func (br *Connector) internalSendMessageStatus(ctx context.Context, ms *bridgev2
 	if ms.Status == event.MessageStatusSuccess && br.Config.Matrix.DeliveryReceipts {
 		err = br.Bot.SendReceipt(ctx, evt.RoomID, evt.EventID, event.ReceiptTypeRead, nil)
 		if err != nil {
-			log.Err(err).Msg("Failed to send Matrix delivery receipt")
+			log.Err(err).
+				Stringer("room_id", evt.RoomID).
+				Stringer("event_id", evt.EventID).
+				Msg("Failed to send Matrix delivery receipt")
 		}
 	}
 	return ""
@@ -596,10 +608,14 @@ func (br *Connector) ServerName() string {
 }
 
 func (br *Connector) HandleNewlyBridgedRoom(ctx context.Context, roomID id.RoomID) error {
+	_, err := br.Bot.Members(ctx, roomID)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to fetch members in newly bridged room")
+	}
 	if !br.Config.Encryption.Default {
 		return nil
 	}
-	_, err := br.Bot.SendStateEvent(ctx, roomID, event.StateEncryption, "", &event.Content{
+	_, err = br.Bot.SendStateEvent(ctx, roomID, event.StateEncryption, "", &event.Content{
 		Parsed: br.getDefaultEncryptionEvent(),
 	})
 	if err != nil {
