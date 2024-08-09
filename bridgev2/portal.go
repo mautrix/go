@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"go.mau.fi/util/exfmt"
 	"go.mau.fi/util/exslices"
 	"go.mau.fi/util/ptr"
@@ -3259,6 +3258,7 @@ func (portal *Portal) handleMatrixMembership(
 		portal.sendErrorStatus(ctx, evt, ErrMembershipNotSupported)
 		return
 	}
+	log := zerolog.Ctx(ctx)
 	targetMXID := id.UserID(*evt.StateKey)
 	isSelf := sender.User.MXID == targetMXID
 	var err error
