@@ -286,17 +286,21 @@ func (as *ASIntent) EnsureInvited(ctx context.Context, roomID id.RoomID, userID 
 	return as.Matrix.EnsureInvited(ctx, roomID, userID)
 }
 
+func (br *Connector) getDefaultEncryptionEvent() *event.EncryptionEventContent {
+	content := &event.EncryptionEventContent{Algorithm: id.AlgorithmMegolmV1}
+	if rot := br.Config.Encryption.Rotation; rot.EnableCustom {
+		content.RotationPeriodMillis = rot.Milliseconds
+		content.RotationPeriodMessages = rot.Messages
+	}
+	return content
+}
+
 func (as *ASIntent) CreateRoom(ctx context.Context, req *mautrix.ReqCreateRoom) (id.RoomID, error) {
 	if as.Connector.Config.Encryption.Default {
-		content := &event.EncryptionEventContent{Algorithm: id.AlgorithmMegolmV1}
-		if rot := as.Connector.Config.Encryption.Rotation; rot.EnableCustom {
-			content.RotationPeriodMillis = rot.Milliseconds
-			content.RotationPeriodMessages = rot.Messages
-		}
 		req.InitialState = append(req.InitialState, &event.Event{
 			Type: event.StateEncryption,
 			Content: event.Content{
-				Parsed: content,
+				Parsed: as.Connector.getDefaultEncryptionEvent(),
 			},
 		})
 	}

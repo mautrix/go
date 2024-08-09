@@ -573,6 +573,14 @@ type CreateChatResponse struct {
 	PortalInfo *ChatInfo
 }
 
+// ErrResolveIdentifierTryNext can be returned by ResolveIdentifier to signal that the identifier is valid,
+// but can't be reached by the current login, and the caller should try the next login if there are more.
+//
+// This should generally only be returned when resolving internal IDs (which happens when initiating chats via Matrix).
+// For example, Google Messages would return this when trying to resolve another login's user ID,
+// and Telegram would return this when the access hash isn't available.
+var ErrResolveIdentifierTryNext = errors.New("that identifier is not available via this login")
+
 // IdentifierResolvingNetworkAPI is an optional interface that network connectors can implement to support starting new direct chats.
 type IdentifierResolvingNetworkAPI interface {
 	NetworkAPI

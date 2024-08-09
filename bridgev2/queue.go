@@ -16,8 +16,52 @@ import (
 	"github.com/rs/zerolog"
 
 	"maunium.net/go/mautrix/event"
-	"maunium.net/go/mautrix/format"
+	"maunium.net/go/mautrix/id"
 )
+
+func rejectInvite(ctx context.Context, evt *event.Event, intent MatrixAPI, reason string) {
+	resp, err := intent.SendState(ctx, evt.RoomID, event.StateMember, intent.GetMXID().String(), &event.Content{
+		Parsed: &event.MemberEventContent{
+			Membership: event.MembershipLeave,
+			Reason:     reason,
+		},
+	}, time.Time{})
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).
+			Stringer("room_id", evt.RoomID).
+			Stringer("inviter_id", evt.Sender).
+			Stringer("invitee_id", intent.GetMXID()).
+			Str("reason", reason).
+			Msg("Failed to reject invite")
+	} else {
+		zerolog.Ctx(ctx).Debug().
+			Stringer("leave_event_id", resp.EventID).
+			Stringer("room_id", evt.RoomID).
+			Stringer("inviter_id", evt.Sender).
+			Stringer("invitee_id", intent.GetMXID()).
+			Str("reason", reason).
+			Msg("Rejected invite")
+	}
+}
+
+func (br *Bridge) rejectInviteOnNoPermission(ctx context.Context, evt *event.Event, permType string) bool {
+	if evt.Type != event.StateMember || evt.Content.AsMember().Membership != event.MembershipInvite {
+		return false
+	}
+	userID := id.UserID(evt.GetStateKey())
+	parsed, isGhost := br.Matrix.ParseGhostMXID(userID)
+	if userID != br.Bot.GetMXID() && !isGhost {
+		return false
+	}
+	var intent MatrixAPI
+	if userID == br.Bot.GetMXID() {
+		intent = br.Bot
+	} else {
+		intent = br.Matrix.GhostIntent(parsed)
+	}
+	rejectInvite(ctx, evt, intent, "You don't have permission to "+permType+" this bridge")
+	return true
+}
 
 func (br *Bridge) QueueMatrixEvent(ctx context.Context, evt *event.Event) {
 	// TODO maybe HandleMatrixEvent would be more appropriate as this also handles bot invites and commands
@@ -38,8 +82,12 @@ func (br *Bridge) QueueMatrixEvent(ctx context.Context, evt *event.Event) {
 			br.Matrix.SendMessageStatus(ctx, &status, StatusEventInfoFromEvent(evt))
 			return
 		} else if !sender.Permissions.SendEvents {
-			status := WrapErrorInStatus(errors.New("you don't have permission to send messages")).WithIsCertain(true).WithSendNotice(false).WithErrorAsMessage()
-			br.Matrix.SendMessageStatus(ctx, &status, StatusEventInfoFromEvent(evt))
+			if !br.rejectInviteOnNoPermission(ctx, evt, "interact with") {
+				status := WrapErrorInStatus(errors.New("you don't have permission to send messages")).WithIsCertain(true).WithSendNotice(false).WithErrorAsMessage()
+				br.Matrix.SendMessageStatus(ctx, &status, StatusEventInfoFromEvent(evt))
+			}
+			return
+		} else if !sender.Permissions.Commands && br.rejectInviteOnNoPermission(ctx, evt, "send commands to") {
 			return
 		}
 	} else if evt.Type.Class != event.EphemeralEventType {
@@ -83,56 +131,11 @@ func (br *Bridge) QueueMatrixEvent(ctx context.Context, evt *event.Event) {
 			evt:    evt,
 			sender: sender,
 		})
+	} else if evt.Type == event.StateMember && br.IsGhostMXID(id.UserID(evt.GetStateKey())) && evt.Content.AsMember().Membership == event.MembershipInvite && evt.Content.AsMember().IsDirect {
+		br.handleGhostDMInvite(ctx, evt, sender)
 	} else {
 		status := WrapErrorInStatus(ErrNoPortal)
 		br.Matrix.SendMessageStatus(ctx, &status, StatusEventInfoFromEvent(evt))
-	}
-}
-
-func (br *Bridge) handleBotInvite(ctx context.Context, evt *event.Event, sender *User) {
-	log := zerolog.Ctx(ctx)
-	if !sender.Permissions.Commands {
-		_, err := br.Bot.SendState(ctx, evt.RoomID, event.StateMember, br.Bot.GetMXID().String(), &event.Content{
-			Parsed: &event.MemberEventContent{
-				Membership: event.MembershipLeave,
-				Reason:     "You don't have permission to send commands to this bridge",
-			},
-		}, time.Time{})
-		if err != nil {
-			log.Err(err).Msg("Failed to reject invite from user with no permission")
-		} else {
-			log.Debug().Msg("Rejected invite from user with no permission")
-		}
-		return
-	}
-	err := br.Bot.EnsureJoined(ctx, evt.RoomID)
-	if err != nil {
-		log.Err(err).Msg("Failed to accept invite to room")
-		return
-	}
-	log.Debug().Msg("Accepted invite to room as bot")
-	members, err := br.Matrix.GetMembers(ctx, evt.RoomID)
-	if err != nil {
-		log.Err(err).Msg("Failed to get members of room after accepting invite")
-	}
-	if len(members) == 2 {
-		var message string
-		if sender.ManagementRoom == "" {
-			message = fmt.Sprintf("Hello, I'm a %s bridge bot.\n\nUse `help` for help or `login` to log in.\n\nThis room has been marked as your management room.", br.Network.GetName().DisplayName)
-			sender.ManagementRoom = evt.RoomID
-			err = br.DB.User.Update(ctx, sender.User)
-			if err != nil {
-				log.Err(err).Msg("Failed to update user's management room in database")
-			}
-		} else {
-			message = fmt.Sprintf("Hello, I'm a %s bridge bot.\n\nUse `%s help` for help.", br.Network.GetName().DisplayName, br.Config.CommandPrefix)
-		}
-		_, err = br.Bot.SendMessage(ctx, evt.RoomID, event.EventMessage, &event.Content{
-			Parsed: format.RenderMarkdown(message, true, false),
-		}, nil)
-		if err != nil {
-			log.Err(err).Msg("Failed to send welcome message to room")
-		}
 	}
 }
 

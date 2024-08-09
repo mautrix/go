@@ -66,6 +66,10 @@ type MatrixConnectorWithNameDisambiguation interface {
 	IsConfusableName(ctx context.Context, roomID id.RoomID, userID id.UserID, name string) ([]id.UserID, error)
 }
 
+type MatrixConnectorWithPostRoomBridgeHandling interface {
+	HandleNewlyBridgedRoom(ctx context.Context, roomID id.RoomID) error
+}
+
 type MatrixSendExtra struct {
 	Timestamp    time.Time
 	MessageMeta  *database.Message

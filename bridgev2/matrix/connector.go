@@ -98,8 +98,9 @@ type Connector struct {
 }
 
 var (
-	_ bridgev2.MatrixConnector           = (*Connector)(nil)
-	_ bridgev2.MatrixConnectorWithServer = (*Connector)(nil)
+	_ bridgev2.MatrixConnector                           = (*Connector)(nil)
+	_ bridgev2.MatrixConnectorWithServer                 = (*Connector)(nil)
+	_ bridgev2.MatrixConnectorWithPostRoomBridgeHandling = (*Connector)(nil)
 )
 
 func NewConnector(cfg *bridgeconfig.Config) *Connector {
@@ -592,4 +593,18 @@ func (br *Connector) GenerateReactionEventID(roomID id.RoomID, targetMessage *da
 
 func (br *Connector) ServerName() string {
 	return br.Config.Homeserver.Domain
+}
+
+func (br *Connector) HandleNewlyBridgedRoom(ctx context.Context, roomID id.RoomID) error {
+	if !br.Config.Encryption.Default {
+		return nil
+	}
+	_, err := br.Bot.SendStateEvent(ctx, roomID, event.StateEncryption, "", &event.Content{
+		Parsed: br.getDefaultEncryptionEvent(),
+	})
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to enable encryption in newly bridged room")
+		return fmt.Errorf("failed to enable encryption")
+	}
+	return nil
 }
