@@ -495,7 +495,7 @@ func (portal *Portal) handleMatrixEvent(sender *User, evt *event.Event) {
 	case event.AccountDataBeeperMute:
 		handleMatrixAccountData(portal, ctx, login, evt, MuteHandlingNetworkAPI.HandleMute)
 	case event.StateMember:
-		handleMatrixMembership(portal, ctx, login, origSender, evt)
+		portal.handleMatrixMembership(ctx, login, origSender, evt)
 	}
 }
 
