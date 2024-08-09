@@ -17,17 +17,20 @@ import (
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/format"
 	"maunium.net/go/mautrix/format/mdext"
+	"maunium.net/go/mautrix/id"
 )
 
 func TestRenderMarkdown_PlainText(t *testing.T) {
 	content := format.RenderMarkdown("hello world", true, true)
-	assert.Equal(t, event.MessageEventContent{MsgType: event.MsgText, Body: "hello world"}, content)
+	assert.Equal(t, event.MessageEventContent{MsgType: event.MsgText, Body: "hello world", Mentions: &event.Mentions{}}, content)
 	content = format.RenderMarkdown("hello world", true, false)
-	assert.Equal(t, event.MessageEventContent{MsgType: event.MsgText, Body: "hello world"}, content)
+	assert.Equal(t, event.MessageEventContent{MsgType: event.MsgText, Body: "hello world", Mentions: &event.Mentions{}}, content)
 	content = format.RenderMarkdown("hello world", false, true)
-	assert.Equal(t, event.MessageEventContent{MsgType: event.MsgText, Body: "hello world"}, content)
+	assert.Equal(t, event.MessageEventContent{MsgType: event.MsgText, Body: "hello world", Mentions: &event.Mentions{}}, content)
 	content = format.RenderMarkdown("<b>hello world</b>", false, false)
-	assert.Equal(t, event.MessageEventContent{MsgType: event.MsgText, Body: "<b>hello world</b>"}, content)
+	assert.Equal(t, event.MessageEventContent{MsgType: event.MsgText, Body: "<b>hello world</b>", Mentions: &event.Mentions{}}, content)
+	content = format.RenderMarkdown(`<a href="https://matrix.to/#/@user:example.com">mention</a>`, false, false)
+	assert.Equal(t, event.MessageEventContent{MsgType: event.MsgText, Body: "<a href=\"https://matrix.to/#/@user:example.com\">mention</a>", Mentions: &event.Mentions{}}, content)
 }
 
 func TestRenderMarkdown_EscapeHTML(t *testing.T) {
@@ -37,6 +40,7 @@ func TestRenderMarkdown_EscapeHTML(t *testing.T) {
 		Body:          "<b>hello world</b>",
 		Format:        event.FormatHTML,
 		FormattedBody: "&lt;b&gt;hello world&lt;/b&gt;",
+		Mentions:      &event.Mentions{},
 	}, content)
 }
 
@@ -47,6 +51,7 @@ func TestRenderMarkdown_HTML(t *testing.T) {
 		Body:          "**hello world**",
 		Format:        event.FormatHTML,
 		FormattedBody: "<b>hello world</b>",
+		Mentions:      &event.Mentions{},
 	}, content)
 
 	content = format.RenderMarkdown("<b>hello world</b>", true, true)
@@ -55,6 +60,18 @@ func TestRenderMarkdown_HTML(t *testing.T) {
 		Body:          "**hello world**",
 		Format:        event.FormatHTML,
 		FormattedBody: "<b>hello world</b>",
+		Mentions:      &event.Mentions{},
+	}, content)
+
+	content = format.RenderMarkdown(`[mention](https://matrix.to/#/@user:example.com)`, true, false)
+	assert.Equal(t, event.MessageEventContent{
+		MsgType:       event.MsgText,
+		Body:          "mention",
+		Format:        event.FormatHTML,
+		FormattedBody: `<a href="https://matrix.to/#/@user:example.com">mention</a>`,
+		Mentions: &event.Mentions{
+			UserIDs: []id.UserID{"@user:example.com"},
+		},
 	}, content)
 }
 
