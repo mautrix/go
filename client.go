@@ -569,7 +569,9 @@ func ParseErrorResponse(req *http.Request, res *http.Response) ([]byte, error) {
 		return contents, err
 	}
 
-	respErr := &RespError{}
+	respErr := &RespError{
+		StatusCode: res.StatusCode,
+	}
 	if _ = json.Unmarshal(contents, respErr); respErr.ErrCode == "" {
 		respErr = nil
 	}

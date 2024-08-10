@@ -117,7 +117,9 @@ func (e HTTPError) Unwrap() error {
 type RespError struct {
 	ErrCode   string
 	Err       string
-	ExtraData map[string]interface{}
+	ExtraData map[string]any
+
+	StatusCode int
 }
 
 func (e *RespError) UnmarshalJSON(data []byte) error {

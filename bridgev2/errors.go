@@ -1,0 +1,82 @@
+// Copyright (c) 2024 Tulir Asokan
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+package bridgev2
+
+import (
+	"errors"
+
+	"maunium.net/go/mautrix"
+)
+
+// ErrIgnoringRemoteEvent can be returned by [RemoteMessage.ConvertMessage] or [RemoteEdit.ConvertEdit]
+// to indicate that the event should be ignored after all. Handling the event will be cancelled immediately.
+var ErrIgnoringRemoteEvent = errors.New("ignoring remote event")
+
+// ErrNoStatus can be returned by [MatrixMessageResponse.HandleEcho] to indicate that the message is still in-flight
+// and a status should not be sent yet. The message will still be saved into the database.
+var ErrNoStatus = errors.New("omit message status")
+
+// ErrResolveIdentifierTryNext can be returned by ResolveIdentifier to signal that the identifier is valid,
+// but can't be reached by the current login, and the caller should try the next login if there are more.
+//
+// This should generally only be returned when resolving internal IDs (which happens when initiating chats via Matrix).
+// For example, Google Messages would return this when trying to resolve another login's user ID,
+// and Telegram would return this when the access hash isn't available.
+var ErrResolveIdentifierTryNext = errors.New("that identifier is not available via this login")
+
+var ErrNotLoggedIn = errors.New("not logged in")
+
+// ErrDirectMediaNotEnabled may be returned by Matrix connectors if [MatrixConnector.GenerateContentURI] is called,
+// but direct media is not enabled.
+var ErrDirectMediaNotEnabled = errors.New("direct media is not enabled")
+
+// Common message status errors
+var (
+	ErrPanicInEventHandler             error = WrapErrorInStatus(errors.New("panic in event handler")).WithSendNotice(true).WithErrorAsMessage()
+	ErrNoPortal                        error = WrapErrorInStatus(errors.New("room is not a portal")).WithIsCertain(true).WithSendNotice(false)
+	ErrIgnoringReactionFromRelayedUser error = WrapErrorInStatus(errors.New("ignoring reaction event from relayed user")).WithIsCertain(true).WithSendNotice(false)
+	ErrEditsNotSupported               error = WrapErrorInStatus(errors.New("this bridge does not support edits")).WithIsCertain(true).WithErrorAsMessage()
+	ErrEditsNotSupportedInPortal       error = WrapErrorInStatus(errors.New("edits are not allowed in this chat")).WithIsCertain(true).WithErrorAsMessage()
+	ErrCaptionsNotAllowed              error = WrapErrorInStatus(errors.New("captions are not supported here")).WithIsCertain(true).WithErrorAsMessage()
+	ErrLocationMessagesNotAllowed      error = WrapErrorInStatus(errors.New("location messages are not supported here")).WithIsCertain(true).WithErrorAsMessage()
+	ErrEditTargetTooOld                error = WrapErrorInStatus(errors.New("the message is too old to be edited")).WithIsCertain(true).WithErrorAsMessage()
+	ErrEditTargetTooManyEdits          error = WrapErrorInStatus(errors.New("the message has been edited too many times")).WithIsCertain(true).WithErrorAsMessage()
+	ErrReactionsNotSupported           error = WrapErrorInStatus(errors.New("this bridge does not support reactions")).WithIsCertain(true).WithErrorAsMessage()
+	ErrRoomMetadataNotSupported        error = WrapErrorInStatus(errors.New("this bridge does not support changing room metadata")).WithIsCertain(true).WithErrorAsMessage().WithSendNotice(false)
+	ErrRedactionsNotSupported          error = WrapErrorInStatus(errors.New("this bridge does not support deleting messages")).WithIsCertain(true).WithErrorAsMessage()
+	ErrUnexpectedParsedContentType     error = WrapErrorInStatus(errors.New("unexpected parsed content type")).WithErrorAsMessage().WithIsCertain(true).WithSendNotice(true)
+	ErrDatabaseError                   error = WrapErrorInStatus(errors.New("database error")).WithMessage("internal database error").WithIsCertain(true).WithSendNotice(true)
+	ErrTargetMessageNotFound           error = WrapErrorInStatus(errors.New("target message not found")).WithErrorAsMessage().WithIsCertain(true).WithSendNotice(false)
+	ErrUnsupportedMessageType          error = WrapErrorInStatus(errors.New("unsupported message type")).WithErrorAsMessage().WithIsCertain(true).WithSendNotice(true)
+	ErrMediaDownloadFailed             error = WrapErrorInStatus(errors.New("failed to download media")).WithMessage("failed to download media").WithIsCertain(true).WithSendNotice(true)
+	ErrMediaReuploadFailed             error = WrapErrorInStatus(errors.New("failed to reupload media")).WithMessage("failed to reupload media").WithIsCertain(true).WithSendNotice(true)
+	ErrMediaConvertFailed              error = WrapErrorInStatus(errors.New("failed to convert media")).WithMessage("failed to convert media").WithIsCertain(true).WithSendNotice(true)
+	ErrMembershipNotSupported          error = WrapErrorInStatus(errors.New("this bridge does not support changing group membership")).WithIsCertain(true).WithErrorAsMessage().WithSendNotice(false)
+)
+
+// RespError is a class of error that certain network interface methods can return to ensure that the error
+// is properly translated into an HTTP error when the method is called via the provisioning API.
+//
+// However, unlike mautrix.RespError, this does not include the error code
+// in the message shown to users when used outside HTTP contexts.
+type RespError mautrix.RespError
+
+func (re RespError) Error() string {
+	return re.Err
+}
+
+func (re RespError) Is(err error) bool {
+	var e2 RespError
+	if errors.As(err, &e2) {
+		return e2.Err == re.Err
+	}
+	return errors.Is(err, mautrix.RespError(re))
+}
+
+func WrapRespErr(err error, code string, status int) RespError {
+	return RespError{ErrCode: code, Err: err.Error(), StatusCode: status}
+}

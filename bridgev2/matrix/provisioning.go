@@ -9,6 +9,7 @@ package matrix
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -355,19 +356,13 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 	)
 	if err != nil {
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to create login process")
-		jsonResponse(w, http.StatusInternalServerError, &mautrix.RespError{
-			Err:     "Failed to create login process",
-			ErrCode: "M_UNKNOWN",
-		})
+		respondMaybeCustomError(w, err, "Internal error creating login process")
 		return
 	}
 	firstStep, err := login.Start(r.Context())
 	if err != nil {
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to start login")
-		jsonResponse(w, http.StatusInternalServerError, &mautrix.RespError{
-			Err:     "Failed to start login",
-			ErrCode: "M_UNKNOWN",
-		})
+		respondMaybeCustomError(w, err, "Internal error starting login")
 		return
 	}
 	loginID := xid.New().String()
@@ -419,10 +414,7 @@ func (prov *ProvisioningAPI) PostLoginSubmitInput(w http.ResponseWriter, r *http
 	}
 	if err != nil {
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to submit input")
-		jsonResponse(w, http.StatusInternalServerError, &mautrix.RespError{
-			Err:     "Failed to submit input",
-			ErrCode: "M_UNKNOWN",
-		})
+		respondMaybeCustomError(w, err, "Internal error submitting input")
 		return
 	}
 	login.NextStep = nextStep
@@ -516,6 +508,24 @@ func (prov *ProvisioningAPI) GetLoginForRequest(w http.ResponseWriter, r *http.R
 	return userLogin
 }
 
+func respondMaybeCustomError(w http.ResponseWriter, err error, message string) {
+	var mautrixRespErr mautrix.RespError
+	var bv2RespErr bridgev2.RespError
+	if errors.As(err, &bv2RespErr) {
+		mautrixRespErr = mautrix.RespError(bv2RespErr)
+	} else if !errors.As(err, &mautrixRespErr) {
+		mautrixRespErr = mautrix.RespError{
+			Err:        message,
+			ErrCode:    "M_UNKNOWN",
+			StatusCode: http.StatusInternalServerError,
+		}
+	}
+	if mautrixRespErr.StatusCode == 0 {
+		mautrixRespErr.StatusCode = http.StatusInternalServerError
+	}
+	jsonResponse(w, mautrixRespErr.StatusCode, mautrixRespErr)
+}
+
 type RespResolveIdentifier struct {
 	ID          networkid.UserID    `json:"id"`
 	Name        string              `json:"name,omitempty"`
@@ -541,10 +551,7 @@ func (prov *ProvisioningAPI) doResolveIdentifier(w http.ResponseWriter, r *http.
 	resp, err := api.ResolveIdentifier(r.Context(), mux.Vars(r)["identifier"], createChat)
 	if err != nil {
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to resolve identifier")
-		jsonResponse(w, http.StatusInternalServerError, &mautrix.RespError{
-			Err:     fmt.Sprintf("Failed to resolve identifier: %v", err),
-			ErrCode: "M_UNKNOWN",
-		})
+		respondMaybeCustomError(w, err, "Internal error resolving identifier")
 		return
 	} else if resp == nil {
 		jsonResponse(w, http.StatusNotFound, &mautrix.RespError{
@@ -617,10 +624,7 @@ func (prov *ProvisioningAPI) GetContactList(w http.ResponseWriter, r *http.Reque
 	resp, err := api.GetContactList(r.Context())
 	if err != nil {
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to get contact list")
-		jsonResponse(w, http.StatusNotImplemented, &mautrix.RespError{
-			Err:     fmt.Sprintf("Failed to get contact list: %v", err),
-			ErrCode: "M_UNKNOWN",
-		})
+		respondMaybeCustomError(w, err, "Internal error fetching contact list")
 		return
 	}
 	apiResp := &RespGetContactList{

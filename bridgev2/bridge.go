@@ -8,7 +8,6 @@ package bridgev2
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 
@@ -21,8 +20,6 @@ import (
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/id"
 )
-
-var ErrNotLoggedIn = errors.New("not logged in")
 
 type CommandProcessor interface {
 	Handle(ctx context.Context, roomID id.RoomID, eventID id.EventID, user *User, message string, replyTo id.EventID)

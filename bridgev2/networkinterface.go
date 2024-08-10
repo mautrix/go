@@ -8,7 +8,6 @@ package bridgev2
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -226,8 +225,6 @@ type NetworkConnector interface {
 	// the user and will execute the requested flow. The actual work should start when [LoginProcess.Start] is called.
 	CreateLogin(ctx context.Context, user *User, flowID string) (LoginProcess, error)
 }
-
-var ErrDirectMediaNotEnabled = errors.New("direct media is not enabled")
 
 // DirectMediableNetwork is an optional interface that network connectors can implement to support direct media access.
 //
@@ -572,14 +569,6 @@ type CreateChatResponse struct {
 	Portal     *Portal
 	PortalInfo *ChatInfo
 }
-
-// ErrResolveIdentifierTryNext can be returned by ResolveIdentifier to signal that the identifier is valid,
-// but can't be reached by the current login, and the caller should try the next login if there are more.
-//
-// This should generally only be returned when resolving internal IDs (which happens when initiating chats via Matrix).
-// For example, Google Messages would return this when trying to resolve another login's user ID,
-// and Telegram would return this when the access hash isn't available.
-var ErrResolveIdentifierTryNext = errors.New("that identifier is not available via this login")
 
 // IdentifierResolvingNetworkAPI is an optional interface that network connectors can implement to support starting new direct chats.
 type IdentifierResolvingNetworkAPI interface {
