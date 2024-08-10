@@ -18,6 +18,7 @@ import (
 
 	"github.com/tidwall/sjson"
 	"go.mau.fi/util/jsontime"
+	"go.mau.fi/util/ptr"
 	"golang.org/x/exp/maps"
 
 	"maunium.net/go/mautrix"
@@ -89,10 +90,10 @@ type BridgeState struct {
 	Error   BridgeStateErrorCode `json:"error,omitempty"`
 	Message string               `json:"message,omitempty"`
 
-	UserID        id.UserID     `json:"user_id,omitempty"`
-	RemoteID      string        `json:"remote_id,omitempty"`
-	RemoteName    string        `json:"remote_name,omitempty"`
-	RemoteProfile RemoteProfile `json:"remote_profile,omitempty"`
+	UserID        id.UserID      `json:"user_id,omitempty"`
+	RemoteID      string         `json:"remote_id,omitempty"`
+	RemoteName    string         `json:"remote_name,omitempty"`
+	RemoteProfile *RemoteProfile `json:"remote_profile,omitempty"`
 
 	Reason string                 `json:"reason,omitempty"`
 	Info   map[string]interface{} `json:"info,omitempty"`
@@ -186,7 +187,7 @@ func (pong *BridgeState) SendHTTP(ctx context.Context, url, token string) error 
 func (pong *BridgeState) ShouldDeduplicate(newPong *BridgeState) bool {
 	return pong != nil &&
 		pong.StateEvent == newPong.StateEvent &&
-		pong.RemoteProfile == newPong.RemoteProfile &&
+		ptr.Val(pong.RemoteProfile) == ptr.Val(newPong.RemoteProfile) &&
 		pong.Error == newPong.Error &&
 		maps.EqualFunc(pong.Info, newPong.Info, reflect.DeepEqual) &&
 		pong.Timestamp.Add(time.Duration(pong.TTL)*time.Second).After(time.Now())

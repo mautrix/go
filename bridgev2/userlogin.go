@@ -476,7 +476,7 @@ func (ul *UserLogin) FillBridgeState(state status.BridgeState) status.BridgeStat
 	state.UserID = ul.UserMXID
 	state.RemoteID = string(ul.ID)
 	state.RemoteName = ul.RemoteName
-	state.RemoteProfile = ul.RemoteProfile
+	state.RemoteProfile = &ul.RemoteProfile
 	filler, ok := ul.Client.(status.StandaloneCustomBridgeStateFiller)
 	if ok {
 		return filler.FillBridgeState(state)

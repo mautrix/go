@@ -272,19 +272,25 @@ type RespWhoami struct {
 	BridgeBot     id.UserID            `json:"bridge_bot"`
 	CommandPrefix string               `json:"command_prefix"`
 
-	ManagementRoom id.RoomID         `json:"management_room"`
+	ManagementRoom id.RoomID         `json:"management_room,omitempty"`
 	Logins         []RespWhoamiLogin `json:"logins"`
 }
 
 type RespWhoamiLogin struct {
-	StateEvent  status.BridgeStateEvent `json:"state_event"`
-	StateTS     jsontime.Unix           `json:"state_ts"`
-	StateReason string                  `json:"state_reason,omitempty"`
-	StateInfo   map[string]any          `json:"state_info,omitempty"`
-	ID          networkid.UserLoginID   `json:"id"`
-	Name        string                  `json:"name"`
-	Profile     status.RemoteProfile    `json:"profile"`
-	SpaceRoom   id.RoomID               `json:"space_room"`
+	// Deprecated
+	StateEvent status.BridgeStateEvent `json:"state_event"`
+	// Deprecated
+	StateTS jsontime.Unix `json:"state_ts"`
+	// Deprecated
+	StateReason string `json:"state_reason,omitempty"`
+	// Deprecated
+	StateInfo map[string]any `json:"state_info,omitempty"`
+
+	State     status.BridgeState    `json:"state"`
+	ID        networkid.UserLoginID `json:"id"`
+	Name      string                `json:"name"`
+	Profile   status.RemoteProfile  `json:"profile"`
+	SpaceRoom id.RoomID             `json:"space_room,omitempty"`
 }
 
 func (prov *ProvisioningAPI) GetWhoami(w http.ResponseWriter, r *http.Request) {
@@ -301,11 +307,17 @@ func (prov *ProvisioningAPI) GetWhoami(w http.ResponseWriter, r *http.Request) {
 	resp.Logins = make([]RespWhoamiLogin, len(logins))
 	for i, login := range logins {
 		prevState := login.BridgeState.GetPrevUnsent()
+		// Clear redundant fields
+		prevState.UserID = ""
+		prevState.RemoteID = ""
+		prevState.RemoteName = ""
+		prevState.RemoteProfile = nil
 		resp.Logins[i] = RespWhoamiLogin{
 			StateEvent:  prevState.StateEvent,
 			StateTS:     prevState.Timestamp,
 			StateReason: prevState.Reason,
 			StateInfo:   prevState.Info,
+			State:       prevState,
 
 			ID:        login.ID,
 			Name:      login.RemoteName,
