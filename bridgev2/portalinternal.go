@@ -49,6 +49,10 @@ func (portal *PortalInternals) SendErrorStatus(ctx context.Context, evt *event.E
 	(*Portal)(portal).sendErrorStatus(ctx, evt, err)
 }
 
+func (portal *PortalInternals) CheckConfusableName(ctx context.Context, userID id.UserID, name string) bool {
+	return (*Portal)(portal).checkConfusableName(ctx, userID, name)
+}
+
 func (portal *PortalInternals) HandleMatrixEvent(sender *User, evt *event.Event) {
 	(*Portal)(portal).handleMatrixEvent(sender, evt)
 }
@@ -87,6 +91,10 @@ func (portal *PortalInternals) HandleMatrixEdit(ctx context.Context, sender *Use
 
 func (portal *PortalInternals) HandleMatrixReaction(ctx context.Context, sender *UserLogin, evt *event.Event) {
 	(*Portal)(portal).handleMatrixReaction(ctx, sender, evt)
+}
+
+func (portal *PortalInternals) HandleMatrixMembership(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) {
+	(*Portal)(portal).handleMatrixMembership(ctx, sender, origSender, evt)
 }
 
 func (portal *PortalInternals) HandleMatrixRedaction(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) {
@@ -263,4 +271,44 @@ func (portal *PortalInternals) UnlockedDelete(ctx context.Context) error {
 
 func (portal *PortalInternals) UnlockedDeleteCache() {
 	(*Portal)(portal).unlockedDeleteCache()
+}
+
+func (portal *PortalInternals) DoForwardBackfill(ctx context.Context, source *UserLogin, lastMessage *database.Message) {
+	(*Portal)(portal).doForwardBackfill(ctx, source, lastMessage)
+}
+
+func (portal *PortalInternals) DoThreadBackfill(ctx context.Context, source *UserLogin, threadID networkid.MessageID) {
+	(*Portal)(portal).doThreadBackfill(ctx, source, threadID)
+}
+
+func (portal *PortalInternals) SendBackfill(ctx context.Context, source *UserLogin, messages []*BackfillMessage, forceForward, markRead, inThread bool) {
+	(*Portal)(portal).sendBackfill(ctx, source, messages, forceForward, markRead, inThread)
+}
+
+func (portal *PortalInternals) SendBatch(ctx context.Context, source *UserLogin, messages []*BackfillMessage, forceForward, markRead, allowNotification bool) {
+	(*Portal)(portal).sendBatch(ctx, source, messages, forceForward, markRead, allowNotification)
+}
+
+func (portal *PortalInternals) SendLegacyBackfill(ctx context.Context, source *UserLogin, messages []*BackfillMessage, markRead bool) {
+	(*Portal)(portal).sendLegacyBackfill(ctx, source, messages, markRead)
+}
+
+func (portal *PortalInternals) UnlockedReID(ctx context.Context, target networkid.PortalKey) error {
+	return (*Portal)(portal).unlockedReID(ctx, target)
+}
+
+func (portal *PortalInternals) CreateParentAndAddToSpace(ctx context.Context, source *UserLogin) {
+	(*Portal)(portal).createParentAndAddToSpace(ctx, source)
+}
+
+func (portal *PortalInternals) AddToParentSpaceAndSave(ctx context.Context, save bool) {
+	(*Portal)(portal).addToParentSpaceAndSave(ctx, save)
+}
+
+func (portal *PortalInternals) ToggleSpace(ctx context.Context, spaceID id.RoomID, canonical, remove bool) error {
+	return (*Portal)(portal).toggleSpace(ctx, spaceID, canonical, remove)
+}
+
+func (portal *PortalInternals) SetMXIDToExistingRoom(roomID id.RoomID) bool {
+	return (*Portal)(portal).setMXIDToExistingRoom(roomID)
 }

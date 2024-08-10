@@ -67,19 +67,26 @@ func getTypeName(expr ast.Expr) string {
 	}
 }
 
+var write func(str string)
+var writef func(format string, args ...any)
+
 func main() {
 	fset := token.NewFileSet()
-	f := exerrors.Must(parser.ParseFile(fset, "portal.go", nil, parser.SkipObjectResolution))
+	fileNames := []string{"portal.go", "portalbackfill.go", "portalreid.go", "space.go", "matrixinvite.go"}
+	files := make([]*ast.File, len(fileNames))
+	for i, name := range fileNames {
+		files[i] = exerrors.Must(parser.ParseFile(fset, name, nil, parser.SkipObjectResolution))
+	}
 	file := exerrors.Must(os.OpenFile("portalinternal.go", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644))
-	write := func(str string) {
+	write = func(str string) {
 		exerrors.Must(file.WriteString(str))
 	}
-	writef := func(format string, args ...any) {
+	writef = func(format string, args ...any) {
 		exerrors.Must(fmt.Fprintf(file, format, args...))
 	}
 	write(header)
 	write("import (\n")
-	for _, i := range f.Imports {
+	for _, i := range files[0].Imports {
 		write("\t")
 		if i.Name != nil {
 			writef("%s ", i.Name.Name)
@@ -88,6 +95,13 @@ func main() {
 	}
 	write(")\n")
 	write(postImportHeader)
+	for _, f := range files {
+		processFile(f)
+	}
+	exerrors.PanicIfNotNil(file.Close())
+}
+
+func processFile(f *ast.File) {
 	ast.Inspect(f, func(node ast.Node) (retVal bool) {
 		retVal = true
 		funcDecl, ok := node.(*ast.FuncDecl)
@@ -156,5 +170,4 @@ func main() {
 		write(")\n}\n")
 		return
 	})
-	exerrors.PanicIfNotNil(file.Close())
 }
