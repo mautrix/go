@@ -77,6 +77,10 @@ func (re RespError) Is(err error) bool {
 	return errors.Is(err, mautrix.RespError(re))
 }
 
-func WrapRespErr(err error, code string, status int) RespError {
+func WrapRespErrManual(err error, code string, status int) RespError {
 	return RespError{ErrCode: code, Err: err.Error(), StatusCode: status}
+}
+
+func WrapRespErr(err error, target mautrix.RespError) RespError {
+	return RespError{ErrCode: target.ErrCode, Err: err.Error(), StatusCode: target.StatusCode}
 }

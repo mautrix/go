@@ -25,43 +25,43 @@ import (
 //	}
 var (
 	// Forbidden access, e.g. joining a room without permission, failed login.
-	MForbidden = RespError{ErrCode: "M_FORBIDDEN"}
+	MForbidden = RespError{ErrCode: "M_FORBIDDEN", StatusCode: http.StatusForbidden}
 	// Unrecognized request, e.g. the endpoint does not exist or is not implemented.
-	MUnrecognized = RespError{ErrCode: "M_UNRECOGNIZED"}
+	MUnrecognized = RespError{ErrCode: "M_UNRECOGNIZED", StatusCode: http.StatusNotFound}
 	// The access token specified was not recognised.
-	MUnknownToken = RespError{ErrCode: "M_UNKNOWN_TOKEN"}
+	MUnknownToken = RespError{ErrCode: "M_UNKNOWN_TOKEN", StatusCode: http.StatusUnauthorized}
 	// No access token was specified for the request.
-	MMissingToken = RespError{ErrCode: "M_MISSING_TOKEN"}
+	MMissingToken = RespError{ErrCode: "M_MISSING_TOKEN", StatusCode: http.StatusUnauthorized}
 	// Request contained valid JSON, but it was malformed in some way, e.g. missing required keys, invalid values for keys.
-	MBadJSON = RespError{ErrCode: "M_BAD_JSON"}
+	MBadJSON = RespError{ErrCode: "M_BAD_JSON", StatusCode: http.StatusBadRequest}
 	// Request did not contain valid JSON.
-	MNotJSON = RespError{ErrCode: "M_NOT_JSON"}
+	MNotJSON = RespError{ErrCode: "M_NOT_JSON", StatusCode: http.StatusBadRequest}
 	// No resource was found for this request.
-	MNotFound = RespError{ErrCode: "M_NOT_FOUND"}
+	MNotFound = RespError{ErrCode: "M_NOT_FOUND", StatusCode: http.StatusNotFound}
 	// Too many requests have been sent in a short period of time. Wait a while then try again.
-	MLimitExceeded = RespError{ErrCode: "M_LIMIT_EXCEEDED"}
+	MLimitExceeded = RespError{ErrCode: "M_LIMIT_EXCEEDED", StatusCode: http.StatusTooManyRequests}
 	// The user ID associated with the request has been deactivated.
 	// Typically for endpoints that prove authentication, such as /login.
 	MUserDeactivated = RespError{ErrCode: "M_USER_DEACTIVATED"}
 	// Encountered when trying to register a user ID which has been taken.
-	MUserInUse = RespError{ErrCode: "M_USER_IN_USE"}
+	MUserInUse = RespError{ErrCode: "M_USER_IN_USE", StatusCode: http.StatusBadRequest}
 	// Encountered when trying to register a user ID which is not valid.
-	MInvalidUsername = RespError{ErrCode: "M_INVALID_USERNAME"}
+	MInvalidUsername = RespError{ErrCode: "M_INVALID_USERNAME", StatusCode: http.StatusBadRequest}
 	// Sent when the room alias given to the createRoom API is already in use.
-	MRoomInUse = RespError{ErrCode: "M_ROOM_IN_USE"}
+	MRoomInUse = RespError{ErrCode: "M_ROOM_IN_USE", StatusCode: http.StatusBadRequest}
 	// The state change requested cannot be performed, such as attempting to unban a user who is not banned.
 	MBadState = RespError{ErrCode: "M_BAD_STATE"}
 	// The request or entity was too large.
-	MTooLarge = RespError{ErrCode: "M_TOO_LARGE"}
+	MTooLarge = RespError{ErrCode: "M_TOO_LARGE", StatusCode: http.StatusRequestEntityTooLarge}
 	// The resource being requested is reserved by an application service, or the application service making the request has not created the resource.
-	MExclusive = RespError{ErrCode: "M_EXCLUSIVE"}
+	MExclusive = RespError{ErrCode: "M_EXCLUSIVE", StatusCode: http.StatusBadRequest}
 	// The client's request to create a room used a room version that the server does not support.
 	MUnsupportedRoomVersion = RespError{ErrCode: "M_UNSUPPORTED_ROOM_VERSION"}
 	// The client attempted to join a room that has a version the server does not support.
 	// Inspect the room_version property of the error response for the room's version.
 	MIncompatibleRoomVersion = RespError{ErrCode: "M_INCOMPATIBLE_ROOM_VERSION"}
 	// The client specified a parameter that has the wrong value.
-	MInvalidParam = RespError{ErrCode: "M_INVALID_PARAM"}
+	MInvalidParam = RespError{ErrCode: "M_INVALID_PARAM", StatusCode: http.StatusBadRequest}
 
 	MURLNotSet         = RespError{ErrCode: "M_URL_NOT_SET"}
 	MBadStatus         = RespError{ErrCode: "M_BAD_STATUS"}
