@@ -225,7 +225,7 @@ func (ms *MessageStatus) ToNoticeEvent(evt *MessageStatusEventInfo) *event.Messa
 		evtType = "redaction"
 	}
 	msg := ms.Message
-	if ms.ErrorAsMessage {
+	if ms.ErrorAsMessage || msg == "" {
 		msg = ms.InternalError.Error()
 	}
 	messagePrefix := fmt.Sprintf("Your %s %s bridged", evtType, certainty)
