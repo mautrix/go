@@ -1,4 +1,4 @@
-// Copyright (c) 2023 Tulir Asokan
+// Copyright (c) 2024 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -10,15 +10,13 @@ package matrix
 
 import (
 	"errors"
-
-	"maunium.net/go/mautrix/bridge"
 )
 
-func NewCryptoHelper(bridge *bridge.Bridge) bridge.Crypto {
-	if bridge.Config.Bridge.GetEncryptionConfig().Allow {
-		bridge.ZLog.Warn().Msg("Bridge built without end-to-bridge encryption, but encryption is enabled in config")
+func NewCryptoHelper(c *Connector) Crypto {
+	if c.Config.Encryption.Allow {
+		c.Log.Warn().Msg("Bridge built without end-to-bridge encryption, but encryption is enabled in config")
 	} else {
-		bridge.ZLog.Debug().Msg("Bridge built without end-to-bridge encryption")
+		c.Log.Debug().Msg("Bridge built without end-to-bridge encryption")
 	}
 	return nil
 }
