@@ -627,16 +627,56 @@ var (
 	Unban         = MembershipChangeType{From: event.MembershipBan, To: event.MembershipLeave}
 )
 
+type GhostOrUserLogin interface {
+	isGhostOrUserLogin()
+}
+
+func (*Ghost) isGhostOrUserLogin()     {}
+func (*UserLogin) isGhostOrUserLogin() {}
+
 type MatrixMembershipChange struct {
-	MatrixEventBase[*event.MemberEventContent]
-	TargetGhost     *Ghost
+	MatrixRoomMeta[*event.MemberEventContent]
+	Target GhostOrUserLogin
+	Type   MembershipChangeType
+
+	// Deprecated: Use Target instead
+	TargetGhost *Ghost
+	// Deprecated: Use Target instead
 	TargetUserLogin *UserLogin
-	Type            MembershipChangeType
 }
 
 type MembershipHandlingNetworkAPI interface {
 	NetworkAPI
 	HandleMatrixMembership(ctx context.Context, msg *MatrixMembershipChange) (bool, error)
+}
+
+type SinglePowerLevelChange struct {
+	OrigLevel int
+	NewLevel  int
+	NewIsSet  bool
+}
+
+type UserPowerLevelChange struct {
+	Target GhostOrUserLogin
+	SinglePowerLevelChange
+}
+
+type MatrixPowerLevelChange struct {
+	MatrixRoomMeta[*event.PowerLevelsEventContent]
+	Users         map[id.UserID]*UserPowerLevelChange
+	Events        map[string]*SinglePowerLevelChange
+	UsersDefault  *SinglePowerLevelChange
+	EventsDefault *SinglePowerLevelChange
+	StateDefault  *SinglePowerLevelChange
+	Invite        *SinglePowerLevelChange
+	Kick          *SinglePowerLevelChange
+	Ban           *SinglePowerLevelChange
+	Redact        *SinglePowerLevelChange
+}
+
+type PowerLevelHandlingNetworkAPI interface {
+	NetworkAPI
+	HandleMatrixPowerLevels(ctx context.Context, msg *MatrixPowerLevelChange) (bool, error)
 }
 
 type PushType int

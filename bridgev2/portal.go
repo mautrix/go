@@ -494,6 +494,8 @@ func (portal *Portal) handleMatrixEvent(sender *User, evt *event.Event) {
 		handleMatrixAccountData(portal, ctx, login, evt, MuteHandlingNetworkAPI.HandleMute)
 	case event.StateMember:
 		portal.handleMatrixMembership(ctx, login, origSender, evt)
+	case event.StatePowerLevels:
+		portal.handleMatrixPowerLevels(ctx, login, origSender, evt)
 	}
 }
 
@@ -1150,58 +1152,80 @@ func handleMatrixAccountData[APIType any, ContentType any](
 	}
 }
 
+func (portal *Portal) getTargetUser(ctx context.Context, userID id.UserID) (GhostOrUserLogin, error) {
+	if targetGhost, err := portal.Bridge.GetGhostByMXID(ctx, userID); err != nil {
+		return nil, fmt.Errorf("failed to get ghost: %w", err)
+	} else if targetGhost != nil {
+		return targetGhost, nil
+	} else if targetUser, err := portal.Bridge.GetUserByMXID(ctx, userID); err != nil {
+		return nil, fmt.Errorf("failed to get user: %w", err)
+	} else if targetUserLogin, _, err := portal.FindPreferredLogin(ctx, targetUser, false); err != nil {
+		return nil, fmt.Errorf("failed to find preferred login: %w", err)
+	} else if targetUserLogin != nil {
+		return targetUserLogin, nil
+	} else {
+		// Return raw nil as a separate case to ensure a typed nil isn't returned
+		return nil, nil
+	}
+}
+
 func (portal *Portal) handleMatrixMembership(
 	ctx context.Context,
 	sender *UserLogin,
 	origSender *OrigSender,
 	evt *event.Event,
 ) {
-	api, ok := sender.Client.(MembershipHandlingNetworkAPI)
-	if !ok {
-		portal.sendErrorStatus(ctx, evt, ErrMembershipNotSupported)
-		return
-	}
 	log := zerolog.Ctx(ctx)
-	targetMXID := id.UserID(*evt.StateKey)
-	isSelf := sender.User.MXID == targetMXID
-	var err error
-	var targetUserLogin *UserLogin
-	targetGhost, err := portal.Bridge.GetGhostByMXID(ctx, targetMXID)
-	if err != nil {
-		log.Err(err).Stringer("mxid", targetMXID).Msg("Failed to get target ghost")
+	content, ok := evt.Content.Parsed.(*event.MemberEventContent)
+	if !ok {
+		log.Error().Type("content_type", evt.Content.Parsed).Msg("Unexpected parsed content type")
+		portal.sendErrorStatus(ctx, evt, fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed))
 		return
-	}
-	if targetGhost == nil {
-		targetUser, err := portal.Bridge.GetUserByMXID(ctx, targetMXID)
-		if err != nil {
-			log.Err(err).Stringer("mxid", targetMXID).Msg("Failed to get target user")
-			return
-		}
-		targetUserLogin, _, err = portal.FindPreferredLogin(ctx, targetUser, false)
-		if err != nil {
-			log.Err(err).Stringer("mxid", targetMXID).Msg("Failed to get target user login")
-			return
-		}
 	}
 	prevContent := &event.MemberEventContent{Membership: event.MembershipLeave}
 	if evt.Unsigned.PrevContent != nil {
 		_ = evt.Unsigned.PrevContent.ParseRaw(evt.Type)
 		prevContent, _ = evt.Unsigned.PrevContent.Parsed.(*event.MemberEventContent)
 	}
+	log.UpdateContext(func(c zerolog.Context) zerolog.Context {
+		return c.
+			Str("membership", string(content.Membership)).
+			Str("prev_membership", string(prevContent.Membership)).
+			Str("target_user_id", evt.GetStateKey())
+	})
+	api, ok := sender.Client.(MembershipHandlingNetworkAPI)
+	if !ok {
+		portal.sendErrorStatus(ctx, evt, ErrMembershipNotSupported)
+		return
+	}
+	targetMXID := id.UserID(*evt.StateKey)
+	isSelf := sender.User.MXID == targetMXID
+	target, err := portal.getTargetUser(ctx, targetMXID)
+	if err != nil {
+		log.Err(err).Msg("Failed to get member event target")
+		portal.sendErrorStatus(ctx, evt, err)
+		return
+	}
 
-	content := evt.Content.AsMember()
 	membershipChangeType := MembershipChangeType{From: prevContent.Membership, To: content.Membership, IsSelf: isSelf}
 	if !portal.Bridge.Config.BridgeMatrixLeave && membershipChangeType == Leave {
 		log.Debug().Msg("Dropping leave event")
+		//portal.sendErrorStatus(ctx, evt, ErrIgnoringLeaveEvent)
 		return
 	}
+	targetGhost, _ := target.(*Ghost)
+	targetUserLogin, _ := target.(*UserLogin)
 	membershipChange := &MatrixMembershipChange{
-		MatrixEventBase: MatrixEventBase[*event.MemberEventContent]{
-			Event:      evt,
-			Content:    content,
-			Portal:     portal,
-			OrigSender: origSender,
+		MatrixRoomMeta: MatrixRoomMeta[*event.MemberEventContent]{
+			MatrixEventBase: MatrixEventBase[*event.MemberEventContent]{
+				Event:      evt,
+				Content:    content,
+				Portal:     portal,
+				OrigSender: origSender,
+			},
+			PrevContent: prevContent,
 		},
+		Target:          target,
 		TargetGhost:     targetGhost,
 		TargetUserLogin: targetUserLogin,
 		Type:            membershipChangeType,
@@ -1209,6 +1233,101 @@ func (portal *Portal) handleMatrixMembership(
 	_, err = api.HandleMatrixMembership(ctx, membershipChange)
 	if err != nil {
 		log.Err(err).Msg("Failed to handle Matrix membership change")
+		portal.sendErrorStatus(ctx, evt, err)
+		return
+	}
+}
+
+func makePLChange(old, new int, newIsSet bool) *SinglePowerLevelChange {
+	if old == new {
+		return nil
+	}
+	return &SinglePowerLevelChange{OrigLevel: old, NewLevel: new, NewIsSet: newIsSet}
+}
+
+func getUniqueKeys[Key comparable, Value any](maps ...map[Key]Value) map[Key]struct{} {
+	unique := make(map[Key]struct{})
+	for _, m := range maps {
+		for k := range m {
+			unique[k] = struct{}{}
+		}
+	}
+	return unique
+}
+
+func (portal *Portal) handleMatrixPowerLevels(
+	ctx context.Context,
+	sender *UserLogin,
+	origSender *OrigSender,
+	evt *event.Event,
+) {
+	log := zerolog.Ctx(ctx)
+	content, ok := evt.Content.Parsed.(*event.PowerLevelsEventContent)
+	if !ok {
+		log.Error().Type("content_type", evt.Content.Parsed).Msg("Unexpected parsed content type")
+		portal.sendErrorStatus(ctx, evt, fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed))
+		return
+	}
+	api, ok := sender.Client.(PowerLevelHandlingNetworkAPI)
+	if !ok {
+		portal.sendErrorStatus(ctx, evt, ErrPowerLevelsNotSupported)
+		return
+	}
+	prevContent := &event.PowerLevelsEventContent{}
+	if evt.Unsigned.PrevContent != nil {
+		_ = evt.Unsigned.PrevContent.ParseRaw(evt.Type)
+		prevContent, _ = evt.Unsigned.PrevContent.Parsed.(*event.PowerLevelsEventContent)
+	}
+
+	plChange := &MatrixPowerLevelChange{
+		MatrixRoomMeta: MatrixRoomMeta[*event.PowerLevelsEventContent]{
+			MatrixEventBase: MatrixEventBase[*event.PowerLevelsEventContent]{
+				Event:      evt,
+				Content:    content,
+				Portal:     portal,
+				OrigSender: origSender,
+			},
+			PrevContent: prevContent,
+		},
+		Users:         make(map[id.UserID]*UserPowerLevelChange),
+		Events:        make(map[string]*SinglePowerLevelChange),
+		UsersDefault:  makePLChange(prevContent.UsersDefault, content.UsersDefault, true),
+		EventsDefault: makePLChange(prevContent.EventsDefault, content.EventsDefault, true),
+		StateDefault:  makePLChange(prevContent.StateDefault(), content.StateDefault(), content.StateDefaultPtr != nil),
+		Invite:        makePLChange(prevContent.Invite(), content.Invite(), content.InvitePtr != nil),
+		Kick:          makePLChange(prevContent.Kick(), content.Kick(), content.KickPtr != nil),
+		Ban:           makePLChange(prevContent.Ban(), content.Ban(), content.BanPtr != nil),
+		Redact:        makePLChange(prevContent.Redact(), content.Redact(), content.RedactPtr != nil),
+	}
+	for eventType := range getUniqueKeys(content.Events, prevContent.Events) {
+		newLevel, hasNewLevel := content.Events[eventType]
+		if !hasNewLevel {
+			// TODO this doesn't handle state events properly
+			newLevel = content.EventsDefault
+		}
+		if change := makePLChange(prevContent.Events[eventType], newLevel, hasNewLevel); change != nil {
+			plChange.Events[eventType] = change
+		}
+	}
+	for user := range getUniqueKeys(content.Users, prevContent.Users) {
+		_, hasNewLevel := content.Users[user]
+		change := makePLChange(prevContent.GetUserLevel(user), content.GetUserLevel(user), hasNewLevel)
+		if change == nil {
+			continue
+		}
+		target, err := portal.getTargetUser(ctx, user)
+		if err != nil {
+			log.Err(err).Stringer("target_user_id", user).Msg("Failed to get user for power level change")
+		} else {
+			plChange.Users[user] = &UserPowerLevelChange{
+				Target:                 target,
+				SinglePowerLevelChange: *change,
+			}
+		}
+	}
+	_, err := api.HandleMatrixPowerLevels(ctx, plChange)
+	if err != nil {
+		log.Err(err).Msg("Failed to handle Matrix power level change")
 		portal.sendErrorStatus(ctx, evt, err)
 		return
 	}
@@ -2368,10 +2487,10 @@ type ChatMemberList struct {
 	OtherUserID networkid.UserID
 
 	Members     []ChatMember
-	PowerLevels *PowerLevelChanges
+	PowerLevels *PowerLevelOverrides
 }
 
-type PowerLevelChanges struct {
+type PowerLevelOverrides struct {
 	Events        map[event.Type]int
 	UsersDefault  *int
 	EventsDefault *int
@@ -2384,11 +2503,14 @@ type PowerLevelChanges struct {
 	Custom func(*event.PowerLevelsEventContent) bool
 }
 
+// Deprecated: renamed to PowerLevelOverrides
+type PowerLevelChanges = PowerLevelOverrides
+
 func allowChange(newLevel, oldLevel, actorLevel int) bool {
 	return newLevel <= actorLevel && oldLevel <= actorLevel
 }
 
-func (plc *PowerLevelChanges) Apply(actor id.UserID, content *event.PowerLevelsEventContent) (changed bool) {
+func (plc *PowerLevelOverrides) Apply(actor id.UserID, content *event.PowerLevelsEventContent) (changed bool) {
 	if plc == nil || content == nil {
 		return
 	}
