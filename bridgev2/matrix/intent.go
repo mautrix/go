@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -109,15 +110,23 @@ func (as *ASIntent) fillMemberEvent(ctx context.Context, roomID id.RoomID, userI
 	}
 }
 
-func (as *ASIntent) SendState(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string, content *event.Content, ts time.Time) (*mautrix.RespSendEvent, error) {
+func (as *ASIntent) SendState(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string, content *event.Content, ts time.Time) (resp *mautrix.RespSendEvent, err error) {
 	if eventType == event.StateMember {
 		as.fillMemberEvent(ctx, roomID, id.UserID(stateKey), content)
 	}
 	if ts.IsZero() {
-		return as.Matrix.SendStateEvent(ctx, roomID, eventType, stateKey, content)
+		resp, err = as.Matrix.SendStateEvent(ctx, roomID, eventType, stateKey, content)
 	} else {
-		return as.Matrix.SendMassagedStateEvent(ctx, roomID, eventType, stateKey, content, ts.UnixMilli())
+		resp, err = as.Matrix.SendMassagedStateEvent(ctx, roomID, eventType, stateKey, content, ts.UnixMilli())
 	}
+	if err != nil && eventType == event.StateMember {
+		var httpErr mautrix.HTTPError
+		if errors.As(err, &httpErr) && httpErr.RespError != nil &&
+			(strings.Contains(httpErr.RespError.Err, "is already in the room") || strings.Contains(httpErr.RespError.Err, "is already joined to room")) {
+			err = as.Matrix.StateStore.SetMembership(ctx, roomID, id.UserID(stateKey), event.MembershipJoin)
+		}
+	}
+	return resp, err
 }
 
 func (as *ASIntent) MarkRead(ctx context.Context, roomID id.RoomID, eventID id.EventID, ts time.Time) (err error) {
