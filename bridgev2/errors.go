@@ -8,6 +8,7 @@ package bridgev2
 
 import (
 	"errors"
+	"fmt"
 
 	"maunium.net/go/mautrix"
 )
@@ -75,6 +76,11 @@ func (re RespError) Is(err error) bool {
 		return e2.Err == re.Err
 	}
 	return errors.Is(err, mautrix.RespError(re))
+}
+
+func (re RespError) AppendMessage(append string, args ...any) RespError {
+	re.Err += fmt.Sprintf(append, args...)
+	return re
 }
 
 func WrapRespErrManual(err error, code string, status int) RespError {
