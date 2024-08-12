@@ -30,12 +30,14 @@ type ChatResync struct {
 
 	LatestMessageTS        time.Time
 	CheckNeedsBackfillFunc func(ctx context.Context, latestMessage *database.Message) (bool, error)
+	BundledBackfillData    any
 }
 
 var (
-	_ bridgev2.RemoteChatResync         = (*ChatResync)(nil)
-	_ bridgev2.RemoteChatResyncWithInfo = (*ChatResync)(nil)
-	_ bridgev2.RemoteChatResyncBackfill = (*ChatResync)(nil)
+	_ bridgev2.RemoteChatResync               = (*ChatResync)(nil)
+	_ bridgev2.RemoteChatResyncWithInfo       = (*ChatResync)(nil)
+	_ bridgev2.RemoteChatResyncBackfill       = (*ChatResync)(nil)
+	_ bridgev2.RemoteChatResyncBackfillBundle = (*ChatResync)(nil)
 )
 
 func (evt *ChatResync) CheckNeedsBackfill(ctx context.Context, latestMessage *database.Message) (bool, error) {
@@ -46,6 +48,10 @@ func (evt *ChatResync) CheckNeedsBackfill(ctx context.Context, latestMessage *da
 	} else {
 		return evt.LatestMessageTS.After(latestMessage.Timestamp), nil
 	}
+}
+
+func (evt *ChatResync) GetBundledBackfillData() any {
+	return evt.BundledBackfillData
 }
 
 func (evt *ChatResync) GetChatInfo(ctx context.Context, portal *bridgev2.Portal) (*bridgev2.ChatInfo, error) {

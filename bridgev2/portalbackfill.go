@@ -23,7 +23,7 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-func (portal *Portal) doForwardBackfill(ctx context.Context, source *UserLogin, lastMessage *database.Message) {
+func (portal *Portal) doForwardBackfill(ctx context.Context, source *UserLogin, lastMessage *database.Message, bundledData any) {
 	log := zerolog.Ctx(ctx).With().Str("action", "forward backfill").Logger()
 	ctx = log.WithContext(ctx)
 	api, ok := source.Client.(BackfillingNetworkAPI)
@@ -51,9 +51,13 @@ func (portal *Portal) doForwardBackfill(ctx context.Context, source *UserLogin, 
 		Forward:       true,
 		AnchorMessage: lastMessage,
 		Count:         limit,
+		BundledData:   bundledData,
 	})
 	if err != nil {
 		log.Err(err).Msg("Failed to fetch messages for forward backfill")
+		return
+	} else if resp == nil {
+		log.Debug().Msg("Didn't get backfill response")
 		return
 	} else if len(resp.Messages) == 0 {
 		log.Debug().Msg("No messages to backfill")
@@ -100,6 +104,10 @@ func (portal *Portal) DoBackwardsBackfill(ctx context.Context, source *UserLogin
 	})
 	if err != nil {
 		return fmt.Errorf("failed to fetch messages for backward backfill: %w", err)
+	} else if resp == nil {
+		log.Debug().Msg("Didn't get backfill response, marking task as done")
+		task.IsDone = true
+		return nil
 	}
 	log.Debug().
 		Str("new_cursor", string(resp.Cursor)).
@@ -149,6 +157,9 @@ func (portal *Portal) doThreadBackfill(ctx context.Context, source *UserLogin, t
 	})
 	if err != nil {
 		log.Err(err).Msg("Failed to fetch messages for thread backfill")
+		return
+	} else if resp == nil {
+		log.Debug().Msg("Didn't get backfill response")
 		return
 	} else if len(resp.Messages) == 0 {
 		log.Debug().Msg("No messages to backfill")

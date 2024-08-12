@@ -302,7 +302,7 @@ func (portal *Portal) handleCreateEvent(evt *portalCreateEvent) {
 			evt.cb(fmt.Errorf("portal creation panicked"))
 		}
 	}()
-	evt.cb(portal.createMatrixRoomInLoop(evt.ctx, evt.source, evt.info))
+	evt.cb(portal.createMatrixRoomInLoop(evt.ctx, evt.source, evt.info, nil))
 }
 
 func (portal *Portal) FindPreferredLogin(ctx context.Context, user *User, allowRelay bool) (*UserLogin, *database.UserPortal, error) {
@@ -1329,7 +1329,12 @@ func (portal *Portal) handleRemoteEvent(source *UserLogin, evt RemoteEvent) {
 				log.Err(err).Msg("Failed to get chat info for portal creation from chat resync event")
 			}
 		}
-		err = portal.createMatrixRoomInLoop(ctx, source, info)
+		bundleProvider, ok := evt.(RemoteChatResyncBackfillBundle)
+		var bundle any
+		if ok {
+			bundle = bundleProvider.GetBundledBackfillData()
+		}
+		err = portal.createMatrixRoomInLoop(ctx, source, info, bundle)
 		if err != nil {
 			log.Err(err).Msg("Failed to create portal to handle event")
 			// TODO error
@@ -2279,7 +2284,12 @@ func (portal *Portal) handleRemoteChatResync(ctx context.Context, source *UserLo
 		} else if needsBackfill, err := backfillChecker.CheckNeedsBackfill(ctx, latestMessage); err != nil {
 			log.Err(err).Msg("Failed to check if backfill is needed")
 		} else if needsBackfill {
-			portal.doForwardBackfill(ctx, source, latestMessage)
+			bundleProvider, ok := evt.(RemoteChatResyncBackfillBundle)
+			var bundle any
+			if ok {
+				bundle = bundleProvider.GetBundledBackfillData()
+			}
+			portal.doForwardBackfill(ctx, source, latestMessage, bundle)
 		}
 	}
 }
@@ -3077,7 +3087,7 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 	}
 }
 
-func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLogin, info *ChatInfo) error {
+func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLogin, info *ChatInfo, backfillBundle any) error {
 	portal.roomCreateLock.Lock()
 	defer portal.roomCreateLock.Unlock()
 	if portal.MXID != "" {
@@ -3259,7 +3269,7 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 			}
 		}
 	}
-	portal.doForwardBackfill(ctx, source, nil)
+	portal.doForwardBackfill(ctx, source, nil, backfillBundle)
 	return nil
 }
 

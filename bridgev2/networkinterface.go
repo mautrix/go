@@ -372,6 +372,12 @@ type FetchMessagesParams struct {
 	// without any side effects, but the network connector should aim for this number.
 	Count int
 
+	// When a forward backfill is triggered by a [RemoteChatResyncBackfillBundle], this will contain
+	// the bundled data returned by the event. It can be used as an optimization to avoid fetching
+	// messages that were already provided by the remote network, while still supporting fetching
+	// more messages if the limit is higher.
+	BundledData any
+
 	// When the messages are being fetched for a queued backfill, this is the task object.
 	Task *database.BackfillTask
 }
@@ -797,6 +803,16 @@ type RemoteChatResyncBackfill interface {
 	CheckNeedsBackfill(ctx context.Context, latestMessage *database.Message) (bool, error)
 }
 
+type RemoteChatResyncBackfillBundle interface {
+	RemoteChatResyncBackfill
+	GetBundledBackfillData() any
+}
+
+type RemoteBackfill interface {
+	RemoteEvent
+	GetBackfillData(ctx context.Context, portal *Portal) (*FetchMessagesResponse, error)
+}
+
 type RemoteChatDelete interface {
 	RemoteEvent
 	DeleteOnlyForMe() bool
@@ -929,11 +945,6 @@ type RemoteMarkUnread interface {
 type RemoteTyping interface {
 	RemoteEvent
 	GetTimeout() time.Duration
-}
-
-type RemoteBackfill interface {
-	RemoteEvent
-	GetBackfillData(ctx context.Context, portal *Portal) (*FetchMessagesResponse, error)
 }
 
 type TypingType int

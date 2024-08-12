@@ -261,8 +261,8 @@ func (portal *PortalInternals) LockedUpdateInfoFromGhost(ctx context.Context, gh
 	(*Portal)(portal).lockedUpdateInfoFromGhost(ctx, ghost)
 }
 
-func (portal *PortalInternals) CreateMatrixRoomInLoop(ctx context.Context, source *UserLogin, info *ChatInfo) error {
-	return (*Portal)(portal).createMatrixRoomInLoop(ctx, source, info)
+func (portal *PortalInternals) CreateMatrixRoomInLoop(ctx context.Context, source *UserLogin, info *ChatInfo, backfillBundle any) error {
+	return (*Portal)(portal).createMatrixRoomInLoop(ctx, source, info, backfillBundle)
 }
 
 func (portal *PortalInternals) UnlockedDelete(ctx context.Context) error {
@@ -273,8 +273,8 @@ func (portal *PortalInternals) UnlockedDeleteCache() {
 	(*Portal)(portal).unlockedDeleteCache()
 }
 
-func (portal *PortalInternals) DoForwardBackfill(ctx context.Context, source *UserLogin, lastMessage *database.Message) {
-	(*Portal)(portal).doForwardBackfill(ctx, source, lastMessage)
+func (portal *PortalInternals) DoForwardBackfill(ctx context.Context, source *UserLogin, lastMessage *database.Message, bundledData any) {
+	(*Portal)(portal).doForwardBackfill(ctx, source, lastMessage, bundledData)
 }
 
 func (portal *PortalInternals) DoThreadBackfill(ctx context.Context, source *UserLogin, threadID networkid.MessageID) {
