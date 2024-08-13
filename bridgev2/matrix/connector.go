@@ -133,6 +133,7 @@ func (br *Connector) Init(bridge *bridgev2.Bridge) {
 	br.EventProcessor.On(event.EventRedaction, br.handleRoomEvent)
 	br.EventProcessor.On(event.EventEncrypted, br.handleEncryptedEvent)
 	br.EventProcessor.On(event.StateMember, br.handleRoomEvent)
+	br.EventProcessor.On(event.StatePowerLevels, br.handleRoomEvent)
 	br.EventProcessor.On(event.StateRoomName, br.handleRoomEvent)
 	br.EventProcessor.On(event.StateRoomAvatar, br.handleRoomEvent)
 	br.EventProcessor.On(event.StateTopic, br.handleRoomEvent)
