@@ -1560,6 +1560,9 @@ func (portal *Portal) getIntentAndUserMXIDFor(ctx context.Context, sender EventS
 func (portal *Portal) GetIntentFor(ctx context.Context, sender EventSender, source *UserLogin, evtType RemoteEventType) MatrixAPI {
 	intent, _ := portal.getIntentAndUserMXIDFor(ctx, sender, source, nil, evtType)
 	if intent == nil {
+		// TODO this is very hacky - we should either insert an empty ghost row automatically
+		//      (and not fetch it at runtime) or make the message sender column nullable.
+		portal.Bridge.GetGhostByID(ctx, "")
 		intent = portal.Bridge.Bot
 	}
 	return intent
@@ -1642,6 +1645,10 @@ func (portal *Portal) sendConvertedMessage(ctx context.Context, id networkid.Mes
 		}
 		if part.DontBridge {
 			dbMessage.SetFakeMXID()
+			logContext(log.Debug()).
+				Stringer("event_id", dbMessage.MXID).
+				Str("part_id", string(part.ID)).
+				Msg("Not bridging message part with DontBridge flag to Matrix")
 		} else {
 			resp, err := intent.SendMessage(ctx, portal.MXID, part.Type, &event.Content{
 				Parsed: part.Content,
