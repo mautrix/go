@@ -429,7 +429,7 @@ func (br *Connector) SendBridgeStatus(ctx context.Context, state *status.BridgeS
 }
 
 func (br *Connector) SendMessageStatus(ctx context.Context, ms *bridgev2.MessageStatus, evt *bridgev2.MessageStatusEventInfo) {
-	br.internalSendMessageStatus(ctx, ms, evt, "")
+	go br.internalSendMessageStatus(ctx, ms, evt, "")
 }
 
 func (br *Connector) internalSendMessageStatus(ctx context.Context, ms *bridgev2.MessageStatus, evt *bridgev2.MessageStatusEventInfo, editEvent id.EventID) id.EventID {
