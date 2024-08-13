@@ -88,6 +88,7 @@ func (br *Bridge) doBackfillTask(ctx context.Context, task *database.BackfillTas
 		Object("portal_key", task.PortalKey).
 		Str("login_id", string(task.UserLoginID)).
 		Logger()
+	ctx = log.WithContext(ctx)
 	err := br.DB.BackfillTask.MarkDispatched(ctx, task)
 	if err != nil {
 		log.Err(err).Msg("Failed to mark backfill task as dispatched")
