@@ -552,8 +552,8 @@ func (portal *Portal) handleMatrixReadReceipt(ctx context.Context, user *User, e
 	if userPortal == nil {
 		userPortal = database.UserPortalFor(login.UserLogin, portal.PortalKey)
 	} else {
-		userPortal = userPortal.CopyWithoutValues()
 		evt.LastRead = userPortal.LastRead
+		userPortal = userPortal.CopyWithoutValues()
 	}
 	evt.ExactMessage, err = portal.Bridge.DB.Message.GetPartByMXID(ctx, eventID)
 	if err != nil {
