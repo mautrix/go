@@ -93,8 +93,16 @@ func (portal *PortalInternals) HandleMatrixReaction(ctx context.Context, sender 
 	(*Portal)(portal).handleMatrixReaction(ctx, sender, evt)
 }
 
+func (portal *PortalInternals) GetTargetUser(ctx context.Context, userID id.UserID) (GhostOrUserLogin, error) {
+	return (*Portal)(portal).getTargetUser(ctx, userID)
+}
+
 func (portal *PortalInternals) HandleMatrixMembership(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) {
 	(*Portal)(portal).handleMatrixMembership(ctx, sender, origSender, evt)
+}
+
+func (portal *PortalInternals) HandleMatrixPowerLevels(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) {
+	(*Portal)(portal).handleMatrixPowerLevels(ctx, sender, origSender, evt)
 }
 
 func (portal *PortalInternals) HandleMatrixRedaction(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) {
@@ -249,8 +257,8 @@ func (portal *PortalInternals) SyncParticipants(ctx context.Context, members *Ch
 	return (*Portal)(portal).syncParticipants(ctx, members, source, sender, ts)
 }
 
-func (portal *PortalInternals) UpdateUserLocalInfo(ctx context.Context, info *UserLocalPortalInfo, source *UserLogin) {
-	(*Portal)(portal).updateUserLocalInfo(ctx, info, source)
+func (portal *PortalInternals) UpdateUserLocalInfo(ctx context.Context, info *UserLocalPortalInfo, source *UserLogin, didJustCreate bool) {
+	(*Portal)(portal).updateUserLocalInfo(ctx, info, source, didJustCreate)
 }
 
 func (portal *PortalInternals) UpdateParent(ctx context.Context, newParent networkid.PortalID, source *UserLogin) bool {

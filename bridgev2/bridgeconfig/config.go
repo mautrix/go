@@ -59,11 +59,13 @@ type BridgeConfig struct {
 	CommandPrefix           string           `yaml:"command_prefix"`
 	PersonalFilteringSpaces bool             `yaml:"personal_filtering_spaces"`
 	PrivateChatPortalMeta   bool             `yaml:"private_chat_portal_meta"`
+	BridgeMatrixLeave       bool             `yaml:"bridge_matrix_leave"`
+	TagOnlyOnCreate         bool             `yaml:"tag_only_on_create"`
+	MuteOnlyOnCreate        bool             `yaml:"mute_only_on_create"`
 	CleanupOnLogout         CleanupOnLogouts `yaml:"cleanup_on_logout"`
 	Relay                   RelayConfig      `yaml:"relay"`
 	Permissions             PermissionConfig `yaml:"permissions"`
 	Backfill                BackfillConfig   `yaml:"backfill"`
-	BridgeMatrixLeave       bool             `yaml:"bridge_matrix_leave"`
 }
 
 type MatrixConfig struct {

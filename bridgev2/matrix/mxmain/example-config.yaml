@@ -8,6 +8,15 @@ bridge:
     # This is only necessary when using clients that don't support MSC4171.
     private_chat_portal_meta: false
 
+    # Should leaving Matrix rooms be bridged as leaving groups on the remote network?
+    bridge_matrix_leave: false
+    # Should room tags only be synced when creating the portal? Tags mean things like favorite/pin and archive/low priority.
+    # Tags currently can't be synced back to the remote network, so a continuous sync means tagging from Matrix will be undone.
+    tag_only_on_create: true
+    # Should room mute status only be synced when creating the portal?
+    # Like tags, mutes can't currently be synced back to the remote network.
+    mute_only_on_create: true
+
     # What should be done to portal rooms when a user logs out or is logged out?
     # Permitted values:
     #   nothing - Do nothing, let the user stay in the portals

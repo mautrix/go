@@ -2976,7 +2976,7 @@ func (portal *Portal) syncParticipants(ctx context.Context, members *ChatMemberL
 	return nil
 }
 
-func (portal *Portal) updateUserLocalInfo(ctx context.Context, info *UserLocalPortalInfo, source *UserLogin) {
+func (portal *Portal) updateUserLocalInfo(ctx context.Context, info *UserLocalPortalInfo, source *UserLogin, didJustCreate bool) {
 	if portal.MXID == "" {
 		return
 	}
@@ -2996,13 +2996,13 @@ func (portal *Portal) updateUserLocalInfo(ctx context.Context, info *UserLocalPo
 	if info == nil {
 		return
 	}
-	if info.MutedUntil != nil {
+	if info.MutedUntil != nil && (didJustCreate || !portal.Bridge.Config.MuteOnlyOnCreate) {
 		err := dp.MuteRoom(ctx, portal.MXID, *info.MutedUntil)
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to mute room")
 		}
 	}
-	if info.Tag != nil {
+	if info.Tag != nil && (didJustCreate || !portal.Bridge.Config.TagOnlyOnCreate) {
 		err := dp.TagRoom(ctx, portal.MXID, *info.Tag, *info.Tag != "")
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to tag room")
@@ -3159,7 +3159,7 @@ func (portal *Portal) UpdateInfo(ctx context.Context, info *ChatInfo, source *Us
 	changed = portal.UpdateInfoFromGhost(ctx, nil) || changed
 	if source != nil {
 		source.MarkInPortal(ctx, portal)
-		portal.updateUserLocalInfo(ctx, info.UserLocal, source)
+		portal.updateUserLocalInfo(ctx, info.UserLocal, source, false)
 	}
 	if info.CanBackfill && source != nil {
 		err := portal.Bridge.DB.BackfillTask.EnsureExists(ctx, portal.PortalKey, source.ID)
@@ -3360,7 +3360,7 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 			go portal.createParentAndAddToSpace(ctx, source)
 		}
 	}
-	portal.updateUserLocalInfo(ctx, info.UserLocal, source)
+	portal.updateUserLocalInfo(ctx, info.UserLocal, source, true)
 	if !autoJoinInvites {
 		if info.Members == nil {
 			dp := source.User.DoublePuppet(ctx)
