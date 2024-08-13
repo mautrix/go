@@ -141,12 +141,21 @@ func TestVerification_Start(t *testing.T) {
 
 func TestVerification_StartThenCancel(t *testing.T) {
 	ctx := log.Logger.WithContext(context.TODO())
+	bystanderDeviceID := id.DeviceID("bystander")
 
 	for _, sendingCancels := range []bool{true, false} {
 		t.Run(fmt.Sprintf("sendingCancels=%t", sendingCancels), func(t *testing.T) {
-			ts, sendingClient, receivingClient, _, _, sendingMachine, receivingMachine := initServerAndLoginTwoAlice(t, ctx)
+			ts, sendingClient, receivingClient, sendingCryptoStore, receivingCryptoStore, sendingMachine, receivingMachine := initServerAndLoginTwoAlice(t, ctx)
 			defer ts.Close()
 			_, _, sendingHelper, receivingHelper := initDefaultCallbacks(t, ctx, sendingClient, receivingClient, sendingMachine, receivingMachine)
+
+			bystanderClient, _ := ts.Login(t, ctx, aliceUserID, bystanderDeviceID)
+			bystanderMachine := bystanderClient.Crypto.(*cryptohelper.CryptoHelper).Machine()
+			bystanderHelper := verificationhelper.NewVerificationHelper(bystanderClient, bystanderMachine, newAllVerificationCallbacks(), true)
+			require.NoError(t, bystanderHelper.Init(ctx))
+
+			require.NoError(t, sendingCryptoStore.PutDevice(ctx, aliceUserID, bystanderMachine.OwnIdentity()))
+			require.NoError(t, receivingCryptoStore.PutDevice(ctx, aliceUserID, bystanderMachine.OwnIdentity()))
 
 			txnID, err := sendingHelper.StartVerification(ctx, aliceUserID)
 			require.NoError(t, err)
@@ -159,7 +168,13 @@ func TestVerification_StartThenCancel(t *testing.T) {
 			assert.Equal(t, txnID, receivingInbox[0].Content.AsVerificationRequest().TransactionID)
 			ts.dispatchToDevice(t, ctx, receivingClient)
 
-			// Cancel the verification request on the sending device.
+			// Process the request event on the bystander device.
+			bystanderInbox := ts.DeviceInbox[aliceUserID][bystanderDeviceID]
+			assert.Len(t, bystanderInbox, 1)
+			assert.Equal(t, txnID, bystanderInbox[0].Content.AsVerificationRequest().TransactionID)
+			ts.dispatchToDevice(t, ctx, bystanderClient)
+
+			// Cancel the verification request.
 			var cancelEvt *event.VerificationCancelEventContent
 			if sendingCancels {
 				err = sendingHelper.CancelVerification(ctx, txnID, event.VerificationCancelCodeUser, "Recovery code preferred")
@@ -171,6 +186,11 @@ func TestVerification_StartThenCancel(t *testing.T) {
 				// Ensure that the cancellation event was sent to the receiving device.
 				assert.Len(t, ts.DeviceInbox[aliceUserID][receivingDeviceID], 1)
 				cancelEvt = ts.DeviceInbox[aliceUserID][receivingDeviceID][0].Content.AsVerificationCancel()
+
+				// Ensure that the cancellation event was sent to the bystander device.
+				assert.Len(t, ts.DeviceInbox[aliceUserID][bystanderDeviceID], 1)
+				bystanderCancelEvt := ts.DeviceInbox[aliceUserID][bystanderDeviceID][0].Content.AsVerificationCancel()
+				assert.Equal(t, cancelEvt, bystanderCancelEvt)
 			} else {
 				err = receivingHelper.CancelVerification(ctx, txnID, event.VerificationCancelCodeUser, "Recovery code preferred")
 				assert.NoError(t, err)
@@ -181,10 +201,25 @@ func TestVerification_StartThenCancel(t *testing.T) {
 				// Ensure that the cancellation event was sent to the sending device.
 				assert.Len(t, ts.DeviceInbox[aliceUserID][sendingDeviceID], 1)
 				cancelEvt = ts.DeviceInbox[aliceUserID][sendingDeviceID][0].Content.AsVerificationCancel()
+
+				// The bystander device should not have a cancellation event.
+				assert.Empty(t, ts.DeviceInbox[aliceUserID][bystanderDeviceID])
 			}
 			assert.Equal(t, txnID, cancelEvt.TransactionID)
 			assert.Equal(t, event.VerificationCancelCodeUser, cancelEvt.Code)
 			assert.Equal(t, "Recovery code preferred", cancelEvt.Reason)
+
+			if !sendingCancels {
+				// Process the cancellation event on the sending device.
+				ts.dispatchToDevice(t, ctx, sendingClient)
+
+				// Ensure that the cancellation event was sent to the bystander device.
+				assert.Len(t, ts.DeviceInbox[aliceUserID][bystanderDeviceID], 1)
+				bystanderCancelEvt := ts.DeviceInbox[aliceUserID][bystanderDeviceID][0].Content.AsVerificationCancel()
+				assert.Equal(t, txnID, bystanderCancelEvt.TransactionID)
+				assert.Equal(t, event.VerificationCancelCodeUser, bystanderCancelEvt.Code)
+				assert.Equal(t, "The verification was rejected from another device.", bystanderCancelEvt.Reason)
+			}
 		})
 	}
 }

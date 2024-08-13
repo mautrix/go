@@ -746,13 +746,8 @@ func (vh *VerificationHelper) onVerificationReady(ctx context.Context, txn *veri
 				Reason:                    "The verification was accepted on another device.",
 			},
 		}
-		devices, err := vh.mach.CryptoStore.GetDevices(ctx, txn.TheirUser)
-		if err != nil {
-			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUser, "failed to get devices for %s: %w", txn.TheirUser, err)
-			return
-		}
 		req := mautrix.ReqSendToDevice{Messages: map[id.UserID]map[id.DeviceID]*event.Content{txn.TheirUser: {}}}
-		for deviceID := range devices {
+		for _, deviceID := range txn.SentToDeviceIDs {
 			if deviceID == txn.TheirDevice || deviceID == vh.client.DeviceID {
 				// Don't ever send a cancellation to the device that accepted
 				// the request or to our own device (which can happen if this
@@ -762,7 +757,7 @@ func (vh *VerificationHelper) onVerificationReady(ctx context.Context, txn *veri
 
 			req.Messages[txn.TheirUser][deviceID] = content
 		}
-		_, err = vh.client.SendToDevice(ctx, event.ToDeviceVerificationCancel, &req)
+		_, err := vh.client.SendToDevice(ctx, event.ToDeviceVerificationCancel, &req)
 		if err != nil {
 			log.Warn().Err(err).Msg("Failed to send cancellation requests")
 		}
@@ -878,14 +873,48 @@ func (vh *VerificationHelper) onVerificationDone(ctx context.Context, txn *verif
 
 func (vh *VerificationHelper) onVerificationCancel(ctx context.Context, txn *verificationTransaction, evt *event.Event) {
 	cancelEvt := evt.Content.AsVerificationCancel()
-	vh.getLog(ctx).Info().
+	log := vh.getLog(ctx).With().
 		Str("verification_action", "cancel").
 		Stringer("transaction_id", txn.TransactionID).
 		Str("cancel_code", string(cancelEvt.Code)).
 		Str("reason", cancelEvt.Reason).
-		Msg("Verification was cancelled")
+		Logger()
+	ctx = log.WithContext(ctx)
+	log.Info().Msg("Verification was cancelled")
 	vh.activeTransactionsLock.Lock()
 	defer vh.activeTransactionsLock.Unlock()
+
+	// Element (and at least the old desktop client) send cancellation events
+	// when the user rejects the verification request. This is really dumb,
+	// because they should just instead ignore the request and not send a
+	// cancellation.
+	//
+	// The above behavior causes a problem with the other devices that we sent
+	// the verification request to because they don't know that the request was
+	// cancelled.
+	//
+	// As a workaround, if we receive a cancellation event to a transaction
+	// that is currently in the REQUESTED state, then we will send
+	// cancellations to all of the devices that we sent the request to. This
+	// will ensure that all of the clients know that the request was cancelled.
+	if txn.VerificationState == verificationStateRequested && len(txn.SentToDeviceIDs) > 0 {
+		content := &event.Content{
+			Parsed: &event.VerificationCancelEventContent{
+				ToDeviceVerificationEvent: event.ToDeviceVerificationEvent{TransactionID: txn.TransactionID},
+				Code:                      event.VerificationCancelCodeUser,
+				Reason:                    "The verification was rejected from another device.",
+			},
+		}
+		req := mautrix.ReqSendToDevice{Messages: map[id.UserID]map[id.DeviceID]*event.Content{txn.TheirUser: {}}}
+		for _, deviceID := range txn.SentToDeviceIDs {
+			req.Messages[txn.TheirUser][deviceID] = content
+		}
+		_, err := vh.client.SendToDevice(ctx, event.ToDeviceVerificationCancel, &req)
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to send cancellation requests")
+		}
+	}
+
 	delete(vh.activeTransactions, txn.TransactionID)
 	vh.verificationCancelledCallback(ctx, txn.TransactionID, cancelEvt.Code, cancelEvt.Reason)
 }
