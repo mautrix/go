@@ -2692,6 +2692,10 @@ func (portal *Portal) getBridgeInfo() (string, event.BridgeEventContent) {
 			// TODO external URL?
 		}
 	}
+	filler, ok := portal.Bridge.Network.(PortalBridgeInfoFillingNetwork)
+	if ok {
+		filler.FillPortalBridgeInfo(portal, &bridgeInfo)
+	}
 	// TODO use something globally unique instead of bridge ID?
 	//      maybe ask the matrix connector to use serverName+appserviceID+bridgeID
 	stateKey := string(portal.BridgeID)

@@ -243,6 +243,11 @@ type IdentifierValidatingNetwork interface {
 	ValidateUserID(id networkid.UserID) bool
 }
 
+type PortalBridgeInfoFillingNetwork interface {
+	NetworkConnector
+	FillPortalBridgeInfo(portal *Portal, content *event.BridgeEventContent)
+}
+
 // ConfigValidatingNetwork is an optional interface that network connectors can implement to validate config fields
 // before the bridge is started.
 //
