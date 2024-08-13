@@ -256,6 +256,9 @@ func (portal *Portal) sendBatch(ctx context.Context, source *UserLogin, messages
 	extras := make([]*MatrixSendExtra, 0, len(messages))
 	var disappearingMessages []*database.DisappearingMessage
 	for _, msg := range messages {
+		if len(msg.Parts) == 0 {
+			continue
+		}
 		intent := portal.GetIntentFor(ctx, msg.Sender, source, RemoteEventMessage)
 		replyTo, threadRoot, prevThreadEvent := portal.getRelationMeta(ctx, msg.ID, msg.ReplyTo, msg.ThreadRoot, true)
 		if threadRoot != nil && prevThreadEvents[*msg.ThreadRoot] != "" {
