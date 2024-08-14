@@ -365,7 +365,7 @@ func (portal *Portal) compileBatchMessage(ctx context.Context, source *UserLogin
 		out.DBReactions = append(out.DBReactions, dbReaction)
 		out.Extras = append(out.Extras, &MatrixSendExtra{ReactionMeta: dbReaction})
 	}
-	if firstPart != nil && !inThread && portal.Bridge.Config.Backfill.Threads.MaxInitialMessages > 0 {
+	if firstPart != nil && !inThread && portal.Bridge.Config.Backfill.Threads.MaxInitialMessages > 0 && msg.ShouldBackfillThread {
 		portal.fetchThreadInsideBatch(ctx, source, firstPart, out)
 	}
 }
