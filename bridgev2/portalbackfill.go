@@ -137,40 +137,49 @@ func (portal *Portal) DoBackwardsBackfill(ctx context.Context, source *UserLogin
 	return nil
 }
 
+func (portal *Portal) fetchThreadBackfill(ctx context.Context, source *UserLogin, anchor *database.Message) *FetchMessagesResponse {
+	log := zerolog.Ctx(ctx)
+	resp, err := source.Client.(BackfillingNetworkAPI).FetchMessages(ctx, FetchMessagesParams{
+		Portal:        portal,
+		ThreadRoot:    anchor.ID,
+		Forward:       true,
+		AnchorMessage: anchor,
+		Count:         portal.Bridge.Config.Backfill.Threads.MaxInitialMessages,
+	})
+	if err != nil {
+		log.Err(err).Msg("Failed to fetch messages for thread backfill")
+		return nil
+	} else if resp == nil {
+		log.Debug().Msg("Didn't get backfill response")
+		return nil
+	} else if len(resp.Messages) == 0 {
+		log.Debug().Msg("No messages to backfill")
+		return nil
+	}
+	resp.Messages = cutoffMessages(log, resp.Messages, true, anchor)
+	if len(resp.Messages) == 0 {
+		log.Warn().Msg("No messages left to backfill after cutting off old messages")
+		return nil
+	}
+	return resp
+}
+
 func (portal *Portal) doThreadBackfill(ctx context.Context, source *UserLogin, threadID networkid.MessageID) {
 	log := zerolog.Ctx(ctx).With().
 		Str("subaction", "thread backfill").
 		Str("thread_id", string(threadID)).
 		Logger()
+	ctx = log.WithContext(ctx)
 	log.Info().Msg("Backfilling thread inside other backfill")
 	anchorMessage, err := portal.Bridge.DB.Message.GetLastThreadMessage(ctx, portal.PortalKey, threadID)
 	if err != nil {
 		log.Err(err).Msg("Failed to get last thread message")
 		return
 	}
-	resp, err := source.Client.(BackfillingNetworkAPI).FetchMessages(ctx, FetchMessagesParams{
-		Portal:        portal,
-		ThreadRoot:    threadID,
-		Forward:       true,
-		AnchorMessage: anchorMessage,
-		Count:         portal.Bridge.Config.Backfill.Threads.MaxInitialMessages,
-	})
-	if err != nil {
-		log.Err(err).Msg("Failed to fetch messages for thread backfill")
-		return
-	} else if resp == nil {
-		log.Debug().Msg("Didn't get backfill response")
-		return
-	} else if len(resp.Messages) == 0 {
-		log.Debug().Msg("No messages to backfill")
-		return
+	resp := portal.fetchThreadBackfill(ctx, source, anchorMessage)
+	if resp != nil {
+		portal.sendBackfill(ctx, source, resp.Messages, true, resp.MarkRead, true)
 	}
-	resp.Messages = cutoffMessages(&log, resp.Messages, true, anchorMessage)
-	if len(resp.Messages) == 0 {
-		log.Warn().Msg("No messages left to backfill after cutting off old messages")
-		return
-	}
-	portal.sendBackfill(ctx, source, resp.Messages, true, resp.MarkRead, true)
 }
 
 func cutoffMessages(log *zerolog.Logger, messages []*BackfillMessage, forward bool, lastMessage *database.Message) []*BackfillMessage {
@@ -226,12 +235,12 @@ func (portal *Portal) sendBackfill(ctx context.Context, source *UserLogin, messa
 		Bool("mark_read_past_threshold", forceMarkRead).
 		Msg("Sending backfill messages")
 	if canBatchSend {
-		portal.sendBatch(ctx, source, messages, forceForward, markRead || forceMarkRead, !inThread)
+		portal.sendBatch(ctx, source, messages, forceForward, markRead || forceMarkRead, inThread)
 	} else {
 		portal.sendLegacyBackfill(ctx, source, messages, markRead || forceMarkRead)
 	}
 	zerolog.Ctx(ctx).Debug().Msg("Backfill finished")
-	if !inThread && portal.Bridge.Config.Backfill.Threads.MaxInitialMessages > 0 {
+	if !canBatchSend && !inThread && portal.Bridge.Config.Backfill.Threads.MaxInitialMessages > 0 {
 		for _, msg := range messages {
 			if msg.ShouldBackfillThread {
 				portal.doThreadBackfill(ctx, source, msg.ID)
@@ -240,137 +249,176 @@ func (portal *Portal) sendBackfill(ctx context.Context, source *UserLogin, messa
 	}
 }
 
-func (portal *Portal) sendBatch(ctx context.Context, source *UserLogin, messages []*BackfillMessage, forceForward, markRead, allowNotification bool) {
+type compileBatchOutput struct {
+	PrevThreadEvents map[networkid.MessageID]id.EventID
+
+	Events []*event.Event
+	Extras []*MatrixSendExtra
+
+	DBMessages  []*database.Message
+	DBReactions []*database.Reaction
+	Disappear   []*database.DisappearingMessage
+}
+
+func (portal *Portal) compileBatchMessage(ctx context.Context, source *UserLogin, msg *BackfillMessage, out *compileBatchOutput, inThread bool) {
+	if len(msg.Parts) == 0 {
+		return
+	}
+	intent := portal.GetIntentFor(ctx, msg.Sender, source, RemoteEventMessage)
+	replyTo, threadRoot, prevThreadEvent := portal.getRelationMeta(ctx, msg.ID, msg.ReplyTo, msg.ThreadRoot, true)
+	if threadRoot != nil && out.PrevThreadEvents[*msg.ThreadRoot] != "" {
+		prevThreadEvent.MXID = out.PrevThreadEvents[*msg.ThreadRoot]
+	}
+	var partIDs []networkid.PartID
+	partMap := make(map[networkid.PartID]*database.Message, len(msg.Parts))
+	var firstPart *database.Message
+	for _, part := range msg.Parts {
+		partIDs = append(partIDs, part.ID)
+		portal.applyRelationMeta(part.Content, replyTo, threadRoot, prevThreadEvent)
+		evtID := portal.Bridge.Matrix.GenerateDeterministicEventID(portal.MXID, portal.PortalKey, msg.ID, part.ID)
+		out.Events = append(out.Events, &event.Event{
+			Sender:    intent.GetMXID(),
+			Type:      part.Type,
+			Timestamp: msg.Timestamp.UnixMilli(),
+			ID:        evtID,
+			RoomID:    portal.MXID,
+			Content: event.Content{
+				Parsed: part.Content,
+				Raw:    part.Extra,
+			},
+		})
+		dbMessage := &database.Message{
+			ID:         msg.ID,
+			PartID:     part.ID,
+			MXID:       evtID,
+			Room:       portal.PortalKey,
+			SenderID:   msg.Sender.Sender,
+			SenderMXID: intent.GetMXID(),
+			Timestamp:  msg.Timestamp,
+			ThreadRoot: ptr.Val(msg.ThreadRoot),
+			ReplyTo:    ptr.Val(msg.ReplyTo),
+			Metadata:   part.DBMetadata,
+		}
+		if firstPart == nil {
+			firstPart = dbMessage
+		}
+		partMap[part.ID] = dbMessage
+		out.Extras = append(out.Extras, &MatrixSendExtra{MessageMeta: dbMessage})
+		out.DBMessages = append(out.DBMessages, dbMessage)
+		if prevThreadEvent != nil {
+			prevThreadEvent.MXID = evtID
+			out.PrevThreadEvents[*msg.ThreadRoot] = evtID
+		}
+		if msg.Disappear.Type != database.DisappearingTypeNone {
+			if msg.Disappear.Type == database.DisappearingTypeAfterSend && msg.Disappear.DisappearAt.IsZero() {
+				msg.Disappear.DisappearAt = msg.Timestamp.Add(msg.Disappear.Timer)
+			}
+			out.Disappear = append(out.Disappear, &database.DisappearingMessage{
+				RoomID:              portal.MXID,
+				EventID:             evtID,
+				DisappearingSetting: msg.Disappear,
+			})
+		}
+	}
+	slices.Sort(partIDs)
+	for _, reaction := range msg.Reactions {
+		reactionIntent := portal.GetIntentFor(ctx, reaction.Sender, source, RemoteEventReactionRemove)
+		if reaction.TargetPart == nil {
+			reaction.TargetPart = &partIDs[0]
+		}
+		if reaction.Timestamp.IsZero() {
+			reaction.Timestamp = msg.Timestamp.Add(10 * time.Millisecond)
+		}
+		targetPart, ok := partMap[*reaction.TargetPart]
+		if !ok {
+			// TODO warning log and/or skip reaction?
+		}
+		reactionMXID := portal.Bridge.Matrix.GenerateReactionEventID(portal.MXID, targetPart, reaction.Sender.Sender, reaction.EmojiID)
+		dbReaction := &database.Reaction{
+			Room:          portal.PortalKey,
+			MessageID:     msg.ID,
+			MessagePartID: *reaction.TargetPart,
+			SenderID:      reaction.Sender.Sender,
+			EmojiID:       reaction.EmojiID,
+			MXID:          reactionMXID,
+			Timestamp:     reaction.Timestamp,
+			Emoji:         reaction.Emoji,
+			Metadata:      reaction.DBMetadata,
+		}
+		out.Events = append(out.Events, &event.Event{
+			Sender:    reactionIntent.GetMXID(),
+			Type:      event.EventReaction,
+			Timestamp: reaction.Timestamp.UnixMilli(),
+			ID:        reactionMXID,
+			RoomID:    portal.MXID,
+			Content: event.Content{
+				Parsed: &event.ReactionEventContent{
+					RelatesTo: event.RelatesTo{
+						Type:    event.RelAnnotation,
+						EventID: portal.Bridge.Matrix.GenerateDeterministicEventID(portal.MXID, portal.PortalKey, msg.ID, *reaction.TargetPart),
+						Key:     variationselector.Add(reaction.Emoji),
+					},
+				},
+				Raw: reaction.ExtraContent,
+			},
+		})
+		out.DBReactions = append(out.DBReactions, dbReaction)
+		out.Extras = append(out.Extras, &MatrixSendExtra{ReactionMeta: dbReaction})
+	}
+	if firstPart != nil && !inThread && portal.Bridge.Config.Backfill.Threads.MaxInitialMessages > 0 {
+		portal.fetchThreadInsideBatch(ctx, source, firstPart, out)
+	}
+}
+
+func (portal *Portal) fetchThreadInsideBatch(ctx context.Context, source *UserLogin, dbMsg *database.Message, out *compileBatchOutput) {
+	log := zerolog.Ctx(ctx).With().
+		Str("subaction", "thread backfill in batch").
+		Str("thread_id", string(dbMsg.ID)).
+		Logger()
+	ctx = log.WithContext(ctx)
+	resp := portal.fetchThreadBackfill(ctx, source, dbMsg)
+	if resp != nil {
+		for _, msg := range resp.Messages {
+			portal.compileBatchMessage(ctx, source, msg, out, true)
+		}
+	}
+}
+
+func (portal *Portal) sendBatch(ctx context.Context, source *UserLogin, messages []*BackfillMessage, forceForward, markRead, inThread bool) {
+	out := &compileBatchOutput{
+		PrevThreadEvents: make(map[networkid.MessageID]id.EventID),
+		Events:           make([]*event.Event, 0, len(messages)),
+		Extras:           make([]*MatrixSendExtra, 0, len(messages)),
+		DBMessages:       make([]*database.Message, 0, len(messages)),
+		DBReactions:      make([]*database.Reaction, 0),
+		Disappear:        make([]*database.DisappearingMessage, 0),
+	}
+	for _, msg := range messages {
+		portal.compileBatchMessage(ctx, source, msg, out, inThread)
+	}
 	req := &mautrix.ReqBeeperBatchSend{
 		ForwardIfNoMessages: !forceForward,
 		Forward:             forceForward,
-		Events:              make([]*event.Event, 0, len(messages)),
-		SendNotification:    !markRead && forceForward && allowNotification,
+		SendNotification:    !markRead && forceForward && !inThread,
+		Events:              out.Events,
 	}
 	if markRead {
 		req.MarkReadBy = source.UserMXID
 	}
-	prevThreadEvents := make(map[networkid.MessageID]id.EventID)
-	dbMessages := make([]*database.Message, 0, len(messages))
-	dbReactions := make([]*database.Reaction, 0)
-	extras := make([]*MatrixSendExtra, 0, len(messages))
-	var disappearingMessages []*database.DisappearingMessage
-	for _, msg := range messages {
-		if len(msg.Parts) == 0 {
-			continue
-		}
-		intent := portal.GetIntentFor(ctx, msg.Sender, source, RemoteEventMessage)
-		replyTo, threadRoot, prevThreadEvent := portal.getRelationMeta(ctx, msg.ID, msg.ReplyTo, msg.ThreadRoot, true)
-		if threadRoot != nil && prevThreadEvents[*msg.ThreadRoot] != "" {
-			prevThreadEvent.MXID = prevThreadEvents[*msg.ThreadRoot]
-		}
-		var partIDs []networkid.PartID
-		partMap := make(map[networkid.PartID]*database.Message, len(msg.Parts))
-		for _, part := range msg.Parts {
-			partIDs = append(partIDs, part.ID)
-			portal.applyRelationMeta(part.Content, replyTo, threadRoot, prevThreadEvent)
-			evtID := portal.Bridge.Matrix.GenerateDeterministicEventID(portal.MXID, portal.PortalKey, msg.ID, part.ID)
-			req.Events = append(req.Events, &event.Event{
-				Sender:    intent.GetMXID(),
-				Type:      part.Type,
-				Timestamp: msg.Timestamp.UnixMilli(),
-				ID:        evtID,
-				RoomID:    portal.MXID,
-				Content: event.Content{
-					Parsed: part.Content,
-					Raw:    part.Extra,
-				},
-			})
-			dbMessage := &database.Message{
-				ID:         msg.ID,
-				PartID:     part.ID,
-				MXID:       evtID,
-				Room:       portal.PortalKey,
-				SenderID:   msg.Sender.Sender,
-				SenderMXID: intent.GetMXID(),
-				Timestamp:  msg.Timestamp,
-				ThreadRoot: ptr.Val(msg.ThreadRoot),
-				ReplyTo:    ptr.Val(msg.ReplyTo),
-				Metadata:   part.DBMetadata,
-			}
-			partMap[part.ID] = dbMessage
-			extras = append(extras, &MatrixSendExtra{MessageMeta: dbMessage})
-			dbMessages = append(dbMessages, dbMessage)
-			if prevThreadEvent != nil {
-				prevThreadEvent.MXID = evtID
-				prevThreadEvents[*msg.ThreadRoot] = evtID
-			}
-			if msg.Disappear.Type != database.DisappearingTypeNone {
-				if msg.Disappear.Type == database.DisappearingTypeAfterSend && msg.Disappear.DisappearAt.IsZero() {
-					msg.Disappear.DisappearAt = msg.Timestamp.Add(msg.Disappear.Timer)
-				}
-				disappearingMessages = append(disappearingMessages, &database.DisappearingMessage{
-					RoomID:              portal.MXID,
-					EventID:             evtID,
-					DisappearingSetting: msg.Disappear,
-				})
-			}
-		}
-		slices.Sort(partIDs)
-		for _, reaction := range msg.Reactions {
-			reactionIntent := portal.GetIntentFor(ctx, reaction.Sender, source, RemoteEventReactionRemove)
-			if reaction.TargetPart == nil {
-				reaction.TargetPart = &partIDs[0]
-			}
-			if reaction.Timestamp.IsZero() {
-				reaction.Timestamp = msg.Timestamp.Add(10 * time.Millisecond)
-			}
-			targetPart, ok := partMap[*reaction.TargetPart]
-			if !ok {
-				// TODO warning log and/or skip reaction?
-			}
-			reactionMXID := portal.Bridge.Matrix.GenerateReactionEventID(portal.MXID, targetPart, reaction.Sender.Sender, reaction.EmojiID)
-			dbReaction := &database.Reaction{
-				Room:          portal.PortalKey,
-				MessageID:     msg.ID,
-				MessagePartID: *reaction.TargetPart,
-				SenderID:      reaction.Sender.Sender,
-				EmojiID:       reaction.EmojiID,
-				MXID:          reactionMXID,
-				Timestamp:     reaction.Timestamp,
-				Emoji:         reaction.Emoji,
-				Metadata:      reaction.DBMetadata,
-			}
-			req.Events = append(req.Events, &event.Event{
-				Sender:    reactionIntent.GetMXID(),
-				Type:      event.EventReaction,
-				Timestamp: reaction.Timestamp.UnixMilli(),
-				ID:        reactionMXID,
-				RoomID:    portal.MXID,
-				Content: event.Content{
-					Parsed: &event.ReactionEventContent{
-						RelatesTo: event.RelatesTo{
-							Type:    event.RelAnnotation,
-							EventID: portal.Bridge.Matrix.GenerateDeterministicEventID(portal.MXID, portal.PortalKey, msg.ID, *reaction.TargetPart),
-							Key:     variationselector.Add(reaction.Emoji),
-						},
-					},
-					Raw: reaction.ExtraContent,
-				},
-			})
-			dbReactions = append(dbReactions, dbReaction)
-			extras = append(extras, &MatrixSendExtra{ReactionMeta: dbReaction})
-		}
-	}
-	_, err := portal.Bridge.Matrix.BatchSend(ctx, portal.MXID, req, extras)
+	_, err := portal.Bridge.Matrix.BatchSend(ctx, portal.MXID, req, out.Extras)
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to send backfill messages")
 	}
-	if len(disappearingMessages) > 0 {
+	if len(out.Disappear) > 0 {
 		// TODO mass insert disappearing messages
 		go func() {
-			for _, msg := range disappearingMessages {
+			for _, msg := range out.Disappear {
 				portal.Bridge.DisappearLoop.Add(ctx, msg)
 			}
 		}()
 	}
 	// TODO mass insert db messages
-	for _, msg := range dbMessages {
+	for _, msg := range out.DBMessages {
 		err = portal.Bridge.DB.Message.Insert(ctx, msg)
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).
@@ -380,6 +428,19 @@ func (portal *Portal) sendBatch(ctx context.Context, source *UserLogin, messages
 				Str("portal_id", string(msg.Room.ID)).
 				Str("portal_receiver", string(msg.Room.Receiver)).
 				Msg("Failed to insert backfilled message to database")
+		}
+	}
+	// TODO mass insert db reactions
+	for _, react := range out.DBReactions {
+		err = portal.Bridge.DB.Reaction.Upsert(ctx, react)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).
+				Str("message_id", string(react.MessageID)).
+				Str("part_id", string(react.MessagePartID)).
+				Str("sender_id", string(react.SenderID)).
+				Str("portal_id", string(react.Room.ID)).
+				Str("portal_receiver", string(react.Room.Receiver)).
+				Msg("Failed to insert backfilled reaction to database")
 		}
 	}
 }
