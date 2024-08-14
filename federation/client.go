@@ -198,6 +198,28 @@ func (c *Client) TimestampToEvent(ctx context.Context, serverName string, roomID
 	return
 }
 
+func (c *Client) QueryProfile(ctx context.Context, serverName string, userID id.UserID) (resp *mautrix.RespUserProfile, err error) {
+	err = c.Query(ctx, serverName, "profile", url.Values{"user_id": {userID.String()}}, &resp)
+	return
+}
+
+func (c *Client) QueryDirectory(ctx context.Context, serverName string, roomAlias id.RoomAlias) (resp *mautrix.RespAliasResolve, err error) {
+	err = c.Query(ctx, serverName, "directory", url.Values{"room_alias": {roomAlias.String()}}, &resp)
+	return
+}
+
+func (c *Client) Query(ctx context.Context, serverName, queryType string, queryParams url.Values, respStruct any) (err error) {
+	_, _, err = c.MakeFullRequest(ctx, RequestParams{
+		ServerName:   serverName,
+		Method:       http.MethodGet,
+		Path:         URLPath{"v1", "query", queryType},
+		Query:        queryParams,
+		Authenticate: true,
+		ResponseJSON: respStruct,
+	})
+	return
+}
+
 type RespOpenIDUserInfo struct {
 	Sub id.UserID `json:"sub"`
 }
