@@ -138,6 +138,9 @@ type ConvertedEditPart struct {
 	Extra   map[string]any
 	// TopLevelExtra can be used to specify custom fields at the top level of the content rather than inside `m.new_content`.
 	TopLevelExtra map[string]any
+	// NewMentions can be used to specify new mentions that should ping the users again.
+	// Mentions inside the edited content will not ping.
+	NewMentions *event.Mentions
 
 	DontBridge bool
 }

@@ -1609,14 +1609,14 @@ func (portal *Portal) getRelationMeta(ctx context.Context, currentMsg networkid.
 }
 
 func (portal *Portal) applyRelationMeta(content *event.MessageEventContent, replyTo, threadRoot, prevThreadEvent *database.Message) {
+	if content.Mentions == nil {
+		content.Mentions = &event.Mentions{}
+	}
 	if threadRoot != nil && prevThreadEvent != nil {
 		content.GetRelatesTo().SetThread(threadRoot.MXID, prevThreadEvent.MXID)
 	}
 	if replyTo != nil {
 		content.GetRelatesTo().SetReplyTo(replyTo.MXID)
-		if content.Mentions == nil {
-			content.Mentions = &event.Mentions{}
-		}
 		content.Mentions.Add(replyTo.SenderMXID)
 	}
 }
@@ -1869,12 +1869,20 @@ func (portal *Portal) handleRemoteEdit(ctx context.Context, source *UserLogin, e
 func (portal *Portal) sendConvertedEdit(ctx context.Context, targetID networkid.MessageID, senderID networkid.UserID, converted *ConvertedEdit, intent MatrixAPI, ts time.Time) {
 	log := zerolog.Ctx(ctx)
 	for _, part := range converted.ModifiedParts {
+		if part.Content.Mentions == nil {
+			part.Content.Mentions = &event.Mentions{}
+		}
 		overrideMXID := true
 		if part.Part.Room != portal.PortalKey {
 			part.Part.Room = portal.PortalKey
 		} else if !part.Part.HasFakeMXID() {
 			part.Content.SetEdit(part.Part.MXID)
 			overrideMXID = false
+			if part.NewMentions != nil {
+				part.Content.Mentions = part.NewMentions
+			} else {
+				part.Content.Mentions = &event.Mentions{}
+			}
 		}
 		if part.TopLevelExtra == nil {
 			part.TopLevelExtra = make(map[string]any)
