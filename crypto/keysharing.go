@@ -33,6 +33,7 @@ var (
 	KeyShareRejectBlacklisted   = KeyShareRejection{event.RoomKeyWithheldBlacklisted, "You have been blacklisted by this device"}
 	KeyShareRejectUnverified    = KeyShareRejection{event.RoomKeyWithheldUnverified, "This device does not share keys to unverified devices"}
 	KeyShareRejectOtherUser     = KeyShareRejection{event.RoomKeyWithheldUnauthorized, "This device does not share keys to other users"}
+	KeyShareRejectNotRecipient  = KeyShareRejection{event.RoomKeyWithheldUnauthorized, "You were not in the original recipient list for that session, or that session didn't originate from this device"}
 	KeyShareRejectUnavailable   = KeyShareRejection{event.RoomKeyWithheldUnavailable, "Requested session ID not found on this device"}
 	KeyShareRejectInternalError = KeyShareRejection{event.RoomKeyWithheldUnavailable, "An internal error occurred while trying to share the requested session"}
 )
@@ -249,13 +250,18 @@ func (mach *OlmMachine) sendToOneDevice(ctx context.Context, userID id.UserID, d
 func (mach *OlmMachine) defaultAllowKeyShare(ctx context.Context, device *id.Device, evt event.RequestedKeyInfo) *KeyShareRejection {
 	log := mach.machOrContextLog(ctx)
 	if mach.Client.UserID != device.UserID {
+		if mach.DisableSharedGroupSessionTracking {
+			log.Debug().Msg("Rejecting key request from another user as recipient list tracking is disabled")
+			return &KeyShareRejectOtherUser
+		}
 		isShared, err := mach.CryptoStore.IsOutboundGroupSessionShared(ctx, device.UserID, device.IdentityKey, evt.SessionID)
 		if err != nil {
 			log.Err(err).Msg("Rejecting key request due to internal error when checking session sharing")
 			return &KeyShareRejectNoResponse
 		} else if !isShared {
+			// TODO differentiate session not shared with requester vs session not created by this device?
 			log.Debug().Msg("Rejecting key request for unshared session")
-			return &KeyShareRejectOtherUser
+			return &KeyShareRejectNotRecipient
 		}
 		log.Debug().Msg("Accepting key request for shared session")
 		return nil
