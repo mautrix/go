@@ -332,12 +332,16 @@ func (c *Client) compileRequest(ctx context.Context, params RequestParams) (*htt
 				Message: "client not configured for authentication",
 			}
 		}
+		var contentAny any
+		if reqJSON != nil {
+			contentAny = reqJSON
+		}
 		auth, err := (&signableRequest{
 			Method:      req.Method,
 			URI:         reqURL.RequestURI(),
 			Origin:      c.ServerName,
 			Destination: params.ServerName,
-			Content:     reqJSON,
+			Content:     contentAny,
 		}).Sign(c.Key)
 		if err != nil {
 			return nil, mautrix.HTTPError{
