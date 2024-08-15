@@ -35,16 +35,37 @@ type CryptoHelper interface {
 }
 
 type VerificationHelper interface {
+	// Init initializes the helper. This should be called before any other
+	// methods.
 	Init(context.Context) error
+
+	// StartVerification starts an interactive verification flow with the given
+	// user via a to-device event.
 	StartVerification(ctx context.Context, to id.UserID) (id.VerificationTransactionID, error)
+	// StartInRoomVerification starts an interactive verification flow with the
+	// given user in the given room.
 	StartInRoomVerification(ctx context.Context, roomID id.RoomID, to id.UserID) (id.VerificationTransactionID, error)
+
+	// AcceptVerification accepts a verification request.
 	AcceptVerification(ctx context.Context, txnID id.VerificationTransactionID) error
+	// DismissVerification dismisses a verification request. This will not send
+	// a cancellation to the other device. This method should only be called
+	// *before* the request has been accepted and will error otherwise.
+	DismissVerification(ctx context.Context, txnID id.VerificationTransactionID) error
+	// CancelVerification cancels a verification request. This method should
+	// only be called *after* the request has been accepted, although it will
+	// not error if called beforehand.
 	CancelVerification(ctx context.Context, txnID id.VerificationTransactionID, code event.VerificationCancelCode, reason string) error
 
+	// HandleScannedQRData handles the data from a QR code scan.
 	HandleScannedQRData(ctx context.Context, data []byte) error
+	// ConfirmQRCodeScanned confirms that our QR code has been scanned.
 	ConfirmQRCodeScanned(ctx context.Context, txnID id.VerificationTransactionID) error
 
+	// StartSAS starts a SAS verification flow.
 	StartSAS(ctx context.Context, txnID id.VerificationTransactionID) error
+	// ConfirmSAS indicates that the user has confirmed that the SAS matches
+	// SAS shown on the other user's device.
 	ConfirmSAS(ctx context.Context, txnID id.VerificationTransactionID) error
 }
 

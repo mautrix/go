@@ -183,8 +183,11 @@ func (vh *VerificationHelper) HandleScannedQRData(ctx context.Context, data []by
 	return nil
 }
 
-// ConfirmQRCodeScanned confirms that our QR code has been scanned and sends the
-// m.key.verification.done event to the other device.
+// ConfirmQRCodeScanned confirms that our QR code has been scanned and sends
+// the m.key.verification.done event to the other device for the given
+// transaction ID. The transaction ID should be one received via the
+// VerificationRequested callback in [RequiredCallbacks] or the
+// [StartVerification] or [StartInRoomVerification] functions.
 func (vh *VerificationHelper) ConfirmQRCodeScanned(ctx context.Context, txnID id.VerificationTransactionID) error {
 	log := vh.getLog(ctx).With().
 		Str("verification_action", "confirm QR code scanned").

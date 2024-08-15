@@ -28,9 +28,10 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-// StartSAS starts a SAS verification flow. The transaction ID should be the
-// transaction ID of a verification request that was received via the
-// VerificationRequested callback in [RequiredCallbacks].
+// StartSAS starts a SAS verification flow for the given transaction ID. The
+// transaction ID should be one received via the VerificationRequested callback
+// in [RequiredCallbacks] or the [StartVerification] or
+// [StartInRoomVerification] functions.
 func (vh *VerificationHelper) StartSAS(ctx context.Context, txnID id.VerificationTransactionID) error {
 	log := vh.getLog(ctx).With().
 		Str("verification_action", "accept verification").
@@ -81,7 +82,10 @@ func (vh *VerificationHelper) StartSAS(ctx context.Context, txnID id.Verificatio
 }
 
 // ConfirmSAS indicates that the user has confirmed that the SAS matches SAS
-// shown on the other user's device.
+// shown on the other user's device for the given transaction ID. The
+// transaction ID should be one received via the VerificationRequested callback
+// in [RequiredCallbacks] or the [StartVerification] or
+// [StartInRoomVerification] functions.
 func (vh *VerificationHelper) ConfirmSAS(ctx context.Context, txnID id.VerificationTransactionID) error {
 	log := vh.getLog(ctx).With().
 		Str("verification_action", "confirm SAS").

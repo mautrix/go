@@ -482,9 +482,21 @@ func (vh *VerificationHelper) AcceptVerification(ctx context.Context, txnID id.V
 	return vh.generateAndShowQRCode(ctx, txn)
 }
 
-// CancelVerification cancels a verification request. The transaction ID should
-// be the transaction ID of a verification request that was received via the
-// VerificationRequested callback in [RequiredCallbacks].
+// DismissVerification dismisses the verification request with the given
+// transaction ID. The transaction ID should be one received via the
+// VerificationRequested callback in [RequiredCallbacks] or the
+// [StartVerification] or [StartInRoomVerification] functions.
+func (vh *VerificationHelper) DismissVerification(ctx context.Context, txnID id.VerificationTransactionID) error {
+	vh.activeTransactionsLock.Lock()
+	defer vh.activeTransactionsLock.Unlock()
+	delete(vh.activeTransactions, txnID)
+	return nil
+}
+
+// DismissVerification cancels the verification request with the given
+// transaction ID. The transaction ID should be one received via the
+// VerificationRequested callback in [RequiredCallbacks] or the
+// [StartVerification] or [StartInRoomVerification] functions.
 func (vh *VerificationHelper) CancelVerification(ctx context.Context, txnID id.VerificationTransactionID, code event.VerificationCancelCode, reason string) error {
 	vh.activeTransactionsLock.Lock()
 	defer vh.activeTransactionsLock.Unlock()
