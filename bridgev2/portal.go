@@ -3415,6 +3415,7 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 }
 
 func (portal *Portal) Delete(ctx context.Context) error {
+	portal.removeInPortalCache(ctx)
 	err := portal.Bridge.DB.Portal.Delete(ctx, portal.PortalKey)
 	if err != nil {
 		return err
@@ -3438,6 +3439,27 @@ func (portal *Portal) RemoveMXID(ctx context.Context) error {
 	defer portal.Bridge.cacheLock.Unlock()
 	delete(portal.Bridge.portalsByMXID, portal.MXID)
 	return nil
+}
+
+func (portal *Portal) removeInPortalCache(ctx context.Context) {
+	if portal.Receiver != "" {
+		login := portal.Bridge.GetCachedUserLoginByID(portal.Receiver)
+		if login != nil {
+			login.inPortalCache.Remove(portal.PortalKey)
+		}
+		return
+	}
+	userPortals, err := portal.Bridge.DB.UserPortal.GetAllInPortal(ctx, portal.PortalKey)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to get user logins in portal to remove user portal cache")
+	} else {
+		for _, up := range userPortals {
+			login := portal.Bridge.GetCachedUserLoginByID(up.LoginID)
+			if login != nil {
+				login.inPortalCache.Remove(portal.PortalKey)
+			}
+		}
+	}
 }
 
 func (portal *Portal) unlockedDelete(ctx context.Context) error {
