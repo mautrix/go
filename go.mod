@@ -1,6 +1,6 @@
 module maunium.net/go/mautrix
 
-go 1.21
+go 1.22
 
 require (
 	github.com/chzyer/readline v1.5.1
