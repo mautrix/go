@@ -1,3 +1,22 @@
+## v0.20.0 (unreleased)
+
+* Bumped minimum Go version to 1.22.
+* *(bridgev2)* Added more features and fixed bugs.
+* *(event)* Added types for [MSC4144]: Per-message profiles.
+* *(federation)* Added implementation of server name resolution and a basic
+  client for making federation requests.
+* *(crypto/ssss)* Changed recovery key/passphrase verify functions to take the
+  key ID as a parameter to ensure it's correctly set even if the key metadata
+  wasn't fetched via `GetKeyData`.
+* *(format/mdext)* Added goldmark extensions for single-character bold, italic
+  and strikethrough parsing (as in `*foo*` -> **foo**, `_foo_` -> _foo_ and
+  `~foo~` -> ~~foo~~)
+* *(format)* Changed `RenderMarkdown` et al to always include `m.mentions` in
+  returned content. The mention list is filled with matrix.to URLs from the
+  input by default.
+
+[MSC4144]: https://github.com/matrix-org/matrix-spec-proposals/pull/4144
+
 ## v0.19.0 (2024-07-16)
 
 * Renamed `master` branch to `main`.
