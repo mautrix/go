@@ -1621,7 +1621,16 @@ func (portal *Portal) applyRelationMeta(content *event.MessageEventContent, repl
 	}
 }
 
-func (portal *Portal) sendConvertedMessage(ctx context.Context, id networkid.MessageID, intent MatrixAPI, senderID networkid.UserID, converted *ConvertedMessage, ts time.Time, logContext func(*zerolog.Event) *zerolog.Event) []*database.Message {
+func (portal *Portal) sendConvertedMessage(
+	ctx context.Context,
+	id networkid.MessageID,
+	intent MatrixAPI,
+	senderID networkid.UserID,
+	converted *ConvertedMessage,
+	ts time.Time,
+	streamOrder int64,
+	logContext func(*zerolog.Event) *zerolog.Event,
+) []*database.Message {
 	if logContext == nil {
 		logContext = func(e *zerolog.Event) *zerolog.Event {
 			return e
@@ -1630,7 +1639,7 @@ func (portal *Portal) sendConvertedMessage(ctx context.Context, id networkid.Mes
 	log := zerolog.Ctx(ctx)
 	replyTo, threadRoot, prevThreadEvent := portal.getRelationMeta(ctx, id, converted.ReplyTo, converted.ThreadRoot, false)
 	output := make([]*database.Message, 0, len(converted.Parts))
-	for _, part := range converted.Parts {
+	for i, part := range converted.Parts {
 		portal.applyRelationMeta(part.Content, replyTo, threadRoot, prevThreadEvent)
 		dbMessage := &database.Message{
 			ID:         id,
@@ -1656,6 +1665,8 @@ func (portal *Portal) sendConvertedMessage(ctx context.Context, id networkid.Mes
 			}, &MatrixSendExtra{
 				Timestamp:   ts,
 				MessageMeta: dbMessage,
+				StreamOrder: streamOrder,
+				PartIndex:   i,
 			})
 			if err != nil {
 				logContext(log.Err(err)).Str("part_id", string(part.ID)).Msg("Failed to send message part to Matrix")
@@ -1807,7 +1818,7 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 		}
 		return
 	}
-	portal.sendConvertedMessage(ctx, evt.GetID(), intent, evt.GetSender().Sender, converted, ts, nil)
+	portal.sendConvertedMessage(ctx, evt.GetID(), intent, evt.GetSender().Sender, converted, ts, getStreamOrder(evt), nil)
 }
 
 func (portal *Portal) sendRemoteErrorNotice(ctx context.Context, intent MatrixAPI, err error, ts time.Time, evtTypeName string) {
@@ -1863,12 +1874,20 @@ func (portal *Portal) handleRemoteEdit(ctx context.Context, source *UserLogin, e
 		portal.sendRemoteErrorNotice(ctx, intent, err, ts, "edit")
 		return
 	}
-	portal.sendConvertedEdit(ctx, existing[0].ID, evt.GetSender().Sender, converted, intent, ts)
+	portal.sendConvertedEdit(ctx, existing[0].ID, evt.GetSender().Sender, converted, intent, ts, getStreamOrder(evt))
 }
 
-func (portal *Portal) sendConvertedEdit(ctx context.Context, targetID networkid.MessageID, senderID networkid.UserID, converted *ConvertedEdit, intent MatrixAPI, ts time.Time) {
+func (portal *Portal) sendConvertedEdit(
+	ctx context.Context,
+	targetID networkid.MessageID,
+	senderID networkid.UserID,
+	converted *ConvertedEdit,
+	intent MatrixAPI,
+	ts time.Time,
+	streamOrder int64,
+) {
 	log := zerolog.Ctx(ctx)
-	for _, part := range converted.ModifiedParts {
+	for i, part := range converted.ModifiedParts {
 		if part.Content.Mentions == nil {
 			part.Content.Mentions = &event.Mentions{}
 		}
@@ -1898,6 +1917,8 @@ func (portal *Portal) sendConvertedEdit(ctx context.Context, targetID networkid.
 			resp, err := intent.SendMessage(ctx, portal.MXID, part.Type, wrappedContent, &MatrixSendExtra{
 				Timestamp:   ts,
 				MessageMeta: part.Part,
+				StreamOrder: streamOrder,
+				PartIndex:   i,
 			})
 			if err != nil {
 				log.Err(err).Stringer("part_mxid", part.Part.MXID).Msg("Failed to edit message part")
@@ -1941,7 +1962,7 @@ func (portal *Portal) sendConvertedEdit(ctx context.Context, targetID networkid.
 		}
 	}
 	if converted.AddedParts != nil {
-		portal.sendConvertedMessage(ctx, targetID, intent, senderID, converted.AddedParts, ts, nil)
+		portal.sendConvertedMessage(ctx, targetID, intent, senderID, converted.AddedParts, ts, streamOrder, nil)
 	}
 }
 
@@ -1966,6 +1987,13 @@ func getEventTS(evt RemoteEvent) time.Time {
 		return tsProvider.GetTimestamp()
 	}
 	return time.Now()
+}
+
+func getStreamOrder(evt RemoteEvent) int64 {
+	if streamProvider, ok := evt.(RemoteEventWithStreamOrder); ok {
+		return streamProvider.GetStreamOrder()
+	}
+	return 0
 }
 
 func (portal *Portal) handleRemoteReactionSync(ctx context.Context, source *UserLogin, evt RemoteReactionSync) {

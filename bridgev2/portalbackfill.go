@@ -272,7 +272,7 @@ func (portal *Portal) compileBatchMessage(ctx context.Context, source *UserLogin
 	var partIDs []networkid.PartID
 	partMap := make(map[networkid.PartID]*database.Message, len(msg.Parts))
 	var firstPart *database.Message
-	for _, part := range msg.Parts {
+	for i, part := range msg.Parts {
 		partIDs = append(partIDs, part.ID)
 		portal.applyRelationMeta(part.Content, replyTo, threadRoot, prevThreadEvent)
 		evtID := portal.Bridge.Matrix.GenerateDeterministicEventID(portal.MXID, portal.PortalKey, msg.ID, part.ID)
@@ -303,7 +303,7 @@ func (portal *Portal) compileBatchMessage(ctx context.Context, source *UserLogin
 			firstPart = dbMessage
 		}
 		partMap[part.ID] = dbMessage
-		out.Extras = append(out.Extras, &MatrixSendExtra{MessageMeta: dbMessage})
+		out.Extras = append(out.Extras, &MatrixSendExtra{MessageMeta: dbMessage, StreamOrder: msg.StreamOrder, PartIndex: i})
 		out.DBMessages = append(out.DBMessages, dbMessage)
 		if prevThreadEvent != nil {
 			prevThreadEvent.MXID = evtID
@@ -449,7 +449,7 @@ func (portal *Portal) sendLegacyBackfill(ctx context.Context, source *UserLogin,
 	var lastPart id.EventID
 	for _, msg := range messages {
 		intent := portal.GetIntentFor(ctx, msg.Sender, source, RemoteEventMessage)
-		dbMessages := portal.sendConvertedMessage(ctx, msg.ID, intent, msg.Sender.Sender, msg.ConvertedMessage, msg.Timestamp, func(z *zerolog.Event) *zerolog.Event {
+		dbMessages := portal.sendConvertedMessage(ctx, msg.ID, intent, msg.Sender.Sender, msg.ConvertedMessage, msg.Timestamp, msg.StreamOrder, func(z *zerolog.Event) *zerolog.Event {
 			return z.
 				Str("message_id", string(msg.ID)).
 				Any("sender_id", msg.Sender).

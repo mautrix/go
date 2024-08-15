@@ -24,6 +24,7 @@ type EventMeta struct {
 	Sender            bridgev2.EventSender
 	CreatePortal      bool
 	Timestamp         time.Time
+	StreamOrder       int64
 }
 
 var (
@@ -31,6 +32,7 @@ var (
 	_ bridgev2.RemoteEventWithUncertainPortalReceiver = (*EventMeta)(nil)
 	_ bridgev2.RemoteEventThatMayCreatePortal         = (*EventMeta)(nil)
 	_ bridgev2.RemoteEventWithTimestamp               = (*EventMeta)(nil)
+	_ bridgev2.RemoteEventWithStreamOrder             = (*EventMeta)(nil)
 )
 
 func (evt *EventMeta) AddLogContext(c zerolog.Context) zerolog.Context {
@@ -53,6 +55,10 @@ func (evt *EventMeta) GetTimestamp() time.Time {
 		return time.Now()
 	}
 	return evt.Timestamp
+}
+
+func (evt *EventMeta) GetStreamOrder() int64 {
+	return evt.StreamOrder
 }
 
 func (evt *EventMeta) GetSender() bridgev2.EventSender {

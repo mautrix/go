@@ -413,11 +413,12 @@ type BackfillReaction struct {
 // BackfillMessage is an individual message in a history pagination request.
 type BackfillMessage struct {
 	*ConvertedMessage
-	Sender    EventSender
-	ID        networkid.MessageID
-	TxnID     networkid.TransactionID
-	Timestamp time.Time
-	Reactions []*BackfillReaction
+	Sender      EventSender
+	ID          networkid.MessageID
+	TxnID       networkid.TransactionID
+	Timestamp   time.Time
+	StreamOrder int64
+	Reactions   []*BackfillReaction
 
 	ShouldBackfillThread bool
 	LastThreadMessage    networkid.MessageID
@@ -889,6 +890,11 @@ type RemoteEventWithTargetPart interface {
 type RemoteEventWithTimestamp interface {
 	RemoteEvent
 	GetTimestamp() time.Time
+}
+
+type RemoteEventWithStreamOrder interface {
+	RemoteEvent
+	GetStreamOrder() int64
 }
 
 type RemoteMessage interface {

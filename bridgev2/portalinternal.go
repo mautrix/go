@@ -125,8 +125,8 @@ func (portal *PortalInternals) ApplyRelationMeta(content *event.MessageEventCont
 	(*Portal)(portal).applyRelationMeta(content, replyTo, threadRoot, prevThreadEvent)
 }
 
-func (portal *PortalInternals) SendConvertedMessage(ctx context.Context, id networkid.MessageID, intent MatrixAPI, senderID networkid.UserID, converted *ConvertedMessage, ts time.Time, logContext func(*zerolog.Event) *zerolog.Event) []*database.Message {
-	return (*Portal)(portal).sendConvertedMessage(ctx, id, intent, senderID, converted, ts, logContext)
+func (portal *PortalInternals) SendConvertedMessage(ctx context.Context, id networkid.MessageID, intent MatrixAPI, senderID networkid.UserID, converted *ConvertedMessage, ts time.Time, streamOrder int64, logContext func(*zerolog.Event) *zerolog.Event) []*database.Message {
+	return (*Portal)(portal).sendConvertedMessage(ctx, id, intent, senderID, converted, ts, streamOrder, logContext)
 }
 
 func (portal *PortalInternals) CheckPendingMessage(ctx context.Context, evt RemoteMessage) (bool, *database.Message) {
@@ -149,8 +149,8 @@ func (portal *PortalInternals) HandleRemoteEdit(ctx context.Context, source *Use
 	(*Portal)(portal).handleRemoteEdit(ctx, source, evt)
 }
 
-func (portal *PortalInternals) SendConvertedEdit(ctx context.Context, targetID networkid.MessageID, senderID networkid.UserID, converted *ConvertedEdit, intent MatrixAPI, ts time.Time) {
-	(*Portal)(portal).sendConvertedEdit(ctx, targetID, senderID, converted, intent, ts)
+func (portal *PortalInternals) SendConvertedEdit(ctx context.Context, targetID networkid.MessageID, senderID networkid.UserID, converted *ConvertedEdit, intent MatrixAPI, ts time.Time, streamOrder int64) {
+	(*Portal)(portal).sendConvertedEdit(ctx, targetID, senderID, converted, intent, ts, streamOrder)
 }
 
 func (portal *PortalInternals) GetTargetMessagePart(ctx context.Context, evt RemoteEventWithTargetMessage) (*database.Message, error) {
@@ -273,6 +273,10 @@ func (portal *PortalInternals) CreateMatrixRoomInLoop(ctx context.Context, sourc
 	return (*Portal)(portal).createMatrixRoomInLoop(ctx, source, info, backfillBundle)
 }
 
+func (portal *PortalInternals) RemoveInPortalCache(ctx context.Context) {
+	(*Portal)(portal).removeInPortalCache(ctx)
+}
+
 func (portal *PortalInternals) UnlockedDelete(ctx context.Context) error {
 	return (*Portal)(portal).unlockedDelete(ctx)
 }
@@ -285,6 +289,10 @@ func (portal *PortalInternals) DoForwardBackfill(ctx context.Context, source *Us
 	(*Portal)(portal).doForwardBackfill(ctx, source, lastMessage, bundledData)
 }
 
+func (portal *PortalInternals) FetchThreadBackfill(ctx context.Context, source *UserLogin, anchor *database.Message) *FetchMessagesResponse {
+	return (*Portal)(portal).fetchThreadBackfill(ctx, source, anchor)
+}
+
 func (portal *PortalInternals) DoThreadBackfill(ctx context.Context, source *UserLogin, threadID networkid.MessageID) {
 	(*Portal)(portal).doThreadBackfill(ctx, source, threadID)
 }
@@ -293,8 +301,16 @@ func (portal *PortalInternals) SendBackfill(ctx context.Context, source *UserLog
 	(*Portal)(portal).sendBackfill(ctx, source, messages, forceForward, markRead, inThread)
 }
 
-func (portal *PortalInternals) SendBatch(ctx context.Context, source *UserLogin, messages []*BackfillMessage, forceForward, markRead, allowNotification bool) {
-	(*Portal)(portal).sendBatch(ctx, source, messages, forceForward, markRead, allowNotification)
+func (portal *PortalInternals) CompileBatchMessage(ctx context.Context, source *UserLogin, msg *BackfillMessage, out *compileBatchOutput, inThread bool) {
+	(*Portal)(portal).compileBatchMessage(ctx, source, msg, out, inThread)
+}
+
+func (portal *PortalInternals) FetchThreadInsideBatch(ctx context.Context, source *UserLogin, dbMsg *database.Message, out *compileBatchOutput) {
+	(*Portal)(portal).fetchThreadInsideBatch(ctx, source, dbMsg, out)
+}
+
+func (portal *PortalInternals) SendBatch(ctx context.Context, source *UserLogin, messages []*BackfillMessage, forceForward, markRead, inThread bool) {
+	(*Portal)(portal).sendBatch(ctx, source, messages, forceForward, markRead, inThread)
 }
 
 func (portal *PortalInternals) SendLegacyBackfill(ctx context.Context, source *UserLogin, messages []*BackfillMessage, markRead bool) {

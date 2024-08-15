@@ -74,6 +74,8 @@ type MatrixSendExtra struct {
 	Timestamp    time.Time
 	MessageMeta  *database.Message
 	ReactionMeta *database.Reaction
+	StreamOrder  int64
+	PartIndex    int
 }
 
 type MatrixAPI interface {
