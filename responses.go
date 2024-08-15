@@ -111,10 +111,14 @@ type RespMediaUpload struct {
 
 // RespCreateMXC is the JSON response for https://spec.matrix.org/v1.7/client-server-api/#post_matrixmediav1create
 type RespCreateMXC struct {
-	ContentURI      id.ContentURI `json:"content_uri"`
-	UnusedExpiresAt int           `json:"unused_expires_at,omitempty"`
+	ContentURI      id.ContentURI      `json:"content_uri"`
+	UnusedExpiresAt jsontime.UnixMilli `json:"unused_expires_at,omitempty"`
 
 	UnstableUploadURL string `json:"com.beeper.msc3870.upload_url,omitempty"`
+
+	// Beeper extensions for uploading unique media only once
+	BeeperUniqueID    string             `json:"com.beeper.unique_id,omitempty"`
+	BeeperCompletedAt jsontime.UnixMilli `json:"com.beeper.completed_at,omitempty"`
 }
 
 // RespPreviewURL is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#get_matrixmediav3preview_url

@@ -1581,12 +1581,27 @@ func (cli *Client) DownloadBytes(ctx context.Context, mxcURL id.ContentURI) ([]b
 	return io.ReadAll(resp.Body)
 }
 
+type ReqCreateMXC struct {
+	BeeperUniqueID string
+	BeeperRoomID   id.RoomID
+}
+
 // CreateMXC creates a blank Matrix content URI to allow uploading the content asynchronously later.
 //
 // See https://spec.matrix.org/v1.7/client-server-api/#post_matrixmediav1create
-func (cli *Client) CreateMXC(ctx context.Context) (*RespCreateMXC, error) {
+func (cli *Client) CreateMXC(ctx context.Context, extra ...ReqCreateMXC) (*RespCreateMXC, error) {
 	var m RespCreateMXC
-	_, err := cli.MakeRequest(ctx, http.MethodPost, cli.BuildURL(MediaURLPath{"v1", "create"}), nil, &m)
+	query := map[string]string{}
+	if len(extra) > 0 {
+		if extra[0].BeeperUniqueID != "" {
+			query["com.beeper.unique_id"] = extra[0].BeeperUniqueID
+		}
+		if extra[0].BeeperRoomID != "" {
+			query["com.beeper.room_id"] = string(extra[0].BeeperRoomID)
+		}
+	}
+	createURL := cli.BuildURLWithQuery(MediaURLPath{"v1", "create"}, query)
+	_, err := cli.MakeRequest(ctx, http.MethodPost, createURL, nil, &m)
 	return &m, err
 }
 
