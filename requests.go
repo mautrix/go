@@ -366,7 +366,8 @@ type ReqSetReadMarkers struct {
 }
 
 type BeeperInboxDone struct {
-	Delta int64 `json:"at_delta"`
+	Delta   int64 `json:"at_delta"`
+	AtOrder int64 `json:"at_order"`
 }
 
 type ReqSetBeeperInboxState struct {
