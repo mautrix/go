@@ -7,7 +7,7 @@ info:
   license:
     name: Mozilla Public License Version 2.0
     url: https://github.com/mautrix/go/blob/main/LICENSE
-  version: v0.19.0
+  version: v0.20.0
 externalDocs:
   description: mautrix-go godocs
   url: https://pkg.go.dev/maunium.net/go/mautrix/bridgev2

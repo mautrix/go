@@ -1,4 +1,4 @@
-## v0.20.0 (unreleased)
+## v0.20.0 (2024-08-16)
 
 * Bumped minimum Go version to 1.22.
 * *(bridgev2)* Added more features and fixed bugs.
