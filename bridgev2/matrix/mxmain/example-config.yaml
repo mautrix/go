@@ -198,6 +198,9 @@ matrix:
     # Whether created rooms should have federation enabled. If false, created portal rooms
     # will never be federated. Changing this option requires recreating rooms.
     federate_rooms: true
+    # The threshold as bytes after which the bridge should roundtrip uploads via the disk
+    # rather than keeping the whole file in memory.
+    upload_file_threshold: 5242880
 
 # Settings for provisioning API
 provisioning:

@@ -238,13 +238,11 @@ func (as *ASIntent) UploadMedia(ctx context.Context, roomID id.RoomID, data []by
 	return
 }
 
-const inMemoryUploadThreshold = 5 * 1024 * 1024
-
-type writeToCapturer struct {
+type simpleBuffer struct {
 	data []byte
 }
 
-func (w *writeToCapturer) Write(p []byte) (n int, err error) {
+func (w *simpleBuffer) Write(p []byte) (n int, err error) {
 	if w.data == nil {
 		w.data = p
 	} else {
@@ -253,36 +251,50 @@ func (w *writeToCapturer) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
-func (as *ASIntent) UploadMediaStream(ctx context.Context, roomID id.RoomID, data io.Reader, size int64, fileName, mimeType string) (url id.ContentURIString, file *event.EncryptedFileInfo, err error) {
+func (w *simpleBuffer) Seek(offset int64, whence int) (int64, error) {
+	if whence == io.SeekStart {
+		if offset == 0 {
+			w.data = nil
+		} else {
+			w.data = w.data[:offset]
+		}
+		return offset, nil
+	}
+	return 0, fmt.Errorf("unsupported whence value %d", whence)
+}
+
+func (as *ASIntent) UploadMediaStream(
+	ctx context.Context,
+	roomID id.RoomID,
+	size int64,
+	requireFile bool,
+	fileName,
+	mimeType string,
+	cb bridgev2.FileStreamCallback,
+) (url id.ContentURIString, file *event.EncryptedFileInfo, err error) {
 	if size > as.Connector.MediaConfig.UploadSize {
 		return "", nil, fmt.Errorf("file too large (%.2f MB > %.2f MB)", float64(size)/1000/1000, float64(as.Connector.MediaConfig.UploadSize)/1000/1000)
-	} else if 0 < size && size < inMemoryUploadThreshold {
-		var dataBytes []byte
-		wt, ok := data.(io.WriterTo)
-		if ok {
-			capturer := &writeToCapturer{}
-			_, err = wt.WriteTo(capturer)
-			if err != nil {
-				return "", nil, err
-			}
-			dataBytes = capturer.data
-		} else {
-			dataBytes, err = io.ReadAll(data)
-			if err != nil {
-				return "", nil, err
-			}
-		}
-		return as.UploadMedia(ctx, roomID, dataBytes, fileName, mimeType)
 	}
-	tempFile, err := os.CreateTemp("", "mautrix-upload-*")
+	if !requireFile && 0 < size && size < as.Connector.Config.Matrix.UploadFileThreshold {
+		var buf simpleBuffer
+		replPath, err := cb(&buf)
+		if err != nil {
+			return "", nil, err
+		} else if replPath != "" {
+			panic(fmt.Errorf("logic error: replacement path must only be returned if requireFile is true"))
+		}
+		return as.UploadMedia(ctx, roomID, buf.data, fileName, mimeType)
+	}
+	var tempFile *os.File
+	tempFile, err = os.CreateTemp("", "mautrix-upload-*")
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to create temp file: %w", err)
+		err = fmt.Errorf("failed to create temp file: %w", err)
+		return
 	}
 	defer func() {
 		_ = tempFile.Close()
 		_ = os.Remove(tempFile.Name())
 	}()
-	var realSize int64
 	if roomID != "" {
 		var encrypted bool
 		if encrypted, err = as.Matrix.StateStore.IsEncrypted(ctx, roomID); err != nil {
@@ -292,27 +304,50 @@ func (as *ASIntent) UploadMediaStream(ctx context.Context, roomID id.RoomID, dat
 			file = &event.EncryptedFileInfo{
 				EncryptedFile: *attachment.NewEncryptedFile(),
 			}
-			encryptStream := file.EncryptStream(data)
-			realSize, err = io.Copy(tempFile, encryptStream)
-			if err != nil {
-				return "", nil, fmt.Errorf("failed to write to temp file: %w", err)
-			}
-			err = encryptStream.Close()
-			if err != nil {
-				return "", nil, fmt.Errorf("failed to finalize encryption: %w", err)
-			}
 			mimeType = "application/octet-stream"
 			fileName = ""
 		}
-	} else {
-		realSize, err = io.Copy(tempFile, data)
+	}
+	var replPath string
+	replPath, err = cb(tempFile)
+	if err != nil {
+		err = fmt.Errorf("failed to write to temp file: %w", err)
+	}
+	var replFile *os.File
+	if replPath != "" {
+		replFile, err = os.OpenFile(replPath, os.O_RDWR, 0)
 		if err != nil {
-			return "", nil, fmt.Errorf("failed to write to temp file: %w", err)
+			err = fmt.Errorf("failed to open replacement file: %w", err)
+			return
 		}
+	} else {
+		replFile = tempFile
+		_, err = replFile.Seek(0, io.SeekStart)
+		if err != nil {
+			err = fmt.Errorf("failed to seek to start of temp file: %w", err)
+			return
+		}
+	}
+	if file != nil {
+		err = file.EncryptFile(replFile)
+		if err != nil {
+			err = fmt.Errorf("failed to encrypt file: %w", err)
+			return
+		}
+		_, err = replFile.Seek(0, io.SeekStart)
+		if err != nil {
+			err = fmt.Errorf("failed to seek to start of temp file after encrypting: %w", err)
+			return
+		}
+	}
+	info, err := replFile.Stat()
+	if err != nil {
+		err = fmt.Errorf("failed to get temp file info: %w", err)
+		return
 	}
 	url, err = as.doUploadReq(ctx, file, mautrix.ReqUploadMedia{
 		Content:       tempFile,
-		ContentLength: realSize,
+		ContentLength: info.Size(),
 		ContentType:   mimeType,
 		FileName:      fileName,
 	})

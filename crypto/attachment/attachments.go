@@ -127,6 +127,43 @@ func (ef *EncryptedFile) EncryptInPlace(data []byte) {
 	ef.Hashes.SHA256 = base64.RawStdEncoding.EncodeToString(checksum[:])
 }
 
+type ReadWriterAt interface {
+	io.WriterAt
+	io.Reader
+}
+
+// EncryptFile encrypts the given file in-place and updates the SHA256 hash in the EncryptedFile struct.
+func (ef *EncryptedFile) EncryptFile(file ReadWriterAt) error {
+	err := ef.decodeKeys(false)
+	if err != nil {
+		return err
+	}
+	block, _ := aes.NewCipher(ef.decoded.key[:])
+	stream := cipher.NewCTR(block, ef.decoded.iv[:])
+	hasher := sha256.New()
+	buf := make([]byte, 32*1024)
+	var writePtr int64
+	var n int
+	for {
+		n, err = file.Read(buf)
+		if err != nil && !errors.Is(err, io.EOF) {
+			return err
+		}
+		if n == 0 {
+			break
+		}
+		stream.XORKeyStream(buf[:n], buf[:n])
+		_, err = file.WriteAt(buf[:n], writePtr)
+		if err != nil {
+			return err
+		}
+		writePtr += int64(n)
+		hasher.Write(buf[:n])
+	}
+	ef.Hashes.SHA256 = base64.RawStdEncoding.EncodeToString(hasher.Sum(nil))
+	return nil
+}
+
 type encryptingReader struct {
 	stream cipher.Stream
 	hash   hash.Hash
