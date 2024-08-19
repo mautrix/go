@@ -291,9 +291,15 @@ func (as *ASIntent) UploadMediaStream(
 		err = fmt.Errorf("failed to create temp file: %w", err)
 		return
 	}
+	removeAndClose := func(f *os.File) {
+		_ = f.Close()
+		_ = os.Remove(f.Name())
+	}
+	startedAsyncUpload := false
 	defer func() {
-		_ = tempFile.Close()
-		_ = os.Remove(tempFile.Name())
+		if !startedAsyncUpload {
+			removeAndClose(tempFile)
+		}
 	}()
 	if roomID != "" {
 		var encrypted bool
@@ -320,6 +326,11 @@ func (as *ASIntent) UploadMediaStream(
 			err = fmt.Errorf("failed to open replacement file: %w", err)
 			return
 		}
+		defer func() {
+			if !startedAsyncUpload {
+				removeAndClose(replFile)
+			}
+		}()
 	} else {
 		replFile = tempFile
 		_, err = replFile.Seek(0, io.SeekStart)
@@ -345,12 +356,34 @@ func (as *ASIntent) UploadMediaStream(
 		err = fmt.Errorf("failed to get temp file info: %w", err)
 		return
 	}
-	url, err = as.doUploadReq(ctx, file, mautrix.ReqUploadMedia{
+	req := mautrix.ReqUploadMedia{
 		Content:       tempFile,
 		ContentLength: info.Size(),
 		ContentType:   mimeType,
 		FileName:      fileName,
-	})
+	}
+	if as.Connector.Config.Homeserver.AsyncMedia {
+		req.DoneCallback = func() {
+			removeAndClose(replFile)
+			removeAndClose(tempFile)
+		}
+		startedAsyncUpload = true
+		var resp *mautrix.RespCreateMXC
+		resp, err = as.Matrix.UploadAsync(ctx, req)
+		if resp != nil {
+			url = resp.ContentURI.CUString()
+		}
+	} else {
+		var resp *mautrix.RespMediaUpload
+		resp, err = as.Matrix.UploadMedia(ctx, req)
+		if resp != nil {
+			url = resp.ContentURI.CUString()
+		}
+	}
+	if file != nil {
+		file.URL = url
+		url = ""
+	}
 	return
 }
 
