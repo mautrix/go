@@ -5,45 +5,45 @@
   * [x] Attachments
   * [ ] Polls
   * [x] Replies
-  * [ ] Threads
+  * [x] Threads
   * [x] Edits
   * [x] Reactions
-    * [ ] Reaction mass-syncing
+    * [x] Reaction mass-syncing
   * [x] Deletions
   * [x] Message status events and error notices
-  * [ ] Backfilling history
+  * [x] Backfilling history
 * [x] Login
 * [x] Logout
-* [ ] Re-login after credential expiry
-* [ ] Disappearing messages
+* [x] Re-login after credential expiry
+* [x] Disappearing messages
 * [x] Read receipts
 * [ ] Presence
-* [ ] Typing notifications
-* [ ] Spaces
-* [ ] Relay mode
-* [ ] Chat metadata
-  * [ ] Archive/low priority
-  * [ ] Pin/favorite
-  * [ ] Mark unread
-  * [ ] Mute status
-    * [ ] Temporary mutes ("snooze")
+* [x] Typing notifications
+* [x] Spaces
+* [x] Relay mode
+* [x] Chat metadata
+  * [x] Archive/low priority
+  * [x] Pin/favorite
+  * [x] Mark unread
+  * [x] Mute status
+    * [x] Temporary mutes ("snooze")
 * [x] User metadata (name/avatar)
-* [ ] Group metadata
-  * [ ] Initial meta and full resyncs
+* [x] Group metadata
+  * [x] Initial meta and full resyncs
     * [x] Name, avatar, topic
     * [x] Members
-    * [ ] Permissions
-  * [ ] Change events
-    * [ ] Name, avatar, topic
-    * [ ] Members (join, leave, invite, kick, ban, knock)
-    * [ ] Permissions (promote, demote)
+    * [x] Permissions
+  * [x] Change events
+    * [x] Name, avatar, topic
+    * [x] Members (join, leave, invite, kick, ban, knock)
+    * [x] Permissions (promote, demote)
 * [ ] Misc actions
   * [ ] Invites / accepting message requests
-  * [ ] Create group
-  * [ ] Create DM
-    * [ ] Get contact list
-    * [ ] Check if identifier is on remote network
-    * [ ] Search users on remote network
+  * [x] Create group
+  * [x] Create DM
+    * [x] Get contact list
+    * [x] Check if identifier is on remote network
+    * [x] Search users on remote network
   * [ ] Delete chat
   * [ ] Report spam
 * [ ] Custom emojis
