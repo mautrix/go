@@ -1593,6 +1593,7 @@ func (cli *Client) CreateMXC(ctx context.Context) (*RespCreateMXC, error) {
 func (cli *Client) UploadAsync(ctx context.Context, req ReqUploadMedia) (*RespCreateMXC, error) {
 	resp, err := cli.CreateMXC(ctx)
 	if err != nil {
+		req.DoneCallback()
 		return nil, err
 	}
 	req.MXC = resp.ContentURI
@@ -1635,6 +1636,8 @@ type ReqUploadMedia struct {
 	ContentLength int64
 	ContentType   string
 	FileName      string
+
+	DoneCallback func()
 
 	// MXC specifies an existing MXC URI which doesn't have content yet to upload into.
 	// See https://spec.matrix.org/unstable/client-server-api/#put_matrixmediav3uploadservernamemediaid
@@ -1711,6 +1714,9 @@ func (cli *Client) uploadMediaToURL(ctx context.Context, data ReqUploadMedia) (*
 // UploadMedia uploads the given data to the content repository and returns an MXC URI.
 // See https://spec.matrix.org/v1.7/client-server-api/#post_matrixmediav3upload
 func (cli *Client) UploadMedia(ctx context.Context, data ReqUploadMedia) (*RespMediaUpload, error) {
+	if data.DoneCallback != nil {
+		defer data.DoneCallback()
+	}
 	if data.UnstableUploadURL != "" {
 		if data.MXC.IsEmpty() {
 			return nil, errors.New("MXC must also be set when uploading to external URL")

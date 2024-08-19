@@ -239,6 +239,9 @@ func (as *ASIntent) UploadMedia(ctx context.Context, roomID id.RoomID, data []by
 		if err != nil {
 			return
 		}
+		req.DoneCallback = func() {
+			as.Connector.uploadSema.Release(int64(len(data)))
+		}
 		var resp *mautrix.RespCreateMXC
 		resp, err = as.Matrix.UploadAsync(ctx, req)
 		if resp != nil {
