@@ -62,6 +62,15 @@ func UpdateStateStore(ctx context.Context, store StateStore, evt *event.Event) {
 		err = store.SetPowerLevels(ctx, evt.RoomID, content)
 	case *event.EncryptionEventContent:
 		err = store.SetEncryptionEvent(ctx, evt.RoomID, content)
+	default:
+		switch evt.Type {
+		case event.StateMember, event.StatePowerLevels, event.StateEncryption:
+			zerolog.Ctx(ctx).Warn().
+				Stringer("event_id", evt.ID).
+				Str("event_type", evt.Type.Type).
+				Type("content_type", evt.Content.Parsed).
+				Msg("Got known event type with unknown content type in UpdateStateStore")
+		}
 	}
 	if err != nil {
 		zerolog.Ctx(ctx).Warn().Err(err).
