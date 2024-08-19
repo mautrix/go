@@ -85,7 +85,7 @@ type MatrixSendExtra struct {
 //
 // The first return value can specify a file path to use instead of the original temp file.
 // Returning a replacement path is only valid if the parameter is a file.
-type FileStreamCallback func(file io.WriteSeeker) (string, error)
+type FileStreamCallback func(file io.Writer) (string, error)
 
 type MatrixAPI interface {
 	GetMXID() id.UserID

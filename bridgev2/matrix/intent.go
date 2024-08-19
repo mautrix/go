@@ -7,6 +7,7 @@
 package matrix
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -238,31 +239,6 @@ func (as *ASIntent) UploadMedia(ctx context.Context, roomID id.RoomID, data []by
 	return
 }
 
-type simpleBuffer struct {
-	data []byte
-}
-
-func (w *simpleBuffer) Write(p []byte) (n int, err error) {
-	if w.data == nil {
-		w.data = p
-	} else {
-		w.data = append(w.data, p...)
-	}
-	return len(p), nil
-}
-
-func (w *simpleBuffer) Seek(offset int64, whence int) (int64, error) {
-	if whence == io.SeekStart {
-		if offset == 0 {
-			w.data = nil
-		} else {
-			w.data = w.data[:offset]
-		}
-		return offset, nil
-	}
-	return 0, fmt.Errorf("unsupported whence value %d", whence)
-}
-
 func (as *ASIntent) UploadMediaStream(
 	ctx context.Context,
 	roomID id.RoomID,
@@ -276,14 +252,14 @@ func (as *ASIntent) UploadMediaStream(
 		return "", nil, fmt.Errorf("file too large (%.2f MB > %.2f MB)", float64(size)/1000/1000, float64(as.Connector.MediaConfig.UploadSize)/1000/1000)
 	}
 	if !requireFile && 0 < size && size < as.Connector.Config.Matrix.UploadFileThreshold {
-		var buf simpleBuffer
+		var buf bytes.Buffer
 		replPath, err := cb(&buf)
 		if err != nil {
 			return "", nil, err
 		} else if replPath != "" {
 			panic(fmt.Errorf("logic error: replacement path must only be returned if requireFile is true"))
 		}
-		return as.UploadMedia(ctx, roomID, buf.data, fileName, mimeType)
+		return as.UploadMedia(ctx, roomID, buf.Bytes(), fileName, mimeType)
 	}
 	var tempFile *os.File
 	tempFile, err = os.CreateTemp("", "mautrix-upload-*")
