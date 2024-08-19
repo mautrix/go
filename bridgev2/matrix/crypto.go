@@ -96,6 +96,7 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 		Str("device_id", helper.client.DeviceID.String()).
 		Msg("Logged in as bridge bot")
 	helper.mach = crypto.NewOlmMachine(helper.client, helper.log, helper.store, helper.bridge.StateStore)
+	helper.mach.DisableSharedGroupSessionTracking = true
 	helper.mach.AllowKeyShare = helper.allowKeyShare
 
 	encryptionConfig := helper.bridge.Config.Encryption
