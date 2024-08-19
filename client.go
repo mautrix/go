@@ -613,7 +613,7 @@ func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backof
 		defer res.Body.Close()
 	}
 	if err != nil {
-		if retries > 0 {
+		if retries > 0 && !errors.Is(err, context.Canceled) {
 			return cli.doRetry(req, err, retries, backoff, responseJSON, handler, dontReadResponse, client)
 		}
 		err = HTTPError{
