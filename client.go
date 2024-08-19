@@ -613,6 +613,11 @@ func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backof
 		defer res.Body.Close()
 	}
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			log := zerolog.Ctx(req.Context())
+			log.Err(err).Msg("context cancelled, don't retry")
+			return nil, nil, err
+		}
 		if retries > 0 {
 			return cli.doRetry(req, err, retries, backoff, responseJSON, handler, dontReadResponse, client)
 		}
