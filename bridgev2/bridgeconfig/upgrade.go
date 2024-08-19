@@ -84,6 +84,7 @@ func doUpgrade(helper up.Helper) {
 	helper.Copy(up.Bool, "matrix", "message_error_notices")
 	helper.Copy(up.Bool, "matrix", "sync_direct_chat_list")
 	helper.Copy(up.Bool, "matrix", "federate_rooms")
+	helper.Copy(up.Int, "matrix", "upload_file_threshold")
 
 	helper.Copy(up.Str, "provisioning", "prefix")
 	if secret, ok := helper.Get(up.Str, "provisioning", "shared_secret"); !ok || secret == "generate" {
