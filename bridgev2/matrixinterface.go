@@ -8,6 +8,7 @@ package bridgev2
 
 import (
 	"context"
+	"io"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -88,6 +89,7 @@ type MatrixAPI interface {
 	MarkTyping(ctx context.Context, roomID id.RoomID, typingType TypingType, timeout time.Duration) error
 	DownloadMedia(ctx context.Context, uri id.ContentURIString, file *event.EncryptedFileInfo) ([]byte, error)
 	UploadMedia(ctx context.Context, roomID id.RoomID, data []byte, fileName, mimeType string) (url id.ContentURIString, file *event.EncryptedFileInfo, err error)
+	UploadMediaStream(ctx context.Context, roomID id.RoomID, data io.Reader, size int64, fileName, mimeType string) (url id.ContentURIString, file *event.EncryptedFileInfo, err error)
 
 	SetDisplayName(ctx context.Context, name string) error
 	SetAvatarURL(ctx context.Context, avatarURL id.ContentURIString) error
