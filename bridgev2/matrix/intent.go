@@ -211,6 +211,9 @@ func (as *ASIntent) DownloadMedia(ctx context.Context, uri id.ContentURIString, 
 }
 
 func (as *ASIntent) UploadMedia(ctx context.Context, roomID id.RoomID, data []byte, fileName, mimeType string) (url id.ContentURIString, file *event.EncryptedFileInfo, err error) {
+	if int64(len(data)) > as.Connector.MediaConfig.UploadSize {
+		return "", nil, fmt.Errorf("file too large (%.2f MB > %.2f MB)", float64(len(data))/1000/1000, float64(as.Connector.MediaConfig.UploadSize)/1000/1000)
+	}
 	if roomID != "" {
 		var encrypted bool
 		if encrypted, err = as.Matrix.StateStore.IsEncrypted(ctx, roomID); err != nil {
@@ -231,6 +234,11 @@ func (as *ASIntent) UploadMedia(ctx context.Context, roomID id.RoomID, data []by
 		FileName:     fileName,
 	}
 	if as.Connector.Config.Homeserver.AsyncMedia {
+		// Prevent too many background uploads at once
+		err = as.Connector.uploadSema.Acquire(ctx, int64(len(data)))
+		if err != nil {
+			return
+		}
 		var resp *mautrix.RespCreateMXC
 		resp, err = as.Matrix.UploadAsync(ctx, req)
 		if resp != nil {

@@ -28,6 +28,7 @@ import (
 	_ "go.mau.fi/util/dbutil/litestream"
 	"go.mau.fi/util/exsync"
 	"go.mau.fi/util/random"
+	"golang.org/x/sync/semaphore"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/appservice"
@@ -70,6 +71,7 @@ type Connector struct {
 	DoublePuppet *doublePuppetUtil
 	MediaProxy   *mediaproxy.MediaProxy
 
+	uploadSema     *semaphore.Weighted
 	dmaSigKey      [32]byte
 	pubMediaSigKey []byte
 
@@ -108,6 +110,7 @@ func NewConnector(cfg *bridgeconfig.Config) *Connector {
 	c.Config = cfg
 	c.userIDRegex = cfg.MakeUserIDRegex("(.+)")
 	c.MediaConfig.UploadSize = 50 * 1024 * 1024
+	c.uploadSema = semaphore.NewWeighted(c.MediaConfig.UploadSize * 2)
 	c.Capabilities = &bridgev2.MatrixCapabilities{}
 	c.doublePuppetIntents = exsync.NewMap[id.UserID, *appservice.IntentAPI]()
 	return c
@@ -366,6 +369,7 @@ func (br *Connector) fetchMediaConfig(ctx context.Context) {
 		if ok {
 			mfsn.SetMaxFileSize(br.MediaConfig.UploadSize)
 		}
+		br.uploadSema = semaphore.NewWeighted(br.MediaConfig.UploadSize * 2)
 	}
 }
 
