@@ -251,6 +251,18 @@ func (w *simpleBuffer) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
+func (w *simpleBuffer) Seek(offset int64, whence int) (int64, error) {
+	if whence == io.SeekStart {
+		if offset == 0 {
+			w.data = nil
+		} else {
+			w.data = w.data[:offset]
+		}
+		return offset, nil
+	}
+	return 0, fmt.Errorf("unsupported whence value %d", whence)
+}
+
 func (as *ASIntent) UploadMediaStream(
 	ctx context.Context,
 	roomID id.RoomID,
@@ -258,16 +270,18 @@ func (as *ASIntent) UploadMediaStream(
 	requireFile bool,
 	fileName,
 	mimeType string,
-	cb func(file io.Writer) error,
+	cb bridgev2.FileStreamCallback,
 ) (url id.ContentURIString, file *event.EncryptedFileInfo, err error) {
 	if size > as.Connector.MediaConfig.UploadSize {
 		return "", nil, fmt.Errorf("file too large (%.2f MB > %.2f MB)", float64(size)/1000/1000, float64(as.Connector.MediaConfig.UploadSize)/1000/1000)
 	}
 	if !requireFile && 0 < size && size < as.Connector.Config.Matrix.UploadFileThreshold {
 		var buf simpleBuffer
-		err = cb(&buf)
+		replPath, err := cb(&buf)
 		if err != nil {
 			return "", nil, err
+		} else if replPath != "" {
+			panic(fmt.Errorf("logic error: replacement path must only be returned if requireFile is true"))
 		}
 		return as.UploadMedia(ctx, roomID, buf.data, fileName, mimeType)
 	}
@@ -294,28 +308,39 @@ func (as *ASIntent) UploadMediaStream(
 			fileName = ""
 		}
 	}
-	err = cb(tempFile)
+	var replPath string
+	replPath, err = cb(tempFile)
 	if err != nil {
 		err = fmt.Errorf("failed to write to temp file: %w", err)
 	}
-	_, err = tempFile.Seek(0, io.SeekStart)
-	if err != nil {
-		err = fmt.Errorf("failed to seek to start of temp file: %w", err)
-		return
+	var replFile *os.File
+	if replPath != "" {
+		replFile, err = os.OpenFile(replPath, os.O_RDWR, 0)
+		if err != nil {
+			err = fmt.Errorf("failed to open replacement file: %w", err)
+			return
+		}
+	} else {
+		replFile = tempFile
+		_, err = replFile.Seek(0, io.SeekStart)
+		if err != nil {
+			err = fmt.Errorf("failed to seek to start of temp file: %w", err)
+			return
+		}
 	}
 	if file != nil {
-		err = file.EncryptFile(tempFile)
+		err = file.EncryptFile(replFile)
 		if err != nil {
 			err = fmt.Errorf("failed to encrypt file: %w", err)
 			return
 		}
-		_, err = tempFile.Seek(0, io.SeekStart)
+		_, err = replFile.Seek(0, io.SeekStart)
 		if err != nil {
 			err = fmt.Errorf("failed to seek to start of temp file after encrypting: %w", err)
 			return
 		}
 	}
-	info, err := tempFile.Stat()
+	info, err := replFile.Stat()
 	if err != nil {
 		err = fmt.Errorf("failed to get temp file info: %w", err)
 		return
