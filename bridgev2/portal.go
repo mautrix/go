@@ -496,6 +496,8 @@ func (portal *Portal) handleMatrixEvent(sender *User, evt *event.Event) {
 		portal.handleMatrixMembership(ctx, login, origSender, evt)
 	case event.StatePowerLevels:
 		portal.handleMatrixPowerLevels(ctx, login, origSender, evt)
+	case event.StateJoinRules:
+		portal.HandleMatrixJoinRules(ctx, login, origSender, evt)
 	}
 }
 
@@ -1328,6 +1330,45 @@ func (portal *Portal) handleMatrixPowerLevels(
 	_, err := api.HandleMatrixPowerLevels(ctx, plChange)
 	if err != nil {
 		log.Err(err).Msg("Failed to handle Matrix power level change")
+		portal.sendErrorStatus(ctx, evt, err)
+		return
+	}
+}
+
+func (portal *Portal) HandleMatrixJoinRules(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) {
+	log := zerolog.Ctx(ctx)
+	content, ok := evt.Content.Parsed.(*event.JoinRulesEventContent)
+	if !ok {
+		log.Error().Type("content_type", evt.Content.Parsed).Msg("Unexpected parsed content type")
+		portal.sendErrorStatus(ctx, evt, fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed))
+		return
+	}
+	api, ok := sender.Client.(JoinRuleHandlingNetworkAPI)
+	if !ok {
+		portal.sendErrorStatus(ctx, evt, ErrJoinRuleNotSupported)
+		return
+	}
+	prevContent := &event.JoinRulesEventContent{}
+	if evt.Unsigned.PrevContent != nil {
+		_ = evt.Unsigned.PrevContent.ParseRaw(evt.Type)
+		prevContent, _ = evt.Unsigned.PrevContent.Parsed.(*event.JoinRulesEventContent)
+	}
+	joinRuleChange := &MatrixJoinRulesChange{
+		MatrixRoomMeta: MatrixRoomMeta[*event.JoinRulesEventContent]{
+			MatrixEventBase: MatrixEventBase[*event.JoinRulesEventContent]{
+				Event:      evt,
+				Content:    content,
+				Portal:     portal,
+				OrigSender: origSender,
+			},
+			PrevContent: prevContent,
+		},
+		OrigJoinRule: content.JoinRule,
+		NewJoinRule:  prevContent.JoinRule,
+	}
+	_, err := api.HandleMatrixJoinRules(ctx, joinRuleChange)
+	if err != nil {
+		log.Err(err).Msg("Failed to handle Matrix join rule change")
 		portal.sendErrorStatus(ctx, evt, err)
 		return
 	}

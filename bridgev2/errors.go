@@ -58,6 +58,7 @@ var (
 	ErrMediaConvertFailed              error = WrapErrorInStatus(errors.New("failed to convert media")).WithMessage("failed to convert media").WithIsCertain(true).WithSendNotice(true)
 	ErrMembershipNotSupported          error = WrapErrorInStatus(errors.New("this bridge does not support changing group membership")).WithIsCertain(true).WithErrorAsMessage().WithSendNotice(false)
 	ErrPowerLevelsNotSupported         error = WrapErrorInStatus(errors.New("this bridge does not support changing group power levels")).WithIsCertain(true).WithErrorAsMessage().WithSendNotice(false)
+	ErrJoinRuleNotSupported            error = WrapErrorInStatus(errors.New("this bridge does not support changing group join rule")).WithIsCertain(true).WithErrorAsMessage().WithSendNotice(false)
 )
 
 // RespError is a class of error that certain network interface methods can return to ensure that the error
