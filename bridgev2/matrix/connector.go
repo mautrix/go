@@ -110,7 +110,7 @@ func NewConnector(cfg *bridgeconfig.Config) *Connector {
 	c.Config = cfg
 	c.userIDRegex = cfg.MakeUserIDRegex("(.+)")
 	c.MediaConfig.UploadSize = 50 * 1024 * 1024
-	c.uploadSema = semaphore.NewWeighted(c.MediaConfig.UploadSize * 2)
+	c.uploadSema = semaphore.NewWeighted(c.MediaConfig.UploadSize + 1)
 	c.Capabilities = &bridgev2.MatrixCapabilities{}
 	c.doublePuppetIntents = exsync.NewMap[id.UserID, *appservice.IntentAPI]()
 	return c
@@ -369,7 +369,7 @@ func (br *Connector) fetchMediaConfig(ctx context.Context) {
 		if ok {
 			mfsn.SetMaxFileSize(br.MediaConfig.UploadSize)
 		}
-		br.uploadSema = semaphore.NewWeighted(br.MediaConfig.UploadSize * 2)
+		br.uploadSema = semaphore.NewWeighted(br.MediaConfig.UploadSize + 1)
 	}
 }
 
