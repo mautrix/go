@@ -79,13 +79,27 @@ type MatrixSendExtra struct {
 	PartIndex    int
 }
 
+// FileStreamResult is the result of a FileStreamCallback.
+type FileStreamResult struct {
+	// ReplacementFile is the path to a new file that replaces the original file provided to the callback.
+	// Providing a replacement file is only allowed if the requireFile flag was set for the UploadMediaStream call.
+	ReplacementFile string
+	// FileName is the name of the file to be specified when uploading to the server.
+	// This should be the same as the file name that will be included in the Matrix event (body or filename field).
+	// If the file gets encrypted, this field will be ignored.
+	FileName string
+	// MimeType is the type of field to be specified when uploading to the server.
+	// This should be the same as the mime type that will be included in the Matrix event (info -> mimetype field).
+	// If the file gets encrypted, this field will be replaced with application/octet-stream.
+	MimeType string
+}
+
 // FileStreamCallback is a callback function for file uploads that roundtrip via disk.
 //
 // The parameter is either a file or an in-memory buffer depending on the size of the file and whether the requireFile flag was set.
 //
-// The first return value can specify a file path to use instead of the original temp file.
-// Returning a replacement path is only valid if the parameter is a file.
-type FileStreamCallback func(file io.Writer) (string, error)
+// The return value must be non-nil unless there's an error, and should always include FileName and MimeType.
+type FileStreamCallback func(file io.Writer) (*FileStreamResult, error)
 
 type MatrixAPI interface {
 	GetMXID() id.UserID
@@ -97,7 +111,7 @@ type MatrixAPI interface {
 	MarkTyping(ctx context.Context, roomID id.RoomID, typingType TypingType, timeout time.Duration) error
 	DownloadMedia(ctx context.Context, uri id.ContentURIString, file *event.EncryptedFileInfo) ([]byte, error)
 	UploadMedia(ctx context.Context, roomID id.RoomID, data []byte, fileName, mimeType string) (url id.ContentURIString, file *event.EncryptedFileInfo, err error)
-	UploadMediaStream(ctx context.Context, roomID id.RoomID, size int64, requireFile bool, fileName, mimeType string, cb FileStreamCallback) (url id.ContentURIString, file *event.EncryptedFileInfo, err error)
+	UploadMediaStream(ctx context.Context, roomID id.RoomID, size int64, requireFile bool, cb FileStreamCallback) (url id.ContentURIString, file *event.EncryptedFileInfo, err error)
 
 	SetDisplayName(ctx context.Context, name string) error
 	SetAvatarURL(ctx context.Context, avatarURL id.ContentURIString) error

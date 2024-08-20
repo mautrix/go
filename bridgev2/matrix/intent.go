@@ -244,8 +244,6 @@ func (as *ASIntent) UploadMediaStream(
 	roomID id.RoomID,
 	size int64,
 	requireFile bool,
-	fileName,
-	mimeType string,
 	cb bridgev2.FileStreamCallback,
 ) (url id.ContentURIString, file *event.EncryptedFileInfo, err error) {
 	if size > as.Connector.MediaConfig.UploadSize {
@@ -253,13 +251,13 @@ func (as *ASIntent) UploadMediaStream(
 	}
 	if !requireFile && 0 < size && size < as.Connector.Config.Matrix.UploadFileThreshold {
 		var buf bytes.Buffer
-		replPath, err := cb(&buf)
+		res, err := cb(&buf)
 		if err != nil {
 			return "", nil, err
-		} else if replPath != "" {
+		} else if res.ReplacementFile != "" {
 			panic(fmt.Errorf("logic error: replacement path must only be returned if requireFile is true"))
 		}
-		return as.UploadMedia(ctx, roomID, buf.Bytes(), fileName, mimeType)
+		return as.UploadMedia(ctx, roomID, buf.Bytes(), res.FileName, res.MimeType)
 	}
 	var tempFile *os.File
 	tempFile, err = os.CreateTemp("", "mautrix-upload-*")
@@ -286,18 +284,16 @@ func (as *ASIntent) UploadMediaStream(
 			file = &event.EncryptedFileInfo{
 				EncryptedFile: *attachment.NewEncryptedFile(),
 			}
-			mimeType = "application/octet-stream"
-			fileName = ""
 		}
 	}
-	var replPath string
-	replPath, err = cb(tempFile)
+	var res *bridgev2.FileStreamResult
+	res, err = cb(tempFile)
 	if err != nil {
 		err = fmt.Errorf("failed to write to temp file: %w", err)
 	}
 	var replFile *os.File
-	if replPath != "" {
-		replFile, err = os.OpenFile(replPath, os.O_RDWR, 0)
+	if res.ReplacementFile != "" {
+		replFile, err = os.OpenFile(res.ReplacementFile, os.O_RDWR, 0)
 		if err != nil {
 			err = fmt.Errorf("failed to open replacement file: %w", err)
 			return
@@ -316,6 +312,8 @@ func (as *ASIntent) UploadMediaStream(
 		}
 	}
 	if file != nil {
+		res.FileName = ""
+		res.MimeType = "application/octet-stream"
 		err = file.EncryptFile(replFile)
 		if err != nil {
 			err = fmt.Errorf("failed to encrypt file: %w", err)
@@ -335,8 +333,8 @@ func (as *ASIntent) UploadMediaStream(
 	req := mautrix.ReqUploadMedia{
 		Content:       tempFile,
 		ContentLength: info.Size(),
-		ContentType:   mimeType,
-		FileName:      fileName,
+		ContentType:   res.MimeType,
+		FileName:      res.FileName,
 	}
 	if as.Connector.Config.Homeserver.AsyncMedia {
 		req.DoneCallback = func() {
