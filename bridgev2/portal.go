@@ -2436,6 +2436,8 @@ func (portal *Portal) handleRemoteChatResync(ctx context.Context, source *UserLo
 			log.Err(err).Msg("Failed to get chat info from resync event")
 		} else if info != nil {
 			portal.UpdateInfo(ctx, info, source, nil, time.Time{})
+		} else {
+			log.Debug().Msg("No chat info provided in resync event")
 		}
 	}
 	backfillChecker, ok := evt.(RemoteChatResyncBackfill)
@@ -2549,8 +2551,10 @@ type PowerLevelOverrides struct {
 // Deprecated: renamed to PowerLevelOverrides
 type PowerLevelChanges = PowerLevelOverrides
 
-func allowChange(newLevel, oldLevel, actorLevel int) bool {
-	return newLevel <= actorLevel && oldLevel <= actorLevel
+func allowChange(newLevel *int, oldLevel, actorLevel int) bool {
+	return newLevel != nil &&
+		*newLevel <= actorLevel && oldLevel <= actorLevel &&
+		oldLevel != *newLevel
 }
 
 func (plc *PowerLevelOverrides) Apply(actor id.UserID, content *event.PowerLevelsEventContent) (changed bool) {
@@ -2566,32 +2570,32 @@ func (plc *PowerLevelOverrides) Apply(actor id.UserID, content *event.PowerLevel
 	} else {
 		actorLevel = (1 << 31) - 1
 	}
-	if plc.UsersDefault != nil && allowChange(*plc.UsersDefault, content.UsersDefault, actorLevel) {
-		changed = content.UsersDefault != *plc.UsersDefault
+	if allowChange(plc.UsersDefault, content.UsersDefault, actorLevel) {
+		changed = true
 		content.UsersDefault = *plc.UsersDefault
 	}
-	if plc.EventsDefault != nil && allowChange(*plc.EventsDefault, content.EventsDefault, actorLevel) {
-		changed = content.EventsDefault != *plc.EventsDefault
+	if allowChange(plc.EventsDefault, content.EventsDefault, actorLevel) {
+		changed = true
 		content.EventsDefault = *plc.EventsDefault
 	}
-	if plc.StateDefault != nil && allowChange(*plc.StateDefault, content.StateDefault(), actorLevel) {
-		changed = content.StateDefault() != *plc.StateDefault
+	if allowChange(plc.StateDefault, content.StateDefault(), actorLevel) {
+		changed = true
 		content.StateDefaultPtr = plc.StateDefault
 	}
-	if plc.Invite != nil && allowChange(*plc.Invite, content.Invite(), actorLevel) {
-		changed = content.Invite() != *plc.Invite
+	if allowChange(plc.Invite, content.Invite(), actorLevel) {
+		changed = true
 		content.InvitePtr = plc.Invite
 	}
-	if plc.Kick != nil && allowChange(*plc.Kick, content.Kick(), actorLevel) {
-		changed = content.Kick() != *plc.Kick
+	if allowChange(plc.Kick, content.Kick(), actorLevel) {
+		changed = true
 		content.KickPtr = plc.Kick
 	}
-	if plc.Ban != nil && allowChange(*plc.Ban, content.Ban(), actorLevel) {
-		changed = content.Ban() != *plc.Ban
+	if allowChange(plc.Ban, content.Ban(), actorLevel) {
+		changed = true
 		content.BanPtr = plc.Ban
 	}
-	if plc.Redact != nil && allowChange(*plc.Redact, content.Redact(), actorLevel) {
-		changed = content.Redact() != *plc.Redact
+	if allowChange(plc.Redact, content.Redact(), actorLevel) {
+		changed = true
 		content.RedactPtr = plc.Redact
 	}
 	if plc.Custom != nil {
