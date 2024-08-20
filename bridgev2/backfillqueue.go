@@ -153,18 +153,26 @@ func (br *Bridge) actuallyDoBackfillTask(ctx context.Context, task *database.Bac
 	login, err := br.GetExistingUserLoginByID(ctx, task.UserLoginID)
 	if err != nil {
 		return false, fmt.Errorf("failed to get user login for backfill task: %w", err)
-	} else if login == nil {
-		log.Warn().Msg("User login not found for backfill task")
+	} else if login == nil || !login.Client.IsLoggedIn() {
+		if login == nil {
+			log.Warn().Msg("User login not found for backfill task")
+		} else {
+			log.Warn().Msg("User login not logged in for backfill task")
+		}
 		logins, err := br.GetUserLoginsInPortal(ctx, portal.PortalKey)
 		if err != nil {
 			return false, fmt.Errorf("failed to get user portals for backfill task: %w", err)
 		} else if len(logins) == 0 {
 			log.Debug().Msg("No user logins found for backfill task")
 			task.NextDispatchMinTS = database.BackfillNextDispatchNever
-			task.UserLoginID = ""
+			if login == nil {
+				task.UserLoginID = ""
+			}
 			return false, nil
 		}
-		task.UserLoginID = ""
+		if login == nil {
+			task.UserLoginID = ""
+		}
 		for _, login = range logins {
 			if login.Client.IsLoggedIn() {
 				task.UserLoginID = login.ID
