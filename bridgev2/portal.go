@@ -497,7 +497,7 @@ func (portal *Portal) handleMatrixEvent(sender *User, evt *event.Event) {
 	case event.StatePowerLevels:
 		portal.handleMatrixPowerLevels(ctx, login, origSender, evt)
 	case event.StateJoinRules:
-		portal.HandleMatrixJoinRules(ctx, login, origSender, evt)
+		portal.handleMatrixJoinRules(ctx, login, origSender, evt)
 	}
 }
 
@@ -1335,7 +1335,7 @@ func (portal *Portal) handleMatrixPowerLevels(
 	}
 }
 
-func (portal *Portal) HandleMatrixJoinRules(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) {
+func (portal *Portal) handleMatrixJoinRules(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) {
 	log := zerolog.Ctx(ctx)
 	content, ok := evt.Content.Parsed.(*event.JoinRulesEventContent)
 	if !ok {
@@ -1343,7 +1343,7 @@ func (portal *Portal) HandleMatrixJoinRules(ctx context.Context, sender *UserLog
 		portal.sendErrorStatus(ctx, evt, fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed))
 		return
 	}
-	api, ok := sender.Client.(JoinRuleHandlingNetworkAPI)
+	api, ok := sender.Client.(JoinRulesHandlingNetworkAPI)
 	if !ok {
 		portal.sendErrorStatus(ctx, evt, ErrJoinRuleNotSupported)
 		return
@@ -1353,18 +1353,14 @@ func (portal *Portal) HandleMatrixJoinRules(ctx context.Context, sender *UserLog
 		_ = evt.Unsigned.PrevContent.ParseRaw(evt.Type)
 		prevContent, _ = evt.Unsigned.PrevContent.Parsed.(*event.JoinRulesEventContent)
 	}
-	joinRuleChange := &MatrixJoinRulesChange{
-		MatrixRoomMeta: MatrixRoomMeta[*event.JoinRulesEventContent]{
-			MatrixEventBase: MatrixEventBase[*event.JoinRulesEventContent]{
-				Event:      evt,
-				Content:    content,
-				Portal:     portal,
-				OrigSender: origSender,
-			},
-			PrevContent: prevContent,
+	joinRuleChange := &MatrixJoinRule{
+		MatrixEventBase: MatrixEventBase[*event.JoinRulesEventContent]{
+			Event:      evt,
+			Content:    content,
+			Portal:     portal,
+			OrigSender: origSender,
 		},
-		OrigJoinRule: content.JoinRule,
-		NewJoinRule:  prevContent.JoinRule,
+		PrevContent: prevContent,
 	}
 	_, err := api.HandleMatrixJoinRules(ctx, joinRuleChange)
 	if err != nil {
