@@ -3212,7 +3212,7 @@ func (portal *Portal) UpdateInfo(ctx context.Context, info *ChatInfo, source *Us
 		source.MarkInPortal(ctx, portal)
 		portal.updateUserLocalInfo(ctx, info.UserLocal, source, false)
 	}
-	if info.CanBackfill && source != nil {
+	if info.CanBackfill && source != nil && portal.MXID != "" {
 		err := portal.Bridge.DB.BackfillTask.EnsureExists(ctx, portal.PortalKey, source.ID)
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to ensure backfill queue task exists")
