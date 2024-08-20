@@ -3442,7 +3442,9 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 			}
 		}
 	}
-	portal.doForwardBackfill(ctx, source, nil, backfillBundle)
+	if portal.Bridge.Config.Backfill.Enabled {
+		portal.doForwardBackfill(ctx, source, nil, backfillBundle)
+	}
 	return nil
 }
 
