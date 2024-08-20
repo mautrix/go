@@ -1,3 +1,8 @@
+## unreleased
+
+* *(bridgev2)* Added more features and fixed bugs.
+* *(client)* Fixed requests being retried even after context is canceled.
+
 ## v0.20.0 (2024-08-16)
 
 * Bumped minimum Go version to 1.22.
