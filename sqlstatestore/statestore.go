@@ -234,7 +234,48 @@ func (store *SQLStateStore) ClearCachedMembers(ctx context.Context, roomID id.Ro
 		query += fmt.Sprintf(" AND membership IN (%s)", strings.Join(placeholders, ","))
 	}
 	_, err := store.Exec(ctx, query, params...)
+	if err != nil {
+		return err
+	}
+	_, err = store.Exec(ctx, "UPDATE mx_room_state SET members_fetched=false WHERE room_id=$1", roomID)
 	return err
+}
+
+func (store *SQLStateStore) HasFetchedMembers(ctx context.Context, roomID id.RoomID) (fetched bool, err error) {
+	err = store.QueryRow(ctx, "SELECT members_fetched FROM mx_room_state WHERE room_id=$1", roomID).Scan(&fetched)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = nil
+	}
+	return
+}
+
+func (store *SQLStateStore) MarkMembersFetched(ctx context.Context, roomID id.RoomID) error {
+	_, err := store.Exec(ctx, `
+		INSERT INTO mx_room_state (room_id, members_fetched) VALUES ($1, true)
+		ON CONFLICT (room_id) DO UPDATE SET members_fetched=true
+	`, roomID)
+	return err
+}
+
+type userAndMembership struct {
+	UserID id.UserID
+	event.MemberEventContent
+}
+
+func (store *SQLStateStore) GetAllMembers(ctx context.Context, roomID id.RoomID) (map[id.UserID]*event.MemberEventContent, error) {
+	rows, err := store.Query(ctx, "SELECT user_id, membership, displayname, avatar_url FROM mx_user_profile WHERE room_id=$1", roomID)
+	if err != nil {
+		return nil, err
+	}
+	output := make(map[id.UserID]*event.MemberEventContent)
+	err = dbutil.NewRowIterWithError(rows, func(row dbutil.Scannable) (res userAndMembership, err error) {
+		err = row.Scan(&res.UserID, &res.Membership, &res.Displayname, &res.AvatarURL)
+		return
+	}, err).Iter(func(member userAndMembership) (bool, error) {
+		output[member.UserID] = &member.MemberEventContent
+		return true, nil
+	})
+	return output, err
 }
 
 func (store *SQLStateStore) SetEncryptionEvent(ctx context.Context, roomID id.RoomID, content *event.EncryptionEventContent) error {

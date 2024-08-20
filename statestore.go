@@ -8,6 +8,7 @@ package mautrix
 
 import (
 	"context"
+	"maps"
 	"sync"
 
 	"github.com/rs/zerolog"
@@ -31,6 +32,10 @@ type StateStore interface {
 
 	SetPowerLevels(ctx context.Context, roomID id.RoomID, levels *event.PowerLevelsEventContent) error
 	GetPowerLevels(ctx context.Context, roomID id.RoomID) (*event.PowerLevelsEventContent, error)
+
+	HasFetchedMembers(ctx context.Context, roomID id.RoomID) (bool, error)
+	MarkMembersFetched(ctx context.Context, roomID id.RoomID) error
+	GetAllMembers(ctx context.Context, roomID id.RoomID) (map[id.UserID]*event.MemberEventContent, error)
 
 	SetEncryptionEvent(ctx context.Context, roomID id.RoomID, content *event.EncryptionEventContent) error
 	IsEncrypted(ctx context.Context, roomID id.RoomID) (bool, error)
@@ -90,10 +95,11 @@ func (cli *Client) StateStoreSyncHandler(ctx context.Context, evt *event.Event) 
 }
 
 type MemoryStateStore struct {
-	Registrations map[id.UserID]bool                                    `json:"registrations"`
-	Members       map[id.RoomID]map[id.UserID]*event.MemberEventContent `json:"memberships"`
-	PowerLevels   map[id.RoomID]*event.PowerLevelsEventContent          `json:"power_levels"`
-	Encryption    map[id.RoomID]*event.EncryptionEventContent           `json:"encryption"`
+	Registrations  map[id.UserID]bool                                    `json:"registrations"`
+	Members        map[id.RoomID]map[id.UserID]*event.MemberEventContent `json:"memberships"`
+	MembersFetched map[id.RoomID]bool                                    `json:"members_fetched"`
+	PowerLevels    map[id.RoomID]*event.PowerLevelsEventContent          `json:"power_levels"`
+	Encryption     map[id.RoomID]*event.EncryptionEventContent           `json:"encryption"`
 
 	registrationsLock sync.RWMutex
 	membersLock       sync.RWMutex
@@ -103,10 +109,11 @@ type MemoryStateStore struct {
 
 func NewMemoryStateStore() StateStore {
 	return &MemoryStateStore{
-		Registrations: make(map[id.UserID]bool),
-		Members:       make(map[id.RoomID]map[id.UserID]*event.MemberEventContent),
-		PowerLevels:   make(map[id.RoomID]*event.PowerLevelsEventContent),
-		Encryption:    make(map[id.RoomID]*event.EncryptionEventContent),
+		Registrations:  make(map[id.UserID]bool),
+		Members:        make(map[id.RoomID]map[id.UserID]*event.MemberEventContent),
+		MembersFetched: make(map[id.RoomID]bool),
+		PowerLevels:    make(map[id.RoomID]*event.PowerLevelsEventContent),
+		Encryption:     make(map[id.RoomID]*event.EncryptionEventContent),
 	}
 }
 
@@ -246,7 +253,27 @@ func (store *MemoryStateStore) ClearCachedMembers(_ context.Context, roomID id.R
 			}
 		}
 	}
+	store.MembersFetched[roomID] = false
 	return nil
+}
+
+func (store *MemoryStateStore) HasFetchedMembers(ctx context.Context, roomID id.RoomID) (bool, error) {
+	store.membersLock.RLock()
+	defer store.membersLock.RUnlock()
+	return store.MembersFetched[roomID], nil
+}
+
+func (store *MemoryStateStore) MarkMembersFetched(ctx context.Context, roomID id.RoomID) error {
+	store.membersLock.Lock()
+	defer store.membersLock.Unlock()
+	store.MembersFetched[roomID] = true
+	return nil
+}
+
+func (store *MemoryStateStore) GetAllMembers(ctx context.Context, roomID id.RoomID) (map[id.UserID]*event.MemberEventContent, error) {
+	store.membersLock.Lock()
+	defer store.membersLock.Unlock()
+	return maps.Clone(store.Members[roomID]), nil
 }
 
 func (store *MemoryStateStore) SetPowerLevels(_ context.Context, roomID id.RoomID, levels *event.PowerLevelsEventContent) error {

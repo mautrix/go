@@ -540,7 +540,12 @@ func (br *Connector) GetPowerLevels(ctx context.Context, roomID id.RoomID) (*eve
 }
 
 func (br *Connector) GetMembers(ctx context.Context, roomID id.RoomID) (map[id.UserID]*event.MemberEventContent, error) {
-	// TODO use cache?
+	fetched, err := br.Bot.StateStore.HasFetchedMembers(ctx, roomID)
+	if err != nil {
+		return nil, err
+	} else if fetched {
+		return br.Bot.StateStore.GetAllMembers(ctx, roomID)
+	}
 	members, err := br.Bot.Members(ctx, roomID)
 	if err != nil {
 		return nil, err

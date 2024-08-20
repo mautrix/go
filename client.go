@@ -1444,6 +1444,11 @@ func (cli *Client) State(ctx context.Context, roomID id.RoomID) (stateMap RoomSt
 				UpdateStateStore(ctx, cli.StateStore, evt)
 			}
 		}
+		clearErr = cli.StateStore.MarkMembersFetched(ctx, roomID)
+		if clearErr != nil {
+			cli.cliOrContextLog(ctx).Warn().Err(clearErr).
+				Msg("Failed to mark members as fetched after fetching full room state")
+		}
 	}
 	return
 }
@@ -1839,6 +1844,13 @@ func (cli *Client) Members(ctx context.Context, roomID id.RoomID, req ...ReqMemb
 		}
 		for _, evt := range resp.Chunk {
 			UpdateStateStore(ctx, cli.StateStore, evt)
+		}
+		if extra.NotMembership == "" && extra.Membership == "" {
+			markErr := cli.StateStore.MarkMembersFetched(ctx, roomID)
+			if markErr != nil {
+				cli.cliOrContextLog(ctx).Warn().Err(markErr).
+					Msg("Failed to mark members as fetched after fetching full member list")
+			}
 		}
 	}
 	return

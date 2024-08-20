@@ -10,6 +10,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 
 	"go.mau.fi/util/dbutil"
 	"golang.org/x/exp/slices"
@@ -113,6 +114,18 @@ func (c *ClientStateStore) GetRoomJoinedMembers(ctx context.Context, roomID id.R
 func (c *ClientStateStore) GetRoomJoinedOrInvitedMembers(ctx context.Context, roomID id.RoomID) ([]id.UserID, error) {
 	rows, err := c.Query(ctx, getRoomJoinedOrInvitedMembersQuery, roomID)
 	return dbutil.NewRowIterWithError(rows, dbutil.ScanSingleColumn[id.UserID], err).AsList()
+}
+
+func (c *ClientStateStore) HasFetchedMembers(ctx context.Context, roomID id.RoomID) (bool, error) {
+	return false, fmt.Errorf("not implemented")
+}
+
+func (c *ClientStateStore) MarkMembersFetched(ctx context.Context, roomID id.RoomID) error {
+	return fmt.Errorf("not implemented")
+}
+
+func (c *ClientStateStore) GetAllMembers(ctx context.Context, roomID id.RoomID) (map[id.UserID]*event.MemberEventContent, error) {
+	return nil, fmt.Errorf("not implemented")
 }
 
 func (c *ClientStateStore) IsEncrypted(ctx context.Context, roomID id.RoomID) (isEncrypted bool, err error) {

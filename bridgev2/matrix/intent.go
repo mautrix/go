@@ -535,6 +535,10 @@ func (as *ASIntent) DeleteRoom(ctx context.Context, roomID id.RoomID, puppetsOnl
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to leave room while cleaning up portal")
 	}
+	err = as.Matrix.StateStore.ClearCachedMembers(ctx, roomID)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to clear cached members while cleaning up portal")
+	}
 	return nil
 }
 
