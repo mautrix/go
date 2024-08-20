@@ -1335,7 +1335,12 @@ func (portal *Portal) handleMatrixPowerLevels(
 	}
 }
 
-func (portal *Portal) handleMatrixJoinRules(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) {
+func (portal *Portal) handleMatrixJoinRules(
+	ctx context.Context,
+	sender *UserLogin,
+	origSender *OrigSender,
+	evt *event.Event,
+) {
 	log := zerolog.Ctx(ctx)
 	content, ok := evt.Content.Parsed.(*event.JoinRulesEventContent)
 	if !ok {
