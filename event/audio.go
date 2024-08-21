@@ -1,8 +1,8 @@
 package event
 
 type MSC1767Audio struct {
-	Duration int   `json:"duration,omitempty"`
-	Waveform []int `json:"waveform,omitempty"`
+	Duration int   `json:"duration"`
+	Waveform []int `json:"waveform"`
 }
 
 type MSC3245Voice struct{}
