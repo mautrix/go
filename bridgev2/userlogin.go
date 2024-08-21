@@ -382,6 +382,8 @@ func (ul *UserLogin) kickUserFromPortal(ctx context.Context, up *database.UserPo
 	portal, action, reason, err := ul.getLogoutAction(ctx, up, badCredentials)
 	if err != nil {
 		return nil, err
+	} else if portal == nil {
+		return nil, nil
 	}
 	zerolog.Ctx(ctx).Debug().
 		Str("login_id", string(ul.ID)).
