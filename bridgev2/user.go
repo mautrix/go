@@ -165,7 +165,12 @@ func (user *User) GetUserLoginIDs() []networkid.UserLoginID {
 	return maps.Keys(user.logins)
 }
 
+// Deprecated: renamed to GetUserLogins
 func (user *User) GetCachedUserLogins() []*UserLogin {
+	return user.GetUserLogins()
+}
+
+func (user *User) GetUserLogins() []*UserLogin {
 	user.Bridge.cacheLock.Lock()
 	defer user.Bridge.cacheLock.Unlock()
 	return maps.Values(user.logins)
