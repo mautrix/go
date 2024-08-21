@@ -2524,15 +2524,30 @@ type ChatMemberList struct {
 	// This should be used when SenderLogin can't be filled accurately.
 	CheckAllLogins bool
 
-	// The total number of members in the chat, regardless of how many of those members are included in Members.
+	// The total number of members in the chat, regardless of how many of those members are included in MemberMap.
 	TotalMemberCount int
 
 	// For DM portals, the ID of the recipient user.
-	// This field is optional and will be automatically filled from Members if there are only 2 entries in the list.
+	// This field is optional and will be automatically filled from MemberMap if there are only 2 entries in the map.
 	OtherUserID networkid.UserID
 
+	// Deprecated: Use MemberMap instead to avoid duplicate entries
 	Members     []ChatMember
+	MemberMap   map[networkid.UserID]ChatMember
 	PowerLevels *PowerLevelOverrides
+}
+
+func (cml *ChatMemberList) memberListToMap(ctx context.Context) {
+	if cml.Members == nil || cml.MemberMap != nil {
+		return
+	}
+	cml.MemberMap = make(map[networkid.UserID]ChatMember, len(cml.Members))
+	for _, member := range cml.Members {
+		if _, alreadyExists := cml.MemberMap[member.Sender]; alreadyExists {
+			zerolog.Ctx(ctx).Warn().Str("member_id", string(member.Sender)).Msg("Duplicate member in list")
+		}
+		cml.MemberMap[member.Sender] = member
+	}
 }
 
 type PowerLevelOverrides struct {
@@ -2803,7 +2818,8 @@ func (portal *Portal) getInitialMemberList(ctx context.Context, members *ChatMem
 		}
 	}
 	members.PowerLevels.Apply("", pl)
-	for _, member := range members.Members {
+	members.memberListToMap(ctx)
+	for _, member := range members.MemberMap {
 		if member.Membership != event.MembershipJoin && member.Membership != "" {
 			continue
 		}
@@ -2839,16 +2855,18 @@ func (portal *Portal) getInitialMemberList(ctx context.Context, members *ChatMem
 }
 
 func (portal *Portal) updateOtherUser(ctx context.Context, members *ChatMemberList) (changed bool) {
+	members.memberListToMap(ctx)
 	var expectedUserID networkid.UserID
 	if portal.RoomType != database.RoomTypeDM {
 		// expected user ID is empty
 	} else if members.OtherUserID != "" {
 		expectedUserID = members.OtherUserID
-	} else if len(members.Members) == 2 && members.IsFull {
-		if members.Members[0].IsFromMe && !members.Members[1].IsFromMe {
-			expectedUserID = members.Members[1].Sender
-		} else if members.Members[1].IsFromMe && !members.Members[0].IsFromMe {
-			expectedUserID = members.Members[0].Sender
+	} else if len(members.MemberMap) == 2 && members.IsFull {
+		vals := maps.Values(members.MemberMap)
+		if vals[0].IsFromMe && !vals[1].IsFromMe {
+			expectedUserID = vals[1].Sender
+		} else if vals[1].IsFromMe && !vals[0].IsFromMe {
+			expectedUserID = vals[0].Sender
 		}
 	}
 	if portal.OtherUserID != expectedUserID {
@@ -2863,6 +2881,7 @@ func (portal *Portal) updateOtherUser(ctx context.Context, members *ChatMemberLi
 }
 
 func (portal *Portal) syncParticipants(ctx context.Context, members *ChatMemberList, source *UserLogin, sender MatrixAPI, ts time.Time) error {
+	members.memberListToMap(ctx)
 	var loginsInPortal []*UserLogin
 	var err error
 	if members.CheckAllLogins {
@@ -2977,7 +2996,7 @@ func (portal *Portal) syncParticipants(ctx context.Context, members *ChatMemberL
 			}
 		}
 	}
-	for _, member := range members.Members {
+	for _, member := range members.MemberMap {
 		if member.Sender != "" && member.UserInfo != nil {
 			ghost, err := portal.Bridge.GetGhostByID(ctx, member.Sender)
 			if err != nil {
