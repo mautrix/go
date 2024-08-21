@@ -86,13 +86,18 @@ func (br *Bridge) loadManyUserLogins(ctx context.Context, user *User, logins []*
 	return output, nil
 }
 
-func (br *Bridge) unlockedLoadUserLoginsByMXID(ctx context.Context, user *User) error {
+func (br *Bridge) GetUserLoginsForUser(ctx context.Context, user *User) ([]*UserLogin, error) {
+	br.cacheLock.Lock()
+	defer br.cacheLock.Unlock()
+	return br.unlockedLoadUserLoginsByMXID(ctx, user)
+}
+
+func (br *Bridge) unlockedLoadUserLoginsByMXID(ctx context.Context, user *User) ([]*UserLogin, error) {
 	logins, err := br.DB.UserLogin.GetAllForUser(ctx, user.MXID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	_, err = br.loadManyUserLogins(ctx, user, logins)
-	return err
+	return br.loadManyUserLogins(ctx, user, logins)
 }
 
 func (br *Bridge) GetUserLoginsInPortal(ctx context.Context, portal networkid.PortalKey) ([]*UserLogin, error) {

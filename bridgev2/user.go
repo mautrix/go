@@ -67,7 +67,7 @@ func (br *Bridge) loadUser(ctx context.Context, dbUser *database.User, queryErr 
 		Permissions: br.Config.Permissions.Get(dbUser.MXID),
 	}
 	br.usersByMXID[user.MXID] = user
-	err := br.unlockedLoadUserLoginsByMXID(ctx, user)
+	_, err := br.unlockedLoadUserLoginsByMXID(ctx, user)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load user logins: %w", err)
 	}
