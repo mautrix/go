@@ -331,7 +331,7 @@ func (as *ASIntent) UploadMediaStream(
 		return
 	}
 	req := mautrix.ReqUploadMedia{
-		Content:       tempFile,
+		Content:       replFile,
 		ContentLength: info.Size(),
 		ContentType:   res.MimeType,
 		FileName:      res.FileName,
