@@ -29,6 +29,30 @@ jobs:
       - name: Lint
         run: pre-commit run -a
 
+  test:
+    runs-on: ubuntu-latest
+    name: Test (latest)
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache: true
+
+      - name: Install libolm
+        run: sudo apt-get install libolm-dev libolm3
+
+      - name: Set up gotestfmt
+        uses: GoTestTools/gotestfmt-action@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run tests
+        run: |
+          go test -v -json ./... -cover | gotestfmt
+
   build:
     runs-on: ubuntu-latest
     strategy:
