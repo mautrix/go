@@ -56,7 +56,7 @@ func fnLogin(ce *Event) {
 			}
 		}
 		if chosenFlowID == "" {
-			ce.Reply("Invalid login flow `%s`. Available options:\n\n%s", ce.Args[0], formatFlowsReply(flows))
+			ce.Reply("Invalid login flow `%s`. Available options:\n\n%s", inputFlowID, formatFlowsReply(flows))
 			return
 		}
 	} else if len(flows) == 1 {
