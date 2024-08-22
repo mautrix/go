@@ -601,7 +601,7 @@ func (prov *ProvisioningAPI) doResolveIdentifier(w http.ResponseWriter, r *http.
 		}
 		apiResp.DMRoomID = resp.Chat.Portal.MXID
 	}
-	jsonResponse(w, status, resp)
+	jsonResponse(w, status, apiResp)
 }
 
 type RespGetContactList struct {
