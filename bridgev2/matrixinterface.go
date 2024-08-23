@@ -10,10 +10,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"time"
-
-	"github.com/gorilla/mux"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridge/status"
@@ -58,7 +57,7 @@ type MatrixConnector interface {
 
 type MatrixConnectorWithServer interface {
 	GetPublicAddress() string
-	GetRouter() *mux.Router
+	GetRouter() *http.ServeMux
 }
 
 type MatrixConnectorWithPublicMedia interface {

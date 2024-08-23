@@ -17,10 +17,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/rs/xid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/hlog"
+	"go.mau.fi/util/exhttp"
 	"go.mau.fi/util/jsontime"
 	"go.mau.fi/util/requestlog"
 
@@ -38,7 +38,7 @@ type matrixAuthCacheEntry struct {
 }
 
 type ProvisioningAPI struct {
-	Router *mux.Router
+	Router *http.ServeMux
 
 	br  *Connector
 	log zerolog.Logger
@@ -82,12 +82,12 @@ func (prov *ProvisioningAPI) GetUser(r *http.Request) *bridgev2.User {
 	return r.Context().Value(provisioningUserKey).(*bridgev2.User)
 }
 
-func (prov *ProvisioningAPI) GetRouter() *mux.Router {
+func (prov *ProvisioningAPI) GetRouter() *http.ServeMux {
 	return prov.Router
 }
 
 type IProvisioningAPI interface {
-	GetRouter() *mux.Router
+	GetRouter() *http.ServeMux
 	GetUser(r *http.Request) *bridgev2.User
 }
 
@@ -106,48 +106,42 @@ func (prov *ProvisioningAPI) Init() {
 	tp.Dialer.Timeout = 10 * time.Second
 	tp.Transport.ResponseHeaderTimeout = 10 * time.Second
 	tp.Transport.TLSHandshakeTimeout = 10 * time.Second
-	prov.Router = prov.br.AS.Router.PathPrefix(prov.br.Config.Provisioning.Prefix).Subrouter()
-	prov.Router.Use(hlog.NewHandler(prov.log))
-	prov.Router.Use(hlog.RequestIDHandler("request_id", "Request-Id"))
-	prov.Router.Use(corsMiddleware)
-	prov.Router.Use(requestlog.AccessLogger(false))
-	prov.Router.Use(prov.AuthMiddleware)
-	prov.Router.Path("/v3/whoami").Methods(http.MethodGet, http.MethodOptions).HandlerFunc(prov.GetWhoami)
-	prov.Router.Path("/v3/login/flows").Methods(http.MethodGet, http.MethodOptions).HandlerFunc(prov.GetLoginFlows)
-	prov.Router.Path("/v3/login/start/{flowID}").Methods(http.MethodPost, http.MethodOptions).HandlerFunc(prov.PostLoginStart)
-	prov.Router.Path("/v3/login/step/{loginProcessID}/{stepID}/{stepType:user_input|cookies}").Methods(http.MethodPost, http.MethodOptions).HandlerFunc(prov.PostLoginSubmitInput)
-	prov.Router.Path("/v3/login/step/{loginProcessID}/{stepID}/{stepType:display_and_wait}").Methods(http.MethodPost, http.MethodOptions).HandlerFunc(prov.PostLoginWait)
-	prov.Router.Path("/v3/logout/{loginID}").Methods(http.MethodPost, http.MethodOptions).HandlerFunc(prov.PostLogout)
-	prov.Router.Path("/v3/logins").Methods(http.MethodGet, http.MethodOptions).HandlerFunc(prov.GetLogins)
-	prov.Router.Path("/v3/contacts").Methods(http.MethodGet, http.MethodOptions).HandlerFunc(prov.GetContactList)
-	prov.Router.Path("/v3/search_users").Methods(http.MethodPost, http.MethodOptions).HandlerFunc(prov.PostSearchUsers)
-	prov.Router.Path("/v3/resolve_identifier/{identifier}").Methods(http.MethodGet, http.MethodOptions).HandlerFunc(prov.GetResolveIdentifier)
-	prov.Router.Path("/v3/create_dm/{identifier}").Methods(http.MethodPost, http.MethodOptions).HandlerFunc(prov.PostCreateDM)
-	prov.Router.Path("/v3/create_group").Methods(http.MethodPost, http.MethodOptions).HandlerFunc(prov.PostCreateGroup)
+
+	provRouter := http.NewServeMux()
+
+	provRouter.HandleFunc("GET /v3/whoami", prov.GetWhoami)
+	provRouter.HandleFunc("GET /v3/whoami/flows", prov.GetLoginFlows)
+
+	provRouter.HandleFunc("POST /v3/login/start/{flowID}", prov.PostLoginStart)
+	provRouter.HandleFunc("POST /v3/login/step/{loginProcessID}/{stepID}/{stepType}", prov.PostLogin)
+	provRouter.HandleFunc("POST /v3/logout/{loginID}", prov.PostLogout)
+	provRouter.HandleFunc("GET /v3/logins", prov.GetLogins)
+	provRouter.HandleFunc("GET /v3/contacts", prov.GetContactList)
+	provRouter.HandleFunc("POST /v3/search_users", prov.PostSearchUsers)
+	provRouter.HandleFunc("GET /v3/resolve_identifier/{identifier}", prov.GetResolveIdentifier)
+	provRouter.HandleFunc("POST /v3/create_dm/{identifier}", prov.PostCreateDM)
+	provRouter.HandleFunc("POST /v3/create_group", prov.PostCreateGroup)
+
+	var provHandler http.Handler = prov.Router
+	provHandler = prov.AuthMiddleware(provHandler)
+	provHandler = requestlog.AccessLogger(false)(provHandler)
+	provHandler = exhttp.CORSMiddleware(provHandler)
+	provHandler = hlog.RequestIDHandler("request_id", "Request-Id")(provHandler)
+	provHandler = hlog.NewHandler(prov.log)(provHandler)
+	provHandler = http.StripPrefix(prov.br.Config.Provisioning.Prefix, provHandler)
+	prov.br.AS.Router.Handle(prov.br.Config.Provisioning.Prefix, provHandler)
 
 	if prov.br.Config.Provisioning.DebugEndpoints {
 		prov.log.Debug().Msg("Enabling debug API at /debug")
-		r := prov.br.AS.Router.PathPrefix("/debug").Subrouter()
-		r.Use(prov.DebugAuthMiddleware)
-		r.HandleFunc("/pprof/cmdline", pprof.Cmdline).Methods(http.MethodGet)
-		r.HandleFunc("/pprof/profile", pprof.Profile).Methods(http.MethodGet)
-		r.HandleFunc("/pprof/symbol", pprof.Symbol).Methods(http.MethodGet)
-		r.HandleFunc("/pprof/trace", pprof.Trace).Methods(http.MethodGet)
-		r.PathPrefix("/pprof/").HandlerFunc(pprof.Index)
+		debugRouter := http.NewServeMux()
+		// TODO do we need to strip prefix here?
+		debugRouter.HandleFunc("/debug/pprof", pprof.Index)
+		debugRouter.HandleFunc("GET /debug/pprof/trace", pprof.Trace)
+		debugRouter.HandleFunc("GET /debug/pprof/symbol", pprof.Symbol)
+		debugRouter.HandleFunc("GET /debug/pprof/profile", pprof.Profile)
+		debugRouter.HandleFunc("GET /debug/pprof/cmdline", pprof.Cmdline)
+		prov.br.AS.Router.Handle("/debug", prov.AuthMiddleware(debugRouter))
 	}
-}
-
-func corsMiddleware(handler http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "X-Requested-With, Content-Type, Authorization")
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		handler.ServeHTTP(w, r)
-	})
 }
 
 func jsonResponse(w http.ResponseWriter, status int, response any) {
@@ -270,7 +264,7 @@ func (prov *ProvisioningAPI) AuthMiddleware(h http.Handler) http.Handler {
 		}
 
 		ctx := context.WithValue(r.Context(), provisioningUserKey, user)
-		if loginID, ok := mux.Vars(r)["loginProcessID"]; ok {
+		if loginID := r.PathValue("loginProcessID"); loginID != "" {
 			prov.loginsLock.RLock()
 			login, ok := prov.logins[loginID]
 			prov.loginsLock.RUnlock()
@@ -285,7 +279,7 @@ func (prov *ProvisioningAPI) AuthMiddleware(h http.Handler) http.Handler {
 			login.Lock.Lock()
 			// This will only unlock after the handler runs
 			defer login.Lock.Unlock()
-			stepID := mux.Vars(r)["stepID"]
+			stepID := r.PathValue("stepID")
 			if login.NextStep.StepID != stepID {
 				zerolog.Ctx(r.Context()).Warn().
 					Str("request_step_id", stepID).
@@ -297,7 +291,7 @@ func (prov *ProvisioningAPI) AuthMiddleware(h http.Handler) http.Handler {
 				})
 				return
 			}
-			stepType := mux.Vars(r)["stepType"]
+			stepType := r.PathValue("stepType")
 			if login.NextStep.Type != bridgev2.LoginStepType(stepType) {
 				zerolog.Ctx(r.Context()).Warn().
 					Str("request_step_type", stepType).
@@ -401,7 +395,7 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 	login, err := prov.net.CreateLogin(
 		r.Context(),
 		prov.GetUser(r),
-		mux.Vars(r)["flowID"],
+		r.PathValue("flowID"),
 	)
 	if err != nil {
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to create login process")
@@ -438,6 +432,17 @@ func (prov *ProvisioningAPI) handleCompleteStep(ctx context.Context, login *Prov
 		StateEvent: status.StateLoggedOut,
 		Reason:     "LOGIN_OVERRIDDEN",
 	}, bridgev2.DeleteOpts{LogoutRemote: true})
+}
+
+func (prov *ProvisioningAPI) PostLogin(w http.ResponseWriter, r *http.Request) {
+	switch r.PathValue("stepType") {
+	case "user_input", "cookies":
+		prov.PostLoginSubmitInput(w, r)
+	case "display_and_wait":
+		prov.PostLoginWait(w, r)
+	default:
+		panic("Impossible state") // checked by the AuthMiddleware
+	}
 }
 
 func (prov *ProvisioningAPI) PostLoginSubmitInput(w http.ResponseWriter, r *http.Request) {
@@ -493,7 +498,7 @@ func (prov *ProvisioningAPI) PostLoginWait(w http.ResponseWriter, r *http.Reques
 
 func (prov *ProvisioningAPI) PostLogout(w http.ResponseWriter, r *http.Request) {
 	user := prov.GetUser(r)
-	userLoginID := networkid.UserLoginID(mux.Vars(r)["loginID"])
+	userLoginID := networkid.UserLoginID(r.PathValue("loginID"))
 	if userLoginID == "all" {
 		for {
 			login := user.GetDefaultLogin()
@@ -596,7 +601,7 @@ func (prov *ProvisioningAPI) doResolveIdentifier(w http.ResponseWriter, r *http.
 		})
 		return
 	}
-	resp, err := api.ResolveIdentifier(r.Context(), mux.Vars(r)["identifier"], createChat)
+	resp, err := api.ResolveIdentifier(r.Context(), r.PathValue("identifier"), createChat)
 	if err != nil {
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to resolve identifier")
 		RespondWithError(w, err, "Internal error resolving identifier")

@@ -17,7 +17,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/rs/zerolog"
 
 	"maunium.net/go/mautrix"
@@ -101,8 +100,7 @@ func (as *AppService) PutTransaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	vars := mux.Vars(r)
-	txnID := vars["txnID"]
+	txnID := r.PathValue("txnID")
 	if len(txnID) == 0 {
 		Error{
 			ErrorCode:  ErrNoTransactionID,
@@ -258,9 +256,7 @@ func (as *AppService) GetRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	vars := mux.Vars(r)
-	roomAlias := vars["roomAlias"]
-	ok := as.QueryHandler.QueryAlias(roomAlias)
+	ok := as.QueryHandler.QueryAlias(r.PathValue("roomAlias"))
 	if ok {
 		WriteBlankOK(w)
 	} else {
@@ -277,9 +273,7 @@ func (as *AppService) GetUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	vars := mux.Vars(r)
-	userID := id.UserID(vars["userID"])
-	ok := as.QueryHandler.QueryUser(userID)
+	ok := as.QueryHandler.QueryUser(id.UserID(r.PathValue("userID")))
 	if ok {
 		WriteBlankOK(w)
 	} else {
