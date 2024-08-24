@@ -20,6 +20,7 @@ type Message[T any] struct {
 	Data T
 
 	ID            networkid.MessageID
+	TransactionID networkid.TransactionID
 	TargetMessage networkid.MessageID
 
 	ConvertMessageFunc func(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, data T) (*bridgev2.ConvertedMessage, error)
@@ -28,9 +29,10 @@ type Message[T any] struct {
 }
 
 var (
-	_ bridgev2.RemoteMessage       = (*Message[any])(nil)
-	_ bridgev2.RemoteEdit          = (*Message[any])(nil)
-	_ bridgev2.RemoteMessageUpsert = (*Message[any])(nil)
+	_ bridgev2.RemoteMessage                  = (*Message[any])(nil)
+	_ bridgev2.RemoteEdit                     = (*Message[any])(nil)
+	_ bridgev2.RemoteMessageUpsert            = (*Message[any])(nil)
+	_ bridgev2.RemoteMessageWithTransactionID = (*Message[any])(nil)
 )
 
 func (evt *Message[T]) ConvertMessage(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI) (*bridgev2.ConvertedMessage, error) {
@@ -51,6 +53,10 @@ func (evt *Message[T]) GetID() networkid.MessageID {
 
 func (evt *Message[T]) GetTargetMessage() networkid.MessageID {
 	return evt.TargetMessage
+}
+
+func (evt *Message[T]) GetTransactionID() networkid.TransactionID {
+	return evt.TransactionID
 }
 
 type MessageRemove struct {
