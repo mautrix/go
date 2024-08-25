@@ -24,6 +24,7 @@ type Filter struct {
 	EventFormat EventFormat `json:"event_format,omitempty"`
 	Presence    FilterPart  `json:"presence,omitempty"`
 	Room        RoomFilter  `json:"room,omitempty"`
+	ToDevice    *FilterPart `json:"com.beeper.to_device,omitempty"`
 }
 
 // RoomFilter is used to define filtering rules for room events
