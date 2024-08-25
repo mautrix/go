@@ -8,9 +8,9 @@ package bridgeconfig
 
 import (
 	"fmt"
-	"html/template"
 	"regexp"
 	"strings"
+	"text/template"
 
 	"go.mau.fi/util/exerrors"
 	"go.mau.fi/util/random"
