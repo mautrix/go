@@ -181,7 +181,7 @@ func fnSearch(ce *Event) {
 					ce.Log.Err(err).Object("portal_key", res.Chat.PortalKey).Msg("Failed to get DM portal")
 				}
 			}
-			if res.Chat.Portal != nil {
+			if res.Chat.Portal != nil && res.Chat.Portal.MXID != "" {
 				portalName := res.Chat.Portal.Name
 				if portalName == "" {
 					portalName = res.Chat.Portal.MXID.String()
