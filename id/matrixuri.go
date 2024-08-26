@@ -65,6 +65,9 @@ func (uri *MatrixURI) getQuery() url.Values {
 
 // String converts the parsed matrix: URI back into the string representation.
 func (uri *MatrixURI) String() string {
+	if uri == nil {
+		return ""
+	}
 	parts := []string{
 		SigilToPathSegment[uri.Sigil1],
 		url.PathEscape(uri.MXID1),
@@ -81,6 +84,9 @@ func (uri *MatrixURI) String() string {
 
 // MatrixToURL converts to parsed matrix: URI into a matrix.to URL
 func (uri *MatrixURI) MatrixToURL() string {
+	if uri == nil {
+		return ""
+	}
 	fragment := fmt.Sprintf("#/%s", url.PathEscape(uri.PrimaryIdentifier()))
 	if uri.Sigil2 != 0 {
 		fragment = fmt.Sprintf("%s/%s", fragment, url.PathEscape(uri.SecondaryIdentifier()))
@@ -96,13 +102,16 @@ func (uri *MatrixURI) MatrixToURL() string {
 // PrimaryIdentifier returns the first Matrix identifier in the URI.
 // Currently room IDs, room aliases and user IDs can be in the primary identifier slot.
 func (uri *MatrixURI) PrimaryIdentifier() string {
+	if uri == nil {
+		return ""
+	}
 	return fmt.Sprintf("%c%s", uri.Sigil1, uri.MXID1)
 }
 
 // SecondaryIdentifier returns the second Matrix identifier in the URI.
 // Currently only event IDs can be in the secondary identifier slot.
 func (uri *MatrixURI) SecondaryIdentifier() string {
-	if uri.Sigil2 == 0 {
+	if uri == nil || uri.Sigil2 == 0 {
 		return ""
 	}
 	return fmt.Sprintf("%c%s", uri.Sigil2, uri.MXID2)
@@ -110,7 +119,7 @@ func (uri *MatrixURI) SecondaryIdentifier() string {
 
 // UserID returns the user ID from the URI if the primary identifier is a user ID.
 func (uri *MatrixURI) UserID() UserID {
-	if uri.Sigil1 == '@' {
+	if uri != nil && uri.Sigil1 == '@' {
 		return UserID(uri.PrimaryIdentifier())
 	}
 	return ""
@@ -118,7 +127,7 @@ func (uri *MatrixURI) UserID() UserID {
 
 // RoomID returns the room ID from the URI if the primary identifier is a room ID.
 func (uri *MatrixURI) RoomID() RoomID {
-	if uri.Sigil1 == '!' {
+	if uri != nil && uri.Sigil1 == '!' {
 		return RoomID(uri.PrimaryIdentifier())
 	}
 	return ""
@@ -126,7 +135,7 @@ func (uri *MatrixURI) RoomID() RoomID {
 
 // RoomAlias returns the room alias from the URI if the primary identifier is a room alias.
 func (uri *MatrixURI) RoomAlias() RoomAlias {
-	if uri.Sigil1 == '#' {
+	if uri != nil && uri.Sigil1 == '#' {
 		return RoomAlias(uri.PrimaryIdentifier())
 	}
 	return ""
@@ -134,7 +143,7 @@ func (uri *MatrixURI) RoomAlias() RoomAlias {
 
 // EventID returns the event ID from the URI if the primary identifier is a room ID or alias and the secondary identifier is an event ID.
 func (uri *MatrixURI) EventID() EventID {
-	if (uri.Sigil1 == '!' || uri.Sigil1 == '#') && uri.Sigil2 == '$' {
+	if uri != nil && (uri.Sigil1 == '!' || uri.Sigil1 == '#') && uri.Sigil2 == '$' {
 		return EventID(uri.SecondaryIdentifier())
 	}
 	return ""

@@ -37,6 +37,9 @@ func (roomID RoomID) String() string {
 }
 
 func (roomID RoomID) URI(via ...string) *MatrixURI {
+	if roomID == "" {
+		return nil
+	}
 	return &MatrixURI{
 		Sigil1: '!',
 		MXID1:  string(roomID)[1:],
@@ -45,6 +48,11 @@ func (roomID RoomID) URI(via ...string) *MatrixURI {
 }
 
 func (roomID RoomID) EventURI(eventID EventID, via ...string) *MatrixURI {
+	if roomID == "" {
+		return nil
+	} else if eventID == "" {
+		return roomID.URI(via...)
+	}
 	return &MatrixURI{
 		Sigil1: '!',
 		MXID1:  string(roomID)[1:],
@@ -59,13 +67,20 @@ func (roomAlias RoomAlias) String() string {
 }
 
 func (roomAlias RoomAlias) URI() *MatrixURI {
+	if roomAlias == "" {
+		return nil
+	}
 	return &MatrixURI{
 		Sigil1: '#',
 		MXID1:  string(roomAlias)[1:],
 	}
 }
 
+// Deprecated: room alias event links should not be used. Use room IDs instead.
 func (roomAlias RoomAlias) EventURI(eventID EventID) *MatrixURI {
+	if roomAlias == "" {
+		return nil
+	}
 	return &MatrixURI{
 		Sigil1: '#',
 		MXID1:  string(roomAlias)[1:],

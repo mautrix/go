@@ -81,6 +81,9 @@ func (userID UserID) Homeserver() string {
 //
 // This does not parse or validate the user ID. Use the ParseAndValidate method if you want to ensure the user ID is valid first.
 func (userID UserID) URI() *MatrixURI {
+	if userID == "" {
+		return nil
+	}
 	return &MatrixURI{
 		Sigil1: '@',
 		MXID1:  string(userID)[1:],
