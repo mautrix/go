@@ -50,6 +50,10 @@ type ProvisioningAPI struct {
 
 	matrixAuthCache     map[string]matrixAuthCacheEntry
 	matrixAuthCacheLock sync.Mutex
+
+	// GetAuthFromRequest is a custom function for getting the auth token from
+	// the request if the Authorization header is not present.
+	GetAuthFromRequest func(r *http.Request) string
 }
 
 type ProvLogin struct {
@@ -184,6 +188,9 @@ func (prov *ProvisioningAPI) checkFederatedMatrixAuth(ctx context.Context, userI
 func (prov *ProvisioningAPI) AuthMiddleware(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		auth := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if auth == "" && prov.GetAuthFromRequest != nil {
+			auth = prov.GetAuthFromRequest(r)
+		}
 		if auth == "" {
 			jsonResponse(w, http.StatusUnauthorized, &mautrix.RespError{
 				Err:     "Missing auth token",
