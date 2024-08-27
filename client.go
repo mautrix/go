@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -92,6 +93,7 @@ type Client struct {
 	UpdateRequestOnRetry func(req *http.Request, cause error) *http.Request
 
 	SyncPresence event.Presence
+	SyncTraceLog bool
 
 	StreamSyncMinAge time.Duration
 
@@ -321,6 +323,8 @@ func (cli *Client) LogRequestDone(req *http.Request, resp *http.Response, err er
 	} else if handlerErr != nil {
 		evt = zerolog.Ctx(req.Context()).Warn().
 			AnErr("body_parse_err", handlerErr)
+	} else if cli.SyncTraceLog && strings.HasSuffix(req.URL.Path, "/_matrix/client/v3/sync") {
+		evt = zerolog.Ctx(req.Context()).Trace()
 	} else {
 		evt = zerolog.Ctx(req.Context()).Debug()
 	}
