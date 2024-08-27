@@ -311,7 +311,7 @@ func (portal *Portal) FindPreferredLogin(ctx context.Context, user *User, allowR
 		if err != nil {
 			return nil, nil, err
 		}
-		if login.UserMXID != user.MXID {
+		if login == nil || login.UserMXID != user.MXID {
 			if allowRelay && portal.Relay != nil {
 				return nil, nil, nil
 			}
