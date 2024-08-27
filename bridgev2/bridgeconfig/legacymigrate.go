@@ -96,7 +96,7 @@ func doMigrateLegacy(helper up.Helper, python bool) {
 				helper.Set(up.Str, "postgres", "database", "type")
 			} else {
 				dbPath := strings.TrimPrefix(strings.TrimPrefix(legacyDB, "sqlite:"), "///")
-				helper.Set(up.Str, dbPath, "database", "uri")
+				helper.Set(up.Str, fmt.Sprintf("file:%s?_txlock=immediate", dbPath), "database", "uri")
 				helper.Set(up.Str, "sqlite3-fk-wal", "database", "type")
 			}
 		}
