@@ -269,6 +269,7 @@ type cookieLoginCommandState struct {
 }
 
 func (clcs *cookieLoginCommandState) prompt(ce *Event) {
+	ce.Reply("Login URL: <%s>", clcs.Data.URL)
 	StoreCommandState(ce.User, &CommandState{
 		Next:   MinimalCommandHandlerFunc(clcs.submit),
 		Action: "Login",
