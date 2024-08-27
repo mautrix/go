@@ -46,13 +46,13 @@ func (br *BridgeMain) LegacyMigrateWithAnotherUpgrader(renameTablesQuery, copyDa
 			if err != nil {
 				return err
 			}
-			upgradesTo, compat, err = otherTable[0].DangerouslyRun(ctx, br.DB)
+			otherUpgradesTo, otherCompat, err := otherTable[0].DangerouslyRun(ctx, br.DB)
 			if err != nil {
 				return err
-			} else if upgradesTo < otherNewVersion || compat > otherNewVersion {
-				return fmt.Errorf("unexpected new database version for %s (%d/c:%d, expected %d)", otherTableName, upgradesTo, compat, newDBVersion)
+			} else if otherUpgradesTo < otherNewVersion || otherCompat > otherNewVersion {
+				return fmt.Errorf("unexpected new database version for %s (%d/c:%d, expected %d)", otherTableName, otherUpgradesTo, otherCompat, newDBVersion)
 			}
-			_, err = br.DB.Exec(ctx, fmt.Sprintf("INSERT INTO %s (version, compat) VALUES ($1, $2)", otherTableName), upgradesTo, compat)
+			_, err = br.DB.Exec(ctx, fmt.Sprintf("INSERT INTO %s (version, compat) VALUES ($1, $2)", otherTableName), otherUpgradesTo, otherCompat)
 			if err != nil {
 				return err
 			}
