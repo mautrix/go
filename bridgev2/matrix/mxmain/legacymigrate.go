@@ -26,7 +26,11 @@ import (
 
 func (br *BridgeMain) LegacyMigrateWithAnotherUpgrader(renameTablesQuery, copyDataQuery string, newDBVersion int, otherTable dbutil.UpgradeTable, otherTableName string, otherNewVersion int) func(ctx context.Context) error {
 	return func(ctx context.Context) error {
-		_, err := br.DB.Exec(ctx, renameTablesQuery)
+		err := dbutil.DangerousInternalUpgradeVersionTable(ctx, br.DB)
+		if err != nil {
+			return err
+		}
+		_, err = br.DB.Exec(ctx, renameTablesQuery)
 		if err != nil {
 			return err
 		}
