@@ -65,7 +65,11 @@ func (br *BridgeMain) LegacyMigrateWithAnotherUpgrader(renameTablesQuery, copyDa
 		if err != nil {
 			return err
 		}
-		_, err = br.DB.Exec(ctx, "UPDATE database_owner SET owner = $1 WHERE key = 0", br.DB.Owner)
+		_, err = br.DB.Exec(ctx, "DELETE FROM database_owner")
+		if err != nil {
+			return err
+		}
+		_, err = br.DB.Exec(ctx, "INSERT INTO database_owner (key, owner) VALUES (0, $1)", br.DB.Owner)
 		if err != nil {
 			return err
 		}
@@ -103,7 +107,7 @@ func (br *BridgeMain) CheckLegacyDB(
 		return
 	}
 	var owner string
-	err = br.DB.QueryRow(ctx, "SELECT owner FROM database_owner WHERE key=0").Scan(&owner)
+	err = br.DB.QueryRow(ctx, "SELECT owner FROM database_owner LIMIT 1").Scan(&owner)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		log.Err(err).Msg("Failed to get database owner")
 		return
