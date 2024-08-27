@@ -99,6 +99,7 @@ type MatrixAPI interface {
 
 	TagRoom(ctx context.Context, roomID id.RoomID, tag event.RoomTag, isTagged bool) error
 	MuteRoom(ctx context.Context, roomID id.RoomID, until time.Time) error
+	GetGroupCreateInfo(ctx context.Context, roomID id.RoomID, creator *UserLogin) (*GroupCreateInfo, error)
 }
 
 type MarkAsDMMatrixAPI interface {

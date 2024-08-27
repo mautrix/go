@@ -445,3 +445,7 @@ func (as *ASIntent) MuteRoom(ctx context.Context, roomID id.RoomID, until time.T
 		})
 	}
 }
+
+func (as *ASIntent) GetGroupCreateInfo(ctx context.Context, roomID id.RoomID, creator *bridgev2.UserLogin) (*bridgev2.GroupCreateInfo, error) {
+	return as.Connector.GetGroupCreateInfo(ctx, roomID, creator)
+}

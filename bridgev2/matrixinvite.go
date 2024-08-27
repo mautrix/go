@@ -209,6 +209,127 @@ func (br *Bridge) handleGhostDMInvite(ctx context.Context, evt *event.Event, sen
 	}
 }
 
+func (br *Bridge) handleGhostGroupInvite(ctx context.Context, evt *event.Event, sender *User) {
+	ghostID, _ := br.Matrix.ParseGhostMXID(id.UserID(evt.GetStateKey()))
+	validator, ok := br.Network.(IdentifierValidatingNetwork)
+	if ghostID == "" || (ok && !validator.ValidateUserID(ghostID)) {
+		rejectInvite(ctx, evt, br.Matrix.GhostIntent(ghostID), "Malformed user ID")
+		return
+	}
+	log := zerolog.Ctx(ctx).With().
+		Str("invitee_network_id", string(ghostID)).
+		Stringer("room_id", evt.RoomID).
+		Logger()
+	// TODO sort in preference order
+	logins := sender.GetCachedUserLogins()
+	if len(logins) == 0 {
+		rejectInvite(ctx, evt, br.Matrix.GhostIntent(ghostID), "You're not logged in")
+		return
+	}
+	creatingAPI, ok := logins[0].Client.(GroupCreatingNetworkAPI)
+	if !ok {
+		rejectInvite(ctx, evt, br.Matrix.GhostIntent(ghostID), "This bridge does not support creating groups")
+		return
+	}
+	doublePuppet := sender.DoublePuppet(ctx)
+	if doublePuppet == nil {
+		// TODO: should the ghost join and print some message like in v1?
+		return
+	}
+	invitedGhost, err := br.GetGhostByID(ctx, ghostID)
+	if err != nil {
+		log.Err(err).Msg("Failed to get invited ghost")
+		return
+	}
+	var resp *ResolveIdentifierResponse
+	var sourceLogin *UserLogin
+	// TODO this should somehow lock incoming event processing to avoid race conditions where a new portal room is created
+	//      between ResolveIdentifier returning and the portal MXID being updated.
+	for _, login := range logins {
+		api, ok := login.Client.(IdentifierResolvingNetworkAPI)
+		if !ok {
+			continue
+		}
+		resp, err = api.ResolveIdentifier(ctx, string(ghostID), false)
+		if errors.Is(err, ErrResolveIdentifierTryNext) {
+			log.Debug().Err(err).Str("login_id", string(login.ID)).Msg("Failed to resolve identifier, trying next login")
+			continue
+		} else if err != nil {
+			log.Err(err).Msg("Failed to resolve identifier")
+			sendErrorAndLeave(ctx, evt, invitedGhost.Intent, "Failed to create chat")
+			return
+		} else {
+			sourceLogin = login
+			break
+		}
+	}
+	if resp == nil {
+		log.Warn().Msg("No login could resolve the identifier")
+		sendErrorAndLeave(ctx, evt, br.Matrix.GhostIntent(ghostID), "Failed to create chat via any login")
+		return
+	}
+	err = doublePuppet.EnsureInvited(ctx, evt.RoomID, br.Bot.GetMXID())
+	if err != nil {
+		log.Err(err).Msg("Failed to ensure bot is invited to room")
+		sendErrorAndLeave(ctx, evt, invitedGhost.Intent, "Failed to invite bridge bot")
+		return
+	}
+	err = br.Bot.EnsureJoined(ctx, evt.RoomID)
+	if err != nil {
+		log.Err(err).Msg("Failed to ensure bot is joined to room")
+		sendErrorAndLeave(ctx, evt, invitedGhost.Intent, "Failed to join with bridge bot")
+		return
+	}
+	groupCreateInfo, err := br.Bot.GetGroupCreateInfo(ctx, evt.RoomID, sourceLogin)
+	if err != nil {
+		log.Err(err).Msg("Failed getting GroupCreateInfo")
+		return
+	}
+	createResponse, err := creatingAPI.CreateGroup(ctx, groupCreateInfo)
+	if err != nil {
+		log.Err(err).Msg("Failed to create Group")
+		return
+	}
+	portal := createResponse.Portal
+	didSetPortal := portal.setMXIDToExistingRoom(evt.RoomID)
+	if createResponse.PortalInfo != nil {
+		portal.UpdateInfo(ctx, createResponse.PortalInfo, sourceLogin, nil, time.Time{})
+	}
+	if didSetPortal {
+		// TODO this might become unnecessary if UpdateInfo starts taking care of it
+		_, err = br.Bot.SendState(ctx, portal.MXID, event.StateElementFunctionalMembers, "", &event.Content{
+			Parsed: &event.ElementFunctionalMembersContent{
+				ServiceMembers: []id.UserID{br.Bot.GetMXID()},
+			},
+		}, time.Time{})
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to set service members in room")
+		}
+		message := "Group chat portal created"
+		err = br.givePowerToBot(ctx, evt.RoomID, doublePuppet)
+		hasWarning := false
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to give power to bot in new Group")
+			message += "\n\nWarning: failed to promote bot"
+			hasWarning = true
+		}
+		mx, ok := br.Matrix.(MatrixConnectorWithPostRoomBridgeHandling)
+		if ok {
+			err = mx.HandleNewlyBridgedRoom(ctx, evt.RoomID)
+			if err != nil {
+				if hasWarning {
+					message += fmt.Sprintf(", %s", err.Error())
+				} else {
+					message += fmt.Sprintf("\n\nWarning: %s", err.Error())
+				}
+			}
+		}
+		sendNotice(ctx, evt, invitedGhost.Intent, message)
+	} else {
+		rejectInvite(ctx, evt, br.Bot, "")
+	}
+}
+
 func (br *Bridge) givePowerToBot(ctx context.Context, roomID id.RoomID, userWithPower MatrixAPI) error {
 	powers, err := br.Matrix.GetPowerLevels(ctx, roomID)
 	if err != nil {
