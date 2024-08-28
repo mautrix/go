@@ -311,7 +311,7 @@ func (prov *ProvisioningAPI) GetWhoami(w http.ResponseWriter, r *http.Request) {
 		CommandPrefix:  prov.br.Config.Bridge.CommandPrefix,
 		ManagementRoom: user.ManagementRoom,
 	}
-	logins := user.GetCachedUserLogins()
+	logins := user.GetUserLogins()
 	resp.Logins = make([]RespWhoamiLogin, len(logins))
 	for i, login := range logins {
 		prevState := login.BridgeState.GetPrevUnsent()

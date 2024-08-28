@@ -151,7 +151,7 @@ func (br *Bridge) StartLogins() error {
 		if err != nil {
 			br.Log.Err(err).Stringer("user_id", userID).Msg("Failed to load user")
 		} else {
-			for _, login := range user.GetCachedUserLogins() {
+			for _, login := range user.GetUserLogins() {
 				startedAny = true
 				br.Log.Info().Str("id", string(login.ID)).Msg("Starting user login")
 				err = login.Client.Connect(login.Log.WithContext(ctx))

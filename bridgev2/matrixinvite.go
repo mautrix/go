@@ -99,7 +99,7 @@ func (br *Bridge) handleGhostDMInvite(ctx context.Context, evt *event.Event, sen
 		Stringer("room_id", evt.RoomID).
 		Logger()
 	// TODO sort in preference order
-	logins := sender.GetCachedUserLogins()
+	logins := sender.GetUserLogins()
 	if len(logins) == 0 {
 		rejectInvite(ctx, evt, br.Matrix.GhostIntent(ghostID), "You're not logged in")
 		return
