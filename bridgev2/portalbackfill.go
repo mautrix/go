@@ -63,9 +63,8 @@ func (portal *Portal) doForwardBackfill(ctx context.Context, source *UserLogin, 
 		log.Debug().Msg("No messages to backfill")
 		return
 	}
-	// TODO check pending messages
 	// TODO mark backfill queue task as done if last message is nil (-> room was empty) and HasMore is false?
-	resp.Messages = cutoffMessages(&log, resp.Messages, true, lastMessage)
+	resp.Messages = portal.cutoffMessages(ctx, resp.Messages, resp.AggressiveDeduplication, true, lastMessage)
 	if len(resp.Messages) == 0 {
 		log.Warn().Msg("No messages left to backfill after cutting off old messages")
 		return
@@ -126,7 +125,7 @@ func (portal *Portal) DoBackwardsBackfill(ctx context.Context, source *UserLogin
 		}
 		return nil
 	}
-	resp.Messages = cutoffMessages(log, resp.Messages, false, firstMessage)
+	resp.Messages = portal.cutoffMessages(ctx, resp.Messages, resp.AggressiveDeduplication, false, firstMessage)
 	if len(resp.Messages) == 0 {
 		return fmt.Errorf("no messages left to backfill after cutting off too new messages")
 	}
@@ -156,7 +155,7 @@ func (portal *Portal) fetchThreadBackfill(ctx context.Context, source *UserLogin
 		log.Debug().Msg("No messages to backfill")
 		return nil
 	}
-	resp.Messages = cutoffMessages(log, resp.Messages, true, anchor)
+	resp.Messages = portal.cutoffMessages(ctx, resp.Messages, resp.AggressiveDeduplication, true, anchor)
 	if len(resp.Messages) == 0 {
 		log.Warn().Msg("No messages left to backfill after cutting off old messages")
 		return nil
@@ -182,7 +181,7 @@ func (portal *Portal) doThreadBackfill(ctx context.Context, source *UserLogin, t
 	}
 }
 
-func cutoffMessages(log *zerolog.Logger, messages []*BackfillMessage, forward bool, lastMessage *database.Message) []*BackfillMessage {
+func (portal *Portal) cutoffMessages(ctx context.Context, messages []*BackfillMessage, aggressiveDedup, forward bool, lastMessage *database.Message) []*BackfillMessage {
 	if lastMessage == nil {
 		return messages
 	}
@@ -196,7 +195,7 @@ func cutoffMessages(log *zerolog.Logger, messages []*BackfillMessage, forward bo
 			}
 		}
 		if cutoff != -1 {
-			log.Debug().
+			zerolog.Ctx(ctx).Debug().
 				Int("cutoff_count", cutoff+1).
 				Int("total_count", len(messages)).
 				Time("last_bridged_ts", lastMessage.Timestamp).
@@ -213,13 +212,42 @@ func cutoffMessages(log *zerolog.Logger, messages []*BackfillMessage, forward bo
 			}
 		}
 		if cutoff != -1 {
-			log.Debug().
+			zerolog.Ctx(ctx).Debug().
 				Int("cutoff_count", len(messages)-cutoff).
 				Int("total_count", len(messages)).
 				Time("oldest_bridged_ts", lastMessage.Timestamp).
 				Msg("Cutting off backward backfill messages newer than oldest bridged message")
 			messages = messages[:cutoff]
 		}
+	}
+	if aggressiveDedup {
+		filteredMessages := messages[:0]
+		for _, msg := range messages {
+			existingMsg, err := portal.Bridge.DB.Message.GetFirstPartByID(ctx, portal.Receiver, msg.ID)
+			if err != nil {
+				zerolog.Ctx(ctx).Err(err).Str("message_id", string(msg.ID)).Msg("Failed to check for existing message")
+			} else if existingMsg != nil {
+				zerolog.Ctx(ctx).Err(err).
+					Str("message_id", string(msg.ID)).
+					Time("message_ts", msg.Timestamp).
+					Str("message_sender", string(msg.Sender.Sender)).
+					Msg("Ignoring duplicate message in backfill")
+				continue
+			}
+			if forward && msg.TxnID != "" {
+				wasPending, _ := portal.checkPendingMessage(ctx, msg)
+				if wasPending {
+					zerolog.Ctx(ctx).Err(err).
+						Str("transaction_id", string(msg.TxnID)).
+						Str("message_id", string(msg.ID)).
+						Time("message_ts", msg.Timestamp).
+						Msg("Found pending message in backfill")
+					continue
+				}
+			}
+			filteredMessages = append(filteredMessages, msg)
+		}
+		messages = filteredMessages
 	}
 	return messages
 }

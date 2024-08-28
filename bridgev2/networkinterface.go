@@ -424,6 +424,43 @@ type BackfillMessage struct {
 	LastThreadMessage    networkid.MessageID
 }
 
+var (
+	_ RemoteMessageWithTransactionID = (*BackfillMessage)(nil)
+	_ RemoteEventWithTimestamp       = (*BackfillMessage)(nil)
+)
+
+func (b *BackfillMessage) GetType() RemoteEventType {
+	return RemoteEventMessage
+}
+
+func (b *BackfillMessage) GetPortalKey() networkid.PortalKey {
+	panic("GetPortalKey called for BackfillMessage")
+}
+
+func (b *BackfillMessage) AddLogContext(c zerolog.Context) zerolog.Context {
+	return c
+}
+
+func (b *BackfillMessage) GetSender() EventSender {
+	return b.Sender
+}
+
+func (b *BackfillMessage) GetID() networkid.MessageID {
+	return b.ID
+}
+
+func (b *BackfillMessage) GetTransactionID() networkid.TransactionID {
+	return b.TxnID
+}
+
+func (b *BackfillMessage) GetTimestamp() time.Time {
+	return b.Timestamp
+}
+
+func (b *BackfillMessage) ConvertMessage(ctx context.Context, portal *Portal, intent MatrixAPI) (*ConvertedMessage, error) {
+	return b.ConvertedMessage, nil
+}
+
 // FetchMessagesResponse contains the response for a message history pagination request.
 type FetchMessagesResponse struct {
 	// The messages to backfill. Messages should always be sorted in chronological order (oldest to newest).
@@ -439,6 +476,11 @@ type FetchMessagesResponse struct {
 	// When sending forward backfill (or the first batch in a room), this field can be set
 	// to mark the messages as read immediately after backfilling.
 	MarkRead bool
+
+	// Should the bridge check each message against the database to ensure it's not a duplicate before bridging?
+	// By default, the bridge will only drop messages that are older than the last bridged message for forward backfills,
+	// or newer than the first for backward.
+	AggressiveDeduplication bool
 
 	// When HasMore is true, one of the following fields can be set to report backfill progress:
 
