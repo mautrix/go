@@ -225,7 +225,7 @@ func (otk *OneTimeKey) MarshalJSON() ([]byte, error) {
 
 type ReqUploadKeys struct {
 	DeviceKeys  *DeviceKeys             `json:"device_keys,omitempty"`
-	OneTimeKeys map[id.KeyID]OneTimeKey `json:"one_time_keys"`
+	OneTimeKeys map[id.KeyID]OneTimeKey `json:"one_time_keys,omitempty"`
 }
 
 type ReqKeysSignatures struct {

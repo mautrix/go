@@ -110,6 +110,9 @@ type Client struct {
 	// Should the ?user_id= query parameter be set in requests?
 	// See https://spec.matrix.org/v1.6/application-service-api/#identity-assertion
 	SetAppServiceUserID bool
+	// Should the org.matrix.msc3202.device_id query parameter be set in requests?
+	// See https://github.com/matrix-org/matrix-spec-proposals/pull/3202
+	SetAppServiceDeviceID bool
 
 	syncingID uint32 // Identifies the current Sync. Only one Sync can be active at any given time.
 }

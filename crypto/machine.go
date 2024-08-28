@@ -208,13 +208,14 @@ func (mach *OlmMachine) OwnIdentity() *id.Device {
 	}
 }
 
-type asEventProcessor interface {
+type ASEventProcessor interface {
 	On(evtType event.Type, handler func(ctx context.Context, evt *event.Event))
 	OnOTK(func(ctx context.Context, otk *mautrix.OTKCount))
 	OnDeviceList(func(ctx context.Context, lists *mautrix.DeviceLists, since string))
+	Dispatch(ctx context.Context, evt *event.Event)
 }
 
-func (mach *OlmMachine) AddAppserviceListener(ep asEventProcessor) {
+func (mach *OlmMachine) AddAppserviceListener(ep ASEventProcessor) {
 	// ToDeviceForwardedRoomKey and ToDeviceRoomKey should only be present inside encrypted to-device events
 	ep.On(event.ToDeviceEncrypted, mach.HandleToDeviceEvent)
 	ep.On(event.ToDeviceRoomKeyRequest, mach.HandleToDeviceEvent)
