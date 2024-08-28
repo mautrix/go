@@ -113,6 +113,7 @@ func (prov *ProvisioningAPI) Init() {
 	prov.Router.Path("/v3/logout/{loginID}").Methods(http.MethodPost, http.MethodOptions).HandlerFunc(prov.PostLogout)
 	prov.Router.Path("/v3/logins").Methods(http.MethodGet, http.MethodOptions).HandlerFunc(prov.GetLogins)
 	prov.Router.Path("/v3/contacts").Methods(http.MethodGet, http.MethodOptions).HandlerFunc(prov.GetContactList)
+	prov.Router.Path("/v3/search_users").Methods(http.MethodPost, http.MethodOptions).HandlerFunc(prov.PostSearchUsers)
 	prov.Router.Path("/v3/resolve_identifier/{identifier}").Methods(http.MethodGet, http.MethodOptions).HandlerFunc(prov.GetResolveIdentifier)
 	prov.Router.Path("/v3/create_dm/{identifier}").Methods(http.MethodPost, http.MethodOptions).HandlerFunc(prov.PostCreateDM)
 	prov.Router.Path("/v3/create_group").Methods(http.MethodPost, http.MethodOptions).HandlerFunc(prov.PostCreateGroup)
@@ -615,33 +616,13 @@ type RespGetContactList struct {
 	Contacts []*RespResolveIdentifier `json:"contacts"`
 }
 
-func (prov *ProvisioningAPI) GetContactList(w http.ResponseWriter, r *http.Request) {
-	login := prov.GetLoginForRequest(w, r)
-	if login == nil {
-		return
-	}
-	api, ok := login.Client.(bridgev2.ContactListingNetworkAPI)
-	if !ok {
-		jsonResponse(w, http.StatusNotImplemented, &mautrix.RespError{
-			Err:     "This bridge does not support listing contacts",
-			ErrCode: mautrix.MUnrecognized.ErrCode,
-		})
-		return
-	}
-	resp, err := api.GetContactList(r.Context())
-	if err != nil {
-		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to get contact list")
-		respondMaybeCustomError(w, err, "Internal error fetching contact list")
-		return
-	}
-	apiResp := &RespGetContactList{
-		Contacts: make([]*RespResolveIdentifier, len(resp)),
-	}
+func (prov *ProvisioningAPI) processResolveIdentifiers(ctx context.Context, resp []*bridgev2.ResolveIdentifierResponse) (apiResp []*RespResolveIdentifier) {
+	apiResp = make([]*RespResolveIdentifier, len(resp))
 	for i, contact := range resp {
 		apiContact := &RespResolveIdentifier{
 			ID: contact.UserID,
 		}
-		apiResp.Contacts[i] = apiContact
+		apiResp[i] = apiContact
 		if contact.UserInfo != nil {
 			if contact.UserInfo.Name != nil {
 				apiContact.Name = *contact.UserInfo.Name
@@ -662,20 +643,84 @@ func (prov *ProvisioningAPI) GetContactList(w http.ResponseWriter, r *http.Reque
 		}
 		if contact.Chat != nil {
 			if contact.Chat.Portal == nil {
-				contact.Chat.Portal, err = prov.br.Bridge.GetPortalByKey(r.Context(), contact.Chat.PortalKey)
+				var err error
+				contact.Chat.Portal, err = prov.br.Bridge.GetPortalByKey(ctx, contact.Chat.PortalKey)
 				if err != nil {
-					zerolog.Ctx(r.Context()).Err(err).Msg("Failed to get portal")
-					jsonResponse(w, http.StatusInternalServerError, &mautrix.RespError{
-						Err:     "Failed to get portal",
-						ErrCode: "M_UNKNOWN",
-					})
-					return
+					zerolog.Ctx(ctx).Err(err).Msg("Failed to get portal")
 				}
 			}
-			apiContact.DMRoomID = contact.Chat.Portal.MXID
+			if contact.Chat.Portal != nil {
+				apiContact.DMRoomID = contact.Chat.Portal.MXID
+			}
 		}
 	}
-	jsonResponse(w, http.StatusOK, apiResp)
+	return
+}
+
+func (prov *ProvisioningAPI) GetContactList(w http.ResponseWriter, r *http.Request) {
+	login := prov.GetLoginForRequest(w, r)
+	if login == nil {
+		return
+	}
+	api, ok := login.Client.(bridgev2.ContactListingNetworkAPI)
+	if !ok {
+		jsonResponse(w, http.StatusNotImplemented, &mautrix.RespError{
+			Err:     "This bridge does not support listing contacts",
+			ErrCode: mautrix.MUnrecognized.ErrCode,
+		})
+		return
+	}
+	resp, err := api.GetContactList(r.Context())
+	if err != nil {
+		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to get contact list")
+		respondMaybeCustomError(w, err, "Internal error fetching contact list")
+		return
+	}
+	jsonResponse(w, http.StatusOK, &RespGetContactList{
+		Contacts: prov.processResolveIdentifiers(r.Context(), resp),
+	})
+}
+
+type ReqSearchUsers struct {
+	Query string `json:"query"`
+}
+
+type RespSearchUsers struct {
+	Results []*RespResolveIdentifier `json:"results"`
+}
+
+func (prov *ProvisioningAPI) PostSearchUsers(w http.ResponseWriter, r *http.Request) {
+	var req ReqSearchUsers
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to decode request body")
+		jsonResponse(w, http.StatusBadRequest, &mautrix.RespError{
+			Err:     "Failed to decode request body",
+			ErrCode: mautrix.MNotJSON.ErrCode,
+		})
+		return
+	}
+	login := prov.GetLoginForRequest(w, r)
+	if login == nil {
+		return
+	}
+	api, ok := login.Client.(bridgev2.UserSearchingNetworkAPI)
+	if !ok {
+		jsonResponse(w, http.StatusNotImplemented, &mautrix.RespError{
+			Err:     "This bridge does not support searching for users",
+			ErrCode: mautrix.MUnrecognized.ErrCode,
+		})
+		return
+	}
+	resp, err := api.SearchUsers(r.Context(), req.Query)
+	if err != nil {
+		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to get contact list")
+		respondMaybeCustomError(w, err, "Internal error fetching contact list")
+		return
+	}
+	jsonResponse(w, http.StatusOK, &RespSearchUsers{
+		Results: prov.processResolveIdentifiers(r.Context(), resp),
+	})
 }
 
 func (prov *ProvisioningAPI) GetResolveIdentifier(w http.ResponseWriter, r *http.Request) {

@@ -240,6 +240,51 @@ paths:
       responses:
         200:
           description: Contact list fetched successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  contacts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ResolvedIdentifier'
+        401:
+          $ref: '#/components/responses/Unauthorized'
+        404:
+          $ref: '#/components/responses/LoginNotFound'
+        500:
+          $ref: '#/components/responses/InternalError'
+        501:
+          $ref: '#/components/responses/NotSupported'
+  /v3/search_users:
+    post:
+      tags: [ snc ]
+      summary: Search for users on the remote network
+      operationId: searchUsers
+      parameters:
+      - $ref: "#/components/parameters/loginID"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                query:
+                  type: string
+                  description: The search query to send to the remote network
+      responses:
+        200:
+          description: Search completed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ResolvedIdentifier'
         401:
           $ref: '#/components/responses/Unauthorized'
         404:
