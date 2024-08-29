@@ -318,7 +318,9 @@ func (cli *Client) RequestStart(req *http.Request) {
 
 func (cli *Client) LogRequestDone(req *http.Request, resp *http.Response, err error, handlerErr error, contentLength int, duration time.Duration) {
 	var evt *zerolog.Event
-	if err != nil {
+	if errors.Is(err, context.Canceled) {
+		evt = zerolog.Ctx(req.Context()).Warn()
+	} else if err != nil {
 		evt = zerolog.Ctx(req.Context()).Err(err)
 	} else if handlerErr != nil {
 		evt = zerolog.Ctx(req.Context()).Warn().
@@ -351,7 +353,9 @@ func (cli *Client) LogRequestDone(req *http.Request, resp *http.Response, err er
 	if body := req.Context().Value(LogBodyContextKey); body != nil {
 		evt.Interface("req_body", body)
 	}
-	if err != nil {
+	if errors.Is(err, context.Canceled) {
+		evt.Msg("Request canceled")
+	} else if err != nil {
 		evt.Msg("Request failed")
 	} else if handlerErr != nil {
 		evt.Msg("Request parsing failed")
