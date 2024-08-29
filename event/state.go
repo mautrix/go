@@ -182,12 +182,18 @@ type SpaceParentEventContent struct {
 	Canonical bool     `json:"canonical,omitempty"`
 }
 
+type PolicyRecommendation string
+
+const (
+	PolicyRecommendationBan PolicyRecommendation = "m.ban"
+)
+
 // ModPolicyContent represents the content of a m.room.rule.user, m.room.rule.room, and m.room.rule.server state event.
 // https://spec.matrix.org/v1.2/client-server-api/#moderation-policy-lists
 type ModPolicyContent struct {
-	Entity         string `json:"entity"`
-	Reason         string `json:"reason"`
-	Recommendation string `json:"recommendation"`
+	Entity         string               `json:"entity"`
+	Reason         string               `json:"reason"`
+	Recommendation PolicyRecommendation `json:"recommendation"`
 }
 
 // Deprecated: MSC2716 has been abandoned
