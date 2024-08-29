@@ -15,10 +15,10 @@ import (
 	"unicode"
 
 	"github.com/tidwall/gjson"
+	"go.mau.fi/util/glob"
 
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
-	"maunium.net/go/mautrix/pushrules/glob"
 )
 
 // Room is an interface with the functions that are needed for processing room-specific push conditions
@@ -219,11 +219,11 @@ func (cond *PushCondition) matchValue(evt *event.Event) bool {
 
 	switch cond.Kind {
 	case KindEventMatch, KindRelatedEventMatch, KindUnstableRelatedEventMatch:
-		pattern, err := glob.Compile(cond.Pattern)
-		if err != nil {
+		pattern := glob.Compile(cond.Pattern)
+		if pattern == nil {
 			return false
 		}
-		return pattern.MatchString(stringifyForPushCondition(val))
+		return pattern.Match(stringifyForPushCondition(val))
 	case KindEventPropertyIs:
 		return valueEquals(val, cond.Value)
 	case KindEventPropertyContains:

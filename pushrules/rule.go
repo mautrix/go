@@ -9,9 +9,10 @@ package pushrules
 import (
 	"encoding/gob"
 
+	"go.mau.fi/util/glob"
+
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
-	"maunium.net/go/mautrix/pushrules/glob"
 )
 
 func init() {
@@ -164,13 +165,13 @@ func (rule *PushRule) matchConditions(room Room, evt *event.Event) bool {
 }
 
 func (rule *PushRule) matchPattern(room Room, evt *event.Event) bool {
-	pattern, err := glob.Compile(rule.Pattern)
-	if err != nil {
+	pattern := glob.Compile(rule.Pattern)
+	if pattern == nil {
 		return false
 	}
 	msg, ok := evt.Content.Raw["body"].(string)
 	if !ok {
 		return false
 	}
-	return pattern.MatchString(msg)
+	return pattern.Match(msg)
 }
