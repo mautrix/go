@@ -199,7 +199,7 @@ func (br *Connector) Start(ctx context.Context) error {
 	}
 	parsed, _ := url.Parse(br.Bridge.Network.GetName().NetworkURL)
 	if parsed != nil {
-		br.deterministicEventIDServer = parsed.Hostname()
+		br.deterministicEventIDServer = strings.TrimPrefix(parsed.Hostname(), "www.")
 	}
 	br.AS.Ready = true
 	if br.Websocket && br.Config.Homeserver.WSPingInterval > 0 {
