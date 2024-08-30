@@ -395,6 +395,7 @@ func (portal *Portal) checkConfusableName(ctx context.Context, userID id.UserID,
 func (portal *Portal) handleMatrixEvent(sender *User, evt *event.Event) {
 	log := portal.Log.With().
 		Str("action", "handle matrix event").
+		Stringer("event_id", evt.ID).
 		Str("event_type", evt.Type.Type).
 		Logger()
 	ctx := log.WithContext(context.TODO())
