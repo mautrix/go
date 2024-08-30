@@ -185,7 +185,8 @@ type SpaceParentEventContent struct {
 type PolicyRecommendation string
 
 const (
-	PolicyRecommendationBan PolicyRecommendation = "m.ban"
+	PolicyRecommendationBan         PolicyRecommendation = "m.ban"
+	PolicyRecommendationUnstableBan PolicyRecommendation = "org.matrix.mjolnir.ban"
 )
 
 // ModPolicyContent represents the content of a m.room.rule.user, m.room.rule.room, and m.room.rule.server state event.

@@ -192,6 +192,13 @@ var (
 	StateSpaceChild        = Type{"m.space.child", StateEventType}
 	StateSpaceParent       = Type{"m.space.parent", StateEventType}
 
+	StateLegacyPolicyRoom     = Type{"m.room.rule.room", StateEventType}
+	StateLegacyPolicyServer   = Type{"m.room.rule.server", StateEventType}
+	StateLegacyPolicyUser     = Type{"m.room.rule.user", StateEventType}
+	StateUnstablePolicyRoom   = Type{"org.matrix.mjolnir.rule.room", StateEventType}
+	StateUnstablePolicyServer = Type{"org.matrix.mjolnir.rule.server", StateEventType}
+	StateUnstablePolicyUser   = Type{"org.matrix.mjolnir.rule.user", StateEventType}
+
 	// Deprecated: MSC2716 has been abandoned
 	StateInsertionMarker = Type{"org.matrix.msc2716.marker", StateEventType}
 

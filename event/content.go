@@ -40,6 +40,13 @@ var TypeMap = map[Type]reflect.Type{
 	StateSpaceChild:        reflect.TypeOf(SpaceChildEventContent{}),
 	StateInsertionMarker:   reflect.TypeOf(InsertionMarkerContent{}),
 
+	StateLegacyPolicyRoom:     reflect.TypeOf(ModPolicyContent{}),
+	StateLegacyPolicyServer:   reflect.TypeOf(ModPolicyContent{}),
+	StateLegacyPolicyUser:     reflect.TypeOf(ModPolicyContent{}),
+	StateUnstablePolicyRoom:   reflect.TypeOf(ModPolicyContent{}),
+	StateUnstablePolicyServer: reflect.TypeOf(ModPolicyContent{}),
+	StateUnstablePolicyUser:   reflect.TypeOf(ModPolicyContent{}),
+
 	StateElementFunctionalMembers: reflect.TypeOf(ElementFunctionalMembersContent{}),
 
 	EventMessage:   reflect.TypeOf(MessageEventContent{}),
