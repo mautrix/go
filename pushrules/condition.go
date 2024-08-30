@@ -219,7 +219,7 @@ func (cond *PushCondition) matchValue(evt *event.Event) bool {
 
 	switch cond.Kind {
 	case KindEventMatch, KindRelatedEventMatch, KindUnstableRelatedEventMatch:
-		pattern := glob.Compile(cond.Pattern)
+		pattern := glob.CompileWithImplicitContains(cond.Pattern)
 		if pattern == nil {
 			return false
 		}

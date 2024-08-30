@@ -165,7 +165,7 @@ func (rule *PushRule) matchConditions(room Room, evt *event.Event) bool {
 }
 
 func (rule *PushRule) matchPattern(room Room, evt *event.Event) bool {
-	pattern := glob.Compile(rule.Pattern)
+	pattern := glob.CompileWithImplicitContains(rule.Pattern)
 	if pattern == nil {
 		return false
 	}
