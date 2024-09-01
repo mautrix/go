@@ -1041,8 +1041,11 @@ func (cli *Client) UpdateProfile(ctx context.Context, data any) (err error) {
 }
 
 func (cli *Client) setOrUpdateProfile(ctx context.Context, data any, method string) (err error) {
-	if cli.SpecVersions.Supports(UnstableFeatureExtendedProfiles) || cli.SpecVersions.Supports(BeeperFeatureArbitraryProfileMeta) {
+	if cli.SpecVersions.Supports(FeatureExtendedProfiles) || cli.SpecVersions.Supports(BeeperFeatureArbitraryProfileMeta) {
 		urlPath := cli.BuildClientURL("v3", "profile", cli.UserID)
+		_, err = cli.MakeRequest(ctx, method, urlPath, data, nil)
+	} else if cli.SpecVersions.Supports(FeatureExtendedProfiles) || cli.SpecVersions.Supports(BeeperFeatureArbitraryProfileMeta) {
+		urlPath := cli.BuildClientURL("unstable", "uk.tcpip.msc4133", "profile", cli.UserID)
 		_, err = cli.MakeRequest(ctx, method, urlPath, data, nil)
 	} else {
 		dataJSON, err := json.Marshal(data)
