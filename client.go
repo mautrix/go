@@ -1463,7 +1463,7 @@ func (cli *Client) State(ctx context.Context, roomID id.RoomID) (stateMap RoomSt
 // GetMediaConfig fetches the configuration of the content repository, such as upload limitations.
 func (cli *Client) GetMediaConfig(ctx context.Context) (resp *RespMediaConfig, err error) {
 	var u string
-	if cli.SpecVersions.ContainsGreaterOrEqual(SpecV111) {
+	if cli.SpecVersions.Supports(FeatureAuthenticatedMedia) {
 		u = cli.BuildClientURL("v1", "media", "config")
 	} else {
 		u = cli.BuildURL(MediaURLPath{"v3", "config"})
@@ -1562,7 +1562,7 @@ func (cli *Client) Download(ctx context.Context, mxcURL id.ContentURI) (*http.Re
 	if ctxLog.GetLevel() == zerolog.Disabled || ctxLog == zerolog.DefaultContextLogger {
 		ctx = cli.Log.WithContext(ctx)
 	}
-	if cli.SpecVersions.ContainsGreaterOrEqual(SpecV111) {
+	if cli.SpecVersions.Supports(FeatureAuthenticatedMedia) {
 		_, resp, err := cli.MakeFullRequestWithResp(ctx, FullRequest{
 			Method:           http.MethodGet,
 			URL:              cli.BuildClientURL("v1", "media", "download", mxcURL.Homeserver, mxcURL.FileID),
@@ -1785,7 +1785,7 @@ func (cli *Client) UploadMedia(ctx context.Context, data ReqUploadMedia) (*RespM
 // See https://spec.matrix.org/v1.2/client-server-api/#get_matrixmediav3preview_url
 func (cli *Client) GetURLPreview(ctx context.Context, url string) (*RespPreviewURL, error) {
 	var urlPath PrefixableURLPath
-	if cli.SpecVersions.ContainsGreaterOrEqual(SpecV111) {
+	if cli.SpecVersions.Supports(FeatureAuthenticatedMedia) {
 		urlPath = ClientURLPath{"v1", "media", "preview_url"}
 	} else {
 		urlPath = MediaURLPath{"v3", "preview_url"}
