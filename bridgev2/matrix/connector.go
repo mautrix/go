@@ -375,39 +375,20 @@ func (br *Connector) fetchMediaConfig(ctx context.Context) {
 
 func (br *Connector) UpdateBotProfile(ctx context.Context) {
 	br.Log.Debug().Msg("Updating bot profile")
-	botConfig := &br.Config.AppService.Bot
-
-	var err error
-	var mxc id.ContentURI
-	if botConfig.Avatar == "remove" {
-		err = br.Bot.SetAvatarURL(ctx, mxc)
-	} else if !botConfig.ParsedAvatar.IsEmpty() {
-		err = br.Bot.SetAvatarURL(ctx, botConfig.ParsedAvatar)
-	}
-	if err != nil {
-		br.Log.Warn().Err(err).Msg("Failed to update bot avatar")
-	}
-
-	if botConfig.Displayname == "remove" {
-		err = br.Bot.SetDisplayName(ctx, "")
-	} else if len(botConfig.Displayname) > 0 {
-		err = br.Bot.SetDisplayName(ctx, botConfig.Displayname)
-	}
-	if err != nil {
-		br.Log.Warn().Err(err).Msg("Failed to update bot displayname")
-	}
-
-	if br.SpecVersions.Supports(mautrix.BeeperFeatureArbitraryProfileMeta) {
-		br.Log.Debug().Msg("Setting contact info on the appservice bot")
-		netName := br.Bridge.Network.GetName()
-		err = br.Bot.BeeperUpdateProfile(ctx, event.BeeperProfileExtra{
+	netName := br.Bridge.Network.GetName()
+	err := br.Bot.SetProfile(ctx, event.ExtendedProfile[event.BeeperProfileExtra]{
+		StandardProfile: event.StandardProfile{
+			Displayname: br.Config.AppService.Bot.Displayname,
+			AvatarURL:   br.Config.AppService.Bot.ParsedAvatar.CUString(),
+		},
+		Extra: event.BeeperProfileExtra{
 			Service:     netName.BeeperBridgeType,
 			Network:     netName.NetworkID,
 			IsBridgeBot: true,
-		})
-		if err != nil {
-			br.Log.Warn().Err(err).Msg("Failed to update bot contact info")
-		}
+		},
+	})
+	if err != nil {
+		br.Log.Warn().Err(err).Msg("Failed to update bot profile")
 	}
 }
 

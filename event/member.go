@@ -7,7 +7,9 @@
 package event
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 
 	"maunium.net/go/mautrix/id"
 )
@@ -41,6 +43,43 @@ type MemberEventContent struct {
 	IsDirect         bool                `json:"is_direct,omitempty"`
 	ThirdPartyInvite *ThirdPartyInvite   `json:"third_party_invite,omitempty"`
 	Reason           string              `json:"reason,omitempty"`
+}
+
+type StandardProfile struct {
+	Displayname string              `json:"displayname,omitempty"`
+	AvatarURL   id.ContentURIString `json:"avatar_url,omitempty"`
+}
+
+type ExtendedProfile[T any] struct {
+	StandardProfile
+	Extra T
+}
+
+func (ep *ExtendedProfile[T]) MarshalJSON() ([]byte, error) {
+	data, err := json.Marshal(ep.StandardProfile)
+	if err != nil {
+		return nil, err
+	}
+	extraData, err := json.Marshal(ep.Extra)
+	if err != nil {
+		return nil, err
+	}
+	if len(extraData) == 0 || bytes.Equal(extraData, []byte("{}")) || bytes.Equal(extraData, []byte("null")) {
+		return data, nil
+	} else if extraData[0] != '{' || extraData[len(extraData)-1] != '}' {
+		return nil, errors.New("unexpected type marshaling profile extra data: not an object")
+	}
+	data[len(data)-1] = ','
+	data = append(data, extraData[1:]...)
+	return data, nil
+}
+
+func (ep *ExtendedProfile[T]) UnmarshalJSON(data []byte) error {
+	err := json.Unmarshal(data, &ep.StandardProfile)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &ep.Extra)
 }
 
 type ThirdPartyInvite struct {

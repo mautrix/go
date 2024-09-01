@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/tidwall/gjson"
 	"go.mau.fi/util/retryafter"
 
 	"maunium.net/go/mautrix/crypto/backup"
@@ -1023,7 +1024,60 @@ func (cli *Client) SetAvatarURL(ctx context.Context, url id.ContentURI) (err err
 	return nil
 }
 
+// SetProfile replaces the user's entire profile.
+//
+// If MSC4133 (https://github.com/matrix-org/matrix-spec-proposals/pull/4133) is supported, this is a single PUT call.
+// Otherwise, the provided data will be parsed and the displayname and avatar are sent in separate requests.
+func (cli *Client) SetProfile(ctx context.Context, data any) (err error) {
+	return cli.setOrUpdateProfile(ctx, data, http.MethodPut)
+}
+
+// UpdateProfile updates the provided fields in the user's entire profile.
+//
+// If MSC4133 (https://github.com/matrix-org/matrix-spec-proposals/pull/4133) is supported, this is a single PATCH call.
+// Otherwise, the provided data will be parsed and the displayname and avatar are sent in separate requests.
+func (cli *Client) UpdateProfile(ctx context.Context, data any) (err error) {
+	return cli.setOrUpdateProfile(ctx, data, http.MethodPatch)
+}
+
+func (cli *Client) setOrUpdateProfile(ctx context.Context, data any, method string) (err error) {
+	if cli.SpecVersions.Supports(UnstableFeatureExtendedProfiles) || cli.SpecVersions.Supports(BeeperFeatureArbitraryProfileMeta) {
+		urlPath := cli.BuildClientURL("v3", "profile", cli.UserID)
+		_, err = cli.MakeRequest(ctx, method, urlPath, data, nil)
+	} else {
+		dataJSON, err := json.Marshal(data)
+		if err != nil {
+			return err
+		}
+		vals := gjson.GetManyBytes(dataJSON, "displayname", "avatar_url")
+		if vals[0].Exists() || method == http.MethodPut {
+			err = cli.SetDisplayName(ctx, vals[0].Str)
+			if err != nil {
+				return fmt.Errorf("failed to set display name: %w", err)
+			}
+		}
+		if vals[1].Exists() {
+			parsed, err := id.ParseContentURI(vals[1].Str)
+			if err != nil {
+				return fmt.Errorf("failed to parse avatar URL: %w", err)
+			}
+			err = cli.SetAvatarURL(ctx, parsed)
+			if err != nil {
+				return fmt.Errorf("failed to set avatar URL: %w", err)
+			}
+		} else if method == http.MethodPut {
+			err = cli.SetAvatarURL(ctx, id.ContentURI{})
+			if err != nil {
+				return fmt.Errorf("failed to set avatar URL: %w", err)
+			}
+		}
+	}
+	return nil
+}
+
 // BeeperUpdateProfile sets custom fields in the user's profile.
+//
+// Deprecated: Updating profiles is being added to the Matrix spec in MSC4133. Use UpdateProfile instead.
 func (cli *Client) BeeperUpdateProfile(ctx context.Context, data any) (err error) {
 	urlPath := cli.BuildClientURL("v3", "profile", cli.UserID)
 	_, err = cli.MakeRequest(ctx, http.MethodPatch, urlPath, data, nil)

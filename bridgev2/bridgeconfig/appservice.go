@@ -123,7 +123,7 @@ func (buc *BotUserConfig) UnmarshalYAML(node *yaml.Node) error {
 		return err
 	}
 	*buc = (BotUserConfig)(sbuc)
-	if buc.Avatar != "" && buc.Avatar != "remove" {
+	if buc.Avatar != "" {
 		buc.ParsedAvatar, err = id.ParseContentURI(buc.Avatar)
 		if err != nil {
 			return fmt.Errorf("%w in bot avatar", err)

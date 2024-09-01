@@ -411,6 +411,10 @@ func (as *ASIntent) SetExtraProfileMeta(ctx context.Context, data any) error {
 	return as.Matrix.BeeperUpdateProfile(ctx, data)
 }
 
+func (as *ASIntent) SetProfile(ctx context.Context, profile any) error {
+	return as.Matrix.SetProfile(ctx, profile)
+}
+
 func (as *ASIntent) GetMXID() id.UserID {
 	return as.Matrix.UserID
 }

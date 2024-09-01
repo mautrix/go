@@ -113,9 +113,13 @@ type MatrixAPI interface {
 	UploadMedia(ctx context.Context, roomID id.RoomID, data []byte, fileName, mimeType string) (url id.ContentURIString, file *event.EncryptedFileInfo, err error)
 	UploadMediaStream(ctx context.Context, roomID id.RoomID, size int64, requireFile bool, cb FileStreamCallback) (url id.ContentURIString, file *event.EncryptedFileInfo, err error)
 
+	// Deprecated: use SetProfile instead
 	SetDisplayName(ctx context.Context, name string) error
+	// Deprecated: use SetProfile instead
 	SetAvatarURL(ctx context.Context, avatarURL id.ContentURIString) error
+	// Deprecated: use SetProfile instead
 	SetExtraProfileMeta(ctx context.Context, data any) error
+	SetProfile(ctx context.Context, profile any) error
 
 	CreateRoom(ctx context.Context, req *mautrix.ReqCreateRoom) (id.RoomID, error)
 	DeleteRoom(ctx context.Context, roomID id.RoomID, puppetsOnly bool) error
