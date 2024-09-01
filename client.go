@@ -1044,7 +1044,7 @@ func (cli *Client) setOrUpdateProfile(ctx context.Context, data any, method stri
 	if cli.SpecVersions.Supports(FeatureExtendedProfiles) || cli.SpecVersions.Supports(BeeperFeatureArbitraryProfileMeta) {
 		urlPath := cli.BuildClientURL("v3", "profile", cli.UserID)
 		_, err = cli.MakeRequest(ctx, method, urlPath, data, nil)
-	} else if cli.SpecVersions.Supports(FeatureExtendedProfiles) || cli.SpecVersions.Supports(BeeperFeatureArbitraryProfileMeta) {
+	} else if cli.SpecVersions.Supports(UnstableFeatureExtendedProfiles) {
 		urlPath := cli.BuildClientURL("unstable", "uk.tcpip.msc4133", "profile", cli.UserID)
 		_, err = cli.MakeRequest(ctx, method, urlPath, data, nil)
 	} else {
