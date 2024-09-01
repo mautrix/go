@@ -1048,7 +1048,8 @@ func (cli *Client) setOrUpdateProfile(ctx context.Context, data any, method stri
 		urlPath := cli.BuildClientURL("unstable", "uk.tcpip.msc4133", "profile", cli.UserID)
 		_, err = cli.MakeRequest(ctx, method, urlPath, data, nil)
 	} else {
-		dataJSON, err := json.Marshal(data)
+		var dataJSON []byte
+		dataJSON, err = json.Marshal(data)
 		if err != nil {
 			return err
 		}
@@ -1075,7 +1076,7 @@ func (cli *Client) setOrUpdateProfile(ctx context.Context, data any, method stri
 			}
 		}
 	}
-	return nil
+	return
 }
 
 // BeeperUpdateProfile sets custom fields in the user's profile.
