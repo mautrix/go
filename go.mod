@@ -9,17 +9,17 @@ require (
 	github.com/gorilla/websocket v1.5.0
 	github.com/lib/pq v1.10.9
 	github.com/mattn/go-sqlite3 v1.14.22
-	github.com/rs/xid v1.5.0
+	github.com/rs/xid v1.6.0
 	github.com/rs/zerolog v1.33.0
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/stretchr/testify v1.9.0
 	github.com/tidwall/gjson v1.17.3
 	github.com/tidwall/sjson v1.2.5
 	github.com/yuin/goldmark v1.7.4
-	go.mau.fi/util v0.7.1-0.20240830150939-8c1e9c295943
+	go.mau.fi/util v0.7.1-0.20240901193650-bf007b10eaf6
 	go.mau.fi/zeroconfig v0.1.3
 	golang.org/x/crypto v0.26.0
-	golang.org/x/exp v0.0.0-20240808152545-0cdaa3abc0fa
+	golang.org/x/exp v0.0.0-20240823005443-9b4947da3948
 	golang.org/x/net v0.28.0
 	golang.org/x/sync v0.8.0
 	gopkg.in/yaml.v3 v3.0.1
