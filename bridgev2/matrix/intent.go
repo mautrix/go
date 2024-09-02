@@ -289,7 +289,8 @@ func (as *ASIntent) UploadMediaStream(
 	var res *bridgev2.FileStreamResult
 	res, err = cb(tempFile)
 	if err != nil {
-		err = fmt.Errorf("failed to write to temp file: %w", err)
+		err = fmt.Errorf("write callback failed: %w", err)
+		return
 	}
 	var replFile *os.File
 	if res.ReplacementFile != "" {
