@@ -227,6 +227,14 @@ func (prov *ProvisioningAPI) AuthMiddleware(h http.Handler) http.Handler {
 			return
 		}
 		// TODO handle user being nil?
+		// TODO per-endpoint permissions?
+		if !user.Permissions.Login {
+			jsonResponse(w, http.StatusForbidden, &mautrix.RespError{
+				Err:     "User does not have login permissions",
+				ErrCode: mautrix.MForbidden.ErrCode,
+			})
+			return
+		}
 
 		ctx := context.WithValue(r.Context(), provisioningUserKey, user)
 		if loginID, ok := mux.Vars(r)["loginProcessID"]; ok {
