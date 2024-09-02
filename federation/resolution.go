@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -140,7 +141,7 @@ func RequestWellKnown(ctx context.Context, cli *http.Client, hostname string) (*
 		return nil, time.Time{}, fmt.Errorf("unexpected status code %d", resp.StatusCode)
 	}
 	var respData RespWellKnown
-	err = json.NewDecoder(resp.Body).Decode(&respData)
+	err = json.NewDecoder(io.LimitReader(resp.Body, 50*1024)).Decode(&respData)
 	if err != nil {
 		return nil, time.Time{}, fmt.Errorf("failed to decode response: %w", err)
 	} else if respData.Server == "" {
