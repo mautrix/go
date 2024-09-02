@@ -187,6 +187,7 @@ type PolicyRecommendation string
 const (
 	PolicyRecommendationBan         PolicyRecommendation = "m.ban"
 	PolicyRecommendationUnstableBan PolicyRecommendation = "org.matrix.mjolnir.ban"
+	PolicyRecommendationUnban       PolicyRecommendation = "fi.mau.meowlnir.unban"
 )
 
 // ModPolicyContent represents the content of a m.room.rule.user, m.room.rule.room, and m.room.rule.server state event.
