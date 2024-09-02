@@ -13,13 +13,16 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/ptr"
 	"go.mau.fi/util/retryafter"
+	"golang.org/x/exp/maps"
 
 	"maunium.net/go/mautrix/crypto/backup"
 	"maunium.net/go/mautrix/event"
@@ -1440,21 +1443,19 @@ func (cli *Client) State(ctx context.Context, roomID id.RoomID) (stateMap RoomSt
 		Handler:      parseRoomStateArray,
 	})
 	if err == nil && cli.StateStore != nil {
-		clearErr := cli.StateStore.ClearCachedMembers(ctx, roomID)
-		if clearErr != nil {
-			cli.cliOrContextLog(ctx).Warn().Err(clearErr).
-				Stringer("room_id", roomID).
-				Msg("Failed to clear cached member list after fetching state")
-		}
-		for _, evts := range stateMap {
+		for evtType, evts := range stateMap {
+			if evtType == event.StateMember {
+				continue
+			}
 			for _, evt := range evts {
 				UpdateStateStore(ctx, cli.StateStore, evt)
 			}
 		}
-		clearErr = cli.StateStore.MarkMembersFetched(ctx, roomID)
-		if clearErr != nil {
-			cli.cliOrContextLog(ctx).Warn().Err(clearErr).
-				Msg("Failed to mark members as fetched after fetching full room state")
+		updateErr := cli.StateStore.ReplaceCachedMembers(ctx, roomID, maps.Values(stateMap[event.StateMember]))
+		if updateErr != nil {
+			cli.cliOrContextLog(ctx).Warn().Err(updateErr).
+				Stringer("room_id", roomID).
+				Msg("Failed to update members in state store after fetching members")
 		}
 	}
 	return
@@ -1806,24 +1807,26 @@ func (cli *Client) JoinedMembers(ctx context.Context, roomID id.RoomID) (resp *R
 	u := cli.BuildClientURL("v3", "rooms", roomID, "joined_members")
 	_, err = cli.MakeRequest(ctx, http.MethodGet, u, nil, &resp)
 	if err == nil && cli.StateStore != nil {
-		clearErr := cli.StateStore.ClearCachedMembers(ctx, roomID, event.MembershipJoin)
-		if clearErr != nil {
-			cli.cliOrContextLog(ctx).Warn().Err(clearErr).
-				Stringer("room_id", roomID).
-				Msg("Failed to clear cached member list after fetching joined members")
-		}
+		fakeEvents := make([]*event.Event, len(resp.Joined))
+		i := 0
 		for userID, member := range resp.Joined {
-			updateErr := cli.StateStore.SetMember(ctx, roomID, userID, &event.MemberEventContent{
-				Membership:  event.MembershipJoin,
-				AvatarURL:   id.ContentURIString(member.AvatarURL),
-				Displayname: member.DisplayName,
-			})
-			if updateErr != nil {
-				cli.cliOrContextLog(ctx).Warn().Err(updateErr).
-					Stringer("room_id", roomID).
-					Stringer("user_id", userID).
-					Msg("Failed to update membership in state store after fetching joined members")
+			fakeEvents[i] = &event.Event{
+				StateKey: ptr.Ptr(userID.String()),
+				Type:     event.StateMember,
+				RoomID:   roomID,
+				Content: event.Content{Parsed: &event.MemberEventContent{
+					Membership:  event.MembershipJoin,
+					AvatarURL:   id.ContentURIString(member.AvatarURL),
+					Displayname: member.DisplayName,
+				}},
 			}
+			i++
+		}
+		updateErr := cli.StateStore.ReplaceCachedMembers(ctx, roomID, fakeEvents, event.MembershipJoin)
+		if updateErr != nil {
+			cli.cliOrContextLog(ctx).Warn().Err(updateErr).
+				Stringer("room_id", roomID).
+				Msg("Failed to update members in state store after fetching joined members")
 		}
 	}
 	return
@@ -1852,27 +1855,20 @@ func (cli *Client) Members(ctx context.Context, roomID id.RoomID, req ...ReqMemb
 		}
 	}
 	if err == nil && cli.StateStore != nil {
-		var clearMemberships []event.Membership
+		var onlyMemberships []event.Membership
 		if extra.Membership != "" {
-			clearMemberships = append(clearMemberships, extra.Membership)
+			onlyMemberships = []event.Membership{extra.Membership}
+		} else if extra.NotMembership != "" {
+			onlyMemberships = []event.Membership{event.MembershipJoin, event.MembershipLeave, event.MembershipInvite, event.MembershipBan, event.MembershipKnock}
+			onlyMemberships = slices.DeleteFunc(onlyMemberships, func(m event.Membership) bool {
+				return m == extra.NotMembership
+			})
 		}
-		if extra.NotMembership == "" {
-			clearErr := cli.StateStore.ClearCachedMembers(ctx, roomID, clearMemberships...)
-			if clearErr != nil {
-				cli.cliOrContextLog(ctx).Warn().Err(clearErr).
-					Stringer("room_id", roomID).
-					Msg("Failed to clear cached member list after fetching joined members")
-			}
-		}
-		for _, evt := range resp.Chunk {
-			UpdateStateStore(ctx, cli.StateStore, evt)
-		}
-		if extra.NotMembership == "" && extra.Membership == "" {
-			markErr := cli.StateStore.MarkMembersFetched(ctx, roomID)
-			if markErr != nil {
-				cli.cliOrContextLog(ctx).Warn().Err(markErr).
-					Msg("Failed to mark members as fetched after fetching full member list")
-			}
+		updateErr := cli.StateStore.ReplaceCachedMembers(ctx, roomID, resp.Chunk, onlyMemberships...)
+		if updateErr != nil {
+			cli.cliOrContextLog(ctx).Warn().Err(updateErr).
+				Stringer("room_id", roomID).
+				Msg("Failed to update members in state store after fetching members")
 		}
 	}
 	return

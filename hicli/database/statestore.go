@@ -174,3 +174,7 @@ func (c *ClientStateStore) SetEncryptionEvent(ctx context.Context, roomID id.Roo
 }
 
 func (c *ClientStateStore) UpdateState(ctx context.Context, evt *event.Event) {}
+
+func (c *ClientStateStore) ReplaceCachedMembers(ctx context.Context, roomID id.RoomID, evts []*event.Event, onlyMemberships ...event.Membership) error {
+	return nil
+}

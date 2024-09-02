@@ -19,6 +19,7 @@ import (
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/confusable"
 	"go.mau.fi/util/dbutil"
+	"go.mau.fi/util/exslices"
 
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -194,21 +195,37 @@ func (store *SQLStateStore) SetMembership(ctx context.Context, roomID id.RoomID,
 	return err
 }
 
+const insertUserProfileQuery = `
+	INSERT INTO mx_user_profile (room_id, user_id, membership, displayname, avatar_url, name_skeleton)
+	VALUES ($1, $2, $3, $4, $5, $6)
+	ON CONFLICT (room_id, user_id) DO UPDATE
+		SET membership=excluded.membership,
+			displayname=excluded.displayname,
+			avatar_url=excluded.avatar_url,
+			name_skeleton=excluded.name_skeleton
+`
+
+type userProfileRow struct {
+	UserID       id.UserID
+	Membership   event.Membership
+	Displayname  string
+	AvatarURL    id.ContentURIString
+	NameSkeleton []byte
+}
+
+func (u *userProfileRow) GetMassInsertValues() [5]any {
+	return [5]any{u.UserID, u.Membership, u.Displayname, u.AvatarURL, u.NameSkeleton}
+}
+
+var userProfileMassInserter = dbutil.NewMassInsertBuilder[*userProfileRow, [1]any](insertUserProfileQuery, "($1, $%d, $%d, $%d, $%d, $%d)")
+
 func (store *SQLStateStore) SetMember(ctx context.Context, roomID id.RoomID, userID id.UserID, member *event.MemberEventContent) error {
 	var nameSkeleton []byte
 	if !store.DisableNameDisambiguation && len(member.Displayname) > 0 {
 		nameSkeletonArr := confusable.SkeletonHash(member.Displayname)
 		nameSkeleton = nameSkeletonArr[:]
 	}
-	_, err := store.Exec(ctx, `
-		INSERT INTO mx_user_profile (room_id, user_id, membership, displayname, avatar_url, name_skeleton)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		ON CONFLICT (room_id, user_id) DO UPDATE
-			SET membership=excluded.membership,
-			    displayname=excluded.displayname,
-			    avatar_url=excluded.avatar_url,
-			    name_skeleton=excluded.name_skeleton
-	`, roomID, userID, member.Membership, member.Displayname, member.AvatarURL, nameSkeleton)
+	_, err := store.Exec(ctx, insertUserProfileQuery, roomID, userID, member.Membership, member.Displayname, member.AvatarURL, nameSkeleton)
 	return err
 }
 
@@ -219,6 +236,50 @@ func (store *SQLStateStore) IsConfusableName(ctx context.Context, roomID id.Room
 	skeleton := confusable.SkeletonHash(name)
 	rows, err := store.Query(ctx, "SELECT user_id FROM mx_user_profile WHERE room_id=$1 AND name_skeleton=$2 AND user_id<>$3", roomID, skeleton[:], currentUser)
 	return dbutil.NewRowIterWithError(rows, dbutil.ScanSingleColumn[id.UserID], err).AsList()
+}
+
+const userProfileMassInsertBatchSize = 500
+
+func (store *SQLStateStore) ReplaceCachedMembers(ctx context.Context, roomID id.RoomID, evts []*event.Event, onlyMemberships ...event.Membership) error {
+	return store.DoTxn(ctx, nil, func(ctx context.Context) error {
+		err := store.ClearCachedMembers(ctx, roomID, onlyMemberships...)
+		if err != nil {
+			return fmt.Errorf("failed to clear cached members: %w", err)
+		}
+		rows := make([]*userProfileRow, min(len(evts), userProfileMassInsertBatchSize))
+		for _, evtsChunk := range exslices.Chunk(evts, userProfileMassInsertBatchSize) {
+			rows = rows[:0]
+			for _, evt := range evtsChunk {
+				content, ok := evt.Content.Parsed.(*event.MemberEventContent)
+				if !ok {
+					continue
+				}
+				row := &userProfileRow{
+					UserID:      id.UserID(*evt.StateKey),
+					Membership:  content.Membership,
+					Displayname: content.Displayname,
+					AvatarURL:   content.AvatarURL,
+				}
+				if !store.DisableNameDisambiguation && len(content.Displayname) > 0 {
+					nameSkeletonArr := confusable.SkeletonHash(content.Displayname)
+					row.NameSkeleton = nameSkeletonArr[:]
+				}
+				rows = append(rows, row)
+			}
+			query, args := userProfileMassInserter.Build([1]any{roomID}, rows)
+			_, err = store.Exec(ctx, query, args...)
+			if err != nil {
+				return fmt.Errorf("failed to insert members: %w", err)
+			}
+		}
+		if len(onlyMemberships) == 0 {
+			err = store.MarkMembersFetched(ctx, roomID)
+			if err != nil {
+				return fmt.Errorf("failed to mark members as fetched: %w", err)
+			}
+		}
+		return nil
+	})
 }
 
 func (store *SQLStateStore) ClearCachedMembers(ctx context.Context, roomID id.RoomID, memberships ...event.Membership) error {
