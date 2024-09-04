@@ -8,11 +8,9 @@ import (
 )
 
 func TestDeriveAESKeys(t *testing.T) {
-	kdfInfo := []byte("test")
-	key := []byte("test key")
-	derivedKeys, err := deriveAESKeys(kdfInfo, key)
+	derivedKeys, err := deriveAESKeys([]byte("test"), []byte("test key"))
 	assert.NoError(t, err)
-	derivedKeys2, err := deriveAESKeys(kdfInfo, key)
+	derivedKeys2, err := deriveAESKeys([]byte("test"), []byte("test key"))
 	assert.NoError(t, err)
 
 	//derivedKeys and derivedKeys2 should be identical
@@ -21,8 +19,7 @@ func TestDeriveAESKeys(t *testing.T) {
 	assert.Equal(t, derivedKeys.hmacKey, derivedKeys2.hmacKey)
 
 	//changing kdfInfo
-	kdfInfo = []byte("other kdf")
-	derivedKeys2, err = deriveAESKeys(kdfInfo, key)
+	derivedKeys2, err = deriveAESKeys([]byte("other kdf"), []byte("test key"))
 	assert.NoError(t, err)
 
 	//derivedKeys and derivedKeys2 should now be different
@@ -31,8 +28,7 @@ func TestDeriveAESKeys(t *testing.T) {
 	assert.NotEqual(t, derivedKeys.hmacKey, derivedKeys2.hmacKey)
 
 	//changing key
-	key = []byte("other test key")
-	derivedKeys, err = deriveAESKeys(kdfInfo, key)
+	derivedKeys, err = deriveAESKeys([]byte("test"), []byte("other test key"))
 	assert.NoError(t, err)
 
 	//derivedKeys and derivedKeys2 should now be different
