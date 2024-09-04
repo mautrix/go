@@ -2,7 +2,6 @@ package cipher
 
 import (
 	"bytes"
-	"crypto/aes"
 	"io"
 
 	"maunium.net/go/mautrix/crypto/aescbc"
@@ -26,11 +25,6 @@ func deriveAESKeys(kdfInfo []byte, key []byte) (derivedAESKeys, error) {
 		hmacKey: keymatter[32:64],
 		iv:      keymatter[64:],
 	}, err
-}
-
-// AESSha512BlockSize resturns the blocksize of the cipher AESSHA256.
-func AESSha512BlockSize() int {
-	return aes.BlockSize
 }
 
 // AESSHA256 is a valid cipher using AES with CBC and HKDFSha256.
