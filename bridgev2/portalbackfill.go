@@ -304,17 +304,6 @@ func (portal *Portal) compileBatchMessage(ctx context.Context, source *UserLogin
 		partIDs = append(partIDs, part.ID)
 		portal.applyRelationMeta(part.Content, replyTo, threadRoot, prevThreadEvent)
 		evtID := portal.Bridge.Matrix.GenerateDeterministicEventID(portal.MXID, portal.PortalKey, msg.ID, part.ID)
-		out.Events = append(out.Events, &event.Event{
-			Sender:    intent.GetMXID(),
-			Type:      part.Type,
-			Timestamp: msg.Timestamp.UnixMilli(),
-			ID:        evtID,
-			RoomID:    portal.MXID,
-			Content: event.Content{
-				Parsed: part.Content,
-				Raw:    part.Extra,
-			},
-		})
 		dbMessage := &database.Message{
 			ID:         msg.ID,
 			PartID:     part.ID,
@@ -327,6 +316,22 @@ func (portal *Portal) compileBatchMessage(ctx context.Context, source *UserLogin
 			ReplyTo:    ptr.Val(msg.ReplyTo),
 			Metadata:   part.DBMetadata,
 		}
+		if part.DontBridge {
+			dbMessage.SetFakeMXID()
+			out.DBMessages = append(out.DBMessages, dbMessage)
+			continue
+		}
+		out.Events = append(out.Events, &event.Event{
+			Sender:    intent.GetMXID(),
+			Type:      part.Type,
+			Timestamp: msg.Timestamp.UnixMilli(),
+			ID:        evtID,
+			RoomID:    portal.MXID,
+			Content: event.Content{
+				Parsed: part.Content,
+				Raw:    part.Extra,
+			},
+		})
 		if firstPart == nil {
 			firstPart = dbMessage
 		}

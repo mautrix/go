@@ -273,11 +273,16 @@ type MaxFileSizeingNetwork interface {
 	SetMaxFileSize(maxSize int64)
 }
 
+type RemoteEchoHandler func(RemoteMessage, *database.Message) (bool, error)
+
 type MatrixMessageResponse struct {
 	DB *database.Message
-
-	Pending    networkid.TransactionID
-	HandleEcho func(RemoteMessage, *database.Message) (bool, error)
+	// If Pending is set, the bridge will not save the provided message to the database.
+	// This should only be used if AddPendingToSave has been called.
+	Pending bool
+	// If RemovePending is set, the bridge will remove the provided transaction ID from pending messages
+	// after saving the provided message to the database. This should be used with AddPendingToIgnore.
+	RemovePending networkid.TransactionID
 }
 
 type FileRestriction struct {

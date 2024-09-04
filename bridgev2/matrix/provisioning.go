@@ -54,6 +54,11 @@ type ProvisioningAPI struct {
 	// GetAuthFromRequest is a custom function for getting the auth token from
 	// the request if the Authorization header is not present.
 	GetAuthFromRequest func(r *http.Request) string
+
+	// GetUserIDFromRequest is a custom function for getting the user ID to
+	// authenticate as instead of using the user ID provided in the query
+	// parameter.
+	GetUserIDFromRequest func(r *http.Request) id.UserID
 }
 
 type ProvLogin struct {
@@ -200,6 +205,9 @@ func (prov *ProvisioningAPI) AuthMiddleware(h http.Handler) http.Handler {
 			return
 		}
 		userID := id.UserID(r.URL.Query().Get("user_id"))
+		if userID == "" && prov.GetUserIDFromRequest != nil {
+			userID = prov.GetUserIDFromRequest(r)
+		}
 		if auth != prov.br.Config.Provisioning.SharedSecret {
 			var err error
 			if strings.HasPrefix(auth, "openid:") {
@@ -227,6 +235,14 @@ func (prov *ProvisioningAPI) AuthMiddleware(h http.Handler) http.Handler {
 			return
 		}
 		// TODO handle user being nil?
+		// TODO per-endpoint permissions?
+		if !user.Permissions.Login {
+			jsonResponse(w, http.StatusForbidden, &mautrix.RespError{
+				Err:     "User does not have login permissions",
+				ErrCode: mautrix.MForbidden.ErrCode,
+			})
+			return
+		}
 
 		ctx := context.WithValue(r.Context(), provisioningUserKey, user)
 		if loginID, ok := mux.Vars(r)["loginProcessID"]; ok {

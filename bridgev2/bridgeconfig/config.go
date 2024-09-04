@@ -59,6 +59,7 @@ type BridgeConfig struct {
 	CommandPrefix           string           `yaml:"command_prefix"`
 	PersonalFilteringSpaces bool             `yaml:"personal_filtering_spaces"`
 	PrivateChatPortalMeta   bool             `yaml:"private_chat_portal_meta"`
+	AsyncEvents             bool             `yaml:"async_events"`
 	BridgeMatrixLeave       bool             `yaml:"bridge_matrix_leave"`
 	TagOnlyOnCreate         bool             `yaml:"tag_only_on_create"`
 	MuteOnlyOnCreate        bool             `yaml:"mute_only_on_create"`

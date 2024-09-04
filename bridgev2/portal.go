@@ -14,6 +14,7 @@ import (
 	"runtime/debug"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -59,6 +60,7 @@ type portalEvent interface {
 type outgoingMessage struct {
 	db     *database.Message
 	evt    *event.Event
+	ignore bool
 	handle func(RemoteMessage, *database.Message) (bool, error)
 }
 
@@ -274,23 +276,49 @@ func (portal *Portal) queueEvent(ctx context.Context, evt portalEvent) {
 
 func (portal *Portal) eventLoop() {
 	for rawEvt := range portal.events {
-		switch evt := rawEvt.(type) {
-		case *portalMatrixEvent:
-			portal.handleMatrixEvent(evt.sender, evt.evt)
-		case *portalRemoteEvent:
-			portal.handleRemoteEvent(evt.source, evt.evt)
-		case *portalCreateEvent:
-			portal.handleCreateEvent(evt)
-		default:
-			panic(fmt.Errorf("illegal type %T in eventLoop", evt))
-		}
+		portal.handleSingleEventAsync(rawEvt)
 	}
 }
 
-func (portal *Portal) handleCreateEvent(evt *portalCreateEvent) {
+func (portal *Portal) handleSingleEventAsync(rawEvt any) {
+	log := portal.Log.With().Logger()
+	if _, isCreate := rawEvt.(*portalCreateEvent); isCreate {
+		portal.handleSingleEvent(&log, rawEvt, func() {})
+	} else if portal.Bridge.Config.AsyncEvents {
+		go portal.handleSingleEvent(&log, rawEvt, func() {})
+	} else {
+		doneCh := make(chan struct{})
+		var backgrounded atomic.Bool
+		go portal.handleSingleEvent(&log, rawEvt, func() {
+			close(doneCh)
+			if backgrounded.Load() {
+				log.Debug().Msg("Event that took too long finally finished handling")
+			}
+		})
+		tick := time.NewTicker(30 * time.Second)
+		defer tick.Stop()
+		for i := 0; i < 10; i++ {
+			select {
+			case <-doneCh:
+				if i > 0 {
+					log.Debug().Msg("Event that took long finished handling")
+				}
+				return
+			case <-tick.C:
+				log.Warn().Msg("Event handling is taking long")
+			}
+		}
+		log.Warn().Msg("Event handling is taking too long, continuing in background")
+		backgrounded.Store(true)
+	}
+}
+
+func (portal *Portal) handleSingleEvent(log *zerolog.Logger, rawEvt any, doneCallback func()) {
+	ctx := log.WithContext(context.Background())
 	defer func() {
+		doneCallback()
 		if err := recover(); err != nil {
-			logEvt := zerolog.Ctx(evt.ctx).Error()
+			logEvt := log.Error()
 			if realErr, ok := err.(error); ok {
 				logEvt = logEvt.Err(realErr)
 			} else {
@@ -299,10 +327,36 @@ func (portal *Portal) handleCreateEvent(evt *portalCreateEvent) {
 			logEvt.
 				Bytes("stack", debug.Stack()).
 				Msg("Portal creation panicked")
-			evt.cb(fmt.Errorf("portal creation panicked"))
+			switch evt := rawEvt.(type) {
+			case *portalMatrixEvent:
+				if evt.evt.ID != "" {
+					go portal.sendErrorStatus(ctx, evt.evt, ErrPanicInEventHandler)
+				}
+			case *portalCreateEvent:
+				evt.cb(fmt.Errorf("portal creation panicked"))
+			}
 		}
 	}()
-	evt.cb(portal.createMatrixRoomInLoop(evt.ctx, evt.source, evt.info, nil))
+	switch evt := rawEvt.(type) {
+	case *portalMatrixEvent:
+		log.UpdateContext(func(c zerolog.Context) zerolog.Context {
+			return c.Str("action", "handle matrix event").
+				Stringer("event_id", evt.evt.ID).
+				Str("event_type", evt.evt.Type.Type)
+		})
+		portal.handleMatrixEvent(ctx, evt.sender, evt.evt)
+	case *portalRemoteEvent:
+		log.UpdateContext(func(c zerolog.Context) zerolog.Context {
+			return c.Str("action", "handle remote event").
+				Str("source_id", string(evt.source.ID))
+		})
+		portal.handleRemoteEvent(ctx, evt.source, evt.evt)
+	case *portalCreateEvent:
+		*log = *zerolog.Ctx(evt.ctx)
+		evt.cb(portal.createMatrixRoomInLoop(evt.ctx, evt.source, evt.info, nil))
+	default:
+		panic(fmt.Errorf("illegal type %T in eventLoop", evt))
+	}
 }
 
 func (portal *Portal) FindPreferredLogin(ctx context.Context, user *User, allowRelay bool) (*UserLogin, *database.UserPortal, error) {
@@ -392,29 +446,8 @@ func (portal *Portal) checkConfusableName(ctx context.Context, userID id.UserID,
 	return false
 }
 
-func (portal *Portal) handleMatrixEvent(sender *User, evt *event.Event) {
-	log := portal.Log.With().
-		Str("action", "handle matrix event").
-		Stringer("event_id", evt.ID).
-		Str("event_type", evt.Type.Type).
-		Logger()
-	ctx := log.WithContext(context.TODO())
-	defer func() {
-		if err := recover(); err != nil {
-			logEvt := log.Error()
-			if realErr, ok := err.(error); ok {
-				logEvt = logEvt.Err(realErr)
-			} else {
-				logEvt = logEvt.Any(zerolog.ErrorFieldName, err)
-			}
-			logEvt.
-				Bytes("stack", debug.Stack()).
-				Msg("Matrix event handler panicked")
-			if evt.ID != "" {
-				go portal.sendErrorStatus(ctx, evt, ErrPanicInEventHandler)
-			}
-		}
-	}()
+func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *event.Event) {
+	log := zerolog.Ctx(ctx)
 	if evt.Mautrix.EventSource&event.SourceEphemeral != 0 {
 		switch evt.Type {
 		case event.EphemeralEventReceipt:
@@ -775,7 +808,7 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 		}
 	}
 
-	resp, err := sender.Client.HandleMatrixMessage(ctx, &MatrixMessage{
+	wrappedEvt := &MatrixMessage{
 		MatrixEventBase: MatrixEventBase[*event.MessageEventContent]{
 			Event:      evt,
 			Content:    content,
@@ -784,52 +817,30 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 		},
 		ThreadRoot: threadRoot,
 		ReplyTo:    replyTo,
-	})
+	}
+	resp, err := sender.Client.HandleMatrixMessage(ctx, wrappedEvt)
 	if err != nil {
 		log.Err(err).Msg("Failed to handle Matrix message")
 		portal.sendErrorStatus(ctx, evt, err)
 		return
 	}
-	message := resp.DB
-	if message.MXID == "" {
-		message.MXID = evt.ID
-	}
-	if message.Room.ID == "" {
-		message.Room = portal.PortalKey
-	}
-	if message.Timestamp.IsZero() {
-		message.Timestamp = time.UnixMilli(evt.Timestamp)
-	}
-	if message.ReplyTo.MessageID == "" && replyTo != nil {
-		message.ReplyTo.MessageID = replyTo.ID
-		message.ReplyTo.PartID = &replyTo.PartID
-	}
-	if message.ThreadRoot == "" && threadRoot != nil {
-		message.ThreadRoot = threadRoot.ID
-		if threadRoot.ThreadRoot != "" {
-			message.ThreadRoot = threadRoot.ThreadRoot
-		}
-	}
-	if message.SenderMXID == "" {
-		message.SenderMXID = evt.Sender
-	}
-	if resp.Pending != "" {
-		// TODO if the event queue is ever removed, this will have to be done by the network connector before sending the request
-		//      (for now this is fine because incoming messages will wait in the queue for this function to return)
-		portal.outgoingMessagesLock.Lock()
-		portal.outgoingMessages[resp.Pending] = outgoingMessage{
-			db:     message,
-			evt:    evt,
-			handle: resp.HandleEcho,
-		}
-		portal.outgoingMessagesLock.Unlock()
-	} else {
-		// Hack to ensure the ghost row exists
-		// TODO move to better place (like login)
-		portal.Bridge.GetGhostByID(ctx, message.SenderID)
-		err = portal.Bridge.DB.Message.Insert(ctx, message)
-		if err != nil {
-			log.Err(err).Msg("Failed to save message to database")
+	message := wrappedEvt.fillDBMessage(resp.DB)
+	if !resp.Pending {
+		if resp.DB == nil {
+			log.Error().Msg("Network connector didn't return a message to save")
+		} else {
+			// Hack to ensure the ghost row exists
+			// TODO move to better place (like login)
+			portal.Bridge.GetGhostByID(ctx, message.SenderID)
+			err = portal.Bridge.DB.Message.Insert(ctx, message)
+			if err != nil {
+				log.Err(err).Msg("Failed to save message to database")
+			}
+			if resp.RemovePending != "" {
+				portal.outgoingMessagesLock.Lock()
+				delete(portal.outgoingMessages, resp.RemovePending)
+				portal.outgoingMessagesLock.Unlock()
+			}
 		}
 		portal.sendSuccessStatus(ctx, evt)
 	}
@@ -844,6 +855,75 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 			},
 		})
 	}
+}
+
+// AddPendingToIgnore adds a transaction ID that should be ignored if encountered as a new message.
+//
+// This should be used when the network connector will return the real message ID from HandleMatrixMessage.
+// The [MatrixMessageResponse] should include RemovePending with the transaction ID sto remove it from the lit
+// after saving to database.
+//
+// See also: [MatrixMessage.AddPendingToSave]
+func (evt *MatrixMessage) AddPendingToIgnore(txnID networkid.TransactionID) {
+	evt.Portal.outgoingMessagesLock.Lock()
+	evt.Portal.outgoingMessages[txnID] = outgoingMessage{
+		ignore: true,
+	}
+	evt.Portal.outgoingMessagesLock.Unlock()
+}
+
+// AddPendingToSave adds a transaction ID that should be processed and pointed at the existing event if encountered.
+//
+// This should be used when the network connector returns `Pending: true` from HandleMatrixMessage,
+// i.e. when the network connector does not know the message ID at the end of the handler.
+// The [MatrixMessageResponse] should set Pending to true to prevent saving the returned message to the database.
+//
+// The provided function will be called when the message is encountered.
+func (evt *MatrixMessage) AddPendingToSave(message *database.Message, txnID networkid.TransactionID, handleEcho RemoteEchoHandler) {
+	evt.Portal.outgoingMessagesLock.Lock()
+	evt.Portal.outgoingMessages[txnID] = outgoingMessage{
+		db:     evt.fillDBMessage(message),
+		evt:    evt.Event,
+		handle: handleEcho,
+	}
+	evt.Portal.outgoingMessagesLock.Unlock()
+}
+
+// RemovePending removes a transaction ID from the list of pending messages.
+// This should only be called if sending the message fails.
+func (evt *MatrixMessage) RemovePending(txnID networkid.TransactionID) {
+	evt.Portal.outgoingMessagesLock.Lock()
+	delete(evt.Portal.outgoingMessages, txnID)
+	evt.Portal.outgoingMessagesLock.Unlock()
+}
+
+func (evt *MatrixMessage) fillDBMessage(message *database.Message) *database.Message {
+	if message == nil {
+		message = &database.Message{}
+	}
+	if message.MXID == "" {
+		message.MXID = evt.Event.ID
+	}
+	if message.Room.ID == "" {
+		message.Room = evt.Portal.PortalKey
+	}
+	if message.Timestamp.IsZero() {
+		message.Timestamp = time.UnixMilli(evt.Event.Timestamp)
+	}
+	if message.ReplyTo.MessageID == "" && evt.ReplyTo != nil {
+		message.ReplyTo.MessageID = evt.ReplyTo.ID
+		message.ReplyTo.PartID = &evt.ReplyTo.PartID
+	}
+	if message.ThreadRoot == "" && evt.ThreadRoot != nil {
+		message.ThreadRoot = evt.ThreadRoot.ID
+		if evt.ThreadRoot.ThreadRoot != "" {
+			message.ThreadRoot = evt.ThreadRoot.ThreadRoot
+		}
+	}
+	if message.SenderMXID == "" {
+		message.SenderMXID = evt.Event.Sender
+	}
+	return message
 }
 
 func (portal *Portal) handleMatrixEdit(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event, content *event.MessageEventContent, caps *NetworkRoomCapabilities) {
@@ -1410,11 +1490,8 @@ func (portal *Portal) handleMatrixRedaction(ctx context.Context, sender *UserLog
 	portal.sendSuccessStatus(ctx, evt)
 }
 
-func (portal *Portal) handleRemoteEvent(source *UserLogin, evt RemoteEvent) {
-	log := portal.Log.With().
-		Str("source_id", string(source.ID)).
-		Str("action", "handle remote event").
-		Logger()
+func (portal *Portal) handleRemoteEvent(ctx context.Context, source *UserLogin, evt RemoteEvent) {
+	log := zerolog.Ctx(ctx)
 	defer func() {
 		if err := recover(); err != nil {
 			logEvt := log.Error()
@@ -1433,7 +1510,6 @@ func (portal *Portal) handleRemoteEvent(source *UserLogin, evt RemoteEvent) {
 		c = c.Stringer("bridge_evt_type", evtType)
 		return evt.AddLogContext(c)
 	})
-	ctx := log.WithContext(context.TODO())
 	if portal.MXID == "" {
 		mcp, ok := evt.(RemoteEventThatMayCreatePortal)
 		if !ok || !mcp.ShouldCreatePortal() {
@@ -1715,6 +1791,8 @@ func (portal *Portal) checkPendingMessage(ctx context.Context, evt RemoteMessage
 	pending, ok := portal.outgoingMessages[txnID]
 	if !ok {
 		return false, nil
+	} else if pending.ignore {
+		return true, nil
 	}
 	delete(portal.outgoingMessages, txnID)
 	pending.db.ID = evt.GetID()
@@ -1773,7 +1851,8 @@ func (portal *Portal) handleRemoteUpsert(ctx context.Context, source *UserLogin,
 	}
 	if len(res.SubEvents) > 0 {
 		for _, subEvt := range res.SubEvents {
-			portal.handleRemoteEvent(source, subEvt)
+			log := portal.Log.With().Str("source_id", string(source.ID)).Str("action", "handle remote subevent").Logger()
+			portal.handleRemoteEvent(log.WithContext(ctx), source, subEvt)
 		}
 	}
 	return res.ContinueMessageHandling

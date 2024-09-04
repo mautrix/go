@@ -245,8 +245,22 @@ func (mach *OlmMachine) HandleDeviceLists(ctx context.Context, dl *mautrix.Devic
 	}
 }
 
+func (mach *OlmMachine) otkCountIsForCrossSigningKey(otkCount *mautrix.OTKCount) bool {
+	if mach.crossSigningPubkeys == nil || otkCount.UserID != mach.Client.UserID {
+		return false
+	}
+	switch id.Ed25519(otkCount.DeviceID) {
+	case mach.crossSigningPubkeys.MasterKey, mach.crossSigningPubkeys.UserSigningKey, mach.crossSigningPubkeys.SelfSigningKey:
+		return true
+	}
+	return false
+}
+
 func (mach *OlmMachine) HandleOTKCounts(ctx context.Context, otkCount *mautrix.OTKCount) {
 	if (len(otkCount.UserID) > 0 && otkCount.UserID != mach.Client.UserID) || (len(otkCount.DeviceID) > 0 && otkCount.DeviceID != mach.Client.DeviceID) {
+		if mach.otkCountIsForCrossSigningKey(otkCount) {
+			return
+		}
 		// TODO This log probably needs to be silence-able if someone wants to use encrypted appservices with multiple e2ee sessions
 		mach.Log.Warn().
 			Str("target_user_id", otkCount.UserID.String()).

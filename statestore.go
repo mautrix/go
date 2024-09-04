@@ -29,6 +29,7 @@ type StateStore interface {
 	SetMember(ctx context.Context, roomID id.RoomID, userID id.UserID, member *event.MemberEventContent) error
 	IsConfusableName(ctx context.Context, roomID id.RoomID, currentUser id.UserID, name string) ([]id.UserID, error)
 	ClearCachedMembers(ctx context.Context, roomID id.RoomID, memberships ...event.Membership) error
+	ReplaceCachedMembers(ctx context.Context, roomID id.RoomID, evts []*event.Event, onlyMemberships ...event.Membership) error
 
 	SetPowerLevels(ctx context.Context, roomID id.RoomID, levels *event.PowerLevelsEventContent) error
 	GetPowerLevels(ctx context.Context, roomID id.RoomID) (*event.PowerLevelsEventContent, error)
@@ -270,9 +271,20 @@ func (store *MemoryStateStore) MarkMembersFetched(ctx context.Context, roomID id
 	return nil
 }
 
+func (store *MemoryStateStore) ReplaceCachedMembers(ctx context.Context, roomID id.RoomID, evts []*event.Event, onlyMemberships ...event.Membership) error {
+	_ = store.ClearCachedMembers(ctx, roomID, onlyMemberships...)
+	for _, evt := range evts {
+		UpdateStateStore(ctx, store, evt)
+	}
+	if len(onlyMemberships) == 0 {
+		_ = store.MarkMembersFetched(ctx, roomID)
+	}
+	return nil
+}
+
 func (store *MemoryStateStore) GetAllMembers(ctx context.Context, roomID id.RoomID) (map[id.UserID]*event.MemberEventContent, error) {
-	store.membersLock.Lock()
-	defer store.membersLock.Unlock()
+	store.membersLock.RLock()
+	defer store.membersLock.RUnlock()
 	return maps.Clone(store.Members[roomID]), nil
 }
 
