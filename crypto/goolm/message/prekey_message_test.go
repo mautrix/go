@@ -1,8 +1,9 @@
 package message_test
 
 import (
-	"bytes"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
 	"maunium.net/go/mautrix/crypto/goolm/message"
@@ -19,29 +20,14 @@ func TestPreKeyMessageDecode(t *testing.T) {
 
 	msg := message.PreKeyMessage{}
 	err := msg.Decode(messageRaw)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if msg.Version != 3 {
-		t.Fatalf("Expected Version to be 3 but go %d", msg.Version)
-	}
-	if !bytes.Equal(msg.OneTimeKey, expectedOneTimeKey) {
-		t.Fatalf("expected '%s' but got '%s'", expectedOneTimeKey, msg.OneTimeKey)
-	}
-	if !bytes.Equal(msg.IdentityKey, expectedIdKey) {
-		t.Fatalf("expected '%s' but got '%s'", expectedIdKey, msg.IdentityKey)
-	}
-	if !bytes.Equal(msg.BaseKey, expectedbaseKey) {
-		t.Fatalf("expected '%s' but got '%s'", expectedbaseKey, msg.BaseKey)
-	}
-	if !bytes.Equal(msg.Message, expectedmessage) {
-		t.Fatalf("expected '%s' but got '%s'", expectedmessage, msg.Message)
-	}
+	assert.NoError(t, err)
+	assert.EqualValues(t, 3, msg.Version)
+	assert.EqualValues(t, expectedOneTimeKey, msg.OneTimeKey)
+	assert.EqualValues(t, expectedIdKey, msg.IdentityKey)
+	assert.EqualValues(t, expectedbaseKey, msg.BaseKey)
+	assert.Equal(t, expectedmessage, msg.Message)
 	theirIDKey := crypto.Curve25519PublicKey(expectedIdKey)
-	checked := msg.CheckFields(&theirIDKey)
-	if !checked {
-		t.Fatal("field check failed")
-	}
+	assert.True(t, msg.CheckFields(&theirIDKey), "field check failed")
 }
 
 func TestPreKeyMessageEncode(t *testing.T) {
@@ -54,10 +40,6 @@ func TestPreKeyMessageEncode(t *testing.T) {
 		Message:     []byte("message"),
 	}
 	encoded, err := msg.Encode()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(encoded, expectedRaw) {
-		t.Fatalf("got other than expected:\nExpected:\n%v\nGot:\n%v", expectedRaw, encoded)
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, expectedRaw, encoded)
 }
