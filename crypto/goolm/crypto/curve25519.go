@@ -26,15 +26,11 @@ func Curve25519GenerateKey() (Curve25519KeyPair, error) {
 	}
 
 	privateKey := Curve25519PrivateKey(privateKeyByte)
-
 	publicKey, err := privateKey.PubKey()
-	if err != nil {
-		return Curve25519KeyPair{}, err
-	}
 	return Curve25519KeyPair{
 		PrivateKey: Curve25519PrivateKey(privateKey),
 		PublicKey:  Curve25519PublicKey(publicKey),
-	}, nil
+	}, err
 }
 
 // Curve25519GenerateFromPrivate creates a new curve25519 key pair with the private key given.
@@ -121,11 +117,7 @@ func (c Curve25519PrivateKey) Equal(x Curve25519PrivateKey) bool {
 
 // PubKey returns the public key derived from the private key.
 func (c Curve25519PrivateKey) PubKey() (Curve25519PublicKey, error) {
-	publicKey, err := curve25519.X25519(c, curve25519.Basepoint)
-	if err != nil {
-		return nil, err
-	}
-	return publicKey, nil
+	return curve25519.X25519(c, curve25519.Basepoint)
 }
 
 // SharedSecret returns the shared secret between the private key and the given public key.

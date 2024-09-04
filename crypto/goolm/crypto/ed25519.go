@@ -17,13 +17,10 @@ const (
 // Ed25519GenerateKey creates a new ed25519 key pair.
 func Ed25519GenerateKey() (Ed25519KeyPair, error) {
 	publicKey, privateKey, err := ed25519.GenerateKey(nil)
-	if err != nil {
-		return Ed25519KeyPair{}, err
-	}
 	return Ed25519KeyPair{
 		PrivateKey: Ed25519PrivateKey(privateKey),
 		PublicKey:  Ed25519PublicKey(publicKey),
-	}, nil
+	}, err
 }
 
 // Ed25519GenerateFromPrivate creates a new ed25519 key pair with the private key given.

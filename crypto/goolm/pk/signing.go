@@ -62,8 +62,5 @@ func (s Signing) SignJSON(obj any) (string, error) {
 	objJSON, _ = sjson.DeleteBytes(objJSON, "unsigned")
 	objJSON, _ = sjson.DeleteBytes(objJSON, "signatures")
 	signature, err := s.Sign(canonicaljson.CanonicalJSONAssumeValid(objJSON))
-	if err != nil {
-		return "", err
-	}
-	return string(signature), nil
+	return string(signature), err
 }

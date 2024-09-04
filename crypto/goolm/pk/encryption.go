@@ -42,8 +42,5 @@ func (e Encryption) Encrypt(plaintext []byte, privateKey crypto.Curve25519Privat
 		return nil, nil, err
 	}
 	mac, err = cipher.MAC(sharedSecret, ciphertext)
-	if err != nil {
-		return nil, nil, err
-	}
-	return ciphertext, goolmbase64.Encode(mac), nil
+	return ciphertext, goolmbase64.Encode(mac), err
 }

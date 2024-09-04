@@ -124,12 +124,7 @@ func (r *Ratchet) Encrypt(plaintext []byte) ([]byte, error) {
 	message.RatchetKey = r.SenderChains.ratchetKey().PublicKey
 	message.Ciphertext = encryptedText
 	//creating the mac is done in encode
-	output, err := message.EncodeAndMAC(messageKey.Key, RatchetCipher)
-	if err != nil {
-		return nil, err
-	}
-
-	return output, nil
+	return message.EncodeAndMAC(messageKey.Key, RatchetCipher)
 }
 
 // Decrypt decrypts the ciphertext and verifies the MAC.
@@ -153,53 +148,42 @@ func (r *Ratchet) Decrypt(input []byte) ([]byte, error) {
 			break
 		}
 	}
-	var result []byte
 	if receiverChainFromMessage == nil {
 		//Advancing the chain is done in this method
-		result, err = r.decryptForNewChain(message, input)
-		if err != nil {
-			return nil, err
-		}
+		return r.decryptForNewChain(message, input)
 	} else if receiverChainFromMessage.chainKey().Index > message.Counter {
 		// No need to advance the chain
 		// Chain already advanced beyond the key for this message
 		// Check if the message keys are in the skipped key list.
-		foundSkippedKey := false
 		for curSkippedIndex := range r.SkippedMessageKeys {
-			if message.Counter == r.SkippedMessageKeys[curSkippedIndex].MKey.Index {
-				// Found the key for this message. Check the MAC.
-				verified, err := message.VerifyMACInline(r.SkippedMessageKeys[curSkippedIndex].MKey.Key, RatchetCipher, input)
-				if err != nil {
-					return nil, err
-				}
-				if !verified {
-					return nil, fmt.Errorf("decrypt from skipped message keys: %w", olm.ErrBadMAC)
-				}
-				result, err = RatchetCipher.Decrypt(r.SkippedMessageKeys[curSkippedIndex].MKey.Key, message.Ciphertext)
-				if err != nil {
-					return nil, fmt.Errorf("cipher decrypt: %w", err)
-				}
-				if len(result) != 0 {
-					// Remove the key from the skipped keys now that we've
-					// decoded the message it corresponds to.
-					r.SkippedMessageKeys[curSkippedIndex] = r.SkippedMessageKeys[len(r.SkippedMessageKeys)-1]
-					r.SkippedMessageKeys = r.SkippedMessageKeys[:len(r.SkippedMessageKeys)-1]
-				}
-				foundSkippedKey = true
+			if message.Counter != r.SkippedMessageKeys[curSkippedIndex].MKey.Index {
+				continue
+			}
+
+			// Found the key for this message. Check the MAC.
+			verified, err := message.VerifyMACInline(r.SkippedMessageKeys[curSkippedIndex].MKey.Key, RatchetCipher, input)
+			if err != nil {
+				return nil, err
+			}
+			if !verified {
+				return nil, fmt.Errorf("decrypt from skipped message keys: %w", olm.ErrBadMAC)
+			}
+			result, err := RatchetCipher.Decrypt(r.SkippedMessageKeys[curSkippedIndex].MKey.Key, message.Ciphertext)
+			if err != nil {
+				return nil, fmt.Errorf("cipher decrypt: %w", err)
+			} else if len(result) != 0 {
+				// Remove the key from the skipped keys now that we've
+				// decoded the message it corresponds to.
+				r.SkippedMessageKeys[curSkippedIndex] = r.SkippedMessageKeys[len(r.SkippedMessageKeys)-1]
+				r.SkippedMessageKeys = r.SkippedMessageKeys[:len(r.SkippedMessageKeys)-1]
+				return result, nil
 			}
 		}
-		if !foundSkippedKey {
-			return nil, fmt.Errorf("decrypt: %w", olm.ErrMessageKeyNotFound)
-		}
+		return nil, fmt.Errorf("decrypt: %w", olm.ErrMessageKeyNotFound)
 	} else {
 		//Advancing the chain is done in this method
-		result, err = r.decryptForExistingChain(receiverChainFromMessage, message, input)
-		if err != nil {
-			return nil, err
-		}
+		return r.decryptForExistingChain(receiverChainFromMessage, message, input)
 	}
-
-	return result, nil
 }
 
 // advanceRootKey created the next root key and returns the next chainKey
@@ -281,11 +265,7 @@ func (r *Ratchet) decryptForNewChain(message *message.Message, rawMessage []byte
 	*/
 	r.SenderChains = senderChain{}
 
-	decrypted, err := r.decryptForExistingChain(&r.ReceiverChains[0], message, rawMessage)
-	if err != nil {
-		return nil, err
-	}
-	return decrypted, nil
+	return r.decryptForExistingChain(&r.ReceiverChains[0], message, rawMessage)
 }
 
 // PickleAsJSON returns a ratchet as a base64 string encrypted using the supplied key. The unencrypted representation of the Account is in JSON format.

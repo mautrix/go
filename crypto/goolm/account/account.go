@@ -47,11 +47,7 @@ func AccountFromJSONPickled(pickled, key []byte) (*Account, error) {
 		return nil, fmt.Errorf("accountFromPickled: %w", olm.ErrEmptyInput)
 	}
 	a := &Account{}
-	err := a.UnpickleAsJSON(pickled, key)
-	if err != nil {
-		return nil, err
-	}
-	return a, nil
+	return a, a.UnpickleAsJSON(pickled, key)
 }
 
 // AccountFromPickled loads the Account details from a pickled base64 string. The input is decrypted with the supplied key.
@@ -60,11 +56,7 @@ func AccountFromPickled(pickled, key []byte) (*Account, error) {
 		return nil, fmt.Errorf("accountFromPickled: %w", olm.ErrEmptyInput)
 	}
 	a := &Account{}
-	err := a.Unpickle(pickled, key)
-	if err != nil {
-		return nil, err
-	}
-	return a, nil
+	return a, a.Unpickle(pickled, key)
 }
 
 // NewAccount creates a new Account.
@@ -185,11 +177,7 @@ func (a *Account) NewOutboundSession(theirIdentityKey, theirOneTimeKey id.Curve2
 	if err != nil {
 		return nil, err
 	}
-	s, err := session.NewOutboundOlmSession(a.IdKeys.Curve25519, theirIdentityKeyDecoded, theirOneTimeKeyDecoded)
-	if err != nil {
-		return nil, err
-	}
-	return s, nil
+	return session.NewOutboundOlmSession(a.IdKeys.Curve25519, theirIdentityKeyDecoded, theirOneTimeKeyDecoded)
 }
 
 // NewInboundSession creates a new in-bound session for sending/receiving
@@ -450,11 +438,7 @@ func (a *Account) Pickle(key []byte) ([]byte, error) {
 	if written != len(pickeledBytes) {
 		return nil, errors.New("number of written bytes not correct")
 	}
-	encrypted, err := cipher.Pickle(key, pickeledBytes)
-	if err != nil {
-		return nil, err
-	}
-	return encrypted, nil
+	return cipher.Pickle(key, pickeledBytes)
 }
 
 // PickleLibOlm encodes the Account into target. target has to have a size of at least PickleLen() and is written to from index 0.

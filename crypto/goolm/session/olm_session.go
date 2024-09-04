@@ -48,11 +48,7 @@ func OlmSessionFromJSONPickled(pickled, key []byte) (*OlmSession, error) {
 		return nil, fmt.Errorf("sessionFromPickled: %w", olm.ErrEmptyInput)
 	}
 	a := &OlmSession{}
-	err := a.UnpickleAsJSON(pickled, key)
-	if err != nil {
-		return nil, err
-	}
-	return a, nil
+	return a, a.UnpickleAsJSON(pickled, key)
 }
 
 // OlmSessionFromPickled loads the OlmSession details from a pickled base64 string. The input is decrypted with the supplied key.
@@ -61,11 +57,7 @@ func OlmSessionFromPickled(pickled, key []byte) (*OlmSession, error) {
 		return nil, fmt.Errorf("sessionFromPickled: %w", olm.ErrEmptyInput)
 	}
 	a := &OlmSession{}
-	err := a.Unpickle(pickled, key)
-	if err != nil {
-		return nil, err
-	}
-	return a, nil
+	return a, a.Unpickle(pickled, key)
 }
 
 // NewOlmSession creates a new Session.
