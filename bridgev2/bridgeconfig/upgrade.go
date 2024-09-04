@@ -25,6 +25,7 @@ func doUpgrade(helper up.Helper) {
 	helper.Copy(up.Str, "bridge", "command_prefix")
 	helper.Copy(up.Bool, "bridge", "personal_filtering_spaces")
 	helper.Copy(up.Bool, "bridge", "private_chat_portal_meta")
+	helper.Copy(up.Bool, "bridge", "async_events")
 	helper.Copy(up.Bool, "bridge", "bridge_matrix_leave")
 	helper.Copy(up.Bool, "bridge", "tag_only_on_create")
 	helper.Copy(up.Bool, "bridge", "mute_only_on_create")

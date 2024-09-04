@@ -14,6 +14,7 @@ import (
 	"runtime/debug"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -275,23 +276,49 @@ func (portal *Portal) queueEvent(ctx context.Context, evt portalEvent) {
 
 func (portal *Portal) eventLoop() {
 	for rawEvt := range portal.events {
-		switch evt := rawEvt.(type) {
-		case *portalMatrixEvent:
-			portal.handleMatrixEvent(evt.sender, evt.evt)
-		case *portalRemoteEvent:
-			portal.handleRemoteEvent(evt.source, evt.evt)
-		case *portalCreateEvent:
-			portal.handleCreateEvent(evt)
-		default:
-			panic(fmt.Errorf("illegal type %T in eventLoop", evt))
-		}
+		portal.handleSingleEventAsync(rawEvt)
 	}
 }
 
-func (portal *Portal) handleCreateEvent(evt *portalCreateEvent) {
+func (portal *Portal) handleSingleEventAsync(rawEvt any) {
+	log := portal.Log.With().Logger()
+	if _, isCreate := rawEvt.(*portalCreateEvent); isCreate {
+		portal.handleSingleEvent(&log, rawEvt, func() {})
+	} else if portal.Bridge.Config.AsyncEvents {
+		go portal.handleSingleEvent(&log, rawEvt, func() {})
+	} else {
+		doneCh := make(chan struct{})
+		var backgrounded atomic.Bool
+		go portal.handleSingleEvent(&log, rawEvt, func() {
+			close(doneCh)
+			if backgrounded.Load() {
+				log.Debug().Msg("Event that took too long finally finished handling")
+			}
+		})
+		tick := time.NewTicker(30 * time.Second)
+		defer tick.Stop()
+		for i := 0; i < 10; i++ {
+			select {
+			case <-doneCh:
+				if i > 0 {
+					log.Debug().Msg("Event that took long finished handling")
+				}
+				return
+			case <-tick.C:
+				log.Warn().Msg("Event handling is taking long")
+			}
+		}
+		log.Warn().Msg("Event handling is taking too long, continuing in background")
+		backgrounded.Store(true)
+	}
+}
+
+func (portal *Portal) handleSingleEvent(log *zerolog.Logger, rawEvt any, doneCallback func()) {
+	ctx := log.WithContext(context.Background())
 	defer func() {
+		doneCallback()
 		if err := recover(); err != nil {
-			logEvt := zerolog.Ctx(evt.ctx).Error()
+			logEvt := log.Error()
 			if realErr, ok := err.(error); ok {
 				logEvt = logEvt.Err(realErr)
 			} else {
@@ -300,10 +327,36 @@ func (portal *Portal) handleCreateEvent(evt *portalCreateEvent) {
 			logEvt.
 				Bytes("stack", debug.Stack()).
 				Msg("Portal creation panicked")
-			evt.cb(fmt.Errorf("portal creation panicked"))
+			switch evt := rawEvt.(type) {
+			case *portalMatrixEvent:
+				if evt.evt.ID != "" {
+					go portal.sendErrorStatus(ctx, evt.evt, ErrPanicInEventHandler)
+				}
+			case *portalCreateEvent:
+				evt.cb(fmt.Errorf("portal creation panicked"))
+			}
 		}
 	}()
-	evt.cb(portal.createMatrixRoomInLoop(evt.ctx, evt.source, evt.info, nil))
+	switch evt := rawEvt.(type) {
+	case *portalMatrixEvent:
+		log.UpdateContext(func(c zerolog.Context) zerolog.Context {
+			return c.Str("action", "handle matrix event").
+				Stringer("event_id", evt.evt.ID).
+				Str("event_type", evt.evt.Type.Type)
+		})
+		portal.handleMatrixEvent(ctx, evt.sender, evt.evt)
+	case *portalRemoteEvent:
+		log.UpdateContext(func(c zerolog.Context) zerolog.Context {
+			return c.Str("action", "handle remote event").
+				Str("source_id", string(evt.source.ID))
+		})
+		portal.handleRemoteEvent(ctx, evt.source, evt.evt)
+	case *portalCreateEvent:
+		*log = *zerolog.Ctx(evt.ctx)
+		evt.cb(portal.createMatrixRoomInLoop(evt.ctx, evt.source, evt.info, nil))
+	default:
+		panic(fmt.Errorf("illegal type %T in eventLoop", evt))
+	}
 }
 
 func (portal *Portal) FindPreferredLogin(ctx context.Context, user *User, allowRelay bool) (*UserLogin, *database.UserPortal, error) {
@@ -393,29 +446,8 @@ func (portal *Portal) checkConfusableName(ctx context.Context, userID id.UserID,
 	return false
 }
 
-func (portal *Portal) handleMatrixEvent(sender *User, evt *event.Event) {
-	log := portal.Log.With().
-		Str("action", "handle matrix event").
-		Stringer("event_id", evt.ID).
-		Str("event_type", evt.Type.Type).
-		Logger()
-	ctx := log.WithContext(context.TODO())
-	defer func() {
-		if err := recover(); err != nil {
-			logEvt := log.Error()
-			if realErr, ok := err.(error); ok {
-				logEvt = logEvt.Err(realErr)
-			} else {
-				logEvt = logEvt.Any(zerolog.ErrorFieldName, err)
-			}
-			logEvt.
-				Bytes("stack", debug.Stack()).
-				Msg("Matrix event handler panicked")
-			if evt.ID != "" {
-				go portal.sendErrorStatus(ctx, evt, ErrPanicInEventHandler)
-			}
-		}
-	}()
+func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *event.Event) {
+	log := zerolog.Ctx(ctx)
 	if evt.Mautrix.EventSource&event.SourceEphemeral != 0 {
 		switch evt.Type {
 		case event.EphemeralEventReceipt:
@@ -1458,11 +1490,8 @@ func (portal *Portal) handleMatrixRedaction(ctx context.Context, sender *UserLog
 	portal.sendSuccessStatus(ctx, evt)
 }
 
-func (portal *Portal) handleRemoteEvent(source *UserLogin, evt RemoteEvent) {
-	log := portal.Log.With().
-		Str("source_id", string(source.ID)).
-		Str("action", "handle remote event").
-		Logger()
+func (portal *Portal) handleRemoteEvent(ctx context.Context, source *UserLogin, evt RemoteEvent) {
+	log := zerolog.Ctx(ctx)
 	defer func() {
 		if err := recover(); err != nil {
 			logEvt := log.Error()
@@ -1481,7 +1510,6 @@ func (portal *Portal) handleRemoteEvent(source *UserLogin, evt RemoteEvent) {
 		c = c.Stringer("bridge_evt_type", evtType)
 		return evt.AddLogContext(c)
 	})
-	ctx := log.WithContext(context.TODO())
 	if portal.MXID == "" {
 		mcp, ok := evt.(RemoteEventThatMayCreatePortal)
 		if !ok || !mcp.ShouldCreatePortal() {
@@ -1823,7 +1851,8 @@ func (portal *Portal) handleRemoteUpsert(ctx context.Context, source *UserLogin,
 	}
 	if len(res.SubEvents) > 0 {
 		for _, subEvt := range res.SubEvents {
-			portal.handleRemoteEvent(source, subEvt)
+			log := portal.Log.With().Str("source_id", string(source.ID)).Str("action", "handle remote subevent").Logger()
+			portal.handleRemoteEvent(log.WithContext(ctx), source, subEvt)
 		}
 	}
 	return res.ContinueMessageHandling

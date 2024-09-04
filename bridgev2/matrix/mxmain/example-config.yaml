@@ -7,6 +7,9 @@ bridge:
     # Whether the bridge should set names and avatars explicitly for DM portals.
     # This is only necessary when using clients that don't support MSC4171.
     private_chat_portal_meta: false
+    # Should events be handled asynchronously within portal rooms?
+    # If true, events may end up being out of order, but slow events won't block other ones.
+    async_events: false
 
     # Should leaving Matrix rooms be bridged as leaving groups on the remote network?
     bridge_matrix_leave: false
