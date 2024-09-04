@@ -1,9 +1,10 @@
 package cipher_test
 
 import (
-	"bytes"
 	"crypto/aes"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"maunium.net/go/mautrix/crypto/goolm/cipher"
 )
@@ -19,15 +20,9 @@ func TestEncoding(t *testing.T) {
 		copy(toEncrypt, input)
 	}
 	encoded, err := cipher.Pickle(key, toEncrypt)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	decoded, err := cipher.Unpickle(key, encoded)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(decoded, toEncrypt) {
-		t.Fatalf("Expected '%s' but got '%s'", toEncrypt, decoded)
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, toEncrypt, decoded)
 }

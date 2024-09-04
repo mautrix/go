@@ -1,12 +1,12 @@
 package pk_test
 
 import (
-	"bytes"
 	"encoding/base64"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
-	"maunium.net/go/mautrix/crypto/goolm/goolmbase64"
 	"maunium.net/go/mautrix/crypto/goolm/pk"
 )
 
@@ -26,34 +26,20 @@ func TestEncryptionDecryption(t *testing.T) {
 	}
 	bobPublic := []byte("3p7bfXt9wbTTW2HC7OQ1Nz+DQ8hbeGdNrfx+FG+IK08")
 	decryption, err := pk.NewDecryptionFromPrivate(alicePrivate)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal([]byte(decryption.PublicKey()), alicePublic) {
-		t.Fatal("public key not correct")
-	}
-	if !bytes.Equal(decryption.PrivateKey(), alicePrivate) {
-		t.Fatal("private key not correct")
-	}
+	assert.NoError(t, err)
+	assert.EqualValues(t, alicePublic, decryption.PublicKey(), "public key not correct")
+	assert.EqualValues(t, alicePrivate, decryption.PrivateKey(), "private key not correct")
 
 	encryption, err := pk.NewEncryption(decryption.PublicKey())
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	plaintext := []byte("This is a test")
 
 	ciphertext, mac, err := encryption.Encrypt(plaintext, bobPrivate)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	decrypted, err := decryption.Decrypt(bobPublic, mac, ciphertext)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(decrypted, plaintext) {
-		t.Fatal("message not equal")
-	}
+	assert.NoError(t, err)
+	assert.EqualValues(t, plaintext, decrypted, "message not equal")
 }
 
 func TestSigning(t *testing.T) {
@@ -66,29 +52,20 @@ func TestSigning(t *testing.T) {
 	message := []byte("We hold these truths to be self-evident, that all men are created equal, that they are endowed by their Creator with certain unalienable Rights, that among these are Life, Liberty and the pursuit of Happiness.")
 	signing, _ := pk.NewSigningFromSeed(seed)
 	signature, err := signing.Sign(message)
-	if err != nil {
-		t.Fatal(err)
-	}
-	signatureDecoded, err := goolmbase64.Decode(signature)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
+	signatureDecoded, err := base64.RawStdEncoding.DecodeString(string(signature))
+	assert.NoError(t, err)
 	pubKeyEncoded := signing.PublicKey()
 	pubKeyDecoded, err := base64.RawStdEncoding.DecodeString(string(pubKeyEncoded))
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	pubKey := crypto.Ed25519PublicKey(pubKeyDecoded)
 
 	verified := pubKey.Verify(message, signatureDecoded)
-	if !verified {
-		t.Fatal("signature did not verify")
-	}
+	assert.True(t, verified, "signature did not verify")
+
 	copy(signatureDecoded[0:], []byte("m"))
 	verified = pubKey.Verify(message, signatureDecoded)
-	if verified {
-		t.Fatal("signature did verify")
-	}
+	assert.False(t, verified, "signature verified with wrong message")
 }
 
 func TestDecryptionPickling(t *testing.T) {
@@ -100,37 +77,19 @@ func TestDecryptionPickling(t *testing.T) {
 	}
 	alicePublic := []byte("hSDwCYkwp1R0i33ctD73Wg2/Og0mOBr066SpjqqbTmo")
 	decryption, err := pk.NewDecryptionFromPrivate(alicePrivate)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal([]byte(decryption.PublicKey()), alicePublic) {
-		t.Fatal("public key not correct")
-	}
-	if !bytes.Equal(decryption.PrivateKey(), alicePrivate) {
-		t.Fatal("private key not correct")
-	}
+	assert.NoError(t, err)
+	assert.EqualValues(t, alicePublic, decryption.PublicKey(), "public key not correct")
+	assert.EqualValues(t, alicePrivate, decryption.PrivateKey(), "private key not correct")
 	pickleKey := []byte("secret_key")
 	expectedPickle := []byte("qx37WTQrjZLz5tId/uBX9B3/okqAbV1ofl9UnHKno1eipByCpXleAAlAZoJgYnCDOQZDQWzo3luTSfkF9pU1mOILCbbouubs6TVeDyPfgGD9i86J8irHjA")
 	pickled, err := decryption.Pickle(pickleKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(expectedPickle, pickled) {
-		t.Fatalf("pickle not as expected:\n%v\n%v\n", pickled, expectedPickle)
-	}
+	assert.NoError(t, err)
+	assert.EqualValues(t, expectedPickle, pickled, "pickle not as expected")
 
 	newDecription, err := pk.NewDecryption()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	err = newDecription.Unpickle(pickled, pickleKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal([]byte(newDecription.PublicKey()), alicePublic) {
-		t.Fatal("public key not correct")
-	}
-	if !bytes.Equal(newDecription.PrivateKey(), alicePrivate) {
-		t.Fatal("private key not correct")
-	}
+	assert.NoError(t, err)
+	assert.EqualValues(t, alicePublic, newDecription.PublicKey(), "public key not correct")
+	assert.EqualValues(t, alicePrivate, newDecription.PrivateKey(), "private key not correct")
 }

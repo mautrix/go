@@ -1,10 +1,10 @@
 package session_test
 
 import (
-	"bytes"
 	"encoding/base64"
-	"errors"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
 	"maunium.net/go/mautrix/crypto/goolm/session"
@@ -15,30 +15,18 @@ import (
 func TestOlmSession(t *testing.T) {
 	pickleKey := []byte("secretKey")
 	aliceKeyPair, err := crypto.Curve25519GenerateKey()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	bobKeyPair, err := crypto.Curve25519GenerateKey()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	bobOneTimeKey, err := crypto.Curve25519GenerateKey()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	aliceSession, err := session.NewOutboundOlmSession(aliceKeyPair, bobKeyPair.PublicKey, bobOneTimeKey.PublicKey)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	//create a message so that there are more keys to marshal
 	plaintext := []byte("Test message from Alice to Bob")
 	msgType, message, err := aliceSession.Encrypt(plaintext)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if msgType != id.OlmMsgTypePreKey {
-		t.Fatal("Wrong message type")
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, id.OlmMsgTypePreKey, msgType)
 
 	searchFunc := func(target crypto.Curve25519PublicKey) *crypto.OneTimeKey {
 		if target.Equal(bobOneTimeKey.PublicKey) {
@@ -52,92 +40,58 @@ func TestOlmSession(t *testing.T) {
 	}
 	//bob receives message
 	bobSession, err := session.NewInboundOlmSession(nil, message, searchFunc, bobKeyPair)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	decryptedMsg, err := bobSession.Decrypt(string(message), msgType)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(plaintext, decryptedMsg) {
-		t.Fatalf("messages are not equal:\n%v\n%v\n", plaintext, decryptedMsg)
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, plaintext, decryptedMsg)
 
 	// Alice pickles session
 	pickled, err := aliceSession.PickleAsJSON(pickleKey)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	//bob sends a message
 	plaintext = []byte("A message from Bob to Alice")
 	msgType, message, err = bobSession.Encrypt(plaintext)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if msgType != id.OlmMsgTypeMsg {
-		t.Fatal("Wrong message type")
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, id.OlmMsgTypeMsg, msgType)
 
 	//Alice unpickles session
 	newAliceSession, err := session.OlmSessionFromJSONPickled(pickled, pickleKey)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	//Alice receives message
 	decryptedMsg, err = newAliceSession.Decrypt(string(message), msgType)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(plaintext, decryptedMsg) {
-		t.Fatalf("messages are not equal:\n%v\n%v\n", plaintext, decryptedMsg)
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, plaintext, decryptedMsg)
 
 	//Alice receives message again
 	_, err = newAliceSession.Decrypt(string(message), msgType)
-	if err == nil {
-		t.Fatal("should have gotten an error")
-	}
+	assert.ErrorIs(t, err, olm.ErrMessageKeyNotFound)
 
 	//Alice sends another message
 	plaintext = []byte("A second message to Bob")
 	msgType, message, err = newAliceSession.Encrypt(plaintext)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if msgType != id.OlmMsgTypeMsg {
-		t.Fatal("Wrong message type")
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, id.OlmMsgTypeMsg, msgType)
+
 	//bob receives message
 	decryptedMsg, err = bobSession.Decrypt(string(message), msgType)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(plaintext, decryptedMsg) {
-		t.Fatalf("messages are not equal:\n%v\n%v\n", plaintext, decryptedMsg)
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, plaintext, decryptedMsg)
 }
 
 func TestSessionPickle(t *testing.T) {
 	pickledDataFromLibOlm := []byte("icDKYm0b4aO23WgUuOxdpPoxC0UlEOYPVeuduNH3IkpFsmnWx5KuEOpxGiZw5IuB/sSn2RZUCTiJ90IvgC7AClkYGHep9O8lpiqQX73XVKD9okZDCAkBc83eEq0DKYC7HBkGRAU/4T6QPIBBY3UK4QZwULLE/fLsi3j4YZBehMtnlsqgHK0q1bvX4cRznZItVKR4ro0O9EAk6LLxJtSnRu5elSUk7YXT")
 	pickleKey := []byte("secret_key")
 	sess, err := session.OlmSessionFromPickled(pickledDataFromLibOlm, pickleKey)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	newPickled, err := sess.Pickle(pickleKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(pickledDataFromLibOlm, newPickled) {
-		t.Fatal("pickled version does not equal libolm version")
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, pickledDataFromLibOlm, newPickled)
+
 	pickledDataFromLibOlm = append(pickledDataFromLibOlm, []byte("a")...)
 	_, err = session.OlmSessionFromPickled(pickledDataFromLibOlm, pickleKey)
-	if err == nil {
-		t.Fatal("should have gotten an error")
-	}
+	assert.ErrorIs(t, err, base64.CorruptInputError(224))
 }
 
 func TestDecrypts(t *testing.T) {
@@ -161,17 +115,9 @@ func TestDecrypts(t *testing.T) {
 		"dGvPXeH8qLeNZA")
 	pickleKey := []byte("")
 	sess, err := session.OlmSessionFromPickled(sessionPickled, pickleKey)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	for curIndex, curMessage := range messages {
 		_, err := sess.Decrypt(string(curMessage), id.OlmMsgTypePreKey)
-		if err != nil {
-			if !errors.Is(err, expectedErr[curIndex]) {
-				t.Fatal(err)
-			}
-		} else {
-			t.Fatal("error expected")
-		}
+		assert.ErrorIs(t, err, expectedErr[curIndex])
 	}
 }

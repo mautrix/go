@@ -1,13 +1,10 @@
 package account_test
 
 import (
-	"bytes"
 	"encoding/base64"
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"maunium.net/go/mautrix/id"
 
@@ -18,75 +15,42 @@ import (
 
 func TestAccount(t *testing.T) {
 	firstAccount, err := account.NewAccount()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	err = firstAccount.GenFallbackKey()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	err = firstAccount.GenOneTimeKeys(2)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	encryptionKey := []byte("testkey")
+
 	//now pickle account in JSON format
 	pickled, err := firstAccount.PickleAsJSON(encryptionKey)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
+
 	//now unpickle into new Account
 	unpickledAccount, err := account.AccountFromJSONPickled(pickled, encryptionKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	//check if accounts are the same
-	if firstAccount.NextOneTimeKeyID != unpickledAccount.NextOneTimeKeyID {
-		t.Fatal("NextOneTimeKeyID unequal")
-	}
-	if !firstAccount.CurrentFallbackKey.Equal(unpickledAccount.CurrentFallbackKey) {
-		t.Fatal("CurrentFallbackKey unequal")
-	}
-	if !firstAccount.PrevFallbackKey.Equal(unpickledAccount.PrevFallbackKey) {
-		t.Fatal("PrevFallbackKey unequal")
-	}
-	if len(firstAccount.OTKeys) != len(unpickledAccount.OTKeys) {
-		t.Fatal("OneTimeKeysunequal")
-	}
-	for i := range firstAccount.OTKeys {
-		if !firstAccount.OTKeys[i].Equal(unpickledAccount.OTKeys[i]) {
-			t.Fatalf("OneTimeKeys %d unequal", i)
-		}
-	}
-	if !firstAccount.IdKeys.Curve25519.PrivateKey.Equal(unpickledAccount.IdKeys.Curve25519.PrivateKey) {
-		t.Fatal("IdentityKeys Curve25519 private unequal")
-	}
-	if !firstAccount.IdKeys.Curve25519.PublicKey.Equal(unpickledAccount.IdKeys.Curve25519.PublicKey) {
-		t.Fatal("IdentityKeys Curve25519 public unequal")
-	}
-	if !firstAccount.IdKeys.Ed25519.PrivateKey.Equal(unpickledAccount.IdKeys.Ed25519.PrivateKey) {
-		t.Fatal("IdentityKeys Ed25519 private unequal")
-	}
-	if !firstAccount.IdKeys.Ed25519.PublicKey.Equal(unpickledAccount.IdKeys.Ed25519.PublicKey) {
-		t.Fatal("IdentityKeys Ed25519 public unequal")
-	}
+	assert.NoError(t, err)
 
-	if otks, err := firstAccount.OneTimeKeys(); err != nil || len(otks) != 2 {
-		t.Fatal("should get 2 unpublished oneTimeKeys")
-	}
-	if len(firstAccount.FallbackKeyUnpublished()) == 0 {
-		t.Fatal("should get fallbackKey")
-	}
+	//check if accounts are the same
+	assert.Equal(t, firstAccount.NextOneTimeKeyID, unpickledAccount.NextOneTimeKeyID)
+	assert.Equal(t, firstAccount.CurrentFallbackKey, unpickledAccount.CurrentFallbackKey)
+	assert.Equal(t, firstAccount.PrevFallbackKey, unpickledAccount.PrevFallbackKey)
+	assert.Equal(t, firstAccount.OTKeys, unpickledAccount.OTKeys)
+	assert.Equal(t, firstAccount.IdKeys, unpickledAccount.IdKeys)
+
+	// Ensure that all of the keys are unpublished right now
+	otks, err := firstAccount.OneTimeKeys()
+	assert.NoError(t, err)
+	assert.Len(t, otks, 2)
+	assert.Len(t, firstAccount.FallbackKeyUnpublished(), 1)
+
+	// Now, publish the key and make sure that they are published
 	firstAccount.MarkKeysAsPublished()
-	if len(firstAccount.FallbackKey()) == 0 {
-		t.Fatal("should get fallbackKey")
-	}
-	if len(firstAccount.FallbackKeyUnpublished()) != 0 {
-		t.Fatal("should get no fallbackKey")
-	}
-	if otks, err := firstAccount.OneTimeKeys(); err != nil || len(otks) != 0 {
-		t.Fatal("should get no oneTimeKeys")
-	}
+
+	assert.Len(t, firstAccount.FallbackKeyUnpublished(), 0)
+	assert.Len(t, firstAccount.FallbackKey(), 1)
+	otks, err = firstAccount.OneTimeKeys()
+	assert.NoError(t, err)
+	assert.Len(t, otks, 0)
 }
 
 func TestAccountPickleJSON(t *testing.T) {
@@ -104,109 +68,49 @@ func TestAccountPickleJSON(t *testing.T) {
 
 	pickledData := []byte("6POkBWwbNl20fwvZWsOu0jgbHy4jkA5h0Ji+XCag59+ifWIRPDrqtgQi9HmkLiSF6wUhhYaV4S73WM+Hh+dlCuZRuXhTQr8yGPTifjcjq8birdAhObbEqHrYEdqaQkrgBLr/rlS5sibXeDqbkhVu4LslvootU9DkcCbd4b/0Flh7iugxqkcCs5GDndTEx9IzTVJzmK82Y0Q1Z1Z9Vuc2Iw746PtBJLtZjite6fSMp2NigPX/ZWWJ3OnwcJo0Vvjy8hgptZEWkamOHdWbUtelbHyjDIZlvxOC25D3rFif0zzPkF9qdpBPqVCWPPzGFmgnqKau6CHrnPfq7GLsM3BrprD7sHN1Js28ex14gXQPjBT7KTUo6H0e4gQMTMRp4qb8btNXDeId8xIFIElTh2SXZBTDmSq/ziVNJinEvYV8mGPvJZjDQQU+SyoS/HZ8uMc41tH0BOGDbFMHbfLMiz61E429gOrx2klu5lqyoyet7//HKi0ed5w2dQ")
 	account, err := account.AccountFromJSONPickled(pickledData, key)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	expectedJSON := `{"ed25519":"qWvNB6Ztov5/AOsP073op0O32KJ8/tgSNarT7MaYgQE","curve25519":"TFUB6M6zwgyWhBEp2m1aUodl2AsnsrIuBr8l9AvwGS8"}`
 	jsonData, err := account.IdentityKeysJSON()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(jsonData, []byte(expectedJSON)) {
-		t.Fatalf("Expected '%s' but got '%s'", expectedJSON, jsonData)
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, expectedJSON, string(jsonData))
 }
 
 func TestSessions(t *testing.T) {
 	aliceAccount, err := account.NewAccount()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	err = aliceAccount.GenOneTimeKeys(5)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	bobAccount, err := account.NewAccount()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	err = bobAccount.GenOneTimeKeys(5)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	aliceSession, err := aliceAccount.NewOutboundSession(bobAccount.IdKeys.Curve25519.B64Encoded(), bobAccount.OTKeys[2].Key.B64Encoded())
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	plaintext := []byte("test message")
 	msgType, crypttext, err := aliceSession.Encrypt(plaintext)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if msgType != id.OlmMsgTypePreKey {
-		t.Fatal("wrong message type")
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, id.OlmMsgTypePreKey, msgType)
 
 	bobSession, err := bobAccount.NewInboundSession(string(crypttext))
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	decodedText, err := bobSession.Decrypt(string(crypttext), msgType)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(plaintext, decodedText) {
-		t.Fatalf("expected '%s' but got '%s'", string(plaintext), string(decodedText))
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, plaintext, decodedText)
 }
 
 func TestAccountPickle(t *testing.T) {
 	pickleKey := []byte("secret_key")
 	account, err := account.AccountFromPickled(pickledDataFromLibOlm, pickleKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !expectedEd25519KeyPairPickleLibOLM.PrivateKey.Equal(account.IdKeys.Ed25519.PrivateKey) {
-		t.Fatal("keys not equal")
-	}
-	if !expectedEd25519KeyPairPickleLibOLM.PublicKey.Equal(account.IdKeys.Ed25519.PublicKey) {
-		t.Fatal("keys not equal")
-	}
-	if !expectedCurve25519KeyPairPickleLibOLM.PrivateKey.Equal(account.IdKeys.Curve25519.PrivateKey) {
-		t.Fatal("keys not equal")
-	}
-	if !expectedCurve25519KeyPairPickleLibOLM.PublicKey.Equal(account.IdKeys.Curve25519.PublicKey) {
-		t.Fatal("keys not equal")
-	}
-	if account.NextOneTimeKeyID != 42 {
-		t.Fatal("wrong next otKey id")
-	}
-	if len(account.OTKeys) != len(expectedOTKeysPickleLibOLM) {
-		t.Fatal("wrong number of otKeys")
-	}
-	if account.NumFallbackKeys != 0 {
-		t.Fatal("fallback keys set but not in pickle")
-	}
-	for curIndex, curValue := range account.OTKeys {
-		curExpected := expectedOTKeysPickleLibOLM[curIndex]
-		if curExpected.ID != curValue.ID {
-			t.Fatal("OTKey id not correct")
-		}
-		if !curExpected.Key.PublicKey.Equal(curValue.Key.PublicKey) {
-			t.Fatal("OTKey public key not correct")
-		}
-		if !curExpected.Key.PrivateKey.Equal(curValue.Key.PrivateKey) {
-			t.Fatal("OTKey private key not correct")
-		}
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, expectedEd25519KeyPairPickleLibOLM, account.IdKeys.Ed25519)
+	assert.Equal(t, expectedCurve25519KeyPairPickleLibOLM, account.IdKeys.Curve25519)
+	assert.EqualValues(t, 42, account.NextOneTimeKeyID)
+	assert.Equal(t, account.OTKeys, expectedOTKeysPickleLibOLM)
+	assert.EqualValues(t, 0, account.NumFallbackKeys)
 
 	targetPickled, err := account.Pickle(pickleKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(targetPickled, pickledDataFromLibOlm) {
-		t.Fatal("repickled value does not equal given value")
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, pickledDataFromLibOlm, targetPickled)
 }
 
 func TestOldAccountPickle(t *testing.T) {
@@ -218,355 +122,212 @@ func TestOldAccountPickle(t *testing.T) {
 		"O5TmXua1FcU")
 	pickleKey := []byte("")
 	account, err := account.NewAccount()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	err = account.Unpickle(pickled, pickleKey)
-	if err == nil {
-		t.Fatal("expected error")
-	} else {
-		if !errors.Is(err, olm.ErrBadVersion) {
-			t.Fatal(err)
-		}
-	}
+	assert.ErrorIs(t, err, olm.ErrBadVersion)
 }
 
 func TestLoopback(t *testing.T) {
 	accountA, err := account.NewAccount()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	accountB, err := account.NewAccount()
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = accountB.GenOneTimeKeys(42)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
+	err = accountB.GenOneTimeKeys( 42)
+	assert.NoError(t, err)
 
 	aliceSession, err := accountA.NewOutboundSession(accountB.IdKeys.Curve25519.B64Encoded(), accountB.OTKeys[0].Key.B64Encoded())
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	plainText := []byte("Hello, World")
 	msgType, message1, err := aliceSession.Encrypt(plainText)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if msgType != id.OlmMsgTypePreKey {
-		t.Fatal("wrong message type")
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, id.OlmMsgTypePreKey, msgType)
 
 	bobSession, err := accountB.NewInboundSession(string(message1))
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	// Check that the inbound session matches the message it was created from.
 	sessionIsOK, err := bobSession.MatchesInboundSessionFrom("", string(message1))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !sessionIsOK {
-		t.Fatal("session was not detected to be valid")
-	}
+	assert.NoError(t, err)
+	assert.True(t, sessionIsOK, "session was not detected to be valid")
+
 	// Check that the inbound session matches the key this message is supposed to be from.
 	aIDKey := accountA.IdKeys.Curve25519.PublicKey.B64Encoded()
 	sessionIsOK, err = bobSession.MatchesInboundSessionFrom(string(aIDKey), string(message1))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !sessionIsOK {
-		t.Fatal("session is sad to be not from a but it should")
-	}
+	assert.NoError(t, err)
+	assert.True(t, sessionIsOK, "session is sad to be not from a but it should")
+
 	// Check that the inbound session isn't from a different user.
 	bIDKey := accountB.IdKeys.Curve25519.PublicKey.B64Encoded()
 	sessionIsOK, err = bobSession.MatchesInboundSessionFrom(string(bIDKey), string(message1))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if sessionIsOK {
-		t.Fatal("session is sad to be from b but is from a")
-	}
+	assert.NoError(t, err)
+	assert.False(t, sessionIsOK, "session is sad to be from b but is from a")
+
 	// Check that we can decrypt the message.
 	decryptedMessage, err := bobSession.Decrypt(string(message1), msgType)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(decryptedMessage, plainText) {
-		t.Fatal("messages are not the same")
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, plainText, decryptedMessage)
 
 	msgTyp2, message2, err := bobSession.Encrypt(plainText)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if msgTyp2 == id.OlmMsgTypePreKey {
-		t.Fatal("wrong message type")
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, id.OlmMsgTypeMsg, msgTyp2)
 
 	decryptedMessage2, err := aliceSession.Decrypt(string(message2), msgTyp2)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(decryptedMessage2, plainText) {
-		t.Fatal("messages are not the same")
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, plainText, decryptedMessage2)
 
 	//decrypting again should fail, as the chain moved on
 	_, err = aliceSession.Decrypt(string(message2), msgTyp2)
-	if err == nil {
-		t.Fatal("expected error")
-	}
+	assert.Error(t, err)
+	assert.ErrorIs(t, err, olm.ErrMessageKeyNotFound)
 
 	//compare sessionIDs
-	if aliceSession.ID() != bobSession.ID() {
-		t.Fatal("sessionIDs are not equal")
-	}
+	assert.Equal(t, aliceSession.ID(), bobSession.ID())
 }
 
 func TestMoreMessages(t *testing.T) {
 	accountA, err := account.NewAccount()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	accountB, err := account.NewAccount()
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = accountB.GenOneTimeKeys(42)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
+	err = accountB.GenOneTimeKeys( 42)
+	assert.NoError(t, err)
 
 	aliceSession, err := accountA.NewOutboundSession(accountB.IdKeys.Curve25519.B64Encoded(), accountB.OTKeys[0].Key.B64Encoded())
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	plainText := []byte("Hello, World")
 	msgType, message1, err := aliceSession.Encrypt(plainText)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if msgType != id.OlmMsgTypePreKey {
-		t.Fatal("wrong message type")
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, id.OlmMsgTypePreKey, msgType)
 
 	bobSession, err := accountB.NewInboundSession(string(message1))
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	decryptedMessage, err := bobSession.Decrypt(string(message1), msgType)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(decryptedMessage, plainText) {
-		t.Fatal("messages are not the same")
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, plainText, decryptedMessage)
 
 	for i := 0; i < 8; i++ {
 		//alice sends, bob reveices
 		msgType, message, err := aliceSession.Encrypt(plainText)
-		if err != nil {
-			t.Fatal(err)
-		}
+		assert.NoError(t, err)
 		if i == 0 {
 			//The first time should still be a preKeyMessage as bob has not yet send a message to alice
-			if msgType != id.OlmMsgTypePreKey {
-				t.Fatal("wrong message type")
-			}
+			assert.Equal(t, id.OlmMsgTypePreKey, msgType)
 		} else {
-			if msgType == id.OlmMsgTypePreKey {
-				t.Fatal("wrong message type")
-			}
+			assert.Equal(t, id.OlmMsgTypeMsg, msgType)
 		}
+
 		decryptedMessage, err := bobSession.Decrypt(string(message), msgType)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !bytes.Equal(decryptedMessage, plainText) {
-			t.Fatal("messages are not the same")
-		}
+		assert.NoError(t, err)
+		assert.Equal(t, plainText, decryptedMessage)
 
 		//now bob sends, alice receives
 		msgType, message, err = bobSession.Encrypt(plainText)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if msgType == id.OlmMsgTypePreKey {
-			t.Fatal("wrong message type")
-		}
+		assert.NoError(t, err)
+		assert.Equal(t, id.OlmMsgTypeMsg, msgType)
+
 		decryptedMessage, err = aliceSession.Decrypt(string(message), msgType)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !bytes.Equal(decryptedMessage, plainText) {
-			t.Fatal("messages are not the same")
-		}
+		assert.NoError(t, err)
+		assert.Equal(t, plainText, decryptedMessage)
 	}
 }
 
 func TestFallbackKey(t *testing.T) {
 	accountA, err := account.NewAccount()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	accountB, err := account.NewAccount()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	err = accountB.GenFallbackKey()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	fallBackKeys := accountB.FallbackKeyUnpublished()
 	var fallbackKey id.Curve25519
 	for _, fbKey := range fallBackKeys {
 		fallbackKey = fbKey
 	}
 	aliceSession, err := accountA.NewOutboundSession(accountB.IdKeys.Curve25519.B64Encoded(), fallbackKey)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	plainText := []byte("Hello, World")
 	msgType, message1, err := aliceSession.Encrypt(plainText)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if msgType != id.OlmMsgTypePreKey {
-		t.Fatal("wrong message type")
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, id.OlmMsgTypePreKey, msgType)
 
 	bobSession, err := accountB.NewInboundSession(string(message1))
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	// Check that the inbound session matches the message it was created from.
 	sessionIsOK, err := bobSession.MatchesInboundSessionFrom("", string(message1))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !sessionIsOK {
-		t.Fatal("session was not detected to be valid")
-	}
+	assert.NoError(t, err)
+	assert.True(t, sessionIsOK, "session was not detected to be valid")
+
 	// Check that the inbound session matches the key this message is supposed to be from.
 	aIDKey := accountA.IdKeys.Curve25519.PublicKey.B64Encoded()
 	sessionIsOK, err = bobSession.MatchesInboundSessionFrom(string(aIDKey), string(message1))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !sessionIsOK {
-		t.Fatal("session is sad to be not from a but it should")
-	}
+	assert.NoError(t, err)
+	assert.True(t, sessionIsOK, "session is sad to be not from a but it should")
+
 	// Check that the inbound session isn't from a different user.
 	bIDKey := accountB.IdKeys.Curve25519.PublicKey.B64Encoded()
 	sessionIsOK, err = bobSession.MatchesInboundSessionFrom(string(bIDKey), string(message1))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if sessionIsOK {
-		t.Fatal("session is sad to be from b but is from a")
-	}
+	assert.NoError(t, err)
+	assert.False(t, sessionIsOK, "session is sad to be from b but is from a")
+
 	// Check that we can decrypt the message.
 	decryptedMessage, err := bobSession.Decrypt(string(message1), msgType)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(decryptedMessage, plainText) {
-		t.Fatal("messages are not the same")
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, plainText, decryptedMessage)
 
 	// create a new fallback key for B (the old fallback should still be usable)
 	err = accountB.GenFallbackKey()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	// start another session and encrypt a message
 	aliceSession2, err := accountA.NewOutboundSession(accountB.IdKeys.Curve25519.B64Encoded(), fallbackKey)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	msgType2, message2, err := aliceSession2.Encrypt(plainText)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if msgType2 != id.OlmMsgTypePreKey {
-		t.Fatal("wrong message type")
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, id.OlmMsgTypePreKey, msgType2)
+
 	// bobSession should not be valid for the message2
 	// Check that the inbound session matches the message it was created from.
 	sessionIsOK, err = bobSession.MatchesInboundSessionFrom("", string(message2))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if sessionIsOK {
-		t.Fatal("session was detected to be valid but should not")
-	}
+	assert.NoError(t, err)
+	assert.False(t, sessionIsOK, "session was detected to be valid but should not")
+
 	bobSession2, err := accountB.NewInboundSession(string(message2))
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	// Check that the inbound session matches the message it was created from.
 	sessionIsOK, err = bobSession2.MatchesInboundSessionFrom("", string(message2))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !sessionIsOK {
-		t.Fatal("session was not detected to be valid")
-	}
+	assert.NoError(t, err)
+	assert.True(t, sessionIsOK, "session was not detected to be valid")
+
 	// Check that the inbound session matches the key this message is supposed to be from.
 	sessionIsOK, err = bobSession2.MatchesInboundSessionFrom(string(aIDKey), string(message2))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !sessionIsOK {
-		t.Fatal("session is sad to be not from a but it should")
-	}
+	assert.NoError(t, err)
+	assert.True(t, sessionIsOK, "session is sad to be not from a but it should")
+
 	// Check that the inbound session isn't from a different user.
 	sessionIsOK, err = bobSession2.MatchesInboundSessionFrom(string(bIDKey), string(message2))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if sessionIsOK {
-		t.Fatal("session is sad to be from b but is from a")
-	}
+	assert.NoError(t, err)
+	assert.False(t, sessionIsOK, "session is sad to be from b but is from a")
+
 	// Check that we can decrypt the message.
 	decryptedMessage2, err := bobSession2.Decrypt(string(message2), msgType2)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(decryptedMessage2, plainText) {
-		t.Fatal("messages are not the same")
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, plainText, decryptedMessage2)
 
 	//Forget the old fallback key -- creating a new session should fail now
 	accountB.ForgetOldFallbackKey()
 	// start another session and encrypt a message
 	aliceSession3, err := accountA.NewOutboundSession(accountB.IdKeys.Curve25519.B64Encoded(), fallbackKey)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	msgType3, message3, err := aliceSession3.Encrypt(plainText)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if msgType3 != id.OlmMsgTypePreKey {
-		t.Fatal("wrong message type")
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, id.OlmMsgTypePreKey, msgType3)
 	_, err = accountB.NewInboundSession(string(message3))
-	if err == nil {
-		t.Fatal("expected error")
-	}
-	if !errors.Is(err, olm.ErrBadMessageKeyID) {
-		t.Fatal(err)
-	}
+	assert.ErrorIs(t, err, olm.ErrBadMessageKeyID)
 }
 
 func TestOldV3AccountPickle(t *testing.T) {
@@ -582,33 +343,23 @@ func TestOldV3AccountPickle(t *testing.T) {
 	expectedUnpublishedFallbackJSON := []byte("{\"curve25519\":{}}")
 
 	account, err := account.AccountFromPickled(pickledData, pickleKey)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	fallbackJSON, err := account.FallbackKeyJSON()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(fallbackJSON, expectedFallbackJSON) {
-		t.Fatalf("expected not as result:\n%s\n%s\n", expectedFallbackJSON, fallbackJSON)
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, expectedFallbackJSON, fallbackJSON)
 	fallbackJSONUnpublished, err := account.FallbackKeyUnpublishedJSON()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(fallbackJSONUnpublished, expectedUnpublishedFallbackJSON) {
-		t.Fatalf("expected not as result:\n%s\n%s\n", expectedUnpublishedFallbackJSON, fallbackJSONUnpublished)
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, expectedUnpublishedFallbackJSON, fallbackJSONUnpublished)
 }
 
 func TestAccountSign(t *testing.T) {
 	accountA, err := account.NewAccount()
-	require.NoError(t, err)
+	assert.NoError(t, err)
 	plainText := []byte("Hello, World")
 	signatureB64, err := accountA.Sign(plainText)
-	require.NoError(t, err)
+	assert.NoError(t, err)
 	signature, err := base64.RawStdEncoding.DecodeString(string(signatureB64))
-	require.NoError(t, err)
+	assert.NoError(t, err)
 
 	verified, err := signatures.VerifySignature(plainText, accountA.IdKeys.Ed25519.B64Encoded(), signature)
 	assert.NoError(t, err)

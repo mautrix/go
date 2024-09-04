@@ -1,49 +1,44 @@
 package crypto_test
 
 import (
-	"bytes"
 	"encoding/base64"
 	"io"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
 )
 
-func TestHMACSha256(t *testing.T) {
+func TestHMACSHA256(t *testing.T) {
 	key := []byte("test key")
 	message := []byte("test message")
 	hash := crypto.HMACSHA256(key, message)
-	if !bytes.Equal(hash, crypto.HMACSHA256(key, message)) {
-		t.Fail()
-	}
+	assert.Equal(t, hash, crypto.HMACSHA256(key, message))
+
 	str := "A4M0ovdiWHaZ5msdDFbrvtChFwZIoIaRSVGmv8bmPtc"
 	result, err := base64.RawStdEncoding.DecodeString(str)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(result, hash) {
-		t.Fail()
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, result, hash)
 }
 
-func TestHKDFSha256(t *testing.T) {
+func TestHKDFSHA256(t *testing.T) {
 	message := []byte("test content")
+
 	hkdf := crypto.HKDFSHA256(message, nil, nil)
-	hkdf2 := crypto.HKDFSHA256(message, nil, nil)
 	result := make([]byte, 32)
-	if _, err := io.ReadFull(hkdf, result); err != nil {
-		t.Fatal(err)
-	}
+	_, err := io.ReadFull(hkdf, result)
+	assert.NoError(t, err)
+
+	hkdf2 := crypto.HKDFSHA256(message, nil, nil)
 	result2 := make([]byte, 32)
-	if _, err := io.ReadFull(hkdf2, result2); err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(result, result2) {
-		t.Fail()
-	}
+	_, err = io.ReadFull(hkdf2, result2)
+	assert.NoError(t, err)
+
+	assert.Equal(t, result, result2)
 }
 
-func TestSha256Case1(t *testing.T) {
+func TestSHA256Case1(t *testing.T) {
 	input := make([]byte, 0)
 	expected := []byte{
 		0xE3, 0xB0, 0xC4, 0x42, 0x98, 0xFC, 0x1C, 0x14,
@@ -52,9 +47,7 @@ func TestSha256Case1(t *testing.T) {
 		0xA4, 0x95, 0x99, 0x1B, 0x78, 0x52, 0xB8, 0x55,
 	}
 	result := crypto.SHA256(input)
-	if !bytes.Equal(expected, result) {
-		t.Fatalf("result not as expected:\n%v\n%v\n", result, expected)
-	}
+	assert.Equal(t, expected, result)
 }
 
 func TestHMACCase1(t *testing.T) {
@@ -66,9 +59,7 @@ func TestHMACCase1(t *testing.T) {
 		0xc6, 0xc7, 0x12, 0x14, 0x42, 0x92, 0xc5, 0xad,
 	}
 	result := crypto.HMACSHA256(input, input)
-	if !bytes.Equal(expected, result) {
-		t.Fatalf("result not as expected:\n%v\n%v\n", result, expected)
-	}
+	assert.Equal(t, expected, result)
 }
 
 func TestHDKFCase1(t *testing.T) {
@@ -92,9 +83,8 @@ func TestHDKFCase1(t *testing.T) {
 		0x22, 0xec, 0x84, 0x4a, 0xd7, 0xc2, 0xb3, 0xe5,
 	}
 	result := crypto.HMACSHA256(salt, input)
-	if !bytes.Equal(expectedHMAC, result) {
-		t.Fatalf("result not as expected:\n%v\n%v\n", result, expectedHMAC)
-	}
+	assert.Equal(t, expectedHMAC, result)
+
 	expectedHDKF := []byte{
 		0x3c, 0xb2, 0x5f, 0x25, 0xfa, 0xac, 0xd5, 0x7a,
 		0x90, 0x43, 0x4f, 0x64, 0xd0, 0x36, 0x2f, 0x2a,
@@ -105,10 +95,7 @@ func TestHDKFCase1(t *testing.T) {
 	}
 	resultReader := crypto.HKDFSHA256(input, salt, info)
 	result = make([]byte, len(expectedHDKF))
-	if _, err := io.ReadFull(resultReader, result); err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(expectedHDKF, result) {
-		t.Fatalf("result not as expected:\n%v\n%v\n", result, expectedHDKF)
-	}
+	_, err := io.ReadFull(resultReader, result)
+	assert.NoError(t, err)
+	assert.Equal(t, expectedHDKF, result)
 }

@@ -1,8 +1,9 @@
 package message_test
 
 import (
-	"bytes"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"maunium.net/go/mautrix/crypto/goolm/message"
 )
@@ -16,18 +17,10 @@ func TestGroupMessageDecode(t *testing.T) {
 
 	msg := message.GroupMessage{}
 	err := msg.Decode(messageRaw)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if msg.Version != 3 {
-		t.Fatalf("Expected Version to be 3 but go %d", msg.Version)
-	}
-	if msg.MessageIndex != expectedMessageIndex {
-		t.Fatalf("Expected message index to be %d but got %d", expectedMessageIndex, msg.MessageIndex)
-	}
-	if !bytes.Equal(msg.Ciphertext, expectedCipherText) {
-		t.Fatalf("expected '%s' but got '%s'", expectedCipherText, msg.Ciphertext)
-	}
+	assert.NoError(t, err)
+	assert.EqualValues(t, 3, msg.Version)
+	assert.Equal(t, expectedMessageIndex, msg.MessageIndex)
+	assert.Equal(t, expectedCipherText, msg.Ciphertext)
 }
 
 func TestGroupMessageEncode(t *testing.T) {
@@ -40,12 +33,8 @@ func TestGroupMessageEncode(t *testing.T) {
 		Ciphertext:   []byte("ciphertext"),
 	}
 	encoded, err := msg.EncodeAndMacAndSign(nil, nil, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	encoded = append(encoded, hmacsha256...)
 	encoded = append(encoded, sign...)
-	if !bytes.Equal(encoded, expectedRaw) {
-		t.Fatalf("expected '%s' but got '%s'", expectedRaw, encoded)
-	}
+	assert.Equal(t, expectedRaw, encoded)
 }

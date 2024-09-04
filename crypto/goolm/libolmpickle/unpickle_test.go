@@ -1,8 +1,9 @@
 package libolmpickle_test
 
 import (
-	"bytes"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
 )
@@ -20,15 +21,9 @@ func TestUnpickleUInt32(t *testing.T) {
 	}
 	for curIndex := range values {
 		response, readLength, err := libolmpickle.UnpickleUInt32(values[curIndex])
-		if err != nil {
-			t.Fatal(err)
-		}
-		if readLength != 4 {
-			t.Fatal("read bytes not correct")
-		}
-		if response != expected[curIndex] {
-			t.Fatalf("response not as expected:\n%v\n%v\n", response, expected[curIndex])
-		}
+		assert.NoError(t, err)
+		assert.Equal(t, 4, readLength)
+		assert.Equal(t, expected[curIndex], response)
 	}
 }
 
@@ -45,15 +40,9 @@ func TestUnpickleBool(t *testing.T) {
 	}
 	for curIndex := range values {
 		response, readLength, err := libolmpickle.UnpickleBool(values[curIndex])
-		if err != nil {
-			t.Fatal(err)
-		}
-		if readLength != 1 {
-			t.Fatal("read bytes not correct")
-		}
-		if response != expected[curIndex] {
-			t.Fatalf("response not as expected:\n%v\n%v\n", response, expected[curIndex])
-		}
+		assert.NoError(t, err)
+		assert.Equal(t, 1, readLength)
+		assert.Equal(t, expected[curIndex], response)
 	}
 }
 
@@ -68,15 +57,9 @@ func TestUnpickleUInt8(t *testing.T) {
 	}
 	for curIndex := range values {
 		response, readLength, err := libolmpickle.UnpickleUInt8(values[curIndex])
-		if err != nil {
-			t.Fatal(err)
-		}
-		if readLength != 1 {
-			t.Fatal("read bytes not correct")
-		}
-		if response != expected[curIndex] {
-			t.Fatalf("response not as expected:\n%v\n%v\n", response, expected[curIndex])
-		}
+		assert.NoError(t, err)
+		assert.Equal(t, 1, readLength)
+		assert.Equal(t, expected[curIndex], response)
 	}
 }
 
@@ -93,14 +76,8 @@ func TestUnpickleBytes(t *testing.T) {
 	}
 	for curIndex := range values {
 		response, readLength, err := libolmpickle.UnpickleBytes(values[curIndex], 4)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if readLength != 4 {
-			t.Fatal("read bytes not correct")
-		}
-		if !bytes.Equal(response, expected[curIndex]) {
-			t.Fatalf("response not as expected:\n%v\n%v\n", response, expected[curIndex])
-		}
+		assert.NoError(t, err)
+		assert.Equal(t, 4, readLength)
+		assert.Equal(t, expected[curIndex], response)
 	}
 }

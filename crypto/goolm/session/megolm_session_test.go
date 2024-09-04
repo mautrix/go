@@ -1,10 +1,11 @@
 package session_test
 
 import (
-	"bytes"
 	"crypto/rand"
-	"errors"
+	"encoding/base64"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
 	"maunium.net/go/mautrix/crypto/goolm/megolm"
@@ -15,78 +16,42 @@ import (
 func TestOutboundPickleJSON(t *testing.T) {
 	pickleKey := []byte("secretKey")
 	sess, err := session.NewMegolmOutboundSession()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	kp, err := crypto.Ed25519GenerateKey()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	sess.SigningKey = kp
 	pickled, err := sess.PickleAsJSON(pickleKey)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	newSession := session.MegolmOutboundSession{}
 	err = newSession.UnpickleAsJSON(pickled, pickleKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if sess.ID() != newSession.ID() {
-		t.Fatal("session ids not equal")
-	}
-	if !bytes.Equal(sess.SigningKey.PrivateKey, newSession.SigningKey.PrivateKey) {
-		t.Fatal("private keys not equal")
-	}
-	if !bytes.Equal(sess.Ratchet.Data[:], newSession.Ratchet.Data[:]) {
-		t.Fatal("ratchet data not equal")
-	}
-	if sess.Ratchet.Counter != newSession.Ratchet.Counter {
-		t.Fatal("ratchet counter not equal")
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, sess.ID(), newSession.ID())
+	assert.Equal(t, sess.SigningKey, newSession.SigningKey)
+	assert.Equal(t, sess.Ratchet, newSession.Ratchet)
 }
 
 func TestInboundPickleJSON(t *testing.T) {
 	pickleKey := []byte("secretKey")
 	sess := session.MegolmInboundSession{}
 	kp, err := crypto.Ed25519GenerateKey()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	sess.SigningKey = kp.PublicKey
 	var randomData [megolm.RatchetParts * megolm.RatchetPartLength]byte
 	_, err = rand.Read(randomData[:])
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	ratchet, err := megolm.New(0, randomData)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	sess.Ratchet = *ratchet
 	pickled, err := sess.PickleAsJSON(pickleKey)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	newSession := session.MegolmInboundSession{}
 	err = newSession.UnpickleAsJSON(pickled, pickleKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if sess.ID() != newSession.ID() {
-		t.Fatal("sess ids not equal")
-	}
-	if !bytes.Equal(sess.SigningKey, newSession.SigningKey) {
-		t.Fatal("private keys not equal")
-	}
-	if !bytes.Equal(sess.Ratchet.Data[:], newSession.Ratchet.Data[:]) {
-		t.Fatal("ratchet data not equal")
-	}
-	if sess.Ratchet.Counter != newSession.Ratchet.Counter {
-		t.Fatal("ratchet counter not equal")
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, sess.ID(), newSession.ID())
+	assert.Equal(t, sess.SigningKey, newSession.SigningKey)
+	assert.Equal(t, sess.Ratchet, newSession.Ratchet)
 }
 
 func TestGroupSendReceive(t *testing.T) {
@@ -100,46 +65,27 @@ func TestGroupSendReceive(t *testing.T) {
 	)
 
 	outboundSession, err := session.NewMegolmOutboundSession()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	copy(outboundSession.Ratchet.Data[:], randomData)
-	if outboundSession.Ratchet.Counter != 0 {
-		t.Fatal("ratchet counter is not correkt")
-	}
+	assert.EqualValues(t, 0, outboundSession.Ratchet.Counter)
+
 	sessionSharing, err := outboundSession.SessionSharingMessage()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	plainText := []byte("Message")
 	ciphertext, err := outboundSession.Encrypt(plainText)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if outboundSession.Ratchet.Counter != 1 {
-		t.Fatal("ratchet counter is not correkt")
-	}
+	assert.NoError(t, err)
+	assert.EqualValues(t, 1, outboundSession.Ratchet.Counter)
 
 	//build inbound session
 	inboundSession, err := session.NewMegolmInboundSession(sessionSharing)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !inboundSession.SigningKeyVerified {
-		t.Fatal("key not verified")
-	}
-	if inboundSession.ID() != outboundSession.ID() {
-		t.Fatal("session ids not equal")
-	}
+	assert.NoError(t, err)
+	assert.True(t, inboundSession.SigningKeyVerified)
+	assert.Equal(t, outboundSession.ID(), inboundSession.ID())
 
 	//decode message
 	decoded, _, err := inboundSession.Decrypt(ciphertext)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(plainText, decoded) {
-		t.Fatal("messages not equal")
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, plainText, decoded)
 }
 
 func TestGroupSessionExportImport(t *testing.T) {
@@ -158,45 +104,26 @@ func TestGroupSessionExportImport(t *testing.T) {
 
 	//init inbound
 	inboundSession, err := session.NewMegolmInboundSession(sessionKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !inboundSession.SigningKeyVerified {
-		t.Fatal("signing key not verified")
-	}
+	assert.NoError(t, err)
+	assert.True(t, inboundSession.SigningKeyVerified)
 
 	decrypted, _, err := inboundSession.Decrypt(message)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(plaintext, decrypted) {
-		t.Fatal("message is not correct")
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, plaintext, decrypted)
 
 	//Export the keys
 	exported, err := inboundSession.Export(0)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	secondInboundSession, err := session.NewMegolmInboundSessionFromExport(exported)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if secondInboundSession.SigningKeyVerified {
-		t.Fatal("signing key is verified")
-	}
+	assert.NoError(t, err)
+	assert.False(t, secondInboundSession.SigningKeyVerified)
+
 	//decrypt with new session
 	decrypted, _, err = secondInboundSession.Decrypt(message)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(plaintext, decrypted) {
-		t.Fatal("message is not correct")
-	}
-	if !secondInboundSession.SigningKeyVerified {
-		t.Fatal("signing key not verified")
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, plaintext, decrypted)
+	assert.True(t, secondInboundSession.SigningKeyVerified)
 }
 
 func TestBadSignatureGroupMessage(t *testing.T) {
@@ -215,70 +142,43 @@ func TestBadSignatureGroupMessage(t *testing.T) {
 
 	//init inbound
 	inboundSession, err := session.NewMegolmInboundSession(sessionKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !inboundSession.SigningKeyVerified {
-		t.Fatal("signing key not verified")
-	}
+	assert.NoError(t, err)
+	assert.True(t, inboundSession.SigningKeyVerified)
 
 	decrypted, _, err := inboundSession.Decrypt(message)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(plaintext, decrypted) {
-		t.Fatal("message is not correct")
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, plaintext, decrypted)
 
 	//Now twiddle the signature
 	copy(message[len(message)-1:], []byte("E"))
 	_, _, err = inboundSession.Decrypt(message)
-	if err == nil {
-		t.Fatal("Signature was changed but did not cause an error")
-	}
-	if !errors.Is(err, olm.ErrBadSignature) {
-		t.Fatalf("wrong error %s", err.Error())
-	}
+	assert.ErrorIs(t, err, olm.ErrBadSignature)
 }
 
 func TestOutbountPickle(t *testing.T) {
 	pickledDataFromLibOlm := []byte("icDKYm0b4aO23WgUuOxdpPoxC0UlEOYPVeuduNH3IkpFsmnWx5KuEOpxGiZw5IuB/sSn2RZUCTiJ90IvgC7AClkYGHep9O8lpiqQX73XVKD9okZDCAkBc83eEq0DKYC7HBkGRAU/4T6QPIBBY3UK4QZwULLE/fLsi3j4YZBehMtnlsqgHK0q1bvX4cRznZItUO3TiOp5I+6PnQka6n8eHTyIEh3tCetilD+BKnHvtakE0eHHvG6pjEsMNN/vs7lkB5rV6XkoUKHLTE1dAfFunYEeHEZuKQpbG385dBwaMJXt4JrC0hU5jnv6jWNqAA0Ud9GxRDvkp04")
 	pickleKey := []byte("secret_key")
 	sess, err := session.MegolmOutboundSessionFromPickled(pickledDataFromLibOlm, pickleKey)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	newPickled, err := sess.Pickle(pickleKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(pickledDataFromLibOlm, newPickled) {
-		t.Fatal("pickled version does not equal libolm version")
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, pickledDataFromLibOlm, newPickled)
+
 	pickledDataFromLibOlm = append(pickledDataFromLibOlm, []byte("a")...)
 	_, err = session.MegolmOutboundSessionFromPickled(pickledDataFromLibOlm, pickleKey)
-	if err == nil {
-		t.Fatal("should have gotten an error")
-	}
+	assert.ErrorIs(t, err, olm.ErrBadMAC)
 }
 
 func TestInbountPickle(t *testing.T) {
 	pickledDataFromLibOlm := []byte("1/IPCdtUoQxMba5XT7sjjUW0Hrs7no9duGFnhsEmxzFX2H3qtRc4eaFBRZYXxOBRTGZ6eMgy3IiSrgAQ1gUlSZf5Q4AVKeBkhvN4LZ6hdhQFv91mM+C2C55/4B9/gDjJEbDGiRgLoMqbWPDV+y0F4h0KaR1V1PiTCC7zCi4WdxJQ098nJLgDL4VSsDbnaLcSMO60FOYgRN4KsLaKUGkXiiUBWp4boFMCiuTTOiyH8XlH0e9uWc0vMLyGNUcO8kCbpAnx3v1JTIVan3WGsnGv4K8Qu4M8GAkZewpexrsb2BSNNeLclOV9/cR203Y5KlzXcpiWNXSs8XoB3TLEtHYMnjuakMQfyrcXKIQntg4xPD/+wvfqkcMg9i7pcplQh7X2OK5ylrMZQrZkJ1fAYBGbBz1tykWOjfrZ")
 	pickleKey := []byte("secret_key")
 	sess, err := session.MegolmInboundSessionFromPickled(pickledDataFromLibOlm, pickleKey)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	newPickled, err := sess.Pickle(pickleKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(pickledDataFromLibOlm, newPickled) {
-		t.Fatal("pickled version does not equal libolm version")
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, pickledDataFromLibOlm, newPickled)
+
 	pickledDataFromLibOlm = append(pickledDataFromLibOlm, []byte("a")...)
 	_, err = session.MegolmInboundSessionFromPickled(pickledDataFromLibOlm, pickleKey)
-	if err == nil {
-		t.Fatal("should have gotten an error")
-	}
+	assert.ErrorIs(t, err, base64.CorruptInputError(416))
 }

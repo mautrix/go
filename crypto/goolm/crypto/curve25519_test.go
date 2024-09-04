@@ -1,39 +1,26 @@
 package crypto_test
 
 import (
-	"bytes"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
 )
 
 func TestCurve25519(t *testing.T) {
 	firstKeypair, err := crypto.Curve25519GenerateKey()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	secondKeypair, err := crypto.Curve25519GenerateKey()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	sharedSecretFromFirst, err := firstKeypair.SharedSecret(secondKeypair.PublicKey)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	sharedSecretFromSecond, err := secondKeypair.SharedSecret(firstKeypair.PublicKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(sharedSecretFromFirst, sharedSecretFromSecond) {
-		t.Fatal("shared secret not equal")
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, sharedSecretFromFirst, sharedSecretFromSecond, "shared secret not equal")
 	fromPrivate, err := crypto.Curve25519GenerateFromPrivate(firstKeypair.PrivateKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(fromPrivate.PublicKey, firstKeypair.PublicKey) {
-		t.Fatal("public keys not equal")
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, fromPrivate, firstKeypair)
 }
 
 func TestCurve25519Case1(t *testing.T) {
@@ -76,112 +63,59 @@ func TestCurve25519Case1(t *testing.T) {
 		PublicKey:  bobPublic,
 	}
 	agreementFromAlice, err := aliceKeyPair.SharedSecret(bobKeyPair.PublicKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(agreementFromAlice, expectedAgreement) {
-		t.Fatal("expected agreement does not match agreement from Alice's view")
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, expectedAgreement, agreementFromAlice, "expected agreement does not match agreement from Alice's view")
 	agreementFromBob, err := bobKeyPair.SharedSecret(aliceKeyPair.PublicKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(agreementFromBob, expectedAgreement) {
-		t.Fatal("expected agreement does not match agreement from Bob's view")
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, expectedAgreement, agreementFromBob, "expected agreement does not match agreement from Bob's view")
 }
 
 func TestCurve25519Pickle(t *testing.T) {
 	//create keypair
 	keyPair, err := crypto.Curve25519GenerateKey()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	target := make([]byte, keyPair.PickleLen())
 	writtenBytes, err := keyPair.PickleLibOlm(target)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if writtenBytes != len(target) {
-		t.Fatal("written bytes not correct")
-	}
+	assert.NoError(t, err)
+	assert.Len(t, target, writtenBytes)
 
 	unpickledKeyPair := crypto.Curve25519KeyPair{}
 	readBytes, err := unpickledKeyPair.UnpickleLibOlm(target)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if readBytes != len(target) {
-		t.Fatal("read bytes not correct")
-	}
-	if !bytes.Equal(keyPair.PrivateKey, unpickledKeyPair.PrivateKey) {
-		t.Fatal("private keys not correct")
-	}
-	if !bytes.Equal(keyPair.PublicKey, unpickledKeyPair.PublicKey) {
-		t.Fatal("public keys not correct")
-	}
+	assert.NoError(t, err)
+	assert.Len(t, target, readBytes)
+	assert.Equal(t, keyPair, unpickledKeyPair)
 }
 
 func TestCurve25519PicklePubKeyOnly(t *testing.T) {
 	//create keypair
 	keyPair, err := crypto.Curve25519GenerateKey()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	//Remove privateKey
 	keyPair.PrivateKey = nil
 	target := make([]byte, keyPair.PickleLen())
 	writtenBytes, err := keyPair.PickleLibOlm(target)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if writtenBytes != len(target) {
-		t.Fatal("written bytes not correct")
-	}
+	assert.NoError(t, err)
+	assert.Len(t, target, writtenBytes)
 	unpickledKeyPair := crypto.Curve25519KeyPair{}
 	readBytes, err := unpickledKeyPair.UnpickleLibOlm(target)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if readBytes != len(target) {
-		t.Fatal("read bytes not correct")
-	}
-	if !bytes.Equal(keyPair.PrivateKey, unpickledKeyPair.PrivateKey) {
-		t.Fatal("private keys not correct")
-	}
-	if !bytes.Equal(keyPair.PublicKey, unpickledKeyPair.PublicKey) {
-		t.Fatal("public keys not correct")
-	}
+	assert.NoError(t, err)
+	assert.Len(t, target, readBytes)
+	assert.Equal(t, keyPair, unpickledKeyPair)
 }
 
 func TestCurve25519PicklePrivKeyOnly(t *testing.T) {
 	//create keypair
 	keyPair, err := crypto.Curve25519GenerateKey()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	//Remove public
 	keyPair.PublicKey = nil
 	target := make([]byte, keyPair.PickleLen())
 	writtenBytes, err := keyPair.PickleLibOlm(target)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if writtenBytes != len(target) {
-		t.Fatal("written bytes not correct")
-	}
+	assert.NoError(t, err)
+	assert.Len(t, target, writtenBytes)
 	unpickledKeyPair := crypto.Curve25519KeyPair{}
 	readBytes, err := unpickledKeyPair.UnpickleLibOlm(target)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if readBytes != len(target) {
-		t.Fatal("read bytes not correct")
-	}
-	if !bytes.Equal(keyPair.PrivateKey, unpickledKeyPair.PrivateKey) {
-		t.Fatal("private keys not correct")
-	}
-	if !bytes.Equal(keyPair.PublicKey, unpickledKeyPair.PublicKey) {
-		t.Fatal("public keys not correct")
-	}
+	assert.NoError(t, err)
+	assert.Len(t, target, readBytes)
+	assert.Equal(t, keyPair, unpickledKeyPair)
 }

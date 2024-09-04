@@ -1,52 +1,44 @@
 package cipher
 
 import (
-	"bytes"
 	"crypto/aes"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestDeriveAESKeys(t *testing.T) {
 	kdfInfo := []byte("test")
 	key := []byte("test key")
 	derivedKeys, err := deriveAESKeys(kdfInfo, key)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	derivedKeys2, err := deriveAESKeys(kdfInfo, key)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
+
 	//derivedKeys and derivedKeys2 should be identical
-	if !bytes.Equal(derivedKeys.key, derivedKeys2.key) ||
-		!bytes.Equal(derivedKeys.iv, derivedKeys2.iv) ||
-		!bytes.Equal(derivedKeys.hmacKey, derivedKeys2.hmacKey) {
-		t.Fail()
-	}
+	assert.Equal(t, derivedKeys.key, derivedKeys2.key)
+	assert.Equal(t, derivedKeys.iv, derivedKeys2.iv)
+	assert.Equal(t, derivedKeys.hmacKey, derivedKeys2.hmacKey)
+
 	//changing kdfInfo
 	kdfInfo = []byte("other kdf")
 	derivedKeys2, err = deriveAESKeys(kdfInfo, key)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
+
 	//derivedKeys and derivedKeys2 should now be different
-	if bytes.Equal(derivedKeys.key, derivedKeys2.key) ||
-		bytes.Equal(derivedKeys.iv, derivedKeys2.iv) ||
-		bytes.Equal(derivedKeys.hmacKey, derivedKeys2.hmacKey) {
-		t.Fail()
-	}
+	assert.NotEqual(t, derivedKeys.key, derivedKeys2.key)
+	assert.NotEqual(t, derivedKeys.iv, derivedKeys2.iv)
+	assert.NotEqual(t, derivedKeys.hmacKey, derivedKeys2.hmacKey)
+
 	//changing key
 	key = []byte("other test key")
 	derivedKeys, err = deriveAESKeys(kdfInfo, key)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
+
 	//derivedKeys and derivedKeys2 should now be different
-	if bytes.Equal(derivedKeys.key, derivedKeys2.key) ||
-		bytes.Equal(derivedKeys.iv, derivedKeys2.iv) ||
-		bytes.Equal(derivedKeys.hmacKey, derivedKeys2.hmacKey) {
-		t.Fail()
-	}
+	assert.NotEqual(t, derivedKeys.key, derivedKeys2.key)
+	assert.NotEqual(t, derivedKeys.iv, derivedKeys2.iv)
+	assert.NotEqual(t, derivedKeys.hmacKey, derivedKeys2.hmacKey)
 }
 
 func TestCipherAESSha256(t *testing.T) {
@@ -58,26 +50,15 @@ func TestCipherAESSha256(t *testing.T) {
 		message = append(message, []byte("-")...)
 	}
 	encrypted, err := cipher.Encrypt(key, []byte(message))
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	mac, err := cipher.MAC(key, encrypted)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	verified, err := cipher.Verify(key, encrypted, mac[:8])
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !verified {
-		t.Fatal("signature verification failed")
-	}
+	assert.NoError(t, err)
+	assert.True(t, verified, "signature verification failed")
+
 	resultPlainText, err := cipher.Decrypt(key, encrypted)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(message, resultPlainText) {
-		t.Fail()
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, message, resultPlainText)
 }

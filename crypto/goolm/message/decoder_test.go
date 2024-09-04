@@ -1,17 +1,16 @@
 package message
 
 import (
-	"bytes"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestEncodeLengthInt(t *testing.T) {
 	numbers := []uint32{127, 128, 16383, 16384, 32767}
 	expected := []int{1, 2, 2, 3, 3}
 	for curIndex := range numbers {
-		if result := encodeVarIntByteLength(numbers[curIndex]); result != expected[curIndex] {
-			t.Fatalf("expected byte length of %d but got %d", expected[curIndex], result)
-		}
+		assert.Equal(t, expected[curIndex], encodeVarIntByteLength(numbers[curIndex]))
 	}
 }
 
@@ -25,9 +24,7 @@ func TestEncodeLengthString(t *testing.T) {
 	strings = append(strings, []byte("this is an even longer message with a length between 128 and 16383 so that the varint of the length needs two byte. just needs some padding again ---------"))
 	expected = append(expected, 2+155)
 	for curIndex := range strings {
-		if result := encodeVarStringByteLength(strings[curIndex]); result != expected[curIndex] {
-			t.Fatalf("expected byte length of %d but got %d", expected[curIndex], result)
-		}
+		assert.Equal(t, expected[curIndex], encodeVarStringByteLength(strings[curIndex]))
 	}
 }
 
@@ -43,9 +40,7 @@ func TestEncodeInt(t *testing.T) {
 	ints = append(ints, 16383)
 	expected = append(expected, []byte{0b11111111, 0b01111111})
 	for curIndex := range ints {
-		if result := encodeVarInt(ints[curIndex]); !bytes.Equal(result, expected[curIndex]) {
-			t.Fatalf("expected byte of %b but got %b", expected[curIndex], result)
-		}
+		assert.Equal(t, expected[curIndex], encodeVarInt(ints[curIndex]))
 	}
 }
 
@@ -75,8 +70,6 @@ func TestEncodeString(t *testing.T) {
 	res = append(res, curTest...) //Add string itself
 	expected = append(expected, res)
 	for curIndex := range strings {
-		if result := encodeVarString(strings[curIndex]); !bytes.Equal(result, expected[curIndex]) {
-			t.Fatalf("expected byte of %b but got %b", expected[curIndex], result)
-		}
+		assert.Equal(t, expected[curIndex], encodeVarString(strings[curIndex]))
 	}
 }
