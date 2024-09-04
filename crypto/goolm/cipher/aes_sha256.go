@@ -45,11 +45,7 @@ func (c AESSHA256) Encrypt(key, plaintext []byte) (ciphertext []byte, err error)
 	if err != nil {
 		return nil, err
 	}
-	ciphertext, err = aescbc.Encrypt(keys.key, keys.iv, plaintext)
-	if err != nil {
-		return nil, err
-	}
-	return ciphertext, nil
+	return aescbc.Encrypt(keys.key, keys.iv, plaintext)
 }
 
 // Decrypt decrypts the ciphertext with the key. The key is used to derive the actual encryption key (32 bytes) as well as the iv (16 bytes).
@@ -58,11 +54,7 @@ func (c AESSHA256) Decrypt(key, ciphertext []byte) (plaintext []byte, err error)
 	if err != nil {
 		return nil, err
 	}
-	plaintext, err = aescbc.Decrypt(keys.key, keys.iv, ciphertext)
-	if err != nil {
-		return nil, err
-	}
-	return plaintext, nil
+	return aescbc.Decrypt(keys.key, keys.iv, ciphertext)
 }
 
 // MAC returns the MAC for the message using the key. The key is used to derive the actual mac key (32 bytes).
