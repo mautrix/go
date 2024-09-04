@@ -17,23 +17,15 @@ type derivedAESKeys struct {
 }
 
 // deriveAESKeys derives three keys for the AESSHA256 cipher
-func deriveAESKeys(kdfInfo []byte, key []byte) (*derivedAESKeys, error) {
+func deriveAESKeys(kdfInfo []byte, key []byte) (derivedAESKeys, error) {
 	hkdf := crypto.HKDFSHA256(key, nil, kdfInfo)
-	keys := &derivedAESKeys{
-		key:     make([]byte, 32),
-		hmacKey: make([]byte, 32),
-		iv:      make([]byte, 16),
-	}
-	if _, err := io.ReadFull(hkdf, keys.key); err != nil {
-		return nil, err
-	}
-	if _, err := io.ReadFull(hkdf, keys.hmacKey); err != nil {
-		return nil, err
-	}
-	if _, err := io.ReadFull(hkdf, keys.iv); err != nil {
-		return nil, err
-	}
-	return keys, nil
+	keymatter := make([]byte, 80)
+	_, err := io.ReadFull(hkdf, keymatter)
+	return derivedAESKeys{
+		key:     keymatter[:32],
+		hmacKey: keymatter[32:64],
+		iv:      keymatter[64:],
+	}, err
 }
 
 // AESSha512BlockSize resturns the blocksize of the cipher AESSHA256.
