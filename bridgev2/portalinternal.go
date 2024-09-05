@@ -37,12 +37,16 @@ func (portal *PortalInternals) EventLoop() {
 	(*Portal)(portal).eventLoop()
 }
 
-func (portal *PortalInternals) HandleSingleEventAsync(rawEvt any) {
-	(*Portal)(portal).handleSingleEventAsync(rawEvt)
+func (portal *PortalInternals) HandleSingleEventAsync(idx int, rawEvt any) {
+	(*Portal)(portal).handleSingleEventAsync(idx, rawEvt)
 }
 
-func (portal *PortalInternals) HandleSingleEvent(log *zerolog.Logger, rawEvt any, doneCallback func()) {
-	(*Portal)(portal).handleSingleEvent(log, rawEvt, doneCallback)
+func (portal *PortalInternals) GetEventCtxWithLog(rawEvt any, idx int) context.Context {
+	return (*Portal)(portal).getEventCtxWithLog(rawEvt, idx)
+}
+
+func (portal *PortalInternals) HandleSingleEvent(ctx context.Context, rawEvt any, doneCallback func()) {
+	(*Portal)(portal).handleSingleEvent(ctx, rawEvt, doneCallback)
 }
 
 func (portal *PortalInternals) SendSuccessStatus(ctx context.Context, evt *event.Event) {
@@ -113,8 +117,8 @@ func (portal *PortalInternals) HandleMatrixRedaction(ctx context.Context, sender
 	(*Portal)(portal).handleMatrixRedaction(ctx, sender, origSender, evt)
 }
 
-func (portal *PortalInternals) HandleRemoteEvent(ctx context.Context, source *UserLogin, evt RemoteEvent) {
-	(*Portal)(portal).handleRemoteEvent(ctx, source, evt)
+func (portal *PortalInternals) HandleRemoteEvent(ctx context.Context, source *UserLogin, evtType RemoteEventType, evt RemoteEvent) {
+	(*Portal)(portal).handleRemoteEvent(ctx, source, evtType, evt)
 }
 
 func (portal *PortalInternals) GetIntentAndUserMXIDFor(ctx context.Context, sender EventSender, source *UserLogin, otherLogins []*UserLogin, evtType RemoteEventType) (intent MatrixAPI, extraUserID id.UserID) {
