@@ -26,8 +26,9 @@ type RoomNameEventContent struct {
 // RoomAvatarEventContent represents the content of a m.room.avatar state event.
 // https://spec.matrix.org/v1.2/client-server-api/#mroomavatar
 type RoomAvatarEventContent struct {
-	URL  id.ContentURIString `json:"url"`
-	Info *FileInfo           `json:"info,omitempty"`
+	URL         id.ContentURIString `json:"url,omitempty"`
+	Info        *FileInfo           `json:"info,omitempty"`
+	MSC3414File *EncryptedFileInfo  `json:"org.matrix.msc3414.file,omitempty"`
 }
 
 // ServerACLEventContent represents the content of a m.room.server_acl state event.
