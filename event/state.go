@@ -157,6 +157,8 @@ type BridgeInfoSection struct {
 	DisplayName string              `json:"displayname,omitempty"`
 	AvatarURL   id.ContentURIString `json:"avatar_url,omitempty"`
 	ExternalURL string              `json:"external_url,omitempty"`
+
+	Receiver string `json:"fi.mau.receiver,omitempty"`
 }
 
 // BridgeEventContent represents the content of a m.bridge state event.

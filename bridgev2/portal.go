@@ -2817,6 +2817,7 @@ func (portal *Portal) getBridgeInfo() (string, event.BridgeEventContent) {
 			ID:          string(portal.ID),
 			DisplayName: portal.Name,
 			AvatarURL:   portal.AvatarMXC,
+			Receiver:    string(portal.Receiver),
 			// TODO external URL?
 		},
 		BeeperRoomTypeV2: string(portal.RoomType),
