@@ -144,7 +144,8 @@ type Unsigned struct {
 	RedactedBecause *Event          `json:"redacted_because,omitempty"`
 	InviteRoomState []StrippedState `json:"invite_room_state,omitempty"`
 
-	BeeperHSOrder int64 `json:"com.beeper.hs.order,omitempty"`
+	BeeperHSOrder    int64 `json:"com.beeper.hs.order,omitempty"`
+	BeeperFromBackup bool  `json:"com.beeper.from_backup,omitempty"`
 }
 
 func (us *Unsigned) IsEmpty() bool {
