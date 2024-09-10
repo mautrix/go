@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/fallocate"
 	"go.mau.fi/util/ptr"
 	"golang.org/x/exp/slices"
 
@@ -213,6 +214,60 @@ func (as *ASIntent) DownloadMedia(ctx context.Context, uri id.ContentURIString, 
 	return data, nil
 }
 
+func (as *ASIntent) DownloadMediaToFile(ctx context.Context, uri id.ContentURIString, file *event.EncryptedFileInfo, writable bool) (*os.File, error) {
+	if file != nil {
+		uri = file.URL
+		err := file.PrepareForDecryption()
+		if err != nil {
+			return nil, err
+		}
+	}
+	parsedURI, err := uri.Parse()
+	if err != nil {
+		return nil, err
+	}
+	tempFile, err := os.CreateTemp("", "mautrix-download-*")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create temp file: %w", err)
+	}
+	ok := false
+	defer func() {
+		if !ok {
+			_ = tempFile.Close()
+			_ = os.Remove(tempFile.Name())
+		}
+	}()
+	resp, err := as.Matrix.Download(ctx, parsedURI)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send download request: %w", err)
+	}
+	defer resp.Body.Close()
+	reader := resp.Body
+	if file != nil {
+		reader = file.DecryptStream(reader)
+	}
+	if resp.ContentLength > 0 {
+		err = fallocate.Fallocate(tempFile, int(resp.ContentLength))
+		if err != nil {
+			return nil, fmt.Errorf("failed to preallocate file: %w", err)
+		}
+	}
+	_, err = io.Copy(tempFile, reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+	err = reader.Close()
+	if err != nil {
+		return nil, fmt.Errorf("failed to close response body: %w", err)
+	}
+	_, err = tempFile.Seek(0, io.SeekStart)
+	if err != nil {
+		return nil, fmt.Errorf("failed to seek to start of temp file: %w", err)
+	}
+	ok = true
+	return tempFile, nil
+}
+
 func (as *ASIntent) UploadMedia(ctx context.Context, roomID id.RoomID, data []byte, fileName, mimeType string) (url id.ContentURIString, file *event.EncryptedFileInfo, err error) {
 	if int64(len(data)) > as.Connector.MediaConfig.UploadSize {
 		return "", nil, fmt.Errorf("file too large (%.2f MB > %.2f MB)", float64(len(data))/1000/1000, float64(as.Connector.MediaConfig.UploadSize)/1000/1000)
@@ -275,6 +330,13 @@ func (as *ASIntent) UploadMediaStream(
 			removeAndClose(tempFile)
 		}
 	}()
+	if size > 0 {
+		err = fallocate.Fallocate(tempFile, int(size))
+		if err != nil {
+			err = fmt.Errorf("failed to preallocate file: %w", err)
+			return
+		}
+	}
 	if roomID != "" {
 		var encrypted bool
 		if encrypted, err = as.Matrix.StateStore.IsEncrypted(ctx, roomID); err != nil {
