@@ -330,7 +330,7 @@ func (portal *Portal) getEventCtxWithLog(rawEvt any, idx int) context.Context {
 			Str("action", "handle matrix event").
 			Stringer("event_id", evt.evt.ID).
 			Str("event_type", evt.evt.Type.Type)
-		if evt.evt.Mautrix.EventSource&event.SourceEphemeral == 0 {
+		if evt.evt.Type.Class != event.EphemeralEventType {
 			logWith = logWith.
 				Stringer("event_id", evt.evt.ID).
 				Stringer("sender", evt.sender.MXID)
