@@ -1,4 +1,4 @@
--- v0 -> v16 (compatible with v9+): Latest revision
+-- v0 -> v17 (compatible with v9+): Latest revision
 CREATE TABLE "user" (
 	bridge_id       TEXT NOT NULL,
 	mxid            TEXT NOT NULL,
@@ -115,7 +115,8 @@ CREATE TABLE message (
 	CONSTRAINT message_sender_fkey FOREIGN KEY (bridge_id, sender_id)
 		REFERENCES ghost (bridge_id, id)
 		ON DELETE CASCADE ON UPDATE CASCADE,
-	CONSTRAINT message_real_pkey UNIQUE (bridge_id, room_receiver, id, part_id)
+	CONSTRAINT message_real_pkey UNIQUE (bridge_id, room_receiver, id, part_id),
+	CONSTRAINT message_mxid_unique UNIQUE (bridge_id, mxid)
 );
 CREATE INDEX message_room_idx ON message (bridge_id, room_id, room_receiver);
 
@@ -154,7 +155,8 @@ CREATE TABLE reaction (
 		ON DELETE CASCADE ON UPDATE CASCADE,
 	CONSTRAINT reaction_sender_fkey FOREIGN KEY (bridge_id, sender_id)
 		REFERENCES ghost (bridge_id, id)
-		ON DELETE CASCADE ON UPDATE CASCADE
+		ON DELETE CASCADE ON UPDATE CASCADE,
+	CONSTRAINT reaction_mxid_unique UNIQUE (bridge_id, mxid)
 );
 CREATE INDEX reaction_room_idx ON reaction (bridge_id, room_id, room_receiver);
 
