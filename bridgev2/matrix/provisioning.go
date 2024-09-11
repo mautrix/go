@@ -380,13 +380,13 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 	)
 	if err != nil {
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to create login process")
-		respondMaybeCustomError(w, err, "Internal error creating login process")
+		RespondWithError(w, err, "Internal error creating login process")
 		return
 	}
 	firstStep, err := login.Start(r.Context())
 	if err != nil {
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to start login")
-		respondMaybeCustomError(w, err, "Internal error starting login")
+		RespondWithError(w, err, "Internal error starting login")
 		return
 	}
 	loginID := xid.New().String()
@@ -438,7 +438,7 @@ func (prov *ProvisioningAPI) PostLoginSubmitInput(w http.ResponseWriter, r *http
 	}
 	if err != nil {
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to submit input")
-		respondMaybeCustomError(w, err, "Internal error submitting input")
+		RespondWithError(w, err, "Internal error submitting input")
 		return
 	}
 	login.NextStep = nextStep
@@ -532,7 +532,7 @@ func (prov *ProvisioningAPI) GetLoginForRequest(w http.ResponseWriter, r *http.R
 	return userLogin
 }
 
-func respondMaybeCustomError(w http.ResponseWriter, err error, message string) {
+func RespondWithError(w http.ResponseWriter, err error, message string) {
 	var mautrixRespErr mautrix.RespError
 	var bv2RespErr bridgev2.RespError
 	if errors.As(err, &bv2RespErr) {
@@ -575,7 +575,7 @@ func (prov *ProvisioningAPI) doResolveIdentifier(w http.ResponseWriter, r *http.
 	resp, err := api.ResolveIdentifier(r.Context(), mux.Vars(r)["identifier"], createChat)
 	if err != nil {
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to resolve identifier")
-		respondMaybeCustomError(w, err, "Internal error resolving identifier")
+		RespondWithError(w, err, "Internal error resolving identifier")
 		return
 	} else if resp == nil {
 		jsonResponse(w, http.StatusNotFound, &mautrix.RespError{
@@ -689,7 +689,7 @@ func (prov *ProvisioningAPI) GetContactList(w http.ResponseWriter, r *http.Reque
 	resp, err := api.GetContactList(r.Context())
 	if err != nil {
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to get contact list")
-		respondMaybeCustomError(w, err, "Internal error fetching contact list")
+		RespondWithError(w, err, "Internal error fetching contact list")
 		return
 	}
 	jsonResponse(w, http.StatusOK, &RespGetContactList{
@@ -731,7 +731,7 @@ func (prov *ProvisioningAPI) PostSearchUsers(w http.ResponseWriter, r *http.Requ
 	resp, err := api.SearchUsers(r.Context(), req.Query)
 	if err != nil {
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to get contact list")
-		respondMaybeCustomError(w, err, "Internal error fetching contact list")
+		RespondWithError(w, err, "Internal error fetching contact list")
 		return
 	}
 	jsonResponse(w, http.StatusOK, &RespSearchUsers{
