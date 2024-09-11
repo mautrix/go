@@ -3509,12 +3509,13 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 		}
 		portal.Bridge.WakeupBackfillQueue()
 	}
+	withoutCancelCtx := context.WithoutCancel(ctx)
 	if portal.Parent != nil {
 		if portal.Parent.MXID != "" {
 			portal.addToParentSpaceAndSave(ctx, true)
 		} else {
 			log.Info().Msg("Parent portal doesn't exist, creating in background")
-			go portal.createParentAndAddToSpace(ctx, source)
+			go portal.createParentAndAddToSpace(withoutCancelCtx, source)
 		}
 	}
 	portal.updateUserLocalInfo(ctx, info.UserLocal, source, true)
@@ -3543,7 +3544,7 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 				login := portal.Bridge.GetCachedUserLoginByID(up.LoginID)
 				if login != nil {
 					login.inPortalCache.Remove(portal.PortalKey)
-					go login.tryAddPortalToSpace(ctx, portal, up.CopyWithoutValues())
+					go login.tryAddPortalToSpace(withoutCancelCtx, portal, up.CopyWithoutValues())
 				}
 			}
 		}
