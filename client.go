@@ -2359,6 +2359,18 @@ func (cli *Client) PutPushRule(ctx context.Context, scope string, kind pushrules
 	return err
 }
 
+func (cli *Client) ReportEvent(ctx context.Context, roomID id.RoomID, eventID id.EventID, reason string) error {
+	urlPath := cli.BuildClientURL("v3", "rooms", roomID, "report", eventID)
+	_, err := cli.MakeRequest(ctx, http.MethodPost, urlPath, &ReqReport{Reason: reason, Score: -100}, nil)
+	return err
+}
+
+func (cli *Client) ReportRoom(ctx context.Context, roomID id.RoomID, reason string) error {
+	urlPath := cli.BuildClientURL("v3", "rooms", roomID, "report")
+	_, err := cli.MakeRequest(ctx, http.MethodPost, urlPath, &ReqReport{Reason: reason, Score: -100}, nil)
+	return err
+}
+
 // BatchSend sends a batch of historical events into a room. This is only available for appservices.
 //
 // Deprecated: MSC2716 has been abandoned, so this is now Beeper-specific. BeeperBatchSend should be used instead.

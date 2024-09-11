@@ -468,3 +468,8 @@ type ReqKeyBackupData struct {
 	IsVerified        bool            `json:"is_verified"`
 	SessionData       json.RawMessage `json:"session_data"`
 }
+
+type ReqReport struct {
+	Reason string `json:"reason,omitempty"`
+	Score  int    `json:"score,omitempty"`
+}
