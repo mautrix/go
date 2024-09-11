@@ -115,8 +115,6 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 	if !ok {
 		if !helper.client.SetAppServiceDeviceID {
 			return fmt.Errorf("the client syncer must implement ExtensibleSyncer")
-		} else if helper.ASEventProcessor == nil {
-			return fmt.Errorf("an appservice must be provided when using appservice mode encryption")
 		}
 	}
 
@@ -214,7 +212,7 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 		if helper.managedStateStore != nil {
 			syncer.OnEvent(helper.client.StateStoreSyncHandler)
 		}
-	} else {
+	} else if helper.ASEventProcessor != nil {
 		helper.mach.AddAppserviceListener(helper.ASEventProcessor)
 		helper.ASEventProcessor.On(event.EventEncrypted, helper.HandleEncrypted)
 	}
