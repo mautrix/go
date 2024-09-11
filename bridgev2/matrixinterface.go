@@ -8,6 +8,7 @@ package bridgev2
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"time"
@@ -102,6 +103,19 @@ type FileStreamResult struct {
 // The return value must be non-nil unless there's an error, and should always include FileName and MimeType.
 type FileStreamCallback func(file io.Writer) (*FileStreamResult, error)
 
+type CallbackError struct {
+	Type    string
+	Wrapped error
+}
+
+func (ce CallbackError) Error() string {
+	return fmt.Sprintf("%s callback failed: %s", ce.Type, ce.Wrapped.Error())
+}
+
+func (ce CallbackError) Unwrap() error {
+	return ce.Wrapped
+}
+
 type MatrixAPI interface {
 	GetMXID() id.UserID
 
@@ -111,7 +125,7 @@ type MatrixAPI interface {
 	MarkUnread(ctx context.Context, roomID id.RoomID, unread bool) error
 	MarkTyping(ctx context.Context, roomID id.RoomID, typingType TypingType, timeout time.Duration) error
 	DownloadMedia(ctx context.Context, uri id.ContentURIString, file *event.EncryptedFileInfo) ([]byte, error)
-	DownloadMediaToFile(ctx context.Context, uri id.ContentURIString, file *event.EncryptedFileInfo, writable bool) (*os.File, error)
+	DownloadMediaToFile(ctx context.Context, uri id.ContentURIString, file *event.EncryptedFileInfo, writable bool, callback func(*os.File) error) error
 	UploadMedia(ctx context.Context, roomID id.RoomID, data []byte, fileName, mimeType string) (url id.ContentURIString, file *event.EncryptedFileInfo, err error)
 	UploadMediaStream(ctx context.Context, roomID id.RoomID, size int64, requireFile bool, cb FileStreamCallback) (url id.ContentURIString, file *event.EncryptedFileInfo, err error)
 

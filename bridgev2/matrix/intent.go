@@ -214,32 +214,29 @@ func (as *ASIntent) DownloadMedia(ctx context.Context, uri id.ContentURIString, 
 	return data, nil
 }
 
-func (as *ASIntent) DownloadMediaToFile(ctx context.Context, uri id.ContentURIString, file *event.EncryptedFileInfo, writable bool) (*os.File, error) {
+func (as *ASIntent) DownloadMediaToFile(ctx context.Context, uri id.ContentURIString, file *event.EncryptedFileInfo, writable bool, callback func(*os.File) error) error {
 	if file != nil {
 		uri = file.URL
 		err := file.PrepareForDecryption()
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 	parsedURI, err := uri.Parse()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	tempFile, err := os.CreateTemp("", "mautrix-download-*")
 	if err != nil {
-		return nil, fmt.Errorf("failed to create temp file: %w", err)
+		return fmt.Errorf("failed to create temp file: %w", err)
 	}
-	ok := false
 	defer func() {
-		if !ok {
-			_ = tempFile.Close()
-			_ = os.Remove(tempFile.Name())
-		}
+		_ = tempFile.Close()
+		_ = os.Remove(tempFile.Name())
 	}()
 	resp, err := as.Matrix.Download(ctx, parsedURI)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send download request: %w", err)
+		return fmt.Errorf("failed to send download request: %w", err)
 	}
 	defer resp.Body.Close()
 	reader := resp.Body
@@ -249,23 +246,26 @@ func (as *ASIntent) DownloadMediaToFile(ctx context.Context, uri id.ContentURISt
 	if resp.ContentLength > 0 {
 		err = fallocate.Fallocate(tempFile, int(resp.ContentLength))
 		if err != nil {
-			return nil, fmt.Errorf("failed to preallocate file: %w", err)
+			return fmt.Errorf("failed to preallocate file: %w", err)
 		}
 	}
 	_, err = io.Copy(tempFile, reader)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		return fmt.Errorf("failed to read response: %w", err)
 	}
 	err = reader.Close()
 	if err != nil {
-		return nil, fmt.Errorf("failed to close response body: %w", err)
+		return fmt.Errorf("failed to close response body: %w", err)
 	}
 	_, err = tempFile.Seek(0, io.SeekStart)
 	if err != nil {
-		return nil, fmt.Errorf("failed to seek to start of temp file: %w", err)
+		return fmt.Errorf("failed to seek to start of temp file: %w", err)
 	}
-	ok = true
-	return tempFile, nil
+	err = callback(tempFile)
+	if err != nil {
+		return bridgev2.CallbackError{Type: "read", Wrapped: err}
+	}
+	return nil
 }
 
 func (as *ASIntent) UploadMedia(ctx context.Context, roomID id.RoomID, data []byte, fileName, mimeType string) (url id.ContentURIString, file *event.EncryptedFileInfo, err error) {
@@ -351,7 +351,7 @@ func (as *ASIntent) UploadMediaStream(
 	var res *bridgev2.FileStreamResult
 	res, err = cb(tempFile)
 	if err != nil {
-		err = fmt.Errorf("write callback failed: %w", err)
+		err = bridgev2.CallbackError{Type: "write", Wrapped: err}
 		return
 	}
 	var replFile *os.File
