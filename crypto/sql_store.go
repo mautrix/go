@@ -52,14 +52,18 @@ var _ Store = (*SQLCryptoStore)(nil)
 // NewSQLCryptoStore initializes a new crypto Store using the given database, for a device's crypto material.
 // The stored material will be encrypted with the given key.
 func NewSQLCryptoStore(db *dbutil.Database, log dbutil.DatabaseLogger, accountID string, deviceID id.DeviceID, pickleKey []byte) *SQLCryptoStore {
-	return &SQLCryptoStore{
+	store := &SQLCryptoStore{
 		DB:        db.Child(sql_store_upgrade.VersionTableName, sql_store_upgrade.Table, log),
 		PickleKey: pickleKey,
 		AccountID: accountID,
 		DeviceID:  deviceID,
-
-		olmSessionCache: make(map[id.SenderKey]map[id.SessionID]*OlmSession),
 	}
+	store.InitFields()
+	return store
+}
+
+func (store *SQLCryptoStore) InitFields() {
+	store.olmSessionCache = make(map[id.SenderKey]map[id.SessionID]*OlmSession)
 }
 
 // Flush does nothing for this implementation as data is already persisted in the database.
