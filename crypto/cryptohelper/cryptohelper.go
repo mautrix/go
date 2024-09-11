@@ -140,7 +140,13 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("failed to upgrade crypto state store: %w", err)
 		}
-		storedDeviceID, err := managedCryptoStore.FindDeviceID(ctx)
+		cryptoStore = managedCryptoStore
+	} else {
+		cryptoStore = helper.unmanagedCryptoStore
+	}
+	shouldFindDeviceID := helper.LoginAs != nil || helper.unmanagedCryptoStore == nil
+	if rawCryptoStore, ok := cryptoStore.(*crypto.SQLCryptoStore); ok && shouldFindDeviceID {
+		storedDeviceID, err := rawCryptoStore.FindDeviceID(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to find existing device ID: %w", err)
 		}
@@ -154,14 +160,14 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 				if err != nil {
 					return err
 				}
-				managedCryptoStore.DeviceID = resp.DeviceID
+				rawCryptoStore.DeviceID = resp.DeviceID
 				helper.client.DeviceID = resp.DeviceID
 			} else {
 				helper.log.Debug().
 					Str("username", helper.LoginAs.Identifier.User).
 					Stringer("device_id", storedDeviceID).
 					Msg("Using existing device")
-				managedCryptoStore.DeviceID = storedDeviceID
+				rawCryptoStore.DeviceID = storedDeviceID
 				helper.client.DeviceID = storedDeviceID
 			}
 		} else if helper.LoginAs != nil {
@@ -178,17 +184,13 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 				return err
 			}
 			if storedDeviceID == "" {
-				managedCryptoStore.DeviceID = helper.client.DeviceID
+				rawCryptoStore.DeviceID = helper.client.DeviceID
 			}
 		} else if storedDeviceID != "" && storedDeviceID != helper.client.DeviceID {
 			return fmt.Errorf("mismatching device ID in client and crypto store (%q != %q)", storedDeviceID, helper.client.DeviceID)
 		}
-		cryptoStore = managedCryptoStore
-	} else {
-		if helper.LoginAs != nil {
-			return fmt.Errorf("LoginAs can only be used with a managed crypto store")
-		}
-		cryptoStore = helper.unmanagedCryptoStore
+	} else if helper.LoginAs != nil {
+		return fmt.Errorf("LoginAs can only be used with a managed crypto store")
 	}
 	if helper.client.DeviceID == "" || helper.client.UserID == "" {
 		return fmt.Errorf("the client must be logged in")
