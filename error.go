@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"go.mau.fi/util/exhttp"
 	"golang.org/x/exp/maps"
 )
 
@@ -140,6 +141,22 @@ func (e *RespError) MarshalJSON() ([]byte, error) {
 	data["errcode"] = e.ErrCode
 	data["error"] = e.Err
 	return json.Marshal(data)
+}
+
+func (e *RespError) Write(w http.ResponseWriter) {
+	statusCode := e.StatusCode
+	if statusCode == 0 {
+		statusCode = http.StatusInternalServerError
+	}
+	exhttp.WriteJSONResponse(w, statusCode, e)
+}
+
+func (e RespError) WithMessage(msg string, args ...any) RespError {
+	if len(args) > 0 {
+		msg = fmt.Sprintf(msg, args...)
+	}
+	e.Err = msg
+	return e
 }
 
 // Error returns the errcode and error message.
