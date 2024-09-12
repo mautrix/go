@@ -17,9 +17,10 @@ import (
 	"os"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 	"unsafe"
+
+	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"

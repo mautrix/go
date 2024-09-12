@@ -11,8 +11,9 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"sync"
 	"time"
+
+	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/exsync"

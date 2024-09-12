@@ -14,8 +14,9 @@ import (
 	"fmt"
 	"os"
 	"runtime/debug"
-	"sync"
 	"time"
+
+	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/lib/pq"
 	"github.com/rs/zerolog"

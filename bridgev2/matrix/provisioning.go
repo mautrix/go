@@ -13,8 +13,9 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
+
+	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/gorilla/mux"
 	"github.com/rs/xid"

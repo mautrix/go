@@ -9,7 +9,8 @@ package bridgev2
 import (
 	"context"
 	"fmt"
-	"sync"
+
+	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/dbutil"

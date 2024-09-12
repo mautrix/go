@@ -11,6 +11,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.23
 	github.com/rs/xid v1.6.0
 	github.com/rs/zerolog v1.33.0
+	github.com/sasha-s/go-deadlock v0.3.5
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/stretchr/testify v1.9.0
 	github.com/tidwall/gjson v1.17.3

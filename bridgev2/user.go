@@ -10,8 +10,9 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 	"unsafe"
+
+	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/rs/zerolog"
 	"golang.org/x/exp/maps"

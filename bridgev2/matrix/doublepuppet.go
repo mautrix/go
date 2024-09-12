@@ -11,7 +11,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
+
+	sync "github.com/sasha-s/go-deadlock"
 
 	"github.com/rs/zerolog"
 

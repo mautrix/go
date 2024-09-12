@@ -11,8 +11,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"sync"
 	"time"
+
+	sync "github.com/sasha-s/go-deadlock"
 
 	"maunium.net/go/mautrix/appservice"
 )
