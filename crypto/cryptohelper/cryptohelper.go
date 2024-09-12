@@ -38,7 +38,8 @@ type CryptoHelper struct {
 
 	LoginAs *mautrix.ReqLogin
 
-	ASEventProcessor crypto.ASEventProcessor
+	ASEventProcessor  crypto.ASEventProcessor
+	CustomPostDecrypt func(context.Context, *event.Event)
 
 	DBAccountID string
 }
@@ -320,7 +321,9 @@ func (helper *CryptoHelper) HandleEncrypted(ctx context.Context, evt *event.Even
 
 func (helper *CryptoHelper) postDecrypt(ctx context.Context, decrypted *event.Event) {
 	decrypted.Mautrix.EventSource |= event.SourceDecrypted
-	if helper.ASEventProcessor != nil {
+	if helper.CustomPostDecrypt != nil {
+		helper.CustomPostDecrypt(ctx, decrypted)
+	} else if helper.ASEventProcessor != nil {
 		helper.ASEventProcessor.Dispatch(ctx, decrypted)
 	} else {
 		helper.client.Syncer.(mautrix.DispatchableSyncer).Dispatch(ctx, decrypted)
