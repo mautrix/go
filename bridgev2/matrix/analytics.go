@@ -42,7 +42,7 @@ func (br *Connector) trackSync(userID id.UserID, event string, properties map[st
 	return nil
 }
 
-func (br *Connector) Track(userID id.UserID, event string, props map[string]any) {
+func (br *Connector) TrackAnalytics(userID id.UserID, event string, props map[string]any) {
 	if br.Config.Analytics.Token == "" || br.Config.Analytics.URL == "" {
 		return
 	}

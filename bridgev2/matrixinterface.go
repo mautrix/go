@@ -74,7 +74,7 @@ type MatrixConnectorWithPostRoomBridgeHandling interface {
 }
 
 type MatrixConnectorWithAnalytics interface {
-	Track(userID id.UserID, event string, properties map[string]any)
+	TrackAnalytics(userID id.UserID, event string, properties map[string]any)
 }
 
 type MatrixSendExtra struct {

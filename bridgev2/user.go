@@ -254,13 +254,13 @@ func (user *User) Save(ctx context.Context) error {
 	return user.Bridge.DB.User.Update(ctx, user.User)
 }
 
-func (br *Bridge) Track(userID id.UserID, event string, props map[string]any) {
+func (br *Bridge) TrackAnalytics(userID id.UserID, event string, props map[string]any) {
 	analyticSender, ok := br.Matrix.(MatrixConnectorWithAnalytics)
 	if ok {
-		analyticSender.Track(userID, event, props)
+		analyticSender.TrackAnalytics(userID, event, props)
 	}
 }
 
-func (user *User) Track(event string, props map[string]any) {
-	user.Bridge.Track(user.MXID, event, props)
+func (user *User) TrackAnalytics(event string, props map[string]any) {
+	user.Bridge.TrackAnalytics(user.MXID, event, props)
 }
