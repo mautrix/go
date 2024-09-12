@@ -63,6 +63,11 @@ func (portal *Portal) doForwardBackfill(ctx context.Context, source *UserLogin, 
 		log.Debug().Msg("No messages to backfill")
 		return
 	}
+	log.Debug().
+		Int("message_count", len(resp.Messages)).
+		Bool("mark_read", resp.MarkRead).
+		Bool("aggressive_deduplication", resp.AggressiveDeduplication).
+		Msg("Fetched messages for forward backfill, deduplicating before sending")
 	// TODO mark backfill queue task as done if last message is nil (-> room was empty) and HasMore is false?
 	resp.Messages = portal.cutoffMessages(ctx, resp.Messages, resp.AggressiveDeduplication, true, lastMessage)
 	if len(resp.Messages) == 0 {
