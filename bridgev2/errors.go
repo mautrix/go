@@ -81,8 +81,8 @@ func (re RespError) Is(err error) bool {
 	return errors.Is(err, mautrix.RespError(re))
 }
 
-func (re *RespError) Write(w http.ResponseWriter) {
-	(*mautrix.RespError)(re).Write(w)
+func (re RespError) Write(w http.ResponseWriter) {
+	mautrix.RespError(re).Write(w)
 }
 
 func (re RespError) WithMessage(msg string, args ...any) RespError {

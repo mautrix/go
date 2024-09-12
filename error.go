@@ -143,12 +143,12 @@ func (e *RespError) MarshalJSON() ([]byte, error) {
 	return json.Marshal(data)
 }
 
-func (e *RespError) Write(w http.ResponseWriter) {
+func (e RespError) Write(w http.ResponseWriter) {
 	statusCode := e.StatusCode
 	if statusCode == 0 {
 		statusCode = http.StatusInternalServerError
 	}
-	exhttp.WriteJSONResponse(w, statusCode, e)
+	exhttp.WriteJSONResponse(w, statusCode, &e)
 }
 
 func (e RespError) WithMessage(msg string, args ...any) RespError {
