@@ -361,7 +361,7 @@ func (portal *Portal) handleSingleEvent(ctx context.Context, rawEvt any, doneCal
 			}
 			logEvt.
 				Bytes("stack", debug.Stack()).
-				Msg("Portal creation panicked")
+				Msg("Event handling panicked")
 			switch evt := rawEvt.(type) {
 			case *portalMatrixEvent:
 				if evt.evt.ID != "" {
