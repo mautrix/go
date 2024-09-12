@@ -73,6 +73,10 @@ type MatrixConnectorWithPostRoomBridgeHandling interface {
 	HandleNewlyBridgedRoom(ctx context.Context, roomID id.RoomID) error
 }
 
+type MatrixConnectorWithAnalytics interface {
+	Track(userID id.UserID, event string, properties map[string]any)
+}
+
 type MatrixSendExtra struct {
 	Timestamp    time.Time
 	MessageMeta  *database.Message

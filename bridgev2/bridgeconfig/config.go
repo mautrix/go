@@ -21,6 +21,7 @@ type Config struct {
 	Homeserver   HomeserverConfig   `yaml:"homeserver"`
 	AppService   AppserviceConfig   `yaml:"appservice"`
 	Matrix       MatrixConfig       `yaml:"matrix"`
+	Analytics    AnalyticsConfig    `yaml:"analytics"`
 	Provisioning ProvisioningConfig `yaml:"provisioning"`
 	PublicMedia  PublicMediaConfig  `yaml:"public_media"`
 	DirectMedia  DirectMediaConfig  `yaml:"direct_media"`
@@ -76,6 +77,12 @@ type MatrixConfig struct {
 	SyncDirectChatList  bool  `yaml:"sync_direct_chat_list"`
 	FederateRooms       bool  `yaml:"federate_rooms"`
 	UploadFileThreshold int64 `yaml:"upload_file_threshold"`
+}
+
+type AnalyticsConfig struct {
+	Token  string `yaml:"token"`
+	URL    string `yaml:"url"`
+	UserID string `yaml:"user_id"`
 }
 
 type ProvisioningConfig struct {

@@ -103,6 +103,9 @@ var (
 	_ bridgev2.MatrixConnector                           = (*Connector)(nil)
 	_ bridgev2.MatrixConnectorWithServer                 = (*Connector)(nil)
 	_ bridgev2.MatrixConnectorWithPostRoomBridgeHandling = (*Connector)(nil)
+	_ bridgev2.MatrixConnectorWithPublicMedia            = (*Connector)(nil)
+	_ bridgev2.MatrixConnectorWithNameDisambiguation     = (*Connector)(nil)
+	_ bridgev2.MatrixConnectorWithAnalytics              = (*Connector)(nil)
 )
 
 func NewConnector(cfg *bridgeconfig.Config) *Connector {
