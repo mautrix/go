@@ -145,11 +145,12 @@ type Unsigned struct {
 	InviteRoomState []StrippedState `json:"invite_room_state,omitempty"`
 
 	BeeperHSOrder    int64 `json:"com.beeper.hs.order,omitempty"`
+	BeeperHSSuborder int64 `json:"com.beeper.hs.suborder,omitempty"`
 	BeeperFromBackup bool  `json:"com.beeper.from_backup,omitempty"`
 }
 
 func (us *Unsigned) IsEmpty() bool {
 	return us.PrevContent == nil && us.PrevSender == "" && us.ReplacesState == "" && us.Age == 0 &&
 		us.TransactionID == "" && us.RedactedBecause == nil && us.InviteRoomState == nil && us.Relations == nil &&
-		us.BeeperHSOrder == 0
+		us.BeeperHSOrder == 0 && us.BeeperHSSuborder == 0
 }
