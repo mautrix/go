@@ -594,9 +594,11 @@ func (br *Connector) BatchSend(ctx context.Context, roomID id.RoomID, req *mautr
 }
 
 func (br *Connector) GenerateDeterministicEventID(roomID id.RoomID, _ networkid.PortalKey, messageID networkid.MessageID, partID networkid.PartID) id.EventID {
-	data := make([]byte, 0, len(roomID)+len(messageID)+len(partID))
+	data := make([]byte, 0, len(roomID)+1+len(messageID)+1+len(partID))
 	data = append(data, roomID...)
+	data = append(data, 0)
 	data = append(data, messageID...)
+	data = append(data, 0)
 	data = append(data, partID...)
 
 	hash := sha256.Sum256(data)
