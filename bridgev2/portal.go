@@ -116,10 +116,10 @@ func (br *Bridge) loadPortal(ctx context.Context, dbPortal *database.Portal, que
 		br.portalsByMXID[portal.MXID] = portal
 	}
 	var err error
-	if portal.ParentID != "" {
-		portal.Parent, err = br.UnlockedGetPortalByKey(ctx, networkid.PortalKey{ID: portal.ParentID}, false)
+	if portal.ParentKey.ID != "" {
+		portal.Parent, err = br.UnlockedGetPortalByKey(ctx, portal.ParentKey, false)
 		if err != nil {
-			return nil, fmt.Errorf("failed to load parent portal (%s): %w", portal.ParentID, err)
+			return nil, fmt.Errorf("failed to load parent portal (%s): %w", portal.ParentKey, err)
 		}
 	}
 	if portal.RelayLoginID != "" {
@@ -159,6 +159,9 @@ func (br *Bridge) loadManyPortals(ctx context.Context, portals []*database.Porta
 }
 
 func (br *Bridge) UnlockedGetPortalByKey(ctx context.Context, key networkid.PortalKey, onlyIfExists bool) (*Portal, error) {
+	if br.Config.SplitPortals && key.Receiver == "" {
+		return nil, fmt.Errorf("receiver must always be set when split portals is enabled")
+	}
 	cached, ok := br.portalsByKey[key]
 	if ok {
 		return cached, nil
@@ -184,6 +187,9 @@ func (br *Bridge) FindPortalReceiver(ctx context.Context, id networkid.PortalID,
 }
 
 func (br *Bridge) FindCachedPortalReceiver(id networkid.PortalID, maybeReceiver networkid.UserLoginID) networkid.PortalKey {
+	if br.Config.SplitPortals {
+		return networkid.PortalKey{ID: id, Receiver: maybeReceiver}
+	}
 	br.cacheLock.Lock()
 	defer br.cacheLock.Unlock()
 	portal, ok := br.portalsByKey[networkid.PortalKey{
@@ -250,7 +256,7 @@ func (br *Bridge) GetPortalByKey(ctx context.Context, key networkid.PortalKey) (
 func (br *Bridge) GetExistingPortalByKey(ctx context.Context, key networkid.PortalKey) (*Portal, error) {
 	br.cacheLock.Lock()
 	defer br.cacheLock.Unlock()
-	if key.Receiver == "" {
+	if key.Receiver == "" || br.Config.SplitPortals {
 		return br.UnlockedGetPortalByKey(ctx, key, true)
 	}
 	cached, ok := br.portalsByKey[key]
@@ -2897,7 +2903,7 @@ func (portal *Portal) getInitialMemberList(ctx context.Context, members *ChatMem
 		return
 	}
 	var loginsInPortal []*UserLogin
-	if members.CheckAllLogins {
+	if members.CheckAllLogins && !portal.Bridge.Config.SplitPortals {
 		loginsInPortal, err = portal.Bridge.GetUserLoginsInPortal(ctx, portal.PortalKey)
 		if err != nil {
 			err = fmt.Errorf("failed to get user logins in portal: %w", err)
@@ -2971,7 +2977,7 @@ func (portal *Portal) syncParticipants(ctx context.Context, members *ChatMemberL
 	members.memberListToMap(ctx)
 	var loginsInPortal []*UserLogin
 	var err error
-	if members.CheckAllLogins {
+	if members.CheckAllLogins && !portal.Bridge.Config.SplitPortals {
 		loginsInPortal, err = portal.Bridge.GetUserLoginsInPortal(ctx, portal.PortalKey)
 		if err != nil {
 			return fmt.Errorf("failed to get user logins in portal: %w", err)
@@ -3208,8 +3214,12 @@ func (portal *Portal) UpdateDisappearingSetting(ctx context.Context, setting dat
 	return true
 }
 
-func (portal *Portal) updateParent(ctx context.Context, newParent networkid.PortalID, source *UserLogin) bool {
-	if portal.ParentID == newParent {
+func (portal *Portal) updateParent(ctx context.Context, newParentID networkid.PortalID, source *UserLogin) bool {
+	newParent := networkid.PortalKey{ID: newParentID}
+	if portal.Bridge.Config.SplitPortals {
+		newParent.Receiver = portal.Receiver
+	}
+	if portal.ParentKey == newParent {
 		return false
 	}
 	var err error
@@ -3219,10 +3229,10 @@ func (portal *Portal) updateParent(ctx context.Context, newParent networkid.Port
 			zerolog.Ctx(ctx).Err(err).Stringer("old_space_mxid", portal.Parent.MXID).Msg("Failed to remove portal from old space")
 		}
 	}
-	portal.ParentID = newParent
+	portal.ParentKey = newParent
 	portal.InSpace = false
-	if newParent != "" {
-		portal.Parent, err = portal.Bridge.GetPortalByKey(ctx, networkid.PortalKey{ID: newParent})
+	if newParent.ID != "" {
+		portal.Parent, err = portal.Bridge.GetPortalByKey(ctx, newParent)
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to get new parent portal")
 		}
@@ -3536,15 +3546,28 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 		}
 	}
 	if portal.Parent == nil {
-		userPortals, err := portal.Bridge.DB.UserPortal.GetAllInPortal(ctx, portal.PortalKey)
-		if err != nil {
-			log.Err(err).Msg("Failed to get user logins in portal to add portal to spaces")
-		} else {
-			for _, up := range userPortals {
-				login := portal.Bridge.GetCachedUserLoginByID(up.LoginID)
-				if login != nil {
+		if portal.Receiver != "" {
+			login := portal.Bridge.GetCachedUserLoginByID(portal.Receiver)
+			if login != nil {
+				up, err := portal.Bridge.DB.UserPortal.Get(ctx, login.UserLogin, portal.PortalKey)
+				if err != nil {
+					log.Err(err).Msg("Failed to get user portal to add portal to spaces")
+				} else {
 					login.inPortalCache.Remove(portal.PortalKey)
 					go login.tryAddPortalToSpace(withoutCancelCtx, portal, up.CopyWithoutValues())
+				}
+			}
+		} else {
+			userPortals, err := portal.Bridge.DB.UserPortal.GetAllInPortal(ctx, portal.PortalKey)
+			if err != nil {
+				log.Err(err).Msg("Failed to get user logins in portal to add portal to spaces")
+			} else {
+				for _, up := range userPortals {
+					login := portal.Bridge.GetCachedUserLoginByID(up.LoginID)
+					if login != nil {
+						login.inPortalCache.Remove(portal.PortalKey)
+						go login.tryAddPortalToSpace(withoutCancelCtx, portal, up.CopyWithoutValues())
+					}
 				}
 			}
 		}

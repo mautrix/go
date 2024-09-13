@@ -96,6 +96,13 @@ func (br *Bridge) unlockedLoadUserLoginsByMXID(ctx context.Context, user *User) 
 }
 
 func (br *Bridge) GetUserLoginsInPortal(ctx context.Context, portal networkid.PortalKey) ([]*UserLogin, error) {
+	if portal.Receiver != "" {
+		ul := br.GetCachedUserLoginByID(portal.Receiver)
+		if ul == nil {
+			return nil, nil
+		}
+		return []*UserLogin{ul}, nil
+	}
 	logins, err := br.DB.UserLogin.GetAllInPortal(ctx, portal)
 	if err != nil {
 		return nil, err

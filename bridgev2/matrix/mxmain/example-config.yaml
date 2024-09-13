@@ -10,6 +10,11 @@ bridge:
     # Should events be handled asynchronously within portal rooms?
     # If true, events may end up being out of order, but slow events won't block other ones.
     async_events: false
+    # Should every user have their own portals rather than sharing them?
+    # By default, users who are in the same group on the remote network will be
+    # in the same Matrix room bridged to that group. If this is set to true,
+    # every user will get their own Matrix room instead.
+    split_portals: false
 
     # Should leaving Matrix rooms be bridged as leaving groups on the remote network?
     bridge_matrix_leave: false

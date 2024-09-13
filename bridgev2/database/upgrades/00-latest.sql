@@ -31,8 +31,6 @@ CREATE TABLE portal (
 	mxid            TEXT,
 
 	parent_id       TEXT,
-	-- This is not accessed by the bridge, it's only used for the portal parent foreign key.
-	-- Parent groups are probably never DMs, so they don't need a receiver.
 	parent_receiver TEXT    NOT NULL DEFAULT '',
 
 	relay_bridge_id TEXT,
