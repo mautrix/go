@@ -87,6 +87,10 @@ func doUpgrade(helper up.Helper) {
 	helper.Copy(up.Bool, "matrix", "federate_rooms")
 	helper.Copy(up.Int, "matrix", "upload_file_threshold")
 
+	helper.Copy(up.Str|up.Null, "analytics", "token")
+	helper.Copy(up.Str|up.Null, "analytics", "url")
+	helper.Copy(up.Str|up.Null, "analytics", "user_id")
+
 	helper.Copy(up.Str, "provisioning", "prefix")
 	if secret, ok := helper.Get(up.Str, "provisioning", "shared_secret"); !ok || secret == "generate" {
 		sharedSecret := random.String(64)
@@ -176,6 +180,7 @@ var SpacedBlocks = [][]string{
 	{"appservice", "as_token"},
 	{"appservice", "username_template"},
 	{"matrix"},
+	{"analytics"},
 	{"provisioning"},
 	{"public_media"},
 	{"direct_media"},

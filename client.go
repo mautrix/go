@@ -1467,13 +1467,7 @@ func (cli *Client) State(ctx context.Context, roomID id.RoomID) (stateMap RoomSt
 
 // GetMediaConfig fetches the configuration of the content repository, such as upload limitations.
 func (cli *Client) GetMediaConfig(ctx context.Context) (resp *RespMediaConfig, err error) {
-	var u string
-	if cli.SpecVersions.Supports(FeatureAuthenticatedMedia) {
-		u = cli.BuildClientURL("v1", "media", "config")
-	} else {
-		u = cli.BuildURL(MediaURLPath{"v3", "config"})
-	}
-	_, err = cli.MakeRequest(ctx, http.MethodGet, u, nil, &resp)
+	_, err = cli.MakeRequest(ctx, http.MethodGet, cli.BuildClientURL("v1", "media", "config"), nil, &resp)
 	return
 }
 
@@ -1494,94 +1488,13 @@ func (cli *Client) UploadLink(ctx context.Context, link string) (*RespMediaUploa
 	return cli.Upload(ctx, res.Body, res.Header.Get("Content-Type"), res.ContentLength)
 }
 
-// Deprecated: unauthenticated media is deprecated as of Matrix v1.11. Use [Download] or [DownloadBytes] instead.
-func (cli *Client) GetDownloadURL(mxcURL id.ContentURI) string {
-	return cli.BuildURLWithQuery(MediaURLPath{"v3", "download", mxcURL.Homeserver, mxcURL.FileID}, map[string]string{"allow_redirect": "true"})
-}
-
-func (cli *Client) doMediaRetry(req *http.Request, cause error, retries int, backoff time.Duration) (*http.Response, error) {
-	log := zerolog.Ctx(req.Context())
-	if req.Body != nil {
-		var err error
-		if req.GetBody != nil {
-			req.Body, err = req.GetBody()
-			if err != nil {
-				log.Warn().Err(err).Msg("Failed to get new body to retry request")
-				return nil, cause
-			}
-		} else if bodySeeker, ok := req.Body.(io.ReadSeeker); ok {
-			_, err = bodySeeker.Seek(0, io.SeekStart)
-			if err != nil {
-				log.Warn().Err(err).Msg("Failed to seek to beginning of request body")
-				return nil, cause
-			}
-		} else {
-			log.Warn().Msg("Failed to get new body to retry request: GetBody is nil and Body is not an io.ReadSeeker")
-			return nil, cause
-		}
-	}
-	log.Warn().Err(cause).
-		Int("retry_in_seconds", int(backoff.Seconds())).
-		Msg("Request failed, retrying")
-	time.Sleep(backoff)
-	return cli.doMediaRequest(req, retries-1, backoff*2)
-}
-
-func (cli *Client) doMediaRequest(req *http.Request, retries int, backoff time.Duration) (*http.Response, error) {
-	cli.RequestStart(req)
-	startTime := time.Now()
-	res, err := cli.Client.Do(req)
-	duration := time.Now().Sub(startTime)
-	if err != nil {
-		if retries > 0 {
-			return cli.doMediaRetry(req, err, retries, backoff)
-		}
-		err = HTTPError{
-			Request:  req,
-			Response: res,
-
-			Message:      "request error",
-			WrappedError: err,
-		}
-		cli.LogRequestDone(req, res, err, nil, 0, duration)
-		return nil, err
-	}
-
-	if retries > 0 && retryafter.Should(res.StatusCode, !cli.IgnoreRateLimit) {
-		backoff = retryafter.Parse(res.Header.Get("Retry-After"), backoff)
-		return cli.doMediaRetry(req, fmt.Errorf("HTTP %d", res.StatusCode), retries, backoff)
-	}
-
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		var body []byte
-		body, err = ParseErrorResponse(req, res)
-		cli.LogRequestDone(req, res, err, nil, len(body), duration)
-	} else {
-		cli.LogRequestDone(req, res, nil, nil, -1, duration)
-	}
-	return res, err
-}
-
 func (cli *Client) Download(ctx context.Context, mxcURL id.ContentURI) (*http.Response, error) {
-	ctxLog := zerolog.Ctx(ctx)
-	if ctxLog.GetLevel() == zerolog.Disabled || ctxLog == zerolog.DefaultContextLogger {
-		ctx = cli.Log.WithContext(ctx)
-	}
-	if cli.SpecVersions.Supports(FeatureAuthenticatedMedia) {
-		_, resp, err := cli.MakeFullRequestWithResp(ctx, FullRequest{
-			Method:           http.MethodGet,
-			URL:              cli.BuildClientURL("v1", "media", "download", mxcURL.Homeserver, mxcURL.FileID),
-			DontReadResponse: true,
-		})
-		return resp, err
-	} else {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, cli.GetDownloadURL(mxcURL), nil)
-		if err != nil {
-			return nil, err
-		}
-		req.Header.Set("User-Agent", cli.UserAgent+" (media downloader)")
-		return cli.doMediaRequest(req, cli.DefaultHTTPRetries, 4*time.Second)
-	}
+	_, resp, err := cli.MakeFullRequestWithResp(ctx, FullRequest{
+		Method:           http.MethodGet,
+		URL:              cli.BuildClientURL("v1", "media", "download", mxcURL.Homeserver, mxcURL.FileID),
+		DontReadResponse: true,
+	})
+	return resp, err
 }
 
 func (cli *Client) DownloadBytes(ctx context.Context, mxcURL id.ContentURI) ([]byte, error) {
@@ -1789,13 +1702,7 @@ func (cli *Client) UploadMedia(ctx context.Context, data ReqUploadMedia) (*RespM
 //
 // See https://spec.matrix.org/v1.2/client-server-api/#get_matrixmediav3preview_url
 func (cli *Client) GetURLPreview(ctx context.Context, url string) (*RespPreviewURL, error) {
-	var urlPath PrefixableURLPath
-	if cli.SpecVersions.Supports(FeatureAuthenticatedMedia) {
-		urlPath = ClientURLPath{"v1", "media", "preview_url"}
-	} else {
-		urlPath = MediaURLPath{"v3", "preview_url"}
-	}
-	reqURL := cli.BuildURLWithQuery(urlPath, map[string]string{
+	reqURL := cli.BuildURLWithQuery(ClientURLPath{"v1", "media", "preview_url"}, map[string]string{
 		"url": url,
 	})
 	var output RespPreviewURL

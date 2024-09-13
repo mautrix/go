@@ -254,3 +254,14 @@ func (user *User) GetManagementRoom(ctx context.Context) (id.RoomID, error) {
 func (user *User) Save(ctx context.Context) error {
 	return user.Bridge.DB.User.Update(ctx, user.User)
 }
+
+func (br *Bridge) TrackAnalytics(userID id.UserID, event string, props map[string]any) {
+	analyticSender, ok := br.Matrix.(MatrixConnectorWithAnalytics)
+	if ok {
+		analyticSender.TrackAnalytics(userID, event, props)
+	}
+}
+
+func (user *User) TrackAnalytics(event string, props map[string]any) {
+	user.Bridge.TrackAnalytics(user.MXID, event, props)
+}

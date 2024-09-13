@@ -9,6 +9,7 @@ package bridgev2
 import (
 	"errors"
 	"fmt"
+	"net/http"
 
 	"maunium.net/go/mautrix"
 )
@@ -78,6 +79,14 @@ func (re RespError) Is(err error) bool {
 		return e2.Err == re.Err
 	}
 	return errors.Is(err, mautrix.RespError(re))
+}
+
+func (re RespError) Write(w http.ResponseWriter) {
+	mautrix.RespError(re).Write(w)
+}
+
+func (re RespError) WithMessage(msg string, args ...any) RespError {
+	return RespError(mautrix.RespError(re).WithMessage(msg, args...))
 }
 
 func (re RespError) AppendMessage(append string, args ...any) RespError {

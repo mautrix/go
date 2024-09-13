@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"go.mau.fi/util/exhttp"
 	"golang.org/x/exp/maps"
 )
 
@@ -24,6 +25,9 @@ import (
 //		// logout
 //	}
 var (
+	// Generic error for when the server encounters an error and it does not have a more specific error code.
+	// Note that `errors.Is` will check the error message rather than code for M_UNKNOWNs.
+	MUnknown = RespError{ErrCode: "M_UNKNOWN", StatusCode: http.StatusInternalServerError}
 	// Forbidden access, e.g. joining a room without permission, failed login.
 	MForbidden = RespError{ErrCode: "M_FORBIDDEN", StatusCode: http.StatusForbidden}
 	// Unrecognized request, e.g. the endpoint does not exist or is not implemented.
@@ -140,6 +144,22 @@ func (e *RespError) MarshalJSON() ([]byte, error) {
 	data["errcode"] = e.ErrCode
 	data["error"] = e.Err
 	return json.Marshal(data)
+}
+
+func (e RespError) Write(w http.ResponseWriter) {
+	statusCode := e.StatusCode
+	if statusCode == 0 {
+		statusCode = http.StatusInternalServerError
+	}
+	exhttp.WriteJSONResponse(w, statusCode, &e)
+}
+
+func (e RespError) WithMessage(msg string, args ...any) RespError {
+	if len(args) > 0 {
+		msg = fmt.Sprintf(msg, args...)
+	}
+	e.Err = msg
+	return e
 }
 
 // Error returns the errcode and error message.

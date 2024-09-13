@@ -205,6 +205,15 @@ matrix:
     # rather than keeping the whole file in memory.
     upload_file_threshold: 5242880
 
+# Segment-compatible analytics endpoint for tracking some events, like provisioning API login and encryption errors.
+analytics:
+    # API key to send with tracking requests. Tracking is disabled if this is null.
+    token: null
+    # Address to send tracking requests to.
+    url: https://api.segment.io/v1/track
+    # Optional user ID for tracking events. If null, defaults to using Matrix user ID.
+    user_id: null
+
 # Settings for provisioning API
 provisioning:
     # Prefix for the provisioning API paths.
