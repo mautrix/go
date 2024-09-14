@@ -26,6 +26,18 @@ import (
 
 func (br *BridgeMain) LegacyMigrateWithAnotherUpgrader(renameTablesQuery, copyDataQuery string, newDBVersion int, otherTable dbutil.UpgradeTable, otherTableName string, otherNewVersion int) func(ctx context.Context) error {
 	return func(ctx context.Context) error {
+		// Unique constraints must have globally unique names on postgres, and renaming the table doesn't rename them,
+		// so just drop the ones that may conflict with the new schema.
+		if br.DB.Dialect == dbutil.Postgres {
+			_, err := br.DB.Exec(ctx, "ALTER TABLE message DROP CONSTRAINT IF EXISTS message_mxid_unique")
+			if err != nil {
+				return fmt.Errorf("failed to drop potentially conflicting constraint on message: %w", err)
+			}
+			_, err = br.DB.Exec(ctx, "ALTER TABLE reaction DROP CONSTRAINT IF EXISTS reaction_mxid_unique")
+			if err != nil {
+				return fmt.Errorf("failed to drop potentially conflicting constraint on reaction: %w", err)
+			}
+		}
 		err := dbutil.DangerousInternalUpgradeVersionTable(ctx, br.DB)
 		if err != nil {
 			return err
