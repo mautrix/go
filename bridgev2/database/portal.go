@@ -102,7 +102,19 @@ const (
 		DELETE FROM portal
 		WHERE bridge_id=$1 AND id=$2 AND receiver=$3
 	`
-	reIDPortalQuery = `UPDATE portal SET id=$4, receiver=$5 WHERE bridge_id=$1 AND id=$2 AND receiver=$3`
+	reIDPortalQuery            = `UPDATE portal SET id=$4, receiver=$5 WHERE bridge_id=$1 AND id=$2 AND receiver=$3`
+	migrateToSplitPortalsQuery = `
+		UPDATE portal
+		SET receiver=COALESCE((
+			SELECT login_id
+			FROM user_portal
+			WHERE bridge_id=portal.bridge_id AND portal_id=portal.id AND portal_receiver=''
+			LIMIT 1
+		), (
+			SELECT id FROM user_login WHERE bridge_id=portal.bridge_id LIMIT 1
+		), '')
+		WHERE receiver='' AND bridge_id=$1
+	`
 )
 
 func (pq *PortalQuery) GetByKey(ctx context.Context, key networkid.PortalKey) (*Portal, error) {
@@ -157,6 +169,14 @@ func (pq *PortalQuery) Update(ctx context.Context, p *Portal) error {
 
 func (pq *PortalQuery) Delete(ctx context.Context, key networkid.PortalKey) error {
 	return pq.Exec(ctx, deletePortalQuery, pq.BridgeID, key.ID, key.Receiver)
+}
+
+func (pq *PortalQuery) MigrateToSplitPortals(ctx context.Context) (int64, error) {
+	res, err := pq.GetDB().Exec(ctx, migrateToSplitPortalsQuery, pq.BridgeID)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
 }
 
 func (p *Portal) Scan(row dbutil.Scannable) (*Portal, error) {

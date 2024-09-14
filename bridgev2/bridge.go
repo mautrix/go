@@ -120,6 +120,7 @@ func (br *Bridge) StartConnectors() error {
 	if err != nil {
 		return DBUpgradeError{Err: err, Section: "main"}
 	}
+	didSplitPortals := br.MigrateToSplitPortals(ctx)
 	br.Log.Info().Msg("Starting Matrix connector")
 	err = br.Matrix.Start(ctx)
 	if err != nil {
@@ -133,7 +134,39 @@ func (br *Bridge) StartConnectors() error {
 	if br.Network.GetCapabilities().DisappearingMessages {
 		go br.DisappearLoop.Start()
 	}
+	if didSplitPortals || br.Config.ResendBridgeInfo {
+		br.ResendBridgeInfo(ctx)
+	}
 	return nil
+}
+
+func (br *Bridge) ResendBridgeInfo(ctx context.Context) {
+	log := zerolog.Ctx(ctx).With().Str("action", "resend bridge info").Logger()
+	portals, err := br.GetAllPortalsWithMXID(ctx)
+	if err != nil {
+		log.Err(err).Msg("Failed to get portals")
+		return
+	}
+	for _, portal := range portals {
+		portal.UpdateBridgeInfo(ctx)
+	}
+	log.Info().Msg("Resent bridge info to all portals")
+}
+
+func (br *Bridge) MigrateToSplitPortals(ctx context.Context) bool {
+	log := zerolog.Ctx(ctx).With().Str("action", "migrate to split portals").Logger()
+	ctx = log.WithContext(ctx)
+	if !br.Config.SplitPortals || br.DB.KV.Get(ctx, database.KeySplitPortalsEnabled) == "true" {
+		return false
+	}
+	affected, err := br.DB.Portal.MigrateToSplitPortals(ctx)
+	if err != nil {
+		log.Err(err).Msg("Failed to migrate portals")
+		return false
+	}
+	log.Info().Int64("rows_affected", affected).Msg("Migrated to split portals")
+	br.DB.KV.Set(ctx, database.KeySplitPortalsEnabled, "true")
+	return affected > 0
 }
 
 func (br *Bridge) StartLogins() error {

@@ -15,6 +15,8 @@ bridge:
     # in the same Matrix room bridged to that group. If this is set to true,
     # every user will get their own Matrix room instead.
     split_portals: false
+    # Should the bridge resend `m.bridge` events to all portals on startup?
+    resend_bridge_info: false
 
     # Should leaving Matrix rooms be bridged as leaving groups on the remote network?
     bridge_matrix_leave: false

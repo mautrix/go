@@ -62,6 +62,7 @@ type BridgeConfig struct {
 	PrivateChatPortalMeta   bool             `yaml:"private_chat_portal_meta"`
 	AsyncEvents             bool             `yaml:"async_events"`
 	SplitPortals            bool             `yaml:"split_portals"`
+	ResendBridgeInfo        bool             `yaml:"resend_bridge_info"`
 	BridgeMatrixLeave       bool             `yaml:"bridge_matrix_leave"`
 	TagOnlyOnCreate         bool             `yaml:"tag_only_on_create"`
 	MuteOnlyOnCreate        bool             `yaml:"mute_only_on_create"`

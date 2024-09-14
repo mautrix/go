@@ -27,6 +27,7 @@ func doUpgrade(helper up.Helper) {
 	helper.Copy(up.Bool, "bridge", "private_chat_portal_meta")
 	helper.Copy(up.Bool, "bridge", "async_events")
 	helper.Copy(up.Bool, "bridge", "split_portals")
+	helper.Copy(up.Bool, "bridge", "resend_bridge_info")
 	helper.Copy(up.Bool, "bridge", "bridge_matrix_leave")
 	helper.Copy(up.Bool, "bridge", "tag_only_on_create")
 	helper.Copy(up.Bool, "bridge", "mute_only_on_create")
@@ -168,6 +169,8 @@ func doUpgrade(helper up.Helper) {
 
 var SpacedBlocks = [][]string{
 	{"bridge"},
+	{"bridge", "bridge_matrix_leave"},
+	{"bridge", "cleanup_on_logout"},
 	{"bridge", "relay"},
 	{"bridge", "permissions"},
 	{"database"},

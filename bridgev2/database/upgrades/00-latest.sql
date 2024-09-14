@@ -1,4 +1,4 @@
--- v0 -> v17 (compatible with v9+): Latest revision
+-- v0 -> v18 (compatible with v9+): Latest revision
 CREATE TABLE "user" (
 	bridge_id       TEXT NOT NULL,
 	mxid            TEXT NOT NULL,
@@ -197,4 +197,12 @@ CREATE TABLE backfill_task (
 	CONSTRAINT backfill_queue_portal_fkey FOREIGN KEY (bridge_id, portal_id, portal_receiver)
 		REFERENCES portal (bridge_id, id, receiver)
 		ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+CREATE TABLE kv_store (
+	bridge_id TEXT NOT NULL,
+	key       TEXT NOT NULL,
+	value     TEXT NOT NULL,
+
+	PRIMARY KEY (bridge_id, key)
 );
