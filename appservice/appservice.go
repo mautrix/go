@@ -32,7 +32,7 @@ import (
 
 // EventChannelSize is the size for the Events channel in Appservice instances.
 var EventChannelSize = 64
-var OTKChannelSize = 4
+var OTKChannelSize = 64
 
 // Create creates a blank appservice instance.
 func Create() *AppService {
