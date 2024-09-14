@@ -43,6 +43,9 @@ type PortalID string
 // It is also permitted to use a non-empty receiver for group chats if there is a good reason to
 // segregate them. For example, Telegram's non-supergroups have user-scoped message IDs instead
 // of chat-scoped IDs, which is easier to manage with segregated rooms.
+//
+// As a special case, Receiver MUST be set if the Bridge.Config.SplitPortals flag is set to true.
+// The flag is intended for puppeting-only bridges which want multiple logins to create separate portals for each user.
 type PortalKey struct {
 	ID       PortalID
 	Receiver UserLoginID
