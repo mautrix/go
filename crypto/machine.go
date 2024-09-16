@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -67,7 +68,7 @@ type OlmMachine struct {
 
 	otkUploadLock       sync.Mutex
 	lastOTKUpload       time.Time
-	receivedOTKsForSelf bool
+	receivedOTKsForSelf atomic.Bool
 
 	CrossSigningKeys    *CrossSigningKeysCache
 	crossSigningPubkeys *CrossSigningPublicKeysCache
@@ -258,16 +259,18 @@ func (mach *OlmMachine) otkCountIsForCrossSigningKey(otkCount *mautrix.OTKCount)
 }
 
 func (mach *OlmMachine) HandleOTKCounts(ctx context.Context, otkCount *mautrix.OTKCount) {
+	receivedOTKsForSelf := mach.receivedOTKsForSelf.Load()
 	if (len(otkCount.UserID) > 0 && otkCount.UserID != mach.Client.UserID) || (len(otkCount.DeviceID) > 0 && otkCount.DeviceID != mach.Client.DeviceID) {
-		if otkCount.UserID != mach.Client.UserID || (!mach.receivedOTKsForSelf && !mach.otkCountIsForCrossSigningKey(otkCount)) {
+		if otkCount.UserID != mach.Client.UserID || (!receivedOTKsForSelf && !mach.otkCountIsForCrossSigningKey(otkCount)) {
 			mach.Log.Warn().
 				Str("target_user_id", otkCount.UserID.String()).
 				Str("target_device_id", otkCount.DeviceID.String()).
 				Msg("Dropping OTK counts targeted to someone else")
 		}
 		return
+	} else if !receivedOTKsForSelf {
+		mach.receivedOTKsForSelf.Store(true)
 	}
-	mach.receivedOTKsForSelf = true
 
 	minCount := mach.account.Internal.MaxNumberOfOneTimeKeys() / 2
 	if otkCount.SignedCurve25519 < int(minCount) {
