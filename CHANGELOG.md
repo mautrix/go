@@ -1,7 +1,22 @@
-## unreleased
+## v0.21.0 (2024-09-16)
 
+* **Breaking change *(client)*** Dropped support for unauthenticated media.
+  Matrix v1.11 support is now required from the homeserver, although it's not
+  enforced using `/versions` as some servers don't advertise it.
 * *(bridgev2)* Added more features and fixed bugs.
+* *(appservice,crypto)* Added support for using MSC3202 for appservice
+  encryption.
+* *(crypto/olm)* Made everything into an interface to allow side-by-side
+  testing of libolm and goolm, as well as potentially support vodozemac
+  in the future.
 * *(client)* Fixed requests being retried even after context is canceled.
+* *(client)* Added option to move `/sync` request logs to trace level.
+* *(error)* Added `Write` and `WithMessage` helpers to `RespError` to make it
+  easier to use on servers.
+* *(event)* Fixed `org.matrix.msc1767.audio` field allowing omitting the
+  duration and waveform.
+* *(id)* Changed `MatrixURI` methods to not panic if the receiver is nil.
+* *(federation)* Added limit to response size when fetching `.well-known` files.
 
 ## v0.20.0 (2024-08-16)
 
