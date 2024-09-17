@@ -131,8 +131,12 @@ func (br *Bridge) QueueMatrixEvent(ctx context.Context, evt *event.Event) {
 			evt:    evt,
 			sender: sender,
 		})
-	} else if evt.Type == event.StateMember && br.IsGhostMXID(id.UserID(evt.GetStateKey())) && evt.Content.AsMember().Membership == event.MembershipInvite && evt.Content.AsMember().IsDirect {
-		br.handleGhostDMInvite(ctx, evt, sender)
+	} else if evt.Type == event.StateMember && br.IsGhostMXID(id.UserID(evt.GetStateKey())) && evt.Content.AsMember().Membership == event.MembershipInvite {
+		if evt.Content.AsMember().IsDirect {
+			br.handleGhostDMInvite(ctx, evt, sender)
+		} else {
+			br.handleGhostGroupInvite(ctx, evt, sender)
+		}
 	} else {
 		status := WrapErrorInStatus(ErrNoPortal)
 		br.Matrix.SendMessageStatus(ctx, &status, StatusEventInfoFromEvent(evt))

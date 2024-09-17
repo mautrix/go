@@ -639,3 +639,93 @@ func (br *Connector) HandleNewlyBridgedRoom(ctx context.Context, roomID id.RoomI
 	}
 	return nil
 }
+
+func (br *Connector) GetGroupCreateInfo(ctx context.Context, roomID id.RoomID, creator *bridgev2.UserLogin) (*bridgev2.GroupCreateInfo, error) {
+	log := zerolog.Ctx(ctx)
+	if creator == nil {
+		return nil, fmt.Errorf("no group creator provided")
+	}
+	roomState, err := br.Bot.State(ctx, roomID)
+	if err != nil {
+		log.Err(err).Msg("Failed to get room state")
+		return nil, err
+	}
+	createInfo := bridgev2.GroupCreateInfo{}
+	members := roomState[event.StateMember]
+	powerLevelsRaw, ok := roomState[event.StatePowerLevels][""]
+	if !ok {
+		return nil, err
+	}
+	powerLevelsRaw.Content.ParseRaw(event.StatePowerLevels)
+	powerLevels := powerLevelsRaw.Content.AsPowerLevels()
+	for mxid, member := range members {
+		userID := id.UserID(mxid)
+		var target bridgev2.GhostOrUserLogin
+		if id.UserID(mxid) == creator.UserMXID {
+			target = creator
+		} else {
+			user, err := br.Bridge.GetUserByMXID(ctx, userID)
+			if err != nil {
+				log.Err(err).Msg("Error getting user")
+				return nil, err
+			}
+			if user != nil {
+				target = user.GetDefaultLogin()
+				if target == nil {
+					continue
+				}
+			} else {
+				ghost, err := br.Bridge.GetGhostByMXID(ctx, userID)
+				if err != nil {
+					log.Err(err).Msg("Error getting ghost")
+					return nil, err
+				}
+				if ghost == nil {
+					continue
+				}
+				target = ghost
+			}
+		}
+		member.Content.ParseRaw(event.StateMember)
+		content := member.Content.AsMember()
+		createInfo.Users = append(createInfo.Users, &bridgev2.LevelAndMembership{
+			Target:     target,
+			PowerLevel: powerLevels.GetUserLevel(userID),
+			Membership: content.Membership,
+		})
+	}
+	joinRulesRaw, ok := roomState[event.StateJoinRules][""]
+	if ok {
+		joinRulesRaw.Content.ParseRaw(event.StateJoinRules)
+		createInfo.JoinRule = &joinRulesRaw.Content.AsJoinRules().JoinRule
+	}
+	roomNameEventRaw, ok := roomState[event.StateRoomName][""]
+	if ok {
+		roomNameEventRaw.Content.ParseRaw(event.StateRoomName)
+		createInfo.Name = &roomNameEventRaw.Content.AsRoomName().Name
+	}
+	roomTopicEvent, ok := roomState[event.StateTopic][""]
+	if ok {
+		roomTopicEvent.Content.ParseRaw(event.StateTopic)
+		createInfo.Topic = &roomTopicEvent.Content.AsTopic().Topic
+	}
+	roomAvatarEvent, ok := roomState[event.StateRoomAvatar][""]
+	if ok {
+		var avatarURL id.ContentURI
+		var avatarBytes []byte
+		roomAvatarEvent.Content.ParseRaw(event.StateRoomAvatar)
+		avatarURL, err = roomAvatarEvent.Content.AsRoomAvatar().URL.Parse()
+		if err != nil {
+			log.Err(err).Msg("Failed to parse avatar content URI")
+		}
+		if !avatarURL.IsEmpty() {
+			avatarBytes, err = br.Bot.DownloadBytes(ctx, avatarURL)
+			if err != nil {
+				log.Err(err).Stringer("Failed to download updated avatar %s", avatarURL)
+				return nil, err
+			}
+		}
+		createInfo.Avatar = avatarBytes
+	}
+	return &createInfo, nil
+}

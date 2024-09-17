@@ -652,9 +652,24 @@ type UserSearchingNetworkAPI interface {
 	SearchUsers(ctx context.Context, query string) ([]*ResolveIdentifierResponse, error)
 }
 
+type LevelAndMembership struct {
+	Target     GhostOrUserLogin
+	PowerLevel int
+	Membership event.Membership
+}
+
+type GroupCreateInfo struct {
+	Users       []*LevelAndMembership
+	Name        *string
+	Topic       *string
+	Avatar      []byte
+	PowerLevels *event.PowerLevelsEventContent
+	JoinRule    *event.JoinRule
+}
+
 type GroupCreatingNetworkAPI interface {
 	IdentifierResolvingNetworkAPI
-	CreateGroup(ctx context.Context, name string, users ...networkid.UserID) (*CreateChatResponse, error)
+	CreateGroup(ctx context.Context, msg *GroupCreateInfo) (*CreateChatResponse, error)
 }
 
 type MembershipChangeType struct {

@@ -12,10 +12,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rs/zerolog/log"
 	"golang.org/x/net/html"
 
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/networkid"
+	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -191,4 +193,67 @@ func fnSearch(ce *Event) {
 		}
 	}
 	ce.Reply("Search results:\n\n%s", strings.Join(resultsString, "\n"))
+}
+
+var CommandCreate = &FullHandler{
+	Func: fnCreate,
+	Name: "create",
+	Help: HelpMeta{
+		Section:     HelpSectionChats,
+		Description: "Create a group chat for the current Matrix room.",
+	},
+	RequiresLogin: true,
+}
+
+func fnCreate(ce *Event) {
+	if ce.Portal != nil {
+		ce.Reply("This is already a portal room")
+		return
+	}
+	login, api, _ := getClientForStartingChat[bridgev2.GroupCreatingNetworkAPI](ce, "creating groups")
+	if api == nil {
+		return
+	}
+	groupCreateInfo, err := ce.Bot.GetGroupCreateInfo(ce.Ctx, ce.RoomID, login)
+	if err != nil {
+		log.Err(err).Msg("Failed getting GroupCreateInfo")
+		return
+	}
+	createResponse, err := api.CreateGroup(ce.Ctx, groupCreateInfo)
+	if err != nil {
+		log.Err(err).Msg("Failed to create Group")
+		return
+	}
+	portal := createResponse.Portal
+	portal.MXID = ce.RoomID
+	if createResponse.PortalInfo != nil {
+		portal.UpdateInfo(ce.Ctx, createResponse.PortalInfo, login, nil, time.Time{})
+	}
+	_, err = ce.Bot.SendState(ce.Ctx, portal.MXID, event.StateElementFunctionalMembers, "", &event.Content{
+		Parsed: &event.ElementFunctionalMembersContent{
+			ServiceMembers: []id.UserID{ce.Bot.GetMXID()},
+		},
+	}, time.Time{})
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to set service members in room")
+	}
+	message := "Group chat portal created"
+	hasWarning := false
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to give power to bot in new Group")
+		message += "\n\nWarning: failed to promote bot"
+		hasWarning = true
+	}
+	mx, ok := ce.Bridge.Matrix.(bridgev2.MatrixConnectorWithPostRoomBridgeHandling)
+	if ok {
+		err = mx.HandleNewlyBridgedRoom(ce.Ctx, ce.RoomID)
+		if err != nil {
+			if hasWarning {
+				message += fmt.Sprintf(", %s", err.Error())
+			} else {
+				message += fmt.Sprintf("\n\nWarning: %s", err.Error())
+			}
+		}
+	}
+	ce.Reply(message)
 }
