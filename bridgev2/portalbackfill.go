@@ -74,7 +74,7 @@ func (portal *Portal) doForwardBackfill(ctx context.Context, source *UserLogin, 
 		log.Warn().Msg("No messages left to backfill after cutting off old messages")
 		return
 	}
-	portal.sendBackfill(ctx, source, resp.Messages, true, resp.MarkRead, false)
+	portal.sendBackfill(ctx, source, resp.Messages, true, resp.MarkRead, false, resp.CompleteCallback)
 }
 
 func (portal *Portal) DoBackwardsBackfill(ctx context.Context, source *UserLogin, task *database.BackfillTask) error {
@@ -134,7 +134,7 @@ func (portal *Portal) DoBackwardsBackfill(ctx context.Context, source *UserLogin
 	if len(resp.Messages) == 0 {
 		return fmt.Errorf("no messages left to backfill after cutting off too new messages")
 	}
-	portal.sendBackfill(ctx, source, resp.Messages, false, resp.MarkRead, false)
+	portal.sendBackfill(ctx, source, resp.Messages, false, resp.MarkRead, false, resp.CompleteCallback)
 	if len(resp.Messages) > 0 {
 		task.OldestMessageID = resp.Messages[0].ID
 	}
@@ -182,7 +182,7 @@ func (portal *Portal) doThreadBackfill(ctx context.Context, source *UserLogin, t
 	}
 	resp := portal.fetchThreadBackfill(ctx, source, anchorMessage)
 	if resp != nil {
-		portal.sendBackfill(ctx, source, resp.Messages, true, resp.MarkRead, true)
+		portal.sendBackfill(ctx, source, resp.Messages, true, resp.MarkRead, true, resp.CompleteCallback)
 	}
 }
 
@@ -257,7 +257,15 @@ func (portal *Portal) cutoffMessages(ctx context.Context, messages []*BackfillMe
 	return messages
 }
 
-func (portal *Portal) sendBackfill(ctx context.Context, source *UserLogin, messages []*BackfillMessage, forceForward, markRead, inThread bool) {
+func (portal *Portal) sendBackfill(
+	ctx context.Context,
+	source *UserLogin,
+	messages []*BackfillMessage,
+	forceForward,
+	markRead,
+	inThread bool,
+	done func(),
+) {
 	canBatchSend := portal.Bridge.Matrix.GetCapabilities().BatchSending
 	unreadThreshold := time.Duration(portal.Bridge.Config.Backfill.UnreadHoursThreshold) * time.Hour
 	forceMarkRead := unreadThreshold > 0 && time.Since(messages[len(messages)-1].Timestamp) > unreadThreshold
@@ -271,6 +279,9 @@ func (portal *Portal) sendBackfill(ctx context.Context, source *UserLogin, messa
 		portal.sendBatch(ctx, source, messages, forceForward, markRead || forceMarkRead, inThread)
 	} else {
 		portal.sendLegacyBackfill(ctx, source, messages, markRead || forceMarkRead)
+	}
+	if done != nil {
+		done()
 	}
 	zerolog.Ctx(ctx).Debug().Msg("Backfill finished")
 	if !canBatchSend && !inThread && portal.Bridge.Config.Backfill.Threads.MaxInitialMessages > 0 {

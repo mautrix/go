@@ -495,6 +495,9 @@ type FetchMessagesResponse struct {
 	ApproxRemainingCount int
 	// Approximate total number of messages in the chat.
 	ApproxTotalCount int
+
+	// An optional function that is called after the backfill batch has been sent.
+	CompleteCallback func()
 }
 
 // BackfillingNetworkAPI is an optional interface that network connectors can implement to support backfilling message history.

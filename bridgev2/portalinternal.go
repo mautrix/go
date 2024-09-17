@@ -269,8 +269,8 @@ func (portal *PortalInternals) UpdateUserLocalInfo(ctx context.Context, info *Us
 	(*Portal)(portal).updateUserLocalInfo(ctx, info, source, didJustCreate)
 }
 
-func (portal *PortalInternals) UpdateParent(ctx context.Context, newParent networkid.PortalID, source *UserLogin) bool {
-	return (*Portal)(portal).updateParent(ctx, newParent, source)
+func (portal *PortalInternals) UpdateParent(ctx context.Context, newParentID networkid.PortalID, source *UserLogin) bool {
+	return (*Portal)(portal).updateParent(ctx, newParentID, source)
 }
 
 func (portal *PortalInternals) LockedUpdateInfoFromGhost(ctx context.Context, ghost *Ghost) {
@@ -309,8 +309,8 @@ func (portal *PortalInternals) CutoffMessages(ctx context.Context, messages []*B
 	return (*Portal)(portal).cutoffMessages(ctx, messages, aggressiveDedup, forward, lastMessage)
 }
 
-func (portal *PortalInternals) SendBackfill(ctx context.Context, source *UserLogin, messages []*BackfillMessage, forceForward, markRead, inThread bool) {
-	(*Portal)(portal).sendBackfill(ctx, source, messages, forceForward, markRead, inThread)
+func (portal *PortalInternals) SendBackfill(ctx context.Context, source *UserLogin, messages []*BackfillMessage, forceForward, markRead, inThread bool, done func()) {
+	(*Portal)(portal).sendBackfill(ctx, source, messages, forceForward, markRead, inThread, done)
 }
 
 func (portal *PortalInternals) CompileBatchMessage(ctx context.Context, source *UserLogin, msg *BackfillMessage, out *compileBatchOutput, inThread bool) {
