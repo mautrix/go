@@ -264,6 +264,9 @@ func (br *Connector) ensureConnection(ctx context.Context) {
 					br.logInitialRequestError(err, "Failed to register after /versions failed with M_FORBIDDEN")
 					os.Exit(16)
 				}
+			} else if errors.Is(err, mautrix.MUnknownToken) || errors.Is(err, mautrix.MExclusive) {
+				br.logInitialRequestError(err, "/versions request failed with auth error")
+				os.Exit(16)
 			} else {
 				br.Log.Err(err).Msg("Failed to connect to homeserver, retrying in 10 seconds...")
 				time.Sleep(10 * time.Second)
