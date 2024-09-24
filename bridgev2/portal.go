@@ -440,8 +440,10 @@ func (portal *Portal) FindPreferredLogin(ctx context.Context, user *User, allowR
 	}
 }
 
-func (portal *Portal) sendSuccessStatus(ctx context.Context, evt *event.Event) {
-	portal.Bridge.Matrix.SendMessageStatus(ctx, &MessageStatus{Status: event.MessageStatusSuccess}, StatusEventInfoFromEvent(evt))
+func (portal *Portal) sendSuccessStatus(ctx context.Context, evt *event.Event, streamOrder int64) {
+	info := StatusEventInfoFromEvent(evt)
+	info.StreamOrder = streamOrder
+	portal.Bridge.Matrix.SendMessageStatus(ctx, &MessageStatus{Status: event.MessageStatusSuccess}, info)
 }
 
 func (portal *Portal) sendErrorStatus(ctx context.Context, evt *event.Event, err error) {
@@ -871,7 +873,7 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 				portal.outgoingMessagesLock.Unlock()
 			}
 		}
-		portal.sendSuccessStatus(ctx, evt)
+		portal.sendSuccessStatus(ctx, evt, resp.StreamOrder)
 	}
 	if portal.Disappear.Type != database.DisappearingTypeNone {
 		go portal.Bridge.DisappearLoop.Add(ctx, &database.DisappearingMessage{
@@ -1023,7 +1025,8 @@ func (portal *Portal) handleMatrixEdit(ctx context.Context, sender *UserLogin, o
 	if err != nil {
 		log.Err(err).Msg("Failed to save message to database after editing")
 	}
-	portal.sendSuccessStatus(ctx, evt)
+	// TODO allow returning stream order from HandleMatrixEdit
+	portal.sendSuccessStatus(ctx, evt, 0)
 }
 
 func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogin, evt *event.Event) {
@@ -1077,7 +1080,7 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 	} else if existing != nil {
 		if existing.EmojiID != "" || existing.Emoji == preResp.Emoji {
 			log.Debug().Msg("Ignoring duplicate reaction")
-			portal.sendSuccessStatus(ctx, evt)
+			portal.sendSuccessStatus(ctx, evt, 0)
 			return
 		}
 		react.ReactionToOverride = existing
@@ -1159,7 +1162,7 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 	if err != nil {
 		log.Err(err).Msg("Failed to save reaction to database")
 	}
-	portal.sendSuccessStatus(ctx, evt)
+	portal.sendSuccessStatus(ctx, evt, 0)
 }
 
 func handleMatrixRoomMeta[APIType any, ContentType any](
@@ -1185,17 +1188,17 @@ func handleMatrixRoomMeta[APIType any, ContentType any](
 	switch typedContent := evt.Content.Parsed.(type) {
 	case *event.RoomNameEventContent:
 		if typedContent.Name == portal.Name {
-			portal.sendSuccessStatus(ctx, evt)
+			portal.sendSuccessStatus(ctx, evt, 0)
 			return
 		}
 	case *event.TopicEventContent:
 		if typedContent.Topic == portal.Topic {
-			portal.sendSuccessStatus(ctx, evt)
+			portal.sendSuccessStatus(ctx, evt, 0)
 			return
 		}
 	case *event.RoomAvatarEventContent:
 		if typedContent.URL == portal.AvatarMXC {
-			portal.sendSuccessStatus(ctx, evt)
+			portal.sendSuccessStatus(ctx, evt, 0)
 			return
 		}
 	}
@@ -1226,7 +1229,7 @@ func handleMatrixRoomMeta[APIType any, ContentType any](
 			log.Err(err).Msg("Failed to save portal after updating room metadata")
 		}
 	}
-	portal.sendSuccessStatus(ctx, evt)
+	portal.sendSuccessStatus(ctx, evt, 0)
 }
 
 func handleMatrixAccountData[APIType any, ContentType any](
@@ -1516,7 +1519,7 @@ func (portal *Portal) handleMatrixRedaction(ctx context.Context, sender *UserLog
 		return
 	}
 	// TODO delete msg/reaction db row
-	portal.sendSuccessStatus(ctx, evt)
+	portal.sendSuccessStatus(ctx, evt, 0)
 }
 
 func (portal *Portal) handleRemoteEvent(ctx context.Context, source *UserLogin, evtType RemoteEventType, evt RemoteEvent) {
@@ -1835,7 +1838,7 @@ func (portal *Portal) checkPendingMessage(ctx context.Context, evt RemoteMessage
 		if statusErr != nil {
 			portal.sendErrorStatus(ctx, pending.evt, statusErr)
 		} else {
-			portal.sendSuccessStatus(ctx, pending.evt)
+			portal.sendSuccessStatus(ctx, pending.evt, getStreamOrder(evt))
 		}
 	}
 	zerolog.Ctx(ctx).Debug().Stringer("event_id", pending.evt.ID).Msg("Received remote echo for message")

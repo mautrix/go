@@ -276,7 +276,8 @@ type MaxFileSizeingNetwork interface {
 type RemoteEchoHandler func(RemoteMessage, *database.Message) (bool, error)
 
 type MatrixMessageResponse struct {
-	DB *database.Message
+	DB          *database.Message
+	StreamOrder int64
 	// If Pending is set, the bridge will not save the provided message to the database.
 	// This should only be used if AddPendingToSave has been called.
 	Pending bool

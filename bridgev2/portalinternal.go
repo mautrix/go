@@ -49,8 +49,8 @@ func (portal *PortalInternals) HandleSingleEvent(ctx context.Context, rawEvt any
 	(*Portal)(portal).handleSingleEvent(ctx, rawEvt, doneCallback)
 }
 
-func (portal *PortalInternals) SendSuccessStatus(ctx context.Context, evt *event.Event) {
-	(*Portal)(portal).sendSuccessStatus(ctx, evt)
+func (portal *PortalInternals) SendSuccessStatus(ctx context.Context, evt *event.Event, streamOrder int64) {
+	(*Portal)(portal).sendSuccessStatus(ctx, evt, streamOrder)
 }
 
 func (portal *PortalInternals) SendErrorStatus(ctx context.Context, evt *event.Event, err error) {

@@ -24,6 +24,7 @@ type MessageStatusEventInfo struct {
 	MessageType event.MessageType
 	Sender      id.UserID
 	ThreadRoot  id.EventID
+	StreamOrder int64
 }
 
 func StatusEventInfoFromEvent(evt *event.Event) *MessageStatusEventInfo {
