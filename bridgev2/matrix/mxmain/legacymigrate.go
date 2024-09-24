@@ -85,7 +85,11 @@ func (br *BridgeMain) LegacyMigrateWithAnotherUpgrader(renameTablesQuery, copyDa
 		if err != nil {
 			return err
 		}
-		_, err = br.DB.Exec(ctx, "UPDATE version SET version = $1, compat = $2", upgradesTo, compat)
+		_, err = br.DB.Exec(ctx, "DELETE FROM version", upgradesTo, compat)
+		if err != nil {
+			return err
+		}
+		_, err = br.DB.Exec(ctx, "INSERT INTO version (version, compat) VALUES ($1, $2)", upgradesTo, compat)
 		if err != nil {
 			return err
 		}
