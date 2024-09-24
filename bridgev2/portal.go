@@ -806,12 +806,16 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 		threadRoot, err = portal.Bridge.DB.Message.GetPartByMXID(ctx, threadRootID)
 		if err != nil {
 			log.Err(err).Msg("Failed to get thread root message from database")
+		} else if threadRoot == nil {
+			log.Warn().Stringer("thread_root_id", threadRootID).Msg("Thread root message not found")
 		}
 	}
 	if replyToID != "" && (caps.Replies || caps.Threads) {
 		replyTo, err = portal.Bridge.DB.Message.GetPartByMXID(ctx, replyToID)
 		if err != nil {
 			log.Err(err).Msg("Failed to get reply target message from database")
+		} else if replyTo == nil {
+			log.Warn().Stringer("reply_to_id", replyToID).Msg("Reply target message not found")
 		} else {
 			// Support replying to threads from non-thread-capable clients.
 			// The fallback happens if the message is not a Matrix thread and either
