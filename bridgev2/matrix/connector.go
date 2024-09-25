@@ -105,6 +105,7 @@ var (
 	_ bridgev2.MatrixConnectorWithPostRoomBridgeHandling = (*Connector)(nil)
 	_ bridgev2.MatrixConnectorWithPublicMedia            = (*Connector)(nil)
 	_ bridgev2.MatrixConnectorWithNameDisambiguation     = (*Connector)(nil)
+	_ bridgev2.MatrixConnectorWithURLPreviews            = (*Connector)(nil)
 	_ bridgev2.MatrixConnectorWithAnalytics              = (*Connector)(nil)
 )
 
@@ -641,4 +642,8 @@ func (br *Connector) HandleNewlyBridgedRoom(ctx context.Context, roomID id.RoomI
 		return fmt.Errorf("failed to enable encryption")
 	}
 	return nil
+}
+
+func (br *Connector) GetURLPreview(ctx context.Context, url string) (*event.LinkPreview, error) {
+	return br.Bot.GetURLPreview(ctx, url)
 }
