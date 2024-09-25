@@ -3180,6 +3180,19 @@ func (portal *Portal) updateUserLocalInfo(ctx context.Context, info *UserLocalPo
 	}
 }
 
+func DisappearingMessageNotice(expiration time.Duration, implicit bool) *event.MessageEventContent {
+	content := &event.MessageEventContent{
+		MsgType: event.MsgNotice,
+		Body:    fmt.Sprintf("Set the disappearing message timer to %s", exfmt.Duration(expiration)),
+	}
+	if implicit {
+		content.Body = fmt.Sprintf("Automatically enabled disappearing message timer (%s) because incoming message is disappearing", exfmt.Duration(expiration))
+	} else if expiration == 0 {
+		content.Body = "Turned off disappearing messages"
+	}
+	return content
+}
+
 func (portal *Portal) UpdateDisappearingSetting(ctx context.Context, setting database.DisappearingSetting, sender MatrixAPI, ts time.Time, implicit, save bool) bool {
 	if setting.Timer == 0 {
 		setting.Type = ""
@@ -3195,15 +3208,7 @@ func (portal *Portal) UpdateDisappearingSetting(ctx context.Context, setting dat
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to save portal to database after updating disappearing setting")
 		}
 	}
-	content := &event.MessageEventContent{
-		MsgType: event.MsgNotice,
-		Body:    fmt.Sprintf("Disappearing messages set to %s", exfmt.Duration(setting.Timer)),
-	}
-	if implicit {
-		content.Body = fmt.Sprintf("Automatically enabled disappearing message timer (%s) because incoming message is disappearing", exfmt.Duration(setting.Timer))
-	} else if setting.Timer == 0 {
-		content.Body = "Disappearing messages disabled"
-	}
+	content := DisappearingMessageNotice(setting.Timer, implicit)
 	if sender == nil {
 		sender = portal.Bridge.Bot
 	}
