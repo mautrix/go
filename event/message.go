@@ -220,6 +220,10 @@ func (m *Mentions) Add(userID id.UserID) {
 	}
 }
 
+func (m *Mentions) Has(userID id.UserID) bool {
+	return m != nil && slices.Contains(m.UserIDs, userID)
+}
+
 type EncryptedFileInfo struct {
 	attachment.EncryptedFile
 	URL id.ContentURIString `json:"url"`
