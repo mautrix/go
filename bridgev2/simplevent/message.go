@@ -63,10 +63,18 @@ type MessageRemove struct {
 	EventMeta
 
 	TargetMessage networkid.MessageID
+	OnlyForMe     bool
 }
 
-var _ bridgev2.RemoteMessageRemove = (*MessageRemove)(nil)
+var (
+	_ bridgev2.RemoteMessageRemove   = (*MessageRemove)(nil)
+	_ bridgev2.RemoteDeleteOnlyForMe = (*MessageRemove)(nil)
+)
 
 func (evt *MessageRemove) GetTargetMessage() networkid.MessageID {
 	return evt.TargetMessage
+}
+
+func (evt *MessageRemove) DeleteOnlyForMe() bool {
+	return evt.OnlyForMe
 }

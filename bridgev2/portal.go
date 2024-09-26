@@ -2370,6 +2370,12 @@ func (portal *Portal) handleRemoteMessageRemove(ctx context.Context, source *Use
 		log.Debug().Msg("Target message not found")
 		return
 	}
+	onlyForMeProvider, ok := evt.(RemoteDeleteOnlyForMe)
+	onlyForMe := ok && onlyForMeProvider.DeleteOnlyForMe()
+	if onlyForMe && portal.Receiver == "" {
+		// TODO check if there are other user logins before deleting
+	}
+
 	intent := portal.GetIntentFor(ctx, evt.GetSender(), source, RemoteEventMessageRemove)
 	if intent == portal.Bridge.Bot && len(targetParts) > 0 {
 		senderIntent, err := portal.getIntentForMXID(ctx, targetParts[0].SenderMXID)

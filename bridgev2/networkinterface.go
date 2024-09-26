@@ -913,9 +913,13 @@ type RemoteBackfill interface {
 	GetBackfillData(ctx context.Context, portal *Portal) (*FetchMessagesResponse, error)
 }
 
-type RemoteChatDelete interface {
+type RemoteDeleteOnlyForMe interface {
 	RemoteEvent
 	DeleteOnlyForMe() bool
+}
+
+type RemoteChatDelete interface {
+	RemoteDeleteOnlyForMe
 }
 
 type RemoteEventThatMayCreatePortal interface {
