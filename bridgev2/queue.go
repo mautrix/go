@@ -139,6 +139,10 @@ func (br *Bridge) QueueMatrixEvent(ctx context.Context, evt *event.Event) {
 	}
 }
 
+func (ul *UserLogin) QueueRemoteEvent(evt RemoteEvent) {
+	ul.Bridge.QueueRemoteEvent(ul, evt)
+}
+
 func (br *Bridge) QueueRemoteEvent(login *UserLogin, evt RemoteEvent) {
 	log := login.Log
 	ctx := log.WithContext(context.TODO())
