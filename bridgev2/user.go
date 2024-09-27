@@ -264,3 +264,8 @@ func (br *Bridge) TrackAnalytics(userID id.UserID, event string, props map[strin
 func (user *User) TrackAnalytics(event string, props map[string]any) {
 	user.Bridge.TrackAnalytics(user.MXID, event, props)
 }
+
+func (ul *UserLogin) TrackAnalytics(event string, props map[string]any) {
+	// TODO include user login ID?
+	ul.Bridge.TrackAnalytics(ul.UserMXID, event, props)
+}
