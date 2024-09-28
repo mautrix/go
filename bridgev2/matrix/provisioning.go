@@ -532,22 +532,21 @@ func (prov *ProvisioningAPI) GetLoginForRequest(w http.ResponseWriter, r *http.R
 	return userLogin
 }
 
+type WritableError interface {
+	Write(w http.ResponseWriter)
+}
+
 func RespondWithError(w http.ResponseWriter, err error, message string) {
-	var mautrixRespErr mautrix.RespError
-	var bv2RespErr bridgev2.RespError
-	if errors.As(err, &bv2RespErr) {
-		mautrixRespErr = mautrix.RespError(bv2RespErr)
-	} else if !errors.As(err, &mautrixRespErr) {
-		mautrixRespErr = mautrix.RespError{
+	var we WritableError
+	if errors.As(err, &we) {
+		we.Write(w)
+	} else {
+		mautrix.RespError{
 			Err:        message,
 			ErrCode:    "M_UNKNOWN",
 			StatusCode: http.StatusInternalServerError,
-		}
+		}.Write(w)
 	}
-	if mautrixRespErr.StatusCode == 0 {
-		mautrixRespErr.StatusCode = http.StatusInternalServerError
-	}
-	jsonResponse(w, mautrixRespErr.StatusCode, mautrixRespErr)
 }
 
 type RespResolveIdentifier struct {
