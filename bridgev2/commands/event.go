@@ -23,20 +23,21 @@ import (
 
 // Event stores all data which might be used to handle commands
 type Event struct {
-	Bot       bridgev2.MatrixAPI
-	Bridge    *bridgev2.Bridge
-	Portal    *bridgev2.Portal
-	Processor *Processor
-	Handler   MinimalCommandHandler
-	RoomID    id.RoomID
-	EventID   id.EventID
-	User      *bridgev2.User
-	Command   string
-	Args      []string
-	RawArgs   string
-	ReplyTo   id.EventID
-	Ctx       context.Context
-	Log       *zerolog.Logger
+	Bot        bridgev2.MatrixAPI
+	Bridge     *bridgev2.Bridge
+	Portal     *bridgev2.Portal
+	Processor  *Processor
+	Handler    MinimalCommandHandler
+	RoomID     id.RoomID
+	OrigRoomID id.RoomID
+	EventID    id.EventID
+	User       *bridgev2.User
+	Command    string
+	Args       []string
+	RawArgs    string
+	ReplyTo    id.EventID
+	Ctx        context.Context
+	Log        *zerolog.Logger
 
 	MessageStatus *bridgev2.MessageStatus
 }
@@ -55,7 +56,7 @@ func (ce *Event) Reply(msg string, args ...any) {
 func (ce *Event) ReplyAdvanced(msg string, allowMarkdown, allowHTML bool) {
 	content := format.RenderMarkdown(msg, allowMarkdown, allowHTML)
 	content.MsgType = event.MsgNotice
-	_, err := ce.Bot.SendMessage(ce.Ctx, ce.RoomID, event.EventMessage, &event.Content{Parsed: &content}, nil)
+	_, err := ce.Bot.SendMessage(ce.Ctx, ce.OrigRoomID, event.EventMessage, &event.Content{Parsed: &content}, nil)
 	if err != nil {
 		ce.Log.Err(err).Msgf("Failed to reply to command")
 	}
@@ -63,7 +64,7 @@ func (ce *Event) ReplyAdvanced(msg string, allowMarkdown, allowHTML bool) {
 
 // React sends a reaction to the command.
 func (ce *Event) React(key string) {
-	_, err := ce.Bot.SendMessage(ce.Ctx, ce.RoomID, event.EventReaction, &event.Content{
+	_, err := ce.Bot.SendMessage(ce.Ctx, ce.OrigRoomID, event.EventReaction, &event.Content{
 		Parsed: &event.ReactionEventContent{
 			RelatesTo: event.RelatesTo{
 				Type:    event.RelAnnotation,
@@ -79,7 +80,7 @@ func (ce *Event) React(key string) {
 
 // Redact redacts the command.
 func (ce *Event) Redact(req ...mautrix.ReqRedact) {
-	_, err := ce.Bot.SendMessage(ce.Ctx, ce.RoomID, event.EventRedaction, &event.Content{
+	_, err := ce.Bot.SendMessage(ce.Ctx, ce.OrigRoomID, event.EventRedaction, &event.Content{
 		Parsed: &event.RedactionEventContent{
 			Redacts: ce.EventID,
 		},

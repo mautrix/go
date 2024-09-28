@@ -46,6 +46,7 @@ func NewProcessor(bridge *bridgev2.Bridge) bridgev2.CommandProcessor {
 		CommandLogin, CommandListLogins, CommandLogout, CommandSetPreferredLogin,
 		CommandSetRelay, CommandUnsetRelay,
 		CommandResolveIdentifier, CommandStartChat, CommandSearch,
+		CommandSudo, CommandDoIn,
 	)
 	return proc
 }
@@ -108,25 +109,30 @@ func (proc *Processor) Handle(ctx context.Context, roomID id.RoomID, eventID id.
 	rawArgs := strings.TrimLeft(strings.TrimPrefix(message, command), " ")
 	portal, err := proc.bridge.GetPortalByMXID(ctx, roomID)
 	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to get portal")
 		// :(
 	}
 	ce := &Event{
-		Bot:       proc.bridge.Bot,
-		Bridge:    proc.bridge,
-		Portal:    portal,
-		Processor: proc,
-		RoomID:    roomID,
-		EventID:   eventID,
-		User:      user,
-		Command:   command,
-		Args:      args[1:],
-		RawArgs:   rawArgs,
-		ReplyTo:   replyTo,
-		Ctx:       ctx,
+		Bot:        proc.bridge.Bot,
+		Bridge:     proc.bridge,
+		Portal:     portal,
+		Processor:  proc,
+		RoomID:     roomID,
+		OrigRoomID: roomID,
+		EventID:    eventID,
+		User:       user,
+		Command:    command,
+		Args:       args[1:],
+		RawArgs:    rawArgs,
+		ReplyTo:    replyTo,
+		Ctx:        ctx,
 
 		MessageStatus: ms,
 	}
+	proc.handleCommand(ctx, ce, message, args)
+}
 
+func (proc *Processor) handleCommand(ctx context.Context, ce *Event, origMessage string, origArgs []string) {
 	realCommand, ok := proc.aliases[ce.Command]
 	if !ok {
 		realCommand = ce.Command
@@ -138,8 +144,8 @@ func (proc *Processor) Handle(ctx context.Context, roomID id.RoomID, eventID id.
 		state := LoadCommandState(ce.User)
 		if state != nil && state.Next != nil {
 			ce.Command = ""
-			ce.RawArgs = message
-			ce.Args = args
+			ce.RawArgs = origMessage
+			ce.Args = origArgs
 			ce.Handler = state.Next
 			log := zerolog.Ctx(ctx).With().Str("action", state.Action).Logger()
 			ce.Log = &log
@@ -147,11 +153,11 @@ func (proc *Processor) Handle(ctx context.Context, roomID id.RoomID, eventID id.
 			log.Debug().Msg("Received reply to command state")
 			state.Next.Run(ce)
 		} else {
-			zerolog.Ctx(ctx).Debug().Str("mx_command", command).Msg("Received unknown command")
+			zerolog.Ctx(ctx).Debug().Str("mx_command", ce.Command).Msg("Received unknown command")
 			ce.Reply("Unknown command, use the `help` command for help.")
 		}
 	} else {
-		log := zerolog.Ctx(ctx).With().Str("mx_command", command).Logger()
+		log := zerolog.Ctx(ctx).With().Str("mx_command", ce.Command).Logger()
 		ctx = log.WithContext(ctx)
 		ce.Log = &log
 		ce.Ctx = ctx
