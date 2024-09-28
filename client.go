@@ -21,6 +21,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/ptr"
+	"go.mau.fi/util/random"
 	"go.mau.fi/util/retryafter"
 	"golang.org/x/exp/maps"
 
@@ -895,6 +896,28 @@ func (cli *Client) Login(ctx context.Context, req *ReqLogin) (resp *RespLogin, e
 		}
 	}
 	return
+}
+
+// Create a Device for a user of the homeserver using appservice interface defined in MSC4190
+func (cli *Client) CreateDeviceMSC4190(ctx context.Context, deviceID id.DeviceID, initialDispalyName string) (err error) {
+	if len(deviceID) == 0 {
+		deviceID = id.DeviceID(random.String(10))
+	}
+	if !cli.SetAppServiceUserID {
+		return fmt.Errorf("CreateDeviceMSC4190 requires SetAppServiceUserID to be enabled")
+	}
+	if cli.AccessToken == "" {
+		return fmt.Errorf("CreateDeviceMSC4190 requires The AS AccessToken token to be set as the client AccessToken")
+	}
+	_, err = cli.MakeRequest(ctx, http.MethodPut, cli.BuildClientURL("v3", "devices", deviceID), ReqPutDevice{
+		DisplayName: initialDispalyName,
+	}, nil)
+	if err != nil {
+		return err
+	}
+	cli.DeviceID = deviceID
+	cli.SetAppServiceDeviceID = true
+	return nil
 }
 
 // Logout the current user. See https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3logout

@@ -90,6 +90,9 @@ type ReqLogin struct {
 	// Whether or not the returned .well-known data should update the homeserver URL in the Client
 	StoreHomeserverURL bool `json:"-"`
 }
+type ReqPutDevice struct {
+	DisplayName string `json:"display_name,omitempty"`
+}
 
 type ReqUIAuthFallback struct {
 	Session string `json:"session"`
