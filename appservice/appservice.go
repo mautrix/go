@@ -224,9 +224,6 @@ type HostConfig struct {
 	Hostname string `yaml:"hostname"`
 	// Port is required when Hostname is an IP address, optional for unix sockets
 	Port uint16 `yaml:"port"`
-
-	TLSKey  string `yaml:"tls_key,omitempty"`
-	TLSCert string `yaml:"tls_cert,omitempty"`
 }
 
 // Address gets the whole address of the Appservice.

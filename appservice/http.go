@@ -59,13 +59,8 @@ func (as *AppService) listenUnix() error {
 }
 
 func (as *AppService) listenTCP() error {
-	if len(as.Host.TLSCert) == 0 || len(as.Host.TLSKey) == 0 {
-		as.Log.Info().Str("address", as.server.Addr).Msg("Starting HTTP listener")
-		return as.server.ListenAndServe()
-	} else {
-		as.Log.Info().Str("address", as.server.Addr).Msg("Starting HTTP listener with TLS")
-		return as.server.ListenAndServeTLS(as.Host.TLSCert, as.Host.TLSKey)
-	}
+	as.Log.Info().Str("address", as.server.Addr).Msg("Starting HTTP listener")
+	return as.server.ListenAndServe()
 }
 
 func (as *AppService) Stop() {
