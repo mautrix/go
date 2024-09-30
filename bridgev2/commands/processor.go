@@ -73,6 +73,8 @@ func (proc *Processor) Handle(ctx context.Context, roomID id.RoomID, eventID id.
 		Step:   status.MsgStepCommand,
 		Status: event.MessageStatusSuccess,
 	}
+	logCopy := zerolog.Ctx(ctx).With().Logger()
+	log := &logCopy
 	defer func() {
 		statusInfo := &bridgev2.MessageStatusEventInfo{
 			RoomID:    roomID,
@@ -82,7 +84,7 @@ func (proc *Processor) Handle(ctx context.Context, roomID id.RoomID, eventID id.
 		}
 		err := recover()
 		if err != nil {
-			logEvt := zerolog.Ctx(ctx).Error().
+			logEvt := log.Error().
 				Bytes(zerolog.ErrorStackFieldName, debug.Stack())
 			if realErr, ok := err.(error); ok {
 				logEvt = logEvt.Err(realErr)
@@ -109,7 +111,7 @@ func (proc *Processor) Handle(ctx context.Context, roomID id.RoomID, eventID id.
 	rawArgs := strings.TrimLeft(strings.TrimPrefix(message, command), " ")
 	portal, err := proc.bridge.GetPortalByMXID(ctx, roomID)
 	if err != nil {
-		zerolog.Ctx(ctx).Err(err).Msg("Failed to get portal")
+		log.Err(err).Msg("Failed to get portal")
 		// :(
 	}
 	ce := &Event{
@@ -126,6 +128,7 @@ func (proc *Processor) Handle(ctx context.Context, roomID id.RoomID, eventID id.
 		RawArgs:    rawArgs,
 		ReplyTo:    replyTo,
 		Ctx:        ctx,
+		Log:        log,
 
 		MessageStatus: ms,
 	}
@@ -137,6 +140,7 @@ func (proc *Processor) handleCommand(ctx context.Context, ce *Event, origMessage
 	if !ok {
 		realCommand = ce.Command
 	}
+	log := zerolog.Ctx(ctx)
 
 	var handler MinimalCommandHandler
 	handler, ok = proc.handlers[realCommand]
@@ -147,9 +151,9 @@ func (proc *Processor) handleCommand(ctx context.Context, ce *Event, origMessage
 			ce.RawArgs = origMessage
 			ce.Args = origArgs
 			ce.Handler = state.Next
-			log := zerolog.Ctx(ctx).With().Str("action", state.Action).Logger()
-			ce.Log = &log
-			ce.Ctx = log.WithContext(ctx)
+			log.UpdateContext(func(c zerolog.Context) zerolog.Context {
+				return c.Str("action", state.Action)
+			})
 			log.Debug().Msg("Received reply to command state")
 			state.Next.Run(ce)
 		} else {
@@ -157,10 +161,9 @@ func (proc *Processor) handleCommand(ctx context.Context, ce *Event, origMessage
 			ce.Reply("Unknown command, use the `help` command for help.")
 		}
 	} else {
-		log := zerolog.Ctx(ctx).With().Str("mx_command", ce.Command).Logger()
-		ctx = log.WithContext(ctx)
-		ce.Log = &log
-		ce.Ctx = ctx
+		log.UpdateContext(func(c zerolog.Context) zerolog.Context {
+			return c.Str("mx_command", ce.Command)
+		})
 		log.Debug().Msg("Received command")
 		ce.Handler = handler
 		handler.Run(ce)
