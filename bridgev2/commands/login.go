@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/skip2/go-qrcode"
@@ -120,11 +121,12 @@ func checkLoginCommandDirectParams(ce *Event, login bridgev2.LoginProcess, nextS
 		}
 		input := make(map[string]string)
 		for i, param := range nextStep.CookiesParams.Fields {
-			if match, _ := regexp.MatchString(param.Pattern, ce.Args[i]); !match {
+			val := maybeURLDecodeCookie(ce.Args[i], &param)
+			if match, _ := regexp.MatchString(param.Pattern, val); !match {
 				ce.Reply("Invalid value for %s: doesn't match regex `%s`", param.ID, param.Pattern)
 				return nil
 			}
-			input[param.ID] = ce.Args[i]
+			input[param.ID] = val
 		}
 		nextStep, err = login.(bridgev2.LoginProcessCookies).SubmitCookies(ce.Ctx, input)
 	}
@@ -349,6 +351,12 @@ func (clcs *cookieLoginCommandState) submit(ce *Event) {
 			ce.Reply("Failed to parse input as JSON: %v", err)
 			return
 		}
+		for _, field := range clcs.Data.Fields {
+			val, ok := cookiesInput[field.ID]
+			if ok {
+				cookiesInput[field.ID] = maybeURLDecodeCookie(val, &field)
+			}
+		}
 	}
 	var missingKeys []string
 	for _, field := range clcs.Data.Fields {
@@ -372,6 +380,27 @@ func (clcs *cookieLoginCommandState) submit(ce *Event) {
 		return
 	}
 	doLoginStep(ce, clcs.Login, nextStep)
+}
+
+func maybeURLDecodeCookie(val string, field *bridgev2.LoginCookieField) string {
+	if val == "" {
+		return val
+	}
+	isCookie := slices.ContainsFunc(field.Sources, func(src bridgev2.LoginCookieFieldSource) bool {
+		return src.Type == bridgev2.LoginCookieTypeCookie
+	})
+	if !isCookie {
+		return val
+	}
+	match, _ := regexp.MatchString(field.Pattern, val)
+	if !match {
+		return val
+	}
+	decoded, err := url.QueryUnescape(val)
+	if err != nil {
+		return val
+	}
+	return decoded
 }
 
 func doLoginStep(ce *Event, login bridgev2.LoginProcess, step *bridgev2.LoginStep) {
