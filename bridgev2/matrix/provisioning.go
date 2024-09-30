@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/http/pprof"
 	"strings"
 	"sync"
 	"time"
@@ -126,8 +127,12 @@ func (prov *ProvisioningAPI) Init() {
 	if prov.br.Config.Provisioning.DebugEndpoints {
 		prov.log.Debug().Msg("Enabling debug API at /debug")
 		r := prov.br.AS.Router.PathPrefix("/debug").Subrouter()
-		r.Use(prov.AuthMiddleware)
-		r.PathPrefix("/pprof").Handler(http.DefaultServeMux)
+		r.Use(prov.DebugAuthMiddleware)
+		r.HandleFunc("/pprof/cmdline", pprof.Cmdline).Methods(http.MethodGet)
+		r.HandleFunc("/pprof/profile", pprof.Profile).Methods(http.MethodGet)
+		r.HandleFunc("/pprof/symbol", pprof.Symbol).Methods(http.MethodGet)
+		r.HandleFunc("/pprof/trace", pprof.Trace).Methods(http.MethodGet)
+		r.PathPrefix("/pprof/").HandlerFunc(pprof.Index)
 	}
 }
 
@@ -189,6 +194,25 @@ func (prov *ProvisioningAPI) checkFederatedMatrixAuth(ctx context.Context, userI
 		}
 		return nil
 	}
+}
+
+func (prov *ProvisioningAPI) DebugAuthMiddleware(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auth := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if auth == "" {
+			jsonResponse(w, http.StatusUnauthorized, &mautrix.RespError{
+				Err:     "Missing auth token",
+				ErrCode: mautrix.MMissingToken.ErrCode,
+			})
+		} else if auth != prov.br.Config.Provisioning.SharedSecret {
+			jsonResponse(w, http.StatusUnauthorized, &mautrix.RespError{
+				Err:     "Invalid auth token",
+				ErrCode: mautrix.MUnknownToken.ErrCode,
+			})
+		} else {
+			h.ServeHTTP(w, r)
+		}
+	})
 }
 
 func (prov *ProvisioningAPI) AuthMiddleware(h http.Handler) http.Handler {
