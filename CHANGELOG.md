@@ -1,3 +1,10 @@
+## unreleased
+
+* *(appservice)* Removed TLS support. A reverse proxy should be used if TLS
+  is needed.
+* *(format/mdext)* Added goldmark extension to fix indented paragraphs when
+  disabling indented code block parser.
+
 ## v0.21.0 (2024-09-16)
 
 * **Breaking change *(client)*** Dropped support for unauthenticated media.
