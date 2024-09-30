@@ -158,8 +158,12 @@ homeserver:
 # Changing these values requires regeneration of the registration (except when noted otherwise)
 appservice:
     # The address that the homeserver can use to connect to this appservice.
+    # Like the homeserver address, a local non-https address is recommended when the bridge is on the same machine.
+    # If the bridge is elsewhere, you must secure the connection yourself (e.g. with https or wireguard)
+    # If you want to use https, you need to use a reverse proxy. The bridge does not have TLS support built in.
     address: http://localhost:$<<or .DefaultPort 8008>>
     # A public address that external services can use to reach this appservice.
+    # This is only needed for things like public media. A reverse proxy is generally necessary when using this field.
     # This value doesn't affect the registration file.
     public_address: https://bridge.example.com
 
