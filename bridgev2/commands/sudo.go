@@ -57,7 +57,9 @@ func fnSudo(ce *Event) {
 	}
 	ce.User = targetUser
 	origArgs := ce.Args[1:]
+	ce.Command = strings.ToLower(ce.Args[1])
 	ce.Args = ce.Args[2:]
+	ce.RawArgs = strings.Join(ce.Args, " ")
 	ce.Processor.handleCommand(ce.Ctx, ce, strings.Join(origArgs, " "), origArgs)
 }
 
@@ -98,6 +100,8 @@ func fnDoIn(ce *Event) {
 		return
 	}
 	origArgs := ce.Args[1:]
+	ce.Command = strings.ToLower(ce.Args[1])
 	ce.Args = ce.Args[2:]
+	ce.RawArgs = strings.Join(ce.Args, " ")
 	ce.Processor.handleCommand(ce.Ctx, ce, strings.Join(origArgs, " "), origArgs)
 }
