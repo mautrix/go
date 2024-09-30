@@ -99,6 +99,7 @@ func TestCrossSignVerification_ScanQRAndConfirmScan(t *testing.T) {
 				assert.Equal(t, txnID, doneEvt.TransactionID)
 
 				ts.dispatchToDevice(t, ctx, sendingClient)
+				assert.True(t, sendingCallbacks.OtherReportedDone(txnID))
 			} else { // receiving scans QR
 				// Emulate scanning the QR code shown by the sending device on
 				// the receiving device.
@@ -137,6 +138,7 @@ func TestCrossSignVerification_ScanQRAndConfirmScan(t *testing.T) {
 				assert.Equal(t, txnID, doneEvt.TransactionID)
 
 				ts.dispatchToDevice(t, ctx, receivingClient)
+				assert.True(t, receivingCallbacks.OtherReportedDone(txnID))
 			}
 
 			// Ensure that both devices have marked the verification as done.

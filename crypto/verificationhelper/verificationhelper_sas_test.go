@@ -269,6 +269,7 @@ func TestVerification_SAS(t *testing.T) {
 			// twice to process and drain all of the events.
 			ts.dispatchToDevice(t, ctx, sendingClient)
 			ts.dispatchToDevice(t, ctx, receivingClient)
+			assert.True(t, receivingCallbacks.OtherReportedDone(txnID))
 			ts.dispatchToDevice(t, ctx, sendingClient)
 			ts.dispatchToDevice(t, ctx, receivingClient)
 			assert.True(t, sendingCallbacks.IsVerificationDone(txnID))
