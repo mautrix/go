@@ -108,6 +108,7 @@ func (prov *ProvisioningAPI) Init() {
 	tp.Transport.TLSHandshakeTimeout = 10 * time.Second
 	prov.Router = prov.br.AS.Router.PathPrefix(prov.br.Config.Provisioning.Prefix).Subrouter()
 	prov.Router.Use(hlog.NewHandler(prov.log))
+	prov.Router.Use(hlog.RequestIDHandler("request_id", "Request-Id"))
 	prov.Router.Use(corsMiddleware)
 	prov.Router.Use(requestlog.AccessLogger(false))
 	prov.Router.Use(prov.AuthMiddleware)
