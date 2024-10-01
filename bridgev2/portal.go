@@ -1594,6 +1594,10 @@ func (portal *Portal) handleRemoteEvent(ctx context.Context, source *UserLogin, 
 	default:
 		log.Warn().Msg("Got remote event with unknown type")
 	}
+	postHandler, ok := evt.(RemotePostHandler)
+	if ok {
+		postHandler.PostHandle(ctx, portal)
+	}
 }
 
 func (portal *Portal) getIntentAndUserMXIDFor(ctx context.Context, sender EventSender, source *UserLogin, otherLogins []*UserLogin, evtType RemoteEventType) (intent MatrixAPI, extraUserID id.UserID) {

@@ -884,6 +884,11 @@ type RemotePreHandler interface {
 	PreHandle(ctx context.Context, portal *Portal)
 }
 
+type RemotePostHandler interface {
+	RemoteEvent
+	PostHandle(ctx context.Context, portal *Portal)
+}
+
 type RemoteChatInfoChange interface {
 	RemoteEvent
 	GetChatInfoChange(ctx context.Context) (*ChatInfoChange, error)
