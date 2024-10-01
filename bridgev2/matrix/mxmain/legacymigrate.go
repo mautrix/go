@@ -62,7 +62,7 @@ func (br *BridgeMain) LegacyMigrateWithAnotherUpgrader(renameTablesQuery, copyDa
 			if err != nil {
 				return err
 			} else if otherUpgradesTo < otherNewVersion || otherCompat > otherNewVersion {
-				return fmt.Errorf("unexpected new database version for %s (%d/c:%d, expected %d)", otherTableName, otherUpgradesTo, otherCompat, newDBVersion)
+				return fmt.Errorf("unexpected new database version for %s (%d/c:%d, expected %d)", otherTableName, otherUpgradesTo, otherCompat, otherNewVersion)
 			}
 			_, err = br.DB.Exec(ctx, fmt.Sprintf("INSERT INTO %s (version, compat) VALUES ($1, $2)", otherTableName), otherUpgradesTo, otherCompat)
 			if err != nil {
