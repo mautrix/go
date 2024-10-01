@@ -9,6 +9,7 @@ package bridgev2
 import (
 	"context"
 	"fmt"
+	"runtime/debug"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -88,6 +89,19 @@ func (br *Bridge) doBackfillTask(ctx context.Context, task *database.BackfillTas
 		Object("portal_key", task.PortalKey).
 		Str("login_id", string(task.UserLoginID)).
 		Logger()
+	defer func() {
+		err := recover()
+		if err != nil {
+			logEvt := log.Error().
+				Bytes(zerolog.ErrorStackFieldName, debug.Stack())
+			if realErr, ok := err.(error); ok {
+				logEvt = logEvt.Err(realErr)
+			} else {
+				logEvt = logEvt.Any(zerolog.ErrorFieldName, err)
+			}
+			logEvt.Msg("Panic in backfill queue")
+		}
+	}()
 	ctx = log.WithContext(ctx)
 	err := br.DB.BackfillTask.MarkDispatched(ctx, task)
 	if err != nil {
