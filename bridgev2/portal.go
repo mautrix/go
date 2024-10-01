@@ -3219,6 +3219,9 @@ func (portal *Portal) UpdateDisappearingSetting(ctx context.Context, setting dat
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to save portal to database after updating disappearing setting")
 		}
 	}
+	if portal.MXID == "" {
+		return true
+	}
 	content := DisappearingMessageNotice(setting.Timer, implicit)
 	if sender == nil {
 		sender = portal.Bridge.Bot
