@@ -1886,7 +1886,7 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 	upsertEvt, isUpsert := evt.(RemoteMessageUpsert)
 	isUpsert = isUpsert && evt.GetType() == RemoteEventMessageUpsert
 	if wasPending, dbMessage := portal.checkPendingMessage(ctx, evt); wasPending {
-		if isUpsert {
+		if isUpsert && dbMessage != nil {
 			portal.handleRemoteUpsert(ctx, source, upsertEvt, []*database.Message{dbMessage})
 		}
 		return
