@@ -8,6 +8,8 @@ package bridgeconfig
 
 import (
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -94,6 +96,23 @@ func (p *Permissions) UnmarshalYAML(perm *yaml.Node) error {
 	case "!!map":
 		err := perm.Decode((*umPerm)(p))
 		return err
+	case "!!int":
+		val, err := strconv.Atoi(perm.Value)
+		if err != nil {
+			return fmt.Errorf("invalid permissions level %s", perm.Value)
+		}
+		_, _ = fmt.Fprintln(os.Stderr, "Warning: config contains deprecated integer permission values")
+		// Integer values are deprecated, so they're hardcoded
+		if val < 5 {
+			*p = PermissionLevelBlock
+		} else if val < 10 {
+			*p = PermissionLevelRelay
+		} else if val < 100 {
+			*p = PermissionLevelUser
+		} else {
+			*p = PermissionLevelAdmin
+		}
+		return nil
 	default:
 		return fmt.Errorf("invalid permissions type %s", perm.Tag)
 	}
