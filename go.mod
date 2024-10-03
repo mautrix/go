@@ -2,7 +2,7 @@ module maunium.net/go/mautrix
 
 go 1.22.0
 
-toolchain go1.23.1
+toolchain go1.23.2
 
 require (
 	filippo.io/edwards25519 v1.1.0
@@ -15,10 +15,10 @@ require (
 	github.com/rs/zerolog v1.33.0
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/stretchr/testify v1.9.0
-	github.com/tidwall/gjson v1.17.3
+	github.com/tidwall/gjson v1.18.0
 	github.com/tidwall/sjson v1.2.5
 	github.com/yuin/goldmark v1.7.4
-	go.mau.fi/util v0.8.1-0.20240927174413-000d30f9a02a
+	go.mau.fi/util v0.8.1-0.20241003092848-3b49d3e0b9ee
 	go.mau.fi/zeroconfig v0.1.3
 	golang.org/x/crypto v0.27.0
 	golang.org/x/exp v0.0.0-20240909161429-701f63a606c0
