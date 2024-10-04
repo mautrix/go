@@ -3176,13 +3176,13 @@ func (portal *Portal) updateUserLocalInfo(ctx context.Context, info *UserLocalPo
 	if info == nil {
 		return
 	}
-	if info.MutedUntil != nil && (didJustCreate || !portal.Bridge.Config.MuteOnlyOnCreate) {
+	if info.MutedUntil != nil && (didJustCreate || !portal.Bridge.Config.MuteOnlyOnCreate) && (!didJustCreate || info.MutedUntil.After(time.Now())) {
 		err := dp.MuteRoom(ctx, portal.MXID, *info.MutedUntil)
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to mute room")
 		}
 	}
-	if info.Tag != nil && (didJustCreate || !portal.Bridge.Config.TagOnlyOnCreate) {
+	if info.Tag != nil && (didJustCreate || !portal.Bridge.Config.TagOnlyOnCreate) && (!didJustCreate || *info.Tag != "") {
 		err := dp.TagRoom(ctx, portal.MXID, *info.Tag, *info.Tag != "")
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to tag room")
