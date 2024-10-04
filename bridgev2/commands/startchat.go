@@ -31,8 +31,9 @@ var CommandResolveIdentifier = &FullHandler{
 }
 
 var CommandStartChat = &FullHandler{
-	Func: fnResolveIdentifier,
-	Name: "start-chat",
+	Func:    fnResolveIdentifier,
+	Name:    "start-chat",
+	Aliases: []string{"pm"},
 	Help: HelpMeta{
 		Section:     HelpSectionChats,
 		Description: "Start a direct chat with the given user",
