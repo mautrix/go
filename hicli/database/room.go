@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"go.mau.fi/util/dbutil"
+	"go.mau.fi/util/jsontime"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
@@ -115,8 +116,8 @@ type Room struct {
 	EncryptionEvent *event.EncryptionEventContent `json:"encryption_event,omitempty"`
 	HasMemberList   bool                          `json:"has_member_list"`
 
-	PreviewEventRowID EventRowID `json:"preview_event_rowid"`
-	SortingTimestamp  time.Time  `json:"sorting_timestamp"`
+	PreviewEventRowID EventRowID         `json:"preview_event_rowid"`
+	SortingTimestamp  jsontime.UnixMilli `json:"sorting_timestamp"`
 
 	PrevBatch string `json:"prev_batch"`
 }
@@ -152,7 +153,7 @@ func (r *Room) CheckChangesAndCopyInto(other *Room) (hasChanges bool) {
 		other.PreviewEventRowID = r.PreviewEventRowID
 		hasChanges = true
 	}
-	if r.SortingTimestamp.After(other.SortingTimestamp) {
+	if r.SortingTimestamp.After(other.SortingTimestamp.Time) {
 		other.SortingTimestamp = r.SortingTimestamp
 		hasChanges = true
 	}
@@ -186,7 +187,7 @@ func (r *Room) Scan(row dbutil.Scannable) (*Room, error) {
 	}
 	r.PrevBatch = prevBatch.String
 	r.PreviewEventRowID = EventRowID(previewEventRowID.Int64)
-	r.SortingTimestamp = time.UnixMilli(sortingTimestamp.Int64)
+	r.SortingTimestamp = jsontime.UM(time.UnixMilli(sortingTimestamp.Int64))
 	return r, nil
 }
 
@@ -203,19 +204,19 @@ func (r *Room) sqlVariables() []any {
 		dbutil.JSONPtr(r.EncryptionEvent),
 		r.HasMemberList,
 		dbutil.NumPtr(r.PreviewEventRowID),
-		dbutil.UnixMilliPtr(r.SortingTimestamp),
+		dbutil.UnixMilliPtr(r.SortingTimestamp.Time),
 		dbutil.StrPtr(r.PrevBatch),
 	}
 }
 
 func (r *Room) BumpSortingTimestamp(evt *Event) bool {
-	if !evt.BumpsSortingTimestamp() || evt.Timestamp.Before(r.SortingTimestamp) {
+	if !evt.BumpsSortingTimestamp() || evt.Timestamp.Before(r.SortingTimestamp.Time) {
 		return false
 	}
-	r.SortingTimestamp = evt.Timestamp
+	r.SortingTimestamp = jsontime.UM(evt.Timestamp)
 	now := time.Now()
 	if r.SortingTimestamp.After(now) {
-		r.SortingTimestamp = now
+		r.SortingTimestamp = jsontime.UM(now)
 	}
 	return true
 }

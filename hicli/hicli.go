@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/url"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -47,10 +48,13 @@ type HiClient struct {
 	firstSyncReceived bool
 	syncingID         int
 	syncLock          sync.Mutex
-	stopSync          context.CancelFunc
+	stopSync          atomic.Pointer[context.CancelFunc]
 	encryptLock       sync.Mutex
 
 	requestQueueWakeup chan struct{}
+
+	jsonRequestsLock sync.Mutex
+	jsonRequests     map[int64]context.CancelCauseFunc
 
 	paginationInterrupterLock sync.Mutex
 	paginationInterrupter     map[id.RoomID]context.CancelCauseFunc
@@ -74,7 +78,9 @@ func New(rawDB, cryptoDB *dbutil.Database, log zerolog.Logger, pickleKey []byte,
 		DB:  db,
 		Log: log,
 
-		requestQueueWakeup: make(chan struct{}, 1),
+		requestQueueWakeup:    make(chan struct{}, 1),
+		jsonRequests:          make(map[int64]context.CancelCauseFunc),
+		paginationInterrupter: make(map[id.RoomID]context.CancelCauseFunc),
 
 		EventHandler: evtHandler,
 	}
@@ -166,7 +172,6 @@ func (h *HiClient) Start(ctx context.Context, userID id.UserID, expectedAccount 
 				return err
 			}
 			go h.Sync()
-			go h.RunRequestQueue(ctx)
 		}
 	}
 	return nil
@@ -186,10 +191,14 @@ func (h *HiClient) CheckServerVersions(ctx context.Context) error {
 	return nil
 }
 
+func (h *HiClient) IsSyncing() bool {
+	return h.stopSync.Load() != nil
+}
+
 func (h *HiClient) Sync() {
 	h.Client.StopSync()
-	if fn := h.stopSync; fn != nil {
-		fn()
+	if fn := h.stopSync.Load(); fn != nil {
+		(*fn)()
 	}
 	h.syncLock.Lock()
 	defer h.syncLock.Unlock()
@@ -199,8 +208,11 @@ func (h *HiClient) Sync() {
 		Str("action", "sync").
 		Int("sync_id", syncingID).
 		Logger()
-	ctx, cancel := context.WithCancel(log.WithContext(context.Background()))
-	h.stopSync = cancel
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	h.stopSync.Store(&cancel)
+	go h.RunRequestQueue(h.Log.WithContext(ctx))
+	ctx = log.WithContext(ctx)
 	log.Info().Msg("Starting syncing")
 	err := h.Client.SyncWithContext(ctx)
 	if err != nil && ctx.Err() == nil {
@@ -212,8 +224,8 @@ func (h *HiClient) Sync() {
 
 func (h *HiClient) Stop() {
 	h.Client.StopSync()
-	if fn := h.stopSync; fn != nil {
-		fn()
+	if fn := h.stopSync.Swap(nil); fn != nil {
+		(*fn)()
 	}
 	h.syncLock.Lock()
 	h.syncLock.Unlock()

@@ -8,6 +8,8 @@ package database
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 
 	"go.mau.fi/util/dbutil"
 
@@ -32,7 +34,14 @@ type AccountQuery struct {
 }
 
 func (aq *AccountQuery) GetFirstUserID(ctx context.Context) (userID id.UserID, err error) {
+	var exists bool
+	if exists, err = aq.GetDB().TableExists(ctx, "account"); err != nil || !exists {
+		return
+	}
 	err = aq.GetDB().QueryRow(ctx, `SELECT user_id FROM account LIMIT 1`).Scan(&userID)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = nil
+	}
 	return
 }
 

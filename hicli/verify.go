@@ -124,7 +124,8 @@ func (h *HiClient) storeCrossSigningPrivateKeys(ctx context.Context) error {
 	return nil
 }
 
-func (h *HiClient) VerifyWithRecoveryCode(ctx context.Context, code string) error {
+func (h *HiClient) VerifyWithRecoveryKey(ctx context.Context, code string) error {
+	defer h.dispatchCurrentState()
 	keyID, keyData, err := h.Crypto.SSSS.GetDefaultKeyData(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get default SSSS key data: %w", err)
@@ -154,5 +155,8 @@ func (h *HiClient) VerifyWithRecoveryCode(ctx context.Context, code string) erro
 		return fmt.Errorf("failed to fetch key backup key: %w", err)
 	}
 	h.Verified = true
+	if !h.IsSyncing() {
+		go h.Sync()
+	}
 	return nil
 }

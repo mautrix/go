@@ -46,6 +46,7 @@ func (h *HiClient) Login(ctx context.Context, req *mautrix.ReqLogin) error {
 	if err != nil {
 		return err
 	}
+	defer h.dispatchCurrentState()
 	h.Account = &database.Account{
 		UserID:        resp.UserID,
 		DeviceID:      resp.DeviceID,
@@ -73,16 +74,14 @@ func (h *HiClient) Login(ctx context.Context, req *mautrix.ReqLogin) error {
 	return nil
 }
 
-func (h *HiClient) LoginAndVerify(ctx context.Context, homeserverURL, username, password, recoveryCode string) error {
+func (h *HiClient) LoginAndVerify(ctx context.Context, homeserverURL, username, password, recoveryKey string) error {
 	err := h.LoginPassword(ctx, homeserverURL, username, password)
 	if err != nil {
 		return err
 	}
-	err = h.VerifyWithRecoveryCode(ctx, recoveryCode)
+	err = h.VerifyWithRecoveryKey(ctx, recoveryKey)
 	if err != nil {
 		return err
 	}
-	go h.Sync()
-	go h.RunRequestQueue(ctx)
 	return nil
 }

@@ -37,3 +37,11 @@ type SendComplete struct {
 	Event *database.Event `json:"event"`
 	Error error           `json:"error"`
 }
+
+type ClientState struct {
+	IsLoggedIn    bool        `json:"is_logged_in"`
+	IsVerified    bool        `json:"is_verified"`
+	UserID        id.UserID   `json:"user_id,omitempty"`
+	DeviceID      id.DeviceID `json:"device_id,omitempty"`
+	HomeserverURL string      `json:"homeserver_url,omitempty"`
+}
