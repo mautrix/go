@@ -67,8 +67,8 @@ func main() {
 			for _, decrypted := range evt.Events {
 				_, _ = fmt.Fprintf(rl, "Delayed decryption of %s completed: %s / %s\n", decrypted.ID, decrypted.DecryptedType, decrypted.Decrypted)
 			}
-			if len(evt.PreviewRowIDs) > 0 {
-				_, _ = fmt.Fprintf(rl, "Room previews updated: %+v\n", evt.PreviewRowIDs)
+			if evt.PreviewEventRowID != 0 {
+				_, _ = fmt.Fprintf(rl, "Room preview updated: %+v\n", evt.PreviewEventRowID)
 			}
 		case *hicli.Typing:
 			_, _ = fmt.Fprintf(rl, "Typing list in %s: %+v\n", evt.RoomID, evt.UserIDs)

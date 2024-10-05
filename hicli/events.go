@@ -24,8 +24,9 @@ type SyncComplete struct {
 }
 
 type EventsDecrypted struct {
-	PreviewRowIDs map[id.RoomID]database.EventRowID `json:"room_preview_rowids"`
-	Events        []*database.Event                 `json:"events"`
+	RoomID            id.RoomID           `json:"room_id"`
+	PreviewEventRowID database.EventRowID `json:"preview_event_rowid,omitempty"`
+	Events            []*database.Event   `json:"events"`
 }
 
 type Typing struct {
