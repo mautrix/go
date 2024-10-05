@@ -74,6 +74,7 @@ CREATE TABLE event (
 
 	megolm_session_id TEXT,
 	decryption_error  TEXT,
+	send_error        TEXT,
 
 	reactions         TEXT,
 	last_edit_rowid   INTEGER,

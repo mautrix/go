@@ -25,7 +25,8 @@ import (
 const (
 	getEventBaseQuery = `
 		SELECT rowid, -1, room_id, event_id, sender, type, state_key, timestamp, content, decrypted, decrypted_type, unsigned,
-		       transaction_id, redacted_by, relates_to, relation_type, megolm_session_id, decryption_error, reactions, last_edit_rowid
+		       transaction_id, redacted_by, relates_to, relation_type, megolm_session_id, decryption_error, send_error,
+		       reactions, last_edit_rowid
 		FROM event
 	`
 	getEventByRowID                  = getEventBaseQuery + `WHERE rowid = $1`
@@ -35,9 +36,9 @@ const (
 	insertEventBaseQuery             = `
 		INSERT INTO event (
 			room_id, event_id, sender, type, state_key, timestamp, content, decrypted, decrypted_type, unsigned,
-			transaction_id, redacted_by, relates_to, relation_type, megolm_session_id, decryption_error
+			transaction_id, redacted_by, relates_to, relation_type, megolm_session_id, decryption_error, send_error
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 	`
 	insertEventQuery = insertEventBaseQuery + `RETURNING rowid`
 	upsertEventQuery = insertEventBaseQuery + `
@@ -46,6 +47,7 @@ const (
 			    decrypted_type=COALESCE(event.decrypted_type, excluded.decrypted_type),
 			    redacted_by=COALESCE(event.redacted_by, excluded.redacted_by),
 			    decryption_error=CASE WHEN COALESCE(event.decrypted, excluded.decrypted) IS NULL THEN COALESCE(excluded.decryption_error, event.decryption_error) END,
+			    send_error=excluded.send_error,
 				timestamp=excluded.timestamp,
 				unsigned=COALESCE(excluded.unsigned, event.unsigned)
 		ON CONFLICT (transaction_id) DO UPDATE
@@ -54,7 +56,8 @@ const (
 				unsigned=excluded.unsigned
 		RETURNING rowid
 	`
-	updateEventIDQuery        = `UPDATE event SET event_id=$2 WHERE rowid=$1`
+	updateEventSendErrorQuery = `UPDATE event SET send_error = $2 WHERE rowid = $1`
+	updateEventIDQuery        = `UPDATE event SET event_id = $2, send_error = NULL WHERE rowid=$1`
 	updateEventDecryptedQuery = `UPDATE event SET decrypted = $1, decrypted_type = $2, decryption_error = NULL WHERE rowid = $3`
 	getEventReactionsQuery    = getEventBaseQuery + `
 		WHERE room_id = ?
@@ -121,6 +124,10 @@ func (eq *EventQuery) Insert(ctx context.Context, evt *Event) (rowID EventRowID,
 
 func (eq *EventQuery) UpdateID(ctx context.Context, rowID EventRowID, newID id.EventID) error {
 	return eq.Exec(ctx, updateEventIDQuery, rowID, newID)
+}
+
+func (eq *EventQuery) UpdateSendError(ctx context.Context, rowID EventRowID, sendError string) error {
+	return eq.Exec(ctx, updateEventSendErrorQuery, rowID, sendError)
 }
 
 func (eq *EventQuery) UpdateDecrypted(ctx context.Context, rowID EventRowID, decrypted json.RawMessage, decryptedType string) error {
@@ -280,6 +287,7 @@ type Event struct {
 
 	MegolmSessionID id.SessionID `json:"-,omitempty"`
 	DecryptionError string       `json:"decryption_error,omitempty"`
+	SendError       string       `json:"send_error,omitempty"`
 
 	Reactions     map[string]int `json:"reactions,omitempty"`
 	LastEditRowID *EventRowID    `json:"last_edit_rowid,omitempty"`
@@ -332,7 +340,7 @@ func (e *Event) AsRawMautrix() *event.Event {
 
 func (e *Event) Scan(row dbutil.Scannable) (*Event, error) {
 	var timestamp int64
-	var transactionID, redactedBy, relatesTo, relationType, megolmSessionID, decryptionError, decryptedType sql.NullString
+	var transactionID, redactedBy, relatesTo, relationType, megolmSessionID, decryptionError, sendError, decryptedType sql.NullString
 	err := row.Scan(
 		&e.RowID,
 		&e.TimelineRowID,
@@ -352,6 +360,7 @@ func (e *Event) Scan(row dbutil.Scannable) (*Event, error) {
 		&relationType,
 		&megolmSessionID,
 		&decryptionError,
+		&sendError,
 		dbutil.JSON{Data: &e.Reactions},
 		&e.LastEditRowID,
 	)
@@ -366,6 +375,7 @@ func (e *Event) Scan(row dbutil.Scannable) (*Event, error) {
 	e.MegolmSessionID = id.SessionID(megolmSessionID.String)
 	e.DecryptedType = decryptedType.String
 	e.DecryptionError = decryptionError.String
+	e.SendError = sendError.String
 	return e, nil
 }
 
@@ -420,6 +430,7 @@ func (e *Event) sqlVariables() []any {
 		dbutil.StrPtr(e.RelationType),
 		dbutil.StrPtr(e.MegolmSessionID),
 		dbutil.StrPtr(e.DecryptionError),
+		dbutil.StrPtr(e.SendError),
 		dbutil.JSON{Data: reactions},
 		e.LastEditRowID,
 	}

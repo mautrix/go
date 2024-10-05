@@ -68,6 +68,7 @@ func (h *HiClient) Send(ctx context.Context, roomID id.RoomID, evtType event.Typ
 		RelationType:    relationType,
 		MegolmSessionID: megolmSessionID,
 		DecryptionError: "",
+		SendError:       "not sent",
 		Reactions:       map[string]int{},
 		LastEditRowID:   &zero,
 	}
@@ -90,8 +91,13 @@ func (h *HiClient) Send(ctx context.Context, roomID id.RoomID, evtType event.Typ
 			DontEncrypt:   true,
 		})
 		if err != nil {
-			// TODO save send error to db?
+			dbEvt.SendError = err.Error()
 			err = fmt.Errorf("failed to send event: %w", err)
+			err2 := h.DB.Event.UpdateSendError(ctx, dbEvt.RowID, dbEvt.SendError)
+			if err2 != nil {
+				zerolog.Ctx(ctx).Err(err2).AnErr("send_error", err).
+					Msg("Failed to update send error in database after sending failed")
+			}
 			return
 		}
 		dbEvt.ID = resp.EventID

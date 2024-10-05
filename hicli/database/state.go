@@ -22,7 +22,7 @@ const (
 	`
 	getCurrentRoomStateQuery = `
 		SELECT event.rowid, -1, event.room_id, event.event_id, sender, event.type, event.state_key, timestamp, content, decrypted, decrypted_type, unsigned,
-		       transaction_id, redacted_by, relates_to, relation_type, megolm_session_id, decryption_error, reactions, last_edit_rowid
+		       transaction_id, redacted_by, relates_to, relation_type, megolm_session_id, decryption_error, send_error, reactions, last_edit_rowid
 		FROM current_state cs
 		JOIN event ON cs.event_rowid = event.rowid
 		WHERE cs.room_id = $1
