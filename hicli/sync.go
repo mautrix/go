@@ -204,6 +204,10 @@ func isDecryptionErrorRetryable(err error) bool {
 }
 
 func removeReplyFallback(evt *event.Event) []byte {
+	if evt.Type != event.EventMessage {
+		return nil
+	}
+	_ = evt.Content.ParseRaw(evt.Type)
 	content, ok := evt.Content.Parsed.(*event.MessageEventContent)
 	if ok && content.RelatesTo.GetReplyTo() != "" {
 		prevFormattedBody := content.FormattedBody
