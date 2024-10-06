@@ -27,8 +27,9 @@ const (
 		       preview_event_rowid, sorting_timestamp, prev_batch
 		FROM room
 	`
-	getRoomByIDQuery      = getRoomBaseQuery + `WHERE room_id = $1`
-	ensureRoomExistsQuery = `
+	getRoomsBySortingTimestampQuery = getRoomBaseQuery + `WHERE sorting_timestamp < $1 ORDER BY sorting_timestamp DESC LIMIT $2`
+	getRoomByIDQuery                = getRoomBaseQuery + `WHERE room_id = $1`
+	ensureRoomExistsQuery           = `
 		INSERT INTO room (room_id) VALUES ($1)
 		ON CONFLICT (room_id) DO NOTHING
 	`
@@ -67,6 +68,10 @@ type RoomQuery struct {
 
 func (rq *RoomQuery) Get(ctx context.Context, roomID id.RoomID) (*Room, error) {
 	return rq.QueryOne(ctx, getRoomByIDQuery, roomID)
+}
+
+func (rq *RoomQuery) GetBySortTS(ctx context.Context, maxTS time.Time, limit int) ([]*Room, error) {
+	return rq.QueryMany(ctx, getRoomsBySortingTimestampQuery, maxTS.UnixMilli(), limit)
 }
 
 func (rq *RoomQuery) Upsert(ctx context.Context, room *Room) error {
