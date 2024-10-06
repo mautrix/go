@@ -143,6 +143,27 @@ type MessageEventContent struct {
 	MSC3245Voice *MSC3245Voice `json:"org.matrix.msc3245.voice,omitempty"`
 }
 
+func (content *MessageEventContent) GetFileName() string {
+	if content.FileName != "" {
+		return content.FileName
+	}
+	return content.Body
+}
+
+func (content *MessageEventContent) GetCaption() string {
+	if content.FileName != "" && content.Body != "" && content.Body != content.FileName {
+		return content.Body
+	}
+	return ""
+}
+
+func (content *MessageEventContent) GetFormattedCaption() string {
+	if content.Format == FormatHTML && content.FormattedBody != "" {
+		return content.FormattedBody
+	}
+	return ""
+}
+
 func (content *MessageEventContent) GetRelatesTo() *RelatesTo {
 	if content.RelatesTo == nil {
 		content.RelatesTo = &RelatesTo{}
