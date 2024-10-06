@@ -223,20 +223,86 @@ func removeReplyFallback(evt *event.Event) []byte {
 	return nil
 }
 
-func (h *HiClient) decryptEvent(ctx context.Context, evt *event.Event) ([]byte, string, error) {
+func (h *HiClient) decryptEvent(ctx context.Context, evt *event.Event) (*event.Event, []byte, string, error) {
 	err := evt.Content.ParseRaw(evt.Type)
 	if err != nil && !errors.Is(err, event.ErrContentAlreadyParsed) {
-		return nil, "", err
+		return nil, nil, "", err
 	}
 	decrypted, err := h.Crypto.DecryptMegolmEvent(ctx, evt)
 	if err != nil {
-		return nil, "", err
+		return nil, nil, "", err
 	}
 	withoutFallback := removeReplyFallback(decrypted)
 	if withoutFallback != nil {
-		return withoutFallback, decrypted.Type.Type, nil
+		return decrypted, withoutFallback, decrypted.Type.Type, nil
 	}
-	return decrypted.Content.VeryRaw, decrypted.Type.Type, nil
+	return decrypted, decrypted.Content.VeryRaw, decrypted.Type.Type, nil
+}
+
+func (h *HiClient) addMediaCache(
+	ctx context.Context,
+	eventRowID database.EventRowID,
+	uri id.ContentURIString,
+	file *event.EncryptedFileInfo,
+	info *event.FileInfo,
+	fileName string,
+) {
+	parsedMXC := uri.ParseOrIgnore()
+	if !parsedMXC.IsValid() {
+		return
+	}
+	cm := &database.CachedMedia{
+		MXC:        parsedMXC,
+		EventRowID: eventRowID,
+		FileName:   fileName,
+	}
+	if file != nil {
+		cm.EncFile = &file.EncryptedFile
+	}
+	if info != nil {
+		cm.MimeType = info.MimeType
+	}
+	err := h.DB.CachedMedia.Put(ctx, cm)
+	if err != nil {
+		zerolog.Ctx(ctx).Warn().Err(err).
+			Stringer("mxc", parsedMXC).
+			Int64("event_rowid", int64(eventRowID)).
+			Msg("Failed to add cached media entry")
+	}
+}
+
+func (h *HiClient) cacheMedia(ctx context.Context, evt *event.Event, rowID database.EventRowID) {
+	switch evt.Type {
+	case event.EventMessage, event.EventSticker:
+		content, ok := evt.Content.Parsed.(*event.MessageEventContent)
+		if !ok {
+			return
+		}
+		if content.File != nil {
+			h.addMediaCache(ctx, rowID, content.File.URL, content.File, content.Info, content.GetFileName())
+		} else if content.URL != "" {
+			h.addMediaCache(ctx, rowID, content.URL, nil, content.Info, content.GetFileName())
+		}
+		if content.GetInfo().ThumbnailFile != nil {
+			h.addMediaCache(ctx, rowID, content.Info.ThumbnailFile.URL, content.Info.ThumbnailFile, content.Info.ThumbnailInfo, "")
+		} else if content.GetInfo().ThumbnailURL != "" {
+			h.addMediaCache(ctx, rowID, content.Info.ThumbnailURL, nil, content.Info.ThumbnailInfo, "")
+		}
+	case event.StateRoomAvatar:
+		_ = evt.Content.ParseRaw(evt.Type)
+		content, ok := evt.Content.Parsed.(*event.RoomAvatarEventContent)
+		if !ok {
+			return
+		}
+		h.addMediaCache(ctx, rowID, content.URL, nil, nil, "")
+	case event.StateMember:
+		_ = evt.Content.ParseRaw(evt.Type)
+		content, ok := evt.Content.Parsed.(*event.MemberEventContent)
+		if !ok {
+			return
+		}
+		h.addMediaCache(ctx, rowID, content.AvatarURL, nil, nil, "")
+	}
 }
 
 func (h *HiClient) processEvent(ctx context.Context, evt *event.Event, decryptionQueue map[id.SessionID]*database.SessionRequest, checkDB bool) (*database.Event, error) {
@@ -254,8 +320,9 @@ func (h *HiClient) processEvent(ctx context.Context, evt *event.Event, decryptio
 		dbEvt.Content = contentWithoutFallback
 	}
 	var decryptionErr error
+	var decryptedMautrixEvt *event.Event
 	if evt.Type == event.EventEncrypted && dbEvt.RedactedBy == "" {
-		dbEvt.Decrypted, dbEvt.DecryptedType, decryptionErr = h.decryptEvent(ctx, evt)
+		decryptedMautrixEvt, dbEvt.Decrypted, dbEvt.DecryptedType, decryptionErr = h.decryptEvent(ctx, evt)
 		if decryptionErr != nil {
 			dbEvt.DecryptionError = decryptionErr.Error()
 		}
@@ -271,6 +338,11 @@ func (h *HiClient) processEvent(ctx context.Context, evt *event.Event, decryptio
 	_, err := h.DB.Event.Upsert(ctx, dbEvt)
 	if err != nil {
 		return dbEvt, fmt.Errorf("failed to save event %s: %w", evt.ID, err)
+	}
+	if decryptedMautrixEvt != nil {
+		h.cacheMedia(ctx, decryptedMautrixEvt, dbEvt.RowID)
+	} else {
+		h.cacheMedia(ctx, evt, dbEvt.RowID)
 	}
 	if decryptionErr != nil && isDecryptionErrorRetryable(decryptionErr) {
 		req, ok := decryptionQueue[dbEvt.MegolmSessionID]

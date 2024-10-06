@@ -14,6 +14,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"maunium.net/go/mautrix/crypto"
+	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/hicli/database"
 	"maunium.net/go/mautrix/id"
 )
@@ -52,11 +53,13 @@ func (h *HiClient) handleReceivedMegolmSession(ctx context.Context, roomID id.Ro
 			continue
 		}
 
-		evt.Decrypted, evt.DecryptedType, err = h.decryptEvent(ctx, evt.AsRawMautrix())
+		var mautrixEvt *event.Event
+		mautrixEvt, evt.Decrypted, evt.DecryptedType, err = h.decryptEvent(ctx, evt.AsRawMautrix())
 		if err != nil {
 			log.Warn().Err(err).Stringer("event_id", evt.ID).Msg("Failed to decrypt event even after receiving megolm session")
 		} else {
 			decrypted = append(decrypted, evt)
+			h.cacheMedia(ctx, mautrixEvt, evt.RowID)
 		}
 	}
 	if len(decrypted) > 0 {
