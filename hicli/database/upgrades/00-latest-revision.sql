@@ -177,6 +177,18 @@ BEGIN
 	  AND reactions IS NOT NULL;
 END;
 
+CREATE TABLE cached_media (
+	mxc         TEXT NOT NULL PRIMARY KEY,
+	event_rowid INTEGER,
+	enc_file    TEXT,
+	file_name   TEXT,
+	mime_type   TEXT,
+	size        INTEGER,
+	hash        BLOB,
+
+	CONSTRAINT cached_media_event_fkey FOREIGN KEY (event_rowid) REFERENCES event (rowid) ON DELETE SET NULL
+) STRICT;
+
 CREATE TABLE session_request (
 	room_id        TEXT    NOT NULL,
 	session_id     TEXT    NOT NULL,
