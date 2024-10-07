@@ -154,7 +154,7 @@ func (eq *EventQuery) FillReactionCounts(ctx context.Context, roomID id.RoomID, 
 }
 
 func (eq *EventQuery) FillLastEditRowIDs(ctx context.Context, roomID id.RoomID, events []*Event) error {
-	eventIDs := make([]id.EventID, 0)
+	eventIDs := make([]id.EventID, len(events))
 	eventMap := make(map[id.EventID]*Event)
 	for i, evt := range events {
 		if evt.LastEditRowID == nil {

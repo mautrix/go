@@ -11,6 +11,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/rs/zerolog"
+
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/hicli/database"
 	"maunium.net/go/mautrix/id"
@@ -60,18 +62,23 @@ func (h *HiClient) GetEvent(ctx context.Context, roomID id.RoomID, eventID id.Ev
 	}
 }
 
-func (h *HiClient) Paginate(ctx context.Context, roomID id.RoomID, maxTimelineID database.TimelineRowID, limit int) ([]*database.Event, error) {
+type PaginationResponse struct {
+	Events  []*database.Event `json:"events"`
+	HasMore bool              `json:"has_more"`
+}
+
+func (h *HiClient) Paginate(ctx context.Context, roomID id.RoomID, maxTimelineID database.TimelineRowID, limit int) (*PaginationResponse, error) {
 	evts, err := h.DB.Timeline.Get(ctx, roomID, limit, maxTimelineID)
 	if err != nil {
 		return nil, err
 	} else if len(evts) > 0 {
-		return evts, nil
+		return &PaginationResponse{Events: evts, HasMore: true}, nil
 	} else {
 		return h.PaginateServer(ctx, roomID, limit)
 	}
 }
 
-func (h *HiClient) PaginateServer(ctx context.Context, roomID id.RoomID, limit int) ([]*database.Event, error) {
+func (h *HiClient) PaginateServer(ctx context.Context, roomID id.RoomID, limit int) (*PaginationResponse, error) {
 	ctx, cancel := context.WithCancelCause(ctx)
 	h.paginationInterrupterLock.Lock()
 	if _, alreadyPaginating := h.paginationInterrupter[roomID]; alreadyPaginating {
@@ -89,12 +96,21 @@ func (h *HiClient) PaginateServer(ctx context.Context, roomID id.RoomID, limit i
 	room, err := h.DB.Room.Get(ctx, roomID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get room from database: %w", err)
+	} else if room.PrevBatch == "" {
+		return &PaginationResponse{Events: []*database.Event{}, HasMore: false}, nil
 	}
 	resp, err := h.Client.Messages(ctx, roomID, room.PrevBatch, "", mautrix.DirectionBackward, nil, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get messages from server: %w", err)
 	}
 	events := make([]*database.Event, len(resp.Chunk))
+	if resp.End == "" || len(resp.Chunk) == 0 {
+		err = h.DB.Room.SetPrevBatch(ctx, room.ID, resp.End)
+		if err != nil {
+			return nil, fmt.Errorf("failed to set prev_batch: %w", err)
+		}
+		return &PaginationResponse{Events: events, HasMore: resp.End != ""}, nil
+	}
 	wakeupSessionRequests := false
 	err = h.DB.DoTxn(ctx, nil, func(ctx context.Context) error {
 		if err = ctx.Err(); err != nil {
@@ -102,13 +118,30 @@ func (h *HiClient) PaginateServer(ctx context.Context, roomID id.RoomID, limit i
 		}
 		eventRowIDs := make([]database.EventRowID, len(resp.Chunk))
 		decryptionQueue := make(map[id.SessionID]*database.SessionRequest)
+		iOffset := 0
 		for i, evt := range resp.Chunk {
-			events[i], err = h.processEvent(ctx, evt, decryptionQueue, true)
+			dbEvt, err := h.processEvent(ctx, evt, decryptionQueue, true)
 			if err != nil {
 				return err
+			} else if exists, err := h.DB.Timeline.Has(ctx, roomID, dbEvt.RowID); err != nil {
+				return fmt.Errorf("failed to check if event exists in timeline: %w", err)
+			} else if exists {
+				zerolog.Ctx(ctx).Warn().
+					Int64("row_id", int64(dbEvt.RowID)).
+					Str("event_id", dbEvt.ID.String()).
+					Msg("Event already exists in timeline, skipping")
+				iOffset++
+				continue
 			}
-			eventRowIDs[i] = events[i].RowID
+			events[i-iOffset] = dbEvt
+			eventRowIDs[i-iOffset] = events[i-iOffset].RowID
 		}
+		if iOffset >= len(events) {
+			events = events[:0]
+			return nil
+		}
+		events = events[:len(events)-iOffset]
+		eventRowIDs = eventRowIDs[:len(eventRowIDs)-iOffset]
 		wakeupSessionRequests = len(decryptionQueue) > 0
 		for _, entry := range decryptionQueue {
 			err = h.DB.SessionRequest.Put(ctx, entry)
@@ -137,5 +170,5 @@ func (h *HiClient) PaginateServer(ctx context.Context, roomID id.RoomID, limit i
 	if err == nil && wakeupSessionRequests {
 		h.WakeupRequestQueue()
 	}
-	return events, err
+	return &PaginationResponse{Events: events, HasMore: true}, err
 }

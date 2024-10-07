@@ -50,11 +50,11 @@ func (h *HiClient) handleJSONCommand(ctx context.Context, req *JSONCommand) (any
 			return h.GetEventsByRowIDs(ctx, params.RowIDs)
 		})
 	case "paginate":
-		return unmarshalAndCall(req.Data, func(params *paginateParams) ([]*database.Event, error) {
+		return unmarshalAndCall(req.Data, func(params *paginateParams) (*PaginationResponse, error) {
 			return h.Paginate(ctx, params.RoomID, params.MaxTimelineID, params.Limit)
 		})
 	case "paginate_server":
-		return unmarshalAndCall(req.Data, func(params *paginateParams) ([]*database.Event, error) {
+		return unmarshalAndCall(req.Data, func(params *paginateParams) (*PaginationResponse, error) {
 			return h.PaginateServer(ctx, params.RoomID, params.Limit)
 		})
 	case "ensure_group_session_shared":

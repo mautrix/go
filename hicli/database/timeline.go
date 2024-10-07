@@ -27,13 +27,16 @@ const (
 	prependTimelineQuery = `
 		INSERT INTO timeline (room_id, rowid, event_rowid) VALUES ($1, $2, $3)
 	`
+	checkTimelineContainsQuery = `
+		SELECT EXISTS(SELECT 1 FROM timeline WHERE room_id = $1 AND event_rowid = $2)
+	`
 	findMinRowIDQuery = `SELECT MIN(rowid) FROM timeline`
 	getTimelineQuery  = `
 		SELECT event.rowid, timeline.rowid, event.room_id, event_id, sender, type, state_key, timestamp, content, decrypted, decrypted_type, unsigned,
-		       redacted_by, relates_to, relation_type, megolm_session_id, decryption_error, reactions, last_edit_rowid
+		       transaction_id, redacted_by, relates_to, relation_type, megolm_session_id, decryption_error, send_error, reactions, last_edit_rowid
 		FROM timeline
 		JOIN event ON event.rowid = timeline.event_rowid
-		WHERE timeline.room_id = $1 AND timeline.rowid < $2
+		WHERE timeline.room_id = $1 AND ($2 = 0 OR timeline.rowid < $2)
 		ORDER BY timeline.rowid DESC
 		LIMIT $3
 	`
@@ -80,12 +83,13 @@ func (tq *TimelineQuery) reserveRowIDs(ctx context.Context, count int) (startFro
 			return
 		}
 		if tq.minRowID >= 0 {
-			// No negative row IDs exist, start at -1
-			tq.minRowID = -1
+			// No negative row IDs exist, start at -2
+			tq.minRowID = -2
 		} else {
 			// We fetched the lowest row ID, but we want the next available one, so decrement one
 			tq.minRowID--
 		}
+		tq.minRowIDFound = true
 	}
 	startFrom = tq.minRowID
 	tq.minRowID -= TimelineRowID(count)
@@ -120,4 +124,9 @@ func (tq *TimelineQuery) Append(ctx context.Context, roomID id.RoomID, rowIDs []
 
 func (tq *TimelineQuery) Get(ctx context.Context, roomID id.RoomID, limit int, before TimelineRowID) ([]*Event, error) {
 	return tq.QueryMany(ctx, getTimelineQuery, roomID, before, limit)
+}
+
+func (tq *TimelineQuery) Has(ctx context.Context, roomID id.RoomID, eventRowID EventRowID) (exists bool, err error) {
+	err = tq.GetDB().QueryRow(ctx, checkTimelineContainsQuery, roomID, eventRowID).Scan(&exists)
+	return
 }
