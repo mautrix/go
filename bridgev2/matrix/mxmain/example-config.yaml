@@ -6,7 +6,7 @@ bridge:
     personal_filtering_spaces: true
     # Whether the bridge should set names and avatars explicitly for DM portals.
     # This is only necessary when using clients that don't support MSC4171.
-    private_chat_portal_meta: false
+    private_chat_portal_meta: true
     # Should events be handled asynchronously within portal rooms?
     # If true, events may end up being out of order, but slow events won't block other ones.
     # This is not yet safe to use.
@@ -209,7 +209,7 @@ matrix:
     # Whether the bridge should send error notices via m.notice events when a message fails to bridge.
     message_error_notices: true
     # Whether the bridge should update the m.direct account data event when double puppeting is enabled.
-    sync_direct_chat_list: false
+    sync_direct_chat_list: true
     # Whether created rooms should have federation enabled. If false, created portal rooms
     # will never be federated. Changing this option requires recreating rooms.
     federate_rooms: true
