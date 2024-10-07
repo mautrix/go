@@ -309,6 +309,7 @@ type NetworkRoomCapabilities struct {
 	Captions         bool
 	MaxTextLength    int
 	MaxCaptionLength int
+	Polls            bool
 
 	Threads      bool
 	Replies      bool
@@ -519,6 +520,12 @@ type EditHandlingNetworkAPI interface {
 	// The central bridge module will save the [*database.Message] after this function returns,
 	// so the network connector is allowed to mutate the provided object.
 	HandleMatrixEdit(ctx context.Context, msg *MatrixEdit) error
+}
+
+type PollHandlingNetworkAPI interface {
+	NetworkAPI
+	HandleMatrixPollStart(ctx context.Context, msg *MatrixPollStart) (*MatrixMessageResponse, error)
+	HandleMatrixPollVote(ctx context.Context, msg *MatrixPollVote) (*MatrixMessageResponse, error)
 }
 
 // ReactionHandlingNetworkAPI is an optional interface that network connectors can implement to handle message reactions.
@@ -1106,6 +1113,17 @@ type MatrixMessage struct {
 type MatrixEdit struct {
 	MatrixEventBase[*event.MessageEventContent]
 	EditTarget *database.Message
+}
+
+type MatrixPollStart struct {
+	MatrixMessage
+	Content *event.PollStartEventContent
+}
+
+type MatrixPollVote struct {
+	MatrixMessage
+	VoteTo  *database.Message
+	Content *event.PollResponseEventContent
 }
 
 type MatrixReaction struct {

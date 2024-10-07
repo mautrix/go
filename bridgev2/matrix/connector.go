@@ -136,6 +136,8 @@ func (br *Connector) Init(bridge *bridgev2.Bridge) {
 	}
 	br.EventProcessor.On(event.EventMessage, br.handleRoomEvent)
 	br.EventProcessor.On(event.EventSticker, br.handleRoomEvent)
+	br.EventProcessor.On(event.EventUnstablePollStart, br.handleRoomEvent)
+	br.EventProcessor.On(event.EventUnstablePollResponse, br.handleRoomEvent)
 	br.EventProcessor.On(event.EventReaction, br.handleRoomEvent)
 	br.EventProcessor.On(event.EventRedaction, br.handleRoomEvent)
 	br.EventProcessor.On(event.EventEncrypted, br.handleEncryptedEvent)

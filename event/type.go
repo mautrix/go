@@ -126,7 +126,7 @@ func (et *Type) GuessClass() TypeClass {
 		InRoomVerificationStart.Type, InRoomVerificationReady.Type, InRoomVerificationAccept.Type,
 		InRoomVerificationKey.Type, InRoomVerificationMAC.Type, InRoomVerificationCancel.Type,
 		CallInvite.Type, CallCandidates.Type, CallAnswer.Type, CallReject.Type, CallSelectAnswer.Type,
-		CallNegotiate.Type, CallHangup.Type, BeeperMessageStatus.Type:
+		CallNegotiate.Type, CallHangup.Type, BeeperMessageStatus.Type, EventUnstablePollStart.Type, EventUnstablePollResponse.Type:
 		return MessageEventType
 	case ToDeviceRoomKey.Type, ToDeviceRoomKeyRequest.Type, ToDeviceForwardedRoomKey.Type, ToDeviceRoomKeyWithheld.Type,
 		ToDeviceBeeperRoomKeyAck.Type:
@@ -232,6 +232,9 @@ var (
 	CallHangup       = Type{"m.call.hangup", MessageEventType}
 
 	BeeperMessageStatus = Type{"com.beeper.message_send_status", MessageEventType}
+
+	EventUnstablePollStart    = Type{Type: "org.matrix.msc3381.poll.start", Class: MessageEventType}
+	EventUnstablePollResponse = Type{Type: "org.matrix.msc3381.poll.response", Class: MessageEventType}
 )
 
 // Ephemeral events

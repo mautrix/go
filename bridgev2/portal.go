@@ -528,7 +528,7 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 	// Copy logger because many of the handlers will use UpdateContext
 	ctx = log.With().Str("login_id", string(login.ID)).Logger().WithContext(ctx)
 	switch evt.Type {
-	case event.EventMessage, event.EventSticker:
+	case event.EventMessage, event.EventSticker, event.EventUnstablePollStart, event.EventUnstablePollResponse:
 		portal.handleMatrixMessage(ctx, login, origSender, evt)
 	case event.EventReaction:
 		if origSender != nil {
@@ -771,7 +771,21 @@ func (portal *Portal) checkMessageContentCaps(ctx context.Context, caps *Network
 
 func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) {
 	log := zerolog.Ctx(ctx)
-	content, ok := evt.Content.Parsed.(*event.MessageEventContent)
+	var relatesTo *event.RelatesTo
+	var msgContent *event.MessageEventContent
+	var pollContent *event.PollStartEventContent
+	var pollResponseContent *event.PollResponseEventContent
+	var ok bool
+	if evt.Type == event.EventUnstablePollStart {
+		pollContent, ok = evt.Content.Parsed.(*event.PollStartEventContent)
+		relatesTo = pollContent.RelatesTo
+	} else if evt.Type == event.EventUnstablePollResponse {
+		pollResponseContent, ok = evt.Content.Parsed.(*event.PollResponseEventContent)
+		relatesTo = &pollResponseContent.RelatesTo
+	} else {
+		msgContent, ok = evt.Content.Parsed.(*event.MessageEventContent)
+		relatesTo = msgContent.RelatesTo
+	}
 	if !ok {
 		log.Error().Type("content_type", evt.Content.Parsed).Msg("Unexpected parsed content type")
 		portal.sendErrorStatus(ctx, evt, fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed))
@@ -779,31 +793,61 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 	}
 	caps := sender.Client.GetCapabilities(ctx, portal)
 
-	if content.RelatesTo.GetReplaceID() != "" {
-		portal.handleMatrixEdit(ctx, sender, origSender, evt, content, caps)
+	if relatesTo.GetReplaceID() != "" {
+		if msgContent == nil {
+			log.Warn().Msg("Ignoring edit of poll")
+			portal.sendErrorStatus(ctx, evt, fmt.Errorf("%w of polls", ErrEditsNotSupported))
+			return
+		}
+		portal.handleMatrixEdit(ctx, sender, origSender, evt, msgContent, caps)
 		return
 	}
 	var err error
 	if origSender != nil {
-		content, err = portal.Bridge.Config.Relay.FormatMessage(content, origSender)
+		if msgContent == nil {
+			log.Debug().Msg("Ignoring poll event from relayed user")
+			portal.sendErrorStatus(ctx, evt, ErrIgnoringPollFromRelayedUser)
+			return
+		}
+		msgContent, err = portal.Bridge.Config.Relay.FormatMessage(msgContent, origSender)
 		if err != nil {
 			log.Err(err).Msg("Failed to format message for relaying")
 			portal.sendErrorStatus(ctx, evt, err)
 			return
 		}
 	}
-	if !portal.checkMessageContentCaps(ctx, caps, content, evt) {
-		return
+	if msgContent != nil {
+		if !portal.checkMessageContentCaps(ctx, caps, msgContent, evt) {
+			return
+		}
+	} else if pollResponseContent != nil || pollContent != nil {
+		if _, ok = sender.Client.(PollHandlingNetworkAPI); !ok {
+			log.Debug().Msg("Ignoring poll event as network connector doesn't implement PollHandlingNetworkAPI")
+			portal.sendErrorStatus(ctx, evt, ErrPollsNotSupported)
+			return
+		}
 	}
 
-	var threadRoot, replyTo *database.Message
+	var threadRoot, replyTo, voteTo *database.Message
+	if evt.Type == event.EventUnstablePollResponse {
+		voteTo, err = portal.Bridge.DB.Message.GetPartByMXID(ctx, relatesTo.GetReferenceID())
+		if err != nil {
+			log.Err(err).Msg("Failed to get poll target message from database")
+			// TODO send status
+			return
+		} else if voteTo == nil {
+			log.Warn().Stringer("vote_to_id", relatesTo.GetReferenceID()).Msg("Poll target message not found")
+			// TODO send status
+			return
+		}
+	}
 	var replyToID id.EventID
 	if caps.Threads {
-		replyToID = content.RelatesTo.GetNonFallbackReplyTo()
+		replyToID = relatesTo.GetNonFallbackReplyTo()
 	} else {
-		replyToID = content.RelatesTo.GetReplyTo()
+		replyToID = relatesTo.GetReplyTo()
 	}
-	threadRootID := content.RelatesTo.GetThreadParent()
+	threadRootID := relatesTo.GetThreadParent()
 	if caps.Threads && threadRootID != "" {
 		threadRoot, err = portal.Bridge.DB.Message.GetPartByMXID(ctx, threadRootID)
 		if err != nil {
@@ -839,23 +883,41 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 		}
 	}
 
-	wrappedEvt := &MatrixMessage{
+	wrappedMsgEvt := &MatrixMessage{
 		MatrixEventBase: MatrixEventBase[*event.MessageEventContent]{
 			Event:      evt,
-			Content:    content,
+			Content:    msgContent,
 			OrigSender: origSender,
 			Portal:     portal,
 		},
 		ThreadRoot: threadRoot,
 		ReplyTo:    replyTo,
 	}
-	resp, err := sender.Client.HandleMatrixMessage(ctx, wrappedEvt)
+	var resp *MatrixMessageResponse
+	if msgContent != nil {
+		resp, err = sender.Client.HandleMatrixMessage(ctx, wrappedMsgEvt)
+	} else if pollContent != nil {
+		resp, err = sender.Client.(PollHandlingNetworkAPI).HandleMatrixPollStart(ctx, &MatrixPollStart{
+			MatrixMessage: *wrappedMsgEvt,
+			Content:       pollContent,
+		})
+	} else if pollResponseContent != nil {
+		resp, err = sender.Client.(PollHandlingNetworkAPI).HandleMatrixPollVote(ctx, &MatrixPollVote{
+			MatrixMessage: *wrappedMsgEvt,
+			VoteTo:        voteTo,
+			Content:       pollResponseContent,
+		})
+	} else {
+		log.Error().Msg("Failed to handle Matrix message: all contents are nil?")
+		portal.sendErrorStatus(ctx, evt, fmt.Errorf("all contents are nil"))
+		return
+	}
 	if err != nil {
 		log.Err(err).Msg("Failed to handle Matrix message")
 		portal.sendErrorStatus(ctx, evt, err)
 		return
 	}
-	message := wrappedEvt.fillDBMessage(resp.DB)
+	message := wrappedMsgEvt.fillDBMessage(resp.DB)
 	if !resp.Pending {
 		if resp.DB == nil {
 			log.Error().Msg("Network connector didn't return a message to save")

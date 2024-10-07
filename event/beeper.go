@@ -97,3 +97,10 @@ type BeeperProfileExtra struct {
 	IsBridgeBot  bool     `json:"com.beeper.bridge.is_bridge_bot,omitempty"`
 	IsNetworkBot bool     `json:"com.beeper.bridge.is_network_bot,omitempty"`
 }
+
+type BeeperPerMessageProfile struct {
+	ID          string               `json:"id"`
+	Displayname string               `json:"displayname,omitempty"`
+	AvatarURL   *id.ContentURIString `json:"avatar_url,omitempty"`
+	AvatarFile  *EncryptedFileInfo   `json:"avatar_file,omitempty"`
+}
