@@ -420,6 +420,10 @@ func (params *FullRequest) compileRequest(ctx context.Context) (*http.Request, e
 		params.RequestLength = int64(len(params.RequestBytes))
 	} else if params.RequestLength > 0 && params.RequestBody != nil {
 		logBody = fmt.Sprintf("<%d bytes>", params.RequestLength)
+		if rsc, ok := params.RequestBody.(io.ReadSeekCloser); ok {
+			// Prevent HTTP from closing the request body, it might be needed for retries
+			reqBody = nopCloseSeeker{rsc}
+		}
 	} else if params.Method != http.MethodGet && params.Method != http.MethodHead {
 		params.RequestJSON = struct{}{}
 		logBody = params.RequestJSON
@@ -1612,6 +1616,9 @@ func (cli *Client) uploadMediaToURL(ctx context.Context, data ReqUploadMedia) (*
 	if data.ContentBytes != nil {
 		data.ContentLength = int64(len(data.ContentBytes))
 		reader = bytes.NewReader(data.ContentBytes)
+	} else if rsc, ok := reader.(io.ReadSeekCloser); ok {
+		// Prevent HTTP from closing the request body, it might be needed for retries
+		reader = nopCloseSeeker{rsc}
 	}
 	readerSeeker, canSeek := reader.(io.ReadSeeker)
 	if !canSeek {
@@ -1654,6 +1661,14 @@ func (cli *Client) uploadMediaToURL(ctx context.Context, data ReqUploadMedia) (*
 	}
 
 	return m, nil
+}
+
+type nopCloseSeeker struct {
+	io.ReadSeeker
+}
+
+func (nopCloseSeeker) Close() error {
+	return nil
 }
 
 // UploadMedia uploads the given data to the content repository and returns an MXC URI.
