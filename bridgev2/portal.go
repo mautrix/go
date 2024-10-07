@@ -928,6 +928,8 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 			err = portal.Bridge.DB.Message.Insert(ctx, message)
 			if err != nil {
 				log.Err(err).Msg("Failed to save message to database")
+			} else if resp.PostSave != nil {
+				resp.PostSave(ctx, message)
 			}
 			if resp.RemovePending != "" {
 				portal.outgoingMessagesLock.Lock()

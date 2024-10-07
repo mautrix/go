@@ -284,6 +284,9 @@ type MatrixMessageResponse struct {
 	// If RemovePending is set, the bridge will remove the provided transaction ID from pending messages
 	// after saving the provided message to the database. This should be used with AddPendingToIgnore.
 	RemovePending networkid.TransactionID
+	// An optional function that is called after the message is saved to the database.
+	// Will not be called if the message is not saved for some reason.
+	PostSave func(context.Context, *database.Message)
 }
 
 type FileRestriction struct {
