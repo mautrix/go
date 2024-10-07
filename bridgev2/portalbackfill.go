@@ -72,6 +72,9 @@ func (portal *Portal) doForwardBackfill(ctx context.Context, source *UserLogin, 
 	resp.Messages = portal.cutoffMessages(ctx, resp.Messages, resp.AggressiveDeduplication, true, lastMessage)
 	if len(resp.Messages) == 0 {
 		log.Warn().Msg("No messages left to backfill after cutting off old messages")
+		if resp.CompleteCallback != nil {
+			resp.CompleteCallback()
+		}
 		return
 	}
 	portal.sendBackfill(ctx, source, resp.Messages, true, resp.MarkRead, false, resp.CompleteCallback)
@@ -128,10 +131,16 @@ func (portal *Portal) DoBackwardsBackfill(ctx context.Context, source *UserLogin
 		} else {
 			log.Warn().Msg("No messages to backfill, but HasMore is true")
 		}
+		if resp.CompleteCallback != nil {
+			resp.CompleteCallback()
+		}
 		return nil
 	}
 	resp.Messages = portal.cutoffMessages(ctx, resp.Messages, resp.AggressiveDeduplication, false, firstMessage)
 	if len(resp.Messages) == 0 {
+		if resp.CompleteCallback != nil {
+			resp.CompleteCallback()
+		}
 		return fmt.Errorf("no messages left to backfill after cutting off too new messages")
 	}
 	portal.sendBackfill(ctx, source, resp.Messages, false, resp.MarkRead, false, resp.CompleteCallback)
@@ -163,6 +172,9 @@ func (portal *Portal) fetchThreadBackfill(ctx context.Context, source *UserLogin
 	resp.Messages = portal.cutoffMessages(ctx, resp.Messages, resp.AggressiveDeduplication, true, anchor)
 	if len(resp.Messages) == 0 {
 		log.Warn().Msg("No messages left to backfill after cutting off old messages")
+		if resp.CompleteCallback != nil {
+			resp.CompleteCallback()
+		}
 		return nil
 	}
 	return resp
