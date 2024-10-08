@@ -71,8 +71,12 @@ type MediaError struct {
 
 const MaxMediaBackoff = 7 * 24 * time.Hour
 
+func (me *MediaError) backoff() time.Duration {
+	return min(time.Duration(2<<me.Attempts)*time.Second, MaxMediaBackoff)
+}
+
 func (me *MediaError) UseCache() bool {
-	return me != nil && time.Since(me.ReceivedAt.Time) < min(time.Duration(2<<me.Attempts)*time.Second, MaxMediaBackoff)
+	return me != nil && time.Since(me.ReceivedAt.Time) < me.backoff()
 }
 
 func (me *MediaError) Write(w http.ResponseWriter) {
@@ -80,6 +84,7 @@ func (me *MediaError) Write(w http.ResponseWriter) {
 		me.Matrix.ExtraData = make(map[string]any)
 	}
 	me.Matrix.ExtraData["fi.mau.hicli.error_ts"] = me.ReceivedAt.UnixMilli()
+	me.Matrix.ExtraData["fi.mau.hicli.next_retry_ts"] = me.ReceivedAt.Add(me.backoff()).UnixMilli()
 	me.Matrix.WithStatus(me.StatusCode).Write(w)
 }
 
