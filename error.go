@@ -162,6 +162,11 @@ func (e RespError) WithMessage(msg string, args ...any) RespError {
 	return e
 }
 
+func (e RespError) WithStatus(status int) RespError {
+	e.StatusCode = status
+	return e
+}
+
 // Error returns the errcode and error message.
 func (e RespError) Error() string {
 	return e.ErrCode + ": " + e.Err

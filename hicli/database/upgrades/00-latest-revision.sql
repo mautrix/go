@@ -185,6 +185,7 @@ CREATE TABLE cached_media (
 	mime_type   TEXT,
 	size        INTEGER,
 	hash        BLOB,
+	error       TEXT,
 
 	CONSTRAINT cached_media_event_fkey FOREIGN KEY (event_rowid) REFERENCES event (rowid) ON DELETE SET NULL
 ) STRICT;
