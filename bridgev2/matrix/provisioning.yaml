@@ -91,6 +91,24 @@ paths:
     post:
       tags: [ auth ]
       summary: Start a new login process.
+      description: |
+        This endpoint starts a new login process, which is used to log into the bridge.
+
+        The basic flow of the entire login, including calling this endpoint, is:
+        1. Call `GET /v3/login/flows` to get the list of available flows.
+           If there's more than one flow, ask the user to pick which one they want to use.
+        2. Call this endpoint with the chosen flow ID to start the login.
+           The first login step will be returned.
+        3. Render the information provided in the step.
+        4. Call the `/login/step/...` endpoint corresponding to the step type:
+           * For `user_input` and `cookies`, acquire the requested fields before calling the endpoint.
+           * For `display_and_wait`, call the endpoint immediately
+             (as there's nothing to acquire on the client side).
+        5. Handle the data returned by the login step endpoint:
+           * If an error is returned, the login has failed and must be restarted
+             (from either step 1 or step 2) if the user wants to try again.
+           * If step type `complete` is returned, the login finished successfully.
+           * Otherwise, go to step 3 with the new data.
       operationId: startLogin
       parameters:
       - name: login_id
