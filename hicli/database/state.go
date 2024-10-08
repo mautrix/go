@@ -4,16 +4,14 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-//go:build go1.23
-
 package database
 
 import (
 	"context"
 	"fmt"
-	"slices"
 
 	"go.mau.fi/util/dbutil"
+	"go.mau.fi/util/exslices"
 
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -72,7 +70,7 @@ func (csq *CurrentStateQuery) AddMany(ctx context.Context, roomID id.RoomID, del
 			return fmt.Errorf("failed to delete old state: %w", err)
 		}
 	}
-	for entryChunk := range slices.Chunk(entries, currentStateMassInsertBatchSize) {
+	for _, entryChunk := range exslices.Chunk(entries, currentStateMassInsertBatchSize) {
 		query, params := massInsertCurrentStateBuilder.Build([1]any{roomID}, entryChunk)
 		err = csq.Exec(ctx, query, params...)
 		if err != nil {
