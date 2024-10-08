@@ -153,7 +153,10 @@ func (r *Room) CheckChangesAndCopyInto(other *Room) (hasChanges bool) {
 		other.EncryptionEvent = r.EncryptionEvent
 		hasChanges = true
 	}
-	other.HasMemberList = other.HasMemberList || r.HasMemberList
+	if r.HasMemberList && !other.HasMemberList {
+		hasChanges = true
+		other.HasMemberList = true
+	}
 	if r.PreviewEventRowID > other.PreviewEventRowID {
 		other.PreviewEventRowID = r.PreviewEventRowID
 		hasChanges = true

@@ -39,6 +39,9 @@ const (
 		SELECT state_key FROM current_state
 		WHERE room_id = $1 AND event_type = 'm.room.member' AND membership IN ('join', 'invite')
 	`
+	getHasFetchedMembersQuery = `
+		SELECT has_member_list FROM room WHERE room_id = $1
+	`
 	isRoomEncryptedQuery = `
 		SELECT room.encryption_event IS NOT NULL FROM room WHERE room_id = $1
 	`
@@ -116,7 +119,12 @@ func (c *ClientStateStore) GetRoomJoinedOrInvitedMembers(ctx context.Context, ro
 	return dbutil.NewRowIterWithError(rows, dbutil.ScanSingleColumn[id.UserID], err).AsList()
 }
 
-func (c *ClientStateStore) HasFetchedMembers(ctx context.Context, roomID id.RoomID) (bool, error) {
+func (c *ClientStateStore) HasFetchedMembers(ctx context.Context, roomID id.RoomID) (hasFetched bool, err error) {
+	//err = c.QueryRow(ctx, getHasFetchedMembersQuery, roomID).Scan(&hasFetched)
+	//if errors.Is(err, sql.ErrNoRows) {
+	//	err = nil
+	//}
+	//return
 	return false, fmt.Errorf("not implemented")
 }
 

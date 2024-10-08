@@ -1469,6 +1469,18 @@ func (cli *Client) State(ctx context.Context, roomID id.RoomID) (stateMap RoomSt
 	return
 }
 
+// StateAsArray gets all the state in a room as an array. It does not update the state store.
+// Use State to get the events as a map and also update the state store.
+func (cli *Client) StateAsArray(ctx context.Context, roomID id.RoomID) (state []*event.Event, err error) {
+	_, err = cli.MakeRequest(ctx, http.MethodGet, cli.BuildClientURL("v3", "rooms", roomID, "state"), nil, &state)
+	if err == nil {
+		for _, evt := range state {
+			evt.Type.Class = event.StateEventType
+		}
+	}
+	return
+}
+
 // GetMediaConfig fetches the configuration of the content repository, such as upload limitations.
 func (cli *Client) GetMediaConfig(ctx context.Context) (resp *RespMediaConfig, err error) {
 	_, err = cli.MakeRequest(ctx, http.MethodGet, cli.BuildClientURL("v1", "media", "config"), nil, &resp)

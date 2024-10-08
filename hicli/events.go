@@ -13,10 +13,11 @@ import (
 )
 
 type SyncRoom struct {
-	Meta     *database.Room              `json:"meta"`
-	Timeline []database.TimelineRowTuple `json:"timeline"`
-	Events   []*database.Event           `json:"events"`
-	Reset    bool                        `json:"reset"`
+	Meta     *database.Room                                `json:"meta"`
+	Timeline []database.TimelineRowTuple                   `json:"timeline"`
+	State    map[event.Type]map[string]database.EventRowID `json:"state"`
+	Events   []*database.Event                             `json:"events"`
+	Reset    bool                                          `json:"reset"`
 }
 
 type SyncComplete struct {

@@ -49,6 +49,10 @@ func (h *HiClient) handleJSONCommand(ctx context.Context, req *JSONCommand) (any
 		return unmarshalAndCall(req.Data, func(params *getEventsByRowIDsParams) ([]*database.Event, error) {
 			return h.GetEventsByRowIDs(ctx, params.RowIDs)
 		})
+	case "get_room_state":
+		return unmarshalAndCall(req.Data, func(params *getRoomStateParams) ([]*database.Event, error) {
+			return h.GetRoomState(ctx, params.RoomID, params.FetchMembers, params.Refetch)
+		})
 	case "paginate":
 		return unmarshalAndCall(req.Data, func(params *paginateParams) (*PaginationResponse, error) {
 			return h.Paginate(ctx, params.RoomID, params.MaxTimelineID, params.Limit)
@@ -109,6 +113,12 @@ type getEventParams struct {
 
 type getEventsByRowIDsParams struct {
 	RowIDs []database.EventRowID `json:"row_ids"`
+}
+
+type getRoomStateParams struct {
+	RoomID       id.RoomID `json:"room_id"`
+	Refetch      bool      `json:"refetch"`
+	FetchMembers bool      `json:"fetch_members"`
 }
 
 type ensureGroupSessionSharedParams struct {

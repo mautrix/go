@@ -148,16 +148,22 @@ func (h *HiClient) loadMembers(ctx context.Context, room *database.Room) error {
 		return fmt.Errorf("failed to get room member list: %w", err)
 	}
 	err = h.DB.DoTxn(ctx, nil, func(ctx context.Context) error {
-		for _, evt := range resp.Chunk {
+		entries := make([]*database.CurrentStateEntry, len(resp.Chunk))
+		for i, evt := range resp.Chunk {
 			dbEvt, err := h.processEvent(ctx, evt, nil, true)
 			if err != nil {
 				return err
 			}
-			membership := event.Membership(evt.Content.Raw["membership"].(string))
-			err = h.DB.CurrentState.Set(ctx, room.ID, evt.Type, *evt.StateKey, dbEvt.RowID, membership)
-			if err != nil {
-				return err
+			entries[i] = &database.CurrentStateEntry{
+				EventType:  evt.Type,
+				StateKey:   *evt.StateKey,
+				EventRowID: dbEvt.RowID,
+				Membership: event.Membership(evt.Content.Raw["membership"].(string)),
 			}
+		}
+		err := h.DB.CurrentState.AddMany(ctx, room.ID, false, entries)
+		if err != nil {
+			return err
 		}
 		return h.DB.Room.Upsert(ctx, &database.Room{
 			ID:            room.ID,

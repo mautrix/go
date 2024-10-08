@@ -14,6 +14,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/hicli/database"
 	"maunium.net/go/mautrix/id"
 )
@@ -60,6 +61,68 @@ func (h *HiClient) GetEvent(ctx context.Context, roomID id.RoomID, eventID id.Ev
 	} else {
 		return h.processEvent(ctx, serverEvt, nil, false)
 	}
+}
+
+func (h *HiClient) GetRoomState(ctx context.Context, roomID id.RoomID, fetchMembers, refetch bool) ([]*database.Event, error) {
+	var evts []*event.Event
+	if refetch {
+		resp, err := h.Client.StateAsArray(ctx, roomID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to refetch state: %w", err)
+		}
+		evts = resp
+	} else if fetchMembers {
+		resp, err := h.Client.Members(ctx, roomID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch members: %w", err)
+		}
+		evts = resp.Chunk
+	}
+	if evts != nil {
+		err := h.DB.DoTxn(ctx, nil, func(ctx context.Context) error {
+			room, err := h.DB.Room.Get(ctx, roomID)
+			if err != nil {
+				return fmt.Errorf("failed to get room from database: %w", err)
+			}
+			updatedRoom := &database.Room{
+				ID:            room.ID,
+				HasMemberList: true,
+			}
+			entries := make([]*database.CurrentStateEntry, len(evts))
+			for i, evt := range evts {
+				dbEvt, err := h.processEvent(ctx, evt, nil, false)
+				if err != nil {
+					return fmt.Errorf("failed to process event %s: %w", evt.ID, err)
+				}
+				entries[i] = &database.CurrentStateEntry{
+					EventType:  evt.Type,
+					StateKey:   *evt.StateKey,
+					EventRowID: dbEvt.RowID,
+				}
+				if evt.Type == event.StateMember {
+					entries[i].Membership = event.Membership(evt.Content.Raw["membership"].(string))
+				} else {
+					processImportantEvent(ctx, evt, room, updatedRoom)
+				}
+			}
+			err = h.DB.CurrentState.AddMany(ctx, room.ID, refetch, entries)
+			if err != nil {
+				return err
+			}
+			roomChanged := updatedRoom.CheckChangesAndCopyInto(room)
+			if roomChanged {
+				err = h.DB.Room.Upsert(ctx, updatedRoom)
+				if err != nil {
+					return fmt.Errorf("failed to save room data: %w", err)
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	return h.DB.CurrentState.GetAll(ctx, roomID)
 }
 
 type PaginationResponse struct {

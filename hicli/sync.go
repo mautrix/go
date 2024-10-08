@@ -410,15 +410,23 @@ func (h *HiClient) processStateAndTimeline(ctx context.Context, room *database.R
 		allNewEvents = append(allNewEvents, dbEvt)
 		return dbEvt.RowID, nil
 	}
-	var err error
+	changedState := make(map[event.Type]map[string]database.EventRowID)
+	setNewState := func(evtType event.Type, stateKey string, rowID database.EventRowID) {
+		if _, ok := changedState[evtType]; !ok {
+			changedState[evtType] = make(map[string]database.EventRowID)
+		}
+		changedState[evtType][stateKey] = rowID
+	}
 	for _, evt := range state.Events {
 		evt.Type.Class = event.StateEventType
-		_, err = processNewEvent(evt, false)
+		rowID, err := processNewEvent(evt, false)
 		if err != nil {
 			return err
 		}
+		setNewState(evt.Type, *evt.StateKey, rowID)
 	}
 	var timelineRowTuples []database.TimelineRowTuple
+	var err error
 	if len(timeline.Events) > 0 {
 		timelineIDs := make([]database.EventRowID, len(timeline.Events))
 		for i, evt := range timeline.Events {
@@ -430,6 +438,9 @@ func (h *HiClient) processStateAndTimeline(ctx context.Context, room *database.R
 			timelineIDs[i], err = processNewEvent(evt, true)
 			if err != nil {
 				return err
+			}
+			if evt.StateKey != nil {
+				setNewState(evt.Type, *evt.StateKey, timelineIDs[i])
 			}
 		}
 		for _, entry := range decryptionQueue {
@@ -481,6 +492,7 @@ func (h *HiClient) processStateAndTimeline(ctx context.Context, room *database.R
 		ctx.Value(syncContextKey).(*syncContext).evt.Rooms[room.ID] = &SyncRoom{
 			Meta:     room,
 			Timeline: timelineRowTuples,
+			State:    changedState,
 			Reset:    timeline.Limited,
 			Events:   allNewEvents,
 		}
