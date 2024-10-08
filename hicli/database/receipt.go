@@ -12,6 +12,7 @@ import (
 
 	"go.mau.fi/util/dbutil"
 	"go.mau.fi/util/exslices"
+	"go.mau.fi/util/jsontime"
 
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -54,12 +55,12 @@ func (rq *ReceiptQuery) PutMany(ctx context.Context, roomID id.RoomID, receipts 
 }
 
 type Receipt struct {
-	RoomID      id.RoomID
-	UserID      id.UserID
-	ReceiptType event.ReceiptType
-	ThreadID    event.ThreadID
-	EventID     id.EventID
-	Timestamp   time.Time
+	RoomID      id.RoomID          `json:"room_id"`
+	UserID      id.UserID          `json:"user_id"`
+	ReceiptType event.ReceiptType  `json:"receipt_type"`
+	ThreadID    event.ThreadID     `json:"thread_id"`
+	EventID     id.EventID         `json:"event_id"`
+	Timestamp   jsontime.UnixMilli `json:"timestamp"`
 }
 
 func (r *Receipt) Scan(row dbutil.Scannable) (*Receipt, error) {
@@ -68,7 +69,7 @@ func (r *Receipt) Scan(row dbutil.Scannable) (*Receipt, error) {
 	if err != nil {
 		return nil, err
 	}
-	r.Timestamp = time.UnixMilli(ts)
+	r.Timestamp = jsontime.UM(time.UnixMilli(ts))
 	return r, nil
 }
 

@@ -50,10 +50,10 @@ func (adq *AccountDataQuery) PutRoom(ctx context.Context, userID id.UserID, room
 }
 
 type AccountData struct {
-	UserID  id.UserID
-	RoomID  id.RoomID
-	Type    string
-	Content json.RawMessage
+	UserID  id.UserID       `json:"user_id"`
+	RoomID  id.RoomID       `json:"room_id,omitempty"`
+	Type    string          `json:"type"`
+	Content json.RawMessage `json:"content"`
 }
 
 func (a *AccountData) Scan(row dbutil.Scannable) (*AccountData, error) {

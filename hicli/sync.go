@@ -16,6 +16,7 @@ import (
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 	"go.mau.fi/util/exzerolog"
+	"go.mau.fi/util/jsontime"
 	"golang.org/x/exp/slices"
 
 	"maunium.net/go/mautrix"
@@ -133,7 +134,7 @@ func receiptsToList(content *event.ReceiptEventContent) []*database.Receipt {
 					ReceiptType: receiptType,
 					ThreadID:    receiptInfo.ThreadID,
 					EventID:     eventID,
-					Timestamp:   receiptInfo.Timestamp,
+					Timestamp:   jsontime.UM(receiptInfo.Timestamp),
 				})
 			}
 		}
