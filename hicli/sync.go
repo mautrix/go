@@ -68,7 +68,9 @@ func (h *HiClient) postProcessSyncResponse(ctx context.Context, resp *mautrix.Re
 		h.WakeupRequestQueue()
 	}
 	h.firstSyncReceived = true
-	h.EventHandler(syncCtx.evt)
+	if !syncCtx.evt.IsEmpty() {
+		h.EventHandler(syncCtx.evt)
+	}
 }
 
 func (h *HiClient) asyncPostProcessSyncResponse(ctx context.Context, resp *mautrix.RespSync, since string) {

@@ -24,6 +24,10 @@ type SyncComplete struct {
 	Rooms map[id.RoomID]*SyncRoom `json:"rooms"`
 }
 
+func (c *SyncComplete) IsEmpty() bool {
+	return len(c.Rooms) == 0
+}
+
 type EventsDecrypted struct {
 	RoomID            id.RoomID           `json:"room_id"`
 	PreviewEventRowID database.EventRowID `json:"preview_event_rowid,omitempty"`
