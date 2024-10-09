@@ -77,6 +77,7 @@ func (h *HiClient) Send(ctx context.Context, roomID id.RoomID, evtType event.Typ
 		return nil, fmt.Errorf("failed to insert event into database: %w", err)
 	}
 	go func() {
+		ctx := context.WithoutCancel(ctx)
 		var err error
 		defer func() {
 			h.EventHandler(&SendComplete{
