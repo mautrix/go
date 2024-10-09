@@ -446,7 +446,7 @@ func (br *Connector) SendMessageStatus(ctx context.Context, ms *bridgev2.Message
 }
 
 func (br *Connector) internalSendMessageStatus(ctx context.Context, ms *bridgev2.MessageStatus, evt *bridgev2.MessageStatusEventInfo, editEvent id.EventID) id.EventID {
-	if evt.EventType.IsEphemeral() || evt.EventID == "" {
+	if evt.EventType.IsEphemeral() || evt.SourceEventID == "" {
 		return ""
 	}
 	log := zerolog.Ctx(ctx)
@@ -460,7 +460,7 @@ func (br *Connector) internalSendMessageStatus(ctx context.Context, ms *bridgev2
 		if err != nil {
 			log.Err(err).
 				Stringer("room_id", evt.RoomID).
-				Stringer("event_id", evt.EventID).
+				Stringer("event_id", evt.SourceEventID).
 				Any("mss_content", mssEvt).
 				Msg("Failed to send MSS event")
 		}
@@ -474,7 +474,7 @@ func (br *Connector) internalSendMessageStatus(ctx context.Context, ms *bridgev2
 		if err != nil {
 			log.Err(err).
 				Stringer("room_id", evt.RoomID).
-				Stringer("event_id", evt.EventID).
+				Stringer("event_id", evt.SourceEventID).
 				Str("notice_message", content.Body).
 				Msg("Failed to send notice event")
 		} else {
@@ -482,11 +482,11 @@ func (br *Connector) internalSendMessageStatus(ctx context.Context, ms *bridgev2
 		}
 	}
 	if ms.Status == event.MessageStatusSuccess && br.Config.Matrix.DeliveryReceipts {
-		err = br.Bot.SendReceipt(ctx, evt.RoomID, evt.EventID, event.ReceiptTypeRead, nil)
+		err = br.Bot.SendReceipt(ctx, evt.RoomID, evt.SourceEventID, event.ReceiptTypeRead, nil)
 		if err != nil {
 			log.Err(err).
 				Stringer("room_id", evt.RoomID).
-				Stringer("event_id", evt.EventID).
+				Stringer("event_id", evt.SourceEventID).
 				Msg("Failed to send Matrix delivery receipt")
 		}
 	}

@@ -66,6 +66,7 @@ type BridgeConfig struct {
 	BridgeMatrixLeave       bool             `yaml:"bridge_matrix_leave"`
 	TagOnlyOnCreate         bool             `yaml:"tag_only_on_create"`
 	MuteOnlyOnCreate        bool             `yaml:"mute_only_on_create"`
+	OutgoingMessageReID     bool             `yaml:"outgoing_message_re_id"`
 	CleanupOnLogout         CleanupOnLogouts `yaml:"cleanup_on_logout"`
 	Relay                   RelayConfig      `yaml:"relay"`
 	Permissions             PermissionConfig `yaml:"permissions"`

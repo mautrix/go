@@ -440,9 +440,12 @@ func (portal *Portal) FindPreferredLogin(ctx context.Context, user *User, allowR
 	}
 }
 
-func (portal *Portal) sendSuccessStatus(ctx context.Context, evt *event.Event, streamOrder int64) {
+func (portal *Portal) sendSuccessStatus(ctx context.Context, evt *event.Event, streamOrder int64, newEventID id.EventID) {
 	info := StatusEventInfoFromEvent(evt)
 	info.StreamOrder = streamOrder
+	if newEventID != evt.ID {
+		info.NewEventID = newEventID
+	}
 	portal.Bridge.Matrix.SendMessageStatus(ctx, &MessageStatus{Status: event.MessageStatusSuccess}, info)
 }
 
@@ -922,6 +925,9 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 		if resp.DB == nil {
 			log.Error().Msg("Network connector didn't return a message to save")
 		} else {
+			if portal.Bridge.Config.OutgoingMessageReID {
+				message.MXID = portal.Bridge.Matrix.GenerateDeterministicEventID(portal.MXID, portal.PortalKey, message.ID, message.PartID)
+			}
 			// Hack to ensure the ghost row exists
 			// TODO move to better place (like login)
 			portal.Bridge.GetGhostByID(ctx, message.SenderID)
@@ -937,7 +943,7 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 				portal.outgoingMessagesLock.Unlock()
 			}
 		}
-		portal.sendSuccessStatus(ctx, evt, resp.StreamOrder)
+		portal.sendSuccessStatus(ctx, evt, resp.StreamOrder, message.MXID)
 	}
 	if portal.Disappear.Type != database.DisappearingTypeNone {
 		go portal.Bridge.DisappearLoop.Add(ctx, &database.DisappearingMessage{
@@ -1090,7 +1096,7 @@ func (portal *Portal) handleMatrixEdit(ctx context.Context, sender *UserLogin, o
 		log.Err(err).Msg("Failed to save message to database after editing")
 	}
 	// TODO allow returning stream order from HandleMatrixEdit
-	portal.sendSuccessStatus(ctx, evt, 0)
+	portal.sendSuccessStatus(ctx, evt, 0, "")
 }
 
 func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogin, evt *event.Event) {
@@ -1144,7 +1150,7 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 	} else if existing != nil {
 		if existing.EmojiID != "" || existing.Emoji == preResp.Emoji {
 			log.Debug().Msg("Ignoring duplicate reaction")
-			portal.sendSuccessStatus(ctx, evt, 0)
+			portal.sendSuccessStatus(ctx, evt, 0, "")
 			return
 		}
 		react.ReactionToOverride = existing
@@ -1226,7 +1232,7 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 	if err != nil {
 		log.Err(err).Msg("Failed to save reaction to database")
 	}
-	portal.sendSuccessStatus(ctx, evt, 0)
+	portal.sendSuccessStatus(ctx, evt, 0, "")
 }
 
 func handleMatrixRoomMeta[APIType any, ContentType any](
@@ -1252,17 +1258,17 @@ func handleMatrixRoomMeta[APIType any, ContentType any](
 	switch typedContent := evt.Content.Parsed.(type) {
 	case *event.RoomNameEventContent:
 		if typedContent.Name == portal.Name {
-			portal.sendSuccessStatus(ctx, evt, 0)
+			portal.sendSuccessStatus(ctx, evt, 0, "")
 			return
 		}
 	case *event.TopicEventContent:
 		if typedContent.Topic == portal.Topic {
-			portal.sendSuccessStatus(ctx, evt, 0)
+			portal.sendSuccessStatus(ctx, evt, 0, "")
 			return
 		}
 	case *event.RoomAvatarEventContent:
 		if typedContent.URL == portal.AvatarMXC {
-			portal.sendSuccessStatus(ctx, evt, 0)
+			portal.sendSuccessStatus(ctx, evt, 0, "")
 			return
 		}
 	}
@@ -1293,7 +1299,7 @@ func handleMatrixRoomMeta[APIType any, ContentType any](
 			log.Err(err).Msg("Failed to save portal after updating room metadata")
 		}
 	}
-	portal.sendSuccessStatus(ctx, evt, 0)
+	portal.sendSuccessStatus(ctx, evt, 0, "")
 }
 
 func handleMatrixAccountData[APIType any, ContentType any](
@@ -1583,7 +1589,7 @@ func (portal *Portal) handleMatrixRedaction(ctx context.Context, sender *UserLog
 		return
 	}
 	// TODO delete msg/reaction db row
-	portal.sendSuccessStatus(ctx, evt, 0)
+	portal.sendSuccessStatus(ctx, evt, 0, "")
 }
 
 func (portal *Portal) handleRemoteEvent(ctx context.Context, source *UserLogin, evtType RemoteEventType, evt RemoteEvent) {
@@ -1894,6 +1900,9 @@ func (portal *Portal) checkPendingMessage(ctx context.Context, evt RemoteMessage
 		saveMessage, statusErr = pending.handle(evt, pending.db)
 	}
 	if saveMessage {
+		if portal.Bridge.Config.OutgoingMessageReID {
+			pending.db.MXID = portal.Bridge.Matrix.GenerateDeterministicEventID(portal.MXID, portal.PortalKey, pending.db.ID, pending.db.PartID)
+		}
 		// Hack to ensure the ghost row exists
 		// TODO move to better place (like login)
 		portal.Bridge.GetGhostByID(ctx, pending.db.SenderID)
@@ -1906,7 +1915,7 @@ func (portal *Portal) checkPendingMessage(ctx context.Context, evt RemoteMessage
 		if statusErr != nil {
 			portal.sendErrorStatus(ctx, pending.evt, statusErr)
 		} else {
-			portal.sendSuccessStatus(ctx, pending.evt, getStreamOrder(evt))
+			portal.sendSuccessStatus(ctx, pending.evt, getStreamOrder(evt), pending.evt.ID)
 		}
 	}
 	zerolog.Ctx(ctx).Debug().Stringer("event_id", pending.evt.ID).Msg("Received remote echo for message")
@@ -2571,9 +2580,9 @@ func (portal *Portal) handleRemoteDeliveryReceipt(ctx context.Context, source *U
 				Status:      event.MessageStatusSuccess,
 				DeliveredTo: []id.UserID{intent.GetMXID()},
 			}, &MessageStatusEventInfo{
-				RoomID:  portal.MXID,
-				EventID: part.MXID,
-				Sender:  part.SenderMXID,
+				RoomID:        portal.MXID,
+				SourceEventID: part.MXID,
+				Sender:        part.SenderMXID,
 			})
 		}
 	}

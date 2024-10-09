@@ -77,10 +77,10 @@ func (proc *Processor) Handle(ctx context.Context, roomID id.RoomID, eventID id.
 	log := &logCopy
 	defer func() {
 		statusInfo := &bridgev2.MessageStatusEventInfo{
-			RoomID:    roomID,
-			EventID:   eventID,
-			EventType: event.EventMessage,
-			Sender:    user.MXID,
+			RoomID:        roomID,
+			SourceEventID: eventID,
+			EventType:     event.EventMessage,
+			Sender:        user.MXID,
 		}
 		err := recover()
 		if err != nil {

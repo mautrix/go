@@ -18,13 +18,14 @@ import (
 )
 
 type MessageStatusEventInfo struct {
-	RoomID      id.RoomID
-	EventID     id.EventID
-	EventType   event.Type
-	MessageType event.MessageType
-	Sender      id.UserID
-	ThreadRoot  id.EventID
-	StreamOrder int64
+	RoomID        id.RoomID
+	SourceEventID id.EventID
+	NewEventID    id.EventID
+	EventType     event.Type
+	MessageType   event.MessageType
+	Sender        id.UserID
+	ThreadRoot    id.EventID
+	StreamOrder   int64
 }
 
 func StatusEventInfoFromEvent(evt *event.Event) *MessageStatusEventInfo {
@@ -33,12 +34,12 @@ func StatusEventInfoFromEvent(evt *event.Event) *MessageStatusEventInfo {
 		threadRoot = relatable.OptionalGetRelatesTo().GetThreadParent()
 	}
 	return &MessageStatusEventInfo{
-		RoomID:      evt.RoomID,
-		EventID:     evt.ID,
-		EventType:   evt.Type,
-		MessageType: evt.Content.AsMessage().MsgType,
-		Sender:      evt.Sender,
-		ThreadRoot:  threadRoot,
+		RoomID:        evt.RoomID,
+		SourceEventID: evt.ID,
+		EventType:     evt.Type,
+		MessageType:   evt.Content.AsMessage().MsgType,
+		Sender:        evt.Sender,
+		ThreadRoot:    threadRoot,
 	}
 }
 
@@ -150,7 +151,7 @@ func (ms *MessageStatus) ToCheckpoint(evt *MessageStatusEventInfo) *status.Messa
 	}
 	checkpoint := &status.MessageCheckpoint{
 		RoomID:      evt.RoomID,
-		EventID:     evt.EventID,
+		EventID:     evt.SourceEventID,
 		Step:        step,
 		Timestamp:   jsontime.UnixMilliNow(),
 		Status:      ms.checkpointStatus(),
@@ -171,7 +172,7 @@ func (ms *MessageStatus) ToMSSEvent(evt *MessageStatusEventInfo) *event.BeeperMe
 	content := &event.BeeperMessageStatusEventContent{
 		RelatesTo: event.RelatesTo{
 			Type:    event.RelReference,
-			EventID: evt.EventID,
+			EventID: evt.SourceEventID,
 		},
 		Status:  ms.Status,
 		Reason:  ms.ErrorReason,
@@ -216,9 +217,9 @@ func (ms *MessageStatus) ToNoticeEvent(evt *MessageStatusEventInfo) *event.Messa
 		Mentions:  &event.Mentions{},
 	}
 	if evt.ThreadRoot != "" {
-		content.RelatesTo.SetThread(evt.ThreadRoot, evt.EventID)
+		content.RelatesTo.SetThread(evt.ThreadRoot, evt.SourceEventID)
 	} else {
-		content.RelatesTo.SetReplyTo(evt.EventID)
+		content.RelatesTo.SetReplyTo(evt.SourceEventID)
 	}
 	if evt.Sender != "" {
 		content.Mentions.UserIDs = []id.UserID{evt.Sender}
