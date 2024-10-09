@@ -51,7 +51,7 @@ func (mach *OlmMachine) storeCrossSigningKeys(ctx context.Context, crossSigningK
 		for _, key := range userKeys.Keys {
 			log := log.With().Str("key", key.String()).Array("usages", exzerolog.ArrayOfStrs(userKeys.Usage)).Logger()
 			for _, usage := range userKeys.Usage {
-				log.Debug().Str("usage", string(usage)).Msg("Storing cross-signing key")
+				log.Trace().Str("usage", string(usage)).Msg("Storing cross-signing key")
 				if err = mach.CryptoStore.PutCrossSigningKey(ctx, userID, usage, key); err != nil {
 					log.Error().Err(err).Msg("Error storing cross-signing key")
 				}
@@ -86,7 +86,7 @@ func (mach *OlmMachine) storeCrossSigningKeys(ctx context.Context, crossSigningK
 						log.Warn().Err(err).Msg("Error verifying cross-signing key signature")
 					} else {
 						if verified {
-							log.Debug().Err(err).Msg("Cross-signing key signature verified")
+							log.Trace().Err(err).Msg("Cross-signing key signature verified")
 							err = mach.CryptoStore.PutSignature(ctx, userID, key, signUserID, signingKey, signature)
 							if err != nil {
 								log.Error().Err(err).Msg("Error storing cross-signing key signature")
