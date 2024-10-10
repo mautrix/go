@@ -187,8 +187,10 @@ func (br *Bridge) actuallyDoBackfillTask(ctx context.Context, task *database.Bac
 		if login == nil {
 			task.UserLoginID = ""
 		}
+		foundLogin := false
 		for _, login = range logins {
 			if login.Client.IsLoggedIn() {
+				foundLogin = true
 				task.UserLoginID = login.ID
 				log.UpdateContext(func(c zerolog.Context) zerolog.Context {
 					return c.Str("overridden_login_id", string(login.ID))
@@ -197,7 +199,7 @@ func (br *Bridge) actuallyDoBackfillTask(ctx context.Context, task *database.Bac
 				break
 			}
 		}
-		if task.UserLoginID == "" {
+		if !foundLogin {
 			log.Debug().Msg("No logged in user logins found for backfill task")
 			task.NextDispatchMinTS = database.BackfillNextDispatchNever
 			return false, nil
