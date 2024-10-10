@@ -481,7 +481,7 @@ func (h *HiClient) processStateAndTimeline(ctx context.Context, room *database.R
 		updatedRoom.Name = &name
 		updatedRoom.NameQuality = database.NameQualityParticipants
 	}
-	if timeline.PrevBatch != "" && room.PrevBatch == "" {
+	if timeline.PrevBatch != "" && (room.PrevBatch == "" || timeline.Limited) {
 		updatedRoom.PrevBatch = timeline.PrevBatch
 	}
 	roomChanged := updatedRoom.CheckChangesAndCopyInto(room)
