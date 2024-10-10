@@ -471,6 +471,8 @@ func (h *HiClient) processStateAndTimeline(ctx context.Context, room *database.R
 		if err != nil {
 			return fmt.Errorf("failed to append timeline: %w", err)
 		}
+	} else {
+		timelineRowTuples = make([]database.TimelineRowTuple, 0)
 	}
 	// Calculate name from participants if participants changed and current name was generated from participants, or if the room name was unset
 	if (heroesChanged && updatedRoom.NameQuality <= database.NameQualityParticipants) || updatedRoom.NameQuality == database.NameQualityNil {
