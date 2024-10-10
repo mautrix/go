@@ -207,7 +207,7 @@ func isDecryptionErrorRetryable(err error) bool {
 }
 
 func removeReplyFallback(evt *event.Event) []byte {
-	if evt.Type != event.EventMessage {
+	if evt.Type != event.EventMessage && evt.Type != event.EventSticker {
 		return nil
 	}
 	_ = evt.Content.ParseRaw(evt.Type)
