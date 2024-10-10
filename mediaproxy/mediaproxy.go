@@ -21,8 +21,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/exhttp"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/federation"
@@ -60,9 +60,9 @@ type MediaProxy struct {
 	serverName string
 	serverKey  *federation.SigningKey
 
-	FederationRouter  *mux.Router
-	LegacyMediaRouter *mux.Router
-	ClientMediaRouter *mux.Router
+	FederationRouter  *http.ServeMux
+	LegacyMediaRouter *http.ServeMux
+	ClientMediaRouter *http.ServeMux
 }
 
 func New(serverName string, serverKey string, getMedia GetMediaFunc) (*MediaProxy, error) {
@@ -70,7 +70,8 @@ func New(serverName string, serverKey string, getMedia GetMediaFunc) (*MediaProx
 	if err != nil {
 		return nil, err
 	}
-	return &MediaProxy{
+
+	mp := &MediaProxy{
 		serverName: serverName,
 		serverKey:  parsed,
 		GetMedia:   getMedia,
@@ -93,7 +94,29 @@ func New(serverName string, serverKey string, getMedia GetMediaFunc) (*MediaProx
 				Version: strings.TrimPrefix(mautrix.VersionWithCommit, "v"),
 			},
 		},
-	}, nil
+		FederationRouter:  http.NewServeMux(),
+		LegacyMediaRouter: http.NewServeMux(),
+		ClientMediaRouter: http.NewServeMux(),
+	}
+
+	mp.FederationRouter.HandleFunc("GET /v1/media/download/{mediaID}", mp.DownloadMediaFederation)
+	mp.FederationRouter.HandleFunc("GET /v1/version", mp.KeyServer.GetServerVersion)
+	addClientRoutes := func(router *http.ServeMux, prefix string) {
+		router.HandleFunc("GET "+prefix+"/download/{serverName}/{mediaID}", mp.DownloadMedia)
+		router.HandleFunc("GET "+prefix+"/download/{serverName}/{mediaID}/{fileName}", mp.DownloadMedia)
+		router.HandleFunc("GET "+prefix+"/thumbnail/{serverName}/{mediaID}", mp.DownloadMedia)
+		router.HandleFunc("PUT "+prefix+"/upload/{serverName}/{mediaID}", mp.UploadNotSupported)
+		router.HandleFunc("POST "+prefix+"/upload", mp.UploadNotSupported)
+		router.HandleFunc("POST "+prefix+"/create", mp.UploadNotSupported)
+		router.HandleFunc("GET "+prefix+"/config", mp.UploadNotSupported)
+		router.HandleFunc("GET "+prefix+"/preview_url", mp.PreviewURLNotSupported)
+	}
+	addClientRoutes(mp.LegacyMediaRouter, "/v3")
+	addClientRoutes(mp.LegacyMediaRouter, "/r0")
+	addClientRoutes(mp.LegacyMediaRouter, "/v1")
+	addClientRoutes(mp.ClientMediaRouter, "")
+
+	return mp, nil
 }
 
 type BasicConfig struct {
@@ -123,7 +146,7 @@ type ServerConfig struct {
 }
 
 func (mp *MediaProxy) Listen(cfg ServerConfig) error {
-	router := mux.NewRouter()
+	router := http.NewServeMux()
 	mp.RegisterRoutes(router)
 	return http.ListenAndServe(fmt.Sprintf("%s:%d", cfg.Hostname, cfg.Port), router)
 }
@@ -140,50 +163,17 @@ func (mp *MediaProxy) DisallowProxying() {
 	mp.ProxyClient = nil
 }
 
-func (mp *MediaProxy) RegisterRoutes(router *mux.Router) {
-	if mp.FederationRouter == nil {
-		mp.FederationRouter = router.PathPrefix("/_matrix/federation").Subrouter()
-	}
-	if mp.LegacyMediaRouter == nil {
-		mp.LegacyMediaRouter = router.PathPrefix("/_matrix/media").Subrouter()
-	}
-	if mp.ClientMediaRouter == nil {
-		mp.ClientMediaRouter = router.PathPrefix("/_matrix/client/v1/media").Subrouter()
-	}
+func (mp *MediaProxy) RegisterRoutes(router *http.ServeMux) {
+	legacyMediaHandler := exhttp.HandleErrors(mp.LegacyMediaRouter, exhttp.ErrorBodyGenerators{NotFound: mp.UnknownEndpoint, MethodNotAllowed: mp.UnsupportedMethod})
+	federationHandler := exhttp.HandleErrors(mp.FederationRouter, exhttp.ErrorBodyGenerators{NotFound: mp.UnknownEndpoint, MethodNotAllowed: mp.UnsupportedMethod})
+	clientMediaHandler := exhttp.HandleErrors(mp.ClientMediaRouter, exhttp.ErrorBodyGenerators{NotFound: mp.UnknownEndpoint, MethodNotAllowed: mp.UnsupportedMethod})
 
-	mp.FederationRouter.HandleFunc("/v1/media/download/{mediaID}", mp.DownloadMediaFederation).Methods(http.MethodGet)
-	mp.FederationRouter.HandleFunc("/v1/version", mp.KeyServer.GetServerVersion).Methods(http.MethodGet)
-	addClientRoutes := func(router *mux.Router, prefix string) {
-		router.HandleFunc(prefix+"/download/{serverName}/{mediaID}", mp.DownloadMedia).Methods(http.MethodGet)
-		router.HandleFunc(prefix+"/download/{serverName}/{mediaID}/{fileName}", mp.DownloadMedia).Methods(http.MethodGet)
-		router.HandleFunc(prefix+"/thumbnail/{serverName}/{mediaID}", mp.DownloadMedia).Methods(http.MethodGet)
-		router.HandleFunc(prefix+"/upload/{serverName}/{mediaID}", mp.UploadNotSupported).Methods(http.MethodPut)
-		router.HandleFunc(prefix+"/upload", mp.UploadNotSupported).Methods(http.MethodPost)
-		router.HandleFunc(prefix+"/create", mp.UploadNotSupported).Methods(http.MethodPost)
-		router.HandleFunc(prefix+"/config", mp.UploadNotSupported).Methods(http.MethodGet)
-		router.HandleFunc(prefix+"/preview_url", mp.PreviewURLNotSupported).Methods(http.MethodGet)
-	}
-	addClientRoutes(mp.LegacyMediaRouter, "/v3")
-	addClientRoutes(mp.LegacyMediaRouter, "/r0")
-	addClientRoutes(mp.LegacyMediaRouter, "/v1")
-	addClientRoutes(mp.ClientMediaRouter, "")
-	mp.LegacyMediaRouter.NotFoundHandler = http.HandlerFunc(mp.UnknownEndpoint)
-	mp.LegacyMediaRouter.MethodNotAllowedHandler = http.HandlerFunc(mp.UnsupportedMethod)
-	mp.FederationRouter.NotFoundHandler = http.HandlerFunc(mp.UnknownEndpoint)
-	mp.FederationRouter.MethodNotAllowedHandler = http.HandlerFunc(mp.UnsupportedMethod)
-	mp.ClientMediaRouter.NotFoundHandler = http.HandlerFunc(mp.UnknownEndpoint)
-	mp.ClientMediaRouter.MethodNotAllowedHandler = http.HandlerFunc(mp.UnsupportedMethod)
-	corsMiddleware := func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "X-Requested-With, Content-Type, Authorization")
-			w.Header().Set("Content-Security-Policy", "sandbox; default-src 'none'; script-src 'none'; plugin-types application/pdf; style-src 'unsafe-inline'; object-src 'self';")
-			next.ServeHTTP(w, r)
-		})
-	}
-	mp.LegacyMediaRouter.Use(corsMiddleware)
-	mp.ClientMediaRouter.Use(corsMiddleware)
+	legacyMediaHandler = exhttp.CORSMiddleware(legacyMediaHandler)
+	clientMediaHandler = exhttp.CORSMiddleware(clientMediaHandler)
+
+	router.Handle("/_matrix/federation", http.StripPrefix("/_matrix/federation", federationHandler))
+	router.Handle("/_matrix/media", http.StripPrefix("/_matrix/media", legacyMediaHandler))
+	router.Handle("/_matrix/client/v1/media", http.StripPrefix("/_matrix/client/v1/media", clientMediaHandler))
 	mp.KeyServer.Register(router)
 }
 
@@ -260,7 +250,7 @@ func (err *ResponseError) Error() string {
 var ErrInvalidMediaIDSyntax = errors.New("invalid media ID syntax")
 
 func (mp *MediaProxy) getMedia(w http.ResponseWriter, r *http.Request) GetMediaResponse {
-	mediaID := mux.Vars(r)["mediaID"]
+	mediaID := r.PathValue("mediaID")
 	resp, err := mp.GetMedia(r.Context(), mediaID)
 	if err != nil {
 		var respError *ResponseError
@@ -342,8 +332,7 @@ func (mp *MediaProxy) DownloadMediaFederation(w http.ResponseWriter, r *http.Req
 func (mp *MediaProxy) DownloadMedia(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := zerolog.Ctx(ctx)
-	vars := mux.Vars(r)
-	if vars["serverName"] != mp.serverName {
+	if r.PathValue("serverName") != mp.serverName {
 		jsonResponse(w, http.StatusNotFound, &mautrix.RespError{
 			ErrCode: mautrix.MNotFound.ErrCode,
 			Err:     fmt.Sprintf("This is a media proxy at %q, other media downloads are not available here", mp.serverName),
@@ -360,7 +349,7 @@ func (mp *MediaProxy) DownloadMedia(w http.ResponseWriter, r *http.Request) {
 		// In any other case, redirect to the URL.
 		isFederated := strings.HasPrefix(r.Header.Get("Authorization"), "X-Matrix")
 		if mp.ProxyClient != nil && (r.URL.Query().Get("allow_redirect") != "true" || (mp.ForceProxyLegacyFederation && isFederated)) {
-			mp.proxyDownload(ctx, w, urlResp.URL, vars["fileName"])
+			mp.proxyDownload(ctx, w, urlResp.URL, r.PathValue("fileName"))
 			return
 		}
 		w.Header().Set("Location", urlResp.URL)
@@ -409,16 +398,18 @@ func (mp *MediaProxy) PreviewURLNotSupported(w http.ResponseWriter, r *http.Requ
 	})
 }
 
-func (mp *MediaProxy) UnknownEndpoint(w http.ResponseWriter, r *http.Request) {
-	jsonResponse(w, http.StatusNotFound, &mautrix.RespError{
+func (mp *MediaProxy) UnknownEndpoint() (body []byte) {
+	body, _ = json.Marshal(&mautrix.RespError{
 		ErrCode: mautrix.MUnrecognized.ErrCode,
 		Err:     "Unrecognized endpoint",
 	})
+	return
 }
 
-func (mp *MediaProxy) UnsupportedMethod(w http.ResponseWriter, r *http.Request) {
-	jsonResponse(w, http.StatusMethodNotAllowed, &mautrix.RespError{
+func (mp *MediaProxy) UnsupportedMethod() (body []byte) {
+	body, _ = json.Marshal(&mautrix.RespError{
 		ErrCode: mautrix.MUnrecognized.ErrCode,
 		Err:     "Invalid method for endpoint",
 	})
+	return
 }

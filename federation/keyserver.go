@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gorilla/mux"
+	"go.mau.fi/util/exhttp"
 	"go.mau.fi/util/jsontime"
 
 	"maunium.net/go/mautrix"
@@ -50,25 +50,32 @@ type KeyServer struct {
 }
 
 // Register registers the key server endpoints to the given router.
-func (ks *KeyServer) Register(r *mux.Router) {
-	r.HandleFunc("/.well-known/matrix/server", ks.GetWellKnown).Methods(http.MethodGet)
-	r.HandleFunc("/_matrix/federation/v1/version", ks.GetServerVersion).Methods(http.MethodGet)
-	keyRouter := r.PathPrefix("/_matrix/key").Subrouter()
-	keyRouter.HandleFunc("/v2/server", ks.GetServerKey).Methods(http.MethodGet)
-	keyRouter.HandleFunc("/v2/query/{serverName}", ks.GetQueryKeys).Methods(http.MethodGet)
-	keyRouter.HandleFunc("/v2/query", ks.PostQueryKeys).Methods(http.MethodPost)
-	keyRouter.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		jsonResponse(w, http.StatusNotFound, &mautrix.RespError{
-			ErrCode: mautrix.MUnrecognized.ErrCode,
-			Err:     "Unrecognized endpoint",
-		})
+func (ks *KeyServer) Register(r *http.ServeMux) {
+	r.HandleFunc("GET /.well-known/matrix/server", ks.GetWellKnown)
+	r.HandleFunc("GET /_matrix/federation/v1/version", ks.GetServerVersion)
+
+	keyRouter := http.NewServeMux()
+	keyRouter.HandleFunc("GET /v2/server", ks.GetServerKey)
+	keyRouter.HandleFunc("GET /v2/query/{serverName}", ks.GetQueryKeys)
+	keyRouter.HandleFunc("POST /v2/query", ks.PostQueryKeys)
+
+	keyHandler := exhttp.HandleErrors(keyRouter, exhttp.ErrorBodyGenerators{
+		NotFound: func() (body []byte) {
+			body, _ = json.Marshal(&mautrix.RespError{
+				ErrCode: mautrix.MUnrecognized.ErrCode,
+				Err:     "Unrecognized endpoint",
+			})
+			return
+		},
+		MethodNotAllowed: func() (body []byte) {
+			body, _ = json.Marshal(&mautrix.RespError{
+				ErrCode: mautrix.MUnrecognized.ErrCode,
+				Err:     "Invalid method for endpoint",
+			})
+			return
+		},
 	})
-	keyRouter.MethodNotAllowedHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		jsonResponse(w, http.StatusMethodNotAllowed, &mautrix.RespError{
-			ErrCode: mautrix.MUnrecognized.ErrCode,
-			Err:     "Invalid method for endpoint",
-		})
-	})
+	r.Handle("/_matrix/key", http.StripPrefix("/_matrix/key", keyHandler))
 }
 
 func jsonResponse(w http.ResponseWriter, code int, data any) {
@@ -177,7 +184,7 @@ type GetQueryKeysResponse struct {
 //
 // https://spec.matrix.org/v1.9/server-server-api/#get_matrixkeyv2queryservername
 func (ks *KeyServer) GetQueryKeys(w http.ResponseWriter, r *http.Request) {
-	serverName := mux.Vars(r)["serverName"]
+	serverName := r.PathValue("serverName")
 	minimumValidUntilTSString := r.URL.Query().Get("minimum_valid_until_ts")
 	minimumValidUntilTS, err := strconv.ParseInt(minimumValidUntilTSString, 10, 64)
 	if err != nil && minimumValidUntilTSString != "" {
