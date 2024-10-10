@@ -68,10 +68,7 @@ func (o *MegolmOutboundSession) Encrypt(plaintext []byte) ([]byte, error) {
 		return nil, olm.ErrEmptyInput
 	}
 	encrypted, err := o.Ratchet.Encrypt(plaintext, &o.SigningKey)
-	if err != nil {
-		return nil, err
-	}
-	return goolmbase64.Encode(encrypted), nil
+	return goolmbase64.Encode(encrypted), err
 }
 
 // SessionID returns the base64 endoded public signing key
@@ -141,11 +138,7 @@ func (o *MegolmOutboundSession) Pickle(key []byte) ([]byte, error) {
 	if written != len(pickeledBytes) {
 		return nil, errors.New("number of written bytes not correct")
 	}
-	encrypted, err := cipher.Pickle(key, pickeledBytes)
-	if err != nil {
-		return nil, err
-	}
-	return encrypted, nil
+	return cipher.Pickle(key, pickeledBytes)
 }
 
 // PickleLibOlm encodes the session into target. target has to have a size of at least PickleLen() and is written to from index 0.

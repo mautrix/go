@@ -1,8 +1,9 @@
 package message_test
 
 import (
-	"bytes"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"maunium.net/go/mautrix/crypto/goolm/message"
 )
@@ -14,24 +15,12 @@ func TestMessageDecode(t *testing.T) {
 
 	msg := message.Message{}
 	err := msg.Decode(messageRaw)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if msg.Version != 3 {
-		t.Fatalf("Expected Version to be 3 but go %d", msg.Version)
-	}
-	if !msg.HasCounter {
-		t.Fatal("Expected to have counter")
-	}
-	if msg.Counter != 1 {
-		t.Fatalf("Expected counter to be 1 but got %d", msg.Counter)
-	}
-	if !bytes.Equal(msg.Ciphertext, expectedCipherText) {
-		t.Fatalf("expected '%s' but got '%s'", expectedCipherText, msg.Ciphertext)
-	}
-	if !bytes.Equal(msg.RatchetKey, expectedRatchetKey) {
-		t.Fatalf("expected '%s' but got '%s'", expectedRatchetKey, msg.RatchetKey)
-	}
+	assert.NoError(t, err)
+	assert.EqualValues(t, 3, msg.Version)
+	assert.True(t, msg.HasCounter)
+	assert.EqualValues(t, 1, msg.Counter)
+	assert.Equal(t, expectedCipherText, msg.Ciphertext)
+	assert.EqualValues(t, expectedRatchetKey, msg.RatchetKey)
 }
 
 func TestMessageEncode(t *testing.T) {
@@ -44,11 +33,7 @@ func TestMessageEncode(t *testing.T) {
 		Ciphertext: []byte("ciphertext"),
 	}
 	encoded, err := msg.EncodeAndMAC(nil, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	encoded = append(encoded, hmacsha256...)
-	if !bytes.Equal(encoded, expectedRaw) {
-		t.Fatalf("expected '%s' but got '%s'", expectedRaw, encoded)
-	}
+	assert.Equal(t, expectedRaw, encoded)
 }
