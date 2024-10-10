@@ -106,6 +106,8 @@ const (
 	NameQualityExplicit
 )
 
+const PrevBatchPaginationComplete = "fi.mau.gomuks.pagination_complete"
+
 type Room struct {
 	ID              id.RoomID                 `json:"room_id"`
 	CreationContent *event.CreateEventContent `json:"creation_content,omitempty"`

@@ -159,7 +159,7 @@ func (h *HiClient) PaginateServer(ctx context.Context, roomID id.RoomID, limit i
 	room, err := h.DB.Room.Get(ctx, roomID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get room from database: %w", err)
-	} else if room.PrevBatch == "" {
+	} else if room.PrevBatch == database.PrevBatchPaginationComplete {
 		return &PaginationResponse{Events: []*database.Event{}, HasMore: false}, nil
 	}
 	resp, err := h.Client.Messages(ctx, roomID, room.PrevBatch, "", mautrix.DirectionBackward, nil, limit)
@@ -167,7 +167,10 @@ func (h *HiClient) PaginateServer(ctx context.Context, roomID id.RoomID, limit i
 		return nil, fmt.Errorf("failed to get messages from server: %w", err)
 	}
 	events := make([]*database.Event, len(resp.Chunk))
-	if resp.End == "" || len(resp.Chunk) == 0 {
+	if resp.End == "" {
+		resp.End = database.PrevBatchPaginationComplete
+	}
+	if resp.End == database.PrevBatchPaginationComplete || len(resp.Chunk) == 0 {
 		err = h.DB.Room.SetPrevBatch(ctx, room.ID, resp.End)
 		if err != nil {
 			return nil, fmt.Errorf("failed to set prev_batch: %w", err)
