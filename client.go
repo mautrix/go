@@ -1836,11 +1836,10 @@ func (cli *Client) Hierarchy(ctx context.Context, roomID id.RoomID, req *ReqHier
 
 // Messages returns a list of message and state events for a room. It uses
 // pagination query parameters to paginate history in the room.
-// See https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3roomsroomidmessages
+// See https://spec.matrix.org/v1.12/client-server-api/#get_matrixclientv3roomsroomidmessages
 func (cli *Client) Messages(ctx context.Context, roomID id.RoomID, from, to string, dir Direction, filter *FilterPart, limit int) (resp *RespMessages, err error) {
 	query := map[string]string{
-		"from": from,
-		"dir":  string(dir),
+		"dir": string(dir),
 	}
 	if filter != nil {
 		filterJSON, err := json.Marshal(filter)
@@ -1848,6 +1847,9 @@ func (cli *Client) Messages(ctx context.Context, roomID id.RoomID, from, to stri
 			return nil, err
 		}
 		query["filter"] = string(filterJSON)
+	}
+	if from != "" {
+		query["from"] = from
 	}
 	if to != "" {
 		query["to"] = to
