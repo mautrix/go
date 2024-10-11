@@ -60,6 +60,19 @@ const (
 		          > COALESCE((SELECT rowid FROM timeline WHERE event_rowid = preview_event_rowid), 0)
 		RETURNING preview_event_rowid
 	`
+	recalculateRoomPreviewEventQuery = `
+		SELECT rowid
+		FROM event
+		WHERE
+			room_id = $1
+			AND (type IN ('m.room.message', 'm.sticker')
+				OR (type = 'm.room.encrypted'
+					AND decrypted_type IN ('m.room.message', 'm.sticker')))
+			AND relation_type <> 'm.replace'
+			AND redacted_by IS NULL
+		ORDER BY timestamp DESC
+		LIMIT 1
+	`
 )
 
 type RoomQuery struct {
@@ -94,6 +107,11 @@ func (rq *RoomQuery) UpdatePreviewIfLaterOnTimeline(ctx context.Context, roomID 
 	} else if err == nil {
 		previewChanged = newPreviewRowID == rowID
 	}
+	return
+}
+
+func (rq *RoomQuery) RecalculatePreview(ctx context.Context, roomID id.RoomID) (rowID EventRowID, err error) {
+	err = rq.GetDB().QueryRow(ctx, recalculateRoomPreviewEventQuery, roomID).Scan(&rowID)
 	return
 }
 

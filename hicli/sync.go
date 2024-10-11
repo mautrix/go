@@ -336,6 +336,8 @@ func (h *HiClient) processEvent(ctx context.Context, evt *event.Event, decryptio
 			if err != nil {
 				return dbEvt, fmt.Errorf("failed to set redacts field: %w", err)
 			}
+		} else if evt.Redacts == "" {
+			evt.Redacts = id.EventID(gjson.GetBytes(evt.Content.VeryRaw, "redacts").Str)
 		}
 	}
 	_, err := h.DB.Event.Upsert(ctx, dbEvt)
@@ -382,6 +384,38 @@ func (h *HiClient) processStateAndTimeline(ctx context.Context, room *database.R
 	}
 	decryptionQueue := make(map[id.SessionID]*database.SessionRequest)
 	allNewEvents := make([]*database.Event, 0, len(state.Events)+len(timeline.Events))
+	recalculatePreviewEvent := false
+	addOldEvent := func(rowID database.EventRowID, evtID id.EventID) (dbEvt *database.Event, err error) {
+		if rowID != 0 {
+			dbEvt, err = h.DB.Event.GetByRowID(ctx, rowID)
+		} else {
+			dbEvt, err = h.DB.Event.GetByID(ctx, evtID)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to get redaction target: %w", err)
+		} else if dbEvt == nil {
+			return nil, nil
+		}
+		allNewEvents = append(allNewEvents, dbEvt)
+		return dbEvt, nil
+	}
+	processRedaction := func(evt *event.Event) error {
+		dbEvt, err := addOldEvent(0, evt.Redacts)
+		if err != nil {
+			return fmt.Errorf("failed to get redaction target: %w", err)
+		}
+		if dbEvt.RelationType == event.RelReplace || dbEvt.RelationType == event.RelAnnotation {
+			_, err = addOldEvent(0, dbEvt.RelatesTo)
+			if err != nil {
+				return fmt.Errorf("failed to get relation target of redaction target: %w", err)
+			}
+		}
+		if updatedRoom.PreviewEventRowID == dbEvt.RowID {
+			updatedRoom.PreviewEventRowID = 0
+			recalculatePreviewEvent = true
+		}
+		return nil
+	}
 	processNewEvent := func(evt *event.Event, isTimeline bool) (database.EventRowID, error) {
 		evt.RoomID = room.ID
 		dbEvt, err := h.processEvent(ctx, evt, decryptionQueue, false)
@@ -391,6 +425,7 @@ func (h *HiClient) processStateAndTimeline(ctx context.Context, room *database.R
 		if isTimeline {
 			if dbEvt.CanUseForPreview() {
 				updatedRoom.PreviewEventRowID = dbEvt.RowID
+				recalculatePreviewEvent = false
 			}
 			updatedRoom.BumpSortingTimestamp(dbEvt)
 		}
@@ -411,6 +446,17 @@ func (h *HiClient) processStateAndTimeline(ctx context.Context, room *database.R
 			processImportantEvent(ctx, evt, room, updatedRoom)
 		}
 		allNewEvents = append(allNewEvents, dbEvt)
+		if evt.Type == event.EventRedaction && evt.Redacts != "" {
+			err = processRedaction(evt)
+			if err != nil {
+				return -1, fmt.Errorf("failed to process redaction: %w", err)
+			}
+		} else if dbEvt.RelationType == event.RelReplace || dbEvt.RelationType == event.RelAnnotation {
+			_, err = addOldEvent(0, dbEvt.RelatesTo)
+			if err != nil {
+				return -1, fmt.Errorf("failed to get relation target of event: %w", err)
+			}
+		}
 		return dbEvt.RowID, nil
 	}
 	changedState := make(map[event.Type]map[string]database.EventRowID)
@@ -473,6 +519,16 @@ func (h *HiClient) processStateAndTimeline(ctx context.Context, room *database.R
 		}
 	} else {
 		timelineRowTuples = make([]database.TimelineRowTuple, 0)
+	}
+	if recalculatePreviewEvent && updatedRoom.PreviewEventRowID == 0 {
+		updatedRoom.PreviewEventRowID, err = h.DB.Room.RecalculatePreview(ctx, room.ID)
+		if err != nil {
+			return fmt.Errorf("failed to recalculate preview event: %w", err)
+		}
+		_, err = addOldEvent(updatedRoom.PreviewEventRowID, "")
+		if err != nil {
+			return fmt.Errorf("failed to get preview event: %w", err)
+		}
 	}
 	// Calculate name from participants if participants changed and current name was generated from participants, or if the room name was unset
 	if (heroesChanged && updatedRoom.NameQuality <= database.NameQualityParticipants) || updatedRoom.NameQuality == database.NameQualityNil {

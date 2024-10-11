@@ -371,7 +371,7 @@ func (e *Event) Scan(row dbutil.Scannable) (*Event, error) {
 	e.TransactionID = transactionID.String
 	e.RedactedBy = id.EventID(redactedBy.String)
 	e.RelatesTo = id.EventID(relatesTo.String)
-	e.RelationType = event.RelationType(relatesTo.String)
+	e.RelationType = event.RelationType(relationType.String)
 	e.MegolmSessionID = id.SessionID(megolmSessionID.String)
 	e.DecryptedType = decryptedType.String
 	e.DecryptionError = decryptionError.String
@@ -440,7 +440,7 @@ func (e *Event) CanUseForPreview() bool {
 	return (e.Type == event.EventMessage.Type || e.Type == event.EventSticker.Type ||
 		(e.Type == event.EventEncrypted.Type &&
 			(e.DecryptedType == event.EventMessage.Type || e.DecryptedType == event.EventSticker.Type))) &&
-		e.RelationType != event.RelReplace
+		e.RelationType != event.RelReplace && e.RedactedBy == ""
 }
 
 func (e *Event) BumpsSortingTimestamp() bool {
