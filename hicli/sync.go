@@ -404,6 +404,9 @@ func (h *HiClient) processStateAndTimeline(ctx context.Context, room *database.R
 		if err != nil {
 			return fmt.Errorf("failed to get redaction target: %w", err)
 		}
+		if dbEvt == nil {
+			return nil
+		}
 		if dbEvt.RelationType == event.RelReplace || dbEvt.RelationType == event.RelAnnotation {
 			_, err = addOldEvent(0, dbEvt.RelatesTo)
 			if err != nil {
