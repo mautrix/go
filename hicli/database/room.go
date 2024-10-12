@@ -241,7 +241,7 @@ func (r *Room) BumpSortingTimestamp(evt *Event) bool {
 	if !evt.BumpsSortingTimestamp() || evt.Timestamp.Before(r.SortingTimestamp.Time) {
 		return false
 	}
-	r.SortingTimestamp = jsontime.UM(evt.Timestamp)
+	r.SortingTimestamp = evt.Timestamp
 	now := time.Now()
 	if r.SortingTimestamp.After(now) {
 		r.SortingTimestamp = jsontime.UM(now)

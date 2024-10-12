@@ -12,10 +12,10 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/yuin/goldmark"
+	"go.mau.fi/util/jsontime"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto"
@@ -84,7 +84,7 @@ func (h *HiClient) Send(ctx context.Context, roomID id.RoomID, evtType event.Typ
 		ID:              id.EventID(fmt.Sprintf("~%s", txnID)),
 		Sender:          h.Account.UserID,
 		Type:            evtType.Type,
-		Timestamp:       time.Now(),
+		Timestamp:       jsontime.UnixMilliNow(),
 		Content:         mainContent,
 		Decrypted:       decryptedContent,
 		DecryptedType:   decryptedType.Type,

@@ -17,6 +17,7 @@ import (
 	"github.com/tidwall/gjson"
 	"go.mau.fi/util/dbutil"
 	"go.mau.fi/util/exgjson"
+	"go.mau.fi/util/jsontime"
 
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -267,12 +268,12 @@ type Event struct {
 	RowID         EventRowID    `json:"rowid"`
 	TimelineRowID TimelineRowID `json:"timeline_rowid"`
 
-	RoomID    id.RoomID  `json:"room_id"`
-	ID        id.EventID `json:"event_id"`
-	Sender    id.UserID  `json:"sender"`
-	Type      string     `json:"type"`
-	StateKey  *string    `json:"state_key,omitempty"`
-	Timestamp time.Time  `json:"timestamp"`
+	RoomID    id.RoomID          `json:"room_id"`
+	ID        id.EventID         `json:"event_id"`
+	Sender    id.UserID          `json:"sender"`
+	Type      string             `json:"type"`
+	StateKey  *string            `json:"state_key,omitempty"`
+	Timestamp jsontime.UnixMilli `json:"timestamp"`
 
 	Content       json.RawMessage `json:"content"`
 	Decrypted     json.RawMessage `json:"decrypted,omitempty"`
@@ -300,7 +301,7 @@ func MautrixToEvent(evt *event.Event) *Event {
 		Sender:          evt.Sender,
 		Type:            evt.Type.Type,
 		StateKey:        evt.StateKey,
-		Timestamp:       time.UnixMilli(evt.Timestamp),
+		Timestamp:       jsontime.UM(time.UnixMilli(evt.Timestamp)),
 		Content:         evt.Content.VeryRaw,
 		MegolmSessionID: getMegolmSessionID(evt),
 		TransactionID:   evt.Unsigned.TransactionID,
@@ -367,7 +368,7 @@ func (e *Event) Scan(row dbutil.Scannable) (*Event, error) {
 	if err != nil {
 		return nil, err
 	}
-	e.Timestamp = time.UnixMilli(timestamp)
+	e.Timestamp = jsontime.UM(time.UnixMilli(timestamp))
 	e.TransactionID = transactionID.String
 	e.RedactedBy = id.EventID(redactedBy.String)
 	e.RelatesTo = id.EventID(relatesTo.String)
