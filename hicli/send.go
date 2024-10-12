@@ -11,16 +11,42 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/yuin/goldmark"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto"
 	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/format"
+	"maunium.net/go/mautrix/format/mdext/rainbow"
 	"maunium.net/go/mautrix/hicli/database"
 	"maunium.net/go/mautrix/id"
 )
+
+var (
+	rainbowWithHTML = goldmark.New(format.Extensions, format.HTMLOptions, goldmark.WithExtensions(rainbow.Extension))
+)
+
+func (h *HiClient) SendMessage(ctx context.Context, roomID id.RoomID, text, mediaPath string) (*database.Event, error) {
+	var content event.MessageEventContent
+	if strings.HasPrefix(text, "/rainbow ") {
+		text = strings.TrimPrefix(text, "/rainbow ")
+		content = format.RenderMarkdownCustom(text, rainbowWithHTML)
+		content.FormattedBody = rainbow.ApplyColor(content.FormattedBody)
+	} else if strings.HasPrefix(text, "/plain ") {
+		text = strings.TrimPrefix(text, "/plain ")
+		content = format.RenderMarkdown(text, false, false)
+	} else if strings.HasPrefix(text, "/html ") {
+		text = strings.TrimPrefix(text, "/html ")
+		content = format.RenderMarkdown(text, false, true)
+	} else {
+		content = format.RenderMarkdown(text, true, false)
+	}
+	return h.Send(ctx, roomID, event.EventMessage, &content)
+}
 
 func (h *HiClient) Send(ctx context.Context, roomID id.RoomID, evtType event.Type, content any) (*database.Event, error) {
 	roomMeta, err := h.DB.Room.Get(ctx, roomID)
