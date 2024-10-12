@@ -102,6 +102,7 @@ CREATE TRIGGER event_update_last_edit_when_redacted
 	WHEN OLD.redacted_by IS NULL
 		AND NEW.redacted_by IS NOT NULL
 		AND NEW.relation_type = 'm.replace'
+		AND NEW.state_key IS NULL
 BEGIN
 	UPDATE event
 	SET last_edit_rowid = COALESCE(
@@ -113,11 +114,13 @@ BEGIN
 		   AND edit.type = event.type
 		   AND edit.sender = event.sender
 		   AND edit.redacted_by IS NULL
+		   AND edit.state_key IS NULL
 		 ORDER BY edit.timestamp DESC
 		 LIMIT 1),
 		0)
 	WHERE event_id = NEW.relates_to
-	  AND last_edit_rowid = NEW.rowid;
+	  AND last_edit_rowid = NEW.rowid
+	  AND state_key IS NULL;
 END;
 
 CREATE TRIGGER event_insert_update_last_edit
@@ -125,6 +128,7 @@ CREATE TRIGGER event_insert_update_last_edit
 	ON event
 	WHEN NEW.relation_type = 'm.replace'
 		AND NEW.redacted_by IS NULL
+		AND NEW.state_key IS NULL
 BEGIN
 	UPDATE event
 	SET last_edit_rowid = NEW.rowid
