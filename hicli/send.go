@@ -16,6 +16,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/yuin/goldmark"
 	"go.mau.fi/util/jsontime"
+	"go.mau.fi/util/ptr"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto"
@@ -48,6 +49,24 @@ func (h *HiClient) SendMessage(ctx context.Context, roomID id.RoomID, text, medi
 	return h.Send(ctx, roomID, event.EventMessage, &content)
 }
 
+func (h *HiClient) MarkRead(ctx context.Context, roomID id.RoomID, eventID id.EventID, receiptType event.ReceiptType) (bool, error) {
+	content := &mautrix.ReqSetReadMarkers{
+		FullyRead: eventID,
+	}
+	if receiptType == event.ReceiptTypeRead {
+		content.Read = eventID
+	} else if receiptType == event.ReceiptTypeReadPrivate {
+		content.ReadPrivate = eventID
+	} else {
+		return false, fmt.Errorf("invalid receipt type: %v", receiptType)
+	}
+	err := h.Client.SetReadMarkers(ctx, roomID, content)
+	if err != nil {
+		return false, fmt.Errorf("failed to mark event as read: %w", err)
+	}
+	return true, nil
+}
+
 func (h *HiClient) Send(ctx context.Context, roomID id.RoomID, evtType event.Type, content any) (*database.Event, error) {
 	roomMeta, err := h.DB.Room.Get(ctx, roomID)
 	if err != nil {
@@ -76,7 +95,6 @@ func (h *HiClient) Send(ctx context.Context, roomID id.RoomID, evtType event.Typ
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal event content: %w", err)
 	}
-	var zero database.EventRowID
 	txnID := "hicli-" + h.Client.TxnID()
 	relatesTo, relationType := database.GetRelatesToFromBytes(mainContent)
 	dbEvt := &database.Event{
@@ -96,7 +114,7 @@ func (h *HiClient) Send(ctx context.Context, roomID id.RoomID, evtType event.Typ
 		DecryptionError: "",
 		SendError:       "not sent",
 		Reactions:       map[string]int{},
-		LastEditRowID:   &zero,
+		LastEditRowID:   ptr.Ptr(database.EventRowID(0)),
 	}
 	_, err = h.DB.Event.Insert(ctx, dbEvt)
 	if err != nil {

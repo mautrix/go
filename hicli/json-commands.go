@@ -45,6 +45,10 @@ func (h *HiClient) handleJSONCommand(ctx context.Context, req *JSONCommand) (any
 		return unmarshalAndCall(req.Data, func(params *sendEventParams) (*database.Event, error) {
 			return h.Send(ctx, params.RoomID, params.EventType, params.Content)
 		})
+	case "mark_read":
+		return unmarshalAndCall(req.Data, func(params *markReadParams) (bool, error) {
+			return h.MarkRead(ctx, params.RoomID, params.EventID, params.ReceiptType)
+		})
 	case "get_event":
 		return unmarshalAndCall(req.Data, func(params *getEventParams) (*database.Event, error) {
 			return h.GetEvent(ctx, params.RoomID, params.EventID)
@@ -114,6 +118,12 @@ type sendEventParams struct {
 	RoomID    id.RoomID       `json:"room_id"`
 	EventType event.Type      `json:"type"`
 	Content   json.RawMessage `json:"content"`
+}
+
+type markReadParams struct {
+	RoomID      id.RoomID         `json:"room_id"`
+	EventID     id.EventID        `json:"event_id"`
+	ReceiptType event.ReceiptType `json:"receipt_type"`
 }
 
 type getEventParams struct {
