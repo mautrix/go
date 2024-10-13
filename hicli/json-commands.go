@@ -39,7 +39,7 @@ func (h *HiClient) handleJSONCommand(ctx context.Context, req *JSONCommand) (any
 		})
 	case "send_message":
 		return unmarshalAndCall(req.Data, func(params *sendMessageParams) (*database.Event, error) {
-			return h.SendMessage(ctx, params.RoomID, params.Text, params.MediaPath)
+			return h.SendMessage(ctx, params.RoomID, params.Text, params.MediaPath, params.ReplyTo, params.Mentions)
 		})
 	case "send_event":
 		return unmarshalAndCall(req.Data, func(params *sendEventParams) (*database.Event, error) {
@@ -109,9 +109,11 @@ type cancelRequestParams struct {
 }
 
 type sendMessageParams struct {
-	RoomID    id.RoomID `json:"room_id"`
-	Text      string    `json:"text"`
-	MediaPath string    `json:"media_path"`
+	RoomID    id.RoomID       `json:"room_id"`
+	Text      string          `json:"text"`
+	MediaPath string          `json:"media_path"`
+	ReplyTo   id.EventID      `json:"reply_to"`
+	Mentions  *event.Mentions `json:"mentions"`
 }
 
 type sendEventParams struct {
