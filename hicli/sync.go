@@ -25,6 +25,7 @@ import (
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/hicli/database"
 	"maunium.net/go/mautrix/id"
+	"maunium.net/go/mautrix/pushrules"
 )
 
 type syncContext struct {
@@ -102,6 +103,15 @@ func (h *HiClient) processSyncResponse(ctx context.Context, resp *mautrix.RespSy
 		err := h.DB.AccountData.Put(ctx, h.Account.UserID, evt.Type, evt.Content.VeryRaw)
 		if err != nil {
 			return fmt.Errorf("failed to save account data event %s: %w", evt.Type.Type, err)
+		}
+		if evt.Type == event.AccountDataPushRules {
+			err = evt.Content.ParseRaw(evt.Type)
+			if err != nil {
+				zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to parse push rules in sync")
+			} else if pushRules, ok := evt.Content.Parsed.(*pushrules.EventContent); ok {
+				h.PushRules.Store(pushRules.Ruleset)
+				zerolog.Ctx(ctx).Debug().Msg("Updated push rules from sync")
+			}
 		}
 	}
 	for roomID, room := range resp.Rooms.Join {

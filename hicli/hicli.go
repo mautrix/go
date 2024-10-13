@@ -27,6 +27,7 @@ import (
 	"maunium.net/go/mautrix/crypto/backup"
 	"maunium.net/go/mautrix/hicli/database"
 	"maunium.net/go/mautrix/id"
+	"maunium.net/go/mautrix/pushrules"
 )
 
 type HiClient struct {
@@ -42,6 +43,8 @@ type HiClient struct {
 
 	KeyBackupVersion id.KeyBackupVersion
 	KeyBackupKey     *backup.MegolmBackupKey
+
+	PushRules atomic.Pointer[pushrules.PushRuleset]
 
 	EventHandler func(evt any)
 
@@ -212,6 +215,7 @@ func (h *HiClient) Sync() {
 	defer cancel()
 	h.stopSync.Store(&cancel)
 	go h.RunRequestQueue(h.Log.WithContext(ctx))
+	go h.LoadPushRules(h.Log.WithContext(ctx))
 	ctx = log.WithContext(ctx)
 	log.Info().Msg("Starting syncing")
 	err := h.Client.SyncWithContext(ctx)
@@ -220,6 +224,16 @@ func (h *HiClient) Sync() {
 	} else {
 		log.Info().Msg("Syncing stopped")
 	}
+}
+
+func (h *HiClient) LoadPushRules(ctx context.Context) {
+	rules, err := h.Client.GetPushRules(ctx)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to load push rules")
+		return
+	}
+	h.PushRules.Store(rules)
+	zerolog.Ctx(ctx).Debug().Msg("Updated push rules from fetch")
 }
 
 func (h *HiClient) Stop() {
