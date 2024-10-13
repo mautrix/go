@@ -120,7 +120,8 @@ BEGIN
 		0)
 	WHERE event_id = NEW.relates_to
 	  AND last_edit_rowid = NEW.rowid
-	  AND state_key IS NULL;
+	  AND state_key IS NULL
+	  AND relation_type NOT IN ('m.replace', 'm.annotation');
 END;
 
 CREATE TRIGGER event_insert_update_last_edit
@@ -136,6 +137,7 @@ BEGIN
 	  AND type = NEW.type
 	  AND sender = NEW.sender
 	  AND state_key IS NULL
+	  AND relation_type NOT IN ('m.replace', 'm.annotation')
 	  AND NEW.timestamp >
 		  COALESCE((SELECT prev_edit.timestamp FROM event prev_edit WHERE prev_edit.rowid = event.last_edit_rowid), 0);
 END;
