@@ -229,6 +229,11 @@ type NetworkConnector interface {
 	CreateLogin(ctx context.Context, user *User, flowID string) (LoginProcess, error)
 }
 
+type StoppableNetwork interface {
+	// Stop is called when the bridge is stopping, after all network clients have been disconnected.
+	Stop()
+}
+
 // DirectMediableNetwork is an optional interface that network connectors can implement to support direct media access.
 //
 // If the Matrix connector has direct media enabled, SetUseDirectMedia will be called

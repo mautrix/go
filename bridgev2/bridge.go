@@ -216,6 +216,9 @@ func (br *Bridge) Stop() {
 	}
 	wg.Wait()
 	br.cacheLock.Unlock()
+	if stopNet, ok := br.Network.(StoppableNetwork); ok {
+		stopNet.Stop()
+	}
 	err := br.DB.Close()
 	if err != nil {
 		br.Log.Warn().Err(err).Msg("Failed to close database")
