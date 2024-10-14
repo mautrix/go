@@ -27,7 +27,7 @@ const (
 		       preview_event_rowid, sorting_timestamp, prev_batch
 		FROM room
 	`
-	getRoomsBySortingTimestampQuery = getRoomBaseQuery + `WHERE sorting_timestamp < $1 ORDER BY sorting_timestamp DESC LIMIT $2`
+	getRoomsBySortingTimestampQuery = getRoomBaseQuery + `WHERE sorting_timestamp < $1 AND sorting_timestamp > 0 ORDER BY sorting_timestamp DESC LIMIT $2`
 	getRoomByIDQuery                = getRoomBaseQuery + `WHERE room_id = $1`
 	ensureRoomExistsQuery           = `
 		INSERT INTO room (room_id) VALUES ($1)

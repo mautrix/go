@@ -161,7 +161,7 @@ func (h *HiClient) processSyncJoinedRoom(ctx context.Context, roomID id.RoomID, 
 		if err != nil {
 			return fmt.Errorf("failed to ensure room row exists: %w", err)
 		}
-		existingRoomData = &database.Room{ID: roomID}
+		existingRoomData = &database.Room{ID: roomID, SortingTimestamp: jsontime.UnixMilliNow()}
 	}
 
 	for _, evt := range room.AccountData.Events {
