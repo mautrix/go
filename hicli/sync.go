@@ -628,6 +628,9 @@ func (h *HiClient) calculateRoomParticipantName(ctx context.Context, roomID id.R
 		heroEvt, err := h.DB.CurrentState.Get(ctx, roomID, event.StateMember, hero.String())
 		if err != nil {
 			return "", fmt.Errorf("failed to get %s's member event: %w", hero, err)
+		} else if heroEvt == nil {
+			leftMembers = append(leftMembers, hero.String())
+			continue
 		}
 		results := gjson.GetManyBytes(heroEvt.Content, "membership", "displayname")
 		name := results[1].Str
