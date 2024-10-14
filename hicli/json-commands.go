@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
@@ -47,7 +48,11 @@ func (h *HiClient) handleJSONCommand(ctx context.Context, req *JSONCommand) (any
 		})
 	case "mark_read":
 		return unmarshalAndCall(req.Data, func(params *markReadParams) (bool, error) {
-			return h.MarkRead(ctx, params.RoomID, params.EventID, params.ReceiptType)
+			return true, h.MarkRead(ctx, params.RoomID, params.EventID, params.ReceiptType)
+		})
+	case "set_typing":
+		return unmarshalAndCall(req.Data, func(params *setTypingParams) (bool, error) {
+			return true, h.SetTyping(ctx, params.RoomID, time.Duration(params.Timeout)*time.Millisecond)
 		})
 	case "get_event":
 		return unmarshalAndCall(req.Data, func(params *getEventParams) (*database.Event, error) {
@@ -126,6 +131,11 @@ type markReadParams struct {
 	RoomID      id.RoomID         `json:"room_id"`
 	EventID     id.EventID        `json:"event_id"`
 	ReceiptType event.ReceiptType `json:"receipt_type"`
+}
+
+type setTypingParams struct {
+	RoomID  id.RoomID `json:"room_id"`
+	Timeout int       `json:"timeout"`
 }
 
 type getEventParams struct {

@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/yuin/goldmark"
@@ -60,7 +61,7 @@ func (h *HiClient) SendMessage(ctx context.Context, roomID id.RoomID, text, medi
 	return h.Send(ctx, roomID, event.EventMessage, &content)
 }
 
-func (h *HiClient) MarkRead(ctx context.Context, roomID id.RoomID, eventID id.EventID, receiptType event.ReceiptType) (bool, error) {
+func (h *HiClient) MarkRead(ctx context.Context, roomID id.RoomID, eventID id.EventID, receiptType event.ReceiptType) error {
 	content := &mautrix.ReqSetReadMarkers{
 		FullyRead: eventID,
 	}
@@ -69,13 +70,18 @@ func (h *HiClient) MarkRead(ctx context.Context, roomID id.RoomID, eventID id.Ev
 	} else if receiptType == event.ReceiptTypeReadPrivate {
 		content.ReadPrivate = eventID
 	} else {
-		return false, fmt.Errorf("invalid receipt type: %v", receiptType)
+		return fmt.Errorf("invalid receipt type: %v", receiptType)
 	}
 	err := h.Client.SetReadMarkers(ctx, roomID, content)
 	if err != nil {
-		return false, fmt.Errorf("failed to mark event as read: %w", err)
+		return fmt.Errorf("failed to mark event as read: %w", err)
 	}
-	return true, nil
+	return nil
+}
+
+func (h *HiClient) SetTyping(ctx context.Context, roomID id.RoomID, timeout time.Duration) error {
+	_, err := h.Client.UserTyping(ctx, roomID, timeout > 0, timeout)
+	return err
 }
 
 func (h *HiClient) Send(ctx context.Context, roomID id.RoomID, evtType event.Type, content any) (*database.Event, error) {
@@ -131,8 +137,14 @@ func (h *HiClient) Send(ctx context.Context, roomID id.RoomID, evtType event.Typ
 	if err != nil {
 		return nil, fmt.Errorf("failed to insert event into database: %w", err)
 	}
+	ctx = context.WithoutCancel(ctx)
 	go func() {
-		ctx := context.WithoutCancel(ctx)
+		err := h.SetTyping(ctx, roomID, 0)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to stop typing while sending message")
+		}
+	}()
+	go func() {
 		var err error
 		defer func() {
 			h.EventHandler(&SendComplete{
