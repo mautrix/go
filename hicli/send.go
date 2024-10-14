@@ -272,7 +272,7 @@ func (h *HiClient) shouldShareKeysToInvitedUsers(ctx context.Context, roomID id.
 	}
 	mautrixEvt := historyVisibility.AsRawMautrix()
 	err = mautrixEvt.Content.ParseRaw(mautrixEvt.Type)
-	if err != nil {
+	if err != nil && !errors.Is(err, event.ErrContentAlreadyParsed) {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to parse history visibility event")
 		return false
 	}

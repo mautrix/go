@@ -40,7 +40,7 @@ func (h *HiClient) preProcessSyncResponse(ctx context.Context, resp *mautrix.Res
 	for _, evt := range resp.ToDevice.Events {
 		evt.Type.Class = event.ToDeviceEventType
 		err := evt.Content.ParseRaw(evt.Type)
-		if err != nil {
+		if err != nil && !errors.Is(err, event.ErrContentAlreadyParsed) {
 			log.Warn().Err(err).
 				Stringer("event_type", &evt.Type).
 				Stringer("sender", evt.Sender).
@@ -106,7 +106,7 @@ func (h *HiClient) processSyncResponse(ctx context.Context, resp *mautrix.RespSy
 		}
 		if evt.Type == event.AccountDataPushRules {
 			err = evt.Content.ParseRaw(evt.Type)
-			if err != nil {
+			if err != nil && !errors.Is(err, event.ErrContentAlreadyParsed) {
 				zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to parse push rules in sync")
 			} else if pushRules, ok := evt.Content.Parsed.(*pushrules.EventContent); ok {
 				h.PushRules.Store(pushRules.Ruleset)
@@ -179,7 +179,7 @@ func (h *HiClient) processSyncJoinedRoom(ctx context.Context, roomID id.RoomID, 
 	for _, evt := range room.Ephemeral.Events {
 		evt.Type.Class = event.EphemeralEventType
 		err = evt.Content.ParseRaw(evt.Type)
-		if err != nil {
+		if err != nil && !errors.Is(err, event.ErrContentAlreadyParsed) {
 			zerolog.Ctx(ctx).Debug().Err(err).Msg("Failed to parse ephemeral event content")
 			continue
 		}
@@ -683,7 +683,7 @@ func processImportantEvent(ctx context.Context, evt *event.Event, existingRoomDa
 		return
 	}
 	err := evt.Content.ParseRaw(evt.Type)
-	if err != nil {
+	if err != nil && !errors.Is(err, event.ErrContentAlreadyParsed) {
 		zerolog.Ctx(ctx).Warn().Err(err).
 			Stringer("event_type", &evt.Type).
 			Stringer("event_id", evt.ID).
