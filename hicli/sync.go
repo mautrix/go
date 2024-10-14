@@ -370,7 +370,18 @@ func (h *HiClient) processEvent(ctx context.Context, evt *event.Event, decryptio
 		}
 		minIndex, _ := crypto.ParseMegolmMessageIndex(evt.Content.AsEncrypted().MegolmCiphertext)
 		req.MinIndex = min(uint32(minIndex), req.MinIndex)
-		decryptionQueue[dbEvt.MegolmSessionID] = req
+		if decryptionQueue != nil {
+			decryptionQueue[dbEvt.MegolmSessionID] = req
+		} else {
+			err = h.DB.SessionRequest.Put(ctx, req)
+			if err != nil {
+				zerolog.Ctx(ctx).Err(err).
+					Stringer("session_id", dbEvt.MegolmSessionID).
+					Msg("Failed to save session request")
+			} else {
+				h.WakeupRequestQueue()
+			}
+		}
 	}
 	return dbEvt, err
 }
