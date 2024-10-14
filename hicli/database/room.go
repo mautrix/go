@@ -22,7 +22,7 @@ import (
 
 const (
 	getRoomBaseQuery = `
-		SELECT room_id, creation_content, name, name_quality, avatar, topic, canonical_alias,
+		SELECT room_id, creation_content, name, name_quality, avatar, explicit_avatar, topic, canonical_alias,
 		       lazy_load_summary, encryption_event, has_member_list,
 		       preview_event_rowid, sorting_timestamp, prev_batch
 		FROM room
@@ -39,14 +39,15 @@ const (
 			name = COALESCE($3, room.name),
 			name_quality = CASE WHEN $3 IS NOT NULL THEN $4 ELSE room.name_quality END,
 			avatar = COALESCE($5, room.avatar),
-			topic = COALESCE($6, room.topic),
-			canonical_alias = COALESCE($7, room.canonical_alias),
-			lazy_load_summary = COALESCE($8, room.lazy_load_summary),
-			encryption_event = COALESCE($9, room.encryption_event),
-			has_member_list = room.has_member_list OR $10,
-			preview_event_rowid = COALESCE($11, room.preview_event_rowid),
-			sorting_timestamp = COALESCE($12, room.sorting_timestamp),
-			prev_batch = COALESCE($13, room.prev_batch)
+			explicit_avatar = CASE WHEN $5 IS NOT NULL THEN $6 ELSE room.explicit_avatar END,
+			topic = COALESCE($7, room.topic),
+			canonical_alias = COALESCE($8, room.canonical_alias),
+			lazy_load_summary = COALESCE($9, room.lazy_load_summary),
+			encryption_event = COALESCE($10, room.encryption_event),
+			has_member_list = room.has_member_list OR $11,
+			preview_event_rowid = COALESCE($12, room.preview_event_rowid),
+			sorting_timestamp = COALESCE($13, room.sorting_timestamp),
+			prev_batch = COALESCE($14, room.prev_batch)
 		WHERE room_id = $1
 	`
 	setRoomPrevBatchQuery = `
@@ -133,6 +134,7 @@ type Room struct {
 	Name           *string        `json:"name,omitempty"`
 	NameQuality    NameQuality    `json:"name_quality"`
 	Avatar         *id.ContentURI `json:"avatar,omitempty"`
+	ExplicitAvatar bool           `json:"explicit_avatar"`
 	Topic          *string        `json:"topic,omitempty"`
 	CanonicalAlias *id.RoomAlias  `json:"canonical_alias,omitempty"`
 
@@ -155,6 +157,7 @@ func (r *Room) CheckChangesAndCopyInto(other *Room) (hasChanges bool) {
 	}
 	if r.Avatar != nil {
 		other.Avatar = r.Avatar
+		other.ExplicitAvatar = r.ExplicitAvatar
 		hasChanges = true
 	}
 	if r.Topic != nil {
@@ -201,6 +204,7 @@ func (r *Room) Scan(row dbutil.Scannable) (*Room, error) {
 		&r.Name,
 		&r.NameQuality,
 		&r.Avatar,
+		&r.ExplicitAvatar,
 		&r.Topic,
 		&r.CanonicalAlias,
 		dbutil.JSON{Data: &r.LazyLoadSummary},
@@ -226,6 +230,7 @@ func (r *Room) sqlVariables() []any {
 		r.Name,
 		r.NameQuality,
 		r.Avatar,
+		r.ExplicitAvatar,
 		r.Topic,
 		r.CanonicalAlias,
 		dbutil.JSONPtr(r.LazyLoadSummary),

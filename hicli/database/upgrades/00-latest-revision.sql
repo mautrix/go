@@ -1,4 +1,4 @@
--- v0 -> v1: Latest revision
+-- v0 -> v2 (compatible with v1+): Latest revision
 CREATE TABLE account (
 	user_id        TEXT NOT NULL PRIMARY KEY,
 	device_id      TEXT NOT NULL,
@@ -15,6 +15,7 @@ CREATE TABLE room (
 	name                TEXT,
 	name_quality        INTEGER NOT NULL DEFAULT 0,
 	avatar              TEXT,
+	explicit_avatar     INTEGER NOT NULL DEFAULT 0,
 	topic               TEXT,
 	canonical_alias     TEXT,
 	lazy_load_summary   TEXT,

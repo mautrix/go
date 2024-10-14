@@ -556,12 +556,15 @@ func (h *HiClient) processStateAndTimeline(ctx context.Context, room *database.R
 	}
 	// Calculate name from participants if participants changed and current name was generated from participants, or if the room name was unset
 	if (heroesChanged && updatedRoom.NameQuality <= database.NameQualityParticipants) || updatedRoom.NameQuality == database.NameQualityNil {
-		name, err := h.calculateRoomParticipantName(ctx, room.ID, summary)
+		name, dmAvatarURL, err := h.calculateRoomParticipantName(ctx, room.ID, summary)
 		if err != nil {
 			return fmt.Errorf("failed to calculate room name: %w", err)
 		}
 		updatedRoom.Name = &name
 		updatedRoom.NameQuality = database.NameQualityParticipants
+		if !dmAvatarURL.IsEmpty() && !room.ExplicitAvatar {
+			updatedRoom.Avatar = &dmAvatarURL
+		}
 	}
 	if timeline.PrevBatch != "" && (room.PrevBatch == "" || timeline.Limited) {
 		updatedRoom.PrevBatch = timeline.PrevBatch
@@ -595,14 +598,15 @@ func joinMemberNames(names []string, totalCount int) string {
 	}
 }
 
-func (h *HiClient) calculateRoomParticipantName(ctx context.Context, roomID id.RoomID, summary *mautrix.LazyLoadSummary) (string, error) {
+func (h *HiClient) calculateRoomParticipantName(ctx context.Context, roomID id.RoomID, summary *mautrix.LazyLoadSummary) (string, id.ContentURI, error) {
+	var primaryAvatarURL id.ContentURI
 	if summary == nil || len(summary.Heroes) == 0 {
-		return "Empty room", nil
+		return "Empty room", primaryAvatarURL, nil
 	}
 	var functionalMembers []id.UserID
 	functionalMembersEvt, err := h.DB.CurrentState.Get(ctx, roomID, event.StateElementFunctionalMembers, "")
 	if err != nil {
-		return "", fmt.Errorf("failed to get %s event: %w", event.StateElementFunctionalMembers.Type, err)
+		return "", primaryAvatarURL, fmt.Errorf("failed to get %s event: %w", event.StateElementFunctionalMembers.Type, err)
 	} else if functionalMembersEvt != nil {
 		mautrixEvt := functionalMembersEvt.AsRawMautrix()
 		_ = mautrixEvt.Content.ParseRaw(mautrixEvt.Type)
@@ -627,28 +631,35 @@ func (h *HiClient) calculateRoomParticipantName(ctx context.Context, roomID id.R
 		}
 		heroEvt, err := h.DB.CurrentState.Get(ctx, roomID, event.StateMember, hero.String())
 		if err != nil {
-			return "", fmt.Errorf("failed to get %s's member event: %w", hero, err)
+			return "", primaryAvatarURL, fmt.Errorf("failed to get %s's member event: %w", hero, err)
 		} else if heroEvt == nil {
 			leftMembers = append(leftMembers, hero.String())
 			continue
 		}
-		results := gjson.GetManyBytes(heroEvt.Content, "membership", "displayname")
-		name := results[1].Str
+		membership := gjson.GetBytes(heroEvt.Content, "membership").Str
+		name := gjson.GetBytes(heroEvt.Content, "displayname").Str
 		if name == "" {
 			name = hero.String()
 		}
-		if results[0].Str == "join" || results[0].Str == "invite" {
+		avatarURL := gjson.GetBytes(heroEvt.Content, "avatar_url").Str
+		if avatarURL != "" {
+			primaryAvatarURL = id.ContentURIString(avatarURL).ParseOrIgnore()
+		}
+		if membership == "join" || membership == "invite" {
 			members = append(members, name)
 		} else {
 			leftMembers = append(leftMembers, name)
 		}
 	}
+	if len(members)+len(leftMembers) > 1 || !primaryAvatarURL.IsValid() {
+		primaryAvatarURL = id.ContentURI{}
+	}
 	if len(members) > 0 {
-		return joinMemberNames(members, memberCount), nil
+		return joinMemberNames(members, memberCount), primaryAvatarURL, nil
 	} else if len(leftMembers) > 0 {
-		return fmt.Sprintf("Empty room (was %s)", joinMemberNames(leftMembers, memberCount)), nil
+		return fmt.Sprintf("Empty room (was %s)", joinMemberNames(leftMembers, memberCount)), primaryAvatarURL, nil
 	} else {
-		return "Empty room", nil
+		return "Empty room", primaryAvatarURL, nil
 	}
 }
 
@@ -721,6 +732,7 @@ func processImportantEvent(ctx context.Context, evt *event.Event, existingRoomDa
 		if ok {
 			url, _ := content.URL.Parse()
 			updatedRoom.Avatar = &url
+			updatedRoom.ExplicitAvatar = true
 		}
 	case event.StateTopic:
 		content, ok := evt.Content.Parsed.(*event.TopicEventContent)
