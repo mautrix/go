@@ -19,7 +19,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog"
 	"golang.org/x/net/publicsuffix"
@@ -43,7 +42,7 @@ func Create() *AppService {
 		intents:    make(map[id.UserID]*IntentAPI),
 		HTTPClient: &http.Client{Timeout: 180 * time.Second, Jar: jar},
 		StateStore: mautrix.NewMemoryStateStore().(StateStore),
-		Router:     mux.NewRouter(),
+		Router:     http.NewServeMux(),
 		UserAgent:  mautrix.DefaultUserAgent,
 		txnIDC:     NewTransactionIDCache(128),
 		Live:       true,
@@ -61,12 +60,12 @@ func Create() *AppService {
 		DefaultHTTPRetries: 4,
 	}
 
-	as.Router.HandleFunc("/_matrix/app/v1/transactions/{txnID}", as.PutTransaction).Methods(http.MethodPut)
-	as.Router.HandleFunc("/_matrix/app/v1/rooms/{roomAlias}", as.GetRoom).Methods(http.MethodGet)
-	as.Router.HandleFunc("/_matrix/app/v1/users/{userID}", as.GetUser).Methods(http.MethodGet)
-	as.Router.HandleFunc("/_matrix/app/v1/ping", as.PostPing).Methods(http.MethodPost)
-	as.Router.HandleFunc("/_matrix/mau/live", as.GetLive).Methods(http.MethodGet)
-	as.Router.HandleFunc("/_matrix/mau/ready", as.GetReady).Methods(http.MethodGet)
+	as.Router.HandleFunc("PUT /_matrix/app/v1/transactions/{txnID}", as.PutTransaction)
+	as.Router.HandleFunc("GET /_matrix/app/v1/rooms/{roomAlias}", as.GetRoom)
+	as.Router.HandleFunc("GET /_matrix/app/v1/users/{userID}", as.GetUser)
+	as.Router.HandleFunc("POST /_matrix/app/v1/ping", as.PostPing)
+	as.Router.HandleFunc("GET /_matrix/mau/live", as.GetLive)
+	as.Router.HandleFunc("GET /_matrix/mau/ready", as.GetReady)
 
 	return as
 }
@@ -160,7 +159,7 @@ type AppService struct {
 	QueryHandler   QueryHandler
 	StateStore     StateStore
 
-	Router       *mux.Router
+	Router       *http.ServeMux
 	UserAgent    string
 	server       *http.Server
 	HTTPClient   *http.Client

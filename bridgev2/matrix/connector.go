@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"os"
 	"regexp"
@@ -21,7 +22,6 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/dbutil"
@@ -222,7 +222,8 @@ func (br *Connector) GetPublicAddress() string {
 	return br.Config.AppService.PublicAddress
 }
 
-func (br *Connector) GetRouter() *mux.Router {
+// TODO switch to http.ServeMux
+func (br *Connector) GetRouter() *http.ServeMux {
 	if br.GetPublicAddress() != "" {
 		return br.AS.Router
 	}

@@ -7,7 +7,6 @@ toolchain go1.23.2
 require (
 	filippo.io/edwards25519 v1.1.0
 	github.com/chzyer/readline v1.5.1
-	github.com/gorilla/mux v1.8.0
 	github.com/gorilla/websocket v1.5.0
 	github.com/lib/pq v1.10.9
 	github.com/lucasb-eyer/go-colorful v1.2.0
