@@ -3530,7 +3530,7 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 		Preset:             "private_chat",
 		IsDirect:           portal.RoomType == database.RoomTypeDM,
 		PowerLevelOverride: powerLevels,
-		BeeperLocalRoomID:  id.RoomID(fmt.Sprintf("!%s:%s", portal.ID, portal.Bridge.Matrix.ServerName())),
+		BeeperLocalRoomID:  id.RoomID(fmt.Sprintf("!%s.%s:%s", portal.ID, portal.Receiver, portal.Bridge.Matrix.ServerName())),
 	}
 	autoJoinInvites := portal.Bridge.Matrix.GetCapabilities().AutoJoinInvites
 	if autoJoinInvites {
