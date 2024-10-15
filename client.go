@@ -79,6 +79,8 @@ type Client struct {
 	UserID        id.UserID    // The user ID of the client. Used for forming HTTP paths which use the client's user ID.
 	DeviceID      id.DeviceID  // The device ID of the client.
 	AccessToken   string       // The access_token for the client.
+	RefreshToken  string       // Token to be used for refreshing AccessToken.
+	RefreshTime   time.Time    // Time after which the AccessToken must be refreshed.
 	UserAgent     string       // The value for the User-Agent header
 	Client        *http.Client // The underlying HTTP client which will be used to make HTTP requests.
 	Syncer        Syncer       // The thing which can process /sync responses
@@ -865,7 +867,7 @@ func (cli *Client) GetLoginFlows(ctx context.Context) (resp *RespLoginFlows, err
 	return
 }
 
-// Login a user to the homeserver according to https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3login
+// Login a user to the homeserver according to https://spec.matrix.org/v1.3/client-server-api/#post_matrixclientv3login
 func (cli *Client) Login(ctx context.Context, req *ReqLogin) (resp *RespLogin, err error) {
 	_, err = cli.MakeFullRequest(ctx, FullRequest{
 		Method:           http.MethodPost,
@@ -874,7 +876,10 @@ func (cli *Client) Login(ctx context.Context, req *ReqLogin) (resp *RespLogin, e
 		ResponseJSON:     &resp,
 		SensitiveContent: len(req.Password) > 0 || len(req.Token) > 0,
 	})
-	if req.StoreCredentials && err == nil {
+	if err != nil {
+		return resp, err
+	}
+	if req.StoreCredentials {
 		cli.DeviceID = resp.DeviceID
 		cli.AccessToken = resp.AccessToken
 		cli.UserID = resp.UserID
@@ -884,7 +889,7 @@ func (cli *Client) Login(ctx context.Context, req *ReqLogin) (resp *RespLogin, e
 			Str("device_id", cli.DeviceID.String()).
 			Msg("Stored credentials after login")
 	}
-	if req.StoreHomeserverURL && err == nil && resp.WellKnown != nil && len(resp.WellKnown.Homeserver.BaseURL) > 0 {
+	if req.StoreHomeserverURL && resp.WellKnown != nil && len(resp.WellKnown.Homeserver.BaseURL) > 0 {
 		var urlErr error
 		cli.HomeserverURL, urlErr = url.Parse(resp.WellKnown.Homeserver.BaseURL)
 		if urlErr != nil {
@@ -898,7 +903,51 @@ func (cli *Client) Login(ctx context.Context, req *ReqLogin) (resp *RespLogin, e
 				Msg("Updated homeserver URL after login")
 		}
 	}
-	return
+	cli.RefreshToken = resp.RefreshToken
+	if req.RefreshToken && resp.RefreshToken != "" {
+		cli.RefreshTime = cli.getRefreshTime(resp.ExpiresInMS)
+	}
+	return resp, err
+}
+
+func (cli *Client) getRefreshTime(expiresInMS int64) time.Time {
+	expiryDuration := time.Duration(expiresInMS) * time.Millisecond
+	fudgeDuration := -time.Duration(expiryDuration / 5) // 20% fudge before we refresh the token
+	return time.Now().Add(expiryDuration).Add(fudgeDuration)
+}
+
+func (cli *Client) Refresh(ctx context.Context) (err error) {
+	// Check access token, Refresh if needed.
+	if time.Now().After(cli.RefreshTime) && cli.RefreshToken != "" {
+		return cli.refreshInner(ctx)
+	}
+	return nil
+}
+
+// Refresh the AccessToken with the homeserver according to https://spec.matrix.org/v1.3/client-server-api/#post_matrixclientv3refresh
+func (cli *Client) refreshInner(ctx context.Context) (err error) {
+	req := ReqRefresh{
+		RefreshToken: cli.RefreshToken,
+	}
+	resp := RespRefresh{}
+	_, err = cli.MakeFullRequest(ctx, FullRequest{
+		Method:           http.MethodPost,
+		URL:              cli.BuildClientURL("v3", "refresh"),
+		RequestJSON:      req,
+		ResponseJSON:     &resp,
+		SensitiveContent: true,
+	})
+	if err != nil {
+		return err
+	}
+	cli.Log.Debug().
+		Msg("Refreshed AccessToken successfully")
+	cli.AccessToken = resp.AccessToken
+	cli.RefreshToken = resp.RefreshToken
+	if resp.RefreshToken != "" && resp.ExpiresInMS > 0 {
+		cli.RefreshTime = cli.getRefreshTime(resp.ExpiresInMS)
+	}
+	return nil
 }
 
 // Logout the current user. See https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3logout
