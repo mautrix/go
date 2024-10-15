@@ -78,11 +78,7 @@ func (s Decryption) Decrypt(ephemeralKey, mac, ciphertext []byte) ([]byte, error
 	if !verified {
 		return nil, fmt.Errorf("decrypt: %w", olm.ErrBadMAC)
 	}
-	plaintext, err := cipher.Decrypt(sharedSecret, ciphertext)
-	if err != nil {
-		return nil, err
-	}
-	return plaintext, nil
+	return cipher.Decrypt(sharedSecret, ciphertext)
 }
 
 // PickleAsJSON returns an Decryption as a base64 string encrypted using the supplied key. The unencrypted representation of the Account is in JSON format.
@@ -136,11 +132,7 @@ func (a Decryption) Pickle(key []byte) ([]byte, error) {
 	if written != len(pickeledBytes) {
 		return nil, errors.New("number of written bytes not correct")
 	}
-	encrypted, err := cipher.Pickle(key, pickeledBytes)
-	if err != nil {
-		return nil, err
-	}
-	return encrypted, nil
+	return cipher.Pickle(key, pickeledBytes)
 }
 
 // PickleLibOlm encodes the Decryption into target. target has to have a size of at least PickleLen() and is written to from index 0.
