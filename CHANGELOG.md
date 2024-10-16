@@ -1,9 +1,13 @@
-## unreleased
+## v0.21.1 (2024-10-16)
 
+* *(bridgev2)* Added more features and fixed bugs.
+* *(hicli)* Added more features and fixed bugs.
 * *(appservice)* Removed TLS support. A reverse proxy should be used if TLS
   is needed.
 * *(format/mdext)* Added goldmark extension to fix indented paragraphs when
   disabling indented code block parser.
+* *(event)* Added `Has` method for `Mentions`.
+* *(event)* Added basic support for the unstable version of polls.
 
 ## v0.21.0 (2024-09-16)
 
