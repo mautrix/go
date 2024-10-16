@@ -218,7 +218,7 @@ func (h *HiClient) loadMembers(ctx context.Context, room *database.Room) error {
 	err = h.DB.DoTxn(ctx, nil, func(ctx context.Context) error {
 		entries := make([]*database.CurrentStateEntry, len(resp.Chunk))
 		for i, evt := range resp.Chunk {
-			dbEvt, err := h.processEvent(ctx, evt, nil, true)
+			dbEvt, err := h.processEvent(ctx, evt, nil, nil, true)
 			if err != nil {
 				return err
 			}

@@ -68,6 +68,9 @@ func (rs *PushRuleset) MarshalJSON() ([]byte, error) {
 var DefaultPushActions = PushActionArray{&PushAction{Action: ActionDontNotify}}
 
 func (rs *PushRuleset) GetMatchingRule(room Room, evt *event.Event) (rule *PushRule) {
+	if rs == nil {
+		return nil
+	}
 	// Add push rule collections to array in priority order
 	arrays := []PushRuleCollection{rs.Override, rs.Content, rs.Room, rs.Sender, rs.Underride}
 	// Loop until one of the push rule collections matches the room/event combo.

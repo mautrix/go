@@ -59,7 +59,7 @@ func (h *HiClient) GetEvent(ctx context.Context, roomID id.RoomID, eventID id.Ev
 	} else if serverEvt, err := h.Client.GetEvent(ctx, roomID, eventID); err != nil {
 		return nil, fmt.Errorf("failed to get event from server: %w", err)
 	} else {
-		return h.processEvent(ctx, serverEvt, nil, false)
+		return h.processEvent(ctx, serverEvt, nil, nil, false)
 	}
 }
 
@@ -90,7 +90,7 @@ func (h *HiClient) GetRoomState(ctx context.Context, roomID id.RoomID, fetchMemb
 			}
 			entries := make([]*database.CurrentStateEntry, len(evts))
 			for i, evt := range evts {
-				dbEvt, err := h.processEvent(ctx, evt, nil, false)
+				dbEvt, err := h.processEvent(ctx, evt, room.LazyLoadSummary, nil, false)
 				if err != nil {
 					return fmt.Errorf("failed to process event %s: %w", evt.ID, err)
 				}
@@ -186,7 +186,7 @@ func (h *HiClient) PaginateServer(ctx context.Context, roomID id.RoomID, limit i
 		decryptionQueue := make(map[id.SessionID]*database.SessionRequest)
 		iOffset := 0
 		for i, evt := range resp.Chunk {
-			dbEvt, err := h.processEvent(ctx, evt, decryptionQueue, true)
+			dbEvt, err := h.processEvent(ctx, evt, room.LazyLoadSummary, decryptionQueue, true)
 			if err != nil {
 				return err
 			} else if exists, err := h.DB.Timeline.Has(ctx, roomID, dbEvt.RowID); err != nil {

@@ -134,11 +134,15 @@ func (h *HiClient) processSyncResponse(ctx context.Context, resp *mautrix.RespSy
 	return nil
 }
 
-func receiptsToList(content *event.ReceiptEventContent) []*database.Receipt {
+func (h *HiClient) receiptsToList(content *event.ReceiptEventContent) ([]*database.Receipt, []id.EventID) {
 	receiptList := make([]*database.Receipt, 0)
+	var newOwnReceipts []id.EventID
 	for eventID, receipts := range *content {
 		for receiptType, users := range receipts {
 			for userID, receiptInfo := range users {
+				if userID == h.Account.UserID {
+					newOwnReceipts = append(newOwnReceipts, eventID)
+				}
 				receiptList = append(receiptList, &database.Receipt{
 					UserID:      userID,
 					ReceiptType: receiptType,
@@ -149,7 +153,12 @@ func receiptsToList(content *event.ReceiptEventContent) []*database.Receipt {
 			}
 		}
 	}
-	return receiptList
+	return receiptList, newOwnReceipts
+}
+
+type receiptsToSave struct {
+	roomID   id.RoomID
+	receipts []*database.Receipt
 }
 
 func (h *HiClient) processSyncJoinedRoom(ctx context.Context, roomID id.RoomID, room *mautrix.SyncJoinedRoom) error {
@@ -172,10 +181,8 @@ func (h *HiClient) processSyncJoinedRoom(ctx context.Context, roomID id.RoomID, 
 			return fmt.Errorf("failed to save account data event %s: %w", evt.Type.Type, err)
 		}
 	}
-	err = h.processStateAndTimeline(ctx, existingRoomData, &room.State, &room.Timeline, &room.Summary)
-	if err != nil {
-		return err
-	}
+	var receipts []receiptsToSave
+	var newOwnReceipts []id.EventID
 	for _, evt := range room.Ephemeral.Events {
 		evt.Type.Class = event.EphemeralEventType
 		err = evt.Content.ParseRaw(evt.Type)
@@ -185,18 +192,24 @@ func (h *HiClient) processSyncJoinedRoom(ctx context.Context, roomID id.RoomID, 
 		}
 		switch evt.Type {
 		case event.EphemeralEventReceipt:
-			err = h.DB.Receipt.PutMany(ctx, roomID, receiptsToList(evt.Content.AsReceipt())...)
-			if err != nil {
-				return fmt.Errorf("failed to save receipts: %w", err)
-			}
+			var receiptsList []*database.Receipt
+			receiptsList, newOwnReceipts = h.receiptsToList(evt.Content.AsReceipt())
+			receipts = append(receipts, receiptsToSave{roomID, receiptsList})
 		case event.EphemeralEventTyping:
 			go h.EventHandler(&Typing{
 				RoomID:             roomID,
 				TypingEventContent: *evt.Content.AsTyping(),
 			})
 		}
-		if evt.Type != event.EphemeralEventReceipt {
-			continue
+	}
+	err = h.processStateAndTimeline(ctx, existingRoomData, &room.State, &room.Timeline, &room.Summary, newOwnReceipts, room.UnreadNotifications)
+	if err != nil {
+		return err
+	}
+	for _, rs := range receipts {
+		err = h.DB.Receipt.PutMany(ctx, rs.roomID, rs.receipts...)
+		if err != nil {
+			return fmt.Errorf("failed to save receipts: %w", err)
 		}
 	}
 	return nil
@@ -209,7 +222,8 @@ func (h *HiClient) processSyncLeftRoom(ctx context.Context, roomID id.RoomID, ro
 	} else if existingRoomData == nil {
 		return nil
 	}
-	return h.processStateAndTimeline(ctx, existingRoomData, &room.State, &room.Timeline, &room.Summary)
+	// TODO delete room instead of processing?
+	return h.processStateAndTimeline(ctx, existingRoomData, &room.State, &room.Timeline, &room.Summary, nil, nil)
 }
 
 func isDecryptionErrorRetryable(err error) bool {
@@ -318,7 +332,47 @@ func (h *HiClient) cacheMedia(ctx context.Context, evt *event.Event, rowID datab
 	}
 }
 
-func (h *HiClient) processEvent(ctx context.Context, evt *event.Event, decryptionQueue map[id.SessionID]*database.SessionRequest, checkDB bool) (*database.Event, error) {
+func (h *HiClient) calculateLocalContent(ctx context.Context, dbEvt *database.Event, evt *event.Event) *database.LocalContent {
+	if evt.Type != event.EventMessage && evt.Type != event.EventSticker {
+		return nil
+	}
+	_ = evt.Content.ParseRaw(evt.Type)
+	content, ok := evt.Content.Parsed.(*event.MessageEventContent)
+	if !ok {
+		return nil
+	}
+	if dbEvt.RelationType == event.RelReplace && content.NewContent != nil {
+		content = content.NewContent
+	}
+	if content != nil {
+		var sanitizedHTML string
+		if content.Format == event.FormatHTML {
+			sanitizedHTML, _ = sanitizeAndLinkifyHTML(content.FormattedBody)
+		} else {
+			var builder strings.Builder
+			linkifyAndWriteBytes(&builder, []byte(content.Body))
+			sanitizedHTML = builder.String()
+		}
+		return &database.LocalContent{SanitizedHTML: sanitizedHTML}
+	}
+	return nil
+}
+
+func (h *HiClient) postDecryptProcess(ctx context.Context, llSummary *mautrix.LazyLoadSummary, dbEvt *database.Event, evt *event.Event) {
+	if dbEvt.RowID != 0 {
+		h.cacheMedia(ctx, evt, dbEvt.RowID)
+	}
+	dbEvt.UnreadType = h.evaluatePushRules(ctx, llSummary, dbEvt.GetNonPushUnreadType(), evt)
+	dbEvt.LocalContent = h.calculateLocalContent(ctx, dbEvt, evt)
+}
+
+func (h *HiClient) processEvent(
+	ctx context.Context,
+	evt *event.Event,
+	llSummary *mautrix.LazyLoadSummary,
+	decryptionQueue map[id.SessionID]*database.SessionRequest,
+	checkDB bool,
+) (*database.Event, error) {
 	if checkDB {
 		dbEvt, err := h.DB.Event.GetByID(ctx, evt.ID)
 		if err != nil {
@@ -349,6 +403,11 @@ func (h *HiClient) processEvent(ctx context.Context, evt *event.Event, decryptio
 		} else if evt.Redacts == "" {
 			evt.Redacts = id.EventID(gjson.GetBytes(evt.Content.VeryRaw, "redacts").Str)
 		}
+	}
+	if decryptedMautrixEvt != nil {
+		h.postDecryptProcess(ctx, llSummary, dbEvt, decryptedMautrixEvt)
+	} else {
+		h.postDecryptProcess(ctx, llSummary, dbEvt, evt)
 	}
 	_, err := h.DB.Event.Upsert(ctx, dbEvt)
 	if err != nil {
@@ -386,12 +445,27 @@ func (h *HiClient) processEvent(ctx context.Context, evt *event.Event, decryptio
 	return dbEvt, err
 }
 
-func (h *HiClient) processStateAndTimeline(ctx context.Context, room *database.Room, state *mautrix.SyncEventsList, timeline *mautrix.SyncTimeline, summary *mautrix.LazyLoadSummary) error {
+func (h *HiClient) processStateAndTimeline(
+	ctx context.Context,
+	room *database.Room,
+	state *mautrix.SyncEventsList,
+	timeline *mautrix.SyncTimeline,
+	summary *mautrix.LazyLoadSummary,
+	newOwnReceipts []id.EventID,
+	serverNotificationCounts *mautrix.UnreadNotificationCounts,
+) error {
 	updatedRoom := &database.Room{
 		ID: room.ID,
 
-		SortingTimestamp: room.SortingTimestamp,
-		NameQuality:      room.NameQuality,
+		SortingTimestamp:    room.SortingTimestamp,
+		NameQuality:         room.NameQuality,
+		UnreadHighlights:    room.UnreadHighlights,
+		UnreadNotifications: room.UnreadNotifications,
+		UnreadMessages:      room.UnreadMessages,
+	}
+	if serverNotificationCounts != nil {
+		updatedRoom.UnreadHighlights = serverNotificationCounts.HighlightCount
+		updatedRoom.UnreadNotifications = serverNotificationCounts.NotificationCount
 	}
 	heroesChanged := false
 	if summary.Heroes == nil && summary.JoinedMemberCount == nil && summary.InvitedMemberCount == nil {
@@ -405,6 +479,7 @@ func (h *HiClient) processStateAndTimeline(ctx context.Context, room *database.R
 	}
 	decryptionQueue := make(map[id.SessionID]*database.SessionRequest)
 	allNewEvents := make([]*database.Event, 0, len(state.Events)+len(timeline.Events))
+	newNotifications := make([]SyncNotification, 0)
 	recalculatePreviewEvent := false
 	addOldEvent := func(rowID database.EventRowID, evtID id.EventID) (dbEvt *database.Event, err error) {
 		if rowID != 0 {
@@ -440,11 +515,17 @@ func (h *HiClient) processStateAndTimeline(ctx context.Context, room *database.R
 		}
 		return nil
 	}
-	processNewEvent := func(evt *event.Event, isTimeline bool) (database.EventRowID, error) {
+	processNewEvent := func(evt *event.Event, isTimeline, isUnread bool) (database.EventRowID, error) {
 		evt.RoomID = room.ID
-		dbEvt, err := h.processEvent(ctx, evt, decryptionQueue, false)
+		dbEvt, err := h.processEvent(ctx, evt, summary, decryptionQueue, false)
 		if err != nil {
 			return -1, err
+		}
+		if isUnread && dbEvt.UnreadType.Is(database.UnreadTypeNotify) {
+			newNotifications = append(newNotifications, SyncNotification{
+				RowID: dbEvt.RowID,
+				Sound: dbEvt.UnreadType.Is(database.UnreadTypeSound),
+			})
 		}
 		if isTimeline {
 			if dbEvt.CanUseForPreview() {
@@ -492,7 +573,7 @@ func (h *HiClient) processStateAndTimeline(ctx context.Context, room *database.R
 	}
 	for _, evt := range state.Events {
 		evt.Type.Class = event.StateEventType
-		rowID, err := processNewEvent(evt, false)
+		rowID, err := processNewEvent(evt, false, false)
 		if err != nil {
 			return err
 		}
@@ -502,13 +583,20 @@ func (h *HiClient) processStateAndTimeline(ctx context.Context, room *database.R
 	var err error
 	if len(timeline.Events) > 0 {
 		timelineIDs := make([]database.EventRowID, len(timeline.Events))
+		readUpToIndex := -1
+		for i := len(timeline.Events) - 1; i >= 0; i-- {
+			if slices.Contains(newOwnReceipts, timeline.Events[i].ID) {
+				readUpToIndex = i
+				break
+			}
+		}
 		for i, evt := range timeline.Events {
 			if evt.StateKey != nil {
 				evt.Type.Class = event.StateEventType
 			} else {
 				evt.Type.Class = event.MessageEventType
 			}
-			timelineIDs[i], err = processNewEvent(evt, true)
+			timelineIDs[i], err = processNewEvent(evt, true, i > readUpToIndex)
 			if err != nil {
 				return err
 			}
@@ -578,11 +666,12 @@ func (h *HiClient) processStateAndTimeline(ctx context.Context, room *database.R
 	}
 	if roomChanged || len(timelineRowTuples) > 0 || len(allNewEvents) > 0 {
 		ctx.Value(syncContextKey).(*syncContext).evt.Rooms[room.ID] = &SyncRoom{
-			Meta:     room,
-			Timeline: timelineRowTuples,
-			State:    changedState,
-			Reset:    timeline.Limited,
-			Events:   allNewEvents,
+			Meta:          room,
+			Timeline:      timelineRowTuples,
+			State:         changedState,
+			Reset:         timeline.Limited,
+			Events:        allNewEvents,
+			Notifications: newNotifications,
 		}
 	}
 	return nil

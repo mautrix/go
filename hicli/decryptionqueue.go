@@ -59,14 +59,14 @@ func (h *HiClient) handleReceivedMegolmSession(ctx context.Context, roomID id.Ro
 			log.Warn().Err(err).Stringer("event_id", evt.ID).Msg("Failed to decrypt event even after receiving megolm session")
 		} else {
 			decrypted = append(decrypted, evt)
-			h.cacheMedia(ctx, mautrixEvt, evt.RowID)
+			h.postDecryptProcess(ctx, nil, evt, mautrixEvt)
 		}
 	}
 	if len(decrypted) > 0 {
 		var newPreview database.EventRowID
 		err = h.DB.DoTxn(ctx, nil, func(ctx context.Context) error {
 			for _, evt := range decrypted {
-				err = h.DB.Event.UpdateDecrypted(ctx, evt.RowID, evt.Decrypted, evt.DecryptedType)
+				err = h.DB.Event.UpdateDecrypted(ctx, evt)
 				if err != nil {
 					return fmt.Errorf("failed to save decrypted content for %s: %w", evt.ID, err)
 				}

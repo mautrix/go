@@ -23,8 +23,8 @@ import (
 const (
 	getRoomBaseQuery = `
 		SELECT room_id, creation_content, name, name_quality, avatar, explicit_avatar, topic, canonical_alias,
-		       lazy_load_summary, encryption_event, has_member_list,
-		       preview_event_rowid, sorting_timestamp, prev_batch
+		       lazy_load_summary, encryption_event, has_member_list, preview_event_rowid, sorting_timestamp,
+		       unread_highlights, unread_notifications, unread_messages, prev_batch
 		FROM room
 	`
 	getRoomsBySortingTimestampQuery = getRoomBaseQuery + `WHERE sorting_timestamp < $1 AND sorting_timestamp > 0 ORDER BY sorting_timestamp DESC LIMIT $2`
@@ -47,7 +47,10 @@ const (
 			has_member_list = room.has_member_list OR $11,
 			preview_event_rowid = COALESCE($12, room.preview_event_rowid),
 			sorting_timestamp = COALESCE($13, room.sorting_timestamp),
-			prev_batch = COALESCE($14, room.prev_batch)
+			unread_highlights = COALESCE($14, room.unread_highlights),
+			unread_notifications = COALESCE($15, room.unread_notifications),
+			unread_messages = COALESCE($16, room.unread_messages),
+			prev_batch = COALESCE($17, room.prev_batch)
 		WHERE room_id = $1
 	`
 	setRoomPrevBatchQuery = `
@@ -143,8 +146,11 @@ type Room struct {
 	EncryptionEvent *event.EncryptionEventContent `json:"encryption_event,omitempty"`
 	HasMemberList   bool                          `json:"has_member_list"`
 
-	PreviewEventRowID EventRowID         `json:"preview_event_rowid"`
-	SortingTimestamp  jsontime.UnixMilli `json:"sorting_timestamp"`
+	PreviewEventRowID   EventRowID         `json:"preview_event_rowid"`
+	SortingTimestamp    jsontime.UnixMilli `json:"sorting_timestamp"`
+	UnreadHighlights    int                `json:"unread_highlights"`
+	UnreadNotifications int                `json:"unread_notifications"`
+	UnreadMessages      int                `json:"unread_messages"`
 
 	PrevBatch string `json:"prev_batch"`
 }
@@ -188,6 +194,18 @@ func (r *Room) CheckChangesAndCopyInto(other *Room) (hasChanges bool) {
 		other.SortingTimestamp = r.SortingTimestamp
 		hasChanges = true
 	}
+	if r.UnreadHighlights != other.UnreadHighlights {
+		other.UnreadHighlights = r.UnreadHighlights
+		hasChanges = true
+	}
+	if r.UnreadNotifications != other.UnreadNotifications {
+		other.UnreadNotifications = r.UnreadNotifications
+		hasChanges = true
+	}
+	if r.UnreadMessages != other.UnreadMessages {
+		other.UnreadMessages = r.UnreadMessages
+		hasChanges = true
+	}
 	if r.PrevBatch != "" && other.PrevBatch == "" {
 		other.PrevBatch = r.PrevBatch
 		hasChanges = true
@@ -212,6 +230,9 @@ func (r *Room) Scan(row dbutil.Scannable) (*Room, error) {
 		&r.HasMemberList,
 		&previewEventRowID,
 		&sortingTimestamp,
+		&r.UnreadHighlights,
+		&r.UnreadNotifications,
+		&r.UnreadMessages,
 		&prevBatch,
 	)
 	if err != nil {
@@ -238,6 +259,9 @@ func (r *Room) sqlVariables() []any {
 		r.HasMemberList,
 		dbutil.NumPtr(r.PreviewEventRowID),
 		dbutil.UnixMilliPtr(r.SortingTimestamp.Time),
+		r.UnreadHighlights,
+		r.UnreadNotifications,
+		r.UnreadMessages,
 		dbutil.StrPtr(r.PrevBatch),
 	}
 }

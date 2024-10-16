@@ -1,4 +1,4 @@
--- v0 -> v2 (compatible with v1+): Latest revision
+-- v0 -> v3 (compatible with v1+): Latest revision
 CREATE TABLE account (
 	user_id        TEXT NOT NULL PRIMARY KEY,
 	device_id      TEXT NOT NULL,
@@ -9,29 +9,34 @@ CREATE TABLE account (
 ) STRICT;
 
 CREATE TABLE room (
-	room_id             TEXT    NOT NULL PRIMARY KEY,
-	creation_content    TEXT,
+	room_id              TEXT    NOT NULL PRIMARY KEY,
+	creation_content     TEXT,
 
-	name                TEXT,
-	name_quality        INTEGER NOT NULL DEFAULT 0,
-	avatar              TEXT,
-	explicit_avatar     INTEGER NOT NULL DEFAULT 0,
-	topic               TEXT,
-	canonical_alias     TEXT,
-	lazy_load_summary   TEXT,
+	name                 TEXT,
+	name_quality         INTEGER NOT NULL DEFAULT 0,
+	avatar               TEXT,
+	explicit_avatar      INTEGER NOT NULL DEFAULT 0,
+	topic                TEXT,
+	canonical_alias      TEXT,
+	lazy_load_summary    TEXT,
 
-	encryption_event    TEXT,
-	has_member_list     INTEGER NOT NULL DEFAULT false,
+	encryption_event     TEXT,
+	has_member_list      INTEGER NOT NULL DEFAULT false,
 
-	preview_event_rowid INTEGER,
-	sorting_timestamp   INTEGER,
+	preview_event_rowid  INTEGER,
+	sorting_timestamp    INTEGER,
+	unread_highlights    INTEGER NOT NULL DEFAULT 0,
+	unread_notifications INTEGER NOT NULL DEFAULT 0,
+	unread_messages      INTEGER NOT NULL DEFAULT 0,
 
-	prev_batch          TEXT,
+	prev_batch           TEXT,
 
 	CONSTRAINT room_preview_event_fkey FOREIGN KEY (preview_event_rowid) REFERENCES event (rowid) ON DELETE SET NULL
 ) STRICT;
 CREATE INDEX room_type_idx ON room (creation_content ->> 'type');
 CREATE INDEX room_sorting_timestamp_idx ON room (sorting_timestamp DESC);
+-- CREATE INDEX room_sorting_timestamp_idx ON room (unread_notifications > 0);
+-- CREATE INDEX room_sorting_timestamp_idx ON room (unread_messages > 0);
 
 CREATE TABLE account_data (
 	user_id TEXT NOT NULL,
@@ -66,6 +71,7 @@ CREATE TABLE event (
 	decrypted         TEXT,
 	decrypted_type    TEXT,
 	unsigned          TEXT    NOT NULL,
+	local_content     TEXT,
 
 	transaction_id    TEXT,
 
@@ -79,6 +85,7 @@ CREATE TABLE event (
 
 	reactions         TEXT,
 	last_edit_rowid   INTEGER,
+	unread_type       INTEGER NOT NULL DEFAULT 0,
 
 	CONSTRAINT event_id_unique_key UNIQUE (event_id),
 	CONSTRAINT transaction_id_unique_key UNIQUE (transaction_id),

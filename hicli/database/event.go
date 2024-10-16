@@ -25,9 +25,10 @@ import (
 
 const (
 	getEventBaseQuery = `
-		SELECT rowid, -1, room_id, event_id, sender, type, state_key, timestamp, content, decrypted, decrypted_type, unsigned,
-		       transaction_id, redacted_by, relates_to, relation_type, megolm_session_id, decryption_error, send_error,
-		       reactions, last_edit_rowid
+		SELECT rowid, -1,
+		       room_id, event_id, sender, type, state_key, timestamp, content, decrypted, decrypted_type,
+		       unsigned, local_content, transaction_id, redacted_by, relates_to, relation_type,
+		       megolm_session_id, decryption_error, send_error, reactions, last_edit_rowid, unread_type
 		FROM event
 	`
 	getEventByRowID                  = getEventBaseQuery + `WHERE rowid = $1`
@@ -36,10 +37,11 @@ const (
 	getFailedEventsByMegolmSessionID = getEventBaseQuery + `WHERE room_id = $1 AND megolm_session_id = $2 AND decryption_error IS NOT NULL`
 	insertEventBaseQuery             = `
 		INSERT INTO event (
-			room_id, event_id, sender, type, state_key, timestamp, content, decrypted, decrypted_type, unsigned,
-			transaction_id, redacted_by, relates_to, relation_type, megolm_session_id, decryption_error, send_error
+			room_id, event_id, sender, type, state_key, timestamp, content, decrypted, decrypted_type,
+			unsigned, local_content, transaction_id, redacted_by, relates_to, relation_type,
+			megolm_session_id, decryption_error, send_error, reactions, last_edit_rowid, unread_type
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
 	`
 	insertEventQuery = insertEventBaseQuery + `RETURNING rowid`
 	upsertEventQuery = insertEventBaseQuery + `
@@ -50,7 +52,8 @@ const (
 			    decryption_error=CASE WHEN COALESCE(event.decrypted, excluded.decrypted) IS NULL THEN COALESCE(excluded.decryption_error, event.decryption_error) END,
 			    send_error=excluded.send_error,
 				timestamp=excluded.timestamp,
-				unsigned=COALESCE(excluded.unsigned, event.unsigned)
+				unsigned=COALESCE(excluded.unsigned, event.unsigned),
+				local_content=COALESCE(excluded.local_content, event.local_content)
 		ON CONFLICT (transaction_id) DO UPDATE
 			SET event_id=excluded.event_id,
 				timestamp=excluded.timestamp,
@@ -59,7 +62,7 @@ const (
 	`
 	updateEventSendErrorQuery = `UPDATE event SET send_error = $2 WHERE rowid = $1`
 	updateEventIDQuery        = `UPDATE event SET event_id = $2, send_error = NULL WHERE rowid=$1`
-	updateEventDecryptedQuery = `UPDATE event SET decrypted = $1, decrypted_type = $2, decryption_error = NULL WHERE rowid = $3`
+	updateEventDecryptedQuery = `UPDATE event SET decrypted = $2, decrypted_type = $3, decryption_error = NULL, unread_type = $4, local_content = $5 WHERE rowid = $1`
 	getEventReactionsQuery    = getEventBaseQuery + `
 		WHERE room_id = ?
 		  AND type = 'm.reaction'
@@ -131,8 +134,16 @@ func (eq *EventQuery) UpdateSendError(ctx context.Context, rowID EventRowID, sen
 	return eq.Exec(ctx, updateEventSendErrorQuery, rowID, sendError)
 }
 
-func (eq *EventQuery) UpdateDecrypted(ctx context.Context, rowID EventRowID, decrypted json.RawMessage, decryptedType string) error {
-	return eq.Exec(ctx, updateEventDecryptedQuery, unsafeJSONString(decrypted), decryptedType, rowID)
+func (eq *EventQuery) UpdateDecrypted(ctx context.Context, evt *Event) error {
+	return eq.Exec(
+		ctx,
+		updateEventDecryptedQuery,
+		evt.RowID,
+		unsafeJSONString(evt.Decrypted),
+		evt.DecryptedType,
+		evt.UnreadType,
+		dbutil.JSONPtr(evt.LocalContent),
+	)
 }
 
 func (eq *EventQuery) FillReactionCounts(ctx context.Context, roomID id.RoomID, events []*Event) error {
@@ -264,6 +275,24 @@ func (m EventRowID) GetMassInsertValues() [1]any {
 	return [1]any{m}
 }
 
+type LocalContent struct {
+	SanitizedHTML string `json:"sanitized_html,omitempty"`
+}
+
+type UnreadType int
+
+func (ut UnreadType) Is(flag UnreadType) bool {
+	return ut&flag != 0
+}
+
+const (
+	UnreadTypeNone      UnreadType = 0b0000
+	UnreadTypeNormal    UnreadType = 0b0001
+	UnreadTypeNotify    UnreadType = 0b0010
+	UnreadTypeHighlight UnreadType = 0b0100
+	UnreadTypeSound     UnreadType = 0b1000
+)
+
 type Event struct {
 	RowID         EventRowID    `json:"rowid"`
 	TimelineRowID TimelineRowID `json:"timeline_rowid"`
@@ -279,6 +308,7 @@ type Event struct {
 	Decrypted     json.RawMessage `json:"decrypted,omitempty"`
 	DecryptedType string          `json:"decrypted_type,omitempty"`
 	Unsigned      json.RawMessage `json:"unsigned,omitempty"`
+	LocalContent  *LocalContent   `json:"local_content,omitempty"`
 
 	TransactionID string `json:"transaction_id,omitempty"`
 
@@ -292,6 +322,7 @@ type Event struct {
 
 	Reactions     map[string]int `json:"reactions,omitempty"`
 	LastEditRowID *EventRowID    `json:"last_edit_rowid,omitempty"`
+	UnreadType    UnreadType     `json:"unread_type,omitempty"`
 }
 
 func MautrixToEvent(evt *event.Event) *Event {
@@ -318,6 +349,9 @@ func MautrixToEvent(evt *event.Event) *Event {
 }
 
 func (e *Event) AsRawMautrix() *event.Event {
+	if e == nil {
+		return nil
+	}
 	evt := &event.Event{
 		RoomID:    e.RoomID,
 		ID:        e.ID,
@@ -355,6 +389,7 @@ func (e *Event) Scan(row dbutil.Scannable) (*Event, error) {
 		(*[]byte)(&e.Decrypted),
 		&decryptedType,
 		(*[]byte)(&e.Unsigned),
+		dbutil.JSON{Data: &e.LocalContent},
 		&transactionID,
 		&redactedBy,
 		&relatesTo,
@@ -364,6 +399,7 @@ func (e *Event) Scan(row dbutil.Scannable) (*Event, error) {
 		&sendError,
 		dbutil.JSON{Data: &e.Reactions},
 		&e.LastEditRowID,
+		&e.UnreadType,
 	)
 	if err != nil {
 		return nil, err
@@ -425,6 +461,7 @@ func (e *Event) sqlVariables() []any {
 		unsafeJSONString(e.Decrypted),
 		dbutil.StrPtr(e.DecryptedType),
 		unsafeJSONString(e.Unsigned),
+		dbutil.JSONPtr(e.LocalContent),
 		dbutil.StrPtr(e.TransactionID),
 		dbutil.StrPtr(e.RedactedBy),
 		dbutil.StrPtr(e.RelatesTo),
@@ -434,7 +471,24 @@ func (e *Event) sqlVariables() []any {
 		dbutil.StrPtr(e.SendError),
 		dbutil.JSON{Data: reactions},
 		e.LastEditRowID,
+		e.UnreadType,
 	}
+}
+
+func (e *Event) GetNonPushUnreadType() UnreadType {
+	if e.RelationType == event.RelReplace {
+		return UnreadTypeNone
+	}
+	switch e.Type {
+	case event.EventMessage.Type, event.EventSticker.Type:
+		return UnreadTypeNormal
+	case event.EventEncrypted.Type:
+		switch e.DecryptedType {
+		case event.EventMessage.Type, event.EventSticker.Type:
+			return UnreadTypeNormal
+		}
+	}
+	return UnreadTypeNone
 }
 
 func (e *Event) CanUseForPreview() bool {
