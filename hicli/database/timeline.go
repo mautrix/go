@@ -22,7 +22,9 @@ const (
 		DELETE FROM timeline WHERE room_id = $1
 	`
 	appendTimelineQuery = `
-		INSERT INTO timeline (room_id, event_rowid) VALUES ($1, $2) RETURNING rowid, event_rowid
+		INSERT INTO timeline (room_id, event_rowid) VALUES ($1, $2)
+		ON CONFLICT DO NOTHING
+		RETURNING rowid, event_rowid
 	`
 	prependTimelineQuery = `
 		INSERT INTO timeline (room_id, rowid, event_rowid) VALUES ($1, $2, $3)
