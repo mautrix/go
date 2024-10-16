@@ -201,16 +201,25 @@ func (rlf *RespLoginFlows) HasFlow(flowType ...AuthType) bool {
 	return rlf.FirstFlowOfType(flowType...) != nil
 }
 
-// RespLogin is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3login
+// RespLogin is the JSON response for https://spec.matrix.org/v1.3/client-server-api/#post_matrixclientv3login
 type RespLogin struct {
-	AccessToken string           `json:"access_token"`
-	DeviceID    id.DeviceID      `json:"device_id"`
-	UserID      id.UserID        `json:"user_id"`
-	WellKnown   *ClientWellKnown `json:"well_known,omitempty"`
+	AccessToken  string           `json:"access_token"`
+	DeviceID     id.DeviceID      `json:"device_id"`
+	ExpiresInMS  int64            `json:"expires_in_ms,omitempty"`
+	RefreshToken string           `json:"refresh_token,omitempty"`
+	UserID       id.UserID        `json:"user_id"`
+	WellKnown    *ClientWellKnown `json:"well_known,omitempty"`
 }
 
 // RespLogout is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3logout
 type RespLogout struct{}
+
+// RespRefresh is the JSON response for https://spec.matrix.org/v1.3/client-server-api/#post_matrixclientv3refresh
+type RespRefresh struct {
+	AccessToken  string `json:"access_token"`
+	ExpiresInMS  int64  `json:"expires_in_ms,omitempty"`
+	RefreshToken string `json:"refresh_token,omitempty"`
+}
 
 // RespCreateRoom is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3createroom
 type RespCreateRoom struct {
