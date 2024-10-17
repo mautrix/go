@@ -213,7 +213,7 @@ func ProcessMatrixURI(uri *url.URL) (*MatrixURI, error) {
 	parsed.MXID1 = parts[1]
 
 	// Step 6: if the first part is a room and the URI has 4 segments, construct a second level identifier
-	if (parsed.Sigil1 == '!' || parsed.Sigil1 == '#') && len(parts) == 4 {
+	if parsed.Sigil1 == '!' && len(parts) == 4 {
 		// a: find the sigil from the third segment
 		switch parts[2] {
 		case "e", "event":
