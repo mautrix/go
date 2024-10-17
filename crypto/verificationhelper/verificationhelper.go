@@ -690,7 +690,7 @@ func (vh *VerificationHelper) onVerificationRequest(ctx context.Context, evt *ev
 		TheirSupportedMethods: verificationRequest.Methods,
 	}
 	for existingTxnID, existingTxn := range vh.activeTransactions {
-		if existingTxn.TheirUser == evt.Sender && existingTxn.TheirDevice == verificationRequest.FromDevice {
+		if existingTxn.TheirUser == evt.Sender && existingTxn.TheirDevice == verificationRequest.FromDevice && existingTxnID != verificationRequest.TransactionID {
 			vh.cancelVerificationTxn(ctx, existingTxn, event.VerificationCancelCodeUnexpectedMessage, "received multiple verification requests from the same device")
 			vh.cancelVerificationTxn(ctx, newTxn, event.VerificationCancelCodeUnexpectedMessage, "received multiple verification requests from the same device")
 			delete(vh.activeTransactions, existingTxnID)
