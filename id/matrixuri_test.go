@@ -16,12 +16,11 @@ import (
 )
 
 var (
-	roomIDLink         = id.MatrixURI{Sigil1: '!', MXID1: "7NdBVvkd4aLSbgKt9RXl:example.org"}
-	roomIDViaLink      = id.MatrixURI{Sigil1: '!', MXID1: "7NdBVvkd4aLSbgKt9RXl:example.org", Via: []string{"maunium.net", "matrix.org"}}
-	roomAliasLink      = id.MatrixURI{Sigil1: '#', MXID1: "someroom:example.org"}
-	roomIDEventLink    = id.MatrixURI{Sigil1: '!', MXID1: "7NdBVvkd4aLSbgKt9RXl:example.org", Sigil2: '$', MXID2: "uOH4C9cK4HhMeFWkUXMbdF_dtndJ0j9je-kIK3XpV1s"}
-	roomAliasEventLink = id.MatrixURI{Sigil1: '#', MXID1: "someroom:example.org", Sigil2: '$', MXID2: "uOH4C9cK4HhMeFWkUXMbdF_dtndJ0j9je-kIK3XpV1s"}
-	userLink           = id.MatrixURI{Sigil1: '@', MXID1: "user:example.org"}
+	roomIDLink      = id.MatrixURI{Sigil1: '!', MXID1: "7NdBVvkd4aLSbgKt9RXl:example.org"}
+	roomIDViaLink   = id.MatrixURI{Sigil1: '!', MXID1: "7NdBVvkd4aLSbgKt9RXl:example.org", Via: []string{"maunium.net", "matrix.org"}}
+	roomAliasLink   = id.MatrixURI{Sigil1: '#', MXID1: "someroom:example.org"}
+	roomIDEventLink = id.MatrixURI{Sigil1: '!', MXID1: "7NdBVvkd4aLSbgKt9RXl:example.org", Sigil2: '$', MXID2: "uOH4C9cK4HhMeFWkUXMbdF_dtndJ0j9je-kIK3XpV1s"}
+	userLink        = id.MatrixURI{Sigil1: '@', MXID1: "user:example.org"}
 
 	escapeRoomIDEventLink = id.MatrixURI{Sigil1: '!', MXID1: "meow & 🐈️:example.org", Sigil2: '$', MXID2: "uOH4C9cK4HhMeFWkUXMbdF/dtndJ0j9je+kIK3XpV1s"}
 )
@@ -31,7 +30,6 @@ func TestMatrixURI_MatrixToURL(t *testing.T) {
 	assert.Equal(t, "https://matrix.to/#/%217NdBVvkd4aLSbgKt9RXl:example.org?via=maunium.net&via=matrix.org", roomIDViaLink.MatrixToURL())
 	assert.Equal(t, "https://matrix.to/#/%23someroom:example.org", roomAliasLink.MatrixToURL())
 	assert.Equal(t, "https://matrix.to/#/%217NdBVvkd4aLSbgKt9RXl:example.org/$uOH4C9cK4HhMeFWkUXMbdF_dtndJ0j9je-kIK3XpV1s", roomIDEventLink.MatrixToURL())
-	assert.Equal(t, "https://matrix.to/#/%23someroom:example.org/$uOH4C9cK4HhMeFWkUXMbdF_dtndJ0j9je-kIK3XpV1s", roomAliasEventLink.MatrixToURL())
 	assert.Equal(t, "https://matrix.to/#/@user:example.org", userLink.MatrixToURL())
 	assert.Equal(t, "https://matrix.to/#/%21meow%20&%20%F0%9F%90%88%EF%B8%8F:example.org/$uOH4C9cK4HhMeFWkUXMbdF%2FdtndJ0j9je+kIK3XpV1s", escapeRoomIDEventLink.MatrixToURL())
 }
@@ -41,7 +39,6 @@ func TestMatrixURI_String(t *testing.T) {
 	assert.Equal(t, "matrix:roomid/7NdBVvkd4aLSbgKt9RXl:example.org?via=maunium.net&via=matrix.org", roomIDViaLink.String())
 	assert.Equal(t, "matrix:r/someroom:example.org", roomAliasLink.String())
 	assert.Equal(t, "matrix:roomid/7NdBVvkd4aLSbgKt9RXl:example.org/e/uOH4C9cK4HhMeFWkUXMbdF_dtndJ0j9je-kIK3XpV1s", roomIDEventLink.String())
-	assert.Equal(t, "matrix:r/someroom:example.org/e/uOH4C9cK4HhMeFWkUXMbdF_dtndJ0j9je-kIK3XpV1s", roomAliasEventLink.String())
 	assert.Equal(t, "matrix:u/user:example.org", userLink.String())
 	assert.Equal(t, "matrix:roomid/meow%20&%20%F0%9F%90%88%EF%B8%8F:example.org/e/uOH4C9cK4HhMeFWkUXMbdF%2FdtndJ0j9je+kIK3XpV1s", escapeRoomIDEventLink.String())
 }
@@ -98,19 +95,11 @@ func TestParseMatrixURI_UserID(t *testing.T) {
 }
 
 func TestParseMatrixURI_EventID(t *testing.T) {
-	parsed1, err := id.ParseMatrixURI("matrix:r/someroom:example.org/e/uOH4C9cK4HhMeFWkUXMbdF_dtndJ0j9je-kIK3XpV1s")
+	parsed, err := id.ParseMatrixURI("matrix:roomid/7NdBVvkd4aLSbgKt9RXl:example.org/e/uOH4C9cK4HhMeFWkUXMbdF_dtndJ0j9je-kIK3XpV1s")
 	require.NoError(t, err)
-	require.NotNil(t, parsed1)
-	parsed2, err := id.ParseMatrixURI("matrix:room/someroom:example.org/e/uOH4C9cK4HhMeFWkUXMbdF_dtndJ0j9je-kIK3XpV1s")
-	require.NoError(t, err)
-	require.NotNil(t, parsed2)
-	parsed3, err := id.ParseMatrixURI("matrix:roomid/7NdBVvkd4aLSbgKt9RXl:example.org/e/uOH4C9cK4HhMeFWkUXMbdF_dtndJ0j9je-kIK3XpV1s")
-	require.NoError(t, err)
-	require.NotNil(t, parsed3)
+	require.NotNil(t, parsed)
 
-	assert.Equal(t, roomAliasEventLink, *parsed1)
-	assert.Equal(t, roomAliasEventLink, *parsed2)
-	assert.Equal(t, roomIDEventLink, *parsed3)
+	assert.Equal(t, roomIDEventLink, *parsed)
 }
 
 func TestParseMatrixToURL_RoomAlias(t *testing.T) {
@@ -158,21 +147,13 @@ func TestParseMatrixToURL_UserID(t *testing.T) {
 }
 
 func TestParseMatrixToURL_EventID(t *testing.T) {
-	parsed1, err := id.ParseMatrixToURL("https://matrix.to/#/#someroom:example.org/$uOH4C9cK4HhMeFWkUXMbdF_dtndJ0j9je-kIK3XpV1s")
+	parsed, err := id.ParseMatrixToURL("https://matrix.to/#/!7NdBVvkd4aLSbgKt9RXl:example.org/$uOH4C9cK4HhMeFWkUXMbdF_dtndJ0j9je-kIK3XpV1s")
 	require.NoError(t, err)
-	require.NotNil(t, parsed1)
-	parsed2, err := id.ParseMatrixToURL("https://matrix.to/#/!7NdBVvkd4aLSbgKt9RXl:example.org/$uOH4C9cK4HhMeFWkUXMbdF_dtndJ0j9je-kIK3XpV1s")
+	require.NotNil(t, parsed)
+	parsedEncoded, err := id.ParseMatrixToURL("https://matrix.to/#/%217NdBVvkd4aLSbgKt9RXl:example.org/%24uOH4C9cK4HhMeFWkUXMbdF_dtndJ0j9je-kIK3XpV1s")
 	require.NoError(t, err)
-	require.NotNil(t, parsed2)
-	parsed1Encoded, err := id.ParseMatrixToURL("https://matrix.to/#/%23someroom:example.org/%24uOH4C9cK4HhMeFWkUXMbdF_dtndJ0j9je-kIK3XpV1s")
-	require.NoError(t, err)
-	require.NotNil(t, parsed1)
-	parsed2Encoded, err := id.ParseMatrixToURL("https://matrix.to/#/%217NdBVvkd4aLSbgKt9RXl:example.org/%24uOH4C9cK4HhMeFWkUXMbdF_dtndJ0j9je-kIK3XpV1s")
-	require.NoError(t, err)
-	require.NotNil(t, parsed2)
+	require.NotNil(t, parsedEncoded)
 
-	assert.Equal(t, roomAliasEventLink, *parsed1)
-	assert.Equal(t, roomAliasEventLink, *parsed1Encoded)
-	assert.Equal(t, roomIDEventLink, *parsed2)
-	assert.Equal(t, roomIDEventLink, *parsed2Encoded)
+	assert.Equal(t, roomIDEventLink, *parsed)
+	assert.Equal(t, roomIDEventLink, *parsedEncoded)
 }
