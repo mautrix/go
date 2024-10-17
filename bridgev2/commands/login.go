@@ -123,7 +123,7 @@ func checkLoginCommandDirectParams(ce *Event, login bridgev2.LoginProcess, nextS
 		for i, param := range nextStep.CookiesParams.Fields {
 			val := maybeURLDecodeCookie(ce.Args[i], &param)
 			if match, _ := regexp.MatchString(param.Pattern, val); !match {
-				ce.Reply("Invalid value for %s: doesn't match regex `%s`", param.ID, param.Pattern)
+				ce.Reply("Invalid value for %s: `%s` doesn't match regex `%s`", param.ID, val, param.Pattern)
 				return nil
 			}
 			input[param.ID] = val
@@ -292,7 +292,7 @@ func (clcs *cookieLoginCommandState) submit(ce *Event) {
 		}
 		reqCookies := make(map[string]string)
 		for _, cookie := range parsed.Cookies() {
-			reqCookies[cookie.Name], err = url.QueryUnescape(cookie.Value)
+			reqCookies[cookie.Name], err = url.PathUnescape(cookie.Value)
 			if err != nil {
 				ce.Reply("Failed to parse cookie %s: %v", cookie.Name, err)
 				return
@@ -365,7 +365,7 @@ func (clcs *cookieLoginCommandState) submit(ce *Event) {
 			missingKeys = append(missingKeys, field.ID)
 		}
 		if match, _ := regexp.MatchString(field.Pattern, val); !match {
-			ce.Reply("Invalid value for %s: doesn't match regex `%s`", field.ID, field.Pattern)
+			ce.Reply("Invalid value for %s: `%s` doesn't match regex `%s`", field.ID, val, field.Pattern)
 			return
 		}
 	}
@@ -396,7 +396,7 @@ func maybeURLDecodeCookie(val string, field *bridgev2.LoginCookieField) string {
 	if !match {
 		return val
 	}
-	decoded, err := url.QueryUnescape(val)
+	decoded, err := url.PathUnescape(val)
 	if err != nil {
 		return val
 	}
