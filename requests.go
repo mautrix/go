@@ -75,7 +75,7 @@ type UserIdentifier struct {
 	Phone   string `json:"phone,omitempty"`
 }
 
-// ReqLogin is the JSON request for https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3login
+// ReqLogin is the JSON request for https://spec.matrix.org/v1.3/client-server-api/#post_matrixclientv3login
 type ReqLogin struct {
 	Type                     AuthType       `json:"type"`
 	Identifier               UserIdentifier `json:"identifier"`
@@ -89,6 +89,11 @@ type ReqLogin struct {
 	StoreCredentials bool `json:"-"`
 	// Whether or not the returned .well-known data should update the homeserver URL in the Client
 	StoreHomeserverURL bool `json:"-"`
+}
+
+// ReqRefresh is the JSON request for https://spec.matrix.org/v1.3/client-server-api/#post_matrixclientv3refresh
+type ReqRefresh struct {
+	RefreshToken string `json:"refresh_token"`
 }
 
 type ReqUIAuthFallback struct {
