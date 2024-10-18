@@ -27,6 +27,11 @@ type Room interface {
 	GetMemberCount() int
 }
 
+type PowerLevelfulRoom interface {
+	Room
+	GetPowerLevels() *event.PowerLevelsEventContent
+}
+
 // EventfulRoom is an extension of Room to support MSC3664.
 type EventfulRoom interface {
 	Room
@@ -38,11 +43,12 @@ type PushCondKind string
 
 // The allowed push condition kinds as specified in https://spec.matrix.org/v1.2/client-server-api/#conditions-1
 const (
-	KindEventMatch            PushCondKind = "event_match"
-	KindContainsDisplayName   PushCondKind = "contains_display_name"
-	KindRoomMemberCount       PushCondKind = "room_member_count"
-	KindEventPropertyIs       PushCondKind = "event_property_is"
-	KindEventPropertyContains PushCondKind = "event_property_contains"
+	KindEventMatch                   PushCondKind = "event_match"
+	KindContainsDisplayName          PushCondKind = "contains_display_name"
+	KindRoomMemberCount              PushCondKind = "room_member_count"
+	KindEventPropertyIs              PushCondKind = "event_property_is"
+	KindEventPropertyContains        PushCondKind = "event_property_contains"
+	KindSenderNotificationPermission PushCondKind = "sender_notification_permission"
 
 	// MSC3664: https://github.com/matrix-org/matrix-spec-proposals/pull/3664
 
@@ -82,6 +88,8 @@ func (cond *PushCondition) Match(room Room, evt *event.Event) bool {
 		return cond.matchDisplayName(room, evt)
 	case KindRoomMemberCount:
 		return cond.matchMemberCount(room)
+	case KindSenderNotificationPermission:
+		return cond.matchSenderNotificationPermission(room, evt.Sender, cond.Key)
 	default:
 		return false
 	}
@@ -333,4 +341,19 @@ func (cond *PushCondition) matchMemberCount(room Room) bool {
 		// Should be impossible due to regex.
 		return false
 	}
+}
+
+func (cond *PushCondition) matchSenderNotificationPermission(room Room, sender id.UserID, key string) bool {
+	if key != "room" {
+		return false
+	}
+	plRoom, ok := room.(PowerLevelfulRoom)
+	if !ok {
+		return false
+	}
+	pls := plRoom.GetPowerLevels()
+	if pls == nil {
+		return false
+	}
+	return pls.GetUserLevel(sender) >= pls.Notifications.Room()
 }
