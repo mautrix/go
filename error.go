@@ -147,6 +147,9 @@ func (e *RespError) MarshalJSON() ([]byte, error) {
 }
 
 func (e RespError) Write(w http.ResponseWriter) {
+	if w == nil {
+		return
+	}
 	statusCode := e.StatusCode
 	if statusCode == 0 {
 		statusCode = http.StatusInternalServerError
