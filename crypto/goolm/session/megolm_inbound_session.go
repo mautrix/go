@@ -254,11 +254,7 @@ func (o *MegolmInboundSession) Pickle(key []byte) ([]byte, error) {
 	if written != len(pickeledBytes) {
 		return nil, errors.New("number of written bytes not correct")
 	}
-	encrypted, err := cipher.Pickle(key, pickeledBytes)
-	if err != nil {
-		return nil, err
-	}
-	return encrypted, nil
+	return cipher.Pickle(key, pickeledBytes)
 }
 
 // PickleLibOlm encodes the session into target. target has to have a size of at least PickleLen() and is written to from index 0.

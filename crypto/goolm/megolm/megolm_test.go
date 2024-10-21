@@ -1,8 +1,9 @@
 package megolm_test
 
 import (
-	"bytes"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"maunium.net/go/mautrix/crypto/goolm/megolm"
 )
@@ -19,9 +20,7 @@ func init() {
 
 func TestAdvance(t *testing.T) {
 	m, err := megolm.New(0, startData)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	expectedData := [megolm.RatchetParts * megolm.RatchetPartLength]byte{
 		0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46,
@@ -34,9 +33,7 @@ func TestAdvance(t *testing.T) {
 		0x89, 0xbb, 0xb4, 0x23, 0xa1, 0x8f, 0x23, 0x82, 0x8f, 0xb2, 0x09, 0x0d, 0x6e, 0x2a, 0xf8, 0x6a,
 	}
 	m.Advance()
-	if !bytes.Equal(m.Data[:], expectedData[:]) {
-		t.Fatal("result after advancing the ratchet is not as expected")
-	}
+	assert.Equal(t, m.Data[:], expectedData[:], "result after advancing the ratchet is not as expected")
 
 	//repeat with complex advance
 	m.Data = startData
@@ -51,9 +48,8 @@ func TestAdvance(t *testing.T) {
 		0x89, 0xbb, 0xb4, 0x23, 0xa1, 0x8f, 0x23, 0x82, 0x8f, 0xb2, 0x09, 0x0d, 0x6e, 0x2a, 0xf8, 0x6a,
 	}
 	m.AdvanceTo(0x1000000)
-	if !bytes.Equal(m.Data[:], expectedData[:]) {
-		t.Fatal("result after advancing the ratchet is not as expected")
-	}
+	assert.Equal(t, m.Data[:], expectedData[:], "result after advancing the ratchet is not as expected")
+
 	expectedData = [megolm.RatchetParts * megolm.RatchetPartLength]byte{
 		0x54, 0x02, 0x2d, 0x7d, 0xc0, 0x29, 0x8e, 0x16, 0x37, 0xe2, 0x1c, 0x97, 0x15, 0x30, 0x92, 0xf9,
 		0x33, 0xc0, 0x56, 0xff, 0x74, 0xfe, 0x1b, 0x92, 0x2d, 0x97, 0x1f, 0x24, 0x82, 0xc2, 0x85, 0x9c,
@@ -65,77 +61,45 @@ func TestAdvance(t *testing.T) {
 		0xd5, 0x6f, 0x03, 0xe2, 0x44, 0x16, 0xb9, 0x8e, 0x1c, 0xfd, 0x97, 0xc2, 0x06, 0xaa, 0x90, 0x7a,
 	}
 	m.AdvanceTo(0x1041506)
-	if !bytes.Equal(m.Data[:], expectedData[:]) {
-		t.Fatal("result after advancing the ratchet is not as expected")
-	}
+	assert.Equal(t, m.Data[:], expectedData[:], "result after advancing the ratchet is not as expected")
 }
 
 func TestAdvanceWraparound(t *testing.T) {
 	m, err := megolm.New(0xffffffff, startData)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	m.AdvanceTo(0x1000000)
-	if m.Counter != 0x1000000 {
-		t.Fatal("counter not correct")
-	}
+	assert.EqualValues(t, 0x1000000, m.Counter, "counter not correct")
 
 	m2, err := megolm.New(0, startData)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	m2.AdvanceTo(0x2000000)
-	if m2.Counter != 0x2000000 {
-		t.Fatal("counter not correct")
-	}
-	if !bytes.Equal(m.Data[:], m2.Data[:]) {
-		t.Fatal("result after wrapping the ratchet is not as expected")
-	}
+	assert.EqualValues(t, 0x2000000, m2.Counter, "counter not correct")
+	assert.Equal(t, m.Data, m2.Data, "result after wrapping the ratchet is not as expected")
 }
 
 func TestAdvanceOverflowByOne(t *testing.T) {
 	m, err := megolm.New(0xffffffff, startData)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	m.AdvanceTo(0x0)
-	if m.Counter != 0x0 {
-		t.Fatal("counter not correct")
-	}
+	assert.EqualValues(t, 0x0, m.Counter, "counter not correct")
 
 	m2, err := megolm.New(0xffffffff, startData)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	m2.Advance()
-	if m2.Counter != 0x0 {
-		t.Fatal("counter not correct")
-	}
-	if !bytes.Equal(m.Data[:], m2.Data[:]) {
-		t.Fatal("result after wrapping the ratchet is not as expected")
-	}
+	assert.EqualValues(t, 0x0, m2.Counter, "counter not correct")
+	assert.Equal(t, m.Data, m2.Data, "result after wrapping the ratchet is not as expected")
 }
 
 func TestAdvanceOverflow(t *testing.T) {
 	m, err := megolm.New(0x1, startData)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	m.AdvanceTo(0x80000000)
 	m.AdvanceTo(0x0)
-	if m.Counter != 0x0 {
-		t.Fatal("counter not correct")
-	}
+	assert.EqualValues(t, 0x0, m.Counter, "counter not correct")
 
 	m2, err := megolm.New(0x1, startData)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	m2.AdvanceTo(0x0)
-	if m2.Counter != 0x0 {
-		t.Fatal("counter not correct")
-	}
-	if !bytes.Equal(m.Data[:], m2.Data[:]) {
-		t.Fatal("result after wrapping the ratchet is not as expected")
-	}
+	assert.EqualValues(t, 0x0, m2.Counter, "counter not correct")
+	assert.Equal(t, m.Data, m2.Data, "result after wrapping the ratchet is not as expected")
 }

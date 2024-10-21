@@ -130,11 +130,7 @@ func (c Curve25519PrivateKey) Equal(x Curve25519PrivateKey) bool {
 
 // PubKey returns the public key derived from the private key.
 func (c Curve25519PrivateKey) PubKey() (Curve25519PublicKey, error) {
-	publicKey, err := curve25519.X25519(c, curve25519.Basepoint)
-	if err != nil {
-		return nil, err
-	}
-	return publicKey, nil
+	return curve25519.X25519(c, curve25519.Basepoint)
 }
 
 // SharedSecret returns the shared secret between the private key and the given public key.

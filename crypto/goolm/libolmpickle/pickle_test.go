@@ -1,8 +1,9 @@
 package libolmpickle_test
 
 import (
-	"bytes"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
 )
@@ -23,12 +24,8 @@ func TestPickleUInt32(t *testing.T) {
 	for curIndex := range values {
 		response := make([]byte, 4)
 		resPLen := libolmpickle.PickleUInt32(values[curIndex], response)
-		if resPLen != libolmpickle.PickleUInt32Len(values[curIndex]) {
-			t.Fatal("written bytes not correct")
-		}
-		if !bytes.Equal(response, expected[curIndex]) {
-			t.Fatalf("response not as expected:\n%v\n%v\n", response, expected[curIndex])
-		}
+		assert.Equal(t, libolmpickle.PickleUInt32Len(values[curIndex]), resPLen)
+		assert.Equal(t, expected[curIndex], response)
 	}
 }
 
@@ -44,12 +41,8 @@ func TestPickleBool(t *testing.T) {
 	for curIndex := range values {
 		response := make([]byte, 1)
 		resPLen := libolmpickle.PickleBool(values[curIndex], response)
-		if resPLen != libolmpickle.PickleBoolLen(values[curIndex]) {
-			t.Fatal("written bytes not correct")
-		}
-		if !bytes.Equal(response, expected[curIndex]) {
-			t.Fatalf("response not as expected:\n%v\n%v\n", response, expected[curIndex])
-		}
+		assert.Equal(t, libolmpickle.PickleBoolLen(values[curIndex]), resPLen)
+		assert.Equal(t, expected[curIndex], response)
 	}
 }
 
@@ -65,12 +58,8 @@ func TestPickleUInt8(t *testing.T) {
 	for curIndex := range values {
 		response := make([]byte, 1)
 		resPLen := libolmpickle.PickleUInt8(values[curIndex], response)
-		if resPLen != libolmpickle.PickleUInt8Len(values[curIndex]) {
-			t.Fatal("written bytes not correct")
-		}
-		if !bytes.Equal(response, expected[curIndex]) {
-			t.Fatalf("response not as expected:\n%v\n%v\n", response, expected[curIndex])
-		}
+		assert.Equal(t, libolmpickle.PickleUInt8Len(values[curIndex]), resPLen)
+		assert.Equal(t, expected[curIndex], response)
 	}
 }
 
@@ -88,11 +77,7 @@ func TestPickleBytes(t *testing.T) {
 	for curIndex := range values {
 		response := make([]byte, len(values[curIndex]))
 		resPLen := libolmpickle.PickleBytes(values[curIndex], response)
-		if resPLen != libolmpickle.PickleBytesLen(values[curIndex]) {
-			t.Fatal("written bytes not correct")
-		}
-		if !bytes.Equal(response, expected[curIndex]) {
-			t.Fatalf("response not as expected:\n%v\n%v\n", response, expected[curIndex])
-		}
+		assert.Equal(t, libolmpickle.PickleBytesLen(values[curIndex]), resPLen)
+		assert.Equal(t, expected[curIndex], response)
 	}
 }
