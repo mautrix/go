@@ -303,7 +303,7 @@ func (store *SQLStateStore) ClearCachedMembers(ctx context.Context, roomID id.Ro
 }
 
 func (store *SQLStateStore) HasFetchedMembers(ctx context.Context, roomID id.RoomID) (fetched bool, err error) {
-	err = store.QueryRow(ctx, "SELECT members_fetched FROM mx_room_state WHERE room_id=$1", roomID).Scan(&fetched)
+	err = store.QueryRow(ctx, "SELECT COALESCE(members_fetched, false) FROM mx_room_state WHERE room_id=$1", roomID).Scan(&fetched)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = nil
 	}
