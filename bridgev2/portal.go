@@ -1143,6 +1143,10 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 		portal.sendErrorStatus(ctx, evt, err)
 		return
 	}
+	var deterministicID id.EventID
+	if portal.Bridge.Config.OutgoingMessageReID {
+		deterministicID = portal.Bridge.Matrix.GenerateReactionEventID(portal.MXID, reactionTarget, preResp.SenderID, preResp.EmojiID)
+	}
 	existing, err := portal.Bridge.DB.Reaction.GetByID(ctx, reactionTarget.ID, reactionTarget.PartID, preResp.SenderID, preResp.EmojiID)
 	if err != nil {
 		log.Err(err).Msg("Failed to check if reaction is a duplicate")
@@ -1150,7 +1154,7 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 	} else if existing != nil {
 		if existing.EmojiID != "" || existing.Emoji == preResp.Emoji {
 			log.Debug().Msg("Ignoring duplicate reaction")
-			portal.sendSuccessStatus(ctx, evt, 0, "")
+			portal.sendSuccessStatus(ctx, evt, 0, deterministicID)
 			return
 		}
 		react.ReactionToOverride = existing
@@ -1209,7 +1213,9 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 		dbReaction.MessageID = reactionTarget.ID
 		dbReaction.MessagePartID = reactionTarget.PartID
 	}
-	if dbReaction.MXID == "" {
+	if deterministicID != "" {
+		dbReaction.MXID = deterministicID
+	} else if dbReaction.MXID == "" {
 		dbReaction.MXID = evt.ID
 	}
 	if dbReaction.Timestamp.IsZero() {
@@ -1232,7 +1238,7 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 	if err != nil {
 		log.Err(err).Msg("Failed to save reaction to database")
 	}
-	portal.sendSuccessStatus(ctx, evt, 0, "")
+	portal.sendSuccessStatus(ctx, evt, 0, deterministicID)
 }
 
 func handleMatrixRoomMeta[APIType any, ContentType any](
