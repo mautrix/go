@@ -1133,8 +1133,19 @@ func (cli *Client) SendMessageEvent(ctx context.Context, roomID id.RoomID, event
 
 // SendStateEvent sends a state event into a room. See https://spec.matrix.org/v1.2/client-server-api/#put_matrixclientv3roomsroomidstateeventtypestatekey
 // contentJSON should be a pointer to something that can be encoded as JSON using json.Marshal.
-func (cli *Client) SendStateEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string, contentJSON interface{}) (resp *RespSendEvent, err error) {
-	urlPath := cli.BuildClientURL("v3", "rooms", roomID, "state", eventType.String(), stateKey)
+func (cli *Client) SendStateEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string, contentJSON interface{}, extra ...ReqSendEvent) (resp *RespSendEvent, err error) {
+	var req ReqSendEvent
+	if len(extra) > 0 {
+		req = extra[0]
+	}
+
+	queryParams := map[string]string{}
+	if req.MeowEventID != "" {
+		queryParams["fi.mau.event_id"] = req.MeowEventID.String()
+	}
+
+	urlData := ClientURLPath{"v3", "rooms", roomID, "state", eventType.String(), stateKey}
+	urlPath := cli.BuildURLWithQuery(urlData, queryParams)
 	_, err = cli.MakeRequest(ctx, http.MethodPut, urlPath, contentJSON, &resp)
 	if err == nil && cli.StateStore != nil {
 		cli.updateStoreWithOutgoingEvent(ctx, roomID, eventType, stateKey, contentJSON)
