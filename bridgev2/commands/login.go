@@ -392,10 +392,6 @@ func maybeURLDecodeCookie(val string, field *bridgev2.LoginCookieField) string {
 	if !isCookie {
 		return val
 	}
-	match, _ := regexp.MatchString(field.Pattern, val)
-	if !match {
-		return val
-	}
 	decoded, err := url.PathUnescape(val)
 	if err != nil {
 		return val
