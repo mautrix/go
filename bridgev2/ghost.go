@@ -136,22 +136,16 @@ type UserInfo struct {
 	ExtraUpdates ExtraUpdater[*Ghost]
 }
 
-func (ghost *Ghost) UpdateName(ctx context.Context, name string) bool {
+func (ghost *Ghost) updateName(name string) bool {
 	if ghost.Name == name && ghost.NameSet {
 		return false
 	}
 	ghost.Name = name
 	ghost.NameSet = false
-	err := ghost.Intent.SetDisplayName(ctx, name)
-	if err != nil {
-		zerolog.Ctx(ctx).Err(err).Msg("Failed to set display name")
-	} else {
-		ghost.NameSet = true
-	}
 	return true
 }
 
-func (ghost *Ghost) UpdateAvatar(ctx context.Context, avatar *Avatar) bool {
+func (ghost *Ghost) updateAvatar(ctx context.Context, avatar *Avatar) bool {
 	if ghost.AvatarID == avatar.ID && ghost.AvatarSet {
 		return false
 	}
@@ -171,15 +165,10 @@ func (ghost *Ghost) UpdateAvatar(ctx context.Context, avatar *Avatar) bool {
 		ghost.AvatarMXC = ""
 	}
 	ghost.AvatarSet = false
-	if err := ghost.Intent.SetAvatarURL(ctx, ghost.AvatarMXC); err != nil {
-		zerolog.Ctx(ctx).Err(err).Msg("Failed to set avatar URL")
-	} else {
-		ghost.AvatarSet = true
-	}
 	return true
 }
 
-func (ghost *Ghost) UpdateContactInfo(ctx context.Context, identifiers []string, isBot *bool) bool {
+func (ghost *Ghost) updateContactInfo(identifiers []string, isBot *bool) bool {
 	if identifiers != nil {
 		slices.Sort(identifiers)
 	}
@@ -193,21 +182,6 @@ func (ghost *Ghost) UpdateContactInfo(ctx context.Context, identifiers []string,
 	}
 	if isBot != nil {
 		ghost.IsBot = *isBot
-	}
-	bridgeName := ghost.Bridge.Network.GetName()
-	meta := &event.BeeperProfileExtra{
-		RemoteID:     string(ghost.ID),
-		Identifiers:  ghost.Identifiers,
-		Service:      bridgeName.BeeperBridgeType,
-		Network:      bridgeName.NetworkID,
-		IsBridgeBot:  false,
-		IsNetworkBot: ghost.IsBot,
-	}
-	err := ghost.Intent.SetExtraProfileMeta(ctx, meta)
-	if err != nil {
-		zerolog.Ctx(ctx).Err(err).Msg("Failed to set extra profile metadata")
-	} else {
-		ghost.ContactInfoSet = true
 	}
 	return true
 }
@@ -264,16 +238,40 @@ func (ghost *Ghost) UpdateInfo(ctx context.Context, info *UserInfo) {
 	oldName := ghost.Name
 	oldAvatar := ghost.AvatarMXC
 	if info.Name != nil {
-		update = ghost.UpdateName(ctx, *info.Name) || update
+		update = ghost.updateName(*info.Name) || update
 	}
 	if info.Avatar != nil {
-		update = ghost.UpdateAvatar(ctx, info.Avatar) || update
+		update = ghost.updateAvatar(ctx, info.Avatar) || update
 	}
 	if info.Identifiers != nil || info.IsBot != nil {
-		update = ghost.UpdateContactInfo(ctx, info.Identifiers, info.IsBot) || update
+		update = ghost.updateContactInfo(info.Identifiers, info.IsBot) || update
 	}
 	if info.ExtraUpdates != nil {
 		update = info.ExtraUpdates(ctx, ghost) || update
+	}
+	if update {
+		bridgeName := ghost.Bridge.Network.GetName()
+		err := ghost.Intent.SetProfile(ctx, &event.ExtendedProfile[event.BeeperProfileExtra]{
+			StandardProfile: event.StandardProfile{
+				Displayname: ghost.Name,
+				AvatarURL:   ghost.AvatarMXC,
+			},
+			Extra: event.BeeperProfileExtra{
+				RemoteID:     string(ghost.ID),
+				Identifiers:  ghost.Identifiers,
+				Service:      bridgeName.BeeperBridgeType,
+				Network:      bridgeName.NetworkID,
+				IsBridgeBot:  false,
+				IsNetworkBot: ghost.IsBot,
+			},
+		})
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to set profile")
+		} else {
+			ghost.NameSet = true
+			ghost.AvatarSet = true
+			ghost.ContactInfoSet = true
+		}
 	}
 	if oldName != ghost.Name || oldAvatar != ghost.AvatarMXC {
 		ghost.updateDMPortals(ctx)
