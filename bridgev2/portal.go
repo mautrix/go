@@ -3392,8 +3392,10 @@ func (portal *Portal) UpdateInfoFromGhost(ctx context.Context, ghost *Ghost) (ch
 func (portal *Portal) UpdateInfo(ctx context.Context, info *ChatInfo, source *UserLogin, sender MatrixAPI, ts time.Time) {
 	changed := false
 	if info.Name == DefaultChatName {
-		portal.NameIsCustom = false
-		changed = portal.updateName(ctx, "", sender, ts) || changed
+		if portal.NameIsCustom {
+			portal.NameIsCustom = false
+			changed = portal.updateName(ctx, "", sender, ts) || changed
+		}
 	} else if info.Name != nil {
 		portal.NameIsCustom = true
 		changed = portal.updateName(ctx, *info.Name, sender, ts) || changed
