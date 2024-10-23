@@ -34,6 +34,7 @@ type AppserviceConfig struct {
 
 	EphemeralEvents   bool `yaml:"ephemeral_events"`
 	AsyncTransactions bool `yaml:"async_transactions"`
+	MSC4190           bool `yaml:"msc4190"`
 
 	UsernameTemplate string             `yaml:"username_template"`
 	usernameTemplate *template.Template `yaml:"-"`
@@ -77,6 +78,7 @@ func (asc *AppserviceConfig) copyToRegistration(registration *appservice.Registr
 	registration.RateLimited = &falseVal
 	registration.EphemeralEvents = asc.EphemeralEvents
 	registration.SoruEphemeralEvents = asc.EphemeralEvents
+	registration.MSC4190 = asc.MSC4190
 }
 
 // GenerateRegistration generates a registration file for the homeserver.
