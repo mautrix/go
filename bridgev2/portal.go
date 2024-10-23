@@ -2807,6 +2807,10 @@ func (plc *PowerLevelOverrides) Apply(actor id.UserID, content *event.PowerLevel
 	return changed
 }
 
+// DefaultChatName can be used to explicitly clear the name of a room
+// and reset it to the default one based on members.
+var DefaultChatName = ptr.Ptr("")
+
 type ChatInfo struct {
 	Name   *string
 	Topic  *string
@@ -3387,7 +3391,10 @@ func (portal *Portal) UpdateInfoFromGhost(ctx context.Context, ghost *Ghost) (ch
 
 func (portal *Portal) UpdateInfo(ctx context.Context, info *ChatInfo, source *UserLogin, sender MatrixAPI, ts time.Time) {
 	changed := false
-	if info.Name != nil {
+	if info.Name == DefaultChatName {
+		portal.NameIsCustom = false
+		changed = portal.updateName(ctx, "", sender, ts) || changed
+	} else if info.Name != nil {
 		portal.NameIsCustom = true
 		changed = portal.updateName(ctx, *info.Name, sender, ts) || changed
 	}
