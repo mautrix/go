@@ -78,6 +78,8 @@ const (
 	provisioningLoginProcessKey
 )
 
+const ProvisioningKeyRequest = "fi.mau.provision.request"
+
 func (prov *ProvisioningAPI) GetUser(r *http.Request) *bridgev2.User {
 	return r.Context().Value(provisioningUserKey).(*bridgev2.User)
 }
@@ -269,7 +271,8 @@ func (prov *ProvisioningAPI) AuthMiddleware(h http.Handler) http.Handler {
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), provisioningUserKey, user)
+		ctx := context.WithValue(r.Context(), ProvisioningKeyRequest, r)
+		ctx = context.WithValue(ctx, provisioningUserKey, user)
 		if loginID, ok := mux.Vars(r)["loginProcessID"]; ok {
 			prov.loginsLock.RLock()
 			login, ok := prov.logins[loginID]
@@ -309,7 +312,7 @@ func (prov *ProvisioningAPI) AuthMiddleware(h http.Handler) http.Handler {
 				})
 				return
 			}
-			ctx = context.WithValue(r.Context(), provisioningLoginProcessKey, login)
+			ctx = context.WithValue(ctx, provisioningLoginProcessKey, login)
 		}
 		h.ServeHTTP(w, r.WithContext(ctx))
 	})
