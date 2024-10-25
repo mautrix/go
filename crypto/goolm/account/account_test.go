@@ -133,7 +133,7 @@ func TestLoopback(t *testing.T) {
 
 	accountB, err := account.NewAccount()
 	assert.NoError(t, err)
-	err = accountB.GenOneTimeKeys( 42)
+	err = accountB.GenOneTimeKeys(42)
 	assert.NoError(t, err)
 
 	aliceSession, err := accountA.NewOutboundSession(accountB.IdKeys.Curve25519.B64Encoded(), accountB.OTKeys[0].Key.B64Encoded())
@@ -191,7 +191,7 @@ func TestMoreMessages(t *testing.T) {
 
 	accountB, err := account.NewAccount()
 	assert.NoError(t, err)
-	err = accountB.GenOneTimeKeys( 42)
+	err = accountB.GenOneTimeKeys(42)
 	assert.NoError(t, err)
 
 	aliceSession, err := accountA.NewOutboundSession(accountB.IdKeys.Curve25519.B64Encoded(), accountB.OTKeys[0].Key.B64Encoded())
