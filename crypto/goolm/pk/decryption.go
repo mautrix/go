@@ -2,7 +2,6 @@ package pk
 
 import (
 	"encoding/base64"
-	"errors"
 	"fmt"
 
 	"maunium.net/go/mautrix/crypto/goolm/cipher"
@@ -17,9 +16,6 @@ import (
 const (
 	decryptionPickleVersionJSON   uint8  = 1
 	decryptionPickleVersionLibOlm uint32 = 1
-
-	DecryptionPickleLength = libolmpickle.PickleUInt32Length + // Version
-		crypto.Curve25519KeyPairPickleLength // KeyPair
 )
 
 // Decryption is used to decrypt pk messages
@@ -127,29 +123,13 @@ func (a *Decryption) UnpickleLibOlm(value []byte) (int, error) {
 
 // Pickle returns a base64 encoded and with key encrypted pickled Decryption using PickleLibOlm().
 func (a Decryption) Pickle(key []byte) ([]byte, error) {
-	pickeledBytes := make([]byte, DecryptionPickleLength)
-	written, err := a.PickleLibOlm(pickeledBytes)
-	if err != nil {
-		return nil, err
-	}
-	if written != len(pickeledBytes) {
-		return nil, errors.New("number of written bytes not correct")
-	}
-	return cipher.Pickle(key, pickeledBytes)
+	return cipher.Pickle(key, a.PickleLibOlm())
 }
 
-// PickleLibOlm encodes the Decryption into target. target has to have a size
-// of at least [DecryptionPickleLength] and is written to from index 0. It
-// returns the number of bytes written.
-func (a Decryption) PickleLibOlm(target []byte) (int, error) {
-	if len(target) < DecryptionPickleLength {
-		return 0, fmt.Errorf("pickle Decryption: %w", olm.ErrValueTooShort)
-	}
-	written := libolmpickle.PickleUInt32(decryptionPickleVersionLibOlm, target)
-	writtenKey, err := a.KeyPair.PickleLibOlm(target[written:])
-	if err != nil {
-		return 0, fmt.Errorf("pickle Decryption: %w", err)
-	}
-	written += writtenKey
-	return written, nil
+// PickleLibOlm pickles the [Decryption] into the encoder.
+func (a Decryption) PickleLibOlm() []byte {
+	encoder := libolmpickle.NewEncoder()
+	encoder.WriteUInt32(decryptionPickleVersionLibOlm)
+	a.KeyPair.PickleLibOlm(encoder)
+	return encoder.Bytes()
 }

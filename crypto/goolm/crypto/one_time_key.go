@@ -3,10 +3,8 @@ package crypto
 import (
 	"encoding/base64"
 	"encoding/binary"
-	"fmt"
 
 	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
-	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -16,10 +14,6 @@ type OneTimeKey struct {
 	Published bool              `json:"published"`
 	Key       Curve25519KeyPair `json:"key,omitempty"`
 }
-
-const OneTimeKeyPickleLength = libolmpickle.PickleUInt32Length + // ID
-	libolmpickle.PickleBoolLength + // Published
-	Curve25519KeyPairPickleLength // Key
 
 // Equal compares the one time key to the given one.
 func (otk OneTimeKey) Equal(s OneTimeKey) bool {
@@ -38,20 +32,11 @@ func (otk OneTimeKey) Equal(s OneTimeKey) bool {
 	return true
 }
 
-// PickleLibOlm encodes the key pair into target. target has to have a size of at least PickleLen() and is written to from index 0.
-// It returns the number of bytes written.
-func (c OneTimeKey) PickleLibOlm(target []byte) (int, error) {
-	if len(target) < OneTimeKeyPickleLength {
-		return 0, fmt.Errorf("pickle one time key: %w", olm.ErrValueTooShort)
-	}
-	written := libolmpickle.PickleUInt32(uint32(c.ID), target)
-	written += libolmpickle.PickleBool(c.Published, target[written:])
-	writtenKey, err := c.Key.PickleLibOlm(target[written:])
-	if err != nil {
-		return 0, fmt.Errorf("pickle one time key: %w", err)
-	}
-	written += writtenKey
-	return written, nil
+// PickleLibOlm pickles the key pair into the encoder.
+func (c OneTimeKey) PickleLibOlm(encoder *libolmpickle.Encoder) {
+	encoder.WriteUInt32(c.ID)
+	encoder.WriteBool(c.Published)
+	c.Key.PickleLibOlm(encoder)
 }
 
 // UnpickleLibOlm decodes the unencryted value and populates the OneTimeKey accordingly. It returns the number of bytes read.

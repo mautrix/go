@@ -26,7 +26,6 @@ var (
 	ErrBadInput             = errors.New("bad input")
 	ErrBadVersion           = errors.New("wrong version")
 	ErrWrongPickleVersion   = errors.New("wrong pickle version")
-	ErrValueTooShort        = errors.New("value too short")
 	ErrInputToSmall         = errors.New("input too small (truncated?)")
 	ErrOverflow             = errors.New("overflow")
 )

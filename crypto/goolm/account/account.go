@@ -4,7 +4,6 @@ package account
 import (
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 
 	"maunium.net/go/mautrix/id"
@@ -430,73 +429,32 @@ func (a *Account) Pickle(key []byte) ([]byte, error) {
 	if len(key) == 0 {
 		return nil, olm.ErrNoKeyProvided
 	}
-	pickeledBytes := make([]byte, a.PickleLen())
-	written, err := a.PickleLibOlm(pickeledBytes)
-	if err != nil {
-		return nil, err
-	}
-	if written != len(pickeledBytes) {
-		return nil, errors.New("number of written bytes not correct")
-	}
-	return cipher.Pickle(key, pickeledBytes)
+	return cipher.Pickle(key, a.PickleLibOlm())
 }
 
-// PickleLibOlm encodes the Account into target. target has to have a size of at least PickleLen() and is written to from index 0.
-// It returns the number of bytes written.
-func (a *Account) PickleLibOlm(target []byte) (int, error) {
-	if len(target) < a.PickleLen() {
-		return 0, fmt.Errorf("pickle account: %w", olm.ErrValueTooShort)
-	}
-	written := libolmpickle.PickleUInt32(accountPickleVersionLibOLM, target)
-	writtenEdKey, err := a.IdKeys.Ed25519.PickleLibOlm(target[written:])
-	if err != nil {
-		return 0, fmt.Errorf("pickle account: %w", err)
-	}
-	written += writtenEdKey
-	writtenCurveKey, err := a.IdKeys.Curve25519.PickleLibOlm(target[written:])
-	if err != nil {
-		return 0, fmt.Errorf("pickle account: %w", err)
-	}
-	written += writtenCurveKey
-	written += libolmpickle.PickleUInt32(uint32(len(a.OTKeys)), target[written:])
+// PickleLibOlm pickles the [Account] and returns the raw bytes.
+func (a *Account) PickleLibOlm() []byte {
+	encoder := libolmpickle.NewEncoder()
+	encoder.WriteUInt32(accountPickleVersionLibOLM)
+	a.IdKeys.Ed25519.PickleLibOlm(encoder)
+	a.IdKeys.Curve25519.PickleLibOlm(encoder)
+
+	// One-Time Keys
+	encoder.WriteUInt32(uint32(len(a.OTKeys)))
 	for _, curOTKey := range a.OTKeys {
-		writtenOT, err := curOTKey.PickleLibOlm(target[written:])
-		if err != nil {
-			return 0, fmt.Errorf("pickle account: %w", err)
-		}
-		written += writtenOT
+		curOTKey.PickleLibOlm(encoder)
 	}
-	written += libolmpickle.PickleUInt8(a.NumFallbackKeys, target[written:])
+
+	// Fallback Keys
+	encoder.WriteUInt8(a.NumFallbackKeys)
 	if a.NumFallbackKeys >= 1 {
-		writtenOT, err := a.CurrentFallbackKey.PickleLibOlm(target[written:])
-		if err != nil {
-			return 0, fmt.Errorf("pickle account: %w", err)
-		}
-		written += writtenOT
-
+		a.CurrentFallbackKey.PickleLibOlm(encoder)
 		if a.NumFallbackKeys >= 2 {
-			writtenOT, err := a.PrevFallbackKey.PickleLibOlm(target[written:])
-			if err != nil {
-				return 0, fmt.Errorf("pickle account: %w", err)
-			}
-			written += writtenOT
+			a.PrevFallbackKey.PickleLibOlm(encoder)
 		}
 	}
-	written += libolmpickle.PickleUInt32(a.NextOneTimeKeyID, target[written:])
-	return written, nil
-}
-
-// PickleLen returns the number of bytes the pickled Account will have.
-func (a *Account) PickleLen() int {
-	length := libolmpickle.PickleUInt32Length
-	length += crypto.Ed25519KeyPairPickleLength    // IdKeys.Ed25519
-	length += crypto.Curve25519KeyPairPickleLength // IdKeys.Curve25519
-	length += libolmpickle.PickleUInt32Length
-	length += (len(a.OTKeys) * crypto.OneTimeKeyPickleLength)
-	length += libolmpickle.PickleUInt8Length
-	length += (int(a.NumFallbackKeys) * crypto.OneTimeKeyPickleLength)
-	length += libolmpickle.PickleUInt32Length
-	return length
+	encoder.WriteUInt32(a.NextOneTimeKeyID)
+	return encoder.Bytes()
 }
 
 // MaxNumberOfOneTimeKeys returns the largest number of one time keys this

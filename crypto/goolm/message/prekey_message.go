@@ -74,11 +74,11 @@ func (r *PreKeyMessage) CheckFields(theirIdentityKey *crypto.Curve25519PublicKey
 	ok := true
 	ok = ok && (theirIdentityKey != nil || r.IdentityKey != nil)
 	if r.IdentityKey != nil {
-		ok = ok && (len(r.IdentityKey) == crypto.Curve25519KeyLength)
+		ok = ok && (len(r.IdentityKey) == crypto.Curve25519PrivateKeyLength)
 	}
 	ok = ok && len(r.Message) != 0
-	ok = ok && len(r.BaseKey) == crypto.Curve25519KeyLength
-	ok = ok && len(r.OneTimeKey) == crypto.Curve25519KeyLength
+	ok = ok && len(r.BaseKey) == crypto.Curve25519PrivateKeyLength
+	ok = ok && len(r.OneTimeKey) == crypto.Curve25519PrivateKeyLength
 	return ok
 }
 

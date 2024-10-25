@@ -347,66 +347,20 @@ func (r *Ratchet) UnpickleLibOlm(value []byte, includesChainIndex bool) (int, er
 	return curPos, nil
 }
 
-// PickleLibOlm encodes the ratchet into target. target has to have a size of at least PickleLen() and is written to from index 0.
-// It returns the number of bytes written.
-func (r Ratchet) PickleLibOlm(target []byte) (int, error) {
-	if len(target) < r.PickleLen() {
-		return 0, fmt.Errorf("pickle ratchet: %w", olm.ErrValueTooShort)
-	}
-	written, err := r.RootKey.PickleLibOlm(target)
-	if err != nil {
-		return 0, fmt.Errorf("pickle ratchet: %w", err)
-	}
-	if r.SenderChains.IsSet {
-		written += libolmpickle.PickleUInt32(1, target[written:]) //Length of sender chain, always 1
-		writtenSender, err := r.SenderChains.PickleLibOlm(target[written:])
-		if err != nil {
-			return 0, fmt.Errorf("pickle ratchet: %w", err)
-		}
-		written += writtenSender
-	} else {
-		written += libolmpickle.PickleUInt32(0, target[written:]) //Length of sender chain
-	}
-	written += libolmpickle.PickleUInt32(uint32(len(r.ReceiverChains)), target[written:])
+// PickleLibOlm pickles the ratchet into the encoder.
+func (r Ratchet) PickleLibOlm(encoder *libolmpickle.Encoder) {
+	r.RootKey.PickleLibOlm(encoder)
+	r.SenderChains.PickleLibOlm(encoder)
+
+	// Receiver Chains
+	encoder.WriteUInt32(uint32(len(r.ReceiverChains)))
 	for _, curChain := range r.ReceiverChains {
-		writtenChain, err := curChain.PickleLibOlm(target[written:])
-		if err != nil {
-			return 0, fmt.Errorf("pickle ratchet: %w", err)
-		}
-		written += writtenChain
+		curChain.PickleLibOlm(encoder)
 	}
-	written += libolmpickle.PickleUInt32(uint32(len(r.SkippedMessageKeys)), target[written:])
+
+	// Skipped Message Keys
+	encoder.WriteUInt32(uint32(len(r.SkippedMessageKeys)))
 	for _, curChain := range r.SkippedMessageKeys {
-		writtenChain, err := curChain.PickleLibOlm(target[written:])
-		if err != nil {
-			return 0, fmt.Errorf("pickle ratchet: %w", err)
-		}
-		written += writtenChain
+		curChain.PickleLibOlm(encoder)
 	}
-	return written, nil
-}
-
-// PickleLen returns the actual number of bytes the pickled ratchet will have.
-func (r Ratchet) PickleLen() int {
-	length := crypto.Curve25519PubKeyLength // Root Key
-	if r.SenderChains.IsSet {
-		length += libolmpickle.PickleUInt32Length // 1
-		length += senderChainPickleLength         // SenderChains
-	} else {
-		length += libolmpickle.PickleUInt32Length // 0
-	}
-	length += libolmpickle.PickleUInt32Length // ReceiverChains length
-	length += len(r.ReceiverChains) * receiverChainPickleLength
-	length += libolmpickle.PickleUInt32Length // SkippedMessageKeys length
-	length += len(r.SkippedMessageKeys) * skippedMessageKeyPickleLen
-	return length
-}
-
-// PickleLen returns the minimum number of bytes the pickled ratchet must have.
-func (r Ratchet) PickleLenMin() int {
-	length := crypto.Curve25519PubKeyLength // Root Key
-	length += libolmpickle.PickleUInt32Length
-	length += libolmpickle.PickleUInt32Length
-	length += libolmpickle.PickleUInt32Length
-	return length
 }

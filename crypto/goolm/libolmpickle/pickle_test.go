@@ -8,6 +8,26 @@ import (
 	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
 )
 
+func TestEncoder(t *testing.T) {
+	var encoder libolmpickle.Encoder
+	encoder.WriteUInt32(4)
+	encoder.WriteUInt8(8)
+	encoder.WriteBool(false)
+	encoder.WriteEmptyBytes(10)
+	encoder.WriteBool(true)
+	encoder.Write([]byte("test"))
+	encoder.WriteUInt32(420_000)
+	assert.Equal(t, []byte{
+		0x00, 0x00, 0x00, 0x04, // 4
+		0x08,                                                       // 8
+		0x00,                                                       // false
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // ten empty bytes
+		0x01,                   //true
+		0x74, 0x65, 0x73, 0x74, // "test" (ASCII)
+		0x00, 0x06, 0x68, 0xa0, // 420,000
+	}, encoder.Bytes())
+}
+
 func TestPickleUInt32(t *testing.T) {
 	values := []uint32{
 		0xffffffff,
@@ -21,11 +41,10 @@ func TestPickleUInt32(t *testing.T) {
 		{0xf0, 0x00, 0x00, 0x00},
 		{0xf0, 0x0f, 0x00, 0x00},
 	}
-	for curIndex := range values {
-		response := make([]byte, 4)
-		resPLen := libolmpickle.PickleUInt32(values[curIndex], response)
-		assert.Equal(t, libolmpickle.PickleUInt32Length, resPLen)
-		assert.Equal(t, expected[curIndex], response)
+	for i, value := range values {
+		var encoder libolmpickle.Encoder
+		encoder.WriteUInt32(value)
+		assert.Equal(t, expected[i], encoder.Bytes())
 	}
 }
 
@@ -38,11 +57,10 @@ func TestPickleBool(t *testing.T) {
 		{0x01},
 		{0x00},
 	}
-	for curIndex := range values {
-		response := make([]byte, 1)
-		resPLen := libolmpickle.PickleBool(values[curIndex], response)
-		assert.Equal(t, libolmpickle.PickleBoolLength, resPLen)
-		assert.Equal(t, expected[curIndex], response)
+	for i, value := range values {
+		var encoder libolmpickle.Encoder
+		encoder.WriteBool(value)
+		assert.Equal(t, expected[i], encoder.Bytes())
 	}
 }
 
@@ -55,11 +73,10 @@ func TestPickleUInt8(t *testing.T) {
 		{0xff},
 		{0x1a},
 	}
-	for curIndex := range values {
-		response := make([]byte, 1)
-		resPLen := libolmpickle.PickleUInt8(values[curIndex], response)
-		assert.Equal(t, libolmpickle.PickleUInt8Length, resPLen)
-		assert.Equal(t, expected[curIndex], response)
+	for i, value := range values {
+		var encoder libolmpickle.Encoder
+		encoder.WriteUInt8(value)
+		assert.Equal(t, expected[i], encoder.Bytes())
 	}
 }
 
@@ -74,10 +91,9 @@ func TestPickleBytes(t *testing.T) {
 		{0x00, 0xff, 0x00, 0xff},
 		{0xf0, 0x00, 0x00, 0x00},
 	}
-	for curIndex := range values {
-		response := make([]byte, len(values[curIndex]))
-		resPLen := libolmpickle.PickleBytes(values[curIndex], response)
-		assert.Equal(t, libolmpickle.PickleBytesLen(values[curIndex]), resPLen)
-		assert.Equal(t, expected[curIndex], response)
+	for i, value := range values {
+		var encoder libolmpickle.Encoder
+		encoder.Write(value)
+		assert.Equal(t, expected[i], encoder.Bytes())
 	}
 }

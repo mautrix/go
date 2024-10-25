@@ -3,7 +3,6 @@ package session
 import (
 	"crypto/rand"
 	"encoding/base64"
-	"errors"
 	"fmt"
 
 	"go.mau.fi/util/exerrors"
@@ -21,10 +20,6 @@ import (
 const (
 	megolmOutboundSessionPickleVersion       byte   = 1
 	megolmOutboundSessionPickleVersionLibOlm uint32 = 1
-
-	MegolmOutboundSessionPickleLength = libolmpickle.PickleUInt32Length + // Version
-		megolm.RatchetPickleLength + // Ratchet
-		crypto.Ed25519KeyPairPickleLength // SigningKey
 )
 
 // MegolmOutboundSession stores information about the sessions to send.
@@ -134,35 +129,16 @@ func (o *MegolmOutboundSession) Pickle(key []byte) ([]byte, error) {
 	if len(key) == 0 {
 		return nil, olm.ErrNoKeyProvided
 	}
-	pickeledBytes := make([]byte, MegolmOutboundSessionPickleLength)
-	written, err := o.PickleLibOlm(pickeledBytes)
-	if err != nil {
-		return nil, err
-	}
-	if written != len(pickeledBytes) {
-		return nil, errors.New("number of written bytes not correct")
-	}
-	return cipher.Pickle(key, pickeledBytes)
+	return cipher.Pickle(key, o.PickleLibOlm())
 }
 
-// PickleLibOlm encodes the session into target. target has to have a size of at least PickleLen() and is written to from index 0.
-// It returns the number of bytes written.
-func (o *MegolmOutboundSession) PickleLibOlm(target []byte) (int, error) {
-	if len(target) < MegolmOutboundSessionPickleLength {
-		return 0, fmt.Errorf("pickle MegolmOutboundSession: %w", olm.ErrValueTooShort)
-	}
-	written := libolmpickle.PickleUInt32(megolmOutboundSessionPickleVersionLibOlm, target)
-	writtenRatchet, err := o.Ratchet.PickleLibOlm(target[written:])
-	if err != nil {
-		return 0, fmt.Errorf("pickle MegolmOutboundSession: %w", err)
-	}
-	written += writtenRatchet
-	writtenPubKey, err := o.SigningKey.PickleLibOlm(target[written:])
-	if err != nil {
-		return 0, fmt.Errorf("pickle MegolmOutboundSession: %w", err)
-	}
-	written += writtenPubKey
-	return written, nil
+// PickleLibOlm pickles the session returning the raw bytes.
+func (o *MegolmOutboundSession) PickleLibOlm() []byte {
+	encoder := libolmpickle.NewEncoder()
+	encoder.WriteUInt32(megolmOutboundSessionPickleVersionLibOlm)
+	o.Ratchet.PickleLibOlm(encoder)
+	o.SigningKey.PickleLibOlm(encoder)
+	return encoder.Bytes()
 }
 
 func (o *MegolmOutboundSession) SessionSharingMessage() ([]byte, error) {

@@ -1,7 +1,10 @@
 package libolmpickle
 
 import (
+	"bytes"
 	"encoding/binary"
+
+	"go.mau.fi/util/exerrors"
 )
 
 const (
@@ -10,29 +13,28 @@ const (
 	PickleUInt32Length = 4
 )
 
-func PickleUInt8(value uint8, target []byte) int {
-	target[0] = value
-	return 1
+type Encoder struct {
+	bytes.Buffer
 }
 
-func PickleBool(value bool, target []byte) int {
+func NewEncoder() *Encoder { return &Encoder{} }
+
+func (p *Encoder) WriteUInt8(value uint8) {
+	exerrors.PanicIfNotNil(p.WriteByte(value))
+}
+
+func (p *Encoder) WriteBool(value bool) {
 	if value {
-		target[0] = 0x01
+		exerrors.PanicIfNotNil(p.WriteByte(0x01))
 	} else {
-		target[0] = 0x00
+		exerrors.PanicIfNotNil(p.WriteByte(0x00))
 	}
-	return 1
 }
 
-func PickleBytes(value, target []byte) int {
-	return copy(target, value)
-}
-func PickleBytesLen(value []byte) int {
-	return len(value)
+func (p *Encoder) WriteEmptyBytes(count int) {
+	exerrors.Must(p.Write(make([]byte, count)))
 }
 
-func PickleUInt32(value uint32, target []byte) int {
-	res := make([]byte, 4) //4 bytes for int32
-	binary.BigEndian.PutUint32(res, value)
-	return copy(target, res)
+func (p *Encoder) WriteUInt32(value uint32) {
+	exerrors.Must(p.Write(binary.BigEndian.AppendUint32(nil, value)))
 }

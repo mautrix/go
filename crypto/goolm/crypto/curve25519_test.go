@@ -6,7 +6,11 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
+	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
 )
+
+const curve25519KeyPairPickleLength = crypto.Curve25519PublicKeyLength + // Public Key
+	crypto.Curve25519PrivateKeyLength // Private Key
 
 func TestCurve25519(t *testing.T) {
 	firstKeypair, err := crypto.Curve25519GenerateKey()
@@ -74,15 +78,15 @@ func TestCurve25519Pickle(t *testing.T) {
 	//create keypair
 	keyPair, err := crypto.Curve25519GenerateKey()
 	assert.NoError(t, err)
-	target := make([]byte, crypto.Curve25519KeyPairPickleLength)
-	writtenBytes, err := keyPair.PickleLibOlm(target)
-	assert.NoError(t, err)
-	assert.Len(t, target, writtenBytes)
+
+	encoder := libolmpickle.NewEncoder()
+	keyPair.PickleLibOlm(encoder)
+	assert.Len(t, encoder.Bytes(), curve25519KeyPairPickleLength)
 
 	unpickledKeyPair := crypto.Curve25519KeyPair{}
-	readBytes, err := unpickledKeyPair.UnpickleLibOlm(target)
+	readBytes, err := unpickledKeyPair.UnpickleLibOlm(encoder.Bytes())
 	assert.NoError(t, err)
-	assert.Len(t, target, readBytes)
+	assert.Len(t, encoder.Bytes(), readBytes)
 	assert.Equal(t, keyPair, unpickledKeyPair)
 }
 
@@ -90,16 +94,18 @@ func TestCurve25519PicklePubKeyOnly(t *testing.T) {
 	//create keypair
 	keyPair, err := crypto.Curve25519GenerateKey()
 	assert.NoError(t, err)
+
 	//Remove privateKey
 	keyPair.PrivateKey = nil
-	target := make([]byte, crypto.Curve25519KeyPairPickleLength)
-	writtenBytes, err := keyPair.PickleLibOlm(target)
-	assert.NoError(t, err)
-	assert.Len(t, target, writtenBytes)
+
+	encoder := libolmpickle.NewEncoder()
+	keyPair.PickleLibOlm(encoder)
+	assert.Len(t, encoder.Bytes(), curve25519KeyPairPickleLength)
+
 	unpickledKeyPair := crypto.Curve25519KeyPair{}
-	readBytes, err := unpickledKeyPair.UnpickleLibOlm(target)
+	readBytes, err := unpickledKeyPair.UnpickleLibOlm(encoder.Bytes())
 	assert.NoError(t, err)
-	assert.Len(t, target, readBytes)
+	assert.Len(t, encoder.Bytes(), readBytes)
 	assert.Equal(t, keyPair, unpickledKeyPair)
 }
 
@@ -109,13 +115,12 @@ func TestCurve25519PicklePrivKeyOnly(t *testing.T) {
 	assert.NoError(t, err)
 	//Remove public
 	keyPair.PublicKey = nil
-	target := make([]byte, crypto.Curve25519KeyPairPickleLength)
-	writtenBytes, err := keyPair.PickleLibOlm(target)
-	assert.NoError(t, err)
-	assert.Len(t, target, writtenBytes)
+	encoder := libolmpickle.NewEncoder()
+	keyPair.PickleLibOlm(encoder)
+	assert.Len(t, encoder.Bytes(), curve25519KeyPairPickleLength)
 	unpickledKeyPair := crypto.Curve25519KeyPair{}
-	readBytes, err := unpickledKeyPair.UnpickleLibOlm(target)
+	readBytes, err := unpickledKeyPair.UnpickleLibOlm(encoder.Bytes())
 	assert.NoError(t, err)
-	assert.Len(t, target, readBytes)
+	assert.Len(t, encoder.Bytes(), readBytes)
 	assert.Equal(t, keyPair, unpickledKeyPair)
 }

@@ -4,23 +4,21 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/base64"
-	"fmt"
 
 	"golang.org/x/crypto/curve25519"
 
 	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
-	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
 )
 
 const (
-	Curve25519KeyLength    = curve25519.ScalarSize //The length of the private key.
-	Curve25519PubKeyLength = 32
+	Curve25519PrivateKeyLength = curve25519.ScalarSize //The length of the private key.
+	Curve25519PublicKeyLength  = 32
 )
 
 // Curve25519GenerateKey creates a new curve25519 key pair.
 func Curve25519GenerateKey() (Curve25519KeyPair, error) {
-	privateKeyByte := make([]byte, Curve25519KeyLength)
+	privateKeyByte := make([]byte, Curve25519PrivateKeyLength)
 	if _, err := rand.Read(privateKeyByte); err != nil {
 		return Curve25519KeyPair{}, err
 	}
@@ -51,9 +49,6 @@ type Curve25519KeyPair struct {
 	PublicKey  Curve25519PublicKey  `json:"public,omitempty"`
 }
 
-const Curve25519KeyPairPickleLength = Curve25519PubKeyLength + // Public Key
-	Curve25519KeyLength // Private Key
-
 // B64Encoded returns a base64 encoded string of the public key.
 func (c Curve25519KeyPair) B64Encoded() id.Curve25519 {
 	return c.PublicKey.B64Encoded()
@@ -64,23 +59,14 @@ func (c Curve25519KeyPair) SharedSecret(pubKey Curve25519PublicKey) ([]byte, err
 	return c.PrivateKey.SharedSecret(pubKey)
 }
 
-// PickleLibOlm encodes the key pair into target. The target has to have a size
-// of at least [Curve25519KeyPairPickleLength] and is written to from index 0.
-// It returns the number of bytes written.
-func (c Curve25519KeyPair) PickleLibOlm(target []byte) (int, error) {
-	if len(target) < Curve25519KeyPairPickleLength {
-		return 0, fmt.Errorf("pickle curve25519 key pair: %w", olm.ErrValueTooShort)
-	}
-	written, err := c.PublicKey.PickleLibOlm(target)
-	if err != nil {
-		return 0, fmt.Errorf("pickle curve25519 key pair: %w", err)
-	}
-	if len(c.PrivateKey) != Curve25519KeyLength {
-		written += libolmpickle.PickleBytes(make([]byte, Curve25519KeyLength), target[written:])
+// PickleLibOlm pickles the key pair into the encoder.
+func (c Curve25519KeyPair) PickleLibOlm(encoder *libolmpickle.Encoder) {
+	c.PublicKey.PickleLibOlm(encoder)
+	if len(c.PrivateKey) == Curve25519PrivateKeyLength {
+		encoder.Write(c.PrivateKey)
 	} else {
-		written += libolmpickle.PickleBytes(c.PrivateKey, target[written:])
+		encoder.WriteEmptyBytes(Curve25519PrivateKeyLength)
 	}
-	return written, nil
 }
 
 // UnpickleLibOlm decodes the unencryted value and populates the key pair accordingly. It returns the number of bytes read.
@@ -91,7 +77,7 @@ func (c *Curve25519KeyPair) UnpickleLibOlm(value []byte) (int, error) {
 		return 0, err
 	}
 	//unpickle PrivateKey
-	privKey, readPriv, err := libolmpickle.UnpickleBytes(value[read:], Curve25519KeyLength)
+	privKey, readPriv, err := libolmpickle.UnpickleBytes(value[read:], Curve25519PrivateKeyLength)
 	if err != nil {
 		return read, err
 	}
@@ -130,21 +116,18 @@ func (c Curve25519PublicKey) B64Encoded() id.Curve25519 {
 	return id.Curve25519(base64.RawStdEncoding.EncodeToString(c))
 }
 
-// PickleLibOlm encodes the public key into target. target has to have a size of at least PickleLen() and is written to from index 0.
-// It returns the number of bytes written.
-func (c Curve25519PublicKey) PickleLibOlm(target []byte) (int, error) {
-	if len(target) < Curve25519PubKeyLength {
-		return 0, fmt.Errorf("pickle curve25519 public key: %w", olm.ErrValueTooShort)
+// PickleLibOlm pickles the public key into the encoder.
+func (c Curve25519PublicKey) PickleLibOlm(encoder *libolmpickle.Encoder) {
+	if len(c) == Curve25519PublicKeyLength {
+		encoder.Write(c)
+	} else {
+		encoder.WriteEmptyBytes(Curve25519PublicKeyLength)
 	}
-	if len(c) != Curve25519PubKeyLength {
-		return libolmpickle.PickleBytes(make([]byte, Curve25519PubKeyLength), target), nil
-	}
-	return libolmpickle.PickleBytes(c, target), nil
 }
 
 // UnpickleLibOlm decodes the unencryted value and populates the public key accordingly. It returns the number of bytes read.
 func (c *Curve25519PublicKey) UnpickleLibOlm(value []byte) (int, error) {
-	unpickled, readBytes, err := libolmpickle.UnpickleBytes(value, Curve25519PubKeyLength)
+	unpickled, readBytes, err := libolmpickle.UnpickleBytes(value, Curve25519PublicKeyLength)
 	if err != nil {
 		return 0, err
 	}
