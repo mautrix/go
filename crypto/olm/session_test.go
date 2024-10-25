@@ -60,16 +60,16 @@ func TestSessionPickle(t *testing.T) {
 
 func TestSession_EncryptDecrypt(t *testing.T) {
 	combos := [][2]olm.Account{
-		{exerrors.Must(libolm.NewAccount(nil)), exerrors.Must(libolm.NewAccount(nil))},
-		{exerrors.Must(account.NewAccount(nil)), exerrors.Must(account.NewAccount(nil))},
-		{exerrors.Must(libolm.NewAccount(nil)), exerrors.Must(account.NewAccount(nil))},
-		{exerrors.Must(account.NewAccount(nil)), exerrors.Must(libolm.NewAccount(nil))},
+		{exerrors.Must(libolm.NewAccount()), exerrors.Must(libolm.NewAccount())},
+		{exerrors.Must(account.NewAccount()), exerrors.Must(account.NewAccount())},
+		{exerrors.Must(libolm.NewAccount()), exerrors.Must(account.NewAccount())},
+		{exerrors.Must(account.NewAccount()), exerrors.Must(libolm.NewAccount())},
 	}
 
 	for _, combo := range combos {
 		receiver, sender := combo[0], combo[1]
-		require.NoError(t, receiver.GenOneTimeKeys(nil, 50))
-		require.NoError(t, sender.GenOneTimeKeys(nil, 50))
+		require.NoError(t, receiver.GenOneTimeKeys(50))
+		require.NoError(t, sender.GenOneTimeKeys(50))
 
 		_, receiverCurve25519, err := receiver.IdentityKeys()
 		require.NoError(t, err)

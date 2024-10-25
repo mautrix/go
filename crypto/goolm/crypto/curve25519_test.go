@@ -8,11 +8,11 @@ import (
 )
 
 func TestCurve25519(t *testing.T) {
-	firstKeypair, err := crypto.Curve25519GenerateKey(nil)
+	firstKeypair, err := crypto.Curve25519GenerateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
-	secondKeypair, err := crypto.Curve25519GenerateKey(nil)
+	secondKeypair, err := crypto.Curve25519GenerateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +93,7 @@ func TestCurve25519Case1(t *testing.T) {
 
 func TestCurve25519Pickle(t *testing.T) {
 	//create keypair
-	keyPair, err := crypto.Curve25519GenerateKey(nil)
+	keyPair, err := crypto.Curve25519GenerateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +124,7 @@ func TestCurve25519Pickle(t *testing.T) {
 
 func TestCurve25519PicklePubKeyOnly(t *testing.T) {
 	//create keypair
-	keyPair, err := crypto.Curve25519GenerateKey(nil)
+	keyPair, err := crypto.Curve25519GenerateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +156,7 @@ func TestCurve25519PicklePubKeyOnly(t *testing.T) {
 
 func TestCurve25519PicklePrivKeyOnly(t *testing.T) {
 	//create keypair
-	keyPair, err := crypto.Curve25519GenerateKey(nil)
+	keyPair, err := crypto.Curve25519GenerateKey()
 	if err != nil {
 		t.Fatal(err)
 	}

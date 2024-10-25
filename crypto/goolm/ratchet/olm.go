@@ -94,11 +94,11 @@ func (r *Ratchet) InitializeAsAlice(sharedSecret []byte, ourRatchetKey crypto.Cu
 	return nil
 }
 
-// Encrypt encrypts the message in a message.Message with MAC. If reader is nil, crypto/rand is used for key generations.
+// Encrypt encrypts the message in a message.Message with MAC.
 func (r *Ratchet) Encrypt(plaintext []byte) ([]byte, error) {
 	var err error
 	if !r.SenderChains.IsSet {
-		newRatchetKey, err := crypto.Curve25519GenerateKey(nil)
+		newRatchetKey, err := crypto.Curve25519GenerateKey()
 		if err != nil {
 			return nil, err
 		}
@@ -132,7 +132,7 @@ func (r *Ratchet) Encrypt(plaintext []byte) ([]byte, error) {
 	return output, nil
 }
 
-// Decrypt decrypts the ciphertext and verifies the MAC.  If reader is nil, crypto/rand is used for key generations.
+// Decrypt decrypts the ciphertext and verifies the MAC.
 func (r *Ratchet) Decrypt(input []byte) ([]byte, error) {
 	message := &message.Message{}
 	//The mac is not verified here, as we do not know the key yet

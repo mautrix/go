@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
-	"io"
 
 	"golang.org/x/crypto/curve25519"
 
@@ -19,19 +18,11 @@ const (
 	curve25519PubKeyLength = 32
 )
 
-// Curve25519GenerateKey creates a new curve25519 key pair. If reader is nil, the random data is taken from crypto/rand.
-func Curve25519GenerateKey(reader io.Reader) (Curve25519KeyPair, error) {
+// Curve25519GenerateKey creates a new curve25519 key pair.
+func Curve25519GenerateKey() (Curve25519KeyPair, error) {
 	privateKeyByte := make([]byte, Curve25519KeyLength)
-	if reader == nil {
-		_, err := rand.Read(privateKeyByte)
-		if err != nil {
-			return Curve25519KeyPair{}, err
-		}
-	} else {
-		_, err := reader.Read(privateKeyByte)
-		if err != nil {
-			return Curve25519KeyPair{}, err
-		}
+	if _, err := rand.Read(privateKeyByte); err != nil {
+		return Curve25519KeyPair{}, err
 	}
 
 	privateKey := Curve25519PrivateKey(privateKeyByte)

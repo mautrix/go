@@ -35,7 +35,7 @@ var _ olm.OutboundGroupSession = (*MegolmOutboundSession)(nil)
 func NewMegolmOutboundSession() (*MegolmOutboundSession, error) {
 	o := &MegolmOutboundSession{}
 	var err error
-	o.SigningKey, err = crypto.Ed25519GenerateKey(nil)
+	o.SigningKey, err = crypto.Ed25519GenerateKey()
 	if err != nil {
 		return nil, err
 	}

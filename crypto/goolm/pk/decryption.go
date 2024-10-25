@@ -26,7 +26,7 @@ type Decryption struct {
 
 // NewDecryption returns a new Decryption with a new generated key pair.
 func NewDecryption() (*Decryption, error) {
-	keyPair, err := crypto.Curve25519GenerateKey(nil)
+	keyPair, err := crypto.Curve25519GenerateKey()
 	if err != nil {
 		return nil, err
 	}

@@ -7,8 +7,6 @@
 package olm
 
 import (
-	"io"
-
 	"maunium.net/go/mautrix/id"
 )
 
@@ -57,9 +55,8 @@ type Account interface {
 
 	// GenOneTimeKeys generates a number of new one time keys.  If the total
 	// number of keys stored by this Account exceeds MaxNumberOfOneTimeKeys
-	// then the old keys are discarded. Reads random data from the given
-	// reader, or if nil is passed, defaults to crypto/rand.
-	GenOneTimeKeys(reader io.Reader, num uint) error
+	// then the old keys are discarded.
+	GenOneTimeKeys(num uint) error
 
 	// NewOutboundSession creates a new out-bound session for sending messages to a
 	// given curve25519 identityKey and oneTimeKey.  Returns error on failure.  If the
@@ -91,12 +88,12 @@ type Account interface {
 }
 
 var InitBlankAccount func() Account
-var InitNewAccount func(io.Reader) (Account, error)
+var InitNewAccount func() (Account, error)
 var InitNewAccountFromPickled func(pickled, key []byte) (Account, error)
 
 // NewAccount creates a new Account.
-func NewAccount(r io.Reader) (Account, error) {
-	return InitNewAccount(r)
+func NewAccount() (Account, error) {
+	return InitNewAccount()
 }
 
 func NewBlankAccount() Account {

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 
 	"maunium.net/go/mautrix/id"
 
@@ -68,15 +67,15 @@ func AccountFromPickled(pickled, key []byte) (*Account, error) {
 	return a, nil
 }
 
-// NewAccount creates a new Account. If reader is nil, crypto/rand is used for the key creation.
-func NewAccount(reader io.Reader) (*Account, error) {
+// NewAccount creates a new Account.
+func NewAccount() (*Account, error) {
 	a := &Account{}
-	kPEd25519, err := crypto.Ed25519GenerateKey(reader)
+	kPEd25519, err := crypto.Ed25519GenerateKey()
 	if err != nil {
 		return nil, err
 	}
 	a.IdKeys.Ed25519 = kPEd25519
-	kPCurve25519, err := crypto.Curve25519GenerateKey(reader)
+	kPCurve25519, err := crypto.Curve25519GenerateKey()
 	if err != nil {
 		return nil, err
 	}
@@ -151,14 +150,14 @@ func (a *Account) MarkKeysAsPublished() {
 
 // GenOneTimeKeys generates a number of new one time keys. If the total number
 // of keys stored by this Account exceeds MaxOneTimeKeys then the older
-// keys are discarded. If reader is nil, crypto/rand is used for the key creation.
-func (a *Account) GenOneTimeKeys(reader io.Reader, num uint) error {
+// keys are discarded.
+func (a *Account) GenOneTimeKeys(num uint) error {
 	for i := uint(0); i < num; i++ {
 		key := crypto.OneTimeKey{
 			Published: false,
 			ID:        a.NextOneTimeKeyID,
 		}
-		newKP, err := crypto.Curve25519GenerateKey(reader)
+		newKP, err := crypto.Curve25519GenerateKey()
 		if err != nil {
 			return err
 		}
@@ -247,14 +246,15 @@ func (a *Account) RemoveOneTimeKeys(s olm.Session) error {
 	//if the key is a fallback or prevFallback, don't remove it
 }
 
-// GenFallbackKey generates a new fallback key. The old fallback key is stored in a.PrevFallbackKey overwriting any previous PrevFallbackKey. If reader is nil, crypto/rand is used for the key creation.
-func (a *Account) GenFallbackKey(reader io.Reader) error {
+// GenFallbackKey generates a new fallback key. The old fallback key is stored
+// in a.PrevFallbackKey overwriting any previous PrevFallbackKey.
+func (a *Account) GenFallbackKey() error {
 	a.PrevFallbackKey = a.CurrentFallbackKey
 	key := crypto.OneTimeKey{
 		Published: false,
 		ID:        a.NextOneTimeKeyID,
 	}
-	newKP, err := crypto.Curve25519GenerateKey(reader)
+	newKP, err := crypto.Curve25519GenerateKey()
 	if err != nil {
 		return err
 	}

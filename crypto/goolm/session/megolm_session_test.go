@@ -18,7 +18,7 @@ func TestOutboundPickleJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	kp, err := crypto.Ed25519GenerateKey(nil)
+	kp, err := crypto.Ed25519GenerateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +50,7 @@ func TestOutboundPickleJSON(t *testing.T) {
 func TestInboundPickleJSON(t *testing.T) {
 	pickleKey := []byte("secretKey")
 	sess := session.MegolmInboundSession{}
-	kp, err := crypto.Ed25519GenerateKey(nil)
+	kp, err := crypto.Ed25519GenerateKey()
 	if err != nil {
 		t.Fatal(err)
 	}

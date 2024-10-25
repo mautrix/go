@@ -80,12 +80,12 @@ func NewOlmSession() *OlmSession {
 func NewOutboundOlmSession(identityKeyAlice crypto.Curve25519KeyPair, identityKeyBob crypto.Curve25519PublicKey, oneTimeKeyBob crypto.Curve25519PublicKey) (*OlmSession, error) {
 	s := NewOlmSession()
 	//generate E_A
-	baseKey, err := crypto.Curve25519GenerateKey(nil)
+	baseKey, err := crypto.Curve25519GenerateKey()
 	if err != nil {
 		return nil, err
 	}
 	//generate T_0
-	ratchetKey, err := crypto.Curve25519GenerateKey(nil)
+	ratchetKey, err := crypto.Curve25519GenerateKey()
 	if err != nil {
 		return nil, err
 	}

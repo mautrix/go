@@ -14,15 +14,15 @@ import (
 
 func TestOlmSession(t *testing.T) {
 	pickleKey := []byte("secretKey")
-	aliceKeyPair, err := crypto.Curve25519GenerateKey(nil)
+	aliceKeyPair, err := crypto.Curve25519GenerateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
-	bobKeyPair, err := crypto.Curve25519GenerateKey(nil)
+	bobKeyPair, err := crypto.Curve25519GenerateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
-	bobOneTimeKey, err := crypto.Curve25519GenerateKey(nil)
+	bobOneTimeKey, err := crypto.Curve25519GenerateKey()
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -3,7 +3,6 @@ package crypto
 import (
 	"encoding/base64"
 	"fmt"
-	"io"
 
 	"maunium.net/go/mautrix/crypto/ed25519"
 	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
@@ -15,9 +14,9 @@ const (
 	ED25519SignatureSize = ed25519.SignatureSize //The length of a signature
 )
 
-// Ed25519GenerateKey creates a new ed25519 key pair. If reader is nil, the random data is taken from crypto/rand.
-func Ed25519GenerateKey(reader io.Reader) (Ed25519KeyPair, error) {
-	publicKey, privateKey, err := ed25519.GenerateKey(reader)
+// Ed25519GenerateKey creates a new ed25519 key pair.
+func Ed25519GenerateKey() (Ed25519KeyPair, error) {
+	publicKey, privateKey, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		return Ed25519KeyPair{}, err
 	}

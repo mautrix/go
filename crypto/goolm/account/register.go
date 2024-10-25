@@ -7,14 +7,12 @@
 package account
 
 import (
-	"io"
-
 	"maunium.net/go/mautrix/crypto/olm"
 )
 
 func init() {
-	olm.InitNewAccount = func(r io.Reader) (olm.Account, error) {
-		return NewAccount(r)
+	olm.InitNewAccount = func() (olm.Account, error) {
+		return NewAccount()
 	}
 	olm.InitBlankAccount = func() olm.Account {
 		return &Account{}

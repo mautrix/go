@@ -27,7 +27,7 @@ type OlmAccount struct {
 }
 
 func NewOlmAccount() *OlmAccount {
-	account, err := olm.NewAccount(nil)
+	account, err := olm.NewAccount()
 	if err != nil {
 		panic(err)
 	}
@@ -105,7 +105,7 @@ func (account *OlmAccount) getInitialKeys(userID id.UserID, deviceID id.DeviceID
 func (account *OlmAccount) getOneTimeKeys(userID id.UserID, deviceID id.DeviceID, currentOTKCount int) map[id.KeyID]mautrix.OneTimeKey {
 	newCount := int(account.Internal.MaxNumberOfOneTimeKeys()/2) - currentOTKCount
 	if newCount > 0 {
-		account.Internal.GenOneTimeKeys(nil, uint(newCount))
+		account.Internal.GenOneTimeKeys(uint(newCount))
 	}
 	oneTimeKeys := make(map[id.KeyID]mautrix.OneTimeKey)
 	internalKeys, err := account.Internal.OneTimeKeys()

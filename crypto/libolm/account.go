@@ -8,7 +8,6 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
-	"io"
 	"unsafe"
 
 	"github.com/tidwall/gjson"
@@ -24,8 +23,8 @@ type Account struct {
 }
 
 func init() {
-	olm.InitNewAccount = func(r io.Reader) (olm.Account, error) {
-		return NewAccount(r)
+	olm.InitNewAccount = func() (olm.Account, error) {
+		return NewAccount()
 	}
 	olm.InitBlankAccount = func() olm.Account {
 		return NewBlankAccount()
@@ -60,13 +59,10 @@ func NewBlankAccount() *Account {
 }
 
 // NewAccount creates a new [Account].
-func NewAccount(r io.Reader) (*Account, error) {
+func NewAccount() (*Account, error) {
 	a := NewBlankAccount()
 	random := make([]byte, a.createRandomLen()+1)
-	if r == nil {
-		r = rand.Reader
-	}
-	_, err := r.Read(random)
+	_, err := rand.Read(random)
 	if err != nil {
 		panic(olm.NotEnoughGoRandom)
 	}
@@ -307,12 +303,9 @@ func (a *Account) MaxNumberOfOneTimeKeys() uint {
 // GenOneTimeKeys generates a number of new one time keys.  If the total number
 // of keys stored by this Account exceeds MaxNumberOfOneTimeKeys then the old
 // keys are discarded.
-func (a *Account) GenOneTimeKeys(reader io.Reader, num uint) error {
+func (a *Account) GenOneTimeKeys(num uint) error {
 	random := make([]byte, a.genOneTimeKeysRandomLen(num)+1)
-	if reader == nil {
-		reader = rand.Reader
-	}
-	_, err := reader.Read(random)
+	_, err := rand.Read(random)
 	if err != nil {
 		return olm.NotEnoughGoRandom
 	}

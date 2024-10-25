@@ -8,7 +8,7 @@ import (
 )
 
 func TestEd25519(t *testing.T) {
-	keypair, err := crypto.Ed25519GenerateKey(nil)
+	keypair, err := crypto.Ed25519GenerateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -21,7 +21,7 @@ func TestEd25519(t *testing.T) {
 
 func TestEd25519Case1(t *testing.T) {
 	//64 bytes for ed25519 package
-	keyPair, err := crypto.Ed25519GenerateKey(nil)
+	keyPair, err := crypto.Ed25519GenerateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +46,7 @@ func TestEd25519Case1(t *testing.T) {
 
 func TestEd25519Pickle(t *testing.T) {
 	//create keypair
-	keyPair, err := crypto.Ed25519GenerateKey(nil)
+	keyPair, err := crypto.Ed25519GenerateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestEd25519Pickle(t *testing.T) {
 
 func TestEd25519PicklePubKeyOnly(t *testing.T) {
 	//create keypair
-	keyPair, err := crypto.Ed25519GenerateKey(nil)
+	keyPair, err := crypto.Ed25519GenerateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +109,7 @@ func TestEd25519PicklePubKeyOnly(t *testing.T) {
 
 func TestEd25519PicklePrivKeyOnly(t *testing.T) {
 	//create keypair
-	keyPair, err := crypto.Ed25519GenerateKey(nil)
+	keyPair, err := crypto.Ed25519GenerateKey()
 	if err != nil {
 		t.Fatal(err)
 	}

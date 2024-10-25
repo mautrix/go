@@ -49,10 +49,10 @@ func ensureAccountsEqual(t *testing.T, a, b olm.Account) {
 // TestAccount_UnpickleLibolmToGoolm tests creating an account from libolm,
 // pickling it, and importing it into goolm.
 func TestAccount_UnpickleLibolmToGoolm(t *testing.T) {
-	libolmAccount, err := libolm.NewAccount(nil)
+	libolmAccount, err := libolm.NewAccount()
 	require.NoError(t, err)
 
-	require.NoError(t, libolmAccount.GenOneTimeKeys(nil, 50))
+	require.NoError(t, libolmAccount.GenOneTimeKeys(50))
 
 	libolmPickled, err := libolmAccount.Pickle([]byte("test"))
 	require.NoError(t, err)
@@ -70,10 +70,10 @@ func TestAccount_UnpickleLibolmToGoolm(t *testing.T) {
 // TestAccount_UnpickleGoolmToLibolm tests creating an account from goolm,
 // pickling it, and importing it into libolm.
 func TestAccount_UnpickleGoolmToLibolm(t *testing.T) {
-	goolmAccount, err := account.NewAccount(nil)
+	goolmAccount, err := account.NewAccount()
 	require.NoError(t, err)
 
-	require.NoError(t, goolmAccount.GenOneTimeKeys(nil, 50))
+	require.NoError(t, goolmAccount.GenOneTimeKeys(50))
 
 	goolmPickled, err := goolmAccount.Pickle([]byte("test"))
 	require.NoError(t, err)
@@ -91,7 +91,7 @@ func TestAccount_UnpickleGoolmToLibolm(t *testing.T) {
 func FuzzAccount_Sign(f *testing.F) {
 	f.Add([]byte("anything"))
 
-	libolmAccount := exerrors.Must(libolm.NewAccount(nil))
+	libolmAccount := exerrors.Must(libolm.NewAccount())
 	goolmAccount := exerrors.Must(account.AccountFromPickled(exerrors.Must(libolmAccount.Pickle([]byte("test"))), []byte("test")))
 
 	f.Fuzz(func(t *testing.T, message []byte) {

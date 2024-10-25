@@ -26,7 +26,7 @@ func initializeRatchets() (*ratchet.Ratchet, *ratchet.Ratchet, error) {
 	aliceRatchet := ratchet.New()
 	bobRatchet := ratchet.New()
 
-	aliceKey, err := crypto.Curve25519GenerateKey(nil)
+	aliceKey, err := crypto.Curve25519GenerateKey()
 	if err != nil {
 		return nil, nil, err
 	}

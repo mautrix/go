@@ -17,15 +17,15 @@ import (
 )
 
 func TestAccount(t *testing.T) {
-	firstAccount, err := account.NewAccount(nil)
+	firstAccount, err := account.NewAccount()
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = firstAccount.GenFallbackKey(nil)
+	err = firstAccount.GenFallbackKey()
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = firstAccount.GenOneTimeKeys(nil, 2)
+	err = firstAccount.GenOneTimeKeys(2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,19 +118,19 @@ func TestAccountPickleJSON(t *testing.T) {
 }
 
 func TestSessions(t *testing.T) {
-	aliceAccount, err := account.NewAccount(nil)
+	aliceAccount, err := account.NewAccount()
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = aliceAccount.GenOneTimeKeys(nil, 5)
+	err = aliceAccount.GenOneTimeKeys(5)
 	if err != nil {
 		t.Fatal(err)
 	}
-	bobAccount, err := account.NewAccount(nil)
+	bobAccount, err := account.NewAccount()
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = bobAccount.GenOneTimeKeys(nil, 5)
+	err = bobAccount.GenOneTimeKeys(5)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -217,7 +217,7 @@ func TestOldAccountPickle(t *testing.T) {
 		"K/A/8TOu9iK2hDFszy6xETiousHnHgh2ZGbRUh4pQx+YMm8ZdNZeRnwFGLnrWyf9" +
 		"O5TmXua1FcU")
 	pickleKey := []byte("")
-	account, err := account.NewAccount(nil)
+	account, err := account.NewAccount()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,16 +232,16 @@ func TestOldAccountPickle(t *testing.T) {
 }
 
 func TestLoopback(t *testing.T) {
-	accountA, err := account.NewAccount(nil)
+	accountA, err := account.NewAccount()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	accountB, err := account.NewAccount(nil)
+	accountB, err := account.NewAccount()
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = accountB.GenOneTimeKeys(nil, 42)
+	err = accountB.GenOneTimeKeys(42)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -328,16 +328,16 @@ func TestLoopback(t *testing.T) {
 }
 
 func TestMoreMessages(t *testing.T) {
-	accountA, err := account.NewAccount(nil)
+	accountA, err := account.NewAccount()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	accountB, err := account.NewAccount(nil)
+	accountB, err := account.NewAccount()
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = accountB.GenOneTimeKeys(nil, 42)
+	err = accountB.GenOneTimeKeys(42)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -411,16 +411,16 @@ func TestMoreMessages(t *testing.T) {
 }
 
 func TestFallbackKey(t *testing.T) {
-	accountA, err := account.NewAccount(nil)
+	accountA, err := account.NewAccount()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	accountB, err := account.NewAccount(nil)
+	accountB, err := account.NewAccount()
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = accountB.GenFallbackKey(nil)
+	err = accountB.GenFallbackKey()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -483,7 +483,7 @@ func TestFallbackKey(t *testing.T) {
 	}
 
 	// create a new fallback key for B (the old fallback should still be usable)
-	err = accountB.GenFallbackKey(nil)
+	err = accountB.GenFallbackKey()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -602,7 +602,7 @@ func TestOldV3AccountPickle(t *testing.T) {
 }
 
 func TestAccountSign(t *testing.T) {
-	accountA, err := account.NewAccount(nil)
+	accountA, err := account.NewAccount()
 	require.NoError(t, err)
 	plainText := []byte("Hello, World")
 	signatureB64, err := accountA.Sign(plainText)
