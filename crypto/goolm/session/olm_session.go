@@ -2,6 +2,7 @@ package session
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
 	"strings"
@@ -203,8 +204,8 @@ func (s *OlmSession) ID() id.SessionID {
 	copy(message, s.AliceIdentityKey)
 	copy(message[crypto.Curve25519PrivateKeyLength:], s.AliceBaseKey)
 	copy(message[2*crypto.Curve25519PrivateKeyLength:], s.BobOneTimeKey)
-	hash := crypto.SHA256(message)
-	res := id.SessionID(goolmbase64.Encode(hash))
+	hash := sha256.Sum256(message)
+	res := id.SessionID(goolmbase64.Encode(hash[:]))
 	return res
 }
 

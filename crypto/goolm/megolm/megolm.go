@@ -2,7 +2,9 @@
 package megolm
 
 import (
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"fmt"
 
 	"maunium.net/go/mautrix/crypto/goolm/cipher"
@@ -63,8 +65,9 @@ func NewWithRandom(counter uint32) (*Ratchet, error) {
 
 // rehashPart rehases the part of the ratchet data with the base defined as from storing into the target to.
 func (m *Ratchet) rehashPart(from, to int) {
-	newData := crypto.HMACSHA256(m.Data[from*RatchetPartLength:from*RatchetPartLength+RatchetPartLength], hashKeySeeds[to])
-	copy(m.Data[to*RatchetPartLength:], newData[:RatchetPartLength])
+	hash := hmac.New(sha256.New, m.Data[from*RatchetPartLength:from*RatchetPartLength+RatchetPartLength])
+	hash.Write(hashKeySeeds[to])
+	copy(m.Data[to*RatchetPartLength:], hash.Sum(nil))
 }
 
 // Advance advances the ratchet one step.

@@ -1,6 +1,9 @@
 package ratchet
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
 	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
 )
@@ -18,7 +21,9 @@ type chainKey struct {
 
 // advance advances the chain
 func (c *chainKey) advance() {
-	c.Key = crypto.HMACSHA256(c.Key, []byte{chainKeySeed})
+	hash := hmac.New(sha256.New, c.Key)
+	hash.Write([]byte{chainKeySeed})
+	c.Key = hash.Sum(nil)
 	c.Index++
 }
 

@@ -2,10 +2,13 @@ package cipher
 
 import (
 	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
 	"io"
 
+	"golang.org/x/crypto/hkdf"
+
 	"maunium.net/go/mautrix/crypto/aescbc"
-	"maunium.net/go/mautrix/crypto/goolm/crypto"
 )
 
 // derivedAESKeys stores the derived keys for the AESSHA256 cipher
@@ -17,9 +20,9 @@ type derivedAESKeys struct {
 
 // deriveAESKeys derives three keys for the AESSHA256 cipher
 func deriveAESKeys(kdfInfo []byte, key []byte) (derivedAESKeys, error) {
-	hkdf := crypto.HKDFSHA256(key, nil, kdfInfo)
+	kdf := hkdf.New(sha256.New, key, nil, kdfInfo)
 	keymatter := make([]byte, 80)
-	_, err := io.ReadFull(hkdf, keymatter)
+	_, err := io.ReadFull(kdf, keymatter)
 	return derivedAESKeys{
 		key:     keymatter[:32],
 		hmacKey: keymatter[32:64],
@@ -63,7 +66,9 @@ func (c AESSHA256) MAC(key, message []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return crypto.HMACSHA256(keys.hmacKey, message), nil
+	hash := hmac.New(sha256.New, keys.hmacKey)
+	_, err = hash.Write(message)
+	return hash.Sum(nil), err
 }
 
 // Verify checks the MAC of the message using the key against the givenMAC. The key is used to derive the actual mac key (32 bytes).

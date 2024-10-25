@@ -2,8 +2,12 @@
 package ratchet
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
 	"fmt"
 	"io"
+
+	"golang.org/x/crypto/hkdf"
 
 	"maunium.net/go/mautrix/crypto/goolm/cipher"
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
@@ -70,7 +74,7 @@ func New() *Ratchet {
 
 // InitializeAsBob initializes this ratchet from a receiving point of view (only first message).
 func (r *Ratchet) InitializeAsBob(sharedSecret []byte, theirRatchetKey crypto.Curve25519PublicKey) error {
-	derivedSecretsReader := crypto.HKDFSHA256(sharedSecret, nil, KdfInfo.Root)
+	derivedSecretsReader := hkdf.New(sha256.New, sharedSecret, nil, KdfInfo.Root)
 	derivedSecrets := make([]byte, 2*sharedKeyLength)
 	if _, err := io.ReadFull(derivedSecretsReader, derivedSecrets); err != nil {
 		return err
@@ -83,7 +87,7 @@ func (r *Ratchet) InitializeAsBob(sharedSecret []byte, theirRatchetKey crypto.Cu
 
 // InitializeAsAlice initializes this ratchet from a sending point of view (only first message).
 func (r *Ratchet) InitializeAsAlice(sharedSecret []byte, ourRatchetKey crypto.Curve25519KeyPair) error {
-	derivedSecretsReader := crypto.HKDFSHA256(sharedSecret, nil, KdfInfo.Root)
+	derivedSecretsReader := hkdf.New(sha256.New, sharedSecret, nil, KdfInfo.Root)
 	derivedSecrets := make([]byte, 2*sharedKeyLength)
 	if _, err := io.ReadFull(derivedSecretsReader, derivedSecrets); err != nil {
 		return err
@@ -192,7 +196,7 @@ func (r *Ratchet) advanceRootKey(newRatchetKey crypto.Curve25519KeyPair, oldRatc
 	if err != nil {
 		return nil, err
 	}
-	derivedSecretsReader := crypto.HKDFSHA256(sharedSecret, r.RootKey, KdfInfo.Ratchet)
+	derivedSecretsReader := hkdf.New(sha256.New, sharedSecret, r.RootKey, KdfInfo.Ratchet)
 	derivedSecrets := make([]byte, 2*sharedKeyLength)
 	if _, err := io.ReadFull(derivedSecretsReader, derivedSecrets); err != nil {
 		return nil, err
@@ -203,10 +207,12 @@ func (r *Ratchet) advanceRootKey(newRatchetKey crypto.Curve25519KeyPair, oldRatc
 
 // createMessageKeys returns the messageKey derived from the chainKey
 func (r Ratchet) createMessageKeys(chainKey chainKey) messageKey {
-	res := messageKey{}
-	res.Key = crypto.HMACSHA256(chainKey.Key, []byte{messageKeySeed})
-	res.Index = chainKey.Index
-	return res
+	hash := hmac.New(sha256.New, chainKey.Key)
+	hash.Write([]byte{messageKeySeed})
+	return messageKey{
+		Key:   hash.Sum(nil),
+		Index: chainKey.Index,
+	}
 }
 
 // decryptForExistingChain returns the decrypted message by using the chain. The MAC of the rawMessage is verified.
