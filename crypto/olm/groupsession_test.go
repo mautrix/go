@@ -31,7 +31,8 @@ func TestEncryptDecrypt_GoolmToLibolm(t *testing.T) {
 }
 
 func TestEncryptDecrypt_LibolmToGoolm(t *testing.T) {
-	libolmOutbound := libolm.NewOutboundGroupSession()
+	libolmOutbound, err := libolm.NewOutboundGroupSession()
+	require.NoError(t, err)
 	goolmInbound, err := session.NewMegolmInboundSession([]byte(libolmOutbound.Key()))
 	require.NoError(t, err)
 

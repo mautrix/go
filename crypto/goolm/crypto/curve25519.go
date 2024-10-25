@@ -1,8 +1,8 @@
 package crypto
 
 import (
-	"bytes"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/base64"
 
 	"golang.org/x/crypto/curve25519"
@@ -15,6 +15,12 @@ const (
 	Curve25519PrivateKeyLength = curve25519.ScalarSize //The length of the private key.
 	Curve25519PublicKeyLength  = 32
 )
+
+// Curve25519KeyPair stores both parts of a curve25519 key.
+type Curve25519KeyPair struct {
+	PrivateKey Curve25519PrivateKey `json:"private,omitempty"`
+	PublicKey  Curve25519PublicKey  `json:"public,omitempty"`
+}
 
 // Curve25519GenerateKey creates a new curve25519 key pair.
 func Curve25519GenerateKey() (Curve25519KeyPair, error) {
@@ -34,19 +40,10 @@ func Curve25519GenerateKey() (Curve25519KeyPair, error) {
 // Curve25519GenerateFromPrivate creates a new curve25519 key pair with the private key given.
 func Curve25519GenerateFromPrivate(private Curve25519PrivateKey) (Curve25519KeyPair, error) {
 	publicKey, err := private.PubKey()
-	if err != nil {
-		return Curve25519KeyPair{}, err
-	}
 	return Curve25519KeyPair{
 		PrivateKey: private,
 		PublicKey:  Curve25519PublicKey(publicKey),
-	}, nil
-}
-
-// Curve25519KeyPair stores both parts of a curve25519 key.
-type Curve25519KeyPair struct {
-	PrivateKey Curve25519PrivateKey `json:"private,omitempty"`
-	PublicKey  Curve25519PublicKey  `json:"public,omitempty"`
+	}, err
 }
 
 // B64Encoded returns a base64 encoded string of the public key.
@@ -86,7 +83,7 @@ type Curve25519PrivateKey []byte
 
 // Equal compares the private key to the given private key.
 func (c Curve25519PrivateKey) Equal(x Curve25519PrivateKey) bool {
-	return bytes.Equal(c, x)
+	return subtle.ConstantTimeCompare(c, x) == 1
 }
 
 // PubKey returns the public key derived from the private key.
@@ -104,7 +101,7 @@ type Curve25519PublicKey []byte
 
 // Equal compares the public key to the given public key.
 func (c Curve25519PublicKey) Equal(x Curve25519PublicKey) bool {
-	return bytes.Equal(c, x)
+	return subtle.ConstantTimeCompare(c, x) == 1
 }
 
 // B64Encoded returns a base64 encoded string of the public key.

@@ -48,16 +48,8 @@ func init() {
 		}
 		return MegolmOutboundSessionFromPickled(pickled, key)
 	}
-	olm.InitNewOutboundGroupSession = func() olm.OutboundGroupSession {
-		session, err := NewMegolmOutboundSession()
-		if err != nil {
-			panic(err)
-		}
-		return session
-	}
-	olm.InitNewBlankOutboundGroupSession = func() olm.OutboundGroupSession {
-		return &MegolmOutboundSession{}
-	}
+	olm.InitNewOutboundGroupSession = func() (olm.OutboundGroupSession, error) { return NewMegolmOutboundSession() }
+	olm.InitNewBlankOutboundGroupSession = func() olm.OutboundGroupSession { return &MegolmOutboundSession{} }
 
 	// Olm Session
 	olm.InitSessionFromPickled = func(pickled, key []byte) (olm.Session, error) {

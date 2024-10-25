@@ -179,7 +179,10 @@ func (mach *OlmMachine) newOutboundGroupSession(ctx context.Context, roomID id.R
 			Msg("Failed to get encryption event in room")
 		return nil, fmt.Errorf("failed to get encryption event in room %s: %w", roomID, err)
 	}
-	session := NewOutboundGroupSession(roomID, encryptionEvent)
+	session, err := NewOutboundGroupSession(roomID, encryptionEvent)
+	if err != nil {
+		return nil, err
+	}
 	if !mach.DontStoreOutboundKeys {
 		signingKey, idKey := mach.account.Keys()
 		err := mach.createGroupSession(ctx, idKey, signingKey, roomID, session.ID(), session.Internal.Key(), session.MaxAge, session.MaxMessages, false)

@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 
 	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
-	"maunium.net/go/mautrix/id"
 )
 
 // OneTimeKey stores the information about a one time key.
@@ -16,20 +15,11 @@ type OneTimeKey struct {
 }
 
 // Equal compares the one time key to the given one.
-func (otk OneTimeKey) Equal(s OneTimeKey) bool {
-	if otk.ID != s.ID {
-		return false
-	}
-	if otk.Published != s.Published {
-		return false
-	}
-	if !otk.Key.PrivateKey.Equal(s.Key.PrivateKey) {
-		return false
-	}
-	if !otk.Key.PublicKey.Equal(s.Key.PublicKey) {
-		return false
-	}
-	return true
+func (otk OneTimeKey) Equal(other OneTimeKey) bool {
+	return otk.ID == other.ID &&
+		otk.Published == other.Published &&
+		otk.Key.PrivateKey.Equal(other.Key.PrivateKey) &&
+		otk.Key.PublicKey.Equal(other.Key.PublicKey)
 }
 
 // PickleLibOlm pickles the key pair into the encoder.
@@ -50,14 +40,7 @@ func (c *OneTimeKey) UnpickleLibOlm(decoder *libolmpickle.Decoder) (err error) {
 	return c.Key.UnpickleLibOlm(decoder)
 }
 
-// KeyIDEncoded returns the base64 encoded id.
+// KeyIDEncoded returns the base64 encoded key ID.
 func (c OneTimeKey) KeyIDEncoded() string {
-	resSlice := make([]byte, 4)
-	binary.BigEndian.PutUint32(resSlice, c.ID)
-	return base64.RawStdEncoding.EncodeToString(resSlice)
-}
-
-// PublicKeyEncoded returns the base64 encoded public key
-func (c OneTimeKey) PublicKeyEncoded() id.Curve25519 {
-	return c.Key.PublicKey.B64Encoded()
+	return base64.RawStdEncoding.EncodeToString(binary.BigEndian.AppendUint32(nil, c.ID))
 }

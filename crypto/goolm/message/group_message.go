@@ -32,7 +32,7 @@ func (r *GroupMessage) Decode(input []byte) error {
 	//first Byte is always version
 	r.Version = input[0]
 	curPos := 1
-	for curPos < len(input)-countMACBytesGroupMessage-crypto.ED25519SignatureSize {
+	for curPos < len(input)-countMACBytesGroupMessage-crypto.Ed25519SignatureSize {
 		//Read Key
 		curKey, readBytes := decodeVarInt(input[curPos:])
 		if err := checkDecodeErr(readBytes); err != nil {
@@ -98,7 +98,10 @@ func (r *GroupMessage) EncodeAndMacAndSign(macKey []byte, cipher cipher.Cipher, 
 		out = append(out, mac[:countMACBytesGroupMessage]...)
 	}
 	if signKey != nil {
-		signature := signKey.Sign(out)
+		signature, err := signKey.Sign(out)
+		if err != nil {
+			return nil, err
+		}
 		out = append(out, signature...)
 	}
 	return out, nil
@@ -120,8 +123,8 @@ func (r *GroupMessage) VerifySignature(key crypto.Ed25519PublicKey, message, giv
 
 // VerifySignature verifies the signature taken from the message to the calculated signature of the message.
 func (r *GroupMessage) VerifySignatureInline(key crypto.Ed25519PublicKey, message []byte) bool {
-	signature := message[len(message)-crypto.ED25519SignatureSize:]
-	message = message[:len(message)-crypto.ED25519SignatureSize]
+	signature := message[len(message)-crypto.Ed25519SignatureSize:]
+	message = message[:len(message)-crypto.Ed25519SignatureSize]
 	return key.Verify(message, signature)
 }
 
@@ -136,7 +139,7 @@ func (r *GroupMessage) VerifyMAC(key []byte, cipher cipher.Cipher, message, give
 
 // VerifyMACInline verifies the MAC taken from the message to the calculated MAC of the message.
 func (r *GroupMessage) VerifyMACInline(key []byte, cipher cipher.Cipher, message []byte) (bool, error) {
-	startMAC := len(message) - countMACBytesGroupMessage - crypto.ED25519SignatureSize
+	startMAC := len(message) - countMACBytesGroupMessage - crypto.Ed25519SignatureSize
 	endMAC := startMAC + countMACBytesGroupMessage
 	suplMac := message[startMAC:endMAC]
 	message = message[:startMAC]

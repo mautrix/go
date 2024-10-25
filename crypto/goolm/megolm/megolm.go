@@ -161,8 +161,8 @@ func (r Ratchet) SessionSharingMessage(key crypto.Ed25519KeyPair) ([]byte, error
 	m := message.MegolmSessionSharing{}
 	m.Counter = r.Counter
 	m.RatchetData = r.Data
-	encoded := m.EncodeAndSign(key)
-	return goolmbase64.Encode(encoded), nil
+	encoded, err := m.EncodeAndSign(key)
+	return goolmbase64.Encode(encoded), err
 }
 
 // SessionExportMessage creates a message in the session export format.

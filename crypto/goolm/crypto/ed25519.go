@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	ED25519SignatureSize = ed25519.SignatureSize //The length of a signature
+	Ed25519SignatureSize = ed25519.SignatureSize //The length of a signature
 )
 
 // Ed25519GenerateKey creates a new ed25519 key pair.
@@ -50,7 +50,7 @@ func (c Ed25519KeyPair) B64Encoded() id.Ed25519 {
 }
 
 // Sign returns the signature for the message.
-func (c Ed25519KeyPair) Sign(message []byte) []byte {
+func (c Ed25519KeyPair) Sign(message []byte) ([]byte, error) {
 	return c.PrivateKey.Sign(message)
 }
 
@@ -96,12 +96,8 @@ func (c Ed25519PrivateKey) PubKey() Ed25519PublicKey {
 }
 
 // Sign returns the signature for the message.
-func (c Ed25519PrivateKey) Sign(message []byte) []byte {
-	signature, err := ed25519.PrivateKey(c).Sign(nil, message, &ed25519.Options{})
-	if err != nil {
-		panic(err)
-	}
-	return signature
+func (c Ed25519PrivateKey) Sign(message []byte) ([]byte, error) {
+	return ed25519.PrivateKey(c).Sign(nil, message, &ed25519.Options{})
 }
 
 // Ed25519PublicKey represents the public key for ed25519 usage. This is just a wrapper.

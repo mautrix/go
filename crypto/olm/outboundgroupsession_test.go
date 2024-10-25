@@ -12,7 +12,8 @@ import (
 )
 
 func TestMegolmOutboundSessionPickle_RoundtripThroughGoolm(t *testing.T) {
-	libolmSession := libolm.NewOutboundGroupSession()
+	libolmSession, err := libolm.NewOutboundGroupSession()
+	require.NoError(t, err)
 	libolmPickled, err := libolmSession.Pickle([]byte("test"))
 	require.NoError(t, err)
 
@@ -24,7 +25,8 @@ func TestMegolmOutboundSessionPickle_RoundtripThroughGoolm(t *testing.T) {
 
 	assert.Equal(t, libolmPickled, goolmPickled, "pickled versions are not the same")
 
-	libolmSession2 := libolm.NewOutboundGroupSession()
+	libolmSession2, err := libolm.NewOutboundGroupSession()
+	require.NoError(t, err)
 	err = libolmSession2.Unpickle(bytes.Clone(goolmPickled), []byte("test"))
 	require.NoError(t, err)
 
@@ -38,7 +40,8 @@ func TestMegolmOutboundSessionPickle_RoundtripThroughLibolm(t *testing.T) {
 	goolmPickled, err := goolmSession.Pickle([]byte("test"))
 	require.NoError(t, err)
 
-	libolmSession := libolm.NewOutboundGroupSession()
+	libolmSession, err := libolm.NewOutboundGroupSession()
+	require.NoError(t, err)
 	err = libolmSession.Unpickle(bytes.Clone(goolmPickled), []byte("test"))
 	require.NoError(t, err)
 
@@ -55,7 +58,8 @@ func TestMegolmOutboundSessionPickle_RoundtripThroughLibolm(t *testing.T) {
 }
 
 func TestMegolmOutboundSessionPickleLibolm(t *testing.T) {
-	libolmSession := libolm.NewOutboundGroupSession()
+	libolmSession, err := libolm.NewOutboundGroupSession()
+	require.NoError(t, err)
 	libolmPickled, err := libolmSession.Pickle([]byte("test"))
 	require.NoError(t, err)
 
@@ -77,7 +81,8 @@ func TestMegolmOutboundSessionPickleGoolm(t *testing.T) {
 	goolmPickled, err := goolmSession.Pickle([]byte("test"))
 	require.NoError(t, err)
 
-	libolmSession := libolm.NewOutboundGroupSession()
+	libolmSession, err := libolm.NewOutboundGroupSession()
+	require.NoError(t, err)
 	err = libolmSession.Unpickle(bytes.Clone(goolmPickled), []byte("test"))
 	require.NoError(t, err)
 	libolmPickled, err := libolmSession.Pickle([]byte("test"))
@@ -98,7 +103,8 @@ func FuzzMegolmOutboundSession_Encrypt(f *testing.F) {
 			t.Skip("empty plaintext is not supported")
 		}
 
-		libolmSession := libolm.NewOutboundGroupSession()
+		libolmSession, err := libolm.NewOutboundGroupSession()
+		require.NoError(t, err)
 		libolmPickled, err := libolmSession.Pickle([]byte("test"))
 		require.NoError(t, err)
 

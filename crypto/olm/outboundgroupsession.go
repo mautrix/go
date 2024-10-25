@@ -34,7 +34,7 @@ type OutboundGroupSession interface {
 }
 
 var InitNewOutboundGroupSessionFromPickled func(pickled, key []byte) (OutboundGroupSession, error)
-var InitNewOutboundGroupSession func() OutboundGroupSession
+var InitNewOutboundGroupSession func() (OutboundGroupSession, error)
 var InitNewBlankOutboundGroupSession func() OutboundGroupSession
 
 // OutboundGroupSessionFromPickled loads an OutboundGroupSession from a pickled
@@ -47,7 +47,7 @@ func OutboundGroupSessionFromPickled(pickled, key []byte) (OutboundGroupSession,
 }
 
 // NewOutboundGroupSession creates a new outbound group session.
-func NewOutboundGroupSession() OutboundGroupSession {
+func NewOutboundGroupSession() (OutboundGroupSession, error) {
 	return InitNewOutboundGroupSession()
 }
 

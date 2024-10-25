@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/stretchr/testify/require"
 	"go.mau.fi/util/dbutil"
 
 	"maunium.net/go/mautrix/crypto/olm"
@@ -195,7 +196,8 @@ func TestStoreOutboundMegolmSession(t *testing.T) {
 				t.Errorf("Error retrieving outbound session: %v", err)
 			}
 
-			outbound := NewOutboundGroupSession("room1", nil)
+			outbound, err := NewOutboundGroupSession("room1", nil)
+			require.NoError(t, err)
 			err = store.AddOutboundGroupSession(context.TODO(), outbound)
 			if err != nil {
 				t.Errorf("Error inserting outbound session: %v", err)

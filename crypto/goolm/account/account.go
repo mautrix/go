@@ -111,8 +111,11 @@ func (a *Account) IdentityKeys() (id.Ed25519, id.Curve25519, error) {
 func (a *Account) Sign(message []byte) ([]byte, error) {
 	if len(message) == 0 {
 		return nil, fmt.Errorf("sign: %w", olm.ErrEmptyInput)
+	} else if signature, err := a.IdKeys.Ed25519.Sign(message); err != nil {
+		return nil, err
+	} else {
+		return []byte(base64.RawStdEncoding.EncodeToString(signature)), nil
 	}
-	return []byte(base64.RawStdEncoding.EncodeToString(a.IdKeys.Ed25519.Sign(message))), nil
 }
 
 // OneTimeKeys returns the public parts of the unpublished one time keys of the Account.
@@ -122,7 +125,7 @@ func (a *Account) OneTimeKeys() (map[string]id.Curve25519, error) {
 	oneTimeKeys := make(map[string]id.Curve25519)
 	for _, curKey := range a.OTKeys {
 		if !curKey.Published {
-			oneTimeKeys[curKey.KeyIDEncoded()] = id.Curve25519(curKey.PublicKeyEncoded())
+			oneTimeKeys[curKey.KeyIDEncoded()] = curKey.Key.PublicKey.B64Encoded()
 		}
 	}
 	return oneTimeKeys, nil
@@ -259,7 +262,7 @@ func (a *Account) GenFallbackKey() error {
 func (a *Account) FallbackKey() map[string]id.Curve25519 {
 	keys := make(map[string]id.Curve25519)
 	if a.NumFallbackKeys >= 1 {
-		keys[a.CurrentFallbackKey.KeyIDEncoded()] = id.Curve25519(a.CurrentFallbackKey.PublicKeyEncoded())
+		keys[a.CurrentFallbackKey.KeyIDEncoded()] = a.CurrentFallbackKey.Key.PublicKey.B64Encoded()
 	}
 	return keys
 }
@@ -286,7 +289,7 @@ func (a *Account) FallbackKeyJSON() ([]byte, error) {
 func (a *Account) FallbackKeyUnpublished() map[string]id.Curve25519 {
 	keys := make(map[string]id.Curve25519)
 	if a.NumFallbackKeys >= 1 && !a.CurrentFallbackKey.Published {
-		keys[a.CurrentFallbackKey.KeyIDEncoded()] = id.Curve25519(a.CurrentFallbackKey.PublicKeyEncoded())
+		keys[a.CurrentFallbackKey.KeyIDEncoded()] = a.CurrentFallbackKey.Key.PublicKey.B64Encoded()
 	}
 	return keys
 }

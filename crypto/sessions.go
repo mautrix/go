@@ -180,9 +180,13 @@ type OutboundGroupSession struct {
 	content *event.RoomKeyEventContent
 }
 
-func NewOutboundGroupSession(roomID id.RoomID, encryptionContent *event.EncryptionEventContent) *OutboundGroupSession {
+func NewOutboundGroupSession(roomID id.RoomID, encryptionContent *event.EncryptionEventContent) (*OutboundGroupSession, error) {
+	internal, err := olm.NewOutboundGroupSession()
+	if err != nil {
+		return nil, err
+	}
 	ogs := &OutboundGroupSession{
-		Internal: olm.NewOutboundGroupSession(),
+		Internal: internal,
 		ExpirationMixin: ExpirationMixin{
 			TimeMixin: TimeMixin{
 				CreationTime:      time.Now(),
@@ -206,7 +210,7 @@ func NewOutboundGroupSession(roomID id.RoomID, encryptionContent *event.Encrypti
 			ogs.MaxMessages = min(max(encryptionContent.RotationPeriodMessages, 1), 10000)
 		}
 	}
-	return ogs
+	return ogs, nil
 }
 
 func (ogs *OutboundGroupSession) ShareContent() event.Content {

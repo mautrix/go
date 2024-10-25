@@ -20,15 +20,15 @@ type MegolmSessionSharing struct {
 }
 
 // Encode returns the encoded message in the correct format with the signature by key appended.
-func (s MegolmSessionSharing) EncodeAndSign(key crypto.Ed25519KeyPair) []byte {
+func (s MegolmSessionSharing) EncodeAndSign(key crypto.Ed25519KeyPair) ([]byte, error) {
 	output := make([]byte, 229)
 	output[0] = sessionSharingVersion
 	binary.BigEndian.PutUint32(output[1:], s.Counter)
 	copy(output[5:], s.RatchetData[:])
 	copy(output[133:], key.PublicKey)
-	signature := key.Sign(output[:165])
+	signature, err := key.Sign(output[:165])
 	copy(output[165:], signature)
-	return output
+	return output, err
 }
 
 // VerifyAndDecode verifies the input and populates the struct with the data encoded in input.

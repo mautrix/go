@@ -28,32 +28,28 @@ func init() {
 		s := NewBlankOutboundGroupSession()
 		return s, s.Unpickle(pickled, key)
 	}
-	olm.InitNewOutboundGroupSession = func() olm.OutboundGroupSession {
-		return NewOutboundGroupSession()
-	}
-	olm.InitNewBlankOutboundGroupSession = func() olm.OutboundGroupSession {
-		return NewBlankOutboundGroupSession()
-	}
+	olm.InitNewOutboundGroupSession = func() (olm.OutboundGroupSession, error) { return NewOutboundGroupSession() }
+	olm.InitNewBlankOutboundGroupSession = func() olm.OutboundGroupSession { return NewBlankOutboundGroupSession() }
 }
 
 // Ensure that [OutboundGroupSession] implements [olm.OutboundGroupSession].
 var _ olm.OutboundGroupSession = (*OutboundGroupSession)(nil)
 
-func NewOutboundGroupSession() *OutboundGroupSession {
+func NewOutboundGroupSession() (*OutboundGroupSession, error) {
 	s := NewBlankOutboundGroupSession()
 	random := make([]byte, s.createRandomLen()+1)
 	_, err := rand.Read(random)
 	if err != nil {
-		panic(olm.NotEnoughGoRandom)
+		return nil, err
 	}
 	r := C.olm_init_outbound_group_session(
 		(*C.OlmOutboundGroupSession)(s.int),
 		(*C.uint8_t)(&random[0]),
 		C.size_t(len(random)))
 	if r == errorVal() {
-		panic(s.lastError())
+		return nil, s.lastError()
 	}
-	return s
+	return s, nil
 }
 
 // outboundGroupSessionSize is the size of an outbound group session object in

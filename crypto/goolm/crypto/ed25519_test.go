@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"maunium.net/go/mautrix/crypto/ed25519"
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
@@ -17,7 +18,8 @@ func TestEd25519(t *testing.T) {
 	keypair, err := crypto.Ed25519GenerateKey()
 	assert.NoError(t, err)
 	message := []byte("test message")
-	signature := keypair.Sign(message)
+	signature, err := keypair.Sign(message)
+	require.NoError(t, err)
 	assert.True(t, keypair.Verify(message, signature))
 }
 
@@ -29,7 +31,8 @@ func TestEd25519Case1(t *testing.T) {
 
 	keyPair2 := crypto.Ed25519GenerateFromPrivate(keyPair.PrivateKey)
 	assert.Equal(t, keyPair, keyPair2, "not equal key pairs")
-	signature := keyPair.Sign(message)
+	signature, err := keyPair.Sign(message)
+	require.NoError(t, err)
 	verified := keyPair.Verify(message, signature)
 	assert.True(t, verified, "message did not verify although it should")
 
