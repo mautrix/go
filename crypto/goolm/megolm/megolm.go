@@ -22,6 +22,9 @@ const (
 	protocolVersion   = 3
 	RatchetParts      = 4       // number of ratchet parts
 	RatchetPartLength = 256 / 8 // length of each ratchet part in bytes
+
+	RatchetPickleLength = (RatchetParts * RatchetPartLength) + //Data
+		libolmpickle.PickleUInt32Length // Counter
 )
 
 var RatchetCipher = cipher.NewAESSHA256([]byte("MEGOLM_KEYS"))
@@ -219,17 +222,10 @@ func (r *Ratchet) UnpickleLibOlm(unpickled []byte) (int, error) {
 // PickleLibOlm encodes the ratchet into target. target has to have a size of at least PickleLen() and is written to from index 0.
 // It returns the number of bytes written.
 func (r Ratchet) PickleLibOlm(target []byte) (int, error) {
-	if len(target) < r.PickleLen() {
+	if len(target) < RatchetPickleLength {
 		return 0, fmt.Errorf("pickle account: %w", olm.ErrValueTooShort)
 	}
 	written := libolmpickle.PickleBytes(r.Data[:], target)
 	written += libolmpickle.PickleUInt32(r.Counter, target[written:])
 	return written, nil
-}
-
-// PickleLen returns the number of bytes the pickled ratchet will have.
-func (r Ratchet) PickleLen() int {
-	length := libolmpickle.PickleBytesLen(r.Data[:])
-	length += libolmpickle.PickleUInt32Len(r.Counter)
-	return length
 }

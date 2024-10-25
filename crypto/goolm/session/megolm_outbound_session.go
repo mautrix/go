@@ -21,6 +21,10 @@ import (
 const (
 	megolmOutboundSessionPickleVersion       byte   = 1
 	megolmOutboundSessionPickleVersionLibOlm uint32 = 1
+
+	MegolmOutboundSessionPickleLength = libolmpickle.PickleUInt32Length + // Version
+		megolm.RatchetPickleLength + // Ratchet
+		crypto.Ed25519KeyPairPickleLength // SigningKey
 )
 
 // MegolmOutboundSession stores information about the sessions to send.
@@ -130,7 +134,7 @@ func (o *MegolmOutboundSession) Pickle(key []byte) ([]byte, error) {
 	if len(key) == 0 {
 		return nil, olm.ErrNoKeyProvided
 	}
-	pickeledBytes := make([]byte, o.PickleLen())
+	pickeledBytes := make([]byte, MegolmOutboundSessionPickleLength)
 	written, err := o.PickleLibOlm(pickeledBytes)
 	if err != nil {
 		return nil, err
@@ -144,7 +148,7 @@ func (o *MegolmOutboundSession) Pickle(key []byte) ([]byte, error) {
 // PickleLibOlm encodes the session into target. target has to have a size of at least PickleLen() and is written to from index 0.
 // It returns the number of bytes written.
 func (o *MegolmOutboundSession) PickleLibOlm(target []byte) (int, error) {
-	if len(target) < o.PickleLen() {
+	if len(target) < MegolmOutboundSessionPickleLength {
 		return 0, fmt.Errorf("pickle MegolmOutboundSession: %w", olm.ErrValueTooShort)
 	}
 	written := libolmpickle.PickleUInt32(megolmOutboundSessionPickleVersionLibOlm, target)
@@ -159,14 +163,6 @@ func (o *MegolmOutboundSession) PickleLibOlm(target []byte) (int, error) {
 	}
 	written += writtenPubKey
 	return written, nil
-}
-
-// PickleLen returns the number of bytes the pickled session will have.
-func (o *MegolmOutboundSession) PickleLen() int {
-	length := libolmpickle.PickleUInt32Len(megolmOutboundSessionPickleVersionLibOlm)
-	length += o.Ratchet.PickleLen()
-	length += o.SigningKey.PickleLen()
-	return length
 }
 
 func (o *MegolmOutboundSession) SessionSharingMessage() ([]byte, error) {

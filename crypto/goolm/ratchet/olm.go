@@ -388,25 +388,25 @@ func (r Ratchet) PickleLibOlm(target []byte) (int, error) {
 
 // PickleLen returns the actual number of bytes the pickled ratchet will have.
 func (r Ratchet) PickleLen() int {
-	length := r.RootKey.PickleLen()
+	length := crypto.Curve25519PubKeyLength // Root Key
 	if r.SenderChains.IsSet {
-		length += libolmpickle.PickleUInt32Len(1)
-		length += r.SenderChains.PickleLen()
+		length += libolmpickle.PickleUInt32Length // 1
+		length += senderChainPickleLength         // SenderChains
 	} else {
-		length += libolmpickle.PickleUInt32Len(0)
+		length += libolmpickle.PickleUInt32Length // 0
 	}
-	length += libolmpickle.PickleUInt32Len(uint32(len(r.ReceiverChains)))
-	length += len(r.ReceiverChains) * receiverChain{}.PickleLen()
-	length += libolmpickle.PickleUInt32Len(uint32(len(r.SkippedMessageKeys)))
-	length += len(r.SkippedMessageKeys) * skippedMessageKey{}.PickleLen()
+	length += libolmpickle.PickleUInt32Length // ReceiverChains length
+	length += len(r.ReceiverChains) * receiverChainPickleLength
+	length += libolmpickle.PickleUInt32Length // SkippedMessageKeys length
+	length += len(r.SkippedMessageKeys) * skippedMessageKeyPickleLen
 	return length
 }
 
 // PickleLen returns the minimum number of bytes the pickled ratchet must have.
 func (r Ratchet) PickleLenMin() int {
-	length := r.RootKey.PickleLen()
-	length += libolmpickle.PickleUInt32Len(0)
-	length += libolmpickle.PickleUInt32Len(0)
-	length += libolmpickle.PickleUInt32Len(0)
+	length := crypto.Curve25519PubKeyLength // Root Key
+	length += libolmpickle.PickleUInt32Length
+	length += libolmpickle.PickleUInt32Length
+	length += libolmpickle.PickleUInt32Length
 	return length
 }

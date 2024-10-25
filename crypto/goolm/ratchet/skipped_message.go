@@ -13,6 +13,9 @@ type skippedMessageKey struct {
 	MKey messageKey                 `json:"message_key"`
 }
 
+const skippedMessageKeyPickleLen = crypto.Curve25519PubKeyLength + // RKey
+	messageKeyPickleLength // MKey
+
 // UnpickleLibOlm decodes the unencryted value and populates the chain accordingly. It returns the number of bytes read.
 func (r *skippedMessageKey) UnpickleLibOlm(value []byte) (int, error) {
 	curPos := 0
@@ -32,7 +35,7 @@ func (r *skippedMessageKey) UnpickleLibOlm(value []byte) (int, error) {
 // PickleLibOlm encodes the chain into target. target has to have a size of at least PickleLen() and is written to from index 0.
 // It returns the number of bytes written.
 func (r skippedMessageKey) PickleLibOlm(target []byte) (int, error) {
-	if len(target) < r.PickleLen() {
+	if len(target) < skippedMessageKeyPickleLen {
 		return 0, fmt.Errorf("pickle sender chain: %w", olm.ErrValueTooShort)
 	}
 	written, err := r.RKey.PickleLibOlm(target)
@@ -45,11 +48,4 @@ func (r skippedMessageKey) PickleLibOlm(target []byte) (int, error) {
 	}
 	written += writtenChain
 	return written, nil
-}
-
-// PickleLen returns the number of bytes the pickled chain will have.
-func (r skippedMessageKey) PickleLen() int {
-	length := r.RKey.PickleLen()
-	length += r.MKey.PickleLen()
-	return length
 }

@@ -74,7 +74,7 @@ func TestCurve25519Pickle(t *testing.T) {
 	//create keypair
 	keyPair, err := crypto.Curve25519GenerateKey()
 	assert.NoError(t, err)
-	target := make([]byte, keyPair.PickleLen())
+	target := make([]byte, crypto.Curve25519KeyPairPickleLength)
 	writtenBytes, err := keyPair.PickleLibOlm(target)
 	assert.NoError(t, err)
 	assert.Len(t, target, writtenBytes)
@@ -92,7 +92,7 @@ func TestCurve25519PicklePubKeyOnly(t *testing.T) {
 	assert.NoError(t, err)
 	//Remove privateKey
 	keyPair.PrivateKey = nil
-	target := make([]byte, keyPair.PickleLen())
+	target := make([]byte, crypto.Curve25519KeyPairPickleLength)
 	writtenBytes, err := keyPair.PickleLibOlm(target)
 	assert.NoError(t, err)
 	assert.Len(t, target, writtenBytes)
@@ -109,7 +109,7 @@ func TestCurve25519PicklePrivKeyOnly(t *testing.T) {
 	assert.NoError(t, err)
 	//Remove public
 	keyPair.PublicKey = nil
-	target := make([]byte, keyPair.PickleLen())
+	target := make([]byte, crypto.Curve25519KeyPairPickleLength)
 	writtenBytes, err := keyPair.PickleLibOlm(target)
 	assert.NoError(t, err)
 	assert.Len(t, target, writtenBytes)

@@ -488,14 +488,14 @@ func (a *Account) PickleLibOlm(target []byte) (int, error) {
 
 // PickleLen returns the number of bytes the pickled Account will have.
 func (a *Account) PickleLen() int {
-	length := libolmpickle.PickleUInt32Len(accountPickleVersionLibOLM)
-	length += a.IdKeys.Ed25519.PickleLen()
-	length += a.IdKeys.Curve25519.PickleLen()
-	length += libolmpickle.PickleUInt32Len(uint32(len(a.OTKeys)))
-	length += (len(a.OTKeys) * (&crypto.OneTimeKey{}).PickleLen())
-	length += libolmpickle.PickleUInt8Len(a.NumFallbackKeys)
-	length += (int(a.NumFallbackKeys) * (&crypto.OneTimeKey{}).PickleLen())
-	length += libolmpickle.PickleUInt32Len(a.NextOneTimeKeyID)
+	length := libolmpickle.PickleUInt32Length
+	length += crypto.Ed25519KeyPairPickleLength    // IdKeys.Ed25519
+	length += crypto.Curve25519KeyPairPickleLength // IdKeys.Curve25519
+	length += libolmpickle.PickleUInt32Length
+	length += (len(a.OTKeys) * crypto.OneTimeKeyPickleLength)
+	length += libolmpickle.PickleUInt8Length
+	length += (int(a.NumFallbackKeys) * crypto.OneTimeKeyPickleLength)
+	length += libolmpickle.PickleUInt32Length
 	return length
 }
 

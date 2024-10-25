@@ -46,6 +46,9 @@ type Ed25519KeyPair struct {
 	PublicKey  Ed25519PublicKey  `json:"public,omitempty"`
 }
 
+const Ed25519KeyPairPickleLength = ed25519.PublicKeySize + // PublicKey
+	ed25519.PrivateKeySize // Private Key
+
 // B64Encoded returns a base64 encoded string of the public key.
 func (c Ed25519KeyPair) B64Encoded() id.Ed25519 {
 	return id.Ed25519(base64.RawStdEncoding.EncodeToString(c.PublicKey))
@@ -61,10 +64,11 @@ func (c Ed25519KeyPair) Verify(message, givenSignature []byte) bool {
 	return c.PublicKey.Verify(message, givenSignature)
 }
 
-// PickleLibOlm encodes the key pair into target. target has to have a size of at least PickleLen() and is written to from index 0.
-// It returns the number of bytes written.
+// PickleLibOlm encodes the key pair into target. target has to have a size of
+// at least [Ed25519KeyPairPickleLength] and is written to from index 0. It
+// returns the number of bytes written.
 func (c Ed25519KeyPair) PickleLibOlm(target []byte) (int, error) {
-	if len(target) < c.PickleLen() {
+	if len(target) < Ed25519KeyPairPickleLength {
 		return 0, fmt.Errorf("pickle ed25519 key pair: %w", olm.ErrValueTooShort)
 	}
 	written, err := c.PublicKey.PickleLibOlm(target)
@@ -94,18 +98,6 @@ func (c *Ed25519KeyPair) UnpickleLibOlm(value []byte) (int, error) {
 	}
 	c.PrivateKey = privKey
 	return read + readPriv, nil
-}
-
-// PickleLen returns the number of bytes the pickled key pair will have.
-func (c Ed25519KeyPair) PickleLen() int {
-	lenPublic := c.PublicKey.PickleLen()
-	var lenPrivate int
-	if len(c.PrivateKey) != ed25519.PrivateKeySize {
-		lenPrivate = libolmpickle.PickleBytesLen(make([]byte, ed25519.PrivateKeySize))
-	} else {
-		lenPrivate = libolmpickle.PickleBytesLen(c.PrivateKey)
-	}
-	return lenPublic + lenPrivate
 }
 
 // Curve25519PrivateKey represents the private key for ed25519 usage. This is just a wrapper.
@@ -149,10 +141,11 @@ func (c Ed25519PublicKey) Verify(message, givenSignature []byte) bool {
 	return ed25519.Verify(ed25519.PublicKey(c), message, givenSignature)
 }
 
-// PickleLibOlm encodes the public key into target. target has to have a size of at least PickleLen() and is written to from index 0.
-// It returns the number of bytes written.
+// PickleLibOlm encodes the public key into target. target has to have a size
+// of at least [ed25519.PublicKeySize] and is written to from index 0. It
+// returns the number of bytes written.
 func (c Ed25519PublicKey) PickleLibOlm(target []byte) (int, error) {
-	if len(target) < c.PickleLen() {
+	if len(target) < ed25519.PublicKeySize {
 		return 0, fmt.Errorf("pickle ed25519 public key: %w", olm.ErrValueTooShort)
 	}
 	if len(c) != ed25519.PublicKeySize {
@@ -169,12 +162,4 @@ func (c *Ed25519PublicKey) UnpickleLibOlm(value []byte) (int, error) {
 	}
 	*c = unpickled
 	return readBytes, nil
-}
-
-// PickleLen returns the number of bytes the pickled public key will have.
-func (c Ed25519PublicKey) PickleLen() int {
-	if len(c) != ed25519.PublicKeySize {
-		return libolmpickle.PickleBytesLen(make([]byte, ed25519.PublicKeySize))
-	}
-	return libolmpickle.PickleBytesLen(c)
 }

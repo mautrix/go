@@ -15,7 +15,7 @@ import (
 
 const (
 	Curve25519KeyLength    = curve25519.ScalarSize //The length of the private key.
-	curve25519PubKeyLength = 32
+	Curve25519PubKeyLength = 32
 )
 
 // Curve25519GenerateKey creates a new curve25519 key pair.
@@ -51,6 +51,9 @@ type Curve25519KeyPair struct {
 	PublicKey  Curve25519PublicKey  `json:"public,omitempty"`
 }
 
+const Curve25519KeyPairPickleLength = Curve25519PubKeyLength + // Public Key
+	Curve25519KeyLength // Private Key
+
 // B64Encoded returns a base64 encoded string of the public key.
 func (c Curve25519KeyPair) B64Encoded() id.Curve25519 {
 	return c.PublicKey.B64Encoded()
@@ -61,10 +64,11 @@ func (c Curve25519KeyPair) SharedSecret(pubKey Curve25519PublicKey) ([]byte, err
 	return c.PrivateKey.SharedSecret(pubKey)
 }
 
-// PickleLibOlm encodes the key pair into target. target has to have a size of at least PickleLen() and is written to from index 0.
+// PickleLibOlm encodes the key pair into target. The target has to have a size
+// of at least [Curve25519KeyPairPickleLength] and is written to from index 0.
 // It returns the number of bytes written.
 func (c Curve25519KeyPair) PickleLibOlm(target []byte) (int, error) {
-	if len(target) < c.PickleLen() {
+	if len(target) < Curve25519KeyPairPickleLength {
 		return 0, fmt.Errorf("pickle curve25519 key pair: %w", olm.ErrValueTooShort)
 	}
 	written, err := c.PublicKey.PickleLibOlm(target)
@@ -93,18 +97,6 @@ func (c *Curve25519KeyPair) UnpickleLibOlm(value []byte) (int, error) {
 	}
 	c.PrivateKey = privKey
 	return read + readPriv, nil
-}
-
-// PickleLen returns the number of bytes the pickled key pair will have.
-func (c Curve25519KeyPair) PickleLen() int {
-	lenPublic := c.PublicKey.PickleLen()
-	var lenPrivate int
-	if len(c.PrivateKey) != Curve25519KeyLength {
-		lenPrivate = libolmpickle.PickleBytesLen(make([]byte, Curve25519KeyLength))
-	} else {
-		lenPrivate = libolmpickle.PickleBytesLen(c.PrivateKey)
-	}
-	return lenPublic + lenPrivate
 }
 
 // Curve25519PrivateKey represents the private key for curve25519 usage
@@ -141,29 +133,21 @@ func (c Curve25519PublicKey) B64Encoded() id.Curve25519 {
 // PickleLibOlm encodes the public key into target. target has to have a size of at least PickleLen() and is written to from index 0.
 // It returns the number of bytes written.
 func (c Curve25519PublicKey) PickleLibOlm(target []byte) (int, error) {
-	if len(target) < c.PickleLen() {
+	if len(target) < Curve25519PubKeyLength {
 		return 0, fmt.Errorf("pickle curve25519 public key: %w", olm.ErrValueTooShort)
 	}
-	if len(c) != curve25519PubKeyLength {
-		return libolmpickle.PickleBytes(make([]byte, curve25519PubKeyLength), target), nil
+	if len(c) != Curve25519PubKeyLength {
+		return libolmpickle.PickleBytes(make([]byte, Curve25519PubKeyLength), target), nil
 	}
 	return libolmpickle.PickleBytes(c, target), nil
 }
 
 // UnpickleLibOlm decodes the unencryted value and populates the public key accordingly. It returns the number of bytes read.
 func (c *Curve25519PublicKey) UnpickleLibOlm(value []byte) (int, error) {
-	unpickled, readBytes, err := libolmpickle.UnpickleBytes(value, curve25519PubKeyLength)
+	unpickled, readBytes, err := libolmpickle.UnpickleBytes(value, Curve25519PubKeyLength)
 	if err != nil {
 		return 0, err
 	}
 	*c = unpickled
 	return readBytes, nil
-}
-
-// PickleLen returns the number of bytes the pickled public key will have.
-func (c Curve25519PublicKey) PickleLen() int {
-	if len(c) != curve25519PubKeyLength {
-		return libolmpickle.PickleBytesLen(make([]byte, curve25519PubKeyLength))
-	}
-	return libolmpickle.PickleBytesLen(c)
 }

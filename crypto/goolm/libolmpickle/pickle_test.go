@@ -24,7 +24,7 @@ func TestPickleUInt32(t *testing.T) {
 	for curIndex := range values {
 		response := make([]byte, 4)
 		resPLen := libolmpickle.PickleUInt32(values[curIndex], response)
-		assert.Equal(t, libolmpickle.PickleUInt32Len(values[curIndex]), resPLen)
+		assert.Equal(t, libolmpickle.PickleUInt32Length, resPLen)
 		assert.Equal(t, expected[curIndex], response)
 	}
 }
@@ -41,7 +41,7 @@ func TestPickleBool(t *testing.T) {
 	for curIndex := range values {
 		response := make([]byte, 1)
 		resPLen := libolmpickle.PickleBool(values[curIndex], response)
-		assert.Equal(t, libolmpickle.PickleBoolLen(values[curIndex]), resPLen)
+		assert.Equal(t, libolmpickle.PickleBoolLength, resPLen)
 		assert.Equal(t, expected[curIndex], response)
 	}
 }
@@ -58,7 +58,7 @@ func TestPickleUInt8(t *testing.T) {
 	for curIndex := range values {
 		response := make([]byte, 1)
 		resPLen := libolmpickle.PickleUInt8(values[curIndex], response)
-		assert.Equal(t, libolmpickle.PickleUInt8Len(values[curIndex]), resPLen)
+		assert.Equal(t, libolmpickle.PickleUInt8Length, resPLen)
 		assert.Equal(t, expected[curIndex], response)
 	}
 }

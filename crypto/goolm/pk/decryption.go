@@ -17,6 +17,9 @@ import (
 const (
 	decryptionPickleVersionJSON   uint8  = 1
 	decryptionPickleVersionLibOlm uint32 = 1
+
+	DecryptionPickleLength = libolmpickle.PickleUInt32Length + // Version
+		crypto.Curve25519KeyPairPickleLength // KeyPair
 )
 
 // Decryption is used to decrypt pk messages
@@ -124,7 +127,7 @@ func (a *Decryption) UnpickleLibOlm(value []byte) (int, error) {
 
 // Pickle returns a base64 encoded and with key encrypted pickled Decryption using PickleLibOlm().
 func (a Decryption) Pickle(key []byte) ([]byte, error) {
-	pickeledBytes := make([]byte, a.PickleLen())
+	pickeledBytes := make([]byte, DecryptionPickleLength)
 	written, err := a.PickleLibOlm(pickeledBytes)
 	if err != nil {
 		return nil, err
@@ -135,10 +138,11 @@ func (a Decryption) Pickle(key []byte) ([]byte, error) {
 	return cipher.Pickle(key, pickeledBytes)
 }
 
-// PickleLibOlm encodes the Decryption into target. target has to have a size of at least PickleLen() and is written to from index 0.
-// It returns the number of bytes written.
+// PickleLibOlm encodes the Decryption into target. target has to have a size
+// of at least [DecryptionPickleLength] and is written to from index 0. It
+// returns the number of bytes written.
 func (a Decryption) PickleLibOlm(target []byte) (int, error) {
-	if len(target) < a.PickleLen() {
+	if len(target) < DecryptionPickleLength {
 		return 0, fmt.Errorf("pickle Decryption: %w", olm.ErrValueTooShort)
 	}
 	written := libolmpickle.PickleUInt32(decryptionPickleVersionLibOlm, target)
@@ -148,11 +152,4 @@ func (a Decryption) PickleLibOlm(target []byte) (int, error) {
 	}
 	written += writtenKey
 	return written, nil
-}
-
-// PickleLen returns the number of bytes the pickled Decryption will have.
-func (a Decryption) PickleLen() int {
-	length := libolmpickle.PickleUInt32Len(decryptionPickleVersionLibOlm)
-	length += a.KeyPair.PickleLen()
-	return length
 }

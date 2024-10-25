@@ -458,22 +458,22 @@ func (o *OlmSession) PickleLibOlm(target []byte) (int, error) {
 
 // PickleLen returns the actual number of bytes the pickled session will have.
 func (o *OlmSession) PickleLen() int {
-	length := libolmpickle.PickleUInt32Len(olmSessionPickleVersionLibOlm)
-	length += libolmpickle.PickleBoolLen(o.ReceivedMessage)
-	length += o.AliceIdentityKey.PickleLen()
-	length += o.AliceBaseKey.PickleLen()
-	length += o.BobOneTimeKey.PickleLen()
+	length := libolmpickle.PickleUInt32Length
+	length += libolmpickle.PickleBoolLength
+	length += crypto.Curve25519PubKeyLength // AliceIdentityKey
+	length += crypto.Curve25519PubKeyLength // AliceBaseKey
+	length += crypto.Curve25519PubKeyLength // BobOneTimeKey
 	length += o.Ratchet.PickleLen()
 	return length
 }
 
 // PickleLenMin returns the minimum number of bytes the pickled session must have.
 func (o *OlmSession) PickleLenMin() int {
-	length := libolmpickle.PickleUInt32Len(olmSessionPickleVersionLibOlm)
-	length += libolmpickle.PickleBoolLen(o.ReceivedMessage)
-	length += o.AliceIdentityKey.PickleLen()
-	length += o.AliceBaseKey.PickleLen()
-	length += o.BobOneTimeKey.PickleLen()
+	length := libolmpickle.PickleUInt32Length
+	length += libolmpickle.PickleBoolLength
+	length += crypto.Curve25519PubKeyLength // AliceIdentityKey
+	length += crypto.Curve25519PubKeyLength // AliceBaseKey
+	length += crypto.Curve25519PubKeyLength // BobOneTimeKey
 	length += o.Ratchet.PickleLenMin()
 	return length
 }
