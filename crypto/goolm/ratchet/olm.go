@@ -278,73 +278,59 @@ func (r *Ratchet) UnpickleAsJSON(pickled, key []byte) error {
 	return utilities.UnpickleAsJSON(r, pickled, key, olmPickleVersion)
 }
 
-// UnpickleLibOlm decodes the unencryted value and populates the Ratchet accordingly. It returns the number of bytes read.
-func (r *Ratchet) UnpickleLibOlm(value []byte, includesChainIndex bool) (int, error) {
-	//read ratchet data
-	curPos := 0
-	readBytes, err := r.RootKey.UnpickleLibOlm(value)
-	if err != nil {
-		return 0, err
+// UnpickleLibOlm unpickles the unencryted value and populates the [Ratchet]
+// accordingly.
+func (r *Ratchet) UnpickleLibOlm(decoder *libolmpickle.Decoder, includesChainIndex bool) error {
+	if err := r.RootKey.UnpickleLibOlm(decoder); err != nil {
+		return err
 	}
-	curPos += readBytes
-	countSenderChains, readBytes, err := libolmpickle.UnpickleUInt32(value[curPos:]) //Length of sender chain
+	senderChainsCount, err := decoder.ReadUInt32()
 	if err != nil {
-		return 0, err
+		return err
 	}
-	curPos += readBytes
-	for i := uint32(0); i < countSenderChains; i++ {
+
+	for i := uint32(0); i < senderChainsCount; i++ {
 		if i == 0 {
-			//only first is stored
-			readBytes, err := r.SenderChains.UnpickleLibOlm(value[curPos:])
-			if err != nil {
-				return 0, err
-			}
-			curPos += readBytes
+			// only the first sender key is stored
+			err = r.SenderChains.UnpickleLibOlm(decoder)
 			r.SenderChains.IsSet = true
 		} else {
-			dummy := senderChain{}
-			readBytes, err := dummy.UnpickleLibOlm(value[curPos:])
-			if err != nil {
-				return 0, err
-			}
-			curPos += readBytes
+			// just eat the values
+			err = (&senderChain{}).UnpickleLibOlm(decoder)
 		}
-	}
-	countReceivChains, readBytes, err := libolmpickle.UnpickleUInt32(value[curPos:]) //Length of recevier chain
-	if err != nil {
-		return 0, err
-	}
-	curPos += readBytes
-	r.ReceiverChains = make([]receiverChain, countReceivChains)
-	for i := uint32(0); i < countReceivChains; i++ {
-		readBytes, err := r.ReceiverChains[i].UnpickleLibOlm(value[curPos:])
 		if err != nil {
-			return 0, err
+			return err
 		}
-		curPos += readBytes
 	}
-	countSkippedMessageKeys, readBytes, err := libolmpickle.UnpickleUInt32(value[curPos:]) //Length of skippedMessageKeys
+
+	receiverChainCount, err := decoder.ReadUInt32()
 	if err != nil {
-		return 0, err
+		return err
 	}
-	curPos += readBytes
-	r.SkippedMessageKeys = make([]skippedMessageKey, countSkippedMessageKeys)
-	for i := uint32(0); i < countSkippedMessageKeys; i++ {
-		readBytes, err := r.SkippedMessageKeys[i].UnpickleLibOlm(value[curPos:])
-		if err != nil {
-			return 0, err
+	r.ReceiverChains = make([]receiverChain, receiverChainCount)
+	for i := uint32(0); i < receiverChainCount; i++ {
+		if err := r.ReceiverChains[i].UnpickleLibOlm(decoder); err != nil {
+			return err
 		}
-		curPos += readBytes
 	}
-	// pickle v 0x80000001 includes a chain index; pickle v1 does not.
+
+	skippedMessageKeysCount, err := decoder.ReadUInt32()
+	if err != nil {
+		return err
+	}
+	r.SkippedMessageKeys = make([]skippedMessageKey, skippedMessageKeysCount)
+	for i := uint32(0); i < skippedMessageKeysCount; i++ {
+		if err := r.SkippedMessageKeys[i].UnpickleLibOlm(decoder); err != nil {
+			return err
+		}
+	}
+
+	// pickle version 0x80000001 includes a chain index; pickle version 1 does not.
 	if includesChainIndex {
-		_, readBytes, err := libolmpickle.UnpickleUInt32(value[curPos:])
-		if err != nil {
-			return 0, err
-		}
-		curPos += readBytes
+		_, err = decoder.ReadUInt32()
+		return err
 	}
-	return curPos, nil
+	return nil
 }
 
 // PickleLibOlm pickles the ratchet into the encoder.

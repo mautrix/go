@@ -70,19 +70,15 @@ func (c Curve25519KeyPair) PickleLibOlm(encoder *libolmpickle.Encoder) {
 }
 
 // UnpickleLibOlm decodes the unencryted value and populates the key pair accordingly. It returns the number of bytes read.
-func (c *Curve25519KeyPair) UnpickleLibOlm(value []byte) (int, error) {
-	//unpickle PubKey
-	read, err := c.PublicKey.UnpickleLibOlm(value)
-	if err != nil {
-		return 0, err
+func (c *Curve25519KeyPair) UnpickleLibOlm(decoder *libolmpickle.Decoder) error {
+	if err := c.PublicKey.UnpickleLibOlm(decoder); err != nil {
+		return err
+	} else if privKey, err := decoder.ReadBytes(Curve25519PrivateKeyLength); err != nil {
+		return err
+	} else {
+		c.PrivateKey = privKey
+		return nil
 	}
-	//unpickle PrivateKey
-	privKey, readPriv, err := libolmpickle.UnpickleBytes(value[read:], Curve25519PrivateKeyLength)
-	if err != nil {
-		return read, err
-	}
-	c.PrivateKey = privKey
-	return read + readPriv, nil
 }
 
 // Curve25519PrivateKey represents the private key for curve25519 usage
@@ -126,11 +122,8 @@ func (c Curve25519PublicKey) PickleLibOlm(encoder *libolmpickle.Encoder) {
 }
 
 // UnpickleLibOlm decodes the unencryted value and populates the public key accordingly. It returns the number of bytes read.
-func (c *Curve25519PublicKey) UnpickleLibOlm(value []byte) (int, error) {
-	unpickled, readBytes, err := libolmpickle.UnpickleBytes(value, Curve25519PublicKeyLength)
-	if err != nil {
-		return 0, err
-	}
-	*c = unpickled
-	return readBytes, nil
+func (c *Curve25519PublicKey) UnpickleLibOlm(decoder *libolmpickle.Decoder) error {
+	pubkey, err := decoder.ReadBytes(Curve25519PublicKeyLength)
+	*c = pubkey
+	return err
 }

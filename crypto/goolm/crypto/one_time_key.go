@@ -39,27 +39,15 @@ func (c OneTimeKey) PickleLibOlm(encoder *libolmpickle.Encoder) {
 	c.Key.PickleLibOlm(encoder)
 }
 
-// UnpickleLibOlm decodes the unencryted value and populates the OneTimeKey accordingly. It returns the number of bytes read.
-func (c *OneTimeKey) UnpickleLibOlm(value []byte) (int, error) {
-	totalReadBytes := 0
-	id, readBytes, err := libolmpickle.UnpickleUInt32(value)
-	if err != nil {
-		return 0, err
+// UnpickleLibOlm unpickles the unencryted value and populates the [OneTimeKey]
+// accordingly.
+func (c *OneTimeKey) UnpickleLibOlm(decoder *libolmpickle.Decoder) (err error) {
+	if c.ID, err = decoder.ReadUInt32(); err != nil {
+		return
+	} else if c.Published, err = decoder.ReadBool(); err != nil {
+		return
 	}
-	totalReadBytes += readBytes
-	c.ID = id
-	published, readBytes, err := libolmpickle.UnpickleBool(value[totalReadBytes:])
-	if err != nil {
-		return 0, err
-	}
-	totalReadBytes += readBytes
-	c.Published = published
-	readBytes, err = c.Key.UnpickleLibOlm(value[totalReadBytes:])
-	if err != nil {
-		return 0, err
-	}
-	totalReadBytes += readBytes
-	return totalReadBytes, nil
+	return c.Key.UnpickleLibOlm(decoder)
 }
 
 // KeyIDEncoded returns the base64 encoded id.

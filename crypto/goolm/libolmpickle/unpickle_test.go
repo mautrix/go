@@ -20,9 +20,9 @@ func TestUnpickleUInt32(t *testing.T) {
 		{0xf0, 0x00, 0x00, 0x00},
 	}
 	for curIndex := range values {
-		response, readLength, err := libolmpickle.UnpickleUInt32(values[curIndex])
+		decoder := libolmpickle.NewDecoder(values[curIndex])
+		response, err := decoder.ReadUInt32()
 		assert.NoError(t, err)
-		assert.Equal(t, 4, readLength)
 		assert.Equal(t, expected[curIndex], response)
 	}
 }
@@ -39,9 +39,9 @@ func TestUnpickleBool(t *testing.T) {
 		{0x02},
 	}
 	for curIndex := range values {
-		response, readLength, err := libolmpickle.UnpickleBool(values[curIndex])
+		decoder := libolmpickle.NewDecoder(values[curIndex])
+		response, err := decoder.ReadBool()
 		assert.NoError(t, err)
-		assert.Equal(t, 1, readLength)
 		assert.Equal(t, expected[curIndex], response)
 	}
 }
@@ -56,9 +56,9 @@ func TestUnpickleUInt8(t *testing.T) {
 		{0x1a},
 	}
 	for curIndex := range values {
-		response, readLength, err := libolmpickle.UnpickleUInt8(values[curIndex])
+		decoder := libolmpickle.NewDecoder(values[curIndex])
+		response, err := decoder.ReadUInt8()
 		assert.NoError(t, err)
-		assert.Equal(t, 1, readLength)
 		assert.Equal(t, expected[curIndex], response)
 	}
 }
@@ -75,9 +75,9 @@ func TestUnpickleBytes(t *testing.T) {
 		{0xf0, 0x00, 0x00, 0x00},
 	}
 	for curIndex := range values {
-		response, readLength, err := libolmpickle.UnpickleBytes(values[curIndex], 4)
+		decoder := libolmpickle.NewDecoder(values[curIndex])
+		response, err := decoder.ReadBytes(4)
 		assert.NoError(t, err)
-		assert.Equal(t, 4, readLength)
 		assert.Equal(t, expected[curIndex], response)
 	}
 }

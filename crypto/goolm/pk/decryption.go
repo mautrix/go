@@ -97,28 +97,21 @@ func (a *Decryption) Unpickle(pickled, key []byte) error {
 	if err != nil {
 		return err
 	}
-	_, err = a.UnpickleLibOlm(decrypted)
-	return err
+	return a.UnpickleLibOlm(decrypted)
 }
 
 // UnpickleLibOlm decodes the unencryted value and populates the Decryption accordingly. It returns the number of bytes read.
-func (a *Decryption) UnpickleLibOlm(value []byte) (int, error) {
-	//First 4 bytes are the accountPickleVersion
-	pickledVersion, curPos, err := libolmpickle.UnpickleUInt32(value)
+func (a *Decryption) UnpickleLibOlm(unpickled []byte) error {
+	decoder := libolmpickle.NewDecoder(unpickled)
+	pickledVersion, err := decoder.ReadUInt32()
 	if err != nil {
-		return 0, err
+		return err
 	}
-	switch pickledVersion {
-	case decryptionPickleVersionLibOlm:
-	default:
-		return 0, fmt.Errorf("unpickle olmSession: %w", olm.ErrBadVersion)
+	if pickledVersion == decryptionPickleVersionLibOlm {
+		return a.KeyPair.UnpickleLibOlm(decoder)
+	} else {
+		return fmt.Errorf("unpickle olmSession: %w (found %d, expected %d)", olm.ErrBadVersion, pickledVersion, decryptionPickleVersionLibOlm)
 	}
-	readBytes, err := a.KeyPair.UnpickleLibOlm(value[curPos:])
-	if err != nil {
-		return 0, err
-	}
-	curPos += readBytes
-	return curPos, nil
 }
 
 // Pickle returns a base64 encoded and with key encrypted pickled Decryption using PickleLibOlm().

@@ -22,20 +22,14 @@ func (c *chainKey) advance() {
 	c.Index++
 }
 
-// UnpickleLibOlm decodes the unencryted value and populates the chain key accordingly. It returns the number of bytes read.
-func (r *chainKey) UnpickleLibOlm(value []byte) (int, error) {
-	curPos := 0
-	readBytes, err := r.Key.UnpickleLibOlm(value)
+// UnpickleLibOlm unpickles the unencryted value and populates the chain key accordingly.
+func (r *chainKey) UnpickleLibOlm(decoder *libolmpickle.Decoder) error {
+	err := r.Key.UnpickleLibOlm(decoder)
 	if err != nil {
-		return 0, err
+		return err
 	}
-	curPos += readBytes
-	r.Index, readBytes, err = libolmpickle.UnpickleUInt32(value[curPos:])
-	if err != nil {
-		return 0, err
-	}
-	curPos += readBytes
-	return curPos, nil
+	r.Index, err = decoder.ReadUInt32()
+	return err
 }
 
 // PickleLibOlm pickles the chain key into the encoder.
@@ -78,20 +72,13 @@ func (s senderChain) chainKey() chainKey {
 	return s.CKey
 }
 
-// UnpickleLibOlm decodes the unencryted value and populates the chain accordingly. It returns the number of bytes read.
-func (r *senderChain) UnpickleLibOlm(value []byte) (int, error) {
-	curPos := 0
-	readBytes, err := r.RKey.UnpickleLibOlm(value)
-	if err != nil {
-		return 0, err
+// UnpickleLibOlm unpickles the unencryted value and populates the sender chain
+// accordingly.
+func (r *senderChain) UnpickleLibOlm(decoder *libolmpickle.Decoder) error {
+	if err := r.RKey.UnpickleLibOlm(decoder); err != nil {
+		return err
 	}
-	curPos += readBytes
-	readBytes, err = r.CKey.UnpickleLibOlm(value[curPos:])
-	if err != nil {
-		return 0, err
-	}
-	curPos += readBytes
-	return curPos, nil
+	return r.CKey.UnpickleLibOlm(decoder)
 }
 
 // PickleLibOlm pickles the sender chain into the encoder.
@@ -137,20 +124,12 @@ func (s receiverChain) chainKey() chainKey {
 	return s.CKey
 }
 
-// UnpickleLibOlm decodes the unencryted value and populates the chain accordingly. It returns the number of bytes read.
-func (r *receiverChain) UnpickleLibOlm(value []byte) (int, error) {
-	curPos := 0
-	readBytes, err := r.RKey.UnpickleLibOlm(value)
-	if err != nil {
-		return 0, err
+// UnpickleLibOlm unpickles the unencryted value and populates the chain accordingly.
+func (r *receiverChain) UnpickleLibOlm(decoder *libolmpickle.Decoder) error {
+	if err := r.RKey.UnpickleLibOlm(decoder); err != nil {
+		return err
 	}
-	curPos += readBytes
-	readBytes, err = r.CKey.UnpickleLibOlm(value[curPos:])
-	if err != nil {
-		return 0, err
-	}
-	curPos += readBytes
-	return curPos, nil
+	return r.CKey.UnpickleLibOlm(decoder)
 }
 
 // PickleLibOlm pickles the receiver chain into the encoder.
@@ -165,22 +144,14 @@ type messageKey struct {
 	Key   []byte `json:"key"`
 }
 
-// UnpickleLibOlm decodes the unencryted value and populates the message key accordingly. It returns the number of bytes read.
-func (m *messageKey) UnpickleLibOlm(value []byte) (int, error) {
-	curPos := 0
-	ratchetKey, readBytes, err := libolmpickle.UnpickleBytes(value, messageKeyLength)
-	if err != nil {
-		return 0, err
+// UnpickleLibOlm unpickles the unencryted value and populates the message key
+// accordingly.
+func (m *messageKey) UnpickleLibOlm(decoder *libolmpickle.Decoder) (err error) {
+	if m.Key, err = decoder.ReadBytes(messageKeyLength); err != nil {
+		return
 	}
-	m.Key = ratchetKey
-	curPos += readBytes
-	keyID, readBytes, err := libolmpickle.UnpickleUInt32(value[:curPos])
-	if err != nil {
-		return 0, err
-	}
-	curPos += readBytes
-	m.Index = keyID
-	return curPos, nil
+	m.Index, err = decoder.ReadUInt32()
+	return
 }
 
 // PickleLibOlm pickles the message key into the encoder.

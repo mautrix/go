@@ -95,33 +95,21 @@ func (o *MegolmOutboundSession) Unpickle(pickled, key []byte) error {
 	if err != nil {
 		return err
 	}
-	_, err = o.UnpickleLibOlm(decrypted)
-	return err
+	return o.UnpickleLibOlm(decrypted)
 }
 
-// UnpickleLibOlm decodes the unencryted value and populates the Session accordingly. It returns the number of bytes read.
-func (o *MegolmOutboundSession) UnpickleLibOlm(value []byte) (int, error) {
-	//First 4 bytes are the accountPickleVersion
-	pickledVersion, curPos, err := libolmpickle.UnpickleUInt32(value)
-	if err != nil {
-		return 0, err
+// UnpickleLibOlm unpickles the unencryted value and populates the
+// [MegolmOutboundSession] accordingly.
+func (o *MegolmOutboundSession) UnpickleLibOlm(buf []byte) error {
+	decoder := libolmpickle.NewDecoder(buf)
+	pickledVersion, err := decoder.ReadUInt32()
+	if pickledVersion != megolmOutboundSessionPickleVersionLibOlm {
+		return fmt.Errorf("unpickle MegolmInboundSession: %w (found version %d)", olm.ErrBadVersion, pickledVersion)
 	}
-	switch pickledVersion {
-	case megolmOutboundSessionPickleVersionLibOlm:
-	default:
-		return 0, fmt.Errorf("unpickle MegolmInboundSession: %w", olm.ErrBadVersion)
+	if err = o.Ratchet.UnpickleLibOlm(decoder); err != nil {
+		return err
 	}
-	readBytes, err := o.Ratchet.UnpickleLibOlm(value[curPos:])
-	if err != nil {
-		return 0, err
-	}
-	curPos += readBytes
-	readBytes, err = o.SigningKey.UnpickleLibOlm(value[curPos:])
-	if err != nil {
-		return 0, err
-	}
-	curPos += readBytes
-	return curPos, nil
+	return o.SigningKey.UnpickleLibOlm(decoder)
 }
 
 // Pickle returns a base64 encoded and with key encrypted pickled MegolmOutboundSession using PickleLibOlm().

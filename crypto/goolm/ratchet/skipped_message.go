@@ -11,20 +11,13 @@ type skippedMessageKey struct {
 	MKey messageKey                 `json:"message_key"`
 }
 
-// UnpickleLibOlm decodes the unencryted value and populates the chain accordingly. It returns the number of bytes read.
-func (r *skippedMessageKey) UnpickleLibOlm(value []byte) (int, error) {
-	curPos := 0
-	readBytes, err := r.RKey.UnpickleLibOlm(value)
-	if err != nil {
-		return 0, err
+// UnpickleLibOlm unpickles the unencryted value and populates the skipped
+// message keys accordingly.
+func (r *skippedMessageKey) UnpickleLibOlm(decoder *libolmpickle.Decoder) (err error) {
+	if err = r.RKey.UnpickleLibOlm(decoder); err != nil {
+		return
 	}
-	curPos += readBytes
-	readBytes, err = r.MKey.UnpickleLibOlm(value[curPos:])
-	if err != nil {
-		return 0, err
-	}
-	curPos += readBytes
-	return curPos, nil
+	return r.MKey.UnpickleLibOlm(decoder)
 }
 
 // PickleLibOlm pickles the skipped message key into the encoder.

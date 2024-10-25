@@ -358,53 +358,35 @@ func (o *OlmSession) Unpickle(pickled, key []byte) error {
 	if err != nil {
 		return err
 	}
-	_, err = o.UnpickleLibOlm(decrypted)
-	return err
+	return o.UnpickleLibOlm(decrypted)
 }
 
-// UnpickleLibOlm decodes the unencryted value and populates the Session accordingly. It returns the number of bytes read.
-func (o *OlmSession) UnpickleLibOlm(value []byte) (int, error) {
-	//First 4 bytes are the accountPickleVersion
-	pickledVersion, curPos, err := libolmpickle.UnpickleUInt32(value)
-	if err != nil {
-		return 0, err
-	}
-	includesChainIndex := true
+// UnpickleLibOlm unpickles the unencryted value and populates the [OlmSession]
+// accordingly.
+func (o *OlmSession) UnpickleLibOlm(buf []byte) error {
+	decoder := libolmpickle.NewDecoder(buf)
+	pickledVersion, err := decoder.ReadUInt32()
+
+	var includesChainIndex bool
 	switch pickledVersion {
 	case olmSessionPickleVersionLibOlm:
 		includesChainIndex = false
 	case uint32(0x80000001):
 		includesChainIndex = true
 	default:
-		return 0, fmt.Errorf("unpickle olmSession: %w", olm.ErrBadVersion)
+		return fmt.Errorf("unpickle olmSession: %w (found version %d)", olm.ErrBadVersion, pickledVersion)
 	}
-	var readBytes int
-	o.ReceivedMessage, readBytes, err = libolmpickle.UnpickleBool(value[curPos:])
-	if err != nil {
-		return 0, err
+
+	if o.ReceivedMessage, err = decoder.ReadBool(); err != nil {
+		return err
+	} else if err = o.AliceIdentityKey.UnpickleLibOlm(decoder); err != nil {
+		return err
+	} else if err = o.AliceBaseKey.UnpickleLibOlm(decoder); err != nil {
+		return err
+	} else if err = o.BobOneTimeKey.UnpickleLibOlm(decoder); err != nil {
+		return err
 	}
-	curPos += readBytes
-	readBytes, err = o.AliceIdentityKey.UnpickleLibOlm(value[curPos:])
-	if err != nil {
-		return 0, err
-	}
-	curPos += readBytes
-	readBytes, err = o.AliceBaseKey.UnpickleLibOlm(value[curPos:])
-	if err != nil {
-		return 0, err
-	}
-	curPos += readBytes
-	readBytes, err = o.BobOneTimeKey.UnpickleLibOlm(value[curPos:])
-	if err != nil {
-		return 0, err
-	}
-	curPos += readBytes
-	readBytes, err = o.Ratchet.UnpickleLibOlm(value[curPos:], includesChainIndex)
-	if err != nil {
-		return 0, err
-	}
-	curPos += readBytes
-	return curPos, nil
+	return o.Ratchet.UnpickleLibOlm(decoder, includesChainIndex)
 }
 
 // Pickle returns a base64 encoded and with key encrypted pickled olmSession

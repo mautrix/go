@@ -1,56 +1,52 @@
 package libolmpickle
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
-
-	"maunium.net/go/mautrix/crypto/olm"
 )
 
-func isZeroByteSlice(bytes []byte) bool {
-	b := byte(0)
-	for _, s := range bytes {
-		b |= s
+func isZeroByteSlice(data []byte) bool {
+	for _, b := range data {
+		if b != 0 {
+			return false
+		}
 	}
-	return b == 0
+	return true
 }
 
 type Decoder struct {
+	buf bytes.Buffer
 }
 
-func UnpickleUInt8(value []byte) (uint8, int, error) {
-	if len(value) < 1 {
-		return 0, 0, fmt.Errorf("unpickle uint8: %w", olm.ErrInputToSmall)
-	}
-	return value[0], 1, nil
+func NewDecoder(buf []byte) *Decoder {
+	return &Decoder{buf: *bytes.NewBuffer(buf)}
 }
 
-func UnpickleBool(value []byte) (bool, int, error) {
-	if len(value) < 1 {
-		return false, 0, fmt.Errorf("unpickle bool: %w", olm.ErrInputToSmall)
-	}
-	return value[0] != uint8(0x00), 1, nil
+func (d *Decoder) ReadUInt8() (uint8, error) {
+	return d.buf.ReadByte()
 }
 
-func UnpickleBytes(value []byte, length int) ([]byte, int, error) {
-	if len(value) < length {
-		return nil, 0, fmt.Errorf("unpickle bytes: %w", olm.ErrInputToSmall)
-	}
-	resp := value[:length]
-	if isZeroByteSlice(resp) {
-		return nil, length, nil
-	}
-	return resp, length, nil
+func (d *Decoder) ReadBool() (bool, error) {
+	val, err := d.buf.ReadByte()
+	return val != 0x00, err
 }
 
-func UnpickleUInt32(value []byte) (uint32, int, error) {
-	if len(value) < 4 {
-		return 0, 0, fmt.Errorf("unpickle uint32: %w", olm.ErrInputToSmall)
+func (d *Decoder) ReadBytes(length int) (data []byte, err error) {
+	data = d.buf.Next(length)
+	if len(data) != length {
+		return nil, fmt.Errorf("only %d in buffer, expected %d", len(data), length)
+	} else if isZeroByteSlice(data) {
+		return nil, nil
 	}
-	var res uint32
-	count := 0
-	for i := 3; i >= 0; i-- {
-		res |= uint32(value[count]) << (8 * i)
-		count++
+	return
+}
+
+func (d *Decoder) ReadUInt32() (uint32, error) {
+	data := d.buf.Next(4)
+	if len(data) != 4 {
+		return 0, fmt.Errorf("only %d bytes is buffer, expected 4 for uint32", len(data))
+	} else {
+		return binary.BigEndian.Uint32(data), nil
 	}
-	return res, 4, nil
 }

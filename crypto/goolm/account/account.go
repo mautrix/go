@@ -323,65 +323,46 @@ func (a *Account) Unpickle(pickled, key []byte) error {
 	if err != nil {
 		return err
 	}
-	_, err = a.UnpickleLibOlm(decrypted)
-	return err
+	return a.UnpickleLibOlm(decrypted)
 }
 
-// UnpickleLibOlm decodes the unencryted value and populates the Account accordingly. It returns the number of bytes read.
-func (a *Account) UnpickleLibOlm(value []byte) (int, error) {
-	//First 4 bytes are the accountPickleVersion
-	pickledVersion, curPos, err := libolmpickle.UnpickleUInt32(value)
+// UnpickleLibOlm unpickles the unencryted value and populates the [Account] accordingly.
+func (a *Account) UnpickleLibOlm(buf []byte) error {
+	decoder := libolmpickle.NewDecoder(buf)
+	pickledVersion, err := decoder.ReadUInt32()
 	if err != nil {
-		return 0, err
+		return err
+	} else if pickledVersion != accountPickleVersionLibOLM && pickledVersion != 3 && pickledVersion != 2 {
+		return fmt.Errorf("unpickle account: %w (found version %d)", olm.ErrBadVersion, pickledVersion)
+	} else if err = a.IdKeys.Ed25519.UnpickleLibOlm(decoder); err != nil { // read the ed25519 key pair
+		return err
+	} else if err = a.IdKeys.Curve25519.UnpickleLibOlm(decoder); err != nil { // read curve25519 key pair
+		return err
 	}
-	switch pickledVersion {
-	case accountPickleVersionLibOLM, 3, 2:
-	default:
-		return 0, fmt.Errorf("unpickle account: %w", olm.ErrBadVersion)
-	}
-	//read ed25519 key pair
-	readBytes, err := a.IdKeys.Ed25519.UnpickleLibOlm(value[curPos:])
+
+	otkCount, err := decoder.ReadUInt32()
 	if err != nil {
-		return 0, err
+		return err
 	}
-	curPos += readBytes
-	//read curve25519 key pair
-	readBytes, err = a.IdKeys.Curve25519.UnpickleLibOlm(value[curPos:])
-	if err != nil {
-		return 0, err
-	}
-	curPos += readBytes
-	//Read number of onetimeKeys
-	numberOTKeys, readBytes, err := libolmpickle.UnpickleUInt32(value[curPos:])
-	if err != nil {
-		return 0, err
-	}
-	curPos += readBytes
-	//Read i one time keys
-	a.OTKeys = make([]crypto.OneTimeKey, numberOTKeys)
-	for i := uint32(0); i < numberOTKeys; i++ {
-		readBytes, err := a.OTKeys[i].UnpickleLibOlm(value[curPos:])
-		if err != nil {
-			return 0, err
+
+	a.OTKeys = make([]crypto.OneTimeKey, otkCount)
+	for i := uint32(0); i < otkCount; i++ {
+		if err := a.OTKeys[i].UnpickleLibOlm(decoder); err != nil {
+			return err
 		}
-		curPos += readBytes
 	}
+
 	if pickledVersion <= 2 {
 		// version 2 did not have fallback keys
 		a.NumFallbackKeys = 0
 	} else if pickledVersion == 3 {
 		// version 3 used the published flag to indicate how many fallback keys
 		// were present (we'll have to assume that the keys were published)
-		readBytes, err := a.CurrentFallbackKey.UnpickleLibOlm(value[curPos:])
-		if err != nil {
-			return 0, err
+		if err = a.CurrentFallbackKey.UnpickleLibOlm(decoder); err != nil {
+			return err
+		} else if err = a.PrevFallbackKey.UnpickleLibOlm(decoder); err != nil {
+			return err
 		}
-		curPos += readBytes
-		readBytes, err = a.PrevFallbackKey.UnpickleLibOlm(value[curPos:])
-		if err != nil {
-			return 0, err
-		}
-		curPos += readBytes
 		if a.CurrentFallbackKey.Published {
 			if a.PrevFallbackKey.Published {
 				a.NumFallbackKeys = 2
@@ -392,36 +373,33 @@ func (a *Account) UnpickleLibOlm(value []byte) (int, error) {
 			a.NumFallbackKeys = 0
 		}
 	} else {
-		//Read number of fallback keys
-		numFallbackKeys, readBytes, err := libolmpickle.UnpickleUInt8(value[curPos:])
+		// Read number of fallback keys
+		a.NumFallbackKeys, err = decoder.ReadUInt8()
 		if err != nil {
-			return 0, err
+			return err
 		}
-		curPos += readBytes
-		a.NumFallbackKeys = numFallbackKeys
-		if a.NumFallbackKeys >= 1 {
-			readBytes, err := a.CurrentFallbackKey.UnpickleLibOlm(value[curPos:])
-			if err != nil {
-				return 0, err
-			}
-			curPos += readBytes
-			if a.NumFallbackKeys >= 2 {
-				readBytes, err := a.PrevFallbackKey.UnpickleLibOlm(value[curPos:])
-				if err != nil {
-					return 0, err
+		for i := 0; i < int(a.NumFallbackKeys); i++ {
+			switch i {
+			case 0:
+				if err = a.CurrentFallbackKey.UnpickleLibOlm(decoder); err != nil {
+					return err
 				}
-				curPos += readBytes
+			case 1:
+				if err = a.PrevFallbackKey.UnpickleLibOlm(decoder); err != nil {
+					return err
+				}
+			default:
+				// Just drain any remaining fallback keys
+				if err = (&crypto.OneTimeKey{}).UnpickleLibOlm(decoder); err != nil {
+					return err
+				}
 			}
 		}
 	}
-	//Read next onetime key id
-	nextOTKeyID, readBytes, err := libolmpickle.UnpickleUInt32(value[curPos:])
-	if err != nil {
-		return 0, err
-	}
-	curPos += readBytes
-	a.NextOneTimeKeyID = nextOTKeyID
-	return curPos, nil
+
+	//Read next onetime key ID
+	a.NextOneTimeKeyID, err = decoder.ReadUInt32()
+	return err
 }
 
 // Pickle returns a base64 encoded and with key encrypted pickled account using PickleLibOlm().

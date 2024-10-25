@@ -48,9 +48,8 @@ func TestEd25519Pickle(t *testing.T) {
 	assert.Len(t, encoder.Bytes(), ed25519KeyPairPickleLength)
 
 	unpickledKeyPair := crypto.Ed25519KeyPair{}
-	readBytes, err := unpickledKeyPair.UnpickleLibOlm(encoder.Bytes())
+	err = unpickledKeyPair.UnpickleLibOlm(libolmpickle.NewDecoder(encoder.Bytes()))
 	assert.NoError(t, err)
-	assert.Len(t, encoder.Bytes(), readBytes, "read bytes not correct")
 	assert.Equal(t, keyPair, unpickledKeyPair)
 }
 
@@ -65,9 +64,8 @@ func TestEd25519PicklePubKeyOnly(t *testing.T) {
 	assert.Len(t, encoder.Bytes(), ed25519KeyPairPickleLength)
 
 	unpickledKeyPair := crypto.Ed25519KeyPair{}
-	readBytes, err := unpickledKeyPair.UnpickleLibOlm(encoder.Bytes())
+	err = unpickledKeyPair.UnpickleLibOlm(libolmpickle.NewDecoder(encoder.Bytes()))
 	assert.NoError(t, err)
-	assert.Len(t, encoder.Bytes(), readBytes, "read bytes not correct")
 	assert.Equal(t, keyPair, unpickledKeyPair)
 }
 
@@ -82,8 +80,7 @@ func TestEd25519PicklePrivKeyOnly(t *testing.T) {
 	assert.Len(t, encoder.Bytes(), ed25519KeyPairPickleLength)
 
 	unpickledKeyPair := crypto.Ed25519KeyPair{}
-	readBytes, err := unpickledKeyPair.UnpickleLibOlm(encoder.Bytes())
+	err = unpickledKeyPair.UnpickleLibOlm(libolmpickle.NewDecoder(encoder.Bytes()))
 	assert.NoError(t, err)
-	assert.Len(t, encoder.Bytes(), readBytes, "read bytes not correct")
 	assert.Equal(t, keyPair, unpickledKeyPair)
 }

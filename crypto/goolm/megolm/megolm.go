@@ -197,23 +197,15 @@ func (r *Ratchet) UnpickleAsJSON(pickled, key []byte) error {
 }
 
 // UnpickleLibOlm decodes the unencryted value and populates the Ratchet accordingly. It returns the number of bytes read.
-func (r *Ratchet) UnpickleLibOlm(unpickled []byte) (int, error) {
-	//read ratchet data
-	curPos := 0
-	ratchetData, readBytes, err := libolmpickle.UnpickleBytes(unpickled, RatchetParts*RatchetPartLength)
+func (r *Ratchet) UnpickleLibOlm(decoder *libolmpickle.Decoder) error {
+	ratchetData, err := decoder.ReadBytes(RatchetParts * RatchetPartLength)
 	if err != nil {
-		return 0, err
+		return err
 	}
 	copy(r.Data[:], ratchetData)
-	curPos += readBytes
-	//Read counter
-	counter, readBytes, err := libolmpickle.UnpickleUInt32(unpickled[curPos:])
-	if err != nil {
-		return 0, err
-	}
-	curPos += readBytes
-	r.Counter = counter
-	return curPos, nil
+
+	r.Counter, err = decoder.ReadUInt32()
+	return err
 }
 
 // PickleLibOlm pickles the ratchet into the encoder.
