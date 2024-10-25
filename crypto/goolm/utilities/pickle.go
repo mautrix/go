@@ -21,8 +21,8 @@ func PickleAsJSON(object any, pickleVersion byte, key []byte) ([]byte, error) {
 	toEncrypt := make([]byte, len(marshaled))
 	copy(toEncrypt, marshaled)
 	//pad marshaled to get block size
-	if len(marshaled)%cipher.PickleBlockSize() != 0 {
-		padding := cipher.PickleBlockSize() - len(marshaled)%cipher.PickleBlockSize()
+	if len(marshaled)%cipher.PickleBlockSize != 0 {
+		padding := cipher.PickleBlockSize - len(marshaled)%cipher.PickleBlockSize
 		toEncrypt = make([]byte, len(marshaled)+padding)
 		copy(toEncrypt, marshaled)
 	}

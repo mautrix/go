@@ -66,7 +66,7 @@ func (o *MegolmOutboundSession) Encrypt(plaintext []byte) ([]byte, error) {
 	if len(plaintext) == 0 {
 		return nil, olm.ErrEmptyInput
 	}
-	encrypted, err := o.Ratchet.Encrypt(plaintext, &o.SigningKey)
+	encrypted, err := o.Ratchet.Encrypt(plaintext, o.SigningKey)
 	return goolmbase64.Encode(encrypted), err
 }
 

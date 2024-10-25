@@ -36,5 +36,5 @@ func (p *Encoder) WriteEmptyBytes(count int) {
 }
 
 func (p *Encoder) WriteUInt32(value uint32) {
-	exerrors.Must(p.Write(binary.BigEndian.AppendUint32(nil, value)))
+	exerrors.PanicIfNotNil(binary.Write(&p.Buffer, binary.BigEndian, value))
 }
