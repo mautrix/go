@@ -66,6 +66,7 @@ type LinkConverter func(text, href string, ctx Context) string
 type ColorConverter func(text, fg, bg string, ctx Context) string
 type CodeBlockConverter func(code, language string, ctx Context) string
 type PillConverter func(displayname, mxid, eventID string, ctx Context) string
+type ImageConverter func(src, alt string, isEmoji bool) string
 
 const ContextKeyMentions = "_mentions"
 
@@ -107,6 +108,7 @@ type HTMLParser struct {
 	MonospaceBlockConverter CodeBlockConverter
 	MonospaceConverter      TextConverter
 	TextConverter           TextConverter
+	ImageConverter          ImageConverter
 }
 
 // TaggedString is a string that also contains a HTML tag.
@@ -298,6 +300,16 @@ func (parser *HTMLParser) linkToString(node *html.Node, ctx Context) string {
 	return fmt.Sprintf("%s (%s)", str, href)
 }
 
+func (parser *HTMLParser) imgToString(node *html.Node, ctx Context) string {
+	src := parser.getAttribute(node, "src")
+	alt := parser.getAttribute(node, "alt")
+	_, isEmoji := parser.maybeGetAttribute(node, "data-mx-emoticon")
+	if parser.ImageConverter != nil {
+		return parser.ImageConverter(src, alt, isEmoji)
+	}
+	return alt
+}
+
 func (parser *HTMLParser) tagToString(node *html.Node, ctx Context) string {
 	ctx = ctx.WithTag(node.Data)
 	switch node.Data {
@@ -317,6 +329,8 @@ func (parser *HTMLParser) tagToString(node *html.Node, ctx Context) string {
 		return parser.linkToString(node, ctx)
 	case "p":
 		return parser.nodeToTagAwareString(node.FirstChild, ctx)
+	case "img":
+		return parser.imgToString(node, ctx)
 	case "hr":
 		return parser.HorizontalLine
 	case "pre":
