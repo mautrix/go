@@ -13,7 +13,6 @@ import (
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
 	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
 	"maunium.net/go/mautrix/crypto/goolm/message"
-	"maunium.net/go/mautrix/crypto/goolm/utilities"
 	"maunium.net/go/mautrix/crypto/olm"
 )
 
@@ -281,12 +280,12 @@ func (r *Ratchet) decryptForNewChain(message *message.Message, rawMessage []byte
 
 // PickleAsJSON returns a ratchet as a base64 string encrypted using the supplied key. The unencrypted representation of the Account is in JSON format.
 func (r Ratchet) PickleAsJSON(key []byte) ([]byte, error) {
-	return utilities.PickleAsJSON(r, olmPickleVersion, key)
+	return libolmpickle.PickleAsJSON(r, olmPickleVersion, key)
 }
 
 // UnpickleAsJSON updates a ratchet by a base64 encrypted string using the supplied key. The unencrypted representation has to be in JSON format.
 func (r *Ratchet) UnpickleAsJSON(pickled, key []byte) error {
-	return utilities.UnpickleAsJSON(r, pickled, key, olmPickleVersion)
+	return libolmpickle.UnpickleAsJSON(r, pickled, key, olmPickleVersion)
 }
 
 // UnpickleLibOlm unpickles the unencryted value and populates the [Ratchet]

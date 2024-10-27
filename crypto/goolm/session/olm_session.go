@@ -7,13 +7,11 @@ import (
 	"fmt"
 	"strings"
 
-	"maunium.net/go/mautrix/crypto/goolm/cipher"
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
 	"maunium.net/go/mautrix/crypto/goolm/goolmbase64"
 	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
 	"maunium.net/go/mautrix/crypto/goolm/message"
 	"maunium.net/go/mautrix/crypto/goolm/ratchet"
-	"maunium.net/go/mautrix/crypto/goolm/utilities"
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
 )
@@ -189,12 +187,12 @@ func NewInboundOlmSession(identityKeyAlice *crypto.Curve25519PublicKey, received
 
 // PickleAsJSON returns an Session as a base64 string encrypted using the supplied key. The unencrypted representation of the Account is in JSON format.
 func (a OlmSession) PickleAsJSON(key []byte) ([]byte, error) {
-	return utilities.PickleAsJSON(a, olmSessionPickleVersionJSON, key)
+	return libolmpickle.PickleAsJSON(a, olmSessionPickleVersionJSON, key)
 }
 
 // UnpickleAsJSON updates an Session by a base64 encrypted string with the key. The unencrypted representation has to be in JSON format.
 func (a *OlmSession) UnpickleAsJSON(pickled, key []byte) error {
-	return utilities.UnpickleAsJSON(a, pickled, key, olmSessionPickleVersionJSON)
+	return libolmpickle.UnpickleAsJSON(a, pickled, key, olmSessionPickleVersionJSON)
 }
 
 // ID returns an identifier for this Session.  Will be the same for both ends of the conversation.
@@ -355,7 +353,7 @@ func (o *OlmSession) Unpickle(pickled, key []byte) error {
 	if len(pickled) == 0 {
 		return olm.ErrEmptyInput
 	}
-	decrypted, err := cipher.Unpickle(key, pickled)
+	decrypted, err := libolmpickle.Unpickle(key, pickled)
 	if err != nil {
 		return err
 	}
@@ -396,7 +394,7 @@ func (s *OlmSession) Pickle(key []byte) ([]byte, error) {
 	if len(key) == 0 {
 		return nil, olm.ErrNoKeyProvided
 	}
-	return cipher.Pickle(key, s.PickleLibOlm())
+	return libolmpickle.Pickle(key, s.PickleLibOlm())
 }
 
 // PickleLibOlm pickles the session and returns the raw bytes.

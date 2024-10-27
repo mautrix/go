@@ -1,40 +1,48 @@
 package libolmpickle
 
 import (
-	"bytes"
-	"encoding/binary"
+	"crypto/aes"
+	"fmt"
 
-	"go.mau.fi/util/exerrors"
+	"maunium.net/go/mautrix/crypto/goolm/aessha2"
+	"maunium.net/go/mautrix/crypto/goolm/goolmbase64"
+	"maunium.net/go/mautrix/crypto/olm"
 )
 
-const (
-	PickleBoolLength   = 1
-	PickleUInt8Length  = 1
-	PickleUInt32Length = 4
-)
+const pickleMACLength = 8
 
-type Encoder struct {
-	bytes.Buffer
-}
+var kdfPickle = []byte("Pickle") //used to derive the keys for encryption
 
-func NewEncoder() *Encoder { return &Encoder{} }
-
-func (p *Encoder) WriteUInt8(value uint8) {
-	exerrors.PanicIfNotNil(p.WriteByte(value))
-}
-
-func (p *Encoder) WriteBool(value bool) {
-	if value {
-		exerrors.PanicIfNotNil(p.WriteByte(0x01))
+// Pickle encrypts the input with the key and the cipher AESSHA256. The result is then encoded in base64.
+func Pickle(key, plaintext []byte) ([]byte, error) {
+	if c, err := aessha2.NewAESSHA2(key, kdfPickle); err != nil {
+		return nil, err
+	} else if ciphertext, err := c.Encrypt(plaintext); err != nil {
+		return nil, err
+	} else if mac, err := c.MAC(ciphertext); err != nil {
+		return nil, err
 	} else {
-		exerrors.PanicIfNotNil(p.WriteByte(0x00))
+		return goolmbase64.Encode(append(ciphertext, mac[:pickleMACLength]...)), nil
 	}
 }
 
-func (p *Encoder) WriteEmptyBytes(count int) {
-	exerrors.Must(p.Write(make([]byte, count)))
-}
-
-func (p *Encoder) WriteUInt32(value uint32) {
-	exerrors.Must(p.Write(binary.BigEndian.AppendUint32(nil, value)))
+// Unpickle decodes the input from base64 and decrypts the decoded input with the key and the cipher AESSHA256.
+func Unpickle(key, input []byte) ([]byte, error) {
+	ciphertext, err := goolmbase64.Decode(input)
+	if err != nil {
+		return nil, err
+	}
+	ciphertext, mac := ciphertext[:len(ciphertext)-pickleMACLength], ciphertext[len(ciphertext)-pickleMACLength:]
+	if c, err := aessha2.NewAESSHA2(key, kdfPickle); err != nil {
+		return nil, err
+	} else if verified, err := c.VerifyMAC(ciphertext, mac); err != nil {
+		return nil, err
+	} else if !verified {
+		return nil, fmt.Errorf("decrypt pickle: %w", olm.ErrBadMAC)
+	} else {
+		// Set to next block size
+		targetCipherText := make([]byte, int(len(ciphertext)/aes.BlockSize)*aes.BlockSize)
+		copy(targetCipherText, ciphertext)
+		return c.Decrypt(targetCipherText)
+	}
 }

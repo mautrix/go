@@ -21,7 +21,7 @@ import (
 	"go.mau.fi/util/dbutil"
 
 	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/crypto/goolm/cipher"
+	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/crypto/sql_store_upgrade"
 	"maunium.net/go/mautrix/event"
@@ -944,7 +944,7 @@ func (store *SQLCryptoStore) DropSignaturesByKey(ctx context.Context, userID id.
 }
 
 func (store *SQLCryptoStore) PutSecret(ctx context.Context, name id.Secret, value string) error {
-	bytes, err := cipher.Pickle(store.PickleKey, []byte(value))
+	bytes, err := libolmpickle.Pickle(store.PickleKey, []byte(value))
 	if err != nil {
 		return err
 	}
@@ -963,7 +963,7 @@ func (store *SQLCryptoStore) GetSecret(ctx context.Context, name id.Secret) (val
 	} else if err != nil {
 		return "", err
 	}
-	bytes, err = cipher.Unpickle(store.PickleKey, bytes)
+	bytes, err = libolmpickle.Unpickle(store.PickleKey, bytes)
 	return string(bytes), err
 }
 

@@ -8,11 +8,9 @@ import (
 
 	"maunium.net/go/mautrix/id"
 
-	"maunium.net/go/mautrix/crypto/goolm/cipher"
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
 	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
 	"maunium.net/go/mautrix/crypto/goolm/session"
-	"maunium.net/go/mautrix/crypto/goolm/utilities"
 	"maunium.net/go/mautrix/crypto/olm"
 )
 
@@ -76,12 +74,12 @@ func NewAccount() (*Account, error) {
 
 // PickleAsJSON returns an Account as a base64 string encrypted using the supplied key. The unencrypted representation of the Account is in JSON format.
 func (a *Account) PickleAsJSON(key []byte) ([]byte, error) {
-	return utilities.PickleAsJSON(a, accountPickleVersionJSON, key)
+	return libolmpickle.PickleAsJSON(a, accountPickleVersionJSON, key)
 }
 
 // UnpickleAsJSON updates an Account by a base64 encrypted string using the supplied key. The unencrypted representation has to be in JSON format.
 func (a *Account) UnpickleAsJSON(pickled, key []byte) error {
-	return utilities.UnpickleAsJSON(a, pickled, key, accountPickleVersionJSON)
+	return libolmpickle.UnpickleAsJSON(a, pickled, key, accountPickleVersionJSON)
 }
 
 // IdentityKeysJSON returns the public parts of the identity keys for the Account in a JSON string.
@@ -322,7 +320,7 @@ func (a *Account) ForgetOldFallbackKey() {
 // Unpickle decodes the base64 encoded string and decrypts the result with the key.
 // The decrypted value is then passed to UnpickleLibOlm.
 func (a *Account) Unpickle(pickled, key []byte) error {
-	decrypted, err := cipher.Unpickle(key, pickled)
+	decrypted, err := libolmpickle.Unpickle(key, pickled)
 	if err != nil {
 		return err
 	}
@@ -410,7 +408,7 @@ func (a *Account) Pickle(key []byte) ([]byte, error) {
 	if len(key) == 0 {
 		return nil, olm.ErrNoKeyProvided
 	}
-	return cipher.Pickle(key, a.PickleLibOlm())
+	return libolmpickle.Pickle(key, a.PickleLibOlm())
 }
 
 // PickleLibOlm pickles the [Account] and returns the raw bytes.
