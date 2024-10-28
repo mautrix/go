@@ -73,42 +73,42 @@ func (evt *EventMeta) ShouldCreatePortal() bool {
 	return evt.CreatePortal
 }
 
-func (evt *EventMeta) WithType(t bridgev2.RemoteEventType) *EventMeta {
+func (evt EventMeta) WithType(t bridgev2.RemoteEventType) EventMeta {
 	evt.Type = t
 	return evt
 }
 
-func (evt *EventMeta) WithLogContext(f func(c zerolog.Context) zerolog.Context) *EventMeta {
+func (evt EventMeta) WithLogContext(f func(c zerolog.Context) zerolog.Context) EventMeta {
 	evt.LogContext = f
 	return evt
 }
 
-func (evt *EventMeta) WithPortalKey(p networkid.PortalKey) *EventMeta {
+func (evt EventMeta) WithPortalKey(p networkid.PortalKey) EventMeta {
 	evt.PortalKey = p
 	return evt
 }
 
-func (evt *EventMeta) WithUncertainReceiver(u bool) *EventMeta {
+func (evt EventMeta) WithUncertainReceiver(u bool) EventMeta {
 	evt.UncertainReceiver = u
 	return evt
 }
 
-func (evt *EventMeta) WithSender(s bridgev2.EventSender) *EventMeta {
+func (evt EventMeta) WithSender(s bridgev2.EventSender) EventMeta {
 	evt.Sender = s
 	return evt
 }
 
-func (evt *EventMeta) WithCreatePortal(c bool) *EventMeta {
+func (evt EventMeta) WithCreatePortal(c bool) EventMeta {
 	evt.CreatePortal = c
 	return evt
 }
 
-func (evt *EventMeta) WithTimestamp(t time.Time) *EventMeta {
+func (evt EventMeta) WithTimestamp(t time.Time) EventMeta {
 	evt.Timestamp = t
 	return evt
 }
 
-func (evt *EventMeta) WithStreamOrder(s int64) *EventMeta {
+func (evt EventMeta) WithStreamOrder(s int64) EventMeta {
 	evt.StreamOrder = s
 	return evt
 }
