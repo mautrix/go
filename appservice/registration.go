@@ -27,7 +27,7 @@ type Registration struct {
 	Protocols       []string   `yaml:"protocols,omitempty" json:"protocols,omitempty"`
 
 	SoruEphemeralEvents bool `yaml:"de.sorunome.msc2409.push_ephemeral,omitempty" json:"de.sorunome.msc2409.push_ephemeral,omitempty"`
-	EphemeralEvents     bool `yaml:"push_ephemeral,omitempty" json:"push_ephemeral,omitempty"`
+	EphemeralEvents     bool `yaml:"receive_ephemeral,omitempty" json:"receive_ephemeral,omitempty"`
 	MSC3202             bool `yaml:"org.matrix.msc3202,omitempty" json:"org.matrix.msc3202,omitempty"`
 }
 
