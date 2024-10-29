@@ -240,6 +240,7 @@ func (vh *VerificationHelper) Init(ctx context.Context) error {
 				Stringer("sender", evt.Sender).
 				Stringer("room_id", evt.RoomID).
 				Stringer("event_id", evt.ID).
+				Stringer("event_type", evt.Type).
 				Logger()
 
 			var transactionID id.VerificationTransactionID
@@ -266,8 +267,10 @@ func (vh *VerificationHelper) Init(ctx context.Context) error {
 					return
 				}
 
+				log.Warn().Msg("Sending cancellation event for unknown transaction ID")
+
 				// We have to create a fake transaction so that the call to
-				// verificationCancelled works.
+				// cancelVerificationTxn works.
 				txn = &verificationTransaction{
 					RoomID:    evt.RoomID,
 					TheirUser: evt.Sender,
