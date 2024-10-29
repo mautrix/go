@@ -149,7 +149,7 @@ func (et *Type) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&et.Type)
 }
 
-func (et Type) UnmarshalText(data []byte) error {
+func (et *Type) UnmarshalText(data []byte) error {
 	et.Type = string(data)
 	et.Class = et.GuessClass()
 	return nil
@@ -159,11 +159,11 @@ func (et Type) MarshalText() ([]byte, error) {
 	return []byte(et.Type), nil
 }
 
-func (et *Type) String() string {
+func (et Type) String() string {
 	return et.Type
 }
 
-func (et *Type) Repr() string {
+func (et Type) Repr() string {
 	return fmt.Sprintf("%s (%s)", et.Type, et.Class.Name())
 }
 
