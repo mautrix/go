@@ -564,6 +564,8 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 }
 
 func (portal *Portal) handleMatrixReceipts(ctx context.Context, evt *event.Event) {
+	log := zerolog.Ctx(ctx).With().Str("action", "handle_read_receipts").Logger()
+
 	content, ok := evt.Content.Parsed.(*event.ReceiptEventContent)
 	if !ok {
 		return
@@ -574,9 +576,20 @@ func (portal *Portal) handleMatrixReceipts(ctx context.Context, evt *event.Event
 			continue
 		}
 		for userID, receipt := range readReceipts {
+			log := log.With().
+				Stringer("event_id", evtID).
+				Stringer("user_id", userID).
+				Logger()
 			sender, err := portal.Bridge.GetUserByMXID(ctx, userID)
 			if err != nil {
-				// TODO log
+				log.Err(err).Msg("Failed to get user of the read receipt")
+				return
+			}
+			_, _, err = portal.FindPreferredLogin(ctx, sender, true)
+			if err != nil {
+				if !errors.Is(err, ErrNotLoggedIn) {
+					log.Err(err).Msg("Failed to get user login to send read receipt")
+				}
 				return
 			}
 			portal.handleMatrixReadReceipt(ctx, sender, evtID, receipt)
