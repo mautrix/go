@@ -17,7 +17,7 @@ import (
 	"testing"
 
 	"github.com/gorilla/mux"
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog/log" // zerolog-allow-global-log
 	"github.com/stretchr/testify/require"
 	"go.mau.fi/util/random"
 

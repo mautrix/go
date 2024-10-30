@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog/log" // zerolog-allow-global-log
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
