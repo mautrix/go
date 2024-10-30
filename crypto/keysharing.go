@@ -59,11 +59,15 @@ func (mach *OlmMachine) RequestRoomKey(ctx context.Context, toUser id.UserID, to
 		select {
 		case <-keyResponseReceived:
 			// key request successful
-			mach.Log.Debug().Msgf("Key for session %v was received, cancelling other key requests", sessionID)
+			mach.Log.Debug().
+				Stringer("session_id", sessionID).
+				Msg("Key for session was received, cancelling other key requests")
 			resChan <- true
 		case <-ctx.Done():
 			// if the context is done, key request was unsuccessful
-			mach.Log.Debug().Msgf("Context closed (%v) before forwared key for session %v received, sending key request cancellation", ctx.Err(), sessionID)
+			mach.Log.Debug().Err(err).
+				Stringer("session_id", sessionID).
+				Msg("Context closed before forwarded key for session received, sending key request cancellation")
 			resChan <- false
 		}
 
@@ -332,7 +336,7 @@ func (mach *OlmMachine) HandleRoomKeyRequest(ctx context.Context, sender id.User
 	}
 	if internalID := igs.ID(); internalID != content.Body.SessionID {
 		// Should this be an error?
-		log = log.With().Str("unexpected_session_id", internalID.String()).Logger()
+		log = log.With().Stringer("unexpected_session_id", internalID).Logger()
 	}
 
 	firstKnownIndex := igs.Internal.FirstKnownIndex()

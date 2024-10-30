@@ -58,7 +58,7 @@ func (ce *Event) ReplyAdvanced(msg string, allowMarkdown, allowHTML bool) {
 	content.MsgType = event.MsgNotice
 	_, err := ce.Bot.SendMessage(ce.Ctx, ce.OrigRoomID, event.EventMessage, &event.Content{Parsed: &content}, nil)
 	if err != nil {
-		ce.Log.Err(err).Msgf("Failed to reply to command")
+		ce.Log.Err(err).Msg("Failed to reply to command")
 	}
 }
 
@@ -74,7 +74,7 @@ func (ce *Event) React(key string) {
 		},
 	}, nil)
 	if err != nil {
-		ce.Log.Err(err).Msgf("Failed to react to command")
+		ce.Log.Err(err).Msg("Failed to react to command")
 	}
 }
 
@@ -86,7 +86,7 @@ func (ce *Event) Redact(req ...mautrix.ReqRedact) {
 		},
 	}, nil)
 	if err != nil {
-		ce.Log.Err(err).Msgf("Failed to redact command")
+		ce.Log.Err(err).Msg("Failed to redact command")
 	}
 }
 
@@ -95,6 +95,6 @@ func (ce *Event) MarkRead() {
 	// TODO
 	//err := ce.Bot.SendReceipt(ce.Ctx, ce.RoomID, ce.EventID, event.ReceiptTypeRead, nil)
 	//if err != nil {
-	//	ce.Log.Err(err).Msgf("Failed to mark command as read")
+	//	ce.Log.Err(err).Msg("Failed to mark command as read")
 	//}
 }
