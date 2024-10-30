@@ -359,23 +359,26 @@ func (mach *OlmMachine) encryptAndSendGroupSession(ctx context.Context, session 
 		toDevice.Messages[userID] = output
 		for deviceID, device := range sessions {
 			log.Trace().
-				Str("target_user_id", userID.String()).
-				Str("target_device_id", deviceID.String()).
+				Stringer("target_user_id", userID).
+				Stringer("target_device_id", deviceID).
+				Stringer("target_identity_key", device.identity.IdentityKey).
 				Msg("Encrypting group session for device")
 			content := mach.encryptOlmEvent(ctx, device.session, device.identity, event.ToDeviceRoomKey, session.ShareContent())
 			output[deviceID] = &event.Content{Parsed: content}
 			deviceCount++
 			log.Debug().
-				Str("target_user_id", userID.String()).
-				Str("target_device_id", deviceID.String()).
+				Stringer("target_user_id", userID).
+				Stringer("target_device_id", deviceID).
+				Stringer("target_identity_key", device.identity.IdentityKey).
 				Msg("Encrypted group session for device")
 			if !mach.DisableSharedGroupSessionTracking {
 				err := mach.CryptoStore.MarkOutboundGroupSessionShared(ctx, userID, device.identity.IdentityKey, session.id)
 				if err != nil {
 					log.Warn().
 						Err(err).
-						Str("target_user_id", userID.String()).
-						Str("target_device_id", deviceID.String()).
+						Stringer("target_user_id", userID).
+						Stringer("target_device_id", deviceID).
+						Stringer("target_identity_key", device.identity.IdentityKey).
 						Stringer("target_session_id", session.id).
 						Msg("Failed to mark outbound group session shared")
 				}
@@ -394,8 +397,9 @@ func (mach *OlmMachine) encryptAndSendGroupSession(ctx context.Context, session 
 func (mach *OlmMachine) findOlmSessionsForUser(ctx context.Context, session *OutboundGroupSession, userID id.UserID, devices map[id.DeviceID]*id.Device, output map[id.DeviceID]deviceSessionWrapper, withheld map[id.DeviceID]*event.Content, missingOutput map[id.DeviceID]*id.Device) {
 	for deviceID, device := range devices {
 		log := zerolog.Ctx(ctx).With().
-			Str("target_user_id", userID.String()).
-			Str("target_device_id", deviceID.String()).
+			Stringer("target_user_id", userID).
+			Stringer("target_device_id", deviceID).
+			Stringer("target_identity_key", device.IdentityKey).
 			Logger()
 		userKey := UserDevice{UserID: userID, DeviceID: deviceID}
 		if state := session.Users[userKey]; state != OGSNotShared {
