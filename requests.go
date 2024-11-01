@@ -123,6 +123,8 @@ type ReqCreateRoom struct {
 	BeeperInitialMembers  []id.UserID `json:"com.beeper.initial_members,omitempty"`
 	BeeperAutoJoinInvites bool        `json:"com.beeper.auto_join_invites,omitempty"`
 	BeeperLocalRoomID     id.RoomID   `json:"com.beeper.local_room_id,omitempty"`
+	BeeperBridgeName      string      `json:"com.beeper.bridge_name,omitempty"`
+	BeeperBridgeAccountID string      `json:"com.beeper.bridge_account_id,omitempty"`
 }
 
 // ReqRedact is the JSON request for https://spec.matrix.org/v1.2/client-server-api/#put_matrixclientv3roomsroomidredacteventidtxnid
