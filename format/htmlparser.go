@@ -102,6 +102,8 @@ type HTMLParser struct {
 	ItalicConverter         TextConverter
 	StrikethroughConverter  TextConverter
 	UnderlineConverter      TextConverter
+	MathConverter           TextConverter
+	MathBlockConverter      TextConverter
 	LinkConverter           LinkConverter
 	SpoilerConverter        SpoilerConverter
 	ColorConverter          ColorConverter
@@ -238,6 +240,16 @@ func (parser *HTMLParser) basicFormatToString(node *html.Node, ctx Context) stri
 
 func (parser *HTMLParser) spanToString(node *html.Node, ctx Context) string {
 	str := parser.nodeToTagAwareString(node.FirstChild, ctx)
+	if node.Data == "span" || node.Data == "div" {
+		math, _ := parser.maybeGetAttribute(node, "data-mx-maths")
+		if math != "" && parser.MathConverter != nil {
+			if node.Data == "div" && parser.MathBlockConverter != nil {
+				str = parser.MathBlockConverter(math, ctx)
+			} else {
+				str = parser.MathConverter(math, ctx)
+			}
+		}
+	}
 	if node.Data == "span" {
 		reason, isSpoiler := parser.maybeGetAttribute(node, "data-mx-spoiler")
 		if isSpoiler {
@@ -448,6 +460,12 @@ func HTMLToMarkdownAndMentions(html string) (parsed string, mentions *event.Ment
 				return text
 			}
 			return fmt.Sprintf("[%s](%s)", text, href)
+		},
+		MathConverter: func(s string, c Context) string {
+			return fmt.Sprintf("$%s$", s)
+		},
+		MathBlockConverter: func(s string, c Context) string {
+			return fmt.Sprintf("$$\n%s\n$$", s)
 		},
 	}).Parse(html, ctx)
 	mentionList, _ := ctx.ReturnData[ContextKeyMentions].([]id.UserID)
