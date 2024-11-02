@@ -158,3 +158,23 @@ func TestRenderMarkdown_DiscordUnderline(t *testing.T) {
 		assert.Equal(t, html, strings.ReplaceAll(rendered, "\n", ""))
 	}
 }
+
+var mathTests = map[string]string{
+	"$foo$":            `<span data-mx-maths="foo"><code>foo</code></span>`,
+	"$$foo$$":          `<div data-mx-maths="foo"><code>foo</code></div>`,
+	"$$\nfoo\nbar\n$$": `<div data-mx-maths="foo\nbar\n"><code>foo<br>bar<br></code></div>`,
+	"`$foo$`":          `<code>$foo$</code>`,
+	"```\n$foo$\n```":  `<pre><code>$foo$\n</code></pre>`,
+	"~~$foo$~~":        `<del><span data-mx-maths="foo"><code>foo</code></span></del>`,
+	"$5 or $10":        `$5 or $10`,
+	"5$ or 10$":        `5$ or 10$`,
+	"$5 or 10$":        `<span data-mx-maths="5 or 10"><code>5 or 10</code></span>`,
+}
+
+func TestRenderMarkdown_Math(t *testing.T) {
+	renderer := goldmark.New(goldmark.WithExtensions(extension.Strikethrough, mdext.Math, mdext.EscapeHTML), format.HTMLOptions)
+	for markdown, html := range mathTests {
+		rendered := format.UnwrapSingleParagraph(render(renderer, markdown))
+		assert.Equal(t, html, strings.ReplaceAll(rendered, "\n", "\\n"))
+	}
+}
