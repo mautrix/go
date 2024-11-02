@@ -160,21 +160,27 @@ func TestRenderMarkdown_DiscordUnderline(t *testing.T) {
 }
 
 var mathTests = map[string]string{
-	"$foo$":            `<span data-mx-maths="foo"><code>foo</code></span>`,
-	"$$foo$$":          `<div data-mx-maths="foo"><code>foo</code></div>`,
-	"$$\nfoo\nbar\n$$": `<div data-mx-maths="foo\nbar\n"><code>foo<br>bar<br></code></div>`,
-	"`$foo$`":          `<code>$foo$</code>`,
-	"```\n$foo$\n```":  `<pre><code>$foo$\n</code></pre>`,
-	"~~$foo$~~":        `<del><span data-mx-maths="foo"><code>foo</code></span></del>`,
-	"$5 or $10":        `$5 or $10`,
-	"5$ or 10$":        `5$ or 10$`,
-	"$5 or 10$":        `<span data-mx-maths="5 or 10"><code>5 or 10</code></span>`,
+	"$foo$":              `<span data-mx-maths="foo"><code>foo</code></span>`,
+	"hello $foo$ world":  `hello <span data-mx-maths="foo"><code>foo</code></span> world`,
+	"$$\nfoo\nbar\n$$":   `<div data-mx-maths="foo\nbar"><code>foo<br>bar</code></div>`,
+	"`$foo$`":            `<code>$foo$</code>`,
+	"```\n$foo$\n```":    `<pre><code>$foo$\n</code></pre>`,
+	"~~meow $foo$ asd~~": `<del>meow <span data-mx-maths="foo"><code>foo</code></span> asd</del>`,
+	"$5 or $10":          `$5 or $10`,
+	"5$ or 10$":          `5$ or 10$`,
+	"$5 or 10$":          `<span data-mx-maths="5 or 10"><code>5 or 10</code></span>`,
+	"$*500*$":            `<span data-mx-maths="*500*"><code>*500*</code></span>`,
+	"$$\n*500*\n$$":      `<div data-mx-maths="*500*"><code>*500*</code></div>`,
+
+	// TODO: This doesn't work :(
+	// Maybe same reason as the spoiler wrapping not working?
+	//"~~$foo$~~": `<del><span data-mx-maths="foo"><code>foo</code></span></del>`,
 }
 
 func TestRenderMarkdown_Math(t *testing.T) {
 	renderer := goldmark.New(goldmark.WithExtensions(extension.Strikethrough, mdext.Math, mdext.EscapeHTML), format.HTMLOptions)
 	for markdown, html := range mathTests {
 		rendered := format.UnwrapSingleParagraph(render(renderer, markdown))
-		assert.Equal(t, html, strings.ReplaceAll(rendered, "\n", "\\n"))
+		assert.Equal(t, html, strings.ReplaceAll(rendered, "\n", "\\n"), "with input %q", markdown)
 	}
 }

@@ -10,7 +10,9 @@ import (
 	"bytes"
 	"fmt"
 	stdhtml "html"
+	"regexp"
 	"strings"
+	"unicode"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
@@ -25,7 +27,7 @@ var astKindMath = ast.NewNodeKind("Math")
 
 type astMath struct {
 	ast.BaseInline
-	block bool
+	value []byte
 }
 
 func (n *astMath) Dump(source []byte, level int) {
@@ -38,7 +40,6 @@ func (n *astMath) Kind() ast.NodeKind {
 
 type astMathBlock struct {
 	ast.BaseBlock
-	info *ast.Text
 }
 
 func (n *astMathBlock) Dump(source []byte, level int) {
@@ -49,22 +50,6 @@ func (n *astMathBlock) Kind() ast.NodeKind {
 	return astKindMath
 }
 
-type mathDelimiterProcessor struct{}
-
-var defaultMathDelimiterProcessor = &mathDelimiterProcessor{}
-
-func (p *mathDelimiterProcessor) IsDelimiter(b byte) bool {
-	return b == '$'
-}
-
-func (p *mathDelimiterProcessor) CanOpenCloser(opener, closer *parser.Delimiter) bool {
-	return opener.Char == closer.Char
-}
-
-func (p *mathDelimiterProcessor) OnMatch(consumes int) ast.Node {
-	return &astMath{block: consumes > 1}
-}
-
 type inlineMathParser struct{}
 
 var defaultInlineMathParser = &inlineMathParser{}
@@ -73,21 +58,30 @@ func NewInlineMathParser() parser.InlineParser {
 	return defaultInlineMathParser
 }
 
+const mathDelimiter = '$'
+
 func (s *inlineMathParser) Trigger() []byte {
-	return []byte{'$'}
+	return []byte{mathDelimiter}
 }
+
+// This ignores lines where there's no space after the closing $ to avoid false positives
+var latexInlineRegexp = regexp.MustCompile(`^(\$[^$]*\$)(?:$|\s)`)
 
 func (s *inlineMathParser) Parse(parent ast.Node, block text.Reader, pc parser.Context) ast.Node {
 	before := block.PrecendingCharacter()
-	line, segment := block.PeekLine()
-	node := parser.ScanDelimiter(line, before, 1, defaultMathDelimiterProcessor)
-	if node == nil {
+	// Ignore lines where the opening $ comes after a letter or number to avoid false positives
+	if unicode.IsLetter(before) || unicode.IsNumber(before) {
 		return nil
 	}
-	node.Segment = segment.WithStop(segment.Start + node.OriginalLength)
-	block.Advance(node.OriginalLength)
-	pc.PushDelimiter(node)
-	return node
+	line, segment := block.PeekLine()
+	idx := latexInlineRegexp.FindSubmatchIndex(line)
+	if idx == nil {
+		return nil
+	}
+	block.Advance(idx[3])
+	return &astMath{
+		value: block.Value(text.NewSegment(segment.Start+1, segment.Start+idx[3]-1)),
+	}
 }
 
 func (s *inlineMathParser) CloseBlock(parent ast.Node, pc parser.Context) {
@@ -115,50 +109,44 @@ func (b *blockMathParser) Trigger() []byte {
 }
 
 func (b *blockMathParser) Open(parent ast.Node, reader text.Reader, pc parser.Context) (ast.Node, parser.State) {
-	const fenceChar = '$'
-	line, segment := reader.PeekLine()
+	line, _ := reader.PeekLine()
 	pos := pc.BlockOffset()
-	if pos < 0 || (line[pos] != fenceChar) {
+	if pos < 0 || (line[pos] != mathDelimiter) {
 		return nil, parser.NoChildren
 	}
 	findent := pos
 	i := pos
-	for ; i < len(line) && line[i] == fenceChar; i++ {
+	for ; i < len(line) && line[i] == mathDelimiter; i++ {
 	}
 	oFenceLength := i - pos
 	if oFenceLength < 2 {
 		return nil, parser.NoChildren
 	}
-	var info *ast.Text
 	if i < len(line)-1 {
 		rest := line[i:]
 		left := util.TrimLeftSpaceLength(rest)
 		right := util.TrimRightSpaceLength(rest)
 		if left < len(rest)-right {
-			infoStart, infoStop := segment.Start-segment.Padding+i+left, segment.Stop-right
 			value := rest[left : len(rest)-right]
-			if bytes.IndexByte(value, fenceChar) > -1 {
+			if bytes.IndexByte(value, mathDelimiter) > -1 {
 				return nil, parser.NoChildren
-			} else if infoStart != infoStop {
-				info = ast.NewTextSegment(text.NewSegment(infoStart, infoStop))
 			}
 		}
 	}
-	node := &astMathBlock{info: info}
+	node := &astMathBlock{}
 	pc.Set(mathBlockInfoKey, &mathBlockData{findent, oFenceLength, node})
 	return node, parser.NoChildren
 
 }
 
 func (b *blockMathParser) Continue(node ast.Node, reader text.Reader, pc parser.Context) parser.State {
-	const fenceChar = '$'
 	line, segment := reader.PeekLine()
 	fdata := pc.Get(mathBlockInfoKey).(*mathBlockData)
 
 	w, pos := util.IndentWidth(line, reader.LineOffset())
 	if w < 4 {
 		i := pos
-		for ; i < len(line) && line[i] == fenceChar; i++ {
+		for ; i < len(line) && line[i] == mathDelimiter; i++ {
 		}
 		length := i - pos
 		if length >= fdata.length && util.IsBlank(line[i:]) {
@@ -221,15 +209,15 @@ func (r *mathHTMLRenderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer
 func (r *mathHTMLRenderer) renderMath(w util.BufWriter, source []byte, n ast.Node, entering bool) (ast.WalkStatus, error) {
 	if entering {
 		tag := "span"
+		var tex string
 		switch typed := n.(type) {
 		case *astMathBlock:
 			tag = "div"
+			tex = string(n.Lines().Value(source))
 		case *astMath:
-			if typed.block {
-				tag = "div"
-			}
+			tex = string(typed.value)
 		}
-		tex := stdhtml.EscapeString(string(n.Text(source)))
+		tex = stdhtml.EscapeString(strings.TrimSpace(tex))
 		_, _ = fmt.Fprintf(w, `<%s data-mx-maths="%s"><code>%s</code></%s>`, tag, tex, strings.ReplaceAll(tex, "\n", "<br>"), tag)
 	}
 	return ast.WalkSkipChildren, nil
