@@ -49,6 +49,14 @@ func RenderMarkdownCustom(text string, renderer goldmark.Markdown) event.Message
 	return HTMLToContent(htmlBody)
 }
 
+func TextToContent(text string) event.MessageEventContent {
+	return event.MessageEventContent{
+		MsgType:  event.MsgText,
+		Body:     text,
+		Mentions: &event.Mentions{},
+	}
+}
+
 func HTMLToContent(html string) event.MessageEventContent {
 	text, mentions := HTMLToMarkdownAndMentions(html)
 	if html != text {
@@ -60,11 +68,7 @@ func HTMLToContent(html string) event.MessageEventContent {
 			Mentions:      mentions,
 		}
 	}
-	return event.MessageEventContent{
-		MsgType:  event.MsgText,
-		Body:     text,
-		Mentions: &event.Mentions{},
-	}
+	return TextToContent(text)
 }
 
 func RenderMarkdown(text string, allowMarkdown, allowHTML bool) event.MessageEventContent {
@@ -80,10 +84,6 @@ func RenderMarkdown(text string, allowMarkdown, allowHTML bool) event.MessageEve
 		htmlBody = strings.Replace(text, "\n", "<br>", -1)
 		return HTMLToContent(htmlBody)
 	} else {
-		return event.MessageEventContent{
-			MsgType:  event.MsgText,
-			Body:     text,
-			Mentions: &event.Mentions{},
-		}
+		return TextToContent(text)
 	}
 }
