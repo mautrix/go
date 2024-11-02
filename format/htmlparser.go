@@ -66,7 +66,7 @@ type LinkConverter func(text, href string, ctx Context) string
 type ColorConverter func(text, fg, bg string, ctx Context) string
 type CodeBlockConverter func(code, language string, ctx Context) string
 type PillConverter func(displayname, mxid, eventID string, ctx Context) string
-type ImageConverter func(src, alt string, isEmoji bool) string
+type ImageConverter func(src, alt, title, width, height string, isEmoji bool) string
 
 const ContextKeyMentions = "_mentions"
 
@@ -315,9 +315,12 @@ func (parser *HTMLParser) linkToString(node *html.Node, ctx Context) string {
 func (parser *HTMLParser) imgToString(node *html.Node, ctx Context) string {
 	src := parser.getAttribute(node, "src")
 	alt := parser.getAttribute(node, "alt")
+	title := parser.getAttribute(node, "title")
+	width := parser.getAttribute(node, "width")
+	height := parser.getAttribute(node, "height")
 	_, isEmoji := parser.maybeGetAttribute(node, "data-mx-emoticon")
 	if parser.ImageConverter != nil {
-		return parser.ImageConverter(src, alt, isEmoji)
+		return parser.ImageConverter(src, alt, title, width, height, isEmoji)
 	}
 	return alt
 }
@@ -438,6 +441,35 @@ func (parser *HTMLParser) Parse(htmlData string, ctx Context) string {
 	return parser.nodeToTagAwareString(node, ctx)
 }
 
+var TextHTMLParser = &HTMLParser{
+	TabsToSpaces:   4,
+	Newline:        "\n",
+	HorizontalLine: "\n---\n",
+	PillConverter:  DefaultPillConverter,
+}
+
+var MarkdownHTMLParser = &HTMLParser{
+	TabsToSpaces:   4,
+	Newline:        "\n",
+	HorizontalLine: "\n---\n",
+	PillConverter:  DefaultPillConverter,
+	LinkConverter: func(text, href string, ctx Context) string {
+		if text == href {
+			return text
+		}
+		return fmt.Sprintf("[%s](%s)", text, href)
+	},
+	MathConverter: func(s string, c Context) string {
+		return fmt.Sprintf("$%s$", s)
+	},
+	MathBlockConverter: func(s string, c Context) string {
+		return fmt.Sprintf("$$\n%s\n$$", s)
+	},
+	UnderlineConverter: func(s string, c Context) string {
+		return fmt.Sprintf("<u>%s</u>", s)
+	},
+}
+
 // HTMLToText converts Matrix HTML into text with the default settings.
 func HTMLToText(html string) string {
 	return (&HTMLParser{
@@ -448,26 +480,12 @@ func HTMLToText(html string) string {
 	}).Parse(html, NewContext(context.TODO()))
 }
 
-func HTMLToMarkdownAndMentions(html string) (parsed string, mentions *event.Mentions) {
+func HTMLToMarkdownFull(parser *HTMLParser, html string) (parsed string, mentions *event.Mentions) {
+	if parser == nil {
+		parser = MarkdownHTMLParser
+	}
 	ctx := NewContext(context.TODO())
-	parsed = (&HTMLParser{
-		TabsToSpaces:   4,
-		Newline:        "\n",
-		HorizontalLine: "\n---\n",
-		PillConverter:  DefaultPillConverter,
-		LinkConverter: func(text, href string, ctx Context) string {
-			if text == href {
-				return text
-			}
-			return fmt.Sprintf("[%s](%s)", text, href)
-		},
-		MathConverter: func(s string, c Context) string {
-			return fmt.Sprintf("$%s$", s)
-		},
-		MathBlockConverter: func(s string, c Context) string {
-			return fmt.Sprintf("$$\n%s\n$$", s)
-		},
-	}).Parse(html, ctx)
+	parsed = parser.Parse(html, ctx)
 	mentionList, _ := ctx.ReturnData[ContextKeyMentions].([]id.UserID)
 	mentions = &event.Mentions{
 		UserIDs: mentionList,
@@ -479,6 +497,6 @@ func HTMLToMarkdownAndMentions(html string) (parsed string, mentions *event.Ment
 //
 // Currently, the only difference to HTMLToText is how links are formatted.
 func HTMLToMarkdown(html string) string {
-	parsed, _ := HTMLToMarkdownAndMentions(html)
+	parsed, _ := HTMLToMarkdownFull(nil, html)
 	return parsed
 }

@@ -184,3 +184,15 @@ func TestRenderMarkdown_Math(t *testing.T) {
 		assert.Equal(t, html, strings.ReplaceAll(rendered, "\n", "\\n"), "with input %q", markdown)
 	}
 }
+
+var customEmojiTests = map[string]string{
+	`![:meow:](mxc://example.com/emoji.png "Emoji: meow")`: `<img src="mxc://example.com/emoji.png" alt=":meow:" title="meow" data-mx-emoticon="" height="32">`,
+}
+
+func TestRenderMarkdown_CustomEmoji(t *testing.T) {
+	renderer := goldmark.New(goldmark.WithExtensions(mdext.CustomEmoji), format.HTMLOptions)
+	for markdown, html := range customEmojiTests {
+		rendered := format.UnwrapSingleParagraph(render(renderer, markdown))
+		assert.Equal(t, html, rendered, "with input %q", markdown)
+	}
+}

@@ -17,7 +17,7 @@ require (
 	github.com/stretchr/testify v1.9.0
 	github.com/tidwall/gjson v1.18.0
 	github.com/tidwall/sjson v1.2.5
-	github.com/yuin/goldmark v1.7.7
+	github.com/yuin/goldmark v1.7.8
 	go.mau.fi/util v0.8.1
 	go.mau.fi/zeroconfig v0.1.3
 	golang.org/x/crypto v0.28.0
