@@ -40,23 +40,23 @@ func (vh *VerificationHelper) StartSAS(ctx context.Context, txnID id.Verificatio
 
 	vh.activeTransactionsLock.Lock()
 	defer vh.activeTransactionsLock.Unlock()
-	txn, ok := vh.activeTransactions[txnID]
-	if !ok {
-		return fmt.Errorf("unknown transaction ID")
-	} else if txn.VerificationState != verificationStateReady {
+	txn, err := vh.store.GetVerificationTransaction(ctx, txnID)
+	if err != nil {
+		return fmt.Errorf("failed to get verification transaction %s: %w", txnID, err)
+	} else if txn.VerificationState != VerificationStateReady {
 		return errors.New("transaction is not in ready state")
 	} else if txn.StartEventContent != nil {
 		return errors.New("start event already sent or received")
 	}
 
-	txn.VerificationState = verificationStateSASStarted
+	txn.VerificationState = VerificationStateSASStarted
 	txn.StartedByUs = true
 	if !slices.Contains(txn.TheirSupportedMethods, event.VerificationMethodSAS) {
 		return fmt.Errorf("the other device does not support SAS verification")
 	}
 
 	// Ensure that we have their device key.
-	_, err := vh.mach.GetOrFetchDevice(ctx, txn.TheirUser, txn.TheirDevice)
+	_, err = vh.mach.GetOrFetchDevice(ctx, txn.TheirUserID, txn.TheirDeviceID)
 	if err != nil {
 		log.Err(err).Msg("Failed to fetch device")
 		return err
@@ -78,6 +78,9 @@ func (vh *VerificationHelper) StartSAS(ctx context.Context, txnID id.Verificatio
 			event.SASMethodEmoji,
 		},
 	}
+	if err := vh.store.SaveVerificationTransaction(ctx, txn); err != nil {
+		return err
+	}
 	return vh.sendVerificationEvent(ctx, txn, event.InRoomVerificationStart, txn.StartEventContent)
 }
 
@@ -94,14 +97,13 @@ func (vh *VerificationHelper) ConfirmSAS(ctx context.Context, txnID id.Verificat
 
 	vh.activeTransactionsLock.Lock()
 	defer vh.activeTransactionsLock.Unlock()
-	txn, ok := vh.activeTransactions[txnID]
-	if !ok {
-		return fmt.Errorf("unknown transaction ID")
-	} else if txn.VerificationState != verificationStateSASKeysExchanged {
+	txn, err := vh.store.GetVerificationTransaction(ctx, txnID)
+	if err != nil {
+		return fmt.Errorf("failed to get transaction %s: %w", txnID, err)
+	} else if txn.VerificationState != VerificationStateSASKeysExchanged {
 		return errors.New("transaction is not in keys exchanged state")
 	}
 
-	var err error
 	keys := map[id.KeyID]jsonbytes.UnpaddedBytes{}
 
 	log.Info().Msg("Signing keys")
@@ -109,7 +111,7 @@ func (vh *VerificationHelper) ConfirmSAS(ctx context.Context, txnID id.Verificat
 	// My device key
 	myDevice := vh.mach.OwnIdentity()
 	myDeviceKeyID := id.NewKeyID(id.KeyAlgorithmEd25519, myDevice.DeviceID.String())
-	keys[myDeviceKeyID], err = vh.verificationMACHKDF(txn, vh.client.UserID, vh.client.DeviceID, txn.TheirUser, txn.TheirDevice, myDeviceKeyID.String(), myDevice.SigningKey.String())
+	keys[myDeviceKeyID], err = vh.verificationMACHKDF(txn, vh.client.UserID, vh.client.DeviceID, txn.TheirUserID, txn.TheirDeviceID, myDeviceKeyID.String(), myDevice.SigningKey.String())
 	if err != nil {
 		return err
 	}
@@ -118,7 +120,7 @@ func (vh *VerificationHelper) ConfirmSAS(ctx context.Context, txnID id.Verificat
 	crossSigningKeys := vh.mach.GetOwnCrossSigningPublicKeys(ctx)
 	if crossSigningKeys != nil {
 		crossSigningKeyID := id.NewKeyID(id.KeyAlgorithmEd25519, crossSigningKeys.MasterKey.String())
-		keys[crossSigningKeyID], err = vh.verificationMACHKDF(txn, vh.client.UserID, vh.client.DeviceID, txn.TheirUser, txn.TheirDevice, crossSigningKeyID.String(), crossSigningKeys.MasterKey.String())
+		keys[crossSigningKeyID], err = vh.verificationMACHKDF(txn, vh.client.UserID, vh.client.DeviceID, txn.TheirUserID, txn.TheirDeviceID, crossSigningKeyID.String(), crossSigningKeys.MasterKey.String())
 		if err != nil {
 			return err
 		}
@@ -129,7 +131,7 @@ func (vh *VerificationHelper) ConfirmSAS(ctx context.Context, txnID id.Verificat
 		keyIDs = append(keyIDs, keyID.String())
 	}
 	slices.Sort(keyIDs)
-	keysMAC, err := vh.verificationMACHKDF(txn, vh.client.UserID, vh.client.DeviceID, txn.TheirUser, txn.TheirDevice, "KEY_IDS", strings.Join(keyIDs, ","))
+	keysMAC, err := vh.verificationMACHKDF(txn, vh.client.UserID, vh.client.DeviceID, txn.TheirUserID, txn.TheirDeviceID, "KEY_IDS", strings.Join(keyIDs, ","))
 	if err != nil {
 		return err
 	}
@@ -145,14 +147,14 @@ func (vh *VerificationHelper) ConfirmSAS(ctx context.Context, txnID id.Verificat
 
 	txn.SentOurMAC = true
 	if txn.ReceivedTheirMAC {
-		txn.VerificationState = verificationStateSASMACExchanged
+		txn.VerificationState = VerificationStateSASMACExchanged
 		err := vh.sendVerificationEvent(ctx, txn, event.InRoomVerificationDone, &event.VerificationDoneEventContent{})
 		if err != nil {
 			return err
 		}
 		txn.SentOurDone = true
 	}
-	return nil
+	return vh.store.SaveVerificationTransaction(ctx, txn)
 }
 
 // onVerificationStartSAS handles the m.key.verification.start events with
@@ -160,7 +162,7 @@ func (vh *VerificationHelper) ConfirmSAS(ctx context.Context, txnID id.Verificat
 // Spec.
 //
 // [Section 11.12.2.2]: https://spec.matrix.org/v1.9/client-server-api/#short-authentication-string-sas-verification
-func (vh *VerificationHelper) onVerificationStartSAS(ctx context.Context, txn *verificationTransaction, evt *event.Event) error {
+func (vh *VerificationHelper) onVerificationStartSAS(ctx context.Context, txn VerificationTransaction, evt *event.Event) error {
 	startEvt := evt.Content.AsVerificationStart()
 	log := vh.getLog(ctx).With().
 		Str("verification_action", "start_sas").
@@ -208,7 +210,7 @@ func (vh *VerificationHelper) onVerificationStartSAS(ctx context.Context, txn *v
 		return fmt.Errorf("failed to generate ephemeral key: %w", err)
 	}
 	txn.MACMethod = macMethod
-	txn.EphemeralKey = ephemeralKey
+	txn.EphemeralKey = &ECDHPrivateKey{ephemeralKey}
 	txn.StartEventContent = startEvt
 
 	commitment, err := calculateCommitment(ephemeralKey.PublicKey(), startEvt)
@@ -226,8 +228,8 @@ func (vh *VerificationHelper) onVerificationStartSAS(ctx context.Context, txn *v
 	if err != nil {
 		return fmt.Errorf("failed to send accept event: %w", err)
 	}
-	txn.VerificationState = verificationStateSASAccepted
-	return nil
+	txn.VerificationState = VerificationStateSASAccepted
+	return vh.store.SaveVerificationTransaction(ctx, txn)
 }
 
 func calculateCommitment(ephemeralPubKey *ecdh.PublicKey, startEvt *event.VerificationStartEventContent) ([]byte, error) {
@@ -252,7 +254,7 @@ func calculateCommitment(ephemeralPubKey *ecdh.PublicKey, startEvt *event.Verifi
 // event. This follows Step 4 of [Section 11.12.2.2] of the Spec.
 //
 // [Section 11.12.2.2]: https://spec.matrix.org/v1.9/client-server-api/#short-authentication-string-sas-verification
-func (vh *VerificationHelper) onVerificationAccept(ctx context.Context, txn *verificationTransaction, evt *event.Event) {
+func (vh *VerificationHelper) onVerificationAccept(ctx context.Context, txn VerificationTransaction, evt *event.Event) {
 	acceptEvt := evt.Content.AsVerificationAccept()
 	log := vh.getLog(ctx).With().
 		Str("verification_action", "accept").
@@ -267,7 +269,7 @@ func (vh *VerificationHelper) onVerificationAccept(ctx context.Context, txn *ver
 
 	vh.activeTransactionsLock.Lock()
 	defer vh.activeTransactionsLock.Unlock()
-	if txn.VerificationState != verificationStateSASStarted {
+	if txn.VerificationState != VerificationStateSASStarted {
 		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnexpectedMessage,
 			"received accept event for a transaction that is not in the started state")
 		return
@@ -287,14 +289,18 @@ func (vh *VerificationHelper) onVerificationAccept(ctx context.Context, txn *ver
 		return
 	}
 
-	txn.VerificationState = verificationStateSASAccepted
+	txn.VerificationState = VerificationStateSASAccepted
 	txn.MACMethod = acceptEvt.MessageAuthenticationCode
 	txn.Commitment = acceptEvt.Commitment
-	txn.EphemeralKey = ephemeralKey
+	txn.EphemeralKey = &ECDHPrivateKey{ephemeralKey}
 	txn.EphemeralPublicKeyShared = true
+
+	if err := vh.store.SaveVerificationTransaction(ctx, txn); err != nil {
+		log.Err(err).Msg("failed to save verification transaction")
+	}
 }
 
-func (vh *VerificationHelper) onVerificationKey(ctx context.Context, txn *verificationTransaction, evt *event.Event) {
+func (vh *VerificationHelper) onVerificationKey(ctx context.Context, txn VerificationTransaction, evt *event.Event) {
 	log := vh.getLog(ctx).With().
 		Str("verification_action", "key").
 		Logger()
@@ -302,22 +308,23 @@ func (vh *VerificationHelper) onVerificationKey(ctx context.Context, txn *verifi
 	vh.activeTransactionsLock.Lock()
 	defer vh.activeTransactionsLock.Unlock()
 
-	if txn.VerificationState != verificationStateSASAccepted {
+	if txn.VerificationState != VerificationStateSASAccepted {
 		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnexpectedMessage,
 			"received key event for a transaction that is not in the accepted state")
 		return
 	}
 
 	var err error
-	txn.OtherPublicKey, err = ecdh.X25519().NewPublicKey(keyEvt.Key)
+	publicKey, err := ecdh.X25519().NewPublicKey(keyEvt.Key)
 	if err != nil {
 		log.Err(err).Msg("Failed to generate other public key")
 		return
 	}
+	txn.OtherPublicKey = &ECDHPublicKey{publicKey}
 
 	if txn.EphemeralPublicKeyShared {
 		// Verify that the commitment hash is correct
-		commitment, err := calculateCommitment(txn.OtherPublicKey, txn.StartEventContent)
+		commitment, err := calculateCommitment(publicKey, txn.StartEventContent)
 		if err != nil {
 			log.Err(err).Msg("Failed to calculate commitment")
 			return
@@ -342,7 +349,7 @@ func (vh *VerificationHelper) onVerificationKey(ctx context.Context, txn *verifi
 		}
 		txn.EphemeralPublicKeyShared = true
 	}
-	txn.VerificationState = verificationStateSASKeysExchanged
+	txn.VerificationState = VerificationStateSASKeysExchanged
 
 	sasBytes, err := vh.verificationSASHKDF(txn)
 	if err != nil {
@@ -370,10 +377,14 @@ func (vh *VerificationHelper) onVerificationKey(ctx context.Context, txn *verifi
 		}
 	}
 	vh.showSAS(ctx, txn.TransactionID, emojis, decimals)
+
+	if err := vh.store.SaveVerificationTransaction(ctx, txn); err != nil {
+		log.Err(err).Msg("failed to save verification transaction")
+	}
 }
 
-func (vh *VerificationHelper) verificationSASHKDF(txn *verificationTransaction) ([]byte, error) {
-	sharedSecret, err := txn.EphemeralKey.ECDH(txn.OtherPublicKey)
+func (vh *VerificationHelper) verificationSASHKDF(txn VerificationTransaction) ([]byte, error) {
+	sharedSecret, err := txn.EphemeralKey.ECDH(txn.OtherPublicKey.PublicKey)
 	if err != nil {
 		return nil, err
 	}
@@ -388,8 +399,8 @@ func (vh *VerificationHelper) verificationSASHKDF(txn *verificationTransaction) 
 	}, "|")
 
 	theirInfo := strings.Join([]string{
-		txn.TheirUser.String(),
-		txn.TheirDevice.String(),
+		txn.TheirUserID.String(),
+		txn.TheirDeviceID.String(),
 		base64.RawStdEncoding.EncodeToString(txn.OtherPublicKey.Bytes()),
 	}, "|")
 
@@ -462,8 +473,8 @@ func BrokenB64Encode(input []byte) string {
 	return string(output)
 }
 
-func (vh *VerificationHelper) verificationMACHKDF(txn *verificationTransaction, senderUser id.UserID, senderDevice id.DeviceID, receivingUser id.UserID, receivingDevice id.DeviceID, keyID, key string) ([]byte, error) {
-	sharedSecret, err := txn.EphemeralKey.ECDH(txn.OtherPublicKey)
+func (vh *VerificationHelper) verificationMACHKDF(txn VerificationTransaction, senderUser id.UserID, senderDevice id.DeviceID, receivingUser id.UserID, receivingDevice id.DeviceID, keyID, key string) ([]byte, error) {
+	sharedSecret, err := txn.EphemeralKey.ECDH(txn.OtherPublicKey.PublicKey)
 	if err != nil {
 		return nil, err
 	}
@@ -563,7 +574,7 @@ var allEmojis = []rune{
 	'📌',
 }
 
-func (vh *VerificationHelper) onVerificationMAC(ctx context.Context, txn *verificationTransaction, evt *event.Event) {
+func (vh *VerificationHelper) onVerificationMAC(ctx context.Context, txn VerificationTransaction, evt *event.Event) {
 	log := vh.getLog(ctx).With().
 		Str("verification_action", "mac").
 		Logger()
@@ -579,12 +590,12 @@ func (vh *VerificationHelper) onVerificationMAC(ctx context.Context, txn *verifi
 	for keyID := range macEvt.MAC {
 		keyIDs = append(keyIDs, keyID.String())
 		_, kID := keyID.Parse()
-		if kID == txn.TheirDevice.String() {
+		if kID == txn.TheirDeviceID.String() {
 			hasTheirDeviceKey = true
 		}
 	}
 	slices.Sort(keyIDs)
-	expectedKeyMAC, err := vh.verificationMACHKDF(txn, txn.TheirUser, txn.TheirDevice, vh.client.UserID, vh.client.DeviceID, "KEY_IDS", strings.Join(keyIDs, ","))
+	expectedKeyMAC, err := vh.verificationMACHKDF(txn, txn.TheirUserID, txn.TheirDeviceID, vh.client.UserID, vh.client.DeviceID, "KEY_IDS", strings.Join(keyIDs, ","))
 	if err != nil {
 		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeSASMismatch, "failed to calculate key list MAC: %w", err)
 		return
@@ -610,8 +621,8 @@ func (vh *VerificationHelper) onVerificationMAC(ctx context.Context, txn *verifi
 
 		var key string
 		var theirDevice *id.Device
-		if kID == txn.TheirDevice.String() {
-			theirDevice, err = vh.mach.GetOrFetchDevice(ctx, txn.TheirUser, txn.TheirDevice)
+		if kID == txn.TheirDeviceID.String() {
+			theirDevice, err = vh.mach.GetOrFetchDevice(ctx, txn.TheirUserID, txn.TheirDeviceID)
 			if err != nil {
 				vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUser, "failed to fetch their device: %w", err)
 				return
@@ -630,7 +641,7 @@ func (vh *VerificationHelper) onVerificationMAC(ctx context.Context, txn *verifi
 			key = crossSigningKeys.MasterKey.String()
 		}
 
-		expectedMAC, err := vh.verificationMACHKDF(txn, txn.TheirUser, txn.TheirDevice, vh.client.UserID, vh.client.DeviceID, keyID.String(), key)
+		expectedMAC, err := vh.verificationMACHKDF(txn, txn.TheirUserID, txn.TheirDeviceID, vh.client.UserID, vh.client.DeviceID, keyID.String(), key)
 		if err != nil {
 			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUser, "failed to calculate key MAC: %w", err)
 			return
@@ -641,9 +652,9 @@ func (vh *VerificationHelper) onVerificationMAC(ctx context.Context, txn *verifi
 		}
 
 		// Trust their device
-		if kID == txn.TheirDevice.String() {
+		if kID == txn.TheirDeviceID.String() {
 			theirDevice.Trust = id.TrustStateVerified
-			err = vh.mach.CryptoStore.PutDevice(ctx, txn.TheirUser, theirDevice)
+			err = vh.mach.CryptoStore.PutDevice(ctx, txn.TheirUserID, theirDevice)
 			if err != nil {
 				vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUser, "failed to update device trust state after verifying: %w", err)
 				return
@@ -654,12 +665,16 @@ func (vh *VerificationHelper) onVerificationMAC(ctx context.Context, txn *verifi
 
 	txn.ReceivedTheirMAC = true
 	if txn.SentOurMAC {
-		txn.VerificationState = verificationStateSASMACExchanged
+		txn.VerificationState = VerificationStateSASMACExchanged
 		err := vh.sendVerificationEvent(ctx, txn, event.InRoomVerificationDone, &event.VerificationDoneEventContent{})
 		if err != nil {
 			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUser, "failed to send verification done event: %w", err)
 			return
 		}
 		txn.SentOurDone = true
+	}
+
+	if err := vh.store.SaveVerificationTransaction(ctx, txn); err != nil {
+		log.Err(err).Msg("failed to save verification transaction")
 	}
 }

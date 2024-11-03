@@ -35,13 +35,13 @@ func (vh *VerificationHelper) HandleScannedQRData(ctx context.Context, data []by
 	vh.activeTransactionsLock.Lock()
 	defer vh.activeTransactionsLock.Unlock()
 
-	txn, ok := vh.activeTransactions[qrCode.TransactionID]
-	if !ok {
-		return fmt.Errorf("unknown transaction ID found in QR code")
-	} else if txn.VerificationState != verificationStateReady {
+	txn, err := vh.store.GetVerificationTransaction(ctx, qrCode.TransactionID)
+	if err != nil {
+		return fmt.Errorf("failed to get transaction %s: %w", qrCode.TransactionID, err)
+	} else if txn.VerificationState != VerificationStateReady {
 		return vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnexpectedMessage, "transaction found in the QR code is not in the ready state")
 	}
-	txn.VerificationState = verificationStateTheirQRScanned
+	txn.VerificationState = VerificationStateTheirQRScanned
 
 	// Verify the keys
 	log.Info().Msg("Verifying keys from QR code")
@@ -53,9 +53,9 @@ func (vh *VerificationHelper) HandleScannedQRData(ctx context.Context, data []by
 
 	switch qrCode.Mode {
 	case QRCodeModeCrossSigning:
-		theirSigningKeys, err := vh.mach.GetCrossSigningPublicKeys(ctx, txn.TheirUser)
+		theirSigningKeys, err := vh.mach.GetCrossSigningPublicKeys(ctx, txn.TheirUserID)
 		if err != nil {
-			return vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeKeyMismatch, "couldn't get %s's cross-signing keys: %w", txn.TheirUser, err)
+			return vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeKeyMismatch, "couldn't get %s's cross-signing keys: %w", txn.TheirUserID, err)
 		}
 		if bytes.Equal(theirSigningKeys.MasterKey.Bytes(), qrCode.Key1[:]) {
 			log.Info().Msg("Verified that the other device has the master key we expected")
@@ -70,7 +70,7 @@ func (vh *VerificationHelper) HandleScannedQRData(ctx context.Context, data []by
 			return vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeKeyMismatch, "the master key does not match")
 		}
 
-		if err := vh.mach.SignUser(ctx, txn.TheirUser, theirSigningKeys.MasterKey); err != nil {
+		if err := vh.mach.SignUser(ctx, txn.TheirUserID, theirSigningKeys.MasterKey); err != nil {
 			return vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeInternalError, "failed to sign their master key: %w", err)
 		}
 	case QRCodeModeSelfVerifyingMasterKeyTrusted:
@@ -78,7 +78,7 @@ func (vh *VerificationHelper) HandleScannedQRData(ctx context.Context, data []by
 		// means that we don't trust the key. Key1 is the master key public
 		// key, and Key2 is what the other device thinks our device key is.
 
-		if vh.client.UserID != txn.TheirUser {
+		if vh.client.UserID != txn.TheirUserID {
 			return vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnexpectedMessage, "mode %d is only allowed when the other user is the same as the current user", qrCode.Mode)
 		}
 
@@ -114,12 +114,12 @@ func (vh *VerificationHelper) HandleScannedQRData(ctx context.Context, data []by
 			return vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeMasterKeyNotTrusted, "the master key is not trusted by this device, cannot verify device that does not trust the master key")
 		}
 
-		if vh.client.UserID != txn.TheirUser {
+		if vh.client.UserID != txn.TheirUserID {
 			return vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnexpectedMessage, "mode %d is only allowed when the other user is the same as the current user", qrCode.Mode)
 		}
 
 		// Get their device
-		theirDevice, err := vh.mach.GetOrFetchDevice(ctx, txn.TheirUser, txn.TheirDevice)
+		theirDevice, err := vh.mach.GetOrFetchDevice(ctx, txn.TheirUserID, txn.TheirDeviceID)
 		if err != nil {
 			return vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeInternalError, "failed to get their device: %w", err)
 		}
@@ -140,7 +140,7 @@ func (vh *VerificationHelper) HandleScannedQRData(ctx context.Context, data []by
 
 		// Trust their device
 		theirDevice.Trust = id.TrustStateVerified
-		err = vh.mach.CryptoStore.PutDevice(ctx, txn.TheirUser, theirDevice)
+		err = vh.mach.CryptoStore.PutDevice(ctx, txn.TheirUserID, theirDevice)
 		if err != nil {
 			return vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeInternalError, "failed to update device trust state after verifying: %+v", err)
 		}
@@ -177,8 +177,12 @@ func (vh *VerificationHelper) HandleScannedQRData(ctx context.Context, data []by
 	txn.SentOurDone = true
 	if txn.ReceivedTheirDone {
 		log.Debug().Msg("We already received their done event. Setting verification state to done.")
-		delete(vh.activeTransactions, txn.TransactionID)
+		if err = vh.store.DeleteVerification(ctx, txn.TransactionID); err != nil {
+			return err
+		}
 		vh.verificationDone(ctx, txn.TransactionID)
+	} else {
+		vh.store.SaveVerificationTransaction(ctx, txn)
 	}
 	return nil
 }
@@ -196,28 +200,27 @@ func (vh *VerificationHelper) ConfirmQRCodeScanned(ctx context.Context, txnID id
 
 	vh.activeTransactionsLock.Lock()
 	defer vh.activeTransactionsLock.Unlock()
-	txn, ok := vh.activeTransactions[txnID]
-	if !ok {
-		log.Warn().Msg("Ignoring QR code scan confirmation for an unknown transaction")
-		return nil
-	} else if txn.VerificationState != verificationStateOurQRScanned {
+	txn, err := vh.store.GetVerificationTransaction(ctx, txnID)
+	if err != nil {
+		return fmt.Errorf("failed to get transaction %s: %w", txnID, err)
+	} else if txn.VerificationState != VerificationStateOurQRScanned {
 		return fmt.Errorf("transaction is not in the scanned state")
 	}
 
 	log.Info().Msg("Confirming QR code scanned")
 
-	if txn.TheirUser == vh.client.UserID {
+	if txn.TheirUserID == vh.client.UserID {
 		// Self-signing situation. Trust their device.
 
 		// Get their device
-		theirDevice, err := vh.mach.GetOrFetchDevice(ctx, txn.TheirUser, txn.TheirDevice)
+		theirDevice, err := vh.mach.GetOrFetchDevice(ctx, txn.TheirUserID, txn.TheirDeviceID)
 		if err != nil {
 			return err
 		}
 
 		// Trust their device
 		theirDevice.Trust = id.TrustStateVerified
-		err = vh.mach.CryptoStore.PutDevice(ctx, txn.TheirUser, theirDevice)
+		err = vh.mach.CryptoStore.PutDevice(ctx, txn.TheirUserID, theirDevice)
 		if err != nil {
 			return fmt.Errorf("failed to update device trust state after verifying: %w", err)
 		}
@@ -231,29 +234,33 @@ func (vh *VerificationHelper) ConfirmQRCodeScanned(ctx context.Context, txnID id
 		}
 	} else {
 		// Cross-signing situation. Sign their master key.
-		theirSigningKeys, err := vh.mach.GetCrossSigningPublicKeys(ctx, txn.TheirUser)
+		theirSigningKeys, err := vh.mach.GetCrossSigningPublicKeys(ctx, txn.TheirUserID)
 		if err != nil {
-			return vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeKeyMismatch, "couldn't get %s's cross-signing keys: %w", txn.TheirUser, err)
+			return vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeKeyMismatch, "couldn't get %s's cross-signing keys: %w", txn.TheirUserID, err)
 		}
 
-		if err := vh.mach.SignUser(ctx, txn.TheirUser, theirSigningKeys.MasterKey); err != nil {
+		if err := vh.mach.SignUser(ctx, txn.TheirUserID, theirSigningKeys.MasterKey); err != nil {
 			return vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeInternalError, "failed to sign their master key: %w", err)
 		}
 	}
 
-	err := vh.sendVerificationEvent(ctx, txn, event.InRoomVerificationDone, &event.VerificationDoneEventContent{})
+	err = vh.sendVerificationEvent(ctx, txn, event.InRoomVerificationDone, &event.VerificationDoneEventContent{})
 	if err != nil {
 		return err
 	}
 	txn.SentOurDone = true
 	if txn.ReceivedTheirDone {
-		delete(vh.activeTransactions, txn.TransactionID)
+		if err = vh.store.DeleteVerification(ctx, txn.TransactionID); err != nil {
+			return err
+		}
 		vh.verificationDone(ctx, txn.TransactionID)
+	} else {
+		vh.store.SaveVerificationTransaction(ctx, txn)
 	}
 	return nil
 }
 
-func (vh *VerificationHelper) generateAndShowQRCode(ctx context.Context, txn *verificationTransaction) error {
+func (vh *VerificationHelper) generateAndShowQRCode(ctx context.Context, txn VerificationTransaction) error {
 	log := vh.getLog(ctx).With().
 		Str("verification_action", "generate and show QR code").
 		Stringer("transaction_id", txn.TransactionID).
@@ -276,7 +283,7 @@ func (vh *VerificationHelper) generateAndShowQRCode(ctx context.Context, txn *ve
 		return err
 	}
 	mode := QRCodeModeCrossSigning
-	if vh.client.UserID == txn.TheirUser {
+	if vh.client.UserID == txn.TheirUserID {
 		// This is a self-signing situation.
 		if ownMasterKeyTrusted {
 			mode = QRCodeModeSelfVerifyingMasterKeyTrusted
@@ -298,7 +305,7 @@ func (vh *VerificationHelper) generateAndShowQRCode(ctx context.Context, txn *ve
 		key1 = ownCrossSigningPublicKeys.MasterKey.Bytes()
 
 		// Key 2 is the other user's master signing key.
-		theirSigningKeys, err := vh.mach.GetCrossSigningPublicKeys(ctx, txn.TheirUser)
+		theirSigningKeys, err := vh.mach.GetCrossSigningPublicKeys(ctx, txn.TheirUserID)
 		if err != nil {
 			return err
 		}
@@ -308,7 +315,7 @@ func (vh *VerificationHelper) generateAndShowQRCode(ctx context.Context, txn *ve
 		key1 = ownCrossSigningPublicKeys.MasterKey.Bytes()
 
 		// Key 2 is the other device's key.
-		theirDevice, err := vh.mach.GetOrFetchDevice(ctx, txn.TheirUser, txn.TheirDevice)
+		theirDevice, err := vh.mach.GetOrFetchDevice(ctx, txn.TheirUserID, txn.TheirDeviceID)
 		if err != nil {
 			return err
 		}
@@ -326,5 +333,5 @@ func (vh *VerificationHelper) generateAndShowQRCode(ctx context.Context, txn *ve
 	qrCode := NewQRCode(mode, txn.TransactionID, [32]byte(key1), [32]byte(key2))
 	txn.QRCodeSharedSecret = qrCode.SharedSecret
 	vh.showQRCode(ctx, txn.TransactionID, qrCode)
-	return nil
+	return vh.store.SaveVerificationTransaction(ctx, txn)
 }
