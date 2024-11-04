@@ -396,7 +396,7 @@ func (portal *Portal) FindPreferredLogin(ctx context.Context, user *User, allowR
 		if err != nil {
 			return nil, nil, err
 		}
-		if login == nil || login.UserMXID != user.MXID {
+		if login == nil || login.UserMXID != user.MXID || !login.Client.IsLoggedIn() {
 			if allowRelay && portal.Relay != nil {
 				return nil, nil, nil
 			}
@@ -412,9 +412,9 @@ func (portal *Portal) FindPreferredLogin(ctx context.Context, user *User, allowR
 	}
 	portal.Bridge.cacheLock.Lock()
 	defer portal.Bridge.cacheLock.Unlock()
-	for i, up := range logins {
+	for _, up := range logins {
 		login, ok := user.logins[up.LoginID]
-		if ok && login.Client != nil && (len(logins) == i-1 || login.Client.IsLoggedIn()) {
+		if ok && login.Client != nil && login.Client.IsLoggedIn() {
 			return login, up, nil
 		}
 	}
@@ -430,7 +430,7 @@ func (portal *Portal) FindPreferredLogin(ctx context.Context, user *User, allowR
 		firstLogin = login
 		break
 	}
-	if firstLogin != nil {
+	if firstLogin != nil && firstLogin.Client.IsLoggedIn() {
 		zerolog.Ctx(ctx).Warn().
 			Str("chosen_login_id", string(firstLogin.ID)).
 			Msg("No usable user portal rows found, returning random login")
