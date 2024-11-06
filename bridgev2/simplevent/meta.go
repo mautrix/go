@@ -80,11 +80,15 @@ func (evt *EventMeta) ShouldCreatePortal() bool {
 }
 
 func (evt *EventMeta) PreHandle(ctx context.Context, portal *bridgev2.Portal) {
-	evt.PreHandleFunc(ctx, portal)
+	if evt.PreHandleFunc != nil {
+		evt.PreHandleFunc(ctx, portal)
+	}
 }
 
 func (evt *EventMeta) PostHandle(ctx context.Context, portal *bridgev2.Portal) {
-	evt.PostHandleFunc(ctx, portal)
+	if evt.PostHandleFunc != nil {
+		evt.PostHandleFunc(ctx, portal)
+	}
 }
 
 func (evt EventMeta) WithType(t bridgev2.RemoteEventType) EventMeta {

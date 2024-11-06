@@ -1628,6 +1628,10 @@ func (portal *Portal) handleRemoteEvent(ctx context.Context, source *UserLogin, 
 		}
 		if evtType == RemoteEventChatResync {
 			log.Debug().Msg("Not handling chat resync event further as portal was created by it")
+			postHandler, ok := evt.(RemotePostHandler)
+			if ok {
+				postHandler.PostHandle(ctx, portal)
+			}
 			return
 		}
 	}
