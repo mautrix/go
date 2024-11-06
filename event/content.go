@@ -188,6 +188,13 @@ func IsUnsupportedContentType(err error) bool {
 var ErrContentAlreadyParsed = errors.New("content is already parsed")
 var ErrUnsupportedContentType = errors.New("unsupported event type")
 
+func (content *Content) GetRaw() map[string]interface{} {
+	if content.Raw == nil {
+		content.Raw = make(map[string]interface{})
+	}
+	return content.Raw
+}
+
 func (content *Content) ParseRaw(evtType Type) error {
 	if content.Parsed != nil {
 		return ErrContentAlreadyParsed
