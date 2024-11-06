@@ -13,7 +13,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
-	"net/http"
 	"strings"
 
 	"maunium.net/go/mautrix"
@@ -80,13 +79,7 @@ func (br *Connector) getDirectMedia(ctx context.Context, mediaIDStr string) (res
 	receivedHash := mediaID[len(mediaID)-MediaIDTruncatedHashLength:]
 	expectedHash := br.hashMediaID(mediaID[:len(mediaID)-MediaIDTruncatedHashLength])
 	if !hmac.Equal(receivedHash, expectedHash) {
-		return nil, &mediaproxy.ResponseError{
-			Status: http.StatusNotFound,
-			Data: &mautrix.RespError{
-				ErrCode: mautrix.MNotFound.ErrCode,
-				Err:     "Invalid checksum in media ID part",
-			},
-		}
+		return nil, mautrix.MNotFound.WithMessage("Invalid checksum in media ID part")
 	}
 	remoteMediaID := networkid.MediaID(mediaID[len(MediaIDPrefix) : len(mediaID)-MediaIDTruncatedHashLength])
 	return br.Bridge.Network.(bridgev2.DirectMediableNetwork).Download(ctx, remoteMediaID)

@@ -242,10 +242,7 @@ func (mp *MediaProxy) proxyDownload(ctx context.Context, w http.ResponseWriter, 
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		log.Err(err).Str("url", url).Msg("Failed to create proxy request")
-		jsonResponse(w, http.StatusInternalServerError, &mautrix.RespError{
-			ErrCode: "M_UNKNOWN",
-			Err:     "Failed to create proxy request",
-		})
+		mautrix.MUnknown.WithMessage("Failed to create proxy request").Write(w)
 		return
 	}
 	req.Header.Set("User-Agent", mautrix.DefaultUserAgent+" (media proxy)")
@@ -260,17 +257,11 @@ func (mp *MediaProxy) proxyDownload(ctx context.Context, w http.ResponseWriter, 
 	}()
 	if err != nil {
 		log.Err(err).Str("url", url).Msg("Failed to proxy download")
-		jsonResponse(w, http.StatusServiceUnavailable, &mautrix.RespError{
-			ErrCode: "M_UNKNOWN",
-			Err:     "Failed to proxy download",
-		})
+		mautrix.MUnknown.WithMessage("Failed to proxy download").WithStatus(http.StatusServiceUnavailable).Write(w)
 		return
 	} else if resp.StatusCode != http.StatusOK {
 		log.Warn().Str("url", url).Int("status", resp.StatusCode).Msg("Unexpected status code proxying download")
-		jsonResponse(w, resp.StatusCode, &mautrix.RespError{
-			ErrCode: "M_UNKNOWN",
-			Err:     "Unexpected status code proxying download",
-		})
+		mautrix.MUnknown.WithMessage("Unexpected status code proxying download").WithStatus(resp.StatusCode).Write(w)
 		return
 	}
 	w.Header()["Content-Type"] = resp.Header["Content-Type"]
@@ -298,6 +289,7 @@ func (mp *MediaProxy) proxyDownload(ctx context.Context, w http.ResponseWriter, 
 	}
 }
 
+// Deprecated: use mautrix.RespError instead
 type ResponseError struct {
 	Status int
 	Data   any
@@ -313,24 +305,43 @@ func (mp *MediaProxy) getMedia(w http.ResponseWriter, r *http.Request) GetMediaR
 	mediaID := mux.Vars(r)["mediaID"]
 	resp, err := mp.GetMedia(r.Context(), mediaID)
 	if err != nil {
+		//lint:ignore SA1019 deprecated types need to be supported until they're removed
 		var respError *ResponseError
+		var mautrixRespError mautrix.RespError
 		if errors.Is(err, ErrInvalidMediaIDSyntax) {
-			jsonResponse(w, http.StatusNotFound, &mautrix.RespError{
-				ErrCode: mautrix.MNotFound.ErrCode,
-				Err:     fmt.Sprintf("This is a media proxy at %q, other media downloads are not available here", mp.serverName),
-			})
+			mautrix.MNotFound.WithMessage("This is a media proxy at %q, other media downloads are not available here", mp.serverName).Write(w)
+		} else if errors.As(err, &mautrixRespError) {
+			mautrixRespError.Write(w)
 		} else if errors.As(err, &respError) {
-			jsonResponse(w, respError.Status, respError.Data)
+			w.Header().Add("Content-Type", "application/json")
+			w.WriteHeader(respError.Status)
+			_ = json.NewEncoder(w).Encode(respError.Data)
 		} else {
 			zerolog.Ctx(r.Context()).Err(err).Str("media_id", mediaID).Msg("Failed to get media URL")
-			jsonResponse(w, http.StatusNotFound, &mautrix.RespError{
-				ErrCode: mautrix.MNotFound.ErrCode,
-				Err:     "Media not found",
-			})
+			mautrix.MNotFound.WithMessage("Media not found").Write(w)
 		}
 		return nil
 	}
 	return resp
+}
+
+func startMultipart(ctx context.Context, w http.ResponseWriter) *multipart.Writer {
+	mpw := multipart.NewWriter(w)
+	w.Header().Set("Content-Type", strings.Replace(mpw.FormDataContentType(), "form-data", "mixed", 1))
+	w.WriteHeader(http.StatusOK)
+	metaPart, err := mpw.CreatePart(textproto.MIMEHeader{
+		"Content-Type": {"application/json"},
+	})
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to create multipart metadata field")
+		return nil
+	}
+	_, err = metaPart.Write([]byte(`{}`))
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to write multipart metadata field")
+		return nil
+	}
+	return mpw
 }
 
 func (mp *MediaProxy) DownloadMediaFederation(w http.ResponseWriter, r *http.Request) {
@@ -343,23 +354,13 @@ func (mp *MediaProxy) DownloadMediaFederation(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	mpw := multipart.NewWriter(w)
-	w.Header().Set("Content-Type", strings.Replace(mpw.FormDataContentType(), "form-data", "mixed", 1))
-	w.WriteHeader(http.StatusOK)
-	metaPart, err := mpw.CreatePart(textproto.MIMEHeader{
-		"Content-Type": {"application/json"},
-	})
-	if err != nil {
-		log.Err(err).Msg("Failed to create multipart metadata field")
-		return
-	}
-	_, err = metaPart.Write([]byte(`{}`))
-	if err != nil {
-		log.Err(err).Msg("Failed to write multipart metadata field")
-		return
-	}
+	var mpw *multipart.Writer
 	if urlResp, ok := resp.(*GetMediaResponseURL); ok {
-		_, err = mpw.CreatePart(textproto.MIMEHeader{
+		mpw = startMultipart(ctx, w)
+		if mpw == nil {
+			return
+		}
+		_, err := mpw.CreatePart(textproto.MIMEHeader{
 			"Location": {urlResp.URL},
 		})
 		if err != nil {
@@ -367,7 +368,11 @@ func (mp *MediaProxy) DownloadMediaFederation(w http.ResponseWriter, r *http.Req
 			return
 		}
 	} else if fileResp, ok := resp.(*GetMediaResponseFile); ok {
-		_, err = doTempFileDownload(fileResp, func(wt io.WriterTo, size int64, mimeType string) error {
+		responseStarted, err := doTempFileDownload(fileResp, func(wt io.WriterTo, size int64, mimeType string) error {
+			mpw = startMultipart(ctx, w)
+			if mpw == nil {
+				return fmt.Errorf("failed to start multipart writer")
+			}
 			dataPart, err := mpw.CreatePart(textproto.MIMEHeader{
 				"Content-Type": {mimeType},
 			})
@@ -379,8 +384,21 @@ func (mp *MediaProxy) DownloadMediaFederation(w http.ResponseWriter, r *http.Req
 		})
 		if err != nil {
 			log.Err(err).Msg("Failed to do media proxy with temp file")
+			if !responseStarted {
+				var mautrixRespError mautrix.RespError
+				if errors.As(err, &mautrixRespError) {
+					mautrixRespError.Write(w)
+				} else {
+					mautrix.MUnknown.WithMessage("Internal error proxying media").Write(w)
+				}
+			}
+			return
 		}
 	} else if dataResp, ok := resp.(GetMediaResponseWriter); ok {
+		mpw = startMultipart(ctx, w)
+		if mpw == nil {
+			return
+		}
 		dataPart, err := mpw.CreatePart(textproto.MIMEHeader{
 			"Content-Type": {dataResp.GetContentType()},
 		})
@@ -396,7 +414,7 @@ func (mp *MediaProxy) DownloadMediaFederation(w http.ResponseWriter, r *http.Req
 	} else {
 		panic(fmt.Errorf("unknown GetMediaResponse type %T", resp))
 	}
-	err = mpw.Close()
+	err := mpw.Close()
 	if err != nil {
 		log.Err(err).Msg("Failed to close multipart writer")
 		return
@@ -408,10 +426,7 @@ func (mp *MediaProxy) DownloadMedia(w http.ResponseWriter, r *http.Request) {
 	log := zerolog.Ctx(ctx)
 	vars := mux.Vars(r)
 	if vars["serverName"] != mp.serverName {
-		jsonResponse(w, http.StatusNotFound, &mautrix.RespError{
-			ErrCode: mautrix.MNotFound.ErrCode,
-			Err:     fmt.Sprintf("This is a media proxy at %q, other media downloads are not available here", mp.serverName),
-		})
+		mautrix.MNotFound.WithMessage("This is a media proxy at %q, other media downloads are not available here", mp.serverName).Write(w)
 		return
 	}
 	resp := mp.getMedia(w, r)
@@ -449,7 +464,12 @@ func (mp *MediaProxy) DownloadMedia(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Err(err).Msg("Failed to do media proxy with temp file")
 			if !responseStarted {
-				mautrix.MUnknown.WithMessage("Internal error proxying media").Write(w)
+				var mautrixRespError mautrix.RespError
+				if errors.As(err, &mautrixRespError) {
+					mautrixRespError.Write(w)
+				} else {
+					mautrix.MUnknown.WithMessage("Internal error proxying media").Write(w)
+				}
 			}
 		}
 	} else if dataResp, ok := resp.(GetMediaResponseWriter); ok {
@@ -512,36 +532,32 @@ func doTempFileDownload(
 	return true, nil
 }
 
-func jsonResponse(w http.ResponseWriter, status int, response interface{}) {
-	w.Header().Add("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(response)
-}
+var (
+	ErrUploadNotSupported = mautrix.MUnrecognized.
+				WithMessage("This is a media proxy and does not support media uploads.").
+				WithStatus(http.StatusNotImplemented)
+	ErrPreviewURLNotSupported = mautrix.MUnrecognized.
+					WithMessage("This is a media proxy and does not support URL previews.").
+					WithStatus(http.StatusNotImplemented)
+	ErrUnknownEndpoint = mautrix.MUnrecognized.
+				WithMessage("Unrecognized endpoint")
+	ErrUnsupportedMethod = mautrix.MUnrecognized.
+				WithMessage("Invalid method for endpoint").
+				WithStatus(http.StatusMethodNotAllowed)
+)
 
 func (mp *MediaProxy) UploadNotSupported(w http.ResponseWriter, r *http.Request) {
-	jsonResponse(w, http.StatusNotImplemented, &mautrix.RespError{
-		ErrCode: mautrix.MUnrecognized.ErrCode,
-		Err:     "This is a media proxy and does not support media uploads.",
-	})
+	ErrUploadNotSupported.Write(w)
 }
 
 func (mp *MediaProxy) PreviewURLNotSupported(w http.ResponseWriter, r *http.Request) {
-	jsonResponse(w, http.StatusNotImplemented, &mautrix.RespError{
-		ErrCode: mautrix.MUnrecognized.ErrCode,
-		Err:     "This is a media proxy and does not support URL previews.",
-	})
+	ErrPreviewURLNotSupported.Write(w)
 }
 
 func (mp *MediaProxy) UnknownEndpoint(w http.ResponseWriter, r *http.Request) {
-	jsonResponse(w, http.StatusNotFound, &mautrix.RespError{
-		ErrCode: mautrix.MUnrecognized.ErrCode,
-		Err:     "Unrecognized endpoint",
-	})
+	ErrUnknownEndpoint.Write(w)
 }
 
 func (mp *MediaProxy) UnsupportedMethod(w http.ResponseWriter, r *http.Request) {
-	jsonResponse(w, http.StatusMethodNotAllowed, &mautrix.RespError{
-		ErrCode: mautrix.MUnrecognized.ErrCode,
-		Err:     "Invalid method for endpoint",
-	})
+	ErrUnsupportedMethod.Write(w)
 }
