@@ -478,14 +478,6 @@ func (as *ASIntent) GetMXID() id.UserID {
 	return as.Matrix.UserID
 }
 
-func (as *ASIntent) InviteUser(ctx context.Context, roomID id.RoomID, userID id.UserID) error {
-	_, err := as.Matrix.InviteUser(ctx, roomID, &mautrix.ReqInviteUser{
-		Reason: "",
-		UserID: userID,
-	})
-	return err
-}
-
 func (as *ASIntent) EnsureJoined(ctx context.Context, roomID id.RoomID) error {
 	err := as.Matrix.EnsureJoined(ctx, roomID)
 	if err != nil {

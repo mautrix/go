@@ -143,7 +143,6 @@ type MatrixAPI interface {
 
 	CreateRoom(ctx context.Context, req *mautrix.ReqCreateRoom) (id.RoomID, error)
 	DeleteRoom(ctx context.Context, roomID id.RoomID, puppetsOnly bool) error
-	InviteUser(ctx context.Context, roomID id.RoomID, userID id.UserID) error
 	EnsureJoined(ctx context.Context, roomID id.RoomID) error
 	EnsureInvited(ctx context.Context, roomID id.RoomID, userID id.UserID) error
 
