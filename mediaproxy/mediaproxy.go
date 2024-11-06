@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
@@ -337,6 +338,25 @@ func (mp *MediaProxy) DownloadMediaFederation(w http.ResponseWriter, r *http.Req
 	}
 }
 
+func (mp *MediaProxy) addHeaders(w http.ResponseWriter, mimeType, fileName string) {
+	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	contentDisposition := "attachment"
+	switch mimeType {
+	case "text/css", "text/plain", "text/csv", "application/json", "application/ld+json", "image/jpeg", "image/gif",
+		"image/png", "image/apng", "image/webp", "image/avif", "video/mp4", "video/webm", "video/ogg", "video/quicktime",
+		"audio/mp4", "audio/webm", "audio/aac", "audio/mpeg", "audio/ogg", "audio/wave", "audio/wav", "audio/x-wav",
+		"audio/x-pn-wav", "audio/flac", "audio/x-flac", "application/pdf":
+		contentDisposition = "inline"
+	}
+	if fileName != "" {
+		contentDisposition = mime.FormatMediaType(contentDisposition, map[string]string{
+			"filename": fileName,
+		})
+	}
+	w.Header().Set("Content-Disposition", contentDisposition)
+	w.Header().Set("Content-Type", mimeType)
+}
+
 func (mp *MediaProxy) DownloadMedia(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := zerolog.Ctx(ctx)
@@ -364,7 +384,7 @@ func (mp *MediaProxy) DownloadMedia(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusTemporaryRedirect)
 	} else if fileResp, ok := resp.(*GetMediaResponseFile); ok {
 		responseStarted, err := doTempFileDownload(fileResp, func(wt io.WriterTo, size int64, mimeType string) error {
-			w.Header().Set("Content-Type", mimeType)
+			mp.addHeaders(w, mimeType, r.PathValue("fileName"))
 			w.Header().Set("Content-Length", strconv.FormatInt(size, 10))
 			w.WriteHeader(http.StatusOK)
 			_, err := wt.WriteTo(w)
@@ -382,7 +402,7 @@ func (mp *MediaProxy) DownloadMedia(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	} else if dataResp, ok := resp.(GetMediaResponseWriter); ok {
-		w.Header().Set("Content-Type", dataResp.GetContentType())
+		mp.addHeaders(w, dataResp.GetContentType(), r.PathValue("fileName"))
 		if dataResp.GetContentLength() != 0 {
 			w.Header().Set("Content-Length", strconv.FormatInt(dataResp.GetContentLength(), 10))
 		}
