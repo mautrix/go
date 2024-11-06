@@ -71,7 +71,7 @@ func (br *Connector) GenerateContentURI(ctx context.Context, mediaID networkid.M
 	return mxc, nil
 }
 
-func (br *Connector) getDirectMedia(ctx context.Context, mediaIDStr string) (response mediaproxy.GetMediaResponse, err error) {
+func (br *Connector) getDirectMedia(ctx context.Context, mediaIDStr string, params map[string]string) (response mediaproxy.GetMediaResponse, err error) {
 	mediaID, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(mediaIDStr, br.Config.DirectMedia.MediaIDPrefix))
 	if err != nil || !bytes.HasPrefix(mediaID, []byte(MediaIDPrefix)) || len(mediaID) < len(MediaIDPrefix)+MediaIDTruncatedHashLength+1 {
 		return nil, mediaproxy.ErrInvalidMediaIDSyntax
@@ -82,5 +82,5 @@ func (br *Connector) getDirectMedia(ctx context.Context, mediaIDStr string) (res
 		return nil, mautrix.MNotFound.WithMessage("Invalid checksum in media ID part")
 	}
 	remoteMediaID := networkid.MediaID(mediaID[len(MediaIDPrefix) : len(mediaID)-MediaIDTruncatedHashLength])
-	return br.Bridge.Network.(bridgev2.DirectMediableNetwork).Download(ctx, remoteMediaID)
+	return br.Bridge.Network.(bridgev2.DirectMediableNetwork).Download(ctx, remoteMediaID, params)
 }

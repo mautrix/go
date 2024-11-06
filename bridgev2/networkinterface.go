@@ -243,7 +243,7 @@ type StoppableNetwork interface {
 type DirectMediableNetwork interface {
 	NetworkConnector
 	SetUseDirectMedia()
-	Download(ctx context.Context, mediaID networkid.MediaID) (mediaproxy.GetMediaResponse, error)
+	Download(ctx context.Context, mediaID networkid.MediaID, params map[string]string) (mediaproxy.GetMediaResponse, error)
 }
 
 type IdentifierValidatingNetwork interface {

@@ -16,6 +16,8 @@
 * *(mediaproxy)* Added `GetMediaResponseCallback` and `GetMediaResponseFile`
   to write proxied data directly to http response or temp file instead of
   having to use an `io.Reader`.
+* *(mediaproxy)* Dropped support for legacy media download endpoints.
+* *(mediaproxy,bridgev2)* Made interface pass through query parameters.
 
 [MSC2781]: https://github.com/matrix-org/matrix-spec-proposals/pull/2781
 
