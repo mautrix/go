@@ -12,9 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"mime"
 	"mime/multipart"
-	"net"
 	"net/http"
 	"net/textproto"
 	"os"
@@ -99,8 +97,7 @@ type GetMediaResponseFile struct {
 type GetMediaFunc = func(ctx context.Context, mediaID string) (response GetMediaResponse, err error)
 
 type MediaProxy struct {
-	KeyServer   *federation.KeyServer
-	ProxyClient *http.Client
+	KeyServer *federation.KeyServer
 
 	ForceProxyLegacyFederation bool
 
@@ -111,7 +108,6 @@ type MediaProxy struct {
 	serverKey  *federation.SigningKey
 
 	FederationRouter  *mux.Router
-	LegacyMediaRouter *mux.Router
 	ClientMediaRouter *mux.Router
 }
 
@@ -124,14 +120,6 @@ func New(serverName string, serverKey string, getMedia GetMediaFunc) (*MediaProx
 		serverName: serverName,
 		serverKey:  parsed,
 		GetMedia:   getMedia,
-		ProxyClient: &http.Client{
-			Transport: &http.Transport{
-				DialContext:         (&net.Dialer{Timeout: 10 * time.Second}).DialContext,
-				TLSHandshakeTimeout: 10 * time.Second,
-				ForceAttemptHTTP2:   false,
-			},
-			Timeout: 60 * time.Second,
-		},
 		KeyServer: &federation.KeyServer{
 			KeyProvider: &federation.StaticServerKey{
 				ServerName: serverName,
@@ -149,7 +137,6 @@ func New(serverName string, serverKey string, getMedia GetMediaFunc) (*MediaProx
 type BasicConfig struct {
 	ServerName        string `yaml:"server_name" json:"server_name"`
 	ServerKey         string `yaml:"server_key" json:"server_key"`
-	AllowProxy        bool   `yaml:"allow_proxy" json:"allow_proxy"`
 	WellKnownResponse string `yaml:"well_known_response" json:"well_known_response"`
 }
 
@@ -157,9 +144,6 @@ func NewFromConfig(cfg BasicConfig, getMedia GetMediaFunc) (*MediaProxy, error) 
 	mp, err := New(cfg.ServerName, cfg.ServerKey, getMedia)
 	if err != nil {
 		return nil, err
-	}
-	if !cfg.AllowProxy {
-		mp.DisallowProxying()
 	}
 	if cfg.WellKnownResponse != "" {
 		mp.KeyServer.WellKnownTarget = cfg.WellKnownResponse
@@ -186,16 +170,9 @@ func (mp *MediaProxy) GetServerKey() *federation.SigningKey {
 	return mp.serverKey
 }
 
-func (mp *MediaProxy) DisallowProxying() {
-	mp.ProxyClient = nil
-}
-
 func (mp *MediaProxy) RegisterRoutes(router *mux.Router) {
 	if mp.FederationRouter == nil {
 		mp.FederationRouter = router.PathPrefix("/_matrix/federation").Subrouter()
-	}
-	if mp.LegacyMediaRouter == nil {
-		mp.LegacyMediaRouter = router.PathPrefix("/_matrix/media").Subrouter()
 	}
 	if mp.ClientMediaRouter == nil {
 		mp.ClientMediaRouter = router.PathPrefix("/_matrix/client/v1/media").Subrouter()
@@ -203,22 +180,14 @@ func (mp *MediaProxy) RegisterRoutes(router *mux.Router) {
 
 	mp.FederationRouter.HandleFunc("/v1/media/download/{mediaID}", mp.DownloadMediaFederation).Methods(http.MethodGet)
 	mp.FederationRouter.HandleFunc("/v1/version", mp.KeyServer.GetServerVersion).Methods(http.MethodGet)
-	addClientRoutes := func(router *mux.Router, prefix string) {
-		router.HandleFunc(prefix+"/download/{serverName}/{mediaID}", mp.DownloadMedia).Methods(http.MethodGet)
-		router.HandleFunc(prefix+"/download/{serverName}/{mediaID}/{fileName}", mp.DownloadMedia).Methods(http.MethodGet)
-		router.HandleFunc(prefix+"/thumbnail/{serverName}/{mediaID}", mp.DownloadMedia).Methods(http.MethodGet)
-		router.HandleFunc(prefix+"/upload/{serverName}/{mediaID}", mp.UploadNotSupported).Methods(http.MethodPut)
-		router.HandleFunc(prefix+"/upload", mp.UploadNotSupported).Methods(http.MethodPost)
-		router.HandleFunc(prefix+"/create", mp.UploadNotSupported).Methods(http.MethodPost)
-		router.HandleFunc(prefix+"/config", mp.UploadNotSupported).Methods(http.MethodGet)
-		router.HandleFunc(prefix+"/preview_url", mp.PreviewURLNotSupported).Methods(http.MethodGet)
-	}
-	addClientRoutes(mp.LegacyMediaRouter, "/v3")
-	addClientRoutes(mp.LegacyMediaRouter, "/r0")
-	addClientRoutes(mp.LegacyMediaRouter, "/v1")
-	addClientRoutes(mp.ClientMediaRouter, "")
-	mp.LegacyMediaRouter.NotFoundHandler = http.HandlerFunc(mp.UnknownEndpoint)
-	mp.LegacyMediaRouter.MethodNotAllowedHandler = http.HandlerFunc(mp.UnsupportedMethod)
+	mp.ClientMediaRouter.HandleFunc("/download/{serverName}/{mediaID}", mp.DownloadMedia).Methods(http.MethodGet)
+	mp.ClientMediaRouter.HandleFunc("/download/{serverName}/{mediaID}/{fileName}", mp.DownloadMedia).Methods(http.MethodGet)
+	mp.ClientMediaRouter.HandleFunc("/thumbnail/{serverName}/{mediaID}", mp.DownloadMedia).Methods(http.MethodGet)
+	mp.ClientMediaRouter.HandleFunc("/upload/{serverName}/{mediaID}", mp.UploadNotSupported).Methods(http.MethodPut)
+	mp.ClientMediaRouter.HandleFunc("/upload", mp.UploadNotSupported).Methods(http.MethodPost)
+	mp.ClientMediaRouter.HandleFunc("/create", mp.UploadNotSupported).Methods(http.MethodPost)
+	mp.ClientMediaRouter.HandleFunc("/config", mp.UploadNotSupported).Methods(http.MethodGet)
+	mp.ClientMediaRouter.HandleFunc("/preview_url", mp.PreviewURLNotSupported).Methods(http.MethodGet)
 	mp.FederationRouter.NotFoundHandler = http.HandlerFunc(mp.UnknownEndpoint)
 	mp.FederationRouter.MethodNotAllowedHandler = http.HandlerFunc(mp.UnsupportedMethod)
 	mp.ClientMediaRouter.NotFoundHandler = http.HandlerFunc(mp.UnknownEndpoint)
@@ -232,61 +201,8 @@ func (mp *MediaProxy) RegisterRoutes(router *mux.Router) {
 			next.ServeHTTP(w, r)
 		})
 	}
-	mp.LegacyMediaRouter.Use(corsMiddleware)
 	mp.ClientMediaRouter.Use(corsMiddleware)
 	mp.KeyServer.Register(router)
-}
-
-func (mp *MediaProxy) proxyDownload(ctx context.Context, w http.ResponseWriter, url, fileName string) {
-	log := zerolog.Ctx(ctx)
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		log.Err(err).Str("url", url).Msg("Failed to create proxy request")
-		mautrix.MUnknown.WithMessage("Failed to create proxy request").Write(w)
-		return
-	}
-	req.Header.Set("User-Agent", mautrix.DefaultUserAgent+" (media proxy)")
-	if mp.PrepareProxyRequest != nil {
-		mp.PrepareProxyRequest(req)
-	}
-	resp, err := mp.ProxyClient.Do(req)
-	defer func() {
-		if resp != nil && resp.Body != nil {
-			_ = resp.Body.Close()
-		}
-	}()
-	if err != nil {
-		log.Err(err).Str("url", url).Msg("Failed to proxy download")
-		mautrix.MUnknown.WithMessage("Failed to proxy download").WithStatus(http.StatusServiceUnavailable).Write(w)
-		return
-	} else if resp.StatusCode != http.StatusOK {
-		log.Warn().Str("url", url).Int("status", resp.StatusCode).Msg("Unexpected status code proxying download")
-		mautrix.MUnknown.WithMessage("Unexpected status code proxying download").WithStatus(resp.StatusCode).Write(w)
-		return
-	}
-	w.Header()["Content-Type"] = resp.Header["Content-Type"]
-	w.Header()["Content-Length"] = resp.Header["Content-Length"]
-	w.Header()["Last-Modified"] = resp.Header["Last-Modified"]
-	w.Header()["Cache-Control"] = resp.Header["Cache-Control"]
-	contentDisposition := "attachment"
-	switch resp.Header.Get("Content-Type") {
-	case "text/css", "text/plain", "text/csv", "application/json", "application/ld+json", "image/jpeg", "image/gif",
-		"image/png", "image/apng", "image/webp", "image/avif", "video/mp4", "video/webm", "video/ogg", "video/quicktime",
-		"audio/mp4", "audio/webm", "audio/aac", "audio/mpeg", "audio/ogg", "audio/wave", "audio/wav", "audio/x-wav",
-		"audio/x-pn-wav", "audio/flac", "audio/x-flac", "application/pdf":
-		contentDisposition = "inline"
-	}
-	if fileName != "" {
-		contentDisposition = mime.FormatMediaType(contentDisposition, map[string]string{
-			"filename": fileName,
-		})
-	}
-	w.Header().Set("Content-Disposition", contentDisposition)
-	w.WriteHeader(http.StatusOK)
-	_, err = io.Copy(w, resp.Body)
-	if err != nil {
-		log.Debug().Err(err).Msg("Failed to write proxy response")
-	}
 }
 
 // Deprecated: use mautrix.RespError instead
@@ -435,13 +351,6 @@ func (mp *MediaProxy) DownloadMedia(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if urlResp, ok := resp.(*GetMediaResponseURL); ok {
-		// Proxy if the config allows proxying and the request doesn't allow redirects.
-		// In any other case, redirect to the URL.
-		isFederated := strings.HasPrefix(r.Header.Get("Authorization"), "X-Matrix")
-		if mp.ProxyClient != nil && (r.URL.Query().Get("allow_redirect") != "true" || (mp.ForceProxyLegacyFederation && isFederated)) {
-			mp.proxyDownload(ctx, w, urlResp.URL, vars["fileName"])
-			return
-		}
 		w.Header().Set("Location", urlResp.URL)
 		expirySeconds := (time.Until(urlResp.ExpiresAt) - 5*time.Minute).Seconds()
 		if urlResp.ExpiresAt.IsZero() {
