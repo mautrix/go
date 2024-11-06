@@ -7,6 +7,7 @@
 package simplevent
 
 import (
+	"context"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -25,6 +26,9 @@ type EventMeta struct {
 	CreatePortal      bool
 	Timestamp         time.Time
 	StreamOrder       int64
+
+	PreHandleFunc  func(context.Context, *bridgev2.Portal)
+	PostHandleFunc func(context.Context, *bridgev2.Portal)
 }
 
 var (
@@ -33,6 +37,8 @@ var (
 	_ bridgev2.RemoteEventThatMayCreatePortal         = (*EventMeta)(nil)
 	_ bridgev2.RemoteEventWithTimestamp               = (*EventMeta)(nil)
 	_ bridgev2.RemoteEventWithStreamOrder             = (*EventMeta)(nil)
+	_ bridgev2.RemotePreHandler                       = (*EventMeta)(nil)
+	_ bridgev2.RemotePostHandler                      = (*EventMeta)(nil)
 )
 
 func (evt *EventMeta) AddLogContext(c zerolog.Context) zerolog.Context {
@@ -71,6 +77,14 @@ func (evt *EventMeta) GetType() bridgev2.RemoteEventType {
 
 func (evt *EventMeta) ShouldCreatePortal() bool {
 	return evt.CreatePortal
+}
+
+func (evt *EventMeta) PreHandle(ctx context.Context, portal *bridgev2.Portal) {
+	evt.PreHandleFunc(ctx, portal)
+}
+
+func (evt *EventMeta) PostHandle(ctx context.Context, portal *bridgev2.Portal) {
+	evt.PostHandleFunc(ctx, portal)
 }
 
 func (evt EventMeta) WithType(t bridgev2.RemoteEventType) EventMeta {
