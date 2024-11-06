@@ -13,8 +13,9 @@
 * *(pushrules)* Added support for `sender_notification_permission` condition
   kind (used for `@room` mentions).
 * *(crypto)* Added support for `json.RawMessage` in `EncryptMegolmEvent`.
-* *(mediaproxy)* Added `GetMediaResponseCallback` to write proxied response
-  directly instead of having to use an `io.Reader`.
+* *(mediaproxy)* Added `GetMediaResponseCallback` and `GetMediaResponseFile`
+  to write proxied data directly to http response or temp file instead of
+  having to use an `io.Reader`.
 
 [MSC2781]: https://github.com/matrix-org/matrix-spec-proposals/pull/2781
 
