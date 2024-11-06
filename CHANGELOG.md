@@ -1,3 +1,21 @@
+## unreleased
+
+* *(hicli)* Moved package into gomuks repo.
+* *(bridgev2/commands)* Fixed cookie unescaping in login commands.
+* *(bridgev2/portal)* Added special `DefaultChatName` constant to explicitly
+  reset portal names to the default (based on members).
+* *(appservice)* Updated [MSC2409] stable registration field name from
+  `push_ephemeral` to `receive_ephemeral`. Homeserver admins must update
+  existing registrations manually.
+* *(format)* Added support for `img` tags.
+* *(format/mdext)* Added goldmark extensions for Matrix math and custom emojis.
+* *(event/reply)* Removed support for generating reply fallbacks ([MSC2781]).
+* *(pushrules)* Added support for `sender_notification_permission` condition
+  kind (used for `@room` mentions).
+* *(crypto)* Added support for `json.RawMessage` in `EncryptMegolmEvent`.
+
+[MSC2781]: https://github.com/matrix-org/matrix-spec-proposals/pull/2781
+
 ## v0.21.1 (2024-10-16)
 
 * *(bridgev2)* Added more features and fixed bugs.
