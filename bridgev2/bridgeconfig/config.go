@@ -11,6 +11,7 @@ import (
 	"go.mau.fi/zeroconfig"
 	"gopkg.in/yaml.v3"
 
+	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/mediaproxy"
 )
 
@@ -65,7 +66,7 @@ type BridgeConfig struct {
 	ResendBridgeInfo        bool             `yaml:"resend_bridge_info"`
 	BridgeMatrixLeave       bool             `yaml:"bridge_matrix_leave"`
 	TagOnlyOnCreate         bool             `yaml:"tag_only_on_create"`
-	EnableTagBridging       bool             `yaml:"enable_tag_bridging"`
+	OnlyBridgeTags          []event.RoomTag  `yaml:"only_bridge_tags"`
 	MuteOnlyOnCreate        bool             `yaml:"mute_only_on_create"`
 	OutgoingMessageReID     bool             `yaml:"outgoing_message_re_id"`
 	CleanupOnLogout         CleanupOnLogouts `yaml:"cleanup_on_logout"`

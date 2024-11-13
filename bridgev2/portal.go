@@ -3269,7 +3269,11 @@ func (portal *Portal) updateUserLocalInfo(ctx context.Context, info *UserLocalPo
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to mute room")
 		}
 	}
-	if info.Tag != nil && portal.Bridge.Config.EnableTagBridging && (didJustCreate || !portal.Bridge.Config.TagOnlyOnCreate) && (!didJustCreate || *info.Tag != "") {
+	if info.Tag != nil &&
+		len(portal.Bridge.Config.OnlyBridgeTags) > 0 &&
+		(*info.Tag == "" || slices.Contains(portal.Bridge.Config.OnlyBridgeTags, *info.Tag)) &&
+		(didJustCreate || !portal.Bridge.Config.TagOnlyOnCreate) &&
+		(!didJustCreate || *info.Tag != "") {
 		err := dp.TagRoom(ctx, portal.MXID, *info.Tag, *info.Tag != "")
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to tag room")

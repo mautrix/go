@@ -24,8 +24,8 @@ bridge:
     # Should room tags only be synced when creating the portal? Tags mean things like favorite/pin and archive/low priority.
     # Tags currently can't be synced back to the remote network, so a continuous sync means tagging from Matrix will be undone.
     tag_only_on_create: true
-    # Should room tags be synced at all?
-    enable_tag_bridging: true
+    # List of tags to allow bridging. If empty, no tags will be bridged.
+    only_bridge_tags: [m.favourite, m.lowpriority]
     # Should room mute status only be synced when creating the portal?
     # Like tags, mutes can't currently be synced back to the remote network.
     mute_only_on_create: true
