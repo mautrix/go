@@ -1147,7 +1147,7 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 	if portal.Bridge.Config.OutgoingMessageReID {
 		deterministicID = portal.Bridge.Matrix.GenerateReactionEventID(portal.MXID, reactionTarget, preResp.SenderID, preResp.EmojiID)
 	}
-	existing, err := portal.Bridge.DB.Reaction.GetByID(ctx, reactionTarget.ID, reactionTarget.PartID, preResp.SenderID, preResp.EmojiID)
+	existing, err := portal.Bridge.DB.Reaction.GetByID(ctx, portal.Receiver, reactionTarget.ID, reactionTarget.PartID, preResp.SenderID, preResp.EmojiID)
 	if err != nil {
 		log.Err(err).Msg("Failed to check if reaction is a duplicate")
 		return
@@ -1169,7 +1169,7 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 	}
 	react.PreHandleResp = &preResp
 	if preResp.MaxReactions > 0 {
-		allReactions, err := portal.Bridge.DB.Reaction.GetAllToMessageBySender(ctx, reactionTarget.ID, preResp.SenderID)
+		allReactions, err := portal.Bridge.DB.Reaction.GetAllToMessageBySender(ctx, portal.Receiver, reactionTarget.ID, preResp.SenderID)
 		if err != nil {
 			log.Err(err).Msg("Failed to get all reactions to message by sender")
 			portal.sendErrorStatus(ctx, evt, fmt.Errorf("%w: failed to get previous reactions: %w", ErrDatabaseError, err))
@@ -2162,9 +2162,9 @@ func (portal *Portal) getTargetMessagePart(ctx context.Context, evt RemoteEventW
 
 func (portal *Portal) getTargetReaction(ctx context.Context, evt RemoteReactionRemove) (*database.Reaction, error) {
 	if partTargeter, ok := evt.(RemoteEventWithTargetPart); ok {
-		return portal.Bridge.DB.Reaction.GetByID(ctx, evt.GetTargetMessage(), partTargeter.GetTargetMessagePart(), evt.GetSender().Sender, evt.GetRemovedEmojiID())
+		return portal.Bridge.DB.Reaction.GetByID(ctx, portal.Receiver, evt.GetTargetMessage(), partTargeter.GetTargetMessagePart(), evt.GetSender().Sender, evt.GetRemovedEmojiID())
 	} else {
-		return portal.Bridge.DB.Reaction.GetByIDWithoutMessagePart(ctx, evt.GetTargetMessage(), evt.GetSender().Sender, evt.GetRemovedEmojiID())
+		return portal.Bridge.DB.Reaction.GetByIDWithoutMessagePart(ctx, portal.Receiver, evt.GetTargetMessage(), evt.GetSender().Sender, evt.GetRemovedEmojiID())
 	}
 }
 
@@ -2196,9 +2196,9 @@ func (portal *Portal) handleRemoteReactionSync(ctx context.Context, source *User
 	}
 	var existingReactions []*database.Reaction
 	if partTargeter, ok := evt.(RemoteEventWithTargetPart); ok {
-		existingReactions, err = portal.Bridge.DB.Reaction.GetAllToMessagePart(ctx, evt.GetTargetMessage(), partTargeter.GetTargetMessagePart())
+		existingReactions, err = portal.Bridge.DB.Reaction.GetAllToMessagePart(ctx, portal.Receiver, evt.GetTargetMessage(), partTargeter.GetTargetMessagePart())
 	} else {
-		existingReactions, err = portal.Bridge.DB.Reaction.GetAllToMessage(ctx, evt.GetTargetMessage())
+		existingReactions, err = portal.Bridge.DB.Reaction.GetAllToMessage(ctx, portal.Receiver, evt.GetTargetMessage())
 	}
 	existing := make(map[networkid.UserID]map[networkid.EmojiID]*database.Reaction)
 	for _, existingReaction := range existingReactions {
@@ -2317,7 +2317,7 @@ func (portal *Portal) handleRemoteReaction(ctx context.Context, source *UserLogi
 		return
 	}
 	emoji, emojiID := evt.GetReactionEmoji()
-	existingReaction, err := portal.Bridge.DB.Reaction.GetByID(ctx, targetMessage.ID, targetMessage.PartID, evt.GetSender().Sender, emojiID)
+	existingReaction, err := portal.Bridge.DB.Reaction.GetByID(ctx, portal.Receiver, targetMessage.ID, targetMessage.PartID, evt.GetSender().Sender, emojiID)
 	if err != nil {
 		log.Err(err).Msg("Failed to check if reaction is a duplicate")
 		return
