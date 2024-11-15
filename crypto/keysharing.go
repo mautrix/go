@@ -8,12 +8,15 @@
 package crypto
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"time"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/exerrors"
 
+	"maunium.net/go/mautrix/crypto/goolm/session"
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
 
@@ -178,7 +181,8 @@ func (mach *OlmMachine) importForwardedRoomKey(ctx context.Context, evt *Decrypt
 		log.Warn().Uint32("first_known_index", firstKnownIndex).Msg("Importing partial session")
 	}
 	igs := &InboundGroupSession{
-		Internal:         igsInternal,
+		InternalLibolm:   igsInternal,
+		InternalGoolm:    exerrors.Must(session.NewMegolmInboundSessionFromExport([]byte(content.SessionKey))),
 		SigningKey:       evt.Keys.Ed25519,
 		SenderKey:        content.SenderKey,
 		RoomID:           content.RoomID,
@@ -191,7 +195,10 @@ func (mach *OlmMachine) importForwardedRoomKey(ctx context.Context, evt *Decrypt
 		IsScheduled: content.IsScheduled,
 	}
 	existingIGS, _ := mach.CryptoStore.GetGroupSession(ctx, igs.RoomID, igs.ID())
-	if existingIGS != nil && existingIGS.Internal.FirstKnownIndex() <= igs.Internal.FirstKnownIndex() {
+	if igs.InternalLibolm.FirstKnownIndex() != igs.InternalGoolm.FirstKnownIndex() {
+		panic("different indices")
+	}
+	if existingIGS != nil && existingIGS.InternalLibolm.FirstKnownIndex() <= igs.InternalLibolm.FirstKnownIndex() {
 		// We already have an equivalent or better session in the store, so don't override it.
 		return false
 	}
@@ -339,13 +346,23 @@ func (mach *OlmMachine) HandleRoomKeyRequest(ctx context.Context, sender id.User
 		log = log.With().Stringer("unexpected_session_id", internalID).Logger()
 	}
 
-	firstKnownIndex := igs.Internal.FirstKnownIndex()
+	firstKnownIndex := igs.InternalLibolm.FirstKnownIndex()
+	if igs.InternalLibolm.FirstKnownIndex() != igs.InternalGoolm.FirstKnownIndex() {
+		panic("different indices")
+	}
 	log = log.With().Uint32("first_known_index", firstKnownIndex).Logger()
-	exportedKey, err := igs.Internal.Export(firstKnownIndex)
+	exportedKey, err := igs.InternalLibolm.Export(firstKnownIndex)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to export group session to forward")
 		mach.rejectKeyRequest(ctx, KeyShareRejectInternalError, device, content.Body)
 		return
+	}
+	exportedKeyGoolm, err := igs.InternalGoolm.Export(firstKnownIndex)
+	if !bytes.Equal(exportedKey, exportedKeyGoolm) {
+		panic("keys different")
+	}
+	if igs.ForwardingChains == nil {
+		igs.ForwardingChains = []string{}
 	}
 
 	forwardedRoomKey := event.Content{

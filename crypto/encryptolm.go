@@ -180,9 +180,17 @@ func (mach *OlmMachine) createOutboundSessions(ctx context.Context, input map[id
 				log.Error().Err(err).Msg("Failed to verify signature of one-time key")
 			} else if !ok {
 				log.Warn().Msg("One-time key has invalid signature from device")
-			} else if sess, err := mach.account.Internal.NewOutboundSession(identity.IdentityKey, oneTimeKey.Key); err != nil {
+			} else if sess, err := mach.account.InternalLibolm.NewOutboundSession(identity.IdentityKey, oneTimeKey.Key); err != nil {
 				log.Error().Err(err).Msg("Failed to create outbound session with claimed one-time key")
 			} else {
+				goolmSess, err := mach.account.InternalGoolm.NewOutboundSession(identity.IdentityKey, oneTimeKey.Key)
+				if err != nil {
+					panic("goolm NewOutboundSession errored")
+				}
+				if sess.Describe() != goolmSess.Describe() {
+					panic("goolm NewOutboundSession and libolm NewOutboundSession returned different values")
+				}
+
 				wrapped := wrapSession(sess)
 				err = mach.CryptoStore.AddSession(ctx, identity.IdentityKey, wrapped)
 				if err != nil {
