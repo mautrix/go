@@ -9,10 +9,9 @@ package commands
 import (
 	"context"
 	"fmt"
+	"html"
 	"strings"
 	"time"
-
-	"golang.org/x/net/html"
 
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/networkid"

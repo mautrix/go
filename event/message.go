@@ -8,11 +8,10 @@ package event
 
 import (
 	"encoding/json"
+	"html"
 	"slices"
 	"strconv"
 	"strings"
-
-	"golang.org/x/net/html"
 
 	"maunium.net/go/mautrix/crypto/attachment"
 	"maunium.net/go/mautrix/id"

@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"net/url"
 	"regexp"
 	"slices"
@@ -17,7 +18,6 @@ import (
 
 	"github.com/skip2/go-qrcode"
 	"go.mau.fi/util/curl"
-	"golang.org/x/net/html"
 
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/networkid"
