@@ -7,6 +7,7 @@
 package crypto
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"database/sql/driver"
@@ -127,16 +128,23 @@ func (store *SQLCryptoStore) FindDeviceID(ctx context.Context) (deviceID id.Devi
 // PutAccount stores an OlmAccount in the database.
 func (store *SQLCryptoStore) PutAccount(ctx context.Context, account *OlmAccount) error {
 	store.Account = account
-	bytes, err := account.Internal.Pickle(store.PickleKey)
+	pickled, err := account.InternalLibolm.Pickle(store.PickleKey)
 	if err != nil {
 		return err
+	}
+	goolmBytes, err := account.InternalGoolm.Pickle(store.PickleKey)
+	if err != nil {
+		panic(fmt.Errorf("pickling goolm account errored %w", err))
+	}
+	if !bytes.Equal(pickled, goolmBytes) {
+		panic("libolm and goolm pickled to different values")
 	}
 	_, err = store.DB.Exec(ctx, `
 		INSERT INTO crypto_account (device_id, shared, sync_token, account, account_id, key_backup_version) VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (account_id) DO UPDATE SET shared=excluded.shared, sync_token=excluded.sync_token,
 											   account=excluded.account, account_id=excluded.account_id,
 											   key_backup_version=excluded.key_backup_version
-	`, store.DeviceID, account.Shared, store.SyncToken, bytes, store.AccountID, account.KeyBackupVersion)
+	`, store.DeviceID, account.Shared, store.SyncToken, pickled, store.AccountID, account.KeyBackupVersion)
 	return err
 }
 
@@ -144,7 +152,10 @@ func (store *SQLCryptoStore) PutAccount(ctx context.Context, account *OlmAccount
 func (store *SQLCryptoStore) GetAccount(ctx context.Context) (*OlmAccount, error) {
 	if store.Account == nil {
 		row := store.DB.QueryRow(ctx, "SELECT shared, sync_token, account, key_backup_version FROM crypto_account WHERE account_id=$1", store.AccountID)
-		acc := &OlmAccount{Internal: olm.NewBlankAccount()}
+		acc := &OlmAccount{
+			InternalLibolm: olm.NewBlankAccount(),
+			InternalGoolm:  olm.NewBlankAccount(),
+		}
 		var accountBytes []byte
 		err := row.Scan(&acc.Shared, &store.SyncToken, &accountBytes, &acc.KeyBackupVersion)
 		if err == sql.ErrNoRows {
@@ -152,9 +163,13 @@ func (store *SQLCryptoStore) GetAccount(ctx context.Context) (*OlmAccount, error
 		} else if err != nil {
 			return nil, err
 		}
-		err = acc.Internal.Unpickle(accountBytes, store.PickleKey)
+		err = acc.InternalLibolm.Unpickle(accountBytes, store.PickleKey)
 		if err != nil {
 			return nil, err
+		}
+		err = acc.InternalGoolm.Unpickle(accountBytes, store.PickleKey)
+		if err != nil {
+			panic("failed to unpickle account using goolm")
 		}
 		store.Account = acc
 	}
