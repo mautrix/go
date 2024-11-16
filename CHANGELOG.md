@@ -1,9 +1,11 @@
-## unreleased
+## v0.22.0 (2024-11-16)
 
 * *(hicli)* Moved package into gomuks repo.
 * *(bridgev2/commands)* Fixed cookie unescaping in login commands.
 * *(bridgev2/portal)* Added special `DefaultChatName` constant to explicitly
   reset portal names to the default (based on members).
+* *(bridgev2/config)* Added options to disable room tag bridging.
+* *(bridgev2/database)* Fixed reaction queries not including portal receiver.
 * *(appservice)* Updated [MSC2409] stable registration field name from
   `push_ephemeral` to `receive_ephemeral`. Homeserver admins must update
   existing registrations manually.
