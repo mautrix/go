@@ -219,7 +219,7 @@ func (store *SQLCryptoStore) getOlmSessionCache(key id.SenderKey) map[id.Session
 	return data
 }
 
-// GetLatestSession retrieves the Olm session for a given sender key from the database that has the largest ID.
+// GetLatestSession retrieves the Olm session for a given sender key from the database that had the most recent successful decryption.
 func (store *SQLCryptoStore) GetLatestSession(ctx context.Context, key id.SenderKey) (*OlmSession, error) {
 	store.olmSessionCacheLock.Lock()
 	defer store.olmSessionCacheLock.Unlock()
@@ -271,6 +271,11 @@ func (store *SQLCryptoStore) UpdateSession(ctx context.Context, _ id.SenderKey, 
 	}
 	_, err = store.DB.Exec(ctx, "UPDATE crypto_olm_session SET session=$1, last_encrypted=$2, last_decrypted=$3 WHERE session_id=$4 AND account_id=$5",
 		sessionBytes, session.LastEncryptedTime, session.LastDecryptedTime, session.ID(), store.AccountID)
+	return err
+}
+
+func (store *SQLCryptoStore) DeleteSession(ctx context.Context, _ id.SenderKey, session *OlmSession) error {
+	_, err := store.DB.Exec(ctx, "DELETE FROM crypto_olm_session WHERE session_id=$1 AND account_id=$2", session.ID(), store.AccountID)
 	return err
 }
 

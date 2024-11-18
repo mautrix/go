@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -74,6 +75,11 @@ func (mach *OlmMachine) decryptAndParseOlmCiphertext(ctx context.Context, evt *e
 		return nil, UnsupportedOlmMessageType
 	}
 
+	log := mach.machOrContextLog(ctx).With().
+		Stringer("sender_key", senderKey).
+		Int("olm_msg_type", int(olmType)).
+		Logger()
+	ctx = log.WithContext(ctx)
 	endTimeTrace := mach.timeTrace(ctx, "decrypting olm ciphertext", 5*time.Second)
 	plaintext, err := mach.tryDecryptOlmCiphertext(ctx, evt.Sender, senderKey, olmType, ciphertext)
 	endTimeTrace()
@@ -168,6 +174,8 @@ func (mach *OlmMachine) tryDecryptOlmCiphertext(ctx context.Context, sender id.U
 	return plaintext, nil
 }
 
+const MaxOlmSessionsPerDevice = 5
+
 func (mach *OlmMachine) tryDecryptOlmCiphertextWithExistingSession(ctx context.Context, senderKey id.SenderKey, olmType id.OlmMsgType, ciphertext string) ([]byte, error) {
 	log := *zerolog.Ctx(ctx)
 	endTimeTrace := mach.timeTrace(ctx, "getting sessions with sender key", time.Second)
@@ -175,6 +183,31 @@ func (mach *OlmMachine) tryDecryptOlmCiphertextWithExistingSession(ctx context.C
 	endTimeTrace()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get session for %s: %w", senderKey, err)
+	}
+	if len(sessions) > MaxOlmSessionsPerDevice*2 {
+		// SQL store sorts sessions, but other implementations may not, so re-sort just in case
+		slices.SortFunc(sessions, func(a, b *OlmSession) int {
+			return b.LastDecryptedTime.Compare(a.LastDecryptedTime)
+		})
+		log.Warn().
+			Int("session_count", len(sessions)).
+			Time("newest_last_decrypted_at", sessions[0].LastDecryptedTime).
+			Time("oldest_last_decrypted_at", sessions[len(sessions)-1].LastDecryptedTime).
+			Msg("Too many sessions, deleting old ones")
+		for i := MaxOlmSessionsPerDevice; i < len(sessions); i++ {
+			err = mach.CryptoStore.DeleteSession(ctx, senderKey, sessions[i])
+			if err != nil {
+				log.Warn().Err(err).
+					Stringer("olm_session_id", sessions[i].ID()).
+					Time("last_decrypt", sessions[i].LastDecryptedTime).
+					Msg("Failed to delete olm session")
+			} else {
+				log.Debug().
+					Stringer("olm_session_id", sessions[i].ID()).
+					Time("last_decrypt", sessions[i].LastDecryptedTime).
+					Msg("Deleted olm session")
+			}
+		}
 	}
 
 	for _, session := range sessions {
