@@ -114,35 +114,44 @@ type BeeperEncodedOrder struct {
 	suborder int64
 }
 
-func NewBeeperEncodedOrder(order int64, suborder int64) BeeperEncodedOrder {
-	return BeeperEncodedOrder{order: order, suborder: suborder}
+func NewBeeperEncodedOrder(order int64, suborder int64) *BeeperEncodedOrder {
+	return &BeeperEncodedOrder{order: order, suborder: suborder}
 }
 
-func BeeperEncodedOrderFromString(str string) (BeeperEncodedOrder, error) {
+func BeeperEncodedOrderFromString(str string) (*BeeperEncodedOrder, error) {
 	order, suborder, err := decodeIntPair(str)
 	if err != nil {
-		return BeeperEncodedOrder{}, err
+		return nil, err
 	}
-	return BeeperEncodedOrder{order: order, suborder: suborder}, nil
+	return &BeeperEncodedOrder{order: order, suborder: suborder}, nil
 }
 
-func (b BeeperEncodedOrder) String() string {
+func (b *BeeperEncodedOrder) String() string {
+	if b == nil {
+		return ""
+	}
 	return encodeIntPair(b.order, b.suborder)
 }
 
-func (b BeeperEncodedOrder) OrderPair() (int64, int64) {
+func (b *BeeperEncodedOrder) OrderPair() (int64, int64) {
+	if b == nil {
+		return 0, 0
+	}
 	return b.order, b.suborder
 }
 
-func (b BeeperEncodedOrder) IsZero() bool {
-	return b.order == 0 && b.suborder == 0
+func (b *BeeperEncodedOrder) IsZero() bool {
+	return b == nil || (b.order == 0 && b.suborder == 0)
 }
 
-func (b BeeperEncodedOrder) MarshalJSON() ([]byte, error) {
+func (b *BeeperEncodedOrder) MarshalJSON() ([]byte, error) {
 	return []byte(`"` + b.String() + `"`), nil
 }
 
 func (b *BeeperEncodedOrder) UnmarshalJSON(data []byte) error {
+	if b == nil {
+		return fmt.Errorf("BeeperEncodedOrder: receiver is nil")
+	}
 	str := string(data)
 	if len(str) < 2 {
 		return fmt.Errorf("invalid encoded order string: %s", str)
