@@ -942,7 +942,7 @@ func (cli *Client) JoinRoom(ctx context.Context, roomIDorAlias, serverName strin
 	var urlPath string
 	if serverName != "" {
 		urlPath = cli.BuildURLWithQuery(ClientURLPath{"v3", "join", roomIDorAlias}, map[string]string{
-			"server_name": serverName,
+			"via": serverName,
 		})
 	} else {
 		urlPath = cli.BuildClientURL("v3", "join", roomIDorAlias)
