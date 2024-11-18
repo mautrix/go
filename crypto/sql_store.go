@@ -22,6 +22,7 @@ import (
 	"go.mau.fi/util/dbutil"
 
 	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/crypto/goolm/account"
 	"maunium.net/go/mautrix/crypto/goolm/cipher"
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/crypto/sql_store_upgrade"
@@ -154,7 +155,7 @@ func (store *SQLCryptoStore) GetAccount(ctx context.Context) (*OlmAccount, error
 		row := store.DB.QueryRow(ctx, "SELECT shared, sync_token, account, key_backup_version FROM crypto_account WHERE account_id=$1", store.AccountID)
 		acc := &OlmAccount{
 			InternalLibolm: olm.NewBlankAccount(),
-			InternalGoolm:  olm.NewBlankAccount(),
+			InternalGoolm:  &account.Account{},
 		}
 		var accountBytes []byte
 		err := row.Scan(&acc.Shared, &store.SyncToken, &accountBytes, &acc.KeyBackupVersion)
@@ -167,9 +168,10 @@ func (store *SQLCryptoStore) GetAccount(ctx context.Context) (*OlmAccount, error
 		if err != nil {
 			return nil, err
 		}
+		fmt.Printf("%s\n", accountBytes)
 		err = acc.InternalGoolm.Unpickle(accountBytes, store.PickleKey)
 		if err != nil {
-			panic("failed to unpickle account using goolm")
+			panic(fmt.Sprintf("failed to unpickle account using goolm: %+v", err))
 		}
 		store.Account = acc
 	}

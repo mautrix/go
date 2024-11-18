@@ -35,11 +35,11 @@ func Pickle(key, input []byte) ([]byte, error) {
 
 // Unpickle decodes the input from base64 and decrypts the decoded input with the key and the cipher AESSHA256.
 func Unpickle(key, input []byte) ([]byte, error) {
-	pickleCipher := NewAESSHA256([]byte(kdfPickle))
 	ciphertext, err := goolmbase64.Decode(input)
 	if err != nil {
 		return nil, err
 	}
+	pickleCipher := NewAESSHA256([]byte(kdfPickle))
 	//remove mac and check
 	verified, err := pickleCipher.Verify(key, ciphertext[:len(ciphertext)-pickleMACLength], ciphertext[len(ciphertext)-pickleMACLength:])
 	if err != nil {
