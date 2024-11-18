@@ -246,7 +246,6 @@ func (gs *MemoryStore) DeleteSession(ctx context.Context, senderKey id.SenderKey
 	gs.Sessions[senderKey] = slices.DeleteFunc(sessions, func(session *OlmSession) bool {
 		return session == target
 	})
-	// we don't need to do anything here because the session is a pointer and already stored in our map
 	return gs.save()
 }
 
