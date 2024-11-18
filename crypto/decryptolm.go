@@ -223,11 +223,13 @@ func (mach *OlmMachine) tryDecryptOlmCiphertextWithExistingSession(ctx context.C
 				continue
 			}
 		}
-		log.Debug().Str("session_description", session.Describe()).Msg("Trying to decrypt olm message")
 		endTimeTrace = mach.timeTrace(ctx, "decrypting olm message", time.Second)
 		plaintext, err := session.Decrypt(ciphertext, olmType)
 		endTimeTrace()
 		if err != nil {
+			log.Warn().Err(err).
+				Str("session_description", session.Describe()).
+				Msg("Failed to decrypt olm message")
 			if olmType == id.OlmMsgTypePreKey {
 				return nil, DecryptionFailedWithMatchingSession
 			}
@@ -238,7 +240,7 @@ func (mach *OlmMachine) tryDecryptOlmCiphertextWithExistingSession(ctx context.C
 			if err != nil {
 				log.Warn().Err(err).Msg("Failed to update olm session in crypto store after decrypting")
 			}
-			log.Debug().Msg("Decrypted olm message")
+			log.Debug().Str("session_description", session.Describe()).Msg("Decrypted olm message")
 			return plaintext, nil
 		}
 	}
