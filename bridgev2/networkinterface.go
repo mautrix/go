@@ -808,9 +808,10 @@ type APNsPushConfig struct {
 }
 
 type PushConfig struct {
-	Web  *WebPushConfig  `json:"web,omitempty"`
-	FCM  *FCMPushConfig  `json:"fcm,omitempty"`
-	APNs *APNsPushConfig `json:"apns,omitempty"`
+	Web    *WebPushConfig  `json:"web,omitempty"`
+	FCM    *FCMPushConfig  `json:"fcm,omitempty"`
+	APNs   *APNsPushConfig `json:"apns,omitempty"`
+	Native bool            `json:"native,omitempty"`
 }
 
 type PushableNetworkAPI interface {
