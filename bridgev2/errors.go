@@ -64,6 +64,11 @@ var (
 	ErrPowerLevelsNotSupported         error = WrapErrorInStatus(errors.New("this bridge does not support changing group power levels")).WithIsCertain(true).WithErrorAsMessage().WithSendNotice(false)
 )
 
+// Common login interface errors
+var (
+	ErrInvalidLoginFlowID error = RespError(mautrix.MNotFound.WithMessage("Invalid login flow ID"))
+)
+
 // RespError is a class of error that certain network interface methods can return to ensure that the error
 // is properly translated into an HTTP error when the method is called via the provisioning API.
 //
