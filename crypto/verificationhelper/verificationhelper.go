@@ -334,7 +334,7 @@ func (vh *VerificationHelper) StartInRoomVerification(ctx context.Context, roomI
 	log.Info().Msg("Sending verification request")
 	content := event.MessageEventContent{
 		MsgType:    event.MsgVerificationRequest,
-		Body:       "Alice is requesting to verify your device, but your client does not support verification, so you may need to use a different verification method.",
+		Body:       fmt.Sprintf("%s is requesting to verify your device, but your client does not support verification, so you may need to use a different verification method.", vh.client.UserID),
 		FromDevice: vh.client.DeviceID,
 		Methods:    vh.supportedMethods,
 		To:         to,
