@@ -397,7 +397,7 @@ func (vh *VerificationHelper) AcceptVerification(ctx context.Context, txnID id.V
 		}
 	}
 
-	log.Info().Msg("Sending ready event")
+	log.Info().Any("methods", maps.Keys(supportedMethods)).Msg("Sending ready event")
 	readyEvt := &event.VerificationReadyEventContent{
 		FromDevice: vh.client.DeviceID,
 		Methods:    maps.Keys(supportedMethods),
@@ -685,6 +685,11 @@ func (vh *VerificationHelper) onVerificationReady(ctx context.Context, txn Verif
 	txn.TheirDeviceID = readyEvt.FromDevice
 	txn.TheirSupportedMethods = readyEvt.Methods
 
+	log.Info().
+		Stringer("their_device_id", txn.TheirDeviceID).
+		Any("their_supported_methods", txn.TheirSupportedMethods).
+		Msg("Received verification ready event")
+
 	// If we sent this verification request, send cancellations to all of the
 	// other devices.
 	if len(txn.SentToDeviceIDs) > 0 {
@@ -726,8 +731,12 @@ func (vh *VerificationHelper) onVerificationStart(ctx context.Context, txn Verif
 	log := vh.getLog(ctx).With().
 		Str("verification_action", "verification start").
 		Str("method", string(startEvt.Method)).
+		Stringer("their_device_id", txn.TheirDeviceID).
+		Any("their_supported_methods", txn.TheirSupportedMethods).
+		Bool("started_by_us", txn.StartedByUs).
 		Logger()
 	ctx = log.WithContext(ctx)
+	log.Info().Msg("Received verification start event")
 
 	vh.activeTransactionsLock.Lock()
 	defer vh.activeTransactionsLock.Unlock()
@@ -765,7 +774,7 @@ func (vh *VerificationHelper) onVerificationStart(ctx context.Context, txn Verif
 		}
 
 		if txn.TheirUserID < vh.client.UserID || (txn.TheirUserID == vh.client.UserID && txn.TheirDeviceID < vh.client.DeviceID) {
-			// Use their start event instead of ours
+			log.Debug().Msg("Using their start event instead of ours because they are alphabetically before us")
 			txn.StartedByUs = false
 			txn.StartEventContent = startEvt
 		}
@@ -776,6 +785,7 @@ func (vh *VerificationHelper) onVerificationStart(ctx context.Context, txn Verif
 
 	switch startEvt.Method {
 	case event.VerificationMethodSAS:
+		log.Info().Msg("Received SAS start event")
 		txn.VerificationState = VerificationStateSASStarted
 		if err := vh.onVerificationStartSAS(ctx, txn, evt); err != nil {
 			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUser, "failed to handle SAS verification start: %w", err)
@@ -804,6 +814,7 @@ func (vh *VerificationHelper) onVerificationDone(ctx context.Context, txn Verifi
 	log := vh.getLog(ctx).With().
 		Str("verification_action", "done").
 		Stringer("transaction_id", txn.TransactionID).
+		Bool("sent_our_done", txn.SentOurDone).
 		Logger()
 	log.Info().Msg("Verification done")
 	vh.activeTransactionsLock.Lock()
