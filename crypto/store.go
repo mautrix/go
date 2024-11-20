@@ -9,6 +9,7 @@ package crypto
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"sync"
 
@@ -47,6 +48,8 @@ type Store interface {
 	GetLatestSession(context.Context, id.SenderKey) (*OlmSession, error)
 	// UpdateSession updates a session that has previously been inserted with AddSession.
 	UpdateSession(context.Context, id.SenderKey, *OlmSession) error
+	// DeleteSession deletes the given session that has been previously inserted with AddSession.
+	DeleteSession(context.Context, id.SenderKey, *OlmSession) error
 
 	// PutGroupSession inserts an inbound Megolm session into the store. If an earlier withhold event has been inserted
 	// with PutWithheldGroupSession, this call should replace that. However, PutWithheldGroupSession must not replace
@@ -230,6 +233,19 @@ func (gs *MemoryStore) AddSession(_ context.Context, senderKey id.SenderKey, ses
 	sessions := gs.Sessions[senderKey]
 	gs.Sessions[senderKey] = append(sessions, session)
 	sort.Sort(gs.Sessions[senderKey])
+	return gs.save()
+}
+
+func (gs *MemoryStore) DeleteSession(ctx context.Context, senderKey id.SenderKey, target *OlmSession) error {
+	gs.lock.Lock()
+	defer gs.lock.Unlock()
+	sessions, ok := gs.Sessions[senderKey]
+	if !ok {
+		return nil
+	}
+	gs.Sessions[senderKey] = slices.DeleteFunc(sessions, func(session *OlmSession) bool {
+		return session == target
+	})
 	return gs.save()
 }
 
