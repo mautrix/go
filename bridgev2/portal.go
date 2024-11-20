@@ -1687,6 +1687,12 @@ func (portal *Portal) getIntentAndUserMXIDFor(ctx context.Context, sender EventS
 			Str("original_id", string(sender.Sender)).
 			Str("default_other_user", string(portal.OtherUserID)).
 			Msg("Overriding event sender with primary other user in DM portal")
+		// Ensure the ghost row exists anyway to prevent foreign key errors when saving messages
+		// TODO it'd probably be better to override the sender in the saved message, but that's more effort
+		_, err := portal.Bridge.GetGhostByID(ctx, sender.Sender)
+		if err != nil {
+			zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to get ghost with original user ID")
+		}
 		sender.Sender = portal.OtherUserID
 	}
 	if sender.Sender != "" {
