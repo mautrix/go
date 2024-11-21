@@ -278,7 +278,7 @@ func (mach *OlmMachine) HandleOTKCounts(ctx context.Context, otkCount *mautrix.O
 		log := mach.Log.With().Str("trace_id", traceID).Logger()
 		ctx = log.WithContext(ctx)
 		log.Debug().
-			Int("keys_left", otkCount.Curve25519).
+			Int("keys_left", otkCount.SignedCurve25519).
 			Msg("Sync response said we have less than 50 signed curve25519 keys left, sharing new ones...")
 		err := mach.ShareKeys(ctx, otkCount.SignedCurve25519)
 		if err != nil {
