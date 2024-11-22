@@ -210,6 +210,8 @@ matrix:
     delivery_receipts: false
     # Whether the bridge should send error notices via m.notice events when a message fails to bridge.
     message_error_notices: true
+    # Should the bridge send fallbacks for media captions as per MSC4231?
+    caption_fallbacks: false
     # Whether the bridge should update the m.direct account data event when double puppeting is enabled.
     sync_direct_chat_list: true
     # Whether created rooms should have federation enabled. If false, created portal rooms

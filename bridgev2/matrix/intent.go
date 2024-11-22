@@ -44,7 +44,45 @@ type ASIntent struct {
 var _ bridgev2.MatrixAPI = (*ASIntent)(nil)
 var _ bridgev2.MarkAsDMMatrixAPI = (*ASIntent)(nil)
 
-func (as *ASIntent) SendMessage(ctx context.Context, roomID id.RoomID, eventType event.Type, content *event.Content, extra *bridgev2.MatrixSendExtra) (*mautrix.RespSendEvent, error) {
+func (as *ASIntent) sendCaptionFallback(ctx context.Context, roomID id.RoomID, content *event.MessageEventContent, ts time.Time, mainEvt id.EventID) {
+	captionFallbackContent := &event.MessageEventContent{
+		MsgType:       event.MsgText,
+		Body:          content.Body,
+		Format:        content.Format,
+		FormattedBody: content.FormattedBody,
+		Mentions:      content.Mentions,
+		RelatesTo: &event.RelatesTo{
+			InReplyTo: &event.InReplyTo{
+				EventID: mainEvt,
+			},
+		},
+		//StableIsCaptionFallback:   true,
+		UnstableIsCaptionFallback: true,
+	}
+	if content.RelatesTo != nil && content.RelatesTo.Type == event.RelThread {
+		captionFallbackContent.RelatesTo.Type = event.RelThread
+		captionFallbackContent.RelatesTo.EventID = content.RelatesTo.EventID
+	}
+	var err error
+	var resp *mautrix.RespSendEvent
+	if ts.IsZero() {
+		resp, err = as.Matrix.SendMessageEvent(ctx, roomID, event.EventMessage, captionFallbackContent)
+	} else {
+		resp, err = as.Matrix.SendMassagedMessageEvent(ctx, roomID, event.EventMessage, captionFallbackContent, ts.UnixMilli())
+	}
+	if err != nil {
+		zerolog.Ctx(ctx).Warn().Err(err).
+			Stringer("main_message_event_id", mainEvt).
+			Msg("Failed to send caption fallback")
+	} else {
+		zerolog.Ctx(ctx).Debug().
+			Stringer("main_message_event_id", mainEvt).
+			Stringer("caption_fallback_event_id", resp.EventID).
+			Msg("Sent caption fallback")
+	}
+}
+
+func (as *ASIntent) SendMessage(ctx context.Context, roomID id.RoomID, eventType event.Type, content *event.Content, extra *bridgev2.MatrixSendExtra) (resp *mautrix.RespSendEvent, err error) {
 	if extra == nil {
 		extra = &bridgev2.MatrixSendExtra{}
 	}
@@ -56,6 +94,13 @@ func (as *ASIntent) SendMessage(ctx context.Context, roomID id.RoomID, eventType
 			Reason: parsedContent.Reason,
 			Extra:  content.Raw,
 		})
+	}
+	if as.Connector.Config.Matrix.CaptionFallbacks && eventType == event.EventMessage {
+		if msgContent, ok := content.Parsed.(*event.MessageEventContent); ok {
+			defer func() {
+				go as.sendCaptionFallback(ctx, roomID, msgContent, extra.Timestamp, resp.EventID)
+			}()
+		}
 	}
 	if eventType != event.EventReaction && eventType != event.EventRedaction {
 		if encrypted, err := as.Matrix.StateStore.IsEncrypted(ctx, roomID); err != nil {

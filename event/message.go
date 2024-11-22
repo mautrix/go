@@ -128,7 +128,9 @@ type MessageEventContent struct {
 	FromDevice id.DeviceID          `json:"from_device,omitempty"`
 	Methods    []VerificationMethod `json:"methods,omitempty"`
 
-	replyFallbackRemoved bool
+	StableIsCaptionFallback   bool `json:"m.caption_fallback,omitempty"`
+	UnstableIsCaptionFallback bool `json:"org.matrix.msc4231.caption_fallback,omitempty"`
+	replyFallbackRemoved      bool
 
 	MessageSendRetry         *BeeperRetryMetadata     `json:"com.beeper.message_send_retry,omitempty"`
 	BeeperGalleryImages      []*MessageEventContent   `json:"com.beeper.gallery.images,omitempty"`
@@ -140,6 +142,11 @@ type MessageEventContent struct {
 
 	MSC1767Audio *MSC1767Audio `json:"org.matrix.msc1767.audio,omitempty"`
 	MSC3245Voice *MSC3245Voice `json:"org.matrix.msc3245.voice,omitempty"`
+}
+
+func (content *MessageEventContent) IsCaptionFallback() bool {
+	return content != nil && (content.StableIsCaptionFallback || content.UnstableIsCaptionFallback ||
+		(content.NewContent != nil && (content.NewContent.StableIsCaptionFallback || content.NewContent.UnstableIsCaptionFallback)))
 }
 
 func (content *MessageEventContent) GetFileName() string {

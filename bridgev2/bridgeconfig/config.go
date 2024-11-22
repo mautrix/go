@@ -79,6 +79,7 @@ type MatrixConfig struct {
 	MessageStatusEvents bool  `yaml:"message_status_events"`
 	DeliveryReceipts    bool  `yaml:"delivery_receipts"`
 	MessageErrorNotices bool  `yaml:"message_error_notices"`
+	CaptionFallbacks    bool  `yaml:"caption_fallbacks"`
 	SyncDirectChatList  bool  `yaml:"sync_direct_chat_list"`
 	FederateRooms       bool  `yaml:"federate_rooms"`
 	UploadFileThreshold int64 `yaml:"upload_file_threshold"`

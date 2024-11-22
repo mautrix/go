@@ -113,6 +113,11 @@ func (ms MessageStatus) WithErrorAsMessage() MessageStatus {
 	return ms
 }
 
+func (ms MessageStatus) WithoutMSS() MessageStatus {
+	ms.DisableMSS = true
+	return ms
+}
+
 func (ms MessageStatus) Error() string {
 	return ms.InternalError.Error()
 }

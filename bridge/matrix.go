@@ -604,6 +604,10 @@ func (mx *MatrixHandler) HandleMessage(ctx context.Context, evt *event.Event) {
 	}
 
 	content := evt.Content.AsMessage()
+	if content.IsCaptionFallback() {
+		mx.bridge.SendMessageCheckpoint(evt, status.MsgStepRemote, fmt.Errorf("ignoring caption fallback"), status.MsgStatusUnsupported, 0)
+		return
+	}
 	content.RemoveReplyFallback()
 	if user.GetPermissionLevel() >= bridgeconfig.PermissionLevelUser && content.MsgType == event.MsgText {
 		commandPrefix := mx.bridge.Config.Bridge.GetCommandPrefix()

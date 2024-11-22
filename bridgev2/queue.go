@@ -98,6 +98,15 @@ func (br *Bridge) QueueMatrixEvent(ctx context.Context, evt *event.Event) {
 	}
 	if evt.Type == event.EventMessage && sender != nil {
 		msg := evt.Content.AsMessage()
+		if msg.IsCaptionFallback() {
+			status := WrapErrorInStatus(errors.New("ignoring caption fallback")).
+				WithErrorReason(event.MessageStatusUnsupported).
+				WithIsCertain(true).
+				WithErrorAsMessage().
+				WithoutMSS()
+			br.Matrix.SendMessageStatus(ctx, &status, StatusEventInfoFromEvent(evt))
+			return
+		}
 		msg.RemoveReplyFallback()
 		if strings.HasPrefix(msg.Body, br.Config.CommandPrefix) || evt.RoomID == sender.ManagementRoom {
 			if !sender.Permissions.Commands {
