@@ -65,11 +65,11 @@ func initServerAndLoginAliceBob(t *testing.T, ctx context.Context) (ts *mockServ
 func initDefaultCallbacks(t *testing.T, ctx context.Context, sendingClient, receivingClient *mautrix.Client, sendingMachine, receivingMachine *crypto.OlmMachine) (sendingCallbacks, receivingCallbacks *allVerificationCallbacks, sendingHelper, receivingHelper *verificationhelper.VerificationHelper) {
 	t.Helper()
 	sendingCallbacks = newAllVerificationCallbacks()
-	sendingHelper = verificationhelper.NewVerificationHelper(sendingClient, sendingMachine, nil, sendingCallbacks, true)
+	sendingHelper = verificationhelper.NewVerificationHelper(sendingClient, sendingMachine, sendingCallbacks, true)
 	require.NoError(t, sendingHelper.Init(ctx))
 
 	receivingCallbacks = newAllVerificationCallbacks()
-	receivingHelper = verificationhelper.NewVerificationHelper(receivingClient, receivingMachine, nil, receivingCallbacks, true)
+	receivingHelper = verificationhelper.NewVerificationHelper(receivingClient, receivingMachine, receivingCallbacks, true)
 	require.NoError(t, receivingHelper.Init(ctx))
 	return
 }
@@ -104,7 +104,7 @@ func TestVerification_Start(t *testing.T) {
 			addDeviceID(ctx, cryptoStore, aliceUserID, receivingDeviceID)
 			addDeviceID(ctx, cryptoStore, aliceUserID, receivingDeviceID2)
 
-			senderHelper := verificationhelper.NewVerificationHelper(client, client.Crypto.(*cryptohelper.CryptoHelper).Machine(), nil, tc.callbacks, tc.supportsScan)
+			senderHelper := verificationhelper.NewVerificationHelper(client, client.Crypto.(*cryptohelper.CryptoHelper).Machine(), tc.callbacks, tc.supportsScan)
 			err := senderHelper.Init(ctx)
 			require.NoError(t, err)
 
@@ -151,7 +151,7 @@ func TestVerification_StartThenCancel(t *testing.T) {
 
 			bystanderClient, _ := ts.Login(t, ctx, aliceUserID, bystanderDeviceID)
 			bystanderMachine := bystanderClient.Crypto.(*cryptohelper.CryptoHelper).Machine()
-			bystanderHelper := verificationhelper.NewVerificationHelper(bystanderClient, bystanderMachine, nil, newAllVerificationCallbacks(), true)
+			bystanderHelper := verificationhelper.NewVerificationHelper(bystanderClient, bystanderMachine, newAllVerificationCallbacks(), true)
 			require.NoError(t, bystanderHelper.Init(ctx))
 
 			require.NoError(t, sendingCryptoStore.PutDevice(ctx, aliceUserID, bystanderMachine.OwnIdentity()))
@@ -241,12 +241,12 @@ func TestVerification_Accept_NoSupportedMethods(t *testing.T) {
 	assert.NotEmpty(t, recoveryKey)
 	assert.NotNil(t, cache)
 
-	sendingHelper := verificationhelper.NewVerificationHelper(sendingClient, sendingMachine, nil, newAllVerificationCallbacks(), true)
+	sendingHelper := verificationhelper.NewVerificationHelper(sendingClient, sendingMachine, newAllVerificationCallbacks(), true)
 	err = sendingHelper.Init(ctx)
 	require.NoError(t, err)
 
 	receivingCallbacks := newBaseVerificationCallbacks()
-	receivingHelper := verificationhelper.NewVerificationHelper(receivingClient, receivingClient.Crypto.(*cryptohelper.CryptoHelper).Machine(), nil, receivingCallbacks, false)
+	receivingHelper := verificationhelper.NewVerificationHelper(receivingClient, receivingClient.Crypto.(*cryptohelper.CryptoHelper).Machine(), receivingCallbacks, false)
 	err = receivingHelper.Init(ctx)
 	require.NoError(t, err)
 
@@ -289,11 +289,11 @@ func TestVerification_Accept_CorrectMethodsPresented(t *testing.T) {
 			assert.NotEmpty(t, recoveryKey)
 			assert.NotNil(t, sendingCrossSigningKeysCache)
 
-			sendingHelper := verificationhelper.NewVerificationHelper(sendingClient, sendingMachine, nil, tc.sendingCallbacks, tc.sendingSupportsScan)
+			sendingHelper := verificationhelper.NewVerificationHelper(sendingClient, sendingMachine, tc.sendingCallbacks, tc.sendingSupportsScan)
 			err = sendingHelper.Init(ctx)
 			require.NoError(t, err)
 
-			receivingHelper := verificationhelper.NewVerificationHelper(receivingClient, receivingMachine, nil, tc.receivingCallbacks, tc.receivingSupportsScan)
+			receivingHelper := verificationhelper.NewVerificationHelper(receivingClient, receivingMachine, tc.receivingCallbacks, tc.receivingSupportsScan)
 			err = receivingHelper.Init(ctx)
 			require.NoError(t, err)
 

@@ -278,12 +278,12 @@ func TestSelfVerification_ScanQRTransactionIDCorrupted(t *testing.T) {
 	// Emulate scanning the QR code shown by the receiving device
 	// on the sending device.
 	err = sendingHelper.HandleScannedQRData(ctx, receivingShownQRCodeBytes)
-	assert.ErrorContains(t, err, "unknown transaction ID")
+	assert.ErrorContains(t, err, "unknown transaction ID found in QR code")
 
 	// Emulate scanning the QR code shown by the sending device on
 	// the receiving device.
 	err = receivingHelper.HandleScannedQRData(ctx, sendingShownQRCodeBytes)
-	assert.ErrorContains(t, err, "unknown transaction ID")
+	assert.ErrorContains(t, err, "unknown transaction ID found in QR code")
 }
 
 func TestSelfVerification_ScanQRKeyCorrupted(t *testing.T) {
