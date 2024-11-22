@@ -208,6 +208,7 @@ func (mach *OlmMachine) tryDecryptOlmCiphertextWithExistingSession(ctx context.C
 					Msg("Deleted olm session")
 			}
 		}
+		sessions = sessions[:MaxOlmSessionsPerDevice]
 	}
 
 	for _, session := range sessions {
