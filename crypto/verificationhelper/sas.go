@@ -37,6 +37,7 @@ func (vh *VerificationHelper) StartSAS(ctx context.Context, txnID id.Verificatio
 		Str("verification_action", "accept verification").
 		Stringer("transaction_id", txnID).
 		Logger()
+	ctx = log.WithContext(ctx)
 
 	vh.activeTransactionsLock.Lock()
 	defer vh.activeTransactionsLock.Unlock()
@@ -95,6 +96,7 @@ func (vh *VerificationHelper) ConfirmSAS(ctx context.Context, txnID id.Verificat
 		Str("verification_action", "confirm SAS").
 		Stringer("transaction_id", txnID).
 		Logger()
+	ctx = log.WithContext(ctx)
 
 	vh.activeTransactionsLock.Lock()
 	defer vh.activeTransactionsLock.Unlock()
@@ -169,6 +171,7 @@ func (vh *VerificationHelper) onVerificationStartSAS(ctx context.Context, txn Ve
 		Str("verification_action", "start_sas").
 		Stringer("transaction_id", txn.TransactionID).
 		Logger()
+	ctx = log.WithContext(ctx)
 	log.Info().Msg("Received SAS verification start event")
 
 	_, err := vh.mach.GetOrFetchDevice(ctx, evt.Sender, startEvt.FromDevice)
@@ -266,6 +269,7 @@ func (vh *VerificationHelper) onVerificationAccept(ctx context.Context, txn Veri
 		Str("message_authentication_code", string(acceptEvt.MessageAuthenticationCode)).
 		Any("short_authentication_string", acceptEvt.ShortAuthenticationString).
 		Logger()
+	ctx = log.WithContext(ctx)
 	log.Info().Msg("Received SAS verification accept event")
 
 	vh.activeTransactionsLock.Lock()
@@ -305,6 +309,7 @@ func (vh *VerificationHelper) onVerificationKey(ctx context.Context, txn Verific
 	log := vh.getLog(ctx).With().
 		Str("verification_action", "key").
 		Logger()
+	ctx = log.WithContext(ctx)
 	keyEvt := evt.Content.AsVerificationKey()
 	vh.activeTransactionsLock.Lock()
 	defer vh.activeTransactionsLock.Unlock()
@@ -579,6 +584,7 @@ func (vh *VerificationHelper) onVerificationMAC(ctx context.Context, txn Verific
 	log := vh.getLog(ctx).With().
 		Str("verification_action", "mac").
 		Logger()
+	ctx = log.WithContext(ctx)
 	log.Info().Msg("Received SAS verification MAC event")
 	vh.activeTransactionsLock.Lock()
 	defer vh.activeTransactionsLock.Unlock()

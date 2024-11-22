@@ -131,6 +131,8 @@ func NewVerificationHelper(client *mautrix.Client, mach *crypto.OlmMachine, stor
 func (vh *VerificationHelper) getLog(ctx context.Context) *zerolog.Logger {
 	logger := zerolog.Ctx(ctx).With().
 		Str("component", "verification").
+		Stringer("device_id", vh.client.DeviceID).
+		Stringer("user_id", vh.client.UserID).
 		Any("supported_methods", vh.supportedMethods).
 		Logger()
 	return &logger
@@ -167,6 +169,7 @@ func (vh *VerificationHelper) Init(ctx context.Context) error {
 				Stringer("event_id", evt.ID).
 				Stringer("event_type", evt.Type).
 				Logger()
+			ctx = log.WithContext(ctx)
 
 			var transactionID id.VerificationTransactionID
 			if evt.ID != "" {
@@ -279,12 +282,14 @@ func (vh *VerificationHelper) StartVerification(ctx context.Context, to id.UserI
 		}
 	}
 
-	vh.getLog(ctx).Info().
+	log := vh.getLog(ctx).With().
 		Str("verification_action", "start verification").
 		Stringer("transaction_id", txnID).
 		Stringer("to", to).
 		Any("device_ids", maps.Keys(devices)).
-		Msg("Sending verification request")
+		Logger()
+	ctx = log.WithContext(ctx)
+	log.Info().Msg("Sending verification request")
 
 	now := time.Now()
 	content := &event.Content{
@@ -330,6 +335,7 @@ func (vh *VerificationHelper) StartInRoomVerification(ctx context.Context, roomI
 		Stringer("room_id", roomID).
 		Stringer("to", to).
 		Logger()
+	ctx = log.WithContext(ctx)
 
 	log.Info().Msg("Sending verification request")
 	content := event.MessageEventContent{
@@ -369,6 +375,7 @@ func (vh *VerificationHelper) AcceptVerification(ctx context.Context, txnID id.V
 		Str("verification_action", "accept verification").
 		Stringer("transaction_id", txnID).
 		Logger()
+	ctx = log.WithContext(ctx)
 
 	txn, err := vh.store.GetVerificationTransaction(ctx, txnID)
 	if err != nil {
@@ -523,13 +530,14 @@ func (vh *VerificationHelper) sendVerificationEvent(ctx context.Context, txn Ver
 //
 // Must always be called with the activeTransactionsLock held.
 func (vh *VerificationHelper) cancelVerificationTxn(ctx context.Context, txn VerificationTransaction, code event.VerificationCancelCode, reasonFmtStr string, fmtArgs ...any) error {
-	log := vh.getLog(ctx)
 	reason := fmt.Errorf(reasonFmtStr, fmtArgs...).Error()
-	log.Info().
+	log := vh.getLog(ctx).With().
 		Stringer("transaction_id", txn.TransactionID).
 		Str("code", string(code)).
 		Str("reason", reason).
-		Msg("Sending cancellation event")
+		Logger()
+	ctx = log.WithContext(ctx)
+	log.Info().Msg("Sending cancellation event")
 	cancelEvt := &event.VerificationCancelEventContent{Code: code, Reason: reason}
 	err := vh.sendVerificationEvent(ctx, txn, event.InRoomVerificationCancel, cancelEvt)
 	if err != nil {
@@ -672,6 +680,7 @@ func (vh *VerificationHelper) onVerificationReady(ctx context.Context, txn Verif
 	log := vh.getLog(ctx).With().
 		Str("verification_action", "verification ready").
 		Logger()
+	ctx = log.WithContext(ctx)
 
 	vh.activeTransactionsLock.Lock()
 	defer vh.activeTransactionsLock.Unlock()
@@ -821,6 +830,7 @@ func (vh *VerificationHelper) onVerificationDone(ctx context.Context, txn Verifi
 		Stringer("transaction_id", txn.TransactionID).
 		Bool("sent_our_done", txn.SentOurDone).
 		Logger()
+	ctx = log.WithContext(ctx)
 	log.Info().Msg("Verification done")
 	vh.activeTransactionsLock.Lock()
 	defer vh.activeTransactionsLock.Unlock()

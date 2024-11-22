@@ -32,6 +32,8 @@ func (vh *VerificationHelper) HandleScannedQRData(ctx context.Context, data []by
 		Stringer("transaction_id", qrCode.TransactionID).
 		Int("mode", int(qrCode.Mode)).
 		Logger()
+	ctx = log.WithContext(ctx)
+
 	vh.activeTransactionsLock.Lock()
 	defer vh.activeTransactionsLock.Unlock()
 
@@ -197,6 +199,7 @@ func (vh *VerificationHelper) ConfirmQRCodeScanned(ctx context.Context, txnID id
 		Str("verification_action", "confirm QR code scanned").
 		Stringer("transaction_id", txnID).
 		Logger()
+	ctx = log.WithContext(ctx)
 
 	vh.activeTransactionsLock.Lock()
 	defer vh.activeTransactionsLock.Unlock()
@@ -265,6 +268,7 @@ func (vh *VerificationHelper) generateAndShowQRCode(ctx context.Context, txn *Ve
 		Str("verification_action", "generate and show QR code").
 		Stringer("transaction_id", txn.TransactionID).
 		Logger()
+	ctx = log.WithContext(ctx)
 	if vh.showQRCode == nil {
 		log.Info().Msg("Ignoring QR code generation request as showing a QR code is not enabled on this device")
 		return nil
