@@ -215,6 +215,10 @@ func ReverseTextToHTML(input string) string {
 	return html.UnescapeString(strings.ReplaceAll(input, "<br/>", "\n"))
 }
 
+func (content *MessageEventContent) HasCaption() bool {
+	return content.MsgType.IsMedia() && content.Body != "" && content.FileName != "" && content.Body != content.FileName
+}
+
 func (content *MessageEventContent) EnsureHasHTML() {
 	if len(content.FormattedBody) == 0 || content.Format != FormatHTML {
 		content.FormattedBody = TextToHTML(content.Body)

@@ -96,7 +96,7 @@ func (as *ASIntent) SendMessage(ctx context.Context, roomID id.RoomID, eventType
 		})
 	}
 	if as.Connector.Config.Matrix.CaptionFallbacks && eventType == event.EventMessage {
-		if msgContent, ok := content.Parsed.(*event.MessageEventContent); ok {
+		if msgContent, ok := content.Parsed.(*event.MessageEventContent); ok && msgContent.HasCaption() {
 			defer func() {
 				go as.sendCaptionFallback(ctx, roomID, msgContent, extra.Timestamp, resp.EventID)
 			}()
