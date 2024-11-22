@@ -203,8 +203,9 @@ func (vh *VerificationHelper) Init(ctx context.Context) error {
 				// We have to create a fake transaction so that the call to
 				// cancelVerificationTxn works.
 				txn = VerificationTransaction{
-					RoomID:      evt.RoomID,
-					TheirUserID: evt.Sender,
+					ExpirationTime: jsontime.UnixMilli{Time: time.Now().Add(time.Minute * 10)},
+					RoomID:         evt.RoomID,
+					TheirUserID:    evt.Sender,
 				}
 				if transactionable, ok := evt.Content.Parsed.(event.VerificationTransactionable); ok {
 					txn.TransactionID = transactionable.GetTransactionID()
@@ -320,6 +321,7 @@ func (vh *VerificationHelper) StartVerification(ctx context.Context, to id.UserI
 	vh.activeTransactionsLock.Lock()
 	defer vh.activeTransactionsLock.Unlock()
 	return txnID, vh.store.SaveVerificationTransaction(ctx, VerificationTransaction{
+		ExpirationTime:    jsontime.UnixMilli{Time: time.Now().Add(time.Minute * 10)},
 		VerificationState: VerificationStateRequested,
 		TransactionID:     txnID,
 		TheirUserID:       to,
@@ -360,6 +362,7 @@ func (vh *VerificationHelper) StartInRoomVerification(ctx context.Context, roomI
 	vh.activeTransactionsLock.Lock()
 	defer vh.activeTransactionsLock.Unlock()
 	return txnID, vh.store.SaveVerificationTransaction(ctx, VerificationTransaction{
+		ExpirationTime:    jsontime.UnixMilli{Time: time.Now().Add(time.Minute * 10)},
 		RoomID:            roomID,
 		VerificationState: VerificationStateRequested,
 		TransactionID:     txnID,
