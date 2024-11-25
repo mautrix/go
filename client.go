@@ -240,7 +240,7 @@ func (cli *Client) SyncWithContext(ctx context.Context) error {
 			streamResp = true
 		}
 		timeout := 30000
-		if isFailing {
+		if isFailing || nextBatch == "" {
 			timeout = 0
 		}
 		resSync, err := cli.FullSyncRequest(ctx, ReqSync{
