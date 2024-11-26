@@ -221,6 +221,11 @@ func (br *BridgeMain) PostMigrate(ctx context.Context) error {
 		return fmt.Errorf("failed to get all portals: %w", err)
 	}
 	for _, portal := range portals {
+		zerolog.Ctx(ctx).Debug().
+			Stringer("room_id", portal.MXID).
+			Object("portal_key", portal.PortalKey).
+			Str("room_type", string(portal.RoomType)).
+			Msg("Migrating portal")
 		switch portal.RoomType {
 		case database.RoomTypeDM:
 			err = br.postMigrateDMPortal(ctx, portal)
