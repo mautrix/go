@@ -2,6 +2,7 @@ package verificationhelper_test
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"os"
 	"testing"
@@ -65,11 +66,20 @@ func initServerAndLoginAliceBob(t *testing.T, ctx context.Context) (ts *mockServ
 func initDefaultCallbacks(t *testing.T, ctx context.Context, sendingClient, receivingClient *mautrix.Client, sendingMachine, receivingMachine *crypto.OlmMachine) (sendingCallbacks, receivingCallbacks *allVerificationCallbacks, sendingHelper, receivingHelper *verificationhelper.VerificationHelper) {
 	t.Helper()
 	sendingCallbacks = newAllVerificationCallbacks()
-	sendingHelper = verificationhelper.NewVerificationHelper(sendingClient, sendingMachine, nil, sendingCallbacks, true)
+	senderVerificationDB, err := sql.Open("sqlite3", ":memory:")
+	require.NoError(t, err)
+	senderVerificationStore, err := NewSQLiteVerificationStore(ctx, senderVerificationDB)
+	require.NoError(t, err)
+
+	sendingHelper = verificationhelper.NewVerificationHelper(sendingClient, sendingMachine, senderVerificationStore, sendingCallbacks, true)
 	require.NoError(t, sendingHelper.Init(ctx))
 
 	receivingCallbacks = newAllVerificationCallbacks()
-	receivingHelper = verificationhelper.NewVerificationHelper(receivingClient, receivingMachine, nil, receivingCallbacks, true)
+	receiverVerificationDB, err := sql.Open("sqlite3", ":memory:")
+	require.NoError(t, err)
+	receiverVerificationStore, err := NewSQLiteVerificationStore(ctx, receiverVerificationDB)
+	require.NoError(t, err)
+	receivingHelper = verificationhelper.NewVerificationHelper(receivingClient, receivingMachine, receiverVerificationStore, receivingCallbacks, true)
 	require.NoError(t, receivingHelper.Init(ctx))
 	return
 }
