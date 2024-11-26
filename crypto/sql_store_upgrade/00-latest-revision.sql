@@ -1,4 +1,4 @@
--- v0 -> v15: Latest revision
+-- v0 -> v16 (compatible with v15+): Latest revision
 CREATE TABLE IF NOT EXISTS crypto_account (
 	account_id         TEXT    PRIMARY KEY,
 	device_id          TEXT    NOT NULL,
@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS crypto_olm_session (
 	last_encrypted timestamp NOT NULL,
 	PRIMARY KEY (account_id, session_id)
 );
+CREATE INDEX crypto_olm_session_sender_key_idx ON crypto_olm_session (account_id, sender_key);
 
 CREATE TABLE IF NOT EXISTS crypto_megolm_inbound_session (
 	account_id         TEXT,
