@@ -1,4 +1,4 @@
--- v0 -> v16: Latest revision
+-- v0 -> v16 (compatible with v15+): Latest revision
 CREATE TABLE IF NOT EXISTS crypto_account (
 	account_id         TEXT    PRIMARY KEY,
 	device_id          TEXT    NOT NULL,
