@@ -255,6 +255,7 @@ func (ul *UserLogin) Logout(ctx context.Context) {
 type DeleteOpts struct {
 	LogoutRemote     bool
 	DontCleanupRooms bool
+	BlockingCleanup  bool
 	unlocked         bool
 }
 
@@ -295,9 +296,17 @@ func (ul *UserLogin) Delete(ctx context.Context, state status.BridgeState, opts 
 		ul.Bridge.cacheLock.Unlock()
 	}
 	backgroundCtx := context.WithoutCancel(ctx)
-	go ul.deleteSpace(backgroundCtx)
+	if !opts.BlockingCleanup {
+		go ul.deleteSpace(backgroundCtx)
+	} else {
+		ul.deleteSpace(backgroundCtx)
+	}
 	if portals != nil {
-		go ul.kickUserFromPortals(backgroundCtx, portals, state.StateEvent == status.StateBadCredentials, false)
+		if !opts.BlockingCleanup {
+			go ul.kickUserFromPortals(backgroundCtx, portals, state.StateEvent == status.StateBadCredentials, false)
+		} else {
+			ul.kickUserFromPortals(backgroundCtx, portals, state.StateEvent == status.StateBadCredentials, false)
+		}
 	}
 	if state.StateEvent != "" {
 		ul.BridgeState.Send(state)
