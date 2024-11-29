@@ -344,7 +344,9 @@ type NetworkRoomCapabilities struct {
 type NetworkAPI interface {
 	// Connect is called to actually connect to the remote network.
 	// If there's no persistent connection, this may just check access token validity, or even do nothing at all.
-	Connect(ctx context.Context) error
+	// This method isn't allowed to return errors, because any connection errors should be sent
+	// using the bridge state mechanism (UserLogin.BridgeState.Send)
+	Connect(ctx context.Context)
 	// Disconnect should disconnect from the remote network.
 	// A clean disconnection is preferred, but it should not take too long.
 	Disconnect()

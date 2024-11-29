@@ -187,10 +187,7 @@ func (br *Bridge) StartLogins() error {
 			for _, login := range user.GetUserLogins() {
 				startedAny = true
 				br.Log.Info().Str("id", string(login.ID)).Msg("Starting user login")
-				err = login.Client.Connect(login.Log.WithContext(ctx))
-				if err != nil {
-					br.Log.Err(err).Msg("Failed to connect existing client")
-				}
+				login.Client.Connect(login.Log.WithContext(ctx))
 			}
 		}
 	}
