@@ -267,6 +267,10 @@ func (br *BridgeMain) Init() {
 func (br *BridgeMain) initDB() {
 	br.Log.Debug().Msg("Initializing database connection")
 	dbConfig := br.Config.Database
+	if dbConfig.Type == "sqlite3" {
+		br.Log.WithLevel(zerolog.FatalLevel).Msg("Invalid database type sqlite3. Use sqlite3-fk-wal instead.")
+		os.Exit(14)
+	}
 	if (dbConfig.Type == "sqlite3-fk-wal" || dbConfig.Type == "litestream") && dbConfig.MaxOpenConns != 1 && !strings.Contains(dbConfig.URI, "_txlock=immediate") {
 		var fixedExampleURI string
 		if !strings.HasPrefix(dbConfig.URI, "file:") {

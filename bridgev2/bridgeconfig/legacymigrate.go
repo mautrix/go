@@ -107,7 +107,11 @@ func doMigrateLegacy(helper up.Helper, python bool) {
 			helper.Set(up.Int, legacyDBMaxSize, "database", "max_open_conns")
 		}
 	} else {
-		CopyToOtherLocation(helper, up.Str, []string{"appservice", "database", "type"}, []string{"database", "type"})
+		if dbType, ok := helper.Get(up.Str, "appservice", "database", "type"); ok && dbType == "sqlite3" {
+			helper.Set(up.Str, "sqlite3-fk-wal", "database", "type")
+		} else {
+			CopyToOtherLocation(helper, up.Str, []string{"appservice", "database", "type"}, []string{"database", "type"})
+		}
 		CopyToOtherLocation(helper, up.Str, []string{"appservice", "database", "uri"}, []string{"database", "uri"})
 		CopyToOtherLocation(helper, up.Int, []string{"appservice", "database", "max_open_conns"}, []string{"database", "max_open_conns"})
 		CopyToOtherLocation(helper, up.Int, []string{"appservice", "database", "max_idle_conns"}, []string{"database", "max_idle_conns"})

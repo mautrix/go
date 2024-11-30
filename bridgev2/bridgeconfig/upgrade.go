@@ -7,6 +7,8 @@
 package bridgeconfig
 
 import (
+	"fmt"
+
 	up "go.mau.fi/util/configupgrade"
 	"go.mau.fi/util/random"
 
@@ -49,6 +51,7 @@ func doUpgrade(helper up.Helper) {
 	helper.Copy(up.Map, "bridge", "permissions")
 
 	if dbType, ok := helper.Get(up.Str, "database", "type"); ok && dbType == "sqlite3" {
+		fmt.Println("Warning: invalid database type sqlite3 in config. Autocorrecting to sqlite3-fk-wal")
 		helper.Set(up.Str, "sqlite3-fk-wal", "database", "type")
 	} else {
 		helper.Copy(up.Str, "database", "type")
