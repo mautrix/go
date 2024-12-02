@@ -188,6 +188,7 @@ func (vh *VerificationHelper) Init(ctx context.Context) error {
 			txn, err := vh.store.GetVerificationTransaction(ctx, transactionID)
 			if err != nil && errors.Is(err, ErrUnknownVerificationTransaction) {
 				log.Err(err).Msg("failed to get verification transaction")
+				vh.activeTransactionsLock.Unlock()
 				return
 			} else if errors.Is(err, ErrUnknownVerificationTransaction) {
 				// If it's a cancellation event for an unknown transaction, we
