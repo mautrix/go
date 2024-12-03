@@ -41,6 +41,7 @@ type MemberEventContent struct {
 	IsDirect         bool                `json:"is_direct,omitempty"`
 	ThirdPartyInvite *ThirdPartyInvite   `json:"third_party_invite,omitempty"`
 	Reason           string              `json:"reason,omitempty"`
+	MSC3414File      *EncryptedFileInfo  `json:"org.matrix.msc3414.file,omitempty"`
 }
 
 type ThirdPartyInvite struct {
