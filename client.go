@@ -978,6 +978,22 @@ func (cli *Client) GetProfile(ctx context.Context, mxid id.UserID) (resp *RespUs
 	return
 }
 
+func (cli *Client) GetMutualRooms(ctx context.Context, otherUserID id.UserID, extras ...ReqMutualRooms) (resp *RespMutualRooms, err error) {
+	if cli.SpecVersions != nil && !cli.SpecVersions.Supports(FeatureMutualRooms) {
+		err = fmt.Errorf("server does not support fetching mutual rooms")
+		return
+	}
+	query := map[string]string{
+		"user_id": otherUserID.String(),
+	}
+	if len(extras) > 0 {
+		query["from"] = extras[0].From
+	}
+	urlPath := cli.BuildURLWithQuery(ClientURLPath{"unstable", "uk.half-shot.msc2666", "user", "mutual_rooms"}, query)
+	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
+	return
+}
+
 // GetDisplayName returns the display name of the user with the specified MXID. See https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3profileuseriddisplayname
 func (cli *Client) GetDisplayName(ctx context.Context, mxid id.UserID) (resp *RespUserDisplayName, err error) {
 	urlPath := cli.BuildClientURL("v3", "profile", mxid, "displayname")

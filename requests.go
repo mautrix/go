@@ -140,6 +140,10 @@ type ReqMembers struct {
 	NotMembership event.Membership `json:"not_membership,omitempty"`
 }
 
+type ReqMutualRooms struct {
+	From string `json:"-"`
+}
+
 // ReqInvite3PID is the JSON request for https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3roomsroomidinvite-1
 // It is also a JSON object used in https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3createroom
 type ReqInvite3PID struct {
