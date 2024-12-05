@@ -85,7 +85,7 @@ func fnResolveIdentifier(ce *Event) {
 	if api == nil {
 		return
 	}
-	createChat := ce.Command == "start-chat"
+	createChat := ce.Command == "start-chat" || ce.Command == "pm"
 	identifier := strings.Join(identifierParts, " ")
 	resp, err := api.ResolveIdentifier(ce.Ctx, identifier, createChat)
 	if err != nil {
