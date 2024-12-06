@@ -1141,6 +1141,14 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 	if err != nil {
 		log.Err(err).Msg("Failed to pre-handle Matrix reaction")
 		portal.sendErrorStatus(ctx, evt, err)
+		_, err := sender.User.DoublePuppet(ctx).SendMessage(ctx, portal.MXID, event.EventRedaction, &event.Content{
+			Parsed: &event.RedactionEventContent{
+				Redacts: evt.ID,
+			},
+		}, nil)
+		if err != nil {
+			log.Err(err).Msg("Failed to remove errored reaction")
+		}
 		return
 	}
 	var deterministicID id.EventID
@@ -1200,6 +1208,14 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 	if err != nil {
 		log.Err(err).Msg("Failed to handle Matrix reaction")
 		portal.sendErrorStatus(ctx, evt, err)
+		_, err := sender.User.DoublePuppet(ctx).SendMessage(ctx, portal.MXID, event.EventRedaction, &event.Content{
+			Parsed: &event.RedactionEventContent{
+				Redacts: evt.ID,
+			},
+		}, nil)
+		if err != nil {
+			log.Err(err).Msg("Failed to remove errored reaction")
+		}
 		return
 	}
 	if dbReaction == nil {
