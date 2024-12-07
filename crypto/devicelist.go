@@ -44,10 +44,6 @@ func (mach *OlmMachine) LoadDevices(ctx context.Context, user id.UserID) (keys m
 	return nil
 }
 
-type GetCachedDevicesParams struct {
-	IsUserTracked bool
-}
-
 type CachedDevices struct {
 	Devices                []*id.Device
 	MasterKey              *id.CrossSigningKey
@@ -55,18 +51,12 @@ type CachedDevices struct {
 	MasterKeySignedByUs    bool
 }
 
-func (mach *OlmMachine) GetCachedDevices(ctx context.Context, userID id.UserID, extra ...GetCachedDevicesParams) (*CachedDevices, error) {
-	var params GetCachedDevicesParams
-	if len(extra) > 0 {
-		params = extra[0]
-	}
-	if !params.IsUserTracked {
-		userIDs, err := mach.CryptoStore.FilterTrackedUsers(ctx, []id.UserID{userID})
-		if err != nil {
-			return nil, fmt.Errorf("failed to check if user's devices are tracked: %w", err)
-		} else if len(userIDs) == 0 {
-			return nil, ErrUserNotTracked
-		}
+func (mach *OlmMachine) GetCachedDevices(ctx context.Context, userID id.UserID) (*CachedDevices, error) {
+	userIDs, err := mach.CryptoStore.FilterTrackedUsers(ctx, []id.UserID{userID})
+	if err != nil {
+		return nil, fmt.Errorf("failed to check if user's devices are tracked: %w", err)
+	} else if len(userIDs) == 0 {
+		return nil, ErrUserNotTracked
 	}
 	ownKeys := mach.GetOwnCrossSigningPublicKeys(ctx)
 	var ownUserSigningKey id.Ed25519
