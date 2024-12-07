@@ -91,6 +91,10 @@ type ReqLogin struct {
 	StoreHomeserverURL bool `json:"-"`
 }
 
+type ReqPutDevice struct {
+	DisplayName string `json:"display_name,omitempty"`
+}
+
 type ReqUIAuthFallback struct {
 	Session string `json:"session"`
 	User    string `json:"user"`

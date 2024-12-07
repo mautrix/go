@@ -241,23 +241,34 @@ func (helper *CryptoHelper) loginBot(ctx context.Context) (*mautrix.Client, bool
 	// Create a new client instance with the default AS settings (including as_token),
 	// the Login call will then override the access token in the client.
 	client := helper.bridge.AS.NewMautrixClient(helper.bridge.AS.BotMXID())
+
+	initialDeviceDisplayName := fmt.Sprintf("%s bridge", helper.bridge.Bridge.Network.GetName().DisplayName)
+	if helper.bridge.Config.AppService.MSC4190 {
+		helper.log.Debug().Msg("Creating bot device with MSC4190")
+		err = client.CreateDeviceMSC4190(ctx, deviceID, initialDeviceDisplayName)
+		if err != nil {
+			return nil, deviceID != "", fmt.Errorf("failed to create device for bridge bot: %w", err)
+		}
+		helper.store.DeviceID = client.DeviceID
+		return client, deviceID != "", nil
+	}
+
 	flows, err := client.GetLoginFlows(ctx)
 	if err != nil {
 		return nil, deviceID != "", fmt.Errorf("failed to get supported login flows: %w", err)
 	} else if !flows.HasFlow(mautrix.AuthTypeAppservice) {
 		return nil, deviceID != "", fmt.Errorf("homeserver does not support appservice login")
 	}
+
 	resp, err := client.Login(ctx, &mautrix.ReqLogin{
 		Type: mautrix.AuthTypeAppservice,
 		Identifier: mautrix.UserIdentifier{
 			Type: mautrix.IdentifierTypeUser,
 			User: string(helper.bridge.AS.BotMXID()),
 		},
-		DeviceID:         deviceID,
-		StoreCredentials: true,
-
-		// TODO find proper bridge name
-		InitialDeviceDisplayName: "Megabridge", // fmt.Sprintf("%s bridge", helper.bridge.ProtocolName),
+		DeviceID:                 deviceID,
+		StoreCredentials:         true,
+		InitialDeviceDisplayName: initialDeviceDisplayName,
 	})
 	if err != nil {
 		return nil, deviceID != "", fmt.Errorf("failed to log in as bridge bot: %w", err)

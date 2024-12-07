@@ -21,6 +21,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/ptr"
+	"go.mau.fi/util/random"
 	"go.mau.fi/util/retryafter"
 	"golang.org/x/exp/maps"
 
@@ -899,6 +900,22 @@ func (cli *Client) Login(ctx context.Context, req *ReqLogin) (resp *RespLogin, e
 		}
 	}
 	return
+}
+
+// Create a device for an appservice user using MSC4190.
+func (cli *Client) CreateDeviceMSC4190(ctx context.Context, deviceID id.DeviceID, initialDisplayName string) error {
+	if len(deviceID) == 0 {
+		deviceID = id.DeviceID(strings.ToUpper(random.String(10)))
+	}
+	_, err := cli.MakeRequest(ctx, http.MethodPut, cli.BuildClientURL("v3", "devices", deviceID), &ReqPutDevice{
+		DisplayName: initialDisplayName,
+	}, nil)
+	if err != nil {
+		return err
+	}
+	cli.DeviceID = deviceID
+	cli.SetAppServiceDeviceID = true
+	return nil
 }
 
 // Logout the current user. See https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3logout
