@@ -135,6 +135,8 @@ type Store interface {
 	IsKeySignedBy(ctx context.Context, userID id.UserID, key id.Ed25519, signedByUser id.UserID, signedByKey id.Ed25519) (bool, error)
 	// DropSignaturesByKey deletes the signatures made by the given user and key from the store. It returns the number of signatures deleted.
 	DropSignaturesByKey(context.Context, id.UserID, id.Ed25519) (int64, error)
+	// GetSignaturesForKeyBy retrieves the stored signatures for a given cross-signing or device key, by the given signer.
+	GetSignaturesForKeyBy(context.Context, id.UserID, id.Ed25519, id.UserID) (map[id.Ed25519]string, error)
 
 	// PutSecret stores a named secret, replacing it if it exists already.
 	PutSecret(context.Context, id.Secret, string) error
