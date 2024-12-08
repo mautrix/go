@@ -398,8 +398,10 @@ func (br *BridgeMain) WaitForInterrupt() int {
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	select {
 	case <-c:
+		br.Log.Info().Msg("Interrupt signal received from OS")
 		return 0
 	case exitCode := <-br.manualStop:
+		br.Log.Info().Msg("Internal stop signal received")
 		return exitCode
 	}
 }

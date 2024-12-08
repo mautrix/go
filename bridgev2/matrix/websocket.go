@@ -61,7 +61,7 @@ func (br *Connector) startWebsocket(wg *sync.WaitGroup) {
 		if errors.Is(err, appservice.ErrWebsocketManualStop) {
 			return
 		} else if closeCommand := (&appservice.CloseCommand{}); errors.As(err, &closeCommand) && closeCommand.Status == appservice.MeowConnectionReplaced {
-			log.Info().Msg("Appservice websocket closed by another instance of the bridge, shutting down...")
+			log.Warn().Msg("Appservice websocket closed by another instance of the bridge, shutting down...")
 			if br.OnWebsocketReplaced != nil {
 				br.OnWebsocketReplaced()
 			} else {
