@@ -6,7 +6,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"maunium.net/go/mautrix/crypto/goolm/cipher"
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
 	"maunium.net/go/mautrix/crypto/goolm/ratchet"
 )
@@ -23,7 +22,6 @@ func initializeRatchets() (*ratchet.Ratchet, *ratchet.Ratchet, error) {
 		Root:    []byte("Olm"),
 		Ratchet: []byte("OlmRatchet"),
 	}
-	ratchet.RatchetCipher = cipher.NewAESSHA256([]byte("OlmMessageKeys"))
 	aliceRatchet := ratchet.New()
 	bobRatchet := ratchet.New()
 
