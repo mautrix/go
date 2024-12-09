@@ -145,7 +145,7 @@ type Unsigned struct {
 	InviteRoomState []StrippedState `json:"invite_room_state,omitempty"`
 
 	BeeperHSOrder       int64               `json:"com.beeper.hs.order,omitempty"`
-	BeeperHSSuborder    int64               `json:"com.beeper.hs.suborder,omitempty"`
+	BeeperHSSuborder    int16               `json:"com.beeper.hs.suborder,omitempty"`
 	BeeperHSOrderString *BeeperEncodedOrder `json:"com.beeper.hs.order_string,omitempty"`
 	BeeperFromBackup    bool                `json:"com.beeper.from_backup,omitempty"`
 }
