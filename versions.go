@@ -65,6 +65,9 @@ var (
 	FeatureAuthenticatedMedia = UnstableFeature{UnstableFlag: "org.matrix.msc3916.stable", SpecVersion: SpecV111}
 	FeatureMutualRooms        = UnstableFeature{UnstableFlag: "uk.half-shot.msc2666.query_mutual_rooms"}
 
+	UnstableFeatureExtendedProfiles = UnstableFeature{UnstableFlag: "uk.tcpip.msc4133"}
+	FeatureExtendedProfiles         = UnstableFeature{UnstableFlag: "uk.tcpip.msc4133.stable"}
+
 	BeeperFeatureHungry               = UnstableFeature{UnstableFlag: "com.beeper.hungry"}
 	BeeperFeatureBatchSending         = UnstableFeature{UnstableFlag: "com.beeper.batch_sending"}
 	BeeperFeatureRoomYeeting          = UnstableFeature{UnstableFlag: "com.beeper.room_yeeting"}
