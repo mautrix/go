@@ -411,7 +411,13 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 		RespondWithError(w, err, "Internal error creating login process")
 		return
 	}
-	firstStep, err := login.Start(r.Context())
+	var firstStep *bridgev2.LoginStep
+	overridable, ok := login.(bridgev2.LoginProcessWithOverride)
+	if ok && overrideLogin != nil {
+		firstStep, err = overridable.StartWithOverride(r.Context(), overrideLogin)
+	} else {
+		firstStep, err = login.Start(r.Context())
+	}
 	if err != nil {
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to start login")
 		RespondWithError(w, err, "Internal error starting login")

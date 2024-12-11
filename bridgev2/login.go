@@ -32,6 +32,17 @@ type LoginProcess interface {
 	Cancel()
 }
 
+type LoginProcessWithOverride interface {
+	LoginProcess
+	// StartWithOverride starts the process with the intent of re-authenticating an existing login.
+	//
+	// The call to this is mutually exclusive with the call to the default Start method.
+	//
+	// The user login being overridden will still be logged out automatically
+	// in case the complete step returns a different login.
+	StartWithOverride(ctx context.Context, override *UserLogin) (*LoginStep, error)
+}
+
 type LoginProcessDisplayAndWait interface {
 	LoginProcess
 	Wait(ctx context.Context) (*LoginStep, error)

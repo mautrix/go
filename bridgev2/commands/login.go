@@ -19,6 +19,7 @@ import (
 	"github.com/skip2/go-qrcode"
 	"go.mau.fi/util/curl"
 
+	"maunium.net/go/mautrix/bridge/status"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
@@ -36,6 +37,17 @@ var CommandLogin = &FullHandler{
 	RequiresLoginPermission: true,
 }
 
+var CommandRelogin = &FullHandler{
+	Func: fnLogin,
+	Name: "relogin",
+	Help: HelpMeta{
+		Section:     HelpSectionAuth,
+		Description: "Re-authenticate an existing login",
+		Args:        "<_login ID_> [_flow ID_]",
+	},
+	RequiresLoginPermission: true,
+}
+
 func formatFlowsReply(flows []bridgev2.LoginFlow) string {
 	var buf strings.Builder
 	for _, flow := range flows {
@@ -45,6 +57,19 @@ func formatFlowsReply(flows []bridgev2.LoginFlow) string {
 }
 
 func fnLogin(ce *Event) {
+	var reauth *bridgev2.UserLogin
+	if ce.Command == "relogin" {
+		if len(ce.Args) == 0 {
+			ce.Reply("Usage: `$cmdprefix relogin <login ID> [_flow ID_]`\n\nYour logins:\n\n%s", ce.User.GetFormattedUserLogins())
+			return
+		}
+		reauth = ce.Bridge.GetCachedUserLoginByID(networkid.UserLoginID(ce.Args[0]))
+		if reauth == nil {
+			ce.Reply("Login `%s` not found", ce.Args[0])
+			return
+		}
+		ce.Args = ce.Args[1:]
+	}
 	flows := ce.Bridge.Network.GetLoginFlows()
 	var chosenFlowID string
 	if len(ce.Args) > 0 {
@@ -63,7 +88,11 @@ func fnLogin(ce *Event) {
 	} else if len(flows) == 1 {
 		chosenFlowID = flows[0].ID
 	} else {
-		ce.Reply("Please specify a login flow, e.g. `login %s`.\n\n%s", flows[0].ID, formatFlowsReply(flows))
+		if reauth != nil {
+			ce.Reply("Please specify a login flow, e.g. `relogin %s %s`.\n\n%s", reauth.ID, flows[0].ID, formatFlowsReply(flows))
+		} else {
+			ce.Reply("Please specify a login flow, e.g. `login %s`.\n\n%s", flows[0].ID, formatFlowsReply(flows))
+		}
 		return
 	}
 
@@ -72,7 +101,13 @@ func fnLogin(ce *Event) {
 		ce.Reply("Failed to prepare login process: %v", err)
 		return
 	}
-	nextStep, err := login.Start(ce.Ctx)
+	overridable, ok := login.(bridgev2.LoginProcessWithOverride)
+	var nextStep *bridgev2.LoginStep
+	if ok && reauth != nil {
+		nextStep, err = overridable.StartWithOverride(ce.Ctx, reauth)
+	} else {
+		nextStep, err = login.Start(ce.Ctx)
+	}
 	if err != nil {
 		ce.Reply("Failed to start login: %v", err)
 		return
@@ -80,7 +115,7 @@ func fnLogin(ce *Event) {
 
 	nextStep = checkLoginCommandDirectParams(ce, login, nextStep)
 	if nextStep != nil {
-		doLoginStep(ce, login, nextStep)
+		doLoginStep(ce, login, nextStep, reauth)
 	}
 }
 
@@ -150,6 +185,7 @@ type userInputLoginCommandState struct {
 	Login           bridgev2.LoginProcessUserInput
 	Data            map[string]string
 	RemainingFields []bridgev2.LoginInputDataField
+	Override        *bridgev2.UserLogin
 }
 
 func (uilcs *userInputLoginCommandState) promptNext(ce *Event) {
@@ -187,7 +223,7 @@ func (uilcs *userInputLoginCommandState) submitNext(ce *Event) {
 	if nextStep, err := uilcs.Login.SubmitUserInput(ce.Ctx, uilcs.Data); err != nil {
 		ce.Reply("Failed to submit input: %v", err)
 	} else {
-		doLoginStep(ce, uilcs.Login, nextStep)
+		doLoginStep(ce, uilcs.Login, nextStep, uilcs.Override)
 	}
 }
 
@@ -231,7 +267,7 @@ const (
 	contextKeyPrevEventID contextKey = iota
 )
 
-func doLoginDisplayAndWait(ce *Event, login bridgev2.LoginProcessDisplayAndWait, step *bridgev2.LoginStep) {
+func doLoginDisplayAndWait(ce *Event, login bridgev2.LoginProcessDisplayAndWait, step *bridgev2.LoginStep, override *bridgev2.UserLogin) {
 	prevEvent, ok := ce.Ctx.Value(contextKeyPrevEventID).(*id.EventID)
 	if !ok {
 		prevEvent = new(id.EventID)
@@ -270,12 +306,13 @@ func doLoginDisplayAndWait(ce *Event, login bridgev2.LoginProcessDisplayAndWait,
 		ce.Reply("Login failed: %v", err)
 		return
 	}
-	doLoginStep(ce, login, nextStep)
+	doLoginStep(ce, login, nextStep, override)
 }
 
 type cookieLoginCommandState struct {
-	Login bridgev2.LoginProcessCookies
-	Data  *bridgev2.LoginCookiesParams
+	Login    bridgev2.LoginProcessCookies
+	Data     *bridgev2.LoginCookiesParams
+	Override *bridgev2.UserLogin
 }
 
 func (clcs *cookieLoginCommandState) prompt(ce *Event) {
@@ -387,7 +424,7 @@ func (clcs *cookieLoginCommandState) submit(ce *Event) {
 		ce.Reply("Login failed: %v", err)
 		return
 	}
-	doLoginStep(ce, clcs.Login, nextStep)
+	doLoginStep(ce, clcs.Login, nextStep, clcs.Override)
 }
 
 func maybeURLDecodeCookie(val string, field *bridgev2.LoginCookieField) string {
@@ -407,27 +444,38 @@ func maybeURLDecodeCookie(val string, field *bridgev2.LoginCookieField) string {
 	return decoded
 }
 
-func doLoginStep(ce *Event, login bridgev2.LoginProcess, step *bridgev2.LoginStep) {
+func doLoginStep(ce *Event, login bridgev2.LoginProcess, step *bridgev2.LoginStep, override *bridgev2.UserLogin) {
 	if step.Instructions != "" {
 		ce.Reply(step.Instructions)
 	}
 
 	switch step.Type {
 	case bridgev2.LoginStepTypeDisplayAndWait:
-		doLoginDisplayAndWait(ce, login.(bridgev2.LoginProcessDisplayAndWait), step)
+		doLoginDisplayAndWait(ce, login.(bridgev2.LoginProcessDisplayAndWait), step, override)
 	case bridgev2.LoginStepTypeCookies:
 		(&cookieLoginCommandState{
-			Login: login.(bridgev2.LoginProcessCookies),
-			Data:  step.CookiesParams,
+			Login:    login.(bridgev2.LoginProcessCookies),
+			Data:     step.CookiesParams,
+			Override: override,
 		}).prompt(ce)
 	case bridgev2.LoginStepTypeUserInput:
 		(&userInputLoginCommandState{
 			Login:           login.(bridgev2.LoginProcessUserInput),
 			RemainingFields: step.UserInputParams.Fields,
 			Data:            make(map[string]string),
+			Override:        override,
 		}).promptNext(ce)
 	case bridgev2.LoginStepTypeComplete:
-		// Nothing to do other than instructions
+		if override != nil && override.ID != step.CompleteParams.UserLoginID {
+			ce.Log.Info().
+				Str("old_login_id", string(override.ID)).
+				Str("new_login_id", string(step.CompleteParams.UserLoginID)).
+				Msg("Login resulted in different remote ID than what was being overridden. Deleting previous login")
+			override.Delete(ce.Ctx, status.BridgeState{
+				StateEvent: status.StateLoggedOut,
+				Reason:     "LOGIN_OVERRIDDEN",
+			}, bridgev2.DeleteOpts{LogoutRemote: true})
+		}
 	default:
 		panic(fmt.Errorf("unknown login step type %q", step.Type))
 	}
