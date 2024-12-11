@@ -105,6 +105,7 @@ func checkLoginCommandDirectParams(ce *Event, login bridgev2.LoginProcess, nextS
 			return nil
 		}
 		input := make(map[string]string)
+		var shouldRedact bool
 		for i, param := range nextStep.UserInputParams.Fields {
 			param.FillDefaultValidate()
 			input[param.ID], err = param.Validate(ce.Args[i])
@@ -112,6 +113,12 @@ func checkLoginCommandDirectParams(ce *Event, login bridgev2.LoginProcess, nextS
 				ce.Reply("Invalid value for %s: %v", param.Name, err)
 				return nil
 			}
+			if param.Type == bridgev2.LoginInputFieldTypePassword || param.Type == bridgev2.LoginInputFieldTypeToken {
+				shouldRedact = true
+			}
+		}
+		if shouldRedact {
+			ce.Redact()
 		}
 		nextStep, err = login.(bridgev2.LoginProcessUserInput).SubmitUserInput(ce.Ctx, input)
 	case bridgev2.LoginStepTypeCookies:
@@ -128,6 +135,7 @@ func checkLoginCommandDirectParams(ce *Event, login bridgev2.LoginProcess, nextS
 			}
 			input[param.ID] = val
 		}
+		ce.Redact()
 		nextStep, err = login.(bridgev2.LoginProcessCookies).SubmitCookies(ce.Ctx, input)
 	}
 	if err != nil {
@@ -162,7 +170,7 @@ func (uilcs *userInputLoginCommandState) promptNext(ce *Event) {
 func (uilcs *userInputLoginCommandState) submitNext(ce *Event) {
 	field := uilcs.RemainingFields[0]
 	field.FillDefaultValidate()
-	if field.Type == bridgev2.LoginInputFieldTypePassword {
+	if field.Type == bridgev2.LoginInputFieldTypePassword || field.Type == bridgev2.LoginInputFieldTypeToken {
 		ce.Redact()
 	}
 	var err error
