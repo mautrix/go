@@ -2639,7 +2639,7 @@ func (portal *Portal) handleRemoteChatResync(ctx context.Context, source *UserLo
 		}
 	}
 	backfillChecker, ok := evt.(RemoteChatResyncBackfill)
-	if portal.Bridge.Config.Backfill.Enabled && ok {
+	if portal.Bridge.Config.Backfill.Enabled && ok && portal.RoomType != database.RoomTypeSpace {
 		latestMessage, err := portal.Bridge.DB.Message.GetLastPartAtOrBeforeTime(ctx, portal.PortalKey, time.Now().Add(10*time.Second))
 		if err != nil {
 			log.Err(err).Msg("Failed to get last message in portal to check if backfill is necessary")
@@ -3636,7 +3636,7 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 		log.Err(err).Msg("Failed to save portal to database after creating Matrix room")
 		return err
 	}
-	if info.CanBackfill {
+	if info.CanBackfill && portal.RoomType != database.RoomTypeSpace {
 		err = portal.Bridge.DB.BackfillTask.Upsert(ctx, &database.BackfillTask{
 			PortalKey:         portal.PortalKey,
 			UserLoginID:       source.ID,
@@ -3700,7 +3700,7 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 			}
 		}
 	}
-	if portal.Bridge.Config.Backfill.Enabled {
+	if portal.Bridge.Config.Backfill.Enabled && portal.RoomType != database.RoomTypeSpace {
 		portal.doForwardBackfill(ctx, source, nil, backfillBundle)
 	}
 	return nil
