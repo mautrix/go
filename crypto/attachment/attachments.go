@@ -198,6 +198,9 @@ func (r *encryptingReader) Seek(offset int64, whence int) (int64, error) {
 }
 
 func (r *encryptingReader) Read(dst []byte) (n int, err error) {
+	if len(dst) < n {
+		return 0, io.ErrUnexpectedEOF
+	}
 	if r.closed {
 		return 0, ReaderClosed
 	} else if r.isDecrypting && r.file.decoded == nil {
