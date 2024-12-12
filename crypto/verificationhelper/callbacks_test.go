@@ -77,7 +77,7 @@ func (c *baseVerificationCallbacks) GetDecimalsShown(txnID id.VerificationTransa
 	return c.decimalsShown[txnID]
 }
 
-func (c *baseVerificationCallbacks) VerificationRequested(ctx context.Context, txnID id.VerificationTransactionID, from id.UserID) {
+func (c *baseVerificationCallbacks) VerificationRequested(ctx context.Context, txnID id.VerificationTransactionID, from id.UserID, fromDevice id.DeviceID) {
 	c.verificationsRequested[from] = append(c.verificationsRequested[from], txnID)
 }
 

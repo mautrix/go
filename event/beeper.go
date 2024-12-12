@@ -111,10 +111,10 @@ type BeeperPerMessageProfile struct {
 
 type BeeperEncodedOrder struct {
 	order    int64
-	suborder int64
+	suborder int16
 }
 
-func NewBeeperEncodedOrder(order int64, suborder int64) *BeeperEncodedOrder {
+func NewBeeperEncodedOrder(order int64, suborder int16) *BeeperEncodedOrder {
 	return &BeeperEncodedOrder{order: order, suborder: suborder}
 }
 
@@ -133,7 +133,7 @@ func (b *BeeperEncodedOrder) String() string {
 	return encodeIntPair(b.order, b.suborder)
 }
 
-func (b *BeeperEncodedOrder) OrderPair() (int64, int64) {
+func (b *BeeperEncodedOrder) OrderPair() (int64, int16) {
 	if b == nil {
 		return 0, 0
 	}
@@ -164,12 +164,13 @@ func (b *BeeperEncodedOrder) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// encodeIntPair encodes two int64 integers into a lexicographically sortable string
-func encodeIntPair(a, b int64) string {
+// encodeIntPair encodes an int64 and an int16 into a lexicographically sortable string
+func encodeIntPair(a int64, b int16) string {
 	// Create a buffer to hold the binary representation of the integers.
-	var buf [16]byte
+	// Will need 8 bytes for the int64 and 2 bytes for the int16.
+	var buf [10]byte
 
-	// Flip the sign bit of each integer to map the entire int64 range to uint64
+	// Flip the sign bit of each integer to map the entire int range to uint
 	// in a way that preserves the order of the original integers.
 	//
 	// Explanation:
@@ -178,7 +179,7 @@ func encodeIntPair(a, b int64) string {
 	// - Non-negative numbers (with a sign bit of 0) become larger uint64 values.
 	// - This mapping preserves the original ordering when the uint64 values are compared.
 	binary.BigEndian.PutUint64(buf[0:8], uint64(a)^(1<<63))
-	binary.BigEndian.PutUint64(buf[8:16], uint64(b)^(1<<63))
+	binary.BigEndian.PutUint16(buf[8:10], uint16(b)^(1<<15))
 
 	// Encode the buffer into a Base32 string without padding using the Hex encoding.
 	//
@@ -191,8 +192,8 @@ func encodeIntPair(a, b int64) string {
 	return encoded
 }
 
-// decodeIntPair decodes a string produced by encodeIntPair back into the original int64 integers
-func decodeIntPair(encoded string) (int64, int64, error) {
+// decodeIntPair decodes a string produced by encodeIntPair back into the original int64 and int16 values
+func decodeIntPair(encoded string) (int64, int16, error) {
 	// Decode the Base32 string back into the original byte buffer.
 	buf, err := base32.HexEncoding.WithPadding(base32.NoPadding).DecodeString(encoded)
 	if err != nil {
@@ -200,17 +201,17 @@ func decodeIntPair(encoded string) (int64, int64, error) {
 	}
 
 	// Check that the decoded buffer has the expected length.
-	if len(buf) != 16 {
-		return 0, 0, fmt.Errorf("invalid encoded string length: expected 16 bytes, got %d", len(buf))
+	if len(buf) != 10 {
+		return 0, 0, fmt.Errorf("invalid encoded string length: expected 10 bytes, got %d", len(buf))
 	}
 
-	// Read the uint64 values from the buffer using big-endian byte order.
+	// Read the uint values from the buffer using big-endian byte order.
 	aPos := binary.BigEndian.Uint64(buf[0:8])
-	bPos := binary.BigEndian.Uint64(buf[8:16])
+	bPos := binary.BigEndian.Uint16(buf[8:10])
 
-	// Reverse the sign bit flip to retrieve the original int64 values.
+	// Reverse the sign bit flip to retrieve the original values.
 	a := int64(aPos ^ (1 << 63))
-	b := int64(bPos ^ (1 << 63))
+	b := int16(bPos ^ (1 << 15))
 
 	return a, b, nil
 }

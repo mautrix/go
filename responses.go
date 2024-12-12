@@ -159,6 +159,11 @@ type RespUserProfile struct {
 	AvatarURL   id.ContentURI `json:"avatar_url"`
 }
 
+type RespMutualRooms struct {
+	Joined    []id.RoomID `json:"joined"`
+	NextBatch string      `json:"next_batch,omitempty"`
+}
+
 // RespRegisterAvailable is the JSON response for https://spec.matrix.org/v1.4/client-server-api/#get_matrixclientv3registeravailable
 type RespRegisterAvailable struct {
 	Available bool `json:"available"`

@@ -29,6 +29,7 @@ type Registration struct {
 	SoruEphemeralEvents bool `yaml:"de.sorunome.msc2409.push_ephemeral,omitempty" json:"de.sorunome.msc2409.push_ephemeral,omitempty"`
 	EphemeralEvents     bool `yaml:"receive_ephemeral,omitempty" json:"receive_ephemeral,omitempty"`
 	MSC3202             bool `yaml:"org.matrix.msc3202,omitempty" json:"org.matrix.msc3202,omitempty"`
+	MSC4190             bool `yaml:"io.element.msc4190,omitempty" json:"io.element.msc4190,omitempty"`
 }
 
 // CreateRegistration creates a Registration with random appservice and homeserver tokens.

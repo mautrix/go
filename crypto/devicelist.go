@@ -10,6 +10,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/exzerolog"
@@ -26,6 +28,8 @@ var (
 	NoSigningKeyFound     = errors.New("didn't find ed25519 signing key")
 	NoIdentityKeyFound    = errors.New("didn't find curve25519 identity key")
 	InvalidKeySignature   = errors.New("invalid signature on device keys")
+
+	ErrUserNotTracked = errors.New("user is not tracked")
 )
 
 func (mach *OlmMachine) LoadDevices(ctx context.Context, user id.UserID) (keys map[id.DeviceID]*id.Device) {
@@ -38,6 +42,81 @@ func (mach *OlmMachine) LoadDevices(ctx context.Context, user id.UserID) (keys m
 	}
 
 	return nil
+}
+
+type CachedDevices struct {
+	Devices                []*id.Device
+	MasterKey              *id.CrossSigningKey
+	HasValidSelfSigningKey bool
+	MasterKeySignedByUs    bool
+}
+
+func (mach *OlmMachine) GetCachedDevices(ctx context.Context, userID id.UserID) (*CachedDevices, error) {
+	userIDs, err := mach.CryptoStore.FilterTrackedUsers(ctx, []id.UserID{userID})
+	if err != nil {
+		return nil, fmt.Errorf("failed to check if user's devices are tracked: %w", err)
+	} else if len(userIDs) == 0 {
+		return nil, ErrUserNotTracked
+	}
+	ownKeys := mach.GetOwnCrossSigningPublicKeys(ctx)
+	var ownUserSigningKey id.Ed25519
+	if ownKeys != nil {
+		ownUserSigningKey = ownKeys.UserSigningKey
+	}
+	var resp CachedDevices
+	csKeys, err := mach.CryptoStore.GetCrossSigningKeys(ctx, userID)
+	theirMasterKey := csKeys[id.XSUsageMaster]
+	theirSelfSignKey := csKeys[id.XSUsageSelfSigning]
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cross-signing keys: %w", err)
+	} else if csKeys != nil && theirMasterKey.Key != "" {
+		resp.MasterKey = &theirMasterKey
+		if theirSelfSignKey.Key != "" {
+			resp.HasValidSelfSigningKey, err = mach.CryptoStore.IsKeySignedBy(ctx, userID, theirSelfSignKey.Key, userID, theirMasterKey.Key)
+			if err != nil {
+				return nil, fmt.Errorf("failed to check if self-signing key is signed by master key: %w", err)
+			}
+		}
+	}
+	devices, err := mach.CryptoStore.GetDevices(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get devices: %w", err)
+	}
+	if userID == mach.Client.UserID {
+		if ownKeys != nil && ownKeys.MasterKey == theirMasterKey.Key {
+			resp.MasterKeySignedByUs, err = mach.CryptoStore.IsKeySignedBy(ctx, userID, theirMasterKey.Key, userID, mach.OwnIdentity().SigningKey)
+		}
+	} else if ownUserSigningKey != "" && theirMasterKey.Key != "" {
+		// TODO should own master key and user-signing key signatures be checked here too?
+		resp.MasterKeySignedByUs, err = mach.CryptoStore.IsKeySignedBy(ctx, userID, theirMasterKey.Key, mach.Client.UserID, ownUserSigningKey)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to check if user is trusted: %w", err)
+	}
+	resp.Devices = make([]*id.Device, len(devices))
+	i := 0
+	for _, device := range devices {
+		resp.Devices[i] = device
+		if resp.HasValidSelfSigningKey && device.Trust == id.TrustStateUnset {
+			signed, err := mach.CryptoStore.IsKeySignedBy(ctx, device.UserID, device.SigningKey, device.UserID, theirSelfSignKey.Key)
+			if err != nil {
+				return nil, fmt.Errorf("failed to check if device %s is signed by self-signing key: %w", device.DeviceID, err)
+			} else if signed {
+				if resp.MasterKeySignedByUs {
+					device.Trust = id.TrustStateCrossSignedVerified
+				} else if theirMasterKey.Key == theirMasterKey.First {
+					device.Trust = id.TrustStateCrossSignedTOFU
+				} else {
+					device.Trust = id.TrustStateCrossSignedUntrusted
+				}
+			}
+		}
+		i++
+	}
+	slices.SortFunc(resp.Devices, func(a, b *id.Device) int {
+		return strings.Compare(a.DeviceID.String(), b.DeviceID.String())
+	})
+	return &resp, nil
 }
 
 func (mach *OlmMachine) storeDeviceSelfSignatures(ctx context.Context, userID id.UserID, deviceID id.DeviceID, resp *mautrix.RespQueryKeys) {

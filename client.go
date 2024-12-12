@@ -21,6 +21,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/ptr"
+	"go.mau.fi/util/random"
 	"go.mau.fi/util/retryafter"
 	"golang.org/x/exp/maps"
 
@@ -901,6 +902,22 @@ func (cli *Client) Login(ctx context.Context, req *ReqLogin) (resp *RespLogin, e
 	return
 }
 
+// Create a device for an appservice user using MSC4190.
+func (cli *Client) CreateDeviceMSC4190(ctx context.Context, deviceID id.DeviceID, initialDisplayName string) error {
+	if len(deviceID) == 0 {
+		deviceID = id.DeviceID(strings.ToUpper(random.String(10)))
+	}
+	_, err := cli.MakeRequest(ctx, http.MethodPut, cli.BuildClientURL("v3", "devices", deviceID), &ReqPutDevice{
+		DisplayName: initialDisplayName,
+	}, nil)
+	if err != nil {
+		return err
+	}
+	cli.DeviceID = deviceID
+	cli.SetAppServiceDeviceID = true
+	return nil
+}
+
 // Logout the current user. See https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3logout
 // This does not clear the credentials from the client instance. See ClearCredentials() instead.
 func (cli *Client) Logout(ctx context.Context) (resp *RespLogout, err error) {
@@ -974,6 +991,22 @@ func (cli *Client) JoinRoomByID(ctx context.Context, roomID id.RoomID) (resp *Re
 
 func (cli *Client) GetProfile(ctx context.Context, mxid id.UserID) (resp *RespUserProfile, err error) {
 	urlPath := cli.BuildClientURL("v3", "profile", mxid)
+	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
+	return
+}
+
+func (cli *Client) GetMutualRooms(ctx context.Context, otherUserID id.UserID, extras ...ReqMutualRooms) (resp *RespMutualRooms, err error) {
+	if cli.SpecVersions != nil && !cli.SpecVersions.Supports(FeatureMutualRooms) {
+		err = fmt.Errorf("server does not support fetching mutual rooms")
+		return
+	}
+	query := map[string]string{
+		"user_id": otherUserID.String(),
+	}
+	if len(extras) > 0 {
+		query["from"] = extras[0].From
+	}
+	urlPath := cli.BuildURLWithQuery(ClientURLPath{"unstable", "uk.half-shot.msc2666", "user", "mutual_rooms"}, query)
 	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
 	return
 }

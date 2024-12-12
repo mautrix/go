@@ -30,7 +30,7 @@ import (
 type RequiredCallbacks interface {
 	// VerificationRequested is called when a verification request is received
 	// from another device.
-	VerificationRequested(ctx context.Context, txnID id.VerificationTransactionID, from id.UserID)
+	VerificationRequested(ctx context.Context, txnID id.VerificationTransactionID, from id.UserID, fromDevice id.DeviceID)
 
 	// VerificationCancelled is called when the verification is cancelled.
 	VerificationCancelled(ctx context.Context, txnID id.VerificationTransactionID, code event.VerificationCancelCode, reason string)
@@ -71,7 +71,7 @@ type VerificationHelper struct {
 
 	// supportedMethods are the methods that *we* support
 	supportedMethods              []event.VerificationMethod
-	verificationRequested         func(ctx context.Context, txnID id.VerificationTransactionID, from id.UserID)
+	verificationRequested         func(ctx context.Context, txnID id.VerificationTransactionID, from id.UserID, fromDevice id.DeviceID)
 	verificationCancelledCallback func(ctx context.Context, txnID id.VerificationTransactionID, code event.VerificationCancelCode, reason string)
 	verificationDone              func(ctx context.Context, txnID id.VerificationTransactionID)
 
@@ -658,7 +658,7 @@ func (vh *VerificationHelper) onVerificationRequest(ctx context.Context, evt *ev
 	vh.activeTransactionsLock.Unlock()
 
 	vh.expireTransactionAt(verificationRequest.TransactionID, verificationRequest.Timestamp.Add(time.Minute*10))
-	vh.verificationRequested(ctx, verificationRequest.TransactionID, evt.Sender)
+	vh.verificationRequested(ctx, verificationRequest.TransactionID, evt.Sender, verificationRequest.FromDevice)
 }
 
 func (vh *VerificationHelper) expireTransactionAt(txnID id.VerificationTransactionID, expiresAt time.Time) {

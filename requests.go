@@ -91,6 +91,10 @@ type ReqLogin struct {
 	StoreHomeserverURL bool `json:"-"`
 }
 
+type ReqPutDevice struct {
+	DisplayName string `json:"display_name,omitempty"`
+}
+
 type ReqUIAuthFallback struct {
 	Session string `json:"session"`
 	User    string `json:"user"`
@@ -138,6 +142,10 @@ type ReqMembers struct {
 	At            string           `json:"at"`
 	Membership    event.Membership `json:"membership,omitempty"`
 	NotMembership event.Membership `json:"not_membership,omitempty"`
+}
+
+type ReqMutualRooms struct {
+	From string `json:"-"`
 }
 
 // ReqInvite3PID is the JSON request for https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3roomsroomidinvite-1
