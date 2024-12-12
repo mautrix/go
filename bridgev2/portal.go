@@ -2970,9 +2970,17 @@ func (portal *Portal) UpdateBridgeInfo(ctx context.Context) {
 }
 
 func (portal *Portal) sendStateWithIntentOrBot(ctx context.Context, sender MatrixAPI, eventType event.Type, stateKey string, content *event.Content, ts time.Time) (resp *mautrix.RespSendEvent, err error) {
+	log := zerolog.Ctx(ctx)
+
 	if sender == nil {
 		sender = portal.Bridge.Bot
 	}
+
+	if !portal.Bridge.Config.RenameRoom && eventType == event.StateRoomName {
+		log.Info().Msg("Ignoring room name change event")
+		return
+	}
+
 	resp, err = sender.SendState(ctx, portal.MXID, eventType, stateKey, content, ts)
 	if errors.Is(err, mautrix.MForbidden) && sender != portal.Bridge.Bot {
 		if content.Raw == nil {
