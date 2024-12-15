@@ -246,6 +246,9 @@ type DirectMediableNetwork interface {
 	Download(ctx context.Context, mediaID networkid.MediaID, params map[string]string) (mediaproxy.GetMediaResponse, error)
 }
 
+// IdentifierValidatingNetwork is an optional interface that network connectors can implement to validate the shape of user IDs.
+//
+// This should not perform any checks to see if the user ID actually exists on the network, just that the user ID looks valid.
 type IdentifierValidatingNetwork interface {
 	NetworkConnector
 	ValidateUserID(id networkid.UserID) bool
@@ -660,6 +663,16 @@ type IdentifierResolvingNetworkAPI interface {
 	// This can happen via the `resolve-identifier` or `start-chat` bridge bot commands,
 	// or the corresponding provisioning API endpoints.
 	ResolveIdentifier(ctx context.Context, identifier string, createChat bool) (*ResolveIdentifierResponse, error)
+}
+
+// GhostDMCreatingNetworkAPI is an optional extension to IdentifierResolvingNetworkAPI for starting chats with pre-validated user IDs.
+type GhostDMCreatingNetworkAPI interface {
+	IdentifierResolvingNetworkAPI
+	// CreateChatWithGhost may be called instead of [IdentifierResolvingNetworkAPI.ResolveIdentifier]
+	// when starting a chat with an internal user identifier that has been pre-validated using
+	// [IdentifierValidatingNetwork.ValidateUserID]. If this is not implemented, ResolveIdentifier
+	// will be used instead (by stringifying the ghost ID).
+	CreateChatWithGhost(ctx context.Context, ghost *Ghost) (*CreateChatResponse, error)
 }
 
 // ContactListingNetworkAPI is an optional interface that network connectors can implement to provide the user's contact list.
