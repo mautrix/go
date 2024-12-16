@@ -33,6 +33,8 @@ type OlmMachine struct {
 	CryptoStore Store
 	StateStore  StateStore
 
+	BackgroundCtx context.Context
+
 	PlaintextMentions bool
 
 	// Never ask the server for keys automatically as a side effect during Megolm decryption.
@@ -111,6 +113,8 @@ func NewOlmMachine(client *mautrix.Client, log *zerolog.Logger, cryptoStore Stor
 		Log:         log,
 		CryptoStore: cryptoStore,
 		StateStore:  stateStore,
+
+		BackgroundCtx: context.Background(),
 
 		SendKeysMinTrust:  id.TrustStateUnset,
 		ShareKeysMinTrust: id.TrustStateCrossSignedTOFU,

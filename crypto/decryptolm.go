@@ -265,7 +265,7 @@ const MinUnwedgeInterval = 1 * time.Hour
 
 func (mach *OlmMachine) unwedgeDevice(log zerolog.Logger, sender id.UserID, senderKey id.SenderKey) {
 	log = log.With().Str("action", "unwedge olm session").Logger()
-	ctx := log.WithContext(context.TODO())
+	ctx := log.WithContext(mach.BackgroundCtx)
 	mach.recentlyUnwedgedLock.Lock()
 	prevUnwedge, ok := mach.recentlyUnwedged[senderKey]
 	delta := time.Now().Sub(prevUnwedge)
