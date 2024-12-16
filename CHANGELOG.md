@@ -1,3 +1,26 @@
+## v0.22.1 (2024-12-16)
+
+* *(crypto)* Added automatic cleanup when there are too many olm sessions with
+  a single device.
+* *(crypto)* Added helper for getting cached device list with cross-signing
+  status.
+* *(crypto/verificationhelper)* Added interface for persisting the state of
+  in-progress verifications.
+* *(client)* Added `GetMutualRooms` wrapper for [MSC2666].
+* *(client)* Switched `JoinRoom` to use the `via` query param instead of
+  `server_name` as per [MSC4156].
+* *(bridgev2/commands)* Fixed `pm` command not actually starting the chat.
+* *(bridgev2/interface)* Added separate network API interface for starting
+  chats with a Matrix ghost user. This allows treating internal user IDs
+  differently than arbitrary user-input strings.
+* *(bridgev2/crypto)* Added support for [MSC4190]
+  (thanks to [@onestacked] in [#288]).
+
+[MSC2666]: https://github.com/matrix-org/matrix-spec-proposals/pull/2666
+[MSC4156]: https://github.com/matrix-org/matrix-spec-proposals/pull/4156
+[MSC4190]: https://github.com/matrix-org/matrix-spec-proposals/pull/4190
+[#288]: https://github.com/mautrix/go/pull/288
+
 ## v0.22.0 (2024-11-16)
 
 * *(hicli)* Moved package into gomuks repo.
