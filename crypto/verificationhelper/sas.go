@@ -666,6 +666,14 @@ func (vh *VerificationHelper) onVerificationMAC(ctx context.Context, txn Verific
 				vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUser, "failed to update device trust state after verifying: %w", err)
 				return
 			}
+
+			// Cross-sign their device with the self-signing key
+			if vh.mach.CrossSigningKeys != nil {
+				err = vh.mach.SignOwnDevice(ctx, theirDevice)
+				if err != nil {
+					log.Err(err).Msg("failed to sign own device")
+				}
+			}
 		}
 	}
 	log.Info().Msg("All MACs verified")
