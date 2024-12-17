@@ -82,7 +82,6 @@ func doUpgrade(helper up.Helper) {
 	helper.Copy(up.Str, "appservice", "bot", "avatar")
 	helper.Copy(up.Bool, "appservice", "ephemeral_events")
 	helper.Copy(up.Bool, "appservice", "async_transactions")
-	helper.Copy(up.Bool, "appservice", "msc4190")
 	helper.Copy(up.Str, "appservice", "as_token")
 	helper.Copy(up.Str, "appservice", "hs_token")
 	helper.Copy(up.Str, "appservice", "username_template")
@@ -147,6 +146,11 @@ func doUpgrade(helper up.Helper) {
 	helper.Copy(up.Bool, "encryption", "default")
 	helper.Copy(up.Bool, "encryption", "require")
 	helper.Copy(up.Bool, "encryption", "appservice")
+	if val, ok := helper.Get(up.Bool, "appservice", "msc4190"); ok {
+		helper.Set(up.Bool, val, "encryption", "msc4190")
+	} else {
+		helper.Copy(up.Bool, "encryption", "msc4190")
+	}
 	helper.Copy(up.Bool, "encryption", "allow_key_sharing")
 	if secret, ok := helper.Get(up.Str, "encryption", "pickle_key"); !ok || secret == "generate" {
 		helper.Set(up.Str, random.String(64), "encryption", "pickle_key")

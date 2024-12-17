@@ -243,7 +243,7 @@ func (helper *CryptoHelper) loginBot(ctx context.Context) (*mautrix.Client, bool
 	client := helper.bridge.AS.NewMautrixClient(helper.bridge.AS.BotMXID())
 
 	initialDeviceDisplayName := fmt.Sprintf("%s bridge", helper.bridge.Bridge.Network.GetName().DisplayName)
-	if helper.bridge.Config.AppService.MSC4190 {
+	if helper.bridge.Config.Encryption.MSC4190 {
 		helper.log.Debug().Msg("Creating bot device with MSC4190")
 		err = client.CreateDeviceMSC4190(ctx, deviceID, initialDeviceDisplayName)
 		if err != nil {

@@ -34,7 +34,6 @@ type AppserviceConfig struct {
 
 	EphemeralEvents   bool `yaml:"ephemeral_events"`
 	AsyncTransactions bool `yaml:"async_transactions"`
-	MSC4190           bool `yaml:"msc4190"`
 
 	UsernameTemplate string             `yaml:"username_template"`
 	usernameTemplate *template.Template `yaml:"-"`
@@ -78,7 +77,11 @@ func (asc *AppserviceConfig) copyToRegistration(registration *appservice.Registr
 	registration.RateLimited = &falseVal
 	registration.EphemeralEvents = asc.EphemeralEvents
 	registration.SoruEphemeralEvents = asc.EphemeralEvents
-	registration.MSC4190 = asc.MSC4190
+}
+
+func (ec *EncryptionConfig) applyUnstableFlags(registration *appservice.Registration) {
+	registration.MSC4190 = ec.MSC4190
+	registration.MSC3202 = ec.Appservice
 }
 
 // GenerateRegistration generates a registration file for the homeserver.
@@ -87,6 +90,7 @@ func (config *Config) GenerateRegistration() *appservice.Registration {
 	config.AppService.HSToken = registration.ServerToken
 	config.AppService.ASToken = registration.AppToken
 	config.AppService.copyToRegistration(registration)
+	config.Encryption.applyUnstableFlags(registration)
 
 	registration.SenderLocalpart = random.String(32)
 	botRegex := regexp.MustCompile(fmt.Sprintf("^@%s:%s$",
@@ -105,6 +109,7 @@ func (config *Config) MakeAppService() *appservice.AppService {
 	as.Host.Hostname = config.AppService.Hostname
 	as.Host.Port = config.AppService.Port
 	as.Registration = config.AppService.GetRegistration()
+	config.Encryption.applyUnstableFlags(as.Registration)
 	return as
 }
 
