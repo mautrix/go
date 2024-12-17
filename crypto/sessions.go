@@ -7,12 +7,14 @@
 package crypto
 
 import (
+	"bytes"
 	"errors"
 	"time"
 
+	"go.mau.fi/util/exerrors"
+
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/event"
-
 	"maunium.net/go/mautrix/id"
 )
 
@@ -68,11 +70,20 @@ func wrapSession(session olm.Session) *OlmSession {
 }
 
 func (account *OlmAccount) NewInboundSessionFrom(senderKey id.Curve25519, ciphertext string) (*OlmSession, error) {
-	session, err := account.Internal.NewInboundSessionFrom(&senderKey, ciphertext)
+	session, err := account.InternalLibolm.NewInboundSessionFrom(&senderKey, ciphertext)
 	if err != nil {
 		return nil, err
 	}
-	_ = account.Internal.RemoveOneTimeKeys(session)
+	goolmSession, err := account.InternalGoolm.NewInboundSessionFrom(&senderKey, ciphertext)
+	if err != nil {
+		return nil, err
+	}
+	if !bytes.Equal(exerrors.Must(goolmSession.Pickle([]byte("123"))), exerrors.Must(session.Pickle([]byte("123")))) {
+		panic("goolm inbound session and libolm inbound session from ciphertext are different")
+	}
+
+	_ = account.InternalLibolm.RemoveOneTimeKeys(session)
+	_ = account.InternalGoolm.RemoveOneTimeKeys(goolmSession)
 	return wrapSession(session), nil
 }
 
