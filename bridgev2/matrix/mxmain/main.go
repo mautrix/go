@@ -310,7 +310,7 @@ func (br *BridgeMain) validateConfig() error {
 	case br.Config.AppService.HSToken == "This value is generated when generating the registration":
 		return errors.New("appservice.hs_token not configured. Did you forget to generate the registration? ")
 	case br.Config.Database.URI == "postgres://user:password@host/database?sslmode=disable":
-		return errors.New("appservice.database not configured")
+		return errors.New("database.uri not configured")
 	case !br.Config.Bridge.Permissions.IsConfigured():
 		return errors.New("bridge.permissions not configured")
 	case !strings.Contains(br.Config.AppService.FormatUsername("1234567890"), "1234567890"):
