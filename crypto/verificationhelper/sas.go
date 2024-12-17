@@ -667,11 +667,25 @@ func (vh *VerificationHelper) onVerificationMAC(ctx context.Context, txn Verific
 				return
 			}
 
-			// Cross-sign their device with the self-signing key
 			if vh.mach.CrossSigningKeys != nil {
-				err = vh.mach.SignOwnDevice(ctx, theirDevice)
-				if err != nil {
-					log.Err(err).Msg("failed to sign own device")
+				if txn.TheirUserID == vh.client.UserID {
+					// Cross-sign our device with the self-signing key
+					err = vh.mach.SignOwnDevice(ctx, theirDevice)
+					if err != nil {
+						log.Err(err).Msg("failed to sign own device")
+					}
+				} else {
+					// Cross-signing situation. Sign their master key.
+					theirSigningKeys, err := vh.mach.GetCrossSigningPublicKeys(ctx, txn.TheirUserID)
+					if err != nil {
+						vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeKeyMismatch, "couldn't get %s's cross-signing keys: %w", txn.TheirUserID, err)
+						return
+					}
+
+					if err := vh.mach.SignUser(ctx, txn.TheirUserID, theirSigningKeys.MasterKey); err != nil {
+						vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeInternalError, "failed to sign their master key: %w", err)
+						return
+					}
 				}
 			}
 		}
