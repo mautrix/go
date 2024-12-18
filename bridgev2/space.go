@@ -43,7 +43,7 @@ func (ul *UserLogin) MarkInPortal(ctx context.Context, portal *Portal) {
 			}
 		}
 		if ul.Bridge.Config.PersonalFilteringSpaces && (userPortal.InSpace == nil || !*userPortal.InSpace) {
-			go ul.tryAddPortalToSpace(ctx, portal, userPortal.CopyWithoutValues())
+			go ul.tryAddPortalToSpace(context.WithoutCancel(ctx), portal, userPortal.CopyWithoutValues())
 		}
 	}
 }
