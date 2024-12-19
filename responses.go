@@ -449,6 +449,7 @@ type RespCapabilities struct {
 	SetDisplayname  *CapBooleanTrue  `json:"m.set_displayname,omitempty"`
 	SetAvatarURL    *CapBooleanTrue  `json:"m.set_avatar_url,omitempty"`
 	ThreePIDChanges *CapBooleanTrue  `json:"m.3pid_changes,omitempty"`
+	GetLoginToken   *CapBooleanTrue  `json:"m.get_login_token,omitempty"`
 
 	Custom map[string]interface{} `json:"-"`
 }
