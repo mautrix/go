@@ -41,17 +41,17 @@ type RoomFilter struct {
 
 // FilterPart is used to define filtering rules for specific categories of events
 type FilterPart struct {
-	NotRooms    []id.RoomID  `json:"not_rooms,omitempty"`
-	Rooms       []id.RoomID  `json:"rooms,omitempty"`
-	Limit       int          `json:"limit,omitempty"`
-	NotSenders  []id.UserID  `json:"not_senders,omitempty"`
-	NotTypes    []event.Type `json:"not_types,omitempty"`
-	Senders     []id.UserID  `json:"senders,omitempty"`
-	Types       []event.Type `json:"types,omitempty"`
-	ContainsURL *bool        `json:"contains_url,omitempty"`
-
-	LazyLoadMembers         bool `json:"lazy_load_members,omitempty"`
-	IncludeRedundantMembers bool `json:"include_redundant_members,omitempty"`
+	NotRooms                  []id.RoomID  `json:"not_rooms,omitempty"`
+	Rooms                     []id.RoomID  `json:"rooms,omitempty"`
+	Limit                     int          `json:"limit,omitempty"`
+	NotSenders                []id.UserID  `json:"not_senders,omitempty"`
+	NotTypes                  []event.Type `json:"not_types,omitempty"`
+	Senders                   []id.UserID  `json:"senders,omitempty"`
+	Types                     []event.Type `json:"types,omitempty"`
+	ContainsURL               *bool        `json:"contains_url,omitempty"`
+	LazyLoadMembers           bool         `json:"lazy_load_members,omitempty"`
+	IncludeRedundantMembers   bool         `json:"include_redundant_members,omitempty"`
+	UnreadThreadNotifications bool         `json:"unread_thread_notifications,omitempty"`
 }
 
 // Validate checks if the filter contains valid property values
