@@ -503,14 +503,14 @@ func (syncer *cryptoSyncer) OnFailedSync(_ *mautrix.RespSync, err error) (time.D
 func (syncer *cryptoSyncer) GetFilterJSON(_ id.UserID) *mautrix.Filter {
 	everything := []event.Type{{Type: "*"}}
 	return &mautrix.Filter{
-		Presence:    mautrix.FilterPart{NotTypes: everything},
-		AccountData: mautrix.FilterPart{NotTypes: everything},
-		Room: mautrix.RoomFilter{
+		Presence:    &mautrix.FilterPart{NotTypes: everything},
+		AccountData: &mautrix.FilterPart{NotTypes: everything},
+		Room: &mautrix.RoomFilter{
 			IncludeLeave: false,
-			Ephemeral:    mautrix.FilterPart{NotTypes: everything},
-			AccountData:  mautrix.FilterPart{NotTypes: everything},
-			State:        mautrix.FilterPart{NotTypes: everything},
-			Timeline:     mautrix.FilterPart{NotTypes: everything},
+			Ephemeral:    &mautrix.FilterPart{NotTypes: everything},
+			AccountData:  &mautrix.FilterPart{NotTypes: everything},
+			State:        &mautrix.FilterPart{NotTypes: everything},
+			Timeline:     &mautrix.FilterPart{NotTypes: everything},
 		},
 	}
 }

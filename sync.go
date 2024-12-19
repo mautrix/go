@@ -191,8 +191,8 @@ func (s *DefaultSyncer) OnFailedSync(res *RespSync, err error) (time.Duration, e
 }
 
 var defaultFilter = Filter{
-	Room: RoomFilter{
-		Timeline: FilterPart{
+	Room: &RoomFilter{
+		Timeline: &FilterPart{
 			Limit: 50,
 		},
 	},
