@@ -1010,6 +1010,17 @@ func (cli *Client) GetMutualRooms(ctx context.Context, otherUserID id.UserID, ex
 	return
 }
 
+func (cli *Client) GetRoomSummary(ctx context.Context, roomIDOrAlias string, via ...string) (resp *RespRoomSummary, err error) {
+	// TODO add version check after one is added to MSC3266
+	urlPath := cli.BuildURLWithFullQuery(ClientURLPath{"unstable", "im.nheko.summary", "summary", roomIDOrAlias}, func(q url.Values) {
+		if len(via) > 0 {
+			q["via"] = via
+		}
+	})
+	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
+	return
+}
+
 // GetDisplayName returns the display name of the user with the specified MXID. See https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3profileuseriddisplayname
 func (cli *Client) GetDisplayName(ctx context.Context, mxid id.UserID) (resp *RespUserDisplayName, err error) {
 	urlPath := cli.BuildClientURL("v3", "profile", mxid, "displayname")

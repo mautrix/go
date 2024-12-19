@@ -164,6 +164,18 @@ type RespMutualRooms struct {
 	NextBatch string      `json:"next_batch,omitempty"`
 }
 
+type RespRoomSummary struct {
+	PublicRoomInfo
+
+	Membership  event.Membership  `json:"membership,omitempty"`
+	RoomVersion event.RoomVersion `json:"room_version,omitempty"`
+	Encryption  id.Algorithm      `json:"encryption,omitempty"`
+
+	UnstableRoomVersion    event.RoomVersion `json:"im.nheko.summary.room_version,omitempty"`
+	UnstableRoomVersionOld event.RoomVersion `json:"im.nheko.summary.version,omitempty"`
+	UnstableEncryption     id.Algorithm      `json:"im.nheko.summary.encryption,omitempty"`
+}
+
 // RespRegisterAvailable is the JSON response for https://spec.matrix.org/v1.4/client-server-api/#get_matrixclientv3registeravailable
 type RespRegisterAvailable struct {
 	Available bool `json:"available"`
@@ -558,24 +570,35 @@ func (vers *CapRoomVersions) IsAvailable(version string) bool {
 	return available
 }
 
+type RespPublicRooms struct {
+	Chunk                  []*PublicRoomInfo `json:"chunk"`
+	NextBatch              string            `json:"next_batch,omitempty"`
+	PrevBatch              string            `json:"prev_batch,omitempty"`
+	TotalRoomCountEstimate int               `json:"total_room_count_estimate"`
+}
+
+type PublicRoomInfo struct {
+	RoomID           id.RoomID           `json:"room_id"`
+	AvatarURL        id.ContentURIString `json:"avatar_url,omitempty"`
+	CanonicalAlias   id.RoomAlias        `json:"canonical_alias,omitempty"`
+	GuestCanJoin     bool                `json:"guest_can_join"`
+	JoinRule         event.JoinRule      `json:"join_rule,omitempty"`
+	Name             string              `json:"name,omitempty"`
+	NumJoinedMembers int                 `json:"num_joined_members"`
+	RoomType         event.RoomType      `json:"room_type"`
+	Topic            string              `json:"topic,omitempty"`
+	WorldReadable    bool                `json:"world_readable"`
+}
+
 // RespHierarchy is the JSON response for https://spec.matrix.org/v1.4/client-server-api/#get_matrixclientv1roomsroomidhierarchy
 type RespHierarchy struct {
-	NextBatch string            `json:"next_batch,omitempty"`
-	Rooms     []ChildRoomsChunk `json:"rooms"`
+	NextBatch string             `json:"next_batch,omitempty"`
+	Rooms     []*ChildRoomsChunk `json:"rooms"`
 }
 
 type ChildRoomsChunk struct {
-	AvatarURL        id.ContentURI           `json:"avatar_url,omitempty"`
-	CanonicalAlias   id.RoomAlias            `json:"canonical_alias,omitempty"`
-	ChildrenState    []StrippedStateWithTime `json:"children_state"`
-	GuestCanJoin     bool                    `json:"guest_can_join"`
-	JoinRule         event.JoinRule          `json:"join_rule,omitempty"`
-	Name             string                  `json:"name,omitempty"`
-	NumJoinedMembers int                     `json:"num_joined_members"`
-	RoomID           id.RoomID               `json:"room_id"`
-	RoomType         event.RoomType          `json:"room_type"`
-	Topic            string                  `json:"topic,omitempty"`
-	WorldReadble     bool                    `json:"world_readable"`
+	PublicRoomInfo
+	ChildrenState []StrippedStateWithTime `json:"children_state"`
 }
 
 type StrippedStateWithTime struct {
