@@ -951,20 +951,19 @@ func (cli *Client) Capabilities(ctx context.Context) (resp *RespCapabilities, er
 	return
 }
 
-// JoinRoom joins the client to a room ID or alias. See https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3joinroomidoralias
+// JoinRoom joins the client to a room ID or alias. See https://spec.matrix.org/v1.13/client-server-api/#post_matrixclientv3joinroomidoralias
 //
-// If serverName is specified, this will be added as a query param to instruct the homeserver to join via that server. If content is specified, it will
-// be JSON encoded and used as the request body.
-func (cli *Client) JoinRoom(ctx context.Context, roomIDorAlias, serverName string, content interface{}) (resp *RespJoinRoom, err error) {
-	var urlPath string
-	if serverName != "" {
-		urlPath = cli.BuildURLWithQuery(ClientURLPath{"v3", "join", roomIDorAlias}, map[string]string{
-			"via": serverName,
-		})
-	} else {
-		urlPath = cli.BuildClientURL("v3", "join", roomIDorAlias)
+// The last parameter contains optional extra fields and can be left nil.
+func (cli *Client) JoinRoom(ctx context.Context, roomIDorAlias string, req *ReqJoinRoom) (resp *RespJoinRoom, err error) {
+	if req == nil {
+		req = &ReqJoinRoom{}
 	}
-	_, err = cli.MakeRequest(ctx, http.MethodPost, urlPath, content, &resp)
+	urlPath := cli.BuildURLWithFullQuery(ClientURLPath{"v3", "join", roomIDorAlias}, func(q url.Values) {
+		if len(req.Via) > 0 {
+			q["via"] = req.Via
+		}
+	})
+	_, err = cli.MakeRequest(ctx, http.MethodPost, urlPath, req, &resp)
 	if err == nil && cli.StateStore != nil {
 		err = cli.StateStore.SetMembership(ctx, resp.RoomID, cli.UserID, event.MembershipJoin)
 		if err != nil {

@@ -57,13 +57,13 @@ func BuildURL(baseURL *url.URL, path ...any) *url.URL {
 
 // BuildURL builds a URL with the Client's homeserver and appservice user ID set already.
 func (cli *Client) BuildURL(urlPath PrefixableURLPath) string {
-	return cli.BuildURLWithQuery(urlPath, nil)
+	return cli.BuildURLWithFullQuery(urlPath, nil)
 }
 
 // BuildClientURL builds a URL with the Client's homeserver and appservice user ID set already.
 // This method also automatically prepends the client API prefix (/_matrix/client).
 func (cli *Client) BuildClientURL(urlPath ...any) string {
-	return cli.BuildURLWithQuery(ClientURLPath(urlPath), nil)
+	return cli.BuildURLWithFullQuery(ClientURLPath(urlPath), nil)
 }
 
 type PrefixableURLPath interface {
@@ -97,6 +97,18 @@ func (saup SynapseAdminURLPath) FullPath() []any {
 // BuildURLWithQuery builds a URL with query parameters in addition to the Client's homeserver
 // and appservice user ID set already.
 func (cli *Client) BuildURLWithQuery(urlPath PrefixableURLPath, urlQuery map[string]string) string {
+	return cli.BuildURLWithFullQuery(urlPath, func(q url.Values) {
+		if urlQuery != nil {
+			for k, v := range urlQuery {
+				q.Set(k, v)
+			}
+		}
+	})
+}
+
+// BuildURLWithQuery builds a URL with query parameters in addition to the Client's homeserver
+// and appservice user ID set already.
+func (cli *Client) BuildURLWithFullQuery(urlPath PrefixableURLPath, fn func(q url.Values)) string {
 	hsURL := *BuildURL(cli.HomeserverURL, urlPath.FullPath()...)
 	query := hsURL.Query()
 	if cli.SetAppServiceUserID {
@@ -106,10 +118,8 @@ func (cli *Client) BuildURLWithQuery(urlPath PrefixableURLPath, urlQuery map[str
 		query.Set("device_id", string(cli.DeviceID))
 		query.Set("org.matrix.msc3202.device_id", string(cli.DeviceID))
 	}
-	if urlQuery != nil {
-		for k, v := range urlQuery {
-			query.Set(k, v)
-		}
+	if fn != nil {
+		fn(query)
 	}
 	hsURL.RawQuery = query.Encode()
 	return hsURL.String()

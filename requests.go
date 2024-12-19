@@ -144,6 +144,12 @@ type ReqMembers struct {
 	NotMembership event.Membership `json:"not_membership,omitempty"`
 }
 
+type ReqJoinRoom struct {
+	Via              []string `json:"-"`
+	Reason           string   `json:"reason,omitempty"`
+	ThirdPartySigned any      `json:"third_party_signed,omitempty"`
+}
+
 type ReqMutualRooms struct {
 	From string `json:"-"`
 }
