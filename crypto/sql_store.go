@@ -279,6 +279,29 @@ func (store *SQLCryptoStore) DeleteSession(ctx context.Context, _ id.SenderKey, 
 	return err
 }
 
+func (store *SQLCryptoStore) PutOlmHash(ctx context.Context, messageHash [32]byte, receivedAt time.Time) error {
+	_, err := store.DB.Exec(ctx, "INSERT INTO crypto_olm_message_hash (account_id, received_at, message_hash) VALUES ($1, $2, $3) ON CONFLICT (message_hash) DO NOTHING", store.Account, messageHash[:], receivedAt.UnixMilli())
+	return err
+}
+
+func (store *SQLCryptoStore) GetOlmHash(ctx context.Context, messageHash [32]byte) (receivedAt time.Time, err error) {
+	var receivedAtInt int64
+	err = store.DB.QueryRow(ctx, "SELECT received_at FROM crypto_olm_message_hash WHERE message_hash=$1", messageHash).Scan(&receivedAtInt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			err = nil
+		}
+		return
+	}
+	receivedAt = time.UnixMilli(receivedAtInt)
+	return
+}
+
+func (store *SQLCryptoStore) DeleteOldOlmHashes(ctx context.Context, beforeTS time.Time) error {
+	_, err := store.DB.Exec(ctx, "DELETE FROM crypto_olm_message_hash WHERE account_id = $1 AND received_at < $2", store.AccountID, beforeTS.UnixMilli())
+	return err
+}
+
 func datePtr(t time.Time) *time.Time {
 	if t.IsZero() {
 		return nil
