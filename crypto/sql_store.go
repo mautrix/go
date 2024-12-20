@@ -249,6 +249,16 @@ func (store *SQLCryptoStore) GetLatestSession(ctx context.Context, key id.Sender
 	}
 }
 
+// GetNewestSessionCreationTS gets the creation timestamp of the most recently created session with the given sender key.
+func (store *SQLCryptoStore) GetNewestSessionCreationTS(ctx context.Context, key id.SenderKey) (createdAt time.Time, err error) {
+	err = store.DB.QueryRow(ctx, "SELECT created_at FROM crypto_olm_session WHERE sender_key=$1 AND account_id=$2 ORDER BY created_at DESC LIMIT 1",
+		key, store.AccountID).Scan(&createdAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = nil
+	}
+	return
+}
+
 // AddSession persists an Olm session for a sender in the database.
 func (store *SQLCryptoStore) AddSession(ctx context.Context, key id.SenderKey, session *OlmSession) error {
 	store.olmSessionCacheLock.Lock()
@@ -276,6 +286,29 @@ func (store *SQLCryptoStore) UpdateSession(ctx context.Context, _ id.SenderKey, 
 
 func (store *SQLCryptoStore) DeleteSession(ctx context.Context, _ id.SenderKey, session *OlmSession) error {
 	_, err := store.DB.Exec(ctx, "DELETE FROM crypto_olm_session WHERE session_id=$1 AND account_id=$2", session.ID(), store.AccountID)
+	return err
+}
+
+func (store *SQLCryptoStore) PutOlmHash(ctx context.Context, messageHash [32]byte, receivedAt time.Time) error {
+	_, err := store.DB.Exec(ctx, "INSERT INTO crypto_olm_message_hash (account_id, received_at, message_hash) VALUES ($1, $2, $3) ON CONFLICT (message_hash) DO NOTHING", store.Account, messageHash[:], receivedAt.UnixMilli())
+	return err
+}
+
+func (store *SQLCryptoStore) GetOlmHash(ctx context.Context, messageHash [32]byte) (receivedAt time.Time, err error) {
+	var receivedAtInt int64
+	err = store.DB.QueryRow(ctx, "SELECT received_at FROM crypto_olm_message_hash WHERE message_hash=$1", messageHash).Scan(&receivedAtInt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			err = nil
+		}
+		return
+	}
+	receivedAt = time.UnixMilli(receivedAtInt)
+	return
+}
+
+func (store *SQLCryptoStore) DeleteOldOlmHashes(ctx context.Context, beforeTS time.Time) error {
+	_, err := store.DB.Exec(ctx, "DELETE FROM crypto_olm_message_hash WHERE account_id = $1 AND received_at < $2", store.AccountID, beforeTS.UnixMilli())
 	return err
 }
 
