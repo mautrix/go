@@ -45,9 +45,11 @@ type Store interface {
 	HasSession(context.Context, id.SenderKey) bool
 	// GetSessions returns all Olm sessions in the store with the given sender key.
 	GetSessions(context.Context, id.SenderKey) (OlmSessionList, error)
-	// GetLatestSession returns the session with the highest session ID (lexiographically sorting).
-	// It's usually safe to return the most recently added session if sorting by session ID is too difficult.
+	// GetLatestSession returns the most recent session that should be used for encrypting outbound messages.
+	// It's usually the one with the most recent successful decryption or the highest ID lexically.
 	GetLatestSession(context.Context, id.SenderKey) (*OlmSession, error)
+	// GetNewestSessionCreationTS returns the creation timestamp of the most recently created session for the given sender key.
+	GetNewestSessionCreationTS(context.Context, id.SenderKey) (time.Time, error)
 	// UpdateSession updates a session that has previously been inserted with AddSession.
 	UpdateSession(context.Context, id.SenderKey, *OlmSession) error
 	// DeleteSession deletes the given session that has been previously inserted with AddSession.
@@ -298,7 +300,16 @@ func (gs *MemoryStore) GetLatestSession(_ context.Context, senderKey id.SenderKe
 	if !ok || len(sessions) == 0 {
 		return nil, nil
 	}
-	return sessions[0], nil
+	return sessions[len(sessions)-1], nil
+}
+
+func (gs *MemoryStore) GetNewestSessionCreationTS(ctx context.Context, senderKey id.SenderKey) (createdAt time.Time, err error) {
+	var sess *OlmSession
+	sess, err = gs.GetLatestSession(ctx, senderKey)
+	if sess != nil {
+		createdAt = sess.CreationTime
+	}
+	return
 }
 
 func (gs *MemoryStore) getGroupSessions(roomID id.RoomID) map[id.SessionID]*InboundGroupSession {

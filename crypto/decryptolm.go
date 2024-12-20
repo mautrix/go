@@ -318,6 +318,17 @@ func (mach *OlmMachine) unwedgeDevice(log zerolog.Logger, sender id.UserID, send
 	mach.recentlyUnwedged[senderKey] = time.Now()
 	mach.recentlyUnwedgedLock.Unlock()
 
+	lastCreatedAt, err := mach.CryptoStore.GetNewestSessionCreationTS(ctx, senderKey)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to get newest session creation timestamp")
+		return
+	} else if time.Since(lastCreatedAt) < MinUnwedgeInterval {
+		log.Debug().
+			Time("last_created_at", lastCreatedAt).
+			Msg("Not creating new Olm session as it was already recreated recently")
+		return
+	}
+
 	deviceIdentity, err := mach.GetOrFetchDeviceByKey(ctx, sender, senderKey)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to find device info by identity key")
