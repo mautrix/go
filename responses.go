@@ -364,16 +364,7 @@ func (sjr SyncJoinedRoom) MarshalJSON() ([]byte, error) {
 }
 
 type SyncInvitedRoom struct {
-	Summary LazyLoadSummary `json:"summary"`
-	State   SyncEventsList  `json:"invite_state"`
-}
-
-type marshalableSyncInvitedRoom SyncInvitedRoom
-
-var syncInvitedRoomPathsToDelete = []string{"summary"}
-
-func (sir SyncInvitedRoom) MarshalJSON() ([]byte, error) {
-	return marshalAndDeleteEmpty((marshalableSyncInvitedRoom)(sir), syncInvitedRoomPathsToDelete)
+	State SyncEventsList `json:"invite_state"`
 }
 
 type SyncKnockedRoom struct {
