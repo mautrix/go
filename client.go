@@ -693,7 +693,7 @@ type ReqSync struct {
 	Since           string
 	FilterID        string
 	FullState       bool
-	SetPresence     ReqPresence
+	SetPresence     event.Presence
 	StreamResponse  bool
 	BeeperStreaming bool
 	Client          *http.Client
@@ -709,8 +709,8 @@ func (req *ReqSync) BuildQuery() map[string]string {
 	if req.FilterID != "" {
 		query["filter"] = req.FilterID
 	}
-	if req.SetPresence.Presence != "" {
-		query["set_presence"] = string(req.SetPresence.Presence)
+	if req.SetPresence != "" {
+		query["set_presence"] = string(req.SetPresence)
 	}
 	if req.FullState {
 		query["full_state"] = "true"
