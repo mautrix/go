@@ -197,7 +197,8 @@ type ReqTyping struct {
 }
 
 type ReqPresence struct {
-	Presence event.Presence `json:"presence"`
+	Presence  event.Presence `json:"presence"`
+	StatusMsg string         `json:"status_msg,omitempty"`
 }
 
 type ReqAliasCreate struct {
