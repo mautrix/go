@@ -74,6 +74,7 @@ type LinkPreview struct {
 	Title        string `json:"og:title,omitempty"`
 	Type         string `json:"og:type,omitempty"`
 	Description  string `json:"og:description,omitempty"`
+	SiteName     string `json:"og:site_name,omitempty"`
 
 	ImageURL id.ContentURIString `json:"og:image,omitempty"`
 
