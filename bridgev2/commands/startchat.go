@@ -27,6 +27,7 @@ var CommandResolveIdentifier = &FullHandler{
 		Args:        "[_login ID_] <_identifier_>",
 	},
 	RequiresLogin: true,
+	NetworkAPI:    NetworkAPIImplements[bridgev2.IdentifierResolvingNetworkAPI],
 }
 
 var CommandStartChat = &FullHandler{
@@ -39,6 +40,7 @@ var CommandStartChat = &FullHandler{
 		Args:        "[_login ID_] <_identifier_>",
 	},
 	RequiresLogin: true,
+	NetworkAPI:    NetworkAPIImplements[bridgev2.IdentifierResolvingNetworkAPI],
 }
 
 func getClientForStartingChat[T bridgev2.IdentifierResolvingNetworkAPI](ce *Event, thing string) (*bridgev2.UserLogin, T, []string) {
@@ -153,6 +155,7 @@ var CommandSearch = &FullHandler{
 		Args:        "<_query_>",
 	},
 	RequiresLogin: true,
+	NetworkAPI:    NetworkAPIImplements[bridgev2.UserSearchingNetworkAPI],
 }
 
 func fnSearch(ce *Event) {

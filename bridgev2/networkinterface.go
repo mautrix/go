@@ -830,6 +830,8 @@ type PushConfig struct {
 }
 
 type PushableNetworkAPI interface {
+	NetworkAPI
+
 	RegisterPushNotifications(ctx context.Context, pushType PushType, token string) error
 	GetPushConfigs() *PushConfig
 }
