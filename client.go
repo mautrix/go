@@ -1043,6 +1043,15 @@ func (cli *Client) SetDisplayName(ctx context.Context, displayName string) (err 
 	return
 }
 
+// SetProfileField sets an arbitrary MSC4208 profile field. See https://github.com/matrix-org/matrix-spec-proposals/pull/4208
+func (cli *Client) SetProfileField(ctx context.Context, key string, value any) (err error) {
+	urlPath := cli.BuildClientURL("v3", "profile", cli.UserID, key)
+	bodyValue := make(map[string]any)
+	bodyValue[key] = value
+	_, err = cli.MakeRequest(ctx, http.MethodPut, urlPath, &bodyValue, nil)
+	return
+}
+
 // GetAvatarURL gets the avatar URL of the user with the specified MXID. See https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3profileuseridavatar_url
 func (cli *Client) GetAvatarURL(ctx context.Context, mxid id.UserID) (url id.ContentURI, err error) {
 	urlPath := cli.BuildClientURL("v3", "profile", mxid, "avatar_url")
