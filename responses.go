@@ -11,6 +11,7 @@ import (
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 	"go.mau.fi/util/jsontime"
+
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
