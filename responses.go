@@ -167,7 +167,7 @@ func (r *RespUserProfile) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	r.DisplayName, _ = r.ExtraFields["displayname"].(string)
-	r.AvatarURL, _ = r.ExtraFields["avatar_url"].(id.ContentURI)
+	r.AvatarURL, _ = id.ParseContentURI(r.ExtraFields["avatar_url"].(string))
 	delete(r.ExtraFields, "displayname")
 	delete(r.ExtraFields, "avatar_url")
 	return nil
