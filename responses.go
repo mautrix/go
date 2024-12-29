@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"reflect"
 	"strconv"
 	"strings"
@@ -155,44 +156,44 @@ type RespUserDisplayName struct {
 }
 
 type RespUserProfile struct {
-	DisplayName string        `json:"displayname,omitempty"`
-	AvatarURL   id.ContentURI `json:"avatar_url,omitempty"`
-	ExtraFields map[string]any
+	DisplayName string         `json:"displayname,omitempty"`
+	AvatarURL   id.ContentURI  `json:"avatar_url,omitempty"`
+	Extra       map[string]any `json:"-"`
 }
 
+type marshalableUserProfile RespUserProfile
+
 func (r *RespUserProfile) UnmarshalJSON(data []byte) error {
-	err := json.Unmarshal(data, &r.ExtraFields)
+	err := json.Unmarshal(data, &r.Extra)
 	if err != nil {
 		return err
 	}
-	r.DisplayName, _ = r.ExtraFields["displayname"].(string)
-	avatarUrl, _ := r.ExtraFields["avatar_url"].(string)
-	r.AvatarURL, _ = id.ParseContentURI(avatarUrl)
-	delete(r.ExtraFields, "displayname")
-	delete(r.ExtraFields, "avatar_url")
+	r.DisplayName, _ = r.Extra["displayname"].(string)
+	avatarURL, _ := r.Extra["avatar_url"].(string)
+	if avatarURL != "" {
+		r.AvatarURL, _ = id.ParseContentURI(avatarURL)
+	}
+	delete(r.Extra, "displayname")
+	delete(r.Extra, "avatar_url")
 	return nil
 }
 
 func (r *RespUserProfile) MarshalJSON() ([]byte, error) {
-	extraFields, err := json.Marshal(r.ExtraFields)
-	if err != nil {
-		return nil, err
+	if len(r.Extra) == 0 {
+		return json.Marshal((*marshalableUserProfile)(r))
 	}
-
+	marshalMap := maps.Clone(r.Extra)
 	if r.DisplayName != "" {
-		extraFields, err = sjson.SetBytes(extraFields, "displayname", r.DisplayName)
-		if err != nil {
-			return nil, err
-		}
+		marshalMap["displayname"] = r.DisplayName
+	} else {
+		delete(marshalMap, "displayname")
 	}
-	if r.AvatarURL.IsValid() {
-		extraFields, err = sjson.SetBytes(extraFields, "avatar_url", r.AvatarURL.String())
-		if err != nil {
-			return nil, err
-		}
+	if !r.AvatarURL.IsEmpty() {
+		marshalMap["avatar_url"] = r.AvatarURL.String()
+	} else {
+		delete(marshalMap, "avatar_url")
 	}
-
-	return extraFields, nil
+	return json.Marshal(r.Extra)
 }
 
 type RespMutualRooms struct {

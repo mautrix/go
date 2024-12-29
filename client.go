@@ -1043,12 +1043,19 @@ func (cli *Client) SetDisplayName(ctx context.Context, displayName string) (err 
 	return
 }
 
-// SetProfileField sets an arbitrary MSC4208 profile field. See https://github.com/matrix-org/matrix-spec-proposals/pull/4208
-func (cli *Client) SetProfileField(ctx context.Context, key string, value any) (err error) {
+// UnstableSetProfileField sets an arbitrary MSC4133 profile field. See https://github.com/matrix-org/matrix-spec-proposals/pull/4133
+func (cli *Client) UnstableSetProfileField(ctx context.Context, key string, value any) (err error) {
 	urlPath := cli.BuildClientURL("unstable", "uk.tcpip.msc4133", "profile", cli.UserID, key)
-	bodyValue := make(map[string]any)
-	bodyValue[key] = value
-	_, err = cli.MakeRequest(ctx, http.MethodPut, urlPath, &bodyValue, nil)
+	_, err = cli.MakeRequest(ctx, http.MethodPut, urlPath, map[string]any{
+		key: value,
+	}, nil)
+	return
+}
+
+// UnstableDeleteProfileField deletes an arbitrary MSC4133 profile field. See https://github.com/matrix-org/matrix-spec-proposals/pull/4133
+func (cli *Client) UnstableDeleteProfileField(ctx context.Context, key string) (err error) {
+	urlPath := cli.BuildClientURL("unstable", "uk.tcpip.msc4133", "profile", cli.UserID, key)
+	_, err = cli.MakeRequest(ctx, http.MethodDelete, urlPath, nil, nil)
 	return
 }
 
