@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"reflect"
 	"strconv"
 	"strings"
@@ -155,8 +156,44 @@ type RespUserDisplayName struct {
 }
 
 type RespUserProfile struct {
-	DisplayName string        `json:"displayname"`
-	AvatarURL   id.ContentURI `json:"avatar_url"`
+	DisplayName string         `json:"displayname,omitempty"`
+	AvatarURL   id.ContentURI  `json:"avatar_url,omitempty"`
+	Extra       map[string]any `json:"-"`
+}
+
+type marshalableUserProfile RespUserProfile
+
+func (r *RespUserProfile) UnmarshalJSON(data []byte) error {
+	err := json.Unmarshal(data, &r.Extra)
+	if err != nil {
+		return err
+	}
+	r.DisplayName, _ = r.Extra["displayname"].(string)
+	avatarURL, _ := r.Extra["avatar_url"].(string)
+	if avatarURL != "" {
+		r.AvatarURL, _ = id.ParseContentURI(avatarURL)
+	}
+	delete(r.Extra, "displayname")
+	delete(r.Extra, "avatar_url")
+	return nil
+}
+
+func (r *RespUserProfile) MarshalJSON() ([]byte, error) {
+	if len(r.Extra) == 0 {
+		return json.Marshal((*marshalableUserProfile)(r))
+	}
+	marshalMap := maps.Clone(r.Extra)
+	if r.DisplayName != "" {
+		marshalMap["displayname"] = r.DisplayName
+	} else {
+		delete(marshalMap, "displayname")
+	}
+	if !r.AvatarURL.IsEmpty() {
+		marshalMap["avatar_url"] = r.AvatarURL.String()
+	} else {
+		delete(marshalMap, "avatar_url")
+	}
+	return json.Marshal(r.Extra)
 }
 
 type RespMutualRooms struct {

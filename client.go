@@ -1043,6 +1043,22 @@ func (cli *Client) SetDisplayName(ctx context.Context, displayName string) (err 
 	return
 }
 
+// UnstableSetProfileField sets an arbitrary MSC4133 profile field. See https://github.com/matrix-org/matrix-spec-proposals/pull/4133
+func (cli *Client) UnstableSetProfileField(ctx context.Context, key string, value any) (err error) {
+	urlPath := cli.BuildClientURL("unstable", "uk.tcpip.msc4133", "profile", cli.UserID, key)
+	_, err = cli.MakeRequest(ctx, http.MethodPut, urlPath, map[string]any{
+		key: value,
+	}, nil)
+	return
+}
+
+// UnstableDeleteProfileField deletes an arbitrary MSC4133 profile field. See https://github.com/matrix-org/matrix-spec-proposals/pull/4133
+func (cli *Client) UnstableDeleteProfileField(ctx context.Context, key string) (err error) {
+	urlPath := cli.BuildClientURL("unstable", "uk.tcpip.msc4133", "profile", cli.UserID, key)
+	_, err = cli.MakeRequest(ctx, http.MethodDelete, urlPath, nil, nil)
+	return
+}
+
 // GetAvatarURL gets the avatar URL of the user with the specified MXID. See https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3profileuseridavatar_url
 func (cli *Client) GetAvatarURL(ctx context.Context, mxid id.UserID) (url id.ContentURI, err error) {
 	urlPath := cli.BuildClientURL("v3", "profile", mxid, "avatar_url")
