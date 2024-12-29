@@ -4,13 +4,11 @@ import (
 	"encoding/base64"
 	"fmt"
 
-	"maunium.net/go/mautrix/crypto/goolm/cipher"
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
 	"maunium.net/go/mautrix/crypto/goolm/goolmbase64"
 	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
 	"maunium.net/go/mautrix/crypto/goolm/megolm"
 	"maunium.net/go/mautrix/crypto/goolm/message"
-	"maunium.net/go/mautrix/crypto/goolm/utilities"
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
 )
@@ -161,12 +159,12 @@ func (o *MegolmInboundSession) ID() id.SessionID {
 
 // PickleAsJSON returns an MegolmInboundSession as a base64 string encrypted using the supplied key. The unencrypted representation of the Account is in JSON format.
 func (o *MegolmInboundSession) PickleAsJSON(key []byte) ([]byte, error) {
-	return utilities.PickleAsJSON(o, megolmInboundSessionPickleVersionJSON, key)
+	return libolmpickle.PickleAsJSON(o, megolmInboundSessionPickleVersionJSON, key)
 }
 
 // UnpickleAsJSON updates an MegolmInboundSession by a base64 encrypted string using the supplied key. The unencrypted representation has to be in JSON format.
 func (o *MegolmInboundSession) UnpickleAsJSON(pickled, key []byte) error {
-	return utilities.UnpickleAsJSON(o, pickled, key, megolmInboundSessionPickleVersionJSON)
+	return libolmpickle.UnpickleAsJSON(o, pickled, key, megolmInboundSessionPickleVersionJSON)
 }
 
 // Export returns the base64-encoded ratchet key for this session, at the given
@@ -192,7 +190,7 @@ func (o *MegolmInboundSession) Unpickle(pickled, key []byte) error {
 	} else if len(pickled) == 0 {
 		return olm.ErrEmptyInput
 	}
-	decrypted, err := cipher.Unpickle(key, pickled)
+	decrypted, err := libolmpickle.Unpickle(key, pickled)
 	if err != nil {
 		return err
 	}
@@ -234,7 +232,7 @@ func (o *MegolmInboundSession) Pickle(key []byte) ([]byte, error) {
 	if len(key) == 0 {
 		return nil, olm.ErrNoKeyProvided
 	}
-	return cipher.Pickle(key, o.PickleLibOlm())
+	return libolmpickle.Pickle(key, o.PickleLibOlm())
 }
 
 // PickleLibOlm pickles the session returning the raw bytes.
