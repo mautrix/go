@@ -11,8 +11,6 @@ import (
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 	"go.mau.fi/util/jsontime"
-	"golang.org/x/exp/maps"
-
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
@@ -175,11 +173,25 @@ func (r *RespUserProfile) UnmarshalJSON(data []byte) error {
 }
 
 func (r *RespUserProfile) MarshalJSON() ([]byte, error) {
-	data := maps.Clone(r.ExtraFields)
-	if data == nil {
-		data = make(map[string]any)
+	extraFields, err := json.Marshal(r.ExtraFields)
+	if err != nil {
+		return nil, err
 	}
-	return json.Marshal(data)
+
+	if r.DisplayName != "" {
+		extraFields, err = sjson.SetBytes(extraFields, "displayname", r.DisplayName)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if r.AvatarURL.IsValid() {
+		extraFields, err = sjson.SetBytes(extraFields, "avatar_url", r.AvatarURL.String())
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return extraFields, nil
 }
 
 type RespMutualRooms struct {
