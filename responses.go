@@ -680,3 +680,10 @@ type RespRoomKeysUpdate struct {
 	Count int    `json:"count"`
 	ETag  string `json:"etag"`
 }
+
+type RespOpenIDToken struct {
+	AccessToken      string `json:"access_token"`
+	ExpiresIn        int    `json:"expires_in"`
+	MatrixServerName string `json:"matrix_server_name"`
+	TokenType        string `json:"token_type"` // Always "Bearer"
+}

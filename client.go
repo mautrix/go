@@ -1556,6 +1556,11 @@ func (cli *Client) GetMediaConfig(ctx context.Context) (resp *RespMediaConfig, e
 	return
 }
 
+func (cli *Client) RequestOpenIDToken(ctx context.Context) (resp *RespOpenIDToken, err error) {
+	_, err = cli.MakeRequest(ctx, http.MethodPost, cli.BuildClientURL("v3", "user", cli.UserID, "openid", "request_token"), nil, &resp)
+	return
+}
+
 // UploadLink uploads an HTTP URL and then returns an MXC URI.
 func (cli *Client) UploadLink(ctx context.Context, link string) (*RespMediaUpload, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, link, nil)
