@@ -360,6 +360,7 @@ func (vh *VerificationHelper) onVerificationKey(ctx context.Context, txn Verific
 
 	var decimals []int
 	var emojis []rune
+	var emojiDescriptions []string
 	if slices.Contains(txn.StartEventContent.ShortAuthenticationString, event.SASMethodDecimal) {
 		decimals = []int{
 			(int(sasBytes[0])<<5 | int(sasBytes[1])>>3) + 1000,
@@ -375,9 +376,10 @@ func (vh *VerificationHelper) onVerificationKey(ctx context.Context, txn Verific
 			// Right shift the number and then mask the lowest 6 bits.
 			emojiIdx := (sasNum >> uint(48-(i+1)*6)) & 0b111111
 			emojis = append(emojis, allEmojis[emojiIdx])
+			emojiDescriptions = append(emojiDescriptions, allEmojiDescriptions[emojiIdx])
 		}
 	}
-	vh.showSAS(ctx, txn.TransactionID, emojis, decimals)
+	vh.showSAS(ctx, txn.TransactionID, emojis, emojiDescriptions, decimals)
 
 	if err := vh.store.SaveVerificationTransaction(ctx, txn); err != nil {
 		log.Err(err).Msg("failed to save verification transaction")
@@ -573,6 +575,73 @@ var allEmojis = []rune{
 	'🎧',
 	'📁',
 	'📌',
+}
+
+var allEmojiDescriptions = []string{
+	"Dog",
+	"Cat",
+	"Lion",
+	"Horse",
+	"Unicorn",
+	"Pig",
+	"Elephant",
+	"Rabbit",
+	"Panda",
+	"Rooster",
+	"Penguin",
+	"Turtle",
+	"Fish",
+	"Octopus",
+	"Butterfly",
+	"Flower",
+	"Tree",
+	"Cactus",
+	"Mushroom",
+	"Globe",
+	"Moon",
+	"Cloud",
+	"Fire",
+	"Banana",
+	"Apple",
+	"Strawberry",
+	"Corn",
+	"Pizza",
+	"Cake",
+	"Heart",
+	"Smiley",
+	"Robot",
+	"Hat",
+	"Glasses",
+	"Spanner",
+	"Santa",
+	"Thumbs Up",
+	"Umbrella",
+	"Hourglass",
+	"Clock",
+	"Gift",
+	"Light Bulb",
+	"Book",
+	"Pencil",
+	"Paperclip",
+	"Scissors",
+	"Lock",
+	"Key",
+	"Hammer",
+	"Telephone",
+	"Flag",
+	"Train",
+	"Bicycle",
+	"Aeroplane",
+	"Rocket",
+	"Trophy",
+	"Ball",
+	"Guitar",
+	"Trumpet",
+	"Bell",
+	"Anchor",
+	"Headphones",
+	"Folder",
+	"Pin",
 }
 
 func (vh *VerificationHelper) onVerificationMAC(ctx context.Context, txn VerificationTransaction, evt *event.Event) {

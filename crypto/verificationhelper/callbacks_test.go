@@ -28,6 +28,7 @@ type baseVerificationCallbacks struct {
 	doneTransactions         map[id.VerificationTransactionID]struct{}
 	verificationCancellation map[id.VerificationTransactionID]*event.VerificationCancelEventContent
 	emojisShown              map[id.VerificationTransactionID][]rune
+	emojiDescriptionsShown   map[id.VerificationTransactionID][]string
 	decimalsShown            map[id.VerificationTransactionID][]int
 }
 
@@ -39,6 +40,7 @@ func newBaseVerificationCallbacks() *baseVerificationCallbacks {
 		doneTransactions:         map[id.VerificationTransactionID]struct{}{},
 		verificationCancellation: map[id.VerificationTransactionID]*event.VerificationCancelEventContent{},
 		emojisShown:              map[id.VerificationTransactionID][]rune{},
+		emojiDescriptionsShown:   map[id.VerificationTransactionID][]string{},
 		decimalsShown:            map[id.VerificationTransactionID][]int{},
 	}
 }
@@ -69,8 +71,8 @@ func (c *baseVerificationCallbacks) GetVerificationCancellation(txnID id.Verific
 	return c.verificationCancellation[txnID]
 }
 
-func (c *baseVerificationCallbacks) GetEmojisShown(txnID id.VerificationTransactionID) []rune {
-	return c.emojisShown[txnID]
+func (c *baseVerificationCallbacks) GetEmojisAndDescriptionsShown(txnID id.VerificationTransactionID) ([]rune, []string) {
+	return c.emojisShown[txnID], c.emojiDescriptionsShown[txnID]
 }
 
 func (c *baseVerificationCallbacks) GetDecimalsShown(txnID id.VerificationTransactionID) []int {
@@ -104,8 +106,9 @@ func newSASVerificationCallbacksWithBase(base *baseVerificationCallbacks) *sasVe
 	return &sasVerificationCallbacks{base}
 }
 
-func (c *sasVerificationCallbacks) ShowSAS(ctx context.Context, txnID id.VerificationTransactionID, emojis []rune, decimals []int) {
+func (c *sasVerificationCallbacks) ShowSAS(ctx context.Context, txnID id.VerificationTransactionID, emojis []rune, emojiDescriptions []string, decimals []int) {
 	c.emojisShown[txnID] = emojis
+	c.emojiDescriptionsShown[txnID] = emojiDescriptions
 	c.decimalsShown[txnID] = decimals
 }
 
