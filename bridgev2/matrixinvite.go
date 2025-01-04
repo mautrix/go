@@ -182,6 +182,14 @@ func (br *Bridge) handleGhostDMInvite(ctx context.Context, evt *event.Event, sen
 		portal.UpdateInfo(ctx, resp.PortalInfo, sourceLogin, nil, time.Time{})
 	}
 	if didSetPortal {
+		message := "Private chat portal created"
+		err = br.givePowerToBot(ctx, evt.RoomID, invitedGhost.Intent)
+		hasWarning := false
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to give power to bot in new DM")
+			message += "\n\nWarning: failed to promote bot"
+			hasWarning = true
+		}
 		// TODO this might become unnecessary if UpdateInfo starts taking care of it
 		_, err = br.Bot.SendState(ctx, portal.MXID, event.StateElementFunctionalMembers, "", &event.Content{
 			Parsed: &event.ElementFunctionalMembersContent{
@@ -190,14 +198,10 @@ func (br *Bridge) handleGhostDMInvite(ctx context.Context, evt *event.Event, sen
 		}, time.Time{})
 		if err != nil {
 			log.Warn().Err(err).Msg("Failed to set service members in room")
-		}
-		message := "Private chat portal created"
-		err = br.givePowerToBot(ctx, evt.RoomID, invitedGhost.Intent)
-		hasWarning := false
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to give power to bot in new DM")
-			message += "\n\nWarning: failed to promote bot"
-			hasWarning = true
+			if !hasWarning {
+				message += "\n\nWarning: failed to set service members"
+				hasWarning = true
+			}
 		}
 		mx, ok := br.Matrix.(MatrixConnectorWithPostRoomBridgeHandling)
 		if ok {
@@ -225,6 +229,9 @@ func (br *Bridge) givePowerToBot(ctx context.Context, roomID id.RoomID, userWith
 	}
 	userLevel := powers.GetUserLevel(userWithPower.GetMXID())
 	if powers.EnsureUserLevelAs(userWithPower.GetMXID(), br.Bot.GetMXID(), userLevel) {
+		if userLevel > powers.UsersDefault {
+			powers.SetUserLevel(userWithPower.GetMXID(), userLevel-1)
+		}
 		_, err = userWithPower.SendState(ctx, roomID, event.StatePowerLevels, "", &event.Content{
 			Parsed: powers,
 		}, time.Time{})
