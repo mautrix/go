@@ -84,7 +84,7 @@ type Portal struct {
 	events chan portalEvent
 }
 
-const PortalEventBuffer = 64
+var PortalEventBuffer = 64
 
 func (br *Bridge) loadPortal(ctx context.Context, dbPortal *database.Portal, queryErr error, key *networkid.PortalKey) (*Portal, error) {
 	if queryErr != nil {
@@ -272,12 +272,16 @@ func (br *Bridge) GetExistingPortalByKey(ctx context.Context, key networkid.Port
 }
 
 func (portal *Portal) queueEvent(ctx context.Context, evt portalEvent) {
-	select {
-	case portal.events <- evt:
-	default:
-		zerolog.Ctx(ctx).Error().
-			Str("portal_id", string(portal.ID)).
-			Msg("Portal event channel is full")
+	if PortalEventBuffer == 0 {
+		portal.events <- evt
+	} else {
+		select {
+		case portal.events <- evt:
+		default:
+			zerolog.Ctx(ctx).Error().
+				Str("portal_id", string(portal.ID)).
+				Msg("Portal event channel is full")
+		}
 	}
 }
 
