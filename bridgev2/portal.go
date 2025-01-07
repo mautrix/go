@@ -2274,7 +2274,7 @@ func (portal *Portal) handleRemoteReactionSync(ctx context.Context, source *User
 			existingReaction, ok := existingUserReactions[reaction.EmojiID]
 			if ok {
 				delete(existingUserReactions, reaction.EmojiID)
-				if reaction.EmojiID != "" {
+				if reaction.EmojiID != "" || reaction.Emoji == existingReaction.Emoji {
 					continue
 				}
 				doOverwriteReaction(reaction, existingReaction)
