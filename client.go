@@ -76,18 +76,19 @@ type VerificationHelper interface {
 
 // Client represents a Matrix client.
 type Client struct {
-	HomeserverURL *url.URL     // The base homeserver URL
-	UserID        id.UserID    // The user ID of the client. Used for forming HTTP paths which use the client's user ID.
-	DeviceID      id.DeviceID  // The device ID of the client.
-	AccessToken   string       // The access_token for the client.
-	UserAgent     string       // The value for the User-Agent header
-	Client        *http.Client // The underlying HTTP client which will be used to make HTTP requests.
-	Syncer        Syncer       // The thing which can process /sync responses
-	Store         SyncStore    // The thing which can store tokens/ids
-	StateStore    StateStore
-	Crypto        CryptoHelper
-	Verification  VerificationHelper
-	SpecVersions  *RespVersions
+	HomeserverURL  *url.URL     // The base homeserver URL
+	UserID         id.UserID    // The user ID of the client. Used for forming HTTP paths which use the client's user ID.
+	DeviceID       id.DeviceID  // The device ID of the client.
+	AccessToken    string       // The access_token for the client.
+	UserAgent      string       // The value for the User-Agent header
+	Client         *http.Client // The underlying HTTP client which will be used to make HTTP requests.
+	Syncer         Syncer       // The thing which can process /sync responses
+	Store          SyncStore    // The thing which can store tokens/ids
+	StateStore     StateStore
+	Crypto         CryptoHelper
+	Verification   VerificationHelper
+	SpecVersions   *RespVersions
+	ExternalClient *http.Client // The HTTP client used for external (not matrix) media HTTP requests.
 
 	Log zerolog.Logger
 
@@ -1693,7 +1694,11 @@ func (cli *Client) tryUploadMediaToURL(ctx context.Context, url, contentType str
 	req.Header.Set("Content-Type", contentType)
 	req.Header.Set("User-Agent", cli.UserAgent+" (external media uploader)")
 
-	return http.DefaultClient.Do(req)
+	if cli.ExternalClient != nil {
+		return cli.ExternalClient.Do(req)
+	} else {
+		return http.DefaultClient.Do(req)
+	}
 }
 
 func (cli *Client) uploadMediaToURL(ctx context.Context, data ReqUploadMedia) (*RespMediaUpload, error) {
