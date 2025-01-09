@@ -3792,3 +3792,17 @@ func (portal *Portal) SetRelay(ctx context.Context, relay *UserLogin) error {
 	}
 	return nil
 }
+
+func (portal *Portal) PerMessageProfileForSender(ctx context.Context, sender networkid.UserID) (profile event.BeeperPerMessageProfile, err error) {
+	var ghost *Ghost
+	ghost, err = portal.Bridge.GetGhostByID(ctx, sender)
+	if err != nil {
+		return
+	}
+	profile.ID = string(ghost.Intent.GetMXID())
+	profile.Displayname = ghost.Name
+	if ghost.AvatarMXC != "" {
+		profile.AvatarURL = &ghost.AvatarMXC
+	}
+	return
+}
