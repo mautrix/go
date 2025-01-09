@@ -333,16 +333,17 @@ func (portal *Portal) compileBatchMessage(ctx context.Context, source *UserLogin
 		portal.applyRelationMeta(part.Content, replyTo, threadRoot, prevThreadEvent)
 		evtID := portal.Bridge.Matrix.GenerateDeterministicEventID(portal.MXID, portal.PortalKey, msg.ID, part.ID)
 		dbMessage := &database.Message{
-			ID:         msg.ID,
-			PartID:     part.ID,
-			MXID:       evtID,
-			Room:       portal.PortalKey,
-			SenderID:   msg.Sender.Sender,
-			SenderMXID: intent.GetMXID(),
-			Timestamp:  msg.Timestamp,
-			ThreadRoot: ptr.Val(msg.ThreadRoot),
-			ReplyTo:    ptr.Val(msg.ReplyTo),
-			Metadata:   part.DBMetadata,
+			ID:               msg.ID,
+			PartID:           part.ID,
+			MXID:             evtID,
+			Room:             portal.PortalKey,
+			SenderID:         msg.Sender.Sender,
+			SenderMXID:       intent.GetMXID(),
+			Timestamp:        msg.Timestamp,
+			ThreadRoot:       ptr.Val(msg.ThreadRoot),
+			ReplyTo:          ptr.Val(msg.ReplyTo),
+			Metadata:         part.DBMetadata,
+			IsDoublePuppeted: intent.IsCustomPuppet && intent.as.DoublePuppetValue != "",
 		}
 		if part.DontBridge {
 			dbMessage.SetFakeMXID()

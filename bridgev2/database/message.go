@@ -33,11 +33,12 @@ type Message struct {
 	PartID   networkid.PartID
 	MXID     id.EventID
 
-	Room       networkid.PortalKey
-	SenderID   networkid.UserID
-	SenderMXID id.UserID
-	Timestamp  time.Time
-	EditCount  int
+	Room             networkid.PortalKey
+	SenderID         networkid.UserID
+	SenderMXID       id.UserID
+	Timestamp        time.Time
+	EditCount        int
+	IsDoublePuppeted bool
 
 	ThreadRoot networkid.MessageID
 	ReplyTo    networkid.MessageOptionalPartID
@@ -72,15 +73,16 @@ const (
 	insertMessageQuery = `
 		INSERT INTO message (
 			bridge_id, id, part_id, mxid, room_id, room_receiver, sender_id, sender_mxid,
-			timestamp, edit_count, thread_root_id, reply_to_id, reply_to_part_id, metadata
+			timestamp, edit_count, is_double_puppeted, thread_root_id, reply_to_id, reply_to_part_id, metadata
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		RETURNING rowid
 	`
 	updateMessageQuery = `
 		UPDATE message SET id=$2, part_id=$3, mxid=$4, room_id=$5, room_receiver=$6, sender_id=$7, sender_mxid=$8,
-		                   timestamp=$9, edit_count=$10, thread_root_id=$11, reply_to_id=$12, reply_to_part_id=$13, metadata=$14
-		WHERE bridge_id=$1 AND rowid=$15
+		                   timestamp=$9, edit_count=$10, is_double_puppeted=$11, thread_root_id=$12, reply_to_id=$13,
+                           reply_to_part_id=$14, metadata=$15
+		WHERE bridge_id=$1 AND rowid=$16
 	`
 	deleteAllMessagePartsByIDQuery = `
 		DELETE FROM message WHERE bridge_id=$1 AND (room_receiver=$2 OR room_receiver='') AND id=$3
@@ -174,7 +176,7 @@ func (m *Message) Scan(row dbutil.Scannable) (*Message, error) {
 	var threadRootID, replyToID, replyToPartID sql.NullString
 	err := row.Scan(
 		&m.RowID, &m.BridgeID, &m.ID, &m.PartID, &m.MXID, &m.Room.ID, &m.Room.Receiver, &m.SenderID, &m.SenderMXID,
-		&timestamp, &m.EditCount, &threadRootID, &replyToID, &replyToPartID, dbutil.JSON{Data: m.Metadata},
+		&timestamp, &m.EditCount, &m.IsDoublePuppeted, &threadRootID, &replyToID, &replyToPartID, dbutil.JSON{Data: m.Metadata},
 	)
 	if err != nil {
 		return nil, err
@@ -200,8 +202,8 @@ func (m *Message) ensureHasMetadata(metaType MetaTypeCreator) *Message {
 func (m *Message) sqlVariables() []any {
 	return []any{
 		m.BridgeID, m.ID, m.PartID, m.MXID, m.Room.ID, m.Room.Receiver, m.SenderID, m.SenderMXID,
-		m.Timestamp.UnixNano(), m.EditCount, dbutil.StrPtr(m.ThreadRoot), dbutil.StrPtr(m.ReplyTo.MessageID), m.ReplyTo.PartID,
-		dbutil.JSON{Data: m.Metadata},
+		m.Timestamp.UnixNano(), m.EditCount, m.IsDoublePuppeted, dbutil.StrPtr(m.ThreadRoot),
+		dbutil.StrPtr(m.ReplyTo.MessageID), m.ReplyTo.PartID, dbutil.JSON{Data: m.Metadata},
 	}
 }
 

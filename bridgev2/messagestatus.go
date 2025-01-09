@@ -9,6 +9,7 @@ package bridgev2
 import (
 	"errors"
 	"fmt"
+	"maunium.net/go/mautrix/appservice"
 
 	"go.mau.fi/util/jsontime"
 
@@ -18,14 +19,15 @@ import (
 )
 
 type MessageStatusEventInfo struct {
-	RoomID        id.RoomID
-	SourceEventID id.EventID
-	NewEventID    id.EventID
-	EventType     event.Type
-	MessageType   event.MessageType
-	Sender        id.UserID
-	ThreadRoot    id.EventID
-	StreamOrder   int64
+	RoomID                      id.RoomID
+	SourceEventID               id.EventID
+	NewEventID                  id.EventID
+	EventType                   event.Type
+	MessageType                 event.MessageType
+	Sender                      id.UserID
+	ThreadRoot                  id.EventID
+	StreamOrder                 int64
+	IsSourceEventDoublePuppeted bool
 }
 
 func StatusEventInfoFromEvent(evt *event.Event) *MessageStatusEventInfo {
@@ -33,13 +35,17 @@ func StatusEventInfoFromEvent(evt *event.Event) *MessageStatusEventInfo {
 	if relatable, ok := evt.Content.Parsed.(event.Relatable); ok {
 		threadRoot = relatable.OptionalGetRelatesTo().GetThreadParent()
 	}
+
+	_, isDoublePuppeted := evt.Content.Raw[appservice.DoublePuppetKey]
+
 	return &MessageStatusEventInfo{
-		RoomID:        evt.RoomID,
-		SourceEventID: evt.ID,
-		EventType:     evt.Type,
-		MessageType:   evt.Content.AsMessage().MsgType,
-		Sender:        evt.Sender,
-		ThreadRoot:    threadRoot,
+		RoomID:                      evt.RoomID,
+		SourceEventID:               evt.ID,
+		EventType:                   evt.Type,
+		MessageType:                 evt.Content.AsMessage().MsgType,
+		Sender:                      evt.Sender,
+		ThreadRoot:                  threadRoot,
+		IsSourceEventDoublePuppeted: isDoublePuppeted,
 	}
 }
 
