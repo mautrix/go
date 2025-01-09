@@ -343,7 +343,7 @@ func (portal *Portal) compileBatchMessage(ctx context.Context, source *UserLogin
 			ThreadRoot:       ptr.Val(msg.ThreadRoot),
 			ReplyTo:          ptr.Val(msg.ReplyTo),
 			Metadata:         part.DBMetadata,
-			IsDoublePuppeted: intent.IsCustomPuppet && intent.as.DoublePuppetValue != "",
+			IsDoublePuppeted: intent.IsDoublePuppet(),
 		}
 		if part.DontBridge {
 			dbMessage.SetFakeMXID()

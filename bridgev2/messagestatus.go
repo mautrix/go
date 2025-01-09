@@ -9,10 +9,10 @@ package bridgev2
 import (
 	"errors"
 	"fmt"
-	"maunium.net/go/mautrix/appservice"
 
 	"go.mau.fi/util/jsontime"
 
+	"maunium.net/go/mautrix/appservice"
 	"maunium.net/go/mautrix/bridge/status"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"

@@ -486,7 +486,7 @@ func (br *Connector) internalSendMessageStatus(ctx context.Context, ms *bridgev2
 		}
 	}
 	if ms.Status == event.MessageStatusSuccess && br.Config.Matrix.DeliveryReceipts {
-		err = br.Bot.SendReceipt(ctx, evt.RoomID, evt.SourceEventID, event.ReceiptTypeRead, nil)
+		err := br.Bot.SendReceipt(ctx, evt.RoomID, evt.SourceEventID, event.ReceiptTypeRead, nil)
 		if err != nil {
 			log.Err(err).
 				Stringer("room_id", evt.RoomID).

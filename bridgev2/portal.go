@@ -11,7 +11,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"maunium.net/go/mautrix/appservice"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -1029,10 +1028,6 @@ func (evt *MatrixMessage) fillDBMessage(message *database.Message) *database.Mes
 	if message.SenderMXID == "" {
 		message.SenderMXID = evt.Event.Sender
 	}
-
-	_, isDoublePuppeted := evt.Event.Content.Raw[appservice.DoublePuppetKey]
-	message.IsDoublePuppeted = isDoublePuppeted
-
 	return message
 }
 
@@ -1832,16 +1827,16 @@ func (portal *Portal) sendConvertedMessage(
 	for i, part := range converted.Parts {
 		portal.applyRelationMeta(part.Content, replyTo, threadRoot, prevThreadEvent)
 		dbMessage := &database.Message{
-			ID:         id,
-			PartID:     part.ID,
-			Room:       portal.PortalKey,
-			SenderID:   senderID,
-			SenderMXID: intent.GetMXID(),
-			Timestamp:  ts,
-			ThreadRoot: ptr.Val(converted.ThreadRoot),
-			ReplyTo:    ptr.Val(converted.ReplyTo),
-			Metadata:   part.DBMetadata,
-			// FIXME: What is this code path, could double puppeted messages come through here?
+			ID:               id,
+			PartID:           part.ID,
+			Room:             portal.PortalKey,
+			SenderID:         senderID,
+			SenderMXID:       intent.GetMXID(),
+			Timestamp:        ts,
+			ThreadRoot:       ptr.Val(converted.ThreadRoot),
+			ReplyTo:          ptr.Val(converted.ReplyTo),
+			Metadata:         part.DBMetadata,
+			IsDoublePuppeted: intent.IsDoublePuppet(),
 		}
 		if part.DontBridge {
 			dbMessage.SetFakeMXID()
