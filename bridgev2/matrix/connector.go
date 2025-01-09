@@ -579,6 +579,10 @@ func (br *Connector) IsConfusableName(ctx context.Context, roomID id.RoomID, use
 	return br.AS.StateStore.IsConfusableName(ctx, roomID, userID, name)
 }
 
+func (br *Connector) GetUniqueBridgeID() string {
+	return fmt.Sprintf("%s/%s", br.Config.Homeserver.Domain, br.Config.AppService.ID)
+}
+
 func (br *Connector) BatchSend(ctx context.Context, roomID id.RoomID, req *mautrix.ReqBeeperBatchSend, extras []*bridgev2.MatrixSendExtra) (*mautrix.RespBeeperBatchSend, error) {
 	if encrypted, err := br.StateStore.IsEncrypted(ctx, roomID); err != nil {
 		return nil, fmt.Errorf("failed to check if room is encrypted: %w", err)

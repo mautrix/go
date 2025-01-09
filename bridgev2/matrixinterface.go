@@ -69,6 +69,10 @@ type MatrixConnectorWithNameDisambiguation interface {
 	IsConfusableName(ctx context.Context, roomID id.RoomID, userID id.UserID, name string) ([]id.UserID, error)
 }
 
+type MatrixConnectorWithBridgeIdentifier interface {
+	GetUniqueBridgeID() string
+}
+
 type MatrixConnectorWithURLPreviews interface {
 	GetURLPreview(ctx context.Context, url string) (*event.LinkPreview, error)
 }

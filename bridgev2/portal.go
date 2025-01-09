@@ -2981,9 +2981,11 @@ func (portal *Portal) getBridgeInfo() (string, event.BridgeEventContent) {
 	if ok {
 		filler.FillPortalBridgeInfo(portal, &bridgeInfo)
 	}
-	// TODO use something globally unique instead of bridge ID?
-	//      maybe ask the matrix connector to use serverName+appserviceID+bridgeID
+	idProvider, ok := portal.Bridge.Matrix.(MatrixConnectorWithBridgeIdentifier)
 	stateKey := string(portal.BridgeID)
+	if ok {
+		stateKey = idProvider.GetUniqueBridgeID()
+	}
 	return stateKey, bridgeInfo
 }
 
