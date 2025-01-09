@@ -774,7 +774,7 @@ func (portal *Portal) checkMessageContentCaps(ctx context.Context, caps *event.R
 		if content.MsgType != event.CapMsgSticker &&
 			content.FileName != "" &&
 			content.Body != content.FileName &&
-			feat.Captions.Reject() {
+			feat.Caption.Reject() {
 			portal.sendErrorStatus(ctx, evt, ErrCaptionsNotAllowed)
 			return false
 		}

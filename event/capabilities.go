@@ -15,31 +15,31 @@ import (
 )
 
 type RoomFeatures struct {
-	Formatting FormattingFeatureMap `json:"formatting"`
-	File       FileFeatureMap       `json:"file"`
+	Formatting FormattingFeatureMap `json:"formatting,omitempty"`
+	File       FileFeatureMap       `json:"file,omitempty"`
 
-	LocationMessage CapabilitySupportLevel `json:"location_message"`
-	Poll            CapabilitySupportLevel `json:"poll"`
-	Thread          CapabilitySupportLevel `json:"thread"`
-	Reply           CapabilitySupportLevel `json:"reply"`
+	LocationMessage CapabilitySupportLevel `json:"location_message,omitempty"`
+	Poll            CapabilitySupportLevel `json:"poll,omitempty"`
+	Thread          CapabilitySupportLevel `json:"thread,omitempty"`
+	Reply           CapabilitySupportLevel `json:"reply,omitempty"`
 
-	Edit         CapabilitySupportLevel `json:"edit"`
-	EditMaxCount int                    `json:"edit_max_count"`
-	EditMaxAge   jsontime.Seconds       `json:"edit_max_age"`
-	Delete       CapabilitySupportLevel `json:"delete"`
-	DeleteForMe  bool                   `json:"delete_for_me"`
-	DeleteMaxAge jsontime.Seconds       `json:"delete_max_age"`
+	Edit         CapabilitySupportLevel `json:"edit,omitempty"`
+	EditMaxCount int                    `json:"edit_max_count,omitempty"`
+	EditMaxAge   *jsontime.Seconds      `json:"edit_max_age,omitempty"`
+	Delete       CapabilitySupportLevel `json:"delete,omitempty"`
+	DeleteForMe  bool                   `json:"delete_for_me,omitempty"`
+	DeleteMaxAge *jsontime.Seconds      `json:"delete_max_age,omitempty"`
 
-	Reaction             CapabilitySupportLevel `json:"reaction"`
-	ReactionCount        int                    `json:"reaction_count"`
+	Reaction             CapabilitySupportLevel `json:"reaction,omitempty"`
+	ReactionCount        int                    `json:"reaction_count,omitempty"`
 	AllowedReactions     []string               `json:"allowed_reactions,omitempty"`
-	CustomEmojiReactions bool                   `json:"custom_emoji_reactions"`
+	CustomEmojiReactions bool                   `json:"custom_emoji_reactions,omitempty"`
 
-	ReadReceipts        bool `json:"read_receipts"`
-	TypingNotifications bool `json:"typing_notifications"`
-	Archive             bool `json:"archive"`
-	MarkAsUnread        bool `json:"mark_as_unread"`
-	DeleteChat          bool `json:"delete_chat"`
+	ReadReceipts        bool `json:"read_receipts,omitempty"`
+	TypingNotifications bool `json:"typing_notifications,omitempty"`
+	Archive             bool `json:"archive,omitempty"`
+	MarkAsUnread        bool `json:"mark_as_unread,omitempty"`
+	DeleteChat          bool `json:"delete_chat,omitempty"`
 }
 
 type FormattingFeatureMap map[FormattingFeature]CapabilitySupportLevel
@@ -114,13 +114,15 @@ const (
 type FileFeatures struct {
 	MimeTypes map[string]CapabilitySupportLevel `json:"mime_types"`
 
-	Captions         CapabilitySupportLevel `json:"captions,omitempty"`
+	Caption          CapabilitySupportLevel `json:"caption,omitempty"`
 	MaxCaptionLength int                    `json:"max_caption_length,omitempty"`
 
-	MaxSize     int64            `json:"max_size,omitempty"`
-	MaxWidth    int              `json:"max_width,omitempty"`
-	MaxHeight   int              `json:"max_height,omitempty"`
-	MaxDuration jsontime.Seconds `json:"max_duration,omitempty"`
+	MaxSize     int64             `json:"max_size,omitempty"`
+	MaxWidth    int               `json:"max_width,omitempty"`
+	MaxHeight   int               `json:"max_height,omitempty"`
+	MaxDuration *jsontime.Seconds `json:"max_duration,omitempty"`
+
+	ViewOnce bool `json:"view_once,omitempty"`
 }
 
 func (ff *FileFeatures) GetMimeSupport(inputType string) CapabilitySupportLevel {
