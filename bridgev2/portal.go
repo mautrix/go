@@ -755,22 +755,36 @@ func (portal *Portal) periodicTypingUpdater() {
 	}
 }
 
-func (portal *Portal) checkMessageContentCaps(ctx context.Context, caps *NetworkRoomCapabilities, content *event.MessageEventContent, evt *event.Event) bool {
+func (portal *Portal) checkMessageContentCaps(ctx context.Context, caps *event.RoomFeatures, content *event.MessageEventContent, evt *event.Event) bool {
 	switch content.MsgType {
 	case event.MsgText, event.MsgNotice, event.MsgEmote:
 		// No checks for now, message length is safer to check after conversion inside connector
 	case event.MsgLocation:
-		if !caps.LocationMessages {
+		if caps.LocationMessage.Reject() {
 			portal.sendErrorStatus(ctx, evt, ErrLocationMessagesNotAllowed)
 			return false
 		}
-	case event.MsgImage, event.MsgAudio, event.MsgVideo, event.MsgFile:
-		if content.FileName != "" && content.Body != content.FileName {
-			if !caps.Captions {
-				portal.sendErrorStatus(ctx, evt, ErrCaptionsNotAllowed)
+	case event.MsgImage, event.MsgAudio, event.MsgVideo, event.MsgFile, event.CapMsgSticker:
+		capMsgType := content.GetCapMsgType()
+		feat, ok := caps.File[capMsgType]
+		if !ok {
+			portal.sendErrorStatus(ctx, evt, ErrUnsupportedMessageType)
+			return false
+		}
+		if content.MsgType != event.CapMsgSticker &&
+			content.FileName != "" &&
+			content.Body != content.FileName &&
+			feat.Captions.Reject() {
+			portal.sendErrorStatus(ctx, evt, ErrCaptionsNotAllowed)
+			return false
+		}
+		if content.Info != nil && content.Info.MimeType != "" {
+			if feat.GetMimeSupport(content.Info.MimeType).Reject() {
+				portal.sendErrorStatus(ctx, evt, fmt.Errorf("%w (%s in %s)", ErrUnsupportedMediaType, content.Info.MimeType, capMsgType))
 				return false
 			}
 		}
+		fallthrough
 	default:
 	}
 	return true
@@ -792,6 +806,9 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 	} else {
 		msgContent, ok = evt.Content.Parsed.(*event.MessageEventContent)
 		relatesTo = msgContent.RelatesTo
+		if evt.Type == event.EventSticker {
+			msgContent.MsgType = event.CapMsgSticker
+		}
 	}
 	if !ok {
 		log.Error().Type("content_type", evt.Content.Parsed).Msg("Unexpected parsed content type")
@@ -849,21 +866,21 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 		}
 	}
 	var replyToID id.EventID
-	if caps.Threads {
+	threadRootID := relatesTo.GetThreadParent()
+	if caps.Thread.Partial() {
 		replyToID = relatesTo.GetNonFallbackReplyTo()
+		if threadRootID != "" {
+			threadRoot, err = portal.Bridge.DB.Message.GetPartByMXID(ctx, threadRootID)
+			if err != nil {
+				log.Err(err).Msg("Failed to get thread root message from database")
+			} else if threadRoot == nil {
+				log.Warn().Stringer("thread_root_id", threadRootID).Msg("Thread root message not found")
+			}
+		}
 	} else {
 		replyToID = relatesTo.GetReplyTo()
 	}
-	threadRootID := relatesTo.GetThreadParent()
-	if caps.Threads && threadRootID != "" {
-		threadRoot, err = portal.Bridge.DB.Message.GetPartByMXID(ctx, threadRootID)
-		if err != nil {
-			log.Err(err).Msg("Failed to get thread root message from database")
-		} else if threadRoot == nil {
-			log.Warn().Stringer("thread_root_id", threadRootID).Msg("Thread root message not found")
-		}
-	}
-	if replyToID != "" && (caps.Replies || caps.Threads) {
+	if replyToID != "" && (caps.Reply.Partial() || caps.Thread.Partial()) {
 		replyTo, err = portal.Bridge.DB.Message.GetPartByMXID(ctx, replyToID)
 		if err != nil {
 			log.Err(err).Msg("Failed to get reply target message from database")
@@ -874,7 +891,7 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 			// The fallback happens if the message is not a Matrix thread and either
 			// * the replied-to message is in a thread, or
 			// * the network only supports threads (assume the user wants to start a new thread)
-			if caps.Threads && threadRoot == nil && (replyTo.ThreadRoot != "" || !caps.Replies) {
+			if caps.Thread.Partial() && threadRoot == nil && (replyTo.ThreadRoot != "" || !caps.Reply.Partial()) {
 				threadRootRemoteID := replyTo.ThreadRoot
 				if threadRootRemoteID == "" {
 					threadRootRemoteID = replyTo.ID
@@ -884,7 +901,7 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 					log.Err(err).Msg("Failed to get thread root message from database (via reply fallback)")
 				}
 			}
-			if !caps.Replies {
+			if !caps.Reply.Partial() {
 				replyTo = nil
 			}
 		}
@@ -1031,7 +1048,7 @@ func (evt *MatrixMessage) fillDBMessage(message *database.Message) *database.Mes
 	return message
 }
 
-func (portal *Portal) handleMatrixEdit(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event, content *event.MessageEventContent, caps *NetworkRoomCapabilities) {
+func (portal *Portal) handleMatrixEdit(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event, content *event.MessageEventContent, caps *event.RoomFeatures) {
 	log := zerolog.Ctx(ctx)
 	editTargetID := content.RelatesTo.GetReplaceID()
 	log.UpdateContext(func(c zerolog.Context) zerolog.Context {
@@ -1039,6 +1056,9 @@ func (portal *Portal) handleMatrixEdit(ctx context.Context, sender *UserLogin, o
 	})
 	if content.NewContent != nil {
 		content = content.NewContent
+		if evt.Type == event.EventSticker {
+			content.MsgType = event.CapMsgSticker
+		}
 	}
 	if origSender != nil {
 		var err error
@@ -1055,7 +1075,7 @@ func (portal *Portal) handleMatrixEdit(ctx context.Context, sender *UserLogin, o
 		log.Debug().Msg("Ignoring edit as network connector doesn't implement EditHandlingNetworkAPI")
 		portal.sendErrorStatus(ctx, evt, ErrEditsNotSupported)
 		return
-	} else if !caps.Edits {
+	} else if !caps.Edit.Partial() {
 		log.Debug().Msg("Ignoring edit as room doesn't support edits")
 		portal.sendErrorStatus(ctx, evt, ErrEditsNotSupportedInPortal)
 		return
@@ -1071,7 +1091,7 @@ func (portal *Portal) handleMatrixEdit(ctx context.Context, sender *UserLogin, o
 		log.Warn().Msg("Edit target message not found in database")
 		portal.sendErrorStatus(ctx, evt, fmt.Errorf("edit %w", ErrTargetMessageNotFound))
 		return
-	} else if caps.EditMaxAge > 0 && time.Since(editTarget.Timestamp) > caps.EditMaxAge {
+	} else if caps.EditMaxAge.Duration > 0 && time.Since(editTarget.Timestamp) > caps.EditMaxAge.Duration {
 		portal.sendErrorStatus(ctx, evt, ErrEditTargetTooOld)
 		return
 	} else if caps.EditMaxCount > 0 && editTarget.EditCount >= caps.EditMaxCount {

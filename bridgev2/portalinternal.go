@@ -85,7 +85,7 @@ func (portal *PortalInternals) PeriodicTypingUpdater() {
 	(*Portal)(portal).periodicTypingUpdater()
 }
 
-func (portal *PortalInternals) CheckMessageContentCaps(ctx context.Context, caps *NetworkRoomCapabilities, content *event.MessageEventContent, evt *event.Event) bool {
+func (portal *PortalInternals) CheckMessageContentCaps(ctx context.Context, caps *event.RoomFeatures, content *event.MessageEventContent, evt *event.Event) bool {
 	return (*Portal)(portal).checkMessageContentCaps(ctx, caps, content, evt)
 }
 
@@ -93,7 +93,7 @@ func (portal *PortalInternals) HandleMatrixMessage(ctx context.Context, sender *
 	(*Portal)(portal).handleMatrixMessage(ctx, sender, origSender, evt)
 }
 
-func (portal *PortalInternals) HandleMatrixEdit(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event, content *event.MessageEventContent, caps *NetworkRoomCapabilities) {
+func (portal *PortalInternals) HandleMatrixEdit(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event, content *event.MessageEventContent, caps *event.RoomFeatures) {
 	(*Portal)(portal).handleMatrixEdit(ctx, sender, origSender, evt, content, caps)
 }
 

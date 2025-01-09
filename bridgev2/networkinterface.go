@@ -297,11 +297,6 @@ type MatrixMessageResponse struct {
 	PostSave func(context.Context, *database.Message)
 }
 
-type FileRestriction struct {
-	MaxSize   int64
-	MimeTypes []string
-}
-
 type NetworkGeneralCapabilities struct {
 	// Does the network connector support disappearing messages?
 	// This flag enables the message disappearing loop in the bridge.
@@ -309,35 +304,6 @@ type NetworkGeneralCapabilities struct {
 	// Should the bridge re-request user info on incoming messages even if the ghost already has info?
 	// By default, info is only requested for ghosts with no name, and other updating is left to events.
 	AggressiveUpdateInfo bool
-}
-
-type NetworkRoomCapabilities struct {
-	FormattedText bool
-	UserMentions  bool
-	RoomMentions  bool
-
-	LocationMessages bool
-	Captions         bool
-	MaxTextLength    int
-	MaxCaptionLength int
-	Polls            bool
-
-	Threads      bool
-	Replies      bool
-	Edits        bool
-	EditMaxCount int
-	EditMaxAge   time.Duration
-	Deletes      bool
-	DeleteMaxAge time.Duration
-
-	DefaultFileRestriction *FileRestriction
-	Files                  map[event.MessageType]FileRestriction
-
-	ReadReceipts bool
-
-	Reactions        bool
-	ReactionCount    int
-	AllowedReactions []string
 }
 
 // NetworkAPI is an interface representing a remote network client for a single user login.
@@ -372,7 +338,7 @@ type NetworkAPI interface {
 	// GetCapabilities returns the bridging capabilities in a given room.
 	// This can simply return a static list if the remote network has no per-chat capability differences,
 	// but all calls will include the portal, because some networks do have per-chat differences.
-	GetCapabilities(ctx context.Context, portal *Portal) *NetworkRoomCapabilities
+	GetCapabilities(ctx context.Context, portal *Portal) *event.RoomFeatures
 
 	// HandleMatrixMessage is called when a message is sent from Matrix in an existing portal room.
 	// This function should convert the message as appropriate, send it over to the remote network,
