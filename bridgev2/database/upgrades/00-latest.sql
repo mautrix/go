@@ -102,7 +102,7 @@ CREATE TABLE message (
 	sender_mxid        TEXT    NOT NULL,
 	timestamp          BIGINT  NOT NULL,
 	edit_count         INTEGER NOT NULL,
-	is_double_puppeted BOOLEAN NOT NULL,
+	is_double_puppeted BOOLEAN,
 	thread_root_id     TEXT,
 	reply_to_id        TEXT,
 	reply_to_part_id   TEXT,
