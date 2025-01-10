@@ -623,6 +623,10 @@ func (br *Connector) GenerateDeterministicEventID(roomID id.RoomID, _ networkid.
 	return id.EventID(unsafe.String(unsafe.SliceData(eventID), len(eventID)))
 }
 
+func (br *Connector) GenerateDeterministicRoomID(key networkid.PortalKey) id.RoomID {
+	return id.RoomID(fmt.Sprintf("!%s.%s:%s", key.ID, key.Receiver, br.ServerName()))
+}
+
 func (br *Connector) GenerateReactionEventID(roomID id.RoomID, targetMessage *database.Message, sender networkid.UserID, emojiID networkid.EmojiID) id.EventID {
 	// We don't care about determinism for reactions
 	return id.EventID(fmt.Sprintf("$%s:%s", base64.RawURLEncoding.EncodeToString(random.Bytes(32)), br.deterministicEventIDServer))
