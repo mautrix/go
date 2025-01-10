@@ -79,6 +79,8 @@ type Portal struct {
 	outgoingMessages     map[networkid.TransactionID]outgoingMessage
 	outgoingMessagesLock sync.Mutex
 
+	lastCapUpdate time.Time
+
 	roomCreateLock sync.Mutex
 
 	events chan portalEvent
@@ -3001,6 +3003,43 @@ func (portal *Portal) UpdateBridgeInfo(ctx context.Context) {
 	portal.sendRoomMeta(ctx, nil, time.Now(), event.StateHalfShotBridge, stateKey, &bridgeInfo)
 }
 
+func (portal *Portal) UpdateCapabilities(ctx context.Context, source *UserLogin, implicit bool) bool {
+	if portal.MXID == "" {
+		return false
+	} else if !implicit && time.Since(portal.lastCapUpdate) < 24*time.Hour {
+		return false
+	} else if portal.CapState.ID != "" && source.ID != portal.CapState.Source && source.ID != portal.Receiver {
+		// TODO allow capability state source to change if the old user login is removed from the portal
+		return false
+	}
+	caps := source.Client.GetCapabilities(ctx, portal)
+	capID := caps.GetID()
+	if capID == portal.CapState.ID {
+		return false
+	}
+	zerolog.Ctx(ctx).Debug().
+		Str("user_login_id", string(source.ID)).
+		Str("old_id", portal.CapState.ID).
+		Str("new_id", capID).
+		Msg("Sending new room capability event")
+	success := portal.sendRoomMeta(ctx, nil, time.Now(), event.StateBeeperRoomFeatures, portal.getBridgeInfoStateKey(), caps)
+	if !success {
+		return false
+	}
+	portal.CapState = database.CapabilityState{
+		Source: source.ID,
+		ID:     capID,
+	}
+	portal.lastCapUpdate = time.Now()
+	if implicit {
+		err := portal.Save(ctx)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to save portal capability state after sending state event")
+		}
+	}
+	return true
+}
+
 func (portal *Portal) sendStateWithIntentOrBot(ctx context.Context, sender MatrixAPI, eventType event.Type, stateKey string, content *event.Content, ts time.Time) (resp *mautrix.RespSendEvent, err error) {
 	if sender == nil {
 		sender = portal.Bridge.Bot
@@ -3487,6 +3526,7 @@ func (portal *Portal) UpdateInfo(ctx context.Context, info *ChatInfo, source *Us
 	if source != nil {
 		source.MarkInPortal(ctx, portal)
 		portal.updateUserLocalInfo(ctx, info.UserLocal, source, false)
+		changed = portal.UpdateCapabilities(ctx, source, false) || changed
 	}
 	if info.CanBackfill && source != nil && portal.MXID != "" {
 		err := portal.Bridge.DB.BackfillTask.EnsureExists(ctx, portal.PortalKey, source.ID)
