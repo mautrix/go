@@ -115,12 +115,16 @@ func (br *Bridge) Start() error {
 func (br *Bridge) StartConnectors() error {
 	br.Log.Info().Msg("Starting bridge")
 	ctx := br.Log.WithContext(context.Background())
+	foreground := true
 
 	err := br.DB.Upgrade(ctx)
 	if err != nil {
 		return DBUpgradeError{Err: err, Section: "main"}
 	}
-	didSplitPortals := br.MigrateToSplitPortals(ctx)
+	var didSplitPortals bool
+	if foreground {
+		didSplitPortals = br.MigrateToSplitPortals(ctx)
+	}
 	br.Log.Info().Msg("Starting Matrix connector")
 	err = br.Matrix.Start(ctx)
 	if err != nil {
@@ -134,13 +138,33 @@ func (br *Bridge) StartConnectors() error {
 	if br.Network.GetCapabilities().DisappearingMessages {
 		go br.DisappearLoop.Start()
 	}
-	if didSplitPortals || br.Config.ResendBridgeInfo {
-		br.ResendBridgeInfo(ctx)
+	if foreground {
+		rawBridgeInfoVer := br.DB.KV.Get(ctx, database.KeyBridgeInfoVersion)
+		bridgeInfoVer, capVer, err := parseBridgeInfoVersion(rawBridgeInfoVer)
+		if err != nil {
+			br.Log.Err(err).Str("db_bridge_info_version", rawBridgeInfoVer).Msg("Failed to parse bridge info version")
+			return nil
+		}
+		expectedBridgeInfoVer, expectedCapVer := br.Network.GetBridgeInfoVersion()
+		doResendBridgeInfo := bridgeInfoVer != expectedBridgeInfoVer || didSplitPortals || br.Config.ResendBridgeInfo
+		doResendCapabilities := capVer != expectedCapVer || didSplitPortals
+		if doResendBridgeInfo || doResendCapabilities {
+			br.ResendBridgeInfo(ctx, doResendBridgeInfo, doResendCapabilities)
+		}
+		br.DB.KV.Set(ctx, database.KeyBridgeInfoVersion, fmt.Sprintf("%d,%d", expectedBridgeInfoVer, expectedCapVer))
 	}
 	return nil
 }
 
-func (br *Bridge) ResendBridgeInfo(ctx context.Context) {
+func parseBridgeInfoVersion(version string) (info, capabilities int, err error) {
+	_, err = fmt.Sscanf(version, "%d,%d", &info, &capabilities)
+	if version == "" {
+		err = nil
+	}
+	return
+}
+
+func (br *Bridge) ResendBridgeInfo(ctx context.Context, resendInfo, resendCaps bool) {
 	log := zerolog.Ctx(ctx).With().Str("action", "resend bridge info").Logger()
 	portals, err := br.GetAllPortalsWithMXID(ctx)
 	if err != nil {
@@ -148,9 +172,35 @@ func (br *Bridge) ResendBridgeInfo(ctx context.Context) {
 		return
 	}
 	for _, portal := range portals {
-		portal.UpdateBridgeInfo(ctx)
+		if resendInfo {
+			portal.UpdateBridgeInfo(ctx)
+		}
+		if resendCaps {
+			logins, err := br.GetUserLoginsInPortal(ctx, portal.PortalKey)
+			if err != nil {
+				log.Err(err).
+					Stringer("room_id", portal.MXID).
+					Object("portal_key", portal.PortalKey).
+					Msg("Failed to get user logins in portal")
+			} else {
+				found := false
+				for _, login := range logins {
+					if portal.CapState.ID == "" || login.ID == portal.CapState.Source {
+						portal.UpdateCapabilities(ctx, login, true)
+						found = true
+					}
+				}
+				if !found && len(logins) > 0 {
+					portal.CapState.Source = ""
+					portal.UpdateCapabilities(ctx, logins[0], true)
+				}
+			}
+		}
 	}
-	log.Info().Msg("Resent bridge info to all portals")
+	log.Info().
+		Bool("capabilities", resendCaps).
+		Bool("info", resendInfo).
+		Msg("Resent bridge info to all portals")
 }
 
 func (br *Bridge) MigrateToSplitPortals(ctx context.Context) bool {

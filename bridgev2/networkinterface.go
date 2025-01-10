@@ -227,6 +227,10 @@ type NetworkConnector interface {
 	// This should generally not do any work, it should just return a LoginProcess that remembers
 	// the user and will execute the requested flow. The actual work should start when [LoginProcess.Start] is called.
 	CreateLogin(ctx context.Context, user *User, flowID string) (LoginProcess, error)
+
+	// GetBridgeInfoVersion returns version numbers for bridge info and room capabilities respectively.
+	// When the versions change, the bridge will automatically resend bridge info to all rooms.
+	GetBridgeInfoVersion() (info, capabilities int)
 }
 
 type StoppableNetwork interface {
