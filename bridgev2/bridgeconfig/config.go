@@ -64,6 +64,7 @@ type BridgeConfig struct {
 	AsyncEvents             bool             `yaml:"async_events"`
 	SplitPortals            bool             `yaml:"split_portals"`
 	ResendBridgeInfo        bool             `yaml:"resend_bridge_info"`
+	NoBridgeInfoStateKey    bool             `yaml:"no_bridge_info_state_key"`
 	BridgeMatrixLeave       bool             `yaml:"bridge_matrix_leave"`
 	TagOnlyOnCreate         bool             `yaml:"tag_only_on_create"`
 	OnlyBridgeTags          []event.RoomTag  `yaml:"only_bridge_tags"`

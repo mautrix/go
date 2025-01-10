@@ -2954,6 +2954,9 @@ func (portal *Portal) GetTopLevelParent() *Portal {
 }
 
 func (portal *Portal) getBridgeInfoStateKey() string {
+	if portal.Bridge.Config.NoBridgeInfoStateKey {
+		return ""
+	}
 	idProvider, ok := portal.Bridge.Matrix.(MatrixConnectorWithBridgeIdentifier)
 	if ok {
 		return idProvider.GetUniqueBridgeID()

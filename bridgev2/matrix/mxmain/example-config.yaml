@@ -18,6 +18,9 @@ bridge:
     split_portals: false
     # Should the bridge resend `m.bridge` events to all portals on startup?
     resend_bridge_info: false
+    # Should `m.bridge` events be sent without a state key?
+    # By default, the bridge uses a unique key that won't conflict with other bridges.
+    no_bridge_info_state_key: false
 
     # Should leaving Matrix rooms be bridged as leaving groups on the remote network?
     bridge_matrix_leave: false
