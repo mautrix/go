@@ -450,13 +450,17 @@ func (br *Connector) internalSendMessageStatus(ctx context.Context, ms *bridgev2
 		return ""
 	}
 	log := zerolog.Ctx(ctx)
-	err := br.SendMessageCheckpoints([]*status.MessageCheckpoint{ms.ToCheckpoint(evt)})
-	if err != nil {
-		log.Err(err).Msg("Failed to send message checkpoint")
+
+	if !evt.IsSourceEventDoublePuppeted {
+		err := br.SendMessageCheckpoints([]*status.MessageCheckpoint{ms.ToCheckpoint(evt)})
+		if err != nil {
+			log.Err(err).Msg("Failed to send message checkpoint")
+		}
 	}
+
 	if !ms.DisableMSS && br.Config.Matrix.MessageStatusEvents {
 		mssEvt := ms.ToMSSEvent(evt)
-		_, err = br.Bot.SendMessageEvent(ctx, evt.RoomID, event.BeeperMessageStatus, mssEvt)
+		_, err := br.Bot.SendMessageEvent(ctx, evt.RoomID, event.BeeperMessageStatus, mssEvt)
 		if err != nil {
 			log.Err(err).
 				Stringer("room_id", evt.RoomID).
@@ -482,7 +486,7 @@ func (br *Connector) internalSendMessageStatus(ctx context.Context, ms *bridgev2
 		}
 	}
 	if ms.Status == event.MessageStatusSuccess && br.Config.Matrix.DeliveryReceipts {
-		err = br.Bot.SendReceipt(ctx, evt.RoomID, evt.SourceEventID, event.ReceiptTypeRead, nil)
+		err := br.Bot.SendReceipt(ctx, evt.RoomID, evt.SourceEventID, event.ReceiptTypeRead, nil)
 		if err != nil {
 			log.Err(err).
 				Stringer("room_id", evt.RoomID).

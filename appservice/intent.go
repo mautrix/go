@@ -142,12 +142,16 @@ func (intent *IntentAPI) EnsureJoined(ctx context.Context, roomID id.RoomID, ext
 	return nil
 }
 
+func (intent *IntentAPI) IsDoublePuppet() bool {
+	return intent.IsCustomPuppet && intent.as.DoublePuppetValue != ""
+}
+
 func (intent *IntentAPI) AddDoublePuppetValue(into any) any {
 	return intent.AddDoublePuppetValueWithTS(into, 0)
 }
 
 func (intent *IntentAPI) AddDoublePuppetValueWithTS(into any, ts int64) any {
-	if !intent.IsCustomPuppet || intent.as.DoublePuppetValue == "" {
+	if !intent.IsDoublePuppet() {
 		return into
 	}
 	// Only use ts deduplication feature with appservice double puppeting

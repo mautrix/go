@@ -126,6 +126,7 @@ func (ce CallbackError) Unwrap() error {
 
 type MatrixAPI interface {
 	GetMXID() id.UserID
+	IsDoublePuppet() bool
 
 	SendMessage(ctx context.Context, roomID id.RoomID, eventType event.Type, content *event.Content, extra *MatrixSendExtra) (*mautrix.RespSendEvent, error)
 	SendState(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string, content *event.Content, ts time.Time) (*mautrix.RespSendEvent, error)

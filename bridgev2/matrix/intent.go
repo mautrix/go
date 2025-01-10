@@ -478,6 +478,10 @@ func (as *ASIntent) GetMXID() id.UserID {
 	return as.Matrix.UserID
 }
 
+func (as *ASIntent) IsDoublePuppet() bool {
+	return as.Matrix.IsDoublePuppet()
+}
+
 func (as *ASIntent) EnsureJoined(ctx context.Context, roomID id.RoomID) error {
 	err := as.Matrix.EnsureJoined(ctx, roomID)
 	if err != nil {

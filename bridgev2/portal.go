@@ -1827,15 +1827,16 @@ func (portal *Portal) sendConvertedMessage(
 	for i, part := range converted.Parts {
 		portal.applyRelationMeta(part.Content, replyTo, threadRoot, prevThreadEvent)
 		dbMessage := &database.Message{
-			ID:         id,
-			PartID:     part.ID,
-			Room:       portal.PortalKey,
-			SenderID:   senderID,
-			SenderMXID: intent.GetMXID(),
-			Timestamp:  ts,
-			ThreadRoot: ptr.Val(converted.ThreadRoot),
-			ReplyTo:    ptr.Val(converted.ReplyTo),
-			Metadata:   part.DBMetadata,
+			ID:               id,
+			PartID:           part.ID,
+			Room:             portal.PortalKey,
+			SenderID:         senderID,
+			SenderMXID:       intent.GetMXID(),
+			Timestamp:        ts,
+			ThreadRoot:       ptr.Val(converted.ThreadRoot),
+			ReplyTo:          ptr.Val(converted.ReplyTo),
+			Metadata:         part.DBMetadata,
+			IsDoublePuppeted: intent.IsDoublePuppet(),
 		}
 		if part.DontBridge {
 			dbMessage.SetFakeMXID()
@@ -2603,6 +2604,8 @@ func (portal *Portal) handleRemoteDeliveryReceipt(ctx context.Context, source *U
 				RoomID:        portal.MXID,
 				SourceEventID: part.MXID,
 				Sender:        part.SenderMXID,
+
+				IsSourceEventDoublePuppeted: part.IsDoublePuppeted,
 			})
 		}
 	}
