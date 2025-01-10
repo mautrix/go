@@ -30,6 +30,8 @@ type RoomFeatures struct {
 	Formatting FormattingFeatureMap `json:"formatting,omitempty"`
 	File       FileFeatureMap       `json:"file,omitempty"`
 
+	MaxTextLength int `json:"max_text_length,omitempty"`
+
 	LocationMessage CapabilitySupportLevel `json:"location_message,omitempty"`
 	Poll            CapabilitySupportLevel `json:"poll,omitempty"`
 	Thread          CapabilitySupportLevel `json:"thread,omitempty"`
@@ -214,6 +216,8 @@ func (rf *RoomFeatures) Hash() []byte {
 
 	hashMap(hasher, "formatting", rf.Formatting)
 	hashMap(hasher, "file", rf.File)
+
+	hashInt(hasher, "max_text_length", rf.MaxTextLength)
 
 	hashValue(hasher, "location_message", rf.LocationMessage)
 	hashValue(hasher, "poll", rf.Poll)

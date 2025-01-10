@@ -17,6 +17,9 @@ export interface RoomFeatures {
 	 */
 	file?: Record<CapabilityMsgType, FileFeatures>
 
+	/** Maximum length of normal text messages. */
+	max_text_length?: integer
+
 	/** Whether location messages (`m.location`) are supported. */
 	location_message?: CapabilitySupportLevel
 	/** Whether polls are supported. */
