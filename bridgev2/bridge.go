@@ -45,6 +45,8 @@ type Bridge struct {
 	ghostsByID     map[networkid.UserID]*Ghost
 	cacheLock      sync.Mutex
 
+	didSplitPortals bool
+
 	wakeupBackfillQueue chan struct{}
 	stopBackfillQueue   chan struct{}
 }
@@ -109,6 +111,7 @@ func (br *Bridge) Start() error {
 	if err != nil {
 		return err
 	}
+	br.PostStart()
 	return nil
 }
 
@@ -121,9 +124,8 @@ func (br *Bridge) StartConnectors() error {
 	if err != nil {
 		return DBUpgradeError{Err: err, Section: "main"}
 	}
-	var didSplitPortals bool
 	if foreground {
-		didSplitPortals = br.MigrateToSplitPortals(ctx)
+		br.didSplitPortals = br.MigrateToSplitPortals(ctx)
 	}
 	br.Log.Info().Msg("Starting Matrix connector")
 	err = br.Matrix.Start(ctx)
@@ -138,22 +140,24 @@ func (br *Bridge) StartConnectors() error {
 	if br.Network.GetCapabilities().DisappearingMessages {
 		go br.DisappearLoop.Start()
 	}
-	if foreground {
-		rawBridgeInfoVer := br.DB.KV.Get(ctx, database.KeyBridgeInfoVersion)
-		bridgeInfoVer, capVer, err := parseBridgeInfoVersion(rawBridgeInfoVer)
-		if err != nil {
-			br.Log.Err(err).Str("db_bridge_info_version", rawBridgeInfoVer).Msg("Failed to parse bridge info version")
-			return nil
-		}
-		expectedBridgeInfoVer, expectedCapVer := br.Network.GetBridgeInfoVersion()
-		doResendBridgeInfo := bridgeInfoVer != expectedBridgeInfoVer || didSplitPortals || br.Config.ResendBridgeInfo
-		doResendCapabilities := capVer != expectedCapVer || didSplitPortals
-		if doResendBridgeInfo || doResendCapabilities {
-			br.ResendBridgeInfo(ctx, doResendBridgeInfo, doResendCapabilities)
-		}
-		br.DB.KV.Set(ctx, database.KeyBridgeInfoVersion, fmt.Sprintf("%d,%d", expectedBridgeInfoVer, expectedCapVer))
-	}
 	return nil
+}
+
+func (br *Bridge) PostStart() {
+	ctx := br.Log.WithContext(context.Background())
+	rawBridgeInfoVer := br.DB.KV.Get(ctx, database.KeyBridgeInfoVersion)
+	bridgeInfoVer, capVer, err := parseBridgeInfoVersion(rawBridgeInfoVer)
+	if err != nil {
+		br.Log.Err(err).Str("db_bridge_info_version", rawBridgeInfoVer).Msg("Failed to parse bridge info version")
+		return
+	}
+	expectedBridgeInfoVer, expectedCapVer := br.Network.GetBridgeInfoVersion()
+	doResendBridgeInfo := bridgeInfoVer != expectedBridgeInfoVer || br.didSplitPortals || br.Config.ResendBridgeInfo
+	doResendCapabilities := capVer != expectedCapVer || br.didSplitPortals
+	if doResendBridgeInfo || doResendCapabilities {
+		br.ResendBridgeInfo(ctx, doResendBridgeInfo, doResendCapabilities)
+	}
+	br.DB.KV.Set(ctx, database.KeyBridgeInfoVersion, fmt.Sprintf("%d,%d", expectedBridgeInfoVer, expectedCapVer))
 }
 
 func parseBridgeInfoVersion(version string) (info, capabilities int, err error) {
@@ -193,6 +197,11 @@ func (br *Bridge) ResendBridgeInfo(ctx context.Context, resendInfo, resendCaps b
 				if !found && len(logins) > 0 {
 					portal.CapState.Source = ""
 					portal.UpdateCapabilities(ctx, logins[0], true)
+				} else if !found {
+					log.Warn().
+						Stringer("room_id", portal.MXID).
+						Object("portal_key", portal.PortalKey).
+						Msg("No user login found to update capabilities")
 				}
 			}
 		}
