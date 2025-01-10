@@ -7,14 +7,26 @@
 package event
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/binary"
 	"fmt"
+	"io"
 	"mime"
+	"slices"
 	"strings"
 
+	"go.mau.fi/util/exerrors"
 	"go.mau.fi/util/jsontime"
+	"golang.org/x/exp/constraints"
+	"golang.org/x/exp/maps"
 )
 
 type RoomFeatures struct {
+	ID string `json:"id,omitempty"`
+
+	// N.B. New fields need to be added to the Hash function to be included in the deduplication hash.
+
 	Formatting FormattingFeatureMap `json:"formatting,omitempty"`
 	File       FileFeatureMap       `json:"file,omitempty"`
 
@@ -40,6 +52,13 @@ type RoomFeatures struct {
 	Archive             bool `json:"archive,omitempty"`
 	MarkAsUnread        bool `json:"mark_as_unread,omitempty"`
 	DeleteChat          bool `json:"delete_chat,omitempty"`
+}
+
+func (rf *RoomFeatures) GetID() string {
+	if rf.ID != "" {
+		return rf.ID
+	}
+	return base64.RawURLEncoding.EncodeToString(rf.Hash())
 }
 
 type FormattingFeatureMap map[FormattingFeature]CapabilitySupportLevel
@@ -112,6 +131,8 @@ const (
 )
 
 type FileFeatures struct {
+	// N.B. New fields need to be added to the Hash function to be included in the deduplication hash.
+
 	MimeTypes map[string]CapabilitySupportLevel `json:"mime_types"`
 
 	Caption          CapabilitySupportLevel `json:"caption,omitempty"`
@@ -149,4 +170,90 @@ func (ff *FileFeatures) GetMimeSupport(inputType string) CapabilitySupportLevel 
 		return match
 	}
 	return CapLevelRejected
+}
+
+type hashable interface {
+	Hash() []byte
+}
+
+func hashMap[Key ~string, Value hashable](w io.Writer, name string, data map[Key]Value) {
+	keys := maps.Keys(data)
+	slices.Sort(keys)
+	exerrors.Must(w.Write([]byte(name)))
+	for _, key := range keys {
+		exerrors.Must(w.Write([]byte(key)))
+		exerrors.Must(w.Write(data[key].Hash()))
+		exerrors.Must(w.Write([]byte{0}))
+	}
+}
+
+func hashValue(w io.Writer, name string, data hashable) {
+	exerrors.Must(w.Write([]byte(name)))
+	exerrors.Must(w.Write(data.Hash()))
+}
+
+func hashInt[T constraints.Integer](w io.Writer, name string, data T) {
+	exerrors.Must(w.Write(binary.BigEndian.AppendUint64([]byte(name), uint64(data))))
+}
+
+func hashBool[T ~bool](w io.Writer, name string, data T) {
+	exerrors.Must(w.Write([]byte(name)))
+	if data {
+		exerrors.Must(w.Write([]byte{1}))
+	} else {
+		exerrors.Must(w.Write([]byte{0}))
+	}
+}
+
+func (csl CapabilitySupportLevel) Hash() []byte {
+	return []byte{byte(csl + 128)}
+}
+
+func (rf *RoomFeatures) Hash() []byte {
+	hasher := sha256.New()
+
+	hashMap(hasher, "formatting", rf.Formatting)
+	hashMap(hasher, "file", rf.File)
+
+	hashValue(hasher, "location_message", rf.LocationMessage)
+	hashValue(hasher, "poll", rf.Poll)
+	hashValue(hasher, "thread", rf.Thread)
+	hashValue(hasher, "reply", rf.Reply)
+
+	hashValue(hasher, "edit", rf.Edit)
+	hashInt(hasher, "edit_max_count", rf.EditMaxCount)
+	hashInt(hasher, "edit_max_age", rf.EditMaxAge.Get())
+
+	hashValue(hasher, "delete", rf.Delete)
+	hashBool(hasher, "delete_for_me", rf.DeleteForMe)
+	hashInt(hasher, "delete_max_age", rf.DeleteMaxAge.Get())
+
+	hashValue(hasher, "reaction", rf.Reaction)
+	hashInt(hasher, "reaction_count", rf.ReactionCount)
+	hasher.Write([]byte("allowed_reactions"))
+	for _, reaction := range rf.AllowedReactions {
+		hasher.Write([]byte(reaction))
+	}
+	hashBool(hasher, "custom_emoji_reactions", rf.CustomEmojiReactions)
+
+	hashBool(hasher, "read_receipts", rf.ReadReceipts)
+	hashBool(hasher, "typing_notifications", rf.TypingNotifications)
+	hashBool(hasher, "archive", rf.Archive)
+	hashBool(hasher, "mark_as_unread", rf.MarkAsUnread)
+	hashBool(hasher, "delete_chat", rf.DeleteChat)
+
+	return hasher.Sum(nil)
+}
+
+func (ff *FileFeatures) Hash() []byte {
+	hasher := sha256.New()
+	hashMap(hasher, "mime_types", ff.MimeTypes)
+	hashValue(hasher, "caption", ff.Caption)
+	hashInt(hasher, "max_caption_length", ff.MaxCaptionLength)
+	hashInt(hasher, "max_size", ff.MaxSize)
+	hashInt(hasher, "max_width", ff.MaxWidth)
+	hashInt(hasher, "max_height", ff.MaxHeight)
+	hashInt(hasher, "max_duration", ff.MaxDuration.Get())
+	hashBool(hasher, "view_once", ff.ViewOnce)
+	return hasher.Sum(nil)
 }

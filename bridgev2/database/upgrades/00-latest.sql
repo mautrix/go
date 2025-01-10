@@ -1,4 +1,4 @@
--- v0 -> v18 (compatible with v9+): Latest revision
+-- v0 -> v20 (compatible with v9+): Latest revision
 CREATE TABLE "user" (
 	bridge_id       TEXT NOT NULL,
 	mxid            TEXT NOT NULL,
@@ -51,6 +51,7 @@ CREATE TABLE portal (
 	room_type       TEXT    NOT NULL,
 	disappear_type  TEXT,
 	disappear_timer BIGINT,
+	cap_state       jsonb,
 	metadata        jsonb   NOT NULL,
 
 	PRIMARY KEY (bridge_id, id, receiver),

@@ -2951,6 +2951,14 @@ func (portal *Portal) GetTopLevelParent() *Portal {
 	return portal.Parent.GetTopLevelParent()
 }
 
+func (portal *Portal) getBridgeInfoStateKey() string {
+	idProvider, ok := portal.Bridge.Matrix.(MatrixConnectorWithBridgeIdentifier)
+	if ok {
+		return idProvider.GetUniqueBridgeID()
+	}
+	return string(portal.BridgeID)
+}
+
 func (portal *Portal) getBridgeInfo() (string, event.BridgeEventContent) {
 	bridgeInfo := event.BridgeEventContent{
 		BridgeBot: portal.Bridge.Bot.GetMXID(),
@@ -2981,12 +2989,7 @@ func (portal *Portal) getBridgeInfo() (string, event.BridgeEventContent) {
 	if ok {
 		filler.FillPortalBridgeInfo(portal, &bridgeInfo)
 	}
-	idProvider, ok := portal.Bridge.Matrix.(MatrixConnectorWithBridgeIdentifier)
-	stateKey := string(portal.BridgeID)
-	if ok {
-		stateKey = idProvider.GetUniqueBridgeID()
-	}
-	return stateKey, bridgeInfo
+	return portal.getBridgeInfoStateKey(), bridgeInfo
 }
 
 func (portal *Portal) UpdateBridgeInfo(ctx context.Context) {
@@ -3601,6 +3604,11 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 		req.CreationContent["type"] = event.RoomTypeSpace
 	}
 	bridgeInfoStateKey, bridgeInfo := portal.getBridgeInfo()
+	roomFeatures := source.Client.GetCapabilities(ctx, portal)
+	portal.CapState = database.CapabilityState{
+		Source: source.ID,
+		ID:     roomFeatures.GetID(),
+	}
 
 	req.InitialState = append(req.InitialState, &event.Event{
 		Type: event.StateElementFunctionalMembers,
@@ -3615,6 +3623,10 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 		StateKey: &bridgeInfoStateKey,
 		Type:     event.StateBridge,
 		Content:  event.Content{Parsed: &bridgeInfo},
+	}, &event.Event{
+		StateKey: &bridgeInfoStateKey,
+		Type:     event.StateBeeperRoomFeatures,
+		Content:  event.Content{Parsed: roomFeatures},
 	})
 	if req.Topic == "" {
 		// Add explicit topic event if topic is empty to ensure the event is set.
