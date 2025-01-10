@@ -32,7 +32,7 @@ func (mt MessageType) IsText() bool {
 
 func (mt MessageType) IsMedia() bool {
 	switch mt {
-	case MsgImage, MsgVideo, MsgAudio, MsgFile, MessageType(EventSticker.Type):
+	case MsgImage, MsgVideo, MsgAudio, MsgFile, CapMsgSticker:
 		return true
 	default:
 		return false
@@ -140,6 +140,32 @@ type MessageEventContent struct {
 
 	MSC1767Audio *MSC1767Audio `json:"org.matrix.msc1767.audio,omitempty"`
 	MSC3245Voice *MSC3245Voice `json:"org.matrix.msc3245.voice,omitempty"`
+}
+
+func (content *MessageEventContent) GetCapMsgType() CapabilityMsgType {
+	switch content.MsgType {
+	case CapMsgSticker:
+		return CapMsgSticker
+	case "":
+		if content.URL != "" || content.File != nil {
+			return CapMsgSticker
+		}
+	case MsgImage:
+		return MsgImage
+	case MsgAudio:
+		if content.MSC3245Voice != nil {
+			return CapMsgVoice
+		}
+		return MsgAudio
+	case MsgVideo:
+		if content.Info != nil && content.Info.MauGIF {
+			return CapMsgGIF
+		}
+		return MsgVideo
+	case MsgFile:
+		return MsgFile
+	}
+	return ""
 }
 
 func (content *MessageEventContent) GetFileName() string {
@@ -257,6 +283,8 @@ type FileInfo struct {
 
 	Blurhash     string `json:"blurhash,omitempty"`
 	AnoaBlurhash string `json:"xyz.amorgan.blurhash,omitempty"`
+
+	MauGIF bool `json:"fi.mau.gif,omitempty"`
 
 	Width    int `json:"-"`
 	Height   int `json:"-"`

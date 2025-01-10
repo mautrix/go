@@ -387,6 +387,7 @@ func (br *BridgeMain) Start() {
 	if err != nil {
 		br.Log.Fatal().Err(err).Msg("Failed to start existing user logins")
 	}
+	br.Bridge.PostStart()
 	if br.PostStart != nil {
 		br.PostStart()
 	}
