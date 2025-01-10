@@ -49,7 +49,7 @@ type Message struct {
 const (
 	getMessageBaseQuery = `
 		SELECT rowid, bridge_id, id, part_id, mxid, room_id, room_receiver, sender_id, sender_mxid,
-		       timestamp, edit_count, thread_root_id, reply_to_id, reply_to_part_id, metadata
+		       timestamp, edit_count, double_puppeted, thread_root_id, reply_to_id, reply_to_part_id, metadata
 		FROM message
 	`
 	getAllMessagePartsByIDQuery  = getMessageBaseQuery + `WHERE bridge_id=$1 AND (room_receiver=$2 OR room_receiver='') AND id=$3`
