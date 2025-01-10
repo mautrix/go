@@ -174,15 +174,17 @@ func (mq *MessageQuery) CountMessagesInPortal(ctx context.Context, key networkid
 func (m *Message) Scan(row dbutil.Scannable) (*Message, error) {
 	var timestamp int64
 	var threadRootID, replyToID, replyToPartID sql.NullString
+	var doublePuppeted sql.NullBool
 	err := row.Scan(
 		&m.RowID, &m.BridgeID, &m.ID, &m.PartID, &m.MXID, &m.Room.ID, &m.Room.Receiver, &m.SenderID, &m.SenderMXID,
-		&timestamp, &m.EditCount, &m.IsDoublePuppeted, &threadRootID, &replyToID, &replyToPartID, dbutil.JSON{Data: m.Metadata},
+		&timestamp, &m.EditCount, &doublePuppeted, &threadRootID, &replyToID, &replyToPartID, dbutil.JSON{Data: m.Metadata},
 	)
 	if err != nil {
 		return nil, err
 	}
 	m.Timestamp = time.Unix(0, timestamp)
 	m.ThreadRoot = networkid.MessageID(threadRootID.String)
+	m.IsDoublePuppeted = doublePuppeted.Valid
 	if replyToID.Valid {
 		m.ReplyTo.MessageID = networkid.MessageID(replyToID.String)
 		if replyToPartID.Valid {
