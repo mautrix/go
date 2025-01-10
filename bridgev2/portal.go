@@ -2601,9 +2601,10 @@ func (portal *Portal) handleRemoteDeliveryReceipt(ctx context.Context, source *U
 				Status:      event.MessageStatusSuccess,
 				DeliveredTo: []id.UserID{intent.GetMXID()},
 			}, &MessageStatusEventInfo{
-				RoomID:                      portal.MXID,
-				SourceEventID:               part.MXID,
-				Sender:                      part.SenderMXID,
+				RoomID:        portal.MXID,
+				SourceEventID: part.MXID,
+				Sender:        part.SenderMXID,
+
 				IsSourceEventDoublePuppeted: part.IsDoublePuppeted,
 			})
 		}

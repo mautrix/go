@@ -73,14 +73,14 @@ const (
 	insertMessageQuery = `
 		INSERT INTO message (
 			bridge_id, id, part_id, mxid, room_id, room_receiver, sender_id, sender_mxid,
-			timestamp, edit_count, is_double_puppeted, thread_root_id, reply_to_id, reply_to_part_id, metadata
+			timestamp, edit_count, double_puppeted, thread_root_id, reply_to_id, reply_to_part_id, metadata
 		)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		RETURNING rowid
 	`
 	updateMessageQuery = `
 		UPDATE message SET id=$2, part_id=$3, mxid=$4, room_id=$5, room_receiver=$6, sender_id=$7, sender_mxid=$8,
-		                   timestamp=$9, edit_count=$10, is_double_puppeted=$11, thread_root_id=$12, reply_to_id=$13,
+		                   timestamp=$9, edit_count=$10, double_puppeted=$11, thread_root_id=$12, reply_to_id=$13,
                            reply_to_part_id=$14, metadata=$15
 		WHERE bridge_id=$1 AND rowid=$16
 	`
