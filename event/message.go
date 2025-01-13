@@ -276,20 +276,20 @@ type EncryptedFileInfo struct {
 }
 
 type FileInfo struct {
-	MimeType      string              `json:"mimetype,omitempty"`
-	ThumbnailInfo *FileInfo           `json:"thumbnail_info,omitempty"`
-	ThumbnailURL  id.ContentURIString `json:"thumbnail_url,omitempty"`
-	ThumbnailFile *EncryptedFileInfo  `json:"thumbnail_file,omitempty"`
+	MimeType      string
+	ThumbnailInfo *FileInfo
+	ThumbnailURL  id.ContentURIString
+	ThumbnailFile *EncryptedFileInfo
 
-	Blurhash     string `json:"blurhash,omitempty"`
-	AnoaBlurhash string `json:"xyz.amorgan.blurhash,omitempty"`
+	Blurhash     string
+	AnoaBlurhash string
 
-	MauGIF bool `json:"fi.mau.gif,omitempty"`
+	MauGIF bool
 
-	Width    int `json:"-"`
-	Height   int `json:"-"`
-	Duration int `json:"-"`
-	Size     int `json:"-"`
+	Width    int
+	Height   int
+	Duration int
+	Size     int
 }
 
 type serializableFileInfo struct {
