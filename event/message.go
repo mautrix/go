@@ -301,6 +301,8 @@ type serializableFileInfo struct {
 	Blurhash     string `json:"blurhash,omitempty"`
 	AnoaBlurhash string `json:"xyz.amorgan.blurhash,omitempty"`
 
+	MauGIF bool `json:"fi.mau.gif,omitempty"`
+
 	Width    json.Number `json:"w,omitempty"`
 	Height   json.Number `json:"h,omitempty"`
 	Duration json.Number `json:"duration,omitempty"`
@@ -316,6 +318,8 @@ func (sfi *serializableFileInfo) CopyFrom(fileInfo *FileInfo) *serializableFileI
 		ThumbnailURL:  fileInfo.ThumbnailURL,
 		ThumbnailInfo: (&serializableFileInfo{}).CopyFrom(fileInfo.ThumbnailInfo),
 		ThumbnailFile: fileInfo.ThumbnailFile,
+
+		MauGIF: fileInfo.MauGIF,
 
 		Blurhash:     fileInfo.Blurhash,
 		AnoaBlurhash: fileInfo.AnoaBlurhash,
@@ -345,6 +349,7 @@ func (sfi *serializableFileInfo) CopyTo(fileInfo *FileInfo) {
 		MimeType:      sfi.MimeType,
 		ThumbnailURL:  sfi.ThumbnailURL,
 		ThumbnailFile: sfi.ThumbnailFile,
+		MauGIF:        sfi.MauGIF,
 		Blurhash:      sfi.Blurhash,
 		AnoaBlurhash:  sfi.AnoaBlurhash,
 	}
