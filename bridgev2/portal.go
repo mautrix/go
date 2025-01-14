@@ -84,6 +84,9 @@ type Portal struct {
 	roomCreateLock sync.Mutex
 
 	events chan portalEvent
+
+	eventsLock sync.Mutex
+	eventIdx   int
 }
 
 var PortalEventBuffer = 64
@@ -109,7 +112,6 @@ func (br *Bridge) loadPortal(ctx context.Context, dbPortal *database.Portal, que
 		Portal: dbPortal,
 		Bridge: br,
 
-		events:                make(chan portalEvent, PortalEventBuffer),
 		currentlyTypingLogins: make(map[id.UserID]*UserLogin),
 		outgoingMessages:      make(map[networkid.TransactionID]outgoingMessage),
 	}
@@ -131,7 +133,10 @@ func (br *Bridge) loadPortal(ctx context.Context, dbPortal *database.Portal, que
 		}
 	}
 	portal.updateLogger()
-	go portal.eventLoop()
+	if PortalEventBuffer != 0 {
+		portal.events = make(chan portalEvent, PortalEventBuffer)
+		go portal.eventLoop()
+	}
 	return portal, nil
 }
 
@@ -275,7 +280,10 @@ func (br *Bridge) GetExistingPortalByKey(ctx context.Context, key networkid.Port
 
 func (portal *Portal) queueEvent(ctx context.Context, evt portalEvent) {
 	if PortalEventBuffer == 0 {
-		portal.events <- evt
+		portal.eventsLock.Lock()
+		defer portal.eventsLock.Unlock()
+		portal.eventIdx++
+		portal.handleSingleEventAsync(portal.eventIdx, evt)
 	} else {
 		select {
 		case portal.events <- evt:
