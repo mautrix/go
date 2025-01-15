@@ -47,6 +47,8 @@ type Bridge struct {
 
 	didSplitPortals bool
 
+	Background bool
+
 	wakeupBackfillQueue chan struct{}
 	stopBackfillQueue   chan struct{}
 }
@@ -103,28 +105,48 @@ func (e DBUpgradeError) Unwrap() error {
 }
 
 func (br *Bridge) Start() error {
-	err := br.StartConnectors()
+	ctx := br.Log.WithContext(context.Background())
+	err := br.StartConnectors(ctx)
 	if err != nil {
 		return err
 	}
-	err = br.StartLogins()
+	err = br.StartLogins(ctx)
 	if err != nil {
 		return err
 	}
-	br.PostStart()
+	br.PostStart(ctx)
 	return nil
 }
 
-func (br *Bridge) StartConnectors() error {
+func (br *Bridge) RunOnce(ctx context.Context, loginID networkid.UserLoginID) error {
+	br.Background = true
+	err := br.StartConnectors(ctx)
+	if err != nil {
+		return err
+	}
+	login, err := br.GetExistingUserLoginByID(ctx, loginID)
+	if err != nil {
+		return fmt.Errorf("failed to get user login: %w", err)
+	} else if login == nil {
+		return ErrNotLoggedIn
+	}
+	syncClient, ok := login.Client.(BackgroundSyncingNetworkAPI)
+	if !ok {
+		return fmt.Errorf("%T does not implement BackgroundSyncingNetworkAPI", login.Client)
+	}
+	defer br.stop(true)
+	br.Log.Info().Str("user_login_id", string(login.ID)).Msg("Starting individual user login in background mode")
+	return syncClient.ConnectBackground(login.Log.WithContext(ctx))
+}
+
+func (br *Bridge) StartConnectors(ctx context.Context) error {
 	br.Log.Info().Msg("Starting bridge")
-	ctx := br.Log.WithContext(context.Background())
-	foreground := true
 
 	err := br.DB.Upgrade(ctx)
 	if err != nil {
 		return DBUpgradeError{Err: err, Section: "main"}
 	}
-	if foreground {
+	if !br.Background {
 		br.didSplitPortals = br.MigrateToSplitPortals(ctx)
 	}
 	br.Log.Info().Msg("Starting Matrix connector")
@@ -137,14 +159,16 @@ func (br *Bridge) StartConnectors() error {
 	if err != nil {
 		return fmt.Errorf("failed to start network connector: %w", err)
 	}
-	if br.Network.GetCapabilities().DisappearingMessages {
+	if br.Network.GetCapabilities().DisappearingMessages && !br.Background {
 		go br.DisappearLoop.Start()
 	}
 	return nil
 }
 
-func (br *Bridge) PostStart() {
-	ctx := br.Log.WithContext(context.Background())
+func (br *Bridge) PostStart(ctx context.Context) {
+	if br.Background {
+		return
+	}
 	rawBridgeInfoVer := br.DB.KV.Get(ctx, database.KeyBridgeInfoVersion)
 	bridgeInfoVer, capVer, err := parseBridgeInfoVersion(rawBridgeInfoVer)
 	if err != nil {
@@ -228,9 +252,7 @@ func (br *Bridge) MigrateToSplitPortals(ctx context.Context) bool {
 	return affected > 0
 }
 
-func (br *Bridge) StartLogins() error {
-	ctx := br.Log.WithContext(context.Background())
-
+func (br *Bridge) StartLogins(ctx context.Context) error {
 	userIDs, err := br.DB.UserLogin.GetAllUserIDsWithLogins(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get users with logins: %w", err)
@@ -261,17 +283,23 @@ func (br *Bridge) StartLogins() error {
 }
 
 func (br *Bridge) Stop() {
+	br.stop(false)
+}
+
+func (br *Bridge) stop(isRunOnce bool) {
 	br.Log.Info().Msg("Shutting down bridge")
 	close(br.stopBackfillQueue)
 	br.Matrix.Stop()
-	br.cacheLock.Lock()
-	var wg sync.WaitGroup
-	wg.Add(len(br.userLoginsByID))
-	for _, login := range br.userLoginsByID {
-		go login.Disconnect(wg.Done)
+	if !isRunOnce {
+		br.cacheLock.Lock()
+		var wg sync.WaitGroup
+		wg.Add(len(br.userLoginsByID))
+		for _, login := range br.userLoginsByID {
+			go login.Disconnect(wg.Done)
+		}
+		wg.Wait()
+		br.cacheLock.Unlock()
 	}
-	wg.Wait()
-	br.cacheLock.Unlock()
 	if stopNet, ok := br.Network.(StoppableNetwork); ok {
 		stopNet.Stop()
 	}

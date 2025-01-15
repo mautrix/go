@@ -352,6 +352,15 @@ type NetworkAPI interface {
 	HandleMatrixMessage(ctx context.Context, msg *MatrixMessage) (message *MatrixMessageResponse, err error)
 }
 
+// BackgroundSyncingNetworkAPI is an optional interface that network connectors can implement to support background resyncs.
+type BackgroundSyncingNetworkAPI interface {
+	NetworkAPI
+	// ConnectBackground is called in place of Connect for background resyncs.
+	// The client should connect to the remote network, handle pending messages, and then disconnect.
+	// This call should block until the entire sync is complete and the client is disconnected.
+	ConnectBackground(ctx context.Context) error
+}
+
 // FetchMessagesParams contains the parameters for a message history pagination request.
 type FetchMessagesParams struct {
 	// The portal to fetch messages in. Always present.
