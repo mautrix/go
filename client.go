@@ -76,18 +76,19 @@ type VerificationHelper interface {
 
 // Client represents a Matrix client.
 type Client struct {
-	HomeserverURL *url.URL     // The base homeserver URL
-	UserID        id.UserID    // The user ID of the client. Used for forming HTTP paths which use the client's user ID.
-	DeviceID      id.DeviceID  // The device ID of the client.
-	AccessToken   string       // The access_token for the client.
-	UserAgent     string       // The value for the User-Agent header
-	Client        *http.Client // The underlying HTTP client which will be used to make HTTP requests.
-	Syncer        Syncer       // The thing which can process /sync responses
-	Store         SyncStore    // The thing which can store tokens/ids
-	StateStore    StateStore
-	Crypto        CryptoHelper
-	Verification  VerificationHelper
-	SpecVersions  *RespVersions
+	HomeserverURL  *url.URL     // The base homeserver URL
+	UserID         id.UserID    // The user ID of the client. Used for forming HTTP paths which use the client's user ID.
+	DeviceID       id.DeviceID  // The device ID of the client.
+	AccessToken    string       // The access_token for the client.
+	UserAgent      string       // The value for the User-Agent header
+	Client         *http.Client // The underlying HTTP client which will be used to make HTTP requests.
+	Syncer         Syncer       // The thing which can process /sync responses
+	Store          SyncStore    // The thing which can store tokens/ids
+	StateStore     StateStore
+	Crypto         CryptoHelper
+	Verification   VerificationHelper
+	SpecVersions   *RespVersions
+	ExternalClient *http.Client // The HTTP client used for external (not matrix) media HTTP requests.
 
 	Log zerolog.Logger
 
@@ -951,20 +952,19 @@ func (cli *Client) Capabilities(ctx context.Context) (resp *RespCapabilities, er
 	return
 }
 
-// JoinRoom joins the client to a room ID or alias. See https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3joinroomidoralias
+// JoinRoom joins the client to a room ID or alias. See https://spec.matrix.org/v1.13/client-server-api/#post_matrixclientv3joinroomidoralias
 //
-// If serverName is specified, this will be added as a query param to instruct the homeserver to join via that server. If content is specified, it will
-// be JSON encoded and used as the request body.
-func (cli *Client) JoinRoom(ctx context.Context, roomIDorAlias, serverName string, content interface{}) (resp *RespJoinRoom, err error) {
-	var urlPath string
-	if serverName != "" {
-		urlPath = cli.BuildURLWithQuery(ClientURLPath{"v3", "join", roomIDorAlias}, map[string]string{
-			"via": serverName,
-		})
-	} else {
-		urlPath = cli.BuildClientURL("v3", "join", roomIDorAlias)
+// The last parameter contains optional extra fields and can be left nil.
+func (cli *Client) JoinRoom(ctx context.Context, roomIDorAlias string, req *ReqJoinRoom) (resp *RespJoinRoom, err error) {
+	if req == nil {
+		req = &ReqJoinRoom{}
 	}
-	_, err = cli.MakeRequest(ctx, http.MethodPost, urlPath, content, &resp)
+	urlPath := cli.BuildURLWithFullQuery(ClientURLPath{"v3", "join", roomIDorAlias}, func(q url.Values) {
+		if len(req.Via) > 0 {
+			q["via"] = req.Via
+		}
+	})
+	_, err = cli.MakeRequest(ctx, http.MethodPost, urlPath, req, &resp)
 	if err == nil && cli.StateStore != nil {
 		err = cli.StateStore.SetMembership(ctx, resp.RoomID, cli.UserID, event.MembershipJoin)
 		if err != nil {
@@ -1011,6 +1011,17 @@ func (cli *Client) GetMutualRooms(ctx context.Context, otherUserID id.UserID, ex
 	return
 }
 
+func (cli *Client) GetRoomSummary(ctx context.Context, roomIDOrAlias string, via ...string) (resp *RespRoomSummary, err error) {
+	// TODO add version check after one is added to MSC3266
+	urlPath := cli.BuildURLWithFullQuery(ClientURLPath{"unstable", "im.nheko.summary", "summary", roomIDOrAlias}, func(q url.Values) {
+		if len(via) > 0 {
+			q["via"] = via
+		}
+	})
+	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
+	return
+}
+
 // GetDisplayName returns the display name of the user with the specified MXID. See https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3profileuseriddisplayname
 func (cli *Client) GetDisplayName(ctx context.Context, mxid id.UserID) (resp *RespUserDisplayName, err error) {
 	urlPath := cli.BuildClientURL("v3", "profile", mxid, "displayname")
@@ -1030,6 +1041,22 @@ func (cli *Client) SetDisplayName(ctx context.Context, displayName string) (err 
 		DisplayName string `json:"displayname"`
 	}{displayName}
 	_, err = cli.MakeRequest(ctx, http.MethodPut, urlPath, &s, nil)
+	return
+}
+
+// UnstableSetProfileField sets an arbitrary MSC4133 profile field. See https://github.com/matrix-org/matrix-spec-proposals/pull/4133
+func (cli *Client) UnstableSetProfileField(ctx context.Context, key string, value any) (err error) {
+	urlPath := cli.BuildClientURL("unstable", "uk.tcpip.msc4133", "profile", cli.UserID, key)
+	_, err = cli.MakeRequest(ctx, http.MethodPut, urlPath, map[string]any{
+		key: value,
+	}, nil)
+	return
+}
+
+// UnstableDeleteProfileField deletes an arbitrary MSC4133 profile field. See https://github.com/matrix-org/matrix-spec-proposals/pull/4133
+func (cli *Client) UnstableDeleteProfileField(ctx context.Context, key string) (err error) {
+	urlPath := cli.BuildClientURL("unstable", "uk.tcpip.msc4133", "profile", cli.UserID, key)
+	_, err = cli.MakeRequest(ctx, http.MethodDelete, urlPath, nil, nil)
 	return
 }
 
@@ -1394,10 +1421,9 @@ func (cli *Client) GetOwnPresence(ctx context.Context) (resp *RespPresence, err 
 	return cli.GetPresence(ctx, cli.UserID)
 }
 
-func (cli *Client) SetPresence(ctx context.Context, status event.Presence) (err error) {
-	req := ReqPresence{Presence: status}
+func (cli *Client) SetPresence(ctx context.Context, presence ReqPresence) (err error) {
 	u := cli.BuildClientURL("v3", "presence", cli.UserID, "status")
-	_, err = cli.MakeRequest(ctx, http.MethodPut, u, req, nil)
+	_, err = cli.MakeRequest(ctx, http.MethodPut, u, presence, nil)
 	return
 }
 
@@ -1528,6 +1554,11 @@ func (cli *Client) StateAsArray(ctx context.Context, roomID id.RoomID) (state []
 // GetMediaConfig fetches the configuration of the content repository, such as upload limitations.
 func (cli *Client) GetMediaConfig(ctx context.Context) (resp *RespMediaConfig, err error) {
 	_, err = cli.MakeRequest(ctx, http.MethodGet, cli.BuildClientURL("v1", "media", "config"), nil, &resp)
+	return
+}
+
+func (cli *Client) RequestOpenIDToken(ctx context.Context) (resp *RespOpenIDToken, err error) {
+	_, err = cli.MakeRequest(ctx, http.MethodPost, cli.BuildClientURL("v3", "user", cli.UserID, "openid", "request_token"), nil, &resp)
 	return
 }
 
@@ -1663,7 +1694,11 @@ func (cli *Client) tryUploadMediaToURL(ctx context.Context, url, contentType str
 	req.Header.Set("Content-Type", contentType)
 	req.Header.Set("User-Agent", cli.UserAgent+" (external media uploader)")
 
-	return http.DefaultClient.Do(req)
+	if cli.ExternalClient != nil {
+		return cli.ExternalClient.Do(req)
+	} else {
+		return http.DefaultClient.Do(req)
+	}
 }
 
 func (cli *Client) uploadMediaToURL(ctx context.Context, data ReqUploadMedia) (*RespMediaUpload, error) {

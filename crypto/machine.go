@@ -33,6 +33,8 @@ type OlmMachine struct {
 	CryptoStore Store
 	StateStore  StateStore
 
+	BackgroundCtx context.Context
+
 	PlaintextMentions bool
 
 	// Never ask the server for keys automatically as a side effect during Megolm decryption.
@@ -61,6 +63,9 @@ type OlmMachine struct {
 	devicesToUnwedgeLock sync.Mutex
 	recentlyUnwedged     map[id.IdentityKey]time.Time
 	recentlyUnwedgedLock sync.Mutex
+	olmHashSavePoints    []time.Time
+	lastHashDelete       time.Time
+	olmHashSavePointLock sync.Mutex
 
 	olmLock           sync.Mutex
 	megolmEncryptLock sync.Mutex
@@ -111,6 +116,8 @@ func NewOlmMachine(client *mautrix.Client, log *zerolog.Logger, cryptoStore Stor
 		Log:         log,
 		CryptoStore: cryptoStore,
 		StateStore:  stateStore,
+
+		BackgroundCtx: context.Background(),
 
 		SendKeysMinTrust:  id.TrustStateUnset,
 		ShareKeysMinTrust: id.TrustStateCrossSignedTOFU,
@@ -308,6 +315,7 @@ func (mach *OlmMachine) ProcessSyncResponse(ctx context.Context, resp *mautrix.R
 	}
 
 	mach.HandleOTKCounts(ctx, &resp.DeviceOTKCount)
+	mach.MarkOlmHashSavePoint(ctx)
 	return true
 }
 
@@ -392,6 +400,35 @@ func (mach *OlmMachine) HandleEncryptedEvent(ctx context.Context, evt *event.Eve
 		log.Trace().Msg("Handled secret send event")
 	default:
 		log.Debug().Msg("Unhandled encrypted to-device event")
+	}
+}
+
+const olmHashSavePointCount = 5
+const olmHashDeleteMinInterval = 10 * time.Minute
+const minSavePointInterval = 1 * time.Minute
+
+// MarkOlmHashSavePoint marks the current time as a save point for olm hashes and deletes old hashes if needed.
+//
+// This should be called after all to-device events in a sync have been processed.
+// The function will then delete old olm hashes after enough syncs have happened
+// (such that it's unlikely for the olm messages to repeat).
+func (mach *OlmMachine) MarkOlmHashSavePoint(ctx context.Context) {
+	mach.olmHashSavePointLock.Lock()
+	defer mach.olmHashSavePointLock.Unlock()
+	if len(mach.olmHashSavePoints) > 0 && time.Since(mach.olmHashSavePoints[len(mach.olmHashSavePoints)-1]) < minSavePointInterval {
+		return
+	}
+	mach.olmHashSavePoints = append(mach.olmHashSavePoints, time.Now())
+	if len(mach.olmHashSavePoints) > olmHashSavePointCount {
+		sp := mach.olmHashSavePoints[0]
+		mach.olmHashSavePoints = mach.olmHashSavePoints[1:]
+		if time.Since(mach.lastHashDelete) > olmHashDeleteMinInterval {
+			err := mach.CryptoStore.DeleteOldOlmHashes(ctx, sp)
+			mach.lastHashDelete = time.Now()
+			if err != nil {
+				zerolog.Ctx(ctx).Err(err).Msg("Failed to delete old olm hashes")
+			}
+		}
 	}
 }
 

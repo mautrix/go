@@ -48,6 +48,7 @@ var TypeMap = map[Type]reflect.Type{
 	StateUnstablePolicyUser:   reflect.TypeOf(ModPolicyContent{}),
 
 	StateElementFunctionalMembers: reflect.TypeOf(ElementFunctionalMembersContent{}),
+	StateBeeperRoomFeatures:       reflect.TypeOf(RoomFeatures{}),
 
 	EventMessage:   reflect.TypeOf(MessageEventContent{}),
 	EventSticker:   reflect.TypeOf(MessageEventContent{}),

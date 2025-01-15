@@ -119,7 +119,7 @@ func (br *Bridge) handleGhostDMInvite(ctx context.Context, evt *event.Event, sen
 		log.Err(err).Msg("Failed to accept invite to room")
 		return
 	}
-	var resp *ResolveIdentifierResponse
+	var resp *CreateChatResponse
 	var sourceLogin *UserLogin
 	// TODO this should somehow lock incoming event processing to avoid race conditions where a new portal room is created
 	//      between ResolveIdentifier returning and the portal MXID being updated.
@@ -128,7 +128,16 @@ func (br *Bridge) handleGhostDMInvite(ctx context.Context, evt *event.Event, sen
 		if !ok {
 			continue
 		}
-		resp, err = api.ResolveIdentifier(ctx, string(ghostID), true)
+		var resolveResp *ResolveIdentifierResponse
+		ghostAPI, ok := login.Client.(GhostDMCreatingNetworkAPI)
+		if ok {
+			resp, err = ghostAPI.CreateChatWithGhost(ctx, invitedGhost)
+		} else {
+			resolveResp, err = api.ResolveIdentifier(ctx, string(ghostID), true)
+			if resolveResp != nil {
+				resp = resolveResp.Chat
+			}
+		}
 		if errors.Is(err, ErrResolveIdentifierTryNext) {
 			log.Debug().Err(err).Str("login_id", string(login.ID)).Msg("Failed to resolve identifier, trying next login")
 			continue
@@ -146,9 +155,9 @@ func (br *Bridge) handleGhostDMInvite(ctx context.Context, evt *event.Event, sen
 		sendErrorAndLeave(ctx, evt, br.Matrix.GhostIntent(ghostID), "Failed to create chat via any login")
 		return
 	}
-	portal := resp.Chat.Portal
+	portal := resp.Portal
 	if portal == nil {
-		portal, err = br.GetPortalByKey(ctx, resp.Chat.PortalKey)
+		portal, err = br.GetPortalByKey(ctx, resp.PortalKey)
 		if err != nil {
 			log.Err(err).Msg("Failed to get portal by key")
 			sendErrorAndLeave(ctx, evt, br.Matrix.GhostIntent(ghostID), "Failed to create portal entry")
@@ -169,10 +178,18 @@ func (br *Bridge) handleGhostDMInvite(ctx context.Context, evt *event.Event, sen
 	}
 
 	didSetPortal := portal.setMXIDToExistingRoom(evt.RoomID)
-	if resp.Chat.PortalInfo != nil {
-		portal.UpdateInfo(ctx, resp.Chat.PortalInfo, sourceLogin, nil, time.Time{})
+	if resp.PortalInfo != nil {
+		portal.UpdateInfo(ctx, resp.PortalInfo, sourceLogin, nil, time.Time{})
 	}
 	if didSetPortal {
+		message := "Private chat portal created"
+		err = br.givePowerToBot(ctx, evt.RoomID, invitedGhost.Intent)
+		hasWarning := false
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to give power to bot in new DM")
+			message += "\n\nWarning: failed to promote bot"
+			hasWarning = true
+		}
 		// TODO this might become unnecessary if UpdateInfo starts taking care of it
 		_, err = br.Bot.SendState(ctx, portal.MXID, event.StateElementFunctionalMembers, "", &event.Content{
 			Parsed: &event.ElementFunctionalMembersContent{
@@ -181,14 +198,10 @@ func (br *Bridge) handleGhostDMInvite(ctx context.Context, evt *event.Event, sen
 		}, time.Time{})
 		if err != nil {
 			log.Warn().Err(err).Msg("Failed to set service members in room")
-		}
-		message := "Private chat portal created"
-		err = br.givePowerToBot(ctx, evt.RoomID, invitedGhost.Intent)
-		hasWarning := false
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to give power to bot in new DM")
-			message += "\n\nWarning: failed to promote bot"
-			hasWarning = true
+			if !hasWarning {
+				message += "\n\nWarning: failed to set service members"
+				hasWarning = true
+			}
 		}
 		mx, ok := br.Matrix.(MatrixConnectorWithPostRoomBridgeHandling)
 		if ok {
@@ -216,6 +229,9 @@ func (br *Bridge) givePowerToBot(ctx context.Context, roomID id.RoomID, userWith
 	}
 	userLevel := powers.GetUserLevel(userWithPower.GetMXID())
 	if powers.EnsureUserLevelAs(userWithPower.GetMXID(), br.Bot.GetMXID(), userLevel) {
+		if userLevel > powers.UsersDefault {
+			powers.SetUserLevel(userWithPower.GetMXID(), userLevel-1)
+		}
 		_, err = userWithPower.SendState(ctx, roomID, event.StatePowerLevels, "", &event.Content{
 			Parsed: powers,
 		}, time.Time{})

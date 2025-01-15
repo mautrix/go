@@ -50,6 +50,7 @@ type MatrixConnector interface {
 	GetMemberInfo(ctx context.Context, roomID id.RoomID, userID id.UserID) (*event.MemberEventContent, error)
 
 	BatchSend(ctx context.Context, roomID id.RoomID, req *mautrix.ReqBeeperBatchSend, extras []*MatrixSendExtra) (*mautrix.RespBeeperBatchSend, error)
+	GenerateDeterministicRoomID(portalKey networkid.PortalKey) id.RoomID
 	GenerateDeterministicEventID(roomID id.RoomID, portalKey networkid.PortalKey, messageID networkid.MessageID, partID networkid.PartID) id.EventID
 	GenerateReactionEventID(roomID id.RoomID, targetMessage *database.Message, sender networkid.UserID, emojiID networkid.EmojiID) id.EventID
 
@@ -67,6 +68,10 @@ type MatrixConnectorWithPublicMedia interface {
 
 type MatrixConnectorWithNameDisambiguation interface {
 	IsConfusableName(ctx context.Context, roomID id.RoomID, userID id.UserID, name string) ([]id.UserID, error)
+}
+
+type MatrixConnectorWithBridgeIdentifier interface {
+	GetUniqueBridgeID() string
 }
 
 type MatrixConnectorWithURLPreviews interface {
@@ -126,6 +131,7 @@ func (ce CallbackError) Unwrap() error {
 
 type MatrixAPI interface {
 	GetMXID() id.UserID
+	IsDoublePuppet() bool
 
 	SendMessage(ctx context.Context, roomID id.RoomID, eventType event.Type, content *event.Content, extra *MatrixSendExtra) (*mautrix.RespSendEvent, error)
 	SendState(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string, content *event.Content, ts time.Time) (*mautrix.RespSendEvent, error)

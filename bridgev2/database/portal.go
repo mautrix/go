@@ -34,6 +34,11 @@ type PortalQuery struct {
 	*dbutil.QueryHelper[*Portal]
 }
 
+type CapabilityState struct {
+	Source networkid.UserLoginID `json:"source"`
+	ID     string                `json:"id"`
+}
+
 type Portal struct {
 	BridgeID networkid.BridgeID
 	networkid.PortalKey
@@ -54,6 +59,7 @@ type Portal struct {
 	InSpace      bool
 	RoomType     RoomType
 	Disappear    DisappearingSetting
+	CapState     CapabilityState
 	Metadata     any
 }
 
@@ -62,7 +68,7 @@ const (
 		SELECT bridge_id, id, receiver, mxid, parent_id, parent_receiver, relay_login_id, other_user_id,
 		       name, topic, avatar_id, avatar_hash, avatar_mxc,
 		       name_set, topic_set, avatar_set, name_is_custom, in_space,
-		       room_type, disappear_type, disappear_timer,
+		       room_type, disappear_type, disappear_timer, cap_state,
 		       metadata
 		FROM portal
 	`
@@ -82,10 +88,10 @@ const (
 			parent_id, parent_receiver, relay_login_id, other_user_id,
 			name, topic, avatar_id, avatar_hash, avatar_mxc,
 			name_set, avatar_set, topic_set, name_is_custom, in_space,
-			room_type, disappear_type, disappear_timer,
+			room_type, disappear_type, disappear_timer, cap_state,
 			metadata, relay_bridge_id
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, cast($7 AS TEXT), $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22,
+			$1, $2, $3, $4, $5, $6, cast($7 AS TEXT), $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23,
 			CASE WHEN cast($7 AS TEXT) IS NULL THEN NULL ELSE $1 END
 		)
 	`
@@ -95,7 +101,7 @@ const (
 		    relay_login_id=cast($7 AS TEXT), relay_bridge_id=CASE WHEN cast($7 AS TEXT) IS NULL THEN NULL ELSE bridge_id END,
 		    other_user_id=$8, name=$9, topic=$10, avatar_id=$11, avatar_hash=$12, avatar_mxc=$13,
 		    name_set=$14, avatar_set=$15, topic_set=$16, name_is_custom=$17, in_space=$18,
-		    room_type=$19, disappear_type=$20, disappear_timer=$21, metadata=$22
+		    room_type=$19, disappear_type=$20, disappear_timer=$21, cap_state=$22, metadata=$23
 		WHERE bridge_id=$1 AND id=$2 AND receiver=$3
 	`
 	deletePortalQuery = `
@@ -189,7 +195,7 @@ func (p *Portal) Scan(row dbutil.Scannable) (*Portal, error) {
 		&p.Name, &p.Topic, &p.AvatarID, &avatarHash, &p.AvatarMXC,
 		&p.NameSet, &p.TopicSet, &p.AvatarSet, &p.NameIsCustom, &p.InSpace,
 		&p.RoomType, &disappearType, &disappearTimer,
-		dbutil.JSON{Data: p.Metadata},
+		dbutil.JSON{Data: &p.CapState}, dbutil.JSON{Data: p.Metadata},
 	)
 	if err != nil {
 		return nil, err
@@ -236,6 +242,6 @@ func (p *Portal) sqlVariables() []any {
 		p.Name, p.Topic, p.AvatarID, avatarHash, p.AvatarMXC,
 		p.NameSet, p.TopicSet, p.AvatarSet, p.NameIsCustom, p.InSpace,
 		p.RoomType, dbutil.StrPtr(p.Disappear.Type), dbutil.NumPtr(p.Disappear.Timer),
-		dbutil.JSON{Data: p.Metadata},
+		dbutil.JSON{Data: p.CapState}, dbutil.JSON{Data: p.Metadata},
 	}
 }

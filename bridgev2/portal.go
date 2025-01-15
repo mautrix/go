@@ -79,12 +79,14 @@ type Portal struct {
 	outgoingMessages     map[networkid.TransactionID]outgoingMessage
 	outgoingMessagesLock sync.Mutex
 
+	lastCapUpdate time.Time
+
 	roomCreateLock sync.Mutex
 
 	events chan portalEvent
 }
 
-const PortalEventBuffer = 64
+var PortalEventBuffer = 64
 
 func (br *Bridge) loadPortal(ctx context.Context, dbPortal *database.Portal, queryErr error, key *networkid.PortalKey) (*Portal, error) {
 	if queryErr != nil {
@@ -272,12 +274,16 @@ func (br *Bridge) GetExistingPortalByKey(ctx context.Context, key networkid.Port
 }
 
 func (portal *Portal) queueEvent(ctx context.Context, evt portalEvent) {
-	select {
-	case portal.events <- evt:
-	default:
-		zerolog.Ctx(ctx).Error().
-			Str("portal_id", string(portal.ID)).
-			Msg("Portal event channel is full")
+	if PortalEventBuffer == 0 {
+		portal.events <- evt
+	} else {
+		select {
+		case portal.events <- evt:
+		default:
+			zerolog.Ctx(ctx).Error().
+				Str("portal_id", string(portal.ID)).
+				Msg("Portal event channel is full")
+		}
 	}
 }
 
@@ -751,22 +757,36 @@ func (portal *Portal) periodicTypingUpdater() {
 	}
 }
 
-func (portal *Portal) checkMessageContentCaps(ctx context.Context, caps *NetworkRoomCapabilities, content *event.MessageEventContent, evt *event.Event) bool {
+func (portal *Portal) checkMessageContentCaps(ctx context.Context, caps *event.RoomFeatures, content *event.MessageEventContent, evt *event.Event) bool {
 	switch content.MsgType {
 	case event.MsgText, event.MsgNotice, event.MsgEmote:
 		// No checks for now, message length is safer to check after conversion inside connector
 	case event.MsgLocation:
-		if !caps.LocationMessages {
+		if caps.LocationMessage.Reject() {
 			portal.sendErrorStatus(ctx, evt, ErrLocationMessagesNotAllowed)
 			return false
 		}
-	case event.MsgImage, event.MsgAudio, event.MsgVideo, event.MsgFile:
-		if content.FileName != "" && content.Body != content.FileName {
-			if !caps.Captions {
-				portal.sendErrorStatus(ctx, evt, ErrCaptionsNotAllowed)
+	case event.MsgImage, event.MsgAudio, event.MsgVideo, event.MsgFile, event.CapMsgSticker:
+		capMsgType := content.GetCapMsgType()
+		feat, ok := caps.File[capMsgType]
+		if !ok {
+			portal.sendErrorStatus(ctx, evt, ErrUnsupportedMessageType)
+			return false
+		}
+		if content.MsgType != event.CapMsgSticker &&
+			content.FileName != "" &&
+			content.Body != content.FileName &&
+			feat.Caption.Reject() {
+			portal.sendErrorStatus(ctx, evt, ErrCaptionsNotAllowed)
+			return false
+		}
+		if content.Info != nil && content.Info.MimeType != "" {
+			if feat.GetMimeSupport(content.Info.MimeType).Reject() {
+				portal.sendErrorStatus(ctx, evt, fmt.Errorf("%w (%s in %s)", ErrUnsupportedMediaType, content.Info.MimeType, capMsgType))
 				return false
 			}
 		}
+		fallthrough
 	default:
 	}
 	return true
@@ -788,6 +808,9 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 	} else {
 		msgContent, ok = evt.Content.Parsed.(*event.MessageEventContent)
 		relatesTo = msgContent.RelatesTo
+		if evt.Type == event.EventSticker {
+			msgContent.MsgType = event.CapMsgSticker
+		}
 	}
 	if !ok {
 		log.Error().Type("content_type", evt.Content.Parsed).Msg("Unexpected parsed content type")
@@ -845,21 +868,21 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 		}
 	}
 	var replyToID id.EventID
-	if caps.Threads {
+	threadRootID := relatesTo.GetThreadParent()
+	if caps.Thread.Partial() {
 		replyToID = relatesTo.GetNonFallbackReplyTo()
+		if threadRootID != "" {
+			threadRoot, err = portal.Bridge.DB.Message.GetPartByMXID(ctx, threadRootID)
+			if err != nil {
+				log.Err(err).Msg("Failed to get thread root message from database")
+			} else if threadRoot == nil {
+				log.Warn().Stringer("thread_root_id", threadRootID).Msg("Thread root message not found")
+			}
+		}
 	} else {
 		replyToID = relatesTo.GetReplyTo()
 	}
-	threadRootID := relatesTo.GetThreadParent()
-	if caps.Threads && threadRootID != "" {
-		threadRoot, err = portal.Bridge.DB.Message.GetPartByMXID(ctx, threadRootID)
-		if err != nil {
-			log.Err(err).Msg("Failed to get thread root message from database")
-		} else if threadRoot == nil {
-			log.Warn().Stringer("thread_root_id", threadRootID).Msg("Thread root message not found")
-		}
-	}
-	if replyToID != "" && (caps.Replies || caps.Threads) {
+	if replyToID != "" && (caps.Reply.Partial() || caps.Thread.Partial()) {
 		replyTo, err = portal.Bridge.DB.Message.GetPartByMXID(ctx, replyToID)
 		if err != nil {
 			log.Err(err).Msg("Failed to get reply target message from database")
@@ -870,7 +893,7 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 			// The fallback happens if the message is not a Matrix thread and either
 			// * the replied-to message is in a thread, or
 			// * the network only supports threads (assume the user wants to start a new thread)
-			if caps.Threads && threadRoot == nil && (replyTo.ThreadRoot != "" || !caps.Replies) {
+			if caps.Thread.Partial() && threadRoot == nil && (replyTo.ThreadRoot != "" || !caps.Reply.Partial()) {
 				threadRootRemoteID := replyTo.ThreadRoot
 				if threadRootRemoteID == "" {
 					threadRootRemoteID = replyTo.ID
@@ -880,7 +903,7 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 					log.Err(err).Msg("Failed to get thread root message from database (via reply fallback)")
 				}
 			}
-			if !caps.Replies {
+			if !caps.Reply.Partial() {
 				replyTo = nil
 			}
 		}
@@ -1027,7 +1050,7 @@ func (evt *MatrixMessage) fillDBMessage(message *database.Message) *database.Mes
 	return message
 }
 
-func (portal *Portal) handleMatrixEdit(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event, content *event.MessageEventContent, caps *NetworkRoomCapabilities) {
+func (portal *Portal) handleMatrixEdit(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event, content *event.MessageEventContent, caps *event.RoomFeatures) {
 	log := zerolog.Ctx(ctx)
 	editTargetID := content.RelatesTo.GetReplaceID()
 	log.UpdateContext(func(c zerolog.Context) zerolog.Context {
@@ -1035,6 +1058,9 @@ func (portal *Portal) handleMatrixEdit(ctx context.Context, sender *UserLogin, o
 	})
 	if content.NewContent != nil {
 		content = content.NewContent
+		if evt.Type == event.EventSticker {
+			content.MsgType = event.CapMsgSticker
+		}
 	}
 	if origSender != nil {
 		var err error
@@ -1051,7 +1077,7 @@ func (portal *Portal) handleMatrixEdit(ctx context.Context, sender *UserLogin, o
 		log.Debug().Msg("Ignoring edit as network connector doesn't implement EditHandlingNetworkAPI")
 		portal.sendErrorStatus(ctx, evt, ErrEditsNotSupported)
 		return
-	} else if !caps.Edits {
+	} else if !caps.Edit.Partial() {
 		log.Debug().Msg("Ignoring edit as room doesn't support edits")
 		portal.sendErrorStatus(ctx, evt, ErrEditsNotSupportedInPortal)
 		return
@@ -1067,7 +1093,7 @@ func (portal *Portal) handleMatrixEdit(ctx context.Context, sender *UserLogin, o
 		log.Warn().Msg("Edit target message not found in database")
 		portal.sendErrorStatus(ctx, evt, fmt.Errorf("edit %w", ErrTargetMessageNotFound))
 		return
-	} else if caps.EditMaxAge > 0 && time.Since(editTarget.Timestamp) > caps.EditMaxAge {
+	} else if caps.EditMaxAge.Duration > 0 && time.Since(editTarget.Timestamp) > caps.EditMaxAge.Duration {
 		portal.sendErrorStatus(ctx, evt, ErrEditTargetTooOld)
 		return
 	} else if caps.EditMaxCount > 0 && editTarget.EditCount >= caps.EditMaxCount {
@@ -1823,15 +1849,16 @@ func (portal *Portal) sendConvertedMessage(
 	for i, part := range converted.Parts {
 		portal.applyRelationMeta(part.Content, replyTo, threadRoot, prevThreadEvent)
 		dbMessage := &database.Message{
-			ID:         id,
-			PartID:     part.ID,
-			Room:       portal.PortalKey,
-			SenderID:   senderID,
-			SenderMXID: intent.GetMXID(),
-			Timestamp:  ts,
-			ThreadRoot: ptr.Val(converted.ThreadRoot),
-			ReplyTo:    ptr.Val(converted.ReplyTo),
-			Metadata:   part.DBMetadata,
+			ID:               id,
+			PartID:           part.ID,
+			Room:             portal.PortalKey,
+			SenderID:         senderID,
+			SenderMXID:       intent.GetMXID(),
+			Timestamp:        ts,
+			ThreadRoot:       ptr.Val(converted.ThreadRoot),
+			ReplyTo:          ptr.Val(converted.ReplyTo),
+			Metadata:         part.DBMetadata,
+			IsDoublePuppeted: intent.IsDoublePuppet(),
 		}
 		if part.DontBridge {
 			dbMessage.SetFakeMXID()
@@ -2274,7 +2301,7 @@ func (portal *Portal) handleRemoteReactionSync(ctx context.Context, source *User
 			existingReaction, ok := existingUserReactions[reaction.EmojiID]
 			if ok {
 				delete(existingUserReactions, reaction.EmojiID)
-				if reaction.EmojiID != "" {
+				if reaction.EmojiID != "" || reaction.Emoji == existingReaction.Emoji {
 					continue
 				}
 				doOverwriteReaction(reaction, existingReaction)
@@ -2599,6 +2626,8 @@ func (portal *Portal) handleRemoteDeliveryReceipt(ctx context.Context, source *U
 				RoomID:        portal.MXID,
 				SourceEventID: part.MXID,
 				Sender:        part.SenderMXID,
+
+				IsSourceEventDoublePuppeted: part.IsDoublePuppeted,
 			})
 		}
 	}
@@ -2924,6 +2953,17 @@ func (portal *Portal) GetTopLevelParent() *Portal {
 	return portal.Parent.GetTopLevelParent()
 }
 
+func (portal *Portal) getBridgeInfoStateKey() string {
+	if portal.Bridge.Config.NoBridgeInfoStateKey {
+		return ""
+	}
+	idProvider, ok := portal.Bridge.Matrix.(MatrixConnectorWithBridgeIdentifier)
+	if ok {
+		return idProvider.GetUniqueBridgeID()
+	}
+	return string(portal.BridgeID)
+}
+
 func (portal *Portal) getBridgeInfo() (string, event.BridgeEventContent) {
 	bridgeInfo := event.BridgeEventContent{
 		BridgeBot: portal.Bridge.Bot.GetMXID(),
@@ -2954,10 +2994,7 @@ func (portal *Portal) getBridgeInfo() (string, event.BridgeEventContent) {
 	if ok {
 		filler.FillPortalBridgeInfo(portal, &bridgeInfo)
 	}
-	// TODO use something globally unique instead of bridge ID?
-	//      maybe ask the matrix connector to use serverName+appserviceID+bridgeID
-	stateKey := string(portal.BridgeID)
-	return stateKey, bridgeInfo
+	return portal.getBridgeInfoStateKey(), bridgeInfo
 }
 
 func (portal *Portal) UpdateBridgeInfo(ctx context.Context) {
@@ -2967,6 +3004,43 @@ func (portal *Portal) UpdateBridgeInfo(ctx context.Context) {
 	stateKey, bridgeInfo := portal.getBridgeInfo()
 	portal.sendRoomMeta(ctx, nil, time.Now(), event.StateBridge, stateKey, &bridgeInfo)
 	portal.sendRoomMeta(ctx, nil, time.Now(), event.StateHalfShotBridge, stateKey, &bridgeInfo)
+}
+
+func (portal *Portal) UpdateCapabilities(ctx context.Context, source *UserLogin, implicit bool) bool {
+	if portal.MXID == "" {
+		return false
+	} else if !implicit && time.Since(portal.lastCapUpdate) < 24*time.Hour {
+		return false
+	} else if portal.CapState.ID != "" && source.ID != portal.CapState.Source && source.ID != portal.Receiver {
+		// TODO allow capability state source to change if the old user login is removed from the portal
+		return false
+	}
+	caps := source.Client.GetCapabilities(ctx, portal)
+	capID := caps.GetID()
+	if capID == portal.CapState.ID {
+		return false
+	}
+	zerolog.Ctx(ctx).Debug().
+		Str("user_login_id", string(source.ID)).
+		Str("old_id", portal.CapState.ID).
+		Str("new_id", capID).
+		Msg("Sending new room capability event")
+	success := portal.sendRoomMeta(ctx, nil, time.Now(), event.StateBeeperRoomFeatures, portal.getBridgeInfoStateKey(), caps)
+	if !success {
+		return false
+	}
+	portal.CapState = database.CapabilityState{
+		Source: source.ID,
+		ID:     capID,
+	}
+	portal.lastCapUpdate = time.Now()
+	if implicit {
+		err := portal.Save(ctx)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to save portal capability state after sending state event")
+		}
+	}
+	return true
 }
 
 func (portal *Portal) sendStateWithIntentOrBot(ctx context.Context, sender MatrixAPI, eventType event.Type, stateKey string, content *event.Content, ts time.Time) (resp *mautrix.RespSendEvent, err error) {
@@ -3463,6 +3537,7 @@ func (portal *Portal) UpdateInfo(ctx context.Context, info *ChatInfo, source *Us
 	if source != nil {
 		source.MarkInPortal(ctx, portal)
 		portal.updateUserLocalInfo(ctx, info.UserLocal, source, false)
+		changed = portal.UpdateCapabilities(ctx, source, false) || changed
 	}
 	if info.CanBackfill && source != nil && portal.MXID != "" {
 		err := portal.Bridge.DB.BackfillTask.EnsureExists(ctx, portal.PortalKey, source.ID)
@@ -3567,7 +3642,7 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 		Preset:             "private_chat",
 		IsDirect:           portal.RoomType == database.RoomTypeDM,
 		PowerLevelOverride: powerLevels,
-		BeeperLocalRoomID:  id.RoomID(fmt.Sprintf("!%s.%s:%s", portal.ID, portal.Receiver, portal.Bridge.Matrix.ServerName())),
+		BeeperLocalRoomID:  portal.Bridge.Matrix.GenerateDeterministicRoomID(portal.PortalKey),
 	}
 	autoJoinInvites := portal.Bridge.Matrix.GetCapabilities().AutoJoinInvites
 	if autoJoinInvites {
@@ -3580,6 +3655,11 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 		req.CreationContent["type"] = event.RoomTypeSpace
 	}
 	bridgeInfoStateKey, bridgeInfo := portal.getBridgeInfo()
+	roomFeatures := source.Client.GetCapabilities(ctx, portal)
+	portal.CapState = database.CapabilityState{
+		Source: source.ID,
+		ID:     roomFeatures.GetID(),
+	}
 
 	req.InitialState = append(req.InitialState, &event.Event{
 		Type: event.StateElementFunctionalMembers,
@@ -3594,6 +3674,10 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 		StateKey: &bridgeInfoStateKey,
 		Type:     event.StateBridge,
 		Content:  event.Content{Parsed: &bridgeInfo},
+	}, &event.Event{
+		StateKey: &bridgeInfoStateKey,
+		Type:     event.StateBeeperRoomFeatures,
+		Content:  event.Content{Parsed: roomFeatures},
 	})
 	if req.Topic == "" {
 		// Add explicit topic event if topic is empty to ensure the event is set.
@@ -3795,4 +3879,18 @@ func (portal *Portal) SetRelay(ctx context.Context, relay *UserLogin) error {
 		return err
 	}
 	return nil
+}
+
+func (portal *Portal) PerMessageProfileForSender(ctx context.Context, sender networkid.UserID) (profile event.BeeperPerMessageProfile, err error) {
+	var ghost *Ghost
+	ghost, err = portal.Bridge.GetGhostByID(ctx, sender)
+	if err != nil {
+		return
+	}
+	profile.ID = string(ghost.Intent.GetMXID())
+	profile.Displayname = ghost.Name
+	if ghost.AvatarMXC != "" {
+		profile.AvatarURL = &ghost.AvatarMXC
+	}
+	return
 }

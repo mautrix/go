@@ -7,6 +7,7 @@
 package commands
 
 import (
+	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/event"
 )
 
@@ -37,6 +38,18 @@ type AliasedCommandHandler interface {
 	GetAliases() []string
 }
 
+func NetworkAPIImplements[T bridgev2.NetworkAPI](val bridgev2.NetworkAPI) bool {
+	_, ok := val.(T)
+	return ok
+}
+
+func NetworkConnectorImplements[T bridgev2.NetworkConnector](val bridgev2.NetworkConnector) bool {
+	_, ok := val.(T)
+	return ok
+}
+
+type ImplementationChecker[T any] func(val T) bool
+
 type FullHandler struct {
 	Func func(*Event)
 
@@ -49,6 +62,9 @@ type FullHandler struct {
 	RequiresLogin           bool
 	RequiresEventLevel      event.Type
 	RequiresLoginPermission bool
+
+	NetworkAPI       ImplementationChecker[bridgev2.NetworkAPI]
+	NetworkConnector ImplementationChecker[bridgev2.NetworkConnector]
 }
 
 func (fh *FullHandler) GetHelp() HelpMeta {
@@ -64,9 +80,15 @@ func (fh *FullHandler) GetAliases() []string {
 	return fh.Aliases
 }
 
+func (fh *FullHandler) ImplementationsFulfilled(ce *Event) bool {
+	// TODO add dedicated method to get an empty NetworkAPI instead of getting default login
+	client := ce.User.GetDefaultLogin()
+	return (fh.NetworkAPI == nil || client == nil || fh.NetworkAPI(client.Client)) &&
+		(fh.NetworkConnector == nil || fh.NetworkConnector(ce.Bridge.Network))
+}
+
 func (fh *FullHandler) ShowInHelp(ce *Event) bool {
-	return true
-	//return !fh.RequiresAdmin || ce.User.GetPermissionLevel() >= bridgeconfig.PermissionLevelAdmin
+	return fh.ImplementationsFulfilled(ce) && (!fh.RequiresAdmin || ce.User.Permissions.Admin)
 }
 
 func (fh *FullHandler) userHasRoomPermission(ce *Event) bool {

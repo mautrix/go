@@ -243,7 +243,7 @@ func (helper *CryptoHelper) loginBot(ctx context.Context) (*mautrix.Client, bool
 	client := helper.bridge.AS.NewMautrixClient(helper.bridge.AS.BotMXID())
 
 	initialDeviceDisplayName := fmt.Sprintf("%s bridge", helper.bridge.Bridge.Network.GetName().DisplayName)
-	if helper.bridge.Config.AppService.MSC4190 {
+	if helper.bridge.Config.Encryption.MSC4190 {
 		helper.log.Debug().Msg("Creating bot device with MSC4190")
 		err = client.CreateDeviceMSC4190(ctx, deviceID, initialDeviceDisplayName)
 		if err != nil {
@@ -503,14 +503,14 @@ func (syncer *cryptoSyncer) OnFailedSync(_ *mautrix.RespSync, err error) (time.D
 func (syncer *cryptoSyncer) GetFilterJSON(_ id.UserID) *mautrix.Filter {
 	everything := []event.Type{{Type: "*"}}
 	return &mautrix.Filter{
-		Presence:    mautrix.FilterPart{NotTypes: everything},
-		AccountData: mautrix.FilterPart{NotTypes: everything},
-		Room: mautrix.RoomFilter{
+		Presence:    &mautrix.FilterPart{NotTypes: everything},
+		AccountData: &mautrix.FilterPart{NotTypes: everything},
+		Room: &mautrix.RoomFilter{
 			IncludeLeave: false,
-			Ephemeral:    mautrix.FilterPart{NotTypes: everything},
-			AccountData:  mautrix.FilterPart{NotTypes: everything},
-			State:        mautrix.FilterPart{NotTypes: everything},
-			Timeline:     mautrix.FilterPart{NotTypes: everything},
+			Ephemeral:    &mautrix.FilterPart{NotTypes: everything},
+			AccountData:  &mautrix.FilterPart{NotTypes: everything},
+			State:        &mautrix.FilterPart{NotTypes: everything},
+			Timeline:     &mautrix.FilterPart{NotTypes: everything},
 		},
 	}
 }

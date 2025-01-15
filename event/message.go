@@ -32,7 +32,7 @@ func (mt MessageType) IsText() bool {
 
 func (mt MessageType) IsMedia() bool {
 	switch mt {
-	case MsgImage, MsgVideo, MsgAudio, MsgFile, MessageType(EventSticker.Type):
+	case MsgImage, MsgVideo, MsgAudio, MsgFile, CapMsgSticker:
 		return true
 	default:
 		return false
@@ -140,6 +140,32 @@ type MessageEventContent struct {
 
 	MSC1767Audio *MSC1767Audio `json:"org.matrix.msc1767.audio,omitempty"`
 	MSC3245Voice *MSC3245Voice `json:"org.matrix.msc3245.voice,omitempty"`
+}
+
+func (content *MessageEventContent) GetCapMsgType() CapabilityMsgType {
+	switch content.MsgType {
+	case CapMsgSticker:
+		return CapMsgSticker
+	case "":
+		if content.URL != "" || content.File != nil {
+			return CapMsgSticker
+		}
+	case MsgImage:
+		return MsgImage
+	case MsgAudio:
+		if content.MSC3245Voice != nil {
+			return CapMsgVoice
+		}
+		return MsgAudio
+	case MsgVideo:
+		if content.Info != nil && content.Info.MauGIF {
+			return CapMsgGIF
+		}
+		return MsgVideo
+	case MsgFile:
+		return MsgFile
+	}
+	return ""
 }
 
 func (content *MessageEventContent) GetFileName() string {
@@ -250,18 +276,20 @@ type EncryptedFileInfo struct {
 }
 
 type FileInfo struct {
-	MimeType      string              `json:"mimetype,omitempty"`
-	ThumbnailInfo *FileInfo           `json:"thumbnail_info,omitempty"`
-	ThumbnailURL  id.ContentURIString `json:"thumbnail_url,omitempty"`
-	ThumbnailFile *EncryptedFileInfo  `json:"thumbnail_file,omitempty"`
+	MimeType      string
+	ThumbnailInfo *FileInfo
+	ThumbnailURL  id.ContentURIString
+	ThumbnailFile *EncryptedFileInfo
 
-	Blurhash     string `json:"blurhash,omitempty"`
-	AnoaBlurhash string `json:"xyz.amorgan.blurhash,omitempty"`
+	Blurhash     string
+	AnoaBlurhash string
 
-	Width    int `json:"-"`
-	Height   int `json:"-"`
-	Duration int `json:"-"`
-	Size     int `json:"-"`
+	MauGIF bool
+
+	Width    int
+	Height   int
+	Duration int
+	Size     int
 }
 
 type serializableFileInfo struct {
@@ -272,6 +300,8 @@ type serializableFileInfo struct {
 
 	Blurhash     string `json:"blurhash,omitempty"`
 	AnoaBlurhash string `json:"xyz.amorgan.blurhash,omitempty"`
+
+	MauGIF bool `json:"fi.mau.gif,omitempty"`
 
 	Width    json.Number `json:"w,omitempty"`
 	Height   json.Number `json:"h,omitempty"`
@@ -288,6 +318,8 @@ func (sfi *serializableFileInfo) CopyFrom(fileInfo *FileInfo) *serializableFileI
 		ThumbnailURL:  fileInfo.ThumbnailURL,
 		ThumbnailInfo: (&serializableFileInfo{}).CopyFrom(fileInfo.ThumbnailInfo),
 		ThumbnailFile: fileInfo.ThumbnailFile,
+
+		MauGIF: fileInfo.MauGIF,
 
 		Blurhash:     fileInfo.Blurhash,
 		AnoaBlurhash: fileInfo.AnoaBlurhash,
@@ -317,6 +349,7 @@ func (sfi *serializableFileInfo) CopyTo(fileInfo *FileInfo) {
 		MimeType:      sfi.MimeType,
 		ThumbnailURL:  sfi.ThumbnailURL,
 		ThumbnailFile: sfi.ThumbnailFile,
+		MauGIF:        sfi.MauGIF,
 		Blurhash:      sfi.Blurhash,
 		AnoaBlurhash:  sfi.AnoaBlurhash,
 	}

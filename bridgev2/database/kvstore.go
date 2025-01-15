@@ -21,6 +21,7 @@ type Key string
 
 const (
 	KeySplitPortalsEnabled Key = "split_portals_enabled"
+	KeyBridgeInfoVersion   Key = "bridge_info_version"
 )
 
 type KVQuery struct {

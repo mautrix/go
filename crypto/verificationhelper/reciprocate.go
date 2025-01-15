@@ -212,27 +212,34 @@ func (vh *VerificationHelper) ConfirmQRCodeScanned(ctx context.Context, txnID id
 
 	log.Info().Msg("Confirming QR code scanned")
 
+	// Get their device
+	theirDevice, err := vh.mach.GetOrFetchDevice(ctx, txn.TheirUserID, txn.TheirDeviceID)
+	if err != nil {
+		return err
+	}
+
+	// Trust their device
+	theirDevice.Trust = id.TrustStateVerified
+	err = vh.mach.CryptoStore.PutDevice(ctx, txn.TheirUserID, theirDevice)
+	if err != nil {
+		return fmt.Errorf("failed to update device trust state after verifying: %w", err)
+	}
+
 	if txn.TheirUserID == vh.client.UserID {
-		// Self-signing situation. Trust their device.
-
-		// Get their device
-		theirDevice, err := vh.mach.GetOrFetchDevice(ctx, txn.TheirUserID, txn.TheirDeviceID)
-		if err != nil {
-			return err
-		}
-
-		// Trust their device
-		theirDevice.Trust = id.TrustStateVerified
-		err = vh.mach.CryptoStore.PutDevice(ctx, txn.TheirUserID, theirDevice)
-		if err != nil {
-			return fmt.Errorf("failed to update device trust state after verifying: %w", err)
-		}
-
-		// Cross-sign their device with the self-signing key
+		// Self-signing situation.
+		//
+		// If we have the cross-signing keys, then we need to sign their device
+		// using the self-signing key. Otherwise, they have the master private
+		// key, so we need to trust the master public key.
 		if vh.mach.CrossSigningKeys != nil {
 			err = vh.mach.SignOwnDevice(ctx, theirDevice)
 			if err != nil {
-				return fmt.Errorf("failed to sign their device: %w", err)
+				return fmt.Errorf("failed to sign our own new device: %w", err)
+			}
+		} else {
+			err = vh.mach.SignOwnMasterKey(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to sign our own master key: %w", err)
 			}
 		}
 	} else {

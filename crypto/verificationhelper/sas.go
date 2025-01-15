@@ -13,6 +13,7 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -336,13 +337,7 @@ func (vh *VerificationHelper) onVerificationKey(ctx context.Context, txn Verific
 			return
 		}
 		if !bytes.Equal(commitment, txn.Commitment) {
-			err := vh.sendVerificationEvent(ctx, txn, event.InRoomVerificationCancel, &event.VerificationCancelEventContent{
-				Code:   event.VerificationCancelCodeKeyMismatch,
-				Reason: "The key was not the one we expected.",
-			})
-			if err != nil {
-				log.Err(err).Msg("Failed to send cancellation event")
-			}
+			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeKeyMismatch, "The key was not the one we expected")
 			return
 		}
 	} else {
@@ -365,6 +360,7 @@ func (vh *VerificationHelper) onVerificationKey(ctx context.Context, txn Verific
 
 	var decimals []int
 	var emojis []rune
+	var emojiDescriptions []string
 	if slices.Contains(txn.StartEventContent.ShortAuthenticationString, event.SASMethodDecimal) {
 		decimals = []int{
 			(int(sasBytes[0])<<5 | int(sasBytes[1])>>3) + 1000,
@@ -380,9 +376,10 @@ func (vh *VerificationHelper) onVerificationKey(ctx context.Context, txn Verific
 			// Right shift the number and then mask the lowest 6 bits.
 			emojiIdx := (sasNum >> uint(48-(i+1)*6)) & 0b111111
 			emojis = append(emojis, allEmojis[emojiIdx])
+			emojiDescriptions = append(emojiDescriptions, allEmojiDescriptions[emojiIdx])
 		}
 	}
-	vh.showSAS(ctx, txn.TransactionID, emojis, decimals)
+	vh.showSAS(ctx, txn.TransactionID, emojis, emojiDescriptions, decimals)
 
 	if err := vh.store.SaveVerificationTransaction(ctx, txn); err != nil {
 		log.Err(err).Msg("failed to save verification transaction")
@@ -580,6 +577,73 @@ var allEmojis = []rune{
 	'📌',
 }
 
+var allEmojiDescriptions = []string{
+	"Dog",
+	"Cat",
+	"Lion",
+	"Horse",
+	"Unicorn",
+	"Pig",
+	"Elephant",
+	"Rabbit",
+	"Panda",
+	"Rooster",
+	"Penguin",
+	"Turtle",
+	"Fish",
+	"Octopus",
+	"Butterfly",
+	"Flower",
+	"Tree",
+	"Cactus",
+	"Mushroom",
+	"Globe",
+	"Moon",
+	"Cloud",
+	"Fire",
+	"Banana",
+	"Apple",
+	"Strawberry",
+	"Corn",
+	"Pizza",
+	"Cake",
+	"Heart",
+	"Smiley",
+	"Robot",
+	"Hat",
+	"Glasses",
+	"Spanner",
+	"Santa",
+	"Thumbs Up",
+	"Umbrella",
+	"Hourglass",
+	"Clock",
+	"Gift",
+	"Light Bulb",
+	"Book",
+	"Pencil",
+	"Paperclip",
+	"Scissors",
+	"Lock",
+	"Key",
+	"Hammer",
+	"Telephone",
+	"Flag",
+	"Train",
+	"Bicycle",
+	"Aeroplane",
+	"Rocket",
+	"Trophy",
+	"Ball",
+	"Guitar",
+	"Trumpet",
+	"Bell",
+	"Anchor",
+	"Headphones",
+	"Folder",
+	"Pin",
+}
+
 func (vh *VerificationHelper) onVerificationMAC(ctx context.Context, txn VerificationTransaction, evt *event.Event) {
 	log := vh.getLog(ctx).With().
 		Str("verification_action", "mac").
@@ -593,12 +657,15 @@ func (vh *VerificationHelper) onVerificationMAC(ctx context.Context, txn Verific
 	// Verifying Keys MAC
 	log.Info().Msg("Verifying MAC for all sent keys")
 	var hasTheirDeviceKey bool
+	var masterKey string
 	var keyIDs []string
 	for keyID := range macEvt.MAC {
 		keyIDs = append(keyIDs, keyID.String())
 		_, kID := keyID.Parse()
 		if kID == txn.TheirDeviceID.String() {
 			hasTheirDeviceKey = true
+		} else {
+			masterKey = kID
 		}
 	}
 	slices.Sort(keyIDs)
@@ -617,6 +684,7 @@ func (vh *VerificationHelper) onVerificationMAC(ctx context.Context, txn Verific
 	}
 
 	// Verify the MAC for each key
+	var theirDevice *id.Device
 	for keyID, mac := range macEvt.MAC {
 		log.Info().Str("key_id", keyID.String()).Msg("Received MAC for key")
 
@@ -627,8 +695,11 @@ func (vh *VerificationHelper) onVerificationMAC(ctx context.Context, txn Verific
 		}
 
 		var key string
-		var theirDevice *id.Device
 		if kID == txn.TheirDeviceID.String() {
+			if theirDevice != nil {
+				vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeInvalidMessage, "two keys found for their device ID")
+				return
+			}
 			theirDevice, err = vh.mach.GetOrFetchDevice(ctx, txn.TheirUserID, txn.TheirDeviceID)
 			if err != nil {
 				vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUser, "failed to fetch their device: %w", err)
@@ -653,22 +724,60 @@ func (vh *VerificationHelper) onVerificationMAC(ctx context.Context, txn Verific
 			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUser, "failed to calculate key MAC: %w", err)
 			return
 		}
-		if !bytes.Equal(expectedMAC, mac) {
+		if subtle.ConstantTimeCompare(expectedMAC, mac) == 0 {
 			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeSASMismatch, "MAC mismatch for key %s", keyID)
 			return
 		}
+	}
+	log.Info().Msg("All MACs verified")
 
-		// Trust their device
-		if kID == txn.TheirDeviceID.String() {
-			theirDevice.Trust = id.TrustStateVerified
-			err = vh.mach.CryptoStore.PutDevice(ctx, txn.TheirUserID, theirDevice)
+	// Trust their device
+	theirDevice.Trust = id.TrustStateVerified
+	err = vh.mach.CryptoStore.PutDevice(ctx, txn.TheirUserID, theirDevice)
+	if err != nil {
+		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUser, "failed to update device trust state after verifying: %w", err)
+		return
+	}
+
+	if txn.TheirUserID == vh.client.UserID {
+		// Self-signing situation.
+		//
+		// If we have the cross-signing keys, then we need to sign their device
+		// using the self-signing key. Otherwise, they have the master private
+		// key, so we need to trust the master public key.
+		if vh.mach.CrossSigningKeys != nil {
+			err = vh.mach.SignOwnDevice(ctx, theirDevice)
 			if err != nil {
-				vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUser, "failed to update device trust state after verifying: %w", err)
+				vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUser, "failed to sign our own new device: %w", err)
+				return
+			}
+		} else {
+			err = vh.mach.SignOwnMasterKey(ctx)
+			if err != nil {
+				vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUser, "failed to sign our own master key: %w", err)
 				return
 			}
 		}
+	} else if masterKey != "" {
+		// Cross-signing situation.
+		//
+		// The master key was included in the list of keys to verify, so verify
+		// that it matches what we expect and sign their master key using the
+		// user-signing key.
+		theirSigningKeys, err := vh.mach.GetCrossSigningPublicKeys(ctx, txn.TheirUserID)
+		if err != nil {
+			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeKeyMismatch, "couldn't get %s's cross-signing keys: %w", txn.TheirUserID, err)
+			return
+		} else if theirSigningKeys.MasterKey.String() != masterKey {
+			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeKeyMismatch, "master keys do not match")
+			return
+		}
+
+		if err := vh.mach.SignUser(ctx, txn.TheirUserID, theirSigningKeys.MasterKey); err != nil {
+			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeInternalError, "failed to sign their master key: %w", err)
+			return
+		}
 	}
-	log.Info().Msg("All MACs verified")
 
 	txn.ReceivedTheirMAC = true
 	if txn.SentOurMAC {

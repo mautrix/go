@@ -227,6 +227,10 @@ type NetworkConnector interface {
 	// This should generally not do any work, it should just return a LoginProcess that remembers
 	// the user and will execute the requested flow. The actual work should start when [LoginProcess.Start] is called.
 	CreateLogin(ctx context.Context, user *User, flowID string) (LoginProcess, error)
+
+	// GetBridgeInfoVersion returns version numbers for bridge info and room capabilities respectively.
+	// When the versions change, the bridge will automatically resend bridge info to all rooms.
+	GetBridgeInfoVersion() (info, capabilities int)
 }
 
 type StoppableNetwork interface {
@@ -246,6 +250,9 @@ type DirectMediableNetwork interface {
 	Download(ctx context.Context, mediaID networkid.MediaID, params map[string]string) (mediaproxy.GetMediaResponse, error)
 }
 
+// IdentifierValidatingNetwork is an optional interface that network connectors can implement to validate the shape of user IDs.
+//
+// This should not perform any checks to see if the user ID actually exists on the network, just that the user ID looks valid.
 type IdentifierValidatingNetwork interface {
 	NetworkConnector
 	ValidateUserID(id networkid.UserID) bool
@@ -294,11 +301,6 @@ type MatrixMessageResponse struct {
 	PostSave func(context.Context, *database.Message)
 }
 
-type FileRestriction struct {
-	MaxSize   int64
-	MimeTypes []string
-}
-
 type NetworkGeneralCapabilities struct {
 	// Does the network connector support disappearing messages?
 	// This flag enables the message disappearing loop in the bridge.
@@ -306,35 +308,6 @@ type NetworkGeneralCapabilities struct {
 	// Should the bridge re-request user info on incoming messages even if the ghost already has info?
 	// By default, info is only requested for ghosts with no name, and other updating is left to events.
 	AggressiveUpdateInfo bool
-}
-
-type NetworkRoomCapabilities struct {
-	FormattedText bool
-	UserMentions  bool
-	RoomMentions  bool
-
-	LocationMessages bool
-	Captions         bool
-	MaxTextLength    int
-	MaxCaptionLength int
-	Polls            bool
-
-	Threads      bool
-	Replies      bool
-	Edits        bool
-	EditMaxCount int
-	EditMaxAge   time.Duration
-	Deletes      bool
-	DeleteMaxAge time.Duration
-
-	DefaultFileRestriction *FileRestriction
-	Files                  map[event.MessageType]FileRestriction
-
-	ReadReceipts bool
-
-	Reactions        bool
-	ReactionCount    int
-	AllowedReactions []string
 }
 
 // NetworkAPI is an interface representing a remote network client for a single user login.
@@ -369,7 +342,7 @@ type NetworkAPI interface {
 	// GetCapabilities returns the bridging capabilities in a given room.
 	// This can simply return a static list if the remote network has no per-chat capability differences,
 	// but all calls will include the portal, because some networks do have per-chat differences.
-	GetCapabilities(ctx context.Context, portal *Portal) *NetworkRoomCapabilities
+	GetCapabilities(ctx context.Context, portal *Portal) *event.RoomFeatures
 
 	// HandleMatrixMessage is called when a message is sent from Matrix in an existing portal room.
 	// This function should convert the message as appropriate, send it over to the remote network,
@@ -662,6 +635,16 @@ type IdentifierResolvingNetworkAPI interface {
 	ResolveIdentifier(ctx context.Context, identifier string, createChat bool) (*ResolveIdentifierResponse, error)
 }
 
+// GhostDMCreatingNetworkAPI is an optional extension to IdentifierResolvingNetworkAPI for starting chats with pre-validated user IDs.
+type GhostDMCreatingNetworkAPI interface {
+	IdentifierResolvingNetworkAPI
+	// CreateChatWithGhost may be called instead of [IdentifierResolvingNetworkAPI.ResolveIdentifier]
+	// when starting a chat with an internal user identifier that has been pre-validated using
+	// [IdentifierValidatingNetwork.ValidateUserID]. If this is not implemented, ResolveIdentifier
+	// will be used instead (by stringifying the ghost ID).
+	CreateChatWithGhost(ctx context.Context, ghost *Ghost) (*CreateChatResponse, error)
+}
+
 // ContactListingNetworkAPI is an optional interface that network connectors can implement to provide the user's contact list.
 type ContactListingNetworkAPI interface {
 	NetworkAPI
@@ -817,6 +800,8 @@ type PushConfig struct {
 }
 
 type PushableNetworkAPI interface {
+	NetworkAPI
+
 	RegisterPushNotifications(ctx context.Context, pushType PushType, token string) error
 	GetPushConfigs() *PushConfig
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"reflect"
 	"strconv"
 	"strings"
@@ -155,13 +156,61 @@ type RespUserDisplayName struct {
 }
 
 type RespUserProfile struct {
-	DisplayName string        `json:"displayname"`
-	AvatarURL   id.ContentURI `json:"avatar_url"`
+	DisplayName string         `json:"displayname,omitempty"`
+	AvatarURL   id.ContentURI  `json:"avatar_url,omitempty"`
+	Extra       map[string]any `json:"-"`
+}
+
+type marshalableUserProfile RespUserProfile
+
+func (r *RespUserProfile) UnmarshalJSON(data []byte) error {
+	err := json.Unmarshal(data, &r.Extra)
+	if err != nil {
+		return err
+	}
+	r.DisplayName, _ = r.Extra["displayname"].(string)
+	avatarURL, _ := r.Extra["avatar_url"].(string)
+	if avatarURL != "" {
+		r.AvatarURL, _ = id.ParseContentURI(avatarURL)
+	}
+	delete(r.Extra, "displayname")
+	delete(r.Extra, "avatar_url")
+	return nil
+}
+
+func (r *RespUserProfile) MarshalJSON() ([]byte, error) {
+	if len(r.Extra) == 0 {
+		return json.Marshal((*marshalableUserProfile)(r))
+	}
+	marshalMap := maps.Clone(r.Extra)
+	if r.DisplayName != "" {
+		marshalMap["displayname"] = r.DisplayName
+	} else {
+		delete(marshalMap, "displayname")
+	}
+	if !r.AvatarURL.IsEmpty() {
+		marshalMap["avatar_url"] = r.AvatarURL.String()
+	} else {
+		delete(marshalMap, "avatar_url")
+	}
+	return json.Marshal(r.Extra)
 }
 
 type RespMutualRooms struct {
 	Joined    []id.RoomID `json:"joined"`
 	NextBatch string      `json:"next_batch,omitempty"`
+}
+
+type RespRoomSummary struct {
+	PublicRoomInfo
+
+	Membership  event.Membership  `json:"membership,omitempty"`
+	RoomVersion event.RoomVersion `json:"room_version,omitempty"`
+	Encryption  id.Algorithm      `json:"encryption,omitempty"`
+
+	UnstableRoomVersion    event.RoomVersion `json:"im.nheko.summary.room_version,omitempty"`
+	UnstableRoomVersionOld event.RoomVersion `json:"im.nheko.summary.version,omitempty"`
+	UnstableEncryption     id.Algorithm      `json:"im.nheko.summary.encryption,omitempty"`
 }
 
 // RespRegisterAvailable is the JSON response for https://spec.matrix.org/v1.4/client-server-api/#get_matrixclientv3registeravailable
@@ -352,16 +401,7 @@ func (sjr SyncJoinedRoom) MarshalJSON() ([]byte, error) {
 }
 
 type SyncInvitedRoom struct {
-	Summary LazyLoadSummary `json:"summary"`
-	State   SyncEventsList  `json:"invite_state"`
-}
-
-type marshalableSyncInvitedRoom SyncInvitedRoom
-
-var syncInvitedRoomPathsToDelete = []string{"summary"}
-
-func (sir SyncInvitedRoom) MarshalJSON() ([]byte, error) {
-	return marshalAndDeleteEmpty((marshalableSyncInvitedRoom)(sir), syncInvitedRoomPathsToDelete)
+	State SyncEventsList `json:"invite_state"`
 }
 
 type SyncKnockedRoom struct {
@@ -449,6 +489,7 @@ type RespCapabilities struct {
 	SetDisplayname  *CapBooleanTrue  `json:"m.set_displayname,omitempty"`
 	SetAvatarURL    *CapBooleanTrue  `json:"m.set_avatar_url,omitempty"`
 	ThreePIDChanges *CapBooleanTrue  `json:"m.3pid_changes,omitempty"`
+	GetLoginToken   *CapBooleanTrue  `json:"m.get_login_token,omitempty"`
 
 	Custom map[string]interface{} `json:"-"`
 }
@@ -557,24 +598,35 @@ func (vers *CapRoomVersions) IsAvailable(version string) bool {
 	return available
 }
 
+type RespPublicRooms struct {
+	Chunk                  []*PublicRoomInfo `json:"chunk"`
+	NextBatch              string            `json:"next_batch,omitempty"`
+	PrevBatch              string            `json:"prev_batch,omitempty"`
+	TotalRoomCountEstimate int               `json:"total_room_count_estimate"`
+}
+
+type PublicRoomInfo struct {
+	RoomID           id.RoomID           `json:"room_id"`
+	AvatarURL        id.ContentURIString `json:"avatar_url,omitempty"`
+	CanonicalAlias   id.RoomAlias        `json:"canonical_alias,omitempty"`
+	GuestCanJoin     bool                `json:"guest_can_join"`
+	JoinRule         event.JoinRule      `json:"join_rule,omitempty"`
+	Name             string              `json:"name,omitempty"`
+	NumJoinedMembers int                 `json:"num_joined_members"`
+	RoomType         event.RoomType      `json:"room_type"`
+	Topic            string              `json:"topic,omitempty"`
+	WorldReadable    bool                `json:"world_readable"`
+}
+
 // RespHierarchy is the JSON response for https://spec.matrix.org/v1.4/client-server-api/#get_matrixclientv1roomsroomidhierarchy
 type RespHierarchy struct {
-	NextBatch string            `json:"next_batch,omitempty"`
-	Rooms     []ChildRoomsChunk `json:"rooms"`
+	NextBatch string             `json:"next_batch,omitempty"`
+	Rooms     []*ChildRoomsChunk `json:"rooms"`
 }
 
 type ChildRoomsChunk struct {
-	AvatarURL        id.ContentURI           `json:"avatar_url,omitempty"`
-	CanonicalAlias   id.RoomAlias            `json:"canonical_alias,omitempty"`
-	ChildrenState    []StrippedStateWithTime `json:"children_state"`
-	GuestCanJoin     bool                    `json:"guest_can_join"`
-	JoinRule         event.JoinRule          `json:"join_rule,omitempty"`
-	Name             string                  `json:"name,omitempty"`
-	NumJoinedMembers int                     `json:"num_joined_members"`
-	RoomID           id.RoomID               `json:"room_id"`
-	RoomType         event.RoomType          `json:"room_type"`
-	Topic            string                  `json:"topic,omitempty"`
-	WorldReadble     bool                    `json:"world_readable"`
+	PublicRoomInfo
+	ChildrenState []StrippedStateWithTime `json:"children_state"`
 }
 
 type StrippedStateWithTime struct {
@@ -627,4 +679,11 @@ type RespKeyBackupData[S any] struct {
 type RespRoomKeysUpdate struct {
 	Count int    `json:"count"`
 	ETag  string `json:"etag"`
+}
+
+type RespOpenIDToken struct {
+	AccessToken      string `json:"access_token"`
+	ExpiresIn        int    `json:"expires_in"`
+	MatrixServerName string `json:"matrix_server_name"`
+	TokenType        string `json:"token_type"` // Always "Bearer"
 }

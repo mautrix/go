@@ -450,13 +450,17 @@ func (br *Connector) internalSendMessageStatus(ctx context.Context, ms *bridgev2
 		return ""
 	}
 	log := zerolog.Ctx(ctx)
-	err := br.SendMessageCheckpoints([]*status.MessageCheckpoint{ms.ToCheckpoint(evt)})
-	if err != nil {
-		log.Err(err).Msg("Failed to send message checkpoint")
+
+	if !evt.IsSourceEventDoublePuppeted {
+		err := br.SendMessageCheckpoints([]*status.MessageCheckpoint{ms.ToCheckpoint(evt)})
+		if err != nil {
+			log.Err(err).Msg("Failed to send message checkpoint")
+		}
 	}
+
 	if !ms.DisableMSS && br.Config.Matrix.MessageStatusEvents {
 		mssEvt := ms.ToMSSEvent(evt)
-		_, err = br.Bot.SendMessageEvent(ctx, evt.RoomID, event.BeeperMessageStatus, mssEvt)
+		_, err := br.Bot.SendMessageEvent(ctx, evt.RoomID, event.BeeperMessageStatus, mssEvt)
 		if err != nil {
 			log.Err(err).
 				Stringer("room_id", evt.RoomID).
@@ -482,7 +486,7 @@ func (br *Connector) internalSendMessageStatus(ctx context.Context, ms *bridgev2
 		}
 	}
 	if ms.Status == event.MessageStatusSuccess && br.Config.Matrix.DeliveryReceipts {
-		err = br.Bot.SendReceipt(ctx, evt.RoomID, evt.SourceEventID, event.ReceiptTypeRead, nil)
+		err := br.Bot.SendReceipt(ctx, evt.RoomID, evt.SourceEventID, event.ReceiptTypeRead, nil)
 		if err != nil {
 			log.Err(err).
 				Stringer("room_id", evt.RoomID).
@@ -575,6 +579,10 @@ func (br *Connector) IsConfusableName(ctx context.Context, roomID id.RoomID, use
 	return br.AS.StateStore.IsConfusableName(ctx, roomID, userID, name)
 }
 
+func (br *Connector) GetUniqueBridgeID() string {
+	return fmt.Sprintf("%s/%s", br.Config.Homeserver.Domain, br.Config.AppService.ID)
+}
+
 func (br *Connector) BatchSend(ctx context.Context, roomID id.RoomID, req *mautrix.ReqBeeperBatchSend, extras []*bridgev2.MatrixSendExtra) (*mautrix.RespBeeperBatchSend, error) {
 	if encrypted, err := br.StateStore.IsEncrypted(ctx, roomID); err != nil {
 		return nil, fmt.Errorf("failed to check if room is encrypted: %w", err)
@@ -617,6 +625,10 @@ func (br *Connector) GenerateDeterministicEventID(roomID id.RoomID, _ networkid.
 	copy(eventID[1+hashB64Len+1:], br.deterministicEventIDServer)
 
 	return id.EventID(unsafe.String(unsafe.SliceData(eventID), len(eventID)))
+}
+
+func (br *Connector) GenerateDeterministicRoomID(key networkid.PortalKey) id.RoomID {
+	return id.RoomID(fmt.Sprintf("!%s.%s:%s", key.ID, key.Receiver, br.ServerName()))
 }
 
 func (br *Connector) GenerateReactionEventID(roomID id.RoomID, targetMessage *database.Message, sender networkid.UserID, emojiID networkid.EmojiID) id.EventID {

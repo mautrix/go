@@ -111,6 +111,8 @@ var (
 	SpecV19  = MustParseSpecVersion("v1.9")
 	SpecV110 = MustParseSpecVersion("v1.10")
 	SpecV111 = MustParseSpecVersion("v1.11")
+	SpecV112 = MustParseSpecVersion("v1.12")
+	SpecV113 = MustParseSpecVersion("v1.13")
 )
 
 func (svf SpecVersionFormat) String() string {

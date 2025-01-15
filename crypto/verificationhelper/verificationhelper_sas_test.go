@@ -165,7 +165,9 @@ func TestVerification_SAS(t *testing.T) {
 
 				// Ensure that the receiving device showed emojis and SAS numbers.
 				assert.Len(t, receivingCallbacks.GetDecimalsShown(txnID), 3)
-				assert.Len(t, receivingCallbacks.GetEmojisShown(txnID), 7)
+				emojis, descriptions := receivingCallbacks.GetEmojisAndDescriptionsShown(txnID)
+				assert.Len(t, emojis, 7)
+				assert.Len(t, descriptions, 7)
 			} else {
 				// Process the first key event on the sending device.
 				ts.dispatchToDevice(t, ctx, sendingClient)
@@ -178,7 +180,9 @@ func TestVerification_SAS(t *testing.T) {
 
 				// Ensure that the sending device showed emojis and SAS numbers.
 				assert.Len(t, sendingCallbacks.GetDecimalsShown(txnID), 3)
-				assert.Len(t, sendingCallbacks.GetEmojisShown(txnID), 7)
+				emojis, descriptions := sendingCallbacks.GetEmojisAndDescriptionsShown(txnID)
+				assert.Len(t, emojis, 7)
+				assert.Len(t, descriptions, 7)
 			}
 			assert.Equal(t, txnID, secondKeyEvt.TransactionID)
 			assert.NotEmpty(t, secondKeyEvt.Key)
@@ -193,7 +197,10 @@ func TestVerification_SAS(t *testing.T) {
 				ts.dispatchToDevice(t, ctx, receivingClient)
 			}
 			assert.Equal(t, sendingCallbacks.GetDecimalsShown(txnID), receivingCallbacks.GetDecimalsShown(txnID))
-			assert.Equal(t, sendingCallbacks.GetEmojisShown(txnID), receivingCallbacks.GetEmojisShown(txnID))
+			sendingEmojis, sendingDescriptions := sendingCallbacks.GetEmojisAndDescriptionsShown(txnID)
+			receivingEmojis, receivingDescriptions := receivingCallbacks.GetEmojisAndDescriptionsShown(txnID)
+			assert.Equal(t, sendingEmojis, receivingEmojis)
+			assert.Equal(t, sendingDescriptions, receivingDescriptions)
 
 			// Test that the first MAC event is correct
 			var firstMACEvt *event.VerificationMACEventContent

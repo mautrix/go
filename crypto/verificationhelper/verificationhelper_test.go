@@ -138,7 +138,7 @@ func TestVerification_Start(t *testing.T) {
 			assert.NotEmpty(t, toDeviceInbox[receivingDeviceID])
 			assert.NotEmpty(t, toDeviceInbox[receivingDeviceID2])
 			assert.Equal(t, toDeviceInbox[receivingDeviceID], toDeviceInbox[receivingDeviceID2])
-			assert.Len(t, toDeviceInbox[receivingDeviceID], 1)
+			require.Len(t, toDeviceInbox[receivingDeviceID], 1)
 
 			// Ensure that the verification request is correct.
 			verificationRequest := toDeviceInbox[receivingDeviceID][0].Content.AsVerificationRequest()

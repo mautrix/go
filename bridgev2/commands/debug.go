@@ -57,4 +57,5 @@ var CommandRegisterPush = &FullHandler{
 	},
 	RequiresAdmin: true,
 	RequiresLogin: true,
+	NetworkAPI:    NetworkAPIImplements[bridgev2.PushableNetworkAPI],
 }

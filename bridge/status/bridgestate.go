@@ -53,6 +53,26 @@ const (
 	StateLoggedOut           BridgeStateEvent = "LOGGED_OUT"
 )
 
+func (e BridgeStateEvent) IsValid() bool {
+	switch e {
+	case
+		StateStarting,
+		StateUnconfigured,
+		StateRunning,
+		StateBridgeUnreachable,
+		StateConnecting,
+		StateBackfilling,
+		StateConnected,
+		StateTransientDisconnect,
+		StateBadCredentials,
+		StateUnknownError,
+		StateLoggedOut:
+		return true
+	default:
+		return false
+	}
+}
+
 type RemoteProfile struct {
 	Phone    string              `json:"phone,omitempty"`
 	Email    string              `json:"email,omitempty"`

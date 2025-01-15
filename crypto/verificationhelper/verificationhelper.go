@@ -42,8 +42,9 @@ type RequiredCallbacks interface {
 type ShowSASCallbacks interface {
 	// ShowSAS is a callback that is called when the SAS verification has
 	// generated a short authentication string to show. It is guaranteed that
-	// either the emojis list, or the decimals list, or both will be present.
-	ShowSAS(ctx context.Context, txnID id.VerificationTransactionID, emojis []rune, decimals []int)
+	// either the emojis and emoji descriptions lists, or the decimals list, or
+	// both will be present.
+	ShowSAS(ctx context.Context, txnID id.VerificationTransactionID, emojis []rune, emojiDescriptions []string, decimals []int)
 }
 
 type ShowQRCodeCallbacks interface {
@@ -75,7 +76,7 @@ type VerificationHelper struct {
 	verificationCancelledCallback func(ctx context.Context, txnID id.VerificationTransactionID, code event.VerificationCancelCode, reason string)
 	verificationDone              func(ctx context.Context, txnID id.VerificationTransactionID)
 
-	showSAS func(ctx context.Context, txnID id.VerificationTransactionID, emojis []rune, decimals []int)
+	showSAS func(ctx context.Context, txnID id.VerificationTransactionID, emojis []rune, emojiDescriptions []string, decimals []int)
 
 	scanQRCode   func(ctx context.Context, txnID id.VerificationTransactionID)
 	showQRCode   func(ctx context.Context, txnID id.VerificationTransactionID, qrCode *QRCode)
