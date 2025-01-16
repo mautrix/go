@@ -340,7 +340,7 @@ encryption:
     default: false
     # Whether to require all messages to be encrypted and drop any unencrypted messages.
     require: false
-    # Whether to use MSC2409/MSC3202 instead of /sync long polling for receiving encryption-related data.
+    # Whether to use MSC3202/MSC4203 instead of /sync long polling for receiving encryption-related data.
     # This option is not yet compatible with standard Matrix servers like Synapse and should not be used.
     # Changing this option requires updating the appservice registration file.
     appservice: false
