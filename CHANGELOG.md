@@ -1,3 +1,38 @@
+## v0.23.0 (2025-01-16)
+
+* **Breaking change *(client)*** Changed `JoinRoom` parameters to allow multiple
+  `via`s.
+* **Breaking change *(bridgev2)*** Updated capability system.
+  * The return type of `NetworkAPI.GetCapabilities` is now different.
+  * Media type capabilities are enforced automatically by bridgev2.
+  * Capabilities are now sent to Matrix rooms using the
+    `com.beeper.room_features` state event.
+* *(client)* Added `GetRoomSummary` to implement [MSC3266].
+* *(client)* Added support for arbitrary profile fields to implement [MSC4133]
+  (thanks to [@nexy7574] in [#337]).
+* *(crypto)* Started storing olm message hashes to prevent decryption errors
+  if messages are repeated (e.g. if the app crashes right after decrypting).
+* *(crypto)* Improved olm session unwedging to check when the last session was
+  created instead of only relying on an in-memory map.
+* *(crypto/verificationhelper)* Fixed emoji verification not doing cross-signing
+  properly after a successful verification.
+* *(bridgev2/config)* Moved MSC4190 flag from `appservice` to `encryption`.
+* *(bridgev2/space)* Fixed failing to add rooms to spaces if the room create
+  call was made with a temporary context.
+* *(bridgev2/commands)* Changed `help` command to hide commands which require
+  interfaces that aren't implemented by the network connector.
+* *(bridgev2/matrixinterface)* Moved deterministic room ID generation to Matrix
+  connector.
+* *(bridgev2)* Fixed service member state event not being set correctly when
+  creating a DM by inviting a ghost user.
+* *(bridgev2)* Fixed `RemoteReactionSync` events replacing all reactions every
+  time instead of only changed ones.
+
+[MSC3266]: https://github.com/matrix-org/matrix-spec-proposals/pull/3266
+[MSC4133]: https://github.com/matrix-org/matrix-spec-proposals/pull/4133
+[@nexy7574]: https://github.com/nexy7574
+[#337]: https://github.com/mautrix/go/pull/337
+
 ## v0.22.1 (2024-12-16)
 
 * *(crypto)* Added automatic cleanup when there are too many olm sessions with
