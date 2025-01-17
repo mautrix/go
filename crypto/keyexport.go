@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"math"
 
+	"go.mau.fi/util/exerrors"
 	"go.mau.fi/util/random"
 	"golang.org/x/crypto/pbkdf2"
 
@@ -81,9 +82,13 @@ func makeExportKeys(passphrase string) (encryptionKey, hashKey, salt, iv []byte)
 func exportSessions(sessions []*InboundGroupSession) ([]ExportedSession, error) {
 	export := make([]ExportedSession, len(sessions))
 	for i, session := range sessions {
-		key, err := session.Internal.Export(session.Internal.FirstKnownIndex())
+		key, err := session.InternalLibolm.Export(session.InternalLibolm.FirstKnownIndex())
 		if err != nil {
 			return nil, fmt.Errorf("failed to export session: %w", err)
+		}
+		keyGoolm := exerrors.Must(session.InternalGoolm.Export(session.InternalGoolm.FirstKnownIndex()))
+		if !bytes.Equal(key, keyGoolm) {
+			panic("keys not equal")
 		}
 		export[i] = ExportedSession{
 			Algorithm:         id.AlgorithmMegolmV1,

@@ -7,6 +7,7 @@
 package crypto
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -203,7 +204,11 @@ func (mach *OlmMachine) checkUndecryptableMessageIndexDuplication(ctx context.Co
 		log.Warn().Err(decodeErr).Msg("Failed to parse message index to check if it's a duplicate for message that failed to decrypt")
 		return 0, fmt.Errorf("%w (also failed to parse message index)", olm.UnknownMessageIndex)
 	}
-	firstKnown := sess.Internal.FirstKnownIndex()
+	firstKnown := sess.InternalLibolm.FirstKnownIndex()
+	firstKnownGoolm := sess.InternalGoolm.FirstKnownIndex()
+	if firstKnown != firstKnownGoolm {
+		panic(fmt.Sprintf("firstKnown not the same %d != %d", firstKnown, firstKnownGoolm))
+	}
 	log = log.With().Uint("message_index", messageIndex).Uint32("first_known_index", firstKnown).Logger()
 	if ok, err := mach.CryptoStore.ValidateMessageIndex(ctx, sess.SenderKey, content.SessionID, evt.ID, messageIndex, evt.Timestamp); err != nil {
 		log.Debug().Err(err).Msg("Failed to check if message index is duplicate")
@@ -228,7 +233,16 @@ func (mach *OlmMachine) actuallyDecryptMegolmEvent(ctx context.Context, evt *eve
 	} else if content.SenderKey != "" && content.SenderKey != sess.SenderKey {
 		return sess, nil, 0, SenderKeyMismatch
 	}
-	plaintext, messageIndex, err := sess.Internal.Decrypt(content.MegolmCiphertext)
+	plaintextGoolm, messageIndexGoolm, errGoolm := sess.InternalGoolm.Decrypt(content.MegolmCiphertext)
+	plaintext, messageIndex, err := sess.InternalLibolm.Decrypt(content.MegolmCiphertext)
+	if !bytes.Equal(plaintextGoolm, plaintext) {
+		panic("plaintext different")
+	} else if messageIndexGoolm != messageIndex {
+		panic(fmt.Sprintf("message index different %d != %d", messageIndexGoolm, messageIndex))
+	} else if err != nil && errGoolm == nil {
+		panic(fmt.Sprintf("goolm didn't error %v", err))
+	}
+
 	if err != nil {
 		if errors.Is(err, olm.UnknownMessageIndex) && mach.RatchetKeysOnDecrypt {
 			messageIndex, err = mach.checkUndecryptableMessageIndexDuplication(ctx, sess, evt, content)
@@ -277,7 +291,11 @@ func (mach *OlmMachine) actuallyDecryptMegolmEvent(ctx context.Context, evt *eve
 	if len(sess.RatchetSafety.MissedIndices) > 0 {
 		ratchetTargetIndex = uint32(sess.RatchetSafety.MissedIndices[0])
 	}
-	ratchetCurrentIndex := sess.Internal.FirstKnownIndex()
+	ratchetCurrentIndexGoolm := sess.InternalGoolm.FirstKnownIndex()
+	ratchetCurrentIndex := sess.InternalLibolm.FirstKnownIndex()
+	if ratchetCurrentIndexGoolm != ratchetCurrentIndex {
+		panic(fmt.Sprintf("ratchet current index different %d != %d", ratchetCurrentIndexGoolm, ratchetCurrentIndex))
+	}
 	log := zerolog.Ctx(ctx).With().
 		Uint32("prev_ratchet_index", ratchetCurrentIndex).
 		Uint32("new_ratchet_index", ratchetTargetIndex).
