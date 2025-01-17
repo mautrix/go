@@ -1,32 +1,12 @@
-package message
+package message_test
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"maunium.net/go/mautrix/crypto/goolm/message"
 )
-
-func TestEncodeLengthInt(t *testing.T) {
-	numbers := []uint32{127, 128, 16383, 16384, 32767}
-	expected := []int{1, 2, 2, 3, 3}
-	for curIndex := range numbers {
-		assert.Equal(t, expected[curIndex], encodeVarIntByteLength(numbers[curIndex]))
-	}
-}
-
-func TestEncodeLengthString(t *testing.T) {
-	var strings [][]byte
-	var expected []int
-	strings = append(strings, []byte("test"))
-	expected = append(expected, 1+4)
-	strings = append(strings, []byte("this is a long message with a length of 127 so that the varint of the length is just one byte. just needs some padding---------"))
-	expected = append(expected, 1+127)
-	strings = append(strings, []byte("this is an even longer message with a length between 128 and 16383 so that the varint of the length needs two byte. just needs some padding again ---------"))
-	expected = append(expected, 2+155)
-	for curIndex := range strings {
-		assert.Equal(t, expected[curIndex], encodeVarStringByteLength(strings[curIndex]))
-	}
-}
 
 func TestEncodeInt(t *testing.T) {
 	var ints []uint32
@@ -40,7 +20,9 @@ func TestEncodeInt(t *testing.T) {
 	ints = append(ints, 16383)
 	expected = append(expected, []byte{0b11111111, 0b01111111})
 	for curIndex := range ints {
-		assert.Equal(t, expected[curIndex], encodeVarInt(ints[curIndex]))
+		var encoder message.Encoder
+		encoder.PutVarInt(uint64(ints[curIndex]))
+		assert.Equal(t, expected[curIndex], encoder.Bytes())
 	}
 }
 
@@ -70,6 +52,8 @@ func TestEncodeString(t *testing.T) {
 	res = append(res, curTest...) //Add string itself
 	expected = append(expected, res)
 	for curIndex := range strings {
-		assert.Equal(t, expected[curIndex], encodeVarString(strings[curIndex]))
+		var encoder message.Encoder
+		encoder.PutVarBytes(strings[curIndex])
+		assert.Equal(t, expected[curIndex], encoder.Bytes())
 	}
 }

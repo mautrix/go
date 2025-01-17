@@ -2,6 +2,7 @@ package message
 
 import (
 	"bytes"
+	"io"
 
 	"maunium.net/go/mautrix/crypto/goolm/aessha2"
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
@@ -22,85 +23,63 @@ type GroupMessage struct {
 }
 
 // Decodes decodes the input and populates the corresponding fileds. MAC and signature are ignored but have to be present.
-func (r *GroupMessage) Decode(input []byte) error {
+func (r *GroupMessage) Decode(input []byte) (err error) {
 	r.Version = 0
 	r.MessageIndex = 0
 	r.Ciphertext = nil
 	if len(input) == 0 {
 		return nil
 	}
-	//first Byte is always version
-	r.Version = input[0]
-	curPos := 1
-	for curPos < len(input)-countMACBytesGroupMessage-crypto.Ed25519SignatureSize {
-		//Read Key
-		curKey, readBytes := decodeVarInt(input[curPos:])
-		if err := checkDecodeErr(readBytes); err != nil {
-			return err
-		}
-		curPos += readBytes
-		if (curKey & 0b111) == 0 {
-			//The value is of type varint
-			value, readBytes := decodeVarInt(input[curPos:])
-			if err := checkDecodeErr(readBytes); err != nil {
-				return err
+
+	decoder := NewDecoder(input[:len(input)-countMACBytesGroupMessage-crypto.Ed25519SignatureSize])
+	r.Version, err = decoder.ReadByte() // First byte is the version
+	if err != nil {
+		return
+	}
+
+	for {
+		// Read Key
+		if curKey, err := decoder.ReadVarInt(); err != nil {
+			if err == io.EOF {
+				// No more keys to read
+				return nil
 			}
-			curPos += readBytes
-			switch curKey {
-			case messageIndexTag:
-				r.MessageIndex = value
+			return err
+		} else if (curKey & 0b111) == 0 {
+			// The value is of type varint
+			if value, err := decoder.ReadVarInt(); err != nil {
+				return err
+			} else if curKey == messageIndexTag {
+				r.MessageIndex = uint32(value)
 				r.HasMessageIndex = true
 			}
 		} else if (curKey & 0b111) == 2 {
-			//The value is of type string
-			value, readBytes := decodeVarString(input[curPos:])
-			if err := checkDecodeErr(readBytes); err != nil {
+			// The value is of type string
+			if value, err := decoder.ReadVarBytes(); err != nil {
 				return err
-			}
-			curPos += readBytes
-			switch curKey {
-			case cipherTextTag:
+			} else if curKey == cipherTextTag {
 				r.Ciphertext = value
 			}
 		}
 	}
-
-	return nil
 }
 
 // EncodeAndMACAndSign encodes the message, creates the mac with the key and the cipher and signs the message.
 // If macKey or cipher is nil, no mac is appended. If signKey is nil, no signature is appended.
 func (r *GroupMessage) EncodeAndMACAndSign(cipher aessha2.AESSHA2, signKey crypto.Ed25519KeyPair) ([]byte, error) {
-	var lengthOfMessage int
-	lengthOfMessage += 1 //Version
-	lengthOfMessage += encodeVarIntByteLength(messageIndexTag) + encodeVarIntByteLength(r.MessageIndex)
-	lengthOfMessage += encodeVarIntByteLength(cipherTextTag) + encodeVarStringByteLength(r.Ciphertext)
-	out := make([]byte, lengthOfMessage)
-	out[0] = r.Version
-	curPos := 1
-	encodedTag := encodeVarInt(messageIndexTag)
-	copy(out[curPos:], encodedTag)
-	curPos += len(encodedTag)
-	encodedValue := encodeVarInt(r.MessageIndex)
-	copy(out[curPos:], encodedValue)
-	curPos += len(encodedValue)
-	encodedTag = encodeVarInt(cipherTextTag)
-	copy(out[curPos:], encodedTag)
-	curPos += len(encodedTag)
-	encodedValue = encodeVarString(r.Ciphertext)
-	copy(out[curPos:], encodedValue)
-	curPos += len(encodedValue)
-	mac, err := r.MAC(cipher, out)
+	var encoder Encoder
+	encoder.PutByte(r.Version)
+	encoder.PutVarInt(messageIndexTag)
+	encoder.PutVarInt(uint64(r.MessageIndex))
+	encoder.PutVarInt(cipherTextTag)
+	encoder.PutVarBytes(r.Ciphertext)
+	mac, err := r.MAC(cipher, encoder.Bytes())
 	if err != nil {
 		return nil, err
 	}
-	out = append(out, mac[:countMACBytesGroupMessage]...)
-	signature, err := signKey.Sign(out)
-	if err != nil {
-		return nil, err
-	}
-	out = append(out, signature...)
-	return out, nil
+	ciphertextWithMAC := append(encoder.Bytes(), mac[:countMACBytesGroupMessage]...)
+	signature, err := signKey.Sign(ciphertextWithMAC)
+	return append(ciphertextWithMAC, signature...), err
 }
 
 // MAC returns the MAC of the message calculated  with cipher and key. The length of the MAC is truncated to the correct length.
