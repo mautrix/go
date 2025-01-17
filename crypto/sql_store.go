@@ -133,12 +133,9 @@ func (store *SQLCryptoStore) PutAccount(ctx context.Context, account *OlmAccount
 	if err != nil {
 		return err
 	}
-	goolmBytes, err := account.InternalGoolm.Pickle(store.PickleKey)
+	err = account.InternalGoolm.Unpickle(pickled, store.PickleKey)
 	if err != nil {
-		panic(fmt.Errorf("pickling goolm account errored %w", err))
-	}
-	if !bytes.Equal(pickled, goolmBytes) {
-		panic("libolm and goolm pickled to different values")
+		panic(fmt.Sprintf("failed to unpickle account using goolm: %+v", err))
 	}
 	_, err = store.DB.Exec(ctx, `
 		INSERT INTO crypto_account (device_id, shared, sync_token, account, account_id, key_backup_version) VALUES ($1, $2, $3, $4, $5, $6)
