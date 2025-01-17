@@ -20,7 +20,10 @@ import (
 	"fmt"
 	"time"
 
-	"maunium.net/go/mautrix/crypto/olm"
+	"go.mau.fi/util/exerrors"
+
+	"maunium.net/go/mautrix/crypto/goolm/session"
+	"maunium.net/go/mautrix/crypto/libolm"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -92,30 +95,34 @@ func decryptKeyExport(passphrase string, exportData []byte) ([]ExportedSession, 
 	return sessionsJSON, nil
 }
 
-func (mach *OlmMachine) importExportedRoomKey(ctx context.Context, session ExportedSession) (bool, error) {
-	if session.Algorithm != id.AlgorithmMegolmV1 {
+func (mach *OlmMachine) importExportedRoomKey(ctx context.Context, sess ExportedSession) (bool, error) {
+	if sess.Algorithm != id.AlgorithmMegolmV1 {
 		return false, ErrInvalidExportedAlgorithm
 	}
 
-	igsInternal, err := olm.InboundGroupSessionImport([]byte(session.SessionKey))
+	igsInternal, err := libolm.InboundGroupSessionImport([]byte(sess.SessionKey))
 	if err != nil {
 		return false, fmt.Errorf("failed to import session: %w", err)
-	} else if igsInternal.ID() != session.SessionID {
+	} else if igsInternal.ID() != sess.SessionID {
 		return false, ErrMismatchingExportedSessionID
 	}
 	igs := &InboundGroupSession{
-		Internal:   igsInternal,
-		SigningKey: session.SenderClaimedKeys.Ed25519,
-		SenderKey:  session.SenderKey,
-		RoomID:     session.RoomID,
+		InternalLibolm: igsInternal,
+		InternalGoolm:  exerrors.Must(session.NewMegolmInboundSessionFromExport([]byte(sess.SessionKey))),
+		SigningKey:     sess.SenderClaimedKeys.Ed25519,
+		SenderKey:      sess.SenderKey,
+		RoomID:         sess.RoomID,
 		// TODO should we add something here to mark the signing key as unverified like key requests do?
-		ForwardingChains: session.ForwardingChains,
+		ForwardingChains: sess.ForwardingChains,
 
 		ReceivedAt: time.Now().UTC(),
 	}
 	existingIGS, _ := mach.CryptoStore.GetGroupSession(ctx, igs.RoomID, igs.ID())
-	firstKnownIndex := igs.Internal.FirstKnownIndex()
-	if existingIGS != nil && existingIGS.Internal.FirstKnownIndex() <= firstKnownIndex {
+	firstKnownIndex := igs.InternalLibolm.FirstKnownIndex()
+	if firstKnownIndex != igs.InternalGoolm.FirstKnownIndex() {
+		panic("indexes different")
+	}
+	if existingIGS != nil && existingIGS.InternalLibolm.FirstKnownIndex() <= firstKnownIndex {
 		// We already have an equivalent or better session in the store, so don't override it.
 		return false, nil
 	}
@@ -123,7 +130,7 @@ func (mach *OlmMachine) importExportedRoomKey(ctx context.Context, session Expor
 	if err != nil {
 		return false, fmt.Errorf("failed to store imported session: %w", err)
 	}
-	mach.markSessionReceived(ctx, session.RoomID, igs.ID(), firstKnownIndex)
+	mach.markSessionReceived(ctx, sess.RoomID, igs.ID(), firstKnownIndex)
 	return true, nil
 }
 

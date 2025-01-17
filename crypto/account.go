@@ -16,6 +16,7 @@ import (
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto/canonicaljson"
 	"maunium.net/go/mautrix/crypto/goolm/account"
+	"maunium.net/go/mautrix/crypto/libolm"
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/crypto/signatures"
 	"maunium.net/go/mautrix/id"
@@ -31,7 +32,7 @@ type OlmAccount struct {
 }
 
 func NewOlmAccount() *OlmAccount {
-	libolmAccount, err := olm.NewAccount()
+	libolmAccount, err := libolm.NewAccount()
 	if err != nil {
 		panic(err)
 	}

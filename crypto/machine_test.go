@@ -60,10 +60,12 @@ func TestRatchetMegolmSession(t *testing.T) {
 	assert.NoError(t, err)
 	inSess, err := mach.CryptoStore.GetGroupSession(context.TODO(), "meow", outSess.ID())
 	require.NoError(t, err)
-	assert.Equal(t, uint32(0), inSess.Internal.FirstKnownIndex())
+	assert.Equal(t, uint32(0), inSess.InternalLibolm.FirstKnownIndex())
+	assert.Equal(t, uint32(0), inSess.InternalGoolm.FirstKnownIndex())
 	err = inSess.RatchetTo(10)
 	assert.NoError(t, err)
-	assert.Equal(t, uint32(10), inSess.Internal.FirstKnownIndex())
+	assert.Equal(t, uint32(10), inSess.InternalLibolm.FirstKnownIndex())
+	assert.Equal(t, uint32(10), inSess.InternalGoolm.FirstKnownIndex())
 }
 
 func TestOlmMachineOlmMegolmSessions(t *testing.T) {

@@ -20,10 +20,13 @@ import (
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/dbutil"
+	"go.mau.fi/util/exerrors"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto/goolm/account"
 	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
+	"maunium.net/go/mautrix/crypto/goolm/session"
+	"maunium.net/go/mautrix/crypto/libolm"
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/crypto/sql_store_upgrade"
 	"maunium.net/go/mautrix/event"
@@ -334,9 +337,13 @@ func datePtr(t time.Time) *time.Time {
 
 // PutGroupSession stores an inbound Megolm group session for a room, sender and session.
 func (store *SQLCryptoStore) PutGroupSession(ctx context.Context, session *InboundGroupSession) error {
-	sessionBytes, err := session.Internal.Pickle(store.PickleKey)
+	sessionBytes, err := session.InternalLibolm.Pickle(store.PickleKey)
 	if err != nil {
 		return err
+	}
+	sessionBytesGoolm := exerrors.Must(session.InternalGoolm.Pickle(store.PickleKey))
+	if !bytes.Equal(sessionBytes, sessionBytesGoolm) {
+		panic("different session bytes")
 	}
 	forwardingChains := strings.Join(session.ForwardingChains, ",")
 	ratchetSafety, err := json.Marshal(&session.RatchetSafety)
@@ -402,12 +409,13 @@ func (store *SQLCryptoStore) GetGroupSession(ctx context.Context, roomID id.Room
 			Reason:    withheldReason.String,
 		}
 	}
-	igs, chains, rs, err := store.postScanInboundGroupSession(sessionBytes, ratchetSafetyBytes, forwardingChains.String)
+	libolmIgs, goolmIgs, chains, rs, err := store.postScanInboundGroupSession(sessionBytes, ratchetSafetyBytes, forwardingChains.String)
 	if err != nil {
 		return nil, err
 	}
 	return &InboundGroupSession{
-		Internal:         igs,
+		InternalLibolm:   libolmIgs,
+		InternalGoolm:    goolmIgs,
 		SigningKey:       id.Ed25519(signingKey.String),
 		SenderKey:        id.Curve25519(senderKey.String),
 		RoomID:           roomID,
@@ -522,12 +530,18 @@ func (store *SQLCryptoStore) GetWithheldGroupSession(ctx context.Context, roomID
 	}, nil
 }
 
-func (store *SQLCryptoStore) postScanInboundGroupSession(sessionBytes, ratchetSafetyBytes []byte, forwardingChains string) (igs olm.InboundGroupSession, chains []string, safety RatchetSafety, err error) {
-	igs = olm.NewBlankInboundGroupSession()
+func (store *SQLCryptoStore) postScanInboundGroupSession(sessionBytes, ratchetSafetyBytes []byte, forwardingChains string) (igs olm.InboundGroupSession, igsGoolm olm.InboundGroupSession, chains []string, safety RatchetSafety, err error) {
+	igs = libolm.NewBlankInboundGroupSession()
 	err = igs.Unpickle(sessionBytes, store.PickleKey)
 	if err != nil {
 		return
 	}
+
+	igsGoolm, err = session.MegolmInboundSessionFromPickled(sessionBytes, store.PickleKey)
+	if err != nil {
+		return
+	}
+
 	if forwardingChains != "" {
 		chains = strings.Split(forwardingChains, ",")
 	}
@@ -553,12 +567,13 @@ func (store *SQLCryptoStore) scanInboundGroupSession(rows dbutil.Scannable) (*In
 	if err != nil {
 		return nil, err
 	}
-	igs, chains, rs, err := store.postScanInboundGroupSession(sessionBytes, ratchetSafetyBytes, forwardingChains.String)
+	igsLibolm, igsGoolm, chains, rs, err := store.postScanInboundGroupSession(sessionBytes, ratchetSafetyBytes, forwardingChains.String)
 	if err != nil {
 		return nil, err
 	}
 	return &InboundGroupSession{
-		Internal:         igs,
+		InternalLibolm:   igsLibolm,
+		InternalGoolm:    igsGoolm,
 		SigningKey:       id.Ed25519(signingKey.String),
 		SenderKey:        id.Curve25519(senderKey.String),
 		RoomID:           roomID,

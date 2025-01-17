@@ -579,7 +579,10 @@ func (mach *OlmMachine) createGroupSession(ctx context.Context, senderKey id.Sen
 		log.Err(err).Str("session_id", sessionID.String()).Msg("Failed to store new inbound group session")
 		return fmt.Errorf("failed to store new inbound group session: %w", err)
 	}
-	mach.markSessionReceived(ctx, roomID, sessionID, igs.Internal.FirstKnownIndex())
+	if igs.InternalLibolm.FirstKnownIndex() != igs.InternalGoolm.FirstKnownIndex() {
+		panic("different index")
+	}
+	mach.markSessionReceived(ctx, roomID, sessionID, igs.InternalLibolm.FirstKnownIndex())
 	log.Debug().
 		Str("session_id", sessionID.String()).
 		Str("sender_key", senderKey.String()).

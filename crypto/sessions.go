@@ -9,10 +9,13 @@ package crypto
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"time"
 
 	"go.mau.fi/util/exerrors"
 
+	"maunium.net/go/mautrix/crypto/goolm/session"
+	"maunium.net/go/mautrix/crypto/libolm"
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -107,7 +110,8 @@ type RatchetSafety struct {
 }
 
 type InboundGroupSession struct {
-	Internal olm.InboundGroupSession
+	InternalLibolm olm.InboundGroupSession
+	InternalGoolm  olm.InboundGroupSession
 
 	SigningKey id.Ed25519
 	SenderKey  id.Curve25519
@@ -126,12 +130,17 @@ type InboundGroupSession struct {
 }
 
 func NewInboundGroupSession(senderKey id.SenderKey, signingKey id.Ed25519, roomID id.RoomID, sessionKey string, maxAge time.Duration, maxMessages int, isScheduled bool) (*InboundGroupSession, error) {
-	igs, err := olm.NewInboundGroupSession([]byte(sessionKey))
+	igs, err := libolm.NewInboundGroupSession([]byte(sessionKey))
+	if err != nil {
+		return nil, err
+	}
+	igsGoolm, err := session.NewMegolmInboundSession([]byte(sessionKey))
 	if err != nil {
 		return nil, err
 	}
 	return &InboundGroupSession{
-		Internal:         igs,
+		InternalLibolm:   igs,
+		InternalGoolm:    igsGoolm,
 		SigningKey:       signingKey,
 		SenderKey:        senderKey,
 		RoomID:           roomID,
@@ -145,22 +154,31 @@ func NewInboundGroupSession(senderKey id.SenderKey, signingKey id.Ed25519, roomI
 
 func (igs *InboundGroupSession) ID() id.SessionID {
 	if igs.id == "" {
-		igs.id = igs.Internal.ID()
+		igs.id = igs.InternalLibolm.ID()
+		if igs.id != igs.InternalGoolm.ID() {
+			panic(fmt.Sprintf("id different %s %s", igs.id, igs.InternalGoolm.ID()))
+		}
 	}
 	return igs.id
 }
 
 func (igs *InboundGroupSession) RatchetTo(index uint32) error {
-	exported, err := igs.Internal.Export(index)
+	exported, err := igs.InternalLibolm.Export(index)
 	if err != nil {
 		return err
 	}
-	imported, err := olm.InboundGroupSessionImport(exported)
+	exportedGoolm, err := igs.InternalGoolm.Export(index)
+	if err != nil {
+		panic(err)
+	} else if !bytes.Equal(exported, exportedGoolm) {
+		panic("bytes not equal")
+	}
+	igs.InternalLibolm, err = libolm.InboundGroupSessionImport(exported)
 	if err != nil {
 		return err
 	}
-	igs.Internal = imported
-	return nil
+	igs.InternalGoolm, err = session.NewMegolmInboundSessionFromExport(exportedGoolm)
+	return err
 }
 
 type OGSState int
