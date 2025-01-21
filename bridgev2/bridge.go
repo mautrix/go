@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/dbutil"
@@ -124,6 +125,22 @@ func (br *Bridge) RunOnce(ctx context.Context, loginID networkid.UserLoginID) er
 	if err != nil {
 		return err
 	}
+
+	if loginID == "" {
+		br.Log.Info().Msg("No login ID provided to RunOnce, running all logins for 20 seconds")
+		err = br.StartLogins(ctx)
+		if err != nil {
+			return err
+		}
+		defer br.Stop()
+		select {
+		case <-time.After(20 * time.Second):
+		case <-ctx.Done():
+		}
+		return nil
+	}
+
+	defer br.stop(true)
 	login, err := br.GetExistingUserLoginByID(ctx, loginID)
 	if err != nil {
 		return fmt.Errorf("failed to get user login: %w", err)
@@ -132,11 +149,18 @@ func (br *Bridge) RunOnce(ctx context.Context, loginID networkid.UserLoginID) er
 	}
 	syncClient, ok := login.Client.(BackgroundSyncingNetworkAPI)
 	if !ok {
-		return fmt.Errorf("%T does not implement BackgroundSyncingNetworkAPI", login.Client)
+		br.Log.Warn().Msg("Network connector doesn't implement background mode, using fallback mechanism for RunOnce")
+		login.Client.Connect(ctx)
+		defer login.Disconnect(nil)
+		select {
+		case <-time.After(20 * time.Second):
+		case <-ctx.Done():
+		}
+		return nil
+	} else {
+		br.Log.Info().Str("user_login_id", string(login.ID)).Msg("Starting individual user login in background mode")
+		return syncClient.ConnectBackground(login.Log.WithContext(ctx))
 	}
-	defer br.stop(true)
-	br.Log.Info().Str("user_login_id", string(login.ID)).Msg("Starting individual user login in background mode")
-	return syncClient.ConnectBackground(login.Log.WithContext(ctx))
 }
 
 func (br *Bridge) StartConnectors(ctx context.Context) error {
