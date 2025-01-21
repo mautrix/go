@@ -3567,7 +3567,7 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 	}
 	waiter := make(chan struct{})
 	closed := false
-	portal.events <- &portalCreateEvent{
+	evt := &portalCreateEvent{
 		ctx:    ctx,
 		source: source,
 		info:   info,
@@ -3578,6 +3578,11 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 				close(waiter)
 			}
 		},
+	}
+	if PortalEventBuffer == 0 {
+		go portal.queueEvent(ctx, evt)
+	} else {
+		portal.events <- evt
 	}
 	select {
 	case <-ctx.Done():
