@@ -61,6 +61,9 @@ func (portal *Portal) doForwardBackfill(ctx context.Context, source *UserLogin, 
 		return
 	} else if len(resp.Messages) == 0 {
 		log.Debug().Msg("No messages to backfill")
+		if resp.CompleteCallback != nil {
+			resp.CompleteCallback()
+		}
 		return
 	}
 	log.Debug().
