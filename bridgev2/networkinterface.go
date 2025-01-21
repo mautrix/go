@@ -497,11 +497,18 @@ type FetchMessagesResponse struct {
 // BackfillingNetworkAPI is an optional interface that network connectors can implement to support backfilling message history.
 type BackfillingNetworkAPI interface {
 	NetworkAPI
+	// FetchMessages returns a batch of messages to backfill in a portal room.
+	// For details on the input and output, see the documentation of [FetchMessagesParams] and [FetchMessagesResponse].
 	FetchMessages(ctx context.Context, fetchParams FetchMessagesParams) (*FetchMessagesResponse, error)
 }
 
+// BackfillingNetworkAPIWithLimits is an optional interface that network connectors can implement to customize
+// the limit for backwards backfilling tasks. It is recommended to implement this by reading the MaxBatchesOverride
+// config field with network-specific keys for different room types.
 type BackfillingNetworkAPIWithLimits interface {
 	BackfillingNetworkAPI
+	// GetBackfillMaxBatchCount is called before a backfill task is executed to determine the maximum number of batches
+	// that should be backfilled. Return values less than 0 are treated as unlimited.
 	GetBackfillMaxBatchCount(ctx context.Context, portal *Portal, task *database.BackfillTask) int
 }
 
