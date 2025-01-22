@@ -8,6 +8,7 @@ package bridgev2
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -809,17 +810,33 @@ type APNsPushConfig struct {
 }
 
 type PushConfig struct {
-	Web    *WebPushConfig  `json:"web,omitempty"`
-	FCM    *FCMPushConfig  `json:"fcm,omitempty"`
-	APNs   *APNsPushConfig `json:"apns,omitempty"`
-	Native bool            `json:"native,omitempty"`
+	Web  *WebPushConfig  `json:"web,omitempty"`
+	FCM  *FCMPushConfig  `json:"fcm,omitempty"`
+	APNs *APNsPushConfig `json:"apns,omitempty"`
+	// If Native is true, it means the network supports registering for pushes
+	// that are delivered directly to the app without the use of a push relay.
+	Native bool `json:"native,omitempty"`
 }
 
+// PushableNetworkAPI is an optional interface that network connectors can implement
+// to support waking up the wrapper app using push notifications.
 type PushableNetworkAPI interface {
 	NetworkAPI
 
+	// RegisterPushNotifications is called when the wrapper app wants to register a push token with the remote network.
 	RegisterPushNotifications(ctx context.Context, pushType PushType, token string) error
+	// GetPushConfigs is used to find which types of push notifications the remote network can provide.
 	GetPushConfigs() *PushConfig
+}
+
+// PushParsingNetwork is an optional interface that network connectors can implement
+// to support parsing native push notifications from networks.
+type PushParsingNetwork interface {
+	NetworkConnector
+
+	// ParsePushNotification is called when a native push is received.
+	// It must return the corresponding user login ID to wake up, plus optionally data to pass to the wakeup call.
+	ParsePushNotification(ctx context.Context, data json.RawMessage) (networkid.UserLoginID, any, error)
 }
 
 type RemoteEventType int
