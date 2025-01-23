@@ -119,7 +119,7 @@ func (br *Bridge) Start() error {
 	return nil
 }
 
-func (br *Bridge) RunOnce(ctx context.Context, loginID networkid.UserLoginID) error {
+func (br *Bridge) RunOnce(ctx context.Context, loginID networkid.UserLoginID, params *ConnectBackgroundParams) error {
 	br.Background = true
 	err := br.StartConnectors(ctx)
 	if err != nil {
@@ -159,7 +159,7 @@ func (br *Bridge) RunOnce(ctx context.Context, loginID networkid.UserLoginID) er
 		return nil
 	} else {
 		br.Log.Info().Str("user_login_id", string(login.ID)).Msg("Starting individual user login in background mode")
-		return syncClient.ConnectBackground(login.Log.WithContext(ctx))
+		return syncClient.ConnectBackground(login.Log.WithContext(ctx), params)
 	}
 }
 
