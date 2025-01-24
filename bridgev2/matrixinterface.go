@@ -86,6 +86,18 @@ type MatrixConnectorWithAnalytics interface {
 	TrackAnalytics(userID id.UserID, event string, properties map[string]any)
 }
 
+type DirectNotificationData struct {
+	Portal  *Portal
+	Sender  *Ghost
+	Message string
+
+	FormattedNotification string
+}
+
+type MatrixConnectorWithNotifications interface {
+	DisplayNotification(ctx context.Context, data *DirectNotificationData)
+}
+
 type MatrixSendExtra struct {
 	Timestamp    time.Time
 	MessageMeta  *database.Message
