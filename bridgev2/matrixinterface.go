@@ -87,9 +87,10 @@ type MatrixConnectorWithAnalytics interface {
 }
 
 type DirectNotificationData struct {
-	Portal  *Portal
-	Sender  *Ghost
-	Message string
+	Portal    *Portal
+	Sender    *Ghost
+	MessageID networkid.MessageID
+	Message   string
 
 	FormattedNotification string
 }
