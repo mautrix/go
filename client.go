@@ -1460,8 +1460,8 @@ func (cli *Client) updateStoreWithOutgoingEvent(ctx context.Context, roomID id.R
 	UpdateStateStore(ctx, cli.StateStore, fakeEvt)
 }
 
-// StateEvent gets a single state event in a room. It will attempt to JSON unmarshal into the given "outContent" struct with
-// the HTTP response body, or return an error.
+// StateEvent gets the content of a single state event in a room.
+// It will attempt to JSON unmarshal into the given "outContent" struct with the HTTP response body, or return an error.
 // See https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3roomsroomidstateeventtypestatekey
 func (cli *Client) StateEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string, outContent interface{}) (err error) {
 	u := cli.BuildClientURL("v3", "rooms", roomID, "state", eventType.String(), stateKey)
@@ -1469,6 +1469,23 @@ func (cli *Client) StateEvent(ctx context.Context, roomID id.RoomID, eventType e
 	if err == nil && cli.StateStore != nil {
 		cli.updateStoreWithOutgoingEvent(ctx, roomID, eventType, stateKey, outContent)
 	}
+	return
+}
+
+// FullStateEvent gets a single state event in a room. Unlike [StateEvent], this gets the entire event
+// (including details like the sender and timestamp).
+// This requires the server to support the ?format=event query parameter, which is currently missing from the spec.
+// See https://github.com/matrix-org/matrix-spec/issues/1047 for more info
+func (cli *Client) FullStateEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string) (evt *event.Event, err error) {
+	u := cli.BuildURLWithQuery(ClientURLPath{"v3", "rooms", roomID, "state", eventType.String(), stateKey}, map[string]string{
+		"format": "event",
+	})
+	_, err = cli.MakeRequest(ctx, http.MethodGet, u, nil, &evt)
+	if err == nil && cli.StateStore != nil {
+		UpdateStateStore(ctx, cli.StateStore, evt)
+	}
+	evt.Type.Class = event.StateEventType
+	_ = evt.Content.ParseRaw(evt.Type)
 	return
 }
 
