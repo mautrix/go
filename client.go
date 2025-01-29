@@ -1277,6 +1277,14 @@ func (cli *Client) RedactEvent(ctx context.Context, roomID id.RoomID, eventID id
 	return
 }
 
+func (cli *Client) UnstableRedactUserEvents(ctx context.Context, roomID id.RoomID, userID id.UserID, limit int) (resp *RespRedactUserEvents, err error) {
+	urlPath := cli.BuildURLWithQuery(ClientURLPath{"unstable", "org.matrix.msc4194", "rooms", roomID, "redact", "user", userID}, map[string]string{
+		"limit": strconv.Itoa(limit),
+	})
+	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
+	return
+}
+
 // CreateRoom creates a new Matrix room. See https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3createroom
 //
 //	resp, err := cli.CreateRoom(&mautrix.ReqCreateRoom{

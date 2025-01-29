@@ -100,6 +100,14 @@ type RespSendEvent struct {
 	EventID id.EventID `json:"event_id"`
 }
 
+type RespRedactUserEvents struct {
+	IsMoreEvents   bool `json:"is_more_events"`
+	RedactedEvents struct {
+		Total      int `json:"total"`
+		SoftFailed int `json:"soft_failed"`
+	} `json:"redacted_events"`
+}
+
 // RespMediaConfig is the JSON response for https://spec.matrix.org/v1.4/client-server-api/#get_matrixmediav3config
 type RespMediaConfig struct {
 	UploadSize int64 `json:"m.upload.size,omitempty"`
