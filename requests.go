@@ -138,6 +138,11 @@ type ReqRedact struct {
 	Extra  map[string]interface{}
 }
 
+type ReqRedactUser struct {
+	Reason string `json:"reason"`
+	Limit  int    `json:"-"`
+}
+
 type ReqMembers struct {
 	At            string           `json:"at"`
 	Membership    event.Membership `json:"membership,omitempty"`

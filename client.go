@@ -1277,11 +1277,16 @@ func (cli *Client) RedactEvent(ctx context.Context, roomID id.RoomID, eventID id
 	return
 }
 
-func (cli *Client) UnstableRedactUserEvents(ctx context.Context, roomID id.RoomID, userID id.UserID, limit int) (resp *RespRedactUserEvents, err error) {
-	urlPath := cli.BuildURLWithQuery(ClientURLPath{"unstable", "org.matrix.msc4194", "rooms", roomID, "redact", "user", userID}, map[string]string{
-		"limit": strconv.Itoa(limit),
-	})
-	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
+func (cli *Client) UnstableRedactUserEvents(ctx context.Context, roomID id.RoomID, userID id.UserID, req *ReqRedactUser) (resp *RespRedactUserEvents, err error) {
+	if req == nil {
+		req = &ReqRedactUser{}
+	}
+	query := map[string]string{}
+	if req.Limit > 0 {
+		query["limit"] = strconv.Itoa(req.Limit)
+	}
+	urlPath := cli.BuildURLWithQuery(ClientURLPath{"unstable", "org.matrix.msc4194", "rooms", roomID, "redact", "user", userID}, query)
+	_, err = cli.MakeRequest(ctx, http.MethodPost, urlPath, req, &resp)
 	return
 }
 
