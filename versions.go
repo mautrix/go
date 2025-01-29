@@ -64,6 +64,7 @@ var (
 	FeatureAppservicePing     = UnstableFeature{UnstableFlag: "fi.mau.msc2659.stable", SpecVersion: SpecV17}
 	FeatureAuthenticatedMedia = UnstableFeature{UnstableFlag: "org.matrix.msc3916.stable", SpecVersion: SpecV111}
 	FeatureMutualRooms        = UnstableFeature{UnstableFlag: "uk.half-shot.msc2666.query_mutual_rooms"}
+	FeatureUserRedaction      = UnstableFeature{UnstableFlag: "org.matrix.msc4194"}
 
 	BeeperFeatureHungry               = UnstableFeature{UnstableFlag: "com.beeper.hungry"}
 	BeeperFeatureBatchSending         = UnstableFeature{UnstableFlag: "com.beeper.batch_sending"}
