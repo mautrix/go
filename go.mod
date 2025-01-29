@@ -2,7 +2,7 @@ module maunium.net/go/mautrix
 
 go 1.22.0
 
-toolchain go1.23.4
+toolchain go1.23.5
 
 require (
 	filippo.io/edwards25519 v1.1.0
@@ -18,10 +18,10 @@ require (
 	github.com/tidwall/gjson v1.18.0
 	github.com/tidwall/sjson v1.2.5
 	github.com/yuin/goldmark v1.7.8
-	go.mau.fi/util v0.8.4
+	go.mau.fi/util v0.8.5-0.20250129121406-18c356e558b8
 	go.mau.fi/zeroconfig v0.1.3
 	golang.org/x/crypto v0.32.0
-	golang.org/x/exp v0.0.0-20250106191152-7588d65b2ba8
+	golang.org/x/exp v0.0.0-20250128182459-e0ece0dbea4c
 	golang.org/x/net v0.34.0
 	golang.org/x/sync v0.10.0
 	gopkg.in/yaml.v3 v3.0.1
