@@ -14,6 +14,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/dbutil"
+	"go.mau.fi/util/exsync"
 
 	"maunium.net/go/mautrix/bridge/status"
 	"maunium.net/go/mautrix/bridgev2/bridgeconfig"
@@ -48,10 +49,11 @@ type Bridge struct {
 
 	didSplitPortals bool
 
-	Background bool
+	Background          bool
+	ExternallyManagedDB bool
 
 	wakeupBackfillQueue chan struct{}
-	stopBackfillQueue   chan struct{}
+	stopBackfillQueue   *exsync.Event
 }
 
 func NewBridge(
@@ -79,7 +81,7 @@ func NewBridge(
 		ghostsByID:     make(map[networkid.UserID]*Ghost),
 
 		wakeupBackfillQueue: make(chan struct{}),
-		stopBackfillQueue:   make(chan struct{}),
+		stopBackfillQueue:   exsync.NewEvent(),
 	}
 	if br.Config == nil {
 		br.Config = &bridgeconfig.BridgeConfig{CommandPrefix: "!bridge"}
@@ -166,15 +168,17 @@ func (br *Bridge) RunOnce(ctx context.Context, loginID networkid.UserLoginID, pa
 func (br *Bridge) StartConnectors(ctx context.Context) error {
 	br.Log.Info().Msg("Starting bridge")
 
-	err := br.DB.Upgrade(ctx)
-	if err != nil {
-		return DBUpgradeError{Err: err, Section: "main"}
+	if !br.ExternallyManagedDB {
+		err := br.DB.Upgrade(ctx)
+		if err != nil {
+			return DBUpgradeError{Err: err, Section: "main"}
+		}
 	}
 	if !br.Background {
 		br.didSplitPortals = br.MigrateToSplitPortals(ctx)
 	}
 	br.Log.Info().Msg("Starting Matrix connector")
-	err = br.Matrix.Start(ctx)
+	err := br.Matrix.Start(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to start Matrix connector: %w", err)
 	}
@@ -300,7 +304,9 @@ func (br *Bridge) StartLogins(ctx context.Context) error {
 		br.Log.Info().Msg("No user logins found")
 		br.SendGlobalBridgeState(status.BridgeState{StateEvent: status.StateUnconfigured})
 	}
-	go br.RunBackfillQueue()
+	if !br.Background {
+		go br.RunBackfillQueue()
+	}
 
 	br.Log.Info().Msg("Bridge started")
 	return nil
@@ -312,7 +318,7 @@ func (br *Bridge) Stop() {
 
 func (br *Bridge) stop(isRunOnce bool) {
 	br.Log.Info().Msg("Shutting down bridge")
-	close(br.stopBackfillQueue)
+	br.stopBackfillQueue.Set()
 	br.Matrix.Stop()
 	if !isRunOnce {
 		br.cacheLock.Lock()
@@ -327,9 +333,11 @@ func (br *Bridge) stop(isRunOnce bool) {
 	if stopNet, ok := br.Network.(StoppableNetwork); ok {
 		stopNet.Stop()
 	}
-	err := br.DB.Close()
-	if err != nil {
-		br.Log.Warn().Err(err).Msg("Failed to close database")
+	if !br.ExternallyManagedDB {
+		err := br.DB.Close()
+		if err != nil {
+			br.Log.Warn().Err(err).Msg("Failed to close database")
+		}
 	}
 	br.Log.Info().Msg("Shutdown complete")
 }

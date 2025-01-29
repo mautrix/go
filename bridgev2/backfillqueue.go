@@ -38,8 +38,10 @@ func (br *Bridge) RunBackfillQueue() {
 		return
 	}
 	ctx, cancel := context.WithCancel(log.WithContext(context.Background()))
+	br.stopBackfillQueue.Clear()
+	stopChan := br.stopBackfillQueue.GetChan()
 	go func() {
-		<-br.stopBackfillQueue
+		<-stopChan
 		cancel()
 	}()
 	batchDelay := time.Duration(br.Config.Backfill.Queue.BatchDelay) * time.Second
@@ -61,7 +63,7 @@ func (br *Bridge) RunBackfillQueue() {
 				}
 			}
 			noTasksFoundCount = 0
-		case <-br.stopBackfillQueue:
+		case <-stopChan:
 			if !timer.Stop() {
 				select {
 				case <-timer.C:
