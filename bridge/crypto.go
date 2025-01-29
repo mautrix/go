@@ -139,13 +139,9 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 func (helper *CryptoHelper) resyncEncryptionInfo(ctx context.Context) {
 	log := helper.log.With().Str("action", "resync encryption event").Logger()
 	rows, err := helper.bridge.DB.Query(ctx, `SELECT room_id FROM mx_room_state WHERE encryption='{"resync":true}'`)
+	roomIDs, err := dbutil.NewRowIterWithError(rows, dbutil.ScanSingleColumn[id.RoomID], err).AsList()
 	if err != nil {
 		log.Err(err).Msg("Failed to query rooms for resync")
-		return
-	}
-	roomIDs, err := dbutil.NewRowIter(rows, dbutil.ScanSingleColumn[id.RoomID]).AsList()
-	if err != nil {
-		log.Err(err).Msg("Failed to scan rooms for resync")
 		return
 	}
 	if len(roomIDs) > 0 {

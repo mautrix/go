@@ -3,6 +3,7 @@ package verificationhelper_test
 import (
 	"context"
 	"database/sql"
+	"errors"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
@@ -42,20 +43,17 @@ func NewSQLiteVerificationStore(ctx context.Context, db *sql.DB) (*SQLiteVerific
 
 func (s *SQLiteVerificationStore) GetAllVerificationTransactions(ctx context.Context) ([]verificationhelper.VerificationTransaction, error) {
 	rows, err := s.db.QueryContext(ctx, selectVerifications)
-	if err != nil {
-		return nil, err
-	}
-	return dbutil.NewRowIter(rows, func(dbutil.Scannable) (txn verificationhelper.VerificationTransaction, err error) {
+	return dbutil.NewRowIterWithError(rows, func(dbutil.Scannable) (txn verificationhelper.VerificationTransaction, err error) {
 		err = rows.Scan(&dbutil.JSON{Data: &txn})
 		return
-	}).AsList()
+	}, err).AsList()
 }
 
 func (vq *SQLiteVerificationStore) GetVerificationTransaction(ctx context.Context, txnID id.VerificationTransactionID) (txn verificationhelper.VerificationTransaction, err error) {
 	zerolog.Ctx(ctx).Warn().Stringer("transaction_id", txnID).Msg("Getting verification transaction")
 	row := vq.db.QueryRowContext(ctx, getVerificationByTransactionID, txnID)
 	err = row.Scan(&dbutil.JSON{Data: &txn})
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		err = verificationhelper.ErrUnknownVerificationTransaction
 	}
 	return
@@ -64,7 +62,7 @@ func (vq *SQLiteVerificationStore) GetVerificationTransaction(ctx context.Contex
 func (vq *SQLiteVerificationStore) FindVerificationTransactionForUserDevice(ctx context.Context, userID id.UserID, deviceID id.DeviceID) (txn verificationhelper.VerificationTransaction, err error) {
 	row := vq.db.QueryRowContext(ctx, getVerificationByUserDeviceID, userID, deviceID)
 	err = row.Scan(&dbutil.JSON{Data: &txn})
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		err = verificationhelper.ErrUnknownVerificationTransaction
 	}
 	return

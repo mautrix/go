@@ -428,10 +428,7 @@ func (store *SQLCryptoStore) RedactGroupSessions(ctx context.Context, roomID id.
 		  AND session IS NOT NULL AND is_scheduled=false AND received_at IS NOT NULL
 		RETURNING session_id
 	`, event.RoomKeyWithheldBeeperRedacted, "Session redacted: "+reason, roomID, senderKey, store.AccountID)
-	if err != nil {
-		return nil, err
-	}
-	return dbutil.NewRowIter(res, dbutil.ScanSingleColumn[id.SessionID]).AsList()
+	return dbutil.NewRowIterWithError(res, dbutil.ScanSingleColumn[id.SessionID], err).AsList()
 }
 
 func (store *SQLCryptoStore) RedactExpiredGroupSessions(ctx context.Context) ([]id.SessionID, error) {
@@ -459,10 +456,7 @@ func (store *SQLCryptoStore) RedactExpiredGroupSessions(ctx context.Context) ([]
 		return nil, fmt.Errorf("unsupported dialect")
 	}
 	res, err := store.DB.Query(ctx, query, event.RoomKeyWithheldBeeperRedacted, "Session redacted: expired", store.AccountID)
-	if err != nil {
-		return nil, err
-	}
-	return dbutil.NewRowIter(res, dbutil.ScanSingleColumn[id.SessionID]).AsList()
+	return dbutil.NewRowIterWithError(res, dbutil.ScanSingleColumn[id.SessionID], err).AsList()
 }
 
 func (store *SQLCryptoStore) RedactOutdatedGroupSessions(ctx context.Context) ([]id.SessionID, error) {
@@ -472,10 +466,7 @@ func (store *SQLCryptoStore) RedactOutdatedGroupSessions(ctx context.Context) ([
 			WHERE account_id=$3 AND session IS NOT NULL AND received_at IS NULL
 			RETURNING session_id
 		`, event.RoomKeyWithheldBeeperRedacted, "Session redacted: outdated", store.AccountID)
-	if err != nil {
-		return nil, err
-	}
-	return dbutil.NewRowIter(res, dbutil.ScanSingleColumn[id.SessionID]).AsList()
+	return dbutil.NewRowIterWithError(res, dbutil.ScanSingleColumn[id.SessionID], err).AsList()
 }
 
 func (store *SQLCryptoStore) PutWithheldGroupSession(ctx context.Context, content event.RoomKeyWithheldEventContent) error {
