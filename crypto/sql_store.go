@@ -703,11 +703,8 @@ func (store *SQLCryptoStore) GetDevices(ctx context.Context, userID id.UserID) (
 	}
 
 	rows, err := store.DB.Query(ctx, "SELECT user_id, device_id, identity_key, signing_key, trust, deleted, name FROM crypto_device WHERE user_id=$1 AND deleted=false", userID)
-	if err != nil {
-		return nil, err
-	}
 	data := make(map[id.DeviceID]*id.Device)
-	err = dbutil.NewRowIter(rows, scanDevice).Iter(func(device *id.Device) (bool, error) {
+	err = dbutil.NewRowIterWithError(rows, scanDevice, err).Iter(func(device *id.Device) (bool, error) {
 		data[device.DeviceID] = device
 		return true, nil
 	})
@@ -827,10 +824,7 @@ func (store *SQLCryptoStore) FilterTrackedUsers(ctx context.Context, users []id.
 		placeholders, params := userIDsToParams(users)
 		rows, err = store.DB.Query(ctx, "SELECT user_id FROM crypto_tracked_user WHERE user_id IN ("+placeholders+")", params...)
 	}
-	if err != nil {
-		return users, err
-	}
-	return dbutil.NewRowIter(rows, dbutil.ScanSingleColumn[id.UserID]).AsList()
+	return dbutil.NewRowIterWithError(rows, dbutil.ScanSingleColumn[id.UserID], err).AsList()
 }
 
 // MarkTrackedUsersOutdated flags that the device list for given users are outdated.
@@ -847,10 +841,7 @@ func (store *SQLCryptoStore) MarkTrackedUsersOutdated(ctx context.Context, users
 // GetOutdatedTrackerUsers gets all tracked users whose devices need to be updated.
 func (store *SQLCryptoStore) GetOutdatedTrackedUsers(ctx context.Context) ([]id.UserID, error) {
 	rows, err := store.DB.Query(ctx, "SELECT user_id FROM crypto_tracked_user WHERE devices_outdated = TRUE")
-	if err != nil {
-		return nil, err
-	}
-	return dbutil.NewRowIter(rows, dbutil.ScanSingleColumn[id.UserID]).AsList()
+	return dbutil.NewRowIterWithError(rows, dbutil.ScanSingleColumn[id.UserID], err).AsList()
 }
 
 // PutCrossSigningKey stores a cross-signing key of some user along with its usage.
