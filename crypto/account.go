@@ -7,19 +7,24 @@
 package crypto
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 
 	"github.com/tidwall/sjson"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto/canonicaljson"
+	"maunium.net/go/mautrix/crypto/goolm/account"
+	"maunium.net/go/mautrix/crypto/libolm"
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/crypto/signatures"
 	"maunium.net/go/mautrix/id"
 )
 
 type OlmAccount struct {
-	Internal         olm.Account
+	InternalLibolm   olm.Account
+	InternalGoolm    olm.Account
 	signingKey       id.SigningKey
 	identityKey      id.IdentityKey
 	Shared           bool
@@ -27,21 +32,40 @@ type OlmAccount struct {
 }
 
 func NewOlmAccount() *OlmAccount {
-	account, err := olm.NewAccount()
+	libolmAccount, err := libolm.NewAccount()
+	if err != nil {
+		panic(err)
+	}
+	pickled, err := libolmAccount.Pickle([]byte("key"))
+	if err != nil {
+		panic(err)
+	}
+	goolmAccount, err := account.AccountFromPickled(pickled, []byte("key"))
 	if err != nil {
 		panic(err)
 	}
 	return &OlmAccount{
-		Internal: account,
+		InternalLibolm: libolmAccount,
+		InternalGoolm:  goolmAccount,
 	}
 }
 
 func (account *OlmAccount) Keys() (id.SigningKey, id.IdentityKey) {
 	if len(account.signingKey) == 0 || len(account.identityKey) == 0 {
 		var err error
-		account.signingKey, account.identityKey, err = account.Internal.IdentityKeys()
+		account.signingKey, account.identityKey, err = account.InternalLibolm.IdentityKeys()
 		if err != nil {
 			panic(err)
+		}
+		goolmSigningKey, goolmIdentityKey, err := account.InternalGoolm.IdentityKeys()
+		if err != nil {
+			panic(err)
+		}
+		if account.signingKey != goolmSigningKey {
+			panic("account signing keys not equal")
+		}
+		if account.identityKey != goolmIdentityKey {
+			panic("account identity keys not equal")
 		}
 	}
 	return account.signingKey, account.identityKey
@@ -50,9 +74,19 @@ func (account *OlmAccount) Keys() (id.SigningKey, id.IdentityKey) {
 func (account *OlmAccount) SigningKey() id.SigningKey {
 	if len(account.signingKey) == 0 {
 		var err error
-		account.signingKey, account.identityKey, err = account.Internal.IdentityKeys()
+		account.signingKey, account.identityKey, err = account.InternalLibolm.IdentityKeys()
 		if err != nil {
 			panic(err)
+		}
+		goolmSigningKey, goolmIdentityKey, err := account.InternalGoolm.IdentityKeys()
+		if err != nil {
+			panic(err)
+		}
+		if account.signingKey != goolmSigningKey {
+			panic("account signing keys not equal")
+		}
+		if account.identityKey != goolmIdentityKey {
+			panic("account identity keys not equal")
 		}
 	}
 	return account.signingKey
@@ -61,9 +95,19 @@ func (account *OlmAccount) SigningKey() id.SigningKey {
 func (account *OlmAccount) IdentityKey() id.IdentityKey {
 	if len(account.identityKey) == 0 {
 		var err error
-		account.signingKey, account.identityKey, err = account.Internal.IdentityKeys()
+		account.signingKey, account.identityKey, err = account.InternalLibolm.IdentityKeys()
 		if err != nil {
 			panic(err)
+		}
+		goolmSigningKey, goolmIdentityKey, err := account.InternalGoolm.IdentityKeys()
+		if err != nil {
+			panic(err)
+		}
+		if account.signingKey != goolmSigningKey {
+			panic("account signing keys not equal")
+		}
+		if account.identityKey != goolmIdentityKey {
+			panic("account identity keys not equal")
 		}
 	}
 	return account.identityKey
@@ -78,7 +122,15 @@ func (account *OlmAccount) SignJSON(obj any) (string, error) {
 	}
 	objJSON, _ = sjson.DeleteBytes(objJSON, "unsigned")
 	objJSON, _ = sjson.DeleteBytes(objJSON, "signatures")
-	signed, err := account.Internal.Sign(canonicaljson.CanonicalJSONAssumeValid(objJSON))
+	signed, err := account.InternalLibolm.Sign(canonicaljson.CanonicalJSONAssumeValid(objJSON))
+	goolmSigned, goolmErr := account.InternalGoolm.Sign(canonicaljson.CanonicalJSONAssumeValid(objJSON))
+	if err != nil {
+		if goolmErr == nil {
+			panic("libolm errored, but goolm did not on account.SignJSON")
+		}
+	} else if !bytes.Equal(signed, goolmSigned) {
+		panic("libolm and goolm signed are not equal in account.SignJSON")
+	}
 	return string(signed), err
 }
 
@@ -102,19 +154,36 @@ func (account *OlmAccount) getInitialKeys(userID id.UserID, deviceID id.DeviceID
 	return deviceKeys
 }
 
-func (account *OlmAccount) getOneTimeKeys(userID id.UserID, deviceID id.DeviceID, currentOTKCount int) map[id.KeyID]mautrix.OneTimeKey {
-	newCount := int(account.Internal.MaxNumberOfOneTimeKeys()/2) - currentOTKCount
+func (a *OlmAccount) getOneTimeKeys(userID id.UserID, deviceID id.DeviceID, currentOTKCount int) map[id.KeyID]mautrix.OneTimeKey {
+	newCount := int(a.InternalLibolm.MaxNumberOfOneTimeKeys()/2) - currentOTKCount
 	if newCount > 0 {
-		account.Internal.GenOneTimeKeys(uint(newCount))
+		a.InternalLibolm.GenOneTimeKeys(uint(newCount))
+
+		pickled, err := a.InternalLibolm.Pickle([]byte("key"))
+		if err != nil {
+			panic(err)
+		}
+		a.InternalGoolm, err = account.AccountFromPickled(pickled, []byte("key"))
+		if err != nil {
+			panic(err)
+		}
 	}
 	oneTimeKeys := make(map[id.KeyID]mautrix.OneTimeKey)
-	internalKeys, err := account.Internal.OneTimeKeys()
+	internalKeys, err := a.InternalLibolm.OneTimeKeys()
+	if err != nil {
+		panic(err)
+	}
+	goolmInternalKeys, err := a.InternalGoolm.OneTimeKeys()
 	if err != nil {
 		panic(err)
 	}
 	for keyID, key := range internalKeys {
+		if goolmInternalKeys[keyID] != key {
+			panic(fmt.Sprintf("key %s not found in getOneTimeKeys", keyID))
+		}
+
 		key := mautrix.OneTimeKey{Key: key}
-		signature, _ := account.SignJSON(key)
+		signature, _ := a.SignJSON(key)
 		key.Signatures = signatures.NewSingleSignature(userID, id.KeyAlgorithmEd25519, deviceID.String(), signature)
 		key.IsSigned = true
 		oneTimeKeys[id.NewKeyID(id.KeyAlgorithmSignedCurve25519, keyID)] = key
