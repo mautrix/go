@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tulir Asokan
+// Copyright (c) 2025 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -16,14 +16,20 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 
+	"go.mau.fi/util/dbutil"
+	"go.mau.fi/util/exbytes"
+	"go.mau.fi/util/exerrors"
 	"go.mau.fi/util/random"
 	"golang.org/x/crypto/pbkdf2"
 
 	"maunium.net/go/mautrix/id"
 )
+
+var ErrNoSessionsForExport = errors.New("no sessions provided for export")
 
 type SenderClaimedKeys struct {
 	Ed25519 id.Ed25519 `json:"ed25519"`
@@ -78,21 +84,13 @@ func makeExportKeys(passphrase string) (encryptionKey, hashKey, salt, iv []byte)
 	return
 }
 
-func exportSessions(sessions []*InboundGroupSession) ([]ExportedSession, error) {
-	export := make([]ExportedSession, len(sessions))
+func exportSessions(sessions []*InboundGroupSession) ([]*ExportedSession, error) {
+	export := make([]*ExportedSession, len(sessions))
+	var err error
 	for i, session := range sessions {
-		key, err := session.Internal.Export(session.Internal.FirstKnownIndex())
+		export[i], err = session.export()
 		if err != nil {
 			return nil, fmt.Errorf("failed to export session: %w", err)
-		}
-		export[i] = ExportedSession{
-			Algorithm:         id.AlgorithmMegolmV1,
-			ForwardingChains:  session.ForwardingChains,
-			RoomID:            session.RoomID,
-			SenderKey:         session.SenderKey,
-			SenderClaimedKeys: SenderClaimedKeys{},
-			SessionID:         session.ID(),
-			SessionKey:        string(key),
 		}
 	}
 	return export, nil
@@ -107,38 +105,73 @@ func exportSessionsJSON(sessions []*InboundGroupSession) ([]byte, error) {
 }
 
 func formatKeyExportData(data []byte) []byte {
-	base64Data := make([]byte, base64.StdEncoding.EncodedLen(len(data)))
-	base64.StdEncoding.Encode(base64Data, data)
-
-	// Prefix + data and newline for each 76 characters of data + suffix
+	encodedLen := base64.StdEncoding.EncodedLen(len(data))
 	outputLength := len(exportPrefix) +
-		len(base64Data) + int(math.Ceil(float64(len(base64Data))/exportLineLengthLimit)) +
+		encodedLen + int(math.Ceil(float64(encodedLen)/exportLineLengthLimit)) +
 		len(exportSuffix)
+	output := make([]byte, 0, outputLength)
+	outputWriter := (*exbytes.Writer)(&output)
+	base64Writer := base64.NewEncoder(base64.StdEncoding, outputWriter)
+	lineByteCount := base64.StdEncoding.DecodedLen(exportLineLengthLimit)
+	exerrors.Must(outputWriter.WriteString(exportPrefix))
+	for i := 0; i < len(data); i += lineByteCount {
+		exerrors.Must(base64Writer.Write(data[i:min(i+lineByteCount, len(data))]))
+		if i+lineByteCount >= len(data) {
+			exerrors.PanicIfNotNil(base64Writer.Close())
+		}
+		exerrors.PanicIfNotNil(outputWriter.WriteByte('\n'))
+	}
+	exerrors.Must(outputWriter.WriteString(exportSuffix))
+	if len(output) != outputLength {
+		panic(fmt.Errorf("unexpected length %d / %d", len(output), outputLength))
+	}
+	return output
+}
 
-	var buf bytes.Buffer
-	buf.Grow(outputLength)
-	buf.WriteString(exportPrefix)
-	for ptr := 0; ptr < len(base64Data); ptr += exportLineLengthLimit {
-		buf.Write(base64Data[ptr:min(ptr+exportLineLengthLimit, len(base64Data))])
-		buf.WriteRune('\n')
+func ExportKeysIter(passphrase string, sessions dbutil.RowIter[*InboundGroupSession]) ([]byte, error) {
+	buf := bytes.NewBuffer(make([]byte, 0, 50*1024))
+	enc := json.NewEncoder(buf)
+	buf.WriteByte('[')
+	err := sessions.Iter(func(session *InboundGroupSession) (bool, error) {
+		exported, err := session.export()
+		if err != nil {
+			return false, err
+		}
+		err = enc.Encode(exported)
+		if err != nil {
+			return false, err
+		}
+		buf.WriteByte(',')
+		return true, nil
+	})
+	if err != nil {
+		return nil, err
 	}
-	buf.WriteString(exportSuffix)
-	if buf.Len() != buf.Cap() || buf.Len() != outputLength {
-		panic(fmt.Errorf("unexpected length %d / %d / %d", buf.Len(), buf.Cap(), outputLength))
+	output := buf.Bytes()
+	if len(output) == 1 {
+		return nil, ErrNoSessionsForExport
 	}
-	return buf.Bytes()
+	output[len(output)-1] = ']' // Replace the last comma with a closing bracket
+	return EncryptKeyExport(passphrase, output)
 }
 
 // ExportKeys exports the given Megolm sessions with the format specified in the Matrix spec.
 // See https://spec.matrix.org/v1.2/client-server-api/#key-exports
 func ExportKeys(passphrase string, sessions []*InboundGroupSession) ([]byte, error) {
-	// Make all the keys necessary for exporting
-	encryptionKey, hashKey, salt, iv := makeExportKeys(passphrase)
+	if len(sessions) == 0 {
+		return nil, ErrNoSessionsForExport
+	}
 	// Export all the given sessions and put them in JSON
 	unencryptedData, err := exportSessionsJSON(sessions)
 	if err != nil {
 		return nil, err
 	}
+	return EncryptKeyExport(passphrase, unencryptedData)
+}
+
+func EncryptKeyExport(passphrase string, unencryptedData json.RawMessage) ([]byte, error) {
+	// Make all the keys necessary for exporting
+	encryptionKey, hashKey, salt, iv := makeExportKeys(passphrase)
 
 	// The export data consists of:
 	// 1 byte of export format version

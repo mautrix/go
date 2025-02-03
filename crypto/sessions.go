@@ -8,6 +8,7 @@ package crypto
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"maunium.net/go/mautrix/crypto/olm"
@@ -150,6 +151,22 @@ func (igs *InboundGroupSession) RatchetTo(index uint32) error {
 	}
 	igs.Internal = imported
 	return nil
+}
+
+func (igs *InboundGroupSession) export() (*ExportedSession, error) {
+	key, err := igs.Internal.Export(igs.Internal.FirstKnownIndex())
+	if err != nil {
+		return nil, fmt.Errorf("failed to export session: %w", err)
+	}
+	return &ExportedSession{
+		Algorithm:         id.AlgorithmMegolmV1,
+		ForwardingChains:  igs.ForwardingChains,
+		RoomID:            igs.RoomID,
+		SenderKey:         igs.SenderKey,
+		SenderClaimedKeys: SenderClaimedKeys{},
+		SessionID:         igs.ID(),
+		SessionKey:        string(key),
+	}, nil
 }
 
 type OGSState int
