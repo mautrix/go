@@ -279,7 +279,7 @@ func (mach *OlmMachine) HandleOTKCounts(ctx context.Context, otkCount *mautrix.O
 		mach.receivedOTKsForSelf.Store(true)
 	}
 
-	minCount := mach.account.Internal.MaxNumberOfOneTimeKeys() / 2
+	minCount := mach.account.InternalLibolm.MaxNumberOfOneTimeKeys() / 2
 	if otkCount.SignedCurve25519 < int(minCount) {
 		traceID := time.Now().Format("15:04:05.000000")
 		log := mach.Log.With().Str("trace_id", traceID).Logger()
@@ -579,7 +579,10 @@ func (mach *OlmMachine) createGroupSession(ctx context.Context, senderKey id.Sen
 		log.Err(err).Str("session_id", sessionID.String()).Msg("Failed to store new inbound group session")
 		return fmt.Errorf("failed to store new inbound group session: %w", err)
 	}
-	mach.markSessionReceived(ctx, roomID, sessionID, igs.Internal.FirstKnownIndex())
+	if igs.InternalLibolm.FirstKnownIndex() != igs.InternalGoolm.FirstKnownIndex() {
+		panic("different index")
+	}
+	mach.markSessionReceived(ctx, roomID, sessionID, igs.InternalLibolm.FirstKnownIndex())
 	log.Debug().
 		Str("session_id", sessionID.String()).
 		Str("sender_key", senderKey.String()).
@@ -749,7 +752,8 @@ func (mach *OlmMachine) ShareKeys(ctx context.Context, currentOTKCount int) erro
 		return err
 	}
 	mach.lastOTKUpload = time.Now()
-	mach.account.Internal.MarkKeysAsPublished()
+	mach.account.InternalLibolm.MarkKeysAsPublished()
+	mach.account.InternalGoolm.MarkKeysAsPublished()
 	mach.account.Shared = true
 	return mach.saveAccount(ctx)
 }
