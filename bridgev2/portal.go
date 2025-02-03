@@ -1101,7 +1101,7 @@ func (portal *Portal) handleMatrixEdit(ctx context.Context, sender *UserLogin, o
 		log.Warn().Msg("Edit target message not found in database")
 		portal.sendErrorStatus(ctx, evt, fmt.Errorf("edit %w", ErrTargetMessageNotFound))
 		return
-	} else if caps.EditMaxAge.Duration > 0 && time.Since(editTarget.Timestamp) > caps.EditMaxAge.Duration {
+	} else if caps.EditMaxAge != nil && caps.EditMaxAge.Duration > 0 && time.Since(editTarget.Timestamp) > caps.EditMaxAge.Duration {
 		portal.sendErrorStatus(ctx, evt, ErrEditTargetTooOld)
 		return
 	} else if caps.EditMaxCount > 0 && editTarget.EditCount >= caps.EditMaxCount {
