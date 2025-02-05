@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/exslices"
 	"go.mau.fi/util/jsontime"
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
@@ -47,12 +48,14 @@ type ShowSASCallbacks interface {
 	ShowSAS(ctx context.Context, txnID id.VerificationTransactionID, emojis []rune, emojiDescriptions []string, decimals []int)
 }
 
-type ShowQRCodeCallbacks interface {
+type ScanQRCodeCallbacks interface {
 	// ScanQRCode is called when another device has sent a
 	// m.key.verification.ready event and indicated that they are capable of
 	// showing a QR code.
 	ScanQRCode(ctx context.Context, txnID id.VerificationTransactionID)
+}
 
+type ShowQRCodeCallbacks interface {
 	// ShowQRCode is called when the verification has been accepted and a QR
 	// code should be shown to the user.
 	ShowQRCode(ctx context.Context, txnID id.VerificationTransactionID, qrCode *QRCode)
@@ -108,24 +111,22 @@ func NewVerificationHelper(client *mautrix.Client, mach *crypto.OlmMachine, stor
 		helper.verificationDone = c.VerificationDone
 	}
 
-	supportedMethods := map[event.VerificationMethod]struct{}{}
 	if c, ok := callbacks.(ShowSASCallbacks); ok {
-		supportedMethods[event.VerificationMethodSAS] = struct{}{}
+		helper.supportedMethods = append(helper.supportedMethods, event.VerificationMethodSAS)
 		helper.showSAS = c.ShowSAS
 	}
 	if c, ok := callbacks.(ShowQRCodeCallbacks); ok {
-		supportedMethods[event.VerificationMethodQRCodeShow] = struct{}{}
-		supportedMethods[event.VerificationMethodReciprocate] = struct{}{}
-		helper.scanQRCode = c.ScanQRCode
+		helper.supportedMethods = append(helper.supportedMethods, event.VerificationMethodQRCodeShow)
+		helper.supportedMethods = append(helper.supportedMethods, event.VerificationMethodReciprocate)
 		helper.showQRCode = c.ShowQRCode
 		helper.qrCodeScaned = c.QRCodeScanned
 	}
-	if supportsScan {
-		supportedMethods[event.VerificationMethodQRCodeScan] = struct{}{}
-		supportedMethods[event.VerificationMethodReciprocate] = struct{}{}
+	if c, ok := callbacks.(ScanQRCodeCallbacks); ok && supportsScan {
+		helper.supportedMethods = append(helper.supportedMethods, event.VerificationMethodQRCodeScan)
+		helper.supportedMethods = append(helper.supportedMethods, event.VerificationMethodReciprocate)
+		helper.scanQRCode = c.ScanQRCode
 	}
-
-	helper.supportedMethods = maps.Keys(supportedMethods)
+	helper.supportedMethods = exslices.DeduplicateUnsorted(helper.supportedMethods)
 	return &helper
 }
 
@@ -420,7 +421,9 @@ func (vh *VerificationHelper) AcceptVerification(ctx context.Context, txnID id.V
 	}
 	txn.VerificationState = VerificationStateReady
 
-	if vh.scanQRCode != nil && slices.Contains(txn.TheirSupportedMethods, event.VerificationMethodQRCodeShow) {
+	if vh.scanQRCode != nil &&
+		slices.Contains(vh.supportedMethods, event.VerificationMethodQRCodeScan) && // technically redundant because vh.scanQRCode is only set if this is true
+		slices.Contains(txn.TheirSupportedMethods, event.VerificationMethodQRCodeShow) {
 		vh.scanQRCode(ctx, txn.TransactionID)
 	}
 
@@ -734,7 +737,9 @@ func (vh *VerificationHelper) onVerificationReady(ctx context.Context, txn Verif
 		}
 	}
 
-	if vh.scanQRCode != nil && slices.Contains(txn.TheirSupportedMethods, event.VerificationMethodQRCodeShow) {
+	if vh.scanQRCode != nil &&
+		slices.Contains(vh.supportedMethods, event.VerificationMethodQRCodeScan) && // technically redundant because vh.scanQRCode is only set if this is true
+		slices.Contains(txn.TheirSupportedMethods, event.VerificationMethodQRCodeShow) {
 		vh.scanQRCode(ctx, txn.TransactionID)
 	}
 
