@@ -93,6 +93,7 @@ type DirectNotificationData struct {
 	Message   string
 
 	FormattedNotification string
+	FormattedTitle        string
 }
 
 type MatrixConnectorWithNotifications interface {
