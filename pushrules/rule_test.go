@@ -186,6 +186,34 @@ func TestPushRule_Match_Content(t *testing.T) {
 	assert.True(t, rule.Match(blankTestRoom, evt))
 }
 
+func TestPushRule_Match_WordBoundary(t *testing.T) {
+	rule := &pushrules.PushRule{
+		Type:    pushrules.ContentRule,
+		Enabled: true,
+		Pattern: "test",
+	}
+
+	evt := newFakeEvent(event.EventMessage, &event.MessageEventContent{
+		MsgType: event.MsgEmote,
+		Body:    "is testing pushrules",
+	})
+	assert.False(t, rule.Match(blankTestRoom, evt))
+}
+
+func TestPushRule_Match_CaseInsensitive(t *testing.T) {
+	rule := &pushrules.PushRule{
+		Type:    pushrules.ContentRule,
+		Enabled: true,
+		Pattern: "test",
+	}
+
+	evt := newFakeEvent(event.EventMessage, &event.MessageEventContent{
+		MsgType: event.MsgEmote,
+		Body:    "is TeSt-InG pushrules",
+	})
+	assert.True(t, rule.Match(blankTestRoom, evt))
+}
+
 func TestPushRule_Match_Content_Fail(t *testing.T) {
 	rule := &pushrules.PushRule{
 		Type:    pushrules.ContentRule,
