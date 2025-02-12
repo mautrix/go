@@ -82,6 +82,10 @@ func NewQRCodeFromBytes(data []byte) (*QRCode, error) {
 //
 // [Section 11.12.2.4.1]: https://spec.matrix.org/v1.9/client-server-api/#qr-code-format
 func (q *QRCode) Bytes() []byte {
+	if q == nil {
+		return nil
+	}
+
 	var buf bytes.Buffer
 	buf.WriteString("MATRIX")   // Header
 	buf.WriteByte(0x02)         // Version
