@@ -55,6 +55,7 @@ func (mach *OlmMachine) GetAndVerifyLatestKeyBackupVersion(ctx context.Context, 
 	// key include the user entering the key, retrieving the key stored in secret storage, or obtaining the key via secret sharing
 	// from a verified device belonging to the same user."
 	if versionInfo.AuthData.PublicKey == id.Ed25519(base64.RawStdEncoding.EncodeToString(megolmBackupKey.PublicKey().Bytes())) {
+		log.Debug().Msg("key backup is trusted based on public key")
 		return versionInfo, nil
 	}
 
@@ -98,6 +99,7 @@ func (mach *OlmMachine) GetAndVerifyLatestKeyBackupVersion(ctx context.Context, 
 			continue
 		} else {
 			// One of the signatures is valid, break from the loop.
+			log.Debug().Stringer("key_id", keyID).Msg("key backup is trusted based on matching signature")
 			signatureVerified = true
 			break
 		}
