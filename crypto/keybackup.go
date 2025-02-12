@@ -2,6 +2,7 @@ package crypto
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"time"
 
@@ -21,7 +22,7 @@ func (mach *OlmMachine) DownloadAndStoreLatestKeyBackup(ctx context.Context, meg
 
 	ctx = log.WithContext(ctx)
 
-	versionInfo, err := mach.GetAndVerifyLatestKeyBackupVersion(ctx)
+	versionInfo, err := mach.GetAndVerifyLatestKeyBackupVersion(ctx, megolmBackupKey)
 	if err != nil {
 		return "", err
 	} else if versionInfo == nil {
@@ -32,7 +33,7 @@ func (mach *OlmMachine) DownloadAndStoreLatestKeyBackup(ctx context.Context, meg
 	return versionInfo.Version, err
 }
 
-func (mach *OlmMachine) GetAndVerifyLatestKeyBackupVersion(ctx context.Context) (*mautrix.RespRoomKeysVersion[backup.MegolmAuthData], error) {
+func (mach *OlmMachine) GetAndVerifyLatestKeyBackupVersion(ctx context.Context, megolmBackupKey *backup.MegolmBackupKey) (*mautrix.RespRoomKeysVersion[backup.MegolmAuthData], error) {
 	versionInfo, err := mach.Client.GetKeyBackupLatestVersion(ctx)
 	if err != nil {
 		return nil, err
@@ -48,6 +49,17 @@ func (mach *OlmMachine) GetAndVerifyLatestKeyBackupVersion(ctx context.Context) 
 		Stringer("key_backup_version", versionInfo.Version).
 		Logger()
 
+	// https://spec.matrix.org/v1.10/client-server-api/#server-side-key-backups
+	// "Clients must only store keys in backups after they have ensured that the auth_data is trusted. This can be done either...
+	// ...by deriving the public key from a private key that it obtained from a trusted source. Trusted sources for the private
+	// key include the user entering the key, retrieving the key stored in secret storage, or obtaining the key via secret sharing
+	// from a verified device belonging to the same user."
+	if megolmBackupKey != nil && versionInfo.AuthData.PublicKey == id.Ed25519(base64.RawStdEncoding.EncodeToString(megolmBackupKey.PublicKey().Bytes())) {
+		log.Debug().Msg("key backup is trusted based on public key")
+		return versionInfo, nil
+	}
+
+	// "...or checking that it is signed by the user’s master cross-signing key or by a verified device belonging to the same user"
 	userSignatures, ok := versionInfo.AuthData.Signatures[mach.Client.UserID]
 	if !ok {
 		return nil, fmt.Errorf("no signature from user %s found in key backup", mach.Client.UserID)
@@ -87,6 +99,7 @@ func (mach *OlmMachine) GetAndVerifyLatestKeyBackupVersion(ctx context.Context) 
 			continue
 		} else {
 			// One of the signatures is valid, break from the loop.
+			log.Debug().Stringer("key_id", keyID).Msg("key backup is trusted based on matching signature")
 			signatureVerified = true
 			break
 		}
