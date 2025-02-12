@@ -181,10 +181,7 @@ func (mach *OlmMachine) receiveSecret(ctx context.Context, evt *DecryptedOlmEven
 	} else if senderDevice == nil {
 		log.Warn().Msg("Unknown sender device, rejecting secret")
 		return
-	} else if trustLevel, err := mach.ResolveTrustContext(ctx, senderDevice); err != nil {
-		log.Err(err).Msg("Failed to resolve trust for sender device, rejecting secret")
-		return
-	} else if trustLevel < id.TrustStateCrossSignedTOFU {
+	} else if !mach.IsDeviceTrusted(senderDevice) {
 		log.Warn().Msg("Sender device is not verified, rejecting secret")
 		return
 	}
