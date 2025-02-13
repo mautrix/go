@@ -199,7 +199,7 @@ func (helper *CryptoHelper) allowKeyShare(ctx context.Context, device *id.Device
 		return &crypto.KeyShareRejectNoResponse
 	} else if device.Trust == id.TrustStateBlacklisted {
 		return &crypto.KeyShareRejectBlacklisted
-	} else if trustState := helper.mach.ResolveTrust(device); trustState >= cfg.VerificationLevels.Share {
+	} else if trustState, _ := helper.mach.ResolveTrustContext(ctx, device); trustState >= cfg.VerificationLevels.Share {
 		portal, err := helper.bridge.Bridge.GetPortalByMXID(ctx, info.RoomID)
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to get portal to handle key request")

@@ -13,6 +13,9 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
+// ResolveTrust resolves the trust state of the device from cross-signing.
+//
+// Deprecated: This method doesn't take a context. Use [OlmMachine.ResolveTrustContext] instead.
 func (mach *OlmMachine) ResolveTrust(device *id.Device) id.TrustState {
 	state, _ := mach.ResolveTrustContext(context.Background(), device)
 	return state
@@ -77,8 +80,12 @@ func (mach *OlmMachine) ResolveTrustContext(ctx context.Context, device *id.Devi
 }
 
 // IsDeviceTrusted returns whether a device has been determined to be trusted either through verification or cross-signing.
-func (mach *OlmMachine) IsDeviceTrusted(device *id.Device) bool {
-	switch mach.ResolveTrust(device) {
+//
+// Note: this will return false if resolving the trust state fails due to database errors.
+// Use [OlmMachine.ResolveTrustContext] if special error handling is required.
+func (mach *OlmMachine) IsDeviceTrusted(ctx context.Context, device *id.Device) bool {
+	trust, _ := mach.ResolveTrustContext(ctx, device)
+	switch trust {
 	case id.TrustStateVerified, id.TrustStateCrossSignedTOFU, id.TrustStateCrossSignedVerified:
 		return true
 	default:

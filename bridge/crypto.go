@@ -193,7 +193,7 @@ func (helper *CryptoHelper) allowKeyShare(ctx context.Context, device *id.Device
 		return &crypto.KeyShareRejectNoResponse
 	} else if device.Trust == id.TrustStateBlacklisted {
 		return &crypto.KeyShareRejectBlacklisted
-	} else if trustState := helper.mach.ResolveTrust(device); trustState >= cfg.VerificationLevels.Share {
+	} else if trustState, _ := helper.mach.ResolveTrustContext(ctx, device); trustState >= cfg.VerificationLevels.Share {
 		portal := helper.bridge.Child.GetIPortal(info.RoomID)
 		if portal == nil {
 			zerolog.Ctx(ctx).Debug().Msg("Rejecting key request: room is not a portal")
