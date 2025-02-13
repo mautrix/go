@@ -181,7 +181,7 @@ func (mach *OlmMachine) receiveSecret(ctx context.Context, evt *DecryptedOlmEven
 	} else if senderDevice == nil {
 		log.Warn().Msg("Unknown sender device, rejecting secret")
 		return
-	} else if !mach.IsDeviceTrusted(senderDevice) {
+	} else if !mach.IsDeviceTrusted(ctx, senderDevice) {
 		log.Warn().Msg("Sender device is not verified, rejecting secret")
 		return
 	}

@@ -86,7 +86,7 @@ func (mach *OlmMachine) GetAndVerifyLatestKeyBackupVersion(ctx context.Context, 
 		} else if device == nil {
 			log.Warn().Err(err).Msg("Device does not exist, ignoring signature")
 			continue
-		} else if !mach.IsDeviceTrusted(device) {
+		} else if !mach.IsDeviceTrusted(ctx, device) {
 			log.Warn().Err(err).Msg("Device is not trusted")
 			continue
 		} else {

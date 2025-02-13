@@ -417,7 +417,7 @@ func (mach *OlmMachine) findOlmSessionsForUser(ctx context.Context, session *Out
 				Reason:    "Device is blacklisted",
 			}}
 			session.Users[userKey] = OGSIgnored
-		} else if trustState := mach.ResolveTrust(device); trustState < mach.SendKeysMinTrust {
+		} else if trustState, _ := mach.ResolveTrustContext(ctx, device); trustState < mach.SendKeysMinTrust {
 			log.Debug().
 				Str("min_trust", mach.SendKeysMinTrust.String()).
 				Str("device_trust", trustState.String()).
