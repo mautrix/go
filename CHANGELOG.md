@@ -1,3 +1,21 @@
+## v0.23.1 (2025-02-16)
+
+* *(client)* Added `FullStateEvent` method to get a state event including
+  metadata (using the `?format=event` query parameter).
+* *(client)* Added wrapper method for [MSC4194]'s redact endpoint.
+* *(pushrules)* Fixed content rules not considering word boundaries and being
+  case-sensitive.
+* *(crypto)* Fixed bugs that would cause key exports to fail for no reason.
+* *(crypto)* Deprecated `ResolveTrust` in favor of `ResolveTrustContext`.
+* *(crypto)* Stopped accepting secret shares from unverified devices.
+* **Breaking change *(crypto)*** Changed `GetAndVerifyLatestKeyBackupVersion`
+  to take an optional private key parameter. The method will now trust the
+  public key if it matches the provided private key even if there are no valid
+  signatures.
+* **Breaking change *(crypto)*** Added context parameter to `IsDeviceTrusted`.
+
+[MSC4194]: https://github.com/matrix-org/matrix-spec-proposals/pull/4194
+
 ## v0.23.0 (2025-01-16)
 
 * **Breaking change *(client)*** Changed `JoinRoom` parameters to allow multiple
