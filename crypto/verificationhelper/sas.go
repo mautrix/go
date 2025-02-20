@@ -111,6 +111,7 @@ func (vh *VerificationHelper) ConfirmSAS(ctx context.Context, txnID id.Verificat
 	keys := map[id.KeyID]jsonbytes.UnpaddedBytes{}
 
 	log.Info().Msg("Signing keys")
+	var masterKey string
 
 	// My device key
 	myDevice := vh.mach.OwnIdentity()
@@ -123,8 +124,9 @@ func (vh *VerificationHelper) ConfirmSAS(ctx context.Context, txnID id.Verificat
 	// Master signing key
 	crossSigningKeys := vh.mach.GetOwnCrossSigningPublicKeys(ctx)
 	if crossSigningKeys != nil {
-		crossSigningKeyID := id.NewKeyID(id.KeyAlgorithmEd25519, crossSigningKeys.MasterKey.String())
-		keys[crossSigningKeyID], err = vh.verificationMACHKDF(txn, vh.client.UserID, vh.client.DeviceID, txn.TheirUserID, txn.TheirDeviceID, crossSigningKeyID.String(), crossSigningKeys.MasterKey.String())
+		masterKey = crossSigningKeys.MasterKey.String()
+		crossSigningKeyID := id.NewKeyID(id.KeyAlgorithmEd25519, masterKey)
+		keys[crossSigningKeyID], err = vh.verificationMACHKDF(txn, vh.client.UserID, vh.client.DeviceID, txn.TheirUserID, txn.TheirDeviceID, crossSigningKeyID.String(), masterKey)
 		if err != nil {
 			return err
 		}
@@ -148,10 +150,16 @@ func (vh *VerificationHelper) ConfirmSAS(ctx context.Context, txnID id.Verificat
 	if err != nil {
 		return err
 	}
+	log.Info().Msg("Sent our MAC event")
 
 	txn.SentOurMAC = true
 	if txn.ReceivedTheirMAC {
 		txn.VerificationState = VerificationStateSASMACExchanged
+
+		if err := vh.trustKeysAfterMACCheck(ctx, txn, masterKey); err != nil {
+			return fmt.Errorf("failed to trust keys: %w", err)
+		}
+
 		err := vh.sendVerificationEvent(ctx, txn, event.InRoomVerificationDone, &event.VerificationDoneEventContent{})
 		if err != nil {
 			return err
@@ -731,57 +739,15 @@ func (vh *VerificationHelper) onVerificationMAC(ctx context.Context, txn Verific
 	}
 	log.Info().Msg("All MACs verified")
 
-	// Trust their device
-	theirDevice.Trust = id.TrustStateVerified
-	err = vh.mach.CryptoStore.PutDevice(ctx, txn.TheirUserID, theirDevice)
-	if err != nil {
-		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUser, "failed to update device trust state after verifying: %w", err)
-		return
-	}
-
-	if txn.TheirUserID == vh.client.UserID {
-		// Self-signing situation.
-		//
-		// If we have the cross-signing keys, then we need to sign their device
-		// using the self-signing key. Otherwise, they have the master private
-		// key, so we need to trust the master public key.
-		if vh.mach.CrossSigningKeys != nil {
-			err = vh.mach.SignOwnDevice(ctx, theirDevice)
-			if err != nil {
-				vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUser, "failed to sign our own new device: %w", err)
-				return
-			}
-		} else {
-			err = vh.mach.SignOwnMasterKey(ctx)
-			if err != nil {
-				vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUser, "failed to sign our own master key: %w", err)
-				return
-			}
-		}
-	} else if masterKey != "" {
-		// Cross-signing situation.
-		//
-		// The master key was included in the list of keys to verify, so verify
-		// that it matches what we expect and sign their master key using the
-		// user-signing key.
-		theirSigningKeys, err := vh.mach.GetCrossSigningPublicKeys(ctx, txn.TheirUserID)
-		if err != nil {
-			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeKeyMismatch, "couldn't get %s's cross-signing keys: %w", txn.TheirUserID, err)
-			return
-		} else if theirSigningKeys.MasterKey.String() != masterKey {
-			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeKeyMismatch, "master keys do not match")
-			return
-		}
-
-		if err := vh.mach.SignUser(ctx, txn.TheirUserID, theirSigningKeys.MasterKey); err != nil {
-			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeInternalError, "failed to sign their master key: %w", err)
-			return
-		}
-	}
-
 	txn.ReceivedTheirMAC = true
 	if txn.SentOurMAC {
 		txn.VerificationState = VerificationStateSASMACExchanged
+
+		if err := vh.trustKeysAfterMACCheck(ctx, txn, masterKey); err != nil {
+			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUser, "failed to trust keys: %w", err)
+			return
+		}
+
 		err := vh.sendVerificationEvent(ctx, txn, event.InRoomVerificationDone, &event.VerificationDoneEventContent{})
 		if err != nil {
 			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUser, "failed to send verification done event: %w", err)
@@ -793,4 +759,53 @@ func (vh *VerificationHelper) onVerificationMAC(ctx context.Context, txn Verific
 	if err := vh.store.SaveVerificationTransaction(ctx, txn); err != nil {
 		log.Err(err).Msg("failed to save verification transaction")
 	}
+}
+
+func (vh *VerificationHelper) trustKeysAfterMACCheck(ctx context.Context, txn VerificationTransaction, masterKey string) error {
+	theirDevice, err := vh.mach.GetOrFetchDevice(ctx, txn.TheirUserID, txn.TheirDeviceID)
+	if err != nil {
+		return fmt.Errorf("failed to fetch their device: %w", err)
+	}
+	// Trust their device
+	theirDevice.Trust = id.TrustStateVerified
+	err = vh.mach.CryptoStore.PutDevice(ctx, txn.TheirUserID, theirDevice)
+	if err != nil {
+		return fmt.Errorf("failed to update device trust state after verifying: %w", err)
+	}
+
+	if txn.TheirUserID == vh.client.UserID {
+		// Self-signing situation.
+		//
+		// If we have the cross-signing keys, then we need to sign their device
+		// using the self-signing key. Otherwise, they have the master private
+		// key, so we need to trust the master public key.
+		if vh.mach.CrossSigningKeys != nil {
+			err = vh.mach.SignOwnDevice(ctx, theirDevice)
+			if err != nil {
+				return fmt.Errorf("failed to sign our own new device: %w", err)
+			}
+		} else {
+			err = vh.mach.SignOwnMasterKey(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to sign our own master key: %w", err)
+			}
+		}
+	} else if masterKey != "" {
+		// Cross-signing situation.
+		//
+		// The master key was included in the list of keys to verify, so verify
+		// that it matches what we expect and sign their master key using the
+		// user-signing key.
+		theirSigningKeys, err := vh.mach.GetCrossSigningPublicKeys(ctx, txn.TheirUserID)
+		if err != nil {
+			return fmt.Errorf("couldn't get %s's cross-signing keys: %w", txn.TheirUserID, err)
+		} else if theirSigningKeys.MasterKey.String() != masterKey {
+			return fmt.Errorf("master keys do not match")
+		}
+
+		if err := vh.mach.SignUser(ctx, txn.TheirUserID, theirSigningKeys.MasterKey); err != nil {
+			return fmt.Errorf("failed to sign %s's master key: %w", txn.TheirUserID, err)
+		}
+	}
+	return nil
 }
