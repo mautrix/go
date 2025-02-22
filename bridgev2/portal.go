@@ -3377,8 +3377,9 @@ func (portal *Portal) updateUserLocalInfo(ctx context.Context, info *UserLocalPo
 func DisappearingMessageNotice(expiration time.Duration, implicit bool) *event.MessageEventContent {
 	formattedDuration := exfmt.DurationCustom(expiration, nil, exfmt.Day, time.Hour, time.Minute, time.Second)
 	content := &event.MessageEventContent{
-		MsgType: event.MsgNotice,
-		Body:    fmt.Sprintf("Set the disappearing message timer to %s", formattedDuration),
+		MsgType:  event.MsgNotice,
+		Body:     fmt.Sprintf("Set the disappearing message timer to %s", formattedDuration),
+		Mentions: &event.Mentions{},
 	}
 	if implicit {
 		content.Body = fmt.Sprintf("Automatically enabled disappearing message timer (%s) because incoming message is disappearing", formattedDuration)
