@@ -219,7 +219,7 @@ func (ms *MessageStatus) ToNoticeEvent(evt *MessageStatusEventInfo) *event.Messa
 		messagePrefix = "Handling your command panicked"
 	}
 	content := &event.MessageEventContent{
-		MsgType:   event.MsgText,
+		MsgType:   event.MsgNotice,
 		Body:      fmt.Sprintf("\u26a0\ufe0f %s: %s", messagePrefix, msg),
 		RelatesTo: &event.RelatesTo{},
 		Mentions:  &event.Mentions{},
