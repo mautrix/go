@@ -511,7 +511,8 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 	if err != nil {
 		log.Err(err).Msg("Failed to get user login to handle Matrix event")
 		if errors.Is(err, ErrNotLoggedIn) {
-			portal.sendErrorStatus(ctx, evt, WrapErrorInStatus(err).WithMessage("You're not logged in").WithIsCertain(true).WithSendNotice(true))
+			shouldSendNotice := evt.Content.AsMessage().MsgType != event.MsgNotice
+			portal.sendErrorStatus(ctx, evt, WrapErrorInStatus(err).WithMessage("You're not logged in").WithIsCertain(true).WithSendNotice(shouldSendNotice))
 		} else {
 			portal.sendErrorStatus(ctx, evt, WrapErrorInStatus(err).WithMessage("Failed to get login to handle event").WithIsCertain(true).WithSendNotice(true))
 		}
@@ -818,6 +819,10 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 		relatesTo = msgContent.RelatesTo
 		if evt.Type == event.EventSticker {
 			msgContent.MsgType = event.CapMsgSticker
+		}
+		if msgContent.MsgType == event.MsgNotice && !portal.Bridge.Config.BridgeNotices {
+			portal.sendErrorStatus(ctx, evt, ErrIgnoringMNotice)
+			return
 		}
 	}
 	if !ok {

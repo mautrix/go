@@ -32,6 +32,7 @@ func doUpgrade(helper up.Helper) {
 	helper.Copy(up.Bool, "bridge", "resend_bridge_info")
 	helper.Copy(up.Bool, "bridge", "no_bridge_info_state_key")
 	helper.Copy(up.Bool, "bridge", "bridge_matrix_leave")
+	helper.Copy(up.Bool, "bridge", "bridge_notices")
 	helper.Copy(up.Bool, "bridge", "tag_only_on_create")
 	helper.Copy(up.List, "bridge", "only_bridge_tags")
 	helper.Copy(up.Bool, "bridge", "mute_only_on_create")

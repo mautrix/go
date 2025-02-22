@@ -66,6 +66,7 @@ type BridgeConfig struct {
 	ResendBridgeInfo        bool             `yaml:"resend_bridge_info"`
 	NoBridgeInfoStateKey    bool             `yaml:"no_bridge_info_state_key"`
 	BridgeMatrixLeave       bool             `yaml:"bridge_matrix_leave"`
+	BridgeNotices           bool             `yaml:"bridge_notices"`
 	TagOnlyOnCreate         bool             `yaml:"tag_only_on_create"`
 	OnlyBridgeTags          []event.RoomTag  `yaml:"only_bridge_tags"`
 	MuteOnlyOnCreate        bool             `yaml:"mute_only_on_create"`
