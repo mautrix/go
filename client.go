@@ -2013,6 +2013,14 @@ func (cli *Client) GetEvent(ctx context.Context, roomID id.RoomID, eventID id.Ev
 	return
 }
 
+func (cli *Client) GetUnredactedEventContent(ctx context.Context, roomID id.RoomID, eventID id.EventID) (resp *event.Event, err error) {
+	urlPath := cli.BuildURLWithQuery(ClientURLPath{"v3", "rooms", roomID, "event", eventID}, map[string]string{
+		"fi.mau.msc2815.include_unredacted_content": "true",
+	})
+	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
+	return
+}
+
 func (cli *Client) MarkRead(ctx context.Context, roomID id.RoomID, eventID id.EventID) (err error) {
 	return cli.SendReceipt(ctx, roomID, eventID, event.ReceiptTypeRead, nil)
 }

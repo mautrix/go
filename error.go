@@ -71,6 +71,9 @@ var (
 	MBadStatus         = RespError{ErrCode: "M_BAD_STATUS"}
 	MConnectionTimeout = RespError{ErrCode: "M_CONNECTION_TIMEOUT"}
 	MConnectionFailed  = RespError{ErrCode: "M_CONNECTION_FAILED"}
+
+	MUnredactedContentDeleted     = RespError{ErrCode: "FI.MAU.MSC2815_UNREDACTED_CONTENT_DELETED"}
+	MUnredactedContentNotReceived = RespError{ErrCode: "FI.MAU.MSC2815_UNREDACTED_CONTENT_NOT_RECEIVED"}
 )
 
 // HTTPError An HTTP Error response, which may wrap an underlying native Go Error.
