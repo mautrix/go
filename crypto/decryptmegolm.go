@@ -149,7 +149,7 @@ func (mach *OlmMachine) DecryptMegolmEvent(ctx context.Context, evt *event.Event
 	} else if megolmEvt.RoomID != encryptionRoomID {
 		return nil, WrongRoom
 	}
-	if evt.StateKey != nil && megolmEvt.StateKey != nil {
+	if evt.StateKey != nil && megolmEvt.StateKey != nil && mach.AllowEncryptedState {
 		megolmEvt.Type.Class = event.StateEventType
 	} else {
 		megolmEvt.Type.Class = evt.Type.Class

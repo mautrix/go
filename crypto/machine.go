@@ -35,7 +35,8 @@ type OlmMachine struct {
 
 	BackgroundCtx context.Context
 
-	PlaintextMentions bool
+	PlaintextMentions   bool
+	AllowEncryptedState bool
 
 	// Never ask the server for keys automatically as a side effect during Megolm decryption.
 	DisableDecryptKeyFetching bool
