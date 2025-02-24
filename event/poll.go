@@ -29,12 +29,9 @@ func (content *PollResponseEventContent) SetRelatesTo(rel *RelatesTo) {
 }
 
 type MSC1767Message struct {
-	Text    string `json:"org.matrix.msc1767.text,omitempty"`
-	HTML    string `json:"org.matrix.msc1767.html,omitempty"`
-	Message []struct {
-		MimeType string `json:"mimetype"`
-		Body     string `json:"body"`
-	} `json:"org.matrix.msc1767.message,omitempty"`
+	Text    string           `json:"org.matrix.msc1767.text,omitempty"`
+	HTML    string           `json:"org.matrix.msc1767.html,omitempty"`
+	Message []ExtensibleText `json:"org.matrix.msc1767.message,omitempty"`
 }
 
 type PollStartEventContent struct {

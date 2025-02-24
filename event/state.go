@@ -42,7 +42,22 @@ type ServerACLEventContent struct {
 // TopicEventContent represents the content of a m.room.topic state event.
 // https://spec.matrix.org/v1.2/client-server-api/#mroomtopic
 type TopicEventContent struct {
-	Topic string `json:"topic"`
+	Topic           string           `json:"topic"`
+	ExtensibleTopic *ExtensibleTopic `json:"m.topic,omitempty"`
+}
+
+// ExtensibleTopic represents the contents of the m.topic field within the
+// m.room.topic state event as described in [MSC3765].
+//
+// [MSC3765]: https://github.com/matrix-org/matrix-spec-proposals/pull/3765
+type ExtensibleTopic struct {
+	Text []ExtensibleText `json:"m.text"`
+}
+
+// ExtensibleText represents the contents of an m.text field.
+type ExtensibleText struct {
+	MimeType string `json:"mimetype,omitempty"`
+	Body     string `json:"body"`
 }
 
 // TombstoneEventContent represents the content of a m.room.tombstone state event.
