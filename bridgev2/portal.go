@@ -2254,8 +2254,10 @@ func (portal *Portal) handleRemoteReactionSync(ctx context.Context, source *User
 		existing[existingReaction.SenderID][existingReaction.EmojiID] = existingReaction
 	}
 
-	doAddReaction := func(new *BackfillReaction) MatrixAPI {
-		intent := portal.GetIntentFor(ctx, new.Sender, source, RemoteEventReactionSync)
+	doAddReaction := func(new *BackfillReaction, intent MatrixAPI) MatrixAPI {
+		if intent == nil {
+			intent = portal.GetIntentFor(ctx, new.Sender, source, RemoteEventReactionSync)
+		}
 		portal.sendConvertedReaction(
 			ctx, new.Sender.Sender, intent, targetMessage, new.EmojiID, new.Emoji,
 			new.Timestamp, new.DBMetadata, new.ExtraContent,
@@ -2299,8 +2301,9 @@ func (portal *Portal) handleRemoteReactionSync(ctx context.Context, source *User
 		}
 	}
 	doOverwriteReaction := func(new *BackfillReaction, old *database.Reaction) {
-		intent := doAddReaction(new)
+		intent := portal.GetIntentFor(ctx, new.Sender, source, RemoteEventReactionSync)
 		doRemoveReaction(old, intent, false)
+		doAddReaction(new, intent)
 	}
 
 	newData := evt.GetReactions()
@@ -2319,7 +2322,7 @@ func (portal *Portal) handleRemoteReactionSync(ctx context.Context, source *User
 				}
 				doOverwriteReaction(reaction, existingReaction)
 			} else {
-				doAddReaction(reaction)
+				doAddReaction(reaction, nil)
 			}
 		}
 		totalReactionCount := len(existingUserReactions) + len(reactions.Reactions)
@@ -2381,7 +2384,6 @@ func (portal *Portal) handleRemoteReaction(ctx context.Context, source *UserLogi
 	if metaProvider, ok := evt.(RemoteReactionWithMeta); ok {
 		dbMetadata = metaProvider.GetReactionDBMetadata()
 	}
-	portal.sendConvertedReaction(ctx, evt.GetSender().Sender, intent, targetMessage, emojiID, emoji, ts, dbMetadata, extra, nil)
 	if existingReaction != nil {
 		_, err = intent.SendMessage(ctx, portal.MXID, event.EventRedaction, &event.Content{
 			Parsed: &event.RedactionEventContent{
@@ -2392,6 +2394,7 @@ func (portal *Portal) handleRemoteReaction(ctx context.Context, source *UserLogi
 			log.Err(err).Msg("Failed to redact old reaction")
 		}
 	}
+	portal.sendConvertedReaction(ctx, evt.GetSender().Sender, intent, targetMessage, emojiID, emoji, ts, dbMetadata, extra, nil)
 }
 
 func (portal *Portal) sendConvertedReaction(
