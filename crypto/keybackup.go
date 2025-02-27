@@ -56,7 +56,7 @@ func (mach *OlmMachine) GetAndVerifyLatestKeyBackupVersion(ctx context.Context, 
 	// from a verified device belonging to the same user."
 	megolmBackupDerivedPublicKey := id.Ed25519(base64.RawStdEncoding.EncodeToString(megolmBackupKey.PublicKey().Bytes()))
 	if megolmBackupKey != nil && versionInfo.AuthData.PublicKey == megolmBackupDerivedPublicKey {
-		log.Debug().Msg("key backup is trusted based on public key")
+		log.Debug().Msg("key backup is trusted based on derived public key")
 		return versionInfo, nil
 	} else {
 		log.Debug().
