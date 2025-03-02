@@ -15,6 +15,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/dbutil"
+	_ "go.mau.fi/util/dbutil/litestream"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto"
@@ -78,7 +79,7 @@ func NewCryptoHelper(cli *mautrix.Client, pickleKey []byte, store any) (*CryptoH
 		}
 		unmanagedCryptoStore = typedStore
 	case string:
-		db, err := dbutil.NewWithDialect(typedStore, "sqlite3")
+		db, err := dbutil.NewWithDialect(fmt.Sprintf("file:%s?_txlock=immediate", typedStore), "sqlite3-fk-wal")
 		if err != nil {
 			return nil, err
 		}
