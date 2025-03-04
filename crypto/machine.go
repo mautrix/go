@@ -363,16 +363,16 @@ func (mach *OlmMachine) HandleMemberEvent(ctx context.Context, evt *event.Event)
 	}
 }
 
-func (mach *OlmMachine) HandleEncryptedEvent(ctx context.Context, evt *event.Event) {
+func (mach *OlmMachine) HandleEncryptedEvent(ctx context.Context, evt *event.Event) *DecryptedOlmEvent {
 	if _, ok := evt.Content.Parsed.(*event.EncryptedEventContent); !ok {
 		mach.machOrContextLog(ctx).Warn().Msg("Passed invalid event to encrypted handler")
-		return
+		return nil
 	}
 
 	decryptedEvt, err := mach.decryptOlmEvent(ctx, evt)
 	if err != nil {
 		mach.machOrContextLog(ctx).Error().Err(err).Msg("Failed to decrypt to-device event")
-		return
+		return nil
 	}
 
 	log := mach.machOrContextLog(ctx).With().
@@ -401,7 +401,9 @@ func (mach *OlmMachine) HandleEncryptedEvent(ctx context.Context, evt *event.Eve
 		log.Trace().Msg("Handled secret send event")
 	default:
 		log.Debug().Msg("Unhandled encrypted to-device event")
+		return decryptedEvt
 	}
+	return nil
 }
 
 const olmHashSavePointCount = 5
