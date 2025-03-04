@@ -57,7 +57,12 @@ func NewKey(passphrase string) (*Key, error) {
 	// We store a certain hash in the key metadata so that clients can check if the user entered the correct key.
 	ivBytes := random.Bytes(utils.AESCTRIVLength)
 	keyData.IV = base64.RawStdEncoding.EncodeToString(ivBytes)
-	keyData.MAC = keyData.calculateHash(ssssKey)
+	var err error
+	keyData.MAC, err = keyData.calculateHash(ssssKey)
+	if err != nil {
+		// This should never happen because we just generated the IV and key.
+		return nil, fmt.Errorf("failed to calculate hash: %w", err)
+	}
 
 	return &Key{
 		Key:      ssssKey,

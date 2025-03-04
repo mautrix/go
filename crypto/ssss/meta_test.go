@@ -41,12 +41,28 @@ const key2Meta = `
 }
 `
 
+const key2MetaBrokenIV = `
+{
+  "algorithm": "m.secret_storage.v1.aes-hmac-sha2",
+  "iv": "O0BOvTqiIAYjC+RMcyHfWwMeowMeowMeow",
+  "mac": "7k6OruQlWg0UmQjxGZ0ad4Q6DdwkgnoI7G6X3IjBYtI="
+}
+`
+
+const key2MetaBrokenMAC = `
+{
+  "algorithm": "m.secret_storage.v1.aes-hmac-sha2",
+  "iv": "O0BOvTqiIAYjC+RMcyHfWw==",
+  "mac": "7k6OruQlWg0UmQjxGZ0ad4Q6DdwkgnoI7G6X3IjBYtIMeowMeowMeow"
+}
+`
+
 const key2ID = "NVe5vK6lZS9gEMQLJw0yqkzmE5Mr7dLv"
 const key2RecoveryKey = "EsUC xSxt XJgQ dz19 8WBZ rHdE GZo7 ybsn EFmG Y5HY MDAG GNWe"
 
-func getKey1Meta() *ssss.KeyMetadata {
+func getKeyMeta(meta string) *ssss.KeyMetadata {
 	var km ssss.KeyMetadata
-	err := json.Unmarshal([]byte(key1Meta), &km)
+	err := json.Unmarshal([]byte(meta), &km)
 	if err != nil {
 		panic(err)
 	}
@@ -54,7 +70,7 @@ func getKey1Meta() *ssss.KeyMetadata {
 }
 
 func getKey1() *ssss.Key {
-	km := getKey1Meta()
+	km := getKeyMeta(key1Meta)
 	key, err := km.VerifyRecoveryKey(key1ID, key1RecoveryKey)
 	if err != nil {
 		panic(err)
@@ -63,17 +79,8 @@ func getKey1() *ssss.Key {
 	return key
 }
 
-func getKey2Meta() *ssss.KeyMetadata {
-	var km ssss.KeyMetadata
-	err := json.Unmarshal([]byte(key2Meta), &km)
-	if err != nil {
-		panic(err)
-	}
-	return &km
-}
-
 func getKey2() *ssss.Key {
-	km := getKey2Meta()
+	km := getKeyMeta(key2Meta)
 	key, err := km.VerifyRecoveryKey(key2ID, key2RecoveryKey)
 	if err != nil {
 		panic(err)
@@ -83,7 +90,7 @@ func getKey2() *ssss.Key {
 }
 
 func TestKeyMetadata_VerifyRecoveryKey_Correct(t *testing.T) {
-	km := getKey1Meta()
+	km := getKeyMeta(key1Meta)
 	key, err := km.VerifyRecoveryKey(key1ID, key1RecoveryKey)
 	assert.NoError(t, err)
 	assert.NotNil(t, key)
@@ -91,7 +98,7 @@ func TestKeyMetadata_VerifyRecoveryKey_Correct(t *testing.T) {
 }
 
 func TestKeyMetadata_VerifyRecoveryKey_Correct2(t *testing.T) {
-	km := getKey2Meta()
+	km := getKeyMeta(key2Meta)
 	key, err := km.VerifyRecoveryKey(key2ID, key2RecoveryKey)
 	assert.NoError(t, err)
 	assert.NotNil(t, key)
@@ -99,21 +106,21 @@ func TestKeyMetadata_VerifyRecoveryKey_Correct2(t *testing.T) {
 }
 
 func TestKeyMetadata_VerifyRecoveryKey_Invalid(t *testing.T) {
-	km := getKey1Meta()
+	km := getKeyMeta(key1Meta)
 	key, err := km.VerifyRecoveryKey(key1ID, "foo")
 	assert.True(t, errors.Is(err, ssss.ErrInvalidRecoveryKey), "unexpected error: %v", err)
 	assert.Nil(t, key)
 }
 
 func TestKeyMetadata_VerifyRecoveryKey_Incorrect(t *testing.T) {
-	km := getKey1Meta()
+	km := getKeyMeta(key1Meta)
 	key, err := km.VerifyRecoveryKey(key2ID, key2RecoveryKey)
 	assert.True(t, errors.Is(err, ssss.ErrIncorrectSSSSKey), "unexpected error: %v", err)
 	assert.Nil(t, key)
 }
 
 func TestKeyMetadata_VerifyPassphrase_Correct(t *testing.T) {
-	km := getKey1Meta()
+	km := getKeyMeta(key1Meta)
 	key, err := km.VerifyPassphrase(key1ID, key1Passphrase)
 	assert.NoError(t, err)
 	assert.NotNil(t, key)
@@ -121,15 +128,29 @@ func TestKeyMetadata_VerifyPassphrase_Correct(t *testing.T) {
 }
 
 func TestKeyMetadata_VerifyPassphrase_Incorrect(t *testing.T) {
-	km := getKey1Meta()
+	km := getKeyMeta(key1Meta)
 	key, err := km.VerifyPassphrase(key1ID, "incorrect horse battery staple")
 	assert.True(t, errors.Is(err, ssss.ErrIncorrectSSSSKey), "unexpected error %v", err)
 	assert.Nil(t, key)
 }
 
 func TestKeyMetadata_VerifyPassphrase_NotSet(t *testing.T) {
-	km := getKey2Meta()
+	km := getKeyMeta(key2Meta)
 	key, err := km.VerifyPassphrase(key2ID, "hmm")
 	assert.True(t, errors.Is(err, ssss.ErrNoPassphrase), "unexpected error %v", err)
+	assert.Nil(t, key)
+}
+
+func TestKeyMetadata_VerifyRecoveryKey_CorruptedIV(t *testing.T) {
+	km := getKeyMeta(key2MetaBrokenIV)
+	key, err := km.VerifyRecoveryKey(key2ID, key2RecoveryKey)
+	assert.True(t, errors.Is(err, ssss.ErrCorruptedKeyMetadata), "unexpected error %v", err)
+	assert.Nil(t, key)
+}
+
+func TestKeyMetadata_VerifyRecoveryKey_CorruptedMAC(t *testing.T) {
+	km := getKeyMeta(key2MetaBrokenMAC)
+	key, err := km.VerifyRecoveryKey(key2ID, key2RecoveryKey)
+	assert.True(t, errors.Is(err, ssss.ErrCorruptedKeyMetadata), "unexpected error %v", err)
 	assert.Nil(t, key)
 }
