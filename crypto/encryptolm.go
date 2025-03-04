@@ -17,6 +17,70 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
+func (mach *OlmMachine) EncryptToDevices(ctx context.Context, eventType event.Type, req *mautrix.ReqSendToDevice) (*mautrix.ReqSendToDevice, error) {
+	devicesToCreateSessions := make(map[id.UserID]map[id.DeviceID]*id.Device)
+	for userID, devices := range req.Messages {
+		for deviceID := range devices {
+			device, err := mach.GetOrFetchDevice(ctx, userID, deviceID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get device %s of user %s: %w", deviceID, userID, err)
+			}
+
+			if _, ok := devicesToCreateSessions[userID]; !ok {
+				devicesToCreateSessions[userID] = make(map[id.DeviceID]*id.Device)
+			}
+			devicesToCreateSessions[userID][deviceID] = device
+		}
+	}
+	if err := mach.createOutboundSessions(ctx, devicesToCreateSessions); err != nil {
+		return nil, fmt.Errorf("failed to create outbound sessions: %w", err)
+	}
+
+	mach.olmLock.Lock()
+	defer mach.olmLock.Unlock()
+
+	encryptedReq := &mautrix.ReqSendToDevice{
+		Messages: make(map[id.UserID]map[id.DeviceID]*event.Content),
+	}
+
+	log := mach.machOrContextLog(ctx)
+
+	for userID, devices := range req.Messages {
+		encryptedReq.Messages[userID] = make(map[id.DeviceID]*event.Content)
+
+		for deviceID, content := range devices {
+			device := devicesToCreateSessions[userID][deviceID]
+
+			olmSess, err := mach.CryptoStore.GetLatestSession(ctx, device.IdentityKey)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get latest session for device %s of %s: %w", deviceID, userID, err)
+			} else if olmSess == nil {
+				log.Warn().
+					Str("target_user_id", userID.String()).
+					Str("target_device_id", deviceID.String()).
+					Str("identity_key", device.IdentityKey.String()).
+					Msg("No outbound session found for device")
+				continue
+			}
+
+			encrypted := mach.encryptOlmEvent(ctx, olmSess, device, eventType, *content)
+			encryptedContent := &event.Content{Parsed: &encrypted}
+
+			log.Debug().
+				Str("decrypted_type", eventType.Type).
+				Str("target_user_id", userID.String()).
+				Str("target_device_id", deviceID.String()).
+				Str("target_identity_key", device.IdentityKey.String()).
+				Str("olm_session_id", olmSess.ID().String()).
+				Msg("Encrypted to-device event")
+
+			encryptedReq.Messages[userID][deviceID] = encryptedContent
+		}
+	}
+
+	return encryptedReq, nil
+}
+
 func (mach *OlmMachine) encryptOlmEvent(ctx context.Context, session *OlmSession, recipient *id.Device, evtType event.Type, content event.Content) *event.EncryptedEventContent {
 	evt := &DecryptedOlmEvent{
 		Sender:        mach.Client.UserID,
