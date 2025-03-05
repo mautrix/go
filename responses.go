@@ -98,7 +98,11 @@ type RespContext struct {
 // RespSendEvent is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#put_matrixclientv3roomsroomidsendeventtypetxnid
 type RespSendEvent struct {
 	EventID id.EventID `json:"event_id"`
+
+	UnstableDelayID string `json:"delay_id,omitempty"`
 }
+
+type RespUpdateDelayedEvent struct{}
 
 type RespRedactUserEvents struct {
 	IsMoreEvents   bool `json:"is_more_events"`

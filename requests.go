@@ -3,6 +3,7 @@ package mautrix
 import (
 	"encoding/json"
 	"strconv"
+	"time"
 
 	"maunium.net/go/mautrix/crypto/signatures"
 	"maunium.net/go/mautrix/event"
@@ -329,6 +330,21 @@ type OneTimeKeysRequest map[id.UserID]map[id.DeviceID]id.KeyAlgorithm
 
 type ReqSendToDevice struct {
 	Messages map[id.UserID]map[id.DeviceID]*event.Content `json:"messages"`
+}
+
+type ReqSendEvent struct {
+	Timestamp     int64
+	TransactionID string
+	UnstableDelay time.Duration
+
+	DontEncrypt bool
+
+	MeowEventID id.EventID
+}
+
+type ReqUpdateDelayedEvent struct {
+	DelayID string `json:"-"`
+	Action  string `json:"action"` // TODO use enum
 }
 
 // ReqDeviceInfo is the JSON request for https://spec.matrix.org/v1.2/client-server-api/#put_matrixclientv3devicesdeviceid

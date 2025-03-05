@@ -1137,15 +1137,6 @@ func (cli *Client) SetRoomAccountData(ctx context.Context, roomID id.RoomID, nam
 	return nil
 }
 
-type ReqSendEvent struct {
-	Timestamp     int64
-	TransactionID string
-
-	DontEncrypt bool
-
-	MeowEventID id.EventID
-}
-
 // SendMessageEvent sends a message event into a room. See https://spec.matrix.org/v1.2/client-server-api/#put_matrixclientv3roomsroomidsendeventtypetxnid
 // contentJSON should be a pointer to something that can be encoded as JSON using json.Marshal.
 func (cli *Client) SendMessageEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, contentJSON interface{}, extra ...ReqSendEvent) (resp *RespSendEvent, err error) {
@@ -1167,6 +1158,9 @@ func (cli *Client) SendMessageEvent(ctx context.Context, roomID id.RoomID, event
 	}
 	if req.MeowEventID != "" {
 		queryParams["fi.mau.event_id"] = req.MeowEventID.String()
+	}
+	if req.UnstableDelay > 0 {
+		queryParams["org.matrix.msc4140.delay"] = strconv.FormatInt(req.UnstableDelay.Milliseconds(), 10)
 	}
 
 	if !req.DontEncrypt && cli.Crypto != nil && eventType != event.EventReaction && eventType != event.EventEncrypted {
@@ -1203,11 +1197,14 @@ func (cli *Client) SendStateEvent(ctx context.Context, roomID id.RoomID, eventTy
 	if req.MeowEventID != "" {
 		queryParams["fi.mau.event_id"] = req.MeowEventID.String()
 	}
+	if req.UnstableDelay > 0 {
+		queryParams["org.matrix.msc4140.delay"] = strconv.FormatInt(req.UnstableDelay.Milliseconds(), 10)
+	}
 
 	urlData := ClientURLPath{"v3", "rooms", roomID, "state", eventType.String(), stateKey}
 	urlPath := cli.BuildURLWithQuery(urlData, queryParams)
 	_, err = cli.MakeRequest(ctx, http.MethodPut, urlPath, contentJSON, &resp)
-	if err == nil && cli.StateStore != nil {
+	if err == nil && cli.StateStore != nil && req.UnstableDelay == 0 {
 		cli.updateStoreWithOutgoingEvent(ctx, roomID, eventType, stateKey, contentJSON)
 	}
 	return
@@ -1223,6 +1220,12 @@ func (cli *Client) SendMassagedStateEvent(ctx context.Context, roomID id.RoomID,
 	if err == nil && cli.StateStore != nil {
 		cli.updateStoreWithOutgoingEvent(ctx, roomID, eventType, stateKey, contentJSON)
 	}
+	return
+}
+
+func (cli *Client) UpdateDelayedEvent(ctx context.Context, req *ReqUpdateDelayedEvent) (resp *RespUpdateDelayedEvent, err error) {
+	urlPath := cli.BuildClientURL("v1", "delayed_events", req.DelayID)
+	_, err = cli.MakeRequest(ctx, http.MethodPut, urlPath, req, &resp)
 	return
 }
 
