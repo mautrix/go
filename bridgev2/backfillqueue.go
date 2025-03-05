@@ -80,13 +80,13 @@ func (br *Bridge) RunBackfillQueue() {
 			time.Sleep(BackfillQueueErrorBackoff)
 			continue
 		} else if backfillTask != nil {
-			br.doBackfillTask(ctx, backfillTask)
+			br.DoBackfillTask(ctx, backfillTask)
 			noTasksFoundCount = 0
 		}
 	}
 }
 
-func (br *Bridge) doBackfillTask(ctx context.Context, task *database.BackfillTask) {
+func (br *Bridge) DoBackfillTask(ctx context.Context, task *database.BackfillTask) {
 	log := zerolog.Ctx(ctx).With().
 		Object("portal_key", task.PortalKey).
 		Str("login_id", string(task.UserLoginID)).
