@@ -86,6 +86,13 @@ const (
 		WHERE bridge_id = $1 AND next_dispatch_min_ts < $2 AND is_done = false AND user_login_id <> ''
 		ORDER BY next_dispatch_min_ts LIMIT 1
 	`
+	getNextBackfillQueryForPortal = `
+		SELECT
+			bridge_id, portal_id, portal_receiver, user_login_id, batch_count, is_done,
+			cursor, oldest_message_id, dispatched_at, completed_at, next_dispatch_min_ts
+		FROM backfill_task
+		WHERE bridge_id = $1 AND portal_id = $2 AND portal_receiver = $3 AND is_done = false AND user_login_id <> ''
+	`
 	deleteBackfillQueueQuery = `
 		DELETE FROM backfill_task
 		WHERE bridge_id = $1 AND portal_id = $2 AND portal_receiver = $3
@@ -122,6 +129,10 @@ func (btq *BackfillTaskQuery) Update(ctx context.Context, bq *BackfillTask) erro
 
 func (btq *BackfillTaskQuery) GetNext(ctx context.Context) (*BackfillTask, error) {
 	return btq.QueryOne(ctx, getNextBackfillQuery, btq.BridgeID, time.Now().UnixNano())
+}
+
+func (btq *BackfillTaskQuery) GetNextForPortal(ctx context.Context, portalKey networkid.PortalKey) (*BackfillTask, error) {
+	return btq.QueryOne(ctx, getNextBackfillQueryForPortal, btq.BridgeID, portalKey.ID, portalKey.Receiver)
 }
 
 func (btq *BackfillTaskQuery) Delete(ctx context.Context, portalKey networkid.PortalKey) error {
