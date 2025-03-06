@@ -14,6 +14,11 @@ type BackfillConfig struct {
 
 	Threads BackfillThreadsConfig `yaml:"threads"`
 	Queue   BackfillQueueConfig   `yaml:"queue"`
+
+	// Flag to indicate that the creator will not run the backfill queue but will still paginate
+	// backfill by calling DoBackfillTask directly. Note that this is not used anywhere within
+	// mautrix-go and exists so bridges can use it to decide when to drop backfill data.
+	WillPaginateManually bool `yaml:"will_paginate_manually"`
 }
 
 type BackfillThreadsConfig struct {
