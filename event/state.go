@@ -92,10 +92,12 @@ const (
 // https://spec.matrix.org/v1.2/client-server-api/#mroomcreate
 type CreateEventContent struct {
 	Type        RoomType     `json:"type,omitempty"`
-	Creator     id.UserID    `json:"creator,omitempty"`
-	Federate    bool         `json:"m.federate,omitempty"`
+	Federate    *bool        `json:"m.federate,omitempty"`
 	RoomVersion RoomVersion  `json:"room_version,omitempty"`
 	Predecessor *Predecessor `json:"predecessor,omitempty"`
+
+	// Deprecated: use the event sender instead
+	Creator id.UserID `json:"creator,omitempty"`
 }
 
 // JoinRule specifies how open a room is to new members.
