@@ -62,6 +62,9 @@ func (br *Bridge) loadUserLogin(ctx context.Context, user *User, dbUserLogin *da
 	if err != nil {
 		userLogin.Log.Err(err).Msg("Failed to load user login")
 		return nil, nil
+	} else if userLogin.Client == nil {
+		userLogin.Log.Error().Msg("LoadUserLogin didn't fill Client")
+		return nil, nil
 	}
 	userLogin.BridgeState = br.NewBridgeStateQueue(userLogin)
 	user.logins[userLogin.ID] = userLogin
