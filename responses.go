@@ -33,6 +33,11 @@ type RespJoinRoom struct {
 	RoomID id.RoomID `json:"room_id"`
 }
 
+// RespKnockRoom is the JSON response for https://spec.matrix.org/v1.13/client-server-api/#post_matrixclientv3knockroomidoralias
+type RespKnockRoom struct {
+	RoomID id.RoomID `json:"room_id"`
+}
+
 // RespLeaveRoom is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3roomsroomidleave
 type RespLeaveRoom struct{}
 
