@@ -717,8 +717,6 @@ func (req *ReqSync) BuildQuery() map[string]string {
 		query["full_state"] = "true"
 	}
 	if req.BeeperStreaming {
-		// TODO remove this
-		query["streaming"] = ""
 		query["com.beeper.streaming"] = "true"
 	}
 	return query
