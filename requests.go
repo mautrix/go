@@ -156,6 +156,11 @@ type ReqJoinRoom struct {
 	ThirdPartySigned any      `json:"third_party_signed,omitempty"`
 }
 
+type ReqKnockRoom struct {
+	Via    []string `json:"-"`
+	Reason string   `json:"reason,omitempty"`
+}
+
 type ReqMutualRooms struct {
 	From string `json:"-"`
 }

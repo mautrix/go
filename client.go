@@ -974,6 +974,28 @@ func (cli *Client) JoinRoom(ctx context.Context, roomIDorAlias string, req *ReqJ
 	return
 }
 
+// KnockRoom requests to join a room ID or alias. See https://spec.matrix.org/v1.13/client-server-api/#post_matrixclientv3knockroomidoralias
+//
+// The last parameter contains optional extra fields and can be left nil.
+func (cli *Client) KnockRoom(ctx context.Context, roomIDorAlias string, req *ReqKnockRoom) (resp *RespKnockRoom, err error) {
+	if req == nil {
+		req = &ReqKnockRoom{}
+	}
+	urlPath := cli.BuildURLWithFullQuery(ClientURLPath{"v3", "knock", roomIDorAlias}, func(q url.Values) {
+		if len(req.Via) > 0 {
+			q["via"] = req.Via
+		}
+	})
+	_, err = cli.MakeRequest(ctx, http.MethodPost, urlPath, req, &resp)
+	if err == nil && cli.StateStore != nil {
+		err = cli.StateStore.SetMembership(ctx, resp.RoomID, cli.UserID, event.MembershipKnock)
+		if err != nil {
+			err = fmt.Errorf("failed to update state store: %w", err)
+		}
+	}
+	return
+}
+
 // JoinRoomByID joins the client to a room ID. See https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3roomsroomidjoin
 //
 // Unlike JoinRoom, this method can only be used to join rooms that the server already knows about.
