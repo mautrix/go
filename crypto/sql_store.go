@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -829,11 +830,13 @@ func (store *SQLCryptoStore) FilterTrackedUsers(ctx context.Context, users []id.
 
 // MarkTrackedUsersOutdated flags that the device list for given users are outdated.
 func (store *SQLCryptoStore) MarkTrackedUsersOutdated(ctx context.Context, users []id.UserID) (err error) {
-	if store.DB.Dialect == dbutil.Postgres && PostgresArrayWrapper != nil {
-		_, err = store.DB.Exec(ctx, "UPDATE crypto_tracked_user SET devices_outdated = true WHERE user_id = ANY($1)", PostgresArrayWrapper(users))
-	} else {
-		placeholders, params := userIDsToParams(users)
-		_, err = store.DB.Exec(ctx, "UPDATE crypto_tracked_user SET devices_outdated = true WHERE user_id IN ("+placeholders+")", params...)
+	for chunk := range slices.Chunk(users, 1000) {
+		if store.DB.Dialect == dbutil.Postgres && PostgresArrayWrapper != nil {
+			_, err = store.DB.Exec(ctx, "UPDATE crypto_tracked_user SET devices_outdated = true WHERE user_id = ANY($1)", PostgresArrayWrapper(chunk))
+		} else {
+			placeholders, params := userIDsToParams(chunk)
+			_, err = store.DB.Exec(ctx, "UPDATE crypto_tracked_user SET devices_outdated = true WHERE user_id IN ("+placeholders+")", params...)
+		}
 	}
 	return
 }
