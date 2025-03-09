@@ -393,6 +393,7 @@ type BeeperInboxPreviewEvent struct {
 type SyncJoinedRoom struct {
 	Summary     LazyLoadSummary `json:"summary"`
 	State       SyncEventsList  `json:"state"`
+	StateAfter  *SyncEventsList `json:"org.matrix.msc4222.state_after,omitempty"`
 	Timeline    SyncTimeline    `json:"timeline"`
 	Ephemeral   SyncEventsList  `json:"ephemeral"`
 	AccountData SyncEventsList  `json:"account_data"`

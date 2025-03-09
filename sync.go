@@ -97,33 +97,38 @@ func (s *DefaultSyncer) ProcessResponse(ctx context.Context, res *RespSync, sinc
 		}
 	}
 
-	s.processSyncEvents(ctx, "", res.ToDevice.Events, event.SourceToDevice)
-	s.processSyncEvents(ctx, "", res.Presence.Events, event.SourcePresence)
-	s.processSyncEvents(ctx, "", res.AccountData.Events, event.SourceAccountData)
+	s.processSyncEvents(ctx, "", res.ToDevice.Events, event.SourceToDevice, false)
+	s.processSyncEvents(ctx, "", res.Presence.Events, event.SourcePresence, false)
+	s.processSyncEvents(ctx, "", res.AccountData.Events, event.SourceAccountData, false)
 
 	for roomID, roomData := range res.Rooms.Join {
-		s.processSyncEvents(ctx, roomID, roomData.State.Events, event.SourceJoin|event.SourceState)
-		s.processSyncEvents(ctx, roomID, roomData.Timeline.Events, event.SourceJoin|event.SourceTimeline)
-		s.processSyncEvents(ctx, roomID, roomData.Ephemeral.Events, event.SourceJoin|event.SourceEphemeral)
-		s.processSyncEvents(ctx, roomID, roomData.AccountData.Events, event.SourceJoin|event.SourceAccountData)
+		if roomData.StateAfter == nil {
+			s.processSyncEvents(ctx, roomID, roomData.State.Events, event.SourceJoin|event.SourceState, false)
+			s.processSyncEvents(ctx, roomID, roomData.Timeline.Events, event.SourceJoin|event.SourceTimeline, false)
+		} else {
+			s.processSyncEvents(ctx, roomID, roomData.Timeline.Events, event.SourceJoin|event.SourceTimeline, true)
+			s.processSyncEvents(ctx, roomID, roomData.StateAfter.Events, event.SourceJoin|event.SourceState, false)
+		}
+		s.processSyncEvents(ctx, roomID, roomData.Ephemeral.Events, event.SourceJoin|event.SourceEphemeral, false)
+		s.processSyncEvents(ctx, roomID, roomData.AccountData.Events, event.SourceJoin|event.SourceAccountData, false)
 	}
 	for roomID, roomData := range res.Rooms.Invite {
-		s.processSyncEvents(ctx, roomID, roomData.State.Events, event.SourceInvite|event.SourceState)
+		s.processSyncEvents(ctx, roomID, roomData.State.Events, event.SourceInvite|event.SourceState, false)
 	}
 	for roomID, roomData := range res.Rooms.Leave {
-		s.processSyncEvents(ctx, roomID, roomData.State.Events, event.SourceLeave|event.SourceState)
-		s.processSyncEvents(ctx, roomID, roomData.Timeline.Events, event.SourceLeave|event.SourceTimeline)
+		s.processSyncEvents(ctx, roomID, roomData.State.Events, event.SourceLeave|event.SourceState, false)
+		s.processSyncEvents(ctx, roomID, roomData.Timeline.Events, event.SourceLeave|event.SourceTimeline, false)
 	}
 	return
 }
 
-func (s *DefaultSyncer) processSyncEvents(ctx context.Context, roomID id.RoomID, events []*event.Event, source event.Source) {
+func (s *DefaultSyncer) processSyncEvents(ctx context.Context, roomID id.RoomID, events []*event.Event, source event.Source, ignoreState bool) {
 	for _, evt := range events {
-		s.processSyncEvent(ctx, roomID, evt, source)
+		s.processSyncEvent(ctx, roomID, evt, source, ignoreState)
 	}
 }
 
-func (s *DefaultSyncer) processSyncEvent(ctx context.Context, roomID id.RoomID, evt *event.Event, source event.Source) {
+func (s *DefaultSyncer) processSyncEvent(ctx context.Context, roomID id.RoomID, evt *event.Event, source event.Source, ignoreState bool) {
 	evt.RoomID = roomID
 
 	// Ensure the type class is correct. It's safe to mutate the class since the event type is not a pointer.
@@ -149,6 +154,7 @@ func (s *DefaultSyncer) processSyncEvent(ctx context.Context, roomID id.RoomID, 
 	}
 
 	evt.Mautrix.EventSource = source
+	evt.Mautrix.IgnoreState = ignoreState
 	s.Dispatch(ctx, evt)
 }
 

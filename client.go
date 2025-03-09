@@ -696,6 +696,7 @@ type ReqSync struct {
 	FullState       bool
 	SetPresence     event.Presence
 	StreamResponse  bool
+	UseStateAfter   bool
 	BeeperStreaming bool
 	Client          *http.Client
 }
@@ -715,6 +716,9 @@ func (req *ReqSync) BuildQuery() map[string]string {
 	}
 	if req.FullState {
 		query["full_state"] = "true"
+	}
+	if req.UseStateAfter {
+		query["org.matrix.msc4222.use_state_after"] = "true"
 	}
 	if req.BeeperStreaming {
 		query["com.beeper.streaming"] = "true"
