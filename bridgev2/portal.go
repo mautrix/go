@@ -2095,6 +2095,12 @@ func (portal *Portal) handleRemoteEdit(ctx context.Context, source *UserLogin, e
 	intent := portal.GetIntentFor(ctx, evt.GetSender(), source, RemoteEventEdit)
 	if intent == nil {
 		return
+	} else if intent.GetMXID() != existing[0].SenderMXID {
+		log.Warn().
+			Stringer("edit_sender_mxid", intent.GetMXID()).
+			Stringer("original_sender_mxid", existing[0].SenderMXID).
+			Msg("Not bridging edit: sender doesn't match original message sender")
+		return
 	}
 	ts := getEventTS(evt)
 	converted, err := evt.ConvertEdit(ctx, portal, intent, existing)
