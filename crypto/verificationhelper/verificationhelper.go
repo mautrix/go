@@ -82,7 +82,7 @@ type VerificationHelper struct {
 
 var _ mautrix.VerificationHelper = (*VerificationHelper)(nil)
 
-func NewVerificationHelper(client *mautrix.Client, mach *crypto.OlmMachine, store VerificationStore, callbacks any, supportsQRShow, supportsQRScan bool) *VerificationHelper {
+func NewVerificationHelper(client *mautrix.Client, mach *crypto.OlmMachine, store VerificationStore, callbacks any, supportsQRShow, supportsQRScan, supportsSAS bool) *VerificationHelper {
 	if client.Crypto == nil {
 		panic("client.Crypto is nil")
 	}
@@ -106,9 +106,13 @@ func NewVerificationHelper(client *mautrix.Client, mach *crypto.OlmMachine, stor
 		helper.verificationDone = c.VerificationDone
 	}
 
-	if c, ok := callbacks.(ShowSASCallbacks); ok {
-		helper.supportedMethods = append(helper.supportedMethods, event.VerificationMethodSAS)
-		helper.showSAS = c.ShowSAS
+	if supportsSAS {
+		if c, ok := callbacks.(ShowSASCallbacks); !ok {
+			panic("callbacks must implement showSAS if supportsSAS is true")
+		} else {
+			helper.supportedMethods = append(helper.supportedMethods, event.VerificationMethodSAS)
+			helper.showSAS = c.ShowSAS
+		}
 	}
 	if supportsQRShow {
 		if c, ok := callbacks.(ShowQRCodeCallbacks); !ok {
