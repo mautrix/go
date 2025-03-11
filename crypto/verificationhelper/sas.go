@@ -224,28 +224,29 @@ func (vh *VerificationHelper) onVerificationStartSAS(ctx context.Context, txn Ve
 	}
 	txn.MACMethod = macMethod
 	txn.EphemeralKey = &ECDHPrivateKey{ephemeralKey}
-	txn.StartEventContent = startEvt
 
-	commitment, err := calculateCommitment(ephemeralKey.PublicKey(), startEvt)
-	if err != nil {
-		return fmt.Errorf("failed to calculate commitment: %w", err)
-	}
+	if !txn.StartedByUs {
+		commitment, err := calculateCommitment(ephemeralKey.PublicKey(), txn)
+		if err != nil {
+			return fmt.Errorf("failed to calculate commitment: %w", err)
+		}
 
-	err = vh.sendVerificationEvent(ctx, txn, event.InRoomVerificationAccept, &event.VerificationAcceptEventContent{
-		Commitment:                commitment,
-		Hash:                      hashAlgorithm,
-		KeyAgreementProtocol:      keyAggreementProtocol,
-		MessageAuthenticationCode: macMethod,
-		ShortAuthenticationString: sasMethods,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to send accept event: %w", err)
+		err = vh.sendVerificationEvent(ctx, txn, event.InRoomVerificationAccept, &event.VerificationAcceptEventContent{
+			Commitment:                commitment,
+			Hash:                      hashAlgorithm,
+			KeyAgreementProtocol:      keyAggreementProtocol,
+			MessageAuthenticationCode: macMethod,
+			ShortAuthenticationString: sasMethods,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to send accept event: %w", err)
+		}
+		txn.VerificationState = VerificationStateSASAccepted
 	}
-	txn.VerificationState = VerificationStateSASAccepted
 	return vh.store.SaveVerificationTransaction(ctx, txn)
 }
 
-func calculateCommitment(ephemeralPubKey *ecdh.PublicKey, startEvt *event.VerificationStartEventContent) ([]byte, error) {
+func calculateCommitment(ephemeralPubKey *ecdh.PublicKey, txn VerificationTransaction) ([]byte, error) {
 	// The commitmentHashInput is the hash (encoded as unpadded base64) of the
 	// concatenation of the device's ephemeral public key (encoded as
 	// unpadded base64) and the canonical JSON representation of the
@@ -255,7 +256,7 @@ func calculateCommitment(ephemeralPubKey *ecdh.PublicKey, startEvt *event.Verifi
 	// hashing it, but we are just stuck on that.
 	commitmentHashInput := sha256.New()
 	commitmentHashInput.Write([]byte(base64.RawStdEncoding.EncodeToString(ephemeralPubKey.Bytes())))
-	encodedStartEvt, err := json.Marshal(startEvt)
+	encodedStartEvt, err := json.Marshal(txn.StartEventContent)
 	if err != nil {
 		return nil, err
 	}
@@ -339,7 +340,7 @@ func (vh *VerificationHelper) onVerificationKey(ctx context.Context, txn Verific
 
 	if txn.EphemeralPublicKeyShared {
 		// Verify that the commitment hash is correct
-		commitment, err := calculateCommitment(publicKey, txn.StartEventContent)
+		commitment, err := calculateCommitment(publicKey, txn)
 		if err != nil {
 			log.Err(err).Msg("Failed to calculate commitment")
 			return

@@ -818,6 +818,8 @@ func (vh *VerificationHelper) onVerificationStart(ctx context.Context, txn Verif
 	} else if txn.VerificationState != VerificationStateReady {
 		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnexpectedMessage, "got start event for transaction that is not in ready state")
 		return
+	} else {
+		txn.StartEventContent = startEvt
 	}
 
 	switch startEvt.Method {
@@ -829,7 +831,7 @@ func (vh *VerificationHelper) onVerificationStart(ctx context.Context, txn Verif
 		}
 	case event.VerificationMethodReciprocate:
 		log.Info().Msg("Received reciprocate start event")
-		if !bytes.Equal(txn.QRCodeSharedSecret, startEvt.Secret) {
+		if !bytes.Equal(txn.QRCodeSharedSecret, txn.StartEventContent.Secret) {
 			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeKeyMismatch, "reciprocated shared secret does not match")
 			return
 		}
@@ -842,8 +844,8 @@ func (vh *VerificationHelper) onVerificationStart(ctx context.Context, txn Verif
 		// Note that we should never get m.qr_code.show.v1 or m.qr_code.scan.v1
 		// here, since the start command for scanning and showing QR codes
 		// should be of type m.reciprocate.v1.
-		log.Error().Str("method", string(startEvt.Method)).Msg("Unsupported verification method in start event")
-		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnknownMethod, fmt.Sprintf("unknown method %s", startEvt.Method))
+		log.Error().Str("method", string(txn.StartEventContent.Method)).Msg("Unsupported verification method in start event")
+		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnknownMethod, fmt.Sprintf("unknown method %s", txn.StartEventContent.Method))
 	}
 }
 
