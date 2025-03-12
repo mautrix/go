@@ -1,6 +1,7 @@
 package libolm
 
-// #cgo LDFLAGS: -lolm -lstdc++
+// #cgo CFLAGS: -I/opt/homebrew/opt/libolm/include
+// #cgo LDFLAGS: -L/opt/homebrew/opt/libolm/lib -lolm -lstdc++
 // #include <olm/olm.h>
 import "C"
 
