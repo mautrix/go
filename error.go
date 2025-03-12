@@ -76,6 +76,10 @@ var (
 	MUnredactedContentNotReceived = RespError{ErrCode: "FI.MAU.MSC2815_UNREDACTED_CONTENT_NOT_RECEIVED"}
 )
 
+var (
+	ErrClientIsNil = errors.New("client is nil")
+)
+
 // HTTPError An HTTP Error response, which may wrap an underlying native Go Error.
 type HTTPError struct {
 	Request      *http.Request

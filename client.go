@@ -319,12 +319,15 @@ const (
 )
 
 func (cli *Client) RequestStart(req *http.Request) {
-	if cli.RequestHook != nil {
+	if cli != nil && cli.RequestHook != nil {
 		cli.RequestHook(req)
 	}
 }
 
 func (cli *Client) LogRequestDone(req *http.Request, resp *http.Response, err error, handlerErr error, contentLength int, duration time.Duration) {
+	if cli == nil {
+		return
+	}
 	var evt *zerolog.Event
 	if errors.Is(err, context.Canceled) {
 		evt = zerolog.Ctx(req.Context()).Warn()
@@ -466,6 +469,9 @@ func (cli *Client) MakeFullRequest(ctx context.Context, params FullRequest) ([]b
 }
 
 func (cli *Client) MakeFullRequestWithResp(ctx context.Context, params FullRequest) ([]byte, *http.Response, error) {
+	if cli == nil {
+		return nil, nil, ErrClientIsNil
+	}
 	if params.MaxAttempts == 0 {
 		params.MaxAttempts = 1 + cli.DefaultHTTPRetries
 	}
@@ -665,7 +671,6 @@ func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backof
 
 // Whoami gets the user ID of the current user. See https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3accountwhoami
 func (cli *Client) Whoami(ctx context.Context) (resp *RespWhoami, err error) {
-
 	urlPath := cli.BuildClientURL("v3", "account", "whoami")
 	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
 	return
@@ -1187,7 +1192,7 @@ func (cli *Client) SendMessageEvent(ctx context.Context, roomID id.RoomID, event
 		queryParams["org.matrix.msc4140.delay"] = strconv.FormatInt(req.UnstableDelay.Milliseconds(), 10)
 	}
 
-	if !req.DontEncrypt && cli.Crypto != nil && eventType != event.EventReaction && eventType != event.EventEncrypted {
+	if !req.DontEncrypt && cli != nil && cli.Crypto != nil && eventType != event.EventReaction && eventType != event.EventEncrypted {
 		var isEncrypted bool
 		isEncrypted, err = cli.StateStore.IsEncrypted(ctx, roomID)
 		if err != nil {
@@ -1468,7 +1473,7 @@ func (cli *Client) SetPresence(ctx context.Context, presence ReqPresence) (err e
 }
 
 func (cli *Client) updateStoreWithOutgoingEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string, contentJSON interface{}) {
-	if cli.StateStore == nil {
+	if cli == nil || cli.StateStore == nil {
 		return
 	}
 	fakeEvt := &event.Event{
@@ -1524,8 +1529,10 @@ func (cli *Client) FullStateEvent(ctx context.Context, roomID id.RoomID, eventTy
 	if err == nil && cli.StateStore != nil {
 		UpdateStateStore(ctx, cli.StateStore, evt)
 	}
-	evt.Type.Class = event.StateEventType
-	_ = evt.Content.ParseRaw(evt.Type)
+	if evt != nil {
+		evt.Type.Class = event.StateEventType
+		_ = evt.Content.ParseRaw(evt.Type)
+	}
 	return
 }
 
@@ -1621,6 +1628,10 @@ func (cli *Client) RequestOpenIDToken(ctx context.Context) (resp *RespOpenIDToke
 
 // UploadLink uploads an HTTP URL and then returns an MXC URI.
 func (cli *Client) UploadLink(ctx context.Context, link string) (*RespMediaUpload, error) {
+	if cli == nil {
+		return nil, ErrClientIsNil
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, link, nil)
 	if err != nil {
 		return nil, err
@@ -1824,6 +1835,9 @@ func (nopCloseSeeker) Close() error {
 func (cli *Client) UploadMedia(ctx context.Context, data ReqUploadMedia) (*RespMediaUpload, error) {
 	if data.DoneCallback != nil {
 		defer data.DoneCallback()
+	}
+	if cli == nil {
+		return nil, ErrClientIsNil
 	}
 	if data.UnstableUploadURL != "" {
 		if data.MXC.IsEmpty() {
@@ -2509,6 +2523,9 @@ func (cli *Client) BeeperDeleteRoom(ctx context.Context, roomID id.RoomID) (err 
 
 // TxnID returns the next transaction ID.
 func (cli *Client) TxnID() string {
+	if cli == nil {
+		return "client is nil"
+	}
 	txnID := atomic.AddInt32(&cli.txnID, 1)
 	return fmt.Sprintf("mautrix-go_%d_%d", time.Now().UnixNano(), txnID)
 }
