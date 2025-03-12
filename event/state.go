@@ -205,10 +205,15 @@ type SpaceParentEventContent struct {
 type PolicyRecommendation string
 
 const (
-	PolicyRecommendationBan         PolicyRecommendation = "m.ban"
-	PolicyRecommendationUnstableBan PolicyRecommendation = "org.matrix.mjolnir.ban"
-	PolicyRecommendationUnban       PolicyRecommendation = "fi.mau.meowlnir.unban"
+	PolicyRecommendationBan              PolicyRecommendation = "m.ban"
+	PolicyRecommendationUnstableTakedown PolicyRecommendation = "org.matrix.msc4204.takedown"
+	PolicyRecommendationUnstableBan      PolicyRecommendation = "org.matrix.mjolnir.ban"
+	PolicyRecommendationUnban            PolicyRecommendation = "fi.mau.meowlnir.unban"
 )
+
+type PolicyHashes struct {
+	SHA256 string `json:"sha256"`
+}
 
 // ModPolicyContent represents the content of a m.room.rule.user, m.room.rule.room, and m.room.rule.server state event.
 // https://spec.matrix.org/v1.2/client-server-api/#moderation-policy-lists
@@ -216,6 +221,7 @@ type ModPolicyContent struct {
 	Entity         string               `json:"entity"`
 	Reason         string               `json:"reason"`
 	Recommendation PolicyRecommendation `json:"recommendation"`
+	UnstableHashes *PolicyHashes        `json:"org.matrix.msc4205.hashes,omitempty"`
 }
 
 // Deprecated: MSC2716 has been abandoned
