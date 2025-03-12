@@ -278,6 +278,9 @@ type RespLogin struct {
 	DeviceID    id.DeviceID      `json:"device_id"`
 	UserID      id.UserID        `json:"user_id"`
 	WellKnown   *ClientWellKnown `json:"well_known,omitempty"`
+
+	RefreshToken string `json:"refresh_token,omitempty"`
+	ExpiresInMS  int64  `json:"expires_in_ms,omitempty"`
 }
 
 // RespLogout is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3logout
