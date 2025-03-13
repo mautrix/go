@@ -7,6 +7,8 @@
 package event
 
 import (
+	"encoding/base64"
+
 	"maunium.net/go/mautrix/id"
 )
 
@@ -215,6 +217,17 @@ type PolicyHashes struct {
 	SHA256 string `json:"sha256"`
 }
 
+func (ph *PolicyHashes) DecodeSHA256() *[32]byte {
+	if ph == nil || ph.SHA256 == "" {
+		return nil
+	}
+	decoded, _ := base64.StdEncoding.DecodeString(ph.SHA256)
+	if len(decoded) == 32 {
+		return (*[32]byte)(decoded)
+	}
+	return nil
+}
+
 // ModPolicyContent represents the content of a m.room.rule.user, m.room.rule.room, and m.room.rule.server state event.
 // https://spec.matrix.org/v1.2/client-server-api/#moderation-policy-lists
 type ModPolicyContent struct {
@@ -222,6 +235,13 @@ type ModPolicyContent struct {
 	Reason         string               `json:"reason"`
 	Recommendation PolicyRecommendation `json:"recommendation"`
 	UnstableHashes *PolicyHashes        `json:"org.matrix.msc4205.hashes,omitempty"`
+}
+
+func (mpc *ModPolicyContent) EntityOrHash() string {
+	if mpc.UnstableHashes != nil && mpc.UnstableHashes.SHA256 != "" {
+		return mpc.UnstableHashes.SHA256
+	}
+	return mpc.Entity
 }
 
 // Deprecated: MSC2716 has been abandoned
