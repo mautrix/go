@@ -25,9 +25,9 @@ import (
 	"go.mau.fi/util/requestlog"
 
 	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/bridge/status"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/networkid"
+	"maunium.net/go/mautrix/bridgev2/status"
 	"maunium.net/go/mautrix/federation"
 	"maunium.net/go/mautrix/id"
 )

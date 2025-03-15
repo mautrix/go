@@ -17,8 +17,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"maunium.net/go/mautrix/bridgev2"
-
-	"maunium.net/go/mautrix/bridge/status"
+	"maunium.net/go/mautrix/bridgev2/status"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
