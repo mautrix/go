@@ -19,6 +19,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/exstrings"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
@@ -83,7 +84,7 @@ func (as *AppService) CheckServerToken(w http.ResponseWriter, r *http.Request) (
 			HTTPStatus: http.StatusForbidden,
 			Message:    "Missing access token",
 		}.Write(w)
-	} else if authHeader[len("Bearer "):] != as.Registration.ServerToken {
+	} else if !exstrings.ConstantTimeEqual(authHeader[len("Bearer "):], as.Registration.ServerToken) {
 		Error{
 			ErrorCode:  ErrUnknownToken,
 			HTTPStatus: http.StatusForbidden,
