@@ -764,6 +764,13 @@ type PowerLevelHandlingNetworkAPI interface {
 	HandleMatrixPowerLevels(ctx context.Context, msg *MatrixPowerLevelChange) (bool, error)
 }
 
+type MatrixJoinRule MatrixRoomMeta[*event.JoinRulesEventContent]
+
+type JoinRulesHandlingNetworkAPI interface {
+	NetworkAPI
+	HandleMatrixJoinRules(ctx context.Context, msg *MatrixJoinRule) (bool, error)
+}
+
 type PushType int
 
 func (pt PushType) String() string {
