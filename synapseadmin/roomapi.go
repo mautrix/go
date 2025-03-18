@@ -202,3 +202,14 @@ func (cli *Client) GetRoomBlockStatus(ctx context.Context, roomID id.RoomID) (Ro
 	_, err := cli.MakeRequest(ctx, http.MethodGet, reqURL, nil, &resp)
 	return resp, err
 }
+
+// ListRooms returns a list of rooms on the server.
+//
+// https://matrix-org.github.io/synapse/latest/admin_api/rooms.html#list-room-api
+func (cli *Client) GetRoomDetails(ctx context.Context, roomID id.RoomID) (RoomInfo, error) {
+	var resp RoomInfo
+	var reqURL string
+	reqURL = cli.BuildURLWithQuery(mautrix.SynapseAdminURLPath{"v1", "rooms", roomID}, nil)
+	_, err := cli.MakeRequest(ctx, http.MethodGet, reqURL, nil, &resp)
+	return resp, err
+}
