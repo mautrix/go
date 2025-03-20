@@ -21,6 +21,10 @@ bridge:
     # Should `m.bridge` events be sent without a state key?
     # By default, the bridge uses a unique key that won't conflict with other bridges.
     no_bridge_info_state_key: false
+    # Should bridge connection status be sent to the management room as `m.notice` events?
+    # These contain the same data that can be posted to an external HTTP server using homeserver -> status_endpoint.
+    # Allowed values: none, errors, all
+    bridge_status_notices: errors
 
     # Should leaving Matrix rooms be bridged as leaving groups on the remote network?
     bridge_matrix_leave: false
