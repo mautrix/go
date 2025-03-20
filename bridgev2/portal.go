@@ -59,10 +59,12 @@ type portalEvent interface {
 }
 
 type outgoingMessage struct {
-	db     *database.Message
-	evt    *event.Event
-	ignore bool
-	handle func(RemoteMessage, *database.Message) (bool, error)
+	db        *database.Message
+	evt       *event.Event
+	ignore    bool
+	handle    func(RemoteMessage, *database.Message) (bool, error)
+	ackedAt   time.Time
+	timeouted bool
 }
 
 type Portal struct {
@@ -76,7 +78,7 @@ type Portal struct {
 	currentlyTypingLogins map[id.UserID]*UserLogin
 	currentlyTypingLock   sync.Mutex
 
-	outgoingMessages     map[networkid.TransactionID]outgoingMessage
+	outgoingMessages     map[networkid.TransactionID]*outgoingMessage
 	outgoingMessagesLock sync.Mutex
 
 	lastCapUpdate time.Time
@@ -113,7 +115,7 @@ func (br *Bridge) loadPortal(ctx context.Context, dbPortal *database.Portal, que
 		Bridge: br,
 
 		currentlyTypingLogins: make(map[id.UserID]*UserLogin),
-		outgoingMessages:      make(map[networkid.TransactionID]outgoingMessage),
+		outgoingMessages:      make(map[networkid.TransactionID]*outgoingMessage),
 	}
 	br.portalsByKey[portal.PortalKey] = portal
 	if portal.MXID != "" {
@@ -296,6 +298,11 @@ func (portal *Portal) queueEvent(ctx context.Context, evt portalEvent) {
 }
 
 func (portal *Portal) eventLoop() {
+	if cfg := portal.Bridge.Network.GetCapabilities().OutgoingMessageTimeouts; cfg != nil {
+		ctx, cancel := context.WithCancel(portal.Log.WithContext(context.Background()))
+		go portal.pendingMessageTimeoutLoop(ctx, cfg)
+		defer cancel()
+	}
 	i := 0
 	for rawEvt := range portal.events {
 		i++
@@ -957,7 +964,11 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 		return
 	}
 	message := wrappedMsgEvt.fillDBMessage(resp.DB)
-	if !resp.Pending {
+	if resp.Pending {
+		for _, save := range wrappedMsgEvt.pendingSaves {
+			save.ackedAt = time.Now()
+		}
+	} else {
 		if resp.DB == nil {
 			log.Error().Msg("Network connector didn't return a message to save")
 		} else {
@@ -1003,7 +1014,7 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 // See also: [MatrixMessage.AddPendingToSave]
 func (evt *MatrixMessage) AddPendingToIgnore(txnID networkid.TransactionID) {
 	evt.Portal.outgoingMessagesLock.Lock()
-	evt.Portal.outgoingMessages[txnID] = outgoingMessage{
+	evt.Portal.outgoingMessages[txnID] = &outgoingMessage{
 		ignore: true,
 	}
 	evt.Portal.outgoingMessagesLock.Unlock()
@@ -1017,12 +1028,14 @@ func (evt *MatrixMessage) AddPendingToIgnore(txnID networkid.TransactionID) {
 //
 // The provided function will be called when the message is encountered.
 func (evt *MatrixMessage) AddPendingToSave(message *database.Message, txnID networkid.TransactionID, handleEcho RemoteEchoHandler) {
-	evt.Portal.outgoingMessagesLock.Lock()
-	evt.Portal.outgoingMessages[txnID] = outgoingMessage{
+	pending := &outgoingMessage{
 		db:     evt.fillDBMessage(message),
 		evt:    evt.Event,
 		handle: handleEcho,
 	}
+	evt.Portal.outgoingMessagesLock.Lock()
+	evt.Portal.outgoingMessages[txnID] = pending
+	evt.pendingSaves = append(evt.pendingSaves, pending)
 	evt.Portal.outgoingMessagesLock.Unlock()
 }
 
@@ -1030,6 +1043,12 @@ func (evt *MatrixMessage) AddPendingToSave(message *database.Message, txnID netw
 // This should only be called if sending the message fails.
 func (evt *MatrixMessage) RemovePending(txnID networkid.TransactionID) {
 	evt.Portal.outgoingMessagesLock.Lock()
+	pendingSave := evt.Portal.outgoingMessages[txnID]
+	if pendingSave != nil {
+		evt.pendingSaves = slices.DeleteFunc(evt.pendingSaves, func(save *outgoingMessage) bool {
+			return save == pendingSave
+		})
+	}
 	delete(evt.Portal.outgoingMessages, txnID)
 	evt.Portal.outgoingMessagesLock.Unlock()
 }
@@ -1061,6 +1080,35 @@ func (evt *MatrixMessage) fillDBMessage(message *database.Message) *database.Mes
 		message.SenderMXID = evt.Event.Sender
 	}
 	return message
+}
+
+func (portal *Portal) pendingMessageTimeoutLoop(ctx context.Context, cfg *OutgoingTimeoutConfig) {
+	ticker := time.NewTicker(cfg.CheckInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			portal.checkPendingMessages(ctx, cfg)
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (portal *Portal) checkPendingMessages(ctx context.Context, cfg *OutgoingTimeoutConfig) {
+	portal.outgoingMessagesLock.Lock()
+	defer portal.outgoingMessagesLock.Unlock()
+	for _, msg := range portal.outgoingMessages {
+		if msg.evt != nil && !msg.timeouted {
+			if cfg.NoEchoTimeout > 0 && !msg.ackedAt.IsZero() && time.Since(msg.ackedAt) > cfg.NoEchoTimeout {
+				msg.timeouted = true
+				portal.sendErrorStatus(ctx, msg.evt, ErrRemoteEchoTimeout.WithMessage(cfg.NoEchoMessage))
+			} else if cfg.NoAckTimeout > 0 && time.Since(msg.db.Timestamp) > cfg.NoAckTimeout {
+				msg.timeouted = true
+				portal.sendErrorStatus(ctx, msg.evt, ErrRemoteAckTimeout.WithMessage(cfg.NoAckMessage))
+			}
+		}
+	}
 }
 
 func (portal *Portal) handleMatrixEdit(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event, content *event.MessageEventContent, caps *event.RoomFeatures) {
@@ -3880,6 +3928,10 @@ func (portal *Portal) unlockedDeleteCache() {
 	delete(portal.Bridge.portalsByKey, portal.PortalKey)
 	if portal.MXID != "" {
 		delete(portal.Bridge.portalsByMXID, portal.MXID)
+	}
+	if portal.events != nil {
+		// TODO there's a small risk of this racing with a queueEvent call
+		close(portal.events)
 	}
 }
 

@@ -302,6 +302,14 @@ type MatrixMessageResponse struct {
 	PostSave func(context.Context, *database.Message)
 }
 
+type OutgoingTimeoutConfig struct {
+	CheckInterval time.Duration
+	NoEchoTimeout time.Duration
+	NoEchoMessage string
+	NoAckTimeout  time.Duration
+	NoAckMessage  string
+}
+
 type NetworkGeneralCapabilities struct {
 	// Does the network connector support disappearing messages?
 	// This flag enables the message disappearing loop in the bridge.
@@ -309,6 +317,10 @@ type NetworkGeneralCapabilities struct {
 	// Should the bridge re-request user info on incoming messages even if the ghost already has info?
 	// By default, info is only requested for ghosts with no name, and other updating is left to events.
 	AggressiveUpdateInfo bool
+	// If the bridge uses the pending message mechanism ([MatrixMessage.AddPendingToSave])
+	// to handle asynchronous message responses, this field can be set to enable
+	// automatic timeout errors in case the asynchronous response never arrives.
+	OutgoingMessageTimeouts *OutgoingTimeoutConfig
 }
 
 // NetworkAPI is an interface representing a remote network client for a single user login.
@@ -1145,6 +1157,8 @@ type MatrixMessage struct {
 	MatrixEventBase[*event.MessageEventContent]
 	ThreadRoot *database.Message
 	ReplyTo    *database.Message
+
+	pendingSaves []*outgoingMessage
 }
 
 type MatrixEdit struct {
