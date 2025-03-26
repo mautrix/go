@@ -57,6 +57,24 @@ type BeeperMessageStatusEventContent struct {
 	DeliveredToUsers *[]id.UserID `json:"delivered_to_users,omitempty"`
 }
 
+type BeeperRelationType string
+
+const (
+	BeeperRelTranscription BeeperRelationType = "com.beeper.transcription"
+)
+
+type BeeperRelatesTo struct {
+	EventID id.EventID         `json:"event_id,omitempty"`
+	RoomID  id.RoomID          `json:"room_id,omitempty"`
+	Type    BeeperRelationType `json:"rel_type,omitempty"`
+}
+
+type BeeperTranscriptionEventContent struct {
+	Text      []ExtensibleText `json:"m.text"`
+	Model     string           `json:"com.beeper.transcription.model"`
+	RelatesTo BeeperRelatesTo  `json:"com.beeper.relates_to"`
+}
+
 type BeeperRetryMetadata struct {
 	OriginalEventID id.EventID `json:"original_event_id"`
 	RetryCount      int        `json:"retry_count"`
