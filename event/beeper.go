@@ -64,9 +64,9 @@ type BeeperRelatesTo struct {
 }
 
 type BeeperTranscriptionEventContent struct {
-	Text      []ExtensibleText `json:"m.text"`
-	Model     string           `json:"com.beeper.transcription.model"`
-	RelatesTo BeeperRelatesTo  `json:"com.beeper.relates_to"`
+	Text      []ExtensibleText `json:"m.text,omitempty"`
+	Model     string           `json:"com.beeper.transcription.model,omitempty"`
+	RelatesTo BeeperRelatesTo  `json:"com.beeper.relates_to,omitempty"`
 }
 
 type BeeperRetryMetadata struct {
