@@ -63,18 +63,10 @@ type BeeperRelatesTo struct {
 	Type    RelationType `json:"rel_type,omitempty"`
 }
 
-type BeeperRelatable interface {
-	OptionalGetBeeperRelatesTo() *BeeperRelatesTo
-}
-
 type BeeperTranscriptionEventContent struct {
 	Text      []ExtensibleText `json:"m.text,omitempty"`
 	Model     string           `json:"com.beeper.transcription.model,omitempty"`
 	RelatesTo BeeperRelatesTo  `json:"com.beeper.relates_to,omitempty"`
-}
-
-func (content *BeeperTranscriptionEventContent) OptionalGetBeeperRelatesTo() *BeeperRelatesTo {
-	return &content.RelatesTo
 }
 
 type BeeperRetryMetadata struct {
