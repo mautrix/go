@@ -58,6 +58,22 @@ func getRelatesTo(content any) *event.RelatesTo {
 	return nil
 }
 
+func getBeeperRelatesTo(content any) *event.BeeperRelatesTo {
+	contentJSON, ok := content.(json.RawMessage)
+	if ok {
+		return getRawJSON[event.BeeperRelatesTo](contentJSON, "com.beeper.relates_to")
+	}
+	contentStruct, ok := content.(*event.Content)
+	if ok {
+		content = contentStruct.Parsed
+	}
+	relatable, ok := content.(event.BeeperRelatable)
+	if ok {
+		return relatable.OptionalGetBeeperRelatesTo()
+	}
+	return nil
+}
+
 func getMentions(content any) *event.Mentions {
 	contentJSON, ok := content.(json.RawMessage)
 	if ok {
@@ -160,6 +176,7 @@ func (mach *OlmMachine) EncryptMegolmEventWithStateKey(ctx context.Context, room
 		SessionID:        session.ID(),
 		MegolmCiphertext: ciphertext,
 		RelatesTo:        getRelatesTo(content),
+		BeeperRelatesTo:  getBeeperRelatesTo(content),
 
 		// These are deprecated
 		SenderKey: mach.account.IdentityKey(),
