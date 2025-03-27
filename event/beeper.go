@@ -57,16 +57,10 @@ type BeeperMessageStatusEventContent struct {
 	DeliveredToUsers *[]id.UserID `json:"delivered_to_users,omitempty"`
 }
 
-type BeeperRelationType string
-
-const (
-	BeeperRelTranscription BeeperRelationType = "com.beeper.transcription"
-)
-
 type BeeperRelatesTo struct {
-	EventID id.EventID         `json:"event_id,omitempty"`
-	RoomID  id.RoomID          `json:"room_id,omitempty"`
-	Type    BeeperRelationType `json:"rel_type,omitempty"`
+	EventID id.EventID   `json:"event_id,omitempty"`
+	RoomID  id.RoomID    `json:"room_id,omitempty"`
+	Type    RelationType `json:"rel_type,omitempty"`
 }
 
 type BeeperTranscriptionEventContent struct {
