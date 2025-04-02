@@ -20,6 +20,7 @@ import (
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/exfmt"
 	"go.mau.fi/util/exslices"
+	"go.mau.fi/util/exsync"
 	"go.mau.fi/util/ptr"
 	"go.mau.fi/util/variationselector"
 	"golang.org/x/exp/maps"
@@ -77,6 +78,7 @@ type Portal struct {
 	currentlyTyping       []id.UserID
 	currentlyTypingLogins map[id.UserID]*UserLogin
 	currentlyTypingLock   sync.Mutex
+	currentlyTypingGhosts *exsync.Set[id.UserID]
 
 	outgoingMessages     map[networkid.TransactionID]*outgoingMessage
 	outgoingMessagesLock sync.Mutex
@@ -115,6 +117,7 @@ func (br *Bridge) loadPortal(ctx context.Context, dbPortal *database.Portal, que
 		Bridge: br,
 
 		currentlyTypingLogins: make(map[id.UserID]*UserLogin),
+		currentlyTypingGhosts: exsync.NewSet[id.UserID](),
 		outgoingMessages:      make(map[networkid.TransactionID]*outgoingMessage),
 	}
 	br.portalsByKey[portal.PortalKey] = portal
@@ -2099,6 +2102,9 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 		return
 	}
 	portal.sendConvertedMessage(ctx, evt.GetID(), intent, evt.GetSender().Sender, converted, ts, getStreamOrder(evt), nil)
+	if portal.currentlyTypingGhosts.Pop(intent.GetMXID()) {
+		intent.MarkTyping(ctx, portal.MXID, TypingTypeText, 0)
+	}
 }
 
 func (portal *Portal) sendRemoteErrorNotice(ctx context.Context, intent MatrixAPI, err error, ts time.Time, evtTypeName string) {
@@ -2161,6 +2167,9 @@ func (portal *Portal) handleRemoteEdit(ctx context.Context, source *UserLogin, e
 		return
 	}
 	portal.sendConvertedEdit(ctx, existing[0].ID, evt.GetSender().Sender, converted, intent, ts, getStreamOrder(evt))
+	if portal.currentlyTypingGhosts.Pop(intent.GetMXID()) {
+		intent.MarkTyping(ctx, portal.MXID, TypingTypeText, 0)
+	}
 }
 
 func (portal *Portal) sendConvertedEdit(
@@ -2709,9 +2718,15 @@ func (portal *Portal) handleRemoteTyping(ctx context.Context, source *UserLogin,
 		typingType = typedEvt.GetTypingType()
 	}
 	intent := portal.GetIntentFor(ctx, evt.GetSender(), source, RemoteEventTyping)
-	err := intent.MarkTyping(ctx, portal.MXID, typingType, evt.GetTimeout())
+	timeout := evt.GetTimeout()
+	err := intent.MarkTyping(ctx, portal.MXID, typingType, timeout)
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to bridge typing event")
+	}
+	if timeout == 0 {
+		portal.currentlyTypingGhosts.Remove(intent.GetMXID())
+	} else {
+		portal.currentlyTypingGhosts.Add(intent.GetMXID())
 	}
 }
 
