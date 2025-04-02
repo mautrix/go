@@ -67,6 +67,10 @@ type BridgeMain struct {
 	PostInit  func()
 	PostStart func()
 
+	// PostMigratePortal is a function that will be called during a legacy
+	// migration for each portal.
+	PostMigratePortal func(context.Context, *bridgev2.Portal) error
+
 	// Connector is the network connector for the bridge.
 	Connector bridgev2.NetworkConnector
 

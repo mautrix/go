@@ -226,11 +226,18 @@ func (br *BridgeMain) PostMigrate(ctx context.Context) error {
 			Object("portal_key", portal.PortalKey).
 			Str("room_type", string(portal.RoomType)).
 			Msg("Migrating portal")
-		switch portal.RoomType {
-		case database.RoomTypeDM:
-			err = br.postMigrateDMPortal(ctx, portal)
+		if br.PostMigratePortal != nil {
+			err = br.PostMigratePortal(ctx, portal)
 			if err != nil {
-				return fmt.Errorf("failed to update DM portal %s: %w", portal.MXID, err)
+				return fmt.Errorf("failed to run post-migrate portal hook for %s: %w", portal.MXID, err)
+			}
+		} else {
+			switch portal.RoomType {
+			case database.RoomTypeDM:
+				err = br.postMigrateDMPortal(ctx, portal)
+				if err != nil {
+					return fmt.Errorf("failed to update DM portal %s: %w", portal.MXID, err)
+				}
 			}
 		}
 		_, err = br.Matrix.Bot.SendStateEvent(ctx, portal.MXID, event.StateElementFunctionalMembers, "", &event.ElementFunctionalMembersContent{
