@@ -208,28 +208,31 @@ func (br *BridgeMain) postMigrateDMPortal(ctx context.Context, portal *bridgev2.
 }
 
 func (br *BridgeMain) PostMigrate(ctx context.Context) error {
+	log := br.Log.With().Str("action", "post-migrate").Logger()
 	wasMigrated, err := br.DB.TableExists(ctx, "database_was_migrated")
 	if err != nil {
 		return fmt.Errorf("failed to check if database_was_migrated table exists: %w", err)
 	} else if !wasMigrated {
 		return nil
 	}
-	zerolog.Ctx(ctx).Info().Msg("Doing post-migration updates to Matrix rooms")
+	log.Info().Msg("Doing post-migration updates to Matrix rooms")
 
 	portals, err := br.Bridge.GetAllPortalsWithMXID(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get all portals: %w", err)
 	}
 	for _, portal := range portals {
-		zerolog.Ctx(ctx).Debug().
+		log := log.With().
 			Stringer("room_id", portal.MXID).
 			Object("portal_key", portal.PortalKey).
 			Str("room_type", string(portal.RoomType)).
-			Msg("Migrating portal")
+			Logger()
+		log.Debug().Msg("Migrating portal")
 		if br.PostMigratePortal != nil {
 			err = br.PostMigratePortal(ctx, portal)
 			if err != nil {
-				return fmt.Errorf("failed to run post-migrate portal hook for %s: %w", portal.MXID, err)
+				log.Err(err).Msg("Failed to run post-migrate portal hook")
+				continue
 			}
 		} else {
 			switch portal.RoomType {
@@ -244,7 +247,7 @@ func (br *BridgeMain) PostMigrate(ctx context.Context) error {
 			ServiceMembers: []id.UserID{br.Matrix.Bot.UserID},
 		})
 		if err != nil {
-			zerolog.Ctx(ctx).Warn().Err(err).Stringer("room_id", portal.MXID).Msg("Failed to set service members")
+			log.Warn().Err(err).Stringer("room_id", portal.MXID).Msg("Failed to set service members")
 		}
 	}
 
@@ -252,6 +255,6 @@ func (br *BridgeMain) PostMigrate(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to drop database_was_migrated table: %w", err)
 	}
-	zerolog.Ctx(ctx).Info().Msg("Post-migration updates complete")
+	log.Info().Msg("Post-migration updates complete")
 	return nil
 }
