@@ -270,28 +270,30 @@ func (vh *VerificationHelper) ConfirmQRCodeScanned(ctx context.Context, txnID id
 	return nil
 }
 
-func (vh *VerificationHelper) generateAndShowQRCode(ctx context.Context, txn *VerificationTransaction) error {
+func (vh *VerificationHelper) generateQRCode(ctx context.Context, txn *VerificationTransaction) (*QRCode, error) {
 	log := vh.getLog(ctx).With().
 		Str("verification_action", "generate and show QR code").
 		Stringer("transaction_id", txn.TransactionID).
 		Logger()
 	ctx = log.WithContext(ctx)
-	if vh.showQRCode == nil {
-		log.Info().Msg("Ignoring QR code generation request as showing a QR code is not enabled on this device")
-		return nil
+
+	if !slices.Contains(vh.supportedMethods, event.VerificationMethodReciprocate) ||
+		!slices.Contains(txn.TheirSupportedMethods, event.VerificationMethodReciprocate) {
+		log.Info().Msg("Ignoring QR code generation request as reciprocating is not supported by both devices")
+		return nil, nil
 	} else if !slices.Contains(txn.TheirSupportedMethods, event.VerificationMethodQRCodeScan) {
 		log.Info().Msg("Ignoring QR code generation request as other device cannot scan QR codes")
-		return nil
+		return nil, nil
 	}
 
 	ownCrossSigningPublicKeys := vh.mach.GetOwnCrossSigningPublicKeys(ctx)
 	if ownCrossSigningPublicKeys == nil || len(ownCrossSigningPublicKeys.MasterKey) == 0 {
-		return errors.New("failed to get own cross-signing master public key")
+		return nil, errors.New("failed to get own cross-signing master public key")
 	}
 
 	ownMasterKeyTrusted, err := vh.mach.CryptoStore.IsKeySignedBy(ctx, vh.client.UserID, ownCrossSigningPublicKeys.MasterKey, vh.client.UserID, vh.mach.OwnIdentity().SigningKey)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	mode := QRCodeModeCrossSigning
 	if vh.client.UserID == txn.TheirUserID {
@@ -304,7 +306,7 @@ func (vh *VerificationHelper) generateAndShowQRCode(ctx context.Context, txn *Ve
 	} else {
 		// This is a cross-signing situation.
 		if !ownMasterKeyTrusted {
-			return errors.New("cannot cross-sign other device when own master key is not trusted")
+			return nil, errors.New("cannot cross-sign other device when own master key is not trusted")
 		}
 		mode = QRCodeModeCrossSigning
 	}
@@ -318,7 +320,7 @@ func (vh *VerificationHelper) generateAndShowQRCode(ctx context.Context, txn *Ve
 		// Key 2 is the other user's master signing key.
 		theirSigningKeys, err := vh.mach.GetCrossSigningPublicKeys(ctx, txn.TheirUserID)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		key2 = theirSigningKeys.MasterKey.Bytes()
 	case QRCodeModeSelfVerifyingMasterKeyTrusted:
@@ -328,7 +330,7 @@ func (vh *VerificationHelper) generateAndShowQRCode(ctx context.Context, txn *Ve
 		// Key 2 is the other device's key.
 		theirDevice, err := vh.mach.GetOrFetchDevice(ctx, txn.TheirUserID, txn.TheirDeviceID)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		key2 = theirDevice.SigningKey.Bytes()
 	case QRCodeModeSelfVerifyingMasterKeyUntrusted:
@@ -343,6 +345,5 @@ func (vh *VerificationHelper) generateAndShowQRCode(ctx context.Context, txn *Ve
 
 	qrCode := NewQRCode(mode, txn.TransactionID, [32]byte(key1), [32]byte(key2))
 	txn.QRCodeSharedSecret = qrCode.SharedSecret
-	vh.showQRCode(ctx, txn.TransactionID, qrCode)
-	return nil
+	return qrCode, nil
 }

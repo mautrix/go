@@ -12,8 +12,8 @@ import (
 
 	"go.mau.fi/util/dbutil"
 
-	"maunium.net/go/mautrix/bridge/status"
 	"maunium.net/go/mautrix/bridgev2/networkid"
+	"maunium.net/go/mautrix/bridgev2/status"
 	"maunium.net/go/mautrix/id"
 )
 

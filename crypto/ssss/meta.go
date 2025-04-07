@@ -33,8 +33,8 @@ func (kd *KeyMetadata) VerifyPassphrase(keyID, passphrase string) (*Key, error) 
 	ssssKey, err := kd.Passphrase.GetKey(passphrase)
 	if err != nil {
 		return nil, err
-	} else if !kd.VerifyKey(ssssKey) {
-		return nil, ErrIncorrectSSSSKey
+	} else if err = kd.verifyKey(ssssKey); err != nil {
+		return nil, err
 	}
 
 	return &Key{
@@ -49,8 +49,8 @@ func (kd *KeyMetadata) VerifyRecoveryKey(keyID, recoveryKey string) (*Key, error
 	ssssKey := utils.DecodeBase58RecoveryKey(recoveryKey)
 	if ssssKey == nil {
 		return nil, ErrInvalidRecoveryKey
-	} else if !kd.VerifyKey(ssssKey) {
-		return nil, ErrIncorrectSSSSKey
+	} else if err := kd.verifyKey(ssssKey); err != nil {
+		return nil, err
 	}
 
 	return &Key{
@@ -60,22 +60,46 @@ func (kd *KeyMetadata) VerifyRecoveryKey(keyID, recoveryKey string) (*Key, error
 	}, nil
 }
 
+func (kd *KeyMetadata) verifyKey(key []byte) error {
+	unpaddedMAC := strings.TrimRight(kd.MAC, "=")
+	expectedMACLength := base64.RawStdEncoding.EncodedLen(utils.SHAHashLength)
+	if len(unpaddedMAC) != expectedMACLength {
+		return fmt.Errorf("%w: invalid mac length %d (expected %d)", ErrCorruptedKeyMetadata, len(unpaddedMAC), expectedMACLength)
+	}
+	hash, err := kd.calculateHash(key)
+	if err != nil {
+		return err
+	}
+	if unpaddedMAC != hash {
+		return ErrIncorrectSSSSKey
+	}
+	return nil
+}
+
 // VerifyKey verifies the SSSS key is valid by calculating and comparing its MAC.
 func (kd *KeyMetadata) VerifyKey(key []byte) bool {
-	return strings.TrimRight(kd.MAC, "=") == kd.calculateHash(key)
+	return kd.verifyKey(key) == nil
 }
 
 // calculateHash calculates the hash used for checking if the key is entered correctly as described
 // in the spec: https://matrix.org/docs/spec/client_server/unstable#m-secret-storage-v1-aes-hmac-sha2
-func (kd *KeyMetadata) calculateHash(key []byte) string {
+func (kd *KeyMetadata) calculateHash(key []byte) (string, error) {
 	aesKey, hmacKey := utils.DeriveKeysSHA256(key, "")
+	unpaddedIV := strings.TrimRight(kd.IV, "=")
+	expectedIVLength := base64.RawStdEncoding.EncodedLen(utils.AESCTRIVLength)
+	if len(unpaddedIV) != expectedIVLength {
+		return "", fmt.Errorf("%w: invalid iv length %d (expected %d)", ErrCorruptedKeyMetadata, len(unpaddedIV), expectedIVLength)
+	}
 
 	var ivBytes [utils.AESCTRIVLength]byte
-	_, _ = base64.RawStdEncoding.Decode(ivBytes[:], []byte(strings.TrimRight(kd.IV, "=")))
+	_, err := base64.RawStdEncoding.Decode(ivBytes[:], []byte(unpaddedIV))
+	if err != nil {
+		return "", fmt.Errorf("%w: failed to decode iv: %w", ErrCorruptedKeyMetadata, err)
+	}
 
 	cipher := utils.XorA256CTR(make([]byte, utils.AESCTRKeyLength), aesKey, ivBytes)
 
-	return utils.HMACSHA256B64(cipher, hmacKey)
+	return utils.HMACSHA256B64(cipher, hmacKey), nil
 }
 
 // PassphraseMetadata represents server-side metadata about a SSSS key passphrase.

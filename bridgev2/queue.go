@@ -119,6 +119,17 @@ func (br *Bridge) QueueMatrixEvent(ctx context.Context, evt *event.Event) {
 	if evt.Type == event.StateMember && evt.GetStateKey() == br.Bot.GetMXID().String() && evt.Content.AsMember().Membership == event.MembershipInvite && sender != nil {
 		br.handleBotInvite(ctx, evt, sender)
 		return
+	} else if sender != nil && evt.RoomID == sender.ManagementRoom {
+		if evt.Type == event.StateMember && evt.Content.AsMember().Membership == event.MembershipLeave && (evt.GetStateKey() == br.Bot.GetMXID().String() || evt.GetStateKey() == sender.MXID.String()) {
+			sender.ManagementRoom = ""
+			err := br.DB.User.Update(ctx, sender.User)
+			if err != nil {
+				log.Err(err).Msg("Failed to clear user's management room in database")
+			} else {
+				log.Debug().Msg("Cleared user's management room due to leave event")
+			}
+		}
+		return
 	}
 	portal, err := br.GetPortalByMXID(ctx, evt.RoomID)
 	if err != nil {

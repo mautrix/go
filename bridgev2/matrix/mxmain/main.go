@@ -67,6 +67,10 @@ type BridgeMain struct {
 	PostInit  func()
 	PostStart func()
 
+	// PostMigratePortal is a function that will be called during a legacy
+	// migration for each portal.
+	PostMigratePortal func(context.Context, *bridgev2.Portal) error
+
 	// Connector is the network connector for the bridge.
 	Connector bridgev2.NetworkConnector
 
@@ -370,7 +374,8 @@ func (br *BridgeMain) LoadConfig() {
 // Start starts the bridge after everything has been initialized.
 // This is called by [Run] and does not need to be called manually.
 func (br *BridgeMain) Start() {
-	err := br.Bridge.StartConnectors()
+	ctx := br.Log.WithContext(context.Background())
+	err := br.Bridge.StartConnectors(ctx)
 	if err != nil {
 		var dbUpgradeErr bridgev2.DBUpgradeError
 		if errors.As(err, &dbUpgradeErr) {
@@ -379,15 +384,15 @@ func (br *BridgeMain) Start() {
 			br.Log.Fatal().Err(err).Msg("Failed to start bridge")
 		}
 	}
-	err = br.PostMigrate(br.Log.WithContext(context.Background()))
+	err = br.PostMigrate(ctx)
 	if err != nil {
 		br.Log.Fatal().Err(err).Msg("Failed to run post-migration updates")
 	}
-	err = br.Bridge.StartLogins()
+	err = br.Bridge.StartLogins(ctx)
 	if err != nil {
 		br.Log.Fatal().Err(err).Msg("Failed to start existing user logins")
 	}
-	br.Bridge.PostStart()
+	br.Bridge.PostStart(ctx)
 	if br.PostStart != nil {
 		br.PostStart()
 	}

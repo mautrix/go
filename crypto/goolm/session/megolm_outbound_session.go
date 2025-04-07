@@ -7,12 +7,10 @@ import (
 
 	"go.mau.fi/util/exerrors"
 
-	"maunium.net/go/mautrix/crypto/goolm/cipher"
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
 	"maunium.net/go/mautrix/crypto/goolm/goolmbase64"
 	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
 	"maunium.net/go/mautrix/crypto/goolm/megolm"
-	"maunium.net/go/mautrix/crypto/goolm/utilities"
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
 )
@@ -66,7 +64,7 @@ func (o *MegolmOutboundSession) Encrypt(plaintext []byte) ([]byte, error) {
 	if len(plaintext) == 0 {
 		return nil, olm.ErrEmptyInput
 	}
-	encrypted, err := o.Ratchet.Encrypt(plaintext, &o.SigningKey)
+	encrypted, err := o.Ratchet.Encrypt(plaintext, o.SigningKey)
 	return goolmbase64.Encode(encrypted), err
 }
 
@@ -77,12 +75,12 @@ func (o *MegolmOutboundSession) ID() id.SessionID {
 
 // PickleAsJSON returns an Session as a base64 string encrypted using the supplied key. The unencrypted representation of the Account is in JSON format.
 func (o *MegolmOutboundSession) PickleAsJSON(key []byte) ([]byte, error) {
-	return utilities.PickleAsJSON(o, megolmOutboundSessionPickleVersion, key)
+	return libolmpickle.PickleAsJSON(o, megolmOutboundSessionPickleVersion, key)
 }
 
 // UnpickleAsJSON updates an Session by a base64 encrypted string with the key. The unencrypted representation has to be in JSON format.
 func (o *MegolmOutboundSession) UnpickleAsJSON(pickled, key []byte) error {
-	return utilities.UnpickleAsJSON(o, pickled, key, megolmOutboundSessionPickleVersion)
+	return libolmpickle.UnpickleAsJSON(o, pickled, key, megolmOutboundSessionPickleVersion)
 }
 
 // Unpickle decodes the base64 encoded string and decrypts the result with the key.
@@ -91,7 +89,7 @@ func (o *MegolmOutboundSession) Unpickle(pickled, key []byte) error {
 	if len(key) == 0 {
 		return olm.ErrNoKeyProvided
 	}
-	decrypted, err := cipher.Unpickle(key, pickled)
+	decrypted, err := libolmpickle.Unpickle(key, pickled)
 	if err != nil {
 		return err
 	}
@@ -117,7 +115,7 @@ func (o *MegolmOutboundSession) Pickle(key []byte) ([]byte, error) {
 	if len(key) == 0 {
 		return nil, olm.ErrNoKeyProvided
 	}
-	return cipher.Pickle(key, o.PickleLibOlm())
+	return libolmpickle.Pickle(key, o.PickleLibOlm())
 }
 
 // PickleLibOlm pickles the session returning the raw bytes.

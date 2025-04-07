@@ -275,7 +275,7 @@ func (mach *OlmMachine) defaultAllowKeyShare(ctx context.Context, device *id.Dev
 	} else if device.Trust == id.TrustStateBlacklisted {
 		log.Debug().Msg("Rejecting key request from blacklisted device")
 		return &KeyShareRejectBlacklisted
-	} else if trustState := mach.ResolveTrust(device); trustState >= mach.ShareKeysMinTrust {
+	} else if trustState, _ := mach.ResolveTrustContext(ctx, device); trustState >= mach.ShareKeysMinTrust {
 		log.Debug().
 			Str("min_trust", mach.SendKeysMinTrust.String()).
 			Str("device_trust", trustState.String()).

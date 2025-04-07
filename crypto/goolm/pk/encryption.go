@@ -5,7 +5,7 @@ import (
 
 	"maunium.net/go/mautrix/id"
 
-	"maunium.net/go/mautrix/crypto/goolm/cipher"
+	"maunium.net/go/mautrix/crypto/goolm/aessha2"
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
 	"maunium.net/go/mautrix/crypto/goolm/goolmbase64"
 )
@@ -36,11 +36,11 @@ func (e Encryption) Encrypt(plaintext []byte, privateKey crypto.Curve25519Privat
 	if err != nil {
 		return nil, nil, err
 	}
-	cipher := cipher.NewAESSHA256(nil)
-	ciphertext, err = cipher.Encrypt(sharedSecret, plaintext)
+	cipher, err := aessha2.NewAESSHA2(sharedSecret, nil)
+	ciphertext, err = cipher.Encrypt(plaintext)
 	if err != nil {
 		return nil, nil, err
 	}
-	mac, err = cipher.MAC(sharedSecret, ciphertext)
+	mac, err = cipher.MAC(ciphertext)
 	return ciphertext, goolmbase64.Encode(mac), err
 }

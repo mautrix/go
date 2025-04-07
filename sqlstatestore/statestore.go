@@ -85,14 +85,11 @@ func (store *SQLStateStore) GetRoomMembers(ctx context.Context, roomID id.RoomID
 		query = fmt.Sprintf("%s AND membership IN (%s)", query, strings.Join(placeholders, ","))
 	}
 	rows, err := store.Query(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
 	members := make(map[id.UserID]*event.MemberEventContent)
-	return members, dbutil.NewRowIter(rows, func(row dbutil.Scannable) (ret Member, err error) {
+	return members, dbutil.NewRowIterWithError(rows, func(row dbutil.Scannable) (ret Member, err error) {
 		err = row.Scan(&ret.UserID, &ret.Membership, &ret.Displayname, &ret.AvatarURL)
 		return
-	}).Iter(func(m Member) (bool, error) {
+	}, err).Iter(func(m Member) (bool, error) {
 		members[m.UserID] = &m.MemberEventContent
 		return true, nil
 	})
@@ -159,10 +156,7 @@ func (store *SQLStateStore) FindSharedRooms(ctx context.Context, userID id.UserI
 		`
 	}
 	rows, err := store.Query(ctx, query, userID)
-	if err != nil {
-		return nil, err
-	}
-	return dbutil.NewRowIter(rows, dbutil.ScanSingleColumn[id.RoomID]).AsList()
+	return dbutil.NewRowIterWithError(rows, dbutil.ScanSingleColumn[id.RoomID], err).AsList()
 }
 
 func (store *SQLStateStore) IsInRoom(ctx context.Context, roomID id.RoomID, userID id.UserID) bool {

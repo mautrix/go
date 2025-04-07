@@ -36,6 +36,10 @@ var (
 var exportPrefixBytes, exportSuffixBytes = []byte(exportPrefix), []byte(exportSuffix)
 
 func decodeKeyExport(data []byte) ([]byte, error) {
+	// Fix some types of corruption in the key export file before checking anything
+	if bytes.IndexByte(data, '\r') != -1 {
+		data = bytes.ReplaceAll(data, []byte{'\r', '\n'}, []byte{'\n'})
+	}
 	// If the valid prefix and suffix aren't there, it's probably not a Matrix key export
 	if !bytes.HasPrefix(data, exportPrefixBytes) {
 		return nil, ErrMissingExportPrefix

@@ -7,12 +7,11 @@ import (
 	"crypto/sha256"
 	"fmt"
 
-	"maunium.net/go/mautrix/crypto/goolm/cipher"
+	"maunium.net/go/mautrix/crypto/goolm/aessha2"
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
 	"maunium.net/go/mautrix/crypto/goolm/goolmbase64"
 	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
 	"maunium.net/go/mautrix/crypto/goolm/message"
-	"maunium.net/go/mautrix/crypto/goolm/utilities"
 	"maunium.net/go/mautrix/crypto/olm"
 )
 
@@ -26,7 +25,7 @@ const (
 	RatchetPartLength = 256 / 8 // length of each ratchet part in bytes
 )
 
-var RatchetCipher = cipher.NewAESSHA256([]byte("MEGOLM_KEYS"))
+var megolmKeysKDFInfo = []byte("MEGOLM_KEYS")
 
 // hasKeySeed are the seed for the different ratchet parts
 var hashKeySeeds [RatchetParts][]byte = [RatchetParts][]byte{
@@ -136,9 +135,8 @@ func (m *Ratchet) AdvanceTo(target uint32) {
 
 // Encrypt encrypts the message in a message.GroupMessage with MAC and signature.
 // The output is base64 encoded.
-func (r *Ratchet) Encrypt(plaintext []byte, key *crypto.Ed25519KeyPair) ([]byte, error) {
-	var err error
-	encryptedText, err := RatchetCipher.Encrypt(r.Data[:], plaintext)
+func (r *Ratchet) Encrypt(plaintext []byte, key crypto.Ed25519KeyPair) ([]byte, error) {
+	cipher, err := aessha2.NewAESSHA2(r.Data[:], megolmKeysKDFInfo)
 	if err != nil {
 		return nil, fmt.Errorf("cipher encrypt: %w", err)
 	}
@@ -146,9 +144,12 @@ func (r *Ratchet) Encrypt(plaintext []byte, key *crypto.Ed25519KeyPair) ([]byte,
 	message := &message.GroupMessage{}
 	message.Version = protocolVersion
 	message.MessageIndex = r.Counter
-	message.Ciphertext = encryptedText
-	//creating the mac and signing is done in encode
-	output, err := message.EncodeAndMacAndSign(r.Data[:], RatchetCipher, key)
+	message.Ciphertext, err = cipher.Encrypt(plaintext)
+	if err != nil {
+		return nil, err
+	}
+	//creating the MAC and signing is done in encode
+	output, err := message.EncodeAndMACAndSign(cipher, key)
 	if err != nil {
 		return nil, err
 	}
@@ -178,7 +179,11 @@ func (r Ratchet) SessionExportMessage(key crypto.Ed25519PublicKey) ([]byte, erro
 // Decrypt decrypts the ciphertext and verifies the MAC but not the signature.
 func (r Ratchet) Decrypt(ciphertext []byte, signingkey *crypto.Ed25519PublicKey, msg *message.GroupMessage) ([]byte, error) {
 	//verify mac
-	verifiedMAC, err := msg.VerifyMACInline(r.Data[:], RatchetCipher, ciphertext)
+	cipher, err := aessha2.NewAESSHA2(r.Data[:], megolmKeysKDFInfo)
+	if err != nil {
+		return nil, err
+	}
+	verifiedMAC, err := msg.VerifyMACInline(cipher, ciphertext)
 	if err != nil {
 		return nil, err
 	}
@@ -186,17 +191,17 @@ func (r Ratchet) Decrypt(ciphertext []byte, signingkey *crypto.Ed25519PublicKey,
 		return nil, fmt.Errorf("decrypt: %w", olm.ErrBadMAC)
 	}
 
-	return RatchetCipher.Decrypt(r.Data[:], msg.Ciphertext)
+	return cipher.Decrypt(msg.Ciphertext)
 }
 
 // PickleAsJSON returns a ratchet as a base64 string encrypted using the supplied key. The unencrypted representation of the Account is in JSON format.
 func (r Ratchet) PickleAsJSON(key []byte) ([]byte, error) {
-	return utilities.PickleAsJSON(r, megolmPickleVersion, key)
+	return libolmpickle.PickleAsJSON(r, megolmPickleVersion, key)
 }
 
 // UnpickleAsJSON updates a ratchet by a base64 encrypted string using the supplied key. The unencrypted representation has to be in JSON format.
 func (r *Ratchet) UnpickleAsJSON(pickled, key []byte) error {
-	return utilities.UnpickleAsJSON(r, pickled, key, megolmPickleVersion)
+	return libolmpickle.UnpickleAsJSON(r, pickled, key, megolmPickleVersion)
 }
 
 // UnpickleLibOlm decodes the unencryted value and populates the Ratchet accordingly. It returns the number of bytes read.

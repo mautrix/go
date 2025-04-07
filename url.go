@@ -109,6 +109,9 @@ func (cli *Client) BuildURLWithQuery(urlPath PrefixableURLPath, urlQuery map[str
 // BuildURLWithQuery builds a URL with query parameters in addition to the Client's homeserver
 // and appservice user ID set already.
 func (cli *Client) BuildURLWithFullQuery(urlPath PrefixableURLPath, fn func(q url.Values)) string {
+	if cli == nil {
+		return "client is nil"
+	}
 	hsURL := *BuildURL(cli.HomeserverURL, urlPath.FullPath()...)
 	query := hsURL.Query()
 	if cli.SetAppServiceUserID {

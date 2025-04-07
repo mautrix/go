@@ -1,10 +1,10 @@
-package utilities
+package libolmpickle
 
 import (
+	"crypto/aes"
 	"encoding/json"
 	"fmt"
 
-	"maunium.net/go/mautrix/crypto/goolm/cipher"
 	"maunium.net/go/mautrix/crypto/olm"
 )
 
@@ -21,12 +21,12 @@ func PickleAsJSON(object any, pickleVersion byte, key []byte) ([]byte, error) {
 	toEncrypt := make([]byte, len(marshaled))
 	copy(toEncrypt, marshaled)
 	//pad marshaled to get block size
-	if len(marshaled)%cipher.PickleBlockSize() != 0 {
-		padding := cipher.PickleBlockSize() - len(marshaled)%cipher.PickleBlockSize()
+	if len(marshaled)%aes.BlockSize != 0 {
+		padding := aes.BlockSize - len(marshaled)%aes.BlockSize
 		toEncrypt = make([]byte, len(marshaled)+padding)
 		copy(toEncrypt, marshaled)
 	}
-	encrypted, err := cipher.Pickle(key, toEncrypt)
+	encrypted, err := Pickle(key, toEncrypt)
 	if err != nil {
 		return nil, fmt.Errorf("pickle encrypt: %w", err)
 	}
@@ -38,7 +38,7 @@ func UnpickleAsJSON(object any, pickled, key []byte, pickleVersion byte) error {
 	if len(key) == 0 {
 		return fmt.Errorf("unpickle: %w", olm.ErrNoKeyProvided)
 	}
-	decrypted, err := cipher.Unpickle(key, pickled)
+	decrypted, err := Unpickle(key, pickled)
 	if err != nil {
 		return fmt.Errorf("unpickle decrypt: %w", err)
 	}

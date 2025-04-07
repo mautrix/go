@@ -1,3 +1,89 @@
+## v0.23.2 (2025-03-16)
+
+* **Breaking change *(bridge)*** Removed legacy bridge module.
+* **Breaking change *(event)*** Changed `m.federate` field in room create event
+  content to a pointer to allow detecting omitted values.
+* *(bridgev2/commands)* Added `set-management-room` command to set a new
+  management room.
+* *(bridgev2/portal)* Changed edit bridging to ignore remote edits if the
+  original sender on Matrix can't be puppeted.
+* *(bridgv2)* Added config option to disable bridging `m.notice` messages.
+* *(appservice/http)* Switched access token validation to use constant time
+  comparisons.
+* *(event)* Added support for [MSC3765] rich text topics.
+* *(event)* Added fields to policy list event contents for [MSC4204] and
+  [MSC4205].
+* *(client)* Added method for getting the content of a redacted event using
+  [MSC2815].
+* *(client)* Added methods for sending and updating [MSC4140] delayed events.
+* *(client)* Added support for [MSC4222] in sync payloads.
+* *(crypto/cryptohelper)* Switched to using `sqlite3-fk-wal` instead of plain
+  `sqlite3` by default.
+* *(crypto/encryptolm)* Added generic method for encrypting to-device events.
+* *(crypto/ssss)* Fixed panic if server-side key metadata is corrupted.
+* *(crypto/sqlstore)* Fixed error when marking over 32 thousand device lists
+  as outdated on SQLite.
+
+[MSC2815]: https://github.com/matrix-org/matrix-spec-proposals/pull/2815
+[MSC3765]: https://github.com/matrix-org/matrix-spec-proposals/pull/3765
+[MSC4140]: https://github.com/matrix-org/matrix-spec-proposals/pull/4140
+[MSC4204]: https://github.com/matrix-org/matrix-spec-proposals/pull/4204
+[MSC4205]: https://github.com/matrix-org/matrix-spec-proposals/pull/4205
+[MSC4222]: https://github.com/matrix-org/matrix-spec-proposals/pull/4222
+
+## v0.23.1 (2025-02-16)
+
+* *(client)* Added `FullStateEvent` method to get a state event including
+  metadata (using the `?format=event` query parameter).
+* *(client)* Added wrapper method for [MSC4194]'s redact endpoint.
+* *(pushrules)* Fixed content rules not considering word boundaries and being
+  case-sensitive.
+* *(crypto)* Fixed bugs that would cause key exports to fail for no reason.
+* *(crypto)* Deprecated `ResolveTrust` in favor of `ResolveTrustContext`.
+* *(crypto)* Stopped accepting secret shares from unverified devices.
+* **Breaking change *(crypto)*** Changed `GetAndVerifyLatestKeyBackupVersion`
+  to take an optional private key parameter. The method will now trust the
+  public key if it matches the provided private key even if there are no valid
+  signatures.
+* **Breaking change *(crypto)*** Added context parameter to `IsDeviceTrusted`.
+
+[MSC4194]: https://github.com/matrix-org/matrix-spec-proposals/pull/4194
+
+## v0.23.0 (2025-01-16)
+
+* **Breaking change *(client)*** Changed `JoinRoom` parameters to allow multiple
+  `via`s.
+* **Breaking change *(bridgev2)*** Updated capability system.
+  * The return type of `NetworkAPI.GetCapabilities` is now different.
+  * Media type capabilities are enforced automatically by bridgev2.
+  * Capabilities are now sent to Matrix rooms using the
+    `com.beeper.room_features` state event.
+* *(client)* Added `GetRoomSummary` to implement [MSC3266].
+* *(client)* Added support for arbitrary profile fields to implement [MSC4133]
+  (thanks to [@nexy7574] in [#337]).
+* *(crypto)* Started storing olm message hashes to prevent decryption errors
+  if messages are repeated (e.g. if the app crashes right after decrypting).
+* *(crypto)* Improved olm session unwedging to check when the last session was
+  created instead of only relying on an in-memory map.
+* *(crypto/verificationhelper)* Fixed emoji verification not doing cross-signing
+  properly after a successful verification.
+* *(bridgev2/config)* Moved MSC4190 flag from `appservice` to `encryption`.
+* *(bridgev2/space)* Fixed failing to add rooms to spaces if the room create
+  call was made with a temporary context.
+* *(bridgev2/commands)* Changed `help` command to hide commands which require
+  interfaces that aren't implemented by the network connector.
+* *(bridgev2/matrixinterface)* Moved deterministic room ID generation to Matrix
+  connector.
+* *(bridgev2)* Fixed service member state event not being set correctly when
+  creating a DM by inviting a ghost user.
+* *(bridgev2)* Fixed `RemoteReactionSync` events replacing all reactions every
+  time instead of only changed ones.
+
+[MSC3266]: https://github.com/matrix-org/matrix-spec-proposals/pull/3266
+[MSC4133]: https://github.com/matrix-org/matrix-spec-proposals/pull/4133
+[@nexy7574]: https://github.com/nexy7574
+[#337]: https://github.com/mautrix/go/pull/337
+
 ## v0.22.1 (2024-12-16)
 
 * *(crypto)* Added automatic cleanup when there are too many olm sessions with

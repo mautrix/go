@@ -16,9 +16,9 @@ import (
 	"github.com/gorilla/mux"
 
 	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/bridge/status"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
+	"maunium.net/go/mautrix/bridgev2/status"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
@@ -84,6 +84,20 @@ type MatrixConnectorWithPostRoomBridgeHandling interface {
 
 type MatrixConnectorWithAnalytics interface {
 	TrackAnalytics(userID id.UserID, event string, properties map[string]any)
+}
+
+type DirectNotificationData struct {
+	Portal    *Portal
+	Sender    *Ghost
+	MessageID networkid.MessageID
+	Message   string
+
+	FormattedNotification string
+	FormattedTitle        string
+}
+
+type MatrixConnectorWithNotifications interface {
+	DisplayNotification(ctx context.Context, data *DirectNotificationData)
 }
 
 type MatrixSendExtra struct {

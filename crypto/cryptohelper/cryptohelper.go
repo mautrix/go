@@ -15,6 +15,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/dbutil"
+	_ "go.mau.fi/util/dbutil/litestream"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto"
@@ -36,6 +37,7 @@ type CryptoHelper struct {
 
 	DecryptErrorCallback func(*event.Event, error)
 
+	MSC4190 bool
 	LoginAs *mautrix.ReqLogin
 
 	ASEventProcessor  crypto.ASEventProcessor
@@ -77,7 +79,7 @@ func NewCryptoHelper(cli *mautrix.Client, pickleKey []byte, store any) (*CryptoH
 		}
 		unmanagedCryptoStore = typedStore
 	case string:
-		db, err := dbutil.NewWithDialect(typedStore, "sqlite3")
+		db, err := dbutil.NewWithDialect(fmt.Sprintf("file:%s?_txlock=immediate", typedStore), "sqlite3-fk-wal")
 		if err != nil {
 			return nil, err
 		}
@@ -151,7 +153,14 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("failed to find existing device ID: %w", err)
 		}
-		if helper.LoginAs != nil && helper.LoginAs.Type == mautrix.AuthTypeAppservice && helper.client.SetAppServiceDeviceID {
+		if helper.MSC4190 {
+			helper.log.Debug().Msg("Creating bot device with MSC4190")
+			err = helper.client.CreateDeviceMSC4190(ctx, storedDeviceID, helper.LoginAs.InitialDeviceDisplayName)
+			if err != nil {
+				return fmt.Errorf("failed to create device for bot: %w", err)
+			}
+			rawCryptoStore.DeviceID = helper.client.DeviceID
+		} else if helper.LoginAs != nil && helper.LoginAs.Type == mautrix.AuthTypeAppservice && helper.client.SetAppServiceDeviceID {
 			if storedDeviceID == "" {
 				helper.log.Debug().
 					Str("username", helper.LoginAs.Identifier.User).

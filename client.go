@@ -319,12 +319,15 @@ const (
 )
 
 func (cli *Client) RequestStart(req *http.Request) {
-	if cli.RequestHook != nil {
+	if cli != nil && cli.RequestHook != nil {
 		cli.RequestHook(req)
 	}
 }
 
 func (cli *Client) LogRequestDone(req *http.Request, resp *http.Response, err error, handlerErr error, contentLength int, duration time.Duration) {
+	if cli == nil {
+		return
+	}
 	var evt *zerolog.Event
 	if errors.Is(err, context.Canceled) {
 		evt = zerolog.Ctx(req.Context()).Warn()
@@ -466,6 +469,9 @@ func (cli *Client) MakeFullRequest(ctx context.Context, params FullRequest) ([]b
 }
 
 func (cli *Client) MakeFullRequestWithResp(ctx context.Context, params FullRequest) ([]byte, *http.Response, error) {
+	if cli == nil {
+		return nil, nil, ErrClientIsNil
+	}
 	if params.MaxAttempts == 0 {
 		params.MaxAttempts = 1 + cli.DefaultHTTPRetries
 	}
@@ -665,7 +671,6 @@ func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backof
 
 // Whoami gets the user ID of the current user. See https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3accountwhoami
 func (cli *Client) Whoami(ctx context.Context) (resp *RespWhoami, err error) {
-
 	urlPath := cli.BuildClientURL("v3", "account", "whoami")
 	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
 	return
@@ -696,6 +701,7 @@ type ReqSync struct {
 	FullState       bool
 	SetPresence     event.Presence
 	StreamResponse  bool
+	UseStateAfter   bool
 	BeeperStreaming bool
 	Client          *http.Client
 }
@@ -716,9 +722,10 @@ func (req *ReqSync) BuildQuery() map[string]string {
 	if req.FullState {
 		query["full_state"] = "true"
 	}
+	if req.UseStateAfter {
+		query["org.matrix.msc4222.use_state_after"] = "true"
+	}
 	if req.BeeperStreaming {
-		// TODO remove this
-		query["streaming"] = ""
 		query["com.beeper.streaming"] = "true"
 	}
 	return query
@@ -974,6 +981,28 @@ func (cli *Client) JoinRoom(ctx context.Context, roomIDorAlias string, req *ReqJ
 	return
 }
 
+// KnockRoom requests to join a room ID or alias. See https://spec.matrix.org/v1.13/client-server-api/#post_matrixclientv3knockroomidoralias
+//
+// The last parameter contains optional extra fields and can be left nil.
+func (cli *Client) KnockRoom(ctx context.Context, roomIDorAlias string, req *ReqKnockRoom) (resp *RespKnockRoom, err error) {
+	if req == nil {
+		req = &ReqKnockRoom{}
+	}
+	urlPath := cli.BuildURLWithFullQuery(ClientURLPath{"v3", "knock", roomIDorAlias}, func(q url.Values) {
+		if len(req.Via) > 0 {
+			q["via"] = req.Via
+		}
+	})
+	_, err = cli.MakeRequest(ctx, http.MethodPost, urlPath, req, &resp)
+	if err == nil && cli.StateStore != nil {
+		err = cli.StateStore.SetMembership(ctx, resp.RoomID, cli.UserID, event.MembershipKnock)
+		if err != nil {
+			err = fmt.Errorf("failed to update state store: %w", err)
+		}
+	}
+	return
+}
+
 // JoinRoomByID joins the client to a room ID. See https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3roomsroomidjoin
 //
 // Unlike JoinRoom, this method can only be used to join rooms that the server already knows about.
@@ -1137,15 +1166,6 @@ func (cli *Client) SetRoomAccountData(ctx context.Context, roomID id.RoomID, nam
 	return nil
 }
 
-type ReqSendEvent struct {
-	Timestamp     int64
-	TransactionID string
-
-	DontEncrypt bool
-
-	MeowEventID id.EventID
-}
-
 // SendMessageEvent sends a message event into a room. See https://spec.matrix.org/v1.2/client-server-api/#put_matrixclientv3roomsroomidsendeventtypetxnid
 // contentJSON should be a pointer to something that can be encoded as JSON using json.Marshal.
 func (cli *Client) SendMessageEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, contentJSON interface{}, extra ...ReqSendEvent) (resp *RespSendEvent, err error) {
@@ -1168,8 +1188,11 @@ func (cli *Client) SendMessageEvent(ctx context.Context, roomID id.RoomID, event
 	if req.MeowEventID != "" {
 		queryParams["fi.mau.event_id"] = req.MeowEventID.String()
 	}
+	if req.UnstableDelay > 0 {
+		queryParams["org.matrix.msc4140.delay"] = strconv.FormatInt(req.UnstableDelay.Milliseconds(), 10)
+	}
 
-	if !req.DontEncrypt && cli.Crypto != nil && eventType != event.EventReaction && eventType != event.EventEncrypted {
+	if !req.DontEncrypt && cli != nil && cli.Crypto != nil && eventType != event.EventReaction && eventType != event.EventEncrypted {
 		var isEncrypted bool
 		isEncrypted, err = cli.StateStore.IsEncrypted(ctx, roomID)
 		if err != nil {
@@ -1203,11 +1226,14 @@ func (cli *Client) SendStateEvent(ctx context.Context, roomID id.RoomID, eventTy
 	if req.MeowEventID != "" {
 		queryParams["fi.mau.event_id"] = req.MeowEventID.String()
 	}
+	if req.UnstableDelay > 0 {
+		queryParams["org.matrix.msc4140.delay"] = strconv.FormatInt(req.UnstableDelay.Milliseconds(), 10)
+	}
 
 	urlData := ClientURLPath{"v3", "rooms", roomID, "state", eventType.String(), stateKey}
 	urlPath := cli.BuildURLWithQuery(urlData, queryParams)
 	_, err = cli.MakeRequest(ctx, http.MethodPut, urlPath, contentJSON, &resp)
-	if err == nil && cli.StateStore != nil {
+	if err == nil && cli.StateStore != nil && req.UnstableDelay == 0 {
 		cli.updateStoreWithOutgoingEvent(ctx, roomID, eventType, stateKey, contentJSON)
 	}
 	return
@@ -1223,6 +1249,12 @@ func (cli *Client) SendMassagedStateEvent(ctx context.Context, roomID id.RoomID,
 	if err == nil && cli.StateStore != nil {
 		cli.updateStoreWithOutgoingEvent(ctx, roomID, eventType, stateKey, contentJSON)
 	}
+	return
+}
+
+func (cli *Client) UpdateDelayedEvent(ctx context.Context, req *ReqUpdateDelayedEvent) (resp *RespUpdateDelayedEvent, err error) {
+	urlPath := cli.BuildClientURL("unstable", "org.matrix.msc4140", "delayed_events", req.DelayID)
+	_, err = cli.MakeRequest(ctx, http.MethodPost, urlPath, req, &resp)
 	return
 }
 
@@ -1274,6 +1306,19 @@ func (cli *Client) RedactEvent(ctx context.Context, roomID id.RoomID, eventID id
 	}
 	urlPath := cli.BuildClientURL("v3", "rooms", roomID, "redact", eventID, txnID)
 	_, err = cli.MakeRequest(ctx, http.MethodPut, urlPath, req.Extra, &resp)
+	return
+}
+
+func (cli *Client) UnstableRedactUserEvents(ctx context.Context, roomID id.RoomID, userID id.UserID, req *ReqRedactUser) (resp *RespRedactUserEvents, err error) {
+	if req == nil {
+		req = &ReqRedactUser{}
+	}
+	query := map[string]string{}
+	if req.Limit > 0 {
+		query["limit"] = strconv.Itoa(req.Limit)
+	}
+	urlPath := cli.BuildURLWithQuery(ClientURLPath{"unstable", "org.matrix.msc4194", "rooms", roomID, "redact", "user", userID}, query)
+	_, err = cli.MakeRequest(ctx, http.MethodPost, urlPath, req, &resp)
 	return
 }
 
@@ -1428,7 +1473,7 @@ func (cli *Client) SetPresence(ctx context.Context, presence ReqPresence) (err e
 }
 
 func (cli *Client) updateStoreWithOutgoingEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string, contentJSON interface{}) {
-	if cli.StateStore == nil {
+	if cli == nil || cli.StateStore == nil {
 		return
 	}
 	fakeEvt := &event.Event{
@@ -1460,14 +1505,33 @@ func (cli *Client) updateStoreWithOutgoingEvent(ctx context.Context, roomID id.R
 	UpdateStateStore(ctx, cli.StateStore, fakeEvt)
 }
 
-// StateEvent gets a single state event in a room. It will attempt to JSON unmarshal into the given "outContent" struct with
-// the HTTP response body, or return an error.
+// StateEvent gets the content of a single state event in a room.
+// It will attempt to JSON unmarshal into the given "outContent" struct with the HTTP response body, or return an error.
 // See https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3roomsroomidstateeventtypestatekey
 func (cli *Client) StateEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string, outContent interface{}) (err error) {
 	u := cli.BuildClientURL("v3", "rooms", roomID, "state", eventType.String(), stateKey)
 	_, err = cli.MakeRequest(ctx, http.MethodGet, u, nil, outContent)
 	if err == nil && cli.StateStore != nil {
 		cli.updateStoreWithOutgoingEvent(ctx, roomID, eventType, stateKey, outContent)
+	}
+	return
+}
+
+// FullStateEvent gets a single state event in a room. Unlike [StateEvent], this gets the entire event
+// (including details like the sender and timestamp).
+// This requires the server to support the ?format=event query parameter, which is currently missing from the spec.
+// See https://github.com/matrix-org/matrix-spec/issues/1047 for more info
+func (cli *Client) FullStateEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string) (evt *event.Event, err error) {
+	u := cli.BuildURLWithQuery(ClientURLPath{"v3", "rooms", roomID, "state", eventType.String(), stateKey}, map[string]string{
+		"format": "event",
+	})
+	_, err = cli.MakeRequest(ctx, http.MethodGet, u, nil, &evt)
+	if err == nil && cli.StateStore != nil {
+		UpdateStateStore(ctx, cli.StateStore, evt)
+	}
+	if evt != nil {
+		evt.Type.Class = event.StateEventType
+		_ = evt.Content.ParseRaw(evt.Type)
 	}
 	return
 }
@@ -1564,6 +1628,10 @@ func (cli *Client) RequestOpenIDToken(ctx context.Context) (resp *RespOpenIDToke
 
 // UploadLink uploads an HTTP URL and then returns an MXC URI.
 func (cli *Client) UploadLink(ctx context.Context, link string) (*RespMediaUpload, error) {
+	if cli == nil {
+		return nil, ErrClientIsNil
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, link, nil)
 	if err != nil {
 		return nil, err
@@ -1767,6 +1835,9 @@ func (nopCloseSeeker) Close() error {
 func (cli *Client) UploadMedia(ctx context.Context, data ReqUploadMedia) (*RespMediaUpload, error) {
 	if data.DoneCallback != nil {
 		defer data.DoneCallback()
+	}
+	if cli == nil {
+		return nil, ErrClientIsNil
 	}
 	if data.UnstableUploadURL != "" {
 		if data.MXC.IsEmpty() {
@@ -1979,6 +2050,14 @@ func (cli *Client) Context(ctx context.Context, roomID id.RoomID, eventID id.Eve
 
 func (cli *Client) GetEvent(ctx context.Context, roomID id.RoomID, eventID id.EventID) (resp *event.Event, err error) {
 	urlPath := cli.BuildClientURL("v3", "rooms", roomID, "event", eventID)
+	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
+	return
+}
+
+func (cli *Client) GetUnredactedEventContent(ctx context.Context, roomID id.RoomID, eventID id.EventID) (resp *event.Event, err error) {
+	urlPath := cli.BuildURLWithQuery(ClientURLPath{"v3", "rooms", roomID, "event", eventID}, map[string]string{
+		"fi.mau.msc2815.include_unredacted_content": "true",
+	})
 	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
 	return
 }
@@ -2444,6 +2523,9 @@ func (cli *Client) BeeperDeleteRoom(ctx context.Context, roomID id.RoomID) (err 
 
 // TxnID returns the next transaction ID.
 func (cli *Client) TxnID() string {
+	if cli == nil {
+		return "client is nil"
+	}
 	txnID := atomic.AddInt32(&cli.txnID, 1)
 	return fmt.Sprintf("mautrix-go_%d_%d", time.Now().UnixNano(), txnID)
 }

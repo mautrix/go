@@ -26,6 +26,7 @@ var (
 	ErrUnsupportedPassphraseAlgorithm = errors.New("unsupported passphrase KDF algorithm")
 	ErrIncorrectSSSSKey               = errors.New("incorrect SSSS key")
 	ErrInvalidRecoveryKey             = errors.New("invalid recovery key")
+	ErrCorruptedKeyMetadata           = errors.New("corrupted key metadata")
 )
 
 // Algorithm is the identifier for an SSSS encryption algorithm.

@@ -4,11 +4,10 @@ import (
 	"encoding/base64"
 	"fmt"
 
-	"maunium.net/go/mautrix/crypto/goolm/cipher"
+	"maunium.net/go/mautrix/crypto/goolm/aessha2"
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
 	"maunium.net/go/mautrix/crypto/goolm/goolmbase64"
 	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
-	"maunium.net/go/mautrix/crypto/goolm/utilities"
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
 )
@@ -57,43 +56,37 @@ func (s Decryption) PrivateKey() crypto.Curve25519PrivateKey {
 
 // Decrypt decrypts the ciphertext and verifies the MAC. The base64 encoded key is used to construct the shared secret.
 func (s Decryption) Decrypt(ephemeralKey, mac, ciphertext []byte) ([]byte, error) {
-	keyDecoded, err := base64.RawStdEncoding.DecodeString(string(ephemeralKey))
-	if err != nil {
+	if keyDecoded, err := base64.RawStdEncoding.DecodeString(string(ephemeralKey)); err != nil {
 		return nil, err
-	}
-	sharedSecret, err := s.KeyPair.SharedSecret(keyDecoded)
-	if err != nil {
+	} else if sharedSecret, err := s.KeyPair.SharedSecret(keyDecoded); err != nil {
 		return nil, err
-	}
-	decodedMAC, err := goolmbase64.Decode(mac)
-	if err != nil {
+	} else if decodedMAC, err := goolmbase64.Decode(mac); err != nil {
 		return nil, err
-	}
-	cipher := cipher.NewAESSHA256(nil)
-	verified, err := cipher.Verify(sharedSecret, ciphertext, decodedMAC)
-	if err != nil {
+	} else if cipher, err := aessha2.NewAESSHA2(sharedSecret, nil); err != nil {
 		return nil, err
-	}
-	if !verified {
+	} else if verified, err := cipher.VerifyMAC(ciphertext, decodedMAC); err != nil {
+		return nil, err
+	} else if !verified {
 		return nil, fmt.Errorf("decrypt: %w", olm.ErrBadMAC)
+	} else {
+		return cipher.Decrypt(ciphertext)
 	}
-	return cipher.Decrypt(sharedSecret, ciphertext)
 }
 
 // PickleAsJSON returns an Decryption as a base64 string encrypted using the supplied key. The unencrypted representation of the Account is in JSON format.
 func (a Decryption) PickleAsJSON(key []byte) ([]byte, error) {
-	return utilities.PickleAsJSON(a, decryptionPickleVersionJSON, key)
+	return libolmpickle.PickleAsJSON(a, decryptionPickleVersionJSON, key)
 }
 
 // UnpickleAsJSON updates an Decryption by a base64 encrypted string using the supplied key. The unencrypted representation has to be in JSON format.
 func (a *Decryption) UnpickleAsJSON(pickled, key []byte) error {
-	return utilities.UnpickleAsJSON(a, pickled, key, decryptionPickleVersionJSON)
+	return libolmpickle.UnpickleAsJSON(a, pickled, key, decryptionPickleVersionJSON)
 }
 
 // Unpickle decodes the base64 encoded string and decrypts the result with the key.
 // The decrypted value is then passed to UnpickleLibOlm.
 func (a *Decryption) Unpickle(pickled, key []byte) error {
-	decrypted, err := cipher.Unpickle(key, pickled)
+	decrypted, err := libolmpickle.Unpickle(key, pickled)
 	if err != nil {
 		return err
 	}
@@ -116,7 +109,7 @@ func (a *Decryption) UnpickleLibOlm(unpickled []byte) error {
 
 // Pickle returns a base64 encoded and with key encrypted pickled Decryption using PickleLibOlm().
 func (a Decryption) Pickle(key []byte) ([]byte, error) {
-	return cipher.Pickle(key, a.PickleLibOlm())
+	return libolmpickle.Pickle(key, a.PickleLibOlm())
 }
 
 // PickleLibOlm pickles the [Decryption] into the encoder.

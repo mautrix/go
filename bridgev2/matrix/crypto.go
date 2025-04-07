@@ -145,13 +145,9 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 func (helper *CryptoHelper) resyncEncryptionInfo(ctx context.Context) {
 	log := helper.log.With().Str("action", "resync encryption event").Logger()
 	rows, err := helper.store.DB.Query(ctx, `SELECT room_id FROM mx_room_state WHERE encryption='{"resync":true}'`)
+	roomIDs, err := dbutil.NewRowIterWithError(rows, dbutil.ScanSingleColumn[id.RoomID], err).AsList()
 	if err != nil {
 		log.Err(err).Msg("Failed to query rooms for resync")
-		return
-	}
-	roomIDs, err := dbutil.NewRowIter(rows, dbutil.ScanSingleColumn[id.RoomID]).AsList()
-	if err != nil {
-		log.Err(err).Msg("Failed to scan rooms for resync")
 		return
 	}
 	if len(roomIDs) > 0 {
@@ -203,7 +199,7 @@ func (helper *CryptoHelper) allowKeyShare(ctx context.Context, device *id.Device
 		return &crypto.KeyShareRejectNoResponse
 	} else if device.Trust == id.TrustStateBlacklisted {
 		return &crypto.KeyShareRejectBlacklisted
-	} else if trustState := helper.mach.ResolveTrust(device); trustState >= cfg.VerificationLevels.Share {
+	} else if trustState, _ := helper.mach.ResolveTrustContext(ctx, device); trustState >= cfg.VerificationLevels.Share {
 		portal, err := helper.bridge.Bridge.GetPortalByMXID(ctx, info.RoomID)
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to get portal to handle key request")

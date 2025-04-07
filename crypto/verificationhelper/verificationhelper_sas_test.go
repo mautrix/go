@@ -283,3 +283,80 @@ func TestVerification_SAS(t *testing.T) {
 		})
 	}
 }
+
+func TestVerification_SAS_BothCallStart(t *testing.T) {
+	ctx := log.Logger.WithContext(context.TODO())
+
+	ts, sendingClient, receivingClient, _, _, sendingMachine, receivingMachine := initServerAndLoginTwoAlice(t, ctx)
+	defer ts.Close()
+	sendingCallbacks, receivingCallbacks, sendingHelper, receivingHelper := initDefaultCallbacks(t, ctx, sendingClient, receivingClient, sendingMachine, receivingMachine)
+	var err error
+
+	var sendingRecoveryKey string
+	var sendingCrossSigningKeysCache *crypto.CrossSigningKeysCache
+
+	sendingRecoveryKey, sendingCrossSigningKeysCache, err = sendingMachine.GenerateAndUploadCrossSigningKeys(ctx, nil, "")
+	require.NoError(t, err)
+	assert.NotEmpty(t, sendingRecoveryKey)
+	assert.NotNil(t, sendingCrossSigningKeysCache)
+
+	// Send the verification request from the sender device and accept
+	// it on the receiving device and receive the verification ready
+	// event on the sending device.
+	txnID, err := sendingHelper.StartVerification(ctx, aliceUserID)
+	require.NoError(t, err)
+	ts.dispatchToDevice(t, ctx, receivingClient)
+	err = receivingHelper.AcceptVerification(ctx, txnID)
+	require.NoError(t, err)
+	ts.dispatchToDevice(t, ctx, sendingClient)
+
+	err = sendingHelper.StartSAS(ctx, txnID)
+	require.NoError(t, err)
+
+	err = receivingHelper.StartSAS(ctx, txnID)
+	require.NoError(t, err)
+
+	// Ensure that both devices have received the verification start event.
+	receivingInbox := ts.DeviceInbox[aliceUserID][receivingDeviceID]
+	assert.Len(t, receivingInbox, 1)
+	assert.Equal(t, txnID, receivingInbox[0].Content.AsVerificationStart().TransactionID)
+	sendingInbox := ts.DeviceInbox[aliceUserID][sendingDeviceID]
+	assert.Len(t, sendingInbox, 1)
+	assert.Equal(t, txnID, sendingInbox[0].Content.AsVerificationStart().TransactionID)
+
+	// Process the start event from the receiving client to the sending client.
+	ts.dispatchToDevice(t, ctx, sendingClient)
+	receivingInbox = ts.DeviceInbox[aliceUserID][receivingDeviceID]
+	assert.Len(t, receivingInbox, 2)
+	assert.Equal(t, txnID, receivingInbox[0].Content.AsVerificationStart().TransactionID)
+	assert.Equal(t, txnID, receivingInbox[1].Content.AsVerificationAccept().TransactionID)
+
+	// Process the rest of the events until we need to confirm the SAS.
+	for len(ts.DeviceInbox[aliceUserID][sendingDeviceID]) > 0 || len(ts.DeviceInbox[aliceUserID][receivingDeviceID]) > 0 {
+		ts.dispatchToDevice(t, ctx, receivingClient)
+		ts.dispatchToDevice(t, ctx, sendingClient)
+	}
+
+	// Confirm the SAS only the receiving device.
+	receivingHelper.ConfirmSAS(ctx, txnID)
+	ts.dispatchToDevice(t, ctx, sendingClient)
+
+	// Verification is not done until both devices confirm the SAS.
+	assert.False(t, sendingCallbacks.IsVerificationDone(txnID))
+	assert.False(t, receivingCallbacks.IsVerificationDone(txnID))
+
+	// Now, confirm it on the sending device.
+	sendingHelper.ConfirmSAS(ctx, txnID)
+
+	// Dispatching the events to the receiving device should get us to the done
+	// state on the receiving device.
+	ts.dispatchToDevice(t, ctx, receivingClient)
+	assert.False(t, sendingCallbacks.IsVerificationDone(txnID))
+	assert.True(t, receivingCallbacks.IsVerificationDone(txnID))
+
+	// Dispatching the events to the sending client should get us to the done
+	// state on the sending device.
+	ts.dispatchToDevice(t, ctx, sendingClient)
+	assert.True(t, sendingCallbacks.IsVerificationDone(txnID))
+	assert.True(t, receivingCallbacks.IsVerificationDone(txnID))
+}

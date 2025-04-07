@@ -66,7 +66,7 @@ func TestTrustOwnDevice(t *testing.T) {
 		DeviceID:   "device",
 		SigningKey: id.Ed25519("deviceKey"),
 	}
-	if m.IsDeviceTrusted(ownDevice) {
+	if m.IsDeviceTrusted(context.TODO(), ownDevice) {
 		t.Error("Own device trusted while it shouldn't be")
 	}
 
@@ -78,7 +78,7 @@ func TestTrustOwnDevice(t *testing.T) {
 	if trusted, _ := m.IsUserTrusted(context.TODO(), ownDevice.UserID); !trusted {
 		t.Error("Own user not trusted while they should be")
 	}
-	if !m.IsDeviceTrusted(ownDevice) {
+	if !m.IsDeviceTrusted(context.TODO(), ownDevice) {
 		t.Error("Own device not trusted while it should be")
 	}
 }
@@ -123,7 +123,7 @@ func TestTrustOtherDevice(t *testing.T) {
 	if trusted, _ := m.IsUserTrusted(context.TODO(), otherUser); trusted {
 		t.Error("Other user trusted while they shouldn't be")
 	}
-	if m.IsDeviceTrusted(theirDevice) {
+	if m.IsDeviceTrusted(context.TODO(), theirDevice) {
 		t.Error("Other device trusted while it shouldn't be")
 	}
 
@@ -144,14 +144,14 @@ func TestTrustOtherDevice(t *testing.T) {
 	m.CryptoStore.PutSignature(context.TODO(), otherUser, theirSSK.PublicKey(),
 		otherUser, theirMasterKey.PublicKey(), "sig3")
 
-	if m.IsDeviceTrusted(theirDevice) {
+	if m.IsDeviceTrusted(context.TODO(), theirDevice) {
 		t.Error("Other device trusted before it has been signed with user's SSK")
 	}
 
 	m.CryptoStore.PutSignature(context.TODO(), otherUser, theirDevice.SigningKey,
 		otherUser, theirSSK.PublicKey(), "sig4")
 
-	if !m.IsDeviceTrusted(theirDevice) {
+	if !m.IsDeviceTrusted(context.TODO(), theirDevice) {
 		t.Error("Other device not trusted while it should be")
 	}
 }

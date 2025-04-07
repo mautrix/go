@@ -20,6 +20,7 @@ import (
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/exfmt"
 	"go.mau.fi/util/exslices"
+	"go.mau.fi/util/exsync"
 	"go.mau.fi/util/ptr"
 	"go.mau.fi/util/variationselector"
 	"golang.org/x/exp/maps"
@@ -59,10 +60,12 @@ type portalEvent interface {
 }
 
 type outgoingMessage struct {
-	db     *database.Message
-	evt    *event.Event
-	ignore bool
-	handle func(RemoteMessage, *database.Message) (bool, error)
+	db        *database.Message
+	evt       *event.Event
+	ignore    bool
+	handle    func(RemoteMessage, *database.Message) (bool, error)
+	ackedAt   time.Time
+	timeouted bool
 }
 
 type Portal struct {
@@ -75,8 +78,9 @@ type Portal struct {
 	currentlyTyping       []id.UserID
 	currentlyTypingLogins map[id.UserID]*UserLogin
 	currentlyTypingLock   sync.Mutex
+	currentlyTypingGhosts *exsync.Set[id.UserID]
 
-	outgoingMessages     map[networkid.TransactionID]outgoingMessage
+	outgoingMessages     map[networkid.TransactionID]*outgoingMessage
 	outgoingMessagesLock sync.Mutex
 
 	lastCapUpdate time.Time
@@ -84,6 +88,9 @@ type Portal struct {
 	roomCreateLock sync.Mutex
 
 	events chan portalEvent
+
+	eventsLock sync.Mutex
+	eventIdx   int
 }
 
 var PortalEventBuffer = 64
@@ -109,9 +116,9 @@ func (br *Bridge) loadPortal(ctx context.Context, dbPortal *database.Portal, que
 		Portal: dbPortal,
 		Bridge: br,
 
-		events:                make(chan portalEvent, PortalEventBuffer),
 		currentlyTypingLogins: make(map[id.UserID]*UserLogin),
-		outgoingMessages:      make(map[networkid.TransactionID]outgoingMessage),
+		currentlyTypingGhosts: exsync.NewSet[id.UserID](),
+		outgoingMessages:      make(map[networkid.TransactionID]*outgoingMessage),
 	}
 	br.portalsByKey[portal.PortalKey] = portal
 	if portal.MXID != "" {
@@ -131,7 +138,10 @@ func (br *Bridge) loadPortal(ctx context.Context, dbPortal *database.Portal, que
 		}
 	}
 	portal.updateLogger()
-	go portal.eventLoop()
+	if PortalEventBuffer != 0 {
+		portal.events = make(chan portalEvent, PortalEventBuffer)
+		go portal.eventLoop()
+	}
 	return portal, nil
 }
 
@@ -275,7 +285,10 @@ func (br *Bridge) GetExistingPortalByKey(ctx context.Context, key networkid.Port
 
 func (portal *Portal) queueEvent(ctx context.Context, evt portalEvent) {
 	if PortalEventBuffer == 0 {
-		portal.events <- evt
+		portal.eventsLock.Lock()
+		defer portal.eventsLock.Unlock()
+		portal.eventIdx++
+		portal.handleSingleEventAsync(portal.eventIdx, evt)
 	} else {
 		select {
 		case portal.events <- evt:
@@ -288,6 +301,11 @@ func (portal *Portal) queueEvent(ctx context.Context, evt portalEvent) {
 }
 
 func (portal *Portal) eventLoop() {
+	if cfg := portal.Bridge.Network.GetCapabilities().OutgoingMessageTimeouts; cfg != nil {
+		ctx, cancel := context.WithCancel(portal.Log.WithContext(context.Background()))
+		go portal.pendingMessageTimeoutLoop(ctx, cfg)
+		defer cancel()
+	}
 	i := 0
 	for rawEvt := range portal.events {
 		i++
@@ -503,7 +521,8 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 	if err != nil {
 		log.Err(err).Msg("Failed to get user login to handle Matrix event")
 		if errors.Is(err, ErrNotLoggedIn) {
-			portal.sendErrorStatus(ctx, evt, WrapErrorInStatus(err).WithMessage("You're not logged in").WithIsCertain(true).WithSendNotice(true))
+			shouldSendNotice := evt.Content.AsMessage().MsgType != event.MsgNotice
+			portal.sendErrorStatus(ctx, evt, WrapErrorInStatus(err).WithMessage("You're not logged in").WithIsCertain(true).WithSendNotice(shouldSendNotice))
 		} else {
 			portal.sendErrorStatus(ctx, evt, WrapErrorInStatus(err).WithMessage("Failed to get login to handle event").WithIsCertain(true).WithSendNotice(true))
 		}
@@ -811,6 +830,10 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 		if evt.Type == event.EventSticker {
 			msgContent.MsgType = event.CapMsgSticker
 		}
+		if msgContent.MsgType == event.MsgNotice && !portal.Bridge.Config.BridgeNotices {
+			portal.sendErrorStatus(ctx, evt, ErrIgnoringMNotice)
+			return
+		}
 	}
 	if !ok {
 		log.Error().Type("content_type", evt.Content.Parsed).Msg("Unexpected parsed content type")
@@ -944,7 +967,11 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 		return
 	}
 	message := wrappedMsgEvt.fillDBMessage(resp.DB)
-	if !resp.Pending {
+	if resp.Pending {
+		for _, save := range wrappedMsgEvt.pendingSaves {
+			save.ackedAt = time.Now()
+		}
+	} else {
 		if resp.DB == nil {
 			log.Error().Msg("Network connector didn't return a message to save")
 		} else {
@@ -990,7 +1017,7 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 // See also: [MatrixMessage.AddPendingToSave]
 func (evt *MatrixMessage) AddPendingToIgnore(txnID networkid.TransactionID) {
 	evt.Portal.outgoingMessagesLock.Lock()
-	evt.Portal.outgoingMessages[txnID] = outgoingMessage{
+	evt.Portal.outgoingMessages[txnID] = &outgoingMessage{
 		ignore: true,
 	}
 	evt.Portal.outgoingMessagesLock.Unlock()
@@ -1004,12 +1031,14 @@ func (evt *MatrixMessage) AddPendingToIgnore(txnID networkid.TransactionID) {
 //
 // The provided function will be called when the message is encountered.
 func (evt *MatrixMessage) AddPendingToSave(message *database.Message, txnID networkid.TransactionID, handleEcho RemoteEchoHandler) {
-	evt.Portal.outgoingMessagesLock.Lock()
-	evt.Portal.outgoingMessages[txnID] = outgoingMessage{
+	pending := &outgoingMessage{
 		db:     evt.fillDBMessage(message),
 		evt:    evt.Event,
 		handle: handleEcho,
 	}
+	evt.Portal.outgoingMessagesLock.Lock()
+	evt.Portal.outgoingMessages[txnID] = pending
+	evt.pendingSaves = append(evt.pendingSaves, pending)
 	evt.Portal.outgoingMessagesLock.Unlock()
 }
 
@@ -1017,6 +1046,12 @@ func (evt *MatrixMessage) AddPendingToSave(message *database.Message, txnID netw
 // This should only be called if sending the message fails.
 func (evt *MatrixMessage) RemovePending(txnID networkid.TransactionID) {
 	evt.Portal.outgoingMessagesLock.Lock()
+	pendingSave := evt.Portal.outgoingMessages[txnID]
+	if pendingSave != nil {
+		evt.pendingSaves = slices.DeleteFunc(evt.pendingSaves, func(save *outgoingMessage) bool {
+			return save == pendingSave
+		})
+	}
 	delete(evt.Portal.outgoingMessages, txnID)
 	evt.Portal.outgoingMessagesLock.Unlock()
 }
@@ -1048,6 +1083,35 @@ func (evt *MatrixMessage) fillDBMessage(message *database.Message) *database.Mes
 		message.SenderMXID = evt.Event.Sender
 	}
 	return message
+}
+
+func (portal *Portal) pendingMessageTimeoutLoop(ctx context.Context, cfg *OutgoingTimeoutConfig) {
+	ticker := time.NewTicker(cfg.CheckInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			portal.checkPendingMessages(ctx, cfg)
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (portal *Portal) checkPendingMessages(ctx context.Context, cfg *OutgoingTimeoutConfig) {
+	portal.outgoingMessagesLock.Lock()
+	defer portal.outgoingMessagesLock.Unlock()
+	for _, msg := range portal.outgoingMessages {
+		if msg.evt != nil && !msg.timeouted {
+			if cfg.NoEchoTimeout > 0 && !msg.ackedAt.IsZero() && time.Since(msg.ackedAt) > cfg.NoEchoTimeout {
+				msg.timeouted = true
+				portal.sendErrorStatus(ctx, msg.evt, ErrRemoteEchoTimeout.WithMessage(cfg.NoEchoMessage))
+			} else if cfg.NoAckTimeout > 0 && time.Since(msg.db.Timestamp) > cfg.NoAckTimeout {
+				msg.timeouted = true
+				portal.sendErrorStatus(ctx, msg.evt, ErrRemoteAckTimeout.WithMessage(cfg.NoAckMessage))
+			}
+		}
+	}
 }
 
 func (portal *Portal) handleMatrixEdit(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event, content *event.MessageEventContent, caps *event.RoomFeatures) {
@@ -1093,7 +1157,7 @@ func (portal *Portal) handleMatrixEdit(ctx context.Context, sender *UserLogin, o
 		log.Warn().Msg("Edit target message not found in database")
 		portal.sendErrorStatus(ctx, evt, fmt.Errorf("edit %w", ErrTargetMessageNotFound))
 		return
-	} else if caps.EditMaxAge.Duration > 0 && time.Since(editTarget.Timestamp) > caps.EditMaxAge.Duration {
+	} else if caps.EditMaxAge != nil && caps.EditMaxAge.Duration > 0 && time.Since(editTarget.Timestamp) > caps.EditMaxAge.Duration {
 		portal.sendErrorStatus(ctx, evt, ErrEditTargetTooOld)
 		return
 	} else if caps.EditMaxCount > 0 && editTarget.EditCount >= caps.EditMaxCount {
@@ -2038,6 +2102,9 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 		return
 	}
 	portal.sendConvertedMessage(ctx, evt.GetID(), intent, evt.GetSender().Sender, converted, ts, getStreamOrder(evt), nil)
+	if portal.currentlyTypingGhosts.Pop(intent.GetMXID()) {
+		intent.MarkTyping(ctx, portal.MXID, TypingTypeText, 0)
+	}
 }
 
 func (portal *Portal) sendRemoteErrorNotice(ctx context.Context, intent MatrixAPI, err error, ts time.Time, evtTypeName string) {
@@ -2082,6 +2149,12 @@ func (portal *Portal) handleRemoteEdit(ctx context.Context, source *UserLogin, e
 	intent := portal.GetIntentFor(ctx, evt.GetSender(), source, RemoteEventEdit)
 	if intent == nil {
 		return
+	} else if intent.GetMXID() != existing[0].SenderMXID {
+		log.Warn().
+			Stringer("edit_sender_mxid", intent.GetMXID()).
+			Stringer("original_sender_mxid", existing[0].SenderMXID).
+			Msg("Not bridging edit: sender doesn't match original message sender")
+		return
 	}
 	ts := getEventTS(evt)
 	converted, err := evt.ConvertEdit(ctx, portal, intent, existing)
@@ -2094,6 +2167,9 @@ func (portal *Portal) handleRemoteEdit(ctx context.Context, source *UserLogin, e
 		return
 	}
 	portal.sendConvertedEdit(ctx, existing[0].ID, evt.GetSender().Sender, converted, intent, ts, getStreamOrder(evt))
+	if portal.currentlyTypingGhosts.Pop(intent.GetMXID()) {
+		intent.MarkTyping(ctx, portal.MXID, TypingTypeText, 0)
+	}
 }
 
 func (portal *Portal) sendConvertedEdit(
@@ -2241,8 +2317,10 @@ func (portal *Portal) handleRemoteReactionSync(ctx context.Context, source *User
 		existing[existingReaction.SenderID][existingReaction.EmojiID] = existingReaction
 	}
 
-	doAddReaction := func(new *BackfillReaction) MatrixAPI {
-		intent := portal.GetIntentFor(ctx, new.Sender, source, RemoteEventReactionSync)
+	doAddReaction := func(new *BackfillReaction, intent MatrixAPI) MatrixAPI {
+		if intent == nil {
+			intent = portal.GetIntentFor(ctx, new.Sender, source, RemoteEventReactionSync)
+		}
 		portal.sendConvertedReaction(
 			ctx, new.Sender.Sender, intent, targetMessage, new.EmojiID, new.Emoji,
 			new.Timestamp, new.DBMetadata, new.ExtraContent,
@@ -2286,8 +2364,9 @@ func (portal *Portal) handleRemoteReactionSync(ctx context.Context, source *User
 		}
 	}
 	doOverwriteReaction := func(new *BackfillReaction, old *database.Reaction) {
-		intent := doAddReaction(new)
+		intent := portal.GetIntentFor(ctx, new.Sender, source, RemoteEventReactionSync)
 		doRemoveReaction(old, intent, false)
+		doAddReaction(new, intent)
 	}
 
 	newData := evt.GetReactions()
@@ -2306,7 +2385,7 @@ func (portal *Portal) handleRemoteReactionSync(ctx context.Context, source *User
 				}
 				doOverwriteReaction(reaction, existingReaction)
 			} else {
-				doAddReaction(reaction)
+				doAddReaction(reaction, nil)
 			}
 		}
 		totalReactionCount := len(existingUserReactions) + len(reactions.Reactions)
@@ -2368,7 +2447,6 @@ func (portal *Portal) handleRemoteReaction(ctx context.Context, source *UserLogi
 	if metaProvider, ok := evt.(RemoteReactionWithMeta); ok {
 		dbMetadata = metaProvider.GetReactionDBMetadata()
 	}
-	portal.sendConvertedReaction(ctx, evt.GetSender().Sender, intent, targetMessage, emojiID, emoji, ts, dbMetadata, extra, nil)
 	if existingReaction != nil {
 		_, err = intent.SendMessage(ctx, portal.MXID, event.EventRedaction, &event.Content{
 			Parsed: &event.RedactionEventContent{
@@ -2379,6 +2457,7 @@ func (portal *Portal) handleRemoteReaction(ctx context.Context, source *UserLogi
 			log.Err(err).Msg("Failed to redact old reaction")
 		}
 	}
+	portal.sendConvertedReaction(ctx, evt.GetSender().Sender, intent, targetMessage, emojiID, emoji, ts, dbMetadata, extra, nil)
 }
 
 func (portal *Portal) sendConvertedReaction(
@@ -2639,9 +2718,15 @@ func (portal *Portal) handleRemoteTyping(ctx context.Context, source *UserLogin,
 		typingType = typedEvt.GetTypingType()
 	}
 	intent := portal.GetIntentFor(ctx, evt.GetSender(), source, RemoteEventTyping)
-	err := intent.MarkTyping(ctx, portal.MXID, typingType, evt.GetTimeout())
+	timeout := evt.GetTimeout()
+	err := intent.MarkTyping(ctx, portal.MXID, typingType, timeout)
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to bridge typing event")
+	}
+	if timeout == 0 {
+		portal.currentlyTypingGhosts.Remove(intent.GetMXID())
+	} else {
+		portal.currentlyTypingGhosts.Add(intent.GetMXID())
 	}
 }
 
@@ -3372,8 +3457,9 @@ func (portal *Portal) updateUserLocalInfo(ctx context.Context, info *UserLocalPo
 func DisappearingMessageNotice(expiration time.Duration, implicit bool) *event.MessageEventContent {
 	formattedDuration := exfmt.DurationCustom(expiration, nil, exfmt.Day, time.Hour, time.Minute, time.Second)
 	content := &event.MessageEventContent{
-		MsgType: event.MsgNotice,
-		Body:    fmt.Sprintf("Set the disappearing message timer to %s", formattedDuration),
+		MsgType:  event.MsgNotice,
+		Body:     fmt.Sprintf("Set the disappearing message timer to %s", formattedDuration),
+		Mentions: &event.Mentions{},
 	}
 	if implicit {
 		content.Body = fmt.Sprintf("Automatically enabled disappearing message timer (%s) because incoming message is disappearing", formattedDuration)
@@ -3567,7 +3653,7 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 	}
 	waiter := make(chan struct{})
 	closed := false
-	portal.events <- &portalCreateEvent{
+	evt := &portalCreateEvent{
 		ctx:    ctx,
 		source: source,
 		info:   info,
@@ -3578,6 +3664,11 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 				close(waiter)
 			}
 		},
+	}
+	if PortalEventBuffer == 0 {
+		go portal.queueEvent(ctx, evt)
+	} else {
+		portal.events <- evt
 	}
 	select {
 	case <-ctx.Done():
@@ -3860,6 +3951,10 @@ func (portal *Portal) unlockedDeleteCache() {
 	delete(portal.Bridge.portalsByKey, portal.PortalKey)
 	if portal.MXID != "" {
 		delete(portal.Bridge.portalsByMXID, portal.MXID)
+	}
+	if portal.events != nil {
+		// TODO there's a small risk of this racing with a queueEvent call
+		close(portal.events)
 	}
 }
 

@@ -9,11 +9,10 @@ import (
 
 	"golang.org/x/crypto/hkdf"
 
-	"maunium.net/go/mautrix/crypto/goolm/cipher"
+	"maunium.net/go/mautrix/crypto/goolm/aessha2"
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
 	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
 	"maunium.net/go/mautrix/crypto/goolm/message"
-	"maunium.net/go/mautrix/crypto/goolm/utilities"
 	"maunium.net/go/mautrix/crypto/olm"
 )
 
@@ -31,6 +30,8 @@ const (
 	sharedKeyLength = 32
 )
 
+var olmKeysKDFInfo = []byte("OLM_KEYS")
+
 // KdfInfo has the infos used for the kdf
 var KdfInfo = struct {
 	Root    []byte
@@ -39,8 +40,6 @@ var KdfInfo = struct {
 	Root:    []byte("OLM_ROOT"),
 	Ratchet: []byte("OLM_RATCHET"),
 }
-
-var RatchetCipher = cipher.NewAESSHA256([]byte("OLM_KEYS"))
 
 // Ratchet represents the olm ratchet as described in
 //
@@ -68,8 +67,7 @@ type Ratchet struct {
 
 // New creates a new ratchet, setting the kdfInfos and cipher.
 func New() *Ratchet {
-	r := &Ratchet{}
-	return r
+	return &Ratchet{}
 }
 
 // InitializeAsBob initializes this ratchet from a receiving point of view (only first message).
@@ -117,7 +115,11 @@ func (r *Ratchet) Encrypt(plaintext []byte) ([]byte, error) {
 	messageKey := r.createMessageKeys(r.SenderChains.chainKey())
 	r.SenderChains.advance()
 
-	encryptedText, err := RatchetCipher.Encrypt(messageKey.Key, plaintext)
+	cipher, err := aessha2.NewAESSHA2(messageKey.Key, olmKeysKDFInfo)
+	if err != nil {
+		return nil, err
+	}
+	encryptedText, err := cipher.Encrypt(plaintext)
 	if err != nil {
 		return nil, fmt.Errorf("cipher encrypt: %w", err)
 	}
@@ -128,7 +130,7 @@ func (r *Ratchet) Encrypt(plaintext []byte) ([]byte, error) {
 	message.RatchetKey = r.SenderChains.ratchetKey().PublicKey
 	message.Ciphertext = encryptedText
 	//creating the mac is done in encode
-	return message.EncodeAndMAC(messageKey.Key, RatchetCipher)
+	return message.EncodeAndMAC(cipher)
 }
 
 // Decrypt decrypts the ciphertext and verifies the MAC.
@@ -165,15 +167,13 @@ func (r *Ratchet) Decrypt(input []byte) ([]byte, error) {
 			}
 
 			// Found the key for this message. Check the MAC.
-			verified, err := message.VerifyMACInline(r.SkippedMessageKeys[curSkippedIndex].MKey.Key, RatchetCipher, input)
-			if err != nil {
+			if cipher, err := aessha2.NewAESSHA2(r.SkippedMessageKeys[curSkippedIndex].MKey.Key, olmKeysKDFInfo); err != nil {
 				return nil, err
-			}
-			if !verified {
+			} else if verified, err := message.VerifyMACInline(r.SkippedMessageKeys[curSkippedIndex].MKey.Key, cipher, input); err != nil {
+				return nil, err
+			} else if !verified {
 				return nil, fmt.Errorf("decrypt from skipped message keys: %w", olm.ErrBadMAC)
-			}
-			result, err := RatchetCipher.Decrypt(r.SkippedMessageKeys[curSkippedIndex].MKey.Key, message.Ciphertext)
-			if err != nil {
+			} else if result, err := cipher.Decrypt(message.Ciphertext); err != nil {
 				return nil, fmt.Errorf("cipher decrypt: %w", err)
 			} else if len(result) != 0 {
 				// Remove the key from the skipped keys now that we've
@@ -235,14 +235,18 @@ func (r *Ratchet) decryptForExistingChain(chain *receiverChain, message *message
 	}
 	messageKey := r.createMessageKeys(chain.chainKey())
 	chain.advance()
-	verified, err := message.VerifyMACInline(messageKey.Key, RatchetCipher, rawMessage)
+	cipher, err := aessha2.NewAESSHA2(messageKey.Key, olmKeysKDFInfo)
+	if err != nil {
+		return nil, err
+	}
+	verified, err := message.VerifyMACInline(messageKey.Key, cipher, rawMessage)
 	if err != nil {
 		return nil, err
 	}
 	if !verified {
 		return nil, fmt.Errorf("decrypt from existing chain: %w", olm.ErrBadMAC)
 	}
-	return RatchetCipher.Decrypt(messageKey.Key, message.Ciphertext)
+	return cipher.Decrypt(message.Ciphertext)
 }
 
 // decryptForNewChain returns the decrypted message by creating a new chain and advancing the root key.
@@ -276,12 +280,12 @@ func (r *Ratchet) decryptForNewChain(message *message.Message, rawMessage []byte
 
 // PickleAsJSON returns a ratchet as a base64 string encrypted using the supplied key. The unencrypted representation of the Account is in JSON format.
 func (r Ratchet) PickleAsJSON(key []byte) ([]byte, error) {
-	return utilities.PickleAsJSON(r, olmPickleVersion, key)
+	return libolmpickle.PickleAsJSON(r, olmPickleVersion, key)
 }
 
 // UnpickleAsJSON updates a ratchet by a base64 encrypted string using the supplied key. The unencrypted representation has to be in JSON format.
 func (r *Ratchet) UnpickleAsJSON(pickled, key []byte) error {
-	return utilities.UnpickleAsJSON(r, pickled, key, olmPickleVersion)
+	return libolmpickle.UnpickleAsJSON(r, pickled, key, olmPickleVersion)
 }
 
 // UnpickleLibOlm unpickles the unencryted value and populates the [Ratchet]

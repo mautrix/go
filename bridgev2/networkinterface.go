@@ -8,6 +8,7 @@ package bridgev2
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -301,6 +302,14 @@ type MatrixMessageResponse struct {
 	PostSave func(context.Context, *database.Message)
 }
 
+type OutgoingTimeoutConfig struct {
+	CheckInterval time.Duration
+	NoEchoTimeout time.Duration
+	NoEchoMessage string
+	NoAckTimeout  time.Duration
+	NoAckMessage  string
+}
+
 type NetworkGeneralCapabilities struct {
 	// Does the network connector support disappearing messages?
 	// This flag enables the message disappearing loop in the bridge.
@@ -308,6 +317,10 @@ type NetworkGeneralCapabilities struct {
 	// Should the bridge re-request user info on incoming messages even if the ghost already has info?
 	// By default, info is only requested for ghosts with no name, and other updating is left to events.
 	AggressiveUpdateInfo bool
+	// If the bridge uses the pending message mechanism ([MatrixMessage.AddPendingToSave])
+	// to handle asynchronous message responses, this field can be set to enable
+	// automatic timeout errors in case the asynchronous response never arrives.
+	OutgoingMessageTimeouts *OutgoingTimeoutConfig
 }
 
 // NetworkAPI is an interface representing a remote network client for a single user login.
@@ -350,6 +363,23 @@ type NetworkAPI interface {
 	//
 	// This is only called for normal non-edit messages. For other types of events, see the optional extra interfaces (`XHandlingNetworkAPI`).
 	HandleMatrixMessage(ctx context.Context, msg *MatrixMessage) (message *MatrixMessageResponse, err error)
+}
+
+type ConnectBackgroundParams struct {
+	// RawData is the raw data in the push that triggered the background connection.
+	RawData json.RawMessage
+	// ExtraData is the data returned by [PushParsingNetwork.ParsePushNotification].
+	// It's only present for native pushes. Relayed pushes will only have the raw data.
+	ExtraData any
+}
+
+// BackgroundSyncingNetworkAPI is an optional interface that network connectors can implement to support background resyncs.
+type BackgroundSyncingNetworkAPI interface {
+	NetworkAPI
+	// ConnectBackground is called in place of Connect for background resyncs.
+	// The client should connect to the remote network, handle pending messages, and then disconnect.
+	// This call should block until the entire sync is complete and the client is disconnected.
+	ConnectBackground(ctx context.Context, params *ConnectBackgroundParams) error
 }
 
 // FetchMessagesParams contains the parameters for a message history pagination request.
@@ -488,11 +518,18 @@ type FetchMessagesResponse struct {
 // BackfillingNetworkAPI is an optional interface that network connectors can implement to support backfilling message history.
 type BackfillingNetworkAPI interface {
 	NetworkAPI
+	// FetchMessages returns a batch of messages to backfill in a portal room.
+	// For details on the input and output, see the documentation of [FetchMessagesParams] and [FetchMessagesResponse].
 	FetchMessages(ctx context.Context, fetchParams FetchMessagesParams) (*FetchMessagesResponse, error)
 }
 
+// BackfillingNetworkAPIWithLimits is an optional interface that network connectors can implement to customize
+// the limit for backwards backfilling tasks. It is recommended to implement this by reading the MaxBatchesOverride
+// config field with network-specific keys for different room types.
 type BackfillingNetworkAPIWithLimits interface {
 	BackfillingNetworkAPI
+	// GetBackfillMaxBatchCount is called before a backfill task is executed to determine the maximum number of batches
+	// that should be backfilled. Return values less than 0 are treated as unlimited.
 	GetBackfillMaxBatchCount(ctx context.Context, portal *Portal, task *database.BackfillTask) int
 }
 
@@ -793,17 +830,33 @@ type APNsPushConfig struct {
 }
 
 type PushConfig struct {
-	Web    *WebPushConfig  `json:"web,omitempty"`
-	FCM    *FCMPushConfig  `json:"fcm,omitempty"`
-	APNs   *APNsPushConfig `json:"apns,omitempty"`
-	Native bool            `json:"native,omitempty"`
+	Web  *WebPushConfig  `json:"web,omitempty"`
+	FCM  *FCMPushConfig  `json:"fcm,omitempty"`
+	APNs *APNsPushConfig `json:"apns,omitempty"`
+	// If Native is true, it means the network supports registering for pushes
+	// that are delivered directly to the app without the use of a push relay.
+	Native bool `json:"native,omitempty"`
 }
 
+// PushableNetworkAPI is an optional interface that network connectors can implement
+// to support waking up the wrapper app using push notifications.
 type PushableNetworkAPI interface {
 	NetworkAPI
 
+	// RegisterPushNotifications is called when the wrapper app wants to register a push token with the remote network.
 	RegisterPushNotifications(ctx context.Context, pushType PushType, token string) error
+	// GetPushConfigs is used to find which types of push notifications the remote network can provide.
 	GetPushConfigs() *PushConfig
+}
+
+// PushParsingNetwork is an optional interface that network connectors can implement
+// to support parsing native push notifications from networks.
+type PushParsingNetwork interface {
+	NetworkConnector
+
+	// ParsePushNotification is called when a native push is received.
+	// It must return the corresponding user login ID to wake up, plus optionally data to pass to the wakeup call.
+	ParsePushNotification(ctx context.Context, data json.RawMessage) (networkid.UserLoginID, any, error)
 }
 
 type RemoteEventType int
@@ -1104,6 +1157,8 @@ type MatrixMessage struct {
 	MatrixEventBase[*event.MessageEventContent]
 	ThreadRoot *database.Message
 	ReplyTo    *database.Message
+
+	pendingSaves []*outgoingMessage
 }
 
 type MatrixEdit struct {

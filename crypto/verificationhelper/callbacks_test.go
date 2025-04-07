@@ -17,12 +17,14 @@ import (
 type MockVerificationCallbacks interface {
 	GetRequestedVerifications() map[id.UserID][]id.VerificationTransactionID
 	GetScanQRCodeTransactions() []id.VerificationTransactionID
+	GetVerificationsReadyTransactions() []id.VerificationTransactionID
 	GetQRCodeShown(id.VerificationTransactionID) *verificationhelper.QRCode
 }
 
 type baseVerificationCallbacks struct {
 	scanQRCodeTransactions   []id.VerificationTransactionID
 	verificationsRequested   map[id.UserID][]id.VerificationTransactionID
+	verificationsReady       []id.VerificationTransactionID
 	qrCodesShown             map[id.VerificationTransactionID]*verificationhelper.QRCode
 	qrCodesScanned           map[id.VerificationTransactionID]struct{}
 	doneTransactions         map[id.VerificationTransactionID]struct{}
@@ -31,6 +33,9 @@ type baseVerificationCallbacks struct {
 	emojiDescriptionsShown   map[id.VerificationTransactionID][]string
 	decimalsShown            map[id.VerificationTransactionID][]int
 }
+
+var _ verificationhelper.RequiredCallbacks = (*baseVerificationCallbacks)(nil)
+var _ MockVerificationCallbacks = (*baseVerificationCallbacks)(nil)
 
 func newBaseVerificationCallbacks() *baseVerificationCallbacks {
 	return &baseVerificationCallbacks{
@@ -51,6 +56,10 @@ func (c *baseVerificationCallbacks) GetRequestedVerifications() map[id.UserID][]
 
 func (c *baseVerificationCallbacks) GetScanQRCodeTransactions() []id.VerificationTransactionID {
 	return c.scanQRCodeTransactions
+}
+
+func (c *baseVerificationCallbacks) GetVerificationsReadyTransactions() []id.VerificationTransactionID {
+	return c.verificationsReady
 }
 
 func (c *baseVerificationCallbacks) GetQRCodeShown(txnID id.VerificationTransactionID) *verificationhelper.QRCode {
@@ -83,6 +92,16 @@ func (c *baseVerificationCallbacks) VerificationRequested(ctx context.Context, t
 	c.verificationsRequested[from] = append(c.verificationsRequested[from], txnID)
 }
 
+func (c *baseVerificationCallbacks) VerificationReady(ctx context.Context, txnID id.VerificationTransactionID, otherDeviceID id.DeviceID, supportsSAS, allowScanQRCode bool, qrCode *verificationhelper.QRCode) {
+	c.verificationsReady = append(c.verificationsReady, txnID)
+	if allowScanQRCode {
+		c.scanQRCodeTransactions = append(c.scanQRCodeTransactions, txnID)
+	}
+	if qrCode != nil {
+		c.qrCodesShown[txnID] = qrCode
+	}
+}
+
 func (c *baseVerificationCallbacks) VerificationCancelled(ctx context.Context, txnID id.VerificationTransactionID, code event.VerificationCancelCode, reason string) {
 	c.verificationCancellation[txnID] = &event.VerificationCancelEventContent{
 		Code:   code,
@@ -98,6 +117,8 @@ type sasVerificationCallbacks struct {
 	*baseVerificationCallbacks
 }
 
+var _ verificationhelper.ShowSASCallbacks = (*sasVerificationCallbacks)(nil)
+
 func newSASVerificationCallbacks() *sasVerificationCallbacks {
 	return &sasVerificationCallbacks{newBaseVerificationCallbacks()}
 }
@@ -112,34 +133,28 @@ func (c *sasVerificationCallbacks) ShowSAS(ctx context.Context, txnID id.Verific
 	c.decimalsShown[txnID] = decimals
 }
 
-type qrCodeVerificationCallbacks struct {
+type showQRCodeVerificationCallbacks struct {
 	*baseVerificationCallbacks
 }
 
-func newQRCodeVerificationCallbacks() *qrCodeVerificationCallbacks {
-	return &qrCodeVerificationCallbacks{newBaseVerificationCallbacks()}
+var _ verificationhelper.ShowQRCodeCallbacks = (*showQRCodeVerificationCallbacks)(nil)
+
+func newShowQRCodeVerificationCallbacks() *showQRCodeVerificationCallbacks {
+	return &showQRCodeVerificationCallbacks{newBaseVerificationCallbacks()}
 }
 
-func newQRCodeVerificationCallbacksWithBase(base *baseVerificationCallbacks) *qrCodeVerificationCallbacks {
-	return &qrCodeVerificationCallbacks{base}
+func newShowQRCodeVerificationCallbacksWithBase(base *baseVerificationCallbacks) *showQRCodeVerificationCallbacks {
+	return &showQRCodeVerificationCallbacks{base}
 }
 
-func (c *qrCodeVerificationCallbacks) ScanQRCode(ctx context.Context, txnID id.VerificationTransactionID) {
-	c.scanQRCodeTransactions = append(c.scanQRCodeTransactions, txnID)
-}
-
-func (c *qrCodeVerificationCallbacks) ShowQRCode(ctx context.Context, txnID id.VerificationTransactionID, qrCode *verificationhelper.QRCode) {
-	c.qrCodesShown[txnID] = qrCode
-}
-
-func (c *qrCodeVerificationCallbacks) QRCodeScanned(ctx context.Context, txnID id.VerificationTransactionID) {
+func (c *showQRCodeVerificationCallbacks) QRCodeScanned(ctx context.Context, txnID id.VerificationTransactionID) {
 	c.qrCodesScanned[txnID] = struct{}{}
 }
 
 type allVerificationCallbacks struct {
 	*baseVerificationCallbacks
 	*sasVerificationCallbacks
-	*qrCodeVerificationCallbacks
+	*showQRCodeVerificationCallbacks
 }
 
 func newAllVerificationCallbacks() *allVerificationCallbacks {
@@ -147,6 +162,6 @@ func newAllVerificationCallbacks() *allVerificationCallbacks {
 	return &allVerificationCallbacks{
 		base,
 		newSASVerificationCallbacksWithBase(base),
-		newQRCodeVerificationCallbacksWithBase(base),
+		newShowQRCodeVerificationCallbacksWithBase(base),
 	}
 }

@@ -455,7 +455,7 @@ var MarkdownHTMLParser = &HTMLParser{
 	PillConverter:  DefaultPillConverter,
 	LinkConverter: func(text, href string, ctx Context) string {
 		if text == href {
-			return text
+			return fmt.Sprintf("<%s>", href)
 		}
 		return fmt.Sprintf("[%s](%s)", text, href)
 	},

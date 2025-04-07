@@ -8,7 +8,10 @@ package pushrules
 
 import (
 	"encoding/gob"
+	"regexp"
+	"strings"
 
+	"go.mau.fi/util/exerrors"
 	"go.mau.fi/util/glob"
 
 	"maunium.net/go/mautrix/event"
@@ -165,13 +168,20 @@ func (rule *PushRule) matchConditions(room Room, evt *event.Event) bool {
 }
 
 func (rule *PushRule) matchPattern(room Room, evt *event.Event) bool {
-	pattern := glob.CompileWithImplicitContains(rule.Pattern)
-	if pattern == nil {
-		return false
-	}
 	msg, ok := evt.Content.Raw["body"].(string)
 	if !ok {
 		return false
 	}
-	return pattern.Match(msg)
+	var buf strings.Builder
+	// As per https://spec.matrix.org/unstable/client-server-api/#push-rules, content rules are case-insensitive
+	// and must match whole words, so wrap the converted glob in (?i) and \b.
+	buf.WriteString(`(?i)\b`)
+	// strings.Builder will never return errors
+	exerrors.PanicIfNotNil(glob.ToRegexPattern(rule.Pattern, &buf))
+	buf.WriteString(`\b`)
+	pattern, err := regexp.Compile(buf.String())
+	if err != nil {
+		return false
+	}
+	return pattern.MatchString(msg)
 }

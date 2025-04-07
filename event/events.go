@@ -118,6 +118,9 @@ type MautrixInfo struct {
 	DecryptionDuration time.Duration
 
 	CheckpointSent bool
+	// When using MSC4222 and the state_after field, this field is set
+	// for timeline events to indicate they shouldn't update room state.
+	IgnoreState bool
 }
 
 func (evt *Event) GetStateKey() string {

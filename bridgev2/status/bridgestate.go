@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"reflect"
 	"time"
@@ -19,7 +20,6 @@ import (
 	"github.com/tidwall/sjson"
 	"go.mau.fi/util/jsontime"
 	"go.mau.fi/util/ptr"
-	"golang.org/x/exp/maps"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/id"
@@ -125,31 +125,15 @@ type GlobalBridgeState struct {
 }
 
 type BridgeStateFiller interface {
-	GetMXID() id.UserID
-	GetRemoteID() string
-	GetRemoteName() string
-}
-
-type StandaloneCustomBridgeStateFiller interface {
 	FillBridgeState(BridgeState) BridgeState
 }
 
-type CustomBridgeStateFiller interface {
-	BridgeStateFiller
-	StandaloneCustomBridgeStateFiller
-}
+// Deprecated: use BridgeStateFiller instead
+type StandaloneCustomBridgeStateFiller = BridgeStateFiller
 
-func (pong BridgeState) Fill(user any) BridgeState {
+func (pong BridgeState) Fill(user BridgeStateFiller) BridgeState {
 	if user != nil {
-		if std, ok := user.(BridgeStateFiller); ok {
-			pong.UserID = std.GetMXID()
-			pong.RemoteID = std.GetRemoteID()
-			pong.RemoteName = std.GetRemoteName()
-		}
-
-		if custom, ok := user.(StandaloneCustomBridgeStateFiller); ok {
-			pong = custom.FillBridgeState(pong)
-		}
+		pong = user.FillBridgeState(pong)
 	}
 
 	pong.Timestamp = jsontime.UnixNow()

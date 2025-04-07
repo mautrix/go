@@ -38,8 +38,10 @@ func (br *Bridge) RunBackfillQueue() {
 		return
 	}
 	ctx, cancel := context.WithCancel(log.WithContext(context.Background()))
+	br.stopBackfillQueue.Clear()
+	stopChan := br.stopBackfillQueue.GetChan()
 	go func() {
-		<-br.stopBackfillQueue
+		<-stopChan
 		cancel()
 	}()
 	batchDelay := time.Duration(br.Config.Backfill.Queue.BatchDelay) * time.Second
@@ -61,7 +63,7 @@ func (br *Bridge) RunBackfillQueue() {
 				}
 			}
 			noTasksFoundCount = 0
-		case <-br.stopBackfillQueue:
+		case <-stopChan:
 			if !timer.Stop() {
 				select {
 				case <-timer.C:
@@ -78,13 +80,13 @@ func (br *Bridge) RunBackfillQueue() {
 			time.Sleep(BackfillQueueErrorBackoff)
 			continue
 		} else if backfillTask != nil {
-			br.doBackfillTask(ctx, backfillTask)
+			br.DoBackfillTask(ctx, backfillTask)
 			noTasksFoundCount = 0
 		}
 	}
 }
 
-func (br *Bridge) doBackfillTask(ctx context.Context, task *database.BackfillTask) {
+func (br *Bridge) DoBackfillTask(ctx context.Context, task *database.BackfillTask) {
 	log := zerolog.Ctx(ctx).With().
 		Object("portal_key", task.PortalKey).
 		Str("login_id", string(task.UserLoginID)).

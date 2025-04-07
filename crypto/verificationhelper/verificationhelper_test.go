@@ -71,7 +71,7 @@ func initDefaultCallbacks(t *testing.T, ctx context.Context, sendingClient, rece
 	senderVerificationStore, err := NewSQLiteVerificationStore(ctx, senderVerificationDB)
 	require.NoError(t, err)
 
-	sendingHelper = verificationhelper.NewVerificationHelper(sendingClient, sendingMachine, senderVerificationStore, sendingCallbacks, true)
+	sendingHelper = verificationhelper.NewVerificationHelper(sendingClient, sendingMachine, senderVerificationStore, sendingCallbacks, true, true, true)
 	require.NoError(t, sendingHelper.Init(ctx))
 
 	receivingCallbacks = newAllVerificationCallbacks()
@@ -79,7 +79,7 @@ func initDefaultCallbacks(t *testing.T, ctx context.Context, sendingClient, rece
 	require.NoError(t, err)
 	receiverVerificationStore, err := NewSQLiteVerificationStore(ctx, receiverVerificationDB)
 	require.NoError(t, err)
-	receivingHelper = verificationhelper.NewVerificationHelper(receivingClient, receivingMachine, receiverVerificationStore, receivingCallbacks, true)
+	receivingHelper = verificationhelper.NewVerificationHelper(receivingClient, receivingMachine, receiverVerificationStore, receivingCallbacks, true, true, true)
 	require.NoError(t, receivingHelper.Init(ctx))
 	return
 }
@@ -89,19 +89,29 @@ func TestVerification_Start(t *testing.T) {
 	receivingDeviceID2 := id.DeviceID("receiving2")
 
 	testCases := []struct {
+		supportsShow                bool
 		supportsScan                bool
+		supportsSAS                 bool
 		callbacks                   MockVerificationCallbacks
 		startVerificationErrMsg     string
 		expectedVerificationMethods []event.VerificationMethod
 	}{
-		{false, newBaseVerificationCallbacks(), "no supported verification methods", nil},
-		{true, newBaseVerificationCallbacks(), "", []event.VerificationMethod{event.VerificationMethodQRCodeScan, event.VerificationMethodReciprocate}},
-		{false, newSASVerificationCallbacks(), "", []event.VerificationMethod{event.VerificationMethodSAS}},
-		{true, newSASVerificationCallbacks(), "", []event.VerificationMethod{event.VerificationMethodQRCodeScan, event.VerificationMethodReciprocate, event.VerificationMethodSAS}},
-		{true, newQRCodeVerificationCallbacks(), "", []event.VerificationMethod{event.VerificationMethodQRCodeScan, event.VerificationMethodQRCodeShow, event.VerificationMethodReciprocate}},
-		{false, newQRCodeVerificationCallbacks(), "", []event.VerificationMethod{event.VerificationMethodQRCodeShow, event.VerificationMethodReciprocate}},
-		{false, newAllVerificationCallbacks(), "", []event.VerificationMethod{event.VerificationMethodQRCodeShow, event.VerificationMethodReciprocate, event.VerificationMethodSAS}},
-		{true, newAllVerificationCallbacks(), "", []event.VerificationMethod{event.VerificationMethodQRCodeScan, event.VerificationMethodQRCodeShow, event.VerificationMethodReciprocate, event.VerificationMethodSAS}},
+		{false, false, false, newBaseVerificationCallbacks(), "no supported verification methods", nil},
+		{false, true, false, newBaseVerificationCallbacks(), "", []event.VerificationMethod{event.VerificationMethodQRCodeScan, event.VerificationMethodReciprocate}},
+
+		{false, false, false, newShowQRCodeVerificationCallbacks(), "no supported verification methods", nil},
+		{true, false, false, newShowQRCodeVerificationCallbacks(), "", []event.VerificationMethod{event.VerificationMethodQRCodeShow, event.VerificationMethodReciprocate}},
+		{false, true, false, newShowQRCodeVerificationCallbacks(), "", []event.VerificationMethod{event.VerificationMethodQRCodeScan, event.VerificationMethodReciprocate}},
+		{true, true, false, newShowQRCodeVerificationCallbacks(), "", []event.VerificationMethod{event.VerificationMethodQRCodeShow, event.VerificationMethodQRCodeScan, event.VerificationMethodReciprocate}},
+
+		{false, false, true, newSASVerificationCallbacks(), "", []event.VerificationMethod{event.VerificationMethodSAS}},
+		{false, true, true, newSASVerificationCallbacks(), "", []event.VerificationMethod{event.VerificationMethodSAS, event.VerificationMethodQRCodeScan, event.VerificationMethodReciprocate}},
+
+		{false, false, false, newAllVerificationCallbacks(), "no supported verification methods", nil},
+		{false, false, true, newAllVerificationCallbacks(), "", []event.VerificationMethod{event.VerificationMethodSAS}},
+		{false, true, true, newAllVerificationCallbacks(), "", []event.VerificationMethod{event.VerificationMethodSAS, event.VerificationMethodQRCodeScan, event.VerificationMethodReciprocate}},
+		{true, false, true, newAllVerificationCallbacks(), "", []event.VerificationMethod{event.VerificationMethodSAS, event.VerificationMethodQRCodeShow, event.VerificationMethodReciprocate}},
+		{true, true, true, newAllVerificationCallbacks(), "", []event.VerificationMethod{event.VerificationMethodSAS, event.VerificationMethodQRCodeShow, event.VerificationMethodQRCodeScan, event.VerificationMethodReciprocate}},
 	}
 
 	for i, tc := range testCases {
@@ -114,7 +124,7 @@ func TestVerification_Start(t *testing.T) {
 			addDeviceID(ctx, cryptoStore, aliceUserID, receivingDeviceID)
 			addDeviceID(ctx, cryptoStore, aliceUserID, receivingDeviceID2)
 
-			senderHelper := verificationhelper.NewVerificationHelper(client, client.Crypto.(*cryptohelper.CryptoHelper).Machine(), nil, tc.callbacks, tc.supportsScan)
+			senderHelper := verificationhelper.NewVerificationHelper(client, client.Crypto.(*cryptohelper.CryptoHelper).Machine(), nil, tc.callbacks, tc.supportsShow, tc.supportsScan, tc.supportsSAS)
 			err := senderHelper.Init(ctx)
 			require.NoError(t, err)
 
@@ -124,7 +134,7 @@ func TestVerification_Start(t *testing.T) {
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.NotEmpty(t, txnID)
 
 			toDeviceInbox := ts.DeviceInbox[aliceUserID]
@@ -161,7 +171,7 @@ func TestVerification_StartThenCancel(t *testing.T) {
 
 			bystanderClient, _ := ts.Login(t, ctx, aliceUserID, bystanderDeviceID)
 			bystanderMachine := bystanderClient.Crypto.(*cryptohelper.CryptoHelper).Machine()
-			bystanderHelper := verificationhelper.NewVerificationHelper(bystanderClient, bystanderMachine, nil, newAllVerificationCallbacks(), true)
+			bystanderHelper := verificationhelper.NewVerificationHelper(bystanderClient, bystanderMachine, nil, newAllVerificationCallbacks(), true, true, true)
 			require.NoError(t, bystanderHelper.Init(ctx))
 
 			require.NoError(t, sendingCryptoStore.PutDevice(ctx, aliceUserID, bystanderMachine.OwnIdentity()))
@@ -251,12 +261,12 @@ func TestVerification_Accept_NoSupportedMethods(t *testing.T) {
 	assert.NotEmpty(t, recoveryKey)
 	assert.NotNil(t, cache)
 
-	sendingHelper := verificationhelper.NewVerificationHelper(sendingClient, sendingMachine, nil, newAllVerificationCallbacks(), true)
+	sendingHelper := verificationhelper.NewVerificationHelper(sendingClient, sendingMachine, nil, newAllVerificationCallbacks(), true, true, true)
 	err = sendingHelper.Init(ctx)
 	require.NoError(t, err)
 
 	receivingCallbacks := newBaseVerificationCallbacks()
-	receivingHelper := verificationhelper.NewVerificationHelper(receivingClient, receivingClient.Crypto.(*cryptohelper.CryptoHelper).Machine(), nil, receivingCallbacks, false)
+	receivingHelper := verificationhelper.NewVerificationHelper(receivingClient, receivingClient.Crypto.(*cryptohelper.CryptoHelper).Machine(), nil, receivingCallbacks, false, false, false)
 	err = receivingHelper.Init(ctx)
 	require.NoError(t, err)
 
@@ -277,16 +287,28 @@ func TestVerification_Accept_CorrectMethodsPresented(t *testing.T) {
 
 	testCases := []struct {
 		sendingSupportsScan         bool
+		sendingSupportsShow         bool
 		receivingSupportsScan       bool
+		receivingSupportsShow       bool
+		sendingSupportsSAS          bool
+		receivingSupportsSAS        bool
 		sendingCallbacks            MockVerificationCallbacks
 		receivingCallbacks          MockVerificationCallbacks
 		expectedVerificationMethods []event.VerificationMethod
 	}{
-		{false, false, newSASVerificationCallbacks(), newSASVerificationCallbacks(), []event.VerificationMethod{event.VerificationMethodSAS}},
-		{true, false, newQRCodeVerificationCallbacks(), newQRCodeVerificationCallbacks(), []event.VerificationMethod{event.VerificationMethodQRCodeShow, event.VerificationMethodReciprocate}},
-		{false, true, newQRCodeVerificationCallbacks(), newQRCodeVerificationCallbacks(), []event.VerificationMethod{event.VerificationMethodQRCodeScan, event.VerificationMethodReciprocate}},
-		{true, false, newAllVerificationCallbacks(), newAllVerificationCallbacks(), []event.VerificationMethod{event.VerificationMethodQRCodeShow, event.VerificationMethodReciprocate, event.VerificationMethodSAS}},
-		{true, true, newAllVerificationCallbacks(), newAllVerificationCallbacks(), []event.VerificationMethod{event.VerificationMethodQRCodeShow, event.VerificationMethodQRCodeScan, event.VerificationMethodReciprocate, event.VerificationMethodSAS}},
+		// TODO
+		{false, false, false, false, true, true, newSASVerificationCallbacks(), newSASVerificationCallbacks(), []event.VerificationMethod{event.VerificationMethodSAS}},
+		{true, false, true, false, true, true, newSASVerificationCallbacks(), newSASVerificationCallbacks(), []event.VerificationMethod{event.VerificationMethodSAS}},
+
+		{true, false, false, true, false, false, newShowQRCodeVerificationCallbacks(), newShowQRCodeVerificationCallbacks(), []event.VerificationMethod{event.VerificationMethodReciprocate, event.VerificationMethodQRCodeShow}},
+		{false, true, true, false, false, false, newShowQRCodeVerificationCallbacks(), newShowQRCodeVerificationCallbacks(), []event.VerificationMethod{event.VerificationMethodReciprocate, event.VerificationMethodQRCodeScan}},
+		{true, false, true, true, false, false, newShowQRCodeVerificationCallbacks(), newShowQRCodeVerificationCallbacks(), []event.VerificationMethod{event.VerificationMethodReciprocate, event.VerificationMethodQRCodeShow}},
+		{false, true, true, true, false, false, newShowQRCodeVerificationCallbacks(), newShowQRCodeVerificationCallbacks(), []event.VerificationMethod{event.VerificationMethodReciprocate, event.VerificationMethodQRCodeScan}},
+		{true, true, true, false, false, false, newShowQRCodeVerificationCallbacks(), newShowQRCodeVerificationCallbacks(), []event.VerificationMethod{event.VerificationMethodReciprocate, event.VerificationMethodQRCodeScan}},
+		{true, true, false, true, false, false, newShowQRCodeVerificationCallbacks(), newShowQRCodeVerificationCallbacks(), []event.VerificationMethod{event.VerificationMethodReciprocate, event.VerificationMethodQRCodeShow}},
+		{true, true, true, true, false, false, newShowQRCodeVerificationCallbacks(), newShowQRCodeVerificationCallbacks(), []event.VerificationMethod{event.VerificationMethodReciprocate, event.VerificationMethodQRCodeScan, event.VerificationMethodQRCodeShow}},
+
+		{true, true, true, true, true, true, newAllVerificationCallbacks(), newAllVerificationCallbacks(), []event.VerificationMethod{event.VerificationMethodSAS, event.VerificationMethodReciprocate, event.VerificationMethodQRCodeScan, event.VerificationMethodQRCodeShow}},
 	}
 
 	for i, tc := range testCases {
@@ -299,11 +321,11 @@ func TestVerification_Accept_CorrectMethodsPresented(t *testing.T) {
 			assert.NotEmpty(t, recoveryKey)
 			assert.NotNil(t, sendingCrossSigningKeysCache)
 
-			sendingHelper := verificationhelper.NewVerificationHelper(sendingClient, sendingMachine, nil, tc.sendingCallbacks, tc.sendingSupportsScan)
+			sendingHelper := verificationhelper.NewVerificationHelper(sendingClient, sendingMachine, nil, tc.sendingCallbacks, tc.sendingSupportsShow, tc.sendingSupportsScan, tc.sendingSupportsSAS)
 			err = sendingHelper.Init(ctx)
 			require.NoError(t, err)
 
-			receivingHelper := verificationhelper.NewVerificationHelper(receivingClient, receivingMachine, nil, tc.receivingCallbacks, tc.receivingSupportsScan)
+			receivingHelper := verificationhelper.NewVerificationHelper(receivingClient, receivingMachine, nil, tc.receivingCallbacks, tc.receivingSupportsShow, tc.receivingSupportsScan, tc.receivingSupportsSAS)
 			err = receivingHelper.Init(ctx)
 			require.NoError(t, err)
 
@@ -321,16 +343,13 @@ func TestVerification_Accept_CorrectMethodsPresented(t *testing.T) {
 			err = receivingHelper.AcceptVerification(ctx, txnID)
 			require.NoError(t, err)
 
-			_, sendingIsQRCallbacks := tc.sendingCallbacks.(*qrCodeVerificationCallbacks)
-			_, sendingIsAllCallbacks := tc.sendingCallbacks.(*allVerificationCallbacks)
-			sendingCanShowQR := sendingIsQRCallbacks || sendingIsAllCallbacks
-			_, receivingIsQRCallbacks := tc.receivingCallbacks.(*qrCodeVerificationCallbacks)
-			_, receivingIsAllCallbacks := tc.receivingCallbacks.(*allVerificationCallbacks)
-			receivingCanShowQR := receivingIsQRCallbacks || receivingIsAllCallbacks
+			// Ensure that the receiving device get a notification about the
+			// transaction being ready.
+			assert.Contains(t, tc.receivingCallbacks.GetVerificationsReadyTransactions(), txnID)
 
 			// Ensure that if the receiving device should show a QR code that
 			// it has the correct content.
-			if tc.sendingSupportsScan && receivingCanShowQR {
+			if tc.sendingSupportsScan && tc.receivingSupportsShow {
 				receivingShownQRCode := tc.receivingCallbacks.GetQRCodeShown(txnID)
 				require.NotNil(t, receivingShownQRCode)
 				assert.Equal(t, txnID, receivingShownQRCode.TransactionID)
@@ -339,7 +358,7 @@ func TestVerification_Accept_CorrectMethodsPresented(t *testing.T) {
 
 			// Check for whether the receiving device should be scanning a QR
 			// code.
-			if tc.receivingSupportsScan && sendingCanShowQR {
+			if tc.receivingSupportsScan && tc.sendingSupportsShow {
 				assert.Contains(t, tc.receivingCallbacks.GetScanQRCodeTransactions(), txnID)
 			}
 
@@ -356,9 +375,13 @@ func TestVerification_Accept_CorrectMethodsPresented(t *testing.T) {
 			// device.
 			ts.dispatchToDevice(t, ctx, sendingClient)
 
+			// Ensure that the sending device got a notification about the
+			// transaction being ready.
+			assert.Contains(t, tc.sendingCallbacks.GetVerificationsReadyTransactions(), txnID)
+
 			// Ensure that if the sending device should show a QR code that it
 			// has the correct content.
-			if tc.receivingSupportsScan && sendingCanShowQR {
+			if tc.receivingSupportsScan && tc.sendingSupportsShow {
 				sendingShownQRCode := tc.sendingCallbacks.GetQRCodeShown(txnID)
 				require.NotNil(t, sendingShownQRCode)
 				assert.Equal(t, txnID, sendingShownQRCode.TransactionID)
@@ -367,7 +390,7 @@ func TestVerification_Accept_CorrectMethodsPresented(t *testing.T) {
 
 			// Check for whether the sending device should be scanning a QR
 			// code.
-			if tc.sendingSupportsScan && receivingCanShowQR {
+			if tc.sendingSupportsScan && tc.receivingSupportsShow {
 				assert.Contains(t, tc.sendingCallbacks.GetScanQRCodeTransactions(), txnID)
 			}
 		})

@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"maunium.net/go/mautrix/crypto/goolm/aessha2"
 	"maunium.net/go/mautrix/crypto/goolm/message"
 )
 
@@ -24,7 +25,7 @@ func TestMessageDecode(t *testing.T) {
 }
 
 func TestMessageEncode(t *testing.T) {
-	expectedRaw := []byte("\x03\n\nratchetkey\x10\x01\"\nciphertexthmacsha2")
+	expectedRaw := []byte("\x03\n\nratchetkey\x10\x01\"\nciphertext\x95\x95\x92\x72\x04\x70\x56\xcdhmacsha2")
 	hmacsha256 := []byte("hmacsha2")
 	msg := message.Message{
 		Version:    3,
@@ -32,7 +33,9 @@ func TestMessageEncode(t *testing.T) {
 		RatchetKey: []byte("ratchetkey"),
 		Ciphertext: []byte("ciphertext"),
 	}
-	encoded, err := msg.EncodeAndMAC(nil, nil)
+	cipher, err := aessha2.NewAESSHA2(nil, nil)
+	assert.NoError(t, err)
+	encoded, err := msg.EncodeAndMAC(cipher)
 	assert.NoError(t, err)
 	encoded = append(encoded, hmacsha256...)
 	assert.Equal(t, expectedRaw, encoded)

@@ -21,13 +21,14 @@ import (
 	"github.com/rs/xid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/hlog"
+	"go.mau.fi/util/exstrings"
 	"go.mau.fi/util/jsontime"
 	"go.mau.fi/util/requestlog"
 
 	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/bridge/status"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/networkid"
+	"maunium.net/go/mautrix/bridgev2/status"
 	"maunium.net/go/mautrix/federation"
 	"maunium.net/go/mautrix/id"
 )
@@ -207,7 +208,7 @@ func (prov *ProvisioningAPI) DebugAuthMiddleware(h http.Handler) http.Handler {
 				Err:     "Missing auth token",
 				ErrCode: mautrix.MMissingToken.ErrCode,
 			})
-		} else if auth != prov.br.Config.Provisioning.SharedSecret {
+		} else if !exstrings.ConstantTimeEqual(auth, prov.br.Config.Provisioning.SharedSecret) {
 			jsonResponse(w, http.StatusUnauthorized, &mautrix.RespError{
 				Err:     "Invalid auth token",
 				ErrCode: mautrix.MUnknownToken.ErrCode,
@@ -235,7 +236,7 @@ func (prov *ProvisioningAPI) AuthMiddleware(h http.Handler) http.Handler {
 		if userID == "" && prov.GetUserIDFromRequest != nil {
 			userID = prov.GetUserIDFromRequest(r)
 		}
-		if auth != prov.br.Config.Provisioning.SharedSecret {
+		if !exstrings.ConstantTimeEqual(auth, prov.br.Config.Provisioning.SharedSecret) {
 			var err error
 			if strings.HasPrefix(auth, "openid:") {
 				err = prov.checkFederatedMatrixAuth(r.Context(), userID, strings.TrimPrefix(auth, "openid:"))

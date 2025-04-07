@@ -173,6 +173,19 @@ func (mach *OlmMachine) receiveSecret(ctx context.Context, evt *DecryptedOlmEven
 		return
 	}
 
+	// https://spec.matrix.org/v1.10/client-server-api/#msecretsend
+	// "The recipient must ensure... that the device is a verified device owned by the recipient"
+	if senderDevice, err := mach.GetOrFetchDevice(ctx, evt.Sender, evt.SenderDevice); err != nil {
+		log.Err(err).Msg("Failed to get or fetch sender device, rejecting secret")
+		return
+	} else if senderDevice == nil {
+		log.Warn().Msg("Unknown sender device, rejecting secret")
+		return
+	} else if !mach.IsDeviceTrusted(ctx, senderDevice) {
+		log.Warn().Msg("Sender device is not verified, rejecting secret")
+		return
+	}
+
 	mach.secretLock.Lock()
 	secretChan := mach.secretListeners[content.RequestID]
 	mach.secretLock.Unlock()

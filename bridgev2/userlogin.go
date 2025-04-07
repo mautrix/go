@@ -17,10 +17,10 @@ import (
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/exsync"
 
-	"maunium.net/go/mautrix/bridge/status"
 	"maunium.net/go/mautrix/bridgev2/bridgeconfig"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
+	"maunium.net/go/mautrix/bridgev2/status"
 	"maunium.net/go/mautrix/event"
 )
 
@@ -61,6 +61,9 @@ func (br *Bridge) loadUserLogin(ctx context.Context, user *User, dbUserLogin *da
 	err := br.Network.LoadUserLogin(ctx, userLogin)
 	if err != nil {
 		userLogin.Log.Err(err).Msg("Failed to load user login")
+		return nil, nil
+	} else if userLogin.Client == nil {
+		userLogin.Log.Error().Msg("LoadUserLogin didn't fill Client")
 		return nil, nil
 	}
 	userLogin.BridgeState = br.NewBridgeStateQueue(userLogin)

@@ -17,8 +17,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"maunium.net/go/mautrix/bridgev2"
-
-	"maunium.net/go/mautrix/bridge/status"
+	"maunium.net/go/mautrix/bridgev2/status"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
@@ -42,7 +41,7 @@ func NewProcessor(bridge *bridgev2.Bridge) bridgev2.CommandProcessor {
 	}
 	proc.AddHandlers(
 		CommandHelp, CommandCancel,
-		CommandRegisterPush, CommandDeletePortal, CommandDeleteAllPortals,
+		CommandRegisterPush, CommandDeletePortal, CommandDeleteAllPortals, CommandSetManagementRoom,
 		CommandLogin, CommandRelogin, CommandListLogins, CommandLogout, CommandSetPreferredLogin,
 		CommandSetRelay, CommandUnsetRelay,
 		CommandResolveIdentifier, CommandStartChat, CommandSearch,

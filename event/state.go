@@ -7,6 +7,8 @@
 package event
 
 import (
+	"encoding/base64"
+
 	"maunium.net/go/mautrix/id"
 )
 
@@ -42,7 +44,22 @@ type ServerACLEventContent struct {
 // TopicEventContent represents the content of a m.room.topic state event.
 // https://spec.matrix.org/v1.2/client-server-api/#mroomtopic
 type TopicEventContent struct {
-	Topic string `json:"topic"`
+	Topic           string           `json:"topic"`
+	ExtensibleTopic *ExtensibleTopic `json:"m.topic,omitempty"`
+}
+
+// ExtensibleTopic represents the contents of the m.topic field within the
+// m.room.topic state event as described in [MSC3765].
+//
+// [MSC3765]: https://github.com/matrix-org/matrix-spec-proposals/pull/3765
+type ExtensibleTopic struct {
+	Text []ExtensibleText `json:"m.text"`
+}
+
+// ExtensibleText represents the contents of an m.text field.
+type ExtensibleText struct {
+	MimeType string `json:"mimetype,omitempty"`
+	Body     string `json:"body"`
 }
 
 // TombstoneEventContent represents the content of a m.room.tombstone state event.
@@ -77,10 +94,12 @@ const (
 // https://spec.matrix.org/v1.2/client-server-api/#mroomcreate
 type CreateEventContent struct {
 	Type        RoomType     `json:"type,omitempty"`
-	Creator     id.UserID    `json:"creator,omitempty"`
-	Federate    bool         `json:"m.federate,omitempty"`
+	Federate    *bool        `json:"m.federate,omitempty"`
 	RoomVersion RoomVersion  `json:"room_version,omitempty"`
 	Predecessor *Predecessor `json:"predecessor,omitempty"`
+
+	// Deprecated: use the event sender instead
+	Creator id.UserID `json:"creator,omitempty"`
 }
 
 // JoinRule specifies how open a room is to new members.
@@ -188,10 +207,26 @@ type SpaceParentEventContent struct {
 type PolicyRecommendation string
 
 const (
-	PolicyRecommendationBan         PolicyRecommendation = "m.ban"
-	PolicyRecommendationUnstableBan PolicyRecommendation = "org.matrix.mjolnir.ban"
-	PolicyRecommendationUnban       PolicyRecommendation = "fi.mau.meowlnir.unban"
+	PolicyRecommendationBan              PolicyRecommendation = "m.ban"
+	PolicyRecommendationUnstableTakedown PolicyRecommendation = "org.matrix.msc4204.takedown"
+	PolicyRecommendationUnstableBan      PolicyRecommendation = "org.matrix.mjolnir.ban"
+	PolicyRecommendationUnban            PolicyRecommendation = "fi.mau.meowlnir.unban"
 )
+
+type PolicyHashes struct {
+	SHA256 string `json:"sha256"`
+}
+
+func (ph *PolicyHashes) DecodeSHA256() *[32]byte {
+	if ph == nil || ph.SHA256 == "" {
+		return nil
+	}
+	decoded, _ := base64.StdEncoding.DecodeString(ph.SHA256)
+	if len(decoded) == 32 {
+		return (*[32]byte)(decoded)
+	}
+	return nil
+}
 
 // ModPolicyContent represents the content of a m.room.rule.user, m.room.rule.room, and m.room.rule.server state event.
 // https://spec.matrix.org/v1.2/client-server-api/#moderation-policy-lists
@@ -199,6 +234,14 @@ type ModPolicyContent struct {
 	Entity         string               `json:"entity"`
 	Reason         string               `json:"reason"`
 	Recommendation PolicyRecommendation `json:"recommendation"`
+	UnstableHashes *PolicyHashes        `json:"org.matrix.msc4205.hashes,omitempty"`
+}
+
+func (mpc *ModPolicyContent) EntityOrHash() string {
+	if mpc.UnstableHashes != nil && mpc.UnstableHashes.SHA256 != "" {
+		return mpc.UnstableHashes.SHA256
+	}
+	return mpc.Entity
 }
 
 // Deprecated: MSC2716 has been abandoned

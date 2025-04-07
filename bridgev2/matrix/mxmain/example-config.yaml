@@ -21,9 +21,15 @@ bridge:
     # Should `m.bridge` events be sent without a state key?
     # By default, the bridge uses a unique key that won't conflict with other bridges.
     no_bridge_info_state_key: false
+    # Should bridge connection status be sent to the management room as `m.notice` events?
+    # These contain the same data that can be posted to an external HTTP server using homeserver -> status_endpoint.
+    # Allowed values: none, errors, all
+    bridge_status_notices: errors
 
     # Should leaving Matrix rooms be bridged as leaving groups on the remote network?
     bridge_matrix_leave: false
+    # Should `m.notice` messages be bridged?
+    bridge_notices: false
     # Should room tags only be synced when creating the portal? Tags mean things like favorite/pin and archive/low priority.
     # Tags currently can't be synced back to the remote network, so a continuous sync means tagging from Matrix will be undone.
     tag_only_on_create: true
@@ -343,7 +349,7 @@ encryption:
     default: false
     # Whether to require all messages to be encrypted and drop any unencrypted messages.
     require: false
-    # Whether to use MSC2409/MSC3202 instead of /sync long polling for receiving encryption-related data.
+    # Whether to use MSC3202/MSC4203 instead of /sync long polling for receiving encryption-related data.
     # This option is not yet compatible with standard Matrix servers like Synapse and should not be used.
     # Changing this option requires updating the appservice registration file.
     appservice: false
