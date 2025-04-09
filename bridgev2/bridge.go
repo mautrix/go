@@ -107,8 +107,8 @@ func (e DBUpgradeError) Unwrap() error {
 	return e.Err
 }
 
-func (br *Bridge) Start() error {
-	ctx := br.Log.WithContext(context.Background())
+func (br *Bridge) Start(ctx context.Context) error {
+	ctx = br.Log.WithContext(ctx)
 	err := br.StartConnectors(ctx)
 	if err != nil {
 		return err
