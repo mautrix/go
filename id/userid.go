@@ -43,10 +43,10 @@ func ParseCommonIdentifier[Stringish ~string](identifier Stringish) (sigil byte,
 	}
 	sigil = identifier[0]
 	strIdentifier := string(identifier)
-	if strings.ContainsRune(strIdentifier, ':') {
-		parts := strings.SplitN(strIdentifier, ":", 2)
-		localpart = parts[0][1:]
-		homeserver = parts[1]
+	colonIdx := strings.IndexByte(strIdentifier, ':')
+	if colonIdx > 0 {
+		localpart = strIdentifier[1:colonIdx]
+		homeserver = strIdentifier[colonIdx+1:]
 	} else {
 		localpart = strIdentifier[1:]
 	}
