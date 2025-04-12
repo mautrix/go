@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog"
 
@@ -92,9 +93,8 @@ func (ce *Event) Redact(req ...mautrix.ReqRedact) {
 
 // MarkRead marks the command event as read.
 func (ce *Event) MarkRead() {
-	// TODO
-	//err := ce.Bot.SendReceipt(ce.Ctx, ce.RoomID, ce.EventID, event.ReceiptTypeRead, nil)
-	//if err != nil {
-	//	ce.Log.Err(err).Msg("Failed to mark command as read")
-	//}
+	err := ce.Bot.MarkRead(ce.Ctx, ce.RoomID, ce.EventID, time.Now())
+	if err != nil {
+		ce.Log.Err(err).Msg("Failed to mark command as read")
+	}
 }
