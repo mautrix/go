@@ -44,6 +44,8 @@ type OlmMachine struct {
 	// Don't mark outbound Olm sessions as shared for devices they were initially sent to.
 	DisableSharedGroupSessionTracking bool
 
+	IgnorePostDecryptionParseErrors bool
+
 	SendKeysMinTrust  id.TrustState
 	ShareKeysMinTrust id.TrustState
 
