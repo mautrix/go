@@ -71,6 +71,7 @@ type BridgeConfig struct {
 	TagOnlyOnCreate         bool             `yaml:"tag_only_on_create"`
 	OnlyBridgeTags          []event.RoomTag  `yaml:"only_bridge_tags"`
 	MuteOnlyOnCreate        bool             `yaml:"mute_only_on_create"`
+	EditInsteadOfDelete     bool             `yaml:"edit_instead_of_delete"`
 	OutgoingMessageReID     bool             `yaml:"outgoing_message_re_id"`
 	CleanupOnLogout         CleanupOnLogouts `yaml:"cleanup_on_logout"`
 	Relay                   RelayConfig      `yaml:"relay"`

@@ -2560,6 +2560,8 @@ func (portal *Portal) handleRemoteReactionRemove(ctx context.Context, source *Us
 }
 
 func (portal *Portal) handleRemoteMessageRemove(ctx context.Context, source *UserLogin, evt RemoteMessageRemove) {
+	editInstedOfDelete := portal.Bridge.Config.EditInsteadOfDelete
+
 	log := zerolog.Ctx(ctx)
 	targetParts, err := portal.Bridge.DB.Message.GetAllPartsByID(ctx, portal.Receiver, evt.GetTargetMessage())
 	if err != nil {
@@ -2567,6 +2569,10 @@ func (portal *Portal) handleRemoteMessageRemove(ctx context.Context, source *Use
 		return
 	} else if len(targetParts) == 0 {
 		log.Debug().Msg("Target message not found")
+		return
+	}
+	if editInstedOfDelete {
+		portal.editMessageToIndicateDeletion(ctx, targetParts, getEventTS(evt), getStreamOrder(evt), source)
 		return
 	}
 	onlyForMeProvider, ok := evt.(RemoteDeleteOnlyForMe)
@@ -2590,7 +2596,67 @@ func (portal *Portal) handleRemoteMessageRemove(ctx context.Context, source *Use
 		log.Err(err).Msg("Failed to delete target message from database")
 	}
 }
+func (portal *Portal) editMessageToIndicateDeletion(ctx context.Context, targetParts []*database.Message, ts time.Time, streamOrder int64, source *UserLogin) {
+	log := zerolog.Ctx(ctx)
+	intent := portal.GetIntentFor(ctx, EventSender{Sender: targetParts[0].SenderID}, source, RemoteEventMessageRemove)
+	if intent == nil {
+		log.Warn().Msg("No intent found for editing message to indicate deletion")
+		return
+	}
 
+	for i, part := range targetParts {
+		if part.HasFakeMXID() {
+			continue
+		}
+
+		// Create the edited content
+		editedContent := &event.MessageEventContent{
+			MsgType: event.MsgNotice,
+			Body:    "This message has been deleted.",
+			Mentions: &event.Mentions{
+				UserIDs: []id.UserID{},
+			},
+		}
+		rawContent := map[string]interface{}{
+			"msgtype": event.MsgNotice,
+			"body":    "* This message has been deleted.",
+			"m.new_content": map[string]interface{}{
+				"body":       "This message has been deleted.",
+				"msgtype":    event.MsgNotice,
+				"m.mentions": "{}",
+			},
+			"m.relates_to": map[string]interface{}{
+				"rel_type": event.RelReplace,
+				"event_id": part.MXID,
+			},
+		}
+		editedContent.SetEdit(part.MXID)
+		// Send the edit event to Matrix
+		_, err := intent.SendMessage(ctx, portal.MXID, event.EventMessage, &event.Content{
+			Parsed: editedContent,
+			Raw:    rawContent,
+		}, &MatrixSendExtra{
+			Timestamp:   ts,
+			MessageMeta: part,
+			StreamOrder: streamOrder,
+			PartIndex:   i,
+		})
+		if err != nil {
+			log.Err(err).Stringer("part_mxid", part.MXID).Msg("Failed to edit message to indicate deletion")
+		} else {
+			log.Debug().
+				Stringer("part_mxid", part.MXID).
+				Msg("Edited message to indicate deletion")
+		}
+
+		// Update the database to reflect the edited message
+		part.Metadata = "deleted"
+		err = portal.Bridge.DB.Message.Update(ctx, part)
+		if err != nil {
+			log.Err(err).Int64("part_rowid", part.RowID).Msg("Failed to update message part in database")
+		}
+	}
+}
 func (portal *Portal) redactMessageParts(ctx context.Context, parts []*database.Message, intent MatrixAPI, ts time.Time) {
 	log := zerolog.Ctx(ctx)
 	for _, part := range parts {

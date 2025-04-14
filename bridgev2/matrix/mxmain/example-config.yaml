@@ -38,7 +38,8 @@ bridge:
     # Should room mute status only be synced when creating the portal?
     # Like tags, mutes can't currently be synced back to the remote network.
     mute_only_on_create: true
-
+    # Should the bridge send a `m.replace` instead of `m.room.redaction` event when a message is deleted?
+    edit_instead_of_delete: false
     # What should be done to portal rooms when a user logs out or is logged out?
     # Permitted values:
     #   nothing - Do nothing, let the user stay in the portals
