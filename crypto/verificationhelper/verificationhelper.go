@@ -607,6 +607,11 @@ func (vh *VerificationHelper) onVerificationRequest(ctx context.Context, evt *ev
 		return
 	}
 
+	if vh.mach.CrossSigningKeys == nil {
+		log.Warn().Msg("Ignoring verification request as we don't have cross signing keys")
+		return
+	}
+
 	log = log.With().
 		Any("requested_methods", verificationRequest.Methods).
 		Stringer("transaction_id", verificationRequest.TransactionID).
