@@ -73,6 +73,13 @@ func (e BridgeStateEvent) IsValid() bool {
 	}
 }
 
+type BridgeStateUserAction string
+
+const (
+	UserActionOpenNative BridgeStateUserAction = "OPEN_NATIVE"
+	UserActionRelogin    BridgeStateUserAction = "RELOGIN"
+)
+
 type RemoteProfile struct {
 	Phone    string              `json:"phone,omitempty"`
 	Email    string              `json:"email,omitempty"`
@@ -109,6 +116,8 @@ type BridgeState struct {
 	Source  string               `json:"source,omitempty"`
 	Error   BridgeStateErrorCode `json:"error,omitempty"`
 	Message string               `json:"message,omitempty"`
+
+	UserAction BridgeStateUserAction `json:"user_action,omitempty"`
 
 	UserID        id.UserID      `json:"user_id,omitempty"`
 	RemoteID      string         `json:"remote_id,omitempty"`
@@ -192,6 +201,7 @@ func (pong *BridgeState) ShouldDeduplicate(newPong *BridgeState) bool {
 	return pong != nil &&
 		pong.StateEvent == newPong.StateEvent &&
 		pong.RemoteName == newPong.RemoteName &&
+		pong.UserAction == newPong.UserAction &&
 		ptr.Val(pong.RemoteProfile) == ptr.Val(newPong.RemoteProfile) &&
 		pong.Error == newPong.Error &&
 		maps.EqualFunc(pong.Info, newPong.Info, reflect.DeepEqual) &&
