@@ -491,14 +491,14 @@ func (ul *UserLogin) MarkAsPreferredIn(ctx context.Context, portal *Portal) erro
 	return ul.Bridge.DB.UserPortal.MarkAsPreferred(ctx, ul.UserLogin, portal.PortalKey)
 }
 
-var _ status.StandaloneCustomBridgeStateFiller = (*UserLogin)(nil)
+var _ status.BridgeStateFiller = (*UserLogin)(nil)
 
 func (ul *UserLogin) FillBridgeState(state status.BridgeState) status.BridgeState {
 	state.UserID = ul.UserMXID
 	state.RemoteID = string(ul.ID)
 	state.RemoteName = ul.RemoteName
 	state.RemoteProfile = &ul.RemoteProfile
-	filler, ok := ul.Client.(status.StandaloneCustomBridgeStateFiller)
+	filler, ok := ul.Client.(status.BridgeStateFiller)
 	if ok {
 		return filler.FillBridgeState(state)
 	}
