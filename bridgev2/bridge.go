@@ -319,7 +319,7 @@ func (br *Bridge) Stop() {
 func (br *Bridge) stop(isRunOnce bool) {
 	br.Log.Info().Msg("Shutting down bridge")
 	br.stopBackfillQueue.Set()
-	br.Matrix.Stop()
+	br.Matrix.PreStop()
 	if !isRunOnce {
 		br.cacheLock.Lock()
 		var wg sync.WaitGroup
@@ -330,6 +330,7 @@ func (br *Bridge) stop(isRunOnce bool) {
 		br.cacheLock.Unlock()
 		wg.Wait()
 	}
+	br.Matrix.Stop()
 	if stopNet, ok := br.Network.(StoppableNetwork); ok {
 		stopNet.Stop()
 	}
