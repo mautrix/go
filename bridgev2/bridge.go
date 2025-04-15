@@ -327,8 +327,8 @@ func (br *Bridge) stop(isRunOnce bool) {
 		for _, login := range br.userLoginsByID {
 			go login.Disconnect(wg.Done)
 		}
-		wg.Wait()
 		br.cacheLock.Unlock()
+		wg.Wait()
 	}
 	if stopNet, ok := br.Network.(StoppableNetwork); ok {
 		stopNet.Stop()
