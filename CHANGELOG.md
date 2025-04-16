@@ -1,3 +1,19 @@
+## v0.23.3 (2025-04-16)
+
+* *(commands)* Added generic command processing framework for bots.
+* *(client)* Added `allowed_room_ids` field to room summary responses
+  (thanks to [@nexy7574] in [#367]).
+* *(bridgev2)* Added support for custom timeouts on outgoing messages which have
+  to wait for a remote echo.
+* *(bridgev2)* Added automatic typing stop event if the ghost user had sent a
+  typing event before a message.
+* *(bridgev2)* The saved management room is now cleared if the user leaves the
+  room, allowing the next DM to be automatically marked as a management room.
+* *(bridge)* Removed deprecated fallback package for bridge statuses.
+  The status package is now only available under bridgev2.
+
+[#367]: https://github.com/mautrix/go/pull/367
+
 ## v0.23.2 (2025-03-16)
 
 * **Breaking change *(bridge)*** Removed legacy bridge module.
