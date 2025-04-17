@@ -58,7 +58,7 @@ func NewCryptoHelper(cli *mautrix.Client, pickleKey []byte, store any) (*CryptoH
 		return nil, fmt.Errorf("pickle key must be provided")
 	}
 	_, isExtensible := cli.Syncer.(mautrix.ExtensibleSyncer)
-	if !isExtensible {
+	if !cli.SetAppServiceDeviceID && !isExtensible {
 		return nil, fmt.Errorf("the client syncer must implement ExtensibleSyncer")
 	}
 

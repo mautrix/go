@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/random"
 	"go.mau.fi/util/retryafter"
 	"maunium.net/go/maulogger/v2/maulogadapt"
 
@@ -82,6 +83,9 @@ type Client struct {
 	// Should the ?user_id= query parameter be set in requests?
 	// See https://spec.matrix.org/v1.6/application-service-api/#identity-assertion
 	SetAppServiceUserID bool
+	// Should the org.matrix.msc3202.device_id query parameter be set in requests?
+	// See https://github.com/matrix-org/matrix-spec-proposals/pull/3202
+	SetAppServiceDeviceID bool
 
 	syncingID uint32 // Identifies the current Sync. Only one Sync can be active at any given time.
 }
@@ -801,6 +805,28 @@ func (cli *Client) Login(req *ReqLogin) (resp *RespLogin, err error) {
 		}
 	}
 	return
+}
+
+func (cli *Client) CreateDeviceMSC4190(deviceID id.DeviceID, initialDispalyName string) (err error) {
+	if len(deviceID) == 0 {
+		deviceID = id.DeviceID(random.String(10))
+	}
+	if !cli.SetAppServiceUserID {
+		return fmt.Errorf("CreateDeviceMSC4190 requires SetAppServiceUserID to be enabled")
+	}
+	if cli.AccessToken == "" {
+		return fmt.Errorf("CreateDeviceMSC4190 requires The AS AccessToken token to be set as the client AccessToken")
+	}
+	urlPath := cli.BuildClientURL("v3", "devices", deviceID)
+	_, err = cli.MakeRequest(http.MethodPut, urlPath, ReqPutDevice{
+		DisplayName: initialDispalyName,
+	}, nil)
+	if err != nil {
+		return err
+	}
+	cli.DeviceID = deviceID
+	cli.SetAppServiceDeviceID = true
+	return nil
 }
 
 // Logout the current user. See https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3logout

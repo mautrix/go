@@ -102,6 +102,10 @@ func (cli *Client) BuildURLWithQuery(urlPath PrefixableURLPath, urlQuery map[str
 	if cli.SetAppServiceUserID {
 		query.Set("user_id", string(cli.UserID))
 	}
+	if cli.SetAppServiceDeviceID && cli.DeviceID != "" {
+		query.Set("device_id", string(cli.DeviceID))
+		query.Set("org.matrix.msc3202.device_id", string(cli.DeviceID))
+	}
 	if urlQuery != nil {
 		for k, v := range urlQuery {
 			query.Set(k, v)

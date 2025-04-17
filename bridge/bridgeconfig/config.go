@@ -97,6 +97,8 @@ func (config *BaseConfig) GenerateRegistration() *appservice.Registration {
 	registration.Namespaces.UserIDs.Register(botRegex, true)
 	registration.Namespaces.UserIDs.Register(config.MakeUserIDRegex(".*"), true)
 
+	config.Bridge.GetEncryptionConfig().applyUnstableFlags(registration)
+
 	return registration
 }
 
@@ -108,6 +110,7 @@ func (config *BaseConfig) MakeAppService() *appservice.AppService {
 	as.Host.Port = config.AppService.Port
 	as.DefaultHTTPRetries = 4
 	as.Registration = config.AppService.GetRegistration()
+	config.Bridge.GetEncryptionConfig().applyUnstableFlags(as.Registration)
 	return as
 }
 
@@ -120,6 +123,10 @@ func (asc *AppserviceConfig) GetRegistration() *appservice.Registration {
 	reg.ServerToken = asc.HSToken
 	reg.AppToken = asc.ASToken
 	return reg
+}
+
+func (ec EncryptionConfig) applyUnstableFlags(registration *appservice.Registration) {
+	registration.MSC4190 = ec.MSC4190
 }
 
 func (asc *AppserviceConfig) copyToRegistration(registration *appservice.Registration) {
@@ -180,6 +187,7 @@ type EncryptionConfig struct {
 	Default    bool `yaml:"default"`
 	Require    bool `yaml:"require"`
 	Appservice bool `yaml:"appservice"`
+	MSC4190    bool `yaml:"msc4190"`
 
 	PlaintextMentions bool `yaml:"plaintext_mentions"`
 
