@@ -230,6 +230,18 @@ func (helper *CryptoHelper) loginBot() (*mautrix.Client, bool, error) {
 	// Create a new client instance with the default AS settings (including as_token),
 	// the Login call will then override the access token in the client.
 	client := helper.bridge.AS.NewMautrixClient(helper.bridge.AS.BotMXID())
+
+	initialDeviceDisplayName := fmt.Sprintf("%s bridge", helper.bridge.ProtocolName)
+	if helper.bridge.Config.Bridge.GetEncryptionConfig().MSC4190 {
+		helper.log.Debug().Msg("Creating bot device with MSC4190")
+		err := client.CreateDeviceMSC4190(deviceID, initialDeviceDisplayName)
+		if err != nil {
+			return nil, deviceID != "", fmt.Errorf("failed to create device for bridge bot: %w", err)
+		}
+		helper.store.DeviceID = client.DeviceID
+		return client, deviceID != "", nil
+	}
+
 	flows, err := client.GetLoginFlows()
 	if err != nil {
 		return nil, deviceID != "", fmt.Errorf("failed to get supported login flows: %w", err)
@@ -245,7 +257,7 @@ func (helper *CryptoHelper) loginBot() (*mautrix.Client, bool, error) {
 		DeviceID:         deviceID,
 		StoreCredentials: true,
 
-		InitialDeviceDisplayName: fmt.Sprintf("%s bridge", helper.bridge.ProtocolName),
+		InitialDeviceDisplayName: initialDeviceDisplayName,
 	})
 	if err != nil {
 		return nil, deviceID != "", fmt.Errorf("failed to log in as bridge bot: %w", err)
