@@ -316,12 +316,21 @@ type contextKey int
 const (
 	LogBodyContextKey contextKey = iota
 	LogRequestIDContextKey
+	MaxAttemptsContextKey
 )
 
 func (cli *Client) RequestStart(req *http.Request) {
 	if cli != nil && cli.RequestHook != nil {
 		cli.RequestHook(req)
 	}
+}
+
+// WithMaxRetries updates the context to set the maximum number of retries for any HTTP requests made with the context.
+//
+// 0 means the request will only be attempted once and will not be retried.
+// Negative values will remove the override and fallback to the defaults.
+func WithMaxRetries(ctx context.Context, maxRetries int) context.Context {
+	return context.WithValue(ctx, MaxAttemptsContextKey, maxRetries+1)
 }
 
 func (cli *Client) LogRequestDone(req *http.Request, resp *http.Response, err error, handlerErr error, contentLength int, duration time.Duration) {
@@ -473,7 +482,12 @@ func (cli *Client) MakeFullRequestWithResp(ctx context.Context, params FullReque
 		return nil, nil, ErrClientIsNil
 	}
 	if params.MaxAttempts == 0 {
-		params.MaxAttempts = 1 + cli.DefaultHTTPRetries
+		maxAttempts, ok := ctx.Value(MaxAttemptsContextKey).(int)
+		if ok && maxAttempts > 0 {
+			params.MaxAttempts = maxAttempts
+		} else {
+			params.MaxAttempts = 1 + cli.DefaultHTTPRetries
+		}
 	}
 	if params.BackoffDuration == 0 {
 		if cli.DefaultHTTPBackoff == 0 {
