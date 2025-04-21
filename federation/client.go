@@ -220,6 +220,26 @@ func (c *Client) Query(ctx context.Context, serverName, queryType string, queryP
 	return
 }
 
+func queryToValues(query map[string]string) url.Values {
+	values := make(url.Values, len(query))
+	for k, v := range query {
+		values[k] = []string{v}
+	}
+	return values
+}
+
+func (c *Client) PublicRooms(ctx context.Context, serverName string, req *mautrix.ReqPublicRooms) (resp *mautrix.RespPublicRooms, err error) {
+	_, _, err = c.MakeFullRequest(ctx, RequestParams{
+		ServerName:   serverName,
+		Method:       http.MethodGet,
+		Path:         URLPath{"v1", "publicRooms"},
+		Query:        queryToValues(req.Query()),
+		Authenticate: true,
+		ResponseJSON: &resp,
+	})
+	return
+}
+
 type RespOpenIDUserInfo struct {
 	Sub id.UserID `json:"sub"`
 }

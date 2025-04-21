@@ -1986,6 +1986,12 @@ func (cli *Client) JoinedRooms(ctx context.Context) (resp *RespJoinedRooms, err 
 	return
 }
 
+func (cli *Client) PublicRooms(ctx context.Context, req *ReqPublicRooms) (resp *RespPublicRooms, err error) {
+	urlPath := cli.BuildURLWithQuery(ClientURLPath{"v3", "publicRooms"}, req.Query())
+	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
+	return
+}
+
 // Hierarchy returns a list of rooms that are in the room's hierarchy. See https://spec.matrix.org/v1.4/client-server-api/#get_matrixclientv1roomsroomidhierarchy
 //
 // The hierarchy API is provided to walk the space tree and discover the rooms with their aesthetic details. works in a depth-first manner:

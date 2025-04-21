@@ -424,6 +424,33 @@ type ReqSendReceipt struct {
 	ThreadID string `json:"thread_id,omitempty"`
 }
 
+type ReqPublicRooms struct {
+	IncludeAllNetworks   bool
+	Limit                int
+	Since                string
+	ThirdPartyInstanceID string
+}
+
+func (req *ReqPublicRooms) Query() map[string]string {
+	query := map[string]string{}
+	if req == nil {
+		return query
+	}
+	if req.IncludeAllNetworks {
+		query["include_all_networks"] = "true"
+	}
+	if req.Limit > 0 {
+		query["limit"] = strconv.Itoa(req.Limit)
+	}
+	if req.Since != "" {
+		query["since"] = req.Since
+	}
+	if req.ThirdPartyInstanceID != "" {
+		query["third_party_instance_id"] = req.ThirdPartyInstanceID
+	}
+	return query
+}
+
 // ReqHierarchy contains the parameters for https://spec.matrix.org/v1.4/client-server-api/#get_matrixclientv1roomsroomidhierarchy
 //
 // As it's a GET method, there is no JSON body, so this is only query parameters.
