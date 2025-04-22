@@ -233,12 +233,36 @@ func (br *Connector) GetCapabilities() *bridgev2.MatrixCapabilities {
 	return br.Capabilities
 }
 
-func (br *Connector) Stop() {
+func sendStopSignal(ch chan struct{}) {
+	if ch != nil {
+		select {
+		case ch <- struct{}{}:
+		default:
+		}
+	}
+}
+
+func (br *Connector) PreStop() {
 	br.stopping = true
 	br.AS.Stop()
+	if stopWebsocket := br.AS.StopWebsocket; stopWebsocket != nil {
+		stopWebsocket(appservice.ErrWebsocketManualStop)
+	}
+	sendStopSignal(br.wsStopPinger)
+	sendStopSignal(br.wsShortCircuitReconnectBackoff)
+}
+
+func (br *Connector) Stop() {
 	br.EventProcessor.Stop()
 	if br.Crypto != nil {
 		br.Crypto.Stop()
+	}
+	if wsStopChan := br.wsStopped; wsStopChan != nil {
+		select {
+		case <-wsStopChan:
+		case <-time.After(4 * time.Second):
+			br.Log.Warn().Msg("Timed out waiting for websocket to close")
+		}
 	}
 }
 

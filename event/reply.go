@@ -47,5 +47,27 @@ func (content *MessageEventContent) GetReplyTo() id.EventID {
 }
 
 func (content *MessageEventContent) SetReply(inReplyTo *Event) {
-	content.RelatesTo = (&RelatesTo{}).SetReplyTo(inReplyTo.ID)
+	if content.RelatesTo == nil {
+		content.RelatesTo = &RelatesTo{}
+	}
+	content.RelatesTo.SetReplyTo(inReplyTo.ID)
+	if content.Mentions == nil {
+		content.Mentions = &Mentions{}
+	}
+	content.Mentions.Add(inReplyTo.Sender)
+}
+
+func (content *MessageEventContent) SetThread(inReplyTo *Event) {
+	root := inReplyTo.ID
+	relatable, ok := inReplyTo.Content.Parsed.(Relatable)
+	if ok {
+		targetRoot := relatable.OptionalGetRelatesTo().GetThreadParent()
+		if targetRoot != "" {
+			root = targetRoot
+		}
+	}
+	if content.RelatesTo == nil {
+		content.RelatesTo = &RelatesTo{}
+	}
+	content.RelatesTo.SetThread(root, inReplyTo.ID)
 }

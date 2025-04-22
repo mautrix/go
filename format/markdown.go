@@ -8,6 +8,7 @@ package format
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/yuin/goldmark"
@@ -37,6 +38,15 @@ func UnwrapSingleParagraph(html string) string {
 		}
 	}
 	return html
+}
+
+var mdEscapeRegex = regexp.MustCompile("([\\\\`*_[\\]])")
+
+func EscapeMarkdown(text string) string {
+	text = mdEscapeRegex.ReplaceAllString(text, "\\$1")
+	text = strings.ReplaceAll(text, ">", "&gt;")
+	text = strings.ReplaceAll(text, "<", "&lt;")
+	return text
 }
 
 func RenderMarkdownCustom(text string, renderer goldmark.Markdown) event.MessageEventContent {

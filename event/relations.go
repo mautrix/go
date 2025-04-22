@@ -101,6 +101,10 @@ func (rel *RelatesTo) SetReplace(mxid id.EventID) *RelatesTo {
 }
 
 func (rel *RelatesTo) SetReplyTo(mxid id.EventID) *RelatesTo {
+	if rel.Type != RelThread {
+		rel.Type = ""
+		rel.EventID = ""
+	}
 	rel.InReplyTo = &InReplyTo{EventID: mxid}
 	rel.IsFallingBack = false
 	return rel

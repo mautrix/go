@@ -31,6 +31,7 @@ type MatrixCapabilities struct {
 type MatrixConnector interface {
 	Init(*Bridge)
 	Start(ctx context.Context) error
+	PreStop()
 	Stop()
 
 	GetCapabilities() *MatrixCapabilities

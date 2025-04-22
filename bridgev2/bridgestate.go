@@ -76,7 +76,9 @@ func (bsq *BridgeStateQueue) loop() {
 
 func (bsq *BridgeStateQueue) sendNotice(ctx context.Context, state status.BridgeState) {
 	noticeConfig := bsq.bridge.Config.BridgeStatusNotices
-	isError := state.StateEvent == status.StateBadCredentials || state.StateEvent == status.StateUnknownError
+	isError := state.StateEvent == status.StateBadCredentials ||
+		state.StateEvent == status.StateUnknownError ||
+		state.UserAction == status.UserActionOpenNative
 	sendNotice := noticeConfig == "all" || (noticeConfig == "errors" &&
 		(isError || (bsq.errorSent && state.StateEvent == status.StateConnected)))
 	if !sendNotice {
