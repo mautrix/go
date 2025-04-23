@@ -76,7 +76,7 @@ func (cv *CallVersion) Int() (int, error) {
 type BaseCallEventContent struct {
 	CallID  string      `json:"call_id"`
 	PartyID string      `json:"party_id"`
-	Version CallVersion `json:"version"`
+	Version CallVersion `json:"version,omitempty"`
 }
 
 type CallInviteEventContent struct {
