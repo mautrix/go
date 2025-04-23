@@ -1805,6 +1805,9 @@ func (cli *Client) uploadMediaToURL(ctx context.Context, data ReqUploadMedia) (*
 				break
 			}
 			err = fmt.Errorf("HTTP %d", resp.StatusCode)
+		} else if errors.Is(err, context.Canceled) {
+			cli.Log.Warn().Str("url", data.UnstableUploadURL).Msg("External media upload canceled")
+			return nil, err
 		}
 		if retries <= 0 {
 			cli.Log.Warn().Str("url", data.UnstableUploadURL).Err(err).
