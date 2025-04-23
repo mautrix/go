@@ -170,14 +170,12 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 				if err != nil {
 					return err
 				}
-				rawCryptoStore.DeviceID = resp.DeviceID
 				helper.client.DeviceID = resp.DeviceID
 			} else {
 				helper.log.Debug().
 					Str("username", helper.LoginAs.Identifier.User).
 					Stringer("device_id", storedDeviceID).
 					Msg("Using existing device")
-				rawCryptoStore.DeviceID = storedDeviceID
 				helper.client.DeviceID = storedDeviceID
 			}
 		} else if helper.LoginAs != nil {
@@ -193,12 +191,10 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
-			if storedDeviceID == "" {
-				rawCryptoStore.DeviceID = helper.client.DeviceID
-			}
 		} else if storedDeviceID != "" && storedDeviceID != helper.client.DeviceID {
 			return fmt.Errorf("mismatching device ID in client and crypto store (%q != %q)", storedDeviceID, helper.client.DeviceID)
 		}
+		rawCryptoStore.DeviceID = helper.client.DeviceID
 	} else if helper.LoginAs != nil {
 		return fmt.Errorf("LoginAs can only be used with a managed crypto store")
 	}
