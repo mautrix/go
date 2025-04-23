@@ -106,9 +106,11 @@ func (mach *OlmMachine) decryptAndParseOlmCiphertext(ctx context.Context, evt *e
 		return nil, RecipientKeyMismatch
 	}
 
-	err = olmEvt.Content.ParseRaw(olmEvt.Type)
-	if err != nil && !errors.Is(err, event.ErrUnsupportedContentType) {
-		return nil, fmt.Errorf("failed to parse content of olm payload event: %w", err)
+	if len(olmEvt.Content.VeryRaw) > 0 {
+		err = olmEvt.Content.ParseRaw(olmEvt.Type)
+		if err != nil && !errors.Is(err, event.ErrUnsupportedContentType) {
+			return nil, fmt.Errorf("failed to parse content of olm payload event: %w", err)
+		}
 	}
 
 	olmEvt.SenderKey = senderKey
