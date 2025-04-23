@@ -378,6 +378,9 @@ func (vh *VerificationHelper) StartInRoomVerification(ctx context.Context, roomI
 // be the transaction ID of a verification request that was received via the
 // VerificationRequested callback in [RequiredCallbacks].
 func (vh *VerificationHelper) AcceptVerification(ctx context.Context, txnID id.VerificationTransactionID) error {
+	vh.activeTransactionsLock.Lock()
+	defer vh.activeTransactionsLock.Unlock()
+
 	log := vh.getLog(ctx).With().
 		Str("verification_action", "accept verification").
 		Stringer("transaction_id", txnID).
