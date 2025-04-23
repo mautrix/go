@@ -583,6 +583,15 @@ type ReadReceiptHandlingNetworkAPI interface {
 	HandleMatrixReadReceipt(ctx context.Context, msg *MatrixReadReceipt) error
 }
 
+// ChatViewingNetworkAPI is an optional interface that network connectors can implement to handle viewing chat status.
+type ChatViewingNetworkAPI interface {
+	NetworkAPI
+	// HandleMatrixViewingChat is called when the user opens a portal room.
+	// This will never be called by the standard appservice connector,
+	// as Matrix doesn't have any standard way of signaling chat open status.
+	HandleMatrixViewingChat(ctx context.Context, msg *MatrixViewingChat) error
+}
+
 // TypingHandlingNetworkAPI is an optional interface that network connectors can implement to handle typing events.
 type TypingHandlingNetworkAPI interface {
 	NetworkAPI
@@ -1233,6 +1242,14 @@ type MatrixTyping struct {
 	Portal   *Portal
 	IsTyping bool
 	Type     TypingType
+}
+
+type MatrixViewingChat struct {
+	// The portal that the user is viewing. This will be nil when the user switches to a chat from a different bridge.
+	Portal *Portal
+	// An optional timeout after which the user should not be assumed to be viewing the chat anymore
+	// unless the event is repeated.
+	Timeout time.Duration
 }
 
 type MatrixMarkedUnread = MatrixRoomMeta[*event.MarkedUnreadEventContent]
