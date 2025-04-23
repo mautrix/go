@@ -46,7 +46,7 @@ func (vh *VerificationHelper) StartSAS(ctx context.Context, txnID id.Verificatio
 	if err != nil {
 		return fmt.Errorf("failed to get verification transaction %s: %w", txnID, err)
 	} else if txn.VerificationState != VerificationStateReady {
-		return errors.New("transaction is not in ready state")
+		return fmt.Errorf("transaction is not in ready state: %s", txn.VerificationState.String())
 	} else if txn.StartEventContent != nil {
 		return errors.New("start event already sent or received")
 	}
