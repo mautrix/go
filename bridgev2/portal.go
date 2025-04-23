@@ -1758,7 +1758,8 @@ func (portal *Portal) handleRemoteEvent(ctx context.Context, source *UserLogin, 
 	case RemoteEventChatResync:
 		portal.handleRemoteChatResync(ctx, source, evt.(RemoteChatResync))
 	case RemoteEventChatDelete:
-		portal.handleRemoteChatDelete(ctx, source, evt.(RemoteChatDelete))
+		log.Info().Msg("Ignoring remote chat delete event...")
+		//portal.handleRemoteChatDelete(ctx, source, evt.(RemoteChatDelete))
 	case RemoteEventBackfill:
 		portal.handleRemoteBackfill(ctx, source, evt.(RemoteBackfill))
 	default:
