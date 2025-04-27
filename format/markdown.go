@@ -50,8 +50,8 @@ func EscapeMarkdown(text string) string {
 	return text
 }
 
-func SafeMarkdownCode(text string) string {
-	text = strings.ReplaceAll(text, "\n", " ")
+func SafeMarkdownCode[T ~string](textInput T) string {
+	text := strings.ReplaceAll(string(textInput), "\n", " ")
 	backtickCount := exstrings.LongestSequenceOf(text, '`')
 	if backtickCount == 0 {
 		return fmt.Sprintf("`%s`", text)
