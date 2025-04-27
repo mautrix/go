@@ -14,6 +14,7 @@ import (
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/renderer/html"
+	"go.mau.fi/util/exstrings"
 
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/format/mdext"
@@ -47,6 +48,19 @@ func EscapeMarkdown(text string) string {
 	text = strings.ReplaceAll(text, ">", "&gt;")
 	text = strings.ReplaceAll(text, "<", "&lt;")
 	return text
+}
+
+func SafeMarkdownCode(text string) string {
+	text = strings.ReplaceAll(text, "\n", " ")
+	backtickCount := exstrings.LongestSequenceOf(text, '`')
+	if backtickCount == 0 {
+		return fmt.Sprintf("`%s`", text)
+	}
+	quotes := strings.Repeat("`", backtickCount+1)
+	if text[0] == '`' || text[len(text)-1] == '`' {
+		return fmt.Sprintf("%s %s %s", quotes, text, quotes)
+	}
+	return fmt.Sprintf("%s%s%s", quotes, text, quotes)
 }
 
 func RenderMarkdownCustom(text string, renderer goldmark.Markdown) event.MessageEventContent {
