@@ -38,12 +38,7 @@ func NewProcessor[MetaType any](cli *mautrix.Client) *Processor[MetaType] {
 		Client:           cli,
 		PreValidator:     ValidatePrefixSubstring[MetaType]("!"),
 	}
-	proc.Register(&Handler[MetaType]{
-		Name: UnknownCommandName,
-		Func: func(ce *Event[MetaType]) {
-			ce.Reply("Unknown command")
-		},
-	})
+	proc.Register(MakeUnknownCommandHandler[MetaType]("!"))
 	return proc
 }
 

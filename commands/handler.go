@@ -6,6 +6,10 @@
 
 package commands
 
+import (
+	"strings"
+)
+
 type Handler[MetaType any] struct {
 	Func func(ce *Event[MetaType])
 
@@ -25,5 +29,18 @@ func (h *Handler[MetaType]) initSubcommandContainer() {
 		h.subcommandContainer.Register(h.Subcommands...)
 	} else {
 		h.subcommandContainer = nil
+	}
+}
+
+func MakeUnknownCommandHandler[MetaType any](prefix string) *Handler[MetaType] {
+	return &Handler[MetaType]{
+		Name: UnknownCommandName,
+		Func: func(ce *Event[MetaType]) {
+			if len(ce.ParentCommands) == 0 {
+				ce.Reply("Unknown command `%s%s`", prefix, ce.Command)
+			} else {
+				ce.Reply("Unknown subcommand `%s%s %s`", prefix, strings.Join(ce.ParentCommands, " "), ce.Command)
+			}
+		},
 	}
 }
