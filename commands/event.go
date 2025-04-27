@@ -23,6 +23,9 @@ type Event[MetaType any] struct {
 	*event.Event
 	// RawInput is the entire message before splitting into command and arguments.
 	RawInput string
+	// ParentCommands is the chain of commands leading up to this command.
+	// This is only set if the command is a subcommand.
+	ParentCommands []string
 	// Command is the lowercased first word of the message.
 	Command string
 	// Args are the rest of the message split by whitespace ([strings.Fields]).
@@ -121,4 +124,19 @@ func (evt *Event[MetaType]) MarkRead() {
 	if err != nil {
 		zerolog.Ctx(evt.Ctx).Err(err).Msg("Failed to send read receipt")
 	}
+}
+
+// PromoteFirstArgToCommand promotes the first argument to the command name.
+//
+// Command will be set to the lowercased first item in the Args list.
+// Both Args and RawArgs will be updated to remove the first argument, but RawInput will be left as-is.
+//
+// The caller MUST check that there are args before calling this function.
+func (evt *Event[MetaType]) PromoteFirstArgToCommand() {
+	if len(evt.Args) == 0 {
+		panic(fmt.Errorf("PromoteFirstArgToCommand called with no args"))
+	}
+	evt.Command = strings.ToLower(evt.Args[0])
+	evt.RawArgs = strings.TrimLeft(strings.TrimPrefix(evt.RawArgs, evt.Args[0]), " ")
+	evt.Args = evt.Args[1:]
 }

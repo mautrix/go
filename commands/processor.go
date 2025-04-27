@@ -8,10 +8,8 @@ package commands
 
 import (
 	"context"
-	"fmt"
 	"runtime/debug"
 	"strings"
-	"sync"
 
 	"github.com/rs/zerolog"
 
@@ -22,34 +20,23 @@ import (
 // Processor implements boilerplate code for splitting messages into a command and arguments,
 // and finding the appropriate handler for the command.
 type Processor[MetaType any] struct {
+	*CommandContainer[MetaType]
+
 	Client       *mautrix.Client
 	LogArgs      bool
 	PreValidator PreValidator[MetaType]
 	Meta         MetaType
-	commands     map[string]*Handler[MetaType]
-	aliases      map[string]string
-	lock         sync.RWMutex
-}
-
-type Handler[MetaType any] struct {
-	Func func(ce *Event[MetaType])
-
-	// Name is the primary name of the command. It must be lowercase.
-	Name string
-	// Aliases are alternative names for the command. They must be lowercase.
-	Aliases []string
 }
 
 // UnknownCommandName is the name of the fallback handler which is used if no other handler is found.
 // If even the unknown command handler is not found, the command is ignored.
-const UnknownCommandName = "unknown-command"
+const UnknownCommandName = "__unknown-command__"
 
 func NewProcessor[MetaType any](cli *mautrix.Client) *Processor[MetaType] {
 	proc := &Processor[MetaType]{
-		Client:       cli,
-		PreValidator: ValidatePrefixSubstring[MetaType]("!"),
-		commands:     make(map[string]*Handler[MetaType]),
-		aliases:      make(map[string]string),
+		CommandContainer: NewCommandContainer[MetaType](),
+		Client:           cli,
+		PreValidator:     ValidatePrefixSubstring[MetaType]("!"),
 	}
 	proc.Register(&Handler[MetaType]{
 		Name: UnknownCommandName,
@@ -58,45 +45,6 @@ func NewProcessor[MetaType any](cli *mautrix.Client) *Processor[MetaType] {
 		},
 	})
 	return proc
-}
-
-// Register registers the given command handlers.
-func (proc *Processor[MetaType]) Register(handlers ...*Handler[MetaType]) {
-	proc.lock.Lock()
-	defer proc.lock.Unlock()
-	for _, handler := range handlers {
-		proc.registerOne(handler)
-	}
-}
-
-func (proc *Processor[MetaType]) registerOne(handler *Handler[MetaType]) {
-	if strings.ToLower(handler.Name) != handler.Name {
-		panic(fmt.Errorf("command %q is not lowercase", handler.Name))
-	}
-	proc.commands[handler.Name] = handler
-	for _, alias := range handler.Aliases {
-		if strings.ToLower(alias) != alias {
-			panic(fmt.Errorf("alias %q is not lowercase", alias))
-		}
-		proc.aliases[alias] = handler.Name
-	}
-}
-
-func (proc *Processor[MetaType]) Unregister(handlers ...*Handler[MetaType]) {
-	proc.lock.Lock()
-	defer proc.lock.Unlock()
-	for _, handler := range handlers {
-		proc.unregisterOne(handler)
-	}
-}
-
-func (proc *Processor[MetaType]) unregisterOne(handler *Handler[MetaType]) {
-	delete(proc.commands, handler.Name)
-	for _, alias := range handler.Aliases {
-		if proc.aliases[alias] == handler.Name {
-			delete(proc.aliases, alias)
-		}
-	}
 }
 
 func (proc *Processor[MetaType]) Process(ctx context.Context, evt *event.Event) {
@@ -123,25 +71,30 @@ func (proc *Processor[MetaType]) Process(ctx context.Context, evt *event.Event) 
 		return
 	}
 
-	realCommand := parsed.Command
-	proc.lock.RLock()
-	alias, ok := proc.aliases[realCommand]
-	if ok {
-		realCommand = alias
-	}
-	handler, ok := proc.commands[realCommand]
-	if !ok {
-		handler, ok = proc.commands[UnknownCommandName]
-	}
-	proc.lock.RUnlock()
-	if !ok {
+	handler := proc.GetHandler(parsed.Command)
+	if handler == nil {
 		return
+	}
+	handlerChain := zerolog.Arr()
+	handlerChain.Str(handler.Name)
+	for handler.subcommandContainer != nil && len(parsed.Args) > 0 {
+		subHandler := handler.subcommandContainer.GetHandler(strings.ToLower(parsed.Args[0]))
+		if subHandler != nil {
+			parsed.ParentCommands = append(parsed.ParentCommands, parsed.Command)
+			handlerChain.Str(subHandler.Name)
+			parsed.PromoteFirstArgToCommand()
+			handler = subHandler
+		}
 	}
 
 	logWith := log.With().
-		Str("command", realCommand).
+		Str("command", parsed.Command).
+		Array("handler", handlerChain).
 		Stringer("sender", evt.Sender).
 		Stringer("room_id", evt.RoomID)
+	if len(parsed.ParentCommands) > 0 {
+		logWith = logWith.Strs("parent_commands", parsed.ParentCommands)
+	}
 	if proc.LogArgs {
 		logWith = logWith.Strs("args", parsed.Args)
 	}
