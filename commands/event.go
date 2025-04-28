@@ -58,9 +58,15 @@ var IDHTMLParser = &format.HTMLParser{
 // ParseEvent parses a message into a command event struct.
 func ParseEvent[MetaType any](ctx context.Context, evt *event.Event) *Event[MetaType] {
 	content := evt.Content.Parsed.(*event.MessageEventContent)
+	if content.MsgType == event.MsgNotice || content.RelatesTo.GetReplaceID() != "" {
+		return nil
+	}
 	text := content.Body
 	if content.Format == event.FormatHTML {
 		text = IDHTMLParser.Parse(content.FormattedBody, format.NewContext(ctx))
+	}
+	if len(text) == 0 {
+		return nil
 	}
 	parts := strings.Fields(text)
 	return &Event[MetaType]{

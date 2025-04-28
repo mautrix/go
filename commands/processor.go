@@ -62,7 +62,7 @@ func (proc *Processor[MetaType]) Process(ctx context.Context, evt *event.Event) 
 		}
 	}()
 	parsed := ParseEvent[MetaType](ctx, evt)
-	if !proc.PreValidator.Validate(parsed) {
+	if parsed == nil || !proc.PreValidator.Validate(parsed) {
 		return
 	}
 	parsed.Proc = proc
