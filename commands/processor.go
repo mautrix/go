@@ -65,20 +65,31 @@ func (proc *Processor[MetaType]) Process(ctx context.Context, evt *event.Event) 
 	if !proc.PreValidator.Validate(parsed) {
 		return
 	}
+	parsed.Proc = proc
+	parsed.Meta = proc.Meta
+	parsed.Ctx = ctx
 
 	handler := proc.GetHandler(parsed.Command)
 	if handler == nil {
 		return
+	}
+	parsed.Handler = handler
+	if handler.PreFunc != nil {
+		handler.PreFunc(parsed)
 	}
 	handlerChain := zerolog.Arr()
 	handlerChain.Str(handler.Name)
 	for handler.subcommandContainer != nil && len(parsed.Args) > 0 {
 		subHandler := handler.subcommandContainer.GetHandler(strings.ToLower(parsed.Args[0]))
 		if subHandler != nil {
+			handler = subHandler
 			parsed.ParentCommands = append(parsed.ParentCommands, parsed.Command)
 			handlerChain.Str(subHandler.Name)
-			parsed.PromoteFirstArgToCommand()
-			handler = subHandler
+			parsed.Command = strings.ToLower(parsed.ShiftArg())
+			parsed.Handler = subHandler
+			if subHandler.PreFunc != nil {
+				subHandler.PreFunc(parsed)
+			}
 		}
 	}
 
@@ -95,9 +106,6 @@ func (proc *Processor[MetaType]) Process(ctx context.Context, evt *event.Event) 
 	}
 	log = logWith.Logger()
 	parsed.Ctx = log.WithContext(ctx)
-	parsed.Handler = handler
-	parsed.Proc = proc
-	parsed.Meta = proc.Meta
 
 	log.Debug().Msg("Processing command")
 	handler.Func(parsed)

@@ -126,17 +126,20 @@ func (evt *Event[MetaType]) MarkRead() {
 	}
 }
 
-// PromoteFirstArgToCommand promotes the first argument to the command name.
-//
-// Command will be set to the lowercased first item in the Args list.
-// Both Args and RawArgs will be updated to remove the first argument, but RawInput will be left as-is.
-//
-// The caller MUST check that there are args before calling this function.
-func (evt *Event[MetaType]) PromoteFirstArgToCommand() {
+// ShiftArg removes the first argument from the Args list and RawArgs data and returns it.
+// RawInput will not be modified.
+func (evt *Event[MetaType]) ShiftArg() string {
 	if len(evt.Args) == 0 {
-		panic(fmt.Errorf("PromoteFirstArgToCommand called with no args"))
+		return ""
 	}
-	evt.Command = strings.ToLower(evt.Args[0])
+	firstArg := evt.Args[0]
 	evt.RawArgs = strings.TrimLeft(strings.TrimPrefix(evt.RawArgs, evt.Args[0]), " ")
 	evt.Args = evt.Args[1:]
+	return firstArg
+}
+
+// UnshiftArg reverses ShiftArg by adding the given value to the beginning of the Args list and RawArgs data.
+func (evt *Event[MetaType]) UnshiftArg(arg string) {
+	evt.RawArgs = arg + " " + evt.RawArgs
+	evt.Args = append([]string{arg}, evt.Args...)
 }

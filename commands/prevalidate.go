@@ -61,7 +61,7 @@ func (f AnyPreValidator[MetaType]) Validate(ce *Event[MetaType]) bool {
 func ValidatePrefixCommand[MetaType any](prefix string) PreValidator[MetaType] {
 	return FuncPreValidator[MetaType](func(ce *Event[MetaType]) bool {
 		if ce.Command == prefix && len(ce.Args) > 0 {
-			ce.PromoteFirstArgToCommand()
+			ce.Command = strings.ToLower(ce.ShiftArg())
 			return true
 		}
 		return false

@@ -11,6 +11,7 @@ import (
 )
 
 type Handler[MetaType any] struct {
+	// Func is the function that is called when the command is executed.
 	Func func(ce *Event[MetaType])
 
 	// Name is the primary name of the command. It must be lowercase.
@@ -19,6 +20,10 @@ type Handler[MetaType any] struct {
 	Aliases []string
 	// Subcommands are subcommands of this command.
 	Subcommands []*Handler[MetaType]
+	// PreFunc is a function that is called before checking subcommands.
+	// It can be used to have parameters between subcommands (e.g. `!rooms <room ID> <command>`).
+	// Event.ShiftArg will likely be useful for implementing such parameters.
+	PreFunc func(ce *Event[MetaType])
 
 	subcommandContainer *CommandContainer[MetaType]
 }
