@@ -15,6 +15,7 @@ import (
 
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/format"
+	"maunium.net/go/mautrix/id"
 )
 
 // Event contains the data of a single command event.
@@ -85,16 +86,17 @@ type ReplyOpts struct {
 	Reply         bool
 	Thread        bool
 	SendAsText    bool
+	Edit          id.EventID
 }
 
-func (evt *Event[MetaType]) Reply(msg string, args ...any) {
+func (evt *Event[MetaType]) Reply(msg string, args ...any) id.EventID {
 	if len(args) > 0 {
 		msg = fmt.Sprintf(msg, args...)
 	}
-	evt.Respond(msg, ReplyOpts{AllowMarkdown: true, Reply: true})
+	return evt.Respond(msg, ReplyOpts{AllowMarkdown: true, Reply: true})
 }
 
-func (evt *Event[MetaType]) Respond(msg string, opts ReplyOpts) {
+func (evt *Event[MetaType]) Respond(msg string, opts ReplyOpts) id.EventID {
 	content := format.RenderMarkdown(msg, opts.AllowMarkdown, opts.AllowHTML)
 	if opts.Thread {
 		content.SetThread(evt.Event)
@@ -105,24 +107,33 @@ func (evt *Event[MetaType]) Respond(msg string, opts ReplyOpts) {
 	if !opts.SendAsText {
 		content.MsgType = event.MsgNotice
 	}
-	_, err := evt.Proc.Client.SendMessageEvent(evt.Ctx, evt.RoomID, event.EventMessage, content)
+	if opts.Edit != "" {
+		content.SetEdit(opts.Edit)
+	}
+	resp, err := evt.Proc.Client.SendMessageEvent(evt.Ctx, evt.RoomID, event.EventMessage, content)
 	if err != nil {
 		zerolog.Ctx(evt.Ctx).Err(err).Msg("Failed to send reply")
+		return ""
 	}
+	return resp.EventID
 }
 
-func (evt *Event[MetaType]) React(emoji string) {
-	_, err := evt.Proc.Client.SendReaction(evt.Ctx, evt.RoomID, evt.ID, emoji)
+func (evt *Event[MetaType]) React(emoji string) id.EventID {
+	resp, err := evt.Proc.Client.SendReaction(evt.Ctx, evt.RoomID, evt.ID, emoji)
 	if err != nil {
 		zerolog.Ctx(evt.Ctx).Err(err).Msg("Failed to send reaction")
+		return ""
 	}
+	return resp.EventID
 }
 
-func (evt *Event[MetaType]) Redact() {
-	_, err := evt.Proc.Client.RedactEvent(evt.Ctx, evt.RoomID, evt.ID)
+func (evt *Event[MetaType]) Redact() id.EventID {
+	resp, err := evt.Proc.Client.RedactEvent(evt.Ctx, evt.RoomID, evt.ID)
 	if err != nil {
 		zerolog.Ctx(evt.Ctx).Err(err).Msg("Failed to redact command")
+		return ""
 	}
+	return resp.EventID
 }
 
 func (evt *Event[MetaType]) MarkRead() {
