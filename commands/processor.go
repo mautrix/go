@@ -90,6 +90,8 @@ func (proc *Processor[MetaType]) Process(ctx context.Context, evt *event.Event) 
 			if subHandler.PreFunc != nil {
 				subHandler.PreFunc(parsed)
 			}
+		} else {
+			break
 		}
 	}
 
