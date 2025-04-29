@@ -210,6 +210,7 @@ func (content *MessageEventContent) SetEdit(original id.EventID) {
 	content.RelatesTo = (&RelatesTo{}).SetReplace(original)
 	if content.MsgType == MsgText || content.MsgType == MsgNotice {
 		content.Body = "* " + content.Body
+		content.Mentions = &Mentions{}
 		if content.Format == FormatHTML && len(content.FormattedBody) > 0 {
 			content.FormattedBody = "* " + content.FormattedBody
 		}
