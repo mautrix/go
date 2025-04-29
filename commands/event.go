@@ -81,12 +81,13 @@ func ParseEvent[MetaType any](ctx context.Context, evt *event.Event) *Event[Meta
 }
 
 type ReplyOpts struct {
-	AllowHTML     bool
-	AllowMarkdown bool
-	Reply         bool
-	Thread        bool
-	SendAsText    bool
-	Edit          id.EventID
+	AllowHTML        bool
+	AllowMarkdown    bool
+	Reply            bool
+	Thread           bool
+	SendAsText       bool
+	Edit             id.EventID
+	OverrideMentions *event.Mentions
 }
 
 func (evt *Event[MetaType]) Reply(msg string, args ...any) id.EventID {
@@ -109,6 +110,9 @@ func (evt *Event[MetaType]) Respond(msg string, opts ReplyOpts) id.EventID {
 	}
 	if opts.Edit != "" {
 		content.SetEdit(opts.Edit)
+	}
+	if opts.OverrideMentions != nil {
+		content.Mentions = opts.OverrideMentions
 	}
 	resp, err := evt.Proc.Client.SendMessageEvent(evt.Ctx, evt.RoomID, event.EventMessage, content)
 	if err != nil {
