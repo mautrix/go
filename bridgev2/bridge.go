@@ -318,6 +318,7 @@ func (br *Bridge) Stop() {
 
 func (br *Bridge) stop(isRunOnce bool) {
 	br.Log.Info().Msg("Shutting down bridge")
+	br.DisappearLoop.Stop()
 	br.stopBackfillQueue.Set()
 	br.Matrix.PreStop()
 	if !isRunOnce {
