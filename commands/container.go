@@ -40,11 +40,19 @@ func (cont *CommandContainer[MetaType]) Register(handlers ...*Handler[MetaType])
 func (cont *CommandContainer[MetaType]) registerOne(handler *Handler[MetaType]) {
 	if strings.ToLower(handler.Name) != handler.Name {
 		panic(fmt.Errorf("command %q is not lowercase", handler.Name))
+	} else if val, alreadyExists := cont.commands[handler.Name]; alreadyExists && val != handler {
+		panic(fmt.Errorf("tried to register command %q, but it's already registered", handler.Name))
+	} else if aliasTarget, alreadyExists := cont.aliases[handler.Name]; alreadyExists {
+		panic(fmt.Errorf("tried to register command %q, but it's already registered as an alias for %q", handler.Name, aliasTarget))
 	}
 	cont.commands[handler.Name] = handler
 	for _, alias := range handler.Aliases {
 		if strings.ToLower(alias) != alias {
 			panic(fmt.Errorf("alias %q is not lowercase", alias))
+		} else if val, alreadyExists := cont.aliases[alias]; alreadyExists && val != handler.Name {
+			panic(fmt.Errorf("tried to register alias %q for %q, but it's already registered for %q", alias, handler.Name, cont.aliases[alias]))
+		} else if _, alreadyExists = cont.commands[alias]; alreadyExists {
+			panic(fmt.Errorf("tried to register alias %q for %q, but it's already registered as a command", alias, handler.Name))
 		}
 		cont.aliases[alias] = handler.Name
 	}
