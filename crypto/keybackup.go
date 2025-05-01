@@ -3,6 +3,7 @@ package crypto
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"time"
 
@@ -154,13 +155,19 @@ func (mach *OlmMachine) GetAndStoreKeyBackup(ctx context.Context, version id.Key
 	return nil
 }
 
+var (
+	ErrUnknownAlgorithmInKeyBackup                   = errors.New("ignoring room key in backup with weird algorithm")
+	ErrMismatchingSessionIDInKeyBackup               = errors.New("mismatched session ID while creating inbound group session from key backup")
+	ErrFailedToStoreNewInboundGroupSessionFromBackup = errors.New("failed to store new inbound group session from key backup")
+)
+
 func (mach *OlmMachine) ImportRoomKeyFromBackup(ctx context.Context, version id.KeyBackupVersion, roomID id.RoomID, sessionID id.SessionID, keyBackupData *backup.MegolmSessionData) (*InboundGroupSession, error) {
 	log := zerolog.Ctx(ctx).With().
 		Str("room_id", roomID.String()).
 		Str("session_id", sessionID.String()).
 		Logger()
 	if keyBackupData.Algorithm != id.AlgorithmMegolmV1 {
-		return nil, fmt.Errorf("ignoring room key in backup with weird algorithm %s", keyBackupData.Algorithm)
+		return nil, fmt.Errorf("%w %s", ErrUnknownAlgorithmInKeyBackup, keyBackupData.Algorithm)
 	}
 
 	igsInternal, err := olm.InboundGroupSessionImport([]byte(keyBackupData.SessionKey))
@@ -170,7 +177,7 @@ func (mach *OlmMachine) ImportRoomKeyFromBackup(ctx context.Context, version id.
 		log.Warn().
 			Stringer("actual_session_id", igsInternal.ID()).
 			Msg("Mismatched session ID while creating inbound group session from key backup")
-		return nil, fmt.Errorf("mismatched session ID while creating inbound group session from key backup")
+		return nil, ErrMismatchingSessionIDInKeyBackup
 	}
 
 	var maxAge time.Duration
@@ -202,7 +209,7 @@ func (mach *OlmMachine) ImportRoomKeyFromBackup(ctx context.Context, version id.
 	}
 	err = mach.CryptoStore.PutGroupSession(ctx, igs)
 	if err != nil {
-		return nil, fmt.Errorf("failed to store new inbound group session: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrFailedToStoreNewInboundGroupSessionFromBackup, err)
 	}
 	mach.markSessionReceived(ctx, roomID, sessionID, firstKnownIndex)
 	return igs, nil
