@@ -589,6 +589,7 @@ type ChatViewingNetworkAPI interface {
 	// HandleMatrixViewingChat is called when the user opens a portal room.
 	// This will never be called by the standard appservice connector,
 	// as Matrix doesn't have any standard way of signaling chat open status.
+	// Clients are expected to call this every 5 seconds. There is no signal for closing a chat.
 	HandleMatrixViewingChat(ctx context.Context, msg *MatrixViewingChat) error
 }
 
@@ -1247,9 +1248,6 @@ type MatrixTyping struct {
 type MatrixViewingChat struct {
 	// The portal that the user is viewing. This will be nil when the user switches to a chat from a different bridge.
 	Portal *Portal
-	// An optional timeout after which the user should not be assumed to be viewing the chat anymore
-	// unless the event is repeated.
-	Timeout time.Duration
 }
 
 type MatrixMarkedUnread = MatrixRoomMeta[*event.MarkedUnreadEventContent]
