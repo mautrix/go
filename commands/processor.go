@@ -82,8 +82,9 @@ func (proc *Processor[MetaType]) Process(ctx context.Context, evt *event.Event) 
 	for handler.subcommandContainer != nil && len(parsed.Args) > 0 {
 		subHandler := handler.subcommandContainer.GetHandler(strings.ToLower(parsed.Args[0]))
 		if subHandler != nil {
-			handler = subHandler
 			parsed.ParentCommands = append(parsed.ParentCommands, parsed.Command)
+			parsed.ParentHandlers = append(parsed.ParentHandlers, handler)
+			handler = subHandler
 			handlerChain.Str(subHandler.Name)
 			parsed.Command = strings.ToLower(parsed.ShiftArg())
 			parsed.Handler = subHandler

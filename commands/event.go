@@ -27,6 +27,7 @@ type Event[MetaType any] struct {
 	// ParentCommands is the chain of commands leading up to this command.
 	// This is only set if the command is a subcommand.
 	ParentCommands []string
+	ParentHandlers []*Handler[MetaType]
 	// Command is the lowercased first word of the message.
 	Command string
 	// Args are the rest of the message split by whitespace ([strings.Fields]).
