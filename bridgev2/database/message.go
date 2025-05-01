@@ -214,6 +214,9 @@ func (m *Message) updateSQLVariables() []any {
 }
 
 const FakeMXIDPrefix = "~fake:"
+const TxnMXIDPrefix = "~txn:"
+const NetworkTxnMXIDPrefix = TxnMXIDPrefix + "network:"
+const RandomTxnMXIDPrefix = TxnMXIDPrefix + "random:"
 
 func (m *Message) SetFakeMXID() {
 	hash := sha256.Sum256([]byte(m.ID))

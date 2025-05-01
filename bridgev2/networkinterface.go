@@ -259,6 +259,11 @@ type IdentifierValidatingNetwork interface {
 	ValidateUserID(id networkid.UserID) bool
 }
 
+type TransactionIDGeneratingNetwork interface {
+	NetworkConnector
+	GenerateTransactionID(userID id.UserID, roomID id.RoomID, eventType event.Type) networkid.RawTransactionID
+}
+
 type PortalBridgeInfoFillingNetwork interface {
 	NetworkConnector
 	FillPortalBridgeInfo(portal *Portal, content *event.BridgeEventContent)
@@ -1161,6 +1166,8 @@ type MatrixEventBase[ContentType any] struct {
 
 	// The original sender user ID. Only present in case the event is being relayed (and Sender is not the same user).
 	OrigSender *OrigSender
+
+	InputTransactionID networkid.RawTransactionID
 }
 
 type MatrixMessage struct {

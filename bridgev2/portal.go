@@ -811,6 +811,13 @@ func (portal *Portal) checkMessageContentCaps(ctx context.Context, caps *event.R
 	return true
 }
 
+func (portal *Portal) parseInputTransactionID(origSender *OrigSender, evt *event.Event) networkid.RawTransactionID {
+	if origSender != nil || !strings.HasPrefix(evt.ID.String(), database.NetworkTxnMXIDPrefix) {
+		return ""
+	}
+	return networkid.RawTransactionID(strings.TrimPrefix(evt.ID.String(), database.NetworkTxnMXIDPrefix))
+}
+
 func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) {
 	log := zerolog.Ctx(ctx)
 	var relatesTo *event.RelatesTo
@@ -938,6 +945,8 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 			Content:    msgContent,
 			OrigSender: origSender,
 			Portal:     portal,
+
+			InputTransactionID: portal.parseInputTransactionID(origSender, evt),
 		},
 		ThreadRoot: threadRoot,
 		ReplyTo:    replyTo,
@@ -1173,6 +1182,8 @@ func (portal *Portal) handleMatrixEdit(ctx context.Context, sender *UserLogin, o
 			Content:    content,
 			OrigSender: origSender,
 			Portal:     portal,
+
+			InputTransactionID: portal.parseInputTransactionID(origSender, evt),
 		},
 		EditTarget: editTarget,
 	})
@@ -1224,6 +1235,8 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 			Event:   evt,
 			Content: content,
 			Portal:  portal,
+
+			InputTransactionID: portal.parseInputTransactionID(nil, evt),
 		},
 		TargetMessage: reactionTarget,
 	}
@@ -1380,6 +1393,8 @@ func handleMatrixRoomMeta[APIType any, ContentType any](
 			Content:    content,
 			Portal:     portal,
 			OrigSender: origSender,
+
+			InputTransactionID: portal.parseInputTransactionID(origSender, evt),
 		},
 		PrevContent: prevContent,
 	})
@@ -1501,6 +1516,8 @@ func (portal *Portal) handleMatrixMembership(
 				Content:    content,
 				Portal:     portal,
 				OrigSender: origSender,
+
+				InputTransactionID: portal.parseInputTransactionID(origSender, evt),
 			},
 			PrevContent: prevContent,
 		},
@@ -1565,6 +1582,8 @@ func (portal *Portal) handleMatrixPowerLevels(
 				Content:    content,
 				Portal:     portal,
 				OrigSender: origSender,
+
+				InputTransactionID: portal.parseInputTransactionID(origSender, evt),
 			},
 			PrevContent: prevContent,
 		},
@@ -1651,6 +1670,8 @@ func (portal *Portal) handleMatrixRedaction(ctx context.Context, sender *UserLog
 				Content:    content,
 				Portal:     portal,
 				OrigSender: origSender,
+
+				InputTransactionID: portal.parseInputTransactionID(origSender, evt),
 			},
 			TargetMessage: redactionTargetMsg,
 		})
@@ -1671,6 +1692,8 @@ func (portal *Portal) handleMatrixRedaction(ctx context.Context, sender *UserLog
 				Content:    content,
 				Portal:     portal,
 				OrigSender: origSender,
+
+				InputTransactionID: portal.parseInputTransactionID(origSender, evt),
 			},
 			TargetReaction: redactionTargetReaction,
 		})
