@@ -9,7 +9,6 @@ package federation
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -414,6 +413,6 @@ func (r *signableRequest) Sign(key *SigningKey) (string, error) {
 		r.Origin,
 		r.Destination,
 		key.ID,
-		base64.RawURLEncoding.EncodeToString(sig),
+		sig,
 	), nil
 }

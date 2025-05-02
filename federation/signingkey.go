@@ -11,9 +11,11 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"strings"
 	"time"
 
+	"github.com/tidwall/sjson"
 	"go.mau.fi/util/jsontime"
 
 	"maunium.net/go/mautrix/crypto/canonicaljson"
@@ -77,6 +79,46 @@ type ServerKeyResponse struct {
 	OldVerifyKeys map[id.KeyID]OldVerifyKey      `json:"old_verify_keys,omitempty"`
 	Signatures    map[string]map[id.KeyID]string `json:"signatures,omitempty"`
 	ValidUntilTS  jsontime.UnixMilli             `json:"valid_until_ts"`
+
+	Extra map[string]any `json:"-"`
+}
+
+type marshalableSKR ServerKeyResponse
+
+func (skr *ServerKeyResponse) MarshalJSON() ([]byte, error) {
+	if skr.Extra == nil {
+		return json.Marshal((*marshalableSKR)(skr))
+	}
+	marshalable := maps.Clone(skr.Extra)
+	marshalable["server_name"] = skr.ServerName
+	marshalable["verify_keys"] = skr.VerifyKeys
+	marshalable["old_verify_keys"] = skr.OldVerifyKeys
+	marshalable["signatures"] = skr.Signatures
+	marshalable["valid_until_ts"] = skr.ValidUntilTS
+	return json.Marshal(skr.Extra)
+}
+
+func (skr *ServerKeyResponse) UnmarshalJSON(data []byte) error {
+	err := json.Unmarshal(data, (*marshalableSKR)(skr))
+	if err != nil {
+		return err
+	}
+	var extra map[string]any
+	err = json.Unmarshal(data, &extra)
+	if err != nil {
+		return err
+	}
+	delete(extra, "server_name")
+	delete(extra, "verify_keys")
+	delete(extra, "old_verify_keys")
+	delete(extra, "signatures")
+	delete(extra, "valid_until_ts")
+	if len(extra) > 0 {
+		skr.Extra = extra
+	} else {
+		skr.Extra = nil
+	}
+	return nil
 }
 
 type ServerVerifyKey struct {
@@ -92,12 +134,16 @@ type OldVerifyKey struct {
 	ExpiredTS jsontime.UnixMilli `json:"expired_ts"`
 }
 
-func (sk *SigningKey) SignJSON(data any) ([]byte, error) {
+func (sk *SigningKey) SignJSON(data any) (string, error) {
 	marshaled, err := json.Marshal(data)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	return sk.SignRawJSON(marshaled), nil
+	marshaled, err = sjson.DeleteBytes(marshaled, "signatures")
+	if err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(sk.SignRawJSON(marshaled)), nil
 }
 
 func (sk *SigningKey) SignRawJSON(data json.RawMessage) []byte {
@@ -120,7 +166,7 @@ func (sk *SigningKey) GenerateKeyResponse(serverName string, oldVerifyKeys map[i
 	}
 	skr.Signatures = map[string]map[id.KeyID]string{
 		serverName: {
-			sk.ID: base64.RawURLEncoding.EncodeToString(signature),
+			sk.ID: signature,
 		},
 	}
 	return skr
