@@ -47,6 +47,7 @@ type KeyServer struct {
 	KeyProvider     ServerKeyProvider
 	Version         ServerVersion
 	WellKnownTarget string
+	OtherKeys       KeyCache
 }
 
 // Register registers the key server endpoints to the given router.
@@ -169,8 +170,26 @@ func (ks *KeyServer) GetQueryKeys(w http.ResponseWriter, r *http.Request) {
 	resp := &GetQueryKeysResponse{
 		ServerKeys: []*ServerKeyResponse{},
 	}
-	if domain, key := ks.KeyProvider.Get(r); key != nil && domain == serverName {
-		resp.ServerKeys = append(resp.ServerKeys, key.GenerateKeyResponse(serverName, nil))
+	domain, key := ks.KeyProvider.Get(r)
+	if domain == serverName {
+		if key != nil {
+			resp.ServerKeys = append(resp.ServerKeys, key.GenerateKeyResponse(serverName, nil))
+		}
+	} else if ks.OtherKeys != nil {
+		otherKey, err := ks.OtherKeys.LoadKeys(serverName)
+		if err != nil {
+			mautrix.MUnknown.WithMessage("Failed to load keys from cache").Write(w)
+			return
+		}
+		if key != nil && domain != "" {
+			signature, err := key.SignJSON(otherKey)
+			if err == nil {
+				otherKey.Signatures[domain] = map[id.KeyID]string{
+					key.ID: signature,
+				}
+			}
+		}
+		resp.ServerKeys = append(resp.ServerKeys, otherKey)
 	}
 	exhttp.WriteJSONResponse(w, http.StatusOK, resp)
 }
