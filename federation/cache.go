@@ -31,6 +31,11 @@ type InMemoryCache struct {
 	keysLock        sync.RWMutex
 }
 
+var (
+	_ ResolutionCache = (*InMemoryCache)(nil)
+	_ KeyCache        = (*InMemoryCache)(nil)
+)
+
 func NewInMemoryCache() *InMemoryCache {
 	return &InMemoryCache{
 		resolutions: make(map[string]*ResolvedServerName),
@@ -69,3 +74,15 @@ func (c *InMemoryCache) LoadKeys(serverName string) (*ServerKeyResponse, error) 
 	}
 	return keys, nil
 }
+
+type NoopCache struct{}
+
+func (*NoopCache) StoreKeys(_ *ServerKeyResponse)                       {}
+func (*NoopCache) LoadKeys(_ string) (*ServerKeyResponse, error)        { return nil, nil }
+func (*NoopCache) StoreResolution(_ *ResolvedServerName)                {}
+func (*NoopCache) LoadResolution(_ string) (*ResolvedServerName, error) { return nil, nil }
+
+var (
+	_ ResolutionCache = (*NoopCache)(nil)
+	_ KeyCache        = (*NoopCache)(nil)
+)
