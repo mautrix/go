@@ -32,10 +32,10 @@ type Client struct {
 	Key        *SigningKey
 }
 
-func NewClient(serverName string, key *SigningKey) *Client {
+func NewClient(serverName string, key *SigningKey, cache ResolutionCache) *Client {
 	return &Client{
 		HTTP: &http.Client{
-			Transport: NewServerResolvingTransport(),
+			Transport: NewServerResolvingTransport(cache),
 			Timeout:   120 * time.Second,
 		},
 		UserAgent:  mautrix.DefaultUserAgent,
