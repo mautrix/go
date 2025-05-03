@@ -52,12 +52,6 @@ func (srt *ServerResolvingTransport) DialContext(ctx context.Context, network, a
 	return srt.Dialer.DialContext(ctx, network, addrs[0])
 }
 
-type contextKey int
-
-const (
-	contextKeyIPPort contextKey = iota
-)
-
 func (srt *ServerResolvingTransport) RoundTrip(request *http.Request) (*http.Response, error) {
 	if request.URL.Scheme != "matrix-federation" {
 		return nil, fmt.Errorf("unsupported scheme: %s", request.URL.Scheme)

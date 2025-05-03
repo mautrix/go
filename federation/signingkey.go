@@ -15,7 +15,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
+	"go.mau.fi/util/exgjson"
 	"go.mau.fi/util/jsontime"
 
 	"maunium.net/go/mautrix/crypto/canonicaljson"
@@ -81,6 +83,52 @@ type ServerKeyResponse struct {
 	ValidUntilTS  jsontime.UnixMilli             `json:"valid_until_ts"`
 
 	Extra map[string]any `json:"-"`
+}
+
+func (skr *ServerKeyResponse) VerifySelfSignature() bool {
+	for keyID, key := range skr.VerifyKeys {
+		if !VerifyJSON(skr.ServerName, keyID, key.Key, skr) {
+			return false
+		}
+	}
+	return true
+}
+
+func VerifyJSON(serverName string, keyID id.KeyID, key id.SigningKey, data any) bool {
+	var err error
+	message, ok := data.(json.RawMessage)
+	if !ok {
+		message, err = json.Marshal(data)
+		if err != nil {
+			return false
+		}
+	}
+	sigVal := gjson.GetBytes(message, exgjson.Path("signatures", serverName, string(keyID)))
+	if sigVal.Type != gjson.String {
+		return false
+	}
+	message, err = sjson.DeleteBytes(message, "signatures")
+	if err != nil {
+		return false
+	}
+	message, err = sjson.DeleteBytes(message, "unsigned")
+	if err != nil {
+		return false
+	}
+	return VerifyJSONRaw(key, sigVal.Str, message)
+}
+
+func VerifyJSONRaw(key id.SigningKey, sig string, message json.RawMessage) bool {
+	sigBytes, err := base64.RawURLEncoding.DecodeString(sig)
+	if err != nil {
+		return false
+	}
+	keyBytes, err := base64.RawStdEncoding.DecodeString(string(key))
+	if err != nil {
+		return false
+	}
+	message = canonicaljson.CanonicalJSONAssumeValid(message)
+	return ed25519.Verify(keyBytes, message, sigBytes)
 }
 
 type marshalableSKR ServerKeyResponse

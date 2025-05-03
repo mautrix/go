@@ -1,0 +1,218 @@
+// Copyright (c) 2025 Tulir Asokan
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+package federation
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"maps"
+	"net/http"
+	"slices"
+	"strings"
+	"sync"
+
+	"github.com/rs/zerolog"
+	"go.mau.fi/util/ptr"
+
+	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/id"
+)
+
+type ServerAuth struct {
+	Keys           KeyCache
+	Client         *Client
+	GetDestination func(XMatrixAuth) string
+	MaxBodySize    int64
+
+	keyFetchLocks     map[string]*sync.Mutex
+	keyFetchLocksLock sync.Mutex
+}
+
+var MUnauthorized = mautrix.RespError{ErrCode: "M_UNAUTHORIZED", StatusCode: http.StatusUnauthorized}
+
+var (
+	ErrMissingAuthHeader       = MUnauthorized.WithMessage("Missing Authorization header")
+	ErrInvalidAuthHeader       = MUnauthorized.WithMessage("Authorization header does not start with X-Matrix")
+	ErrMalformedAuthHeader     = MUnauthorized.WithMessage("X-Matrix value is missing required components")
+	ErrInvalidDestination      = MUnauthorized.WithMessage("Invalid destination in X-Matrix header")
+	ErrFailedToQueryKeys       = MUnauthorized.WithMessage("Failed to query server keys")
+	ErrInvalidSelfSignatures   = MUnauthorized.WithMessage("Server keys don't have valid self-signatures")
+	ErrRequestBodyTooLarge     = mautrix.MTooLarge.WithMessage("Request body too large")
+	ErrInvalidJSONBody         = mautrix.MBadJSON.WithMessage("Request body is not valid JSON")
+	ErrBodyReadFailed          = mautrix.MUnknown.WithMessage("Failed to read request body")
+	ErrInvalidRequestSignature = MUnauthorized.WithMessage("Failed to verify request signature")
+)
+
+type XMatrixAuth struct {
+	Origin      string
+	Destination string
+	KeyID       id.KeyID
+	Signature   string
+}
+
+func (xma XMatrixAuth) String() string {
+	return fmt.Sprintf(
+		`X-Matrix origin="%s",destination="%s",key="%s",sig="%s"`,
+		xma.Origin,
+		xma.Destination,
+		xma.KeyID,
+		xma.Signature,
+	)
+}
+
+func ParseXMatrixAuth(auth string) (xma XMatrixAuth) {
+	auth = strings.TrimPrefix(auth, "X-Matrix ")
+	for part := range strings.SplitSeq(auth, ",") {
+		part = strings.TrimSpace(part)
+		eqIdx := strings.Index(part, "=")
+		if eqIdx == -1 || strings.Count(part, "=") > 1 {
+			continue
+		}
+		val := strings.Trim(part[eqIdx+1:], "\"")
+		switch strings.ToLower(part[:eqIdx]) {
+		case "origin":
+			xma.Origin = val
+		case "destination":
+			xma.Destination = val
+		case "key":
+			xma.KeyID = id.KeyID(val)
+		case "sig":
+			xma.Signature = val
+		}
+	}
+	return
+}
+
+func (sa *ServerAuth) GetKeysWithCache(ctx context.Context, serverName string) (*ServerKeyResponse, error) {
+	sa.keyFetchLocksLock.Lock()
+	lock, ok := sa.keyFetchLocks[serverName]
+	if !ok {
+		lock = &sync.Mutex{}
+		sa.keyFetchLocks[serverName] = lock
+	}
+	sa.keyFetchLocksLock.Unlock()
+
+	lock.Lock()
+	defer lock.Unlock()
+	res, err := sa.Keys.LoadKeys(serverName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read cache: %w", err)
+	} else if res != nil {
+		return res, nil
+	} else if res, err = sa.Client.ServerKeys(ctx, serverName); err != nil {
+		return nil, err
+	} else {
+		sa.Keys.StoreKeys(res)
+		return res, nil
+	}
+}
+
+type fixedLimitedReader struct {
+	R   io.Reader
+	N   int64
+	Err error
+}
+
+func (l *fixedLimitedReader) Read(p []byte) (n int, err error) {
+	if l.N <= 0 {
+		return 0, l.Err
+	}
+	if int64(len(p)) > l.N {
+		p = p[0:l.N]
+	}
+	n, err = l.R.Read(p)
+	l.N -= int64(n)
+	return
+}
+
+func (sa *ServerAuth) Authenticate(r *http.Request) (*http.Request, *mautrix.RespError) {
+	defer func() {
+		_ = r.Body.Close()
+	}()
+	log := zerolog.Ctx(r.Context())
+	if r.ContentLength > sa.MaxBodySize {
+		return nil, &ErrRequestBodyTooLarge
+	}
+	auth := r.Header.Get("Authorization")
+	if auth == "" {
+		return nil, &ErrMissingAuthHeader
+	} else if !strings.HasPrefix(auth, "X-Matrix ") {
+		return nil, &ErrInvalidAuthHeader
+	}
+	parsed := ParseXMatrixAuth(auth)
+	if parsed.Origin == "" || parsed.KeyID == "" || parsed.Signature == "" {
+		log.Trace().Str("auth_header", auth).Msg("Malformed X-Matrix header")
+		return nil, &ErrMalformedAuthHeader
+	}
+	destination := sa.GetDestination(parsed)
+	if destination == "" || (parsed.Destination != "" && parsed.Destination != destination) {
+		log.Trace().
+			Str("got_destination", parsed.Destination).
+			Str("expected_destination", destination).
+			Msg("Invalid destination in X-Matrix header")
+		return nil, &ErrInvalidDestination
+	}
+	resp, err := sa.GetKeysWithCache(r.Context(), parsed.Origin)
+	if err != nil {
+		log.Err(err).
+			Str("server_name", parsed.Origin).
+			Msg("Failed to query keys to authenticate request")
+		return nil, &ErrFailedToQueryKeys
+	} else if !resp.VerifySelfSignature() {
+		return nil, &ErrInvalidSelfSignatures
+	}
+	key, ok := resp.VerifyKeys[parsed.KeyID]
+	if !ok {
+		keys := slices.Collect(maps.Keys(resp.VerifyKeys))
+		log.Trace().
+			Stringer("expected_key_id", parsed.KeyID).
+			Any("found_key_ids", keys).
+			Msg("Didn't find expected key ID to verify request")
+		return nil, ptr.Ptr(MUnauthorized.WithMessage("Key ID %q not found (got %v)", parsed.KeyID, keys))
+	}
+	reqBody, err := io.ReadAll(&fixedLimitedReader{R: r.Body, N: sa.MaxBodySize, Err: ErrRequestBodyTooLarge})
+	if errors.Is(err, ErrRequestBodyTooLarge) {
+		return nil, &ErrRequestBodyTooLarge
+	} else if err != nil {
+		log.Err(err).
+			Str("server_name", parsed.Origin).
+			Msg("Failed to read request body to authenticate")
+		return nil, &ErrBodyReadFailed
+	} else if !json.Valid(reqBody) {
+		return nil, &ErrInvalidJSONBody
+	}
+	valid := (&signableRequest{
+		Method:      r.Method,
+		URI:         r.URL.RawPath,
+		Origin:      parsed.Origin,
+		Destination: destination,
+		Content:     reqBody,
+	}).Verify(key.Key, parsed.Signature)
+	if !valid {
+		log.Trace().Msg("Request has invalid signature")
+		return nil, &ErrInvalidRequestSignature
+	}
+	ctx := context.WithValue(r.Context(), contextKeyDestinationServer, destination)
+	ctx = log.With().Str("destination_server_name", destination).Logger().WithContext(ctx)
+	modifiedReq := r.WithContext(ctx)
+	modifiedReq.Body = io.NopCloser(bytes.NewReader(reqBody))
+	return modifiedReq, nil
+}
+
+func (sa *ServerAuth) AuthenticateMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if modifiedReq, err := sa.Authenticate(r); err != nil {
+			err.Write(w)
+		} else {
+			next.ServeHTTP(w, modifiedReq)
+		}
+	})
+}
