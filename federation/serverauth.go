@@ -36,6 +36,16 @@ type ServerAuth struct {
 	keyFetchLocksLock sync.Mutex
 }
 
+func NewServerAuth(client *Client, keyCache KeyCache, getDestination func(auth XMatrixAuth) string) *ServerAuth {
+	return &ServerAuth{
+		Keys:           keyCache,
+		Client:         client,
+		GetDestination: getDestination,
+		MaxBodySize:    50 * 1024 * 1024,
+		keyFetchLocks:  make(map[string]*sync.Mutex),
+	}
+}
+
 var MUnauthorized = mautrix.RespError{ErrCode: "M_UNAUTHORIZED", StatusCode: http.StatusUnauthorized}
 
 var (
@@ -91,7 +101,14 @@ func ParseXMatrixAuth(auth string) (xma XMatrixAuth) {
 	return
 }
 
-func (sa *ServerAuth) GetKeysWithCache(ctx context.Context, serverName string) (*ServerKeyResponse, error) {
+func (sa *ServerAuth) GetKeysWithCache(ctx context.Context, serverName string, keyID id.KeyID) (*ServerKeyResponse, error) {
+	res, err := sa.Keys.LoadKeys(serverName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read cache: %w", err)
+	} else if res.HasKey(keyID) {
+		return res, nil
+	}
+
 	sa.keyFetchLocksLock.Lock()
 	lock, ok := sa.keyFetchLocks[serverName]
 	if !ok {
@@ -102,17 +119,27 @@ func (sa *ServerAuth) GetKeysWithCache(ctx context.Context, serverName string) (
 
 	lock.Lock()
 	defer lock.Unlock()
-	res, err := sa.Keys.LoadKeys(serverName)
+	res, err = sa.Keys.LoadKeys(serverName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read cache: %w", err)
 	} else if res != nil {
-		return res, nil
-	} else if res, err = sa.Client.ServerKeys(ctx, serverName); err != nil {
-		return nil, err
-	} else {
-		sa.Keys.StoreKeys(res)
-		return res, nil
+		if res.HasKey(keyID) {
+			return res, nil
+		} else if !sa.Keys.ShouldReQuery(serverName) {
+			zerolog.Ctx(ctx).Trace().
+				Str("server_name", serverName).
+				Stringer("key_id", keyID).
+				Msg("Not sending key request for missing key ID, last query was too recent")
+			return res, nil
+		}
 	}
+	res, err = sa.Client.ServerKeys(ctx, serverName)
+	if err != nil {
+		sa.Keys.StoreFetchError(serverName, err)
+		return nil, err
+	}
+	sa.Keys.StoreKeys(res)
+	return res, nil
 }
 
 type fixedLimitedReader struct {
@@ -160,11 +187,17 @@ func (sa *ServerAuth) Authenticate(r *http.Request) (*http.Request, *mautrix.Res
 			Msg("Invalid destination in X-Matrix header")
 		return nil, &ErrInvalidDestination
 	}
-	resp, err := sa.GetKeysWithCache(r.Context(), parsed.Origin)
+	resp, err := sa.GetKeysWithCache(r.Context(), parsed.Origin, parsed.KeyID)
 	if err != nil {
-		log.Err(err).
-			Str("server_name", parsed.Origin).
-			Msg("Failed to query keys to authenticate request")
+		if !errors.Is(err, ErrRecentKeyQueryFailed) {
+			log.Err(err).
+				Str("server_name", parsed.Origin).
+				Msg("Failed to query keys to authenticate request")
+		} else {
+			log.Trace().Err(err).
+				Str("server_name", parsed.Origin).
+				Msg("Failed to query keys to authenticate request (cached error)")
+		}
 		return nil, &ErrFailedToQueryKeys
 	} else if !resp.VerifySelfSignature() {
 		return nil, &ErrInvalidSelfSignatures

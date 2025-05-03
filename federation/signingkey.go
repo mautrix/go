@@ -85,6 +85,15 @@ type ServerKeyResponse struct {
 	Extra map[string]any `json:"-"`
 }
 
+func (skr *ServerKeyResponse) HasKey(keyID id.KeyID) bool {
+	if skr == nil {
+		return false
+	} else if _, ok := skr.VerifyKeys[keyID]; ok {
+		return true
+	}
+	return false
+}
+
 func (skr *ServerKeyResponse) VerifySelfSignature() bool {
 	for keyID, key := range skr.VerifyKeys {
 		if !VerifyJSON(skr.ServerName, keyID, key.Key, skr) {

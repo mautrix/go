@@ -7,6 +7,9 @@
 package federation
 
 import (
+	"errors"
+	"fmt"
+	"math"
 	"sync"
 	"time"
 )
@@ -21,13 +24,19 @@ type ResolutionCache interface {
 
 type KeyCache interface {
 	StoreKeys(*ServerKeyResponse)
+	StoreFetchError(serverName string, err error)
+	ShouldReQuery(serverName string) bool
 	LoadKeys(serverName string) (*ServerKeyResponse, error)
 }
 
 type InMemoryCache struct {
+	MinKeyRefetchDelay time.Duration
+
 	resolutions     map[string]*ResolvedServerName
 	resolutionsLock sync.RWMutex
 	keys            map[string]*ServerKeyResponse
+	lastReQueryAt   map[string]time.Time
+	lastError       map[string]*resolutionErrorCache
 	keysLock        sync.RWMutex
 }
 
@@ -38,8 +47,11 @@ var (
 
 func NewInMemoryCache() *InMemoryCache {
 	return &InMemoryCache{
-		resolutions: make(map[string]*ResolvedServerName),
-		keys:        make(map[string]*ServerKeyResponse),
+		resolutions:        make(map[string]*ResolvedServerName),
+		keys:               make(map[string]*ServerKeyResponse),
+		lastReQueryAt:      make(map[string]time.Time),
+		lastError:          make(map[string]*resolutionErrorCache),
+		MinKeyRefetchDelay: 1 * time.Hour,
 	}
 }
 
@@ -63,22 +75,73 @@ func (c *InMemoryCache) StoreKeys(keys *ServerKeyResponse) {
 	c.keysLock.Lock()
 	defer c.keysLock.Unlock()
 	c.keys[keys.ServerName] = keys
+	delete(c.lastError, keys.ServerName)
 }
+
+type resolutionErrorCache struct {
+	Error error
+	Time  time.Time
+	Count int
+}
+
+const MaxBackoff = 7 * 24 * time.Hour
+
+func (rec *resolutionErrorCache) ShouldRetry() bool {
+	backoff := time.Duration(math.Exp(float64(rec.Count))) * time.Second
+	return time.Since(rec.Time) > backoff
+}
+
+var ErrRecentKeyQueryFailed = errors.New("last retry was too recent")
 
 func (c *InMemoryCache) LoadKeys(serverName string) (*ServerKeyResponse, error) {
 	c.keysLock.RLock()
 	defer c.keysLock.RUnlock()
 	keys, ok := c.keys[serverName]
 	if !ok || time.Until(keys.ValidUntilTS.Time) < 0 {
+		err, ok := c.lastError[serverName]
+		if ok && !err.ShouldRetry() {
+			return nil, fmt.Errorf(
+				"%w (%s ago) and failed with %w",
+				ErrRecentKeyQueryFailed,
+				time.Since(err.Time).String(),
+				err.Error,
+			)
+		}
 		return nil, nil
 	}
 	return keys, nil
+}
+
+func (c *InMemoryCache) StoreFetchError(serverName string, err error) {
+	c.keysLock.Lock()
+	defer c.keysLock.Unlock()
+	errorCache, ok := c.lastError[serverName]
+	if ok {
+		errorCache.Time = time.Now()
+		errorCache.Error = err
+		errorCache.Count++
+	} else {
+		c.lastError[serverName] = &resolutionErrorCache{Error: err, Time: time.Now(), Count: 1}
+	}
+}
+
+func (c *InMemoryCache) ShouldReQuery(serverName string) bool {
+	c.keysLock.Lock()
+	defer c.keysLock.Unlock()
+	lastQuery, ok := c.lastReQueryAt[serverName]
+	if ok && time.Since(lastQuery) < c.MinKeyRefetchDelay {
+		return false
+	}
+	c.lastReQueryAt[serverName] = time.Now()
+	return true
 }
 
 type NoopCache struct{}
 
 func (*NoopCache) StoreKeys(_ *ServerKeyResponse)                       {}
 func (*NoopCache) LoadKeys(_ string) (*ServerKeyResponse, error)        { return nil, nil }
+func (*NoopCache) StoreFetchError(_ string, _ error)                    {}
+func (*NoopCache) ShouldReQuery(_ string) bool                          { return true }
 func (*NoopCache) StoreResolution(_ *ResolvedServerName)                {}
 func (*NoopCache) LoadResolution(_ string) (*ResolvedServerName, error) { return nil, nil }
 
