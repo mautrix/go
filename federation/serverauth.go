@@ -234,7 +234,11 @@ func (sa *ServerAuth) Authenticate(r *http.Request) (*http.Request, *mautrix.Res
 		return nil, &errInvalidRequestSignature
 	}
 	ctx := context.WithValue(r.Context(), contextKeyDestinationServer, destination)
-	ctx = log.With().Str("destination_server_name", destination).Logger().WithContext(ctx)
+	ctx = context.WithValue(ctx, contextKeyOriginServer, parsed.Origin)
+	ctx = log.With().
+		Str("origin_server_name", parsed.Origin).
+		Str("destination_server_name", destination).
+		Logger().WithContext(ctx)
 	modifiedReq := r.WithContext(ctx)
 	modifiedReq.Body = io.NopCloser(bytes.NewReader(reqBody))
 	return modifiedReq, nil

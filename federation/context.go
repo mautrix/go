@@ -16,6 +16,7 @@ type contextKey int
 const (
 	contextKeyIPPort contextKey = iota
 	contextKeyDestinationServer
+	contextKeyOriginServer
 )
 
 func DestinationServerNameFromRequest(r *http.Request) string {
@@ -25,6 +26,17 @@ func DestinationServerNameFromRequest(r *http.Request) string {
 func DestinationServerName(ctx context.Context) string {
 	if dest, ok := ctx.Value(contextKeyDestinationServer).(string); ok {
 		return dest
+	}
+	return ""
+}
+
+func OriginServerNameFromRequest(r *http.Request) string {
+	return OriginServerName(r.Context())
+}
+
+func OriginServerName(ctx context.Context) string {
+	if origin, ok := ctx.Value(contextKeyOriginServer).(string); ok {
+		return origin
 	}
 	return ""
 }
