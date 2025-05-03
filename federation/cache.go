@@ -136,16 +136,18 @@ func (c *InMemoryCache) ShouldReQuery(serverName string) bool {
 	return true
 }
 
-type NoopCache struct{}
+type noopCache struct{}
 
-func (*NoopCache) StoreKeys(_ *ServerKeyResponse)                       {}
-func (*NoopCache) LoadKeys(_ string) (*ServerKeyResponse, error)        { return nil, nil }
-func (*NoopCache) StoreFetchError(_ string, _ error)                    {}
-func (*NoopCache) ShouldReQuery(_ string) bool                          { return true }
-func (*NoopCache) StoreResolution(_ *ResolvedServerName)                {}
-func (*NoopCache) LoadResolution(_ string) (*ResolvedServerName, error) { return nil, nil }
+func (*noopCache) StoreKeys(_ *ServerKeyResponse)                       {}
+func (*noopCache) LoadKeys(_ string) (*ServerKeyResponse, error)        { return nil, nil }
+func (*noopCache) StoreFetchError(_ string, _ error)                    {}
+func (*noopCache) ShouldReQuery(_ string) bool                          { return true }
+func (*noopCache) StoreResolution(_ *ResolvedServerName)                {}
+func (*noopCache) LoadResolution(_ string) (*ResolvedServerName, error) { return nil, nil }
 
 var (
-	_ ResolutionCache = (*NoopCache)(nil)
-	_ KeyCache        = (*NoopCache)(nil)
+	_ ResolutionCache = (*noopCache)(nil)
+	_ KeyCache        = (*noopCache)(nil)
 )
+
+var NoopCache *noopCache
