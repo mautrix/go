@@ -80,7 +80,8 @@ func (xma XMatrixAuth) String() string {
 
 func ParseXMatrixAuth(auth string) (xma XMatrixAuth) {
 	auth = strings.TrimPrefix(auth, "X-Matrix ")
-	for part := range strings.SplitSeq(auth, ",") {
+	// TODO upgrade to strings.SplitSeq after Go 1.24 is the minimum
+	for _, part := range strings.Split(auth, ",") {
 		part = strings.TrimSpace(part)
 		eqIdx := strings.Index(part, "=")
 		if eqIdx == -1 || strings.Count(part, "=") > 1 {
