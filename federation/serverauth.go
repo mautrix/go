@@ -211,16 +211,19 @@ func (sa *ServerAuth) Authenticate(r *http.Request) (*http.Request, *mautrix.Res
 			Msg("Didn't find expected key ID to verify request")
 		return nil, ptr.Ptr(MUnauthorized.WithMessage("Key ID %q not found (got %v)", parsed.KeyID, keys))
 	}
-	reqBody, err := io.ReadAll(&fixedLimitedReader{R: r.Body, N: sa.MaxBodySize, Err: errRequestBodyTooLarge})
-	if errors.Is(err, errRequestBodyTooLarge) {
-		return nil, &errRequestBodyTooLarge
-	} else if err != nil {
-		log.Err(err).
-			Str("server_name", parsed.Origin).
-			Msg("Failed to read request body to authenticate")
-		return nil, &errBodyReadFailed
-	} else if !json.Valid(reqBody) {
-		return nil, &errInvalidJSONBody
+	var reqBody []byte
+	if r.ContentLength != 0 && r.Method != http.MethodGet && r.Method != http.MethodHead {
+		reqBody, err = io.ReadAll(&fixedLimitedReader{R: r.Body, N: sa.MaxBodySize, Err: errRequestBodyTooLarge})
+		if errors.Is(err, errRequestBodyTooLarge) {
+			return nil, &errRequestBodyTooLarge
+		} else if err != nil {
+			log.Err(err).
+				Str("server_name", parsed.Origin).
+				Msg("Failed to read request body to authenticate")
+			return nil, &errBodyReadFailed
+		} else if !json.Valid(reqBody) {
+			return nil, &errInvalidJSONBody
+		}
 	}
 	valid := (&signableRequest{
 		Method:      r.Method,
@@ -240,7 +243,9 @@ func (sa *ServerAuth) Authenticate(r *http.Request) (*http.Request, *mautrix.Res
 		Str("destination_server_name", destination).
 		Logger().WithContext(ctx)
 	modifiedReq := r.WithContext(ctx)
-	modifiedReq.Body = io.NopCloser(bytes.NewReader(reqBody))
+	if reqBody != nil {
+		modifiedReq.Body = io.NopCloser(bytes.NewReader(reqBody))
+	}
 	return modifiedReq, nil
 }
 
