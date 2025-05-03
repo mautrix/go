@@ -49,16 +49,16 @@ func NewServerAuth(client *Client, keyCache KeyCache, getDestination func(auth X
 var MUnauthorized = mautrix.RespError{ErrCode: "M_UNAUTHORIZED", StatusCode: http.StatusUnauthorized}
 
 var (
-	ErrMissingAuthHeader       = MUnauthorized.WithMessage("Missing Authorization header")
-	ErrInvalidAuthHeader       = MUnauthorized.WithMessage("Authorization header does not start with X-Matrix")
-	ErrMalformedAuthHeader     = MUnauthorized.WithMessage("X-Matrix value is missing required components")
-	ErrInvalidDestination      = MUnauthorized.WithMessage("Invalid destination in X-Matrix header")
-	ErrFailedToQueryKeys       = MUnauthorized.WithMessage("Failed to query server keys")
-	ErrInvalidSelfSignatures   = MUnauthorized.WithMessage("Server keys don't have valid self-signatures")
-	ErrRequestBodyTooLarge     = mautrix.MTooLarge.WithMessage("Request body too large")
-	ErrInvalidJSONBody         = mautrix.MBadJSON.WithMessage("Request body is not valid JSON")
-	ErrBodyReadFailed          = mautrix.MUnknown.WithMessage("Failed to read request body")
-	ErrInvalidRequestSignature = MUnauthorized.WithMessage("Failed to verify request signature")
+	errMissingAuthHeader       = MUnauthorized.WithMessage("Missing Authorization header")
+	errInvalidAuthHeader       = MUnauthorized.WithMessage("Authorization header does not start with X-Matrix")
+	errMalformedAuthHeader     = MUnauthorized.WithMessage("X-Matrix value is missing required components")
+	errInvalidDestination      = MUnauthorized.WithMessage("Invalid destination in X-Matrix header")
+	errFailedToQueryKeys       = MUnauthorized.WithMessage("Failed to query server keys")
+	errInvalidSelfSignatures   = MUnauthorized.WithMessage("Server keys don't have valid self-signatures")
+	errRequestBodyTooLarge     = mautrix.MTooLarge.WithMessage("Request body too large")
+	errInvalidJSONBody         = mautrix.MBadJSON.WithMessage("Request body is not valid JSON")
+	errBodyReadFailed          = mautrix.MUnknown.WithMessage("Failed to read request body")
+	errInvalidRequestSignature = MUnauthorized.WithMessage("Failed to verify request signature")
 )
 
 type XMatrixAuth struct {
@@ -166,18 +166,18 @@ func (sa *ServerAuth) Authenticate(r *http.Request) (*http.Request, *mautrix.Res
 	}()
 	log := zerolog.Ctx(r.Context())
 	if r.ContentLength > sa.MaxBodySize {
-		return nil, &ErrRequestBodyTooLarge
+		return nil, &errRequestBodyTooLarge
 	}
 	auth := r.Header.Get("Authorization")
 	if auth == "" {
-		return nil, &ErrMissingAuthHeader
+		return nil, &errMissingAuthHeader
 	} else if !strings.HasPrefix(auth, "X-Matrix ") {
-		return nil, &ErrInvalidAuthHeader
+		return nil, &errInvalidAuthHeader
 	}
 	parsed := ParseXMatrixAuth(auth)
 	if parsed.Origin == "" || parsed.KeyID == "" || parsed.Signature == "" {
 		log.Trace().Str("auth_header", auth).Msg("Malformed X-Matrix header")
-		return nil, &ErrMalformedAuthHeader
+		return nil, &errMalformedAuthHeader
 	}
 	destination := sa.GetDestination(parsed)
 	if destination == "" || (parsed.Destination != "" && parsed.Destination != destination) {
@@ -185,7 +185,7 @@ func (sa *ServerAuth) Authenticate(r *http.Request) (*http.Request, *mautrix.Res
 			Str("got_destination", parsed.Destination).
 			Str("expected_destination", destination).
 			Msg("Invalid destination in X-Matrix header")
-		return nil, &ErrInvalidDestination
+		return nil, &errInvalidDestination
 	}
 	resp, err := sa.GetKeysWithCache(r.Context(), parsed.Origin, parsed.KeyID)
 	if err != nil {
@@ -198,9 +198,9 @@ func (sa *ServerAuth) Authenticate(r *http.Request) (*http.Request, *mautrix.Res
 				Str("server_name", parsed.Origin).
 				Msg("Failed to query keys to authenticate request (cached error)")
 		}
-		return nil, &ErrFailedToQueryKeys
+		return nil, &errFailedToQueryKeys
 	} else if !resp.VerifySelfSignature() {
-		return nil, &ErrInvalidSelfSignatures
+		return nil, &errInvalidSelfSignatures
 	}
 	key, ok := resp.VerifyKeys[parsed.KeyID]
 	if !ok {
@@ -211,16 +211,16 @@ func (sa *ServerAuth) Authenticate(r *http.Request) (*http.Request, *mautrix.Res
 			Msg("Didn't find expected key ID to verify request")
 		return nil, ptr.Ptr(MUnauthorized.WithMessage("Key ID %q not found (got %v)", parsed.KeyID, keys))
 	}
-	reqBody, err := io.ReadAll(&fixedLimitedReader{R: r.Body, N: sa.MaxBodySize, Err: ErrRequestBodyTooLarge})
-	if errors.Is(err, ErrRequestBodyTooLarge) {
-		return nil, &ErrRequestBodyTooLarge
+	reqBody, err := io.ReadAll(&fixedLimitedReader{R: r.Body, N: sa.MaxBodySize, Err: errRequestBodyTooLarge})
+	if errors.Is(err, errRequestBodyTooLarge) {
+		return nil, &errRequestBodyTooLarge
 	} else if err != nil {
 		log.Err(err).
 			Str("server_name", parsed.Origin).
 			Msg("Failed to read request body to authenticate")
-		return nil, &ErrBodyReadFailed
+		return nil, &errBodyReadFailed
 	} else if !json.Valid(reqBody) {
-		return nil, &ErrInvalidJSONBody
+		return nil, &errInvalidJSONBody
 	}
 	valid := (&signableRequest{
 		Method:      r.Method,
@@ -231,7 +231,7 @@ func (sa *ServerAuth) Authenticate(r *http.Request) (*http.Request, *mautrix.Res
 	}).Verify(key.Key, parsed.Signature)
 	if !valid {
 		log.Trace().Msg("Request has invalid signature")
-		return nil, &ErrInvalidRequestSignature
+		return nil, &errInvalidRequestSignature
 	}
 	ctx := context.WithValue(r.Context(), contextKeyDestinationServer, destination)
 	ctx = log.With().Str("destination_server_name", destination).Logger().WithContext(ctx)
