@@ -106,6 +106,19 @@ func (cli *Client) DeactivateAccount(ctx context.Context, userID id.UserID, req 
 	return err
 }
 
+type ReqSuspendUser struct {
+	Suspend bool `json:"suspend"`
+}
+
+// SuspendAccount suspends or unsuspends a specific local user account.
+//
+// https://element-hq.github.io/synapse/latest/admin_api/user_admin_api.html#suspendunsuspend-account
+func (cli *Client) SuspendAccount(ctx context.Context, userID id.UserID, req ReqSuspendUser) error {
+	reqURL := cli.BuildAdminURL("v1", "suspend", userID)
+	_, err := cli.MakeRequest(ctx, http.MethodPut, reqURL, &req, nil)
+	return err
+}
+
 type ReqCreateOrModifyAccount struct {
 	Password      string `json:"password,omitempty"`
 	LogoutDevices *bool  `json:"logout_devices,omitempty"`
