@@ -200,7 +200,7 @@ func (mach *OlmMachine) importForwardedRoomKey(ctx context.Context, evt *Decrypt
 		log.Error().Err(err).Msg("Failed to store new inbound group session")
 		return false
 	}
-	mach.markSessionReceived(ctx, content.RoomID, content.SessionID, firstKnownIndex)
+	mach.MarkSessionReceived(ctx, content.RoomID, content.SessionID, firstKnownIndex)
 	log.Debug().Msg("Received forwarded inbound group session")
 	return true
 }
