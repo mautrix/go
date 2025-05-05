@@ -951,6 +951,18 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 		ThreadRoot: threadRoot,
 		ReplyTo:    replyTo,
 	}
+	if portal.Bridge.Config.DeduplicateMatrixMessages {
+		if part, err := portal.Bridge.DB.Message.GetPartByTxnID(ctx, portal.Receiver, evt.ID, wrappedMsgEvt.InputTransactionID); err != nil {
+			log.Err(err).Msg("Failed to check db if message is already sent")
+		} else if part != nil {
+			log.Debug().
+				Stringer("message_mxid", part.MXID).
+				Stringer("input_event_id", evt.ID).
+				Msg("Message already sent, ignoring")
+			return
+		}
+	}
+
 	var resp *MatrixMessageResponse
 	if msgContent != nil {
 		resp, err = sender.Client.HandleMatrixMessage(ctx, wrappedMsgEvt)
@@ -1090,6 +1102,9 @@ func (evt *MatrixMessage) fillDBMessage(message *database.Message) *database.Mes
 	}
 	if message.SenderMXID == "" {
 		message.SenderMXID = evt.Event.Sender
+	}
+	if message.SendTxnID != "" {
+		message.SendTxnID = evt.InputTransactionID
 	}
 	return message
 }
