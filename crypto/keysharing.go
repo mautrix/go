@@ -357,7 +357,7 @@ func (mach *OlmMachine) HandleRoomKeyRequest(ctx context.Context, sender id.User
 				SessionKey: string(exportedKey),
 			},
 			SenderKey:          content.Body.SenderKey,
-			ForwardingKeyChain: igs.ForwardingChainsOrEmpty(),
+			ForwardingKeyChain: igs.ForwardingChains,
 			SenderClaimedKey:   igs.SigningKey,
 		},
 	}

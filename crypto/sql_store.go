@@ -326,6 +326,9 @@ func (store *SQLCryptoStore) PutGroupSession(ctx context.Context, session *Inbou
 	if err != nil {
 		return err
 	}
+	if session.ForwardingChains == nil {
+		session.ForwardingChains = []string{}
+	}
 	forwardingChains := strings.Join(session.ForwardingChains, ",")
 	ratchetSafety, err := json.Marshal(&session.RatchetSafety)
 	if err != nil {

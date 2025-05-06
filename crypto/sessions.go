@@ -133,13 +133,6 @@ func NewInboundGroupSession(senderKey id.SenderKey, signingKey id.Ed25519, roomI
 	}, nil
 }
 
-func (igs *InboundGroupSession) ForwardingChainsOrEmpty() []string {
-	if igs.ForwardingChains == nil {
-		return []string{}
-	}
-	return igs.ForwardingChains
-}
-
 func (igs *InboundGroupSession) ID() id.SessionID {
 	if igs.id == "" {
 		igs.id = igs.Internal.ID()
