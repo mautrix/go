@@ -509,6 +509,8 @@ func (store *SQLCryptoStore) postScanInboundGroupSession(sessionBytes, ratchetSa
 	}
 	if forwardingChains != "" {
 		chains = strings.Split(forwardingChains, ",")
+	} else {
+		chains = []string{}
 	}
 	var rs RatchetSafety
 	if len(ratchetSafetyBytes) > 0 {
