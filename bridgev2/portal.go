@@ -2641,6 +2641,7 @@ func (portal *Portal) handleRemoteReadReceipt(ctx context.Context, source *UserL
 	log := zerolog.Ctx(ctx)
 	var err error
 	var lastTarget *database.Message
+	readUpTo := evt.GetReadUpTo()
 	if lastTargetID := evt.GetLastReceiptTarget(); lastTargetID != "" {
 		lastTarget, err = portal.Bridge.DB.Message.GetLastPartByID(ctx, portal.Receiver, lastTargetID)
 		if err != nil {
@@ -2653,6 +2654,9 @@ func (portal *Portal) handleRemoteReadReceipt(ctx context.Context, source *UserL
 		} else if lastTarget.HasFakeMXID() {
 			log.Debug().Str("last_target_id", string(lastTargetID)).
 				Msg("Last target message is fake")
+			if readUpTo.IsZero() {
+				readUpTo = lastTarget.Timestamp
+			}
 			lastTarget = nil
 		}
 	}
@@ -2668,7 +2672,6 @@ func (portal *Portal) handleRemoteReadReceipt(ctx context.Context, source *UserL
 			}
 		}
 	}
-	readUpTo := evt.GetReadUpTo()
 	if lastTarget == nil && !readUpTo.IsZero() {
 		lastTarget, err = portal.Bridge.DB.Message.GetLastNonFakePartAtOrBeforeTime(ctx, portal.PortalKey, readUpTo)
 		if err != nil {
