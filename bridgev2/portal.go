@@ -2638,7 +2638,6 @@ func (portal *Portal) redactMessageParts(ctx context.Context, parts []*database.
 }
 
 func (portal *Portal) handleRemoteReadReceipt(ctx context.Context, source *UserLogin, evt RemoteReadReceipt) {
-	// TODO exclude fake mxids
 	log := zerolog.Ctx(ctx)
 	var err error
 	var lastTarget *database.Message
@@ -2651,6 +2650,10 @@ func (portal *Portal) handleRemoteReadReceipt(ctx context.Context, source *UserL
 		} else if lastTarget == nil {
 			log.Debug().Str("last_target_id", string(lastTargetID)).
 				Msg("Last target message not found")
+		} else if lastTarget.HasFakeMXID() {
+			log.Debug().Str("last_target_id", string(lastTargetID)).
+				Msg("Last target message is fake")
+			lastTarget = nil
 		}
 	}
 	if lastTarget == nil {
@@ -2660,14 +2663,14 @@ func (portal *Portal) handleRemoteReadReceipt(ctx context.Context, source *UserL
 				log.Err(err).Str("target_id", string(targetID)).
 					Msg("Failed to get target message for read receipt")
 				return
-			} else if target != nil && (lastTarget == nil || target.Timestamp.After(lastTarget.Timestamp)) {
+			} else if target != nil && !target.HasFakeMXID() && (lastTarget == nil || target.Timestamp.After(lastTarget.Timestamp)) {
 				lastTarget = target
 			}
 		}
 	}
 	readUpTo := evt.GetReadUpTo()
 	if lastTarget == nil && !readUpTo.IsZero() {
-		lastTarget, err = portal.Bridge.DB.Message.GetLastPartAtOrBeforeTime(ctx, portal.PortalKey, readUpTo)
+		lastTarget, err = portal.Bridge.DB.Message.GetLastNonFakePartAtOrBeforeTime(ctx, portal.PortalKey, readUpTo)
 		if err != nil {
 			log.Err(err).Time("read_up_to", readUpTo).Msg("Failed to get target message for read receipt")
 		}
