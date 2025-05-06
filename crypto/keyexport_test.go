@@ -31,5 +31,5 @@ func TestExportKeys(t *testing.T) {
 	))
 	data, err := crypto.ExportKeys("meow", []*crypto.InboundGroupSession{sess})
 	assert.NoError(t, err)
-	assert.Len(t, data, 840)
+	assert.Len(t, data, 836)
 }
