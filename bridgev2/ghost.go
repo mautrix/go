@@ -162,7 +162,7 @@ func (ghost *Ghost) UpdateAvatar(ctx context.Context, avatar *Avatar) bool {
 			ghost.AvatarSet = false
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to reupload avatar")
 			return true
-		} else if newHash == ghost.AvatarHash && ghost.AvatarSet {
+		} else if newMXC == ghost.AvatarMXC && newHash == ghost.AvatarHash && ghost.AvatarSet {
 			return true
 		}
 		ghost.AvatarHash = newHash
