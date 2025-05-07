@@ -481,6 +481,9 @@ func (cli *Client) MakeFullRequestWithResp(ctx context.Context, params FullReque
 	if cli == nil {
 		return nil, nil, ErrClientIsNil
 	}
+	if cli.HomeserverURL == nil || cli.HomeserverURL.Scheme == "" {
+		return nil, nil, ErrClientHasNoHomeserver
+	}
 	if params.MaxAttempts == 0 {
 		maxAttempts, ok := ctx.Value(MaxAttemptsContextKey).(int)
 		if ok && maxAttempts > 0 {

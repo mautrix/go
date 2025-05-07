@@ -77,7 +77,8 @@ var (
 )
 
 var (
-	ErrClientIsNil = errors.New("client is nil")
+	ErrClientIsNil           = errors.New("client is nil")
+	ErrClientHasNoHomeserver = errors.New("client has no homeserver set")
 )
 
 // HTTPError An HTTP Error response, which may wrap an underlying native Go Error.
