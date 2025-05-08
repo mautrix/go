@@ -111,10 +111,6 @@ func (e DBUpgradeError) Unwrap() error {
 }
 
 func (br *Bridge) Start(ctx context.Context) error {
-	if br.backgroundCtx == nil || br.backgroundCtx.Err() != nil {
-		// Ensure we have a valid event handling context
-		br.backgroundCtx, br.cancelBackgroundCtx = context.WithCancel(context.Background())
-	}
 	ctx = br.Log.WithContext(ctx)
 	err := br.StartConnectors(ctx)
 	if err != nil {
@@ -174,6 +170,9 @@ func (br *Bridge) RunOnce(ctx context.Context, loginID networkid.UserLoginID, pa
 
 func (br *Bridge) StartConnectors(ctx context.Context) error {
 	br.Log.Info().Msg("Starting bridge")
+	if br.backgroundCtx == nil || br.backgroundCtx.Err() != nil {
+		br.backgroundCtx, br.cancelBackgroundCtx = context.WithCancel(context.Background())
+	}
 
 	if !br.ExternallyManagedDB {
 		err := br.DB.Upgrade(ctx)
