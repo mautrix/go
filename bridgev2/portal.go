@@ -375,7 +375,7 @@ func (portal *Portal) getEventCtxWithLog(rawEvt any, idx int) context.Context {
 	case *portalCreateEvent:
 		return evt.ctx
 	}
-	return logWith.Logger().WithContext(portal.Bridge.backgroundCtx)
+	return logWith.Logger().WithContext(portal.Bridge.BackgroundCtx)
 }
 
 func (portal *Portal) handleSingleEvent(ctx context.Context, rawEvt any, doneCallback func()) {

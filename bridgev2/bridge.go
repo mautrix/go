@@ -55,7 +55,7 @@ type Bridge struct {
 	wakeupBackfillQueue chan struct{}
 	stopBackfillQueue   *exsync.Event
 
-	backgroundCtx       context.Context
+	BackgroundCtx       context.Context
 	cancelBackgroundCtx context.CancelFunc
 }
 
@@ -170,8 +170,8 @@ func (br *Bridge) RunOnce(ctx context.Context, loginID networkid.UserLoginID, pa
 
 func (br *Bridge) StartConnectors(ctx context.Context) error {
 	br.Log.Info().Msg("Starting bridge")
-	if br.backgroundCtx == nil || br.backgroundCtx.Err() != nil {
-		br.backgroundCtx, br.cancelBackgroundCtx = context.WithCancel(context.Background())
+	if br.BackgroundCtx == nil || br.BackgroundCtx.Err() != nil {
+		br.BackgroundCtx, br.cancelBackgroundCtx = context.WithCancel(context.Background())
 	}
 
 	if !br.ExternallyManagedDB {
