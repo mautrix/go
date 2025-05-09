@@ -215,3 +215,11 @@ CREATE TABLE kv_store (
 
 	PRIMARY KEY (bridge_id, key)
 );
+
+CREATE TABLE media (
+	bridge_id TEXT NOT NULL,
+	id        TEXT NOT NULL,
+	metadata  jsonb NOT NULL,
+
+	PRIMARY KEY (bridge_id, id)
+);
