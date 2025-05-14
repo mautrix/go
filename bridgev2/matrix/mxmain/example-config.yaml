@@ -119,6 +119,9 @@ bridge:
     # If you want to rename the room when the user changes his name, set this to true.
     rename_room: false
 
+    # Should the bridge delete the messages when the user deletes them from whatsapp?
+    delete_messages: false
+
 # Config for the bridge's database.
 database:
     # The database type. "sqlite3-fk-wal" and "postgres" are supported.
