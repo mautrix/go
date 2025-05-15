@@ -1117,6 +1117,11 @@ type RemoteReadReceipt interface {
 	GetReadUpTo() time.Time
 }
 
+type RemoteReadReceiptWithStreamOrder interface {
+	RemoteReadReceipt
+	GetReadUpToStreamOrder() int64
+}
+
 type RemoteDeliveryReceipt interface {
 	RemoteEvent
 	GetReceiptTargets() []networkid.MessageID
