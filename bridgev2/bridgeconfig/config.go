@@ -75,6 +75,7 @@ type BridgeConfig struct {
 	CleanupOnLogout         CleanupOnLogouts `yaml:"cleanup_on_logout"`
 	Relay                   RelayConfig      `yaml:"relay"`
 	RenameRoom              bool             `yaml:"rename_room"`
+	DeleteMessages          bool             `yaml:"delete_messages"`
 	Permissions             PermissionConfig `yaml:"permissions"`
 	Backfill                BackfillConfig   `yaml:"backfill"`
 }

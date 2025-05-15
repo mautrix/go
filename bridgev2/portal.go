@@ -2562,6 +2562,10 @@ func (portal *Portal) handleRemoteReactionRemove(ctx context.Context, source *Us
 
 func (portal *Portal) handleRemoteMessageRemove(ctx context.Context, source *UserLogin, evt RemoteMessageRemove) {
 	log := zerolog.Ctx(ctx)
+	if !portal.Bridge.Config.DeleteMessages {
+		log.Info().Msg("Ignoring remote message remove event because delete messages are disabled")
+		return
+	}
 	targetParts, err := portal.Bridge.DB.Message.GetAllPartsByID(ctx, portal.Receiver, evt.GetTargetMessage())
 	if err != nil {
 		log.Err(err).Msg("Failed to get target message for removal")
