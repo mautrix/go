@@ -120,7 +120,7 @@ bridge:
     rename_room: false
 
     # Should the bridge delete the messages when the user deletes them from whatsapp?
-    delete_messages: false
+    delete_messages: true
 
 # Config for the bridge's database.
 database:
