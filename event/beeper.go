@@ -9,7 +9,9 @@ package event
 import (
 	"encoding/base32"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
+	"strconv"
 
 	"maunium.net/go/mautrix/id"
 )
@@ -81,6 +83,25 @@ type BeeperRoomKeyAckEventContent struct {
 	FirstMessageIndex int          `json:"first_message_index"`
 }
 
+type IntOrString int
+
+func (ios *IntOrString) UnmarshalJSON(data []byte) error {
+	if len(data) > 0 && data[0] == '"' {
+		var str string
+		err := json.Unmarshal(data, &str)
+		if err != nil {
+			return err
+		}
+		intVal, err := strconv.Atoi(str)
+		if err != nil {
+			return err
+		}
+		*ios = IntOrString(intVal)
+		return nil
+	}
+	return json.Unmarshal(data, (*int)(ios))
+}
+
 type LinkPreview struct {
 	CanonicalURL string `json:"og:url,omitempty"`
 	Title        string `json:"og:title,omitempty"`
@@ -90,10 +111,10 @@ type LinkPreview struct {
 
 	ImageURL id.ContentURIString `json:"og:image,omitempty"`
 
-	ImageSize   int    `json:"matrix:image:size,omitempty"`
-	ImageWidth  int    `json:"og:image:width,omitempty"`
-	ImageHeight int    `json:"og:image:height,omitempty"`
-	ImageType   string `json:"og:image:type,omitempty"`
+	ImageSize   IntOrString `json:"matrix:image:size,omitempty"`
+	ImageWidth  IntOrString `json:"og:image:width,omitempty"`
+	ImageHeight IntOrString `json:"og:image:height,omitempty"`
+	ImageType   string      `json:"og:image:type,omitempty"`
 }
 
 // BeeperLinkPreview contains the data for a bundled URL preview as specified in MSC4095
