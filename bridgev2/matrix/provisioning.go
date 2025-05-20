@@ -53,6 +53,11 @@ type ProvisioningAPI struct {
 	matrixAuthCache     map[string]matrixAuthCacheEntry
 	matrixAuthCacheLock sync.Mutex
 
+	// Set for a given login once credentials have been exported, once in this state the finish
+	// API is available which will call logout on the client in question.
+	sessionTransfers     map[networkid.UserLoginID]struct{}
+	sessionTransfersLock sync.Mutex
+
 	// GetAuthFromRequest is a custom function for getting the auth token from
 	// the request if the Authorization header is not present.
 	GetAuthFromRequest func(r *http.Request) string
@@ -101,6 +106,7 @@ func (br *Connector) GetProvisioning() IProvisioningAPI {
 func (prov *ProvisioningAPI) Init() {
 	prov.matrixAuthCache = make(map[string]matrixAuthCacheEntry)
 	prov.logins = make(map[string]*ProvLogin)
+	prov.sessionTransfers = make(map[networkid.UserLoginID]struct{})
 	prov.net = prov.br.Bridge.Network
 	prov.log = prov.br.Log.With().Str("component", "provisioning").Logger()
 	prov.fedClient = federation.NewClient("", nil, nil)
@@ -127,6 +133,12 @@ func (prov *ProvisioningAPI) Init() {
 	prov.Router.Path("/v3/resolve_identifier/{identifier}").Methods(http.MethodGet, http.MethodOptions).HandlerFunc(prov.GetResolveIdentifier)
 	prov.Router.Path("/v3/create_dm/{identifier}").Methods(http.MethodPost, http.MethodOptions).HandlerFunc(prov.PostCreateDM)
 	prov.Router.Path("/v3/create_group").Methods(http.MethodPost, http.MethodOptions).HandlerFunc(prov.PostCreateGroup)
+
+	if prov.br.Config.Provisioning.EnableSessionTransfers {
+		prov.log.Debug().Msg("Enabling session transfer API")
+		prov.Router.Path("/v3/session_transfer/init").Methods(http.MethodPost, http.MethodOptions).HandlerFunc(prov.PostInitSessionTransfer)
+		prov.Router.Path("/v3/session_transfer/finish").Methods(http.MethodPost, http.MethodOptions).HandlerFunc(prov.PostFinishSessionTransfer)
+	}
 
 	if prov.br.Config.Provisioning.DebugEndpoints {
 		prov.log.Debug().Msg("Enabling debug API at /debug")
@@ -790,4 +802,113 @@ func (prov *ProvisioningAPI) PostCreateGroup(w http.ResponseWriter, r *http.Requ
 		Err:     "Creating groups is not yet implemented",
 		ErrCode: mautrix.MUnrecognized.ErrCode,
 	})
+}
+
+type ReqExportCredentials struct {
+	RemoteID networkid.UserLoginID `json:"remote_name"`
+}
+
+type RespExportCredentials struct {
+	Credentials any `json:"credentials"`
+}
+
+func (prov *ProvisioningAPI) PostInitSessionTransfer(w http.ResponseWriter, r *http.Request) {
+	prov.sessionTransfersLock.Lock()
+	defer prov.sessionTransfersLock.Unlock()
+
+	var req ReqExportCredentials
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to decode request body")
+		jsonResponse(w, http.StatusBadRequest, &mautrix.RespError{
+			Err:     "Failed to decode request body",
+			ErrCode: mautrix.MNotJSON.ErrCode,
+		})
+		return
+	}
+
+	user := prov.GetUser(r)
+	logins := user.GetUserLogins()
+	var loginToExport *bridgev2.UserLogin
+	for _, login := range logins {
+		if login.ID == req.RemoteID {
+			loginToExport = login
+			break
+		}
+	}
+	if loginToExport == nil {
+		jsonResponse(w, http.StatusNotFound, &mautrix.RespError{
+			Err:     "No matching user login found",
+			ErrCode: mautrix.MNotFound.ErrCode,
+		})
+		return
+	}
+
+	client, ok := loginToExport.Client.(bridgev2.CredentialExportingNetworkAPI)
+	if !ok {
+		jsonResponse(w, http.StatusBadRequest, &mautrix.RespError{
+			Err:     "Client does not support credential exporting",
+			ErrCode: mautrix.MInvalidParam.ErrCode,
+		})
+		return
+	}
+
+	if _, ok := prov.sessionTransfers[loginToExport.ID]; ok {
+		// Warn, but allow, double exports. This might happen if a client crashes handling creds,
+		// and should be safe to call multiple times.
+		zerolog.Ctx(r.Context()).Warn().Msg("Exporting already exported credentials")
+	}
+
+	resp := RespExportCredentials{
+		Credentials: client.ExportCredentials(r.Context()),
+	}
+	jsonResponse(w, http.StatusOK, resp)
+}
+
+func (prov *ProvisioningAPI) PostFinishSessionTransfer(w http.ResponseWriter, r *http.Request) {
+	prov.sessionTransfersLock.Lock()
+	defer prov.sessionTransfersLock.Unlock()
+
+	var req ReqExportCredentials
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to decode request body")
+		jsonResponse(w, http.StatusBadRequest, &mautrix.RespError{
+			Err:     "Failed to decode request body",
+			ErrCode: mautrix.MNotJSON.ErrCode,
+		})
+		return
+	}
+
+	user := prov.GetUser(r)
+	logins := user.GetUserLogins()
+	var loginToExport *bridgev2.UserLogin
+	for _, login := range logins {
+		if login.ID == req.RemoteID {
+			loginToExport = login
+			break
+		}
+	}
+	if loginToExport == nil {
+		jsonResponse(w, http.StatusNotFound, &mautrix.RespError{
+			Err:     "No matching user login found",
+			ErrCode: mautrix.MNotFound.ErrCode,
+		})
+		return
+	} else if _, ok := prov.sessionTransfers[loginToExport.ID]; !ok {
+		jsonResponse(w, http.StatusBadRequest, &mautrix.RespError{
+			Err:     "No matching credential export found",
+			ErrCode: mautrix.MNotJSON.ErrCode,
+		})
+		return
+	}
+
+	zerolog.Ctx(r.Context()).Info().
+		Str("remote_name", string(req.RemoteID)).
+		Msg("Logging out remote after finishing credential export")
+
+	loginToExport.Client.LogoutRemote(r.Context())
+	delete(prov.sessionTransfers, req.RemoteID)
+
+	jsonResponse(w, http.StatusOK, struct{}{})
 }

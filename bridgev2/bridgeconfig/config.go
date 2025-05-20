@@ -95,9 +95,10 @@ type AnalyticsConfig struct {
 }
 
 type ProvisioningConfig struct {
-	Prefix         string `yaml:"prefix"`
-	SharedSecret   string `yaml:"shared_secret"`
-	DebugEndpoints bool   `yaml:"debug_endpoints"`
+	Prefix                 string `yaml:"prefix"`
+	SharedSecret           string `yaml:"shared_secret"`
+	DebugEndpoints         bool   `yaml:"debug_endpoints"`
+	EnableSessionTransfers bool   `yaml:"enable_session_transfers"`
 }
 
 type DirectMediaConfig struct {
