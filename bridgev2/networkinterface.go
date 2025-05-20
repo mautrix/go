@@ -387,6 +387,13 @@ type BackgroundSyncingNetworkAPI interface {
 	ConnectBackground(ctx context.Context, params *ConnectBackgroundParams) error
 }
 
+// CredentialExportingNetworkAPI is an optional interface that networks connectors can implement to support export of
+// the credentials associated with that login. Credential type is bridge specific.
+type CredentialExportingNetworkAPI interface {
+	NetworkAPI
+	ExportCredentials(ctx context.Context) any
+}
+
 // FetchMessagesParams contains the parameters for a message history pagination request.
 type FetchMessagesParams struct {
 	// The portal to fetch messages in. Always present.
