@@ -805,7 +805,7 @@ func (prov *ProvisioningAPI) PostCreateGroup(w http.ResponseWriter, r *http.Requ
 }
 
 type ReqExportCredentials struct {
-	RemoteID networkid.UserLoginID `json:"remote_name"`
+	RemoteID networkid.UserLoginID `json:"remote_id"`
 }
 
 type RespExportCredentials struct {
