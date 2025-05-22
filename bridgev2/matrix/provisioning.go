@@ -859,6 +859,8 @@ func (prov *ProvisioningAPI) PostInitSessionTransfer(w http.ResponseWriter, r *h
 		zerolog.Ctx(r.Context()).Warn().Msg("Exporting already exported credentials")
 	}
 
+	// Disconnect now so we don't use the same network session in two places at once
+	client.Disconnect()
 	resp := RespExportCredentials{
 		Credentials: client.ExportCredentials(r.Context()),
 	}
