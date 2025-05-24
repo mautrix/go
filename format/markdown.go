@@ -18,6 +18,7 @@ import (
 
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/format/mdext"
+	"maunium.net/go/mautrix/id"
 )
 
 const paragraphStart = "<p>"
@@ -41,7 +42,7 @@ func UnwrapSingleParagraph(html string) string {
 	return html
 }
 
-var mdEscapeRegex = regexp.MustCompile("([\\\\`*_[\\]])")
+var mdEscapeRegex = regexp.MustCompile("([\\\\`*_[\\]()])")
 
 func EscapeMarkdown(text string) string {
 	text = mdEscapeRegex.ReplaceAllString(text, "\\$1")
@@ -50,7 +51,23 @@ func EscapeMarkdown(text string) string {
 	return text
 }
 
+type uriAble interface {
+	String() string
+	URI() *id.MatrixURI
+}
+
+func MarkdownMention(id uriAble) string {
+	return MarkdownLink(id.String(), id.URI().MatrixToURL())
+}
+
+func MarkdownLink(name string, url string) string {
+	return fmt.Sprintf("[%s](%s)", EscapeMarkdown(name), EscapeMarkdown(url))
+}
+
 func SafeMarkdownCode[T ~string](textInput T) string {
+	if textInput == "" {
+		return "` `"
+	}
 	text := strings.ReplaceAll(string(textInput), "\n", " ")
 	backtickCount := exstrings.LongestSequenceOf(text, '`')
 	if backtickCount == 0 {
