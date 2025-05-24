@@ -43,7 +43,11 @@ func NewProcessor[MetaType any](cli *mautrix.Client) *Processor[MetaType] {
 }
 
 func (proc *Processor[MetaType]) Process(ctx context.Context, evt *event.Event) {
-	log := *zerolog.Ctx(ctx)
+	log := zerolog.Ctx(ctx).With().
+		Stringer("sender", evt.Sender).
+		Stringer("room_id", evt.RoomID).
+		Stringer("event_id", evt.ID).
+		Logger()
 	defer func() {
 		panicErr := recover()
 		if panicErr != nil {
@@ -98,9 +102,7 @@ func (proc *Processor[MetaType]) Process(ctx context.Context, evt *event.Event) 
 
 	logWith := log.With().
 		Str("command", parsed.Command).
-		Array("handler", handlerChain).
-		Stringer("sender", evt.Sender).
-		Stringer("room_id", evt.RoomID)
+		Array("handler", handlerChain)
 	if len(parsed.ParentCommands) > 0 {
 		logWith = logWith.Strs("parent_commands", parsed.ParentCommands)
 	}
