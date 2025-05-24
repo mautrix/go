@@ -26,6 +26,8 @@ type Processor[MetaType any] struct {
 	LogArgs      bool
 	PreValidator PreValidator[MetaType]
 	Meta         MetaType
+
+	ReactionCommandPrefix string
 }
 
 // UnknownCommandName is the name of the fallback handler which is used if no other handler is found.
@@ -65,7 +67,13 @@ func (proc *Processor[MetaType]) Process(ctx context.Context, evt *event.Event) 
 			}
 		}
 	}()
-	parsed := ParseEvent[MetaType](ctx, evt)
+	var parsed *Event[MetaType]
+	switch evt.Type {
+	case event.EventReaction:
+		parsed = proc.ParseReaction(ctx, evt)
+	case event.EventMessage:
+		parsed = ParseEvent[MetaType](ctx, evt)
+	}
 	if parsed == nil || !proc.PreValidator.Validate(parsed) {
 		return
 	}
