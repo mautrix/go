@@ -36,6 +36,7 @@ type Event[MetaType any] struct {
 	RawArgs string
 
 	Ctx     context.Context
+	Log     *zerolog.Logger
 	Proc    *Processor[MetaType]
 	Handler *Handler[MetaType]
 	Meta    MetaType
@@ -77,6 +78,7 @@ func ParseEvent[MetaType any](ctx context.Context, evt *event.Event) *Event[Meta
 		Command:  strings.ToLower(parts[0]),
 		Args:     parts[1:],
 		RawArgs:  strings.TrimLeft(strings.TrimPrefix(text, parts[0]), " "),
+		Log:      zerolog.Ctx(ctx),
 		Ctx:      ctx,
 	}
 }

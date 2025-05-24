@@ -111,6 +111,7 @@ func (proc *Processor[MetaType]) Process(ctx context.Context, evt *event.Event) 
 	}
 	log = logWith.Logger()
 	parsed.Ctx = log.WithContext(ctx)
+	parsed.Log = &log
 
 	log.Debug().Msg("Processing command")
 	handler.Func(parsed)
