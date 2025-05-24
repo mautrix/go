@@ -709,3 +709,10 @@ type RespOpenIDToken struct {
 	MatrixServerName string `json:"matrix_server_name"`
 	TokenType        string `json:"token_type"` // Always "Bearer"
 }
+
+type RespGetRelations struct {
+	Chunk          []*event.Event `json:"chunk"`
+	NextBatch      string         `json:"next_batch,omitempty"`
+	PrevBatch      string         `json:"prev_batch,omitempty"`
+	RecursionDepth int            `json:"recursion_depth,omitempty"`
+}

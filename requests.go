@@ -543,3 +543,44 @@ type ReqReport struct {
 	Reason string `json:"reason,omitempty"`
 	Score  int    `json:"score,omitempty"`
 }
+
+type ReqGetRelations struct {
+	RelationType event.RelationType
+	EventType    event.Type
+
+	Dir     Direction
+	From    string
+	To      string
+	Limit   int
+	Recurse bool
+}
+
+func (rgr *ReqGetRelations) PathSuffix() ClientURLPath {
+	if rgr.RelationType != "" {
+		if rgr.EventType.Type != "" {
+			return ClientURLPath{rgr.RelationType, rgr.EventType.Type}
+		}
+		return ClientURLPath{rgr.RelationType}
+	}
+	return ClientURLPath{}
+}
+
+func (rgr *ReqGetRelations) Query() map[string]string {
+	query := map[string]string{}
+	if rgr.Dir != 0 {
+		query["dir"] = string(rgr.Dir)
+	}
+	if rgr.From != "" {
+		query["from"] = rgr.From
+	}
+	if rgr.To != "" {
+		query["to"] = rgr.To
+	}
+	if rgr.Limit > 0 {
+		query["limit"] = strconv.Itoa(rgr.Limit)
+	}
+	if rgr.Recurse {
+		query["recurse"] = "true"
+	}
+	return query
+}
