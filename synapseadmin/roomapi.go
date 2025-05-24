@@ -127,6 +127,14 @@ type RespDeleteRoom struct {
 	DeleteID string `json:"delete_id"`
 }
 
+type RespDeleteRoomStatus struct {
+	Status            string         `json:"status,omitempty"`
+	KickedUsers       []id.UserID    `json:"kicked_users,omitempty"`
+	FailedToKickUsers []id.UserID    `json:"failed_to_kick_users,omitempty"`
+	LocalAliases      []id.RoomAlias `json:"local_aliases,omitempty"`
+	NewRoomID         id.RoomID      `json:"new_room_id,omitempty"`
+}
+
 // DeleteRoom deletes a room from the server, optionally blocking it and/or purging all data from the database.
 //
 // This calls the async version of the endpoint, which will return immediately and delete the room in the background.
@@ -137,6 +145,27 @@ func (cli *Client) DeleteRoom(ctx context.Context, roomID id.RoomID, req ReqDele
 	var resp RespDeleteRoom
 	_, err := cli.Client.MakeRequest(ctx, http.MethodDelete, reqURL, &req, &resp)
 	return resp, err
+}
+
+// DeleteRoomSync deletes a room from the server, optionally blocking it and/or purging all data from the database.
+//
+// This calls the synchronous version of the endpoint, which will block until the room is deleted.
+//
+// https://element-hq.github.io/synapse/latest/admin_api/rooms.html#version-1-old-version
+func (cli *Client) DeleteRoomSync(ctx context.Context, roomID id.RoomID, req ReqDeleteRoom) (resp RespDeleteRoomStatus, err error) {
+	reqURL := cli.BuildAdminURL("v1", "rooms", roomID)
+	httpClient := &http.Client{}
+	_, err = cli.Client.MakeFullRequest(ctx, mautrix.FullRequest{
+		Method:       http.MethodDelete,
+		URL:          reqURL,
+		RequestJSON:  &req,
+		ResponseJSON: &resp,
+		MaxAttempts:  1,
+		// Use a fresh HTTP client without timeouts
+		Client: httpClient,
+	})
+	httpClient.CloseIdleConnections()
+	return
 }
 
 type RespRoomsMembers struct {
