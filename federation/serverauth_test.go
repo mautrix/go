@@ -23,7 +23,7 @@ func TestServerKeyResponse_VerifySelfSignature(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			resp, err := cli.ServerKeys(ctx, "matrix.org")
 			require.NoError(t, err)
-			assert.True(t, resp.VerifySelfSignature())
+			assert.NoError(t, resp.VerifySelfSignature())
 		})
 	}
 }

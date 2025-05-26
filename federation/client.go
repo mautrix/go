@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -398,10 +399,10 @@ type signableRequest struct {
 	Content     json.RawMessage `json:"content,omitempty"`
 }
 
-func (r *signableRequest) Verify(key id.SigningKey, sig string) bool {
+func (r *signableRequest) Verify(key id.SigningKey, sig string) error {
 	message, err := json.Marshal(r)
 	if err != nil {
-		return false
+		return fmt.Errorf("failed to marshal data: %w", err)
 	}
 	return VerifyJSONRaw(key, sig, message)
 }
