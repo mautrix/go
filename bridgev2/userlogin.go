@@ -230,6 +230,9 @@ func (user *User) NewLogin(ctx context.Context, data *database.UserLogin, params
 	err = params.LoadUserLogin(ul.Log.WithContext(context.Background()), ul)
 	if err != nil {
 		return nil, err
+	} else if ul.Client == nil {
+		ul.Log.Error().Msg("LoadUserLogin didn't fill Client in NewLogin")
+		return nil, fmt.Errorf("client not filled by LoadUserLogin")
 	}
 	if doInsert {
 		err = user.Bridge.DB.UserLogin.Insert(ctx, ul.UserLogin)
