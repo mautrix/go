@@ -228,7 +228,7 @@ func (sa *ServerAuth) Authenticate(r *http.Request) (*http.Request, *mautrix.Res
 	}
 	valid := (&signableRequest{
 		Method:      r.Method,
-		URI:         r.URL.RawPath,
+		URI:         r.URL.EscapedPath(),
 		Origin:      parsed.Origin,
 		Destination: destination,
 		Content:     reqBody,
