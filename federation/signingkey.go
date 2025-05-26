@@ -84,6 +84,10 @@ type ServerKeyResponse struct {
 	Raw json.RawMessage `json:"-"`
 }
 
+type QueryKeysResponse struct {
+	ServerKeys []*ServerKeyResponse `json:"server_keys"`
+}
+
 func (skr *ServerKeyResponse) HasKey(keyID id.KeyID) bool {
 	if skr == nil {
 		return false
