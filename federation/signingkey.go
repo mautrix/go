@@ -11,7 +11,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"maps"
 	"strings"
 	"time"
 
@@ -82,7 +81,7 @@ type ServerKeyResponse struct {
 	Signatures    map[string]map[id.KeyID]string `json:"signatures,omitempty"`
 	ValidUntilTS  jsontime.UnixMilli             `json:"valid_until_ts"`
 
-	Extra map[string]any `json:"-"`
+	Raw json.RawMessage `json:"-"`
 }
 
 func (skr *ServerKeyResponse) HasKey(keyID id.KeyID) bool {
@@ -96,7 +95,7 @@ func (skr *ServerKeyResponse) HasKey(keyID id.KeyID) bool {
 
 func (skr *ServerKeyResponse) VerifySelfSignature() bool {
 	for keyID, key := range skr.VerifyKeys {
-		if !VerifyJSON(skr.ServerName, keyID, key.Key, skr) {
+		if !VerifyJSON(skr.ServerName, keyID, key.Key, skr.Raw) {
 			return false
 		}
 	}
@@ -128,7 +127,7 @@ func VerifyJSON(serverName string, keyID id.KeyID, key id.SigningKey, data any) 
 }
 
 func VerifyJSONRaw(key id.SigningKey, sig string, message json.RawMessage) bool {
-	sigBytes, err := base64.RawURLEncoding.DecodeString(sig)
+	sigBytes, err := base64.RawStdEncoding.DecodeString(sig)
 	if err != nil {
 		return false
 	}
@@ -142,40 +141,9 @@ func VerifyJSONRaw(key id.SigningKey, sig string, message json.RawMessage) bool 
 
 type marshalableSKR ServerKeyResponse
 
-func (skr *ServerKeyResponse) MarshalJSON() ([]byte, error) {
-	if skr.Extra == nil {
-		return json.Marshal((*marshalableSKR)(skr))
-	}
-	marshalable := maps.Clone(skr.Extra)
-	marshalable["server_name"] = skr.ServerName
-	marshalable["verify_keys"] = skr.VerifyKeys
-	marshalable["old_verify_keys"] = skr.OldVerifyKeys
-	marshalable["signatures"] = skr.Signatures
-	marshalable["valid_until_ts"] = skr.ValidUntilTS
-	return json.Marshal(skr.Extra)
-}
-
 func (skr *ServerKeyResponse) UnmarshalJSON(data []byte) error {
-	err := json.Unmarshal(data, (*marshalableSKR)(skr))
-	if err != nil {
-		return err
-	}
-	var extra map[string]any
-	err = json.Unmarshal(data, &extra)
-	if err != nil {
-		return err
-	}
-	delete(extra, "server_name")
-	delete(extra, "verify_keys")
-	delete(extra, "old_verify_keys")
-	delete(extra, "signatures")
-	delete(extra, "valid_until_ts")
-	if len(extra) > 0 {
-		skr.Extra = extra
-	} else {
-		skr.Extra = nil
-	}
-	return nil
+	skr.Raw = data
+	return json.Unmarshal(data, (*marshalableSKR)(skr))
 }
 
 type ServerVerifyKey struct {
