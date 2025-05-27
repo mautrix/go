@@ -19,6 +19,8 @@ type Receipt struct {
 	LastTarget networkid.MessageID
 	Targets    []networkid.MessageID
 	ReadUpTo   time.Time
+
+	ReadUpToStreamOrder int64
 }
 
 var (
@@ -36,6 +38,10 @@ func (evt *Receipt) GetReceiptTargets() []networkid.MessageID {
 
 func (evt *Receipt) GetReadUpTo() time.Time {
 	return evt.ReadUpTo
+}
+
+func (evt *Receipt) GetReadUpToStreamOrder() int64 {
+	return evt.ReadUpToStreamOrder
 }
 
 type MarkUnread struct {

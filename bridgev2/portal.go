@@ -2693,17 +2693,31 @@ func (portal *Portal) handleRemoteReadReceipt(ctx context.Context, source *UserL
 			log.Err(err).Time("read_up_to", readUpTo).Msg("Failed to get target message for read receipt")
 		}
 	}
-	if lastTarget == nil {
-		log.Warn().Msg("No target message found for read receipt")
-		return
-	}
 	sender := evt.GetSender()
 	intent := portal.GetIntentFor(ctx, sender, source, RemoteEventReadReceipt)
-	err = intent.MarkRead(ctx, portal.MXID, lastTarget.MXID, getEventTS(evt))
-	if err != nil {
-		log.Err(err).Stringer("target_mxid", lastTarget.MXID).Msg("Failed to bridge read receipt")
+	var addTargetLog func(evt *zerolog.Event) *zerolog.Event
+	if lastTarget == nil {
+		sevt, evtOK := evt.(RemoteReadReceiptWithStreamOrder)
+		soIntent, soIntentOK := intent.(StreamOrderReadingMatrixAPI)
+		if !evtOK || !soIntentOK || sevt.GetReadUpToStreamOrder() == 0 {
+			log.Warn().Msg("No target message found for read receipt")
+			return
+		}
+		targetStreamOrder := sevt.GetReadUpToStreamOrder()
+		addTargetLog = func(evt *zerolog.Event) *zerolog.Event {
+			return evt.Int64("target_stream_order", targetStreamOrder)
+		}
+		err = soIntent.MarkStreamOrderRead(ctx, portal.MXID, targetStreamOrder, getEventTS(evt))
 	} else {
-		log.Debug().Stringer("target_mxid", lastTarget.MXID).Msg("Bridged read receipt")
+		addTargetLog = func(evt *zerolog.Event) *zerolog.Event {
+			return evt.Stringer("target_mxid", lastTarget.MXID)
+		}
+		err = intent.MarkRead(ctx, portal.MXID, lastTarget.MXID, getEventTS(evt))
+	}
+	if err != nil {
+		addTargetLog(log.Err(err)).Msg("Failed to bridge read receipt")
+	} else {
+		addTargetLog(log.Debug()).Msg("Bridged read receipt")
 	}
 	if sender.IsFromMe {
 		portal.Bridge.DisappearLoop.StartAll(ctx, portal.MXID)
