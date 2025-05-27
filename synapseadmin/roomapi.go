@@ -147,6 +147,12 @@ func (cli *Client) DeleteRoom(ctx context.Context, roomID id.RoomID, req ReqDele
 	return resp, err
 }
 
+func (cli *Client) DeleteRoomStatus(ctx context.Context, deleteID string) (resp RespDeleteRoomStatus, err error) {
+	reqURL := cli.BuildAdminURL("v2", "rooms", "delete_status", deleteID)
+	_, err = cli.Client.MakeRequest(ctx, http.MethodGet, reqURL, nil, &resp)
+	return
+}
+
 // DeleteRoomSync deletes a room from the server, optionally blocking it and/or purging all data from the database.
 //
 // This calls the synchronous version of the endpoint, which will block until the room is deleted.
