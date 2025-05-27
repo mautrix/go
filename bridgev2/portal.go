@@ -3943,7 +3943,7 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 			}
 		}
 	}
-	if portal.Bridge.Config.Backfill.Enabled && portal.RoomType != database.RoomTypeSpace {
+	if portal.Bridge.Config.Backfill.Enabled && portal.RoomType != database.RoomTypeSpace && !portal.Bridge.Background {
 		portal.doForwardBackfill(ctx, source, nil, backfillBundle)
 	}
 	return nil
