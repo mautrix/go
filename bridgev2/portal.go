@@ -3226,6 +3226,10 @@ func (portal *Portal) getInitialMemberList(ctx context.Context, members *ChatMem
 	members.PowerLevels.Apply("", pl)
 	members.memberListToMap(ctx)
 	for _, member := range members.MemberMap {
+		if ctx.Err() != nil {
+			err = ctx.Err()
+			return
+		}
 		if member.Membership != event.MembershipJoin && member.Membership != "" {
 			continue
 		}
@@ -3403,6 +3407,9 @@ func (portal *Portal) syncParticipants(ctx context.Context, members *ChatMemberL
 		}
 	}
 	for _, member := range members.MemberMap {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		if member.Sender != "" && member.UserInfo != nil {
 			ghost, err := portal.Bridge.GetGhostByID(ctx, member.Sender)
 			if err != nil {
@@ -3742,6 +3749,9 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 	}
 
 	portal.UpdateInfo(ctx, info, source, nil, time.Time{})
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 
 	powerLevels := &event.PowerLevelsEventContent{
 		Events: map[string]int{
@@ -3866,7 +3876,7 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 		}
 		portal.Bridge.WakeupBackfillQueue()
 	}
-	withoutCancelCtx := context.WithoutCancel(ctx)
+	withoutCancelCtx := zerolog.Ctx(ctx).WithContext(portal.Bridge.BackgroundCtx)
 	if portal.Parent != nil {
 		if portal.Parent.MXID != "" {
 			portal.addToParentSpaceAndSave(ctx, true)

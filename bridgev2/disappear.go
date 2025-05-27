@@ -85,7 +85,7 @@ func (dl *DisappearLoop) Add(ctx context.Context, dm *database.DisappearingMessa
 			Msg("Failed to save disappearing message")
 	}
 	if !dm.DisappearAt.IsZero() && dm.DisappearAt.Before(dl.NextCheck) {
-		go dl.sleepAndDisappear(context.WithoutCancel(ctx), dm)
+		go dl.sleepAndDisappear(zerolog.Ctx(ctx).WithContext(dl.br.BackgroundCtx), dm)
 	}
 }
 

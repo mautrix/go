@@ -301,7 +301,7 @@ func (ul *UserLogin) Delete(ctx context.Context, state status.BridgeState, opts 
 	if !opts.unlocked {
 		ul.Bridge.cacheLock.Unlock()
 	}
-	backgroundCtx := context.WithoutCancel(ctx)
+	backgroundCtx := zerolog.Ctx(ctx).WithContext(ul.Bridge.BackgroundCtx)
 	if !opts.BlockingCleanup {
 		go ul.deleteSpace(backgroundCtx)
 	} else {
