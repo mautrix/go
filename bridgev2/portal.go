@@ -1885,7 +1885,7 @@ func (portal *Portal) getRelationMeta(ctx context.Context, currentMsg networkid.
 		if err != nil {
 			log.Err(err).Msg("Failed to get reply target message from database")
 		} else if replyTo == nil {
-			if isBatchSend {
+			if isBatchSend || portal.Bridge.Config.OutgoingMessageReID {
 				// This is somewhat evil
 				replyTo = &database.Message{
 					MXID: portal.Bridge.Matrix.GenerateDeterministicEventID(portal.MXID, portal.PortalKey, replyToPtr.MessageID, ptr.Val(replyToPtr.PartID)),
@@ -1900,7 +1900,7 @@ func (portal *Portal) getRelationMeta(ctx context.Context, currentMsg networkid.
 		if err != nil {
 			log.Err(err).Msg("Failed to get thread root message from database")
 		} else if threadRoot == nil {
-			if isBatchSend {
+			if isBatchSend || portal.Bridge.Config.OutgoingMessageReID {
 				threadRoot = &database.Message{
 					MXID: portal.Bridge.Matrix.GenerateDeterministicEventID(portal.MXID, portal.PortalKey, *threadRootPtr, ""),
 				}
