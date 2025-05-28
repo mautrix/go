@@ -1,4 +1,4 @@
-// Copyright (c) 2023 Tulir Asokan
+// Copyright (c) 2025 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -23,6 +23,8 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
+
+	"maunium.net/go/mautrix"
 )
 
 type WebsocketRequest struct {
@@ -371,12 +373,12 @@ func (as *AppService) StartWebsocket(baseURL string, onConnect func()) error {
 		"X-Mautrix-Websocket-Version": []string{"3"},
 	})
 	if resp != nil && resp.StatusCode >= 400 {
-		var errResp Error
+		var errResp mautrix.RespError
 		err = json.NewDecoder(resp.Body).Decode(&errResp)
 		if err != nil {
 			return fmt.Errorf("websocket request returned HTTP %d with non-JSON body", resp.StatusCode)
 		} else {
-			return fmt.Errorf("websocket request returned %s (HTTP %d): %s", errResp.ErrorCode, resp.StatusCode, errResp.Message)
+			return fmt.Errorf("websocket request returned %s (HTTP %d): %s", errResp.ErrCode, resp.StatusCode, errResp.Err)
 		}
 	} else if err != nil {
 		return fmt.Errorf("failed to open websocket: %w", err)
