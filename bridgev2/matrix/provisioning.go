@@ -501,7 +501,7 @@ func (prov *ProvisioningAPI) PostLoginWait(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to wait")
 		jsonResponse(w, http.StatusInternalServerError, &mautrix.RespError{
-			Err:     "Failed to wait",
+			Err:     "Failed to wait: " + err.Error(),
 			ErrCode: "M_UNKNOWN",
 		})
 		return
