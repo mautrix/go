@@ -8,6 +8,7 @@ package bridgev2
 
 import (
 	"context"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -21,15 +22,17 @@ import (
 type DisappearLoop struct {
 	br        *Bridge
 	NextCheck time.Time
-	stop      context.CancelFunc
+	stop      atomic.Pointer[context.CancelFunc]
 }
 
 const DisappearCheckInterval = 1 * time.Hour
 
 func (dl *DisappearLoop) Start() {
 	log := dl.br.Log.With().Str("component", "disappear loop").Logger()
-	ctx := log.WithContext(context.Background())
-	ctx, dl.stop = context.WithCancel(ctx)
+	ctx, stop := context.WithCancel(log.WithContext(context.Background()))
+	if oldStop := dl.stop.Swap(&stop); oldStop != nil {
+		(*oldStop)()
+	}
 	log.Debug().Msg("Disappearing message loop starting")
 	for {
 		dl.NextCheck = time.Now().Add(DisappearCheckInterval)
@@ -49,8 +52,11 @@ func (dl *DisappearLoop) Start() {
 }
 
 func (dl *DisappearLoop) Stop() {
-	if dl.stop != nil {
-		dl.stop()
+	if dl == nil {
+		return
+	}
+	if stop := dl.stop.Load(); stop != nil {
+		(*stop)()
 	}
 }
 

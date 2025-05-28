@@ -15,6 +15,7 @@ import (
 
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/format"
+	"maunium.net/go/mautrix/id"
 )
 
 // Event contains the data of a single command event.
@@ -23,6 +24,10 @@ type Event[MetaType any] struct {
 	*event.Event
 	// RawInput is the entire message before splitting into command and arguments.
 	RawInput string
+	// ParentCommands is the chain of commands leading up to this command.
+	// This is only set if the command is a subcommand.
+	ParentCommands []string
+	ParentHandlers []*Handler[MetaType]
 	// Command is the lowercased first word of the message.
 	Command string
 	// Args are the rest of the message split by whitespace ([strings.Fields]).
@@ -55,9 +60,15 @@ var IDHTMLParser = &format.HTMLParser{
 // ParseEvent parses a message into a command event struct.
 func ParseEvent[MetaType any](ctx context.Context, evt *event.Event) *Event[MetaType] {
 	content := evt.Content.Parsed.(*event.MessageEventContent)
+	if content.MsgType == event.MsgNotice || content.RelatesTo.GetReplaceID() != "" {
+		return nil
+	}
 	text := content.Body
 	if content.Format == event.FormatHTML {
 		text = IDHTMLParser.Parse(content.FormattedBody, format.NewContext(ctx))
+	}
+	if len(text) == 0 {
+		return nil
 	}
 	parts := strings.Fields(text)
 	return &Event[MetaType]{
@@ -71,21 +82,23 @@ func ParseEvent[MetaType any](ctx context.Context, evt *event.Event) *Event[Meta
 }
 
 type ReplyOpts struct {
-	AllowHTML     bool
-	AllowMarkdown bool
-	Reply         bool
-	Thread        bool
-	SendAsText    bool
+	AllowHTML        bool
+	AllowMarkdown    bool
+	Reply            bool
+	Thread           bool
+	SendAsText       bool
+	Edit             id.EventID
+	OverrideMentions *event.Mentions
 }
 
-func (evt *Event[MetaType]) Reply(msg string, args ...any) {
+func (evt *Event[MetaType]) Reply(msg string, args ...any) id.EventID {
 	if len(args) > 0 {
 		msg = fmt.Sprintf(msg, args...)
 	}
-	evt.Respond(msg, ReplyOpts{AllowMarkdown: true, Reply: true})
+	return evt.Respond(msg, ReplyOpts{AllowMarkdown: true, Reply: true})
 }
 
-func (evt *Event[MetaType]) Respond(msg string, opts ReplyOpts) {
+func (evt *Event[MetaType]) Respond(msg string, opts ReplyOpts) id.EventID {
 	content := format.RenderMarkdown(msg, opts.AllowMarkdown, opts.AllowHTML)
 	if opts.Thread {
 		content.SetThread(evt.Event)
@@ -96,24 +109,36 @@ func (evt *Event[MetaType]) Respond(msg string, opts ReplyOpts) {
 	if !opts.SendAsText {
 		content.MsgType = event.MsgNotice
 	}
-	_, err := evt.Proc.Client.SendMessageEvent(evt.Ctx, evt.RoomID, event.EventMessage, content)
+	if opts.Edit != "" {
+		content.SetEdit(opts.Edit)
+	}
+	if opts.OverrideMentions != nil {
+		content.Mentions = opts.OverrideMentions
+	}
+	resp, err := evt.Proc.Client.SendMessageEvent(evt.Ctx, evt.RoomID, event.EventMessage, content)
 	if err != nil {
 		zerolog.Ctx(evt.Ctx).Err(err).Msg("Failed to send reply")
+		return ""
 	}
+	return resp.EventID
 }
 
-func (evt *Event[MetaType]) React(emoji string) {
-	_, err := evt.Proc.Client.SendReaction(evt.Ctx, evt.RoomID, evt.ID, emoji)
+func (evt *Event[MetaType]) React(emoji string) id.EventID {
+	resp, err := evt.Proc.Client.SendReaction(evt.Ctx, evt.RoomID, evt.ID, emoji)
 	if err != nil {
 		zerolog.Ctx(evt.Ctx).Err(err).Msg("Failed to send reaction")
+		return ""
 	}
+	return resp.EventID
 }
 
-func (evt *Event[MetaType]) Redact() {
-	_, err := evt.Proc.Client.RedactEvent(evt.Ctx, evt.RoomID, evt.ID)
+func (evt *Event[MetaType]) Redact() id.EventID {
+	resp, err := evt.Proc.Client.RedactEvent(evt.Ctx, evt.RoomID, evt.ID)
 	if err != nil {
 		zerolog.Ctx(evt.Ctx).Err(err).Msg("Failed to redact command")
+		return ""
 	}
+	return resp.EventID
 }
 
 func (evt *Event[MetaType]) MarkRead() {
@@ -121,4 +146,22 @@ func (evt *Event[MetaType]) MarkRead() {
 	if err != nil {
 		zerolog.Ctx(evt.Ctx).Err(err).Msg("Failed to send read receipt")
 	}
+}
+
+// ShiftArg removes the first argument from the Args list and RawArgs data and returns it.
+// RawInput will not be modified.
+func (evt *Event[MetaType]) ShiftArg() string {
+	if len(evt.Args) == 0 {
+		return ""
+	}
+	firstArg := evt.Args[0]
+	evt.RawArgs = strings.TrimLeft(strings.TrimPrefix(evt.RawArgs, evt.Args[0]), " ")
+	evt.Args = evt.Args[1:]
+	return firstArg
+}
+
+// UnshiftArg reverses ShiftArg by adding the given value to the beginning of the Args list and RawArgs data.
+func (evt *Event[MetaType]) UnshiftArg(arg string) {
+	evt.RawArgs = arg + " " + evt.RawArgs
+	evt.Args = append([]string{arg}, evt.Args...)
 }

@@ -159,6 +159,12 @@ type LoginCookiesParams struct {
 	// The snippet will evaluate to a promise that resolves when the relevant fields are found.
 	// Fields that are not present in the promise result must be extracted another way.
 	ExtractJS string `json:"extract_js,omitempty"`
+	// A regex pattern that the URL should match before the client closes the webview.
+	//
+	// The client may submit the login if the user closes the webview after all cookies are collected
+	// even if this URL is not reached, but it should only automatically close the webview after
+	// both cookies and the URL match.
+	WaitForURLPattern string `json:"wait_for_url_pattern,omitempty"`
 }
 
 type LoginInputFieldType string

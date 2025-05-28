@@ -259,6 +259,11 @@ type IdentifierValidatingNetwork interface {
 	ValidateUserID(id networkid.UserID) bool
 }
 
+type TransactionIDGeneratingNetwork interface {
+	NetworkConnector
+	GenerateTransactionID(userID id.UserID, roomID id.RoomID, eventType event.Type) networkid.RawTransactionID
+}
+
 type PortalBridgeInfoFillingNetwork interface {
 	NetworkConnector
 	FillPortalBridgeInfo(portal *Portal, content *event.BridgeEventContent)
@@ -581,6 +586,16 @@ type ReadReceiptHandlingNetworkAPI interface {
 	// Network connectors must gracefully handle [MatrixReadReceipt.ExactMessage] being nil.
 	// The exact handling is up to the network connector.
 	HandleMatrixReadReceipt(ctx context.Context, msg *MatrixReadReceipt) error
+}
+
+// ChatViewingNetworkAPI is an optional interface that network connectors can implement to handle viewing chat status.
+type ChatViewingNetworkAPI interface {
+	NetworkAPI
+	// HandleMatrixViewingChat is called when the user opens a portal room.
+	// This will never be called by the standard appservice connector,
+	// as Matrix doesn't have any standard way of signaling chat open status.
+	// Clients are expected to call this every 5 seconds. There is no signal for closing a chat.
+	HandleMatrixViewingChat(ctx context.Context, msg *MatrixViewingChat) error
 }
 
 // TypingHandlingNetworkAPI is an optional interface that network connectors can implement to handle typing events.
@@ -1151,6 +1166,8 @@ type MatrixEventBase[ContentType any] struct {
 
 	// The original sender user ID. Only present in case the event is being relayed (and Sender is not the same user).
 	OrigSender *OrigSender
+
+	InputTransactionID networkid.RawTransactionID
 }
 
 type MatrixMessage struct {
@@ -1233,6 +1250,11 @@ type MatrixTyping struct {
 	Portal   *Portal
 	IsTyping bool
 	Type     TypingType
+}
+
+type MatrixViewingChat struct {
+	// The portal that the user is viewing. This will be nil when the user switches to a chat from a different bridge.
+	Portal *Portal
 }
 
 type MatrixMarkedUnread = MatrixRoomMeta[*event.MarkedUnreadEventContent]

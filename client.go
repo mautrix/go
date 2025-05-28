@@ -316,12 +316,21 @@ type contextKey int
 const (
 	LogBodyContextKey contextKey = iota
 	LogRequestIDContextKey
+	MaxAttemptsContextKey
 )
 
 func (cli *Client) RequestStart(req *http.Request) {
 	if cli != nil && cli.RequestHook != nil {
 		cli.RequestHook(req)
 	}
+}
+
+// WithMaxRetries updates the context to set the maximum number of retries for any HTTP requests made with the context.
+//
+// 0 means the request will only be attempted once and will not be retried.
+// Negative values will remove the override and fallback to the defaults.
+func WithMaxRetries(ctx context.Context, maxRetries int) context.Context {
+	return context.WithValue(ctx, MaxAttemptsContextKey, maxRetries+1)
 }
 
 func (cli *Client) LogRequestDone(req *http.Request, resp *http.Response, err error, handlerErr error, contentLength int, duration time.Duration) {
@@ -472,8 +481,16 @@ func (cli *Client) MakeFullRequestWithResp(ctx context.Context, params FullReque
 	if cli == nil {
 		return nil, nil, ErrClientIsNil
 	}
+	if cli.HomeserverURL == nil || cli.HomeserverURL.Scheme == "" {
+		return nil, nil, ErrClientHasNoHomeserver
+	}
 	if params.MaxAttempts == 0 {
-		params.MaxAttempts = 1 + cli.DefaultHTTPRetries
+		maxAttempts, ok := ctx.Value(MaxAttemptsContextKey).(int)
+		if ok && maxAttempts > 0 {
+			params.MaxAttempts = maxAttempts
+		} else {
+			params.MaxAttempts = 1 + cli.DefaultHTTPRetries
+		}
 	}
 	if params.BackoffDuration == 0 {
 		if cli.DefaultHTTPBackoff == 0 {
@@ -1791,6 +1808,9 @@ func (cli *Client) uploadMediaToURL(ctx context.Context, data ReqUploadMedia) (*
 				break
 			}
 			err = fmt.Errorf("HTTP %d", resp.StatusCode)
+		} else if errors.Is(err, context.Canceled) {
+			cli.Log.Warn().Str("url", data.UnstableUploadURL).Msg("External media upload canceled")
+			return nil, err
 		}
 		if retries <= 0 {
 			cli.Log.Warn().Str("url", data.UnstableUploadURL).Err(err).
@@ -1969,6 +1989,12 @@ func (cli *Client) Members(ctx context.Context, roomID id.RoomID, req ...ReqMemb
 func (cli *Client) JoinedRooms(ctx context.Context) (resp *RespJoinedRooms, err error) {
 	u := cli.BuildClientURL("v3", "joined_rooms")
 	_, err = cli.MakeRequest(ctx, http.MethodGet, u, nil, &resp)
+	return
+}
+
+func (cli *Client) PublicRooms(ctx context.Context, req *ReqPublicRooms) (resp *RespPublicRooms, err error) {
+	urlPath := cli.BuildURLWithQuery(ClientURLPath{"v3", "publicRooms"}, req.Query())
+	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
 	return
 }
 

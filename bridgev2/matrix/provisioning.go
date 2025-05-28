@@ -103,7 +103,7 @@ func (prov *ProvisioningAPI) Init() {
 	prov.logins = make(map[string]*ProvLogin)
 	prov.net = prov.br.Bridge.Network
 	prov.log = prov.br.Log.With().Str("component", "provisioning").Logger()
-	prov.fedClient = federation.NewClient("", nil)
+	prov.fedClient = federation.NewClient("", nil, nil)
 	prov.fedClient.HTTP.Timeout = 20 * time.Second
 	tp := prov.fedClient.HTTP.Transport.(*federation.ServerResolvingTransport)
 	tp.Dialer.Timeout = 10 * time.Second

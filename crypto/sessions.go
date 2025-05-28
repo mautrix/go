@@ -125,7 +125,7 @@ func NewInboundGroupSession(senderKey id.SenderKey, signingKey id.Ed25519, roomI
 		SigningKey:       signingKey,
 		SenderKey:        senderKey,
 		RoomID:           roomID,
-		ForwardingChains: nil,
+		ForwardingChains: []string{},
 		ReceivedAt:       time.Now().UTC(),
 		MaxAge:           maxAge.Milliseconds(),
 		MaxMessages:      maxMessages,

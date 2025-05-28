@@ -375,7 +375,7 @@ func (portal *Portal) getEventCtxWithLog(rawEvt any, idx int) context.Context {
 	case *portalCreateEvent:
 		return evt.ctx
 	}
-	return logWith.Logger().WithContext(context.Background())
+	return logWith.Logger().WithContext(portal.Bridge.BackgroundCtx)
 }
 
 func (portal *Portal) handleSingleEvent(ctx context.Context, rawEvt any, doneCallback func()) {
@@ -811,6 +811,13 @@ func (portal *Portal) checkMessageContentCaps(ctx context.Context, caps *event.R
 	return true
 }
 
+func (portal *Portal) parseInputTransactionID(origSender *OrigSender, evt *event.Event) networkid.RawTransactionID {
+	if origSender != nil || !strings.HasPrefix(evt.ID.String(), database.NetworkTxnMXIDPrefix) {
+		return ""
+	}
+	return networkid.RawTransactionID(strings.TrimPrefix(evt.ID.String(), database.NetworkTxnMXIDPrefix))
+}
+
 func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) {
 	log := zerolog.Ctx(ctx)
 	var relatesTo *event.RelatesTo
@@ -938,10 +945,24 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 			Content:    msgContent,
 			OrigSender: origSender,
 			Portal:     portal,
+
+			InputTransactionID: portal.parseInputTransactionID(origSender, evt),
 		},
 		ThreadRoot: threadRoot,
 		ReplyTo:    replyTo,
 	}
+	if portal.Bridge.Config.DeduplicateMatrixMessages {
+		if part, err := portal.Bridge.DB.Message.GetPartByTxnID(ctx, portal.Receiver, evt.ID, wrappedMsgEvt.InputTransactionID); err != nil {
+			log.Err(err).Msg("Failed to check db if message is already sent")
+		} else if part != nil {
+			log.Debug().
+				Stringer("message_mxid", part.MXID).
+				Stringer("input_event_id", evt.ID).
+				Msg("Message already sent, ignoring")
+			return
+		}
+	}
+
 	var resp *MatrixMessageResponse
 	if msgContent != nil {
 		resp, err = sender.Client.HandleMatrixMessage(ctx, wrappedMsgEvt)
@@ -1082,6 +1103,9 @@ func (evt *MatrixMessage) fillDBMessage(message *database.Message) *database.Mes
 	if message.SenderMXID == "" {
 		message.SenderMXID = evt.Event.Sender
 	}
+	if message.SendTxnID != "" {
+		message.SendTxnID = evt.InputTransactionID
+	}
 	return message
 }
 
@@ -1173,6 +1197,8 @@ func (portal *Portal) handleMatrixEdit(ctx context.Context, sender *UserLogin, o
 			Content:    content,
 			OrigSender: origSender,
 			Portal:     portal,
+
+			InputTransactionID: portal.parseInputTransactionID(origSender, evt),
 		},
 		EditTarget: editTarget,
 	})
@@ -1224,6 +1250,8 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 			Event:   evt,
 			Content: content,
 			Portal:  portal,
+
+			InputTransactionID: portal.parseInputTransactionID(nil, evt),
 		},
 		TargetMessage: reactionTarget,
 	}
@@ -1380,6 +1408,8 @@ func handleMatrixRoomMeta[APIType any, ContentType any](
 			Content:    content,
 			Portal:     portal,
 			OrigSender: origSender,
+
+			InputTransactionID: portal.parseInputTransactionID(origSender, evt),
 		},
 		PrevContent: prevContent,
 	})
@@ -1501,6 +1531,8 @@ func (portal *Portal) handleMatrixMembership(
 				Content:    content,
 				Portal:     portal,
 				OrigSender: origSender,
+
+				InputTransactionID: portal.parseInputTransactionID(origSender, evt),
 			},
 			PrevContent: prevContent,
 		},
@@ -1565,6 +1597,8 @@ func (portal *Portal) handleMatrixPowerLevels(
 				Content:    content,
 				Portal:     portal,
 				OrigSender: origSender,
+
+				InputTransactionID: portal.parseInputTransactionID(origSender, evt),
 			},
 			PrevContent: prevContent,
 		},
@@ -1651,6 +1685,8 @@ func (portal *Portal) handleMatrixRedaction(ctx context.Context, sender *UserLog
 				Content:    content,
 				Portal:     portal,
 				OrigSender: origSender,
+
+				InputTransactionID: portal.parseInputTransactionID(origSender, evt),
 			},
 			TargetMessage: redactionTargetMsg,
 		})
@@ -1671,6 +1707,8 @@ func (portal *Portal) handleMatrixRedaction(ctx context.Context, sender *UserLog
 				Content:    content,
 				Portal:     portal,
 				OrigSender: origSender,
+
+				InputTransactionID: portal.parseInputTransactionID(origSender, evt),
 			},
 			TargetReaction: redactionTargetReaction,
 		})
@@ -2620,10 +2658,10 @@ func (portal *Portal) redactMessageParts(ctx context.Context, parts []*database.
 }
 
 func (portal *Portal) handleRemoteReadReceipt(ctx context.Context, source *UserLogin, evt RemoteReadReceipt) {
-	// TODO exclude fake mxids
 	log := zerolog.Ctx(ctx)
 	var err error
 	var lastTarget *database.Message
+	readUpTo := evt.GetReadUpTo()
 	if lastTargetID := evt.GetLastReceiptTarget(); lastTargetID != "" {
 		lastTarget, err = portal.Bridge.DB.Message.GetLastPartByID(ctx, portal.Receiver, lastTargetID)
 		if err != nil {
@@ -2633,6 +2671,13 @@ func (portal *Portal) handleRemoteReadReceipt(ctx context.Context, source *UserL
 		} else if lastTarget == nil {
 			log.Debug().Str("last_target_id", string(lastTargetID)).
 				Msg("Last target message not found")
+		} else if lastTarget.HasFakeMXID() {
+			log.Debug().Str("last_target_id", string(lastTargetID)).
+				Msg("Last target message is fake")
+			if readUpTo.IsZero() {
+				readUpTo = lastTarget.Timestamp
+			}
+			lastTarget = nil
 		}
 	}
 	if lastTarget == nil {
@@ -2642,14 +2687,13 @@ func (portal *Portal) handleRemoteReadReceipt(ctx context.Context, source *UserL
 				log.Err(err).Str("target_id", string(targetID)).
 					Msg("Failed to get target message for read receipt")
 				return
-			} else if target != nil && (lastTarget == nil || target.Timestamp.After(lastTarget.Timestamp)) {
+			} else if target != nil && !target.HasFakeMXID() && (lastTarget == nil || target.Timestamp.After(lastTarget.Timestamp)) {
 				lastTarget = target
 			}
 		}
 	}
-	readUpTo := evt.GetReadUpTo()
 	if lastTarget == nil && !readUpTo.IsZero() {
-		lastTarget, err = portal.Bridge.DB.Message.GetLastPartAtOrBeforeTime(ctx, portal.PortalKey, readUpTo)
+		lastTarget, err = portal.Bridge.DB.Message.GetLastNonFakePartAtOrBeforeTime(ctx, portal.PortalKey, readUpTo)
 		if err != nil {
 			log.Err(err).Time("read_up_to", readUpTo).Msg("Failed to get target message for read receipt")
 		}

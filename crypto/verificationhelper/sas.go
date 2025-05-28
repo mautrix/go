@@ -35,7 +35,7 @@ import (
 // [StartInRoomVerification] functions.
 func (vh *VerificationHelper) StartSAS(ctx context.Context, txnID id.VerificationTransactionID) error {
 	log := vh.getLog(ctx).With().
-		Str("verification_action", "accept verification").
+		Str("verification_action", "start SAS").
 		Stringer("transaction_id", txnID).
 		Logger()
 	ctx = log.WithContext(ctx)
@@ -46,7 +46,7 @@ func (vh *VerificationHelper) StartSAS(ctx context.Context, txnID id.Verificatio
 	if err != nil {
 		return fmt.Errorf("failed to get verification transaction %s: %w", txnID, err)
 	} else if txn.VerificationState != VerificationStateReady {
-		return errors.New("transaction is not in ready state")
+		return fmt.Errorf("transaction is not in ready state: %s", txn.VerificationState.String())
 	} else if txn.StartEventContent != nil {
 		return errors.New("start event already sent or received")
 	}
@@ -177,7 +177,7 @@ func (vh *VerificationHelper) ConfirmSAS(ctx context.Context, txnID id.Verificat
 func (vh *VerificationHelper) onVerificationStartSAS(ctx context.Context, txn VerificationTransaction, evt *event.Event) error {
 	startEvt := evt.Content.AsVerificationStart()
 	log := vh.getLog(ctx).With().
-		Str("verification_action", "start_sas").
+		Str("verification_action", "start SAS").
 		Stringer("transaction_id", txn.TransactionID).
 		Logger()
 	ctx = log.WithContext(ctx)

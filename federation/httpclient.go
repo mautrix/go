@@ -12,7 +12,6 @@ import (
 	"net"
 	"net/http"
 	"sync"
-	"time"
 )
 
 // ServerResolvingTransport is an http.RoundTripper that resolves Matrix server names before sending requests.
@@ -22,17 +21,20 @@ type ServerResolvingTransport struct {
 	Transport   *http.Transport
 	Dialer      *net.Dialer
 
-	cache        map[string]*ResolvedServerName
-	resolveLocks map[string]*sync.Mutex
-	cacheLock    sync.Mutex
+	cache ResolutionCache
+
+	resolveLocks     map[string]*sync.Mutex
+	resolveLocksLock sync.Mutex
 }
 
-func NewServerResolvingTransport() *ServerResolvingTransport {
+func NewServerResolvingTransport(cache ResolutionCache) *ServerResolvingTransport {
+	if cache == nil {
+		cache = NewInMemoryCache()
+	}
 	srt := &ServerResolvingTransport{
-		cache:        make(map[string]*ResolvedServerName),
 		resolveLocks: make(map[string]*sync.Mutex),
-
-		Dialer: &net.Dialer{},
+		cache:        cache,
+		Dialer:       &net.Dialer{},
 	}
 	srt.Transport = &http.Transport{
 		DialContext: srt.DialContext,
@@ -50,12 +52,6 @@ func (srt *ServerResolvingTransport) DialContext(ctx context.Context, network, a
 	return srt.Dialer.DialContext(ctx, network, addrs[0])
 }
 
-type contextKey int
-
-const (
-	contextKeyIPPort contextKey = iota
-)
-
 func (srt *ServerResolvingTransport) RoundTrip(request *http.Request) (*http.Response, error) {
 	if request.URL.Scheme != "matrix-federation" {
 		return nil, fmt.Errorf("unsupported scheme: %s", request.URL.Scheme)
@@ -72,37 +68,25 @@ func (srt *ServerResolvingTransport) RoundTrip(request *http.Request) (*http.Res
 }
 
 func (srt *ServerResolvingTransport) resolve(ctx context.Context, serverName string) (*ResolvedServerName, error) {
-	res, lock := srt.getResolveCache(serverName)
-	if res != nil {
-		return res, nil
+	srt.resolveLocksLock.Lock()
+	lock, ok := srt.resolveLocks[serverName]
+	if !ok {
+		lock = &sync.Mutex{}
+		srt.resolveLocks[serverName] = lock
 	}
+	srt.resolveLocksLock.Unlock()
+
 	lock.Lock()
 	defer lock.Unlock()
-	res, _ = srt.getResolveCache(serverName)
-	if res != nil {
+	res, err := srt.cache.LoadResolution(serverName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read cache: %w", err)
+	} else if res != nil {
+		return res, nil
+	} else if res, err = ResolveServerName(ctx, serverName, srt.ResolveOpts); err != nil {
+		return nil, err
+	} else {
+		srt.cache.StoreResolution(res)
 		return res, nil
 	}
-	var err error
-	res, err = ResolveServerName(ctx, serverName, srt.ResolveOpts)
-	if err != nil {
-		return nil, err
-	}
-	srt.cacheLock.Lock()
-	srt.cache[serverName] = res
-	srt.cacheLock.Unlock()
-	return res, nil
-}
-
-func (srt *ServerResolvingTransport) getResolveCache(serverName string) (*ResolvedServerName, *sync.Mutex) {
-	srt.cacheLock.Lock()
-	defer srt.cacheLock.Unlock()
-	if val, ok := srt.cache[serverName]; ok && time.Until(val.Expires) > 0 {
-		return val, nil
-	}
-	rl, ok := srt.resolveLocks[serverName]
-	if !ok {
-		rl = &sync.Mutex{}
-		srt.resolveLocks[serverName] = rl
-	}
-	return nil, rl
 }

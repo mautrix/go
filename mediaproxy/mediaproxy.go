@@ -99,9 +99,8 @@ type GetMediaResponseFile struct {
 type GetMediaFunc = func(ctx context.Context, mediaID string, params map[string]string) (response GetMediaResponse, err error)
 
 type MediaProxy struct {
-	KeyServer *federation.KeyServer
-
-	ForceProxyLegacyFederation bool
+	KeyServer  *federation.KeyServer
+	ServerAuth *federation.ServerAuth
 
 	GetMedia            GetMediaFunc
 	PrepareProxyRequest func(*http.Request)
@@ -139,6 +138,7 @@ func New(serverName string, serverKey string, getMedia GetMediaFunc) (*MediaProx
 type BasicConfig struct {
 	ServerName        string `yaml:"server_name" json:"server_name"`
 	ServerKey         string `yaml:"server_key" json:"server_key"`
+	FederationAuth    bool   `yaml:"federation_auth" json:"federation_auth"`
 	WellKnownResponse string `yaml:"well_known_response" json:"well_known_response"`
 }
 
@@ -149,6 +149,9 @@ func NewFromConfig(cfg BasicConfig, getMedia GetMediaFunc) (*MediaProxy, error) 
 	}
 	if cfg.WellKnownResponse != "" {
 		mp.KeyServer.WellKnownTarget = cfg.WellKnownResponse
+	}
+	if cfg.FederationAuth {
+		mp.EnableServerAuth(nil, nil)
 	}
 	return mp, nil
 }
@@ -170,6 +173,19 @@ func (mp *MediaProxy) GetServerName() string {
 
 func (mp *MediaProxy) GetServerKey() *federation.SigningKey {
 	return mp.serverKey
+}
+
+func (mp *MediaProxy) EnableServerAuth(client *federation.Client, keyCache federation.KeyCache) {
+	if keyCache == nil {
+		keyCache = federation.NewInMemoryCache()
+	}
+	if client == nil {
+		resCache, _ := keyCache.(federation.ResolutionCache)
+		client = federation.NewClient(mp.serverName, mp.serverKey, resCache)
+	}
+	mp.ServerAuth = federation.NewServerAuth(client, keyCache, func(auth federation.XMatrixAuth) string {
+		return mp.GetServerName()
+	})
 }
 
 func (mp *MediaProxy) RegisterRoutes(router *mux.Router) {
@@ -271,9 +287,16 @@ func startMultipart(ctx context.Context, w http.ResponseWriter) *multipart.Write
 }
 
 func (mp *MediaProxy) DownloadMediaFederation(w http.ResponseWriter, r *http.Request) {
+	if mp.ServerAuth != nil {
+		var err *mautrix.RespError
+		r, err = mp.ServerAuth.Authenticate(r)
+		if err != nil {
+			err.Write(w)
+			return
+		}
+	}
 	ctx := r.Context()
 	log := zerolog.Ctx(ctx)
-	// TODO check destination header in X-Matrix auth
 
 	resp := mp.getMedia(w, r)
 	if resp == nil {

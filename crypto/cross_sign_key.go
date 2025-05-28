@@ -11,6 +11,8 @@ import (
 	"context"
 	"fmt"
 
+	"go.mau.fi/util/jsonbytes"
+
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/crypto/signatures"
@@ -33,9 +35,9 @@ func (cskc *CrossSigningKeysCache) PublicKeys() *CrossSigningPublicKeysCache {
 }
 
 type CrossSigningSeeds struct {
-	MasterKey      []byte
-	SelfSigningKey []byte
-	UserSigningKey []byte
+	MasterKey      jsonbytes.UnpaddedURLBytes `json:"m.cross_signing.master"`
+	SelfSigningKey jsonbytes.UnpaddedURLBytes `json:"m.cross_signing.self_signing"`
+	UserSigningKey jsonbytes.UnpaddedURLBytes `json:"m.cross_signing.user_signing"`
 }
 
 func (mach *OlmMachine) ExportCrossSigningKeys() CrossSigningSeeds {
