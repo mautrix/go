@@ -500,10 +500,7 @@ func (prov *ProvisioningAPI) PostLoginWait(w http.ResponseWriter, r *http.Reques
 	nextStep, err := login.Process.(bridgev2.LoginProcessDisplayAndWait).Wait(r.Context())
 	if err != nil {
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to wait")
-		jsonResponse(w, http.StatusInternalServerError, &mautrix.RespError{
-			Err:     "Failed to wait",
-			ErrCode: "M_UNKNOWN",
-		})
+		RespondWithError(w, err, "Internal error waiting for login")
 		return
 	}
 	login.NextStep = nextStep
