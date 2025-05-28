@@ -3,6 +3,7 @@ package crypto
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"maunium.net/go/mautrix/crypto/backup"
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/crypto/signatures"
+	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -154,13 +156,23 @@ func (mach *OlmMachine) GetAndStoreKeyBackup(ctx context.Context, version id.Key
 	return nil
 }
 
-func (mach *OlmMachine) ImportRoomKeyFromBackup(ctx context.Context, version id.KeyBackupVersion, roomID id.RoomID, sessionID id.SessionID, keyBackupData *backup.MegolmSessionData) (*InboundGroupSession, error) {
-	log := zerolog.Ctx(ctx).With().
-		Str("room_id", roomID.String()).
-		Str("session_id", sessionID.String()).
-		Logger()
+var (
+	ErrUnknownAlgorithmInKeyBackup                   = errors.New("ignoring room key in backup with weird algorithm")
+	ErrMismatchingSessionIDInKeyBackup               = errors.New("mismatched session ID while creating inbound group session from key backup")
+	ErrFailedToStoreNewInboundGroupSessionFromBackup = errors.New("failed to store new inbound group session from key backup")
+)
+
+func (mach *OlmMachine) ImportRoomKeyFromBackupWithoutSaving(
+	ctx context.Context,
+	version id.KeyBackupVersion,
+	roomID id.RoomID,
+	config *event.EncryptionEventContent,
+	sessionID id.SessionID,
+	keyBackupData *backup.MegolmSessionData,
+) (*InboundGroupSession, error) {
+	log := zerolog.Ctx(ctx)
 	if keyBackupData.Algorithm != id.AlgorithmMegolmV1 {
-		return nil, fmt.Errorf("ignoring room key in backup with weird algorithm %s", keyBackupData.Algorithm)
+		return nil, fmt.Errorf("%w %s", ErrUnknownAlgorithmInKeyBackup, keyBackupData.Algorithm)
 	}
 
 	igsInternal, err := olm.InboundGroupSessionImport([]byte(keyBackupData.SessionKey))
@@ -168,26 +180,21 @@ func (mach *OlmMachine) ImportRoomKeyFromBackup(ctx context.Context, version id.
 		return nil, fmt.Errorf("failed to import inbound group session: %w", err)
 	} else if igsInternal.ID() != sessionID {
 		log.Warn().
+			Stringer("room_id", roomID).
+			Stringer("session_id", sessionID).
 			Stringer("actual_session_id", igsInternal.ID()).
 			Msg("Mismatched session ID while creating inbound group session from key backup")
-		return nil, fmt.Errorf("mismatched session ID while creating inbound group session from key backup")
+		return nil, ErrMismatchingSessionIDInKeyBackup
 	}
 
 	var maxAge time.Duration
 	var maxMessages int
-	if config, err := mach.StateStore.GetEncryptionEvent(ctx, roomID); err != nil {
-		log.Error().Err(err).Msg("Failed to get encryption event for room")
-	} else if config != nil {
+	if config != nil {
 		maxAge = time.Duration(config.RotationPeriodMillis) * time.Millisecond
 		maxMessages = config.RotationPeriodMessages
 	}
 
-	firstKnownIndex := igsInternal.FirstKnownIndex()
-	if firstKnownIndex > 0 {
-		log.Warn().Uint32("first_known_index", firstKnownIndex).Msg("Importing partial session")
-	}
-
-	igs := &InboundGroupSession{
+	return &InboundGroupSession{
 		Internal:         igsInternal,
 		SigningKey:       keyBackupData.SenderClaimedKeys.Ed25519,
 		SenderKey:        keyBackupData.SenderKey,
@@ -199,11 +206,33 @@ func (mach *OlmMachine) ImportRoomKeyFromBackup(ctx context.Context, version id.
 		MaxAge:           maxAge.Milliseconds(),
 		MaxMessages:      maxMessages,
 		KeyBackupVersion: version,
-	}
-	err = mach.CryptoStore.PutGroupSession(ctx, igs)
+	}, nil
+}
+
+func (mach *OlmMachine) ImportRoomKeyFromBackup(ctx context.Context, version id.KeyBackupVersion, roomID id.RoomID, sessionID id.SessionID, keyBackupData *backup.MegolmSessionData) (*InboundGroupSession, error) {
+	config, err := mach.StateStore.GetEncryptionEvent(ctx, roomID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to store new inbound group session: %w", err)
+		zerolog.Ctx(ctx).Err(err).
+			Stringer("room_id", roomID).
+			Stringer("session_id", sessionID).
+			Msg("Failed to get encryption event for room")
 	}
-	mach.markSessionReceived(ctx, roomID, sessionID, firstKnownIndex)
-	return igs, nil
+	imported, err := mach.ImportRoomKeyFromBackupWithoutSaving(ctx, version, roomID, config, sessionID, keyBackupData)
+	if err != nil {
+		return nil, err
+	}
+	firstKnownIndex := imported.Internal.FirstKnownIndex()
+	if firstKnownIndex > 0 {
+		zerolog.Ctx(ctx).Warn().
+			Stringer("room_id", roomID).
+			Stringer("session_id", sessionID).
+			Uint32("first_known_index", firstKnownIndex).
+			Msg("Importing partial session")
+	}
+	err = mach.CryptoStore.PutGroupSession(ctx, imported)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrFailedToStoreNewInboundGroupSessionFromBackup, err)
+	}
+	mach.MarkSessionReceived(ctx, roomID, sessionID, firstKnownIndex)
+	return imported, nil
 }

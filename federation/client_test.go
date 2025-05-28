@@ -16,7 +16,7 @@ import (
 )
 
 func TestClient_Version(t *testing.T) {
-	cli := federation.NewClient("", nil)
+	cli := federation.NewClient("", nil, nil)
 	resp, err := cli.Version(context.TODO(), "maunium.net")
 	require.NoError(t, err)
 	require.Equal(t, "Synapse", resp.Server.Name)

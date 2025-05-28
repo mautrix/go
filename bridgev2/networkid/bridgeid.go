@@ -94,6 +94,11 @@ type MessageID string
 // Transaction IDs must be unique across users in a room, but don't need to be unique across different rooms.
 type TransactionID string
 
+// RawTransactionID is a client-generated identifier for a message send operation on the remote network.
+//
+// Unlike TransactionID, RawTransactionID's are only used for sending and don't have any uniqueness requirements.
+type RawTransactionID string
+
 // PartID is the ID of a message part on the remote network (e.g. index of image in album).
 //
 // Part IDs are only unique within a message, not globally.

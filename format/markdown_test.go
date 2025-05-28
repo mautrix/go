@@ -196,3 +196,18 @@ func TestRenderMarkdown_CustomEmoji(t *testing.T) {
 		assert.Equal(t, html, rendered, "with input %q", markdown)
 	}
 }
+
+var codeTests = map[string]string{
+	"meow":      "`meow`",
+	"me`ow":     "``me`ow``",
+	"`me`ow":    "`` `me`ow ``",
+	"me`ow`":    "`` me`ow` ``",
+	"`meow`":    "`` `meow` ``",
+	"`````````": "`````````` ````````` ``````````",
+}
+
+func TestSafeMarkdownCode(t *testing.T) {
+	for input, expected := range codeTests {
+		assert.Equal(t, expected, format.SafeMarkdownCode(input), "with input %q", input)
+	}
+}

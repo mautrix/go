@@ -120,6 +120,38 @@ func RequestSRV(ctx context.Context, cli *net.Resolver, hostname string) ([]*net
 	return target, err
 }
 
+func parseCacheControl(resp *http.Response) time.Duration {
+	cc := resp.Header.Get("Cache-Control")
+	if cc == "" {
+		return 0
+	}
+	parts := strings.Split(cc, ",")
+	for _, part := range parts {
+		kv := strings.SplitN(strings.TrimSpace(part), "=", 1)
+		switch kv[0] {
+		case "no-cache", "no-store":
+			return 0
+		case "max-age":
+			if len(kv) < 2 {
+				continue
+			}
+			maxAge, err := strconv.Atoi(kv[1])
+			if err != nil || maxAge < 0 {
+				continue
+			}
+			age, _ := strconv.Atoi(resp.Header.Get("Age"))
+			return time.Duration(maxAge-age) * time.Second
+		}
+	}
+	return 0
+}
+
+const (
+	MinCacheDuration     = 1 * time.Hour
+	MaxCacheDuration     = 72 * time.Hour
+	DefaultCacheDuration = 24 * time.Hour
+)
+
 // RequestWellKnown sends a request to the well-known endpoint of a server and returns the response,
 // plus the time when the cache should expire.
 func RequestWellKnown(ctx context.Context, cli *http.Client, hostname string) (*RespWellKnown, time.Time, error) {
@@ -147,6 +179,13 @@ func RequestWellKnown(ctx context.Context, cli *http.Client, hostname string) (*
 	} else if respData.Server == "" {
 		return nil, time.Time{}, errors.New("server name not found in response")
 	}
-	// TODO parse cache-control header
+	cacheDuration := parseCacheControl(resp)
+	if cacheDuration <= 0 {
+		cacheDuration = DefaultCacheDuration
+	} else if cacheDuration < MinCacheDuration {
+		cacheDuration = MinCacheDuration
+	} else if cacheDuration > MaxCacheDuration {
+		cacheDuration = MaxCacheDuration
+	}
 	return &respData, time.Now().Add(24 * time.Hour), nil
 }

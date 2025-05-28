@@ -9,9 +9,7 @@ package federation
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -32,10 +30,10 @@ type Client struct {
 	Key        *SigningKey
 }
 
-func NewClient(serverName string, key *SigningKey) *Client {
+func NewClient(serverName string, key *SigningKey, cache ResolutionCache) *Client {
 	return &Client{
 		HTTP: &http.Client{
-			Transport: NewServerResolvingTransport(),
+			Transport: NewServerResolvingTransport(cache),
 			Timeout:   120 * time.Second,
 		},
 		UserAgent:  mautrix.DefaultUserAgent,
@@ -220,6 +218,26 @@ func (c *Client) Query(ctx context.Context, serverName, queryType string, queryP
 	return
 }
 
+func queryToValues(query map[string]string) url.Values {
+	values := make(url.Values, len(query))
+	for k, v := range query {
+		values[k] = []string{v}
+	}
+	return values
+}
+
+func (c *Client) PublicRooms(ctx context.Context, serverName string, req *mautrix.ReqPublicRooms) (resp *mautrix.RespPublicRooms, err error) {
+	_, _, err = c.MakeFullRequest(ctx, RequestParams{
+		ServerName:   serverName,
+		Method:       http.MethodGet,
+		Path:         URLPath{"v1", "publicRooms"},
+		Query:        queryToValues(req.Query()),
+		Authenticate: true,
+		ResponseJSON: &resp,
+	})
+	return
+}
+
 type RespOpenIDUserInfo struct {
 	Sub id.UserID `json:"sub"`
 }
@@ -354,16 +372,12 @@ func (c *Client) compileRequest(ctx context.Context, params RequestParams) (*htt
 				Message: "client not configured for authentication",
 			}
 		}
-		var contentAny any
-		if reqJSON != nil {
-			contentAny = reqJSON
-		}
 		auth, err := (&signableRequest{
 			Method:      req.Method,
 			URI:         reqURL.RequestURI(),
 			Origin:      c.ServerName,
 			Destination: params.ServerName,
-			Content:     contentAny,
+			Content:     reqJSON,
 		}).Sign(c.Key)
 		if err != nil {
 			return nil, mautrix.HTTPError{
@@ -377,11 +391,19 @@ func (c *Client) compileRequest(ctx context.Context, params RequestParams) (*htt
 }
 
 type signableRequest struct {
-	Method      string `json:"method"`
-	URI         string `json:"uri"`
-	Origin      string `json:"origin"`
-	Destination string `json:"destination"`
-	Content     any    `json:"content,omitempty"`
+	Method      string          `json:"method"`
+	URI         string          `json:"uri"`
+	Origin      string          `json:"origin"`
+	Destination string          `json:"destination"`
+	Content     json.RawMessage `json:"content,omitempty"`
+}
+
+func (r *signableRequest) Verify(key id.SigningKey, sig string) bool {
+	message, err := json.Marshal(r)
+	if err != nil {
+		return false
+	}
+	return VerifyJSONRaw(key, sig, message)
 }
 
 func (r *signableRequest) Sign(key *SigningKey) (string, error) {
@@ -389,11 +411,10 @@ func (r *signableRequest) Sign(key *SigningKey) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf(
-		`X-Matrix origin="%s",destination="%s",key="%s",sig="%s"`,
-		r.Origin,
-		r.Destination,
-		key.ID,
-		base64.RawURLEncoding.EncodeToString(sig),
-	), nil
+	return XMatrixAuth{
+		Origin:      r.Origin,
+		Destination: r.Destination,
+		KeyID:       key.ID,
+		Signature:   sig,
+	}.String(), nil
 }

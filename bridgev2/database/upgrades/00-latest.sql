@@ -1,4 +1,4 @@
--- v0 -> v20 (compatible with v9+): Latest revision
+-- v0 -> v22 (compatible with v9+): Latest revision
 CREATE TABLE "user" (
 	bridge_id       TEXT NOT NULL,
 	mxid            TEXT NOT NULL,
@@ -63,6 +63,7 @@ CREATE TABLE portal (
 		REFERENCES user_login (bridge_id, id)
 		ON DELETE SET NULL ON UPDATE CASCADE
 );
+CREATE UNIQUE INDEX portal_bridge_mxid_idx ON portal (bridge_id, mxid);
 
 CREATE TABLE ghost (
 	bridge_id        TEXT    NOT NULL,
@@ -107,6 +108,7 @@ CREATE TABLE message (
 	thread_root_id   TEXT,
 	reply_to_id      TEXT,
 	reply_to_part_id TEXT,
+	send_txn_id      TEXT,
 	metadata         jsonb   NOT NULL,
 
 	CONSTRAINT message_room_fkey FOREIGN KEY (bridge_id, room_id, room_receiver)
@@ -116,7 +118,8 @@ CREATE TABLE message (
 		REFERENCES ghost (bridge_id, id)
 		ON DELETE CASCADE ON UPDATE CASCADE,
 	CONSTRAINT message_real_pkey UNIQUE (bridge_id, room_receiver, id, part_id),
-	CONSTRAINT message_mxid_unique UNIQUE (bridge_id, mxid)
+	CONSTRAINT message_mxid_unique UNIQUE (bridge_id, mxid),
+	CONSTRAINT message_txn_id_unique UNIQUE (bridge_id, room_receiver, send_txn_id)
 );
 CREATE INDEX message_room_idx ON message (bridge_id, room_id, room_receiver);
 
@@ -128,7 +131,11 @@ CREATE TABLE disappearing_message (
 	timer        BIGINT NOT NULL,
 	disappear_at BIGINT,
 
-	PRIMARY KEY (bridge_id, mxid)
+	PRIMARY KEY (bridge_id, mxid),
+    CONSTRAINT disappearing_message_portal_fkey
+        FOREIGN KEY (bridge_id, mx_room)
+        REFERENCES portal (bridge_id, mxid)
+        ON DELETE CASCADE
 );
 
 CREATE TABLE reaction (
