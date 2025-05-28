@@ -500,6 +500,9 @@ func (prov *ProvisioningAPI) GetExplicitLoginForRequest(w http.ResponseWriter, r
 	}
 	userLogin := prov.br.Bridge.GetCachedUserLoginByID(userLoginID)
 	if userLogin == nil || userLogin.UserMXID != prov.GetUser(r).MXID {
+		hlog.FromRequest(r).Warn().
+			Str("login_id", string(userLoginID)).
+			Msg("Tried to use non-existent login, returning 404")
 		mautrix.MNotFound.WithMessage("Login not found").Write(w)
 		return nil, true
 	}
