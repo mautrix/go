@@ -77,6 +77,19 @@ type EventSender struct {
 	ForceDMUser bool
 }
 
+func (es EventSender) MarshalZerologObject(evt *zerolog.Event) {
+	evt.Str("user_id", string(es.Sender))
+	if string(es.SenderLogin) != string(es.Sender) {
+		evt.Str("sender_login", string(es.SenderLogin))
+	}
+	if es.IsFromMe {
+		evt.Bool("is_from_me", true)
+	}
+	if es.ForceDMUser {
+		evt.Bool("force_dm_user", true)
+	}
+}
+
 type ConvertedMessage struct {
 	ReplyTo    *networkid.MessageOptionalPartID
 	ThreadRoot *networkid.MessageID

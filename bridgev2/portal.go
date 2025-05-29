@@ -372,6 +372,24 @@ func (portal *Portal) getEventCtxWithLog(rawEvt any, idx int) context.Context {
 			Str("source_id", string(evt.source.ID)).
 			Stringer("bridge_evt_type", evt.evtType)
 		logWith = evt.evt.AddLogContext(logWith)
+		if remoteSender := evt.evt.GetSender(); remoteSender.Sender != "" || remoteSender.IsFromMe {
+			logWith = logWith.Object("remote_sender", remoteSender)
+		}
+		if remoteMsg, ok := evt.evt.(RemoteMessage); ok {
+			if remoteMsgID := remoteMsg.GetID(); remoteMsgID != "" {
+				logWith = logWith.Str("remote_message_id", string(remoteMsgID))
+			}
+		}
+		if remoteMsg, ok := evt.evt.(RemoteEventWithTargetMessage); ok {
+			if targetMsgID := remoteMsg.GetTargetMessage(); targetMsgID != "" {
+				logWith = logWith.Str("remote_target_message_id", string(targetMsgID))
+			}
+		}
+		if remoteMsg, ok := evt.evt.(RemoteEventWithStreamOrder); ok {
+			if remoteStreamOrder := remoteMsg.GetStreamOrder(); remoteStreamOrder != 0 {
+				logWith = logWith.Int64("remote_stream_order", remoteStreamOrder)
+			}
+		}
 	case *portalCreateEvent:
 		return evt.ctx
 	}
