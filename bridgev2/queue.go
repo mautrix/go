@@ -156,7 +156,7 @@ func (ul *UserLogin) QueueRemoteEvent(evt RemoteEvent) {
 
 func (br *Bridge) QueueRemoteEvent(login *UserLogin, evt RemoteEvent) {
 	log := login.Log
-	ctx := log.WithContext(context.TODO())
+	ctx := log.WithContext(br.BackgroundCtx)
 	maybeUncertain, ok := evt.(RemoteEventWithUncertainPortalReceiver)
 	isUncertain := ok && maybeUncertain.PortalReceiverIsUncertain()
 	key := evt.GetPortalKey()

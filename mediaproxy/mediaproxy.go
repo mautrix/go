@@ -8,7 +8,6 @@ package mediaproxy
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -223,16 +222,6 @@ func (mp *MediaProxy) RegisterRoutes(router *mux.Router) {
 	mp.KeyServer.Register(router)
 }
 
-// Deprecated: use mautrix.RespError instead
-type ResponseError struct {
-	Status int
-	Data   any
-}
-
-func (err *ResponseError) Error() string {
-	return fmt.Sprintf("HTTP %d: %v", err.Status, err.Data)
-}
-
 var ErrInvalidMediaIDSyntax = errors.New("invalid media ID syntax")
 
 func queryToMap(vals url.Values) map[string]string {
@@ -247,17 +236,11 @@ func (mp *MediaProxy) getMedia(w http.ResponseWriter, r *http.Request) GetMediaR
 	mediaID := mux.Vars(r)["mediaID"]
 	resp, err := mp.GetMedia(r.Context(), mediaID, queryToMap(r.URL.Query()))
 	if err != nil {
-		//lint:ignore SA1019 deprecated types need to be supported until they're removed
-		var respError *ResponseError
 		var mautrixRespError mautrix.RespError
 		if errors.Is(err, ErrInvalidMediaIDSyntax) {
 			mautrix.MNotFound.WithMessage("This is a media proxy at %q, other media downloads are not available here", mp.serverName).Write(w)
 		} else if errors.As(err, &mautrixRespError) {
 			mautrixRespError.Write(w)
-		} else if errors.As(err, &respError) {
-			w.Header().Add("Content-Type", "application/json")
-			w.WriteHeader(respError.Status)
-			_ = json.NewEncoder(w).Encode(respError.Data)
 		} else {
 			zerolog.Ctx(r.Context()).Err(err).Str("media_id", mediaID).Msg("Failed to get media URL")
 			mautrix.MNotFound.WithMessage("Media not found").Write(w)

@@ -123,7 +123,7 @@ var TypeMap = map[Type]reflect.Type{
 // When being marshaled into JSON, the data in Parsed will be marshaled first and then recursively merged
 // with the data in Raw. Values in Raw are preferred, but nested objects will be recursed into before merging,
 // rather than overriding the whole object with the one in Raw).
-// If one of them is nil, the only the other is used. If both (Parsed and Raw) are nil, VeryRaw is used instead.
+// If one of them is nil, then only the other is used. If both (Parsed and Raw) are nil, VeryRaw is used instead.
 type Content struct {
 	VeryRaw json.RawMessage
 	Raw     map[string]interface{}

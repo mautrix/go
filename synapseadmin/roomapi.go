@@ -76,9 +76,15 @@ type RespListRooms struct {
 func (cli *Client) ListRooms(ctx context.Context, req ReqListRoom) (RespListRooms, error) {
 	var resp RespListRooms
 	var reqURL string
-	reqURL = cli.BuildURLWithQuery(mautrix.SynapseAdminURLPath{"v1", "rooms"}, req.BuildQuery())
-	_, err := cli.MakeRequest(ctx, http.MethodGet, reqURL, nil, &resp)
+	reqURL = cli.Client.BuildURLWithQuery(mautrix.SynapseAdminURLPath{"v1", "rooms"}, req.BuildQuery())
+	_, err := cli.Client.MakeRequest(ctx, http.MethodGet, reqURL, nil, &resp)
 	return resp, err
+}
+
+func (cli *Client) RoomInfo(ctx context.Context, roomID id.RoomID) (resp *RoomInfo, err error) {
+	reqURL := cli.BuildAdminURL("v1", "rooms", roomID)
+	_, err = cli.Client.MakeRequest(ctx, http.MethodGet, reqURL, nil, &resp)
+	return
 }
 
 type RespRoomMessages = mautrix.RespMessages
@@ -104,8 +110,8 @@ func (cli *Client) RoomMessages(ctx context.Context, roomID id.RoomID, from, to 
 	if limit != 0 {
 		query["limit"] = strconv.Itoa(limit)
 	}
-	urlPath := cli.BuildURLWithQuery(mautrix.SynapseAdminURLPath{"v1", "rooms", roomID, "messages"}, query)
-	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
+	urlPath := cli.Client.BuildURLWithQuery(mautrix.SynapseAdminURLPath{"v1", "rooms", roomID, "messages"}, query)
+	_, err = cli.Client.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
 	return resp, err
 }
 
@@ -121,6 +127,19 @@ type RespDeleteRoom struct {
 	DeleteID string `json:"delete_id"`
 }
 
+type RespDeleteRoomResult struct {
+	KickedUsers       []id.UserID    `json:"kicked_users,omitempty"`
+	FailedToKickUsers []id.UserID    `json:"failed_to_kick_users,omitempty"`
+	LocalAliases      []id.RoomAlias `json:"local_aliases,omitempty"`
+	NewRoomID         id.RoomID      `json:"new_room_id,omitempty"`
+}
+
+type RespDeleteRoomStatus struct {
+	Status       string               `json:"status,omitempty"`
+	Error        string               `json:"error,omitempty"`
+	ShutdownRoom RespDeleteRoomResult `json:"shutdown_room,omitempty"`
+}
+
 // DeleteRoom deletes a room from the server, optionally blocking it and/or purging all data from the database.
 //
 // This calls the async version of the endpoint, which will return immediately and delete the room in the background.
@@ -129,8 +148,35 @@ type RespDeleteRoom struct {
 func (cli *Client) DeleteRoom(ctx context.Context, roomID id.RoomID, req ReqDeleteRoom) (RespDeleteRoom, error) {
 	reqURL := cli.BuildAdminURL("v2", "rooms", roomID)
 	var resp RespDeleteRoom
-	_, err := cli.MakeRequest(ctx, http.MethodDelete, reqURL, &req, &resp)
+	_, err := cli.Client.MakeRequest(ctx, http.MethodDelete, reqURL, &req, &resp)
 	return resp, err
+}
+
+func (cli *Client) DeleteRoomStatus(ctx context.Context, deleteID string) (resp RespDeleteRoomStatus, err error) {
+	reqURL := cli.BuildAdminURL("v2", "rooms", "delete_status", deleteID)
+	_, err = cli.Client.MakeRequest(ctx, http.MethodGet, reqURL, nil, &resp)
+	return
+}
+
+// DeleteRoomSync deletes a room from the server, optionally blocking it and/or purging all data from the database.
+//
+// This calls the synchronous version of the endpoint, which will block until the room is deleted.
+//
+// https://element-hq.github.io/synapse/latest/admin_api/rooms.html#version-1-old-version
+func (cli *Client) DeleteRoomSync(ctx context.Context, roomID id.RoomID, req ReqDeleteRoom) (resp RespDeleteRoomResult, err error) {
+	reqURL := cli.BuildAdminURL("v1", "rooms", roomID)
+	httpClient := &http.Client{}
+	_, err = cli.Client.MakeFullRequest(ctx, mautrix.FullRequest{
+		Method:       http.MethodDelete,
+		URL:          reqURL,
+		RequestJSON:  &req,
+		ResponseJSON: &resp,
+		MaxAttempts:  1,
+		// Use a fresh HTTP client without timeouts
+		Client: httpClient,
+	})
+	httpClient.CloseIdleConnections()
+	return
 }
 
 type RespRoomsMembers struct {
@@ -144,7 +190,7 @@ type RespRoomsMembers struct {
 func (cli *Client) RoomMembers(ctx context.Context, roomID id.RoomID) (RespRoomsMembers, error) {
 	reqURL := cli.BuildAdminURL("v1", "rooms", roomID, "members")
 	var resp RespRoomsMembers
-	_, err := cli.MakeRequest(ctx, http.MethodGet, reqURL, nil, &resp)
+	_, err := cli.Client.MakeRequest(ctx, http.MethodGet, reqURL, nil, &resp)
 	return resp, err
 }
 
@@ -157,7 +203,7 @@ type ReqMakeRoomAdmin struct {
 // https://matrix-org.github.io/synapse/latest/admin_api/rooms.html#make-room-admin-api
 func (cli *Client) MakeRoomAdmin(ctx context.Context, roomIDOrAlias string, req ReqMakeRoomAdmin) error {
 	reqURL := cli.BuildAdminURL("v1", "rooms", roomIDOrAlias, "make_room_admin")
-	_, err := cli.MakeRequest(ctx, http.MethodPost, reqURL, &req, nil)
+	_, err := cli.Client.MakeRequest(ctx, http.MethodPost, reqURL, &req, nil)
 	return err
 }
 
@@ -170,7 +216,7 @@ type ReqJoinUserToRoom struct {
 // https://matrix-org.github.io/synapse/latest/admin_api/room_membership.html
 func (cli *Client) JoinUserToRoom(ctx context.Context, roomID id.RoomID, req ReqJoinUserToRoom) error {
 	reqURL := cli.BuildAdminURL("v1", "join", roomID)
-	_, err := cli.MakeRequest(ctx, http.MethodPost, reqURL, &req, nil)
+	_, err := cli.Client.MakeRequest(ctx, http.MethodPost, reqURL, &req, nil)
 	return err
 }
 
@@ -183,7 +229,7 @@ type ReqBlockRoom struct {
 // https://matrix-org.github.io/synapse/latest/admin_api/rooms.html#block-room-api
 func (cli *Client) BlockRoom(ctx context.Context, roomID id.RoomID, req ReqBlockRoom) error {
 	reqURL := cli.BuildAdminURL("v1", "rooms", roomID, "block")
-	_, err := cli.MakeRequest(ctx, http.MethodPut, reqURL, &req, nil)
+	_, err := cli.Client.MakeRequest(ctx, http.MethodPut, reqURL, &req, nil)
 	return err
 }
 
@@ -199,6 +245,6 @@ type RoomsBlockResponse struct {
 func (cli *Client) GetRoomBlockStatus(ctx context.Context, roomID id.RoomID) (RoomsBlockResponse, error) {
 	var resp RoomsBlockResponse
 	reqURL := cli.BuildAdminURL("v1", "rooms", roomID, "block")
-	_, err := cli.MakeRequest(ctx, http.MethodGet, reqURL, nil, &resp)
+	_, err := cli.Client.MakeRequest(ctx, http.MethodGet, reqURL, nil, &resp)
 	return resp, err
 }

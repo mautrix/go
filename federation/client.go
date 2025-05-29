@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -52,7 +53,7 @@ func (c *Client) ServerKeys(ctx context.Context, serverName string) (resp *Serve
 	return
 }
 
-func (c *Client) QueryKeys(ctx context.Context, serverName string, req *ReqQueryKeys) (resp *ServerKeyResponse, err error) {
+func (c *Client) QueryKeys(ctx context.Context, serverName string, req *ReqQueryKeys) (resp *QueryKeysResponse, err error) {
 	err = c.MakeRequest(ctx, serverName, false, http.MethodPost, KeyURLPath{"v2", "query"}, req, &resp)
 	return
 }
@@ -398,10 +399,10 @@ type signableRequest struct {
 	Content     json.RawMessage `json:"content,omitempty"`
 }
 
-func (r *signableRequest) Verify(key id.SigningKey, sig string) bool {
+func (r *signableRequest) Verify(key id.SigningKey, sig string) error {
 	message, err := json.Marshal(r)
 	if err != nil {
-		return false
+		return fmt.Errorf("failed to marshal data: %w", err)
 	}
 	return VerifyJSONRaw(key, sig, message)
 }

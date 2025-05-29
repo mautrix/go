@@ -2088,6 +2088,12 @@ func (cli *Client) GetUnredactedEventContent(ctx context.Context, roomID id.Room
 	return
 }
 
+func (cli *Client) GetRelations(ctx context.Context, roomID id.RoomID, eventID id.EventID, req *ReqGetRelations) (resp *RespGetRelations, err error) {
+	urlPath := cli.BuildURLWithQuery(append(ClientURLPath{"v1", "rooms", roomID, "relations", eventID}, req.PathSuffix()...), req.Query())
+	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
+	return
+}
+
 func (cli *Client) MarkRead(ctx context.Context, roomID id.RoomID, eventID id.EventID) (err error) {
 	return cli.SendReceipt(ctx, roomID, eventID, event.ReceiptTypeRead, nil)
 }

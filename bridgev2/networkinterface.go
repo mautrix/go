@@ -77,6 +77,19 @@ type EventSender struct {
 	ForceDMUser bool
 }
 
+func (es EventSender) MarshalZerologObject(evt *zerolog.Event) {
+	evt.Str("user_id", string(es.Sender))
+	if string(es.SenderLogin) != string(es.Sender) {
+		evt.Str("sender_login", string(es.SenderLogin))
+	}
+	if es.IsFromMe {
+		evt.Bool("is_from_me", true)
+	}
+	if es.ForceDMUser {
+		evt.Bool("force_dm_user", true)
+	}
+}
+
 type ConvertedMessage struct {
 	ReplyTo    *networkid.MessageOptionalPartID
 	ThreadRoot *networkid.MessageID
@@ -385,6 +398,13 @@ type BackgroundSyncingNetworkAPI interface {
 	// The client should connect to the remote network, handle pending messages, and then disconnect.
 	// This call should block until the entire sync is complete and the client is disconnected.
 	ConnectBackground(ctx context.Context, params *ConnectBackgroundParams) error
+}
+
+// CredentialExportingNetworkAPI is an optional interface that networks connectors can implement to support export of
+// the credentials associated with that login. Credential type is bridge specific.
+type CredentialExportingNetworkAPI interface {
+	NetworkAPI
+	ExportCredentials(ctx context.Context) any
 }
 
 // FetchMessagesParams contains the parameters for a message history pagination request.
@@ -1115,6 +1135,11 @@ type RemoteReadReceipt interface {
 	GetLastReceiptTarget() networkid.MessageID
 	GetReceiptTargets() []networkid.MessageID
 	GetReadUpTo() time.Time
+}
+
+type RemoteReadReceiptWithStreamOrder interface {
+	RemoteReadReceipt
+	GetReadUpToStreamOrder() int64
 }
 
 type RemoteDeliveryReceipt interface {

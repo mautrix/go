@@ -14,9 +14,9 @@ import (
 //
 // https://matrix-org.github.io/synapse/latest/usage/administration/admin_api/index.html
 type Client struct {
-	*mautrix.Client
+	Client *mautrix.Client
 }
 
 func (cli *Client) BuildAdminURL(path ...any) string {
-	return cli.BuildURL(mautrix.SynapseAdminURLPath(path))
+	return cli.Client.BuildURL(mautrix.SynapseAdminURLPath(path))
 }

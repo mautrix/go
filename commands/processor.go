@@ -26,6 +26,8 @@ type Processor[MetaType any] struct {
 	LogArgs      bool
 	PreValidator PreValidator[MetaType]
 	Meta         MetaType
+
+	ReactionCommandPrefix string
 }
 
 // UnknownCommandName is the name of the fallback handler which is used if no other handler is found.
@@ -43,7 +45,11 @@ func NewProcessor[MetaType any](cli *mautrix.Client) *Processor[MetaType] {
 }
 
 func (proc *Processor[MetaType]) Process(ctx context.Context, evt *event.Event) {
-	log := *zerolog.Ctx(ctx)
+	log := zerolog.Ctx(ctx).With().
+		Stringer("sender", evt.Sender).
+		Stringer("room_id", evt.RoomID).
+		Stringer("event_id", evt.ID).
+		Logger()
 	defer func() {
 		panicErr := recover()
 		if panicErr != nil {
@@ -61,7 +67,13 @@ func (proc *Processor[MetaType]) Process(ctx context.Context, evt *event.Event) 
 			}
 		}
 	}()
-	parsed := ParseEvent[MetaType](ctx, evt)
+	var parsed *Event[MetaType]
+	switch evt.Type {
+	case event.EventReaction:
+		parsed = proc.ParseReaction(ctx, evt)
+	case event.EventMessage:
+		parsed = ParseEvent[MetaType](ctx, evt)
+	}
 	if parsed == nil || !proc.PreValidator.Validate(parsed) {
 		return
 	}
@@ -98,9 +110,7 @@ func (proc *Processor[MetaType]) Process(ctx context.Context, evt *event.Event) 
 
 	logWith := log.With().
 		Str("command", parsed.Command).
-		Array("handler", handlerChain).
-		Stringer("sender", evt.Sender).
-		Stringer("room_id", evt.RoomID)
+		Array("handler", handlerChain)
 	if len(parsed.ParentCommands) > 0 {
 		logWith = logWith.Strs("parent_commands", parsed.ParentCommands)
 	}
@@ -109,6 +119,7 @@ func (proc *Processor[MetaType]) Process(ctx context.Context, evt *event.Event) 
 	}
 	log = logWith.Logger()
 	parsed.Ctx = log.WithContext(ctx)
+	parsed.Log = &log
 
 	log.Debug().Msg("Processing command")
 	handler.Func(parsed)

@@ -231,7 +231,7 @@ func (ph *PolicyHashes) DecodeSHA256() *[32]byte {
 // ModPolicyContent represents the content of a m.room.rule.user, m.room.rule.room, and m.room.rule.server state event.
 // https://spec.matrix.org/v1.2/client-server-api/#moderation-policy-lists
 type ModPolicyContent struct {
-	Entity         string               `json:"entity"`
+	Entity         string               `json:"entity,omitempty"`
 	Reason         string               `json:"reason"`
 	Recommendation PolicyRecommendation `json:"recommendation"`
 	UnstableHashes *PolicyHashes        `json:"org.matrix.msc4205.hashes,omitempty"`

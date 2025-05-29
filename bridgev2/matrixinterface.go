@@ -171,6 +171,10 @@ type MatrixAPI interface {
 	MuteRoom(ctx context.Context, roomID id.RoomID, until time.Time) error
 }
 
+type StreamOrderReadingMatrixAPI interface {
+	MarkStreamOrderRead(ctx context.Context, roomID id.RoomID, streamOrder int64, ts time.Time) error
+}
+
 type MarkAsDMMatrixAPI interface {
 	MarkAsDM(ctx context.Context, roomID id.RoomID, otherUser id.UserID) error
 }

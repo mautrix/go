@@ -230,6 +230,9 @@ func (user *User) NewLogin(ctx context.Context, data *database.UserLogin, params
 	err = params.LoadUserLogin(ul.Log.WithContext(context.Background()), ul)
 	if err != nil {
 		return nil, err
+	} else if ul.Client == nil {
+		ul.Log.Error().Msg("LoadUserLogin didn't fill Client in NewLogin")
+		return nil, fmt.Errorf("client not filled by LoadUserLogin")
 	}
 	if doInsert {
 		err = user.Bridge.DB.UserLogin.Insert(ctx, ul.UserLogin)
@@ -298,7 +301,7 @@ func (ul *UserLogin) Delete(ctx context.Context, state status.BridgeState, opts 
 	if !opts.unlocked {
 		ul.Bridge.cacheLock.Unlock()
 	}
-	backgroundCtx := context.WithoutCancel(ctx)
+	backgroundCtx := zerolog.Ctx(ctx).WithContext(ul.Bridge.BackgroundCtx)
 	if !opts.BlockingCleanup {
 		go ul.deleteSpace(backgroundCtx)
 	} else {

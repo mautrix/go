@@ -200,7 +200,10 @@ func (sa *ServerAuth) Authenticate(r *http.Request) (*http.Request, *mautrix.Res
 				Msg("Failed to query keys to authenticate request (cached error)")
 		}
 		return nil, &errFailedToQueryKeys
-	} else if !resp.VerifySelfSignature() {
+	} else if err := resp.VerifySelfSignature(); err != nil {
+		log.Trace().Err(err).
+			Str("server_name", parsed.Origin).
+			Msg("Failed to validate self-signatures of server keys")
 		return nil, &errInvalidSelfSignatures
 	}
 	key, ok := resp.VerifyKeys[parsed.KeyID]
@@ -226,15 +229,15 @@ func (sa *ServerAuth) Authenticate(r *http.Request) (*http.Request, *mautrix.Res
 			return nil, &errInvalidJSONBody
 		}
 	}
-	valid := (&signableRequest{
+	err = (&signableRequest{
 		Method:      r.Method,
-		URI:         r.URL.RawPath,
+		URI:         r.URL.EscapedPath(),
 		Origin:      parsed.Origin,
 		Destination: destination,
 		Content:     reqBody,
 	}).Verify(key.Key, parsed.Signature)
-	if !valid {
-		log.Trace().Msg("Request has invalid signature")
+	if err != nil {
+		log.Trace().Err(err).Msg("Request has invalid signature")
 		return nil, &errInvalidRequestSignature
 	}
 	ctx := context.WithValue(r.Context(), contextKeyDestinationServer, destination)

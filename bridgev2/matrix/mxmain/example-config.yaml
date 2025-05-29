@@ -258,6 +258,9 @@ provisioning:
     allow_matrix_auth: true
     # Enable debug API at /debug with provisioning authentication.
     debug_endpoints: false
+    # Enable session transfers between bridges. Note that this only validates Matrix or shared secret
+    # auth before passing live network client credentials down in the response.
+    enable_session_transfers: false
 
 # Some networks require publicly accessible media download links (e.g. for user avatars when using Discord webhooks).
 # These settings control whether the bridge will provide such public media access.

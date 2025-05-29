@@ -372,6 +372,24 @@ func (portal *Portal) getEventCtxWithLog(rawEvt any, idx int) context.Context {
 			Str("source_id", string(evt.source.ID)).
 			Stringer("bridge_evt_type", evt.evtType)
 		logWith = evt.evt.AddLogContext(logWith)
+		if remoteSender := evt.evt.GetSender(); remoteSender.Sender != "" || remoteSender.IsFromMe {
+			logWith = logWith.Object("remote_sender", remoteSender)
+		}
+		if remoteMsg, ok := evt.evt.(RemoteMessage); ok {
+			if remoteMsgID := remoteMsg.GetID(); remoteMsgID != "" {
+				logWith = logWith.Str("remote_message_id", string(remoteMsgID))
+			}
+		}
+		if remoteMsg, ok := evt.evt.(RemoteEventWithTargetMessage); ok {
+			if targetMsgID := remoteMsg.GetTargetMessage(); targetMsgID != "" {
+				logWith = logWith.Str("remote_target_message_id", string(targetMsgID))
+			}
+		}
+		if remoteMsg, ok := evt.evt.(RemoteEventWithStreamOrder); ok {
+			if remoteStreamOrder := remoteMsg.GetStreamOrder(); remoteStreamOrder != 0 {
+				logWith = logWith.Int64("remote_stream_order", remoteStreamOrder)
+			}
+		}
 	case *portalCreateEvent:
 		return evt.ctx
 	}
@@ -1886,7 +1904,7 @@ func (portal *Portal) getRelationMeta(ctx context.Context, currentMsg networkid.
 		if err != nil {
 			log.Err(err).Msg("Failed to get reply target message from database")
 		} else if replyTo == nil {
-			if isBatchSend {
+			if isBatchSend || portal.Bridge.Config.OutgoingMessageReID {
 				// This is somewhat evil
 				replyTo = &database.Message{
 					MXID: portal.Bridge.Matrix.GenerateDeterministicEventID(portal.MXID, portal.PortalKey, replyToPtr.MessageID, ptr.Val(replyToPtr.PartID)),
@@ -1901,7 +1919,7 @@ func (portal *Portal) getRelationMeta(ctx context.Context, currentMsg networkid.
 		if err != nil {
 			log.Err(err).Msg("Failed to get thread root message from database")
 		} else if threadRoot == nil {
-			if isBatchSend {
+			if isBatchSend || portal.Bridge.Config.OutgoingMessageReID {
 				threadRoot = &database.Message{
 					MXID: portal.Bridge.Matrix.GenerateDeterministicEventID(portal.MXID, portal.PortalKey, *threadRootPtr, ""),
 				}
@@ -2698,17 +2716,31 @@ func (portal *Portal) handleRemoteReadReceipt(ctx context.Context, source *UserL
 			log.Err(err).Time("read_up_to", readUpTo).Msg("Failed to get target message for read receipt")
 		}
 	}
-	if lastTarget == nil {
-		log.Warn().Msg("No target message found for read receipt")
-		return
-	}
 	sender := evt.GetSender()
 	intent := portal.GetIntentFor(ctx, sender, source, RemoteEventReadReceipt)
-	err = intent.MarkRead(ctx, portal.MXID, lastTarget.MXID, getEventTS(evt))
-	if err != nil {
-		log.Err(err).Stringer("target_mxid", lastTarget.MXID).Msg("Failed to bridge read receipt")
+	var addTargetLog func(evt *zerolog.Event) *zerolog.Event
+	if lastTarget == nil {
+		sevt, evtOK := evt.(RemoteReadReceiptWithStreamOrder)
+		soIntent, soIntentOK := intent.(StreamOrderReadingMatrixAPI)
+		if !evtOK || !soIntentOK || sevt.GetReadUpToStreamOrder() == 0 {
+			log.Warn().Msg("No target message found for read receipt")
+			return
+		}
+		targetStreamOrder := sevt.GetReadUpToStreamOrder()
+		addTargetLog = func(evt *zerolog.Event) *zerolog.Event {
+			return evt.Int64("target_stream_order", targetStreamOrder)
+		}
+		err = soIntent.MarkStreamOrderRead(ctx, portal.MXID, targetStreamOrder, getEventTS(evt))
 	} else {
-		log.Debug().Stringer("target_mxid", lastTarget.MXID).Msg("Bridged read receipt")
+		addTargetLog = func(evt *zerolog.Event) *zerolog.Event {
+			return evt.Stringer("target_mxid", lastTarget.MXID)
+		}
+		err = intent.MarkRead(ctx, portal.MXID, lastTarget.MXID, getEventTS(evt))
+	}
+	if err != nil {
+		addTargetLog(log.Err(err)).Msg("Failed to bridge read receipt")
+	} else {
+		addTargetLog(log.Debug()).Msg("Bridged read receipt")
 	}
 	if sender.IsFromMe {
 		portal.Bridge.DisappearLoop.StartAll(ctx, portal.MXID)
@@ -3239,6 +3271,10 @@ func (portal *Portal) getInitialMemberList(ctx context.Context, members *ChatMem
 	members.PowerLevels.Apply("", pl)
 	members.memberListToMap(ctx)
 	for _, member := range members.MemberMap {
+		if ctx.Err() != nil {
+			err = ctx.Err()
+			return
+		}
 		if member.Membership != event.MembershipJoin && member.Membership != "" {
 			continue
 		}
@@ -3416,6 +3452,9 @@ func (portal *Portal) syncParticipants(ctx context.Context, members *ChatMemberL
 		}
 	}
 	for _, member := range members.MemberMap {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		if member.Sender != "" && member.UserInfo != nil {
 			ghost, err := portal.Bridge.GetGhostByID(ctx, member.Sender)
 			if err != nil {
@@ -3755,6 +3794,9 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 	}
 
 	portal.UpdateInfo(ctx, info, source, nil, time.Time{})
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 
 	powerLevels := &event.PowerLevelsEventContent{
 		Events: map[string]int{
@@ -3879,7 +3921,7 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 		}
 		portal.Bridge.WakeupBackfillQueue()
 	}
-	withoutCancelCtx := context.WithoutCancel(ctx)
+	withoutCancelCtx := zerolog.Ctx(ctx).WithContext(portal.Bridge.BackgroundCtx)
 	if portal.Parent != nil {
 		if portal.Parent.MXID != "" {
 			portal.addToParentSpaceAndSave(ctx, true)
@@ -3932,7 +3974,7 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 			}
 		}
 	}
-	if portal.Bridge.Config.Backfill.Enabled && portal.RoomType != database.RoomTypeSpace {
+	if portal.Bridge.Config.Backfill.Enabled && portal.RoomType != database.RoomTypeSpace && !portal.Bridge.Background {
 		portal.doForwardBackfill(ctx, source, nil, backfillBundle)
 	}
 	return nil
