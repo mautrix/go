@@ -109,6 +109,7 @@ func doUpgrade(helper up.Helper) {
 		helper.Copy(up.Str, "provisioning", "shared_secret")
 	}
 	helper.Copy(up.Bool, "provisioning", "debug_endpoints")
+	helper.Copy(up.Bool, "provisioning", "enable_session_transfers")
 
 	helper.Copy(up.Bool, "direct_media", "enabled")
 	helper.Copy(up.Str|up.Null, "direct_media", "media_id_prefix")
