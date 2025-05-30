@@ -555,7 +555,11 @@ func (cli *Client) doRetry(req *http.Request, cause error, retries int, backoff 
 	log.Warn().Err(cause).
 		Int("retry_in_seconds", int(backoff.Seconds())).
 		Msg("Request failed, retrying")
-	time.Sleep(backoff)
+	select {
+	case <-time.After(backoff):
+	case <-req.Context().Done():
+		return nil, nil, req.Context().Err()
+	}
 	if cli.UpdateRequestOnRetry != nil {
 		req = cli.UpdateRequestOnRetry(req, cause)
 	}
