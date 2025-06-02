@@ -30,10 +30,11 @@ func NewEncodedUserID(localpart, homeserver string) UserID {
 }
 
 var (
-	ErrInvalidUserID         = errors.New("is not a valid user ID")
-	ErrNoncompliantLocalpart = errors.New("contains characters that are not allowed")
-	ErrUserIDTooLong         = errors.New("the given user ID is longer than 255 characters")
-	ErrEmptyLocalpart        = errors.New("empty localparts are not allowed")
+	ErrInvalidUserID          = errors.New("is not a valid user ID")
+	ErrNoncompliantLocalpart  = errors.New("contains characters that are not allowed")
+	ErrUserIDTooLong          = errors.New("the given user ID is longer than 255 characters")
+	ErrEmptyLocalpart         = errors.New("empty localparts are not allowed")
+	ErrNoncompliantServerPart = errors.New("is not a valid server name")
 )
 
 // ParseCommonIdentifier parses a common identifier according to https://spec.matrix.org/v1.9/appendices/#common-identifier-format
@@ -112,6 +113,9 @@ func (userID UserID) ParseAndValidate() (localpart, homeserver string, err error
 	}
 	if err == nil && len(userID) > UserIDMaxLength {
 		err = ErrUserIDTooLong
+	}
+	if err == nil && !ValidateServerName(homeserver) {
+		err = fmt.Errorf("%q %q", homeserver, ErrNoncompliantServerPart)
 	}
 	return
 }
