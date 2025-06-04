@@ -279,7 +279,8 @@ func (ul *UserLogin) Delete(ctx context.Context, state status.BridgeState, opts 
 	if opts.LogoutRemote {
 		ul.Client.LogoutRemote(ctx)
 	} else {
-		ul.Disconnect(nil)
+		// we probably shouldn't delete the login if disconnect isn't finished
+		ul.Disconnect()
 	}
 	var portals []*database.UserPortal
 	var err error
@@ -508,10 +509,11 @@ func (ul *UserLogin) FillBridgeState(state status.BridgeState) status.BridgeStat
 	return state
 }
 
-func (ul *UserLogin) Disconnect(done func()) {
-	if done != nil {
-		defer done()
-	}
+func (ul *UserLogin) Disconnect() {
+	ul.DisconnectWithTimeout(0)
+}
+
+func (ul *UserLogin) DisconnectWithTimeout(timeout time.Duration) {
 	client := ul.Client
 	if client != nil {
 		ul.Client = nil
@@ -520,10 +522,21 @@ func (ul *UserLogin) Disconnect(done func()) {
 			client.Disconnect()
 			close(disconnected)
 		}()
-		select {
-		case <-disconnected:
-		case <-time.After(5 * time.Second):
-			ul.Log.Warn().Msg("Client disconnection timed out")
+
+		var timeoutC <-chan time.Time
+		if timeout > 0 {
+			timeoutC = time.After(timeout)
+		}
+		for {
+			select {
+			case <-disconnected:
+				return
+			case <-time.After(2 * time.Second):
+				ul.Log.Warn().Msg("Client disconnection taking long")
+			case <-timeoutC:
+				ul.Log.Error().Msg("Client disconnection timed out")
+				return
+			}
 		}
 	}
 }
