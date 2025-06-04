@@ -329,7 +329,9 @@ func (portal *Portal) handleSingleEventAsync(idx int, rawEvt any) {
 			handleDuration = time.Since(start)
 			close(doneCh)
 			if backgrounded.Load() {
-				log.Debug().Stringer("duration", handleDuration).
+				log.Debug().
+					Time("started_at", start).
+					Stringer("duration", handleDuration).
 					Msg("Event that took too long finally finished handling")
 			}
 		})
@@ -339,15 +341,21 @@ func (portal *Portal) handleSingleEventAsync(idx int, rawEvt any) {
 			select {
 			case <-doneCh:
 				if i > 0 {
-					log.Debug().Stringer("duration", handleDuration).
+					log.Debug().
+						Time("started_at", start).
+						Stringer("duration", handleDuration).
 						Msg("Event that took long finished handling")
 				}
 				return
 			case <-tick.C:
-				log.Warn().Msg("Event handling is taking long")
+				log.Warn().
+					Time("started_at", start).
+					Msg("Event handling is taking long")
 			}
 		}
-		log.Warn().Msg("Event handling is taking too long, continuing in background")
+		log.Warn().
+			Time("started_at", start).
+			Msg("Event handling is taking too long, continuing in background")
 		backgrounded.Store(true)
 	}
 }
