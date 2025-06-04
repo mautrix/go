@@ -1062,13 +1062,17 @@ func (cli *Client) GetMutualRooms(ctx context.Context, otherUserID id.UserID, ex
 }
 
 func (cli *Client) GetRoomSummary(ctx context.Context, roomIDOrAlias string, via ...string) (resp *RespRoomSummary, err error) {
+	urlPath := ClientURLPath{"unstable", "im.nheko.summary", "summary", roomIDOrAlias}
+	if cli.SpecVersions.ContainsGreaterOrEqual(SpecV115) {
+		urlPath = ClientURLPath{"v1", "room_summary", roomIDOrAlias}
+	}
 	// TODO add version check after one is added to MSC3266
-	urlPath := cli.BuildURLWithFullQuery(ClientURLPath{"unstable", "im.nheko.summary", "summary", roomIDOrAlias}, func(q url.Values) {
+	fullURL := cli.BuildURLWithFullQuery(urlPath, func(q url.Values) {
 		if len(via) > 0 {
 			q["via"] = via
 		}
 	})
-	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
+	_, err = cli.MakeRequest(ctx, http.MethodGet, fullURL, nil, &resp)
 	return
 }
 
