@@ -109,7 +109,7 @@ func (c *baseVerificationCallbacks) VerificationCancelled(ctx context.Context, t
 	}
 }
 
-func (c *baseVerificationCallbacks) VerificationDone(ctx context.Context, txnID id.VerificationTransactionID) {
+func (c *baseVerificationCallbacks) VerificationDone(ctx context.Context, txnID id.VerificationTransactionID, method event.VerificationMethod) {
 	c.doneTransactions[txnID] = struct{}{}
 }
 
