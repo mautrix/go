@@ -421,7 +421,7 @@ func (br *BridgeMain) TriggerStop(exitCode int) {
 
 // Stop cleanly stops the bridge. This is called by [Run] and does not need to be called manually.
 func (br *BridgeMain) Stop() {
-	br.Bridge.Stop()
+	br.Bridge.StopWithTimeout(5 * time.Second)
 }
 
 // InitVersion formats the bridge version and build time nicely for things like
