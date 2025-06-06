@@ -116,6 +116,9 @@ type MessageEventContent struct {
 	BeeperGalleryImages      []*MessageEventContent `json:"com.beeper.gallery.images,omitempty"`
 	BeeperGalleryCaption     string                 `json:"com.beeper.gallery.caption,omitempty"`
 	BeeperGalleryCaptionHTML string                 `json:"com.beeper.gallery.caption_html,omitempty"`
+
+	// MSC4193 for spoiler tags on files, currently rendered by Cinny
+	EveryPizzaSpoiler bool `json:"page.codeberg.everypizza.msc4193.spoiler,omitempty"`
 }
 
 func (content *MessageEventContent) GetRelatesTo() *RelatesTo {
