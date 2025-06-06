@@ -2909,7 +2909,8 @@ type ChatMember struct {
 	PowerLevel *int
 	UserInfo   *UserInfo
 
-	PrevMembership event.Membership
+	MemberEventExtra map[string]any
+	PrevMembership   event.Membership
 }
 
 type ChatMemberList struct {
@@ -3330,7 +3331,13 @@ func (portal *Portal) updateOtherUser(ctx context.Context, members *ChatMemberLi
 	return false
 }
 
-func (portal *Portal) syncParticipants(ctx context.Context, members *ChatMemberList, source *UserLogin, sender MatrixAPI, ts time.Time) error {
+func (portal *Portal) syncParticipants(
+	ctx context.Context,
+	members *ChatMemberList,
+	source *UserLogin,
+	sender MatrixAPI,
+	ts time.Time,
+) error {
 	members.memberListToMap(ctx)
 	var loginsInPortal []*UserLogin
 	var err error
@@ -3354,7 +3361,7 @@ func (portal *Portal) syncParticipants(ctx context.Context, members *ChatMemberL
 	}
 	delete(currentMembers, portal.Bridge.Bot.GetMXID())
 	powerChanged := members.PowerLevels.Apply(portal.Bridge.Bot.GetMXID(), currentPower)
-	syncUser := func(extraUserID id.UserID, member ChatMember, hasIntent bool) bool {
+	syncUser := func(extraUserID id.UserID, member ChatMember, intent MatrixAPI) bool {
 		if member.Membership == "" {
 			member.Membership = event.MembershipJoin
 		}
@@ -3383,16 +3390,24 @@ func (portal *Portal) syncParticipants(ctx context.Context, members *ChatMemberL
 			Displayname: currentMember.Displayname,
 			AvatarURL:   currentMember.AvatarURL,
 		}
-		wrappedContent := &event.Content{Parsed: content, Raw: make(map[string]any)}
+		wrappedContent := &event.Content{Parsed: content, Raw: member.MemberEventExtra}
+		if wrappedContent.Raw == nil {
+			wrappedContent.Raw = make(map[string]any)
+		}
 		thisEvtSender := sender
 		if member.Membership == event.MembershipJoin {
 			content.Membership = event.MembershipInvite
-			if hasIntent {
+			if intent != nil {
 				wrappedContent.Raw["fi.mau.will_auto_accept"] = true
 			}
 			if thisEvtSender.GetMXID() == extraUserID {
 				thisEvtSender = portal.Bridge.Bot
 			}
+		}
+		addLogContext := func(e *zerolog.Event) *zerolog.Event {
+			return e.Stringer("target_user_id", extraUserID).
+				Stringer("sender_user_id", thisEvtSender.GetMXID()).
+				Str("prev_membership", string(currentMember.Membership))
 		}
 		if currentMember != nil && currentMember.Membership == event.MembershipBan && member.Membership != event.MembershipLeave {
 			unbanContent := *content
@@ -3400,41 +3415,46 @@ func (portal *Portal) syncParticipants(ctx context.Context, members *ChatMemberL
 			wrappedUnbanContent := &event.Content{Parsed: &unbanContent}
 			_, err = portal.sendStateWithIntentOrBot(ctx, thisEvtSender, event.StateMember, extraUserID.String(), wrappedUnbanContent, ts)
 			if err != nil {
-				log.Err(err).
-					Stringer("target_user_id", extraUserID).
-					Stringer("sender_user_id", thisEvtSender.GetMXID()).
-					Str("prev_membership", string(currentMember.Membership)).
-					Str("membership", string(member.Membership)).
+				addLogContext(log.Err(err)).
+					Str("new_membership", string(unbanContent.Membership)).
 					Msg("Failed to unban user to update membership")
 			} else {
-				log.Trace().
-					Stringer("target_user_id", extraUserID).
-					Stringer("sender_user_id", thisEvtSender.GetMXID()).
-					Str("prev_membership", string(currentMember.Membership)).
-					Str("membership", string(member.Membership)).
+				addLogContext(log.Trace()).
+					Str("new_membership", string(unbanContent.Membership)).
 					Msg("Unbanned user to update membership")
+				currentMember.Membership = event.MembershipLeave
 			}
 		}
 		_, err = portal.sendStateWithIntentOrBot(ctx, thisEvtSender, event.StateMember, extraUserID.String(), wrappedContent, ts)
 		if err != nil {
-			log.Err(err).
-				Stringer("target_user_id", extraUserID).
-				Stringer("sender_user_id", thisEvtSender.GetMXID()).
-				Str("prev_membership", string(currentMember.Membership)).
-				Str("membership", string(member.Membership)).
+			addLogContext(log.Err(err)).
+				Str("new_membership", string(content.Membership)).
 				Msg("Failed to update user membership")
 		} else {
-			log.Trace().
-				Stringer("target_user_id", extraUserID).
-				Stringer("sender_user_id", thisEvtSender.GetMXID()).
-				Str("prev_membership", string(currentMember.Membership)).
-				Str("membership", string(member.Membership)).
-				Msg("Updating membership in room")
+			addLogContext(log.Trace()).
+				Str("new_membership", string(content.Membership)).
+				Msg("Updated membership in room")
+			currentMember.Membership = content.Membership
+
+			if intent != nil && content.Membership == event.MembershipInvite && member.Membership == event.MembershipJoin {
+				content.Membership = event.MembershipJoin
+				wrappedJoinContent := &event.Content{Parsed: content, Raw: member.MemberEventExtra}
+				_, err = intent.SendState(ctx, portal.MXID, event.StateMember, intent.GetMXID().String(), wrappedJoinContent, ts)
+				if err != nil {
+					addLogContext(log.Err(err)).
+						Str("new_membership", string(content.Membership)).
+						Msg("Failed to join with intent")
+				} else {
+					addLogContext(log.Trace()).
+						Str("new_membership", string(content.Membership)).
+						Msg("Joined room with intent")
+				}
+			}
 		}
 		return true
 	}
 	syncIntent := func(intent MatrixAPI, member ChatMember) {
-		if !syncUser(intent.GetMXID(), member, true) {
+		if !syncUser(intent.GetMXID(), member, intent) {
 			return
 		}
 		if member.Membership == event.MembershipJoin || member.Membership == "" {
@@ -3463,7 +3483,7 @@ func (portal *Portal) syncParticipants(ctx context.Context, members *ChatMemberL
 			syncIntent(intent, member)
 		}
 		if extraUserID != "" {
-			syncUser(extraUserID, member, false)
+			syncUser(extraUserID, member, nil)
 		}
 	}
 	if powerChanged {
