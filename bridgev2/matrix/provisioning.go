@@ -390,6 +390,10 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to start login")
 		RespondWithError(w, err, "Internal error starting login")
 		return
+	} else if firstStep == nil {
+		zerolog.Ctx(r.Context()).Error().Msg("Bridge returned nil first step in Start with no error")
+		RespondWithError(w, err, "Internal error starting login")
+		return
 	}
 	loginID := xid.New().String()
 	prov.loginsLock.Lock()
