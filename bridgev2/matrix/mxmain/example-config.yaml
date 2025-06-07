@@ -40,6 +40,9 @@ bridge:
     mute_only_on_create: true
     # Should the bridge check the db to ensure that incoming events haven't been handled before
     deduplicate_matrix_messages: false
+    # Should cross-room reply metadata be bridged?
+    # Most Matrix clients don't support this and servers may reject such messages too.
+    cross_room_replies: false
 
     # What should be done to portal rooms when a user logs out or is logged out?
     # Permitted values:

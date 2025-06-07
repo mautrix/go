@@ -1943,7 +1943,7 @@ func (portal *Portal) getRelationMeta(ctx context.Context, currentMsg networkid.
 	return
 }
 
-func (portal *Portal) applyRelationMeta(content *event.MessageEventContent, replyTo, threadRoot, prevThreadEvent *database.Message) {
+func (portal *Portal) applyRelationMeta(ctx context.Context, content *event.MessageEventContent, replyTo, threadRoot, prevThreadEvent *database.Message) {
 	if content.Mentions == nil {
 		content.Mentions = &event.Mentions{}
 	}
@@ -1951,7 +1951,24 @@ func (portal *Portal) applyRelationMeta(content *event.MessageEventContent, repl
 		content.GetRelatesTo().SetThread(threadRoot.MXID, prevThreadEvent.MXID)
 	}
 	if replyTo != nil {
-		content.GetRelatesTo().SetReplyTo(replyTo.MXID)
+		crossRoom := replyTo.Room != portal.PortalKey
+		if !crossRoom || portal.Bridge.Config.CrossRoomReplies {
+			content.GetRelatesTo().SetReplyTo(replyTo.MXID)
+		}
+		if crossRoom && portal.Bridge.Config.CrossRoomReplies {
+			targetPortal, err := portal.Bridge.GetExistingPortalByKey(ctx, replyTo.Room)
+			if err != nil {
+				zerolog.Ctx(ctx).Err(err).
+					Object("target_portal_key", replyTo.Room).
+					Msg("Failed to get cross-room reply portal")
+			} else if targetPortal == nil || targetPortal.MXID == "" {
+				zerolog.Ctx(ctx).Warn().
+					Object("target_portal_key", replyTo.Room).
+					Msg("Cross-room reply portal not found")
+			} else {
+				content.RelatesTo.InReplyTo.UnstableRoomID = targetPortal.MXID
+			}
+		}
 		content.Mentions.Add(replyTo.SenderMXID)
 	}
 }
@@ -1975,7 +1992,7 @@ func (portal *Portal) sendConvertedMessage(
 	replyTo, threadRoot, prevThreadEvent := portal.getRelationMeta(ctx, id, converted.ReplyTo, converted.ThreadRoot, false)
 	output := make([]*database.Message, 0, len(converted.Parts))
 	for i, part := range converted.Parts {
-		portal.applyRelationMeta(part.Content, replyTo, threadRoot, prevThreadEvent)
+		portal.applyRelationMeta(ctx, part.Content, replyTo, threadRoot, prevThreadEvent)
 		dbMessage := &database.Message{
 			ID:               id,
 			PartID:           part.ID,

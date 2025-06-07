@@ -38,6 +38,7 @@ func doUpgrade(helper up.Helper) {
 	helper.Copy(up.List, "bridge", "only_bridge_tags")
 	helper.Copy(up.Bool, "bridge", "mute_only_on_create")
 	helper.Copy(up.Bool, "bridge", "deduplicate_matrix_messages")
+	helper.Copy(up.Bool, "bridge", "cross_room_replies")
 	helper.Copy(up.Bool, "bridge", "cleanup_on_logout", "enabled")
 	helper.Copy(up.Str, "bridge", "cleanup_on_logout", "manual", "private")
 	helper.Copy(up.Str, "bridge", "cleanup_on_logout", "manual", "relayed")
