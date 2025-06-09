@@ -3390,7 +3390,7 @@ func (portal *Portal) syncParticipants(
 			Displayname: currentMember.Displayname,
 			AvatarURL:   currentMember.AvatarURL,
 		}
-		wrappedContent := &event.Content{Parsed: content, Raw: member.MemberEventExtra}
+		wrappedContent := &event.Content{Parsed: content, Raw: maps.Clone(member.MemberEventExtra)}
 		if wrappedContent.Raw == nil {
 			wrappedContent.Raw = make(map[string]any)
 		}
