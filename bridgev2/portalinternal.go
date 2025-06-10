@@ -361,6 +361,6 @@ func (portal *PortalInternals) ToggleSpace(ctx context.Context, spaceID id.RoomI
 	return (*Portal)(portal).toggleSpace(ctx, spaceID, canonical, remove)
 }
 
-func (portal *PortalInternals) SetMXIDToExistingRoom(roomID id.RoomID) bool {
-	return (*Portal)(portal).setMXIDToExistingRoom(roomID)
+func (portal *PortalInternals) SetMXIDToExistingRoom(ctx context.Context, roomID id.RoomID) bool {
+	return (*Portal)(portal).setMXIDToExistingRoom(ctx, roomID)
 }

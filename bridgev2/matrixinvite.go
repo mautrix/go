@@ -177,10 +177,7 @@ func (br *Bridge) handleGhostDMInvite(ctx context.Context, evt *event.Event, sen
 		return
 	}
 
-	didSetPortal := portal.setMXIDToExistingRoom(evt.RoomID)
-	if resp.PortalInfo != nil {
-		portal.UpdateInfo(ctx, resp.PortalInfo, sourceLogin, nil, time.Time{})
-	}
+	didSetPortal := portal.setMXIDToExistingRoom(ctx, evt.RoomID)
 	if didSetPortal {
 		message := "Private chat portal created"
 		err = br.givePowerToBot(ctx, evt.RoomID, invitedGhost.Intent)
@@ -189,6 +186,12 @@ func (br *Bridge) handleGhostDMInvite(ctx context.Context, evt *event.Event, sen
 			log.Warn().Err(err).Msg("Failed to give power to bot in new DM")
 			message += "\n\nWarning: failed to promote bot"
 			hasWarning = true
+		}
+		if resp.PortalInfo != nil {
+			portal.UpdateInfo(ctx, resp.PortalInfo, sourceLogin, nil, time.Time{})
+		} else {
+			portal.UpdateCapabilities(ctx, sourceLogin, true)
+			portal.UpdateBridgeInfo(ctx)
 		}
 		// TODO this might become unnecessary if UpdateInfo starts taking care of it
 		_, err = br.Bot.SendState(ctx, portal.MXID, event.StateElementFunctionalMembers, "", &event.Content{
@@ -242,7 +245,7 @@ func (br *Bridge) givePowerToBot(ctx context.Context, roomID id.RoomID, userWith
 	return nil
 }
 
-func (portal *Portal) setMXIDToExistingRoom(roomID id.RoomID) bool {
+func (portal *Portal) setMXIDToExistingRoom(ctx context.Context, roomID id.RoomID) bool {
 	portal.roomCreateLock.Lock()
 	defer portal.roomCreateLock.Unlock()
 	if portal.MXID != "" {
@@ -253,5 +256,9 @@ func (portal *Portal) setMXIDToExistingRoom(roomID id.RoomID) bool {
 	portal.Bridge.cacheLock.Lock()
 	portal.Bridge.portalsByMXID[portal.MXID] = portal
 	portal.Bridge.cacheLock.Unlock()
+	err := portal.Save(ctx)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to save portal after updating mxid")
+	}
 	return true
 }
