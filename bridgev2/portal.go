@@ -302,7 +302,7 @@ func (portal *Portal) queueEvent(ctx context.Context, evt portalEvent) {
 
 func (portal *Portal) eventLoop() {
 	if cfg := portal.Bridge.Network.GetCapabilities().OutgoingMessageTimeouts; cfg != nil {
-		ctx, cancel := context.WithCancel(portal.Log.WithContext(context.Background()))
+		ctx, cancel := context.WithCancel(portal.Log.WithContext(portal.Bridge.BackgroundCtx))
 		go portal.pendingMessageTimeoutLoop(ctx, cfg)
 		defer cancel()
 	}

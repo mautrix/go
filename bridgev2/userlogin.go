@@ -228,7 +228,8 @@ func (user *User) NewLogin(ctx context.Context, data *database.UserLogin, params
 		}
 		ul.BridgeState = user.Bridge.NewBridgeStateQueue(ul)
 	}
-	err = params.LoadUserLogin(ul.Log.WithContext(context.Background()), ul)
+	noCancelCtx := ul.Log.WithContext(user.Bridge.BackgroundCtx)
+	err = params.LoadUserLogin(noCancelCtx, ul)
 	if err != nil {
 		return nil, err
 	} else if ul.Client == nil {
@@ -236,14 +237,14 @@ func (user *User) NewLogin(ctx context.Context, data *database.UserLogin, params
 		return nil, fmt.Errorf("client not filled by LoadUserLogin")
 	}
 	if doInsert {
-		err = user.Bridge.DB.UserLogin.Insert(ctx, ul.UserLogin)
+		err = user.Bridge.DB.UserLogin.Insert(noCancelCtx, ul.UserLogin)
 		if err != nil {
 			return nil, err
 		}
 		user.Bridge.userLoginsByID[ul.ID] = ul
 		user.logins[ul.ID] = ul
 	} else {
-		err = ul.Save(ctx)
+		err = ul.Save(noCancelCtx)
 		if err != nil {
 			return nil, err
 		}
