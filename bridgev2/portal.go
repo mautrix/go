@@ -2872,17 +2872,57 @@ func (portal *Portal) handleRemoteChatResync(ctx context.Context, source *UserLo
 }
 
 func (portal *Portal) handleRemoteChatDelete(ctx context.Context, source *UserLogin, evt RemoteChatDelete) {
+	log := zerolog.Ctx(ctx)
 	if portal.Receiver == "" && evt.DeleteOnlyForMe() {
-		// TODO check if there are other users
+		logins, err := portal.Bridge.DB.UserPortal.GetAllInPortal(ctx, portal.PortalKey)
+		if err != nil {
+			log.Err(err).Msg("Failed to check if portal has other logins")
+			return
+		}
+		var ownUP *database.UserPortal
+		logins = slices.DeleteFunc(logins, func(up *database.UserPortal) bool {
+			if up.LoginID == source.ID {
+				ownUP = up
+				return true
+			}
+			return false
+		})
+		if len(logins) > 0 {
+			log.Debug().Msg("Not deleting portal with other logins in remote chat delete event")
+			if ownUP != nil {
+				err = portal.Bridge.DB.UserPortal.Delete(ctx, ownUP)
+				if err != nil {
+					log.Err(err).Msg("Failed to delete own user portal row from database")
+				} else {
+					log.Debug().Msg("Deleted own user portal row from database")
+				}
+			}
+			_, err = portal.sendStateWithIntentOrBot(
+				ctx,
+				source.User.DoublePuppet(ctx),
+				event.StateMember,
+				source.UserMXID.String(),
+				&event.Content{Parsed: &event.MemberEventContent{Membership: event.MembershipLeave}},
+				getEventTS(evt),
+			)
+			if err != nil {
+				log.Err(err).Msg("Failed to send leave state event for user after remote chat delete")
+			} else {
+				log.Debug().Msg("Sent leave state event for user after remote chat delete")
+			}
+			return
+		}
 	}
 	err := portal.Delete(ctx)
 	if err != nil {
-		zerolog.Ctx(ctx).Err(err).Msg("Failed to delete portal from database")
+		log.Err(err).Msg("Failed to delete portal from database")
 		return
 	}
 	err = portal.Bridge.Bot.DeleteRoom(ctx, portal.MXID, false)
 	if err != nil {
-		zerolog.Ctx(ctx).Err(err).Msg("Failed to delete Matrix room")
+		log.Err(err).Msg("Failed to delete Matrix room")
+	} else {
+		log.Info().Msg("Deleted room after remote chat delete event")
 	}
 }
 
