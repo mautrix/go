@@ -37,6 +37,7 @@ type UserLogin struct {
 
 	spaceCreateLock sync.Mutex
 	deleteLock      sync.Mutex
+	disconnectOnce  sync.Once
 }
 
 func (br *Bridge) loadUserLogin(ctx context.Context, user *User, dbUserLogin *database.UserLogin) (*UserLogin, error) {
@@ -514,29 +515,31 @@ func (ul *UserLogin) Disconnect() {
 }
 
 func (ul *UserLogin) DisconnectWithTimeout(timeout time.Duration) {
-	client := ul.Client
-	if client != nil {
-		ul.Client = nil
-		disconnected := make(chan struct{})
-		go func() {
-			client.Disconnect()
-			close(disconnected)
-		}()
+	ul.disconnectOnce.Do(func() {
+		ul.disconnectInternal(timeout)
+	})
+}
 
-		var timeoutC <-chan time.Time
-		if timeout > 0 {
-			timeoutC = time.After(timeout)
-		}
-		for {
-			select {
-			case <-disconnected:
-				return
-			case <-time.After(2 * time.Second):
-				ul.Log.Warn().Msg("Client disconnection taking long")
-			case <-timeoutC:
-				ul.Log.Error().Msg("Client disconnection timed out")
-				return
-			}
+func (ul *UserLogin) disconnectInternal(timeout time.Duration) {
+	disconnected := make(chan struct{})
+	go func() {
+		ul.Client.Disconnect()
+		close(disconnected)
+	}()
+
+	var timeoutC <-chan time.Time
+	if timeout > 0 {
+		timeoutC = time.After(timeout)
+	}
+	for {
+		select {
+		case <-disconnected:
+			return
+		case <-time.After(2 * time.Second):
+			ul.Log.Warn().Msg("Client disconnection taking long")
+		case <-timeoutC:
+			ul.Log.Error().Msg("Client disconnection timed out")
+			return
 		}
 	}
 }
