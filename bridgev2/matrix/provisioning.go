@@ -364,6 +364,8 @@ func (prov *ProvisioningAPI) GetLoginFlows(w http.ResponseWriter, r *http.Reques
 	})
 }
 
+var ErrNilStep = errors.New("bridge returned nil step with no error")
+
 func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Request) {
 	overrideLogin, failed := prov.GetExplicitLoginForRequest(w, r)
 	if failed {
@@ -386,12 +388,11 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 	} else {
 		firstStep, err = login.Start(r.Context())
 	}
+	if err == nil && firstStep == nil {
+		err = ErrNilStep
+	}
 	if err != nil {
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to start login")
-		RespondWithError(w, err, "Internal error starting login")
-		return
-	} else if firstStep == nil {
-		zerolog.Ctx(r.Context()).Error().Msg("Bridge returned nil first step in Start with no error")
 		RespondWithError(w, err, "Internal error starting login")
 		return
 	}
@@ -439,6 +440,9 @@ func (prov *ProvisioningAPI) PostLoginSubmitInput(w http.ResponseWriter, r *http
 	default:
 		panic("Impossible state")
 	}
+	if err == nil && nextStep == nil {
+		err = ErrNilStep
+	}
 	if err != nil {
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to submit input")
 		RespondWithError(w, err, "Internal error submitting input")
@@ -454,6 +458,9 @@ func (prov *ProvisioningAPI) PostLoginSubmitInput(w http.ResponseWriter, r *http
 func (prov *ProvisioningAPI) PostLoginWait(w http.ResponseWriter, r *http.Request) {
 	login := r.Context().Value(provisioningLoginProcessKey).(*ProvLogin)
 	nextStep, err := login.Process.(bridgev2.LoginProcessDisplayAndWait).Wait(r.Context())
+	if err == nil && nextStep == nil {
+		err = ErrNilStep
+	}
 	if err != nil {
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to wait")
 		RespondWithError(w, err, "Internal error waiting for login")
