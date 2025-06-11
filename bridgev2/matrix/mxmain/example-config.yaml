@@ -43,7 +43,8 @@ bridge:
     # Should cross-room reply metadata be bridged?
     # Most Matrix clients don't support this and servers may reject such messages too.
     cross_room_replies: false
-
+    # Should the bridge send a `m.replace` instead of `m.room.redaction` event when a message is deleted?
+    edit_instead_of_delete: false
     # What should be done to portal rooms when a user logs out or is logged out?
     # Permitted values:
     #   nothing - Do nothing, let the user stay in the portals
