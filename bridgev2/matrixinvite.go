@@ -187,6 +187,26 @@ func (br *Bridge) handleGhostDMInvite(ctx context.Context, evt *event.Event, sen
 			message += "\n\nWarning: failed to promote bot"
 			hasWarning = true
 		}
+		if resp.DMRedirectedTo != "" && resp.DMRedirectedTo != invitedGhost.ID {
+			log.Debug().
+				Str("dm_redirected_to_id", string(resp.DMRedirectedTo)).
+				Msg("Created DM was redirected to another user ID")
+			_, err = invitedGhost.Intent.SendState(ctx, portal.MXID, event.StateMember, invitedGhost.Intent.GetMXID().String(), &event.Content{
+				Parsed: &event.MemberEventContent{
+					Membership: event.MembershipLeave,
+					Reason:     "Direct chat redirected to another internal user ID",
+				},
+			}, time.Time{})
+			if err != nil {
+				log.Err(err).Msg("Failed to make incorrect ghost leave new DM room")
+			}
+			otherUserGhost, err := br.GetGhostByID(ctx, resp.DMRedirectedTo)
+			if err != nil {
+				log.Err(err).Msg("Failed to get ghost of real portal other user ID")
+			} else {
+				invitedGhost = otherUserGhost
+			}
+		}
 		if resp.PortalInfo != nil {
 			portal.UpdateInfo(ctx, resp.PortalInfo, sourceLogin, nil, time.Time{})
 		} else {
