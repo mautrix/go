@@ -58,6 +58,10 @@ func (as *ASIntent) SendMessage(ctx context.Context, roomID id.RoomID, eventType
 		})
 	}
 	if eventType != event.EventReaction && eventType != event.EventRedaction {
+		msgContent, ok := content.Parsed.(*event.MessageEventContent)
+		if ok {
+			msgContent.AddPerMessageProfileFallback()
+		}
 		if encrypted, err := as.Matrix.StateStore.IsEncrypted(ctx, roomID); err != nil {
 			return nil, fmt.Errorf("failed to check if room is encrypted: %w", err)
 		} else if encrypted {
