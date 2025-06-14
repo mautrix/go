@@ -393,9 +393,13 @@ func (as *ASIntent) UploadMediaStream(
 		err = fmt.Errorf("failed to get temp file info: %w", err)
 		return
 	}
+	size = info.Size()
+	if size > as.Connector.MediaConfig.UploadSize {
+		return "", nil, fmt.Errorf("file too large (%.2f MB > %.2f MB)", float64(size)/1000/1000, float64(as.Connector.MediaConfig.UploadSize)/1000/1000)
+	}
 	req := mautrix.ReqUploadMedia{
 		Content:       replFile,
-		ContentLength: info.Size(),
+		ContentLength: size,
 		ContentType:   res.MimeType,
 		FileName:      res.FileName,
 	}
