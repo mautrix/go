@@ -120,7 +120,7 @@ func (prov *ProvisioningAPI) Init() {
 	prov.Router.Use(hlog.NewHandler(prov.log))
 	prov.Router.Use(hlog.RequestIDHandler("request_id", "Request-Id"))
 	prov.Router.Use(exhttp.CORSMiddleware)
-	prov.Router.Use(requestlog.AccessLogger(false))
+	prov.Router.Use(requestlog.AccessLogger(requestlog.Options{TrustXForwardedFor: true}))
 	prov.Router.Use(prov.AuthMiddleware)
 	prov.Router.Path("/v3/whoami").Methods(http.MethodGet, http.MethodOptions).HandlerFunc(prov.GetWhoami)
 	prov.Router.Path("/v3/login/flows").Methods(http.MethodGet, http.MethodOptions).HandlerFunc(prov.GetLoginFlows)
