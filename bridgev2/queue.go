@@ -151,11 +151,24 @@ func (br *Bridge) QueueMatrixEvent(ctx context.Context, evt *event.Event) {
 	}
 }
 
-func (ul *UserLogin) QueueRemoteEvent(evt RemoteEvent) {
-	ul.Bridge.QueueRemoteEvent(ul, evt)
+type EventHandlingResult struct {
+	Success bool
+	Ignored bool
+	Queued  bool
 }
 
-func (br *Bridge) QueueRemoteEvent(login *UserLogin, evt RemoteEvent) {
+var (
+	EventHandlingResultFailed  = EventHandlingResult{}
+	EventHandlingResultQueued  = EventHandlingResult{Queued: true}
+	EventHandlingResultSuccess = EventHandlingResult{Success: true}
+	EventHandlingResultIgnored = EventHandlingResult{Success: true, Ignored: true}
+)
+
+func (ul *UserLogin) QueueRemoteEvent(evt RemoteEvent) EventHandlingResult {
+	return ul.Bridge.QueueRemoteEvent(ul, evt)
+}
+
+func (br *Bridge) QueueRemoteEvent(login *UserLogin, evt RemoteEvent) (res EventHandlingResult) {
 	log := login.Log
 	ctx := log.WithContext(br.BackgroundCtx)
 	maybeUncertain, ok := evt.(RemoteEventWithUncertainPortalReceiver)
@@ -182,7 +195,7 @@ func (br *Bridge) QueueRemoteEvent(login *UserLogin, evt RemoteEvent) {
 	}
 	// TODO put this in a better place, and maybe cache to avoid constant db queries
 	login.MarkInPortal(ctx, portal)
-	portal.queueEvent(ctx, &portalRemoteEvent{
+	return portal.queueEvent(ctx, &portalRemoteEvent{
 		evt:    evt,
 		source: login,
 	})
