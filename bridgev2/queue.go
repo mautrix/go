@@ -159,7 +159,7 @@ type EventHandlingResult struct {
 
 var (
 	EventHandlingResultFailed  = EventHandlingResult{}
-	EventHandlingResultQueued  = EventHandlingResult{Queued: true}
+	EventHandlingResultQueued  = EventHandlingResult{Success: true, Queued: true}
 	EventHandlingResultSuccess = EventHandlingResult{Success: true}
 	EventHandlingResultIgnored = EventHandlingResult{Success: true, Ignored: true}
 )

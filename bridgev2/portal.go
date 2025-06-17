@@ -330,6 +330,8 @@ func (portal *Portal) handleSingleEventAsync(idx int, rawEvt any) (outerRes Even
 		var backgrounded atomic.Bool
 		start := time.Now()
 		var handleDuration time.Duration
+		// Note: this will not set the success flag if the handler times out
+		outerRes = EventHandlingResult{Queued: true}
 		go portal.handleSingleEvent(ctx, rawEvt, func(res EventHandlingResult) {
 			outerRes = res
 			handleDuration = time.Since(start)
