@@ -421,13 +421,16 @@ func (mp *MediaProxy) DownloadMedia(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-	} else if dataResp, ok := resp.(GetMediaResponseWriter); ok {
-		mp.addHeaders(w, dataResp.GetContentType(), vars["fileName"])
-		if dataResp.GetContentLength() != 0 {
-			w.Header().Set("Content-Length", strconv.FormatInt(dataResp.GetContentLength(), 10))
+	} else if writerResp, ok := resp.(GetMediaResponseWriter); ok {
+		if dataResp, ok := writerResp.(*GetMediaResponseData); ok {
+			defer dataResp.Reader.Close()
+		}
+		mp.addHeaders(w, writerResp.GetContentType(), vars["fileName"])
+		if writerResp.GetContentLength() != 0 {
+			w.Header().Set("Content-Length", strconv.FormatInt(writerResp.GetContentLength(), 10))
 		}
 		w.WriteHeader(http.StatusOK)
-		_, err := dataResp.WriteTo(w)
+		_, err := writerResp.WriteTo(w)
 		if err != nil {
 			log.Err(err).Msg("Failed to write media data")
 		}
