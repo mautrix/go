@@ -848,7 +848,7 @@ func (vh *VerificationHelper) onVerificationStart(ctx context.Context, txn Verif
 		// here, since the start command for scanning and showing QR codes
 		// should be of type m.reciprocate.v1.
 		log.Error().Str("method", string(txn.StartEventContent.Method)).Msg("Unsupported verification method in start event")
-		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnknownMethod, fmt.Sprintf("unknown method %s", txn.StartEventContent.Method))
+		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnknownMethod, "unknown method %s", txn.StartEventContent.Method)
 	}
 }
 
