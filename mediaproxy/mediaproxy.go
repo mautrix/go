@@ -26,6 +26,7 @@ import (
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/federation"
+	"maunium.net/go/mautrix/id"
 )
 
 type GetMediaResponse interface {
@@ -234,6 +235,10 @@ func queryToMap(vals url.Values) map[string]string {
 
 func (mp *MediaProxy) getMedia(w http.ResponseWriter, r *http.Request) GetMediaResponse {
 	mediaID := mux.Vars(r)["mediaID"]
+	if !id.IsValidMediaID(mediaID) {
+		mautrix.MNotFound.WithMessage("Media ID %q is not valid", mediaID).Write(w)
+		return nil
+	}
 	resp, err := mp.GetMedia(r.Context(), mediaID, queryToMap(r.URL.Query()))
 	if err != nil {
 		var mautrixRespError mautrix.RespError
