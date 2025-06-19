@@ -42,6 +42,8 @@ type MemberEventContent struct {
 	ThirdPartyInvite *ThirdPartyInvite   `json:"third_party_invite,omitempty"`
 	Reason           string              `json:"reason,omitempty"`
 	MSC3414File      *EncryptedFileInfo  `json:"org.matrix.msc3414.file,omitempty"`
+
+	MSC4293RedactEvents bool `json:"org.matrix.msc4293.redact_events,omitempty"`
 }
 
 type ThirdPartyInvite struct {

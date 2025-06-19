@@ -11,7 +11,10 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"html"
+	"regexp"
 	"strconv"
+	"strings"
 
 	"maunium.net/go/mautrix/id"
 )
@@ -141,6 +144,34 @@ type BeeperPerMessageProfile struct {
 	Displayname string               `json:"displayname,omitempty"`
 	AvatarURL   *id.ContentURIString `json:"avatar_url,omitempty"`
 	AvatarFile  *EncryptedFileInfo   `json:"avatar_file,omitempty"`
+	HasFallback bool                 `json:"has_fallback,omitempty"`
+}
+
+func (content *MessageEventContent) AddPerMessageProfileFallback() {
+	if content.BeeperPerMessageProfile == nil || content.BeeperPerMessageProfile.HasFallback || content.BeeperPerMessageProfile.Displayname == "" {
+		return
+	}
+	content.BeeperPerMessageProfile.HasFallback = true
+	content.EnsureHasHTML()
+	content.Body = fmt.Sprintf("%s: %s", content.BeeperPerMessageProfile.Displayname, content.Body)
+	content.FormattedBody = fmt.Sprintf(
+		"<strong data-mx-profile-fallback>%s: </strong>%s",
+		html.EscapeString(content.BeeperPerMessageProfile.Displayname),
+		content.FormattedBody,
+	)
+}
+
+var HTMLProfileFallbackRegex = regexp.MustCompile(`<strong\s+data-mx-profile-fallback\s*>([^<]+): </strong\s*>`)
+
+func (content *MessageEventContent) RemovePerMessageProfileFallback() {
+	if content.BeeperPerMessageProfile == nil || !content.BeeperPerMessageProfile.HasFallback || content.BeeperPerMessageProfile.Displayname == "" {
+		return
+	}
+	content.BeeperPerMessageProfile.HasFallback = false
+	content.Body = strings.TrimPrefix(content.Body, content.BeeperPerMessageProfile.Displayname+": ")
+	if content.Format == FormatHTML {
+		content.FormattedBody = HTMLProfileFallbackRegex.ReplaceAllLiteralString(content.FormattedBody, "")
+	}
 }
 
 type BeeperEncodedOrder struct {

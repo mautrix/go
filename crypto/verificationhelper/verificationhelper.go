@@ -41,7 +41,7 @@ type RequiredCallbacks interface {
 	VerificationCancelled(ctx context.Context, txnID id.VerificationTransactionID, code event.VerificationCancelCode, reason string)
 
 	// VerificationDone is called when the verification is done.
-	VerificationDone(ctx context.Context, txnID id.VerificationTransactionID)
+	VerificationDone(ctx context.Context, txnID id.VerificationTransactionID, method event.VerificationMethod)
 }
 
 type ShowSASCallbacks interface {
@@ -70,14 +70,14 @@ type VerificationHelper struct {
 	verificationRequested         func(ctx context.Context, txnID id.VerificationTransactionID, from id.UserID, fromDevice id.DeviceID)
 	verificationReady             func(ctx context.Context, txnID id.VerificationTransactionID, otherDeviceID id.DeviceID, supportsSAS, supportsScanQRCode bool, qrCode *QRCode)
 	verificationCancelledCallback func(ctx context.Context, txnID id.VerificationTransactionID, code event.VerificationCancelCode, reason string)
-	verificationDone              func(ctx context.Context, txnID id.VerificationTransactionID)
+	verificationDone              func(ctx context.Context, txnID id.VerificationTransactionID, method event.VerificationMethod)
 
 	// showSAS is a callback that will be called after the SAS verification
 	// dance is complete and we want the client to show the emojis/decimals
 	showSAS func(ctx context.Context, txnID id.VerificationTransactionID, emojis []rune, emojiDescriptions []string, decimals []int)
-	// qrCodeScaned is a callback that will be called when the other device
+	// qrCodeScanned is a callback that will be called when the other device
 	// scanned the QR code we are showing
-	qrCodeScaned func(ctx context.Context, txnID id.VerificationTransactionID)
+	qrCodeScanned func(ctx context.Context, txnID id.VerificationTransactionID)
 }
 
 var _ mautrix.VerificationHelper = (*VerificationHelper)(nil)
@@ -120,7 +120,7 @@ func NewVerificationHelper(client *mautrix.Client, mach *crypto.OlmMachine, stor
 		} else {
 			helper.supportedMethods = append(helper.supportedMethods, event.VerificationMethodQRCodeShow)
 			helper.supportedMethods = append(helper.supportedMethods, event.VerificationMethodReciprocate)
-			helper.qrCodeScaned = c.QRCodeScanned
+			helper.qrCodeScanned = c.QRCodeScanned
 		}
 	}
 	if supportsQRScan {
@@ -839,7 +839,7 @@ func (vh *VerificationHelper) onVerificationStart(ctx context.Context, txn Verif
 			return
 		}
 		txn.VerificationState = VerificationStateOurQRScanned
-		vh.qrCodeScaned(ctx, txn.TransactionID)
+		vh.qrCodeScanned(ctx, txn.TransactionID)
 		if err := vh.store.SaveVerificationTransaction(ctx, txn); err != nil {
 			log.Err(err).Msg("failed to save verification transaction")
 		}
@@ -875,7 +875,7 @@ func (vh *VerificationHelper) onVerificationDone(ctx context.Context, txn Verifi
 		if err := vh.store.DeleteVerification(ctx, txn.TransactionID); err != nil {
 			log.Err(err).Msg("Delete verification failed")
 		}
-		vh.verificationDone(ctx, txn.TransactionID)
+		vh.verificationDone(ctx, txn.TransactionID, txn.StartEventContent.Method)
 	} else if err := vh.store.SaveVerificationTransaction(ctx, txn); err != nil {
 		log.Err(err).Msg("failed to save verification transaction")
 	}

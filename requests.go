@@ -193,6 +193,8 @@ type ReqKickUser struct {
 type ReqBanUser struct {
 	Reason string    `json:"reason,omitempty"`
 	UserID id.UserID `json:"user_id"`
+
+	MSC4293RedactEvents bool `json:"org.matrix.msc4293.redact_events,omitempty"`
 }
 
 // ReqUnbanUser is the JSON request for https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3roomsroomidunban

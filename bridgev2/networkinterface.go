@@ -696,6 +696,9 @@ type CreateChatResponse struct {
 	// Portal and PortalInfo are not required, the caller will fetch them automatically based on PortalKey if necessary.
 	Portal     *Portal
 	PortalInfo *ChatInfo
+	// If a start DM request (CreateChatWithGhost or ResolveIdentifier) returns the DM to a different user,
+	// this field should have the user ID of said different user.
+	DMRedirectedTo networkid.UserID
 }
 
 // IdentifierResolvingNetworkAPI is an optional interface that network connectors can implement to support starting new direct chats.

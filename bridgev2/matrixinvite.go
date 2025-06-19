@@ -164,6 +164,34 @@ func (br *Bridge) handleGhostDMInvite(ctx context.Context, evt *event.Event, sen
 			return
 		}
 	}
+	if portal.MXID != "" {
+		doCleanup := true
+		existingPortalMembers, err := br.Matrix.GetMembers(ctx, portal.MXID)
+		if err != nil {
+			log.Err(err).
+				Stringer("old_portal_mxid", portal.MXID).
+				Msg("Failed to check existing portal members, deleting room")
+		} else if targetUserMember, ok := existingPortalMembers[sender.MXID]; !ok {
+			log.Debug().
+				Stringer("old_portal_mxid", portal.MXID).
+				Msg("Inviter has no member event in old portal, deleting room")
+		} else if targetUserMember.Membership.IsInviteOrJoin() {
+			doCleanup = false
+		} else {
+			log.Debug().
+				Stringer("old_portal_mxid", portal.MXID).
+				Str("membership", string(targetUserMember.Membership)).
+				Msg("Inviter is not in old portal, deleting room")
+		}
+
+		if doCleanup {
+			if err = portal.RemoveMXID(ctx); err != nil {
+				log.Err(err).Msg("Failed to delete old portal mxid")
+			} else if err = br.Bot.DeleteRoom(ctx, portal.MXID, true); err != nil {
+				log.Err(err).Msg("Failed to clean up old portal room")
+			}
+		}
+	}
 	err = invitedGhost.Intent.EnsureInvited(ctx, evt.RoomID, br.Bot.GetMXID())
 	if err != nil {
 		log.Err(err).Msg("Failed to ensure bot is invited to room")
@@ -177,10 +205,7 @@ func (br *Bridge) handleGhostDMInvite(ctx context.Context, evt *event.Event, sen
 		return
 	}
 
-	didSetPortal := portal.setMXIDToExistingRoom(evt.RoomID)
-	if resp.PortalInfo != nil {
-		portal.UpdateInfo(ctx, resp.PortalInfo, sourceLogin, nil, time.Time{})
-	}
+	didSetPortal := portal.setMXIDToExistingRoom(ctx, evt.RoomID)
 	if didSetPortal {
 		message := "Private chat portal created"
 		err = br.givePowerToBot(ctx, evt.RoomID, invitedGhost.Intent)
@@ -189,6 +214,32 @@ func (br *Bridge) handleGhostDMInvite(ctx context.Context, evt *event.Event, sen
 			log.Warn().Err(err).Msg("Failed to give power to bot in new DM")
 			message += "\n\nWarning: failed to promote bot"
 			hasWarning = true
+		}
+		if resp.DMRedirectedTo != "" && resp.DMRedirectedTo != invitedGhost.ID {
+			log.Debug().
+				Str("dm_redirected_to_id", string(resp.DMRedirectedTo)).
+				Msg("Created DM was redirected to another user ID")
+			_, err = invitedGhost.Intent.SendState(ctx, portal.MXID, event.StateMember, invitedGhost.Intent.GetMXID().String(), &event.Content{
+				Parsed: &event.MemberEventContent{
+					Membership: event.MembershipLeave,
+					Reason:     "Direct chat redirected to another internal user ID",
+				},
+			}, time.Time{})
+			if err != nil {
+				log.Err(err).Msg("Failed to make incorrect ghost leave new DM room")
+			}
+			otherUserGhost, err := br.GetGhostByID(ctx, resp.DMRedirectedTo)
+			if err != nil {
+				log.Err(err).Msg("Failed to get ghost of real portal other user ID")
+			} else {
+				invitedGhost = otherUserGhost
+			}
+		}
+		if resp.PortalInfo != nil {
+			portal.UpdateInfo(ctx, resp.PortalInfo, sourceLogin, nil, time.Time{})
+		} else {
+			portal.UpdateCapabilities(ctx, sourceLogin, true)
+			portal.UpdateBridgeInfo(ctx)
 		}
 		// TODO this might become unnecessary if UpdateInfo starts taking care of it
 		_, err = br.Bot.SendState(ctx, portal.MXID, event.StateElementFunctionalMembers, "", &event.Content{
@@ -242,7 +293,7 @@ func (br *Bridge) givePowerToBot(ctx context.Context, roomID id.RoomID, userWith
 	return nil
 }
 
-func (portal *Portal) setMXIDToExistingRoom(roomID id.RoomID) bool {
+func (portal *Portal) setMXIDToExistingRoom(ctx context.Context, roomID id.RoomID) bool {
 	portal.roomCreateLock.Lock()
 	defer portal.roomCreateLock.Unlock()
 	if portal.MXID != "" {
@@ -253,5 +304,9 @@ func (portal *Portal) setMXIDToExistingRoom(roomID id.RoomID) bool {
 	portal.Bridge.cacheLock.Lock()
 	portal.Bridge.portalsByMXID[portal.MXID] = portal
 	portal.Bridge.cacheLock.Unlock()
+	err := portal.Save(ctx)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to save portal after updating mxid")
+	}
 	return true
 }

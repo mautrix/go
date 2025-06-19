@@ -228,6 +228,8 @@ func (intent *IntentAPI) SendStateEvent(ctx context.Context, roomID id.RoomID, e
 		if err := intent.EnsureJoined(ctx, roomID); err != nil {
 			return nil, err
 		}
+	} else if err := intent.EnsureRegistered(ctx); err != nil {
+		return nil, err
 	}
 	contentJSON = intent.AddDoublePuppetValue(contentJSON)
 	return intent.Client.SendStateEvent(ctx, roomID, eventType, stateKey, contentJSON)

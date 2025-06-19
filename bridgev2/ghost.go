@@ -185,6 +185,18 @@ func (ghost *Ghost) UpdateAvatar(ctx context.Context, avatar *Avatar) bool {
 	return true
 }
 
+func (ghost *Ghost) getExtraProfileMeta() *event.BeeperProfileExtra {
+	bridgeName := ghost.Bridge.Network.GetName()
+	return &event.BeeperProfileExtra{
+		RemoteID:     string(ghost.ID),
+		Identifiers:  ghost.Identifiers,
+		Service:      bridgeName.BeeperBridgeType,
+		Network:      bridgeName.NetworkID,
+		IsBridgeBot:  false,
+		IsNetworkBot: ghost.IsBot,
+	}
+}
+
 func (ghost *Ghost) UpdateContactInfo(ctx context.Context, identifiers []string, isBot *bool) bool {
 	if identifiers != nil {
 		slices.Sort(identifiers)
@@ -200,16 +212,7 @@ func (ghost *Ghost) UpdateContactInfo(ctx context.Context, identifiers []string,
 	if isBot != nil {
 		ghost.IsBot = *isBot
 	}
-	bridgeName := ghost.Bridge.Network.GetName()
-	meta := &event.BeeperProfileExtra{
-		RemoteID:     string(ghost.ID),
-		Identifiers:  ghost.Identifiers,
-		Service:      bridgeName.BeeperBridgeType,
-		Network:      bridgeName.NetworkID,
-		IsBridgeBot:  false,
-		IsNetworkBot: ghost.IsBot,
-	}
-	err := ghost.Intent.SetExtraProfileMeta(ctx, meta)
+	err := ghost.Intent.SetExtraProfileMeta(ctx, ghost.getExtraProfileMeta())
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to set extra profile metadata")
 	} else {

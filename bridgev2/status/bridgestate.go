@@ -78,6 +78,7 @@ type BridgeStateUserAction string
 const (
 	UserActionOpenNative BridgeStateUserAction = "OPEN_NATIVE"
 	UserActionRelogin    BridgeStateUserAction = "RELOGIN"
+	UserActionRestart    BridgeStateUserAction = "RESTART"
 )
 
 type RemoteProfile struct {

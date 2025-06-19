@@ -210,7 +210,11 @@ func ProcessMatrixURI(uri *url.URL) (*MatrixURI, error) {
 	if len(parts[1]) == 0 {
 		return nil, ErrEmptySecondSegment
 	}
-	parsed.MXID1 = parts[1]
+	var err error
+	parsed.MXID1, err = url.PathUnescape(parts[1])
+	if err != nil {
+		return nil, fmt.Errorf("failed to url decode second segment %q: %w", parts[1], err)
+	}
 
 	// Step 6: if the first part is a room and the URI has 4 segments, construct a second level identifier
 	if parsed.Sigil1 == '!' && len(parts) == 4 {
@@ -226,7 +230,10 @@ func ProcessMatrixURI(uri *url.URL) (*MatrixURI, error) {
 		if len(parts[3]) == 0 {
 			return nil, ErrEmptyFourthSegment
 		}
-		parsed.MXID2 = parts[3]
+		parsed.MXID2, err = url.PathUnescape(parts[3])
+		if err != nil {
+			return nil, fmt.Errorf("failed to url decode fourth segment %q: %w", parts[3], err)
+		}
 	}
 
 	// Step 7: parse the query and extract via and action items

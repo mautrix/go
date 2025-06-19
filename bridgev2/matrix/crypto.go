@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"os"
 	"runtime/debug"
+	"strings"
 	"sync"
 	"time"
 
@@ -77,7 +78,7 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 		dbutil.ZeroLogger(helper.bridge.Log.With().Str("db_section", "crypto").Logger()),
 		string(helper.bridge.Bridge.ID),
 		helper.bridge.AS.BotMXID(),
-		fmt.Sprintf("@%s:%s", helper.bridge.Config.AppService.FormatUsername("%"), helper.bridge.AS.HomeserverDomain),
+		fmt.Sprintf("@%s:%s", strings.ReplaceAll(helper.bridge.Config.AppService.FormatUsername("%"), "_", `\_`), helper.bridge.AS.HomeserverDomain),
 		helper.bridge.Config.Encryption.PickleKey,
 	)
 

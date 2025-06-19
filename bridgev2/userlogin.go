@@ -37,6 +37,7 @@ type UserLogin struct {
 
 	spaceCreateLock sync.Mutex
 	deleteLock      sync.Mutex
+	disconnectOnce  sync.Once
 }
 
 func (br *Bridge) loadUserLogin(ctx context.Context, user *User, dbUserLogin *database.UserLogin) (*UserLogin, error) {
@@ -227,7 +228,8 @@ func (user *User) NewLogin(ctx context.Context, data *database.UserLogin, params
 		}
 		ul.BridgeState = user.Bridge.NewBridgeStateQueue(ul)
 	}
-	err = params.LoadUserLogin(ul.Log.WithContext(context.Background()), ul)
+	noCancelCtx := ul.Log.WithContext(user.Bridge.BackgroundCtx)
+	err = params.LoadUserLogin(noCancelCtx, ul)
 	if err != nil {
 		return nil, err
 	} else if ul.Client == nil {
@@ -235,14 +237,14 @@ func (user *User) NewLogin(ctx context.Context, data *database.UserLogin, params
 		return nil, fmt.Errorf("client not filled by LoadUserLogin")
 	}
 	if doInsert {
-		err = user.Bridge.DB.UserLogin.Insert(ctx, ul.UserLogin)
+		err = user.Bridge.DB.UserLogin.Insert(noCancelCtx, ul.UserLogin)
 		if err != nil {
 			return nil, err
 		}
 		user.Bridge.userLoginsByID[ul.ID] = ul
 		user.logins[ul.ID] = ul
 	} else {
-		err = ul.Save(ctx)
+		err = ul.Save(noCancelCtx)
 		if err != nil {
 			return nil, err
 		}
@@ -279,7 +281,8 @@ func (ul *UserLogin) Delete(ctx context.Context, state status.BridgeState, opts 
 	if opts.LogoutRemote {
 		ul.Client.LogoutRemote(ctx)
 	} else {
-		ul.Disconnect(nil)
+		// we probably shouldn't delete the login if disconnect isn't finished
+		ul.Disconnect()
 	}
 	var portals []*database.UserPortal
 	var err error
@@ -508,22 +511,36 @@ func (ul *UserLogin) FillBridgeState(state status.BridgeState) status.BridgeStat
 	return state
 }
 
-func (ul *UserLogin) Disconnect(done func()) {
-	if done != nil {
-		defer done()
+func (ul *UserLogin) Disconnect() {
+	ul.DisconnectWithTimeout(0)
+}
+
+func (ul *UserLogin) DisconnectWithTimeout(timeout time.Duration) {
+	ul.disconnectOnce.Do(func() {
+		ul.disconnectInternal(timeout)
+	})
+}
+
+func (ul *UserLogin) disconnectInternal(timeout time.Duration) {
+	disconnected := make(chan struct{})
+	go func() {
+		ul.Client.Disconnect()
+		close(disconnected)
+	}()
+
+	var timeoutC <-chan time.Time
+	if timeout > 0 {
+		timeoutC = time.After(timeout)
 	}
-	client := ul.Client
-	if client != nil {
-		ul.Client = nil
-		disconnected := make(chan struct{})
-		go func() {
-			client.Disconnect()
-			close(disconnected)
-		}()
+	for {
 		select {
 		case <-disconnected:
-		case <-time.After(5 * time.Second):
-			ul.Log.Warn().Msg("Client disconnection timed out")
+			return
+		case <-time.After(2 * time.Second):
+			ul.Log.Warn().Msg("Client disconnection taking long")
+		case <-timeoutC:
+			ul.Log.Error().Msg("Client disconnection timed out")
+			return
 		}
 	}
 }

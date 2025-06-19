@@ -89,8 +89,20 @@ func (portal *PortalInternals) CheckMessageContentCaps(ctx context.Context, caps
 	return (*Portal)(portal).checkMessageContentCaps(ctx, caps, content, evt)
 }
 
+func (portal *PortalInternals) ParseInputTransactionID(origSender *OrigSender, evt *event.Event) networkid.RawTransactionID {
+	return (*Portal)(portal).parseInputTransactionID(origSender, evt)
+}
+
 func (portal *PortalInternals) HandleMatrixMessage(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) {
 	(*Portal)(portal).handleMatrixMessage(ctx, sender, origSender, evt)
+}
+
+func (portal *PortalInternals) PendingMessageTimeoutLoop(ctx context.Context, cfg *OutgoingTimeoutConfig) {
+	(*Portal)(portal).pendingMessageTimeoutLoop(ctx, cfg)
+}
+
+func (portal *PortalInternals) CheckPendingMessages(ctx context.Context, cfg *OutgoingTimeoutConfig) {
+	(*Portal)(portal).checkPendingMessages(ctx, cfg)
 }
 
 func (portal *PortalInternals) HandleMatrixEdit(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event, content *event.MessageEventContent, caps *event.RoomFeatures) {
@@ -129,8 +141,8 @@ func (portal *PortalInternals) GetRelationMeta(ctx context.Context, currentMsg n
 	return (*Portal)(portal).getRelationMeta(ctx, currentMsg, replyToPtr, threadRootPtr, isBatchSend)
 }
 
-func (portal *PortalInternals) ApplyRelationMeta(content *event.MessageEventContent, replyTo, threadRoot, prevThreadEvent *database.Message) {
-	(*Portal)(portal).applyRelationMeta(content, replyTo, threadRoot, prevThreadEvent)
+func (portal *PortalInternals) ApplyRelationMeta(ctx context.Context, content *event.MessageEventContent, replyTo, threadRoot, prevThreadEvent *database.Message) {
+	(*Portal)(portal).applyRelationMeta(ctx, content, replyTo, threadRoot, prevThreadEvent)
 }
 
 func (portal *PortalInternals) SendConvertedMessage(ctx context.Context, id networkid.MessageID, intent MatrixAPI, senderID networkid.UserID, converted *ConvertedMessage, ts time.Time, streamOrder int64, logContext func(*zerolog.Event) *zerolog.Event) []*database.Message {
@@ -241,6 +253,10 @@ func (portal *PortalInternals) UpdateAvatar(ctx context.Context, avatar *Avatar,
 	return (*Portal)(portal).updateAvatar(ctx, avatar, sender, ts)
 }
 
+func (portal *PortalInternals) GetBridgeInfoStateKey() string {
+	return (*Portal)(portal).getBridgeInfoStateKey()
+}
+
 func (portal *PortalInternals) GetBridgeInfo() (string, event.BridgeEventContent) {
 	return (*Portal)(portal).getBridgeInfo()
 }
@@ -345,6 +361,6 @@ func (portal *PortalInternals) ToggleSpace(ctx context.Context, spaceID id.RoomI
 	return (*Portal)(portal).toggleSpace(ctx, spaceID, canonical, remove)
 }
 
-func (portal *PortalInternals) SetMXIDToExistingRoom(roomID id.RoomID) bool {
-	return (*Portal)(portal).setMXIDToExistingRoom(roomID)
+func (portal *PortalInternals) SetMXIDToExistingRoom(ctx context.Context, roomID id.RoomID) bool {
+	return (*Portal)(portal).setMXIDToExistingRoom(ctx, roomID)
 }
