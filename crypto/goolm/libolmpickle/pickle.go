@@ -4,9 +4,9 @@ import (
 	"crypto/aes"
 	"fmt"
 
-	"maunium.net/go/mautrix/crypto/goolm/aessha2"
-	"maunium.net/go/mautrix/crypto/goolm/goolmbase64"
-	"maunium.net/go/mautrix/crypto/olm"
+	"github.com/iKonoTelecomunicaciones/go/crypto/goolm/aessha2"
+	"github.com/iKonoTelecomunicaciones/go/crypto/goolm/goolmbase64"
+	"github.com/iKonoTelecomunicaciones/go/crypto/olm"
 )
 
 const pickleMACLength = 8

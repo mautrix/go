@@ -12,10 +12,10 @@ import (
 	"runtime/debug"
 	"time"
 
+	ikono "github.com/iKonoTelecomunicaciones/go"
 	"github.com/rs/zerolog"
 
-	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/event"
+	"github.com/iKonoTelecomunicaciones/go/event"
 )
 
 type ExecMode uint8
@@ -27,8 +27,8 @@ const (
 )
 
 type EventHandler = func(ctx context.Context, evt *event.Event)
-type OTKHandler = func(ctx context.Context, otk *mautrix.OTKCount)
-type DeviceListHandler = func(ctx context.Context, lists *mautrix.DeviceLists, since string)
+type OTKHandler = func(ctx context.Context, otk *ikono.OTKCount)
+type DeviceListHandler = func(ctx context.Context, lists *ikono.DeviceLists, since string)
 
 type EventProcessor struct {
 	ExecMode ExecMode
@@ -103,23 +103,23 @@ func (ep *EventProcessor) callHandler(ctx context.Context, handler EventHandler,
 	handler(ctx, evt)
 }
 
-func (ep *EventProcessor) callOTKHandler(ctx context.Context, handler OTKHandler, otk *mautrix.OTKCount) {
+func (ep *EventProcessor) callOTKHandler(ctx context.Context, handler OTKHandler, otk *ikono.OTKCount) {
 	defer ep.recoverFunc(otk)
 	handler(ctx, otk)
 }
 
-func (ep *EventProcessor) callDeviceListHandler(ctx context.Context, handler DeviceListHandler, dl *mautrix.DeviceLists) {
+func (ep *EventProcessor) callDeviceListHandler(ctx context.Context, handler DeviceListHandler, dl *ikono.DeviceLists) {
 	defer ep.recoverFunc(dl)
 	handler(ctx, dl, "")
 }
 
-func (ep *EventProcessor) DispatchOTK(ctx context.Context, otk *mautrix.OTKCount) {
+func (ep *EventProcessor) DispatchOTK(ctx context.Context, otk *ikono.OTKCount) {
 	for _, handler := range ep.otkHandlers {
 		go ep.callOTKHandler(ctx, handler, otk)
 	}
 }
 
-func (ep *EventProcessor) DispatchDeviceList(ctx context.Context, dl *mautrix.DeviceLists) {
+func (ep *EventProcessor) DispatchDeviceList(ctx context.Context, dl *ikono.DeviceLists) {
 	for _, handler := range ep.deviceListHandlers {
 		go ep.callDeviceListHandler(ctx, handler, dl)
 	}

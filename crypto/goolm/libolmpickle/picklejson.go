@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"maunium.net/go/mautrix/crypto/olm"
+	"github.com/iKonoTelecomunicaciones/go/crypto/olm"
 )
 
 // PickleAsJSON returns an object as a base64 string encrypted using the supplied key. The unencrypted representation of the object is in JSON format.

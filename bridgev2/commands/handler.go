@@ -7,8 +7,8 @@
 package commands
 
 import (
-	"maunium.net/go/mautrix/bridgev2"
-	"maunium.net/go/mautrix/event"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2"
+	"github.com/iKonoTelecomunicaciones/go/event"
 )
 
 type MinimalCommandHandler interface {

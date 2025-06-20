@@ -18,8 +18,8 @@ import (
 	"go.mau.fi/util/exsync"
 	"golang.org/x/exp/maps"
 
-	"maunium.net/go/mautrix/event"
-	"maunium.net/go/mautrix/id"
+	"github.com/iKonoTelecomunicaciones/go/event"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 var ErrGroupSessionWithheld error = &event.RoomKeyWithheldEventContent{}

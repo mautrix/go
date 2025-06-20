@@ -14,7 +14,7 @@ import (
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/dbutil"
 
-	"maunium.net/go/mautrix/bridgev2/networkid"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2/networkid"
 )
 
 type Key string

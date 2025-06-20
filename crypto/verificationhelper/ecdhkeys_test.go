@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"maunium.net/go/mautrix/crypto/verificationhelper"
+	"github.com/iKonoTelecomunicaciones/go/crypto/verificationhelper"
 )
 
 func TestECDHPrivateKey(t *testing.T) {

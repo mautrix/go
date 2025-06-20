@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"maunium.net/go/mautrix/crypto/goolm/megolm"
+	"github.com/iKonoTelecomunicaciones/go/crypto/goolm/megolm"
 )
 
 var startData [megolm.RatchetParts * megolm.RatchetPartLength]byte

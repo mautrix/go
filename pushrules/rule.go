@@ -14,8 +14,8 @@ import (
 	"go.mau.fi/util/exerrors"
 	"go.mau.fi/util/glob"
 
-	"maunium.net/go/mautrix/event"
-	"maunium.net/go/mautrix/id"
+	"github.com/iKonoTelecomunicaciones/go/event"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 func init() {

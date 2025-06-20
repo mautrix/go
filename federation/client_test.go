@@ -12,7 +12,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"maunium.net/go/mautrix/federation"
+	"github.com/iKonoTelecomunicaciones/go/federation"
 )
 
 func TestClient_Version(t *testing.T) {

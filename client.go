@@ -25,10 +25,10 @@ import (
 	"go.mau.fi/util/retryafter"
 	"golang.org/x/exp/maps"
 
-	"maunium.net/go/mautrix/crypto/backup"
-	"maunium.net/go/mautrix/event"
-	"maunium.net/go/mautrix/id"
-	"maunium.net/go/mautrix/pushrules"
+	"github.com/iKonoTelecomunicaciones/go/crypto/backup"
+	"github.com/iKonoTelecomunicaciones/go/event"
+	"github.com/iKonoTelecomunicaciones/go/id"
+	"github.com/iKonoTelecomunicaciones/go/pushrules"
 )
 
 type CryptoHelper interface {

@@ -22,10 +22,10 @@ import (
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/exzerolog"
 
-	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/crypto/cryptohelper"
-	"maunium.net/go/mautrix/event"
-	"maunium.net/go/mautrix/id"
+	mautrix "github.com/iKonoTelecomunicaciones/go"
+	"github.com/iKonoTelecomunicaciones/go/crypto/cryptohelper"
+	"github.com/iKonoTelecomunicaciones/go/event"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 var homeserver = flag.String("homeserver", "", "Matrix homeserver")

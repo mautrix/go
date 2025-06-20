@@ -11,8 +11,8 @@ import (
 	"go.mau.fi/zeroconfig"
 	"gopkg.in/yaml.v3"
 
-	"maunium.net/go/mautrix/event"
-	"maunium.net/go/mautrix/mediaproxy"
+	"github.com/iKonoTelecomunicaciones/go/event"
+	"github.com/iKonoTelecomunicaciones/go/mediaproxy"
 )
 
 type Config struct {

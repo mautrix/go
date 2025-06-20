@@ -18,7 +18,7 @@ import (
 
 	"golang.org/x/crypto/hkdf"
 
-	"maunium.net/go/mautrix/crypto/aescbc"
+	"github.com/iKonoTelecomunicaciones/go/crypto/aescbc"
 )
 
 type AESSHA2 struct {

@@ -16,9 +16,9 @@ import (
 	"github.com/yuin/goldmark/renderer/html"
 	"go.mau.fi/util/exstrings"
 
-	"maunium.net/go/mautrix/event"
-	"maunium.net/go/mautrix/format/mdext"
-	"maunium.net/go/mautrix/id"
+	"github.com/iKonoTelecomunicaciones/go/event"
+	"github.com/iKonoTelecomunicaciones/go/format/mdext"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 const paragraphStart = "<p>"

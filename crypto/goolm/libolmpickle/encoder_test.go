@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
+	"github.com/iKonoTelecomunicaciones/go/crypto/goolm/libolmpickle"
 )
 
 func TestEncoder(t *testing.T) {

@@ -18,7 +18,7 @@ import (
 	"go.mau.fi/util/jsonbytes"
 	"golang.org/x/crypto/hkdf"
 
-	"maunium.net/go/mautrix/crypto/aescbc"
+	"github.com/iKonoTelecomunicaciones/go/crypto/aescbc"
 )
 
 var ErrInvalidMAC = errors.New("invalid MAC")

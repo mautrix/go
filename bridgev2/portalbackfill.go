@@ -12,15 +12,15 @@ import (
 	"slices"
 	"time"
 
+	ikono "github.com/iKonoTelecomunicaciones/go"
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/ptr"
 	"go.mau.fi/util/variationselector"
 
-	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/bridgev2/database"
-	"maunium.net/go/mautrix/bridgev2/networkid"
-	"maunium.net/go/mautrix/event"
-	"maunium.net/go/mautrix/id"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2/database"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2/networkid"
+	"github.com/iKonoTelecomunicaciones/go/event"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 func (portal *Portal) doForwardBackfill(ctx context.Context, source *UserLogin, lastMessage *database.Message, bundledData any) {
@@ -461,7 +461,7 @@ func (portal *Portal) sendBatch(ctx context.Context, source *UserLogin, messages
 	for _, msg := range messages {
 		portal.compileBatchMessage(ctx, source, msg, out, inThread)
 	}
-	req := &mautrix.ReqBeeperBatchSend{
+	req := &ikono.ReqBeeperBatchSend{
 		ForwardIfNoMessages: !forceForward,
 		Forward:             forceForward,
 		SendNotification:    !markRead && forceForward && !inThread,

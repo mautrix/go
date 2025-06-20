@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"maunium.net/go/mautrix/id"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 func (br *Connector) trackSync(userID id.UserID, event string, properties map[string]any) error {

@@ -25,9 +25,9 @@ import (
 	"golang.org/x/net/publicsuffix"
 	"gopkg.in/yaml.v3"
 
-	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/event"
-	"maunium.net/go/mautrix/id"
+	mautrix "github.com/iKonoTelecomunicaciones/go"
+	"github.com/iKonoTelecomunicaciones/go/event"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 // EventChannelSize is the size for the Events channel in Appservice instances.

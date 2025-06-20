@@ -4,7 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 
-	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
+	"github.com/iKonoTelecomunicaciones/go/crypto/goolm/libolmpickle"
 )
 
 // OneTimeKey stores the information about a one time key.

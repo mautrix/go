@@ -29,11 +29,11 @@ import (
 	"gopkg.in/yaml.v3"
 	flag "maunium.net/go/mauflag"
 
-	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/bridgev2"
-	"maunium.net/go/mautrix/bridgev2/bridgeconfig"
-	"maunium.net/go/mautrix/bridgev2/commands"
-	"maunium.net/go/mautrix/bridgev2/matrix"
+	mautrix "github.com/iKonoTelecomunicaciones/go"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2/bridgeconfig"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2/commands"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2/matrix"
 )
 
 var configPath = flag.MakeFull("c", "config", "The path to your config file.", "config.yaml").String()
@@ -441,8 +441,8 @@ func (br *BridgeMain) Stop() {
 //
 // You may additionally want to fill the mautrix-go version using another ldflag:
 //
-//	export MAUTRIX_VERSION=$(cat go.mod | grep 'maunium.net/go/mautrix ' | head -n1 | awk '{ print $2 }')
-//	go build -ldflags "-X 'maunium.net/go/mautrix.GoModVersion=$MAUTRIX_VERSION'"
+//	export MAUTRIX_VERSION=$(cat go.mod | grep 'github.com/iKonoTelecomunicaciones/go ' | head -n1 | awk '{ print $2 }')
+//	go build -ldflags "-X 'github.com/iKonoTelecomunicaciones/go.GoModVersion=$MAUTRIX_VERSION'"
 //
 // (to use both at the same time, simply merge the ldflags into one, `-ldflags "-X '...' -X ..."`)
 func (br *BridgeMain) InitVersion(tag, commit, rawBuildTime string) {

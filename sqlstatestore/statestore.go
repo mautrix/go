@@ -21,8 +21,8 @@ import (
 	"go.mau.fi/util/dbutil"
 	"go.mau.fi/util/exslices"
 
-	"maunium.net/go/mautrix/event"
-	"maunium.net/go/mautrix/id"
+	"github.com/iKonoTelecomunicaciones/go/event"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 //go:embed *.sql

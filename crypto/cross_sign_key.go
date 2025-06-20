@@ -13,10 +13,10 @@ import (
 
 	"go.mau.fi/util/jsonbytes"
 
-	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/crypto/olm"
-	"maunium.net/go/mautrix/crypto/signatures"
-	"maunium.net/go/mautrix/id"
+	mautrix "github.com/iKonoTelecomunicaciones/go"
+	"github.com/iKonoTelecomunicaciones/go/crypto/olm"
+	"github.com/iKonoTelecomunicaciones/go/crypto/signatures"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 // CrossSigningKeysCache holds the three cross-signing keys for the current user.

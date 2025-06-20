@@ -14,9 +14,9 @@ import (
 
 	"golang.org/x/exp/slices"
 
-	"maunium.net/go/mautrix/crypto"
-	"maunium.net/go/mautrix/event"
-	"maunium.net/go/mautrix/id"
+	"github.com/iKonoTelecomunicaciones/go/crypto"
+	"github.com/iKonoTelecomunicaciones/go/event"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 // HandleScannedQRData verifies the keys from a scanned QR code and if

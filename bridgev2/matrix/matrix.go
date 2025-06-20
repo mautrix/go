@@ -16,11 +16,11 @@ import (
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/jsontime"
 
-	"maunium.net/go/mautrix/appservice"
-	"maunium.net/go/mautrix/bridgev2"
-	"maunium.net/go/mautrix/bridgev2/status"
-	"maunium.net/go/mautrix/event"
-	"maunium.net/go/mautrix/id"
+	"github.com/iKonoTelecomunicaciones/go/appservice"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2/status"
+	"github.com/iKonoTelecomunicaciones/go/event"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 func (br *Connector) handleRoomEvent(ctx context.Context, evt *event.Event) {

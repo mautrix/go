@@ -11,11 +11,11 @@ import (
 
 	"github.com/tidwall/sjson"
 
-	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/crypto/canonicaljson"
-	"maunium.net/go/mautrix/crypto/olm"
-	"maunium.net/go/mautrix/crypto/signatures"
-	"maunium.net/go/mautrix/id"
+	mautrix "github.com/iKonoTelecomunicaciones/go"
+	"github.com/iKonoTelecomunicaciones/go/crypto/canonicaljson"
+	"github.com/iKonoTelecomunicaciones/go/crypto/olm"
+	"github.com/iKonoTelecomunicaciones/go/crypto/signatures"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 type OlmAccount struct {

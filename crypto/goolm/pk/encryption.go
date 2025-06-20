@@ -3,11 +3,11 @@ package pk
 import (
 	"encoding/base64"
 
-	"maunium.net/go/mautrix/id"
+	"github.com/iKonoTelecomunicaciones/go/id"
 
-	"maunium.net/go/mautrix/crypto/goolm/aessha2"
-	"maunium.net/go/mautrix/crypto/goolm/crypto"
-	"maunium.net/go/mautrix/crypto/goolm/goolmbase64"
+	"github.com/iKonoTelecomunicaciones/go/crypto/goolm/aessha2"
+	"github.com/iKonoTelecomunicaciones/go/crypto/goolm/crypto"
+	"github.com/iKonoTelecomunicaciones/go/crypto/goolm/goolmbase64"
 )
 
 // Encryption is used to encrypt pk messages

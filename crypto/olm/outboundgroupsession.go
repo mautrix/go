@@ -6,7 +6,7 @@
 
 package olm
 
-import "maunium.net/go/mautrix/id"
+import "github.com/iKonoTelecomunicaciones/go/id"
 
 type OutboundGroupSession interface {
 	// Pickle returns a Session as a base64 string. Encrypts the Session using

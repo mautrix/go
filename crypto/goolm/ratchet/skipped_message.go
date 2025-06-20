@@ -1,8 +1,8 @@
 package ratchet
 
 import (
-	"maunium.net/go/mautrix/crypto/goolm/crypto"
-	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
+	"github.com/iKonoTelecomunicaciones/go/crypto/goolm/crypto"
+	"github.com/iKonoTelecomunicaciones/go/crypto/goolm/libolmpickle"
 )
 
 // skippedMessageKey stores a skipped message key

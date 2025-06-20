@@ -7,8 +7,8 @@
 package simplevent
 
 import (
-	"maunium.net/go/mautrix/bridgev2"
-	"maunium.net/go/mautrix/bridgev2/networkid"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2/networkid"
 )
 
 // Reaction is a simple implementation of [bridgev2.RemoteReaction] and [bridgev2.RemoteReactionRemove].

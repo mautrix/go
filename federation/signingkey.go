@@ -20,8 +20,8 @@ import (
 	"go.mau.fi/util/exgjson"
 	"go.mau.fi/util/jsontime"
 
-	"maunium.net/go/mautrix/crypto/canonicaljson"
-	"maunium.net/go/mautrix/id"
+	"github.com/iKonoTelecomunicaciones/go/crypto/canonicaljson"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 // SigningKey is a Matrix federation signing key pair.

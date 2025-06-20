@@ -7,8 +7,8 @@
 package mxmain_test
 
 import (
-	"maunium.net/go/mautrix/bridgev2"
-	"maunium.net/go/mautrix/bridgev2/matrix/mxmain"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2/matrix/mxmain"
 )
 
 // Information to find out exactly which commit the bridge was built from.

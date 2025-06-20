@@ -12,9 +12,9 @@ import (
 
 	"go.mau.fi/util/exzerolog"
 
-	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/crypto/signatures"
-	"maunium.net/go/mautrix/id"
+	mautrix "github.com/iKonoTelecomunicaciones/go"
+	"github.com/iKonoTelecomunicaciones/go/crypto/signatures"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 func (mach *OlmMachine) storeCrossSigningKeys(ctx context.Context, crossSigningKeys map[id.UserID]mautrix.CrossSigningKeys, deviceKeys map[id.UserID]map[id.DeviceID]mautrix.DeviceKeys) {

@@ -2,4 +2,4 @@
 
 package crypto
 
-import _ "maunium.net/go/mautrix/crypto/goolm"
+import _ "github.com/iKonoTelecomunicaciones/go/crypto/goolm"

@@ -9,8 +9,8 @@ import (
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/dbutil"
 
-	"maunium.net/go/mautrix/crypto/verificationhelper"
-	"maunium.net/go/mautrix/id"
+	"github.com/iKonoTelecomunicaciones/go/crypto/verificationhelper"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 type SQLiteVerificationStore struct {

@@ -25,8 +25,8 @@ import (
 	"encoding/base64"
 	"unsafe"
 
-	"maunium.net/go/mautrix/crypto/olm"
-	"maunium.net/go/mautrix/id"
+	"github.com/iKonoTelecomunicaciones/go/crypto/olm"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 // Session stores an end to end encrypted messaging session.

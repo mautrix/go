@@ -26,7 +26,7 @@ import (
 	"go.mau.fi/util/random"
 	"golang.org/x/crypto/pbkdf2"
 
-	"maunium.net/go/mautrix/id"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 var ErrNoSessionsForExport = errors.New("no sessions provided for export")

@@ -7,7 +7,7 @@
 package account
 
 import (
-	"maunium.net/go/mautrix/crypto/olm"
+	"github.com/iKonoTelecomunicaciones/go/crypto/olm"
 )
 
 func init() {

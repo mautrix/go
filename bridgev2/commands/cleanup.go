@@ -7,7 +7,7 @@
 package commands
 
 import (
-	"maunium.net/go/mautrix/bridgev2"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2"
 )
 
 var CommandDeletePortal = &FullHandler{

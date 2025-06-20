@@ -3,9 +3,9 @@ package libolm
 // #cgo LDFLAGS: -lolm -lstdc++
 // #include <olm/olm.h>
 import "C"
-import "maunium.net/go/mautrix/crypto/olm"
+import "github.com/iKonoTelecomunicaciones/go/crypto/olm"
 
-var pickleKey = []byte("maunium.net/go/mautrix/crypto/olm")
+var pickleKey = []byte("github.com/iKonoTelecomunicaciones/go/crypto/olm")
 
 func init() {
 	olm.GetVersion = func() (major, minor, patch uint8) {

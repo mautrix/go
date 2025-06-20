@@ -7,7 +7,7 @@
 package olm
 
 import (
-	"maunium.net/go/mautrix/id"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 // PKSigning is an interface for signing messages.

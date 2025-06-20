@@ -18,8 +18,8 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"maunium.net/go/mautrix/bridgev2"
-	"maunium.net/go/mautrix/id"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 var _ bridgev2.MatrixConnectorWithPublicMedia = (*Connector)(nil)

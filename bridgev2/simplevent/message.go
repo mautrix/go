@@ -9,9 +9,9 @@ package simplevent
 import (
 	"context"
 
-	"maunium.net/go/mautrix/bridgev2"
-	"maunium.net/go/mautrix/bridgev2/database"
-	"maunium.net/go/mautrix/bridgev2/networkid"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2/database"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2/networkid"
 )
 
 // Message is a simple implementation of [bridgev2.RemoteMessage], [bridgev2.RemoteEdit] and [bridgev2.RemoteMessageUpsert].

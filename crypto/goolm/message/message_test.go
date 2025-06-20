@@ -5,8 +5,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"maunium.net/go/mautrix/crypto/goolm/aessha2"
-	"maunium.net/go/mautrix/crypto/goolm/message"
+	"github.com/iKonoTelecomunicaciones/go/crypto/goolm/aessha2"
+	"github.com/iKonoTelecomunicaciones/go/crypto/goolm/message"
 )
 
 func TestMessageDecode(t *testing.T) {

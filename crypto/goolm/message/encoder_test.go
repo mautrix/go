@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"maunium.net/go/mautrix/crypto/goolm/message"
+	"github.com/iKonoTelecomunicaciones/go/crypto/goolm/message"
 )
 
 func TestEncodeInt(t *testing.T) {

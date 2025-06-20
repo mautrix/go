@@ -4,13 +4,13 @@ import (
 	"encoding/base64"
 	"fmt"
 
-	"maunium.net/go/mautrix/crypto/goolm/crypto"
-	"maunium.net/go/mautrix/crypto/goolm/goolmbase64"
-	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
-	"maunium.net/go/mautrix/crypto/goolm/megolm"
-	"maunium.net/go/mautrix/crypto/goolm/message"
-	"maunium.net/go/mautrix/crypto/olm"
-	"maunium.net/go/mautrix/id"
+	"github.com/iKonoTelecomunicaciones/go/crypto/goolm/crypto"
+	"github.com/iKonoTelecomunicaciones/go/crypto/goolm/goolmbase64"
+	"github.com/iKonoTelecomunicaciones/go/crypto/goolm/libolmpickle"
+	"github.com/iKonoTelecomunicaciones/go/crypto/goolm/megolm"
+	"github.com/iKonoTelecomunicaciones/go/crypto/goolm/message"
+	"github.com/iKonoTelecomunicaciones/go/crypto/olm"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 const (

@@ -8,11 +8,11 @@ package goolm
 
 import (
 	// Need to import these subpackages to ensure they are registered
-	_ "maunium.net/go/mautrix/crypto/goolm/account"
-	_ "maunium.net/go/mautrix/crypto/goolm/pk"
-	_ "maunium.net/go/mautrix/crypto/goolm/session"
+	_ "github.com/iKonoTelecomunicaciones/go/crypto/goolm/account"
+	_ "github.com/iKonoTelecomunicaciones/go/crypto/goolm/pk"
+	_ "github.com/iKonoTelecomunicaciones/go/crypto/goolm/session"
 
-	"maunium.net/go/mautrix/crypto/olm"
+	"github.com/iKonoTelecomunicaciones/go/crypto/olm"
 )
 
 func init() {

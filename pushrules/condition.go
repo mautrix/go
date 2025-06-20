@@ -17,8 +17,8 @@ import (
 	"github.com/tidwall/gjson"
 	"go.mau.fi/util/glob"
 
-	"maunium.net/go/mautrix/event"
-	"maunium.net/go/mautrix/id"
+	"github.com/iKonoTelecomunicaciones/go/event"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 // Room is an interface with the functions that are needed for processing room-specific push conditions

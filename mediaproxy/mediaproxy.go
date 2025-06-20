@@ -24,8 +24,8 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/rs/zerolog"
 
-	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/federation"
+	mautrix "github.com/iKonoTelecomunicaciones/go"
+	"github.com/iKonoTelecomunicaciones/go/federation"
 )
 
 type GetMediaResponse interface {

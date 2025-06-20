@@ -16,11 +16,11 @@ import (
 	"go.mau.fi/util/exerrors"
 	"golang.org/x/exp/maps"
 
-	"maunium.net/go/mautrix/crypto/goolm/account"
-	"maunium.net/go/mautrix/crypto/goolm/session"
-	"maunium.net/go/mautrix/crypto/libolm"
-	"maunium.net/go/mautrix/crypto/olm"
-	"maunium.net/go/mautrix/id"
+	"github.com/iKonoTelecomunicaciones/go/crypto/goolm/account"
+	"github.com/iKonoTelecomunicaciones/go/crypto/goolm/session"
+	"github.com/iKonoTelecomunicaciones/go/crypto/libolm"
+	"github.com/iKonoTelecomunicaciones/go/crypto/olm"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 func TestBlankSession(t *testing.T) {

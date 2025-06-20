@@ -6,11 +6,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"maunium.net/go/mautrix/id"
+	"github.com/iKonoTelecomunicaciones/go/id"
 
-	"maunium.net/go/mautrix/crypto/goolm/account"
-	"maunium.net/go/mautrix/crypto/olm"
-	"maunium.net/go/mautrix/crypto/signatures"
+	"github.com/iKonoTelecomunicaciones/go/crypto/goolm/account"
+	"github.com/iKonoTelecomunicaciones/go/crypto/olm"
+	"github.com/iKonoTelecomunicaciones/go/crypto/signatures"
 )
 
 func TestAccount(t *testing.T) {

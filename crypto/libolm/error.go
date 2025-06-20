@@ -7,7 +7,7 @@ import "C"
 import (
 	"fmt"
 
-	"maunium.net/go/mautrix/crypto/olm"
+	"github.com/iKonoTelecomunicaciones/go/crypto/olm"
 )
 
 var errorMap = map[string]error{

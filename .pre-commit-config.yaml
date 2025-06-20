@@ -14,7 +14,7 @@ repos:
       - id: go-imports-repo
         args:
           - "-local"
-          - "maunium.net/go/mautrix"
+          - "github.com/iKonoTelecomunicaciones/go"
           - "-w"
       - id: go-vet-repo-mod
       - id: go-mod-tidy
