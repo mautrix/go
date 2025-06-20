@@ -14,7 +14,7 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"maunium.net/go/mautrix/bridgev2/database"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2/database"
 )
 
 const BackfillMinBackoffAfterRoomCreate = 1 * time.Minute

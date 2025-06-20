@@ -10,7 +10,7 @@ info:
   version: v0.20.0
 externalDocs:
   description: mautrix-go godocs
-  url: https://pkg.go.dev/maunium.net/go/mautrix/bridgev2
+  url: https://pkg.go.dev/github.com/iKonoTelecomunicaciones/go/bridgev2
 servers:
 - url: http://localhost:8080/_matrix/provision
 tags:

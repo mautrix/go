@@ -26,12 +26,12 @@ import (
 	"go.mau.fi/util/jsontime"
 	"go.mau.fi/util/requestlog"
 
-	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/bridgev2"
-	"maunium.net/go/mautrix/bridgev2/networkid"
-	"maunium.net/go/mautrix/bridgev2/status"
-	"maunium.net/go/mautrix/federation"
-	"maunium.net/go/mautrix/id"
+	mautrix "github.com/iKonoTelecomunicaciones/go"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2/networkid"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2/status"
+	"github.com/iKonoTelecomunicaciones/go/federation"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 type matrixAuthCacheEntry struct {

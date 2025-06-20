@@ -16,12 +16,12 @@ import (
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/dbutil"
 
-	"maunium.net/go/mautrix/appservice"
-	"maunium.net/go/mautrix/bridgev2"
-	"maunium.net/go/mautrix/bridgev2/database"
-	"maunium.net/go/mautrix/bridgev2/matrix"
-	"maunium.net/go/mautrix/event"
-	"maunium.net/go/mautrix/id"
+	"github.com/iKonoTelecomunicaciones/go/appservice"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2/database"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2/matrix"
+	"github.com/iKonoTelecomunicaciones/go/event"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 func (br *BridgeMain) LegacyMigrateWithAnotherUpgrader(renameTablesQuery, copyDataQuery string, newDBVersion int, otherTable dbutil.UpgradeTable, otherTableName string, otherNewVersion int) func(ctx context.Context) error {

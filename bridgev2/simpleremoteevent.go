@@ -12,8 +12,8 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"maunium.net/go/mautrix/bridgev2/database"
-	"maunium.net/go/mautrix/bridgev2/networkid"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2/database"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2/networkid"
 )
 
 // SimpleRemoteEvent is a simple implementation of RemoteEvent that can be used with struct fields and some callbacks.

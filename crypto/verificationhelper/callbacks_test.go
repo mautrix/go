@@ -9,9 +9,9 @@ package verificationhelper_test
 import (
 	"context"
 
-	"maunium.net/go/mautrix/crypto/verificationhelper"
-	"maunium.net/go/mautrix/event"
-	"maunium.net/go/mautrix/id"
+	"github.com/iKonoTelecomunicaciones/go/crypto/verificationhelper"
+	"github.com/iKonoTelecomunicaciones/go/event"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 type MockVerificationCallbacks interface {

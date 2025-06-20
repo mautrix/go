@@ -7,7 +7,7 @@
 package olm
 
 import (
-	"maunium.net/go/mautrix/id"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 type Account interface {

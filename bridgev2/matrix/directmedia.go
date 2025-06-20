@@ -15,11 +15,11 @@ import (
 	"fmt"
 	"strings"
 
-	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/bridgev2"
-	"maunium.net/go/mautrix/bridgev2/networkid"
-	"maunium.net/go/mautrix/id"
-	"maunium.net/go/mautrix/mediaproxy"
+	mautrix "github.com/iKonoTelecomunicaciones/go"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2/networkid"
+	"github.com/iKonoTelecomunicaciones/go/id"
+	"github.com/iKonoTelecomunicaciones/go/mediaproxy"
 )
 
 const MediaIDPrefix = "\U0001F408"

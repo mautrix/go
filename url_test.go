@@ -11,7 +11,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"maunium.net/go/mautrix"
+	mautrix "github.com/iKonoTelecomunicaciones/go"
 )
 
 func TestClient_BuildURL(t *testing.T) {

@@ -11,7 +11,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"maunium.net/go/mautrix/federation"
+	"github.com/iKonoTelecomunicaciones/go/federation"
 )
 
 type parseTestCase struct {

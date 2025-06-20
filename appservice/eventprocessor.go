@@ -12,10 +12,10 @@ import (
 	"runtime/debug"
 	"time"
 
+	mautrix "github.com/iKonoTelecomunicaciones/go"
 	"github.com/rs/zerolog"
 
-	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/event"
+	"github.com/iKonoTelecomunicaciones/go/event"
 )
 
 type ExecMode uint8

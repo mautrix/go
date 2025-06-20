@@ -16,11 +16,11 @@ import (
 	"go.mau.fi/util/dbutil"
 	"go.mau.fi/util/exsync"
 
-	"maunium.net/go/mautrix/bridgev2/bridgeconfig"
-	"maunium.net/go/mautrix/bridgev2/database"
-	"maunium.net/go/mautrix/bridgev2/networkid"
-	"maunium.net/go/mautrix/bridgev2/status"
-	"maunium.net/go/mautrix/id"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2/bridgeconfig"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2/database"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2/networkid"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2/status"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 type CommandProcessor interface {

@@ -10,8 +10,8 @@ import (
 	"context"
 	"time"
 
-	"maunium.net/go/mautrix/bridgev2"
-	"maunium.net/go/mautrix/bridgev2/database"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2/database"
 )
 
 // ChatResync is a simple implementation of [bridgev2.RemoteChatResync].

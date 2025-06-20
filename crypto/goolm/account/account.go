@@ -6,12 +6,12 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"maunium.net/go/mautrix/id"
+	"github.com/iKonoTelecomunicaciones/go/id"
 
-	"maunium.net/go/mautrix/crypto/goolm/crypto"
-	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
-	"maunium.net/go/mautrix/crypto/goolm/session"
-	"maunium.net/go/mautrix/crypto/olm"
+	"github.com/iKonoTelecomunicaciones/go/crypto/goolm/crypto"
+	"github.com/iKonoTelecomunicaciones/go/crypto/goolm/libolmpickle"
+	"github.com/iKonoTelecomunicaciones/go/crypto/goolm/session"
+	"github.com/iKonoTelecomunicaciones/go/crypto/olm"
 )
 
 const (

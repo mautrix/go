@@ -17,12 +17,12 @@ import (
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 
-	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/bridgev2/bridgeconfig"
-	"maunium.net/go/mautrix/bridgev2/database"
-	"maunium.net/go/mautrix/bridgev2/networkid"
-	"maunium.net/go/mautrix/event"
-	"maunium.net/go/mautrix/id"
+	ikono "github.com/iKonoTelecomunicaciones/go"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2/bridgeconfig"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2/database"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2/networkid"
+	"github.com/iKonoTelecomunicaciones/go/event"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 type User struct {
@@ -207,7 +207,7 @@ func (user *User) GetManagementRoom(ctx context.Context) (id.RoomID, error) {
 	var err error
 	autoJoin := user.Bridge.Matrix.GetCapabilities().AutoJoinInvites
 	doublePuppet := user.DoublePuppet(ctx)
-	req := &mautrix.ReqCreateRoom{
+	req := &ikono.ReqCreateRoom{
 		Visibility: "private",
 		Name:       netName.DisplayName,
 		Topic:      fmt.Sprintf("%s bridge management room", netName.DisplayName),

@@ -16,7 +16,7 @@ import (
 	"strconv"
 	"strings"
 
-	"maunium.net/go/mautrix/id"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 type MessageStatusReason string

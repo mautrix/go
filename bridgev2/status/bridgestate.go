@@ -21,8 +21,8 @@ import (
 	"go.mau.fi/util/jsontime"
 	"go.mau.fi/util/ptr"
 
-	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/id"
+	mautrix "github.com/iKonoTelecomunicaciones/go"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 type BridgeStateEvent string

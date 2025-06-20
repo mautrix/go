@@ -12,7 +12,7 @@ import (
 	up "go.mau.fi/util/configupgrade"
 	"go.mau.fi/util/random"
 
-	"maunium.net/go/mautrix/federation"
+	"github.com/iKonoTelecomunicaciones/go/federation"
 )
 
 func doUpgrade(helper up.Helper) {

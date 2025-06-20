@@ -10,7 +10,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 
-	"maunium.net/go/mautrix/crypto/pkcs7"
+	"github.com/iKonoTelecomunicaciones/go/crypto/pkcs7"
 )
 
 // Encrypt encrypts the plaintext with the key and IV. The IV length must be

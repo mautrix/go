@@ -16,8 +16,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.mau.fi/util/dbutil"
 
-	"maunium.net/go/mautrix/crypto/olm"
-	"maunium.net/go/mautrix/id"
+	"github.com/iKonoTelecomunicaciones/go/crypto/olm"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 const olmSessID = "sJlikQQKXp7UQjmS9/lyZCNUVJ2AmKyHbufPBaC7tpk"

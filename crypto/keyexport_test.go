@@ -14,8 +14,8 @@ import (
 	"go.mau.fi/util/exerrors"
 	"go.mau.fi/util/exfmt"
 
-	"maunium.net/go/mautrix/crypto"
-	"maunium.net/go/mautrix/crypto/olm"
+	"github.com/iKonoTelecomunicaciones/go/crypto"
+	"github.com/iKonoTelecomunicaciones/go/crypto/olm"
 )
 
 func TestExportKeys(t *testing.T) {

@@ -1,4 +1,4 @@
-module maunium.net/go/mautrix
+module github.com/iKonoTelecomunicaciones/go
 
 go 1.23.0
 

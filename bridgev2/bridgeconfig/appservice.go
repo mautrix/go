@@ -16,8 +16,8 @@ import (
 	"go.mau.fi/util/random"
 	"gopkg.in/yaml.v3"
 
-	"maunium.net/go/mautrix/appservice"
-	"maunium.net/go/mautrix/id"
+	"github.com/iKonoTelecomunicaciones/go/appservice"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 type AppserviceConfig struct {

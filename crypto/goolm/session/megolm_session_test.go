@@ -7,10 +7,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"maunium.net/go/mautrix/crypto/goolm/crypto"
-	"maunium.net/go/mautrix/crypto/goolm/megolm"
-	"maunium.net/go/mautrix/crypto/goolm/session"
-	"maunium.net/go/mautrix/crypto/olm"
+	"github.com/iKonoTelecomunicaciones/go/crypto/goolm/crypto"
+	"github.com/iKonoTelecomunicaciones/go/crypto/goolm/megolm"
+	"github.com/iKonoTelecomunicaciones/go/crypto/goolm/session"
+	"github.com/iKonoTelecomunicaciones/go/crypto/olm"
 )
 
 func TestOutboundPickleJSON(t *testing.T) {

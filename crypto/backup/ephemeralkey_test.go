@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"maunium.net/go/mautrix/crypto/backup"
+	"github.com/iKonoTelecomunicaciones/go/crypto/backup"
 )
 
 type testStruct struct {

@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"strings"
 
-	"maunium.net/go/mautrix/id"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 type RoomType string

@@ -6,8 +6,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"maunium.net/go/mautrix/crypto/goolm/crypto"
-	"maunium.net/go/mautrix/crypto/goolm/pk"
+	"github.com/iKonoTelecomunicaciones/go/crypto/goolm/crypto"
+	"github.com/iKonoTelecomunicaciones/go/crypto/goolm/pk"
 )
 
 func TestEncryptionDecryption(t *testing.T) {

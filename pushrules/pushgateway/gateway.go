@@ -14,9 +14,9 @@ import (
 	"io"
 	"net/http"
 
-	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/id"
-	"maunium.net/go/mautrix/pushrules"
+	mautrix "github.com/iKonoTelecomunicaciones/go"
+	"github.com/iKonoTelecomunicaciones/go/id"
+	"github.com/iKonoTelecomunicaciones/go/pushrules"
 )
 
 type NotificationCounts struct {

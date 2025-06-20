@@ -10,7 +10,7 @@ package crypto
 import (
 	"context"
 
-	"maunium.net/go/mautrix/id"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 // ResolveTrust resolves the trust state of the device from cross-signing.

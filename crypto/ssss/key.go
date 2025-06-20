@@ -13,7 +13,7 @@ import (
 
 	"go.mau.fi/util/random"
 
-	"maunium.net/go/mautrix/crypto/utils"
+	"github.com/iKonoTelecomunicaciones/go/crypto/utils"
 )
 
 // Key represents a SSSS private key and related metadata.

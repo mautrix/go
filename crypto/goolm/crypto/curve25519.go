@@ -7,8 +7,8 @@ import (
 
 	"golang.org/x/crypto/curve25519"
 
-	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
-	"maunium.net/go/mautrix/id"
+	"github.com/iKonoTelecomunicaciones/go/crypto/goolm/libolmpickle"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 const (

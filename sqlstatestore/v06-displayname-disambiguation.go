@@ -12,7 +12,7 @@ import (
 	"go.mau.fi/util/confusable"
 	"go.mau.fi/util/dbutil"
 
-	"maunium.net/go/mautrix/id"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 type roomUserName struct {

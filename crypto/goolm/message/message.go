@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"io"
 
-	"maunium.net/go/mautrix/crypto/goolm/aessha2"
-	"maunium.net/go/mautrix/crypto/goolm/crypto"
+	"github.com/iKonoTelecomunicaciones/go/crypto/goolm/aessha2"
+	"github.com/iKonoTelecomunicaciones/go/crypto/goolm/crypto"
 )
 
 const (

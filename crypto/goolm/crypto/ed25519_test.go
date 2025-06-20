@@ -6,9 +6,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"maunium.net/go/mautrix/crypto/ed25519"
-	"maunium.net/go/mautrix/crypto/goolm/crypto"
-	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
+	"github.com/iKonoTelecomunicaciones/go/crypto/ed25519"
+	"github.com/iKonoTelecomunicaciones/go/crypto/goolm/crypto"
+	"github.com/iKonoTelecomunicaciones/go/crypto/goolm/libolmpickle"
 )
 
 const ed25519KeyPairPickleLength = ed25519.PublicKeySize + // PublicKey

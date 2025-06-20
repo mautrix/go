@@ -21,12 +21,12 @@ import (
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/dbutil"
 
-	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
-	"maunium.net/go/mautrix/crypto/olm"
-	"maunium.net/go/mautrix/crypto/sql_store_upgrade"
-	"maunium.net/go/mautrix/event"
-	"maunium.net/go/mautrix/id"
+	mautrix "github.com/iKonoTelecomunicaciones/go"
+	"github.com/iKonoTelecomunicaciones/go/crypto/goolm/libolmpickle"
+	"github.com/iKonoTelecomunicaciones/go/crypto/olm"
+	"github.com/iKonoTelecomunicaciones/go/crypto/sql_store_upgrade"
+	"github.com/iKonoTelecomunicaciones/go/event"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 var PostgresArrayWrapper func(any) interface {

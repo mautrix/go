@@ -24,7 +24,7 @@ import (
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 
-	"maunium.net/go/mautrix"
+	mautrix "github.com/iKonoTelecomunicaciones/go"
 )
 
 type WebsocketRequest struct {

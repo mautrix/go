@@ -11,10 +11,10 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/crypto/signatures"
-	"maunium.net/go/mautrix/event"
-	"maunium.net/go/mautrix/id"
+	mautrix "github.com/iKonoTelecomunicaciones/go"
+	"github.com/iKonoTelecomunicaciones/go/crypto/signatures"
+	"github.com/iKonoTelecomunicaciones/go/event"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 func (mach *OlmMachine) EncryptToDevices(ctx context.Context, eventType event.Type, req *mautrix.ReqSendToDevice) (*mautrix.ReqSendToDevice, error) {

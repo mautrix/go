@@ -12,7 +12,7 @@ import (
 	"regexp"
 	"strings"
 
-	"maunium.net/go/mautrix/bridgev2/networkid"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2/networkid"
 )
 
 // LoginProcess represents a single occurrence of a user logging into the remote network.

@@ -14,8 +14,8 @@ import (
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/exerrors"
 
-	"maunium.net/go/mautrix/event"
-	"maunium.net/go/mautrix/id"
+	"github.com/iKonoTelecomunicaciones/go/event"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 // StateStore is an interface for storing basic room state information.

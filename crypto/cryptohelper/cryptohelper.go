@@ -17,11 +17,11 @@ import (
 	"go.mau.fi/util/dbutil"
 	_ "go.mau.fi/util/dbutil/litestream"
 
-	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/crypto"
-	"maunium.net/go/mautrix/event"
-	"maunium.net/go/mautrix/id"
-	"maunium.net/go/mautrix/sqlstatestore"
+	mautrix "github.com/iKonoTelecomunicaciones/go"
+	"github.com/iKonoTelecomunicaciones/go/crypto"
+	"github.com/iKonoTelecomunicaciones/go/event"
+	"github.com/iKonoTelecomunicaciones/go/id"
+	"github.com/iKonoTelecomunicaciones/go/sqlstatestore"
 )
 
 type CryptoHelper struct {

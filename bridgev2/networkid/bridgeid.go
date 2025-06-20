@@ -78,7 +78,7 @@ type UserID string
 //
 // It may be the same shape as [UserID]. However, being the same shape is not required, and the
 // central bridge module and Matrix connectors will never assume it is. Instead, the bridge will
-// use methods like [maunium.net/go/mautrix/bridgev2.NetworkAPI.IsThisUser] to check if a user ID
+// use methods like [github.com/iKonoTelecomunicaciones/go/bridgev2.NetworkAPI.IsThisUser] to check if a user ID
 // is associated with a given UserLogin.
 // The network connector is of course allowed to assume a UserLoginID is equivalent to a UserID,
 // because it is the one defining both types.

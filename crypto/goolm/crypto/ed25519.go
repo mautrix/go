@@ -3,9 +3,9 @@ package crypto
 import (
 	"encoding/base64"
 
-	"maunium.net/go/mautrix/crypto/ed25519"
-	"maunium.net/go/mautrix/crypto/goolm/libolmpickle"
-	"maunium.net/go/mautrix/id"
+	"github.com/iKonoTelecomunicaciones/go/crypto/ed25519"
+	"github.com/iKonoTelecomunicaciones/go/crypto/goolm/libolmpickle"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 const (

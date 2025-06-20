@@ -11,12 +11,12 @@ import (
 	"fmt"
 	"time"
 
+	ikono "github.com/iKonoTelecomunicaciones/go"
 	"github.com/rs/zerolog"
 
-	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/bridgev2/database"
-	"maunium.net/go/mautrix/event"
-	"maunium.net/go/mautrix/id"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2/database"
+	"github.com/iKonoTelecomunicaciones/go/event"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 func (ul *UserLogin) MarkInPortal(ctx context.Context, portal *Portal) {
@@ -143,7 +143,7 @@ func (ul *UserLogin) GetSpaceRoom(ctx context.Context) (id.RoomID, error) {
 	var err error
 	autoJoin := ul.Bridge.Matrix.GetCapabilities().AutoJoinInvites
 	doublePuppet := ul.User.DoublePuppet(ctx)
-	req := &mautrix.ReqCreateRoom{
+	req := &ikono.ReqCreateRoom{
 		Visibility: "private",
 		Name:       fmt.Sprintf("%s (%s)", netName.DisplayName, ul.RemoteName),
 		Topic:      fmt.Sprintf("Your %s bridged chats - %s", netName.DisplayName, ul.RemoteName),

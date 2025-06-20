@@ -10,11 +10,11 @@ import (
 	"context"
 	"fmt"
 
-	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/crypto/ssss"
-	"maunium.net/go/mautrix/crypto/utils"
-	"maunium.net/go/mautrix/event"
-	"maunium.net/go/mautrix/id"
+	mautrix "github.com/iKonoTelecomunicaciones/go"
+	"github.com/iKonoTelecomunicaciones/go/crypto/ssss"
+	"github.com/iKonoTelecomunicaciones/go/crypto/utils"
+	"github.com/iKonoTelecomunicaciones/go/event"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 // FetchCrossSigningKeysFromSSSS fetches all the cross-signing keys from SSSS, decrypts them using the given key and stores them in the olm machine.

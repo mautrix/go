@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"maunium.net/go/mautrix/id"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 var _ SyncStore = (*MemorySyncStore)(nil)

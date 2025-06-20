@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.mau.fi/util/random"
 
-	"maunium.net/go/mautrix/crypto/ed25519"
+	"github.com/iKonoTelecomunicaciones/go/crypto/ed25519"
 )
 
 func TestPubkeyEqual(t *testing.T) {

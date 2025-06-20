@@ -16,9 +16,9 @@ import (
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/exzerolog"
 
-	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/crypto/signatures"
-	"maunium.net/go/mautrix/id"
+	mautrix "github.com/iKonoTelecomunicaciones/go"
+	"github.com/iKonoTelecomunicaciones/go/crypto/signatures"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 var (

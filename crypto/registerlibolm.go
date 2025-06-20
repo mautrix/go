@@ -2,4 +2,4 @@
 
 package crypto
 
-import _ "maunium.net/go/mautrix/crypto/libolm"
+import _ "github.com/iKonoTelecomunicaciones/go/crypto/libolm"

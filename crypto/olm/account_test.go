@@ -15,10 +15,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.mau.fi/util/exerrors"
 
-	"maunium.net/go/mautrix/crypto/ed25519"
-	"maunium.net/go/mautrix/crypto/goolm/account"
-	"maunium.net/go/mautrix/crypto/libolm"
-	"maunium.net/go/mautrix/crypto/olm"
+	"github.com/iKonoTelecomunicaciones/go/crypto/ed25519"
+	"github.com/iKonoTelecomunicaciones/go/crypto/goolm/account"
+	"github.com/iKonoTelecomunicaciones/go/crypto/libolm"
+	"github.com/iKonoTelecomunicaciones/go/crypto/olm"
 )
 
 func ensureAccountsEqual(t *testing.T, a, b olm.Account) {

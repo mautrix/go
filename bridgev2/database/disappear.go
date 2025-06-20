@@ -13,8 +13,8 @@ import (
 
 	"go.mau.fi/util/dbutil"
 
-	"maunium.net/go/mautrix/bridgev2/networkid"
-	"maunium.net/go/mautrix/id"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2/networkid"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 // DisappearingType represents the type of a disappearing message timer.

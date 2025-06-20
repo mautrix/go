@@ -14,7 +14,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"maunium.net/go/mautrix"
+	mautrix "github.com/iKonoTelecomunicaciones/go"
 )
 
 type respGetRegisterNonce struct {

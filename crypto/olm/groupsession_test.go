@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"maunium.net/go/mautrix/crypto/goolm/session"
-	"maunium.net/go/mautrix/crypto/libolm"
+	"github.com/iKonoTelecomunicaciones/go/crypto/goolm/session"
+	"github.com/iKonoTelecomunicaciones/go/crypto/libolm"
 )
 
 // TestEncryptDecrypt_GoolmToLibolm tests encryption where goolm encrypts and libolm decrypts

@@ -16,8 +16,8 @@ import (
 	"go.mau.fi/util/exhttp"
 	"go.mau.fi/util/jsontime"
 
-	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/id"
+	mautrix "github.com/iKonoTelecomunicaciones/go"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 type ServerVersion struct {

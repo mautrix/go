@@ -12,7 +12,7 @@ import (
 	"go.mau.fi/util/ptr"
 	"golang.org/x/exp/maps"
 
-	"maunium.net/go/mautrix/id"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 // PowerLevelsEventContent represents the content of a m.room.power_levels state event content.

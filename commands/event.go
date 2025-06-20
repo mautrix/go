@@ -13,9 +13,9 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"maunium.net/go/mautrix/event"
-	"maunium.net/go/mautrix/format"
-	"maunium.net/go/mautrix/id"
+	"github.com/iKonoTelecomunicaciones/go/event"
+	"github.com/iKonoTelecomunicaciones/go/format"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 // Event contains the data of a single command event.

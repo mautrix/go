@@ -21,11 +21,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.mau.fi/util/random"
 
-	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/crypto"
-	"maunium.net/go/mautrix/crypto/cryptohelper"
-	"maunium.net/go/mautrix/event"
-	"maunium.net/go/mautrix/id"
+	mautrix "github.com/iKonoTelecomunicaciones/go"
+	"github.com/iKonoTelecomunicaciones/go/crypto"
+	"github.com/iKonoTelecomunicaciones/go/crypto/cryptohelper"
+	"github.com/iKonoTelecomunicaciones/go/event"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 // mockServer is a mock Matrix server that wraps an [httptest.Server] to allow

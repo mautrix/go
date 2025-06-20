@@ -11,8 +11,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/event"
+	mautrix "github.com/iKonoTelecomunicaciones/go"
+	"github.com/iKonoTelecomunicaciones/go/event"
 )
 
 // ErrIgnoringRemoteEvent can be returned by [RemoteMessage.ConvertMessage] or [RemoteEdit.ConvertEdit]

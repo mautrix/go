@@ -12,8 +12,8 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"maunium.net/go/mautrix/bridgev2"
-	"maunium.net/go/mautrix/bridgev2/networkid"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2"
+	"github.com/iKonoTelecomunicaciones/go/bridgev2/networkid"
 )
 
 // EventMeta is a struct containing metadata fields used by most event types.

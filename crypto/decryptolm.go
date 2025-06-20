@@ -18,8 +18,8 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"maunium.net/go/mautrix/event"
-	"maunium.net/go/mautrix/id"
+	"github.com/iKonoTelecomunicaciones/go/event"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 var (
