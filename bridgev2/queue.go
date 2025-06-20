@@ -99,6 +99,7 @@ func (br *Bridge) QueueMatrixEvent(ctx context.Context, evt *event.Event) {
 	if evt.Type == event.EventMessage && sender != nil {
 		msg := evt.Content.AsMessage()
 		msg.RemoveReplyFallback()
+		msg.RemovePerMessageProfileFallback()
 		if strings.HasPrefix(msg.Body, br.Config.CommandPrefix) || evt.RoomID == sender.ManagementRoom {
 			if !sender.Permissions.Commands {
 				status := WrapErrorInStatus(errors.New("you don't have permission to use commands")).WithIsCertain(true).WithSendNotice(false).WithErrorAsMessage()

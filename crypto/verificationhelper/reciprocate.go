@@ -182,7 +182,7 @@ func (vh *VerificationHelper) HandleScannedQRData(ctx context.Context, data []by
 		if err = vh.store.DeleteVerification(ctx, txn.TransactionID); err != nil {
 			return err
 		}
-		vh.verificationDone(ctx, txn.TransactionID)
+		vh.verificationDone(ctx, txn.TransactionID, txn.StartEventContent.Method)
 	} else {
 		return vh.store.SaveVerificationTransaction(ctx, txn)
 	}
@@ -263,7 +263,7 @@ func (vh *VerificationHelper) ConfirmQRCodeScanned(ctx context.Context, txnID id
 		if err = vh.store.DeleteVerification(ctx, txn.TransactionID); err != nil {
 			return err
 		}
-		vh.verificationDone(ctx, txn.TransactionID)
+		vh.verificationDone(ctx, txn.TransactionID, txn.StartEventContent.Method)
 	} else {
 		return vh.store.SaveVerificationTransaction(ctx, txn)
 	}

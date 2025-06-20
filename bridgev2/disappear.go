@@ -91,7 +91,11 @@ func (dl *DisappearLoop) Add(ctx context.Context, dm *database.DisappearingMessa
 
 func (dl *DisappearLoop) sleepAndDisappear(ctx context.Context, dms ...*database.DisappearingMessage) {
 	for _, msg := range dms {
-		time.Sleep(time.Until(msg.DisappearAt))
+		select {
+		case <-time.After(time.Until(msg.DisappearAt)):
+		case <-ctx.Done():
+			return
+		}
 		resp, err := dl.br.Bot.SendMessage(ctx, msg.RoomID, event.EventRedaction, &event.Content{
 			Parsed: &event.RedactionEventContent{
 				Redacts: msg.EventID,

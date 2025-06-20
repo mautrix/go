@@ -1,3 +1,36 @@
+## v0.24.1 (2025-06-16)
+
+* *(commands)* Added framework for using reactions as buttons that execute
+  command handlers.
+* *(client)* Added wrapper for `/relations` endpoints.
+* *(client)* Added support for stable version of room summary endpoint.
+* *(client)* Fixed parsing URL preview responses where width/height are strings.
+* *(federation)* Fixed bugs in server auth.
+* *(id)* Added utilities for validating server names.
+* *(event)* Fixed incorrect empty `entity` field when sending hashed moderation
+  policy events.
+* *(event)* Added [MSC4293] redact events field to member events.
+* *(event)* Added support for fallbacks in [MSC4144] per-message profiles.
+* *(format)* Added `MarkdownLink` and `MarkdownMention` utility functions for
+  generating properly escaped markdown.
+* *(synapseadmin)* Added support for synchronous (v1) room delete endpoint.
+* *(synapseadmin)* Changed `Client` struct to not embed the `mautrix.Client`.
+  This is a breaking change if you were relying on accessing non-admin functions
+  from the admin client.
+* *(bridgev2/provisioning)* Fixed `/display_and_wait` not passing through errors
+  from the network connector properly.
+* *(bridgev2/crypto)* Fixed encryption not working if the user's ID had the same
+  prefix as the bridge ghosts (e.g. `@whatsappbridgeuser:example.com` with a
+  `@whatsapp_` prefix).
+* *(bridgev2)* Fixed portals not being saved after creating a DM portal from a
+  Matrix DM invite.
+* *(bridgev2)* Added config option to determine whether cross-room replies
+  should be bridged.
+* *(appservice)* Fixed `EnsureRegistered` not being called when sending a custom
+  member event for the controlled user.
+
+[MSC4293]: https://github.com/matrix-org/matrix-spec-proposals/pull/4293
+
 ## v0.24.0 (2025-05-16)
 
 * *(commands)* Added generic framework for implementing bot commands.

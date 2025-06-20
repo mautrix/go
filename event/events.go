@@ -140,6 +140,7 @@ type StrippedState struct {
 type Unsigned struct {
 	PrevContent     *Content        `json:"prev_content,omitempty"`
 	PrevSender      id.UserID       `json:"prev_sender,omitempty"`
+	Membership      Membership      `json:"membership,omitempty"`
 	ReplacesState   id.EventID      `json:"replaces_state,omitempty"`
 	Age             int64           `json:"age,omitempty"`
 	TransactionID   string          `json:"transaction_id,omitempty"`
@@ -151,10 +152,14 @@ type Unsigned struct {
 	BeeperHSSuborder    int16               `json:"com.beeper.hs.suborder,omitempty"`
 	BeeperHSOrderString *BeeperEncodedOrder `json:"com.beeper.hs.order_string,omitempty"`
 	BeeperFromBackup    bool                `json:"com.beeper.from_backup,omitempty"`
+
+	MauSoftFailed      bool   `json:"fi.mau.soft_failed,omitempty"`
+	MauRejectionReason string `json:"fi.mau.rejection_reason,omitempty"`
 }
 
 func (us *Unsigned) IsEmpty() bool {
-	return us.PrevContent == nil && us.PrevSender == "" && us.ReplacesState == "" && us.Age == 0 &&
+	return us.PrevContent == nil && us.PrevSender == "" && us.ReplacesState == "" && us.Age == 0 && us.Membership == "" &&
 		us.TransactionID == "" && us.RedactedBecause == nil && us.InviteRoomState == nil && us.Relations == nil &&
-		us.BeeperHSOrder == 0 && us.BeeperHSSuborder == 0 && us.BeeperHSOrderString.IsZero()
+		us.BeeperHSOrder == 0 && us.BeeperHSSuborder == 0 && us.BeeperHSOrderString.IsZero() &&
+		!us.MauSoftFailed && us.MauRejectionReason == ""
 }

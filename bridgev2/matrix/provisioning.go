@@ -120,7 +120,7 @@ func (prov *ProvisioningAPI) Init() {
 	prov.Router.Use(hlog.NewHandler(prov.log))
 	prov.Router.Use(hlog.RequestIDHandler("request_id", "Request-Id"))
 	prov.Router.Use(exhttp.CORSMiddleware)
-	prov.Router.Use(requestlog.AccessLogger(false))
+	prov.Router.Use(requestlog.AccessLogger(requestlog.Options{TrustXForwardedFor: true}))
 	prov.Router.Use(prov.AuthMiddleware)
 	prov.Router.Path("/v3/whoami").Methods(http.MethodGet, http.MethodOptions).HandlerFunc(prov.GetWhoami)
 	prov.Router.Path("/v3/login/flows").Methods(http.MethodGet, http.MethodOptions).HandlerFunc(prov.GetLoginFlows)
@@ -364,6 +364,8 @@ func (prov *ProvisioningAPI) GetLoginFlows(w http.ResponseWriter, r *http.Reques
 	})
 }
 
+var ErrNilStep = errors.New("bridge returned nil step with no error")
+
 func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Request) {
 	overrideLogin, failed := prov.GetExplicitLoginForRequest(w, r)
 	if failed {
@@ -385,6 +387,9 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 		firstStep, err = overridable.StartWithOverride(r.Context(), overrideLogin)
 	} else {
 		firstStep, err = login.Start(r.Context())
+	}
+	if err == nil && firstStep == nil {
+		err = ErrNilStep
 	}
 	if err != nil {
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to start login")
@@ -435,6 +440,9 @@ func (prov *ProvisioningAPI) PostLoginSubmitInput(w http.ResponseWriter, r *http
 	default:
 		panic("Impossible state")
 	}
+	if err == nil && nextStep == nil {
+		err = ErrNilStep
+	}
 	if err != nil {
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to submit input")
 		RespondWithError(w, err, "Internal error submitting input")
@@ -450,6 +458,9 @@ func (prov *ProvisioningAPI) PostLoginSubmitInput(w http.ResponseWriter, r *http
 func (prov *ProvisioningAPI) PostLoginWait(w http.ResponseWriter, r *http.Request) {
 	login := r.Context().Value(provisioningLoginProcessKey).(*ProvLogin)
 	nextStep, err := login.Process.(bridgev2.LoginProcessDisplayAndWait).Wait(r.Context())
+	if err == nil && nextStep == nil {
+		err = ErrNilStep
+	}
 	if err != nil {
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to wait")
 		RespondWithError(w, err, "Internal error waiting for login")

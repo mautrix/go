@@ -77,8 +77,12 @@ func TestParseMatrixURI_RoomID(t *testing.T) {
 	parsedVia, err := id.ParseMatrixURI("matrix:roomid/7NdBVvkd4aLSbgKt9RXl:example.org?via=maunium.net&via=matrix.org")
 	require.NoError(t, err)
 	require.NotNil(t, parsedVia)
+	parsedEncoded, err := id.ParseMatrixURI("matrix:roomid/7NdBVvkd4aLSbgKt9RXl%3Aexample.org")
+	require.NoError(t, err)
+	require.NotNil(t, parsedEncoded)
 
 	assert.Equal(t, roomIDLink, *parsed)
+	assert.Equal(t, roomIDLink, *parsedEncoded)
 	assert.Equal(t, roomIDViaLink, *parsedVia)
 }
 

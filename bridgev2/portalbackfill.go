@@ -333,7 +333,7 @@ func (portal *Portal) compileBatchMessage(ctx context.Context, source *UserLogin
 	var firstPart *database.Message
 	for i, part := range msg.Parts {
 		partIDs = append(partIDs, part.ID)
-		portal.applyRelationMeta(part.Content, replyTo, threadRoot, prevThreadEvent)
+		portal.applyRelationMeta(ctx, part.Content, replyTo, threadRoot, prevThreadEvent)
 		evtID := portal.Bridge.Matrix.GenerateDeterministicEventID(portal.MXID, portal.PortalKey, msg.ID, part.ID)
 		dbMessage := &database.Message{
 			ID:               msg.ID,
