@@ -25,7 +25,7 @@ type ParsedServerName struct {
 	Port int
 }
 
-var ServerNameRegex = regexp.MustCompile(`^(?:\[([0-9A-Fa-f:.]{2,45})]|(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})|([0-9A-Za-z.-]{1,255}))(\d{1,5})?$`)
+var ServerNameRegex = regexp.MustCompile(`^(?:\[([0-9A-Fa-f:.]{2,45})]|(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})|([0-9A-Za-z.-]{1,255}))(?::(\d{1,5}))?$`)
 
 func ValidateServerName(serverName string) bool {
 	return len(serverName) <= 255 && len(serverName) > 0 && ServerNameRegex.MatchString(serverName)
