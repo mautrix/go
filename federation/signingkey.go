@@ -116,7 +116,7 @@ func (sk *SigningKey) GenerateKeyResponse(serverName string, oldVerifyKeys map[i
 	}
 	skr.Signatures = map[string]map[id.KeyID]string{
 		serverName: {
-			sk.ID: base64.RawURLEncoding.EncodeToString(signature),
+			sk.ID: base64.RawStdEncoding.EncodeToString(signature),
 		},
 	}
 	return skr
