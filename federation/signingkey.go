@@ -179,7 +179,7 @@ func (sk *SigningKey) SignJSON(data any) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return base64.RawURLEncoding.EncodeToString(sk.SignRawJSON(marshaled)), nil
+	return base64.RawStdEncoding.EncodeToString(sk.SignRawJSON(marshaled)), nil
 }
 
 func (sk *SigningKey) SignRawJSON(data json.RawMessage) []byte {
