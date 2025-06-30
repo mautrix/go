@@ -544,6 +544,8 @@ func (portal *Portal) checkConfusableName(ctx context.Context, userID id.UserID,
 	return false
 }
 
+var fakePerMessageProfileEventType = event.Type{Class: event.StateEventType, Type: "m.per_message_profile"}
+
 func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *event.Event) {
 	log := zerolog.Ctx(ctx)
 	if evt.Mautrix.EventSource&event.SourceEphemeral != 0 {
@@ -589,6 +591,24 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 		} else {
 			origSender.DisambiguatedName = sender.MXID.String()
 		}
+		msg := evt.Content.AsMessage()
+		if msg != nil && msg.BeeperPerMessageProfile != nil && msg.BeeperPerMessageProfile.Displayname != "" {
+			pmp := msg.BeeperPerMessageProfile
+			origSender.PerMessageProfile = *pmp
+			roomPLs, err := portal.Bridge.Matrix.GetPowerLevels(ctx, portal.MXID)
+			if err != nil {
+				log.Warn().Err(err).Msg("Failed to get power levels to check relay profile")
+			}
+			if roomPLs != nil &&
+				roomPLs.GetUserLevel(sender.MXID) >= roomPLs.GetEventLevel(fakePerMessageProfileEventType) &&
+				!portal.checkConfusableName(ctx, sender.MXID, pmp.Displayname) {
+				origSender.DisambiguatedName = pmp.Displayname
+				origSender.RequiresDisambiguation = false
+			} else {
+				origSender.DisambiguatedName = fmt.Sprintf("%s via %s", pmp.Displayname, origSender.DisambiguatedName)
+			}
+		}
+
 		origSender.FormattedName = portal.Bridge.Config.Relay.FormatName(origSender)
 	}
 	// Copy logger because many of the handlers will use UpdateContext

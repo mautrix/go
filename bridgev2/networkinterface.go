@@ -1180,6 +1180,7 @@ type OrigSender struct {
 	RequiresDisambiguation bool
 	DisambiguatedName      string
 	FormattedName          string
+	PerMessageProfile      event.BeeperPerMessageProfile
 
 	event.MemberEventContent
 }
