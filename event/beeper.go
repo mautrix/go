@@ -164,7 +164,10 @@ func (content *MessageEventContent) AddPerMessageProfileFallback() {
 var HTMLProfileFallbackRegex = regexp.MustCompile(`<strong\s+data-mx-profile-fallback\s*>([^<]+): </strong\s*>`)
 
 func (content *MessageEventContent) RemovePerMessageProfileFallback() {
-	if content.BeeperPerMessageProfile == nil || !content.BeeperPerMessageProfile.HasFallback || content.BeeperPerMessageProfile.Displayname == "" {
+	if content.NewContent != nil && content.NewContent != content {
+		content.NewContent.RemovePerMessageProfileFallback()
+	}
+	if content == nil || content.BeeperPerMessageProfile == nil || !content.BeeperPerMessageProfile.HasFallback || content.BeeperPerMessageProfile.Displayname == "" {
 		return
 	}
 	content.BeeperPerMessageProfile.HasFallback = false
