@@ -343,7 +343,7 @@ func (br *Connector) ensureConnection(ctx context.Context) {
 		return
 	}
 
-	br.Bot.EnsureAppserviceConnection(ctx, br.Config.AppService.ID)
+	br.Bot.EnsureAppserviceConnection(ctx)
 }
 
 func (br *Connector) fetchMediaConfig(ctx context.Context) {

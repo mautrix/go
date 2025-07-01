@@ -19,7 +19,7 @@ import (
 	"maunium.net/go/mautrix"
 )
 
-func (intent *IntentAPI) EnsureAppserviceConnection(ctx context.Context, appserviceID string) {
+func (intent *IntentAPI) EnsureAppserviceConnection(ctx context.Context) {
 	var pingResp *mautrix.RespAppservicePing
 	var txnID string
 	var retryCount int
@@ -27,7 +27,7 @@ func (intent *IntentAPI) EnsureAppserviceConnection(ctx context.Context, appserv
 	const maxRetries = 6
 	for {
 		txnID = intent.TxnID()
-		pingResp, err = intent.AppservicePing(ctx, appserviceID, txnID)
+		pingResp, err = intent.AppservicePing(ctx, intent.as.Registration.ID, txnID)
 		if err == nil {
 			break
 		}
