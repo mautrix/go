@@ -3759,10 +3759,14 @@ func DisappearingMessageNotice(expiration time.Duration, implicit bool) *event.M
 		Body:     fmt.Sprintf("Set the disappearing message timer to %s", formattedDuration),
 		Mentions: &event.Mentions{},
 	}
-	if implicit {
+	if expiration == 0 {
+		if implicit {
+			content.Body = "Automatically turned off disappearing messages because incoming message is not disappearing"
+		} else {
+			content.Body = "Turned off disappearing messages"
+		}
+	} else if implicit {
 		content.Body = fmt.Sprintf("Automatically enabled disappearing message timer (%s) because incoming message is disappearing", formattedDuration)
-	} else if expiration == 0 {
-		content.Body = "Turned off disappearing messages"
 	}
 	return content
 }
