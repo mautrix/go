@@ -1940,7 +1940,13 @@ func (portal *Portal) GetIntentFor(ctx context.Context, sender EventSender, sour
 	return intent, true
 }
 
-func (portal *Portal) getRelationMeta(ctx context.Context, currentMsg networkid.MessageID, replyToPtr *networkid.MessageOptionalPartID, threadRootPtr *networkid.MessageID, isBatchSend bool) (replyTo, threadRoot, prevThreadEvent *database.Message) {
+func (portal *Portal) getRelationMeta(
+	ctx context.Context,
+	currentMsg networkid.MessageID,
+	replyToPtr *networkid.MessageOptionalPartID,
+	threadRootPtr *networkid.MessageID,
+	isBatchSend bool,
+) (replyTo, threadRoot, prevThreadEvent *database.Message) {
 	log := zerolog.Ctx(ctx)
 	var err error
 	if replyToPtr != nil {
@@ -1950,6 +1956,7 @@ func (portal *Portal) getRelationMeta(ctx context.Context, currentMsg networkid.
 		} else if replyTo == nil {
 			if isBatchSend || portal.Bridge.Config.OutgoingMessageReID {
 				// This is somewhat evil
+				// TODO this does not work with cross-room replies
 				replyTo = &database.Message{
 					MXID: portal.Bridge.Matrix.GenerateDeterministicEventID(portal.MXID, portal.PortalKey, replyToPtr.MessageID, ptr.Val(replyToPtr.PartID)),
 				}
@@ -1988,7 +1995,7 @@ func (portal *Portal) applyRelationMeta(ctx context.Context, content *event.Mess
 		content.GetRelatesTo().SetThread(threadRoot.MXID, prevThreadEvent.MXID)
 	}
 	if replyTo != nil {
-		crossRoom := replyTo.Room != portal.PortalKey
+		crossRoom := !replyTo.Room.IsEmpty() && replyTo.Room != portal.PortalKey
 		if !crossRoom || portal.Bridge.Config.CrossRoomReplies {
 			content.GetRelatesTo().SetReplyTo(replyTo.MXID)
 		}
