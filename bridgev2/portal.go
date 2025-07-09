@@ -1942,42 +1942,61 @@ func (portal *Portal) GetIntentFor(ctx context.Context, sender EventSender, sour
 
 func (portal *Portal) getRelationMeta(
 	ctx context.Context,
-	currentMsg networkid.MessageID,
-	replyToPtr *networkid.MessageOptionalPartID,
-	threadRootPtr *networkid.MessageID,
+	currentMsgID networkid.MessageID,
+	currentMsg *ConvertedMessage,
 	isBatchSend bool,
 ) (replyTo, threadRoot, prevThreadEvent *database.Message) {
 	log := zerolog.Ctx(ctx)
 	var err error
-	if replyToPtr != nil {
-		replyTo, err = portal.Bridge.DB.Message.GetFirstOrSpecificPartByID(ctx, portal.Receiver, *replyToPtr)
+	if currentMsg.ReplyTo != nil {
+		replyTo, err = portal.Bridge.DB.Message.GetFirstOrSpecificPartByID(ctx, portal.Receiver, *currentMsg.ReplyTo)
 		if err != nil {
 			log.Err(err).Msg("Failed to get reply target message from database")
 		} else if replyTo == nil {
 			if isBatchSend || portal.Bridge.Config.OutgoingMessageReID {
 				// This is somewhat evil
-				// TODO this does not work with cross-room replies
 				replyTo = &database.Message{
-					MXID: portal.Bridge.Matrix.GenerateDeterministicEventID(portal.MXID, portal.PortalKey, replyToPtr.MessageID, ptr.Val(replyToPtr.PartID)),
+					MXID:     portal.Bridge.Matrix.GenerateDeterministicEventID(portal.MXID, portal.PortalKey, currentMsg.ReplyTo.MessageID, ptr.Val(currentMsg.ReplyTo.PartID)),
+					Room:     currentMsg.ReplyToRoom,
+					SenderID: currentMsg.ReplyToUser,
+				}
+				if currentMsg.ReplyToLogin != "" && (portal.Receiver == "" || portal.Receiver == currentMsg.ReplyToLogin) {
+					userLogin, err := portal.Bridge.GetExistingUserLoginByID(ctx, currentMsg.ReplyToLogin)
+					if err != nil {
+						log.Err(err).
+							Str("reply_to_login", string(currentMsg.ReplyToLogin)).
+							Msg("Failed to get reply target user login")
+					} else if userLogin != nil {
+						replyTo.SenderMXID = userLogin.UserMXID
+					}
+				} else {
+					ghost, err := portal.Bridge.GetGhostByID(ctx, currentMsg.ReplyToUser)
+					if err != nil {
+						log.Err(err).
+							Str("reply_to_user_id", string(currentMsg.ReplyToUser)).
+							Msg("Failed to get reply target ghost")
+					} else {
+						replyTo.SenderMXID = ghost.Intent.GetMXID()
+					}
 				}
 			} else {
-				log.Warn().Any("reply_to", *replyToPtr).Msg("Reply target message not found in database")
+				log.Warn().Any("reply_to", *currentMsg.ReplyTo).Msg("Reply target message not found in database")
 			}
 		}
 	}
-	if threadRootPtr != nil && *threadRootPtr != currentMsg {
-		threadRoot, err = portal.Bridge.DB.Message.GetFirstThreadMessage(ctx, portal.PortalKey, *threadRootPtr)
+	if currentMsg.ThreadRoot != nil && *currentMsg.ThreadRoot != currentMsgID {
+		threadRoot, err = portal.Bridge.DB.Message.GetFirstThreadMessage(ctx, portal.PortalKey, *currentMsg.ThreadRoot)
 		if err != nil {
 			log.Err(err).Msg("Failed to get thread root message from database")
 		} else if threadRoot == nil {
 			if isBatchSend || portal.Bridge.Config.OutgoingMessageReID {
 				threadRoot = &database.Message{
-					MXID: portal.Bridge.Matrix.GenerateDeterministicEventID(portal.MXID, portal.PortalKey, *threadRootPtr, ""),
+					MXID: portal.Bridge.Matrix.GenerateDeterministicEventID(portal.MXID, portal.PortalKey, *currentMsg.ThreadRoot, ""),
 				}
 			} else {
-				log.Warn().Str("thread_root", string(*threadRootPtr)).Msg("Thread root message not found in database")
+				log.Warn().Str("thread_root", string(*currentMsg.ThreadRoot)).Msg("Thread root message not found in database")
 			}
-		} else if prevThreadEvent, err = portal.Bridge.DB.Message.GetLastThreadMessage(ctx, portal.PortalKey, *threadRootPtr); err != nil {
+		} else if prevThreadEvent, err = portal.Bridge.DB.Message.GetLastThreadMessage(ctx, portal.PortalKey, *currentMsg.ThreadRoot); err != nil {
 			log.Err(err).Msg("Failed to get last thread message from database")
 		}
 		if prevThreadEvent == nil {
@@ -2033,7 +2052,9 @@ func (portal *Portal) sendConvertedMessage(
 		}
 	}
 	log := zerolog.Ctx(ctx)
-	replyTo, threadRoot, prevThreadEvent := portal.getRelationMeta(ctx, id, converted.ReplyTo, converted.ThreadRoot, false)
+	replyTo, threadRoot, prevThreadEvent := portal.getRelationMeta(
+		ctx, id, converted, false,
+	)
 	output := make([]*database.Message, 0, len(converted.Parts))
 	allSuccess := true
 	for i, part := range converted.Parts {

@@ -327,7 +327,9 @@ func (portal *Portal) compileBatchMessage(ctx context.Context, source *UserLogin
 	if !ok {
 		return
 	}
-	replyTo, threadRoot, prevThreadEvent := portal.getRelationMeta(ctx, msg.ID, msg.ReplyTo, msg.ThreadRoot, true)
+	replyTo, threadRoot, prevThreadEvent := portal.getRelationMeta(
+		ctx, msg.ID, msg.ConvertedMessage, true,
+	)
 	if threadRoot != nil && out.PrevThreadEvents[*msg.ThreadRoot] != "" {
 		prevThreadEvent.MXID = out.PrevThreadEvents[*msg.ThreadRoot]
 	}
