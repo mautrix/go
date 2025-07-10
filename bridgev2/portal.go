@@ -420,10 +420,13 @@ func (portal *Portal) handleSingleEvent(ctx context.Context, rawEvt any, doneCal
 		doneCallback(res)
 		if err := recover(); err != nil {
 			logEvt := log.Error()
+			var errorString string
 			if realErr, ok := err.(error); ok {
 				logEvt = logEvt.Err(realErr)
+				errorString = realErr.Error()
 			} else {
 				logEvt = logEvt.Any(zerolog.ErrorFieldName, err)
+				errorString = fmt.Sprintf("%v", err)
 			}
 			logEvt.
 				Bytes("stack", debug.Stack()).
@@ -436,6 +439,9 @@ func (portal *Portal) handleSingleEvent(ctx context.Context, rawEvt any, doneCal
 			case *portalCreateEvent:
 				evt.cb(fmt.Errorf("portal creation panicked"))
 			}
+			portal.Bridge.TrackAnalytics("", "Bridge Event Handler Panic", map[string]any{
+				"error": errorString,
+			})
 		}
 	}()
 	switch evt := rawEvt.(type) {
