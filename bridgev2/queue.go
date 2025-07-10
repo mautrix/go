@@ -63,7 +63,7 @@ func (br *Bridge) rejectInviteOnNoPermission(ctx context.Context, evt *event.Eve
 	return true
 }
 
-func (br *Bridge) QueueMatrixEvent(ctx context.Context, evt *event.Event) {
+func (br *Bridge) QueueMatrixEvent(ctx context.Context, evt *event.Event) EventHandlingResult {
 	// TODO maybe HandleMatrixEvent would be more appropriate as this also handles bot invites and commands
 
 	log := zerolog.Ctx(ctx)
@@ -75,26 +75,26 @@ func (br *Bridge) QueueMatrixEvent(ctx context.Context, evt *event.Event) {
 			log.Err(err).Msg("Failed to get sender user for incoming Matrix event")
 			status := WrapErrorInStatus(fmt.Errorf("%w: failed to get sender user: %w", ErrDatabaseError, err))
 			br.Matrix.SendMessageStatus(ctx, &status, StatusEventInfoFromEvent(evt))
-			return
+			return EventHandlingResultFailed
 		} else if sender == nil {
 			log.Error().Msg("Couldn't get sender for incoming non-ephemeral Matrix event")
 			status := WrapErrorInStatus(errors.New("sender not found for event")).WithIsCertain(true).WithErrorAsMessage()
 			br.Matrix.SendMessageStatus(ctx, &status, StatusEventInfoFromEvent(evt))
-			return
+			return EventHandlingResultFailed
 		} else if !sender.Permissions.SendEvents {
 			if !br.rejectInviteOnNoPermission(ctx, evt, "interact with") {
 				status := WrapErrorInStatus(errors.New("you don't have permission to send messages")).WithIsCertain(true).WithSendNotice(false).WithErrorAsMessage()
 				br.Matrix.SendMessageStatus(ctx, &status, StatusEventInfoFromEvent(evt))
 			}
-			return
+			return EventHandlingResultIgnored
 		} else if !sender.Permissions.Commands && br.rejectInviteOnNoPermission(ctx, evt, "send commands to") {
-			return
+			return EventHandlingResultIgnored
 		}
 	} else if evt.Type.Class != event.EphemeralEventType {
 		log.Error().Msg("Missing sender for incoming non-ephemeral Matrix event")
 		status := WrapErrorInStatus(errors.New("sender not found for event")).WithIsCertain(true).WithErrorAsMessage()
 		br.Matrix.SendMessageStatus(ctx, &status, StatusEventInfoFromEvent(evt))
-		return
+		return EventHandlingResultIgnored
 	}
 	if evt.Type == event.EventMessage && sender != nil {
 		msg := evt.Content.AsMessage()
@@ -104,7 +104,7 @@ func (br *Bridge) QueueMatrixEvent(ctx context.Context, evt *event.Event) {
 			if !sender.Permissions.Commands {
 				status := WrapErrorInStatus(errors.New("you don't have permission to use commands")).WithIsCertain(true).WithSendNotice(false).WithErrorAsMessage()
 				br.Matrix.SendMessageStatus(ctx, &status, StatusEventInfoFromEvent(evt))
-				return
+				return EventHandlingResultIgnored
 			}
 			br.Commands.Handle(
 				ctx,
@@ -114,40 +114,41 @@ func (br *Bridge) QueueMatrixEvent(ctx context.Context, evt *event.Event) {
 				strings.TrimPrefix(msg.Body, br.Config.CommandPrefix+" "),
 				msg.RelatesTo.GetReplyTo(),
 			)
-			return
+			return EventHandlingResultSuccess
 		}
 	}
 	if evt.Type == event.StateMember && evt.GetStateKey() == br.Bot.GetMXID().String() && evt.Content.AsMember().Membership == event.MembershipInvite && sender != nil {
-		br.handleBotInvite(ctx, evt, sender)
-		return
+		return br.handleBotInvite(ctx, evt, sender)
 	} else if sender != nil && evt.RoomID == sender.ManagementRoom {
 		if evt.Type == event.StateMember && evt.Content.AsMember().Membership == event.MembershipLeave && (evt.GetStateKey() == br.Bot.GetMXID().String() || evt.GetStateKey() == sender.MXID.String()) {
 			sender.ManagementRoom = ""
 			err := br.DB.User.Update(ctx, sender.User)
 			if err != nil {
 				log.Err(err).Msg("Failed to clear user's management room in database")
+				return EventHandlingResultFailed
 			} else {
 				log.Debug().Msg("Cleared user's management room due to leave event")
 			}
 		}
-		return
+		return EventHandlingResultSuccess
 	}
 	portal, err := br.GetPortalByMXID(ctx, evt.RoomID)
 	if err != nil {
 		log.Err(err).Msg("Failed to get portal for incoming Matrix event")
 		status := WrapErrorInStatus(fmt.Errorf("%w: failed to get portal: %w", ErrDatabaseError, err))
 		br.Matrix.SendMessageStatus(ctx, &status, StatusEventInfoFromEvent(evt))
-		return
+		return EventHandlingResultFailed
 	} else if portal != nil {
-		portal.queueEvent(ctx, &portalMatrixEvent{
+		return portal.queueEvent(ctx, &portalMatrixEvent{
 			evt:    evt,
 			sender: sender,
 		})
 	} else if evt.Type == event.StateMember && br.IsGhostMXID(id.UserID(evt.GetStateKey())) && evt.Content.AsMember().Membership == event.MembershipInvite && evt.Content.AsMember().IsDirect {
-		br.handleGhostDMInvite(ctx, evt, sender)
+		return br.handleGhostDMInvite(ctx, evt, sender)
 	} else {
 		status := WrapErrorInStatus(ErrNoPortal)
 		br.Matrix.SendMessageStatus(ctx, &status, StatusEventInfoFromEvent(evt))
+		return EventHandlingResultIgnored
 	}
 }
 
@@ -155,6 +156,18 @@ type EventHandlingResult struct {
 	Success bool
 	Ignored bool
 	Queued  bool
+
+	// Error is an optional reason for failure. It is not required, Success may be false even without a specific error.
+	Error error
+}
+
+func (ehr EventHandlingResult) WithError(err error) EventHandlingResult {
+	if err == nil {
+		return ehr
+	}
+	ehr.Error = err
+	ehr.Success = false
+	return ehr
 }
 
 var (

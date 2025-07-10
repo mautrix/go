@@ -61,20 +61,20 @@ func (portal *PortalInternals) CheckConfusableName(ctx context.Context, userID i
 	return (*Portal)(portal).checkConfusableName(ctx, userID, name)
 }
 
-func (portal *PortalInternals) HandleMatrixEvent(ctx context.Context, sender *User, evt *event.Event) {
-	(*Portal)(portal).handleMatrixEvent(ctx, sender, evt)
+func (portal *PortalInternals) HandleMatrixEvent(ctx context.Context, sender *User, evt *event.Event) EventHandlingResult {
+	return (*Portal)(portal).handleMatrixEvent(ctx, sender, evt)
 }
 
-func (portal *PortalInternals) HandleMatrixReceipts(ctx context.Context, evt *event.Event) {
-	(*Portal)(portal).handleMatrixReceipts(ctx, evt)
+func (portal *PortalInternals) HandleMatrixReceipts(ctx context.Context, evt *event.Event) EventHandlingResult {
+	return (*Portal)(portal).handleMatrixReceipts(ctx, evt)
 }
 
 func (portal *PortalInternals) HandleMatrixReadReceipt(ctx context.Context, user *User, eventID id.EventID, receipt event.ReadReceipt) {
 	(*Portal)(portal).handleMatrixReadReceipt(ctx, user, eventID, receipt)
 }
 
-func (portal *PortalInternals) HandleMatrixTyping(ctx context.Context, evt *event.Event) {
-	(*Portal)(portal).handleMatrixTyping(ctx, evt)
+func (portal *PortalInternals) HandleMatrixTyping(ctx context.Context, evt *event.Event) EventHandlingResult {
+	return (*Portal)(portal).handleMatrixTyping(ctx, evt)
 }
 
 func (portal *PortalInternals) SendTypings(ctx context.Context, userIDs []id.UserID, typing bool) {
@@ -93,8 +93,8 @@ func (portal *PortalInternals) ParseInputTransactionID(origSender *OrigSender, e
 	return (*Portal)(portal).parseInputTransactionID(origSender, evt)
 }
 
-func (portal *PortalInternals) HandleMatrixMessage(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) {
-	(*Portal)(portal).handleMatrixMessage(ctx, sender, origSender, evt)
+func (portal *PortalInternals) HandleMatrixMessage(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) EventHandlingResult {
+	return (*Portal)(portal).handleMatrixMessage(ctx, sender, origSender, evt)
 }
 
 func (portal *PortalInternals) PendingMessageTimeoutLoop(ctx context.Context, cfg *OutgoingTimeoutConfig) {
@@ -105,28 +105,28 @@ func (portal *PortalInternals) CheckPendingMessages(ctx context.Context, cfg *Ou
 	(*Portal)(portal).checkPendingMessages(ctx, cfg)
 }
 
-func (portal *PortalInternals) HandleMatrixEdit(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event, content *event.MessageEventContent, caps *event.RoomFeatures) {
-	(*Portal)(portal).handleMatrixEdit(ctx, sender, origSender, evt, content, caps)
+func (portal *PortalInternals) HandleMatrixEdit(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event, content *event.MessageEventContent, caps *event.RoomFeatures) EventHandlingResult {
+	return (*Portal)(portal).handleMatrixEdit(ctx, sender, origSender, evt, content, caps)
 }
 
-func (portal *PortalInternals) HandleMatrixReaction(ctx context.Context, sender *UserLogin, evt *event.Event) {
-	(*Portal)(portal).handleMatrixReaction(ctx, sender, evt)
+func (portal *PortalInternals) HandleMatrixReaction(ctx context.Context, sender *UserLogin, evt *event.Event) EventHandlingResult {
+	return (*Portal)(portal).handleMatrixReaction(ctx, sender, evt)
 }
 
 func (portal *PortalInternals) GetTargetUser(ctx context.Context, userID id.UserID) (GhostOrUserLogin, error) {
 	return (*Portal)(portal).getTargetUser(ctx, userID)
 }
 
-func (portal *PortalInternals) HandleMatrixMembership(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) {
-	(*Portal)(portal).handleMatrixMembership(ctx, sender, origSender, evt)
+func (portal *PortalInternals) HandleMatrixMembership(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) EventHandlingResult {
+	return (*Portal)(portal).handleMatrixMembership(ctx, sender, origSender, evt)
 }
 
-func (portal *PortalInternals) HandleMatrixPowerLevels(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) {
-	(*Portal)(portal).handleMatrixPowerLevels(ctx, sender, origSender, evt)
+func (portal *PortalInternals) HandleMatrixPowerLevels(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) EventHandlingResult {
+	return (*Portal)(portal).handleMatrixPowerLevels(ctx, sender, origSender, evt)
 }
 
-func (portal *PortalInternals) HandleMatrixRedaction(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) {
-	(*Portal)(portal).handleMatrixRedaction(ctx, sender, origSender, evt)
+func (portal *PortalInternals) HandleMatrixRedaction(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) EventHandlingResult {
+	return (*Portal)(portal).handleMatrixRedaction(ctx, sender, origSender, evt)
 }
 
 func (portal *PortalInternals) HandleRemoteEvent(ctx context.Context, source *UserLogin, evtType RemoteEventType, evt RemoteEvent) (res EventHandlingResult) {
