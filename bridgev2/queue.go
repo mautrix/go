@@ -159,6 +159,8 @@ type EventHandlingResult struct {
 
 	// Error is an optional reason for failure. It is not required, Success may be false even without a specific error.
 	Error error
+	// Whether the Error should be sent as a MSS event.
+	SendMSS bool
 }
 
 func (ehr EventHandlingResult) WithError(err error) EventHandlingResult {
@@ -168,6 +170,18 @@ func (ehr EventHandlingResult) WithError(err error) EventHandlingResult {
 	ehr.Error = err
 	ehr.Success = false
 	return ehr
+}
+
+func (ehr EventHandlingResult) WithMSS() EventHandlingResult {
+	ehr.SendMSS = true
+	return ehr
+}
+
+func (ehr EventHandlingResult) WithMSSError(err error) EventHandlingResult {
+	if err == nil {
+		return ehr
+	}
+	return ehr.WithError(err).WithMSS()
 }
 
 var (

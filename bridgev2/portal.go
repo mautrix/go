@@ -447,6 +447,13 @@ func (portal *Portal) handleSingleEvent(ctx context.Context, rawEvt any, doneCal
 	switch evt := rawEvt.(type) {
 	case *portalMatrixEvent:
 		res = portal.handleMatrixEvent(ctx, evt.sender, evt.evt)
+		if res.SendMSS {
+			if res.Error != nil {
+				portal.sendErrorStatus(ctx, evt.evt, res.Error)
+			} else {
+				portal.sendSuccessStatus(ctx, evt.evt, 0, "")
+			}
+		}
 	case *portalRemoteEvent:
 		res = portal.handleRemoteEvent(ctx, evt.source, evt.evtType, evt.evt)
 	case *portalCreateEvent:
@@ -569,11 +576,14 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 		log.Err(err).Msg("Failed to get user login to handle Matrix event")
 		if errors.Is(err, ErrNotLoggedIn) {
 			shouldSendNotice := evt.Content.AsMessage().MsgType != event.MsgNotice
-			portal.sendErrorStatus(ctx, evt, WrapErrorInStatus(err).WithMessage("You're not logged in").WithIsCertain(true).WithSendNotice(shouldSendNotice))
+			return EventHandlingResultFailed.WithMSSError(
+				WrapErrorInStatus(err).WithMessage("You're not logged in").WithIsCertain(true).WithSendNotice(shouldSendNotice),
+			)
 		} else {
-			portal.sendErrorStatus(ctx, evt, WrapErrorInStatus(err).WithMessage("Failed to get login to handle event").WithIsCertain(true).WithSendNotice(true))
+			return EventHandlingResultFailed.WithMSSError(
+				WrapErrorInStatus(err).WithMessage("Failed to get login to handle event").WithIsCertain(true).WithSendNotice(true),
+			)
 		}
-		return EventHandlingResultFailed
 	}
 	var origSender *OrigSender
 	if login == nil {
@@ -626,8 +636,7 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 	case event.EventReaction:
 		if origSender != nil {
 			log.Debug().Msg("Ignoring reaction event from relayed user")
-			portal.sendErrorStatus(ctx, evt, ErrIgnoringReactionFromRelayedUser)
-			return EventHandlingResultIgnored
+			return EventHandlingResultIgnored.WithMSSError(ErrIgnoringReactionFromRelayedUser)
 		}
 		return portal.handleMatrixReaction(ctx, login, evt)
 	case event.EventRedaction:
@@ -848,39 +857,35 @@ func (portal *Portal) periodicTypingUpdater() {
 	}
 }
 
-func (portal *Portal) checkMessageContentCaps(ctx context.Context, caps *event.RoomFeatures, content *event.MessageEventContent, evt *event.Event) bool {
+func (portal *Portal) checkMessageContentCaps(caps *event.RoomFeatures, content *event.MessageEventContent) error {
 	switch content.MsgType {
 	case event.MsgText, event.MsgNotice, event.MsgEmote:
 		// No checks for now, message length is safer to check after conversion inside connector
 	case event.MsgLocation:
 		if caps.LocationMessage.Reject() {
-			portal.sendErrorStatus(ctx, evt, ErrLocationMessagesNotAllowed)
-			return false
+			return ErrLocationMessagesNotAllowed
 		}
 	case event.MsgImage, event.MsgAudio, event.MsgVideo, event.MsgFile, event.CapMsgSticker:
 		capMsgType := content.GetCapMsgType()
 		feat, ok := caps.File[capMsgType]
 		if !ok {
-			portal.sendErrorStatus(ctx, evt, ErrUnsupportedMessageType)
-			return false
+			return ErrUnsupportedMessageType
 		}
 		if content.MsgType != event.CapMsgSticker &&
 			content.FileName != "" &&
 			content.Body != content.FileName &&
 			feat.Caption.Reject() {
-			portal.sendErrorStatus(ctx, evt, ErrCaptionsNotAllowed)
-			return false
+			return ErrCaptionsNotAllowed
 		}
 		if content.Info != nil && content.Info.MimeType != "" {
 			if feat.GetMimeSupport(content.Info.MimeType).Reject() {
-				portal.sendErrorStatus(ctx, evt, fmt.Errorf("%w (%s in %s)", ErrUnsupportedMediaType, content.Info.MimeType, capMsgType))
-				return false
+				return fmt.Errorf("%w (%s in %s)", ErrUnsupportedMediaType, content.Info.MimeType, capMsgType)
 			}
 		}
 		fallthrough
 	default:
 	}
-	return true
+	return nil
 }
 
 func (portal *Portal) parseInputTransactionID(origSender *OrigSender, evt *event.Event) networkid.RawTransactionID {
@@ -910,23 +915,20 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 			msgContent.MsgType = event.CapMsgSticker
 		}
 		if msgContent.MsgType == event.MsgNotice && !portal.Bridge.Config.BridgeNotices {
-			portal.sendErrorStatus(ctx, evt, ErrIgnoringMNotice)
-			return EventHandlingResultIgnored
+			return EventHandlingResultIgnored.WithMSSError(ErrIgnoringMNotice)
 		}
 	}
 	if !ok {
 		log.Error().Type("content_type", evt.Content.Parsed).Msg("Unexpected parsed content type")
-		typeErr := fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed)
-		portal.sendErrorStatus(ctx, evt, typeErr)
-		return EventHandlingResultFailed.WithError(typeErr)
+		return EventHandlingResultFailed.
+			WithMSSError(fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed))
 	}
 	caps := sender.Client.GetCapabilities(ctx, portal)
 
 	if relatesTo.GetReplaceID() != "" {
 		if msgContent == nil {
 			log.Warn().Msg("Ignoring edit of poll")
-			portal.sendErrorStatus(ctx, evt, fmt.Errorf("%w of polls", ErrEditsNotSupported))
-			return EventHandlingResultFailed.WithError(fmt.Errorf("%w of polls", ErrEditsNotSupported))
+			return EventHandlingResultFailed.WithMSSError(fmt.Errorf("%w of polls", ErrEditsNotSupported))
 		}
 		return portal.handleMatrixEdit(ctx, sender, origSender, evt, msgContent, caps)
 	}
@@ -934,25 +936,22 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 	if origSender != nil {
 		if msgContent == nil {
 			log.Debug().Msg("Ignoring poll event from relayed user")
-			portal.sendErrorStatus(ctx, evt, ErrIgnoringPollFromRelayedUser)
-			return EventHandlingResultIgnored
+			return EventHandlingResultIgnored.WithMSSError(ErrIgnoringPollFromRelayedUser)
 		}
 		msgContent, err = portal.Bridge.Config.Relay.FormatMessage(msgContent, origSender)
 		if err != nil {
 			log.Err(err).Msg("Failed to format message for relaying")
-			portal.sendErrorStatus(ctx, evt, err)
-			return EventHandlingResultFailed.WithError(err)
+			return EventHandlingResultFailed.WithMSSError(err)
 		}
 	}
 	if msgContent != nil {
-		if !portal.checkMessageContentCaps(ctx, caps, msgContent, evt) {
-			return EventHandlingResultFailed
+		if err = portal.checkMessageContentCaps(caps, msgContent); err != nil {
+			return EventHandlingResultFailed.WithMSSError(err)
 		}
 	} else if pollResponseContent != nil || pollContent != nil {
 		if _, ok = sender.Client.(PollHandlingNetworkAPI); !ok {
 			log.Debug().Msg("Ignoring poll event as network connector doesn't implement PollHandlingNetworkAPI")
-			portal.sendErrorStatus(ctx, evt, ErrPollsNotSupported)
-			return EventHandlingResultIgnored
+			return EventHandlingResultIgnored.WithMSSError(ErrPollsNotSupported)
 		}
 	}
 
@@ -1051,13 +1050,11 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 		})
 	} else {
 		log.Error().Msg("Failed to handle Matrix message: all contents are nil?")
-		portal.sendErrorStatus(ctx, evt, fmt.Errorf("all contents are nil"))
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithMSSError(fmt.Errorf("all contents are nil"))
 	}
 	if err != nil {
 		log.Err(err).Msg("Failed to handle Matrix message")
-		portal.sendErrorStatus(ctx, evt, err)
-		return EventHandlingResultFailed.WithError(err)
+		return EventHandlingResultFailed.WithMSSError(err)
 	}
 	message := wrappedMsgEvt.fillDBMessage(resp.DB)
 	if resp.Pending {
@@ -1235,39 +1232,31 @@ func (portal *Portal) handleMatrixEdit(
 		content, err = portal.Bridge.Config.Relay.FormatMessage(content, origSender)
 		if err != nil {
 			log.Err(err).Msg("Failed to format message for relaying")
-			portal.sendErrorStatus(ctx, evt, err)
-			return EventHandlingResultFailed.WithError(err)
+			return EventHandlingResultFailed.WithMSSError(err)
 		}
 	}
 
 	editingAPI, ok := sender.Client.(EditHandlingNetworkAPI)
 	if !ok {
 		log.Debug().Msg("Ignoring edit as network connector doesn't implement EditHandlingNetworkAPI")
-		portal.sendErrorStatus(ctx, evt, ErrEditsNotSupported)
-		return EventHandlingResultIgnored
+		return EventHandlingResultIgnored.WithMSSError(ErrEditsNotSupported)
 	} else if !caps.Edit.Partial() {
 		log.Debug().Msg("Ignoring edit as room doesn't support edits")
-		portal.sendErrorStatus(ctx, evt, ErrEditsNotSupportedInPortal)
-		return EventHandlingResultIgnored
-	} else if !portal.checkMessageContentCaps(ctx, caps, content, evt) {
-		return EventHandlingResultFailed
+		return EventHandlingResultIgnored.WithMSSError(ErrEditsNotSupportedInPortal)
+	} else if err := portal.checkMessageContentCaps(caps, content); err != nil {
+		return EventHandlingResultFailed.WithMSSError(err)
 	}
 	editTarget, err := portal.Bridge.DB.Message.GetPartByMXID(ctx, editTargetID)
 	if err != nil {
 		log.Err(err).Msg("Failed to get edit target message from database")
-		portal.sendErrorStatus(ctx, evt, fmt.Errorf("%w: failed to get edit target: %w", ErrDatabaseError, err))
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithMSSError(fmt.Errorf("%w: failed to get edit target: %w", ErrDatabaseError, err))
 	} else if editTarget == nil {
 		log.Warn().Msg("Edit target message not found in database")
-		notFoundErr := fmt.Errorf("edit %w", ErrTargetMessageNotFound)
-		portal.sendErrorStatus(ctx, evt, notFoundErr)
-		return EventHandlingResultFailed.WithError(notFoundErr)
+		return EventHandlingResultFailed.WithMSSError(fmt.Errorf("edit %w", ErrTargetMessageNotFound))
 	} else if caps.EditMaxAge != nil && caps.EditMaxAge.Duration > 0 && time.Since(editTarget.Timestamp) > caps.EditMaxAge.Duration {
-		portal.sendErrorStatus(ctx, evt, ErrEditTargetTooOld)
-		return EventHandlingResultFailed.WithError(ErrEditTargetTooOld)
+		return EventHandlingResultFailed.WithMSSError(ErrEditTargetTooOld)
 	} else if caps.EditMaxCount > 0 && editTarget.EditCount >= caps.EditMaxCount {
-		portal.sendErrorStatus(ctx, evt, ErrEditTargetTooManyEdits)
-		return EventHandlingResultFailed.WithError(ErrEditTargetTooManyEdits)
+		return EventHandlingResultFailed.WithMSSError(ErrEditTargetTooManyEdits)
 	}
 	log.UpdateContext(func(c zerolog.Context) zerolog.Context {
 		return c.Str("edit_target_remote_id", string(editTarget.ID))
@@ -1285,8 +1274,7 @@ func (portal *Portal) handleMatrixEdit(
 	})
 	if err != nil {
 		log.Err(err).Msg("Failed to handle Matrix edit")
-		portal.sendErrorStatus(ctx, evt, err)
-		return EventHandlingResultFailed.WithError(err)
+		return EventHandlingResultFailed.WithMSSError(err)
 	}
 	err = portal.Bridge.DB.Message.Update(ctx, editTarget)
 	if err != nil {
@@ -1302,15 +1290,12 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 	reactingAPI, ok := sender.Client.(ReactionHandlingNetworkAPI)
 	if !ok {
 		log.Debug().Msg("Ignoring reaction as network connector doesn't implement ReactionHandlingNetworkAPI")
-		portal.sendErrorStatus(ctx, evt, ErrReactionsNotSupported)
-		return EventHandlingResultIgnored
+		return EventHandlingResultIgnored.WithMSSError(ErrReactionsNotSupported)
 	}
 	content, ok := evt.Content.Parsed.(*event.ReactionEventContent)
 	if !ok {
 		log.Error().Type("content_type", evt.Content.Parsed).Msg("Unexpected parsed content type")
-		typeErr := fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed)
-		portal.sendErrorStatus(ctx, evt, typeErr)
-		return EventHandlingResultFailed.WithError(typeErr)
+		return EventHandlingResultFailed.WithMSSError(fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed))
 	}
 	log.UpdateContext(func(c zerolog.Context) zerolog.Context {
 		return c.Stringer("reaction_target_mxid", content.RelatesTo.EventID)
@@ -1318,13 +1303,10 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 	reactionTarget, err := portal.Bridge.DB.Message.GetPartByMXID(ctx, content.RelatesTo.EventID)
 	if err != nil {
 		log.Err(err).Msg("Failed to get reaction target message from database")
-		portal.sendErrorStatus(ctx, evt, fmt.Errorf("%w: failed to get reaction target: %w", ErrDatabaseError, err))
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithMSSError(fmt.Errorf("%w: failed to get reaction target: %w", ErrDatabaseError, err))
 	} else if reactionTarget == nil {
 		log.Warn().Msg("Reaction target message not found in database")
-		notFoundErr := fmt.Errorf("reaction %w", ErrTargetMessageNotFound)
-		portal.sendErrorStatus(ctx, evt, notFoundErr)
-		return EventHandlingResultFailed.WithError(notFoundErr)
+		return EventHandlingResultFailed.WithMSSError(fmt.Errorf("reaction %w", ErrTargetMessageNotFound))
 	}
 	log.UpdateContext(func(c zerolog.Context) zerolog.Context {
 		return c.Str("reaction_target_remote_id", string(reactionTarget.ID))
@@ -1342,8 +1324,7 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 	preResp, err := reactingAPI.PreHandleMatrixReaction(ctx, react)
 	if err != nil {
 		log.Err(err).Msg("Failed to pre-handle Matrix reaction")
-		portal.sendErrorStatus(ctx, evt, err)
-		return EventHandlingResultFailed.WithError(err)
+		return EventHandlingResultFailed.WithMSSError(err)
 	}
 	var deterministicID id.EventID
 	if portal.Bridge.Config.OutgoingMessageReID {
@@ -1352,7 +1333,7 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 	existing, err := portal.Bridge.DB.Reaction.GetByID(ctx, portal.Receiver, reactionTarget.ID, reactionTarget.PartID, preResp.SenderID, preResp.EmojiID)
 	if err != nil {
 		log.Err(err).Msg("Failed to check if reaction is a duplicate")
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithMSSError(fmt.Errorf("%w: failed to check for existing reaction: %w", ErrDatabaseError, err))
 	} else if existing != nil {
 		if existing.EmojiID != "" || existing.Emoji == preResp.Emoji {
 			log.Debug().Msg("Ignoring duplicate reaction")
@@ -1374,8 +1355,7 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 		allReactions, err := portal.Bridge.DB.Reaction.GetAllToMessageBySender(ctx, portal.Receiver, reactionTarget.ID, preResp.SenderID)
 		if err != nil {
 			log.Err(err).Msg("Failed to get all reactions to message by sender")
-			portal.sendErrorStatus(ctx, evt, fmt.Errorf("%w: failed to get previous reactions: %w", ErrDatabaseError, err))
-			return EventHandlingResultFailed
+			return EventHandlingResultFailed.WithMSSError(fmt.Errorf("%w: failed to get previous reactions: %w", ErrDatabaseError, err))
 		}
 		if len(allReactions) < preResp.MaxReactions {
 			react.ExistingReactionsToKeep = allReactions
@@ -1401,8 +1381,7 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 	dbReaction, err := reactingAPI.HandleMatrixReaction(ctx, react)
 	if err != nil {
 		log.Err(err).Msg("Failed to handle Matrix reaction")
-		portal.sendErrorStatus(ctx, evt, err)
-		return EventHandlingResultFailed.WithError(err)
+		return EventHandlingResultFailed.WithMSSError(err)
 	}
 	if dbReaction == nil {
 		dbReaction = &database.Reaction{}
@@ -1454,16 +1433,13 @@ func handleMatrixRoomMeta[APIType any, ContentType any](
 ) EventHandlingResult {
 	api, ok := sender.Client.(APIType)
 	if !ok {
-		portal.sendErrorStatus(ctx, evt, ErrRoomMetadataNotSupported)
-		return EventHandlingResultIgnored
+		return EventHandlingResultIgnored.WithMSSError(ErrRoomMetadataNotSupported)
 	}
 	log := zerolog.Ctx(ctx)
 	content, ok := evt.Content.Parsed.(ContentType)
 	if !ok {
 		log.Error().Type("content_type", evt.Content.Parsed).Msg("Unexpected parsed content type")
-		typeErr := fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed)
-		portal.sendErrorStatus(ctx, evt, typeErr)
-		return EventHandlingResultFailed.WithError(typeErr)
+		return EventHandlingResultFailed.WithMSSError(fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed))
 	}
 	switch typedContent := evt.Content.Parsed.(type) {
 	case *event.RoomNameEventContent:
@@ -1501,8 +1477,7 @@ func handleMatrixRoomMeta[APIType any, ContentType any](
 	})
 	if err != nil {
 		log.Err(err).Msg("Failed to handle Matrix room metadata")
-		portal.sendErrorStatus(ctx, evt, err)
-		return EventHandlingResultFailed.WithError(err)
+		return EventHandlingResultFailed.WithMSSError(err)
 	}
 	if changed {
 		portal.UpdateBridgeInfo(ctx)
@@ -1511,8 +1486,7 @@ func handleMatrixRoomMeta[APIType any, ContentType any](
 			log.Err(err).Msg("Failed to save portal after updating room metadata")
 		}
 	}
-	portal.sendSuccessStatus(ctx, evt, 0, "")
-	return EventHandlingResultSuccess
+	return EventHandlingResultSuccess.WithMSS()
 }
 
 func handleMatrixAccountData[APIType any, ContentType any](
@@ -1577,9 +1551,7 @@ func (portal *Portal) handleMatrixMembership(
 	content, ok := evt.Content.Parsed.(*event.MemberEventContent)
 	if !ok {
 		log.Error().Type("content_type", evt.Content.Parsed).Msg("Unexpected parsed content type")
-		typeErr := fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed)
-		portal.sendErrorStatus(ctx, evt, typeErr)
-		return EventHandlingResultFailed.WithError(typeErr)
+		return EventHandlingResultFailed.WithMSSError(fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed))
 	}
 	prevContent := &event.MemberEventContent{Membership: event.MembershipLeave}
 	if evt.Unsigned.PrevContent != nil {
@@ -1594,23 +1566,20 @@ func (portal *Portal) handleMatrixMembership(
 	})
 	api, ok := sender.Client.(MembershipHandlingNetworkAPI)
 	if !ok {
-		portal.sendErrorStatus(ctx, evt, ErrMembershipNotSupported)
-		return EventHandlingResultIgnored
+		return EventHandlingResultIgnored.WithMSSError(ErrMembershipNotSupported)
 	}
 	targetMXID := id.UserID(*evt.StateKey)
 	isSelf := sender.User.MXID == targetMXID
 	target, err := portal.getTargetUser(ctx, targetMXID)
 	if err != nil {
 		log.Err(err).Msg("Failed to get member event target")
-		portal.sendErrorStatus(ctx, evt, err)
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithMSSError(err)
 	}
 
 	membershipChangeType := MembershipChangeType{From: prevContent.Membership, To: content.Membership, IsSelf: isSelf}
 	if !portal.Bridge.Config.BridgeMatrixLeave && membershipChangeType == Leave {
 		log.Debug().Msg("Dropping leave event")
-		//portal.sendErrorStatus(ctx, evt, ErrIgnoringLeaveEvent)
-		return EventHandlingResultIgnored
+		return EventHandlingResultIgnored //.WithMSSError(ErrIgnoringLeaveEvent)
 	}
 	targetGhost, _ := target.(*Ghost)
 	targetUserLogin, _ := target.(*UserLogin)
@@ -1634,10 +1603,9 @@ func (portal *Portal) handleMatrixMembership(
 	_, err = api.HandleMatrixMembership(ctx, membershipChange)
 	if err != nil {
 		log.Err(err).Msg("Failed to handle Matrix membership change")
-		portal.sendErrorStatus(ctx, evt, err)
-		return EventHandlingResultFailed.WithError(err)
+		return EventHandlingResultFailed.WithMSSError(err)
 	}
-	return EventHandlingResultSuccess
+	return EventHandlingResultSuccess.WithMSS()
 }
 
 func makePLChange(old, new int, newIsSet bool) *SinglePowerLevelChange {
@@ -1667,14 +1635,11 @@ func (portal *Portal) handleMatrixPowerLevels(
 	content, ok := evt.Content.Parsed.(*event.PowerLevelsEventContent)
 	if !ok {
 		log.Error().Type("content_type", evt.Content.Parsed).Msg("Unexpected parsed content type")
-		typeErr := fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed)
-		portal.sendErrorStatus(ctx, evt, typeErr)
-		return EventHandlingResultFailed.WithError(typeErr)
+		return EventHandlingResultFailed.WithMSSError(fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed))
 	}
 	api, ok := sender.Client.(PowerLevelHandlingNetworkAPI)
 	if !ok {
-		portal.sendErrorStatus(ctx, evt, ErrPowerLevelsNotSupported)
-		return EventHandlingResultIgnored
+		return EventHandlingResultIgnored.WithMSSError(ErrPowerLevelsNotSupported)
 	}
 	prevContent := &event.PowerLevelsEventContent{}
 	if evt.Unsigned.PrevContent != nil {
@@ -1733,10 +1698,9 @@ func (portal *Portal) handleMatrixPowerLevels(
 	_, err := api.HandleMatrixPowerLevels(ctx, plChange)
 	if err != nil {
 		log.Err(err).Msg("Failed to handle Matrix power level change")
-		portal.sendErrorStatus(ctx, evt, err)
-		return EventHandlingResultFailed.WithError(err)
+		return EventHandlingResultFailed.WithMSSError(err)
 	}
-	return EventHandlingResultSuccess
+	return EventHandlingResultSuccess.WithMSS()
 }
 
 func (portal *Portal) handleMatrixRedaction(
@@ -1746,9 +1710,7 @@ func (portal *Portal) handleMatrixRedaction(
 	content, ok := evt.Content.Parsed.(*event.RedactionEventContent)
 	if !ok {
 		log.Error().Type("content_type", evt.Content.Parsed).Msg("Unexpected parsed content type")
-		typeErr := fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed)
-		portal.sendErrorStatus(ctx, evt, typeErr)
-		return EventHandlingResultFailed.WithError(typeErr)
+		return EventHandlingResultFailed.WithMSSError(fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed))
 	}
 	if evt.Redacts != "" && content.Redacts != evt.Redacts {
 		content.Redacts = evt.Redacts
@@ -1760,20 +1722,17 @@ func (portal *Portal) handleMatrixRedaction(
 	reactingAPI, reactOK := sender.Client.(ReactionHandlingNetworkAPI)
 	if !deleteOK && !reactOK {
 		log.Debug().Msg("Ignoring redaction without checking target as network connector doesn't implement RedactionHandlingNetworkAPI nor ReactionHandlingNetworkAPI")
-		portal.sendErrorStatus(ctx, evt, ErrRedactionsNotSupported)
-		return EventHandlingResultIgnored
+		return EventHandlingResultIgnored.WithMSSError(ErrRedactionsNotSupported)
 	}
 	var redactionTargetReaction *database.Reaction
 	redactionTargetMsg, err := portal.Bridge.DB.Message.GetPartByMXID(ctx, content.Redacts)
 	if err != nil {
 		log.Err(err).Msg("Failed to get redaction target message from database")
-		portal.sendErrorStatus(ctx, evt, fmt.Errorf("%w: failed to get redaction target message: %w", ErrDatabaseError, err))
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithMSSError(fmt.Errorf("%w: failed to get redaction target message: %w", ErrDatabaseError, err))
 	} else if redactionTargetMsg != nil {
 		if !deleteOK {
 			log.Debug().Msg("Ignoring message redaction event as network connector doesn't implement RedactionHandlingNetworkAPI")
-			portal.sendErrorStatus(ctx, evt, ErrRedactionsNotSupported)
-			return EventHandlingResultIgnored
+			return EventHandlingResultIgnored.WithMSSError(ErrRedactionsNotSupported)
 		}
 		err = deletingAPI.HandleMatrixMessageRemove(ctx, &MatrixMessageRemove{
 			MatrixEventBase: MatrixEventBase[*event.RedactionEventContent]{
@@ -1788,13 +1747,11 @@ func (portal *Portal) handleMatrixRedaction(
 		})
 	} else if redactionTargetReaction, err = portal.Bridge.DB.Reaction.GetByMXID(ctx, content.Redacts); err != nil {
 		log.Err(err).Msg("Failed to get redaction target reaction from database")
-		portal.sendErrorStatus(ctx, evt, fmt.Errorf("%w: failed to get redaction target message reaction: %w", ErrDatabaseError, err))
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithMSSError(fmt.Errorf("%w: failed to get redaction target message reaction: %w", ErrDatabaseError, err))
 	} else if redactionTargetReaction != nil {
 		if !reactOK {
 			log.Debug().Msg("Ignoring reaction redaction event as network connector doesn't implement ReactionHandlingNetworkAPI")
-			portal.sendErrorStatus(ctx, evt, ErrReactionsNotSupported)
-			return EventHandlingResultIgnored
+			return EventHandlingResultIgnored.WithMSSError(ErrReactionsNotSupported)
 		}
 		// TODO ignore if sender doesn't match?
 		err = reactingAPI.HandleMatrixReactionRemove(ctx, &MatrixReactionRemove{
@@ -1810,18 +1767,14 @@ func (portal *Portal) handleMatrixRedaction(
 		})
 	} else {
 		log.Debug().Msg("Redaction target message not found in database")
-		notFoundErr := fmt.Errorf("redaction %w", ErrTargetMessageNotFound)
-		portal.sendErrorStatus(ctx, evt, notFoundErr)
-		return EventHandlingResultIgnored
+		return EventHandlingResultIgnored.WithMSSError(fmt.Errorf("redaction %w", ErrTargetMessageNotFound))
 	}
 	if err != nil {
 		log.Err(err).Msg("Failed to handle Matrix redaction")
-		portal.sendErrorStatus(ctx, evt, err)
-		return EventHandlingResultFailed.WithError(err)
+		return EventHandlingResultFailed.WithMSSError(err)
 	}
 	// TODO delete msg/reaction db row
-	portal.sendSuccessStatus(ctx, evt, 0, "")
-	return EventHandlingResultSuccess
+	return EventHandlingResultSuccess.WithMSS()
 }
 
 func (portal *Portal) handleRemoteEvent(ctx context.Context, source *UserLogin, evtType RemoteEventType, evt RemoteEvent) (res EventHandlingResult) {

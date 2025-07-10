@@ -85,8 +85,8 @@ func (portal *PortalInternals) PeriodicTypingUpdater() {
 	(*Portal)(portal).periodicTypingUpdater()
 }
 
-func (portal *PortalInternals) CheckMessageContentCaps(ctx context.Context, caps *event.RoomFeatures, content *event.MessageEventContent, evt *event.Event) bool {
-	return (*Portal)(portal).checkMessageContentCaps(ctx, caps, content, evt)
+func (portal *PortalInternals) CheckMessageContentCaps(caps *event.RoomFeatures, content *event.MessageEventContent) error {
+	return (*Portal)(portal).checkMessageContentCaps(caps, content)
 }
 
 func (portal *PortalInternals) ParseInputTransactionID(origSender *OrigSender, evt *event.Event) networkid.RawTransactionID {
