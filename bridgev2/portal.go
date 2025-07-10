@@ -1096,6 +1096,10 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 			},
 		})
 	}
+	if resp.Pending {
+		// Not exactly queued, but not finished either
+		return EventHandlingResultQueued
+	}
 	return EventHandlingResultSuccess
 }
 
