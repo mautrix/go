@@ -9,7 +9,9 @@ package bridgev2
 import (
 	"context"
 	"fmt"
+	"math/rand/v2"
 	"runtime/debug"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -26,6 +28,9 @@ type BridgeStateQueue struct {
 	ch         chan status.BridgeState
 	bridge     *Bridge
 	login      *UserLogin
+
+	stopChan      chan struct{}
+	stopReconnect atomic.Pointer[context.CancelFunc]
 }
 
 func (br *Bridge) SendGlobalBridgeState(state status.BridgeState) {
@@ -47,16 +52,28 @@ func (br *Bridge) SendGlobalBridgeState(state status.BridgeState) {
 
 func (br *Bridge) NewBridgeStateQueue(login *UserLogin) *BridgeStateQueue {
 	bsq := &BridgeStateQueue{
-		ch:     make(chan status.BridgeState, 10),
-		bridge: br,
-		login:  login,
+		ch:       make(chan status.BridgeState, 10),
+		stopChan: make(chan struct{}),
+		bridge:   br,
+		login:    login,
 	}
 	go bsq.loop()
 	return bsq
 }
 
 func (bsq *BridgeStateQueue) Destroy() {
+	close(bsq.stopChan)
 	close(bsq.ch)
+	bsq.StopUnknownErrorReconnect()
+}
+
+func (bsq *BridgeStateQueue) StopUnknownErrorReconnect() {
+	if bsq == nil {
+		return
+	}
+	if cancelFn := bsq.stopReconnect.Swap(nil); cancelFn != nil {
+		(*cancelFn)()
+	}
 }
 
 func (bsq *BridgeStateQueue) loop() {
@@ -114,6 +131,55 @@ func (bsq *BridgeStateQueue) sendNotice(ctx context.Context, state status.Bridge
 		bsq.login.Log.Err(err).Msg("Failed to send bridge state notice")
 	} else {
 		bsq.errorSent = isError
+	}
+}
+
+func (bsq *BridgeStateQueue) unknownErrorReconnect(triggeredBy status.BridgeState) {
+	log := bsq.login.Log.With().Str("action", "unknown error reconnect").Logger()
+	ctx := log.WithContext(bsq.bridge.BackgroundCtx)
+	if !bsq.waitForUnknownErrorReconnect(ctx) {
+		return
+	}
+	prevUnsent := bsq.GetPrevUnsent()
+	prev := bsq.GetPrev()
+	if triggeredBy.Timestamp != prev.Timestamp {
+		log.Debug().Msg("Not reconnecting as a new bridge state was sent after the unknown error")
+		return
+	} else if prev.Timestamp != prevUnsent.Timestamp {
+		log.Warn().Msg("Not reconnecting as there are unsent bridge states")
+		return
+	} else if prevUnsent.StateEvent != status.StateUnknownError || prev.StateEvent != status.StateUnknownError {
+		// This case will probably never be hit
+		log.Debug().Msg("Not reconnecting as the previous state was not an unknown error")
+		return
+	}
+	log.Info().Msg("Disconnecting and reconnecting login due to unknown error")
+	bsq.login.Disconnect()
+	log.Debug().Msg("Disconnection finished, reconnecting")
+	// FIXME this is not currently allowed, Disconnect expects that the login is never reconnected
+	bsq.login.Client.Connect(ctx)
+	log.Debug().Msg("Reconnection finished")
+}
+
+func (bsq *BridgeStateQueue) waitForUnknownErrorReconnect(ctx context.Context) bool {
+	reconnectIn := bsq.bridge.Config.UnknownErrorAutoReconnect
+	// Don't allow too low values
+	if reconnectIn < 1*time.Minute {
+		return false
+	}
+	reconnectIn += time.Duration(rand.Int64N(int64(float64(reconnectIn)*0.4)) - int64(float64(reconnectIn)*0.2))
+	cancelCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	if oldCancel := bsq.stopReconnect.Swap(&cancel); oldCancel != nil {
+		(*oldCancel)()
+	}
+	select {
+	case <-time.After(reconnectIn):
+		return bsq.stopReconnect.CompareAndSwap(&cancel, nil)
+	case <-cancelCtx.Done():
+		return false
+	case <-bsq.stopChan:
+		return false
 	}
 }
 
