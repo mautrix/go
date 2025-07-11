@@ -1378,9 +1378,6 @@ func (cli *Client) CreateRoom(ctx context.Context, req *ReqCreateRoom) (resp *Re
 					Msg("Failed to update membership in state store after creating room")
 			}
 		}
-		for _, evt := range req.InitialState {
-			cli.updateStoreWithOutgoingEvent(ctx, resp.RoomID, evt.Type, evt.GetStateKey(), &evt.Content)
-		}
 	}
 	return
 }
