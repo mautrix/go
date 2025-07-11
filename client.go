@@ -1548,12 +1548,15 @@ func (cli *Client) FullStateEvent(ctx context.Context, roomID id.RoomID, eventTy
 		"format": "event",
 	})
 	_, err = cli.MakeRequest(ctx, http.MethodGet, u, nil, &evt)
-	if err == nil && cli.StateStore != nil {
-		UpdateStateStore(ctx, cli.StateStore, evt)
-	}
 	if evt != nil {
 		evt.Type.Class = event.StateEventType
 		_ = evt.Content.ParseRaw(evt.Type)
+		if evt.RoomID == "" {
+			evt.RoomID = roomID
+		}
+	}
+	if err == nil && cli.StateStore != nil {
+		UpdateStateStore(ctx, cli.StateStore, evt)
 	}
 	return
 }
@@ -1606,12 +1609,21 @@ func (cli *Client) State(ctx context.Context, roomID id.RoomID) (stateMap RoomSt
 		ResponseJSON: &stateMap,
 		Handler:      parseRoomStateArray,
 	})
+	if stateMap != nil {
+		pls, ok := stateMap[event.StatePowerLevels][""]
+		if ok {
+			pls.Content.AsPowerLevels().CreateEvent = stateMap[event.StateCreate][""]
+		}
+	}
 	if err == nil && cli.StateStore != nil {
 		for evtType, evts := range stateMap {
 			if evtType == event.StateMember {
 				continue
 			}
 			for _, evt := range evts {
+				if evt.RoomID == "" {
+					evt.RoomID = roomID
+				}
 				UpdateStateStore(ctx, cli.StateStore, evt)
 			}
 		}

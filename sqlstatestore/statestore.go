@@ -379,89 +379,67 @@ func (store *SQLStateStore) SetPowerLevels(ctx context.Context, roomID id.RoomID
 }
 
 func (store *SQLStateStore) GetPowerLevels(ctx context.Context, roomID id.RoomID) (levels *event.PowerLevelsEventContent, err error) {
+	levels = &event.PowerLevelsEventContent{}
 	err = store.
-		QueryRow(ctx, "SELECT power_levels FROM mx_room_state WHERE room_id=$1", roomID).
-		Scan(&dbutil.JSON{Data: &levels})
+		QueryRow(ctx, "SELECT power_levels, create_event FROM mx_room_state WHERE room_id=$1", roomID).
+		Scan(&dbutil.JSON{Data: &levels}, &dbutil.JSON{Data: &levels.CreateEvent})
 	if errors.Is(err, sql.ErrNoRows) {
-		err = nil
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
+	if levels.CreateEvent != nil {
+		err = levels.CreateEvent.Content.ParseRaw(event.StateCreate)
 	}
 	return
 }
 
 func (store *SQLStateStore) GetPowerLevel(ctx context.Context, roomID id.RoomID, userID id.UserID) (int, error) {
-	if store.Dialect == dbutil.Postgres {
-		var powerLevel int
-		err := store.
-			QueryRow(ctx, `
-				SELECT COALESCE((power_levels->'users'->$2)::int, (power_levels->'users_default')::int, 0)
-				FROM mx_room_state WHERE room_id=$1
-			`, roomID, userID).
-			Scan(&powerLevel)
-		return powerLevel, err
-	} else {
-		levels, err := store.GetPowerLevels(ctx, roomID)
-		if err != nil {
-			return 0, err
-		}
-		return levels.GetUserLevel(userID), nil
+	levels, err := store.GetPowerLevels(ctx, roomID)
+	if err != nil {
+		return 0, err
 	}
+	return levels.GetUserLevel(userID), nil
 }
 
 func (store *SQLStateStore) GetPowerLevelRequirement(ctx context.Context, roomID id.RoomID, eventType event.Type) (int, error) {
-	if store.Dialect == dbutil.Postgres {
-		defaultType := "events_default"
-		defaultValue := 0
-		if eventType.IsState() {
-			defaultType = "state_default"
-			defaultValue = 50
-		}
-		var powerLevel int
-		err := store.
-			QueryRow(ctx, `
-				SELECT COALESCE((power_levels->'events'->$2)::int, (power_levels->'$3')::int, $4)
-				FROM mx_room_state WHERE room_id=$1
-			`, roomID, eventType.Type, defaultType, defaultValue).
-			Scan(&powerLevel)
-		if errors.Is(err, sql.ErrNoRows) {
-			err = nil
-			powerLevel = defaultValue
-		}
-		return powerLevel, err
-	} else {
-		levels, err := store.GetPowerLevels(ctx, roomID)
-		if err != nil {
-			return 0, err
-		}
-		return levels.GetEventLevel(eventType), nil
+	levels, err := store.GetPowerLevels(ctx, roomID)
+	if err != nil {
+		return 0, err
 	}
+	return levels.GetEventLevel(eventType), nil
 }
 
 func (store *SQLStateStore) HasPowerLevel(ctx context.Context, roomID id.RoomID, userID id.UserID, eventType event.Type) (bool, error) {
-	if store.Dialect == dbutil.Postgres {
-		defaultType := "events_default"
-		defaultValue := 0
-		if eventType.IsState() {
-			defaultType = "state_default"
-			defaultValue = 50
-		}
-		var hasPower bool
-		err := store.
-			QueryRow(ctx, `SELECT
-				COALESCE((power_levels->'users'->$2)::int, (power_levels->'users_default')::int, 0)
-				>=
-				COALESCE((power_levels->'events'->$3)::int, (power_levels->'$4')::int, $5)
-				FROM mx_room_state WHERE room_id=$1`, roomID, userID, eventType.Type, defaultType, defaultValue).
-			Scan(&hasPower)
-		if errors.Is(err, sql.ErrNoRows) {
-			err = nil
-			hasPower = defaultValue == 0
-		}
-		return hasPower, err
-	} else {
-		levels, err := store.GetPowerLevels(ctx, roomID)
-		if err != nil {
-			return false, err
-		}
-		return levels.GetUserLevel(userID) >= levels.GetEventLevel(eventType), nil
+	levels, err := store.GetPowerLevels(ctx, roomID)
+	if err != nil {
+		return false, err
 	}
+	return levels.GetUserLevel(userID) >= levels.GetEventLevel(eventType), nil
+}
+
+func (store *SQLStateStore) SetCreate(ctx context.Context, evt *event.Event) error {
+	if evt.Type != event.StateCreate {
+		return fmt.Errorf("invalid event type for create event: %s", evt.Type)
+	}
+	_, err := store.Exec(ctx, `
+		INSERT INTO mx_room_state (room_id, create_event) VALUES ($1, $2)
+		ON CONFLICT (room_id) DO UPDATE SET create_event=excluded.create_event
+	`, evt.RoomID, dbutil.JSON{Data: evt})
+	return err
+}
+
+func (store *SQLStateStore) GetCreate(ctx context.Context, roomID id.RoomID) (evt *event.Event, err error) {
+	err = store.
+		QueryRow(ctx, "SELECT create_event FROM mx_room_state WHERE room_id=$1", roomID).
+		Scan(&dbutil.JSON{Data: &evt})
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
+	if evt != nil {
+		err = evt.Content.ParseRaw(event.StateCreate)
+	}
+	return
 }

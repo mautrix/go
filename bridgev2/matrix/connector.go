@@ -534,6 +534,14 @@ func (br *Connector) GetPowerLevels(ctx context.Context, roomID id.RoomID) (*eve
 	return br.Bot.PowerLevels(ctx, roomID)
 }
 
+func (br *Connector) GetCreateEvent(ctx context.Context, roomID id.RoomID) (*event.Event, error) {
+	createEvt, err := br.Bot.StateStore.GetCreate(ctx, roomID)
+	if err != nil || createEvt != nil {
+		return createEvt, err
+	}
+	return br.Bot.FullStateEvent(ctx, roomID, event.StateCreate, "")
+}
+
 func (br *Connector) GetMembers(ctx context.Context, roomID id.RoomID) (map[id.UserID]*event.MemberEventContent, error) {
 	fetched, err := br.Bot.StateStore.HasFetchedMembers(ctx, roomID)
 	if err != nil {

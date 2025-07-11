@@ -88,6 +88,7 @@ const (
 	RoomV9  RoomVersion = "9"
 	RoomV10 RoomVersion = "10"
 	RoomV11 RoomVersion = "11"
+	RoomV12 RoomVersion = "12"
 )
 
 // CreateEventContent represents the content of a m.room.create state event.
@@ -98,8 +99,21 @@ type CreateEventContent struct {
 	RoomVersion RoomVersion  `json:"room_version,omitempty"`
 	Predecessor *Predecessor `json:"predecessor,omitempty"`
 
+	// Room v12+ only
+	AdditionalCreators []id.UserID `json:"additional_creators,omitempty"`
+
 	// Deprecated: use the event sender instead
 	Creator id.UserID `json:"creator,omitempty"`
+}
+
+func (cec *CreateEventContent) SupportsCreatorPower() bool {
+	switch cec.RoomVersion {
+	case "", RoomV1, RoomV2, RoomV3, RoomV4, RoomV5, RoomV6, RoomV7, RoomV8, RoomV9, RoomV10, RoomV11:
+		return false
+	default:
+		// Assume anything except known old versions supports creator power.
+		return true
+	}
 }
 
 // JoinRule specifies how open a room is to new members.

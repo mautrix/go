@@ -1654,6 +1654,13 @@ func (portal *Portal) handleMatrixPowerLevels(
 		log.Error().Type("content_type", evt.Content.Parsed).Msg("Unexpected parsed content type")
 		return EventHandlingResultFailed.WithMSSError(fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed))
 	}
+	if content.CreateEvent == nil {
+		var err error
+		content.CreateEvent, err = portal.Bridge.Matrix.GetCreateEvent(ctx, portal.MXID)
+		if err != nil {
+			return EventHandlingResultFailed.WithMSSError(fmt.Errorf("failed to get create event for power levels: %w", err))
+		}
+	}
 	api, ok := sender.Client.(PowerLevelHandlingNetworkAPI)
 	if !ok {
 		return EventHandlingResultIgnored.WithMSSError(ErrPowerLevelsNotSupported)
@@ -1662,6 +1669,7 @@ func (portal *Portal) handleMatrixPowerLevels(
 	if evt.Unsigned.PrevContent != nil {
 		_ = evt.Unsigned.PrevContent.ParseRaw(evt.Type)
 		prevContent, _ = evt.Unsigned.PrevContent.Parsed.(*event.PowerLevelsEventContent)
+		prevContent.CreateEvent = content.CreateEvent
 	}
 
 	plChange := &MatrixPowerLevelChange{

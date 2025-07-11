@@ -375,6 +375,24 @@ func (intent *IntentAPI) Member(ctx context.Context, roomID id.RoomID, userID id
 	return member
 }
 
+func (intent *IntentAPI) FillPowerLevelCreateEvent(ctx context.Context, roomID id.RoomID, pl *event.PowerLevelsEventContent) error {
+	if pl.CreateEvent != nil {
+		return nil
+	}
+	var err error
+	pl.CreateEvent, err = intent.StateStore.GetCreate(ctx, roomID)
+	if err != nil {
+		return fmt.Errorf("failed to get create event from cache: %w", err)
+	} else if pl.CreateEvent != nil {
+		return nil
+	}
+	pl.CreateEvent, err = intent.FullStateEvent(ctx, roomID, event.StateCreate, "")
+	if err != nil {
+		return fmt.Errorf("failed to get create event from server: %w", err)
+	}
+	return nil
+}
+
 func (intent *IntentAPI) PowerLevels(ctx context.Context, roomID id.RoomID) (pl *event.PowerLevelsEventContent, err error) {
 	pl, err = intent.as.StateStore.GetPowerLevels(ctx, roomID)
 	if err != nil {
@@ -384,6 +402,12 @@ func (intent *IntentAPI) PowerLevels(ctx context.Context, roomID id.RoomID) (pl 
 	if pl == nil {
 		pl = &event.PowerLevelsEventContent{}
 		err = intent.StateEvent(ctx, roomID, event.StatePowerLevels, "", pl)
+		if err != nil {
+			return
+		}
+	}
+	if pl.CreateEvent == nil {
+		pl.CreateEvent, err = intent.FullStateEvent(ctx, roomID, event.StateCreate, "")
 	}
 	return
 }
@@ -398,8 +422,7 @@ func (intent *IntentAPI) SetPowerLevel(ctx context.Context, roomID id.RoomID, us
 		return nil, err
 	}
 
-	if pl.GetUserLevel(userID) != level {
-		pl.SetUserLevel(userID, level)
+	if pl.EnsureUserLevelAs(intent.UserID, userID, level) {
 		return intent.SendStateEvent(ctx, roomID, event.StatePowerLevels, "", &pl)
 	}
 	return nil, nil
