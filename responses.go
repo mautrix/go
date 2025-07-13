@@ -648,12 +648,7 @@ type RespHierarchy struct {
 
 type ChildRoomsChunk struct {
 	PublicRoomInfo
-	ChildrenState []StrippedStateWithTime `json:"children_state"`
-}
-
-type StrippedStateWithTime struct {
-	event.StrippedState
-	Timestamp jsontime.UnixMilli `json:"origin_server_ts"`
+	ChildrenState []*event.Event `json:"children_state"`
 }
 
 type RespAppservicePing struct {
