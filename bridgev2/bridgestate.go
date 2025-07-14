@@ -155,8 +155,12 @@ func (bsq *BridgeStateQueue) unknownErrorReconnect(triggeredBy status.BridgeStat
 	}
 	log.Info().Msg("Disconnecting and reconnecting login due to unknown error")
 	bsq.login.Disconnect()
-	log.Debug().Msg("Disconnection finished, reconnecting")
-	// FIXME this is not currently allowed, Disconnect expects that the login is never reconnected
+	log.Debug().Msg("Disconnection finished, recreating client and reconnecting")
+	err := bsq.login.recreateClient(ctx)
+	if err != nil {
+		log.Err(err).Msg("Failed to recreate client after unknown error")
+		return
+	}
 	bsq.login.Client.Connect(ctx)
 	log.Debug().Msg("Reconnection finished")
 }

@@ -545,3 +545,18 @@ func (ul *UserLogin) disconnectInternal(timeout time.Duration) {
 		}
 	}
 }
+
+func (ul *UserLogin) recreateClient(ctx context.Context) error {
+	oldClient := ul.Client
+	err := ul.Bridge.Network.LoadUserLogin(ctx, ul)
+	if err != nil {
+		return err
+	}
+	if ul.Client == oldClient {
+		zerolog.Ctx(ctx).Warn().Msg("LoadUserLogin didn't update client")
+	} else {
+		zerolog.Ctx(ctx).Debug().Msg("Recreated user login client")
+	}
+	ul.disconnectOnce = sync.Once{}
+	return nil
+}
