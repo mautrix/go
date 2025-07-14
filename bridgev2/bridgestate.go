@@ -145,11 +145,10 @@ func (bsq *BridgeStateQueue) unknownErrorReconnect(triggeredBy status.BridgeStat
 	if triggeredBy.Timestamp != prev.Timestamp {
 		log.Debug().Msg("Not reconnecting as a new bridge state was sent after the unknown error")
 		return
-	} else if prev.Timestamp != prevUnsent.Timestamp {
+	} else if len(bsq.ch) > 0 {
 		log.Warn().Msg("Not reconnecting as there are unsent bridge states")
 		return
 	} else if prevUnsent.StateEvent != status.StateUnknownError || prev.StateEvent != status.StateUnknownError {
-		// This case will probably never be hit
 		log.Debug().Msg("Not reconnecting as the previous state was not an unknown error")
 		return
 	}
@@ -193,6 +192,9 @@ func (bsq *BridgeStateQueue) immediateSendBridgeState(state status.BridgeState) 
 			Str("state_event", string(state.StateEvent)).
 			Msg("Not sending bridge state as it's a duplicate")
 		return
+	}
+	if state.StateEvent == status.StateUnknownError {
+		go bsq.unknownErrorReconnect(state)
 	}
 
 	ctx := bsq.login.Log.WithContext(context.Background())
