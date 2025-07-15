@@ -300,6 +300,7 @@ func (portal *Portal) queueEvent(ctx context.Context, evt portalEvent) EventHand
 			for {
 				select {
 				case portal.events <- evt:
+					return EventHandlingResultQueued
 				case <-time.After(5 * time.Second):
 					zerolog.Ctx(ctx).Error().
 						Str("portal_id", string(portal.ID)).
