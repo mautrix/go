@@ -120,7 +120,7 @@ type ReqCreateRoom struct {
 	InitialState    []*event.Event         `json:"initial_state,omitempty"`
 	Preset          string                 `json:"preset,omitempty"`
 	IsDirect        bool                   `json:"is_direct,omitempty"`
-	RoomVersion     string                 `json:"room_version,omitempty"`
+	RoomVersion     event.RoomVersion      `json:"room_version,omitempty"`
 
 	PowerLevelOverride *event.PowerLevelsEventContent `json:"power_level_content_override,omitempty"`
 
