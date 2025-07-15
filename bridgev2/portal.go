@@ -296,8 +296,16 @@ func (portal *Portal) queueEvent(ctx context.Context, evt portalEvent) EventHand
 		default:
 			zerolog.Ctx(ctx).Error().
 				Str("portal_id", string(portal.ID)).
-				Msg("Portal event channel is full")
-			return EventHandlingResultFailed
+				Msg("Portal event channel is full, queue will block")
+			for {
+				select {
+				case portal.events <- evt:
+				case <-time.After(5 * time.Second):
+					zerolog.Ctx(ctx).Error().
+						Str("portal_id", string(portal.ID)).
+						Msg("Portal event channel is still full")
+				}
+			}
 		}
 	}
 }
