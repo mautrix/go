@@ -42,21 +42,16 @@ func (dl *DisappearLoop) Start() {
 			log.Err(err).Msg("Failed to get upcoming disappearing messages")
 		} else if len(messages) > 0 {
 			lastDisappearTime := messages[len(messages)-1].DisappearAt
-			if len(messages) > MessageLimit/2 && lastDisappearTime.Before(time.Now()) {
+			if len(messages) >= MessageLimit {
+				log.Debug().
+					Int("message_count", len(messages)).
+					Time("last_due", lastDisappearTime).
+					Msg("Deleting disappearing messages synchronously and checking again immediately")
+				dl.NextCheck = lastDisappearTime
 				// If there are many messages, and they're all due immediately,
 				// process them synchronously and then check again.
 				dl.sleepAndDisappear(ctx, messages...)
-				log.Debug().
-					Int("message_count", len(messages)).
-					Time("last_due", lastDisappearTime).
-					Msg("Checking for disappearing messages again immediately")
 				continue
-			} else if len(messages) >= MessageLimit && lastDisappearTime.Add(5*time.Second).Before(dl.NextCheck) {
-				log.Debug().
-					Int("message_count", len(messages)).
-					Time("last_due", lastDisappearTime).
-					Msg("Using lower disappearing message check interval as the limit was reached, but the last message isn't due yet")
-				dl.NextCheck = lastDisappearTime.Add(5 * time.Second)
 			}
 			go dl.sleepAndDisappear(ctx, messages...)
 		}
