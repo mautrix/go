@@ -61,7 +61,7 @@ const (
 	getUpcomingDisappearingMessagesQuery = `
 		SELECT bridge_id, mx_room, mxid, type, timer, disappear_at
 		FROM disappearing_message WHERE bridge_id = $1 AND disappear_at IS NOT NULL AND disappear_at < $2
-		ORDER BY disappear_at
+		ORDER BY disappear_at LIMIT $3
 	`
 	deleteDisappearingMessageQuery = `
 		DELETE FROM disappearing_message WHERE bridge_id=$1 AND mxid=$2
@@ -77,8 +77,8 @@ func (dmq *DisappearingMessageQuery) StartAll(ctx context.Context, roomID id.Roo
 	return dmq.QueryMany(ctx, startDisappearingMessagesQuery, time.Now().UnixNano(), dmq.BridgeID, roomID)
 }
 
-func (dmq *DisappearingMessageQuery) GetUpcoming(ctx context.Context, duration time.Duration) ([]*DisappearingMessage, error) {
-	return dmq.QueryMany(ctx, getUpcomingDisappearingMessagesQuery, dmq.BridgeID, time.Now().Add(duration).UnixNano())
+func (dmq *DisappearingMessageQuery) GetUpcoming(ctx context.Context, duration time.Duration, limit int) ([]*DisappearingMessage, error) {
+	return dmq.QueryMany(ctx, getUpcomingDisappearingMessagesQuery, dmq.BridgeID, time.Now().Add(duration).UnixNano(), limit)
 }
 
 func (dmq *DisappearingMessageQuery) Delete(ctx context.Context, eventID id.EventID) error {

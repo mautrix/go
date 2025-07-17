@@ -36,10 +36,21 @@ func (dl *DisappearLoop) Start() {
 	log.Debug().Msg("Disappearing message loop starting")
 	for {
 		dl.NextCheck = time.Now().Add(DisappearCheckInterval)
-		messages, err := dl.br.DB.DisappearingMessage.GetUpcoming(ctx, DisappearCheckInterval)
+		const MessageLimit = 200
+		messages, err := dl.br.DB.DisappearingMessage.GetUpcoming(ctx, DisappearCheckInterval, MessageLimit)
 		if err != nil {
 			log.Err(err).Msg("Failed to get upcoming disappearing messages")
 		} else if len(messages) > 0 {
+			if len(messages) > MessageLimit/2 && messages[len(messages)-1].DisappearAt.Before(time.Now()) {
+				// If there are many messages, and they're all due immediately,
+				// process them synchronously and then check again.
+				dl.sleepAndDisappear(ctx, messages...)
+				log.Debug().
+					Int("message_count", len(messages)).
+					Time("last_due", messages[len(messages)-1].DisappearAt).
+					Msg("Checking for disappearing messages again immediately")
+				continue
+			}
 			go dl.sleepAndDisappear(ctx, messages...)
 		}
 		select {
@@ -91,10 +102,17 @@ func (dl *DisappearLoop) Add(ctx context.Context, dm *database.DisappearingMessa
 
 func (dl *DisappearLoop) sleepAndDisappear(ctx context.Context, dms ...*database.DisappearingMessage) {
 	for _, msg := range dms {
-		select {
-		case <-time.After(time.Until(msg.DisappearAt)):
-		case <-ctx.Done():
-			return
+		timeUntilDisappear := time.Until(msg.DisappearAt)
+		if timeUntilDisappear <= 0 {
+			if ctx.Err() != nil {
+				return
+			}
+		} else {
+			select {
+			case <-time.After(timeUntilDisappear):
+			case <-ctx.Done():
+				return
+			}
 		}
 		resp, err := dl.br.Bot.SendMessage(ctx, msg.RoomID, event.EventRedaction, &event.Content{
 			Parsed: &event.RedactionEventContent{
