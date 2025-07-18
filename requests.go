@@ -125,6 +125,7 @@ type ReqCreateRoom struct {
 	PowerLevelOverride *event.PowerLevelsEventContent `json:"power_level_content_override,omitempty"`
 
 	MeowRoomID            id.RoomID   `json:"fi.mau.room_id,omitempty"`
+	MeowCreateTS          int64       `json:"fi.mau.origin_server_ts,omitempty"`
 	BeeperInitialMembers  []id.UserID `json:"com.beeper.initial_members,omitempty"`
 	BeeperAutoJoinInvites bool        `json:"com.beeper.auto_join_invites,omitempty"`
 	BeeperLocalRoomID     id.RoomID   `json:"com.beeper.local_room_id,omitempty"`
