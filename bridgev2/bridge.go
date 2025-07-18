@@ -172,6 +172,7 @@ func (br *Bridge) StartConnectors(ctx context.Context) error {
 	br.Log.Info().Msg("Starting bridge")
 	if br.BackgroundCtx == nil || br.BackgroundCtx.Err() != nil {
 		br.BackgroundCtx, br.cancelBackgroundCtx = context.WithCancel(context.Background())
+		br.BackgroundCtx = br.Log.WithContext(br.BackgroundCtx)
 	}
 
 	if !br.ExternallyManagedDB {

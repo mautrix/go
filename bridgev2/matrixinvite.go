@@ -19,17 +19,17 @@ import (
 	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
-func (br *Bridge) handleBotInvite(ctx context.Context, evt *event.Event, sender *User) {
+func (br *Bridge) handleBotInvite(ctx context.Context, evt *event.Event, sender *User) EventHandlingResult {
 	log := zerolog.Ctx(ctx)
 	// These invites should already be rejected in QueueMatrixEvent
 	if !sender.Permissions.Commands {
 		log.Warn().Msg("Received bot invite from user without permission to send commands")
-		return
+		return EventHandlingResultIgnored
 	}
 	err := br.Bot.EnsureJoined(ctx, evt.RoomID)
 	if err != nil {
 		log.Err(err).Msg("Failed to accept invite to room")
-		return
+		return EventHandlingResultFailed
 	}
 	log.Debug().Msg("Accepted invite to room as bot")
 	members, err := br.Matrix.GetMembers(ctx, evt.RoomID)
@@ -55,6 +55,7 @@ func (br *Bridge) handleBotInvite(ctx context.Context, evt *event.Event, sender 
 			log.Err(err).Msg("Failed to send welcome message to room")
 		}
 	}
+	return EventHandlingResultSuccess
 }
 
 func sendNotice(ctx context.Context, evt *event.Event, intent MatrixAPI, message string, args ...any) {
@@ -87,12 +88,12 @@ func sendErrorAndLeave(ctx context.Context, evt *event.Event, intent MatrixAPI, 
 	rejectInvite(ctx, evt, intent, "")
 }
 
-func (br *Bridge) handleGhostDMInvite(ctx context.Context, evt *event.Event, sender *User) {
+func (br *Bridge) handleGhostDMInvite(ctx context.Context, evt *event.Event, sender *User) EventHandlingResult {
 	ghostID, _ := br.Matrix.ParseGhostMXID(id.UserID(evt.GetStateKey()))
 	validator, ok := br.Network.(IdentifierValidatingNetwork)
 	if ghostID == "" || (ok && !validator.ValidateUserID(ghostID)) {
 		rejectInvite(ctx, evt, br.Matrix.GhostIntent(ghostID), "Malformed user ID")
-		return
+		return EventHandlingResultIgnored
 	}
 	log := zerolog.Ctx(ctx).With().
 		Str("invitee_network_id", string(ghostID)).
@@ -102,22 +103,22 @@ func (br *Bridge) handleGhostDMInvite(ctx context.Context, evt *event.Event, sen
 	logins := sender.GetUserLogins()
 	if len(logins) == 0 {
 		rejectInvite(ctx, evt, br.Matrix.GhostIntent(ghostID), "You're not logged in")
-		return
+		return EventHandlingResultIgnored
 	}
 	_, ok = logins[0].Client.(IdentifierResolvingNetworkAPI)
 	if !ok {
 		rejectInvite(ctx, evt, br.Matrix.GhostIntent(ghostID), "This bridge does not support starting chats")
-		return
+		return EventHandlingResultIgnored
 	}
 	invitedGhost, err := br.GetGhostByID(ctx, ghostID)
 	if err != nil {
 		log.Err(err).Msg("Failed to get invited ghost")
-		return
+		return EventHandlingResultFailed
 	}
 	err = invitedGhost.Intent.EnsureJoined(ctx, evt.RoomID)
 	if err != nil {
 		log.Err(err).Msg("Failed to accept invite to room")
-		return
+		return EventHandlingResultFailed
 	}
 	var resp *CreateChatResponse
 	var sourceLogin *UserLogin
@@ -144,7 +145,7 @@ func (br *Bridge) handleGhostDMInvite(ctx context.Context, evt *event.Event, sen
 		} else if err != nil {
 			log.Err(err).Msg("Failed to resolve identifier")
 			sendErrorAndLeave(ctx, evt, invitedGhost.Intent, "Failed to create chat")
-			return
+			return EventHandlingResultFailed
 		} else {
 			sourceLogin = login
 			break
@@ -153,7 +154,7 @@ func (br *Bridge) handleGhostDMInvite(ctx context.Context, evt *event.Event, sen
 	if resp == nil {
 		log.Warn().Msg("No login could resolve the identifier")
 		sendErrorAndLeave(ctx, evt, br.Matrix.GhostIntent(ghostID), "Failed to create chat via any login")
-		return
+		return EventHandlingResultFailed
 	}
 	portal := resp.Portal
 	if portal == nil {
@@ -161,7 +162,35 @@ func (br *Bridge) handleGhostDMInvite(ctx context.Context, evt *event.Event, sen
 		if err != nil {
 			log.Err(err).Msg("Failed to get portal by key")
 			sendErrorAndLeave(ctx, evt, br.Matrix.GhostIntent(ghostID), "Failed to create portal entry")
-			return
+			return EventHandlingResultFailed
+		}
+	}
+	if portal.MXID != "" {
+		doCleanup := true
+		existingPortalMembers, err := br.Matrix.GetMembers(ctx, portal.MXID)
+		if err != nil {
+			log.Err(err).
+				Stringer("old_portal_mxid", portal.MXID).
+				Msg("Failed to check existing portal members, deleting room")
+		} else if targetUserMember, ok := existingPortalMembers[sender.MXID]; !ok {
+			log.Debug().
+				Stringer("old_portal_mxid", portal.MXID).
+				Msg("Inviter has no member event in old portal, deleting room")
+		} else if targetUserMember.Membership.IsInviteOrJoin() {
+			doCleanup = false
+		} else {
+			log.Debug().
+				Stringer("old_portal_mxid", portal.MXID).
+				Str("membership", string(targetUserMember.Membership)).
+				Msg("Inviter is not in old portal, deleting room")
+		}
+
+		if doCleanup {
+			if err = portal.RemoveMXID(ctx); err != nil {
+				log.Err(err).Msg("Failed to delete old portal mxid")
+			} else if err = br.Bot.DeleteRoom(ctx, portal.MXID, true); err != nil {
+				log.Err(err).Msg("Failed to clean up old portal room")
+			}
 		}
 	}
 	if portal.MXID != "" {
@@ -196,13 +225,13 @@ func (br *Bridge) handleGhostDMInvite(ctx context.Context, evt *event.Event, sen
 	if err != nil {
 		log.Err(err).Msg("Failed to ensure bot is invited to room")
 		sendErrorAndLeave(ctx, evt, invitedGhost.Intent, "Failed to invite bridge bot")
-		return
+		return EventHandlingResultFailed
 	}
 	err = br.Bot.EnsureJoined(ctx, evt.RoomID)
 	if err != nil {
 		log.Err(err).Msg("Failed to ensure bot is joined to room")
 		sendErrorAndLeave(ctx, evt, invitedGhost.Intent, "Failed to join with bridge bot")
-		return
+		return EventHandlingResultFailed
 	}
 
 	didSetPortal := portal.setMXIDToExistingRoom(ctx, evt.RoomID)
@@ -271,6 +300,7 @@ func (br *Bridge) handleGhostDMInvite(ctx context.Context, evt *event.Event, sen
 		sendErrorAndLeave(ctx, evt, invitedGhost.Intent, "You already have a direct chat with me at [%s](%s)", portal.MXID, portal.MXID.URI(br.Matrix.ServerName()).MatrixToURL())
 		rejectInvite(ctx, evt, br.Bot, "")
 	}
+	return EventHandlingResultSuccess
 }
 
 func (br *Bridge) givePowerToBot(ctx context.Context, roomID id.RoomID, userWithPower MatrixAPI) error {

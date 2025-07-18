@@ -7,6 +7,8 @@
 package bridgeconfig
 
 import (
+	"time"
+
 	"go.mau.fi/util/dbutil"
 	"go.mau.fi/zeroconfig"
 	"gopkg.in/yaml.v3"
@@ -66,6 +68,7 @@ type BridgeConfig struct {
 	ResendBridgeInfo          bool             `yaml:"resend_bridge_info"`
 	NoBridgeInfoStateKey      bool             `yaml:"no_bridge_info_state_key"`
 	BridgeStatusNotices       string           `yaml:"bridge_status_notices"`
+	UnknownErrorAutoReconnect time.Duration    `yaml:"unknown_error_auto_reconnect"`
 	BridgeMatrixLeave         bool             `yaml:"bridge_matrix_leave"`
 	BridgeNotices             bool             `yaml:"bridge_notices"`
 	TagOnlyOnCreate           bool             `yaml:"tag_only_on_create"`

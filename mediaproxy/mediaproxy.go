@@ -26,6 +26,7 @@ import (
 
 	mautrix "github.com/iKonoTelecomunicaciones/go"
 	"github.com/iKonoTelecomunicaciones/go/federation"
+	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
 type GetMediaResponse interface {
@@ -234,6 +235,10 @@ func queryToMap(vals url.Values) map[string]string {
 
 func (mp *MediaProxy) getMedia(w http.ResponseWriter, r *http.Request) GetMediaResponse {
 	mediaID := mux.Vars(r)["mediaID"]
+	if !id.IsValidMediaID(mediaID) {
+		mautrix.MNotFound.WithMessage("Media ID %q is not valid", mediaID).Write(w)
+		return nil
+	}
 	resp, err := mp.GetMedia(r.Context(), mediaID, queryToMap(r.URL.Query()))
 	if err != nil {
 		var mautrixRespError mautrix.RespError
@@ -416,13 +421,16 @@ func (mp *MediaProxy) DownloadMedia(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-	} else if dataResp, ok := resp.(GetMediaResponseWriter); ok {
-		mp.addHeaders(w, dataResp.GetContentType(), vars["fileName"])
-		if dataResp.GetContentLength() != 0 {
-			w.Header().Set("Content-Length", strconv.FormatInt(dataResp.GetContentLength(), 10))
+	} else if writerResp, ok := resp.(GetMediaResponseWriter); ok {
+		if dataResp, ok := writerResp.(*GetMediaResponseData); ok {
+			defer dataResp.Reader.Close()
+		}
+		mp.addHeaders(w, writerResp.GetContentType(), vars["fileName"])
+		if writerResp.GetContentLength() != 0 {
+			w.Header().Set("Content-Length", strconv.FormatInt(writerResp.GetContentLength(), 10))
 		}
 		w.WriteHeader(http.StatusOK)
-		_, err := dataResp.WriteTo(w)
+		_, err := writerResp.WriteTo(w)
 		if err != nil {
 			log.Err(err).Msg("Failed to write media data")
 		}

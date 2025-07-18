@@ -29,23 +29,23 @@ func (portal *PortalInternals) UpdateLogger() {
 	(*Portal)(portal).updateLogger()
 }
 
-func (portal *PortalInternals) QueueEvent(ctx context.Context, evt portalEvent) {
-	(*Portal)(portal).queueEvent(ctx, evt)
+func (portal *PortalInternals) QueueEvent(ctx context.Context, evt portalEvent) EventHandlingResult {
+	return (*Portal)(portal).queueEvent(ctx, evt)
 }
 
 func (portal *PortalInternals) EventLoop() {
 	(*Portal)(portal).eventLoop()
 }
 
-func (portal *PortalInternals) HandleSingleEventAsync(idx int, rawEvt any) {
-	(*Portal)(portal).handleSingleEventAsync(idx, rawEvt)
+func (portal *PortalInternals) HandleSingleEventAsync(idx int, rawEvt any) (outerRes EventHandlingResult) {
+	return (*Portal)(portal).handleSingleEventAsync(idx, rawEvt)
 }
 
 func (portal *PortalInternals) GetEventCtxWithLog(rawEvt any, idx int) context.Context {
 	return (*Portal)(portal).getEventCtxWithLog(rawEvt, idx)
 }
 
-func (portal *PortalInternals) HandleSingleEvent(ctx context.Context, rawEvt any, doneCallback func()) {
+func (portal *PortalInternals) HandleSingleEvent(ctx context.Context, rawEvt any, doneCallback func(EventHandlingResult)) {
 	(*Portal)(portal).handleSingleEvent(ctx, rawEvt, doneCallback)
 }
 
@@ -61,20 +61,20 @@ func (portal *PortalInternals) CheckConfusableName(ctx context.Context, userID i
 	return (*Portal)(portal).checkConfusableName(ctx, userID, name)
 }
 
-func (portal *PortalInternals) HandleMatrixEvent(ctx context.Context, sender *User, evt *event.Event) {
-	(*Portal)(portal).handleMatrixEvent(ctx, sender, evt)
+func (portal *PortalInternals) HandleMatrixEvent(ctx context.Context, sender *User, evt *event.Event) EventHandlingResult {
+	return (*Portal)(portal).handleMatrixEvent(ctx, sender, evt)
 }
 
-func (portal *PortalInternals) HandleMatrixReceipts(ctx context.Context, evt *event.Event) {
-	(*Portal)(portal).handleMatrixReceipts(ctx, evt)
+func (portal *PortalInternals) HandleMatrixReceipts(ctx context.Context, evt *event.Event) EventHandlingResult {
+	return (*Portal)(portal).handleMatrixReceipts(ctx, evt)
 }
 
 func (portal *PortalInternals) HandleMatrixReadReceipt(ctx context.Context, user *User, eventID id.EventID, receipt event.ReadReceipt) {
 	(*Portal)(portal).handleMatrixReadReceipt(ctx, user, eventID, receipt)
 }
 
-func (portal *PortalInternals) HandleMatrixTyping(ctx context.Context, evt *event.Event) {
-	(*Portal)(portal).handleMatrixTyping(ctx, evt)
+func (portal *PortalInternals) HandleMatrixTyping(ctx context.Context, evt *event.Event) EventHandlingResult {
+	return (*Portal)(portal).handleMatrixTyping(ctx, evt)
 }
 
 func (portal *PortalInternals) SendTypings(ctx context.Context, userIDs []id.UserID, typing bool) {
@@ -85,67 +85,55 @@ func (portal *PortalInternals) PeriodicTypingUpdater() {
 	(*Portal)(portal).periodicTypingUpdater()
 }
 
-func (portal *PortalInternals) CheckMessageContentCaps(ctx context.Context, caps *event.RoomFeatures, content *event.MessageEventContent, evt *event.Event) bool {
-	return (*Portal)(portal).checkMessageContentCaps(ctx, caps, content, evt)
-}
-
-func (portal *PortalInternals) ParseInputTransactionID(origSender *OrigSender, evt *event.Event) networkid.RawTransactionID {
-	return (*Portal)(portal).parseInputTransactionID(origSender, evt)
+func (portal *PortalInternals) CheckMessageContentCaps(caps *event.RoomFeatures, content *event.MessageEventContent) error {
+	return (*Portal)(portal).checkMessageContentCaps(caps, content)
 }
 
 func (portal *PortalInternals) HandleMatrixMessage(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) {
 	(*Portal)(portal).handleMatrixMessage(ctx, sender, origSender, evt)
 }
 
-func (portal *PortalInternals) PendingMessageTimeoutLoop(ctx context.Context, cfg *OutgoingTimeoutConfig) {
-	(*Portal)(portal).pendingMessageTimeoutLoop(ctx, cfg)
+func (portal *PortalInternals) HandleMatrixEdit(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event, content *event.MessageEventContent, caps *event.RoomFeatures) EventHandlingResult {
+	return (*Portal)(portal).handleMatrixEdit(ctx, sender, origSender, evt, content, caps)
 }
 
-func (portal *PortalInternals) CheckPendingMessages(ctx context.Context, cfg *OutgoingTimeoutConfig) {
-	(*Portal)(portal).checkPendingMessages(ctx, cfg)
-}
-
-func (portal *PortalInternals) HandleMatrixEdit(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event, content *event.MessageEventContent, caps *event.RoomFeatures) {
-	(*Portal)(portal).handleMatrixEdit(ctx, sender, origSender, evt, content, caps)
-}
-
-func (portal *PortalInternals) HandleMatrixReaction(ctx context.Context, sender *UserLogin, evt *event.Event) {
-	(*Portal)(portal).handleMatrixReaction(ctx, sender, evt)
+func (portal *PortalInternals) HandleMatrixReaction(ctx context.Context, sender *UserLogin, evt *event.Event) EventHandlingResult {
+	return (*Portal)(portal).handleMatrixReaction(ctx, sender, evt)
 }
 
 func (portal *PortalInternals) GetTargetUser(ctx context.Context, userID id.UserID) (GhostOrUserLogin, error) {
 	return (*Portal)(portal).getTargetUser(ctx, userID)
 }
 
-func (portal *PortalInternals) HandleMatrixMembership(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) {
-	(*Portal)(portal).handleMatrixMembership(ctx, sender, origSender, evt)
+func (portal *PortalInternals) HandleMatrixMembership(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) EventHandlingResult {
+	return (*Portal)(portal).handleMatrixMembership(ctx, sender, origSender, evt)
 }
 
-func (portal *PortalInternals) HandleMatrixPowerLevels(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) {
-	(*Portal)(portal).handleMatrixPowerLevels(ctx, sender, origSender, evt)
+func (portal *PortalInternals) HandleMatrixPowerLevels(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) EventHandlingResult {
+	return (*Portal)(portal).handleMatrixPowerLevels(ctx, sender, origSender, evt)
 }
 
-func (portal *PortalInternals) HandleMatrixRedaction(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) {
-	(*Portal)(portal).handleMatrixRedaction(ctx, sender, origSender, evt)
+func (portal *PortalInternals) HandleMatrixRedaction(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) EventHandlingResult {
+	return (*Portal)(portal).handleMatrixRedaction(ctx, sender, origSender, evt)
 }
 
-func (portal *PortalInternals) HandleRemoteEvent(ctx context.Context, source *UserLogin, evtType RemoteEventType, evt RemoteEvent) {
-	(*Portal)(portal).handleRemoteEvent(ctx, source, evtType, evt)
+func (portal *PortalInternals) HandleRemoteEvent(ctx context.Context, source *UserLogin, evtType RemoteEventType, evt RemoteEvent) (res EventHandlingResult) {
+	return (*Portal)(portal).handleRemoteEvent(ctx, source, evtType, evt)
 }
 
-func (portal *PortalInternals) GetIntentAndUserMXIDFor(ctx context.Context, sender EventSender, source *UserLogin, otherLogins []*UserLogin, evtType RemoteEventType) (intent MatrixAPI, extraUserID id.UserID) {
+func (portal *PortalInternals) GetIntentAndUserMXIDFor(ctx context.Context, sender EventSender, source *UserLogin, otherLogins []*UserLogin, evtType RemoteEventType) (intent MatrixAPI, extraUserID id.UserID, err error) {
 	return (*Portal)(portal).getIntentAndUserMXIDFor(ctx, sender, source, otherLogins, evtType)
 }
 
-func (portal *PortalInternals) GetRelationMeta(ctx context.Context, currentMsg networkid.MessageID, replyToPtr *networkid.MessageOptionalPartID, threadRootPtr *networkid.MessageID, isBatchSend bool) (replyTo, threadRoot, prevThreadEvent *database.Message) {
-	return (*Portal)(portal).getRelationMeta(ctx, currentMsg, replyToPtr, threadRootPtr, isBatchSend)
+func (portal *PortalInternals) GetRelationMeta(ctx context.Context, currentMsgID networkid.MessageID, currentMsg *ConvertedMessage, isBatchSend bool) (replyTo, threadRoot, prevThreadEvent *database.Message) {
+	return (*Portal)(portal).getRelationMeta(ctx, currentMsgID, currentMsg, isBatchSend)
 }
 
 func (portal *PortalInternals) ApplyRelationMeta(ctx context.Context, content *event.MessageEventContent, replyTo, threadRoot, prevThreadEvent *database.Message) {
 	(*Portal)(portal).applyRelationMeta(ctx, content, replyTo, threadRoot, prevThreadEvent)
 }
 
-func (portal *PortalInternals) SendConvertedMessage(ctx context.Context, id networkid.MessageID, intent MatrixAPI, senderID networkid.UserID, converted *ConvertedMessage, ts time.Time, streamOrder int64, logContext func(*zerolog.Event) *zerolog.Event) []*database.Message {
+func (portal *PortalInternals) SendConvertedMessage(ctx context.Context, id networkid.MessageID, intent MatrixAPI, senderID networkid.UserID, converted *ConvertedMessage, ts time.Time, streamOrder int64, logContext func(*zerolog.Event) *zerolog.Event) ([]*database.Message, EventHandlingResult) {
 	return (*Portal)(portal).sendConvertedMessage(ctx, id, intent, senderID, converted, ts, streamOrder, logContext)
 }
 
@@ -153,24 +141,24 @@ func (portal *PortalInternals) CheckPendingMessage(ctx context.Context, evt Remo
 	return (*Portal)(portal).checkPendingMessage(ctx, evt)
 }
 
-func (portal *PortalInternals) HandleRemoteUpsert(ctx context.Context, source *UserLogin, evt RemoteMessageUpsert, existing []*database.Message) bool {
+func (portal *PortalInternals) HandleRemoteUpsert(ctx context.Context, source *UserLogin, evt RemoteMessageUpsert, existing []*database.Message) (handleRes EventHandlingResult, continueHandling bool) {
 	return (*Portal)(portal).handleRemoteUpsert(ctx, source, evt, existing)
 }
 
-func (portal *PortalInternals) HandleRemoteMessage(ctx context.Context, source *UserLogin, evt RemoteMessage) {
-	(*Portal)(portal).handleRemoteMessage(ctx, source, evt)
+func (portal *PortalInternals) HandleRemoteMessage(ctx context.Context, source *UserLogin, evt RemoteMessage) (res EventHandlingResult) {
+	return (*Portal)(portal).handleRemoteMessage(ctx, source, evt)
 }
 
 func (portal *PortalInternals) SendRemoteErrorNotice(ctx context.Context, intent MatrixAPI, err error, ts time.Time, evtTypeName string) {
 	(*Portal)(portal).sendRemoteErrorNotice(ctx, intent, err, ts, evtTypeName)
 }
 
-func (portal *PortalInternals) HandleRemoteEdit(ctx context.Context, source *UserLogin, evt RemoteEdit) {
-	(*Portal)(portal).handleRemoteEdit(ctx, source, evt)
+func (portal *PortalInternals) HandleRemoteEdit(ctx context.Context, source *UserLogin, evt RemoteEdit) EventHandlingResult {
+	return (*Portal)(portal).handleRemoteEdit(ctx, source, evt)
 }
 
-func (portal *PortalInternals) SendConvertedEdit(ctx context.Context, targetID networkid.MessageID, senderID networkid.UserID, converted *ConvertedEdit, intent MatrixAPI, ts time.Time, streamOrder int64) {
-	(*Portal)(portal).sendConvertedEdit(ctx, targetID, senderID, converted, intent, ts, streamOrder)
+func (portal *PortalInternals) SendConvertedEdit(ctx context.Context, targetID networkid.MessageID, senderID networkid.UserID, converted *ConvertedEdit, intent MatrixAPI, ts time.Time, streamOrder int64) EventHandlingResult {
+	return (*Portal)(portal).sendConvertedEdit(ctx, targetID, senderID, converted, intent, ts, streamOrder)
 }
 
 func (portal *PortalInternals) GetTargetMessagePart(ctx context.Context, evt RemoteEventWithTargetMessage) (*database.Message, error) {
@@ -181,64 +169,64 @@ func (portal *PortalInternals) GetTargetReaction(ctx context.Context, evt Remote
 	return (*Portal)(portal).getTargetReaction(ctx, evt)
 }
 
-func (portal *PortalInternals) HandleRemoteReactionSync(ctx context.Context, source *UserLogin, evt RemoteReactionSync) {
-	(*Portal)(portal).handleRemoteReactionSync(ctx, source, evt)
+func (portal *PortalInternals) HandleRemoteReactionSync(ctx context.Context, source *UserLogin, evt RemoteReactionSync) EventHandlingResult {
+	return (*Portal)(portal).handleRemoteReactionSync(ctx, source, evt)
 }
 
-func (portal *PortalInternals) HandleRemoteReaction(ctx context.Context, source *UserLogin, evt RemoteReaction) {
-	(*Portal)(portal).handleRemoteReaction(ctx, source, evt)
+func (portal *PortalInternals) HandleRemoteReaction(ctx context.Context, source *UserLogin, evt RemoteReaction) EventHandlingResult {
+	return (*Portal)(portal).handleRemoteReaction(ctx, source, evt)
 }
 
-func (portal *PortalInternals) SendConvertedReaction(ctx context.Context, senderID networkid.UserID, intent MatrixAPI, targetMessage *database.Message, emojiID networkid.EmojiID, emoji string, ts time.Time, dbMetadata any, extraContent map[string]any, logContext func(*zerolog.Event) *zerolog.Event) {
-	(*Portal)(portal).sendConvertedReaction(ctx, senderID, intent, targetMessage, emojiID, emoji, ts, dbMetadata, extraContent, logContext)
+func (portal *PortalInternals) SendConvertedReaction(ctx context.Context, senderID networkid.UserID, intent MatrixAPI, targetMessage *database.Message, emojiID networkid.EmojiID, emoji string, ts time.Time, dbMetadata any, extraContent map[string]any, logContext func(*zerolog.Event) *zerolog.Event) EventHandlingResult {
+	return (*Portal)(portal).sendConvertedReaction(ctx, senderID, intent, targetMessage, emojiID, emoji, ts, dbMetadata, extraContent, logContext)
 }
 
 func (portal *PortalInternals) GetIntentForMXID(ctx context.Context, userID id.UserID) (MatrixAPI, error) {
 	return (*Portal)(portal).getIntentForMXID(ctx, userID)
 }
 
-func (portal *PortalInternals) HandleRemoteReactionRemove(ctx context.Context, source *UserLogin, evt RemoteReactionRemove) {
-	(*Portal)(portal).handleRemoteReactionRemove(ctx, source, evt)
+func (portal *PortalInternals) HandleRemoteReactionRemove(ctx context.Context, source *UserLogin, evt RemoteReactionRemove) EventHandlingResult {
+	return (*Portal)(portal).handleRemoteReactionRemove(ctx, source, evt)
 }
 
-func (portal *PortalInternals) HandleRemoteMessageRemove(ctx context.Context, source *UserLogin, evt RemoteMessageRemove) {
-	(*Portal)(portal).handleRemoteMessageRemove(ctx, source, evt)
+func (portal *PortalInternals) HandleRemoteMessageRemove(ctx context.Context, source *UserLogin, evt RemoteMessageRemove) EventHandlingResult {
+	return (*Portal)(portal).handleRemoteMessageRemove(ctx, source, evt)
 }
 
-func (portal *PortalInternals) RedactMessageParts(ctx context.Context, parts []*database.Message, intent MatrixAPI, ts time.Time) {
-	(*Portal)(portal).redactMessageParts(ctx, parts, intent, ts)
+func (portal *PortalInternals) RedactMessageParts(ctx context.Context, parts []*database.Message, intent MatrixAPI, ts time.Time) EventHandlingResult {
+	return (*Portal)(portal).redactMessageParts(ctx, parts, intent, ts)
 }
 
-func (portal *PortalInternals) HandleRemoteReadReceipt(ctx context.Context, source *UserLogin, evt RemoteReadReceipt) {
-	(*Portal)(portal).handleRemoteReadReceipt(ctx, source, evt)
+func (portal *PortalInternals) HandleRemoteReadReceipt(ctx context.Context, source *UserLogin, evt RemoteReadReceipt) EventHandlingResult {
+	return (*Portal)(portal).handleRemoteReadReceipt(ctx, source, evt)
 }
 
-func (portal *PortalInternals) HandleRemoteMarkUnread(ctx context.Context, source *UserLogin, evt RemoteMarkUnread) {
-	(*Portal)(portal).handleRemoteMarkUnread(ctx, source, evt)
+func (portal *PortalInternals) HandleRemoteMarkUnread(ctx context.Context, source *UserLogin, evt RemoteMarkUnread) EventHandlingResult {
+	return (*Portal)(portal).handleRemoteMarkUnread(ctx, source, evt)
 }
 
-func (portal *PortalInternals) HandleRemoteDeliveryReceipt(ctx context.Context, source *UserLogin, evt RemoteDeliveryReceipt) {
-	(*Portal)(portal).handleRemoteDeliveryReceipt(ctx, source, evt)
+func (portal *PortalInternals) HandleRemoteDeliveryReceipt(ctx context.Context, source *UserLogin, evt RemoteDeliveryReceipt) EventHandlingResult {
+	return (*Portal)(portal).handleRemoteDeliveryReceipt(ctx, source, evt)
 }
 
-func (portal *PortalInternals) HandleRemoteTyping(ctx context.Context, source *UserLogin, evt RemoteTyping) {
-	(*Portal)(portal).handleRemoteTyping(ctx, source, evt)
+func (portal *PortalInternals) HandleRemoteTyping(ctx context.Context, source *UserLogin, evt RemoteTyping) EventHandlingResult {
+	return (*Portal)(portal).handleRemoteTyping(ctx, source, evt)
 }
 
-func (portal *PortalInternals) HandleRemoteChatInfoChange(ctx context.Context, source *UserLogin, evt RemoteChatInfoChange) {
-	(*Portal)(portal).handleRemoteChatInfoChange(ctx, source, evt)
+func (portal *PortalInternals) HandleRemoteChatInfoChange(ctx context.Context, source *UserLogin, evt RemoteChatInfoChange) EventHandlingResult {
+	return (*Portal)(portal).handleRemoteChatInfoChange(ctx, source, evt)
 }
 
-func (portal *PortalInternals) HandleRemoteChatResync(ctx context.Context, source *UserLogin, evt RemoteChatResync) {
-	(*Portal)(portal).handleRemoteChatResync(ctx, source, evt)
+func (portal *PortalInternals) HandleRemoteChatResync(ctx context.Context, source *UserLogin, evt RemoteChatResync) EventHandlingResult {
+	return (*Portal)(portal).handleRemoteChatResync(ctx, source, evt)
 }
 
-func (portal *PortalInternals) HandleRemoteChatDelete(ctx context.Context, source *UserLogin, evt RemoteChatDelete) {
-	(*Portal)(portal).handleRemoteChatDelete(ctx, source, evt)
+func (portal *PortalInternals) HandleRemoteChatDelete(ctx context.Context, source *UserLogin, evt RemoteChatDelete) EventHandlingResult {
+	return (*Portal)(portal).handleRemoteChatDelete(ctx, source, evt)
 }
 
-func (portal *PortalInternals) HandleRemoteBackfill(ctx context.Context, source *UserLogin, backfill RemoteBackfill) {
-	(*Portal)(portal).handleRemoteBackfill(ctx, source, backfill)
+func (portal *PortalInternals) HandleRemoteBackfill(ctx context.Context, source *UserLogin, backfill RemoteBackfill) (res EventHandlingResult) {
+	return (*Portal)(portal).handleRemoteBackfill(ctx, source, backfill)
 }
 
 func (portal *PortalInternals) UpdateName(ctx context.Context, name string, sender MatrixAPI, ts time.Time) bool {

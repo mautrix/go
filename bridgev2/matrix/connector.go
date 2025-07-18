@@ -10,7 +10,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -343,50 +342,8 @@ func (br *Connector) ensureConnection(ctx context.Context) {
 		br.Log.Debug().Msg("Homeserver does not support checking status of homeserver -> bridge connection")
 		return
 	}
-	var pingResp *mautrix.RespAppservicePing
-	var txnID string
-	var retryCount int
-	const maxRetries = 6
-	for {
-		txnID = br.Bot.TxnID()
-		pingResp, err = br.Bot.AppservicePing(ctx, br.Config.AppService.ID, txnID)
-		if err == nil {
-			break
-		}
-		var httpErr mautrix.HTTPError
-		var pingErrBody string
-		if errors.As(err, &httpErr) && httpErr.RespError != nil {
-			if val, ok := httpErr.RespError.ExtraData["body"].(string); ok {
-				pingErrBody = strings.TrimSpace(val)
-			}
-		}
-		outOfRetries := retryCount >= maxRetries
-		level := zerolog.ErrorLevel
-		if outOfRetries {
-			level = zerolog.FatalLevel
-		}
-		evt := br.Log.WithLevel(level).Err(err).Str("txn_id", txnID)
-		if pingErrBody != "" {
-			bodyBytes := []byte(pingErrBody)
-			if json.Valid(bodyBytes) {
-				evt.RawJSON("body", bodyBytes)
-			} else {
-				evt.Str("body", pingErrBody)
-			}
-		}
-		if outOfRetries {
-			evt.Msg("Homeserver -> bridge connection is not working")
-			br.Log.Info().Msg("See https://docs.mau.fi/faq/as-ping for more info")
-			os.Exit(13)
-		}
-		evt.Msg("Homeserver -> bridge connection is not working, retrying in 5 seconds...")
-		time.Sleep(5 * time.Second)
-		retryCount++
-	}
-	br.Log.Debug().
-		Str("txn_id", txnID).
-		Int64("duration_ms", pingResp.DurationMS).
-		Msg("Homeserver -> bridge connection works")
+
+	br.Bot.EnsureAppserviceConnection(ctx)
 }
 
 func (br *Connector) fetchMediaConfig(ctx context.Context) {

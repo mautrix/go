@@ -91,7 +91,14 @@ func (es EventSender) MarshalZerologObject(evt *zerolog.Event) {
 }
 
 type ConvertedMessage struct {
-	ReplyTo    *networkid.MessageOptionalPartID
+	ReplyTo *networkid.MessageOptionalPartID
+	// Optional additional info about the reply. This is only used when backfilling messages
+	// on Beeper, where replies may target messages that haven't been bridged yet.
+	// Standard Matrix servers can't backwards backfill, so these are never used.
+	ReplyToRoom  networkid.PortalKey
+	ReplyToUser  networkid.UserID
+	ReplyToLogin networkid.UserLoginID
+
 	ThreadRoot *networkid.MessageID
 	Parts      []*ConvertedMessagePart
 	Disappear  database.DisappearingSetting
@@ -1180,6 +1187,7 @@ type OrigSender struct {
 	RequiresDisambiguation bool
 	DisambiguatedName      string
 	FormattedName          string
+	PerMessageProfile      event.BeeperPerMessageProfile
 
 	event.MemberEventContent
 }

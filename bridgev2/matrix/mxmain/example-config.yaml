@@ -25,6 +25,9 @@ bridge:
     # These contain the same data that can be posted to an external HTTP server using homeserver -> status_endpoint.
     # Allowed values: none, errors, all
     bridge_status_notices: errors
+    # How long after an unknown error should the bridge attempt a full reconnect?
+    # Must be at least 1 minute. The bridge will add an extra ±20% jitter to this value.
+    unknown_error_auto_reconnect: null
 
     # Should leaving Matrix rooms be bridged as leaving groups on the remote network?
     bridge_matrix_leave: false

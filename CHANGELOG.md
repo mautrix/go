@@ -1,3 +1,26 @@
+## v0.24.2 (2025-07-16)
+
+* *(bridgev2)* Added support for return values from portal event handlers. Note
+  that the return value will always be "queued" unless the event buffer is
+  disabled.
+* *(bridgev2)* Added support for [MSC4144] per-message profile passthrough in
+  relay mode.
+* *(bridgev2)* Added option to auto-reconnect logins after a certain period if
+  they hit an `UNKNOWN_ERROR` state.
+* *(bridgev2)* Added analytics for event handler panics.
+* *(bridgev2)* Changed new room creation to hardcode room v11 to avoid v12 rooms
+  being created before proper support for them can be added.
+* *(bridgev2)* Changed queuing events to block instead of dropping events if the
+  buffer is full.
+* *(bridgev2)* Fixed assumption that replies to unknown messages are cross-room.
+* *(id)* Fixed server name validation not including ports correctly
+  (thanks to [@krombel] in [#392]).
+* *(federation)* Fixed base64 algorithm in signature generation.
+* *(event)* Fixed [MSC4144] fallbacks not being removed from edits.
+
+[@krombel]: https://github.com/krombel
+[#392]: https://github.com/mautrix/go/pull/392
+
 ## v0.24.1 (2025-06-16)
 
 * *(commands)* Added framework for using reactions as buttons that execute
