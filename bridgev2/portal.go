@@ -2784,7 +2784,14 @@ func (portal *Portal) handleRemoteMessageRemove(ctx context.Context, source *Use
 	onlyForMeProvider, ok := evt.(RemoteDeleteOnlyForMe)
 	onlyForMe := ok && onlyForMeProvider.DeleteOnlyForMe()
 	if onlyForMe && portal.Receiver == "" {
-		// TODO check if there are other user logins before deleting
+		logins, err := portal.Bridge.DB.UserPortal.GetAllInPortal(ctx, portal.PortalKey)
+		if err != nil {
+			log.Err(err).Msg("Failed to check if portal has other logins")
+			return EventHandlingResultFailed
+		} else if len(logins) > 1 {
+			log.Debug().Msg("Ignoring delete for me event in portal with multiple logins")
+			return EventHandlingResultIgnored
+		}
 	}
 
 	intent, ok := portal.GetIntentFor(ctx, evt.GetSender(), source, RemoteEventMessageRemove)
