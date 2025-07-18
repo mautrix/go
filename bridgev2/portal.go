@@ -1784,7 +1784,11 @@ func (portal *Portal) handleMatrixTombstone(ctx context.Context, evt *event.Even
 			log.Err(err).Msg("Failed to leave replacement room after tombstone validation failed")
 		}
 	}
-	err = portal.Bridge.Bot.EnsureJoined(ctx, content.ReplacementRoom)
+	var via []string
+	if senderHS := evt.Sender.Homeserver(); senderHS != "" {
+		via = []string{senderHS}
+	}
+	err = portal.Bridge.Bot.EnsureJoined(ctx, content.ReplacementRoom, EnsureJoinedParams{Via: via})
 	if err != nil {
 		log.Err(err).Msg("Failed to join replacement room from tombstone")
 		return EventHandlingResultFailed

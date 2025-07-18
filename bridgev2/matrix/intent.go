@@ -490,8 +490,12 @@ func (as *ASIntent) IsDoublePuppet() bool {
 	return as.Matrix.IsDoublePuppet()
 }
 
-func (as *ASIntent) EnsureJoined(ctx context.Context, roomID id.RoomID) error {
-	err := as.Matrix.EnsureJoined(ctx, roomID)
+func (as *ASIntent) EnsureJoined(ctx context.Context, roomID id.RoomID, extra ...bridgev2.EnsureJoinedParams) error {
+	var params bridgev2.EnsureJoinedParams
+	if len(extra) > 0 {
+		params = extra[0]
+	}
+	err := as.Matrix.EnsureJoined(ctx, roomID, appservice.EnsureJoinedParams{Via: params.Via})
 	if err != nil {
 		return err
 	}

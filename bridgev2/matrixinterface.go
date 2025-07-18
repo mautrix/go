@@ -144,6 +144,10 @@ func (ce CallbackError) Unwrap() error {
 	return ce.Wrapped
 }
 
+type EnsureJoinedParams struct {
+	Via []string
+}
+
 type MatrixAPI interface {
 	GetMXID() id.UserID
 	IsDoublePuppet() bool
@@ -164,7 +168,7 @@ type MatrixAPI interface {
 
 	CreateRoom(ctx context.Context, req *mautrix.ReqCreateRoom) (id.RoomID, error)
 	DeleteRoom(ctx context.Context, roomID id.RoomID, puppetsOnly bool) error
-	EnsureJoined(ctx context.Context, roomID id.RoomID) error
+	EnsureJoined(ctx context.Context, roomID id.RoomID, params ...EnsureJoinedParams) error
 	EnsureInvited(ctx context.Context, roomID id.RoomID, userID id.UserID) error
 
 	TagRoom(ctx context.Context, roomID id.RoomID, tag event.RoomTag, isTagged bool) error

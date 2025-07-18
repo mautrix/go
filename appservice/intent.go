@@ -86,6 +86,7 @@ func (intent *IntentAPI) EnsureRegistered(ctx context.Context) error {
 type EnsureJoinedParams struct {
 	IgnoreCache bool
 	BotOverride *mautrix.Client
+	Via         []string
 }
 
 func (intent *IntentAPI) EnsureJoined(ctx context.Context, roomID id.RoomID, extra ...EnsureJoinedParams) error {
@@ -99,11 +100,17 @@ func (intent *IntentAPI) EnsureJoined(ctx context.Context, roomID id.RoomID, ext
 		return nil
 	}
 
-	if err := intent.EnsureRegistered(ctx); err != nil {
+	err := intent.EnsureRegistered(ctx)
+	if err != nil {
 		return fmt.Errorf("failed to ensure joined: %w", err)
 	}
 
-	resp, err := intent.JoinRoomByID(ctx, roomID)
+	var resp *mautrix.RespJoinRoom
+	if len(params.Via) > 0 {
+		resp, err = intent.JoinRoom(ctx, roomID.String(), &mautrix.ReqJoinRoom{Via: params.Via})
+	} else {
+		resp, err = intent.JoinRoomByID(ctx, roomID)
+	}
 	if err != nil {
 		bot := intent.bot
 		if params.BotOverride != nil {
