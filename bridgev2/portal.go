@@ -580,6 +580,10 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 			return EventHandlingResultIgnored
 		}
 	}
+	if evt.Type == event.StateTombstone {
+		// Tombstones aren't bridged so they don't need a login
+		return portal.handleMatrixTombstone(ctx, evt)
+	}
 	login, _, err := portal.FindPreferredLogin(ctx, sender, true)
 	if err != nil {
 		log.Err(err).Msg("Failed to get user login to handle Matrix event")
@@ -1714,6 +1718,158 @@ func (portal *Portal) handleMatrixPowerLevels(
 		return EventHandlingResultFailed.WithMSSError(err)
 	}
 	return EventHandlingResultSuccess.WithMSS()
+}
+
+func (portal *Portal) handleMatrixTombstone(ctx context.Context, evt *event.Event) EventHandlingResult {
+	if evt.StateKey == nil || *evt.StateKey != "" || portal.MXID != evt.RoomID {
+		return EventHandlingResultIgnored
+	}
+	log := *zerolog.Ctx(ctx)
+	sentByBridge := evt.Sender == portal.Bridge.Bot.GetMXID() || portal.Bridge.IsGhostMXID(evt.Sender)
+	var senderUser *User
+	var err error
+	if !sentByBridge {
+		senderUser, err = portal.Bridge.GetUserByMXID(ctx, evt.Sender)
+		if err != nil {
+			log.Err(err).Msg("Failed to get tombstone sender user")
+			return EventHandlingResultFailed
+		}
+	}
+	content, ok := evt.Content.Parsed.(*event.TombstoneEventContent)
+	if !ok {
+		log.Error().Type("content_type", evt.Content.Parsed).Msg("Unexpected parsed content type")
+		return EventHandlingResultFailed.WithMSSError(fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed))
+	}
+	log = log.With().
+		Stringer("replacement_room", content.ReplacementRoom).
+		Logger()
+	if content.ReplacementRoom == "" {
+		log.Info().Msg("Received tombstone with no replacement room, cleaning up portal")
+		err := portal.RemoveMXID(ctx)
+		if err != nil {
+			log.Err(err).Msg("Failed to remove portal MXID")
+			return EventHandlingResultFailed.WithMSSError(err)
+		}
+		err = portal.Bridge.Bot.DeleteRoom(ctx, portal.MXID, true)
+		if err != nil {
+			log.Err(err).Msg("Failed to clean up Matrix room")
+			return EventHandlingResultFailed
+		}
+		return EventHandlingResultSuccess
+	}
+	existingMemberEvt, err := portal.Bridge.Matrix.GetMemberInfo(ctx, content.ReplacementRoom, portal.Bridge.Bot.GetMXID())
+	if err != nil {
+		log.Err(err).Msg("Failed to get member info of bot in replacement room")
+		return EventHandlingResultFailed
+	}
+	leaveOnError := func() {
+		if existingMemberEvt != nil && existingMemberEvt.Membership == event.MembershipJoin {
+			return
+		}
+		log.Debug().Msg("Leaving replacement room with bot after tombstone validation failed")
+		_, err = portal.Bridge.Bot.SendState(
+			ctx,
+			content.ReplacementRoom,
+			event.StateMember,
+			portal.Bridge.Bot.GetMXID().String(),
+			&event.Content{
+				Parsed: &event.MemberEventContent{
+					Membership: event.MembershipLeave,
+					Reason:     fmt.Sprintf("Failed to validate tombstone sent by %s from %s", evt.Sender, evt.RoomID),
+				},
+			},
+			time.Time{},
+		)
+		if err != nil {
+			log.Err(err).Msg("Failed to leave replacement room after tombstone validation failed")
+		}
+	}
+	err = portal.Bridge.Bot.EnsureJoined(ctx, content.ReplacementRoom)
+	if err != nil {
+		log.Err(err).Msg("Failed to join replacement room from tombstone")
+		return EventHandlingResultFailed
+	}
+	if !sentByBridge && !senderUser.Permissions.Admin {
+		powers, err := portal.Bridge.Matrix.GetPowerLevels(ctx, content.ReplacementRoom)
+		if err != nil {
+			log.Err(err).Msg("Failed to get power levels in replacement room")
+			leaveOnError()
+			return EventHandlingResultFailed
+		}
+		if powers.GetUserLevel(evt.Sender) < powers.Invite() {
+			log.Warn().Msg("Tombstone sender doesn't have enough power to invite the bot to the replacement room")
+			leaveOnError()
+			return EventHandlingResultIgnored
+		}
+	}
+
+	portal.Bridge.cacheLock.Lock()
+	if _, alreadyExists := portal.Bridge.portalsByMXID[content.ReplacementRoom]; alreadyExists {
+		log.Warn().Msg("Replacement room is already a portal, ignoring tombstone")
+		portal.Bridge.cacheLock.Unlock()
+		return EventHandlingResultIgnored
+	}
+	delete(portal.Bridge.portalsByMXID, portal.MXID)
+	portal.MXID = content.ReplacementRoom
+	portal.Bridge.portalsByMXID[portal.MXID] = portal
+	portal.NameSet = false
+	portal.AvatarSet = false
+	portal.TopicSet = false
+	portal.InSpace = false
+	portal.CapState = database.CapabilityState{}
+	portal.Bridge.cacheLock.Unlock()
+
+	err = portal.Save(ctx)
+	if err != nil {
+		log.Err(err).Msg("Failed to save portal after tombstone")
+		return EventHandlingResultFailed
+	}
+	log.Info().Msg("Successfully followed tombstone and updated portal MXID")
+	err = portal.Bridge.DB.UserPortal.MarkAllNotInSpace(ctx, portal.PortalKey)
+	if err != nil {
+		log.Err(err).Msg("Failed to update in_space flag for user portals after tombstone")
+	}
+	go portal.addToUserSpaces(ctx)
+	go portal.updateInfoAfterTombstone(ctx, senderUser)
+	go func() {
+		err = portal.Bridge.Bot.DeleteRoom(ctx, evt.RoomID, true)
+		if err != nil {
+			log.Err(err).Msg("Failed to clean up Matrix room after following tombstone")
+		}
+	}()
+	return EventHandlingResultSuccess
+}
+
+func (portal *Portal) updateInfoAfterTombstone(ctx context.Context, senderUser *User) {
+	log := zerolog.Ctx(ctx)
+	logins, err := portal.Bridge.GetUserLoginsInPortal(ctx, portal.PortalKey)
+	if err != nil {
+		log.Err(err).Msg("Failed to get user logins in portal to sync info")
+		return
+	}
+	var preferredLogin *UserLogin
+	for _, login := range logins {
+		if !login.Client.IsLoggedIn() {
+			continue
+		} else if preferredLogin == nil {
+			preferredLogin = login
+		} else if senderUser != nil && login.User == senderUser {
+			preferredLogin = login
+		}
+	}
+	if preferredLogin == nil {
+		log.Warn().Msg("No logins found to sync info")
+		return
+	}
+	info, err := preferredLogin.Client.GetChatInfo(ctx, portal)
+	if err != nil {
+		log.Err(err).Msg("Failed to get chat info")
+		return
+	}
+	log.Info().
+		Str("info_source_login", string(preferredLogin.ID)).
+		Msg("Fetched info to update portal after tombstone")
+	portal.UpdateInfo(ctx, info, preferredLogin, nil, time.Time{})
 }
 
 func (portal *Portal) handleMatrixRedaction(
@@ -4203,37 +4359,44 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 			}
 		}
 	}
-	if portal.Parent == nil {
-		if portal.Receiver != "" {
-			login := portal.Bridge.GetCachedUserLoginByID(portal.Receiver)
-			if login != nil {
-				up, err := portal.Bridge.DB.UserPortal.Get(ctx, login.UserLogin, portal.PortalKey)
-				if err != nil {
-					log.Err(err).Msg("Failed to get user portal to add portal to spaces")
-				} else {
-					login.inPortalCache.Remove(portal.PortalKey)
-					go login.tryAddPortalToSpace(withoutCancelCtx, portal, up.CopyWithoutValues())
-				}
-			}
-		} else {
-			userPortals, err := portal.Bridge.DB.UserPortal.GetAllInPortal(ctx, portal.PortalKey)
-			if err != nil {
-				log.Err(err).Msg("Failed to get user logins in portal to add portal to spaces")
-			} else {
-				for _, up := range userPortals {
-					login := portal.Bridge.GetCachedUserLoginByID(up.LoginID)
-					if login != nil {
-						login.inPortalCache.Remove(portal.PortalKey)
-						go login.tryAddPortalToSpace(withoutCancelCtx, portal, up.CopyWithoutValues())
-					}
-				}
-			}
-		}
-	}
+	portal.addToUserSpaces(ctx)
 	if portal.Bridge.Config.Backfill.Enabled && portal.RoomType != database.RoomTypeSpace && !portal.Bridge.Background {
 		portal.doForwardBackfill(ctx, source, nil, backfillBundle)
 	}
 	return nil
+}
+
+func (portal *Portal) addToUserSpaces(ctx context.Context) {
+	if portal.Parent == nil {
+		return
+	}
+	log := zerolog.Ctx(ctx)
+	withoutCancelCtx := log.WithContext(portal.Bridge.BackgroundCtx)
+	if portal.Receiver != "" {
+		login := portal.Bridge.GetCachedUserLoginByID(portal.Receiver)
+		if login != nil {
+			up, err := portal.Bridge.DB.UserPortal.Get(ctx, login.UserLogin, portal.PortalKey)
+			if err != nil {
+				log.Err(err).Msg("Failed to get user portal to add portal to spaces")
+			} else {
+				login.inPortalCache.Remove(portal.PortalKey)
+				go login.tryAddPortalToSpace(withoutCancelCtx, portal, up.CopyWithoutValues())
+			}
+		}
+	} else {
+		userPortals, err := portal.Bridge.DB.UserPortal.GetAllInPortal(ctx, portal.PortalKey)
+		if err != nil {
+			log.Err(err).Msg("Failed to get user logins in portal to add portal to spaces")
+		} else {
+			for _, up := range userPortals {
+				login := portal.Bridge.GetCachedUserLoginByID(up.LoginID)
+				if login != nil {
+					login.inPortalCache.Remove(portal.PortalKey)
+					go login.tryAddPortalToSpace(withoutCancelCtx, portal, up.CopyWithoutValues())
+				}
+			}
+		}
+	}
 }
 
 func (portal *Portal) Delete(ctx context.Context) error {

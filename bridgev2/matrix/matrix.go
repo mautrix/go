@@ -169,7 +169,7 @@ func (br *Connector) shouldIgnoreEventFromUser(userID id.UserID) bool {
 }
 
 func (br *Connector) shouldIgnoreEvent(evt *event.Event) bool {
-	if br.shouldIgnoreEventFromUser(evt.Sender) {
+	if br.shouldIgnoreEventFromUser(evt.Sender) && evt.Type != event.StateTombstone {
 		return true
 	}
 	dpVal, ok := evt.Content.Raw[appservice.DoublePuppetKey]
