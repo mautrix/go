@@ -139,6 +139,10 @@ type IdentityServerInfo struct {
 // Use ParseUserID to extract the server name from a user ID.
 // https://spec.matrix.org/v1.2/client-server-api/#server-discovery
 func DiscoverClientAPI(ctx context.Context, serverName string) (*ClientWellKnown, error) {
+	return DiscoverClientAPIWithClient(ctx, &http.Client{Timeout: 30 * time.Second}, serverName)
+}
+
+func DiscoverClientAPIWithClient(ctx context.Context, client *http.Client, serverName string) (*ClientWellKnown, error) {
 	wellKnownURL := url.URL{
 		Scheme: "https",
 		Host:   serverName,
@@ -153,7 +157,6 @@ func DiscoverClientAPI(ctx context.Context, serverName string) (*ClientWellKnown
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", DefaultUserAgent+" (.well-known fetcher)")
 
-	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
