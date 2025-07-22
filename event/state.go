@@ -8,6 +8,7 @@ package event
 
 import (
 	"encoding/base64"
+	"slices"
 
 	"maunium.net/go/mautrix/id"
 )
@@ -266,4 +267,12 @@ type InsertionMarkerContent struct {
 
 type ElementFunctionalMembersContent struct {
 	ServiceMembers []id.UserID `json:"service_members"`
+}
+
+func (efmc *ElementFunctionalMembersContent) Add(mxid id.UserID) bool {
+	if slices.Contains(efmc.ServiceMembers, mxid) {
+		return false
+	}
+	efmc.ServiceMembers = append(efmc.ServiceMembers, mxid)
+	return true
 }

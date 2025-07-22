@@ -87,6 +87,9 @@ type Portal struct {
 
 	roomCreateLock sync.Mutex
 
+	functionalMembersLock  sync.Mutex
+	functionalMembersCache *event.ElementFunctionalMembersContent
+
 	events chan portalEvent
 
 	eventsLock sync.Mutex
@@ -2043,6 +2046,45 @@ func (portal *Portal) handleRemoteEvent(ctx context.Context, source *UserLogin, 
 	return
 }
 
+func (portal *Portal) ensureFunctionalMember(ctx context.Context, ghost *Ghost) {
+	if !ghost.IsBot || portal.RoomType != database.RoomTypeDM || portal.OtherUserID == ghost.ID {
+		return
+	}
+	ars, ok := portal.Bridge.Matrix.(MatrixConnectorWithArbitraryRoomState)
+	if !ok {
+		return
+	}
+	portal.functionalMembersLock.Lock()
+	defer portal.functionalMembersLock.Unlock()
+	var functionalMembers *event.ElementFunctionalMembersContent
+	if portal.functionalMembersCache != nil {
+		functionalMembers = portal.functionalMembersCache
+	} else {
+		evt, err := ars.GetStateEvent(ctx, portal.MXID, event.StateElementFunctionalMembers, "")
+		if err != nil && !errors.Is(err, mautrix.MNotFound) {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to get functional members state event")
+			return
+		}
+		functionalMembers = &event.ElementFunctionalMembersContent{}
+		if evt != nil {
+			evtContent, ok := evt.Content.Parsed.(*event.ElementFunctionalMembersContent)
+			if ok && evtContent != nil {
+				functionalMembers = evtContent
+			}
+		}
+	}
+	functionalMembers.Add(portal.Bridge.Bot.GetMXID())
+	if functionalMembers.Add(ghost.Intent.GetMXID()) {
+		_, err := portal.Bridge.Bot.SendState(ctx, portal.MXID, event.StateElementFunctionalMembers, "", &event.Content{
+			Parsed: functionalMembers,
+		}, time.Time{})
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to update functional members state event")
+			return
+		}
+	}
+}
+
 func (portal *Portal) getIntentAndUserMXIDFor(ctx context.Context, sender EventSender, source *UserLogin, otherLogins []*UserLogin, evtType RemoteEventType) (intent MatrixAPI, extraUserID id.UserID, err error) {
 	var ghost *Ghost
 	if !sender.IsFromMe && sender.ForceDMUser && portal.OtherUserID != "" && sender.Sender != portal.OtherUserID {
@@ -2066,6 +2108,7 @@ func (portal *Portal) getIntentAndUserMXIDFor(ctx context.Context, sender EventS
 			return
 		}
 		ghost.UpdateInfoIfNecessary(ctx, source, evtType)
+		portal.ensureFunctionalMember(ctx, ghost)
 	}
 	if sender.IsFromMe {
 		intent = source.User.DoublePuppet(ctx)
