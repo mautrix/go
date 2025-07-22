@@ -101,6 +101,7 @@ type Connector struct {
 var (
 	_ bridgev2.MatrixConnector                           = (*Connector)(nil)
 	_ bridgev2.MatrixConnectorWithServer                 = (*Connector)(nil)
+	_ bridgev2.MatrixConnectorWithArbitraryRoomState     = (*Connector)(nil)
 	_ bridgev2.MatrixConnectorWithPostRoomBridgeHandling = (*Connector)(nil)
 	_ bridgev2.MatrixConnectorWithPublicMedia            = (*Connector)(nil)
 	_ bridgev2.MatrixConnectorWithNameDisambiguation     = (*Connector)(nil)
@@ -534,12 +535,14 @@ func (br *Connector) GetPowerLevels(ctx context.Context, roomID id.RoomID) (*eve
 	return br.Bot.PowerLevels(ctx, roomID)
 }
 
-func (br *Connector) GetCreateEvent(ctx context.Context, roomID id.RoomID) (*event.Event, error) {
-	createEvt, err := br.Bot.StateStore.GetCreate(ctx, roomID)
-	if err != nil || createEvt != nil {
-		return createEvt, err
+func (br *Connector) GetStateEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string) (*event.Event, error) {
+	if eventType == event.StateCreate && stateKey == "" {
+		createEvt, err := br.Bot.StateStore.GetCreate(ctx, roomID)
+		if err != nil || createEvt != nil {
+			return createEvt, err
+		}
 	}
-	return br.Bot.FullStateEvent(ctx, roomID, event.StateCreate, "")
+	return br.Bot.FullStateEvent(ctx, roomID, eventType, "")
 }
 
 func (br *Connector) GetMembers(ctx context.Context, roomID id.RoomID) (map[id.UserID]*event.MemberEventContent, error) {

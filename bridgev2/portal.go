@@ -1655,10 +1655,13 @@ func (portal *Portal) handleMatrixPowerLevels(
 		return EventHandlingResultFailed.WithMSSError(fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed))
 	}
 	if content.CreateEvent == nil {
-		var err error
-		content.CreateEvent, err = portal.Bridge.Matrix.GetCreateEvent(ctx, portal.MXID)
-		if err != nil {
-			return EventHandlingResultFailed.WithMSSError(fmt.Errorf("failed to get create event for power levels: %w", err))
+		ars, ok := portal.Bridge.Matrix.(MatrixConnectorWithArbitraryRoomState)
+		if ok {
+			var err error
+			content.CreateEvent, err = ars.GetStateEvent(ctx, portal.MXID, event.StateCreate, "")
+			if err != nil {
+				return EventHandlingResultFailed.WithMSSError(fmt.Errorf("failed to get create event for power levels: %w", err))
+			}
 		}
 	}
 	api, ok := sender.Client.(PowerLevelHandlingNetworkAPI)

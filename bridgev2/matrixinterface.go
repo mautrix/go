@@ -47,7 +47,6 @@ type MatrixConnector interface {
 	GenerateContentURI(ctx context.Context, mediaID networkid.MediaID) (id.ContentURIString, error)
 
 	GetPowerLevels(ctx context.Context, roomID id.RoomID) (*event.PowerLevelsEventContent, error)
-	GetCreateEvent(ctx context.Context, roomID id.RoomID) (*event.Event, error)
 	GetMembers(ctx context.Context, roomID id.RoomID) (map[id.UserID]*event.MemberEventContent, error)
 	GetMemberInfo(ctx context.Context, roomID id.RoomID, userID id.UserID) (*event.MemberEventContent, error)
 
@@ -57,6 +56,10 @@ type MatrixConnector interface {
 	GenerateReactionEventID(roomID id.RoomID, targetMessage *database.Message, sender networkid.UserID, emojiID networkid.EmojiID) id.EventID
 
 	ServerName() string
+}
+
+type MatrixConnectorWithArbitraryRoomState interface {
+	GetStateEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string) (*event.Event, error)
 }
 
 type MatrixConnectorWithServer interface {
