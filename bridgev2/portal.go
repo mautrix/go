@@ -4379,7 +4379,7 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 }
 
 func (portal *Portal) addToUserSpaces(ctx context.Context) {
-	if portal.Parent == nil {
+	if portal.Parent != nil {
 		return
 	}
 	log := zerolog.Ctx(ctx)
