@@ -78,6 +78,11 @@ const (
 			dispatched_at=$9, completed_at=$10, next_dispatch_min_ts=$11
 		WHERE bridge_id = $1 AND portal_id = $2 AND portal_receiver = $3
 	`
+	markBackfillTaskNotDoneQuery = `
+		UPDATE backfill_task
+		SET is_done = false
+		WHERE bridge_id = $1 AND portal_id = $2 AND portal_receiver = $3 AND user_login_id = $4
+	`
 	getNextBackfillQuery = `
 		SELECT
 			bridge_id, portal_id, portal_receiver, user_login_id, batch_count, is_done,
@@ -125,6 +130,10 @@ func (btq *BackfillTaskQuery) MarkDispatched(ctx context.Context, bq *BackfillTa
 func (btq *BackfillTaskQuery) Update(ctx context.Context, bq *BackfillTask) error {
 	ensureBridgeIDMatches(&bq.BridgeID, btq.BridgeID)
 	return btq.Exec(ctx, updateBackfillQueueQuery, bq.sqlVariables()...)
+}
+
+func (btq *BackfillTaskQuery) MarkNotDone(ctx context.Context, portalKey networkid.PortalKey, userLoginID networkid.UserLoginID) error {
+	return btq.Exec(ctx, markBackfillTaskNotDoneQuery, btq.BridgeID, portalKey.ID, portalKey.Receiver, userLoginID)
 }
 
 func (btq *BackfillTaskQuery) GetNext(ctx context.Context) (*BackfillTask, error) {
