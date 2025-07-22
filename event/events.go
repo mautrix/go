@@ -146,13 +146,12 @@ type Unsigned struct {
 	BeeperHSOrderString *BeeperEncodedOrder `json:"com.beeper.hs.order_string,omitempty"`
 	BeeperFromBackup    bool                `json:"com.beeper.from_backup,omitempty"`
 
-	MauSoftFailed      bool   `json:"fi.mau.soft_failed,omitempty"`
-	MauRejectionReason string `json:"fi.mau.rejection_reason,omitempty"`
+	ElementSoftFailed bool `json:"io.element.synapse.soft_failed,omitempty"`
 }
 
 func (us *Unsigned) IsEmpty() bool {
 	return us.PrevContent == nil && us.PrevSender == "" && us.ReplacesState == "" && us.Age == 0 && us.Membership == "" &&
 		us.TransactionID == "" && us.RedactedBecause == nil && us.InviteRoomState == nil && us.Relations == nil &&
 		us.BeeperHSOrder == 0 && us.BeeperHSSuborder == 0 && us.BeeperHSOrderString.IsZero() &&
-		!us.MauSoftFailed && us.MauRejectionReason == ""
+		!us.ElementSoftFailed
 }
