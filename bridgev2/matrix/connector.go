@@ -435,7 +435,7 @@ func (br *Connector) internalSendMessageStatus(ctx context.Context, ms *bridgev2
 	log := zerolog.Ctx(ctx)
 
 	if !evt.IsSourceEventDoublePuppeted {
-		err := br.SendMessageCheckpoints([]*status.MessageCheckpoint{ms.ToCheckpoint(evt)})
+		err := br.SendMessageCheckpoints(ctx, []*status.MessageCheckpoint{ms.ToCheckpoint(evt)})
 		if err != nil {
 			log.Err(err).Msg("Failed to send message checkpoint")
 		}
@@ -480,7 +480,7 @@ func (br *Connector) internalSendMessageStatus(ctx context.Context, ms *bridgev2
 	return ""
 }
 
-func (br *Connector) SendMessageCheckpoints(checkpoints []*status.MessageCheckpoint) error {
+func (br *Connector) SendMessageCheckpoints(ctx context.Context, checkpoints []*status.MessageCheckpoint) error {
 	checkpointsJSON := status.CheckpointsJSON{Checkpoints: checkpoints}
 
 	if br.Websocket {
@@ -495,7 +495,7 @@ func (br *Connector) SendMessageCheckpoints(checkpoints []*status.MessageCheckpo
 		return nil
 	}
 
-	return checkpointsJSON.SendHTTP(endpoint, br.AS.Registration.AppToken)
+	return checkpointsJSON.SendHTTP(ctx, br.AS.HTTPClient, endpoint, br.AS.Registration.AppToken)
 }
 
 func (br *Connector) ParseGhostMXID(userID id.UserID) (networkid.UserID, bool) {

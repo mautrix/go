@@ -169,13 +169,13 @@ type CheckpointsJSON struct {
 	Checkpoints []*MessageCheckpoint `json:"checkpoints"`
 }
 
-func (cj *CheckpointsJSON) SendHTTP(endpoint string, token string) error {
+func (cj *CheckpointsJSON) SendHTTP(ctx context.Context, cli *http.Client, endpoint string, token string) error {
 	var body bytes.Buffer
 	if err := json.NewEncoder(&body).Encode(cj); err != nil {
 		return fmt.Errorf("failed to encode message checkpoint JSON: %w", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, &body)
 	if err != nil {
@@ -186,7 +186,10 @@ func (cj *CheckpointsJSON) SendHTTP(endpoint string, token string) error {
 	req.Header.Set("User-Agent", mautrix.DefaultUserAgent+" (checkpoint sender)")
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	if cli == nil {
+		cli = http.DefaultClient
+	}
+	resp, err := cli.Do(req)
 	if err != nil {
 		return mautrix.HTTPError{
 			Request:  req,

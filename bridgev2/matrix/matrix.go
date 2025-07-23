@@ -142,7 +142,7 @@ type CommandProcessor interface {
 }
 
 func (br *Connector) sendSuccessCheckpoint(ctx context.Context, evt *event.Event, step status.MessageCheckpointStep, retryNum int) {
-	err := br.SendMessageCheckpoints([]*status.MessageCheckpoint{{
+	err := br.SendMessageCheckpoints(ctx, []*status.MessageCheckpoint{{
 		RoomID:      evt.RoomID,
 		EventID:     evt.ID,
 		EventType:   evt.Type,
