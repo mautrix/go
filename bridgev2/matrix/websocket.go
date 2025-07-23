@@ -57,7 +57,7 @@ func (br *Connector) startWebsocket(wg *sync.WaitGroup) {
 		addr = br.Config.Homeserver.Address
 	}
 	for {
-		err := br.AS.StartWebsocket(addr, onConnect)
+		err := br.AS.StartWebsocket(br.Bridge.BackgroundCtx, addr, onConnect)
 		if errors.Is(err, appservice.ErrWebsocketManualStop) {
 			return
 		} else if closeCommand := (&appservice.CloseCommand{}); errors.As(err, &closeCommand) && closeCommand.Status == appservice.MeowConnectionReplaced {

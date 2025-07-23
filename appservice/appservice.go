@@ -19,7 +19,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gorilla/websocket"
+	"github.com/coder/websocket"
 	"github.com/rs/zerolog"
 	"golang.org/x/net/publicsuffix"
 	"gopkg.in/yaml.v3"
@@ -178,7 +178,6 @@ type AppService struct {
 	intentsLock sync.RWMutex
 
 	ws                    *websocket.Conn
-	wsWriteLock           sync.Mutex
 	StopWebsocket         func(error)
 	websocketHandlers     map[string]WebsocketHandler
 	websocketHandlersLock sync.RWMutex

@@ -413,7 +413,7 @@ func (br *Connector) GhostIntent(userID networkid.UserID) bridgev2.MatrixAPI {
 func (br *Connector) SendBridgeStatus(ctx context.Context, state *status.BridgeState) error {
 	if br.Websocket {
 		br.hasSentAnyStates = true
-		return br.AS.SendWebsocket(&appservice.WebsocketRequest{
+		return br.AS.SendWebsocket(ctx, &appservice.WebsocketRequest{
 			Command: "bridge_status",
 			Data:    state,
 		})
@@ -484,7 +484,7 @@ func (br *Connector) SendMessageCheckpoints(ctx context.Context, checkpoints []*
 	checkpointsJSON := status.CheckpointsJSON{Checkpoints: checkpoints}
 
 	if br.Websocket {
-		return br.AS.SendWebsocket(&appservice.WebsocketRequest{
+		return br.AS.SendWebsocket(ctx, &appservice.WebsocketRequest{
 			Command: "message_checkpoint",
 			Data:    checkpointsJSON,
 		})
