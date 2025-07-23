@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tulir Asokan
+// Copyright (c) 2025 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -15,8 +15,6 @@ import (
 	"io"
 	"net/http"
 	"time"
-
-	"github.com/gorilla/mux"
 
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/id"
@@ -35,7 +33,7 @@ func (br *Connector) initPublicMedia() error {
 		return fmt.Errorf("public media hash length is negative")
 	}
 	br.pubMediaSigKey = []byte(br.Config.PublicMedia.SigningKey)
-	br.AS.Router.HandleFunc("/_mautrix/publicmedia/{server}/{mediaID}/{checksum}", br.servePublicMedia).Methods(http.MethodGet)
+	br.AS.Router.HandleFunc("GET /_mautrix/publicmedia/{server}/{mediaID}/{checksum}", br.servePublicMedia)
 	return nil
 }
 
@@ -76,16 +74,15 @@ var proxyHeadersToCopy = []string{
 }
 
 func (br *Connector) servePublicMedia(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
 	contentURI := id.ContentURI{
-		Homeserver: vars["server"],
-		FileID:     vars["mediaID"],
+		Homeserver: r.PathValue("server"),
+		FileID:     r.PathValue("mediaID"),
 	}
 	if !contentURI.IsValid() {
 		http.Error(w, "invalid content URI", http.StatusBadRequest)
 		return
 	}
-	checksum, err := base64.RawURLEncoding.DecodeString(vars["checksum"])
+	checksum, err := base64.RawURLEncoding.DecodeString(r.PathValue("checksum"))
 	if err != nil || !hmac.Equal(checksum, br.makePublicMediaChecksum(contentURI)) {
 		http.Error(w, "invalid base64 in checksum", http.StatusBadRequest)
 		return

@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tulir Asokan
+// Copyright (c) 2025 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -10,10 +10,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"time"
-
-	"github.com/gorilla/mux"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2/database"
@@ -64,7 +63,7 @@ type MatrixConnectorWithArbitraryRoomState interface {
 
 type MatrixConnectorWithServer interface {
 	GetPublicAddress() string
-	GetRouter() *mux.Router
+	GetRouter() *http.ServeMux
 }
 
 type MatrixConnectorWithPublicMedia interface {
