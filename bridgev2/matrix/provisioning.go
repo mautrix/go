@@ -142,15 +142,17 @@ func (prov *ProvisioningAPI) Init() {
 		debugRouter.HandleFunc("GET /pprof/symbol", pprof.Symbol)
 		debugRouter.HandleFunc("GET /pprof/trace", pprof.Trace)
 		debugRouter.HandleFunc("/pprof/", pprof.Index)
-		prov.br.AS.Router.Handle("/debug", exhttp.ApplyMiddleware(
+		prov.br.AS.Router.Handle("/debug/", exhttp.ApplyMiddleware(
 			debugRouter,
+			exhttp.StripPrefix("/debug"),
 			hlog.NewHandler(prov.br.Log.With().Str("component", "debug api").Logger()),
 			prov.DebugAuthMiddleware,
 		))
 	}
 
-	prov.br.AS.Router.Handle("/_matrix/provision", exhttp.ApplyMiddleware(
+	prov.br.AS.Router.Handle("/_matrix/provision/", exhttp.ApplyMiddleware(
 		prov.Router,
+		exhttp.StripPrefix("/_matrix/provision"),
 		hlog.NewHandler(prov.log),
 		hlog.RequestIDHandler("request_id", "Request-Id"),
 		exhttp.CORSMiddleware,

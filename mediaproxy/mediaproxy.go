@@ -208,12 +208,14 @@ func (mp *MediaProxy) RegisterRoutes(router *http.ServeMux) {
 		NotFound:         exerrors.Must(json.Marshal(mautrix.MUnrecognized.WithMessage("Unrecognized endpoint"))),
 		MethodNotAllowed: exerrors.Must(json.Marshal(mautrix.MUnrecognized.WithMessage("Invalid method for endpoint"))),
 	}
-	router.Handle("/_matrix/federation", exhttp.ApplyMiddleware(
+	router.Handle("/_matrix/federation/", exhttp.ApplyMiddleware(
 		mp.FederationRouter,
+		exhttp.StripPrefix("/_matrix/federation"),
 		exhttp.HandleErrors(errorBodies),
 	))
-	router.Handle("/_matrix/client/v1/media", exhttp.ApplyMiddleware(
+	router.Handle("/_matrix/client/v1/media/", exhttp.ApplyMiddleware(
 		mp.ClientMediaRouter,
+		exhttp.StripPrefix("/_matrix/client/v1/media"),
 		exhttp.CORSMiddleware,
 		exhttp.HandleErrors(errorBodies),
 	))

@@ -62,8 +62,9 @@ func (ks *KeyServer) Register(r *http.ServeMux) {
 		NotFound:         exerrors.Must(json.Marshal(mautrix.MUnrecognized.WithMessage("Unrecognized endpoint"))),
 		MethodNotAllowed: exerrors.Must(json.Marshal(mautrix.MUnrecognized.WithMessage("Invalid method for endpoint"))),
 	}
-	r.Handle("/_matrix/key", exhttp.ApplyMiddleware(
+	r.Handle("/_matrix/key/", exhttp.ApplyMiddleware(
 		keyRouter,
+		exhttp.StripPrefix("/_matrix/key"),
 		exhttp.HandleErrors(errorBodies),
 	))
 }
