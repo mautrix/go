@@ -2073,6 +2073,7 @@ func (portal *Portal) ensureFunctionalMember(ctx context.Context, ghost *Ghost) 
 			}
 		}
 	}
+	// TODO what about non-double-puppeted user ghosts?
 	functionalMembers.Add(portal.Bridge.Bot.GetMXID())
 	if functionalMembers.Add(ghost.Intent.GetMXID()) {
 		_, err := portal.Bridge.Bot.SendState(ctx, portal.MXID, event.StateElementFunctionalMembers, "", &event.Content{
