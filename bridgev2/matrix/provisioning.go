@@ -119,8 +119,7 @@ func (prov *ProvisioningAPI) Init() {
 	prov.Router.HandleFunc("GET /v3/whoami", prov.GetWhoami)
 	prov.Router.HandleFunc("GET /v3/login/flows", prov.GetLoginFlows)
 	prov.Router.HandleFunc("POST /v3/login/start/{flowID}", prov.PostLoginStart)
-	prov.Router.HandleFunc("POST /v3/login/step/{loginProcessID}/{stepID}/{stepType:user_input|cookies}", prov.PostLoginSubmitInput)
-	prov.Router.HandleFunc("POST /v3/login/step/{loginProcessID}/{stepID}/{stepType:display_and_wait}", prov.PostLoginWait)
+	prov.Router.HandleFunc("POST /v3/login/step/{loginProcessID}/{stepID}/{stepType}", prov.PostLoginStep)
 	prov.Router.HandleFunc("POST /v3/logout/{loginID}", prov.PostLogout)
 	prov.Router.HandleFunc("GET /v3/logins", prov.GetLogins)
 	prov.Router.HandleFunc("GET /v3/contacts", prov.GetContactList)
@@ -427,6 +426,18 @@ func (prov *ProvisioningAPI) handleCompleteStep(ctx context.Context, login *Prov
 		StateEvent: status.StateLoggedOut,
 		Reason:     "LOGIN_OVERRIDDEN",
 	}, bridgev2.DeleteOpts{LogoutRemote: true})
+}
+
+func (prov *ProvisioningAPI) PostLoginStep(w http.ResponseWriter, r *http.Request) {
+	switch r.PathValue("stepType") {
+	case "user_input", "cookies":
+		prov.PostLoginSubmitInput(w, r)
+	case "display_and_wait":
+		prov.PostLoginWait(w, r)
+	default:
+		// This is probably impossible because AuthMiddleware checks that the next step type matches the request.
+		mautrix.MUnrecognized.WithMessage("Invalid step type %q", r.PathValue("stepType")).Write(w)
+	}
 }
 
 func (prov *ProvisioningAPI) PostLoginSubmitInput(w http.ResponseWriter, r *http.Request) {
