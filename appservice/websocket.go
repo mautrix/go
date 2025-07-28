@@ -182,9 +182,10 @@ func (as *AppService) SendWebsocket(ctx context.Context, cmd *WebsocketRequest) 
 	}
 	err = json.NewEncoder(wr).Encode(cmd)
 	if err != nil {
+		_ = wr.Close()
 		return err
 	}
-	return nil
+	return wr.Close()
 }
 
 func (as *AppService) clearWebsocketResponseWaiters() {
