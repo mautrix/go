@@ -2008,6 +2008,7 @@ func (portal *Portal) handleRemoteEvent(ctx context.Context, source *UserLogin, 
 	switch evtType {
 	case RemoteEventUnknown:
 		log.Debug().Msg("Ignoring remote event with type unknown")
+		res = EventHandlingResultIgnored
 	case RemoteEventMessage, RemoteEventMessageUpsert:
 		res = portal.handleRemoteMessage(ctx, source, evt.(RemoteMessage))
 	case RemoteEventEdit:
