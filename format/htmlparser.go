@@ -286,7 +286,10 @@ func (parser *HTMLParser) linkToString(node *html.Node, ctx Context) string {
 	}
 	if parser.LinkConverter != nil {
 		return parser.LinkConverter(str, href, ctx)
-	} else if str == href {
+	} else if str == href ||
+		str == strings.TrimPrefix(href, "mailto:") ||
+		str == strings.TrimPrefix(href, "http://") ||
+		str == strings.TrimPrefix(href, "https://") {
 		return str
 	}
 	return fmt.Sprintf("%s (%s)", str, href)
