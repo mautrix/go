@@ -12,9 +12,13 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/hlog"
 	"go.mau.fi/util/exerrors"
 	"go.mau.fi/util/exhttp"
 	"go.mau.fi/util/jsontime"
+	"go.mau.fi/util/ptr"
+	"go.mau.fi/util/requestlog"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/id"
@@ -51,7 +55,7 @@ type KeyServer struct {
 }
 
 // Register registers the key server endpoints to the given router.
-func (ks *KeyServer) Register(r *http.ServeMux) {
+func (ks *KeyServer) Register(r *http.ServeMux, log zerolog.Logger) {
 	r.HandleFunc("GET /.well-known/matrix/server", ks.GetWellKnown)
 	r.HandleFunc("GET /_matrix/federation/v1/version", ks.GetServerVersion)
 	keyRouter := http.NewServeMux()
@@ -59,12 +63,15 @@ func (ks *KeyServer) Register(r *http.ServeMux) {
 	keyRouter.HandleFunc("GET /v2/query/{serverName}", ks.GetQueryKeys)
 	keyRouter.HandleFunc("POST /v2/query", ks.PostQueryKeys)
 	errorBodies := exhttp.ErrorBodies{
-		NotFound:         exerrors.Must(json.Marshal(mautrix.MUnrecognized.WithMessage("Unrecognized endpoint"))),
-		MethodNotAllowed: exerrors.Must(json.Marshal(mautrix.MUnrecognized.WithMessage("Invalid method for endpoint"))),
+		NotFound:         exerrors.Must(ptr.Ptr(mautrix.MUnrecognized.WithMessage("Unrecognized endpoint")).MarshalJSON()),
+		MethodNotAllowed: exerrors.Must(ptr.Ptr(mautrix.MUnrecognized.WithMessage("Invalid method for endpoint")).MarshalJSON()),
 	}
 	r.Handle("/_matrix/key/", exhttp.ApplyMiddleware(
 		keyRouter,
 		exhttp.StripPrefix("/_matrix/key"),
+		hlog.NewHandler(log),
+		hlog.RequestIDHandler("request_id", "Request-Id"),
+		requestlog.AccessLogger(requestlog.Options{TrustXForwardedFor: true}),
 		exhttp.HandleErrors(errorBodies),
 	))
 }

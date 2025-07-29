@@ -20,9 +20,11 @@ import (
 	"github.com/rs/xid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/hlog"
+	"go.mau.fi/util/exerrors"
 	"go.mau.fi/util/exhttp"
 	"go.mau.fi/util/exstrings"
 	"go.mau.fi/util/jsontime"
+	"go.mau.fi/util/ptr"
 	"go.mau.fi/util/requestlog"
 
 	"maunium.net/go/mautrix"
@@ -146,10 +148,15 @@ func (prov *ProvisioningAPI) Init() {
 			debugRouter,
 			exhttp.StripPrefix("/debug"),
 			hlog.NewHandler(prov.br.Log.With().Str("component", "debug api").Logger()),
+			requestlog.AccessLogger(requestlog.Options{TrustXForwardedFor: true}),
 			prov.DebugAuthMiddleware,
 		))
 	}
 
+	errorBodies := exhttp.ErrorBodies{
+		NotFound:         exerrors.Must(ptr.Ptr(mautrix.MUnrecognized.WithMessage("Unrecognized endpoint")).MarshalJSON()),
+		MethodNotAllowed: exerrors.Must(ptr.Ptr(mautrix.MUnrecognized.WithMessage("Invalid method for endpoint")).MarshalJSON()),
+	}
 	prov.br.AS.Router.Handle("/_matrix/provision/", exhttp.ApplyMiddleware(
 		prov.Router,
 		exhttp.StripPrefix("/_matrix/provision"),
@@ -157,6 +164,7 @@ func (prov *ProvisioningAPI) Init() {
 		hlog.RequestIDHandler("request_id", "Request-Id"),
 		exhttp.CORSMiddleware,
 		requestlog.AccessLogger(requestlog.Options{TrustXForwardedFor: true}),
+		exhttp.HandleErrors(errorBodies),
 		prov.AuthMiddleware,
 	))
 }

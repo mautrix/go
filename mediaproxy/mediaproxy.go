@@ -8,7 +8,6 @@ package mediaproxy
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -23,8 +22,11 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/hlog"
 	"go.mau.fi/util/exerrors"
 	"go.mau.fi/util/exhttp"
+	"go.mau.fi/util/ptr"
+	"go.mau.fi/util/requestlog"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/federation"
@@ -178,7 +180,7 @@ type ServerConfig struct {
 
 func (mp *MediaProxy) Listen(cfg ServerConfig) error {
 	router := http.NewServeMux()
-	mp.RegisterRoutes(router)
+	mp.RegisterRoutes(router, zerolog.Nop())
 	return http.ListenAndServe(fmt.Sprintf("%s:%d", cfg.Hostname, cfg.Port), router)
 }
 
@@ -203,23 +205,29 @@ func (mp *MediaProxy) EnableServerAuth(client *federation.Client, keyCache feder
 	})
 }
 
-func (mp *MediaProxy) RegisterRoutes(router *http.ServeMux) {
+func (mp *MediaProxy) RegisterRoutes(router *http.ServeMux, log zerolog.Logger) {
 	errorBodies := exhttp.ErrorBodies{
-		NotFound:         exerrors.Must(json.Marshal(mautrix.MUnrecognized.WithMessage("Unrecognized endpoint"))),
-		MethodNotAllowed: exerrors.Must(json.Marshal(mautrix.MUnrecognized.WithMessage("Invalid method for endpoint"))),
+		NotFound:         exerrors.Must(ptr.Ptr(mautrix.MUnrecognized.WithMessage("Unrecognized endpoint")).MarshalJSON()),
+		MethodNotAllowed: exerrors.Must(ptr.Ptr(mautrix.MUnrecognized.WithMessage("Invalid method for endpoint")).MarshalJSON()),
 	}
 	router.Handle("/_matrix/federation/", exhttp.ApplyMiddleware(
 		mp.FederationRouter,
 		exhttp.StripPrefix("/_matrix/federation"),
+		hlog.NewHandler(log),
+		hlog.RequestIDHandler("request_id", "Request-Id"),
+		requestlog.AccessLogger(requestlog.Options{TrustXForwardedFor: true}),
 		exhttp.HandleErrors(errorBodies),
 	))
 	router.Handle("/_matrix/client/v1/media/", exhttp.ApplyMiddleware(
 		mp.ClientMediaRouter,
 		exhttp.StripPrefix("/_matrix/client/v1/media"),
+		hlog.NewHandler(log),
+		hlog.RequestIDHandler("request_id", "Request-Id"),
 		exhttp.CORSMiddleware,
+		requestlog.AccessLogger(requestlog.Options{TrustXForwardedFor: true}),
 		exhttp.HandleErrors(errorBodies),
 	))
-	mp.KeyServer.Register(router)
+	mp.KeyServer.Register(router, log)
 }
 
 var ErrInvalidMediaIDSyntax = errors.New("invalid media ID syntax")
