@@ -511,7 +511,7 @@ func (intent *IntentAPI) SetAvatarURL(ctx context.Context, avatarURL id.ContentU
 		// No need to update
 		return nil
 	}
-	if !avatarURL.IsEmpty() {
+	if !avatarURL.IsEmpty() && !intent.SpecVersions.Supports(mautrix.BeeperFeatureHungry) {
 		// Some homeservers require the avatar to be downloaded before setting it
 		resp, _ := intent.Download(ctx, avatarURL)
 		if resp != nil {
