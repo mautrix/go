@@ -556,6 +556,8 @@ func (cli *Client) doRetry(req *http.Request, cause error, retries int, backoff 
 		}
 	}
 	log.Warn().Err(cause).
+		Str("method", req.Method).
+		Str("url", req.URL.String()).
 		Int("retry_in_seconds", int(backoff.Seconds())).
 		Msg("Request failed, retrying")
 	select {
