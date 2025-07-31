@@ -418,6 +418,10 @@ func (br *Connector) SendBridgeStatus(ctx context.Context, state *status.BridgeS
 			Data:    state,
 		})
 	} else if br.Config.Homeserver.StatusEndpoint != "" {
+		// Connecting states aren't really relevant unless the bridge runs somewhere with an unreliable network
+		if state.StateEvent == status.StateConnecting {
+			return nil
+		}
 		return state.SendHTTP(ctx, br.Config.Homeserver.StatusEndpoint, br.Config.AppService.ASToken)
 	} else {
 		return nil
