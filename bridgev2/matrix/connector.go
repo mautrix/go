@@ -170,6 +170,17 @@ func (br *Connector) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	needsStateResync := br.Config.Encryption.Default &&
+		br.Bridge.DB.KV.Get(ctx, database.KeyEncryptionStateResynced) != "true"
+	if needsStateResync {
+		dbExists, err := br.StateStore.TableExists(ctx, "mx_version")
+		if err != nil {
+			return fmt.Errorf("failed to check if mx_version table exists: %w", err)
+		} else if !dbExists {
+			needsStateResync = false
+			br.Bridge.DB.KV.Set(ctx, database.KeyEncryptionStateResynced, "true")
+		}
+	}
 	err = br.StateStore.Upgrade(ctx)
 	if err != nil {
 		return bridgev2.DBUpgradeError{Section: "matrix_state", Err: err}
@@ -213,7 +224,46 @@ func (br *Connector) Start(ctx context.Context) error {
 		br.wsStopPinger = make(chan struct{}, 1)
 		go br.websocketServerPinger()
 	}
+	if needsStateResync {
+		br.ResyncEncryptionState(ctx)
+	}
 	return nil
+}
+
+func (br *Connector) ResyncEncryptionState(ctx context.Context) {
+	log := zerolog.Ctx(ctx)
+	roomIDScanner := dbutil.ConvertRowFn[id.RoomID](dbutil.ScanSingleColumn[id.RoomID])
+	rooms, err := roomIDScanner.NewRowIter(br.Bridge.DB.Query(ctx, `
+		SELECT rooms.room_id
+		FROM (SELECT DISTINCT(room_id) FROM mx_user_profile) rooms
+		LEFT JOIN mx_room_state ON rooms.room_id = mx_room_state.room_id
+		WHERE mx_room_state.encryption IS NULL
+	`)).AsList()
+	if err != nil {
+		log.Err(err).Msg("Failed to get room list to resync state")
+		return
+	}
+	var failedCount, successCount, forbiddenCount int
+	for _, roomID := range rooms {
+		var outContent *event.EncryptionEventContent
+		err = br.Bot.StateEvent(ctx, roomID, event.StateEncryption, "", &outContent)
+		if errors.Is(err, mautrix.MForbidden) {
+			// Most likely non-existent room
+			log.Debug().Err(err).Stringer("room_id", roomID).Msg("Failed to get state for room")
+			forbiddenCount++
+		} else if err != nil {
+			log.Err(err).Stringer("room_id", roomID).Msg("Failed to get state for room")
+			failedCount++
+		} else {
+			successCount++
+		}
+	}
+	br.Bridge.DB.KV.Set(ctx, database.KeyEncryptionStateResynced, "true")
+	log.Info().
+		Int("success_count", successCount).
+		Int("forbidden_count", forbiddenCount).
+		Int("failed_count", failedCount).
+		Msg("Resynced rooms")
 }
 
 func (br *Connector) GetPublicAddress() string {
