@@ -1369,6 +1369,10 @@ func (cli *Client) CreateRoom(ctx context.Context, req *ReqCreateRoom) (resp *Re
 				Msg("Failed to update creator membership in state store after creating room")
 		}
 		for _, evt := range req.InitialState {
+			evt.RoomID = resp.RoomID
+			if evt.StateKey == nil {
+				evt.StateKey = ptr.Ptr("")
+			}
 			UpdateStateStore(ctx, cli.StateStore, evt)
 		}
 		inviteMembership := event.MembershipInvite
