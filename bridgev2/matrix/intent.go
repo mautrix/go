@@ -578,7 +578,15 @@ func (as *ASIntent) MarkAsDM(ctx context.Context, roomID id.RoomID, withUser id.
 
 func (as *ASIntent) DeleteRoom(ctx context.Context, roomID id.RoomID, puppetsOnly bool) error {
 	if as.Connector.SpecVersions.Supports(mautrix.BeeperFeatureRoomYeeting) {
-		return as.Matrix.BeeperDeleteRoom(ctx, roomID)
+		err := as.Matrix.BeeperDeleteRoom(ctx, roomID)
+		if err != nil {
+			return err
+		}
+		err = as.Matrix.StateStore.ClearCachedMembers(ctx, roomID)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to clear cached members while cleaning up portal")
+		}
+		return nil
 	}
 	members, err := as.Matrix.JoinedMembers(ctx, roomID)
 	if err != nil {
