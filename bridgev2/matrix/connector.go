@@ -246,7 +246,7 @@ func (br *Connector) ResyncEncryptionState(ctx context.Context) {
 	var failedCount, successCount, forbiddenCount int
 	for _, roomID := range rooms {
 		var outContent *event.EncryptionEventContent
-		err = br.Bot.StateEvent(ctx, roomID, event.StateEncryption, "", &outContent)
+		err = br.Bot.Client.StateEvent(ctx, roomID, event.StateEncryption, "", &outContent)
 		if errors.Is(err, mautrix.MForbidden) {
 			// Most likely non-existent room
 			log.Debug().Err(err).Stringer("room_id", roomID).Msg("Failed to get state for room")
