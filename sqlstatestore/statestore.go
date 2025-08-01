@@ -62,6 +62,9 @@ func (store *SQLStateStore) IsRegistered(ctx context.Context, userID id.UserID) 
 }
 
 func (store *SQLStateStore) MarkRegistered(ctx context.Context, userID id.UserID) error {
+	if userID == "" {
+		return fmt.Errorf("user ID is empty")
+	}
 	_, err := store.Exec(ctx, "INSERT INTO mx_registrations (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING", userID)
 	return err
 }
@@ -182,6 +185,11 @@ func (store *SQLStateStore) IsMembership(ctx context.Context, roomID id.RoomID, 
 }
 
 func (store *SQLStateStore) SetMembership(ctx context.Context, roomID id.RoomID, userID id.UserID, membership event.Membership) error {
+	if roomID == "" {
+		return fmt.Errorf("room ID is empty")
+	} else if userID == "" {
+		return fmt.Errorf("user ID is empty")
+	}
 	_, err := store.Exec(ctx, `
 		INSERT INTO mx_user_profile (room_id, user_id, membership, displayname, avatar_url) VALUES ($1, $2, $3, '', '')
 		ON CONFLICT (room_id, user_id) DO UPDATE SET membership=excluded.membership
@@ -214,6 +222,11 @@ func (u *userProfileRow) GetMassInsertValues() [5]any {
 var userProfileMassInserter = dbutil.NewMassInsertBuilder[*userProfileRow, [1]any](insertUserProfileQuery, "($1, $%d, $%d, $%d, $%d, $%d)")
 
 func (store *SQLStateStore) SetMember(ctx context.Context, roomID id.RoomID, userID id.UserID, member *event.MemberEventContent) error {
+	if roomID == "" {
+		return fmt.Errorf("room ID is empty")
+	} else if userID == "" {
+		return fmt.Errorf("user ID is empty")
+	}
 	var nameSkeleton []byte
 	if !store.DisableNameDisambiguation && len(member.Displayname) > 0 {
 		nameSkeletonArr := confusable.SkeletonHash(member.Displayname)
@@ -235,6 +248,9 @@ func (store *SQLStateStore) IsConfusableName(ctx context.Context, roomID id.Room
 const userProfileMassInsertBatchSize = 500
 
 func (store *SQLStateStore) ReplaceCachedMembers(ctx context.Context, roomID id.RoomID, evts []*event.Event, onlyMemberships ...event.Membership) error {
+	if roomID == "" {
+		return fmt.Errorf("room ID is empty")
+	}
 	return store.DoTxn(ctx, nil, func(ctx context.Context) error {
 		err := store.ClearCachedMembers(ctx, roomID, onlyMemberships...)
 		if err != nil {
@@ -305,6 +321,9 @@ func (store *SQLStateStore) HasFetchedMembers(ctx context.Context, roomID id.Roo
 }
 
 func (store *SQLStateStore) MarkMembersFetched(ctx context.Context, roomID id.RoomID) error {
+	if roomID == "" {
+		return fmt.Errorf("room ID is empty")
+	}
 	_, err := store.Exec(ctx, `
 		INSERT INTO mx_room_state (room_id, members_fetched) VALUES ($1, true)
 		ON CONFLICT (room_id) DO UPDATE SET members_fetched=true
@@ -334,6 +353,9 @@ func (store *SQLStateStore) GetAllMembers(ctx context.Context, roomID id.RoomID)
 }
 
 func (store *SQLStateStore) SetEncryptionEvent(ctx context.Context, roomID id.RoomID, content *event.EncryptionEventContent) error {
+	if roomID == "" {
+		return fmt.Errorf("room ID is empty")
+	}
 	contentBytes, err := json.Marshal(content)
 	if err != nil {
 		return fmt.Errorf("failed to marshal content JSON: %w", err)
@@ -371,6 +393,9 @@ func (store *SQLStateStore) IsEncrypted(ctx context.Context, roomID id.RoomID) (
 }
 
 func (store *SQLStateStore) SetPowerLevels(ctx context.Context, roomID id.RoomID, levels *event.PowerLevelsEventContent) error {
+	if roomID == "" {
+		return fmt.Errorf("room ID is empty")
+	}
 	_, err := store.Exec(ctx, `
 		INSERT INTO mx_room_state (room_id, power_levels) VALUES ($1, $2)
 		ON CONFLICT (room_id) DO UPDATE SET power_levels=excluded.power_levels
@@ -421,6 +446,8 @@ func (store *SQLStateStore) HasPowerLevel(ctx context.Context, roomID id.RoomID,
 func (store *SQLStateStore) SetCreate(ctx context.Context, evt *event.Event) error {
 	if evt.Type != event.StateCreate {
 		return fmt.Errorf("invalid event type for create event: %s", evt.Type)
+	} else if evt.RoomID == "" {
+		return fmt.Errorf("room ID is empty")
 	}
 	_, err := store.Exec(ctx, `
 		INSERT INTO mx_room_state (room_id, create_event) VALUES ($1, $2)

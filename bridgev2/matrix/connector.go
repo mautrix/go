@@ -235,7 +235,7 @@ func (br *Connector) ResyncEncryptionState(ctx context.Context) {
 	roomIDScanner := dbutil.ConvertRowFn[id.RoomID](dbutil.ScanSingleColumn[id.RoomID])
 	rooms, err := roomIDScanner.NewRowIter(br.Bridge.DB.Query(ctx, `
 		SELECT rooms.room_id
-		FROM (SELECT DISTINCT(room_id) FROM mx_user_profile) rooms
+		FROM (SELECT DISTINCT(room_id) FROM mx_user_profile WHERE room_id<>'') rooms
 		LEFT JOIN mx_room_state ON rooms.room_id = mx_room_state.room_id
 		WHERE mx_room_state.encryption IS NULL
 	`)).AsList()
@@ -245,6 +245,9 @@ func (br *Connector) ResyncEncryptionState(ctx context.Context) {
 	}
 	var failedCount, successCount, forbiddenCount int
 	for _, roomID := range rooms {
+		if roomID == "" {
+			continue
+		}
 		var outContent *event.EncryptionEventContent
 		err = br.Bot.Client.StateEvent(ctx, roomID, event.StateEncryption, "", &outContent)
 		if errors.Is(err, mautrix.MForbidden) {
