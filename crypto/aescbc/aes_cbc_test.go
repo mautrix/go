@@ -7,10 +7,12 @@
 package aescbc_test
 
 import (
-	"bytes"
 	"crypto/aes"
 	"crypto/rand"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"maunium.net/go/mautrix/crypto/aescbc"
 )
@@ -22,32 +24,23 @@ func TestAESCBC(t *testing.T) {
 	// The key length can be 32, 24, 16  bytes (OR in bits: 128, 192 or 256)
 	key := make([]byte, 32)
 	_, err = rand.Read(key)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	iv := make([]byte, aes.BlockSize)
 	_, err = rand.Read(iv)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	plaintext = []byte("secret message for testing")
 	//increase to next block size
 	for len(plaintext)%8 != 0 {
 		plaintext = append(plaintext, []byte("-")...)
 	}
 
-	if ciphertext, err = aescbc.Encrypt(key, iv, plaintext); err != nil {
-		t.Fatal(err)
-	}
+	ciphertext, err = aescbc.Encrypt(key, iv, plaintext)
+	require.NoError(t, err)
 
 	resultPlainText, err := aescbc.Decrypt(key, iv, ciphertext)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	if string(resultPlainText) != string(plaintext) {
-		t.Fatalf("message '%s' (length %d) != '%s'", resultPlainText, len(resultPlainText), plaintext)
-	}
+	assert.Equal(t, string(resultPlainText), string(plaintext))
 }
 
 func TestAESCBCCase1(t *testing.T) {
@@ -61,18 +54,10 @@ func TestAESCBCCase1(t *testing.T) {
 	key := make([]byte, 32)
 	iv := make([]byte, aes.BlockSize)
 	encrypted, err := aescbc.Encrypt(key, iv, input)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(expected, encrypted) {
-		t.Fatalf("encrypted did not match expected:\n%v\n%v\n", encrypted, expected)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, expected, encrypted, "encrypted output does not match expected")
 
 	decrypted, err := aescbc.Decrypt(key, iv, encrypted)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(input, decrypted) {
-		t.Fatalf("decrypted did not match expected:\n%v\n%v\n", decrypted, input)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, input, decrypted, "decrypted output does not match input")
 }

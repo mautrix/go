@@ -13,6 +13,8 @@ import (
 	"testing"
 
 	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.mau.fi/util/dbutil"
 
 	"maunium.net/go/mautrix"
@@ -24,17 +26,12 @@ var noopLogger = zerolog.Nop()
 
 func getOlmMachine(t *testing.T) *OlmMachine {
 	rawDB, err := sql.Open("sqlite3", ":memory:?_busy_timeout=5000")
-	if err != nil {
-		t.Fatalf("Error opening db: %v", err)
-	}
+	require.NoError(t, err, "Error opening raw database")
 	db, err := dbutil.NewWithDB(rawDB, "sqlite3")
-	if err != nil {
-		t.Fatalf("Error opening db: %v", err)
-	}
+	require.NoError(t, err, "Error creating database wrapper")
 	sqlStore := NewSQLCryptoStore(db, nil, "accid", id.DeviceID("dev"), []byte("test"))
-	if err = sqlStore.DB.Upgrade(context.TODO()); err != nil {
-		t.Fatalf("Error creating tables: %v", err)
-	}
+	err = sqlStore.DB.Upgrade(context.TODO())
+	require.NoError(t, err, "Error upgrading database")
 
 	userID := id.UserID("@mautrix")
 	mk, _ := olm.NewPKSigning()
@@ -66,29 +63,25 @@ func TestTrustOwnDevice(t *testing.T) {
 		DeviceID:   "device",
 		SigningKey: id.Ed25519("deviceKey"),
 	}
-	if m.IsDeviceTrusted(context.TODO(), ownDevice) {
-		t.Error("Own device trusted while it shouldn't be")
-	}
+	assert.False(t, m.IsDeviceTrusted(context.TODO(), ownDevice), "Own device trusted while it shouldn't be")
 
 	m.CryptoStore.PutSignature(context.TODO(), ownDevice.UserID, m.CrossSigningKeys.SelfSigningKey.PublicKey(),
 		ownDevice.UserID, m.CrossSigningKeys.MasterKey.PublicKey(), "sig1")
 	m.CryptoStore.PutSignature(context.TODO(), ownDevice.UserID, ownDevice.SigningKey,
 		ownDevice.UserID, m.CrossSigningKeys.SelfSigningKey.PublicKey(), "sig2")
 
-	if trusted, _ := m.IsUserTrusted(context.TODO(), ownDevice.UserID); !trusted {
-		t.Error("Own user not trusted while they should be")
-	}
-	if !m.IsDeviceTrusted(context.TODO(), ownDevice) {
-		t.Error("Own device not trusted while it should be")
-	}
+	trusted, err := m.IsUserTrusted(context.TODO(), ownDevice.UserID)
+	require.NoError(t, err, "Error checking if own user is trusted")
+	assert.True(t, trusted, "Own user not trusted while they should be")
+	assert.True(t, m.IsDeviceTrusted(context.TODO(), ownDevice), "Own device not trusted while it should be")
 }
 
 func TestTrustOtherUser(t *testing.T) {
 	m := getOlmMachine(t)
 	otherUser := id.UserID("@user")
-	if trusted, _ := m.IsUserTrusted(context.TODO(), otherUser); trusted {
-		t.Error("Other user trusted while they shouldn't be")
-	}
+	trusted, err := m.IsUserTrusted(context.TODO(), otherUser)
+	require.NoError(t, err, "Error checking if other user is trusted")
+	assert.False(t, trusted, "Other user trusted while they shouldn't be")
 
 	theirMasterKey, _ := olm.NewPKSigning()
 	m.CryptoStore.PutCrossSigningKey(context.TODO(), otherUser, id.XSUsageMaster, theirMasterKey.PublicKey())
@@ -100,16 +93,16 @@ func TestTrustOtherUser(t *testing.T) {
 	m.CryptoStore.PutSignature(context.TODO(), otherUser, theirMasterKey.PublicKey(),
 		m.Client.UserID, m.CrossSigningKeys.SelfSigningKey.PublicKey(), "invalid_sig")
 
-	if trusted, _ := m.IsUserTrusted(context.TODO(), otherUser); trusted {
-		t.Error("Other user trusted before their master key has been signed with our user-signing key")
-	}
+	trusted, err = m.IsUserTrusted(context.TODO(), otherUser)
+	require.NoError(t, err, "Error checking if other user is trusted")
+	assert.False(t, trusted, "Other user trusted before their master key has been signed with our user-signing key")
 
 	m.CryptoStore.PutSignature(context.TODO(), otherUser, theirMasterKey.PublicKey(),
 		m.Client.UserID, m.CrossSigningKeys.UserSigningKey.PublicKey(), "sig2")
 
-	if trusted, _ := m.IsUserTrusted(context.TODO(), otherUser); !trusted {
-		t.Error("Other user not trusted while they should be")
-	}
+	trusted, err = m.IsUserTrusted(context.TODO(), otherUser)
+	require.NoError(t, err, "Error checking if other user is trusted")
+	assert.True(t, trusted, "Other user not trusted while they should be")
 }
 
 func TestTrustOtherDevice(t *testing.T) {
@@ -120,12 +113,11 @@ func TestTrustOtherDevice(t *testing.T) {
 		DeviceID:   "theirDevice",
 		SigningKey: id.Ed25519("theirDeviceKey"),
 	}
-	if trusted, _ := m.IsUserTrusted(context.TODO(), otherUser); trusted {
-		t.Error("Other user trusted while they shouldn't be")
-	}
-	if m.IsDeviceTrusted(context.TODO(), theirDevice) {
-		t.Error("Other device trusted while it shouldn't be")
-	}
+
+	trusted, err := m.IsUserTrusted(context.TODO(), otherUser)
+	require.NoError(t, err, "Error checking if other user is trusted")
+	assert.False(t, trusted, "Other user trusted while they shouldn't be")
+	assert.False(t, m.IsDeviceTrusted(context.TODO(), theirDevice), "Other device trusted while it shouldn't be")
 
 	theirMasterKey, _ := olm.NewPKSigning()
 	m.CryptoStore.PutCrossSigningKey(context.TODO(), otherUser, id.XSUsageMaster, theirMasterKey.PublicKey())
@@ -137,21 +129,17 @@ func TestTrustOtherDevice(t *testing.T) {
 	m.CryptoStore.PutSignature(context.TODO(), otherUser, theirMasterKey.PublicKey(),
 		m.Client.UserID, m.CrossSigningKeys.UserSigningKey.PublicKey(), "sig2")
 
-	if trusted, _ := m.IsUserTrusted(context.TODO(), otherUser); !trusted {
-		t.Error("Other user not trusted while they should be")
-	}
+	trusted, err = m.IsUserTrusted(context.TODO(), otherUser)
+	require.NoError(t, err, "Error checking if other user is trusted")
+	assert.True(t, trusted, "Other user not trusted while they should be")
 
 	m.CryptoStore.PutSignature(context.TODO(), otherUser, theirSSK.PublicKey(),
 		otherUser, theirMasterKey.PublicKey(), "sig3")
 
-	if m.IsDeviceTrusted(context.TODO(), theirDevice) {
-		t.Error("Other device trusted before it has been signed with user's SSK")
-	}
+	assert.False(t, m.IsDeviceTrusted(context.TODO(), theirDevice), "Other device trusted before it has been signed with user's SSK")
 
 	m.CryptoStore.PutSignature(context.TODO(), otherUser, theirDevice.SigningKey,
 		otherUser, theirSSK.PublicKey(), "sig4")
 
-	if !m.IsDeviceTrusted(context.TODO(), theirDevice) {
-		t.Error("Other device not trusted while it should be")
-	}
+	assert.True(t, m.IsDeviceTrusted(context.TODO(), theirDevice), "Other device not trusted after it has been signed with user's SSK")
 }

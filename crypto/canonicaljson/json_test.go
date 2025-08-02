@@ -17,31 +17,43 @@ package canonicaljson
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
-func testSortJSON(t *testing.T, input, want string) {
-	got := SortJSON([]byte(input), nil)
-
-	// Squash out the whitespace before comparing the JSON in case SortJSON had inserted whitespace.
-	if string(CompactJSON(got, nil)) != want {
-		t.Errorf("SortJSON(%q): want %q got %q", input, want, got)
-	}
-}
-
 func TestSortJSON(t *testing.T) {
-	testSortJSON(t, `[{"b":"two","a":1}]`, `[{"a":1,"b":"two"}]`)
-	testSortJSON(t, `{"B":{"4":4,"3":3},"A":{"1":1,"2":2}}`,
-		`{"A":{"1":1,"2":2},"B":{"3":3,"4":4}}`)
-	testSortJSON(t, `[true,false,null]`, `[true,false,null]`)
-	testSortJSON(t, `[9007199254740991]`, `[9007199254740991]`)
-	testSortJSON(t, "\t\n[9007199254740991]", `[9007199254740991]`)
+	var tests = []struct {
+		input string
+		want  string
+	}{
+		{"{}", "{}"},
+		{`[{"b":"two","a":1}]`, `[{"a":1,"b":"two"}]`},
+		{`{"B":{"4":4,"3":3},"A":{"1":1,"2":2}}`, `{"A":{"1":1,"2":2},"B":{"3":3,"4":4}}`},
+		{`[true,false,null]`, `[true,false,null]`},
+		{`[9007199254740991]`, `[9007199254740991]`},
+		{"\t\n[9007199254740991]", `[9007199254740991]`},
+		{`[true,false,null]`, `[true,false,null]`},
+		{`[{"b":"two","a":1}]`, `[{"a":1,"b":"two"}]`},
+		{`{"B":{"4":4,"3":3},"A":{"1":1,"2":2}}`, `{"A":{"1":1,"2":2},"B":{"3":3,"4":4}}`},
+		{`[true,false,null]`, `[true,false,null]`},
+		{`[9007199254740991]`, `[9007199254740991]`},
+		{"\t\n[9007199254740991]", `[9007199254740991]`},
+		{`[true,false,null]`, `[true,false,null]`},
+	}
+	for _, test := range tests {
+		t.Run(test.input, func(t *testing.T) {
+			got := SortJSON([]byte(test.input), nil)
+
+			// Squash out the whitespace before comparing the JSON in case SortJSON had inserted whitespace.
+			assert.EqualValues(t, test.want, string(CompactJSON(got, nil)))
+		})
+	}
 }
 
 func testCompactJSON(t *testing.T, input, want string) {
+	t.Helper()
 	got := string(CompactJSON([]byte(input), nil))
-	if got != want {
-		t.Errorf("CompactJSON(%q): want %q got %q", input, want, got)
-	}
+	assert.EqualValues(t, want, got)
 }
 
 func TestCompactJSON(t *testing.T) {
@@ -74,18 +86,23 @@ func TestCompactJSON(t *testing.T) {
 	testCompactJSON(t, `["\"\\\/"]`, `["\"\\/"]`)
 }
 
-func testReadHex(t *testing.T, input string, want uint32) {
-	got := readHexDigits([]byte(input))
-	if want != got {
-		t.Errorf("readHexDigits(%q): want 0x%x got 0x%x", input, want, got)
-	}
-}
-
 func TestReadHex(t *testing.T) {
-	testReadHex(t, "0123", 0x0123)
-	testReadHex(t, "4567", 0x4567)
-	testReadHex(t, "89AB", 0x89AB)
-	testReadHex(t, "CDEF", 0xCDEF)
-	testReadHex(t, "89ab", 0x89AB)
-	testReadHex(t, "cdef", 0xCDEF)
+	tests := []struct {
+		input string
+		want  uint32
+	}{
+
+		{"0123", 0x0123},
+		{"4567", 0x4567},
+		{"89AB", 0x89AB},
+		{"CDEF", 0xCDEF},
+		{"89ab", 0x89AB},
+		{"cdef", 0xCDEF},
+	}
+	for _, test := range tests {
+		t.Run(test.input, func(t *testing.T) {
+			got := readHexDigits([]byte(test.input))
+			assert.Equal(t, test.want, got)
+		})
+	}
 }

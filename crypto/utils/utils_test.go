@@ -9,6 +9,9 @@ package utils
 import (
 	"encoding/base64"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestAES256Ctr(t *testing.T) {
@@ -16,9 +19,7 @@ func TestAES256Ctr(t *testing.T) {
 	key, iv := GenAttachmentA256CTR()
 	enc := XorA256CTR([]byte(expected), key, iv)
 	dec := XorA256CTR(enc, key, iv)
-	if string(dec) != expected {
-		t.Errorf("Expected decrypted using generated key/iv to be `%v`, got %v", expected, string(dec))
-	}
+	assert.EqualValues(t, expected, dec, "Decrypted text should match original")
 
 	var key2 [AESCTRKeyLength]byte
 	var iv2 [AESCTRIVLength]byte
@@ -29,9 +30,7 @@ func TestAES256Ctr(t *testing.T) {
 		iv2[i] = byte(i) + 32
 	}
 	dec2 := XorA256CTR([]byte{0x29, 0xc3, 0xff, 0x02, 0x21, 0xaf, 0x67, 0x73, 0x6e, 0xad, 0x9d}, key2, iv2)
-	if string(dec2) != expected {
-		t.Errorf("Expected decrypted using constant key/iv to be `%v`, got %v", expected, string(dec2))
-	}
+	assert.EqualValues(t, expected, dec2, "Decrypted text with constant key/iv should match original")
 }
 
 func TestPBKDF(t *testing.T) {
@@ -42,9 +41,7 @@ func TestPBKDF(t *testing.T) {
 	key := PBKDF2SHA512([]byte("Hello world"), salt, 1000, 256)
 	expected := "ffk9YdbVE1cgqOWgDaec0lH+rJzO+MuCcxpIn3Z6D0E="
 	keyB64 := base64.StdEncoding.EncodeToString([]byte(key))
-	if keyB64 != expected {
-		t.Errorf("Expected base64 of generated key to be `%v`, got `%v`", expected, keyB64)
-	}
+	assert.Equal(t, expected, keyB64)
 }
 
 func TestDecodeSSSSKey(t *testing.T) {
@@ -53,13 +50,10 @@ func TestDecodeSSSSKey(t *testing.T) {
 
 	expected := "QCFDrXZYLEFnwf4NikVm62rYGJS2mNBEmAWLC3CgNPw="
 	decodedB64 := base64.StdEncoding.EncodeToString(decoded[:])
-	if expected != decodedB64 {
-		t.Errorf("Expected decoded recovery key b64 to be `%v`, got `%v`", expected, decodedB64)
-	}
+	assert.Equal(t, expected, decodedB64)
 
-	if encoded := EncodeBase58RecoveryKey(decoded); encoded != recoveryKey {
-		t.Errorf("Expected recovery key to be `%v`, got `%v`", recoveryKey, encoded)
-	}
+	encoded := EncodeBase58RecoveryKey(decoded)
+	assert.Equal(t, recoveryKey, encoded)
 }
 
 func TestKeyDerivationAndHMAC(t *testing.T) {
@@ -69,15 +63,11 @@ func TestKeyDerivationAndHMAC(t *testing.T) {
 	aesKey, hmacKey := DeriveKeysSHA256(decoded[:], "m.cross_signing.master")
 
 	ciphertextBytes, err := base64.StdEncoding.DecodeString("Fx16KlJ9vkd3Dd6CafIq5spaH5QmK5BALMzbtFbQznG2j1VARKK+klc4/Qo=")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	calcMac := HMACSHA256B64(ciphertextBytes, hmacKey)
 	expectedMac := "0DABPNIZsP9iTOh1o6EM0s7BfHHXb96dN7Eca88jq2E"
-	if calcMac != expectedMac {
-		t.Errorf("Expected MAC `%v`, got `%v`", expectedMac, calcMac)
-	}
+	assert.Equal(t, expectedMac, calcMac)
 
 	var ivBytes [AESCTRIVLength]byte
 	decodedIV, _ := base64.StdEncoding.DecodeString("zxT/W5LpZ0Q819pfju6hZw==")
@@ -85,7 +75,5 @@ func TestKeyDerivationAndHMAC(t *testing.T) {
 	decrypted := string(XorA256CTR(ciphertextBytes, aesKey, ivBytes))
 
 	expectedDec := "Ec8eZDyvVkO3EDsEG6ej5c0cCHnX7PINqFXZjnaTV2s="
-	if expectedDec != decrypted {
-		t.Errorf("Expected decrypted text to be `%v`, got `%v`", expectedDec, decrypted)
-	}
+	assert.Equal(t, expectedDec, decrypted)
 }

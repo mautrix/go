@@ -36,20 +36,15 @@ func (mockStateStore) FindSharedRooms(context.Context, id.UserID) ([]id.RoomID, 
 
 func newMachine(t *testing.T, userID id.UserID) *OlmMachine {
 	client, err := mautrix.NewClient("http://localhost", userID, "token")
-	if err != nil {
-		t.Fatalf("Error creating client: %v", err)
-	}
+	require.NoError(t, err, "Error creating client")
 	client.DeviceID = "device1"
 
 	gobStore := NewMemoryStore(nil)
-	if err != nil {
-		t.Fatalf("Error creating Gob store: %v", err)
-	}
+	require.NoError(t, err, "Error creating Gob store")
 
 	machine := NewOlmMachine(client, nil, gobStore, mockStateStore{})
-	if err := machine.Load(context.TODO()); err != nil {
-		t.Fatalf("Error creating account: %v", err)
-	}
+	err = machine.Load(context.TODO())
+	require.NoError(t, err, "Error creating account")
 
 	return machine
 }
@@ -82,9 +77,7 @@ func TestOlmMachineOlmMegolmSessions(t *testing.T) {
 
 	// create outbound olm session for sending machine using OTK
 	olmSession, err := machineOut.account.Internal.NewOutboundSession(machineIn.account.IdentityKey(), otk.Key)
-	if err != nil {
-		t.Errorf("Failed to create outbound olm session: %v", err)
-	}
+	require.NoError(t, err, "Error creating outbound olm session")
 
 	// store sender device identity in receiving machine store
 	machineIn.CryptoStore.PutDevices(context.TODO(), "user1", map[id.DeviceID]*id.Device{
@@ -121,29 +114,21 @@ func TestOlmMachineOlmMegolmSessions(t *testing.T) {
 			Type:   event.ToDeviceEncrypted,
 			Sender: "user1",
 		}, senderKey, content.Type, content.Body)
-		if err != nil {
-			t.Errorf("Error decrypting olm content: %v", err)
-		}
+		require.NoError(t, err, "Error decrypting olm ciphertext")
+
 		// store room key in new inbound group session
 		roomKeyEvt := decrypted.Content.AsRoomKey()
 		igs, err := NewInboundGroupSession(senderKey, signingKey, "room1", roomKeyEvt.SessionKey, 0, 0, false)
-		if err != nil {
-			t.Errorf("Error creating inbound megolm session: %v", err)
-		}
-		if err = machineIn.CryptoStore.PutGroupSession(context.TODO(), igs); err != nil {
-			t.Errorf("Error storing inbound megolm session: %v", err)
-		}
+		require.NoError(t, err, "Error creating inbound group session")
+		err = machineIn.CryptoStore.PutGroupSession(context.TODO(), igs)
+		require.NoError(t, err, "Error storing inbound group session")
 	}
 
 	// encrypt event with megolm session in sending machine
 	eventContent := map[string]string{"hello": "world"}
 	encryptedEvtContent, err := machineOut.EncryptMegolmEvent(context.TODO(), "room1", event.EventMessage, eventContent)
-	if err != nil {
-		t.Errorf("Error encrypting megolm event: %v", err)
-	}
-	if megolmOutSession.MessageCount != 1 {
-		t.Errorf("Megolm outbound session message count is not 1 but %d", megolmOutSession.MessageCount)
-	}
+	require.NoError(t, err, "Error encrypting megolm event")
+	assert.Equal(t, 1, megolmOutSession.MessageCount)
 
 	encryptedEvt := &event.Event{
 		Content: event.Content{Parsed: encryptedEvtContent},
@@ -155,22 +140,12 @@ func TestOlmMachineOlmMegolmSessions(t *testing.T) {
 
 	// decrypt event on receiving machine and confirm
 	decryptedEvt, err := machineIn.DecryptMegolmEvent(context.TODO(), encryptedEvt)
-	if err != nil {
-		t.Errorf("Error decrypting megolm event: %v", err)
-	}
-	if decryptedEvt.Type != event.EventMessage {
-		t.Errorf("Expected event type %v, got %v", event.EventMessage, decryptedEvt.Type)
-	}
-	if decryptedEvt.Content.Raw["hello"] != "world" {
-		t.Errorf("Expected event content %v, got %v", eventContent, decryptedEvt.Content.Raw)
-	}
+	require.NoError(t, err, "Error decrypting megolm event")
+	assert.Equal(t, event.EventMessage, decryptedEvt.Type)
+	assert.Equal(t, "world", decryptedEvt.Content.Raw["hello"])
 
 	machineOut.EncryptMegolmEvent(context.TODO(), "room1", event.EventMessage, eventContent)
-	if megolmOutSession.Expired() {
-		t.Error("Megolm outbound session expired before 3rd message")
-	}
+	assert.False(t, megolmOutSession.Expired(), "Megolm outbound session expired before 3rd message")
 	machineOut.EncryptMegolmEvent(context.TODO(), "room1", event.EventMessage, eventContent)
-	if !megolmOutSession.Expired() {
-		t.Error("Megolm outbound session not expired after 3rd message")
-	}
+	assert.True(t, megolmOutSession.Expired(), "Megolm outbound session not expired after 3rd message")
 }
