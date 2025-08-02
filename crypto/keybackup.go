@@ -233,7 +233,7 @@ func (mach *OlmMachine) ImportRoomKeyFromBackup(ctx context.Context, version id.
 	if err != nil {
 		return nil, err
 	}
-	firstKnownIndex := imported.Internal.FirstKnownIndex()
+	firstKnownIndex := imported.InternalLibolm.FirstKnownIndex()
 	if firstKnownIndex > 0 {
 		zerolog.Ctx(ctx).Warn().
 			Stringer("room_id", roomID).
@@ -241,6 +241,10 @@ func (mach *OlmMachine) ImportRoomKeyFromBackup(ctx context.Context, version id.
 			Uint32("first_known_index", firstKnownIndex).
 			Msg("Importing partial session")
 	}
+	if firstKnownIndex != imported.InternalGoolm.FirstKnownIndex() {
+		panic("Goolm and libolm first known index mismatch")
+	}
+
 	err = mach.CryptoStore.PutGroupSession(ctx, imported)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrFailedToStoreNewInboundGroupSessionFromBackup, err)

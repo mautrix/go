@@ -182,11 +182,11 @@ func (igs *InboundGroupSession) RatchetTo(index uint32) error {
 }
 
 func (igs *InboundGroupSession) export() (*ExportedSession, error) {
-	key, err := session.InternalLibolm.Export(session.InternalLibolm.FirstKnownIndex())
+	key, err := igs.InternalLibolm.Export(igs.InternalLibolm.FirstKnownIndex())
 	if err != nil {
 		return nil, fmt.Errorf("failed to export session: %w", err)
 	}
-	keyGoolm := exerrors.Must(session.InternalGoolm.Export(session.InternalGoolm.FirstKnownIndex()))
+	keyGoolm := exerrors.Must(igs.InternalGoolm.Export(igs.InternalGoolm.FirstKnownIndex()))
 	if !bytes.Equal(key, keyGoolm) {
 		panic("keys not equal")
 	}
