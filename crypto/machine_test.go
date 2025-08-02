@@ -60,10 +60,12 @@ func TestRatchetMegolmSession(t *testing.T) {
 	assert.NoError(t, err)
 	inSess, err := mach.CryptoStore.GetGroupSession(context.TODO(), "meow", outSess.ID())
 	require.NoError(t, err)
-	assert.Equal(t, uint32(0), inSess.Internal.FirstKnownIndex())
+	assert.Equal(t, uint32(0), inSess.InternalLibolm.FirstKnownIndex())
+	assert.Equal(t, uint32(0), inSess.InternalGoolm.FirstKnownIndex())
 	err = inSess.RatchetTo(10)
 	assert.NoError(t, err)
-	assert.Equal(t, uint32(10), inSess.Internal.FirstKnownIndex())
+	assert.Equal(t, uint32(10), inSess.InternalLibolm.FirstKnownIndex())
+	assert.Equal(t, uint32(10), inSess.InternalGoolm.FirstKnownIndex())
 }
 
 func TestOlmMachineOlmMegolmSessions(t *testing.T) {
@@ -78,10 +80,11 @@ func TestOlmMachineOlmMegolmSessions(t *testing.T) {
 		otk = otkTmp
 		break
 	}
-	machineIn.account.Internal.MarkKeysAsPublished()
+	machineIn.account.InternalLibolm.MarkKeysAsPublished()
+	machineIn.account.InternalGoolm.MarkKeysAsPublished()
 
 	// create outbound olm session for sending machine using OTK
-	olmSession, err := machineOut.account.Internal.NewOutboundSession(machineIn.account.IdentityKey(), otk.Key)
+	olmSession, err := machineOut.account.InternalLibolm.NewOutboundSession(machineIn.account.IdentityKey(), otk.Key)
 	if err != nil {
 		t.Errorf("Failed to create outbound olm session: %v", err)
 	}

@@ -11,7 +11,8 @@ import (
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto/backup"
-	"maunium.net/go/mautrix/crypto/olm"
+	"maunium.net/go/mautrix/crypto/goolm/session"
+	"maunium.net/go/mautrix/crypto/libolm"
 	"maunium.net/go/mautrix/crypto/signatures"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -175,7 +176,12 @@ func (mach *OlmMachine) ImportRoomKeyFromBackupWithoutSaving(
 		return nil, fmt.Errorf("%w %s", ErrUnknownAlgorithmInKeyBackup, keyBackupData.Algorithm)
 	}
 
-	igsInternal, err := olm.InboundGroupSessionImport([]byte(keyBackupData.SessionKey))
+	igsInternalGoolm, err := session.NewMegolmInboundSessionFromExport([]byte(keyBackupData.SessionKey))
+	if err != nil {
+		return nil, err
+	}
+
+	igsInternal, err := libolm.InboundGroupSessionImport([]byte(keyBackupData.SessionKey))
 	if err != nil {
 		return nil, fmt.Errorf("failed to import inbound group session: %w", err)
 	} else if igsInternal.ID() != sessionID {
@@ -194,8 +200,14 @@ func (mach *OlmMachine) ImportRoomKeyFromBackupWithoutSaving(
 		maxMessages = config.RotationPeriodMessages
 	}
 
+	firstKnownIndex := igsInternal.FirstKnownIndex()
+	if firstKnownIndex > 0 {
+		log.Warn().Uint32("first_known_index", firstKnownIndex).Msg("Importing partial session")
+	}
+
 	return &InboundGroupSession{
-		Internal:         igsInternal,
+		InternalLibolm:   igsInternal,
+		InternalGoolm:    igsInternalGoolm,
 		SigningKey:       keyBackupData.SenderClaimedKeys.Ed25519,
 		SenderKey:        keyBackupData.SenderKey,
 		RoomID:           roomID,
@@ -221,7 +233,7 @@ func (mach *OlmMachine) ImportRoomKeyFromBackup(ctx context.Context, version id.
 	if err != nil {
 		return nil, err
 	}
-	firstKnownIndex := imported.Internal.FirstKnownIndex()
+	firstKnownIndex := imported.InternalLibolm.FirstKnownIndex()
 	if firstKnownIndex > 0 {
 		zerolog.Ctx(ctx).Warn().
 			Stringer("room_id", roomID).
@@ -229,6 +241,10 @@ func (mach *OlmMachine) ImportRoomKeyFromBackup(ctx context.Context, version id.
 			Uint32("first_known_index", firstKnownIndex).
 			Msg("Importing partial session")
 	}
+	if firstKnownIndex != imported.InternalGoolm.FirstKnownIndex() {
+		panic("Goolm and libolm first known index mismatch")
+	}
+
 	err = mach.CryptoStore.PutGroupSession(ctx, imported)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrFailedToStoreNewInboundGroupSessionFromBackup, err)

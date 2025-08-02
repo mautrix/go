@@ -13,9 +13,13 @@ import (
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.mau.fi/util/dbutil"
+	"go.mau.fi/util/exerrors"
 
+	"maunium.net/go/mautrix/crypto/goolm/session"
+	"maunium.net/go/mautrix/crypto/libolm"
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/id"
 )
@@ -153,33 +157,30 @@ func TestStoreMegolmSession(t *testing.T) {
 		t.Run(storeName, func(t *testing.T) {
 			acc := NewOlmAccount()
 
-			internal, err := olm.InboundGroupSessionFromPickled([]byte(groupSession), []byte("test"))
-			if err != nil {
-				t.Fatalf("Error creating internal inbound group session: %v", err)
-			}
+			internal, err := libolm.InboundGroupSessionFromPickled([]byte(groupSession), []byte("test"))
+			require.NoError(t, err, "Error creating internal inbound group session")
+
+			internalGoolm, err := session.MegolmInboundSessionFromPickled([]byte(groupSession), []byte("test"))
+			require.NoError(t, err)
 
 			igs := &InboundGroupSession{
-				Internal:   internal,
-				SigningKey: acc.SigningKey(),
-				SenderKey:  acc.IdentityKey(),
-				RoomID:     "room1",
+				InternalLibolm: internal,
+				InternalGoolm:  internalGoolm,
+				SigningKey:     acc.SigningKey(),
+				SenderKey:      acc.IdentityKey(),
+				RoomID:         "room1",
 			}
 
 			err = store.PutGroupSession(context.TODO(), igs)
-			if err != nil {
-				t.Errorf("Error storing inbound group session: %v", err)
-			}
+			require.NoError(t, err, "Error storing inbound group session")
 
 			retrieved, err := store.GetGroupSession(context.TODO(), "room1", igs.ID())
-			if err != nil {
-				t.Errorf("Error retrieving inbound group session: %v", err)
-			}
+			require.NoError(t, err, "Error retrieving inbound group session")
 
-			if pickled, err := retrieved.Internal.Pickle([]byte("test")); err != nil {
-				t.Fatalf("Error pickling inbound group session: %v", err)
-			} else if string(pickled) != groupSession {
-				t.Error("Pickled inbound group session does not match original")
-			}
+			pickled, err := retrieved.InternalLibolm.Pickle([]byte("test"))
+			require.NoError(t, err)
+			assert.Equal(t, string(pickled), groupSession)
+			assert.Equal(t, pickled, exerrors.Must(retrieved.InternalGoolm.Pickle([]byte("test"))))
 		})
 	}
 }

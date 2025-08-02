@@ -336,8 +336,10 @@ func (a *Account) UnpickleLibOlm(buf []byte) error {
 	} else if pickledVersion != accountPickleVersionLibOLM && pickledVersion != 3 && pickledVersion != 2 {
 		return fmt.Errorf("unpickle account: %w (found version %d)", olm.ErrBadVersion, pickledVersion)
 	} else if err = a.IdKeys.Ed25519.UnpickleLibOlm(decoder); err != nil { // read the ed25519 key pair
+		fmt.Printf("123 %+v\n", err)
 		return err
 	} else if err = a.IdKeys.Curve25519.UnpickleLibOlm(decoder); err != nil { // read curve25519 key pair
+		fmt.Printf("456 %+v\n", err)
 		return err
 	}
 
