@@ -413,8 +413,10 @@ func (store *SQLCryptoStore) GetGroupSession(ctx context.Context, roomID id.Room
 			Reason:    withheldReason.String,
 		}
 	}
+	fmt.Printf("got here 1\n")
 	libolmIgs, goolmIgs, chains, rs, err := store.postScanInboundGroupSession(sessionBytes, ratchetSafetyBytes, forwardingChains.String)
 	if err != nil {
+		fmt.Printf("got here 2 %+v\n", err)
 		return nil, err
 	}
 	return &InboundGroupSession{
@@ -527,7 +529,7 @@ func (store *SQLCryptoStore) GetWithheldGroupSession(ctx context.Context, roomID
 
 func (store *SQLCryptoStore) postScanInboundGroupSession(sessionBytes, ratchetSafetyBytes []byte, forwardingChains string) (igs olm.InboundGroupSession, igsGoolm olm.InboundGroupSession, chains []string, safety RatchetSafety, err error) {
 	igs = libolm.NewBlankInboundGroupSession()
-	err = igs.Unpickle(sessionBytes, store.PickleKey)
+	err = igs.Unpickle(bytes.Clone(sessionBytes), store.PickleKey)
 	if err != nil {
 		return
 	}

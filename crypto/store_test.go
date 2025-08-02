@@ -158,9 +158,7 @@ func TestStoreMegolmSession(t *testing.T) {
 			acc := NewOlmAccount()
 
 			internal, err := libolm.InboundGroupSessionFromPickled([]byte(groupSession), []byte("test"))
-			if err != nil {
-				t.Fatalf("Error creating internal inbound group session: %v", err)
-			}
+			require.NoError(t, err, "Error creating internal inbound group session")
 
 			internalGoolm, err := session.MegolmInboundSessionFromPickled([]byte(groupSession), []byte("test"))
 			require.NoError(t, err)
@@ -174,14 +172,10 @@ func TestStoreMegolmSession(t *testing.T) {
 			}
 
 			err = store.PutGroupSession(context.TODO(), igs)
-			if err != nil {
-				t.Errorf("Error storing inbound group session: %v", err)
-			}
+			require.NoError(t, err, "Error storing inbound group session")
 
 			retrieved, err := store.GetGroupSession(context.TODO(), "room1", igs.ID())
-			if err != nil {
-				t.Errorf("Error retrieving inbound group session: %v", err)
-			}
+			require.NoError(t, err, "Error retrieving inbound group session")
 
 			pickled, err := retrieved.InternalLibolm.Pickle([]byte("test"))
 			require.NoError(t, err)
