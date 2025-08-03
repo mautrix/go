@@ -39,7 +39,7 @@ type PowerLevelsEventContent struct {
 
 	// This is not a part of power levels, it's added by mautrix-go internally in certain places
 	// in order to detect creator power accurately.
-	CreateEvent *Event `json:"-,omitempty"`
+	CreateEvent *Event `json:"-"`
 }
 
 func (pl *PowerLevelsEventContent) Clone() *PowerLevelsEventContent {
