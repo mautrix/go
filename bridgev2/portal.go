@@ -3533,7 +3533,7 @@ func (portal *Portal) updateTopic(ctx context.Context, topic string, sender Matr
 }
 
 func (portal *Portal) updateAvatar(ctx context.Context, avatar *Avatar, sender MatrixAPI, ts time.Time) bool {
-	if portal.AvatarID == avatar.ID && (portal.AvatarSet || portal.MXID == "") {
+	if portal.AvatarID == avatar.ID && (avatar.Remove || portal.AvatarMXC != "") && (portal.AvatarSet || portal.MXID == "") {
 		return false
 	}
 	portal.AvatarID = avatar.ID
@@ -3549,7 +3549,7 @@ func (portal *Portal) updateAvatar(ctx context.Context, avatar *Avatar, sender M
 			portal.AvatarSet = false
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to reupload room avatar")
 			return true
-		} else if newHash == portal.AvatarHash && portal.AvatarSet {
+		} else if newHash == portal.AvatarHash && portal.AvatarMXC != "" && portal.AvatarSet {
 			return true
 		}
 		portal.AvatarMXC = newMXC
