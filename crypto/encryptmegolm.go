@@ -25,7 +25,6 @@ import (
 )
 
 var (
-	AlreadyShared  = errors.New("group session already shared")
 	NoGroupSession = errors.New("no group session created")
 )
 
@@ -209,7 +208,8 @@ func (mach *OlmMachine) ShareGroupSession(ctx context.Context, roomID id.RoomID,
 	if err != nil {
 		return fmt.Errorf("failed to get previous outbound group session: %w", err)
 	} else if session != nil && session.Shared && !session.Expired() {
-		return AlreadyShared
+		mach.machOrContextLog(ctx).Debug().Stringer("room_id", roomID).Msg("Not re-sharing group session, already shared")
+		return nil
 	}
 	log := mach.machOrContextLog(ctx).With().
 		Str("room_id", roomID.String()).
