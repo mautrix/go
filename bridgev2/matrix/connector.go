@@ -19,12 +19,12 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unsafe"
 
 	_ "github.com/lib/pq"
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/dbutil"
 	_ "go.mau.fi/util/dbutil/litestream"
+	"go.mau.fi/util/exbytes"
 	"go.mau.fi/util/exsync"
 	"go.mau.fi/util/random"
 	"golang.org/x/sync/semaphore"
@@ -674,7 +674,7 @@ func (br *Connector) GenerateDeterministicEventID(roomID id.RoomID, _ networkid.
 	eventID[1+hashB64Len] = ':'
 	copy(eventID[1+hashB64Len+1:], br.deterministicEventIDServer)
 
-	return id.EventID(unsafe.String(unsafe.SliceData(eventID), len(eventID)))
+	return id.EventID(exbytes.UnsafeString(eventID))
 }
 
 func (br *Connector) GenerateDeterministicRoomID(key networkid.PortalKey) id.RoomID {
