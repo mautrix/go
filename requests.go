@@ -2,6 +2,7 @@ package mautrix
 
 import (
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -38,6 +39,26 @@ const (
 )
 
 type Direction rune
+
+func (d Direction) MarshalJSON() ([]byte, error) {
+	return json.Marshal(string(d))
+}
+
+func (d *Direction) UnmarshalJSON(data []byte) error {
+	var str string
+	if err := json.Unmarshal(data, &str); err != nil {
+		return err
+	}
+	switch str {
+	case "f":
+		*d = DirectionForward
+	case "b":
+		*d = DirectionBackward
+	default:
+		return fmt.Errorf("invalid direction %q, must be 'f' or 'b'", str)
+	}
+	return nil
+}
 
 const (
 	DirectionForward  Direction = 'f'
