@@ -146,7 +146,8 @@ type Unsigned struct {
 	BeeperHSOrderString *BeeperEncodedOrder `json:"com.beeper.hs.order_string,omitempty"`
 	BeeperFromBackup    bool                `json:"com.beeper.from_backup,omitempty"`
 
-	ElementSoftFailed bool `json:"io.element.synapse.soft_failed,omitempty"`
+	ElementSoftFailed         bool `json:"io.element.synapse.soft_failed,omitempty"`
+	ElementPolicyServerSpammy bool `json:"io.element.synapse.policy_server_spammy,omitempty"`
 }
 
 func (us *Unsigned) IsEmpty() bool {
