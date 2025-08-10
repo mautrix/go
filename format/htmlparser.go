@@ -334,11 +334,37 @@ func (parser *HTMLParser) tagToString(node *html.Node, ctx Context) string {
 	}
 }
 
+// PrefixByteRunLength returns the number of the given byte at the start of a string.
+func PrefixByteRunLength(s string, b byte) int {
+	count := 0
+	for ; count < len(s) && s[count] == b; count++ {
+	}
+	return count
+}
+
+// CollapseSpaces replaces all runs of multiple spaces (\x20) in a string with a single space.
+func CollapseSpaces(s string) string {
+	doubleSpaceIdx := strings.Index(s, "  ")
+	if doubleSpaceIdx < 0 {
+		return s
+	}
+	var buf strings.Builder
+	buf.Grow(len(s))
+	for doubleSpaceIdx >= 0 {
+		buf.WriteString(s[:doubleSpaceIdx+1])
+		spaceCount := PrefixByteRunLength(s[doubleSpaceIdx+2:], ' ') + 2
+		s = s[doubleSpaceIdx+spaceCount:]
+		doubleSpaceIdx = strings.Index(s, "  ")
+	}
+	buf.WriteString(s)
+	return buf.String()
+}
+
 func (parser *HTMLParser) singleNodeToString(node *html.Node, ctx Context) TaggedString {
 	switch node.Type {
 	case html.TextNode:
 		if !ctx.PreserveWhitespace {
-			node.Data = strings.Replace(node.Data, "\n", "", -1)
+			node.Data = CollapseSpaces(strings.Replace(node.Data, "\n", "", -1))
 		}
 		if parser.TextConverter != nil {
 			node.Data = parser.TextConverter(node.Data, ctx)
