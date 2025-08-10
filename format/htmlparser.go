@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	"go.mau.fi/util/exstrings"
 	"golang.org/x/net/html"
 
 	"maunium.net/go/mautrix/event"
@@ -371,7 +372,7 @@ func (parser *HTMLParser) singleNodeToString(node *html.Node, ctx Context) Tagge
 	switch node.Type {
 	case html.TextNode:
 		if !ctx.PreserveWhitespace {
-			node.Data = strings.Replace(node.Data, "\n", "", -1)
+			node.Data = exstrings.CollapseSpaces(strings.ReplaceAll(node.Data, "\n", ""))
 		}
 		if parser.TextConverter != nil {
 			node.Data = parser.TextConverter(node.Data, ctx)
