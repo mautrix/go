@@ -207,8 +207,13 @@ func (r *encryptingReader) Read(dst []byte) (n int, err error) {
 		}
 	}
 	n, err = r.source.Read(dst)
+	if r.isDecrypting {
+		r.hash.Write(dst[:n])
+	}
 	r.stream.XORKeyStream(dst[:n], dst[:n])
-	r.hash.Write(dst[:n])
+	if !r.isDecrypting {
+		r.hash.Write(dst[:n])
+	}
 	return
 }
 
