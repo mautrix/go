@@ -34,8 +34,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        go-version: ["1.23", "1.24"]
-    name: Build (${{ matrix.go-version == '1.24' && 'latest' || 'old' }}, libolm)
+        go-version: ["1.24", "1.25"]
+    name: Build (${{ matrix.go-version == '1.25' && 'latest' || 'old' }}, libolm)
 
     steps:
       - uses: actions/checkout@v4
@@ -65,8 +65,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        go-version: ["1.23", "1.24"]
-    name: Build (${{ matrix.go-version == '1.24' && 'latest' || 'old' }}, goolm)
+        go-version: ["1.24", "1.25"]
+    name: Build (${{ matrix.go-version == '1.25' && 'latest' || 'old' }}, goolm)
 
     steps:
       - uses: actions/checkout@v4
