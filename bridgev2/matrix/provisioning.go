@@ -601,14 +601,49 @@ func (prov *ProvisioningAPI) doResolveIdentifier(w http.ResponseWriter, r *http.
 		mautrix.MUnrecognized.WithMessage("This bridge does not support resolving identifiers").Write(w)
 		return
 	}
-	resp, err := api.ResolveIdentifier(r.Context(), r.PathValue("identifier"), createChat)
-	if err != nil {
-		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to resolve identifier")
-		RespondWithError(w, err, "Internal error resolving identifier")
-		return
-	} else if resp == nil {
-		mautrix.MNotFound.WithMessage("Identifier not found").Write(w)
-		return
+	var resp *bridgev2.ResolveIdentifierResponse
+	identifier := r.PathValue("identifier")
+	parsedUserID, ok := prov.br.ParseGhostMXID(id.UserID(identifier))
+	validator, vOK := prov.br.Bridge.Network.(bridgev2.IdentifierValidatingNetwork)
+	if ok && (!vOK || validator.ValidateUserID(parsedUserID)) {
+		ghost, err := prov.br.Bridge.GetGhostByID(r.Context(), parsedUserID)
+		if err != nil {
+			zerolog.Ctx(r.Context()).Err(err).Msg("Failed to get ghost by ID")
+			RespondWithError(w, err, "Internal error getting user by ID")
+			return
+		}
+		resp = &bridgev2.ResolveIdentifierResponse{
+			Ghost:  ghost,
+			UserID: parsedUserID,
+		}
+		gdcAPI, ok := api.(bridgev2.GhostDMCreatingNetworkAPI)
+		if ok && createChat {
+			resp.Chat, err = gdcAPI.CreateChatWithGhost(r.Context(), ghost)
+			if err != nil {
+				zerolog.Ctx(r.Context()).Err(err).Msg("Failed to create chat")
+				RespondWithError(w, err, "Internal error creating chat")
+				return
+			}
+		} else if createChat || ghost.Name == "" {
+			zerolog.Ctx(r.Context()).Debug().
+				Bool("create_chat", createChat).
+				Bool("has_name", ghost.Name != "").
+				Msg("Falling back to resolving identifier")
+			resp = nil
+			identifier = string(parsedUserID)
+		}
+	}
+	if resp == nil {
+		var err error
+		resp, err = api.ResolveIdentifier(r.Context(), identifier, createChat)
+		if err != nil {
+			zerolog.Ctx(r.Context()).Err(err).Msg("Failed to resolve identifier")
+			RespondWithError(w, err, "Internal error resolving identifier")
+			return
+		} else if resp == nil {
+			mautrix.MNotFound.WithMessage("Identifier not found").Write(w)
+			return
+		}
 	}
 	apiResp := &RespResolveIdentifier{
 		ID: resp.UserID,
@@ -626,6 +661,7 @@ func (prov *ProvisioningAPI) doResolveIdentifier(w http.ResponseWriter, r *http.
 		apiResp.Name = *resp.UserInfo.Name
 	}
 	if resp.Chat != nil {
+		var err error
 		if resp.Chat.Portal == nil {
 			resp.Chat.Portal, err = prov.br.Bridge.GetPortalByKey(r.Context(), resp.Chat.PortalKey)
 			if err != nil {
