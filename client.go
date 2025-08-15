@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -154,8 +155,10 @@ func DiscoverClientAPIWithClient(ctx context.Context, client *http.Client, serve
 		return nil, err
 	}
 
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", DefaultUserAgent+" (.well-known fetcher)")
+	if runtime.GOOS != "js" {
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("User-Agent", DefaultUserAgent+" (.well-known fetcher)")
+	}
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -516,7 +519,9 @@ func (cli *Client) MakeFullRequestWithResp(ctx context.Context, params FullReque
 			params.Handler = handleNormalResponse
 		}
 	}
-	req.Header.Set("User-Agent", cli.UserAgent)
+	if cli.UserAgent != "" {
+		req.Header.Set("User-Agent", cli.UserAgent)
+	}
 	if len(cli.AccessToken) > 0 {
 		req.Header.Set("Authorization", "Bearer "+cli.AccessToken)
 	}
@@ -1803,7 +1808,9 @@ func (cli *Client) tryUploadMediaToURL(ctx context.Context, url, contentType str
 	}
 	req.ContentLength = contentLength
 	req.Header.Set("Content-Type", contentType)
-	req.Header.Set("User-Agent", cli.UserAgent+" (external media uploader)")
+	if cli.UserAgent != "" {
+		req.Header.Set("User-Agent", cli.UserAgent+" (external media uploader)")
+	}
 
 	if cli.ExternalClient != nil {
 		return cli.ExternalClient.Do(req)
