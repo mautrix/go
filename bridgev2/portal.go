@@ -2300,6 +2300,12 @@ func (portal *Portal) sendConvertedMessage(
 				Str("part_id", string(part.ID)).
 				Msg("Not bridging message part with DontBridge flag to Matrix")
 		} else {
+			if converted.Disappear.Type != database.DisappearingTypeNone && converted.Disappear.Timer > 0 {
+				part.Content.BeeperDisappearingTimer = &event.BeeperDisappearingTimer{
+					Type:  event.DisappearingType(converted.Disappear.Type),
+					Timer: converted.Disappear.Timer.Milliseconds(),
+				}
+			}
 			resp, err := intent.SendMessage(ctx, portal.MXID, part.Type, &event.Content{
 				Parsed: part.Content,
 				Raw:    part.Extra,
