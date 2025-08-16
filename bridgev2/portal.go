@@ -4047,14 +4047,8 @@ func (portal *Portal) UpdateDisappearingSetting(ctx context.Context, setting dat
 		return true
 	}
 
-	timerType := event.DisappearingTypeAfterSend
-	if setting.Type == database.DisappearingTypeAfterRead {
-		timerType = event.DisappearingTypeAfterRead
-	} else if setting.Type == database.DisappearingTypeNone {
-		timerType = event.DisappearingTypeNone
-	}
 	stateContent := &event.BeeperDisappearingTimerEventContent{
-		Type:  timerType,
+		Type:  setting.Type,
 		Timer: setting.Timer.Milliseconds(),
 	}
 	portal.sendRoomMeta(ctx, sender, ts, event.StateBeeperDisappearingTimer, "", stateContent)
