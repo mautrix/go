@@ -4046,6 +4046,17 @@ func (portal *Portal) UpdateDisappearingSetting(ctx context.Context, setting dat
 	if portal.MXID == "" {
 		return true
 	}
+
+	timerType := string(database.DisappearingTypeAfterSend)
+	if setting.Type == database.DisappearingTypeAfterRead {
+		timerType = string(database.DisappearingTypeAfterRead)
+	}
+	stateContent := &event.BeeperDisappearingTimerEventContent{
+		Type:  timerType,
+		Timer: setting.Timer.Milliseconds(),
+	}
+	portal.sendRoomMeta(ctx, sender, ts, event.StateBeeperDisappearingTimer, "", stateContent)
+
 	content := DisappearingMessageNotice(setting.Timer, implicit)
 	if sender == nil {
 		sender = portal.Bridge.Bot

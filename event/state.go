@@ -207,6 +207,11 @@ type BridgeEventContent struct {
 	BeeperRoomTypeV2 string `json:"com.beeper.room_type.v2,omitempty"`
 }
 
+type BeeperDisappearingTimerEventContent struct {
+	Type  string `json:"type"`
+	Timer int64  `json:"timer"` // ms
+}
+
 type SpaceChildEventContent struct {
 	Via       []string `json:"via,omitempty"`
 	Order     string   `json:"order,omitempty"`

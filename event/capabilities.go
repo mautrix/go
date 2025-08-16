@@ -54,6 +54,8 @@ type RoomFeatures struct {
 	Archive             bool `json:"archive,omitempty"`
 	MarkAsUnread        bool `json:"mark_as_unread,omitempty"`
 	DeleteChat          bool `json:"delete_chat,omitempty"`
+
+	DisappearingTimer *DisappearingTimerCapability `json:"disappearing_timer,omitempty"`
 }
 
 func (rf *RoomFeatures) GetID() string {
@@ -66,6 +68,11 @@ func (rf *RoomFeatures) GetID() string {
 type FormattingFeatureMap map[FormattingFeature]CapabilitySupportLevel
 
 type FileFeatureMap map[CapabilityMsgType]*FileFeatures
+
+type DisappearingTimerCapability struct {
+	Types  []string `json:"types,omitempty"`
+	Timers []int64  `json:"timers,omitempty"`
+}
 
 type CapabilityMsgType = MessageType
 
@@ -246,6 +253,23 @@ func (rf *RoomFeatures) Hash() []byte {
 	hashBool(hasher, "mark_as_unread", rf.MarkAsUnread)
 	hashBool(hasher, "delete_chat", rf.DeleteChat)
 
+	if rf.DisappearingTimer != nil {
+		hashValue(hasher, "disappearing_timer", rf.DisappearingTimer)
+	}
+
+	return hasher.Sum(nil)
+}
+
+func (dtc *DisappearingTimerCapability) Hash() []byte {
+	hasher := sha256.New()
+	hasher.Write([]byte("types"))
+	for _, t := range dtc.Types {
+		hasher.Write([]byte(t))
+	}
+	hasher.Write([]byte("timers"))
+	for _, timer := range dtc.Timers {
+		exerrors.Must(hasher.Write(binary.BigEndian.AppendUint64(nil, uint64(timer))))
+	}
 	return hasher.Sum(nil)
 }
 

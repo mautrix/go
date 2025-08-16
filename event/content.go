@@ -49,6 +49,7 @@ var TypeMap = map[Type]reflect.Type{
 
 	StateElementFunctionalMembers: reflect.TypeOf(ElementFunctionalMembersContent{}),
 	StateBeeperRoomFeatures:       reflect.TypeOf(RoomFeatures{}),
+	StateBeeperDisappearingTimer:  reflect.TypeOf(BeeperDisappearingTimerEventContent{}),
 
 	EventMessage:   reflect.TypeOf(MessageEventContent{}),
 	EventSticker:   reflect.TypeOf(MessageEventContent{}),
