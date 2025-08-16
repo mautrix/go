@@ -4047,9 +4047,9 @@ func (portal *Portal) UpdateDisappearingSetting(ctx context.Context, setting dat
 		return true
 	}
 
-	timerType := string(database.DisappearingTypeAfterSend)
+	timerType := event.DisappearingTypeAfterSend
 	if setting.Type == database.DisappearingTypeAfterRead {
-		timerType = string(database.DisappearingTypeAfterRead)
+		timerType = event.DisappearingTypeAfterRead
 	}
 	stateContent := &event.BeeperDisappearingTimerEventContent{
 		Type:  timerType,

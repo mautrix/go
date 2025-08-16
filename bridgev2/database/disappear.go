@@ -14,16 +14,17 @@ import (
 	"go.mau.fi/util/dbutil"
 
 	"maunium.net/go/mautrix/bridgev2/networkid"
+	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
-// DisappearingType represents the type of a disappearing message timer.
-type DisappearingType string
+// For backwards compatibility
+type DisappearingType = event.DisappearingType
 
 const (
-	DisappearingTypeNone      DisappearingType = ""
-	DisappearingTypeAfterRead DisappearingType = "after_read"
-	DisappearingTypeAfterSend DisappearingType = "after_send"
+	DisappearingTypeNone      DisappearingType = event.DisappearingTypeNone
+	DisappearingTypeAfterRead DisappearingType = event.DisappearingTypeAfterRead
+	DisappearingTypeAfterSend DisappearingType = event.DisappearingTypeAfterSend
 )
 
 // DisappearingSetting represents a disappearing message timer setting
