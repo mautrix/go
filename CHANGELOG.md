@@ -1,4 +1,4 @@
-## v0.25.0 (unreleased)
+## v0.25.0 (2025-08-16)
 
 * Bumped minimum Go version to 1.24.
 * **Breaking change *(appservice,bridgev2,federation)*** Replaced gorilla/mux
