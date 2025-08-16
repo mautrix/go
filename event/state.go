@@ -207,6 +207,20 @@ type BridgeEventContent struct {
 	BeeperRoomTypeV2 string `json:"com.beeper.room_type.v2,omitempty"`
 }
 
+// DisappearingType represents the type of a disappearing message timer.
+type DisappearingType string
+
+const (
+	DisappearingTypeNone      DisappearingType = ""
+	DisappearingTypeAfterRead DisappearingType = "after_read"
+	DisappearingTypeAfterSend DisappearingType = "after_send"
+)
+
+type BeeperDisappearingTimer struct {
+	Type  DisappearingType `json:"type"`
+	Timer int64            `json:"timer"` // ms
+}
+
 type SpaceChildEventContent struct {
 	Via       []string `json:"via,omitempty"`
 	Order     string   `json:"order,omitempty"`
