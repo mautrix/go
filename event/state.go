@@ -216,7 +216,7 @@ const (
 	DisappearingTypeAfterSend DisappearingType = "after_send"
 )
 
-type BeeperDisappearingTimerEventContent struct {
+type BeeperDisappearingTimer struct {
 	Type  DisappearingType `json:"type"`
 	Timer int64            `json:"timer"` // ms
 }
