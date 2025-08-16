@@ -9,7 +9,7 @@ require (
 	github.com/chzyer/readline v1.5.1
 	github.com/coder/websocket v1.8.13
 	github.com/lib/pq v1.10.9
-	github.com/mattn/go-sqlite3 v1.14.31
+	github.com/mattn/go-sqlite3 v1.14.32
 	github.com/rs/xid v1.6.0
 	github.com/rs/zerolog v1.34.0
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
@@ -17,8 +17,8 @@ require (
 	github.com/tidwall/gjson v1.18.0
 	github.com/tidwall/sjson v1.2.5
 	github.com/yuin/goldmark v1.7.13
-	go.mau.fi/util v0.8.9-0.20250813172851-79bf3eba563d
-	go.mau.fi/zeroconfig v0.1.3
+	go.mau.fi/util v0.9.0
+	go.mau.fi/zeroconfig v0.2.0
 	golang.org/x/crypto v0.41.0
 	golang.org/x/exp v0.0.0-20250813145105-42675adae3e6
 	golang.org/x/net v0.43.0
