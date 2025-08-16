@@ -4030,7 +4030,7 @@ func DisappearingMessageNotice(expiration time.Duration, implicit bool) *event.M
 
 func (portal *Portal) UpdateDisappearingSetting(ctx context.Context, setting database.DisappearingSetting, sender MatrixAPI, ts time.Time, implicit, save bool) bool {
 	if setting.Timer == 0 {
-		setting.Type = ""
+		setting.Type = event.DisappearingTypeNone
 	}
 	if portal.Disappear.Timer == setting.Timer && portal.Disappear.Type == setting.Type {
 		return false
@@ -4050,6 +4050,8 @@ func (portal *Portal) UpdateDisappearingSetting(ctx context.Context, setting dat
 	timerType := event.DisappearingTypeAfterSend
 	if setting.Type == database.DisappearingTypeAfterRead {
 		timerType = event.DisappearingTypeAfterRead
+	} else if setting.Type == database.DisappearingTypeNone {
+		timerType = event.DisappearingTypeNone
 	}
 	stateContent := &event.BeeperDisappearingTimerEventContent{
 		Type:  timerType,
