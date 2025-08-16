@@ -4047,7 +4047,7 @@ func (portal *Portal) UpdateDisappearingSetting(ctx context.Context, setting dat
 		return true
 	}
 
-	stateContent := &event.BeeperDisappearingTimerEventContent{
+	stateContent := &event.BeeperDisappearingTimer{
 		Type:  setting.Type,
 		Timer: setting.Timer.Milliseconds(),
 	}
