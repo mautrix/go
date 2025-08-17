@@ -151,15 +151,16 @@ func (pdu *PDU) VerifySignature(
 		originServerTS := time.UnixMilli(pdu.OriginServerTS)
 		key, validUntil, err := getKey(keyID, originServerTS)
 		if err != nil {
-			return fmt.Errorf("failed to get key %s: %w", keyID, err)
-		} else if key == "" || (validUntil.Before(originServerTS) && roomVersion.EnforceSigningKeyValidity()) {
-			continue
-		}
-		err = signutil.VerifyJSONRaw(key, sig, rawJSON)
-		if err != nil {
+			return fmt.Errorf("failed to get key %s for %s: %w", keyID, serverName, err)
+		} else if key == "" {
+			return fmt.Errorf("key %s not found for %s", keyID, serverName)
+		} else if validUntil.Before(originServerTS) && roomVersion.EnforceSigningKeyValidity() {
+			return fmt.Errorf("key %s for %s is only valid until %s, but event is from %s", keyID, serverName, validUntil, originServerTS)
+		} else if err = signutil.VerifyJSONRaw(key, sig, rawJSON); err != nil {
 			return fmt.Errorf("failed to verify signature from key %s: %w", keyID, err)
+		} else {
+			verified = true
 		}
-		verified = true
 	}
 	if !verified {
 		return fmt.Errorf("no verifiable signatures found for server %s", serverName)
