@@ -18,12 +18,15 @@ import (
 	"encoding/json/v2"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/tidwall/gjson"
 	"go.mau.fi/util/jsonbytes"
+	"go.mau.fi/util/ptr"
 
 	"maunium.net/go/mautrix/crypto/canonicaljson"
+	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/federation/signutil"
 	"maunium.net/go/mautrix/id"
 )
@@ -96,6 +99,38 @@ func (pdu *PDU) VerifyContentHash() bool {
 		return false
 	}
 	return hmac.Equal(calculatedHash[:], pdu.Hashes.SHA256)
+}
+
+func (pdu *PDU) ToClientEvent(roomVersion id.RoomVersion) (*event.Event, error) {
+	if pdu.Type == "m.room.create" && roomVersion == "" {
+		roomVersion = id.RoomVersion(gjson.GetBytes(pdu.Content, "room_version").Str)
+	}
+	evtType := event.Type{Type: pdu.Type, Class: event.MessageEventType}
+	if pdu.StateKey != nil {
+		evtType.Class = event.StateEventType
+	}
+	eventID, err := pdu.CalculateEventID(roomVersion)
+	if err != nil {
+		return nil, err
+	}
+	roomID := pdu.RoomID
+	if pdu.Type == "m.room.create" && roomVersion.RoomIDIsCreateEventID() {
+		roomID = id.RoomID(strings.Replace(string(eventID), "$", "!", 1))
+	}
+	evt := &event.Event{
+		StateKey:  pdu.StateKey,
+		Sender:    pdu.Sender,
+		Type:      evtType,
+		Timestamp: pdu.OriginServerTS,
+		ID:        eventID,
+		RoomID:    roomID,
+		Redacts:   ptr.Val(pdu.Redacts),
+	}
+	err = json.Unmarshal(pdu.Content, &evt.Content)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal content: %w", err)
+	}
+	return evt, nil
 }
 
 func (pdu *PDU) Sign(roomVersion id.RoomVersion, serverName string, keyID id.KeyID, privateKey ed25519.PrivateKey) error {
