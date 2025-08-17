@@ -10,7 +10,7 @@ package pdu_test
 
 import (
 	"encoding/base64"
-	"encoding/json"
+	"encoding/json/v2"
 	"testing"
 	"time"
 
@@ -171,10 +171,10 @@ func TestPDU_VerifyContentHash(t *testing.T) {
 	}
 }
 
-func TestPDU_CalculateEventID(t *testing.T) {
+func TestPDU_GetEventID(t *testing.T) {
 	for _, test := range testPDUs {
 		t.Run(test.name, func(t *testing.T) {
-			gotEventID := exerrors.Must(parsePDU(test.pdu).CalculateEventID(test.roomVersion))
+			gotEventID := exerrors.Must(parsePDU(test.pdu).GetEventID(test.roomVersion))
 			assert.Equal(t, test.eventID, gotEventID)
 		})
 	}
