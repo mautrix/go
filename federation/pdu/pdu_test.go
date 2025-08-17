@@ -9,12 +9,9 @@
 package pdu_test
 
 import (
-	"encoding/base64"
 	"encoding/json/v2"
-	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"go.mau.fi/util/exerrors"
 
 	"maunium.net/go/mautrix/federation/pdu"
@@ -29,6 +26,14 @@ type serverKey struct {
 type serverDetails struct {
 	serverName string
 	keys       map[id.KeyID]serverKey
+}
+
+func (sd serverDetails) getKey(keyID id.KeyID, _ time.Time) (id.SigningKey, time.Time, error) {
+	key, ok := sd.keys[keyID]
+	if ok {
+		return key.key, key.validUntilTS, nil
+	}
+	return "", time.Time{}, nil
 }
 
 var mauniumNet = serverDetails{
@@ -75,7 +80,23 @@ type testPDU struct {
 	serverDetails
 }
 
-var testPDUs = []testPDU{{
+var roomV4MessageTestPDU = testPDU{
+	name:          "m.room.message in v4 room",
+	pdu:           `{"auth_events":["$OB87jNemaIVDHAfu0-pa_cP7OPFXUXCbFpjYVi8gll4","$RaWbTF9wQfGQgUpe1S13wzICtGTB2PNKRHUNHu9IO1c","$ZmEWOXw6cC4Rd1wTdY5OzeLJVzjhrkxFPwwKE4gguGk"],"content":{"body":"the last one is saying it shouldn't have effects","com.beeper.linkpreviews":[],"m.mentions":{},"msgtype":"m.text"},"depth":13103,"hashes":{"sha256":"c2wb8qMlvzIPCP1Wd+eYZ4BRgnGYxS97dR1UlJjVMeg"},"origin_server_ts":1752875275263,"prev_events":["$-7_BMI3BXwj3ayoxiJvraJxYWTKwjiQ6sh7CW_Brvj0"],"room_id":"!JiiOHXrIUCtcOJsZCa:matrix.org","sender":"@tulir:maunium.net","type":"m.room.message","signatures":{"maunium.net":{"ed25519:a_xxeS":"99TAqHpBkUEtgCraXsVXogmf/hnijPbgbG9eACtA+mbix3Y6gURI4QGQgcX/NhcE3pJQZ/YDjmbuvCnKvEccAA"}},"unsigned":{"age_ts":1752875275281}}`,
+	eventID:       "$Jo_lmFR-e6lzrimzCA7DevIn2OwhuQYmd9xkcJBoqAA",
+	roomVersion:   id.RoomV4,
+	serverDetails: mauniumNet,
+}
+
+var roomV12MessageTestPDU = testPDU{
+	name:          "m.room.message in v12 room",
+	pdu:           `{"auth_events":["$gCzdJUVV93Qory0x7p_PLG5UUiDjPJNe1H12qbHTuFA","$hyeL_nU_L3tsZ2dtZZpAHk0Skv-PqFQIipuII_By584"],"content":{"body":"meow","com.beeper.linkpreviews":[],"m.mentions":{},"msgtype":"m.text"},"depth":122,"hashes":{"sha256":"IQ0zlc+PXeEs6R3JvRkW3xTPV3zlGKSSd3x07KXGjzs"},"origin_server_ts":1755384351627,"prev_events":["$gCzdJUVV93Qory0x7p_PLG5UUiDjPJNe1H12qbHTuFA"],"room_id":"!mauT12AzsoqxV7Abvy_ApA-HNPK1LcT4GbP70_AOPyQ","sender":"@tulir_test:maunium.net","type":"m.room.message","signatures":{"maunium.net":{"ed25519:a_xxeS":"0GDMddL2k7gF4V1VU8sL3wTfhAIzAu5iVH5jeavZ2VEg3J9/tHLWXAOn2tzkLaMRWl0/XpINT2YlH/rd2U21Ag"}},"unsigned":{"age_ts":1755384351627}}`,
+	eventID:       "$xmP-wZfpannuHG-Akogi6c4YvqxChMtdyYbUMGOrMWc",
+	roomVersion:   id.RoomV12,
+	serverDetails: mauniumNet,
+}
+
+var testPDUs = []testPDU{roomV4MessageTestPDU, {
 	name:          "m.room.message in v5 room",
 	pdu:           `{"auth_events":["$hp0ImHqYgHTRbLeWKPeTeFmxdb5SdMJN9cfmTrTk7d0","$KAj7X7tnJbR9qYYMWJSw-1g414_KlPptbbkZm7_kUtg","$V-2ShOwZYhA_nxMijaf3lqFgIJgzE2UMeFPtOLnoBYM"],"content":{"body":"meow","com.beeper.linkpreviews":[],"m.mentions":{},"msgtype":"m.text"},"depth":2248,"hashes":{"sha256":"kV+JuLbWXJ2r6PjHT3wt8bFc/TfI1nTaSN3Lamg/xHs"},"origin_server_ts":1755422945654,"prev_events":["$49lFLem2Nk4dxHk9RDXxTdaq9InIJpmkHpzVnjKcYwg"],"room_id":"!vzBgJsjNzgHSdWsmki:mozilla.org","sender":"@tulir:maunium.net","type":"m.room.message","signatures":{"maunium.net":{"ed25519:a_xxeS":"JIl60uVgfCLBZLPoSiE7wVkJ9U5cNEPVPuv1sCCYUOq5yOW56WD1adgpBUdX2UFpYkCHvkRnyQGxU0+6HBp5BA"}},"unsigned":{"age_ts":1755422945673}}`,
 	eventID:       "$Qn4tHfuAe6PlnKXPZnygAU9wd6RXqMKtt_ZzstHTSgA",
@@ -93,13 +114,7 @@ var testPDUs = []testPDU{{
 	eventID:       `$qkWfTL7_l3oRZO2CItW8-Q0yAmi_l_1ua629ZDqponE`,
 	roomVersion:   id.RoomV11,
 	serverDetails: mauniumNet,
-}, {
-	name:          "m.room.message in v12 room",
-	pdu:           `{"auth_events":["$gCzdJUVV93Qory0x7p_PLG5UUiDjPJNe1H12qbHTuFA","$hyeL_nU_L3tsZ2dtZZpAHk0Skv-PqFQIipuII_By584"],"content":{"body":"meow","com.beeper.linkpreviews":[],"m.mentions":{},"msgtype":"m.text"},"depth":122,"hashes":{"sha256":"IQ0zlc+PXeEs6R3JvRkW3xTPV3zlGKSSd3x07KXGjzs"},"origin_server_ts":1755384351627,"prev_events":["$gCzdJUVV93Qory0x7p_PLG5UUiDjPJNe1H12qbHTuFA"],"room_id":"!mauT12AzsoqxV7Abvy_ApA-HNPK1LcT4GbP70_AOPyQ","sender":"@tulir_test:maunium.net","type":"m.room.message","signatures":{"maunium.net":{"ed25519:a_xxeS":"0GDMddL2k7gF4V1VU8sL3wTfhAIzAu5iVH5jeavZ2VEg3J9/tHLWXAOn2tzkLaMRWl0/XpINT2YlH/rd2U21Ag"}},"unsigned":{"age_ts":1755384351627}}`,
-	eventID:       "$xmP-wZfpannuHG-Akogi6c4YvqxChMtdyYbUMGOrMWc",
-	roomVersion:   id.RoomV12,
-	serverDetails: mauniumNet,
-}, {
+}, roomV12MessageTestPDU, {
 	name:          "m.room.create in v4 room",
 	pdu:           `{"auth_events": [], "prev_events": [], "type": "m.room.create", "room_id": "!jxlRxnrZCsjpjDubDX:matrix.org", "sender": "@neilj:matrix.org", "content": {"room_version": "4", "predecessor": {"room_id": "!DYgXKezaHgMbiPMzjX:matrix.org", "event_id": "$156171636353XwPJT:matrix.org"}, "creator": "@neilj:matrix.org"}, "depth": 1, "prev_state": [], "state_key": "", "origin": "matrix.org", "origin_server_ts": 1561716363993, "hashes": {"sha256": "9tj8GpXjTAJvdNAbnuKLemZZk+Tjv2LAbGodSX6nJAo"}, "signatures": {"matrix.org": {"ed25519:auto": "2+sNt8uJUhzU4GPxnFVYtU2ZRgFdtVLT1vEZGUdJYN40zBpwYEGJy+kyb5matA+8/yLeYD9gu1O98lhleH0aCA"}}, "unsigned": {"age": 104769}}`,
 	eventID:       "$ay_9_nPilrTpb3UxIwHHBBfFjTJb6hBAE_JzQwSjqeY",
@@ -146,52 +161,4 @@ var testPDUs = []testPDU{{
 func parsePDU(pdu string) (out *pdu.PDU) {
 	exerrors.PanicIfNotNil(json.Unmarshal([]byte(pdu), &out))
 	return
-}
-
-func TestPDU_CalculateContentHash(t *testing.T) {
-	for _, test := range testPDUs {
-		t.Run(test.name, func(t *testing.T) {
-			parsed := parsePDU(test.pdu)
-			contentHash := exerrors.Must(parsed.CalculateContentHash())
-			assert.Equal(
-				t,
-				base64.RawStdEncoding.EncodeToString(parsed.Hashes.SHA256),
-				base64.RawStdEncoding.EncodeToString(contentHash[:]),
-			)
-		})
-	}
-}
-
-func TestPDU_VerifyContentHash(t *testing.T) {
-	for _, test := range testPDUs {
-		t.Run(test.name, func(t *testing.T) {
-			parsed := parsePDU(test.pdu)
-			assert.True(t, parsed.VerifyContentHash())
-		})
-	}
-}
-
-func TestPDU_GetEventID(t *testing.T) {
-	for _, test := range testPDUs {
-		t.Run(test.name, func(t *testing.T) {
-			gotEventID := exerrors.Must(parsePDU(test.pdu).GetEventID(test.roomVersion))
-			assert.Equal(t, test.eventID, gotEventID)
-		})
-	}
-}
-
-func TestPDU_VerifySignature(t *testing.T) {
-	for _, test := range testPDUs {
-		t.Run(test.name, func(t *testing.T) {
-			parsed := parsePDU(test.pdu)
-			err := parsed.VerifySignature(test.roomVersion, test.serverName, func(keyID id.KeyID, _ time.Time) (id.SigningKey, time.Time, error) {
-				key, ok := test.keys[keyID]
-				if ok {
-					return key.key, key.validUntilTS, nil
-				}
-				return "", time.Time{}, nil
-			})
-			assert.NoError(t, err)
-		})
-	}
 }
