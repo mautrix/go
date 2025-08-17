@@ -152,7 +152,7 @@ func (pdu *PDU) VerifySignature(
 		key, validUntil, err := getKey(keyID, originServerTS)
 		if err != nil {
 			return fmt.Errorf("failed to get key %s: %w", keyID, err)
-		} else if key == "" || validUntil.Before(originServerTS) {
+		} else if key == "" || (validUntil.Before(originServerTS) && roomVersion.EnforceSigningKeyValidity()) {
 			continue
 		}
 		err = signutil.VerifyJSONRaw(key, sig, rawJSON)
