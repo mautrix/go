@@ -58,12 +58,12 @@ jobs:
         run: go build -v ./...
 
       - name: Test
-        run: go test -json -v ./... 2>&1 | gotestfmt
+        run: go test -v ./...
 
       - name: Test (jsonv2)
         env:
             GOEXPERIMENT: jsonv2
-        run: go test -json -v ./... 2>&1 | gotestfmt
+        run: go test -v ./...
 
   build-goolm:
     runs-on: ubuntu-latest
