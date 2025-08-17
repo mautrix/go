@@ -27,7 +27,13 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-type GetKeyFunc = func(keyID id.KeyID, minValidUntil time.Time) (id.SigningKey, time.Time, error)
+// GetKeyFunc is a callback for retrieving the key corresponding to a given key ID when verifying the signature of a PDU.
+//
+// The input time is the timestamp of the event. The function should attempt to fetch a key that is
+// valid at or after this time, but if that is not possible, the latest available key should be
+// returned without an error. The verify function will do its own validity checking based on the
+// returned valid until timestamp.
+type GetKeyFunc = func(keyID id.KeyID, minValidUntil time.Time) (key id.SigningKey, validUntil time.Time, err error)
 
 type AnyPDU interface {
 	GetRoomID() (id.RoomID, error)
