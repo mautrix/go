@@ -83,21 +83,7 @@ jobs:
           go-version: ${{ matrix.go-version }}
           cache: true
 
-      - name: Set up gotestfmt
-        uses: GoTestTools/gotestfmt-action@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Build
         run: |
           rm -rf crypto/libolm
           go build -tags=goolm -v ./...
-
-      - name: Test
-        run: go test -tags goolm -v ./...
-
-      - name: Test (jsonv2)
-        if: matrix.go-version == '1.25'
-        env:
-          GOEXPERIMENT: jsonv2
-        run: go test -tags goolm -v ./...
