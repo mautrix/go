@@ -2530,27 +2530,6 @@ func (cli *Client) ReportRoom(ctx context.Context, roomID id.RoomID, reason stri
 	return err
 }
 
-// BatchSend sends a batch of historical events into a room. This is only available for appservices.
-//
-// Deprecated: MSC2716 has been abandoned, so this is now Beeper-specific. BeeperBatchSend should be used instead.
-func (cli *Client) BatchSend(ctx context.Context, roomID id.RoomID, req *ReqBatchSend) (resp *RespBatchSend, err error) {
-	path := ClientURLPath{"unstable", "org.matrix.msc2716", "rooms", roomID, "batch_send"}
-	query := map[string]string{
-		"prev_event_id": req.PrevEventID.String(),
-	}
-	if req.BeeperNewMessages {
-		query["com.beeper.new_messages"] = "true"
-	}
-	if req.BeeperMarkReadBy != "" {
-		query["com.beeper.mark_read_by"] = req.BeeperMarkReadBy.String()
-	}
-	if len(req.BatchID) > 0 {
-		query["batch_id"] = req.BatchID.String()
-	}
-	_, err = cli.MakeRequest(ctx, http.MethodPost, cli.BuildURLWithQuery(path, query), req, &resp)
-	return
-}
-
 func (cli *Client) AppservicePing(ctx context.Context, id, txnID string) (resp *RespAppservicePing, err error) {
 	_, err = cli.MakeFullRequest(ctx, FullRequest{
 		Method:       http.MethodPost,

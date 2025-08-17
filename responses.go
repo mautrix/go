@@ -488,18 +488,6 @@ type RespDeviceInfo struct {
 	LastSeenTS  int64       `json:"last_seen_ts"`
 }
 
-// Deprecated: MSC2716 was abandoned
-type RespBatchSend struct {
-	StateEventIDs []id.EventID `json:"state_event_ids"`
-	EventIDs      []id.EventID `json:"event_ids"`
-
-	InsertionEventID     id.EventID `json:"insertion_event_id"`
-	BatchEventID         id.EventID `json:"batch_event_id"`
-	BaseInsertionEventID id.EventID `json:"base_insertion_event_id"`
-
-	NextBatchID id.BatchID `json:"next_batch_id"`
-}
-
 type RespBeeperBatchSend struct {
 	EventIDs []id.EventID `json:"event_ids"`
 }

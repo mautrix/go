@@ -38,7 +38,6 @@ var TypeMap = map[Type]reflect.Type{
 	StateHalfShotBridge:    reflect.TypeOf(BridgeEventContent{}),
 	StateSpaceParent:       reflect.TypeOf(SpaceParentEventContent{}),
 	StateSpaceChild:        reflect.TypeOf(SpaceChildEventContent{}),
-	StateInsertionMarker:   reflect.TypeOf(InsertionMarkerContent{}),
 
 	StateLegacyPolicyRoom:     reflect.TypeOf(ModPolicyContent{}),
 	StateLegacyPolicyServer:   reflect.TypeOf(ModPolicyContent{}),
