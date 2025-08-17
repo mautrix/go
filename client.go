@@ -1704,6 +1704,38 @@ func (cli *Client) Download(ctx context.Context, mxcURL id.ContentURI) (*http.Re
 	return resp, err
 }
 
+type DownloadThumbnailExtra struct {
+	Method   string
+	Animated bool
+}
+
+func (cli *Client) DownloadThumbnail(ctx context.Context, mxcURL id.ContentURI, height, width int, extras ...DownloadThumbnailExtra) (*http.Response, error) {
+	if len(extras) > 1 {
+		panic(fmt.Errorf("invalid number of arguments to DownloadThumbnail: %d", len(extras)))
+	}
+	var extra DownloadThumbnailExtra
+	if len(extras) == 1 {
+		extra = extras[0]
+	}
+	path := ClientURLPath{"v1", "media", "thumbnail", mxcURL.Homeserver, mxcURL.FileID}
+	query := map[string]string{
+		"height": strconv.Itoa(height),
+		"width":  strconv.Itoa(width),
+	}
+	if extra.Method != "" {
+		query["method"] = extra.Method
+	}
+	if extra.Animated {
+		query["animated"] = "true"
+	}
+	_, resp, err := cli.MakeFullRequestWithResp(ctx, FullRequest{
+		Method:           http.MethodGet,
+		URL:              cli.BuildURLWithQuery(path, query),
+		DontReadResponse: true,
+	})
+	return resp, err
+}
+
 func (cli *Client) DownloadBytes(ctx context.Context, mxcURL id.ContentURI) ([]byte, error) {
 	resp, err := cli.Download(ctx, mxcURL)
 	if err != nil {
