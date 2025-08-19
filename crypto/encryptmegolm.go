@@ -41,7 +41,7 @@ func getRawJSON[T any](content json.RawMessage, path ...string) *T {
 	return &result
 }
 
-func getRelatesTo(content any) *event.RelatesTo {
+func getRelatesTo(content any, plaintext json.RawMessage) *event.RelatesTo {
 	contentJSON, ok := content.(json.RawMessage)
 	if ok {
 		return getRawJSON[event.RelatesTo](contentJSON, "m.relates_to")
@@ -54,7 +54,7 @@ func getRelatesTo(content any) *event.RelatesTo {
 	if ok {
 		return relatable.OptionalGetRelatesTo()
 	}
-	return nil
+	return getRawJSON[event.RelatesTo](plaintext, "content", "m.relates_to")
 }
 
 func getMentions(content any) *event.Mentions {
@@ -158,7 +158,7 @@ func (mach *OlmMachine) EncryptMegolmEventWithStateKey(ctx context.Context, room
 		Algorithm:        id.AlgorithmMegolmV1,
 		SessionID:        session.ID(),
 		MegolmCiphertext: ciphertext,
-		RelatesTo:        getRelatesTo(content),
+		RelatesTo:        getRelatesTo(content, plaintext),
 
 		// These are deprecated
 		SenderKey: mach.account.IdentityKey(),
