@@ -1704,6 +1704,38 @@ func (cli *Client) Download(ctx context.Context, mxcURL id.ContentURI) (*http.Re
 	return resp, err
 }
 
+type DownloadThumbnailExtra struct {
+	Method   string
+	Animated bool
+}
+
+func (cli *Client) DownloadThumbnail(ctx context.Context, mxcURL id.ContentURI, height, width int, extras ...DownloadThumbnailExtra) (*http.Response, error) {
+	if len(extras) > 1 {
+		panic(fmt.Errorf("invalid number of arguments to DownloadThumbnail: %d", len(extras)))
+	}
+	var extra DownloadThumbnailExtra
+	if len(extras) == 1 {
+		extra = extras[0]
+	}
+	path := ClientURLPath{"v1", "media", "thumbnail", mxcURL.Homeserver, mxcURL.FileID}
+	query := map[string]string{
+		"height": strconv.Itoa(height),
+		"width":  strconv.Itoa(width),
+	}
+	if extra.Method != "" {
+		query["method"] = extra.Method
+	}
+	if extra.Animated {
+		query["animated"] = "true"
+	}
+	_, resp, err := cli.MakeFullRequestWithResp(ctx, FullRequest{
+		Method:           http.MethodGet,
+		URL:              cli.BuildURLWithQuery(path, query),
+		DontReadResponse: true,
+	})
+	return resp, err
+}
+
 func (cli *Client) DownloadBytes(ctx context.Context, mxcURL id.ContentURI) ([]byte, error) {
 	resp, err := cli.Download(ctx, mxcURL)
 	if err != nil {
@@ -2528,27 +2560,6 @@ func (cli *Client) ReportRoom(ctx context.Context, roomID id.RoomID, reason stri
 	urlPath := cli.BuildClientURL("v3", "rooms", roomID, "report")
 	_, err := cli.MakeRequest(ctx, http.MethodPost, urlPath, &ReqReport{Reason: reason, Score: -100}, nil)
 	return err
-}
-
-// BatchSend sends a batch of historical events into a room. This is only available for appservices.
-//
-// Deprecated: MSC2716 has been abandoned, so this is now Beeper-specific. BeeperBatchSend should be used instead.
-func (cli *Client) BatchSend(ctx context.Context, roomID id.RoomID, req *ReqBatchSend) (resp *RespBatchSend, err error) {
-	path := ClientURLPath{"unstable", "org.matrix.msc2716", "rooms", roomID, "batch_send"}
-	query := map[string]string{
-		"prev_event_id": req.PrevEventID.String(),
-	}
-	if req.BeeperNewMessages {
-		query["com.beeper.new_messages"] = "true"
-	}
-	if req.BeeperMarkReadBy != "" {
-		query["com.beeper.mark_read_by"] = req.BeeperMarkReadBy.String()
-	}
-	if len(req.BatchID) > 0 {
-		query["batch_id"] = req.BatchID.String()
-	}
-	_, err = cli.MakeRequest(ctx, http.MethodPost, cli.BuildURLWithQuery(path, query), req, &resp)
-	return
 }
 
 func (cli *Client) AppservicePing(ctx context.Context, id, txnID string) (resp *RespAppservicePing, err error) {

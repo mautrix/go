@@ -15,7 +15,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.24"
+          go-version: "1.25"
           cache: true
 
       - name: Install libolm
@@ -60,6 +60,12 @@ jobs:
       - name: Test
         run: go test -json -v ./... 2>&1 | gotestfmt
 
+      - name: Test (jsonv2)
+        if: matrix.go-version == '1.25'
+        env:
+          GOEXPERIMENT: jsonv2
+        run: go test -json -v ./... 2>&1 | gotestfmt
+
   build-goolm:
     runs-on: ubuntu-latest
     strategy:
@@ -76,11 +82,6 @@ jobs:
         with:
           go-version: ${{ matrix.go-version }}
           cache: true
-
-      - name: Set up gotestfmt
-        uses: GoTestTools/gotestfmt-action@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build
         run: |

@@ -1,9 +1,11 @@
-## v0.25.0 (unreleased)
+## v0.25.0 (2025-08-16)
 
 * Bumped minimum Go version to 1.24.
-* **Breaking change *(appservice,bridgev2,federation)** Replaced gorilla/mux
+* **Breaking change *(appservice,bridgev2,federation)*** Replaced gorilla/mux
   with standard library ServeMux.
 * *(client,bridgev2)* Added support for creator power in room v12.
+* *(client)* Added option to not set `User-Agent` header for improved Wasm
+  compatibility.
 * *(bridgev2)* Added support for following tombstones.
 * *(bridgev2)* Added interface for getting arbitrary state event from Matrix.
 * *(bridgev2)* Added batching to disappearing message queue to ensure it doesn't
