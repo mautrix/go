@@ -70,8 +70,8 @@ type FormattingFeatureMap map[FormattingFeature]CapabilitySupportLevel
 type FileFeatureMap map[CapabilityMsgType]*FileFeatures
 
 type DisappearingTimerCapability struct {
-	Types  []DisappearingType      `json:"types,omitempty"`
-	Timers []jsontime.Milliseconds `json:"timers,omitempty"`
+	Types  []DisappearingType      `json:"types"`
+	Timers []jsontime.Milliseconds `json:"timers"`
 }
 
 type CapabilityMsgType = MessageType

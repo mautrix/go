@@ -41,6 +41,8 @@ export interface RoomFeatures {
 	delete_max_age?: seconds
 	/** Whether deleting messages just for yourself is supported. No message age limit. */
 	delete_for_me?: boolean
+	/** Allowed configuration options for disappearing timers. */
+	disappearing_timer?: DisappearingTimerCapability
 
 	/** Whether reactions are supported. */
 	reaction?: CapabilitySupportLevel
@@ -57,6 +59,7 @@ export interface RoomFeatures {
 
 declare type integer = number
 declare type seconds = integer
+declare type milliseconds = integer
 declare type MIMEClass = "image" | "audio" | "video" | "text" | "font" | "model" | "application"
 declare type MIMETypeOrPattern =
 	"*/*"
@@ -104,6 +107,17 @@ export interface FileFeatures {
 
 	/** Can this type of file be sent as view-once media? */
 	view_once?: boolean
+}
+
+export enum DisappearingType {
+	None = "",
+	AfterRead = "after_read",
+	AfterSend = "after_send",
+}
+
+export interface DisappearingTimerCapability {
+	types: DisappearingType[]
+	timers: milliseconds[]
 }
 
 /**
