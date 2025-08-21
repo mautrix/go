@@ -90,31 +90,18 @@ func (pdu *RoomV1PDU) GetEventID(roomVersion id.RoomVersion) (id.EventID, error)
 	return pdu.EventID, nil
 }
 
-func (pdu *RoomV1PDU) RedactForSignature() *RoomV1PDU {
+func (pdu *RoomV1PDU) RedactForSignature(roomVersion id.RoomVersion) *RoomV1PDU {
 	pdu.Signatures = nil
-	return pdu.Redact()
+	return pdu.Redact(roomVersion)
 }
 
-func (pdu *RoomV1PDU) Redact() *RoomV1PDU {
+func (pdu *RoomV1PDU) Redact(roomVersion id.RoomVersion) *RoomV1PDU {
 	pdu.Unknown = nil
 	pdu.Unsigned = nil
-
-	switch pdu.Type {
-	case "m.room.member":
-		pdu.Content = filteredObject(pdu.Content, "membership")
-	case "m.room.create":
-		pdu.Content = filteredObject(pdu.Content, "creator")
-	case "m.room.join_rules":
-		pdu.Content = filteredObject(pdu.Content, "join_rule")
-	case "m.room.power_levels":
-		pdu.Content = filteredObject(pdu.Content, "ban", "events", "events_default", "kick", "redact", "state_default", "users", "users_default")
-	case "m.room.history_visibility":
-		pdu.Content = filteredObject(pdu.Content, "history_visibility")
-	case "m.room.aliases":
-		pdu.Content = filteredObject(pdu.Content, "aliases")
-	default:
-		pdu.Content = emptyObject
+	if pdu.Type != "m.room.redaction" {
+		pdu.Redacts = nil
 	}
+	pdu.Content = RedactContent(pdu.Type, pdu.Content, roomVersion)
 	return pdu
 }
 
@@ -130,7 +117,7 @@ func (pdu *RoomV1PDU) GetReferenceHash(roomVersion id.RoomVersion) ([32]byte, er
 			return [32]byte{}, err
 		}
 	}
-	rawJSON, err := marshalCanonical(pdu.Clone().RedactForSignature())
+	rawJSON, err := marshalCanonical(pdu.Clone().RedactForSignature(roomVersion))
 	if err != nil {
 		return [32]byte{}, fmt.Errorf("failed to marshal redacted PDU to calculate event ID: %w", err)
 	}
@@ -188,7 +175,7 @@ func (pdu *RoomV1PDU) Sign(roomVersion id.RoomVersion, serverName string, keyID 
 	if err != nil {
 		return err
 	}
-	rawJSON, err := marshalCanonical(pdu.Clone().RedactForSignature())
+	rawJSON, err := marshalCanonical(pdu.Clone().RedactForSignature(roomVersion))
 	if err != nil {
 		return fmt.Errorf("failed to marshal redacted PDU to sign: %w", err)
 	}
@@ -207,7 +194,7 @@ func (pdu *RoomV1PDU) VerifySignature(roomVersion id.RoomVersion, serverName str
 	if !pdu.SupportsRoomVersion(roomVersion) {
 		return fmt.Errorf("RoomV1PDU.VerifySignature: unsupported room version %s", roomVersion)
 	}
-	rawJSON, err := marshalCanonical(pdu.Clone().RedactForSignature())
+	rawJSON, err := marshalCanonical(pdu.Clone().RedactForSignature(roomVersion))
 	if err != nil {
 		return fmt.Errorf("failed to marshal redacted PDU to verify signature: %w", err)
 	}

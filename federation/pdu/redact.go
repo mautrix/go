@@ -51,16 +51,8 @@ func (pdu *PDU) RedactForSignature(roomVersion id.RoomVersion) *PDU {
 
 var emptyObject = jsontext.Value("{}")
 
-func (pdu *PDU) Redact(roomVersion id.RoomVersion) *PDU {
-	pdu.Unknown = nil
-	pdu.Unsigned = nil
-	if roomVersion.UpdatedRedactionRules() {
-		pdu.DeprecatedPrevState = nil
-		pdu.DeprecatedOrigin = nil
-		pdu.DeprecatedMembership = nil
-	}
-
-	switch pdu.Type {
+func RedactContent(eventType string, content jsontext.Value, roomVersion id.RoomVersion) jsontext.Value {
+	switch eventType {
 	case "m.room.member":
 		allowedPaths := []string{"membership"}
 		if roomVersion.RestrictedJoinsFix() {
@@ -69,40 +61,51 @@ func (pdu *PDU) Redact(roomVersion id.RoomVersion) *PDU {
 		if roomVersion.UpdatedRedactionRules() {
 			allowedPaths = append(allowedPaths, exgjson.Path("third_party_invite", "signed"))
 		}
-		pdu.Content = filteredObject(pdu.Content, allowedPaths...)
+		return filteredObject(content, allowedPaths...)
 	case "m.room.create":
 		if !roomVersion.UpdatedRedactionRules() {
-			pdu.Content = filteredObject(pdu.Content, "creator")
-		} // else: all fields are protected
+			return filteredObject(content, "creator")
+		}
+		return content
 	case "m.room.join_rules":
 		if roomVersion.RestrictedJoins() {
-			pdu.Content = filteredObject(pdu.Content, "join_rule", "allow")
-		} else {
-			pdu.Content = filteredObject(pdu.Content, "join_rule")
+			return filteredObject(content, "join_rule", "allow")
 		}
+		return filteredObject(content, "join_rule")
 	case "m.room.power_levels":
 		allowedKeys := []string{"ban", "events", "events_default", "kick", "redact", "state_default", "users", "users_default"}
 		if roomVersion.UpdatedRedactionRules() {
 			allowedKeys = append(allowedKeys, "invite")
 		}
-		pdu.Content = filteredObject(pdu.Content, allowedKeys...)
+		return filteredObject(content, allowedKeys...)
 	case "m.room.history_visibility":
-		pdu.Content = filteredObject(pdu.Content, "history_visibility")
+		return filteredObject(content, "history_visibility")
 	case "m.room.redaction":
 		if roomVersion.RedactsInContent() {
-			pdu.Content = filteredObject(pdu.Content, "redacts")
-			pdu.Redacts = nil
-		} else {
-			pdu.Content = emptyObject
+			return filteredObject(content, "redacts")
 		}
+		return emptyObject
 	case "m.room.aliases":
 		if roomVersion.SpecialCasedAliasesAuth() {
-			pdu.Content = filteredObject(pdu.Content, "aliases")
-		} else {
-			pdu.Content = emptyObject
+			return filteredObject(content, "aliases")
 		}
+		return emptyObject
 	default:
-		pdu.Content = emptyObject
+		return emptyObject
 	}
+}
+
+func (pdu *PDU) Redact(roomVersion id.RoomVersion) *PDU {
+	pdu.Unknown = nil
+	pdu.Unsigned = nil
+	if roomVersion.UpdatedRedactionRules() {
+		pdu.DeprecatedPrevState = nil
+		pdu.DeprecatedOrigin = nil
+		pdu.DeprecatedMembership = nil
+	}
+	if pdu.Type != "m.room.redaction" || roomVersion.RedactsInContent() {
+		pdu.Redacts = nil
+	}
+	pdu.Content = RedactContent(pdu.Type, pdu.Content, roomVersion)
 	return pdu
 }
