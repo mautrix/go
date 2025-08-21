@@ -33,7 +33,7 @@ const invalidMessageEvent = `{
 func TestMessageEventContent__ParseInvalid(t *testing.T) {
 	var evt *event.Event
 	err := json.Unmarshal([]byte(invalidMessageEvent), &evt)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	assert.Equal(t, id.UserID("@tulir:maunium.net"), evt.Sender)
 	assert.Equal(t, event.EventMessage, evt.Type)
@@ -42,7 +42,7 @@ func TestMessageEventContent__ParseInvalid(t *testing.T) {
 	assert.Equal(t, id.RoomID("!bar"), evt.RoomID)
 
 	err = evt.Content.ParseRaw(evt.Type)
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 }
 
 const messageEvent = `{
@@ -68,7 +68,7 @@ const messageEvent = `{
 func TestMessageEventContent__ParseEdit(t *testing.T) {
 	var evt *event.Event
 	err := json.Unmarshal([]byte(messageEvent), &evt)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	assert.Equal(t, id.UserID("@tulir:maunium.net"), evt.Sender)
 	assert.Equal(t, event.EventMessage, evt.Type)
@@ -110,7 +110,7 @@ const imageMessageEvent = `{
 func TestMessageEventContent__ParseMedia(t *testing.T) {
 	var evt *event.Event
 	err := json.Unmarshal([]byte(imageMessageEvent), &evt)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	assert.Equal(t, id.UserID("@tulir:maunium.net"), evt.Sender)
 	assert.Equal(t, event.EventMessage, evt.Type)
@@ -125,7 +125,7 @@ func TestMessageEventContent__ParseMedia(t *testing.T) {
 	content := evt.Content.Parsed.(*event.MessageEventContent)
 	assert.Equal(t, event.MsgImage, content.MsgType)
 	parsedURL, err := content.URL.Parse()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, id.ContentURI{Homeserver: "example.com", FileID: "image"}, parsedURL)
 	assert.Nil(t, content.NewContent)
 	assert.Equal(t, "image/png", content.GetInfo().MimeType)
@@ -145,7 +145,7 @@ const expectedMarshalResult = `{"msgtype":"m.text","body":"test"}`
 
 func TestMessageEventContent__Marshal(t *testing.T) {
 	data, err := json.Marshal(parsedMessage)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, expectedMarshalResult, string(data))
 }
 
@@ -163,6 +163,6 @@ const expectedCustomMarshalResult = `{"body":"test","msgtype":"m.text","net.maun
 
 func TestMessageEventContent__Marshal_Custom(t *testing.T) {
 	data, err := json.Marshal(customParsedMessage)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, expectedCustomMarshalResult, string(data))
 }

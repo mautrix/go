@@ -139,9 +139,9 @@ func TestPushAction_UnmarshalJSON_InvalidTypeDoesNothing(t *testing.T) {
 	}
 
 	err := pa.UnmarshalJSON([]byte(`{"foo": "bar"}`))
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	err = pa.UnmarshalJSON([]byte(`9001`))
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	assert.Equal(t, pushrules.PushActionType("unchanged"), pa.Action)
 	assert.Equal(t, pushrules.PushActionTweak("unchanged"), pa.Tweak)
@@ -156,7 +156,7 @@ func TestPushAction_UnmarshalJSON_StringChangesActionType(t *testing.T) {
 	}
 
 	err := pa.UnmarshalJSON([]byte(`"foo"`))
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	assert.Equal(t, pushrules.PushActionType("foo"), pa.Action)
 	assert.Equal(t, pushrules.PushActionTweak("unchanged"), pa.Tweak)
@@ -171,7 +171,7 @@ func TestPushAction_UnmarshalJSON_SetTweakChangesTweak(t *testing.T) {
 	}
 
 	err := pa.UnmarshalJSON([]byte(`{"set_tweak": "foo", "value": 123.0}`))
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	assert.Equal(t, pushrules.ActionSetTweak, pa.Action)
 	assert.Equal(t, pushrules.PushActionTweak("foo"), pa.Tweak)
@@ -185,7 +185,7 @@ func TestPushAction_MarshalJSON_TweakOutputWorks(t *testing.T) {
 		Value:  "bar",
 	}
 	data, err := pa.MarshalJSON()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, []byte(`{"set_tweak":"foo","value":"bar"}`), data)
 }
 
@@ -196,6 +196,6 @@ func TestPushAction_MarshalJSON_OtherOutputWorks(t *testing.T) {
 		Value:  "bar",
 	}
 	data, err := pa.MarshalJSON()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, []byte(`"something else"`), data)
 }

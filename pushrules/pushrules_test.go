@@ -25,7 +25,7 @@ func TestEventToPushRules(t *testing.T) {
 		},
 	}
 	pushRuleset, err := pushrules.EventToPushRules(evt)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.NotNil(t, pushRuleset)
 
 	assert.IsType(t, pushRuleset.Override, pushrules.PushRuleArray{})
