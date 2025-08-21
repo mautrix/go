@@ -72,6 +72,8 @@ type FileFeatureMap map[CapabilityMsgType]*FileFeatures
 type DisappearingTimerCapability struct {
 	Types  []DisappearingType      `json:"types"`
 	Timers []jsontime.Milliseconds `json:"timers"`
+
+	OmitEmptyTimer bool `json:"omit_empty_timer,omitempty"`
 }
 
 type CapabilityMsgType = MessageType

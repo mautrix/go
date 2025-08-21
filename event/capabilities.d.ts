@@ -118,6 +118,13 @@ export enum DisappearingType {
 export interface DisappearingTimerCapability {
 	types: DisappearingType[]
 	timers: milliseconds[]
+	/**
+	 * Whether clients should omit the empty disappearing_timer object in messages that they don't want to disappear
+	 *
+	 * Generally, bridged rooms will want the object to be always present, while native Matrix rooms don't,
+	 * so the hardcoded features for Matrix rooms should set this to true, while bridges will not.
+	 */
+	omit_empty_timer?: true
 }
 
 /**
