@@ -35,9 +35,20 @@ type PortalQuery struct {
 	*dbutil.QueryHelper[*Portal]
 }
 
+type CapStateFlags uint32
+
+func (csf CapStateFlags) Has(flag CapStateFlags) bool {
+	return csf&flag != 0
+}
+
+const (
+	CapStateFlagDisappearingTimerSet CapStateFlags = 1 << iota
+)
+
 type CapabilityState struct {
 	Source networkid.UserLoginID `json:"source"`
 	ID     string                `json:"id"`
+	Flags  CapStateFlags         `json:"flags"`
 }
 
 type Portal struct {

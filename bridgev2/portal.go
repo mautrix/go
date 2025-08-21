@@ -3649,6 +3649,15 @@ func (portal *Portal) UpdateCapabilities(ctx context.Context, source *UserLogin,
 	portal.CapState = database.CapabilityState{
 		Source: source.ID,
 		ID:     capID,
+		Flags:  portal.CapState.Flags,
+	}
+	if caps.DisappearingTimer != nil && !portal.CapState.Flags.Has(database.CapStateFlagDisappearingTimerSet) {
+		zerolog.Ctx(ctx).Debug().Msg("Disappearing timer capability was added, sending disappearing timer state event")
+		success = portal.sendRoomMeta(ctx, nil, time.Now(), event.StateBeeperDisappearingTimer, "", portal.Disappear.ToEventContent())
+		if !success {
+			return false
+		}
+		portal.CapState.Flags |= database.CapStateFlagDisappearingTimerSet
 	}
 	portal.lastCapUpdate = time.Now()
 	if implicit {
@@ -4342,6 +4351,7 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 			Type:    event.StateBeeperDisappearingTimer,
 			Content: event.Content{Parsed: portal.Disappear.ToEventContent()},
 		})
+		portal.CapState.Flags |= database.CapStateFlagDisappearingTimerSet
 	}
 	if req.Topic == "" {
 		// Add explicit topic event if topic is empty to ensure the event is set.
