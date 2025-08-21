@@ -16,6 +16,7 @@ import (
 	"go.mau.fi/util/dbutil"
 
 	"maunium.net/go/mautrix/bridgev2/networkid"
+	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -208,7 +209,7 @@ func (p *Portal) Scan(row dbutil.Scannable) (*Portal, error) {
 	}
 	if disappearType.Valid {
 		p.Disappear = DisappearingSetting{
-			Type:  DisappearingType(disappearType.String),
+			Type:  event.DisappearingType(disappearType.String),
 			Timer: time.Duration(disappearTimer.Int64),
 		}
 	}

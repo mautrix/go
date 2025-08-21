@@ -1101,7 +1101,7 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 		}
 		portal.sendSuccessStatus(ctx, evt, resp.StreamOrder, message.MXID)
 	}
-	if portal.Disappear.Type != database.DisappearingTypeNone {
+	if portal.Disappear.Type != event.DisappearingTypeNone {
 		go portal.Bridge.DisappearLoop.Add(ctx, &database.DisappearingMessage{
 			RoomID:  portal.MXID,
 			EventID: message.MXID,
@@ -2300,7 +2300,7 @@ func (portal *Portal) sendConvertedMessage(
 				Str("part_id", string(part.ID)).
 				Msg("Not bridging message part with DontBridge flag to Matrix")
 		} else {
-			if converted.Disappear.Type != database.DisappearingTypeNone && converted.Disappear.Timer > 0 {
+			if converted.Disappear.Type != event.DisappearingTypeNone && converted.Disappear.Timer > 0 {
 				part.Content.BeeperDisappearingTimer = &event.BeeperDisappearingTimer{
 					Type:  event.DisappearingType(converted.Disappear.Type),
 					Timer: converted.Disappear.Timer.Milliseconds(),
@@ -2331,8 +2331,8 @@ func (portal *Portal) sendConvertedMessage(
 			logContext(log.Err(err)).Str("part_id", string(part.ID)).Msg("Failed to save message part to database")
 			allSuccess = false
 		}
-		if converted.Disappear.Type != database.DisappearingTypeNone && !dbMessage.HasFakeMXID() {
-			if converted.Disappear.Type == database.DisappearingTypeAfterSend && converted.Disappear.DisappearAt.IsZero() {
+		if converted.Disappear.Type != event.DisappearingTypeNone && !dbMessage.HasFakeMXID() {
+			if converted.Disappear.Type == event.DisappearingTypeAfterSend && converted.Disappear.DisappearAt.IsZero() {
 				converted.Disappear.DisappearAt = dbMessage.Timestamp.Add(converted.Disappear.Timer)
 			}
 			portal.Bridge.DisappearLoop.Add(ctx, &database.DisappearingMessage{

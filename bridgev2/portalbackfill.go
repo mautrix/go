@@ -379,8 +379,8 @@ func (portal *Portal) compileBatchMessage(ctx context.Context, source *UserLogin
 			prevThreadEvent.MXID = evtID
 			out.PrevThreadEvents[*msg.ThreadRoot] = evtID
 		}
-		if msg.Disappear.Type != database.DisappearingTypeNone {
-			if msg.Disappear.Type == database.DisappearingTypeAfterSend && msg.Disappear.DisappearAt.IsZero() {
+		if msg.Disappear.Type != event.DisappearingTypeNone {
+			if msg.Disappear.Type == event.DisappearingTypeAfterSend && msg.Disappear.DisappearAt.IsZero() {
 				msg.Disappear.DisappearAt = msg.Timestamp.Add(msg.Disappear.Timer)
 			}
 			out.Disappear = append(out.Disappear, &database.DisappearingMessage{

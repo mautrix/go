@@ -18,19 +18,20 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-// For backwards compatibility
+// Deprecated: use [event.DisappearingType]
 type DisappearingType = event.DisappearingType
 
+// Deprecated: use constants in event package
 const (
-	DisappearingTypeNone      DisappearingType = event.DisappearingTypeNone
-	DisappearingTypeAfterRead DisappearingType = event.DisappearingTypeAfterRead
-	DisappearingTypeAfterSend DisappearingType = event.DisappearingTypeAfterSend
+	DisappearingTypeNone      = event.DisappearingTypeNone
+	DisappearingTypeAfterRead = event.DisappearingTypeAfterRead
+	DisappearingTypeAfterSend = event.DisappearingTypeAfterSend
 )
 
 // DisappearingSetting represents a disappearing message timer setting
 // by combining a type with a timer and an optional start timestamp.
 type DisappearingSetting struct {
-	Type        DisappearingType
+	Type        event.DisappearingType
 	Timer       time.Duration
 	DisappearAt time.Time
 }
