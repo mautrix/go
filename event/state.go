@@ -10,6 +10,8 @@ import (
 	"encoding/base64"
 	"slices"
 
+	"go.mau.fi/util/jsontime"
+
 	"maunium.net/go/mautrix/id"
 )
 
@@ -217,8 +219,8 @@ const (
 )
 
 type BeeperDisappearingTimer struct {
-	Type  DisappearingType `json:"type"`
-	Timer int64            `json:"timer"` // ms
+	Type  DisappearingType      `json:"type"`
+	Timer jsontime.Milliseconds `json:"timer"`
 }
 
 type SpaceChildEventContent struct {

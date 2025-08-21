@@ -44,6 +44,8 @@ type RoomFeatures struct {
 	DeleteForMe  bool                   `json:"delete_for_me,omitempty"`
 	DeleteMaxAge *jsontime.Seconds      `json:"delete_max_age,omitempty"`
 
+	DisappearingTimer *DisappearingTimerCapability `json:"disappearing_timer,omitempty"`
+
 	Reaction             CapabilitySupportLevel `json:"reaction,omitempty"`
 	ReactionCount        int                    `json:"reaction_count,omitempty"`
 	AllowedReactions     []string               `json:"allowed_reactions,omitempty"`
@@ -54,8 +56,6 @@ type RoomFeatures struct {
 	Archive             bool `json:"archive,omitempty"`
 	MarkAsUnread        bool `json:"mark_as_unread,omitempty"`
 	DeleteChat          bool `json:"delete_chat,omitempty"`
-
-	DisappearingTimer *DisappearingTimerCapability `json:"disappearing_timer,omitempty"`
 }
 
 func (rf *RoomFeatures) GetID() string {
@@ -70,8 +70,8 @@ type FormattingFeatureMap map[FormattingFeature]CapabilitySupportLevel
 type FileFeatureMap map[CapabilityMsgType]*FileFeatures
 
 type DisappearingTimerCapability struct {
-	Types  []string `json:"types,omitempty"`
-	Timers []int64  `json:"timers,omitempty"`
+	Types  []DisappearingType      `json:"types,omitempty"`
+	Timers []jsontime.Milliseconds `json:"timers,omitempty"`
 }
 
 type CapabilityMsgType = MessageType
@@ -238,6 +238,7 @@ func (rf *RoomFeatures) Hash() []byte {
 	hashValue(hasher, "delete", rf.Delete)
 	hashBool(hasher, "delete_for_me", rf.DeleteForMe)
 	hashInt(hasher, "delete_max_age", rf.DeleteMaxAge.Get())
+	hashValue(hasher, "disappearing_timer", rf.DisappearingTimer)
 
 	hashValue(hasher, "reaction", rf.Reaction)
 	hashInt(hasher, "reaction_count", rf.ReactionCount)
@@ -253,14 +254,13 @@ func (rf *RoomFeatures) Hash() []byte {
 	hashBool(hasher, "mark_as_unread", rf.MarkAsUnread)
 	hashBool(hasher, "delete_chat", rf.DeleteChat)
 
-	if rf.DisappearingTimer != nil {
-		hashValue(hasher, "disappearing_timer", rf.DisappearingTimer)
-	}
-
 	return hasher.Sum(nil)
 }
 
 func (dtc *DisappearingTimerCapability) Hash() []byte {
+	if dtc == nil {
+		return nil
+	}
 	hasher := sha256.New()
 	hasher.Write([]byte("types"))
 	for _, t := range dtc.Types {
@@ -268,7 +268,7 @@ func (dtc *DisappearingTimerCapability) Hash() []byte {
 	}
 	hasher.Write([]byte("timers"))
 	for _, timer := range dtc.Timers {
-		exerrors.Must(hasher.Write(binary.BigEndian.AppendUint64(nil, uint64(timer))))
+		hashInt(hasher, "", timer.Milliseconds())
 	}
 	return hasher.Sum(nil)
 }

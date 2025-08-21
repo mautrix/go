@@ -2300,12 +2300,7 @@ func (portal *Portal) sendConvertedMessage(
 				Str("part_id", string(part.ID)).
 				Msg("Not bridging message part with DontBridge flag to Matrix")
 		} else {
-			if converted.Disappear.Type != event.DisappearingTypeNone && converted.Disappear.Timer > 0 {
-				part.Content.BeeperDisappearingTimer = &event.BeeperDisappearingTimer{
-					Type:  event.DisappearingType(converted.Disappear.Type),
-					Timer: converted.Disappear.Timer.Milliseconds(),
-				}
-			}
+			part.Content.BeeperDisappearingTimer = converted.Disappear.ToEventContent()
 			resp, err := intent.SendMessage(ctx, portal.MXID, part.Type, &event.Content{
 				Parsed: part.Content,
 				Raw:    part.Extra,
@@ -4053,11 +4048,7 @@ func (portal *Portal) UpdateDisappearingSetting(ctx context.Context, setting dat
 		return true
 	}
 
-	stateContent := &event.BeeperDisappearingTimer{
-		Type:  setting.Type,
-		Timer: setting.Timer.Milliseconds(),
-	}
-	portal.sendRoomMeta(ctx, sender, ts, event.StateBeeperDisappearingTimer, "", stateContent)
+	portal.sendRoomMeta(ctx, sender, ts, event.StateBeeperDisappearingTimer, "", setting.ToEventContent())
 
 	content := DisappearingMessageNotice(setting.Timer, implicit)
 	if sender == nil {

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"go.mau.fi/util/dbutil"
+	"go.mau.fi/util/jsontime"
 
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
@@ -34,6 +35,16 @@ type DisappearingSetting struct {
 	Type        event.DisappearingType
 	Timer       time.Duration
 	DisappearAt time.Time
+}
+
+func (ds DisappearingSetting) ToEventContent() *event.BeeperDisappearingTimer {
+	if ds.Type == event.DisappearingTypeNone || ds.Timer == 0 {
+		return nil
+	}
+	return &event.BeeperDisappearingTimer{
+		Type:  ds.Type,
+		Timer: jsontime.MS(ds.Timer),
+	}
 }
 
 type DisappearingMessageQuery struct {
