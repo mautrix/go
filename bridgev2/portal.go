@@ -4337,6 +4337,12 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 		Type:     event.StateBeeperRoomFeatures,
 		Content:  event.Content{Parsed: roomFeatures},
 	})
+	if roomFeatures.DisappearingTimer != nil {
+		req.InitialState = append(req.InitialState, &event.Event{
+			Type:    event.StateBeeperDisappearingTimer,
+			Content: event.Content{Parsed: portal.Disappear.ToEventContent()},
+		})
+	}
 	if req.Topic == "" {
 		// Add explicit topic event if topic is empty to ensure the event is set.
 		// This ensures that there won't be an extra event later if PUT /state/... is called.
