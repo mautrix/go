@@ -2281,6 +2281,7 @@ func (portal *Portal) sendConvertedMessage(
 	allSuccess := true
 	for i, part := range converted.Parts {
 		portal.applyRelationMeta(ctx, part.Content, replyTo, threadRoot, prevThreadEvent)
+		part.Content.BeeperDisappearingTimer = converted.Disappear.ToEventContent()
 		dbMessage := &database.Message{
 			ID:               id,
 			PartID:           part.ID,
@@ -2300,7 +2301,6 @@ func (portal *Portal) sendConvertedMessage(
 				Str("part_id", string(part.ID)).
 				Msg("Not bridging message part with DontBridge flag to Matrix")
 		} else {
-			part.Content.BeeperDisappearingTimer = converted.Disappear.ToEventContent()
 			resp, err := intent.SendMessage(ctx, portal.MXID, part.Type, &event.Content{
 				Parsed: part.Content,
 				Raw:    part.Extra,

@@ -339,6 +339,7 @@ func (portal *Portal) compileBatchMessage(ctx context.Context, source *UserLogin
 	for i, part := range msg.Parts {
 		partIDs = append(partIDs, part.ID)
 		portal.applyRelationMeta(ctx, part.Content, replyTo, threadRoot, prevThreadEvent)
+		part.Content.BeeperDisappearingTimer = msg.Disappear.ToEventContent()
 		evtID := portal.Bridge.Matrix.GenerateDeterministicEventID(portal.MXID, portal.PortalKey, msg.ID, part.ID)
 		dbMessage := &database.Message{
 			ID:               msg.ID,
