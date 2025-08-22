@@ -12,11 +12,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"strings"
 	"testing"
 
-	"github.com/gorilla/mux"
 	"github.com/rs/zerolog/log" // zerolog-allow-global-log
 	"github.com/stretchr/testify/require"
 	"go.mau.fi/util/random"
@@ -42,20 +40,6 @@ type mockServer struct {
 	UserSigningKeys     map[id.UserID]mautrix.CrossSigningKeys
 }
 
-func DecodeVarsMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		vars := mux.Vars(r)
-		var err error
-		for k, v := range vars {
-			vars[k], err = url.PathUnescape(v)
-			if err != nil {
-				panic(err)
-			}
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
 func createMockServer(t *testing.T) *mockServer {
 	t.Helper()
 
@@ -69,15 +53,14 @@ func createMockServer(t *testing.T) *mockServer {
 		UserSigningKeys:     map[id.UserID]mautrix.CrossSigningKeys{},
 	}
 
-	router := mux.NewRouter().SkipClean(true).StrictSlash(false).UseEncodedPath()
-	router.Use(DecodeVarsMiddleware)
-	router.HandleFunc("/_matrix/client/v3/login", server.postLogin).Methods(http.MethodPost)
-	router.HandleFunc("/_matrix/client/v3/keys/query", server.postKeysQuery).Methods(http.MethodPost)
-	router.HandleFunc("/_matrix/client/v3/sendToDevice/{type}/{txn}", server.putSendToDevice).Methods(http.MethodPut)
-	router.HandleFunc("/_matrix/client/v3/user/{userID}/account_data/{type}", server.putAccountData).Methods(http.MethodPut)
-	router.HandleFunc("/_matrix/client/v3/keys/device_signing/upload", server.postDeviceSigningUpload).Methods(http.MethodPost)
-	router.HandleFunc("/_matrix/client/v3/keys/signatures/upload", server.emptyResp).Methods(http.MethodPost)
-	router.HandleFunc("/_matrix/client/v3/keys/upload", server.postKeysUpload).Methods(http.MethodPost)
+	router := http.NewServeMux()
+	router.HandleFunc("POST /_matrix/client/v3/login", server.postLogin)
+	router.HandleFunc("POST /_matrix/client/v3/keys/query", server.postKeysQuery)
+	router.HandleFunc("PUT /_matrix/client/v3/sendToDevice/{type}/{txn}", server.putSendToDevice)
+	router.HandleFunc("PUT /_matrix/client/v3/user/{userID}/account_data/{type}", server.putAccountData)
+	router.HandleFunc("POST /_matrix/client/v3/keys/device_signing/upload", server.postDeviceSigningUpload)
+	router.HandleFunc("POST /_matrix/client/v3/keys/signatures/upload", server.emptyResp)
+	router.HandleFunc("POST /_matrix/client/v3/keys/upload", server.postKeysUpload)
 
 	server.Server = httptest.NewServer(router)
 	return &server
@@ -118,10 +101,9 @@ func (s *mockServer) postLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *mockServer) putSendToDevice(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
 	var req mautrix.ReqSendToDevice
 	json.NewDecoder(r.Body).Decode(&req)
-	evtType := event.Type{Type: vars["type"], Class: event.ToDeviceEventType}
+	evtType := event.Type{Type: r.PathValue("type"), Class: event.ToDeviceEventType}
 
 	for user, devices := range req.Messages {
 		for device, content := range devices {
@@ -140,9 +122,8 @@ func (s *mockServer) putSendToDevice(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *mockServer) putAccountData(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	userID := id.UserID(vars["userID"])
-	eventType := event.Type{Type: vars["type"], Class: event.AccountDataEventType}
+	userID := id.UserID(r.PathValue("userID"))
+	eventType := event.Type{Type: r.PathValue("type"), Class: event.AccountDataEventType}
 
 	jsonData, _ := io.ReadAll(r.Body)
 	if _, ok := s.AccountData[userID]; !ok {

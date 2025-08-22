@@ -1,4 +1,4 @@
-// Copyright (c) 2023 Tulir Asokan
+// Copyright (c) 2025 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -19,8 +19,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gorilla/mux"
-	"github.com/gorilla/websocket"
+	"github.com/coder/websocket"
 	"github.com/rs/zerolog"
 	"golang.org/x/net/publicsuffix"
 	"gopkg.in/yaml.v3"
@@ -43,7 +42,7 @@ func Create() *AppService {
 		intents:    make(map[id.UserID]*IntentAPI),
 		HTTPClient: &http.Client{Timeout: 180 * time.Second, Jar: jar},
 		StateStore: mautrix.NewMemoryStateStore().(StateStore),
-		Router:     mux.NewRouter(),
+		Router:     http.NewServeMux(),
 		UserAgent:  mautrix.DefaultUserAgent,
 		txnIDC:     NewTransactionIDCache(128),
 		Live:       true,
@@ -61,12 +60,12 @@ func Create() *AppService {
 		DefaultHTTPRetries: 4,
 	}
 
-	as.Router.HandleFunc("/_matrix/app/v1/transactions/{txnID}", as.PutTransaction).Methods(http.MethodPut)
-	as.Router.HandleFunc("/_matrix/app/v1/rooms/{roomAlias}", as.GetRoom).Methods(http.MethodGet)
-	as.Router.HandleFunc("/_matrix/app/v1/users/{userID}", as.GetUser).Methods(http.MethodGet)
-	as.Router.HandleFunc("/_matrix/app/v1/ping", as.PostPing).Methods(http.MethodPost)
-	as.Router.HandleFunc("/_matrix/mau/live", as.GetLive).Methods(http.MethodGet)
-	as.Router.HandleFunc("/_matrix/mau/ready", as.GetReady).Methods(http.MethodGet)
+	as.Router.HandleFunc("PUT /_matrix/app/v1/transactions/{txnID}", as.PutTransaction)
+	as.Router.HandleFunc("GET /_matrix/app/v1/rooms/{roomAlias}", as.GetRoom)
+	as.Router.HandleFunc("GET /_matrix/app/v1/users/{userID}", as.GetUser)
+	as.Router.HandleFunc("POST /_matrix/app/v1/ping", as.PostPing)
+	as.Router.HandleFunc("GET /_matrix/mau/live", as.GetLive)
+	as.Router.HandleFunc("GET /_matrix/mau/ready", as.GetReady)
 
 	return as
 }
@@ -114,13 +113,13 @@ var _ StateStore = (*mautrix.MemoryStateStore)(nil)
 
 // QueryHandler handles room alias and user ID queries from the homeserver.
 type QueryHandler interface {
-	QueryAlias(alias string) bool
+	QueryAlias(alias id.RoomAlias) bool
 	QueryUser(userID id.UserID) bool
 }
 
 type QueryHandlerStub struct{}
 
-func (qh *QueryHandlerStub) QueryAlias(alias string) bool {
+func (qh *QueryHandlerStub) QueryAlias(alias id.RoomAlias) bool {
 	return false
 }
 
@@ -128,7 +127,7 @@ func (qh *QueryHandlerStub) QueryUser(userID id.UserID) bool {
 	return false
 }
 
-type WebsocketHandler func(WebsocketCommand) (ok bool, data interface{})
+type WebsocketHandler func(WebsocketCommand) (ok bool, data any)
 
 type StateStore interface {
 	mautrix.StateStore
@@ -160,7 +159,7 @@ type AppService struct {
 	QueryHandler   QueryHandler
 	StateStore     StateStore
 
-	Router       *mux.Router
+	Router       *http.ServeMux
 	UserAgent    string
 	server       *http.Server
 	HTTPClient   *http.Client
@@ -179,7 +178,6 @@ type AppService struct {
 	intentsLock sync.RWMutex
 
 	ws                    *websocket.Conn
-	wsWriteLock           sync.Mutex
 	StopWebsocket         func(error)
 	websocketHandlers     map[string]WebsocketHandler
 	websocketHandlersLock sync.RWMutex

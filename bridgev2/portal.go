@@ -87,6 +87,9 @@ type Portal struct {
 
 	roomCreateLock sync.Mutex
 
+	functionalMembersLock  sync.Mutex
+	functionalMembersCache *event.ElementFunctionalMembersContent
+
 	events chan portalEvent
 
 	eventsLock sync.Mutex
@@ -580,6 +583,10 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 			return EventHandlingResultIgnored
 		}
 	}
+	if evt.Type == event.StateTombstone {
+		// Tombstones aren't bridged so they don't need a login
+		return portal.handleMatrixTombstone(ctx, evt)
+	}
 	login, _, err := portal.FindPreferredLogin(ctx, sender, true)
 	if err != nil {
 		log.Err(err).Msg("Failed to get user login to handle Matrix event")
@@ -688,7 +695,7 @@ func (portal *Portal) handleMatrixReceipts(ctx context.Context, evt *event.Event
 			sender, err := portal.Bridge.GetUserByMXID(ctx, userID)
 			if err != nil {
 				zerolog.Ctx(ctx).Err(err).Msg("Failed to get user to handle read receipt")
-				return EventHandlingResultFailed
+				return EventHandlingResultFailed.WithError(err)
 			}
 			portal.handleMatrixReadReceipt(ctx, sender, evtID, receipt)
 		}
@@ -1650,6 +1657,16 @@ func (portal *Portal) handleMatrixPowerLevels(
 		log.Error().Type("content_type", evt.Content.Parsed).Msg("Unexpected parsed content type")
 		return EventHandlingResultFailed.WithMSSError(fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed))
 	}
+	if content.CreateEvent == nil {
+		ars, ok := portal.Bridge.Matrix.(MatrixConnectorWithArbitraryRoomState)
+		if ok {
+			var err error
+			content.CreateEvent, err = ars.GetStateEvent(ctx, portal.MXID, event.StateCreate, "")
+			if err != nil {
+				return EventHandlingResultFailed.WithMSSError(fmt.Errorf("failed to get create event for power levels: %w", err))
+			}
+		}
+	}
 	api, ok := sender.Client.(PowerLevelHandlingNetworkAPI)
 	if !ok {
 		return EventHandlingResultIgnored.WithMSSError(ErrPowerLevelsNotSupported)
@@ -1658,6 +1675,7 @@ func (portal *Portal) handleMatrixPowerLevels(
 	if evt.Unsigned.PrevContent != nil {
 		_ = evt.Unsigned.PrevContent.ParseRaw(evt.Type)
 		prevContent, _ = evt.Unsigned.PrevContent.Parsed.(*event.PowerLevelsEventContent)
+		prevContent.CreateEvent = content.CreateEvent
 	}
 
 	plChange := &MatrixPowerLevelChange{
@@ -1714,6 +1732,162 @@ func (portal *Portal) handleMatrixPowerLevels(
 		return EventHandlingResultFailed.WithMSSError(err)
 	}
 	return EventHandlingResultSuccess.WithMSS()
+}
+
+func (portal *Portal) handleMatrixTombstone(ctx context.Context, evt *event.Event) EventHandlingResult {
+	if evt.StateKey == nil || *evt.StateKey != "" || portal.MXID != evt.RoomID {
+		return EventHandlingResultIgnored
+	}
+	log := *zerolog.Ctx(ctx)
+	sentByBridge := evt.Sender == portal.Bridge.Bot.GetMXID() || portal.Bridge.IsGhostMXID(evt.Sender)
+	var senderUser *User
+	var err error
+	if !sentByBridge {
+		senderUser, err = portal.Bridge.GetUserByMXID(ctx, evt.Sender)
+		if err != nil {
+			log.Err(err).Msg("Failed to get tombstone sender user")
+			return EventHandlingResultFailed.WithError(err)
+		}
+	}
+	content, ok := evt.Content.Parsed.(*event.TombstoneEventContent)
+	if !ok {
+		log.Error().Type("content_type", evt.Content.Parsed).Msg("Unexpected parsed content type")
+		return EventHandlingResultFailed.WithMSSError(fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed))
+	}
+	log = log.With().
+		Stringer("replacement_room", content.ReplacementRoom).
+		Logger()
+	if content.ReplacementRoom == "" {
+		log.Info().Msg("Received tombstone with no replacement room, cleaning up portal")
+		err := portal.RemoveMXID(ctx)
+		if err != nil {
+			log.Err(err).Msg("Failed to remove portal MXID")
+			return EventHandlingResultFailed.WithMSSError(err)
+		}
+		err = portal.Bridge.Bot.DeleteRoom(ctx, portal.MXID, true)
+		if err != nil {
+			log.Err(err).Msg("Failed to clean up Matrix room")
+			return EventHandlingResultFailed.WithError(err)
+		}
+		return EventHandlingResultSuccess
+	}
+	existingMemberEvt, err := portal.Bridge.Matrix.GetMemberInfo(ctx, content.ReplacementRoom, portal.Bridge.Bot.GetMXID())
+	if err != nil {
+		log.Err(err).Msg("Failed to get member info of bot in replacement room")
+		return EventHandlingResultFailed.WithError(err)
+	}
+	leaveOnError := func() {
+		if existingMemberEvt != nil && existingMemberEvt.Membership == event.MembershipJoin {
+			return
+		}
+		log.Debug().Msg("Leaving replacement room with bot after tombstone validation failed")
+		_, err = portal.Bridge.Bot.SendState(
+			ctx,
+			content.ReplacementRoom,
+			event.StateMember,
+			portal.Bridge.Bot.GetMXID().String(),
+			&event.Content{
+				Parsed: &event.MemberEventContent{
+					Membership: event.MembershipLeave,
+					Reason:     fmt.Sprintf("Failed to validate tombstone sent by %s from %s", evt.Sender, evt.RoomID),
+				},
+			},
+			time.Time{},
+		)
+		if err != nil {
+			log.Err(err).Msg("Failed to leave replacement room after tombstone validation failed")
+		}
+	}
+	var via []string
+	if senderHS := evt.Sender.Homeserver(); senderHS != "" {
+		via = []string{senderHS}
+	}
+	err = portal.Bridge.Bot.EnsureJoined(ctx, content.ReplacementRoom, EnsureJoinedParams{Via: via})
+	if err != nil {
+		log.Err(err).Msg("Failed to join replacement room from tombstone")
+		return EventHandlingResultFailed.WithError(err)
+	}
+	if !sentByBridge && !senderUser.Permissions.Admin {
+		powers, err := portal.Bridge.Matrix.GetPowerLevels(ctx, content.ReplacementRoom)
+		if err != nil {
+			log.Err(err).Msg("Failed to get power levels in replacement room")
+			leaveOnError()
+			return EventHandlingResultFailed.WithError(err)
+		}
+		if powers.GetUserLevel(evt.Sender) < powers.Invite() {
+			log.Warn().Msg("Tombstone sender doesn't have enough power to invite the bot to the replacement room")
+			leaveOnError()
+			return EventHandlingResultIgnored
+		}
+	}
+
+	portal.Bridge.cacheLock.Lock()
+	if _, alreadyExists := portal.Bridge.portalsByMXID[content.ReplacementRoom]; alreadyExists {
+		log.Warn().Msg("Replacement room is already a portal, ignoring tombstone")
+		portal.Bridge.cacheLock.Unlock()
+		return EventHandlingResultIgnored
+	}
+	delete(portal.Bridge.portalsByMXID, portal.MXID)
+	portal.MXID = content.ReplacementRoom
+	portal.Bridge.portalsByMXID[portal.MXID] = portal
+	portal.NameSet = false
+	portal.AvatarSet = false
+	portal.TopicSet = false
+	portal.InSpace = false
+	portal.CapState = database.CapabilityState{}
+	portal.Bridge.cacheLock.Unlock()
+
+	err = portal.Save(ctx)
+	if err != nil {
+		log.Err(err).Msg("Failed to save portal after tombstone")
+		return EventHandlingResultFailed.WithError(err)
+	}
+	log.Info().Msg("Successfully followed tombstone and updated portal MXID")
+	err = portal.Bridge.DB.UserPortal.MarkAllNotInSpace(ctx, portal.PortalKey)
+	if err != nil {
+		log.Err(err).Msg("Failed to update in_space flag for user portals after tombstone")
+	}
+	go portal.addToUserSpaces(ctx)
+	go portal.updateInfoAfterTombstone(ctx, senderUser)
+	go func() {
+		err = portal.Bridge.Bot.DeleteRoom(ctx, evt.RoomID, true)
+		if err != nil {
+			log.Err(err).Msg("Failed to clean up Matrix room after following tombstone")
+		}
+	}()
+	return EventHandlingResultSuccess
+}
+
+func (portal *Portal) updateInfoAfterTombstone(ctx context.Context, senderUser *User) {
+	log := zerolog.Ctx(ctx)
+	logins, err := portal.Bridge.GetUserLoginsInPortal(ctx, portal.PortalKey)
+	if err != nil {
+		log.Err(err).Msg("Failed to get user logins in portal to sync info")
+		return
+	}
+	var preferredLogin *UserLogin
+	for _, login := range logins {
+		if !login.Client.IsLoggedIn() {
+			continue
+		} else if preferredLogin == nil {
+			preferredLogin = login
+		} else if senderUser != nil && login.User == senderUser {
+			preferredLogin = login
+		}
+	}
+	if preferredLogin == nil {
+		log.Warn().Msg("No logins found to sync info")
+		return
+	}
+	info, err := preferredLogin.Client.GetChatInfo(ctx, portal)
+	if err != nil {
+		log.Err(err).Msg("Failed to get chat info")
+		return
+	}
+	log.Info().
+		Str("info_source_login", string(preferredLogin.ID)).
+		Msg("Fetched info to update portal after tombstone")
+	portal.UpdateInfo(ctx, info, preferredLogin, nil, time.Time{})
 }
 
 func (portal *Portal) handleMatrixRedaction(
@@ -1815,7 +1989,7 @@ func (portal *Portal) handleRemoteEvent(ctx context.Context, source *UserLogin, 
 		err = portal.createMatrixRoomInLoop(ctx, source, info, bundle)
 		if err != nil {
 			log.Err(err).Msg("Failed to create portal to handle event")
-			return EventHandlingResultFailed
+			return EventHandlingResultFailed.WithError(err)
 		}
 		if evtType == RemoteEventChatResync {
 			log.Debug().Msg("Not handling chat resync event further as portal was created by it")
@@ -1834,6 +2008,7 @@ func (portal *Portal) handleRemoteEvent(ctx context.Context, source *UserLogin, 
 	switch evtType {
 	case RemoteEventUnknown:
 		log.Debug().Msg("Ignoring remote event with type unknown")
+		res = EventHandlingResultIgnored
 	case RemoteEventMessage, RemoteEventMessageUpsert:
 		res = portal.handleRemoteMessage(ctx, source, evt.(RemoteMessage))
 	case RemoteEventEdit:
@@ -1873,6 +2048,46 @@ func (portal *Portal) handleRemoteEvent(ctx context.Context, source *UserLogin, 
 	return
 }
 
+func (portal *Portal) ensureFunctionalMember(ctx context.Context, ghost *Ghost) {
+	if !ghost.IsBot || portal.RoomType != database.RoomTypeDM || portal.OtherUserID == ghost.ID {
+		return
+	}
+	ars, ok := portal.Bridge.Matrix.(MatrixConnectorWithArbitraryRoomState)
+	if !ok {
+		return
+	}
+	portal.functionalMembersLock.Lock()
+	defer portal.functionalMembersLock.Unlock()
+	var functionalMembers *event.ElementFunctionalMembersContent
+	if portal.functionalMembersCache != nil {
+		functionalMembers = portal.functionalMembersCache
+	} else {
+		evt, err := ars.GetStateEvent(ctx, portal.MXID, event.StateElementFunctionalMembers, "")
+		if err != nil && !errors.Is(err, mautrix.MNotFound) {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to get functional members state event")
+			return
+		}
+		functionalMembers = &event.ElementFunctionalMembersContent{}
+		if evt != nil {
+			evtContent, ok := evt.Content.Parsed.(*event.ElementFunctionalMembersContent)
+			if ok && evtContent != nil {
+				functionalMembers = evtContent
+			}
+		}
+	}
+	// TODO what about non-double-puppeted user ghosts?
+	functionalMembers.Add(portal.Bridge.Bot.GetMXID())
+	if functionalMembers.Add(ghost.Intent.GetMXID()) {
+		_, err := portal.Bridge.Bot.SendState(ctx, portal.MXID, event.StateElementFunctionalMembers, "", &event.Content{
+			Parsed: functionalMembers,
+		}, time.Time{})
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to update functional members state event")
+			return
+		}
+	}
+}
+
 func (portal *Portal) getIntentAndUserMXIDFor(ctx context.Context, sender EventSender, source *UserLogin, otherLogins []*UserLogin, evtType RemoteEventType) (intent MatrixAPI, extraUserID id.UserID, err error) {
 	var ghost *Ghost
 	if !sender.IsFromMe && sender.ForceDMUser && portal.OtherUserID != "" && sender.Sender != portal.OtherUserID {
@@ -1896,6 +2111,7 @@ func (portal *Portal) getIntentAndUserMXIDFor(ctx context.Context, sender EventS
 			return
 		}
 		ghost.UpdateInfoIfNecessary(ctx, source, evtType)
+		portal.ensureFunctionalMember(ctx, ghost)
 	}
 	if sender.IsFromMe {
 		intent = source.User.DoublePuppet(ctx)
@@ -2205,7 +2421,7 @@ func (portal *Portal) handleRemoteUpsert(ctx context.Context, source *UserLogin,
 			err = portal.Bridge.DB.Message.Update(ctx, part)
 			if err != nil {
 				log.Err(err).Str("part_id", string(part.PartID)).Msg("Failed to update message part in database")
-				handleRes = EventHandlingResultFailed
+				handleRes = EventHandlingResultFailed.WithError(err)
 			}
 		}
 	}
@@ -2269,7 +2485,7 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 		} else {
 			log.Err(err).Msg("Failed to convert remote message")
 			portal.sendRemoteErrorNotice(ctx, intent, err, ts, "message")
-			return EventHandlingResultFailed
+			return EventHandlingResultFailed.WithError(err)
 		}
 	}
 	_, res = portal.sendConvertedMessage(ctx, evt.GetID(), intent, evt.GetSender().Sender, converted, ts, getStreamOrder(evt), nil)
@@ -2314,7 +2530,7 @@ func (portal *Portal) handleRemoteEdit(ctx context.Context, source *UserLogin, e
 		existing, err = portal.Bridge.DB.Message.GetAllPartsByID(ctx, portal.Receiver, targetID)
 		if err != nil {
 			log.Err(err).Msg("Failed to get edit target message")
-			return EventHandlingResultFailed
+			return EventHandlingResultFailed.WithError(err)
 		}
 	}
 	if existing == nil {
@@ -2339,7 +2555,7 @@ func (portal *Portal) handleRemoteEdit(ctx context.Context, source *UserLogin, e
 	} else if err != nil {
 		log.Err(err).Msg("Failed to convert remote edit")
 		portal.sendRemoteErrorNotice(ctx, intent, err, ts, "edit")
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithError(err)
 	}
 	res := portal.sendConvertedEdit(ctx, existing[0].ID, evt.GetSender().Sender, converted, intent, ts, getStreamOrder(evt))
 	if portal.currentlyTypingGhosts.Pop(intent.GetMXID()) {
@@ -2488,7 +2704,7 @@ func (portal *Portal) handleRemoteReactionSync(ctx context.Context, source *User
 	targetMessage, err := portal.getTargetMessagePart(ctx, evt)
 	if err != nil {
 		log.Err(err).Msg("Failed to get target message for reaction")
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithError(err)
 	} else if targetMessage == nil {
 		// TODO use deterministic event ID as target if applicable?
 		log.Warn().Msg("Target message for reaction not found")
@@ -2502,7 +2718,7 @@ func (portal *Portal) handleRemoteReactionSync(ctx context.Context, source *User
 	}
 	if err != nil {
 		log.Err(err).Msg("Failed to get existing reactions for reaction sync")
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithError(err)
 	}
 	existing := make(map[networkid.UserID]map[networkid.EmojiID]*database.Reaction)
 	for _, existingReaction := range existingReactions {
@@ -2624,7 +2840,7 @@ func (portal *Portal) handleRemoteReaction(ctx context.Context, source *UserLogi
 	targetMessage, err := portal.getTargetMessagePart(ctx, evt)
 	if err != nil {
 		log.Err(err).Msg("Failed to get target message for reaction")
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithError(err)
 	} else if targetMessage == nil {
 		// TODO use deterministic event ID as target if applicable?
 		log.Warn().Msg("Target message for reaction not found")
@@ -2634,7 +2850,7 @@ func (portal *Portal) handleRemoteReaction(ctx context.Context, source *UserLogi
 	existingReaction, err := portal.Bridge.DB.Reaction.GetByID(ctx, portal.Receiver, targetMessage.ID, targetMessage.PartID, evt.GetSender().Sender, emojiID)
 	if err != nil {
 		log.Err(err).Msg("Failed to check if reaction is a duplicate")
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithError(err)
 	} else if existingReaction != nil && (emojiID != "" || existingReaction.Emoji == emoji) {
 		log.Debug().Msg("Ignoring duplicate reaction")
 		return EventHandlingResultIgnored
@@ -2704,7 +2920,7 @@ func (portal *Portal) sendConvertedReaction(
 	})
 	if err != nil {
 		logContext(log.Err(err)).Msg("Failed to send reaction to Matrix")
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithError(err)
 	}
 	logContext(log.Debug()).
 		Stringer("event_id", resp.EventID).
@@ -2713,7 +2929,7 @@ func (portal *Portal) sendConvertedReaction(
 	err = portal.Bridge.DB.Reaction.Upsert(ctx, dbReaction)
 	if err != nil {
 		logContext(log.Err(err)).Msg("Failed to save reaction to database")
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithError(err)
 	}
 	return EventHandlingResultSuccess
 }
@@ -2739,7 +2955,7 @@ func (portal *Portal) handleRemoteReactionRemove(ctx context.Context, source *Us
 	targetReaction, err := portal.getTargetReaction(ctx, evt)
 	if err != nil {
 		log.Err(err).Msg("Failed to get target reaction for removal")
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithError(err)
 	} else if targetReaction == nil {
 		log.Warn().Msg("Target reaction not found")
 		return EventHandlingResultIgnored
@@ -2763,7 +2979,7 @@ func (portal *Portal) handleRemoteReactionRemove(ctx context.Context, source *Us
 	}, &MatrixSendExtra{Timestamp: ts, ReactionMeta: targetReaction})
 	if err != nil {
 		log.Err(err).Stringer("reaction_mxid", targetReaction.MXID).Msg("Failed to redact reaction")
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithError(err)
 	}
 	err = portal.Bridge.DB.Reaction.Delete(ctx, targetReaction)
 	if err != nil {
@@ -2781,7 +2997,7 @@ func (portal *Portal) handleRemoteMessageRemove(ctx context.Context, source *Use
 	targetParts, err := portal.Bridge.DB.Message.GetAllPartsByID(ctx, portal.Receiver, evt.GetTargetMessage())
 	if err != nil {
 		log.Err(err).Msg("Failed to get target message for removal")
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithError(err)
 	} else if len(targetParts) == 0 {
 		log.Debug().Msg("Target message not found")
 		return EventHandlingResultIgnored
@@ -2789,7 +3005,14 @@ func (portal *Portal) handleRemoteMessageRemove(ctx context.Context, source *Use
 	onlyForMeProvider, ok := evt.(RemoteDeleteOnlyForMe)
 	onlyForMe := ok && onlyForMeProvider.DeleteOnlyForMe()
 	if onlyForMe && portal.Receiver == "" {
-		// TODO check if there are other user logins before deleting
+		logins, err := portal.Bridge.DB.UserPortal.GetAllInPortal(ctx, portal.PortalKey)
+		if err != nil {
+			log.Err(err).Msg("Failed to check if portal has other logins")
+			return EventHandlingResultFailed.WithError(err)
+		} else if len(logins) > 1 {
+			log.Debug().Msg("Ignoring delete for me event in portal with multiple logins")
+			return EventHandlingResultIgnored
+		}
 	}
 
 	intent, ok := portal.GetIntentFor(ctx, evt.GetSender(), source, RemoteEventMessageRemove)
@@ -2851,7 +3074,7 @@ func (portal *Portal) handleRemoteReadReceipt(ctx context.Context, source *UserL
 		if err != nil {
 			log.Err(err).Str("last_target_id", string(lastTargetID)).
 				Msg("Failed to get last target message for read receipt")
-			return EventHandlingResultFailed
+			return EventHandlingResultFailed.WithError(err)
 		} else if lastTarget == nil {
 			log.Debug().Str("last_target_id", string(lastTargetID)).
 				Msg("Last target message not found")
@@ -2870,7 +3093,7 @@ func (portal *Portal) handleRemoteReadReceipt(ctx context.Context, source *UserL
 			if err != nil {
 				log.Err(err).Str("target_id", string(targetID)).
 					Msg("Failed to get target message for read receipt")
-				return EventHandlingResultFailed
+				return EventHandlingResultFailed.WithError(err)
 			} else if target != nil && !target.HasFakeMXID() && (lastTarget == nil || target.Timestamp.After(lastTarget.Timestamp)) {
 				lastTarget = target
 			}
@@ -2908,7 +3131,7 @@ func (portal *Portal) handleRemoteReadReceipt(ctx context.Context, source *UserL
 	}
 	if err != nil {
 		addTargetLog(log.Err(err)).Msg("Failed to bridge read receipt")
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithError(err)
 	} else {
 		addTargetLog(log.Debug()).Msg("Bridged read receipt")
 	}
@@ -2930,7 +3153,7 @@ func (portal *Portal) handleRemoteMarkUnread(ctx context.Context, source *UserLo
 	err := dp.MarkUnread(ctx, portal.MXID, evt.GetUnread())
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to bridge mark unread event")
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithError(err)
 	}
 	return EventHandlingResultSuccess
 }
@@ -2948,7 +3171,7 @@ func (portal *Portal) handleRemoteDeliveryReceipt(ctx context.Context, source *U
 		targetParts, err := portal.Bridge.DB.Message.GetAllPartsByID(ctx, portal.Receiver, target)
 		if err != nil {
 			log.Err(err).Str("target_id", string(target)).Msg("Failed to get target message for delivery receipt")
-			return EventHandlingResultFailed
+			return EventHandlingResultFailed.WithError(err)
 		} else if len(targetParts) == 0 {
 			continue
 		} else if _, sentByGhost := portal.Bridge.Matrix.ParseGhostMXID(targetParts[0].SenderMXID); sentByGhost {
@@ -2983,7 +3206,7 @@ func (portal *Portal) handleRemoteTyping(ctx context.Context, source *UserLogin,
 	err := intent.MarkTyping(ctx, portal.MXID, typingType, timeout)
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to bridge typing event")
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithError(err)
 	}
 	if timeout == 0 {
 		portal.currentlyTypingGhosts.Remove(intent.GetMXID())
@@ -2997,7 +3220,7 @@ func (portal *Portal) handleRemoteChatInfoChange(ctx context.Context, source *Us
 	info, err := evt.GetChatInfoChange(ctx)
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to get chat info change")
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithError(err)
 	}
 	portal.ProcessChatInfoChange(ctx, evt.GetSender(), source, info, getEventTS(evt))
 	return EventHandlingResultSuccess
@@ -3041,7 +3264,7 @@ func (portal *Portal) handleRemoteChatDelete(ctx context.Context, source *UserLo
 		logins, err := portal.Bridge.DB.UserPortal.GetAllInPortal(ctx, portal.PortalKey)
 		if err != nil {
 			log.Err(err).Msg("Failed to check if portal has other logins")
-			return EventHandlingResultFailed
+			return EventHandlingResultFailed.WithError(err)
 		}
 		var ownUP *database.UserPortal
 		logins = slices.DeleteFunc(logins, func(up *database.UserPortal) bool {
@@ -3071,7 +3294,7 @@ func (portal *Portal) handleRemoteChatDelete(ctx context.Context, source *UserLo
 			)
 			if err != nil {
 				log.Err(err).Msg("Failed to send leave state event for user after remote chat delete")
-				return EventHandlingResultFailed
+				return EventHandlingResultFailed.WithError(err)
 			} else {
 				log.Debug().Msg("Sent leave state event for user after remote chat delete")
 				return EventHandlingResultSuccess
@@ -3081,12 +3304,12 @@ func (portal *Portal) handleRemoteChatDelete(ctx context.Context, source *UserLo
 	err := portal.Delete(ctx)
 	if err != nil {
 		log.Err(err).Msg("Failed to delete portal from database")
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithError(err)
 	}
 	err = portal.Bridge.Bot.DeleteRoom(ctx, portal.MXID, false)
 	if err != nil {
 		log.Err(err).Msg("Failed to delete Matrix room")
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithError(err)
 	} else {
 		log.Info().Msg("Deleted room after remote chat delete event")
 		return EventHandlingResultSuccess
@@ -3315,7 +3538,7 @@ func (portal *Portal) updateTopic(ctx context.Context, topic string, sender Matr
 }
 
 func (portal *Portal) updateAvatar(ctx context.Context, avatar *Avatar, sender MatrixAPI, ts time.Time) bool {
-	if portal.AvatarID == avatar.ID && (portal.AvatarSet || portal.MXID == "") {
+	if portal.AvatarID == avatar.ID && (avatar.Remove || portal.AvatarMXC != "") && (portal.AvatarSet || portal.MXID == "") {
 		return false
 	}
 	portal.AvatarID = avatar.ID
@@ -3331,7 +3554,7 @@ func (portal *Portal) updateAvatar(ctx context.Context, avatar *Avatar, sender M
 			portal.AvatarSet = false
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to reupload room avatar")
 			return true
-		} else if newHash == portal.AvatarHash && portal.AvatarSet {
+		} else if newHash == portal.AvatarHash && portal.AvatarMXC != "" && portal.AvatarSet {
 			return true
 		}
 		portal.AvatarMXC = newMXC
@@ -4086,7 +4309,7 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 		IsDirect:           portal.RoomType == database.RoomTypeDM,
 		PowerLevelOverride: powerLevels,
 		BeeperLocalRoomID:  portal.Bridge.Matrix.GenerateDeterministicRoomID(portal.PortalKey),
-		RoomVersion:        event.RoomV11,
+		RoomVersion:        id.RoomV11,
 	}
 	autoJoinInvites := portal.Bridge.Matrix.GetCapabilities().AutoJoinInvites
 	if autoJoinInvites {
@@ -4209,37 +4432,44 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 			}
 		}
 	}
-	if portal.Parent == nil {
-		if portal.Receiver != "" {
-			login := portal.Bridge.GetCachedUserLoginByID(portal.Receiver)
-			if login != nil {
-				up, err := portal.Bridge.DB.UserPortal.Get(ctx, login.UserLogin, portal.PortalKey)
-				if err != nil {
-					log.Err(err).Msg("Failed to get user portal to add portal to spaces")
-				} else {
-					login.inPortalCache.Remove(portal.PortalKey)
-					go login.tryAddPortalToSpace(withoutCancelCtx, portal, up.CopyWithoutValues())
-				}
-			}
-		} else {
-			userPortals, err := portal.Bridge.DB.UserPortal.GetAllInPortal(ctx, portal.PortalKey)
-			if err != nil {
-				log.Err(err).Msg("Failed to get user logins in portal to add portal to spaces")
-			} else {
-				for _, up := range userPortals {
-					login := portal.Bridge.GetCachedUserLoginByID(up.LoginID)
-					if login != nil {
-						login.inPortalCache.Remove(portal.PortalKey)
-						go login.tryAddPortalToSpace(withoutCancelCtx, portal, up.CopyWithoutValues())
-					}
-				}
-			}
-		}
-	}
+	portal.addToUserSpaces(ctx)
 	if portal.Bridge.Config.Backfill.Enabled && portal.RoomType != database.RoomTypeSpace && !portal.Bridge.Background {
 		portal.doForwardBackfill(ctx, source, nil, backfillBundle)
 	}
 	return nil
+}
+
+func (portal *Portal) addToUserSpaces(ctx context.Context) {
+	if portal.Parent != nil {
+		return
+	}
+	log := zerolog.Ctx(ctx)
+	withoutCancelCtx := log.WithContext(portal.Bridge.BackgroundCtx)
+	if portal.Receiver != "" {
+		login := portal.Bridge.GetCachedUserLoginByID(portal.Receiver)
+		if login != nil {
+			up, err := portal.Bridge.DB.UserPortal.Get(ctx, login.UserLogin, portal.PortalKey)
+			if err != nil {
+				log.Err(err).Msg("Failed to get user portal to add portal to spaces")
+			} else {
+				login.inPortalCache.Remove(portal.PortalKey)
+				go login.tryAddPortalToSpace(withoutCancelCtx, portal, up.CopyWithoutValues())
+			}
+		}
+	} else {
+		userPortals, err := portal.Bridge.DB.UserPortal.GetAllInPortal(ctx, portal.PortalKey)
+		if err != nil {
+			log.Err(err).Msg("Failed to get user logins in portal to add portal to spaces")
+		} else {
+			for _, up := range userPortals {
+				login := portal.Bridge.GetCachedUserLoginByID(up.LoginID)
+				if login != nil {
+					login.inPortalCache.Remove(portal.PortalKey)
+					go login.tryAddPortalToSpace(withoutCancelCtx, portal, up.CopyWithoutValues())
+				}
+			}
+		}
+	}
 }
 
 func (portal *Portal) Delete(ctx context.Context) error {

@@ -45,7 +45,7 @@ func (store *SQLCryptoStore) GetRoomJoinedOrInvitedMembers(ctx context.Context, 
 		WHERE room_id=$1
 			AND (membership='join' OR membership='invite')
 			AND user_id<>$2
-			AND user_id NOT LIKE $3
+			AND user_id NOT LIKE $3 ESCAPE '\'
 	`, roomID, store.UserID, store.GhostIDFormat)
 	if err != nil {
 		return

@@ -20,8 +20,9 @@ import (
 type Key string
 
 const (
-	KeySplitPortalsEnabled Key = "split_portals_enabled"
-	KeyBridgeInfoVersion   Key = "bridge_info_version"
+	KeySplitPortalsEnabled     Key = "split_portals_enabled"
+	KeyBridgeInfoVersion       Key = "bridge_info_version"
+	KeyEncryptionStateResynced Key = "encryption_state_resynced"
 )
 
 type KVQuery struct {

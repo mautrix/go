@@ -106,7 +106,7 @@ func (br *Bridge) QueueMatrixEvent(ctx context.Context, evt *event.Event) EventH
 				br.Matrix.SendMessageStatus(ctx, &status, StatusEventInfoFromEvent(evt))
 				return EventHandlingResultIgnored
 			}
-			br.Commands.Handle(
+			go br.Commands.Handle(
 				ctx,
 				evt.RoomID,
 				evt.ID,
@@ -114,7 +114,7 @@ func (br *Bridge) QueueMatrixEvent(ctx context.Context, evt *event.Event) EventH
 				strings.TrimPrefix(msg.Body, br.Config.CommandPrefix+" "),
 				msg.RelatesTo.GetReplyTo(),
 			)
-			return EventHandlingResultSuccess
+			return EventHandlingResultQueued
 		}
 	}
 	if evt.Type == event.StateMember && evt.GetStateKey() == br.Bot.GetMXID().String() && evt.Content.AsMember().Membership == event.MembershipInvite && sender != nil {

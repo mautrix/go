@@ -21,7 +21,7 @@ import (
 
 type DisappearLoop struct {
 	br        *Bridge
-	NextCheck time.Time
+	nextCheck atomic.Pointer[time.Time]
 	stop      atomic.Pointer[context.CancelFunc]
 }
 
@@ -35,20 +35,46 @@ func (dl *DisappearLoop) Start() {
 	}
 	log.Debug().Msg("Disappearing message loop starting")
 	for {
-		dl.NextCheck = time.Now().Add(DisappearCheckInterval)
-		messages, err := dl.br.DB.DisappearingMessage.GetUpcoming(ctx, DisappearCheckInterval)
+		nextCheck := time.Now().Add(DisappearCheckInterval)
+		dl.nextCheck.Store(&nextCheck)
+		const MessageLimit = 200
+		messages, err := dl.br.DB.DisappearingMessage.GetUpcoming(ctx, DisappearCheckInterval, MessageLimit)
 		if err != nil {
 			log.Err(err).Msg("Failed to get upcoming disappearing messages")
 		} else if len(messages) > 0 {
+			if len(messages) >= MessageLimit {
+				lastDisappearTime := messages[len(messages)-1].DisappearAt
+				log.Debug().
+					Int("message_count", len(messages)).
+					Time("last_due", lastDisappearTime).
+					Msg("Deleting disappearing messages synchronously and checking again immediately")
+				// Store the expected next check time to avoid Add spawning unnecessary goroutines.
+				// This can be in the past, in which case Add will put everything in the db, which is also fine.
+				dl.nextCheck.Store(&lastDisappearTime)
+				// If there are many messages, process them synchronously and then check again.
+				dl.sleepAndDisappear(ctx, messages...)
+				continue
+			}
 			go dl.sleepAndDisappear(ctx, messages...)
 		}
 		select {
-		case <-time.After(time.Until(dl.NextCheck)):
+		case <-time.After(time.Until(dl.GetNextCheck())):
 		case <-ctx.Done():
 			log.Debug().Msg("Disappearing message loop stopping")
 			return
 		}
 	}
+}
+
+func (dl *DisappearLoop) GetNextCheck() time.Time {
+	if dl == nil {
+		return time.Time{}
+	}
+	nextCheck := dl.nextCheck.Load()
+	if nextCheck == nil {
+		return time.Time{}
+	}
+	return *nextCheck
 }
 
 func (dl *DisappearLoop) Stop() {
@@ -67,7 +93,7 @@ func (dl *DisappearLoop) StartAll(ctx context.Context, roomID id.RoomID) {
 		return
 	}
 	startedMessages = slices.DeleteFunc(startedMessages, func(dm *database.DisappearingMessage) bool {
-		return dm.DisappearAt.After(dl.NextCheck)
+		return dm.DisappearAt.After(dl.GetNextCheck())
 	})
 	slices.SortFunc(startedMessages, func(a, b *database.DisappearingMessage) int {
 		return a.DisappearAt.Compare(b.DisappearAt)
@@ -84,17 +110,24 @@ func (dl *DisappearLoop) Add(ctx context.Context, dm *database.DisappearingMessa
 			Stringer("event_id", dm.EventID).
 			Msg("Failed to save disappearing message")
 	}
-	if !dm.DisappearAt.IsZero() && dm.DisappearAt.Before(dl.NextCheck) {
+	if !dm.DisappearAt.IsZero() && dm.DisappearAt.Before(dl.GetNextCheck()) {
 		go dl.sleepAndDisappear(zerolog.Ctx(ctx).WithContext(dl.br.BackgroundCtx), dm)
 	}
 }
 
 func (dl *DisappearLoop) sleepAndDisappear(ctx context.Context, dms ...*database.DisappearingMessage) {
 	for _, msg := range dms {
-		select {
-		case <-time.After(time.Until(msg.DisappearAt)):
-		case <-ctx.Done():
-			return
+		timeUntilDisappear := time.Until(msg.DisappearAt)
+		if timeUntilDisappear <= 0 {
+			if ctx.Err() != nil {
+				return
+			}
+		} else {
+			select {
+			case <-time.After(timeUntilDisappear):
+			case <-ctx.Done():
+				return
+			}
 		}
 		resp, err := dl.br.Bot.SendMessage(ctx, msg.RoomID, event.EventRedaction, &event.Content{
 			Parsed: &event.RedactionEventContent{

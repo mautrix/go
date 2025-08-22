@@ -193,34 +193,6 @@ func (br *Bridge) handleGhostDMInvite(ctx context.Context, evt *event.Event, sen
 			}
 		}
 	}
-	if portal.MXID != "" {
-		doCleanup := true
-		existingPortalMembers, err := br.Matrix.GetMembers(ctx, portal.MXID)
-		if err != nil {
-			log.Err(err).
-				Stringer("old_portal_mxid", portal.MXID).
-				Msg("Failed to check existing portal members, deleting room")
-		} else if targetUserMember, ok := existingPortalMembers[sender.MXID]; !ok {
-			log.Debug().
-				Stringer("old_portal_mxid", portal.MXID).
-				Msg("Inviter has no member event in old portal, deleting room")
-		} else if targetUserMember.Membership.IsInviteOrJoin() {
-			doCleanup = false
-		} else {
-			log.Debug().
-				Stringer("old_portal_mxid", portal.MXID).
-				Str("membership", string(targetUserMember.Membership)).
-				Msg("Inviter is not in old portal, deleting room")
-		}
-
-		if doCleanup {
-			if err = portal.RemoveMXID(ctx); err != nil {
-				log.Err(err).Msg("Failed to delete old portal mxid")
-			} else if err = br.Bot.DeleteRoom(ctx, portal.MXID, true); err != nil {
-				log.Err(err).Msg("Failed to clean up old portal room")
-			}
-		}
-	}
 	err = invitedGhost.Intent.EnsureInvited(ctx, evt.RoomID, br.Bot.GetMXID())
 	if err != nil {
 		log.Err(err).Msg("Failed to ensure bot is invited to room")

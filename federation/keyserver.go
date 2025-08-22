@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tulir Asokan
+// Copyright (c) 2025 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -12,9 +12,13 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gorilla/mux"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/hlog"
+	"go.mau.fi/util/exerrors"
 	"go.mau.fi/util/exhttp"
 	"go.mau.fi/util/jsontime"
+	"go.mau.fi/util/ptr"
+	"go.mau.fi/util/requestlog"
 
 	mautrix "github.com/iKonoTelecomunicaciones/go"
 	"github.com/iKonoTelecomunicaciones/go/id"
@@ -51,19 +55,25 @@ type KeyServer struct {
 }
 
 // Register registers the key server endpoints to the given router.
-func (ks *KeyServer) Register(r *mux.Router) {
-	r.HandleFunc("/.well-known/matrix/server", ks.GetWellKnown).Methods(http.MethodGet)
-	r.HandleFunc("/_matrix/federation/v1/version", ks.GetServerVersion).Methods(http.MethodGet)
-	keyRouter := r.PathPrefix("/_matrix/key").Subrouter()
-	keyRouter.HandleFunc("/v2/server", ks.GetServerKey).Methods(http.MethodGet)
-	keyRouter.HandleFunc("/v2/query/{serverName}", ks.GetQueryKeys).Methods(http.MethodGet)
-	keyRouter.HandleFunc("/v2/query", ks.PostQueryKeys).Methods(http.MethodPost)
-	keyRouter.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mautrix.MUnrecognized.WithStatus(http.StatusNotFound).WithMessage("Unrecognized endpoint").Write(w)
-	})
-	keyRouter.MethodNotAllowedHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mautrix.MUnrecognized.WithStatus(http.StatusMethodNotAllowed).WithMessage("Invalid method for endpoint").Write(w)
-	})
+func (ks *KeyServer) Register(r *http.ServeMux, log zerolog.Logger) {
+	r.HandleFunc("GET /.well-known/matrix/server", ks.GetWellKnown)
+	r.HandleFunc("GET /_matrix/federation/v1/version", ks.GetServerVersion)
+	keyRouter := http.NewServeMux()
+	keyRouter.HandleFunc("GET /v2/server", ks.GetServerKey)
+	keyRouter.HandleFunc("GET /v2/query/{serverName}", ks.GetQueryKeys)
+	keyRouter.HandleFunc("POST /v2/query", ks.PostQueryKeys)
+	errorBodies := exhttp.ErrorBodies{
+		NotFound:         exerrors.Must(ptr.Ptr(mautrix.MUnrecognized.WithMessage("Unrecognized endpoint")).MarshalJSON()),
+		MethodNotAllowed: exerrors.Must(ptr.Ptr(mautrix.MUnrecognized.WithMessage("Invalid method for endpoint")).MarshalJSON()),
+	}
+	r.Handle("/_matrix/key/", exhttp.ApplyMiddleware(
+		keyRouter,
+		exhttp.StripPrefix("/_matrix/key"),
+		hlog.NewHandler(log),
+		hlog.RequestIDHandler("request_id", "Request-Id"),
+		requestlog.AccessLogger(requestlog.Options{TrustXForwardedFor: true}),
+		exhttp.HandleErrors(errorBodies),
+	))
 }
 
 // RespWellKnown is the response body for the `GET /.well-known/matrix/server` endpoint.
@@ -157,7 +167,7 @@ type GetQueryKeysResponse struct {
 //
 // https://spec.matrix.org/v1.9/server-server-api/#get_matrixkeyv2queryservername
 func (ks *KeyServer) GetQueryKeys(w http.ResponseWriter, r *http.Request) {
-	serverName := mux.Vars(r)["serverName"]
+	serverName := r.PathValue("serverName")
 	minimumValidUntilTSString := r.URL.Query().Get("minimum_valid_until_ts")
 	minimumValidUntilTS, err := strconv.ParseInt(minimumValidUntilTSString, 10, 64)
 	if err != nil && minimumValidUntilTSString != "" {

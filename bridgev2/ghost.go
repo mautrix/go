@@ -158,7 +158,7 @@ func (ghost *Ghost) UpdateName(ctx context.Context, name string) bool {
 }
 
 func (ghost *Ghost) UpdateAvatar(ctx context.Context, avatar *Avatar) bool {
-	if ghost.AvatarID == avatar.ID && ghost.AvatarSet {
+	if ghost.AvatarID == avatar.ID && (avatar.Remove || ghost.AvatarMXC != "") && ghost.AvatarSet {
 		return false
 	}
 	ghost.AvatarID = avatar.ID
@@ -168,7 +168,7 @@ func (ghost *Ghost) UpdateAvatar(ctx context.Context, avatar *Avatar) bool {
 			ghost.AvatarSet = false
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to reupload avatar")
 			return true
-		} else if newHash == ghost.AvatarHash && ghost.AvatarSet {
+		} else if newHash == ghost.AvatarHash && ghost.AvatarMXC != "" && ghost.AvatarSet {
 			return true
 		}
 		ghost.AvatarHash = newHash

@@ -9,6 +9,7 @@ package attachment
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
@@ -206,8 +207,13 @@ func (r *encryptingReader) Read(dst []byte) (n int, err error) {
 		}
 	}
 	n, err = r.source.Read(dst)
+	if r.isDecrypting {
+		r.hash.Write(dst[:n])
+	}
 	r.stream.XORKeyStream(dst[:n], dst[:n])
-	r.hash.Write(dst[:n])
+	if !r.isDecrypting {
+		r.hash.Write(dst[:n])
+	}
 	return
 }
 
@@ -217,9 +223,7 @@ func (r *encryptingReader) Close() (err error) {
 		err = closer.Close()
 	}
 	if r.isDecrypting {
-		var downloadedChecksum [utils.SHAHashLength]byte
-		r.hash.Sum(downloadedChecksum[:])
-		if downloadedChecksum != r.file.decoded.sha256 {
+		if !hmac.Equal(r.hash.Sum(nil), r.file.decoded.sha256[:]) {
 			return HashMismatch
 		}
 	} else {
@@ -274,12 +278,13 @@ func (ef *EncryptedFile) PrepareForDecryption() error {
 func (ef *EncryptedFile) DecryptInPlace(data []byte) error {
 	if err := ef.PrepareForDecryption(); err != nil {
 		return err
-	} else if ef.decoded.sha256 != sha256.Sum256(data) {
-		return HashMismatch
-	} else {
-		utils.XorA256CTR(data, ef.decoded.key, ef.decoded.iv)
-		return nil
 	}
+	dataHash := sha256.Sum256(data)
+	if !hmac.Equal(ef.decoded.sha256[:], dataHash[:]) {
+		return HashMismatch
+	}
+	utils.XorA256CTR(data, ef.decoded.key, ef.decoded.iv)
+	return nil
 }
 
 // DecryptStream wraps the given io.Reader in order to decrypt the data.
@@ -292,9 +297,10 @@ func (ef *EncryptedFile) DecryptInPlace(data []byte) error {
 func (ef *EncryptedFile) DecryptStream(reader io.Reader) io.ReadSeekCloser {
 	block, _ := aes.NewCipher(ef.decoded.key[:])
 	return &encryptingReader{
-		stream: cipher.NewCTR(block, ef.decoded.iv[:]),
-		hash:   sha256.New(),
-		source: reader,
-		file:   ef,
+		isDecrypting: true,
+		stream:       cipher.NewCTR(block, ef.decoded.iv[:]),
+		hash:         sha256.New(),
+		source:       reader,
+		file:         ef,
 	}
 }

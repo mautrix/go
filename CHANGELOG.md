@@ -1,3 +1,39 @@
+## v0.25.0 (unreleased)
+
+* Bumped minimum Go version to 1.24.
+* **Breaking change *(appservice,bridgev2,federation)*** Replaced gorilla/mux
+  with standard library ServeMux.
+* *(client,bridgev2)* Added support for creator power in room v12.
+* *(client)* Added option to not set `User-Agent` header for improved Wasm
+  compatibility.
+* *(bridgev2)* Added support for following tombstones.
+* *(bridgev2)* Added interface for getting arbitrary state event from Matrix.
+* *(bridgev2)* Added batching to disappearing message queue to ensure it doesn't
+  use too many resources even if there are a large number of messages.
+* *(bridgev2/commands)* Added support for canceling QR login with `cancel`
+  command.
+* *(client)* Added option to override HTTP client used for .well-known
+  resolution.
+* *(crypto/backup)* Added method for encrypting key backup session without
+  private keys.
+* *(event->id)* Moved room version type and constants to id package.
+* *(bridgev2)* Bots in DM portals will now be added to the functional members
+  state event to hide them from the room name calculation.
+* *(bridgev2)* Changed message delete handling to ignore "delete for me" events
+  if there are multiple Matrix users in the room.
+* *(format/htmlparser)* Changed text processing to collapse multiple spaces into
+  one when outside `pre`/`code` tags.
+* *(format/htmlparser)* Removed link suffix in plaintext output when link text
+  is only missing protocol part of href.
+  * e.g. `<a href="https://example.com">example.com</a>` will turn into
+    `example.com` rather than `example.com (https://example.com)`
+* *(appservice)* Switched appservice websockets from gorilla/websocket to
+  coder/websocket.
+* *(bridgev2/matrix)* Fixed encryption key sharing not ignoring ghosts properly.
+* *(crypto/attachments)* Fixed hash check when decrypting file streams.
+* *(crypto)* Removed unnecessary `AlreadyShared` error in `ShareGroupSession`.
+  The function will now act as if it was successful instead.
+
 ## v0.24.2 (2025-07-16)
 
 * *(bridgev2)* Added support for return values from portal event handlers. Note

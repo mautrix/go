@@ -225,7 +225,7 @@ func (user *User) GetManagementRoom(ctx context.Context) (id.RoomID, error) {
 				user.MXID:                 50,
 			},
 		},
-		RoomVersion: event.RoomV11,
+		RoomVersion: id.RoomV11,
 		Invite:      []id.UserID{user.MXID},
 		IsDirect:    true,
 	}

@@ -273,6 +273,13 @@ func doLoginDisplayAndWait(ce *Event, login bridgev2.LoginProcessDisplayAndWait,
 		prevEvent = new(id.EventID)
 		ce.Ctx = context.WithValue(ce.Ctx, contextKeyPrevEventID, prevEvent)
 	}
+	cancelCtx, cancelFunc := context.WithCancel(ce.Ctx)
+	defer cancelFunc()
+	StoreCommandState(ce.User, &CommandState{
+		Action: "Login",
+		Cancel: cancelFunc,
+	})
+	defer StoreCommandState(ce.User, nil)
 	switch step.DisplayAndWaitParams.Type {
 	case bridgev2.LoginDisplayTypeQR:
 		err := sendQR(ce, step.DisplayAndWaitParams.Data, prevEvent)
@@ -292,7 +299,7 @@ func doLoginDisplayAndWait(ce *Event, login bridgev2.LoginProcessDisplayAndWait,
 		login.Cancel()
 		return
 	}
-	nextStep, err := login.Wait(ce.Ctx)
+	nextStep, err := login.Wait(cancelCtx)
 	// Redact the QR code, unless the next step is refreshing the code (in which case the event is just edited)
 	if *prevEvent != "" && (nextStep == nil || nextStep.StepID != step.StepID) {
 		_, _ = ce.Bot.SendMessage(ce.Ctx, ce.RoomID, event.EventRedaction, &event.Content{

@@ -120,7 +120,7 @@ func (br *Bridge) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	br.PostStart(ctx)
+	go br.PostStart(ctx)
 	return nil
 }
 

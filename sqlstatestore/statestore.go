@@ -62,6 +62,9 @@ func (store *SQLStateStore) IsRegistered(ctx context.Context, userID id.UserID) 
 }
 
 func (store *SQLStateStore) MarkRegistered(ctx context.Context, userID id.UserID) error {
+	if userID == "" {
+		return fmt.Errorf("user ID is empty")
+	}
 	_, err := store.Exec(ctx, "INSERT INTO mx_registrations (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING", userID)
 	return err
 }
@@ -182,6 +185,11 @@ func (store *SQLStateStore) IsMembership(ctx context.Context, roomID id.RoomID, 
 }
 
 func (store *SQLStateStore) SetMembership(ctx context.Context, roomID id.RoomID, userID id.UserID, membership event.Membership) error {
+	if roomID == "" {
+		return fmt.Errorf("room ID is empty")
+	} else if userID == "" {
+		return fmt.Errorf("user ID is empty")
+	}
 	_, err := store.Exec(ctx, `
 		INSERT INTO mx_user_profile (room_id, user_id, membership, displayname, avatar_url) VALUES ($1, $2, $3, '', '')
 		ON CONFLICT (room_id, user_id) DO UPDATE SET membership=excluded.membership
@@ -214,6 +222,11 @@ func (u *userProfileRow) GetMassInsertValues() [5]any {
 var userProfileMassInserter = dbutil.NewMassInsertBuilder[*userProfileRow, [1]any](insertUserProfileQuery, "($1, $%d, $%d, $%d, $%d, $%d)")
 
 func (store *SQLStateStore) SetMember(ctx context.Context, roomID id.RoomID, userID id.UserID, member *event.MemberEventContent) error {
+	if roomID == "" {
+		return fmt.Errorf("room ID is empty")
+	} else if userID == "" {
+		return fmt.Errorf("user ID is empty")
+	}
 	var nameSkeleton []byte
 	if !store.DisableNameDisambiguation && len(member.Displayname) > 0 {
 		nameSkeletonArr := confusable.SkeletonHash(member.Displayname)
@@ -235,6 +248,9 @@ func (store *SQLStateStore) IsConfusableName(ctx context.Context, roomID id.Room
 const userProfileMassInsertBatchSize = 500
 
 func (store *SQLStateStore) ReplaceCachedMembers(ctx context.Context, roomID id.RoomID, evts []*event.Event, onlyMemberships ...event.Membership) error {
+	if roomID == "" {
+		return fmt.Errorf("room ID is empty")
+	}
 	return store.DoTxn(ctx, nil, func(ctx context.Context) error {
 		err := store.ClearCachedMembers(ctx, roomID, onlyMemberships...)
 		if err != nil {
@@ -305,6 +321,9 @@ func (store *SQLStateStore) HasFetchedMembers(ctx context.Context, roomID id.Roo
 }
 
 func (store *SQLStateStore) MarkMembersFetched(ctx context.Context, roomID id.RoomID) error {
+	if roomID == "" {
+		return fmt.Errorf("room ID is empty")
+	}
 	_, err := store.Exec(ctx, `
 		INSERT INTO mx_room_state (room_id, members_fetched) VALUES ($1, true)
 		ON CONFLICT (room_id) DO UPDATE SET members_fetched=true
@@ -334,6 +353,9 @@ func (store *SQLStateStore) GetAllMembers(ctx context.Context, roomID id.RoomID)
 }
 
 func (store *SQLStateStore) SetEncryptionEvent(ctx context.Context, roomID id.RoomID, content *event.EncryptionEventContent) error {
+	if roomID == "" {
+		return fmt.Errorf("room ID is empty")
+	}
 	contentBytes, err := json.Marshal(content)
 	if err != nil {
 		return fmt.Errorf("failed to marshal content JSON: %w", err)
@@ -371,6 +393,9 @@ func (store *SQLStateStore) IsEncrypted(ctx context.Context, roomID id.RoomID) (
 }
 
 func (store *SQLStateStore) SetPowerLevels(ctx context.Context, roomID id.RoomID, levels *event.PowerLevelsEventContent) error {
+	if roomID == "" {
+		return fmt.Errorf("room ID is empty")
+	}
 	_, err := store.Exec(ctx, `
 		INSERT INTO mx_room_state (room_id, power_levels) VALUES ($1, $2)
 		ON CONFLICT (room_id) DO UPDATE SET power_levels=excluded.power_levels
@@ -379,89 +404,69 @@ func (store *SQLStateStore) SetPowerLevels(ctx context.Context, roomID id.RoomID
 }
 
 func (store *SQLStateStore) GetPowerLevels(ctx context.Context, roomID id.RoomID) (levels *event.PowerLevelsEventContent, err error) {
+	levels = &event.PowerLevelsEventContent{}
 	err = store.
-		QueryRow(ctx, "SELECT power_levels FROM mx_room_state WHERE room_id=$1", roomID).
-		Scan(&dbutil.JSON{Data: &levels})
+		QueryRow(ctx, "SELECT power_levels, create_event FROM mx_room_state WHERE room_id=$1", roomID).
+		Scan(&dbutil.JSON{Data: &levels}, &dbutil.JSON{Data: &levels.CreateEvent})
 	if errors.Is(err, sql.ErrNoRows) {
-		err = nil
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
+	if levels.CreateEvent != nil {
+		err = levels.CreateEvent.Content.ParseRaw(event.StateCreate)
 	}
 	return
 }
 
 func (store *SQLStateStore) GetPowerLevel(ctx context.Context, roomID id.RoomID, userID id.UserID) (int, error) {
-	if store.Dialect == dbutil.Postgres {
-		var powerLevel int
-		err := store.
-			QueryRow(ctx, `
-				SELECT COALESCE((power_levels->'users'->$2)::int, (power_levels->'users_default')::int, 0)
-				FROM mx_room_state WHERE room_id=$1
-			`, roomID, userID).
-			Scan(&powerLevel)
-		return powerLevel, err
-	} else {
-		levels, err := store.GetPowerLevels(ctx, roomID)
-		if err != nil {
-			return 0, err
-		}
-		return levels.GetUserLevel(userID), nil
+	levels, err := store.GetPowerLevels(ctx, roomID)
+	if err != nil {
+		return 0, err
 	}
+	return levels.GetUserLevel(userID), nil
 }
 
 func (store *SQLStateStore) GetPowerLevelRequirement(ctx context.Context, roomID id.RoomID, eventType event.Type) (int, error) {
-	if store.Dialect == dbutil.Postgres {
-		defaultType := "events_default"
-		defaultValue := 0
-		if eventType.IsState() {
-			defaultType = "state_default"
-			defaultValue = 50
-		}
-		var powerLevel int
-		err := store.
-			QueryRow(ctx, `
-				SELECT COALESCE((power_levels->'events'->$2)::int, (power_levels->'$3')::int, $4)
-				FROM mx_room_state WHERE room_id=$1
-			`, roomID, eventType.Type, defaultType, defaultValue).
-			Scan(&powerLevel)
-		if errors.Is(err, sql.ErrNoRows) {
-			err = nil
-			powerLevel = defaultValue
-		}
-		return powerLevel, err
-	} else {
-		levels, err := store.GetPowerLevels(ctx, roomID)
-		if err != nil {
-			return 0, err
-		}
-		return levels.GetEventLevel(eventType), nil
+	levels, err := store.GetPowerLevels(ctx, roomID)
+	if err != nil {
+		return 0, err
 	}
+	return levels.GetEventLevel(eventType), nil
 }
 
 func (store *SQLStateStore) HasPowerLevel(ctx context.Context, roomID id.RoomID, userID id.UserID, eventType event.Type) (bool, error) {
-	if store.Dialect == dbutil.Postgres {
-		defaultType := "events_default"
-		defaultValue := 0
-		if eventType.IsState() {
-			defaultType = "state_default"
-			defaultValue = 50
-		}
-		var hasPower bool
-		err := store.
-			QueryRow(ctx, `SELECT
-				COALESCE((power_levels->'users'->$2)::int, (power_levels->'users_default')::int, 0)
-				>=
-				COALESCE((power_levels->'events'->$3)::int, (power_levels->'$4')::int, $5)
-				FROM mx_room_state WHERE room_id=$1`, roomID, userID, eventType.Type, defaultType, defaultValue).
-			Scan(&hasPower)
-		if errors.Is(err, sql.ErrNoRows) {
-			err = nil
-			hasPower = defaultValue == 0
-		}
-		return hasPower, err
-	} else {
-		levels, err := store.GetPowerLevels(ctx, roomID)
-		if err != nil {
-			return false, err
-		}
-		return levels.GetUserLevel(userID) >= levels.GetEventLevel(eventType), nil
+	levels, err := store.GetPowerLevels(ctx, roomID)
+	if err != nil {
+		return false, err
 	}
+	return levels.GetUserLevel(userID) >= levels.GetEventLevel(eventType), nil
+}
+
+func (store *SQLStateStore) SetCreate(ctx context.Context, evt *event.Event) error {
+	if evt.Type != event.StateCreate {
+		return fmt.Errorf("invalid event type for create event: %s", evt.Type)
+	} else if evt.RoomID == "" {
+		return fmt.Errorf("room ID is empty")
+	}
+	_, err := store.Exec(ctx, `
+		INSERT INTO mx_room_state (room_id, create_event) VALUES ($1, $2)
+		ON CONFLICT (room_id) DO UPDATE SET create_event=excluded.create_event
+	`, evt.RoomID, dbutil.JSON{Data: evt})
+	return err
+}
+
+func (store *SQLStateStore) GetCreate(ctx context.Context, roomID id.RoomID) (evt *event.Event, err error) {
+	err = store.
+		QueryRow(ctx, "SELECT create_event FROM mx_room_state WHERE room_id=$1", roomID).
+		Scan(&dbutil.JSON{Data: &evt})
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
+	if evt != nil {
+		err = evt.Content.ParseRaw(event.StateCreate)
+	}
+	return
 }

@@ -221,14 +221,14 @@ type RespMutualRooms struct {
 type RespRoomSummary struct {
 	PublicRoomInfo
 
-	Membership     event.Membership  `json:"membership,omitempty"`
-	RoomVersion    event.RoomVersion `json:"room_version,omitempty"`
-	Encryption     id.Algorithm      `json:"encryption,omitempty"`
-	AllowedRoomIDs []id.RoomID       `json:"allowed_room_ids,omitempty"`
+	Membership     event.Membership `json:"membership,omitempty"`
+	RoomVersion    id.RoomVersion   `json:"room_version,omitempty"`
+	Encryption     id.Algorithm     `json:"encryption,omitempty"`
+	AllowedRoomIDs []id.RoomID      `json:"allowed_room_ids,omitempty"`
 
-	UnstableRoomVersion    event.RoomVersion `json:"im.nheko.summary.room_version,omitempty"`
-	UnstableRoomVersionOld event.RoomVersion `json:"im.nheko.summary.version,omitempty"`
-	UnstableEncryption     id.Algorithm      `json:"im.nheko.summary.encryption,omitempty"`
+	UnstableRoomVersion    id.RoomVersion `json:"im.nheko.summary.room_version,omitempty"`
+	UnstableRoomVersionOld id.RoomVersion `json:"im.nheko.summary.version,omitempty"`
+	UnstableEncryption     id.Algorithm   `json:"im.nheko.summary.encryption,omitempty"`
 }
 
 // RespRegisterAvailable is the JSON response for https://spec.matrix.org/v1.4/client-server-api/#get_matrixclientv3registeravailable
@@ -648,12 +648,7 @@ type RespHierarchy struct {
 
 type ChildRoomsChunk struct {
 	PublicRoomInfo
-	ChildrenState []StrippedStateWithTime `json:"children_state"`
-}
-
-type StrippedStateWithTime struct {
-	event.StrippedState
-	Timestamp jsontime.UnixMilli `json:"origin_server_ts"`
+	ChildrenState []*event.Event `json:"children_state"`
 }
 
 type RespAppservicePing struct {

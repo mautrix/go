@@ -68,6 +68,10 @@ func calculateCompatMAC(macKey []byte) []byte {
 //
 // [Section 11.12.3.2.2 of the Spec]: https://spec.matrix.org/v1.9/client-server-api/#backup-algorithm-mmegolm_backupv1curve25519-aes-sha2
 func EncryptSessionData[T any](backupKey *MegolmBackupKey, sessionData T) (*EncryptedSessionData[T], error) {
+	return EncryptSessionDataWithPubkey(backupKey.PublicKey(), sessionData)
+}
+
+func EncryptSessionDataWithPubkey[T any](pubkey *ecdh.PublicKey, sessionData T) (*EncryptedSessionData[T], error) {
 	sessionJSON, err := json.Marshal(sessionData)
 	if err != nil {
 		return nil, err
@@ -78,7 +82,7 @@ func EncryptSessionData[T any](backupKey *MegolmBackupKey, sessionData T) (*Encr
 		return nil, err
 	}
 
-	sharedSecret, err := ephemeralKey.ECDH(backupKey.PublicKey())
+	sharedSecret, err := ephemeralKey.ECDH(pubkey)
 	if err != nil {
 		return nil, err
 	}

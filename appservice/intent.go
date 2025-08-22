@@ -86,6 +86,7 @@ func (intent *IntentAPI) EnsureRegistered(ctx context.Context) error {
 type EnsureJoinedParams struct {
 	IgnoreCache bool
 	BotOverride *mautrix.Client
+	Via         []string
 }
 
 func (intent *IntentAPI) EnsureJoined(ctx context.Context, roomID id.RoomID, extra ...EnsureJoinedParams) error {
@@ -99,11 +100,17 @@ func (intent *IntentAPI) EnsureJoined(ctx context.Context, roomID id.RoomID, ext
 		return nil
 	}
 
-	if err := intent.EnsureRegistered(ctx); err != nil {
+	err := intent.EnsureRegistered(ctx)
+	if err != nil {
 		return fmt.Errorf("failed to ensure joined: %w", err)
 	}
 
-	resp, err := intent.JoinRoomByID(ctx, roomID)
+	var resp *mautrix.RespJoinRoom
+	if len(params.Via) > 0 {
+		resp, err = intent.JoinRoom(ctx, roomID.String(), &mautrix.ReqJoinRoom{Via: params.Via})
+	} else {
+		resp, err = intent.JoinRoomByID(ctx, roomID)
+	}
 	if err != nil {
 		bot := intent.bot
 		if params.BotOverride != nil {
@@ -368,6 +375,24 @@ func (intent *IntentAPI) Member(ctx context.Context, roomID id.RoomID, userID id
 	return member
 }
 
+func (intent *IntentAPI) FillPowerLevelCreateEvent(ctx context.Context, roomID id.RoomID, pl *event.PowerLevelsEventContent) error {
+	if pl.CreateEvent != nil {
+		return nil
+	}
+	var err error
+	pl.CreateEvent, err = intent.StateStore.GetCreate(ctx, roomID)
+	if err != nil {
+		return fmt.Errorf("failed to get create event from cache: %w", err)
+	} else if pl.CreateEvent != nil {
+		return nil
+	}
+	pl.CreateEvent, err = intent.FullStateEvent(ctx, roomID, event.StateCreate, "")
+	if err != nil {
+		return fmt.Errorf("failed to get create event from server: %w", err)
+	}
+	return nil
+}
+
 func (intent *IntentAPI) PowerLevels(ctx context.Context, roomID id.RoomID) (pl *event.PowerLevelsEventContent, err error) {
 	pl, err = intent.as.StateStore.GetPowerLevels(ctx, roomID)
 	if err != nil {
@@ -377,6 +402,12 @@ func (intent *IntentAPI) PowerLevels(ctx context.Context, roomID id.RoomID) (pl 
 	if pl == nil {
 		pl = &event.PowerLevelsEventContent{}
 		err = intent.StateEvent(ctx, roomID, event.StatePowerLevels, "", pl)
+		if err != nil {
+			return
+		}
+	}
+	if pl.CreateEvent == nil {
+		pl.CreateEvent, err = intent.FullStateEvent(ctx, roomID, event.StateCreate, "")
 	}
 	return
 }
@@ -391,8 +422,7 @@ func (intent *IntentAPI) SetPowerLevel(ctx context.Context, roomID id.RoomID, us
 		return nil, err
 	}
 
-	if pl.GetUserLevel(userID) != level {
-		pl.SetUserLevel(userID, level)
+	if pl.EnsureUserLevelAs(intent.UserID, userID, level) {
 		return intent.SendStateEvent(ctx, roomID, event.StatePowerLevels, "", &pl)
 	}
 	return nil, nil
@@ -481,7 +511,7 @@ func (intent *IntentAPI) SetAvatarURL(ctx context.Context, avatarURL id.ContentU
 		// No need to update
 		return nil
 	}
-	if !avatarURL.IsEmpty() {
+	if !avatarURL.IsEmpty() && !intent.SpecVersions.Supports(mautrix.BeeperFeatureHungry) {
 		// Some homeservers require the avatar to be downloaded before setting it
 		resp, _ := intent.Download(ctx, avatarURL)
 		if resp != nil {

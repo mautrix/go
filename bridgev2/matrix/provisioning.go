@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tulir Asokan
+// Copyright (c) 2025 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -17,13 +17,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/rs/xid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/hlog"
+	"go.mau.fi/util/exerrors"
 	"go.mau.fi/util/exhttp"
 	"go.mau.fi/util/exstrings"
 	"go.mau.fi/util/jsontime"
+	"go.mau.fi/util/ptr"
 	"go.mau.fi/util/requestlog"
 
 	mautrix "github.com/iKonoTelecomunicaciones/go"
@@ -40,7 +41,7 @@ type matrixAuthCacheEntry struct {
 }
 
 type ProvisioningAPI struct {
-	Router *mux.Router
+	Router *http.ServeMux
 
 	br  *Connector
 	log zerolog.Logger
@@ -91,12 +92,12 @@ func (prov *ProvisioningAPI) GetUser(r *http.Request) *bridgev2.User {
 	return r.Context().Value(provisioningUserKey).(*bridgev2.User)
 }
 
-func (prov *ProvisioningAPI) GetRouter() *mux.Router {
+func (prov *ProvisioningAPI) GetRouter() *http.ServeMux {
 	return prov.Router
 }
 
 type IProvisioningAPI interface {
-	GetRouter() *mux.Router
+	GetRouter() *http.ServeMux
 	GetUser(r *http.Request) *bridgev2.User
 }
 
@@ -116,41 +117,56 @@ func (prov *ProvisioningAPI) Init() {
 	tp.Dialer.Timeout = 10 * time.Second
 	tp.Transport.ResponseHeaderTimeout = 10 * time.Second
 	tp.Transport.TLSHandshakeTimeout = 10 * time.Second
-	prov.Router = prov.br.AS.Router.PathPrefix(prov.br.Config.Provisioning.Prefix).Subrouter()
-	prov.Router.Use(hlog.NewHandler(prov.log))
-	prov.Router.Use(hlog.RequestIDHandler("request_id", "Request-Id"))
-	prov.Router.Use(exhttp.CORSMiddleware)
-	prov.Router.Use(requestlog.AccessLogger(requestlog.Options{TrustXForwardedFor: true}))
-	prov.Router.Use(prov.AuthMiddleware)
-	prov.Router.Path("/v3/whoami").Methods(http.MethodGet, http.MethodOptions).HandlerFunc(prov.GetWhoami)
-	prov.Router.Path("/v3/login/flows").Methods(http.MethodGet, http.MethodOptions).HandlerFunc(prov.GetLoginFlows)
-	prov.Router.Path("/v3/login/start/{flowID}").Methods(http.MethodPost, http.MethodOptions).HandlerFunc(prov.PostLoginStart)
-	prov.Router.Path("/v3/login/step/{loginProcessID}/{stepID}/{stepType:user_input|cookies}").Methods(http.MethodPost, http.MethodOptions).HandlerFunc(prov.PostLoginSubmitInput)
-	prov.Router.Path("/v3/login/step/{loginProcessID}/{stepID}/{stepType:display_and_wait}").Methods(http.MethodPost, http.MethodOptions).HandlerFunc(prov.PostLoginWait)
-	prov.Router.Path("/v3/logout/{loginID}").Methods(http.MethodPost, http.MethodOptions).HandlerFunc(prov.PostLogout)
-	prov.Router.Path("/v3/logins").Methods(http.MethodGet, http.MethodOptions).HandlerFunc(prov.GetLogins)
-	prov.Router.Path("/v3/contacts").Methods(http.MethodGet, http.MethodOptions).HandlerFunc(prov.GetContactList)
-	prov.Router.Path("/v3/search_users").Methods(http.MethodPost, http.MethodOptions).HandlerFunc(prov.PostSearchUsers)
-	prov.Router.Path("/v3/resolve_identifier/{identifier}").Methods(http.MethodGet, http.MethodOptions).HandlerFunc(prov.GetResolveIdentifier)
-	prov.Router.Path("/v3/create_dm/{identifier}").Methods(http.MethodPost, http.MethodOptions).HandlerFunc(prov.PostCreateDM)
-	prov.Router.Path("/v3/create_group").Methods(http.MethodPost, http.MethodOptions).HandlerFunc(prov.PostCreateGroup)
+	prov.Router = http.NewServeMux()
+	prov.Router.HandleFunc("GET /v3/whoami", prov.GetWhoami)
+	prov.Router.HandleFunc("GET /v3/login/flows", prov.GetLoginFlows)
+	prov.Router.HandleFunc("POST /v3/login/start/{flowID}", prov.PostLoginStart)
+	prov.Router.HandleFunc("POST /v3/login/step/{loginProcessID}/{stepID}/{stepType}", prov.PostLoginStep)
+	prov.Router.HandleFunc("POST /v3/logout/{loginID}", prov.PostLogout)
+	prov.Router.HandleFunc("GET /v3/logins", prov.GetLogins)
+	prov.Router.HandleFunc("GET /v3/contacts", prov.GetContactList)
+	prov.Router.HandleFunc("POST /v3/search_users", prov.PostSearchUsers)
+	prov.Router.HandleFunc("GET /v3/resolve_identifier/{identifier}", prov.GetResolveIdentifier)
+	prov.Router.HandleFunc("POST /v3/create_dm/{identifier}", prov.PostCreateDM)
+	prov.Router.HandleFunc("POST /v3/create_group", prov.PostCreateGroup)
 
 	if prov.br.Config.Provisioning.EnableSessionTransfers {
 		prov.log.Debug().Msg("Enabling session transfer API")
-		prov.Router.Path("/v3/session_transfer/init").Methods(http.MethodPost, http.MethodOptions).HandlerFunc(prov.PostInitSessionTransfer)
-		prov.Router.Path("/v3/session_transfer/finish").Methods(http.MethodPost, http.MethodOptions).HandlerFunc(prov.PostFinishSessionTransfer)
+		prov.Router.HandleFunc("POST /v3/session_transfer/init", prov.PostInitSessionTransfer)
+		prov.Router.HandleFunc("POST /v3/session_transfer/finish", prov.PostFinishSessionTransfer)
 	}
 
 	if prov.br.Config.Provisioning.DebugEndpoints {
 		prov.log.Debug().Msg("Enabling debug API at /debug")
-		r := prov.br.AS.Router.PathPrefix("/debug").Subrouter()
-		r.Use(prov.DebugAuthMiddleware)
-		r.HandleFunc("/pprof/cmdline", pprof.Cmdline).Methods(http.MethodGet)
-		r.HandleFunc("/pprof/profile", pprof.Profile).Methods(http.MethodGet)
-		r.HandleFunc("/pprof/symbol", pprof.Symbol).Methods(http.MethodGet)
-		r.HandleFunc("/pprof/trace", pprof.Trace).Methods(http.MethodGet)
-		r.PathPrefix("/pprof/").HandlerFunc(pprof.Index)
+		debugRouter := http.NewServeMux()
+		debugRouter.HandleFunc("GET /pprof/cmdline", pprof.Cmdline)
+		debugRouter.HandleFunc("GET /pprof/profile", pprof.Profile)
+		debugRouter.HandleFunc("GET /pprof/symbol", pprof.Symbol)
+		debugRouter.HandleFunc("GET /pprof/trace", pprof.Trace)
+		debugRouter.HandleFunc("/pprof/", pprof.Index)
+		prov.br.AS.Router.Handle("/debug/", exhttp.ApplyMiddleware(
+			debugRouter,
+			exhttp.StripPrefix("/debug"),
+			hlog.NewHandler(prov.br.Log.With().Str("component", "debug api").Logger()),
+			requestlog.AccessLogger(requestlog.Options{TrustXForwardedFor: true}),
+			prov.DebugAuthMiddleware,
+		))
 	}
+
+	errorBodies := exhttp.ErrorBodies{
+		NotFound:         exerrors.Must(ptr.Ptr(mautrix.MUnrecognized.WithMessage("Unrecognized endpoint")).MarshalJSON()),
+		MethodNotAllowed: exerrors.Must(ptr.Ptr(mautrix.MUnrecognized.WithMessage("Invalid method for endpoint")).MarshalJSON()),
+	}
+	prov.br.AS.Router.Handle("/_matrix/provision/", exhttp.ApplyMiddleware(
+		prov.Router,
+		exhttp.StripPrefix("/_matrix/provision"),
+		hlog.NewHandler(prov.log),
+		hlog.RequestIDHandler("request_id", "Request-Id"),
+		exhttp.CORSMiddleware,
+		requestlog.AccessLogger(requestlog.Options{TrustXForwardedFor: true}),
+		exhttp.HandleErrors(errorBodies),
+		prov.AuthMiddleware,
+	))
 }
 
 func (prov *ProvisioningAPI) checkMatrixAuth(ctx context.Context, userID id.UserID, token string) error {
@@ -250,38 +266,6 @@ func (prov *ProvisioningAPI) AuthMiddleware(h http.Handler) http.Handler {
 
 		ctx := context.WithValue(r.Context(), ProvisioningKeyRequest, r)
 		ctx = context.WithValue(ctx, provisioningUserKey, user)
-		if loginID, ok := mux.Vars(r)["loginProcessID"]; ok {
-			prov.loginsLock.RLock()
-			login, ok := prov.logins[loginID]
-			prov.loginsLock.RUnlock()
-			if !ok {
-				zerolog.Ctx(r.Context()).Warn().Str("login_id", loginID).Msg("Login not found")
-				mautrix.MNotFound.WithMessage("Login not found").Write(w)
-				return
-			}
-			login.Lock.Lock()
-			// This will only unlock after the handler runs
-			defer login.Lock.Unlock()
-			stepID := mux.Vars(r)["stepID"]
-			if login.NextStep.StepID != stepID {
-				zerolog.Ctx(r.Context()).Warn().
-					Str("request_step_id", stepID).
-					Str("expected_step_id", login.NextStep.StepID).
-					Msg("Step ID does not match")
-				mautrix.MBadState.WithMessage("Step ID does not match").Write(w)
-				return
-			}
-			stepType := mux.Vars(r)["stepType"]
-			if login.NextStep.Type != bridgev2.LoginStepType(stepType) {
-				zerolog.Ctx(r.Context()).Warn().
-					Str("request_step_type", stepType).
-					Str("expected_step_type", string(login.NextStep.Type)).
-					Msg("Step type does not match")
-				mautrix.MBadState.WithMessage("Step type does not match").Write(w)
-				return
-			}
-			ctx = context.WithValue(ctx, provisioningLoginProcessKey, login)
-		}
 		h.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -374,7 +358,7 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 	login, err := prov.net.CreateLogin(
 		r.Context(),
 		prov.GetUser(r),
-		mux.Vars(r)["flowID"],
+		r.PathValue("flowID"),
 	)
 	if err != nil {
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to create login process")
@@ -420,6 +404,52 @@ func (prov *ProvisioningAPI) handleCompleteStep(ctx context.Context, login *Prov
 		StateEvent: status.StateLoggedOut,
 		Reason:     "LOGIN_OVERRIDDEN",
 	}, bridgev2.DeleteOpts{LogoutRemote: true})
+}
+
+func (prov *ProvisioningAPI) PostLoginStep(w http.ResponseWriter, r *http.Request) {
+	loginID := r.PathValue("loginProcessID")
+	prov.loginsLock.RLock()
+	login, ok := prov.logins[loginID]
+	prov.loginsLock.RUnlock()
+	if !ok {
+		zerolog.Ctx(r.Context()).Warn().Str("login_id", loginID).Msg("Login not found")
+		mautrix.MNotFound.WithMessage("Login not found").Write(w)
+		return
+	}
+	login.Lock.Lock()
+	// This will only unlock after the handler runs
+	defer login.Lock.Unlock()
+	stepID := r.PathValue("stepID")
+	if login.NextStep.StepID != stepID {
+		zerolog.Ctx(r.Context()).Warn().
+			Str("request_step_id", stepID).
+			Str("expected_step_id", login.NextStep.StepID).
+			Msg("Step ID does not match")
+		mautrix.MBadState.WithMessage("Step ID does not match").Write(w)
+		return
+	}
+	stepType := r.PathValue("stepType")
+	if login.NextStep.Type != bridgev2.LoginStepType(stepType) {
+		zerolog.Ctx(r.Context()).Warn().
+			Str("request_step_type", stepType).
+			Str("expected_step_type", string(login.NextStep.Type)).
+			Msg("Step type does not match")
+		mautrix.MBadState.WithMessage("Step type does not match").Write(w)
+		return
+	}
+	ctx := context.WithValue(r.Context(), provisioningLoginProcessKey, login)
+	r = r.WithContext(ctx)
+	switch bridgev2.LoginStepType(r.PathValue("stepType")) {
+	case bridgev2.LoginStepTypeUserInput, bridgev2.LoginStepTypeCookies:
+		prov.PostLoginSubmitInput(w, r)
+	case bridgev2.LoginStepTypeDisplayAndWait:
+		prov.PostLoginWait(w, r)
+	case bridgev2.LoginStepTypeComplete:
+		fallthrough
+	default:
+		// This is probably impossible because of the above check that the next step type matches the request.
+		mautrix.MUnrecognized.WithMessage("Invalid step type %q", r.PathValue("stepType")).Write(w)
+	}
 }
 
 func (prov *ProvisioningAPI) PostLoginSubmitInput(w http.ResponseWriter, r *http.Request) {
@@ -475,7 +505,7 @@ func (prov *ProvisioningAPI) PostLoginWait(w http.ResponseWriter, r *http.Reques
 
 func (prov *ProvisioningAPI) PostLogout(w http.ResponseWriter, r *http.Request) {
 	user := prov.GetUser(r)
-	userLoginID := networkid.UserLoginID(mux.Vars(r)["loginID"])
+	userLoginID := networkid.UserLoginID(r.PathValue("loginID"))
 	if userLoginID == "all" {
 		for {
 			login := user.GetDefaultLogin()
@@ -571,7 +601,7 @@ func (prov *ProvisioningAPI) doResolveIdentifier(w http.ResponseWriter, r *http.
 		mautrix.MUnrecognized.WithMessage("This bridge does not support resolving identifiers").Write(w)
 		return
 	}
-	resp, err := api.ResolveIdentifier(r.Context(), mux.Vars(r)["identifier"], createChat)
+	resp, err := api.ResolveIdentifier(r.Context(), r.PathValue("identifier"), createChat)
 	if err != nil {
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to resolve identifier")
 		RespondWithError(w, err, "Internal error resolving identifier")

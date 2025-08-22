@@ -164,7 +164,7 @@ func (ul *UserLogin) GetSpaceRoom(ctx context.Context) (id.RoomID, error) {
 				ul.UserMXID:             50,
 			},
 		},
-		RoomVersion: event.RoomV11,
+		RoomVersion: id.RoomV11,
 		Invite:      []id.UserID{ul.UserMXID},
 	}
 	if autoJoin {

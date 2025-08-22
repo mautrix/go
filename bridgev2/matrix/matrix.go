@@ -142,7 +142,7 @@ type CommandProcessor interface {
 }
 
 func (br *Connector) sendSuccessCheckpoint(ctx context.Context, evt *event.Event, step status.MessageCheckpointStep, retryNum int) {
-	err := br.SendMessageCheckpoints([]*status.MessageCheckpoint{{
+	err := br.SendMessageCheckpoints(ctx, []*status.MessageCheckpoint{{
 		RoomID:      evt.RoomID,
 		EventID:     evt.ID,
 		EventType:   evt.Type,
@@ -169,7 +169,7 @@ func (br *Connector) shouldIgnoreEventFromUser(userID id.UserID) bool {
 }
 
 func (br *Connector) shouldIgnoreEvent(evt *event.Event) bool {
-	if br.shouldIgnoreEventFromUser(evt.Sender) {
+	if br.shouldIgnoreEventFromUser(evt.Sender) && evt.Type != event.StateTombstone {
 		return true
 	}
 	dpVal, ok := evt.Content.Raw[appservice.DoublePuppetKey]

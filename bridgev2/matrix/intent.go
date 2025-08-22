@@ -490,8 +490,12 @@ func (as *ASIntent) IsDoublePuppet() bool {
 	return as.Matrix.IsDoublePuppet()
 }
 
-func (as *ASIntent) EnsureJoined(ctx context.Context, roomID id.RoomID) error {
-	err := as.Matrix.EnsureJoined(ctx, roomID)
+func (as *ASIntent) EnsureJoined(ctx context.Context, roomID id.RoomID, extra ...bridgev2.EnsureJoinedParams) error {
+	var params bridgev2.EnsureJoinedParams
+	if len(extra) > 0 {
+		params = extra[0]
+	}
+	err := as.Matrix.EnsureJoined(ctx, roomID, appservice.EnsureJoinedParams{Via: params.Via})
 	if err != nil {
 		return err
 	}
@@ -574,7 +578,15 @@ func (as *ASIntent) MarkAsDM(ctx context.Context, roomID id.RoomID, withUser id.
 
 func (as *ASIntent) DeleteRoom(ctx context.Context, roomID id.RoomID, puppetsOnly bool) error {
 	if as.Connector.SpecVersions.Supports(mautrix.BeeperFeatureRoomYeeting) {
-		return as.Matrix.BeeperDeleteRoom(ctx, roomID)
+		err := as.Matrix.BeeperDeleteRoom(ctx, roomID)
+		if err != nil {
+			return err
+		}
+		err = as.Matrix.StateStore.ClearCachedMembers(ctx, roomID)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to clear cached members while cleaning up portal")
+		}
+		return nil
 	}
 	members, err := as.Matrix.JoinedMembers(ctx, roomID)
 	if err != nil {

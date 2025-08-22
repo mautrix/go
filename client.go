@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -139,6 +140,10 @@ type IdentityServerInfo struct {
 // Use ParseUserID to extract the server name from a user ID.
 // https://spec.matrix.org/v1.2/client-server-api/#server-discovery
 func DiscoverClientAPI(ctx context.Context, serverName string) (*ClientWellKnown, error) {
+	return DiscoverClientAPIWithClient(ctx, &http.Client{Timeout: 30 * time.Second}, serverName)
+}
+
+func DiscoverClientAPIWithClient(ctx context.Context, client *http.Client, serverName string) (*ClientWellKnown, error) {
 	wellKnownURL := url.URL{
 		Scheme: "https",
 		Host:   serverName,
@@ -150,10 +155,11 @@ func DiscoverClientAPI(ctx context.Context, serverName string) (*ClientWellKnown
 		return nil, err
 	}
 
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", DefaultUserAgent+" (.well-known fetcher)")
+	if runtime.GOOS != "js" {
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("User-Agent", DefaultUserAgent+" (.well-known fetcher)")
+	}
 
-	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
@@ -513,7 +519,9 @@ func (cli *Client) MakeFullRequestWithResp(ctx context.Context, params FullReque
 			params.Handler = handleNormalResponse
 		}
 	}
-	req.Header.Set("User-Agent", cli.UserAgent)
+	if cli.UserAgent != "" {
+		req.Header.Set("User-Agent", cli.UserAgent)
+	}
 	if len(cli.AccessToken) > 0 {
 		req.Header.Set("Authorization", "Bearer "+cli.AccessToken)
 	}
@@ -553,6 +561,8 @@ func (cli *Client) doRetry(req *http.Request, cause error, retries int, backoff 
 		}
 	}
 	log.Warn().Err(cause).
+		Str("method", req.Method).
+		Str("url", req.URL.String()).
 		Int("retry_in_seconds", int(backoff.Seconds())).
 		Msg("Request failed, retrying")
 	select {
@@ -1364,6 +1374,10 @@ func (cli *Client) CreateRoom(ctx context.Context, req *ReqCreateRoom) (resp *Re
 				Msg("Failed to update creator membership in state store after creating room")
 		}
 		for _, evt := range req.InitialState {
+			evt.RoomID = resp.RoomID
+			if evt.StateKey == nil {
+				evt.StateKey = ptr.Ptr("")
+			}
 			UpdateStateStore(ctx, cli.StateStore, evt)
 		}
 		inviteMembership := event.MembershipInvite
@@ -1377,9 +1391,6 @@ func (cli *Client) CreateRoom(ctx context.Context, req *ReqCreateRoom) (resp *Re
 					Stringer("invitee_user_id", invitee).
 					Msg("Failed to update membership in state store after creating room")
 			}
-		}
-		for _, evt := range req.InitialState {
-			cli.updateStoreWithOutgoingEvent(ctx, resp.RoomID, evt.Type, evt.GetStateKey(), &evt.Content)
 		}
 	}
 	return
@@ -1551,12 +1562,15 @@ func (cli *Client) FullStateEvent(ctx context.Context, roomID id.RoomID, eventTy
 		"format": "event",
 	})
 	_, err = cli.MakeRequest(ctx, http.MethodGet, u, nil, &evt)
-	if err == nil && cli.StateStore != nil {
-		UpdateStateStore(ctx, cli.StateStore, evt)
-	}
 	if evt != nil {
 		evt.Type.Class = event.StateEventType
 		_ = evt.Content.ParseRaw(evt.Type)
+		if evt.RoomID == "" {
+			evt.RoomID = roomID
+		}
+	}
+	if err == nil && cli.StateStore != nil {
+		UpdateStateStore(ctx, cli.StateStore, evt)
 	}
 	return
 }
@@ -1609,12 +1623,21 @@ func (cli *Client) State(ctx context.Context, roomID id.RoomID) (stateMap RoomSt
 		ResponseJSON: &stateMap,
 		Handler:      parseRoomStateArray,
 	})
+	if stateMap != nil {
+		pls, ok := stateMap[event.StatePowerLevels][""]
+		if ok {
+			pls.Content.AsPowerLevels().CreateEvent = stateMap[event.StateCreate][""]
+		}
+	}
 	if err == nil && cli.StateStore != nil {
 		for evtType, evts := range stateMap {
 			if evtType == event.StateMember {
 				continue
 			}
 			for _, evt := range evts {
+				if evt.RoomID == "" {
+					evt.RoomID = roomID
+				}
 				UpdateStateStore(ctx, cli.StateStore, evt)
 			}
 		}
@@ -1785,7 +1808,9 @@ func (cli *Client) tryUploadMediaToURL(ctx context.Context, url, contentType str
 	}
 	req.ContentLength = contentLength
 	req.Header.Set("Content-Type", contentType)
-	req.Header.Set("User-Agent", cli.UserAgent+" (external media uploader)")
+	if cli.UserAgent != "" {
+		req.Header.Set("User-Agent", cli.UserAgent+" (external media uploader)")
+	}
 
 	if cli.ExternalClient != nil {
 		return cli.ExternalClient.Do(req)

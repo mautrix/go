@@ -7,6 +7,8 @@
 package event
 
 import (
+	"math"
+	"slices"
 	"sync"
 
 	"go.mau.fi/util/ptr"
@@ -34,6 +36,10 @@ type PowerLevelsEventContent struct {
 	KickPtr   *int `json:"kick,omitempty"`
 	BanPtr    *int `json:"ban,omitempty"`
 	RedactPtr *int `json:"redact,omitempty"`
+
+	// This is not a part of power levels, it's added by mautrix-go internally in certain places
+	// in order to detect creator power accurately.
+	CreateEvent *Event `json:"-"`
 }
 
 func (pl *PowerLevelsEventContent) Clone() *PowerLevelsEventContent {
@@ -53,6 +59,8 @@ func (pl *PowerLevelsEventContent) Clone() *PowerLevelsEventContent {
 		KickPtr:   ptr.Clone(pl.KickPtr),
 		BanPtr:    ptr.Clone(pl.BanPtr),
 		RedactPtr: ptr.Clone(pl.RedactPtr),
+
+		CreateEvent: pl.CreateEvent,
 	}
 }
 
@@ -112,6 +120,9 @@ func (pl *PowerLevelsEventContent) StateDefault() int {
 }
 
 func (pl *PowerLevelsEventContent) GetUserLevel(userID id.UserID) int {
+	if pl.isCreator(userID) {
+		return math.MaxInt
+	}
 	pl.usersLock.RLock()
 	defer pl.usersLock.RUnlock()
 	level, ok := pl.Users[userID]
@@ -138,9 +149,24 @@ func (pl *PowerLevelsEventContent) EnsureUserLevel(target id.UserID, level int) 
 	return pl.EnsureUserLevelAs("", target, level)
 }
 
+func (pl *PowerLevelsEventContent) createContent() *CreateEventContent {
+	if pl.CreateEvent == nil {
+		return &CreateEventContent{}
+	}
+	return pl.CreateEvent.Content.AsCreate()
+}
+
+func (pl *PowerLevelsEventContent) isCreator(userID id.UserID) bool {
+	cc := pl.createContent()
+	return cc.SupportsCreatorPower() && (userID == pl.CreateEvent.Sender || slices.Contains(cc.AdditionalCreators, userID))
+}
+
 func (pl *PowerLevelsEventContent) EnsureUserLevelAs(actor, target id.UserID, level int) bool {
+	if pl.isCreator(target) {
+		return false
+	}
 	existingLevel := pl.GetUserLevel(target)
-	if actor != "" {
+	if actor != "" && !pl.isCreator(actor) {
 		actorLevel := pl.GetUserLevel(actor)
 		if actorLevel <= existingLevel || actorLevel < level {
 			return false
@@ -185,7 +211,7 @@ func (pl *PowerLevelsEventContent) EnsureEventLevel(eventType Type, level int) b
 
 func (pl *PowerLevelsEventContent) EnsureEventLevelAs(actor id.UserID, eventType Type, level int) bool {
 	existingLevel := pl.GetEventLevel(eventType)
-	if actor != "" {
+	if actor != "" && !pl.isCreator(actor) {
 		actorLevel := pl.GetUserLevel(actor)
 		if existingLevel > actorLevel || level > actorLevel {
 			return false

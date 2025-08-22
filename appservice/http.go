@@ -17,7 +17,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/exhttp"
 	"go.mau.fi/util/exstrings"
@@ -95,8 +94,7 @@ func (as *AppService) PutTransaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	vars := mux.Vars(r)
-	txnID := vars["txnID"]
+	txnID := r.PathValue("txnID")
 	if len(txnID) == 0 {
 		mautrix.MInvalidParam.WithMessage("Missing transaction ID").Write(w)
 		return
@@ -240,8 +238,7 @@ func (as *AppService) GetRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	vars := mux.Vars(r)
-	roomAlias := vars["roomAlias"]
+	roomAlias := id.RoomAlias(r.PathValue("roomAlias"))
 	ok := as.QueryHandler.QueryAlias(roomAlias)
 	if ok {
 		exhttp.WriteEmptyJSONResponse(w, http.StatusOK)
@@ -256,8 +253,7 @@ func (as *AppService) GetUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	vars := mux.Vars(r)
-	userID := id.UserID(vars["userID"])
+	userID := id.UserID(r.PathValue("userID"))
 	ok := as.QueryHandler.QueryUser(userID)
 	if ok {
 		exhttp.WriteEmptyJSONResponse(w, http.StatusOK)

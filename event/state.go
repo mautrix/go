@@ -8,6 +8,7 @@ package event
 
 import (
 	"encoding/base64"
+	"slices"
 
 	"github.com/iKonoTelecomunicaciones/go/id"
 )
@@ -74,32 +75,45 @@ type Predecessor struct {
 	EventID id.EventID `json:"event_id"`
 }
 
-type RoomVersion string
+// Deprecated: use id.RoomVersion instead
+type RoomVersion = id.RoomVersion
 
+// Deprecated: use id.RoomVX constants instead
 const (
-	RoomV1  RoomVersion = "1"
-	RoomV2  RoomVersion = "2"
-	RoomV3  RoomVersion = "3"
-	RoomV4  RoomVersion = "4"
-	RoomV5  RoomVersion = "5"
-	RoomV6  RoomVersion = "6"
-	RoomV7  RoomVersion = "7"
-	RoomV8  RoomVersion = "8"
-	RoomV9  RoomVersion = "9"
-	RoomV10 RoomVersion = "10"
-	RoomV11 RoomVersion = "11"
+	RoomV1  = id.RoomV1
+	RoomV2  = id.RoomV2
+	RoomV3  = id.RoomV3
+	RoomV4  = id.RoomV4
+	RoomV5  = id.RoomV5
+	RoomV6  = id.RoomV6
+	RoomV7  = id.RoomV7
+	RoomV8  = id.RoomV8
+	RoomV9  = id.RoomV9
+	RoomV10 = id.RoomV10
+	RoomV11 = id.RoomV11
+	RoomV12 = id.RoomV12
 )
 
 // CreateEventContent represents the content of a m.room.create state event.
 // https://spec.matrix.org/v1.2/client-server-api/#mroomcreate
 type CreateEventContent struct {
-	Type        RoomType     `json:"type,omitempty"`
-	Federate    *bool        `json:"m.federate,omitempty"`
-	RoomVersion RoomVersion  `json:"room_version,omitempty"`
-	Predecessor *Predecessor `json:"predecessor,omitempty"`
+	Type        RoomType       `json:"type,omitempty"`
+	Federate    *bool          `json:"m.federate,omitempty"`
+	RoomVersion id.RoomVersion `json:"room_version,omitempty"`
+	Predecessor *Predecessor   `json:"predecessor,omitempty"`
+
+	// Room v12+ only
+	AdditionalCreators []id.UserID `json:"additional_creators,omitempty"`
 
 	// Deprecated: use the event sender instead
 	Creator id.UserID `json:"creator,omitempty"`
+}
+
+func (cec *CreateEventContent) SupportsCreatorPower() bool {
+	if cec == nil {
+		return false
+	}
+	return cec.RoomVersion.PrivilegedRoomCreators()
 }
 
 // JoinRule specifies how open a room is to new members.
@@ -252,4 +266,12 @@ type InsertionMarkerContent struct {
 
 type ElementFunctionalMembersContent struct {
 	ServiceMembers []id.UserID `json:"service_members"`
+}
+
+func (efmc *ElementFunctionalMembersContent) Add(mxid id.UserID) bool {
+	if slices.Contains(efmc.ServiceMembers, mxid) {
+		return false
+	}
+	efmc.ServiceMembers = append(efmc.ServiceMembers, mxid)
+	return true
 }

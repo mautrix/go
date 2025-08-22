@@ -39,7 +39,7 @@ func (br *Connector) initDirectMedia() error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize media proxy: %w", err)
 	}
-	br.MediaProxy.RegisterRoutes(br.AS.Router)
+	br.MediaProxy.RegisterRoutes(br.AS.Router, br.Log.With().Str("component", "media proxy").Logger())
 	br.dmaSigKey = sha256.Sum256(br.MediaProxy.GetServerKey().Priv.Seed())
 	dmn.SetUseDirectMedia()
 	br.Log.Debug().Str("server_name", br.MediaProxy.GetServerName()).Msg("Enabled direct media access")

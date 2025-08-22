@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.mau.fi/util/dbutil"
 
@@ -29,22 +30,14 @@ const groupSession = "9ZbsRqJuETbjnxPpKv29n3dubP/m5PSLbr9I9CIWS2O86F/Og1JZXhqT+4
 
 func getCryptoStores(t *testing.T) map[string]Store {
 	rawDB, err := sql.Open("sqlite3", ":memory:?_busy_timeout=5000")
-	if err != nil {
-		t.Fatalf("Error opening db: %v", err)
-	}
+	require.NoError(t, err, "Error opening raw database")
 	db, err := dbutil.NewWithDB(rawDB, "sqlite3")
-	if err != nil {
-		t.Fatalf("Error opening db: %v", err)
-	}
+	require.NoError(t, err, "Error creating database wrapper")
 	sqlStore := NewSQLCryptoStore(db, nil, "accid", id.DeviceID("dev"), []byte("test"))
-	if err = sqlStore.DB.Upgrade(context.TODO()); err != nil {
-		t.Fatalf("Error creating tables: %v", err)
-	}
+	err = sqlStore.DB.Upgrade(context.TODO())
+	require.NoError(t, err, "Error upgrading database")
 
 	gobStore := NewMemoryStore(nil)
-	if err != nil {
-		t.Fatalf("Error creating Gob store: %v", err)
-	}
 
 	return map[string]Store{
 		"sql": sqlStore,
@@ -56,9 +49,10 @@ func TestPutNextBatch(t *testing.T) {
 	stores := getCryptoStores(t)
 	store := stores["sql"].(*SQLCryptoStore)
 	store.PutNextBatch(context.Background(), "batch1")
-	if batch, _ := store.GetNextBatch(context.Background()); batch != "batch1" {
-		t.Errorf("Expected batch1, got %v", batch)
-	}
+
+	batch, err := store.GetNextBatch(context.Background())
+	require.NoError(t, err, "Error retrieving next batch")
+	assert.Equal(t, "batch1", batch)
 }
 
 func TestPutAccount(t *testing.T) {
@@ -68,15 +62,9 @@ func TestPutAccount(t *testing.T) {
 			acc := NewOlmAccount()
 			store.PutAccount(context.TODO(), acc)
 			retrieved, err := store.GetAccount(context.TODO())
-			if err != nil {
-				t.Fatalf("Error retrieving account: %v", err)
-			}
-			if acc.IdentityKey() != retrieved.IdentityKey() {
-				t.Errorf("Stored identity key %v, got %v", acc.IdentityKey(), retrieved.IdentityKey())
-			}
-			if acc.SigningKey() != retrieved.SigningKey() {
-				t.Errorf("Stored signing key %v, got %v", acc.SigningKey(), retrieved.SigningKey())
-			}
+			require.NoError(t, err, "Error retrieving account")
+			assert.Equal(t, acc.IdentityKey(), retrieved.IdentityKey(), "Identity key does not match")
+			assert.Equal(t, acc.SigningKey(), retrieved.SigningKey(), "Signing key does not match")
 		})
 	}
 }
@@ -86,18 +74,26 @@ func TestValidateMessageIndex(t *testing.T) {
 	for storeName, store := range stores {
 		t.Run(storeName, func(t *testing.T) {
 			acc := NewOlmAccount()
-			if ok, _ := store.ValidateMessageIndex(context.TODO(), acc.IdentityKey(), "sess1", "event1", 0, 1000); !ok {
-				t.Error("First message not validated successfully")
-			}
-			if ok, _ := store.ValidateMessageIndex(context.TODO(), acc.IdentityKey(), "sess1", "event1", 0, 1001); ok {
-				t.Error("First message validated successfully after changing timestamp")
-			}
-			if ok, _ := store.ValidateMessageIndex(context.TODO(), acc.IdentityKey(), "sess1", "event2", 0, 1000); ok {
-				t.Error("First message validated successfully after changing event ID")
-			}
-			if ok, _ := store.ValidateMessageIndex(context.TODO(), acc.IdentityKey(), "sess1", "event1", 0, 1000); !ok {
-				t.Error("First message not validated successfully for a second time")
-			}
+
+			// First message should validate successfully
+			ok, err := store.ValidateMessageIndex(context.TODO(), acc.IdentityKey(), "sess1", "event1", 0, 1000)
+			require.NoError(t, err, "Error validating message index")
+			assert.True(t, ok, "First message validation should be valid")
+
+			// Edit the timestamp and ensure validate fails
+			ok, err = store.ValidateMessageIndex(context.TODO(), acc.IdentityKey(), "sess1", "event1", 0, 1001)
+			require.NoError(t, err, "Error validating message index after timestamp change")
+			assert.False(t, ok, "First message validation should fail after timestamp change")
+
+			// Edit the event ID and ensure validate fails
+			ok, err = store.ValidateMessageIndex(context.TODO(), acc.IdentityKey(), "sess1", "event2", 0, 1000)
+			require.NoError(t, err, "Error validating message index after event ID change")
+			assert.False(t, ok, "First message validation should fail after event ID change")
+
+			// Validate again with the original parameters and ensure that it still passes
+			ok, err = store.ValidateMessageIndex(context.TODO(), acc.IdentityKey(), "sess1", "event1", 0, 1000)
+			require.NoError(t, err, "Error validating message index")
+			assert.True(t, ok, "First message validation should be valid")
 		})
 	}
 }
@@ -106,43 +102,26 @@ func TestStoreOlmSession(t *testing.T) {
 	stores := getCryptoStores(t)
 	for storeName, store := range stores {
 		t.Run(storeName, func(t *testing.T) {
-			if store.HasSession(context.TODO(), olmSessID) {
-				t.Error("Found Olm session before inserting it")
-			}
+			require.False(t, store.HasSession(context.TODO(), olmSessID), "Found Olm session before inserting it")
+
 			olmInternal, err := olm.SessionFromPickled([]byte(olmPickled), []byte("test"))
-			if err != nil {
-				t.Fatalf("Error creating internal Olm session: %v", err)
-			}
+			require.NoError(t, err, "Error creating internal Olm session")
 
 			olmSess := OlmSession{
 				id:       olmSessID,
 				Internal: olmInternal,
 			}
 			err = store.AddSession(context.TODO(), olmSessID, &olmSess)
-			if err != nil {
-				t.Errorf("Error storing Olm session: %v", err)
-			}
-			if !store.HasSession(context.TODO(), olmSessID) {
-				t.Error("Not found Olm session after inserting it")
-			}
+			require.NoError(t, err, "Error storing Olm session")
+			assert.True(t, store.HasSession(context.TODO(), olmSessID), "Olm session not found after inserting it")
 
 			retrieved, err := store.GetLatestSession(context.TODO(), olmSessID)
-			if err != nil {
-				t.Errorf("Failed retrieving Olm session: %v", err)
-			}
-
-			if retrieved.ID() != olmSessID {
-				t.Errorf("Expected session ID to be %v, got %v", olmSessID, retrieved.ID())
-			}
+			require.NoError(t, err, "Error retrieving Olm session")
+			assert.EqualValues(t, olmSessID, retrieved.ID())
 
 			pickled, err := retrieved.Internal.Pickle([]byte("test"))
-			if err != nil {
-				t.Fatalf("Error pickling Olm session: %v", err)
-			}
-
-			if string(pickled) != olmPickled {
-				t.Error("Pickled Olm session does not match original")
-			}
+			require.NoError(t, err, "Error pickling Olm session")
+			assert.EqualValues(t, pickled, olmPickled, "Pickled Olm session does not match original")
 		})
 	}
 }
@@ -154,9 +133,7 @@ func TestStoreMegolmSession(t *testing.T) {
 			acc := NewOlmAccount()
 
 			internal, err := olm.InboundGroupSessionFromPickled([]byte(groupSession), []byte("test"))
-			if err != nil {
-				t.Fatalf("Error creating internal inbound group session: %v", err)
-			}
+			require.NoError(t, err, "Error creating internal inbound group session")
 
 			igs := &InboundGroupSession{
 				Internal:   internal,
@@ -166,20 +143,14 @@ func TestStoreMegolmSession(t *testing.T) {
 			}
 
 			err = store.PutGroupSession(context.TODO(), igs)
-			if err != nil {
-				t.Errorf("Error storing inbound group session: %v", err)
-			}
+			require.NoError(t, err, "Error storing inbound group session")
 
 			retrieved, err := store.GetGroupSession(context.TODO(), "room1", igs.ID())
-			if err != nil {
-				t.Errorf("Error retrieving inbound group session: %v", err)
-			}
+			require.NoError(t, err, "Error retrieving inbound group session")
 
-			if pickled, err := retrieved.Internal.Pickle([]byte("test")); err != nil {
-				t.Fatalf("Error pickling inbound group session: %v", err)
-			} else if string(pickled) != groupSession {
-				t.Error("Pickled inbound group session does not match original")
-			}
+			pickled, err := retrieved.Internal.Pickle([]byte("test"))
+			require.NoError(t, err, "Error pickling inbound group session")
+			assert.EqualValues(t, pickled, groupSession, "Pickled inbound group session does not match original")
 		})
 	}
 }
@@ -189,40 +160,24 @@ func TestStoreOutboundMegolmSession(t *testing.T) {
 	for storeName, store := range stores {
 		t.Run(storeName, func(t *testing.T) {
 			sess, err := store.GetOutboundGroupSession(context.TODO(), "room1")
-			if sess != nil {
-				t.Error("Got outbound session before inserting")
-			}
-			if err != nil {
-				t.Errorf("Error retrieving outbound session: %v", err)
-			}
+			require.NoError(t, err, "Error retrieving outbound session")
+			require.Nil(t, sess, "Got outbound session before inserting")
 
 			outbound, err := NewOutboundGroupSession("room1", nil)
 			require.NoError(t, err)
 			err = store.AddOutboundGroupSession(context.TODO(), outbound)
-			if err != nil {
-				t.Errorf("Error inserting outbound session: %v", err)
-			}
+			require.NoError(t, err, "Error inserting outbound session")
 
 			sess, err = store.GetOutboundGroupSession(context.TODO(), "room1")
-			if sess == nil {
-				t.Error("Did not get outbound session after inserting")
-			}
-			if err != nil {
-				t.Errorf("Error retrieving outbound session: %v", err)
-			}
+			require.NoError(t, err, "Error retrieving outbound session")
+			assert.NotNil(t, sess, "Did not get outbound session after inserting")
 
 			err = store.RemoveOutboundGroupSession(context.TODO(), "room1")
-			if err != nil {
-				t.Errorf("Error deleting outbound session: %v", err)
-			}
+			require.NoError(t, err, "Error deleting outbound session")
 
 			sess, err = store.GetOutboundGroupSession(context.TODO(), "room1")
-			if sess != nil {
-				t.Error("Got outbound session after deleting")
-			}
-			if err != nil {
-				t.Errorf("Error retrieving outbound session: %v", err)
-			}
+			require.NoError(t, err, "Error retrieving outbound session after deletion")
+			assert.Nil(t, sess, "Got outbound session after deleting")
 		})
 	}
 }
@@ -244,58 +199,41 @@ func TestStoreOutboundMegolmSessionSharing(t *testing.T) {
 		t.Run(storeName, func(t *testing.T) {
 			device := resetDevice()
 			err := store.PutDevice(context.TODO(), "user1", device)
-			if err != nil {
-				t.Errorf("Error storing devices: %v", err)
-			}
+			require.NoError(t, err, "Error storing device")
 
 			shared, err := store.IsOutboundGroupSessionShared(context.TODO(), device.UserID, device.IdentityKey, "session1")
-			if err != nil {
-				t.Errorf("Error checking if outbound group session is shared: %v", err)
-			} else if shared {
-				t.Errorf("Outbound group session shared when it shouldn't")
-			}
+			require.NoError(t, err, "Error checking if outbound group session is shared")
+			assert.False(t, shared, "Outbound group session should not be shared initially")
 
 			err = store.MarkOutboundGroupSessionShared(context.TODO(), device.UserID, device.IdentityKey, "session1")
-			if err != nil {
-				t.Errorf("Error marking outbound group session as shared: %v", err)
-			}
+			require.NoError(t, err, "Error marking outbound group session as shared")
 
 			shared, err = store.IsOutboundGroupSessionShared(context.TODO(), device.UserID, device.IdentityKey, "session1")
-			if err != nil {
-				t.Errorf("Error checking if outbound group session is shared: %v", err)
-			} else if !shared {
-				t.Errorf("Outbound group session not shared when it should")
-			}
+			require.NoError(t, err, "Error checking if outbound group session is shared")
+			assert.True(t, shared, "Outbound group session should be shared after marking it as such")
 
 			device = resetDevice()
 			err = store.PutDevice(context.TODO(), "user1", device)
-			if err != nil {
-				t.Errorf("Error storing devices: %v", err)
-			}
+			require.NoError(t, err, "Error storing device after resetting")
 
 			shared, err = store.IsOutboundGroupSessionShared(context.TODO(), device.UserID, device.IdentityKey, "session1")
-			if err != nil {
-				t.Errorf("Error checking if outbound group session is shared: %v", err)
-			} else if shared {
-				t.Errorf("Outbound group session shared when it shouldn't")
-			}
+			require.NoError(t, err, "Error checking if outbound group session is shared")
+			assert.False(t, shared, "Outbound group session should not be shared after resetting device")
 		})
 	}
 }
 
 func TestStoreDevices(t *testing.T) {
+	devicesToCreate := 17
 	stores := getCryptoStores(t)
 	for storeName, store := range stores {
 		t.Run(storeName, func(t *testing.T) {
 			outdated, err := store.GetOutdatedTrackedUsers(context.TODO())
-			if err != nil {
-				t.Errorf("Error filtering tracked users: %v", err)
-			}
-			if len(outdated) > 0 {
-				t.Errorf("Got %d outdated tracked users when expected none", len(outdated))
-			}
+			require.NoError(t, err, "Error filtering tracked users")
+			assert.Empty(t, outdated, "Expected no outdated tracked users initially")
+
 			deviceMap := make(map[id.DeviceID]*id.Device)
-			for i := 0; i < 17; i++ {
+			for i := 0; i < devicesToCreate; i++ {
 				iStr := strconv.Itoa(i)
 				acc := NewOlmAccount()
 				deviceMap[id.DeviceID("dev"+iStr)] = &id.Device{
@@ -306,59 +244,33 @@ func TestStoreDevices(t *testing.T) {
 				}
 			}
 			err = store.PutDevices(context.TODO(), "user1", deviceMap)
-			if err != nil {
-				t.Errorf("Error storing devices: %v", err)
-			}
+			require.NoError(t, err, "Error storing devices")
 			devs, err := store.GetDevices(context.TODO(), "user1")
-			if err != nil {
-				t.Errorf("Error getting devices: %v", err)
-			}
-			if len(devs) != 17 {
-				t.Errorf("Stored 17 devices, got back %v", len(devs))
-			}
-			if devs["dev0"].IdentityKey != deviceMap["dev0"].IdentityKey {
-				t.Errorf("First device identity key does not match")
-			}
-			if devs["dev16"].IdentityKey != deviceMap["dev16"].IdentityKey {
-				t.Errorf("Last device identity key does not match")
-			}
+			require.NoError(t, err, "Error getting devices")
+			assert.Len(t, devs, devicesToCreate, "Expected to get %d devices back", devicesToCreate)
+			assert.Equal(t, deviceMap, devs, "Stored devices do not match retrieved devices")
 
 			filtered, err := store.FilterTrackedUsers(context.TODO(), []id.UserID{"user0", "user1", "user2"})
-			if err != nil {
-				t.Errorf("Error filtering tracked users: %v", err)
-			} else if len(filtered) != 1 || filtered[0] != "user1" {
-				t.Errorf("Expected to get 'user1' from filter, got %v", filtered)
-			}
+			require.NoError(t, err, "Error filtering tracked users")
+			assert.Equal(t, []id.UserID{"user1"}, filtered, "Expected to get 'user1' from filter")
 
 			outdated, err = store.GetOutdatedTrackedUsers(context.TODO())
-			if err != nil {
-				t.Errorf("Error filtering tracked users: %v", err)
-			}
-			if len(outdated) > 0 {
-				t.Errorf("Got %d outdated tracked users when expected none", len(outdated))
-			}
+			require.NoError(t, err, "Error filtering tracked users")
+			assert.Empty(t, outdated, "Expected no outdated tracked users after initial storage")
+
 			err = store.MarkTrackedUsersOutdated(context.TODO(), []id.UserID{"user0", "user1"})
-			if err != nil {
-				t.Errorf("Error marking tracked users outdated: %v", err)
-			}
+			require.NoError(t, err, "Error marking tracked users outdated")
+
 			outdated, err = store.GetOutdatedTrackedUsers(context.TODO())
-			if err != nil {
-				t.Errorf("Error filtering tracked users: %v", err)
-			}
-			if len(outdated) != 1 || outdated[0] != id.UserID("user1") {
-				t.Errorf("Got outdated tracked users %v when expected 'user1'", outdated)
-			}
+			require.NoError(t, err, "Error filtering tracked users")
+			assert.Equal(t, []id.UserID{"user1"}, outdated, "Expected 'user1' to be marked as outdated")
+
 			err = store.PutDevices(context.TODO(), "user1", deviceMap)
-			if err != nil {
-				t.Errorf("Error storing devices: %v", err)
-			}
+			require.NoError(t, err, "Error storing devices again")
+
 			outdated, err = store.GetOutdatedTrackedUsers(context.TODO())
-			if err != nil {
-				t.Errorf("Error filtering tracked users: %v", err)
-			}
-			if len(outdated) > 0 {
-				t.Errorf("Got outdated tracked users %v when expected none", outdated)
-			}
+			require.NoError(t, err, "Error filtering tracked users")
+			assert.Empty(t, outdated, "Expected no outdated tracked users after re-storing devices")
 		})
 	}
 }
@@ -369,16 +281,11 @@ func TestStoreSecrets(t *testing.T) {
 		t.Run(storeName, func(t *testing.T) {
 			storedSecret := "trustno1"
 			err := store.PutSecret(context.TODO(), id.SecretMegolmBackupV1, storedSecret)
-			if err != nil {
-				t.Errorf("Error storing secret: %v", err)
-			}
+			require.NoError(t, err, "Error storing secret")
 
 			secret, err := store.GetSecret(context.TODO(), id.SecretMegolmBackupV1)
-			if err != nil {
-				t.Errorf("Error storing secret: %v", err)
-			} else if secret != storedSecret {
-				t.Errorf("Stored secret did not match: '%s' != '%s'", secret, storedSecret)
-			}
+			require.NoError(t, err, "Error retrieving secret")
+			assert.Equal(t, storedSecret, secret, "Retrieved secret does not match stored secret")
 		})
 	}
 }

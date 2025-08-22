@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tulir Asokan
+// Copyright (c) 2025 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -10,10 +10,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"time"
-
-	"github.com/gorilla/mux"
 
 	mautrix "github.com/iKonoTelecomunicaciones/go"
 	"github.com/iKonoTelecomunicaciones/go/bridgev2/database"
@@ -58,9 +57,13 @@ type MatrixConnector interface {
 	ServerName() string
 }
 
+type MatrixConnectorWithArbitraryRoomState interface {
+	GetStateEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string) (*event.Event, error)
+}
+
 type MatrixConnectorWithServer interface {
 	GetPublicAddress() string
-	GetRouter() *mux.Router
+	GetRouter() *http.ServeMux
 }
 
 type MatrixConnectorWithPublicMedia interface {
@@ -144,6 +147,10 @@ func (ce CallbackError) Unwrap() error {
 	return ce.Wrapped
 }
 
+type EnsureJoinedParams struct {
+	Via []string
+}
+
 type MatrixAPI interface {
 	GetMXID() id.UserID
 	IsDoublePuppet() bool
@@ -164,7 +171,7 @@ type MatrixAPI interface {
 
 	CreateRoom(ctx context.Context, req *mautrix.ReqCreateRoom) (id.RoomID, error)
 	DeleteRoom(ctx context.Context, roomID id.RoomID, puppetsOnly bool) error
-	EnsureJoined(ctx context.Context, roomID id.RoomID) error
+	EnsureJoined(ctx context.Context, roomID id.RoomID, params ...EnsureJoinedParams) error
 	EnsureInvited(ctx context.Context, roomID id.RoomID, userID id.UserID) error
 
 	TagRoom(ctx context.Context, roomID id.RoomID, tag event.RoomTag, isTagged bool) error

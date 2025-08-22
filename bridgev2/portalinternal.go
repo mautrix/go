@@ -89,8 +89,20 @@ func (portal *PortalInternals) CheckMessageContentCaps(caps *event.RoomFeatures,
 	return (*Portal)(portal).checkMessageContentCaps(caps, content)
 }
 
-func (portal *PortalInternals) HandleMatrixMessage(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) {
-	(*Portal)(portal).handleMatrixMessage(ctx, sender, origSender, evt)
+func (portal *PortalInternals) ParseInputTransactionID(origSender *OrigSender, evt *event.Event) networkid.RawTransactionID {
+	return (*Portal)(portal).parseInputTransactionID(origSender, evt)
+}
+
+func (portal *PortalInternals) HandleMatrixMessage(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) EventHandlingResult {
+	return (*Portal)(portal).handleMatrixMessage(ctx, sender, origSender, evt)
+}
+
+func (portal *PortalInternals) PendingMessageTimeoutLoop(ctx context.Context, cfg *OutgoingTimeoutConfig) {
+	(*Portal)(portal).pendingMessageTimeoutLoop(ctx, cfg)
+}
+
+func (portal *PortalInternals) CheckPendingMessages(ctx context.Context, cfg *OutgoingTimeoutConfig) {
+	(*Portal)(portal).checkPendingMessages(ctx, cfg)
 }
 
 func (portal *PortalInternals) HandleMatrixEdit(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event, content *event.MessageEventContent, caps *event.RoomFeatures) EventHandlingResult {

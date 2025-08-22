@@ -130,36 +130,29 @@ func (evt *Event) GetStateKey() string {
 	return ""
 }
 
-type StrippedState struct {
-	Content  Content   `json:"content"`
-	Type     Type      `json:"type"`
-	StateKey string    `json:"state_key"`
-	Sender   id.UserID `json:"sender"`
-}
-
 type Unsigned struct {
-	PrevContent     *Content        `json:"prev_content,omitempty"`
-	PrevSender      id.UserID       `json:"prev_sender,omitempty"`
-	Membership      Membership      `json:"membership,omitempty"`
-	ReplacesState   id.EventID      `json:"replaces_state,omitempty"`
-	Age             int64           `json:"age,omitempty"`
-	TransactionID   string          `json:"transaction_id,omitempty"`
-	Relations       *Relations      `json:"m.relations,omitempty"`
-	RedactedBecause *Event          `json:"redacted_because,omitempty"`
-	InviteRoomState []StrippedState `json:"invite_room_state,omitempty"`
+	PrevContent     *Content   `json:"prev_content,omitempty"`
+	PrevSender      id.UserID  `json:"prev_sender,omitempty"`
+	Membership      Membership `json:"membership,omitempty"`
+	ReplacesState   id.EventID `json:"replaces_state,omitempty"`
+	Age             int64      `json:"age,omitempty"`
+	TransactionID   string     `json:"transaction_id,omitempty"`
+	Relations       *Relations `json:"m.relations,omitempty"`
+	RedactedBecause *Event     `json:"redacted_because,omitempty"`
+	InviteRoomState []*Event   `json:"invite_room_state,omitempty"`
 
 	BeeperHSOrder       int64               `json:"com.beeper.hs.order,omitempty"`
 	BeeperHSSuborder    int16               `json:"com.beeper.hs.suborder,omitempty"`
 	BeeperHSOrderString *BeeperEncodedOrder `json:"com.beeper.hs.order_string,omitempty"`
 	BeeperFromBackup    bool                `json:"com.beeper.from_backup,omitempty"`
 
-	MauSoftFailed      bool   `json:"fi.mau.soft_failed,omitempty"`
-	MauRejectionReason string `json:"fi.mau.rejection_reason,omitempty"`
+	ElementSoftFailed         bool `json:"io.element.synapse.soft_failed,omitempty"`
+	ElementPolicyServerSpammy bool `json:"io.element.synapse.policy_server_spammy,omitempty"`
 }
 
 func (us *Unsigned) IsEmpty() bool {
 	return us.PrevContent == nil && us.PrevSender == "" && us.ReplacesState == "" && us.Age == 0 && us.Membership == "" &&
 		us.TransactionID == "" && us.RedactedBecause == nil && us.InviteRoomState == nil && us.Relations == nil &&
 		us.BeeperHSOrder == 0 && us.BeeperHSSuborder == 0 && us.BeeperHSOrderString.IsZero() &&
-		!us.MauSoftFailed && us.MauRejectionReason == ""
+		!us.ElementSoftFailed
 }

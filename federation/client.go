@@ -21,6 +21,7 @@ import (
 	"go.mau.fi/util/jsontime"
 
 	mautrix "github.com/iKonoTelecomunicaciones/go"
+	"github.com/iKonoTelecomunicaciones/go/federation/signutil"
 	"github.com/iKonoTelecomunicaciones/go/id"
 )
 
@@ -404,7 +405,7 @@ func (r *signableRequest) Verify(key id.SigningKey, sig string) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal data: %w", err)
 	}
-	return VerifyJSONRaw(key, sig, message)
+	return signutil.VerifyJSONRaw(key, sig, message)
 }
 
 func (r *signableRequest) Sign(key *SigningKey) (string, error) {

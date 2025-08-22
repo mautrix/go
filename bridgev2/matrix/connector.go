@@ -12,19 +12,19 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"os"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
-	"unsafe"
 
-	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/dbutil"
 	_ "go.mau.fi/util/dbutil/litestream"
+	"go.mau.fi/util/exbytes"
 	"go.mau.fi/util/exsync"
 	"go.mau.fi/util/random"
 	"golang.org/x/sync/semaphore"
@@ -101,6 +101,7 @@ type Connector struct {
 var (
 	_ bridgev2.MatrixConnector                           = (*Connector)(nil)
 	_ bridgev2.MatrixConnectorWithServer                 = (*Connector)(nil)
+	_ bridgev2.MatrixConnectorWithArbitraryRoomState     = (*Connector)(nil)
 	_ bridgev2.MatrixConnectorWithPostRoomBridgeHandling = (*Connector)(nil)
 	_ bridgev2.MatrixConnectorWithPublicMedia            = (*Connector)(nil)
 	_ bridgev2.MatrixConnectorWithNameDisambiguation     = (*Connector)(nil)
@@ -145,6 +146,7 @@ func (br *Connector) Init(bridge *bridgev2.Bridge) {
 	br.EventProcessor.On(event.StateRoomName, br.handleRoomEvent)
 	br.EventProcessor.On(event.StateRoomAvatar, br.handleRoomEvent)
 	br.EventProcessor.On(event.StateTopic, br.handleRoomEvent)
+	br.EventProcessor.On(event.StateTombstone, br.handleRoomEvent)
 	br.EventProcessor.On(event.EphemeralEventReceipt, br.handleEphemeralEvent)
 	br.EventProcessor.On(event.EphemeralEventTyping, br.handleEphemeralEvent)
 	br.Bot = br.AS.BotIntent()
@@ -167,6 +169,17 @@ func (br *Connector) Start(ctx context.Context) error {
 	err = br.initPublicMedia()
 	if err != nil {
 		return err
+	}
+	needsStateResync := br.Config.Encryption.Default &&
+		br.Bridge.DB.KV.Get(ctx, database.KeyEncryptionStateResynced) != "true"
+	if needsStateResync {
+		dbExists, err := br.StateStore.TableExists(ctx, "mx_version")
+		if err != nil {
+			return fmt.Errorf("failed to check if mx_version table exists: %w", err)
+		} else if !dbExists {
+			needsStateResync = false
+			br.Bridge.DB.KV.Set(ctx, database.KeyEncryptionStateResynced, "true")
+		}
 	}
 	err = br.StateStore.Upgrade(ctx)
 	if err != nil {
@@ -211,7 +224,49 @@ func (br *Connector) Start(ctx context.Context) error {
 		br.wsStopPinger = make(chan struct{}, 1)
 		go br.websocketServerPinger()
 	}
+	if needsStateResync {
+		br.ResyncEncryptionState(ctx)
+	}
 	return nil
+}
+
+func (br *Connector) ResyncEncryptionState(ctx context.Context) {
+	log := zerolog.Ctx(ctx)
+	roomIDScanner := dbutil.ConvertRowFn[id.RoomID](dbutil.ScanSingleColumn[id.RoomID])
+	rooms, err := roomIDScanner.NewRowIter(br.Bridge.DB.Query(ctx, `
+		SELECT rooms.room_id
+		FROM (SELECT DISTINCT(room_id) FROM mx_user_profile WHERE room_id<>'') rooms
+		LEFT JOIN mx_room_state ON rooms.room_id = mx_room_state.room_id
+		WHERE mx_room_state.encryption IS NULL
+	`)).AsList()
+	if err != nil {
+		log.Err(err).Msg("Failed to get room list to resync state")
+		return
+	}
+	var failedCount, successCount, forbiddenCount int
+	for _, roomID := range rooms {
+		if roomID == "" {
+			continue
+		}
+		var outContent *event.EncryptionEventContent
+		err = br.Bot.Client.StateEvent(ctx, roomID, event.StateEncryption, "", &outContent)
+		if errors.Is(err, mautrix.MForbidden) {
+			// Most likely non-existent room
+			log.Debug().Err(err).Stringer("room_id", roomID).Msg("Failed to get state for room")
+			forbiddenCount++
+		} else if err != nil {
+			log.Err(err).Stringer("room_id", roomID).Msg("Failed to get state for room")
+			failedCount++
+		} else {
+			successCount++
+		}
+	}
+	br.Bridge.DB.KV.Set(ctx, database.KeyEncryptionStateResynced, "true")
+	log.Info().
+		Int("success_count", successCount).
+		Int("forbidden_count", forbiddenCount).
+		Int("failed_count", failedCount).
+		Msg("Resynced rooms")
 }
 
 func (br *Connector) GetPublicAddress() string {
@@ -221,7 +276,7 @@ func (br *Connector) GetPublicAddress() string {
 	return br.Config.AppService.PublicAddress
 }
 
-func (br *Connector) GetRouter() *mux.Router {
+func (br *Connector) GetRouter() *http.ServeMux {
 	if br.GetPublicAddress() != "" {
 		return br.AS.Router
 	}
@@ -411,11 +466,15 @@ func (br *Connector) GhostIntent(userID networkid.UserID) bridgev2.MatrixAPI {
 func (br *Connector) SendBridgeStatus(ctx context.Context, state *status.BridgeState) error {
 	if br.Websocket {
 		br.hasSentAnyStates = true
-		return br.AS.SendWebsocket(&appservice.WebsocketRequest{
+		return br.AS.SendWebsocket(ctx, &appservice.WebsocketRequest{
 			Command: "bridge_status",
 			Data:    state,
 		})
 	} else if br.Config.Homeserver.StatusEndpoint != "" {
+		// Connecting states aren't really relevant unless the bridge runs somewhere with an unreliable network
+		if state.StateEvent == status.StateConnecting {
+			return nil
+		}
 		return state.SendHTTP(ctx, br.Config.Homeserver.StatusEndpoint, br.Config.AppService.ASToken)
 	} else {
 		return nil
@@ -433,7 +492,7 @@ func (br *Connector) internalSendMessageStatus(ctx context.Context, ms *bridgev2
 	log := zerolog.Ctx(ctx)
 
 	if !evt.IsSourceEventDoublePuppeted {
-		err := br.SendMessageCheckpoints([]*status.MessageCheckpoint{ms.ToCheckpoint(evt)})
+		err := br.SendMessageCheckpoints(ctx, []*status.MessageCheckpoint{ms.ToCheckpoint(evt)})
 		if err != nil {
 			log.Err(err).Msg("Failed to send message checkpoint")
 		}
@@ -478,11 +537,11 @@ func (br *Connector) internalSendMessageStatus(ctx context.Context, ms *bridgev2
 	return ""
 }
 
-func (br *Connector) SendMessageCheckpoints(checkpoints []*status.MessageCheckpoint) error {
+func (br *Connector) SendMessageCheckpoints(ctx context.Context, checkpoints []*status.MessageCheckpoint) error {
 	checkpointsJSON := status.CheckpointsJSON{Checkpoints: checkpoints}
 
 	if br.Websocket {
-		return br.AS.SendWebsocket(&appservice.WebsocketRequest{
+		return br.AS.SendWebsocket(ctx, &appservice.WebsocketRequest{
 			Command: "message_checkpoint",
 			Data:    checkpointsJSON,
 		})
@@ -493,7 +552,7 @@ func (br *Connector) SendMessageCheckpoints(checkpoints []*status.MessageCheckpo
 		return nil
 	}
 
-	return checkpointsJSON.SendHTTP(endpoint, br.AS.Registration.AppToken)
+	return checkpointsJSON.SendHTTP(ctx, br.AS.HTTPClient, endpoint, br.AS.Registration.AppToken)
 }
 
 func (br *Connector) ParseGhostMXID(userID id.UserID) (networkid.UserID, bool) {
@@ -531,6 +590,16 @@ func (br *Connector) BotIntent() bridgev2.MatrixAPI {
 
 func (br *Connector) GetPowerLevels(ctx context.Context, roomID id.RoomID) (*event.PowerLevelsEventContent, error) {
 	return br.Bot.PowerLevels(ctx, roomID)
+}
+
+func (br *Connector) GetStateEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string) (*event.Event, error) {
+	if eventType == event.StateCreate && stateKey == "" {
+		createEvt, err := br.Bot.StateStore.GetCreate(ctx, roomID)
+		if err != nil || createEvt != nil {
+			return createEvt, err
+		}
+	}
+	return br.Bot.FullStateEvent(ctx, roomID, eventType, "")
 }
 
 func (br *Connector) GetMembers(ctx context.Context, roomID id.RoomID) (map[id.UserID]*event.MemberEventContent, error) {
@@ -605,7 +674,7 @@ func (br *Connector) GenerateDeterministicEventID(roomID id.RoomID, _ networkid.
 	eventID[1+hashB64Len] = ':'
 	copy(eventID[1+hashB64Len+1:], br.deterministicEventIDServer)
 
-	return id.EventID(unsafe.String(unsafe.SliceData(eventID), len(eventID)))
+	return id.EventID(exbytes.UnsafeString(eventID))
 }
 
 func (br *Connector) GenerateDeterministicRoomID(key networkid.PortalKey) id.RoomID {

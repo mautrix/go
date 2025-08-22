@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	"go.mau.fi/util/exstrings"
 	"golang.org/x/net/html"
 
 	"github.com/iKonoTelecomunicaciones/go/event"
@@ -286,7 +287,10 @@ func (parser *HTMLParser) linkToString(node *html.Node, ctx Context) string {
 	}
 	if parser.LinkConverter != nil {
 		return parser.LinkConverter(str, href, ctx)
-	} else if str == href {
+	} else if str == href ||
+		str == strings.TrimPrefix(href, "mailto:") ||
+		str == strings.TrimPrefix(href, "http://") ||
+		str == strings.TrimPrefix(href, "https://") {
 		return str
 	}
 	return fmt.Sprintf("%s (%s)", str, href)
@@ -368,7 +372,7 @@ func (parser *HTMLParser) singleNodeToString(node *html.Node, ctx Context) Tagge
 	switch node.Type {
 	case html.TextNode:
 		if !ctx.PreserveWhitespace {
-			node.Data = strings.Replace(node.Data, "\n", "", -1)
+			node.Data = exstrings.CollapseSpaces(strings.ReplaceAll(node.Data, "\n", ""))
 		}
 		if parser.TextConverter != nil {
 			node.Data = parser.TextConverter(node.Data, ctx)
