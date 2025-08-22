@@ -12,26 +12,39 @@ import (
 	"time"
 
 	"go.mau.fi/util/dbutil"
+	"go.mau.fi/util/jsontime"
 
 	"maunium.net/go/mautrix/bridgev2/networkid"
+	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
-// DisappearingType represents the type of a disappearing message timer.
-type DisappearingType string
+// Deprecated: use [event.DisappearingType]
+type DisappearingType = event.DisappearingType
 
+// Deprecated: use constants in event package
 const (
-	DisappearingTypeNone      DisappearingType = ""
-	DisappearingTypeAfterRead DisappearingType = "after_read"
-	DisappearingTypeAfterSend DisappearingType = "after_send"
+	DisappearingTypeNone      = event.DisappearingTypeNone
+	DisappearingTypeAfterRead = event.DisappearingTypeAfterRead
+	DisappearingTypeAfterSend = event.DisappearingTypeAfterSend
 )
 
 // DisappearingSetting represents a disappearing message timer setting
 // by combining a type with a timer and an optional start timestamp.
 type DisappearingSetting struct {
-	Type        DisappearingType
+	Type        event.DisappearingType
 	Timer       time.Duration
 	DisappearAt time.Time
+}
+
+func (ds DisappearingSetting) ToEventContent() *event.BeeperDisappearingTimer {
+	if ds.Type == event.DisappearingTypeNone || ds.Timer == 0 {
+		return nil
+	}
+	return &event.BeeperDisappearingTimer{
+		Type:  ds.Type,
+		Timer: jsontime.MS(ds.Timer),
+	}
 }
 
 type DisappearingMessageQuery struct {

@@ -339,6 +339,7 @@ func (portal *Portal) compileBatchMessage(ctx context.Context, source *UserLogin
 	for i, part := range msg.Parts {
 		partIDs = append(partIDs, part.ID)
 		portal.applyRelationMeta(ctx, part.Content, replyTo, threadRoot, prevThreadEvent)
+		part.Content.BeeperDisappearingTimer = msg.Disappear.ToEventContent()
 		evtID := portal.Bridge.Matrix.GenerateDeterministicEventID(portal.MXID, portal.PortalKey, msg.ID, part.ID)
 		dbMessage := &database.Message{
 			ID:               msg.ID,
@@ -379,8 +380,8 @@ func (portal *Portal) compileBatchMessage(ctx context.Context, source *UserLogin
 			prevThreadEvent.MXID = evtID
 			out.PrevThreadEvents[*msg.ThreadRoot] = evtID
 		}
-		if msg.Disappear.Type != database.DisappearingTypeNone {
-			if msg.Disappear.Type == database.DisappearingTypeAfterSend && msg.Disappear.DisappearAt.IsZero() {
+		if msg.Disappear.Type != event.DisappearingTypeNone {
+			if msg.Disappear.Type == event.DisappearingTypeAfterSend && msg.Disappear.DisappearAt.IsZero() {
 				msg.Disappear.DisappearAt = msg.Timestamp.Add(msg.Disappear.Timer)
 			}
 			out.Disappear = append(out.Disappear, &database.DisappearingMessage{

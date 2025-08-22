@@ -1101,7 +1101,7 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 		}
 		portal.sendSuccessStatus(ctx, evt, resp.StreamOrder, message.MXID)
 	}
-	if portal.Disappear.Type != database.DisappearingTypeNone {
+	if portal.Disappear.Type != event.DisappearingTypeNone {
 		go portal.Bridge.DisappearLoop.Add(ctx, &database.DisappearingMessage{
 			RoomID:  portal.MXID,
 			EventID: message.MXID,
@@ -2281,6 +2281,7 @@ func (portal *Portal) sendConvertedMessage(
 	allSuccess := true
 	for i, part := range converted.Parts {
 		portal.applyRelationMeta(ctx, part.Content, replyTo, threadRoot, prevThreadEvent)
+		part.Content.BeeperDisappearingTimer = converted.Disappear.ToEventContent()
 		dbMessage := &database.Message{
 			ID:               id,
 			PartID:           part.ID,
@@ -2325,8 +2326,8 @@ func (portal *Portal) sendConvertedMessage(
 			logContext(log.Err(err)).Str("part_id", string(part.ID)).Msg("Failed to save message part to database")
 			allSuccess = false
 		}
-		if converted.Disappear.Type != database.DisappearingTypeNone && !dbMessage.HasFakeMXID() {
-			if converted.Disappear.Type == database.DisappearingTypeAfterSend && converted.Disappear.DisappearAt.IsZero() {
+		if converted.Disappear.Type != event.DisappearingTypeNone && !dbMessage.HasFakeMXID() {
+			if converted.Disappear.Type == event.DisappearingTypeAfterSend && converted.Disappear.DisappearAt.IsZero() {
 				converted.Disappear.DisappearAt = dbMessage.Timestamp.Add(converted.Disappear.Timer)
 			}
 			portal.Bridge.DisappearLoop.Add(ctx, &database.DisappearingMessage{
@@ -3648,6 +3649,15 @@ func (portal *Portal) UpdateCapabilities(ctx context.Context, source *UserLogin,
 	portal.CapState = database.CapabilityState{
 		Source: source.ID,
 		ID:     capID,
+		Flags:  portal.CapState.Flags,
+	}
+	if caps.DisappearingTimer != nil && !portal.CapState.Flags.Has(database.CapStateFlagDisappearingTimerSet) {
+		zerolog.Ctx(ctx).Debug().Msg("Disappearing timer capability was added, sending disappearing timer state event")
+		success = portal.sendRoomMeta(ctx, nil, time.Now(), event.StateBeeperDisappearingTimer, "", portal.Disappear.ToEventContent())
+		if !success {
+			return false
+		}
+		portal.CapState.Flags |= database.CapStateFlagDisappearingTimerSet
 	}
 	portal.lastCapUpdate = time.Now()
 	if implicit {
@@ -4030,7 +4040,7 @@ func DisappearingMessageNotice(expiration time.Duration, implicit bool) *event.M
 
 func (portal *Portal) UpdateDisappearingSetting(ctx context.Context, setting database.DisappearingSetting, sender MatrixAPI, ts time.Time, implicit, save bool) bool {
 	if setting.Timer == 0 {
-		setting.Type = ""
+		setting.Type = event.DisappearingTypeNone
 	}
 	if portal.Disappear.Timer == setting.Timer && portal.Disappear.Type == setting.Type {
 		return false
@@ -4046,6 +4056,9 @@ func (portal *Portal) UpdateDisappearingSetting(ctx context.Context, setting dat
 	if portal.MXID == "" {
 		return true
 	}
+
+	portal.sendRoomMeta(ctx, sender, ts, event.StateBeeperDisappearingTimer, "", setting.ToEventContent())
+
 	content := DisappearingMessageNotice(setting.Timer, implicit)
 	if sender == nil {
 		sender = portal.Bridge.Bot
@@ -4333,6 +4346,13 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 		Type:     event.StateBeeperRoomFeatures,
 		Content:  event.Content{Parsed: roomFeatures},
 	})
+	if roomFeatures.DisappearingTimer != nil {
+		req.InitialState = append(req.InitialState, &event.Event{
+			Type:    event.StateBeeperDisappearingTimer,
+			Content: event.Content{Parsed: portal.Disappear.ToEventContent()},
+		})
+		portal.CapState.Flags |= database.CapStateFlagDisappearingTimerSet
+	}
 	if req.Topic == "" {
 		// Add explicit topic event if topic is empty to ensure the event is set.
 		// This ensures that there won't be an extra event later if PUT /state/... is called.

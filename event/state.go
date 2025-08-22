@@ -10,6 +10,8 @@ import (
 	"encoding/base64"
 	"slices"
 
+	"go.mau.fi/util/jsontime"
+
 	"maunium.net/go/mautrix/id"
 )
 
@@ -205,6 +207,20 @@ type BridgeEventContent struct {
 
 	BeeperRoomType   string `json:"com.beeper.room_type,omitempty"`
 	BeeperRoomTypeV2 string `json:"com.beeper.room_type.v2,omitempty"`
+}
+
+// DisappearingType represents the type of a disappearing message timer.
+type DisappearingType string
+
+const (
+	DisappearingTypeNone      DisappearingType = ""
+	DisappearingTypeAfterRead DisappearingType = "after_read"
+	DisappearingTypeAfterSend DisappearingType = "after_send"
+)
+
+type BeeperDisappearingTimer struct {
+	Type  DisappearingType      `json:"type"`
+	Timer jsontime.Milliseconds `json:"timer"`
 }
 
 type SpaceChildEventContent struct {
