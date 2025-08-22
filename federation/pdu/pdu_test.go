@@ -71,12 +71,31 @@ var matrixOrg = serverDetails{
 		},
 	},
 }
+var continuwuityOrg = serverDetails{
+	serverName: "continuwuity.org",
+	keys: map[id.KeyID]serverKey{
+		"ed25519:PwHlNsFu": {
+			key:          "8eNx2s0zWW+heKAmOH5zKv/nCPkEpraDJfGHxDu6hFI",
+			validUntilTS: time.Now(),
+		},
+	},
+}
+var novaAstraltechOrg = serverDetails{
+	serverName: "nova.astraltech.org",
+	keys: map[id.KeyID]serverKey{
+		"ed25519:a_afpo": {
+			key:          "O1Y9GWuKo9xkuzuQef6gROxtTgxxAbS3WPNghPYXF3o",
+			validUntilTS: time.Now(),
+		},
+	},
+}
 
 type testPDU struct {
 	name        string
 	pdu         string
 	eventID     id.EventID
 	roomVersion id.RoomVersion
+	redacted    bool
 	serverDetails
 }
 
@@ -156,6 +175,13 @@ var testPDUs = []testPDU{roomV4MessageTestPDU, {
 	eventID:       "$kAagtZAIEeZaLVCUSl74tAxQbdKbE22GU7FM-iAJBc0",
 	roomVersion:   id.RoomV4,
 	serverDetails: mauniumNet,
+}, {
+	name:          "redacted m.room.member event in v11 room with 2 signatures",
+	pdu:           `{"auth_events":["$9f12-_stoY07BOTmyguE1QlqvghLBh9Rk6PWRLoZn_M","$IP8hyjBkIDREVadyv0fPCGAW9IXGNllaZyxqQwiY_tA","$7dN5J8EveliaPkX6_QSejl4GQtem4oieavgALMeWZyE"],"content":{"membership":"join"},"depth":96978,"hashes":{"sha256":"APYA/aj3u+P0EwNaEofuSIlfqY3cK3lBz6RkwHX+Zak"},"origin_server_ts":1755664164485,"prev_events":["$XBN9W5Ll8VEH3eYqJaemxCBTDdy0hZB0sWpmyoUp93c"],"room_id":"!main-1:continuwuity.org","sender":"@6a19abdd4766:nova.astraltech.org","state_key":"@6a19abdd4766:nova.astraltech.org","type":"m.room.member","signatures":{"continuwuity.org":{"ed25519:PwHlNsFu":"+b/Fp2vWnC+Z2lI3GnCu7ZHdo3iWNDZ2AJqMoU9owMtLBPMxs4dVIsJXvaFq0ryawsgwDwKZ7f4xaFUNARJSDg"},"nova.astraltech.org":{"ed25519:a_afpo":"pXIngyxKukCPR7WOIIy8FTZxQ5L2dLiou5Oc8XS4WyY4YzJuckQzOaToigLLZxamfbN/jXbO+XUizpRpYccDAA"}},"unsigned":{}}`,
+	eventID:       "$r6d9m125YWG28-Tln47bWtm6Jlv4mcSUWJTHijBlXLQ",
+	roomVersion:   id.RoomV11,
+	serverDetails: novaAstraltechOrg,
+	redacted:      true,
 }}
 
 func parsePDU(pdu string) (out *pdu.PDU) {

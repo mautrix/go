@@ -18,6 +18,9 @@ import (
 
 func TestPDU_CalculateContentHash(t *testing.T) {
 	for _, test := range testPDUs {
+		if test.redacted {
+			continue
+		}
 		t.Run(test.name, func(t *testing.T) {
 			parsed := parsePDU(test.pdu)
 			contentHash := exerrors.Must(parsed.CalculateContentHash())
@@ -32,6 +35,9 @@ func TestPDU_CalculateContentHash(t *testing.T) {
 
 func TestPDU_VerifyContentHash(t *testing.T) {
 	for _, test := range testPDUs {
+		if test.redacted {
+			continue
+		}
 		t.Run(test.name, func(t *testing.T) {
 			parsed := parsePDU(test.pdu)
 			assert.True(t, parsed.VerifyContentHash())
