@@ -45,6 +45,7 @@ type AnyPDU interface {
 	Sign(roomVersion id.RoomVersion, serverName string, keyID id.KeyID, privateKey ed25519.PrivateKey) error
 	VerifySignature(roomVersion id.RoomVersion, serverName string, getKey GetKeyFunc) error
 	ToClientEvent(roomVersion id.RoomVersion) (*event.Event, error)
+	AuthEventSelection(roomVersion id.RoomVersion) (keys AuthEventSelection)
 }
 
 var (

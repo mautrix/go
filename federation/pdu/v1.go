@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/tidwall/gjson"
 	"go.mau.fi/util/ptr"
 
 	"maunium.net/go/mautrix/event"
@@ -249,4 +250,28 @@ func (pdu *RoomV1PDU) ToClientEvent(roomVersion id.RoomVersion) (*event.Event, e
 		return nil, fmt.Errorf("failed to unmarshal content: %w", err)
 	}
 	return evt, nil
+}
+
+func (pdu *RoomV1PDU) AuthEventSelection(_ id.RoomVersion) (keys AuthEventSelection) {
+	if pdu.Type == event.StateCreate.Type && pdu.StateKey != nil {
+		return AuthEventSelection{}
+	}
+	keys = make(AuthEventSelection, 0, 3)
+	keys.Add(event.StateCreate.Type, "")
+	keys.Add(event.StatePowerLevels.Type, "")
+	keys.Add(event.StateMember.Type, pdu.Sender.String())
+	if pdu.Type == event.StateMember.Type && pdu.StateKey != nil {
+		keys.Add(event.StateMember.Type, *pdu.StateKey)
+		membership := event.Membership(gjson.GetBytes(pdu.Content, "membership").Str)
+		if membership == event.MembershipJoin || membership == event.MembershipInvite || membership == event.MembershipKnock {
+			keys.Add(event.StateJoinRules.Type, "")
+		}
+		if membership == event.MembershipInvite {
+			thirdPartyInviteToken := gjson.GetBytes(pdu.Content, thirdPartyInviteTokenPath).Str
+			if thirdPartyInviteToken != "" {
+				keys.Add(event.StateThirdPartyInvite.Type, thirdPartyInviteToken)
+			}
+		}
+	}
+	return
 }
