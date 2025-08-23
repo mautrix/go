@@ -28,7 +28,10 @@ type serverDetails struct {
 	keys       map[id.KeyID]serverKey
 }
 
-func (sd serverDetails) getKey(keyID id.KeyID, _ time.Time) (id.SigningKey, time.Time, error) {
+func (sd serverDetails) getKey(serverName string, keyID id.KeyID, _ time.Time) (id.SigningKey, time.Time, error) {
+	if serverName != sd.serverName {
+		return "", time.Time{}, nil
+	}
 	key, ok := sd.keys[keyID]
 	if ok {
 		return key.key, key.validUntilTS, nil

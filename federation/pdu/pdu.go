@@ -33,7 +33,7 @@ import (
 // valid at or after this time, but if that is not possible, the latest available key should be
 // returned without an error. The verify function will do its own validity checking based on the
 // returned valid until timestamp.
-type GetKeyFunc = func(keyID id.KeyID, minValidUntil time.Time) (key id.SigningKey, validUntil time.Time, err error)
+type GetKeyFunc = func(serverName string, keyID id.KeyID, minValidUntil time.Time) (key id.SigningKey, validUntil time.Time, err error)
 
 type AnyPDU interface {
 	GetRoomID() (id.RoomID, error)

@@ -73,7 +73,7 @@ func TestRoomV1PDU_VerifySignature(t *testing.T) {
 	for _, test := range testV1PDUs {
 		t.Run(test.name, func(t *testing.T) {
 			parsed := parseV1PDU(test.pdu)
-			err := parsed.VerifySignature(test.roomVersion, test.serverName, func(keyID id.KeyID, _ time.Time) (id.SigningKey, time.Time, error) {
+			err := parsed.VerifySignature(test.roomVersion, test.serverName, func(serverName string, keyID id.KeyID, _ time.Time) (id.SigningKey, time.Time, error) {
 				key, ok := test.keys[keyID]
 				if ok {
 					return key.key, key.validUntilTS, nil

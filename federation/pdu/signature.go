@@ -46,7 +46,7 @@ func (pdu *PDU) VerifySignature(roomVersion id.RoomVersion, serverName string, g
 	verified := false
 	for keyID, sig := range pdu.Signatures[serverName] {
 		originServerTS := time.UnixMilli(pdu.OriginServerTS)
-		key, validUntil, err := getKey(keyID, originServerTS)
+		key, validUntil, err := getKey(serverName, keyID, originServerTS)
 		if err != nil {
 			return fmt.Errorf("failed to get key %s for %s: %w", keyID, serverName, err)
 		} else if key == "" {

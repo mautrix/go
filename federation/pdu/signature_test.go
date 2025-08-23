@@ -36,7 +36,7 @@ func TestPDU_VerifySignature(t *testing.T) {
 func TestPDU_VerifySignature_Fail_NoKey(t *testing.T) {
 	test := roomV12MessageTestPDU
 	parsed := parsePDU(test.pdu)
-	err := parsed.VerifySignature(test.roomVersion, test.serverName, func(keyID id.KeyID, minValidUntil time.Time) (key id.SigningKey, validUntil time.Time, err error) {
+	err := parsed.VerifySignature(test.roomVersion, test.serverName, func(serverName string, keyID id.KeyID, minValidUntil time.Time) (key id.SigningKey, validUntil time.Time, err error) {
 		return
 	})
 	assert.Error(t, err)
@@ -45,7 +45,7 @@ func TestPDU_VerifySignature_Fail_NoKey(t *testing.T) {
 func TestPDU_VerifySignature_V4ExpiredKey(t *testing.T) {
 	test := roomV4MessageTestPDU
 	parsed := parsePDU(test.pdu)
-	err := parsed.VerifySignature(test.roomVersion, test.serverName, func(keyID id.KeyID, minValidUntil time.Time) (key id.SigningKey, validUntil time.Time, err error) {
+	err := parsed.VerifySignature(test.roomVersion, test.serverName, func(serverName string, keyID id.KeyID, minValidUntil time.Time) (key id.SigningKey, validUntil time.Time, err error) {
 		key = test.keys[keyID].key
 		validUntil = time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 		return
@@ -56,7 +56,7 @@ func TestPDU_VerifySignature_V4ExpiredKey(t *testing.T) {
 func TestPDU_VerifySignature_V12ExpiredKey(t *testing.T) {
 	test := roomV12MessageTestPDU
 	parsed := parsePDU(test.pdu)
-	err := parsed.VerifySignature(test.roomVersion, test.serverName, func(keyID id.KeyID, minValidUntil time.Time) (key id.SigningKey, validUntil time.Time, err error) {
+	err := parsed.VerifySignature(test.roomVersion, test.serverName, func(serverName string, keyID id.KeyID, minValidUntil time.Time) (key id.SigningKey, validUntil time.Time, err error) {
 		key = test.keys[keyID].key
 		validUntil = time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 		return
@@ -90,8 +90,8 @@ func TestPDU_Sign(t *testing.T) {
 	}
 	err := evt.Sign(id.RoomV12, "example.com", "ed25519:rand", privKey)
 	require.NoError(t, err)
-	err = evt.VerifySignature(id.RoomV11, "example.com", func(keyID id.KeyID, minValidUntil time.Time) (key id.SigningKey, validUntil time.Time, err error) {
-		if keyID == "ed25519:rand" {
+	err = evt.VerifySignature(id.RoomV11, "example.com", func(serverName string, keyID id.KeyID, minValidUntil time.Time) (key id.SigningKey, validUntil time.Time, err error) {
+		if serverName == "example.com" && keyID == "ed25519:rand" {
 			key = id.SigningKey(base64.RawStdEncoding.EncodeToString(pubKey))
 			validUntil = time.Now()
 		}
