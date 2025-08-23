@@ -53,5 +53,5 @@ type ThirdPartyInvite struct {
 		Token      string          `json:"token"`
 		Signatures json.RawMessage `json:"signatures"`
 		MXID       string          `json:"mxid"`
-	}
+	} `json:"signed"`
 }
