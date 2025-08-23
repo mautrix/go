@@ -28,10 +28,6 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-var (
-	ErrInvalidUserID = errors.New("invalid user ID")
-)
-
 type ErrAuthFail struct {
 	Index   string
 	Message string
@@ -122,8 +118,7 @@ var (
 )
 
 func isRejected(evt *pdu.PDU) bool {
-	// TODO figure out what's the best way for the caller of Authorize to provide this information
-	panic("not implemented yet")
+	return evt.InternalMeta.Rejected
 }
 
 type GetEventsFunc = func(ids []id.EventID) ([]*pdu.PDU, error)

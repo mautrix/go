@@ -53,6 +53,10 @@ var (
 	_ AnyPDU = (*RoomV1PDU)(nil)
 )
 
+type InternalMeta struct {
+	Rejected bool `json:"rejected,omitempty"`
+}
+
 type PDU struct {
 	AuthEvents     []id.EventID                   `json:"auth_events"`
 	Content        jsontext.Value                 `json:"content"`
@@ -67,6 +71,7 @@ type PDU struct {
 	StateKey       *string                        `json:"state_key,omitzero"`
 	Type           string                         `json:"type"`
 	Unsigned       jsontext.Value                 `json:"unsigned,omitzero"`
+	InternalMeta   InternalMeta                   `json:"-"`
 
 	Unknown jsontext.Value `json:",unknown"`
 
