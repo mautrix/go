@@ -638,22 +638,21 @@ func authorizePowerLevels(roomVersion id.RoomVersion, evt, createEvt *pdu.PDU, a
 		}
 	}
 	if err := allowPowerChangeMap(
-		roomVersion, *senderPLPtr, "events",
+		roomVersion, *senderPLPtr, "events", "",
 		gjson.GetBytes(oldPL.Content, "events"),
 		gjson.GetBytes(evt.Content, "events"),
 	); err != nil {
 		return err
 	}
 	if err := allowPowerChangeMap(
-		roomVersion, *senderPLPtr, "notifications",
+		roomVersion, *senderPLPtr, "notifications", "",
 		gjson.GetBytes(oldPL.Content, "notifications"),
 		gjson.GetBytes(evt.Content, "notifications"),
 	); err != nil {
 		return err
 	}
-	// FIXME don't allow demoting users with equal PL
 	if err := allowPowerChangeMap(
-		roomVersion, *senderPLPtr, "users",
+		roomVersion, *senderPLPtr, "users", evt.Sender.String(),
 		gjson.GetBytes(oldPL.Content, "users"),
 		gjson.GetBytes(evt.Content, "users"),
 	); err != nil {
@@ -662,9 +661,16 @@ func authorizePowerLevels(roomVersion id.RoomVersion, evt, createEvt *pdu.PDU, a
 	return nil
 }
 
-func allowPowerChangeMap(roomVersion id.RoomVersion, maxVal int, path string, old, new gjson.Result) (err error) {
+func allowPowerChangeMap(roomVersion id.RoomVersion, maxVal int, ownID, path string, old, new gjson.Result) (err error) {
 	old.ForEach(func(key, value gjson.Result) bool {
-		err = allowPowerChange(roomVersion, maxVal, path+"."+key.Str, value, new.Get(exgjson.Path(key.Path(key.Str))))
+		newVal := new.Get(exgjson.Path(key.Path(key.Str)))
+		err = allowPowerChange(roomVersion, maxVal, path+"."+key.Str, value, newVal)
+		if err == nil && ownID != "" {
+			val := parseIntWithVersion(roomVersion, value)
+			if *val >= maxVal {
+				err = fmt.Errorf("%w can't change users.%s from %s to %s with sender level %d", ErrInvalidPowerChange, key.Str, stringifyForError(value), stringifyForError(newVal), maxVal)
+			}
+		}
 		return err == nil
 	})
 	if err != nil {
