@@ -355,7 +355,7 @@ func authorizeMember(roomVersion id.RoomVersion, evt, createEvt *pdu.PDU, authEv
 			fallthrough
 		case event.JoinRuleInvite:
 			// 5.3.4. If the join_rule is invite or knock then allow if membership state is invite or join.
-			if targetPrevMembership == event.MembershipJoin || targetPrevMembership == event.MembershipLeave {
+			if targetPrevMembership == event.MembershipJoin || targetPrevMembership == event.MembershipInvite {
 				return nil
 			}
 			return ErrCantJoinWithoutInvite
@@ -368,7 +368,7 @@ func authorizeMember(roomVersion id.RoomVersion, evt, createEvt *pdu.PDU, authEv
 			if joinRule == event.JoinRuleRestricted && !roomVersion.RestrictedJoins() {
 				return ErrInvalidJoinRule
 			}
-			if targetPrevMembership == event.MembershipJoin || targetPrevMembership == event.MembershipLeave {
+			if targetPrevMembership == event.MembershipJoin || targetPrevMembership == event.MembershipInvite {
 				// 5.3.5.1. If membership state is join or invite, allow.
 				return nil
 			}
