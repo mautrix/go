@@ -13,6 +13,7 @@ import (
 	"encoding/json/jsontext"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -111,6 +112,13 @@ var (
 	ErrInsufficientPowerLevel = ErrAuthFail{Index: "8", Message: "sender does not have sufficient power level to send event"}
 
 	ErrMismatchingPrivateStateKey = ErrAuthFail{Index: "9", Message: "state keys starting with @ must match sender user ID"}
+
+	ErrTopLevelPLNotInteger = ErrAuthFail{Index: "10.1", Message: "invalid type for top-level power level field"}
+	ErrPLNotInteger         = ErrAuthFail{Index: "10.2", Message: "invalid type for power level"}
+	ErrInvalidUserIDInPL    = ErrAuthFail{Index: "10.3", Message: "invalid user ID in power levels"}
+	ErrUserPLNotInteger     = ErrAuthFail{Index: "10.3", Message: "invalid type for user power level"}
+	ErrCreatorInPowerLevels = ErrAuthFail{Index: "10.4", Message: "room creators must not be specified in power levels"}
+	ErrInvalidPowerChange   = ErrAuthFail{Index: "10.x", Message: "illegal power level change"}
 )
 
 func isRejected(evt *pdu.PDU) bool {
@@ -235,6 +243,21 @@ func Authorize(roomVersion id.RoomVersion, evt *pdu.PDU, getEvents GetEventsFunc
 	return nil
 }
 
+var ErrUserIDNotAString = errors.New("not a string")
+var ErrUserIDNotValid = errors.New("not a valid user ID")
+
+func isValidUserID(roomVersion id.RoomVersion, userID gjson.Result) error {
+	if userID.Type != gjson.String {
+		return ErrUserIDNotAString
+	}
+	// In a future room version, user IDs will have stricter validation
+	_, _, err := id.UserID(userID.Str).Parse()
+	if err != nil {
+		return ErrUserIDNotValid
+	}
+	return nil
+}
+
 func authorizeCreate(roomVersion id.RoomVersion, evt *pdu.PDU) error {
 	if len(evt.PrevEvents) > 0 {
 		// 1.1. If it has any prev_events, reject.
@@ -265,12 +288,8 @@ func authorizeCreate(roomVersion id.RoomVersion, evt *pdu.PDU) error {
 			for i, item := range additionalCreators.Array() {
 				// 1.4. If additional_creators is present in content and is not an array of strings
 				//      where each string passes the same user ID validation applied to sender, reject.
-				if item.Type != gjson.String {
-					return fmt.Errorf("%w: item #%d is not a string", ErrInvalidAdditionalCreators, i+1)
-				}
-				_, _, err := id.UserID(item.Str).Parse()
-				if err != nil {
-					return fmt.Errorf("%w: item #%d is not a valid user ID", ErrInvalidAdditionalCreators, i+1)
+				if err := isValidUserID(roomVersion, item); err != nil {
+					return fmt.Errorf("%w: item #%d %w", ErrInvalidAdditionalCreators, i+1, err)
 				}
 			}
 		}
@@ -285,7 +304,7 @@ func authorizeCreate(roomVersion id.RoomVersion, evt *pdu.PDU) error {
 	return nil
 }
 
-func authorizeMember(roomVersion id.RoomVersion, evt *pdu.PDU, createEvt *pdu.PDU, authEvents []*pdu.PDU, getKey pdu.GetKeyFunc) error {
+func authorizeMember(roomVersion id.RoomVersion, evt, createEvt *pdu.PDU, authEvents []*pdu.PDU, getKey pdu.GetKeyFunc) error {
 	membership := event.Membership(gjson.GetBytes(evt.Content, "membership").Str)
 	if evt.StateKey == nil {
 		// 5.1. If there is no state_key property, or no membership property in content, reject.
@@ -381,9 +400,9 @@ func authorizeMember(roomVersion id.RoomVersion, evt *pdu.PDU, createEvt *pdu.PD
 			if targetPrevMembership == event.MembershipBan {
 				return ErrThirdPartyInviteBanned
 			}
-			signed := gjson.Get(tpiVal.Raw, "signed")
-			mxid := gjson.Get(signed.Raw, "mxid").Str
-			token := gjson.Get(signed.Raw, "token").Str
+			signed := tpiVal.Get("signed")
+			mxid := signed.Get("mxid").Str
+			token := signed.Get("token").Str
 			if mxid == "" || token == "" {
 				// 5.4.1.2. If content.third_party_invite does not have a signed property, reject.
 				// 5.4.1.3. If signed does not have mxid and token properties, reject.
@@ -521,8 +540,165 @@ func authorizeMember(roomVersion id.RoomVersion, evt *pdu.PDU, createEvt *pdu.PD
 	}
 }
 
-func authorizePowerLevels(version id.RoomVersion, evt *pdu.PDU, evt2 *pdu.PDU, events []*pdu.PDU) error {
-	panic("not implemented")
+func authorizePowerLevels(roomVersion id.RoomVersion, evt, createEvt *pdu.PDU, authEvents []*pdu.PDU) error {
+	if roomVersion.ValidatePowerLevelInts() {
+		for _, key := range []string{"users_default", "events_default", "state_default", "ban", "redact", "kick", "invite"} {
+			res := gjson.GetBytes(evt.Content, key)
+			if !res.Exists() {
+				continue
+			}
+			if parseIntWithVersion(roomVersion, res) == nil {
+				// 10.1. If any of the properties users_default, events_default, state_default, ban, redact, kick, or invite in content are present and not an integer, reject.
+				return fmt.Errorf("%w %s", ErrTopLevelPLNotInteger, key)
+			}
+		}
+		for _, key := range []string{"events", "notifications"} {
+			obj := gjson.GetBytes(evt.Content, key)
+			if !obj.Exists() {
+				continue
+			}
+			// 10.2. If either of the properties events or notifications in content are present and not an object [...], reject.
+			if !obj.IsObject() {
+				return fmt.Errorf("%w %s", ErrTopLevelPLNotInteger, key)
+			}
+			var err error
+			// 10.2. [...] are not an object with values that are integers, reject.
+			obj.ForEach(func(innerKey, value gjson.Result) bool {
+				if parseIntWithVersion(roomVersion, value) == nil {
+					err = fmt.Errorf("%w %s.%s", ErrPLNotInteger, key, innerKey.Str)
+					return false
+				}
+				return true
+			})
+			if err != nil {
+				return err
+			}
+		}
+	}
+	var creators []id.UserID
+	if roomVersion.PrivilegedRoomCreators() {
+		creators = append(creators, createEvt.Sender)
+		gjson.GetBytes(createEvt.Content, "additional_creators").ForEach(func(key, value gjson.Result) bool {
+			creators = append(creators, id.UserID(value.Str))
+			return true
+		})
+	}
+	users := gjson.GetBytes(evt.Content, "users")
+	if users.Exists() {
+		if !users.IsObject() {
+			// 10.3. If the users property in content is not an object [...], reject.
+			return fmt.Errorf("%w users", ErrTopLevelPLNotInteger)
+		}
+		var err error
+		users.ForEach(func(key, value gjson.Result) bool {
+			if validatorErr := isValidUserID(roomVersion, key); validatorErr != nil {
+				// 10.3. [...] is not an object with keys that are valid user IDs [...], reject.
+				err = fmt.Errorf("%w: %q %w", ErrInvalidUserIDInPL, key.Str, validatorErr)
+				return false
+			}
+			if parseIntWithVersion(roomVersion, value) == nil {
+				// 10.3. [...] is not an object [...] with values that are integers, reject.
+				err = fmt.Errorf("%w %q", ErrUserPLNotInteger, key.Str)
+				return false
+			}
+			// creators is only filled if the room version has privileged room creators
+			if slices.Contains(creators, id.UserID(key.Str)) {
+				// 10.4. If the users property in content contains the sender of the m.room.create event or any of
+				//       the additional_creators array (if present) from the content of the m.room.create event, reject.
+				err = fmt.Errorf("%w: %q", ErrCreatorInPowerLevels, key.Str)
+				return false
+			}
+			return true
+		})
+		if err != nil {
+			return err
+		}
+	}
+	oldPL := findEvent(authEvents, event.StatePowerLevels.Type, "")
+	if oldPL == nil {
+		// 10.5. If there is no previous m.room.power_levels event in the room, allow.
+		return nil
+	}
+	if slices.Contains(creators, evt.Sender) {
+		// Skip remaining checks for creators
+		return nil
+	}
+	senderPLPtr := parsePythonInt(gjson.GetBytes(oldPL.Content, exgjson.Path("users", evt.Sender.String())))
+	if senderPLPtr == nil {
+		senderPLPtr = parsePythonInt(gjson.GetBytes(oldPL.Content, "users_default"))
+		if senderPLPtr == nil {
+			senderPLPtr = ptr.Ptr(0)
+		}
+	}
+	for _, key := range []string{"users_default", "events_default", "state_default", "ban", "redact", "kick", "invite"} {
+		oldVal := gjson.GetBytes(oldPL.Content, key)
+		newVal := gjson.GetBytes(evt.Content, key)
+		if err := allowPowerChange(roomVersion, *senderPLPtr, key, oldVal, newVal); err != nil {
+			return err
+		}
+	}
+	if err := allowPowerChangeMap(
+		roomVersion, *senderPLPtr, "events",
+		gjson.GetBytes(oldPL.Content, "events"),
+		gjson.GetBytes(evt.Content, "events"),
+	); err != nil {
+		return err
+	}
+	if err := allowPowerChangeMap(
+		roomVersion, *senderPLPtr, "notifications",
+		gjson.GetBytes(oldPL.Content, "notifications"),
+		gjson.GetBytes(evt.Content, "notifications"),
+	); err != nil {
+		return err
+	}
+	// FIXME don't allow demoting users with equal PL
+	if err := allowPowerChangeMap(
+		roomVersion, *senderPLPtr, "users",
+		gjson.GetBytes(oldPL.Content, "users"),
+		gjson.GetBytes(evt.Content, "users"),
+	); err != nil {
+		return err
+	}
+	return nil
+}
+
+func allowPowerChangeMap(roomVersion id.RoomVersion, maxVal int, path string, old, new gjson.Result) (err error) {
+	old.ForEach(func(key, value gjson.Result) bool {
+		err = allowPowerChange(roomVersion, maxVal, path+"."+key.Str, value, new.Get(exgjson.Path(key.Path(key.Str))))
+		return err == nil
+	})
+	if err != nil {
+		return
+	}
+	new.ForEach(func(key, value gjson.Result) bool {
+		err = allowPowerChange(roomVersion, maxVal, path+"."+key.Str, old.Get(exgjson.Path(key.Path(key.Str))), value)
+		return err == nil
+	})
+	return
+}
+
+func allowPowerChange(roomVersion id.RoomVersion, maxVal int, path string, old, new gjson.Result) error {
+	oldVal := parseIntWithVersion(roomVersion, old)
+	newVal := parseIntWithVersion(roomVersion, new)
+	if oldVal == nil {
+		if newVal == nil || *newVal <= maxVal {
+			return nil
+		}
+	} else if newVal == nil {
+		if *oldVal <= maxVal {
+			return nil
+		}
+	} else if *oldVal == *newVal || (*oldVal <= maxVal && *newVal <= maxVal) {
+		return nil
+	}
+	return fmt.Errorf("%w can't change %s from %s to %s with sender level %d", ErrInvalidPowerChange, path, stringifyForError(old), stringifyForError(new), maxVal)
+}
+
+func stringifyForError(val gjson.Result) string {
+	if !val.Exists() {
+		return "null"
+	}
+	return val.Raw
 }
 
 func findEvent(events []*pdu.PDU, evtType, stateKey string) *pdu.PDU {
@@ -576,6 +752,16 @@ func getPowerLevels(roomVersion id.RoomVersion, authEvents []*pdu.PDU, createEvt
 		}
 	}
 	return &powerLevels, nil
+}
+
+func parseIntWithVersion(roomVersion id.RoomVersion, val gjson.Result) *int {
+	if roomVersion.ValidatePowerLevelInts() {
+		if val.Type != gjson.Number {
+			return nil
+		}
+		return ptr.Ptr(int(val.Int()))
+	}
+	return parsePythonInt(val)
 }
 
 func parsePythonInt(val gjson.Result) *int {
