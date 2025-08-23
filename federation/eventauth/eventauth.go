@@ -28,93 +28,93 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-type ErrAuthFail struct {
+type AuthFailError struct {
 	Index   string
 	Message string
 	Wrapped error
 }
 
-func (eaf ErrAuthFail) Error() string {
-	if eaf.Message != "" {
-		return fmt.Sprintf("fail %s: %s", eaf.Index, eaf.Message)
-	} else if eaf.Wrapped != nil {
-		return fmt.Sprintf("fail %s: %s", eaf.Index, eaf.Wrapped.Error())
+func (afe AuthFailError) Error() string {
+	if afe.Message != "" {
+		return fmt.Sprintf("fail %s: %s", afe.Index, afe.Message)
+	} else if afe.Wrapped != nil {
+		return fmt.Sprintf("fail %s: %s", afe.Index, afe.Wrapped.Error())
 	}
-	return fmt.Sprintf("fail %s", eaf.Index)
+	return fmt.Sprintf("fail %s", afe.Index)
 }
 
-func (eaf ErrAuthFail) Unwrap() error {
-	return eaf.Wrapped
+func (afe AuthFailError) Unwrap() error {
+	return afe.Wrapped
 }
 
 var mFederatePath = exgjson.Path("m.federate")
 
 var (
-	ErrCreateHasPrevEvents       = ErrAuthFail{Index: "1.1", Message: "m.room.create event has prev_events"}
-	ErrCreateHasRoomID           = ErrAuthFail{Index: "1.2", Message: "m.room.create event has room_id set"}
-	ErrRoomIDDoesntMatchSender   = ErrAuthFail{Index: "1.2", Message: "room ID server doesn't match sender server"}
-	ErrUnknownRoomVersion        = ErrAuthFail{Index: "1.3", Wrapped: id.ErrUnknownRoomVersion}
-	ErrInvalidAdditionalCreators = ErrAuthFail{Index: "1.4", Message: "m.room.create event has invalid additional_creators"}
-	ErrMissingCreator            = ErrAuthFail{Index: "1.4", Message: "m.room.create event is missing creator field"}
+	ErrCreateHasPrevEvents       = AuthFailError{Index: "1.1", Message: "m.room.create event has prev_events"}
+	ErrCreateHasRoomID           = AuthFailError{Index: "1.2", Message: "m.room.create event has room_id set"}
+	ErrRoomIDDoesntMatchSender   = AuthFailError{Index: "1.2", Message: "room ID server doesn't match sender server"}
+	ErrUnknownRoomVersion        = AuthFailError{Index: "1.3", Wrapped: id.ErrUnknownRoomVersion}
+	ErrInvalidAdditionalCreators = AuthFailError{Index: "1.4", Message: "m.room.create event has invalid additional_creators"}
+	ErrMissingCreator            = AuthFailError{Index: "1.4", Message: "m.room.create event is missing creator field"}
 
-	ErrInvalidRoomIDLength    = ErrAuthFail{Index: "2", Message: "room ID length is invalid"}
-	ErrFailedToGetCreateEvent = ErrAuthFail{Index: "2", Message: "failed to get m.room.create event"}
-	ErrCreateEventNotFound    = ErrAuthFail{Index: "2", Message: "m.room.create event not found using room ID as event ID"}
-	ErrRejectedCreateEvent    = ErrAuthFail{Index: "2", Message: "m.room.create event was rejected"}
+	ErrInvalidRoomIDLength    = AuthFailError{Index: "2", Message: "room ID length is invalid"}
+	ErrFailedToGetCreateEvent = AuthFailError{Index: "2", Message: "failed to get m.room.create event"}
+	ErrCreateEventNotFound    = AuthFailError{Index: "2", Message: "m.room.create event not found using room ID as event ID"}
+	ErrRejectedCreateEvent    = AuthFailError{Index: "2", Message: "m.room.create event was rejected"}
 
-	ErrFailedToGetAuthEvents        = ErrAuthFail{Index: "3", Message: "failed to get auth events"}
-	ErrFailedToParsePowerLevels     = ErrAuthFail{Index: "?", Message: "failed to parse power levels"}
-	ErrDuplicateAuthEvent           = ErrAuthFail{Index: "3.1", Message: "duplicate type/state key pair in auth events"}
-	ErrNonStateAuthEvent            = ErrAuthFail{Index: "3.2", Message: "non-state event in auth events"}
-	ErrUnexpectedAuthEvent          = ErrAuthFail{Index: "3.2", Message: "unexpected type/state key pair in auth events"}
-	ErrNoCreateEvent                = ErrAuthFail{Index: "3.2", Message: "no m.room.create event found in auth events"}
-	ErrRejectedAuthEvent            = ErrAuthFail{Index: "3.3", Message: "auth event was rejected"}
-	ErrMismatchingRoomIDInAuthEvent = ErrAuthFail{Index: "3.4", Message: "auth event room ID does not match event room ID"}
+	ErrFailedToGetAuthEvents        = AuthFailError{Index: "3", Message: "failed to get auth events"}
+	ErrFailedToParsePowerLevels     = AuthFailError{Index: "?", Message: "failed to parse power levels"}
+	ErrDuplicateAuthEvent           = AuthFailError{Index: "3.1", Message: "duplicate type/state key pair in auth events"}
+	ErrNonStateAuthEvent            = AuthFailError{Index: "3.2", Message: "non-state event in auth events"}
+	ErrUnexpectedAuthEvent          = AuthFailError{Index: "3.2", Message: "unexpected type/state key pair in auth events"}
+	ErrNoCreateEvent                = AuthFailError{Index: "3.2", Message: "no m.room.create event found in auth events"}
+	ErrRejectedAuthEvent            = AuthFailError{Index: "3.3", Message: "auth event was rejected"}
+	ErrMismatchingRoomIDInAuthEvent = AuthFailError{Index: "3.4", Message: "auth event room ID does not match event room ID"}
 
-	ErrFederationDisabled = ErrAuthFail{Index: "4", Message: "federation is disabled for this room"}
+	ErrFederationDisabled = AuthFailError{Index: "4", Message: "federation is disabled for this room"}
 
-	ErrMemberNotState                  = ErrAuthFail{Index: "5.1", Message: "m.room.member event is not a state event"}
-	ErrNotSignedByAuthoriser           = ErrAuthFail{Index: "5.2", Message: "m.room.member event is not signed by server of join_authorised_via_users_server"}
-	ErrCantJoinOtherUser               = ErrAuthFail{Index: "5.3.2", Message: "can't send join event with different state key"}
-	ErrCantJoinBanned                  = ErrAuthFail{Index: "5.3.3", Message: "user is banned from the room"}
-	ErrAuthoriserCantInvite            = ErrAuthFail{Index: "5.3.5.2", Message: "authoriser doesn't have sufficient power level to invite"}
-	ErrCantJoinWithoutInvite           = ErrAuthFail{Index: "5.3.7", Message: "can't join invite-only room without invite"}
-	ErrInvalidJoinRule                 = ErrAuthFail{Index: "5.3.7", Message: "invalid join rule in room"}
-	ErrThirdPartyInviteBanned          = ErrAuthFail{Index: "5.4.1.1", Message: "third party invite target user is banned"}
-	ErrThirdPartyInviteMissingFields   = ErrAuthFail{Index: "5.4.1.3", Message: "third party invite is missing mxid or token fields"}
-	ErrThirdPartyInviteMXIDMismatch    = ErrAuthFail{Index: "5.4.1.4", Message: "mxid in signed third party invite doesn't match event state key"}
-	ErrThirdPartyInviteNotFound        = ErrAuthFail{Index: "5.4.1.5", Message: "matching m.room.third_party_invite event not found in auth events"}
-	ErrThirdPartyInviteSenderMismatch  = ErrAuthFail{Index: "5.4.1.6", Message: "sender of third party invite doesn't match sender of member event"}
-	ErrThirdPartyInviteNotSigned       = ErrAuthFail{Index: "5.4.1.8", Message: "no valid signatures found for third party invite"}
-	ErrInviterNotInRoom                = ErrAuthFail{Index: "5.4.2", Message: "inviter's membership is not join"}
-	ErrInviteTargetAlreadyInRoom       = ErrAuthFail{Index: "5.4.3", Message: "invite target user is already in the room"}
-	ErrInviteTargetBanned              = ErrAuthFail{Index: "5.4.3", Message: "invite target user is banned"}
-	ErrInsufficientPermissionForInvite = ErrAuthFail{Index: "5.4.5", Message: "inviter does not have sufficient permission to send invites"}
-	ErrCantLeaveWithoutBeingInRoom     = ErrAuthFail{Index: "5.5.1", Message: "can't leave room without being in it"}
-	ErrCantKickWithoutBeingInRoom      = ErrAuthFail{Index: "5.5.2", Message: "can't kick another user without being in the room"}
-	ErrInsufficientPermissionForUnban  = ErrAuthFail{Index: "5.5.3", Message: "sender does not have sufficient permission to unban users"}
-	ErrInsufficientPermissionForKick   = ErrAuthFail{Index: "5.5.5", Message: "sender does not have sufficient permission to kick the user"}
-	ErrCantBanWithoutBeingInRoom       = ErrAuthFail{Index: "5.6.1", Message: "can't ban another user without being in the room"}
-	ErrInsufficientPermissionForBan    = ErrAuthFail{Index: "5.6.3", Message: "sender does not have sufficient permission to ban the user"}
-	ErrNotKnockableRoom                = ErrAuthFail{Index: "5.7.1", Message: "join rule doesn't allow knocking"}
-	ErrCantKnockOtherUser              = ErrAuthFail{Index: "5.7.1", Message: "can't send knock event with different state key"}
-	ErrCantKnockWhileInRoom            = ErrAuthFail{Index: "5.7.2", Message: "can't knock while joined, invited or banned"}
-	ErrUnknownMembership               = ErrAuthFail{Index: "5.8", Message: "unknown membership in m.room.member event"}
+	ErrMemberNotState                  = AuthFailError{Index: "5.1", Message: "m.room.member event is not a state event"}
+	ErrNotSignedByAuthoriser           = AuthFailError{Index: "5.2", Message: "m.room.member event is not signed by server of join_authorised_via_users_server"}
+	ErrCantJoinOtherUser               = AuthFailError{Index: "5.3.2", Message: "can't send join event with different state key"}
+	ErrCantJoinBanned                  = AuthFailError{Index: "5.3.3", Message: "user is banned from the room"}
+	ErrAuthoriserCantInvite            = AuthFailError{Index: "5.3.5.2", Message: "authoriser doesn't have sufficient power level to invite"}
+	ErrCantJoinWithoutInvite           = AuthFailError{Index: "5.3.7", Message: "can't join invite-only room without invite"}
+	ErrInvalidJoinRule                 = AuthFailError{Index: "5.3.7", Message: "invalid join rule in room"}
+	ErrThirdPartyInviteBanned          = AuthFailError{Index: "5.4.1.1", Message: "third party invite target user is banned"}
+	ErrThirdPartyInviteMissingFields   = AuthFailError{Index: "5.4.1.3", Message: "third party invite is missing mxid or token fields"}
+	ErrThirdPartyInviteMXIDMismatch    = AuthFailError{Index: "5.4.1.4", Message: "mxid in signed third party invite doesn't match event state key"}
+	ErrThirdPartyInviteNotFound        = AuthFailError{Index: "5.4.1.5", Message: "matching m.room.third_party_invite event not found in auth events"}
+	ErrThirdPartyInviteSenderMismatch  = AuthFailError{Index: "5.4.1.6", Message: "sender of third party invite doesn't match sender of member event"}
+	ErrThirdPartyInviteNotSigned       = AuthFailError{Index: "5.4.1.8", Message: "no valid signatures found for third party invite"}
+	ErrInviterNotInRoom                = AuthFailError{Index: "5.4.2", Message: "inviter's membership is not join"}
+	ErrInviteTargetAlreadyInRoom       = AuthFailError{Index: "5.4.3", Message: "invite target user is already in the room"}
+	ErrInviteTargetBanned              = AuthFailError{Index: "5.4.3", Message: "invite target user is banned"}
+	ErrInsufficientPermissionForInvite = AuthFailError{Index: "5.4.5", Message: "inviter does not have sufficient permission to send invites"}
+	ErrCantLeaveWithoutBeingInRoom     = AuthFailError{Index: "5.5.1", Message: "can't leave room without being in it"}
+	ErrCantKickWithoutBeingInRoom      = AuthFailError{Index: "5.5.2", Message: "can't kick another user without being in the room"}
+	ErrInsufficientPermissionForUnban  = AuthFailError{Index: "5.5.3", Message: "sender does not have sufficient permission to unban users"}
+	ErrInsufficientPermissionForKick   = AuthFailError{Index: "5.5.5", Message: "sender does not have sufficient permission to kick the user"}
+	ErrCantBanWithoutBeingInRoom       = AuthFailError{Index: "5.6.1", Message: "can't ban another user without being in the room"}
+	ErrInsufficientPermissionForBan    = AuthFailError{Index: "5.6.3", Message: "sender does not have sufficient permission to ban the user"}
+	ErrNotKnockableRoom                = AuthFailError{Index: "5.7.1", Message: "join rule doesn't allow knocking"}
+	ErrCantKnockOtherUser              = AuthFailError{Index: "5.7.1", Message: "can't send knock event with different state key"}
+	ErrCantKnockWhileInRoom            = AuthFailError{Index: "5.7.2", Message: "can't knock while joined, invited or banned"}
+	ErrUnknownMembership               = AuthFailError{Index: "5.8", Message: "unknown membership in m.room.member event"}
 
-	ErrNotInRoom = ErrAuthFail{Index: "6", Message: "sender is not a member of the room"}
+	ErrNotInRoom = AuthFailError{Index: "6", Message: "sender is not a member of the room"}
 
-	ErrInsufficientPowerForThirdPartyInvite = ErrAuthFail{Index: "7.1", Message: "sender does not have sufficient power level to send third party invite"}
+	ErrInsufficientPowerForThirdPartyInvite = AuthFailError{Index: "7.1", Message: "sender does not have sufficient power level to send third party invite"}
 
-	ErrInsufficientPowerLevel = ErrAuthFail{Index: "8", Message: "sender does not have sufficient power level to send event"}
+	ErrInsufficientPowerLevel = AuthFailError{Index: "8", Message: "sender does not have sufficient power level to send event"}
 
-	ErrMismatchingPrivateStateKey = ErrAuthFail{Index: "9", Message: "state keys starting with @ must match sender user ID"}
+	ErrMismatchingPrivateStateKey = AuthFailError{Index: "9", Message: "state keys starting with @ must match sender user ID"}
 
-	ErrTopLevelPLNotInteger = ErrAuthFail{Index: "10.1", Message: "invalid type for top-level power level field"}
-	ErrPLNotInteger         = ErrAuthFail{Index: "10.2", Message: "invalid type for power level"}
-	ErrInvalidUserIDInPL    = ErrAuthFail{Index: "10.3", Message: "invalid user ID in power levels"}
-	ErrUserPLNotInteger     = ErrAuthFail{Index: "10.3", Message: "invalid type for user power level"}
-	ErrCreatorInPowerLevels = ErrAuthFail{Index: "10.4", Message: "room creators must not be specified in power levels"}
-	ErrInvalidPowerChange   = ErrAuthFail{Index: "10.x", Message: "illegal power level change"}
+	ErrTopLevelPLNotInteger = AuthFailError{Index: "10.1", Message: "invalid type for top-level power level field"}
+	ErrPLNotInteger         = AuthFailError{Index: "10.2", Message: "invalid type for power level"}
+	ErrInvalidUserIDInPL    = AuthFailError{Index: "10.3", Message: "invalid user ID in power levels"}
+	ErrUserPLNotInteger     = AuthFailError{Index: "10.3", Message: "invalid type for user power level"}
+	ErrCreatorInPowerLevels = AuthFailError{Index: "10.4", Message: "room creators must not be specified in power levels"}
+	ErrInvalidPowerChange   = AuthFailError{Index: "10.x", Message: "illegal power level change"}
 )
 
 func isRejected(evt *pdu.PDU) bool {
