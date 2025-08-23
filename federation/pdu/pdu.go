@@ -76,9 +76,9 @@ type PDU struct {
 	Unknown jsontext.Value `json:",unknown"`
 
 	// Deprecated legacy fields
-	DeprecatedPrevState  any `json:"prev_state,omitzero"`
-	DeprecatedOrigin     any `json:"origin,omitzero"`
-	DeprecatedMembership any `json:"membership,omitzero"`
+	DeprecatedPrevState  jsontext.Value `json:"prev_state,omitzero"`
+	DeprecatedOrigin     jsontext.Value `json:"origin,omitzero"`
+	DeprecatedMembership jsontext.Value `json:"membership,omitzero"`
 }
 
 var ErrPDUIsNil = errors.New("PDU is nil")
