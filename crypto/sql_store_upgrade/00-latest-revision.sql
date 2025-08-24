@@ -74,8 +74,7 @@ CREATE TABLE IF NOT EXISTS crypto_megolm_inbound_session (
 	PRIMARY KEY (account_id, session_id)
 );
 -- Useful index to find keys that need backing up
-CREATE INDEX crypto_megolm_inbound_session_backup_idx ON crypto_megolm_inbound_session(account_id, key_backup_version, session);
-
+CREATE INDEX crypto_megolm_inbound_session_backup_idx ON crypto_megolm_inbound_session(account_id, key_backup_version) WHERE session IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS crypto_megolm_outbound_session (
 	account_id    TEXT,
