@@ -4068,6 +4068,9 @@ func (portal *Portal) UpdateDisappearingSetting(ctx context.Context, setting dat
 	if opts.Sender == nil {
 		opts.Sender = portal.Bridge.Bot
 	}
+	if opts.Timestamp.IsZero() {
+		opts.Timestamp = time.Now()
+	}
 	portal.sendRoomMeta(ctx, opts.Sender, opts.Timestamp, event.StateBeeperDisappearingTimer, "", setting.ToEventContent())
 
 	content := DisappearingMessageNotice(setting.Timer, opts.Implicit)
