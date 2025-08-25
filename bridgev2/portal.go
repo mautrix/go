@@ -676,6 +676,8 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 		return portal.handleMatrixMembership(ctx, login, origSender, evt)
 	case event.StatePowerLevels:
 		return portal.handleMatrixPowerLevels(ctx, login, origSender, evt)
+	case event.StateBeeperDisappearingTimer:
+		return portal.handleMatrixDisappearingTimer(ctx, login, origSender, evt)
 	default:
 		return EventHandlingResultIgnored
 	}
@@ -1731,6 +1733,43 @@ func (portal *Portal) handleMatrixPowerLevels(
 		log.Err(err).Msg("Failed to handle Matrix power level change")
 		return EventHandlingResultFailed.WithMSSError(err)
 	}
+	return EventHandlingResultSuccess.WithMSS()
+}
+
+func (portal *Portal) handleMatrixDisappearingTimer(
+	ctx context.Context,
+	sender *UserLogin,
+	origSender *OrigSender,
+	evt *event.Event,
+) EventHandlingResult {
+	log := zerolog.Ctx(ctx)
+	content, ok := evt.Content.Parsed.(*event.BeeperDisappearingTimer)
+	if !ok {
+		log.Error().Type("content_type", evt.Content.Parsed).Msg("Unexpected parsed content type")
+		return EventHandlingResultFailed.WithMSSError(fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed))
+	}
+
+	timer := time.Duration(content.Timer) * time.Millisecond
+	if content.Type == event.DisappearingTypeNone {
+		timer = 0
+	}
+
+	setting := database.DisappearingSetting{
+		Type:  content.Type,
+		Timer: timer,
+	}
+
+	changed := portal.UpdateDisappearingSetting(ctx, setting, portal.Bridge.Bot, time.UnixMilli(evt.Timestamp), false, true)
+	if !changed {
+		log.Debug().Msg("Disappearing timer setting unchanged")
+		return EventHandlingResultSuccess.WithMSS()
+	}
+
+	log.Info().
+		Str("type", string(content.Type)).
+		Dur("timer", timer).
+		Msg("Updated disappearing timer setting from Matrix")
+
 	return EventHandlingResultSuccess.WithMSS()
 }
 
