@@ -7,8 +7,6 @@
 package event
 
 import (
-	"encoding/json"
-
 	"maunium.net/go/mautrix/id"
 )
 
@@ -47,11 +45,25 @@ type MemberEventContent struct {
 	MSC4293RedactEvents bool `json:"org.matrix.msc4293.redact_events,omitempty"`
 }
 
+type SignedThirdPartyInvite struct {
+	Token      string                         `json:"token"`
+	Signatures map[string]map[id.KeyID]string `json:"signatures,omitempty"`
+	MXID       string                         `json:"mxid"`
+}
+
 type ThirdPartyInvite struct {
-	DisplayName string `json:"display_name"`
-	Signed      struct {
-		Token      string          `json:"token"`
-		Signatures json.RawMessage `json:"signatures"`
-		MXID       string          `json:"mxid"`
-	} `json:"signed"`
+	DisplayName string                 `json:"display_name"`
+	Signed      SignedThirdPartyInvite `json:"signed"`
+}
+
+type ThirdPartyInviteEventContent struct {
+	DisplayName    string                `json:"display_name"`
+	KeyValidityURL string                `json:"key_validity_url"`
+	PublicKey      id.Ed25519            `json:"public_key"`
+	PublicKeys     []ThirdPartyInviteKey `json:"public_keys,omitempty"`
+}
+
+type ThirdPartyInviteKey struct {
+	KeyValidityURL string     `json:"key_validity_url,omitempty"`
+	PublicKey      id.Ed25519 `json:"public_key"`
 }
