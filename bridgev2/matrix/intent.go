@@ -674,3 +674,7 @@ func (as *ASIntent) MuteRoom(ctx context.Context, roomID id.RoomID, until time.T
 		})
 	}
 }
+
+func (as *ASIntent) GetEvent(ctx context.Context, roomID id.RoomID, eventID id.EventID) (*event.Event, error) {
+	return as.Matrix.GetEvent(ctx, roomID, eventID)
+}

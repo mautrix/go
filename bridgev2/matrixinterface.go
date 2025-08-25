@@ -176,6 +176,8 @@ type MatrixAPI interface {
 
 	TagRoom(ctx context.Context, roomID id.RoomID, tag event.RoomTag, isTagged bool) error
 	MuteRoom(ctx context.Context, roomID id.RoomID, until time.Time) error
+
+	GetEvent(ctx context.Context, roomID id.RoomID, eventID id.EventID) (*event.Event, error)
 }
 
 type StreamOrderReadingMatrixAPI interface {
