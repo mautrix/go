@@ -18,6 +18,7 @@ import (
 // This is used by Content.ParseRaw() for creating the correct type of struct.
 var TypeMap = map[Type]reflect.Type{
 	StateMember:            reflect.TypeOf(MemberEventContent{}),
+	StateThirdPartyInvite:  reflect.TypeOf(ThirdPartyInviteEventContent{}),
 	StatePowerLevels:       reflect.TypeOf(PowerLevelsEventContent{}),
 	StateCanonicalAlias:    reflect.TypeOf(CanonicalAliasEventContent{}),
 	StateRoomName:          reflect.TypeOf(RoomNameEventContent{}),

@@ -57,7 +57,18 @@ type uriAble interface {
 }
 
 func MarkdownMention(id uriAble) string {
-	return MarkdownLink(id.String(), id.URI().MatrixToURL())
+	return MarkdownMentionWithName(id.String(), id)
+}
+
+func MarkdownMentionWithName(name string, id uriAble) string {
+	return MarkdownLink(name, id.URI().MatrixToURL())
+}
+
+func MarkdownMentionRoomID(name string, id id.RoomID, via ...string) string {
+	if name == "" {
+		name = id.String()
+	}
+	return MarkdownLink(name, id.URI(via...).MatrixToURL())
 }
 
 func MarkdownLink(name string, url string) string {

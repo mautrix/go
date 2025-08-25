@@ -4038,7 +4038,15 @@ func DisappearingMessageNotice(expiration time.Duration, implicit bool) *event.M
 	return content
 }
 
-func (portal *Portal) UpdateDisappearingSetting(ctx context.Context, setting database.DisappearingSetting, sender MatrixAPI, ts time.Time, implicit, save bool) bool {
+type UpdateDisappearingSettingOpts struct {
+	Sender     MatrixAPI
+	Timestamp  time.Time
+	Implicit   bool
+	Save       bool
+	SendNotice bool
+}
+
+func (portal *Portal) UpdateDisappearingSetting(ctx context.Context, setting database.DisappearingSetting, opts UpdateDisappearingSettingOpts) bool {
 	if setting.Timer == 0 {
 		setting.Type = event.DisappearingTypeNone
 	}
@@ -4047,7 +4055,7 @@ func (portal *Portal) UpdateDisappearingSetting(ctx context.Context, setting dat
 	}
 	portal.Disappear.Type = setting.Type
 	portal.Disappear.Timer = setting.Timer
-	if save {
+	if opts.Save {
 		err := portal.Save(ctx)
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to save portal to database after updating disappearing setting")
@@ -4057,21 +4065,21 @@ func (portal *Portal) UpdateDisappearingSetting(ctx context.Context, setting dat
 		return true
 	}
 
-	portal.sendRoomMeta(ctx, sender, ts, event.StateBeeperDisappearingTimer, "", setting.ToEventContent())
-
-	content := DisappearingMessageNotice(setting.Timer, implicit)
-	if sender == nil {
-		sender = portal.Bridge.Bot
+	if opts.Sender == nil {
+		opts.Sender = portal.Bridge.Bot
 	}
-	_, err := sender.SendMessage(ctx, portal.MXID, event.EventMessage, &event.Content{
+	portal.sendRoomMeta(ctx, opts.Sender, opts.Timestamp, event.StateBeeperDisappearingTimer, "", setting.ToEventContent())
+
+	content := DisappearingMessageNotice(setting.Timer, opts.Implicit)
+	_, err := opts.Sender.SendMessage(ctx, portal.MXID, event.EventMessage, &event.Content{
 		Parsed: content,
-	}, &MatrixSendExtra{Timestamp: ts})
+	}, &MatrixSendExtra{Timestamp: opts.Timestamp})
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to send disappearing messages notice")
 	} else {
 		zerolog.Ctx(ctx).Debug().
 			Dur("new_timer", portal.Disappear.Timer).
-			Bool("implicit", implicit).
+			Bool("implicit", opts.Implicit).
 			Msg("Sent disappearing messages notice")
 	}
 	return true
@@ -4162,7 +4170,13 @@ func (portal *Portal) UpdateInfo(ctx context.Context, info *ChatInfo, source *Us
 		changed = portal.updateAvatar(ctx, info.Avatar, sender, ts) || changed
 	}
 	if info.Disappear != nil {
-		changed = portal.UpdateDisappearingSetting(ctx, *info.Disappear, sender, ts, false, false) || changed
+		changed = portal.UpdateDisappearingSetting(ctx, *info.Disappear, UpdateDisappearingSettingOpts{
+			Sender:     sender,
+			Timestamp:  ts,
+			Implicit:   false,
+			Save:       false,
+			SendNotice: true,
+		}) || changed
 	}
 	if info.ParentID != nil {
 		changed = portal.updateParent(ctx, *info.ParentID, source) || changed
