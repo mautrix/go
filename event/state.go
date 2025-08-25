@@ -8,6 +8,7 @@ package event
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"slices"
 
 	"go.mau.fi/util/jsontime"
@@ -221,6 +222,15 @@ const (
 type BeeperDisappearingTimer struct {
 	Type  DisappearingType      `json:"type"`
 	Timer jsontime.Milliseconds `json:"timer"`
+}
+
+type marshalableBeeperDisappearingTimer BeeperDisappearingTimer
+
+func (bdt *BeeperDisappearingTimer) MarshalJSON() ([]byte, error) {
+	if bdt == nil || bdt.Type == DisappearingTypeNone {
+		return []byte("{}"), nil
+	}
+	return json.Marshal((*marshalableBeeperDisappearingTimer)(bdt))
 }
 
 type SpaceChildEventContent struct {
