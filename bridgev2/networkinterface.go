@@ -117,11 +117,15 @@ func MergeCaption(textPart, mediaPart *ConvertedMessagePart) *ConvertedMessagePa
 		mediaPart.Content.EnsureHasHTML()
 		mediaPart.Content.Body += "\n\n" + textPart.Content.Body
 		mediaPart.Content.FormattedBody += "<br><br>" + textPart.Content.FormattedBody
+		mediaPart.Content.Mentions = mediaPart.Content.Mentions.Merge(textPart.Content.Mentions)
+		mediaPart.Content.BeeperLinkPreviews = append(mediaPart.Content.BeeperLinkPreviews, textPart.Content.BeeperLinkPreviews...)
 	} else {
 		mediaPart.Content.FileName = mediaPart.Content.Body
 		mediaPart.Content.Body = textPart.Content.Body
 		mediaPart.Content.Format = textPart.Content.Format
 		mediaPart.Content.FormattedBody = textPart.Content.FormattedBody
+		mediaPart.Content.Mentions = textPart.Content.Mentions
+		mediaPart.Content.BeeperLinkPreviews = textPart.Content.BeeperLinkPreviews
 	}
 	if metaMerger, ok := mediaPart.DBMetadata.(database.MetaMerger); ok {
 		metaMerger.CopyFrom(textPart.DBMetadata)

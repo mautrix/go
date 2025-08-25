@@ -273,6 +273,18 @@ func (m *Mentions) Has(userID id.UserID) bool {
 	return m != nil && slices.Contains(m.UserIDs, userID)
 }
 
+func (m *Mentions) Merge(other *Mentions) *Mentions {
+	if m == nil {
+		return other
+	} else if other == nil {
+		return m
+	}
+	return &Mentions{
+		UserIDs: slices.Concat(m.UserIDs, other.UserIDs),
+		Room:    m.Room || other.Room,
+	}
+}
+
 type EncryptedFileInfo struct {
 	attachment.EncryptedFile
 	URL id.ContentURIString `json:"url"`
