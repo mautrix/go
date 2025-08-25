@@ -87,17 +87,18 @@ func (br *Connector) handleEncryptedEvent(ctx context.Context, evt *event.Event)
 	decryptionStart := time.Now()
 	decrypted, err := br.Crypto.Decrypt(ctx, evt)
 	decryptionRetryCount := 0
+	var errorEventID id.EventID
 	if errors.Is(err, NoSessionFound) {
 		decryptionRetryCount = 1
 		log.Debug().
 			Int("wait_seconds", int(initialSessionWaitTimeout.Seconds())).
 			Msg("Couldn't find session, waiting for keys to arrive...")
-		go br.sendCryptoStatusError(ctx, evt, err, nil, 0, false)
+		go br.sendCryptoStatusError(ctx, evt, err, &errorEventID, 0, false)
 		if br.Crypto.WaitForSession(ctx, evt.RoomID, content.SenderKey, content.SessionID, initialSessionWaitTimeout) {
 			log.Debug().Msg("Got keys after waiting, trying to decrypt event again")
 			decrypted, err = br.Crypto.Decrypt(ctx, evt)
 		} else {
-			go br.waitLongerForSession(ctx, evt, decryptionStart)
+			go br.waitLongerForSession(ctx, evt, decryptionStart, &errorEventID)
 			return
 		}
 	}
@@ -106,10 +107,10 @@ func (br *Connector) handleEncryptedEvent(ctx context.Context, evt *event.Event)
 		go br.sendCryptoStatusError(ctx, evt, err, nil, decryptionRetryCount, true)
 		return
 	}
-	br.postDecrypt(ctx, evt, decrypted, decryptionRetryCount, nil, time.Since(decryptionStart))
+	br.postDecrypt(ctx, evt, decrypted, decryptionRetryCount, &errorEventID, time.Since(decryptionStart))
 }
 
-func (br *Connector) waitLongerForSession(ctx context.Context, evt *event.Event, decryptionStart time.Time) {
+func (br *Connector) waitLongerForSession(ctx context.Context, evt *event.Event, decryptionStart time.Time, errorEventID *id.EventID) {
 	log := zerolog.Ctx(ctx)
 	content := evt.Content.AsEncrypted()
 	log.Debug().
@@ -117,7 +118,6 @@ func (br *Connector) waitLongerForSession(ctx context.Context, evt *event.Event,
 		Msg("Couldn't find session, requesting keys and waiting longer...")
 
 	go br.Crypto.RequestSession(ctx, evt.RoomID, content.SenderKey, content.SessionID, evt.Sender, content.DeviceID)
-	var errorEventID *id.EventID
 	go br.sendCryptoStatusError(ctx, evt, fmt.Errorf("%w. The bridge will retry for %d seconds", errNoDecryptionKeys, int(extendedSessionWaitTimeout.Seconds())), errorEventID, 1, false)
 
 	if !br.Crypto.WaitForSession(ctx, evt.RoomID, content.SenderKey, content.SessionID, extendedSessionWaitTimeout) {
