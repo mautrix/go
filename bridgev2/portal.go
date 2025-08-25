@@ -1488,6 +1488,10 @@ func handleMatrixRoomMeta[APIType any, ContentType any](
 			portal.sendSuccessStatus(ctx, evt, 0, "")
 			return EventHandlingResultIgnored
 		}
+		if !sender.Client.GetCapabilities(ctx, portal).DisappearingTimer.Supports(typedContent) {
+			portal.sendRoomMeta(ctx, nil, time.Now(), event.StateBeeperDisappearingTimer, "", portal.Disappear.ToEventContent())
+			return EventHandlingResultFailed.WithMSSError(ErrDisappearingTimerUnsupported)
+		}
 	}
 	var prevContent ContentType
 	if evt.Unsigned.PrevContent != nil {
@@ -1508,6 +1512,9 @@ func handleMatrixRoomMeta[APIType any, ContentType any](
 	})
 	if err != nil {
 		log.Err(err).Msg("Failed to handle Matrix room metadata")
+		if evt.Type == event.StateBeeperDisappearingTimer {
+			portal.sendRoomMeta(ctx, nil, time.Now(), event.StateBeeperDisappearingTimer, "", portal.Disappear.ToEventContent())
+		}
 		return EventHandlingResultFailed.WithMSSError(err)
 	}
 	if changed {

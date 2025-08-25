@@ -76,6 +76,13 @@ type DisappearingTimerCapability struct {
 	OmitEmptyTimer bool `json:"omit_empty_timer,omitempty"`
 }
 
+func (dtc *DisappearingTimerCapability) Supports(content *BeeperDisappearingTimer) bool {
+	if dtc == nil || content.Type == DisappearingTypeNone {
+		return true
+	}
+	return slices.Contains(dtc.Types, content.Type) && slices.Contains(dtc.Timers, content.Timer)
+}
+
 type CapabilityMsgType = MessageType
 
 // Message types which are used for event capability signaling, but aren't real values for the msgtype field.
