@@ -147,6 +147,7 @@ func (br *Connector) Init(bridge *bridgev2.Bridge) {
 	br.EventProcessor.On(event.StateRoomAvatar, br.handleRoomEvent)
 	br.EventProcessor.On(event.StateTopic, br.handleRoomEvent)
 	br.EventProcessor.On(event.StateTombstone, br.handleRoomEvent)
+	br.EventProcessor.On(event.StateBeeperDisappearingTimer, br.handleRoomEvent)
 	br.EventProcessor.On(event.EphemeralEventReceipt, br.handleEphemeralEvent)
 	br.EventProcessor.On(event.EphemeralEventTyping, br.handleEphemeralEvent)
 	br.Bot = br.AS.BotIntent()

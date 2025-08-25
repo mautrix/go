@@ -663,6 +663,8 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 		return handleMatrixRoomMeta(portal, ctx, login, origSender, evt, RoomTopicHandlingNetworkAPI.HandleMatrixRoomTopic)
 	case event.StateRoomAvatar:
 		return handleMatrixRoomMeta(portal, ctx, login, origSender, evt, RoomAvatarHandlingNetworkAPI.HandleMatrixRoomAvatar)
+	case event.StateBeeperDisappearingTimer:
+		return handleMatrixRoomMeta(portal, ctx, login, origSender, evt, DisappearTimerChangingNetworkAPI.HandleMatrixDisappearingTimer)
 	case event.StateEncryption:
 		// TODO?
 		return EventHandlingResultIgnored
@@ -1477,6 +1479,15 @@ func handleMatrixRoomMeta[APIType any, ContentType any](
 			portal.sendSuccessStatus(ctx, evt, 0, "")
 			return EventHandlingResultIgnored
 		}
+	case *event.BeeperDisappearingTimer:
+		if typedContent.Type == event.DisappearingTypeNone || typedContent.Timer.Duration <= 0 {
+			typedContent.Type = event.DisappearingTypeNone
+			typedContent.Timer.Duration = 0
+		}
+		if typedContent.Type == portal.Disappear.Type && typedContent.Timer.Duration == portal.Disappear.Timer {
+			portal.sendSuccessStatus(ctx, evt, 0, "")
+			return EventHandlingResultIgnored
+		}
 	}
 	var prevContent ContentType
 	if evt.Unsigned.PrevContent != nil {
@@ -1500,7 +1511,9 @@ func handleMatrixRoomMeta[APIType any, ContentType any](
 		return EventHandlingResultFailed.WithMSSError(err)
 	}
 	if changed {
-		portal.UpdateBridgeInfo(ctx)
+		if evt.Type != event.StateBeeperDisappearingTimer {
+			portal.UpdateBridgeInfo(ctx)
+		}
 		err = portal.Save(ctx)
 		if err != nil {
 			log.Err(err).Msg("Failed to save portal after updating room metadata")

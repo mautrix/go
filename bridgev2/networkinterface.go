@@ -683,6 +683,14 @@ type RoomTopicHandlingNetworkAPI interface {
 	HandleMatrixRoomTopic(ctx context.Context, msg *MatrixRoomTopic) (bool, error)
 }
 
+type DisappearTimerChangingNetworkAPI interface {
+	NetworkAPI
+	// HandleMatrixDisappearingTimer is called when the disappearing timer of a portal room is changed.
+	// This method should update the Disappear field of the Portal with the new timer and return true
+	// if the change was successful. If the change is not successful, then the field should not be updated.
+	HandleMatrixDisappearingTimer(ctx context.Context, msg *MatrixDisappearingTimer) (bool, error)
+}
+
 type ResolveIdentifierResponse struct {
 	// Ghost is the ghost of the user that the identifier resolves to.
 	// This field should be set whenever possible. However, it is not required,
@@ -1270,6 +1278,7 @@ type MatrixRoomMeta[ContentType any] struct {
 type MatrixRoomName = MatrixRoomMeta[*event.RoomNameEventContent]
 type MatrixRoomAvatar = MatrixRoomMeta[*event.RoomAvatarEventContent]
 type MatrixRoomTopic = MatrixRoomMeta[*event.TopicEventContent]
+type MatrixDisappearingTimer = MatrixRoomMeta[*event.BeeperDisappearingTimer]
 
 type MatrixReadReceipt struct {
 	Portal *Portal
