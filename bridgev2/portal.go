@@ -4073,6 +4073,9 @@ func (portal *Portal) UpdateDisappearingSetting(ctx context.Context, setting dat
 	}
 	portal.sendRoomMeta(ctx, opts.Sender, opts.Timestamp, event.StateBeeperDisappearingTimer, "", setting.ToEventContent())
 
+	if !opts.SendNotice {
+		return true
+	}
 	content := DisappearingMessageNotice(setting.Timer, opts.Implicit)
 	_, err := opts.Sender.SendMessage(ctx, portal.MXID, event.EventMessage, &event.Content{
 		Parsed: content,
