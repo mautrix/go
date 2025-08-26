@@ -66,6 +66,7 @@ var (
 	ErrFailedToParsePowerLevels     = AuthFailError{Index: "?", Message: "failed to parse power levels"}
 	ErrDuplicateAuthEvent           = AuthFailError{Index: "3.1", Message: "duplicate type/state key pair in auth events"}
 	ErrNonStateAuthEvent            = AuthFailError{Index: "3.2", Message: "non-state event in auth events"}
+	ErrMissingAuthEvent             = AuthFailError{Index: "3.2", Message: "missing auth event"}
 	ErrUnexpectedAuthEvent          = AuthFailError{Index: "3.2", Message: "unexpected type/state key pair in auth events"}
 	ErrNoCreateEvent                = AuthFailError{Index: "3.2", Message: "no m.room.create event found in auth events"}
 	ErrRejectedAuthEvent            = AuthFailError{Index: "3.3", Message: "auth event was rejected"}
@@ -153,7 +154,9 @@ func Authorize(roomVersion id.RoomVersion, evt *pdu.PDU, getEvents GetEventsFunc
 	// 3. Considering the event’s auth_events:
 	for i, ae := range authEvents {
 		authEvtID := evt.AuthEvents[i]
-		if ae.StateKey == nil {
+		if ae == nil {
+			return fmt.Errorf("%w (%s)", ErrMissingAuthEvent, authEvtID)
+		} else if ae.StateKey == nil {
 			// This approximately falls under rule 3.2.
 			return fmt.Errorf("%w (%s)", ErrNonStateAuthEvent, authEvtID)
 		}
@@ -656,14 +659,14 @@ func authorizePowerLevels(roomVersion id.RoomVersion, evt, createEvt *pdu.PDU, a
 	return nil
 }
 
-func allowPowerChangeMap(roomVersion id.RoomVersion, maxVal int, ownID, path string, old, new gjson.Result) (err error) {
+func allowPowerChangeMap(roomVersion id.RoomVersion, maxVal int, path, ownID string, old, new gjson.Result) (err error) {
 	old.ForEach(func(key, value gjson.Result) bool {
-		newVal := new.Get(exgjson.Path(key.Path(key.Str)))
+		newVal := new.Get(exgjson.Path(key.Str))
 		err = allowPowerChange(roomVersion, maxVal, path+"."+key.Str, value, newVal)
-		if err == nil && ownID != "" {
+		if err == nil && ownID != "" && key.Str != ownID {
 			val := parseIntWithVersion(roomVersion, value)
 			if *val >= maxVal {
-				err = fmt.Errorf("%w can't change users.%s from %s to %s with sender level %d", ErrInvalidPowerChange, key.Str, stringifyForError(value), stringifyForError(newVal), maxVal)
+				err = fmt.Errorf("%w: can't change users.%s from %s to %s with sender level %d", ErrInvalidPowerChange, key.Str, stringifyForError(value), stringifyForError(newVal), maxVal)
 			}
 		}
 		return err == nil
@@ -750,6 +753,14 @@ func getPowerLevels(roomVersion id.RoomVersion, authEvents []*pdu.PDU, createEvt
 		powerLevels.CreateEvent, err = createEvt.ToClientEvent(roomVersion)
 		if err != nil {
 			return nil, fmt.Errorf("%w: %w", ErrFailedToParsePowerLevels, err)
+		}
+		err = powerLevels.CreateEvent.Content.ParseRaw(powerLevels.CreateEvent.Type)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %w", ErrFailedToParsePowerLevels, err)
+		}
+	} else {
+		powerLevels.Users = map[id.UserID]int{
+			createEvt.Sender: (1 << 53) - 1,
 		}
 	}
 	return &powerLevels, nil
