@@ -22,6 +22,7 @@ import (
 	"go.mau.fi/util/ptr"
 
 	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/crypto/attachment"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -87,6 +88,9 @@ type RemoteProfile struct {
 	Username string              `json:"username,omitempty"`
 	Name     string              `json:"name,omitempty"`
 	Avatar   id.ContentURIString `json:"avatar,omitempty"`
+
+	// Only used for backups of local bridge states
+	AvatarKeys *attachment.EncryptedFile `json:"avatar_keys,omitempty"`
 }
 
 func coalesce[T ~string](a, b T) T {
@@ -102,6 +106,9 @@ func (rp *RemoteProfile) Merge(other RemoteProfile) RemoteProfile {
 	other.Username = coalesce(rp.Username, other.Username)
 	other.Name = coalesce(rp.Name, other.Name)
 	other.Avatar = coalesce(rp.Avatar, other.Avatar)
+	if rp.AvatarKeys != nil {
+		other.AvatarKeys = rp.AvatarKeys
+	}
 	return other
 }
 

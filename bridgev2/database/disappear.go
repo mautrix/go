@@ -39,7 +39,7 @@ type DisappearingSetting struct {
 
 func (ds DisappearingSetting) ToEventContent() *event.BeeperDisappearingTimer {
 	if ds.Type == event.DisappearingTypeNone || ds.Timer == 0 {
-		return nil
+		return &event.BeeperDisappearingTimer{}
 	}
 	return &event.BeeperDisappearingTimer{
 		Type:  ds.Type,

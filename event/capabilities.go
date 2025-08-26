@@ -71,9 +71,16 @@ type FileFeatureMap map[CapabilityMsgType]*FileFeatures
 
 type DisappearingTimerCapability struct {
 	Types  []DisappearingType      `json:"types"`
-	Timers []jsontime.Milliseconds `json:"timers"`
+	Timers []jsontime.Milliseconds `json:"timers,omitempty"`
 
 	OmitEmptyTimer bool `json:"omit_empty_timer,omitempty"`
+}
+
+func (dtc *DisappearingTimerCapability) Supports(content *BeeperDisappearingTimer) bool {
+	if dtc == nil || content.Type == DisappearingTypeNone {
+		return true
+	}
+	return slices.Contains(dtc.Types, content.Type) && (dtc.Timers == nil || slices.Contains(dtc.Timers, content.Timer))
 }
 
 type CapabilityMsgType = MessageType

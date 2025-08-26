@@ -117,7 +117,8 @@ export enum DisappearingType {
 
 export interface DisappearingTimerCapability {
 	types: DisappearingType[]
-	timers: milliseconds[]
+	/** Allowed timer values. If omitted, any timer is allowed. */
+	timers?: milliseconds[]
 	/**
 	 * Whether clients should omit the empty disappearing_timer object in messages that they don't want to disappear
 	 *

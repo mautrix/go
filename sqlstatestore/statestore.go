@@ -370,7 +370,7 @@ func (store *SQLStateStore) SetEncryptionEvent(ctx context.Context, roomID id.Ro
 func (store *SQLStateStore) GetEncryptionEvent(ctx context.Context, roomID id.RoomID) (*event.EncryptionEventContent, error) {
 	var data []byte
 	err := store.
-		QueryRow(ctx, "SELECT encryption FROM mx_room_state WHERE room_id=$1", roomID).
+		QueryRow(ctx, "SELECT encryption FROM mx_room_state WHERE room_id=$1 AND encryption IS NOT NULL", roomID).
 		Scan(&data)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -406,7 +406,7 @@ func (store *SQLStateStore) SetPowerLevels(ctx context.Context, roomID id.RoomID
 func (store *SQLStateStore) GetPowerLevels(ctx context.Context, roomID id.RoomID) (levels *event.PowerLevelsEventContent, err error) {
 	levels = &event.PowerLevelsEventContent{}
 	err = store.
-		QueryRow(ctx, "SELECT power_levels, create_event FROM mx_room_state WHERE room_id=$1", roomID).
+		QueryRow(ctx, "SELECT power_levels, create_event FROM mx_room_state WHERE room_id=$1 AND power_levels IS NOT NULL", roomID).
 		Scan(&dbutil.JSON{Data: &levels}, &dbutil.JSON{Data: &levels.CreateEvent})
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -458,7 +458,7 @@ func (store *SQLStateStore) SetCreate(ctx context.Context, evt *event.Event) err
 
 func (store *SQLStateStore) GetCreate(ctx context.Context, roomID id.RoomID) (evt *event.Event, err error) {
 	err = store.
-		QueryRow(ctx, "SELECT create_event FROM mx_room_state WHERE room_id=$1", roomID).
+		QueryRow(ctx, "SELECT create_event FROM mx_room_state WHERE room_id=$1 AND create_event IS NOT NULL", roomID).
 		Scan(&dbutil.JSON{Data: &evt})
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
