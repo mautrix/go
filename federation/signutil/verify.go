@@ -48,6 +48,47 @@ func VerifyJSON(serverName string, keyID id.KeyID, key id.SigningKey, data any) 
 	return VerifyJSONRaw(key, sigVal.Str, message)
 }
 
+func VerifyJSONAny(key id.SigningKey, data any) error {
+	var err error
+	message, ok := data.(json.RawMessage)
+	if !ok {
+		message, err = json.Marshal(data)
+		if err != nil {
+			return fmt.Errorf("failed to marshal data: %w", err)
+		}
+	}
+	sigs := gjson.GetBytes(message, "signatures")
+	if !sigs.IsObject() {
+		return ErrSignatureNotFound
+	}
+	message, err = sjson.DeleteBytes(message, "signatures")
+	if err != nil {
+		return fmt.Errorf("failed to delete signatures: %w", err)
+	}
+	message, err = sjson.DeleteBytes(message, "unsigned")
+	if err != nil {
+		return fmt.Errorf("failed to delete unsigned: %w", err)
+	}
+	var validated bool
+	sigs.ForEach(func(_, value gjson.Result) bool {
+		if !value.IsObject() {
+			return true
+		}
+		value.ForEach(func(_, value gjson.Result) bool {
+			if value.Type != gjson.String {
+				return true
+			}
+			validated = VerifyJSONRaw(key, value.Str, message) == nil
+			return !validated
+		})
+		return !validated
+	})
+	if !validated {
+		return ErrInvalidSignature
+	}
+	return nil
+}
+
 func VerifyJSONRaw(key id.SigningKey, sig string, message json.RawMessage) error {
 	sigBytes, err := base64.RawStdEncoding.DecodeString(sig)
 	if err != nil {
