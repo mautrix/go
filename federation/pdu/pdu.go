@@ -54,7 +54,8 @@ var (
 )
 
 type InternalMeta struct {
-	Rejected bool `json:"rejected,omitempty"`
+	EventID  id.EventID `json:"event_id,omitempty"`
+	Rejected bool       `json:"rejected,omitempty"`
 }
 
 type PDU struct {
