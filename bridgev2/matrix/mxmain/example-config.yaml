@@ -248,7 +248,7 @@ analytics:
 # Settings for provisioning API
 provisioning:
     # Shared secret for authentication. If set to "generate" or null, a random secret will be generated,
-    # or if set to "disable", the provisioning API will be disabled.
+    # or if set to "disable", the provisioning API will be disabled. Must be at least 16 characters.
     shared_secret: generate
     # Whether to allow provisioning API requests to be authed using Matrix access tokens.
     # This follows the same rules as double puppeting to determine which server to contact to check the token,

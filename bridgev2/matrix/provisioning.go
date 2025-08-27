@@ -210,12 +210,20 @@ func (prov *ProvisioningAPI) checkFederatedMatrixAuth(ctx context.Context, userI
 	}
 }
 
+func disabledAuth(w http.ResponseWriter, r *http.Request) {
+	mautrix.MForbidden.WithMessage("Provisioning API is disabled").Write(w)
+}
+
 func (prov *ProvisioningAPI) DebugAuthMiddleware(h http.Handler) http.Handler {
+	secret := prov.br.Config.Provisioning.SharedSecret
+	if len(secret) < 16 {
+		return http.HandlerFunc(disabledAuth)
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		auth := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 		if auth == "" {
 			mautrix.MMissingToken.WithMessage("Missing auth token").Write(w)
-		} else if !exstrings.ConstantTimeEqual(auth, prov.br.Config.Provisioning.SharedSecret) {
+		} else if !exstrings.ConstantTimeEqual(auth, secret) {
 			mautrix.MUnknownToken.WithMessage("Invalid auth token").Write(w)
 		} else {
 			h.ServeHTTP(w, r)
@@ -224,6 +232,10 @@ func (prov *ProvisioningAPI) DebugAuthMiddleware(h http.Handler) http.Handler {
 }
 
 func (prov *ProvisioningAPI) AuthMiddleware(h http.Handler) http.Handler {
+	secret := prov.br.Config.Provisioning.SharedSecret
+	if len(secret) < 16 {
+		return http.HandlerFunc(disabledAuth)
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		auth := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 		if auth == "" && prov.GetAuthFromRequest != nil {
@@ -237,7 +249,7 @@ func (prov *ProvisioningAPI) AuthMiddleware(h http.Handler) http.Handler {
 		if userID == "" && prov.GetUserIDFromRequest != nil {
 			userID = prov.GetUserIDFromRequest(r)
 		}
-		if !exstrings.ConstantTimeEqual(auth, prov.br.Config.Provisioning.SharedSecret) {
+		if !exstrings.ConstantTimeEqual(auth, secret) {
 			var err error
 			if strings.HasPrefix(auth, "openid:") {
 				err = prov.checkFederatedMatrixAuth(r.Context(), userID, strings.TrimPrefix(auth, "openid:"))
