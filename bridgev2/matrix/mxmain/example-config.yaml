@@ -247,8 +247,6 @@ analytics:
 
 # Settings for provisioning API
 provisioning:
-    # Prefix for the provisioning API paths.
-    prefix: /_matrix/provision
     # Shared secret for authentication. If set to "generate" or null, a random secret will be generated,
     # or if set to "disable", the provisioning API will be disabled.
     shared_secret: generate

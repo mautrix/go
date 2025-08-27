@@ -103,7 +103,6 @@ func doUpgrade(helper up.Helper) {
 	helper.Copy(up.Str|up.Null, "analytics", "url")
 	helper.Copy(up.Str|up.Null, "analytics", "user_id")
 
-	helper.Copy(up.Str, "provisioning", "prefix")
 	if secret, ok := helper.Get(up.Str, "provisioning", "shared_secret"); !ok || secret == "generate" {
 		sharedSecret := random.String(64)
 		helper.Set(up.Str, sharedSecret, "provisioning", "shared_secret")
