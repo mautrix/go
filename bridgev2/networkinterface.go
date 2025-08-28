@@ -350,6 +350,8 @@ type NetworkGeneralCapabilities struct {
 	// to handle asynchronous message responses, this field can be set to enable
 	// automatic timeout errors in case the asynchronous response never arrives.
 	OutgoingMessageTimeouts *OutgoingTimeoutConfig
+	// Capabilities related to the provisioning API.
+	Provisioning *ProvisioningCapabilities
 }
 
 // NetworkAPI is an interface representing a remote network client for a single user login.
@@ -750,9 +752,75 @@ type UserSearchingNetworkAPI interface {
 	SearchUsers(ctx context.Context, query string) ([]*ResolveIdentifierResponse, error)
 }
 
+type ProvisioningCapabilities struct {
+	ResolveIdentifier ResolveIdentifierCapabilities    `json:"resolve_identifier"`
+	GroupCreation     map[string]GroupTypeCapabilities `json:"group_creation"`
+}
+
+type ResolveIdentifierCapabilities struct {
+	// Can DMs be created after resolving an identifier?
+	CreateDM bool `json:"create_dm"`
+	// Can users be looked up by phone number?
+	LookupPhone bool `json:"lookup_phone"`
+	// Can users be looked up by email address?
+	LookupEmail bool `json:"lookup_email"`
+	// Can users be looked up by network-specific username?
+	LookupUsername bool `json:"lookup_username"`
+	// Can any phone number be contacted without having to validate it via lookup first?
+	AnyPhone bool `json:"any_phone"`
+	// Can a contact list be retrieved from the bridge?
+	ContactList bool `json:"contact_list"`
+	// Can users be searched by name on the remote network?
+	Search bool `json:"search"`
+}
+
+type GroupTypeCapabilities struct {
+	TypeDescription string `json:"type_description"`
+
+	Name      GroupFieldCapability `json:"name"`
+	Username  GroupFieldCapability `json:"username"`
+	Avatar    GroupFieldCapability `json:"avatar"`
+	Topic     GroupFieldCapability `json:"topic"`
+	Disappear GroupFieldCapability `json:"disappear"`
+	Members   GroupFieldCapability `json:"members"`
+	Parent    GroupFieldCapability `json:"parent"`
+}
+
+type GroupFieldCapability struct {
+	// Is setting this field allowed at all in the create request?
+	// Even if false, the network connector should attempt to set the metadata after group creation,
+	// as the allowed flag can't be enforced properly when creating a group for an existing Matrix room.
+	Allowed bool `json:"allowed"`
+	// Is setting this field mandatory for the creation to succeed?
+	Required bool `json:"required,omitempty"`
+	// The minimum/maximum length of the field, if applicable.
+	// For members, length means the number of members excluding the creator.
+	MinLength int `json:"min_length,omitempty"`
+	MaxLength int `json:"max_length,omitempty"`
+
+	// Only for the disappear field: allowed disappearing settings
+	DisappearSettings *event.DisappearingTimerCapability `json:"settings,omitempty"`
+}
+
+type GroupCreateParams struct {
+	Type string `json:"type"`
+
+	Username     string               `json:"username"`
+	Participants []networkid.UserID   `json:"participants"`
+	Parent       *networkid.PortalKey `json:"parent"`
+
+	Name      *event.RoomNameEventContent    `json:"name"`
+	Avatar    *event.RoomAvatarEventContent  `json:"avatar"`
+	Topic     *event.TopicEventContent       `json:"topic"`
+	Disappear *event.BeeperDisappearingTimer `json:"disappear"`
+
+	// An existing room ID to bridge to. If unset, a new room will be created.
+	RoomID id.RoomID `json:"room_id"`
+}
+
 type GroupCreatingNetworkAPI interface {
 	IdentifierResolvingNetworkAPI
-	CreateGroup(ctx context.Context, name string, users ...networkid.UserID) (*CreateChatResponse, error)
+	CreateGroup(ctx context.Context, params *GroupCreateParams) (*CreateChatResponse, error)
 }
 
 type MembershipChangeType struct {

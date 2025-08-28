@@ -47,8 +47,8 @@ type PortalID string
 // As a special case, Receiver MUST be set if the Bridge.Config.SplitPortals flag is set to true.
 // The flag is intended for puppeting-only bridges which want multiple logins to create separate portals for each user.
 type PortalKey struct {
-	ID       PortalID
-	Receiver UserLoginID
+	ID       PortalID    `json:"portal_id"`
+	Receiver UserLoginID `json:"portal_receiver,omitempty"`
 }
 
 func (pk PortalKey) IsEmpty() bool {
