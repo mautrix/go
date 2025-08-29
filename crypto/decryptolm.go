@@ -340,7 +340,7 @@ func (mach *OlmMachine) unwedgeDevice(log zerolog.Logger, sender id.UserID, send
 		return
 	}
 
-	log.Debug().Str("device_id", deviceIdentity.DeviceID.String()).Msg("Creating new Olm session")
+	log.Debug().Stringer("device_id", deviceIdentity.DeviceID).Msg("Creating new Olm session")
 	mach.devicesToUnwedgeLock.Lock()
 	mach.devicesToUnwedge[senderKey] = true
 	mach.devicesToUnwedgeLock.Unlock()

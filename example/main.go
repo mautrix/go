@@ -143,7 +143,7 @@ func main() {
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to send event")
 		} else {
-			log.Info().Str("event_id", resp.EventID.String()).Msg("Event sent")
+			log.Info().Stringer("event_id", resp.EventID).Msg("Event sent")
 		}
 	}
 	cancelSync()

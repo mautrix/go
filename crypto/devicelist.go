@@ -206,7 +206,7 @@ func (mach *OlmMachine) FetchKeys(ctx context.Context, users []id.UserID, includ
 	log.Trace().Int("user_count", len(resp.DeviceKeys)).Msg("Query key result received")
 	data = make(map[id.UserID]map[id.DeviceID]*id.Device)
 	for userID, devices := range resp.DeviceKeys {
-		log := log.With().Str("user_id", userID.String()).Logger()
+		log := log.With().Stringer("user_id", userID).Logger()
 		delete(req.DeviceKeys, userID)
 
 		newDevices := make(map[id.DeviceID]*id.Device)
@@ -222,7 +222,7 @@ func (mach *OlmMachine) FetchKeys(ctx context.Context, users []id.UserID, includ
 			Msg("Updating devices in store")
 		changed := false
 		for deviceID, deviceKeys := range devices {
-			log := log.With().Str("device_id", deviceID.String()).Logger()
+			log := log.With().Stringer("device_id", deviceID).Logger()
 			existing, ok := existingDevices[deviceID]
 			if !ok {
 				// New device
@@ -270,7 +270,7 @@ func (mach *OlmMachine) FetchKeys(ctx context.Context, users []id.UserID, includ
 		}
 	}
 	for userID := range req.DeviceKeys {
-		log.Warn().Str("user_id", userID.String()).Msg("Didn't get any keys for user")
+		log.Warn().Stringer("user_id", userID).Msg("Didn't get any keys for user")
 	}
 
 	mach.storeCrossSigningKeys(ctx, resp.MasterKeys, resp.DeviceKeys)

@@ -233,7 +233,7 @@ func (mach *OlmMachine) ShareGroupSession(ctx context.Context, roomID id.RoomID,
 	var fetchKeysForUsers []id.UserID
 
 	for _, userID := range users {
-		log := log.With().Str("target_user_id", userID.String()).Logger()
+		log := log.With().Stringer("target_user_id", userID).Logger()
 		devices, err := mach.CryptoStore.GetDevices(ctx, userID)
 		if err != nil {
 			log.Err(err).Msg("Failed to get devices of user")
@@ -305,7 +305,7 @@ func (mach *OlmMachine) ShareGroupSession(ctx context.Context, roomID id.RoomID,
 			toDeviceWithheld.Messages[userID] = withheld
 		}
 
-		log := log.With().Str("target_user_id", userID.String()).Logger()
+		log := log.With().Stringer("target_user_id", userID).Logger()
 		log.Trace().Msg("Trying to find olm session to encrypt megolm session for user (post-fetch retry)")
 		mach.findOlmSessionsForUser(ctx, session, userID, devices, output, withheld, nil)
 		log.Debug().

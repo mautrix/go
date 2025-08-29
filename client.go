@@ -1785,7 +1785,7 @@ func (cli *Client) UploadAsync(ctx context.Context, req ReqUploadMedia) (*RespCr
 	go func() {
 		_, err = cli.UploadMedia(ctx, req)
 		if err != nil {
-			cli.Log.Error().Str("mxc", req.MXC.String()).Err(err).Msg("Async upload of media failed")
+			cli.Log.Error().Stringer("mxc", req.MXC).Err(err).Msg("Async upload of media failed")
 		}
 	}()
 	return resp, nil

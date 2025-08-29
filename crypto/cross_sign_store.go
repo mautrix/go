@@ -20,7 +20,7 @@ import (
 func (mach *OlmMachine) storeCrossSigningKeys(ctx context.Context, crossSigningKeys map[id.UserID]mautrix.CrossSigningKeys, deviceKeys map[id.UserID]map[id.DeviceID]mautrix.DeviceKeys) {
 	log := mach.machOrContextLog(ctx)
 	for userID, userKeys := range crossSigningKeys {
-		log := log.With().Str("user_id", userID.String()).Logger()
+		log := log.With().Stringer("user_id", userID).Logger()
 		currentKeys, err := mach.CryptoStore.GetCrossSigningKeys(ctx, userID)
 		if err != nil {
 			log.Error().Err(err).
@@ -28,7 +28,7 @@ func (mach *OlmMachine) storeCrossSigningKeys(ctx context.Context, crossSigningK
 		}
 		if currentKeys != nil {
 			for curKeyUsage, curKey := range currentKeys {
-				log := log.With().Str("old_key", curKey.Key.String()).Str("old_key_usage", string(curKeyUsage)).Logger()
+				log := log.With().Stringer("old_key", curKey.Key).Str("old_key_usage", string(curKeyUsage)).Logger()
 				// got a new key with the same usage as an existing key
 				for _, newKeyUsage := range userKeys.Usage {
 					if newKeyUsage == curKeyUsage {
@@ -49,7 +49,7 @@ func (mach *OlmMachine) storeCrossSigningKeys(ctx context.Context, crossSigningK
 		}
 
 		for _, key := range userKeys.Keys {
-			log := log.With().Str("key", key.String()).Array("usages", exzerolog.ArrayOfStrs(userKeys.Usage)).Logger()
+			log := log.With().Stringer("key", key).Array("usages", exzerolog.ArrayOfStrs(userKeys.Usage)).Logger()
 			for _, usage := range userKeys.Usage {
 				log.Trace().Str("usage", string(usage)).Msg("Storing cross-signing key")
 				if err = mach.CryptoStore.PutCrossSigningKey(ctx, userID, usage, key); err != nil {

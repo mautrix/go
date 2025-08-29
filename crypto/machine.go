@@ -361,7 +361,7 @@ func (mach *OlmMachine) HandleMemberEvent(ctx context.Context, evt *event.Event)
 		Msg("Got membership state change, invalidating group session in room")
 	err := mach.CryptoStore.RemoveOutboundGroupSession(ctx, evt.RoomID)
 	if err != nil {
-		mach.Log.Warn().Str("room_id", evt.RoomID.String()).Msg("Failed to invalidate outbound group session")
+		mach.Log.Warn().Stringer("room_id", evt.RoomID).Msg("Failed to invalidate outbound group session")
 	}
 }
 
@@ -581,7 +581,7 @@ func (mach *OlmMachine) createGroupSession(ctx context.Context, senderKey id.Sen
 	}
 	err = mach.CryptoStore.PutGroupSession(ctx, igs)
 	if err != nil {
-		log.Err(err).Str("session_id", sessionID.String()).Msg("Failed to store new inbound group session")
+		log.Err(err).Stringer("session_id", sessionID).Msg("Failed to store new inbound group session")
 		return fmt.Errorf("failed to store new inbound group session: %w", err)
 	}
 	mach.MarkSessionReceived(ctx, roomID, sessionID, igs.Internal.FirstKnownIndex())

@@ -360,7 +360,7 @@ func (as *AppService) NewMautrixClient(userID id.UserID) *mautrix.Client {
 		AccessToken:         as.Registration.AppToken,
 		UserAgent:           as.UserAgent,
 		StateStore:          as.StateStore,
-		Log:                 as.Log.With().Str("as_user_id", userID.String()).Logger(),
+		Log:                 as.Log.With().Stringer("as_user_id", userID).Logger(),
 		Client:              as.HTTPClient,
 		DefaultHTTPRetries:  as.DefaultHTTPRetries,
 		SpecVersions:        as.SpecVersions,

@@ -201,7 +201,7 @@ func (as *AppService) handleEvents(ctx context.Context, evts []*event.Event, def
 		}
 		err := evt.Content.ParseRaw(evt.Type)
 		if errors.Is(err, event.ErrUnsupportedContentType) {
-			log.Debug().Str("event_id", evt.ID.String()).Msg("Not parsing content of unsupported event")
+			log.Debug().Stringer("event_id", evt.ID).Msg("Not parsing content of unsupported event")
 		} else if err != nil {
 			log.Warn().Err(err).
 				Str("event_id", evt.ID.String()).

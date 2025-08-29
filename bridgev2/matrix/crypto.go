@@ -157,12 +157,12 @@ func (helper *CryptoHelper) resyncEncryptionInfo(ctx context.Context) {
 			var evt event.EncryptionEventContent
 			err = helper.client.StateEvent(ctx, roomID, event.StateEncryption, "", &evt)
 			if err != nil {
-				log.Err(err).Str("room_id", roomID.String()).Msg("Failed to get encryption event")
+				log.Err(err).Stringer("room_id", roomID).Msg("Failed to get encryption event")
 				_, err = helper.store.DB.Exec(ctx, `
 					UPDATE mx_room_state SET encryption=NULL WHERE room_id=$1 AND encryption='{"resync":true}'
 				`, roomID)
 				if err != nil {
-					log.Err(err).Str("room_id", roomID.String()).Msg("Failed to unmark room for resync after failed sync")
+					log.Err(err).Stringer("room_id", roomID).Msg("Failed to unmark room for resync after failed sync")
 				}
 			} else {
 				maxAge := evt.RotationPeriodMillis
@@ -185,9 +185,9 @@ func (helper *CryptoHelper) resyncEncryptionInfo(ctx context.Context) {
 					WHERE room_id=$3 AND max_age IS NULL AND max_messages IS NULL
 				`, maxAge, maxMessages, roomID)
 				if err != nil {
-					log.Err(err).Str("room_id", roomID.String()).Msg("Failed to update megolm session table")
+					log.Err(err).Stringer("room_id", roomID).Msg("Failed to update megolm session table")
 				} else {
-					log.Debug().Str("room_id", roomID.String()).Msg("Updated megolm session table")
+					log.Debug().Stringer("room_id", roomID).Msg("Updated megolm session table")
 				}
 			}
 		}
@@ -233,7 +233,7 @@ func (helper *CryptoHelper) loginBot(ctx context.Context) (*mautrix.Client, bool
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to find existing device ID: %w", err)
 	} else if len(deviceID) > 0 {
-		helper.log.Debug().Str("device_id", deviceID.String()).Msg("Found existing device ID for bot in database")
+		helper.log.Debug().Stringer("device_id", deviceID).Msg("Found existing device ID for bot in database")
 	}
 	// Create a new client instance with the default AS settings (including as_token),
 	// the Login call will then override the access token in the client.

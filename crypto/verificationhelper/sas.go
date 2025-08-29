@@ -695,7 +695,7 @@ func (vh *VerificationHelper) onVerificationMAC(ctx context.Context, txn Verific
 	// Verify the MAC for each key
 	var theirDevice *id.Device
 	for keyID, mac := range macEvt.MAC {
-		log.Info().Str("key_id", keyID.String()).Msg("Received MAC for key")
+		log.Info().Stringer("key_id", keyID).Msg("Received MAC for key")
 
 		alg, kID := keyID.Parse()
 		if alg != id.KeyAlgorithmEd25519 {

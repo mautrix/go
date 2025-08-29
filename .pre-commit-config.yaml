@@ -27,3 +27,4 @@ repos:
       - id: prevent-literal-http-methods
       - id: zerolog-ban-global-log
       - id: zerolog-ban-msgf
+      - id: zerolog-use-stringer
