@@ -8,6 +8,7 @@ package provisionutil
 
 import (
 	"context"
+	"errors"
 
 	"github.com/rs/zerolog"
 
@@ -30,6 +31,8 @@ type RespResolveIdentifier struct {
 	JustCreated bool             `json:"-"`
 }
 
+var ErrNoPortalKey = errors.New("network API didn't return portal key for createChat request")
+
 func ResolveIdentifier(
 	ctx context.Context,
 	login *bridgev2.UserLogin,
@@ -40,12 +43,44 @@ func ResolveIdentifier(
 	if !ok {
 		return nil, bridgev2.RespError(mautrix.MUnrecognized.WithMessage("This bridge does not support resolving identifiers"))
 	}
-	resp, err := api.ResolveIdentifier(ctx, identifier, createChat)
-	if err != nil {
-		zerolog.Ctx(ctx).Err(err).Msg("Failed to resolve identifier")
-		return nil, err
-	} else if resp == nil {
-		return nil, nil
+	var resp *bridgev2.ResolveIdentifierResponse
+	parsedUserID, ok := login.Bridge.Matrix.ParseGhostMXID(id.UserID(identifier))
+	validator, vOK := login.Bridge.Network.(bridgev2.IdentifierValidatingNetwork)
+	if ok && (!vOK || validator.ValidateUserID(parsedUserID)) {
+		ghost, err := login.Bridge.GetGhostByID(ctx, parsedUserID)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to get ghost by ID")
+			return nil, err
+		}
+		resp = &bridgev2.ResolveIdentifierResponse{
+			Ghost:  ghost,
+			UserID: parsedUserID,
+		}
+		gdcAPI, ok := api.(bridgev2.GhostDMCreatingNetworkAPI)
+		if ok && createChat {
+			resp.Chat, err = gdcAPI.CreateChatWithGhost(ctx, ghost)
+			if err != nil {
+				zerolog.Ctx(ctx).Err(err).Msg("Failed to create chat")
+				return nil, err
+			}
+		} else if createChat || ghost.Name == "" {
+			zerolog.Ctx(ctx).Debug().
+				Bool("create_chat", createChat).
+				Bool("has_name", ghost.Name != "").
+				Msg("Falling back to resolving identifier")
+			resp = nil
+			identifier = string(parsedUserID)
+		}
+	}
+	if resp == nil {
+		var err error
+		resp, err = api.ResolveIdentifier(ctx, identifier, createChat)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to resolve identifier")
+			return nil, err
+		} else if resp == nil {
+			return nil, nil
+		}
 	}
 	apiResp := &RespResolveIdentifier{
 		ID:    resp.UserID,
@@ -63,7 +98,11 @@ func ResolveIdentifier(
 		apiResp.Name = *resp.UserInfo.Name
 	}
 	if resp.Chat != nil {
+		if resp.Chat.PortalKey.IsEmpty() {
+			return nil, ErrNoPortalKey
+		}
 		if resp.Chat.Portal == nil {
+			var err error
 			resp.Chat.Portal, err = login.Bridge.GetPortalByKey(ctx, resp.Chat.PortalKey)
 			if err != nil {
 				zerolog.Ctx(ctx).Err(err).Msg("Failed to get portal")
@@ -72,7 +111,7 @@ func ResolveIdentifier(
 		}
 		if createChat && resp.Chat.Portal.MXID == "" {
 			apiResp.JustCreated = true
-			err = resp.Chat.Portal.CreateMatrixRoom(ctx, login, resp.Chat.PortalInfo)
+			err := resp.Chat.Portal.CreateMatrixRoom(ctx, login, resp.Chat.PortalInfo)
 			if err != nil {
 				zerolog.Ctx(ctx).Err(err).Msg("Failed to create portal room")
 				return nil, bridgev2.RespError(mautrix.MUnknown.WithMessage("Failed to create portal room"))
