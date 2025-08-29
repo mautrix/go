@@ -542,7 +542,3 @@ func (intent *IntentAPI) EnsureInvited(ctx context.Context, roomID id.RoomID, us
 	}
 	return nil
 }
-
-func (intent *IntentAPI) GetEvent(ctx context.Context, roomID id.RoomID, eventID id.EventID) (*event.Event, error) {
-	return intent.Client.GetEvent(ctx, roomID, eventID)
-}

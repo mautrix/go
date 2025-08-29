@@ -676,5 +676,21 @@ func (as *ASIntent) MuteRoom(ctx context.Context, roomID id.RoomID, until time.T
 }
 
 func (as *ASIntent) GetEvent(ctx context.Context, roomID id.RoomID, eventID id.EventID) (*event.Event, error) {
-	return as.Matrix.GetEvent(ctx, roomID, eventID)
+	evt, err := as.Matrix.Client.GetEvent(ctx, roomID, eventID)
+	if err != nil {
+		return nil, err
+	}
+	err = evt.Content.ParseRaw(evt.Type)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Str("roomID", roomID.String()).Str("eventID", string(eventID)).Msg("failed to parse event content")
+	}
+
+	if evt.Type == event.EventEncrypted {
+		if as.Connector.Config.Encryption.DeleteKeys.RatchetOnDecrypt {
+			return nil, errors.New("can't decrypt the event")
+		}
+		return as.Matrix.Crypto.Decrypt(ctx, evt)
+	}
+
+	return evt, nil
 }
