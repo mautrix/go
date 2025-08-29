@@ -56,8 +56,31 @@ type TopicEventContent struct {
 // m.room.topic state event as described in [MSC3765].
 //
 // [MSC3765]: https://github.com/matrix-org/matrix-spec-proposals/pull/3765
-type ExtensibleTopic struct {
+type ExtensibleTopic = ExtensibleTextContainer
+
+type ExtensibleTextContainer struct {
 	Text []ExtensibleText `json:"m.text"`
+}
+
+func MakeExtensibleText(text string) *ExtensibleTextContainer {
+	return &ExtensibleTextContainer{
+		Text: []ExtensibleText{{
+			Body:     text,
+			MimeType: "text/plain",
+		}},
+	}
+}
+
+func MakeExtensibleFormattedText(plaintext, html string) *ExtensibleTextContainer {
+	return &ExtensibleTextContainer{
+		Text: []ExtensibleText{{
+			Body:     plaintext,
+			MimeType: "text/plain",
+		}, {
+			Body:     html,
+			MimeType: "text/html",
+		}},
+	}
 }
 
 // ExtensibleText represents the contents of an m.text field.
