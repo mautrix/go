@@ -30,6 +30,7 @@ import (
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/networkid"
+	"maunium.net/go/mautrix/bridgev2/provisionutil"
 	"maunium.net/go/mautrix/bridgev2/status"
 	"maunium.net/go/mautrix/federation"
 	"maunium.net/go/mautrix/id"
@@ -608,101 +609,18 @@ func (prov *ProvisioningAPI) doResolveIdentifier(w http.ResponseWriter, r *http.
 	if login == nil {
 		return
 	}
-	api, ok := login.Client.(bridgev2.IdentifierResolvingNetworkAPI)
-	if !ok {
-		mautrix.MUnrecognized.WithMessage("This bridge does not support resolving identifiers").Write(w)
-		return
-	}
-	resp, err := api.ResolveIdentifier(r.Context(), r.PathValue("identifier"), createChat)
+	resp, err := provisionutil.ResolveIdentifier(r.Context(), login, r.PathValue("identifier"), createChat)
 	if err != nil {
-		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to resolve identifier")
 		RespondWithError(w, err, "Internal error resolving identifier")
-		return
 	} else if resp == nil {
 		mautrix.MNotFound.WithMessage("Identifier not found").Write(w)
-		return
-	}
-	apiResp := &RespResolveIdentifier{
-		ID: resp.UserID,
-	}
-	status := http.StatusOK
-	if resp.Ghost != nil {
-		if resp.UserInfo != nil {
-			resp.Ghost.UpdateInfo(r.Context(), resp.UserInfo)
-		}
-		apiResp.Name = resp.Ghost.Name
-		apiResp.AvatarURL = resp.Ghost.AvatarMXC
-		apiResp.Identifiers = resp.Ghost.Identifiers
-		apiResp.MXID = resp.Ghost.Intent.GetMXID()
-	} else if resp.UserInfo != nil && resp.UserInfo.Name != nil {
-		apiResp.Name = *resp.UserInfo.Name
-	}
-	if resp.Chat != nil {
-		if resp.Chat.Portal == nil {
-			resp.Chat.Portal, err = prov.br.Bridge.GetPortalByKey(r.Context(), resp.Chat.PortalKey)
-			if err != nil {
-				zerolog.Ctx(r.Context()).Err(err).Msg("Failed to get portal")
-				mautrix.MUnknown.WithMessage("Failed to get portal").Write(w)
-				return
-			}
-		}
-		if createChat && resp.Chat.Portal.MXID == "" {
+	} else {
+		status := http.StatusOK
+		if resp.JustCreated {
 			status = http.StatusCreated
-			err = resp.Chat.Portal.CreateMatrixRoom(r.Context(), login, resp.Chat.PortalInfo)
-			if err != nil {
-				zerolog.Ctx(r.Context()).Err(err).Msg("Failed to create portal room")
-				mautrix.MUnknown.WithMessage("Failed to create portal room").Write(w)
-				return
-			}
 		}
-		apiResp.DMRoomID = resp.Chat.Portal.MXID
+		exhttp.WriteJSONResponse(w, status, resp)
 	}
-	exhttp.WriteJSONResponse(w, status, apiResp)
-}
-
-type RespGetContactList struct {
-	Contacts []*RespResolveIdentifier `json:"contacts"`
-}
-
-func (prov *ProvisioningAPI) processResolveIdentifiers(ctx context.Context, resp []*bridgev2.ResolveIdentifierResponse) (apiResp []*RespResolveIdentifier) {
-	apiResp = make([]*RespResolveIdentifier, len(resp))
-	for i, contact := range resp {
-		apiContact := &RespResolveIdentifier{
-			ID: contact.UserID,
-		}
-		apiResp[i] = apiContact
-		if contact.UserInfo != nil {
-			if contact.UserInfo.Name != nil {
-				apiContact.Name = *contact.UserInfo.Name
-			}
-			if contact.UserInfo.Identifiers != nil {
-				apiContact.Identifiers = contact.UserInfo.Identifiers
-			}
-		}
-		if contact.Ghost != nil {
-			if contact.Ghost.Name != "" {
-				apiContact.Name = contact.Ghost.Name
-			}
-			if len(contact.Ghost.Identifiers) >= len(apiContact.Identifiers) {
-				apiContact.Identifiers = contact.Ghost.Identifiers
-			}
-			apiContact.AvatarURL = contact.Ghost.AvatarMXC
-			apiContact.MXID = contact.Ghost.Intent.GetMXID()
-		}
-		if contact.Chat != nil {
-			if contact.Chat.Portal == nil {
-				var err error
-				contact.Chat.Portal, err = prov.br.Bridge.GetPortalByKey(ctx, contact.Chat.PortalKey)
-				if err != nil {
-					zerolog.Ctx(ctx).Err(err).Msg("Failed to get portal")
-				}
-			}
-			if contact.Chat.Portal != nil {
-				apiContact.DMRoomID = contact.Chat.Portal.MXID
-			}
-		}
-	}
-	return
 }
 
 func (prov *ProvisioningAPI) GetContactList(w http.ResponseWriter, r *http.Request) {
@@ -710,20 +628,12 @@ func (prov *ProvisioningAPI) GetContactList(w http.ResponseWriter, r *http.Reque
 	if login == nil {
 		return
 	}
-	api, ok := login.Client.(bridgev2.ContactListingNetworkAPI)
-	if !ok {
-		mautrix.MUnrecognized.WithMessage("This bridge does not support listing contacts").Write(w)
-		return
-	}
-	resp, err := api.GetContactList(r.Context())
+	resp, err := provisionutil.GetContactList(r.Context(), login)
 	if err != nil {
-		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to get contact list")
-		RespondWithError(w, err, "Internal error fetching contact list")
+		RespondWithError(w, err, "Internal error getting contact list")
 		return
 	}
-	exhttp.WriteJSONResponse(w, http.StatusOK, &RespGetContactList{
-		Contacts: prov.processResolveIdentifiers(r.Context(), resp),
-	})
+	exhttp.WriteJSONResponse(w, http.StatusOK, resp)
 }
 
 type ReqSearchUsers struct {
@@ -746,20 +656,12 @@ func (prov *ProvisioningAPI) PostSearchUsers(w http.ResponseWriter, r *http.Requ
 	if login == nil {
 		return
 	}
-	api, ok := login.Client.(bridgev2.UserSearchingNetworkAPI)
-	if !ok {
-		mautrix.MUnrecognized.WithMessage("This bridge does not support searching for users").Write(w)
-		return
-	}
-	resp, err := api.SearchUsers(r.Context(), req.Query)
+	resp, err := provisionutil.SearchUsers(r.Context(), login, req.Query)
 	if err != nil {
-		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to get contact list")
-		RespondWithError(w, err, "Internal error fetching contact list")
+		RespondWithError(w, err, "Internal error searching users")
 		return
 	}
-	exhttp.WriteJSONResponse(w, http.StatusOK, &RespSearchUsers{
-		Results: prov.processResolveIdentifiers(r.Context(), resp),
-	})
+	exhttp.WriteJSONResponse(w, http.StatusOK, resp)
 }
 
 func (prov *ProvisioningAPI) GetResolveIdentifier(w http.ResponseWriter, r *http.Request) {
