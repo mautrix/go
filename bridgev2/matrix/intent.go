@@ -682,7 +682,7 @@ func (as *ASIntent) GetEvent(ctx context.Context, roomID id.RoomID, eventID id.E
 	}
 	err = evt.Content.ParseRaw(evt.Type)
 	if err != nil {
-		zerolog.Ctx(ctx).Err(err).Stringer("roomID", roomID).Stringer("eventID", eventID).Msg("failed to parse event content")
+		zerolog.Ctx(ctx).Err(err).Stringer("room_id", roomID).Stringer("event_id", eventID).Msg("failed to parse event content")
 	}
 
 	if evt.Type == event.EventEncrypted {
