@@ -22,6 +22,7 @@ import (
 	"go.mau.fi/util/ptr"
 
 	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
@@ -126,10 +127,10 @@ type BridgeState struct {
 
 	UserAction BridgeStateUserAction `json:"user_action,omitempty"`
 
-	UserID        id.UserID      `json:"user_id,omitempty"`
-	RemoteID      string         `json:"remote_id,omitempty"`
-	RemoteName    string         `json:"remote_name,omitempty"`
-	RemoteProfile *RemoteProfile `json:"remote_profile,omitempty"`
+	UserID        id.UserID             `json:"user_id,omitempty"`
+	RemoteID      networkid.UserLoginID `json:"remote_id,omitempty"`
+	RemoteName    string                `json:"remote_name,omitempty"`
+	RemoteProfile *RemoteProfile        `json:"remote_profile,omitempty"`
 
 	Reason string                 `json:"reason,omitempty"`
 	Info   map[string]interface{} `json:"info,omitempty"`
