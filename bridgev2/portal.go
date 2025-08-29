@@ -1840,42 +1840,134 @@ func (portal *Portal) handleMatrixTombstone(ctx context.Context, evt *event.Even
 			return EventHandlingResultIgnored
 		}
 	}
-
-	portal.Bridge.cacheLock.Lock()
-	if _, alreadyExists := portal.Bridge.portalsByMXID[content.ReplacementRoom]; alreadyExists {
-		log.Warn().Msg("Replacement room is already a portal, ignoring tombstone")
-		portal.Bridge.cacheLock.Unlock()
+	err = portal.UpdateMatrixRoomID(ctx, content.ReplacementRoom, UpdateMatrixRoomIDParams{
+		DeleteOldRoom: true,
+		FetchInfoVia:  senderUser,
+	})
+	if errors.Is(err, ErrTargetRoomIsPortal) {
 		return EventHandlingResultIgnored
+	} else if err != nil {
+		return EventHandlingResultFailed.WithError(err)
 	}
-	delete(portal.Bridge.portalsByMXID, portal.MXID)
-	portal.MXID = content.ReplacementRoom
+	return EventHandlingResultSuccess
+}
+
+var ErrTargetRoomIsPortal = errors.New("target room is already a portal")
+var ErrRoomAlreadyExists = errors.New("this portal already has a room")
+
+type UpdateMatrixRoomIDParams struct {
+	SyncDBMetadata     func()
+	FailIfMXIDSet      bool
+	OverwriteOldPortal bool
+	TombstoneOldRoom   bool
+	DeleteOldRoom      bool
+
+	RoomCreateAlreadyLocked bool
+
+	FetchInfoVia   *User
+	ChatInfo       *ChatInfo
+	ChatInfoSource *UserLogin
+}
+
+func (portal *Portal) UpdateMatrixRoomID(
+	ctx context.Context,
+	newRoomID id.RoomID,
+	params UpdateMatrixRoomIDParams,
+) error {
+	if !params.RoomCreateAlreadyLocked {
+		portal.roomCreateLock.Lock()
+		defer portal.roomCreateLock.Unlock()
+	}
+	oldRoom := portal.MXID
+	if oldRoom == newRoomID {
+		return nil
+	} else if oldRoom != "" && params.FailIfMXIDSet {
+		return ErrRoomAlreadyExists
+	}
+	log := zerolog.Ctx(ctx)
+	portal.Bridge.cacheLock.Lock()
+	// Wrap unlock in a sync.OnceFunc because we want to both defer it to catch early returns
+	// and unlock it before return if nothing goes wrong.
+	unlockCacheLock := sync.OnceFunc(portal.Bridge.cacheLock.Unlock)
+	defer unlockCacheLock()
+	if existingPortal, alreadyExists := portal.Bridge.portalsByMXID[newRoomID]; alreadyExists && !params.OverwriteOldPortal {
+		log.Warn().Msg("Replacement room is already a portal, ignoring")
+		return ErrTargetRoomIsPortal
+	} else if alreadyExists {
+		log.Debug().Msg("Replacement room is already a portal, overwriting")
+		existingPortal.MXID = ""
+		err := existingPortal.Save(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to clear mxid of existing portal: %w", err)
+		}
+		delete(portal.Bridge.portalsByMXID, portal.MXID)
+	}
+	portal.MXID = newRoomID
 	portal.Bridge.portalsByMXID[portal.MXID] = portal
 	portal.NameSet = false
 	portal.AvatarSet = false
 	portal.TopicSet = false
 	portal.InSpace = false
 	portal.CapState = database.CapabilityState{}
-	portal.Bridge.cacheLock.Unlock()
+	portal.lastCapUpdate = time.Time{}
+	if params.SyncDBMetadata != nil {
+		params.SyncDBMetadata()
+	}
+	unlockCacheLock()
+	portal.updateLogger()
 
-	err = portal.Save(ctx)
+	err := portal.Save(ctx)
 	if err != nil {
-		log.Err(err).Msg("Failed to save portal after tombstone")
-		return EventHandlingResultFailed.WithError(err)
+		log.Err(err).Msg("Failed to save portal in UpdateMatrixRoomID")
+		return err
 	}
 	log.Info().Msg("Successfully followed tombstone and updated portal MXID")
 	err = portal.Bridge.DB.UserPortal.MarkAllNotInSpace(ctx, portal.PortalKey)
 	if err != nil {
-		log.Err(err).Msg("Failed to update in_space flag for user portals after tombstone")
+		log.Err(err).Msg("Failed to update in_space flag for user portals after updating portal MXID")
 	}
 	go portal.addToUserSpaces(ctx)
-	go portal.updateInfoAfterTombstone(ctx, senderUser)
+	if params.FetchInfoVia != nil {
+		go portal.updateInfoAfterTombstone(ctx, params.FetchInfoVia)
+	} else if params.ChatInfo != nil {
+		go portal.UpdateInfo(ctx, params.ChatInfo, params.ChatInfoSource, nil, time.Time{})
+	} else if params.ChatInfoSource != nil {
+		portal.UpdateCapabilities(ctx, params.ChatInfoSource, true)
+		portal.UpdateBridgeInfo(ctx)
+	}
 	go func() {
-		err = portal.Bridge.Bot.DeleteRoom(ctx, evt.RoomID, true)
+		// TODO this might become unnecessary if UpdateInfo starts taking care of it
+		_, err = portal.Bridge.Bot.SendState(ctx, portal.MXID, event.StateElementFunctionalMembers, "", &event.Content{
+			Parsed: &event.ElementFunctionalMembersContent{
+				ServiceMembers: []id.UserID{portal.Bridge.Bot.GetMXID()},
+			},
+		}, time.Time{})
 		if err != nil {
-			log.Err(err).Msg("Failed to clean up Matrix room after following tombstone")
+			if err != nil {
+				log.Warn().Err(err).Msg("Failed to set service members in new room")
+			}
 		}
 	}()
-	return EventHandlingResultSuccess
+	if params.TombstoneOldRoom && oldRoom != "" {
+		_, err = portal.Bridge.Bot.SendState(ctx, portal.MXID, event.StateTombstone, "", &event.Content{
+			Parsed: &event.TombstoneEventContent{
+				Body:            "Room has been replaced.",
+				ReplacementRoom: newRoomID,
+			},
+		}, time.Now())
+		if err != nil {
+			log.Err(err).Msg("Failed to send tombstone event to old room")
+		}
+	}
+	if params.DeleteOldRoom && oldRoom != "" {
+		go func() {
+			err = portal.Bridge.Bot.DeleteRoom(ctx, oldRoom, true)
+			if err != nil {
+				log.Err(err).Msg("Failed to clean up old Matrix room after updating portal MXID")
+			}
+		}()
+	}
+	return nil
 }
 
 func (portal *Portal) updateInfoAfterTombstone(ctx context.Context, senderUser *User) {
