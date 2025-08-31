@@ -66,6 +66,7 @@ var (
 	FeatureMutualRooms         = UnstableFeature{UnstableFlag: "uk.half-shot.msc2666.query_mutual_rooms"}
 	FeatureUserRedaction       = UnstableFeature{UnstableFlag: "org.matrix.msc4194"}
 	FeatureViewRedactedContent = UnstableFeature{UnstableFlag: "fi.mau.msc2815"}
+	FeatureAccountModeration   = UnstableFeature{UnstableFlag: "uk.timedout.msc4323"}
 
 	BeeperFeatureHungry               = UnstableFeature{UnstableFlag: "com.beeper.hungry"}
 	BeeperFeatureBatchSending         = UnstableFeature{UnstableFlag: "com.beeper.batch_sending"}
