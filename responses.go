@@ -494,12 +494,13 @@ type RespBeeperBatchSend struct {
 
 // RespCapabilities is the JSON response for https://spec.matrix.org/v1.3/client-server-api/#get_matrixclientv3capabilities
 type RespCapabilities struct {
-	RoomVersions    *CapRoomVersions `json:"m.room_versions,omitempty"`
-	ChangePassword  *CapBooleanTrue  `json:"m.change_password,omitempty"`
-	SetDisplayname  *CapBooleanTrue  `json:"m.set_displayname,omitempty"`
-	SetAvatarURL    *CapBooleanTrue  `json:"m.set_avatar_url,omitempty"`
-	ThreePIDChanges *CapBooleanTrue  `json:"m.3pid_changes,omitempty"`
-	GetLoginToken   *CapBooleanTrue  `json:"m.get_login_token,omitempty"`
+	RoomVersions              *CapRoomVersions              `json:"m.room_versions,omitempty"`
+	ChangePassword            *CapBooleanTrue               `json:"m.change_password,omitempty"`
+	SetDisplayname            *CapBooleanTrue               `json:"m.set_displayname,omitempty"`
+	SetAvatarURL              *CapBooleanTrue               `json:"m.set_avatar_url,omitempty"`
+	ThreePIDChanges           *CapBooleanTrue               `json:"m.3pid_changes,omitempty"`
+	GetLoginToken             *CapBooleanTrue               `json:"m.get_login_token,omitempty"`
+	UnstableAccountModeration *CapUnstableAccountModeration `json:"uk.timedout.msc4323,omitempty"`
 
 	Custom map[string]interface{} `json:"-"`
 }
@@ -608,6 +609,11 @@ func (vers *CapRoomVersions) IsAvailable(version string) bool {
 	return available
 }
 
+type CapUnstableAccountModeration struct {
+	Suspend bool `json:"suspend"`
+	Lock    bool `json:"lock"`
+}
+
 type RespPublicRooms struct {
 	Chunk                  []*PublicRoomInfo `json:"chunk"`
 	NextBatch              string            `json:"next_batch,omitempty"`
@@ -698,4 +704,14 @@ type RespGetRelations struct {
 	NextBatch      string         `json:"next_batch,omitempty"`
 	PrevBatch      string         `json:"prev_batch,omitempty"`
 	RecursionDepth int            `json:"recursion_depth,omitempty"`
+}
+
+// RespSuspended is the response body for https://github.com/matrix-org/matrix-spec-proposals/pull/4323
+type RespSuspended struct {
+	Suspended bool `json:"suspended"`
+}
+
+// RespLocked is the response body for https://github.com/matrix-org/matrix-spec-proposals/pull/4323
+type RespLocked struct {
+	Locked bool `json:"locked"`
 }
