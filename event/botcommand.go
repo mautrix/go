@@ -6,6 +6,10 @@
 
 package event
 
+import (
+	"encoding/json"
+)
+
 type BotCommandsEventContent struct {
 	Sigil    string        `json:"sigil,omitempty"`
 	Commands []*BotCommand `json:"commands,omitempty"`
@@ -40,6 +44,6 @@ type BotCommandArgument struct {
 }
 
 type BotCommandInput struct {
-	Syntax    string         `json:"syntax"`
-	Arguments map[string]any `json:"arguments,omitempty"`
+	Syntax    string          `json:"syntax"`
+	Arguments json.RawMessage `json:"arguments,omitempty"`
 }
