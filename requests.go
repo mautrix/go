@@ -596,3 +596,13 @@ func (rgr *ReqGetRelations) Query() map[string]string {
 	}
 	return query
 }
+
+// ReqSuspend is the request body for https://github.com/matrix-org/matrix-spec-proposals/pull/4323
+type ReqSuspend struct {
+	Suspended bool `json:"suspended"`
+}
+
+// ReqLocked is the request body for https://github.com/matrix-org/matrix-spec-proposals/pull/4323
+type ReqLocked struct {
+	Locked bool `json:"locked"`
+}

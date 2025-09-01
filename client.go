@@ -2562,6 +2562,34 @@ func (cli *Client) ReportRoom(ctx context.Context, roomID id.RoomID, reason stri
 	return err
 }
 
+// UnstableGetSuspendedStatus uses MSC4323 to check if a user is suspended.
+func (cli *Client) UnstableGetSuspendedStatus(ctx context.Context, userID id.UserID) (res *RespSuspended, err error) {
+	urlPath := cli.BuildClientURL("unstable", "uk.timedout.msc4323", "admin", "suspend", userID)
+	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, res)
+	return
+}
+
+// UnstableGetLockStatus uses MSC4323 to check if a user is locked.
+func (cli *Client) UnstableGetLockStatus(ctx context.Context, userID id.UserID) (res *RespLocked, err error) {
+	urlPath := cli.BuildClientURL("unstable", "uk.timedout.msc4323", "admin", "lock", userID)
+	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, res)
+	return
+}
+
+// UnstableSetSuspendedStatus uses MSC4323 to set whether a user account is suspended.
+func (cli *Client) UnstableSetSuspendedStatus(ctx context.Context, userID id.UserID, suspended bool) (res *RespSuspended, err error) {
+	urlPath := cli.BuildClientURL("unstable", "uk.timedout.msc4323", "admin", "suspend", userID)
+	_, err = cli.MakeRequest(ctx, http.MethodPut, urlPath, &ReqSuspend{Suspended: suspended}, res)
+	return
+}
+
+// UnstableSetLockStatus uses MSC4323 to set whether a user account is locked.
+func (cli *Client) UnstableSetLockStatus(ctx context.Context, userID id.UserID, locked bool) (res *RespLocked, err error) {
+	urlPath := cli.BuildClientURL("unstable", "uk.timedout.msc4323", "admin", "lock", userID)
+	_, err = cli.MakeRequest(ctx, http.MethodPut, urlPath, &ReqLocked{Locked: locked}, res)
+	return
+}
+
 func (cli *Client) AppservicePing(ctx context.Context, id, txnID string) (resp *RespAppservicePing, err error) {
 	_, err = cli.MakeFullRequest(ctx, FullRequest{
 		Method:       http.MethodPost,
