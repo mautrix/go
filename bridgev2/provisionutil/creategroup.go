@@ -34,8 +34,8 @@ func CreateGroup(ctx context.Context, login *bridgev2.UserLogin, params *bridgev
 	if !validType {
 		return nil, bridgev2.RespError(mautrix.MUnrecognized.WithMessage("Unrecognized group type %s", params.Type))
 	}
-	if len(params.Participants) < typeSpec.Members.MinLength {
-		return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("Must have at least %d members", typeSpec.Members.MinLength))
+	if len(params.Participants) < typeSpec.Participants.MinLength {
+		return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("Must have at least %d members", typeSpec.Participants.MinLength))
 	}
 	if (params.Name == nil || params.Name.Name == "") && typeSpec.Name.Required {
 		return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("Name is required"))

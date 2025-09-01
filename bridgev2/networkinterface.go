@@ -777,13 +777,13 @@ type ResolveIdentifierCapabilities struct {
 type GroupTypeCapabilities struct {
 	TypeDescription string `json:"type_description"`
 
-	Name      GroupFieldCapability `json:"name"`
-	Username  GroupFieldCapability `json:"username"`
-	Avatar    GroupFieldCapability `json:"avatar"`
-	Topic     GroupFieldCapability `json:"topic"`
-	Disappear GroupFieldCapability `json:"disappear"`
-	Members   GroupFieldCapability `json:"members"`
-	Parent    GroupFieldCapability `json:"parent"`
+	Name         GroupFieldCapability `json:"name"`
+	Username     GroupFieldCapability `json:"username"`
+	Avatar       GroupFieldCapability `json:"avatar"`
+	Topic        GroupFieldCapability `json:"topic"`
+	Disappear    GroupFieldCapability `json:"disappear"`
+	Participants GroupFieldCapability `json:"participants"`
+	Parent       GroupFieldCapability `json:"parent"`
 }
 
 type GroupFieldCapability struct {

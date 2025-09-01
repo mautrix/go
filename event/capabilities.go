@@ -77,7 +77,7 @@ type DisappearingTimerCapability struct {
 }
 
 func (dtc *DisappearingTimerCapability) Supports(content *BeeperDisappearingTimer) bool {
-	if dtc == nil || content.Type == DisappearingTypeNone {
+	if dtc == nil || content == nil || content.Type == DisappearingTypeNone {
 		return true
 	}
 	return slices.Contains(dtc.Types, content.Type) && (dtc.Timers == nil || slices.Contains(dtc.Timers, content.Timer))

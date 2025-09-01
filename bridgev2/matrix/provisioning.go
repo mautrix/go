@@ -120,6 +120,7 @@ func (prov *ProvisioningAPI) Init() {
 	tp.Transport.TLSHandshakeTimeout = 10 * time.Second
 	prov.Router = http.NewServeMux()
 	prov.Router.HandleFunc("GET /v3/whoami", prov.GetWhoami)
+	prov.Router.HandleFunc("GET /v3/capabilities", prov.GetCapabilities)
 	prov.Router.HandleFunc("GET /v3/login/flows", prov.GetLoginFlows)
 	prov.Router.HandleFunc("POST /v3/login/start/{flowID}", prov.PostLoginStart)
 	prov.Router.HandleFunc("POST /v3/login/step/{loginProcessID}/{stepID}/{stepType}", prov.PostLoginStep)
@@ -359,6 +360,10 @@ func (prov *ProvisioningAPI) GetLoginFlows(w http.ResponseWriter, r *http.Reques
 	exhttp.WriteJSONResponse(w, http.StatusOK, &RespLoginFlows{
 		Flows: prov.net.GetLoginFlows(),
 	})
+}
+
+func (prov *ProvisioningAPI) GetCapabilities(w http.ResponseWriter, r *http.Request) {
+	exhttp.WriteJSONResponse(w, http.StatusOK, &prov.net.GetCapabilities().Provisioning)
 }
 
 var ErrNilStep = errors.New("bridge returned nil step with no error")
