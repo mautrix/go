@@ -7,13 +7,20 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"html"
+	"maps"
+	"slices"
 	"strings"
+
+	"github.com/rs/zerolog"
 
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/bridgev2/provisionutil"
+	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/id"
 )
 
 var CommandResolveIdentifier = &FullHandler{
@@ -98,6 +105,97 @@ func fnResolveIdentifier(ce *Event) {
 	} else {
 		ce.Reply("Found %s", formattedName)
 	}
+}
+
+var CommandCreateGroup = &FullHandler{
+	Func:    fnCreateGroup,
+	Name:    "create-group",
+	Aliases: []string{"create"},
+	Help: HelpMeta{
+		Section:     HelpSectionChats,
+		Description: "Create a new group chat for the current Matrix room",
+		Args:        "[_group type_]",
+	},
+	RequiresLogin: true,
+	NetworkAPI:    NetworkAPIImplements[bridgev2.GroupCreatingNetworkAPI],
+}
+
+func getState[T any](ctx context.Context, roomID id.RoomID, evtType event.Type, provider bridgev2.MatrixConnectorWithArbitraryRoomState) (content T) {
+	evt, err := provider.GetStateEvent(ctx, roomID, evtType, "")
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Stringer("event_type", evtType).Msg("Failed to get state event for group creation")
+	} else if evt != nil {
+		content, _ = evt.Content.Parsed.(T)
+	}
+	return
+}
+
+func fnCreateGroup(ce *Event) {
+	ce.Bridge.Matrix.GetCapabilities()
+	login, api, remainingArgs := getClientForStartingChat[bridgev2.GroupCreatingNetworkAPI](ce, "creating group")
+	if api == nil {
+		return
+	}
+	stateProvider, ok := ce.Bridge.Matrix.(bridgev2.MatrixConnectorWithArbitraryRoomState)
+	if !ok {
+		ce.Reply("Matrix connector doesn't support fetching room state")
+		return
+	}
+	params := &bridgev2.GroupCreateParams{
+		Username:     "",
+		Participants: nil,
+		Parent:       nil,
+		Name:         getState[*event.RoomNameEventContent](ce.Ctx, ce.RoomID, event.StateRoomName, stateProvider),
+		Avatar:       getState[*event.RoomAvatarEventContent](ce.Ctx, ce.RoomID, event.StateRoomAvatar, stateProvider),
+		Topic:        getState[*event.TopicEventContent](ce.Ctx, ce.RoomID, event.StateTopic, stateProvider),
+		Disappear:    getState[*event.BeeperDisappearingTimer](ce.Ctx, ce.RoomID, event.StateBeeperDisappearingTimer, stateProvider),
+		RoomID:       ce.RoomID,
+	}
+	members, err := ce.Bridge.Matrix.GetMembers(ce.Ctx, ce.RoomID)
+	if err != nil {
+		ce.Log.Err(err).Msg("Failed to get room members for group creation")
+		ce.Reply("Failed to get room members: %v", err)
+		return
+	}
+	params.Participants = make([]networkid.UserID, 0, len(members)-2)
+	for userID := range members {
+		if userID == ce.User.MXID || userID == ce.Bot.GetMXID() {
+			continue
+		}
+		if parsedUserID, ok := ce.Bridge.Matrix.ParseGhostMXID(userID); ok {
+			params.Participants = append(params.Participants, parsedUserID)
+		} else if !ce.Bridge.Config.SplitPortals {
+			if user, err := ce.Bridge.GetExistingUserByMXID(ce.Ctx, userID); err != nil {
+				ce.Log.Err(err).Stringer("user_id", userID).Msg("Failed to get user for room member")
+			} else if user != nil {
+				// TODO add user logins to participants
+				//for _, login := range user.GetUserLogins() {
+				//	params.Participants = append(params.Participants, login.GetUserID())
+				//}
+			}
+		}
+	}
+
+	if caps := ce.Bridge.Network.GetCapabilities(); len(caps.Provisioning.GroupCreation) == 0 {
+		ce.Reply("No group creation types defined in network capabilities")
+		return
+	} else if len(remainingArgs) > 0 {
+		params.Type = remainingArgs[0]
+	} else if len(caps.Provisioning.GroupCreation) == 1 {
+		for params.Type = range caps.Provisioning.GroupCreation {
+			// The loop assigns the variable we want
+		}
+	} else {
+		types := strings.Join(slices.Collect(maps.Keys(caps.Provisioning.GroupCreation)), "`, `")
+		ce.Reply("Please specify type of group to create: `%s`", types)
+		return
+	}
+	resp, err := provisionutil.CreateGroup(ce.Ctx, login, params)
+	if err != nil {
+		ce.Reply("Failed to create group: %v", err)
+		return
+	}
+	ce.Reply("Successfully created group `%s`", resp.ID)
 }
 
 var CommandSearch = &FullHandler{

@@ -351,7 +351,7 @@ type NetworkGeneralCapabilities struct {
 	// automatic timeout errors in case the asynchronous response never arrives.
 	OutgoingMessageTimeouts *OutgoingTimeoutConfig
 	// Capabilities related to the provisioning API.
-	Provisioning *ProvisioningCapabilities
+	Provisioning ProvisioningCapabilities
 }
 
 // NetworkAPI is an interface representing a remote network client for a single user login.
