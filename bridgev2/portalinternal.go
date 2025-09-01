@@ -125,12 +125,24 @@ func (portal *PortalInternals) HandleMatrixPowerLevels(ctx context.Context, send
 	return (*Portal)(portal).handleMatrixPowerLevels(ctx, sender, origSender, evt)
 }
 
+func (portal *PortalInternals) HandleMatrixTombstone(ctx context.Context, evt *event.Event) EventHandlingResult {
+	return (*Portal)(portal).handleMatrixTombstone(ctx, evt)
+}
+
+func (portal *PortalInternals) UpdateInfoAfterTombstone(ctx context.Context, senderUser *User) {
+	(*Portal)(portal).updateInfoAfterTombstone(ctx, senderUser)
+}
+
 func (portal *PortalInternals) HandleMatrixRedaction(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) EventHandlingResult {
 	return (*Portal)(portal).handleMatrixRedaction(ctx, sender, origSender, evt)
 }
 
 func (portal *PortalInternals) HandleRemoteEvent(ctx context.Context, source *UserLogin, evtType RemoteEventType, evt RemoteEvent) (res EventHandlingResult) {
 	return (*Portal)(portal).handleRemoteEvent(ctx, source, evtType, evt)
+}
+
+func (portal *PortalInternals) EnsureFunctionalMember(ctx context.Context, ghost *Ghost) {
+	(*Portal)(portal).ensureFunctionalMember(ctx, ghost)
 }
 
 func (portal *PortalInternals) GetIntentAndUserMXIDFor(ctx context.Context, sender EventSender, source *UserLogin, otherLogins []*UserLogin, evtType RemoteEventType) (intent MatrixAPI, extraUserID id.UserID, err error) {
@@ -297,6 +309,10 @@ func (portal *PortalInternals) CreateMatrixRoomInLoop(ctx context.Context, sourc
 	return (*Portal)(portal).createMatrixRoomInLoop(ctx, source, info, backfillBundle)
 }
 
+func (portal *PortalInternals) AddToUserSpaces(ctx context.Context) {
+	(*Portal)(portal).addToUserSpaces(ctx)
+}
+
 func (portal *PortalInternals) RemoveInPortalCache(ctx context.Context) {
 	(*Portal)(portal).removeInPortalCache(ctx)
 }
@@ -359,8 +375,4 @@ func (portal *PortalInternals) AddToParentSpaceAndSave(ctx context.Context, save
 
 func (portal *PortalInternals) ToggleSpace(ctx context.Context, spaceID id.RoomID, canonical, remove bool) error {
 	return (*Portal)(portal).toggleSpace(ctx, spaceID, canonical, remove)
-}
-
-func (portal *PortalInternals) SetMXIDToExistingRoom(ctx context.Context, roomID id.RoomID) bool {
-	return (*Portal)(portal).setMXIDToExistingRoom(ctx, roomID)
 }

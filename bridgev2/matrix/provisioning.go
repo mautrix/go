@@ -120,6 +120,7 @@ func (prov *ProvisioningAPI) Init() {
 	tp.Transport.TLSHandshakeTimeout = 10 * time.Second
 	prov.Router = http.NewServeMux()
 	prov.Router.HandleFunc("GET /v3/whoami", prov.GetWhoami)
+	prov.Router.HandleFunc("GET /v3/capabilities", prov.GetCapabilities)
 	prov.Router.HandleFunc("GET /v3/login/flows", prov.GetLoginFlows)
 	prov.Router.HandleFunc("POST /v3/login/start/{flowID}", prov.PostLoginStart)
 	prov.Router.HandleFunc("POST /v3/login/step/{loginProcessID}/{stepID}/{stepType}", prov.PostLoginStep)
@@ -129,7 +130,7 @@ func (prov *ProvisioningAPI) Init() {
 	prov.Router.HandleFunc("POST /v3/search_users", prov.PostSearchUsers)
 	prov.Router.HandleFunc("GET /v3/resolve_identifier/{identifier}", prov.GetResolveIdentifier)
 	prov.Router.HandleFunc("POST /v3/create_dm/{identifier}", prov.PostCreateDM)
-	prov.Router.HandleFunc("POST /v3/create_group", prov.PostCreateGroup)
+	prov.Router.HandleFunc("POST /v3/create_group/{type}", prov.PostCreateGroup)
 
 	if prov.br.Config.Provisioning.EnableSessionTransfers {
 		prov.log.Debug().Msg("Enabling session transfer API")
@@ -359,6 +360,10 @@ func (prov *ProvisioningAPI) GetLoginFlows(w http.ResponseWriter, r *http.Reques
 	exhttp.WriteJSONResponse(w, http.StatusOK, &RespLoginFlows{
 		Flows: prov.net.GetLoginFlows(),
 	})
+}
+
+func (prov *ProvisioningAPI) GetCapabilities(w http.ResponseWriter, r *http.Request) {
+	exhttp.WriteJSONResponse(w, http.StatusOK, &prov.net.GetCapabilities().Provisioning)
 }
 
 var ErrNilStep = errors.New("bridge returned nil step with no error")
@@ -673,11 +678,24 @@ func (prov *ProvisioningAPI) PostCreateDM(w http.ResponseWriter, r *http.Request
 }
 
 func (prov *ProvisioningAPI) PostCreateGroup(w http.ResponseWriter, r *http.Request) {
+	var req bridgev2.GroupCreateParams
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to decode request body")
+		mautrix.MNotJSON.WithMessage("Failed to decode request body").Write(w)
+		return
+	}
+	req.Type = r.PathValue("type")
 	login := prov.GetLoginForRequest(w, r)
 	if login == nil {
 		return
 	}
-	mautrix.MUnrecognized.WithMessage("Creating groups is not yet implemented").Write(w)
+	resp, err := provisionutil.CreateGroup(r.Context(), login, &req)
+	if err != nil {
+		RespondWithError(w, err, "Internal error creating group")
+		return
+	}
+	exhttp.WriteJSONResponse(w, http.StatusOK, resp)
 }
 
 type ReqExportCredentials struct {

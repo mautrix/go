@@ -206,72 +206,64 @@ func (br *Bridge) handleGhostDMInvite(ctx context.Context, evt *event.Event, sen
 		return EventHandlingResultFailed
 	}
 
-	didSetPortal := portal.setMXIDToExistingRoom(ctx, evt.RoomID)
-	if didSetPortal {
-		message := "Private chat portal created"
-		err = br.givePowerToBot(ctx, evt.RoomID, invitedGhost.Intent)
-		hasWarning := false
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to give power to bot in new DM")
-			message += "\n\nWarning: failed to promote bot"
-			hasWarning = true
-		}
-		if resp.DMRedirectedTo != "" && resp.DMRedirectedTo != invitedGhost.ID {
-			log.Debug().
-				Str("dm_redirected_to_id", string(resp.DMRedirectedTo)).
-				Msg("Created DM was redirected to another user ID")
-			_, err = invitedGhost.Intent.SendState(ctx, portal.MXID, event.StateMember, invitedGhost.Intent.GetMXID().String(), &event.Content{
-				Parsed: &event.MemberEventContent{
-					Membership: event.MembershipLeave,
-					Reason:     "Direct chat redirected to another internal user ID",
-				},
-			}, time.Time{})
-			if err != nil {
-				log.Err(err).Msg("Failed to make incorrect ghost leave new DM room")
-			}
-			otherUserGhost, err := br.GetGhostByID(ctx, resp.DMRedirectedTo)
-			if err != nil {
-				log.Err(err).Msg("Failed to get ghost of real portal other user ID")
-			} else {
-				invitedGhost = otherUserGhost
-			}
-		}
-		if resp.PortalInfo != nil {
-			portal.UpdateInfo(ctx, resp.PortalInfo, sourceLogin, nil, time.Time{})
-		} else {
-			portal.UpdateCapabilities(ctx, sourceLogin, true)
-			portal.UpdateBridgeInfo(ctx)
-		}
-		// TODO this might become unnecessary if UpdateInfo starts taking care of it
-		_, err = br.Bot.SendState(ctx, portal.MXID, event.StateElementFunctionalMembers, "", &event.Content{
-			Parsed: &event.ElementFunctionalMembersContent{
-				ServiceMembers: []id.UserID{br.Bot.GetMXID()},
+	portal.roomCreateLock.Lock()
+	defer portal.roomCreateLock.Unlock()
+	portalMXID := portal.MXID
+	if portalMXID != "" {
+		sendErrorAndLeave(ctx, evt, invitedGhost.Intent, "You already have a direct chat with me at [%s](%s)", portalMXID, portalMXID.URI(br.Matrix.ServerName()).MatrixToURL())
+		rejectInvite(ctx, evt, br.Bot, "")
+		return EventHandlingResultSuccess
+	}
+	err = br.givePowerToBot(ctx, evt.RoomID, invitedGhost.Intent)
+	if err != nil {
+		log.Err(err).Msg("Failed to give permissions to bridge bot")
+		sendErrorAndLeave(ctx, evt, invitedGhost.Intent, "Failed to give permissions to bridge bot")
+		rejectInvite(ctx, evt, br.Bot, "")
+		return EventHandlingResultSuccess
+	}
+	if resp.DMRedirectedTo != "" && resp.DMRedirectedTo != invitedGhost.ID {
+		log.Debug().
+			Str("dm_redirected_to_id", string(resp.DMRedirectedTo)).
+			Msg("Created DM was redirected to another user ID")
+		_, err = invitedGhost.Intent.SendState(ctx, portal.MXID, event.StateMember, invitedGhost.Intent.GetMXID().String(), &event.Content{
+			Parsed: &event.MemberEventContent{
+				Membership: event.MembershipLeave,
+				Reason:     "Direct chat redirected to another internal user ID",
 			},
 		}, time.Time{})
 		if err != nil {
-			log.Warn().Err(err).Msg("Failed to set service members in room")
-			if !hasWarning {
-				message += "\n\nWarning: failed to set service members"
-				hasWarning = true
-			}
+			log.Err(err).Msg("Failed to make incorrect ghost leave new DM room")
 		}
-		mx, ok := br.Matrix.(MatrixConnectorWithPostRoomBridgeHandling)
-		if ok {
-			err = mx.HandleNewlyBridgedRoom(ctx, evt.RoomID)
-			if err != nil {
-				if hasWarning {
-					message += fmt.Sprintf(", %s", err.Error())
-				} else {
-					message += fmt.Sprintf("\n\nWarning: %s", err.Error())
-				}
-			}
+		otherUserGhost, err := br.GetGhostByID(ctx, resp.DMRedirectedTo)
+		if err != nil {
+			log.Err(err).Msg("Failed to get ghost of real portal other user ID")
+		} else {
+			invitedGhost = otherUserGhost
 		}
-		sendNotice(ctx, evt, invitedGhost.Intent, message)
-	} else {
-		// TODO ensure user is invited even if PortalInfo wasn't provided?
-		sendErrorAndLeave(ctx, evt, invitedGhost.Intent, "You already have a direct chat with me at [%s](%s)", portal.MXID, portal.MXID.URI(br.Matrix.ServerName()).MatrixToURL())
-		rejectInvite(ctx, evt, br.Bot, "")
 	}
+	err = portal.UpdateMatrixRoomID(ctx, evt.RoomID, UpdateMatrixRoomIDParams{
+		// We locked it before checking the mxid
+		RoomCreateAlreadyLocked: true,
+
+		FailIfMXIDSet:  true,
+		ChatInfo:       resp.PortalInfo,
+		ChatInfoSource: sourceLogin,
+	})
+	if err != nil {
+		log.Err(err).Msg("Failed to update Matrix room ID for new DM portal")
+		sendNotice(ctx, evt, invitedGhost.Intent, "Failed to finish configuring portal. The chat may or may not work")
+		return EventHandlingResultSuccess
+	}
+	message := "Private chat portal created"
+	mx, ok := br.Matrix.(MatrixConnectorWithPostRoomBridgeHandling)
+	if ok {
+		err = mx.HandleNewlyBridgedRoom(ctx, evt.RoomID)
+		if err != nil {
+			log.Err(err).Msg("Error in connector newly bridged room handler")
+			message += fmt.Sprintf("\n\nWarning: %s", err.Error())
+		}
+	}
+	sendNotice(ctx, evt, invitedGhost.Intent, message)
 	return EventHandlingResultSuccess
 }
 
@@ -293,22 +285,4 @@ func (br *Bridge) givePowerToBot(ctx context.Context, roomID id.RoomID, userWith
 		}
 	}
 	return nil
-}
-
-func (portal *Portal) setMXIDToExistingRoom(ctx context.Context, roomID id.RoomID) bool {
-	portal.roomCreateLock.Lock()
-	defer portal.roomCreateLock.Unlock()
-	if portal.MXID != "" {
-		return false
-	}
-	portal.MXID = roomID
-	portal.updateLogger()
-	portal.Bridge.cacheLock.Lock()
-	portal.Bridge.portalsByMXID[portal.MXID] = portal
-	portal.Bridge.cacheLock.Unlock()
-	err := portal.Save(ctx)
-	if err != nil {
-		zerolog.Ctx(ctx).Err(err).Msg("Failed to save portal after updating mxid")
-	}
-	return true
 }

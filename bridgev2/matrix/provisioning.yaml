@@ -361,14 +361,25 @@ paths:
           $ref: '#/components/responses/InternalError'
         501:
           $ref: '#/components/responses/NotSupported'
-  /v3/create_group:
+  /v3/create_group/{type}:
     post:
       tags: [ snc ]
       summary: Create a group chat on the remote network.
       operationId: createGroup
       parameters:
       - $ref: "#/components/parameters/loginID"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GroupCreateParams'
       responses:
+        200:
+          description: Identifier resolved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatedGroup'
         401:
           $ref: '#/components/responses/Unauthorized'
         404:
@@ -570,6 +581,74 @@ components:
           type: string
           format: matrix_room_id
           description: The Matrix room ID of the direct chat with the user.
+          examples:
+          - '!OKhS0I5q2fCzdnl2qgeozDQw:t2bot.io'
+    GroupCreateParams:
+      type: object
+      description: |
+        Parameters for creating a group chat.
+        The /capabilities endpoint response must be checked to see which fields are actually allowed.
+      properties:
+        type:
+          type: string
+          description: The type of group to create.
+          examples:
+          - channel
+        username:
+          type: string
+          description: The public username for the created group.
+        participants:
+          type: array
+          description: The users to add to the group initially.
+          items:
+            type: string
+        parent:
+          type: object
+        name:
+          type: object
+          description: The `m.room.name` event content for the room.
+          properties:
+            name:
+              type: string
+        avatar:
+          type: object
+          description: The `m.room.avatar` event content for the room.
+          properties:
+            url:
+              type: string
+              format: mxc
+        topic:
+          type: object
+          description: The `m.room.topic` event content for the room.
+          properties:
+            topic:
+              type: string
+        disappear:
+          type: object
+          description: The `com.beeper.disappearing_timer` event content for the room.
+          properties:
+            type:
+              type: string
+            timer:
+              type: number
+        room_id:
+          type: string
+          format: matrix_room_id
+          description: |
+            An existing Matrix room ID to bridge to.
+            The other parameters must be already in sync with the room state when using this parameter.
+    CreatedGroup:
+      type: object
+      description: A successfully created group chat.
+      required: [id, mxid]
+      properties:
+        id:
+          type: string
+          description: The internal chat ID of the created group.
+        mxid:
+          type: string
+          format: matrix_room_id
+          description: The Matrix room ID of the portal.
           examples:
           - '!OKhS0I5q2fCzdnl2qgeozDQw:t2bot.io'
     LoginStep:
