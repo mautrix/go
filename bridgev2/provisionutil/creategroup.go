@@ -10,6 +10,7 @@ import (
 	"context"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/ptr"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2"
@@ -29,8 +30,44 @@ func CreateGroup(ctx context.Context, login *bridgev2.UserLogin, params *bridgev
 		return nil, bridgev2.RespError(mautrix.MUnrecognized.WithMessage("This bridge does not support creating groups"))
 	}
 	caps := login.Bridge.Network.GetCapabilities()
-	if _, validType := caps.Provisioning.GroupCreation[params.Type]; !validType {
+	typeSpec, validType := caps.Provisioning.GroupCreation[params.Type]
+	if !validType {
 		return nil, bridgev2.RespError(mautrix.MUnrecognized.WithMessage("Unrecognized group type %s", params.Type))
+	}
+	if len(params.Participants) < typeSpec.Members.MinLength {
+		return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("Must have at least %d members", typeSpec.Members.MinLength))
+	}
+	if (params.Name == nil || params.Name.Name == "") && typeSpec.Name.Required {
+		return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("Name is required"))
+	} else if nameLen := len(ptr.Val(params.Name).Name); nameLen > 0 && nameLen < typeSpec.Name.MinLength {
+		return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("Name must be at least %d characters", typeSpec.Name.MinLength))
+	} else if nameLen > typeSpec.Name.MaxLength {
+		return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("Name must be at most %d characters", typeSpec.Name.MaxLength))
+	}
+	if (params.Avatar == nil || params.Avatar.URL == "") && typeSpec.Avatar.Required {
+		return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("Avatar is required"))
+	}
+	if (params.Topic == nil || params.Topic.Topic == "") && typeSpec.Topic.Required {
+		return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("Topic is required"))
+	} else if topicLen := len(ptr.Val(params.Topic).Topic); topicLen > 0 && topicLen < typeSpec.Topic.MinLength {
+		return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("Topic must be at least %d characters", typeSpec.Topic.MinLength))
+	} else if topicLen > typeSpec.Topic.MaxLength {
+		return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("Topic must be at most %d characters", typeSpec.Topic.MaxLength))
+	}
+	if (params.Disappear == nil || params.Disappear.Timer.Duration == 0) && typeSpec.Disappear.Required {
+		return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("Disappearing timer is required"))
+	} else if !typeSpec.Disappear.DisappearSettings.Supports(params.Disappear) {
+		return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("Unsupported value for disappearing timer"))
+	}
+	if params.Username == "" && typeSpec.Username.Required {
+		return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("Username is required"))
+	} else if len(params.Username) > 0 && len(params.Username) < typeSpec.Username.MinLength {
+		return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("Username must be at least %d characters", typeSpec.Username.MinLength))
+	} else if len(params.Username) > typeSpec.Username.MaxLength {
+		return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("Username must be at most %d characters", typeSpec.Username.MaxLength))
+	}
+	if params.Parent == nil && typeSpec.Parent.Required {
+		return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("Parent is required"))
 	}
 	resp, err := api.CreateGroup(ctx, params)
 	if err != nil {

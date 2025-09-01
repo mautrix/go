@@ -141,25 +141,25 @@ func fnCreateGroup(ce *Event) {
 		ce.Reply("Matrix connector doesn't support fetching room state")
 		return
 	}
-	params := &bridgev2.GroupCreateParams{
-		Username:     "",
-		Participants: nil,
-		Parent:       nil,
-		Name:         getState[*event.RoomNameEventContent](ce.Ctx, ce.RoomID, event.StateRoomName, stateProvider),
-		Avatar:       getState[*event.RoomAvatarEventContent](ce.Ctx, ce.RoomID, event.StateRoomAvatar, stateProvider),
-		Topic:        getState[*event.TopicEventContent](ce.Ctx, ce.RoomID, event.StateTopic, stateProvider),
-		Disappear:    getState[*event.BeeperDisappearingTimer](ce.Ctx, ce.RoomID, event.StateBeeperDisappearingTimer, stateProvider),
-		RoomID:       ce.RoomID,
-	}
 	members, err := ce.Bridge.Matrix.GetMembers(ce.Ctx, ce.RoomID)
 	if err != nil {
 		ce.Log.Err(err).Msg("Failed to get room members for group creation")
 		ce.Reply("Failed to get room members: %v", err)
 		return
 	}
-	params.Participants = make([]networkid.UserID, 0, len(members)-2)
-	for userID := range members {
-		if userID == ce.User.MXID || userID == ce.Bot.GetMXID() {
+	caps := ce.Bridge.Network.GetCapabilities()
+	params := &bridgev2.GroupCreateParams{
+		Username:     "",
+		Participants: make([]networkid.UserID, 0, len(members)-2),
+		Parent:       nil, // TODO check space parent event
+		Name:         getState[*event.RoomNameEventContent](ce.Ctx, ce.RoomID, event.StateRoomName, stateProvider),
+		Avatar:       getState[*event.RoomAvatarEventContent](ce.Ctx, ce.RoomID, event.StateRoomAvatar, stateProvider),
+		Topic:        getState[*event.TopicEventContent](ce.Ctx, ce.RoomID, event.StateTopic, stateProvider),
+		Disappear:    getState[*event.BeeperDisappearingTimer](ce.Ctx, ce.RoomID, event.StateBeeperDisappearingTimer, stateProvider),
+		RoomID:       ce.RoomID,
+	}
+	for userID, member := range members {
+		if userID == ce.User.MXID || userID == ce.Bot.GetMXID() || !member.Membership.IsInviteOrJoin() {
 			continue
 		}
 		if parsedUserID, ok := ce.Bridge.Matrix.ParseGhostMXID(userID); ok {
@@ -176,7 +176,7 @@ func fnCreateGroup(ce *Event) {
 		}
 	}
 
-	if caps := ce.Bridge.Network.GetCapabilities(); len(caps.Provisioning.GroupCreation) == 0 {
+	if len(caps.Provisioning.GroupCreation) == 0 {
 		ce.Reply("No group creation types defined in network capabilities")
 		return
 	} else if len(remainingArgs) > 0 {
