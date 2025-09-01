@@ -412,6 +412,7 @@ func (as *AppService) StartWebsocket(ctx context.Context, baseURL string, onConn
 			}
 		})
 	}
+	ws.SetReadLimit(50 * 1024 * 1024)
 	as.ws = ws
 	as.StopWebsocket = stopFunc
 	as.PrepareWebsocket()
