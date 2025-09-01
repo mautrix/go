@@ -2471,7 +2471,7 @@ func (cli *Client) DeleteDevice(ctx context.Context, deviceID id.DeviceID, req *
 
 func (cli *Client) DeleteDevices(ctx context.Context, req *ReqDeleteDevices) error {
 	urlPath := cli.BuildClientURL("v3", "delete_devices")
-	_, err := cli.MakeRequest(ctx, http.MethodDelete, urlPath, req, nil)
+	_, err := cli.MakeRequest(ctx, http.MethodPost, urlPath, req, nil)
 	return err
 }
 
