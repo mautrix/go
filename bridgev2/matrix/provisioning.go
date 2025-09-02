@@ -600,15 +600,6 @@ func RespondWithError(w http.ResponseWriter, err error, message string) {
 	}
 }
 
-type RespResolveIdentifier struct {
-	ID          networkid.UserID    `json:"id"`
-	Name        string              `json:"name,omitempty"`
-	AvatarURL   id.ContentURIString `json:"avatar_url,omitempty"`
-	Identifiers []string            `json:"identifiers,omitempty"`
-	MXID        id.UserID           `json:"mxid,omitempty"`
-	DMRoomID    id.RoomID           `json:"dm_room_mxid,omitempty"`
-}
-
 func (prov *ProvisioningAPI) doResolveIdentifier(w http.ResponseWriter, r *http.Request, createChat bool) {
 	login := prov.GetLoginForRequest(w, r)
 	if login == nil {
@@ -643,10 +634,6 @@ func (prov *ProvisioningAPI) GetContactList(w http.ResponseWriter, r *http.Reque
 
 type ReqSearchUsers struct {
 	Query string `json:"query"`
-}
-
-type RespSearchUsers struct {
-	Results []*RespResolveIdentifier `json:"results"`
 }
 
 func (prov *ProvisioningAPI) PostSearchUsers(w http.ResponseWriter, r *http.Request) {
