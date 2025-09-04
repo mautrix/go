@@ -334,7 +334,7 @@ func (as *AppService) SetHomeserverURL(homeserverURL string) error {
 	} else if as.hsURLForClient.Scheme == "" {
 		as.hsURLForClient.Scheme = "https"
 	}
-	as.hsURLForClient.RawPath = parsedURL.EscapedPath()
+	as.hsURLForClient.RawPath = as.hsURLForClient.EscapedPath()
 
 	jar, _ := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
 	as.HTTPClient = &http.Client{Timeout: 180 * time.Second, Jar: jar}
