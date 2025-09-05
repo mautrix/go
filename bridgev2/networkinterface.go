@@ -984,6 +984,14 @@ type PushParsingNetwork interface {
 	ParsePushNotification(ctx context.Context, data json.RawMessage) (networkid.UserLoginID, any, error)
 }
 
+// DeleteChatHandlingNetworkAPI is an optional interface that network connectors
+// can implement to delete a chat from the remote network.
+type DeleteChatHandlingNetworkAPI interface {
+	NetworkAPI
+	// HandleMatrixDeleteChat is called when the user explicitly deletes a chat.
+	HandleMatrixDeleteChat(ctx context.Context, msg *MatrixDeleteChat) error
+}
+
 type RemoteEventType int
 
 func (ret RemoteEventType) String() string {
@@ -1372,6 +1380,13 @@ type MatrixTyping struct {
 type MatrixViewingChat struct {
 	// The portal that the user is viewing. This will be nil when the user switches to a chat from a different bridge.
 	Portal *Portal
+}
+
+type MatrixDeleteChat struct {
+	// The portal that the user deleted.
+	Portal *Portal
+	// Delete the chat for the other user in that chat. Not every bridge supports this.
+	DeleteForEveryone bool
 }
 
 type MatrixMarkedUnread = MatrixRoomMeta[*event.MarkedUnreadEventContent]
