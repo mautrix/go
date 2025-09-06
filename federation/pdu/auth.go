@@ -23,6 +23,10 @@ type StateKey struct {
 	StateKey string
 }
 
+func (sk StateKey) MarshalJSON() ([]byte, error) {
+	return []byte(fmt.Sprintf("(%s,\"%s\")", sk.Type, sk.StateKey)), nil
+}
+
 var thirdPartyInviteTokenPath = exgjson.Path("third_party_invite", "signed", "token")
 
 type AuthEventSelection []StateKey
