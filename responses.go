@@ -715,3 +715,21 @@ type RespSuspended struct {
 type RespLocked struct {
 	Locked bool `json:"locked"`
 }
+
+type ConnectionInfo struct {
+	IP        string `json:"ip"`
+	LastSeen  int64  `json:"last_seen"`
+	UserAgent string `json:"user_agent"`
+}
+type SessionInfo struct {
+	Connections []ConnectionInfo `json:"connections"`
+}
+type DeviceInfo struct {
+	Sessions []SessionInfo `json:"sessions"`
+}
+
+// RespWhoIs is the response body for https://spec.matrix.org/v1.15/client-server-api/#get_matrixclientv3adminwhoisuserid
+type RespWhoIs struct {
+	UserID  id.UserID             `json:"user_id"`
+	Devices map[string]DeviceInfo `json:"devices"`
+}
