@@ -4191,6 +4191,14 @@ func (portal *Portal) UpdateDisappearingSetting(ctx context.Context, setting dat
 	content := DisappearingMessageNotice(setting.Timer, opts.Implicit)
 	_, err := opts.Sender.SendMessage(ctx, portal.MXID, event.EventMessage, &event.Content{
 		Parsed: content,
+		Raw: map[string]any{
+			"com.beeper.action_message": map[string]any{
+				"type":       "disappearing_timer",
+				"timer":      setting.Timer.Milliseconds(),
+				"timer_type": setting.Type,
+				"implicit":   opts.Implicit,
+			},
+		},
 	}, &MatrixSendExtra{Timestamp: opts.Timestamp})
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to send disappearing messages notice")
