@@ -156,6 +156,10 @@ func (mach *OlmMachine) Load(ctx context.Context) (err error) {
 	if mach.account == nil {
 		mach.account = NewOlmAccount()
 	}
+	zerolog.Ctx(ctx).Debug().
+		Str("machine_ptr", fmt.Sprintf("%p", mach)).
+		Str("account_ptr", fmt.Sprintf("%p", mach.account.Internal)).
+		Msg("Loaded olm account")
 	return nil
 }
 
