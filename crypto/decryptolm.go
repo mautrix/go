@@ -17,6 +17,8 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/exerrors"
+	"go.mau.fi/util/ptr"
 
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -180,6 +182,7 @@ func (mach *OlmMachine) tryDecryptOlmCiphertext(ctx context.Context, sender id.U
 	log = log.With().Str("new_olm_session_id", session.ID().String()).Logger()
 	log.Debug().
 		Hex("ciphertext_hash", ciphertextHash[:]).
+		Hex("ciphertext_hash_repeat", ptr.Ptr(exerrors.Must(olmMessageHash(ciphertext)))[:]).
 		Str("olm_session_description", session.Describe()).
 		Msg("Created inbound olm session")
 	ctx = log.WithContext(ctx)
@@ -189,6 +192,12 @@ func (mach *OlmMachine) tryDecryptOlmCiphertext(ctx context.Context, sender id.U
 	endTimeTrace()
 	if err != nil {
 		go mach.unwedgeDevice(log, sender, senderKey)
+		log.Debug().
+			Hex("ciphertext_hash", ciphertextHash[:]).
+			Hex("ciphertext_hash_repeat", ptr.Ptr(exerrors.Must(olmMessageHash(ciphertext)))[:]).
+			Str("ciphertext", ciphertext).
+			Str("olm_session_description", session.Describe()).
+			Msg("DEBUG: Failed to decrypt prekey olm message with newly created session")
 		return nil, fmt.Errorf("failed to decrypt olm event with session created from prekey message: %w", err)
 	}
 
