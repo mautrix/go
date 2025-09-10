@@ -717,19 +717,21 @@ type RespLocked struct {
 }
 
 type ConnectionInfo struct {
-	IP        string `json:"ip"`
-	LastSeen  int64  `json:"last_seen"`
-	UserAgent string `json:"user_agent"`
+	IP        string             `json:"ip,omitempty"`
+	LastSeen  jsontime.UnixMilli `json:"last_seen,omitempty"`
+	UserAgent string             `json:"user_agent,omitempty"`
 }
+
 type SessionInfo struct {
-	Connections []ConnectionInfo `json:"connections"`
+	Connections []ConnectionInfo `json:"connections,omitempty"`
 }
+
 type DeviceInfo struct {
-	Sessions []SessionInfo `json:"sessions"`
+	Sessions []SessionInfo `json:"sessions,omitempty"`
 }
 
 // RespWhoIs is the response body for https://spec.matrix.org/v1.15/client-server-api/#get_matrixclientv3adminwhoisuserid
 type RespWhoIs struct {
-	UserID  id.UserID             `json:"user_id"`
-	Devices map[string]DeviceInfo `json:"devices"`
+	UserID  id.UserID                `json:"user_id,omitempty"`
+	Devices map[id.Device]DeviceInfo `json:"devices,omitempty"`
 }
