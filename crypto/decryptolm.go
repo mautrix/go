@@ -272,6 +272,7 @@ func (mach *OlmMachine) tryDecryptOlmCiphertextWithExistingSession(
 		if err != nil {
 			log.Warn().Err(err).
 				Hex("ciphertext_hash", ciphertextHash[:]).
+				Hex("ciphertext_hash_repeat", ptr.Ptr(exerrors.Must(olmMessageHash(ciphertext)))[:]).
 				Str("session_description", session.Describe()).
 				Msg("Failed to decrypt olm message")
 			if olmType == id.OlmMsgTypePreKey {
@@ -315,7 +316,7 @@ const MinUnwedgeInterval = 1 * time.Hour
 
 func (mach *OlmMachine) unwedgeDevice(log zerolog.Logger, sender id.UserID, senderKey id.SenderKey) {
 	log = log.With().Str("action", "unwedge olm session").Logger()
-	ctx := log.WithContext(mach.BackgroundCtx)
+	ctx := log.WithContext(mach.backgroundCtx)
 	mach.recentlyUnwedgedLock.Lock()
 	prevUnwedge, ok := mach.recentlyUnwedged[senderKey]
 	delta := time.Now().Sub(prevUnwedge)
