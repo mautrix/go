@@ -10,7 +10,7 @@ import (
 	"maunium.net/go/mautrix/crypto/olm"
 )
 
-func init() {
+func Register() {
 	// Inbound Session
 	olm.InitInboundGroupSessionFromPickled = func(pickled, key []byte) (olm.InboundGroupSession, error) {
 		if len(pickled) == 0 {

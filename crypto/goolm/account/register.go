@@ -10,7 +10,7 @@ import (
 	"maunium.net/go/mautrix/crypto/olm"
 )
 
-func init() {
+func Register() {
 	olm.InitNewAccount = func() (olm.Account, error) {
 		return NewAccount()
 	}

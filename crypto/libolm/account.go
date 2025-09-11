@@ -23,18 +23,6 @@ type Account struct {
 	mem []byte
 }
 
-func init() {
-	olm.InitNewAccount = func() (olm.Account, error) {
-		return NewAccount()
-	}
-	olm.InitBlankAccount = func() olm.Account {
-		return NewBlankAccount()
-	}
-	olm.InitNewAccountFromPickled = func(pickled, key []byte) (olm.Account, error) {
-		return AccountFromPickled(pickled, key)
-	}
-}
-
 // Ensure that [Account] implements [olm.Account].
 var _ olm.Account = (*Account)(nil)
 

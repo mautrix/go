@@ -39,15 +39,6 @@ type Session struct {
 // Ensure that [Session] implements [olm.Session].
 var _ olm.Session = (*Session)(nil)
 
-func init() {
-	olm.InitSessionFromPickled = func(pickled, key []byte) (olm.Session, error) {
-		return SessionFromPickled(pickled, key)
-	}
-	olm.InitNewBlankSession = func() olm.Session {
-		return NewBlankSession()
-	}
-}
-
 // sessionSize is the size of a session object in bytes.
 func sessionSize() uint {
 	return uint(C.olm_session_size())

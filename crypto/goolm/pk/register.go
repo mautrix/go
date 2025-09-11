@@ -8,7 +8,7 @@ package pk
 
 import "maunium.net/go/mautrix/crypto/olm"
 
-func init() {
+func Register() {
 	olm.InitNewPKSigningFromSeed = func(seed []byte) (olm.PKSigning, error) {
 		return NewSigningFromSeed(seed)
 	}

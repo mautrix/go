@@ -21,18 +21,6 @@ type OutboundGroupSession struct {
 	mem []byte
 }
 
-func init() {
-	olm.InitNewOutboundGroupSessionFromPickled = func(pickled, key []byte) (olm.OutboundGroupSession, error) {
-		if len(pickled) == 0 {
-			return nil, olm.EmptyInput
-		}
-		s := NewBlankOutboundGroupSession()
-		return s, s.Unpickle(pickled, key)
-	}
-	olm.InitNewOutboundGroupSession = func() (olm.OutboundGroupSession, error) { return NewOutboundGroupSession() }
-	olm.InitNewBlankOutboundGroupSession = func() olm.OutboundGroupSession { return NewBlankOutboundGroupSession() }
-}
-
 // Ensure that [OutboundGroupSession] implements [olm.OutboundGroupSession].
 var _ olm.OutboundGroupSession = (*OutboundGroupSession)(nil)
 

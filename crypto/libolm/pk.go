@@ -35,16 +35,6 @@ type PKSigning struct {
 // Ensure that [PKSigning] implements [olm.PKSigning].
 var _ olm.PKSigning = (*PKSigning)(nil)
 
-func init() {
-	olm.InitNewPKSigning = func() (olm.PKSigning, error) { return NewPKSigning() }
-	olm.InitNewPKSigningFromSeed = func(seed []byte) (olm.PKSigning, error) {
-		return NewPKSigningFromSeed(seed)
-	}
-	olm.InitNewPKDecryptionFromPrivateKey = func(privateKey []byte) (olm.PKDecryption, error) {
-		return NewPkDecryption(privateKey)
-	}
-}
-
 func pkSigningSize() uint {
 	return uint(C.olm_pk_signing_size())
 }

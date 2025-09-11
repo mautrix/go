@@ -2,4 +2,10 @@
 
 package crypto
 
-import _ "maunium.net/go/mautrix/crypto/goolm"
+import (
+	"maunium.net/go/mautrix/crypto/goolm"
+)
+
+func init() {
+	goolm.Register()
+}

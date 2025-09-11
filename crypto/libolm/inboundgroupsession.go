@@ -21,21 +21,6 @@ type InboundGroupSession struct {
 	mem []byte
 }
 
-func init() {
-	olm.InitInboundGroupSessionFromPickled = func(pickled, key []byte) (olm.InboundGroupSession, error) {
-		return InboundGroupSessionFromPickled(pickled, key)
-	}
-	olm.InitNewInboundGroupSession = func(sessionKey []byte) (olm.InboundGroupSession, error) {
-		return NewInboundGroupSession(sessionKey)
-	}
-	olm.InitInboundGroupSessionImport = func(sessionKey []byte) (olm.InboundGroupSession, error) {
-		return InboundGroupSessionImport(sessionKey)
-	}
-	olm.InitBlankInboundGroupSession = func() olm.InboundGroupSession {
-		return NewBlankInboundGroupSession()
-	}
-}
-
 // Ensure that [InboundGroupSession] implements [olm.InboundGroupSession].
 var _ olm.InboundGroupSession = (*InboundGroupSession)(nil)
 
