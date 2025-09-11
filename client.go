@@ -2562,10 +2562,10 @@ func (cli *Client) ReportRoom(ctx context.Context, roomID id.RoomID, reason stri
 	return err
 }
 
-// WhoIs fetches session information belonging to a specific user. Typically requires being a server admin.
+// AdminWhoIs fetches session information belonging to a specific user. Typically requires being a server admin.
 //
 // https://spec.matrix.org/v1.15/client-server-api/#get_matrixclientv3adminwhoisuserid
-func (cli *Client) WhoIs(ctx context.Context, userID id.UserID) (resp RespWhoIs, err error) {
+func (cli *Client) AdminWhoIs(ctx context.Context, userID id.UserID) (resp RespWhoIs, err error) {
 	urlPath := cli.BuildClientURL("v3", "admin", "whois", userID)
 	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
 	return
