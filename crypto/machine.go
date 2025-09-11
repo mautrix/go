@@ -177,7 +177,7 @@ func (mach *OlmMachine) Destroy() {
 		Str("account_ptr", fmt.Sprintf("%p", ptr.Val(mach.account).Internal)).
 		Msg("Destroying olm machine")
 	mach.cancelBackgroundCtx()
-	mach.account = nil
+	// TODO actually destroy something?
 }
 
 func (mach *OlmMachine) saveAccount(ctx context.Context) error {
