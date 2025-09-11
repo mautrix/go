@@ -14,6 +14,7 @@ import "C"
 import (
 	"crypto/rand"
 	"encoding/json"
+	"runtime"
 	"unsafe"
 
 	"github.com/tidwall/sjson"
@@ -63,7 +64,7 @@ func pkSigningSignatureLength() uint {
 func newBlankPKSigning() *PKSigning {
 	memory := make([]byte, pkSigningSize())
 	return &PKSigning{
-		int: C.olm_pk_signing(unsafe.Pointer(&memory[0])),
+		int: C.olm_pk_signing(unsafe.Pointer(unsafe.SliceData(memory))),
 		mem: memory,
 	}
 }
@@ -73,9 +74,14 @@ func NewPKSigningFromSeed(seed []byte) (*PKSigning, error) {
 	p := newBlankPKSigning()
 	p.clear()
 	pubKey := make([]byte, pkSigningPublicKeyLength())
-	if C.olm_pk_signing_key_from_seed((*C.OlmPkSigning)(p.int),
-		unsafe.Pointer(&pubKey[0]), C.size_t(len(pubKey)),
-		unsafe.Pointer(&seed[0]), C.size_t(len(seed))) == errorVal() {
+	r := C.olm_pk_signing_key_from_seed(
+		(*C.OlmPkSigning)(p.int),
+		unsafe.Pointer(unsafe.SliceData(pubKey)),
+		C.size_t(len(pubKey)),
+		unsafe.Pointer(unsafe.SliceData(seed)),
+		C.size_t(len(seed)),
+	)
+	if r == errorVal() {
 		return nil, p.lastError()
 	}
 	p.publicKey = id.Ed25519(pubKey)
@@ -112,8 +118,15 @@ func (p *PKSigning) clear() {
 // Sign creates a signature for the given message using this key.
 func (p *PKSigning) Sign(message []byte) ([]byte, error) {
 	signature := make([]byte, pkSigningSignatureLength())
-	if C.olm_pk_sign((*C.OlmPkSigning)(p.int), (*C.uint8_t)(unsafe.Pointer(&message[0])), C.size_t(len(message)),
-		(*C.uint8_t)(unsafe.Pointer(&signature[0])), C.size_t(len(signature))) == errorVal() {
+	r := C.olm_pk_sign(
+		(*C.OlmPkSigning)(p.int),
+		(*C.uint8_t)(unsafe.Pointer(unsafe.SliceData(message))),
+		C.size_t(len(message)),
+		(*C.uint8_t)(unsafe.Pointer(unsafe.SliceData(signature))),
+		C.size_t(len(signature)),
+	)
+	runtime.KeepAlive(message)
+	if r == errorVal() {
 		return nil, p.lastError()
 	}
 	return signature, nil
@@ -157,15 +170,21 @@ func pkDecryptionPublicKeySize() uint {
 func NewPkDecryption(privateKey []byte) (*PKDecryption, error) {
 	memory := make([]byte, pkDecryptionSize())
 	p := &PKDecryption{
-		int: C.olm_pk_decryption(unsafe.Pointer(&memory[0])),
+		int: C.olm_pk_decryption(unsafe.Pointer(unsafe.SliceData(memory))),
 		mem: memory,
 	}
 	p.clear()
 	pubKey := make([]byte, pkDecryptionPublicKeySize())
 
-	if C.olm_pk_key_from_private((*C.OlmPkDecryption)(p.int),
-		unsafe.Pointer(&pubKey[0]), C.size_t(len(pubKey)),
-		unsafe.Pointer(&privateKey[0]), C.size_t(len(privateKey))) == errorVal() {
+	r := C.olm_pk_key_from_private(
+		(*C.OlmPkDecryption)(p.int),
+		unsafe.Pointer(unsafe.SliceData(pubKey)),
+		C.size_t(len(pubKey)),
+		unsafe.Pointer(unsafe.SliceData(privateKey)),
+		C.size_t(len(privateKey)),
+	)
+	runtime.KeepAlive(privateKey)
+	if r == errorVal() {
 		return nil, p.lastError()
 	}
 	p.publicKey = pubKey
@@ -178,14 +197,26 @@ func (p *PKDecryption) PublicKey() id.Curve25519 {
 }
 
 func (p *PKDecryption) Decrypt(ephemeralKey []byte, mac []byte, ciphertext []byte) ([]byte, error) {
-	maxPlaintextLength := uint(C.olm_pk_max_plaintext_length((*C.OlmPkDecryption)(p.int), C.size_t(len(ciphertext))))
+	maxPlaintextLength := uint(C.olm_pk_max_plaintext_length(
+		(*C.OlmPkDecryption)(p.int),
+		C.size_t(len(ciphertext)),
+	))
 	plaintext := make([]byte, maxPlaintextLength)
 
-	size := C.olm_pk_decrypt((*C.OlmPkDecryption)(p.int),
-		unsafe.Pointer(&ephemeralKey[0]), C.size_t(len(ephemeralKey)),
-		unsafe.Pointer(&mac[0]), C.size_t(len(mac)),
-		unsafe.Pointer(&ciphertext[0]), C.size_t(len(ciphertext)),
-		unsafe.Pointer(&plaintext[0]), C.size_t(len(plaintext)))
+	size := C.olm_pk_decrypt(
+		(*C.OlmPkDecryption)(p.int),
+		unsafe.Pointer(unsafe.SliceData(ephemeralKey)),
+		C.size_t(len(ephemeralKey)),
+		unsafe.Pointer(unsafe.SliceData(mac)),
+		C.size_t(len(mac)),
+		unsafe.Pointer(unsafe.SliceData(ciphertext)),
+		C.size_t(len(ciphertext)),
+		unsafe.Pointer(unsafe.SliceData(plaintext)),
+		C.size_t(len(plaintext)),
+	)
+	runtime.KeepAlive(ephemeralKey)
+	runtime.KeepAlive(mac)
+	runtime.KeepAlive(ciphertext)
 	if size == errorVal() {
 		return nil, p.lastError()
 	}

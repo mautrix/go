@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"runtime"
 	"unsafe"
 
 	"github.com/tidwall/gjson"
@@ -53,7 +54,7 @@ func AccountFromPickled(pickled, key []byte) (*Account, error) {
 func NewBlankAccount() *Account {
 	memory := make([]byte, accountSize())
 	return &Account{
-		int: C.olm_account(unsafe.Pointer(&memory[0])),
+		int: C.olm_account(unsafe.Pointer(unsafe.SliceData(memory))),
 		mem: memory,
 	}
 }
@@ -68,8 +69,9 @@ func NewAccount() (*Account, error) {
 	}
 	ret := C.olm_create_account(
 		(*C.OlmAccount)(a.int),
-		unsafe.Pointer(&random[0]),
+		unsafe.Pointer(unsafe.SliceData(random)),
 		C.size_t(len(random)))
+	runtime.KeepAlive(random)
 	if ret == errorVal() {
 		return nil, a.lastError()
 	} else {
@@ -143,9 +145,9 @@ func (a *Account) Pickle(key []byte) ([]byte, error) {
 	pickled := make([]byte, a.pickleLen())
 	r := C.olm_pickle_account(
 		(*C.OlmAccount)(a.int),
-		unsafe.Pointer(&key[0]),
+		unsafe.Pointer(unsafe.SliceData(key)),
 		C.size_t(len(key)),
-		unsafe.Pointer(&pickled[0]),
+		unsafe.Pointer(unsafe.SliceData(pickled)),
 		C.size_t(len(pickled)))
 	if r == errorVal() {
 		return nil, a.lastError()
@@ -159,9 +161,9 @@ func (a *Account) Unpickle(pickled, key []byte) error {
 	}
 	r := C.olm_unpickle_account(
 		(*C.OlmAccount)(a.int),
-		unsafe.Pointer(&key[0]),
+		unsafe.Pointer(unsafe.SliceData(key)),
 		C.size_t(len(key)),
-		unsafe.Pointer(&pickled[0]),
+		unsafe.Pointer(unsafe.SliceData(pickled)),
 		C.size_t(len(pickled)))
 	if r == errorVal() {
 		return a.lastError()
@@ -221,7 +223,7 @@ func (a *Account) IdentityKeysJSON() ([]byte, error) {
 	identityKeys := make([]byte, a.identityKeysLen())
 	r := C.olm_account_identity_keys(
 		(*C.OlmAccount)(a.int),
-		unsafe.Pointer(&identityKeys[0]),
+		unsafe.Pointer(unsafe.SliceData(identityKeys)),
 		C.size_t(len(identityKeys)))
 	if r == errorVal() {
 		return nil, a.lastError()
@@ -250,10 +252,11 @@ func (a *Account) Sign(message []byte) ([]byte, error) {
 	signature := make([]byte, a.signatureLen())
 	r := C.olm_account_sign(
 		(*C.OlmAccount)(a.int),
-		unsafe.Pointer(&message[0]),
+		unsafe.Pointer(unsafe.SliceData(message)),
 		C.size_t(len(message)),
-		unsafe.Pointer(&signature[0]),
+		unsafe.Pointer(unsafe.SliceData(signature)),
 		C.size_t(len(signature)))
+	runtime.KeepAlive(message)
 	if r == errorVal() {
 		panic(a.lastError())
 	}
@@ -277,8 +280,9 @@ func (a *Account) OneTimeKeys() (map[string]id.Curve25519, error) {
 	oneTimeKeysJSON := make([]byte, a.oneTimeKeysLen())
 	r := C.olm_account_one_time_keys(
 		(*C.OlmAccount)(a.int),
-		unsafe.Pointer(&oneTimeKeysJSON[0]),
-		C.size_t(len(oneTimeKeysJSON)))
+		unsafe.Pointer(unsafe.SliceData(oneTimeKeysJSON)),
+		C.size_t(len(oneTimeKeysJSON)),
+	)
 	if r == errorVal() {
 		return nil, a.lastError()
 	}
@@ -312,8 +316,10 @@ func (a *Account) GenOneTimeKeys(num uint) error {
 	r := C.olm_account_generate_one_time_keys(
 		(*C.OlmAccount)(a.int),
 		C.size_t(num),
-		unsafe.Pointer(&random[0]),
-		C.size_t(len(random)))
+		unsafe.Pointer(unsafe.SliceData(random)),
+		C.size_t(len(random)),
+	)
+	runtime.KeepAlive(random)
 	if r == errorVal() {
 		return a.lastError()
 	}
@@ -333,15 +339,21 @@ func (a *Account) NewOutboundSession(theirIdentityKey, theirOneTimeKey id.Curve2
 	if err != nil {
 		panic(olm.NotEnoughGoRandom)
 	}
+	theirIdentityKeyCopy := []byte(theirIdentityKey)
+	theirOneTimeKeyCopy := []byte(theirOneTimeKey)
 	r := C.olm_create_outbound_session(
 		(*C.OlmSession)(s.int),
 		(*C.OlmAccount)(a.int),
-		unsafe.Pointer(&([]byte(theirIdentityKey)[0])),
-		C.size_t(len(theirIdentityKey)),
-		unsafe.Pointer(&([]byte(theirOneTimeKey)[0])),
-		C.size_t(len(theirOneTimeKey)),
-		unsafe.Pointer(&random[0]),
-		C.size_t(len(random)))
+		unsafe.Pointer(unsafe.SliceData(theirIdentityKeyCopy)),
+		C.size_t(len(theirIdentityKeyCopy)),
+		unsafe.Pointer(unsafe.SliceData(theirOneTimeKeyCopy)),
+		C.size_t(len(theirOneTimeKeyCopy)),
+		unsafe.Pointer(unsafe.SliceData(random)),
+		C.size_t(len(random)),
+	)
+	runtime.KeepAlive(random)
+	runtime.KeepAlive(theirIdentityKeyCopy)
+	runtime.KeepAlive(theirOneTimeKeyCopy)
 	if r == errorVal() {
 		return nil, s.lastError()
 	}
@@ -360,11 +372,14 @@ func (a *Account) NewInboundSession(oneTimeKeyMsg string) (olm.Session, error) {
 		return nil, olm.EmptyInput
 	}
 	s := NewBlankSession()
+	oneTimeKeyMsgCopy := []byte(oneTimeKeyMsg)
 	r := C.olm_create_inbound_session(
 		(*C.OlmSession)(s.int),
 		(*C.OlmAccount)(a.int),
-		unsafe.Pointer(&([]byte(oneTimeKeyMsg)[0])),
-		C.size_t(len(oneTimeKeyMsg)))
+		unsafe.Pointer(unsafe.SliceData(oneTimeKeyMsgCopy)),
+		C.size_t(len(oneTimeKeyMsgCopy)),
+	)
+	runtime.KeepAlive(oneTimeKeyMsgCopy)
 	if r == errorVal() {
 		return nil, s.lastError()
 	}
@@ -382,14 +397,19 @@ func (a *Account) NewInboundSessionFrom(theirIdentityKey *id.Curve25519, oneTime
 	if theirIdentityKey == nil || len(oneTimeKeyMsg) == 0 {
 		return nil, olm.EmptyInput
 	}
+	theirIdentityKeyCopy := []byte(*theirIdentityKey)
+	oneTimeKeyMsgCopy := []byte(oneTimeKeyMsg)
 	s := NewBlankSession()
 	r := C.olm_create_inbound_session_from(
 		(*C.OlmSession)(s.int),
 		(*C.OlmAccount)(a.int),
-		unsafe.Pointer(&([]byte(*theirIdentityKey)[0])),
-		C.size_t(len(*theirIdentityKey)),
-		unsafe.Pointer(&([]byte(oneTimeKeyMsg)[0])),
-		C.size_t(len(oneTimeKeyMsg)))
+		unsafe.Pointer(unsafe.SliceData(theirIdentityKeyCopy)),
+		C.size_t(len(theirIdentityKeyCopy)),
+		unsafe.Pointer(unsafe.SliceData(oneTimeKeyMsgCopy)),
+		C.size_t(len(oneTimeKeyMsgCopy)),
+	)
+	runtime.KeepAlive(theirIdentityKeyCopy)
+	runtime.KeepAlive(oneTimeKeyMsgCopy)
 	if r == errorVal() {
 		return nil, s.lastError()
 	}
@@ -402,7 +422,8 @@ func (a *Account) NewInboundSessionFrom(theirIdentityKey *id.Curve25519, oneTime
 func (a *Account) RemoveOneTimeKeys(s olm.Session) error {
 	r := C.olm_remove_one_time_keys(
 		(*C.OlmAccount)(a.int),
-		(*C.OlmSession)(s.(*Session).int))
+		(*C.OlmSession)(s.(*Session).int),
+	)
 	if r == errorVal() {
 		return a.lastError()
 	}

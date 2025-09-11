@@ -23,6 +23,7 @@ import "C"
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"runtime"
 	"unsafe"
 
 	"maunium.net/go/mautrix/crypto/olm"
@@ -68,7 +69,7 @@ func SessionFromPickled(pickled, key []byte) (*Session, error) {
 func NewBlankSession() *Session {
 	memory := make([]byte, sessionSize())
 	return &Session{
-		int: C.olm_session(unsafe.Pointer(&memory[0])),
+		int: C.olm_session(unsafe.Pointer(unsafe.SliceData(memory))),
 		mem: memory,
 	}
 }
@@ -128,11 +129,14 @@ func (s *Session) decryptMaxPlaintextLen(message string, msgType id.OlmMsgType) 
 	if len(message) == 0 {
 		return 0, olm.EmptyInput
 	}
+	messageCopy := []byte(message)
 	r := C.olm_decrypt_max_plaintext_length(
 		(*C.OlmSession)(s.int),
 		C.size_t(msgType),
-		unsafe.Pointer(C.CString(message)),
-		C.size_t(len(message)))
+		unsafe.Pointer(unsafe.SliceData((messageCopy))),
+		C.size_t(len(messageCopy)),
+	)
+	runtime.KeepAlive(messageCopy)
 	if r == errorVal() {
 		return 0, s.lastError()
 	}
@@ -148,10 +152,11 @@ func (s *Session) Pickle(key []byte) ([]byte, error) {
 	pickled := make([]byte, s.pickleLen())
 	r := C.olm_pickle_session(
 		(*C.OlmSession)(s.int),
-		unsafe.Pointer(&key[0]),
+		unsafe.Pointer(unsafe.SliceData(key)),
 		C.size_t(len(key)),
-		unsafe.Pointer(&pickled[0]),
+		unsafe.Pointer(unsafe.SliceData(pickled)),
 		C.size_t(len(pickled)))
+	runtime.KeepAlive(key)
 	if r == errorVal() {
 		panic(s.lastError())
 	}
@@ -166,10 +171,12 @@ func (s *Session) Unpickle(pickled, key []byte) error {
 	}
 	r := C.olm_unpickle_session(
 		(*C.OlmSession)(s.int),
-		unsafe.Pointer(&key[0]),
+		unsafe.Pointer(unsafe.SliceData(key)),
 		C.size_t(len(key)),
-		unsafe.Pointer(&pickled[0]),
+		unsafe.Pointer(unsafe.SliceData(pickled)),
 		C.size_t(len(pickled)))
+	runtime.KeepAlive(pickled)
+	runtime.KeepAlive(key)
 	if r == errorVal() {
 		return s.lastError()
 	}
@@ -229,8 +236,9 @@ func (s *Session) ID() id.SessionID {
 	sessionID := make([]byte, s.idLen())
 	r := C.olm_session_id(
 		(*C.OlmSession)(s.int),
-		unsafe.Pointer(&sessionID[0]),
-		C.size_t(len(sessionID)))
+		unsafe.Pointer(unsafe.SliceData(sessionID)),
+		C.size_t(len(sessionID)),
+	)
 	if r == errorVal() {
 		panic(s.lastError())
 	}
@@ -259,10 +267,13 @@ func (s *Session) MatchesInboundSession(oneTimeKeyMsg string) (bool, error) {
 	if len(oneTimeKeyMsg) == 0 {
 		return false, olm.EmptyInput
 	}
+	oneTimeKeyMsgCopy := []byte(oneTimeKeyMsg)
 	r := C.olm_matches_inbound_session(
 		(*C.OlmSession)(s.int),
-		unsafe.Pointer(&([]byte(oneTimeKeyMsg))[0]),
-		C.size_t(len(oneTimeKeyMsg)))
+		unsafe.Pointer(unsafe.SliceData(oneTimeKeyMsgCopy)),
+		C.size_t(len(oneTimeKeyMsgCopy)),
+	)
+	runtime.KeepAlive(oneTimeKeyMsgCopy)
 	if r == 1 {
 		return true, nil
 	} else if r == 0 {
@@ -284,12 +295,17 @@ func (s *Session) MatchesInboundSessionFrom(theirIdentityKey, oneTimeKeyMsg stri
 	if len(theirIdentityKey) == 0 || len(oneTimeKeyMsg) == 0 {
 		return false, olm.EmptyInput
 	}
+	theirIdentityKeyCopy := []byte(theirIdentityKey)
+	oneTimeKeyMsgCopy := []byte(oneTimeKeyMsg)
 	r := C.olm_matches_inbound_session_from(
 		(*C.OlmSession)(s.int),
-		unsafe.Pointer(&([]byte(theirIdentityKey))[0]),
-		C.size_t(len(theirIdentityKey)),
-		unsafe.Pointer(&([]byte(oneTimeKeyMsg))[0]),
-		C.size_t(len(oneTimeKeyMsg)))
+		unsafe.Pointer(unsafe.SliceData(theirIdentityKeyCopy)),
+		C.size_t(len(theirIdentityKeyCopy)),
+		unsafe.Pointer(unsafe.SliceData(oneTimeKeyMsgCopy)),
+		C.size_t(len(oneTimeKeyMsgCopy)),
+	)
+	runtime.KeepAlive(theirIdentityKeyCopy)
+	runtime.KeepAlive(oneTimeKeyMsgCopy)
 	if r == 1 {
 		return true, nil
 	} else if r == 0 {
@@ -331,12 +347,15 @@ func (s *Session) Encrypt(plaintext []byte) (id.OlmMsgType, []byte, error) {
 	message := make([]byte, s.encryptMsgLen(len(plaintext)))
 	r := C.olm_encrypt(
 		(*C.OlmSession)(s.int),
-		unsafe.Pointer(&plaintext[0]),
+		unsafe.Pointer(unsafe.SliceData(plaintext)),
 		C.size_t(len(plaintext)),
-		unsafe.Pointer(&random[0]),
+		unsafe.Pointer(unsafe.SliceData(random)),
 		C.size_t(len(random)),
-		unsafe.Pointer(&message[0]),
-		C.size_t(len(message)))
+		unsafe.Pointer(unsafe.SliceData(message)),
+		C.size_t(len(message)),
+	)
+	runtime.KeepAlive(plaintext)
+	runtime.KeepAlive(random)
 	if r == errorVal() {
 		return 0, nil, s.lastError()
 	}
@@ -363,10 +382,12 @@ func (s *Session) Decrypt(message string, msgType id.OlmMsgType) ([]byte, error)
 	r := C.olm_decrypt(
 		(*C.OlmSession)(s.int),
 		C.size_t(msgType),
-		unsafe.Pointer(&(messageCopy)[0]),
+		unsafe.Pointer(unsafe.SliceData(messageCopy)),
 		C.size_t(len(messageCopy)),
-		unsafe.Pointer(&plaintext[0]),
-		C.size_t(len(plaintext)))
+		unsafe.Pointer(unsafe.SliceData(plaintext)),
+		C.size_t(len(plaintext)),
+	)
+	runtime.KeepAlive(messageCopy)
 	if r == errorVal() {
 		return nil, s.lastError()
 	}
@@ -383,6 +404,7 @@ func (s *Session) Describe() string {
 	C.meowlm_session_describe(
 		(*C.OlmSession)(s.int),
 		desc,
-		C.size_t(maxDescribeSize))
+		C.size_t(maxDescribeSize),
+	)
 	return C.GoString(desc)
 }
