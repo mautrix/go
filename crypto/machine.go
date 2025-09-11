@@ -19,6 +19,7 @@ import (
 	"go.mau.fi/util/exzerolog"
 
 	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/crypto/ssss"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -159,6 +160,7 @@ func (mach *OlmMachine) Load(ctx context.Context) (err error) {
 	zerolog.Ctx(ctx).Debug().
 		Str("machine_ptr", fmt.Sprintf("%p", mach)).
 		Str("account_ptr", fmt.Sprintf("%p", mach.account.Internal)).
+		Str("olm_driver", olm.Driver).
 		Msg("Loaded olm account")
 	return nil
 }

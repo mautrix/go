@@ -87,6 +87,8 @@ type Account interface {
 	RemoveOneTimeKeys(s Session) error
 }
 
+var Driver = "none"
+
 var InitBlankAccount func() Account
 var InitNewAccount func() (Account, error)
 var InitNewAccountFromPickled func(pickled, key []byte) (Account, error)

@@ -16,6 +16,8 @@ import (
 )
 
 func init() {
+	olm.Driver = "goolm"
+
 	olm.GetVersion = func() (major, minor, patch uint8) {
 		return 3, 2, 15
 	}

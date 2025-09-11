@@ -12,6 +12,8 @@ import (
 var pickleKey = []byte("maunium.net/go/mautrix/crypto/olm")
 
 func init() {
+	olm.Driver = "libolm"
+
 	olm.GetVersion = func() (major, minor, patch uint8) {
 		C.olm_get_library_version(
 			(*C.uint8_t)(unsafe.Pointer(&major)),
