@@ -1105,13 +1105,9 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 	}
 	if portal.Disappear.Type != event.DisappearingTypeNone {
 		go portal.Bridge.DisappearLoop.Add(ctx, &database.DisappearingMessage{
-			RoomID:  portal.MXID,
-			EventID: message.MXID,
-			DisappearingSetting: database.DisappearingSetting{
-				Type:        portal.Disappear.Type,
-				Timer:       portal.Disappear.Timer,
-				DisappearAt: message.Timestamp.Add(portal.Disappear.Timer),
-			},
+			RoomID:              portal.MXID,
+			EventID:             message.MXID,
+			DisappearingSetting: portal.Disappear.StartingAt(message.Timestamp),
 		})
 	}
 	if resp.Pending {
@@ -4159,9 +4155,7 @@ type UpdateDisappearingSettingOpts struct {
 }
 
 func (portal *Portal) UpdateDisappearingSetting(ctx context.Context, setting database.DisappearingSetting, opts UpdateDisappearingSettingOpts) bool {
-	if setting.Timer == 0 {
-		setting.Type = event.DisappearingTypeNone
-	}
+	setting = setting.Normalize()
 	if portal.Disappear.Timer == setting.Timer && portal.Disappear.Type == setting.Type {
 		return false
 	}
