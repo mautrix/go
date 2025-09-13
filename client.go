@@ -754,7 +754,7 @@ func (req *ReqSync) BuildQuery() map[string]string {
 		query["full_state"] = "true"
 	}
 	if req.UseStateAfter {
-		query["org.matrix.msc4222.use_state_after"] = "true"
+		query["use_state_after"] = "true"
 	}
 	if req.BeeperStreaming {
 		query["com.beeper.streaming"] = "true"
