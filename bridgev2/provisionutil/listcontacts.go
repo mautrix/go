@@ -34,7 +34,7 @@ func GetContactList(ctx context.Context, login *bridgev2.UserLogin) (*RespGetCon
 		return nil, err
 	}
 	return &RespGetContactList{
-		Contacts: processResolveIdentifiers(ctx, login.Bridge, resp),
+		Contacts: processResolveIdentifiers(ctx, login.Bridge, resp, false),
 	}, nil
 }
 
@@ -49,11 +49,11 @@ func SearchUsers(ctx context.Context, login *bridgev2.UserLogin, query string) (
 		return nil, err
 	}
 	return &RespSearchUsers{
-		Results: processResolveIdentifiers(ctx, login.Bridge, resp),
+		Results: processResolveIdentifiers(ctx, login.Bridge, resp, true),
 	}, nil
 }
 
-func processResolveIdentifiers(ctx context.Context, br *bridgev2.Bridge, resp []*bridgev2.ResolveIdentifierResponse) (apiResp []*RespResolveIdentifier) {
+func processResolveIdentifiers(ctx context.Context, br *bridgev2.Bridge, resp []*bridgev2.ResolveIdentifierResponse, syncInfo bool) (apiResp []*RespResolveIdentifier) {
 	apiResp = make([]*RespResolveIdentifier, len(resp))
 	for i, contact := range resp {
 		apiContact := &RespResolveIdentifier{
@@ -69,6 +69,9 @@ func processResolveIdentifiers(ctx context.Context, br *bridgev2.Bridge, resp []
 			}
 		}
 		if contact.Ghost != nil {
+			if syncInfo && contact.UserInfo != nil {
+				contact.Ghost.UpdateInfo(ctx, contact.UserInfo)
+			}
 			if contact.Ghost.Name != "" {
 				apiContact.Name = contact.Ghost.Name
 			}
