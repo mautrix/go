@@ -35,7 +35,7 @@ type MSC1767Message struct {
 }
 
 type PollStartEventContent struct {
-	RelatesTo *RelatesTo `json:"m.relates_to"`
+	RelatesTo *RelatesTo `json:"m.relates_to,omitempty"`
 	Mentions  *Mentions  `json:"m.mentions,omitempty"`
 	PollStart struct {
 		Kind          string         `json:"kind"`
