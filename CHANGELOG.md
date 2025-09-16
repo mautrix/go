@@ -1,3 +1,46 @@
+## v0.25.1 (2025-09-16)
+
+* *(client)* Fixed HTTP method of delete devices API call
+  (thanks to [@fmseals] in [#393]).
+* *(client)* Added wrappers for [MSC4323]: User suspension & locking endpoints
+  (thanks to [@nexy7574] in [#407]).
+* *(client)* Stabilized support for extensible profiles.
+* *(client)* Stabilized support for `state_after` in sync.
+* *(client)* Removed deprecated MSC2716 requests.
+* *(crypto)* Added fallback to ensure `m.relates_to` is always copied even if
+  the content struct doesn't implement `Relatable`.
+* *(crypto)* Changed olm unwedging to ignore newly created sessions if they
+  haven't been used successfully in either direction.
+* *(federation)* Added utilities for generating, parsing, validating and
+  authorizing PDUs.
+  * Note: the new PDU code depends on `GOEXPERIMENT=jsonv2`
+* *(event)* Added `is_animated` flag from [MSC4230] to file info.
+* *(event)* Added types for [MSC4332]: In-room bot commands.
+* *(event)* Added missing poll end event type for [MSC3381].
+* *(appservice)* Fixed URLs not being escaped properly when using unix socket
+  for homeserver connections.
+* *(format)* Added more helpers for forming markdown links.
+* *(event,bridgev2)* Added support for Beeper's disappearing message state event.
+* *(bridgev2)* Redesigned group creation interface and added support in commands
+  and provisioning API.
+* *(bridgev2)* Added GetEvent to Matrix interface to allow network connectors to
+  get an old event. The method is best effort only, as some configurations don't
+  allow fetching old events.
+* *(bridgev2)* Added shared logic for provisioning that can be reused by the
+  API, commands and other sources.
+* *(bridgev2)* Fixed mentions and URL previews not being copied over when
+  caption and media are merged.
+* *(bridgev2)* Removed config option to change provisioning API prefix, which
+  had already broken in the previous release.
+
+[@fmseals]: https://github.com/fmseals
+[#393]: https://github.com/mautrix/go/pull/393
+[#407]: https://github.com/mautrix/go/pull/407
+[MSC3381]: https://github.com/matrix-org/matrix-spec-proposals/pull/3381
+[MSC4230]: https://github.com/matrix-org/matrix-spec-proposals/pull/4230
+[MSC4323]: https://github.com/matrix-org/matrix-spec-proposals/pull/4323
+[MSC4332]: https://github.com/matrix-org/matrix-spec-proposals/pull/4332
+
 ## v0.25.0 (2025-08-16)
 
 * Bumped minimum Go version to 1.24.
