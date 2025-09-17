@@ -7,6 +7,8 @@
 package ssss
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
 	"strings"
@@ -108,12 +110,18 @@ func (key *Key) Decrypt(eventType string, data EncryptedKeyData) ([]byte, error)
 		return nil, err
 	}
 
+	mac, err := base64.RawStdEncoding.DecodeString(strings.TrimRight(data.MAC, "="))
+	if err != nil {
+		return nil, err
+	}
+
 	// derive the AES and HMAC keys for the requested event type using the SSSS key
 	aesKey, hmacKey := utils.DeriveKeysSHA256(key.Key, eventType)
 
 	// compare the stored MAC with the one we calculated from the ciphertext
-	calcMac := utils.HMACSHA256B64(payload, hmacKey)
-	if strings.TrimRight(data.MAC, "=") != calcMac {
+	h := hmac.New(sha256.New, hmacKey[:])
+	h.Write(payload)
+	if !hmac.Equal(h.Sum(nil), mac) {
 		return nil, ErrKeyDataMACMismatch
 	}
 

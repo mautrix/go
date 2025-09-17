@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"go.mau.fi/util/exerrors"
 
 	"maunium.net/go/mautrix/crypto/ssss"
 )
@@ -70,23 +71,11 @@ func getKeyMeta(meta string) *ssss.KeyMetadata {
 }
 
 func getKey1() *ssss.Key {
-	km := getKeyMeta(key1Meta)
-	key, err := km.VerifyRecoveryKey(key1ID, key1RecoveryKey)
-	if err != nil {
-		panic(err)
-	}
-	key.ID = key1ID
-	return key
+	return exerrors.Must(getKeyMeta(key1Meta).VerifyRecoveryKey(key1ID, key1RecoveryKey))
 }
 
 func getKey2() *ssss.Key {
-	km := getKeyMeta(key2Meta)
-	key, err := km.VerifyRecoveryKey(key2ID, key2RecoveryKey)
-	if err != nil {
-		panic(err)
-	}
-	key.ID = key2ID
-	return key
+	return exerrors.Must(getKeyMeta(key2Meta).VerifyRecoveryKey(key2ID, key2RecoveryKey))
 }
 
 func TestKeyMetadata_VerifyRecoveryKey_Correct(t *testing.T) {
