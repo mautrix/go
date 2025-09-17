@@ -1449,6 +1449,9 @@ func handleMatrixRoomMeta[APIType any, ContentType any](
 	evt *event.Event,
 	fn func(APIType, context.Context, *MatrixRoomMeta[ContentType]) (bool, error),
 ) EventHandlingResult {
+	if evt.StateKey == nil || *evt.StateKey != "" {
+		return EventHandlingResultFailed.WithMSSError(ErrInvalidStateKey)
+	}
 	api, ok := sender.Client.(APIType)
 	if !ok {
 		return EventHandlingResultIgnored.WithMSSError(ErrRoomMetadataNotSupported)
@@ -1583,6 +1586,9 @@ func (portal *Portal) handleMatrixMembership(
 	origSender *OrigSender,
 	evt *event.Event,
 ) EventHandlingResult {
+	if evt.StateKey == nil {
+		return EventHandlingResultFailed.WithMSSError(ErrInvalidStateKey)
+	}
 	log := zerolog.Ctx(ctx)
 	content, ok := evt.Content.Parsed.(*event.MemberEventContent)
 	if !ok {
@@ -1667,6 +1673,9 @@ func (portal *Portal) handleMatrixPowerLevels(
 	origSender *OrigSender,
 	evt *event.Event,
 ) EventHandlingResult {
+	if evt.StateKey == nil || *evt.StateKey != "" {
+		return EventHandlingResultFailed.WithMSSError(ErrInvalidStateKey)
+	}
 	log := zerolog.Ctx(ctx)
 	content, ok := evt.Content.Parsed.(*event.PowerLevelsEventContent)
 	if !ok {
