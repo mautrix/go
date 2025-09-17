@@ -210,7 +210,7 @@ func (r *RespUserProfile) MarshalJSON() ([]byte, error) {
 	} else {
 		delete(marshalMap, "avatar_url")
 	}
-	return json.Marshal(r.Extra)
+	return json.Marshal(marshalMap)
 }
 
 type RespMutualRooms struct {
