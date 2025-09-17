@@ -643,7 +643,7 @@ func (br *Connector) BatchSend(ctx context.Context, roomID id.RoomID, req *mautr
 			if intent != nil {
 				intent.AddDoublePuppetValueWithTS(&evt.Content, evt.Timestamp)
 			}
-			if evt.Type != event.EventEncrypted {
+			if evt.Type != event.EventEncrypted && evt.Type != event.EventReaction {
 				err = br.Crypto.Encrypt(ctx, roomID, evt.Type, &evt.Content)
 				if err != nil {
 					return nil, err
