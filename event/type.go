@@ -128,7 +128,7 @@ func (et *Type) GuessClass() TypeClass {
 		InRoomVerificationKey.Type, InRoomVerificationMAC.Type, InRoomVerificationCancel.Type,
 		CallInvite.Type, CallCandidates.Type, CallAnswer.Type, CallReject.Type, CallSelectAnswer.Type,
 		CallNegotiate.Type, CallHangup.Type, BeeperMessageStatus.Type, EventUnstablePollStart.Type, EventUnstablePollResponse.Type,
-		BeeperTranscription.Type:
+		EventUnstablePollEnd.Type, BeeperTranscription.Type:
 		return MessageEventType
 	case ToDeviceRoomKey.Type, ToDeviceRoomKeyRequest.Type, ToDeviceForwardedRoomKey.Type, ToDeviceRoomKeyWithheld.Type,
 		ToDeviceBeeperRoomKeyAck.Type:
