@@ -88,6 +88,7 @@ const (
 	getPortalByIDWithUncertainReceiverQuery = getPortalBaseQuery + `WHERE bridge_id=$1 AND id=$2 AND (receiver=$3 OR receiver='')`
 	getPortalByMXIDQuery                    = getPortalBaseQuery + `WHERE bridge_id=$1 AND mxid=$2`
 	getAllPortalsWithMXIDQuery              = getPortalBaseQuery + `WHERE bridge_id=$1 AND mxid IS NOT NULL`
+	getAllPortalsWithoutReceiver            = getPortalBaseQuery + `WHERE bridge_id=$1 AND receiver=''`
 	getAllDMPortalsQuery                    = getPortalBaseQuery + `WHERE bridge_id=$1 AND room_type='dm' AND other_user_id=$2`
 	getAllPortalsQuery                      = getPortalBaseQuery + `WHERE bridge_id=$1`
 	getChildPortalsQuery                    = getPortalBaseQuery + `WHERE bridge_id=$1 AND parent_id=$2 AND parent_receiver=$3`
@@ -123,15 +124,22 @@ const (
 	reIDPortalQuery            = `UPDATE portal SET id=$4, receiver=$5 WHERE bridge_id=$1 AND id=$2 AND receiver=$3`
 	migrateToSplitPortalsQuery = `
 		UPDATE portal
-		SET receiver=COALESCE((
-			SELECT login_id
-			FROM user_portal
-			WHERE bridge_id=portal.bridge_id AND portal_id=portal.id AND portal_receiver=''
-			LIMIT 1
-		), (
-			SELECT id FROM user_login WHERE bridge_id=portal.bridge_id LIMIT 1
-		), '')
-		WHERE receiver='' AND bridge_id=$1
+		SET receiver=new_receiver
+		FROM (
+			SELECT bridge_id, id, COALESCE((
+				SELECT login_id
+				FROM user_portal
+				WHERE bridge_id=portal.bridge_id AND portal_id=portal.id AND portal_receiver=''
+				LIMIT 1
+			), (
+				SELECT id FROM user_login WHERE bridge_id=portal.bridge_id LIMIT 1
+			), '') AS new_receiver
+			FROM portal
+			WHERE receiver='' AND bridge_id=$1
+		) updates
+		WHERE portal.bridge_id=updates.bridge_id AND portal.id=updates.id AND portal.receiver='' AND NOT EXISTS (
+			SELECT 1 FROM portal p2 WHERE p2.bridge_id=updates.bridge_id AND p2.id=updates.id AND p2.receiver=updates.new_receiver
+		)
 	`
 )
 
@@ -157,6 +165,10 @@ func (pq *PortalQuery) GetByMXID(ctx context.Context, mxid id.RoomID) (*Portal, 
 
 func (pq *PortalQuery) GetAllWithMXID(ctx context.Context) ([]*Portal, error) {
 	return pq.QueryMany(ctx, getAllPortalsWithMXIDQuery, pq.BridgeID)
+}
+
+func (pq *PortalQuery) GetAllWithoutReceiver(ctx context.Context) ([]*Portal, error) {
+	return pq.QueryMany(ctx, getAllPortalsWithoutReceiver, pq.BridgeID)
 }
 
 func (pq *PortalQuery) GetAll(ctx context.Context) ([]*Portal, error) {

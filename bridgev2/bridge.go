@@ -285,7 +285,33 @@ func (br *Bridge) MigrateToSplitPortals(ctx context.Context) bool {
 		return false
 	}
 	log.Info().Int64("rows_affected", affected).Msg("Migrated to split portals")
+	withoutReceiver, err := br.DB.Portal.GetAllWithoutReceiver(ctx)
+	if err != nil {
+		log.WithLevel(zerolog.FatalLevel).Err(err).Msg("Failed to get portals that failed to migrate")
+		os.Exit(32)
+		return false
+	}
+	log.Info().Int("remaining_portals", len(withoutReceiver)).Msg("Deleting remaining portals without receiver")
+	for _, portal := range withoutReceiver {
+		if err = br.DB.Portal.Delete(ctx, portal.PortalKey); err != nil {
+			log.Err(err).
+				Str("portal_id", string(portal.ID)).
+				Stringer("mxid", portal.MXID).
+				Msg("Failed to delete portal database row that failed to migrate")
+		} else if err = br.Bot.DeleteRoom(ctx, portal.MXID, true); err != nil {
+			log.Err(err).
+				Str("portal_id", string(portal.ID)).
+				Stringer("mxid", portal.MXID).
+				Msg("Failed to delete portal room that failed to migrate")
+		} else {
+			log.Debug().
+				Str("portal_id", string(portal.ID)).
+				Stringer("mxid", portal.MXID).
+				Msg("Deleted portal that wasn't updated by split portal migration query")
+		}
+	}
 	br.DB.KV.Set(ctx, database.KeySplitPortalsEnabled, "true")
+	log.Info().Msg("Finished split portal migration successfully")
 	return affected > 0
 }
 

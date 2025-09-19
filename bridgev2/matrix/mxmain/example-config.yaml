@@ -15,6 +15,7 @@ bridge:
     # By default, users who are in the same group on the remote network will be
     # in the same Matrix room bridged to that group. If this is set to true,
     # every user will get their own Matrix room instead.
+    # SETTING THIS IS IRREVERSIBLE AND POTENTIALLY DESTRUCTIVE IF PORTALS ALREADY EXIST.
     split_portals: false
     # Should the bridge resend `m.bridge` events to all portals on startup?
     resend_bridge_info: false
