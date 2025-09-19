@@ -303,6 +303,9 @@ func (portal *Portal) queueEvent(ctx context.Context, evt portalEvent) EventHand
 		portal.eventIdx++
 		return portal.handleSingleEventWithDelayLogging(portal.eventIdx, evt)
 	} else {
+		if portal.events == nil {
+			panic(fmt.Errorf("queueEvent into uninitialized portal %s", portal.PortalKey))
+		}
 		select {
 		case portal.events <- evt:
 			return EventHandlingResultQueued
