@@ -9,6 +9,7 @@ package bridgev2
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -279,7 +280,8 @@ func (br *Bridge) MigrateToSplitPortals(ctx context.Context) bool {
 	}
 	affected, err := br.DB.Portal.MigrateToSplitPortals(ctx)
 	if err != nil {
-		log.Err(err).Msg("Failed to migrate portals")
+		log.WithLevel(zerolog.FatalLevel).Err(err).Msg("Failed to migrate portals")
+		os.Exit(31)
 		return false
 	}
 	log.Info().Int64("rows_affected", affected).Msg("Migrated to split portals")
