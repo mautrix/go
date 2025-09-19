@@ -123,6 +123,8 @@ func (br *Bridge) loadPortal(ctx context.Context, dbPortal *database.Portal, que
 		currentlyTypingGhosts: exsync.NewSet[id.UserID](),
 		outgoingMessages:      make(map[networkid.TransactionID]*outgoingMessage),
 	}
+	// Putting the portal in the cache before it's fully initialized is mildly dangerous,
+	// but loading the relay user login may depend on it.
 	br.portalsByKey[portal.PortalKey] = portal
 	if portal.MXID != "" {
 		br.portalsByMXID[portal.MXID] = portal
@@ -131,12 +133,20 @@ func (br *Bridge) loadPortal(ctx context.Context, dbPortal *database.Portal, que
 	if portal.ParentKey.ID != "" {
 		portal.Parent, err = br.UnlockedGetPortalByKey(ctx, portal.ParentKey, false)
 		if err != nil {
+			delete(br.portalsByKey, portal.PortalKey)
+			if portal.MXID != "" {
+				delete(br.portalsByMXID, portal.MXID)
+			}
 			return nil, fmt.Errorf("failed to load parent portal (%s): %w", portal.ParentKey, err)
 		}
 	}
 	if portal.RelayLoginID != "" {
 		portal.Relay, err = br.unlockedGetExistingUserLoginByID(ctx, portal.RelayLoginID)
 		if err != nil {
+			delete(br.portalsByKey, portal.PortalKey)
+			if portal.MXID != "" {
+				delete(br.portalsByMXID, portal.MXID)
+			}
 			return nil, fmt.Errorf("failed to load relay login (%s): %w", portal.RelayLoginID, err)
 		}
 	}
