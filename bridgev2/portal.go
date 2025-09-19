@@ -291,7 +291,7 @@ func (portal *Portal) queueEvent(ctx context.Context, evt portalEvent) EventHand
 		portal.eventsLock.Lock()
 		defer portal.eventsLock.Unlock()
 		portal.eventIdx++
-		return portal.handleSingleEventAsync(portal.eventIdx, evt)
+		return portal.handleSingleEventWithDelayLogging(portal.eventIdx, evt)
 	} else {
 		select {
 		case portal.events <- evt:
@@ -323,16 +323,16 @@ func (portal *Portal) eventLoop() {
 	i := 0
 	for rawEvt := range portal.events {
 		i++
-		portal.handleSingleEventAsync(i, rawEvt)
+		if portal.Bridge.Config.AsyncEvents {
+			go portal.handleSingleEventWithDelayLogging(i, rawEvt)
+		} else {
+			portal.handleSingleEventWithDelayLogging(i, rawEvt)
+		}
 	}
 }
 
-func (portal *Portal) handleSingleEventAsync(idx int, rawEvt any) (outerRes EventHandlingResult) {
+func (portal *Portal) handleSingleEventWithDelayLogging(idx int, rawEvt any) (outerRes EventHandlingResult) {
 	ctx := portal.getEventCtxWithLog(rawEvt, idx)
-	if portal.Bridge.Config.AsyncEvents {
-		go portal.handleSingleEvent(ctx, rawEvt, func(res EventHandlingResult) {})
-		return EventHandlingResultQueued
-	}
 	log := zerolog.Ctx(ctx)
 	doneCh := make(chan struct{})
 	var backgrounded atomic.Bool

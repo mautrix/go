@@ -37,8 +37,8 @@ func (portal *PortalInternals) EventLoop() {
 	(*Portal)(portal).eventLoop()
 }
 
-func (portal *PortalInternals) HandleSingleEventAsync(idx int, rawEvt any) (outerRes EventHandlingResult) {
-	return (*Portal)(portal).handleSingleEventAsync(idx, rawEvt)
+func (portal *PortalInternals) HandleSingleEventWithDelayLogging(idx int, rawEvt any) (outerRes EventHandlingResult) {
+	return (*Portal)(portal).handleSingleEventWithDelayLogging(idx, rawEvt)
 }
 
 func (portal *PortalInternals) GetEventCtxWithLog(rawEvt any, idx int) context.Context {
@@ -71,6 +71,10 @@ func (portal *PortalInternals) HandleMatrixReceipts(ctx context.Context, evt *ev
 
 func (portal *PortalInternals) HandleMatrixReadReceipt(ctx context.Context, user *User, eventID id.EventID, receipt event.ReadReceipt) {
 	(*Portal)(portal).handleMatrixReadReceipt(ctx, user, eventID, receipt)
+}
+
+func (portal *PortalInternals) CallReadReceiptHandler(ctx context.Context, login *UserLogin, rrClient ReadReceiptHandlingNetworkAPI, evt *MatrixReadReceipt, userPortal *database.UserPortal) {
+	(*Portal)(portal).callReadReceiptHandler(ctx, login, rrClient, evt, userPortal)
 }
 
 func (portal *PortalInternals) HandleMatrixTyping(ctx context.Context, evt *event.Event) EventHandlingResult {
