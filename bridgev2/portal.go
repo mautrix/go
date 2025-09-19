@@ -329,55 +329,55 @@ func (portal *Portal) eventLoop() {
 
 func (portal *Portal) handleSingleEventAsync(idx int, rawEvt any) (outerRes EventHandlingResult) {
 	ctx := portal.getEventCtxWithLog(rawEvt, idx)
-	if _, isCreate := rawEvt.(*portalCreateEvent); isCreate {
-		portal.handleSingleEvent(ctx, rawEvt, func(res EventHandlingResult) {
-			outerRes = res
-		})
-	} else if portal.Bridge.Config.AsyncEvents {
-		outerRes = EventHandlingResultQueued
+	if portal.Bridge.Config.AsyncEvents {
 		go portal.handleSingleEvent(ctx, rawEvt, func(res EventHandlingResult) {})
-	} else {
-		log := zerolog.Ctx(ctx)
-		doneCh := make(chan struct{})
-		var backgrounded atomic.Bool
-		start := time.Now()
-		var handleDuration time.Duration
-		// Note: this will not set the success flag if the handler times out
-		outerRes = EventHandlingResult{Queued: true}
-		go portal.handleSingleEvent(ctx, rawEvt, func(res EventHandlingResult) {
-			outerRes = res
-			handleDuration = time.Since(start)
-			close(doneCh)
-			if backgrounded.Load() {
+		return EventHandlingResultQueued
+	}
+	log := zerolog.Ctx(ctx)
+	doneCh := make(chan struct{})
+	var backgrounded atomic.Bool
+	start := time.Now()
+	var handleDuration time.Duration
+	// Note: this will not set the success flag if the handler times out
+	outerRes = EventHandlingResult{Queued: true}
+	go portal.handleSingleEvent(ctx, rawEvt, func(res EventHandlingResult) {
+		outerRes = res
+		handleDuration = time.Since(start)
+		close(doneCh)
+		if backgrounded.Load() {
+			log.Debug().
+				Time("started_at", start).
+				Stringer("duration", handleDuration).
+				Msg("Event that took too long finally finished handling")
+		}
+	})
+	tick := time.NewTicker(30 * time.Second)
+	_, isCreate := rawEvt.(*portalCreateEvent)
+	defer tick.Stop()
+	for i := 0; i < 10; i++ {
+		select {
+		case <-doneCh:
+			if i > 0 {
 				log.Debug().
 					Time("started_at", start).
 					Stringer("duration", handleDuration).
-					Msg("Event that took too long finally finished handling")
+					Msg("Event that took long finished handling")
 			}
-		})
-		tick := time.NewTicker(30 * time.Second)
-		defer tick.Stop()
-		for i := 0; i < 10; i++ {
-			select {
-			case <-doneCh:
-				if i > 0 {
-					log.Debug().
-						Time("started_at", start).
-						Stringer("duration", handleDuration).
-						Msg("Event that took long finished handling")
-				}
-				return
-			case <-tick.C:
-				log.Warn().
-					Time("started_at", start).
-					Msg("Event handling is taking long")
+			return
+		case <-tick.C:
+			log.Warn().
+				Time("started_at", start).
+				Msg("Event handling is taking long")
+			if isCreate {
+				// Never background portal creation events
+				i = 1
 			}
 		}
-		log.Warn().
-			Time("started_at", start).
-			Msg("Event handling is taking too long, continuing in background")
-		backgrounded.Store(true)
 	}
+	log.Warn().
+		Time("started_at", start).
+		Msg("Event handling is taking too long, continuing in background")
+	backgrounded.Store(true)
 	return
 }
 
