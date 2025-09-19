@@ -4444,8 +4444,6 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 
 	req := mautrix.ReqCreateRoom{
 		Visibility:         "private",
-		Name:               portal.Name,
-		Topic:              portal.Topic,
 		CreationContent:    make(map[string]any),
 		InitialState:       make([]*event.Event, 0, 6),
 		Preset:             "private_chat",
@@ -4488,26 +4486,47 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 		StateKey: &bridgeInfoStateKey,
 		Type:     event.StateBeeperRoomFeatures,
 		Content:  event.Content{Parsed: roomFeatures},
+	}, &event.Event{
+		Type: event.StateTopic,
+		Content: event.Content{
+			Parsed: &event.TopicEventContent{Topic: portal.Topic},
+			Raw: map[string]any{
+				"com.beeper.exclude_from_timeline": true,
+			},
+		},
 	})
 	if roomFeatures.DisappearingTimer != nil {
 		req.InitialState = append(req.InitialState, &event.Event{
-			Type:    event.StateBeeperDisappearingTimer,
-			Content: event.Content{Parsed: portal.Disappear.ToEventContent()},
+			Type: event.StateBeeperDisappearingTimer,
+			Content: event.Content{
+				Parsed: portal.Disappear.ToEventContent(),
+				Raw: map[string]any{
+					"com.beeper.exclude_from_timeline": true,
+				},
+			},
 		})
 		portal.CapState.Flags |= database.CapStateFlagDisappearingTimerSet
 	}
-	if req.Topic == "" {
-		// Add explicit topic event if topic is empty to ensure the event is set.
-		// This ensures that there won't be an extra event later if PUT /state/... is called.
+	if portal.Name != "" {
 		req.InitialState = append(req.InitialState, &event.Event{
-			Type:    event.StateTopic,
-			Content: event.Content{Parsed: &event.TopicEventContent{Topic: ""}},
+			Type: event.StateRoomName,
+			Content: event.Content{
+				Parsed: &event.RoomNameEventContent{Name: portal.Name},
+				Raw: map[string]any{
+					"com.beeper.exclude_from_timeline": true,
+				},
+			},
 		})
 	}
 	if portal.AvatarMXC != "" {
 		req.InitialState = append(req.InitialState, &event.Event{
-			Type:    event.StateRoomAvatar,
-			Content: event.Content{Parsed: &event.RoomAvatarEventContent{URL: portal.AvatarMXC}},
+			Type: event.StateRoomAvatar,
+			Content: event.Content{
+				Parsed: &event.RoomAvatarEventContent{URL: portal.AvatarMXC},
+				Raw: map[string]any{
+					"com.beeper.exclude_from_timeline": true,
+				},
+			},
 		})
 	}
 	if portal.Parent != nil && portal.Parent.MXID != "" {
