@@ -346,6 +346,10 @@ type NetworkGeneralCapabilities struct {
 	// Should the bridge re-request user info on incoming messages even if the ghost already has info?
 	// By default, info is only requested for ghosts with no name, and other updating is left to events.
 	AggressiveUpdateInfo bool
+	// Should the bridge call HandleMatrixReadReceipt with fake data when receiving a new message?
+	// This should be enabled if the network requires each message to be marked as read independently,
+	// and doesn't automatically do it when sending a message.
+	ImplicitReadReceipts bool
 	// If the bridge uses the pending message mechanism ([MatrixMessage.AddPendingToSave])
 	// to handle asynchronous message responses, this field can be set to enable
 	// automatic timeout errors in case the asynchronous response never arrives.
@@ -1361,6 +1365,8 @@ type MatrixReadReceipt struct {
 	LastRead time.Time
 	// The receipt metadata.
 	Receipt event.ReadReceipt
+	// Whether the receipt is implicit, i.e. triggered by an incoming timeline event rather than an explicit receipt.
+	Implicit bool
 }
 
 type MatrixTyping struct {

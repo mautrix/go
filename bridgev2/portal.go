@@ -587,7 +587,7 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 		// Tombstones aren't bridged so they don't need a login
 		return portal.handleMatrixTombstone(ctx, evt)
 	}
-	login, _, err := portal.FindPreferredLogin(ctx, sender, true)
+	login, userPortal, err := portal.FindPreferredLogin(ctx, sender, true)
 	if err != nil {
 		log.Err(err).Msg("Failed to get user login to handle Matrix event")
 		if errors.Is(err, ErrNotLoggedIn) {
@@ -646,6 +646,21 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 	}
 	// Copy logger because many of the handlers will use UpdateContext
 	ctx = log.With().Str("login_id", string(login.ID)).Logger().WithContext(ctx)
+
+	if origSender == nil && portal.Bridge.Network.GetCapabilities().ImplicitReadReceipts {
+		rrLog := log.With().Str("subaction", "implicit read receipt").Logger()
+		rrCtx := rrLog.WithContext(ctx)
+		rrLog.Debug().Msg("Sending implicit read receipt for event")
+		evtTS := time.UnixMilli(evt.Timestamp)
+		portal.callReadReceiptHandler(rrCtx, login, nil, &MatrixReadReceipt{
+			Portal:   portal,
+			EventID:  evt.ID,
+			Implicit: true,
+			ReadUpTo: evtTS,
+			Receipt:  event.ReadReceipt{Timestamp: evtTS},
+		}, userPortal)
+	}
+
 	switch evt.Type {
 	case event.EventMessage, event.EventSticker, event.EventUnstablePollStart, event.EventUnstablePollResponse:
 		return portal.handleMatrixMessage(ctx, login, origSender, evt)
@@ -735,15 +750,10 @@ func (portal *Portal) handleMatrixReadReceipt(ctx context.Context, user *User, e
 		EventID: eventID,
 		Receipt: receipt,
 	}
-	if userPortal == nil {
-		userPortal = database.UserPortalFor(login.UserLogin, portal.PortalKey)
-	} else {
-		evt.LastRead = userPortal.LastRead
-		userPortal = userPortal.CopyWithoutValues()
-	}
 	evt.ExactMessage, err = portal.Bridge.DB.Message.GetPartByMXID(ctx, eventID)
 	if err != nil {
 		log.Err(err).Msg("Failed to get exact message from database")
+		evt.ReadUpTo = receipt.Timestamp
 	} else if evt.ExactMessage != nil {
 		log.UpdateContext(func(c zerolog.Context) zerolog.Context {
 			return c.Str("exact_message_id", string(evt.ExactMessage.ID)).Time("exact_message_ts", evt.ExactMessage.Timestamp)
@@ -752,19 +762,38 @@ func (portal *Portal) handleMatrixReadReceipt(ctx context.Context, user *User, e
 	} else {
 		evt.ReadUpTo = receipt.Timestamp
 	}
-	err = rrClient.HandleMatrixReadReceipt(ctx, evt)
+	portal.callReadReceiptHandler(ctx, login, rrClient, evt, userPortal)
+}
+
+func (portal *Portal) callReadReceiptHandler(
+	ctx context.Context,
+	login *UserLogin,
+	rrClient ReadReceiptHandlingNetworkAPI,
+	evt *MatrixReadReceipt,
+	userPortal *database.UserPortal,
+) {
+	if rrClient == nil {
+		var ok bool
+		rrClient, ok = login.Client.(ReadReceiptHandlingNetworkAPI)
+		if !ok {
+			return
+		}
+	}
+	if userPortal == nil {
+		userPortal = database.UserPortalFor(login.UserLogin, portal.PortalKey)
+	} else {
+		evt.LastRead = userPortal.LastRead
+		userPortal = userPortal.CopyWithoutValues()
+	}
+	err := rrClient.HandleMatrixReadReceipt(ctx, evt)
 	if err != nil {
-		log.Err(err).Msg("Failed to handle read receipt")
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to handle read receipt")
 		return
 	}
-	if evt.ExactMessage != nil {
-		userPortal.LastRead = evt.ExactMessage.Timestamp
-	} else {
-		userPortal.LastRead = receipt.Timestamp
-	}
+	userPortal.LastRead = evt.ReadUpTo
 	err = portal.Bridge.DB.UserPortal.Put(ctx, userPortal)
 	if err != nil {
-		log.Err(err).Msg("Failed to save user portal metadata")
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to save user portal metadata")
 	}
 	portal.Bridge.DisappearLoop.StartAll(ctx, portal.MXID)
 }
