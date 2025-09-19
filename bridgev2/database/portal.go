@@ -132,6 +132,11 @@ const (
 				WHERE bridge_id=portal.bridge_id AND portal_id=portal.id AND portal_receiver=''
 				LIMIT 1
 			), (
+				SELECT login_id
+				FROM user_portal
+				WHERE portal.parent_id<>'' AND bridge_id=portal.bridge_id AND portal_id=portal.parent_id
+				LIMIT 1
+			), (
 				SELECT id FROM user_login WHERE bridge_id=portal.bridge_id LIMIT 1
 			), '') AS new_receiver
 			FROM portal
@@ -140,6 +145,9 @@ const (
 		WHERE portal.bridge_id=updates.bridge_id AND portal.id=updates.id AND portal.receiver='' AND NOT EXISTS (
 			SELECT 1 FROM portal p2 WHERE p2.bridge_id=updates.bridge_id AND p2.id=updates.id AND p2.receiver=updates.new_receiver
 		)
+	`
+	fixParentsAfterSplitPortalMigrationQuery = `
+		UPDATE portal SET parent_receiver=receiver WHERE parent_receiver='' AND receiver<>'' AND parent_id<>'';
 	`
 )
 
@@ -203,6 +211,14 @@ func (pq *PortalQuery) Delete(ctx context.Context, key networkid.PortalKey) erro
 
 func (pq *PortalQuery) MigrateToSplitPortals(ctx context.Context) (int64, error) {
 	res, err := pq.GetDB().Exec(ctx, migrateToSplitPortalsQuery, pq.BridgeID)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+func (pq *PortalQuery) FixParentsAfterSplitPortalMigration(ctx context.Context) (int64, error) {
+	res, err := pq.GetDB().Exec(ctx, fixParentsAfterSplitPortalMigrationQuery, pq.BridgeID)
 	if err != nil {
 		return 0, err
 	}

@@ -289,10 +289,17 @@ func (br *Bridge) MigrateToSplitPortals(ctx context.Context) (bool, func()) {
 		return false, nil
 	}
 	log.Info().Int64("rows_affected", affected).Msg("Migrated to split portals")
+	affected2, err := br.DB.Portal.FixParentsAfterSplitPortalMigration(ctx)
+	if err != nil {
+		log.Err(err).Msg("Failed to fix parent portals after split portal migration")
+		os.Exit(31)
+		return false, nil
+	}
+	log.Info().Int64("rows_affected", affected2).Msg("Updated parent receivers after split portal migration")
 	withoutReceiver, err := br.DB.Portal.GetAllWithoutReceiver(ctx)
 	if err != nil {
 		log.WithLevel(zerolog.FatalLevel).Err(err).Msg("Failed to get portals that failed to migrate")
-		os.Exit(32)
+		os.Exit(31)
 		return false, nil
 	}
 	var roomsToDelete []id.RoomID
