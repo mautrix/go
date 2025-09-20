@@ -177,6 +177,12 @@ func (e RespError) WithStatus(status int) RespError {
 	return e
 }
 
+func (e RespError) WithExtraData(extraData map[string]any) RespError {
+	e.ExtraData = maps.Clone(e.ExtraData)
+	maps.Copy(e.ExtraData, extraData)
+	return e
+}
+
 // Error returns the errcode and error message.
 func (e RespError) Error() string {
 	return e.ErrCode + ": " + e.Err
