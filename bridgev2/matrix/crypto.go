@@ -139,6 +139,11 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 		if !helper.verifyKeysAreOnServer(ctx) {
 			return nil
 		}
+	} else {
+		err = helper.ShareKeys(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to share device keys: %w", err)
+		}
 	}
 	if helper.bridge.Config.Encryption.SelfSign {
 		if !helper.doSelfSign(ctx) {
