@@ -1,3 +1,18 @@
+## unreleased
+
+* *(crypto)* Added helper methods for generating and verifying with recovery
+  keys.
+* *(bridgev2/matrix)* Added config option to automatically generate a recovery
+  key for the bridge bot and self-sign the bridge's device.
+* *(bridgev2/matrix)* Added initial support for using appservice/MSC3202 mode
+  for encryption with standard servers like Synapse.
+* *(bridgev2)* Added optional support for implicit read receipts.
+* *(bridgev2)* Extended event duration logging to log any event taking too long.
+* *(bridgev2)* Fixed various bugs with migrating to split portals.
+* *(event)* Fixed poll start events having incorrect null `m.relates_to`.
+* *(event)* Added event type constant for poll end events.
+* *(client)* Fixed `RespUserProfile` losing standard fields when re-marshaling.
+
 ## v0.25.1 (2025-09-16)
 
 * *(client)* Fixed HTTP method of delete devices API call
