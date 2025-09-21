@@ -71,6 +71,42 @@ func (mach *OlmMachine) GenerateAndUploadCrossSigningKeysWithPassword(ctx contex
 	}, passphrase)
 }
 
+func (mach *OlmMachine) VerifyWithRecoveryKey(ctx context.Context, recoveryKey string) error {
+	keyID, keyData, err := mach.SSSS.GetDefaultKeyData(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get default SSSS key data: %w", err)
+	}
+	key, err := keyData.VerifyRecoveryKey(keyID, recoveryKey)
+	if err != nil {
+		return err
+	}
+	err = mach.FetchCrossSigningKeysFromSSSS(ctx, key)
+	if err != nil {
+		return fmt.Errorf("failed to fetch cross-signing keys from SSSS: %w", err)
+	}
+	err = mach.SignOwnDevice(ctx, mach.OwnIdentity())
+	if err != nil {
+		return fmt.Errorf("failed to sign own device: %w", err)
+	}
+	err = mach.SignOwnMasterKey(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to sign own master key: %w", err)
+	}
+	return nil
+}
+
+func (mach *OlmMachine) GenerateAndVerifyWithRecoveryKey(ctx context.Context) (recoveryKey string, err error) {
+	recoveryKey, _, err = mach.GenerateAndUploadCrossSigningKeys(ctx, nil, "")
+	if err != nil {
+		err = fmt.Errorf("failed to generate and upload cross-signing keys: %w", err)
+	} else if err = mach.SignOwnDevice(ctx, mach.OwnIdentity()); err != nil {
+		err = fmt.Errorf("failed to sign own device: %w", err)
+	} else if err = mach.SignOwnMasterKey(ctx); err != nil {
+		err = fmt.Errorf("failed to sign own master key: %w", err)
+	}
+	return
+}
+
 // GenerateAndUploadCrossSigningKeys generates a new key with all corresponding cross-signing keys.
 //
 // A passphrase can be provided to generate the SSSS key. If the passphrase is empty, a random key
@@ -97,12 +133,12 @@ func (mach *OlmMachine) GenerateAndUploadCrossSigningKeys(ctx context.Context, u
 	// Publish cross-signing keys
 	err = mach.PublishCrossSigningKeys(ctx, keysCache, uiaCallback)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to publish cross-signing keys: %w", err)
+		return key.RecoveryKey(), keysCache, fmt.Errorf("failed to publish cross-signing keys: %w", err)
 	}
 
 	err = mach.SSSS.SetDefaultKeyID(ctx, key.ID)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to mark %s as the default key: %w", key.ID, err)
+		return key.RecoveryKey(), keysCache, fmt.Errorf("failed to mark %s as the default key: %w", key.ID, err)
 	}
 
 	return key.RecoveryKey(), keysCache, nil
