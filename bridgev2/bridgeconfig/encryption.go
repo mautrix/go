@@ -16,6 +16,7 @@ type EncryptionConfig struct {
 	Require    bool `yaml:"require"`
 	Appservice bool `yaml:"appservice"`
 	MSC4190    bool `yaml:"msc4190"`
+	SelfSign   bool `yaml:"self_sign"`
 
 	PlaintextMentions bool `yaml:"plaintext_mentions"`
 

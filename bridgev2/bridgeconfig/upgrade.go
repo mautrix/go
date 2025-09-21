@@ -157,6 +157,7 @@ func doUpgrade(helper up.Helper) {
 	} else {
 		helper.Copy(up.Bool, "encryption", "msc4190")
 	}
+	helper.Copy(up.Bool, "encryption", "self_sign")
 	helper.Copy(up.Bool, "encryption", "allow_key_sharing")
 	if secret, ok := helper.Get(up.Str, "encryption", "pickle_key"); !ok || secret == "generate" {
 		helper.Set(up.Str, random.String(64), "encryption", "pickle_key")

@@ -23,6 +23,7 @@ const (
 	KeySplitPortalsEnabled     Key = "split_portals_enabled"
 	KeyBridgeInfoVersion       Key = "bridge_info_version"
 	KeyEncryptionStateResynced Key = "encryption_state_resynced"
+	KeyRecoveryKey             Key = "recovery_key"
 )
 
 type KVQuery struct {
