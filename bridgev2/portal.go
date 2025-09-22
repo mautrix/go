@@ -90,7 +90,8 @@ type Portal struct {
 	functionalMembersLock  sync.Mutex
 	functionalMembersCache *event.ElementFunctionalMembersContent
 
-	events chan portalEvent
+	events  chan portalEvent
+	deleted bool
 
 	eventsLock sync.Mutex
 	eventIdx   int
@@ -335,6 +336,9 @@ func (portal *Portal) eventLoop() {
 	}
 	i := 0
 	for rawEvt := range portal.events {
+		if portal.deleted {
+			return
+		}
 		i++
 		if portal.Bridge.Config.AsyncEvents {
 			go portal.handleSingleEventWithDelayLogging(i, rawEvt)
@@ -4811,6 +4815,7 @@ func (portal *Portal) unlockedDeleteCache() {
 		// TODO there's a small risk of this racing with a queueEvent call
 		close(portal.events)
 	}
+	portal.deleted = true
 }
 
 func (portal *Portal) Save(ctx context.Context) error {
