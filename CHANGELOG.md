@@ -12,6 +12,7 @@
 * *(event)* Fixed poll start events having incorrect null `m.relates_to`.
 * *(event)* Added event type constant for poll end events.
 * *(client)* Fixed `RespUserProfile` losing standard fields when re-marshaling.
+* *(client)* Added wrapper for searching user directory.
 
 ## v0.25.1 (2025-09-16)
 

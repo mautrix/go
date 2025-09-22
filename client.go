@@ -1055,6 +1055,15 @@ func (cli *Client) GetProfile(ctx context.Context, mxid id.UserID) (resp *RespUs
 	return
 }
 
+func (cli *Client) SearchUserDirectory(ctx context.Context, query string, limit int) (resp *RespSearchUserDirectory, err error) {
+	urlPath := cli.BuildClientURL("v3", "user_directory", "search")
+	_, err = cli.MakeRequest(ctx, http.MethodPost, urlPath, &ReqSearchUserDirectory{
+		SearchTerm: query,
+		Limit:      limit,
+	}, &resp)
+	return
+}
+
 func (cli *Client) GetMutualRooms(ctx context.Context, otherUserID id.UserID, extras ...ReqMutualRooms) (resp *RespMutualRooms, err error) {
 	if cli.SpecVersions != nil && !cli.SpecVersions.Supports(FeatureMutualRooms) {
 		err = fmt.Errorf("server does not support fetching mutual rooms")

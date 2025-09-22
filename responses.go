@@ -213,6 +213,35 @@ func (r *RespUserProfile) MarshalJSON() ([]byte, error) {
 	return json.Marshal(marshalMap)
 }
 
+type RespSearchUserDirectory struct {
+	Limited bool               `json:"limited"`
+	Results []*RespUserProfile `json:"results"`
+}
+
+type UserDirectoryEntry struct {
+	RespUserProfile
+	UserID id.UserID `json:"user_id"`
+}
+
+func (r *UserDirectoryEntry) UnmarshalJSON(data []byte) error {
+	err := r.RespUserProfile.UnmarshalJSON(data)
+	if err != nil {
+		return err
+	}
+	userIDStr, _ := r.Extra["user_id"].(string)
+	r.UserID = id.UserID(userIDStr)
+	delete(r.Extra, "user_id")
+	return nil
+}
+
+func (r *UserDirectoryEntry) MarshalJSON() ([]byte, error) {
+	if r.Extra == nil {
+		r.Extra = make(map[string]any)
+	}
+	r.Extra["user_id"] = r.UserID.String()
+	return r.RespUserProfile.MarshalJSON()
+}
+
 type RespMutualRooms struct {
 	Joined    []id.RoomID `json:"joined"`
 	NextBatch string      `json:"next_batch,omitempty"`

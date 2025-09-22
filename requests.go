@@ -183,6 +183,11 @@ type ReqKnockRoom struct {
 	Reason string   `json:"reason,omitempty"`
 }
 
+type ReqSearchUserDirectory struct {
+	SearchTerm string `json:"search_term"`
+	Limit      int    `json:"limit,omitempty"`
+}
+
 type ReqMutualRooms struct {
 	From string `json:"-"`
 }
