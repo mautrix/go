@@ -231,6 +231,8 @@ type BridgeEventContent struct {
 
 	BeeperRoomType   string `json:"com.beeper.room_type,omitempty"`
 	BeeperRoomTypeV2 string `json:"com.beeper.room_type.v2,omitempty"`
+
+	TempSlackRemoteIDMigratedFlag bool `json:"com.beeper.slack_remote_id_migrated,omitempty"`
 }
 
 // DisappearingType represents the type of a disappearing message timer.
