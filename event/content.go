@@ -63,6 +63,7 @@ var TypeMap = map[Type]reflect.Type{
 
 	BeeperMessageStatus: reflect.TypeOf(BeeperMessageStatusEventContent{}),
 	BeeperTranscription: reflect.TypeOf(BeeperTranscriptionEventContent{}),
+	BeeperDeleteChat:    reflect.TypeOf(BeeperChatDeleteEventContent{}),
 
 	AccountDataRoomTags:        reflect.TypeOf(TagEventContent{}),
 	AccountDataDirectChats:     reflect.TypeOf(DirectChatsEventContent{}),

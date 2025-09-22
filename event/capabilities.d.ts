@@ -55,6 +55,11 @@ export interface RoomFeatures {
 	allowed_reactions?: string[]
 	/** Whether custom emoji reactions are allowed. */
 	custom_emoji_reactions?: boolean
+
+	/** Whether deleting the chat for yourself is supported. */
+	delete_chat?: boolean
+	/** Whether deleting the chat for all participants is supported. */
+	delete_chat_for_everyone?: boolean
 }
 
 declare type integer = number

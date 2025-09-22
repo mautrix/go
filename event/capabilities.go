@@ -51,11 +51,12 @@ type RoomFeatures struct {
 	AllowedReactions     []string               `json:"allowed_reactions,omitempty"`
 	CustomEmojiReactions bool                   `json:"custom_emoji_reactions,omitempty"`
 
-	ReadReceipts        bool `json:"read_receipts,omitempty"`
-	TypingNotifications bool `json:"typing_notifications,omitempty"`
-	Archive             bool `json:"archive,omitempty"`
-	MarkAsUnread        bool `json:"mark_as_unread,omitempty"`
-	DeleteChat          bool `json:"delete_chat,omitempty"`
+	ReadReceipts          bool `json:"read_receipts,omitempty"`
+	TypingNotifications   bool `json:"typing_notifications,omitempty"`
+	Archive               bool `json:"archive,omitempty"`
+	MarkAsUnread          bool `json:"mark_as_unread,omitempty"`
+	DeleteChat            bool `json:"delete_chat,omitempty"`
+	DeleteChatForEveryone bool `json:"delete_chat_for_everyone,omitempty"`
 }
 
 func (rf *RoomFeatures) GetID() string {
@@ -262,6 +263,7 @@ func (rf *RoomFeatures) Hash() []byte {
 	hashBool(hasher, "archive", rf.Archive)
 	hashBool(hasher, "mark_as_unread", rf.MarkAsUnread)
 	hashBool(hasher, "delete_chat", rf.DeleteChat)
+	hashBool(hasher, "delete_chat_for_everyone", rf.DeleteChatForEveryone)
 
 	return hasher.Sum(nil)
 }
