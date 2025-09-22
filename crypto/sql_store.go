@@ -253,7 +253,7 @@ func (store *SQLCryptoStore) GetLatestSession(ctx context.Context, key id.Sender
 // GetNewestSessionCreationTS gets the creation timestamp of the most recently created session with the given sender key.
 // This will exclude sessions that have never been used to encrypt or decrypt a message.
 func (store *SQLCryptoStore) GetNewestSessionCreationTS(ctx context.Context, key id.SenderKey) (createdAt time.Time, err error) {
-	err = store.DB.QueryRow(ctx, "SELECT created_at FROM crypto_olm_session WHERE sender_key=$1 AND account_id=$2 AND (encrypted_at <> created_at OR decrypted_at <> created_at) ORDER BY created_at DESC LIMIT 1",
+	err = store.DB.QueryRow(ctx, "SELECT created_at FROM crypto_olm_session WHERE sender_key=$1 AND account_id=$2 AND (last_encrypted <> created_at OR last_decrypted <> created_at) ORDER BY created_at DESC LIMIT 1",
 		key, store.AccountID).Scan(&createdAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = nil
