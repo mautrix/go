@@ -706,6 +706,8 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 		return portal.handleMatrixMembership(ctx, login, origSender, evt)
 	case event.StatePowerLevels:
 		return portal.handleMatrixPowerLevels(ctx, login, origSender, evt)
+	case event.BeeperDeleteChat:
+		return portal.handleMatrixDeleteChat(ctx, login, origSender, evt)
 	default:
 		return EventHandlingResultIgnored
 	}
@@ -1620,6 +1622,58 @@ func (portal *Portal) getTargetUser(ctx context.Context, userID id.UserID) (Ghos
 		// Return raw nil as a separate case to ensure a typed nil isn't returned
 		return nil, nil
 	}
+}
+
+func (portal *Portal) handleMatrixDeleteChat(
+	ctx context.Context,
+	sender *UserLogin,
+	origSender *OrigSender,
+	evt *event.Event,
+) EventHandlingResult {
+	if origSender != nil {
+		return EventHandlingResultFailed.WithMSSError(ErrIgnoringDeleteChatRelayedUser)
+	}
+	log := zerolog.Ctx(ctx)
+	content, ok := evt.Content.Parsed.(*event.BeeperChatDeleteEventContent)
+	if !ok {
+		log.Error().Type("content_type", evt.Content.Parsed).Msg("Unexpected parsed content type")
+		return EventHandlingResultFailed.WithMSSError(fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed))
+	}
+	api, ok := sender.Client.(DeleteChatHandlingNetworkAPI)
+	if !ok {
+		return EventHandlingResultIgnored.WithMSSError(ErrDeleteChatNotSupported)
+	}
+	err := api.HandleMatrixDeleteChat(ctx, &MatrixDeleteChat{
+		Event:   evt,
+		Content: content,
+		Portal:  portal,
+	})
+	if err != nil {
+		log.Err(err).Msg("Failed to handle Matrix chat delete")
+		return EventHandlingResultFailed.WithMSSError(err)
+	}
+	if portal.Receiver == "" {
+		_, others, err := portal.findOtherLogins(ctx, sender)
+		if err != nil {
+			log.Err(err).Msg("Failed to check if portal has other logins")
+			return EventHandlingResultFailed.WithError(err)
+		} else if len(others) > 0 {
+			log.Debug().Msg("Not deleting portal after chat delete as other logins are present")
+			return EventHandlingResultSuccess
+		}
+	}
+	err = portal.Delete(ctx)
+	if err != nil {
+		log.Err(err).Msg("Failed to delete portal from database")
+		return EventHandlingResultFailed.WithMSSError(err)
+	}
+	err = portal.Bridge.Bot.DeleteRoom(ctx, portal.MXID, false)
+	if err != nil {
+		log.Err(err).Msg("Failed to delete Matrix room")
+		return EventHandlingResultFailed.WithMSSError(err)
+	}
+	// No MSS here as the portal was deleted
+	return EventHandlingResultSuccess
 }
 
 func (portal *Portal) handleMatrixMembership(
@@ -3160,11 +3214,11 @@ func (portal *Portal) handleRemoteMessageRemove(ctx context.Context, source *Use
 	onlyForMeProvider, ok := evt.(RemoteDeleteOnlyForMe)
 	onlyForMe := ok && onlyForMeProvider.DeleteOnlyForMe()
 	if onlyForMe && portal.Receiver == "" {
-		logins, err := portal.Bridge.DB.UserPortal.GetAllInPortal(ctx, portal.PortalKey)
+		_, others, err := portal.findOtherLogins(ctx, source)
 		if err != nil {
 			log.Err(err).Msg("Failed to check if portal has other logins")
 			return EventHandlingResultFailed.WithError(err)
-		} else if len(logins) > 1 {
+		} else if len(others) > 0 {
 			log.Debug().Msg("Ignoring delete for me event in portal with multiple logins")
 			return EventHandlingResultIgnored
 		}
@@ -3413,22 +3467,29 @@ func (portal *Portal) handleRemoteChatResync(ctx context.Context, source *UserLo
 	return EventHandlingResultSuccess
 }
 
+func (portal *Portal) findOtherLogins(ctx context.Context, source *UserLogin) (ownUP *database.UserPortal, others []*database.UserPortal, err error) {
+	others, err = portal.Bridge.DB.UserPortal.GetAllInPortal(ctx, portal.PortalKey)
+	if err != nil {
+		return
+	}
+	others = slices.DeleteFunc(others, func(up *database.UserPortal) bool {
+		if up.LoginID == source.ID {
+			ownUP = up
+			return true
+		}
+		return false
+	})
+	return
+}
+
 func (portal *Portal) handleRemoteChatDelete(ctx context.Context, source *UserLogin, evt RemoteChatDelete) EventHandlingResult {
 	log := zerolog.Ctx(ctx)
 	if portal.Receiver == "" && evt.DeleteOnlyForMe() {
-		logins, err := portal.Bridge.DB.UserPortal.GetAllInPortal(ctx, portal.PortalKey)
+		ownUP, logins, err := portal.findOtherLogins(ctx, source)
 		if err != nil {
 			log.Err(err).Msg("Failed to check if portal has other logins")
 			return EventHandlingResultFailed.WithError(err)
 		}
-		var ownUP *database.UserPortal
-		logins = slices.DeleteFunc(logins, func(up *database.UserPortal) bool {
-			if up.LoginID == source.ID {
-				ownUP = up
-				return true
-			}
-			return false
-		})
 		if len(logins) > 0 {
 			log.Debug().Msg("Not deleting portal with other logins in remote chat delete event")
 			if ownUP != nil {

@@ -697,6 +697,14 @@ type DisappearTimerChangingNetworkAPI interface {
 	HandleMatrixDisappearingTimer(ctx context.Context, msg *MatrixDisappearingTimer) (bool, error)
 }
 
+// DeleteChatHandlingNetworkAPI is an optional interface that network connectors
+// can implement to delete a chat from the remote network.
+type DeleteChatHandlingNetworkAPI interface {
+	NetworkAPI
+	// HandleMatrixDeleteChat is called when the user explicitly deletes a chat.
+	HandleMatrixDeleteChat(ctx context.Context, msg *MatrixDeleteChat) error
+}
+
 type ResolveIdentifierResponse struct {
 	// Ghost is the ghost of the user that the identifier resolves to.
 	// This field should be set whenever possible. However, it is not required,
@@ -1380,6 +1388,7 @@ type MatrixViewingChat struct {
 	Portal *Portal
 }
 
+type MatrixDeleteChat = MatrixEventBase[*event.BeeperChatDeleteEventContent]
 type MatrixMarkedUnread = MatrixRoomMeta[*event.MarkedUnreadEventContent]
 type MatrixMute = MatrixRoomMeta[*event.BeeperMuteEventContent]
 type MatrixRoomTag = MatrixRoomMeta[*event.TagEventContent]
