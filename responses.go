@@ -214,8 +214,8 @@ func (r *RespUserProfile) MarshalJSON() ([]byte, error) {
 }
 
 type RespSearchUserDirectory struct {
-	Limited bool               `json:"limited"`
-	Results []*RespUserProfile `json:"results"`
+	Limited bool                  `json:"limited"`
+	Results []*UserDirectoryEntry `json:"results"`
 }
 
 type UserDirectoryEntry struct {
