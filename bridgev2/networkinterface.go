@@ -417,6 +417,17 @@ type BackgroundSyncingNetworkAPI interface {
 	ConnectBackground(ctx context.Context, params *ConnectBackgroundParams) error
 }
 
+// ChatInfoFetchingNetworkAPI is an optional interface that network connectors can implement
+// to provide chat metadata when a resync is requested externally (e.g. by the SDK).
+//
+// If implemented, the SDK can emit a RemoteEventChatResync with a GetChatInfoFunc binding
+// directly to this method, allowing the connector to fetch fresh chat info.
+type ChatInfoFetchingNetworkAPI interface {
+	NetworkAPI
+	// GetChatInfo should return up-to-date chat metadata for the given portal.
+	GetChatInfo(ctx context.Context, portal *Portal) (*ChatInfo, error)
+}
+
 // CredentialExportingNetworkAPI is an optional interface that networks connectors can implement to support export of
 // the credentials associated with that login. Credential type is bridge specific.
 type CredentialExportingNetworkAPI interface {
