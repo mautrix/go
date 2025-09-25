@@ -4046,16 +4046,7 @@ func (portal *Portal) syncParticipants(
 		return fmt.Errorf("failed to get current members: %w", err)
 	}
 	delete(currentMembers, portal.Bridge.Bot.GetMXID())
-	// Ensure baseline power levels match initial room creation defaults.
-	// See createMatrixRoomInLoop: we enforce bot at 9001 and lock down
-	// critical state events to PL 100.
-	baselineChanged := false
-	baselineChanged = currentPower.EnsureEventLevel(event.StateTombstone, 100) || baselineChanged
-	baselineChanged = currentPower.EnsureEventLevel(event.StateServerACL, 100) || baselineChanged
-	baselineChanged = currentPower.EnsureEventLevel(event.StateEncryption, 100) || baselineChanged
-	baselineChanged = currentPower.EnsureUserLevel(portal.Bridge.Bot.GetMXID(), 9001) || baselineChanged
-
-	powerChanged := members.PowerLevels.Apply(portal.Bridge.Bot.GetMXID(), currentPower) || baselineChanged
+	powerChanged := members.PowerLevels.Apply(portal.Bridge.Bot.GetMXID(), currentPower)
 	syncUser := func(extraUserID id.UserID, member ChatMember, intent MatrixAPI) bool {
 		if member.Membership == "" {
 			member.Membership = event.MembershipJoin
