@@ -34,6 +34,7 @@ type Database struct {
 	UserPortal          *UserPortalQuery
 	BackfillTask        *BackfillTaskQuery
 	KV                  *KVQuery
+	Media               *MediaQuery
 }
 
 type MetaMerger interface {
@@ -48,6 +49,7 @@ type MetaTypes struct {
 	Message   MetaTypeCreator
 	Reaction  MetaTypeCreator
 	UserLogin MetaTypeCreator
+	Media     MetaTypeCreator
 }
 
 type blankMeta struct{}
@@ -73,6 +75,9 @@ func New(bridgeID networkid.BridgeID, mt MetaTypes, db *dbutil.Database) *Databa
 	}
 	if mt.UserLogin == nil {
 		mt.UserLogin = blankMetaCreator
+	}
+	if mt.Media == nil {
+		mt.Media = blankMetaCreator
 	}
 	db.UpgradeTable = upgrades.Table
 	return &Database{
@@ -140,6 +145,12 @@ func New(bridgeID networkid.BridgeID, mt MetaTypes, db *dbutil.Database) *Databa
 		KV: &KVQuery{
 			BridgeID: bridgeID,
 			Database: db,
+		},
+		Media: &MediaQuery{
+			BridgeID: bridgeID,
+			QueryHelper: dbutil.MakeQueryHelper(db, func(_ *dbutil.QueryHelper[*Media]) *Media {
+				return &Media{}
+			}),
 		},
 	}
 }
