@@ -733,23 +733,27 @@ func findEventAndReadString(events []*pdu.PDU, evtType, stateKey, fieldPath, def
 
 func getPowerLevels(roomVersion id.RoomVersion, authEvents []*pdu.PDU, createEvt *pdu.PDU) (*event.PowerLevelsEventContent, error) {
 	var err error
-	powerLevels := findEventAndReadData(authEvents, event.StatePowerLevels.Type, "", func(evt *pdu.PDU) (out event.PowerLevelsEventContent) {
+	powerLevels := findEventAndReadData(authEvents, event.StatePowerLevels.Type, "", func(evt *pdu.PDU) *event.PowerLevelsEventContent {
 		if evt == nil {
-			return
+			return nil
 		}
 		content := evt.Content
+		out := &event.PowerLevelsEventContent{}
 		if !roomVersion.ValidatePowerLevelInts() {
-			safeParsePowerLevels(content, &out)
+			safeParsePowerLevels(content, out)
 		} else {
-			err = json.Unmarshal(content, &out)
+			err = json.Unmarshal(content, out)
 		}
-		return
+		return out
 	})
 	if err != nil {
 		// This should never happen thanks to safeParsePowerLevels for v1-9 and strict validation in v10+
 		return nil, fmt.Errorf("%w: %w", ErrFailedToParsePowerLevels, err)
 	}
 	if roomVersion.PrivilegedRoomCreators() {
+		if powerLevels == nil {
+			powerLevels = &event.PowerLevelsEventContent{}
+		}
 		powerLevels.CreateEvent, err = createEvt.ToClientEvent(roomVersion)
 		if err != nil {
 			return nil, fmt.Errorf("%w: %w", ErrFailedToParsePowerLevels, err)
@@ -758,12 +762,14 @@ func getPowerLevels(roomVersion id.RoomVersion, authEvents []*pdu.PDU, createEvt
 		if err != nil {
 			return nil, fmt.Errorf("%w: %w", ErrFailedToParsePowerLevels, err)
 		}
-	} else {
-		powerLevels.Users = map[id.UserID]int{
-			createEvt.Sender: (1 << 53) - 1,
+	} else if powerLevels == nil {
+		powerLevels = &event.PowerLevelsEventContent{
+			Users: map[id.UserID]int{
+				createEvt.Sender: 100,
+			},
 		}
 	}
-	return &powerLevels, nil
+	return powerLevels, nil
 }
 
 func parseIntWithVersion(roomVersion id.RoomVersion, val gjson.Result) *int {
