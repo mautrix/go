@@ -225,13 +225,6 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 		helper.ASEventProcessor.On(event.EventEncrypted, helper.HandleEncrypted)
 	}
 
-	if helper.client.SetAppServiceDeviceID {
-		err = helper.mach.ShareKeys(ctx, -1)
-		if err != nil {
-			return fmt.Errorf("failed to share keys: %w", err)
-		}
-	}
-
 	return nil
 }
 
@@ -268,21 +261,21 @@ func (helper *CryptoHelper) verifyDeviceKeysOnServer(ctx context.Context) error 
 	if !ok || len(device.Keys) == 0 {
 		if isShared {
 			return fmt.Errorf("olm account is marked as shared, keys seem to have disappeared from the server")
-		} else {
-			helper.log.Debug().Msg("Olm account not shared and keys not on server, so device is probably fine")
-			return nil
 		}
+		helper.log.Debug().Msg("Olm account not shared and keys not on server, sharing initial keys")
+		err = helper.mach.ShareKeys(ctx, -1)
+		if err != nil {
+			return fmt.Errorf("failed to share keys: %w", err)
+		}
+		return nil
 	} else if !isShared {
 		return fmt.Errorf("olm account is not marked as shared, but there are keys on the server")
 	} else if ed := device.Keys.GetEd25519(helper.client.DeviceID); ownID.SigningKey != ed {
 		return fmt.Errorf("mismatching identity key on server (%q != %q)", ownID.SigningKey, ed)
-	}
-	if !isShared {
-		helper.log.Debug().Msg("Olm account not marked as shared, but keys on server match?")
 	} else {
 		helper.log.Debug().Msg("Olm account marked as shared and keys on server match, device is fine")
+		return nil
 	}
-	return nil
 }
 
 var NoSessionFound = crypto.NoSessionFound
