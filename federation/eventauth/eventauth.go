@@ -664,8 +664,9 @@ func allowPowerChangeMap(roomVersion id.RoomVersion, maxVal int, path, ownID str
 		newVal := new.Get(exgjson.Path(key.Str))
 		err = allowPowerChange(roomVersion, maxVal, path+"."+key.Str, value, newVal)
 		if err == nil && ownID != "" && key.Str != ownID {
-			val := parseIntWithVersion(roomVersion, value)
-			if *val >= maxVal {
+			parsedOldVal := parseIntWithVersion(roomVersion, value)
+			parsedNewVal := parseIntWithVersion(roomVersion, newVal)
+			if *parsedOldVal >= maxVal && *parsedOldVal != *parsedNewVal {
 				err = fmt.Errorf("%w: can't change users.%s from %s to %s with sender level %d", ErrInvalidPowerChange, key.Str, stringifyForError(value), stringifyForError(newVal), maxVal)
 			}
 		}
