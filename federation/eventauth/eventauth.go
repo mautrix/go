@@ -676,7 +676,7 @@ func allowPowerChangeMap(roomVersion id.RoomVersion, maxVal int, path, ownID str
 		return
 	}
 	new.ForEach(func(key, value gjson.Result) bool {
-		err = allowPowerChange(roomVersion, maxVal, path+"."+key.Str, old.Get(exgjson.Path(key.Path(key.Str))), value)
+		err = allowPowerChange(roomVersion, maxVal, path+"."+key.Str, old.Get(exgjson.Path(key.Str)), value)
 		return err == nil
 	})
 	return
