@@ -1,10 +1,10 @@
-// Copyright (c) 2024 Sumner Evans
+// Copyright (c) 2025 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-package verificationhelper_test
+package mockserver
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rs/zerolog/log" // zerolog-allow-global-log
+	globallog "github.com/rs/zerolog/log" // zerolog-allow-global-log
 	"github.com/stretchr/testify/require"
 	"go.mau.fi/util/random"
 
@@ -26,10 +26,9 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-// mockServer is a mock Matrix server that wraps an [httptest.Server] to allow
-// testing of the interactive verification process.
-type mockServer struct {
-	*httptest.Server
+type MockServer struct {
+	Router *http.ServeMux
+	Server *httptest.Server
 
 	AccessTokenToUserID map[string]id.UserID
 	DeviceInbox         map[id.UserID]map[id.DeviceID][]event.Event
@@ -40,10 +39,10 @@ type mockServer struct {
 	UserSigningKeys     map[id.UserID]mautrix.CrossSigningKeys
 }
 
-func createMockServer(t *testing.T) *mockServer {
+func Create(t *testing.T) *MockServer {
 	t.Helper()
 
-	server := mockServer{
+	server := MockServer{
 		AccessTokenToUserID: map[string]id.UserID{},
 		DeviceInbox:         map[id.UserID]map[id.DeviceID][]event.Event{},
 		AccountData:         map[id.UserID]map[event.Type]json.RawMessage{},
@@ -61,12 +60,13 @@ func createMockServer(t *testing.T) *mockServer {
 	router.HandleFunc("POST /_matrix/client/v3/keys/device_signing/upload", server.postDeviceSigningUpload)
 	router.HandleFunc("POST /_matrix/client/v3/keys/signatures/upload", server.emptyResp)
 	router.HandleFunc("POST /_matrix/client/v3/keys/upload", server.postKeysUpload)
-
+	server.Router = router
 	server.Server = httptest.NewServer(router)
+	t.Cleanup(server.Server.Close)
 	return &server
 }
 
-func (ms *mockServer) getUserID(r *http.Request) id.UserID {
+func (ms *MockServer) getUserID(r *http.Request) id.UserID {
 	authHeader := r.Header.Get("Authorization")
 	authHeader = strings.TrimPrefix(authHeader, "Bearer ")
 	userID, ok := ms.AccessTokenToUserID[authHeader]
@@ -76,11 +76,11 @@ func (ms *mockServer) getUserID(r *http.Request) id.UserID {
 	return userID
 }
 
-func (s *mockServer) emptyResp(w http.ResponseWriter, _ *http.Request) {
+func (ms *MockServer) emptyResp(w http.ResponseWriter, _ *http.Request) {
 	w.Write([]byte("{}"))
 }
 
-func (s *mockServer) postLogin(w http.ResponseWriter, r *http.Request) {
+func (ms *MockServer) postLogin(w http.ResponseWriter, r *http.Request) {
 	var loginReq mautrix.ReqLogin
 	json.NewDecoder(r.Body).Decode(&loginReq)
 
@@ -91,7 +91,7 @@ func (s *mockServer) postLogin(w http.ResponseWriter, r *http.Request) {
 
 	accessToken := random.String(30)
 	userID := id.UserID(loginReq.Identifier.User)
-	s.AccessTokenToUserID[accessToken] = userID
+	ms.AccessTokenToUserID[accessToken] = userID
 
 	json.NewEncoder(w).Encode(&mautrix.RespLogin{
 		AccessToken: accessToken,
@@ -100,40 +100,40 @@ func (s *mockServer) postLogin(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *mockServer) putSendToDevice(w http.ResponseWriter, r *http.Request) {
+func (ms *MockServer) putSendToDevice(w http.ResponseWriter, r *http.Request) {
 	var req mautrix.ReqSendToDevice
 	json.NewDecoder(r.Body).Decode(&req)
 	evtType := event.Type{Type: r.PathValue("type"), Class: event.ToDeviceEventType}
 
 	for user, devices := range req.Messages {
 		for device, content := range devices {
-			if _, ok := s.DeviceInbox[user]; !ok {
-				s.DeviceInbox[user] = map[id.DeviceID][]event.Event{}
+			if _, ok := ms.DeviceInbox[user]; !ok {
+				ms.DeviceInbox[user] = map[id.DeviceID][]event.Event{}
 			}
 			content.ParseRaw(evtType)
-			s.DeviceInbox[user][device] = append(s.DeviceInbox[user][device], event.Event{
-				Sender:  s.getUserID(r),
+			ms.DeviceInbox[user][device] = append(ms.DeviceInbox[user][device], event.Event{
+				Sender:  ms.getUserID(r),
 				Type:    evtType,
 				Content: *content,
 			})
 		}
 	}
-	s.emptyResp(w, r)
+	ms.emptyResp(w, r)
 }
 
-func (s *mockServer) putAccountData(w http.ResponseWriter, r *http.Request) {
+func (ms *MockServer) putAccountData(w http.ResponseWriter, r *http.Request) {
 	userID := id.UserID(r.PathValue("userID"))
 	eventType := event.Type{Type: r.PathValue("type"), Class: event.AccountDataEventType}
 
 	jsonData, _ := io.ReadAll(r.Body)
-	if _, ok := s.AccountData[userID]; !ok {
-		s.AccountData[userID] = map[event.Type]json.RawMessage{}
+	if _, ok := ms.AccountData[userID]; !ok {
+		ms.AccountData[userID] = map[event.Type]json.RawMessage{}
 	}
-	s.AccountData[userID][eventType] = json.RawMessage(jsonData)
-	s.emptyResp(w, r)
+	ms.AccountData[userID][eventType] = json.RawMessage(jsonData)
+	ms.emptyResp(w, r)
 }
 
-func (s *mockServer) postKeysQuery(w http.ResponseWriter, r *http.Request) {
+func (ms *MockServer) postKeysQuery(w http.ResponseWriter, r *http.Request) {
 	var req mautrix.ReqQueryKeys
 	json.NewDecoder(r.Body).Decode(&req)
 	resp := mautrix.RespQueryKeys{
@@ -143,44 +143,44 @@ func (s *mockServer) postKeysQuery(w http.ResponseWriter, r *http.Request) {
 		DeviceKeys:      map[id.UserID]map[id.DeviceID]mautrix.DeviceKeys{},
 	}
 	for user := range req.DeviceKeys {
-		resp.MasterKeys[user] = s.MasterKeys[user]
-		resp.UserSigningKeys[user] = s.UserSigningKeys[user]
-		resp.SelfSigningKeys[user] = s.SelfSigningKeys[user]
-		resp.DeviceKeys[user] = s.DeviceKeys[user]
+		resp.MasterKeys[user] = ms.MasterKeys[user]
+		resp.UserSigningKeys[user] = ms.UserSigningKeys[user]
+		resp.SelfSigningKeys[user] = ms.SelfSigningKeys[user]
+		resp.DeviceKeys[user] = ms.DeviceKeys[user]
 	}
 	json.NewEncoder(w).Encode(&resp)
 }
 
-func (s *mockServer) postKeysUpload(w http.ResponseWriter, r *http.Request) {
+func (ms *MockServer) postKeysUpload(w http.ResponseWriter, r *http.Request) {
 	var req mautrix.ReqUploadKeys
 	json.NewDecoder(r.Body).Decode(&req)
 
-	userID := s.getUserID(r)
-	if _, ok := s.DeviceKeys[userID]; !ok {
-		s.DeviceKeys[userID] = map[id.DeviceID]mautrix.DeviceKeys{}
+	userID := ms.getUserID(r)
+	if _, ok := ms.DeviceKeys[userID]; !ok {
+		ms.DeviceKeys[userID] = map[id.DeviceID]mautrix.DeviceKeys{}
 	}
-	s.DeviceKeys[userID][req.DeviceKeys.DeviceID] = *req.DeviceKeys
+	ms.DeviceKeys[userID][req.DeviceKeys.DeviceID] = *req.DeviceKeys
 
 	json.NewEncoder(w).Encode(&mautrix.RespUploadKeys{
 		OneTimeKeyCounts: mautrix.OTKCount{SignedCurve25519: 50},
 	})
 }
 
-func (s *mockServer) postDeviceSigningUpload(w http.ResponseWriter, r *http.Request) {
+func (ms *MockServer) postDeviceSigningUpload(w http.ResponseWriter, r *http.Request) {
 	var req mautrix.UploadCrossSigningKeysReq
 	json.NewDecoder(r.Body).Decode(&req)
 
-	userID := s.getUserID(r)
-	s.MasterKeys[userID] = req.Master
-	s.SelfSigningKeys[userID] = req.SelfSigning
-	s.UserSigningKeys[userID] = req.UserSigning
+	userID := ms.getUserID(r)
+	ms.MasterKeys[userID] = req.Master
+	ms.SelfSigningKeys[userID] = req.SelfSigning
+	ms.UserSigningKeys[userID] = req.UserSigning
 
-	s.emptyResp(w, r)
+	ms.emptyResp(w, r)
 }
 
-func (ms *mockServer) Login(t *testing.T, ctx context.Context, userID id.UserID, deviceID id.DeviceID) (*mautrix.Client, crypto.Store) {
+func (ms *MockServer) Login(t *testing.T, ctx context.Context, userID id.UserID, deviceID id.DeviceID) (*mautrix.Client, crypto.Store) {
 	t.Helper()
-	client, err := mautrix.NewClient(ms.URL, "", "")
+	client, err := mautrix.NewClient(ms.Server.URL, "", "")
 	require.NoError(t, err)
 	client.StateStore = mautrix.NewMemoryStateStore()
 
@@ -204,7 +204,7 @@ func (ms *mockServer) Login(t *testing.T, ctx context.Context, userID id.UserID,
 	err = cryptoHelper.Init(ctx)
 	require.NoError(t, err)
 
-	machineLog := log.Logger.With().
+	machineLog := globallog.Logger.With().
 		Stringer("my_user_id", userID).
 		Stringer("my_device_id", deviceID).
 		Logger()
@@ -216,21 +216,11 @@ func (ms *mockServer) Login(t *testing.T, ctx context.Context, userID id.UserID,
 	return client, cryptoStore
 }
 
-func (ms *mockServer) dispatchToDevice(t *testing.T, ctx context.Context, client *mautrix.Client) {
+func (ms *MockServer) DispatchToDevice(t *testing.T, ctx context.Context, client *mautrix.Client) {
 	t.Helper()
 
 	for _, evt := range ms.DeviceInbox[client.UserID][client.DeviceID] {
 		client.Syncer.(*mautrix.DefaultSyncer).Dispatch(ctx, &evt)
 		ms.DeviceInbox[client.UserID][client.DeviceID] = ms.DeviceInbox[client.UserID][client.DeviceID][1:]
-	}
-}
-
-func addDeviceID(ctx context.Context, cryptoStore crypto.Store, userID id.UserID, deviceID id.DeviceID) {
-	err := cryptoStore.PutDevice(ctx, userID, &id.Device{
-		UserID:   userID,
-		DeviceID: deviceID,
-	})
-	if err != nil {
-		panic(err)
 	}
 }

@@ -36,7 +36,6 @@ func TestVerification_SAS(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("sendingGenerated=%t sendingStartsSAS=%t sendingConfirmsFirst=%t", tc.sendingGeneratedCrossSigningKeys, tc.sendingStartsSAS, tc.sendingConfirmsFirst), func(t *testing.T) {
 			ts, sendingClient, receivingClient, _, _, sendingMachine, receivingMachine := initServerAndLoginTwoAlice(t, ctx)
-			defer ts.Close()
 			sendingCallbacks, receivingCallbacks, sendingHelper, receivingHelper := initDefaultCallbacks(t, ctx, sendingClient, receivingClient, sendingMachine, receivingMachine)
 			var err error
 
@@ -60,10 +59,10 @@ func TestVerification_SAS(t *testing.T) {
 			// event on the sending device.
 			txnID, err := sendingHelper.StartVerification(ctx, aliceUserID)
 			require.NoError(t, err)
-			ts.dispatchToDevice(t, ctx, receivingClient)
+			ts.DispatchToDevice(t, ctx, receivingClient)
 			err = receivingHelper.AcceptVerification(ctx, txnID)
 			require.NoError(t, err)
-			ts.dispatchToDevice(t, ctx, sendingClient)
+			ts.DispatchToDevice(t, ctx, sendingClient)
 
 			// Test that the start event is correct
 			var startEvt *event.VerificationStartEventContent
@@ -102,7 +101,7 @@ func TestVerification_SAS(t *testing.T) {
 			if tc.sendingStartsSAS {
 				// Process the verification start event on the receiving
 				// device.
-				ts.dispatchToDevice(t, ctx, receivingClient)
+				ts.DispatchToDevice(t, ctx, receivingClient)
 
 				// Receiving device sent the accept event to the sending device
 				sendingInbox := ts.DeviceInbox[aliceUserID][sendingDeviceID]
@@ -110,7 +109,7 @@ func TestVerification_SAS(t *testing.T) {
 				acceptEvt = sendingInbox[0].Content.AsVerificationAccept()
 			} else {
 				// Process the verification start event on the sending device.
-				ts.dispatchToDevice(t, ctx, sendingClient)
+				ts.DispatchToDevice(t, ctx, sendingClient)
 
 				// Sending device sent the accept event to the receiving device
 				receivingInbox := ts.DeviceInbox[aliceUserID][receivingDeviceID]
@@ -129,7 +128,7 @@ func TestVerification_SAS(t *testing.T) {
 			var firstKeyEvt *event.VerificationKeyEventContent
 			if tc.sendingStartsSAS {
 				// Process the verification accept event on the sending device.
-				ts.dispatchToDevice(t, ctx, sendingClient)
+				ts.DispatchToDevice(t, ctx, sendingClient)
 
 				// Sending device sends first key event to the receiving
 				// device.
@@ -139,7 +138,7 @@ func TestVerification_SAS(t *testing.T) {
 			} else {
 				// Process the verification accept event on the receiving
 				// device.
-				ts.dispatchToDevice(t, ctx, receivingClient)
+				ts.DispatchToDevice(t, ctx, receivingClient)
 
 				// Receiving device sends first key event to the sending
 				// device.
@@ -155,7 +154,7 @@ func TestVerification_SAS(t *testing.T) {
 			var secondKeyEvt *event.VerificationKeyEventContent
 			if tc.sendingStartsSAS {
 				// Process the first key event on the receiving device.
-				ts.dispatchToDevice(t, ctx, receivingClient)
+				ts.DispatchToDevice(t, ctx, receivingClient)
 
 				// Receiving device sends second key event to the sending
 				// device.
@@ -170,7 +169,7 @@ func TestVerification_SAS(t *testing.T) {
 				assert.Len(t, descriptions, 7)
 			} else {
 				// Process the first key event on the sending device.
-				ts.dispatchToDevice(t, ctx, sendingClient)
+				ts.DispatchToDevice(t, ctx, sendingClient)
 
 				// Sending device sends second key event to the receiving
 				// device.
@@ -191,10 +190,10 @@ func TestVerification_SAS(t *testing.T) {
 			// Ensure that the SAS codes are the same.
 			if tc.sendingStartsSAS {
 				// Process the second key event on the sending device.
-				ts.dispatchToDevice(t, ctx, sendingClient)
+				ts.DispatchToDevice(t, ctx, sendingClient)
 			} else {
 				// Process the second key event on the receiving device.
-				ts.dispatchToDevice(t, ctx, receivingClient)
+				ts.DispatchToDevice(t, ctx, receivingClient)
 			}
 			assert.Equal(t, sendingCallbacks.GetDecimalsShown(txnID), receivingCallbacks.GetDecimalsShown(txnID))
 			sendingEmojis, sendingDescriptions := sendingCallbacks.GetEmojisAndDescriptionsShown(txnID)
@@ -274,10 +273,10 @@ func TestVerification_SAS(t *testing.T) {
 
 			// Test the transaction is done on both sides. We have to dispatch
 			// twice to process and drain all of the events.
-			ts.dispatchToDevice(t, ctx, sendingClient)
-			ts.dispatchToDevice(t, ctx, receivingClient)
-			ts.dispatchToDevice(t, ctx, sendingClient)
-			ts.dispatchToDevice(t, ctx, receivingClient)
+			ts.DispatchToDevice(t, ctx, sendingClient)
+			ts.DispatchToDevice(t, ctx, receivingClient)
+			ts.DispatchToDevice(t, ctx, sendingClient)
+			ts.DispatchToDevice(t, ctx, receivingClient)
 			assert.True(t, sendingCallbacks.IsVerificationDone(txnID))
 			assert.True(t, receivingCallbacks.IsVerificationDone(txnID))
 		})
@@ -288,7 +287,6 @@ func TestVerification_SAS_BothCallStart(t *testing.T) {
 	ctx := log.Logger.WithContext(context.TODO())
 
 	ts, sendingClient, receivingClient, _, _, sendingMachine, receivingMachine := initServerAndLoginTwoAlice(t, ctx)
-	defer ts.Close()
 	sendingCallbacks, receivingCallbacks, sendingHelper, receivingHelper := initDefaultCallbacks(t, ctx, sendingClient, receivingClient, sendingMachine, receivingMachine)
 	var err error
 
@@ -305,10 +303,10 @@ func TestVerification_SAS_BothCallStart(t *testing.T) {
 	// event on the sending device.
 	txnID, err := sendingHelper.StartVerification(ctx, aliceUserID)
 	require.NoError(t, err)
-	ts.dispatchToDevice(t, ctx, receivingClient)
+	ts.DispatchToDevice(t, ctx, receivingClient)
 	err = receivingHelper.AcceptVerification(ctx, txnID)
 	require.NoError(t, err)
-	ts.dispatchToDevice(t, ctx, sendingClient)
+	ts.DispatchToDevice(t, ctx, sendingClient)
 
 	err = sendingHelper.StartSAS(ctx, txnID)
 	require.NoError(t, err)
@@ -325,7 +323,7 @@ func TestVerification_SAS_BothCallStart(t *testing.T) {
 	assert.Equal(t, txnID, sendingInbox[0].Content.AsVerificationStart().TransactionID)
 
 	// Process the start event from the receiving client to the sending client.
-	ts.dispatchToDevice(t, ctx, sendingClient)
+	ts.DispatchToDevice(t, ctx, sendingClient)
 	receivingInbox = ts.DeviceInbox[aliceUserID][receivingDeviceID]
 	assert.Len(t, receivingInbox, 2)
 	assert.Equal(t, txnID, receivingInbox[0].Content.AsVerificationStart().TransactionID)
@@ -333,13 +331,13 @@ func TestVerification_SAS_BothCallStart(t *testing.T) {
 
 	// Process the rest of the events until we need to confirm the SAS.
 	for len(ts.DeviceInbox[aliceUserID][sendingDeviceID]) > 0 || len(ts.DeviceInbox[aliceUserID][receivingDeviceID]) > 0 {
-		ts.dispatchToDevice(t, ctx, receivingClient)
-		ts.dispatchToDevice(t, ctx, sendingClient)
+		ts.DispatchToDevice(t, ctx, receivingClient)
+		ts.DispatchToDevice(t, ctx, sendingClient)
 	}
 
 	// Confirm the SAS only the receiving device.
 	receivingHelper.ConfirmSAS(ctx, txnID)
-	ts.dispatchToDevice(t, ctx, sendingClient)
+	ts.DispatchToDevice(t, ctx, sendingClient)
 
 	// Verification is not done until both devices confirm the SAS.
 	assert.False(t, sendingCallbacks.IsVerificationDone(txnID))
@@ -350,13 +348,13 @@ func TestVerification_SAS_BothCallStart(t *testing.T) {
 
 	// Dispatching the events to the receiving device should get us to the done
 	// state on the receiving device.
-	ts.dispatchToDevice(t, ctx, receivingClient)
+	ts.DispatchToDevice(t, ctx, receivingClient)
 	assert.False(t, sendingCallbacks.IsVerificationDone(txnID))
 	assert.True(t, receivingCallbacks.IsVerificationDone(txnID))
 
 	// Dispatching the events to the sending client should get us to the done
 	// state on the sending device.
-	ts.dispatchToDevice(t, ctx, sendingClient)
+	ts.DispatchToDevice(t, ctx, sendingClient)
 	assert.True(t, sendingCallbacks.IsVerificationDone(txnID))
 	assert.True(t, receivingCallbacks.IsVerificationDone(txnID))
 }

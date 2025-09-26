@@ -19,6 +19,7 @@ import (
 	"maunium.net/go/mautrix/crypto/verificationhelper"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
+	"maunium.net/go/mautrix/mockserver"
 )
 
 var aliceUserID = id.UserID("@alice:example.org")
@@ -31,9 +32,19 @@ func init() {
 	zerolog.DefaultContextLogger = &log.Logger
 }
 
-func initServerAndLoginTwoAlice(t *testing.T, ctx context.Context) (ts *mockServer, sendingClient, receivingClient *mautrix.Client, sendingCryptoStore, receivingCryptoStore crypto.Store, sendingMachine, receivingMachine *crypto.OlmMachine) {
+func addDeviceID(ctx context.Context, cryptoStore crypto.Store, userID id.UserID, deviceID id.DeviceID) {
+	err := cryptoStore.PutDevice(ctx, userID, &id.Device{
+		UserID:   userID,
+		DeviceID: deviceID,
+	})
+	if err != nil {
+		panic(err)
+	}
+}
+
+func initServerAndLoginTwoAlice(t *testing.T, ctx context.Context) (ts *mockserver.MockServer, sendingClient, receivingClient *mautrix.Client, sendingCryptoStore, receivingCryptoStore crypto.Store, sendingMachine, receivingMachine *crypto.OlmMachine) {
 	t.Helper()
-	ts = createMockServer(t)
+	ts = mockserver.Create(t)
 
 	sendingClient, sendingCryptoStore = ts.Login(t, ctx, aliceUserID, sendingDeviceID)
 	sendingMachine = sendingClient.Crypto.(*cryptohelper.CryptoHelper).Machine()
@@ -47,9 +58,9 @@ func initServerAndLoginTwoAlice(t *testing.T, ctx context.Context) (ts *mockServ
 	return
 }
 
-func initServerAndLoginAliceBob(t *testing.T, ctx context.Context) (ts *mockServer, sendingClient, receivingClient *mautrix.Client, sendingCryptoStore, receivingCryptoStore crypto.Store, sendingMachine, receivingMachine *crypto.OlmMachine) {
+func initServerAndLoginAliceBob(t *testing.T, ctx context.Context) (ts *mockserver.MockServer, sendingClient, receivingClient *mautrix.Client, sendingCryptoStore, receivingCryptoStore crypto.Store, sendingMachine, receivingMachine *crypto.OlmMachine) {
 	t.Helper()
-	ts = createMockServer(t)
+	ts = mockserver.Create(t)
 
 	sendingClient, sendingCryptoStore = ts.Login(t, ctx, aliceUserID, sendingDeviceID)
 	sendingMachine = sendingClient.Crypto.(*cryptohelper.CryptoHelper).Machine()
@@ -116,8 +127,7 @@ func TestVerification_Start(t *testing.T) {
 
 	for i, tc := range testCases {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
-			ts := createMockServer(t)
-			defer ts.Close()
+			ts := mockserver.Create(t)
 
 			client, cryptoStore := ts.Login(t, ctx, aliceUserID, sendingDeviceID)
 			addDeviceID(ctx, cryptoStore, aliceUserID, sendingDeviceID)
@@ -166,7 +176,6 @@ func TestVerification_StartThenCancel(t *testing.T) {
 	for _, sendingCancels := range []bool{true, false} {
 		t.Run(fmt.Sprintf("sendingCancels=%t", sendingCancels), func(t *testing.T) {
 			ts, sendingClient, receivingClient, sendingCryptoStore, receivingCryptoStore, sendingMachine, receivingMachine := initServerAndLoginTwoAlice(t, ctx)
-			defer ts.Close()
 			_, _, sendingHelper, receivingHelper := initDefaultCallbacks(t, ctx, sendingClient, receivingClient, sendingMachine, receivingMachine)
 
 			bystanderClient, _ := ts.Login(t, ctx, aliceUserID, bystanderDeviceID)
@@ -186,13 +195,13 @@ func TestVerification_StartThenCancel(t *testing.T) {
 			receivingInbox := ts.DeviceInbox[aliceUserID][receivingDeviceID]
 			assert.Len(t, receivingInbox, 1)
 			assert.Equal(t, txnID, receivingInbox[0].Content.AsVerificationRequest().TransactionID)
-			ts.dispatchToDevice(t, ctx, receivingClient)
+			ts.DispatchToDevice(t, ctx, receivingClient)
 
 			// Process the request event on the bystander device.
 			bystanderInbox := ts.DeviceInbox[aliceUserID][bystanderDeviceID]
 			assert.Len(t, bystanderInbox, 1)
 			assert.Equal(t, txnID, bystanderInbox[0].Content.AsVerificationRequest().TransactionID)
-			ts.dispatchToDevice(t, ctx, bystanderClient)
+			ts.DispatchToDevice(t, ctx, bystanderClient)
 
 			// Cancel the verification request.
 			var cancelEvt *event.VerificationCancelEventContent
@@ -231,7 +240,7 @@ func TestVerification_StartThenCancel(t *testing.T) {
 
 			if !sendingCancels {
 				// Process the cancellation event on the sending device.
-				ts.dispatchToDevice(t, ctx, sendingClient)
+				ts.DispatchToDevice(t, ctx, sendingClient)
 
 				// Ensure that the cancellation event was sent to the bystander device.
 				assert.Len(t, ts.DeviceInbox[aliceUserID][bystanderDeviceID], 1)
@@ -247,8 +256,7 @@ func TestVerification_StartThenCancel(t *testing.T) {
 func TestVerification_Accept_NoSupportedMethods(t *testing.T) {
 	ctx := log.Logger.WithContext(context.TODO())
 
-	ts := createMockServer(t)
-	defer ts.Close()
+	ts := mockserver.Create(t)
 
 	sendingClient, sendingCryptoStore := ts.Login(t, ctx, aliceUserID, sendingDeviceID)
 	receivingClient, _ := ts.Login(t, ctx, aliceUserID, receivingDeviceID)
@@ -274,7 +282,7 @@ func TestVerification_Accept_NoSupportedMethods(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, txnID)
 
-	ts.dispatchToDevice(t, ctx, receivingClient)
+	ts.DispatchToDevice(t, ctx, receivingClient)
 
 	// Ensure that the receiver ignored the request because it
 	// doesn't support any of the verification methods in the
@@ -314,7 +322,6 @@ func TestVerification_Accept_CorrectMethodsPresented(t *testing.T) {
 	for i, tc := range testCases {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
 			ts, sendingClient, receivingClient, _, _, sendingMachine, receivingMachine := initServerAndLoginTwoAlice(t, ctx)
-			defer ts.Close()
 
 			recoveryKey, sendingCrossSigningKeysCache, err := sendingMachine.GenerateAndUploadCrossSigningKeys(ctx, nil, "")
 			assert.NoError(t, err)
@@ -333,7 +340,7 @@ func TestVerification_Accept_CorrectMethodsPresented(t *testing.T) {
 			require.NoError(t, err)
 
 			// Process the verification request on the receiving device.
-			ts.dispatchToDevice(t, ctx, receivingClient)
+			ts.DispatchToDevice(t, ctx, receivingClient)
 
 			// Ensure that the receiving device received a verification
 			// request with the correct transaction ID.
@@ -373,7 +380,7 @@ func TestVerification_Accept_CorrectMethodsPresented(t *testing.T) {
 
 			// Receive the m.key.verification.ready event on the sending
 			// device.
-			ts.dispatchToDevice(t, ctx, sendingClient)
+			ts.DispatchToDevice(t, ctx, sendingClient)
 
 			// Ensure that the sending device got a notification about the
 			// transaction being ready.
@@ -402,7 +409,6 @@ func TestVerification_Accept_CorrectMethodsPresented(t *testing.T) {
 func TestVerification_Accept_CancelOnNonParticipatingDevices(t *testing.T) {
 	ctx := log.Logger.WithContext(context.TODO())
 	ts, sendingClient, receivingClient, sendingCryptoStore, receivingCryptoStore, sendingMachine, receivingMachine := initServerAndLoginTwoAlice(t, ctx)
-	defer ts.Close()
 	_, _, sendingHelper, receivingHelper := initDefaultCallbacks(t, ctx, sendingClient, receivingClient, sendingMachine, receivingMachine)
 
 	nonParticipatingDeviceID1 := id.DeviceID("non-participating1")
@@ -419,12 +425,12 @@ func TestVerification_Accept_CancelOnNonParticipatingDevices(t *testing.T) {
 	// the receiving device.
 	txnID, err := sendingHelper.StartVerification(ctx, aliceUserID)
 	require.NoError(t, err)
-	ts.dispatchToDevice(t, ctx, receivingClient)
+	ts.DispatchToDevice(t, ctx, receivingClient)
 	err = receivingHelper.AcceptVerification(ctx, txnID)
 	require.NoError(t, err)
 
 	// Receive the m.key.verification.ready event on the sending device.
-	ts.dispatchToDevice(t, ctx, sendingClient)
+	ts.DispatchToDevice(t, ctx, sendingClient)
 
 	// The sending and receiving devices should not have any cancellation
 	// events in their inboxes.
@@ -444,7 +450,6 @@ func TestVerification_Accept_CancelOnNonParticipatingDevices(t *testing.T) {
 func TestVerification_ErrorOnDoubleAccept(t *testing.T) {
 	ctx := log.Logger.WithContext(context.TODO())
 	ts, sendingClient, receivingClient, _, _, sendingMachine, receivingMachine := initServerAndLoginTwoAlice(t, ctx)
-	defer ts.Close()
 	_, _, sendingHelper, receivingHelper := initDefaultCallbacks(t, ctx, sendingClient, receivingClient, sendingMachine, receivingMachine)
 
 	_, _, err := sendingMachine.GenerateAndUploadCrossSigningKeys(ctx, nil, "")
@@ -452,7 +457,7 @@ func TestVerification_ErrorOnDoubleAccept(t *testing.T) {
 
 	txnID, err := sendingHelper.StartVerification(ctx, aliceUserID)
 	require.NoError(t, err)
-	ts.dispatchToDevice(t, ctx, receivingClient)
+	ts.DispatchToDevice(t, ctx, receivingClient)
 	err = receivingHelper.AcceptVerification(ctx, txnID)
 	require.NoError(t, err)
 	err = receivingHelper.AcceptVerification(ctx, txnID)
@@ -472,7 +477,6 @@ func TestVerification_ErrorOnDoubleAccept(t *testing.T) {
 func TestVerification_CancelOnDoubleStart(t *testing.T) {
 	ctx := log.Logger.WithContext(context.TODO())
 	ts, sendingClient, receivingClient, _, _, sendingMachine, receivingMachine := initServerAndLoginTwoAlice(t, ctx)
-	defer ts.Close()
 	sendingCallbacks, receivingCallbacks, sendingHelper, receivingHelper := initDefaultCallbacks(t, ctx, sendingClient, receivingClient, sendingMachine, receivingMachine)
 
 	_, _, err := sendingMachine.GenerateAndUploadCrossSigningKeys(ctx, nil, "")
@@ -481,15 +485,15 @@ func TestVerification_CancelOnDoubleStart(t *testing.T) {
 	// Send and accept the first verification request.
 	txnID1, err := sendingHelper.StartVerification(ctx, aliceUserID)
 	require.NoError(t, err)
-	ts.dispatchToDevice(t, ctx, receivingClient)
+	ts.DispatchToDevice(t, ctx, receivingClient)
 	err = receivingHelper.AcceptVerification(ctx, txnID1)
 	require.NoError(t, err)
-	ts.dispatchToDevice(t, ctx, sendingClient) // Process the m.key.verification.ready event
+	ts.DispatchToDevice(t, ctx, sendingClient) // Process the m.key.verification.ready event
 
 	// Send a second verification request
 	txnID2, err := sendingHelper.StartVerification(ctx, aliceUserID)
 	require.NoError(t, err)
-	ts.dispatchToDevice(t, ctx, receivingClient)
+	ts.DispatchToDevice(t, ctx, receivingClient)
 
 	// Ensure that the sending device received a cancellation event for both of
 	// the ongoing transactions.
@@ -507,7 +511,7 @@ func TestVerification_CancelOnDoubleStart(t *testing.T) {
 
 	assert.NotNil(t, receivingCallbacks.GetVerificationCancellation(txnID1))
 	assert.NotNil(t, receivingCallbacks.GetVerificationCancellation(txnID2))
-	ts.dispatchToDevice(t, ctx, sendingClient) // Process the m.key.verification.cancel events
+	ts.DispatchToDevice(t, ctx, sendingClient) // Process the m.key.verification.cancel events
 	assert.NotNil(t, sendingCallbacks.GetVerificationCancellation(txnID1))
 	assert.NotNil(t, sendingCallbacks.GetVerificationCancellation(txnID2))
 }
