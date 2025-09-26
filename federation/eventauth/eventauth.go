@@ -110,12 +110,13 @@ var (
 
 	ErrMismatchingPrivateStateKey = AuthFailError{Index: "9", Message: "state keys starting with @ must match sender user ID"}
 
-	ErrTopLevelPLNotInteger = AuthFailError{Index: "10.1", Message: "invalid type for top-level power level field"}
-	ErrPLNotInteger         = AuthFailError{Index: "10.2", Message: "invalid type for power level"}
-	ErrInvalidUserIDInPL    = AuthFailError{Index: "10.3", Message: "invalid user ID in power levels"}
-	ErrUserPLNotInteger     = AuthFailError{Index: "10.3", Message: "invalid type for user power level"}
-	ErrCreatorInPowerLevels = AuthFailError{Index: "10.4", Message: "room creators must not be specified in power levels"}
-	ErrInvalidPowerChange   = AuthFailError{Index: "10.x", Message: "illegal power level change"}
+	ErrTopLevelPLNotInteger   = AuthFailError{Index: "10.1", Message: "invalid type for top-level power level field"}
+	ErrPLNotInteger           = AuthFailError{Index: "10.2", Message: "invalid type for power level"}
+	ErrInvalidUserIDInPL      = AuthFailError{Index: "10.3", Message: "invalid user ID in power levels"}
+	ErrUserPLNotInteger       = AuthFailError{Index: "10.3", Message: "invalid type for user power level"}
+	ErrCreatorInPowerLevels   = AuthFailError{Index: "10.4", Message: "room creators must not be specified in power levels"}
+	ErrInvalidPowerChange     = AuthFailError{Index: "10.x", Message: "illegal power level change"}
+	ErrInvalidUserPowerChange = AuthFailError{Index: "10.9", Message: "illegal power level change"}
 )
 
 func isRejected(evt *pdu.PDU) bool {
@@ -667,7 +668,7 @@ func allowPowerChangeMap(roomVersion id.RoomVersion, maxVal int, path, ownID str
 			parsedOldVal := parseIntWithVersion(roomVersion, value)
 			parsedNewVal := parseIntWithVersion(roomVersion, newVal)
 			if *parsedOldVal >= maxVal && *parsedOldVal != *parsedNewVal {
-				err = fmt.Errorf("%w: can't change users.%s from %s to %s with sender level %d", ErrInvalidPowerChange, key.Str, stringifyForError(value), stringifyForError(newVal), maxVal)
+				err = fmt.Errorf("%w: can't change users.%s from %s to %s with sender level %d", ErrInvalidUserPowerChange, key.Str, stringifyForError(value), stringifyForError(newVal), maxVal)
 			}
 		}
 		return err == nil
