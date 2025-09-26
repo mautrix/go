@@ -1125,6 +1125,9 @@ func (cli *Client) SetDisplayName(ctx context.Context, displayName string) (err 
 // SetProfileField sets an arbitrary profile field. See https://spec.matrix.org/v1.16/client-server-api/#put_matrixclientv3profileuseridkeyname
 func (cli *Client) SetProfileField(ctx context.Context, key string, value any) (err error) {
 	urlPath := cli.BuildClientURL("v3", "profile", cli.UserID, key)
+	if key != "displayname" && key != "avatar_url" && !cli.SpecVersions.Supports(FeatureArbitraryProfileFields) && cli.SpecVersions.Supports(FeatureUnstableProfileFields) {
+		urlPath = cli.BuildClientURL("unstable", "uk.tcpip.msc4133", "profile", cli.UserID, key)
+	}
 	_, err = cli.MakeRequest(ctx, http.MethodPut, urlPath, map[string]any{
 		key: value,
 	}, nil)
@@ -1134,6 +1137,9 @@ func (cli *Client) SetProfileField(ctx context.Context, key string, value any) (
 // DeleteProfileField deletes an arbitrary profile field. See https://spec.matrix.org/v1.16/client-server-api/#put_matrixclientv3profileuseridkeyname
 func (cli *Client) DeleteProfileField(ctx context.Context, key string) (err error) {
 	urlPath := cli.BuildClientURL("v3", "profile", cli.UserID, key)
+	if key != "displayname" && key != "avatar_url" && !cli.SpecVersions.Supports(FeatureArbitraryProfileFields) && cli.SpecVersions.Supports(FeatureUnstableProfileFields) {
+		urlPath = cli.BuildClientURL("unstable", "uk.tcpip.msc4133", "profile", cli.UserID, key)
+	}
 	_, err = cli.MakeRequest(ctx, http.MethodDelete, urlPath, nil, nil)
 	return
 }
@@ -1141,6 +1147,9 @@ func (cli *Client) DeleteProfileField(ctx context.Context, key string) (err erro
 // GetProfileField gets an arbitrary profile field and parses the response into the given struct. See https://spec.matrix.org/unstable/client-server-api/#get_matrixclientv3profileuseridkeyname
 func (cli *Client) GetProfileField(ctx context.Context, userID id.UserID, key string, into any) (err error) {
 	urlPath := cli.BuildClientURL("v3", "profile", userID, key)
+	if key != "displayname" && key != "avatar_url" && !cli.SpecVersions.Supports(FeatureArbitraryProfileFields) && cli.SpecVersions.Supports(FeatureUnstableProfileFields) {
+		urlPath = cli.BuildClientURL("unstable", "uk.tcpip.msc4133", "profile", cli.UserID, key)
+	}
 	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, into)
 	return
 }
