@@ -62,6 +62,9 @@ type BridgeMain struct {
 	// git tag to see if the built version is the release or a dev build.
 	// You can either bump this right after a release or right before, as long as it matches on the release commit.
 	Version string
+	// SemCalVer defines whether this bridge uses a mix of semantic and calendar versioning,
+	// such that the Version field is YY.0M.patch, while git tags are major.YY0M.patch.
+	SemCalVer bool
 
 	// PostInit is a function that will be called after the bridge has been initialized but before it is started.
 	PostInit  func()
@@ -424,6 +427,21 @@ func (br *BridgeMain) Stop() {
 	br.Bridge.StopWithTimeout(5 * time.Second)
 }
 
+func semverToCalver(semver string) string {
+	parts := strings.SplitN(semver, ".", 3)
+	if len(parts) < 2 {
+		panic(fmt.Errorf("invalid semver for calendar versioning: %s", semver))
+	}
+	if len(parts[1]) != 4 {
+		panic(fmt.Errorf("invalid minor semver component for calendar versioning: %s", parts[1]))
+	}
+	calver := parts[1][:2] + "." + parts[1][2:]
+	if len(parts) == 3 {
+		calver += "." + parts[2]
+	}
+	return calver
+}
+
 // InitVersion formats the bridge version and build time nicely for things like
 // the `version` bridge command on Matrix and the `--version` CLI flag.
 //
@@ -447,8 +465,12 @@ func (br *BridgeMain) Stop() {
 // (to use both at the same time, simply merge the ldflags into one, `-ldflags "-X '...' -X ..."`)
 func (br *BridgeMain) InitVersion(tag, commit, rawBuildTime string) {
 	br.baseVersion = br.Version
+	rawTag := tag
 	if len(tag) > 0 && tag[0] == 'v' {
 		tag = tag[1:]
+	}
+	if br.SemCalVer && len(tag) > 0 {
+		tag = semverToCalver(tag)
 	}
 	if tag != br.Version {
 		suffix := ""
@@ -464,7 +486,7 @@ func (br *BridgeMain) InitVersion(tag, commit, rawBuildTime string) {
 
 	br.LinkifiedVersion = fmt.Sprintf("v%s", br.Version)
 	if tag == br.Version {
-		br.LinkifiedVersion = fmt.Sprintf("[v%s](%s/releases/v%s)", br.Version, br.URL, tag)
+		br.LinkifiedVersion = fmt.Sprintf("[v%s](%s/releases/v%s)", br.Version, br.URL, rawTag)
 	} else if len(commit) > 8 {
 		br.LinkifiedVersion = strings.Replace(br.LinkifiedVersion, commit[:8], fmt.Sprintf("[%s](%s/commit/%s)", commit[:8], br.URL, commit), 1)
 	}
