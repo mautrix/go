@@ -16,8 +16,6 @@ var VersionWithCommit = Version
 
 var DefaultUserAgent = "mautrix-go/" + Version + " go/" + strings.TrimPrefix(runtime.Version(), "go")
 
-var goModVersionRegex = regexp.MustCompile(`v.+\d{14}-([0-9a-f]{12})`)
-
 func init() {
 	if GoModVersion == "" {
 		info, _ := debug.ReadBuildInfo()
@@ -31,7 +29,7 @@ func init() {
 		}
 	}
 	if GoModVersion != "" {
-		match := goModVersionRegex.FindStringSubmatch(GoModVersion)
+		match := regexp.MustCompile(`v.+\d{14}-([0-9a-f]{12})`).FindStringSubmatch(GoModVersion)
 		if match != nil {
 			Commit = match[1]
 		}
