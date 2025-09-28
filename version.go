@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"runtime"
+	"runtime/debug"
 	"strings"
 )
 
@@ -18,6 +19,17 @@ var DefaultUserAgent = "mautrix-go/" + Version + " go/" + strings.TrimPrefix(run
 var goModVersionRegex = regexp.MustCompile(`v.+\d{14}-([0-9a-f]{12})`)
 
 func init() {
+	if GoModVersion == "" {
+		info, _ := debug.ReadBuildInfo()
+		if info != nil {
+			for _, mod := range info.Deps {
+				if mod.Path == "maunium.net/go/mautrix" {
+					GoModVersion = mod.Version
+					break
+				}
+			}
+		}
+	}
 	if GoModVersion != "" {
 		match := goModVersionRegex.FindStringSubmatch(GoModVersion)
 		if match != nil {
