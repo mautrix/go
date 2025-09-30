@@ -387,6 +387,7 @@ func (portal *Portal) compileBatchMessage(ctx context.Context, source *UserLogin
 			out.Disappear = append(out.Disappear, &database.DisappearingMessage{
 				RoomID:              portal.MXID,
 				EventID:             evtID,
+				Timestamp:           msg.Timestamp,
 				DisappearingSetting: msg.Disappear,
 			})
 		}
