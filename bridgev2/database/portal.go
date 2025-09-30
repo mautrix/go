@@ -147,7 +147,7 @@ const (
 		)
 	`
 	fixParentsAfterSplitPortalMigrationQuery = `
-		UPDATE portal SET parent_receiver=receiver WHERE parent_receiver='' AND receiver<>'' AND parent_id<>'';
+		UPDATE portal SET parent_receiver=receiver WHERE bridge_id=$1 AND parent_receiver='' AND receiver<>'' AND parent_id<>'';
 	`
 )
 
