@@ -19,6 +19,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/exfmt"
+	"go.mau.fi/util/exmaps"
 	"go.mau.fi/util/exslices"
 	"go.mau.fi/util/exsync"
 	"go.mau.fi/util/ptr"
@@ -4076,10 +4077,7 @@ func (portal *Portal) syncParticipants(
 			Displayname: currentMember.Displayname,
 			AvatarURL:   currentMember.AvatarURL,
 		}
-		wrappedContent := &event.Content{Parsed: content, Raw: maps.Clone(member.MemberEventExtra)}
-		if wrappedContent.Raw == nil {
-			wrappedContent.Raw = make(map[string]any)
-		}
+		wrappedContent := &event.Content{Parsed: content, Raw: exmaps.NonNilClone(member.MemberEventExtra)}
 		thisEvtSender := sender
 		if member.Membership == event.MembershipJoin {
 			content.Membership = event.MembershipInvite
