@@ -3592,6 +3592,10 @@ type ChatMemberList struct {
 	// Should the bridge call IsThisUser for every member in the list?
 	// This should be used when SenderLogin can't be filled accurately.
 	CheckAllLogins bool
+	// Should any changes have the `com.beeper.exclude_from_timeline` flag set by default?
+	// This is recommended for syncs with non-real-time changes.
+	// Real-time changes (e.g. a user joining) should not set this flag set.
+	ExcludeChangesFromTimeline bool
 
 	// The total number of members in the chat, regardless of how many of those members are included in MemberMap.
 	TotalMemberCount int
@@ -4048,6 +4052,12 @@ func (portal *Portal) syncParticipants(
 	}
 	delete(currentMembers, portal.Bridge.Bot.GetMXID())
 	powerChanged := members.PowerLevels.Apply(portal.Bridge.Bot.GetMXID(), currentPower)
+	addExcludeFromTimeline := func(raw map[string]any) {
+		_, hasKey := raw["com.beeper.exclude_from_timeline"]
+		if !hasKey && members.ExcludeChangesFromTimeline {
+			raw["com.beeper.exclude_from_timeline"] = true
+		}
+	}
 	syncUser := func(extraUserID id.UserID, member ChatMember, intent MatrixAPI) bool {
 		if member.Membership == "" {
 			member.Membership = event.MembershipJoin
@@ -4078,6 +4088,7 @@ func (portal *Portal) syncParticipants(
 			AvatarURL:   currentMember.AvatarURL,
 		}
 		wrappedContent := &event.Content{Parsed: content, Raw: exmaps.NonNilClone(member.MemberEventExtra)}
+		addExcludeFromTimeline(wrappedContent.Raw)
 		thisEvtSender := sender
 		if member.Membership == event.MembershipJoin {
 			content.Membership = event.MembershipInvite
@@ -4122,7 +4133,8 @@ func (portal *Portal) syncParticipants(
 
 			if intent != nil && content.Membership == event.MembershipInvite && member.Membership == event.MembershipJoin {
 				content.Membership = event.MembershipJoin
-				wrappedJoinContent := &event.Content{Parsed: content, Raw: member.MemberEventExtra}
+				wrappedJoinContent := &event.Content{Parsed: content, Raw: exmaps.NonNilClone(member.MemberEventExtra)}
+				addExcludeFromTimeline(wrappedContent.Raw)
 				_, err = intent.SendState(ctx, portal.MXID, event.StateMember, intent.GetMXID().String(), wrappedJoinContent, ts)
 				if err != nil {
 					addLogContext(log.Err(err)).
