@@ -1537,7 +1537,7 @@ func handleMatrixRoomMeta[APIType any, ContentType any](
 			return EventHandlingResultIgnored
 		}
 		if !sender.Client.GetCapabilities(ctx, portal).DisappearingTimer.Supports(typedContent) {
-			portal.sendRoomMeta(ctx, nil, time.Now(), event.StateBeeperDisappearingTimer, "", portal.Disappear.ToEventContent())
+			portal.sendRoomMeta(ctx, nil, time.Now(), event.StateBeeperDisappearingTimer, "", portal.Disappear.ToEventContent(), false)
 			return EventHandlingResultFailed.WithMSSError(ErrDisappearingTimerUnsupported)
 		}
 	}
@@ -1561,7 +1561,7 @@ func handleMatrixRoomMeta[APIType any, ContentType any](
 	if err != nil {
 		log.Err(err).Msg("Failed to handle Matrix room metadata")
 		if evt.Type == event.StateBeeperDisappearingTimer {
-			portal.sendRoomMeta(ctx, nil, time.Now(), event.StateBeeperDisappearingTimer, "", portal.Disappear.ToEventContent())
+			portal.sendRoomMeta(ctx, nil, time.Now(), event.StateBeeperDisappearingTimer, "", portal.Disappear.ToEventContent(), false)
 		}
 		return EventHandlingResultFailed.WithMSSError(err)
 	}
@@ -3712,6 +3712,8 @@ type ChatInfo struct {
 
 	CanBackfill bool
 
+	ExcludeChangesFromTimeline bool
+
 	ExtraUpdates ExtraUpdater[*Portal]
 }
 
@@ -3744,25 +3746,35 @@ type UserLocalPortalInfo struct {
 	Tag        *event.RoomTag
 }
 
-func (portal *Portal) updateName(ctx context.Context, name string, sender MatrixAPI, ts time.Time) bool {
+func (portal *Portal) updateName(
+	ctx context.Context, name string, sender MatrixAPI, ts time.Time, excludeFromTimeline bool,
+) bool {
 	if portal.Name == name && (portal.NameSet || portal.MXID == "") {
 		return false
 	}
 	portal.Name = name
-	portal.NameSet = portal.sendRoomMeta(ctx, sender, ts, event.StateRoomName, "", &event.RoomNameEventContent{Name: name})
+	portal.NameSet = portal.sendRoomMeta(
+		ctx, sender, ts, event.StateRoomName, "", &event.RoomNameEventContent{Name: name}, excludeFromTimeline,
+	)
 	return true
 }
 
-func (portal *Portal) updateTopic(ctx context.Context, topic string, sender MatrixAPI, ts time.Time) bool {
+func (portal *Portal) updateTopic(
+	ctx context.Context, topic string, sender MatrixAPI, ts time.Time, excludeFromTimeline bool,
+) bool {
 	if portal.Topic == topic && (portal.TopicSet || portal.MXID == "") {
 		return false
 	}
 	portal.Topic = topic
-	portal.TopicSet = portal.sendRoomMeta(ctx, sender, ts, event.StateTopic, "", &event.TopicEventContent{Topic: topic})
+	portal.TopicSet = portal.sendRoomMeta(
+		ctx, sender, ts, event.StateTopic, "", &event.TopicEventContent{Topic: topic}, excludeFromTimeline,
+	)
 	return true
 }
 
-func (portal *Portal) updateAvatar(ctx context.Context, avatar *Avatar, sender MatrixAPI, ts time.Time) bool {
+func (portal *Portal) updateAvatar(
+	ctx context.Context, avatar *Avatar, sender MatrixAPI, ts time.Time, excludeFromTimeline bool,
+) bool {
 	if portal.AvatarID == avatar.ID && (avatar.Remove || portal.AvatarMXC != "") && (portal.AvatarSet || portal.MXID == "") {
 		return false
 	}
@@ -3785,7 +3797,9 @@ func (portal *Portal) updateAvatar(ctx context.Context, avatar *Avatar, sender M
 		portal.AvatarMXC = newMXC
 		portal.AvatarHash = newHash
 	}
-	portal.AvatarSet = portal.sendRoomMeta(ctx, sender, ts, event.StateRoomAvatar, "", &event.RoomAvatarEventContent{URL: portal.AvatarMXC})
+	portal.AvatarSet = portal.sendRoomMeta(
+		ctx, sender, ts, event.StateRoomAvatar, "", &event.RoomAvatarEventContent{URL: portal.AvatarMXC}, excludeFromTimeline,
+	)
 	return true
 }
 
@@ -3851,8 +3865,8 @@ func (portal *Portal) UpdateBridgeInfo(ctx context.Context) {
 		return
 	}
 	stateKey, bridgeInfo := portal.getBridgeInfo()
-	portal.sendRoomMeta(ctx, nil, time.Now(), event.StateBridge, stateKey, &bridgeInfo)
-	portal.sendRoomMeta(ctx, nil, time.Now(), event.StateHalfShotBridge, stateKey, &bridgeInfo)
+	portal.sendRoomMeta(ctx, nil, time.Now(), event.StateBridge, stateKey, &bridgeInfo, false)
+	portal.sendRoomMeta(ctx, nil, time.Now(), event.StateHalfShotBridge, stateKey, &bridgeInfo, false)
 }
 
 func (portal *Portal) UpdateCapabilities(ctx context.Context, source *UserLogin, implicit bool) bool {
@@ -3874,7 +3888,7 @@ func (portal *Portal) UpdateCapabilities(ctx context.Context, source *UserLogin,
 		Str("old_id", portal.CapState.ID).
 		Str("new_id", capID).
 		Msg("Sending new room capability event")
-	success := portal.sendRoomMeta(ctx, nil, time.Now(), event.StateBeeperRoomFeatures, portal.getBridgeInfoStateKey(), caps)
+	success := portal.sendRoomMeta(ctx, nil, time.Now(), event.StateBeeperRoomFeatures, portal.getBridgeInfoStateKey(), caps, false)
 	if !success {
 		return false
 	}
@@ -3885,7 +3899,7 @@ func (portal *Portal) UpdateCapabilities(ctx context.Context, source *UserLogin,
 	}
 	if caps.DisappearingTimer != nil && !portal.CapState.Flags.Has(database.CapStateFlagDisappearingTimerSet) {
 		zerolog.Ctx(ctx).Debug().Msg("Disappearing timer capability was added, sending disappearing timer state event")
-		success = portal.sendRoomMeta(ctx, nil, time.Now(), event.StateBeeperDisappearingTimer, "", portal.Disappear.ToEventContent())
+		success = portal.sendRoomMeta(ctx, nil, time.Now(), event.StateBeeperDisappearingTimer, "", portal.Disappear.ToEventContent(), true)
 		if !success {
 			return false
 		}
@@ -3916,15 +3930,24 @@ func (portal *Portal) sendStateWithIntentOrBot(ctx context.Context, sender Matri
 	return
 }
 
-func (portal *Portal) sendRoomMeta(ctx context.Context, sender MatrixAPI, ts time.Time, eventType event.Type, stateKey string, content any) bool {
+func (portal *Portal) sendRoomMeta(
+	ctx context.Context,
+	sender MatrixAPI,
+	ts time.Time,
+	eventType event.Type,
+	stateKey string,
+	content any,
+	excludeFromTimeline bool,
+) bool {
 	if portal.MXID == "" {
 		return false
 	}
-	var extra map[string]any
+	extra := make(map[string]any)
+	if excludeFromTimeline {
+		extra["com.beeper.exclude_from_timeline"] = true
+	}
 	if !portal.NameIsCustom && (eventType == event.StateRoomName || eventType == event.StateRoomAvatar) {
-		extra = map[string]any{
-			"fi.mau.implicit_name": true,
-		}
+		extra["fi.mau.implicit_name"] = true
 	}
 	_, err := portal.sendStateWithIntentOrBot(ctx, sender, eventType, stateKey, &event.Content{
 		Parsed: content,
@@ -4281,9 +4304,15 @@ type UpdateDisappearingSettingOpts struct {
 	Implicit   bool
 	Save       bool
 	SendNotice bool
+
+	ExcludeFromTimeline bool
 }
 
-func (portal *Portal) UpdateDisappearingSetting(ctx context.Context, setting database.DisappearingSetting, opts UpdateDisappearingSettingOpts) bool {
+func (portal *Portal) UpdateDisappearingSetting(
+	ctx context.Context,
+	setting database.DisappearingSetting,
+	opts UpdateDisappearingSettingOpts,
+) bool {
 	setting = setting.Normalize()
 	if portal.Disappear.Timer == setting.Timer && portal.Disappear.Type == setting.Type {
 		return false
@@ -4306,7 +4335,15 @@ func (portal *Portal) UpdateDisappearingSetting(ctx context.Context, setting dat
 	if opts.Timestamp.IsZero() {
 		opts.Timestamp = time.Now()
 	}
-	portal.sendRoomMeta(ctx, opts.Sender, opts.Timestamp, event.StateBeeperDisappearingTimer, "", setting.ToEventContent())
+	portal.sendRoomMeta(
+		ctx,
+		opts.Sender,
+		opts.Timestamp,
+		event.StateBeeperDisappearingTimer,
+		"",
+		setting.ToEventContent(),
+		opts.ExcludeFromTimeline,
+	)
 
 	if !opts.SendNotice {
 		return true
@@ -4390,13 +4427,13 @@ func (portal *Portal) UpdateInfoFromGhost(ctx context.Context, ghost *Ghost) (ch
 			return
 		}
 	}
-	changed = portal.updateName(ctx, ghost.Name, nil, time.Time{}) || changed
+	changed = portal.updateName(ctx, ghost.Name, nil, time.Time{}, false) || changed
 	changed = portal.updateAvatar(ctx, &Avatar{
 		ID:     ghost.AvatarID,
 		MXC:    ghost.AvatarMXC,
 		Hash:   ghost.AvatarHash,
 		Remove: ghost.AvatarID == "",
-	}, nil, time.Time{}) || changed
+	}, nil, time.Time{}, false) || changed
 	return
 }
 
@@ -4405,26 +4442,28 @@ func (portal *Portal) UpdateInfo(ctx context.Context, info *ChatInfo, source *Us
 	if info.Name == DefaultChatName {
 		if portal.NameIsCustom {
 			portal.NameIsCustom = false
-			changed = portal.updateName(ctx, "", sender, ts) || changed
+			changed = portal.updateName(ctx, "", sender, ts, info.ExcludeChangesFromTimeline) || changed
 		}
 	} else if info.Name != nil {
 		portal.NameIsCustom = true
-		changed = portal.updateName(ctx, *info.Name, sender, ts) || changed
+		changed = portal.updateName(ctx, *info.Name, sender, ts, info.ExcludeChangesFromTimeline) || changed
 	}
 	if info.Topic != nil {
-		changed = portal.updateTopic(ctx, *info.Topic, sender, ts) || changed
+		changed = portal.updateTopic(ctx, *info.Topic, sender, ts, info.ExcludeChangesFromTimeline) || changed
 	}
 	if info.Avatar != nil {
 		portal.NameIsCustom = true
-		changed = portal.updateAvatar(ctx, info.Avatar, sender, ts) || changed
+		changed = portal.updateAvatar(ctx, info.Avatar, sender, ts, info.ExcludeChangesFromTimeline) || changed
 	}
 	if info.Disappear != nil {
 		changed = portal.UpdateDisappearingSetting(ctx, *info.Disappear, UpdateDisappearingSettingOpts{
-			Sender:     sender,
-			Timestamp:  ts,
-			Implicit:   false,
-			Save:       false,
-			SendNotice: true,
+			Sender:    sender,
+			Timestamp: ts,
+			Implicit:  false,
+			Save:      false,
+
+			SendNotice:          !info.ExcludeChangesFromTimeline,
+			ExcludeFromTimeline: info.ExcludeChangesFromTimeline,
 		}) || changed
 	}
 	if info.ParentID != nil {
@@ -4432,7 +4471,7 @@ func (portal *Portal) UpdateInfo(ctx context.Context, info *ChatInfo, source *Us
 	}
 	if info.JoinRule != nil {
 		// TODO change detection instead of spamming this every time?
-		portal.sendRoomMeta(ctx, sender, ts, event.StateJoinRules, "", info.JoinRule)
+		portal.sendRoomMeta(ctx, sender, ts, event.StateJoinRules, "", info.JoinRule, info.ExcludeChangesFromTimeline)
 	}
 	if info.Type != nil && portal.RoomType != *info.Type {
 		if portal.MXID != "" && (*info.Type == database.RoomTypeSpace || portal.RoomType == database.RoomTypeSpace) {
