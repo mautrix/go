@@ -20,8 +20,6 @@ import (
 	"go.mau.fi/util/exslices"
 	"go.mau.fi/util/jsontime"
 
-	"maunium.net/go/mautrix/event"
-
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/federation/signutil"
 	"maunium.net/go/mautrix/id"
@@ -265,20 +263,6 @@ func (c *Client) GetOpenIDUserInfo(ctx context.Context, serverName, accessToken 
 	return
 }
 
-type PartialMemberEvent struct {
-	Membership                   event.Membership `json:"membership"`
-	JoinAuthorisedViaUsersServer id.UserID        `json:"join_authorised_via_users_server,omitempty"`
-}
-
-type MakeJoinEventTemplate struct {
-	Content        PartialMemberEvent `json:"content"`
-	Origin         string             `json:"origin"`
-	OriginServerTS jsontime.UnixMilli `json:"origin_server_ts"`
-	Sender         id.UserID          `json:"sender"`
-	StateKey       string             `json:"state_key"`
-	Type           event.Type         `json:"type"`
-}
-
 type ReqMakeJoin struct {
 	RoomID            id.RoomID
 	UserID            id.UserID
@@ -287,15 +271,15 @@ type ReqMakeJoin struct {
 }
 
 type RespMakeJoin struct {
-	RoomVersion id.RoomVersion        `json:"room_version"`
-	Event       MakeJoinEventTemplate `json:"event"`
+	RoomVersion id.RoomVersion `json:"room_version"`
+	Event       PDU            `json:"event"`
 }
 
 type ReqSendJoin struct {
 	RoomID      id.RoomID
 	EventID     id.EventID
 	OmitMembers bool
-	Event       MakeJoinEventTemplate
+	Event       PDU
 }
 
 type RespSendJoin struct {
@@ -311,11 +295,11 @@ type RespSendKnock struct {
 }
 
 type ReqSendInvite struct {
-	RoomID          id.RoomID          `json:"-"`
-	UserID          id.UserID          `json:"-"`
-	Event           PartialMemberEvent `json:"event"`
-	InviteRoomState []PDU              `json:"invite_room_state"`
-	RoomVersion     id.RoomVersion     `json:"room_version"`
+	RoomID          id.RoomID      `json:"-"`
+	UserID          id.UserID      `json:"-"`
+	Event           PDU            `json:"event"`
+	InviteRoomState []PDU          `json:"invite_room_state"`
+	RoomVersion     id.RoomVersion `json:"room_version"`
 }
 
 type RespSendInvite struct {
@@ -328,8 +312,8 @@ type ReqMakeLeave struct {
 }
 
 type RespMakeLeave struct {
-	Event       MakeJoinEventTemplate `json:"event"`
-	RoomVersion id.RoomVersion        `json:"room_version"`
+	Event       PDU            `json:"event"`
+	RoomVersion id.RoomVersion `json:"room_version"`
 }
 
 func (c *Client) MakeJoin(ctx context.Context, req *ReqMakeJoin) (resp *RespMakeJoin, err error) {
@@ -414,7 +398,7 @@ func (c *Client) MakeLeave(ctx context.Context, req *ReqMakeLeave) (resp *RespMa
 	return
 }
 
-func (c *Client) SendLeave(ctx context.Context, roomID id.RoomID, eventID id.EventID, evt *PartialMemberEvent) (resp struct{}, err error) {
+func (c *Client) SendLeave(ctx context.Context, roomID id.RoomID, eventID id.EventID, evt PDU) (resp struct{}, err error) {
 	_, _, err = c.MakeFullRequest(ctx, RequestParams{
 		ServerName:   c.ServerName,
 		Method:       http.MethodPut,
