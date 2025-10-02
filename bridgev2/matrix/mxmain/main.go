@@ -140,7 +140,7 @@ func (br *BridgeMain) PreInit() {
 		flag.PrintHelp()
 		os.Exit(0)
 	} else if *version {
-		fmt.Println(br.ver.FormattedVersion)
+		fmt.Println(br.ver.VersionDescription)
 		os.Exit(0)
 	} else if *versionJSON {
 		output := VersionJSONOutput{
