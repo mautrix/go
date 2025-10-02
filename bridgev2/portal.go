@@ -4230,6 +4230,9 @@ func (portal *Portal) syncParticipants(
 					Displayname: memberEvt.Displayname,
 					Reason:      "User is not in remote chat",
 				},
+				Raw: map[string]any{
+					"com.beeper.exclude_from_timeline": members.ExcludeChangesFromTimeline,
+				},
 			}, time.Now())
 			if err != nil {
 				zerolog.Ctx(ctx).Err(err).
