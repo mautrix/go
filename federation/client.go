@@ -20,6 +20,8 @@ import (
 	"go.mau.fi/util/exslices"
 	"go.mau.fi/util/jsontime"
 
+	"maunium.net/go/mautrix/event"
+
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/federation/signutil"
 	"maunium.net/go/mautrix/id"
@@ -258,6 +260,167 @@ func (c *Client) GetOpenIDUserInfo(ctx context.Context, serverName, accessToken 
 		Method:       http.MethodGet,
 		Path:         URLPath{"v1", "openid", "userinfo"},
 		Query:        url.Values{"access_token": {accessToken}},
+		ResponseJSON: &resp,
+	})
+	return
+}
+
+type PartialMemberEvent struct {
+	Membership                   event.Membership `json:"membership"`
+	JoinAuthorisedViaUsersServer id.UserID        `json:"join_authorised_via_users_server,omitempty"`
+}
+
+type MakeJoinEventTemplate struct {
+	Content        PartialMemberEvent `json:"content"`
+	Origin         string             `json:"origin"`
+	OriginServerTS jsontime.UnixMilli `json:"origin_server_ts"`
+	Sender         id.UserID          `json:"sender"`
+	StateKey       string             `json:"state_key"`
+	Type           event.Type         `json:"type"`
+}
+
+type ReqMakeJoin struct {
+	RoomID            id.RoomID
+	UserID            id.UserID
+	Via               string
+	SupportedVersions []id.RoomVersion
+}
+
+type RespMakeJoin struct {
+	RoomVersion id.RoomVersion        `json:"room_version"`
+	Event       MakeJoinEventTemplate `json:"event"`
+}
+
+type ReqSendJoin struct {
+	RoomID      id.RoomID
+	EventID     id.EventID
+	OmitMembers bool
+	Event       MakeJoinEventTemplate
+}
+
+type RespSendJoin struct {
+	AuthChain      []PDU    `json:"auth_chain"`
+	Event          PDU      `json:"event"`
+	MembersOmitted bool     `json:"members_omitted"`
+	ServersInRoom  []string `json:"servers_in_room"`
+	State          []PDU    `json:"state"`
+}
+
+type RespSendKnock struct {
+	KnockRoomState []PDU `json:"knock_room_state"`
+}
+
+type ReqSendInvite struct {
+	RoomID          id.RoomID          `json:"-"`
+	UserID          id.UserID          `json:"-"`
+	Event           PartialMemberEvent `json:"event"`
+	InviteRoomState []PDU              `json:"invite_room_state"`
+	RoomVersion     id.RoomVersion     `json:"room_version"`
+}
+
+type RespSendInvite struct {
+	Event PDU `json:"event"`
+}
+
+type ReqMakeLeave struct {
+	RoomID id.RoomID
+	UserID id.UserID
+}
+
+type RespMakeLeave struct {
+	Event       MakeJoinEventTemplate `json:"event"`
+	RoomVersion id.RoomVersion        `json:"room_version"`
+}
+
+func (c *Client) MakeJoin(ctx context.Context, req *ReqMakeJoin) (resp *RespMakeJoin, err error) {
+	versions := make([]string, len(req.SupportedVersions))
+	for i, v := range req.SupportedVersions {
+		versions[i] = string(v)
+	}
+	_, _, err = c.MakeFullRequest(ctx, RequestParams{
+		ServerName:   c.ServerName,
+		Method:       http.MethodGet,
+		Path:         URLPath{"v1", "make_join", req.RoomID, req.UserID},
+		Query:        url.Values{"v": versions},
+		Authenticate: true,
+		ResponseJSON: &resp,
+	})
+	return
+}
+
+func (c *Client) MakeKnock(ctx context.Context, req *ReqMakeJoin) (resp *RespMakeJoin, err error) {
+	versions := make([]string, len(req.SupportedVersions))
+	for i, v := range req.SupportedVersions {
+		versions[i] = string(v)
+	}
+	_, _, err = c.MakeFullRequest(ctx, RequestParams{
+		ServerName:   req.UserID.Homeserver(),
+		Method:       http.MethodGet,
+		Path:         URLPath{"v1", "make_knock", req.RoomID, req.UserID},
+		Query:        url.Values{"v": versions},
+		Authenticate: true,
+		ResponseJSON: &resp,
+	})
+	return
+}
+
+func (c *Client) SendJoin(ctx context.Context, req *ReqSendJoin) (resp *RespSendJoin, err error) {
+	_, _, err = c.MakeFullRequest(ctx, RequestParams{
+		ServerName: c.ServerName,
+		Method:     http.MethodPut,
+		Path:       URLPath{"v1", "send_join", req.RoomID, req.EventID},
+		Query: url.Values{
+			"omit_members": {strconv.FormatBool(req.OmitMembers)},
+		},
+		Authenticate: true,
+		RequestJSON:  req.Event,
+		ResponseJSON: &resp,
+	})
+	return
+}
+
+func (c *Client) SendKnock(ctx context.Context, req *ReqSendJoin) (resp *RespSendKnock, err error) {
+	_, _, err = c.MakeFullRequest(ctx, RequestParams{
+		ServerName:   c.ServerName,
+		Method:       http.MethodPut,
+		Path:         URLPath{"v1", "send_knock", req.RoomID, req.EventID},
+		Authenticate: true,
+		RequestJSON:  req.Event,
+		ResponseJSON: &resp,
+	})
+	return
+}
+
+func (c *Client) SendInvite(ctx context.Context, req *ReqSendInvite) (resp *RespSendInvite, err error) {
+	_, _, err = c.MakeFullRequest(ctx, RequestParams{
+		ServerName:   c.ServerName,
+		Method:       http.MethodPut,
+		Path:         URLPath{"v1", "invite", req.RoomID, req.UserID},
+		Authenticate: true,
+		RequestJSON:  req,
+		ResponseJSON: &resp,
+	})
+	return
+}
+
+func (c *Client) MakeLeave(ctx context.Context, req *ReqMakeLeave) (resp *RespMakeLeave, err error) {
+	_, _, err = c.MakeFullRequest(ctx, RequestParams{
+		ServerName:   c.ServerName,
+		Method:       http.MethodPut,
+		Path:         URLPath{"v1", "make_leave", req.RoomID, req.UserID},
+		Authenticate: true,
+		ResponseJSON: &resp,
+	})
+	return
+}
+
+func (c *Client) SendLeave(ctx context.Context, roomID id.RoomID, eventID id.EventID, evt *PartialMemberEvent) (resp struct{}, err error) {
+	_, _, err = c.MakeFullRequest(ctx, RequestParams{
+		ServerName:   c.ServerName,
+		Method:       http.MethodPut,
+		Path:         URLPath{"v1", "send_leave", roomID, eventID},
+		Authenticate: true,
+		RequestJSON:  evt,
 		ResponseJSON: &resp,
 	})
 	return
