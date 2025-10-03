@@ -65,10 +65,13 @@ type PreConvertedMessage struct {
 	Data          *bridgev2.ConvertedMessage
 	ID            networkid.MessageID
 	TransactionID networkid.TransactionID
+
+	HandleExistingFunc func(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, existing []*database.Message) (bridgev2.UpsertResult, error)
 }
 
 var (
 	_ bridgev2.RemoteMessage                  = (*PreConvertedMessage)(nil)
+	_ bridgev2.RemoteMessageUpsert            = (*PreConvertedMessage)(nil)
 	_ bridgev2.RemoteMessageWithTransactionID = (*PreConvertedMessage)(nil)
 )
 
@@ -82,6 +85,13 @@ func (evt *PreConvertedMessage) GetID() networkid.MessageID {
 
 func (evt *PreConvertedMessage) GetTransactionID() networkid.TransactionID {
 	return evt.TransactionID
+}
+
+func (evt *PreConvertedMessage) HandleExisting(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, existing []*database.Message) (bridgev2.UpsertResult, error) {
+	if evt.HandleExistingFunc == nil {
+		return bridgev2.UpsertResult{}, nil
+	}
+	return evt.HandleExistingFunc(ctx, portal, intent, existing)
 }
 
 type MessageRemove struct {
