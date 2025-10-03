@@ -59,6 +59,31 @@ func (evt *Message[T]) GetTransactionID() networkid.TransactionID {
 	return evt.TransactionID
 }
 
+// PreConvertedMessage is a simple implementation of [bridgev2.RemoteMessage] with pre-converted data.
+type PreConvertedMessage struct {
+	EventMeta
+	Data          *bridgev2.ConvertedMessage
+	ID            networkid.MessageID
+	TransactionID networkid.TransactionID
+}
+
+var (
+	_ bridgev2.RemoteMessage                  = (*PreConvertedMessage)(nil)
+	_ bridgev2.RemoteMessageWithTransactionID = (*PreConvertedMessage)(nil)
+)
+
+func (evt *PreConvertedMessage) ConvertMessage(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI) (*bridgev2.ConvertedMessage, error) {
+	return evt.Data, nil
+}
+
+func (evt *PreConvertedMessage) GetID() networkid.MessageID {
+	return evt.ID
+}
+
+func (evt *PreConvertedMessage) GetTransactionID() networkid.TransactionID {
+	return evt.TransactionID
+}
+
 type MessageRemove struct {
 	EventMeta
 
