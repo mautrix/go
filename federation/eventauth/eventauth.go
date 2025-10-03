@@ -79,6 +79,7 @@ var (
 	ErrCantJoinOtherUser               = AuthFailError{Index: "5.3.2", Message: "can't send join event with different state key"}
 	ErrCantJoinBanned                  = AuthFailError{Index: "5.3.3", Message: "user is banned from the room"}
 	ErrAuthoriserCantInvite            = AuthFailError{Index: "5.3.5.2", Message: "authoriser doesn't have sufficient power level to invite"}
+	ErrAuthoriserNotInRoom             = AuthFailError{Index: "5.3.5.2", Message: "authoriser isn't a member of the room"}
 	ErrCantJoinWithoutInvite           = AuthFailError{Index: "5.3.7", Message: "can't join invite-only room without invite"}
 	ErrInvalidJoinRule                 = AuthFailError{Index: "5.3.7", Message: "invalid join rule in room"}
 	ErrThirdPartyInviteBanned          = AuthFailError{Index: "5.4.1.1", Message: "third party invite target user is banned"}
@@ -383,6 +384,10 @@ func authorizeMember(roomVersion id.RoomVersion, evt, createEvt *pdu.PDU, authEv
 			if powerLevels.GetUserLevel(authorizedVia) < powerLevels.Invite() {
 				// 5.3.5.2. If the join_authorised_via_users_server key in content is not a user with sufficient permission to invite other users, reject.
 				return ErrAuthoriserCantInvite
+			}
+			authorizerMembership := event.Membership(findEventAndReadString(authEvents, event.StateMember.Type, authorizedVia.String(), "membership", string(event.MembershipLeave)))
+			if authorizerMembership != event.MembershipJoin {
+				return ErrAuthoriserNotInRoom
 			}
 			// 5.3.5.3. Otherwise, allow.
 			return nil
