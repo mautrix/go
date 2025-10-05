@@ -323,6 +323,7 @@ const (
 	LogBodyContextKey contextKey = iota
 	LogRequestIDContextKey
 	MaxAttemptsContextKey
+	SyncTokenContextKey
 )
 
 func (cli *Client) RequestStart(req *http.Request) {
