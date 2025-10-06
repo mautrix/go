@@ -334,7 +334,7 @@ func (c *Client) MakeJoin(ctx context.Context, req *ReqMakeJoin) (resp *RespMake
 		ServerName:   req.Via,
 		Method:       http.MethodGet,
 		Path:         URLPath{"v1", "make_join", req.RoomID, req.UserID},
-		Query:        url.Values{"v": versions},
+		Query:        url.Values{"ver": versions},
 		Authenticate: true,
 		ResponseJSON: &resp,
 	})
@@ -350,7 +350,7 @@ func (c *Client) MakeKnock(ctx context.Context, req *ReqMakeJoin) (resp *RespMak
 		ServerName:   req.Via,
 		Method:       http.MethodGet,
 		Path:         URLPath{"v1", "make_knock", req.RoomID, req.UserID},
-		Query:        url.Values{"v": versions},
+		Query:        url.Values{"ver": versions},
 		Authenticate: true,
 		ResponseJSON: &resp,
 	})
