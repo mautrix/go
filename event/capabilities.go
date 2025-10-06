@@ -67,6 +67,20 @@ func (rf *RoomFeatures) GetID() string {
 	return base64.RawURLEncoding.EncodeToString(rf.Hash())
 }
 
+func (rf *RoomFeatures) Clone() *RoomFeatures {
+	if rf == nil {
+		return nil
+	}
+	clone := *rf
+	clone.File = clone.File.Clone()
+	clone.Formatting = maps.Clone(clone.Formatting)
+	clone.EditMaxAge = ptr.Clone(clone.EditMaxAge)
+	clone.DeleteMaxAge = ptr.Clone(clone.DeleteMaxAge)
+	clone.DisappearingTimer = clone.DisappearingTimer.Clone()
+	clone.AllowedReactions = slices.Clone(clone.AllowedReactions)
+	return &clone
+}
+
 type FormattingFeatureMap map[FormattingFeature]CapabilitySupportLevel
 
 type FileFeatureMap map[CapabilityMsgType]*FileFeatures
@@ -84,6 +98,16 @@ type DisappearingTimerCapability struct {
 	Timers []jsontime.Milliseconds `json:"timers,omitempty"`
 
 	OmitEmptyTimer bool `json:"omit_empty_timer,omitempty"`
+}
+
+func (dtc *DisappearingTimerCapability) Clone() *DisappearingTimerCapability {
+	if dtc == nil {
+		return nil
+	}
+	clone := *dtc
+	clone.Types = slices.Clone(clone.Types)
+	clone.Timers = slices.Clone(clone.Timers)
+	return &clone
 }
 
 func (dtc *DisappearingTimerCapability) Supports(content *BeeperDisappearingTimer) bool {
@@ -307,6 +331,9 @@ func (ff *FileFeatures) Hash() []byte {
 }
 
 func (ff *FileFeatures) Clone() *FileFeatures {
+	if ff == nil {
+		return nil
+	}
 	clone := *ff
 	clone.MimeTypes = maps.Clone(clone.MimeTypes)
 	clone.MaxDuration = ptr.Clone(clone.MaxDuration)
