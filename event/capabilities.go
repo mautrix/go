@@ -18,6 +18,7 @@ import (
 
 	"go.mau.fi/util/exerrors"
 	"go.mau.fi/util/jsontime"
+	"go.mau.fi/util/ptr"
 	"golang.org/x/exp/constraints"
 	"golang.org/x/exp/maps"
 )
@@ -69,6 +70,14 @@ func (rf *RoomFeatures) GetID() string {
 type FormattingFeatureMap map[FormattingFeature]CapabilitySupportLevel
 
 type FileFeatureMap map[CapabilityMsgType]*FileFeatures
+
+func (ffm FileFeatureMap) Clone() FileFeatureMap {
+	dup := maps.Clone(ffm)
+	for key, value := range dup {
+		dup[key] = value.Clone()
+	}
+	return dup
+}
 
 type DisappearingTimerCapability struct {
 	Types  []DisappearingType      `json:"types"`
@@ -295,4 +304,11 @@ func (ff *FileFeatures) Hash() []byte {
 	hashInt(hasher, "max_duration", ff.MaxDuration.Get())
 	hashBool(hasher, "view_once", ff.ViewOnce)
 	return hasher.Sum(nil)
+}
+
+func (ff *FileFeatures) Clone() *FileFeatures {
+	clone := *ff
+	clone.MimeTypes = maps.Clone(clone.MimeTypes)
+	clone.MaxDuration = ptr.Clone(clone.MaxDuration)
+	return &clone
 }
