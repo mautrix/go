@@ -11,8 +11,8 @@ package pdu
 import (
 	"bytes"
 	"crypto/ed25519"
+	"encoding/json"
 	"encoding/json/jsontext"
-	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"strings"
@@ -60,12 +60,12 @@ type InternalMeta struct {
 }
 
 type PDU struct {
-	AuthEvents     []id.EventID                   `json:"auth_events"`
+	AuthEvents     []id.EventID                   `json:"auth_events,omitzero"`
 	Content        jsontext.Value                 `json:"content"`
 	Depth          int64                          `json:"depth"`
 	Hashes         *Hashes                        `json:"hashes,omitzero"`
 	OriginServerTS int64                          `json:"origin_server_ts"`
-	PrevEvents     []id.EventID                   `json:"prev_events"`
+	PrevEvents     []id.EventID                   `json:"prev_events,omitzero"`
 	Redacts        *id.EventID                    `json:"redacts,omitzero"`
 	RoomID         id.RoomID                      `json:"room_id,omitzero"` // not present for room v12+ create events
 	Sender         id.UserID                      `json:"sender"`
