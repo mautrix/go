@@ -272,6 +272,7 @@ type ReqSendJoin struct {
 	EventID     id.EventID
 	OmitMembers bool
 	Event       PDU
+	Via         string
 }
 
 type RespSendJoin struct {
@@ -301,11 +302,19 @@ type RespSendInvite struct {
 type ReqMakeLeave struct {
 	RoomID id.RoomID
 	UserID id.UserID
+	Via    string
 }
 
 type RespMakeLeave struct {
 	Event       PDU            `json:"event"`
 	RoomVersion id.RoomVersion `json:"room_version"`
+}
+
+type ReqSendLeave struct {
+	RoomID  id.RoomID
+	EventID id.EventID
+	Event   PDU
+	Via     string
 }
 
 func (c *Client) MakeJoin(ctx context.Context, req *ReqMakeJoin) (resp *RespMakeJoin, err error) {
@@ -314,7 +323,7 @@ func (c *Client) MakeJoin(ctx context.Context, req *ReqMakeJoin) (resp *RespMake
 		versions[i] = string(v)
 	}
 	_, _, err = c.MakeFullRequest(ctx, RequestParams{
-		ServerName:   c.ServerName,
+		ServerName:   req.Via,
 		Method:       http.MethodGet,
 		Path:         URLPath{"v1", "make_join", req.RoomID, req.UserID},
 		Query:        url.Values{"v": versions},
@@ -330,7 +339,7 @@ func (c *Client) MakeKnock(ctx context.Context, req *ReqMakeJoin) (resp *RespMak
 		versions[i] = string(v)
 	}
 	_, _, err = c.MakeFullRequest(ctx, RequestParams{
-		ServerName:   req.UserID.Homeserver(),
+		ServerName:   req.Via,
 		Method:       http.MethodGet,
 		Path:         URLPath{"v1", "make_knock", req.RoomID, req.UserID},
 		Query:        url.Values{"v": versions},
@@ -342,7 +351,7 @@ func (c *Client) MakeKnock(ctx context.Context, req *ReqMakeJoin) (resp *RespMak
 
 func (c *Client) SendJoin(ctx context.Context, req *ReqSendJoin) (resp *RespSendJoin, err error) {
 	_, _, err = c.MakeFullRequest(ctx, RequestParams{
-		ServerName: c.ServerName,
+		ServerName: req.Via,
 		Method:     http.MethodPut,
 		Path:       URLPath{"v1", "send_join", req.RoomID, req.EventID},
 		Query: url.Values{
@@ -357,7 +366,7 @@ func (c *Client) SendJoin(ctx context.Context, req *ReqSendJoin) (resp *RespSend
 
 func (c *Client) SendKnock(ctx context.Context, req *ReqSendJoin) (resp *RespSendKnock, err error) {
 	_, _, err = c.MakeFullRequest(ctx, RequestParams{
-		ServerName:   c.ServerName,
+		ServerName:   req.Via,
 		Method:       http.MethodPut,
 		Path:         URLPath{"v1", "send_knock", req.RoomID, req.EventID},
 		Authenticate: true,
@@ -369,7 +378,7 @@ func (c *Client) SendKnock(ctx context.Context, req *ReqSendJoin) (resp *RespSen
 
 func (c *Client) SendInvite(ctx context.Context, req *ReqSendInvite) (resp *RespSendInvite, err error) {
 	_, _, err = c.MakeFullRequest(ctx, RequestParams{
-		ServerName:   c.ServerName,
+		ServerName:   req.UserID.Homeserver(),
 		Method:       http.MethodPut,
 		Path:         URLPath{"v1", "invite", req.RoomID, req.UserID},
 		Authenticate: true,
@@ -381,7 +390,7 @@ func (c *Client) SendInvite(ctx context.Context, req *ReqSendInvite) (resp *Resp
 
 func (c *Client) MakeLeave(ctx context.Context, req *ReqMakeLeave) (resp *RespMakeLeave, err error) {
 	_, _, err = c.MakeFullRequest(ctx, RequestParams{
-		ServerName:   c.ServerName,
+		ServerName:   req.Via,
 		Method:       http.MethodPut,
 		Path:         URLPath{"v1", "make_leave", req.RoomID, req.UserID},
 		Authenticate: true,
@@ -390,14 +399,13 @@ func (c *Client) MakeLeave(ctx context.Context, req *ReqMakeLeave) (resp *RespMa
 	return
 }
 
-func (c *Client) SendLeave(ctx context.Context, roomID id.RoomID, eventID id.EventID, evt PDU) (resp struct{}, err error) {
+func (c *Client) SendLeave(ctx context.Context, req *ReqSendLeave) (err error) {
 	_, _, err = c.MakeFullRequest(ctx, RequestParams{
-		ServerName:   c.ServerName,
+		ServerName:   req.Via,
 		Method:       http.MethodPut,
-		Path:         URLPath{"v1", "send_leave", roomID, eventID},
+		Path:         URLPath{"v1", "send_leave", req.RoomID, req.EventID},
 		Authenticate: true,
-		RequestJSON:  evt,
-		ResponseJSON: &resp,
+		RequestJSON:  req.Event,
 	})
 	return
 }
