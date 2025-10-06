@@ -361,7 +361,7 @@ func (c *Client) SendJoin(ctx context.Context, req *ReqSendJoin) (resp *RespSend
 	_, _, err = c.MakeFullRequest(ctx, RequestParams{
 		ServerName: req.Via,
 		Method:     http.MethodPut,
-		Path:       URLPath{"v1", "send_join", req.RoomID, req.EventID},
+		Path:       URLPath{"v2", "send_join", req.RoomID, req.EventID},
 		Query: url.Values{
 			"omit_members": {strconv.FormatBool(req.OmitMembers)},
 		},
@@ -411,7 +411,7 @@ func (c *Client) SendLeave(ctx context.Context, req *ReqSendLeave) (err error) {
 	_, _, err = c.MakeFullRequest(ctx, RequestParams{
 		ServerName:   req.Via,
 		Method:       http.MethodPut,
-		Path:         URLPath{"v1", "send_leave", req.RoomID, req.EventID},
+		Path:         URLPath{"v2", "send_leave", req.RoomID, req.EventID},
 		Authenticate: true,
 		RequestJSON:  req.Event,
 	})
