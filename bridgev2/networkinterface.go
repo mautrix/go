@@ -815,19 +815,19 @@ type GroupFieldCapability struct {
 }
 
 type GroupCreateParams struct {
-	Type string `json:"type"`
+	Type string `json:"type,omitempty"`
 
-	Username     string               `json:"username"`
-	Participants []networkid.UserID   `json:"participants"`
-	Parent       *networkid.PortalKey `json:"parent"`
+	Username     string               `json:"username,omitempty"`
+	Participants []networkid.UserID   `json:"participants,omitempty"`
+	Parent       *networkid.PortalKey `json:"parent,omitempty"`
 
-	Name      *event.RoomNameEventContent    `json:"name"`
-	Avatar    *event.RoomAvatarEventContent  `json:"avatar"`
-	Topic     *event.TopicEventContent       `json:"topic"`
-	Disappear *event.BeeperDisappearingTimer `json:"disappear"`
+	Name      *event.RoomNameEventContent    `json:"name,omitempty"`
+	Avatar    *event.RoomAvatarEventContent  `json:"avatar,omitempty"`
+	Topic     *event.TopicEventContent       `json:"topic,omitempty"`
+	Disappear *event.BeeperDisappearingTimer `json:"disappear,omitempty"`
 
 	// An existing room ID to bridge to. If unset, a new room will be created.
-	RoomID id.RoomID `json:"room_id"`
+	RoomID id.RoomID `json:"room_id,omitempty"`
 }
 
 type GroupCreatingNetworkAPI interface {
