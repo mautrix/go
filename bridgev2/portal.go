@@ -944,8 +944,15 @@ func (portal *Portal) checkMessageContentCaps(caps *event.RoomFeatures, content 
 			feat.Caption.Reject() {
 			return ErrCaptionsNotAllowed
 		}
-		if content.Info != nil && content.Info.MimeType != "" {
-			if feat.GetMimeSupport(content.Info.MimeType).Reject() {
+		if content.Info != nil {
+			dur := time.Duration(content.Info.Duration) * time.Millisecond
+			if feat.MaxDuration != nil && dur > feat.MaxDuration.Duration {
+				return fmt.Errorf("%w: %s is longer than the maximum of %s", ErrMediaDurationTooLong, exfmt.Duration(dur), exfmt.Duration(feat.MaxDuration.Duration))
+			}
+			if feat.MaxSize != 0 && int64(content.Info.Size) > feat.MaxSize {
+				return fmt.Errorf("%w: %.1f MiB is larger than the maximum of %.1f MiB", ErrMediaTooLarge, float64(content.Info.Size)/1024/1024, float64(feat.MaxSize)/1024/1024)
+			}
+			if content.Info.MimeType != "" && feat.GetMimeSupport(content.Info.MimeType).Reject() {
 				return fmt.Errorf("%w (%s in %s)", ErrUnsupportedMediaType, content.Info.MimeType, capMsgType)
 			}
 		}
