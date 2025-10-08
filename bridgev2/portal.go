@@ -665,7 +665,7 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 	// Copy logger because many of the handlers will use UpdateContext
 	ctx = log.With().Str("login_id", string(login.ID)).Logger().WithContext(ctx)
 
-	if origSender == nil && portal.Bridge.Network.GetCapabilities().ImplicitReadReceipts {
+	if origSender == nil && portal.Bridge.Network.GetCapabilities().ImplicitReadReceipts && !evt.Type.IsAccountData() {
 		rrLog := log.With().Str("subaction", "implicit read receipt").Logger()
 		rrCtx := rrLog.WithContext(ctx)
 		rrLog.Debug().Msg("Sending implicit read receipt for event")
