@@ -815,7 +815,7 @@ func (portal *Portal) callReadReceiptHandler(
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to save user portal metadata")
 	}
-	portal.Bridge.DisappearLoop.StartAll(ctx, portal.MXID)
+	portal.Bridge.DisappearLoop.StartAllBefore(ctx, portal.MXID, evt.ReadUpTo)
 }
 
 func (portal *Portal) handleMatrixTyping(ctx context.Context, evt *event.Event) EventHandlingResult {
@@ -1163,6 +1163,7 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 		go portal.Bridge.DisappearLoop.Add(ctx, &database.DisappearingMessage{
 			RoomID:              portal.MXID,
 			EventID:             message.MXID,
+			Timestamp:           message.Timestamp,
 			DisappearingSetting: portal.Disappear.StartingAt(message.Timestamp),
 		})
 	}
@@ -2558,6 +2559,7 @@ func (portal *Portal) sendConvertedMessage(
 			portal.Bridge.DisappearLoop.Add(ctx, &database.DisappearingMessage{
 				RoomID:              portal.MXID,
 				EventID:             dbMessage.MXID,
+				Timestamp:           dbMessage.Timestamp,
 				DisappearingSetting: converted.Disappear,
 			})
 		}
@@ -3344,11 +3346,15 @@ func (portal *Portal) handleRemoteReadReceipt(ctx context.Context, source *UserL
 			return evt.Int64("target_stream_order", targetStreamOrder)
 		}
 		err = soIntent.MarkStreamOrderRead(ctx, portal.MXID, targetStreamOrder, getEventTS(evt))
+		if readUpTo.IsZero() {
+			readUpTo = getEventTS(evt)
+		}
 	} else {
 		addTargetLog = func(evt *zerolog.Event) *zerolog.Event {
 			return evt.Stringer("target_mxid", lastTarget.MXID)
 		}
 		err = intent.MarkRead(ctx, portal.MXID, lastTarget.MXID, getEventTS(evt))
+		readUpTo = lastTarget.Timestamp
 	}
 	if err != nil {
 		addTargetLog(log.Err(err)).Msg("Failed to bridge read receipt")
@@ -3357,7 +3363,7 @@ func (portal *Portal) handleRemoteReadReceipt(ctx context.Context, source *UserL
 		addTargetLog(log.Debug()).Msg("Bridged read receipt")
 	}
 	if sender.IsFromMe {
-		portal.Bridge.DisappearLoop.StartAll(ctx, portal.MXID)
+		portal.Bridge.DisappearLoop.StartAllBefore(ctx, portal.MXID, readUpTo)
 	}
 	return EventHandlingResultSuccess
 }

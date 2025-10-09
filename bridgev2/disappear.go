@@ -86,8 +86,8 @@ func (dl *DisappearLoop) Stop() {
 	}
 }
 
-func (dl *DisappearLoop) StartAll(ctx context.Context, roomID id.RoomID) {
-	startedMessages, err := dl.br.DB.DisappearingMessage.StartAll(ctx, roomID)
+func (dl *DisappearLoop) StartAllBefore(ctx context.Context, roomID id.RoomID, beforeTS time.Time) {
+	startedMessages, err := dl.br.DB.DisappearingMessage.StartAllBefore(ctx, roomID, beforeTS)
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to start disappearing messages")
 		return
