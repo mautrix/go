@@ -376,9 +376,15 @@ type ReqSendEvent struct {
 	MeowEventID id.EventID
 }
 
+type ReqDelayedEvents struct {
+	DelayID   id.DelayID        `json:"-"`
+	Status    event.DelayStatus `json:"-"`
+	NextBatch string            `json:"-"`
+}
+
 type ReqUpdateDelayedEvent struct {
-	DelayID string `json:"-"`
-	Action  string `json:"action"` // TODO use enum
+	DelayID id.DelayID        `json:"-"`
+	Action  event.DelayAction `json:"action"`
 }
 
 // ReqDeviceInfo is the JSON request for https://spec.matrix.org/v1.2/client-server-api/#put_matrixclientv3devicesdeviceid

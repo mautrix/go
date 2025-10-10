@@ -1313,6 +1313,32 @@ func (cli *Client) SendMassagedStateEvent(ctx context.Context, roomID id.RoomID,
 	return
 }
 
+func (cli *Client) DelayedEvents(ctx context.Context, req *ReqDelayedEvents) (resp *RespDelayedEvents, err error) {
+	query := map[string]string{}
+	if req.DelayID != "" {
+		query["delay_id"] = string(req.DelayID)
+	}
+	if req.Status != "" {
+		query["status"] = string(req.Status)
+	}
+	if req.NextBatch != "" {
+		query["next_batch"] = req.NextBatch
+	}
+
+	urlPath := cli.BuildURLWithQuery(ClientURLPath{"unstable", "org.matrix.msc4140", "delayed_events"}, query)
+	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, req, &resp)
+
+	// Migration: merge old keys with new ones
+	if resp != nil {
+		resp.Scheduled = append(resp.Scheduled, resp.DelayedEvents...)
+		resp.DelayedEvents = nil
+		resp.Finalised = append(resp.Finalised, resp.FinalisedEvents...)
+		resp.FinalisedEvents = nil
+	}
+
+	return
+}
+
 func (cli *Client) UpdateDelayedEvent(ctx context.Context, req *ReqUpdateDelayedEvent) (resp *RespUpdateDelayedEvent, err error) {
 	urlPath := cli.BuildClientURL("unstable", "org.matrix.msc4140", "delayed_events", req.DelayID)
 	_, err = cli.MakeRequest(ctx, http.MethodPost, urlPath, req, &resp)

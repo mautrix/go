@@ -104,10 +104,21 @@ type RespContext struct {
 type RespSendEvent struct {
 	EventID id.EventID `json:"event_id"`
 
-	UnstableDelayID string `json:"delay_id,omitempty"`
+	UnstableDelayID id.DelayID `json:"delay_id,omitempty"`
 }
 
 type RespUpdateDelayedEvent struct{}
+
+type RespDelayedEvents struct {
+	Scheduled []*event.ScheduledDelayedEvent `json:"scheduled,omitempty"`
+	Finalised []*event.FinalisedDelayedEvent `json:"finalised,omitempty"`
+	NextBatch string                         `json:"next_batch,omitempty"`
+
+	// Deprecated: Synapse implementation still returns this
+	DelayedEvents []*event.ScheduledDelayedEvent `json:"delayed_events,omitempty"`
+	// Deprecated: Synapse implementation still returns this
+	FinalisedEvents []*event.FinalisedDelayedEvent `json:"finalised_events,omitempty"`
+}
 
 type RespRedactUserEvents struct {
 	IsMoreEvents   bool `json:"is_more_events"`
