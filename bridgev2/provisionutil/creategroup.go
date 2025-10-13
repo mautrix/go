@@ -37,6 +37,14 @@ func CreateGroup(ctx context.Context, login *bridgev2.UserLogin, params *bridgev
 	if len(params.Participants) < typeSpec.Participants.MinLength {
 		return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("Must have at least %d members", typeSpec.Participants.MinLength))
 	}
+	userIDValidatingNetwork, ok := login.Bridge.Network.(bridgev2.IdentifierValidatingNetwork)
+	if ok {
+		for _, participant := range params.Participants {
+			if !userIDValidatingNetwork.ValidateUserID(participant) {
+				return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("User ID %q is not valid on this network", participant))
+			}
+		}
+	}
 	if (params.Name == nil || params.Name.Name == "") && typeSpec.Name.Required {
 		return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("Name is required"))
 	} else if nameLen := len(ptr.Val(params.Name).Name); nameLen > 0 && nameLen < typeSpec.Name.MinLength {
