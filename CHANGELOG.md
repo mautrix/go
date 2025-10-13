@@ -1,5 +1,9 @@
 ## v0.25.2 (unreleased)
 
+* **Breaking change *(id)*** Split `UserID.ParseAndValidate` into
+  `ParseAndValidateRelaxed` and `ParseAndValidateStrict`. Strict is the old
+  behavior, but most users likely want the relaxed version, as there are real
+  users whose user IDs aren't valid under the strict rules.
 * *(crypto)* Added helper methods for generating and verifying with recovery
   keys.
 * *(bridgev2/matrix)* Added config option to automatically generate a recovery
@@ -8,6 +12,7 @@
   for encryption with standard servers like Synapse.
 * *(bridgev2)* Added optional support for implicit read receipts.
 * *(bridgev2)* Added interface for deleting chats on remote network.
+* *(bridgev2)* Added local enforcement of media duration and size limits.
 * *(bridgev2)* Extended event duration logging to log any event taking too long.
 * *(event)* Added event type constant for poll end events.
 * *(client)* Added wrapper for searching user directory.
