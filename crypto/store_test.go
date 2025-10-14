@@ -75,8 +75,13 @@ func TestValidateMessageIndex(t *testing.T) {
 		t.Run(storeName, func(t *testing.T) {
 			acc := NewOlmAccount()
 
+			// Validating without event ID and timestamp before we have them should work
+			ok, err := store.ValidateMessageIndex(context.TODO(), acc.IdentityKey(), "sess1", "", 0, 0)
+			require.NoError(t, err, "Error validating message index")
+			assert.True(t, ok, "First message validation should be valid")
+
 			// First message should validate successfully
-			ok, err := store.ValidateMessageIndex(context.TODO(), acc.IdentityKey(), "sess1", "event1", 0, 1000)
+			ok, err = store.ValidateMessageIndex(context.TODO(), acc.IdentityKey(), "sess1", "event1", 0, 1000)
 			require.NoError(t, err, "Error validating message index")
 			assert.True(t, ok, "First message validation should be valid")
 
@@ -94,6 +99,11 @@ func TestValidateMessageIndex(t *testing.T) {
 			ok, err = store.ValidateMessageIndex(context.TODO(), acc.IdentityKey(), "sess1", "event1", 0, 1000)
 			require.NoError(t, err, "Error validating message index")
 			assert.True(t, ok, "First message validation should be valid")
+
+			// Validating without event ID and timestamp must fail if we already know them
+			ok, err = store.ValidateMessageIndex(context.TODO(), acc.IdentityKey(), "sess1", "", 0, 0)
+			require.NoError(t, err, "Error validating message index")
+			assert.False(t, ok, "First message validation should be invalid")
 		})
 	}
 }

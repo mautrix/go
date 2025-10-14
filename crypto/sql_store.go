@@ -664,6 +664,20 @@ func (store *SQLCryptoStore) IsOutboundGroupSessionShared(ctx context.Context, u
 // ValidateMessageIndex returns whether the given event information match the ones stored in the database
 // for the given sender key, session ID and index. If the index hasn't been stored, this will store it.
 func (store *SQLCryptoStore) ValidateMessageIndex(ctx context.Context, senderKey id.SenderKey, sessionID id.SessionID, eventID id.EventID, index uint, timestamp int64) (bool, error) {
+	if eventID == "" && timestamp == 0 {
+		var notOK bool
+		const validateEmptyQuery = `
+		SELECT EXISTS(SELECT 1 FROM crypto_message_index WHERE sender_key=$1 AND session_id=$2 AND "index"=$3)
+		`
+		err := store.DB.QueryRow(ctx, validateEmptyQuery, senderKey, sessionID, index).Scan(&notOK)
+		if notOK {
+			zerolog.Ctx(ctx).Debug().
+				Uint("message_index", index).
+				Msg("Rejecting event without event ID and timestamp due to already knowing them")
+		}
+		return !notOK, err
+	}
+
 	const validateQuery = `
 	INSERT INTO crypto_message_index (sender_key, session_id, "index", event_id, timestamp)
 	VALUES ($1, $2, $3, $4, $5)

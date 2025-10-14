@@ -525,6 +525,9 @@ func (gs *MemoryStore) ValidateMessageIndex(_ context.Context, senderKey id.Send
 	}
 	val, ok := gs.MessageIndices[key]
 	if !ok {
+		if eventID == "" && timestamp == 0 {
+			return true, nil
+		}
 		gs.MessageIndices[key] = messageIndexValue{
 			EventID:   eventID,
 			Timestamp: timestamp,
