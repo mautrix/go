@@ -2689,6 +2689,15 @@ func (cli *Client) ReportRoom(ctx context.Context, roomID id.RoomID, reason stri
 	return err
 }
 
+// AdminWhoIs fetches session information belonging to a specific user. Typically requires being a server admin.
+//
+// https://spec.matrix.org/v1.15/client-server-api/#get_matrixclientv3adminwhoisuserid
+func (cli *Client) AdminWhoIs(ctx context.Context, userID id.UserID) (resp RespWhoIs, err error) {
+	urlPath := cli.BuildClientURL("v3", "admin", "whois", userID)
+	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
+	return
+}
+
 // UnstableGetSuspendedStatus uses MSC4323 to check if a user is suspended.
 func (cli *Client) UnstableGetSuspendedStatus(ctx context.Context, userID id.UserID) (res *RespSuspended, err error) {
 	urlPath := cli.BuildClientURL("unstable", "uk.timedout.msc4323", "admin", "suspend", userID)
