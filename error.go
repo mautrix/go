@@ -67,6 +67,8 @@ var (
 	MIncompatibleRoomVersion = RespError{ErrCode: "M_INCOMPATIBLE_ROOM_VERSION"}
 	// The client specified a parameter that has the wrong value.
 	MInvalidParam = RespError{ErrCode: "M_INVALID_PARAM", StatusCode: http.StatusBadRequest}
+	// The client specified a room key backup version that is not the current room key backup version for the user.
+	MWrongRoomKeysVersion = RespError{ErrCode: "M_WRONG_ROOM_KEYS_VERSION", StatusCode: http.StatusForbidden}
 
 	MURLNotSet         = RespError{ErrCode: "M_URL_NOT_SET"}
 	MBadStatus         = RespError{ErrCode: "M_BAD_STATUS"}
