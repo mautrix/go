@@ -37,6 +37,10 @@ func NewClient(serverName string, key *SigningKey, cache ResolutionCache) *Clien
 		HTTP: &http.Client{
 			Transport: NewServerResolvingTransport(cache),
 			Timeout:   120 * time.Second,
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				// Federation requests do not allow redirects.
+				return http.ErrUseLastResponse
+			},
 		},
 		UserAgent:  mautrix.DefaultUserAgent,
 		ServerName: serverName,
@@ -310,7 +314,7 @@ func (c *Client) MakeFullRequest(ctx context.Context, params RequestParams) ([]b
 		_ = resp.Body.Close()
 	}()
 	var body []byte
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode >= 300 {
 		body, err = mautrix.ParseErrorResponse(req, resp)
 		return body, resp, err
 	} else if params.ResponseJSON != nil || !params.DontReadBody {
