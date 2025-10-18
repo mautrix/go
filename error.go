@@ -82,6 +82,9 @@ var (
 var (
 	ErrClientIsNil           = errors.New("client is nil")
 	ErrClientHasNoHomeserver = errors.New("client has no homeserver set")
+
+	ErrResponseTooLong      = errors.New("response content length too long")
+	ErrBodyReadReachedLimit = errors.New("reached response size limit while reading body")
 )
 
 // HTTPError An HTTP Error response, which may wrap an underlying native Go Error.

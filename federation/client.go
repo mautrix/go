@@ -48,7 +48,7 @@ func NewClient(serverName string, key *SigningKey, cache ResolutionCache) *Clien
 		ServerName: serverName,
 		Key:        key,
 
-		ResponseSizeLimit: 128 * 1024 * 1024,
+		ResponseSizeLimit: mautrix.DefaultResponseSizeLimit,
 	}
 }
 
@@ -327,11 +327,14 @@ func (c *Client) MakeFullRequest(ctx context.Context, params RequestParams) ([]b
 				Request:  req,
 				Response: resp,
 
-				Message:      "response body too long",
-				WrappedError: fmt.Errorf("%.2f MiB", float64(resp.ContentLength)/1024/1024),
+				Message:      "not reading response",
+				WrappedError: fmt.Errorf("%w (%.2f MiB)", mautrix.ErrResponseTooLong, float64(resp.ContentLength)/1024/1024),
 			}
 		}
 		body, err = io.ReadAll(io.LimitReader(resp.Body, c.ResponseSizeLimit+1))
+		if err == nil && len(body) > int(c.ResponseSizeLimit) {
+			err = mautrix.ErrBodyReadReachedLimit
+		}
 		if err != nil {
 			return body, resp, mautrix.HTTPError{
 				Request:  req,
@@ -339,15 +342,6 @@ func (c *Client) MakeFullRequest(ctx context.Context, params RequestParams) ([]b
 
 				Message:      "failed to read response body",
 				WrappedError: err,
-			}
-		}
-		if len(body) > int(c.ResponseSizeLimit) {
-			return body, resp, mautrix.HTTPError{
-				Request:  req,
-				Response: resp,
-
-				Message:      "failed to read response body",
-				WrappedError: fmt.Errorf("exceeded read limit"),
 			}
 		}
 		if params.ResponseJSON != nil {
