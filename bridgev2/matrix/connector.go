@@ -337,16 +337,18 @@ func (br *Connector) logInitialRequestError(err error, defaultMessage string) {
 }
 
 func (br *Connector) ensureConnection(ctx context.Context) {
+	triedToRegister := false
 	for {
 		versions, err := br.Bot.Versions(ctx)
 		if err != nil {
-			if errors.Is(err, mautrix.MForbidden) {
+			if errors.Is(err, mautrix.MForbidden) && !triedToRegister {
 				br.Log.Debug().Msg("M_FORBIDDEN in /versions, trying to register before retrying")
 				err = br.Bot.EnsureRegistered(ctx)
 				if err != nil {
 					br.logInitialRequestError(err, "Failed to register after /versions failed with M_FORBIDDEN")
 					os.Exit(16)
 				}
+				triedToRegister = true
 			} else if errors.Is(err, mautrix.MUnknownToken) || errors.Is(err, mautrix.MExclusive) {
 				br.logInitialRequestError(err, "/versions request failed with auth error")
 				os.Exit(16)
