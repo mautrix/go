@@ -127,7 +127,7 @@ func (bsq *BridgeStateQueue) sendNotice(ctx context.Context, state status.Bridge
 		bsq.firstTransientDisconnect = time.Time{}
 	}
 	if !sendNotice {
-		if !isDelayed && noticeConfig == "errors" && state.StateEvent == status.StateTransientDisconnect {
+		if !bsq.errorSent && !isDelayed && noticeConfig == "errors" && state.StateEvent == status.StateTransientDisconnect {
 			if bsq.firstTransientDisconnect.IsZero() {
 				bsq.firstTransientDisconnect = time.Now()
 			}
