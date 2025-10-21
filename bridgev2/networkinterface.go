@@ -817,7 +817,8 @@ type GroupFieldCapability struct {
 type GroupCreateParams struct {
 	Type string `json:"type,omitempty"`
 
-	Username     string               `json:"username,omitempty"`
+	Username string `json:"username,omitempty"`
+	// Clients may also provide MXIDs here, but provisionutil will normalize them, so bridges only need to handle network IDs
 	Participants []networkid.UserID   `json:"participants,omitempty"`
 	Parent       *networkid.PortalKey `json:"parent,omitempty"`
 
