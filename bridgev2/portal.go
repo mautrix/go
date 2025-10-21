@@ -185,6 +185,16 @@ func (br *Bridge) loadManyPortals(ctx context.Context, portals []*database.Porta
 	return output, nil
 }
 
+func (br *Bridge) loadPortalWithCacheCheck(ctx context.Context, dbPortal *database.Portal) (*Portal, error) {
+	if dbPortal == nil {
+		return nil, nil
+	} else if cached, ok := br.portalsByKey[dbPortal.PortalKey]; ok {
+		return cached, nil
+	} else {
+		return br.loadPortal(ctx, dbPortal, nil, nil)
+	}
+}
+
 func (br *Bridge) UnlockedGetPortalByKey(ctx context.Context, key networkid.PortalKey, onlyIfExists bool) (*Portal, error) {
 	if br.Config.SplitPortals && key.Receiver == "" {
 		return nil, fmt.Errorf("receiver must always be set when split portals is enabled")
@@ -272,6 +282,16 @@ func (br *Bridge) GetDMPortalsWith(ctx context.Context, otherUserID networkid.Us
 		return nil, err
 	}
 	return br.loadManyPortals(ctx, rows)
+}
+
+func (br *Bridge) GetDMPortal(ctx context.Context, receiver networkid.UserLoginID, otherUserID networkid.UserID) (*Portal, error) {
+	br.cacheLock.Lock()
+	defer br.cacheLock.Unlock()
+	dbPortal, err := br.DB.Portal.GetDM(ctx, receiver, otherUserID)
+	if err != nil {
+		return nil, err
+	}
+	return br.loadPortalWithCacheCheck(ctx, dbPortal)
 }
 
 func (br *Bridge) GetPortalByKey(ctx context.Context, key networkid.PortalKey) (*Portal, error) {

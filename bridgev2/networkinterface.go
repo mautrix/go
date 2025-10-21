@@ -733,12 +733,16 @@ type CreateChatResponse struct {
 	// this field should have the user ID of said different user.
 	DMRedirectedTo networkid.UserID
 
-	FailedParticipants map[networkid.UserID]CreateChatFailedParticipant
+	FailedParticipants map[networkid.UserID]*CreateChatFailedParticipant
 }
 
 type CreateChatFailedParticipant struct {
-	Reason        string         `json:"reason"`
-	InviteContent *event.Content `json:"invite_content,omitempty"`
+	Reason          string         `json:"reason"`
+	InviteEventType string         `json:"invite_event_type,omitempty"`
+	InviteContent   *event.Content `json:"invite_content,omitempty"`
+
+	UserMXID   id.UserID `json:"user_mxid,omitempty"`
+	DMRoomMXID id.RoomID `json:"dm_room_mxid,omitempty"`
 }
 
 // IdentifierResolvingNetworkAPI is an optional interface that network connectors can implement to support starting new direct chats.

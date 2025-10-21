@@ -15,6 +15,7 @@ import (
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/networkid"
+	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -23,7 +24,7 @@ type RespCreateGroup struct {
 	MXID   id.RoomID          `json:"mxid"`
 	Portal *bridgev2.Portal   `json:"-"`
 
-	FailedParticipants map[networkid.UserID]bridgev2.CreateChatFailedParticipant `json:"failed_participants,omitempty"`
+	FailedParticipants map[networkid.UserID]*bridgev2.CreateChatFailedParticipant `json:"failed_participants,omitempty"`
 }
 
 func CreateGroup(ctx context.Context, login *bridgev2.UserLogin, params *bridgev2.GroupCreateParams) (*RespCreateGroup, error) {
@@ -105,6 +106,27 @@ func CreateGroup(ctx context.Context, login *bridgev2.UserLogin, params *bridgev
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to create portal room")
 			return nil, bridgev2.RespError(mautrix.MUnknown.WithMessage("Failed to create portal room"))
+		}
+	}
+	for key, fp := range resp.FailedParticipants {
+		if fp.InviteEventType == "" {
+			fp.InviteEventType = event.EventMessage.Type
+		}
+		if fp.UserMXID == "" {
+			ghost, err := login.Bridge.GetGhostByID(ctx, key)
+			if err != nil {
+				zerolog.Ctx(ctx).Err(err).Msg("Failed to get ghost for failed participant")
+			} else if ghost != nil {
+				fp.UserMXID = ghost.Intent.GetMXID()
+			}
+		}
+		if fp.DMRoomMXID == "" {
+			portal, err := login.Bridge.GetDMPortal(ctx, login.ID, key)
+			if err != nil {
+				zerolog.Ctx(ctx).Err(err).Msg("Failed to get DM portal for failed participant")
+			} else if portal != nil {
+				fp.DMRoomMXID = portal.MXID
+			}
 		}
 	}
 	return &RespCreateGroup{

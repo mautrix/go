@@ -90,6 +90,7 @@ const (
 	getAllPortalsWithMXIDQuery              = getPortalBaseQuery + `WHERE bridge_id=$1 AND mxid IS NOT NULL`
 	getAllPortalsWithoutReceiver            = getPortalBaseQuery + `WHERE bridge_id=$1 AND receiver=''`
 	getAllDMPortalsQuery                    = getPortalBaseQuery + `WHERE bridge_id=$1 AND room_type='dm' AND other_user_id=$2`
+	getDMPortalQuery                        = getPortalBaseQuery + `WHERE bridge_id=$1 AND room_type='dm' AND receiver=$2 AND other_user_id=$3`
 	getAllPortalsQuery                      = getPortalBaseQuery + `WHERE bridge_id=$1`
 	getChildPortalsQuery                    = getPortalBaseQuery + `WHERE bridge_id=$1 AND parent_id=$2 AND parent_receiver=$3`
 
@@ -185,6 +186,10 @@ func (pq *PortalQuery) GetAll(ctx context.Context) ([]*Portal, error) {
 
 func (pq *PortalQuery) GetAllDMsWith(ctx context.Context, otherUserID networkid.UserID) ([]*Portal, error) {
 	return pq.QueryMany(ctx, getAllDMPortalsQuery, pq.BridgeID, otherUserID)
+}
+
+func (pq *PortalQuery) GetDM(ctx context.Context, receiver networkid.UserLoginID, otherUserID networkid.UserID) (*Portal, error) {
+	return pq.QueryOne(ctx, getDMPortalQuery, pq.BridgeID, receiver, otherUserID)
 }
 
 func (pq *PortalQuery) GetChildren(ctx context.Context, parentKey networkid.PortalKey) ([]*Portal, error) {
