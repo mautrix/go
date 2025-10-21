@@ -772,6 +772,6 @@ type DeviceInfo struct {
 
 // RespWhoIs is the response body for https://spec.matrix.org/v1.15/client-server-api/#get_matrixclientv3adminwhoisuserid
 type RespWhoIs struct {
-	UserID  id.UserID                `json:"user_id,omitempty"`
-	Devices map[id.Device]DeviceInfo `json:"devices,omitempty"`
+	UserID  id.UserID                  `json:"user_id,omitempty"`
+	Devices map[id.DeviceID]DeviceInfo `json:"devices,omitempty"`
 }
