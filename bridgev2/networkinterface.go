@@ -732,6 +732,13 @@ type CreateChatResponse struct {
 	// If a start DM request (CreateChatWithGhost or ResolveIdentifier) returns the DM to a different user,
 	// this field should have the user ID of said different user.
 	DMRedirectedTo networkid.UserID
+
+	FailedParticipants map[networkid.UserID]CreateChatFailedParticipant
+}
+
+type CreateChatFailedParticipant struct {
+	Reason        string         `json:"reason"`
+	InviteContent *event.Content `json:"invite_content,omitempty"`
 }
 
 // IdentifierResolvingNetworkAPI is an optional interface that network connectors can implement to support starting new direct chats.

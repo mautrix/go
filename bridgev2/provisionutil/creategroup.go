@@ -22,6 +22,8 @@ type RespCreateGroup struct {
 	ID     networkid.PortalID `json:"id"`
 	MXID   id.RoomID          `json:"mxid"`
 	Portal *bridgev2.Portal   `json:"-"`
+
+	FailedParticipants map[networkid.UserID]bridgev2.CreateChatFailedParticipant `json:"failed_participants,omitempty"`
 }
 
 func CreateGroup(ctx context.Context, login *bridgev2.UserLogin, params *bridgev2.GroupCreateParams) (*RespCreateGroup, error) {
@@ -109,5 +111,7 @@ func CreateGroup(ctx context.Context, login *bridgev2.UserLogin, params *bridgev
 		ID:     resp.Portal.ID,
 		MXID:   resp.Portal.MXID,
 		Portal: resp.Portal,
+
+		FailedParticipants: resp.FailedParticipants,
 	}, nil
 }
