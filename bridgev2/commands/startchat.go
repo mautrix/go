@@ -20,6 +20,7 @@ import (
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/bridgev2/provisionutil"
 	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/format"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -195,7 +196,17 @@ func fnCreateGroup(ce *Event) {
 		ce.Reply("Failed to create group: %v", err)
 		return
 	}
-	ce.Reply("Successfully created group `%s`", resp.ID)
+	var postfix string
+	if len(resp.FailedParticipants) > 0 {
+		failedParticipantsStrings := make([]string, len(resp.FailedParticipants))
+		i := 0
+		for participantID, meta := range resp.FailedParticipants {
+			failedParticipantsStrings[i] = fmt.Sprintf("* %s: %s", format.SafeMarkdownCode(participantID), meta.Reason)
+			i++
+		}
+		postfix += "\n\nFailed to add some participants:\n" + strings.Join(failedParticipantsStrings, "\n")
+	}
+	ce.Reply("Successfully created group `%s`%s", resp.ID, postfix)
 }
 
 var CommandSearch = &FullHandler{
