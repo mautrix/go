@@ -13,6 +13,7 @@ import (
 	"maps"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog"
 
@@ -34,6 +35,35 @@ var CommandResolveIdentifier = &FullHandler{
 	},
 	RequiresLogin: true,
 	NetworkAPI:    NetworkAPIImplements[bridgev2.IdentifierResolvingNetworkAPI],
+}
+
+var CommandSyncChat = &FullHandler{
+	Func: func(ce *Event) {
+		login, _, err := ce.Portal.FindPreferredLogin(ce.Ctx, ce.User, false)
+		if err != nil {
+			ce.Log.Err(err).Msg("Failed to find login for sync")
+			ce.Reply("Failed to find login: %v", err)
+			return
+		} else if login == nil {
+			ce.Reply("No login found for sync")
+			return
+		}
+		info, err := login.Client.GetChatInfo(ce.Ctx, ce.Portal)
+		if err != nil {
+			ce.Log.Err(err).Msg("Failed to get chat info for sync")
+			ce.Reply("Failed to get chat info: %v", err)
+			return
+		}
+		ce.Portal.UpdateInfo(ce.Ctx, info, login, nil, time.Time{})
+		ce.React("✅️")
+	},
+	Name: "sync-portal",
+	Help: HelpMeta{
+		Section:     HelpSectionChats,
+		Description: "Sync the current portal room",
+	},
+	RequiresPortal: true,
+	RequiresLogin:  true,
 }
 
 var CommandStartChat = &FullHandler{
