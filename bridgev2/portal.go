@@ -3604,12 +3604,42 @@ type PortalInfo = ChatInfo
 type ChatMember struct {
 	EventSender
 	Membership event.Membership
-	Nickname   *string
+	// Per-room nickname for the user. Not yet used.
+	Nickname *string
+	// The power level to set for the user when syncing power levels.
 	PowerLevel *int
-	UserInfo   *UserInfo
-
+	// Optional user info to sync the ghost user while updating membership.
+	UserInfo *UserInfo
+	// The user who sent the membership change (user who invited/kicked/banned this user).
+	// Not yet used. Not applicable if Membership is join or knock.
+	MemberSender EventSender
+	// Extra fields to include in the member event.
 	MemberEventExtra map[string]any
-	PrevMembership   event.Membership
+	// The expected previous membership. If this doesn't match, the change is ignored.
+	PrevMembership event.Membership
+}
+
+type ChatMemberMap map[networkid.UserID]ChatMember
+
+// Set adds the given entry to this map, overwriting any existing entry with the same Sender field.
+func (cmm ChatMemberMap) Set(member ChatMember) {
+	if member.Sender == "" && member.SenderLogin == "" && !member.IsFromMe {
+		return
+	}
+	cmm[member.Sender] = member
+}
+
+// Add adds the given entry to this map, but will ignore it if an entry with the same Sender field already exists.
+// It returns true if the entry was added, false otherwise.
+func (cmm ChatMemberMap) Add(member ChatMember) bool {
+	if member.Sender == "" && member.SenderLogin == "" && !member.IsFromMe {
+		return false
+	}
+	if _, exists := cmm[member.Sender]; exists {
+		return false
+	}
+	cmm[member.Sender] = member
+	return true
 }
 
 type ChatMemberList struct {
@@ -3633,7 +3663,7 @@ type ChatMemberList struct {
 
 	// Deprecated: Use MemberMap instead to avoid duplicate entries
 	Members     []ChatMember
-	MemberMap   map[networkid.UserID]ChatMember
+	MemberMap   ChatMemberMap
 	PowerLevels *PowerLevelOverrides
 }
 
