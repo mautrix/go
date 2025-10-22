@@ -65,12 +65,17 @@ func (evt *ChatResync) GetChatInfo(ctx context.Context, portal *bridgev2.Portal)
 type ChatDelete struct {
 	EventMeta
 	OnlyForMe bool
+	Children  bool
 }
 
-var _ bridgev2.RemoteChatDelete = (*ChatDelete)(nil)
+var _ bridgev2.RemoteChatDeleteWithChildren = (*ChatDelete)(nil)
 
 func (evt *ChatDelete) DeleteOnlyForMe() bool {
 	return evt.OnlyForMe
+}
+
+func (evt *ChatDelete) DeleteChildren() bool {
+	return evt.Children
 }
 
 // ChatInfoChange is a simple implementation of [bridgev2.RemoteChatInfoChange].

@@ -284,6 +284,16 @@ func (br *Bridge) GetDMPortalsWith(ctx context.Context, otherUserID networkid.Us
 	return br.loadManyPortals(ctx, rows)
 }
 
+func (br *Bridge) GetChildPortals(ctx context.Context, parent networkid.PortalKey) ([]*Portal, error) {
+	br.cacheLock.Lock()
+	defer br.cacheLock.Unlock()
+	rows, err := br.DB.Portal.GetChildren(ctx, parent)
+	if err != nil {
+		return nil, err
+	}
+	return br.loadManyPortals(ctx, rows)
+}
+
 func (br *Bridge) GetDMPortal(ctx context.Context, receiver networkid.UserLoginID, otherUserID networkid.UserID) (*Portal, error) {
 	br.cacheLock.Lock()
 	defer br.cacheLock.Unlock()
@@ -3514,6 +3524,20 @@ func (portal *Portal) findOtherLogins(ctx context.Context, source *UserLogin) (o
 	return
 }
 
+type childDeleteProxy struct {
+	RemoteChatDeleteWithChildren
+	child networkid.PortalKey
+	done  func()
+}
+
+func (cdp *childDeleteProxy) AddLogContext(c zerolog.Context) zerolog.Context {
+	return cdp.RemoteChatDeleteWithChildren.AddLogContext(c).Str("subaction", "delete children")
+}
+func (cdp *childDeleteProxy) GetPortalKey() networkid.PortalKey              { return cdp.child }
+func (cdp *childDeleteProxy) ShouldCreatePortal() bool                       { return false }
+func (cdp *childDeleteProxy) PreHandle(ctx context.Context, portal *Portal)  {}
+func (cdp *childDeleteProxy) PostHandle(ctx context.Context, portal *Portal) { cdp.done() }
+
 func (portal *Portal) handleRemoteChatDelete(ctx context.Context, source *UserLogin, evt RemoteChatDelete) EventHandlingResult {
 	log := zerolog.Ctx(ctx)
 	if portal.Receiver == "" && evt.DeleteOnlyForMe() {
@@ -3548,6 +3572,31 @@ func (portal *Portal) handleRemoteChatDelete(ctx context.Context, source *UserLo
 				return EventHandlingResultSuccess
 			}
 		}
+	}
+	if childDeleter, ok := evt.(RemoteChatDeleteWithChildren); ok && childDeleter.DeleteChildren() && portal.RoomType == database.RoomTypeSpace {
+		children, err := portal.Bridge.GetChildPortals(ctx, portal.PortalKey)
+		if err != nil {
+			log.Err(err).Msg("Failed to fetch children to delete")
+			return EventHandlingResultFailed.WithError(err)
+		}
+		log.Debug().
+			Int("portal_count", len(children)).
+			Msg("Deleting child portals before remote chat delete")
+		var wg sync.WaitGroup
+		wg.Add(len(children))
+		for _, child := range children {
+			child.queueEvent(ctx, &portalRemoteEvent{
+				evt: &childDeleteProxy{
+					RemoteChatDeleteWithChildren: childDeleter,
+					child:                        child.PortalKey,
+					done:                         wg.Done,
+				},
+				source:  source,
+				evtType: RemoteEventChatDelete,
+			})
+		}
+		wg.Wait()
+		log.Debug().Msg("Finished deleting child portals")
 	}
 	err := portal.Delete(ctx)
 	if err != nil {

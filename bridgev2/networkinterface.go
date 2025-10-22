@@ -1135,6 +1135,11 @@ type RemoteChatDelete interface {
 	RemoteDeleteOnlyForMe
 }
 
+type RemoteChatDeleteWithChildren interface {
+	RemoteChatDelete
+	DeleteChildren() bool
+}
+
 type RemoteEventThatMayCreatePortal interface {
 	RemoteEvent
 	ShouldCreatePortal() bool
