@@ -80,8 +80,14 @@ var CommandStartChat = &FullHandler{
 }
 
 func getClientForStartingChat[T bridgev2.IdentifierResolvingNetworkAPI](ce *Event, thing string) (*bridgev2.UserLogin, T, []string) {
-	remainingArgs := ce.Args[1:]
-	login := ce.Bridge.GetCachedUserLoginByID(networkid.UserLoginID(ce.Args[0]))
+	var remainingArgs []string
+	if len(ce.Args) > 1 {
+		remainingArgs = ce.Args[1:]
+	}
+	var login *bridgev2.UserLogin
+	if len(ce.Args) > 0 {
+		login = ce.Bridge.GetCachedUserLoginByID(networkid.UserLoginID(ce.Args[0]))
+	}
 	if login == nil || login.UserMXID != ce.User.MXID {
 		remainingArgs = ce.Args
 		login = ce.User.GetDefaultLogin()
