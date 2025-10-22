@@ -4885,7 +4885,7 @@ func (portal *Portal) addToUserSpaces(ctx context.Context) {
 	if portal.Receiver != "" {
 		login := portal.Bridge.GetCachedUserLoginByID(portal.Receiver)
 		if login != nil {
-			up, err := portal.Bridge.DB.UserPortal.Get(ctx, login.UserLogin, portal.PortalKey)
+			up, err := portal.Bridge.DB.UserPortal.GetOrCreate(ctx, login.UserLogin, portal.PortalKey)
 			if err != nil {
 				log.Err(err).Msg("Failed to get user portal to add portal to spaces")
 			} else {

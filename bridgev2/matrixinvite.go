@@ -226,7 +226,7 @@ func (br *Bridge) handleGhostDMInvite(ctx context.Context, evt *event.Event, sen
 		log.Debug().
 			Str("dm_redirected_to_id", string(resp.DMRedirectedTo)).
 			Msg("Created DM was redirected to another user ID")
-		_, err = invitedGhost.Intent.SendState(ctx, portal.MXID, event.StateMember, invitedGhost.Intent.GetMXID().String(), &event.Content{
+		_, err = invitedGhost.Intent.SendState(ctx, evt.RoomID, event.StateMember, invitedGhost.Intent.GetMXID().String(), &event.Content{
 			Parsed: &event.MemberEventContent{
 				Membership: event.MembershipLeave,
 				Reason:     "Direct chat redirected to another internal user ID",
@@ -235,7 +235,7 @@ func (br *Bridge) handleGhostDMInvite(ctx context.Context, evt *event.Event, sen
 		if err != nil {
 			log.Err(err).Msg("Failed to make incorrect ghost leave new DM room")
 		}
-		if resp.DMRedirectedTo != SpecialValueDMRedirectedToBot {
+		if resp.DMRedirectedTo == SpecialValueDMRedirectedToBot {
 			overrideIntent = br.Bot
 		} else if otherUserGhost, err := br.GetGhostByID(ctx, resp.DMRedirectedTo); err != nil {
 			log.Err(err).Msg("Failed to get ghost of real portal other user ID")
