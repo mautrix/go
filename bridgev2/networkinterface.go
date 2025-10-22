@@ -16,6 +16,7 @@ import (
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/configupgrade"
 	"go.mau.fi/util/ptr"
+	"go.mau.fi/util/random"
 
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
@@ -723,6 +724,8 @@ type ResolveIdentifierResponse struct {
 	// and optional otherwise.
 	Chat *CreateChatResponse
 }
+
+var SpecialValueDMRedirectedToBot = networkid.UserID("__fi.mau.bridgev2.dm_redirected_to_bot::" + random.String(10))
 
 type CreateChatResponse struct {
 	PortalKey networkid.PortalKey
