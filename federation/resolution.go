@@ -20,6 +20,8 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+
+	"maunium.net/go/mautrix"
 )
 
 type ResolvedServerName struct {
@@ -171,9 +173,11 @@ func RequestWellKnown(ctx context.Context, cli *http.Client, hostname string) (*
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return nil, time.Time{}, fmt.Errorf("unexpected status code %d", resp.StatusCode)
+	} else if resp.ContentLength > mautrix.WellKnownMaxSize {
+		return nil, time.Time{}, fmt.Errorf("response too large: %d bytes", resp.ContentLength)
 	}
 	var respData RespWellKnown
-	err = json.NewDecoder(io.LimitReader(resp.Body, 50*1024)).Decode(&respData)
+	err = json.NewDecoder(io.LimitReader(resp.Body, mautrix.WellKnownMaxSize)).Decode(&respData)
 	if err != nil {
 		return nil, time.Time{}, fmt.Errorf("failed to decode response: %w", err)
 	} else if respData.Server == "" {

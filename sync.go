@@ -90,6 +90,7 @@ func (s *DefaultSyncer) ProcessResponse(ctx context.Context, res *RespSync, sinc
 			err = fmt.Errorf("ProcessResponse panicked! since=%s panic=%s\n%s", since, r, debug.Stack())
 		}
 	}()
+	ctx = context.WithValue(ctx, SyncTokenContextKey, since)
 
 	for _, listener := range s.syncListeners {
 		if !listener(ctx, res, since) {

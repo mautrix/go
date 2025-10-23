@@ -32,6 +32,9 @@ type EventID string
 // https://github.com/matrix-org/matrix-doc/pull/2716
 type BatchID string
 
+// A DelayID is a string identifying a delayed event.
+type DelayID string
+
 func (roomID RoomID) String() string {
 	return string(roomID)
 }

@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -292,10 +293,16 @@ func (as *AppService) consumeWebsocket(ctx context.Context, stopFunc func(error)
 			as.Log.Debug().Msg("Ignoring non-text message from websocket")
 			continue
 		}
-		var msg WebsocketMessage
-		err = json.NewDecoder(reader).Decode(&msg)
+		data, err := io.ReadAll(reader)
 		if err != nil {
-			as.Log.Debug().Err(err).Msg("Error reading JSON from websocket")
+			as.Log.Debug().Err(err).Msg("Error reading data from websocket")
+			stopFunc(parseCloseError(err))
+			return
+		}
+		var msg WebsocketMessage
+		err = json.Unmarshal(data, &msg)
+		if err != nil {
+			as.Log.Debug().Err(err).Msg("Error parsing JSON received from websocket")
 			stopFunc(parseCloseError(err))
 			return
 		}

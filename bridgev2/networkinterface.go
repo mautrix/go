@@ -16,6 +16,7 @@ import (
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/configupgrade"
 	"go.mau.fi/util/ptr"
+	"go.mau.fi/util/random"
 
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
@@ -697,6 +698,14 @@ type DisappearTimerChangingNetworkAPI interface {
 	HandleMatrixDisappearingTimer(ctx context.Context, msg *MatrixDisappearingTimer) (bool, error)
 }
 
+// DeleteChatHandlingNetworkAPI is an optional interface that network connectors
+// can implement to delete a chat from the remote network.
+type DeleteChatHandlingNetworkAPI interface {
+	NetworkAPI
+	// HandleMatrixDeleteChat is called when the user explicitly deletes a chat.
+	HandleMatrixDeleteChat(ctx context.Context, msg *MatrixDeleteChat) error
+}
+
 type ResolveIdentifierResponse struct {
 	// Ghost is the ghost of the user that the identifier resolves to.
 	// This field should be set whenever possible. However, it is not required,
@@ -716,6 +725,8 @@ type ResolveIdentifierResponse struct {
 	Chat *CreateChatResponse
 }
 
+var SpecialValueDMRedirectedToBot = networkid.UserID("__fi.mau.bridgev2.dm_redirected_to_bot::" + random.String(10))
+
 type CreateChatResponse struct {
 	PortalKey networkid.PortalKey
 	// Portal and PortalInfo are not required, the caller will fetch them automatically based on PortalKey if necessary.
@@ -724,6 +735,17 @@ type CreateChatResponse struct {
 	// If a start DM request (CreateChatWithGhost or ResolveIdentifier) returns the DM to a different user,
 	// this field should have the user ID of said different user.
 	DMRedirectedTo networkid.UserID
+
+	FailedParticipants map[networkid.UserID]*CreateChatFailedParticipant
+}
+
+type CreateChatFailedParticipant struct {
+	Reason          string         `json:"reason"`
+	InviteEventType string         `json:"invite_event_type,omitempty"`
+	InviteContent   *event.Content `json:"invite_content,omitempty"`
+
+	UserMXID   id.UserID `json:"user_mxid,omitempty"`
+	DMRoomMXID id.RoomID `json:"dm_room_mxid,omitempty"`
 }
 
 // IdentifierResolvingNetworkAPI is an optional interface that network connectors can implement to support starting new direct chats.
@@ -807,19 +829,20 @@ type GroupFieldCapability struct {
 }
 
 type GroupCreateParams struct {
-	Type string `json:"type"`
+	Type string `json:"type,omitempty"`
 
-	Username     string               `json:"username"`
-	Participants []networkid.UserID   `json:"participants"`
-	Parent       *networkid.PortalKey `json:"parent"`
+	Username string `json:"username,omitempty"`
+	// Clients may also provide MXIDs here, but provisionutil will normalize them, so bridges only need to handle network IDs
+	Participants []networkid.UserID   `json:"participants,omitempty"`
+	Parent       *networkid.PortalKey `json:"parent,omitempty"`
 
-	Name      *event.RoomNameEventContent    `json:"name"`
-	Avatar    *event.RoomAvatarEventContent  `json:"avatar"`
-	Topic     *event.TopicEventContent       `json:"topic"`
-	Disappear *event.BeeperDisappearingTimer `json:"disappear"`
+	Name      *event.RoomNameEventContent    `json:"name,omitempty"`
+	Avatar    *event.RoomAvatarEventContent  `json:"avatar,omitempty"`
+	Topic     *event.TopicEventContent       `json:"topic,omitempty"`
+	Disappear *event.BeeperDisappearingTimer `json:"disappear,omitempty"`
 
 	// An existing room ID to bridge to. If unset, a new room will be created.
-	RoomID id.RoomID `json:"room_id"`
+	RoomID id.RoomID `json:"room_id,omitempty"`
 }
 
 type GroupCreatingNetworkAPI interface {
@@ -1112,6 +1135,11 @@ type RemoteChatDelete interface {
 	RemoteDeleteOnlyForMe
 }
 
+type RemoteChatDeleteWithChildren interface {
+	RemoteChatDelete
+	DeleteChildren() bool
+}
+
 type RemoteEventThatMayCreatePortal interface {
 	RemoteEvent
 	ShouldCreatePortal() bool
@@ -1380,6 +1408,7 @@ type MatrixViewingChat struct {
 	Portal *Portal
 }
 
+type MatrixDeleteChat = MatrixEventBase[*event.BeeperChatDeleteEventContent]
 type MatrixMarkedUnread = MatrixRoomMeta[*event.MarkedUnreadEventContent]
 type MatrixMute = MatrixRoomMeta[*event.BeeperMuteEventContent]
 type MatrixRoomTag = MatrixRoomMeta[*event.TagEventContent]

@@ -37,8 +37,8 @@ func (portal *PortalInternals) EventLoop() {
 	(*Portal)(portal).eventLoop()
 }
 
-func (portal *PortalInternals) HandleSingleEventAsync(idx int, rawEvt any) (outerRes EventHandlingResult) {
-	return (*Portal)(portal).handleSingleEventAsync(idx, rawEvt)
+func (portal *PortalInternals) HandleSingleEventWithDelayLogging(idx int, rawEvt any) (outerRes EventHandlingResult) {
+	return (*Portal)(portal).handleSingleEventWithDelayLogging(idx, rawEvt)
 }
 
 func (portal *PortalInternals) GetEventCtxWithLog(rawEvt any, idx int) context.Context {
@@ -71,6 +71,10 @@ func (portal *PortalInternals) HandleMatrixReceipts(ctx context.Context, evt *ev
 
 func (portal *PortalInternals) HandleMatrixReadReceipt(ctx context.Context, user *User, eventID id.EventID, receipt event.ReadReceipt) {
 	(*Portal)(portal).handleMatrixReadReceipt(ctx, user, eventID, receipt)
+}
+
+func (portal *PortalInternals) CallReadReceiptHandler(ctx context.Context, login *UserLogin, rrClient ReadReceiptHandlingNetworkAPI, evt *MatrixReadReceipt, userPortal *database.UserPortal) {
+	(*Portal)(portal).callReadReceiptHandler(ctx, login, rrClient, evt, userPortal)
 }
 
 func (portal *PortalInternals) HandleMatrixTyping(ctx context.Context, evt *event.Event) EventHandlingResult {
@@ -115,6 +119,10 @@ func (portal *PortalInternals) HandleMatrixReaction(ctx context.Context, sender 
 
 func (portal *PortalInternals) GetTargetUser(ctx context.Context, userID id.UserID) (GhostOrUserLogin, error) {
 	return (*Portal)(portal).getTargetUser(ctx, userID)
+}
+
+func (portal *PortalInternals) HandleMatrixDeleteChat(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) EventHandlingResult {
+	return (*Portal)(portal).handleMatrixDeleteChat(ctx, sender, origSender, evt)
 }
 
 func (portal *PortalInternals) HandleMatrixMembership(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) EventHandlingResult {
@@ -245,6 +253,10 @@ func (portal *PortalInternals) HandleRemoteChatResync(ctx context.Context, sourc
 	return (*Portal)(portal).handleRemoteChatResync(ctx, source, evt)
 }
 
+func (portal *PortalInternals) FindOtherLogins(ctx context.Context, source *UserLogin) (ownUP *database.UserPortal, others []*database.UserPortal, err error) {
+	return (*Portal)(portal).findOtherLogins(ctx, source)
+}
+
 func (portal *PortalInternals) HandleRemoteChatDelete(ctx context.Context, source *UserLogin, evt RemoteChatDelete) EventHandlingResult {
 	return (*Portal)(portal).handleRemoteChatDelete(ctx, source, evt)
 }
@@ -253,16 +265,16 @@ func (portal *PortalInternals) HandleRemoteBackfill(ctx context.Context, source 
 	return (*Portal)(portal).handleRemoteBackfill(ctx, source, backfill)
 }
 
-func (portal *PortalInternals) UpdateName(ctx context.Context, name string, sender MatrixAPI, ts time.Time) bool {
-	return (*Portal)(portal).updateName(ctx, name, sender, ts)
+func (portal *PortalInternals) UpdateName(ctx context.Context, name string, sender MatrixAPI, ts time.Time, excludeFromTimeline bool) bool {
+	return (*Portal)(portal).updateName(ctx, name, sender, ts, excludeFromTimeline)
 }
 
-func (portal *PortalInternals) UpdateTopic(ctx context.Context, topic string, sender MatrixAPI, ts time.Time) bool {
-	return (*Portal)(portal).updateTopic(ctx, topic, sender, ts)
+func (portal *PortalInternals) UpdateTopic(ctx context.Context, topic string, sender MatrixAPI, ts time.Time, excludeFromTimeline bool) bool {
+	return (*Portal)(portal).updateTopic(ctx, topic, sender, ts, excludeFromTimeline)
 }
 
-func (portal *PortalInternals) UpdateAvatar(ctx context.Context, avatar *Avatar, sender MatrixAPI, ts time.Time) bool {
-	return (*Portal)(portal).updateAvatar(ctx, avatar, sender, ts)
+func (portal *PortalInternals) UpdateAvatar(ctx context.Context, avatar *Avatar, sender MatrixAPI, ts time.Time, excludeFromTimeline bool) bool {
+	return (*Portal)(portal).updateAvatar(ctx, avatar, sender, ts, excludeFromTimeline)
 }
 
 func (portal *PortalInternals) GetBridgeInfoStateKey() string {
@@ -277,8 +289,8 @@ func (portal *PortalInternals) SendStateWithIntentOrBot(ctx context.Context, sen
 	return (*Portal)(portal).sendStateWithIntentOrBot(ctx, sender, eventType, stateKey, content, ts)
 }
 
-func (portal *PortalInternals) SendRoomMeta(ctx context.Context, sender MatrixAPI, ts time.Time, eventType event.Type, stateKey string, content any) bool {
-	return (*Portal)(portal).sendRoomMeta(ctx, sender, ts, eventType, stateKey, content)
+func (portal *PortalInternals) SendRoomMeta(ctx context.Context, sender MatrixAPI, ts time.Time, eventType event.Type, stateKey string, content any, excludeFromTimeline bool) bool {
+	return (*Portal)(portal).sendRoomMeta(ctx, sender, ts, eventType, stateKey, content, excludeFromTimeline)
 }
 
 func (portal *PortalInternals) GetInitialMemberList(ctx context.Context, members *ChatMemberList, source *UserLogin, pl *event.PowerLevelsEventContent) (invite, functional []id.UserID, err error) {

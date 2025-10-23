@@ -36,7 +36,6 @@ func TestSelfVerification_Accept_QRContents(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("sendingGenerated=%t receivingGenerated=%t err=%s", tc.sendingGeneratedCrossSigningKeys, tc.receivingGeneratedCrossSigningKeys, tc.expectedAcceptError), func(t *testing.T) {
 			ts, sendingClient, receivingClient, _, _, sendingMachine, receivingMachine := initServerAndLoginTwoAlice(t, ctx)
-			defer ts.Close()
 			sendingCallbacks, receivingCallbacks, sendingHelper, receivingHelper := initDefaultCallbacks(t, ctx, sendingClient, receivingClient, sendingMachine, receivingMachine)
 			var err error
 
@@ -62,7 +61,7 @@ func TestSelfVerification_Accept_QRContents(t *testing.T) {
 			// event on the sending device.
 			txnID, err := sendingHelper.StartVerification(ctx, aliceUserID)
 			require.NoError(t, err)
-			ts.dispatchToDevice(t, ctx, receivingClient)
+			ts.DispatchToDevice(t, ctx, receivingClient)
 
 			err = receivingHelper.AcceptVerification(ctx, txnID)
 			if tc.expectedAcceptError != "" {
@@ -72,7 +71,7 @@ func TestSelfVerification_Accept_QRContents(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			ts.dispatchToDevice(t, ctx, sendingClient)
+			ts.DispatchToDevice(t, ctx, sendingClient)
 
 			receivingShownQRCode := receivingCallbacks.GetQRCodeShown(txnID)
 			require.NotNil(t, receivingShownQRCode)
@@ -135,7 +134,6 @@ func TestSelfVerification_ScanQRAndConfirmScan(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("sendingGeneratedCrossSigningKeys=%t sendingScansQR=%t", tc.sendingGeneratedCrossSigningKeys, tc.sendingScansQR), func(t *testing.T) {
 			ts, sendingClient, receivingClient, _, _, sendingMachine, receivingMachine := initServerAndLoginTwoAlice(t, ctx)
-			defer ts.Close()
 			sendingCallbacks, receivingCallbacks, sendingHelper, receivingHelper := initDefaultCallbacks(t, ctx, sendingClient, receivingClient, sendingMachine, receivingMachine)
 			var err error
 
@@ -152,10 +150,10 @@ func TestSelfVerification_ScanQRAndConfirmScan(t *testing.T) {
 			// event on the sending device.
 			txnID, err := sendingHelper.StartVerification(ctx, aliceUserID)
 			require.NoError(t, err)
-			ts.dispatchToDevice(t, ctx, receivingClient)
+			ts.DispatchToDevice(t, ctx, receivingClient)
 			err = receivingHelper.AcceptVerification(ctx, txnID)
 			require.NoError(t, err)
-			ts.dispatchToDevice(t, ctx, sendingClient)
+			ts.DispatchToDevice(t, ctx, sendingClient)
 
 			receivingShownQRCode := receivingCallbacks.GetQRCodeShown(txnID)
 			require.NotNil(t, receivingShownQRCode)
@@ -184,7 +182,7 @@ func TestSelfVerification_ScanQRAndConfirmScan(t *testing.T) {
 
 				// Handle the start and done events on the receiving client and
 				// confirm the scan.
-				ts.dispatchToDevice(t, ctx, receivingClient)
+				ts.DispatchToDevice(t, ctx, receivingClient)
 
 				// Ensure that the receiving device detected that its QR code
 				// was scanned.
@@ -199,7 +197,7 @@ func TestSelfVerification_ScanQRAndConfirmScan(t *testing.T) {
 				doneEvt = sendingInbox[0].Content.AsVerificationDone()
 				assert.Equal(t, txnID, doneEvt.TransactionID)
 
-				ts.dispatchToDevice(t, ctx, sendingClient)
+				ts.DispatchToDevice(t, ctx, sendingClient)
 			} else { // receiving scans QR
 				// Emulate scanning the QR code shown by the sending device on
 				// the receiving device.
@@ -222,7 +220,7 @@ func TestSelfVerification_ScanQRAndConfirmScan(t *testing.T) {
 
 				// Handle the start and done events on the receiving client and
 				// confirm the scan.
-				ts.dispatchToDevice(t, ctx, sendingClient)
+				ts.DispatchToDevice(t, ctx, sendingClient)
 
 				// Ensure that the sending device detected that its QR code was
 				// scanned.
@@ -237,7 +235,7 @@ func TestSelfVerification_ScanQRAndConfirmScan(t *testing.T) {
 				doneEvt = receivingInbox[0].Content.AsVerificationDone()
 				assert.Equal(t, txnID, doneEvt.TransactionID)
 
-				ts.dispatchToDevice(t, ctx, receivingClient)
+				ts.DispatchToDevice(t, ctx, receivingClient)
 			}
 
 			// Ensure that both devices have marked the verification as done.
@@ -251,7 +249,6 @@ func TestSelfVerification_ScanQRTransactionIDCorrupted(t *testing.T) {
 	ctx := log.Logger.WithContext(context.TODO())
 
 	ts, sendingClient, receivingClient, _, _, sendingMachine, receivingMachine := initServerAndLoginTwoAlice(t, ctx)
-	defer ts.Close()
 	sendingCallbacks, receivingCallbacks, sendingHelper, receivingHelper := initDefaultCallbacks(t, ctx, sendingClient, receivingClient, sendingMachine, receivingMachine)
 	var err error
 
@@ -263,10 +260,10 @@ func TestSelfVerification_ScanQRTransactionIDCorrupted(t *testing.T) {
 	// event on the sending device.
 	txnID, err := sendingHelper.StartVerification(ctx, aliceUserID)
 	require.NoError(t, err)
-	ts.dispatchToDevice(t, ctx, receivingClient)
+	ts.DispatchToDevice(t, ctx, receivingClient)
 	err = receivingHelper.AcceptVerification(ctx, txnID)
 	require.NoError(t, err)
-	ts.dispatchToDevice(t, ctx, sendingClient)
+	ts.DispatchToDevice(t, ctx, sendingClient)
 
 	receivingShownQRCodeBytes := receivingCallbacks.GetQRCodeShown(txnID).Bytes()
 	sendingShownQRCodeBytes := sendingCallbacks.GetQRCodeShown(txnID).Bytes()
@@ -310,7 +307,6 @@ func TestSelfVerification_ScanQRKeyCorrupted(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("sendingGeneratedCrossSigningKeys=%t sendingScansQR=%t corrupt=%d", tc.sendingGeneratedCrossSigningKeys, tc.sendingScansQR, tc.corruptByte), func(t *testing.T) {
 			ts, sendingClient, receivingClient, _, _, sendingMachine, receivingMachine := initServerAndLoginTwoAlice(t, ctx)
-			defer ts.Close()
 			sendingCallbacks, receivingCallbacks, sendingHelper, receivingHelper := initDefaultCallbacks(t, ctx, sendingClient, receivingClient, sendingMachine, receivingMachine)
 			var err error
 
@@ -327,10 +323,10 @@ func TestSelfVerification_ScanQRKeyCorrupted(t *testing.T) {
 			// event on the sending device.
 			txnID, err := sendingHelper.StartVerification(ctx, aliceUserID)
 			require.NoError(t, err)
-			ts.dispatchToDevice(t, ctx, receivingClient)
+			ts.DispatchToDevice(t, ctx, receivingClient)
 			err = receivingHelper.AcceptVerification(ctx, txnID)
 			require.NoError(t, err)
-			ts.dispatchToDevice(t, ctx, sendingClient)
+			ts.DispatchToDevice(t, ctx, sendingClient)
 
 			receivingShownQRCodeBytes := receivingCallbacks.GetQRCodeShown(txnID).Bytes()
 			sendingShownQRCodeBytes := sendingCallbacks.GetQRCodeShown(txnID).Bytes()
@@ -348,7 +344,7 @@ func TestSelfVerification_ScanQRKeyCorrupted(t *testing.T) {
 				// Ensure that the receiving device received a cancellation.
 				receivingInbox := ts.DeviceInbox[aliceUserID][receivingDeviceID]
 				assert.Len(t, receivingInbox, 1)
-				ts.dispatchToDevice(t, ctx, receivingClient)
+				ts.DispatchToDevice(t, ctx, receivingClient)
 				cancellation := receivingCallbacks.GetVerificationCancellation(txnID)
 				require.NotNil(t, cancellation)
 				assert.Equal(t, event.VerificationCancelCodeKeyMismatch, cancellation.Code)
@@ -362,7 +358,7 @@ func TestSelfVerification_ScanQRKeyCorrupted(t *testing.T) {
 				// Ensure that the sending device received a cancellation.
 				sendingInbox := ts.DeviceInbox[aliceUserID][sendingDeviceID]
 				assert.Len(t, sendingInbox, 1)
-				ts.dispatchToDevice(t, ctx, sendingClient)
+				ts.DispatchToDevice(t, ctx, sendingClient)
 				cancellation := sendingCallbacks.GetVerificationCancellation(txnID)
 				require.NotNil(t, cancellation)
 				assert.Equal(t, event.VerificationCancelCodeKeyMismatch, cancellation.Code)

@@ -111,6 +111,8 @@ type Client struct {
 	// Set to true to disable automatically sleeping on 429 errors.
 	IgnoreRateLimit bool
 
+	ResponseSizeLimit int64
+
 	txnID int32
 
 	// Should the ?user_id= query parameter be set in requests?
@@ -143,6 +145,8 @@ func DiscoverClientAPI(ctx context.Context, serverName string) (*ClientWellKnown
 	return DiscoverClientAPIWithClient(ctx, &http.Client{Timeout: 30 * time.Second}, serverName)
 }
 
+const WellKnownMaxSize = 64 * 1024
+
 func DiscoverClientAPIWithClient(ctx context.Context, client *http.Client, serverName string) (*ClientWellKnown, error) {
 	wellKnownURL := url.URL{
 		Scheme: "https",
@@ -168,11 +172,15 @@ func DiscoverClientAPIWithClient(ctx context.Context, client *http.Client, serve
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, nil
+	} else if resp.ContentLength > WellKnownMaxSize {
+		return nil, errors.New(".well-known response too large")
 	}
 
-	data, err := io.ReadAll(resp.Body)
+	data, err := io.ReadAll(io.LimitReader(resp.Body, WellKnownMaxSize))
 	if err != nil {
 		return nil, err
+	} else if len(data) >= WellKnownMaxSize {
+		return nil, errors.New(".well-known response too large")
 	}
 
 	var wellKnown ClientWellKnown
@@ -323,6 +331,7 @@ const (
 	LogBodyContextKey contextKey = iota
 	LogRequestIDContextKey
 	MaxAttemptsContextKey
+	SyncTokenContextKey
 )
 
 func (cli *Client) RequestStart(req *http.Request) {
@@ -394,32 +403,43 @@ func (cli *Client) MakeRequest(ctx context.Context, method string, httpURL strin
 	return cli.MakeFullRequest(ctx, FullRequest{Method: method, URL: httpURL, RequestJSON: reqBody, ResponseJSON: resBody})
 }
 
-type ClientResponseHandler = func(req *http.Request, res *http.Response, responseJSON interface{}) ([]byte, error)
+type ClientResponseHandler = func(req *http.Request, res *http.Response, responseJSON any, sizeLimit int64) ([]byte, error)
 
 type FullRequest struct {
-	Method           string
-	URL              string
-	Headers          http.Header
-	RequestJSON      interface{}
-	RequestBytes     []byte
-	RequestBody      io.Reader
-	RequestLength    int64
-	ResponseJSON     interface{}
-	MaxAttempts      int
-	BackoffDuration  time.Duration
-	SensitiveContent bool
-	Handler          ClientResponseHandler
-	DontReadResponse bool
-	Logger           *zerolog.Logger
-	Client           *http.Client
+	Method            string
+	URL               string
+	Headers           http.Header
+	RequestJSON       interface{}
+	RequestBytes      []byte
+	RequestBody       io.Reader
+	RequestLength     int64
+	ResponseJSON      interface{}
+	MaxAttempts       int
+	BackoffDuration   time.Duration
+	SensitiveContent  bool
+	Handler           ClientResponseHandler
+	DontReadResponse  bool
+	ResponseSizeLimit int64
+	Logger            *zerolog.Logger
+	Client            *http.Client
 }
 
 var requestID int32
 var logSensitiveContent = os.Getenv("MAUTRIX_LOG_SENSITIVE_CONTENT") == "yes"
 
 func (params *FullRequest) compileRequest(ctx context.Context) (*http.Request, error) {
+	reqID := atomic.AddInt32(&requestID, 1)
+	logger := zerolog.Ctx(ctx)
+	if logger.GetLevel() == zerolog.Disabled || logger == zerolog.DefaultContextLogger {
+		logger = params.Logger
+	}
+	ctx = logger.With().
+		Int32("req_id", reqID).
+		Logger().WithContext(ctx)
+
 	var logBody any
-	reqBody := params.RequestBody
+	var reqBody io.Reader
+	var reqLen int64
 	if params.RequestJSON != nil {
 		jsonStr, err := json.Marshal(params.RequestJSON)
 		if err != nil {
@@ -434,12 +454,22 @@ func (params *FullRequest) compileRequest(ctx context.Context) (*http.Request, e
 			logBody = params.RequestJSON
 		}
 		reqBody = bytes.NewReader(jsonStr)
+		reqLen = int64(len(jsonStr))
 	} else if params.RequestBytes != nil {
 		logBody = fmt.Sprintf("<%d bytes>", len(params.RequestBytes))
 		reqBody = bytes.NewReader(params.RequestBytes)
-		params.RequestLength = int64(len(params.RequestBytes))
-	} else if params.RequestLength > 0 && params.RequestBody != nil {
-		logBody = fmt.Sprintf("<%d bytes>", params.RequestLength)
+		reqLen = int64(len(params.RequestBytes))
+	} else if params.RequestBody != nil {
+		logBody = "<unknown stream of bytes>"
+		reqLen = -1
+		if params.RequestLength > 0 {
+			logBody = fmt.Sprintf("<%d bytes>", params.RequestLength)
+			reqLen = params.RequestLength
+		} else if params.RequestLength == 0 {
+			zerolog.Ctx(ctx).Warn().
+				Msg("RequestBody passed without specifying request length")
+		}
+		reqBody = params.RequestBody
 		if rsc, ok := params.RequestBody.(io.ReadSeekCloser); ok {
 			// Prevent HTTP from closing the request body, it might be needed for retries
 			reqBody = nopCloseSeeker{rsc}
@@ -448,15 +478,8 @@ func (params *FullRequest) compileRequest(ctx context.Context) (*http.Request, e
 		params.RequestJSON = struct{}{}
 		logBody = params.RequestJSON
 		reqBody = bytes.NewReader([]byte("{}"))
+		reqLen = 2
 	}
-	reqID := atomic.AddInt32(&requestID, 1)
-	logger := zerolog.Ctx(ctx)
-	if logger.GetLevel() == zerolog.Disabled || logger == zerolog.DefaultContextLogger {
-		logger = params.Logger
-	}
-	ctx = logger.With().
-		Int32("req_id", reqID).
-		Logger().WithContext(ctx)
 	ctx = context.WithValue(ctx, LogBodyContextKey, logBody)
 	ctx = context.WithValue(ctx, LogRequestIDContextKey, int(reqID))
 	req, err := http.NewRequestWithContext(ctx, params.Method, params.URL, reqBody)
@@ -472,9 +495,7 @@ func (params *FullRequest) compileRequest(ctx context.Context) (*http.Request, e
 	if params.RequestJSON != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	if params.RequestLength > 0 && params.RequestBody != nil {
-		req.ContentLength = params.RequestLength
-	}
+	req.ContentLength = reqLen
 	return req, nil
 }
 
@@ -525,10 +546,25 @@ func (cli *Client) MakeFullRequestWithResp(ctx context.Context, params FullReque
 	if len(cli.AccessToken) > 0 {
 		req.Header.Set("Authorization", "Bearer "+cli.AccessToken)
 	}
+	if params.ResponseSizeLimit == 0 {
+		params.ResponseSizeLimit = cli.ResponseSizeLimit
+	}
+	if params.ResponseSizeLimit == 0 {
+		params.ResponseSizeLimit = DefaultResponseSizeLimit
+	}
 	if params.Client == nil {
 		params.Client = cli.Client
 	}
-	return cli.executeCompiledRequest(req, params.MaxAttempts-1, params.BackoffDuration, params.ResponseJSON, params.Handler, params.DontReadResponse, params.Client)
+	return cli.executeCompiledRequest(
+		req,
+		params.MaxAttempts-1,
+		params.BackoffDuration,
+		params.ResponseJSON,
+		params.Handler,
+		params.DontReadResponse,
+		params.ResponseSizeLimit,
+		params.Client,
+	)
 }
 
 func (cli *Client) cliOrContextLog(ctx context.Context) *zerolog.Logger {
@@ -539,7 +575,17 @@ func (cli *Client) cliOrContextLog(ctx context.Context) *zerolog.Logger {
 	return log
 }
 
-func (cli *Client) doRetry(req *http.Request, cause error, retries int, backoff time.Duration, responseJSON any, handler ClientResponseHandler, dontReadResponse bool, client *http.Client) ([]byte, *http.Response, error) {
+func (cli *Client) doRetry(
+	req *http.Request,
+	cause error,
+	retries int,
+	backoff time.Duration,
+	responseJSON any,
+	handler ClientResponseHandler,
+	dontReadResponse bool,
+	sizeLimit int64,
+	client *http.Client,
+) ([]byte, *http.Response, error) {
 	log := zerolog.Ctx(req.Context())
 	if req.Body != nil {
 		var err error
@@ -573,11 +619,23 @@ func (cli *Client) doRetry(req *http.Request, cause error, retries int, backoff 
 	if cli.UpdateRequestOnRetry != nil {
 		req = cli.UpdateRequestOnRetry(req, cause)
 	}
-	return cli.executeCompiledRequest(req, retries-1, backoff*2, responseJSON, handler, dontReadResponse, client)
+	return cli.executeCompiledRequest(req, retries-1, backoff*2, responseJSON, handler, dontReadResponse, sizeLimit, client)
 }
 
-func readResponseBody(req *http.Request, res *http.Response) ([]byte, error) {
-	contents, err := io.ReadAll(res.Body)
+func readResponseBody(req *http.Request, res *http.Response, limit int64) ([]byte, error) {
+	if res.ContentLength > limit {
+		return nil, HTTPError{
+			Request:  req,
+			Response: res,
+
+			Message:      "not reading response",
+			WrappedError: fmt.Errorf("%w (%.2f MiB)", ErrResponseTooLong, float64(res.ContentLength)/1024/1024),
+		}
+	}
+	contents, err := io.ReadAll(io.LimitReader(res.Body, limit+1))
+	if err == nil && len(contents) > int(limit) {
+		err = ErrBodyReadReachedLimit
+	}
 	if err != nil {
 		return nil, HTTPError{
 			Request:  req,
@@ -598,17 +656,20 @@ func closeTemp(log *zerolog.Logger, file *os.File) {
 	}
 }
 
-func streamResponse(req *http.Request, res *http.Response, responseJSON interface{}) ([]byte, error) {
+func streamResponse(req *http.Request, res *http.Response, responseJSON any, limit int64) ([]byte, error) {
 	log := zerolog.Ctx(req.Context())
 	file, err := os.CreateTemp("", "mautrix-response-")
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to create temporary file for streaming response")
-		_, err = handleNormalResponse(req, res, responseJSON)
+		_, err = handleNormalResponse(req, res, responseJSON, limit)
 		return nil, err
 	}
 	defer closeTemp(log, file)
-	if _, err = io.Copy(file, res.Body); err != nil {
+	var n int64
+	if n, err = io.Copy(file, io.LimitReader(res.Body, limit+1)); err != nil {
 		return nil, fmt.Errorf("failed to copy response to file: %w", err)
+	} else if n > limit {
+		return nil, ErrBodyReadReachedLimit
 	} else if _, err = file.Seek(0, 0); err != nil {
 		return nil, fmt.Errorf("failed to seek to beginning of response file: %w", err)
 	} else if err = json.NewDecoder(file).Decode(responseJSON); err != nil {
@@ -618,12 +679,12 @@ func streamResponse(req *http.Request, res *http.Response, responseJSON interfac
 	}
 }
 
-func noopHandleResponse(req *http.Request, res *http.Response, responseJSON interface{}) ([]byte, error) {
+func noopHandleResponse(req *http.Request, res *http.Response, responseJSON any, limit int64) ([]byte, error) {
 	return nil, nil
 }
 
-func handleNormalResponse(req *http.Request, res *http.Response, responseJSON interface{}) ([]byte, error) {
-	if contents, err := readResponseBody(req, res); err != nil {
+func handleNormalResponse(req *http.Request, res *http.Response, responseJSON any, limit int64) ([]byte, error) {
+	if contents, err := readResponseBody(req, res, limit); err != nil {
 		return nil, err
 	} else if responseJSON == nil {
 		return contents, nil
@@ -641,8 +702,12 @@ func handleNormalResponse(req *http.Request, res *http.Response, responseJSON in
 	}
 }
 
+const ErrorResponseSizeLimit = 512 * 1024
+
+var DefaultResponseSizeLimit int64 = 512 * 1024 * 1024
+
 func ParseErrorResponse(req *http.Request, res *http.Response) ([]byte, error) {
-	contents, err := readResponseBody(req, res)
+	contents, err := readResponseBody(req, res, ErrorResponseSizeLimit)
 	if err != nil {
 		return contents, err
 	}
@@ -661,7 +726,16 @@ func ParseErrorResponse(req *http.Request, res *http.Response) ([]byte, error) {
 	}
 }
 
-func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backoff time.Duration, responseJSON any, handler ClientResponseHandler, dontReadResponse bool, client *http.Client) ([]byte, *http.Response, error) {
+func (cli *Client) executeCompiledRequest(
+	req *http.Request,
+	retries int,
+	backoff time.Duration,
+	responseJSON any,
+	handler ClientResponseHandler,
+	dontReadResponse bool,
+	sizeLimit int64,
+	client *http.Client,
+) ([]byte, *http.Response, error) {
 	cli.RequestStart(req)
 	startTime := time.Now()
 	res, err := client.Do(req)
@@ -671,7 +745,9 @@ func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backof
 	}
 	if err != nil {
 		if retries > 0 && !errors.Is(err, context.Canceled) {
-			return cli.doRetry(req, err, retries, backoff, responseJSON, handler, dontReadResponse, client)
+			return cli.doRetry(
+				req, err, retries, backoff, responseJSON, handler, dontReadResponse, sizeLimit, client,
+			)
 		}
 		err = HTTPError{
 			Request:  req,
@@ -686,7 +762,9 @@ func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backof
 
 	if retries > 0 && retryafter.Should(res.StatusCode, !cli.IgnoreRateLimit) {
 		backoff = retryafter.Parse(res.Header.Get("Retry-After"), backoff)
-		return cli.doRetry(req, fmt.Errorf("HTTP %d", res.StatusCode), retries, backoff, responseJSON, handler, dontReadResponse, client)
+		return cli.doRetry(
+			req, fmt.Errorf("HTTP %d", res.StatusCode), retries, backoff, responseJSON, handler, dontReadResponse, sizeLimit, client,
+		)
 	}
 
 	var body []byte
@@ -694,7 +772,7 @@ func (cli *Client) executeCompiledRequest(req *http.Request, retries int, backof
 		body, err = ParseErrorResponse(req, res)
 		cli.LogRequestDone(req, res, nil, nil, len(body), duration)
 	} else {
-		body, err = handler(req, res, responseJSON)
+		body, err = handler(req, res, responseJSON, sizeLimit)
 		cli.LogRequestDone(req, res, nil, err, len(body), duration)
 	}
 	return body, res, err
@@ -1055,6 +1133,15 @@ func (cli *Client) GetProfile(ctx context.Context, mxid id.UserID) (resp *RespUs
 	return
 }
 
+func (cli *Client) SearchUserDirectory(ctx context.Context, query string, limit int) (resp *RespSearchUserDirectory, err error) {
+	urlPath := cli.BuildClientURL("v3", "user_directory", "search")
+	_, err = cli.MakeRequest(ctx, http.MethodPost, urlPath, &ReqSearchUserDirectory{
+		SearchTerm: query,
+		Limit:      limit,
+	}, &resp)
+	return
+}
+
 func (cli *Client) GetMutualRooms(ctx context.Context, otherUserID id.UserID, extras ...ReqMutualRooms) (resp *RespMutualRooms, err error) {
 	if cli.SpecVersions != nil && !cli.SpecVersions.Supports(FeatureMutualRooms) {
 		err = fmt.Errorf("server does not support fetching mutual rooms")
@@ -1105,6 +1192,9 @@ func (cli *Client) SetDisplayName(ctx context.Context, displayName string) (err 
 // SetProfileField sets an arbitrary profile field. See https://spec.matrix.org/v1.16/client-server-api/#put_matrixclientv3profileuseridkeyname
 func (cli *Client) SetProfileField(ctx context.Context, key string, value any) (err error) {
 	urlPath := cli.BuildClientURL("v3", "profile", cli.UserID, key)
+	if key != "displayname" && key != "avatar_url" && !cli.SpecVersions.Supports(FeatureArbitraryProfileFields) && cli.SpecVersions.Supports(FeatureUnstableProfileFields) {
+		urlPath = cli.BuildClientURL("unstable", "uk.tcpip.msc4133", "profile", cli.UserID, key)
+	}
 	_, err = cli.MakeRequest(ctx, http.MethodPut, urlPath, map[string]any{
 		key: value,
 	}, nil)
@@ -1114,6 +1204,9 @@ func (cli *Client) SetProfileField(ctx context.Context, key string, value any) (
 // DeleteProfileField deletes an arbitrary profile field. See https://spec.matrix.org/v1.16/client-server-api/#put_matrixclientv3profileuseridkeyname
 func (cli *Client) DeleteProfileField(ctx context.Context, key string) (err error) {
 	urlPath := cli.BuildClientURL("v3", "profile", cli.UserID, key)
+	if key != "displayname" && key != "avatar_url" && !cli.SpecVersions.Supports(FeatureArbitraryProfileFields) && cli.SpecVersions.Supports(FeatureUnstableProfileFields) {
+		urlPath = cli.BuildClientURL("unstable", "uk.tcpip.msc4133", "profile", cli.UserID, key)
+	}
 	_, err = cli.MakeRequest(ctx, http.MethodDelete, urlPath, nil, nil)
 	return
 }
@@ -1121,6 +1214,9 @@ func (cli *Client) DeleteProfileField(ctx context.Context, key string) (err erro
 // GetProfileField gets an arbitrary profile field and parses the response into the given struct. See https://spec.matrix.org/unstable/client-server-api/#get_matrixclientv3profileuseridkeyname
 func (cli *Client) GetProfileField(ctx context.Context, userID id.UserID, key string, into any) (err error) {
 	urlPath := cli.BuildClientURL("v3", "profile", userID, key)
+	if key != "displayname" && key != "avatar_url" && !cli.SpecVersions.Supports(FeatureArbitraryProfileFields) && cli.SpecVersions.Supports(FeatureUnstableProfileFields) {
+		urlPath = cli.BuildClientURL("unstable", "uk.tcpip.msc4133", "profile", cli.UserID, key)
+	}
 	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, into)
 	return
 }
@@ -1280,6 +1376,32 @@ func (cli *Client) SendMassagedStateEvent(ctx context.Context, roomID id.RoomID,
 	if err == nil && cli.StateStore != nil {
 		cli.updateStoreWithOutgoingEvent(ctx, roomID, eventType, stateKey, contentJSON)
 	}
+	return
+}
+
+func (cli *Client) DelayedEvents(ctx context.Context, req *ReqDelayedEvents) (resp *RespDelayedEvents, err error) {
+	query := map[string]string{}
+	if req.DelayID != "" {
+		query["delay_id"] = string(req.DelayID)
+	}
+	if req.Status != "" {
+		query["status"] = string(req.Status)
+	}
+	if req.NextBatch != "" {
+		query["next_batch"] = req.NextBatch
+	}
+
+	urlPath := cli.BuildURLWithQuery(ClientURLPath{"unstable", "org.matrix.msc4140", "delayed_events"}, query)
+	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, req, &resp)
+
+	// Migration: merge old keys with new ones
+	if resp != nil {
+		resp.Scheduled = append(resp.Scheduled, resp.DelayedEvents...)
+		resp.DelayedEvents = nil
+		resp.Finalised = append(resp.Finalised, resp.FinalisedEvents...)
+		resp.FinalisedEvents = nil
+	}
+
 	return
 }
 
@@ -1572,11 +1694,20 @@ func (cli *Client) FullStateEvent(ctx context.Context, roomID id.RoomID, eventTy
 }
 
 // parseRoomStateArray parses a JSON array as a stream and stores the events inside it in a room state map.
-func parseRoomStateArray(_ *http.Request, res *http.Response, responseJSON interface{}) ([]byte, error) {
+func parseRoomStateArray(req *http.Request, res *http.Response, responseJSON any, limit int64) ([]byte, error) {
+	if res.ContentLength > limit {
+		return nil, HTTPError{
+			Request:  req,
+			Response: res,
+
+			Message:      "not reading response",
+			WrappedError: fmt.Errorf("%w (%.2f MiB)", ErrResponseTooLong, float64(res.ContentLength)/1024/1024),
+		}
+	}
 	response := make(RoomStateMap)
 	responsePtr := responseJSON.(*map[event.Type]map[string]*event.Event)
 	*responsePtr = response
-	dec := json.NewDecoder(res.Body)
+	dec := json.NewDecoder(io.LimitReader(res.Body, limit))
 
 	arrayStart, err := dec.Token()
 	if err != nil {
@@ -2556,6 +2687,15 @@ func (cli *Client) ReportRoom(ctx context.Context, roomID id.RoomID, reason stri
 	urlPath := cli.BuildClientURL("v3", "rooms", roomID, "report")
 	_, err := cli.MakeRequest(ctx, http.MethodPost, urlPath, &ReqReport{Reason: reason, Score: -100}, nil)
 	return err
+}
+
+// AdminWhoIs fetches session information belonging to a specific user. Typically requires being a server admin.
+//
+// https://spec.matrix.org/v1.15/client-server-api/#get_matrixclientv3adminwhoisuserid
+func (cli *Client) AdminWhoIs(ctx context.Context, userID id.UserID) (resp RespWhoIs, err error) {
+	urlPath := cli.BuildClientURL("v3", "admin", "whois", userID)
+	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
+	return
 }
 
 // UnstableGetSuspendedStatus uses MSC4323 to check if a user is suspended.

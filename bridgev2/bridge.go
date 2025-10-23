@@ -9,6 +9,7 @@ package bridgev2
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -182,7 +183,11 @@ func (br *Bridge) StartConnectors(ctx context.Context) error {
 		}
 	}
 	if !br.Background {
-		br.didSplitPortals = br.MigrateToSplitPortals(ctx)
+		var postMigrate func()
+		br.didSplitPortals, postMigrate = br.MigrateToSplitPortals(ctx)
+		if postMigrate != nil {
+			defer postMigrate()
+		}
 	}
 	br.Log.Info().Msg("Starting Matrix connector")
 	err := br.Matrix.Start(ctx)
@@ -271,20 +276,64 @@ func (br *Bridge) ResendBridgeInfo(ctx context.Context, resendInfo, resendCaps b
 		Msg("Resent bridge info to all portals")
 }
 
-func (br *Bridge) MigrateToSplitPortals(ctx context.Context) bool {
+func (br *Bridge) MigrateToSplitPortals(ctx context.Context) (bool, func()) {
 	log := zerolog.Ctx(ctx).With().Str("action", "migrate to split portals").Logger()
 	ctx = log.WithContext(ctx)
 	if !br.Config.SplitPortals || br.DB.KV.Get(ctx, database.KeySplitPortalsEnabled) == "true" {
-		return false
+		return false, nil
 	}
 	affected, err := br.DB.Portal.MigrateToSplitPortals(ctx)
 	if err != nil {
-		log.Err(err).Msg("Failed to migrate portals")
-		return false
+		log.WithLevel(zerolog.FatalLevel).Err(err).Msg("Failed to migrate portals")
+		os.Exit(31)
+		return false, nil
 	}
 	log.Info().Int64("rows_affected", affected).Msg("Migrated to split portals")
+	affected2, err := br.DB.Portal.FixParentsAfterSplitPortalMigration(ctx)
+	if err != nil {
+		log.Err(err).Msg("Failed to fix parent portals after split portal migration")
+		os.Exit(31)
+		return false, nil
+	}
+	log.Info().Int64("rows_affected", affected2).Msg("Updated parent receivers after split portal migration")
+	withoutReceiver, err := br.DB.Portal.GetAllWithoutReceiver(ctx)
+	if err != nil {
+		log.WithLevel(zerolog.FatalLevel).Err(err).Msg("Failed to get portals that failed to migrate")
+		os.Exit(31)
+		return false, nil
+	}
+	var roomsToDelete []id.RoomID
+	log.Info().Int("remaining_portals", len(withoutReceiver)).Msg("Deleting remaining portals without receiver")
+	for _, portal := range withoutReceiver {
+		if err = br.DB.Portal.Delete(ctx, portal.PortalKey); err != nil {
+			log.Err(err).
+				Str("portal_id", string(portal.ID)).
+				Stringer("mxid", portal.MXID).
+				Msg("Failed to delete portal database row that failed to migrate")
+		} else if portal.MXID != "" {
+			log.Debug().
+				Str("portal_id", string(portal.ID)).
+				Stringer("mxid", portal.MXID).
+				Msg("Marked portal room for deletion from homeserver")
+			roomsToDelete = append(roomsToDelete, portal.MXID)
+		} else {
+			log.Debug().
+				Str("portal_id", string(portal.ID)).
+				Msg("Deleted portal row with no Matrix room")
+		}
+	}
 	br.DB.KV.Set(ctx, database.KeySplitPortalsEnabled, "true")
-	return affected > 0
+	log.Info().Msg("Finished split portal migration successfully")
+	return affected > 0, func() {
+		for _, roomID := range roomsToDelete {
+			if err = br.Bot.DeleteRoom(ctx, roomID, true); err != nil {
+				log.Err(err).
+					Stringer("mxid", roomID).
+					Msg("Failed to delete portal room that failed to migrate")
+			}
+		}
+		log.Info().Int("room_count", len(roomsToDelete)).Msg("Finished deleting rooms that failed to migrate")
+	}
 }
 
 func (br *Bridge) StartLogins(ctx context.Context) error {

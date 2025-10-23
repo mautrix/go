@@ -21,7 +21,7 @@ func TestServerKeyResponse_VerifySelfSignature(t *testing.T) {
 	ctx := context.Background()
 	for _, name := range []string{"matrix.org", "maunium.net", "continuwuity.org"} {
 		t.Run(name, func(t *testing.T) {
-			resp, err := cli.ServerKeys(ctx, "matrix.org")
+			resp, err := cli.ServerKeys(ctx, name)
 			require.NoError(t, err)
 			assert.NoError(t, resp.VerifySelfSignature())
 		})

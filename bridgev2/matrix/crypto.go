@@ -24,6 +24,7 @@ import (
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2"
+	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/crypto"
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/event"
@@ -135,12 +136,64 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 		return err
 	}
 	if isExistingDevice {
-		helper.verifyKeysAreOnServer(ctx)
+		if !helper.verifyKeysAreOnServer(ctx) {
+			return nil
+		}
+	} else {
+		err = helper.ShareKeys(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to share device keys: %w", err)
+		}
+	}
+	if helper.bridge.Config.Encryption.SelfSign {
+		if !helper.doSelfSign(ctx) {
+			os.Exit(34)
+		}
 	}
 
 	go helper.resyncEncryptionInfo(context.TODO())
 
 	return nil
+}
+
+func (helper *CryptoHelper) doSelfSign(ctx context.Context) bool {
+	log := zerolog.Ctx(ctx)
+	hasKeys, isVerified, err := helper.mach.GetOwnVerificationStatus(ctx)
+	if err != nil {
+		log.WithLevel(zerolog.FatalLevel).Err(err).Msg("Failed to check verification status")
+		return false
+	}
+	log.Debug().Bool("has_keys", hasKeys).Bool("is_verified", isVerified).Msg("Checked verification status")
+	keyInDB := helper.bridge.Bridge.DB.KV.Get(ctx, database.KeyRecoveryKey)
+	if !hasKeys || keyInDB == "overwrite" {
+		if keyInDB != "" && keyInDB != "overwrite" {
+			log.WithLevel(zerolog.FatalLevel).
+				Msg("No keys on server, but database already has recovery key. Delete `recovery_key` from `kv_store` manually to continue.")
+			return false
+		}
+		recoveryKey, err := helper.mach.GenerateAndVerifyWithRecoveryKey(ctx)
+		if recoveryKey != "" {
+			helper.bridge.Bridge.DB.KV.Set(ctx, database.KeyRecoveryKey, recoveryKey)
+		}
+		if err != nil {
+			log.WithLevel(zerolog.FatalLevel).Err(err).Msg("Failed to generate recovery key and self-sign")
+			return false
+		}
+		log.Info().Msg("Generated new recovery key and self-signed bot device")
+	} else if !isVerified {
+		if keyInDB == "" {
+			log.WithLevel(zerolog.FatalLevel).
+				Msg("Server already has cross-signing keys, but no key in database. Add `recovery_key` to `kv_store`, or set it to `overwrite` to generate new keys.")
+			return false
+		}
+		err = helper.mach.VerifyWithRecoveryKey(ctx, keyInDB)
+		if err != nil {
+			log.WithLevel(zerolog.FatalLevel).Err(err).Msg("Failed to verify with recovery key")
+			return false
+		}
+		log.Info().Msg("Verified bot device with existing recovery key")
+	}
+	return true
 }
 
 func (helper *CryptoHelper) resyncEncryptionInfo(ctx context.Context) {
@@ -274,7 +327,7 @@ func (helper *CryptoHelper) loginBot(ctx context.Context) (*mautrix.Client, bool
 	return client, deviceID != "", nil
 }
 
-func (helper *CryptoHelper) verifyKeysAreOnServer(ctx context.Context) {
+func (helper *CryptoHelper) verifyKeysAreOnServer(ctx context.Context) bool {
 	helper.log.Debug().Msg("Making sure keys are still on server")
 	resp, err := helper.client.QueryKeys(ctx, &mautrix.ReqQueryKeys{
 		DeviceKeys: map[id.UserID]mautrix.DeviceIDList{
@@ -287,10 +340,11 @@ func (helper *CryptoHelper) verifyKeysAreOnServer(ctx context.Context) {
 	}
 	device, ok := resp.DeviceKeys[helper.client.UserID][helper.client.DeviceID]
 	if ok && len(device.Keys) > 0 {
-		return
+		return true
 	}
 	helper.log.Warn().Msg("Existing device doesn't have keys on server, resetting crypto")
 	helper.Reset(ctx, false)
+	return false
 }
 
 func (helper *CryptoHelper) Start() {

@@ -105,3 +105,15 @@ func (bmec *BeeperMuteEventContent) GetMutedUntilTime() time.Time {
 	}
 	return time.Time{}
 }
+
+func (bmec *BeeperMuteEventContent) GetMuteDuration() time.Duration {
+	ts := bmec.GetMutedUntilTime()
+	now := time.Now()
+	if ts.Before(now) {
+		return 0
+	} else if ts == MutedForever {
+		return -1
+	} else {
+		return ts.Sub(now)
+	}
+}

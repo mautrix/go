@@ -32,7 +32,6 @@ func TestCrossSignVerification_ScanQRAndConfirmScan(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("sendingScansQR=%t", tc.sendingScansQR), func(t *testing.T) {
 			ts, sendingClient, receivingClient, _, _, sendingMachine, receivingMachine := initServerAndLoginAliceBob(t, ctx)
-			defer ts.Close()
 			sendingCallbacks, receivingCallbacks, sendingHelper, receivingHelper := initDefaultCallbacks(t, ctx, sendingClient, receivingClient, sendingMachine, receivingMachine)
 			var err error
 
@@ -51,10 +50,10 @@ func TestCrossSignVerification_ScanQRAndConfirmScan(t *testing.T) {
 			// event on the sending device.
 			txnID, err := sendingHelper.StartVerification(ctx, bobUserID)
 			require.NoError(t, err)
-			ts.dispatchToDevice(t, ctx, receivingClient)
+			ts.DispatchToDevice(t, ctx, receivingClient)
 			err = receivingHelper.AcceptVerification(ctx, txnID)
 			require.NoError(t, err)
-			ts.dispatchToDevice(t, ctx, sendingClient)
+			ts.DispatchToDevice(t, ctx, sendingClient)
 
 			receivingShownQRCode := receivingCallbacks.GetQRCodeShown(txnID)
 			require.NotNil(t, receivingShownQRCode)
@@ -83,7 +82,7 @@ func TestCrossSignVerification_ScanQRAndConfirmScan(t *testing.T) {
 
 				// Handle the start and done events on the receiving client and
 				// confirm the scan.
-				ts.dispatchToDevice(t, ctx, receivingClient)
+				ts.DispatchToDevice(t, ctx, receivingClient)
 
 				// Ensure that the receiving device detected that its QR code
 				// was scanned.
@@ -98,7 +97,7 @@ func TestCrossSignVerification_ScanQRAndConfirmScan(t *testing.T) {
 				doneEvt = sendingInbox[0].Content.AsVerificationDone()
 				assert.Equal(t, txnID, doneEvt.TransactionID)
 
-				ts.dispatchToDevice(t, ctx, sendingClient)
+				ts.DispatchToDevice(t, ctx, sendingClient)
 			} else { // receiving scans QR
 				// Emulate scanning the QR code shown by the sending device on
 				// the receiving device.
@@ -121,7 +120,7 @@ func TestCrossSignVerification_ScanQRAndConfirmScan(t *testing.T) {
 
 				// Handle the start and done events on the receiving client and
 				// confirm the scan.
-				ts.dispatchToDevice(t, ctx, sendingClient)
+				ts.DispatchToDevice(t, ctx, sendingClient)
 
 				// Ensure that the sending device detected that its QR code was
 				// scanned.
@@ -136,7 +135,7 @@ func TestCrossSignVerification_ScanQRAndConfirmScan(t *testing.T) {
 				doneEvt = receivingInbox[0].Content.AsVerificationDone()
 				assert.Equal(t, txnID, doneEvt.TransactionID)
 
-				ts.dispatchToDevice(t, ctx, receivingClient)
+				ts.DispatchToDevice(t, ctx, receivingClient)
 			}
 
 			// Ensure that both devices have marked the verification as done.

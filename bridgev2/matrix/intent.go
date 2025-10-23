@@ -577,6 +577,9 @@ func (as *ASIntent) MarkAsDM(ctx context.Context, roomID id.RoomID, withUser id.
 }
 
 func (as *ASIntent) DeleteRoom(ctx context.Context, roomID id.RoomID, puppetsOnly bool) error {
+	if roomID == "" {
+		return nil
+	}
 	if as.Connector.SpecVersions.Supports(mautrix.BeeperFeatureRoomYeeting) {
 		err := as.Matrix.BeeperDeleteRoom(ctx, roomID)
 		if err != nil {

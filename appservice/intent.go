@@ -306,7 +306,7 @@ func (intent *IntentAPI) SendCustomMembershipEvent(ctx context.Context, roomID i
 func (intent *IntentAPI) JoinRoomByID(ctx context.Context, roomID id.RoomID, extraContent ...map[string]interface{}) (resp *mautrix.RespJoinRoom, err error) {
 	if intent.IsCustomPuppet || len(extraContent) > 0 {
 		_, err = intent.SendCustomMembershipEvent(ctx, roomID, intent.UserID, event.MembershipJoin, "", extraContent...)
-		return &mautrix.RespJoinRoom{}, err
+		return &mautrix.RespJoinRoom{RoomID: roomID}, err
 	}
 	return intent.Client.JoinRoomByID(ctx, roomID)
 }

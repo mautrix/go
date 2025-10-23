@@ -13,6 +13,7 @@ import (
 	"net/http"
 
 	"go.mau.fi/util/exhttp"
+	"go.mau.fi/util/exmaps"
 	"golang.org/x/exp/maps"
 )
 
@@ -66,6 +67,8 @@ var (
 	MIncompatibleRoomVersion = RespError{ErrCode: "M_INCOMPATIBLE_ROOM_VERSION"}
 	// The client specified a parameter that has the wrong value.
 	MInvalidParam = RespError{ErrCode: "M_INVALID_PARAM", StatusCode: http.StatusBadRequest}
+	// The client specified a room key backup version that is not the current room key backup version for the user.
+	MWrongRoomKeysVersion = RespError{ErrCode: "M_WRONG_ROOM_KEYS_VERSION", StatusCode: http.StatusForbidden}
 
 	MURLNotSet         = RespError{ErrCode: "M_URL_NOT_SET"}
 	MBadStatus         = RespError{ErrCode: "M_BAD_STATUS"}
@@ -79,6 +82,9 @@ var (
 var (
 	ErrClientIsNil           = errors.New("client is nil")
 	ErrClientHasNoHomeserver = errors.New("client has no homeserver set")
+
+	ErrResponseTooLong      = errors.New("response content length too long")
+	ErrBodyReadReachedLimit = errors.New("reached response size limit while reading body")
 )
 
 // HTTPError An HTTP Error response, which may wrap an underlying native Go Error.
@@ -144,10 +150,7 @@ func (e *RespError) UnmarshalJSON(data []byte) error {
 }
 
 func (e *RespError) MarshalJSON() ([]byte, error) {
-	data := maps.Clone(e.ExtraData)
-	if data == nil {
-		data = make(map[string]any)
-	}
+	data := exmaps.NonNilClone(e.ExtraData)
 	data["errcode"] = e.ErrCode
 	data["error"] = e.Err
 	return json.Marshal(data)
@@ -174,6 +177,12 @@ func (e RespError) WithMessage(msg string, args ...any) RespError {
 
 func (e RespError) WithStatus(status int) RespError {
 	e.StatusCode = status
+	return e
+}
+
+func (e RespError) WithExtraData(extraData map[string]any) RespError {
+	e.ExtraData = exmaps.NonNilClone(e.ExtraData)
+	maps.Copy(e.ExtraData, extraData)
 	return e
 }
 

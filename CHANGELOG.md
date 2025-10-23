@@ -1,3 +1,31 @@
+## v0.25.2 (2025-10-16)
+
+* **Breaking change *(id)*** Split `UserID.ParseAndValidate` into
+  `ParseAndValidateRelaxed` and `ParseAndValidateStrict`. Strict is the old
+  behavior, but most users likely want the relaxed version, as there are real
+  users whose user IDs aren't valid under the strict rules.
+* *(crypto)* Added helper methods for generating and verifying with recovery
+  keys.
+* *(bridgev2/matrix)* Added config option to automatically generate a recovery
+  key for the bridge bot and self-sign the bridge's device.
+* *(bridgev2/matrix)* Added initial support for using appservice/MSC3202 mode
+  for encryption with standard servers like Synapse.
+* *(bridgev2)* Added optional support for implicit read receipts.
+* *(bridgev2)* Added interface for deleting chats on remote network.
+* *(bridgev2)* Added local enforcement of media duration and size limits.
+* *(bridgev2)* Extended event duration logging to log any event taking too long.
+* *(bridgev2)* Improved validation in group creation provisioning API.
+* *(event)* Added event type constant for poll end events.
+* *(client)* Added wrapper for searching user directory.
+* *(client)* Improved support for managing [MSC4140] delayed events.
+* *(crypto/helper)* Changed default sync handling to not block on waiting for
+  decryption keys. On initial sync, keys won't be requested at all by default.
+* *(crypto)* Fixed olm unwedging not working (regressed in v0.25.1).
+* *(bridgev2)* Fixed various bugs with migrating to split portals.
+* *(event)* Fixed poll start events having incorrect null `m.relates_to`.
+* *(client)* Fixed `RespUserProfile` losing standard fields when re-marshaling.
+* *(federation)* Fixed various bugs in event auth.
+
 ## v0.25.1 (2025-09-16)
 
 * *(client)* Fixed HTTP method of delete devices API call

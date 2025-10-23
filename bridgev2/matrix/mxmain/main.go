@@ -26,6 +26,7 @@ import (
 	"go.mau.fi/util/dbutil"
 	"go.mau.fi/util/exerrors"
 	"go.mau.fi/util/exzerolog"
+	"go.mau.fi/util/progver"
 	"gopkg.in/yaml.v3"
 	flag "maunium.net/go/mauflag"
 
@@ -62,6 +63,9 @@ type BridgeMain struct {
 	// git tag to see if the built version is the release or a dev build.
 	// You can either bump this right after a release or right before, as long as it matches on the release commit.
 	Version string
+	// SemCalVer defines whether this bridge uses a mix of semantic and calendar versioning,
+	// such that the Version field is YY.0M.patch, while git tags are major.YY0M.patch.
+	SemCalVer bool
 
 	// PostInit is a function that will be called after the bridge has been initialized but before it is started.
 	PostInit  func()
@@ -86,11 +90,7 @@ type BridgeMain struct {
 	RegistrationPath string
 	SaveConfig       bool
 
-	baseVersion      string
-	commit           string
-	LinkifiedVersion string
-	VersionDesc      string
-	BuildTime        time.Time
+	ver progver.ProgramVersion
 
 	AdditionalShortFlags string
 	AdditionalLongFlags  string
@@ -99,14 +99,7 @@ type BridgeMain struct {
 }
 
 type VersionJSONOutput struct {
-	Name string
-	URL  string
-
-	Version          string
-	IsRelease        bool
-	Commit           string
-	FormattedVersion string
-	BuildTime        time.Time
+	progver.ProgramVersion
 
 	OS   string
 	Arch string
@@ -147,18 +140,11 @@ func (br *BridgeMain) PreInit() {
 		flag.PrintHelp()
 		os.Exit(0)
 	} else if *version {
-		fmt.Println(br.VersionDesc)
+		fmt.Println(br.ver.VersionDescription)
 		os.Exit(0)
 	} else if *versionJSON {
 		output := VersionJSONOutput{
-			URL:  br.URL,
-			Name: br.Name,
-
-			Version:          br.baseVersion,
-			IsRelease:        br.Version == br.baseVersion,
-			Commit:           br.commit,
-			FormattedVersion: br.Version,
-			BuildTime:        br.BuildTime,
+			ProgramVersion: br.ver,
 
 			OS:   runtime.GOOS,
 			Arch: runtime.GOARCH,
@@ -240,8 +226,8 @@ func (br *BridgeMain) Init() {
 
 	br.Log.Info().
 		Str("name", br.Name).
-		Str("version", br.Version).
-		Time("built_at", br.BuildTime).
+		Str("version", br.ver.FormattedVersion).
+		Time("built_at", br.ver.BuildTime).
 		Str("go_version", runtime.Version()).
 		Msg("Initializing bridge")
 
@@ -255,7 +241,7 @@ func (br *BridgeMain) Init() {
 	br.Matrix.AS.DoublePuppetValue = br.Name
 	br.Bridge.Commands.(*commands.Processor).AddHandler(&commands.FullHandler{
 		Func: func(ce *commands.Event) {
-			ce.Reply("[%s](%s) %s (%s)", br.Name, br.URL, br.LinkifiedVersion, br.BuildTime.Format(time.RFC1123))
+			ce.Reply(br.ver.MarkdownDescription())
 		},
 		Name: "version",
 		Help: commands.HelpMeta{
@@ -446,42 +432,12 @@ func (br *BridgeMain) Stop() {
 //
 // (to use both at the same time, simply merge the ldflags into one, `-ldflags "-X '...' -X ..."`)
 func (br *BridgeMain) InitVersion(tag, commit, rawBuildTime string) {
-	br.baseVersion = br.Version
-	if len(tag) > 0 && tag[0] == 'v' {
-		tag = tag[1:]
-	}
-	if tag != br.Version {
-		suffix := ""
-		if !strings.HasSuffix(br.Version, "+dev") {
-			suffix = "+dev"
-		}
-		if len(commit) > 8 {
-			br.Version = fmt.Sprintf("%s%s.%s", br.Version, suffix, commit[:8])
-		} else {
-			br.Version = fmt.Sprintf("%s%s.unknown", br.Version, suffix)
-		}
-	}
-
-	br.LinkifiedVersion = fmt.Sprintf("v%s", br.Version)
-	if tag == br.Version {
-		br.LinkifiedVersion = fmt.Sprintf("[v%s](%s/releases/v%s)", br.Version, br.URL, tag)
-	} else if len(commit) > 8 {
-		br.LinkifiedVersion = strings.Replace(br.LinkifiedVersion, commit[:8], fmt.Sprintf("[%s](%s/commit/%s)", commit[:8], br.URL, commit), 1)
-	}
-	var buildTime time.Time
-	if rawBuildTime != "unknown" {
-		buildTime, _ = time.Parse(time.RFC3339, rawBuildTime)
-	}
-	var builtWith string
-	if buildTime.IsZero() {
-		rawBuildTime = "unknown"
-		builtWith = runtime.Version()
-	} else {
-		rawBuildTime = buildTime.Format(time.RFC1123)
-		builtWith = fmt.Sprintf("built at %s with %s", rawBuildTime, runtime.Version())
-	}
-	mautrix.DefaultUserAgent = fmt.Sprintf("%s/%s %s", br.Name, br.Version, mautrix.DefaultUserAgent)
-	br.VersionDesc = fmt.Sprintf("%s %s (%s)", br.Name, br.Version, builtWith)
-	br.commit = commit
-	br.BuildTime = buildTime
+	br.ver = progver.ProgramVersion{
+		Name:        br.Name,
+		URL:         br.URL,
+		BaseVersion: br.Version,
+		SemCalVer:   br.SemCalVer,
+	}.Init(tag, commit, rawBuildTime)
+	mautrix.DefaultUserAgent = fmt.Sprintf("%s/%s %s", br.Name, br.ver.FormattedVersion, mautrix.DefaultUserAgent)
+	br.Version = br.ver.FormattedVersion
 }

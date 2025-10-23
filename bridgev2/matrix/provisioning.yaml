@@ -400,7 +400,7 @@ components:
         - username
         - meow@example.com
     loginID:
-      name: loginID
+      name: login_id
       in: query
       description: An optional explicit login ID to do the action through.
       required: false

@@ -221,11 +221,12 @@ func (br *Bridge) handleGhostDMInvite(ctx context.Context, evt *event.Event, sen
 		rejectInvite(ctx, evt, br.Bot, "")
 		return EventHandlingResultSuccess
 	}
+	overrideIntent := invitedGhost.Intent
 	if resp.DMRedirectedTo != "" && resp.DMRedirectedTo != invitedGhost.ID {
 		log.Debug().
 			Str("dm_redirected_to_id", string(resp.DMRedirectedTo)).
 			Msg("Created DM was redirected to another user ID")
-		_, err = invitedGhost.Intent.SendState(ctx, portal.MXID, event.StateMember, invitedGhost.Intent.GetMXID().String(), &event.Content{
+		_, err = invitedGhost.Intent.SendState(ctx, evt.RoomID, event.StateMember, invitedGhost.Intent.GetMXID().String(), &event.Content{
 			Parsed: &event.MemberEventContent{
 				Membership: event.MembershipLeave,
 				Reason:     "Direct chat redirected to another internal user ID",
@@ -234,11 +235,13 @@ func (br *Bridge) handleGhostDMInvite(ctx context.Context, evt *event.Event, sen
 		if err != nil {
 			log.Err(err).Msg("Failed to make incorrect ghost leave new DM room")
 		}
-		otherUserGhost, err := br.GetGhostByID(ctx, resp.DMRedirectedTo)
-		if err != nil {
+		if resp.DMRedirectedTo == SpecialValueDMRedirectedToBot {
+			overrideIntent = br.Bot
+		} else if otherUserGhost, err := br.GetGhostByID(ctx, resp.DMRedirectedTo); err != nil {
 			log.Err(err).Msg("Failed to get ghost of real portal other user ID")
 		} else {
 			invitedGhost = otherUserGhost
+			overrideIntent = otherUserGhost.Intent
 		}
 	}
 	err = portal.UpdateMatrixRoomID(ctx, evt.RoomID, UpdateMatrixRoomIDParams{
@@ -251,7 +254,7 @@ func (br *Bridge) handleGhostDMInvite(ctx context.Context, evt *event.Event, sen
 	})
 	if err != nil {
 		log.Err(err).Msg("Failed to update Matrix room ID for new DM portal")
-		sendNotice(ctx, evt, invitedGhost.Intent, "Failed to finish configuring portal. The chat may or may not work")
+		sendNotice(ctx, evt, overrideIntent, "Failed to finish configuring portal. The chat may or may not work")
 		return EventHandlingResultSuccess
 	}
 	message := "Private chat portal created"
@@ -263,7 +266,7 @@ func (br *Bridge) handleGhostDMInvite(ctx context.Context, evt *event.Event, sen
 			message += fmt.Sprintf("\n\nWarning: %s", err.Error())
 		}
 	}
-	sendNotice(ctx, evt, invitedGhost.Intent, message)
+	sendNotice(ctx, evt, overrideIntent, message)
 	return EventHandlingResultSuccess
 }
 

@@ -104,10 +104,21 @@ type RespContext struct {
 type RespSendEvent struct {
 	EventID id.EventID `json:"event_id"`
 
-	UnstableDelayID string `json:"delay_id,omitempty"`
+	UnstableDelayID id.DelayID `json:"delay_id,omitempty"`
 }
 
 type RespUpdateDelayedEvent struct{}
+
+type RespDelayedEvents struct {
+	Scheduled []*event.ScheduledDelayedEvent `json:"scheduled,omitempty"`
+	Finalised []*event.FinalisedDelayedEvent `json:"finalised,omitempty"`
+	NextBatch string                         `json:"next_batch,omitempty"`
+
+	// Deprecated: Synapse implementation still returns this
+	DelayedEvents []*event.ScheduledDelayedEvent `json:"delayed_events,omitempty"`
+	// Deprecated: Synapse implementation still returns this
+	FinalisedEvents []*event.FinalisedDelayedEvent `json:"finalised_events,omitempty"`
+}
 
 type RespRedactUserEvents struct {
 	IsMoreEvents   bool `json:"is_more_events"`
@@ -211,6 +222,35 @@ func (r *RespUserProfile) MarshalJSON() ([]byte, error) {
 		delete(marshalMap, "avatar_url")
 	}
 	return json.Marshal(marshalMap)
+}
+
+type RespSearchUserDirectory struct {
+	Limited bool                  `json:"limited"`
+	Results []*UserDirectoryEntry `json:"results"`
+}
+
+type UserDirectoryEntry struct {
+	RespUserProfile
+	UserID id.UserID `json:"user_id"`
+}
+
+func (r *UserDirectoryEntry) UnmarshalJSON(data []byte) error {
+	err := r.RespUserProfile.UnmarshalJSON(data)
+	if err != nil {
+		return err
+	}
+	userIDStr, _ := r.Extra["user_id"].(string)
+	r.UserID = id.UserID(userIDStr)
+	delete(r.Extra, "user_id")
+	return nil
+}
+
+func (r *UserDirectoryEntry) MarshalJSON() ([]byte, error) {
+	if r.Extra == nil {
+		r.Extra = make(map[string]any)
+	}
+	r.Extra["user_id"] = r.UserID.String()
+	return r.RespUserProfile.MarshalJSON()
 }
 
 type RespMutualRooms struct {
@@ -714,4 +754,24 @@ type RespSuspended struct {
 // RespLocked is the response body for https://github.com/matrix-org/matrix-spec-proposals/pull/4323
 type RespLocked struct {
 	Locked bool `json:"locked"`
+}
+
+type ConnectionInfo struct {
+	IP        string             `json:"ip,omitempty"`
+	LastSeen  jsontime.UnixMilli `json:"last_seen,omitempty"`
+	UserAgent string             `json:"user_agent,omitempty"`
+}
+
+type SessionInfo struct {
+	Connections []ConnectionInfo `json:"connections,omitempty"`
+}
+
+type DeviceInfo struct {
+	Sessions []SessionInfo `json:"sessions,omitempty"`
+}
+
+// RespWhoIs is the response body for https://spec.matrix.org/v1.15/client-server-api/#get_matrixclientv3adminwhoisuserid
+type RespWhoIs struct {
+	UserID  id.UserID                  `json:"user_id,omitempty"`
+	Devices map[id.DeviceID]DeviceInfo `json:"devices,omitempty"`
 }

@@ -253,7 +253,7 @@ func (store *SQLCryptoStore) GetLatestSession(ctx context.Context, key id.Sender
 // GetNewestSessionCreationTS gets the creation timestamp of the most recently created session with the given sender key.
 // This will exclude sessions that have never been used to encrypt or decrypt a message.
 func (store *SQLCryptoStore) GetNewestSessionCreationTS(ctx context.Context, key id.SenderKey) (createdAt time.Time, err error) {
-	err = store.DB.QueryRow(ctx, "SELECT created_at FROM crypto_olm_session WHERE sender_key=$1 AND account_id=$2 AND (encrypted_at <> created_at OR decrypted_at <> created_at) ORDER BY created_at DESC LIMIT 1",
+	err = store.DB.QueryRow(ctx, "SELECT created_at FROM crypto_olm_session WHERE sender_key=$1 AND account_id=$2 AND (last_encrypted <> created_at OR last_decrypted <> created_at) ORDER BY created_at DESC LIMIT 1",
 		key, store.AccountID).Scan(&createdAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = nil
@@ -664,6 +664,20 @@ func (store *SQLCryptoStore) IsOutboundGroupSessionShared(ctx context.Context, u
 // ValidateMessageIndex returns whether the given event information match the ones stored in the database
 // for the given sender key, session ID and index. If the index hasn't been stored, this will store it.
 func (store *SQLCryptoStore) ValidateMessageIndex(ctx context.Context, senderKey id.SenderKey, sessionID id.SessionID, eventID id.EventID, index uint, timestamp int64) (bool, error) {
+	if eventID == "" && timestamp == 0 {
+		var notOK bool
+		const validateEmptyQuery = `
+		SELECT EXISTS(SELECT 1 FROM crypto_message_index WHERE sender_key=$1 AND session_id=$2 AND "index"=$3)
+		`
+		err := store.DB.QueryRow(ctx, validateEmptyQuery, senderKey, sessionID, index).Scan(&notOK)
+		if notOK {
+			zerolog.Ctx(ctx).Debug().
+				Uint("message_index", index).
+				Msg("Rejecting event without event ID and timestamp due to already knowing them")
+		}
+		return !notOK, err
+	}
+
 	const validateQuery = `
 	INSERT INTO crypto_message_index (sender_key, session_id, "index", event_id, timestamp)
 	VALUES ($1, $2, $3, $4, $5)

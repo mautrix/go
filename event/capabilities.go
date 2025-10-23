@@ -18,6 +18,7 @@ import (
 
 	"go.mau.fi/util/exerrors"
 	"go.mau.fi/util/jsontime"
+	"go.mau.fi/util/ptr"
 	"golang.org/x/exp/constraints"
 	"golang.org/x/exp/maps"
 )
@@ -51,11 +52,12 @@ type RoomFeatures struct {
 	AllowedReactions     []string               `json:"allowed_reactions,omitempty"`
 	CustomEmojiReactions bool                   `json:"custom_emoji_reactions,omitempty"`
 
-	ReadReceipts        bool `json:"read_receipts,omitempty"`
-	TypingNotifications bool `json:"typing_notifications,omitempty"`
-	Archive             bool `json:"archive,omitempty"`
-	MarkAsUnread        bool `json:"mark_as_unread,omitempty"`
-	DeleteChat          bool `json:"delete_chat,omitempty"`
+	ReadReceipts          bool `json:"read_receipts,omitempty"`
+	TypingNotifications   bool `json:"typing_notifications,omitempty"`
+	Archive               bool `json:"archive,omitempty"`
+	MarkAsUnread          bool `json:"mark_as_unread,omitempty"`
+	DeleteChat            bool `json:"delete_chat,omitempty"`
+	DeleteChatForEveryone bool `json:"delete_chat_for_everyone,omitempty"`
 }
 
 func (rf *RoomFeatures) GetID() string {
@@ -65,15 +67,47 @@ func (rf *RoomFeatures) GetID() string {
 	return base64.RawURLEncoding.EncodeToString(rf.Hash())
 }
 
+func (rf *RoomFeatures) Clone() *RoomFeatures {
+	if rf == nil {
+		return nil
+	}
+	clone := *rf
+	clone.File = clone.File.Clone()
+	clone.Formatting = maps.Clone(clone.Formatting)
+	clone.EditMaxAge = ptr.Clone(clone.EditMaxAge)
+	clone.DeleteMaxAge = ptr.Clone(clone.DeleteMaxAge)
+	clone.DisappearingTimer = clone.DisappearingTimer.Clone()
+	clone.AllowedReactions = slices.Clone(clone.AllowedReactions)
+	return &clone
+}
+
 type FormattingFeatureMap map[FormattingFeature]CapabilitySupportLevel
 
 type FileFeatureMap map[CapabilityMsgType]*FileFeatures
+
+func (ffm FileFeatureMap) Clone() FileFeatureMap {
+	dup := maps.Clone(ffm)
+	for key, value := range dup {
+		dup[key] = value.Clone()
+	}
+	return dup
+}
 
 type DisappearingTimerCapability struct {
 	Types  []DisappearingType      `json:"types"`
 	Timers []jsontime.Milliseconds `json:"timers,omitempty"`
 
 	OmitEmptyTimer bool `json:"omit_empty_timer,omitempty"`
+}
+
+func (dtc *DisappearingTimerCapability) Clone() *DisappearingTimerCapability {
+	if dtc == nil {
+		return nil
+	}
+	clone := *dtc
+	clone.Types = slices.Clone(clone.Types)
+	clone.Timers = slices.Clone(clone.Timers)
+	return &clone
 }
 
 func (dtc *DisappearingTimerCapability) Supports(content *BeeperDisappearingTimer) bool {
@@ -262,6 +296,7 @@ func (rf *RoomFeatures) Hash() []byte {
 	hashBool(hasher, "archive", rf.Archive)
 	hashBool(hasher, "mark_as_unread", rf.MarkAsUnread)
 	hashBool(hasher, "delete_chat", rf.DeleteChat)
+	hashBool(hasher, "delete_chat_for_everyone", rf.DeleteChatForEveryone)
 
 	return hasher.Sum(nil)
 }
@@ -293,4 +328,14 @@ func (ff *FileFeatures) Hash() []byte {
 	hashInt(hasher, "max_duration", ff.MaxDuration.Get())
 	hashBool(hasher, "view_once", ff.ViewOnce)
 	return hasher.Sum(nil)
+}
+
+func (ff *FileFeatures) Clone() *FileFeatures {
+	if ff == nil {
+		return nil
+	}
+	clone := *ff
+	clone.MimeTypes = maps.Clone(clone.MimeTypes)
+	clone.MaxDuration = ptr.Clone(clone.MaxDuration)
+	return &clone
 }

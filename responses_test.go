@@ -8,7 +8,6 @@ package mautrix_test
 
 import (
 	"encoding/json"
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -86,7 +85,6 @@ func TestRespCapabilities_UnmarshalJSON(t *testing.T) {
 	var caps mautrix.RespCapabilities
 	err := json.Unmarshal([]byte(sampleData), &caps)
 	require.NoError(t, err)
-	fmt.Println(caps)
 
 	require.NotNil(t, caps.RoomVersions)
 	assert.Equal(t, "9", caps.RoomVersions.Default)

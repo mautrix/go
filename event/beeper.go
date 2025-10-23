@@ -86,6 +86,10 @@ type BeeperRoomKeyAckEventContent struct {
 	FirstMessageIndex int          `json:"first_message_index"`
 }
 
+type BeeperChatDeleteEventContent struct {
+	DeleteForEveryone bool `json:"delete_for_everyone,omitempty"`
+}
+
 type IntOrString int
 
 func (ios *IntOrString) UnmarshalJSON(data []byte) error {

@@ -13,6 +13,7 @@ import (
 	"maps"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog"
 
@@ -20,6 +21,7 @@ import (
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/bridgev2/provisionutil"
 	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/format"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -33,6 +35,35 @@ var CommandResolveIdentifier = &FullHandler{
 	},
 	RequiresLogin: true,
 	NetworkAPI:    NetworkAPIImplements[bridgev2.IdentifierResolvingNetworkAPI],
+}
+
+var CommandSyncChat = &FullHandler{
+	Func: func(ce *Event) {
+		login, _, err := ce.Portal.FindPreferredLogin(ce.Ctx, ce.User, false)
+		if err != nil {
+			ce.Log.Err(err).Msg("Failed to find login for sync")
+			ce.Reply("Failed to find login: %v", err)
+			return
+		} else if login == nil {
+			ce.Reply("No login found for sync")
+			return
+		}
+		info, err := login.Client.GetChatInfo(ce.Ctx, ce.Portal)
+		if err != nil {
+			ce.Log.Err(err).Msg("Failed to get chat info for sync")
+			ce.Reply("Failed to get chat info: %v", err)
+			return
+		}
+		ce.Portal.UpdateInfo(ce.Ctx, info, login, nil, time.Time{})
+		ce.React("✅️")
+	},
+	Name: "sync-portal",
+	Help: HelpMeta{
+		Section:     HelpSectionChats,
+		Description: "Sync the current portal room",
+	},
+	RequiresPortal: true,
+	RequiresLogin:  true,
 }
 
 var CommandStartChat = &FullHandler{
@@ -49,8 +80,14 @@ var CommandStartChat = &FullHandler{
 }
 
 func getClientForStartingChat[T bridgev2.IdentifierResolvingNetworkAPI](ce *Event, thing string) (*bridgev2.UserLogin, T, []string) {
-	remainingArgs := ce.Args[1:]
-	login := ce.Bridge.GetCachedUserLoginByID(networkid.UserLoginID(ce.Args[0]))
+	var remainingArgs []string
+	if len(ce.Args) > 1 {
+		remainingArgs = ce.Args[1:]
+	}
+	var login *bridgev2.UserLogin
+	if len(ce.Args) > 0 {
+		login = ce.Bridge.GetCachedUserLoginByID(networkid.UserLoginID(ce.Args[0]))
+	}
 	if login == nil || login.UserMXID != ce.User.MXID {
 		remainingArgs = ce.Args
 		login = ce.User.GetDefaultLogin()
@@ -195,7 +232,17 @@ func fnCreateGroup(ce *Event) {
 		ce.Reply("Failed to create group: %v", err)
 		return
 	}
-	ce.Reply("Successfully created group `%s`", resp.ID)
+	var postfix string
+	if len(resp.FailedParticipants) > 0 {
+		failedParticipantsStrings := make([]string, len(resp.FailedParticipants))
+		i := 0
+		for participantID, meta := range resp.FailedParticipants {
+			failedParticipantsStrings[i] = fmt.Sprintf("* %s: %s", format.SafeMarkdownCode(participantID), meta.Reason)
+			i++
+		}
+		postfix += "\n\nFailed to add some participants:\n" + strings.Join(failedParticipantsStrings, "\n")
+	}
+	ce.Reply("Successfully created group `%s`%s", resp.ID, postfix)
 }
 
 var CommandSearch = &FullHandler{

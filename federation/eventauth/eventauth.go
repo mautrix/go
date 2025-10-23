@@ -79,6 +79,7 @@ var (
 	ErrCantJoinOtherUser               = AuthFailError{Index: "5.3.2", Message: "can't send join event with different state key"}
 	ErrCantJoinBanned                  = AuthFailError{Index: "5.3.3", Message: "user is banned from the room"}
 	ErrAuthoriserCantInvite            = AuthFailError{Index: "5.3.5.2", Message: "authoriser doesn't have sufficient power level to invite"}
+	ErrAuthoriserNotInRoom             = AuthFailError{Index: "5.3.5.2", Message: "authoriser isn't a member of the room"}
 	ErrCantJoinWithoutInvite           = AuthFailError{Index: "5.3.7", Message: "can't join invite-only room without invite"}
 	ErrInvalidJoinRule                 = AuthFailError{Index: "5.3.7", Message: "invalid join rule in room"}
 	ErrThirdPartyInviteBanned          = AuthFailError{Index: "5.4.1.1", Message: "third party invite target user is banned"}
@@ -110,12 +111,13 @@ var (
 
 	ErrMismatchingPrivateStateKey = AuthFailError{Index: "9", Message: "state keys starting with @ must match sender user ID"}
 
-	ErrTopLevelPLNotInteger = AuthFailError{Index: "10.1", Message: "invalid type for top-level power level field"}
-	ErrPLNotInteger         = AuthFailError{Index: "10.2", Message: "invalid type for power level"}
-	ErrInvalidUserIDInPL    = AuthFailError{Index: "10.3", Message: "invalid user ID in power levels"}
-	ErrUserPLNotInteger     = AuthFailError{Index: "10.3", Message: "invalid type for user power level"}
-	ErrCreatorInPowerLevels = AuthFailError{Index: "10.4", Message: "room creators must not be specified in power levels"}
-	ErrInvalidPowerChange   = AuthFailError{Index: "10.x", Message: "illegal power level change"}
+	ErrTopLevelPLNotInteger   = AuthFailError{Index: "10.1", Message: "invalid type for top-level power level field"}
+	ErrPLNotInteger           = AuthFailError{Index: "10.2", Message: "invalid type for power level"}
+	ErrInvalidUserIDInPL      = AuthFailError{Index: "10.3", Message: "invalid user ID in power levels"}
+	ErrUserPLNotInteger       = AuthFailError{Index: "10.3", Message: "invalid type for user power level"}
+	ErrCreatorInPowerLevels   = AuthFailError{Index: "10.4", Message: "room creators must not be specified in power levels"}
+	ErrInvalidPowerChange     = AuthFailError{Index: "10.x", Message: "illegal power level change"}
+	ErrInvalidUserPowerChange = AuthFailError{Index: "10.9", Message: "illegal power level change"}
 )
 
 func isRejected(evt *pdu.PDU) bool {
@@ -382,6 +384,10 @@ func authorizeMember(roomVersion id.RoomVersion, evt, createEvt *pdu.PDU, authEv
 			if powerLevels.GetUserLevel(authorizedVia) < powerLevels.Invite() {
 				// 5.3.5.2. If the join_authorised_via_users_server key in content is not a user with sufficient permission to invite other users, reject.
 				return ErrAuthoriserCantInvite
+			}
+			authorizerMembership := event.Membership(findEventAndReadString(authEvents, event.StateMember.Type, authorizedVia.String(), "membership", string(event.MembershipLeave)))
+			if authorizerMembership != event.MembershipJoin {
+				return ErrAuthoriserNotInRoom
 			}
 			// 5.3.5.3. Otherwise, allow.
 			return nil
@@ -664,9 +670,10 @@ func allowPowerChangeMap(roomVersion id.RoomVersion, maxVal int, path, ownID str
 		newVal := new.Get(exgjson.Path(key.Str))
 		err = allowPowerChange(roomVersion, maxVal, path+"."+key.Str, value, newVal)
 		if err == nil && ownID != "" && key.Str != ownID {
-			val := parseIntWithVersion(roomVersion, value)
-			if *val >= maxVal {
-				err = fmt.Errorf("%w: can't change users.%s from %s to %s with sender level %d", ErrInvalidPowerChange, key.Str, stringifyForError(value), stringifyForError(newVal), maxVal)
+			parsedOldVal := parseIntWithVersion(roomVersion, value)
+			parsedNewVal := parseIntWithVersion(roomVersion, newVal)
+			if *parsedOldVal >= maxVal && *parsedOldVal != *parsedNewVal {
+				err = fmt.Errorf("%w: can't change users.%s from %s to %s with sender level %d", ErrInvalidUserPowerChange, key.Str, stringifyForError(value), stringifyForError(newVal), maxVal)
 			}
 		}
 		return err == nil
@@ -675,7 +682,7 @@ func allowPowerChangeMap(roomVersion id.RoomVersion, maxVal int, path, ownID str
 		return
 	}
 	new.ForEach(func(key, value gjson.Result) bool {
-		err = allowPowerChange(roomVersion, maxVal, path+"."+key.Str, old.Get(exgjson.Path(key.Path(key.Str))), value)
+		err = allowPowerChange(roomVersion, maxVal, path+"."+key.Str, old.Get(exgjson.Path(key.Str)), value)
 		return err == nil
 	})
 	return
@@ -733,23 +740,27 @@ func findEventAndReadString(events []*pdu.PDU, evtType, stateKey, fieldPath, def
 
 func getPowerLevels(roomVersion id.RoomVersion, authEvents []*pdu.PDU, createEvt *pdu.PDU) (*event.PowerLevelsEventContent, error) {
 	var err error
-	powerLevels := findEventAndReadData(authEvents, event.StatePowerLevels.Type, "", func(evt *pdu.PDU) (out event.PowerLevelsEventContent) {
+	powerLevels := findEventAndReadData(authEvents, event.StatePowerLevels.Type, "", func(evt *pdu.PDU) *event.PowerLevelsEventContent {
 		if evt == nil {
-			return
+			return nil
 		}
 		content := evt.Content
+		out := &event.PowerLevelsEventContent{}
 		if !roomVersion.ValidatePowerLevelInts() {
-			safeParsePowerLevels(content, &out)
+			safeParsePowerLevels(content, out)
 		} else {
-			err = json.Unmarshal(content, &out)
+			err = json.Unmarshal(content, out)
 		}
-		return
+		return out
 	})
 	if err != nil {
 		// This should never happen thanks to safeParsePowerLevels for v1-9 and strict validation in v10+
 		return nil, fmt.Errorf("%w: %w", ErrFailedToParsePowerLevels, err)
 	}
 	if roomVersion.PrivilegedRoomCreators() {
+		if powerLevels == nil {
+			powerLevels = &event.PowerLevelsEventContent{}
+		}
 		powerLevels.CreateEvent, err = createEvt.ToClientEvent(roomVersion)
 		if err != nil {
 			return nil, fmt.Errorf("%w: %w", ErrFailedToParsePowerLevels, err)
@@ -758,12 +769,14 @@ func getPowerLevels(roomVersion id.RoomVersion, authEvents []*pdu.PDU, createEvt
 		if err != nil {
 			return nil, fmt.Errorf("%w: %w", ErrFailedToParsePowerLevels, err)
 		}
-	} else {
-		powerLevels.Users = map[id.UserID]int{
-			createEvt.Sender: (1 << 53) - 1,
+	} else if powerLevels == nil {
+		powerLevels = &event.PowerLevelsEventContent{
+			Users: map[id.UserID]int{
+				createEvt.Sender: 100,
+			},
 		}
 	}
-	return &powerLevels, nil
+	return powerLevels, nil
 }
 
 func parseIntWithVersion(roomVersion id.RoomVersion, val gjson.Result) *int {
