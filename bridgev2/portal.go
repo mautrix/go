@@ -977,6 +977,9 @@ func (portal *Portal) checkMessageContentCaps(caps *event.RoomFeatures, content 
 		if content.Info != nil {
 			dur := time.Duration(content.Info.Duration) * time.Millisecond
 			if feat.MaxDuration != nil && dur > feat.MaxDuration.Duration {
+				if capMsgType == event.CapMsgVoice {
+					return fmt.Errorf("%w: %s supports voice messages up to %s long", ErrVoiceMessageDurationTooLong, portal.Bridge.Network.GetName().DisplayName, exfmt.Duration(feat.MaxDuration.Duration))
+				}
 				return fmt.Errorf("%w: %s is longer than the maximum of %s", ErrMediaDurationTooLong, exfmt.Duration(dur), exfmt.Duration(feat.MaxDuration.Duration))
 			}
 			if feat.MaxSize != 0 && int64(content.Info.Size) > feat.MaxSize {
