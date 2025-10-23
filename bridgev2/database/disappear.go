@@ -67,26 +67,27 @@ type DisappearingMessageQuery struct {
 }
 
 type DisappearingMessage struct {
-	BridgeID networkid.BridgeID
-	RoomID   id.RoomID
-	EventID  id.EventID
+	BridgeID  networkid.BridgeID
+	RoomID    id.RoomID
+	EventID   id.EventID
+	Timestamp time.Time
 	DisappearingSetting
 }
 
 const (
 	upsertDisappearingMessageQuery = `
-		INSERT INTO disappearing_message (bridge_id, mx_room, mxid, type, timer, disappear_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO disappearing_message (bridge_id, mx_room, mxid, timestamp, type, timer, disappear_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		ON CONFLICT (bridge_id, mxid) DO UPDATE SET timer=excluded.timer, disappear_at=excluded.disappear_at
 	`
 	startDisappearingMessagesQuery = `
 		UPDATE disappearing_message
 		SET disappear_at=$1 + timer
-		WHERE bridge_id=$2 AND mx_room=$3 AND disappear_at IS NULL AND type='after_read'
-		RETURNING bridge_id, mx_room, mxid, type, timer, disappear_at
+		WHERE bridge_id=$2 AND mx_room=$3 AND disappear_at IS NULL AND type='after_read' AND timestamp<=$4
+		RETURNING bridge_id, mx_room, mxid, timestamp, type, timer, disappear_at
 	`
 	getUpcomingDisappearingMessagesQuery = `
-		SELECT bridge_id, mx_room, mxid, type, timer, disappear_at
+		SELECT bridge_id, mx_room, mxid, timestamp, type, timer, disappear_at
 		FROM disappearing_message WHERE bridge_id = $1 AND disappear_at IS NOT NULL AND disappear_at < $2
 		ORDER BY disappear_at LIMIT $3
 	`
@@ -100,8 +101,8 @@ func (dmq *DisappearingMessageQuery) Put(ctx context.Context, dm *DisappearingMe
 	return dmq.Exec(ctx, upsertDisappearingMessageQuery, dm.sqlVariables()...)
 }
 
-func (dmq *DisappearingMessageQuery) StartAll(ctx context.Context, roomID id.RoomID) ([]*DisappearingMessage, error) {
-	return dmq.QueryMany(ctx, startDisappearingMessagesQuery, time.Now().UnixNano(), dmq.BridgeID, roomID)
+func (dmq *DisappearingMessageQuery) StartAllBefore(ctx context.Context, roomID id.RoomID, beforeTS time.Time) ([]*DisappearingMessage, error) {
+	return dmq.QueryMany(ctx, startDisappearingMessagesQuery, time.Now().UnixNano(), dmq.BridgeID, roomID, beforeTS.UnixNano())
 }
 
 func (dmq *DisappearingMessageQuery) GetUpcoming(ctx context.Context, duration time.Duration, limit int) ([]*DisappearingMessage, error) {
@@ -113,17 +114,19 @@ func (dmq *DisappearingMessageQuery) Delete(ctx context.Context, eventID id.Even
 }
 
 func (d *DisappearingMessage) Scan(row dbutil.Scannable) (*DisappearingMessage, error) {
+	var timestamp int64
 	var disappearAt sql.NullInt64
-	err := row.Scan(&d.BridgeID, &d.RoomID, &d.EventID, &d.Type, &d.Timer, &disappearAt)
+	err := row.Scan(&d.BridgeID, &d.RoomID, &d.EventID, &timestamp, &d.Type, &d.Timer, &disappearAt)
 	if err != nil {
 		return nil, err
 	}
 	if disappearAt.Valid {
 		d.DisappearAt = time.Unix(0, disappearAt.Int64)
 	}
+	d.Timestamp = time.Unix(0, timestamp)
 	return d, nil
 }
 
 func (d *DisappearingMessage) sqlVariables() []any {
-	return []any{d.BridgeID, d.RoomID, d.EventID, d.Type, d.Timer, dbutil.ConvertedPtr(d.DisappearAt, time.Time.UnixNano)}
+	return []any{d.BridgeID, d.RoomID, d.EventID, d.Timestamp.UnixNano(), d.Type, d.Timer, dbutil.ConvertedPtr(d.DisappearAt, time.Time.UnixNano)}
 }
