@@ -70,6 +70,15 @@ func fnLogin(ce *Event) {
 		}
 		ce.Args = ce.Args[1:]
 	}
+	if reauth == nil && ce.User.HasTooManyLogins() {
+		ce.Reply(
+			"You have reached the maximum number of logins (%d). "+
+				"Please logout from an existing login before creating a new one. "+
+				"If you want to re-authenticate an existing login, use the `$cmdprefix relogin` command.",
+			ce.User.Permissions.MaxLogins,
+		)
+		return
+	}
 	flows := ce.Bridge.Network.GetLoginFlows()
 	var chosenFlowID string
 	if len(ce.Args) > 0 {

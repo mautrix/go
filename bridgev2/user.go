@@ -176,6 +176,10 @@ func (user *User) GetUserLogins() []*UserLogin {
 	return maps.Values(user.logins)
 }
 
+func (user *User) HasTooManyLogins() bool {
+	return user.Permissions.MaxLogins > 0 && len(user.GetUserLoginIDs()) >= user.Permissions.MaxLogins
+}
+
 func (user *User) GetFormattedUserLogins() string {
 	user.Bridge.cacheLock.Lock()
 	logins := make([]string, len(user.logins))

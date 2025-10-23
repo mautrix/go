@@ -367,17 +367,19 @@ func (prov *ProvisioningAPI) GetCapabilities(w http.ResponseWriter, r *http.Requ
 }
 
 var ErrNilStep = errors.New("bridge returned nil step with no error")
+var ErrTooManyLogins = bridgev2.RespError{ErrCode: "FI.MAU.BRIDGE.TOO_MANY_LOGINS", Err: "Maximum number of logins exceeded"}
 
 func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Request) {
 	overrideLogin, failed := prov.GetExplicitLoginForRequest(w, r)
 	if failed {
 		return
 	}
-	login, err := prov.net.CreateLogin(
-		r.Context(),
-		prov.GetUser(r),
-		r.PathValue("flowID"),
-	)
+	user := prov.GetUser(r)
+	if overrideLogin == nil && user.HasTooManyLogins() {
+		ErrTooManyLogins.AppendMessage(" (%d)", user.Permissions.MaxLogins).Write(w)
+		return
+	}
+	login, err := prov.net.CreateLogin(r.Context(), user, r.PathValue("flowID"))
 	if err != nil {
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to create login process")
 		RespondWithError(w, err, "Internal error creating login process")

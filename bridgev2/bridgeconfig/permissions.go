@@ -24,6 +24,7 @@ type Permissions struct {
 	DoublePuppet bool `yaml:"double_puppet"`
 	Admin        bool `yaml:"admin"`
 	ManageRelay  bool `yaml:"manage_relay"`
+	MaxLogins    int  `yaml:"max_logins"`
 }
 
 type PermissionConfig map[string]*Permissions
