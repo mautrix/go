@@ -87,6 +87,7 @@ type Portal struct {
 	lastCapUpdate time.Time
 
 	roomCreateLock sync.Mutex
+	RoomCreated    *exsync.Event
 
 	functionalMembersLock  sync.Mutex
 	functionalMembersCache *event.ElementFunctionalMembersContent
@@ -124,6 +125,11 @@ func (br *Bridge) loadPortal(ctx context.Context, dbPortal *database.Portal, que
 		currentlyTypingLogins: make(map[id.UserID]*UserLogin),
 		currentlyTypingGhosts: exsync.NewSet[id.UserID](),
 		outgoingMessages:      make(map[networkid.TransactionID]*outgoingMessage),
+
+		RoomCreated: exsync.NewEvent(),
+	}
+	if portal.MXID != "" {
+		portal.RoomCreated.Set()
 	}
 	// Putting the portal in the cache before it's fully initialized is mildly dangerous,
 	// but loading the relay user login may depend on it.
@@ -2043,6 +2049,7 @@ func (portal *Portal) UpdateMatrixRoomID(
 	} else if alreadyExists {
 		log.Debug().Msg("Replacement room is already a portal, overwriting")
 		existingPortal.MXID = ""
+		existingPortal.RoomCreated.Clear()
 		err := existingPortal.Save(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to clear mxid of existing portal: %w", err)
@@ -2050,6 +2057,7 @@ func (portal *Portal) UpdateMatrixRoomID(
 		delete(portal.Bridge.portalsByMXID, portal.MXID)
 	}
 	portal.MXID = newRoomID
+	portal.RoomCreated.Set()
 	portal.Bridge.portalsByMXID[portal.MXID] = portal
 	portal.NameSet = false
 	portal.AvatarSet = false
@@ -4832,6 +4840,7 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 	portal.TopicSet = true
 	portal.NameSet = true
 	portal.MXID = roomID
+	portal.RoomCreated.Set()
 	portal.Bridge.cacheLock.Lock()
 	portal.Bridge.portalsByMXID[roomID] = portal
 	portal.Bridge.cacheLock.Unlock()
@@ -4935,6 +4944,7 @@ func (portal *Portal) RemoveMXID(ctx context.Context) error {
 		return nil
 	}
 	portal.MXID = ""
+	portal.RoomCreated.Clear()
 	err := portal.Save(ctx)
 	if err != nil {
 		return err
