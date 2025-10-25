@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"maps"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 	"go.mau.fi/util/jsontime"
+	"go.mau.fi/util/ptr"
 
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -340,6 +342,17 @@ type LazyLoadSummary struct {
 	Heroes             []id.UserID `json:"m.heroes,omitempty"`
 	JoinedMemberCount  *int        `json:"m.joined_member_count,omitempty"`
 	InvitedMemberCount *int        `json:"m.invited_member_count,omitempty"`
+}
+
+func (lls *LazyLoadSummary) Equal(other *LazyLoadSummary) bool {
+	if lls == other {
+		return true
+	} else if lls == nil || other == nil {
+		return false
+	}
+	return ptr.Val(lls.JoinedMemberCount) == ptr.Val(other.JoinedMemberCount) &&
+		ptr.Val(lls.InvitedMemberCount) == ptr.Val(other.InvitedMemberCount) &&
+		slices.Equal(lls.Heroes, other.Heroes)
 }
 
 type SyncEventsList struct {
