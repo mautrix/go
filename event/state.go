@@ -96,6 +96,13 @@ type TombstoneEventContent struct {
 	ReplacementRoom id.RoomID `json:"replacement_room"`
 }
 
+func (tec *TombstoneEventContent) GetReplacementRoom() id.RoomID {
+	if tec == nil {
+		return ""
+	}
+	return tec.ReplacementRoom
+}
+
 type Predecessor struct {
 	RoomID  id.RoomID  `json:"room_id"`
 	EventID id.EventID `json:"event_id"`
@@ -133,6 +140,13 @@ type CreateEventContent struct {
 
 	// Deprecated: use the event sender instead
 	Creator id.UserID `json:"creator,omitempty"`
+}
+
+func (cec *CreateEventContent) GetPredecessor() (p Predecessor) {
+	if cec != nil && cec.Predecessor != nil {
+		p = *cec.Predecessor
+	}
+	return
 }
 
 func (cec *CreateEventContent) SupportsCreatorPower() bool {
