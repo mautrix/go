@@ -58,6 +58,14 @@ type RoomFeatures struct {
 	MarkAsUnread          bool `json:"mark_as_unread,omitempty"`
 	DeleteChat            bool `json:"delete_chat,omitempty"`
 	DeleteChatForEveryone bool `json:"delete_chat_for_everyone,omitempty"`
+
+	// Room management capabilities
+	// Whether the bridge supports changing room membership (invite/kick/leave/ban on the remote network).
+	ManageMembers bool `json:"manage_members,omitempty"`
+	// Whether the bridge supports changing the room avatar on the remote network.
+	SetRoomAvatar bool `json:"set_room_avatar,omitempty"`
+	// Whether the bridge supports changing the room title/name on the remote network.
+	SetRoomTitle bool `json:"set_room_title,omitempty"`
 }
 
 func (rf *RoomFeatures) GetID() string {
@@ -297,6 +305,11 @@ func (rf *RoomFeatures) Hash() []byte {
 	hashBool(hasher, "mark_as_unread", rf.MarkAsUnread)
 	hashBool(hasher, "delete_chat", rf.DeleteChat)
 	hashBool(hasher, "delete_chat_for_everyone", rf.DeleteChatForEveryone)
+
+	// Room management capabilities
+	hashBool(hasher, "manage_members", rf.ManageMembers)
+	hashBool(hasher, "set_room_avatar", rf.SetRoomAvatar)
+	hashBool(hasher, "set_room_title", rf.SetRoomTitle)
 
 	return hasher.Sum(nil)
 }

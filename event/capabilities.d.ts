@@ -60,6 +60,14 @@ export interface RoomFeatures {
 	delete_chat?: boolean
 	/** Whether deleting the chat for all participants is supported. */
 	delete_chat_for_everyone?: boolean
+
+	// Room management capabilities
+	/** Whether changing membership (invite/kick/leave/ban) via the bridge is supported. */
+	manage_members?: boolean
+	/** Whether changing the room avatar on the remote network is supported. */
+	set_room_avatar?: boolean
+	/** Whether changing the room title/name on the remote network is supported. */
+	set_room_title?: boolean
 }
 
 declare type integer = number
