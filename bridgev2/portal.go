@@ -645,11 +645,13 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 	if err != nil {
 		log.Err(err).Msg("Failed to get user login to handle Matrix event")
 		if errors.Is(err, ErrNotLoggedIn) {
+			portal.revertRoomMeta(ctx, evt, nil)
 			shouldSendNotice := evt.Content.AsMessage().MsgType != event.MsgNotice
 			return EventHandlingResultFailed.WithMSSError(
 				WrapErrorInStatus(err).WithMessage("You're not logged in").WithIsCertain(true).WithSendNotice(shouldSendNotice),
 			)
 		} else {
+			portal.revertRoomMeta(ctx, evt, nil)
 			return EventHandlingResultFailed.WithMSSError(
 				WrapErrorInStatus(err).WithMessage("Failed to get login to handle event").WithIsCertain(true).WithSendNotice(true),
 			)
@@ -1548,14 +1550,20 @@ func handleMatrixRoomMeta[APIType any, ContentType any](
 	if evt.StateKey == nil || *evt.StateKey != "" {
 		return EventHandlingResultFailed.WithMSSError(ErrInvalidStateKey)
 	}
+	//caps := sender.Client.GetCapabilities(ctx, portal)
+	//if stateCap, ok := caps.State[evt.Type.Type]; !ok || stateCap.Level <= event.CapLevelUnsupported {
+	//	return EventHandlingResultIgnored.WithMSSError(fmt.Errorf("%s %w", evt.Type.Type, ErrRoomMetadataNotAllowed))
+	//}
 	api, ok := sender.Client.(APIType)
 	if !ok {
-		return EventHandlingResultIgnored.WithMSSError(ErrRoomMetadataNotSupported)
+		portal.revertRoomMeta(ctx, evt, sender)
+		return EventHandlingResultIgnored.WithMSSError(fmt.Errorf("%w of type %s", ErrRoomMetadataNotSupported, evt.Type))
 	}
 	log := zerolog.Ctx(ctx)
 	content, ok := evt.Content.Parsed.(ContentType)
 	if !ok {
 		log.Error().Type("content_type", evt.Content.Parsed).Msg("Unexpected parsed content type")
+		portal.revertRoomMeta(ctx, evt, sender)
 		return EventHandlingResultFailed.WithMSSError(fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed))
 	}
 	switch typedContent := evt.Content.Parsed.(type) {
@@ -1584,7 +1592,7 @@ func handleMatrixRoomMeta[APIType any, ContentType any](
 			return EventHandlingResultIgnored
 		}
 		if !sender.Client.GetCapabilities(ctx, portal).DisappearingTimer.Supports(typedContent) {
-			portal.sendRoomMeta(ctx, nil, time.Now(), event.StateBeeperDisappearingTimer, "", portal.Disappear.ToEventContent(), false)
+			portal.revertRoomMeta(ctx, evt, sender)
 			return EventHandlingResultFailed.WithMSSError(ErrDisappearingTimerUnsupported)
 		}
 	}
@@ -1607,9 +1615,7 @@ func handleMatrixRoomMeta[APIType any, ContentType any](
 	})
 	if err != nil {
 		log.Err(err).Msg("Failed to handle Matrix room metadata")
-		if evt.Type == event.StateBeeperDisappearingTimer {
-			portal.sendRoomMeta(ctx, nil, time.Now(), event.StateBeeperDisappearingTimer, "", portal.Disappear.ToEventContent(), false)
-		}
+		portal.revertRoomMeta(ctx, evt, sender)
 		return EventHandlingResultFailed.WithMSSError(err)
 	}
 	if changed {
@@ -1741,6 +1747,7 @@ func (portal *Portal) handleMatrixMembership(
 	content, ok := evt.Content.Parsed.(*event.MemberEventContent)
 	if !ok {
 		log.Error().Type("content_type", evt.Content.Parsed).Msg("Unexpected parsed content type")
+		portal.revertRoomMeta(ctx, evt, sender)
 		return EventHandlingResultFailed.WithMSSError(fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed))
 	}
 	prevContent := &event.MemberEventContent{Membership: event.MembershipLeave}
@@ -1756,6 +1763,7 @@ func (portal *Portal) handleMatrixMembership(
 	})
 	api, ok := sender.Client.(MembershipHandlingNetworkAPI)
 	if !ok {
+		portal.revertRoomMeta(ctx, evt, sender)
 		return EventHandlingResultIgnored.WithMSSError(ErrMembershipNotSupported)
 	}
 	targetMXID := id.UserID(*evt.StateKey)
@@ -1763,6 +1771,7 @@ func (portal *Portal) handleMatrixMembership(
 	target, err := portal.getTargetUser(ctx, targetMXID)
 	if err != nil {
 		log.Err(err).Msg("Failed to get member event target")
+		portal.revertRoomMeta(ctx, evt, sender)
 		return EventHandlingResultFailed.WithMSSError(err)
 	}
 
@@ -1793,6 +1802,7 @@ func (portal *Portal) handleMatrixMembership(
 	_, err = api.HandleMatrixMembership(ctx, membershipChange)
 	if err != nil {
 		log.Err(err).Msg("Failed to handle Matrix membership change")
+		portal.revertRoomMeta(ctx, evt, sender)
 		return EventHandlingResultFailed.WithMSSError(err)
 	}
 	return EventHandlingResultSuccess.WithMSS()
@@ -4083,6 +4093,37 @@ func (portal *Portal) sendRoomMeta(
 		return false
 	}
 	return true
+}
+
+func (portal *Portal) revertRoomMeta(ctx context.Context, evt *event.Event, source *UserLogin) {
+	if !portal.Bridge.Config.RevertFailedStateChanges {
+		return
+	}
+	if evt.GetStateKey() != "" && evt.Type != event.StateMember {
+		return
+	}
+	switch evt.Type {
+	case event.StateRoomName:
+		portal.sendRoomMeta(ctx, nil, time.Time{}, event.StateRoomName, "", &event.RoomNameEventContent{Name: portal.Name}, true)
+	case event.StateRoomAvatar:
+		portal.sendRoomMeta(ctx, nil, time.Time{}, event.StateRoomAvatar, "", &event.RoomAvatarEventContent{URL: portal.AvatarMXC}, true)
+	case event.StateTopic:
+		portal.sendRoomMeta(ctx, nil, time.Time{}, event.StateTopic, "", &event.TopicEventContent{Topic: portal.Topic}, true)
+	case event.StateBeeperDisappearingTimer:
+		portal.sendRoomMeta(ctx, nil, time.Time{}, event.StateBeeperDisappearingTimer, "", portal.Disappear.ToEventContent(), true)
+	case event.StateMember:
+		_ = evt.Unsigned.PrevContent.ParseRaw(evt.Type)
+		prevContent := evt.Unsigned.PrevContent.AsMember()
+		newContent := evt.Content.AsMember()
+		if prevContent.Membership == newContent.Membership {
+			return
+		}
+		if portal.Bridge.Matrix.GetCapabilities().ArbitraryMemberChange {
+			content := *evt.Unsigned.PrevContent
+			content.Raw["com.beeper.member_rollback"] = true
+			portal.sendRoomMeta(ctx, nil, time.Time{}, event.StateMember, evt.GetStateKey(), content, true)
+		}
+	}
 }
 
 func (portal *Portal) getInitialMemberList(ctx context.Context, members *ChatMemberList, source *UserLogin, pl *event.PowerLevelsEventContent) (invite, functional []id.UserID, err error) {

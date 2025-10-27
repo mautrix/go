@@ -70,13 +70,14 @@ var (
 	FeatureUnstableProfileFields  = UnstableFeature{UnstableFlag: "uk.tcpip.msc4133"}
 	FeatureArbitraryProfileFields = UnstableFeature{UnstableFlag: "uk.tcpip.msc4133.stable", SpecVersion: SpecV116}
 
-	BeeperFeatureHungry               = UnstableFeature{UnstableFlag: "com.beeper.hungry"}
-	BeeperFeatureBatchSending         = UnstableFeature{UnstableFlag: "com.beeper.batch_sending"}
-	BeeperFeatureRoomYeeting          = UnstableFeature{UnstableFlag: "com.beeper.room_yeeting"}
-	BeeperFeatureAutojoinInvites      = UnstableFeature{UnstableFlag: "com.beeper.room_create_autojoin_invites"}
-	BeeperFeatureArbitraryProfileMeta = UnstableFeature{UnstableFlag: "com.beeper.arbitrary_profile_meta"}
-	BeeperFeatureAccountDataMute      = UnstableFeature{UnstableFlag: "com.beeper.account_data_mute"}
-	BeeperFeatureInboxState           = UnstableFeature{UnstableFlag: "com.beeper.inbox_state"}
+	BeeperFeatureHungry                = UnstableFeature{UnstableFlag: "com.beeper.hungry"}
+	BeeperFeatureBatchSending          = UnstableFeature{UnstableFlag: "com.beeper.batch_sending"}
+	BeeperFeatureRoomYeeting           = UnstableFeature{UnstableFlag: "com.beeper.room_yeeting"}
+	BeeperFeatureAutojoinInvites       = UnstableFeature{UnstableFlag: "com.beeper.room_create_autojoin_invites"}
+	BeeperFeatureArbitraryProfileMeta  = UnstableFeature{UnstableFlag: "com.beeper.arbitrary_profile_meta"}
+	BeeperFeatureAccountDataMute       = UnstableFeature{UnstableFlag: "com.beeper.account_data_mute"}
+	BeeperFeatureInboxState            = UnstableFeature{UnstableFlag: "com.beeper.inbox_state"}
+	BeeperFeatureArbitraryMemberChange = UnstableFeature{UnstableFlag: "com.beeper.arbitrary_member_change"}
 )
 
 func (versions *RespVersions) Supports(feature UnstableFeature) bool {

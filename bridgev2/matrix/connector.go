@@ -361,6 +361,7 @@ func (br *Connector) ensureConnection(ctx context.Context) {
 			*br.AS.SpecVersions = *versions
 			br.Capabilities.AutoJoinInvites = br.SpecVersions.Supports(mautrix.BeeperFeatureAutojoinInvites)
 			br.Capabilities.BatchSending = br.SpecVersions.Supports(mautrix.BeeperFeatureBatchSending)
+			br.Capabilities.ArbitraryMemberChange = br.SpecVersions.Supports(mautrix.BeeperFeatureArbitraryMemberChange)
 			break
 		}
 	}

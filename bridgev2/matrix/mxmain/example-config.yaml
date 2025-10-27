@@ -47,6 +47,8 @@ bridge:
     # Should cross-room reply metadata be bridged?
     # Most Matrix clients don't support this and servers may reject such messages too.
     cross_room_replies: false
+    # If a state event fails to bridge, should the bridge revert any state changes made by that event?
+    revert_failed_state_changes: false
 
     # What should be done to portal rooms when a user logs out or is logged out?
     # Permitted values:
