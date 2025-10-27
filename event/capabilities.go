@@ -28,8 +28,10 @@ type RoomFeatures struct {
 
 	// N.B. New fields need to be added to the Hash function to be included in the deduplication hash.
 
-	Formatting FormattingFeatureMap `json:"formatting,omitempty"`
-	File       FileFeatureMap       `json:"file,omitempty"`
+	Formatting    FormattingFeatureMap `json:"formatting,omitempty"`
+	File          FileFeatureMap       `json:"file,omitempty"`
+	State         StateFeatureMap      `json:"state,omitempty"`
+	MemberActions MemberFeatureMap     `json:"member_actions,omitempty"`
 
 	MaxTextLength int `json:"max_text_length,omitempty"`
 
@@ -74,11 +76,55 @@ func (rf *RoomFeatures) Clone() *RoomFeatures {
 	clone := *rf
 	clone.File = clone.File.Clone()
 	clone.Formatting = maps.Clone(clone.Formatting)
+	clone.State = clone.State.Clone()
+	clone.MemberActions = clone.MemberActions.Clone()
 	clone.EditMaxAge = ptr.Clone(clone.EditMaxAge)
 	clone.DeleteMaxAge = ptr.Clone(clone.DeleteMaxAge)
 	clone.DisappearingTimer = clone.DisappearingTimer.Clone()
 	clone.AllowedReactions = slices.Clone(clone.AllowedReactions)
 	return &clone
+}
+
+type MemberFeatureMap map[MemberAction]CapabilitySupportLevel
+
+func (mfm MemberFeatureMap) Clone() MemberFeatureMap {
+	return maps.Clone(mfm)
+}
+
+type MemberAction string
+
+const (
+	MemberActionBan          MemberAction = "ban"
+	MemberActionKick         MemberAction = "kick"
+	MemberActionLeave        MemberAction = "leave"
+	MemberActionRevokeInvite MemberAction = "revoke_invite"
+	MemberActionInvite       MemberAction = "invite"
+)
+
+type StateFeatureMap map[string]*StateFeatures
+
+func (sfm StateFeatureMap) Clone() StateFeatureMap {
+	dup := maps.Clone(sfm)
+	for key, value := range dup {
+		dup[key] = value.Clone()
+	}
+	return dup
+}
+
+type StateFeatures struct {
+	Level CapabilitySupportLevel `json:"level"`
+}
+
+func (sf *StateFeatures) Clone() *StateFeatures {
+	if sf == nil {
+		return nil
+	}
+	clone := *sf
+	return &clone
+}
+
+func (sf *StateFeatures) Hash() []byte {
+	return sf.Level.Hash()
 }
 
 type FormattingFeatureMap map[FormattingFeature]CapabilitySupportLevel
@@ -266,6 +312,8 @@ func (rf *RoomFeatures) Hash() []byte {
 
 	hashMap(hasher, "formatting", rf.Formatting)
 	hashMap(hasher, "file", rf.File)
+	hashMap(hasher, "state", rf.State)
+	hashMap(hasher, "member_actions", rf.MemberActions)
 
 	hashInt(hasher, "max_text_length", rf.MaxTextLength)
 

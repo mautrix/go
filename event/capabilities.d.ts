@@ -16,6 +16,8 @@ export interface RoomFeatures {
 	 * If a message type isn't listed here, it should be treated as support level -2 (will be rejected).
 	 */
 	file?: Record<CapabilityMsgType, FileFeatures>
+	state?: Record<EventType, StateFeatures>
+	member_actions?: Record<MemberAction, CapabilitySupportLevel>
 
 	/** Maximum length of normal text messages. */
 	max_text_length?: integer
@@ -71,6 +73,21 @@ declare type MIMETypeOrPattern =
 	| `${MIMEClass}/*`
 	| `${MIMEClass}/${string}`
 	| `${MIMEClass}/${string}; ${string}`
+
+export enum MemberAction {
+	Ban = "ban",
+	Kick = "kick",
+	Leave = "leave",
+	RevokeInvite = "revoke_invite",
+	Invite = "invite",
+}
+
+declare type EventType = string
+
+// This is an object for future extensibility (e.g. max name/topic length)
+export interface StateFeatures {
+	level: CapabilitySupportLevel
+}
 
 export enum CapabilityMsgType {
 	// Real message types used in the `msgtype` field
