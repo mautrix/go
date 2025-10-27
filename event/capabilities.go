@@ -101,10 +101,30 @@ const (
 	MemberActionInvite       MemberAction = "invite"
 )
 
-type StateFeatureMap map[string]CapabilitySupportLevel
+type StateFeatureMap map[string]*StateFeatures
 
 func (sfm StateFeatureMap) Clone() StateFeatureMap {
-	return maps.Clone(sfm)
+	dup := maps.Clone(sfm)
+	for key, value := range dup {
+		dup[key] = value.Clone()
+	}
+	return dup
+}
+
+type StateFeatures struct {
+	Level CapabilitySupportLevel `json:"level"`
+}
+
+func (sf *StateFeatures) Clone() *StateFeatures {
+	if sf == nil {
+		return nil
+	}
+	clone := *sf
+	return &clone
+}
+
+func (sf *StateFeatures) Hash() []byte {
+	return sf.Level.Hash()
 }
 
 type FormattingFeatureMap map[FormattingFeature]CapabilitySupportLevel

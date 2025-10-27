@@ -16,7 +16,7 @@ export interface RoomFeatures {
 	 * If a message type isn't listed here, it should be treated as support level -2 (will be rejected).
 	 */
 	file?: Record<CapabilityMsgType, FileFeatures>
-	state?: Record<EventType, CapabilitySupportLevel>
+	state?: Record<EventType, StateFeatures>
 	member_actions?: Record<MemberAction, CapabilitySupportLevel>
 
 	/** Maximum length of normal text messages. */
@@ -83,6 +83,11 @@ export enum MemberAction {
 }
 
 declare type EventType = string
+
+// This is an object for future extensibility (e.g. max name/topic length)
+export interface StateFeatures {
+	level: CapabilitySupportLevel
+}
 
 export enum CapabilityMsgType {
 	// Real message types used in the `msgtype` field
