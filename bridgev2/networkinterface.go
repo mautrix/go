@@ -826,6 +826,10 @@ type GroupFieldCapability struct {
 
 	// Only for the disappear field: allowed disappearing settings
 	DisappearSettings *event.DisappearingTimerCapability `json:"settings,omitempty"`
+
+	// This can be used to tell provisionutil not to call ValidateUserID on each participant.
+	// It only meant to allow hacks where ResolveIdentifier returns a fake ID that isn't actually valid for MXIDs.
+	SkipIdentifierValidation bool `json:"-"`
 }
 
 type GroupCreateParams struct {

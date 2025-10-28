@@ -47,8 +47,10 @@ func CreateGroup(ctx context.Context, login *bridgev2.UserLogin, params *bridgev
 			participant = parsedParticipant
 			params.Participants[i] = participant
 		}
-		if uidValOK && !userIDValidatingNetwork.ValidateUserID(participant) {
-			return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("User ID %q is not valid on this network", participant))
+		if !typeSpec.Participants.SkipIdentifierValidation {
+			if uidValOK && !userIDValidatingNetwork.ValidateUserID(participant) {
+				return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("User ID %q is not valid on this network", participant))
+			}
 		}
 		if api.IsThisUser(ctx, participant) {
 			return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("You can't include yourself in the participants list", participant))
