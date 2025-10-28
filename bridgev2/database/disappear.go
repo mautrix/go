@@ -37,6 +37,16 @@ type DisappearingSetting struct {
 	DisappearAt time.Time
 }
 
+func DisappearingSettingFromEvent(evt *event.BeeperDisappearingTimer) DisappearingSetting {
+	if evt == nil || evt.Type == event.DisappearingTypeNone {
+		return DisappearingSetting{}
+	}
+	return DisappearingSetting{
+		Type:  evt.Type,
+		Timer: evt.Timer.Duration,
+	}
+}
+
 func (ds DisappearingSetting) Normalize() DisappearingSetting {
 	if ds.Type == event.DisappearingTypeNone {
 		ds.Timer = 0
