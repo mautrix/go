@@ -3980,6 +3980,7 @@ func (portal *Portal) getBridgeInfo() (string, event.BridgeEventContent) {
 	}
 	if bridgeInfo.Protocol.ID == "slackgo" {
 		bridgeInfo.TempSlackRemoteIDMigratedFlag = true
+		bridgeInfo.TempSlackRemoteIDMigratedFlag2 = true
 	}
 	parent := portal.GetTopLevelParent()
 	if parent != nil {
