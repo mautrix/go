@@ -90,8 +90,8 @@ func (as *ASIntent) SendMessage(ctx context.Context, roomID id.RoomID, eventType
 }
 
 func (as *ASIntent) fillMemberEvent(ctx context.Context, roomID id.RoomID, userID id.UserID, content *event.Content) {
-	targetContent := content.Parsed.(*event.MemberEventContent)
-	if targetContent.Displayname != "" || targetContent.AvatarURL != "" {
+	targetContent, ok := content.Parsed.(*event.MemberEventContent)
+	if !ok || targetContent.Displayname != "" || targetContent.AvatarURL != "" {
 		return
 	}
 	memberContent, err := as.Matrix.StateStore.TryGetMember(ctx, roomID, userID)
