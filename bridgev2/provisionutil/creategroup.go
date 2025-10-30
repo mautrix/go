@@ -39,6 +39,8 @@ func CreateGroup(ctx context.Context, login *bridgev2.UserLogin, params *bridgev
 	}
 	if len(params.Participants) < typeSpec.Participants.MinLength {
 		return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("Must have at least %d members", typeSpec.Participants.MinLength))
+	} else if typeSpec.Participants.MaxLength > 0 && len(params.Participants) > typeSpec.Participants.MaxLength {
+		return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("Must have at most %d members", typeSpec.Participants.MaxLength))
 	}
 	userIDValidatingNetwork, uidValOK := login.Bridge.Network.(bridgev2.IdentifierValidatingNetwork)
 	for i, participant := range params.Participants {
@@ -47,8 +49,10 @@ func CreateGroup(ctx context.Context, login *bridgev2.UserLogin, params *bridgev
 			participant = parsedParticipant
 			params.Participants[i] = participant
 		}
-		if uidValOK && !userIDValidatingNetwork.ValidateUserID(participant) {
-			return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("User ID %q is not valid on this network", participant))
+		if !typeSpec.Participants.SkipIdentifierValidation {
+			if uidValOK && !userIDValidatingNetwork.ValidateUserID(participant) {
+				return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("User ID %q is not valid on this network", participant))
+			}
 		}
 		if api.IsThisUser(ctx, participant) {
 			return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("You can't include yourself in the participants list", participant))
@@ -58,7 +62,7 @@ func CreateGroup(ctx context.Context, login *bridgev2.UserLogin, params *bridgev
 		return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("Name is required"))
 	} else if nameLen := len(ptr.Val(params.Name).Name); nameLen > 0 && nameLen < typeSpec.Name.MinLength {
 		return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("Name must be at least %d characters", typeSpec.Name.MinLength))
-	} else if nameLen > typeSpec.Name.MaxLength {
+	} else if typeSpec.Name.MaxLength > 0 && nameLen > typeSpec.Name.MaxLength {
 		return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("Name must be at most %d characters", typeSpec.Name.MaxLength))
 	}
 	if (params.Avatar == nil || params.Avatar.URL == "") && typeSpec.Avatar.Required {
@@ -68,7 +72,7 @@ func CreateGroup(ctx context.Context, login *bridgev2.UserLogin, params *bridgev
 		return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("Topic is required"))
 	} else if topicLen := len(ptr.Val(params.Topic).Topic); topicLen > 0 && topicLen < typeSpec.Topic.MinLength {
 		return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("Topic must be at least %d characters", typeSpec.Topic.MinLength))
-	} else if topicLen > typeSpec.Topic.MaxLength {
+	} else if typeSpec.Topic.MaxLength > 0 && topicLen > typeSpec.Topic.MaxLength {
 		return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("Topic must be at most %d characters", typeSpec.Topic.MaxLength))
 	}
 	if (params.Disappear == nil || params.Disappear.Timer.Duration == 0) && typeSpec.Disappear.Required {
@@ -80,7 +84,7 @@ func CreateGroup(ctx context.Context, login *bridgev2.UserLogin, params *bridgev
 		return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("Username is required"))
 	} else if len(params.Username) > 0 && len(params.Username) < typeSpec.Username.MinLength {
 		return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("Username must be at least %d characters", typeSpec.Username.MinLength))
-	} else if len(params.Username) > typeSpec.Username.MaxLength {
+	} else if typeSpec.Username.MaxLength > 0 && len(params.Username) > typeSpec.Username.MaxLength {
 		return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("Username must be at most %d characters", typeSpec.Username.MaxLength))
 	}
 	if params.Parent == nil && typeSpec.Parent.Required {

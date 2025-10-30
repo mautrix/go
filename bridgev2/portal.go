@@ -1124,6 +1124,16 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 			}
 		}
 	}
+	var messageTimer *event.BeeperDisappearingTimer
+	if msgContent != nil {
+		messageTimer = msgContent.BeeperDisappearingTimer
+	}
+	if messageTimer != nil && *portal.Disappear.ToEventContent() != *messageTimer {
+		log.Warn().
+			Any("event_timer", messageTimer).
+			Any("portal_timer", portal.Disappear.ToEventContent()).
+			Msg("Mismatching disappearing timer in event")
+	}
 
 	wrappedMsgEvt := &MatrixMessage{
 		MatrixEventBase: MatrixEventBase[*event.MessageEventContent]{
@@ -1200,12 +1210,16 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 		}
 		portal.sendSuccessStatus(ctx, evt, resp.StreamOrder, message.MXID)
 	}
-	if portal.Disappear.Type != event.DisappearingTypeNone {
+	ds := portal.Disappear
+	if messageTimer != nil {
+		ds = database.DisappearingSettingFromEvent(messageTimer)
+	}
+	if ds.Type != event.DisappearingTypeNone {
 		go portal.Bridge.DisappearLoop.Add(ctx, &database.DisappearingMessage{
 			RoomID:              portal.MXID,
 			EventID:             message.MXID,
 			Timestamp:           message.Timestamp,
-			DisappearingSetting: portal.Disappear.StartingAt(message.Timestamp),
+			DisappearingSetting: ds.StartingAt(message.Timestamp),
 		})
 	}
 	if resp.Pending {
@@ -3976,6 +3990,7 @@ func (portal *Portal) getBridgeInfo() (string, event.BridgeEventContent) {
 	}
 	if bridgeInfo.Protocol.ID == "slackgo" {
 		bridgeInfo.TempSlackRemoteIDMigratedFlag = true
+		bridgeInfo.TempSlackRemoteIDMigratedFlag2 = true
 	}
 	parent := portal.GetTopLevelParent()
 	if parent != nil {
@@ -4091,6 +4106,12 @@ func (portal *Portal) sendRoomMeta(
 			Str("event_type", eventType.Type).
 			Msg("Failed to set room metadata")
 		return false
+	}
+	if eventType == event.StateBeeperDisappearingTimer {
+		// TODO remove this debug log at some point
+		zerolog.Ctx(ctx).Debug().
+			Any("content", content).
+			Msg("Sent new disappearing timer event")
 	}
 	return true
 }
