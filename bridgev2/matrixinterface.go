@@ -23,8 +23,9 @@ import (
 )
 
 type MatrixCapabilities struct {
-	AutoJoinInvites bool
-	BatchSending    bool
+	AutoJoinInvites       bool
+	BatchSending          bool
+	ArbitraryMemberChange bool
 }
 
 type MatrixConnector interface {

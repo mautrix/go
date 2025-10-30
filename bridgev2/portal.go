@@ -520,6 +520,9 @@ func (portal *Portal) handleSingleEvent(ctx context.Context, rawEvt any, doneCal
 				portal.sendSuccessStatus(ctx, evt.evt, 0, "")
 			}
 		}
+		if res.Error != nil && evt.evt.StateKey != nil {
+			portal.revertRoomMeta(ctx, evt.evt)
+		}
 	case *portalRemoteEvent:
 		res = portal.handleRemoteEvent(ctx, evt.source, evt.evtType, evt.evt)
 	case *portalCreateEvent:
@@ -1562,9 +1565,13 @@ func handleMatrixRoomMeta[APIType any, ContentType any](
 	if evt.StateKey == nil || *evt.StateKey != "" {
 		return EventHandlingResultFailed.WithMSSError(ErrInvalidStateKey)
 	}
+	//caps := sender.Client.GetCapabilities(ctx, portal)
+	//if stateCap, ok := caps.State[evt.Type.Type]; !ok || stateCap.Level <= event.CapLevelUnsupported {
+	//	return EventHandlingResultIgnored.WithMSSError(fmt.Errorf("%s %w", evt.Type.Type, ErrRoomMetadataNotAllowed))
+	//}
 	api, ok := sender.Client.(APIType)
 	if !ok {
-		return EventHandlingResultIgnored.WithMSSError(ErrRoomMetadataNotSupported)
+		return EventHandlingResultIgnored.WithMSSError(fmt.Errorf("%w of type %s", ErrRoomMetadataNotSupported, evt.Type))
 	}
 	log := zerolog.Ctx(ctx)
 	content, ok := evt.Content.Parsed.(ContentType)
@@ -1598,7 +1605,6 @@ func handleMatrixRoomMeta[APIType any, ContentType any](
 			return EventHandlingResultIgnored
 		}
 		if !sender.Client.GetCapabilities(ctx, portal).DisappearingTimer.Supports(typedContent) {
-			portal.sendRoomMeta(ctx, nil, time.Now(), event.StateBeeperDisappearingTimer, "", portal.Disappear.ToEventContent(), false)
 			return EventHandlingResultFailed.WithMSSError(ErrDisappearingTimerUnsupported)
 		}
 	}
@@ -1621,9 +1627,6 @@ func handleMatrixRoomMeta[APIType any, ContentType any](
 	})
 	if err != nil {
 		log.Err(err).Msg("Failed to handle Matrix room metadata")
-		if evt.Type == event.StateBeeperDisappearingTimer {
-			portal.sendRoomMeta(ctx, nil, time.Now(), event.StateBeeperDisappearingTimer, "", portal.Disappear.ToEventContent(), false)
-		}
 		return EventHandlingResultFailed.WithMSSError(err)
 	}
 	if changed {
@@ -3891,7 +3894,7 @@ func (portal *Portal) updateName(
 	}
 	portal.Name = name
 	portal.NameSet = portal.sendRoomMeta(
-		ctx, sender, ts, event.StateRoomName, "", &event.RoomNameEventContent{Name: name}, excludeFromTimeline,
+		ctx, sender, ts, event.StateRoomName, "", &event.RoomNameEventContent{Name: name}, excludeFromTimeline, nil,
 	)
 	return true
 }
@@ -3904,7 +3907,7 @@ func (portal *Portal) updateTopic(
 	}
 	portal.Topic = topic
 	portal.TopicSet = portal.sendRoomMeta(
-		ctx, sender, ts, event.StateTopic, "", &event.TopicEventContent{Topic: topic}, excludeFromTimeline,
+		ctx, sender, ts, event.StateTopic, "", &event.TopicEventContent{Topic: topic}, excludeFromTimeline, nil,
 	)
 	return true
 }
@@ -3935,7 +3938,7 @@ func (portal *Portal) updateAvatar(
 		portal.AvatarHash = newHash
 	}
 	portal.AvatarSet = portal.sendRoomMeta(
-		ctx, sender, ts, event.StateRoomAvatar, "", &event.RoomAvatarEventContent{URL: portal.AvatarMXC}, excludeFromTimeline,
+		ctx, sender, ts, event.StateRoomAvatar, "", &event.RoomAvatarEventContent{URL: portal.AvatarMXC}, excludeFromTimeline, nil,
 	)
 	return true
 }
@@ -4003,8 +4006,8 @@ func (portal *Portal) UpdateBridgeInfo(ctx context.Context) {
 		return
 	}
 	stateKey, bridgeInfo := portal.getBridgeInfo()
-	portal.sendRoomMeta(ctx, nil, time.Now(), event.StateBridge, stateKey, &bridgeInfo, false)
-	portal.sendRoomMeta(ctx, nil, time.Now(), event.StateHalfShotBridge, stateKey, &bridgeInfo, false)
+	portal.sendRoomMeta(ctx, nil, time.Now(), event.StateBridge, stateKey, &bridgeInfo, false, nil)
+	portal.sendRoomMeta(ctx, nil, time.Now(), event.StateHalfShotBridge, stateKey, &bridgeInfo, false, nil)
 }
 
 func (portal *Portal) UpdateCapabilities(ctx context.Context, source *UserLogin, implicit bool) bool {
@@ -4026,7 +4029,7 @@ func (portal *Portal) UpdateCapabilities(ctx context.Context, source *UserLogin,
 		Str("old_id", portal.CapState.ID).
 		Str("new_id", capID).
 		Msg("Sending new room capability event")
-	success := portal.sendRoomMeta(ctx, nil, time.Now(), event.StateBeeperRoomFeatures, portal.getBridgeInfoStateKey(), caps, false)
+	success := portal.sendRoomMeta(ctx, nil, time.Now(), event.StateBeeperRoomFeatures, portal.getBridgeInfoStateKey(), caps, false, nil)
 	if !success {
 		return false
 	}
@@ -4037,7 +4040,7 @@ func (portal *Portal) UpdateCapabilities(ctx context.Context, source *UserLogin,
 	}
 	if caps.DisappearingTimer != nil && !portal.CapState.Flags.Has(database.CapStateFlagDisappearingTimerSet) {
 		zerolog.Ctx(ctx).Debug().Msg("Disappearing timer capability was added, sending disappearing timer state event")
-		success = portal.sendRoomMeta(ctx, nil, time.Now(), event.StateBeeperDisappearingTimer, "", portal.Disappear.ToEventContent(), true)
+		success = portal.sendRoomMeta(ctx, nil, time.Now(), event.StateBeeperDisappearingTimer, "", portal.Disappear.ToEventContent(), true, nil)
 		if !success {
 			return false
 		}
@@ -4076,11 +4079,14 @@ func (portal *Portal) sendRoomMeta(
 	stateKey string,
 	content any,
 	excludeFromTimeline bool,
+	extra map[string]any,
 ) bool {
 	if portal.MXID == "" {
 		return false
 	}
-	extra := make(map[string]any)
+	if extra == nil {
+		extra = make(map[string]any)
+	}
 	if excludeFromTimeline {
 		extra["com.beeper.exclude_from_timeline"] = true
 	}
@@ -4104,6 +4110,46 @@ func (portal *Portal) sendRoomMeta(
 			Msg("Sent new disappearing timer event")
 	}
 	return true
+}
+
+func (portal *Portal) revertRoomMeta(ctx context.Context, evt *event.Event) {
+	if !portal.Bridge.Config.RevertFailedStateChanges {
+		return
+	}
+	if evt.GetStateKey() != "" && evt.Type != event.StateMember {
+		return
+	}
+	switch evt.Type {
+	case event.StateRoomName:
+		portal.sendRoomMeta(ctx, nil, time.Time{}, event.StateRoomName, "", &event.RoomNameEventContent{Name: portal.Name}, true, nil)
+	case event.StateRoomAvatar:
+		portal.sendRoomMeta(ctx, nil, time.Time{}, event.StateRoomAvatar, "", &event.RoomAvatarEventContent{URL: portal.AvatarMXC}, true, nil)
+	case event.StateTopic:
+		portal.sendRoomMeta(ctx, nil, time.Time{}, event.StateTopic, "", &event.TopicEventContent{Topic: portal.Topic}, true, nil)
+	case event.StateBeeperDisappearingTimer:
+		portal.sendRoomMeta(ctx, nil, time.Time{}, event.StateBeeperDisappearingTimer, "", portal.Disappear.ToEventContent(), true, nil)
+	case event.StateMember:
+		var prevContent *event.MemberEventContent
+		var extra map[string]any
+		if evt.Unsigned.PrevContent != nil {
+			_ = evt.Unsigned.PrevContent.ParseRaw(evt.Type)
+			prevContent = evt.Unsigned.PrevContent.AsMember()
+			newContent := evt.Content.AsMember()
+			if prevContent.Membership == newContent.Membership {
+				return
+			}
+			extra = evt.Unsigned.PrevContent.Raw
+		} else {
+			prevContent = &event.MemberEventContent{Membership: event.MembershipLeave}
+		}
+		if portal.Bridge.Matrix.GetCapabilities().ArbitraryMemberChange {
+			if extra == nil {
+				extra = make(map[string]any)
+			}
+			extra["com.beeper.member_rollback"] = true
+			portal.sendRoomMeta(ctx, nil, time.Time{}, event.StateMember, evt.GetStateKey(), prevContent, true, extra)
+		}
+	}
 }
 
 func (portal *Portal) getInitialMemberList(ctx context.Context, members *ChatMemberList, source *UserLogin, pl *event.PowerLevelsEventContent) (invite, functional []id.UserID, err error) {
@@ -4490,6 +4536,7 @@ func (portal *Portal) UpdateDisappearingSetting(
 		"",
 		setting.ToEventContent(),
 		opts.ExcludeFromTimeline,
+		nil,
 	)
 
 	if !opts.SendNotice {
@@ -4618,7 +4665,7 @@ func (portal *Portal) UpdateInfo(ctx context.Context, info *ChatInfo, source *Us
 	}
 	if info.JoinRule != nil {
 		// TODO change detection instead of spamming this every time?
-		portal.sendRoomMeta(ctx, sender, ts, event.StateJoinRules, "", info.JoinRule, info.ExcludeChangesFromTimeline)
+		portal.sendRoomMeta(ctx, sender, ts, event.StateJoinRules, "", info.JoinRule, info.ExcludeChangesFromTimeline, nil)
 	}
 	if info.Type != nil && portal.RoomType != *info.Type {
 		if portal.MXID != "" && (*info.Type == database.RoomTypeSpace || portal.RoomType == database.RoomTypeSpace) {
