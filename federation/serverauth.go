@@ -231,7 +231,7 @@ func (sa *ServerAuth) Authenticate(r *http.Request) (*http.Request, *mautrix.Res
 	}
 	err = (&signableRequest{
 		Method:      r.Method,
-		URI:         r.URL.EscapedPath(),
+		URI:         r.URL.RequestURI(),
 		Origin:      parsed.Origin,
 		Destination: destination,
 		Content:     reqBody,
