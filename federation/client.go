@@ -400,8 +400,7 @@ func (c *Client) MakeLeave(ctx context.Context, req *ReqMakeLeave) (resp *RespMa
 	_, _, err = c.MakeFullRequest(ctx, RequestParams{
 		ServerName:   req.Via,
 		Method:       http.MethodGet,
-		Path:         URLPath{"v1", "make_leave"},
-		Query:        url.Values{"room_id": {string(req.RoomID)}, "user_id": {string(req.UserID)}},
+		Path:         URLPath{"v1", "make_leave", req.RoomID, req.UserID},
 		Authenticate: true,
 		ResponseJSON: &resp,
 	})
