@@ -388,7 +388,7 @@ func (c *Client) SendInvite(ctx context.Context, req *ReqSendInvite) (resp *Resp
 	_, _, err = c.MakeFullRequest(ctx, RequestParams{
 		ServerName:   req.UserID.Homeserver(),
 		Method:       http.MethodPut,
-		Path:         URLPath{"v1", "invite", req.RoomID, req.UserID},
+		Path:         URLPath{"v2", "invite", req.RoomID, req.UserID},
 		Authenticate: true,
 		RequestJSON:  req,
 		ResponseJSON: &resp,
@@ -399,8 +399,9 @@ func (c *Client) SendInvite(ctx context.Context, req *ReqSendInvite) (resp *Resp
 func (c *Client) MakeLeave(ctx context.Context, req *ReqMakeLeave) (resp *RespMakeLeave, err error) {
 	_, _, err = c.MakeFullRequest(ctx, RequestParams{
 		ServerName:   req.Via,
-		Method:       http.MethodPut,
-		Path:         URLPath{"v1", "make_leave", req.RoomID, req.UserID},
+		Method:       http.MethodGet,
+		Path:         URLPath{"v1", "make_leave"},
+		Query:        url.Values{"room_id": {string(req.RoomID)}, "user_id": {string(req.UserID)}},
 		Authenticate: true,
 		ResponseJSON: &resp,
 	})
