@@ -275,11 +275,6 @@ type RespMakeJoin struct {
 	Event       PDU            `json:"event"`
 }
 
-type (
-	ReqMakeKnock  = ReqMakeJoin
-	RespMakeKnock = RespMakeJoin
-)
-
 type ReqSendJoin struct {
 	RoomID      id.RoomID
 	EventID     id.EventID
@@ -325,17 +320,18 @@ type ReqMakeLeave struct {
 	Via    string
 }
 
-type RespMakeLeave struct {
-	Event       PDU            `json:"event"`
-	RoomVersion id.RoomVersion `json:"room_version"`
-}
-
 type ReqSendLeave struct {
 	RoomID  id.RoomID
 	EventID id.EventID
 	Event   PDU
 	Via     string
 }
+
+type (
+	ReqMakeKnock  = ReqMakeJoin
+	RespMakeKnock = RespMakeJoin
+	RespMakeLeave = RespMakeJoin
+)
 
 func (c *Client) MakeJoin(ctx context.Context, req *ReqMakeJoin) (resp *RespMakeJoin, err error) {
 	versions := make([]string, len(req.SupportedVersions))
