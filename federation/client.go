@@ -275,12 +275,24 @@ type RespMakeJoin struct {
 	Event       PDU            `json:"event"`
 }
 
+type (
+	ReqMakeKnock  = ReqMakeJoin
+	RespMakeKnock = RespMakeJoin
+)
+
 type ReqSendJoin struct {
 	RoomID      id.RoomID
 	EventID     id.EventID
 	OmitMembers bool
 	Event       PDU
 	Via         string
+}
+
+type ReqSendKnock struct {
+	RoomID  id.RoomID
+	EventID id.EventID
+	Event   PDU
+	Via     string
 }
 
 type RespSendJoin struct {
@@ -341,7 +353,7 @@ func (c *Client) MakeJoin(ctx context.Context, req *ReqMakeJoin) (resp *RespMake
 	return
 }
 
-func (c *Client) MakeKnock(ctx context.Context, req *ReqMakeJoin) (resp *RespMakeJoin, err error) {
+func (c *Client) MakeKnock(ctx context.Context, req *ReqMakeKnock) (resp *RespMakeKnock, err error) {
 	versions := make([]string, len(req.SupportedVersions))
 	for i, v := range req.SupportedVersions {
 		versions[i] = string(v)
@@ -372,7 +384,7 @@ func (c *Client) SendJoin(ctx context.Context, req *ReqSendJoin) (resp *RespSend
 	return
 }
 
-func (c *Client) SendKnock(ctx context.Context, req *ReqSendJoin) (resp *RespSendKnock, err error) {
+func (c *Client) SendKnock(ctx context.Context, req *ReqSendKnock) (resp *RespSendKnock, err error) {
 	_, _, err = c.MakeFullRequest(ctx, RequestParams{
 		ServerName:   req.Via,
 		Method:       http.MethodPut,
