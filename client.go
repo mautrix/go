@@ -1353,6 +1353,9 @@ func (cli *Client) SendStateEvent(ctx context.Context, roomID id.RoomID, eventTy
 	if req.MeowEventID != "" {
 		queryParams["fi.mau.event_id"] = req.MeowEventID.String()
 	}
+	if req.TransactionID != "" {
+		queryParams["fi.mau.transaction_id"] = req.TransactionID
+	}
 	if req.UnstableDelay > 0 {
 		queryParams["org.matrix.msc4140.delay"] = strconv.FormatInt(req.UnstableDelay.Milliseconds(), 10)
 	}
