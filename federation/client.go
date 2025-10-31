@@ -263,6 +263,169 @@ func (c *Client) GetOpenIDUserInfo(ctx context.Context, serverName, accessToken 
 	return
 }
 
+type ReqMakeJoin struct {
+	RoomID            id.RoomID
+	UserID            id.UserID
+	Via               string
+	SupportedVersions []id.RoomVersion
+}
+
+type RespMakeJoin struct {
+	RoomVersion id.RoomVersion `json:"room_version"`
+	Event       PDU            `json:"event"`
+}
+
+type ReqSendJoin struct {
+	RoomID      id.RoomID
+	EventID     id.EventID
+	OmitMembers bool
+	Event       PDU
+	Via         string
+}
+
+type ReqSendKnock struct {
+	RoomID  id.RoomID
+	EventID id.EventID
+	Event   PDU
+	Via     string
+}
+
+type RespSendJoin struct {
+	AuthChain      []PDU    `json:"auth_chain"`
+	Event          PDU      `json:"event"`
+	MembersOmitted bool     `json:"members_omitted"`
+	ServersInRoom  []string `json:"servers_in_room"`
+	State          []PDU    `json:"state"`
+}
+
+type RespSendKnock struct {
+	KnockRoomState []PDU `json:"knock_room_state"`
+}
+
+type ReqSendInvite struct {
+	RoomID          id.RoomID      `json:"-"`
+	UserID          id.UserID      `json:"-"`
+	Event           PDU            `json:"event"`
+	InviteRoomState []PDU          `json:"invite_room_state"`
+	RoomVersion     id.RoomVersion `json:"room_version"`
+}
+
+type RespSendInvite struct {
+	Event PDU `json:"event"`
+}
+
+type ReqMakeLeave struct {
+	RoomID id.RoomID
+	UserID id.UserID
+	Via    string
+}
+
+type ReqSendLeave struct {
+	RoomID  id.RoomID
+	EventID id.EventID
+	Event   PDU
+	Via     string
+}
+
+type (
+	ReqMakeKnock  = ReqMakeJoin
+	RespMakeKnock = RespMakeJoin
+	RespMakeLeave = RespMakeJoin
+)
+
+func (c *Client) MakeJoin(ctx context.Context, req *ReqMakeJoin) (resp *RespMakeJoin, err error) {
+	versions := make([]string, len(req.SupportedVersions))
+	for i, v := range req.SupportedVersions {
+		versions[i] = string(v)
+	}
+	_, _, err = c.MakeFullRequest(ctx, RequestParams{
+		ServerName:   req.Via,
+		Method:       http.MethodGet,
+		Path:         URLPath{"v1", "make_join", req.RoomID, req.UserID},
+		Query:        url.Values{"ver": versions},
+		Authenticate: true,
+		ResponseJSON: &resp,
+	})
+	return
+}
+
+func (c *Client) MakeKnock(ctx context.Context, req *ReqMakeKnock) (resp *RespMakeKnock, err error) {
+	versions := make([]string, len(req.SupportedVersions))
+	for i, v := range req.SupportedVersions {
+		versions[i] = string(v)
+	}
+	_, _, err = c.MakeFullRequest(ctx, RequestParams{
+		ServerName:   req.Via,
+		Method:       http.MethodGet,
+		Path:         URLPath{"v1", "make_knock", req.RoomID, req.UserID},
+		Query:        url.Values{"ver": versions},
+		Authenticate: true,
+		ResponseJSON: &resp,
+	})
+	return
+}
+
+func (c *Client) SendJoin(ctx context.Context, req *ReqSendJoin) (resp *RespSendJoin, err error) {
+	_, _, err = c.MakeFullRequest(ctx, RequestParams{
+		ServerName: req.Via,
+		Method:     http.MethodPut,
+		Path:       URLPath{"v2", "send_join", req.RoomID, req.EventID},
+		Query: url.Values{
+			"omit_members": {strconv.FormatBool(req.OmitMembers)},
+		},
+		Authenticate: true,
+		RequestJSON:  req.Event,
+		ResponseJSON: &resp,
+	})
+	return
+}
+
+func (c *Client) SendKnock(ctx context.Context, req *ReqSendKnock) (resp *RespSendKnock, err error) {
+	_, _, err = c.MakeFullRequest(ctx, RequestParams{
+		ServerName:   req.Via,
+		Method:       http.MethodPut,
+		Path:         URLPath{"v1", "send_knock", req.RoomID, req.EventID},
+		Authenticate: true,
+		RequestJSON:  req.Event,
+		ResponseJSON: &resp,
+	})
+	return
+}
+
+func (c *Client) SendInvite(ctx context.Context, req *ReqSendInvite) (resp *RespSendInvite, err error) {
+	_, _, err = c.MakeFullRequest(ctx, RequestParams{
+		ServerName:   req.UserID.Homeserver(),
+		Method:       http.MethodPut,
+		Path:         URLPath{"v2", "invite", req.RoomID, req.UserID},
+		Authenticate: true,
+		RequestJSON:  req,
+		ResponseJSON: &resp,
+	})
+	return
+}
+
+func (c *Client) MakeLeave(ctx context.Context, req *ReqMakeLeave) (resp *RespMakeLeave, err error) {
+	_, _, err = c.MakeFullRequest(ctx, RequestParams{
+		ServerName:   req.Via,
+		Method:       http.MethodGet,
+		Path:         URLPath{"v1", "make_leave", req.RoomID, req.UserID},
+		Authenticate: true,
+		ResponseJSON: &resp,
+	})
+	return
+}
+
+func (c *Client) SendLeave(ctx context.Context, req *ReqSendLeave) (err error) {
+	_, _, err = c.MakeFullRequest(ctx, RequestParams{
+		ServerName:   req.Via,
+		Method:       http.MethodPut,
+		Path:         URLPath{"v2", "send_leave", req.RoomID, req.EventID},
+		Authenticate: true,
+		RequestJSON:  req.Event,
+	})
+	return
+}
+
 type URLPath []any
 
 func (fup URLPath) FullPath() []any {
