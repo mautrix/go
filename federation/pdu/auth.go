@@ -61,7 +61,7 @@ func (pdu *PDU) AuthEventSelection(roomVersion id.RoomVersion) (keys AuthEventSe
 			}
 		}
 		if membership == event.MembershipJoin && roomVersion.RestrictedJoins() {
-			authorizedVia := gjson.GetBytes(pdu.Content, "authorized_via_users_server").Str
+			authorizedVia := gjson.GetBytes(pdu.Content, "authorised_via_users_server").Str
 			if authorizedVia != "" {
 				keys.Add(event.StateMember.Type, authorizedVia)
 			}

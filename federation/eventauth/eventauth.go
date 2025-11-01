@@ -310,7 +310,7 @@ func authorizeMember(roomVersion id.RoomVersion, evt, createEvt *pdu.PDU, authEv
 		// 5.1. If there is no state_key property, or no membership property in content, reject.
 		return ErrMemberNotState
 	}
-	authorizedVia := id.UserID(gjson.GetBytes(evt.Content, "authorized_via_users_server").Str)
+	authorizedVia := id.UserID(gjson.GetBytes(evt.Content, "authorised_via_users_server").Str)
 	if authorizedVia != "" {
 		homeserver := authorizedVia.Homeserver()
 		err := evt.VerifySignature(roomVersion, homeserver, getKey)
