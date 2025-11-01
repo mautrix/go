@@ -2,10 +2,12 @@ package message
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 
 	"maunium.net/go/mautrix/crypto/goolm/aessha2"
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
+	"maunium.net/go/mautrix/crypto/olm"
 )
 
 const (
@@ -39,6 +41,9 @@ func (r *Message) Decode(input []byte) (err error) {
 	r.Version, err = decoder.ReadByte() // first byte is always version
 	if err != nil {
 		return
+	}
+	if r.Version != protocolVersion {
+		return fmt.Errorf("Message.Decode: %w", olm.ErrWrongProtocolVersion)
 	}
 
 	for {

@@ -1,6 +1,7 @@
 package message
 
 import (
+	"fmt"
 	"io"
 
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
@@ -22,6 +23,11 @@ type PreKeyMessage struct {
 	Message     []byte                     `json:"message"`
 }
 
+// TODO deduplicate constant with one in session/olm_session.go
+const (
+	protocolVersion = 0x3
+)
+
 // Decodes decodes the input and populates the corresponding fileds.
 func (r *PreKeyMessage) Decode(input []byte) (err error) {
 	r.Version = 0
@@ -40,6 +46,9 @@ func (r *PreKeyMessage) Decode(input []byte) (err error) {
 			return olm.ErrInputToSmall
 		}
 		return
+	}
+	if r.Version != protocolVersion {
+		return fmt.Errorf("PreKeyMessage.Decode: %w", olm.ErrWrongProtocolVersion)
 	}
 
 	for {
