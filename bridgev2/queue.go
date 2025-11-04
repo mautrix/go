@@ -163,6 +163,21 @@ type EventHandlingResult struct {
 	Error error
 	// Whether the Error should be sent as a MSS event.
 	SendMSS bool
+
+	// EventID from the network
+	EventID id.EventID
+	// Stream order from the network
+	StreamOrder int64
+}
+
+func (ehr EventHandlingResult) WithEventID(id id.EventID) EventHandlingResult {
+	ehr.EventID = id
+	return ehr
+}
+
+func (ehr EventHandlingResult) WithStreamOrder(order int64) EventHandlingResult {
+	ehr.StreamOrder = order
+	return ehr
 }
 
 func (ehr EventHandlingResult) WithError(err error) EventHandlingResult {

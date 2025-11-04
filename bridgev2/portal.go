@@ -1227,7 +1227,7 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 		// Not exactly queued, but not finished either
 		return EventHandlingResultQueued
 	}
-	return EventHandlingResultSuccess
+	return EventHandlingResultSuccess.WithEventID(message.MXID).WithStreamOrder(resp.StreamOrder)
 }
 
 // AddPendingToIgnore adds a transaction ID that should be ignored if encountered as a new message.
@@ -1551,7 +1551,7 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 		log.Err(err).Msg("Failed to save reaction to database")
 	}
 	portal.sendSuccessStatus(ctx, evt, 0, deterministicID)
-	return EventHandlingResultSuccess
+	return EventHandlingResultSuccess.WithEventID(deterministicID)
 }
 
 func handleMatrixRoomMeta[APIType any, ContentType any](
