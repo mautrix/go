@@ -237,6 +237,7 @@ var (
 	BeeperMessageStatus = Type{"com.beeper.message_send_status", MessageEventType}
 	BeeperTranscription = Type{"com.beeper.transcription", MessageEventType}
 	BeeperDeleteChat    = Type{"com.beeper.delete_chat", MessageEventType}
+	BeeperSendState     = Type{"com.beeper.send_state", MessageEventType}
 
 	EventUnstablePollStart    = Type{Type: "org.matrix.msc3381.poll.start", Class: MessageEventType}
 	EventUnstablePollResponse = Type{Type: "org.matrix.msc3381.poll.response", Class: MessageEventType}
