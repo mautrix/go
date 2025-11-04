@@ -1469,7 +1469,7 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 		if existing.EmojiID != "" || existing.Emoji == preResp.Emoji {
 			log.Debug().Msg("Ignoring duplicate reaction")
 			portal.sendSuccessStatus(ctx, evt, 0, deterministicID)
-			return EventHandlingResultIgnored
+			return EventHandlingResultIgnored.WithEventID(deterministicID)
 		}
 		react.ReactionToOverride = existing
 		_, err = portal.Bridge.Bot.SendMessage(ctx, portal.MXID, event.EventRedaction, &event.Content{
