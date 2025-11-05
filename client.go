@@ -2729,6 +2729,13 @@ func (cli *Client) UnstableSetLockStatus(ctx context.Context, userID id.UserID, 
 	return
 }
 
+// UnstableGetStorageUsage queries MSC4034 storage usage information for the current account.
+func (cli *Client) UnstableGetStorageUsage(ctx context.Context) (resp *RespStorageUsage, err error) {
+	urlPath := cli.BuildClientURL("unstable", "org.matrix.msc4034", "usage")
+	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
+	return
+}
+
 func (cli *Client) AppservicePing(ctx context.Context, id, txnID string) (resp *RespAppservicePing, err error) {
 	_, err = cli.MakeFullRequest(ctx, FullRequest{
 		Method:       http.MethodPost,
