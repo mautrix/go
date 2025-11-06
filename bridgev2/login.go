@@ -178,6 +178,7 @@ const (
 	LoginInputFieldTypeToken       LoginInputFieldType = "token"
 	LoginInputFieldTypeURL         LoginInputFieldType = "url"
 	LoginInputFieldTypeDomain      LoginInputFieldType = "domain"
+	LoginInputFieldTypeSelect      LoginInputFieldType = "select"
 )
 
 type LoginInputDataField struct {
@@ -191,6 +192,9 @@ type LoginInputDataField struct {
 	Description string `json:"description"`
 	// A regex pattern that the client can use to validate input client-side.
 	Pattern string `json:"pattern,omitempty"`
+	// For fields of type select, the valid options.
+	// Pattern may also be filled with a regex that matches the same options.
+	Options []string `json:"options,omitempty"`
 	// A function that validates the input and optionally cleans it up before it's submitted to the connector.
 	Validate func(string) (string, error) `json:"-"`
 }

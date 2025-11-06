@@ -714,7 +714,7 @@ components:
                     type:
                       type: string
                       description: The type of field.
-                      enum: [ username, phone_number, email, password, 2fa_code, token, url, domain ]
+                      enum: [ username, phone_number, email, password, 2fa_code, token, url, domain, select ]
                     id:
                       type: string
                       description: The internal ID of the field. This must be used as the key in the object when submitting the data back to the bridge.
@@ -732,6 +732,11 @@ components:
                       type: string
                       format: regex
                       description: A regular expression that the field value must match.
+                    select:
+                      type: array
+                      description: For fields of type select, the valid options.
+                      items:
+                        type: string
       - description: Cookie login step
         required: [ type, cookies ]
         properties:
