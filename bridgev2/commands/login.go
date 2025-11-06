@@ -199,11 +199,14 @@ type userInputLoginCommandState struct {
 
 func (uilcs *userInputLoginCommandState) promptNext(ce *Event) {
 	field := uilcs.RemainingFields[0]
+	parts := []string{fmt.Sprintf("Please enter your %s", field.Name)}
 	if field.Description != "" {
-		ce.Reply("Please enter your %s\n%s", field.Name, field.Description)
-	} else {
-		ce.Reply("Please enter your %s", field.Name)
+		parts = append(parts, field.Description)
 	}
+	if len(field.Options) > 0 {
+		parts = append(parts, fmt.Sprintf("Options: `%s`", strings.Join(field.Options, "`, `")))
+	}
+	ce.Reply(strings.Join(parts, "\n"))
 	StoreCommandState(ce.User, &CommandState{
 		Next:   MinimalCommandHandlerFunc(uilcs.submitNext),
 		Action: "Login",
