@@ -707,6 +707,7 @@ const ErrorResponseSizeLimit = 512 * 1024
 var DefaultResponseSizeLimit int64 = 512 * 1024 * 1024
 
 func ParseErrorResponse(req *http.Request, res *http.Response) ([]byte, error) {
+	defer res.Body.Close()
 	contents, err := readResponseBody(req, res, ErrorResponseSizeLimit)
 	if err != nil {
 		return contents, err

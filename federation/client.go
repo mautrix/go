@@ -314,9 +314,9 @@ func (c *Client) MakeFullRequest(ctx context.Context, params RequestParams) ([]b
 			WrappedError: err,
 		}
 	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
+	if !params.DontReadBody {
+		defer resp.Body.Close()
+	}
 	var body []byte
 	if resp.StatusCode >= 300 {
 		body, err = mautrix.ParseErrorResponse(req, resp)
