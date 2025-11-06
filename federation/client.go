@@ -283,8 +283,9 @@ type RequestParams struct {
 	Authenticate bool
 	RequestJSON  any
 
-	ResponseJSON any
-	DontReadBody bool
+	ResponseJSON  any
+	DontReadBody  bool
+	DontCloseBody bool
 }
 
 func (c *Client) MakeRequest(ctx context.Context, serverName string, authenticate bool, method string, path mautrix.PrefixableURLPath, reqJSON, respJSON any) error {
@@ -314,9 +315,11 @@ func (c *Client) MakeFullRequest(ctx context.Context, params RequestParams) ([]b
 			WrappedError: err,
 		}
 	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
+	if !params.DontCloseBody {
+		defer func() {
+			_ = resp.Body.Close()
+		}()
+	}
 	var body []byte
 	if resp.StatusCode >= 300 {
 		body, err = mautrix.ParseErrorResponse(req, resp)
