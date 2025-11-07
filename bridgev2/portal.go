@@ -3705,11 +3705,12 @@ type ChatMember struct {
 type ChatMemberMap map[networkid.UserID]ChatMember
 
 // Set adds the given entry to this map, overwriting any existing entry with the same Sender field.
-func (cmm ChatMemberMap) Set(member ChatMember) {
+func (cmm ChatMemberMap) Set(member ChatMember) ChatMemberMap {
 	if member.Sender == "" && member.SenderLogin == "" && !member.IsFromMe {
-		return
+		return cmm
 	}
 	cmm[member.Sender] = member
+	return cmm
 }
 
 // Add adds the given entry to this map, but will ignore it if an entry with the same Sender field already exists.
