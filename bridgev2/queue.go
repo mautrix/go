@@ -63,6 +63,12 @@ func (br *Bridge) rejectInviteOnNoPermission(ctx context.Context, evt *event.Eve
 	return true
 }
 
+var (
+	ErrEventSenderUserNotFound = WrapErrorInStatus(errors.New("sender not found for event")).WithIsCertain(true).WithErrorAsMessage()
+	ErrNoPermissionToInteract  = WrapErrorInStatus(errors.New("you don't have permission to send messages")).WithIsCertain(true).WithSendNotice(false).WithErrorAsMessage()
+	ErrNoPermissionForCommands = WrapErrorInStatus(WrapErrorInStatus(errors.New("you don't have permission to use commands")).WithIsCertain(true).WithSendNotice(false).WithErrorAsMessage())
+)
+
 func (br *Bridge) QueueMatrixEvent(ctx context.Context, evt *event.Event) EventHandlingResult {
 	// TODO maybe HandleMatrixEvent would be more appropriate as this also handles bot invites and commands
 
@@ -78,13 +84,11 @@ func (br *Bridge) QueueMatrixEvent(ctx context.Context, evt *event.Event) EventH
 			return EventHandlingResultFailed
 		} else if sender == nil {
 			log.Error().Msg("Couldn't get sender for incoming non-ephemeral Matrix event")
-			status := WrapErrorInStatus(errors.New("sender not found for event")).WithIsCertain(true).WithErrorAsMessage()
-			br.Matrix.SendMessageStatus(ctx, &status, StatusEventInfoFromEvent(evt))
+			br.Matrix.SendMessageStatus(ctx, &ErrEventSenderUserNotFound, StatusEventInfoFromEvent(evt))
 			return EventHandlingResultFailed
 		} else if !sender.Permissions.SendEvents {
 			if !br.rejectInviteOnNoPermission(ctx, evt, "interact with") {
-				status := WrapErrorInStatus(errors.New("you don't have permission to send messages")).WithIsCertain(true).WithSendNotice(false).WithErrorAsMessage()
-				br.Matrix.SendMessageStatus(ctx, &status, StatusEventInfoFromEvent(evt))
+				br.Matrix.SendMessageStatus(ctx, &ErrNoPermissionToInteract, StatusEventInfoFromEvent(evt))
 			}
 			return EventHandlingResultIgnored
 		} else if !sender.Permissions.Commands && br.rejectInviteOnNoPermission(ctx, evt, "send commands to") {
@@ -92,8 +96,7 @@ func (br *Bridge) QueueMatrixEvent(ctx context.Context, evt *event.Event) EventH
 		}
 	} else if evt.Type.Class != event.EphemeralEventType {
 		log.Error().Msg("Missing sender for incoming non-ephemeral Matrix event")
-		status := WrapErrorInStatus(errors.New("sender not found for event")).WithIsCertain(true).WithErrorAsMessage()
-		br.Matrix.SendMessageStatus(ctx, &status, StatusEventInfoFromEvent(evt))
+		br.Matrix.SendMessageStatus(ctx, &ErrEventSenderUserNotFound, StatusEventInfoFromEvent(evt))
 		return EventHandlingResultIgnored
 	}
 	if evt.Type == event.EventMessage && sender != nil {
@@ -102,8 +105,7 @@ func (br *Bridge) QueueMatrixEvent(ctx context.Context, evt *event.Event) EventH
 		msg.RemovePerMessageProfileFallback()
 		if strings.HasPrefix(msg.Body, br.Config.CommandPrefix) || evt.RoomID == sender.ManagementRoom {
 			if !sender.Permissions.Commands {
-				status := WrapErrorInStatus(errors.New("you don't have permission to use commands")).WithIsCertain(true).WithSendNotice(false).WithErrorAsMessage()
-				br.Matrix.SendMessageStatus(ctx, &status, StatusEventInfoFromEvent(evt))
+				br.Matrix.SendMessageStatus(ctx, &ErrNoPermissionForCommands, StatusEventInfoFromEvent(evt))
 				return EventHandlingResultIgnored
 			}
 			go br.Commands.Handle(
