@@ -277,6 +277,9 @@ public_media:
     expiry: 0
     # Length of hash to use for public media URLs. Must be between 0 and 32.
     hash_length: 32
+    # The path prefix for generated URLs. Note that this will NOT change the path where media is actually served.
+    # If you change this, you must configure your reverse proxy to rewrite the path accordingly.
+    path_prefix: /_mautrix/publicmedia
 
 # Settings for converting remote media to custom mxc:// URIs instead of reuploading.
 # More details can be found at https://docs.mau.fi/bridges/go/discord/direct-media.html

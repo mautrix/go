@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"maunium.net/go/mautrix/bridgev2"
@@ -115,11 +116,14 @@ func (br *Connector) GetPublicMediaAddress(contentURI id.ContentURIString) strin
 	if err != nil || !parsed.IsValid() {
 		return ""
 	}
-	return fmt.Sprintf(
-		"%s/_mautrix/publicmedia/%s/%s/%s",
-		br.GetPublicAddress(),
-		parsed.Homeserver,
-		parsed.FileID,
-		base64.RawURLEncoding.EncodeToString(br.makePublicMediaChecksum(parsed)),
+	return strings.Join(
+		[]string{
+			br.GetPublicAddress(),
+			strings.Trim(br.Config.PublicMedia.PathPrefix, "/"),
+			parsed.Homeserver,
+			parsed.FileID,
+			base64.RawURLEncoding.EncodeToString(br.makePublicMediaChecksum(parsed)),
+		},
+		"/",
 	)
 }

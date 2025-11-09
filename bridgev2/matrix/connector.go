@@ -275,7 +275,7 @@ func (br *Connector) GetPublicAddress() string {
 	if br.Config.AppService.PublicAddress == "https://bridge.example.com" {
 		return ""
 	}
-	return br.Config.AppService.PublicAddress
+	return strings.TrimRight(br.Config.AppService.PublicAddress, "/")
 }
 
 func (br *Connector) GetRouter() *http.ServeMux {

@@ -133,6 +133,7 @@ func doUpgrade(helper up.Helper) {
 	}
 	helper.Copy(up.Int, "public_media", "expiry")
 	helper.Copy(up.Int, "public_media", "hash_length")
+	helper.Copy(up.Str|up.Null, "public_media", "path_prefix")
 
 	helper.Copy(up.Bool, "backfill", "enabled")
 	helper.Copy(up.Int, "backfill", "max_initial_messages")
