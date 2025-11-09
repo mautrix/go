@@ -69,7 +69,7 @@ type MatrixConnectorWithServer interface {
 
 type MatrixConnectorWithPublicMedia interface {
 	GetPublicMediaAddress(contentURI id.ContentURIString) string
-	GetPublicMediaAddressWithFileName(contentURI id.ContentURIString, fileName string) string
+	GetPublicMediaAddressForEvent(ctx context.Context, evt *event.MessageEventContent) (string, error)
 }
 
 type MatrixConnectorWithNameDisambiguation interface {

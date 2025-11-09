@@ -34,6 +34,7 @@ type Database struct {
 	UserPortal          *UserPortalQuery
 	BackfillTask        *BackfillTaskQuery
 	KV                  *KVQuery
+	PublicMedia         *PublicMediaQuery
 }
 
 type MetaMerger interface {
@@ -140,6 +141,12 @@ func New(bridgeID networkid.BridgeID, mt MetaTypes, db *dbutil.Database) *Databa
 		KV: &KVQuery{
 			BridgeID: bridgeID,
 			Database: db,
+		},
+		PublicMedia: &PublicMediaQuery{
+			BridgeID: bridgeID,
+			QueryHelper: dbutil.MakeQueryHelper(db, func(_ *dbutil.QueryHelper[*PublicMedia]) *PublicMedia {
+				return &PublicMedia{}
+			}),
 		},
 	}
 }

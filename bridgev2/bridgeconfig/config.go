@@ -112,11 +112,12 @@ type DirectMediaConfig struct {
 }
 
 type PublicMediaConfig struct {
-	Enabled    bool   `yaml:"enabled"`
-	SigningKey string `yaml:"signing_key"`
-	Expiry     int    `yaml:"expiry"`
-	HashLength int    `yaml:"hash_length"`
-	PathPrefix string `yaml:"path_prefix"`
+	Enabled     bool   `yaml:"enabled"`
+	SigningKey  string `yaml:"signing_key"`
+	Expiry      int    `yaml:"expiry"`
+	HashLength  int    `yaml:"hash_length"`
+	PathPrefix  string `yaml:"path_prefix"`
+	UseDatabase bool   `yaml:"use_database"`
 }
 
 type DoublePuppetConfig struct {

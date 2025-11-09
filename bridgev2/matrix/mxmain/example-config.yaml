@@ -280,6 +280,11 @@ public_media:
     # The path prefix for generated URLs. Note that this will NOT change the path where media is actually served.
     # If you change this, you must configure your reverse proxy to rewrite the path accordingly.
     path_prefix: /_mautrix/publicmedia
+    # Should the bridge store media metadata in the database in order to support encrypted media and generate shorter URLs?
+    # If false, the generated URLs will just have the MXC URI and a HMAC signature.
+    # The hash_length field will be used to decide the length of the generated URL.
+    # This also allows invalidating URLs by deleting the database entry.
+    use_database: false
 
 # Settings for converting remote media to custom mxc:// URIs instead of reuploading.
 # More details can be found at https://docs.mau.fi/bridges/go/discord/direct-media.html
