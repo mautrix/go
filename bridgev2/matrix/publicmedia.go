@@ -13,7 +13,9 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -35,6 +37,7 @@ func (br *Connector) initPublicMedia() error {
 	}
 	br.pubMediaSigKey = []byte(br.Config.PublicMedia.SigningKey)
 	br.AS.Router.HandleFunc("GET /_mautrix/publicmedia/{server}/{mediaID}/{checksum}", br.servePublicMedia)
+	br.AS.Router.HandleFunc("GET /_mautrix/publicmedia/{server}/{mediaID}/{checksum}/{filename}", br.servePublicMedia)
 	return nil
 }
 
@@ -104,11 +107,24 @@ func (br *Connector) servePublicMedia(w http.ResponseWriter, r *http.Request) {
 	for _, hdr := range proxyHeadersToCopy {
 		w.Header()[hdr] = resp.Header[hdr]
 	}
+	if filename := r.PathValue("filename"); filename != "" {
+		contentDisposition, _, _ := mime.ParseMediaType(resp.Header.Get("Content-Disposition"))
+		if contentDisposition == "" {
+			contentDisposition = "attachment"
+		}
+		w.Header().Set("Content-Disposition", mime.FormatMediaType(contentDisposition, map[string]string{
+			"filename": filename,
+		}))
+	}
 	w.WriteHeader(http.StatusOK)
 	_, _ = io.Copy(w, resp.Body)
 }
 
 func (br *Connector) GetPublicMediaAddress(contentURI id.ContentURIString) string {
+	return br.GetPublicMediaAddressWithFileName(contentURI, "")
+}
+
+func (br *Connector) GetPublicMediaAddressWithFileName(contentURI id.ContentURIString, fileName string) string {
 	if br.pubMediaSigKey == nil {
 		return ""
 	}
@@ -116,14 +132,20 @@ func (br *Connector) GetPublicMediaAddress(contentURI id.ContentURIString) strin
 	if err != nil || !parsed.IsValid() {
 		return ""
 	}
-	return strings.Join(
-		[]string{
-			br.GetPublicAddress(),
-			strings.Trim(br.Config.PublicMedia.PathPrefix, "/"),
-			parsed.Homeserver,
-			parsed.FileID,
-			base64.RawURLEncoding.EncodeToString(br.makePublicMediaChecksum(parsed)),
-		},
-		"/",
-	)
+	fileName = url.PathEscape(strings.ReplaceAll(fileName, "/", "_"))
+	if fileName == ".." {
+		fileName = ""
+	}
+	parts := []string{
+		br.GetPublicAddress(),
+		strings.Trim(br.Config.PublicMedia.PathPrefix, "/"),
+		parsed.Homeserver,
+		parsed.FileID,
+		base64.RawURLEncoding.EncodeToString(br.makePublicMediaChecksum(parsed)),
+		fileName,
+	}
+	if fileName == "" {
+		parts = parts[:len(parts)-1]
+	}
+	return strings.Join(parts, "/")
 }
