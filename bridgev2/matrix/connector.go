@@ -514,7 +514,8 @@ func (br *Connector) internalSendMessageStatus(ctx context.Context, ms *bridgev2
 				Msg("Failed to send MSS event")
 		}
 	}
-	if ms.SendNotice && br.Config.Matrix.MessageErrorNotices && (ms.Status == event.MessageStatusFail || ms.Status == event.MessageStatusRetriable || ms.Step == status.MsgStepDecrypted) {
+	if ms.SendNotice && br.Config.Matrix.MessageErrorNotices && evt.MessageType != event.MsgNotice &&
+		(ms.Status == event.MessageStatusFail || ms.Status == event.MessageStatusRetriable || ms.Step == status.MsgStepDecrypted) {
 		content := ms.ToNoticeEvent(evt)
 		if editEvent != "" {
 			content.SetEdit(editEvent)
