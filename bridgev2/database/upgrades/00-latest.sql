@@ -1,4 +1,4 @@
--- v0 -> v23 (compatible with v9+): Latest revision
+-- v0 -> v24 (compatible with v9+): Latest revision
 CREATE TABLE "user" (
 	bridge_id       TEXT NOT NULL,
 	mxid            TEXT NOT NULL,
