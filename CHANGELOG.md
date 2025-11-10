@@ -1,3 +1,43 @@
+## v0.26.0 (unreleased)
+
+* *(client,federation)* Added size limits for responses to make it safer to send
+  requests to untrusted servers.
+* *(client)* Added wrapper for `/admin/whois` client API
+  (thanks to [@nexy7574] in [#411]).
+* *(synapseadmin)* Added `force_purge` option to DeleteRoom
+  (thanks to [@nexy7574] in [#420]).
+* *(bridgev2)* Added optional automatic rollback of room state if bridging the
+  change to the remote network fails.
+* *(bridgev2)* Added management room notices if transient disconnect state
+  doesn't resolve within 3 minutes.
+* *(bridgev2)* Added interface to signal that certain participants couldn't be
+  invited when creating a group.
+* *(bridgev2)* Added `select` type for user input fields in login.
+* *(bridgev2/matrix)* Added checks to avoid sending error messages in reply to
+  other bots.
+* *(bridgev2/publicmedia)* Added support for custom path prefixes, file names,
+  and encrypted files.
+* *(bridgev2/commands)* Added command to resync a single portal.
+* *(bridgev2/commands)* Added create group command.
+* *(bridgev2/config)* Added option to limit maximum number of logins.
+* *(bridgev2/disappear)* Changed read receipt handling to only start
+  disappearing timers for messages up to the read message (note: may not work in
+  all cases if the read receipt points at an unknown event).
+* *(event/reply)* Changed plaintext reply fallback removal to only happen when
+  an HTML reply fallback is removed successfully.
+* *(bridgev2/matrix)* Fixed unnecessary sleep after registering bot on first run.
+* *(crypto/goolm)* Fixed panic when processing certain malformed Olm messages.
+* *(federation)* Fixed HTTP method for sending transactions
+  (thanks to [@nexy7574] in [#426]).
+* *(federation)* Fixed response body being closed even when using `DontReadBody`
+  parameter.
+* *(federation)* Fixed validating auth for requests with query params.
+* *(federation/eventauth)* Fixed typo causing restricted joins to not work.
+
+[#411]: github.com/mautrix/go/pull/411
+[#420]: github.com/mautrix/go/pull/420
+[#426]: github.com/mautrix/go/pull/426
+
 ## v0.25.2 (2025-10-16)
 
 * **Breaking change *(id)*** Split `UserID.ParseAndValidate` into
