@@ -4236,6 +4236,15 @@ func (portal *Portal) updateOtherUser(ctx context.Context, members *ChatMemberLi
 	return false
 }
 
+func (portal *Portal) roomIsPublic(ctx context.Context) bool {
+	evt, err := portal.Bridge.Matrix.(MatrixConnectorWithArbitraryRoomState).GetStateEvent(ctx, portal.MXID, event.StateJoinRules, "")
+	if err != nil {
+		zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to get join rules to check if room is public")
+		return false
+	}
+	return evt != nil && evt.Content.AsJoinRules().JoinRule == event.JoinRulePublic
+}
+
 func (portal *Portal) syncParticipants(
 	ctx context.Context,
 	members *ChatMemberList,
@@ -4304,7 +4313,7 @@ func (portal *Portal) syncParticipants(
 		wrappedContent := &event.Content{Parsed: content, Raw: exmaps.NonNilClone(member.MemberEventExtra)}
 		addExcludeFromTimeline(wrappedContent.Raw)
 		thisEvtSender := sender
-		if member.Membership == event.MembershipJoin {
+		if member.Membership == event.MembershipJoin && (intent == nil || !portal.roomIsPublic(ctx)) {
 			content.Membership = event.MembershipInvite
 			if intent != nil {
 				wrappedContent.Raw["fi.mau.will_auto_accept"] = true

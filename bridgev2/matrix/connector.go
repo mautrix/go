@@ -26,6 +26,7 @@ import (
 	_ "go.mau.fi/util/dbutil/litestream"
 	"go.mau.fi/util/exbytes"
 	"go.mau.fi/util/exsync"
+	"go.mau.fi/util/ptr"
 	"go.mau.fi/util/random"
 	"golang.org/x/sync/semaphore"
 
@@ -599,10 +600,25 @@ func (br *Connector) GetPowerLevels(ctx context.Context, roomID id.RoomID) (*eve
 }
 
 func (br *Connector) GetStateEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string) (*event.Event, error) {
-	if eventType == event.StateCreate && stateKey == "" {
-		createEvt, err := br.Bot.StateStore.GetCreate(ctx, roomID)
-		if err != nil || createEvt != nil {
-			return createEvt, err
+	if stateKey == "" {
+		switch eventType {
+		case event.StateCreate:
+			createEvt, err := br.Bot.StateStore.GetCreate(ctx, roomID)
+			if err != nil || createEvt != nil {
+				return createEvt, err
+			}
+		case event.StateJoinRules:
+			joinRulesContent, err := br.Bot.StateStore.GetJoinRules(ctx, roomID)
+			if err != nil {
+				return nil, err
+			} else if joinRulesContent != nil {
+				return &event.Event{
+					Type:     event.StateJoinRules,
+					RoomID:   roomID,
+					StateKey: ptr.Ptr(""),
+					Content:  event.Content{Parsed: joinRulesContent},
+				}, nil
+			}
 		}
 	}
 	return br.Bot.FullStateEvent(ctx, roomID, eventType, "")
