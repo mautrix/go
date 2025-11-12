@@ -172,6 +172,10 @@ func (ul *UserLogin) GetSpaceRoom(ctx context.Context) (id.RoomID, error) {
 		// TODO remove this after initial_members is supported in hungryserv
 		req.BeeperAutoJoinInvites = true
 	}
+	pfc, ok := ul.Client.(PersonalFilteringCustomizingNetworkAPI)
+	if ok {
+		pfc.CustomizePersonalFilteringSpace(req)
+	}
 	ul.SpaceRoom, err = ul.Bridge.Bot.CreateRoom(ctx, req)
 	if err != nil {
 		return "", fmt.Errorf("failed to create space room: %w", err)

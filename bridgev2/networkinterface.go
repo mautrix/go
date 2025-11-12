@@ -18,6 +18,7 @@ import (
 	"go.mau.fi/util/ptr"
 	"go.mau.fi/util/random"
 
+	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
@@ -292,6 +293,11 @@ type TransactionIDGeneratingNetwork interface {
 type PortalBridgeInfoFillingNetwork interface {
 	NetworkConnector
 	FillPortalBridgeInfo(portal *Portal, content *event.BridgeEventContent)
+}
+
+type PersonalFilteringCustomizingNetworkAPI interface {
+	NetworkAPI
+	CustomizePersonalFilteringSpace(req *mautrix.ReqCreateRoom)
 }
 
 // ConfigValidatingNetwork is an optional interface that network connectors can implement to validate config fields
