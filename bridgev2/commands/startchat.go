@@ -8,6 +8,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"html"
 	"maps"
@@ -118,9 +119,13 @@ func fnResolveIdentifier(ce *Event) {
 	if api == nil {
 		return
 	}
+	allLogins := ce.User.GetUserLogins()
 	createChat := ce.Command == "start-chat" || ce.Command == "pm"
 	identifier := strings.Join(identifierParts, " ")
 	resp, err := provisionutil.ResolveIdentifier(ce.Ctx, login, identifier, createChat)
+	for i := 0; i < len(allLogins) && errors.Is(err, bridgev2.ErrResolveIdentifierTryNext); i++ {
+		resp, err = provisionutil.ResolveIdentifier(ce.Ctx, allLogins[i], identifier, createChat)
+	}
 	if err != nil {
 		ce.Reply("Failed to resolve identifier: %v", err)
 		return
