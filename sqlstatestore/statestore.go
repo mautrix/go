@@ -470,3 +470,26 @@ func (store *SQLStateStore) GetCreate(ctx context.Context, roomID id.RoomID) (ev
 	}
 	return
 }
+
+func (store *SQLStateStore) SetJoinRules(ctx context.Context, roomID id.RoomID, rules *event.JoinRulesEventContent) error {
+	if roomID == "" {
+		return fmt.Errorf("room ID is empty")
+	}
+	_, err := store.Exec(ctx, `
+		INSERT INTO mx_room_state (room_id, join_rules) VALUES ($1, $2)
+		ON CONFLICT (room_id) DO UPDATE SET join_rules=excluded.join_rules
+	`, roomID, dbutil.JSON{Data: rules})
+	return err
+}
+
+func (store *SQLStateStore) GetJoinRules(ctx context.Context, roomID id.RoomID) (levels *event.JoinRulesEventContent, err error) {
+	levels = &event.JoinRulesEventContent{}
+	err = store.
+		QueryRow(ctx, "SELECT join_rules FROM mx_room_state WHERE room_id=$1 AND join_rules IS NOT NULL", roomID).
+		Scan(&dbutil.JSON{Data: &levels})
+	if errors.Is(err, sql.ErrNoRows) {
+		levels = nil
+		err = nil
+	}
+	return
+}

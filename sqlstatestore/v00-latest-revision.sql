@@ -1,4 +1,4 @@
--- v0 -> v9 (compatible with v3+): Latest revision
+-- v0 -> v10 (compatible with v3+): Latest revision
 
 CREATE TABLE mx_registrations (
 	user_id TEXT PRIMARY KEY
@@ -27,5 +27,6 @@ CREATE TABLE mx_room_state (
 	power_levels    jsonb,
 	encryption      jsonb,
 	create_event    jsonb,
+	join_rules      jsonb,
 	members_fetched BOOLEAN NOT NULL DEFAULT false
 );
