@@ -60,6 +60,8 @@ type RoomFeatures struct {
 	MarkAsUnread          bool `json:"mark_as_unread,omitempty"`
 	DeleteChat            bool `json:"delete_chat,omitempty"`
 	DeleteChatForEveryone bool `json:"delete_chat_for_everyone,omitempty"`
+
+	PerMessageProfileRelay bool `json:"-"`
 }
 
 func (rf *RoomFeatures) GetID() string {

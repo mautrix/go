@@ -1054,10 +1054,12 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 			log.Debug().Msg("Ignoring poll event from relayed user")
 			return EventHandlingResultIgnored.WithMSSError(ErrIgnoringPollFromRelayedUser)
 		}
-		msgContent, err = portal.Bridge.Config.Relay.FormatMessage(msgContent, origSender)
-		if err != nil {
-			log.Err(err).Msg("Failed to format message for relaying")
-			return EventHandlingResultFailed.WithMSSError(err)
+		if !caps.PerMessageProfileRelay {
+			msgContent, err = portal.Bridge.Config.Relay.FormatMessage(msgContent, origSender)
+			if err != nil {
+				log.Err(err).Msg("Failed to format message for relaying")
+				return EventHandlingResultFailed.WithMSSError(err)
+			}
 		}
 	}
 	if msgContent != nil {
