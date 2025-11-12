@@ -4236,13 +4236,33 @@ func (portal *Portal) updateOtherUser(ctx context.Context, members *ChatMemberLi
 	return false
 }
 
+func looksDirectlyJoinable(rule *event.JoinRulesEventContent) bool {
+	switch rule.JoinRule {
+	case event.JoinRulePublic:
+		return true
+	case event.JoinRuleKnockRestricted, event.JoinRuleRestricted:
+		for _, allow := range rule.Allow {
+			if allow.Type == "fi.mau.spam_checker" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (portal *Portal) roomIsPublic(ctx context.Context) bool {
 	evt, err := portal.Bridge.Matrix.(MatrixConnectorWithArbitraryRoomState).GetStateEvent(ctx, portal.MXID, event.StateJoinRules, "")
 	if err != nil {
 		zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to get join rules to check if room is public")
 		return false
+	} else if evt == nil {
+		return false
 	}
-	return evt != nil && evt.Content.AsJoinRules().JoinRule == event.JoinRulePublic
+	content, ok := evt.Content.Parsed.(*event.JoinRulesEventContent)
+	if !ok {
+		return false
+	}
+	return looksDirectlyJoinable(content)
 }
 
 func (portal *Portal) syncParticipants(
