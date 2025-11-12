@@ -78,6 +78,7 @@ type BridgeConfig struct {
 	CrossRoomReplies          bool             `yaml:"cross_room_replies"`
 	OutgoingMessageReID       bool             `yaml:"outgoing_message_re_id"`
 	RevertFailedStateChanges  bool             `yaml:"revert_failed_state_changes"`
+	KickMatrixUsers           bool             `yaml:"kick_matrix_users"`
 	CleanupOnLogout           CleanupOnLogouts `yaml:"cleanup_on_logout"`
 	Relay                     RelayConfig      `yaml:"relay"`
 	Permissions               PermissionConfig `yaml:"permissions"`

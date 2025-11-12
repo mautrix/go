@@ -4411,7 +4411,7 @@ func (portal *Portal) syncParticipants(
 			if memberEvt.Membership == event.MembershipLeave || memberEvt.Membership == event.MembershipBan {
 				continue
 			}
-			if !portal.Bridge.IsGhostMXID(extraMember) && portal.Relay != nil {
+			if !portal.Bridge.IsGhostMXID(extraMember) && (portal.Relay != nil || !portal.Bridge.Config.KickMatrixUsers) {
 				continue
 			}
 			_, err = portal.Bridge.Bot.SendState(ctx, portal.MXID, event.StateMember, extraMember.String(), &event.Content{

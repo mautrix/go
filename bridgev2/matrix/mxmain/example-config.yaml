@@ -49,6 +49,9 @@ bridge:
     cross_room_replies: false
     # If a state event fails to bridge, should the bridge revert any state changes made by that event?
     revert_failed_state_changes: false
+    # In portals with no relay set, should Matrix users be kicked if they're
+    # not logged into an account that's in the remote chat?
+    kick_matrix_users: true
 
     # What should be done to portal rooms when a user logs out or is logged out?
     # Permitted values:
