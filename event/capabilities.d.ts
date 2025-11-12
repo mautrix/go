@@ -16,7 +16,22 @@ export interface RoomFeatures {
 	 * If a message type isn't listed here, it should be treated as support level -2 (will be rejected).
 	 */
 	file?: Record<CapabilityMsgType, FileFeatures>
+	/**
+	 * Supported state event types and their parameters. Currently, there are no parameters,
+	 * but it is likely there will be some in the future (like max name/topic length, avatar mime types, etc.).
+	 *
+	 * Events that are not listed or have a support level of zero or below should be treated as unsupported.
+	 *
+	 * Clients should at least check `m.room.name`, `m.room.topic`, and `m.room.avatar` here.
+	 * `m.room.member` will not be listed here, as it's controlled by the member_actions field.
+	 * `com.beeper.disappearing_timer` should be listed here, but the parameters are in the disappearing_timer field for now.
+	 */
 	state?: Record<EventType, StateFeatures>
+	/**
+	 * Supported member actions and their support levels.
+	 *
+	 * Actions that are not listed or have a support level of zero or below should be treated as unsupported.
+	 */
 	member_actions?: Record<MemberAction, CapabilitySupportLevel>
 
 	/** Maximum length of normal text messages. */
