@@ -394,6 +394,9 @@ func (portal *Portal) compileBatchMessage(ctx context.Context, source *UserLogin
 	}
 	slices.Sort(partIDs)
 	for _, reaction := range msg.Reactions {
+		if reaction == nil {
+			continue
+		}
 		reactionIntent, ok := portal.GetIntentFor(ctx, reaction.Sender, source, RemoteEventReactionRemove)
 		if !ok {
 			continue
