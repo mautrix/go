@@ -48,8 +48,7 @@ func (as *ASIntent) SendMessage(ctx context.Context, roomID id.RoomID, eventType
 	if extra == nil {
 		extra = &bridgev2.MatrixSendExtra{}
 	}
-	// TODO remove this once hungryserv and synapse support sending m.room.redactions directly in all room versions
-	if eventType == event.EventRedaction {
+	if eventType == event.EventRedaction && !as.Connector.SpecVersions.Supports(mautrix.FeatureRedactSendAsEvent) {
 		parsedContent := content.Parsed.(*event.RedactionEventContent)
 		as.Matrix.AddDoublePuppetValue(content)
 		return as.Matrix.RedactEvent(ctx, roomID, parsedContent.Redacts, mautrix.ReqRedact{

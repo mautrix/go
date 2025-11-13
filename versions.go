@@ -69,6 +69,7 @@ var (
 	FeatureAccountModeration      = UnstableFeature{UnstableFlag: "uk.timedout.msc4323"}
 	FeatureUnstableProfileFields  = UnstableFeature{UnstableFlag: "uk.tcpip.msc4133"}
 	FeatureArbitraryProfileFields = UnstableFeature{UnstableFlag: "uk.tcpip.msc4133.stable", SpecVersion: SpecV116}
+	FeatureRedactSendAsEvent      = UnstableFeature{UnstableFlag: "com.beeper.msc4169"}
 
 	BeeperFeatureHungry                = UnstableFeature{UnstableFlag: "com.beeper.hungry"}
 	BeeperFeatureBatchSending          = UnstableFeature{UnstableFlag: "com.beeper.batch_sending"}
