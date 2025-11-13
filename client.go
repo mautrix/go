@@ -1342,9 +1342,9 @@ func (cli *Client) SendMessageEvent(ctx context.Context, roomID id.RoomID, event
 	return
 }
 
-// SendStateEvent sends a state event into a room. See https://spec.matrix.org/v1.2/client-server-api/#put_matrixclientv3roomsroomidstateeventtypestatekey
+// SendStateEvent sends a state event into a room. See https://spec.matrix.org/v1.16/client-server-api/#put_matrixclientv3roomsroomidstateeventtypestatekey
 // contentJSON should be a pointer to something that can be encoded as JSON using json.Marshal.
-func (cli *Client) SendStateEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string, contentJSON interface{}, extra ...ReqSendEvent) (resp *RespSendEvent, err error) {
+func (cli *Client) SendStateEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string, contentJSON any, extra ...ReqSendEvent) (resp *RespSendEvent, err error) {
 	var req ReqSendEvent
 	if len(extra) > 0 {
 		req = extra[0]
@@ -1360,6 +1360,9 @@ func (cli *Client) SendStateEvent(ctx context.Context, roomID id.RoomID, eventTy
 	if req.UnstableDelay > 0 {
 		queryParams["org.matrix.msc4140.delay"] = strconv.FormatInt(req.UnstableDelay.Milliseconds(), 10)
 	}
+	if req.Timestamp > 0 {
+		queryParams["ts"] = strconv.FormatInt(req.Timestamp, 10)
+	}
 
 	urlData := ClientURLPath{"v3", "rooms", roomID, "state", eventType.String(), stateKey}
 	urlPath := cli.BuildURLWithQuery(urlData, queryParams)
@@ -1372,14 +1375,12 @@ func (cli *Client) SendStateEvent(ctx context.Context, roomID id.RoomID, eventTy
 
 // SendMassagedStateEvent sends a state event into a room with a custom timestamp. See https://spec.matrix.org/v1.2/client-server-api/#put_matrixclientv3roomsroomidstateeventtypestatekey
 // contentJSON should be a pointer to something that can be encoded as JSON using json.Marshal.
+//
+// Deprecated: SendStateEvent accepts a timestamp via ReqSendEvent and should be used instead.
 func (cli *Client) SendMassagedStateEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string, contentJSON interface{}, ts int64) (resp *RespSendEvent, err error) {
-	urlPath := cli.BuildURLWithQuery(ClientURLPath{"v3", "rooms", roomID, "state", eventType.String(), stateKey}, map[string]string{
-		"ts": strconv.FormatInt(ts, 10),
+	resp, err = cli.SendStateEvent(ctx, roomID, eventType, stateKey, contentJSON, ReqSendEvent{
+		Timestamp: ts,
 	})
-	_, err = cli.MakeRequest(ctx, http.MethodPut, urlPath, contentJSON, &resp)
-	if err == nil && cli.StateStore != nil {
-		cli.updateStoreWithOutgoingEvent(ctx, roomID, eventType, stateKey, contentJSON)
-	}
 	return
 }
 

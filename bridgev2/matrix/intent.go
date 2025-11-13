@@ -82,11 +82,7 @@ func (as *ASIntent) SendMessage(ctx context.Context, roomID id.RoomID, eventType
 			eventType = event.EventEncrypted
 		}
 	}
-	if extra.Timestamp.IsZero() {
-		return as.Matrix.SendMessageEvent(ctx, roomID, eventType, content)
-	} else {
-		return as.Matrix.SendMassagedMessageEvent(ctx, roomID, eventType, content, extra.Timestamp.UnixMilli())
-	}
+	return as.Matrix.SendMessageEvent(ctx, roomID, eventType, content, mautrix.ReqSendEvent{Timestamp: extra.Timestamp.UnixMilli()})
 }
 
 func (as *ASIntent) fillMemberEvent(ctx context.Context, roomID id.RoomID, userID id.UserID, content *event.Content) {
@@ -126,11 +122,7 @@ func (as *ASIntent) SendState(ctx context.Context, roomID id.RoomID, eventType e
 	if eventType == event.StateMember {
 		as.fillMemberEvent(ctx, roomID, id.UserID(stateKey), content)
 	}
-	if ts.IsZero() {
-		resp, err = as.Matrix.SendStateEvent(ctx, roomID, eventType, stateKey, content)
-	} else {
-		resp, err = as.Matrix.SendMassagedStateEvent(ctx, roomID, eventType, stateKey, content, ts.UnixMilli())
-	}
+	resp, err = as.Matrix.SendStateEvent(ctx, roomID, eventType, stateKey, content, mautrix.ReqSendEvent{Timestamp: ts.UnixMilli()})
 	if err != nil && eventType == event.StateMember {
 		var httpErr mautrix.HTTPError
 		if errors.As(err, &httpErr) && httpErr.RespError != nil &&
