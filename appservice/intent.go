@@ -243,7 +243,11 @@ func (intent *IntentAPI) SendStateEvent(ctx context.Context, roomID id.RoomID, e
 }
 
 func (intent *IntentAPI) SendMassagedStateEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string, contentJSON interface{}, ts int64) (*mautrix.RespSendEvent, error) {
-	if err := intent.EnsureJoined(ctx, roomID); err != nil {
+	if eventType != event.StateMember || stateKey != string(intent.UserID) {
+		if err := intent.EnsureJoined(ctx, roomID); err != nil {
+			return nil, err
+		}
+	} else if err := intent.EnsureRegistered(ctx); err != nil {
 		return nil, err
 	}
 	contentJSON = intent.AddDoublePuppetValueWithTS(contentJSON, ts)
