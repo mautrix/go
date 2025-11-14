@@ -512,6 +512,13 @@ func (portal *Portal) handleSingleEvent(ctx context.Context, rawEvt any, doneCal
 	}()
 	switch evt := rawEvt.(type) {
 	case *portalMatrixEvent:
+		isStateRequest := evt.evt.Type == event.BeeperSendState
+		if isStateRequest {
+			if err := portal.unwrapBeeperSendState(ctx, evt.evt); err != nil {
+				portal.sendErrorStatus(ctx, evt.evt, err)
+				return
+			}
+		}
 		res = portal.handleMatrixEvent(ctx, evt.sender, evt.evt)
 		if res.SendMSS {
 			if res.Error != nil {
@@ -520,8 +527,20 @@ func (portal *Portal) handleSingleEvent(ctx context.Context, rawEvt any, doneCal
 				portal.sendSuccessStatus(ctx, evt.evt, 0, "")
 			}
 		}
-		if res.Error != nil && evt.evt.StateKey != nil {
+		if !isStateRequest && res.Error != nil && evt.evt.StateKey != nil {
 			portal.revertRoomMeta(ctx, evt.evt)
+		}
+		if isStateRequest && res.Success {
+			portal.sendRoomMeta(
+				ctx,
+				evt.sender.DoublePuppet(ctx),
+				time.UnixMilli(evt.evt.Timestamp),
+				evt.evt.Type,
+				evt.evt.GetStateKey(),
+				evt.evt.Content.Parsed,
+				false,
+				evt.evt.Content.Raw,
+			)
 		}
 	case *portalRemoteEvent:
 		res = portal.handleRemoteEvent(ctx, evt.source, evt.evtType, evt.evt)
@@ -532,6 +551,29 @@ func (portal *Portal) handleSingleEvent(ctx context.Context, rawEvt any, doneCal
 	default:
 		panic(fmt.Errorf("illegal type %T in eventLoop", evt))
 	}
+}
+
+func (portal *Portal) unwrapBeeperSendState(ctx context.Context, evt *event.Event) error {
+	content, ok := evt.Content.Parsed.(*event.BeeperSendStateEventContent)
+	if !ok {
+		return fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed)
+	}
+	evt.Content = content.Content
+	evt.StateKey = &content.StateKey
+	evt.Type = event.Type{Type: content.Type, Class: event.StateEventType}
+	_ = evt.Content.ParseRaw(evt.Type)
+	mx, ok := portal.Bridge.Matrix.(MatrixConnectorWithArbitraryRoomState)
+	if !ok {
+		return fmt.Errorf("matrix connector doesn't support fetching state")
+	}
+	prevEvt, err := mx.GetStateEvent(ctx, portal.MXID, evt.Type, evt.GetStateKey())
+	if err != nil {
+		return fmt.Errorf("failed to get prev event: %w", err)
+	} else if prevEvt != nil {
+		evt.Unsigned.PrevContent = &prevEvt.Content
+		evt.Unsigned.PrevSender = prevEvt.Sender
+	}
+	return nil
 }
 
 func (portal *Portal) FindPreferredLogin(ctx context.Context, user *User, allowRelay bool) (*UserLogin, *database.UserPortal, error) {

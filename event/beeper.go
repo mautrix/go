@@ -90,6 +90,12 @@ type BeeperChatDeleteEventContent struct {
 	DeleteForEveryone bool `json:"delete_for_everyone,omitempty"`
 }
 
+type BeeperSendStateEventContent struct {
+	Type     string  `json:"type"`
+	StateKey string  `json:"state_key"`
+	Content  Content `json:"content"`
+}
+
 type IntOrString int
 
 func (ios *IntOrString) UnmarshalJSON(data []byte) error {
