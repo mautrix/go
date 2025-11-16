@@ -1,11 +1,14 @@
-## v0.26.0 (unreleased)
+## v0.26.0 (2025-11-16)
 
+* *(client,appservice)* Deprecated `SendMassagedStateEvent` as `SendStateEvent`
+  has been able to do the same for a while now.
 * *(client,federation)* Added size limits for responses to make it safer to send
   requests to untrusted servers.
 * *(client)* Added wrapper for `/admin/whois` client API
   (thanks to [@nexy7574] in [#411]).
 * *(synapseadmin)* Added `force_purge` option to DeleteRoom
   (thanks to [@nexy7574] in [#420]).
+* *(statestore)* Added saving join rules for rooms.
 * *(bridgev2)* Added optional automatic rollback of room state if bridging the
   change to the remote network fails.
 * *(bridgev2)* Added management room notices if transient disconnect state
@@ -13,13 +16,19 @@
 * *(bridgev2)* Added interface to signal that certain participants couldn't be
   invited when creating a group.
 * *(bridgev2)* Added `select` type for user input fields in login.
+* *(bridgev2)* Added interface to let network connector customize personal
+  filtering space.
 * *(bridgev2/matrix)* Added checks to avoid sending error messages in reply to
   other bots.
+* *(bridgev2/matrix)* Switched to using [MSC4169] to send redactions whenever
+  possible.
 * *(bridgev2/publicmedia)* Added support for custom path prefixes, file names,
   and encrypted files.
 * *(bridgev2/commands)* Added command to resync a single portal.
 * *(bridgev2/commands)* Added create group command.
 * *(bridgev2/config)* Added option to limit maximum number of logins.
+* *(bridgev2)* Changed ghost joining to skip unnecessary invite if portal room
+  is public.
 * *(bridgev2/disappear)* Changed read receipt handling to only start
   disappearing timers for messages up to the read message (note: may not work in
   all cases if the read receipt points at an unknown event).
@@ -34,6 +43,7 @@
 * *(federation)* Fixed validating auth for requests with query params.
 * *(federation/eventauth)* Fixed typo causing restricted joins to not work.
 
+[MSC416]: https://github.com/matrix-org/matrix-spec-proposals/pull/4169
 [#411]: github.com/mautrix/go/pull/411
 [#420]: github.com/mautrix/go/pull/420
 [#426]: github.com/mautrix/go/pull/426
