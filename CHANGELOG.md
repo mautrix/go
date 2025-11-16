@@ -43,7 +43,7 @@
 * *(federation)* Fixed validating auth for requests with query params.
 * *(federation/eventauth)* Fixed typo causing restricted joins to not work.
 
-[MSC416]: https://github.com/matrix-org/matrix-spec-proposals/pull/4169
+[MSC4169]: https://github.com/matrix-org/matrix-spec-proposals/pull/4169
 [#411]: github.com/mautrix/go/pull/411
 [#420]: github.com/mautrix/go/pull/420
 [#426]: github.com/mautrix/go/pull/426
