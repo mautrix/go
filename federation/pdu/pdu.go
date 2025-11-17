@@ -60,12 +60,12 @@ type InternalMeta struct {
 }
 
 type PDU struct {
-	AuthEvents     []id.EventID                   `json:"auth_events,omitzero"`
+	AuthEvents     []id.EventID                   `json:"auth_events"`
 	Content        jsontext.Value                 `json:"content"`
 	Depth          int64                          `json:"depth"`
 	Hashes         *Hashes                        `json:"hashes,omitzero"`
 	OriginServerTS int64                          `json:"origin_server_ts"`
-	PrevEvents     []id.EventID                   `json:"prev_events,omitzero"`
+	PrevEvents     []id.EventID                   `json:"prev_events"`
 	Redacts        *id.EventID                    `json:"redacts,omitzero"`
 	RoomID         id.RoomID                      `json:"room_id,omitzero"` // not present for room v12+ create events
 	Sender         id.UserID                      `json:"sender"`
