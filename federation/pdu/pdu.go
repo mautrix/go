@@ -11,8 +11,8 @@ package pdu
 import (
 	"bytes"
 	"crypto/ed25519"
-	"encoding/json"
 	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"strings"
