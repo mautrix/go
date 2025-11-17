@@ -129,6 +129,7 @@ func NewMemoryStateStore() StateStore {
 		PowerLevels:    make(map[id.RoomID]*event.PowerLevelsEventContent),
 		Encryption:     make(map[id.RoomID]*event.EncryptionEventContent),
 		Create:         make(map[id.RoomID]*event.Event),
+		JoinRules:      make(map[id.RoomID]*event.JoinRulesEventContent),
 	}
 }
 
