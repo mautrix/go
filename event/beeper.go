@@ -53,6 +53,8 @@ type BeeperMessageStatusEventContent struct {
 
 	LastRetry id.EventID `json:"last_retry,omitempty"`
 
+	TargetTxnID string `json:"relates_to_txn_id,omitempty"`
+
 	MutateEventKey string `json:"mutate_event_key,omitempty"`
 
 	// Indicates the set of users to whom the event was delivered. If nil, then
@@ -88,6 +90,12 @@ type BeeperRoomKeyAckEventContent struct {
 
 type BeeperChatDeleteEventContent struct {
 	DeleteForEveryone bool `json:"delete_for_everyone,omitempty"`
+}
+
+type BeeperSendStateEventContent struct {
+	Type     string  `json:"type"`
+	StateKey string  `json:"state_key"`
+	Content  Content `json:"content"`
 }
 
 type IntOrString int
