@@ -622,7 +622,7 @@ func (br *Connector) GetStateEvent(ctx context.Context, roomID id.RoomID, eventT
 			}
 		}
 	}
-	return br.Bot.FullStateEvent(ctx, roomID, eventType, "")
+	return br.Bot.FullStateEvent(ctx, roomID, eventType, stateKey)
 }
 
 func (br *Connector) GetMembers(ctx context.Context, roomID id.RoomID) (map[id.UserID]*event.MemberEventContent, error) {
