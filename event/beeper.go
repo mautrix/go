@@ -53,6 +53,8 @@ type BeeperMessageStatusEventContent struct {
 
 	LastRetry id.EventID `json:"last_retry,omitempty"`
 
+	TargetTxnID string `json:"relates_to_txn_id,omitempty"`
+
 	MutateEventKey string `json:"mutate_event_key,omitempty"`
 
 	// Indicates the set of users to whom the event was delivered. If nil, then

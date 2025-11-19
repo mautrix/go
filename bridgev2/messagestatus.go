@@ -20,6 +20,7 @@ import (
 
 type MessageStatusEventInfo struct {
 	RoomID        id.RoomID
+	TransactionID string
 	SourceEventID id.EventID
 	NewEventID    id.EventID
 	EventType     event.Type
@@ -41,6 +42,7 @@ func StatusEventInfoFromEvent(evt *event.Event) *MessageStatusEventInfo {
 
 	return &MessageStatusEventInfo{
 		RoomID:        evt.RoomID,
+		TransactionID: evt.Unsigned.TransactionID,
 		SourceEventID: evt.ID,
 		EventType:     evt.Type,
 		MessageType:   evt.Content.AsMessage().MsgType,
@@ -182,9 +184,10 @@ func (ms *MessageStatus) ToMSSEvent(evt *MessageStatusEventInfo) *event.BeeperMe
 			Type:    event.RelReference,
 			EventID: evt.SourceEventID,
 		},
-		Status:  ms.Status,
-		Reason:  ms.ErrorReason,
-		Message: ms.Message,
+		TargetTxnID: evt.TransactionID,
+		Status:      ms.Status,
+		Reason:      ms.ErrorReason,
+		Message:     ms.Message,
 	}
 	if ms.InternalError != nil {
 		content.InternalError = ms.InternalError.Error()
