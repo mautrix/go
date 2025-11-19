@@ -567,7 +567,7 @@ func (portal *Portal) unwrapBeeperSendState(ctx context.Context, evt *event.Even
 		return fmt.Errorf("matrix connector doesn't support fetching state")
 	}
 	prevEvt, err := mx.GetStateEvent(ctx, portal.MXID, evt.Type, evt.GetStateKey())
-	if err != nil {
+	if err != nil && !errors.Is(err, mautrix.MNotFound) {
 		return fmt.Errorf("failed to get prev event: %w", err)
 	} else if prevEvt != nil {
 		evt.Unsigned.PrevContent = &prevEvt.Content
