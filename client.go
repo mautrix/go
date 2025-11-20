@@ -745,7 +745,10 @@ func (cli *Client) executeCompiledRequest(
 		defer res.Body.Close()
 	}
 	if err != nil {
-		if retries > 0 && !errors.Is(err, context.Canceled) {
+		// Either error is *not* canceled or the underlying cause of cancelation explicitly asks to retry
+		canRetry := !errors.Is(err, context.Canceled) ||
+			errors.Is(context.Cause(req.Context()), ErrContextCancelRetry)
+		if retries > 0 && canRetry {
 			return cli.doRetry(
 				req, err, retries, backoff, responseJSON, handler, dontReadResponse, sizeLimit, client,
 			)
