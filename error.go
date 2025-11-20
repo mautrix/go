@@ -85,6 +85,10 @@ var (
 
 	ErrResponseTooLong      = errors.New("response content length too long")
 	ErrBodyReadReachedLimit = errors.New("reached response size limit while reading body")
+
+	// Special error that indicates we should retry canceled contexts. Note that on it's own this
+	// is useless, the context itself must also be replaced.
+	ErrContextCancelRetry = errors.New("retry canceled context")
 )
 
 // HTTPError An HTTP Error response, which may wrap an underlying native Go Error.
