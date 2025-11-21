@@ -4295,7 +4295,11 @@ func looksDirectlyJoinable(rule *event.JoinRulesEventContent) bool {
 }
 
 func (portal *Portal) roomIsPublic(ctx context.Context) bool {
-	evt, err := portal.Bridge.Matrix.(MatrixConnectorWithArbitraryRoomState).GetStateEvent(ctx, portal.MXID, event.StateJoinRules, "")
+	mx, ok := portal.Bridge.Matrix.(MatrixConnectorWithArbitraryRoomState)
+	if !ok {
+		return false
+	}
+	evt, err := mx.GetStateEvent(ctx, portal.MXID, event.StateJoinRules, "")
 	if err != nil {
 		zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to get join rules to check if room is public")
 		return false
