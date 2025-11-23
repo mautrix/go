@@ -109,6 +109,7 @@ func ResolveIdentifier(
 				return nil, bridgev2.RespError(mautrix.MUnknown.WithMessage("Failed to get portal"))
 			}
 		}
+		resp.Chat.Portal.CleanupOrphanedDM(ctx, login.UserMXID)
 		if createChat && resp.Chat.Portal.MXID == "" {
 			apiResp.JustCreated = true
 			err := resp.Chat.Portal.CreateMatrixRoom(ctx, login, resp.Chat.PortalInfo)
