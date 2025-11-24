@@ -22,6 +22,8 @@ import (
 	"maunium.net/go/mautrix/format"
 )
 
+var CatchBridgeStateQueuePanics = true
+
 type BridgeStateQueue struct {
 	prevUnsent *status.BridgeState
 	prevSent   *status.BridgeState
@@ -84,15 +86,17 @@ func (bsq *BridgeStateQueue) StopUnknownErrorReconnect() {
 }
 
 func (bsq *BridgeStateQueue) loop() {
-	defer func() {
-		err := recover()
-		if err != nil {
-			bsq.login.Log.Error().
-				Bytes(zerolog.ErrorStackFieldName, debug.Stack()).
-				Any(zerolog.ErrorFieldName, err).
-				Msg("Panic in bridge state loop")
-		}
-	}()
+	if CatchBridgeStateQueuePanics {
+		defer func() {
+			err := recover()
+			if err != nil {
+				bsq.login.Log.Error().
+					Bytes(zerolog.ErrorStackFieldName, debug.Stack()).
+					Any(zerolog.ErrorFieldName, err).
+					Msg("Panic in bridge state loop")
+			}
+		}()
+	}
 	for state := range bsq.ch {
 		bsq.immediateSendBridgeState(state)
 	}
