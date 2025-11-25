@@ -37,7 +37,7 @@ func fnSetRelay(ce *Event) {
 	}
 	onlySetDefaultRelays := !ce.User.Permissions.Admin && ce.Bridge.Config.Relay.AdminOnly
 	var relay *bridgev2.UserLogin
-	if len(ce.Args) == 0 {
+	if len(ce.Args) == 0 && ce.Portal.Receiver == "" {
 		relay = ce.User.GetDefaultLogin()
 		isLoggedIn := relay != nil
 		if onlySetDefaultRelays {
@@ -73,9 +73,19 @@ func fnSetRelay(ce *Event) {
 			}
 		}
 	} else {
-		relay = ce.Bridge.GetCachedUserLoginByID(networkid.UserLoginID(ce.Args[0]))
+		var targetID networkid.UserLoginID
+		if ce.Portal.Receiver != "" {
+			targetID = ce.Portal.Receiver
+			if len(ce.Args) > 0 && ce.Args[0] != string(targetID) {
+				ce.Reply("In split portals, only the receiver (%s) can be set as relay", targetID)
+				return
+			}
+		} else {
+			targetID = networkid.UserLoginID(ce.Args[0])
+		}
+		relay = ce.Bridge.GetCachedUserLoginByID(targetID)
 		if relay == nil {
-			ce.Reply("User login with ID `%s` not found", ce.Args[0])
+			ce.Reply("User login with ID `%s` not found", targetID)
 			return
 		} else if slices.Contains(ce.Bridge.Config.Relay.DefaultRelays, relay.ID) {
 			// All good
