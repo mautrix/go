@@ -582,12 +582,15 @@ func (portal *Portal) FindPreferredLogin(ctx context.Context, user *User, allowR
 		if err != nil {
 			return nil, nil, err
 		}
-		if login == nil || login.UserMXID != user.MXID || !login.Client.IsLoggedIn() {
+		if login == nil {
+			return nil, nil, fmt.Errorf("%w (receiver login is nil)", ErrNotLoggedIn)
+		} else if !login.Client.IsLoggedIn() {
+			return nil, nil, fmt.Errorf("%w (receiver login is not logged in)", ErrNotLoggedIn)
+		} else if login.UserMXID != user.MXID {
 			if allowRelay && portal.Relay != nil {
 				return nil, nil, nil
 			}
-			// TODO different error for this case?
-			return nil, nil, ErrNotLoggedIn
+			return nil, nil, fmt.Errorf("%w (relay not set and receiver login is owned by %s, not %s)", ErrNotLoggedIn, login.UserMXID, user.MXID)
 		}
 		up, err := portal.Bridge.DB.UserPortal.Get(ctx, login.UserLogin, portal.PortalKey)
 		return login, up, err
