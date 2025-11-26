@@ -57,6 +57,7 @@ type EncryptedKeyData struct {
 
 type EncryptedAccountDataEventContent struct {
 	Encrypted map[string]EncryptedKeyData `json:"encrypted"`
+	Metadata  map[string]any              `json:"com.beeper.metadata,omitzero"`
 }
 
 func (ed *EncryptedAccountDataEventContent) Decrypt(eventType string, key *Key) ([]byte, error) {

@@ -95,6 +95,22 @@ func (mach *Machine) SetEncryptedAccountData(ctx context.Context, eventType even
 	return mach.Client.SetAccountData(ctx, eventType.Type, &EncryptedAccountDataEventContent{Encrypted: encrypted})
 }
 
+// SetEncryptedAccountDataWithMetadata encrypts the given data with the given keys and stores it,
+// alongside the unencrypted metadata, on the server.
+func (mach *Machine) SetEncryptedAccountDataWithMetadata(ctx context.Context, eventType event.Type, data []byte, metadata map[string]any, keys ...*Key) error {
+	if len(keys) == 0 {
+		return ErrNoKeyGiven
+	}
+	encrypted := make(map[string]EncryptedKeyData, len(keys))
+	for _, key := range keys {
+		encrypted[key.ID] = key.Encrypt(eventType.Type, data)
+	}
+	return mach.Client.SetAccountData(ctx, eventType.Type, &EncryptedAccountDataEventContent{
+		Encrypted: encrypted,
+		Metadata:  metadata,
+	})
+}
+
 // GenerateAndUploadKey generates a new SSSS key and stores the metadata on the server.
 func (mach *Machine) GenerateAndUploadKey(ctx context.Context, passphrase string) (key *Key, err error) {
 	key, err = NewKey(passphrase)
