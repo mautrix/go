@@ -194,6 +194,9 @@ func (portal *Portal) doThreadBackfill(ctx context.Context, source *UserLogin, t
 	if err != nil {
 		log.Err(err).Msg("Failed to get last thread message")
 		return
+	} else if anchorMessage == nil {
+		log.Warn().Msg("No messages found in thread?")
+		return
 	}
 	resp := portal.fetchThreadBackfill(ctx, source, anchorMessage)
 	if resp != nil {
