@@ -80,7 +80,7 @@ var CommandStartChat = &FullHandler{
 	NetworkAPI:    NetworkAPIImplements[bridgev2.IdentifierResolvingNetworkAPI],
 }
 
-func getClientForStartingChat[T bridgev2.IdentifierResolvingNetworkAPI](ce *Event, thing string) (*bridgev2.UserLogin, T, []string) {
+func getClientForStartingChat[T bridgev2.NetworkAPI](ce *Event, thing string) (*bridgev2.UserLogin, T, []string) {
 	var remainingArgs []string
 	if len(ce.Args) > 1 {
 		remainingArgs = ce.Args[1:]
@@ -289,4 +289,45 @@ func fnSearch(ce *Event) {
 		}
 	}
 	ce.Reply("Search results:\n\n%s", strings.Join(resultsString, "\n"))
+}
+
+var CommandMute = &FullHandler{
+	Func:    fnMute,
+	Name:    "mute",
+	Aliases: []string{"unmute"},
+	Help: HelpMeta{
+		Section:     HelpSectionChats,
+		Description: "Mute or unmute a chat on the remote network",
+		Args:        "[duration]",
+	},
+	RequiresPortal: true,
+	RequiresLogin:  true,
+	NetworkAPI:     NetworkAPIImplements[bridgev2.MuteHandlingNetworkAPI],
+}
+
+func fnMute(ce *Event) {
+	_, api, _ := getClientForStartingChat[bridgev2.MuteHandlingNetworkAPI](ce, "muting chats")
+	var mutedUntil int64
+	if ce.Command == "mute" {
+		mutedUntil = -1
+		if len(ce.Args) > 0 {
+			duration, err := time.ParseDuration(ce.Args[0])
+			if err != nil {
+				ce.Reply("Invalid duration: %v", err)
+				return
+			}
+			mutedUntil = time.Now().Add(duration).UnixMilli()
+		}
+	}
+	err := api.HandleMute(ce.Ctx, &bridgev2.MatrixMute{
+		MatrixEventBase: bridgev2.MatrixEventBase[*event.BeeperMuteEventContent]{
+			Content: &event.BeeperMuteEventContent{MutedUntil: mutedUntil},
+			Portal:  ce.Portal,
+		},
+	})
+	if err != nil {
+		ce.Reply("Failed to %s chat: %v", ce.Command, err)
+	} else {
+		ce.React("✅️")
+	}
 }
