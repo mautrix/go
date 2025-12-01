@@ -88,7 +88,7 @@ const (
 	getPortalByIDWithUncertainReceiverQuery = getPortalBaseQuery + `WHERE bridge_id=$1 AND id=$2 AND (receiver=$3 OR receiver='')`
 	getPortalByMXIDQuery                    = getPortalBaseQuery + `WHERE bridge_id=$1 AND mxid=$2`
 	getAllPortalsWithMXIDQuery              = getPortalBaseQuery + `WHERE bridge_id=$1 AND mxid IS NOT NULL`
-	getAllPortalsWithoutReceiver            = getPortalBaseQuery + `WHERE bridge_id=$1 AND receiver=''`
+	getAllPortalsWithoutReceiver            = getPortalBaseQuery + `WHERE bridge_id=$1 AND (receiver='' OR (parent_id<>'' AND parent_receiver='')) ORDER BY parent_id DESC`
 	getAllDMPortalsQuery                    = getPortalBaseQuery + `WHERE bridge_id=$1 AND room_type='dm' AND other_user_id=$2`
 	getDMPortalQuery                        = getPortalBaseQuery + `WHERE bridge_id=$1 AND room_type='dm' AND receiver=$2 AND other_user_id=$3`
 	getAllPortalsQuery                      = getPortalBaseQuery + `WHERE bridge_id=$1`
@@ -148,7 +148,10 @@ const (
 		)
 	`
 	fixParentsAfterSplitPortalMigrationQuery = `
-		UPDATE portal SET parent_receiver=receiver WHERE bridge_id=$1 AND parent_receiver='' AND receiver<>'' AND parent_id<>'';
+		UPDATE portal
+		SET parent_receiver=receiver
+		WHERE bridge_id=$1 AND parent_receiver='' AND receiver<>'' AND parent_id<>''
+		  AND EXISTS(SELECT 1 FROM portal pp WHERE pp.bridge_id=$1 AND pp.id=portal.parent_id AND pp.receiver=portal.receiver);
 	`
 )
 
