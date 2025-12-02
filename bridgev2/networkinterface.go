@@ -899,9 +899,13 @@ type MatrixMembershipChange struct {
 	Type   MembershipChangeType
 }
 
+type MatrixMembershipResult struct {
+	RedirectTo networkid.UserID
+}
+
 type MembershipHandlingNetworkAPI interface {
 	NetworkAPI
-	HandleMatrixMembership(ctx context.Context, msg *MatrixMembershipChange) (bool, error)
+	HandleMatrixMembership(ctx context.Context, msg *MatrixMembershipChange) (*MatrixMembershipResult, error)
 }
 
 type SinglePowerLevelChange struct {

@@ -530,7 +530,7 @@ func (portal *Portal) handleSingleEvent(ctx context.Context, rawEvt any, doneCal
 		if !isStateRequest && res.Error != nil && evt.evt.StateKey != nil {
 			portal.revertRoomMeta(ctx, evt.evt)
 		}
-		if isStateRequest && res.Success {
+		if isStateRequest && res.Success && !res.SkipStateEcho {
 			portal.sendRoomMeta(
 				ctx,
 				evt.sender.DoublePuppet(ctx),
@@ -1858,12 +1858,54 @@ func (portal *Portal) handleMatrixMembership(
 		Target: target,
 		Type:   membershipChangeType,
 	}
-	_, err = api.HandleMatrixMembership(ctx, membershipChange)
+	res, err := api.HandleMatrixMembership(ctx, membershipChange)
 	if err != nil {
 		log.Err(err).Msg("Failed to handle Matrix membership change")
 		return EventHandlingResultFailed.WithMSSError(err)
 	}
-	return EventHandlingResultSuccess.WithMSS()
+	didRedirectInvite := membershipChangeType == Invite &&
+		targetGhost != nil &&
+		res != nil &&
+		res.RedirectTo != "" &&
+		res.RedirectTo != targetGhost.ID
+	if didRedirectInvite {
+		log.Debug().
+			Str("orig_id", string(targetGhost.ID)).
+			Str("redirect_id", string(res.RedirectTo)).
+			Msg("Invite was redirected to different ghost")
+		var redirectGhost *Ghost
+		redirectGhost, err = portal.Bridge.GetGhostByID(ctx, res.RedirectTo)
+		if err != nil {
+			log.Err(err).Msg("Failed to get redirect target ghost")
+			return EventHandlingResultFailed.WithError(err)
+		}
+		if !isStateRequest {
+			portal.sendRoomMeta(
+				ctx,
+				sender.User.DoublePuppet(ctx),
+				time.UnixMilli(evt.Timestamp),
+				event.StateMember,
+				evt.GetStateKey(),
+				&event.MemberEventContent{
+					Membership: event.MembershipLeave,
+					Reason:     fmt.Sprintf("Invite redirected to %s", res.RedirectTo),
+				},
+				true,
+				nil,
+			)
+		}
+		portal.sendRoomMeta(
+			ctx,
+			sender.User.DoublePuppet(ctx),
+			time.UnixMilli(evt.Timestamp),
+			event.StateMember,
+			redirectGhost.Intent.GetMXID().String(),
+			content,
+			false,
+			nil,
+		)
+	}
+	return EventHandlingResultSuccess.WithMSS().WithSkipStateEcho(didRedirectInvite)
 }
 
 func makePLChange(old, new int, newIsSet bool) *SinglePowerLevelChange {

@@ -160,6 +160,8 @@ type EventHandlingResult struct {
 	Ignored bool
 	Queued  bool
 
+	SkipStateEcho bool
+
 	// Error is an optional reason for failure. It is not required, Success may be false even without a specific error.
 	Error error
 	// Whether the Error should be sent as a MSS event.
@@ -192,6 +194,11 @@ func (ehr EventHandlingResult) WithError(err error) EventHandlingResult {
 
 func (ehr EventHandlingResult) WithMSS() EventHandlingResult {
 	ehr.SendMSS = true
+	return ehr
+}
+
+func (ehr EventHandlingResult) WithSkipStateEcho(skip bool) EventHandlingResult {
+	ehr.SkipStateEcho = skip
 	return ehr
 }
 
