@@ -49,6 +49,10 @@ func (portal *PortalInternals) HandleSingleEvent(ctx context.Context, rawEvt any
 	(*Portal)(portal).handleSingleEvent(ctx, rawEvt, doneCallback)
 }
 
+func (portal *PortalInternals) UnwrapBeeperSendState(ctx context.Context, evt *event.Event) error {
+	return (*Portal)(portal).unwrapBeeperSendState(ctx, evt)
+}
+
 func (portal *PortalInternals) SendSuccessStatus(ctx context.Context, evt *event.Event, streamOrder int64, newEventID id.EventID) {
 	(*Portal)(portal).sendSuccessStatus(ctx, evt, streamOrder, newEventID)
 }
@@ -61,8 +65,8 @@ func (portal *PortalInternals) CheckConfusableName(ctx context.Context, userID i
 	return (*Portal)(portal).checkConfusableName(ctx, userID, name)
 }
 
-func (portal *PortalInternals) HandleMatrixEvent(ctx context.Context, sender *User, evt *event.Event) EventHandlingResult {
-	return (*Portal)(portal).handleMatrixEvent(ctx, sender, evt)
+func (portal *PortalInternals) HandleMatrixEvent(ctx context.Context, sender *User, evt *event.Event, isStateRequest bool) EventHandlingResult {
+	return (*Portal)(portal).handleMatrixEvent(ctx, sender, evt, isStateRequest)
 }
 
 func (portal *PortalInternals) HandleMatrixReceipts(ctx context.Context, evt *event.Event) EventHandlingResult {
@@ -125,12 +129,12 @@ func (portal *PortalInternals) HandleMatrixDeleteChat(ctx context.Context, sende
 	return (*Portal)(portal).handleMatrixDeleteChat(ctx, sender, origSender, evt)
 }
 
-func (portal *PortalInternals) HandleMatrixMembership(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) EventHandlingResult {
-	return (*Portal)(portal).handleMatrixMembership(ctx, sender, origSender, evt)
+func (portal *PortalInternals) HandleMatrixMembership(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event, isStateRequest bool) EventHandlingResult {
+	return (*Portal)(portal).handleMatrixMembership(ctx, sender, origSender, evt, isStateRequest)
 }
 
-func (portal *PortalInternals) HandleMatrixPowerLevels(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) EventHandlingResult {
-	return (*Portal)(portal).handleMatrixPowerLevels(ctx, sender, origSender, evt)
+func (portal *PortalInternals) HandleMatrixPowerLevels(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event, isStateRequest bool) EventHandlingResult {
+	return (*Portal)(portal).handleMatrixPowerLevels(ctx, sender, origSender, evt, isStateRequest)
 }
 
 func (portal *PortalInternals) HandleMatrixTombstone(ctx context.Context, evt *event.Event) EventHandlingResult {
@@ -303,6 +307,10 @@ func (portal *PortalInternals) GetInitialMemberList(ctx context.Context, members
 
 func (portal *PortalInternals) UpdateOtherUser(ctx context.Context, members *ChatMemberList) (changed bool) {
 	return (*Portal)(portal).updateOtherUser(ctx, members)
+}
+
+func (portal *PortalInternals) RoomIsPublic(ctx context.Context) bool {
+	return (*Portal)(portal).roomIsPublic(ctx)
 }
 
 func (portal *PortalInternals) SyncParticipants(ctx context.Context, members *ChatMemberList, source *UserLogin, sender MatrixAPI, ts time.Time) error {

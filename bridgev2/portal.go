@@ -519,7 +519,7 @@ func (portal *Portal) handleSingleEvent(ctx context.Context, rawEvt any, doneCal
 				return
 			}
 		}
-		res = portal.handleMatrixEvent(ctx, evt.sender, evt.evt)
+		res = portal.handleMatrixEvent(ctx, evt.sender, evt.evt, isStateRequest)
 		if res.SendMSS {
 			if res.Error != nil {
 				portal.sendErrorStatus(ctx, evt.evt, res.Error)
@@ -673,7 +673,7 @@ func (portal *Portal) checkConfusableName(ctx context.Context, userID id.UserID,
 
 var fakePerMessageProfileEventType = event.Type{Class: event.StateEventType, Type: "m.per_message_profile"}
 
-func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *event.Event) EventHandlingResult {
+func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *event.Event, isStateRequest bool) EventHandlingResult {
 	log := zerolog.Ctx(ctx)
 	if evt.Mautrix.EventSource&event.SourceEphemeral != 0 {
 		switch evt.Type {
@@ -705,6 +705,9 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 	}
 	var origSender *OrigSender
 	if login == nil {
+		if isStateRequest {
+			return EventHandlingResultFailed.WithMSSError(ErrCantRelayStateRequest)
+		}
 		login = portal.Relay
 		origSender = &OrigSender{
 			User:   sender,
@@ -775,13 +778,13 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 	case event.EventRedaction:
 		return portal.handleMatrixRedaction(ctx, login, origSender, evt)
 	case event.StateRoomName:
-		return handleMatrixRoomMeta(portal, ctx, login, origSender, evt, RoomNameHandlingNetworkAPI.HandleMatrixRoomName)
+		return handleMatrixRoomMeta(portal, ctx, login, origSender, evt, isStateRequest, RoomNameHandlingNetworkAPI.HandleMatrixRoomName)
 	case event.StateTopic:
-		return handleMatrixRoomMeta(portal, ctx, login, origSender, evt, RoomTopicHandlingNetworkAPI.HandleMatrixRoomTopic)
+		return handleMatrixRoomMeta(portal, ctx, login, origSender, evt, isStateRequest, RoomTopicHandlingNetworkAPI.HandleMatrixRoomTopic)
 	case event.StateRoomAvatar:
-		return handleMatrixRoomMeta(portal, ctx, login, origSender, evt, RoomAvatarHandlingNetworkAPI.HandleMatrixRoomAvatar)
+		return handleMatrixRoomMeta(portal, ctx, login, origSender, evt, isStateRequest, RoomAvatarHandlingNetworkAPI.HandleMatrixRoomAvatar)
 	case event.StateBeeperDisappearingTimer:
-		return handleMatrixRoomMeta(portal, ctx, login, origSender, evt, DisappearTimerChangingNetworkAPI.HandleMatrixDisappearingTimer)
+		return handleMatrixRoomMeta(portal, ctx, login, origSender, evt, isStateRequest, DisappearTimerChangingNetworkAPI.HandleMatrixDisappearingTimer)
 	case event.StateEncryption:
 		// TODO?
 		return EventHandlingResultIgnored
@@ -792,9 +795,9 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 	case event.AccountDataBeeperMute:
 		return handleMatrixAccountData(portal, ctx, login, evt, MuteHandlingNetworkAPI.HandleMute)
 	case event.StateMember:
-		return portal.handleMatrixMembership(ctx, login, origSender, evt)
+		return portal.handleMatrixMembership(ctx, login, origSender, evt, isStateRequest)
 	case event.StatePowerLevels:
-		return portal.handleMatrixPowerLevels(ctx, login, origSender, evt)
+		return portal.handleMatrixPowerLevels(ctx, login, origSender, evt, isStateRequest)
 	case event.BeeperDeleteChat:
 		return portal.handleMatrixDeleteChat(ctx, login, origSender, evt)
 	default:
@@ -1607,6 +1610,7 @@ func handleMatrixRoomMeta[APIType any, ContentType any](
 	sender *UserLogin,
 	origSender *OrigSender,
 	evt *event.Event,
+	isStateRequest bool,
 	fn func(APIType, context.Context, *MatrixRoomMeta[ContentType]) (bool, error),
 ) EventHandlingResult {
 	if evt.StateKey == nil || *evt.StateKey != "" {
@@ -1670,7 +1674,8 @@ func handleMatrixRoomMeta[APIType any, ContentType any](
 
 			InputTransactionID: portal.parseInputTransactionID(origSender, evt),
 		},
-		PrevContent: prevContent,
+		IsStateRequest: isStateRequest,
+		PrevContent:    prevContent,
 	})
 	if err != nil {
 		log.Err(err).Msg("Failed to handle Matrix room metadata")
@@ -1797,6 +1802,7 @@ func (portal *Portal) handleMatrixMembership(
 	sender *UserLogin,
 	origSender *OrigSender,
 	evt *event.Event,
+	isStateRequest bool,
 ) EventHandlingResult {
 	if evt.StateKey == nil {
 		return EventHandlingResultFailed.WithMSSError(ErrInvalidStateKey)
@@ -1847,7 +1853,8 @@ func (portal *Portal) handleMatrixMembership(
 
 				InputTransactionID: portal.parseInputTransactionID(origSender, evt),
 			},
-			PrevContent: prevContent,
+			IsStateRequest: isStateRequest,
+			PrevContent:    prevContent,
 		},
 		Target:          target,
 		TargetGhost:     targetGhost,
@@ -1884,6 +1891,7 @@ func (portal *Portal) handleMatrixPowerLevels(
 	sender *UserLogin,
 	origSender *OrigSender,
 	evt *event.Event,
+	isStateRequest bool,
 ) EventHandlingResult {
 	if evt.StateKey == nil || *evt.StateKey != "" {
 		return EventHandlingResultFailed.WithMSSError(ErrInvalidStateKey)
@@ -1925,7 +1933,8 @@ func (portal *Portal) handleMatrixPowerLevels(
 
 				InputTransactionID: portal.parseInputTransactionID(origSender, evt),
 			},
-			PrevContent: prevContent,
+			IsStateRequest: isStateRequest,
+			PrevContent:    prevContent,
 		},
 		Users:         make(map[id.UserID]*UserPowerLevelChange),
 		Events:        make(map[string]*SinglePowerLevelChange),

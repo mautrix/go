@@ -1382,7 +1382,8 @@ type MatrixMessageRemove struct {
 
 type MatrixRoomMeta[ContentType any] struct {
 	MatrixEventBase[ContentType]
-	PrevContent ContentType
+	PrevContent    ContentType
+	IsStateRequest bool
 }
 
 type MatrixRoomName = MatrixRoomMeta[*event.RoomNameEventContent]
