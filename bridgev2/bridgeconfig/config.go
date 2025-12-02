@@ -33,6 +33,8 @@ type Config struct {
 	Encryption   EncryptionConfig   `yaml:"encryption"`
 	Logging      zeroconfig.Config  `yaml:"logging"`
 
+	EnvConfigPrefix string `yaml:"env_config_prefix"`
+
 	ManagementRoomTexts ManagementRoomTexts `yaml:"management_room_texts"`
 }
 

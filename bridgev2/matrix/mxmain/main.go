@@ -354,6 +354,13 @@ func (br *BridgeMain) LoadConfig() {
 		}
 	}
 	cfg.Bridge.Backfill = cfg.Backfill
+	if cfg.EnvConfigPrefix != "" {
+		err = UpdateConfigFromEnv(&cfg, networkData, cfg.EnvConfigPrefix)
+		if err != nil {
+			_, _ = fmt.Fprintln(os.Stderr, "Failed to parse environment variables:", err)
+			os.Exit(10)
+		}
+	}
 	br.Config = &cfg
 }
 

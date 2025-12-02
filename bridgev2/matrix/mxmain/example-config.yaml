@@ -444,6 +444,16 @@ encryption:
         # You should not enable this option unless you understand all the implications.
         disable_device_change_key_rotation: false
 
+# Prefix for environment variables. All variables with this prefix must map to valid config fields.
+# Nesting in variable names is represented with a dot (.).
+# If there are no dots in the name, two underscores (__) are replaced with a dot.
+#
+# e.g. if the prefix is set to `BRIDGE_`, then `BRIDGE_APPSERVICE__AS_TOKEN` will set appservice.as_token.
+# `BRIDGE_appservice.as_token` would work as well, but can't be set in a shell as easily.
+#
+# If this is null, reading config fields from environment will be disabled.
+env_config_prefix: null
+
 # Logging config. See https://github.com/tulir/zeroconfig for details.
 logging:
     min_level: debug
