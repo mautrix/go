@@ -1842,7 +1842,6 @@ func (portal *Portal) handleMatrixMembership(
 		return EventHandlingResultIgnored //.WithMSSError(ErrIgnoringLeaveEvent)
 	}
 	targetGhost, _ := target.(*Ghost)
-	targetUserLogin, _ := target.(*UserLogin)
 	membershipChange := &MatrixMembershipChange{
 		MatrixRoomMeta: MatrixRoomMeta[*event.MemberEventContent]{
 			MatrixEventBase: MatrixEventBase[*event.MemberEventContent]{
@@ -1856,10 +1855,8 @@ func (portal *Portal) handleMatrixMembership(
 			IsStateRequest: isStateRequest,
 			PrevContent:    prevContent,
 		},
-		Target:          target,
-		TargetGhost:     targetGhost,
-		TargetUserLogin: targetUserLogin,
-		Type:            membershipChangeType,
+		Target: target,
+		Type:   membershipChangeType,
 	}
 	_, err = api.HandleMatrixMembership(ctx, membershipChange)
 	if err != nil {

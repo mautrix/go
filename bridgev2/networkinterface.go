@@ -897,11 +897,6 @@ type MatrixMembershipChange struct {
 	MatrixRoomMeta[*event.MemberEventContent]
 	Target GhostOrUserLogin
 	Type   MembershipChangeType
-
-	// Deprecated: Use Target instead
-	TargetGhost *Ghost
-	// Deprecated: Use Target instead
-	TargetUserLogin *UserLogin
 }
 
 type MembershipHandlingNetworkAPI interface {
