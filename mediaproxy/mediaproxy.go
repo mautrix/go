@@ -95,9 +95,13 @@ func (d *GetMediaResponseCallback) GetContentType() string {
 	return d.ContentType
 }
 
+type FileMeta struct {
+	ContentType     string
+	ReplacementFile string
+}
+
 type GetMediaResponseFile struct {
-	Callback    func(w *os.File) error
-	ContentType string
+	Callback func(w *os.File) (*FileMeta, error)
 }
 
 type GetMediaFunc = func(ctx context.Context, mediaID string, params map[string]string) (response GetMediaResponse, err error)
@@ -453,23 +457,35 @@ func doTempFileDownload(
 	if err != nil {
 		return false, fmt.Errorf("failed to create temp file: %w", err)
 	}
+	origTempFile := tempFile
 	defer func() {
-		_ = tempFile.Close()
-		_ = os.Remove(tempFile.Name())
+		_ = origTempFile.Close()
+		_ = os.Remove(origTempFile.Name())
 	}()
-	err = data.Callback(tempFile)
+	meta, err := data.Callback(tempFile)
 	if err != nil {
 		return false, err
 	}
-	_, err = tempFile.Seek(0, io.SeekStart)
-	if err != nil {
-		return false, fmt.Errorf("failed to seek to start of temp file: %w", err)
+	if meta.ReplacementFile != "" {
+		tempFile, err = os.Open(meta.ReplacementFile)
+		if err != nil {
+			return false, fmt.Errorf("failed to open replacement file: %w", err)
+		}
+		defer func() {
+			_ = tempFile.Close()
+			_ = os.Remove(origTempFile.Name())
+		}()
+	} else {
+		_, err = tempFile.Seek(0, io.SeekStart)
+		if err != nil {
+			return false, fmt.Errorf("failed to seek to start of temp file: %w", err)
+		}
 	}
 	fileInfo, err := tempFile.Stat()
 	if err != nil {
 		return false, fmt.Errorf("failed to stat temp file: %w", err)
 	}
-	mimeType := data.ContentType
+	mimeType := meta.ContentType
 	if mimeType == "" {
 		buf := make([]byte, 512)
 		n, err := tempFile.Read(buf)
