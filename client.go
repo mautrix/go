@@ -614,7 +614,9 @@ func (cli *Client) doRetry(
 	select {
 	case <-time.After(backoff):
 	case <-req.Context().Done():
-		return nil, nil, req.Context().Err()
+		if !errors.Is(context.Cause(req.Context()), ErrContextCancelRetry) {
+			return nil, nil, req.Context().Err()
+		}
 	}
 	if cli.UpdateRequestOnRetry != nil {
 		req = cli.UpdateRequestOnRetry(req, cause)
