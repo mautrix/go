@@ -66,7 +66,12 @@ func (br *BridgeMain) LogDBUpgradeErrorAndExit(name string, err error, message s
 	} else if errors.Is(err, dbutil.ErrForeignTables) {
 		br.Log.Info().Msg("See https://docs.mau.fi/faq/foreign-tables for more info")
 	} else if errors.Is(err, dbutil.ErrNotOwned) {
-		br.Log.Info().Msg("Sharing the same database with different programs is not supported")
+		var noe dbutil.NotOwnedError
+		if errors.As(err, &noe) && noe.Owner == br.Name {
+			br.Log.Info().Msg("The database appears to be on a very old pre-megabridge schema. Perhaps you need to run an older version of the bridge with migration support first?")
+		} else {
+			br.Log.Info().Msg("Sharing the same database with different programs is not supported")
+		}
 	} else if errors.Is(err, dbutil.ErrUnsupportedDatabaseVersion) {
 		br.Log.Info().Msg("Downgrading the bridge is not supported")
 	}
