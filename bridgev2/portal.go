@@ -1466,7 +1466,7 @@ func (portal *Portal) handleMatrixEdit(
 	return EventHandlingResultSuccess
 }
 
-func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogin, evt *event.Event) EventHandlingResult {
+func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogin, evt *event.Event) (handleRes EventHandlingResult) {
 	log := zerolog.Ctx(ctx)
 	reactingAPI, ok := sender.Client.(ReactionHandlingNetworkAPI)
 	if !ok {
@@ -1511,6 +1511,25 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 	if portal.Bridge.Config.OutgoingMessageReID {
 		deterministicID = portal.Bridge.Matrix.GenerateReactionEventID(portal.MXID, reactionTarget, preResp.SenderID, preResp.EmojiID)
 	}
+	removeOutdatedReaction := func(oldReact *database.Reaction, deleteDB bool) {
+		if !handleRes.Success {
+			return
+		}
+		_, err := portal.Bridge.Bot.SendMessage(ctx, portal.MXID, event.EventRedaction, &event.Content{
+			Parsed: &event.RedactionEventContent{
+				Redacts: oldReact.MXID,
+			},
+		}, nil)
+		if err != nil {
+			log.Err(err).Msg("Failed to remove old reaction")
+		}
+		if deleteDB {
+			err = portal.Bridge.DB.Reaction.Delete(ctx, oldReact)
+			if err != nil {
+				log.Err(err).Msg("Failed to delete old reaction from database")
+			}
+		}
+	}
 	existing, err := portal.Bridge.DB.Reaction.GetByID(ctx, portal.Receiver, reactionTarget.ID, reactionTarget.PartID, preResp.SenderID, preResp.EmojiID)
 	if err != nil {
 		log.Err(err).Msg("Failed to check if reaction is a duplicate")
@@ -1522,14 +1541,7 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 			return EventHandlingResultIgnored.WithEventID(deterministicID)
 		}
 		react.ReactionToOverride = existing
-		_, err = portal.Bridge.Bot.SendMessage(ctx, portal.MXID, event.EventRedaction, &event.Content{
-			Parsed: &event.RedactionEventContent{
-				Redacts: existing.MXID,
-			},
-		}, nil)
-		if err != nil {
-			log.Err(err).Msg("Failed to remove old reaction")
-		}
+		defer removeOutdatedReaction(existing, false)
 	}
 	react.PreHandleResp = &preResp
 	if preResp.MaxReactions > 0 {
@@ -1544,18 +1556,10 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 			// Keep n-1 previous reactions and remove the rest
 			react.ExistingReactionsToKeep = allReactions[:preResp.MaxReactions-1]
 			for _, oldReaction := range allReactions[preResp.MaxReactions-1:] {
-				_, err = portal.Bridge.Bot.SendMessage(ctx, portal.MXID, event.EventRedaction, &event.Content{
-					Parsed: &event.RedactionEventContent{
-						Redacts: oldReaction.MXID,
-					},
-				}, nil)
-				if err != nil {
-					log.Err(err).Msg("Failed to remove previous reaction after limit was exceeded")
-				}
-				err = portal.Bridge.DB.Reaction.Delete(ctx, oldReaction)
-				if err != nil {
-					log.Err(err).Msg("Failed to delete previous reaction from database after limit was exceeded")
-				}
+				// Intentionally defer in a loop, there won't be that many items,
+				// and we want all of them to be done after this function completes successfully
+				//goland:noinspection GoDeferInLoop
+				defer removeOutdatedReaction(oldReaction, true)
 			}
 		}
 	}
