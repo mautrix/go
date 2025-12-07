@@ -2427,7 +2427,7 @@ func (portal *Portal) handleRemoteEvent(ctx context.Context, source *UserLogin, 
 }
 
 func (portal *Portal) ensureFunctionalMember(ctx context.Context, ghost *Ghost) {
-	if !ghost.IsBot || portal.RoomType != database.RoomTypeDM || portal.OtherUserID == ghost.ID {
+	if !ghost.IsBot || portal.RoomType != database.RoomTypeDM || portal.OtherUserID == ghost.ID || portal.MXID == "" {
 		return
 	}
 	ars, ok := portal.Bridge.Matrix.(MatrixConnectorWithArbitraryRoomState)
