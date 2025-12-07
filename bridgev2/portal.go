@@ -5089,7 +5089,10 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 		}
 	}
 	portal.addToUserSpaces(ctx)
-	if portal.Bridge.Config.Backfill.Enabled && portal.RoomType != database.RoomTypeSpace && !portal.Bridge.Background {
+	if info.CanBackfill &&
+		portal.Bridge.Config.Backfill.Enabled &&
+		portal.RoomType != database.RoomTypeSpace &&
+		!portal.Bridge.Background {
 		portal.doForwardBackfill(ctx, source, nil, backfillBundle)
 	}
 	return nil
