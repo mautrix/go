@@ -184,7 +184,7 @@ func doUpgrade(helper up.Helper) {
 	helper.Copy(up.Int, "encryption", "rotation", "messages")
 	helper.Copy(up.Bool, "encryption", "rotation", "disable_device_change_key_rotation")
 
-	helper.Copy(up.Str, "env_config_prefix")
+	helper.Copy(up.Str|up.Null, "env_config_prefix")
 
 	helper.Copy(up.Map, "logging")
 }
