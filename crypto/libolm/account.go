@@ -33,7 +33,7 @@ var _ olm.Account = (*Account)(nil)
 // "INVALID_BASE64".
 func AccountFromPickled(pickled, key []byte) (*Account, error) {
 	if len(pickled) == 0 {
-		return nil, olm.EmptyInput
+		return nil, olm.ErrEmptyInput
 	}
 	a := NewBlankAccount()
 	return a, a.Unpickle(pickled, key)
@@ -53,7 +53,7 @@ func NewAccount() (*Account, error) {
 	random := make([]byte, a.createRandomLen()+1)
 	_, err := rand.Read(random)
 	if err != nil {
-		panic(olm.NotEnoughGoRandom)
+		panic(olm.ErrNotEnoughGoRandom)
 	}
 	ret := C.olm_create_account(
 		(*C.OlmAccount)(a.int),
@@ -128,7 +128,7 @@ func (a *Account) genOneTimeKeysRandomLen(num uint) uint {
 // supplied key.
 func (a *Account) Pickle(key []byte) ([]byte, error) {
 	if len(key) == 0 {
-		return nil, olm.NoKeyProvided
+		return nil, olm.ErrNoKeyProvided
 	}
 	pickled := make([]byte, a.pickleLen())
 	r := C.olm_pickle_account(
@@ -145,7 +145,7 @@ func (a *Account) Pickle(key []byte) ([]byte, error) {
 
 func (a *Account) Unpickle(pickled, key []byte) error {
 	if len(key) == 0 {
-		return olm.NoKeyProvided
+		return olm.ErrNoKeyProvided
 	}
 	r := C.olm_unpickle_account(
 		(*C.OlmAccount)(a.int),
@@ -198,7 +198,7 @@ func (a *Account) MarshalJSON() ([]byte, error) {
 // Deprecated
 func (a *Account) UnmarshalJSON(data []byte) error {
 	if len(data) == 0 || data[0] != '"' || data[len(data)-1] != '"' {
-		return olm.InputNotJSONString
+		return olm.ErrInputNotJSONString
 	}
 	if a.int == nil {
 		*a = *NewBlankAccount()
@@ -235,7 +235,7 @@ func (a *Account) IdentityKeys() (id.Ed25519, id.Curve25519, error) {
 // Account.
 func (a *Account) Sign(message []byte) ([]byte, error) {
 	if len(message) == 0 {
-		panic(olm.EmptyInput)
+		panic(olm.ErrEmptyInput)
 	}
 	signature := make([]byte, a.signatureLen())
 	r := C.olm_account_sign(
@@ -299,7 +299,7 @@ func (a *Account) GenOneTimeKeys(num uint) error {
 	random := make([]byte, a.genOneTimeKeysRandomLen(num)+1)
 	_, err := rand.Read(random)
 	if err != nil {
-		return olm.NotEnoughGoRandom
+		return olm.ErrNotEnoughGoRandom
 	}
 	r := C.olm_account_generate_one_time_keys(
 		(*C.OlmAccount)(a.int),
@@ -319,13 +319,13 @@ func (a *Account) GenOneTimeKeys(num uint) error {
 // keys couldn't be decoded as base64 then the error will be "INVALID_BASE64"
 func (a *Account) NewOutboundSession(theirIdentityKey, theirOneTimeKey id.Curve25519) (olm.Session, error) {
 	if len(theirIdentityKey) == 0 || len(theirOneTimeKey) == 0 {
-		return nil, olm.EmptyInput
+		return nil, olm.ErrEmptyInput
 	}
 	s := NewBlankSession()
 	random := make([]byte, s.createOutboundRandomLen()+1)
 	_, err := rand.Read(random)
 	if err != nil {
-		panic(olm.NotEnoughGoRandom)
+		panic(olm.ErrNotEnoughGoRandom)
 	}
 	theirIdentityKeyCopy := []byte(theirIdentityKey)
 	theirOneTimeKeyCopy := []byte(theirOneTimeKey)
@@ -357,7 +357,7 @@ func (a *Account) NewOutboundSession(theirIdentityKey, theirOneTimeKey id.Curve2
 // time key then the error will be "BAD_MESSAGE_KEY_ID".
 func (a *Account) NewInboundSession(oneTimeKeyMsg string) (olm.Session, error) {
 	if len(oneTimeKeyMsg) == 0 {
-		return nil, olm.EmptyInput
+		return nil, olm.ErrEmptyInput
 	}
 	s := NewBlankSession()
 	oneTimeKeyMsgCopy := []byte(oneTimeKeyMsg)
@@ -383,7 +383,7 @@ func (a *Account) NewInboundSession(oneTimeKeyMsg string) (olm.Session, error) {
 // time key then the error will be "BAD_MESSAGE_KEY_ID".
 func (a *Account) NewInboundSessionFrom(theirIdentityKey *id.Curve25519, oneTimeKeyMsg string) (olm.Session, error) {
 	if theirIdentityKey == nil || len(oneTimeKeyMsg) == 0 {
-		return nil, olm.EmptyInput
+		return nil, olm.ErrEmptyInput
 	}
 	theirIdentityKeyCopy := []byte(*theirIdentityKey)
 	oneTimeKeyMsgCopy := []byte(oneTimeKeyMsg)

@@ -85,9 +85,8 @@ const (
 	provisioningUserKey provisioningContextKey = iota
 	provisioningUserLoginKey
 	provisioningLoginProcessKey
+	ProvisioningKeyRequest
 )
-
-const ProvisioningKeyRequest = "fi.mau.provision.request"
 
 func (prov *ProvisioningAPI) GetUser(r *http.Request) *bridgev2.User {
 	return r.Context().Value(provisioningUserKey).(*bridgev2.User)

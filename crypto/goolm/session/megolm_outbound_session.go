@@ -101,8 +101,10 @@ func (o *MegolmOutboundSession) Unpickle(pickled, key []byte) error {
 func (o *MegolmOutboundSession) UnpickleLibOlm(buf []byte) error {
 	decoder := libolmpickle.NewDecoder(buf)
 	pickledVersion, err := decoder.ReadUInt32()
-	if pickledVersion != megolmOutboundSessionPickleVersionLibOlm {
-		return fmt.Errorf("unpickle MegolmInboundSession: %w (found version %d)", olm.ErrBadVersion, pickledVersion)
+	if err != nil {
+		return fmt.Errorf("unpickle MegolmOutboundSession: failed to read version: %w", err)
+	} else if pickledVersion != megolmOutboundSessionPickleVersionLibOlm {
+		return fmt.Errorf("unpickle MegolmInboundSession: %w (found version %d)", olm.ErrUnknownOlmPickleVersion, pickledVersion)
 	}
 	if err = o.Ratchet.UnpickleLibOlm(decoder); err != nil {
 		return err

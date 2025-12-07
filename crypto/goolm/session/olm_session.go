@@ -168,11 +168,11 @@ func NewInboundOlmSession(identityKeyAlice *crypto.Curve25519PublicKey, received
 	msg := message.Message{}
 	err = msg.Decode(oneTimeMsg.Message)
 	if err != nil {
-		return nil, fmt.Errorf("Message decode: %w", err)
+		return nil, fmt.Errorf("message decode: %w", err)
 	}
 
 	if len(msg.RatchetKey) == 0 {
-		return nil, fmt.Errorf("Message missing ratchet key: %w", olm.ErrBadMessageFormat)
+		return nil, fmt.Errorf("message missing ratchet key: %w", olm.ErrBadMessageFormat)
 	}
 	//Init Ratchet
 	s.Ratchet.InitializeAsBob(secret, msg.RatchetKey)
@@ -203,7 +203,7 @@ func (s *OlmSession) ID() id.SessionID {
 	copy(message[crypto.Curve25519PrivateKeyLength:], s.AliceBaseKey)
 	copy(message[2*crypto.Curve25519PrivateKeyLength:], s.BobOneTimeKey)
 	hash := sha256.Sum256(message)
-	res := id.SessionID(goolmbase64.Encode(hash[:]))
+	res := id.SessionID(base64.RawStdEncoding.EncodeToString(hash[:]))
 	return res
 }
 
@@ -325,7 +325,7 @@ func (s *OlmSession) Decrypt(crypttext string, msgType id.OlmMsgType) ([]byte, e
 	if len(crypttext) == 0 {
 		return nil, fmt.Errorf("decrypt: %w", olm.ErrEmptyInput)
 	}
-	decodedCrypttext, err := goolmbase64.Decode([]byte(crypttext))
+	decodedCrypttext, err := base64.RawStdEncoding.DecodeString(crypttext)
 	if err != nil {
 		return nil, err
 	}
@@ -365,6 +365,9 @@ func (o *OlmSession) Unpickle(pickled, key []byte) error {
 func (o *OlmSession) UnpickleLibOlm(buf []byte) error {
 	decoder := libolmpickle.NewDecoder(buf)
 	pickledVersion, err := decoder.ReadUInt32()
+	if err != nil {
+		return fmt.Errorf("unpickle olmSession: failed to read version: %w", err)
+	}
 
 	var includesChainIndex bool
 	switch pickledVersion {
@@ -373,7 +376,7 @@ func (o *OlmSession) UnpickleLibOlm(buf []byte) error {
 	case uint32(0x80000001):
 		includesChainIndex = true
 	default:
-		return fmt.Errorf("unpickle olmSession: %w (found version %d)", olm.ErrBadVersion, pickledVersion)
+		return fmt.Errorf("unpickle olmSession: %w (found version %d)", olm.ErrUnknownOlmPickleVersion, pickledVersion)
 	}
 
 	if o.ReceivedMessage, err = decoder.ReadBool(); err != nil {

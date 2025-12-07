@@ -53,33 +53,33 @@ func TestUnsupportedVersion(t *testing.T) {
 	file := parseHelloWorld()
 	file.Version = "foo"
 	err := file.DecryptInPlace([]byte(helloWorldCiphertext))
-	assert.ErrorIs(t, err, UnsupportedVersion)
+	assert.ErrorIs(t, err, ErrUnsupportedVersion)
 }
 
 func TestUnsupportedAlgorithm(t *testing.T) {
 	file := parseHelloWorld()
 	file.Key.Algorithm = "bar"
 	err := file.DecryptInPlace([]byte(helloWorldCiphertext))
-	assert.ErrorIs(t, err, UnsupportedAlgorithm)
+	assert.ErrorIs(t, err, ErrUnsupportedAlgorithm)
 }
 
 func TestHashMismatch(t *testing.T) {
 	file := parseHelloWorld()
 	file.Hashes.SHA256 = base64.RawStdEncoding.EncodeToString([]byte(random32Bytes))
 	err := file.DecryptInPlace([]byte(helloWorldCiphertext))
-	assert.ErrorIs(t, err, HashMismatch)
+	assert.ErrorIs(t, err, ErrHashMismatch)
 }
 
 func TestTooLongHash(t *testing.T) {
 	file := parseHelloWorld()
 	file.Hashes.SHA256 = "TG9yZW0gaXBzdW0gZG9sb3Igc2l0IGFtZXQsIGNvbnNlY3RldHVlciBhZGlwaXNjaW5nIGVsaXQuIFNlZCBwb3N1ZXJlIGludGVyZHVtIHNlbS4gUXVpc3F1ZSBsaWd1bGEgZXJvcyB1bGxhbWNvcnBlciBxdWlzLCBsYWNpbmlhIHF1aXMgZmFjaWxpc2lzIHNlZCBzYXBpZW4uCg"
 	err := file.DecryptInPlace([]byte(helloWorldCiphertext))
-	assert.ErrorIs(t, err, InvalidHash)
+	assert.ErrorIs(t, err, ErrInvalidHash)
 }
 
 func TestTooShortHash(t *testing.T) {
 	file := parseHelloWorld()
 	file.Hashes.SHA256 = "5/Gy1JftyyQ"
 	err := file.DecryptInPlace([]byte(helloWorldCiphertext))
-	assert.ErrorIs(t, err, InvalidHash)
+	assert.ErrorIs(t, err, ErrInvalidHash)
 }

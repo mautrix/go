@@ -14,7 +14,7 @@ func Register() {
 	// Inbound Session
 	olm.InitInboundGroupSessionFromPickled = func(pickled, key []byte) (olm.InboundGroupSession, error) {
 		if len(pickled) == 0 {
-			return nil, olm.EmptyInput
+			return nil, olm.ErrEmptyInput
 		}
 		if len(key) == 0 {
 			key = []byte(" ")
@@ -23,13 +23,13 @@ func Register() {
 	}
 	olm.InitNewInboundGroupSession = func(sessionKey []byte) (olm.InboundGroupSession, error) {
 		if len(sessionKey) == 0 {
-			return nil, olm.EmptyInput
+			return nil, olm.ErrEmptyInput
 		}
 		return NewMegolmInboundSession(sessionKey)
 	}
 	olm.InitInboundGroupSessionImport = func(sessionKey []byte) (olm.InboundGroupSession, error) {
 		if len(sessionKey) == 0 {
-			return nil, olm.EmptyInput
+			return nil, olm.ErrEmptyInput
 		}
 		return NewMegolmInboundSessionFromExport(sessionKey)
 	}
@@ -40,7 +40,7 @@ func Register() {
 	// Outbound Session
 	olm.InitNewOutboundGroupSessionFromPickled = func(pickled, key []byte) (olm.OutboundGroupSession, error) {
 		if len(pickled) == 0 {
-			return nil, olm.EmptyInput
+			return nil, olm.ErrEmptyInput
 		}
 		lenKey := len(key)
 		if lenKey == 0 {

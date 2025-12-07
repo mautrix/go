@@ -56,11 +56,12 @@ func (mach *OlmMachine) GetAndVerifyLatestKeyBackupVersion(ctx context.Context, 
 	// ...by deriving the public key from a private key that it obtained from a trusted source. Trusted sources for the private
 	// key include the user entering the key, retrieving the key stored in secret storage, or obtaining the key via secret sharing
 	// from a verified device belonging to the same user."
-	megolmBackupDerivedPublicKey := id.Ed25519(base64.RawStdEncoding.EncodeToString(megolmBackupKey.PublicKey().Bytes()))
-	if megolmBackupKey != nil && versionInfo.AuthData.PublicKey == megolmBackupDerivedPublicKey {
-		log.Debug().Msg("key backup is trusted based on derived public key")
-		return versionInfo, nil
-	} else {
+	if megolmBackupKey != nil {
+		megolmBackupDerivedPublicKey := id.Ed25519(base64.RawStdEncoding.EncodeToString(megolmBackupKey.PublicKey().Bytes()))
+		if versionInfo.AuthData.PublicKey == megolmBackupDerivedPublicKey {
+			log.Debug().Msg("Key backup is trusted based on derived public key")
+			return versionInfo, nil
+		}
 		log.Debug().
 			Stringer("expected_key", megolmBackupDerivedPublicKey).
 			Stringer("actual_key", versionInfo.AuthData.PublicKey).

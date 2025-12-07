@@ -22,14 +22,23 @@ import (
 )
 
 var (
-	MismatchingDeviceID   = errors.New("mismatching device ID in parameter and keys object")
-	MismatchingUserID     = errors.New("mismatching user ID in parameter and keys object")
-	MismatchingSigningKey = errors.New("received update for device with different signing key")
-	NoSigningKeyFound     = errors.New("didn't find ed25519 signing key")
-	NoIdentityKeyFound    = errors.New("didn't find curve25519 identity key")
-	InvalidKeySignature   = errors.New("invalid signature on device keys")
+	ErrMismatchingDeviceID   = errors.New("mismatching device ID in parameter and keys object")
+	ErrMismatchingUserID     = errors.New("mismatching user ID in parameter and keys object")
+	ErrMismatchingSigningKey = errors.New("received update for device with different signing key")
+	ErrNoSigningKeyFound     = errors.New("didn't find ed25519 signing key")
+	ErrNoIdentityKeyFound    = errors.New("didn't find curve25519 identity key")
+	ErrInvalidKeySignature   = errors.New("invalid signature on device keys")
+	ErrUserNotTracked        = errors.New("user is not tracked")
+)
 
-	ErrUserNotTracked = errors.New("user is not tracked")
+// Deprecated: use variables prefixed with Err
+var (
+	MismatchingDeviceID   = ErrMismatchingDeviceID
+	MismatchingUserID     = ErrMismatchingUserID
+	MismatchingSigningKey = ErrMismatchingSigningKey
+	NoSigningKeyFound     = ErrNoSigningKeyFound
+	NoIdentityKeyFound    = ErrNoIdentityKeyFound
+	InvalidKeySignature   = ErrInvalidKeySignature
 )
 
 func (mach *OlmMachine) LoadDevices(ctx context.Context, user id.UserID) (keys map[id.DeviceID]*id.Device) {
@@ -312,28 +321,28 @@ func (mach *OlmMachine) OnDevicesChanged(ctx context.Context, userID id.UserID) 
 
 func (mach *OlmMachine) validateDevice(userID id.UserID, deviceID id.DeviceID, deviceKeys mautrix.DeviceKeys, existing *id.Device) (*id.Device, error) {
 	if deviceID != deviceKeys.DeviceID {
-		return nil, fmt.Errorf("%w (expected %s, got %s)", MismatchingDeviceID, deviceID, deviceKeys.DeviceID)
+		return nil, fmt.Errorf("%w (expected %s, got %s)", ErrMismatchingDeviceID, deviceID, deviceKeys.DeviceID)
 	} else if userID != deviceKeys.UserID {
-		return nil, fmt.Errorf("%w (expected %s, got %s)", MismatchingUserID, userID, deviceKeys.UserID)
+		return nil, fmt.Errorf("%w (expected %s, got %s)", ErrMismatchingUserID, userID, deviceKeys.UserID)
 	}
 
 	signingKey := deviceKeys.Keys.GetEd25519(deviceID)
 	identityKey := deviceKeys.Keys.GetCurve25519(deviceID)
 	if signingKey == "" {
-		return nil, NoSigningKeyFound
+		return nil, ErrNoSigningKeyFound
 	} else if identityKey == "" {
-		return nil, NoIdentityKeyFound
+		return nil, ErrNoIdentityKeyFound
 	}
 
 	if existing != nil && existing.SigningKey != signingKey {
-		return existing, fmt.Errorf("%w (expected %s, got %s)", MismatchingSigningKey, existing.SigningKey, signingKey)
+		return existing, fmt.Errorf("%w (expected %s, got %s)", ErrMismatchingSigningKey, existing.SigningKey, signingKey)
 	}
 
 	ok, err := signatures.VerifySignatureJSON(deviceKeys, userID, deviceID.String(), signingKey)
 	if err != nil {
 		return existing, fmt.Errorf("failed to verify signature: %w", err)
 	} else if !ok {
-		return existing, InvalidKeySignature
+		return existing, ErrInvalidKeySignature
 	}
 
 	name, ok := deviceKeys.Unsigned["device_display_name"].(string)

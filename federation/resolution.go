@@ -80,7 +80,10 @@ func ResolveServerName(ctx context.Context, serverName string, opts ...*ResolveS
 	} else if wellKnown != nil {
 		output.Expires = expiry
 		output.HostHeader = wellKnown.Server
-		hostname, port, ok = ParseServerName(wellKnown.Server)
+		wkHost, wkPort, ok := ParseServerName(wellKnown.Server)
+		if ok {
+			hostname, port = wkHost, wkPort
+		}
 		// Step 3.1 and 3.2: IP literals and hostnames with port inside .well-known
 		if net.ParseIP(hostname) != nil || port != 0 {
 			if port == 0 {

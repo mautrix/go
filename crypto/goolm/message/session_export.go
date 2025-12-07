@@ -35,7 +35,7 @@ func (s *MegolmSessionExport) Decode(input []byte) error {
 		return fmt.Errorf("decrypt: %w", olm.ErrBadInput)
 	}
 	if input[0] != sessionExportVersion {
-		return fmt.Errorf("decrypt: %w", olm.ErrBadVersion)
+		return fmt.Errorf("decrypt: %w", olm.ErrUnknownOlmPickleVersion)
 	}
 	s.Counter = binary.BigEndian.Uint32(input[1:5])
 	copy(s.RatchetData[:], input[5:133])

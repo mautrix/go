@@ -278,7 +278,7 @@ func (helper *CryptoHelper) verifyDeviceKeysOnServer(ctx context.Context) error 
 	}
 }
 
-var NoSessionFound = crypto.NoSessionFound
+var NoSessionFound = crypto.ErrNoSessionFound
 
 const initialSessionWaitTimeout = 3 * time.Second
 const extendedSessionWaitTimeout = 22 * time.Second
@@ -371,6 +371,7 @@ func (helper *CryptoHelper) waitLongerForSession(ctx context.Context, evt *event
 	content := evt.Content.AsEncrypted()
 	log.Debug().Int("wait_seconds", int(extendedSessionWaitTimeout.Seconds())).Msg("Couldn't find session, requesting keys and waiting longer...")
 
+	//lint:ignore SA1019 RequestSession will gracefully request from all devices if DeviceID is blank
 	go helper.RequestSession(context.TODO(), evt.RoomID, content.SenderKey, content.SessionID, evt.Sender, content.DeviceID)
 
 	if !helper.mach.WaitForSession(ctx, evt.RoomID, content.SenderKey, content.SessionID, extendedSessionWaitTimeout) {
@@ -418,7 +419,7 @@ func (helper *CryptoHelper) EncryptWithStateKey(ctx context.Context, roomID id.R
 	defer helper.lock.RUnlock()
 	encrypted, err = helper.mach.EncryptMegolmEventWithStateKey(ctx, roomID, evtType, stateKey, content)
 	if err != nil {
-		if !errors.Is(err, crypto.SessionExpired) && err != crypto.NoGroupSession && !errors.Is(err, crypto.SessionNotShared) {
+		if !errors.Is(err, crypto.ErrSessionExpired) && err != crypto.ErrNoGroupSession && !errors.Is(err, crypto.ErrSessionNotShared) {
 			return
 		}
 		helper.log.Debug().

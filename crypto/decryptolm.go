@@ -26,15 +26,27 @@ import (
 )
 
 var (
-	UnsupportedAlgorithm                = errors.New("unsupported event encryption algorithm")
-	NotEncryptedForMe                   = errors.New("olm event doesn't contain ciphertext for this device")
-	UnsupportedOlmMessageType           = errors.New("unsupported olm message type")
-	DecryptionFailedWithMatchingSession = errors.New("decryption failed with matching session")
-	DecryptionFailedForNormalMessage    = errors.New("decryption failed for normal message")
-	SenderMismatch                      = errors.New("mismatched sender in olm payload")
-	RecipientMismatch                   = errors.New("mismatched recipient in olm payload")
-	RecipientKeyMismatch                = errors.New("mismatched recipient key in olm payload")
-	ErrDuplicateMessage                 = errors.New("duplicate olm message")
+	ErrUnsupportedAlgorithm                = errors.New("unsupported event encryption algorithm")
+	ErrNotEncryptedForMe                   = errors.New("olm event doesn't contain ciphertext for this device")
+	ErrUnsupportedOlmMessageType           = errors.New("unsupported olm message type")
+	ErrDecryptionFailedWithMatchingSession = errors.New("decryption failed with matching session")
+	ErrDecryptionFailedForNormalMessage    = errors.New("decryption failed for normal message")
+	ErrSenderMismatch                      = errors.New("mismatched sender in olm payload")
+	ErrRecipientMismatch                   = errors.New("mismatched recipient in olm payload")
+	ErrRecipientKeyMismatch                = errors.New("mismatched recipient key in olm payload")
+	ErrDuplicateMessage                    = errors.New("duplicate olm message")
+)
+
+// Deprecated: use variables prefixed with Err
+var (
+	UnsupportedAlgorithm                = ErrUnsupportedAlgorithm
+	NotEncryptedForMe                   = ErrNotEncryptedForMe
+	UnsupportedOlmMessageType           = ErrUnsupportedOlmMessageType
+	DecryptionFailedWithMatchingSession = ErrDecryptionFailedWithMatchingSession
+	DecryptionFailedForNormalMessage    = ErrDecryptionFailedForNormalMessage
+	SenderMismatch                      = ErrSenderMismatch
+	RecipientMismatch                   = ErrRecipientMismatch
+	RecipientKeyMismatch                = ErrRecipientKeyMismatch
 )
 
 // DecryptedOlmEvent represents an event that was decrypted from an event encrypted with the m.olm.v1.curve25519-aes-sha2 algorithm.
@@ -56,13 +68,13 @@ type DecryptedOlmEvent struct {
 func (mach *OlmMachine) decryptOlmEvent(ctx context.Context, evt *event.Event) (*DecryptedOlmEvent, error) {
 	content, ok := evt.Content.Parsed.(*event.EncryptedEventContent)
 	if !ok {
-		return nil, IncorrectEncryptedContentType
+		return nil, ErrIncorrectEncryptedContentType
 	} else if content.Algorithm != id.AlgorithmOlmV1 {
-		return nil, UnsupportedAlgorithm
+		return nil, ErrUnsupportedAlgorithm
 	}
 	ownContent, ok := content.OlmCiphertext[mach.account.IdentityKey()]
 	if !ok {
-		return nil, NotEncryptedForMe
+		return nil, ErrNotEncryptedForMe
 	}
 	decrypted, err := mach.decryptAndParseOlmCiphertext(ctx, evt, content.SenderKey, ownContent.Type, ownContent.Body)
 	if err != nil {
@@ -78,7 +90,7 @@ type OlmEventKeys struct {
 
 func (mach *OlmMachine) decryptAndParseOlmCiphertext(ctx context.Context, evt *event.Event, senderKey id.SenderKey, olmType id.OlmMsgType, ciphertext string) (*DecryptedOlmEvent, error) {
 	if olmType != id.OlmMsgTypePreKey && olmType != id.OlmMsgTypeMsg {
-		return nil, UnsupportedOlmMessageType
+		return nil, ErrUnsupportedOlmMessageType
 	}
 
 	log := mach.machOrContextLog(ctx).With().
@@ -102,11 +114,11 @@ func (mach *OlmMachine) decryptAndParseOlmCiphertext(ctx context.Context, evt *e
 	}
 	olmEvt.Type.Class = evt.Type.Class
 	if evt.Sender != olmEvt.Sender {
-		return nil, SenderMismatch
+		return nil, ErrSenderMismatch
 	} else if mach.Client.UserID != olmEvt.Recipient {
-		return nil, RecipientMismatch
+		return nil, ErrRecipientMismatch
 	} else if mach.account.SigningKey() != olmEvt.RecipientKeys.Ed25519 {
-		return nil, RecipientKeyMismatch
+		return nil, ErrRecipientKeyMismatch
 	}
 
 	if len(olmEvt.Content.VeryRaw) > 0 {
@@ -151,7 +163,7 @@ func (mach *OlmMachine) tryDecryptOlmCiphertext(ctx context.Context, sender id.U
 
 	plaintext, err := mach.tryDecryptOlmCiphertextWithExistingSession(ctx, senderKey, olmType, ciphertext, ciphertextHash)
 	if err != nil {
-		if err == DecryptionFailedWithMatchingSession {
+		if err == ErrDecryptionFailedWithMatchingSession {
 			log.Warn().Msg("Found matching session, but decryption failed")
 			go mach.unwedgeDevice(log, sender, senderKey)
 		}
@@ -169,10 +181,10 @@ func (mach *OlmMachine) tryDecryptOlmCiphertext(ctx context.Context, sender id.U
 	// if it isn't one at this point in time anymore, so return early.
 	if olmType != id.OlmMsgTypePreKey {
 		go mach.unwedgeDevice(log, sender, senderKey)
-		return nil, DecryptionFailedForNormalMessage
+		return nil, ErrDecryptionFailedForNormalMessage
 	}
 
-	accountBackup, err := mach.account.Internal.Pickle([]byte("tmp"))
+	accountBackup, _ := mach.account.Internal.Pickle([]byte("tmp"))
 	log.Trace().Msg("Trying to create inbound session")
 	endTimeTrace = mach.timeTrace(ctx, "creating inbound olm session", time.Second)
 	session, err := mach.createInboundSession(ctx, senderKey, ciphertext)
@@ -302,7 +314,7 @@ func (mach *OlmMachine) tryDecryptOlmCiphertextWithExistingSession(
 				Str("session_description", session.Describe()).
 				Msg("Failed to decrypt olm message")
 			if olmType == id.OlmMsgTypePreKey {
-				return nil, DecryptionFailedWithMatchingSession
+				return nil, ErrDecryptionFailedWithMatchingSession
 			}
 		} else {
 			endTimeTrace = mach.timeTrace(ctx, "updating session in database", time.Second)
@@ -345,7 +357,7 @@ func (mach *OlmMachine) unwedgeDevice(log zerolog.Logger, sender id.UserID, send
 	ctx := log.WithContext(mach.backgroundCtx)
 	mach.recentlyUnwedgedLock.Lock()
 	prevUnwedge, ok := mach.recentlyUnwedged[senderKey]
-	delta := time.Now().Sub(prevUnwedge)
+	delta := time.Since(prevUnwedge)
 	if ok && delta < MinUnwedgeInterval {
 		log.Debug().
 			Str("previous_recreation", delta.String()).

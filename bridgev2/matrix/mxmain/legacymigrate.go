@@ -135,7 +135,10 @@ func (br *BridgeMain) CheckLegacyDB(
 	}
 	var dbVersion int
 	err = br.DB.QueryRow(ctx, "SELECT version FROM version").Scan(&dbVersion)
-	if dbVersion < expectedVersion {
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to get database version")
+		return
+	} else if dbVersion < expectedVersion {
 		log.Fatal().
 			Int("expected_version", expectedVersion).
 			Int("version", dbVersion).

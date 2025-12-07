@@ -56,7 +56,7 @@ func (wsc *WebsocketCommand) MakeResponse(ok bool, data any) *WebsocketRequest {
 		var prefixMessage string
 		for unwrappedErr != nil {
 			errorData, jsonErr = json.Marshal(unwrappedErr)
-			if errorData != nil && len(errorData) > 2 && jsonErr == nil {
+			if len(errorData) > 2 && jsonErr == nil {
 				prefixMessage = strings.Replace(err.Error(), unwrappedErr.Error(), "", 1)
 				prefixMessage = strings.TrimRight(prefixMessage, ": ")
 				break

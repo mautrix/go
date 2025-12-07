@@ -84,7 +84,7 @@ func (s *OutboundGroupSession) pickleLen() uint {
 // OutboundGroupSession using the supplied key.
 func (s *OutboundGroupSession) Pickle(key []byte) ([]byte, error) {
 	if len(key) == 0 {
-		return nil, olm.NoKeyProvided
+		return nil, olm.ErrNoKeyProvided
 	}
 	pickled := make([]byte, s.pickleLen())
 	r := C.olm_pickle_outbound_group_session(
@@ -103,7 +103,7 @@ func (s *OutboundGroupSession) Pickle(key []byte) ([]byte, error) {
 
 func (s *OutboundGroupSession) Unpickle(pickled, key []byte) error {
 	if len(key) == 0 {
-		return olm.NoKeyProvided
+		return olm.ErrNoKeyProvided
 	}
 	r := C.olm_unpickle_outbound_group_session(
 		(*C.OlmOutboundGroupSession)(s.int),
@@ -159,7 +159,7 @@ func (s *OutboundGroupSession) MarshalJSON() ([]byte, error) {
 // Deprecated
 func (s *OutboundGroupSession) UnmarshalJSON(data []byte) error {
 	if len(data) == 0 || data[0] != '"' || data[len(data)-1] != '"' {
-		return olm.InputNotJSONString
+		return olm.ErrInputNotJSONString
 	}
 	if s == nil || s.int == nil {
 		*s = *NewBlankOutboundGroupSession()
@@ -183,7 +183,7 @@ func (s *OutboundGroupSession) encryptMsgLen(plainTextLen int) uint {
 // as base64.
 func (s *OutboundGroupSession) Encrypt(plaintext []byte) ([]byte, error) {
 	if len(plaintext) == 0 {
-		return nil, olm.EmptyInput
+		return nil, olm.ErrEmptyInput
 	}
 	message := make([]byte, s.encryptMsgLen(len(plaintext)))
 	r := C.olm_group_encrypt(

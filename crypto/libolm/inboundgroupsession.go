@@ -31,7 +31,7 @@ var _ olm.InboundGroupSession = (*InboundGroupSession)(nil)
 // base64 couldn't be decoded then the error will be "INVALID_BASE64".
 func InboundGroupSessionFromPickled(pickled, key []byte) (*InboundGroupSession, error) {
 	if len(pickled) == 0 {
-		return nil, olm.EmptyInput
+		return nil, olm.ErrEmptyInput
 	}
 	lenKey := len(key)
 	if lenKey == 0 {
@@ -48,7 +48,7 @@ func InboundGroupSessionFromPickled(pickled, key []byte) (*InboundGroupSession, 
 // "OLM_BAD_SESSION_KEY".
 func NewInboundGroupSession(sessionKey []byte) (*InboundGroupSession, error) {
 	if len(sessionKey) == 0 {
-		return nil, olm.EmptyInput
+		return nil, olm.ErrEmptyInput
 	}
 	s := NewBlankInboundGroupSession()
 	r := C.olm_init_inbound_group_session(
@@ -69,7 +69,7 @@ func NewInboundGroupSession(sessionKey []byte) (*InboundGroupSession, error) {
 // error will be "OLM_BAD_SESSION_KEY".
 func InboundGroupSessionImport(sessionKey []byte) (*InboundGroupSession, error) {
 	if len(sessionKey) == 0 {
-		return nil, olm.EmptyInput
+		return nil, olm.ErrEmptyInput
 	}
 	s := NewBlankInboundGroupSession()
 	r := C.olm_import_inbound_group_session(
@@ -124,7 +124,7 @@ func (s *InboundGroupSession) pickleLen() uint {
 // InboundGroupSession using the supplied key.
 func (s *InboundGroupSession) Pickle(key []byte) ([]byte, error) {
 	if len(key) == 0 {
-		return nil, olm.NoKeyProvided
+		return nil, olm.ErrNoKeyProvided
 	}
 	pickled := make([]byte, s.pickleLen())
 	r := C.olm_pickle_inbound_group_session(
@@ -143,9 +143,9 @@ func (s *InboundGroupSession) Pickle(key []byte) ([]byte, error) {
 
 func (s *InboundGroupSession) Unpickle(pickled, key []byte) error {
 	if len(key) == 0 {
-		return olm.NoKeyProvided
+		return olm.ErrNoKeyProvided
 	} else if len(pickled) == 0 {
-		return olm.EmptyInput
+		return olm.ErrEmptyInput
 	}
 	r := C.olm_unpickle_inbound_group_session(
 		(*C.OlmInboundGroupSession)(s.int),
@@ -200,7 +200,7 @@ func (s *InboundGroupSession) MarshalJSON() ([]byte, error) {
 // Deprecated
 func (s *InboundGroupSession) UnmarshalJSON(data []byte) error {
 	if len(data) == 0 || data[0] != '"' || data[len(data)-1] != '"' {
-		return olm.InputNotJSONString
+		return olm.ErrInputNotJSONString
 	}
 	if s == nil || s.int == nil {
 		*s = *NewBlankInboundGroupSession()
@@ -217,7 +217,7 @@ func (s *InboundGroupSession) UnmarshalJSON(data []byte) error {
 // will be "BAD_MESSAGE_FORMAT".
 func (s *InboundGroupSession) decryptMaxPlaintextLen(message []byte) (uint, error) {
 	if len(message) == 0 {
-		return 0, olm.EmptyInput
+		return 0, olm.ErrEmptyInput
 	}
 	// olm_group_decrypt_max_plaintext_length destroys the input, so we have to clone it
 	messageCopy := bytes.Clone(message)
@@ -244,7 +244,7 @@ func (s *InboundGroupSession) decryptMaxPlaintextLen(message []byte) (uint, erro
 // was shared with us) the error will be "OLM_UNKNOWN_MESSAGE_INDEX".
 func (s *InboundGroupSession) Decrypt(message []byte) ([]byte, uint, error) {
 	if len(message) == 0 {
-		return nil, 0, olm.EmptyInput
+		return nil, 0, olm.ErrEmptyInput
 	}
 	decryptMaxPlaintextLen, err := s.decryptMaxPlaintextLen(message)
 	if err != nil {

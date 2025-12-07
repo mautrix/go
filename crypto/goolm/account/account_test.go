@@ -124,7 +124,7 @@ func TestOldAccountPickle(t *testing.T) {
 	account, err := account.NewAccount()
 	assert.NoError(t, err)
 	err = account.Unpickle(pickled, pickleKey)
-	assert.ErrorIs(t, err, olm.ErrBadVersion)
+	assert.ErrorIs(t, err, olm.ErrUnknownOlmPickleVersion)
 }
 
 func TestLoopback(t *testing.T) {

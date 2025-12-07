@@ -37,6 +37,9 @@ func (e Encryption) Encrypt(plaintext []byte, privateKey crypto.Curve25519Privat
 		return nil, nil, err
 	}
 	cipher, err := aessha2.NewAESSHA2(sharedSecret, nil)
+	if err != nil {
+		return nil, nil, err
+	}
 	ciphertext, err = cipher.Encrypt(plaintext)
 	if err != nil {
 		return nil, nil, err

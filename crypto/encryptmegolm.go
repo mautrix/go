@@ -25,7 +25,12 @@ import (
 )
 
 var (
-	NoGroupSession = errors.New("no group session created")
+	ErrNoGroupSession = errors.New("no group session created")
+)
+
+// Deprecated: use variables prefixed with Err
+var (
+	NoGroupSession = ErrNoGroupSession
 )
 
 func getRawJSON[T any](content json.RawMessage, path ...string) *T {
@@ -82,7 +87,7 @@ type rawMegolmEvent struct {
 
 // IsShareError returns true if the error is caused by the lack of an outgoing megolm session and can be solved with OlmMachine.ShareGroupSession
 func IsShareError(err error) bool {
-	return err == SessionExpired || err == SessionNotShared || err == NoGroupSession
+	return err == ErrSessionExpired || err == ErrSessionNotShared || err == ErrNoGroupSession
 }
 
 func ParseMegolmMessageIndex(ciphertext []byte) (uint, error) {
@@ -120,7 +125,7 @@ func (mach *OlmMachine) EncryptMegolmEventWithStateKey(ctx context.Context, room
 	if err != nil {
 		return nil, fmt.Errorf("failed to get outbound group session: %w", err)
 	} else if session == nil {
-		return nil, NoGroupSession
+		return nil, ErrNoGroupSession
 	}
 	plaintext, err := json.Marshal(&rawMegolmEvent{
 		RoomID:   roomID,

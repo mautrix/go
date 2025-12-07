@@ -205,7 +205,7 @@ func (mach *OlmMachine) FlushStore(ctx context.Context) error {
 func (mach *OlmMachine) timeTrace(ctx context.Context, thing string, expectedDuration time.Duration) func() {
 	start := time.Now()
 	return func() {
-		duration := time.Now().Sub(start)
+		duration := time.Since(start)
 		if duration > expectedDuration {
 			zerolog.Ctx(ctx).Warn().
 				Str("action", thing).

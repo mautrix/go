@@ -38,9 +38,9 @@ func init() {
 
 var _ crypto.StateStore = (*sqlstatestore.SQLStateStore)(nil)
 
-var NoSessionFound = crypto.NoSessionFound
-var DuplicateMessageIndex = crypto.DuplicateMessageIndex
-var UnknownMessageIndex = olm.UnknownMessageIndex
+var NoSessionFound = crypto.ErrNoSessionFound
+var DuplicateMessageIndex = crypto.ErrDuplicateMessageIndex
+var UnknownMessageIndex = olm.ErrUnknownMessageIndex
 
 type CryptoHelper struct {
 	bridge *Connector
@@ -439,7 +439,7 @@ func (helper *CryptoHelper) Encrypt(ctx context.Context, roomID id.RoomID, evtTy
 	var encrypted *event.EncryptedEventContent
 	encrypted, err = helper.mach.EncryptMegolmEvent(ctx, roomID, evtType, content)
 	if err != nil {
-		if !errors.Is(err, crypto.SessionExpired) && !errors.Is(err, crypto.SessionNotShared) && !errors.Is(err, crypto.NoGroupSession) {
+		if !errors.Is(err, crypto.ErrSessionExpired) && !errors.Is(err, crypto.ErrSessionNotShared) && !errors.Is(err, crypto.ErrNoGroupSession) {
 			return
 		}
 		helper.log.Debug().Err(err).

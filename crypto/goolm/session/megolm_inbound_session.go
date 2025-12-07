@@ -99,7 +99,7 @@ func (o *MegolmInboundSession) getRatchet(messageIndex uint32) (*megolm.Ratchet,
 	}
 	if (messageIndex - o.InitialRatchet.Counter) >= uint32(1<<31) {
 		// the counter is before our initial ratchet - we can't decode this
-		return nil, fmt.Errorf("decrypt: %w", olm.ErrRatchetNotAvailable)
+		return nil, fmt.Errorf("decrypt: %w", olm.ErrUnknownMessageIndex)
 	}
 	// otherwise, start from the initial ratchet. Take a copy so that we don't overwrite the initial ratchet
 	copiedRatchet := o.InitialRatchet
@@ -206,7 +206,7 @@ func (o *MegolmInboundSession) UnpickleLibOlm(value []byte) error {
 		return err
 	}
 	if pickledVersion != megolmInboundSessionPickleVersionLibOlm && pickledVersion != 1 {
-		return fmt.Errorf("unpickle MegolmInboundSession: %w (found version %d)", olm.ErrBadVersion, pickledVersion)
+		return fmt.Errorf("unpickle MegolmInboundSession: %w (found version %d)", olm.ErrUnknownOlmPickleVersion, pickledVersion)
 	}
 
 	if err = o.InitialRatchet.UnpickleLibOlm(decoder); err != nil {

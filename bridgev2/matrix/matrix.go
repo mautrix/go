@@ -127,6 +127,7 @@ func (br *Connector) waitLongerForSession(ctx context.Context, evt *event.Event,
 		Int("wait_seconds", int(extendedSessionWaitTimeout.Seconds())).
 		Msg("Couldn't find session, requesting keys and waiting longer...")
 
+	//lint:ignore SA1019 RequestSession will gracefully request from all devices if DeviceID is blank
 	go br.Crypto.RequestSession(ctx, evt.RoomID, content.SenderKey, content.SessionID, evt.Sender, content.DeviceID)
 	go br.sendCryptoStatusError(ctx, evt, fmt.Errorf("%w. The bridge will retry for %d seconds", errNoDecryptionKeys, int(extendedSessionWaitTimeout.Seconds())), errorEventID, 1, false)
 

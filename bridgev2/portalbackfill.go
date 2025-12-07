@@ -410,6 +410,7 @@ func (portal *Portal) compileBatchMessage(ctx context.Context, source *UserLogin
 		if reaction.Timestamp.IsZero() {
 			reaction.Timestamp = msg.Timestamp.Add(10 * time.Millisecond)
 		}
+		//lint:ignore SA4006 it's a todo
 		targetPart, ok := partMap[*reaction.TargetPart]
 		if !ok {
 			// TODO warning log and/or skip reaction?

@@ -41,10 +41,7 @@ func (pc PermissionConfig) IsConfigured() bool {
 	_, hasExampleDomain := pc["example.com"]
 	_, hasExampleUser := pc["@admin:example.com"]
 	exampleLen := boolToInt(hasWildcard) + boolToInt(hasExampleUser) + boolToInt(hasExampleDomain)
-	if len(pc) <= exampleLen {
-		return false
-	}
-	return true
+	return len(pc) > exampleLen
 }
 
 func (pc PermissionConfig) Get(userID id.UserID) Permissions {

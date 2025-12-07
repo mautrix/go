@@ -42,7 +42,7 @@ func (s *MegolmSessionSharing) VerifyAndDecode(input []byte) error {
 	}
 	s.PublicKey = publicKey
 	if input[0] != sessionSharingVersion {
-		return fmt.Errorf("verify: %w", olm.ErrBadVersion)
+		return fmt.Errorf("verify: %w", olm.ErrUnknownOlmPickleVersion)
 	}
 	s.Counter = binary.BigEndian.Uint32(input[1:5])
 	copy(s.RatchetData[:], input[5:133])

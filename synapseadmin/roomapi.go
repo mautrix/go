@@ -75,8 +75,7 @@ type RespListRooms struct {
 // https://matrix-org.github.io/synapse/latest/admin_api/rooms.html#list-room-api
 func (cli *Client) ListRooms(ctx context.Context, req ReqListRoom) (RespListRooms, error) {
 	var resp RespListRooms
-	var reqURL string
-	reqURL = cli.Client.BuildURLWithQuery(mautrix.SynapseAdminURLPath{"v1", "rooms"}, req.BuildQuery())
+	reqURL := cli.Client.BuildURLWithQuery(mautrix.SynapseAdminURLPath{"v1", "rooms"}, req.BuildQuery())
 	_, err := cli.Client.MakeRequest(ctx, http.MethodGet, reqURL, nil, &resp)
 	return resp, err
 }

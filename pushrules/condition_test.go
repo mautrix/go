@@ -102,14 +102,6 @@ func newEventPropertyIsPushCondition(key string, value any) *pushrules.PushCondi
 	}
 }
 
-func newEventPropertyContainsPushCondition(key string, value any) *pushrules.PushCondition {
-	return &pushrules.PushCondition{
-		Kind:  pushrules.KindEventPropertyContains,
-		Key:   key,
-		Value: value,
-	}
-}
-
 func TestPushCondition_Match_InvalidKind(t *testing.T) {
 	condition := &pushrules.PushCondition{
 		Kind: pushrules.PushCondKind("invalid"),

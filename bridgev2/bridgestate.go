@@ -102,9 +102,9 @@ func (bsq *BridgeStateQueue) loop() {
 	}
 }
 
-func (bsq *BridgeStateQueue) scheduleNotice(ctx context.Context, triggeredBy status.BridgeState) {
+func (bsq *BridgeStateQueue) scheduleNotice(triggeredBy status.BridgeState) {
 	log := bsq.login.Log.With().Str("action", "transient disconnect notice").Logger()
-	ctx = log.WithContext(bsq.bridge.BackgroundCtx)
+	ctx := log.WithContext(bsq.bridge.BackgroundCtx)
 	if !bsq.waitForTransientDisconnectReconnect(ctx) {
 		return
 	}
@@ -135,7 +135,7 @@ func (bsq *BridgeStateQueue) sendNotice(ctx context.Context, state status.Bridge
 			if bsq.firstTransientDisconnect.IsZero() {
 				bsq.firstTransientDisconnect = time.Now()
 			}
-			go bsq.scheduleNotice(ctx, state)
+			go bsq.scheduleNotice(state)
 		}
 		return
 	}

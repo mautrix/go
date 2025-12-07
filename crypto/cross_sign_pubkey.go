@@ -63,8 +63,8 @@ func (mach *OlmMachine) GetCrossSigningPublicKeys(ctx context.Context, userID id
 	if len(dbKeys) > 0 {
 		masterKey, ok := dbKeys[id.XSUsageMaster]
 		if ok {
-			selfSigning, _ := dbKeys[id.XSUsageSelfSigning]
-			userSigning, _ := dbKeys[id.XSUsageUserSigning]
+			selfSigning := dbKeys[id.XSUsageSelfSigning]
+			userSigning := dbKeys[id.XSUsageUserSigning]
 			return &CrossSigningPublicKeysCache{
 				MasterKey:      masterKey.Key,
 				SelfSigningKey: selfSigning.Key,
