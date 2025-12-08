@@ -2021,8 +2021,16 @@ func (cli *Client) uploadMediaToURL(ctx context.Context, data ReqUploadMedia) (*
 				Msg("Error uploading media to external URL, not retrying")
 			return nil, err
 		}
-		cli.Log.Warn().Str("url", data.UnstableUploadURL).Err(err).
+		backoff := time.Second * time.Duration(cli.DefaultHTTPRetries-retries)
+		cli.Log.Warn().Err(err).
+			Str("url", data.UnstableUploadURL).
+			Int("retry_in_seconds", int(backoff.Seconds())).
 			Msg("Error uploading media to external URL, retrying")
+		select {
+		case <-time.After(backoff):
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
 		retries--
 		_, err = readerSeeker.Seek(0, io.SeekStart)
 		if err != nil {
