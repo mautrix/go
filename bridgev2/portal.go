@@ -800,6 +800,8 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 		return portal.handleMatrixPowerLevels(ctx, login, origSender, evt, isStateRequest)
 	case event.BeeperDeleteChat:
 		return portal.handleMatrixDeleteChat(ctx, login, origSender, evt)
+	case event.BeeperAcceptMessageRequest:
+		return portal.handleMatrixAcceptMessageRequest(ctx, login, origSender, evt)
 	default:
 		return EventHandlingResultIgnored
 	}
@@ -1747,6 +1749,45 @@ func (portal *Portal) getTargetUser(ctx context.Context, userID id.UserID) (Ghos
 		// Return raw nil as a separate case to ensure a typed nil isn't returned
 		return nil, nil
 	}
+}
+
+func (portal *Portal) handleMatrixAcceptMessageRequest(
+	ctx context.Context,
+	sender *UserLogin,
+	origSender *OrigSender,
+	evt *event.Event,
+) EventHandlingResult {
+	if origSender != nil {
+		return EventHandlingResultFailed.WithMSSError(ErrIgnoringAcceptRequestRelayedUser)
+	}
+	log := zerolog.Ctx(ctx)
+	content, ok := evt.Content.Parsed.(*event.BeeperAcceptMessageRequestEventContent)
+	if !ok {
+		log.Error().Type("content_type", evt.Content.Parsed).Msg("Unexpected parsed content type")
+		return EventHandlingResultFailed.WithMSSError(fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed))
+	}
+	api, ok := sender.Client.(MessageRequestAcceptingNetworkAPI)
+	if !ok {
+		return EventHandlingResultIgnored.WithMSSError(ErrDeleteChatNotSupported)
+	}
+	err := api.HandleMatrixAcceptMessageRequest(ctx, &MatrixAcceptMessageRequest{
+		Event:   evt,
+		Content: content,
+		Portal:  portal,
+	})
+	if err != nil {
+		log.Err(err).Msg("Failed to handle Matrix accept message request")
+		return EventHandlingResultFailed.WithMSSError(err)
+	}
+	if portal.MessageRequest {
+		portal.MessageRequest = false
+		portal.UpdateBridgeInfo(ctx)
+		err = portal.Save(ctx)
+		if err != nil {
+			log.Err(err).Msg("Failed to save portal after accepting message request")
+		}
+	}
+	return EventHandlingResultSuccess.WithMSS()
 }
 
 func (portal *Portal) handleMatrixDeleteChat(
@@ -3948,9 +3989,9 @@ type ChatInfo struct {
 	Disappear *database.DisappearingSetting
 	ParentID  *networkid.PortalID
 
-	UserLocal *UserLocalPortalInfo
-
-	CanBackfill bool
+	UserLocal      *UserLocalPortalInfo
+	MessageRequest *bool
+	CanBackfill    bool
 
 	ExcludeChangesFromTimeline bool
 
@@ -4070,10 +4111,11 @@ func (portal *Portal) getBridgeInfo() (string, event.BridgeEventContent) {
 		Creator:   portal.Bridge.Bot.GetMXID(),
 		Protocol:  portal.Bridge.Network.GetName().AsBridgeInfoSection(),
 		Channel: event.BridgeInfoSection{
-			ID:          string(portal.ID),
-			DisplayName: portal.Name,
-			AvatarURL:   portal.AvatarMXC,
-			Receiver:    string(portal.Receiver),
+			ID:             string(portal.ID),
+			DisplayName:    portal.Name,
+			AvatarURL:      portal.AvatarMXC,
+			Receiver:       string(portal.Receiver),
+			MessageRequest: portal.MessageRequest,
 			// TODO external URL?
 		},
 		BeeperRoomTypeV2: string(portal.RoomType),
@@ -4814,6 +4856,10 @@ func (portal *Portal) UpdateInfo(ctx context.Context, info *ChatInfo, source *Us
 			changed = true
 			portal.RoomType = *info.Type
 		}
+	}
+	if info.MessageRequest != nil && *info.MessageRequest != portal.MessageRequest {
+		changed = true
+		portal.MessageRequest = *info.MessageRequest
 	}
 	if info.Members != nil && portal.MXID != "" && source != nil {
 		err := portal.syncParticipants(ctx, info.Members, source, nil, time.Time{})

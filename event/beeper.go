@@ -89,7 +89,11 @@ type BeeperRoomKeyAckEventContent struct {
 }
 
 type BeeperChatDeleteEventContent struct {
-	DeleteForEveryone bool `json:"delete_for_everyone,omitempty"`
+	DeleteForEveryone  bool `json:"delete_for_everyone,omitempty"`
+	FromMessageRequest bool `json:"from_message_request,omitempty"`
+}
+
+type BeeperAcceptMessageRequestEventContent struct {
 }
 
 type BeeperSendStateEventContent struct {
