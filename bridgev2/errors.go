@@ -38,6 +38,8 @@ var ErrNotLoggedIn = errors.New("not logged in")
 // but direct media is not enabled.
 var ErrDirectMediaNotEnabled = errors.New("direct media is not enabled")
 
+var ErrPortalIsDeleted = errors.New("portal is deleted")
+
 // Common message status errors
 var (
 	ErrPanicInEventHandler              error = WrapErrorInStatus(errors.New("panic in event handler")).WithSendNotice(true).WithErrorAsMessage()
