@@ -141,6 +141,70 @@ func (vh *VerificationHelper) getLog(ctx context.Context) *zerolog.Logger {
 	return &logger
 }
 
+func (vh *VerificationHelper) checkTransactionID(ctx context.Context, evt *event.Event) *VerificationTransaction {
+	log := vh.getLog(ctx).With().
+		Str("verification_action", "check transaction ID").
+		Stringer("sender", evt.Sender).
+		Stringer("room_id", evt.RoomID).
+		Stringer("event_id", evt.ID).
+		Stringer("event_type", evt.Type).
+		Logger()
+	ctx = log.WithContext(ctx)
+
+	var transactionID id.VerificationTransactionID
+	if evt.ID != "" {
+		transactionID = id.VerificationTransactionID(evt.ID)
+	} else {
+		if txnID, ok := evt.Content.Parsed.(event.VerificationTransactionable); !ok {
+			log.Warn().Msg("Ignoring verification event without a transaction ID")
+			return nil
+		} else {
+			transactionID = txnID.GetTransactionID()
+		}
+	}
+	log = log.With().Stringer("transaction_id", transactionID).Logger()
+
+	vh.activeTransactionsLock.Lock()
+	defer vh.activeTransactionsLock.Unlock()
+
+	txn, err := vh.store.GetVerificationTransaction(ctx, transactionID)
+	if err != nil && errors.Is(err, ErrUnknownVerificationTransaction) {
+		log.Err(err).Msg("failed to get verification transaction")
+		return nil
+	} else if errors.Is(err, ErrUnknownVerificationTransaction) {
+		// If it's a cancellation event for an unknown transaction, we
+		// can just ignore it.
+		if evt.Type == event.ToDeviceVerificationCancel || evt.Type == event.InRoomVerificationCancel {
+			log.Info().Msg("Ignoring verification cancellation event for an unknown transaction")
+			return nil
+		}
+
+		log.Warn().Msg("Sending cancellation event for unknown transaction ID")
+
+		// We have to create a fake transaction so that the call to
+		// cancelVerificationTxn works.
+		txn = VerificationTransaction{
+			ExpirationTime: jsontime.UnixMilli{Time: time.Now().Add(time.Minute * 10)},
+			RoomID:         evt.RoomID,
+			TheirUserID:    evt.Sender,
+		}
+		if transactionable, ok := evt.Content.Parsed.(event.VerificationTransactionable); ok {
+			txn.TransactionID = transactionable.GetTransactionID()
+		} else {
+			txn.TransactionID = id.VerificationTransactionID(evt.ID)
+		}
+		if fromDevice, ok := evt.Content.Raw["from_device"]; ok {
+			txn.TheirDeviceID = id.DeviceID(fromDevice.(string))
+		}
+
+		// Send a cancellation event.
+		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnknownTransaction, "The transaction ID was not recognized.")
+		return nil
+	}
+
+	return &txn
+}
+
 // Init initializes the verification helper by adding the necessary event
 // handlers to the syncer.
 func (vh *VerificationHelper) Init(ctx context.Context) error {
@@ -165,70 +229,12 @@ func (vh *VerificationHelper) Init(ctx context.Context) error {
 	// and ignore the event if it isn't.
 	wrapHandler := func(callback func(context.Context, VerificationTransaction, *event.Event)) func(context.Context, *event.Event) {
 		return func(ctx context.Context, evt *event.Event) {
-			log := vh.getLog(ctx).With().
-				Str("verification_action", "check transaction ID").
-				Stringer("sender", evt.Sender).
-				Stringer("room_id", evt.RoomID).
-				Stringer("event_id", evt.ID).
-				Stringer("event_type", evt.Type).
-				Logger()
-			ctx = log.WithContext(ctx)
-
-			var transactionID id.VerificationTransactionID
-			if evt.ID != "" {
-				transactionID = id.VerificationTransactionID(evt.ID)
-			} else {
-				if txnID, ok := evt.Content.Parsed.(event.VerificationTransactionable); !ok {
-					log.Warn().Msg("Ignoring verification event without a transaction ID")
-					return
-				} else {
-					transactionID = txnID.GetTransactionID()
-				}
-			}
-			log = log.With().Stringer("transaction_id", transactionID).Logger()
-
-			vh.activeTransactionsLock.Lock()
-			txn, err := vh.store.GetVerificationTransaction(ctx, transactionID)
-			if err != nil && errors.Is(err, ErrUnknownVerificationTransaction) {
-				log.Err(err).Msg("failed to get verification transaction")
-				vh.activeTransactionsLock.Unlock()
+			txn := vh.checkTransactionID(ctx, evt)
+			if txn == nil {
 				return
-			} else if errors.Is(err, ErrUnknownVerificationTransaction) {
-				// If it's a cancellation event for an unknown transaction, we
-				// can just ignore it.
-				if evt.Type == event.ToDeviceVerificationCancel || evt.Type == event.InRoomVerificationCancel {
-					log.Info().Msg("Ignoring verification cancellation event for an unknown transaction")
-					vh.activeTransactionsLock.Unlock()
-					return
-				}
-
-				log.Warn().Msg("Sending cancellation event for unknown transaction ID")
-
-				// We have to create a fake transaction so that the call to
-				// cancelVerificationTxn works.
-				txn = VerificationTransaction{
-					ExpirationTime: jsontime.UnixMilli{Time: time.Now().Add(time.Minute * 10)},
-					RoomID:         evt.RoomID,
-					TheirUserID:    evt.Sender,
-				}
-				if transactionable, ok := evt.Content.Parsed.(event.VerificationTransactionable); ok {
-					txn.TransactionID = transactionable.GetTransactionID()
-				} else {
-					txn.TransactionID = id.VerificationTransactionID(evt.ID)
-				}
-				if fromDevice, ok := evt.Content.Raw["from_device"]; ok {
-					txn.TheirDeviceID = id.DeviceID(fromDevice.(string))
-				}
-
-				// Send a cancellation event.
-				vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUnknownTransaction, "The transaction ID was not recognized.")
-				vh.activeTransactionsLock.Unlock()
-				return
-			} else {
-				vh.activeTransactionsLock.Unlock()
 			}
 
-			logCtx := log.With().
+			logCtx := vh.getLog(ctx).With().
 				Stringer("transaction_step", txn.VerificationState).
 				Stringer("sender", evt.Sender)
 			if evt.RoomID != "" {
@@ -236,7 +242,8 @@ func (vh *VerificationHelper) Init(ctx context.Context) error {
 					Stringer("room_id", evt.RoomID).
 					Stringer("event_id", evt.ID)
 			}
-			callback(logCtx.Logger().WithContext(ctx), txn, evt)
+
+			callback(logCtx.Logger().WithContext(ctx), *txn, evt)
 		}
 	}
 
