@@ -5195,6 +5195,9 @@ func (portal *Portal) addToUserSpaces(ctx context.Context) {
 }
 
 func (portal *Portal) Delete(ctx context.Context) error {
+	if portal.deleted.IsSet() {
+		return nil
+	}
 	portal.removeInPortalCache(ctx)
 	err := portal.Bridge.DB.Portal.Delete(ctx, portal.PortalKey)
 	if err != nil {
@@ -5254,6 +5257,9 @@ func (portal *Portal) unlockedDelete(ctx context.Context) error {
 }
 
 func (portal *Portal) unlockedDeleteCache() {
+	if portal.deleted.IsSet() {
+		return
+	}
 	delete(portal.Bridge.portalsByKey, portal.PortalKey)
 	if portal.MXID != "" {
 		delete(portal.Bridge.portalsByMXID, portal.MXID)

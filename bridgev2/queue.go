@@ -220,7 +220,7 @@ func (ul *UserLogin) QueueRemoteEvent(evt RemoteEvent) EventHandlingResult {
 	return ul.Bridge.QueueRemoteEvent(ul, evt)
 }
 
-func (br *Bridge) QueueRemoteEvent(login *UserLogin, evt RemoteEvent) (res EventHandlingResult) {
+func (br *Bridge) QueueRemoteEvent(login *UserLogin, evt RemoteEvent) EventHandlingResult {
 	log := login.Log
 	ctx := log.WithContext(br.BackgroundCtx)
 	maybeUncertain, ok := evt.(RemoteEventWithUncertainPortalReceiver)
@@ -236,14 +236,14 @@ func (br *Bridge) QueueRemoteEvent(login *UserLogin, evt RemoteEvent) (res Event
 	if err != nil {
 		log.Err(err).Object("portal_key", key).Bool("uncertain_receiver", isUncertain).
 			Msg("Failed to get portal to handle remote event")
-		return
+		return EventHandlingResultFailed.WithError(fmt.Errorf("failed to get portal: %w", err))
 	} else if portal == nil {
 		log.Warn().
 			Stringer("event_type", evt.GetType()).
 			Object("portal_key", key).
 			Bool("uncertain_receiver", isUncertain).
 			Msg("Portal not found to handle remote event")
-		return
+		return EventHandlingResultFailed.WithError(ErrPortalNotFoundInEventHandler)
 	}
 	// TODO put this in a better place, and maybe cache to avoid constant db queries
 	login.MarkInPortal(ctx, portal)
