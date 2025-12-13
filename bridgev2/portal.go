@@ -381,12 +381,16 @@ func (portal *Portal) eventLoop() {
 	for i := 0; ; i++ {
 		select {
 		case rawEvt := <-portal.events:
+			if rawEvt == nil {
+				return
+			}
 			if portal.Bridge.Config.AsyncEvents {
 				go portal.handleSingleEventWithDelayLogging(i, rawEvt)
 			} else {
 				portal.handleSingleEventWithDelayLogging(i, rawEvt)
 			}
 		case <-deleteCh:
+			return
 		}
 	}
 }
