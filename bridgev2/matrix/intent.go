@@ -512,6 +512,39 @@ func (br *Connector) getDefaultEncryptionEvent() *event.EncryptionEventContent {
 	return content
 }
 
+func (as *ASIntent) filterCreateRequestForV12(ctx context.Context, req *mautrix.ReqCreateRoom) {
+	if as.Connector.Config.Homeserver.Software == bridgeconfig.SoftwareHungry {
+		// Hungryserv doesn't override the capabilities endpoint nor do room versions
+		return
+	}
+	caps := as.Connector.fetchCapabilities(ctx)
+	roomVer := req.RoomVersion
+	if roomVer == "" && caps != nil && caps.RoomVersions != nil {
+		roomVer = id.RoomVersion(caps.RoomVersions.Default)
+	}
+	if roomVer != "" && !roomVer.PrivilegedRoomCreators() {
+		return
+	}
+	creators, _ := req.CreationContent["additional_creators"].([]id.UserID)
+	creators = append(slices.Clone(creators), as.GetMXID())
+	if req.PowerLevelOverride != nil {
+		for _, creator := range creators {
+			delete(req.PowerLevelOverride.Users, creator)
+		}
+	}
+	for _, evt := range req.InitialState {
+		if evt.Type != event.StatePowerLevels {
+			continue
+		}
+		content, ok := evt.Content.Parsed.(*event.PowerLevelsEventContent)
+		if ok {
+			for _, creator := range creators {
+				delete(content.Users, creator)
+			}
+		}
+	}
+}
+
 func (as *ASIntent) CreateRoom(ctx context.Context, req *mautrix.ReqCreateRoom) (id.RoomID, error) {
 	if as.Connector.Config.Encryption.Default {
 		req.InitialState = append(req.InitialState, &event.Event{
@@ -527,6 +560,7 @@ func (as *ASIntent) CreateRoom(ctx context.Context, req *mautrix.ReqCreateRoom) 
 		}
 		req.CreationContent["m.federate"] = false
 	}
+	as.filterCreateRequestForV12(ctx, req)
 	resp, err := as.Matrix.CreateRoom(ctx, req)
 	if err != nil {
 		return "", err
