@@ -1,3 +1,35 @@
+## v0.26.1 (unreleased)
+
+* **Breaking change *(mediaproxy)*** Changed `GetMediaResponseFile` to return
+  the mime type from the callback rather than in the return get media return
+  value. The callback can now also redirect the caller to a different file.
+* *(federation)* Added join/knock/leave functions
+  (thanks to [@nexy7574] in [#422]).
+* *(federation/eventauth)* Fixed various incorrect checks.
+* *(client)* Added backoff for retrying media uploads to external URLs
+  (with MSC3870).
+* *(bridgev2/config)* Added support for overriding config fields using
+  environment variables.
+* *(bridgev2/commands)* Added command to mute chat on remote network.
+* *(bridgev2)* Added interface for network connectors to redirect to a different
+  user ID when handling an invite from Matrix.
+* *(bridgev2)* Added interface for signaling message request status of portals.
+* *(bridgev2)* Changed portal creation to not backfill unless `CanBackfill` flag
+  is set in chat info.
+* *(bridgev2)* Changed Matrix reaction handling to only delete old reaction if
+  bridging the new one is successful.
+* *(bridgev2/mxmain)* Improved error message when trying to run bridge with
+  pre-megabridge database when no database migration exists.
+* *(bridgev2)* Improved reliability of database migration when enabling split
+  portals.
+* *(bridgev2)* Improved detection of orphaned DM rooms when starting new chats.
+* *(bridgev2)* Stopped sending redundant invites when joining ghosts to public
+  portal rooms.
+* *(bridgev2)* Stopped hardcoding room versions in favor of checking
+  server capabilities to determine appropriate `/createRoom` parameters.
+
+[#422]: https://github.com/mautrix/go/pull/422
+
 ## v0.26.0 (2025-11-16)
 
 * *(client,appservice)* Deprecated `SendMassagedStateEvent` as `SendStateEvent`
