@@ -48,7 +48,7 @@ func (r *PreKeyMessage) Decode(input []byte) (err error) {
 		return
 	}
 	if r.Version != protocolVersion {
-		return fmt.Errorf("PreKeyMessage.Decode: %w", olm.ErrWrongProtocolVersion)
+		return fmt.Errorf("PreKeyMessage.Decode: %w (got %d, expected %d)", olm.ErrWrongProtocolVersion, r.Version, protocolVersion)
 	}
 
 	for {

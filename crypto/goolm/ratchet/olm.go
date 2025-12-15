@@ -142,7 +142,7 @@ func (r *Ratchet) Decrypt(input []byte) ([]byte, error) {
 		return nil, err
 	}
 	if message.Version != protocolVersion {
-		return nil, fmt.Errorf("decrypt: %w", olm.ErrWrongProtocolVersion)
+		return nil, fmt.Errorf("decrypt: %w (got %d, expected %d)", olm.ErrWrongProtocolVersion, message.Version, protocolVersion)
 	}
 	if !message.HasCounter || len(message.RatchetKey) == 0 || len(message.Ciphertext) == 0 {
 		return nil, fmt.Errorf("decrypt: %w", olm.ErrBadMessageFormat)
