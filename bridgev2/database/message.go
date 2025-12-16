@@ -220,7 +220,7 @@ func (mq *MessageQuery) DeleteInChunks(ctx context.Context, portal networkid.Por
 	total, err := mq.CountMessagesInPortal(ctx, portal)
 	if err != nil {
 		return fmt.Errorf("failed to count messages in portal: %w", err)
-	} else if total < deleteChunkSize {
+	} else if total < deleteChunkSize/3 {
 		return nil
 	}
 	globalMaxRowID, err := mq.getMaxRowID(ctx)
