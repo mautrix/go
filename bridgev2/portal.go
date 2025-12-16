@@ -5202,7 +5202,7 @@ func (portal *Portal) Delete(ctx context.Context) error {
 		return nil
 	}
 	portal.removeInPortalCache(ctx)
-	err := portal.Bridge.DB.Portal.Delete(ctx, portal.PortalKey)
+	err := portal.safeDBDelete(ctx)
 	if err != nil {
 		return err
 	}
@@ -5210,6 +5210,15 @@ func (portal *Portal) Delete(ctx context.Context) error {
 	defer portal.Bridge.cacheLock.Unlock()
 	portal.unlockedDeleteCache()
 	return nil
+}
+
+func (portal *Portal) safeDBDelete(ctx context.Context) error {
+	err := portal.Bridge.DB.Message.DeleteInChunks(ctx, portal.PortalKey)
+	if err != nil {
+		return fmt.Errorf("failed to delete messages in portal: %w", err)
+	}
+	// TODO delete child portals?
+	return portal.Bridge.DB.Portal.Delete(ctx, portal.PortalKey)
 }
 
 func (portal *Portal) RemoveMXID(ctx context.Context) error {
@@ -5250,8 +5259,7 @@ func (portal *Portal) removeInPortalCache(ctx context.Context) {
 }
 
 func (portal *Portal) unlockedDelete(ctx context.Context) error {
-	// TODO delete child portals?
-	err := portal.Bridge.DB.Portal.Delete(ctx, portal.PortalKey)
+	err := portal.safeDBDelete(ctx)
 	if err != nil {
 		return err
 	}
