@@ -1,4 +1,4 @@
-## v0.26.1 (unreleased)
+## v0.26.1 (2025-12-16)
 
 * **Breaking change *(mediaproxy)*** Changed `GetMediaResponseFile` to return
   the mime type from the callback rather than in the return get media return
