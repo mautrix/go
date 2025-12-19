@@ -86,8 +86,9 @@ type Portal struct {
 
 	lastCapUpdate time.Time
 
-	roomCreateLock sync.Mutex
-	RoomCreated    *exsync.Event
+	roomCreateLock   sync.Mutex
+	cancelRoomCreate atomic.Pointer[context.CancelFunc]
+	RoomCreated      *exsync.Event
 
 	functionalMembersLock  sync.Mutex
 	functionalMembersCache *event.ElementFunctionalMembersContent
@@ -4947,7 +4948,11 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 }
 
 func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLogin, info *ChatInfo, backfillBundle any) error {
+	cancellableCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	portal.cancelRoomCreate.CompareAndSwap(nil, &cancel)
 	portal.roomCreateLock.Lock()
+	portal.cancelRoomCreate.Store(&cancel)
 	defer portal.roomCreateLock.Unlock()
 	if portal.MXID != "" {
 		if source != nil {
@@ -4958,6 +4963,7 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 	log := zerolog.Ctx(ctx).With().
 		Str("action", "create matrix room").
 		Logger()
+	cancellableCtx = log.WithContext(cancellableCtx)
 	ctx = log.WithContext(ctx)
 	log.Info().Msg("Creating Matrix room")
 
@@ -4966,16 +4972,16 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 		if info != nil {
 			log.Warn().Msg("CreateMatrixRoom got info without members. Refetching info")
 		}
-		info, err = source.Client.GetChatInfo(ctx, portal)
+		info, err = source.Client.GetChatInfo(cancellableCtx, portal)
 		if err != nil {
 			log.Err(err).Msg("Failed to update portal info for creation")
 			return err
 		}
 	}
 
-	portal.UpdateInfo(ctx, info, source, nil, time.Time{})
-	if ctx.Err() != nil {
-		return ctx.Err()
+	portal.UpdateInfo(cancellableCtx, info, source, nil, time.Time{})
+	if cancellableCtx.Err() != nil {
+		return cancellableCtx.Err()
 	}
 
 	powerLevels := &event.PowerLevelsEventContent{
@@ -4988,7 +4994,7 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 			portal.Bridge.Bot.GetMXID(): 9001,
 		},
 	}
-	initialMembers, extraFunctionalMembers, err := portal.getInitialMemberList(ctx, info.Members, source, powerLevels)
+	initialMembers, extraFunctionalMembers, err := portal.getInitialMemberList(cancellableCtx, info.Members, source, powerLevels)
 	if err != nil {
 		log.Err(err).Msg("Failed to process participant list for portal creation")
 		return err
@@ -5015,7 +5021,7 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 		req.CreationContent["type"] = event.RoomTypeSpace
 	}
 	bridgeInfoStateKey, bridgeInfo := portal.getBridgeInfo()
-	roomFeatures := source.Client.GetCapabilities(ctx, portal)
+	roomFeatures := source.Client.GetCapabilities(cancellableCtx, portal)
 	portal.CapState = database.CapabilityState{
 		Source: source.ID,
 		ID:     roomFeatures.GetID(),
@@ -5096,6 +5102,9 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 			Type:    event.StateJoinRules,
 			Content: event.Content{Parsed: info.JoinRule},
 		})
+	}
+	if cancellableCtx.Err() != nil {
+		return cancellableCtx.Err()
 	}
 	roomID, err := portal.Bridge.Bot.CreateRoom(ctx, &req)
 	if err != nil {

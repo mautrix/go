@@ -56,6 +56,9 @@ func (br *Bridge) ReIDPortal(ctx context.Context, source, target networkid.Porta
 		return ReIDResultNoOp, nil, nil
 	}
 	if !sourcePortal.roomCreateLock.TryLock() {
+		if cancelCreate := sourcePortal.cancelRoomCreate.Swap(nil); cancelCreate != nil {
+			(*cancelCreate)()
+		}
 		log.Debug().Msg("Waiting for source portal room creation lock")
 		sourcePortal.roomCreateLock.Lock()
 		log.Debug().Msg("Acquired source portal room creation lock after waiting")
@@ -85,6 +88,9 @@ func (br *Bridge) ReIDPortal(ctx context.Context, source, target networkid.Porta
 		return ReIDResultSourceReIDd, sourcePortal, nil
 	}
 	if !targetPortal.roomCreateLock.TryLock() {
+		if cancelCreate := targetPortal.cancelRoomCreate.Swap(nil); cancelCreate != nil {
+			(*cancelCreate)()
+		}
 		log.Debug().Msg("Waiting for target portal room creation lock")
 		targetPortal.roomCreateLock.Lock()
 		log.Debug().Msg("Acquired target portal room creation lock after waiting")
