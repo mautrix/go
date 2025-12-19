@@ -32,13 +32,22 @@ func (br *Bridge) ReIDPortal(ctx context.Context, source, target networkid.Porta
 	if source == target {
 		return ReIDResultError, nil, fmt.Errorf("illegal re-ID call: source and target are the same")
 	}
-	log := zerolog.Ctx(ctx)
-	log.Debug().Msg("Re-ID'ing portal")
+	log := zerolog.Ctx(ctx).With().
+		Str("action", "re-id portal").
+		Stringer("source_portal_key", source).
+		Stringer("target_portal_key", target).
+		Logger()
+	ctx = log.WithContext(ctx)
+	if !br.cacheLock.TryLock() {
+		log.Debug().Msg("Waiting for cache lock")
+		br.cacheLock.Lock()
+		log.Debug().Msg("Acquired cache lock after waiting")
+	}
 	defer func() {
+		br.cacheLock.Unlock()
 		log.Debug().Msg("Finished handling portal re-ID")
 	}()
-	br.cacheLock.Lock()
-	defer br.cacheLock.Unlock()
+	log.Debug().Msg("Re-ID'ing portal")
 	sourcePortal, err := br.UnlockedGetPortalByKey(ctx, source, true)
 	if err != nil {
 		return ReIDResultError, nil, fmt.Errorf("failed to get source portal: %w", err)
@@ -46,7 +55,11 @@ func (br *Bridge) ReIDPortal(ctx context.Context, source, target networkid.Porta
 		log.Debug().Msg("Source portal not found, re-ID is no-op")
 		return ReIDResultNoOp, nil, nil
 	}
-	sourcePortal.roomCreateLock.Lock()
+	if !sourcePortal.roomCreateLock.TryLock() {
+		log.Debug().Msg("Waiting for source portal room creation lock")
+		sourcePortal.roomCreateLock.Lock()
+		log.Debug().Msg("Acquired source portal room creation lock after waiting")
+	}
 	defer sourcePortal.roomCreateLock.Unlock()
 	if sourcePortal.MXID == "" {
 		log.Info().Msg("Source portal doesn't have Matrix room, deleting row")
@@ -71,7 +84,11 @@ func (br *Bridge) ReIDPortal(ctx context.Context, source, target networkid.Porta
 		}
 		return ReIDResultSourceReIDd, sourcePortal, nil
 	}
-	targetPortal.roomCreateLock.Lock()
+	if !targetPortal.roomCreateLock.TryLock() {
+		log.Debug().Msg("Waiting for target portal room creation lock")
+		targetPortal.roomCreateLock.Lock()
+		log.Debug().Msg("Acquired target portal room creation lock after waiting")
+	}
 	defer targetPortal.roomCreateLock.Unlock()
 	if targetPortal.MXID == "" {
 		log.Info().Msg("Target portal row exists, but doesn't have a Matrix room. Deleting target portal row and re-ID'ing source portal")
