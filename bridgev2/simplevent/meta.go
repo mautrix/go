@@ -101,6 +101,18 @@ func (evt EventMeta) WithLogContext(f func(c zerolog.Context) zerolog.Context) E
 	return evt
 }
 
+func (evt EventMeta) WithMoreLogContext(f func(c zerolog.Context) zerolog.Context) EventMeta {
+	origFunc := evt.LogContext
+	if origFunc == nil {
+		evt.LogContext = f
+		return evt
+	}
+	evt.LogContext = func(c zerolog.Context) zerolog.Context {
+		return f(origFunc(c))
+	}
+	return evt
+}
+
 func (evt EventMeta) WithPortalKey(p networkid.PortalKey) EventMeta {
 	evt.PortalKey = p
 	return evt
