@@ -392,6 +392,7 @@
 [MSC4156]: https://github.com/matrix-org/matrix-spec-proposals/pull/4156
 [MSC4190]: https://github.com/matrix-org/matrix-spec-proposals/pull/4190
 [#288]: https://github.com/mautrix/go/pull/288
+[@onestacked]: https://github.com/onestacked
 
 ## v0.22.0 (2024-11-16)
 
