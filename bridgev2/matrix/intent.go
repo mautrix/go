@@ -56,7 +56,7 @@ func (as *ASIntent) SendMessage(ctx context.Context, roomID id.RoomID, eventType
 			Extra:  content.Raw,
 		})
 	}
-	if eventType != event.EventReaction && eventType != event.EventRedaction {
+	if (eventType != event.EventReaction || as.Connector.Config.Encryption.MSC4392) && eventType != event.EventRedaction {
 		msgContent, ok := content.Parsed.(*event.MessageEventContent)
 		if ok {
 			msgContent.AddPerMessageProfileFallback()
