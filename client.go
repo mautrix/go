@@ -1835,6 +1835,9 @@ func (cli *Client) UploadLink(ctx context.Context, link string) (*RespMediaUploa
 }
 
 func (cli *Client) Download(ctx context.Context, mxcURL id.ContentURI) (*http.Response, error) {
+	if mxcURL.IsEmpty() {
+		return nil, fmt.Errorf("empty mxc uri provided to Download")
+	}
 	_, resp, err := cli.MakeFullRequestWithResp(ctx, FullRequest{
 		Method:           http.MethodGet,
 		URL:              cli.BuildClientURL("v1", "media", "download", mxcURL.Homeserver, mxcURL.FileID),
@@ -1849,6 +1852,9 @@ type DownloadThumbnailExtra struct {
 }
 
 func (cli *Client) DownloadThumbnail(ctx context.Context, mxcURL id.ContentURI, height, width int, extras ...DownloadThumbnailExtra) (*http.Response, error) {
+	if mxcURL.IsEmpty() {
+		return nil, fmt.Errorf("empty mxc uri provided to DownloadThumbnail")
+	}
 	if len(extras) > 1 {
 		panic(fmt.Errorf("invalid number of arguments to DownloadThumbnail: %d", len(extras)))
 	}
