@@ -9,7 +9,6 @@ package event
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"maunium.net/go/mautrix/id"
@@ -53,124 +52,6 @@ const (
 	BotArgumentTypeRoomAlias  BotArgumentType = "room_alias"
 	BotArgumentTypeEventID    BotArgumentType = "event_id"
 )
-
-func (bat BotArgumentType) ValidateValue(value any) bool {
-	_, ok := bat.NormalizeValue(value)
-	return ok
-}
-
-func (bat BotArgumentType) NormalizeValue(value any) (any, bool) {
-	switch bat {
-	case BotArgumentTypeInteger:
-		switch typedValue := value.(type) {
-		case int:
-			return typedValue, true
-		case int64:
-			return int(typedValue), true
-		case float64:
-			return int(typedValue), true
-		case json.Number:
-			if i, err := typedValue.Int64(); err == nil {
-				return int(i), true
-			}
-		}
-	case BotArgumentTypeBoolean:
-		bv, ok := value.(bool)
-		return bv, ok
-	case BotArgumentTypeString, BotArgumentTypeServerName:
-		str, ok := value.(string)
-		if !ok {
-			return nil, false
-		}
-		return str, bat.validateStringValue(str)
-	case BotArgumentTypeUserID, BotArgumentTypeRoomAlias:
-		str, ok := value.(string)
-		if !ok {
-			return nil, false
-		} else if bat.validateStringValue(str) {
-			return str, true
-		} else if parsed, err := id.ParseMatrixURIOrMatrixToURL(str); err != nil {
-			return nil, false
-		} else if parsed.Sigil1 == '@' && bat == BotArgumentTypeUserID {
-			return parsed.UserID(), true
-		} else if parsed.Sigil1 == '#' && bat == BotArgumentTypeRoomAlias {
-			return parsed.RoomAlias(), true
-		}
-	case BotArgumentTypeRoomID, BotArgumentTypeEventID:
-		switch typedValue := value.(type) {
-		case map[string]any, json.RawMessage:
-			var riv MSC4391RoomIDValue
-			if raw, err := json.Marshal(value); err != nil {
-				return nil, false
-			} else if err = json.Unmarshal(raw, &riv); err != nil {
-				return nil, false
-			}
-			return &riv, riv.IsValid()
-		case *MSC4391RoomIDValue:
-			return typedValue, typedValue.IsValid()
-		case MSC4391RoomIDValue:
-			return &typedValue, typedValue.IsValid()
-		}
-	}
-	return nil, false
-}
-
-func (bat BotArgumentType) validateStringValue(value string) bool {
-	switch bat {
-	case BotArgumentTypeString:
-		return true
-	case BotArgumentTypeServerName:
-		return id.ValidateServerName(value)
-	case BotArgumentTypeUserID:
-		_, _, err := id.UserID(value).ParseAndValidateRelaxed()
-		return err == nil
-	case BotArgumentTypeRoomAlias:
-		sigil, localpart, serverName := id.ParseCommonIdentifier(value)
-		return sigil == '#' && (localpart != "" || serverName != "") &&
-			(serverName == "" || id.ValidateServerName(serverName))
-	default:
-		panic(fmt.Errorf("validateStringValue called with invalid type %s", bat))
-	}
-}
-
-func (bat BotArgumentType) ParseString(value string) (any, bool) {
-	switch bat {
-	case BotArgumentTypeInteger:
-		intVal, err := strconv.Atoi(value)
-		return intVal, err == nil
-	case BotArgumentTypeBoolean:
-		boolVal, err := strconv.ParseBool(value)
-		return boolVal, err == nil
-	case BotArgumentTypeString, BotArgumentTypeServerName, BotArgumentTypeUserID:
-		return value, bat.validateStringValue(value)
-	case BotArgumentTypeRoomAlias:
-		if bat.validateStringValue(value) {
-			return value, true
-		}
-		parsed, _ := id.ParseMatrixURIOrMatrixToURL(value)
-		if parsed != nil && parsed.Sigil1 == '#' {
-			return parsed.RoomAlias(), true
-		}
-	case BotArgumentTypeRoomID, BotArgumentTypeEventID:
-		parsed, err := id.ParseMatrixURIOrMatrixToURL(value)
-		if err != nil && bat == BotArgumentTypeRoomID && strings.HasPrefix(value, "!") {
-			return &MSC4391RoomIDValue{
-				Type:   bat,
-				RoomID: id.RoomID(value),
-			}, true
-		}
-		if err != nil || parsed.Sigil1 != '!' || parsed.Sigil2 != '$' {
-			return nil, false
-		}
-		return &MSC4391RoomIDValue{
-			Type:    bat,
-			RoomID:  parsed.RoomID(),
-			Via:     parsed.Via,
-			EventID: parsed.EventID(),
-		}, true
-	}
-	return nil, false
-}
 
 func (bat BotArgumentType) Schema() *MSC4391ParameterSchema {
 	return &MSC4391ParameterSchema{
@@ -225,31 +106,40 @@ func (riv *MSC4391RoomIDValue) URI() *id.MatrixURI {
 	}
 }
 
-func (riv *MSC4391RoomIDValue) IsValid() bool {
+func (riv *MSC4391RoomIDValue) Validate() error {
 	if riv == nil {
-		return false
+		return fmt.Errorf("value is nil")
 	}
 	switch riv.Type {
 	case BotArgumentTypeRoomID:
 		if riv.EventID != "" {
-			return false
+			return fmt.Errorf("event ID must be empty for room ID type")
 		}
 	case BotArgumentTypeEventID:
 		if !strings.HasPrefix(riv.EventID.String(), "$") {
-			return false
+			return fmt.Errorf("event ID not valid: %q", riv.EventID)
 		}
 	default:
-		return false
+		return fmt.Errorf("unexpected type %s for room/event ID value", riv.Type)
 	}
 	for _, via := range riv.Via {
 		if !id.ValidateServerName(via) {
-			return false
+			return fmt.Errorf("invalid server name %q in vias", via)
 		}
 	}
 	sigil, localpart, serverName := id.ParseCommonIdentifier(riv.RoomID)
-	return sigil == '!' &&
-		(localpart != "" || serverName != "") &&
-		(serverName == "" || id.ValidateServerName(serverName))
+	if sigil != '!' {
+		return fmt.Errorf("room ID does not start with !: %q", riv.RoomID)
+	} else if localpart == "" && serverName == "" {
+		return fmt.Errorf("room ID has empty localpart and server name: %q", riv.RoomID)
+	} else if serverName != "" && !id.ValidateServerName(serverName) {
+		return fmt.Errorf("invalid server name %q in room ID", serverName)
+	}
+	return nil
+}
+
+func (riv *MSC4391RoomIDValue) IsValid() bool {
+	return riv.Validate() == nil
 }
 
 var (
@@ -268,6 +158,34 @@ type MSC4391ParameterSchema struct {
 	Items      *MSC4391ParameterSchema   `json:"items,omitempty"`    // Only for array
 	Variants   []*MSC4391ParameterSchema `json:"variants,omitempty"` // Only for union
 	Value      any                       `json:"value,omitempty"`    // Only for literal
+}
+
+func (ps *MSC4391ParameterSchema) GetDefaultValue() any {
+	if ps == nil {
+		return nil
+	}
+	switch ps.SchemaType {
+	case MSC4391SchemaTypePrimitive:
+		switch ps.Type {
+		case BotArgumentTypeInteger:
+			return 0
+		case BotArgumentTypeBoolean:
+			return false
+		default:
+			return ""
+		}
+	case MSC4391SchemaTypeArray:
+		return []any{}
+	case MSC4391SchemaTypeUnion:
+		if len(ps.Variants) > 0 {
+			return ps.Variants[0].GetDefaultValue()
+		}
+		return nil
+	case MSC4391SchemaTypeLiteral:
+		return ps.Value
+	default:
+		return nil
+	}
 }
 
 func (ps *MSC4391ParameterSchema) IsValid() bool {
@@ -320,6 +238,15 @@ type MSC4391Parameter struct {
 
 func (p *MSC4391Parameter) IsValid() bool {
 	return p != nil && p.Key != "" && p.Type.IsValid()
+}
+
+func (p *MSC4391Parameter) GetDefaultValue() any {
+	if p != nil && p.DefaultValue != nil {
+		return p.DefaultValue
+	} else if p == nil || p.Optional {
+		return nil
+	}
+	return p.Type.GetDefaultValue()
 }
 
 type MSC4391BotCommandEventContent struct {
