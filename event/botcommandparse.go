@@ -91,6 +91,7 @@ func (bcec *MSC4391BotCommandEventContent) StringifyArgs(args *MSC4391BotCommand
 // If the prefix doesn't match, this will return a nil content and nil error.
 // If the prefix does match, some content is always returned, but there may still be an error if parsing failed.
 func (bcec *MSC4391BotCommandEventContent) ParseInput(owner id.UserID, input string) (*MessageEventContent, error) {
+	fullInput := input
 	prefix := bcec.parsePrefix(input, botCommandSigil, owner.String())
 	if prefix == "" {
 		return nil, nil
@@ -169,7 +170,7 @@ func (bcec *MSC4391BotCommandEventContent) ParseInput(owner id.UserID, input str
 	}
 	content := &MessageEventContent{
 		MsgType:  MsgText,
-		Body:     input,
+		Body:     fullInput,
 		Mentions: &Mentions{UserIDs: []id.UserID{owner}},
 		MSC4391BotCommand: &MSC4391BotCommandInput{
 			Command: bcec.Command,
