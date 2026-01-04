@@ -85,6 +85,24 @@ const (
 	MSC4391SchemaTypeLiteral   MSC4391SchemaType = "literal"
 )
 
+func LiteralSchema(value any) *MSC4391ParameterSchema {
+	return &MSC4391ParameterSchema{
+		SchemaType: MSC4391SchemaTypeLiteral,
+		Value:      value,
+	}
+}
+
+func EnumSchema(values ...any) *MSC4391ParameterSchema {
+	var variants []*MSC4391ParameterSchema
+	for _, v := range values {
+		variants = append(variants, LiteralSchema(v))
+	}
+	return &MSC4391ParameterSchema{
+		SchemaType: MSC4391SchemaTypeUnion,
+		Variants:   variants,
+	}
+}
+
 type MSC4391RoomIDValue struct {
 	Type    BotArgumentType `json:"type"`
 	RoomID  id.RoomID       `json:"id"`
