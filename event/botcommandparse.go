@@ -190,10 +190,21 @@ func (bcec *MSC4391BotCommandEventContent) parsePrefix(origInput, sigil, owner s
 		return ""
 	}
 	input = input[len(sigil):]
+	var chosenAlias string
 	if !strings.HasPrefix(input, bcec.Command) {
-		return ""
+		for _, alias := range bcec.Aliases {
+			if strings.HasPrefix(input, alias) {
+				chosenAlias = alias
+				break
+			}
+		}
+		if chosenAlias == "" {
+			return ""
+		}
+	} else {
+		chosenAlias = bcec.Command
 	}
-	input = strings.TrimPrefix(input[len(bcec.Command):], owner)
+	input = strings.TrimPrefix(input[len(chosenAlias):], owner)
 	if input == "" || input[0] == ' ' {
 		input = strings.TrimLeft(input, " ")
 		return origInput[:len(origInput)-len(input)]
