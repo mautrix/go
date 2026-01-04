@@ -216,25 +216,29 @@ func (bat BotArgumentType) ValidateValue(value any) bool {
 	return err == nil
 }
 
+func normalizeNumber(value any) (int, error) {
+	switch typedValue := value.(type) {
+	case int:
+		return typedValue, nil
+	case int64:
+		return int(typedValue), nil
+	case float64:
+		return int(typedValue), nil
+	case json.Number:
+		if i, err := typedValue.Int64(); err != nil {
+			return 0, fmt.Errorf("failed to parse json.Number: %w", err)
+		} else {
+			return int(i), nil
+		}
+	default:
+		return 0, fmt.Errorf("unsupported type %T for integer", value)
+	}
+}
+
 func (bat BotArgumentType) NormalizeValue(value any) (any, error) {
 	switch bat {
 	case BotArgumentTypeInteger:
-		switch typedValue := value.(type) {
-		case int:
-			return typedValue, nil
-		case int64:
-			return int(typedValue), nil
-		case float64:
-			return int(typedValue), nil
-		case json.Number:
-			if i, err := typedValue.Int64(); err != nil {
-				return nil, fmt.Errorf("failed to parse json.Number: %w", err)
-			} else {
-				return int(i), nil
-			}
-		default:
-			return nil, fmt.Errorf("unsupported type %T for integer", value)
-		}
+		return normalizeNumber(value)
 	case BotArgumentTypeBoolean:
 		bv, ok := value.(bool)
 		if !ok {
@@ -375,8 +379,33 @@ func (ps *MSC4391ParameterSchema) ParseString(value string) (any, error) {
 	case MSC4391SchemaTypePrimitive:
 		return ps.Type.ParseString(value)
 	case MSC4391SchemaTypeLiteral:
-		// TODO implement
-		panic(fmt.Errorf("literal schema type parsing not implemented"))
+		switch typedValue := ps.Value.(type) {
+		case string:
+			if value == typedValue {
+				return typedValue, nil
+			} else {
+				return nil, fmt.Errorf("literal value %q does not match %q", typedValue, value)
+			}
+		case int, int64, float64, json.Number:
+			expectedVal, _ := normalizeNumber(typedValue)
+			intVal, err := strconv.Atoi(value)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse integer literal: %w", err)
+			} else if intVal != expectedVal {
+				return nil, fmt.Errorf("literal value %d does not match %d", expectedVal, intVal)
+			}
+			return intVal, nil
+		case bool:
+			boolVal, err := parseBoolean(value)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse boolean literal: %w", err)
+			} else if boolVal != typedValue {
+				return nil, fmt.Errorf("literal value %t does not match %t", typedValue, boolVal)
+			}
+			return boolVal, nil
+		default:
+			return nil, fmt.Errorf("unsupported literal type %T", ps.Value)
+		}
 	case MSC4391SchemaTypeUnion:
 		var errs []error
 		for _, variant := range ps.Variants {
