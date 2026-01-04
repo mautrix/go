@@ -16,7 +16,6 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-const botCommandSigil = "/"
 const botArrayOpener = "<"
 const botArrayCloser = ">"
 
@@ -90,9 +89,9 @@ func (bcec *MSC4391BotCommandEventContent) StringifyArgs(args *MSC4391BotCommand
 //
 // If the prefix doesn't match, this will return a nil content and nil error.
 // If the prefix does match, some content is always returned, but there may still be an error if parsing failed.
-func (bcec *MSC4391BotCommandEventContent) ParseInput(owner id.UserID, input string) (*MessageEventContent, error) {
+func (bcec *MSC4391BotCommandEventContent) ParseInput(owner id.UserID, sigil, input string) (*MessageEventContent, error) {
 	fullInput := input
-	prefix := bcec.parsePrefix(input, botCommandSigil, owner.String())
+	prefix := bcec.parsePrefix(input, sigil, owner.String())
 	if prefix == "" {
 		return nil, nil
 	}
