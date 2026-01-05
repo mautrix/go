@@ -108,7 +108,7 @@ func (bcec *MSC4391BotCommandEventContent) ParseInput(owner id.UserID, sigil, in
 		origInput := input
 		var nextVal string
 		var wasQuoted bool
-		if param.Type.SchemaType == MSC4391SchemaTypeArray {
+		if param.Schema.SchemaType == MSC4391SchemaTypeArray {
 			hasOpener := strings.HasPrefix(input, botArrayOpener)
 			arrayClosed := false
 			if hasOpener {
@@ -135,7 +135,7 @@ func (bcec *MSC4391BotCommandEventContent) ParseInput(owner id.UserID, sigil, in
 					// For array arguments in the middle without the <> delimiters, stop after the first item
 					arrayClosed = true
 				}
-				parsedVal, err := param.Type.ParseString(nextVal)
+				parsedVal, err := param.Schema.ParseString(nextVal)
 				if err == nil {
 					collector = append(collector, parsedVal)
 				} else if hasOpener || isLast {
@@ -153,7 +153,7 @@ func (bcec *MSC4391BotCommandEventContent) ParseInput(owner id.UserID, sigil, in
 				nextVal += " " + input
 				input = ""
 			}
-			parsedVal, err := param.Type.ParseString(nextVal)
+			parsedVal, err := param.Schema.ParseString(nextVal)
 			if err != nil {
 				args[param.Key] = param.GetDefaultValue()
 				// For optional parameters that fail to parse, restore the input and try passing it as the next parameter

@@ -248,14 +248,14 @@ func (ps *MSC4391ParameterSchema) isValid(parent MSC4391SchemaType) bool {
 
 type MSC4391Parameter struct {
 	Key          string                   `json:"key"`
-	Type         *MSC4391ParameterSchema  `json:"type"`
+	Schema       *MSC4391ParameterSchema  `json:"schema"`
 	Optional     bool                     `json:"optional,omitempty"`
 	Description  *ExtensibleTextContainer `json:"description,omitempty"`
 	DefaultValue any                      `json:"default_value,omitempty"`
 }
 
 func (p *MSC4391Parameter) IsValid() bool {
-	return p != nil && p.Key != "" && p.Type.IsValid()
+	return p != nil && p.Key != "" && p.Schema.IsValid()
 }
 
 func (p *MSC4391Parameter) GetDefaultValue() any {
@@ -264,7 +264,7 @@ func (p *MSC4391Parameter) GetDefaultValue() any {
 	} else if p == nil || p.Optional {
 		return nil
 	}
-	return p.Type.GetDefaultValue()
+	return p.Schema.GetDefaultValue()
 }
 
 type MSC4391BotCommandEventContent struct {
