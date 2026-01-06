@@ -236,7 +236,8 @@ func (vh *VerificationHelper) Init(ctx context.Context) error {
 
 			logCtx := vh.getLog(ctx).With().
 				Stringer("transaction_step", txn.VerificationState).
-				Stringer("sender", evt.Sender)
+				Stringer("sender", evt.Sender).
+				Stringer("event_type", evt.Type)
 			if evt.RoomID != "" {
 				logCtx = logCtx.
 					Stringer("room_id", evt.RoomID).
