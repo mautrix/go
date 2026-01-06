@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -316,7 +317,15 @@ func parseBoolean(val string) (bool, error) {
 	}
 }
 
+var markdownLinkRegex = regexp.MustCompile(`^\[.+]\(([^)]+)\)$`)
+
 func parseRoomOrEventID(value string) (*MSC4391RoomIDValue, error) {
+	if strings.HasPrefix(value, "[") && strings.Contains(value, "](") && strings.HasSuffix(value, ")") {
+		matches := markdownLinkRegex.FindStringSubmatch(value)
+		if len(matches) == 2 {
+			value = matches[1]
+		}
+	}
 	parsed, err := id.ParseMatrixURIOrMatrixToURL(value)
 	if err != nil && strings.HasPrefix(value, "!") {
 		return &MSC4391RoomIDValue{
