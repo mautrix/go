@@ -1,0 +1,20 @@
+[
+	["single word", "meow", ["meow", "", false]],
+	["two words", "meow woof", ["meow", "woof", false]],
+	["many words", "meow meow mrrp", ["meow", "meow mrrp", false]],
+	["extra spaces", "meow    meow   mrrp", ["meow", "meow   mrrp", false]],
+	["trailing space", "meow    ", ["meow", "", false]],
+	["quoted word", "\"meow\" meow mrrp", ["meow", "meow mrrp", true]],
+	["quoted words", "\"meow meow\" mrrp", ["meow meow", "mrrp", true]],
+	["spaces in quotes", "\" meow  meow \"  mrrp", [" meow  meow ", "mrrp", true]],
+	["quotes after word", "meow  \" meow mrrp \"", ["meow", "\" meow mrrp \"", false]],
+	["escaped quote", "\"meow\\\" meow\" mrrp", ["meow\" meow", "mrrp", true]],
+	["missing end quote", "\"meow meow mrrp", ["meow meow mrrp", "", true]],
+	["missing end quote with escaped quote", "\"meow\\\" meow mrrp", ["meow\" meow mrrp", "", true]],
+	["quote in the middle", "me\"ow meow mrrp", ["me\"ow", "meow mrrp", false]],
+	["backslash in the middle", "me\\ow meow mrrp", ["me\\ow", "meow mrrp", false]],
+	["other escaped character", "\"m\\eow\" meow mrrp", ["meow", "meow mrrp", true]],
+	["escaped backslashes", "\"m\\\\e\\\"ow\\\\\" meow mrrp", ["m\\e\"ow\\", "meow mrrp", true]],
+	["just quotes", "\"\\\"\\\"\\\\\\\"\" meow", ["\"\"\\\"", "meow", true]],
+	["eof escape", "\"meow\\", ["meow\\", "", true]]
+]

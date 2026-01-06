@@ -45,7 +45,7 @@ func parseQuoted(val string) (parsed, remaining string, quoted bool) {
 				buf.WriteByte(val[escapeIdx+1])
 			}
 			val = val[min(escapeIdx+2, len(val)):]
-		} else if quoteIdx > 0 {
+		} else if quoteIdx >= 0 {
 			buf.WriteString(val[:quoteIdx])
 			val = val[quoteIdx+1:]
 			break
