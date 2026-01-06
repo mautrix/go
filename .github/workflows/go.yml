@@ -10,10 +10,10 @@ jobs:
     runs-on: ubuntu-latest
     name: Lint (latest)
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: "1.25"
           cache: true
@@ -39,10 +39,10 @@ jobs:
     name: Build (${{ matrix.go-version == '1.25' && 'latest' || 'old' }}, libolm)
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up Go ${{ matrix.go-version }}
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ matrix.go-version }}
           cache: true
@@ -76,10 +76,10 @@ jobs:
     name: Build (${{ matrix.go-version == '1.25' && 'latest' || 'old' }}, goolm)
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up Go ${{ matrix.go-version }}
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ matrix.go-version }}
           cache: true

@@ -81,6 +81,8 @@ type Connector struct {
 
 	MediaConfig             mautrix.RespMediaConfig
 	SpecVersions            *mautrix.RespVersions
+	SpecCaps                *mautrix.RespCapabilities
+	specCapsLock            sync.Mutex
 	Capabilities            *bridgev2.MatrixCapabilities
 	IgnoreUnsupportedServer bool
 
@@ -151,6 +153,7 @@ func (br *Connector) Init(bridge *bridgev2.Bridge) {
 	br.EventProcessor.On(event.StateTombstone, br.handleRoomEvent)
 	br.EventProcessor.On(event.StateBeeperDisappearingTimer, br.handleRoomEvent)
 	br.EventProcessor.On(event.BeeperDeleteChat, br.handleRoomEvent)
+	br.EventProcessor.On(event.BeeperAcceptMessageRequest, br.handleRoomEvent)
 	br.EventProcessor.On(event.EphemeralEventReceipt, br.handleEphemeralEvent)
 	br.EventProcessor.On(event.EphemeralEventTyping, br.handleEphemeralEvent)
 	br.Bot = br.AS.BotIntent()
@@ -406,6 +409,21 @@ func (br *Connector) ensureConnection(ctx context.Context) {
 	}
 
 	br.Bot.EnsureAppserviceConnection(ctx)
+}
+
+func (br *Connector) fetchCapabilities(ctx context.Context) *mautrix.RespCapabilities {
+	br.specCapsLock.Lock()
+	defer br.specCapsLock.Unlock()
+	if br.SpecCaps != nil {
+		return br.SpecCaps
+	}
+	caps, err := br.Bot.Capabilities(ctx)
+	if err != nil {
+		br.Log.Err(err).Msg("Failed to fetch capabilities from homeserver")
+		return nil
+	}
+	br.SpecCaps = caps
+	return caps
 }
 
 func (br *Connector) fetchMediaConfig(ctx context.Context) {

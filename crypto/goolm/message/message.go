@@ -43,7 +43,7 @@ func (r *Message) Decode(input []byte) (err error) {
 		return
 	}
 	if r.Version != protocolVersion {
-		return fmt.Errorf("Message.Decode: %w", olm.ErrWrongProtocolVersion)
+		return fmt.Errorf("Message.Decode: %w (got %d, expected %d)", olm.ErrWrongProtocolVersion, r.Version, protocolVersion)
 	}
 
 	for {

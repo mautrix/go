@@ -126,7 +126,7 @@ func (o *MegolmInboundSession) Decrypt(ciphertext []byte) ([]byte, uint, error) 
 		return nil, 0, err
 	}
 	if msg.Version != protocolVersion {
-		return nil, 0, fmt.Errorf("decrypt: %w", olm.ErrWrongProtocolVersion)
+		return nil, 0, fmt.Errorf("decrypt: %w (got %d, expected %d)", olm.ErrWrongProtocolVersion, msg.Version, protocolVersion)
 	}
 	if msg.Ciphertext == nil || !msg.HasMessageIndex {
 		return nil, 0, fmt.Errorf("decrypt: %w", olm.ErrBadMessageFormat)

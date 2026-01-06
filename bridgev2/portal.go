@@ -86,14 +86,15 @@ type Portal struct {
 
 	lastCapUpdate time.Time
 
-	roomCreateLock sync.Mutex
-	RoomCreated    *exsync.Event
+	roomCreateLock   sync.Mutex
+	cancelRoomCreate atomic.Pointer[context.CancelFunc]
+	RoomCreated      *exsync.Event
 
 	functionalMembersLock  sync.Mutex
 	functionalMembersCache *event.ElementFunctionalMembersContent
 
 	events  chan portalEvent
-	deleted bool
+	deleted *exsync.Event
 
 	eventsLock sync.Mutex
 	eventIdx   int
@@ -127,6 +128,7 @@ func (br *Bridge) loadPortal(ctx context.Context, dbPortal *database.Portal, que
 		outgoingMessages:      make(map[networkid.TransactionID]*outgoingMessage),
 
 		RoomCreated: exsync.NewEvent(),
+		deleted:     exsync.NewEvent(),
 	}
 	if portal.MXID != "" {
 		portal.RoomCreated.Set()
@@ -335,6 +337,9 @@ func (br *Bridge) GetExistingPortalByKey(ctx context.Context, key networkid.Port
 }
 
 func (portal *Portal) queueEvent(ctx context.Context, evt portalEvent) EventHandlingResult {
+	if portal.deleted.IsSet() {
+		return EventHandlingResultIgnored
+	}
 	if PortalEventBuffer == 0 {
 		portal.eventsLock.Lock()
 		defer portal.eventsLock.Unlock()
@@ -347,6 +352,8 @@ func (portal *Portal) queueEvent(ctx context.Context, evt portalEvent) EventHand
 		select {
 		case portal.events <- evt:
 			return EventHandlingResultQueued
+		case <-portal.deleted.GetChan():
+			return EventHandlingResultIgnored
 		default:
 			zerolog.Ctx(ctx).Error().
 				Str("portal_id", string(portal.ID)).
@@ -371,16 +378,20 @@ func (portal *Portal) eventLoop() {
 		go portal.pendingMessageTimeoutLoop(ctx, cfg)
 		defer cancel()
 	}
-	i := 0
-	for rawEvt := range portal.events {
-		if portal.deleted {
+	deleteCh := portal.deleted.GetChan()
+	for i := 0; ; i++ {
+		select {
+		case rawEvt := <-portal.events:
+			if rawEvt == nil {
+				return
+			}
+			if portal.Bridge.Config.AsyncEvents {
+				go portal.handleSingleEventWithDelayLogging(i, rawEvt)
+			} else {
+				portal.handleSingleEventWithDelayLogging(i, rawEvt)
+			}
+		case <-deleteCh:
 			return
-		}
-		i++
-		if portal.Bridge.Config.AsyncEvents {
-			go portal.handleSingleEventWithDelayLogging(i, rawEvt)
-		} else {
-			portal.handleSingleEventWithDelayLogging(i, rawEvt)
 		}
 	}
 }
@@ -800,6 +811,8 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 		return portal.handleMatrixPowerLevels(ctx, login, origSender, evt, isStateRequest)
 	case event.BeeperDeleteChat:
 		return portal.handleMatrixDeleteChat(ctx, login, origSender, evt)
+	case event.BeeperAcceptMessageRequest:
+		return portal.handleMatrixAcceptMessageRequest(ctx, login, origSender, evt)
 	default:
 		return EventHandlingResultIgnored
 	}
@@ -1747,6 +1760,45 @@ func (portal *Portal) getTargetUser(ctx context.Context, userID id.UserID) (Ghos
 		// Return raw nil as a separate case to ensure a typed nil isn't returned
 		return nil, nil
 	}
+}
+
+func (portal *Portal) handleMatrixAcceptMessageRequest(
+	ctx context.Context,
+	sender *UserLogin,
+	origSender *OrigSender,
+	evt *event.Event,
+) EventHandlingResult {
+	if origSender != nil {
+		return EventHandlingResultFailed.WithMSSError(ErrIgnoringAcceptRequestRelayedUser)
+	}
+	log := zerolog.Ctx(ctx)
+	content, ok := evt.Content.Parsed.(*event.BeeperAcceptMessageRequestEventContent)
+	if !ok {
+		log.Error().Type("content_type", evt.Content.Parsed).Msg("Unexpected parsed content type")
+		return EventHandlingResultFailed.WithMSSError(fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed))
+	}
+	api, ok := sender.Client.(MessageRequestAcceptingNetworkAPI)
+	if !ok {
+		return EventHandlingResultIgnored.WithMSSError(ErrDeleteChatNotSupported)
+	}
+	err := api.HandleMatrixAcceptMessageRequest(ctx, &MatrixAcceptMessageRequest{
+		Event:   evt,
+		Content: content,
+		Portal:  portal,
+	})
+	if err != nil {
+		log.Err(err).Msg("Failed to handle Matrix accept message request")
+		return EventHandlingResultFailed.WithMSSError(err)
+	}
+	if portal.MessageRequest {
+		portal.MessageRequest = false
+		portal.UpdateBridgeInfo(ctx)
+		err = portal.Save(ctx)
+		if err != nil {
+			log.Err(err).Msg("Failed to save portal after accepting message request")
+		}
+	}
+	return EventHandlingResultSuccess.WithMSS()
 }
 
 func (portal *Portal) handleMatrixDeleteChat(
@@ -3948,9 +4000,9 @@ type ChatInfo struct {
 	Disappear *database.DisappearingSetting
 	ParentID  *networkid.PortalID
 
-	UserLocal *UserLocalPortalInfo
-
-	CanBackfill bool
+	UserLocal      *UserLocalPortalInfo
+	MessageRequest *bool
+	CanBackfill    bool
 
 	ExcludeChangesFromTimeline bool
 
@@ -4070,10 +4122,11 @@ func (portal *Portal) getBridgeInfo() (string, event.BridgeEventContent) {
 		Creator:   portal.Bridge.Bot.GetMXID(),
 		Protocol:  portal.Bridge.Network.GetName().AsBridgeInfoSection(),
 		Channel: event.BridgeInfoSection{
-			ID:          string(portal.ID),
-			DisplayName: portal.Name,
-			AvatarURL:   portal.AvatarMXC,
-			Receiver:    string(portal.Receiver),
+			ID:             string(portal.ID),
+			DisplayName:    portal.Name,
+			AvatarURL:      portal.AvatarMXC,
+			Receiver:       string(portal.Receiver),
+			MessageRequest: portal.MessageRequest,
 			// TODO external URL?
 		},
 		BeeperRoomTypeV2: string(portal.RoomType),
@@ -4815,6 +4868,10 @@ func (portal *Portal) UpdateInfo(ctx context.Context, info *ChatInfo, source *Us
 			portal.RoomType = *info.Type
 		}
 	}
+	if info.MessageRequest != nil && *info.MessageRequest != portal.MessageRequest {
+		changed = true
+		portal.MessageRequest = *info.MessageRequest
+	}
 	if info.Members != nil && portal.MXID != "" && source != nil {
 		err := portal.syncParticipants(ctx, info.Members, source, nil, time.Time{})
 		if err != nil {
@@ -4856,6 +4913,9 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 		}
 		return nil
 	}
+	if portal.deleted.IsSet() {
+		return ErrPortalIsDeleted
+	}
 	waiter := make(chan struct{})
 	closed := false
 	evt := &portalCreateEvent{
@@ -4873,7 +4933,11 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 	if PortalEventBuffer == 0 {
 		go portal.queueEvent(ctx, evt)
 	} else {
-		portal.events <- evt
+		select {
+		case portal.events <- evt:
+		case <-portal.deleted.GetChan():
+			return ErrPortalIsDeleted
+		}
 	}
 	select {
 	case <-ctx.Done():
@@ -4884,7 +4948,11 @@ func (portal *Portal) CreateMatrixRoom(ctx context.Context, source *UserLogin, i
 }
 
 func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLogin, info *ChatInfo, backfillBundle any) error {
+	cancellableCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	portal.cancelRoomCreate.CompareAndSwap(nil, &cancel)
 	portal.roomCreateLock.Lock()
+	portal.cancelRoomCreate.Store(&cancel)
 	defer portal.roomCreateLock.Unlock()
 	if portal.MXID != "" {
 		if source != nil {
@@ -4895,6 +4963,7 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 	log := zerolog.Ctx(ctx).With().
 		Str("action", "create matrix room").
 		Logger()
+	cancellableCtx = log.WithContext(cancellableCtx)
 	ctx = log.WithContext(ctx)
 	log.Info().Msg("Creating Matrix room")
 
@@ -4903,16 +4972,16 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 		if info != nil {
 			log.Warn().Msg("CreateMatrixRoom got info without members. Refetching info")
 		}
-		info, err = source.Client.GetChatInfo(ctx, portal)
+		info, err = source.Client.GetChatInfo(cancellableCtx, portal)
 		if err != nil {
 			log.Err(err).Msg("Failed to update portal info for creation")
 			return err
 		}
 	}
 
-	portal.UpdateInfo(ctx, info, source, nil, time.Time{})
-	if ctx.Err() != nil {
-		return ctx.Err()
+	portal.UpdateInfo(cancellableCtx, info, source, nil, time.Time{})
+	if cancellableCtx.Err() != nil {
+		return cancellableCtx.Err()
 	}
 
 	powerLevels := &event.PowerLevelsEventContent{
@@ -4925,7 +4994,7 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 			portal.Bridge.Bot.GetMXID(): 9001,
 		},
 	}
-	initialMembers, extraFunctionalMembers, err := portal.getInitialMemberList(ctx, info.Members, source, powerLevels)
+	initialMembers, extraFunctionalMembers, err := portal.getInitialMemberList(cancellableCtx, info.Members, source, powerLevels)
 	if err != nil {
 		log.Err(err).Msg("Failed to process participant list for portal creation")
 		return err
@@ -4940,7 +5009,6 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 		IsDirect:           portal.RoomType == database.RoomTypeDM,
 		PowerLevelOverride: powerLevels,
 		BeeperLocalRoomID:  portal.Bridge.Matrix.GenerateDeterministicRoomID(portal.PortalKey),
-		RoomVersion:        id.RoomV11,
 	}
 	autoJoinInvites := portal.Bridge.Matrix.GetCapabilities().AutoJoinInvites
 	if autoJoinInvites {
@@ -4953,7 +5021,7 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 		req.CreationContent["type"] = event.RoomTypeSpace
 	}
 	bridgeInfoStateKey, bridgeInfo := portal.getBridgeInfo()
-	roomFeatures := source.Client.GetCapabilities(ctx, portal)
+	roomFeatures := source.Client.GetCapabilities(cancellableCtx, portal)
 	portal.CapState = database.CapabilityState{
 		Source: source.ID,
 		ID:     roomFeatures.GetID(),
@@ -5034,6 +5102,9 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 			Type:    event.StateJoinRules,
 			Content: event.Content{Parsed: info.JoinRule},
 		})
+	}
+	if cancellableCtx.Err() != nil {
+		return cancellableCtx.Err()
 	}
 	roomID, err := portal.Bridge.Bot.CreateRoom(ctx, &req)
 	if err != nil {
@@ -5136,8 +5207,11 @@ func (portal *Portal) addToUserSpaces(ctx context.Context) {
 }
 
 func (portal *Portal) Delete(ctx context.Context) error {
+	if portal.deleted.IsSet() {
+		return nil
+	}
 	portal.removeInPortalCache(ctx)
-	err := portal.Bridge.DB.Portal.Delete(ctx, portal.PortalKey)
+	err := portal.safeDBDelete(ctx)
 	if err != nil {
 		return err
 	}
@@ -5145,6 +5219,15 @@ func (portal *Portal) Delete(ctx context.Context) error {
 	defer portal.Bridge.cacheLock.Unlock()
 	portal.unlockedDeleteCache()
 	return nil
+}
+
+func (portal *Portal) safeDBDelete(ctx context.Context) error {
+	err := portal.Bridge.DB.Message.DeleteInChunks(ctx, portal.PortalKey)
+	if err != nil {
+		return fmt.Errorf("failed to delete messages in portal: %w", err)
+	}
+	// TODO delete child portals?
+	return portal.Bridge.DB.Portal.Delete(ctx, portal.PortalKey)
 }
 
 func (portal *Portal) RemoveMXID(ctx context.Context) error {
@@ -5185,8 +5268,7 @@ func (portal *Portal) removeInPortalCache(ctx context.Context) {
 }
 
 func (portal *Portal) unlockedDelete(ctx context.Context) error {
-	// TODO delete child portals?
-	err := portal.Bridge.DB.Portal.Delete(ctx, portal.PortalKey)
+	err := portal.safeDBDelete(ctx)
 	if err != nil {
 		return err
 	}
@@ -5195,15 +5277,18 @@ func (portal *Portal) unlockedDelete(ctx context.Context) error {
 }
 
 func (portal *Portal) unlockedDeleteCache() {
+	if portal.deleted.IsSet() {
+		return
+	}
 	delete(portal.Bridge.portalsByKey, portal.PortalKey)
 	if portal.MXID != "" {
 		delete(portal.Bridge.portalsByMXID, portal.MXID)
 	}
+	portal.deleted.Set()
 	if portal.events != nil {
 		// TODO there's a small risk of this racing with a queueEvent call
 		close(portal.events)
 	}
-	portal.deleted = true
 }
 
 func (portal *Portal) Save(ctx context.Context) error {

@@ -77,6 +77,11 @@ export interface RoomFeatures {
 	delete_chat?: boolean
 	/** Whether deleting the chat for all participants is supported. */
 	delete_chat_for_everyone?: boolean
+	/** What can be done with message requests? */
+	message_request?: {
+		accept_with_message?: CapabilitySupportLevel
+		accept_with_button?: CapabilitySupportLevel
+	}
 }
 
 declare type integer = number

@@ -229,9 +229,8 @@ func (user *User) GetManagementRoom(ctx context.Context) (id.RoomID, error) {
 				user.MXID:                 50,
 			},
 		},
-		RoomVersion: id.RoomV11,
-		Invite:      []id.UserID{user.MXID},
-		IsDirect:    true,
+		Invite:   []id.UserID{user.MXID},
+		IsDirect: true,
 	}
 	if autoJoin {
 		req.BeeperInitialMembers = []id.UserID{user.MXID}
