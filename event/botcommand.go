@@ -9,6 +9,7 @@ package event
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	"maunium.net/go/mautrix/id"
@@ -110,6 +111,29 @@ type MSC4391RoomIDValue struct {
 	EventID id.EventID      `json:"event_id,omitempty"`
 }
 
+func NormalizeRoomIDValue(input any) (riv *MSC4391RoomIDValue, err error) {
+	switch typedValue := input.(type) {
+	case map[string]any, json.RawMessage:
+		var raw json.RawMessage
+		if raw, err = json.Marshal(input); err != nil {
+			err = fmt.Errorf("failed to roundtrip room ID value: %w", err)
+		} else if err = json.Unmarshal(raw, &riv); err != nil {
+			err = fmt.Errorf("failed to roundtrip room ID value: %w", err)
+		}
+	case *MSC4391RoomIDValue:
+		riv = typedValue
+	case MSC4391RoomIDValue:
+		riv = &typedValue
+	default:
+		err = fmt.Errorf("unsupported type %T for room or event ID", input)
+	}
+	return
+}
+
+func (riv *MSC4391RoomIDValue) String() string {
+	return riv.URI().String()
+}
+
 func (riv *MSC4391RoomIDValue) URI() *id.MatrixURI {
 	if riv == nil {
 		return nil
@@ -122,6 +146,16 @@ func (riv *MSC4391RoomIDValue) URI() *id.MatrixURI {
 	default:
 		return nil
 	}
+}
+
+func (riv *MSC4391RoomIDValue) Equals(other *MSC4391RoomIDValue) bool {
+	if riv == nil || other == nil {
+		return riv == other
+	}
+	return riv.Type == other.Type &&
+		riv.RoomID == other.RoomID &&
+		riv.EventID == other.EventID &&
+		slices.Equal(riv.Via, other.Via)
 }
 
 func (riv *MSC4391RoomIDValue) Validate() error {
@@ -235,8 +269,12 @@ func (ps *MSC4391ParameterSchema) isValid(parent MSC4391SchemaType) bool {
 		}
 		return ps.Type == "" && ps.Variants == nil && ps.Value == nil
 	case MSC4391SchemaTypeLiteral:
-		switch ps.Value.(type) {
-		case string, float64, int, int64, json.Number, bool:
+		switch typedVal := ps.Value.(type) {
+		case string, float64, int, int64, json.Number, bool, MSC4391RoomIDValue, *MSC4391RoomIDValue:
+		case map[string]any:
+			if typedVal["type"] != "event_id" && typedVal["type"] != "room_id" {
+				return false
+			}
 		default:
 			return false
 		}

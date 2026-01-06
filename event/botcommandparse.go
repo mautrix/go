@@ -267,18 +267,9 @@ func (bat BotArgumentType) NormalizeValue(value any) (any, error) {
 			return nil, fmt.Errorf("unexpected sigil %c for user ID or room alias", parsed.Sigil1)
 		}
 	case BotArgumentTypeRoomID, BotArgumentTypeEventID:
-		var riv *MSC4391RoomIDValue
-		switch typedValue := value.(type) {
-		case map[string]any, json.RawMessage:
-			if raw, err := json.Marshal(value); err != nil {
-				return nil, fmt.Errorf("failed to roundtrip room ID value: %w", err)
-			} else if err = json.Unmarshal(raw, &riv); err != nil {
-				return nil, fmt.Errorf("failed to roundtrip room ID value: %w", err)
-			}
-		case *MSC4391RoomIDValue:
-			riv = typedValue
-		case MSC4391RoomIDValue:
-			riv = &typedValue
+		riv, err := NormalizeRoomIDValue(value)
+		if err != nil {
+			return nil, err
 		}
 		return riv, riv.Validate()
 	default:
@@ -325,6 +316,33 @@ func parseBoolean(val string) (bool, error) {
 	}
 }
 
+func parseRoomOrEventID(value string) (*MSC4391RoomIDValue, error) {
+	parsed, err := id.ParseMatrixURIOrMatrixToURL(value)
+	if err != nil && strings.HasPrefix(value, "!") {
+		return &MSC4391RoomIDValue{
+			Type:   BotArgumentTypeRoomID,
+			RoomID: id.RoomID(value),
+		}, nil
+	}
+	if err != nil {
+		return nil, err
+	} else if parsed.Sigil1 != '!' {
+		return nil, fmt.Errorf("unexpected sigil %c for room ID", parsed.Sigil1)
+	} else if parsed.MXID2 != "" && parsed.Sigil2 != '$' {
+		return nil, fmt.Errorf("unexpected sigil %c for event ID", parsed.Sigil2)
+	}
+	valType := BotArgumentTypeRoomID
+	if parsed.MXID2 != "" {
+		valType = BotArgumentTypeEventID
+	}
+	return &MSC4391RoomIDValue{
+		Type:    valType,
+		RoomID:  parsed.RoomID(),
+		Via:     parsed.Via,
+		EventID: parsed.EventID(),
+	}, nil
+}
+
 func (bat BotArgumentType) ParseString(value string) (any, error) {
 	switch bat {
 	case BotArgumentTypeInteger:
@@ -346,26 +364,13 @@ func (bat BotArgumentType) ParseString(value string) (any, error) {
 		}
 		return parsed.RoomAlias(), nil
 	case BotArgumentTypeRoomID, BotArgumentTypeEventID:
-		parsed, err := id.ParseMatrixURIOrMatrixToURL(value)
-		if err != nil && bat == BotArgumentTypeRoomID && strings.HasPrefix(value, "!") {
-			return &MSC4391RoomIDValue{
-				Type:   bat,
-				RoomID: id.RoomID(value),
-			}, nil
-		}
+		parsed, err := parseRoomOrEventID(value)
 		if err != nil {
 			return nil, err
-		} else if parsed.Sigil1 != '!' {
-			return nil, fmt.Errorf("unexpected sigil %c for room ID", parsed.Sigil1)
-		} else if bat == BotArgumentTypeEventID && parsed.Sigil2 != '$' {
-			return nil, fmt.Errorf("unexpected sigil %c for event ID", parsed.Sigil2)
+		} else if bat != parsed.Type {
+			return nil, fmt.Errorf("mismatching argument type: expected %s but got %s", bat, parsed.Type)
 		}
-		return &MSC4391RoomIDValue{
-			Type:    bat,
-			RoomID:  parsed.RoomID(),
-			Via:     parsed.Via,
-			EventID: parsed.EventID(),
-		}, nil
+		return bat, nil
 	default:
 		return nil, fmt.Errorf("cannot parse string for argument type %s", bat)
 	}
@@ -403,6 +408,15 @@ func (ps *MSC4391ParameterSchema) ParseString(value string) (any, error) {
 				return nil, fmt.Errorf("literal value %t does not match %t", typedValue, boolVal)
 			}
 			return boolVal, nil
+		case MSC4391RoomIDValue, *MSC4391RoomIDValue, map[string]any, json.RawMessage:
+			expectedVal, _ := NormalizeRoomIDValue(typedValue)
+			parsed, err := parseRoomOrEventID(value)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse room or event ID literal: %w", err)
+			} else if !parsed.Equals(expectedVal) {
+				return nil, fmt.Errorf("literal value %s does not match %s", expectedVal, parsed)
+			}
+			return parsed, nil
 		default:
 			return nil, fmt.Errorf("unsupported literal type %T", ps.Value)
 		}
