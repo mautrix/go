@@ -22,24 +22,21 @@ type QuoteParseOutput struct {
 	Quoted    bool
 }
 
-type QuoteParseTestData struct {
-	Name   string
-	Input  string
-	Output QuoteParseOutput
-}
-
-func (qptd *QuoteParseTestData) UnmarshalJSON(data []byte) error {
+func (qpo *QuoteParseOutput) UnmarshalJSON(data []byte) error {
 	var arr []any
 	if err := json.Unmarshal(data, &arr); err != nil {
 		return err
 	}
-	qptd.Name = arr[0].(string)
-	qptd.Input = arr[1].(string)
-	output := arr[2].([]any)
-	qptd.Output.Parsed = output[0].(string)
-	qptd.Output.Remaining = output[1].(string)
-	qptd.Output.Quoted = output[2].(bool)
+	qpo.Parsed = arr[0].(string)
+	qpo.Remaining = arr[1].(string)
+	qpo.Quoted = arr[2].(bool)
 	return nil
+}
+
+type QuoteParseTestData struct {
+	Name   string           `json:"name"`
+	Input  string           `json:"input"`
+	Output QuoteParseOutput `json:"output"`
 }
 
 func TestParseQuoted(t *testing.T) {
