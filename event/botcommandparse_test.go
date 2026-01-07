@@ -7,7 +7,9 @@
 package event
 
 import (
+	"bytes"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -39,10 +41,14 @@ type QuoteParseTestData struct {
 	Output QuoteParseOutput `json:"output"`
 }
 
+func loadFile[T any](name string) (into T) {
+	quoteData := exerrors.Must(botcommandtestdata.FS.ReadFile(name))
+	exerrors.PanicIfNotNil(json.Unmarshal(quoteData, &into))
+	return
+}
+
 func TestParseQuoted(t *testing.T) {
-	var qptd []QuoteParseTestData
-	dec := json.NewDecoder(exerrors.Must(botcommandtestdata.FS.Open("parse_quote.json")))
-	exerrors.PanicIfNotNil(dec.Decode(&qptd))
+	qptd := loadFile[[]QuoteParseTestData]("parse_quote.json")
 	for _, test := range qptd {
 		t.Run(test.Name, func(t *testing.T) {
 			parsed, remaining, quoted := parseQuoted(test.Input)
@@ -59,6 +65,54 @@ func TestParseQuoted(t *testing.T) {
 				assert.Equal(t, parsed, reparsed)
 				assert.Equal(t, remaining, newRemaining)
 			})
+		})
+	}
+}
+
+type CommandTestData struct {
+	Spec  *MSC4391BotCommandEventContent
+	Tests []*CommandTestUnit
+}
+
+type CommandTestUnit struct {
+	Name   string                  `json:"name"`
+	Input  string                  `json:"input"`
+	Broken string                  `json:"broken,omitempty"`
+	Error  bool                    `json:"error"`
+	Output *MSC4391BotCommandInput `json:"output"`
+}
+
+func compactJSON(input json.RawMessage) json.RawMessage {
+	var buf bytes.Buffer
+	exerrors.PanicIfNotNil(json.Compact(&buf, input))
+	return buf.Bytes()
+}
+
+func TestMSC4391BotCommandEventContent_ParseInput(t *testing.T) {
+	for _, cmd := range exerrors.Must(botcommandtestdata.FS.ReadDir("commands")) {
+		t.Run(strings.TrimSuffix(cmd.Name(), ".json"), func(t *testing.T) {
+			ctd := loadFile[CommandTestData]("commands/" + cmd.Name())
+			for _, test := range ctd.Tests {
+				if test.Output != nil {
+					test.Output.Arguments = compactJSON(test.Output.Arguments)
+				}
+				t.Run(test.Name, func(t *testing.T) {
+					if test.Broken != "" {
+						t.Skip(test.Broken)
+					}
+					output, err := ctd.Spec.ParseInput("@testbot", "/", test.Input)
+					if test.Error {
+						assert.Error(t, err)
+					} else {
+						assert.NoError(t, err)
+					}
+					if test.Output == nil {
+						assert.Nil(t, output)
+					} else {
+						assert.Equal(t, test.Output.Command, output.MSC4391BotCommand.Command)
+					}
+				})
+			}
 		})
 	}
 }

@@ -1,0 +1,85 @@
+{
+	"spec": {
+		"command": "test room reference",
+		"parameters": [
+			{
+				"key": "room",
+				"schema": {
+					"schema_type": "union",
+					"variants": [
+						{
+							"schema_type": "primitive",
+							"type": "room_id"
+						},
+						{
+							"schema_type": "primitive",
+							"type": "room_alias"
+						}
+					]
+				}
+			}
+		]
+	},
+	"tests": [{
+		"name": "room alias",
+		"input": "/test room reference #test:matrix.org",
+		"output": {
+			"command": "test room reference",
+			"arguments": {
+				"room": "#test:matrix.org"
+			}
+		}
+	}, {
+		"name": "room id",
+		"input": "/test room reference !aiwVrNhPwbGBNjqlNu:matrix.org",
+		"output": {
+			"command": "test room reference",
+			"arguments": {
+				"room": {
+					"type": "room_id",
+					"id": "!aiwVrNhPwbGBNjqlNu:matrix.org"
+				}
+			}
+		}
+	}, {
+		"name": "room id matrix.to link",
+		"input": "/test room reference https://matrix.to/#/!aiwVrNhPwbGBNjqlNu:matrix.org?via=example.com",
+		"output": {
+			"command": "test room reference",
+			"arguments": {
+				"room": {
+					"type": "room_id",
+					"id": "!aiwVrNhPwbGBNjqlNu:matrix.org",
+					"via": ["example.com"]
+				}
+			}
+		}
+	},{
+		"name": "room id matrix.to link with url encoding",
+		"input": "/test room reference https://matrix.to/#/!%23test%2Froom%0Aversion%20%3Cu%3E11%3C%2Fu%3E%2C%20with%20%40%F0%9F%90%88%EF%B8%8F%3Amaunium.net?via=maunium.net",
+		"broken": "Go's url.URL does url decoding on the fragment, which breaks splitting the path segments properly",
+		"output": {
+			"command": "test room reference",
+			"arguments": {
+				"room": {
+					"type": "room_id",
+					"id": "!#test/room\nversion <u>11</u>, with @🐈️:maunium.net",
+					"via": ["maunium.net"]
+				}
+			}
+		}
+	}, {
+		"name": "room id matrix: URI",
+		"input": "/test room reference matrix:roomid/mauT12AzsoqxV7Abvy_ApA-HNPK1LcT4GbP70_AOPyQ?via=maunium.net&via=matrix.org",
+		"output": {
+			"command": "test room reference",
+			"arguments": {
+				"room": {
+					"type": "room_id",
+					"id": "!mauT12AzsoqxV7Abvy_ApA-HNPK1LcT4GbP70_AOPyQ",
+					"via": ["maunium.net", "matrix.org"]
+				}
+			}
+		}
+	}]
+}

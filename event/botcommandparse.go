@@ -154,6 +154,9 @@ func (bcec *MSC4391BotCommandEventContent) ParseInput(owner id.UserID, sigil, in
 				nextVal += " " + input
 				input = ""
 			}
+			if nextVal == "" && !param.Optional {
+				setError(fmt.Errorf("missing value for required parameter %s", param.Key))
+			}
 			parsedVal, err := param.Schema.ParseString(nextVal)
 			if err != nil {
 				args[param.Key] = param.GetDefaultValue()

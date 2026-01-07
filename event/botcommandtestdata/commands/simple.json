@@ -1,0 +1,53 @@
+{
+	"spec": {
+		"command": "test simple",
+		"parameters": [
+			{
+				"key": "meow",
+				"schema": {
+					"schema_type": "primitive",
+					"type": "string"
+				}
+			}
+		]
+	},
+	"tests": [
+		{
+			"name": "success",
+			"input": "/test simple mrrp",
+			"output": {
+				"command": "test simple",
+				"arguments": {
+					"meow": "mrrp"
+				}
+			}
+		},
+		{
+			"name": "directed success",
+			"input": "/test simple@testbot mrrp",
+			"output": {
+				"command": "test simple",
+				"arguments": {
+					"meow": "mrrp"
+				}
+			}
+		},
+		{
+			"name": "missing parameter",
+			"input": "/test simple",
+			"error": true,
+			"output": {
+				"command": "test simple",
+				"arguments": {
+					"meow": ""
+				}
+			}
+		},
+		{
+			"name": "directed at another bot",
+			"input": "/test simple@anotherbot mrrp",
+			"error": false,
+			"output": null
+		}
+	]
+}
