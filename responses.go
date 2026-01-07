@@ -132,7 +132,15 @@ type RespRedactUserEvents struct {
 
 // RespMediaConfig is the JSON response for https://spec.matrix.org/v1.4/client-server-api/#get_matrixmediav3config
 type RespMediaConfig struct {
-	UploadSize int64 `json:"m.upload.size,omitempty"`
+	UploadSize           int64  `json:"m.upload.size,omitempty"`
+	UnstableStorageSize  *int64 `json:"org.matrix.msc4034.storage.size,omitempty"`
+	UnstableStorageFiles *int64 `json:"org.matrix.msc4034.storage.max_files,omitempty"`
+}
+
+// RespStorageUsage is the JSON response for https://github.com/matrix-org/matrix-spec-proposals/pull/4034
+type RespStorageUsage struct {
+	Used  *int64 `json:"org.matrix.msc4034.storage.used,omitempty"`
+	Files *int64 `json:"org.matrix.msc4034.storage.files,omitempty"`
 }
 
 // RespMediaUpload is the JSON response for https://spec.matrix.org/v1.2/client-server-api/#post_matrixmediav3upload
