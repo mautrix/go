@@ -169,6 +169,15 @@ func (mach *OlmMachine) EncryptMegolmEventWithStateKey(ctx context.Context, room
 		SenderKey: mach.account.IdentityKey(),
 		DeviceID:  mach.Client.DeviceID,
 	}
+	if mach.MSC4392Relations && encrypted.RelatesTo != nil {
+		// When MSC4392 mode is enabled, reply and reaction metadata is stripped from the unencrypted content.
+		// Other relations like threads are still left unencrypted.
+		encrypted.RelatesTo.InReplyTo = nil
+		encrypted.RelatesTo.IsFallingBack = false
+		if evtType == event.EventReaction || encrypted.RelatesTo.Type == "" {
+			encrypted.RelatesTo = nil
+		}
+	}
 	if mach.PlaintextMentions {
 		encrypted.Mentions = getMentions(content)
 	}

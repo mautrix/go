@@ -39,6 +39,7 @@ type OlmMachine struct {
 	cancelBackgroundCtx context.CancelFunc
 
 	PlaintextMentions   bool
+	MSC4392Relations    bool
 	AllowEncryptedState bool
 
 	// Never ask the server for keys automatically as a side effect during Megolm decryption.

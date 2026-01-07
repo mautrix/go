@@ -378,6 +378,8 @@ encryption:
     # Only relevant when using end-to-bridge encryption, required when using encryption with next-gen auth (MSC3861).
     # Changing this option requires updating the appservice registration file.
     msc4190: false
+    # Whether to encrypt reactions and reply metadata as per MSC4392.
+    msc4392: false
     # Should the bridge bot generate a recovery key and cross-signing keys and verify itself?
     # Note that without the latest version of MSC4190, this will fail if you reset the bridge database.
     # The generated recovery key will be saved in the kv_store table under `recovery_key`.
