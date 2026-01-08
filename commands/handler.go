@@ -8,7 +8,7 @@ package commands
 
 import (
         "strings"
-        "maunium.net/mautrix/go/event"
+        "go/event"
 )
 
 type Handler[MetaType any] struct {
