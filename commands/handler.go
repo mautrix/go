@@ -8,6 +8,8 @@ package commands
 
 import (
 	"strings"
+
+	"maunium.net/go/mautrix/event"
 )
 
 type Handler[MetaType any] struct {
@@ -18,12 +20,17 @@ type Handler[MetaType any] struct {
 	Name string
 	// Aliases are alternative names for the command. They must be lowercase.
 	Aliases []string
+	// Description is a description of the command.
+	Description *event.ExtensibleTextContainer
 	// Subcommands are subcommands of this command.
 	Subcommands []*Handler[MetaType]
 	// PreFunc is a function that is called before checking subcommands.
 	// It can be used to have parameters between subcommands (e.g. `!rooms <room ID> <command>`).
 	// Event.ShiftArg will likely be useful for implementing such parameters.
 	PreFunc func(ce *Event[MetaType])
+	// Parameters are the parameters of the command. These are used to suggest auto-completions to clients,
+	// but are not actually functional in any regard.
+	Parameters []*event.MSC4391Parameter
 
 	subcommandContainer *CommandContainer[MetaType]
 }
@@ -34,6 +41,16 @@ func (h *Handler[MetaType]) initSubcommandContainer() {
 		h.subcommandContainer.Register(h.Subcommands...)
 	} else {
 		h.subcommandContainer = nil
+	}
+}
+
+// MakeMSC4391Event creates a *event.MSC4391BotCommandEventContent representing this command handler.
+func (h *Handler[MetaType]) MakeMSC4391Event() *event.MSC4391BotCommandEventContent {
+	return &event.MSC4391BotCommandEventContent{
+		Command:     h.Name,
+		Aliases:     h.Aliases,
+		Description: h.Description,
+		Parameters:  h.Parameters,
 	}
 }
 
