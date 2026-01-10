@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tulir Asokan
+// Copyright (c) 2026 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -72,9 +72,9 @@ func (proc *Processor[MetaType]) Process(ctx context.Context, evt *event.Event) 
 	case event.EventReaction:
 		parsed = proc.ParseReaction(ctx, evt)
 	case event.EventMessage:
-		parsed = ParseEvent[MetaType](ctx, evt)
+		parsed = proc.ParseEvent(ctx, evt)
 	}
-	if parsed == nil || !proc.PreValidator.Validate(parsed) {
+	if parsed == nil || (!proc.PreValidator.Validate(parsed) && parsed.StructuredArgs == nil) {
 		return
 	}
 	parsed.Proc = proc
@@ -107,6 +107,11 @@ func (proc *Processor[MetaType]) Process(ctx context.Context, evt *event.Event) 
 			break
 		}
 	}
+	if parsed.StructuredArgs != nil && len(parsed.Args) > 0 {
+		// The client sent MSC4391 data, but the target command wasn't found
+		log.Debug().Msg("Didn't find handler for MSC4391 command")
+		return
+	}
 
 	logWith := log.With().
 		Str("command", parsed.Command).
@@ -116,10 +121,30 @@ func (proc *Processor[MetaType]) Process(ctx context.Context, evt *event.Event) 
 	}
 	if proc.LogArgs {
 		logWith = logWith.Strs("args", parsed.Args)
+		if parsed.StructuredArgs != nil {
+			logWith = logWith.RawJSON("structured_args", parsed.StructuredArgs)
+		}
 	}
 	log = logWith.Logger()
 	parsed.Ctx = log.WithContext(ctx)
 	parsed.Log = &log
+
+	if handler.Parameters != nil && parsed.StructuredArgs == nil {
+		// The handler wants structured parameters, but the client didn't send MSC4391 data
+		var err error
+		parsed.StructuredArgs, err = handler.Spec().ParseArguments(parsed.RawArgs)
+		if err != nil {
+			log.Debug().Err(err).Msg("Failed to parse structured arguments")
+			// TODO better error, usage info? deduplicate with WithParsedArgs
+			parsed.Reply("Failed to parse arguments: %v", err)
+			return
+		}
+		if proc.LogArgs {
+			log.UpdateContext(func(c zerolog.Context) zerolog.Context {
+				return c.RawJSON("structured_args", parsed.StructuredArgs)
+			})
+		}
+	}
 
 	log.Debug().Msg("Processing command")
 	handler.Func(parsed)
