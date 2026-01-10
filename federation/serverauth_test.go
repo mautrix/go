@@ -19,7 +19,7 @@ import (
 func TestServerKeyResponse_VerifySelfSignature(t *testing.T) {
 	cli := federation.NewClient("", nil, nil)
 	ctx := context.Background()
-	for _, name := range []string{"matrix.org", "maunium.net", "continuwuity.org"} {
+	for _, name := range []string{"matrix.org", "maunium.net", "cd.mau.dev", "uwu.mau.dev"} {
 		t.Run(name, func(t *testing.T) {
 			resp, err := cli.ServerKeys(ctx, name)
 			require.NoError(t, err)
