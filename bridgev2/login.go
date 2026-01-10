@@ -190,6 +190,8 @@ type LoginInputDataField struct {
 	Name string `json:"name"`
 	// The description of the field shown to the user.
 	Description string `json:"description"`
+	// A default value that the client can pre-fill the field with.
+	DefaultValue string `json:"default_value,omitempty"`
 	// A regex pattern that the client can use to validate input client-side.
 	Pattern string `json:"pattern,omitempty"`
 	// For fields of type select, the valid options.

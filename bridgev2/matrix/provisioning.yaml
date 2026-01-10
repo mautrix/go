@@ -728,11 +728,14 @@ components:
                       description: A more detailed description of the field shown to the user.
                       examples:
                       - Include the country code with a +
+                    default_value:
+                      type: string
+                      description: A default value that the client can pre-fill the field with.
                     pattern:
                       type: string
                       format: regex
                       description: A regular expression that the field value must match.
-                    select:
+                    options:
                       type: array
                       description: For fields of type select, the valid options.
                       items:
