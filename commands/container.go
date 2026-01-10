@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tulir Asokan
+// Copyright (c) 2026 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,20 +8,49 @@ package commands
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
+
+	"go.mau.fi/util/exmaps"
+
+	"maunium.net/go/mautrix/event/cmdschema"
 )
 
 type CommandContainer[MetaType any] struct {
 	commands map[string]*Handler[MetaType]
 	aliases  map[string]string
 	lock     sync.RWMutex
+	parent   *Handler[MetaType]
 }
 
 func NewCommandContainer[MetaType any]() *CommandContainer[MetaType] {
 	return &CommandContainer[MetaType]{
 		commands: make(map[string]*Handler[MetaType]),
 		aliases:  make(map[string]string),
+	}
+}
+
+func (cont *CommandContainer[MetaType]) AllSpecs() []*cmdschema.EventContent {
+	data := make(exmaps.Set[*Handler[MetaType]])
+	cont.collectHandlers(data)
+	specs := make([]*cmdschema.EventContent, 0, data.Size())
+	for handler := range data.Iter() {
+		if handler.Parameters != nil {
+			specs = append(specs, handler.Spec())
+		}
+	}
+	return specs
+}
+
+func (cont *CommandContainer[MetaType]) collectHandlers(into exmaps.Set[*Handler[MetaType]]) {
+	cont.lock.RLock()
+	defer cont.lock.RUnlock()
+	for _, handler := range cont.commands {
+		into.Add(handler)
+		if handler.subcommandContainer != nil {
+			handler.subcommandContainer.collectHandlers(into)
+		}
 	}
 }
 
@@ -32,7 +61,10 @@ func (cont *CommandContainer[MetaType]) Register(handlers ...*Handler[MetaType])
 	}
 	cont.lock.Lock()
 	defer cont.lock.Unlock()
-	for _, handler := range handlers {
+	for i, handler := range handlers {
+		if handler == nil {
+			panic(fmt.Errorf("handler #%d is nil", i+1))
+		}
 		cont.registerOne(handler)
 	}
 }
@@ -44,6 +76,10 @@ func (cont *CommandContainer[MetaType]) registerOne(handler *Handler[MetaType]) 
 		panic(fmt.Errorf("tried to register command %q, but it's already registered", handler.Name))
 	} else if aliasTarget, alreadyExists := cont.aliases[handler.Name]; alreadyExists {
 		panic(fmt.Errorf("tried to register command %q, but it's already registered as an alias for %q", handler.Name, aliasTarget))
+	}
+	if !slices.Contains(handler.parents, cont.parent) {
+		handler.parents = append(handler.parents, cont.parent)
+		handler.nestedNameCache = nil
 	}
 	cont.commands[handler.Name] = handler
 	for _, alias := range handler.Aliases {

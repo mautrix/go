@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tulir Asokan
+// Copyright (c) 2026 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,6 +8,7 @@ package commands
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 
 	"github.com/rs/zerolog"
@@ -18,6 +19,11 @@ import (
 
 const ReactionCommandsKey = "fi.mau.reaction_commands"
 const ReactionMultiUseKey = "fi.mau.reaction_multi_use"
+
+type ReactionCommandData struct {
+	Command string `json:"command"`
+	Args    any    `json:"args,omitempty"`
+}
 
 func (proc *Processor[MetaType]) ParseReaction(ctx context.Context, evt *event.Event) *Event[MetaType] {
 	content, ok := evt.Content.Parsed.(*event.ReactionEventContent)
@@ -67,21 +73,33 @@ func (proc *Processor[MetaType]) ParseReaction(ctx context.Context, evt *event.E
 			Msg("Reaction command not found in target event")
 		return nil
 	}
-	cmdString, ok := rawCmd.(string)
-	if !ok {
+	var wrappedEvt *Event[MetaType]
+	switch typedCmd := rawCmd.(type) {
+	case string:
+		wrappedEvt = RawTextToEvent[MetaType](ctx, evt, typedCmd)
+	case map[string]any:
+		var input event.MSC4391BotCommandInput
+		if marshaled, err := json.Marshal(typedCmd); err != nil {
+
+		} else if err = json.Unmarshal(marshaled, &input); err != nil {
+
+		} else {
+			wrappedEvt = StructuredCommandToEvent[MetaType](ctx, evt, &input)
+		}
+	}
+	if wrappedEvt == nil {
 		zerolog.Ctx(ctx).Debug().
 			Stringer("target_event_id", evtID).
 			Str("reaction_key", content.RelatesTo.Key).
 			Msg("Reaction command data is invalid")
 		return nil
 	}
-	wrappedEvt := RawTextToEvent[MetaType](ctx, evt, cmdString)
 	wrappedEvt.Proc = proc
 	wrappedEvt.Redact()
 	if !isMultiUse {
 		DeleteAllReactions(ctx, proc.Client, evt)
 	}
-	if cmdString == "" {
+	if wrappedEvt.Command == "" {
 		return nil
 	}
 	return wrappedEvt

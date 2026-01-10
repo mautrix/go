@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tulir Asokan
+// Copyright (c) 2026 Tulir Asokan
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,6 +8,7 @@ package commands
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -35,6 +36,8 @@ type Event[MetaType any] struct {
 	// RawArgs is the same as args, but without the splitting by whitespace.
 	RawArgs string
 
+	StructuredArgs json.RawMessage
+
 	Ctx     context.Context
 	Log     *zerolog.Logger
 	Proc    *Processor[MetaType]
@@ -61,7 +64,7 @@ var IDHTMLParser = &format.HTMLParser{
 }
 
 // ParseEvent parses a message into a command event struct.
-func ParseEvent[MetaType any](ctx context.Context, evt *event.Event) *Event[MetaType] {
+func (proc *Processor[MetaType]) ParseEvent(ctx context.Context, evt *event.Event) *Event[MetaType] {
 	content, ok := evt.Content.Parsed.(*event.MessageEventContent)
 	if !ok || content.MsgType == event.MsgNotice || content.RelatesTo.GetReplaceID() != "" {
 		return nil
@@ -70,10 +73,32 @@ func ParseEvent[MetaType any](ctx context.Context, evt *event.Event) *Event[Meta
 	if content.Format == event.FormatHTML {
 		text = IDHTMLParser.Parse(content.FormattedBody, format.NewContext(ctx))
 	}
+	if content.MSC4391BotCommand != nil {
+		if !content.Mentions.Has(proc.Client.UserID) || len(content.Mentions.UserIDs) != 1 {
+			return nil
+		}
+		wrapped := StructuredCommandToEvent[MetaType](ctx, evt, content.MSC4391BotCommand)
+		wrapped.RawInput = text
+		return wrapped
+	}
 	if len(text) == 0 {
 		return nil
 	}
 	return RawTextToEvent[MetaType](ctx, evt, text)
+}
+
+func StructuredCommandToEvent[MetaType any](ctx context.Context, evt *event.Event, content *event.MSC4391BotCommandInput) *Event[MetaType] {
+	commandParts := strings.Split(content.Command, " ")
+	return &Event[MetaType]{
+		Event: evt,
+		// Fake a command and args to let the subcommand finder in Process work.
+		Command: commandParts[0],
+		Args:    commandParts[1:],
+		Ctx:     ctx,
+		Log:     zerolog.Ctx(ctx),
+
+		StructuredArgs: content.Arguments,
+	}
 }
 
 func RawTextToEvent[MetaType any](ctx context.Context, evt *event.Event, text string) *Event[MetaType] {
@@ -187,4 +212,26 @@ func (evt *Event[MetaType]) ShiftArg() string {
 func (evt *Event[MetaType]) UnshiftArg(arg string) {
 	evt.RawArgs = arg + " " + evt.RawArgs
 	evt.Args = append([]string{arg}, evt.Args...)
+}
+
+func (evt *Event[MetaType]) ParseArgs(into any) error {
+	return json.Unmarshal(evt.StructuredArgs, into)
+}
+
+func ParseArgs[T, MetaType any](evt *Event[MetaType]) (into T, err error) {
+	err = evt.ParseArgs(&into)
+	return
+}
+
+func WithParsedArgs[T, MetaType any](fn func(*Event[MetaType], T)) func(*Event[MetaType]) {
+	return func(evt *Event[MetaType]) {
+		parsed, err := ParseArgs[T, MetaType](evt)
+		if err != nil {
+			evt.Log.Debug().Err(err).Msg("Failed to parse structured args into struct")
+			// TODO better error, usage info? deduplicate with Process
+			evt.Reply("Failed to parse arguments: %v", err)
+			return
+		}
+		fn(evt, parsed)
+	}
 }
