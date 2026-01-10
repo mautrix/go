@@ -1,0 +1,105 @@
+{
+	"spec": {
+		"command": "test room reference",
+		"source": "@testbot",
+		"parameters": [
+			{
+				"key": "rooms",
+				"schema": {
+					"schema_type": "array",
+					"items": {
+						"schema_type": "union",
+						"variants": [
+							{
+								"schema_type": "primitive",
+								"type": "room_id"
+							},
+							{
+								"schema_type": "primitive",
+								"type": "room_alias"
+							}
+						]
+					}
+				}
+			}
+		]
+	},
+	"tests": [
+		{
+			"name": "room alias",
+			"input": "/test room reference #test:matrix.org",
+			"output": {
+				"rooms": [
+					"#test:matrix.org"
+				]
+			}
+		},
+		{
+			"name": "room id",
+			"input": "/test room reference !aiwVrNhPwbGBNjqlNu:matrix.org",
+			"output": {
+				"rooms": [
+					{
+						"type": "room_id",
+						"id": "!aiwVrNhPwbGBNjqlNu:matrix.org"
+					}
+				]
+			}
+		},
+		{
+			"name": "two room ids",
+			"input": "/test room reference !mauT12AzsoqxV7Abvy_ApA-HNPK1LcT4GbP70_AOPyQ !aiwVrNhPwbGBNjqlNu:matrix.org",
+			"output": {
+				"rooms": [
+					{
+						"type": "room_id",
+						"id": "!mauT12AzsoqxV7Abvy_ApA-HNPK1LcT4GbP70_AOPyQ"
+					},
+					{
+						"type": "room_id",
+						"id": "!aiwVrNhPwbGBNjqlNu:matrix.org"
+					}
+				]
+			}
+		},
+		{
+			"name": "room id matrix: URI",
+			"input": "/test room reference matrix:roomid/mauT12AzsoqxV7Abvy_ApA-HNPK1LcT4GbP70_AOPyQ?via=maunium.net&via=matrix.org",
+			"output": {
+				"rooms": [
+					{
+						"type": "room_id",
+						"id": "!mauT12AzsoqxV7Abvy_ApA-HNPK1LcT4GbP70_AOPyQ",
+						"via": [
+							"maunium.net",
+							"matrix.org"
+						]
+					}
+				]
+			}
+		},
+		{
+			"name": "room id matrix: URI and matrix.to URL",
+			"input": "/test room reference https://matrix.to/#/!aiwVrNhPwbGBNjqlNu:matrix.org?via=example.com matrix:roomid/mauT12AzsoqxV7Abvy_ApA-HNPK1LcT4GbP70_AOPyQ?via=maunium.net&via=matrix.org",
+			"output": {
+				"rooms": [
+					{
+						"type": "room_id",
+						"id": "!aiwVrNhPwbGBNjqlNu:matrix.org",
+						"via": [
+							"example.com"
+						]
+					},
+					{
+						"type": "room_id",
+						"id": "!mauT12AzsoqxV7Abvy_ApA-HNPK1LcT4GbP70_AOPyQ",
+						"via": [
+							"maunium.net",
+							"matrix.org"
+						]
+					}
+				]
+			}
+		}
+	]
+}
