@@ -1,0 +1,153 @@
+{
+	"spec": {
+		"command": "flag",
+		"source": "@testbot",
+		"parameters": [
+			{
+				"key": "meow",
+				"schema": {
+					"schema_type": "primitive",
+					"type": "string"
+				}
+			},
+			{
+				"key": "user",
+				"schema": {
+					"schema_type": "primitive",
+					"type": "user_id"
+				},
+				"optional": true
+			},
+			{
+				"key": "woof",
+				"schema": {
+					"schema_type": "primitive",
+					"type": "boolean"
+				},
+				"optional": true,
+				"fi.mau.default_value": false
+			}
+		]
+	},
+	"tests": [
+		{
+			"name": "no flags",
+			"input": "/flag mrrp",
+			"output": {
+				"meow": "mrrp",
+				"user": null,
+				"woof": false
+			}
+		},
+		{
+			"name": "positional flag",
+			"input": "/flag mrrp @user:example.com yes",
+			"output": {
+				"meow": "mrrp",
+				"user": "@user:example.com",
+				"woof": true
+			}
+		},
+		{
+			"name": "named flag at start",
+			"input": "/flag --woof=yes mrrp @user:example.com",
+			"output": {
+				"meow": "mrrp",
+				"user": "@user:example.com",
+				"woof": true
+			}
+		},
+		{
+			"name": "boolean flag without value",
+			"input": "/flag --woof mrrp @user:example.com",
+			"output": {
+				"meow": "mrrp",
+				"user": "@user:example.com",
+				"woof": true
+			}
+		},
+		{
+			"name": "user id flag without value",
+			"input": "/flag --user --woof mrrp",
+			"error": true,
+			"output": {
+				"meow": "mrrp",
+				"user": null,
+				"woof": true
+			}
+		},
+		{
+			"name": "named flag in the middle",
+			"input": "/flag mrrp --woof=yes @user:example.com",
+			"output": {
+				"meow": "mrrp",
+				"user": "@user:example.com",
+				"woof": true
+			}
+		},
+		{
+			"name": "named flag in the middle with different value",
+			"input": "/flag mrrp --woof=no @user:example.com",
+			"output": {
+				"meow": "mrrp",
+				"user": "@user:example.com",
+				"woof": false
+			}
+		},
+		{
+			"name": "named flag at end",
+			"input": "/flag mrrp @user:example.com --woof=yes",
+			"output": {
+				"meow": "mrrp",
+				"user": "@user:example.com",
+				"woof": true
+			}
+		},
+		{
+			"name": "named flag at end without value",
+			"input": "/flag mrrp @user:example.com --woof",
+			"output": {
+				"meow": "mrrp",
+				"user": "@user:example.com",
+				"woof": true
+			}
+		},
+		{
+			"name": "all variables named",
+			"input": "/flag --woof=no --meow=mrrp --user=@user:example.com",
+			"output": {
+				"meow": "mrrp",
+				"user": "@user:example.com",
+				"woof": false
+			}
+		},
+		{
+			"name": "all variables named with quotes",
+			"input": "/flag --woof --meow=\"meow meow mrrp\" --user=\"@user:example.com\"",
+			"output": {
+				"meow": "meow meow mrrp",
+				"user": "@user:example.com",
+				"woof": true
+			}
+		},
+		{
+			"name": "only string variables named",
+			"input": "/flag --user=@user:example.com --meow=mrrp yes",
+			"output": {
+				"meow": "mrrp",
+				"user": "@user:example.com",
+				"woof": true
+			}
+		},
+		{
+			"name": "invalid value for named parameter",
+			"input": "/flag --user=meowings mrrp yes",
+			"error": true,
+			"output": {
+				"meow": "mrrp",
+				"user": null,
+				"woof": true
+			}
+		}
+	]
+}
