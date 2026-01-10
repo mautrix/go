@@ -142,8 +142,6 @@ type MessageEventContent struct {
 
 	MSC1767Audio *MSC1767Audio `json:"org.matrix.msc1767.audio,omitempty"`
 	MSC3245Voice *MSC3245Voice `json:"org.matrix.msc3245.voice,omitempty"`
-
-	MSC4332BotCommand *BotCommandInput `json:"org.matrix.msc4332.command,omitempty"`
 }
 
 func (content *MessageEventContent) GetCapMsgType() CapabilityMsgType {
