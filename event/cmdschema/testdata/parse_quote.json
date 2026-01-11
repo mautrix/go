@@ -1,12 +1,21 @@
 [
+	{"name": "empty string", "input": "", "output": ["", "", false]},
 	{"name": "single word", "input": "meow", "output": ["meow", "", false]},
 	{"name": "two words", "input": "meow woof", "output": ["meow", "woof", false]},
 	{"name": "many words", "input": "meow meow mrrp", "output": ["meow", "meow mrrp", false]},
 	{"name": "extra spaces", "input": "meow    meow   mrrp", "output": ["meow", "meow   mrrp", false]},
 	{"name": "trailing space", "input": "meow    ", "output": ["meow", "", false]},
+	{"name": "only spaces", "input": "   ", "output": ["", "", false]},
+	{"name": "leading spaces", "input": "  meow woof", "output": ["", "meow woof", false]},
+	{"name": "backslash at end unquoted", "input": "meow\\ woof", "output": ["meow\\", "woof", false]},
 	{"name": "quoted word", "input": "\"meow\" meow mrrp", "output": ["meow", "meow mrrp", true]},
 	{"name": "quoted words", "input": "\"meow meow\" mrrp", "output": ["meow meow", "mrrp", true]},
 	{"name": "spaces in quotes", "input": "\" meow  meow \"  mrrp", "output": [" meow  meow ", "mrrp", true]},
+	{"name": "empty quoted string", "input": "\"\"", "output": ["", "", true]},
+	{"name": "empty quoted with trailing", "input": "\"\" meow", "output": ["", "meow", true]},
+	{"name": "quote no space before next", "input": "\"meow\"woof", "output": ["meow", "woof", true]},
+	{"name": "just opening quote", "input": "\"", "output": ["", "", true]},
+	{"name": "quote then space then text", "input": "\" meow", "output": [" meow", "", true]},
 	{"name": "quotes after word", "input": "meow  \" meow mrrp \"", "output": ["meow", "\" meow mrrp \"", false]},
 	{"name": "escaped quote", "input": "\"meow\\\" meow\" mrrp", "output": ["meow\" meow", "mrrp", true]},
 	{"name": "missing end quote", "input": "\"meow meow mrrp", "output": ["meow meow mrrp", "", true]},
@@ -16,5 +25,6 @@
 	{"name": "other escaped character", "input": "\"m\\eow\" meow mrrp", "output": ["meow", "meow mrrp", true]},
 	{"name": "escaped backslashes", "input": "\"m\\\\e\\\"ow\\\\\" meow mrrp", "output": ["m\\e\"ow\\", "meow mrrp", true]},
 	{"name": "just quotes", "input": "\"\\\"\\\"\\\\\\\"\" meow", "output": ["\"\"\\\"", "meow", true]},
-	{"name": "eof escape", "input": "\"meow\\", "output": ["meow\\", "", true]}
+	{"name": "escape at eof", "input": "\"meow\\", "output": ["meow", "", true]},
+	{"name": "escaped backslash at eof", "input": "\"meow\\\\", "output": ["meow\\", "", true]}
 ]

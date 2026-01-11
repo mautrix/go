@@ -39,7 +39,13 @@ func parseQuoted(val string) (parsed, remaining string, quoted bool) {
 	var buf strings.Builder
 	for {
 		quoteIdx := strings.IndexByte(val, '"')
-		escapeIdx := strings.IndexByte(val[:max(0, quoteIdx)], '\\')
+		var valUntilQuote string
+		if quoteIdx == -1 {
+			valUntilQuote = val
+		} else {
+			valUntilQuote = val[:quoteIdx]
+		}
+		escapeIdx := strings.IndexByte(valUntilQuote, '\\')
 		if escapeIdx >= 0 {
 			buf.WriteString(val[:escapeIdx])
 			if len(val) > escapeIdx+1 {
