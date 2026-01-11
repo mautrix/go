@@ -331,10 +331,10 @@ func parseBoolean(val string) (bool, error) {
 	if len(val) == 0 {
 		return false, fmt.Errorf("cannot parse empty string as boolean")
 	}
-	switch val[0] {
-	case 't', 'T', 'y', 'Y', '1':
+	switch strings.ToLower(val) {
+	case "t", "true", "y", "yes", "1":
 		return true, nil
-	case 'f', 'F', 'n', 'N', '0':
+	case "f", "false", "n", "no", "0":
 		return false, nil
 	default:
 		return false, fmt.Errorf("invalid boolean string: %q", val)
