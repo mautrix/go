@@ -1,0 +1,59 @@
+{
+	"spec": {
+		"command": "tail",
+		"source": "@testbot",
+		"parameters": [
+			{
+				"key": "meow",
+				"schema": {
+					"schema_type": "primitive",
+					"type": "string"
+				}
+			},
+			{
+				"key": "reason",
+				"schema": {
+					"schema_type": "primitive",
+					"type": "string"
+				},
+				"optional": true
+			},
+			{
+				"key": "woof",
+				"schema": {
+					"schema_type": "primitive",
+					"type": "boolean"
+				},
+				"optional": true
+			}
+		],
+		"fi.mau.tail_parameter": "reason"
+	},
+	"tests": [
+		{
+			"name": "no tail or flag",
+			"input": "/tail mrrp",
+			"output": {
+				"meow": "mrrp",
+				"reason": ""
+			}
+		},
+		{
+			"name": "tail, no flag",
+			"input": "/tail mrrp meow meow",
+			"output": {
+				"meow": "mrrp",
+				"reason": "meow meow"
+			}
+		},
+		{
+			"name": "flag before tail",
+			"input": "/tail mrrp --woof meow meow",
+			"output": {
+				"meow": "mrrp",
+				"reason": "meow meow",
+				"woof": true
+			}
+		}
+	]
+}

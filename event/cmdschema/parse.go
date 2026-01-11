@@ -92,7 +92,7 @@ func (ec *EventContent) ParseArguments(input string) (json.RawMessage, error) {
 			retErr = err
 		}
 	}
-	processParameter := func(param *Parameter, isLast, isNamed bool) {
+	processParameter := func(param *Parameter, isLast, isTail, isNamed bool) {
 		origInput := input
 		var nextVal string
 		var wasQuoted bool
@@ -135,8 +135,8 @@ func (ec *EventContent) ParseArguments(input string) (json.RawMessage, error) {
 			args[param.Key] = collector
 		} else {
 			nextVal, input, wasQuoted = parseQuoted(input)
-			if isLast && !wasQuoted && len(input) > 0 && !strings.Contains(input, "--") {
-				// If the last argument is not quoted and doesn't have flags, just treat the rest of the string
+			if (isLast || isTail) && !wasQuoted && len(input) > 0 {
+				// If the last argument is not quoted, just treat the rest of the string
 				// as the argument without escapes (arguments with escapes should be quoted).
 				nextVal += " " + input
 				input = ""
@@ -175,7 +175,7 @@ func (ec *EventContent) ParseArguments(input string) (json.RawMessage, error) {
 				// Trim the equals sign, but leave spaces alone to let parseQuoted treat it as empty input
 				input = strings.TrimPrefix(input[nameEndIdx:], "=")
 				skipParams[paramIdx] = true
-				processParameter(overrideParam, false, true)
+				processParameter(overrideParam, false, false, true)
 			} else {
 				break
 			}
@@ -184,7 +184,7 @@ func (ec *EventContent) ParseArguments(input string) (json.RawMessage, error) {
 		if skipParams[i] || (param.Optional && !isTail) {
 			continue
 		}
-		processParameter(param, i == len(ec.Parameters)-1 || isTail, false)
+		processParameter(param, i == len(ec.Parameters)-1, isTail, false)
 	}
 	jsonArgs, marshalErr := json.Marshal(args)
 	if marshalErr != nil {

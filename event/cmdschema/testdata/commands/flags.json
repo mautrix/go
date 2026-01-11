@@ -94,24 +94,6 @@
 			}
 		},
 		{
-			"name": "named flag at end",
-			"input": "/flag mrrp @user:example.com --woof=yes",
-			"output": {
-				"meow": "mrrp",
-				"user": "@user:example.com",
-				"woof": true
-			}
-		},
-		{
-			"name": "named flag at end without value",
-			"input": "/flag mrrp @user:example.com --woof",
-			"output": {
-				"meow": "mrrp",
-				"user": "@user:example.com",
-				"woof": true
-			}
-		},
-		{
 			"name": "all variables named",
 			"input": "/flag --woof=no --meow=mrrp --user=@user:example.com",
 			"output": {

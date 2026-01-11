@@ -69,7 +69,8 @@ func (ec *EventContent) Equals(other *EventContent) bool {
 	return ec.Command == other.Command &&
 		slices.Equal(ec.Aliases, other.Aliases) &&
 		slices.EqualFunc(ec.Parameters, other.Parameters, (*Parameter).Equals) &&
-		ec.Description.Equals(other.Description)
+		ec.Description.Equals(other.Description) &&
+		ec.TailParam == other.TailParam
 }
 
 func init() {
