@@ -108,6 +108,7 @@ func (proc *Processor[MetaType]) Process(ctx context.Context, evt *event.Event) 
 		}
 	}
 	if parsed.StructuredArgs != nil && len(parsed.Args) > 0 {
+		// TODO allow unknown command handlers to be called?
 		// The client sent MSC4391 data, but the target command wasn't found
 		log.Debug().Msg("Didn't find handler for MSC4391 command")
 		return

@@ -109,7 +109,7 @@ func TestMSC4391BotCommandEventContent_ParseInput(t *testing.T) {
 						assert.Nil(t, output)
 					} else {
 						assert.Equal(t, ctd.Spec.Command, output.MSC4391BotCommand.Command)
-						assert.Equal(t, outputStr, exbytes.UnsafeString(output.MSC4391BotCommand.Arguments))
+						assert.Equalf(t, outputStr, exbytes.UnsafeString(output.MSC4391BotCommand.Arguments), "Input: %s", test.Input)
 					}
 				})
 			}

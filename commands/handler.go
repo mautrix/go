@@ -33,6 +33,7 @@ type Handler[MetaType any] struct {
 	// Parameters is a description of structured command parameters.
 	// If set, the StructuredArgs field of Event will be populated.
 	Parameters []*cmdschema.Parameter
+	TailParam  string
 
 	parents             []*Handler[MetaType]
 	nestedNameCache     []string
@@ -68,7 +69,16 @@ func (h *Handler[MetaType]) Spec() *cmdschema.EventContent {
 		Aliases:     names[1:],
 		Parameters:  h.Parameters,
 		Description: h.Description,
+		TailParam:   h.TailParam,
 	}
+}
+
+func (h *Handler[MetaType]) CopyFrom(other *Handler[MetaType]) {
+	if h.Parameters == nil {
+		h.Parameters = other.Parameters
+		h.TailParam = other.TailParam
+	}
+	h.Func = other.Func
 }
 
 func (h *Handler[MetaType]) initSubcommandContainer() {

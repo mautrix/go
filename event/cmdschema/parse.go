@@ -135,8 +135,8 @@ func (ec *EventContent) ParseArguments(input string) (json.RawMessage, error) {
 			args[param.Key] = collector
 		} else {
 			nextVal, input, wasQuoted = parseQuoted(input)
-			if isLast && !wasQuoted && len(input) > 0 {
-				// If the last argument is not quoted and not variadic, just treat the rest of the string
+			if isLast && !wasQuoted && len(input) > 0 && !strings.Contains(input, "--") {
+				// If the last argument is not quoted and doesn't have flags, just treat the rest of the string
 				// as the argument without escapes (arguments with escapes should be quoted).
 				nextVal += " " + input
 				input = ""
@@ -146,7 +146,7 @@ func (ec *EventContent) ParseArguments(input string) (json.RawMessage, error) {
 				args[param.Key] = true
 				return
 			}
-			if nextVal == "" && !param.Optional {
+			if nextVal == "" && !wasQuoted && !isNamed && !param.Optional {
 				setError(fmt.Errorf("missing value for required parameter %s", param.Key))
 			}
 			parsedVal, err := param.Schema.ParseString(nextVal)
@@ -180,10 +180,11 @@ func (ec *EventContent) ParseArguments(input string) (json.RawMessage, error) {
 				break
 			}
 		}
-		if skipParams[i] {
+		isTail := param.Key == ec.TailParam
+		if skipParams[i] || (param.Optional && !isTail) {
 			continue
 		}
-		processParameter(param, i == len(ec.Parameters)-1, false)
+		processParameter(param, i == len(ec.Parameters)-1 || isTail, false)
 	}
 	jsonArgs, marshalErr := json.Marshal(args)
 	if marshalErr != nil {

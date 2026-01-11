@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"slices"
 
+	"go.mau.fi/util/exsync"
 	"go.mau.fi/util/ptr"
 
 	"maunium.net/go/mautrix/event"
@@ -24,6 +25,7 @@ type EventContent struct {
 	Aliases     []string                       `json:"aliases,omitempty"`
 	Parameters  []*Parameter                   `json:"parameters,omitempty"`
 	Description *event.ExtensibleTextContainer `json:"description,omitempty"`
+	TailParam   string                         `json:"fi.mau.tail_parameter,omitempty"`
 }
 
 func (ec *EventContent) Validate() error {
@@ -32,10 +34,21 @@ func (ec *EventContent) Validate() error {
 	} else if ec.Command == "" {
 		return fmt.Errorf("command is empty")
 	}
+	var tailFound bool
+	dupMap := exsync.NewSet[string]()
 	for i, p := range ec.Parameters {
 		if err := p.Validate(); err != nil {
 			return fmt.Errorf("parameter %q (#%d) is invalid: %w", ptr.Val(p).Key, i+1, err)
+		} else if !dupMap.Add(p.Key) {
+			return fmt.Errorf("duplicate parameter key %q at #%d", p.Key, i+1)
+		} else if p.Key == ec.TailParam {
+			tailFound = true
+		} else if tailFound && !p.Optional {
+			return fmt.Errorf("required parameter %q (#%d) is after tail parameter %q", p.Key, i+1, ec.TailParam)
 		}
+	}
+	if ec.TailParam != "" && !tailFound {
+		return fmt.Errorf("tail parameter %q not found in parameters", ec.TailParam)
 	}
 	return nil
 }

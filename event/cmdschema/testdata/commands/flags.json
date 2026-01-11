@@ -27,7 +27,8 @@
 				"optional": true,
 				"fi.mau.default_value": false
 			}
-		]
+		],
+		"fi.mau.tail_parameter": "user"
 	},
 	"tests": [
 		{
@@ -35,17 +36,15 @@
 			"input": "/flag mrrp",
 			"output": {
 				"meow": "mrrp",
-				"user": null,
-				"woof": false
+				"user": null
 			}
 		},
 		{
-			"name": "positional flag",
-			"input": "/flag mrrp @user:example.com yes",
+			"name": "no flags, has tail",
+			"input": "/flag mrrp @user:example.com",
 			"output": {
 				"meow": "mrrp",
-				"user": "@user:example.com",
-				"woof": true
+				"user": "@user:example.com"
 			}
 		},
 		{
@@ -131,17 +130,8 @@
 			}
 		},
 		{
-			"name": "only string variables named",
-			"input": "/flag --user=@user:example.com --meow=mrrp yes",
-			"output": {
-				"meow": "mrrp",
-				"user": "@user:example.com",
-				"woof": true
-			}
-		},
-		{
 			"name": "invalid value for named parameter",
-			"input": "/flag --user=meowings mrrp yes",
+			"input": "/flag --user=meowings mrrp --woof",
 			"error": true,
 			"output": {
 				"meow": "mrrp",
