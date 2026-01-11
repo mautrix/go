@@ -1,4 +1,5 @@
 {
+	"$schema": "../commands.schema.json#",
 	"spec": {
 		"command": "tail",
 		"source": "@testbot",

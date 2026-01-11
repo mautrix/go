@@ -1,0 +1,281 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema#",
+	"$id": "commands.schema.json",
+	"title": "ParseInput test cases",
+	"description": "JSON schema for test case files containing command specifications and test cases",
+	"type": "object",
+	"required": [
+		"spec",
+		"tests"
+	],
+	"additionalProperties": false,
+	"properties": {
+		"spec": {
+			"title": "MSC4391 Command Description",
+			"description": "JSON schema defining the structure of a bot command event content",
+			"type": "object",
+			"required": [
+				"command"
+			],
+			"additionalProperties": false,
+			"properties": {
+				"command": {
+					"type": "string",
+					"description": "The command name that triggers this bot command"
+				},
+				"aliases": {
+					"type": "array",
+					"description": "Alternative names/aliases for this command",
+					"items": {
+						"type": "string"
+					}
+				},
+				"parameters": {
+					"type": "array",
+					"description": "List of parameters accepted by this command",
+					"items": {
+						"$ref": "#/$defs/Parameter"
+					}
+				},
+				"description": {
+					"$ref": "#/$defs/ExtensibleTextContainer",
+					"description": "Human-readable description of the command"
+				},
+				"fi.mau.tail_parameter": {
+					"type": "string",
+					"description": "The key of the parameter that accepts remaining arguments as tail text"
+				},
+				"source": {
+					"type": "string",
+					"description": "The user ID of the bot that responds to this command"
+				}
+			}
+		},
+		"tests": {
+			"type": "array",
+			"description": "Array of test cases for the command",
+			"items": {
+				"type": "object",
+				"description": "A single test case for command parsing",
+				"required": [
+					"name",
+					"input"
+				],
+				"additionalProperties": false,
+				"properties": {
+					"name": {
+						"type": "string",
+						"description": "The name of the test case"
+					},
+					"input": {
+						"type": "string",
+						"description": "The command input string to parse"
+					},
+					"output": {
+						"description": "The expected parsed parameter values, or null if the parsing is expected to fail",
+						"oneOf": [
+							{
+								"type": "object",
+								"additionalProperties": true
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"error": {
+						"type": "boolean",
+						"description": "Whether parsing should result in an error. May still produce output.",
+						"default": false
+					}
+				}
+			}
+		}
+	},
+	"$defs": {
+		"ExtensibleTextContainer": {
+			"type": "object",
+			"description": "Container for text that can have multiple representations",
+			"required": [
+				"m.text"
+			],
+			"properties": {
+				"m.text": {
+					"type": "array",
+					"description": "Array of text representations in different formats",
+					"items": {
+						"$ref": "#/$defs/ExtensibleText"
+					}
+				}
+			}
+		},
+		"ExtensibleText": {
+			"type": "object",
+			"description": "A text representation with a specific MIME type",
+			"required": [
+				"body"
+			],
+			"properties": {
+				"body": {
+					"type": "string",
+					"description": "The text content"
+				},
+				"mimetype": {
+					"type": "string",
+					"description": "The MIME type of the text (e.g., text/plain, text/html)",
+					"default": "text/plain",
+					"examples": [
+						"text/plain",
+						"text/html"
+					]
+				}
+			}
+		},
+		"Parameter": {
+			"type": "object",
+			"description": "A parameter definition for a command",
+			"required": [
+				"key",
+				"schema"
+			],
+			"additionalProperties": false,
+			"properties": {
+				"key": {
+					"type": "string",
+					"description": "The identifier for this parameter"
+				},
+				"schema": {
+					"$ref": "#/$defs/ParameterSchema",
+					"description": "The schema defining the type and structure of this parameter"
+				},
+				"optional": {
+					"type": "boolean",
+					"description": "Whether this parameter is optional",
+					"default": false
+				},
+				"description": {
+					"$ref": "#/$defs/ExtensibleTextContainer",
+					"description": "Human-readable description of this parameter"
+				},
+				"fi.mau.default_value": {
+					"description": "Default value for this parameter if not provided"
+				}
+			}
+		},
+		"ParameterSchema": {
+			"type": "object",
+			"description": "Schema definition for a parameter value",
+			"required": [
+				"schema_type"
+			],
+			"additionalProperties": false,
+			"properties": {
+				"schema_type": {
+					"type": "string",
+					"enum": [
+						"primitive",
+						"array",
+						"union",
+						"literal"
+					],
+					"description": "The type of schema"
+				}
+			},
+			"allOf": [
+				{
+					"if": {
+						"properties": {
+							"schema_type": {
+								"const": "primitive"
+							}
+						}
+					},
+					"then": {
+						"required": [
+							"type"
+						],
+						"properties": {
+							"type": {
+								"type": "string",
+								"enum": [
+									"string",
+									"integer",
+									"boolean",
+									"server_name",
+									"user_id",
+									"room_id",
+									"room_alias",
+									"event_id"
+								],
+								"description": "The primitive type (only for schema_type: primitive)"
+							}
+						}
+					}
+				},
+				{
+					"if": {
+						"properties": {
+							"schema_type": {
+								"const": "array"
+							}
+						}
+					},
+					"then": {
+						"required": [
+							"items"
+						],
+						"properties": {
+							"items": {
+								"$ref": "#/$defs/ParameterSchema",
+								"description": "The schema for array items (only for schema_type: array)"
+							}
+						}
+					}
+				},
+				{
+					"if": {
+						"properties": {
+							"schema_type": {
+								"const": "union"
+							}
+						}
+					},
+					"then": {
+						"required": [
+							"variants"
+						],
+						"properties": {
+							"variants": {
+								"type": "array",
+								"description": "The possible variants (only for schema_type: union)",
+								"items": {
+									"$ref": "#/$defs/ParameterSchema"
+								},
+								"minItems": 1
+							}
+						}
+					}
+				},
+				{
+					"if": {
+						"properties": {
+							"schema_type": {
+								"const": "literal"
+							}
+						}
+					},
+					"then": {
+						"required": [
+							"value"
+						],
+						"properties": {
+							"value": {
+								"description": "The literal value (only for schema_type: literal)"
+							}
+						}
+					}
+				}
+			]
+		}
+	}
+}

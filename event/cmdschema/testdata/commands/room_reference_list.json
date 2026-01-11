@@ -1,4 +1,5 @@
 {
+	"$schema": "../commands.schema.json#",
 	"spec": {
 		"command": "test room reference",
 		"source": "@testbot",

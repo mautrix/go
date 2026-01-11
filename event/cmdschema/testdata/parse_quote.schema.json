@@ -1,0 +1,46 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema#",
+	"$id": "parse_quote.schema.json",
+	"title": "parseQuote test cases",
+	"description": "Test cases for the parseQuoted function",
+	"type": "array",
+	"items": {
+		"type": "object",
+		"required": [
+			"name",
+			"input",
+			"output"
+		],
+		"properties": {
+			"name": {
+				"type": "string",
+				"description": "Name of the test case"
+			},
+			"input": {
+				"type": "string",
+				"description": "Input string to be parsed"
+			},
+			"output": {
+				"type": "array",
+				"description": "Expected output of parsing: [first word, remaining text, was quoted]",
+				"minItems": 3,
+				"maxItems": 3,
+				"prefixItems": [
+					{
+						"type": "string",
+						"description": "First parsed word"
+					},
+					{
+						"type": "string",
+						"description": "Remaining text after the first word"
+					},
+					{
+						"type": "boolean",
+						"description": "Whether the first word was quoted"
+					}
+				]
+			}
+		},
+		"additionalProperties": false
+	}
+}
