@@ -67,6 +67,15 @@ type MatrixConnectorWithServer interface {
 	GetRouter() *http.ServeMux
 }
 
+type IProvisioningAPI interface {
+	GetRouter() *http.ServeMux
+	GetUser(r *http.Request) *User
+}
+
+type MatrixConnectorWithProvisioning interface {
+	GetProvisioning() IProvisioningAPI
+}
+
 type MatrixConnectorWithPublicMedia interface {
 	GetPublicMediaAddress(contentURI id.ContentURIString) string
 	GetPublicMediaAddressForEvent(ctx context.Context, evt *event.MessageEventContent) (string, error)

@@ -96,12 +96,7 @@ func (prov *ProvisioningAPI) GetRouter() *http.ServeMux {
 	return prov.Router
 }
 
-type IProvisioningAPI interface {
-	GetRouter() *http.ServeMux
-	GetUser(r *http.Request) *bridgev2.User
-}
-
-func (br *Connector) GetProvisioning() IProvisioningAPI {
+func (br *Connector) GetProvisioning() bridgev2.IProvisioningAPI {
 	return br.Provisioning
 }
 
