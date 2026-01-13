@@ -261,6 +261,7 @@ type NetworkConnector interface {
 }
 
 type StoppableNetwork interface {
+	NetworkConnector
 	// Stop is called when the bridge is stopping, after all network clients have been disconnected.
 	Stop()
 }
@@ -293,11 +294,6 @@ type TransactionIDGeneratingNetwork interface {
 type PortalBridgeInfoFillingNetwork interface {
 	NetworkConnector
 	FillPortalBridgeInfo(portal *Portal, content *event.BridgeEventContent)
-}
-
-type PersonalFilteringCustomizingNetworkAPI interface {
-	NetworkAPI
-	CustomizePersonalFilteringSpace(req *mautrix.ReqCreateRoom)
 }
 
 // ConfigValidatingNetwork is an optional interface that network connectors can implement to validate config fields
@@ -792,6 +788,16 @@ type UserSearchingNetworkAPI interface {
 	SearchUsers(ctx context.Context, query string) ([]*ResolveIdentifierResponse, error)
 }
 
+type GroupCreatingNetworkAPI interface {
+	IdentifierResolvingNetworkAPI
+	CreateGroup(ctx context.Context, params *GroupCreateParams) (*CreateChatResponse, error)
+}
+
+type PersonalFilteringCustomizingNetworkAPI interface {
+	NetworkAPI
+	CustomizePersonalFilteringSpace(req *mautrix.ReqCreateRoom)
+}
+
 type ProvisioningCapabilities struct {
 	ResolveIdentifier ResolveIdentifierCapabilities    `json:"resolve_identifier"`
 	GroupCreation     map[string]GroupTypeCapabilities `json:"group_creation"`
@@ -861,11 +867,6 @@ type GroupCreateParams struct {
 
 	// An existing room ID to bridge to. If unset, a new room will be created.
 	RoomID id.RoomID `json:"room_id,omitempty"`
-}
-
-type GroupCreatingNetworkAPI interface {
-	IdentifierResolvingNetworkAPI
-	CreateGroup(ctx context.Context, params *GroupCreateParams) (*CreateChatResponse, error)
 }
 
 type MembershipChangeType struct {

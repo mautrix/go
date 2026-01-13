@@ -59,10 +59,12 @@ type MatrixConnector interface {
 }
 
 type MatrixConnectorWithArbitraryRoomState interface {
+	MatrixConnector
 	GetStateEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string) (*event.Event, error)
 }
 
 type MatrixConnectorWithServer interface {
+	MatrixConnector
 	GetPublicAddress() string
 	GetRouter() *http.ServeMux
 }
@@ -73,31 +75,38 @@ type IProvisioningAPI interface {
 }
 
 type MatrixConnectorWithProvisioning interface {
+	MatrixConnector
 	GetProvisioning() IProvisioningAPI
 }
 
 type MatrixConnectorWithPublicMedia interface {
+	MatrixConnector
 	GetPublicMediaAddress(contentURI id.ContentURIString) string
 	GetPublicMediaAddressForEvent(ctx context.Context, evt *event.MessageEventContent) (string, error)
 }
 
 type MatrixConnectorWithNameDisambiguation interface {
+	MatrixConnector
 	IsConfusableName(ctx context.Context, roomID id.RoomID, userID id.UserID, name string) ([]id.UserID, error)
 }
 
 type MatrixConnectorWithBridgeIdentifier interface {
+	MatrixConnector
 	GetUniqueBridgeID() string
 }
 
 type MatrixConnectorWithURLPreviews interface {
+	MatrixConnector
 	GetURLPreview(ctx context.Context, url string) (*event.LinkPreview, error)
 }
 
 type MatrixConnectorWithPostRoomBridgeHandling interface {
+	MatrixConnector
 	HandleNewlyBridgedRoom(ctx context.Context, roomID id.RoomID) error
 }
 
 type MatrixConnectorWithAnalytics interface {
+	MatrixConnector
 	TrackAnalytics(userID id.UserID, event string, properties map[string]any)
 }
 
@@ -112,6 +121,7 @@ type DirectNotificationData struct {
 }
 
 type MatrixConnectorWithNotifications interface {
+	MatrixConnector
 	DisplayNotification(ctx context.Context, data *DirectNotificationData)
 }
 
@@ -192,9 +202,11 @@ type MatrixAPI interface {
 }
 
 type StreamOrderReadingMatrixAPI interface {
+	MatrixAPI
 	MarkStreamOrderRead(ctx context.Context, roomID id.RoomID, streamOrder int64, ts time.Time) error
 }
 
 type MarkAsDMMatrixAPI interface {
+	MatrixAPI
 	MarkAsDM(ctx context.Context, roomID id.RoomID, otherUser id.UserID) error
 }
