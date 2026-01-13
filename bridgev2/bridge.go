@@ -373,6 +373,34 @@ func (br *Bridge) StartLogins(ctx context.Context) error {
 	return nil
 }
 
+func (br *Bridge) ResetNetworkConnections() {
+	nrn, ok := br.Network.(NetworkResettingNetwork)
+	if ok {
+		br.Log.Info().Msg("Resetting network connections with NetworkConnector.ResetNetworkConnections")
+		nrn.ResetNetworkConnections()
+		return
+	}
+
+	br.Log.Info().Msg("Network connector doesn't support ResetNetworkConnections, recreating clients manually")
+	for _, login := range br.GetAllCachedUserLogins() {
+		login.Log.Debug().Msg("Disconnecting and recreating client for network reset")
+		ctx := login.Log.WithContext(br.BackgroundCtx)
+		login.Client.Disconnect()
+		err := login.recreateClient(ctx)
+		if err != nil {
+			login.Log.Err(err).Msg("Failed to recreate client during network reset")
+			login.BridgeState.Send(status.BridgeState{
+				StateEvent: status.StateUnknownError,
+				Error:      "bridgev2-network-reset-fail",
+				Info:       map[string]any{"go_error": err.Error()},
+			})
+		} else {
+			login.Client.Connect(ctx)
+		}
+	}
+	br.Log.Info().Msg("Finished resetting all user logins")
+}
+
 func (br *Bridge) IsStopping() bool {
 	return br.stopping.Load()
 }

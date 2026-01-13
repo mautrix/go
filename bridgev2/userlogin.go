@@ -10,6 +10,7 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 	"sync"
 	"time"
@@ -138,6 +139,12 @@ func (br *Bridge) GetCachedUserLoginByID(id networkid.UserLoginID) *UserLogin {
 	br.cacheLock.Lock()
 	defer br.cacheLock.Unlock()
 	return br.userLoginsByID[id]
+}
+
+func (br *Bridge) GetAllCachedUserLogins() (logins []*UserLogin) {
+	br.cacheLock.Lock()
+	defer br.cacheLock.Unlock()
+	return slices.Collect(maps.Values(br.userLoginsByID))
 }
 
 func (br *Bridge) GetCurrentBridgeStates() (states []status.BridgeState) {
