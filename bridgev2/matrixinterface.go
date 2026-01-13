@@ -14,6 +14,8 @@ import (
 	"os"
 	"time"
 
+	"go.mau.fi/util/exhttp"
+
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
@@ -123,6 +125,11 @@ type DirectNotificationData struct {
 type MatrixConnectorWithNotifications interface {
 	MatrixConnector
 	DisplayNotification(ctx context.Context, data *DirectNotificationData)
+}
+
+type MatrixConnectorWithHTTPSettings interface {
+	MatrixConnector
+	GetHTTPClientSettings() exhttp.ClientSettings
 }
 
 type MatrixSendExtra struct {
