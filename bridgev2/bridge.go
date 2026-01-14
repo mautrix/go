@@ -16,6 +16,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/dbutil"
+	"go.mau.fi/util/exhttp"
 	"go.mau.fi/util/exsync"
 
 	"maunium.net/go/mautrix/bridgev2/bridgeconfig"
@@ -399,6 +400,14 @@ func (br *Bridge) ResetNetworkConnections() {
 		}
 	}
 	br.Log.Info().Msg("Finished resetting all user logins")
+}
+
+func (br *Bridge) GetHTTPClientSettings() exhttp.ClientSettings {
+	mchs, ok := br.Matrix.(MatrixConnectorWithHTTPSettings)
+	if ok {
+		return mchs.GetHTTPClientSettings()
+	}
+	return exhttp.SensibleClientSettings
 }
 
 func (br *Bridge) IsStopping() bool {
