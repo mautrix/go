@@ -41,7 +41,8 @@ func NewProcessor(bridge *bridgev2.Bridge) bridgev2.CommandProcessor {
 	}
 	proc.AddHandlers(
 		CommandHelp, CommandCancel,
-		CommandRegisterPush, CommandSendAccountData, CommandDeletePortal, CommandDeleteAllPortals, CommandSetManagementRoom,
+		CommandRegisterPush, CommandSendAccountData, CommandResetNetwork,
+		CommandDeletePortal, CommandDeleteAllPortals, CommandSetManagementRoom,
 		CommandLogin, CommandRelogin, CommandListLogins, CommandLogout, CommandSetPreferredLogin,
 		CommandSetRelay, CommandUnsetRelay,
 		CommandResolveIdentifier, CommandStartChat, CommandCreateGroup, CommandSearch, CommandSyncChat, CommandMute,

@@ -101,3 +101,25 @@ var CommandSendAccountData = &FullHandler{
 	RequiresPortal: true,
 	RequiresLogin:  true,
 }
+
+var CommandResetNetwork = &FullHandler{
+	Func: func(ce *Event) {
+		if strings.Contains(strings.ToLower(ce.RawArgs), "--reset-transport") {
+			nrn, ok := ce.Bridge.Network.(bridgev2.NetworkResettingNetwork)
+			if ok {
+				nrn.ResetHTTPTransport()
+			} else {
+				ce.Reply("Network connector does not support resetting HTTP transport")
+			}
+		}
+		ce.Bridge.ResetNetworkConnections()
+		ce.React("✅️")
+	},
+	Name: "debug-reset-network",
+	Help: HelpMeta{
+		Section:     HelpSectionAdmin,
+		Description: "Reset network connections to the remote network",
+		Args:        "[--reset-transport]",
+	},
+	RequiresAdmin: true,
+}
