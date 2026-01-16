@@ -407,6 +407,7 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 }
 
 func (prov *ProvisioningAPI) handleCompleteStep(ctx context.Context, login *ProvLogin, step *bridgev2.LoginStep) {
+	prov.deleteLogin(login, false)
 	if login.Override == nil || login.Override.ID == step.CompleteParams.UserLoginID {
 		return
 	}
@@ -418,6 +419,15 @@ func (prov *ProvisioningAPI) handleCompleteStep(ctx context.Context, login *Prov
 		StateEvent: status.StateLoggedOut,
 		Reason:     "LOGIN_OVERRIDDEN",
 	}, bridgev2.DeleteOpts{LogoutRemote: true})
+}
+
+func (prov *ProvisioningAPI) deleteLogin(login *ProvLogin, cancel bool) {
+	if cancel {
+		login.Process.Cancel()
+	}
+	prov.loginsLock.Lock()
+	delete(prov.logins, login.ID)
+	prov.loginsLock.Unlock()
 }
 
 func (prov *ProvisioningAPI) PostLoginStep(w http.ResponseWriter, r *http.Request) {
@@ -490,6 +500,7 @@ func (prov *ProvisioningAPI) PostLoginSubmitInput(w http.ResponseWriter, r *http
 	if err != nil {
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to submit input")
 		RespondWithError(w, err, "Internal error submitting input")
+		prov.deleteLogin(login, true)
 		return
 	}
 	login.NextStep = nextStep
@@ -508,6 +519,7 @@ func (prov *ProvisioningAPI) PostLoginWait(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to wait")
 		RespondWithError(w, err, "Internal error waiting for login")
+		prov.deleteLogin(login, true)
 		return
 	}
 	login.NextStep = nextStep
