@@ -1324,6 +1324,9 @@ func (cli *Client) SendMessageEvent(ctx context.Context, roomID id.RoomID, event
 	if req.UnstableDelay > 0 {
 		queryParams["org.matrix.msc4140.delay"] = strconv.FormatInt(req.UnstableDelay.Milliseconds(), 10)
 	}
+	if req.UnstableStickyDuration > 0 {
+		queryParams["org.matrix.msc4354.sticky_duration_ms"] = strconv.FormatInt(req.UnstableStickyDuration.Milliseconds(), 10)
+	}
 
 	if !req.DontEncrypt && cli != nil && cli.Crypto != nil && eventType != event.EventReaction && eventType != event.EventEncrypted {
 		var isEncrypted bool
@@ -1364,6 +1367,9 @@ func (cli *Client) SendStateEvent(ctx context.Context, roomID id.RoomID, eventTy
 	}
 	if req.UnstableDelay > 0 {
 		queryParams["org.matrix.msc4140.delay"] = strconv.FormatInt(req.UnstableDelay.Milliseconds(), 10)
+	}
+	if req.UnstableStickyDuration > 0 {
+		queryParams["org.matrix.msc4354.sticky_duration_ms"] = strconv.FormatInt(req.UnstableStickyDuration.Milliseconds(), 10)
 	}
 	if req.Timestamp > 0 {
 		queryParams["ts"] = strconv.FormatInt(req.Timestamp, 10)
