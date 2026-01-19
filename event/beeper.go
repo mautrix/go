@@ -94,6 +94,8 @@ type BeeperChatDeleteEventContent struct {
 }
 
 type BeeperAcceptMessageRequestEventContent struct {
+	// Whether this was triggered by a message rather than an explicit event
+	IsImplicit bool `json:"-"`
 }
 
 type BeeperSendStateEventContent struct {

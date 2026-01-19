@@ -1223,6 +1223,12 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 		}
 	}
 
+	err = portal.autoAcceptMessageRequest(ctx, evt, sender, origSender, caps)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to auto-accept message request on message")
+		// TODO stop processing?
+	}
+
 	var resp *MatrixMessageResponse
 	if msgContent != nil {
 		resp, err = sender.Client.HandleMatrixMessage(ctx, wrappedMsgEvt)
@@ -1501,6 +1507,12 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 	} else if reactionTarget == nil {
 		log.Warn().Msg("Reaction target message not found in database")
 		return EventHandlingResultFailed.WithMSSError(fmt.Errorf("reaction %w", ErrTargetMessageNotFound))
+	}
+	caps := sender.Client.GetCapabilities(ctx, portal)
+	err = portal.autoAcceptMessageRequest(ctx, evt, sender, nil, caps)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to auto-accept message request on reaction")
+		// TODO stop processing?
 	}
 	log.UpdateContext(func(c zerolog.Context) zerolog.Context {
 		return c.Str("reaction_target_remote_id", string(reactionTarget.ID))
@@ -1799,6 +1811,38 @@ func (portal *Portal) handleMatrixAcceptMessageRequest(
 		}
 	}
 	return EventHandlingResultSuccess.WithMSS()
+}
+
+func (portal *Portal) autoAcceptMessageRequest(
+	ctx context.Context, evt *event.Event, sender *UserLogin, origSender *OrigSender, caps *event.RoomFeatures,
+) error {
+	if !portal.MessageRequest || caps.MessageRequest == nil || caps.MessageRequest.AcceptWithMessage == event.CapLevelFullySupported {
+		return nil
+	}
+	mran, ok := sender.Client.(MessageRequestAcceptingNetworkAPI)
+	if !ok {
+		return nil
+	}
+	err := mran.HandleMatrixAcceptMessageRequest(ctx, &MatrixAcceptMessageRequest{
+		Event: evt,
+		Content: &event.BeeperAcceptMessageRequestEventContent{
+			IsImplicit: true,
+		},
+		Portal:     portal,
+		OrigSender: origSender,
+	})
+	if err != nil {
+		return err
+	}
+	if portal.MessageRequest {
+		portal.MessageRequest = false
+		portal.UpdateBridgeInfo(ctx)
+		err = portal.Save(ctx)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to save portal after accepting message request")
+		}
+	}
+	return nil
 }
 
 func (portal *Portal) handleMatrixDeleteChat(
