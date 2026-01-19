@@ -234,7 +234,7 @@ func (br *Bridge) allowAggressiveUpdateForType(evtType RemoteEventType) bool {
 }
 
 func (ghost *Ghost) UpdateInfoIfNecessary(ctx context.Context, source *UserLogin, evtType RemoteEventType) {
-	if ghost.Name != "" && ghost.NameSet && !ghost.Bridge.allowAggressiveUpdateForType(evtType) {
+	if ghost.Name != "" && ghost.NameSet && ghost.AvatarSet && !ghost.Bridge.allowAggressiveUpdateForType(evtType) {
 		return
 	}
 	info, err := source.Client.GetUserInfo(ctx, ghost)
@@ -244,12 +244,16 @@ func (ghost *Ghost) UpdateInfoIfNecessary(ctx context.Context, source *UserLogin
 		zerolog.Ctx(ctx).Debug().
 			Bool("has_name", ghost.Name != "").
 			Bool("name_set", ghost.NameSet).
+			Bool("has_avatar", ghost.AvatarMXC != "").
+			Bool("avatar_set", ghost.AvatarSet).
 			Msg("Updating ghost info in IfNecessary call")
 		ghost.UpdateInfo(ctx, info)
 	} else {
 		zerolog.Ctx(ctx).Trace().
 			Bool("has_name", ghost.Name != "").
 			Bool("name_set", ghost.NameSet).
+			Bool("has_avatar", ghost.AvatarMXC != "").
+			Bool("avatar_set", ghost.AvatarSet).
 			Msg("No ghost info received in IfNecessary call")
 	}
 }
