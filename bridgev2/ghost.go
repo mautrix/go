@@ -281,6 +281,10 @@ func (ghost *Ghost) UpdateInfo(ctx context.Context, info *UserInfo) {
 	}
 	if info.Avatar != nil {
 		update = ghost.UpdateAvatar(ctx, info.Avatar) || update
+	} else if oldAvatar == "" && !ghost.AvatarSet {
+		// Special case: nil avatar means we're not expecting one ever, if we don't currently have
+		// one we flag it as set to avoid constantly refetching in UpdateInfoIfNecessary.
+		ghost.AvatarSet = true
 	}
 	if info.Identifiers != nil || info.IsBot != nil {
 		update = ghost.UpdateContactInfo(ctx, info.Identifiers, info.IsBot) || update
