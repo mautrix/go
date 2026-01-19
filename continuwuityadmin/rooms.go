@@ -46,7 +46,7 @@ func (cli *Client) BanRoom(ctx context.Context, roomID id.RoomID) (resp *RespBan
 		Banned: true,
 	}
 	reqURL := cli.Client.BuildURL(mautrix.ContinuwuityAdminURLPath{"rooms", roomID, "ban"})
-	_, err = cli.Client.MakeRequest(ctx, http.MethodPost, reqURL, &body, &resp)
+	_, err = cli.Client.MakeRequest(ctx, http.MethodPut, reqURL, &body, &resp)
 	return resp, err
 }
 
@@ -57,6 +57,6 @@ func (cli *Client) UnbanRoom(ctx context.Context, roomID id.RoomID) (resp *RespB
 		Banned: false,
 	}
 	reqURL := cli.Client.BuildURL(mautrix.ContinuwuityAdminURLPath{"rooms", roomID, "ban"})
-	_, err = cli.Client.MakeRequest(ctx, http.MethodPost, reqURL, &body, &resp)
+	_, err = cli.Client.MakeRequest(ctx, http.MethodPut, reqURL, &body, &resp)
 	return resp, err
 }
