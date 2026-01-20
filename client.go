@@ -2459,7 +2459,17 @@ func (cli *Client) GetKeyBackup(ctx context.Context, version id.KeyBackupVersion
 	urlPath := cli.BuildURLWithQuery(ClientURLPath{"v3", "room_keys", "keys"}, map[string]string{
 		"version": string(version),
 	})
-	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
+	_, err = cli.MakeFullRequest(ctx, FullRequest{
+		Method:       http.MethodGet,
+		URL:          urlPath,
+		ResponseJSON: &resp,
+		Client: &http.Client{
+			Timeout: 180 * time.Second,
+			Transport: &http.Transport{
+				ResponseHeaderTimeout: 180 * time.Second,
+			},
+		},
+	})
 	return
 }
 
