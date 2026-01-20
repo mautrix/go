@@ -120,7 +120,9 @@ func (mach *OlmMachine) importExportedRoomKey(ctx context.Context, session Expor
 	existingIGS, _ := mach.CryptoStore.GetGroupSession(ctx, igs.RoomID, igs.ID())
 	firstKnownIndex := igs.Internal.FirstKnownIndex()
 	if existingIGS != nil && existingIGS.Internal.FirstKnownIndex() <= firstKnownIndex {
-		// We already have an equivalent or better session in the store, so don't override it.
+		// We already have an equivalent or better session in the store, so don't override it,
+		// but do notify the session received callback just in case.
+		mach.MarkSessionReceived(ctx, session.RoomID, igs.ID(), existingIGS.Internal.FirstKnownIndex())
 		return false, nil
 	}
 	err = mach.CryptoStore.PutGroupSession(ctx, igs)
