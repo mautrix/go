@@ -135,6 +135,7 @@ type MessageEventContent struct {
 	BeeperGalleryCaption     string                   `json:"com.beeper.gallery.caption,omitempty"`
 	BeeperGalleryCaptionHTML string                   `json:"com.beeper.gallery.caption_html,omitempty"`
 	BeeperPerMessageProfile  *BeeperPerMessageProfile `json:"com.beeper.per_message_profile,omitempty"`
+	BeeperActionMessage      *BeeperActionMessage     `json:"com.beeper.action_message,omitempty"`
 
 	BeeperLinkPreviews []*BeeperLinkPreview `json:"com.beeper.linkpreviews,omitempty"`
 
