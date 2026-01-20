@@ -403,6 +403,7 @@ func (as *ASIntent) UploadMediaStream(
 			removeAndClose(replFile)
 			removeAndClose(tempFile)
 		}
+		req.AsyncContext = zerolog.Ctx(ctx).WithContext(as.Connector.Bridge.BackgroundCtx)
 		startedAsyncUpload = true
 		var resp *mautrix.RespCreateMXC
 		resp, err = as.Matrix.UploadAsync(ctx, req)
@@ -435,6 +436,7 @@ func (as *ASIntent) doUploadReq(ctx context.Context, file *event.EncryptedFileIn
 				as.Connector.uploadSema.Release(int64(len(req.ContentBytes)))
 			}
 		}
+		req.AsyncContext = zerolog.Ctx(ctx).WithContext(as.Connector.Bridge.BackgroundCtx)
 		var resp *mautrix.RespCreateMXC
 		resp, err = as.Matrix.UploadAsync(ctx, req)
 		if resp != nil {
