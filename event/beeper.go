@@ -175,8 +175,8 @@ const (
 type BeeperActionMessageCallType string
 
 const (
-	BeeperActionMessageCallTypeVoice BeeperActionMessageType = "voice"
-	BeeperActionMessageCallTypeVideo BeeperActionMessageType = "video"
+	BeeperActionMessageCallTypeVoice BeeperActionMessageCallType = "voice"
+	BeeperActionMessageCallTypeVideo BeeperActionMessageCallType = "video"
 )
 
 type BeeperActionMessage struct {
