@@ -166,6 +166,24 @@ type BeeperPerMessageProfile struct {
 	HasFallback bool                 `json:"has_fallback,omitempty"`
 }
 
+type BeeperActionMessageType string
+
+const (
+	BeeperActionMessageCall BeeperActionMessageType = "call"
+)
+
+type BeeperActionMessageCallType string
+
+const (
+	BeeperActionMessageCallTypeVoice BeeperActionMessageCallType = "voice"
+	BeeperActionMessageCallTypeVideo BeeperActionMessageCallType = "video"
+)
+
+type BeeperActionMessage struct {
+	Type     BeeperActionMessageType     `json:"type"`
+	CallType BeeperActionMessageCallType `json:"call_type,omitempty"`
+}
+
 func (content *MessageEventContent) AddPerMessageProfileFallback() {
 	if content.BeeperPerMessageProfile == nil || content.BeeperPerMessageProfile.HasFallback || content.BeeperPerMessageProfile.Displayname == "" {
 		return
