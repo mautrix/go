@@ -214,6 +214,7 @@ func (mach *OlmMachine) rejectKeyRequest(ctx context.Context, rejection KeyShare
 		RoomID:    request.RoomID,
 		Algorithm: request.Algorithm,
 		SessionID: request.SessionID,
+		//lint:ignore SA1019 This is just echoing back the deprecated field
 		SenderKey: request.SenderKey,
 		Code:      rejection.Code,
 		Reason:    rejection.Reason,
@@ -356,7 +357,7 @@ func (mach *OlmMachine) HandleRoomKeyRequest(ctx context.Context, sender id.User
 				SessionID:  igs.ID(),
 				SessionKey: string(exportedKey),
 			},
-			SenderKey:          content.Body.SenderKey,
+			SenderKey:          igs.SenderKey,
 			ForwardingKeyChain: igs.ForwardingChains,
 			SenderClaimedKey:   igs.SigningKey,
 		},

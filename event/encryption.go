@@ -132,8 +132,9 @@ type RoomKeyRequestEventContent struct {
 type RequestedKeyInfo struct {
 	Algorithm id.Algorithm `json:"algorithm"`
 	RoomID    id.RoomID    `json:"room_id"`
-	SenderKey id.SenderKey `json:"sender_key"`
 	SessionID id.SessionID `json:"session_id"`
+	// Deprecated: Matrix v1.3
+	SenderKey id.SenderKey `json:"sender_key"`
 }
 
 type RoomKeyWithheldCode string

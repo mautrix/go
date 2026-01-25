@@ -29,7 +29,6 @@ var (
 	ErrDuplicateMessageIndex         = errors.New("duplicate megolm message index")
 	ErrWrongRoom                     = errors.New("encrypted megolm event is not intended for this room")
 	ErrDeviceKeyMismatch             = errors.New("device keys in event and verified device info do not match")
-	ErrSenderKeyMismatch             = errors.New("sender keys in content and megolm session do not match")
 	ErrRatchetError                  = errors.New("failed to ratchet session after use")
 	ErrCorruptedMegolmPayload        = errors.New("corrupted megolm payload")
 )
@@ -41,7 +40,6 @@ var (
 	DuplicateMessageIndex         = ErrDuplicateMessageIndex
 	WrongRoom                     = ErrWrongRoom
 	DeviceKeyMismatch             = ErrDeviceKeyMismatch
-	SenderKeyMismatch             = ErrSenderKeyMismatch
 	RatchetError                  = ErrRatchetError
 )
 
@@ -254,8 +252,6 @@ func (mach *OlmMachine) actuallyDecryptMegolmEvent(ctx context.Context, evt *eve
 		return nil, nil, 0, fmt.Errorf("failed to get group session: %w", err)
 	} else if sess == nil {
 		return nil, nil, 0, fmt.Errorf("%w (ID %s)", ErrNoSessionFound, content.SessionID)
-	} else if content.SenderKey != "" && content.SenderKey != sess.SenderKey {
-		return sess, nil, 0, ErrSenderKeyMismatch
 	}
 	plaintext, messageIndex, err := sess.Internal.Decrypt(content.MegolmCiphertext)
 	if err != nil {
