@@ -140,7 +140,8 @@ type RespError struct {
 	Err       string
 	ExtraData map[string]any
 
-	StatusCode int
+	StatusCode  int
+	ExtraHeader map[string]string
 }
 
 func (e *RespError) UnmarshalJSON(data []byte) error {
@@ -168,6 +169,9 @@ func (e RespError) Write(w http.ResponseWriter) {
 	if statusCode == 0 {
 		statusCode = http.StatusInternalServerError
 	}
+	for key, value := range e.ExtraHeader {
+		w.Header().Set(key, value)
+	}
 	exhttp.WriteJSONResponse(w, statusCode, &e)
 }
 
@@ -187,6 +191,18 @@ func (e RespError) WithStatus(status int) RespError {
 func (e RespError) WithExtraData(extraData map[string]any) RespError {
 	e.ExtraData = exmaps.NonNilClone(e.ExtraData)
 	maps.Copy(e.ExtraData, extraData)
+	return e
+}
+
+func (e RespError) WithExtraHeader(key, value string) RespError {
+	e.ExtraHeader = exmaps.NonNilClone(e.ExtraHeader)
+	e.ExtraHeader[key] = value
+	return e
+}
+
+func (e RespError) WithExtraHeaders(headers map[string]string) RespError {
+	e.ExtraHeader = exmaps.NonNilClone(e.ExtraHeader)
+	maps.Copy(e.ExtraHeader, headers)
 	return e
 }
 
