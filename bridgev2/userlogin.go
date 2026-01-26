@@ -51,6 +51,8 @@ func (br *Bridge) loadUserLogin(ctx context.Context, user *User, dbUserLogin *da
 		if err != nil {
 			return nil, fmt.Errorf("failed to get user: %w", err)
 		}
+		// TODO if loading the user caused the provided userlogin to be loaded, cancel here?
+		//      Currently this will double-load it
 	}
 	userLogin := &UserLogin{
 		UserLogin: dbUserLogin,
