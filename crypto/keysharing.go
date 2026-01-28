@@ -264,9 +264,14 @@ func (mach *OlmMachine) defaultAllowKeyShare(ctx context.Context, device *id.Dev
 			log.Err(err).Msg("Rejecting key request due to internal error when checking session sharing")
 			return &KeyShareRejectNoResponse
 		} else if !isShared {
-			// TODO differentiate session not shared with requester vs session not created by this device?
-			log.Debug().Msg("Rejecting key request for unshared session")
-			return &KeyShareRejectNotRecipient
+			igs, _ := mach.CryptoStore.GetGroupSession(ctx, evt.RoomID, evt.SessionID)
+			if igs != nil && igs.SenderKey == mach.OwnIdentity().IdentityKey {
+				log.Debug().Msg("Rejecting key request for unshared session")
+				return &KeyShareRejectNotRecipient
+			}
+			// Note: this case will also happen for redacted sessions and database errors
+			log.Debug().Msg("Rejecting key request for session created by another device")
+			return &KeyShareRejectNoResponse
 		}
 		log.Debug().Msg("Accepting key request for shared session")
 		return nil
@@ -324,7 +329,9 @@ func (mach *OlmMachine) HandleRoomKeyRequest(ctx context.Context, sender id.User
 	if err != nil {
 		if errors.Is(err, ErrGroupSessionWithheld) {
 			log.Debug().Err(err).Msg("Requested group session not available")
-			mach.rejectKeyRequest(ctx, KeyShareRejectUnavailable, device, content.Body)
+			if sender != mach.Client.UserID {
+				mach.rejectKeyRequest(ctx, KeyShareRejectUnavailable, device, content.Body)
+			}
 		} else {
 			log.Error().Err(err).Msg("Failed to get group session to forward")
 			mach.rejectKeyRequest(ctx, KeyShareRejectInternalError, device, content.Body)
@@ -332,7 +339,9 @@ func (mach *OlmMachine) HandleRoomKeyRequest(ctx context.Context, sender id.User
 		return
 	} else if igs == nil {
 		log.Error().Msg("Didn't find group session to forward")
-		mach.rejectKeyRequest(ctx, KeyShareRejectUnavailable, device, content.Body)
+		if sender != mach.Client.UserID {
+			mach.rejectKeyRequest(ctx, KeyShareRejectUnavailable, device, content.Body)
+		}
 		return
 	}
 	if internalID := igs.ID(); internalID != content.Body.SessionID {
