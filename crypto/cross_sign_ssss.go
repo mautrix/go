@@ -8,6 +8,7 @@ package crypto
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"maunium.net/go/mautrix"
@@ -77,7 +78,11 @@ func (mach *OlmMachine) VerifyWithRecoveryKey(ctx context.Context, recoveryKey s
 		return fmt.Errorf("failed to get default SSSS key data: %w", err)
 	}
 	key, err := keyData.VerifyRecoveryKey(keyID, recoveryKey)
-	if err != nil {
+	if errors.Is(err, ssss.ErrUnverifiableKey) {
+		mach.machOrContextLog(ctx).Warn().
+			Str("key_id", keyID).
+			Msg("SSSS key is unverifiable, trying to use without verifying")
+	} else if err != nil {
 		return err
 	}
 	err = mach.FetchCrossSigningKeysFromSSSS(ctx, key)

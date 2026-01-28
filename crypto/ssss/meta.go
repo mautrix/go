@@ -8,6 +8,7 @@ package ssss
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -33,7 +34,9 @@ func (kd *KeyMetadata) VerifyPassphrase(keyID, passphrase string) (*Key, error) 
 	ssssKey, err := kd.Passphrase.GetKey(passphrase)
 	if err != nil {
 		return nil, err
-	} else if err = kd.verifyKey(ssssKey); err != nil {
+	}
+	err = kd.verifyKey(ssssKey)
+	if err != nil && !errors.Is(err, ErrUnverifiableKey) {
 		return nil, err
 	}
 
@@ -49,7 +52,9 @@ func (kd *KeyMetadata) VerifyRecoveryKey(keyID, recoveryKey string) (*Key, error
 	ssssKey := utils.DecodeBase58RecoveryKey(recoveryKey)
 	if ssssKey == nil {
 		return nil, ErrInvalidRecoveryKey
-	} else if err := kd.verifyKey(ssssKey); err != nil {
+	}
+	err := kd.verifyKey(ssssKey)
+	if err != nil && !errors.Is(err, ErrUnverifiableKey) {
 		return nil, err
 	}
 
@@ -57,10 +62,13 @@ func (kd *KeyMetadata) VerifyRecoveryKey(keyID, recoveryKey string) (*Key, error
 		ID:       keyID,
 		Key:      ssssKey,
 		Metadata: kd,
-	}, nil
+	}, err
 }
 
 func (kd *KeyMetadata) verifyKey(key []byte) error {
+	if kd.MAC == "" || kd.IV == "" {
+		return ErrUnverifiableKey
+	}
 	unpaddedMAC := strings.TrimRight(kd.MAC, "=")
 	expectedMACLength := base64.RawStdEncoding.EncodedLen(utils.SHAHashLength)
 	if len(unpaddedMAC) != expectedMACLength {
