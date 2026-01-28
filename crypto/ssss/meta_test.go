@@ -8,7 +8,6 @@ package ssss_test
 
 import (
 	"encoding/json"
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -42,10 +41,24 @@ const key2Meta = `
 }
 `
 
+const key2MetaUnverified = `
+{
+  "algorithm": "m.secret_storage.v1.aes-hmac-sha2"
+}
+`
+
+const key2MetaLongIV = `
+{
+  "algorithm": "m.secret_storage.v1.aes-hmac-sha2",
+  "iv": "O0BOvTqiIAYjC+RMcyHfW2f/gdxjceTxoYtNlpPduJ8=",
+  "mac": "7k6OruQlWg0UmQjxGZ0ad4Q6DdwkgnoI7G6X3IjBYtI="
+}
+`
+
 const key2MetaBrokenIV = `
 {
   "algorithm": "m.secret_storage.v1.aes-hmac-sha2",
-  "iv": "O0BOvTqiIAYjC+RMcyHfWwMeowMeowMeow",
+  "iv": "MeowMeowMeow",
   "mac": "7k6OruQlWg0UmQjxGZ0ad4Q6DdwkgnoI7G6X3IjBYtI="
 }
 `
@@ -94,17 +107,33 @@ func TestKeyMetadata_VerifyRecoveryKey_Correct2(t *testing.T) {
 	assert.Equal(t, key2RecoveryKey, key.RecoveryKey())
 }
 
+func TestKeyMetadata_VerifyRecoveryKey_NonCompliant_LongIV(t *testing.T) {
+	km := getKeyMeta(key2MetaLongIV)
+	key, err := km.VerifyRecoveryKey(key2ID, key2RecoveryKey)
+	assert.NoError(t, err)
+	assert.NotNil(t, key)
+	assert.Equal(t, key2RecoveryKey, key.RecoveryKey())
+}
+
+func TestKeyMetadata_VerifyRecoveryKey_Unverified(t *testing.T) {
+	km := getKeyMeta(key2MetaUnverified)
+	key, err := km.VerifyRecoveryKey(key2ID, key2RecoveryKey)
+	assert.ErrorIs(t, err, ssss.ErrUnverifiableKey)
+	assert.NotNil(t, key)
+	assert.Equal(t, key2RecoveryKey, key.RecoveryKey())
+}
+
 func TestKeyMetadata_VerifyRecoveryKey_Invalid(t *testing.T) {
 	km := getKeyMeta(key1Meta)
 	key, err := km.VerifyRecoveryKey(key1ID, "foo")
-	assert.True(t, errors.Is(err, ssss.ErrInvalidRecoveryKey), "unexpected error: %v", err)
+	assert.ErrorIs(t, err, ssss.ErrInvalidRecoveryKey)
 	assert.Nil(t, key)
 }
 
 func TestKeyMetadata_VerifyRecoveryKey_Incorrect(t *testing.T) {
 	km := getKeyMeta(key1Meta)
 	key, err := km.VerifyRecoveryKey(key2ID, key2RecoveryKey)
-	assert.True(t, errors.Is(err, ssss.ErrIncorrectSSSSKey), "unexpected error: %v", err)
+	assert.ErrorIs(t, err, ssss.ErrIncorrectSSSSKey)
 	assert.Nil(t, key)
 }
 
@@ -119,27 +148,27 @@ func TestKeyMetadata_VerifyPassphrase_Correct(t *testing.T) {
 func TestKeyMetadata_VerifyPassphrase_Incorrect(t *testing.T) {
 	km := getKeyMeta(key1Meta)
 	key, err := km.VerifyPassphrase(key1ID, "incorrect horse battery staple")
-	assert.True(t, errors.Is(err, ssss.ErrIncorrectSSSSKey), "unexpected error %v", err)
+	assert.ErrorIs(t, err, ssss.ErrIncorrectSSSSKey)
 	assert.Nil(t, key)
 }
 
 func TestKeyMetadata_VerifyPassphrase_NotSet(t *testing.T) {
 	km := getKeyMeta(key2Meta)
 	key, err := km.VerifyPassphrase(key2ID, "hmm")
-	assert.True(t, errors.Is(err, ssss.ErrNoPassphrase), "unexpected error %v", err)
+	assert.ErrorIs(t, err, ssss.ErrNoPassphrase)
 	assert.Nil(t, key)
 }
 
 func TestKeyMetadata_VerifyRecoveryKey_CorruptedIV(t *testing.T) {
 	km := getKeyMeta(key2MetaBrokenIV)
 	key, err := km.VerifyRecoveryKey(key2ID, key2RecoveryKey)
-	assert.True(t, errors.Is(err, ssss.ErrCorruptedKeyMetadata), "unexpected error %v", err)
+	assert.ErrorIs(t, err, ssss.ErrCorruptedKeyMetadata)
 	assert.Nil(t, key)
 }
 
 func TestKeyMetadata_VerifyRecoveryKey_CorruptedMAC(t *testing.T) {
 	km := getKeyMeta(key2MetaBrokenMAC)
 	key, err := km.VerifyRecoveryKey(key2ID, key2RecoveryKey)
-	assert.True(t, errors.Is(err, ssss.ErrCorruptedKeyMetadata), "unexpected error %v", err)
+	assert.ErrorIs(t, err, ssss.ErrCorruptedKeyMetadata)
 	assert.Nil(t, key)
 }

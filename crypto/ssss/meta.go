@@ -7,6 +7,8 @@
 package ssss
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -74,11 +76,16 @@ func (kd *KeyMetadata) verifyKey(key []byte) error {
 	if len(unpaddedMAC) != expectedMACLength {
 		return fmt.Errorf("%w: invalid mac length %d (expected %d)", ErrCorruptedKeyMetadata, len(unpaddedMAC), expectedMACLength)
 	}
-	hash, err := kd.calculateHash(key)
+	expectedMAC, err := base64.RawStdEncoding.DecodeString(unpaddedMAC)
+	if err != nil {
+		return fmt.Errorf("%w: failed to decode mac: %w", ErrCorruptedKeyMetadata, err)
+	}
+	calculatedMAC, err := kd.calculateHash(key)
 	if err != nil {
 		return err
 	}
-	if unpaddedMAC != hash {
+	// This doesn't really need to be constant time since it's fully local, but might as well be.
+	if !hmac.Equal(expectedMAC, calculatedMAC) {
 		return ErrIncorrectSSSSKey
 	}
 	return nil
@@ -91,23 +98,26 @@ func (kd *KeyMetadata) VerifyKey(key []byte) bool {
 
 // calculateHash calculates the hash used for checking if the key is entered correctly as described
 // in the spec: https://matrix.org/docs/spec/client_server/unstable#m-secret-storage-v1-aes-hmac-sha2
-func (kd *KeyMetadata) calculateHash(key []byte) (string, error) {
+func (kd *KeyMetadata) calculateHash(key []byte) ([]byte, error) {
 	aesKey, hmacKey := utils.DeriveKeysSHA256(key, "")
 	unpaddedIV := strings.TrimRight(kd.IV, "=")
 	expectedIVLength := base64.RawStdEncoding.EncodedLen(utils.AESCTRIVLength)
-	if len(unpaddedIV) != expectedIVLength {
-		return "", fmt.Errorf("%w: invalid iv length %d (expected %d)", ErrCorruptedKeyMetadata, len(unpaddedIV), expectedIVLength)
+	if len(unpaddedIV) < expectedIVLength || len(unpaddedIV) > expectedIVLength*3 {
+		return nil, fmt.Errorf("%w: invalid iv length %d (expected %d)", ErrCorruptedKeyMetadata, len(unpaddedIV), expectedIVLength)
 	}
-
-	var ivBytes [utils.AESCTRIVLength]byte
-	_, err := base64.RawStdEncoding.Decode(ivBytes[:], []byte(unpaddedIV))
+	rawIVBytes, err := base64.RawStdEncoding.DecodeString(unpaddedIV)
 	if err != nil {
-		return "", fmt.Errorf("%w: failed to decode iv: %w", ErrCorruptedKeyMetadata, err)
+		return nil, fmt.Errorf("%w: failed to decode iv: %w", ErrCorruptedKeyMetadata, err)
 	}
+	// TODO log a warning for non-16 byte IVs?
+	//      Certain broken clients like nheko generated 32-byte IVs where only the first 16 bytes were used.
+	ivBytes := *(*[utils.AESCTRIVLength]byte)(rawIVBytes[:utils.AESCTRIVLength])
 
-	cipher := utils.XorA256CTR(make([]byte, utils.AESCTRKeyLength), aesKey, ivBytes)
-
-	return utils.HMACSHA256B64(cipher, hmacKey), nil
+	zeroes := make([]byte, utils.AESCTRKeyLength)
+	encryptedZeroes := utils.XorA256CTR(zeroes, aesKey, ivBytes)
+	h := hmac.New(sha256.New, hmacKey[:])
+	h.Write(encryptedZeroes)
+	return h.Sum(nil), nil
 }
 
 // PassphraseMetadata represents server-side metadata about a SSSS key passphrase.
