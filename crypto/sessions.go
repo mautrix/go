@@ -169,7 +169,7 @@ func (igs *InboundGroupSession) export() (*ExportedSession, error) {
 		ForwardingChains:  igs.ForwardingChains,
 		RoomID:            igs.RoomID,
 		SenderKey:         igs.SenderKey,
-		SenderClaimedKeys: SenderClaimedKeys{},
+		SenderClaimedKeys: SenderClaimedKeys{Ed25519: igs.SigningKey},
 		SessionID:         igs.ID(),
 		SessionKey:        string(key),
 	}, nil
