@@ -153,6 +153,7 @@ func (e *RespError) UnmarshalJSON(data []byte) error {
 	}
 	e.ErrCode, _ = e.ExtraData["errcode"].(string)
 	e.Err, _ = e.ExtraData["error"].(string)
+	e.CanRetry, _ = e.ExtraData["com.beeper.can_retry"].(bool)
 	return nil
 }
 
@@ -160,6 +161,9 @@ func (e *RespError) MarshalJSON() ([]byte, error) {
 	data := exmaps.NonNilClone(e.ExtraData)
 	data["errcode"] = e.ErrCode
 	data["error"] = e.Err
+	if e.CanRetry {
+		data["com.beeper.can_retry"] = e.CanRetry
+	}
 	return json.Marshal(data)
 }
 
