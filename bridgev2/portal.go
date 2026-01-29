@@ -3639,7 +3639,7 @@ func (portal *Portal) handleRemoteMarkUnread(ctx context.Context, source *UserLo
 }
 
 func (portal *Portal) handleRemoteDeliveryReceipt(ctx context.Context, source *UserLogin, evt RemoteDeliveryReceipt) EventHandlingResult {
-	if portal.RoomType != database.RoomTypeDM || evt.GetSender().Sender != portal.OtherUserID {
+	if portal.RoomType != database.RoomTypeDM || (evt.GetSender().Sender != portal.OtherUserID && portal.OtherUserID != "") {
 		return EventHandlingResultIgnored
 	}
 	intent, ok := portal.GetIntentFor(ctx, evt.GetSender(), source, RemoteEventDeliveryReceipt)
