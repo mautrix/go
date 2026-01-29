@@ -142,6 +142,8 @@ type RespError struct {
 
 	StatusCode  int
 	ExtraHeader map[string]string
+
+	CanRetry bool
 }
 
 func (e *RespError) UnmarshalJSON(data []byte) error {
@@ -151,6 +153,7 @@ func (e *RespError) UnmarshalJSON(data []byte) error {
 	}
 	e.ErrCode, _ = e.ExtraData["errcode"].(string)
 	e.Err, _ = e.ExtraData["error"].(string)
+	e.CanRetry, _ = e.ExtraData["com.beeper.can_retry"].(bool)
 	return nil
 }
 
@@ -158,6 +161,9 @@ func (e *RespError) MarshalJSON() ([]byte, error) {
 	data := exmaps.NonNilClone(e.ExtraData)
 	data["errcode"] = e.ErrCode
 	data["error"] = e.Err
+	if e.CanRetry {
+		data["com.beeper.can_retry"] = e.CanRetry
+	}
 	return json.Marshal(data)
 }
 
@@ -185,6 +191,11 @@ func (e RespError) WithMessage(msg string, args ...any) RespError {
 
 func (e RespError) WithStatus(status int) RespError {
 	e.StatusCode = status
+	return e
+}
+
+func (e RespError) WithCanRetry(canRetry bool) RespError {
+	e.CanRetry = canRetry
 	return e
 }
 
