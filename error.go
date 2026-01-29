@@ -142,6 +142,8 @@ type RespError struct {
 
 	StatusCode  int
 	ExtraHeader map[string]string
+
+	CanRetry bool
 }
 
 func (e *RespError) UnmarshalJSON(data []byte) error {
@@ -185,6 +187,11 @@ func (e RespError) WithMessage(msg string, args ...any) RespError {
 
 func (e RespError) WithStatus(status int) RespError {
 	e.StatusCode = status
+	return e
+}
+
+func (e RespError) WithCanRetry(canRetry bool) RespError {
+	e.CanRetry = canRetry
 	return e
 }
 
