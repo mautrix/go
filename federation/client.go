@@ -292,11 +292,15 @@ type ReqSendKnock struct {
 }
 
 type RespSendJoin struct {
-	AuthChain      []PDU    `json:"auth_chain"`
+	AuthChain      []PDU    `json:"auth_chain,omitempty"`
 	Event          PDU      `json:"event"`
 	MembersOmitted bool     `json:"members_omitted"`
-	ServersInRoom  []string `json:"servers_in_room"`
-	State          []PDU    `json:"state"`
+	ServersInRoom  []string `json:"servers_in_room,omitempty"`
+	State          []PDU    `json:"state,omitempty"`
+
+	// MSC4242 fields
+	StateDag             []PDU        `json:"state_dag,omitempty"`
+	PartialStateEventIDs []id.EventID `json:"partial_state_event_ids,omitempty"`
 }
 
 type RespSendKnock struct {
