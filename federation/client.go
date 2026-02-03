@@ -131,12 +131,13 @@ func (c *Client) Backfill(ctx context.Context, req *ReqBackfill) (resp *RespBack
 }
 
 type ReqGetMissingEvents struct {
-	ServerName     string       `json:"-"`
-	RoomID         id.RoomID    `json:"-"`
-	EarliestEvents []id.EventID `json:"earliest_events"`
-	LatestEvents   []id.EventID `json:"latest_events"`
-	Limit          int          `json:"limit,omitempty"`
-	MinDepth       int          `json:"min_depth,omitempty"`
+	ServerName       string       `json:"-"`
+	RoomID           id.RoomID    `json:"-"`
+	EarliestEvents   []id.EventID `json:"earliest_events"`
+	LatestEvents     []id.EventID `json:"latest_events"`
+	Limit            int          `json:"limit,omitempty"`
+	MinDepth         int          `json:"min_depth,omitempty"`
+	UnstableStateDag bool         `json:"org.matrix.msc4242.state_dag,omitempty"`
 }
 
 type RespGetMissingEvents struct {
