@@ -550,6 +550,9 @@ func (c *Client) compileRequest(ctx context.Context, params RequestParams) (*htt
 			WrappedError: err,
 		}
 	}
+	if reqJSON != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	req.Header.Set("User-Agent", c.UserAgent)
 	if params.Authenticate {
 		if c.ServerName == "" || c.Key == nil {
