@@ -60,20 +60,21 @@ type InternalMeta struct {
 }
 
 type PDU struct {
-	AuthEvents     []id.EventID                   `json:"auth_events"`
-	Content        jsontext.Value                 `json:"content"`
-	Depth          int64                          `json:"depth"`
-	Hashes         *Hashes                        `json:"hashes,omitzero"`
-	OriginServerTS int64                          `json:"origin_server_ts"`
-	PrevEvents     []id.EventID                   `json:"prev_events"`
-	Redacts        *id.EventID                    `json:"redacts,omitzero"`
-	RoomID         id.RoomID                      `json:"room_id,omitzero"` // not present for room v12+ create events
-	Sender         id.UserID                      `json:"sender"`
-	Signatures     map[string]map[id.KeyID]string `json:"signatures,omitzero"`
-	StateKey       *string                        `json:"state_key,omitzero"`
-	Type           string                         `json:"type"`
-	Unsigned       jsontext.Value                 `json:"unsigned,omitzero"`
-	InternalMeta   InternalMeta                   `json:"-"`
+	AuthEvents      []id.EventID                   `json:"auth_events,omitzero"`
+	Content         jsontext.Value                 `json:"content"`
+	Depth           int64                          `json:"depth"`
+	Hashes          *Hashes                        `json:"hashes,omitzero"`
+	OriginServerTS  int64                          `json:"origin_server_ts"`
+	PrevEvents      []id.EventID                   `json:"prev_events"`
+	Redacts         *id.EventID                    `json:"redacts,omitzero"`
+	RoomID          id.RoomID                      `json:"room_id,omitzero"` // not present for room v12+ create events
+	Sender          id.UserID                      `json:"sender"`
+	Signatures      map[string]map[id.KeyID]string `json:"signatures,omitzero"`
+	StateKey        *string                        `json:"state_key,omitzero"`
+	Type            string                         `json:"type"`
+	PrevStateEvents []id.EventID                   `json:"prev_state_events,omitzero"`
+	Unsigned        jsontext.Value                 `json:"unsigned,omitzero"`
+	InternalMeta    InternalMeta                   `json:"-"`
 
 	Unknown jsontext.Value `json:",unknown"`
 
