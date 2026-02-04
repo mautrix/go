@@ -1359,6 +1359,48 @@ func (cli *Client) SendMessageEvent(ctx context.Context, roomID id.RoomID, event
 	return
 }
 
+// SendEphemeralEvent sends an ephemeral event into a room. This is a custom unstable endpoint.
+// contentJSON should be a pointer to something that can be encoded as JSON using json.Marshal.
+func (cli *Client) SendEphemeralEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, contentJSON interface{}, extra ...ReqSendEvent) (resp *RespSendEvent, err error) {
+	var req ReqSendEvent
+	if len(extra) > 0 {
+		req = extra[0]
+	}
+
+	var txnID string
+	if len(req.TransactionID) > 0 {
+		txnID = req.TransactionID
+	} else {
+		txnID = cli.TxnID()
+	}
+
+	queryParams := map[string]string{}
+	if req.Timestamp > 0 {
+		queryParams["ts"] = strconv.FormatInt(req.Timestamp, 10)
+	}
+
+	if !req.DontEncrypt && cli != nil && cli.Crypto != nil && eventType != event.EventEncrypted {
+		var isEncrypted bool
+		isEncrypted, err = cli.StateStore.IsEncrypted(ctx, roomID)
+		if err != nil {
+			err = fmt.Errorf("failed to check if room is encrypted: %w", err)
+			return
+		}
+		if isEncrypted {
+			if contentJSON, err = cli.Crypto.Encrypt(ctx, roomID, eventType, contentJSON); err != nil {
+				err = fmt.Errorf("failed to encrypt event: %w", err)
+				return
+			}
+			eventType = event.EventEncrypted
+		}
+	}
+
+	urlData := ClientURLPath{"unstable", "com.beeper.ephemeral", "rooms", roomID, "ephemeral", eventType.String(), txnID}
+	urlPath := cli.BuildURLWithQuery(urlData, queryParams)
+	_, err = cli.MakeRequest(ctx, http.MethodPut, urlPath, contentJSON, &resp)
+	return
+}
+
 // SendStateEvent sends a state event into a room. See https://spec.matrix.org/v1.16/client-server-api/#put_matrixclientv3roomsroomidstateeventtypestatekey
 // contentJSON should be a pointer to something that can be encoded as JSON using json.Marshal.
 func (cli *Client) SendStateEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string, contentJSON any, extra ...ReqSendEvent) (resp *RespSendEvent, err error) {

@@ -28,6 +28,9 @@ type PowerLevelsEventContent struct {
 	Events        map[string]int `json:"events,omitempty"`
 	EventsDefault int            `json:"events_default,omitempty"`
 
+	ephemeralLock sync.RWMutex
+	Ephemeral     map[string]int `json:"com.beeper.ephemeral,omitempty"`
+
 	Notifications *NotificationPowerLevels `json:"notifications,omitempty"`
 
 	StateDefaultPtr *int `json:"state_default,omitempty"`
@@ -36,6 +39,8 @@ type PowerLevelsEventContent struct {
 	KickPtr   *int `json:"kick,omitempty"`
 	BanPtr    *int `json:"ban,omitempty"`
 	RedactPtr *int `json:"redact,omitempty"`
+
+	EphemeralDefaultPtr *int `json:"com.beeper.ephemeral_default,omitempty"`
 
 	// This is not a part of power levels, it's added by mautrix-go internally in certain places
 	// in order to detect creator power accurately.
@@ -51,6 +56,7 @@ func (pl *PowerLevelsEventContent) Clone() *PowerLevelsEventContent {
 		UsersDefault:    pl.UsersDefault,
 		Events:          maps.Clone(pl.Events),
 		EventsDefault:   pl.EventsDefault,
+		Ephemeral:       maps.Clone(pl.Ephemeral),
 		StateDefaultPtr: ptr.Clone(pl.StateDefaultPtr),
 
 		Notifications: pl.Notifications.Clone(),
@@ -59,6 +65,8 @@ func (pl *PowerLevelsEventContent) Clone() *PowerLevelsEventContent {
 		KickPtr:   ptr.Clone(pl.KickPtr),
 		BanPtr:    ptr.Clone(pl.BanPtr),
 		RedactPtr: ptr.Clone(pl.RedactPtr),
+
+		EphemeralDefaultPtr: ptr.Clone(pl.EphemeralDefaultPtr),
 
 		CreateEvent: pl.CreateEvent,
 	}
@@ -117,6 +125,13 @@ func (pl *PowerLevelsEventContent) StateDefault() int {
 		return *pl.StateDefaultPtr
 	}
 	return 50
+}
+
+func (pl *PowerLevelsEventContent) EphemeralDefault() int {
+	if pl != nil && pl.EphemeralDefaultPtr != nil {
+		return *pl.EphemeralDefaultPtr
+	}
+	return pl.EventsDefault
 }
 
 func (pl *PowerLevelsEventContent) GetUserLevel(userID id.UserID) int {
@@ -200,6 +215,29 @@ func (pl *PowerLevelsEventContent) GetEventLevel(eventType Type) int {
 		return pl.EventsDefault
 	}
 	return level
+}
+
+func (pl *PowerLevelsEventContent) GetEphemeralLevel(eventType Type) int {
+	pl.ephemeralLock.RLock()
+	defer pl.ephemeralLock.RUnlock()
+	level, ok := pl.Ephemeral[eventType.String()]
+	if !ok {
+		return pl.EphemeralDefault()
+	}
+	return level
+}
+
+func (pl *PowerLevelsEventContent) SetEphemeralLevel(eventType Type, level int) {
+	pl.ephemeralLock.Lock()
+	defer pl.ephemeralLock.Unlock()
+	if level == pl.EphemeralDefault() {
+		delete(pl.Ephemeral, eventType.String())
+	} else {
+		if pl.Ephemeral == nil {
+			pl.Ephemeral = make(map[string]int)
+		}
+		pl.Ephemeral[eventType.String()] = level
+	}
 }
 
 func (pl *PowerLevelsEventContent) SetEventLevel(eventType Type, level int) {

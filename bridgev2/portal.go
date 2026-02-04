@@ -698,7 +698,7 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 		case event.EphemeralEventTyping:
 			return portal.handleMatrixTyping(ctx, evt)
 		default:
-			return EventHandlingResultIgnored
+			return portal.handleMatrixEphemeral(ctx, sender, evt)
 		}
 	}
 	if evt.Type == event.StateTombstone {
@@ -938,6 +938,48 @@ func (portal *Portal) handleMatrixTyping(ctx context.Context, evt *event.Event) 
 	portal.sendTypings(ctx, startedTyping, true)
 	portal.currentlyTyping = content.UserIDs
 	// TODO actual status
+	return EventHandlingResultSuccess
+}
+
+func (portal *Portal) handleMatrixEphemeral(ctx context.Context, sender *User, evt *event.Event) EventHandlingResult {
+	log := zerolog.Ctx(ctx)
+	if sender == nil {
+		log.Error().Msg("Missing sender for ephemeral event")
+		return EventHandlingResultIgnored
+	}
+	login, _, err := portal.FindPreferredLogin(ctx, sender, true)
+	if err != nil {
+		log.Err(err).Msg("Failed to get user login to handle ephemeral event")
+		return EventHandlingResultFailed
+	}
+	var origSender *OrigSender
+	if login == nil {
+		if portal.Relay == nil {
+			return EventHandlingResultIgnored
+		}
+		login = portal.Relay
+		origSender = &OrigSender{
+			User:   sender,
+			UserID: sender.MXID,
+		}
+	}
+	ephemeralAPI, ok := login.Client.(EphemeralHandlingNetworkAPI)
+	if !ok {
+		return EventHandlingResultIgnored
+	}
+	err = ephemeralAPI.HandleMatrixEphemeral(ctx, &MatrixEphemeralEvent{
+		MatrixEventBase: MatrixEventBase[*event.Content]{
+			Event:              evt,
+			Content:            &evt.Content,
+			Portal:             portal,
+			OrigSender:         origSender,
+			InputTransactionID: portal.parseInputTransactionID(origSender, evt),
+		},
+	})
+	if err != nil {
+		log.Err(err).Msg("Failed to bridge Matrix ephemeral event")
+		return EventHandlingResultFailed
+	}
 	return EventHandlingResultSuccess
 }
 
