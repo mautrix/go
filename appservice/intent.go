@@ -233,11 +233,6 @@ func (intent *IntentAPI) SendEphemeralEvent(ctx context.Context, roomID id.RoomI
 	return intent.Client.SendEphemeralEvent(ctx, roomID, eventType, contentJSON, mautrix.ReqSendEvent{TransactionID: txnID})
 }
 
-// Deprecated: use SendEphemeralEvent.
-func (intent *IntentAPI) SendEphemeral(ctx context.Context, roomID id.RoomID, eventType event.Type, content *event.Content, txnID string) (*mautrix.RespSendEvent, error) {
-	return intent.SendEphemeralEvent(ctx, roomID, eventType, content, txnID)
-}
-
 // Deprecated: use SendMessageEvent with mautrix.ReqSendEvent.Timestamp instead
 func (intent *IntentAPI) SendMassagedMessageEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, contentJSON interface{}, ts int64) (*mautrix.RespSendEvent, error) {
 	return intent.SendMessageEvent(ctx, roomID, eventType, contentJSON, mautrix.ReqSendEvent{Timestamp: ts})
