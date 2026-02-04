@@ -222,6 +222,17 @@ func (intent *IntentAPI) SendMessageEvent(ctx context.Context, roomID id.RoomID,
 	return intent.Client.SendMessageEvent(ctx, roomID, eventType, contentJSON, extra...)
 }
 
+func (intent *IntentAPI) SendEphemeral(ctx context.Context, roomID id.RoomID, eventType event.Type, content *event.Content, txnID string) (*mautrix.RespSendEvent, error) {
+	if err := intent.EnsureJoined(ctx, roomID); err != nil {
+		return nil, err
+	}
+	if content == nil {
+		content = &event.Content{}
+	}
+	contentJSON := intent.AddDoublePuppetValue(content)
+	return intent.Client.SendEphemeralEvent(ctx, roomID, eventType, contentJSON, mautrix.ReqSendEvent{TransactionID: txnID})
+}
+
 // Deprecated: use SendMessageEvent with mautrix.ReqSendEvent.Timestamp instead
 func (intent *IntentAPI) SendMassagedMessageEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, contentJSON interface{}, ts int64) (*mautrix.RespSendEvent, error) {
 	return intent.SendMessageEvent(ctx, roomID, eventType, contentJSON, mautrix.ReqSendEvent{Timestamp: ts})
