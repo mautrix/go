@@ -426,6 +426,25 @@ func (c *Client) SendLeave(ctx context.Context, req *ReqSendLeave) (err error) {
 	return
 }
 
+type UserDevice struct {
+	DisplayName string             `json:"device_display_name,omitempty"`
+	DeviceID    id.DeviceID        `json:"device_id"`
+	Keys        mautrix.DeviceKeys `json:"keys"`
+}
+
+type RespUserDevices struct {
+	MasterKey      *mautrix.CrossSigningKeys `json:"master_key,omitempty"`
+	SelfSigningKey *mautrix.CrossSigningKeys `json:"self_signing_key,omitempty"`
+	StreamID       int64                     `json:"stream_id,omitempty"`
+	UserID         id.UserID
+	Devices        []UserDevice `json:"devices"`
+}
+
+// GetUserDevices Gets information on all of the user’s devices
+func (c *Client) GetUserDevices(ctx context.Context, serverName string, userID id.UserID) (resp *RespUserDevices, err error) {
+	return resp, c.MakeRequest(ctx, serverName, true, http.MethodGet, URLPath{"v1", "user", "devices", userID}, nil, &resp)
+}
+
 type URLPath []any
 
 func (fup URLPath) FullPath() []any {
