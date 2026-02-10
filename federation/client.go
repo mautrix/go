@@ -445,6 +445,16 @@ func (c *Client) GetUserDevices(ctx context.Context, serverName string, userID i
 	return resp, c.MakeRequest(ctx, serverName, true, http.MethodGet, URLPath{"v1", "user", "devices", userID}, nil, &resp)
 }
 
+// QueryUserKeys Returns the current devices and identity keys for the given users.
+func (c *Client) QueryUserKeys(ctx context.Context, serverName string, req *mautrix.ReqQueryKeys) (resp *mautrix.RespQueryKeys, err error) {
+	return resp, c.MakeRequest(ctx, serverName, true, http.MethodPost, URLPath{"v1", "user", "keys", "query"}, req, &resp)
+}
+
+// ClaimUserKeys Claims one-time keys for use in pre-key messages.
+func (c *Client) ClaimUserKeys(ctx context.Context, serverName string, req *mautrix.ReqClaimKeys) (resp *mautrix.RespClaimKeys, err error) {
+	return resp, c.MakeRequest(ctx, serverName, true, http.MethodPost, URLPath{"v1", "user", "keys", "claim"}, req, &resp)
+}
+
 type URLPath []any
 
 func (fup URLPath) FullPath() []any {
