@@ -583,7 +583,10 @@ func (as *ASIntent) MarkAsDM(ctx context.Context, roomID id.RoomID, withUser id.
 	var directChats event.DirectChatsEventContent
 	err := as.Matrix.GetAccountData(ctx, event.AccountDataDirectChats.Type, &directChats)
 	if err != nil {
-		return err
+		if !errors.Is(err, mautrix.MNotFound) {
+			return err
+		}
+		directChats = make(event.DirectChatsEventContent)
 	}
 	as.directChatsCache = directChats
 	rooms := directChats[withUser]
