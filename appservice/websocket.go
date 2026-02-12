@@ -14,7 +14,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"path/filepath"
+	"path"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -374,7 +374,7 @@ func (as *AppService) StartWebsocket(ctx context.Context, baseURL string, onConn
 		copiedURL := *as.hsURLForClient
 		parsed = &copiedURL
 	}
-	parsed.Path = filepath.Join(parsed.Path, "_matrix/client/unstable/fi.mau.as_sync")
+	parsed.Path = path.Join(parsed.Path, "_matrix/client/unstable/fi.mau.as_sync")
 	if parsed.Scheme == "http" {
 		parsed.Scheme = "ws"
 	} else if parsed.Scheme == "https" {
