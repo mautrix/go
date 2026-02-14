@@ -799,7 +799,7 @@ func parsePythonInt(val gjson.Result) *int {
 		return ptr.Ptr(int(val.Int()))
 	case gjson.String:
 		// strconv.Atoi accepts signs as well as leading zeroes, so we just need to trim spaces beforehand
-		num, err := strconv.Atoi(strings.TrimSpace(val.Str))
+		num, err := strconv.Atoi(removeUnderscores(strings.TrimSpace(val.Str)))
 		if err != nil {
 			return nil
 		}
@@ -808,6 +808,15 @@ func parsePythonInt(val gjson.Result) *int {
 		// Python int() doesn't accept nulls, arrays or dicts
 		return nil
 	}
+}
+
+func removeUnderscores(num string) string {
+	numWithoutSign := strings.TrimPrefix(strings.TrimPrefix(num, "+"), "-")
+	if strings.HasPrefix(numWithoutSign, "_") || strings.HasSuffix(numWithoutSign, "_") {
+		// Leading or trailing underscores are not valid, let strconv.Atoi fail
+		return num
+	}
+	return strings.ReplaceAll(num, "_", "")
 }
 
 func safeParsePowerLevels(content jsontext.Value, into *event.PowerLevelsEventContent) {
