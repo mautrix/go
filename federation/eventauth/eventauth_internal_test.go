@@ -9,6 +9,7 @@
 package eventauth
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -19,42 +20,45 @@ import (
 type pythonIntTest struct {
 	Name     string
 	Input    string
-	Expected int
-	Invalid  bool
+	Expected int64
 }
 
 var pythonIntTests = []pythonIntTest{
-	{"True", `true`, 1, false},
-	{"False", `false`, 0, false},
-	{"SmallFloat", `3.1415`, 3, false},
-	{"SmallFloatRoundDown", `10.999999999999999`, 10, false},
-	{"SmallFloatRoundUp", `10.9999999999999999`, 11, false},
-	{"BigFloatRoundDown", `1000000.9999999999`, 1000000, false},
-	{"BigFloatRoundUp", `1000000.99999999999`, 1000001, false},
-	{"String", `"123"`, 123, false},
-	{"FloatInString", `"123.456"`, 0, true},
-	{"StringWithPlusSign", `"+123"`, 123, false},
-	{"StringWithMinusSign", `"-123"`, -123, false},
-	{"StringWithSpaces", `"  123  "`, 123, false},
-	{"StringWithSpacesAndSign", `"  -123  "`, -123, false},
-	{"StringWithUnderscores", `"123_456"`, 123456, false},
-	{"StringWithUnderscores", `"123_456"`, 123456, false},
-	{"StringWithTrailingUnderscore", `"123_456_"`, 0, true},
-	{"StringWithLeadingUnderscore", `"_123_456"`, 0, true},
-	{"StringWithUnderscoreAfterSign", `"+_123_456"`, 0, true},
-	{"StringWithUnderscoreAfterSpace", `"  _123_456"`, 0, true},
-	{"StringWithUnderscoresAndSpaces", `"  +1_2_3_4_5_6  "`, 123456, false},
+	{"True", `true`, 1},
+	{"False", `false`, 0},
+	{"SmallFloat", `3.1415`, 3},
+	{"SmallFloatRoundDown", `10.999999999999999`, 10},
+	{"SmallFloatRoundUp", `10.9999999999999999`, 11},
+	{"BigFloatRoundDown", `1000000.9999999999`, 1000000},
+	{"BigFloatRoundUp", `1000000.99999999999`, 1000001},
+	{"BigFloatPrecisionError", `9007199254740993.0`, 9007199254740992},
+	{"BigFloatPrecisionError2", `9007199254740993.123`, 9007199254740994},
+	{"Int64", `9223372036854775807`, 9223372036854775807},
+	{"Int64String", `"9223372036854775807"`, 9223372036854775807},
+	{"String", `"123"`, 123},
+	{"InvalidFloatInString", `"123.456"`, 0},
+	{"StringWithPlusSign", `"+123"`, 123},
+	{"StringWithMinusSign", `"-123"`, -123},
+	{"StringWithSpaces", `"  123  "`, 123},
+	{"StringWithSpacesAndSign", `"  -123  "`, -123},
+	{"StringWithUnderscores", `"123_456"`, 123456},
+	{"StringWithUnderscores", `"123_456"`, 123456},
+	{"InvalidStringWithTrailingUnderscore", `"123_456_"`, 0},
+	{"InvalidStringWithLeadingUnderscore", `"_123_456"`, 0},
+	{"InvalidStringWithUnderscoreAfterSign", `"+_123_456"`, 0},
+	{"InvalidStringWithUnderscoreAfterSpace", `"  _123_456"`, 0},
+	{"StringWithUnderscoresAndSpaces", `"  +1_2_3_4_5_6  "`, 123456},
 }
 
 func TestParsePythonInt(t *testing.T) {
 	for _, test := range pythonIntTests {
 		t.Run(test.Name, func(t *testing.T) {
 			output := parsePythonInt(gjson.Parse(test.Input))
-			if test.Invalid {
+			if strings.HasPrefix(test.Name, "Invalid") {
 				assert.Nil(t, output)
 			} else {
 				require.NotNil(t, output)
-				assert.Equal(t, test.Expected, *output)
+				assert.Equal(t, int(test.Expected), *output)
 			}
 		})
 	}
