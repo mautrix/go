@@ -143,6 +143,7 @@ func New(serverName string, serverKey string, getMedia GetMediaFunc) (*MediaProx
 	}
 	mp.FederationRouter = http.NewServeMux()
 	mp.FederationRouter.HandleFunc("GET /v1/media/download/{mediaID}", mp.DownloadMediaFederation)
+	mp.FederationRouter.HandleFunc("GET /v1/media/thumbnail/{mediaID}", mp.DownloadMediaFederation)
 	mp.FederationRouter.HandleFunc("GET /v1/version", mp.KeyServer.GetServerVersion)
 	mp.ClientMediaRouter = http.NewServeMux()
 	mp.ClientMediaRouter.HandleFunc("GET /download/{serverName}/{mediaID}", mp.DownloadMedia)
