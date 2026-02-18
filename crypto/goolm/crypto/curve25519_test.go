@@ -25,6 +25,8 @@ func TestCurve25519(t *testing.T) {
 	fromPrivate, err := crypto.Curve25519GenerateFromPrivate(firstKeypair.PrivateKey)
 	assert.NoError(t, err)
 	assert.Equal(t, fromPrivate, firstKeypair)
+	_, err = secondKeypair.SharedSecret(make([]byte, crypto.Curve25519PublicKeyLength))
+	assert.Error(t, err)
 }
 
 func TestCurve25519Case1(t *testing.T) {

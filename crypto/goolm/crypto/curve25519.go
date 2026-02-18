@@ -53,6 +53,7 @@ func (c Curve25519KeyPair) B64Encoded() id.Curve25519 {
 
 // SharedSecret returns the shared secret between the key pair and the given public key.
 func (c Curve25519KeyPair) SharedSecret(pubKey Curve25519PublicKey) ([]byte, error) {
+	// Note: the standard library checks that the output is non-zero
 	return c.PrivateKey.SharedSecret(pubKey)
 }
 
