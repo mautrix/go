@@ -16,6 +16,7 @@ type TrustState int
 
 const (
 	TrustStateBlacklisted          TrustState = -100
+	TrustStateDeviceKeyMismatch    TrustState = -5
 	TrustStateUnset                TrustState = 0
 	TrustStateUnknownDevice        TrustState = 10
 	TrustStateForwarded            TrustState = 20
@@ -23,7 +24,7 @@ const (
 	TrustStateCrossSignedTOFU      TrustState = 100
 	TrustStateCrossSignedVerified  TrustState = 200
 	TrustStateVerified             TrustState = 300
-	TrustStateInvalid              TrustState = (1 << 31) - 1
+	TrustStateInvalid              TrustState = -2147483647
 )
 
 func (ts *TrustState) UnmarshalText(data []byte) error {
@@ -44,6 +45,8 @@ func ParseTrustState(val string) TrustState {
 	switch strings.ToLower(val) {
 	case "blacklisted":
 		return TrustStateBlacklisted
+	case "device-key-mismatch":
+		return TrustStateDeviceKeyMismatch
 	case "unverified":
 		return TrustStateUnset
 	case "cross-signed-untrusted":
@@ -67,6 +70,8 @@ func (ts TrustState) String() string {
 	switch ts {
 	case TrustStateBlacklisted:
 		return "blacklisted"
+	case TrustStateDeviceKeyMismatch:
+		return "device-key-mismatch"
 	case TrustStateUnset:
 		return "unverified"
 	case TrustStateCrossSignedUntrusted:

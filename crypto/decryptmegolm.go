@@ -124,7 +124,13 @@ func (mach *OlmMachine) DecryptMegolmEvent(ctx context.Context, evt *event.Event
 					Msg("Couldn't resolve trust level of session: sent by unknown device")
 				trustLevel = id.TrustStateUnknownDevice
 			} else if device.SigningKey != sess.SigningKey || device.IdentityKey != sess.SenderKey {
-				return nil, ErrDeviceKeyMismatch
+				log.Debug().
+					Stringer("session_sender_key", sess.SenderKey).
+					Stringer("device_sender_key", device.IdentityKey).
+					Stringer("session_signing_key", sess.SigningKey).
+					Stringer("device_signing_key", device.SigningKey).
+					Msg("Device keys don't match keys in session, marking as untrusted")
+				trustLevel = id.TrustStateDeviceKeyMismatch
 			} else {
 				trustLevel, err = mach.ResolveTrustContext(ctx, device)
 				if err != nil {
