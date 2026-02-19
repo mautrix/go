@@ -604,7 +604,7 @@ func RespondWithError(w http.ResponseWriter, err error, message string) {
 	if errors.As(err, &we) {
 		we.Write(w)
 	} else {
-		mautrix.MUnknown.WithMessage(message).Write(w)
+		mautrix.MUnknown.WithMessage(message).WithInternalError(err).Write(w)
 	}
 }
 
