@@ -32,6 +32,9 @@ func CreateGroup(ctx context.Context, login *bridgev2.UserLogin, params *bridgev
 	if !ok {
 		return nil, bridgev2.RespError(mautrix.MUnrecognized.WithMessage("This bridge does not support creating groups"))
 	}
+	zerolog.Ctx(ctx).Debug().
+		Any("create_params", params).
+		Msg("Creating group chat on remote network")
 	caps := login.Bridge.Network.GetCapabilities()
 	typeSpec, validType := caps.Provisioning.GroupCreation[params.Type]
 	if !validType {
@@ -98,6 +101,9 @@ func CreateGroup(ctx context.Context, login *bridgev2.UserLogin, params *bridgev
 	if resp.PortalKey.IsEmpty() {
 		return nil, ErrNoPortalKey
 	}
+	zerolog.Ctx(ctx).Debug().
+		Object("portal_key", resp.PortalKey).
+		Msg("Successfully created group on remote network")
 	if resp.Portal == nil {
 		resp.Portal, err = login.Bridge.GetPortalByKey(ctx, resp.PortalKey)
 		if err != nil {
