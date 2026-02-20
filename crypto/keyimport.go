@@ -108,14 +108,13 @@ func (mach *OlmMachine) importExportedRoomKey(ctx context.Context, session Expor
 		return false, ErrMismatchingExportedSessionID
 	}
 	igs := &InboundGroupSession{
-		Internal:   igsInternal,
-		SigningKey: session.SenderClaimedKeys.Ed25519,
-		SenderKey:  session.SenderKey,
-		RoomID:     session.RoomID,
-		// TODO should we add something here to mark the signing key as unverified like key requests do?
+		Internal:         igsInternal,
+		SigningKey:       session.SenderClaimedKeys.Ed25519,
+		SenderKey:        session.SenderKey,
+		RoomID:           session.RoomID,
 		ForwardingChains: session.ForwardingChains,
-
-		ReceivedAt: time.Now().UTC(),
+		KeySource:        id.KeySourceImport,
+		ReceivedAt:       time.Now().UTC(),
 	}
 	existingIGS, _ := mach.CryptoStore.GetGroupSession(ctx, igs.RoomID, igs.ID())
 	firstKnownIndex := igs.Internal.FirstKnownIndex()

@@ -1,4 +1,4 @@
--- v0 -> v18 (compatible with v15+): Latest revision
+-- v0 -> v19 (compatible with v15+): Latest revision
 CREATE TABLE IF NOT EXISTS crypto_account (
 	account_id         TEXT    PRIMARY KEY,
 	device_id          TEXT    NOT NULL,
@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS crypto_megolm_inbound_session (
 	max_messages       INTEGER,
 	is_scheduled       BOOLEAN NOT NULL DEFAULT false,
 	key_backup_version TEXT NOT NULL DEFAULT '',
+	key_source         TEXT NOT NULL DEFAULT '',
 	PRIMARY KEY (account_id, session_id)
 );
 -- Useful index to find keys that need backing up

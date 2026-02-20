@@ -200,13 +200,14 @@ func (mach *OlmMachine) ImportRoomKeyFromBackupWithoutSaving(
 		SigningKey:       keyBackupData.SenderClaimedKeys.Ed25519,
 		SenderKey:        keyBackupData.SenderKey,
 		RoomID:           roomID,
-		ForwardingChains: append(keyBackupData.ForwardingKeyChain, keyBackupData.SenderKey.String()),
+		ForwardingChains: keyBackupData.ForwardingKeyChain,
 		id:               sessionID,
 
 		ReceivedAt:       time.Now().UTC(),
 		MaxAge:           maxAge.Milliseconds(),
 		MaxMessages:      maxMessages,
 		KeyBackupVersion: version,
+		KeySource:        id.KeySourceBackup,
 	}, nil
 }
 

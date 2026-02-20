@@ -189,6 +189,7 @@ func (mach *OlmMachine) importForwardedRoomKey(ctx context.Context, evt *Decrypt
 		MaxAge:      maxAge.Milliseconds(),
 		MaxMessages: maxMessages,
 		IsScheduled: content.IsScheduled,
+		KeySource:   id.KeySourceForward,
 	}
 	existingIGS, _ := mach.CryptoStore.GetGroupSession(ctx, igs.RoomID, igs.ID())
 	if existingIGS != nil && existingIGS.Internal.FirstKnownIndex() <= igs.Internal.FirstKnownIndex() {

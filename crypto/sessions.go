@@ -117,6 +117,7 @@ type InboundGroupSession struct {
 	MaxMessages      int
 	IsScheduled      bool
 	KeyBackupVersion id.KeyBackupVersion
+	KeySource        id.KeySource
 
 	id id.SessionID
 }
@@ -136,6 +137,7 @@ func NewInboundGroupSession(senderKey id.SenderKey, signingKey id.Ed25519, roomI
 		MaxAge:           maxAge.Milliseconds(),
 		MaxMessages:      maxMessages,
 		IsScheduled:      isScheduled,
+		KeySource:        id.KeySourceDirect,
 	}, nil
 }
 
