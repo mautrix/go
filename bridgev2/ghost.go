@@ -9,12 +9,15 @@ package bridgev2
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
+	"slices"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/exerrors"
 	"go.mau.fi/util/exmime"
-	"golang.org/x/exp/slices"
 
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
@@ -134,10 +137,11 @@ func (a *Avatar) Reupload(ctx context.Context, intent MatrixAPI, currentHash [32
 }
 
 type UserInfo struct {
-	Identifiers []string
-	Name        *string
-	Avatar      *Avatar
-	IsBot       *bool
+	Identifiers  []string
+	Name         *string
+	Avatar       *Avatar
+	IsBot        *bool
+	ExtraProfile database.ExtraProfile
 
 	ExtraUpdates ExtraUpdater[*Ghost]
 }
@@ -185,9 +189,9 @@ func (ghost *Ghost) UpdateAvatar(ctx context.Context, avatar *Avatar) bool {
 	return true
 }
 
-func (ghost *Ghost) getExtraProfileMeta() *event.BeeperProfileExtra {
+func (ghost *Ghost) getExtraProfileMeta() any {
 	bridgeName := ghost.Bridge.Network.GetName()
-	return &event.BeeperProfileExtra{
+	baseExtra := &event.BeeperProfileExtra{
 		RemoteID:     string(ghost.ID),
 		Identifiers:  ghost.Identifiers,
 		Service:      bridgeName.BeeperBridgeType,
@@ -195,22 +199,34 @@ func (ghost *Ghost) getExtraProfileMeta() *event.BeeperProfileExtra {
 		IsBridgeBot:  false,
 		IsNetworkBot: ghost.IsBot,
 	}
+	if len(ghost.ExtraProfile) == 0 {
+		return baseExtra
+	}
+	mergedExtra := maps.Clone(ghost.ExtraProfile)
+	baseExtraMarshaled := exerrors.Must(json.Marshal(baseExtra))
+	exerrors.PanicIfNotNil(json.Unmarshal(baseExtraMarshaled, &mergedExtra))
+	return mergedExtra
 }
 
-func (ghost *Ghost) UpdateContactInfo(ctx context.Context, identifiers []string, isBot *bool) bool {
-	if identifiers != nil {
-		slices.Sort(identifiers)
-	}
-	if ghost.ContactInfoSet &&
-		(identifiers == nil || slices.Equal(identifiers, ghost.Identifiers)) &&
-		(isBot == nil || *isBot == ghost.IsBot) {
+func (ghost *Ghost) UpdateContactInfo(ctx context.Context, identifiers []string, isBot *bool, extraProfile database.ExtraProfile) bool {
+	if !ghost.Bridge.Matrix.GetCapabilities().ExtraProfileMeta {
+		ghost.ContactInfoSet = false
 		return false
 	}
 	if identifiers != nil {
+		slices.Sort(identifiers)
+	}
+	changed := extraProfile.CopyTo(&ghost.ExtraProfile)
+	if identifiers != nil {
+		changed = changed || !slices.Equal(identifiers, ghost.Identifiers)
 		ghost.Identifiers = identifiers
 	}
 	if isBot != nil {
+		changed = changed || *isBot != ghost.IsBot
 		ghost.IsBot = *isBot
+	}
+	if ghost.ContactInfoSet && !changed {
+		return false
 	}
 	err := ghost.Intent.SetExtraProfileMeta(ctx, ghost.getExtraProfileMeta())
 	if err != nil {
@@ -287,8 +303,8 @@ func (ghost *Ghost) UpdateInfo(ctx context.Context, info *UserInfo) {
 		ghost.AvatarSet = true
 		update = true
 	}
-	if info.Identifiers != nil || info.IsBot != nil {
-		update = ghost.UpdateContactInfo(ctx, info.Identifiers, info.IsBot) || update
+	if info.Identifiers != nil || info.IsBot != nil || info.ExtraProfile != nil {
+		update = ghost.UpdateContactInfo(ctx, info.Identifiers, info.IsBot, info.ExtraProfile) || update
 	}
 	if info.ExtraUpdates != nil {
 		update = info.ExtraUpdates(ctx, ghost) || update

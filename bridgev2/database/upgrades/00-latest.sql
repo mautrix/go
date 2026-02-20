@@ -1,4 +1,4 @@
--- v0 -> v26 (compatible with v9+): Latest revision
+-- v0 -> v27 (compatible with v9+): Latest revision
 CREATE TABLE "user" (
 	bridge_id       TEXT NOT NULL,
 	mxid            TEXT NOT NULL,
@@ -80,6 +80,7 @@ CREATE TABLE ghost (
 	contact_info_set BOOLEAN NOT NULL,
 	is_bot           BOOLEAN NOT NULL,
 	identifiers      jsonb   NOT NULL,
+	extra_profile    jsonb,
 	metadata         jsonb   NOT NULL,
 
 	PRIMARY KEY (bridge_id, id)

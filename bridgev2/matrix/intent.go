@@ -9,6 +9,7 @@ package matrix
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -27,6 +28,7 @@ import (
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/bridgeconfig"
 	"maunium.net/go/mautrix/crypto/attachment"
+	"maunium.net/go/mautrix/crypto/canonicaljson"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/pushrules"
@@ -468,11 +470,62 @@ func (as *ASIntent) SetAvatarURL(ctx context.Context, avatarURL id.ContentURIStr
 	return as.Matrix.SetAvatarURL(ctx, parsedAvatarURL)
 }
 
-func (as *ASIntent) SetExtraProfileMeta(ctx context.Context, data any) error {
-	if !as.Connector.SpecVersions.Supports(mautrix.BeeperFeatureArbitraryProfileMeta) {
-		return nil
+func dataToFields(data any) (map[string]json.RawMessage, error) {
+	fields, ok := data.(map[string]json.RawMessage)
+	if ok {
+		return fields, nil
 	}
-	return as.Matrix.BeeperUpdateProfile(ctx, data)
+	d, err := json.Marshal(data)
+	if err != nil {
+		return nil, err
+	}
+	d = canonicaljson.CanonicalJSONAssumeValid(d)
+	err = json.Unmarshal(d, &fields)
+	return fields, err
+}
+
+func marshalField(val any) json.RawMessage {
+	data, _ := json.Marshal(val)
+	if len(data) > 0 && (data[0] == '{' || data[0] == '[') {
+		return canonicaljson.CanonicalJSONAssumeValid(data)
+	}
+	return data
+}
+
+var nullJSON = json.RawMessage("null")
+
+func (as *ASIntent) SetExtraProfileMeta(ctx context.Context, data any) error {
+	if as.Connector.SpecVersions.Supports(mautrix.BeeperFeatureArbitraryProfileMeta) {
+		return as.Matrix.BeeperUpdateProfile(ctx, data)
+	} else if as.Connector.SpecVersions.Supports(mautrix.FeatureArbitraryProfileFields) && as.Connector.Config.Matrix.GhostExtraProfileInfo {
+		fields, err := dataToFields(data)
+		if err != nil {
+			return fmt.Errorf("failed to marshal fields: %w", err)
+		}
+		currentProfile, err := as.Matrix.GetProfile(ctx, as.Matrix.UserID)
+		if err != nil {
+			return fmt.Errorf("failed to get current profile: %w", err)
+		}
+		for key, val := range fields {
+			existing, ok := currentProfile.Extra[key]
+			if !ok {
+				if bytes.Equal(val, nullJSON) {
+					continue
+				}
+				err = as.Matrix.SetProfileField(ctx, key, val)
+			} else if !bytes.Equal(marshalField(existing), val) {
+				if bytes.Equal(val, nullJSON) {
+					err = as.Matrix.DeleteProfileField(ctx, key)
+				} else {
+					err = as.Matrix.SetProfileField(ctx, key, val)
+				}
+			}
+			if err != nil {
+				return fmt.Errorf("failed to set profile field %q: %w", key, err)
+			}
+		}
+	}
+	return nil
 }
 
 func (as *ASIntent) GetMXID() id.UserID {
