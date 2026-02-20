@@ -14,6 +14,7 @@ import (
 	"fmt"
 
 	"go.mau.fi/util/dbutil"
+	"go.mau.fi/util/exerrors"
 
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/crypto/canonicaljson"
@@ -41,6 +42,11 @@ func (ep *ExtraProfile) Set(key string, value any) error {
 	}
 	(*ep)[key] = canonicaljson.CanonicalJSONAssumeValid(marshaled)
 	return nil
+}
+
+func (ep *ExtraProfile) With(key string, value any) *ExtraProfile {
+	exerrors.PanicIfNotNil(ep.Set(key, value))
+	return ep
 }
 
 func canonicalizeIfObject(data json.RawMessage) json.RawMessage {
