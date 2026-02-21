@@ -100,6 +100,7 @@ func doUpgrade(helper up.Helper) {
 	helper.Copy(up.Bool, "matrix", "sync_direct_chat_list")
 	helper.Copy(up.Bool, "matrix", "federate_rooms")
 	helper.Copy(up.Int, "matrix", "upload_file_threshold")
+	helper.Copy(up.Bool, "matrix", "ghost_extra_profile_info")
 
 	helper.Copy(up.Str|up.Null, "analytics", "token")
 	helper.Copy(up.Str|up.Null, "analytics", "url")
