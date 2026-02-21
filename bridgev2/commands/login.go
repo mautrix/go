@@ -251,14 +251,19 @@ func sendQR(ce *Event, qr string, prevEventID *id.EventID) error {
 		return fmt.Errorf("failed to upload image: %w", err)
 	}
 	content := &event.MessageEventContent{
-		MsgType:  event.MsgImage,
-		FileName: "qr.png",
-		URL:      qrMXC,
-		File:     qrFile,
-
+		MsgType:       event.MsgImage,
+		FileName:      "qr.png",
+		URL:           qrMXC,
+		File:          qrFile,
 		Body:          qr,
 		Format:        event.FormatHTML,
 		FormattedBody: fmt.Sprintf("<pre><code>%s</code></pre>", html.EscapeString(qr)),
+		Info: &event.FileInfo{
+			MimeType: "image/png",
+			Width:    qrSizePx,
+			Height:   qrSizePx,
+			Size:     len(qrData),
+		},
 	}
 	if *prevEventID != "" {
 		content.SetEdit(*prevEventID)
