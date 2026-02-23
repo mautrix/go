@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 
 	"go.mau.fi/util/jsontime"
 
@@ -25,6 +26,44 @@ type ReqResetPassword struct {
 	NewPassword string `json:"new_password"`
 	// Whether all the user's existing devices should be logged out after the password change.
 	LogoutDevices bool `json:"logout_devices"`
+}
+
+// ReqListUsers is the request parameters for /v{2,3}/users
+type ReqListUsers struct {
+	UserIDContains   string
+	NameOrIDContains string
+	IncludeGuests    *bool
+	IncludeAdmins    *bool
+	OnlyDeactivated  *bool
+	Limit            int
+	From             int
+	OrderBy          string
+	Direction        mautrix.Direction
+	IncludeLocked    bool
+}
+
+// ListAccountsAccount is the account object returned in /v{2,3}/users
+type ListAccountsAccount struct {
+	Name         id.UserID            `json:"name"`
+	UserType     *string              `json:"user_type"`
+	IsGuest      bool                 `json:"is_guest"`
+	Admin        bool                 `json:"admin"`
+	Deactivated  bool                 `json:"deactivated"`
+	ShadowBanned bool                 `json:"shadow_banned"`
+	Displayname  *string              `json:"displayname"`
+	AvatarUrl    *id.ContentURIString `json:"avatar_url"`
+	CreationTs   int64                `json:"creation_ts"`
+	Approved     bool                 `json:"approved"`
+	Erased       bool                 `json:"erased"`
+	LastSeenTs   *int64               `json:"last_seen_ts"`
+	Locked       bool                 `json:"locked"`
+}
+
+// RespListAccounts is the response body for /v{2,3}/users
+type RespListAccounts struct {
+	Users     []ListAccountsAccount `json:"users"`
+	Total     int                   `json:"total"`
+	NextToken string                `json:"next_token"`
 }
 
 // ResetPassword changes the password of another user using
@@ -172,5 +211,44 @@ func (cli *Client) GetUserRatelimit(ctx context.Context, userID id.UserID) (resp
 // https://matrix-org.github.io/synapse/latest/admin_api/user_admin_api.html#delete-ratelimit
 func (cli *Client) DeleteUserRatelimit(ctx context.Context, userID id.UserID) (err error) {
 	_, err = cli.Client.MakeRequest(ctx, http.MethodDelete, cli.BuildAdminURL("v1", "users", userID, "override_ratelimit"), nil, nil)
+	return
+}
+
+// ListAccounts lists all local user accounts using v3.
+//
+// https://element-hq.github.io/synapse/latest/admin_api/user_admin_api.html#list-accounts-v3
+func (cli *Client) ListAccounts(ctx context.Context, req ReqListUsers) (resp RespListAccounts, err error) {
+	query := map[string]string{
+		"dir": string(req.Direction),
+	}
+	if req.UserIDContains != "" {
+		query["user_id"] = req.UserIDContains
+	}
+	if req.NameOrIDContains != "" {
+		query["name"] = req.NameOrIDContains
+	}
+	if req.IncludeGuests != nil {
+		query["guest"] = strconv.FormatBool(*req.IncludeGuests)
+	}
+	if req.IncludeAdmins != nil {
+		query["admin"] = strconv.FormatBool(*req.IncludeAdmins)
+	}
+	if req.OnlyDeactivated != nil {
+		query["deactivated"] = strconv.FormatBool(*req.OnlyDeactivated)
+	}
+	if req.Limit > 0 {
+		query["limit"] = strconv.Itoa(req.Limit)
+	}
+	if req.From > 0 {
+		query["from"] = strconv.Itoa(req.From)
+	}
+	if req.OrderBy != "" {
+		query["order_by"] = req.OrderBy
+	}
+	if req.IncludeLocked {
+		query["locked"] = "true"
+	}
+	reqURL := cli.Client.BuildURLWithQuery(mautrix.SynapseAdminURLPath{"v3", "users"}, query)
+	_, err = cli.Client.MakeRequest(ctx, http.MethodGet, reqURL, nil, &resp)
 	return
 }
