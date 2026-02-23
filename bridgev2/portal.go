@@ -484,6 +484,11 @@ func (portal *Portal) getEventCtxWithLog(rawEvt any, idx int) context.Context {
 				logWith = logWith.Int64("remote_stream_order", remoteStreamOrder)
 			}
 		}
+		if remoteMsg, ok := evt.evt.(RemoteEventWithTimestamp); ok {
+			if remoteTimestamp := remoteMsg.GetTimestamp(); !remoteTimestamp.IsZero() {
+				logWith = logWith.Time("remote_timestamp", remoteTimestamp)
+			}
+		}
 	case *portalCreateEvent:
 		return evt.ctx
 	}
