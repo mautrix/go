@@ -18,6 +18,7 @@ import (
 
 	"github.com/skip2/go-qrcode"
 	"go.mau.fi/util/curl"
+	"go.mau.fi/util/exmime"
 
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/networkid"
@@ -273,6 +274,44 @@ func sendQR(ce *Event, qr string, prevEventID *id.EventID) error {
 	return nil
 }
 
+func sendCaptcha(ce *Event, params *bridgev2.LoginCaptchaParams) error {
+	if params.ImageMimeType != "" {
+		filename := "captcha" + exmime.ExtensionFromMimetype(params.ImageMimeType)
+		mxc, file, err := ce.Bot.UploadMedia(ce.Ctx, ce.RoomID, params.ImageData, filename, params.ImageMimeType)
+		if err != nil {
+			return fmt.Errorf("failed to upload image: %w", err)
+		}
+		content := &event.MessageEventContent{
+			MsgType:  event.MsgImage,
+			FileName: filename,
+			URL:      mxc,
+			File:     file,
+		}
+		_, err = ce.Bot.SendMessage(ce.Ctx, ce.RoomID, event.EventMessage, &event.Content{Parsed: content}, nil)
+		if err != nil {
+			return nil
+		}
+	}
+	if params.AudioMimeType != "" {
+		filename := "captcha" + exmime.ExtensionFromMimetype(params.AudioMimeType)
+		mxc, file, err := ce.Bot.UploadMedia(ce.Ctx, ce.RoomID, params.AudioData, filename, params.AudioMimeType)
+		if err != nil {
+			return fmt.Errorf("failed to upload audio: %w", err)
+		}
+		content := &event.MessageEventContent{
+			MsgType:  event.MsgAudio,
+			FileName: filename,
+			URL:      mxc,
+			File:     file,
+		}
+		_, err = ce.Bot.SendMessage(ce.Ctx, ce.RoomID, event.EventMessage, &event.Content{Parsed: content}, nil)
+		if err != nil {
+			return nil
+		}
+	}
+	return nil
+}
+
 type contextKey int
 
 const (
@@ -463,6 +502,31 @@ func maybeURLDecodeCookie(val string, field *bridgev2.LoginCookieField) string {
 	return decoded
 }
 
+type captchaLoginCommandState struct {
+	Login    bridgev2.LoginProcessCaptcha
+	Data     *bridgev2.LoginCaptchaParams
+	Override *bridgev2.UserLogin
+}
+
+func (clcs *captchaLoginCommandState) prompt(ce *Event) {
+	ce.Reply("Please enter the captcha code")
+	StoreCommandState(ce.User, &CommandState{
+		Next:   MinimalCommandHandlerFunc(clcs.submit),
+		Action: "Login",
+		Meta:   clcs,
+		Cancel: clcs.Login.Cancel,
+	})
+}
+
+func (clcs *captchaLoginCommandState) submit(ce *Event) {
+	StoreCommandState(ce.User, nil)
+	if nextStep, err := clcs.Login.SubmitCaptcha(ce.Ctx, ce.RawArgs); err != nil {
+		ce.Reply("Failed to submit captcha: %v", err)
+	} else {
+		doLoginStep(ce, clcs.Login, nextStep, clcs.Override)
+	}
+}
+
 func doLoginStep(ce *Event, login bridgev2.LoginProcess, step *bridgev2.LoginStep, override *bridgev2.UserLogin) {
 	if step.Instructions != "" {
 		ce.Reply(step.Instructions)
@@ -484,6 +548,18 @@ func doLoginStep(ce *Event, login bridgev2.LoginProcess, step *bridgev2.LoginSte
 			Data:            make(map[string]string),
 			Override:        override,
 		}).promptNext(ce)
+	case bridgev2.LoginStepTypeCaptcha:
+		err := sendCaptcha(ce, step.CaptchaParams)
+		if err != nil {
+			ce.Reply("Failed to send captcha: %v", err)
+			login.Cancel()
+			return
+		}
+		(&captchaLoginCommandState{
+			Login:    login.(bridgev2.LoginProcessCaptcha),
+			Data:     step.CaptchaParams,
+			Override: override,
+		}).prompt(ce)
 	case bridgev2.LoginStepTypeComplete:
 		if override != nil && override.ID != step.CompleteParams.UserLoginID {
 			ce.Log.Info().

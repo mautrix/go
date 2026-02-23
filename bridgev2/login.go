@@ -58,6 +58,11 @@ type LoginProcessCookies interface {
 	SubmitCookies(ctx context.Context, cookies map[string]string) (*LoginStep, error)
 }
 
+type LoginProcessCaptcha interface {
+	LoginProcess
+	SubmitCaptcha(ctx context.Context, code string) (*LoginStep, error)
+}
+
 type LoginFlow struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
@@ -70,6 +75,7 @@ const (
 	LoginStepTypeUserInput      LoginStepType = "user_input"
 	LoginStepTypeCookies        LoginStepType = "cookies"
 	LoginStepTypeDisplayAndWait LoginStepType = "display_and_wait"
+	LoginStepTypeCaptcha        LoginStepType = "captcha"
 	LoginStepTypeComplete       LoginStepType = "complete"
 )
 
@@ -99,6 +105,7 @@ type LoginStep struct {
 	DisplayAndWaitParams *LoginDisplayAndWaitParams `json:"display_and_wait,omitempty"`
 	CookiesParams        *LoginCookiesParams        `json:"cookies,omitempty"`
 	UserInputParams      *LoginUserInputParams      `json:"user_input,omitempty"`
+	CaptchaParams        *LoginCaptchaParams        `json:"captcha,omitempty"`
 	CompleteParams       *LoginCompleteParams       `json:"complete,omitempty"`
 }
 
@@ -271,6 +278,14 @@ func (f *LoginInputDataField) FillDefaultValidate() {
 type LoginUserInputParams struct {
 	// The fields that the user needs to fill in.
 	Fields []LoginInputDataField `json:"fields"`
+}
+
+type LoginCaptchaParams struct {
+	ImageData     []byte `json:"image,omitempty"`
+	ImageMimeType string `json:"image_content_type"`
+
+	AudioData     []byte `json:"audio,omitempty"`
+	AudioMimeType string `json:"audio_content_type,omitempty"`
 }
 
 type LoginCompleteParams struct {
