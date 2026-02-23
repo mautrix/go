@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"maunium.net/go/mautrix/bridgev2/networkid"
+	"maunium.net/go/mautrix/event"
 )
 
 // LoginProcess represents a single occurrence of a user logging into the remote network.
@@ -105,7 +106,6 @@ type LoginStep struct {
 	DisplayAndWaitParams *LoginDisplayAndWaitParams `json:"display_and_wait,omitempty"`
 	CookiesParams        *LoginCookiesParams        `json:"cookies,omitempty"`
 	UserInputParams      *LoginUserInputParams      `json:"user_input,omitempty"`
-	CaptchaParams        *LoginCaptchaParams        `json:"captcha,omitempty"`
 	CompleteParams       *LoginCompleteParams       `json:"complete,omitempty"`
 }
 
@@ -186,6 +186,7 @@ const (
 	LoginInputFieldTypeURL         LoginInputFieldType = "url"
 	LoginInputFieldTypeDomain      LoginInputFieldType = "domain"
 	LoginInputFieldTypeSelect      LoginInputFieldType = "select"
+	LoginInputFieldTypeCaptchaCode LoginInputFieldType = "captcha_code"
 )
 
 type LoginInputDataField struct {
@@ -278,14 +279,16 @@ func (f *LoginInputDataField) FillDefaultValidate() {
 type LoginUserInputParams struct {
 	// The fields that the user needs to fill in.
 	Fields []LoginInputDataField `json:"fields"`
+
+	// Attachments to display alongside the input fields.
+	Attachments []*LoginUserInputAttachment `json:"attachments"`
 }
 
-type LoginCaptchaParams struct {
-	ImageData     []byte `json:"image,omitempty"`
-	ImageMimeType string `json:"image_content_type"`
-
-	AudioData     []byte `json:"audio,omitempty"`
-	AudioMimeType string `json:"audio_content_type,omitempty"`
+type LoginUserInputAttachment struct {
+	Type     event.MessageType
+	Filename string
+	MimeType string
+	Content  []byte
 }
 
 type LoginCompleteParams struct {
