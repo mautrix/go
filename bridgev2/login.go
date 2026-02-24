@@ -59,11 +59,6 @@ type LoginProcessCookies interface {
 	SubmitCookies(ctx context.Context, cookies map[string]string) (*LoginStep, error)
 }
 
-type LoginProcessCaptcha interface {
-	LoginProcess
-	SubmitCaptcha(ctx context.Context, code string) (*LoginStep, error)
-}
-
 type LoginFlow struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
@@ -76,7 +71,6 @@ const (
 	LoginStepTypeUserInput      LoginStepType = "user_input"
 	LoginStepTypeCookies        LoginStepType = "cookies"
 	LoginStepTypeDisplayAndWait LoginStepType = "display_and_wait"
-	LoginStepTypeCaptcha        LoginStepType = "captcha"
 	LoginStepTypeComplete       LoginStepType = "complete"
 )
 
@@ -285,10 +279,17 @@ type LoginUserInputParams struct {
 }
 
 type LoginUserInputAttachment struct {
-	Type     event.MessageType
-	Filename string
-	MimeType string
-	Content  []byte
+	Type     event.MessageType            `json:"type,omitempty"`
+	FileName string                       `json:"filename,omitempty"`
+	Content  []byte                       `json:"content,omitempty"`
+	Info     LoginUserInputAttachmentInfo `json:"info,omitempty"`
+}
+
+type LoginUserInputAttachmentInfo struct {
+	MimeType string `json:"mimetype,omitempty"`
+	Width    int    `json:"w,omitempty"`
+	Height   int    `json:"h,omitempty"`
+	Size     int    `json:"size,omitempty"`
 }
 
 type LoginCompleteParams struct {

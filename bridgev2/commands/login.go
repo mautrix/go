@@ -276,8 +276,8 @@ func sendQR(ce *Event, qr string, prevEventID *id.EventID) error {
 
 func sendUserInputAttachments(ce *Event, atts []*bridgev2.LoginUserInputAttachment) error {
 	for _, att := range atts {
-		filename := "captcha" + exmime.ExtensionFromMimetype(att.MimeType)
-		mxc, file, err := ce.Bot.UploadMedia(ce.Ctx, ce.RoomID, att.Content, filename, att.MimeType)
+		filename := "captcha" + exmime.ExtensionFromMimetype(att.Info.MimeType)
+		mxc, file, err := ce.Bot.UploadMedia(ce.Ctx, ce.RoomID, att.Content, filename, att.Info.MimeType)
 		if err != nil {
 			return fmt.Errorf("failed to upload attachment %q: %w", filename, err)
 		}
@@ -286,6 +286,12 @@ func sendUserInputAttachments(ce *Event, atts []*bridgev2.LoginUserInputAttachme
 			FileName: filename,
 			URL:      mxc,
 			File:     file,
+			Info: &event.FileInfo{
+				Width:  att.Info.Width,
+				Height: att.Info.Height,
+				Size:   att.Info.Size,
+			},
+			Body: filename,
 		}
 		_, err = ce.Bot.SendMessage(ce.Ctx, ce.RoomID, event.EventMessage, &event.Content{Parsed: content}, nil)
 		if err != nil {
