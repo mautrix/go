@@ -18,7 +18,6 @@ import (
 
 	"github.com/skip2/go-qrcode"
 	"go.mau.fi/util/curl"
-	"go.mau.fi/util/exmime"
 
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/networkid"
