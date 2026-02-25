@@ -287,9 +287,10 @@ func sendUserInputAttachments(ce *Event, atts []*bridgev2.LoginUserInputAttachme
 			URL:      mxc,
 			File:     file,
 			Info: &event.FileInfo{
-				Width:  att.Info.Width,
-				Height: att.Info.Height,
-				Size:   att.Info.Size,
+				MimeType: att.Info.MimeType,
+				Width:    att.Info.Width,
+				Height:   att.Info.Height,
+				Size:     att.Info.Size,
 			},
 			Body: filename,
 		}

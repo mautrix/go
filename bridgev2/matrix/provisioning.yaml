@@ -766,10 +766,10 @@ components:
                           type: string
                           description: The MIME type for the media content.
                           examples: [ image/png, audio/mpeg ]
-                        width:
+                        w:
                           type: number
                           description: The width of the media in pixels. Only applicable for images and videos.
-                        height:
+                        h:
                           type: number
                           description: The height of the media in pixels. Only applicable for images and videos.
                         size:
