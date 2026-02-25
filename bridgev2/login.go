@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"maunium.net/go/mautrix/bridgev2/networkid"
+	"maunium.net/go/mautrix/event"
 )
 
 // LoginProcess represents a single occurrence of a user logging into the remote network.
@@ -179,6 +180,7 @@ const (
 	LoginInputFieldTypeURL         LoginInputFieldType = "url"
 	LoginInputFieldTypeDomain      LoginInputFieldType = "domain"
 	LoginInputFieldTypeSelect      LoginInputFieldType = "select"
+	LoginInputFieldTypeCaptchaCode LoginInputFieldType = "captcha_code"
 )
 
 type LoginInputDataField struct {
@@ -271,6 +273,23 @@ func (f *LoginInputDataField) FillDefaultValidate() {
 type LoginUserInputParams struct {
 	// The fields that the user needs to fill in.
 	Fields []LoginInputDataField `json:"fields"`
+
+	// Attachments to display alongside the input fields.
+	Attachments []*LoginUserInputAttachment `json:"attachments"`
+}
+
+type LoginUserInputAttachment struct {
+	Type     event.MessageType            `json:"type,omitempty"`
+	FileName string                       `json:"filename,omitempty"`
+	Content  []byte                       `json:"content,omitempty"`
+	Info     LoginUserInputAttachmentInfo `json:"info,omitempty"`
+}
+
+type LoginUserInputAttachmentInfo struct {
+	MimeType string `json:"mimetype,omitempty"`
+	Width    int    `json:"w,omitempty"`
+	Height   int    `json:"h,omitempty"`
+	Size     int    `json:"size,omitempty"`
 }
 
 type LoginCompleteParams struct {

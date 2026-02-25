@@ -278,6 +278,36 @@ func sendQR(ce *Event, qr string, prevEventID *id.EventID) error {
 	return nil
 }
 
+func sendUserInputAttachments(ce *Event, atts []*bridgev2.LoginUserInputAttachment) error {
+	for _, att := range atts {
+		if att.FileName == "" {
+			return fmt.Errorf("missing attachment filename")
+		}
+		mxc, file, err := ce.Bot.UploadMedia(ce.Ctx, ce.RoomID, att.Content, att.FileName, att.Info.MimeType)
+		if err != nil {
+			return fmt.Errorf("failed to upload attachment %q: %w", att.FileName, err)
+		}
+		content := &event.MessageEventContent{
+			MsgType:  att.Type,
+			FileName: att.FileName,
+			URL:      mxc,
+			File:     file,
+			Info: &event.FileInfo{
+				MimeType: att.Info.MimeType,
+				Width:    att.Info.Width,
+				Height:   att.Info.Height,
+				Size:     att.Info.Size,
+			},
+			Body: att.FileName,
+		}
+		_, err = ce.Bot.SendMessage(ce.Ctx, ce.RoomID, event.EventMessage, &event.Content{Parsed: content}, nil)
+		if err != nil {
+			return nil
+		}
+	}
+	return nil
+}
+
 type contextKey int
 
 const (
@@ -483,6 +513,10 @@ func doLoginStep(ce *Event, login bridgev2.LoginProcess, step *bridgev2.LoginSte
 			Override: override,
 		}).prompt(ce)
 	case bridgev2.LoginStepTypeUserInput:
+		err := sendUserInputAttachments(ce, step.UserInputParams.Attachments)
+		if err != nil {
+			ce.Reply("Failed to send attachments: %v", err)
+		}
 		(&userInputLoginCommandState{
 			Login:           login.(bridgev2.LoginProcessUserInput),
 			RemainingFields: step.UserInputParams.Fields,

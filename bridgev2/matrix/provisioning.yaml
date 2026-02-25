@@ -740,6 +740,41 @@ components:
                       description: For fields of type select, the valid options.
                       items:
                         type: string
+              attachments:
+                type: array
+                description: A list of media attachments to show the user alongside the form fields.
+                items:
+                  type: object
+                  description: A media attachment to show the user.
+                  required: [ type, filename, content ]
+                  properties:
+                    type:
+                      type: string
+                      description: The type of media attachment, using the same media type identifiers as Matrix attachments. Only some are supported.
+                      enum: [ m.image, m.audio ]
+                    filename:
+                      type: string
+                      description: The filename for the media attachment.
+                    content:
+                      type: string
+                      description: The raw file content for the attachment encoded in base64.
+                    info:
+                      type: object
+                      description: Optional but recommended metadata for the attachment. Can generally be derived from the raw content if omitted.
+                      properties:
+                        mimetype:
+                          type: string
+                          description: The MIME type for the media content.
+                          examples: [ image/png, audio/mpeg ]
+                        w:
+                          type: number
+                          description: The width of the media in pixels. Only applicable for images and videos.
+                        h:
+                          type: number
+                          description: The height of the media in pixels. Only applicable for images and videos.
+                        size:
+                          type: number
+                          description: The size of the media content in number of bytes. Strongly recommended to include.
       - description: Cookie login step
         required: [ type, cookies ]
         properties:
