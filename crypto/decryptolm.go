@@ -134,6 +134,9 @@ func (mach *OlmMachine) decryptAndParseOlmCiphertext(ctx context.Context, evt *e
 }
 
 func olmMessageHash(ciphertext string) ([32]byte, error) {
+	if ciphertext == "" {
+		return [32]byte{}, fmt.Errorf("empty ciphertext")
+	}
 	ciphertextBytes, err := base64.RawStdEncoding.DecodeString(ciphertext)
 	return sha256.Sum256(ciphertextBytes), err
 }

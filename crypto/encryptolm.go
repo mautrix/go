@@ -96,15 +96,19 @@ func (mach *OlmMachine) encryptOlmEvent(ctx context.Context, session *OlmSession
 		panic(err)
 	}
 	log := mach.machOrContextLog(ctx)
-	log.Debug().
-		Str("recipient_identity_key", recipient.IdentityKey.String()).
-		Str("olm_session_id", session.ID().String()).
-		Str("olm_session_description", session.Describe()).
-		Msg("Encrypting olm message")
 	msgType, ciphertext, err := session.Encrypt(plaintext)
 	if err != nil {
 		panic(err)
 	}
+	ciphertextStr := string(ciphertext)
+	ciphertextHash, _ := olmMessageHash(ciphertextStr)
+	log.Debug().
+		Stringer("event_type", evtType).
+		Str("recipient_identity_key", recipient.IdentityKey.String()).
+		Str("olm_session_id", session.ID().String()).
+		Str("olm_session_description", session.Describe()).
+		Hex("ciphertext_hash", ciphertextHash[:]).
+		Msg("Encrypted olm message")
 	err = mach.CryptoStore.UpdateSession(ctx, recipient.IdentityKey, session)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to update olm session in crypto store after encrypting")
@@ -115,7 +119,7 @@ func (mach *OlmMachine) encryptOlmEvent(ctx context.Context, session *OlmSession
 		OlmCiphertext: event.OlmCiphertexts{
 			recipient.IdentityKey: {
 				Type: msgType,
-				Body: string(ciphertext),
+				Body: ciphertextStr,
 			},
 		},
 	}
