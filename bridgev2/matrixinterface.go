@@ -28,6 +28,7 @@ type MatrixCapabilities struct {
 	AutoJoinInvites       bool
 	BatchSending          bool
 	ArbitraryMemberChange bool
+	ExtraProfileMeta      bool
 }
 
 type MatrixConnector interface {

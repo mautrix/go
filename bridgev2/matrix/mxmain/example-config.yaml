@@ -241,6 +241,9 @@ matrix:
     # The threshold as bytes after which the bridge should roundtrip uploads via the disk
     # rather than keeping the whole file in memory.
     upload_file_threshold: 5242880
+    # Should the bridge set additional custom profile info for ghosts?
+    # This can make a lot of requests, as there's no batch profile update endpoint.
+    ghost_extra_profile_info: false
 
 # Segment-compatible analytics endpoint for tracking some events, like provisioning API login and encryption errors.
 analytics:
