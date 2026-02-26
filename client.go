@@ -386,7 +386,14 @@ func (cli *Client) LogRequestDone(req *http.Request, resp *http.Response, err er
 		}
 	}
 	if body := req.Context().Value(LogBodyContextKey); body != nil {
-		evt.Interface("req_body", body)
+		switch typedLogBody := body.(type) {
+		case json.RawMessage:
+			evt.RawJSON("req_body", typedLogBody)
+		case string:
+			evt.Str("req_body", typedLogBody)
+		default:
+			panic(fmt.Errorf("invalid type for LogBodyContextKey: %T", body))
+		}
 	}
 	if errors.Is(err, context.Canceled) {
 		evt.Msg("Request canceled")
@@ -450,8 +457,10 @@ func (params *FullRequest) compileRequest(ctx context.Context) (*http.Request, e
 		}
 		if params.SensitiveContent && !logSensitiveContent {
 			logBody = "<sensitive content omitted>"
+		} else if len(jsonStr) > 32768 {
+			logBody = fmt.Sprintf("<large content omitted (%d bytes)>", len(jsonStr))
 		} else {
-			logBody = params.RequestJSON
+			logBody = json.RawMessage(jsonStr)
 		}
 		reqBody = bytes.NewReader(jsonStr)
 		reqLen = int64(len(jsonStr))
@@ -476,7 +485,7 @@ func (params *FullRequest) compileRequest(ctx context.Context) (*http.Request, e
 		}
 	} else if params.Method != http.MethodGet && params.Method != http.MethodHead {
 		params.RequestJSON = struct{}{}
-		logBody = params.RequestJSON
+		logBody = json.RawMessage("{}")
 		reqBody = bytes.NewReader([]byte("{}"))
 		reqLen = 2
 	}
