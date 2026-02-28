@@ -209,6 +209,6 @@ type RespRedactUserStatus struct {
 }
 
 func (cli *Client) RedactUserStatus(ctx context.Context, redactID string) (resp RespRedactUser, err error) {
-	_, err = cli.Client.MakeRequest(ctx, http.MethodPost, cli.BuildAdminURL("v1", "user", "redact_status", redactID), nil, &resp)
+	_, err = cli.Client.MakeRequest(ctx, http.MethodGet, cli.BuildAdminURL("v1", "user", "redact_status", redactID), nil, &resp)
 	return
 }
