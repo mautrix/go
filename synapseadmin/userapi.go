@@ -174,3 +174,41 @@ func (cli *Client) DeleteUserRatelimit(ctx context.Context, userID id.UserID) (e
 	_, err = cli.Client.MakeRequest(ctx, http.MethodDelete, cli.BuildAdminURL("v1", "users", userID, "override_ratelimit"), nil, nil)
 	return
 }
+
+type ReqRedactUser struct {
+	// A list of rooms to redact the user’s events in.
+	// If an empty list is provided all events in all rooms the user is a member of will be redacted.
+	Rooms []id.RoomID `json:"rooms"`
+	// Reason the redaction is being requested, ie “spam”, “abuse”, etc. This will be included in each redaction event.
+	Reason string `json:"reason,omitempty"`
+	// a limit on the number of the user’s events to search for ones that can be redacted (events are redacted newest to
+	// oldest) in each room, defaults to 1000 if not provided.
+	Limit int `json:"limit,omitempty"`
+	// If set to true, the admin user is used to issue the redactions, rather than puppeting the user
+	UseAdmin bool `json:"use_admin,omitempty"`
+}
+
+type RespRedactUser struct {
+	RedactID string `json:"redact_id"`
+}
+
+// RedactUser puppets the target user to redact their events.
+// If the supplied room list is empty, all rooms the user is a member of are used.
+// If the user is a remote user, the invoking admin user will be used to issue redactions.
+func (cli *Client) RedactUser(ctx context.Context, userID id.UserID, req ReqRedactUser) (resp RespUserRatelimit, err error) {
+	if req.Rooms == nil {
+		req.Rooms = []id.RoomID{}
+	}
+	_, err = cli.Client.MakeRequest(ctx, http.MethodPost, cli.BuildAdminURL("v1", "user", userID, "redact"), &req, &resp)
+	return
+}
+
+type RespRedactUserStatus struct {
+	Status           string                `json:"status"`
+	FailedRedactions map[id.EventID]string `json:"failed_redactions"`
+}
+
+func (cli *Client) RedactUserStatus(ctx context.Context, redactID string) (resp RespRedactUser, err error) {
+	_, err = cli.Client.MakeRequest(ctx, http.MethodPost, cli.BuildAdminURL("v1", "user", "redact_status", redactID), nil, &resp)
+	return
+}
