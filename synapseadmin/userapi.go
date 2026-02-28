@@ -195,7 +195,7 @@ type RespRedactUser struct {
 // RedactUser puppets the target user to redact their events.
 // If the supplied room list is empty, all rooms the user is a member of are used.
 // If the user is a remote user, the invoking admin user will be used to issue redactions.
-func (cli *Client) RedactUser(ctx context.Context, userID id.UserID, req ReqRedactUser) (resp RespUserRatelimit, err error) {
+func (cli *Client) RedactUser(ctx context.Context, userID id.UserID, req ReqRedactUser) (resp RespRedactUser, err error) {
 	if req.Rooms == nil {
 		req.Rooms = []id.RoomID{}
 	}
@@ -208,7 +208,7 @@ type RespRedactUserStatus struct {
 	FailedRedactions map[id.EventID]string `json:"failed_redactions"`
 }
 
-func (cli *Client) RedactUserStatus(ctx context.Context, redactID string) (resp RespRedactUser, err error) {
+func (cli *Client) RedactUserStatus(ctx context.Context, redactID string) (resp RespRedactUserStatus, err error) {
 	_, err = cli.Client.MakeRequest(ctx, http.MethodGet, cli.BuildAdminURL("v1", "user", "redact_status", redactID), nil, &resp)
 	return
 }
