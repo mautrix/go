@@ -697,12 +697,11 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 			return portal.handleMatrixReceipts(ctx, evt)
 		case event.EphemeralEventTyping:
 			return portal.handleMatrixTyping(ctx, evt)
-		default:
-			if evt.Type.IsCustom() {
-				return portal.handleMatrixEphemeral(ctx, sender, evt)
-			}
-			return EventHandlingResultIgnored
 		}
+		if evt.Type.IsCustom() {
+			return portal.handleMatrixEphemeral(ctx, sender, evt)
+		}
+		return EventHandlingResultIgnored
 	}
 	if evt.Type == event.StateTombstone {
 		// Tombstones aren't bridged so they don't need a login
