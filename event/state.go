@@ -343,3 +343,15 @@ func (efmc *ElementFunctionalMembersContent) Add(mxid id.UserID) bool {
 	efmc.ServiceMembers = append(efmc.ServiceMembers, mxid)
 	return true
 }
+
+type PolicyServerPublicKeys struct {
+	Ed25519 id.Ed25519 `json:"ed25519,omitempty"`
+}
+
+type RoomPolicyEventContent struct {
+	Via        string                  `json:"via,omitempty"`
+	PublicKeys *PolicyServerPublicKeys `json:"public_keys,omitempty"`
+
+	// Deprecated, only for legacy use
+	PublicKey id.Ed25519 `json:"public_key"`
+}

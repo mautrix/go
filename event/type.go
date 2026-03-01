@@ -113,7 +113,7 @@ func (et *Type) GuessClass() TypeClass {
 		StatePinnedEvents.Type, StateTombstone.Type, StateEncryption.Type, StateBridge.Type, StateHalfShotBridge.Type,
 		StateSpaceParent.Type, StateSpaceChild.Type, StatePolicyRoom.Type, StatePolicyServer.Type, StatePolicyUser.Type,
 		StateElementFunctionalMembers.Type, StateBeeperRoomFeatures.Type, StateBeeperDisappearingTimer.Type,
-		StateMSC4391BotCommand.Type:
+		StateMSC4391BotCommand.Type, StateRoomPolicy.Type, StateUnstableRoomPolicy.Type:
 		return StateEventType
 	case EphemeralEventReceipt.Type, EphemeralEventTyping.Type, EphemeralEventPresence.Type:
 		return EphemeralEventType
@@ -194,6 +194,9 @@ var (
 	StateHalfShotBridge    = Type{"uk.half-shot.bridge", StateEventType}
 	StateSpaceChild        = Type{"m.space.child", StateEventType}
 	StateSpaceParent       = Type{"m.space.parent", StateEventType}
+
+	StateRoomPolicy         = Type{"m.room.policy", StateEventType}
+	StateUnstableRoomPolicy = Type{"org.matrix.msc4284.policy", StateEventType}
 
 	StateLegacyPolicyRoom     = Type{"m.room.rule.room", StateEventType}
 	StateLegacyPolicyServer   = Type{"m.room.rule.server", StateEventType}
