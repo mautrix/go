@@ -128,7 +128,7 @@ func (pl *PowerLevelsEventContent) StateDefault() int {
 }
 
 func (pl *PowerLevelsEventContent) EphemeralDefault() int {
-	if pl != nil && pl.EphemeralDefaultPtr != nil {
+	if pl.EphemeralDefaultPtr != nil {
 		return *pl.EphemeralDefaultPtr
 	}
 	return pl.EventsDefault

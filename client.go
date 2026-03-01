@@ -1360,8 +1360,8 @@ func (cli *Client) SendMessageEvent(ctx context.Context, roomID id.RoomID, event
 }
 
 // SendEphemeralEvent sends an ephemeral event into a room. This is a custom unstable endpoint.
-// contentJSON should be a pointer to something that can be encoded as JSON using json.Marshal.
-func (cli *Client) SendEphemeralEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, contentJSON interface{}, extra ...ReqSendEvent) (resp *RespSendEvent, err error) {
+// contentJSON should be a value that can be encoded as JSON using json.Marshal.
+func (cli *Client) SendEphemeralEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, contentJSON any, extra ...ReqSendEvent) (resp *RespSendEvent, err error) {
 	var req ReqSendEvent
 	if len(extra) > 0 {
 		req = extra[0]
