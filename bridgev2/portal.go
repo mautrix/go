@@ -698,7 +698,10 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 		case event.EphemeralEventTyping:
 			return portal.handleMatrixTyping(ctx, evt)
 		default:
-			return portal.handleMatrixEphemeral(ctx, sender, evt)
+			if evt.Type.IsCustom() {
+				return portal.handleMatrixEphemeral(ctx, sender, evt)
+			}
+			return EventHandlingResultIgnored
 		}
 	}
 	if evt.Type == event.StateTombstone {
