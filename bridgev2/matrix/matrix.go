@@ -231,8 +231,13 @@ func (br *Connector) postDecrypt(ctx context.Context, original, decrypted *event
 	go br.sendSuccessCheckpoint(ctx, decrypted, status.MsgStepDecrypted, retryCount)
 	decrypted.Mautrix.CheckpointSent = true
 	decrypted.Mautrix.DecryptionDuration = duration
+	decrypted.Mautrix.EventSource |= original.Mautrix.EventSource
 	decrypted.Mautrix.EventSource |= event.SourceDecrypted
-	br.EventProcessor.Dispatch(ctx, decrypted)
+	if decrypted.Mautrix.EventSource&event.SourceEphemeral != 0 {
+		br.handleEphemeralEvent(ctx, decrypted)
+	} else {
+		br.EventProcessor.Dispatch(ctx, decrypted)
+	}
 	if errorEventID != nil && *errorEventID != "" {
 		_, _ = br.Bot.RedactEvent(ctx, decrypted.RoomID, *errorEventID)
 	}

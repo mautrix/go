@@ -144,6 +144,7 @@ func (br *Connector) Init(bridge *bridgev2.Bridge) {
 	br.EventProcessor.On(event.EventReaction, br.handleRoomEvent)
 	br.EventProcessor.On(event.EventRedaction, br.handleRoomEvent)
 	br.EventProcessor.On(event.EventEncrypted, br.handleEncryptedEvent)
+	br.EventProcessor.On(event.Type{Type: event.EventEncrypted.Type, Class: event.EphemeralEventType}, br.handleEncryptedEvent)
 	br.EventProcessor.On(event.StateMember, br.handleRoomEvent)
 	br.EventProcessor.On(event.StatePowerLevels, br.handleRoomEvent)
 	br.EventProcessor.On(event.StateRoomName, br.handleRoomEvent)
@@ -156,6 +157,7 @@ func (br *Connector) Init(bridge *bridgev2.Bridge) {
 	br.EventProcessor.On(event.BeeperAcceptMessageRequest, br.handleRoomEvent)
 	br.EventProcessor.On(event.EphemeralEventReceipt, br.handleEphemeralEvent)
 	br.EventProcessor.On(event.EphemeralEventTyping, br.handleEphemeralEvent)
+	br.EventProcessor.On(event.EphemeralEventAIStream, br.handleEphemeralEvent)
 	br.Bot = br.AS.BotIntent()
 	br.Crypto = NewCryptoHelper(br)
 	br.Bridge.Commands.(*commands.Processor).AddHandlers(
