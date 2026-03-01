@@ -697,7 +697,7 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 			return portal.handleMatrixReceipts(ctx, evt)
 		case event.EphemeralEventTyping:
 			return portal.handleMatrixTyping(ctx, evt)
-		case event.EphemeralEventBeeper:
+		case event.EphemeralEventAIStream:
 			return portal.handleMatrixEphemeral(ctx, sender, evt)
 		default:
 			return EventHandlingResultIgnored
