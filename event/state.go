@@ -353,5 +353,5 @@ type RoomPolicyEventContent struct {
 	PublicKeys *PolicyServerPublicKeys `json:"public_keys,omitempty"`
 
 	// Deprecated, only for legacy use
-	PublicKey id.Ed25519 `json:"public_key"`
+	PublicKey id.Ed25519 `json:"public_key,omitempty"`
 }
