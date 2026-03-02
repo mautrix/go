@@ -214,23 +214,6 @@ func (content *MessageEventContent) RemovePerMessageProfileFallback() {
 	}
 }
 
-type BeeperActionHint struct {
-	Body          string          `json:"body"`
-	EventType     string          `json:"event_type,omitempty"`
-	Event         json.RawMessage `json:"event,omitempty"`
-	Format        string          `json:"format,omitempty"`
-	FormattedBody string          `json:"formatted_body,omitempty"`
-	Img           id.ContentURI   `json:"img,omitempty"`
-}
-
-type BeeperActionHints struct {
-	Hints          []BeeperActionHint `json:"hints"`
-	Exclusive      bool               `json:"exclusive,omitempty"`
-	AllowedSenders []id.UserID        `json:"allowed_senders,omitempty"`
-	ExpiresAt      int64              `json:"expires_at,omitempty"`
-	Context        json.RawMessage    `json:"context,omitempty"`
-}
-
 type BeeperAIStreamEventContent struct {
 	TurnID      string         `json:"turn_id"`
 	Seq         int            `json:"seq"`
