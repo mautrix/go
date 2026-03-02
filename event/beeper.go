@@ -237,6 +237,15 @@ type BeeperActionResponseEventContent struct {
 	Context   json.RawMessage `json:"context,omitempty"`
 }
 
+type BeeperAIStreamEventContent struct {
+	TurnID      string         `json:"turn_id"`
+	Seq         int            `json:"seq"`
+	Part        map[string]any `json:"part"`
+	TargetEvent id.EventID     `json:"target_event,omitempty"`
+	AgentID     string         `json:"agent_id,omitempty"`
+	RelatesTo   *RelatesTo     `json:"m.relates_to,omitempty"`
+}
+
 func (content *BeeperActionResponseEventContent) GetRelatesTo() *RelatesTo {
 	if content.RelatesTo == nil {
 		content.RelatesTo = &RelatesTo{}

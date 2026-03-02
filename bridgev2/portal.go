@@ -820,8 +820,6 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 		return portal.handleMatrixDeleteChat(ctx, login, origSender, evt)
 	case event.BeeperAcceptMessageRequest:
 		return portal.handleMatrixAcceptMessageRequest(ctx, login, origSender, evt)
-	case event.BeeperActionResponse:
-		return portal.handleMatrixBeeperActionResponse(ctx, login, origSender, evt)
 	default:
 		return EventHandlingResultIgnored
 	}
@@ -967,7 +965,26 @@ func (portal *Portal) handleMatrixAIStream(ctx context.Context, sender *User, ev
 			UserID: sender.MXID,
 		}
 	}
-	return portal.handleMatrixBeeperActionResponse(ctx, login, origSender, evt)
+	content, ok := evt.Content.Parsed.(*event.BeeperAIStreamEventContent)
+	if !ok {
+		log.Error().Type("content_type", evt.Content.Parsed).Msg("Unexpected parsed content type")
+		return EventHandlingResultFailed.WithMSSError(fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed))
+	}
+	api, ok := login.Client.(BeeperAIStreamHandlingNetworkAPI)
+	if !ok {
+		return EventHandlingResultIgnored.WithMSSError(ErrBeeperAIStreamNotSupported)
+	}
+	err = api.HandleMatrixBeeperAIStream(ctx, &MatrixBeeperAIStream{
+		Event:      evt,
+		Content:    content,
+		Portal:     portal,
+		OrigSender: origSender,
+	})
+	if err != nil {
+		log.Err(err).Msg("Failed to handle Matrix AI stream event")
+		return EventHandlingResultFailed.WithMSSError(err)
+	}
+	return EventHandlingResultSuccess.WithMSS()
 }
 
 func (portal *Portal) sendTypings(ctx context.Context, userIDs []id.UserID, typing bool) {
@@ -1843,35 +1860,6 @@ func (portal *Portal) handleMatrixAcceptMessageRequest(
 		if err != nil {
 			log.Err(err).Msg("Failed to save portal after accepting message request")
 		}
-	}
-	return EventHandlingResultSuccess.WithMSS()
-}
-
-func (portal *Portal) handleMatrixBeeperActionResponse(
-	ctx context.Context,
-	sender *UserLogin,
-	origSender *OrigSender,
-	evt *event.Event,
-) EventHandlingResult {
-	log := zerolog.Ctx(ctx)
-	content, ok := evt.Content.Parsed.(*event.BeeperActionResponseEventContent)
-	if !ok {
-		log.Error().Type("content_type", evt.Content.Parsed).Msg("Unexpected parsed content type")
-		return EventHandlingResultFailed.WithMSSError(fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed))
-	}
-	api, ok := sender.Client.(BeeperActionResponseHandlingNetworkAPI)
-	if !ok {
-		return EventHandlingResultIgnored.WithMSSError(ErrBeeperActionResponseNotSupported)
-	}
-	err := api.HandleMatrixBeeperActionResponse(ctx, &MatrixBeeperActionResponse{
-		Event:      evt,
-		Content:    content,
-		Portal:     portal,
-		OrigSender: origSender,
-	})
-	if err != nil {
-		log.Err(err).Msg("Failed to handle Matrix action response")
-		return EventHandlingResultFailed.WithMSSError(err)
 	}
 	return EventHandlingResultSuccess.WithMSS()
 }

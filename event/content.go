@@ -80,7 +80,7 @@ var TypeMap = map[Type]reflect.Type{
 	EphemeralEventTyping:         reflect.TypeOf(TypingEventContent{}),
 	EphemeralEventReceipt:        reflect.TypeOf(ReceiptEventContent{}),
 	EphemeralEventPresence:       reflect.TypeOf(PresenceEventContent{}),
-	BeeperEphemeralEventAIStream: reflect.TypeOf(BeeperActionResponseEventContent{}),
+	BeeperEphemeralEventAIStream: reflect.TypeOf(BeeperAIStreamEventContent{}),
 
 	InRoomVerificationReady:  reflect.TypeOf(VerificationReadyEventContent{}),
 	InRoomVerificationStart:  reflect.TypeOf(VerificationStartEventContent{}),

@@ -726,12 +726,9 @@ type MessageRequestAcceptingNetworkAPI interface {
 	HandleMatrixAcceptMessageRequest(ctx context.Context, msg *MatrixAcceptMessageRequest) error
 }
 
-// BeeperActionResponseHandlingNetworkAPI is an optional interface that network connectors
-// can implement to handle com.beeper.action_response events (MSC1485 action hints).
-type BeeperActionResponseHandlingNetworkAPI interface {
+type BeeperAIStreamHandlingNetworkAPI interface {
 	NetworkAPI
-	// HandleMatrixBeeperActionResponse is called when a user clicks an action hint button.
-	HandleMatrixBeeperActionResponse(ctx context.Context, msg *MatrixBeeperActionResponse) error
+	HandleMatrixBeeperAIStream(ctx context.Context, msg *MatrixBeeperAIStream) error
 }
 
 type ResolveIdentifierResponse struct {
@@ -1447,7 +1444,7 @@ type MatrixViewingChat struct {
 
 type MatrixDeleteChat = MatrixEventBase[*event.BeeperChatDeleteEventContent]
 type MatrixAcceptMessageRequest = MatrixEventBase[*event.BeeperAcceptMessageRequestEventContent]
-type MatrixBeeperActionResponse = MatrixEventBase[*event.BeeperActionResponseEventContent]
+type MatrixBeeperAIStream = MatrixEventBase[*event.BeeperAIStreamEventContent]
 type MatrixMarkedUnread = MatrixRoomMeta[*event.MarkedUnreadEventContent]
 type MatrixMute = MatrixRoomMeta[*event.BeeperMuteEventContent]
 type MatrixRoomTag = MatrixRoomMeta[*event.TagEventContent]
