@@ -128,8 +128,7 @@ func (et *Type) GuessClass() TypeClass {
 		InRoomVerificationKey.Type, InRoomVerificationMAC.Type, InRoomVerificationCancel.Type,
 		CallInvite.Type, CallCandidates.Type, CallAnswer.Type, CallReject.Type, CallSelectAnswer.Type,
 		CallNegotiate.Type, CallHangup.Type, BeeperMessageStatus.Type, EventUnstablePollStart.Type, EventUnstablePollResponse.Type,
-		EventUnstablePollEnd.Type, BeeperTranscription.Type, BeeperDeleteChat.Type, BeeperAcceptMessageRequest.Type,
-		BeeperActionResponse.Type:
+		EventUnstablePollEnd.Type, BeeperTranscription.Type, BeeperDeleteChat.Type, BeeperAcceptMessageRequest.Type:
 		return MessageEventType
 	case ToDeviceRoomKey.Type, ToDeviceRoomKeyRequest.Type, ToDeviceForwardedRoomKey.Type, ToDeviceRoomKeyWithheld.Type,
 		ToDeviceBeeperRoomKeyAck.Type:
@@ -243,7 +242,6 @@ var (
 	BeeperDeleteChat           = Type{"com.beeper.delete_chat", MessageEventType}
 	BeeperAcceptMessageRequest = Type{"com.beeper.accept_message_request", MessageEventType}
 	BeeperSendState            = Type{"com.beeper.send_state", MessageEventType}
-	BeeperActionResponse       = Type{"com.beeper.action_response", MessageEventType}
 
 	EventUnstablePollStart    = Type{Type: "org.matrix.msc3381.poll.start", Class: MessageEventType}
 	EventUnstablePollResponse = Type{Type: "org.matrix.msc3381.poll.response", Class: MessageEventType}

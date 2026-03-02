@@ -231,12 +231,6 @@ type BeeperActionHints struct {
 	Context        json.RawMessage    `json:"context,omitempty"`
 }
 
-type BeeperActionResponseEventContent struct {
-	RelatesTo *RelatesTo      `json:"m.relates_to,omitempty"`
-	ActionID  string          `json:"action_id,omitempty"`
-	Context   json.RawMessage `json:"context,omitempty"`
-}
-
 type BeeperAIStreamEventContent struct {
 	TurnID      string         `json:"turn_id"`
 	Seq         int            `json:"seq"`
@@ -244,21 +238,6 @@ type BeeperAIStreamEventContent struct {
 	TargetEvent id.EventID     `json:"target_event,omitempty"`
 	AgentID     string         `json:"agent_id,omitempty"`
 	RelatesTo   *RelatesTo     `json:"m.relates_to,omitempty"`
-}
-
-func (content *BeeperActionResponseEventContent) GetRelatesTo() *RelatesTo {
-	if content.RelatesTo == nil {
-		content.RelatesTo = &RelatesTo{}
-	}
-	return content.RelatesTo
-}
-
-func (content *BeeperActionResponseEventContent) OptionalGetRelatesTo() *RelatesTo {
-	return content.RelatesTo
-}
-
-func (content *BeeperActionResponseEventContent) SetRelatesTo(rel *RelatesTo) {
-	content.RelatesTo = rel
 }
 
 type BeeperEncodedOrder struct {
