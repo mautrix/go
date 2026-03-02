@@ -28,13 +28,7 @@ func (pdu *PDU) Sign(roomVersion id.RoomVersion, serverName string, keyID id.Key
 		return fmt.Errorf("failed to marshal redacted PDU to sign: %w", err)
 	}
 	signature := ed25519.Sign(privateKey, rawJSON)
-	if pdu.Signatures == nil {
-		pdu.Signatures = make(map[string]map[id.KeyID]string)
-	}
-	if _, ok := pdu.Signatures[serverName]; !ok {
-		pdu.Signatures[serverName] = make(map[id.KeyID]string)
-	}
-	pdu.Signatures[serverName][keyID] = base64.RawStdEncoding.EncodeToString(signature)
+	pdu.AddSignature(serverName, keyID, base64.RawStdEncoding.EncodeToString(signature))
 	return nil
 }
 

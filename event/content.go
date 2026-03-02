@@ -40,6 +40,9 @@ var TypeMap = map[Type]reflect.Type{
 	StateSpaceParent:       reflect.TypeOf(SpaceParentEventContent{}),
 	StateSpaceChild:        reflect.TypeOf(SpaceChildEventContent{}),
 
+	StateRoomPolicy:         reflect.TypeOf(RoomPolicyEventContent{}),
+	StateUnstableRoomPolicy: reflect.TypeOf(RoomPolicyEventContent{}),
+
 	StateLegacyPolicyRoom:     reflect.TypeOf(ModPolicyContent{}),
 	StateLegacyPolicyServer:   reflect.TypeOf(ModPolicyContent{}),
 	StateLegacyPolicyUser:     reflect.TypeOf(ModPolicyContent{}),

@@ -123,6 +123,19 @@ func (pdu *PDU) ToClientEvent(roomVersion id.RoomVersion) (*event.Event, error) 
 	return evt, nil
 }
 
+func (pdu *PDU) AddSignature(serverName string, keyID id.KeyID, signature string) {
+	if signature == "" {
+		return
+	}
+	if pdu.Signatures == nil {
+		pdu.Signatures = make(map[string]map[id.KeyID]string)
+	}
+	if _, ok := pdu.Signatures[serverName]; !ok {
+		pdu.Signatures[serverName] = make(map[id.KeyID]string)
+	}
+	pdu.Signatures[serverName][keyID] = signature
+}
+
 func marshalCanonical(data any) (jsontext.Value, error) {
 	marshaledBytes, err := json.Marshal(data)
 	if err != nil {
