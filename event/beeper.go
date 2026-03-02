@@ -214,6 +214,49 @@ func (content *MessageEventContent) RemovePerMessageProfileFallback() {
 	}
 }
 
+// BeeperActionHint represents a single button in a com.beeper.action_hints content block.
+// Based on MSC1485 (tulir).
+type BeeperActionHint struct {
+	Body          string          `json:"body"`
+	EventType     string          `json:"event_type,omitempty"`
+	Event         json.RawMessage `json:"event,omitempty"`
+	Format        string          `json:"format,omitempty"`
+	FormattedBody string          `json:"formatted_body,omitempty"`
+	Img           id.ContentURI   `json:"img,omitempty"`
+}
+
+// BeeperActionHints is a single object under "com.beeper.action_hints" containing
+// both the hints array (from MSC1485) and Beeper extension fields.
+type BeeperActionHints struct {
+	Hints          []BeeperActionHint `json:"hints"`
+	Exclusive      bool               `json:"exclusive,omitempty"`
+	AllowedSenders []id.UserID        `json:"allowed_senders,omitempty"`
+	ExpiresAt      int64              `json:"expires_at,omitempty"`
+	Context        json.RawMessage    `json:"context,omitempty"`
+}
+
+// BeeperActionResponseEventContent represents the content of a com.beeper.action_response event.
+type BeeperActionResponseEventContent struct {
+	RelatesTo *RelatesTo      `json:"m.relates_to,omitempty"`
+	ActionID  string          `json:"action_id,omitempty"`
+	Context   json.RawMessage `json:"context,omitempty"`
+}
+
+func (content *BeeperActionResponseEventContent) GetRelatesTo() *RelatesTo {
+	if content.RelatesTo == nil {
+		content.RelatesTo = &RelatesTo{}
+	}
+	return content.RelatesTo
+}
+
+func (content *BeeperActionResponseEventContent) OptionalGetRelatesTo() *RelatesTo {
+	return content.RelatesTo
+}
+
+func (content *BeeperActionResponseEventContent) SetRelatesTo(rel *RelatesTo) {
+	content.RelatesTo = rel
+}
+
 type BeeperEncodedOrder struct {
 	order    int64
 	suborder int16

@@ -820,6 +820,8 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 		return portal.handleMatrixDeleteChat(ctx, login, origSender, evt)
 	case event.BeeperAcceptMessageRequest:
 		return portal.handleMatrixAcceptMessageRequest(ctx, login, origSender, evt)
+	case event.BeeperActionResponse:
+		return portal.handleMatrixActionResponse(ctx, login, origSender, evt)
 	default:
 		return EventHandlingResultIgnored
 	}
@@ -1858,6 +1860,35 @@ func (portal *Portal) handleMatrixAcceptMessageRequest(
 		if err != nil {
 			log.Err(err).Msg("Failed to save portal after accepting message request")
 		}
+	}
+	return EventHandlingResultSuccess.WithMSS()
+}
+
+func (portal *Portal) handleMatrixActionResponse(
+	ctx context.Context,
+	sender *UserLogin,
+	origSender *OrigSender,
+	evt *event.Event,
+) EventHandlingResult {
+	log := zerolog.Ctx(ctx)
+	content, ok := evt.Content.Parsed.(*event.BeeperActionResponseEventContent)
+	if !ok {
+		log.Error().Type("content_type", evt.Content.Parsed).Msg("Unexpected parsed content type")
+		return EventHandlingResultFailed.WithMSSError(fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed))
+	}
+	api, ok := sender.Client.(ActionResponseHandlingNetworkAPI)
+	if !ok {
+		return EventHandlingResultIgnored
+	}
+	err := api.HandleMatrixActionResponse(ctx, &MatrixActionResponse{
+		Event:      evt,
+		Content:    content,
+		Portal:     portal,
+		OrigSender: origSender,
+	})
+	if err != nil {
+		log.Err(err).Msg("Failed to handle Matrix action response")
+		return EventHandlingResultFailed.WithMSSError(err)
 	}
 	return EventHandlingResultSuccess.WithMSS()
 }

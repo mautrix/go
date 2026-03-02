@@ -217,3 +217,9 @@ type MarkAsDMMatrixAPI interface {
 	MatrixAPI
 	MarkAsDM(ctx context.Context, roomID id.RoomID, otherUser id.UserID) error
 }
+
+// EphemeralSendingMatrixAPI extends MatrixAPI with ephemeral event delivery.
+type EphemeralSendingMatrixAPI interface {
+	MatrixAPI
+	SendEphemeralEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, content *event.Content, txnID string) (*mautrix.RespSendEvent, error)
+}

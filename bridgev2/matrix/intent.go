@@ -43,6 +43,7 @@ type ASIntent struct {
 
 var _ bridgev2.MatrixAPI = (*ASIntent)(nil)
 var _ bridgev2.MarkAsDMMatrixAPI = (*ASIntent)(nil)
+var _ bridgev2.EphemeralSendingMatrixAPI = (*ASIntent)(nil)
 
 func (as *ASIntent) SendMessage(ctx context.Context, roomID id.RoomID, eventType event.Type, content *event.Content, extra *bridgev2.MatrixSendExtra) (*mautrix.RespSendEvent, error) {
 	if extra == nil {
@@ -82,6 +83,18 @@ func (as *ASIntent) SendMessage(ctx context.Context, roomID id.RoomID, eventType
 		}
 	}
 	return as.Matrix.SendMessageEvent(ctx, roomID, eventType, content, mautrix.ReqSendEvent{Timestamp: extra.Timestamp.UnixMilli()})
+}
+
+func (as *ASIntent) SendEphemeralEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, content *event.Content, txnID string) (*mautrix.RespSendEvent, error) {
+	if encrypted, err := as.Matrix.StateStore.IsEncrypted(ctx, roomID); err != nil {
+		return nil, fmt.Errorf("failed to check if room is encrypted: %w", err)
+	} else if encrypted && as.Connector.Crypto != nil {
+		if err = as.Connector.Crypto.Encrypt(ctx, roomID, eventType, content); err != nil {
+			return nil, err
+		}
+		eventType = event.EventEncrypted
+	}
+	return as.Matrix.SendEphemeralEvent(ctx, roomID, eventType, content, mautrix.ReqSendEvent{TransactionID: txnID})
 }
 
 func (as *ASIntent) fillMemberEvent(ctx context.Context, roomID id.RoomID, userID id.UserID, content *event.Content) {

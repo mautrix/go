@@ -65,6 +65,7 @@ var TypeMap = map[Type]reflect.Type{
 	BeeperDeleteChat:           reflect.TypeOf(BeeperChatDeleteEventContent{}),
 	BeeperAcceptMessageRequest: reflect.TypeOf(BeeperAcceptMessageRequestEventContent{}),
 	BeeperSendState:            reflect.TypeOf(BeeperSendStateEventContent{}),
+	BeeperActionResponse:       reflect.TypeOf(BeeperActionResponseEventContent{}),
 
 	AccountDataRoomTags:        reflect.TypeOf(TagEventContent{}),
 	AccountDataDirectChats:     reflect.TypeOf(DirectChatsEventContent{}),
@@ -260,6 +261,7 @@ func init() {
 	gob.Register(&TypingEventContent{})
 	gob.Register(&ReceiptEventContent{})
 	gob.Register(&PresenceEventContent{})
+	gob.Register(&BeeperActionResponseEventContent{})
 	gob.Register(&RoomKeyEventContent{})
 	gob.Register(&ForwardedRoomKeyEventContent{})
 	gob.Register(&RoomKeyRequestEventContent{})
@@ -554,6 +556,13 @@ func (content *Content) AsCallHangup() *CallHangupEventContent {
 	casted, ok := content.Parsed.(*CallHangupEventContent)
 	if !ok {
 		return &CallHangupEventContent{}
+	}
+	return casted
+}
+func (content *Content) AsBeeperActionResponse() *BeeperActionResponseEventContent {
+	casted, ok := content.Parsed.(*BeeperActionResponseEventContent)
+	if !ok {
+		return &BeeperActionResponseEventContent{}
 	}
 	return casted
 }
