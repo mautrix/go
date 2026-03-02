@@ -42,7 +42,7 @@ func TestClient_SendEphemeralEvent_UsesUnstablePathTxnAndTS(t *testing.T) {
 	cli, err := mautrix.NewClient(ts.URL, "", "")
 	require.NoError(t, err)
 
-	_, err = cli.SendEphemeralEvent(
+	_, err = cli.BeeperSendEphemeralEvent(
 		context.Background(),
 		roomID,
 		evtType,
@@ -66,7 +66,7 @@ func TestClient_SendEphemeralEvent_UnsupportedReturnsMUnrecognized(t *testing.T)
 	cli, err := mautrix.NewClient(ts.URL, "", "")
 	require.NoError(t, err)
 
-	_, err = cli.SendEphemeralEvent(
+	_, err = cli.BeeperSendEphemeralEvent(
 		context.Background(),
 		id.RoomID("!room:example.com"),
 		event.Type{Type: "com.example.ephemeral", Class: event.EphemeralEventType},
@@ -110,7 +110,7 @@ func TestClient_SendEphemeralEvent_EncryptsInEncryptedRooms(t *testing.T) {
 	cli.StateStore = stateStore
 	cli.Crypto = fakeCrypto
 
-	_, err = cli.SendEphemeralEvent(
+	_, err = cli.BeeperSendEphemeralEvent(
 		context.Background(),
 		roomID,
 		evtType,

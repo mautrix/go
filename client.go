@@ -1359,9 +1359,9 @@ func (cli *Client) SendMessageEvent(ctx context.Context, roomID id.RoomID, event
 	return
 }
 
-// SendEphemeralEvent sends an ephemeral event into a room. This is a custom unstable endpoint.
+// BeeperSendEphemeralEvent sends an ephemeral event into a room using Beeper's unstable endpoint.
 // contentJSON should be a value that can be encoded as JSON using json.Marshal.
-func (cli *Client) SendEphemeralEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, contentJSON any, extra ...ReqSendEvent) (resp *RespSendEvent, err error) {
+func (cli *Client) BeeperSendEphemeralEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, contentJSON any, extra ...ReqSendEvent) (resp *RespSendEvent, err error) {
 	var req ReqSendEvent
 	if len(extra) > 0 {
 		req = extra[0]
@@ -1377,6 +1377,17 @@ func (cli *Client) SendEphemeralEvent(ctx context.Context, roomID id.RoomID, eve
 	queryParams := map[string]string{}
 	if req.Timestamp > 0 {
 		queryParams["ts"] = strconv.FormatInt(req.Timestamp, 10)
+	}
+	if eventType == event.BeeperEphemeralEventAIStream {
+		if cli.SpecVersions == nil {
+			_, err = cli.Versions(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("failed to check homeserver feature support via /versions: %w", err)
+			}
+		}
+		if !cli.SpecVersions.Supports(BeeperFeatureAIStreamEvent) {
+			return nil, MUnrecognized.WithMessage("Homeserver does not advertise com.beeper.ai.stream_event support")
+		}
 	}
 
 	if !req.DontEncrypt && cli != nil && cli.Crypto != nil && eventType != event.EventEncrypted {

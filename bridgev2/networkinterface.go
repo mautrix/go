@@ -657,11 +657,6 @@ type TypingHandlingNetworkAPI interface {
 	HandleMatrixTyping(ctx context.Context, msg *MatrixTyping) error
 }
 
-type EphemeralHandlingNetworkAPI interface {
-	NetworkAPI
-	HandleMatrixEphemeral(ctx context.Context, msg *MatrixEphemeralEvent) error
-}
-
 type MarkedUnreadHandlingNetworkAPI interface {
 	NetworkAPI
 	HandleMarkedUnread(ctx context.Context, msg *MatrixMarkedUnread) error
@@ -731,12 +726,12 @@ type MessageRequestAcceptingNetworkAPI interface {
 	HandleMatrixAcceptMessageRequest(ctx context.Context, msg *MatrixAcceptMessageRequest) error
 }
 
-// ActionResponseHandlingNetworkAPI is an optional interface that network connectors
+// BeeperActionResponseHandlingNetworkAPI is an optional interface that network connectors
 // can implement to handle com.beeper.action_response events (MSC1485 action hints).
-type ActionResponseHandlingNetworkAPI interface {
+type BeeperActionResponseHandlingNetworkAPI interface {
 	NetworkAPI
-	// HandleMatrixActionResponse is called when a user clicks an action hint button.
-	HandleMatrixActionResponse(ctx context.Context, msg *MatrixActionResponse) error
+	// HandleMatrixBeeperActionResponse is called when a user clicks an action hint button.
+	HandleMatrixBeeperActionResponse(ctx context.Context, msg *MatrixBeeperActionResponse) error
 }
 
 type ResolveIdentifierResponse struct {
@@ -1367,10 +1362,6 @@ type MatrixMessage struct {
 	pendingSaves []*outgoingMessage
 }
 
-type MatrixEphemeralEvent struct {
-	MatrixEventBase[*event.Content]
-}
-
 type MatrixEdit struct {
 	MatrixEventBase[*event.MessageEventContent]
 	EditTarget *database.Message
@@ -1456,7 +1447,7 @@ type MatrixViewingChat struct {
 
 type MatrixDeleteChat = MatrixEventBase[*event.BeeperChatDeleteEventContent]
 type MatrixAcceptMessageRequest = MatrixEventBase[*event.BeeperAcceptMessageRequestEventContent]
-type MatrixActionResponse = MatrixEventBase[*event.BeeperActionResponseEventContent]
+type MatrixBeeperActionResponse = MatrixEventBase[*event.BeeperActionResponseEventContent]
 type MatrixMarkedUnread = MatrixRoomMeta[*event.MarkedUnreadEventContent]
 type MatrixMute = MatrixRoomMeta[*event.BeeperMuteEventContent]
 type MatrixRoomTag = MatrixRoomMeta[*event.TagEventContent]

@@ -697,8 +697,8 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 			return portal.handleMatrixReceipts(ctx, evt)
 		case event.EphemeralEventTyping:
 			return portal.handleMatrixTyping(ctx, evt)
-		case event.EphemeralEventAIStream:
-			return portal.handleMatrixEphemeral(ctx, sender, evt)
+		case event.BeeperEphemeralEventAIStream:
+			return portal.handleMatrixAIStream(ctx, sender, evt)
 		default:
 			return EventHandlingResultIgnored
 		}
@@ -821,7 +821,7 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 	case event.BeeperAcceptMessageRequest:
 		return portal.handleMatrixAcceptMessageRequest(ctx, login, origSender, evt)
 	case event.BeeperActionResponse:
-		return portal.handleMatrixActionResponse(ctx, login, origSender, evt)
+		return portal.handleMatrixBeeperActionResponse(ctx, login, origSender, evt)
 	default:
 		return EventHandlingResultIgnored
 	}
@@ -945,15 +945,15 @@ func (portal *Portal) handleMatrixTyping(ctx context.Context, evt *event.Event) 
 	return EventHandlingResultSuccess
 }
 
-func (portal *Portal) handleMatrixEphemeral(ctx context.Context, sender *User, evt *event.Event) EventHandlingResult {
+func (portal *Portal) handleMatrixAIStream(ctx context.Context, sender *User, evt *event.Event) EventHandlingResult {
 	log := zerolog.Ctx(ctx)
 	if sender == nil {
-		log.Error().Msg("Missing sender for ephemeral event")
+		log.Error().Msg("Missing sender for Matrix AI stream event")
 		return EventHandlingResultIgnored
 	}
 	login, _, err := portal.FindPreferredLogin(ctx, sender, true)
 	if err != nil {
-		log.Err(err).Msg("Failed to get user login to handle ephemeral event")
+		log.Err(err).Msg("Failed to get user login to handle Matrix AI stream event")
 		return EventHandlingResultFailed.WithMSSError(err)
 	}
 	var origSender *OrigSender
@@ -967,24 +967,7 @@ func (portal *Portal) handleMatrixEphemeral(ctx context.Context, sender *User, e
 			UserID: sender.MXID,
 		}
 	}
-	ephemeralAPI, ok := login.Client.(EphemeralHandlingNetworkAPI)
-	if !ok {
-		return EventHandlingResultIgnored
-	}
-	err = ephemeralAPI.HandleMatrixEphemeral(ctx, &MatrixEphemeralEvent{
-		MatrixEventBase: MatrixEventBase[*event.Content]{
-			Event:              evt,
-			Content:            &evt.Content,
-			Portal:             portal,
-			OrigSender:         origSender,
-			InputTransactionID: portal.parseInputTransactionID(origSender, evt),
-		},
-	})
-	if err != nil {
-		log.Err(err).Msg("Failed to bridge Matrix ephemeral event")
-		return EventHandlingResultFailed.WithMSSError(err)
-	}
-	return EventHandlingResultSuccess.WithMSS()
+	return portal.handleMatrixBeeperActionResponse(ctx, login, origSender, evt)
 }
 
 func (portal *Portal) sendTypings(ctx context.Context, userIDs []id.UserID, typing bool) {
@@ -1864,7 +1847,7 @@ func (portal *Portal) handleMatrixAcceptMessageRequest(
 	return EventHandlingResultSuccess.WithMSS()
 }
 
-func (portal *Portal) handleMatrixActionResponse(
+func (portal *Portal) handleMatrixBeeperActionResponse(
 	ctx context.Context,
 	sender *UserLogin,
 	origSender *OrigSender,
@@ -1876,11 +1859,11 @@ func (portal *Portal) handleMatrixActionResponse(
 		log.Error().Type("content_type", evt.Content.Parsed).Msg("Unexpected parsed content type")
 		return EventHandlingResultFailed.WithMSSError(fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed))
 	}
-	api, ok := sender.Client.(ActionResponseHandlingNetworkAPI)
+	api, ok := sender.Client.(BeeperActionResponseHandlingNetworkAPI)
 	if !ok {
-		return EventHandlingResultIgnored.WithMSSError(ErrActionResponseNotSupported)
+		return EventHandlingResultIgnored.WithMSSError(ErrBeeperActionResponseNotSupported)
 	}
-	err := api.HandleMatrixActionResponse(ctx, &MatrixActionResponse{
+	err := api.HandleMatrixBeeperActionResponse(ctx, &MatrixBeeperActionResponse{
 		Event:      evt,
 		Content:    content,
 		Portal:     portal,

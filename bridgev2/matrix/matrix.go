@@ -16,6 +16,7 @@ import (
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/jsontime"
 
+	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/appservice"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/status"
@@ -68,8 +69,11 @@ func (br *Connector) handleEphemeralEvent(ctx context.Context, evt *event.Event)
 	case event.EphemeralEventTyping:
 		typingContent := evt.Content.AsTyping()
 		typingContent.UserIDs = slices.DeleteFunc(typingContent.UserIDs, br.shouldIgnoreEventFromUser)
-	case event.EphemeralEventAIStream:
+	case event.BeeperEphemeralEventAIStream:
 		if br.shouldIgnoreEvent(evt) {
+			return
+		}
+		if !br.SpecVersions.Supports(mautrix.BeeperFeatureAIStreamEvent) {
 			return
 		}
 	}
