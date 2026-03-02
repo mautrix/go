@@ -657,10 +657,8 @@ type TypingHandlingNetworkAPI interface {
 	HandleMatrixTyping(ctx context.Context, msg *MatrixTyping) error
 }
 
-// EphemeralHandlingNetworkAPI is an optional interface that network connectors can implement to handle ephemeral events.
 type EphemeralHandlingNetworkAPI interface {
 	NetworkAPI
-	// HandleMatrixEphemeral is called when a custom ephemeral event is sent in a portal room.
 	HandleMatrixEphemeral(ctx context.Context, msg *MatrixEphemeralEvent) error
 }
 

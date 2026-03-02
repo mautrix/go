@@ -214,8 +214,6 @@ func (content *MessageEventContent) RemovePerMessageProfileFallback() {
 	}
 }
 
-// BeeperActionHint represents a single button in a com.beeper.action_hints content block.
-// Based on MSC1485 (tulir).
 type BeeperActionHint struct {
 	Body          string          `json:"body"`
 	EventType     string          `json:"event_type,omitempty"`
@@ -225,8 +223,6 @@ type BeeperActionHint struct {
 	Img           id.ContentURI   `json:"img,omitempty"`
 }
 
-// BeeperActionHints is a single object under "com.beeper.action_hints" containing
-// both the hints array (from MSC1485) and Beeper extension fields.
 type BeeperActionHints struct {
 	Hints          []BeeperActionHint `json:"hints"`
 	Exclusive      bool               `json:"exclusive,omitempty"`
@@ -235,7 +231,6 @@ type BeeperActionHints struct {
 	Context        json.RawMessage    `json:"context,omitempty"`
 }
 
-// BeeperActionResponseEventContent represents the content of a com.beeper.action_response event.
 type BeeperActionResponseEventContent struct {
 	RelatesTo *RelatesTo      `json:"m.relates_to,omitempty"`
 	ActionID  string          `json:"action_id,omitempty"`

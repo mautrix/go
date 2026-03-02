@@ -954,7 +954,7 @@ func (portal *Portal) handleMatrixEphemeral(ctx context.Context, sender *User, e
 	login, _, err := portal.FindPreferredLogin(ctx, sender, true)
 	if err != nil {
 		log.Err(err).Msg("Failed to get user login to handle ephemeral event")
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithMSSError(err)
 	}
 	var origSender *OrigSender
 	if login == nil {
@@ -982,9 +982,9 @@ func (portal *Portal) handleMatrixEphemeral(ctx context.Context, sender *User, e
 	})
 	if err != nil {
 		log.Err(err).Msg("Failed to bridge Matrix ephemeral event")
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithMSSError(err)
 	}
-	return EventHandlingResultSuccess
+	return EventHandlingResultSuccess.WithMSS()
 }
 
 func (portal *Portal) sendTypings(ctx context.Context, userIDs []id.UserID, typing bool) {
@@ -1878,7 +1878,7 @@ func (portal *Portal) handleMatrixActionResponse(
 	}
 	api, ok := sender.Client.(ActionResponseHandlingNetworkAPI)
 	if !ok {
-		return EventHandlingResultIgnored
+		return EventHandlingResultIgnored.WithMSSError(ErrActionResponseNotSupported)
 	}
 	err := api.HandleMatrixActionResponse(ctx, &MatrixActionResponse{
 		Event:      evt,

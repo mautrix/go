@@ -206,7 +206,7 @@ var (
 	StateElementFunctionalMembers = Type{"io.element.functional_members", StateEventType}
 	StateBeeperRoomFeatures       = Type{"com.beeper.room_features", StateEventType}
 	StateBeeperDisappearingTimer  = Type{"com.beeper.disappearing_timer", StateEventType}
-	StateMSC4391BotCommand = Type{"org.matrix.msc4391.command_description", StateEventType}
+	StateMSC4391BotCommand        = Type{"org.matrix.msc4391.command_description", StateEventType}
 )
 
 // Message events
