@@ -407,6 +407,10 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 }
 
 func (prov *ProvisioningAPI) handleCompleteStep(ctx context.Context, login *ProvLogin, step *bridgev2.LoginStep) {
+	zerolog.Ctx(ctx).Info().
+		Str("step_id", step.StepID).
+		Str("user_login_id", string(step.CompleteParams.UserLoginID)).
+		Msg("Login completed successfully")
 	prov.deleteLogin(login, false)
 	if login.Override == nil || login.Override.ID == step.CompleteParams.UserLoginID {
 		return
@@ -506,6 +510,8 @@ func (prov *ProvisioningAPI) PostLoginSubmitInput(w http.ResponseWriter, r *http
 	login.NextStep = nextStep
 	if nextStep.Type == bridgev2.LoginStepTypeComplete {
 		prov.handleCompleteStep(r.Context(), login, nextStep)
+	} else {
+		zerolog.Ctx(r.Context()).Debug().Str("step_id", nextStep.StepID).Msg("Returning next login step")
 	}
 	exhttp.WriteJSONResponse(w, http.StatusOK, &RespSubmitLogin{LoginID: login.ID, LoginStep: nextStep})
 }
@@ -525,6 +531,8 @@ func (prov *ProvisioningAPI) PostLoginWait(w http.ResponseWriter, r *http.Reques
 	login.NextStep = nextStep
 	if nextStep.Type == bridgev2.LoginStepTypeComplete {
 		prov.handleCompleteStep(r.Context(), login, nextStep)
+	} else {
+		zerolog.Ctx(r.Context()).Debug().Str("step_id", nextStep.StepID).Msg("Returning next login step")
 	}
 	exhttp.WriteJSONResponse(w, http.StatusOK, &RespSubmitLogin{LoginID: login.ID, LoginStep: nextStep})
 }
