@@ -121,6 +121,7 @@ func fnLogin(ce *Event) {
 		ce.Reply("Failed to start login: %v", err)
 		return
 	}
+	ce.Log.Debug().Any("first_step", nextStep).Msg("Created login process")
 
 	nextStep = checkLoginCommandDirectParams(ce, login, nextStep)
 	if nextStep != nil {
@@ -499,6 +500,7 @@ func maybeURLDecodeCookie(val string, field *bridgev2.LoginCookieField) string {
 }
 
 func doLoginStep(ce *Event, login bridgev2.LoginProcess, step *bridgev2.LoginStep, override *bridgev2.UserLogin) {
+	ce.Log.Debug().Any("next_step", step).Msg("Got next login step")
 	if step.Instructions != "" {
 		ce.Reply(step.Instructions)
 	}

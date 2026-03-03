@@ -403,6 +403,9 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 		Override: overrideLogin,
 	}
 	prov.loginsLock.Unlock()
+	zerolog.Ctx(r.Context()).Info().
+		Any("first_step", firstStep).
+		Msg("Created login process")
 	exhttp.WriteJSONResponse(w, http.StatusOK, &RespSubmitLogin{LoginID: loginID, LoginStep: firstStep})
 }
 
@@ -511,7 +514,7 @@ func (prov *ProvisioningAPI) PostLoginSubmitInput(w http.ResponseWriter, r *http
 	if nextStep.Type == bridgev2.LoginStepTypeComplete {
 		prov.handleCompleteStep(r.Context(), login, nextStep)
 	} else {
-		zerolog.Ctx(r.Context()).Debug().Str("step_id", nextStep.StepID).Msg("Returning next login step")
+		zerolog.Ctx(r.Context()).Debug().Any("next_step", nextStep).Msg("Returning next login step")
 	}
 	exhttp.WriteJSONResponse(w, http.StatusOK, &RespSubmitLogin{LoginID: login.ID, LoginStep: nextStep})
 }
@@ -532,7 +535,7 @@ func (prov *ProvisioningAPI) PostLoginWait(w http.ResponseWriter, r *http.Reques
 	if nextStep.Type == bridgev2.LoginStepTypeComplete {
 		prov.handleCompleteStep(r.Context(), login, nextStep)
 	} else {
-		zerolog.Ctx(r.Context()).Debug().Str("step_id", nextStep.StepID).Msg("Returning next login step")
+		zerolog.Ctx(r.Context()).Debug().Any("next_step", nextStep).Msg("Returning next login step")
 	}
 	exhttp.WriteJSONResponse(w, http.StatusOK, &RespSubmitLogin{LoginID: login.ID, LoginStep: nextStep})
 }
