@@ -86,6 +86,9 @@ func (as *ASIntent) SendMessage(ctx context.Context, roomID id.RoomID, eventType
 }
 
 func (as *ASIntent) BeeperSendEphemeralEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, content *event.Content, txnID string) (*mautrix.RespSendEvent, error) {
+	if !as.Connector.SpecVersions.Supports(mautrix.BeeperFeatureEphemeralEvents) {
+		return nil, mautrix.MUnrecognized.WithMessage("Homeserver does not advertise com.beeper.ephemeral support")
+	}
 	if encrypted, err := as.Matrix.StateStore.IsEncrypted(ctx, roomID); err != nil {
 		return nil, fmt.Errorf("failed to check if room is encrypted: %w", err)
 	} else if encrypted && as.Connector.Crypto != nil {

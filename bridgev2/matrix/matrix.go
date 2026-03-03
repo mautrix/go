@@ -16,7 +16,6 @@ import (
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/jsontime"
 
-	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/appservice"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/status"
@@ -71,9 +70,6 @@ func (br *Connector) handleEphemeralEvent(ctx context.Context, evt *event.Event)
 		typingContent.UserIDs = slices.DeleteFunc(typingContent.UserIDs, br.shouldIgnoreEventFromUser)
 	case event.BeeperEphemeralEventAIStream:
 		if br.shouldIgnoreEvent(evt) {
-			return
-		}
-		if !br.SpecVersions.Supports(mautrix.BeeperFeatureAIStreamEvent) {
 			return
 		}
 	}
@@ -239,13 +235,7 @@ func (br *Connector) postDecrypt(ctx context.Context, original, decrypted *event
 	go br.sendSuccessCheckpoint(ctx, decrypted, status.MsgStepDecrypted, retryCount)
 	decrypted.Mautrix.CheckpointSent = true
 	decrypted.Mautrix.DecryptionDuration = duration
-	decrypted.Mautrix.EventSource |= original.Mautrix.EventSource
-	decrypted.Mautrix.EventSource |= event.SourceDecrypted
-	if decrypted.Mautrix.EventSource&event.SourceEphemeral != 0 {
-		br.handleEphemeralEvent(ctx, decrypted)
-	} else {
-		br.EventProcessor.Dispatch(ctx, decrypted)
-	}
+	br.EventProcessor.Dispatch(ctx, decrypted)
 	if errorEventID != nil && *errorEventID != "" {
 		_, _ = br.Bot.RedactEvent(ctx, decrypted.RoomID, *errorEventID)
 	}

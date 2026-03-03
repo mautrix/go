@@ -253,6 +253,7 @@ var (
 	EphemeralEventReceipt        = Type{"m.receipt", EphemeralEventType}
 	EphemeralEventTyping         = Type{"m.typing", EphemeralEventType}
 	EphemeralEventPresence       = Type{"m.presence", EphemeralEventType}
+	EphemeralEventEncrypted      = Type{"m.room.encrypted", EphemeralEventType}
 	BeeperEphemeralEventAIStream = Type{"com.beeper.ai.stream_event", EphemeralEventType}
 )
 

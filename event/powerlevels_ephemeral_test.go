@@ -15,53 +15,53 @@ import (
 	"maunium.net/go/mautrix/event"
 )
 
-func TestPowerLevelsEventContent_EphemeralDefaultFallsBackToEventsDefault(t *testing.T) {
+func TestPowerLevelsEventContent_BeeperEphemeralDefaultFallsBackToEventsDefault(t *testing.T) {
 	pl := &event.PowerLevelsEventContent{
 		EventsDefault: 45,
 	}
 
-	assert.Equal(t, 45, pl.EphemeralDefault())
+	assert.Equal(t, 45, pl.BeeperEphemeralDefault())
 
 	override := 60
-	pl.EphemeralDefaultPtr = &override
-	assert.Equal(t, 60, pl.EphemeralDefault())
+	pl.BeeperEphemeralDefaultPtr = &override
+	assert.Equal(t, 60, pl.BeeperEphemeralDefault())
 }
 
-func TestPowerLevelsEventContent_GetSetEphemeralLevel(t *testing.T) {
+func TestPowerLevelsEventContent_GetSetBeeperEphemeralLevel(t *testing.T) {
 	pl := &event.PowerLevelsEventContent{
 		EventsDefault: 25,
 	}
 	evtType := event.Type{Type: "com.example.ephemeral", Class: event.EphemeralEventType}
 
-	assert.Equal(t, 25, pl.GetEphemeralLevel(evtType))
+	assert.Equal(t, 25, pl.GetBeeperEphemeralLevel(evtType))
 
-	pl.SetEphemeralLevel(evtType, 50)
-	assert.Equal(t, 50, pl.GetEphemeralLevel(evtType))
-	require.NotNil(t, pl.Ephemeral)
-	assert.Equal(t, 50, pl.Ephemeral[evtType.String()])
+	pl.SetBeeperEphemeralLevel(evtType, 50)
+	assert.Equal(t, 50, pl.GetBeeperEphemeralLevel(evtType))
+	require.NotNil(t, pl.BeeperEphemeral)
+	assert.Equal(t, 50, pl.BeeperEphemeral[evtType.String()])
 
-	pl.SetEphemeralLevel(evtType, 25)
-	_, exists := pl.Ephemeral[evtType.String()]
+	pl.SetBeeperEphemeralLevel(evtType, 25)
+	_, exists := pl.BeeperEphemeral[evtType.String()]
 	assert.False(t, exists)
 }
 
-func TestPowerLevelsEventContent_CloneCopiesEphemeralFields(t *testing.T) {
+func TestPowerLevelsEventContent_CloneCopiesBeeperEphemeralFields(t *testing.T) {
 	override := 70
 	pl := &event.PowerLevelsEventContent{
-		EventsDefault:       35,
-		Ephemeral:           map[string]int{"com.example.ephemeral": 90},
-		EphemeralDefaultPtr: &override,
+		EventsDefault:             35,
+		BeeperEphemeral:           map[string]int{"com.example.ephemeral": 90},
+		BeeperEphemeralDefaultPtr: &override,
 	}
 
 	cloned := pl.Clone()
 	require.NotNil(t, cloned)
-	require.NotNil(t, cloned.EphemeralDefaultPtr)
-	assert.Equal(t, 70, *cloned.EphemeralDefaultPtr)
-	assert.Equal(t, 90, cloned.Ephemeral["com.example.ephemeral"])
+	require.NotNil(t, cloned.BeeperEphemeralDefaultPtr)
+	assert.Equal(t, 70, *cloned.BeeperEphemeralDefaultPtr)
+	assert.Equal(t, 90, cloned.BeeperEphemeral["com.example.ephemeral"])
 
-	cloned.Ephemeral["com.example.ephemeral"] = 99
-	*cloned.EphemeralDefaultPtr = 71
+	cloned.BeeperEphemeral["com.example.ephemeral"] = 99
+	*cloned.BeeperEphemeralDefaultPtr = 71
 
-	assert.Equal(t, 90, pl.Ephemeral["com.example.ephemeral"])
-	assert.Equal(t, 70, *pl.EphemeralDefaultPtr)
+	assert.Equal(t, 90, pl.BeeperEphemeral["com.example.ephemeral"])
+	assert.Equal(t, 70, *pl.BeeperEphemeralDefaultPtr)
 }

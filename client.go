@@ -1378,17 +1378,6 @@ func (cli *Client) BeeperSendEphemeralEvent(ctx context.Context, roomID id.RoomI
 	if req.Timestamp > 0 {
 		queryParams["ts"] = strconv.FormatInt(req.Timestamp, 10)
 	}
-	if eventType == event.BeeperEphemeralEventAIStream {
-		if cli.SpecVersions == nil {
-			_, err = cli.Versions(ctx)
-			if err != nil {
-				return nil, fmt.Errorf("failed to check homeserver feature support via /versions: %w", err)
-			}
-		}
-		if !cli.SpecVersions.Supports(BeeperFeatureAIStreamEvent) {
-			return nil, MUnrecognized.WithMessage("Homeserver does not advertise com.beeper.ai.stream_event support")
-		}
-	}
 
 	if !req.DontEncrypt && cli != nil && cli.Crypto != nil && eventType != event.EventEncrypted {
 		var isEncrypted bool

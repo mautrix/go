@@ -226,6 +226,9 @@ func (intent *IntentAPI) BeeperSendEphemeralEvent(ctx context.Context, roomID id
 	if err := intent.EnsureJoined(ctx, roomID); err != nil {
 		return nil, err
 	}
+	if !intent.SpecVersions.Supports(mautrix.BeeperFeatureEphemeralEvents) {
+		return nil, mautrix.MUnrecognized.WithMessage("Homeserver does not advertise com.beeper.ephemeral support")
+	}
 	contentJSON = intent.AddDoublePuppetValue(contentJSON)
 	return intent.Client.BeeperSendEphemeralEvent(ctx, roomID, eventType, contentJSON, extra...)
 }
