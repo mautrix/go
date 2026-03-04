@@ -38,17 +38,20 @@ func (br *Bridge) ReIDPortal(ctx context.Context, source, target networkid.Porta
 		Stringer("target_portal_key", target).
 		Logger()
 	ctx = log.WithContext(ctx)
-	if !br.cacheLock.TryLock() {
-		log.Debug().Msg("Waiting for cache lock")
-		br.cacheLock.Lock()
-		log.Debug().Msg("Acquired cache lock after waiting")
-	}
 	defer func() {
-		br.cacheLock.Unlock()
 		log.Debug().Msg("Finished handling portal re-ID")
 	}()
+	acquireCacheLock := func() {
+		if !br.cacheLock.TryLock() {
+			log.Debug().Msg("Waiting for global cache lock")
+			br.cacheLock.Lock()
+			log.Debug().Msg("Acquired global cache lock after waiting")
+		} else {
+			log.Trace().Msg("Acquired global cache lock without waiting")
+		}
+	}
 	log.Debug().Msg("Re-ID'ing portal")
-	sourcePortal, err := br.UnlockedGetPortalByKey(ctx, source, true)
+	sourcePortal, err := br.GetExistingPortalByKey(ctx, source)
 	if err != nil {
 		return ReIDResultError, nil, fmt.Errorf("failed to get source portal: %w", err)
 	} else if sourcePortal == nil {
@@ -75,18 +78,24 @@ func (br *Bridge) ReIDPortal(ctx context.Context, source, target networkid.Porta
 	log.UpdateContext(func(c zerolog.Context) zerolog.Context {
 		return c.Stringer("source_portal_mxid", sourcePortal.MXID)
 	})
+
+	acquireCacheLock()
 	targetPortal, err := br.UnlockedGetPortalByKey(ctx, target, true)
 	if err != nil {
+		br.cacheLock.Unlock()
 		return ReIDResultError, nil, fmt.Errorf("failed to get target portal: %w", err)
 	}
 	if targetPortal == nil {
 		log.Info().Msg("Target portal doesn't exist, re-ID'ing source portal")
 		err = sourcePortal.unlockedReID(ctx, target)
+		br.cacheLock.Unlock()
 		if err != nil {
 			return ReIDResultError, nil, fmt.Errorf("failed to re-ID source portal: %w", err)
 		}
 		return ReIDResultSourceReIDd, sourcePortal, nil
 	}
+	br.cacheLock.Unlock()
+
 	if !targetPortal.roomCreateLock.TryLock() {
 		if cancelCreate := targetPortal.cancelRoomCreate.Swap(nil); cancelCreate != nil {
 			(*cancelCreate)()
@@ -98,6 +107,8 @@ func (br *Bridge) ReIDPortal(ctx context.Context, source, target networkid.Porta
 	defer targetPortal.roomCreateLock.Unlock()
 	if targetPortal.MXID == "" {
 		log.Info().Msg("Target portal row exists, but doesn't have a Matrix room. Deleting target portal row and re-ID'ing source portal")
+		acquireCacheLock()
+		defer br.cacheLock.Unlock()
 		err = targetPortal.unlockedDelete(ctx)
 		if err != nil {
 			return ReIDResultError, nil, fmt.Errorf("failed to delete target portal: %w", err)
@@ -112,6 +123,9 @@ func (br *Bridge) ReIDPortal(ctx context.Context, source, target networkid.Porta
 			return c.Stringer("target_portal_mxid", targetPortal.MXID)
 		})
 		log.Info().Msg("Both target and source portals have Matrix rooms, tombstoning source portal")
+		sourcePortal.removeInPortalCache(ctx)
+		acquireCacheLock()
+		defer br.cacheLock.Unlock()
 		err = sourcePortal.unlockedDelete(ctx)
 		if err != nil {
 			return ReIDResultError, nil, fmt.Errorf("failed to delete source portal row: %w", err)

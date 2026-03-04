@@ -5363,6 +5363,9 @@ func (portal *Portal) removeInPortalCache(ctx context.Context) {
 }
 
 func (portal *Portal) unlockedDelete(ctx context.Context) error {
+	if portal.deleted.IsSet() {
+		return nil
+	}
 	err := portal.safeDBDelete(ctx)
 	if err != nil {
 		return err
