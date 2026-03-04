@@ -2041,7 +2041,10 @@ type ReqUploadMedia struct {
 }
 
 func (cli *Client) tryUploadMediaToURL(ctx context.Context, url, contentType string, content io.Reader, contentLength int64) (*http.Response, error) {
-	cli.Log.Debug().Str("url", url).Msg("Uploading media to external URL")
+	cli.Log.Debug().
+		Str("url", url).
+		Int64("content_length", contentLength).
+		Msg("Uploading media to external URL")
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, content)
 	if err != nil {
 		return nil, err
