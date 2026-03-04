@@ -217,3 +217,8 @@ type MarkAsDMMatrixAPI interface {
 	MatrixAPI
 	MarkAsDM(ctx context.Context, roomID id.RoomID, otherUser id.UserID) error
 }
+
+type EphemeralSendingMatrixAPI interface {
+	MatrixAPI
+	BeeperSendEphemeralEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, content *event.Content, txnID string) (*mautrix.RespSendEvent, error)
+}

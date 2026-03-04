@@ -68,6 +68,10 @@ func (br *Connector) handleEphemeralEvent(ctx context.Context, evt *event.Event)
 	case event.EphemeralEventTyping:
 		typingContent := evt.Content.AsTyping()
 		typingContent.UserIDs = slices.DeleteFunc(typingContent.UserIDs, br.shouldIgnoreEventFromUser)
+	case event.BeeperEphemeralEventAIStream:
+		if br.shouldIgnoreEvent(evt) {
+			return
+		}
 	}
 	br.Bridge.QueueMatrixEvent(ctx, evt)
 }
@@ -231,7 +235,6 @@ func (br *Connector) postDecrypt(ctx context.Context, original, decrypted *event
 	go br.sendSuccessCheckpoint(ctx, decrypted, status.MsgStepDecrypted, retryCount)
 	decrypted.Mautrix.CheckpointSent = true
 	decrypted.Mautrix.DecryptionDuration = duration
-	decrypted.Mautrix.EventSource |= event.SourceDecrypted
 	br.EventProcessor.Dispatch(ctx, decrypted)
 	if errorEventID != nil && *errorEventID != "" {
 		_, _ = br.Bot.RedactEvent(ctx, decrypted.RoomID, *errorEventID)

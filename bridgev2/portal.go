@@ -697,6 +697,8 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 			return portal.handleMatrixReceipts(ctx, evt)
 		case event.EphemeralEventTyping:
 			return portal.handleMatrixTyping(ctx, evt)
+		case event.BeeperEphemeralEventAIStream:
+			return portal.handleMatrixAIStream(ctx, sender, evt)
 		default:
 			return EventHandlingResultIgnored
 		}
@@ -939,6 +941,50 @@ func (portal *Portal) handleMatrixTyping(ctx context.Context, evt *event.Event) 
 	portal.currentlyTyping = content.UserIDs
 	// TODO actual status
 	return EventHandlingResultSuccess
+}
+
+func (portal *Portal) handleMatrixAIStream(ctx context.Context, sender *User, evt *event.Event) EventHandlingResult {
+	log := zerolog.Ctx(ctx)
+	if sender == nil {
+		log.Error().Msg("Missing sender for Matrix AI stream event")
+		return EventHandlingResultIgnored
+	}
+	login, _, err := portal.FindPreferredLogin(ctx, sender, true)
+	if err != nil {
+		log.Err(err).Msg("Failed to get user login to handle Matrix AI stream event")
+		return EventHandlingResultFailed.WithMSSError(err)
+	}
+	var origSender *OrigSender
+	if login == nil {
+		if portal.Relay == nil {
+			return EventHandlingResultIgnored
+		}
+		login = portal.Relay
+		origSender = &OrigSender{
+			User:   sender,
+			UserID: sender.MXID,
+		}
+	}
+	content, ok := evt.Content.Parsed.(*event.BeeperAIStreamEventContent)
+	if !ok {
+		log.Error().Type("content_type", evt.Content.Parsed).Msg("Unexpected parsed content type")
+		return EventHandlingResultFailed.WithMSSError(fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed))
+	}
+	api, ok := login.Client.(BeeperAIStreamHandlingNetworkAPI)
+	if !ok {
+		return EventHandlingResultIgnored.WithMSSError(ErrBeeperAIStreamNotSupported)
+	}
+	err = api.HandleMatrixBeeperAIStream(ctx, &MatrixBeeperAIStream{
+		Event:      evt,
+		Content:    content,
+		Portal:     portal,
+		OrigSender: origSender,
+	})
+	if err != nil {
+		log.Err(err).Msg("Failed to handle Matrix AI stream event")
+		return EventHandlingResultFailed.WithMSSError(err)
+	}
+	return EventHandlingResultSuccess.WithMSS()
 }
 
 func (portal *Portal) sendTypings(ctx context.Context, userIDs []id.UserID, typing bool) {

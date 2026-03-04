@@ -213,6 +213,7 @@ func (mach *OlmMachine) DecryptMegolmEvent(ctx context.Context, evt *event.Event
 			TrustSource:   device,
 			ForwardedKeys: forwardedKeys,
 			WasEncrypted:  true,
+			EventSource:   evt.Mautrix.EventSource | event.SourceDecrypted,
 			ReceivedAt:    evt.Mautrix.ReceivedAt,
 		},
 	}, nil
