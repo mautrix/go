@@ -1632,6 +1632,10 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 			// Keep n-1 previous reactions and remove the rest
 			react.ExistingReactionsToKeep = allReactions[:preResp.MaxReactions-1]
 			for _, oldReaction := range allReactions[preResp.MaxReactions-1:] {
+				if existing != nil && oldReaction.EmojiID == existing.EmojiID {
+					// Don't double-delete on networks that only allow one emoji
+					continue
+				}
 				// Intentionally defer in a loop, there won't be that many items,
 				// and we want all of them to be done after this function completes successfully
 				//goland:noinspection GoDeferInLoop
