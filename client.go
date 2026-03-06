@@ -1158,7 +1158,9 @@ func (cli *Client) SearchUserDirectory(ctx context.Context, query string, limit 
 }
 
 func (cli *Client) GetMutualRooms(ctx context.Context, otherUserID id.UserID, extras ...ReqMutualRooms) (resp *RespMutualRooms, err error) {
-	if cli.SpecVersions != nil && !cli.SpecVersions.Supports(FeatureMutualRooms) {
+	supportsStable := cli.SpecVersions.Supports(FeatureStableMutualRooms)
+	supportsUnstable := cli.SpecVersions.Supports(FeatureUnstableMutualRooms)
+	if cli.SpecVersions != nil && !supportsUnstable && !supportsStable {
 		err = fmt.Errorf("server does not support fetching mutual rooms")
 		return
 	}
@@ -1168,7 +1170,10 @@ func (cli *Client) GetMutualRooms(ctx context.Context, otherUserID id.UserID, ex
 	if len(extras) > 0 {
 		query["from"] = extras[0].From
 	}
-	urlPath := cli.BuildURLWithQuery(ClientURLPath{"unstable", "uk.half-shot.msc2666", "user", "mutual_rooms"}, query)
+	urlPath := cli.BuildURLWithQuery(ClientURLPath{"v1", "user", "mutual_rooms"}, query)
+	if !supportsStable && supportsUnstable {
+		urlPath = cli.BuildURLWithQuery(ClientURLPath{"unstable", "uk.half-shot.msc2666", "user", "mutual_rooms"}, query)
+	}
 	_, err = cli.MakeRequest(ctx, http.MethodGet, urlPath, nil, &resp)
 	return
 }

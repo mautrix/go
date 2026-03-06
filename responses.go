@@ -258,6 +258,7 @@ func (r *UserDirectoryEntry) MarshalJSON() ([]byte, error) {
 type RespMutualRooms struct {
 	Joined    []id.RoomID `json:"joined"`
 	NextBatch string      `json:"next_batch,omitempty"`
+	Count     int         `json:"count,omitempty"`
 }
 
 type RespRoomSummary struct {
