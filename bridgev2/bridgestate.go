@@ -37,6 +37,8 @@ type BridgeStateQueue struct {
 
 	stopChan      chan struct{}
 	stopReconnect atomic.Pointer[context.CancelFunc]
+
+	unknownErrorReconnects int
 }
 
 func (br *Bridge) SendGlobalBridgeState(state status.BridgeState) {
@@ -192,8 +194,14 @@ func (bsq *BridgeStateQueue) unknownErrorReconnect(triggeredBy status.BridgeStat
 	} else if prevUnsent.StateEvent != status.StateUnknownError || prev.StateEvent != status.StateUnknownError {
 		log.Debug().Msg("Not reconnecting as the previous state was not an unknown error")
 		return
+	} else if bsq.unknownErrorReconnects > bsq.bridge.Config.UnknownErrorMaxAutoReconnects {
+		log.Warn().Msg("Not reconnecting as the maximum number of unknown error reconnects has been reached")
+		return
 	}
-	log.Info().Msg("Disconnecting and reconnecting login due to unknown error")
+	bsq.unknownErrorReconnects++
+	log.Info().
+		Int("reconnect_num", bsq.unknownErrorReconnects).
+		Msg("Disconnecting and reconnecting login due to unknown error")
 	bsq.login.Disconnect()
 	log.Debug().Msg("Disconnection finished, recreating client and reconnecting")
 	err := bsq.login.recreateClient(ctx)

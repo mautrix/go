@@ -62,29 +62,30 @@ type CleanupOnLogouts struct {
 }
 
 type BridgeConfig struct {
-	CommandPrefix             string           `yaml:"command_prefix"`
-	PersonalFilteringSpaces   bool             `yaml:"personal_filtering_spaces"`
-	PrivateChatPortalMeta     bool             `yaml:"private_chat_portal_meta"`
-	AsyncEvents               bool             `yaml:"async_events"`
-	SplitPortals              bool             `yaml:"split_portals"`
-	ResendBridgeInfo          bool             `yaml:"resend_bridge_info"`
-	NoBridgeInfoStateKey      bool             `yaml:"no_bridge_info_state_key"`
-	BridgeStatusNotices       string           `yaml:"bridge_status_notices"`
-	UnknownErrorAutoReconnect time.Duration    `yaml:"unknown_error_auto_reconnect"`
-	BridgeMatrixLeave         bool             `yaml:"bridge_matrix_leave"`
-	BridgeNotices             bool             `yaml:"bridge_notices"`
-	TagOnlyOnCreate           bool             `yaml:"tag_only_on_create"`
-	OnlyBridgeTags            []event.RoomTag  `yaml:"only_bridge_tags"`
-	MuteOnlyOnCreate          bool             `yaml:"mute_only_on_create"`
-	DeduplicateMatrixMessages bool             `yaml:"deduplicate_matrix_messages"`
-	CrossRoomReplies          bool             `yaml:"cross_room_replies"`
-	OutgoingMessageReID       bool             `yaml:"outgoing_message_re_id"`
-	RevertFailedStateChanges  bool             `yaml:"revert_failed_state_changes"`
-	KickMatrixUsers           bool             `yaml:"kick_matrix_users"`
-	CleanupOnLogout           CleanupOnLogouts `yaml:"cleanup_on_logout"`
-	Relay                     RelayConfig      `yaml:"relay"`
-	Permissions               PermissionConfig `yaml:"permissions"`
-	Backfill                  BackfillConfig   `yaml:"backfill"`
+	CommandPrefix                 string           `yaml:"command_prefix"`
+	PersonalFilteringSpaces       bool             `yaml:"personal_filtering_spaces"`
+	PrivateChatPortalMeta         bool             `yaml:"private_chat_portal_meta"`
+	AsyncEvents                   bool             `yaml:"async_events"`
+	SplitPortals                  bool             `yaml:"split_portals"`
+	ResendBridgeInfo              bool             `yaml:"resend_bridge_info"`
+	NoBridgeInfoStateKey          bool             `yaml:"no_bridge_info_state_key"`
+	BridgeStatusNotices           string           `yaml:"bridge_status_notices"`
+	UnknownErrorAutoReconnect     time.Duration    `yaml:"unknown_error_auto_reconnect"`
+	UnknownErrorMaxAutoReconnects int              `yaml:"unknown_error_max_auto_reconnects"`
+	BridgeMatrixLeave             bool             `yaml:"bridge_matrix_leave"`
+	BridgeNotices                 bool             `yaml:"bridge_notices"`
+	TagOnlyOnCreate               bool             `yaml:"tag_only_on_create"`
+	OnlyBridgeTags                []event.RoomTag  `yaml:"only_bridge_tags"`
+	MuteOnlyOnCreate              bool             `yaml:"mute_only_on_create"`
+	DeduplicateMatrixMessages     bool             `yaml:"deduplicate_matrix_messages"`
+	CrossRoomReplies              bool             `yaml:"cross_room_replies"`
+	OutgoingMessageReID           bool             `yaml:"outgoing_message_re_id"`
+	RevertFailedStateChanges      bool             `yaml:"revert_failed_state_changes"`
+	KickMatrixUsers               bool             `yaml:"kick_matrix_users"`
+	CleanupOnLogout               CleanupOnLogouts `yaml:"cleanup_on_logout"`
+	Relay                         RelayConfig      `yaml:"relay"`
+	Permissions                   PermissionConfig `yaml:"permissions"`
+	Backfill                      BackfillConfig   `yaml:"backfill"`
 }
 
 type MatrixConfig struct {
