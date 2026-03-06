@@ -1587,6 +1587,12 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 	if portal.Bridge.Config.OutgoingMessageReID {
 		deterministicID = portal.Bridge.Matrix.GenerateReactionEventID(portal.MXID, reactionTarget, preResp.SenderID, preResp.EmojiID)
 	}
+	defer func() {
+		// Do this in a defer so that it happens after any potential defer calls to removeOutdatedReaction
+		if handleRes.Success {
+			portal.sendSuccessStatus(ctx, evt, 0, deterministicID)
+		}
+	}()
 	removeOutdatedReaction := func(oldReact *database.Reaction, deleteDB bool) {
 		if !handleRes.Success {
 			return
@@ -1684,7 +1690,6 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 	if err != nil {
 		log.Err(err).Msg("Failed to save reaction to database")
 	}
-	portal.sendSuccessStatus(ctx, evt, 0, deterministicID)
 	return EventHandlingResultSuccess.WithEventID(deterministicID)
 }
 
