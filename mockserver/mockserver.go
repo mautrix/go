@@ -231,7 +231,7 @@ func (ms *MockServer) postKeysUpload(w http.ResponseWriter, r *http.Request) {
 }
 
 func (ms *MockServer) postDeviceSigningUpload(w http.ResponseWriter, r *http.Request) {
-	var req mautrix.UploadCrossSigningKeysReq
+	var req mautrix.UploadCrossSigningKeysReq[any]
 	mustDecode(r, &req)
 
 	userID := ms.getUserID(r).UserID
