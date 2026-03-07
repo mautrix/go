@@ -51,7 +51,7 @@ func (as *AppService) NewIntentAPI(localpart string) *IntentAPI {
 }
 
 func (intent *IntentAPI) Register(ctx context.Context) error {
-	_, err := intent.Client.MakeRequest(ctx, http.MethodPost, intent.BuildClientURL("v3", "register"), &mautrix.ReqRegister{
+	_, err := intent.Client.MakeRequest(ctx, http.MethodPost, intent.BuildClientURL("v3", "register"), &mautrix.ReqRegister[any]{
 		Username:     intent.Localpart,
 		Type:         mautrix.AuthTypeAppservice,
 		InhibitLogin: true,
