@@ -66,14 +66,14 @@ const (
 )
 
 // ReqRegister is the JSON request for https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3register
-type ReqRegister struct {
+type ReqRegister[UIAType any] struct {
 	Username                 string      `json:"username,omitempty"`
 	Password                 string      `json:"password,omitempty"`
 	DeviceID                 id.DeviceID `json:"device_id,omitempty"`
 	InitialDeviceDisplayName string      `json:"initial_device_display_name,omitempty"`
 	InhibitLogin             bool        `json:"inhibit_login,omitempty"`
 	RefreshToken             bool        `json:"refresh_token,omitempty"`
-	Auth                     interface{} `json:"auth,omitempty"`
+	Auth                     UIAType     `json:"auth,omitempty"`
 
 	// Type for registration, only used for appservice user registrations
 	// https://spec.matrix.org/v1.2/application-service-api/#server-admin-style-permissions
@@ -392,14 +392,14 @@ type ReqDeviceInfo struct {
 }
 
 // ReqDeleteDevice is the JSON request for https://spec.matrix.org/v1.2/client-server-api/#delete_matrixclientv3devicesdeviceid
-type ReqDeleteDevice struct {
-	Auth interface{} `json:"auth,omitempty"`
+type ReqDeleteDevice[UIAType any] struct {
+	Auth UIAType `json:"auth,omitempty"`
 }
 
 // ReqDeleteDevices is the JSON request for https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3delete_devices
-type ReqDeleteDevices struct {
+type ReqDeleteDevices[UIAType any] struct {
 	Devices []id.DeviceID `json:"devices"`
-	Auth    interface{}   `json:"auth,omitempty"`
+	Auth    UIAType       `json:"auth,omitempty"`
 }
 
 type ReqPutPushRule struct {

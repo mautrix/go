@@ -918,7 +918,7 @@ func (cli *Client) RegisterAvailable(ctx context.Context, username string) (resp
 	return
 }
 
-func (cli *Client) register(ctx context.Context, url string, req *ReqRegister) (resp *RespRegister, uiaResp *RespUserInteractive, err error) {
+func (cli *Client) register(ctx context.Context, url string, req *ReqRegister[any]) (resp *RespRegister, uiaResp *RespUserInteractive, err error) {
 	var bodyBytes []byte
 	bodyBytes, err = cli.MakeFullRequest(ctx, FullRequest{
 		Method:           http.MethodPost,
@@ -942,7 +942,7 @@ func (cli *Client) register(ctx context.Context, url string, req *ReqRegister) (
 // Register makes an HTTP request according to https://spec.matrix.org/v1.2/client-server-api/#post_matrixclientv3register
 //
 // Registers with kind=user. For kind=guest, see RegisterGuest.
-func (cli *Client) Register(ctx context.Context, req *ReqRegister) (*RespRegister, *RespUserInteractive, error) {
+func (cli *Client) Register(ctx context.Context, req *ReqRegister[any]) (*RespRegister, *RespUserInteractive, error) {
 	u := cli.BuildClientURL("v3", "register")
 	return cli.register(ctx, u, req)
 }
@@ -951,7 +951,7 @@ func (cli *Client) Register(ctx context.Context, req *ReqRegister) (*RespRegiste
 // with kind=guest.
 //
 // For kind=user, see Register.
-func (cli *Client) RegisterGuest(ctx context.Context, req *ReqRegister) (*RespRegister, *RespUserInteractive, error) {
+func (cli *Client) RegisterGuest(ctx context.Context, req *ReqRegister[any]) (*RespRegister, *RespUserInteractive, error) {
 	query := map[string]string{
 		"kind": "guest",
 	}
@@ -974,7 +974,7 @@ func (cli *Client) RegisterGuest(ctx context.Context, req *ReqRegister) (*RespRe
 //		panic(err)
 //	}
 //	token := res.AccessToken
-func (cli *Client) RegisterDummy(ctx context.Context, req *ReqRegister) (*RespRegister, error) {
+func (cli *Client) RegisterDummy(ctx context.Context, req *ReqRegister[any]) (*RespRegister, error) {
 	_, uia, err := cli.Register(ctx, req)
 	if err != nil && uia == nil {
 		return nil, err
@@ -2687,13 +2687,13 @@ func (cli *Client) SetDeviceInfo(ctx context.Context, deviceID id.DeviceID, req 
 	return err
 }
 
-func (cli *Client) DeleteDevice(ctx context.Context, deviceID id.DeviceID, req *ReqDeleteDevice) error {
+func (cli *Client) DeleteDevice(ctx context.Context, deviceID id.DeviceID, req *ReqDeleteDevice[any]) error {
 	urlPath := cli.BuildClientURL("v3", "devices", deviceID)
 	_, err := cli.MakeRequest(ctx, http.MethodDelete, urlPath, req, nil)
 	return err
 }
 
-func (cli *Client) DeleteDevices(ctx context.Context, req *ReqDeleteDevices) error {
+func (cli *Client) DeleteDevices(ctx context.Context, req *ReqDeleteDevices[any]) error {
 	urlPath := cli.BuildClientURL("v3", "delete_devices")
 	_, err := cli.MakeRequest(ctx, http.MethodPost, urlPath, req, nil)
 	return err
