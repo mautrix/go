@@ -320,11 +320,11 @@ func (csk *CrossSigningKeys) FirstKey() id.Ed25519 {
 	return ""
 }
 
-type UploadCrossSigningKeysReq struct {
+type UploadCrossSigningKeysReq[UIAType any] struct {
 	Master      CrossSigningKeys `json:"master_key"`
 	SelfSigning CrossSigningKeys `json:"self_signing_key"`
 	UserSigning CrossSigningKeys `json:"user_signing_key"`
-	Auth        interface{}      `json:"auth,omitempty"`
+	Auth        UIAType          `json:"auth,omitempty"`
 }
 
 type KeyMap map[id.DeviceKeyID]string
