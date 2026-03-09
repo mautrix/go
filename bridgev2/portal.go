@@ -169,7 +169,9 @@ func (br *Bridge) loadPortal(ctx context.Context, dbPortal *database.Portal, que
 }
 
 func (portal *Portal) updateLogger() {
-	logWith := portal.Bridge.Log.With().Str("portal_id", string(portal.ID))
+	logWith := portal.Bridge.Log.With().
+		Str("portal_id", string(portal.ID)).
+		Str("portal_receiver", string(portal.Receiver))
 	if portal.MXID != "" {
 		logWith = logWith.Stringer("portal_mxid", portal.MXID)
 	}
