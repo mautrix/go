@@ -2763,7 +2763,7 @@ func (portal *Portal) getRelationMeta(
 			log.Err(err).Msg("Failed to get last thread message from database")
 		}
 		if prevThreadEvent == nil {
-			prevThreadEvent = threadRoot
+			prevThreadEvent = ptr.Clone(threadRoot)
 		}
 	}
 	return
