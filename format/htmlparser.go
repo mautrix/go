@@ -93,6 +93,30 @@ func DefaultPillConverter(displayname, mxid, eventID string, ctx Context) string
 	}
 }
 
+func onlyBacktickCount(line string) (count int) {
+	for i := 0; i < len(line); i++ {
+		if line[i] != '`' {
+			return -1
+		}
+		count++
+	}
+	return
+}
+
+func DefaultMonospaceBlockConverter(code, language string, ctx Context) string {
+	if len(code) == 0 || code[len(code)-1] != '\n' {
+		code += "\n"
+	}
+	fence := "```"
+	for line := range strings.SplitSeq(code, "\n") {
+		count := onlyBacktickCount(strings.TrimSpace(line))
+		if count >= len(fence) {
+			fence = strings.Repeat("`", count+1)
+		}
+	}
+	return fmt.Sprintf("%s%s\n%s%s", fence, language, code, fence)
+}
+
 // HTMLParser is a somewhat customizable Matrix HTML parser.
 type HTMLParser struct {
 	PillConverter           PillConverter
@@ -348,10 +372,7 @@ func (parser *HTMLParser) tagToString(node *html.Node, ctx Context) string {
 		if parser.MonospaceBlockConverter != nil {
 			return parser.MonospaceBlockConverter(preStr, language, ctx)
 		}
-		if len(preStr) == 0 || preStr[len(preStr)-1] != '\n' {
-			preStr += "\n"
-		}
-		return fmt.Sprintf("```%s\n%s```", language, preStr)
+		return DefaultMonospaceBlockConverter(preStr, language, ctx)
 	default:
 		return parser.nodeToTagAwareString(node.FirstChild, ctx)
 	}
