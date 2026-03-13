@@ -1170,7 +1170,7 @@ func (cli *Client) GetMutualRooms(ctx context.Context, otherUserID id.UserID, ex
 	if len(extras) > 0 {
 		query["from"] = extras[0].From
 	}
-	urlPath := cli.BuildURLWithQuery(ClientURLPath{"v1", "user", "mutual_rooms"}, query)
+	urlPath := cli.BuildURLWithQuery(ClientURLPath{"v1", "mutual_rooms"}, query)
 	if !supportsStable && supportsUnstable {
 		urlPath = cli.BuildURLWithQuery(ClientURLPath{"unstable", "uk.half-shot.msc2666", "user", "mutual_rooms"}, query)
 	}
