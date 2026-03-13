@@ -324,7 +324,7 @@ func (prov *ProvisioningAPI) GetWhoami(w http.ResponseWriter, r *http.Request) {
 		prevState.UserID = ""
 		prevState.RemoteID = ""
 		prevState.RemoteName = ""
-		prevState.RemoteProfile = nil
+		prevState.RemoteProfile = status.RemoteProfile{}
 		resp.Logins[i] = RespWhoamiLogin{
 			StateEvent:  prevState.StateEvent,
 			StateTS:     prevState.Timestamp,

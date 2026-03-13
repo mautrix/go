@@ -116,7 +116,7 @@ func (u *UserLogin) ensureHasMetadata(metaType MetaTypeCreator) *UserLogin {
 
 func (u *UserLogin) sqlVariables() []any {
 	var remoteProfile dbutil.JSON
-	if !u.RemoteProfile.IsEmpty() {
+	if !u.RemoteProfile.IsZero() {
 		remoteProfile.Data = &u.RemoteProfile
 	}
 	return []any{u.BridgeID, u.UserMXID, u.ID, u.RemoteName, remoteProfile, dbutil.StrPtr(u.SpaceRoom), dbutil.JSON{Data: u.Metadata}}

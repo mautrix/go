@@ -19,7 +19,6 @@ import (
 
 	"github.com/tidwall/sjson"
 	"go.mau.fi/util/jsontime"
-	"go.mau.fi/util/ptr"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2/networkid"
@@ -112,7 +111,7 @@ func (rp *RemoteProfile) Merge(other RemoteProfile) RemoteProfile {
 	return other
 }
 
-func (rp *RemoteProfile) IsEmpty() bool {
+func (rp *RemoteProfile) IsZero() bool {
 	return rp == nil || (rp.Phone == "" && rp.Email == "" && rp.Username == "" && rp.Name == "" && rp.Avatar == "" && rp.AvatarFile == nil)
 }
 
@@ -130,7 +129,7 @@ type BridgeState struct {
 	UserID        id.UserID             `json:"user_id,omitempty"`
 	RemoteID      networkid.UserLoginID `json:"remote_id,omitempty"`
 	RemoteName    string                `json:"remote_name,omitempty"`
-	RemoteProfile *RemoteProfile        `json:"remote_profile,omitempty"`
+	RemoteProfile RemoteProfile         `json:"remote_profile,omitzero"`
 
 	Reason string                 `json:"reason,omitempty"`
 	Info   map[string]interface{} `json:"info,omitempty"`
@@ -210,7 +209,7 @@ func (pong *BridgeState) ShouldDeduplicate(newPong *BridgeState) bool {
 		pong.StateEvent == newPong.StateEvent &&
 		pong.RemoteName == newPong.RemoteName &&
 		pong.UserAction == newPong.UserAction &&
-		ptr.Val(pong.RemoteProfile) == ptr.Val(newPong.RemoteProfile) &&
+		pong.RemoteProfile == newPong.RemoteProfile &&
 		pong.Error == newPong.Error &&
 		maps.EqualFunc(pong.Info, newPong.Info, reflect.DeepEqual) &&
 		pong.Timestamp.Add(time.Duration(pong.TTL)*time.Second).After(time.Now())
