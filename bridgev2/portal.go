@@ -448,6 +448,23 @@ func (portal *Portal) handleSingleEventWithDelayLogging(idx int, rawEvt any) (ou
 	return
 }
 
+type contextKey int
+
+const (
+	contextKeyRemoteEvent contextKey = iota
+	contextKeyMatrixEvent
+)
+
+func GetMatrixEventFromContext(ctx context.Context) (evt *event.Event) {
+	evt, _ = ctx.Value(contextKeyMatrixEvent).(*event.Event)
+	return
+}
+
+func GetRemoteEventFromContext(ctx context.Context) (evt RemoteEvent) {
+	evt, _ = ctx.Value(contextKeyRemoteEvent).(RemoteEvent)
+	return
+}
+
 func (portal *Portal) getEventCtxWithLog(rawEvt any, idx int) context.Context {
 	var logWith zerolog.Context
 	switch evt := rawEvt.(type) {
@@ -461,6 +478,10 @@ func (portal *Portal) getEventCtxWithLog(rawEvt any, idx int) context.Context {
 				Stringer("event_id", evt.evt.ID).
 				Stringer("sender", evt.sender.MXID)
 		}
+		ctx := portal.Bridge.BackgroundCtx
+		ctx = context.WithValue(ctx, contextKeyMatrixEvent, evt.evt)
+		ctx = logWith.Logger().WithContext(ctx)
+		return ctx
 	case *portalRemoteEvent:
 		evt.evtType = evt.evt.GetType()
 		logWith = portal.Log.With().Int("event_loop_index", idx).
@@ -491,10 +512,18 @@ func (portal *Portal) getEventCtxWithLog(rawEvt any, idx int) context.Context {
 				logWith = logWith.Time("remote_timestamp", remoteTimestamp)
 			}
 		}
+		ctx := portal.Bridge.BackgroundCtx
+		ctx = context.WithValue(ctx, contextKeyRemoteEvent, evt.evt)
+		ctx = logWith.Logger().WithContext(ctx)
+		if ctxMut, ok := evt.evt.(RemoteEventWithContextMutation); ok {
+			ctx = ctxMut.MutateContext(ctx)
+		}
+		return ctx
 	case *portalCreateEvent:
 		return evt.ctx
+	default:
+		panic(fmt.Errorf("invalid type %T in getEventCtxWithLog", evt))
 	}
-	return logWith.Logger().WithContext(portal.Bridge.BackgroundCtx)
 }
 
 func (portal *Portal) handleSingleEvent(ctx context.Context, rawEvt any, doneCallback func(res EventHandlingResult)) {

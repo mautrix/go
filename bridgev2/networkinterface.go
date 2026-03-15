@@ -1115,6 +1115,11 @@ type RemoteEvent interface {
 	GetSender() EventSender
 }
 
+type RemoteEventWithContextMutation interface {
+	RemoteEvent
+	MutateContext(ctx context.Context) context.Context
+}
+
 type RemoteEventWithUncertainPortalReceiver interface {
 	RemoteEvent
 	PortalReceiverIsUncertain() bool
