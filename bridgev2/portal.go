@@ -2001,6 +2001,7 @@ func (portal *Portal) handleMatrixMembership(
 	membershipChangeType := MembershipChangeType{From: prevContent.Membership, To: content.Membership, IsSelf: isSelf}
 	if !portal.Bridge.Config.BridgeMatrixLeave && membershipChangeType == Leave {
 		log.Debug().Msg("Dropping leave event")
+		sender.inPortalCache.Remove(portal.PortalKey)
 		return EventHandlingResultIgnored //.WithMSSError(ErrIgnoringLeaveEvent)
 	}
 	targetGhost, _ := target.(*Ghost)
