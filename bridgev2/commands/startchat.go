@@ -128,8 +128,9 @@ var CommandCreateGroup = &FullHandler{
 		Description: "Create a new group chat for the current Matrix room",
 		Args:        "[_group type_]",
 	},
-	RequiresLogin: true,
-	NetworkAPI:    NetworkAPIImplements[bridgev2.GroupCreatingNetworkAPI],
+	RequiresLogin:      true,
+	NetworkAPI:         NetworkAPIImplements[bridgev2.GroupCreatingNetworkAPI],
+	RequiresEventLevel: event.StateBridge,
 }
 
 func getState[T any](ctx context.Context, roomID id.RoomID, evtType event.Type, provider bridgev2.MatrixConnectorWithArbitraryRoomState) (content T) {
