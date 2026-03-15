@@ -7,6 +7,7 @@
 package commands
 
 import (
+	"slices"
 	"time"
 
 	"maunium.net/go/mautrix/bridgev2"
@@ -80,6 +81,36 @@ func fnMute(ce *Event) {
 	})
 	if err != nil {
 		ce.Reply("Failed to %s chat: %v", ce.Command, err)
+	} else {
+		ce.React("✅️")
+	}
+}
+
+var CommandDeleteChat = &FullHandler{
+	Func: fnDeleteChat,
+	Name: "delete-chat",
+	Help: HelpMeta{
+		Section:     HelpSectionChats,
+		Description: "Delete the current chat on the remote network",
+		Args:        "[--for-everyone]",
+	},
+	RequiresPortal: true,
+	RequiresLogin:  true,
+	NetworkAPI:     NetworkAPIImplements[bridgev2.DeleteChatHandlingNetworkAPI],
+}
+
+func fnDeleteChat(ce *Event) {
+	_, api, _ := getClientForStartingChat[bridgev2.DeleteChatHandlingNetworkAPI](ce, "deleting chats")
+	err := api.HandleMatrixDeleteChat(ce.Ctx, &bridgev2.MatrixDeleteChat{
+		Event: nil,
+		Content: &event.BeeperChatDeleteEventContent{
+			DeleteForEveryone:  slices.Contains(ce.Args, "--for-everyone"),
+			FromMessageRequest: ce.Portal.MessageRequest,
+		},
+		Portal: ce.Portal,
+	})
+	if err != nil {
+		ce.Reply("Failed to delete chat: %v", err)
 	} else {
 		ce.React("✅️")
 	}
