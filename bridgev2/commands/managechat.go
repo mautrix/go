@@ -12,7 +12,20 @@ import (
 
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/format"
 )
+
+var CommandID = &FullHandler{
+	Func: func(ce *Event) {
+		ce.Reply("This room is bridged to %s on %s", format.SafeMarkdownCode(ce.Portal.ID), ce.Bridge.Network.GetName().DisplayName)
+	},
+	Name: "id",
+	Help: HelpMeta{
+		Section:     HelpSectionChats,
+		Description: "View the internal network ID of the current portal room",
+	},
+	RequiresPortal: true,
+}
 
 var CommandSyncChat = &FullHandler{
 	Func: fnSyncChat,
