@@ -63,10 +63,7 @@ func TestNewStreamUpdateContentRejectsReservedKeys(t *testing.T) {
 }
 
 func TestEncryptDecryptStreamPayloadRoundTrip(t *testing.T) {
-	key, err := makeStreamKey()
-	if err != nil {
-		t.Fatalf("failed to make stream key: %v", err)
-	}
+	key := makeStreamKey()
 	content, err := newStreamUpdateContent(&PublishStreamRequest{
 		RoomID:  "!room:example.com",
 		EventID: "$event",
