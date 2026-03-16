@@ -1,3 +1,33 @@
+## v0.26.4 (2026-03-16)
+
+* **Breaking change *(client)*** Changed request structs that include UIA
+  (register, upload cross-signing keys, delete devices) to take the auth data
+  as a type parameter.
+* *(crypto)* Changed device key mismatches in Megolm decryption to mark the
+  message as untrusted instead of failing entirely.
+* *(crypto)* Added new column to save origin of received Megolm sessions.
+* *(bridgev2)* Added support for setting custom profile fields (e.g. `m.tz`)
+  for ghosts.
+* *(bridgev2/commands)* Added `delete-chat` command to delete chats on the
+  remote network.
+* *(client)* Updated MSC2666 implementation to use stable endpoint.
+* *(client)* Stopped logging large (>32 KiB) request bodies.
+* *(bridgev2/portal)* Fixed potential deadlock when a portal ID change races
+  with room creation.
+* *(bridgev2/portal)* Fixed the third reaction from Matrix being handled
+  incorrectly on networks that only allow one reaction per message.
+* *(bridgev2/database)* Fixed finding first message in thread in case the thread
+  contains messages with a lower timestamp than the root message.
+* *(bridgev2/commands)* Fixed login QR codes not having appropriate file info.
+* *(bridgev2/commands)* Fixed user input steps not working correctly after a
+  display step.
+* *(format/htmlparser)* Fixed generating markdown for code blocks containing
+  backticks.
+* *(federation/eventauth)* Fixed inverted check in ban membership authorization
+  (thanks to [@nexy7574] in [#464]).
+
+[#464]: https://github.com/mautrix/go/pull/464
+
 ## v0.26.3 (2026-02-16)
 
 * Bumped minimum Go version to 1.25.
