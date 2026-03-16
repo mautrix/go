@@ -327,13 +327,13 @@ func doLoginDisplayAndWait(ce *Event, login bridgev2.LoginProcessDisplayAndWait,
 		Action: "Login",
 		Cancel: cancelFunc,
 	})
-	defer StoreCommandState(ce.User, nil)
 	switch step.DisplayAndWaitParams.Type {
 	case bridgev2.LoginDisplayTypeQR:
 		err := sendQR(ce, step.DisplayAndWaitParams.Data, prevEvent)
 		if err != nil {
 			ce.Reply("Failed to send QR code: %v", err)
 			login.Cancel()
+			StoreCommandState(ce.User, nil)
 			return
 		}
 	case bridgev2.LoginDisplayTypeEmoji:
@@ -345,6 +345,7 @@ func doLoginDisplayAndWait(ce *Event, login bridgev2.LoginProcessDisplayAndWait,
 	default:
 		ce.Reply("Unsupported display type %q", step.DisplayAndWaitParams.Type)
 		login.Cancel()
+		StoreCommandState(ce.User, nil)
 		return
 	}
 	nextStep, err := login.Wait(cancelCtx)
@@ -359,8 +360,10 @@ func doLoginDisplayAndWait(ce *Event, login bridgev2.LoginProcessDisplayAndWait,
 	}
 	if err != nil {
 		ce.Reply("Login failed: %v", err)
+		StoreCommandState(ce.User, nil)
 		return
 	}
+	StoreCommandState(ce.User, nil)
 	doLoginStep(ce, login, nextStep, override)
 }
 
