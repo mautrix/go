@@ -73,7 +73,7 @@ func (br *Connector) handleEphemeralEvent(ctx context.Context, evt *event.Event)
 }
 
 func (br *Connector) handleToDeviceEvent(ctx context.Context, evt *event.Event) {
-	if br.Bridge.Streams != nil && br.Bridge.Streams.HandleIncomingEvent(ctx, evt) {
+	if br.Bridge.HandleBeeperStreamEvent(ctx, evt) {
 		return
 	}
 }

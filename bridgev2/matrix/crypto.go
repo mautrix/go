@@ -130,7 +130,7 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 
 	helper.client.Syncer = &cryptoSyncer{
 		OlmMachine: helper.mach,
-		streams:    helper.bridge.Bridge.Streams,
+		bridge:     helper.bridge.Bridge,
 	}
 	helper.client.Store = helper.store
 
@@ -519,7 +519,7 @@ func (helper *CryptoHelper) ShareKeys(ctx context.Context) error {
 
 type cryptoSyncer struct {
 	*crypto.OlmMachine
-	streams bridgev2.StreamTransport
+	bridge *bridgev2.Bridge
 }
 
 func (syncer *cryptoSyncer) ProcessResponse(ctx context.Context, resp *mautrix.RespSync, since string) error {
@@ -536,7 +536,7 @@ func (syncer *cryptoSyncer) ProcessResponse(ctx context.Context, resp *mautrix.R
 			done <- struct{}{}
 		}()
 		syncer.Log.Trace().Str("since", since).Msg("Starting sync response handling")
-		if syncer.streams != nil && len(resp.ToDevice.Events) > 0 {
+		if syncer.bridge != nil && len(resp.ToDevice.Events) > 0 {
 			filtered := resp.ToDevice.Events[:0]
 			for _, evt := range resp.ToDevice.Events {
 				if evt == nil {
@@ -552,7 +552,7 @@ func (syncer *cryptoSyncer) ProcessResponse(ctx context.Context, resp *mautrix.R
 						Str("sender", evt.Sender.String()).
 						Msg("Failed to parse to-device event while filtering stream transport events")
 				}
-				if syncer.streams.HandleIncomingEvent(ctx, evt) {
+				if syncer.bridge.HandleBeeperStreamEvent(ctx, evt) {
 					continue
 				}
 				filtered = append(filtered, evt)

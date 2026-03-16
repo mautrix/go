@@ -31,8 +31,9 @@ type UserLogin struct {
 	User   *User
 	Log    zerolog.Logger
 
-	Client      NetworkAPI
-	BridgeState *BridgeStateQueue
+	Client       NetworkAPI
+	BridgeState  *BridgeStateQueue
+	BeeperStream BeeperStream
 
 	inPortalCache *exsync.Set[networkid.PortalKey]
 
@@ -55,13 +56,13 @@ func (br *Bridge) loadUserLogin(ctx context.Context, user *User, dbUserLogin *da
 		//      Currently this will double-load it
 	}
 	userLogin := &UserLogin{
-		UserLogin: dbUserLogin,
-		Bridge:    br,
-		User:      user,
-		Log:       user.Log.With().Str("login_id", string(dbUserLogin.ID)).Logger(),
-
+		UserLogin:     dbUserLogin,
+		Bridge:        br,
+		User:          user,
+		Log:           user.Log.With().Str("login_id", string(dbUserLogin.ID)).Logger(),
 		inPortalCache: exsync.NewSet[networkid.PortalKey](),
 	}
+	userLogin.BeeperStream = newUserLoginBeeperStream(userLogin, br.beeperStream)
 	err := br.Network.LoadUserLogin(ctx, userLogin)
 	if err != nil {
 		userLogin.Log.Err(err).Msg("Failed to load user login")
@@ -235,6 +236,7 @@ func (user *User) NewLogin(ctx context.Context, data *database.UserLogin, params
 			User:      user,
 			Log:       user.Log.With().Str("login_id", string(data.ID)).Logger(),
 		}
+		ul.BeeperStream = newUserLoginBeeperStream(ul, user.Bridge.beeperStream)
 		ul.BridgeState = user.Bridge.NewBridgeStateQueue(ul)
 	}
 	noCancelCtx := ul.Log.WithContext(user.Bridge.BackgroundCtx)
