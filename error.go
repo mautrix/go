@@ -143,7 +143,8 @@ type RespError struct {
 	StatusCode  int
 	ExtraHeader map[string]string
 
-	CanRetry bool
+	CanRetry      bool
+	InternalError string
 }
 
 func (e *RespError) UnmarshalJSON(data []byte) error {
@@ -154,6 +155,7 @@ func (e *RespError) UnmarshalJSON(data []byte) error {
 	e.ErrCode, _ = e.ExtraData["errcode"].(string)
 	e.Err, _ = e.ExtraData["error"].(string)
 	e.CanRetry, _ = e.ExtraData["com.beeper.can_retry"].(bool)
+	e.InternalError, _ = e.ExtraData["fi.mau.internal_error"].(string)
 	return nil
 }
 
@@ -163,6 +165,13 @@ func (e *RespError) MarshalJSON() ([]byte, error) {
 	data["error"] = e.Err
 	if e.CanRetry {
 		data["com.beeper.can_retry"] = e.CanRetry
+	} else {
+		delete(data, "com.beeper.can_retry")
+	}
+	if e.InternalError != "" {
+		data["fi.mau.internal_error"] = e.InternalError
+	} else {
+		delete(data, "fi.mau.internal_error")
 	}
 	return json.Marshal(data)
 }
@@ -199,9 +208,20 @@ func (e RespError) WithCanRetry(canRetry bool) RespError {
 	return e
 }
 
+func (e RespError) WithInternalError(err error) RespError {
+	e.InternalError = err.Error()
+	return e
+}
+
 func (e RespError) WithExtraData(extraData map[string]any) RespError {
 	e.ExtraData = exmaps.NonNilClone(e.ExtraData)
 	maps.Copy(e.ExtraData, extraData)
+	return e
+}
+
+func (e RespError) WithExtraField(key string, value any) RespError {
+	e.ExtraData = exmaps.NonNilClone(e.ExtraData)
+	e.ExtraData[key] = value
 	return e
 }
 
