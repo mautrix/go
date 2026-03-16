@@ -115,7 +115,7 @@ func (et *Type) GuessClass() TypeClass {
 		StateElementFunctionalMembers.Type, StateBeeperRoomFeatures.Type, StateBeeperDisappearingTimer.Type,
 		StateMSC4391BotCommand.Type, StateRoomPolicy.Type, StateUnstableRoomPolicy.Type:
 		return StateEventType
-	case EphemeralEventReceipt.Type, EphemeralEventTyping.Type, EphemeralEventPresence.Type, BeeperEphemeralEventAIStream.Type:
+	case EphemeralEventReceipt.Type, EphemeralEventTyping.Type, EphemeralEventPresence.Type:
 		return EphemeralEventType
 	case AccountDataDirectChats.Type, AccountDataPushRules.Type, AccountDataRoomTags.Type,
 		AccountDataFullyRead.Type, AccountDataIgnoredUserList.Type, AccountDataMarkedUnread.Type,
@@ -131,7 +131,7 @@ func (et *Type) GuessClass() TypeClass {
 		EventUnstablePollEnd.Type, BeeperTranscription.Type, BeeperDeleteChat.Type, BeeperAcceptMessageRequest.Type:
 		return MessageEventType
 	case ToDeviceRoomKey.Type, ToDeviceRoomKeyRequest.Type, ToDeviceForwardedRoomKey.Type, ToDeviceRoomKeyWithheld.Type,
-		ToDeviceBeeperRoomKeyAck.Type:
+		ToDeviceBeeperRoomKeyAck.Type, ToDeviceBeeperStreamSubscribe.Type, ToDeviceBeeperStreamUpdate.Type:
 		return ToDeviceEventType
 	default:
 		return UnknownEventType
@@ -254,7 +254,6 @@ var (
 	EphemeralEventTyping         = Type{"m.typing", EphemeralEventType}
 	EphemeralEventPresence       = Type{"m.presence", EphemeralEventType}
 	EphemeralEventEncrypted      = Type{"m.room.encrypted", EphemeralEventType}
-	BeeperEphemeralEventAIStream = Type{"com.beeper.ai.stream_event", EphemeralEventType}
 )
 
 // Account data events
@@ -299,5 +298,7 @@ var (
 
 	ToDeviceOrgMatrixRoomKeyWithheld = Type{"org.matrix.room_key.withheld", ToDeviceEventType}
 
-	ToDeviceBeeperRoomKeyAck = Type{"com.beeper.room_key.ack", ToDeviceEventType}
+	ToDeviceBeeperRoomKeyAck      = Type{"com.beeper.room_key.ack", ToDeviceEventType}
+	ToDeviceBeeperStreamSubscribe = Type{"com.beeper.stream.subscribe", ToDeviceEventType}
+	ToDeviceBeeperStreamUpdate    = Type{"com.beeper.stream.update", ToDeviceEventType}
 )

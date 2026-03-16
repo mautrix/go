@@ -726,10 +726,6 @@ type MessageRequestAcceptingNetworkAPI interface {
 	HandleMatrixAcceptMessageRequest(ctx context.Context, msg *MatrixAcceptMessageRequest) error
 }
 
-type BeeperAIStreamHandlingNetworkAPI interface {
-	NetworkAPI
-	HandleMatrixBeeperAIStream(ctx context.Context, msg *MatrixBeeperAIStream) error
-}
 
 type ResolveIdentifierResponse struct {
 	// Ghost is the ghost of the user that the identifier resolves to.
@@ -1449,7 +1445,6 @@ type MatrixViewingChat struct {
 
 type MatrixDeleteChat = MatrixEventBase[*event.BeeperChatDeleteEventContent]
 type MatrixAcceptMessageRequest = MatrixEventBase[*event.BeeperAcceptMessageRequestEventContent]
-type MatrixBeeperAIStream = MatrixEventBase[*event.BeeperAIStreamEventContent]
 type MatrixMarkedUnread = MatrixRoomMeta[*event.MarkedUnreadEventContent]
 type MatrixMute = MatrixRoomMeta[*event.BeeperMuteEventContent]
 type MatrixRoomTag = MatrixRoomMeta[*event.TagEventContent]

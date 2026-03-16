@@ -37,6 +37,7 @@ type Bridge struct {
 
 	Matrix   MatrixConnector
 	Bot      MatrixAPI
+	Streams  StreamTransport
 	Network  NetworkConnector
 	Commands CommandProcessor
 	Config   *bridgeconfig.BridgeConfig
@@ -96,6 +97,7 @@ func NewBridge(
 	br.Commands = newCommandProcessor(br)
 	br.Matrix.Init(br)
 	br.Bot = br.Matrix.BotIntent()
+	br.Streams = newStreamTransport(br)
 	br.Network.Init(br)
 	br.DisappearLoop = &DisappearLoop{br: br}
 	return br

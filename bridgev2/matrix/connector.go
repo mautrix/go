@@ -157,7 +157,8 @@ func (br *Connector) Init(bridge *bridgev2.Bridge) {
 	br.EventProcessor.On(event.BeeperAcceptMessageRequest, br.handleRoomEvent)
 	br.EventProcessor.On(event.EphemeralEventReceipt, br.handleEphemeralEvent)
 	br.EventProcessor.On(event.EphemeralEventTyping, br.handleEphemeralEvent)
-	br.EventProcessor.On(event.BeeperEphemeralEventAIStream, br.handleEphemeralEvent)
+	br.EventProcessor.On(event.ToDeviceBeeperStreamSubscribe, br.handleToDeviceEvent)
+	br.EventProcessor.On(event.ToDeviceEncrypted, br.handleToDeviceEvent)
 	br.Bot = br.AS.BotIntent()
 	br.Crypto = NewCryptoHelper(br)
 	br.Bridge.Commands.(*commands.Processor).AddHandlers(

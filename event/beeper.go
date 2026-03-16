@@ -214,13 +214,29 @@ func (content *MessageEventContent) RemovePerMessageProfileFallback() {
 	}
 }
 
-type BeeperAIStreamEventContent struct {
-	TurnID      string         `json:"turn_id"`
-	Seq         int            `json:"seq"`
-	Part        map[string]any `json:"part"`
-	TargetEvent id.EventID     `json:"target_event,omitempty"`
-	AgentID     string         `json:"agent_id,omitempty"`
-	RelatesTo   *RelatesTo     `json:"m.relates_to,omitempty"`
+type BeeperStreamInfo struct {
+	UserID     id.UserID                   `json:"user_id"`
+	DeviceID   id.DeviceID                 `json:"device_id"`
+	Type       string                      `json:"type"`
+	ExpiryMS   int64                       `json:"expiry,omitempty"`
+	Encryption *BeeperStreamEncryptionInfo `json:"encryption,omitempty"`
+}
+
+type BeeperStreamEncryptionInfo struct {
+	Algorithm id.Algorithm `json:"algorithm"`
+	Key       string       `json:"key"`
+}
+
+type BeeperStreamSubscribeEventContent struct {
+	RoomID   id.RoomID   `json:"room_id"`
+	EventID  id.EventID  `json:"event_id"`
+	DeviceID id.DeviceID `json:"device_id"`
+	ExpiryMS int64       `json:"expiry"`
+}
+
+type BeeperStreamUpdateEventContent struct {
+	RoomID  id.RoomID  `json:"room_id"`
+	EventID id.EventID `json:"event_id"`
 }
 
 type BeeperEncodedOrder struct {

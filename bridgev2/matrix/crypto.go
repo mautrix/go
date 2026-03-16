@@ -128,7 +128,10 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 		}
 	}
 
-	helper.client.Syncer = &cryptoSyncer{helper.mach}
+	helper.client.Syncer = &cryptoSyncer{
+		OlmMachine: helper.mach,
+		streams:    helper.bridge.Bridge.Streams,
+	}
 	helper.client.Store = helper.store
 
 	err = helper.mach.Load(ctx)
@@ -516,6 +519,7 @@ func (helper *CryptoHelper) ShareKeys(ctx context.Context) error {
 
 type cryptoSyncer struct {
 	*crypto.OlmMachine
+	streams bridgev2.StreamTransport
 }
 
 func (syncer *cryptoSyncer) ProcessResponse(ctx context.Context, resp *mautrix.RespSync, since string) error {
@@ -532,6 +536,29 @@ func (syncer *cryptoSyncer) ProcessResponse(ctx context.Context, resp *mautrix.R
 			done <- struct{}{}
 		}()
 		syncer.Log.Trace().Str("since", since).Msg("Starting sync response handling")
+		if syncer.streams != nil && len(resp.ToDevice.Events) > 0 {
+			filtered := resp.ToDevice.Events[:0]
+			for _, evt := range resp.ToDevice.Events {
+				if evt == nil {
+					continue
+				}
+				evt.Type.Class = event.ToDeviceEventType
+				evt.Mautrix.EventSource = event.SourceToDevice
+				evt.Mautrix.ReceivedAt = time.Now()
+				if err := evt.Content.ParseRaw(evt.Type); err != nil && !errors.Is(err, event.ErrUnsupportedContentType) {
+					syncer.Log.Warn().
+						Err(err).
+						Str("event_type", evt.Type.Type).
+						Str("sender", evt.Sender.String()).
+						Msg("Failed to parse to-device event while filtering stream transport events")
+				}
+				if syncer.streams.HandleIncomingEvent(ctx, evt) {
+					continue
+				}
+				filtered = append(filtered, evt)
+			}
+			resp.ToDevice.Events = filtered
+		}
 		syncer.ProcessSyncResponse(ctx, resp, since)
 		syncer.Log.Trace().Str("since", since).Msg("Successfully handled sync response")
 	}()

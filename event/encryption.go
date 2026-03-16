@@ -35,11 +35,14 @@ type EncryptedEventContent struct {
 	DeviceID id.DeviceID `json:"device_id,omitempty"`
 	// Only present for Megolm events
 	SessionID id.SessionID `json:"session_id,omitempty"`
+	// Only present for com.beeper.stream.v1.aes-gcm events
+	IV string `json:"iv,omitempty"`
 
 	Ciphertext json.RawMessage `json:"ciphertext"`
 
 	MegolmCiphertext []byte         `json:"-"`
 	OlmCiphertext    OlmCiphertexts `json:"-"`
+	StreamCiphertext []byte         `json:"-"`
 
 	RelatesTo *RelatesTo `json:"m.relates_to,omitempty"`
 	Mentions  *Mentions  `json:"m.mentions,omitempty"`
@@ -66,6 +69,11 @@ func (content *EncryptedEventContent) UnmarshalJSON(data []byte) error {
 			return fmt.Errorf("ciphertext %w", id.ErrInputNotJSONString)
 		}
 		content.MegolmCiphertext = content.Ciphertext[1 : len(content.Ciphertext)-1]
+	case id.AlgorithmBeeperStreamAESGCM:
+		if len(content.Ciphertext) == 0 || content.Ciphertext[0] != '"' || content.Ciphertext[len(content.Ciphertext)-1] != '"' {
+			return fmt.Errorf("ciphertext %w", id.ErrInputNotJSONString)
+		}
+		content.StreamCiphertext = content.Ciphertext[1 : len(content.Ciphertext)-1]
 	}
 	return nil
 }
@@ -80,6 +88,11 @@ func (content *EncryptedEventContent) MarshalJSON() ([]byte, error) {
 		content.Ciphertext[0] = '"'
 		content.Ciphertext[len(content.Ciphertext)-1] = '"'
 		copy(content.Ciphertext[1:len(content.Ciphertext)-1], content.MegolmCiphertext)
+	case id.AlgorithmBeeperStreamAESGCM:
+		content.Ciphertext = make([]byte, len(content.StreamCiphertext)+2)
+		content.Ciphertext[0] = '"'
+		content.Ciphertext[len(content.Ciphertext)-1] = '"'
+		copy(content.Ciphertext[1:len(content.Ciphertext)-1], content.StreamCiphertext)
 	}
 	if err != nil {
 		return nil, err

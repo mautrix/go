@@ -54,11 +54,12 @@ var TypeMap = map[Type]reflect.Type{
 	StateBeeperRoomFeatures:       reflect.TypeOf(RoomFeatures{}),
 	StateBeeperDisappearingTimer:  reflect.TypeOf(BeeperDisappearingTimer{}),
 
-	EventMessage:   reflect.TypeOf(MessageEventContent{}),
-	EventSticker:   reflect.TypeOf(MessageEventContent{}),
-	EventEncrypted: reflect.TypeOf(EncryptedEventContent{}),
-	EventRedaction: reflect.TypeOf(RedactionEventContent{}),
-	EventReaction:  reflect.TypeOf(ReactionEventContent{}),
+	EventMessage:            reflect.TypeOf(MessageEventContent{}),
+	EventSticker:            reflect.TypeOf(MessageEventContent{}),
+	EventEncrypted:          reflect.TypeOf(EncryptedEventContent{}),
+	EphemeralEventEncrypted: reflect.TypeOf(EncryptedEventContent{}),
+	EventRedaction:          reflect.TypeOf(RedactionEventContent{}),
+	EventReaction:           reflect.TypeOf(ReactionEventContent{}),
 
 	EventUnstablePollStart:    reflect.TypeOf(PollStartEventContent{}),
 	EventUnstablePollResponse: reflect.TypeOf(PollResponseEventContent{}),
@@ -80,7 +81,6 @@ var TypeMap = map[Type]reflect.Type{
 	EphemeralEventReceipt:        reflect.TypeOf(ReceiptEventContent{}),
 	EphemeralEventPresence:       reflect.TypeOf(PresenceEventContent{}),
 	EphemeralEventEncrypted:      reflect.TypeOf(EncryptedEventContent{}),
-	BeeperEphemeralEventAIStream: reflect.TypeOf(BeeperAIStreamEventContent{}),
 
 	InRoomVerificationReady:  reflect.TypeOf(VerificationReadyEventContent{}),
 	InRoomVerificationStart:  reflect.TypeOf(VerificationStartEventContent{}),
@@ -112,7 +112,9 @@ var TypeMap = map[Type]reflect.Type{
 
 	ToDeviceOrgMatrixRoomKeyWithheld: reflect.TypeOf(RoomKeyWithheldEventContent{}),
 
-	ToDeviceBeeperRoomKeyAck: reflect.TypeOf(BeeperRoomKeyAckEventContent{}),
+	ToDeviceBeeperRoomKeyAck:      reflect.TypeOf(BeeperRoomKeyAckEventContent{}),
+	ToDeviceBeeperStreamSubscribe: reflect.TypeOf(BeeperStreamSubscribeEventContent{}),
+	ToDeviceBeeperStreamUpdate:    reflect.TypeOf(BeeperStreamUpdateEventContent{}),
 
 	CallInvite:       reflect.TypeOf(CallInviteEventContent{}),
 	CallCandidates:   reflect.TypeOf(CallCandidatesEventContent{}),
@@ -269,6 +271,8 @@ func init() {
 	gob.Register(&ForwardedRoomKeyEventContent{})
 	gob.Register(&RoomKeyRequestEventContent{})
 	gob.Register(&RoomKeyWithheldEventContent{})
+	gob.Register(&BeeperStreamSubscribeEventContent{})
+	gob.Register(&BeeperStreamUpdateEventContent{})
 }
 
 func CastOrDefault[T any](content *Content) *T {
@@ -412,6 +416,20 @@ func (content *Content) AsEncrypted() *EncryptedEventContent {
 	casted, ok := content.Parsed.(*EncryptedEventContent)
 	if !ok {
 		return &EncryptedEventContent{}
+	}
+	return casted
+}
+func (content *Content) AsBeeperStreamSubscribe() *BeeperStreamSubscribeEventContent {
+	casted, ok := content.Parsed.(*BeeperStreamSubscribeEventContent)
+	if !ok {
+		return &BeeperStreamSubscribeEventContent{}
+	}
+	return casted
+}
+func (content *Content) AsBeeperStreamUpdate() *BeeperStreamUpdateEventContent {
+	casted, ok := content.Parsed.(*BeeperStreamUpdateEventContent)
+	if !ok {
+		return &BeeperStreamUpdateEventContent{}
 	}
 	return casted
 }
