@@ -104,6 +104,8 @@ type streamState struct {
 	subscribers map[streamSubscriber]time.Time
 	finished    bool
 	cleanup     *time.Timer
+
+	cachedGCM cipher.AEAD
 }
 
 type streamEncryptedPayload struct {
@@ -217,11 +219,11 @@ func (g *Generator) Publish(ctx context.Context, req *PublishRequest) error {
 	} else if req == nil || req.RoomID == "" || req.EventID == "" {
 		return fmt.Errorf("missing stream identifiers")
 	}
-	desc, update, subscribers, err := g.helper.recordUpdate(req)
+	desc, gcm, update, subscribers, err := g.helper.recordUpdate(req)
 	if err != nil {
 		return err
 	}
-	return g.helper.sendUpdateToSubscribers(ctx, desc, update, subscribers)
+	return g.helper.sendUpdateToSubscribers(ctx, desc, gcm, update, subscribers)
 }
 
 func (g *Generator) Finish(_ context.Context, req *FinishRequest) error {
@@ -341,7 +343,12 @@ func (h *Helper) tryDecryptAndSubscribe(ctx context.Context, evt *event.Event, c
 		Str("stream_room_id", state.key.roomID.String()).
 		Str("stream_event_id", state.key.eventID.String()).
 		Logger()
-	payload, err := decryptStreamPayload(content, state.descriptor.Encryption.Key)
+	gcm, err := state.getGCM()
+	if err != nil {
+		log.Debug().Err(err).Msg("Failed to get stream GCM cipher")
+		return false
+	}
+	payload, err := decryptStreamPayload(content, gcm)
 	if err != nil {
 		log.Debug().Err(err).Msg("Failed to decrypt custom encrypted subscribe")
 		return false
@@ -400,20 +407,22 @@ func (h *Helper) handleSubscribe(ctx context.Context, sender id.UserID, subscrib
 	if expiry <= 0 {
 		expiry = DefaultStreamExpiry
 	}
-	state.subscribers[streamSubscriber{userID: sender, deviceID: subscribe.DeviceID}] = h.now().Add(expiry)
 	desc := state.descriptor
+	gcm, _ := state.getGCM()
 	updates := append([]*event.Content(nil), state.updates...)
 	h.lock.Unlock()
+
+	sub := streamSubscriber{userID: sender, deviceID: subscribe.DeviceID}
 	zerolog.Ctx(ctx).Debug().
 		Str("sender", sender.String()).
 		Str("room_id", subscribe.RoomID.String()).
 		Str("event_id", subscribe.EventID.String()).
 		Str("device_id", subscribe.DeviceID.String()).
 		Int("replay_count", len(updates)).
-		Msg("Registered stream subscriber")
+		Msg("Replaying stream updates to new subscriber")
 
 	for _, update := range updates {
-		if err := h.sendUpdateToSubscribers(ctx, desc, update, []streamSubscriber{{userID: sender, deviceID: subscribe.DeviceID}}); err != nil {
+		if err := h.sendUpdateToSubscribers(ctx, desc, gcm, update, []streamSubscriber{sub}); err != nil {
 			zerolog.Ctx(ctx).Err(err).
 				Str("room_id", subscribe.RoomID.String()).
 				Str("event_id", subscribe.EventID.String()).
@@ -422,9 +431,16 @@ func (h *Helper) handleSubscribe(ctx context.Context, sender id.UserID, subscrib
 			break
 		}
 	}
+
+	h.lock.Lock()
+	state = h.streams[key]
+	if state != nil && !state.finished {
+		state.subscribers[sub] = h.now().Add(expiry)
+	}
+	h.lock.Unlock()
 }
 
-func (h *Helper) recordUpdate(req *PublishRequest) (desc *event.BeeperStreamInfo, update *event.Content, subscribers []streamSubscriber, err error) {
+func (h *Helper) recordUpdate(req *PublishRequest) (desc *event.BeeperStreamInfo, gcm cipher.AEAD, update *event.Content, subscribers []streamSubscriber, err error) {
 	update, err = newStreamUpdateContent(req)
 	if err != nil {
 		return
@@ -442,11 +458,12 @@ func (h *Helper) recordUpdate(req *PublishRequest) (desc *event.BeeperStreamInfo
 	}
 	state.updates = append(state.updates, update)
 	desc = state.descriptor
+	gcm, _ = state.getGCM()
 	subscribers = state.activeSubscribers(h.now())
 	return
 }
 
-func (h *Helper) sendUpdateToSubscribers(ctx context.Context, descriptor *event.BeeperStreamInfo, update *event.Content, subscribers []streamSubscriber) error {
+func (h *Helper) sendUpdateToSubscribers(ctx context.Context, descriptor *event.BeeperStreamInfo, gcm cipher.AEAD, update *event.Content, subscribers []streamSubscriber) error {
 	if len(subscribers) == 0 {
 		return nil
 	}
@@ -454,7 +471,7 @@ func (h *Helper) sendUpdateToSubscribers(ctx context.Context, descriptor *event.
 	if err != nil {
 		return err
 	}
-	eventType, content, err := makeToDeviceContent(descriptor, event.ToDeviceBeeperStreamUpdate, update)
+	eventType, content, err := makeToDeviceContent(descriptor, gcm, event.ToDeviceBeeperStreamUpdate, update)
 	if err != nil {
 		return err
 	}
@@ -563,22 +580,7 @@ func (h *Helper) replayPendingEncryptedSubscribes(ctx context.Context) {
 }
 
 func (h *Helper) tryPendingEncryptedSubscribe(ctx context.Context, evt *event.Event, content *event.EncryptedEventContent) bool {
-	h.lock.Lock()
-	states := make([]*streamState, 0, len(h.streams))
-	if content.RoomID != "" && content.EventID != "" {
-		key := streamKey{roomID: content.RoomID, eventID: content.EventID}
-		if state := h.streams[key]; state != nil && state.descriptor != nil && state.descriptor.Encryption != nil {
-			states = append(states, state)
-		}
-	} else {
-		for _, state := range h.streams {
-			if state.descriptor == nil || state.descriptor.Encryption == nil {
-				continue
-			}
-			states = append(states, state)
-		}
-	}
-	h.lock.Unlock()
+	states := h.collectEncryptedCandidates(content)
 	for _, state := range states {
 		if h.tryDecryptAndSubscribe(ctx, evt, content, state) {
 			return true
@@ -599,10 +601,10 @@ func (state *streamState) activeSubscribers(now time.Time) []streamSubscriber {
 	return active
 }
 
-func makeToDeviceContent(descriptor *event.BeeperStreamInfo, logicalType event.Type, payload *event.Content) (event.Type, *event.Content, error) {
-	if descriptor != nil && descriptor.Encryption != nil {
+func makeToDeviceContent(descriptor *event.BeeperStreamInfo, gcm cipher.AEAD, logicalType event.Type, payload *event.Content) (event.Type, *event.Content, error) {
+	if descriptor != nil && descriptor.Encryption != nil && gcm != nil {
 		roomID, eventID := streamRouteFromContent(payload)
-		encrypted, err := encryptStreamPayload(logicalType, payload, roomID, eventID, descriptor.Encryption.Key)
+		encrypted, err := encryptStreamPayload(logicalType, payload, roomID, eventID, gcm)
 		if err != nil {
 			return event.Type{}, nil, err
 		}
@@ -629,7 +631,22 @@ func newStreamGCM(base64Key string) (cipher.AEAD, error) {
 	return cipher.NewGCM(block)
 }
 
-func encryptStreamPayload(logicalType event.Type, payload *event.Content, roomID id.RoomID, eventID id.EventID, base64Key string) (*event.EncryptedEventContent, error) {
+func (s *streamState) getGCM() (cipher.AEAD, error) {
+	if s.cachedGCM != nil {
+		return s.cachedGCM, nil
+	}
+	if s.descriptor == nil || s.descriptor.Encryption == nil {
+		return nil, fmt.Errorf("stream has no encryption info")
+	}
+	gcm, err := newStreamGCM(s.descriptor.Encryption.Key)
+	if err != nil {
+		return nil, err
+	}
+	s.cachedGCM = gcm
+	return gcm, nil
+}
+
+func encryptStreamPayload(logicalType event.Type, payload *event.Content, roomID id.RoomID, eventID id.EventID, gcm cipher.AEAD) (*event.EncryptedEventContent, error) {
 	plaintextContent, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
@@ -638,10 +655,6 @@ func encryptStreamPayload(logicalType event.Type, payload *event.Content, roomID
 		Type:    logicalType.Type,
 		Content: plaintextContent,
 	})
-	if err != nil {
-		return nil, err
-	}
-	gcm, err := newStreamGCM(base64Key)
 	if err != nil {
 		return nil, err
 	}
@@ -659,7 +672,7 @@ func encryptStreamPayload(logicalType event.Type, payload *event.Content, roomID
 	}, nil
 }
 
-func decryptStreamPayload(content *event.EncryptedEventContent, base64Key string) (*streamEncryptedPayload, error) {
+func decryptStreamPayload(content *event.EncryptedEventContent, gcm cipher.AEAD) (*streamEncryptedPayload, error) {
 	iv, err := base64.RawStdEncoding.DecodeString(content.IV)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode stream IV: %w", err)
@@ -667,10 +680,6 @@ func decryptStreamPayload(content *event.EncryptedEventContent, base64Key string
 	ciphertext, err := base64.RawStdEncoding.DecodeString(string(content.StreamCiphertext))
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode stream ciphertext: %w", err)
-	}
-	gcm, err := newStreamGCM(base64Key)
-	if err != nil {
-		return nil, err
 	}
 	plaintext, err := gcm.Open(nil, iv, ciphertext, nil)
 	if err != nil {

@@ -578,6 +578,10 @@ func (syncer *cryptoSyncer) ProcessResponse(ctx context.Context, resp *mautrix.R
 				evt.Type.Class = event.ToDeviceEventType
 				evt.Mautrix.EventSource = event.SourceToDevice
 				evt.Mautrix.ReceivedAt = time.Now()
+				if evt.Type != event.ToDeviceEncrypted && evt.Type != event.ToDeviceBeeperStreamSubscribe {
+					filtered = append(filtered, evt)
+					continue
+				}
 				if err := evt.Content.ParseRaw(evt.Type); err != nil && !errors.Is(err, event.ErrUnsupportedContentType) {
 					syncer.Log.Warn().
 						Err(err).

@@ -79,7 +79,12 @@ func TestEncryptDecryptStreamPayloadRoundTrip(t *testing.T) {
 		t.Fatalf("newStreamUpdateContent returned error: %v", err)
 	}
 
-	encrypted, err := encryptStreamPayload(event.ToDeviceBeeperStreamUpdate, content, "!room:example.com", "$event", key)
+	gcm, err := newStreamGCM(key)
+	if err != nil {
+		t.Fatalf("newStreamGCM returned error: %v", err)
+	}
+
+	encrypted, err := encryptStreamPayload(event.ToDeviceBeeperStreamUpdate, content, "!room:example.com", "$event", gcm)
 	if err != nil {
 		t.Fatalf("encryptStreamPayload returned error: %v", err)
 	}
@@ -93,7 +98,7 @@ func TestEncryptDecryptStreamPayloadRoundTrip(t *testing.T) {
 		t.Fatalf("encrypted payload missing routing identifiers: %#v", encrypted)
 	}
 
-	decrypted, err := decryptStreamPayload(encrypted, key)
+	decrypted, err := decryptStreamPayload(encrypted, gcm)
 	if err != nil {
 		t.Fatalf("decryptStreamPayload returned error: %v", err)
 	}
@@ -193,7 +198,11 @@ func TestPendingEncryptedSubscribeReplay(t *testing.T) {
 		DeviceID: "SUBDEVICE",
 		ExpiryMS: 60_000,
 	}}
-	encrypted, err := encryptStreamPayload(event.ToDeviceBeeperStreamSubscribe, subscribeContent, "!room:example.com", "$event", desc.Encryption.Key)
+	testGCM, err := newStreamGCM(desc.Encryption.Key)
+	if err != nil {
+		t.Fatalf("newStreamGCM returned error: %v", err)
+	}
+	encrypted, err := encryptStreamPayload(event.ToDeviceBeeperStreamSubscribe, subscribeContent, "!room:example.com", "$event", testGCM)
 	if err != nil {
 		t.Fatalf("encryptStreamPayload returned error: %v", err)
 	}
