@@ -36,39 +36,29 @@ func newTestStreamSender(encrypted bool) *BeeperStreamSender {
 	}, opts)
 }
 
-func newTestStreamPublisher(t *testing.T, encrypted bool, authorize func(context.Context, *BeeperStreamSubscribeRequest) bool) (*BeeperStreamSender, *BeeperStreamPublisher, *event.BeeperStreamInfo) {
+func newTestStreamPublisher(t *testing.T, encrypted bool, authorize func(context.Context, *BeeperStreamSubscribeRequest) bool) (*BeeperStreamSender, *BeeperStreamPublisher, *BeeperStreamDescriptor) {
 	t.Helper()
 	sender := newTestStreamSender(encrypted)
 	publisher := sender.NewPublisher(&BeeperStreamPublisherOptions{AuthorizeSubscriber: authorize})
-	desc, err := publisher.BuildDescriptor(context.Background(), &BeeperStreamDescriptorRequest{
-		RoomID: testStreamRoomID,
-		Type:   testStreamType,
-	})
+	desc, err := publisher.PrepareStream(context.Background(), testStreamRoomID, testStreamType)
 	if err != nil {
-		t.Fatalf("BuildDescriptor returned error: %v", err)
+		t.Fatalf("PrepareStream returned error: %v", err)
 	}
 	return sender, publisher, desc
 }
 
-func startTestStream(t *testing.T, publisher *BeeperStreamPublisher, desc *event.BeeperStreamInfo) {
+func startTestStream(t *testing.T, desc *BeeperStreamDescriptor) *BeeperStream {
 	t.Helper()
-	if err := publisher.Start(context.Background(), &BeeperStartStreamRequest{
-		RoomID:     testStreamRoomID,
-		EventID:    testStreamEventID,
-		Type:       testStreamType,
-		Descriptor: desc,
-	}); err != nil {
-		t.Fatalf("Start returned error: %v", err)
+	stream, err := desc.Activate(context.Background(), testStreamEventID)
+	if err != nil {
+		t.Fatalf("Activate returned error: %v", err)
 	}
+	return stream
 }
 
-func newTestPublishRequest(delta string) *BeeperPublishStreamRequest {
-	return &BeeperPublishStreamRequest{
-		RoomID:  testStreamRoomID,
-		EventID: testStreamEventID,
-		Content: map[string]any{
-			testStreamDeltaKey: []map[string]any{{"delta": delta}},
-		},
+func newTestPublishContent(delta string) map[string]any {
+	return map[string]any{
+		testStreamDeltaKey: []map[string]any{{"delta": delta}},
 	}
 }
 
@@ -146,7 +136,7 @@ func requireTestStreamState(t *testing.T, sender *BeeperStreamSender) *beeperStr
 }
 
 func TestNewStreamUpdateContentMarshal(t *testing.T) {
-	content, err := newStreamUpdateContent(newTestPublishRequest("hello"))
+	content, err := newStreamUpdateContent(testStreamRoomID, testStreamEventID, newTestPublishContent("hello"))
 	if err != nil {
 		t.Fatalf("newStreamUpdateContent returned error: %v", err)
 	}
@@ -161,9 +151,9 @@ func TestNewStreamUpdateContentMarshal(t *testing.T) {
 func TestNewStreamUpdateContentRejectsReservedKeys(t *testing.T) {
 	for _, key := range []string{"room_id", "event_id"} {
 		t.Run(key, func(t *testing.T) {
-			req := newTestPublishRequest("hello")
-			req.Content[key] = "override"
-			if _, err := newStreamUpdateContent(req); err == nil {
+			content := newTestPublishContent("hello")
+			content[key] = "override"
+			if _, err := newStreamUpdateContent(testStreamRoomID, testStreamEventID, content); err == nil {
 				t.Fatalf("expected %s override to be rejected", key)
 			}
 		})
@@ -172,7 +162,7 @@ func TestNewStreamUpdateContentRejectsReservedKeys(t *testing.T) {
 
 func TestEncryptDecryptStreamPayloadRoundTrip(t *testing.T) {
 	key := makeStreamKey()
-	content, err := newStreamUpdateContent(newTestPublishRequest("hello"))
+	content, err := newStreamUpdateContent(testStreamRoomID, testStreamEventID, newTestPublishContent("hello"))
 	if err != nil {
 		t.Fatalf("newStreamUpdateContent returned error: %v", err)
 	}
@@ -209,11 +199,11 @@ func TestEncryptDecryptStreamPayloadRoundTrip(t *testing.T) {
 
 func TestHandlePlainSubscribe(t *testing.T) {
 	var gotAuth *BeeperStreamSubscribeRequest
-	sender, publisher, desc := newTestStreamPublisher(t, false, func(_ context.Context, req *BeeperStreamSubscribeRequest) bool {
+	sender, _, desc := newTestStreamPublisher(t, false, func(_ context.Context, req *BeeperStreamSubscribeRequest) bool {
 		gotAuth = req
 		return req.UserID == testStreamSubscriberID
 	})
-	startTestStream(t, publisher, desc)
+	startTestStream(t, desc)
 
 	if !sender.HandleToDeviceEvent(context.Background(), newTestSubscribeEvent(t, nil, "", "")) {
 		t.Fatal("expected plain subscribe to be consumed")
@@ -240,18 +230,18 @@ func TestPendingSubscribeReplay(t *testing.T) {
 		{name: "encrypted", encrypted: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			sender, publisher, desc := newTestStreamPublisher(t, tc.encrypted, func(context.Context, *BeeperStreamSubscribeRequest) bool {
+			sender, _, desc := newTestStreamPublisher(t, tc.encrypted, func(context.Context, *BeeperStreamSubscribeRequest) bool {
 				return true
 			})
 
-			if !sender.HandleToDeviceEvent(context.Background(), newTestSubscribeEvent(t, desc, "", "")) {
+			if !sender.HandleToDeviceEvent(context.Background(), newTestSubscribeEvent(t, desc.Info, "", "")) {
 				t.Fatalf("expected %s subscribe to be consumed", tc.name)
 			}
 			if len(sender.pendingSubscribe) != 1 {
 				t.Fatalf("expected 1 pending subscribe, got %d", len(sender.pendingSubscribe))
 			}
 
-			startTestStream(t, publisher, desc)
+			startTestStream(t, desc)
 
 			if len(sender.pendingSubscribe) != 0 {
 				t.Fatalf("expected pending subscribes to be replayed, got %d left", len(sender.pendingSubscribe))
@@ -292,20 +282,20 @@ func TestStreamPublishAndFinishWithDirectClient(t *testing.T) {
 	publisher := sender.NewPublisher(&BeeperStreamPublisherOptions{
 		AuthorizeSubscriber: func(context.Context, *BeeperStreamSubscribeRequest) bool { return true },
 	})
-	desc, err := publisher.BuildDescriptor(context.Background(), &BeeperStreamDescriptorRequest{
-		RoomID: testStreamRoomID,
-		Type:   testStreamType,
-	})
+	desc, err := publisher.PrepareStream(context.Background(), testStreamRoomID, testStreamType)
 	if err != nil {
-		t.Fatalf("BuildDescriptor returned error: %v", err)
+		t.Fatalf("PrepareStream returned error: %v", err)
 	}
-	startTestStream(t, publisher, desc)
+	stream, err := desc.Activate(context.Background(), testStreamEventID)
+	if err != nil {
+		t.Fatalf("Activate returned error: %v", err)
+	}
 
 	if !sender.HandleToDeviceEvent(context.Background(), newTestSubscribeEvent(t, nil, testStreamBotUserID, testStreamBotDeviceID)) {
 		t.Fatal("expected subscribe to be consumed")
 	}
 
-	if err = publisher.Publish(context.Background(), newTestPublishRequest("hello")); err != nil {
+	if err = stream.Publish(context.Background(), newTestPublishContent("hello")); err != nil {
 		t.Fatalf("Publish returned error: %v", err)
 	}
 	if sendPath == "" {
@@ -331,13 +321,10 @@ func TestStreamPublishAndFinishWithDirectClient(t *testing.T) {
 	}
 	assertStreamUpdateMap(t, decodeJSONMap(t, rawContent))
 
-	if err = publisher.Finish(context.Background(), &BeeperFinishStreamRequest{
-		RoomID:  testStreamRoomID,
-		EventID: testStreamEventID,
-	}); err != nil {
+	if err = stream.Finish(context.Background()); err != nil {
 		t.Fatalf("Finish returned error: %v", err)
 	}
-	if err = publisher.Publish(context.Background(), newTestPublishRequest("bye")); err == nil {
+	if err = stream.Publish(context.Background(), newTestPublishContent("bye")); err == nil {
 		t.Fatal("expected Publish after Finish to fail")
 	}
 }

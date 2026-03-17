@@ -376,12 +376,5 @@ func receiverLoopContext(ctx context.Context) context.Context {
 	if ctx == nil {
 		return context.Background()
 	}
-	return withContextLogger(ctx, zerolog.Ctx(ctx))
-}
-
-func withContextLogger(ctx context.Context, log *zerolog.Logger) context.Context {
-	if log == nil {
-		return ctx
-	}
-	return log.WithContext(ctx)
+	return zerolog.Ctx(ctx).WithContext(ctx)
 }

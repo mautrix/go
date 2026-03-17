@@ -134,21 +134,13 @@ func TestGetOrCreateBotDeviceClientProvisioningAndInterception(t *testing.T) {
 	publisher := sender.NewPublisher(&mautrix.BeeperStreamPublisherOptions{
 		AuthorizeSubscriber: func(context.Context, *mautrix.BeeperStreamSubscribeRequest) bool { return true },
 	})
-	desc, err := publisher.BuildDescriptor(context.Background(), &mautrix.BeeperStreamDescriptorRequest{
-		RoomID: "!room:example.com",
-		Type:   "com.beeper.llm",
-	})
+	desc, err := publisher.PrepareStream(context.Background(), "!room:example.com", "com.beeper.llm")
 	if err != nil {
-		t.Fatalf("BuildDescriptor returned error: %v", err)
+		t.Fatalf("PrepareStream returned error: %v", err)
 	}
-	err = publisher.Start(context.Background(), &mautrix.BeeperStartStreamRequest{
-		RoomID:     "!room:example.com",
-		EventID:    "$event",
-		Type:       "com.beeper.llm",
-		Descriptor: desc,
-	})
+	stream, err := desc.Activate(context.Background(), "$event")
 	if err != nil {
-		t.Fatalf("Start returned error: %v", err)
+		t.Fatalf("Activate returned error: %v", err)
 	}
 
 	as.handleEvents(context.Background(), []*event.Event{{
@@ -164,12 +156,8 @@ func TestGetOrCreateBotDeviceClientProvisioningAndInterception(t *testing.T) {
 		}},
 	}}, event.ToDeviceEventType)
 
-	if err = publisher.Publish(context.Background(), &mautrix.BeeperPublishStreamRequest{
-		RoomID:  "!room:example.com",
-		EventID: "$event",
-		Content: map[string]any{
-			"com.beeper.llm.deltas": []map[string]any{{"delta": "hello"}},
-		},
+	if err = stream.Publish(context.Background(), map[string]any{
+		"com.beeper.llm.deltas": []map[string]any{{"delta": "hello"}},
 	}); err != nil {
 		t.Fatalf("Publish returned error: %v", err)
 	}

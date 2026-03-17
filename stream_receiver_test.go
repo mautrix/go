@@ -144,7 +144,7 @@ func TestBeeperStreamReceiverPlainUpdateCallback(t *testing.T) {
 		},
 		cancel: func() {},
 	}
-	content, err := newStreamUpdateContent(newTestPublishRequest("hello"))
+	content, err := newStreamUpdateContent(testStreamRoomID, testStreamEventID, newTestPublishContent("hello"))
 	if err != nil {
 		t.Fatalf("newStreamUpdateContent returned error: %v", err)
 	}
@@ -195,7 +195,7 @@ func TestBeeperStreamReceiverEncryptedUpdateCallback(t *testing.T) {
 	}
 	receiver.subscriptions[sub.key] = sub
 	receiver.subscriptionsByStreamID[streamID] = sub
-	content, err := newStreamUpdateContent(newTestPublishRequest("hello"))
+	content, err := newStreamUpdateContent(testStreamRoomID, testStreamEventID, newTestPublishContent("hello"))
 	if err != nil {
 		t.Fatalf("newStreamUpdateContent returned error: %v", err)
 	}
@@ -249,7 +249,7 @@ func TestBeeperStreamReceiverEncryptedUpdateIgnoresWrongRoute(t *testing.T) {
 	}
 	receiver.subscriptions[sub.key] = sub
 	receiver.subscriptionsByStreamID[streamID] = sub
-	content, err := newStreamUpdateContent(newTestPublishRequest("hello"))
+	content, err := newStreamUpdateContent(testStreamRoomID, testStreamEventID, newTestPublishContent("hello"))
 	if err != nil {
 		t.Fatalf("newStreamUpdateContent returned error: %v", err)
 	}

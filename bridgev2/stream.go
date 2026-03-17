@@ -14,7 +14,7 @@ import (
 	"maunium.net/go/mautrix/event"
 )
 
-func (login *UserLogin) GetBeeperStreamTransport(ctx context.Context) (mautrix.BeeperStreamTransport, error) {
+func (login *UserLogin) GetBeeperStreamPublisher(ctx context.Context) (*mautrix.BeeperStreamPublisher, error) {
 	login.beeperStreamLock.Lock()
 	defer login.beeperStreamLock.Unlock()
 	if login.beeperStreamPublisher != nil {
