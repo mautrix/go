@@ -199,9 +199,8 @@ func TestNewStreamUpdateContentRejectsReservedKeys(t *testing.T) {
 		t.Run(key, func(t *testing.T) {
 			content := newTestPublishContent("hello")
 			content[key] = "override"
-			if _, err := newStreamUpdateContent(testStreamRoomID, testStreamEventID, content); err == nil {
-				t.Fatalf("expected %s override to be rejected", key)
-			}
+			_, err := newStreamUpdateContent(testStreamRoomID, testStreamEventID, content)
+			require.Error(t, err, "expected %s override to be rejected", key)
 		})
 	}
 }
@@ -297,17 +296,15 @@ func TestHandleEncryptedSubscribeWithoutStreamIDDropped(t *testing.T) {
 func TestBeeperStreamDescriptorActivateRejectsInvalidEncryptedDescriptor(t *testing.T) {
 	_, desc := newEncryptedTestDesc(t)
 	desc.Info.Encryption.StreamID = ""
-	if _, err := desc.Activate(context.Background(), testStreamEventID); err == nil {
-		t.Fatal("expected Activate to fail with missing encrypted stream_id")
-	}
+	_, err := desc.Activate(context.Background(), testStreamEventID)
+	require.Error(t, err)
 }
 
 func TestBeeperStreamDescriptorActivateOneShot(t *testing.T) {
 	_, desc := newEncryptedTestDesc(t)
 	must(desc.Activate(context.Background(), testStreamEventID))
-	if _, err := desc.Activate(context.Background(), "$second"); err == nil {
-		t.Fatal("expected second Activate on same descriptor to fail")
-	}
+	_, err := desc.Activate(context.Background(), "$second")
+	require.Error(t, err)
 }
 
 func TestBeeperStreamDescriptorActivateRejectsStreamIDCollision(t *testing.T) {
@@ -315,12 +312,9 @@ func TestBeeperStreamDescriptorActivateRejectsStreamIDCollision(t *testing.T) {
 	must(descA.Activate(context.Background(), testStreamEventID))
 	descB := must(sender.PrepareStream(context.Background(), testStreamRoomID, testStreamType))
 	descB.Info.Encryption.StreamID = descA.Info.Encryption.StreamID
-	if _, err := descB.Activate(context.Background(), "$second"); err == nil {
-		t.Fatal("expected Activate to fail on stream_id collision")
-	}
-	if _, exists := sender.streams[beeperStreamKey{roomID: testStreamRoomID, eventID: "$second"}]; exists {
-		t.Fatal("unexpected stream state for failed activation")
-	}
+	_, err := descB.Activate(context.Background(), "$second")
+	require.Error(t, err)
+	require.NotContains(t, sender.streams, beeperStreamKey{roomID: testStreamRoomID, eventID: "$second"})
 }
 
 func TestBeeperStreamDescriptorActivateSnapshotsDescriptor(t *testing.T) {
