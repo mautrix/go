@@ -3,6 +3,10 @@ package mautrix
 import (
 	"context"
 	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"maunium.net/go/mautrix/event"
@@ -297,5 +301,122 @@ func TestPendingEncryptedSubscribeReplay(t *testing.T) {
 	}
 	if len(state.subscribers) != 1 {
 		t.Fatalf("expected 1 replayed subscriber, got %d", len(state.subscribers))
+	}
+}
+
+func TestStreamPublishAndFinishWithDirectClient(t *testing.T) {
+	var sendPath string
+	var sendBody []byte
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Fatalf("unexpected method %s", r.Method)
+		}
+		sendPath = r.URL.Path
+		var err error
+		sendBody, err = io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("failed to read request body: %v", err)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{})
+	}))
+	defer ts.Close()
+
+	client, err := NewClient(ts.URL, "@bot:example.com", "access-token")
+	if err != nil {
+		t.Fatalf("NewClient returned error: %v", err)
+	}
+	client.DeviceID = "BOTDEVICE"
+	client.StateStore = NewMemoryStateStore()
+	helper := client.GetOrCreateStreamHelper(nil)
+	gen := helper.NewGenerator(&StreamGeneratorOptions{
+		AuthorizeSubscriber: func(context.Context, *StreamSubscribeRequest) bool { return true },
+	})
+	desc, err := gen.BuildDescriptor(context.Background(), &StreamDescriptorRequest{
+		RoomID: "!room:example.com",
+		Type:   "com.beeper.llm",
+	})
+	if err != nil {
+		t.Fatalf("BuildDescriptor returned error: %v", err)
+	}
+	err = gen.Start(context.Background(), &StartStreamRequest{
+		RoomID:     "!room:example.com",
+		EventID:    "$event",
+		Type:       "com.beeper.llm",
+		Descriptor: desc,
+	})
+	if err != nil {
+		t.Fatalf("Start returned error: %v", err)
+	}
+
+	if !helper.HandleToDeviceEvent(context.Background(), &event.Event{
+		Sender:     "@alice:example.com",
+		ToUserID:   "@bot:example.com",
+		ToDeviceID: "BOTDEVICE",
+		Type:       event.ToDeviceBeeperStreamSubscribe,
+		Content: event.Content{Parsed: &event.BeeperStreamSubscribeEventContent{
+			RoomID:   "!room:example.com",
+			EventID:  "$event",
+			DeviceID: "SUBDEVICE",
+			ExpiryMS: 60_000,
+		}},
+	}) {
+		t.Fatal("expected subscribe to be consumed")
+	}
+
+	err = gen.Publish(context.Background(), &PublishStreamRequest{
+		RoomID:  "!room:example.com",
+		EventID: "$event",
+		Content: map[string]any{
+			"com.beeper.llm.deltas": []map[string]any{{"delta": "hello"}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Publish returned error: %v", err)
+	}
+	if sendPath == "" {
+		t.Fatal("expected SendToDevice request")
+	}
+	if !strings.Contains(sendPath, "/sendToDevice/com.beeper.stream.update/") {
+		t.Fatalf("unexpected sendToDevice path %q", sendPath)
+	}
+
+	var req struct {
+		Messages map[string]map[string]json.RawMessage `json:"messages"`
+	}
+	if err = json.Unmarshal(sendBody, &req); err != nil {
+		t.Fatalf("failed to unmarshal sendToDevice request: %v", err)
+	}
+	targetUser, ok := req.Messages["@alice:example.com"]
+	if !ok {
+		t.Fatalf("missing target user in request: %#v", req.Messages)
+	}
+	rawContent, ok := targetUser["SUBDEVICE"]
+	if !ok {
+		t.Fatalf("missing target device in request: %#v", targetUser)
+	}
+	var content map[string]any
+	if err = json.Unmarshal(rawContent, &content); err != nil {
+		t.Fatalf("failed to unmarshal stream update content: %v", err)
+	}
+	if content["room_id"] != "!room:example.com" || content["event_id"] != "$event" {
+		t.Fatalf("unexpected stream update routing content: %#v", content)
+	}
+
+	err = gen.Finish(context.Background(), &FinishStreamRequest{
+		RoomID:  "!room:example.com",
+		EventID: "$event",
+	})
+	if err != nil {
+		t.Fatalf("Finish returned error: %v", err)
+	}
+	err = gen.Publish(context.Background(), &PublishStreamRequest{
+		RoomID:  "!room:example.com",
+		EventID: "$event",
+		Content: map[string]any{
+			"com.beeper.llm.deltas": []map[string]any{{"delta": "bye"}},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected Publish after Finish to fail")
 	}
 }
