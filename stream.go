@@ -30,6 +30,7 @@ const (
 	streamCleanupGrace   = 30 * time.Second
 	pendingSubscribeTTL  = 5 * time.Second
 	maxPendingSubscribes = 64
+	maxUpdatesPerStream  = 1024
 )
 
 type ToDeviceInterceptor func(context.Context, *event.Event) bool
@@ -538,6 +539,9 @@ func (h *StreamHelper) recordUpdate(req *PublishStreamRequest) (desc *event.Beep
 		return
 	}
 	state.updates = append(state.updates, update)
+	if len(state.updates) > maxUpdatesPerStream {
+		state.updates = state.updates[len(state.updates)-maxUpdatesPerStream:]
+	}
 	desc = state.descriptor
 	gcm, _ = state.getGCM()
 	subscribers = state.activeSubscribers(h.now())
@@ -663,8 +667,8 @@ func (h *StreamHelper) tryPendingSubscribe(ctx context.Context, evt *event.Event
 		}
 		return h.handleSubscribe(ctx, evt.Sender, subscribe)
 	case event.ToDeviceEncrypted:
-		content := evt.Content.AsEncrypted()
-		if content == nil || content.Algorithm != id.AlgorithmBeeperStreamAESGCM {
+		content, ok := evt.Content.Parsed.(*event.EncryptedEventContent)
+		if !ok || content.Algorithm != id.AlgorithmBeeperStreamAESGCM {
 			return false
 		}
 		states := h.collectEncryptedCandidates(content)
@@ -689,15 +693,15 @@ func clonePendingSubscribeEvent(evt *event.Event) *event.Event {
 	}
 	switch evt.Type {
 	case event.ToDeviceBeeperStreamSubscribe:
-		subscribe := event.CastOrDefault[event.BeeperStreamSubscribeEventContent](&evt.Content)
-		if subscribe == nil {
+		subscribe, ok := evt.Content.Parsed.(*event.BeeperStreamSubscribeEventContent)
+		if !ok {
 			return nil
 		}
 		contentCopy := *subscribe
 		cloned.Content = event.Content{Parsed: &contentCopy}
 	case event.ToDeviceEncrypted:
-		encrypted := evt.Content.AsEncrypted()
-		if encrypted == nil {
+		encrypted, ok := evt.Content.Parsed.(*event.EncryptedEventContent)
+		if !ok {
 			return nil
 		}
 		contentCopy := *encrypted
@@ -754,15 +758,7 @@ func (s *streamState) getGCM() (cipher.AEAD, error) {
 	if s.cachedGCM != nil {
 		return s.cachedGCM, nil
 	}
-	if s.descriptor == nil || s.descriptor.Encryption == nil {
-		return nil, fmt.Errorf("stream has no encryption info")
-	}
-	gcm, err := newStreamGCM(s.descriptor.Encryption.Key)
-	if err != nil {
-		return nil, err
-	}
-	s.cachedGCM = gcm
-	return gcm, nil
+	return nil, fmt.Errorf("stream has no encryption info")
 }
 
 func encryptStreamPayload(logicalType event.Type, payload *event.Content, roomID id.RoomID, eventID id.EventID, gcm cipher.AEAD) (*event.EncryptedEventContent, error) {
