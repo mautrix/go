@@ -7,7 +7,6 @@
 package event
 
 import (
-	"encoding/gob"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -56,8 +55,7 @@ var TypeMap = map[Type]reflect.Type{
 
 	EventMessage:            reflect.TypeOf(MessageEventContent{}),
 	EventSticker:            reflect.TypeOf(MessageEventContent{}),
-	EventEncrypted:          reflect.TypeOf(EncryptedEventContent{}),
-	EphemeralEventEncrypted: reflect.TypeOf(EncryptedEventContent{}),
+	EventEncrypted: reflect.TypeOf(EncryptedEventContent{}),
 	EventRedaction:          reflect.TypeOf(RedactionEventContent{}),
 	EventReaction:           reflect.TypeOf(ReactionEventContent{}),
 
@@ -235,44 +233,6 @@ func mergeMaps(into, from map[string]interface{}) {
 			into[key] = newValue
 		}
 	}
-}
-
-func init() {
-	gob.Register(&MemberEventContent{})
-	gob.Register(&PowerLevelsEventContent{})
-	gob.Register(&CanonicalAliasEventContent{})
-	gob.Register(&EncryptionEventContent{})
-	gob.Register(&BridgeEventContent{})
-	gob.Register(&SpaceChildEventContent{})
-	gob.Register(&SpaceParentEventContent{})
-	gob.Register(&ElementFunctionalMembersContent{})
-	gob.Register(&RoomNameEventContent{})
-	gob.Register(&RoomAvatarEventContent{})
-	gob.Register(&TopicEventContent{})
-	gob.Register(&TombstoneEventContent{})
-	gob.Register(&CreateEventContent{})
-	gob.Register(&JoinRulesEventContent{})
-	gob.Register(&HistoryVisibilityEventContent{})
-	gob.Register(&GuestAccessEventContent{})
-	gob.Register(&PinnedEventsEventContent{})
-	gob.Register(&MessageEventContent{})
-	gob.Register(&MessageEventContent{})
-	gob.Register(&EncryptedEventContent{})
-	gob.Register(&RedactionEventContent{})
-	gob.Register(&ReactionEventContent{})
-	gob.Register(&TagEventContent{})
-	gob.Register(&DirectChatsEventContent{})
-	gob.Register(&FullyReadEventContent{})
-	gob.Register(&IgnoredUserListEventContent{})
-	gob.Register(&TypingEventContent{})
-	gob.Register(&ReceiptEventContent{})
-	gob.Register(&PresenceEventContent{})
-	gob.Register(&RoomKeyEventContent{})
-	gob.Register(&ForwardedRoomKeyEventContent{})
-	gob.Register(&RoomKeyRequestEventContent{})
-	gob.Register(&RoomKeyWithheldEventContent{})
-	gob.Register(&BeeperStreamSubscribeEventContent{})
-	gob.Register(&BeeperStreamUpdateEventContent{})
 }
 
 func CastOrDefault[T any](content *Content) *T {
