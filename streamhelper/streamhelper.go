@@ -738,7 +738,7 @@ func streamRouteFromContent(content *event.Content) (id.RoomID, id.EventID) {
 	if content == nil {
 		return "", ""
 	}
-	if update := event.CastOrDefault[event.BeeperStreamUpdateEventContent](content); update != nil && (update.RoomID != "" || update.EventID != "") {
+	if update := event.CastOrDefault[event.BeeperStreamUpdateEventContent](content); update.RoomID != "" || update.EventID != "" {
 		return update.RoomID, update.EventID
 	}
 	return "", ""

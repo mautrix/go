@@ -581,6 +581,9 @@ func (syncer *cryptoSyncer) ProcessResponse(ctx context.Context, resp *mautrix.R
 				if syncer.filterToDeviceEvent(ctx, evt) {
 					continue
 				}
+				// Reset Parsed so ProcessSyncResponse can parse the event normally.
+				// filterToDeviceEvent may have called ParseRaw as a side effect.
+				evt.Content.Parsed = nil
 				filtered = append(filtered, evt)
 			}
 			resp.ToDevice.Events = filtered
