@@ -69,9 +69,9 @@ func newTestBotDeviceHomeserver(t *testing.T) (*httptest.Server, *atomic.Int32, 
 	return ts, &loginCalls, &sendToDeviceCalls
 }
 
-func activateTestAppServiceStream(t *testing.T, publisher *mautrix.BeeperStreamPublisher) *mautrix.BeeperStream {
+func activateTestAppServiceStream(t *testing.T, sender *mautrix.BeeperStreamSender) *mautrix.BeeperStream {
 	t.Helper()
-	desc, err := publisher.PrepareStream(context.Background(), "!room:example.com", "com.beeper.llm")
+	desc, err := sender.PrepareStream(context.Background(), "!room:example.com", "com.beeper.llm")
 	if err != nil {
 		t.Fatalf("PrepareStream returned error: %v", err)
 	}
@@ -168,10 +168,10 @@ func TestGetOrCreateBotDeviceClientProvisioningAndInterception(t *testing.T) {
 		t.Fatalf("expected cached client to avoid additional login calls, got %d", loginCalls.Load())
 	}
 
-	sender := client.GetOrCreateBeeperStreamSender(nil)
-	stream := activateTestAppServiceStream(t, sender.NewPublisher(&mautrix.BeeperStreamPublisherOptions{
+	sender := client.GetOrCreateBeeperStreamSender(&mautrix.BeeperStreamSenderOptions{
 		AuthorizeSubscriber: func(context.Context, *mautrix.BeeperStreamSubscribeRequest) bool { return true },
-	}))
+	})
+	stream := activateTestAppServiceStream(t, sender)
 	deliverTestBotSubscribe(as, "NEWDEVICE")
 
 	if err = stream.Publish(context.Background(), map[string]any{
@@ -189,27 +189,27 @@ func TestGetOrCreateBotDeviceClientProvisioningAndInterception(t *testing.T) {
 	}
 }
 
-func TestNewBeeperStreamPublisherPassesOptions(t *testing.T) {
+func TestGetOrCreateBeeperStreamSenderPassesOptions(t *testing.T) {
 	ts, loginCalls, sendToDeviceCalls := newTestBotDeviceHomeserver(t)
 	var authorizeCalls atomic.Int32
 	as := newTestAppService(t, ts.URL)
-	publisher, err := as.NewBeeperStreamPublisher(context.Background(), BotDeviceClientOptions{
+	sender, err := as.GetOrCreateBeeperStreamSender(context.Background(), BotDeviceClientOptions{
 		Purpose:                  "stream",
 		InitialDeviceDisplayName: "Stream Bot",
-	}, &mautrix.BeeperStreamPublisherOptions{
+	}, &mautrix.BeeperStreamSenderOptions{
 		AuthorizeSubscriber: func(context.Context, *mautrix.BeeperStreamSubscribeRequest) bool {
 			authorizeCalls.Add(1)
 			return false
 		},
-	}, nil)
+	})
 	if err != nil {
-		t.Fatalf("NewBeeperStreamPublisher returned error: %v", err)
+		t.Fatalf("GetOrCreateBeeperStreamSender returned error: %v", err)
 	}
 	if loginCalls.Load() != 1 {
 		t.Fatalf("expected one login call, got %d", loginCalls.Load())
 	}
 
-	stream := activateTestAppServiceStream(t, publisher)
+	stream := activateTestAppServiceStream(t, sender)
 	deliverTestBotSubscribe(as, "NEWDEVICE")
 
 	if err = stream.Publish(context.Background(), map[string]any{
