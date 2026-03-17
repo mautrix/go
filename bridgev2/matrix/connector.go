@@ -86,10 +86,7 @@ type Connector struct {
 	Capabilities            *bridgev2.MatrixCapabilities
 	IgnoreUnsupportedServer bool
 
-	EventProcessor   *appservice.EventProcessor
-	streamHelper     *mautrix.StreamHelper
-	streamHelperLock sync.Mutex
-	streamClient     *mautrix.Client
+	EventProcessor *appservice.EventProcessor
 
 	userIDRegex *regexp.Regexp
 

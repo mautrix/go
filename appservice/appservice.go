@@ -37,17 +37,18 @@ var OTKChannelSize = 64
 func Create() *AppService {
 	jar, _ := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
 	as := &AppService{
-		Log:        zerolog.Nop(),
-		clients:    make(map[id.UserID]*mautrix.Client),
-		intents:    make(map[id.UserID]*IntentAPI),
-		HTTPClient: &http.Client{Timeout: 180 * time.Second, Jar: jar},
-		StateStore: mautrix.NewMemoryStateStore().(StateStore),
-		Router:     http.NewServeMux(),
-		UserAgent:  mautrix.DefaultUserAgent,
-		txnIDC:     NewTransactionIDCache(128),
-		Live:       true,
-		Ready:      false,
-		ProcessID:  getDefaultProcessID(),
+		Log:              zerolog.Nop(),
+		clients:          make(map[id.UserID]*mautrix.Client),
+		intents:          make(map[id.UserID]*IntentAPI),
+		botDeviceClients: make(map[string]*mautrix.Client),
+		HTTPClient:       &http.Client{Timeout: 180 * time.Second, Jar: jar},
+		StateStore:       mautrix.NewMemoryStateStore().(StateStore),
+		Router:           http.NewServeMux(),
+		UserAgent:        mautrix.DefaultUserAgent,
+		txnIDC:           NewTransactionIDCache(128),
+		Live:             true,
+		Ready:            false,
+		ProcessID:        getDefaultProcessID(),
 
 		Events:         make(chan *event.Event, EventChannelSize),
 		ToDeviceEvents: make(chan *event.Event, EventChannelSize),
@@ -176,6 +177,9 @@ type AppService struct {
 	clientsLock sync.RWMutex
 	intents     map[id.UserID]*IntentAPI
 	intentsLock sync.RWMutex
+
+	botDeviceClients     map[string]*mautrix.Client
+	botDeviceClientsLock sync.RWMutex
 
 	toDeviceInterceptors     []mautrix.ToDeviceInterceptor
 	toDeviceInterceptorsLock sync.RWMutex
@@ -431,17 +435,6 @@ func (as *AppService) AddToDeviceInterceptor(interceptor mautrix.ToDeviceInterce
 	as.toDeviceInterceptorsLock.Lock()
 	defer as.toDeviceInterceptorsLock.Unlock()
 	as.toDeviceInterceptors = append(as.toDeviceInterceptors, interceptor)
-}
-
-// GetOrCreateStreamHelper creates or reuses the client's stream helper and routes
-// appservice to-device events through it.
-func (as *AppService) GetOrCreateStreamHelper(client *mautrix.Client, opts *mautrix.StreamHelperOptions) *mautrix.StreamHelper {
-	if client == nil {
-		return nil
-	}
-	helper := client.GetOrCreateStreamHelper(opts)
-	as.AddToDeviceInterceptor(helper.HandleToDeviceEvent)
-	return helper
 }
 
 // BotClient returns the [mautrix.Client] instance for the appservice's sender_localpart user.
