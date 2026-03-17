@@ -167,7 +167,7 @@ func TestBeeperStreamReceiverUpdateCallback(t *testing.T) {
 				if update.Sender != testStreamBotUserID || update.RoomID != testStreamRoomID || update.EventID != testStreamEventID {
 					t.Fatalf("unexpected update metadata: %#v", update)
 				}
-				assertStreamUpdateMap(t, decodeJSONMap(t, must(json.Marshal(update.Content)))
+				assertStreamUpdateMap(t, decodeJSONMap(t, must(json.Marshal(update.Content))))
 			case <-time.After(time.Second):
 				t.Fatal("timed out waiting for update callback")
 			}
@@ -224,7 +224,7 @@ func newTestReceiverUpdateEvent(t *testing.T, receiver *BeeperStreamReceiver, en
 	if !encrypted {
 		// Round-trip through JSON to populate VeryRaw, which ParseRaw depends on.
 		var wireContent event.Content
-		require.NoError(t, json.Unmarshal(must(json.Marshal(content), &wireContent))
+		require.NoError(t, json.Unmarshal(must(json.Marshal(content)), &wireContent))
 		return &event.Event{
 			Sender:  testStreamBotUserID,
 			Type:    event.ToDeviceBeeperStreamUpdate,

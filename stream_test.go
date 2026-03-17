@@ -216,15 +216,9 @@ func TestNewStreamUpdateContentRejectsReservedKeys(t *testing.T) {
 func TestNewStreamUpdateContentAllowsNilPayload(t *testing.T) {
 	content := must(newStreamUpdateContent(testStreamRoomID, testStreamEventID, nil))
 	parsed := decodeJSONMap(t, must(json.Marshal(content)))
-	if parsed["room_id"] != string(testStreamRoomID) {
-		t.Fatalf("unexpected room_id: %#v", parsed["room_id"])
-	}
-	if parsed["event_id"] != string(testStreamEventID) {
-		t.Fatalf("unexpected event_id: %#v", parsed["event_id"])
-	}
-	if len(parsed) != 2 {
-		t.Fatalf("expected only room_id and event_id in nil payload update, got %#v", parsed)
-	}
+	require.Equal(t, string(testStreamRoomID), parsed["room_id"])
+	require.Equal(t, string(testStreamEventID), parsed["event_id"])
+	require.Len(t, parsed, 2, "expected only room_id and event_id in nil payload update")
 }
 
 func TestEncryptDecryptStreamPayloadRoundTrip(t *testing.T) {
