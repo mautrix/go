@@ -6,22 +6,25 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
+func newTestBeeperStreamInfo() *event.BeeperStreamInfo {
+	return &event.BeeperStreamInfo{UserID: testStreamBotUserID, Type: testStreamType, ExpiryMS: 60_000}
+}
+
+func newTestReceiverOptions() *BeeperStreamReceiverOptions {
+	return &BeeperStreamReceiverOptions{DefaultExpiry: time.Minute, MinimumRenewInterval: time.Hour}
+}
+
 func TestBeeperStreamReceiverHandleTimelineEventSubscribes(t *testing.T) {
 	ts, recorder := newSendToDeviceRecorderServer(t)
 	client := newTestStreamClient(t, ts.URL, testStreamSubscriberID, testStreamSubscriberDev)
-	receiver := client.GetOrCreateBeeperStreamReceiver(&BeeperStreamReceiverOptions{
-		DefaultExpiry:        time.Minute,
-		MinimumRenewInterval: time.Hour,
-	})
-	desc := &event.BeeperStreamInfo{
-		UserID:   testStreamBotUserID,
-		Type:     testStreamType,
-		ExpiryMS: 60_000,
-	}
+	receiver := client.GetOrCreateBeeperStreamReceiver(newTestReceiverOptions())
+	desc := newTestBeeperStreamInfo()
 
 	receiver.HandleTimelineEvent(context.Background(), &event.Event{
 		ID:     testStreamEventID,
@@ -41,21 +44,12 @@ func TestBeeperStreamReceiverHandleTimelineEventSubscribes(t *testing.T) {
 func TestBeeperStreamReceiverEnsureSubscriptionIgnoresCallerCancellation(t *testing.T) {
 	ts, recorder := newSendToDeviceRecorderServer(t)
 	client := newTestStreamClient(t, ts.URL, testStreamSubscriberID, testStreamSubscriberDev)
-	receiver := client.GetOrCreateBeeperStreamReceiver(&BeeperStreamReceiverOptions{
-		DefaultExpiry:        time.Minute,
-		MinimumRenewInterval: time.Hour,
-	})
+	receiver := client.GetOrCreateBeeperStreamReceiver(newTestReceiverOptions())
 	defer receiver.Stop()
-	desc := &event.BeeperStreamInfo{
-		UserID:   testStreamBotUserID,
-		Type:     testStreamType,
-		ExpiryMS: 60_000,
-	}
+	desc := newTestBeeperStreamInfo()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if err := receiver.EnsureSubscription(ctx, testStreamRoomID, testStreamEventID, desc); err != nil {
-		t.Fatalf("EnsureSubscription returned error: %v", err)
-	}
+	require.NoError(t, receiver.EnsureSubscription(ctx, testStreamRoomID, testStreamEventID, desc))
 	assertTestStreamSubscribe(t, recorder, testStreamBotUserID, "*")
 }
 
@@ -226,16 +220,11 @@ func newTestReceiverUpdateEvent(t *testing.T, receiver *BeeperStreamReceiver, en
 	}
 	receiver.subscriptions[sub.key] = sub
 
-	content, err := newStreamUpdateContent(testStreamRoomID, testStreamEventID, newTestPublishContent("hello"))
-	if err != nil {
-		t.Fatalf("newStreamUpdateContent returned error: %v", err)
-	}
+	content := must(newStreamUpdateContent(testStreamRoomID, testStreamEventID, newTestPublishContent("hello")))
 	if !encrypted {
 		// Round-trip through JSON to populate VeryRaw, which ParseRaw depends on.
 		var wireContent event.Content
-		if err = json.Unmarshal(mustMarshalJSON(t, content), &wireContent); err != nil {
-			t.Fatalf("failed to unmarshal wire content: %v", err)
-		}
+		require.NoError(t, json.Unmarshal(mustMarshalJSON(t, content), &wireContent))
 		return &event.Event{
 			Sender:  testStreamBotUserID,
 			Type:    event.ToDeviceBeeperStreamUpdate,
@@ -243,10 +232,7 @@ func newTestReceiverUpdateEvent(t *testing.T, receiver *BeeperStreamReceiver, en
 		}
 	}
 
-	encryptedContent, err := EncryptBeeperStreamEvent(event.ToDeviceBeeperStreamUpdate, content, eventStreamID, encKey)
-	if err != nil {
-		t.Fatalf("EncryptBeeperStreamEvent returned error: %v", err)
-	}
+	encryptedContent := must(EncryptBeeperStreamEvent(event.ToDeviceBeeperStreamUpdate, content, eventStreamID, encKey))
 	return &event.Event{
 		Sender:  testStreamBotUserID,
 		Type:    event.ToDeviceEncrypted,

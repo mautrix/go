@@ -9,10 +9,25 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
+
+func must[T any](val T, err error) T {
+	if err != nil {
+		panic(err)
+	}
+	return val
+}
+
+func testPublishPayload() map[string]any {
+	return map[string]any{
+		"com.beeper.llm.deltas": []map[string]any{{"delta": "hello"}},
+	}
+}
 
 func newTestAppService(t *testing.T, homeserverURL string) *AppService {
 	t.Helper()
@@ -23,9 +38,7 @@ func newTestAppService(t *testing.T, homeserverURL string) *AppService {
 		SenderLocalpart: "bot",
 	}
 	if homeserverURL != "" {
-		if err := as.SetHomeserverURL(homeserverURL); err != nil {
-			t.Fatalf("failed to set homeserver URL: %v", err)
-		}
+		require.NoError(t, as.SetHomeserverURL(homeserverURL))
 	}
 	return as
 }
@@ -48,15 +61,8 @@ func newTestBotHomeserver(t *testing.T) (*httptest.Server, *atomic.Int32) {
 
 func activateTestAppServiceStream(t *testing.T, sender *mautrix.BeeperStreamSender) *mautrix.BeeperStream {
 	t.Helper()
-	desc, err := sender.PrepareStream(context.Background(), "!room:example.com", "com.beeper.llm")
-	if err != nil {
-		t.Fatalf("PrepareStream returned error: %v", err)
-	}
-	stream, err := desc.Activate(context.Background(), "$event")
-	if err != nil {
-		t.Fatalf("Activate returned error: %v", err)
-	}
-	return stream
+	desc := must(sender.PrepareStream(context.Background(), "!room:example.com", "com.beeper.llm"))
+	return must(desc.Activate(context.Background(), "$event"))
 }
 
 func deliverTestBotSubscribe(as *AppService, deviceID id.DeviceID) {
@@ -85,11 +91,7 @@ func TestBotClientBeeperStreamInterception(t *testing.T) {
 
 	deliverTestBotSubscribe(as, "*")
 
-	if err := stream.Publish(context.Background(), map[string]any{
-		"com.beeper.llm.deltas": []map[string]any{{"delta": "hello"}},
-	}); err != nil {
-		t.Fatalf("Publish returned error: %v", err)
-	}
+	require.NoError(t, stream.Publish(context.Background(), testPublishPayload()))
 	if sendToDeviceCalls.Load() != 1 {
 		t.Fatalf("expected intercepted subscriber to receive one update, got %d calls", sendToDeviceCalls.Load())
 	}
@@ -114,11 +116,7 @@ func TestBotClientBeeperStreamSenderPassesOptions(t *testing.T) {
 
 	deliverTestBotSubscribe(as, "*")
 
-	if err := stream.Publish(context.Background(), map[string]any{
-		"com.beeper.llm.deltas": []map[string]any{{"delta": "hello"}},
-	}); err != nil {
-		t.Fatalf("Publish returned error: %v", err)
-	}
+	require.NoError(t, stream.Publish(context.Background(), testPublishPayload()))
 	if authorizeCalls.Load() != 1 {
 		t.Fatalf("expected authorize callback to be called once, got %d", authorizeCalls.Load())
 	}
