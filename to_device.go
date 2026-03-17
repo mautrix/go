@@ -38,7 +38,8 @@ func (cli *Client) HandleToDeviceEvent(ctx context.Context, evt *event.Event) bo
 		return false
 	}
 	cli.toDeviceInterceptorsLock.RLock()
-	interceptors := cli.toDeviceInterceptors
+	interceptors := make([]ToDeviceInterceptor, len(cli.toDeviceInterceptors))
+	copy(interceptors, cli.toDeviceInterceptors)
 	cli.toDeviceInterceptorsLock.RUnlock()
 	return RunToDeviceInterceptors(ctx, interceptors, evt)
 }

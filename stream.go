@@ -103,8 +103,9 @@ type BeeperStreamSender struct {
 	isEncrypted func(context.Context, id.RoomID) (bool, error)
 	now         func() time.Time
 
-	lock    sync.RWMutex
-	streams map[beeperStreamKey]*beeperStreamState
+	lock             sync.RWMutex
+	streams          map[beeperStreamKey]*beeperStreamState
+	streamsByStreamID map[string]*beeperStreamState
 
 	pendingLock      sync.Mutex
 	pendingSubscribe []pendingSubscribeEvent
@@ -156,10 +157,11 @@ func NewBeeperStreamSender(client *Client, opts *BeeperStreamSenderOptions) *Bee
 		optsLogger = opts.Logger
 	}
 	sender := &BeeperStreamSender{
-		log:     resolveStreamLogger(optsLogger, client, beeperStreamComponentName),
-		client:  client,
-		now:     time.Now,
-		streams: make(map[beeperStreamKey]*beeperStreamState),
+		log:               resolveStreamLogger(optsLogger, client, beeperStreamComponentName),
+		client:            client,
+		now:               time.Now,
+		streams:           make(map[beeperStreamKey]*beeperStreamState),
+		streamsByStreamID: make(map[string]*beeperStreamState),
 	}
 	if opts != nil && opts.IsEncrypted != nil {
 		sender.isEncrypted = opts.IsEncrypted
@@ -234,6 +236,7 @@ func (p *BeeperStreamPublisher) BuildDescriptor(ctx context.Context, req *Beeper
 		desc.Encryption = &event.BeeperStreamEncryptionInfo{
 			Algorithm: id.AlgorithmBeeperStreamAESGCM,
 			Key:       makeStreamKey(),
+			StreamID:  makeStreamID(),
 		}
 	}
 	return desc, nil
@@ -270,6 +273,9 @@ func (p *BeeperStreamPublisher) Start(ctx context.Context, req *BeeperStartStrea
 		state.gcm = gcm
 	}
 	s.streams[key] = state
+	if req.Descriptor.Encryption != nil && req.Descriptor.Encryption.StreamID != "" {
+		s.streamsByStreamID[req.Descriptor.Encryption.StreamID] = state
+	}
 	s.lock.Unlock()
 	s.replayPendingSubscribes(ctx)
 	return nil
@@ -305,6 +311,9 @@ func (p *BeeperStreamPublisher) Finish(_ context.Context, req *BeeperFinishStrea
 	}
 	state.finished = true
 	state.subscribers = nil
+	if state.descriptor.Encryption != nil && state.descriptor.Encryption.StreamID != "" {
+		delete(s.streamsByStreamID, state.descriptor.Encryption.StreamID)
+	}
 	if state.cleanup != nil {
 		state.cleanup.Stop()
 	}
@@ -358,8 +367,7 @@ func (s *BeeperStreamSender) handleEncryptedEvent(ctx context.Context, evt *even
 	log := zerolog.Ctx(ctx).With().
 		Str("sender", evt.Sender.String()).
 		Str("to_device_id", evt.ToDeviceID.String()).
-		Str("room_id", content.RoomID.String()).
-		Str("event_id", content.EventID.String()).
+		Str("stream_id", content.StreamID).
 		Logger()
 	ctx = log.WithContext(ctx)
 	if !s.tryEncryptedSubscribeCandidates(ctx, evt, content) {
@@ -379,32 +387,15 @@ func (s *BeeperStreamSender) tryEncryptedSubscribeCandidates(ctx context.Context
 }
 
 func (s *BeeperStreamSender) collectEncryptedCandidates(content *event.EncryptedEventContent) []*beeperStreamState {
+	if content.StreamID == "" {
+		return nil
+	}
 	s.lock.RLock()
 	defer s.lock.RUnlock()
-	return collectEncryptedEntries(s.streams, content)
-}
-
-// collectEncryptedEntries returns entries from m whose encryption key may have produced the event.
-// If the event has routing metadata (RoomID+EventID), only that entry is returned.
-// Otherwise all entries with encryption are returned as candidates.
-// The caller must hold the appropriate lock on m.
-func collectEncryptedEntries[T interface{ getDescriptor() *event.BeeperStreamInfo }](m map[beeperStreamKey]T, content *event.EncryptedEventContent) []T {
-	result := make([]T, 0, len(m))
-	if content.RoomID != "" && content.EventID != "" {
-		key := beeperStreamKey{roomID: content.RoomID, eventID: content.EventID}
-		if entry, ok := m[key]; ok {
-			if desc := entry.getDescriptor(); desc != nil && desc.Encryption != nil {
-				result = append(result, entry)
-			}
-		}
-	} else {
-		for _, entry := range m {
-			if desc := entry.getDescriptor(); desc != nil && desc.Encryption != nil {
-				result = append(result, entry)
-			}
-		}
+	if state, ok := s.streamsByStreamID[content.StreamID]; ok {
+		return []*beeperStreamState{state}
 	}
-	return result
+	return nil
 }
 
 func (s *BeeperStreamSender) isForDifferentDevice(evt *event.Event) bool {
@@ -724,10 +715,6 @@ func (state *beeperStreamState) getGCM() (cipher.AEAD, bool) {
 	return state.gcm, state.gcm != nil
 }
 
-func (state *beeperStreamState) getDescriptor() *event.BeeperStreamInfo {
-	return state.descriptor
-}
-
 func BeeperStreamDescriptorEqual(a, b *event.BeeperStreamInfo) bool {
 	switch {
 	case a == nil || b == nil:
@@ -737,7 +724,7 @@ func BeeperStreamDescriptorEqual(a, b *event.BeeperStreamInfo) bool {
 	case a.Encryption == nil || b.Encryption == nil:
 		return a.Encryption == b.Encryption
 	default:
-		return a.Encryption.Algorithm == b.Encryption.Algorithm && a.Encryption.Key == b.Encryption.Key
+		return a.Encryption.Algorithm == b.Encryption.Algorithm && a.Encryption.Key == b.Encryption.Key && a.Encryption.StreamID == b.Encryption.StreamID
 	}
 }
 
@@ -843,12 +830,12 @@ func (cli *Client) NewBeeperStreamPublisher(publisherOpts *BeeperStreamPublisher
 	return cli.GetOrCreateBeeperStreamSender(senderOpts).NewPublisher(publisherOpts)
 }
 
-func EncryptBeeperStreamEvent(logicalType event.Type, content *event.Content, roomID id.RoomID, eventID id.EventID, base64Key string) (*event.EncryptedEventContent, error) {
+func EncryptBeeperStreamEvent(logicalType event.Type, content *event.Content, streamID string, base64Key string) (*event.EncryptedEventContent, error) {
 	gcm, err := newStreamGCM(base64Key)
 	if err != nil {
 		return nil, err
 	}
-	return encryptStreamPayload(logicalType, content, roomID, eventID, gcm)
+	return encryptStreamPayload(logicalType, content, streamID, gcm)
 }
 
 func DecryptBeeperStreamEvent(content *event.EncryptedEventContent, base64Key string) (event.Type, *event.Content, error) {
@@ -890,8 +877,7 @@ func GetBeeperStreamRoute(content *event.Content) (id.RoomID, id.EventID) {
 
 func makeToDeviceContent(descriptor *event.BeeperStreamInfo, gcm cipher.AEAD, logicalType event.Type, payload *event.Content) (event.Type, *event.Content, error) {
 	if descriptor != nil && descriptor.Encryption != nil && gcm != nil {
-		roomID, eventID := GetBeeperStreamRoute(payload)
-		encrypted, err := encryptStreamPayload(logicalType, payload, roomID, eventID, gcm)
+		encrypted, err := encryptStreamPayload(logicalType, payload, descriptor.Encryption.StreamID, gcm)
 		if err != nil {
 			return event.Type{}, nil, err
 		}
@@ -902,6 +888,10 @@ func makeToDeviceContent(descriptor *event.BeeperStreamInfo, gcm cipher.AEAD, lo
 
 func makeStreamKey() string {
 	return base64.RawStdEncoding.EncodeToString(random.Bytes(32))
+}
+
+func makeStreamID() string {
+	return base64.RawStdEncoding.EncodeToString(random.Bytes(16))
 }
 
 func newStreamGCM(base64Key string) (cipher.AEAD, error) {
@@ -918,7 +908,7 @@ func newStreamGCM(base64Key string) (cipher.AEAD, error) {
 	return cipher.NewGCM(block)
 }
 
-func encryptStreamPayload(logicalType event.Type, payload *event.Content, roomID id.RoomID, eventID id.EventID, gcm cipher.AEAD) (*event.EncryptedEventContent, error) {
+func encryptStreamPayload(logicalType event.Type, payload *event.Content, streamID string, gcm cipher.AEAD) (*event.EncryptedEventContent, error) {
 	plaintextContent, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
@@ -938,8 +928,7 @@ func encryptStreamPayload(logicalType event.Type, payload *event.Content, roomID
 	return &event.EncryptedEventContent{
 		Algorithm:        id.AlgorithmBeeperStreamAESGCM,
 		IV:               base64.RawStdEncoding.EncodeToString(iv),
-		RoomID:           roomID,
-		EventID:          eventID,
+		StreamID:         streamID,
 		StreamCiphertext: []byte(base64.RawStdEncoding.EncodeToString(ciphertext)),
 	}, nil
 }

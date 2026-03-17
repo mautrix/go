@@ -134,6 +134,16 @@ func TestBeeperStreamReceiverPlainUpdateCallback(t *testing.T) {
 			return nil
 		},
 	})
+	// Issue 1: subscription must exist and sender must match for update to be dispatched.
+	receiver.subscriptions[beeperStreamKey{roomID: testStreamRoomID, eventID: testStreamEventID}] = &beeperStreamSubscription{
+		key: beeperStreamKey{roomID: testStreamRoomID, eventID: testStreamEventID},
+		descriptor: &event.BeeperStreamInfo{
+			UserID:   testStreamBotUserID,
+			DeviceID: testStreamBotDeviceID,
+			Type:     testStreamType,
+		},
+		cancel: func() {},
+	}
 	content, err := newStreamUpdateContent(newTestPublishRequest("hello"))
 	if err != nil {
 		t.Fatalf("newStreamUpdateContent returned error: %v", err)
@@ -167,8 +177,9 @@ func TestBeeperStreamReceiverEncryptedUpdateCallback(t *testing.T) {
 			return nil
 		},
 	})
-	key := makeStreamKey()
-	receiver.subscriptions[beeperStreamKey{roomID: testStreamRoomID, eventID: testStreamEventID}] = &beeperStreamSubscription{
+	encKey := makeStreamKey()
+	streamID := makeStreamID()
+	sub := &beeperStreamSubscription{
 		key: beeperStreamKey{roomID: testStreamRoomID, eventID: testStreamEventID},
 		descriptor: &event.BeeperStreamInfo{
 			UserID:   testStreamBotUserID,
@@ -176,16 +187,19 @@ func TestBeeperStreamReceiverEncryptedUpdateCallback(t *testing.T) {
 			Type:     testStreamType,
 			Encryption: &event.BeeperStreamEncryptionInfo{
 				Algorithm: id.AlgorithmBeeperStreamAESGCM,
-				Key:       key,
+				Key:       encKey,
+				StreamID:  streamID,
 			},
 		},
 		cancel: func() {},
 	}
+	receiver.subscriptions[sub.key] = sub
+	receiver.subscriptionsByStreamID[streamID] = sub
 	content, err := newStreamUpdateContent(newTestPublishRequest("hello"))
 	if err != nil {
 		t.Fatalf("newStreamUpdateContent returned error: %v", err)
 	}
-	encrypted, err := EncryptBeeperStreamEvent(event.ToDeviceBeeperStreamUpdate, content, testStreamRoomID, testStreamEventID, key)
+	encrypted, err := EncryptBeeperStreamEvent(event.ToDeviceBeeperStreamUpdate, content, streamID, encKey)
 	if err != nil {
 		t.Fatalf("EncryptBeeperStreamEvent returned error: %v", err)
 	}
@@ -217,8 +231,9 @@ func TestBeeperStreamReceiverEncryptedUpdateIgnoresWrongRoute(t *testing.T) {
 			return nil
 		},
 	})
-	key := makeStreamKey()
-	receiver.subscriptions[beeperStreamKey{roomID: testStreamRoomID, eventID: testStreamEventID}] = &beeperStreamSubscription{
+	encKey := makeStreamKey()
+	streamID := makeStreamID()
+	sub := &beeperStreamSubscription{
 		key: beeperStreamKey{roomID: testStreamRoomID, eventID: testStreamEventID},
 		descriptor: &event.BeeperStreamInfo{
 			UserID:   testStreamBotUserID,
@@ -226,16 +241,20 @@ func TestBeeperStreamReceiverEncryptedUpdateIgnoresWrongRoute(t *testing.T) {
 			Type:     testStreamType,
 			Encryption: &event.BeeperStreamEncryptionInfo{
 				Algorithm: id.AlgorithmBeeperStreamAESGCM,
-				Key:       key,
+				Key:       encKey,
+				StreamID:  streamID,
 			},
 		},
 		cancel: func() {},
 	}
+	receiver.subscriptions[sub.key] = sub
+	receiver.subscriptionsByStreamID[streamID] = sub
 	content, err := newStreamUpdateContent(newTestPublishRequest("hello"))
 	if err != nil {
 		t.Fatalf("newStreamUpdateContent returned error: %v", err)
 	}
-	encrypted, err := EncryptBeeperStreamEvent(event.ToDeviceBeeperStreamUpdate, content, "!other:example.com", "$other", key)
+	// Encrypt with a different stream_id — the receiver should not find a matching subscription.
+	encrypted, err := EncryptBeeperStreamEvent(event.ToDeviceBeeperStreamUpdate, content, makeStreamID(), encKey)
 	if err != nil {
 		t.Fatalf("EncryptBeeperStreamEvent returned error: %v", err)
 	}

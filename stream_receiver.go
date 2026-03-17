@@ -33,9 +33,10 @@ type BeeperStreamReceiver struct {
 	minimumRenewInterval time.Duration
 	onUpdate             func(context.Context, *BeeperStreamUpdate) error
 
-	lock          sync.Mutex
-	subscriptions map[beeperStreamKey]*beeperStreamSubscription
-	wg            sync.WaitGroup
+	lock                  sync.Mutex
+	subscriptions         map[beeperStreamKey]*beeperStreamSubscription
+	subscriptionsByStreamID map[string]*beeperStreamSubscription
+	wg                    sync.WaitGroup
 }
 
 type beeperStreamSubscription struct {
@@ -50,11 +51,12 @@ func NewBeeperStreamReceiver(client *Client, opts *BeeperStreamReceiverOptions) 
 		optsLogger = opts.Logger
 	}
 	receiver := &BeeperStreamReceiver{
-		client:               client,
-		log:                  resolveStreamLogger(optsLogger, client, beeperStreamComponentName+"_receiver"),
-		defaultExpiry:        DefaultBeeperStreamSubscribeExpiry,
-		minimumRenewInterval: defaultBeeperStreamRenewInterval,
-		subscriptions:        make(map[beeperStreamKey]*beeperStreamSubscription),
+		client:                  client,
+		log:                     resolveStreamLogger(optsLogger, client, beeperStreamComponentName+"_receiver"),
+		defaultExpiry:           DefaultBeeperStreamSubscribeExpiry,
+		minimumRenewInterval:    defaultBeeperStreamRenewInterval,
+		subscriptions:           make(map[beeperStreamKey]*beeperStreamSubscription),
+		subscriptionsByStreamID: make(map[string]*beeperStreamSubscription),
 	}
 	receiver.applyOptions(opts)
 	return receiver
@@ -93,6 +95,14 @@ func (r *BeeperStreamReceiver) HandleTimelineEvent(ctx context.Context, evt *eve
 		return
 	}
 	if msg.BeeperStream != nil && evt.RoomID != "" && evt.ID != "" {
+		// Issue 5: Skip subscription for already-expired streams.
+		if msg.BeeperStream.ExpiryMS > 0 && evt.Timestamp > 0 {
+			expiryTime := time.UnixMilli(evt.Timestamp).Add(
+				time.Duration(msg.BeeperStream.ExpiryMS) * time.Millisecond)
+			if time.Now().After(expiryTime) {
+				return
+			}
+		}
 		_ = r.EnsureSubscription(ctx, evt.RoomID, evt.ID, msg.BeeperStream)
 		return
 	}
@@ -142,6 +152,9 @@ func (r *BeeperStreamReceiver) EnsureSubscription(ctx context.Context, roomID id
 		}
 		existing.cancel()
 		delete(r.subscriptions, key)
+		if existing.descriptor != nil && existing.descriptor.Encryption != nil && existing.descriptor.Encryption.StreamID != "" {
+			delete(r.subscriptionsByStreamID, existing.descriptor.Encryption.StreamID)
+		}
 	}
 	subCtx, cancel := context.WithCancel(receiverLoopContext(ctx))
 	sub := &beeperStreamSubscription{
@@ -150,6 +163,9 @@ func (r *BeeperStreamReceiver) EnsureSubscription(ctx context.Context, roomID id
 		cancel:     cancel,
 	}
 	r.subscriptions[key] = sub
+	if descriptor.Encryption != nil && descriptor.Encryption.StreamID != "" {
+		r.subscriptionsByStreamID[descriptor.Encryption.StreamID] = sub
+	}
 	r.lock.Unlock()
 
 	r.wg.Add(1)
@@ -163,6 +179,9 @@ func (r *BeeperStreamReceiver) StopSubscription(roomID id.RoomID, eventID id.Eve
 	sub := r.subscriptions[key]
 	if sub != nil {
 		delete(r.subscriptions, key)
+		if sub.descriptor != nil && sub.descriptor.Encryption != nil && sub.descriptor.Encryption.StreamID != "" {
+			delete(r.subscriptionsByStreamID, sub.descriptor.Encryption.StreamID)
+		}
 	}
 	r.lock.Unlock()
 	if sub != nil {
@@ -174,6 +193,7 @@ func (r *BeeperStreamReceiver) Stop() {
 	r.lock.Lock()
 	subs := r.subscriptions
 	r.subscriptions = make(map[beeperStreamKey]*beeperStreamSubscription)
+	r.subscriptionsByStreamID = make(map[string]*beeperStreamSubscription)
 	r.lock.Unlock()
 	for _, sub := range subs {
 		sub.cancel()
@@ -229,7 +249,7 @@ func (r *BeeperStreamReceiver) sendStreamSubscribe(ctx context.Context, key beep
 	eventType := event.ToDeviceBeeperStreamSubscribe
 	content := subscribeContent
 	if descriptor.Encryption != nil {
-		encrypted, err := EncryptBeeperStreamEvent(eventType, subscribeContent, key.roomID, key.eventID, descriptor.Encryption.Key)
+		encrypted, err := EncryptBeeperStreamEvent(eventType, subscribeContent, descriptor.Encryption.StreamID, descriptor.Encryption.Key)
 		if err != nil {
 			return err
 		}
@@ -246,6 +266,8 @@ func (r *BeeperStreamReceiver) sendStreamSubscribe(ctx context.Context, key beep
 	return err
 }
 
+// handleStreamUpdateEvent dispatches a plain (unencrypted) stream update.
+// Issue 1: verifies a subscription exists for (room_id, event_id) and that the sender matches.
 func (r *BeeperStreamReceiver) handleStreamUpdateEvent(ctx context.Context, sender id.UserID, content *event.Content) {
 	if content == nil {
 		return
@@ -255,6 +277,22 @@ func (r *BeeperStreamReceiver) handleStreamUpdateEvent(ctx context.Context, send
 		return
 	}
 	if update.RoomID == "" || update.EventID == "" {
+		return
+	}
+	key := beeperStreamKey{roomID: update.RoomID, eventID: update.EventID}
+	r.lock.Lock()
+	sub := r.subscriptions[key]
+	r.lock.Unlock()
+	if sub == nil {
+		return
+	}
+	if sender != sub.descriptor.UserID {
+		r.log.Warn().
+			Stringer("sender", sender).
+			Stringer("expected_user_id", sub.descriptor.UserID).
+			Stringer("room_id", update.RoomID).
+			Stringer("event_id", update.EventID).
+			Msg("Beeper stream update from unexpected sender, dropping")
 		return
 	}
 	if r.onUpdate != nil {
@@ -290,33 +328,41 @@ func (r *BeeperStreamReceiver) applyOptions(opts *BeeperStreamReceiverOptions) {
 	}
 }
 
-func (s *beeperStreamSubscription) getDescriptor() *event.BeeperStreamInfo {
-	return s.descriptor
-}
-
+// handleEncryptedStreamEvent decrypts and dispatches an encrypted stream update.
+// Issue 2: verifies the sender matches the subscription descriptor after decryption.
+// Issue 3: uses subscriptionsByStreamID for O(1) lookup by stream_id.
 func (r *BeeperStreamReceiver) handleEncryptedStreamEvent(ctx context.Context, evt *event.Event, content *event.EncryptedEventContent) {
-	if content.RoomID == "" || content.EventID == "" {
-		zerolog.Ctx(ctx).Debug().Msg("Encrypted beeper stream event missing route metadata, trying all active subscriptions")
-	}
-	r.lock.Lock()
-	subs := collectEncryptedEntries(r.subscriptions, content)
-	r.lock.Unlock()
-
-	for _, sub := range subs {
-		logicalType, parsedContent, err := DecryptBeeperStreamEvent(content, sub.descriptor.Encryption.Key)
-		if err != nil {
-			continue
-		}
-		if logicalType != event.ToDeviceBeeperStreamUpdate {
-			continue
-		}
-		update := parsedContent.AsBeeperStreamUpdate()
-		if update.RoomID != sub.key.roomID || update.EventID != sub.key.eventID {
-			continue
-		}
-		r.handleStreamUpdateEvent(ctx, evt.Sender, parsedContent)
+	if content.StreamID == "" {
 		return
 	}
+	r.lock.Lock()
+	sub := r.subscriptionsByStreamID[content.StreamID]
+	r.lock.Unlock()
+	if sub == nil {
+		return
+	}
+	logicalType, parsedContent, err := DecryptBeeperStreamEvent(content, sub.descriptor.Encryption.Key)
+	if err != nil {
+		return
+	}
+	if logicalType != event.ToDeviceBeeperStreamUpdate {
+		return
+	}
+	update := parsedContent.AsBeeperStreamUpdate()
+	if update.RoomID != sub.key.roomID || update.EventID != sub.key.eventID {
+		return
+	}
+	// Issue 2: Verify sender matches the descriptor before dispatching.
+	if evt.Sender != sub.descriptor.UserID {
+		r.log.Warn().
+			Stringer("sender", evt.Sender).
+			Stringer("expected_user_id", sub.descriptor.UserID).
+			Stringer("room_id", update.RoomID).
+			Stringer("event_id", update.EventID).
+			Msg("Encrypted beeper stream update from unexpected sender, dropping")
+		return
+	}
+	r.handleStreamUpdateEvent(ctx, evt.Sender, parsedContent)
 }
 
 func (r *BeeperStreamReceiver) requireClient() (*Client, error) {

@@ -240,7 +240,8 @@ func (as *AppService) interceptToDeviceEvent(ctx context.Context, evt *event.Eve
 		return false
 	}
 	as.toDeviceInterceptorsLock.RLock()
-	interceptors := as.toDeviceInterceptors
+	interceptors := make([]mautrix.ToDeviceInterceptor, len(as.toDeviceInterceptors))
+	copy(interceptors, as.toDeviceInterceptors)
 	as.toDeviceInterceptorsLock.RUnlock()
 	if mautrix.RunToDeviceInterceptors(ctx, interceptors, evt) {
 		return true
@@ -259,10 +260,14 @@ func (as *AppService) interceptToDeviceEvent(ctx context.Context, evt *event.Eve
 		if client == nil {
 			continue
 		}
+		// Only fan out to purpose clients when there is explicit routing info.
+		if evt.ToDeviceID == "" {
+			continue
+		}
 		if evt.ToUserID != "" && client.UserID != evt.ToUserID {
 			continue
 		}
-		if evt.ToDeviceID != "" && client.DeviceID != "" && client.DeviceID != evt.ToDeviceID {
+		if client.DeviceID != "" && client.DeviceID != evt.ToDeviceID {
 			continue
 		}
 		clients = append(clients, client)

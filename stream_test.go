@@ -89,7 +89,7 @@ func newTestSubscribeEvent(t *testing.T, desc *event.BeeperStreamInfo, toUserID 
 		if err != nil {
 			t.Fatalf("newStreamGCM returned error: %v", err)
 		}
-		encrypted, err := encryptStreamPayload(event.ToDeviceBeeperStreamSubscribe, content, testStreamRoomID, testStreamEventID, gcm)
+		encrypted, err := encryptStreamPayload(event.ToDeviceBeeperStreamSubscribe, content, desc.Encryption.StreamID, gcm)
 		if err != nil {
 			t.Fatalf("encryptStreamPayload returned error: %v", err)
 		}
@@ -182,7 +182,8 @@ func TestEncryptDecryptStreamPayloadRoundTrip(t *testing.T) {
 		t.Fatalf("newStreamGCM returned error: %v", err)
 	}
 
-	encrypted, err := encryptStreamPayload(event.ToDeviceBeeperStreamUpdate, content, testStreamRoomID, testStreamEventID, gcm)
+	streamID := makeStreamID()
+	encrypted, err := encryptStreamPayload(event.ToDeviceBeeperStreamUpdate, content, streamID, gcm)
 	if err != nil {
 		t.Fatalf("encryptStreamPayload returned error: %v", err)
 	}
@@ -192,8 +193,8 @@ func TestEncryptDecryptStreamPayloadRoundTrip(t *testing.T) {
 	if encrypted.IV == "" || len(encrypted.StreamCiphertext) == 0 {
 		t.Fatalf("encrypted payload missing IV or ciphertext: %#v", encrypted)
 	}
-	if encrypted.RoomID != testStreamRoomID || encrypted.EventID != testStreamEventID {
-		t.Fatalf("encrypted payload missing routing identifiers: %#v", encrypted)
+	if encrypted.StreamID != streamID {
+		t.Fatalf("encrypted payload missing stream ID: %#v", encrypted)
 	}
 
 	decrypted, err := decryptStreamPayload(encrypted, gcm)

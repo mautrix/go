@@ -37,10 +37,9 @@ type EncryptedEventContent struct {
 	SessionID id.SessionID `json:"session_id,omitempty"`
 	// Only present for com.beeper.stream.v1.aes-gcm events
 	IV string `json:"iv,omitempty"`
-	// Only present for com.beeper.stream.v1.aes-gcm events. Used to route stream payloads
-	// to the correct placeholder event without trying every active stream key.
-	RoomID  id.RoomID  `json:"room_id,omitempty"`
-	EventID id.EventID `json:"event_id,omitempty"`
+	// Only present for com.beeper.stream.v1.aes-gcm events.
+	// Opaque per-stream identifier (analogous to session_id in Megolm).
+	StreamID string `json:"stream_id,omitempty"`
 
 	Ciphertext json.RawMessage `json:"ciphertext"`
 

@@ -225,6 +225,7 @@ type BeeperStreamInfo struct {
 type BeeperStreamEncryptionInfo struct {
 	Algorithm id.Algorithm `json:"algorithm"`
 	Key       string       `json:"key"`
+	StreamID  string       `json:"stream_id"`
 }
 
 type BeeperStreamSubscribeEventContent struct {
