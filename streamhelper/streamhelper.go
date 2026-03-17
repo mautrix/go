@@ -202,12 +202,21 @@ func (g *Generator) Start(ctx context.Context, req *StartRequest) error {
 		h.lock.Unlock()
 		return fmt.Errorf("stream %s/%s already started", req.RoomID, req.EventID)
 	}
-	h.streams[key] = &streamState{
+	state := &streamState{
 		key:                 key,
 		descriptor:          req.Descriptor,
 		authorizeSubscriber: g.authorizeSubscriber,
 		subscribers:         make(map[streamSubscriber]time.Time),
 	}
+	if req.Descriptor.Encryption != nil {
+		gcm, err := newStreamGCM(req.Descriptor.Encryption.Key)
+		if err != nil {
+			h.lock.Unlock()
+			return fmt.Errorf("failed to initialize stream cipher: %w", err)
+		}
+		state.cachedGCM = gcm
+	}
+	h.streams[key] = state
 	h.lock.Unlock()
 	h.replayPendingEncryptedSubscribes(ctx)
 	return nil
@@ -329,7 +338,7 @@ func (h *Helper) collectEncryptedCandidates(content *event.EncryptedEventContent
 
 func (h *Helper) isForDifferentDevice(evt *event.Event) bool {
 	if evt == nil || h.client == nil {
-		return false
+		return h.client == nil
 	}
 	if evt.ToUserID != "" && evt.ToUserID != h.client.UserID {
 		return true
@@ -395,9 +404,20 @@ func (h *Helper) handleSubscribe(ctx context.Context, sender id.UserID, subscrib
 			Msg("Ignoring subscribe for missing or finished stream")
 		return
 	}
-	if state.authorizeSubscriber != nil && !state.authorizeSubscriber(ctx, sender) {
-		h.lock.Unlock()
+	authFunc := state.authorizeSubscriber
+	h.lock.Unlock()
+
+	// Authorize outside the lock to avoid blocking all stream operations on a DB query.
+	if authFunc != nil && !authFunc(ctx, sender) {
 		zerolog.Ctx(ctx).Debug().Stringer("sender", sender).Msg("Ignoring stream subscribe from unauthorized user")
+		return
+	}
+
+	h.lock.Lock()
+	// Re-check state after re-acquiring lock (may have finished during authorization).
+	state = h.streams[key]
+	if state == nil || state.finished {
+		h.lock.Unlock()
 		return
 	}
 	expiry := time.Duration(subscribe.ExpiryMS) * time.Millisecond
@@ -407,12 +427,15 @@ func (h *Helper) handleSubscribe(ctx context.Context, sender id.UserID, subscrib
 	if expiry <= 0 {
 		expiry = DefaultStreamExpiry
 	}
+	sub := streamSubscriber{userID: sender, deviceID: subscribe.DeviceID}
+	// Register subscriber before replaying so that updates published during replay
+	// are also delivered. Clients should handle potential duplicate updates.
+	state.subscribers[sub] = h.now().Add(expiry)
 	desc := state.descriptor
 	gcm, _ := state.getGCM()
 	updates := append([]*event.Content(nil), state.updates...)
 	h.lock.Unlock()
 
-	sub := streamSubscriber{userID: sender, deviceID: subscribe.DeviceID}
 	zerolog.Ctx(ctx).Debug().
 		Str("sender", sender.String()).
 		Str("room_id", subscribe.RoomID.String()).
@@ -427,17 +450,17 @@ func (h *Helper) handleSubscribe(ctx context.Context, sender id.UserID, subscrib
 				Str("room_id", subscribe.RoomID.String()).
 				Str("event_id", subscribe.EventID.String()).
 				Str("subscriber", sender.String()).
-				Msg("Failed to replay stream updates to new subscriber")
-			break
+				Msg("Failed to replay stream updates to new subscriber, removing subscriber")
+			// Remove subscriber on replay failure to avoid gaps in the stream.
+			h.lock.Lock()
+			state = h.streams[key]
+			if state != nil {
+				delete(state.subscribers, sub)
+			}
+			h.lock.Unlock()
+			return
 		}
 	}
-
-	h.lock.Lock()
-	state = h.streams[key]
-	if state != nil && !state.finished {
-		state.subscribers[sub] = h.now().Add(expiry)
-	}
-	h.lock.Unlock()
 }
 
 func (h *Helper) recordUpdate(req *PublishRequest) (desc *event.BeeperStreamInfo, gcm cipher.AEAD, update *event.Content, subscribers []streamSubscriber, err error) {
@@ -562,7 +585,7 @@ func (h *Helper) replayPendingEncryptedSubscribes(ctx context.Context) {
 	}
 	h.pendingLock.Lock()
 	defer h.pendingLock.Unlock()
-	filtered := h.pendingEncryptedSubscribe[:0]
+	var filtered []pendingEncryptedSubscribe
 	for _, candidate := range h.pendingEncryptedSubscribe {
 		if candidate.evt == nil || now.Sub(candidate.receivedAt) > pendingSubscribeTTL {
 			continue

@@ -16,8 +16,6 @@ import (
 	"maunium.net/go/mautrix/streamhelper"
 )
 
-const DefaultStreamExpiry = streamhelper.DefaultStreamExpiry
-
 type BeeperStreamTransport interface {
 	BuildDescriptor(ctx context.Context, req *StreamDescriptorRequest) (*event.BeeperStreamInfo, error)
 	Start(ctx context.Context, req *StartStreamRequest) error
