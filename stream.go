@@ -174,7 +174,7 @@ func (s *BeeperStreamSender) HandleToDeviceEvent(ctx context.Context, evt *event
 }
 
 func (s *BeeperStreamSender) handleSubscribeEvent(ctx context.Context, evt *event.Event) bool {
-	if s.isForDifferentDevice(evt) {
+	if s.isForDifferentUser(evt) {
 		return true
 	}
 	subscribe := evt.Content.AsBeeperStreamSubscribe()
@@ -192,7 +192,7 @@ func (s *BeeperStreamSender) handleEncryptedEvent(ctx context.Context, evt *even
 	content := evt.Content.AsEncrypted()
 	if content.Algorithm != id.AlgorithmBeeperStreamAESGCM {
 		return false
-	} else if s.isForDifferentDevice(evt) {
+	} else if s.isForDifferentUser(evt) {
 		return true
 	}
 	log := zerolog.Ctx(ctx).With().
@@ -221,7 +221,7 @@ func (s *BeeperStreamSender) tryEncryptedSubscribeCandidates(ctx context.Context
 	return s.tryDecryptAndSubscribe(ctx, evt, content, state)
 }
 
-func (s *BeeperStreamSender) isForDifferentDevice(evt *event.Event) bool {
+func (s *BeeperStreamSender) isForDifferentUser(evt *event.Event) bool {
 	if s.client == nil {
 		return true
 	}

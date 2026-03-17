@@ -37,17 +37,17 @@ var OTKChannelSize = 64
 func Create() *AppService {
 	jar, _ := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
 	as := &AppService{
-		Log:                       zerolog.Nop(),
-		clients:                   make(map[id.UserID]*mautrix.Client),
-		intents:                   make(map[id.UserID]*IntentAPI),
-		HTTPClient:                &http.Client{Timeout: 180 * time.Second, Jar: jar},
-		StateStore:                mautrix.NewMemoryStateStore().(StateStore),
-		Router:                    http.NewServeMux(),
-		UserAgent:                 mautrix.DefaultUserAgent,
-		txnIDC:                    NewTransactionIDCache(128),
-		Live:                      true,
-		Ready:                     false,
-		ProcessID:                 getDefaultProcessID(),
+		Log:        zerolog.Nop(),
+		clients:    make(map[id.UserID]*mautrix.Client),
+		intents:    make(map[id.UserID]*IntentAPI),
+		HTTPClient: &http.Client{Timeout: 180 * time.Second, Jar: jar},
+		StateStore: mautrix.NewMemoryStateStore().(StateStore),
+		Router:     http.NewServeMux(),
+		UserAgent:  mautrix.DefaultUserAgent,
+		txnIDC:     NewTransactionIDCache(128),
+		Live:       true,
+		Ready:      false,
+		ProcessID:  getDefaultProcessID(),
 
 		Events:         make(chan *event.Event, EventChannelSize),
 		ToDeviceEvents: make(chan *event.Event, EventChannelSize),

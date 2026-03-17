@@ -61,7 +61,6 @@ type Bridge struct {
 
 	BackgroundCtx       context.Context
 	cancelBackgroundCtx context.CancelFunc
-
 }
 
 func NewBridge(
