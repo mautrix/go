@@ -14,8 +14,8 @@ import (
 )
 
 func (br *Bridge) GetOrCreateBeeperStreamSender() *mautrix.BeeperStreamSender {
-	br.beeperStreamLock.Lock()
-	defer br.beeperStreamLock.Unlock()
+	br.beeperStreamSenderLock.Lock()
+	defer br.beeperStreamSenderLock.Unlock()
 	if br.beeperStreamSender != nil {
 		return br.beeperStreamSender
 	}
@@ -23,7 +23,7 @@ func (br *Bridge) GetOrCreateBeeperStreamSender() *mautrix.BeeperStreamSender {
 	if !ok {
 		return nil
 	}
-	br.beeperStreamSender = connector.GetOrCreateBeeperStreamSender(&mautrix.BeeperStreamSenderOptions{
+	br.beeperStreamSender = connector.GetBeeperStreamSender(&mautrix.BeeperStreamSenderOptions{
 		AuthorizeSubscriber: br.authorizeBeeperStreamSubscriber,
 	})
 	return br.beeperStreamSender

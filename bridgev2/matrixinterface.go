@@ -135,7 +135,7 @@ type MatrixConnectorWithHTTPSettings interface {
 
 type MatrixConnectorWithBeeperStreamSender interface {
 	MatrixConnector
-	GetOrCreateBeeperStreamSender(opts *mautrix.BeeperStreamSenderOptions) *mautrix.BeeperStreamSender
+	GetBeeperStreamSender(opts *mautrix.BeeperStreamSenderOptions) *mautrix.BeeperStreamSender
 }
 
 type MatrixSendExtra struct {

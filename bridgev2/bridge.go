@@ -63,8 +63,8 @@ type Bridge struct {
 	BackgroundCtx       context.Context
 	cancelBackgroundCtx context.CancelFunc
 
-	beeperStreamLock   sync.Mutex
-	beeperStreamSender *mautrix.BeeperStreamSender
+	beeperStreamSenderLock sync.Mutex
+	beeperStreamSender     *mautrix.BeeperStreamSender
 }
 
 func NewBridge(
