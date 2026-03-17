@@ -28,11 +28,6 @@ func (br *Connector) GetOrCreateStreamGenerator(ctx context.Context, opts *mautr
 }
 
 func (br *Connector) getStreamDeviceClient(ctx context.Context) (*mautrix.Client, error) {
-	if br.Crypto != nil {
-		if client := br.Crypto.Client(); client != nil && client.DeviceID != "" {
-			return client, nil
-		}
-	}
 	return br.AS.GetOrCreateBotDeviceClient(ctx, appservice.BotDeviceClientOptions{
 		Purpose:                  "stream",
 		InitialDeviceDisplayName: fmt.Sprintf("%s bridge stream", br.Bridge.Network.GetName().DisplayName),

@@ -9,104 +9,49 @@ package bridgev2
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 )
 
-type BeeperStreamTransport interface {
-	BuildDescriptor(ctx context.Context, req *StreamDescriptorRequest) (*event.BeeperStreamInfo, error)
-	Start(ctx context.Context, req *StartStreamRequest) error
-	Publish(ctx context.Context, req *PublishStreamRequest) error
-	Finish(ctx context.Context, req *FinishStreamRequest) error
-}
-
-type StreamDescriptorRequest = mautrix.StreamDescriptorRequest
-type StartStreamRequest = mautrix.StartStreamRequest
-type PublishStreamRequest = mautrix.PublishStreamRequest
-type FinishStreamRequest = mautrix.FinishStreamRequest
-
-type matrixConnectorWithStreamGenerator interface {
-	MatrixConnector
+// streamGeneratorProvider is the narrow capability interface for matrix connectors that support streams.
+type streamGeneratorProvider interface {
 	GetOrCreateStreamGenerator(ctx context.Context, opts *mautrix.StreamGeneratorOptions) (*mautrix.StreamGenerator, error)
 }
 
-type userLoginBeeperStream struct {
-	login *UserLogin
-
-	generatorLock sync.Mutex
-	generator     *mautrix.StreamGenerator
-}
-
-func newUserLoginBeeperStream(login *UserLogin) BeeperStreamTransport {
-	return &userLoginBeeperStream{login: login}
-}
-
-func (st *userLoginBeeperStream) BuildDescriptor(ctx context.Context, req *StreamDescriptorRequest) (*event.BeeperStreamInfo, error) {
-	gen, err := st.getGenerator(ctx)
-	if err != nil {
-		return nil, err
+// GetStreamGenerator returns this login's *mautrix.StreamGenerator, initializing it lazily.
+func (login *UserLogin) GetStreamGenerator(ctx context.Context) (*mautrix.StreamGenerator, error) {
+	login.streamGenLock.Lock()
+	defer login.streamGenLock.Unlock()
+	if login.streamGenerator != nil {
+		return login.streamGenerator, nil
 	}
-	return gen.BuildDescriptor(ctx, req)
-}
-
-func (st *userLoginBeeperStream) Start(ctx context.Context, req *StartStreamRequest) error {
-	gen, err := st.getGenerator(ctx)
-	if err != nil {
-		return err
-	}
-	return gen.Start(ctx, req)
-}
-
-func (st *userLoginBeeperStream) Publish(ctx context.Context, req *PublishStreamRequest) error {
-	gen, err := st.getGenerator(ctx)
-	if err != nil {
-		return err
-	}
-	return gen.Publish(ctx, req)
-}
-
-func (st *userLoginBeeperStream) Finish(ctx context.Context, req *FinishStreamRequest) error {
-	gen, err := st.getGenerator(ctx)
-	if err != nil {
-		return err
-	}
-	return gen.Finish(ctx, req)
-}
-
-func (st *userLoginBeeperStream) getGenerator(ctx context.Context) (*mautrix.StreamGenerator, error) {
-	st.generatorLock.Lock()
-	defer st.generatorLock.Unlock()
-	if st.generator != nil {
-		return st.generator, nil
-	}
-	conn, ok := st.login.Bridge.Matrix.(matrixConnectorWithStreamGenerator)
+	provider, ok := login.Bridge.Matrix.(streamGeneratorProvider)
 	if !ok {
 		return nil, fmt.Errorf("matrix connector doesn't support streams")
 	}
-	var err error
-	st.generator, err = conn.GetOrCreateStreamGenerator(ctx, &mautrix.StreamGeneratorOptions{
-		AuthorizeSubscriber: st.authorizeSubscriber,
+	gen, err := provider.GetOrCreateStreamGenerator(ctx, &mautrix.StreamGeneratorOptions{
+		AuthorizeSubscriber: login.authorizeStreamSubscriber,
 	})
 	if err != nil {
 		return nil, err
 	}
-	return st.generator, nil
+	login.streamGenerator = gen
+	return gen, nil
 }
 
-func (st *userLoginBeeperStream) authorizeSubscriber(ctx context.Context, req *mautrix.StreamSubscribeRequest) bool {
-	user, err := st.login.Bridge.GetUserByMXID(ctx, req.UserID)
+func (login *UserLogin) authorizeStreamSubscriber(ctx context.Context, req *mautrix.StreamSubscribeRequest) bool {
+	user, err := login.Bridge.GetUserByMXID(ctx, req.UserID)
 	if err != nil {
-		st.login.Log.Err(err).Stringer("sender", req.UserID).Msg("Failed to load stream subscriber user")
+		login.Log.Err(err).Stringer("sender", req.UserID).Msg("Failed to load stream subscriber user")
 		return false
 	}
 	if user == nil || !user.Permissions.SendEvents {
 		return false
 	}
-	member, err := st.login.Bridge.Matrix.GetMemberInfo(ctx, req.RoomID, req.UserID)
+	member, err := login.Bridge.Matrix.GetMemberInfo(ctx, req.RoomID, req.UserID)
 	if err != nil {
-		st.login.Log.Err(err).
+		login.Log.Err(err).
 			Stringer("sender", req.UserID).
 			Stringer("room_id", req.RoomID).
 			Msg("Failed to load stream subscriber membership")

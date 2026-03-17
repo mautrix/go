@@ -18,6 +18,7 @@ import (
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/exsync"
 
+	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2/bridgeconfig"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
@@ -31,11 +32,13 @@ type UserLogin struct {
 	User   *User
 	Log    zerolog.Logger
 
-	Client       NetworkAPI
-	BridgeState  *BridgeStateQueue
-	BeeperStream BeeperStreamTransport
+	Client      NetworkAPI
+	BridgeState *BridgeStateQueue
 
 	inPortalCache *exsync.Set[networkid.PortalKey]
+
+	streamGenLock   sync.Mutex
+	streamGenerator *mautrix.StreamGenerator
 
 	spaceCreateLock sync.Mutex
 	deleteLock      sync.Mutex
@@ -62,7 +65,6 @@ func (br *Bridge) loadUserLogin(ctx context.Context, user *User, dbUserLogin *da
 		Log:           user.Log.With().Str("login_id", string(dbUserLogin.ID)).Logger(),
 		inPortalCache: exsync.NewSet[networkid.PortalKey](),
 	}
-	userLogin.BeeperStream = newUserLoginBeeperStream(userLogin)
 	err := br.Network.LoadUserLogin(ctx, userLogin)
 	if err != nil {
 		userLogin.Log.Err(err).Msg("Failed to load user login")
@@ -236,7 +238,6 @@ func (user *User) NewLogin(ctx context.Context, data *database.UserLogin, params
 			User:      user,
 			Log:       user.Log.With().Str("login_id", string(data.ID)).Logger(),
 		}
-		ul.BeeperStream = newUserLoginBeeperStream(ul)
 		ul.BridgeState = user.Bridge.NewBridgeStateQueue(ul)
 	}
 	noCancelCtx := ul.Log.WithContext(user.Bridge.BackgroundCtx)
