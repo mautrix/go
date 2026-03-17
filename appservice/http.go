@@ -241,33 +241,13 @@ func (as *AppService) handleEvents(ctx context.Context, evts []*event.Event, def
 }
 
 func (as *AppService) interceptToDeviceEvent(ctx context.Context, evt *event.Event) bool {
-	if evt == nil {
+	if evt == nil || as.botClient == nil {
 		return false
 	}
-	var clients []*mautrix.Client
-	seen := make(map[*mautrix.Client]struct{})
-	addClient := func(client *mautrix.Client) {
-		if client == nil {
-			return
-		}
-		if _, ok := seen[client]; ok {
-			return
-		}
-		seen[client] = struct{}{}
-		clients = append(clients, client)
+	if evt.ToUserID != "" && evt.ToUserID != as.BotMXID() {
+		return false
 	}
-	if evt.ToUserID != "" {
-		addClient(as.existingClient(evt.ToUserID))
-	}
-	if evt.ToUserID == "" || evt.ToUserID == as.BotMXID() {
-		addClient(as.existingBotClient())
-	}
-	for _, client := range clients {
-		if client.HandleToDeviceEvent(ctx, evt) {
-			return true
-		}
-	}
-	return false
+	return as.botClient.HandleToDeviceEvent(ctx, evt)
 }
 
 // GetRoom handles a /rooms GET call from the homeserver.
