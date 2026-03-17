@@ -130,7 +130,6 @@ func (br *Connector) Init(bridge *bridgev2.Bridge) {
 	br.AS = br.Config.MakeAppService()
 	br.AS.Log = bridge.Log
 	br.AS.StateStore = br.StateStore
-	br.AS.Registration.EphemeralEvents = true
 	br.EventProcessor = appservice.NewEventProcessor(br.AS)
 	if !br.Config.AppService.AsyncTransactions {
 		br.EventProcessor.ExecMode = appservice.Sync
