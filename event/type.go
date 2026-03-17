@@ -115,7 +115,7 @@ func (et *Type) GuessClass() TypeClass {
 		StateElementFunctionalMembers.Type, StateBeeperRoomFeatures.Type, StateBeeperDisappearingTimer.Type,
 		StateMSC4391BotCommand.Type, StateRoomPolicy.Type, StateUnstableRoomPolicy.Type:
 		return StateEventType
-	case EphemeralEventReceipt.Type, EphemeralEventTyping.Type, EphemeralEventPresence.Type, BeeperEphemeralEventAIStream.Type:
+	case EphemeralEventReceipt.Type, EphemeralEventTyping.Type, EphemeralEventPresence.Type:
 		return EphemeralEventType
 	case AccountDataDirectChats.Type, AccountDataPushRules.Type, AccountDataRoomTags.Type,
 		AccountDataFullyRead.Type, AccountDataIgnoredUserList.Type, AccountDataMarkedUnread.Type,
@@ -250,11 +250,9 @@ var (
 
 // Ephemeral events
 var (
-	EphemeralEventReceipt        = Type{"m.receipt", EphemeralEventType}
-	EphemeralEventTyping         = Type{"m.typing", EphemeralEventType}
-	EphemeralEventPresence       = Type{"m.presence", EphemeralEventType}
-	EphemeralEventEncrypted      = Type{"m.room.encrypted", EphemeralEventType}
-	BeeperEphemeralEventAIStream = Type{"com.beeper.ai.stream_event", EphemeralEventType}
+	EphemeralEventReceipt  = Type{"m.receipt", EphemeralEventType}
+	EphemeralEventTyping   = Type{"m.typing", EphemeralEventType}
+	EphemeralEventPresence = Type{"m.presence", EphemeralEventType}
 )
 
 // Account data events

@@ -214,15 +214,6 @@ func (content *MessageEventContent) RemovePerMessageProfileFallback() {
 	}
 }
 
-type BeeperAIStreamEventContent struct {
-	TurnID      string         `json:"turn_id"`
-	Seq         int            `json:"seq"`
-	Part        map[string]any `json:"part"`
-	TargetEvent id.EventID     `json:"target_event,omitempty"`
-	AgentID     string         `json:"agent_id,omitempty"`
-	RelatesTo   *RelatesTo     `json:"m.relates_to,omitempty"`
-}
-
 type BeeperEncodedOrder struct {
 	order    int64
 	suborder int16

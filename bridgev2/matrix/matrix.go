@@ -68,10 +68,6 @@ func (br *Connector) handleEphemeralEvent(ctx context.Context, evt *event.Event)
 	case event.EphemeralEventTyping:
 		typingContent := evt.Content.AsTyping()
 		typingContent.UserIDs = slices.DeleteFunc(typingContent.UserIDs, br.shouldIgnoreEventFromUser)
-	case event.BeeperEphemeralEventAIStream:
-		if br.shouldIgnoreEvent(evt) {
-			return
-		}
 	}
 	br.Bridge.QueueMatrixEvent(ctx, evt)
 }
