@@ -223,9 +223,3 @@ type EphemeralSendingMatrixAPI interface {
 	MatrixAPI
 	BeeperSendEphemeralEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, content *event.Content, txnID string) (*mautrix.RespSendEvent, error)
 }
-
-type ToDeviceSendingMatrixAPI interface {
-	MatrixAPI
-	SendToDevice(ctx context.Context, eventType event.Type, req *mautrix.ReqSendToDevice) (*mautrix.RespSendToDevice, error)
-	GetDeviceID() id.DeviceID
-}

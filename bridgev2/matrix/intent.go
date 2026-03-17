@@ -46,7 +46,6 @@ type ASIntent struct {
 var _ bridgev2.MatrixAPI = (*ASIntent)(nil)
 var _ bridgev2.MarkAsDMMatrixAPI = (*ASIntent)(nil)
 var _ bridgev2.EphemeralSendingMatrixAPI = (*ASIntent)(nil)
-var _ bridgev2.ToDeviceSendingMatrixAPI = (*ASIntent)(nil)
 
 func (as *ASIntent) SendMessage(ctx context.Context, roomID id.RoomID, eventType event.Type, content *event.Content, extra *bridgev2.MatrixSendExtra) (*mautrix.RespSendEvent, error) {
 	if extra == nil {
@@ -101,20 +100,6 @@ func (as *ASIntent) BeeperSendEphemeralEvent(ctx context.Context, roomID id.Room
 		eventType = event.EventEncrypted
 	}
 	return as.Matrix.BeeperSendEphemeralEvent(ctx, roomID, eventType, content, mautrix.ReqSendEvent{TransactionID: txnID})
-}
-
-func (as *ASIntent) GetDeviceID() id.DeviceID {
-	if as.Connector.Crypto == nil || as.Connector.Crypto.Client() == nil {
-		return ""
-	}
-	return as.Connector.Crypto.Client().DeviceID
-}
-
-func (as *ASIntent) SendToDevice(ctx context.Context, eventType event.Type, req *mautrix.ReqSendToDevice) (*mautrix.RespSendToDevice, error) {
-	if as.Connector.Crypto == nil || as.Connector.Crypto.Client() == nil {
-		return nil, fmt.Errorf("bridge bot has no logged-in device for to-device events")
-	}
-	return as.Connector.Crypto.Client().SendToDevice(ctx, eventType, req)
 }
 
 func (as *ASIntent) fillMemberEvent(ctx context.Context, roomID id.RoomID, userID id.UserID, content *event.Content) {

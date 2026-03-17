@@ -23,7 +23,6 @@ import (
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/bridgev2/status"
-	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -62,8 +61,6 @@ type Bridge struct {
 
 	BackgroundCtx       context.Context
 	cancelBackgroundCtx context.CancelFunc
-
-	beeperStream *beeperStreamHandler
 }
 
 func NewBridge(
@@ -99,17 +96,9 @@ func NewBridge(
 	br.Commands = newCommandProcessor(br)
 	br.Matrix.Init(br)
 	br.Bot = br.Matrix.BotIntent()
-	br.beeperStream = newBeeperStreamHandler(br)
 	br.Network.Init(br)
 	br.DisappearLoop = &DisappearLoop{br: br}
 	return br
-}
-
-func (br *Bridge) HandleBeeperStreamEvent(ctx context.Context, evt *event.Event) bool {
-	if br == nil || br.beeperStream == nil {
-		return false
-	}
-	return br.beeperStream.HandleIncomingEvent(ctx, evt)
 }
 
 type DBUpgradeError struct {

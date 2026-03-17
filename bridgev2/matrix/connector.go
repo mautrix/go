@@ -42,6 +42,7 @@ import (
 	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/mediaproxy"
 	"maunium.net/go/mautrix/sqlstatestore"
+	"maunium.net/go/mautrix/streamhelper"
 )
 
 type Crypto interface {
@@ -87,6 +88,7 @@ type Connector struct {
 	IgnoreUnsupportedServer bool
 
 	EventProcessor *appservice.EventProcessor
+	streamHelper   *streamhelper.Helper
 
 	userIDRegex *regexp.Regexp
 
@@ -121,6 +123,10 @@ func NewConnector(cfg *bridgeconfig.Config) *Connector {
 	c.Capabilities = &bridgev2.MatrixCapabilities{}
 	c.doublePuppetIntents = exsync.NewMap[id.UserID, *appservice.IntentAPI]()
 	return c
+}
+
+func (br *Connector) GetStreamHelper() *streamhelper.Helper {
+	return br.streamHelper
 }
 
 func (br *Connector) Init(bridge *bridgev2.Bridge) {

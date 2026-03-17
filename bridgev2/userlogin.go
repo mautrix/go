@@ -62,7 +62,7 @@ func (br *Bridge) loadUserLogin(ctx context.Context, user *User, dbUserLogin *da
 		Log:           user.Log.With().Str("login_id", string(dbUserLogin.ID)).Logger(),
 		inPortalCache: exsync.NewSet[networkid.PortalKey](),
 	}
-	userLogin.BeeperStream = newUserLoginBeeperStream(userLogin, br.beeperStream)
+	userLogin.BeeperStream = newUserLoginBeeperStream(userLogin)
 	err := br.Network.LoadUserLogin(ctx, userLogin)
 	if err != nil {
 		userLogin.Log.Err(err).Msg("Failed to load user login")
@@ -236,7 +236,7 @@ func (user *User) NewLogin(ctx context.Context, data *database.UserLogin, params
 			User:      user,
 			Log:       user.Log.With().Str("login_id", string(data.ID)).Logger(),
 		}
-		ul.BeeperStream = newUserLoginBeeperStream(ul, user.Bridge.beeperStream)
+		ul.BeeperStream = newUserLoginBeeperStream(ul)
 		ul.BridgeState = user.Bridge.NewBridgeStateQueue(ul)
 	}
 	noCancelCtx := ul.Log.WithContext(user.Bridge.BackgroundCtx)
