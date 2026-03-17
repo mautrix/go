@@ -696,23 +696,20 @@ func (d *BeeperStreamDescriptor) Activate(ctx context.Context, eventID id.EventI
 		d.lock.Unlock()
 		return nil, err
 	}
-	descriptor := cloneBeeperStreamInfo(d.Info)
 	d.activated = true
 	d.lock.Unlock()
 	return &BeeperStream{
-		sender:     d.sender,
-		roomID:     d.roomID,
-		eventID:    eventID,
-		descriptor: descriptor,
+		sender:  d.sender,
+		roomID:  d.roomID,
+		eventID: eventID,
 	}, nil
 }
 
 // BeeperStream publishes updates for an active stream.
 type BeeperStream struct {
-	sender     *BeeperStreamSender
-	roomID     id.RoomID
-	eventID    id.EventID
-	descriptor *event.BeeperStreamInfo
+	sender  *BeeperStreamSender
+	roomID  id.RoomID
+	eventID id.EventID
 }
 
 // Publish sends an update to all active subscribers.
@@ -758,23 +755,6 @@ func (s *BeeperStreamSender) PrepareStream(ctx context.Context, roomID id.RoomID
 		roomID: roomID,
 		Info:   info,
 	}, nil
-}
-
-// BuildDescriptor returns the `com.beeper.stream` payload for a Matrix event.
-func (s *BeeperStreamSender) BuildDescriptor(ctx context.Context, roomID id.RoomID, streamType string) (*event.BeeperStreamInfo, error) {
-	desc, err := s.PrepareStream(ctx, roomID, streamType)
-	if err != nil {
-		return nil, err
-	}
-	return desc.Info, nil
-}
-
-// Start registers a stream for a sent Matrix event.
-func (s *BeeperStreamSender) Start(ctx context.Context, roomID id.RoomID, eventID id.EventID, descriptor *event.BeeperStreamInfo) error {
-	if s == nil {
-		return fmt.Errorf("beeper stream sender is nil")
-	}
-	return s.activateStream(ctx, roomID, eventID, descriptor)
 }
 
 func EncryptBeeperStreamEvent(logicalType event.Type, content *event.Content, streamID string, base64Key string) (*event.EncryptedEventContent, error) {

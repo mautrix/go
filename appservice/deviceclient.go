@@ -116,3 +116,17 @@ func (as *AppService) getBotDeviceClientLock(purpose string) *sync.Mutex {
 	}
 	return lock
 }
+
+// GetOrCreateBeeperStreamSender returns a stream sender for a bot device client.
+// clientOpts.Purpose must be set.
+func (as *AppService) GetOrCreateBeeperStreamSender(
+	ctx context.Context,
+	clientOpts BotDeviceClientOptions,
+	senderOpts *mautrix.BeeperStreamSenderOptions,
+) (*mautrix.BeeperStreamSender, error) {
+	client, err := as.GetOrCreateBotDeviceClient(ctx, clientOpts)
+	if err != nil {
+		return nil, err
+	}
+	return client.GetOrCreateBeeperStreamSender(senderOpts), nil
+}
