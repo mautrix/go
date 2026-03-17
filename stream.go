@@ -45,6 +45,15 @@ type BeeperStreamPublisherOptions struct {
 	AuthorizeSubscriber func(context.Context, *BeeperStreamSubscribeRequest) bool
 }
 
+// BeeperStreamTransport is an abstract entry point for managing the stream lifecycle.
+// Obtain one via BeeperStreamPublisher.NewTransport().
+type BeeperStreamTransport interface {
+	BuildDescriptor(ctx context.Context, roomID id.RoomID, streamType string) (*event.BeeperStreamInfo, error)
+	Start(ctx context.Context, roomID id.RoomID, eventID id.EventID, descriptor *event.BeeperStreamInfo) error
+	Publish(ctx context.Context, roomID id.RoomID, eventID id.EventID, content map[string]any) error
+	Finish(ctx context.Context, roomID id.RoomID, eventID id.EventID) error
+}
+
 type BeeperStreamSubscribeRequest struct {
 	RoomID   id.RoomID
 	EventID  id.EventID
@@ -683,6 +692,47 @@ type BeeperStreamDescriptor struct {
 	activated bool
 }
 
+// activateStream registers a new stream state. Called by Activate and BeeperStreamTransport.Start.
+func (s *BeeperStreamSender) activateStream(ctx context.Context, roomID id.RoomID, eventID id.EventID, info *event.BeeperStreamInfo, authorizeSubscriber func(context.Context, *BeeperStreamSubscribeRequest) bool) error {
+	descriptor := cloneBeeperStreamInfo(info)
+	if err := validateBeeperStreamDescriptor(descriptor); err != nil {
+		return err
+	}
+	key := beeperStreamKey{roomID: roomID, eventID: eventID}
+	s.lock.Lock()
+	if _, exists := s.streams[key]; exists {
+		s.lock.Unlock()
+		return fmt.Errorf("beeper stream %s/%s already started", roomID, eventID)
+	}
+	if descriptor.Encryption != nil {
+		if _, exists := s.streamsByStreamID[descriptor.Encryption.StreamID]; exists {
+			s.lock.Unlock()
+			return fmt.Errorf("beeper stream %s/%s has duplicate stream_id", roomID, eventID)
+		}
+	}
+	state := &beeperStreamState{
+		key:                 key,
+		descriptor:          descriptor,
+		authorizeSubscriber: authorizeSubscriber,
+		subscribers:         make(map[beeperStreamSubscriber]time.Time),
+	}
+	if descriptor.Encryption != nil {
+		gcm, err := newStreamGCM(descriptor.Encryption.Key)
+		if err != nil {
+			s.lock.Unlock()
+			return fmt.Errorf("failed to initialize beeper stream cipher: %w", err)
+		}
+		state.gcm = gcm
+	}
+	s.streams[key] = state
+	if descriptor.Encryption != nil {
+		s.streamsByStreamID[descriptor.Encryption.StreamID] = state
+	}
+	s.lock.Unlock()
+	s.replayPendingSubscribes(ctx)
+	return nil
+}
+
 // Activate starts the stream after the Matrix message event has been sent.
 // eventID is the ID returned by the send call. Returns a handle for publishing updates.
 func (d *BeeperStreamDescriptor) Activate(ctx context.Context, eventID id.EventID) (*BeeperStream, error) {
@@ -697,58 +747,23 @@ func (d *BeeperStreamDescriptor) Activate(ctx context.Context, eventID id.EventI
 		d.lock.Unlock()
 		return nil, fmt.Errorf("beeper stream descriptor already activated")
 	}
-	descriptor := cloneBeeperStreamInfo(d.Info)
-	if err := validateBeeperStreamDescriptor(descriptor); err != nil {
-		d.lock.Unlock()
-		return nil, err
-	}
 	s, err := d.publisher.requireSender()
 	if err != nil {
 		d.lock.Unlock()
 		return nil, err
 	}
-	key := beeperStreamKey{roomID: d.roomID, eventID: eventID}
-	s.lock.Lock()
-	if _, exists := s.streams[key]; exists {
-		s.lock.Unlock()
+	if err = s.activateStream(ctx, d.roomID, eventID, d.Info, d.publisher.authorizeSubscriber); err != nil {
 		d.lock.Unlock()
-		return nil, fmt.Errorf("beeper stream %s/%s already started", d.roomID, eventID)
+		return nil, err
 	}
-	if descriptor.Encryption != nil {
-		if _, exists := s.streamsByStreamID[descriptor.Encryption.StreamID]; exists {
-			s.lock.Unlock()
-			d.lock.Unlock()
-			return nil, fmt.Errorf("beeper stream %s/%s has duplicate stream_id", d.roomID, eventID)
-		}
-	}
-	state := &beeperStreamState{
-		key:                 key,
-		descriptor:          descriptor,
-		authorizeSubscriber: d.publisher.authorizeSubscriber,
-		subscribers:         make(map[beeperStreamSubscriber]time.Time),
-	}
-	if descriptor.Encryption != nil {
-		gcm, err := newStreamGCM(descriptor.Encryption.Key)
-		if err != nil {
-			s.lock.Unlock()
-			d.lock.Unlock()
-			return nil, fmt.Errorf("failed to initialize beeper stream cipher: %w", err)
-		}
-		state.gcm = gcm
-	}
-	s.streams[key] = state
-	if descriptor.Encryption != nil {
-		s.streamsByStreamID[descriptor.Encryption.StreamID] = state
-	}
-	s.lock.Unlock()
+	descriptor := cloneBeeperStreamInfo(d.Info)
 	d.activated = true
 	d.lock.Unlock()
-	s.replayPendingSubscribes(ctx)
 	return &BeeperStream{
 		publisher:  d.publisher,
 		roomID:     d.roomID,
 		eventID:    eventID,
-		descriptor: cloneBeeperStreamInfo(descriptor),
+		descriptor: descriptor,
 	}, nil
 }
 
@@ -820,6 +835,40 @@ func (p *BeeperStreamPublisher) PrepareStream(ctx context.Context, roomID id.Roo
 // on first call and its to-device interceptor is registered automatically.
 func (cli *Client) NewBeeperStreamPublisher(publisherOpts *BeeperStreamPublisherOptions, senderOpts *BeeperStreamSenderOptions) *BeeperStreamPublisher {
 	return cli.GetOrCreateBeeperStreamSender(senderOpts).NewPublisher(publisherOpts)
+}
+
+type beeperStreamPublisherTransport struct {
+	publisher *BeeperStreamPublisher
+}
+
+// NewTransport returns a BeeperStreamTransport backed by this publisher.
+// Multiple transports can share the same publisher safely; all state is in the underlying sender.
+func (p *BeeperStreamPublisher) NewTransport() BeeperStreamTransport {
+	return &beeperStreamPublisherTransport{publisher: p}
+}
+
+func (t *beeperStreamPublisherTransport) BuildDescriptor(ctx context.Context, roomID id.RoomID, streamType string) (*event.BeeperStreamInfo, error) {
+	desc, err := t.publisher.PrepareStream(ctx, roomID, streamType)
+	if err != nil {
+		return nil, err
+	}
+	return desc.Info, nil
+}
+
+func (t *beeperStreamPublisherTransport) Start(ctx context.Context, roomID id.RoomID, eventID id.EventID, descriptor *event.BeeperStreamInfo) error {
+	s, err := t.publisher.requireSender()
+	if err != nil {
+		return err
+	}
+	return s.activateStream(ctx, roomID, eventID, descriptor, t.publisher.authorizeSubscriber)
+}
+
+func (t *beeperStreamPublisherTransport) Publish(ctx context.Context, roomID id.RoomID, eventID id.EventID, content map[string]any) error {
+	return t.publisher.publish(ctx, roomID, eventID, content)
+}
+
+func (t *beeperStreamPublisherTransport) Finish(ctx context.Context, roomID id.RoomID, eventID id.EventID) error {
+	return t.publisher.finish(ctx, roomID, eventID)
 }
 
 func EncryptBeeperStreamEvent(logicalType event.Type, content *event.Content, streamID string, base64Key string) (*event.EncryptedEventContent, error) {
