@@ -33,7 +33,7 @@ type UserLogin struct {
 
 	Client       NetworkAPI
 	BridgeState  *BridgeStateQueue
-	BeeperStream BeeperStream
+	BeeperStream BeeperStreamTransport
 
 	inPortalCache *exsync.Set[networkid.PortalKey]
 

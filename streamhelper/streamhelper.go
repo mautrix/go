@@ -274,7 +274,7 @@ func (h *Helper) handleSubscribeEvent(ctx context.Context, evt *event.Event) boo
 	if h.isForDifferentDevice(evt) {
 		return true
 	}
-	subscribe := evt.Content.AsBeeperStreamSubscribe()
+	subscribe := event.CastOrDefault[event.BeeperStreamSubscribeEventContent](&evt.Content)
 	if subscribe.RoomID == "" || subscribe.EventID == "" {
 		return true
 	}
@@ -715,7 +715,7 @@ func streamRouteFromContent(content *event.Content) (id.RoomID, id.EventID) {
 	if content == nil {
 		return "", ""
 	}
-	if update := content.AsBeeperStreamUpdate(); update != nil && (update.RoomID != "" || update.EventID != "") {
+	if update := event.CastOrDefault[event.BeeperStreamUpdateEventContent](content); update != nil && (update.RoomID != "" || update.EventID != "") {
 		return update.RoomID, update.EventID
 	}
 	return "", ""

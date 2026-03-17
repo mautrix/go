@@ -379,20 +379,7 @@ func (content *Content) AsEncrypted() *EncryptedEventContent {
 	}
 	return casted
 }
-func (content *Content) AsBeeperStreamSubscribe() *BeeperStreamSubscribeEventContent {
-	casted, ok := content.Parsed.(*BeeperStreamSubscribeEventContent)
-	if !ok {
-		return &BeeperStreamSubscribeEventContent{}
-	}
-	return casted
-}
-func (content *Content) AsBeeperStreamUpdate() *BeeperStreamUpdateEventContent {
-	casted, ok := content.Parsed.(*BeeperStreamUpdateEventContent)
-	if !ok {
-		return &BeeperStreamUpdateEventContent{}
-	}
-	return casted
-}
+
 func (content *Content) AsRedaction() *RedactionEventContent {
 	casted, ok := content.Parsed.(*RedactionEventContent)
 	if !ok {

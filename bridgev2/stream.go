@@ -18,14 +18,12 @@ import (
 
 const DefaultStreamExpiry = streamhelper.DefaultStreamExpiry
 
-type BeeperStream interface {
+type BeeperStreamTransport interface {
 	BuildDescriptor(ctx context.Context, req *StreamDescriptorRequest) (*event.BeeperStreamInfo, error)
 	Start(ctx context.Context, req *StartStreamRequest) error
 	Publish(ctx context.Context, req *PublishStreamRequest) error
 	Finish(ctx context.Context, req *FinishStreamRequest) error
 }
-
-type StreamTransport = BeeperStream
 
 type StreamDescriptorRequest = streamhelper.StreamDescriptorRequest
 type StartStreamRequest = streamhelper.StartRequest
@@ -44,7 +42,7 @@ type userLoginBeeperStream struct {
 	generator     *streamhelper.Generator
 }
 
-func newUserLoginBeeperStream(login *UserLogin) BeeperStream {
+func newUserLoginBeeperStream(login *UserLogin) BeeperStreamTransport {
 	return &userLoginBeeperStream{login: login}
 }
 
