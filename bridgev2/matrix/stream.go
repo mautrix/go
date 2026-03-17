@@ -19,10 +19,6 @@ import (
 const streamBotDeviceKey database.Key = "stream_device_id"
 
 func (br *Connector) GetBeeperStreamClient(ctx context.Context) (*mautrix.Client, error) {
-	return br.getStreamDeviceClient(ctx)
-}
-
-func (br *Connector) getStreamDeviceClient(ctx context.Context) (*mautrix.Client, error) {
 	return br.AS.GetOrCreateBotDeviceClient(ctx, appservice.BotDeviceClientOptions{
 		Purpose:                  "stream",
 		InitialDeviceDisplayName: fmt.Sprintf("%s bridge stream", br.Bridge.Network.GetName().DisplayName),
