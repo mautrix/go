@@ -12,9 +12,8 @@ import (
 	"maunium.net/go/mautrix"
 )
 
-// GetOrCreateBeeperStreamSender returns a stream sender backed by a device-bearing bot client.
-// It wraps GetOrCreateBotDeviceClient so callers don't need to duplicate device-provisioning wiring.
-// clientOpts.Purpose must be set by the caller.
+// GetOrCreateBeeperStreamSender returns a stream sender for a bot device client.
+// clientOpts.Purpose must be set.
 func (as *AppService) GetOrCreateBeeperStreamSender(
 	ctx context.Context,
 	clientOpts BotDeviceClientOptions,

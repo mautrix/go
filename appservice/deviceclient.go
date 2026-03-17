@@ -17,15 +17,15 @@ import (
 
 // BotDeviceClientOptions configures [AppService.GetOrCreateBotDeviceClient].
 type BotDeviceClientOptions struct {
-	// Purpose is the cache key for this secondary device-bearing bot client.
+	// Purpose is the cache key.
 	Purpose string
-	// InitialDeviceDisplayName is used when creating a new device.
+	// InitialDeviceDisplayName is used when creating a device.
 	InitialDeviceDisplayName string
-	// MSC4190 toggles device creation via MSC4190 instead of appservice login.
+	// MSC4190 uses MSC4190 instead of appservice login.
 	MSC4190 bool
-	// LoadDeviceID loads a previously persisted device ID for reuse.
+	// LoadDeviceID loads a persisted device ID.
 	LoadDeviceID func(context.Context) (id.DeviceID, error)
-	// SaveDeviceID persists the final device ID after provisioning.
+	// SaveDeviceID persists the device ID.
 	SaveDeviceID func(context.Context, id.DeviceID) error
 }
 

@@ -124,9 +124,6 @@ func NewBeeperStreamSender(client *Client, opts *BeeperStreamSenderOptions) *Bee
 }
 
 // GetOrCreateBeeperStreamSender returns the cached stream sender for this client.
-//
-// The first call initializes the singleton with the provided options. Later calls
-// ignore opts and return the existing sender.
 func (cli *Client) GetOrCreateBeeperStreamSender(opts *BeeperStreamSenderOptions) *BeeperStreamSender {
 	if cli == nil {
 		return nil
@@ -409,8 +406,6 @@ func (s *BeeperStreamSender) sendUpdateToSubscribers(ctx context.Context, descri
 	return err
 }
 
-// requireStreamClient validates that client is non-nil, logged in, and has a device ID.
-// role is used in error messages (e.g. "sender", "receiver").
 func requireStreamClient(client *Client, role string) (*Client, error) {
 	if client == nil {
 		return nil, fmt.Errorf("beeper stream %s doesn't have a client", role)
@@ -422,7 +417,6 @@ func requireStreamClient(client *Client, role string) (*Client, error) {
 	return client, nil
 }
 
-// resolveStreamLogger resolves a logger from opts (if non-nil), falling back to client.Log, then zerolog.Nop.
 func resolveStreamLogger(optsLogger *zerolog.Logger, client *Client, component string) zerolog.Logger {
 	switch {
 	case optsLogger != nil:
@@ -635,19 +629,17 @@ func validateBeeperStreamDescriptor(info *event.BeeperStreamInfo) error {
 	return nil
 }
 
-// BeeperStreamDescriptor holds the stream info to embed in the initial Matrix event.
-// Returned by PrepareStream; call Activate after sending the Matrix event to start publishing.
+// BeeperStreamDescriptor holds the `com.beeper.stream` payload for a Matrix event.
 type BeeperStreamDescriptor struct {
 	sender *BeeperStreamSender
 	roomID id.RoomID
-	// Info should be embedded in the com.beeper.stream field of the Matrix message event.
+	// Info is the `com.beeper.stream` payload.
 	Info *event.BeeperStreamInfo
 
 	lock      sync.Mutex
 	activated bool
 }
 
-// activateStream registers a new stream state. Called by Activate and Start.
 func (s *BeeperStreamSender) activateStream(ctx context.Context, roomID id.RoomID, eventID id.EventID, info *event.BeeperStreamInfo) error {
 	descriptor := cloneBeeperStreamInfo(info)
 	if err := validateBeeperStreamDescriptor(descriptor); err != nil {
@@ -687,8 +679,7 @@ func (s *BeeperStreamSender) activateStream(ctx context.Context, roomID id.RoomI
 	return nil
 }
 
-// Activate starts the stream after the Matrix message event has been sent.
-// eventID is the ID returned by the send call. Returns a handle for publishing updates.
+// Activate registers the sent Matrix event and returns a stream handle.
 func (d *BeeperStreamDescriptor) Activate(ctx context.Context, eventID id.EventID) (*BeeperStream, error) {
 	d.lock.Lock()
 	if d.sender == nil || d.Info == nil {
@@ -716,8 +707,7 @@ func (d *BeeperStreamDescriptor) Activate(ctx context.Context, eventID id.EventI
 	}, nil
 }
 
-// BeeperStream is a handle for an active stream.
-// Created by BeeperStreamDescriptor.Activate; call Publish and Finish on it.
+// BeeperStream publishes updates for an active stream.
 type BeeperStream struct {
 	sender     *BeeperStreamSender
 	roomID     id.RoomID
@@ -730,14 +720,12 @@ func (s *BeeperStream) Publish(ctx context.Context, content map[string]any) erro
 	return s.sender.Publish(ctx, s.roomID, s.eventID, content)
 }
 
-// Finish marks the stream as done and cleans up after a grace period.
+// Finish closes the stream.
 func (s *BeeperStream) Finish(ctx context.Context) error {
 	return s.sender.Finish(ctx, s.roomID, s.eventID)
 }
 
-// PrepareStream builds a stream descriptor for the given room and stream type.
-// Embed the returned BeeperStreamDescriptor.Info in the Matrix message event's com.beeper.stream field.
-// After sending the event and getting its ID, call Activate to start publishing.
+// PrepareStream creates a stream descriptor for a Matrix event.
 func (s *BeeperStreamSender) PrepareStream(ctx context.Context, roomID id.RoomID, streamType string) (*BeeperStreamDescriptor, error) {
 	if s == nil {
 		return nil, fmt.Errorf("beeper stream sender is nil")
@@ -772,8 +760,7 @@ func (s *BeeperStreamSender) PrepareStream(ctx context.Context, roomID id.RoomID
 	}, nil
 }
 
-// BuildDescriptor prepares a stream descriptor for the given room and stream type.
-// Returns the BeeperStreamInfo to embed in the com.beeper.stream field of the Matrix event.
+// BuildDescriptor returns the `com.beeper.stream` payload for a Matrix event.
 func (s *BeeperStreamSender) BuildDescriptor(ctx context.Context, roomID id.RoomID, streamType string) (*event.BeeperStreamInfo, error) {
 	desc, err := s.PrepareStream(ctx, roomID, streamType)
 	if err != nil {
@@ -782,7 +769,7 @@ func (s *BeeperStreamSender) BuildDescriptor(ctx context.Context, roomID id.Room
 	return desc.Info, nil
 }
 
-// Start registers a new stream state after the Matrix event has been sent.
+// Start registers a stream for a sent Matrix event.
 func (s *BeeperStreamSender) Start(ctx context.Context, roomID id.RoomID, eventID id.EventID, descriptor *event.BeeperStreamInfo) error {
 	if s == nil {
 		return fmt.Errorf("beeper stream sender is nil")

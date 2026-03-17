@@ -14,9 +14,6 @@ import (
 	"maunium.net/go/mautrix/event"
 )
 
-// beeperStreamClientProvider is a narrow interface for connectors that can provide
-// a device-bearing client for the stream bot. It is only used inside
-// Bridge.GetOrCreateBeeperStreamSender and is not part of the MatrixConnector hierarchy.
 type beeperStreamClientProvider interface {
 	GetBeeperStreamClient(ctx context.Context) (*mautrix.Client, error)
 }

@@ -71,9 +71,6 @@ func NewBeeperStreamReceiver(client *Client, opts *BeeperStreamReceiverOptions) 
 }
 
 // GetOrCreateBeeperStreamReceiver returns the cached stream receiver for this client.
-//
-// The first call initializes the singleton and registers its to-device interceptor.
-// Later calls update mutable options on the existing receiver before returning it.
 func (cli *Client) GetOrCreateBeeperStreamReceiver(opts *BeeperStreamReceiverOptions) *BeeperStreamReceiver {
 	if cli == nil {
 		return nil
@@ -103,7 +100,6 @@ func (r *BeeperStreamReceiver) HandleTimelineEvent(ctx context.Context, evt *eve
 		return
 	}
 	if msg.BeeperStream != nil && evt.RoomID != "" && evt.ID != "" {
-		// Skip subscription for already-expired streams.
 		if msg.BeeperStream.ExpiryMS > 0 && evt.Timestamp > 0 {
 			expiryTime := time.UnixMilli(evt.Timestamp).Add(
 				time.Duration(msg.BeeperStream.ExpiryMS) * time.Millisecond)
@@ -276,8 +272,6 @@ func (r *BeeperStreamReceiver) sendStreamSubscribe(ctx context.Context, key beep
 	return err
 }
 
-// handleStreamUpdateEvent dispatches a plain (unencrypted) stream update.
-// Verifies a subscription exists for (room_id, event_id) and that the sender matches.
 func (r *BeeperStreamReceiver) handleStreamUpdateEvent(ctx context.Context, sender id.UserID, content *event.Content) {
 	if content == nil {
 		return
@@ -308,7 +302,6 @@ func (r *BeeperStreamReceiver) handleStreamUpdateEvent(ctx context.Context, send
 	r.dispatchUpdate(ctx, sender, update.RoomID, update.EventID, content)
 }
 
-// dispatchUpdate invokes the onUpdate callback for a verified stream update.
 func (r *BeeperStreamReceiver) dispatchUpdate(ctx context.Context, sender id.UserID, roomID id.RoomID, eventID id.EventID, content *event.Content) {
 	if r.onUpdate == nil {
 		return
@@ -344,8 +337,6 @@ func (r *BeeperStreamReceiver) applyOptions(opts *BeeperStreamReceiverOptions) {
 	}
 }
 
-// handleEncryptedStreamEvent decrypts and dispatches an encrypted stream update.
-// Uses subscriptionsByStreamID for O(1) lookup and verifies the sender matches the descriptor.
 func (r *BeeperStreamReceiver) handleEncryptedStreamEvent(ctx context.Context, evt *event.Event, content *event.EncryptedEventContent) {
 	if content.StreamID == "" {
 		return

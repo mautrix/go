@@ -263,7 +263,6 @@ func (as *AppService) interceptToDeviceEvent(ctx context.Context, evt *event.Eve
 		if client == nil {
 			continue
 		}
-		// Only fan out to purpose clients when there is explicit routing info.
 		if evt.ToDeviceID == "" {
 			continue
 		}
