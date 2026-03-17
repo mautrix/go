@@ -77,7 +77,7 @@ func TestEncryptDecryptStreamPayloadRoundTrip(t *testing.T) {
 		t.Fatalf("newStreamUpdateContent returned error: %v", err)
 	}
 
-	encrypted, err := encryptStreamPayload(event.ToDeviceBeeperStreamUpdate, content, key)
+	encrypted, err := encryptStreamPayload(event.ToDeviceBeeperStreamUpdate, content, "!room:example.com", "$event", key)
 	if err != nil {
 		t.Fatalf("encryptStreamPayload returned error: %v", err)
 	}
@@ -86,6 +86,9 @@ func TestEncryptDecryptStreamPayloadRoundTrip(t *testing.T) {
 	}
 	if encrypted.IV == "" || len(encrypted.StreamCiphertext) == 0 {
 		t.Fatalf("encrypted payload missing IV or ciphertext: %#v", encrypted)
+	}
+	if encrypted.RoomID != "!room:example.com" || encrypted.EventID != "$event" {
+		t.Fatalf("encrypted payload missing routing identifiers: %#v", encrypted)
 	}
 
 	decrypted, err := decryptStreamPayload(encrypted, key)

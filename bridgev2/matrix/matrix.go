@@ -73,6 +73,9 @@ func (br *Connector) handleEphemeralEvent(ctx context.Context, evt *event.Event)
 }
 
 func (br *Connector) handleToDeviceEvent(ctx context.Context, evt *event.Event) {
+	if evt.Type == event.ToDeviceEncrypted && br.Config != nil && br.Config.Encryption.Appservice && br.Crypto != nil {
+		return
+	}
 	if br.Bridge.HandleBeeperStreamEvent(ctx, evt) {
 		return
 	}

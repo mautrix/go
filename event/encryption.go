@@ -37,6 +37,10 @@ type EncryptedEventContent struct {
 	SessionID id.SessionID `json:"session_id,omitempty"`
 	// Only present for com.beeper.stream.v1.aes-gcm events
 	IV string `json:"iv,omitempty"`
+	// Only present for com.beeper.stream.v1.aes-gcm events. Used to route stream payloads
+	// to the correct placeholder event without trying every active stream key.
+	RoomID  id.RoomID  `json:"room_id,omitempty"`
+	EventID id.EventID `json:"event_id,omitempty"`
 
 	Ciphertext json.RawMessage `json:"ciphertext"`
 
@@ -64,16 +68,16 @@ func (content *EncryptedEventContent) UnmarshalJSON(data []byte) error {
 	case id.AlgorithmOlmV1:
 		content.OlmCiphertext = make(OlmCiphertexts)
 		return json.Unmarshal(content.Ciphertext, &content.OlmCiphertext)
-	case id.AlgorithmMegolmV1:
+	case id.AlgorithmMegolmV1, id.AlgorithmBeeperStreamAESGCM:
 		if len(content.Ciphertext) == 0 || content.Ciphertext[0] != '"' || content.Ciphertext[len(content.Ciphertext)-1] != '"' {
 			return fmt.Errorf("ciphertext %w", id.ErrInputNotJSONString)
 		}
-		content.MegolmCiphertext = content.Ciphertext[1 : len(content.Ciphertext)-1]
-	case id.AlgorithmBeeperStreamAESGCM:
-		if len(content.Ciphertext) == 0 || content.Ciphertext[0] != '"' || content.Ciphertext[len(content.Ciphertext)-1] != '"' {
-			return fmt.Errorf("ciphertext %w", id.ErrInputNotJSONString)
+		raw := content.Ciphertext[1 : len(content.Ciphertext)-1]
+		if content.Algorithm == id.AlgorithmMegolmV1 {
+			content.MegolmCiphertext = raw
+		} else {
+			content.StreamCiphertext = raw
 		}
-		content.StreamCiphertext = content.Ciphertext[1 : len(content.Ciphertext)-1]
 	}
 	return nil
 }
@@ -83,16 +87,15 @@ func (content *EncryptedEventContent) MarshalJSON() ([]byte, error) {
 	switch content.Algorithm {
 	case id.AlgorithmOlmV1:
 		content.Ciphertext, err = json.Marshal(content.OlmCiphertext)
-	case id.AlgorithmMegolmV1:
-		content.Ciphertext = make([]byte, len(content.MegolmCiphertext)+2)
+	case id.AlgorithmMegolmV1, id.AlgorithmBeeperStreamAESGCM:
+		raw := content.MegolmCiphertext
+		if content.Algorithm == id.AlgorithmBeeperStreamAESGCM {
+			raw = content.StreamCiphertext
+		}
+		content.Ciphertext = make([]byte, len(raw)+2)
 		content.Ciphertext[0] = '"'
 		content.Ciphertext[len(content.Ciphertext)-1] = '"'
-		copy(content.Ciphertext[1:len(content.Ciphertext)-1], content.MegolmCiphertext)
-	case id.AlgorithmBeeperStreamAESGCM:
-		content.Ciphertext = make([]byte, len(content.StreamCiphertext)+2)
-		content.Ciphertext[0] = '"'
-		content.Ciphertext[len(content.Ciphertext)-1] = '"'
-		copy(content.Ciphertext[1:len(content.Ciphertext)-1], content.StreamCiphertext)
+		copy(content.Ciphertext[1:len(content.Ciphertext)-1], raw)
 	}
 	if err != nil {
 		return nil, err

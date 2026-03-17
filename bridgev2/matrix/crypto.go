@@ -129,8 +129,8 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 	}
 
 	helper.client.Syncer = &cryptoSyncer{
-		OlmMachine: helper.mach,
-		bridge:     helper.bridge.Bridge,
+		OlmMachine:          helper.mach,
+		filterToDeviceEvent: helper.bridge.Bridge.HandleBeeperStreamEvent,
 	}
 	helper.client.Store = helper.store
 
@@ -354,7 +354,7 @@ func (helper *CryptoHelper) Start() {
 	if helper.bridge.Config.Encryption.Appservice {
 		helper.log.Debug().Msg("End-to-bridge encryption is in appservice mode, registering event listeners and not starting syncer")
 		helper.bridge.AS.Registration.EphemeralEvents = true
-		helper.mach.AddAppserviceListener(helper.bridge.EventProcessor)
+		helper.addAppserviceCryptoListeners()
 		return
 	}
 	helper.syncDone.Add(1)
@@ -369,6 +369,33 @@ func (helper *CryptoHelper) Start() {
 	} else {
 		helper.log.Info().Msg("Bridge bot to-device syncer stopped without error")
 	}
+}
+
+func (helper *CryptoHelper) addAppserviceCryptoListeners() {
+	helper.bridge.EventProcessor.On(event.ToDeviceEncrypted, helper.handleAppserviceToDeviceEncrypted)
+	helper.bridge.EventProcessor.On(event.ToDeviceRoomKeyRequest, helper.mach.HandleToDeviceEvent)
+	helper.bridge.EventProcessor.On(event.ToDeviceRoomKeyWithheld, helper.mach.HandleToDeviceEvent)
+	helper.bridge.EventProcessor.On(event.ToDeviceBeeperRoomKeyAck, helper.mach.HandleToDeviceEvent)
+	helper.bridge.EventProcessor.On(event.ToDeviceOrgMatrixRoomKeyWithheld, helper.mach.HandleToDeviceEvent)
+	helper.bridge.EventProcessor.On(event.ToDeviceVerificationRequest, helper.mach.HandleToDeviceEvent)
+	helper.bridge.EventProcessor.On(event.ToDeviceVerificationStart, helper.mach.HandleToDeviceEvent)
+	helper.bridge.EventProcessor.On(event.ToDeviceVerificationAccept, helper.mach.HandleToDeviceEvent)
+	helper.bridge.EventProcessor.On(event.ToDeviceVerificationKey, helper.mach.HandleToDeviceEvent)
+	helper.bridge.EventProcessor.On(event.ToDeviceVerificationMAC, helper.mach.HandleToDeviceEvent)
+	helper.bridge.EventProcessor.On(event.ToDeviceVerificationCancel, helper.mach.HandleToDeviceEvent)
+	helper.bridge.EventProcessor.OnOTK(helper.mach.HandleOTKCounts)
+	helper.bridge.EventProcessor.OnDeviceList(helper.mach.HandleDeviceLists)
+	helper.log.Debug().Msg("Added listeners for encryption data coming from appservice transactions")
+}
+
+func (helper *CryptoHelper) handleAppserviceToDeviceEncrypted(ctx context.Context, evt *event.Event) {
+	if evt.Content.Parsed == nil {
+		_ = evt.Content.ParseRaw(evt.Type)
+	}
+	if helper.bridge.Bridge.HandleBeeperStreamEvent(ctx, evt) {
+		return
+	}
+	helper.mach.HandleToDeviceEvent(ctx, evt)
 }
 
 func (helper *CryptoHelper) Stop() {
@@ -519,7 +546,7 @@ func (helper *CryptoHelper) ShareKeys(ctx context.Context) error {
 
 type cryptoSyncer struct {
 	*crypto.OlmMachine
-	bridge *bridgev2.Bridge
+	filterToDeviceEvent func(ctx context.Context, evt *event.Event) bool
 }
 
 func (syncer *cryptoSyncer) ProcessResponse(ctx context.Context, resp *mautrix.RespSync, since string) error {
@@ -536,7 +563,7 @@ func (syncer *cryptoSyncer) ProcessResponse(ctx context.Context, resp *mautrix.R
 			done <- struct{}{}
 		}()
 		syncer.Log.Trace().Str("since", since).Msg("Starting sync response handling")
-		if syncer.bridge != nil && len(resp.ToDevice.Events) > 0 {
+		if syncer.filterToDeviceEvent != nil && len(resp.ToDevice.Events) > 0 {
 			filtered := resp.ToDevice.Events[:0]
 			for _, evt := range resp.ToDevice.Events {
 				if evt == nil {
@@ -552,7 +579,7 @@ func (syncer *cryptoSyncer) ProcessResponse(ctx context.Context, resp *mautrix.R
 						Str("sender", evt.Sender.String()).
 						Msg("Failed to parse to-device event while filtering stream transport events")
 				}
-				if syncer.bridge.HandleBeeperStreamEvent(ctx, evt) {
+				if syncer.filterToDeviceEvent(ctx, evt) {
 					continue
 				}
 				filtered = append(filtered, evt)
