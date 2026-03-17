@@ -128,10 +128,7 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 		}
 	}
 
-	helper.client.Syncer = &cryptoSyncer{
-		OlmMachine:          helper.mach,
-		filterToDeviceEvent: helper.client.HandleToDeviceEvent,
-	}
+	helper.client.Syncer = &cryptoSyncer{helper.mach}
 	helper.client.Store = helper.store
 
 	err = helper.mach.Load(ctx)
@@ -518,7 +515,6 @@ func (helper *CryptoHelper) ShareKeys(ctx context.Context) error {
 
 type cryptoSyncer struct {
 	*crypto.OlmMachine
-	filterToDeviceEvent func(ctx context.Context, evt *event.Event) bool
 }
 
 func (syncer *cryptoSyncer) ProcessResponse(ctx context.Context, resp *mautrix.RespSync, since string) error {
@@ -535,7 +531,7 @@ func (syncer *cryptoSyncer) ProcessResponse(ctx context.Context, resp *mautrix.R
 			done <- struct{}{}
 		}()
 		syncer.Log.Trace().Str("since", since).Msg("Starting sync response handling")
-		resp.ToDevice.Events = mautrix.FilterSyncToDeviceEvents(ctx, resp.ToDevice.Events, syncer.filterToDeviceEvent)
+		resp.ToDevice.Events = mautrix.FilterSyncToDeviceEvents(ctx, resp.ToDevice.Events, syncer.Client.HandleToDeviceEvent)
 		syncer.ProcessSyncResponse(ctx, resp, since)
 		syncer.Log.Trace().Str("since", since).Msg("Successfully handled sync response")
 	}()
