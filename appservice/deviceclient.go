@@ -9,6 +9,7 @@ package appservice
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/id"
@@ -16,10 +17,8 @@ import (
 
 // BotDeviceClientOptions configures [AppService.GetOrCreateBotDeviceClient].
 type BotDeviceClientOptions struct {
-	// Key is the cache key for this device-bearing bot client.
-	Key string
-	// UserID defaults to [AppService.BotMXID].
-	UserID id.UserID
+	// Purpose is the cache key for this secondary device-bearing bot client.
+	Purpose string
 	// InitialDeviceDisplayName is used when creating a new device.
 	InitialDeviceDisplayName string
 	// MSC4190 toggles device creation via MSC4190 instead of appservice login.
@@ -32,26 +31,25 @@ type BotDeviceClientOptions struct {
 
 // GetOrCreateBotDeviceClient creates or reuses a device-bearing appservice bot client.
 func (as *AppService) GetOrCreateBotDeviceClient(ctx context.Context, opts BotDeviceClientOptions) (*mautrix.Client, error) {
-	if opts.Key == "" {
-		return nil, fmt.Errorf("missing bot device client key")
+	if opts.Purpose == "" {
+		return nil, fmt.Errorf("missing bot device client purpose")
 	}
 	as.botDeviceClientsLock.RLock()
-	client := as.botDeviceClients[opts.Key]
+	client := as.botDeviceClientsByPurpose[opts.Purpose]
 	as.botDeviceClientsLock.RUnlock()
 	if client != nil && client.DeviceID != "" {
 		return client, nil
 	}
 
-	as.botDeviceClientsLock.Lock()
-	defer as.botDeviceClientsLock.Unlock()
-	client = as.botDeviceClients[opts.Key]
+	lock := as.getBotDeviceClientLock(opts.Purpose)
+	lock.Lock()
+	defer lock.Unlock()
+
+	as.botDeviceClientsLock.RLock()
+	client = as.botDeviceClientsByPurpose[opts.Purpose]
+	as.botDeviceClientsLock.RUnlock()
 	if client != nil && client.DeviceID != "" {
 		return client, nil
-	}
-
-	userID := opts.UserID
-	if userID == "" {
-		userID = as.BotMXID()
 	}
 	if opts.InitialDeviceDisplayName == "" {
 		return nil, fmt.Errorf("missing initial device display name")
@@ -66,7 +64,7 @@ func (as *AppService) GetOrCreateBotDeviceClient(ctx context.Context, opts BotDe
 		}
 	}
 
-	client = as.NewMautrixClient(userID)
+	client = as.NewMautrixClient(as.BotMXID())
 	if opts.MSC4190 {
 		if err := client.CreateDeviceMSC4190(ctx, storedDeviceID, opts.InitialDeviceDisplayName); err != nil {
 			return nil, fmt.Errorf("failed to create bot device with MSC4190: %w", err)
@@ -85,7 +83,7 @@ func (as *AppService) GetOrCreateBotDeviceClient(ctx context.Context, opts BotDe
 			Type: mautrix.AuthTypeAppservice,
 			Identifier: mautrix.UserIdentifier{
 				Type: mautrix.IdentifierTypeUser,
-				User: string(userID),
+				User: string(as.BotMXID()),
 			},
 			StoreCredentials:         true,
 			InitialDeviceDisplayName: opts.InitialDeviceDisplayName,
@@ -102,6 +100,19 @@ func (as *AppService) GetOrCreateBotDeviceClient(ctx context.Context, opts BotDe
 		}
 	}
 
-	as.botDeviceClients[opts.Key] = client
+	as.botDeviceClientsLock.Lock()
+	as.botDeviceClientsByPurpose[opts.Purpose] = client
+	as.botDeviceClientsLock.Unlock()
 	return client, nil
+}
+
+func (as *AppService) getBotDeviceClientLock(purpose string) *sync.Mutex {
+	as.botDeviceClientLocksLock.Lock()
+	defer as.botDeviceClientLocksLock.Unlock()
+	lock := as.botDeviceClientLocks[purpose]
+	if lock == nil {
+		lock = &sync.Mutex{}
+		as.botDeviceClientLocks[purpose] = lock
+	}
+	return lock
 }

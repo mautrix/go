@@ -256,20 +256,22 @@ func (as *AppService) interceptToDeviceEvent(ctx context.Context, evt *event.Eve
 	if as.botClient != nil && (evt.ToUserID == "" || evt.ToUserID == as.BotMXID()) {
 		clients = append(clients, as.botClient)
 	}
-	as.botDeviceClientsLock.RLock()
-	for _, client := range as.botDeviceClients {
-		if client == nil {
-			continue
+	if evt.ToDeviceID != "" {
+		as.botDeviceClientsLock.RLock()
+		for _, client := range as.botDeviceClientsByPurpose {
+			if client == nil {
+				continue
+			}
+			if evt.ToUserID != "" && client.UserID != evt.ToUserID {
+				continue
+			}
+			if client.DeviceID != "" && client.DeviceID != evt.ToDeviceID {
+				continue
+			}
+			clients = append(clients, client)
 		}
-		if evt.ToUserID != "" && client.UserID != evt.ToUserID {
-			continue
-		}
-		if evt.ToDeviceID != "" && client.DeviceID != "" && client.DeviceID != evt.ToDeviceID {
-			continue
-		}
-		clients = append(clients, client)
+		as.botDeviceClientsLock.RUnlock()
 	}
-	as.botDeviceClientsLock.RUnlock()
 	for _, client := range clients {
 		if client != nil && client.HandleToDeviceEvent(ctx, evt) {
 			return true

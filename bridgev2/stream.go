@@ -27,9 +27,9 @@ type StartStreamRequest = mautrix.StartStreamRequest
 type PublishStreamRequest = mautrix.PublishStreamRequest
 type FinishStreamRequest = mautrix.FinishStreamRequest
 
-type matrixConnectorWithStreamHelper interface {
+type matrixConnectorWithStreamGenerator interface {
 	MatrixConnector
-	GetOrCreateStreamHelper(ctx context.Context) (*mautrix.StreamHelper, error)
+	GetOrCreateStreamGenerator(ctx context.Context, opts *mautrix.StreamGeneratorOptions) (*mautrix.StreamGenerator, error)
 }
 
 type userLoginBeeperStream struct {
@@ -81,17 +81,17 @@ func (st *userLoginBeeperStream) getGenerator(ctx context.Context) (*mautrix.Str
 	if st.generator != nil {
 		return st.generator, nil
 	}
-	conn, ok := st.login.Bridge.Matrix.(matrixConnectorWithStreamHelper)
+	conn, ok := st.login.Bridge.Matrix.(matrixConnectorWithStreamGenerator)
 	if !ok {
 		return nil, fmt.Errorf("matrix connector doesn't support streams")
 	}
-	helper, err := conn.GetOrCreateStreamHelper(ctx)
+	var err error
+	st.generator, err = conn.GetOrCreateStreamGenerator(ctx, &mautrix.StreamGeneratorOptions{
+		AuthorizeSubscriber: st.authorizeSubscriber,
+	})
 	if err != nil {
 		return nil, err
 	}
-	st.generator = helper.NewGenerator(&mautrix.StreamGeneratorOptions{
-		AuthorizeSubscriber: st.authorizeSubscriber,
-	})
 	return st.generator, nil
 }
 

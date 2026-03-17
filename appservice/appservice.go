@@ -38,9 +38,10 @@ func Create() *AppService {
 	jar, _ := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
 	as := &AppService{
 		Log:              zerolog.Nop(),
-		clients:          make(map[id.UserID]*mautrix.Client),
-		intents:          make(map[id.UserID]*IntentAPI),
-		botDeviceClients: make(map[string]*mautrix.Client),
+		clients:                  make(map[id.UserID]*mautrix.Client),
+		intents:                  make(map[id.UserID]*IntentAPI),
+		botDeviceClientsByPurpose: make(map[string]*mautrix.Client),
+		botDeviceClientLocks:     make(map[string]*sync.Mutex),
 		HTTPClient:       &http.Client{Timeout: 180 * time.Second, Jar: jar},
 		StateStore:       mautrix.NewMemoryStateStore().(StateStore),
 		Router:           http.NewServeMux(),
@@ -178,8 +179,10 @@ type AppService struct {
 	intents     map[id.UserID]*IntentAPI
 	intentsLock sync.RWMutex
 
-	botDeviceClients     map[string]*mautrix.Client
-	botDeviceClientsLock sync.RWMutex
+	botDeviceClientsByPurpose map[string]*mautrix.Client
+	botDeviceClientsLock      sync.RWMutex
+	botDeviceClientLocks      map[string]*sync.Mutex
+	botDeviceClientLocksLock  sync.Mutex
 
 	toDeviceInterceptors     []mautrix.ToDeviceInterceptor
 	toDeviceInterceptorsLock sync.RWMutex
