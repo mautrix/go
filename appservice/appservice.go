@@ -421,8 +421,8 @@ func (as *AppService) Client(userID id.UserID) *mautrix.Client {
 	return client
 }
 
-// ExistingClient returns a cached [mautrix.Client] for the given user ID, if one exists.
-func (as *AppService) ExistingClient(userID id.UserID) *mautrix.Client {
+// existingClient returns a cached [mautrix.Client] for the given user ID, if one exists.
+func (as *AppService) existingClient(userID id.UserID) *mautrix.Client {
 	as.clientsLock.RLock()
 	defer as.clientsLock.RUnlock()
 	return as.clients[userID]

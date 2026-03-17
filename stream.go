@@ -379,15 +379,22 @@ func resolveStreamLogger(optsLogger *zerolog.Logger, client *Client, component s
 	}
 }
 
-func (s *BeeperStreamSender) requireClient() (*Client, error) {
-	if s == nil || s.client == nil {
-		return nil, fmt.Errorf("beeper stream sender doesn't have a client")
-	} else if s.client.UserID == "" {
-		return nil, fmt.Errorf("beeper stream sender client isn't logged in")
-	} else if s.client.DeviceID == "" {
-		return nil, fmt.Errorf("beeper stream sender client doesn't have a device ID")
+func requireStreamClient(client *Client, role string) (*Client, error) {
+	if client == nil {
+		return nil, fmt.Errorf("beeper stream %s doesn't have a client", role)
+	} else if client.UserID == "" {
+		return nil, fmt.Errorf("beeper stream %s client isn't logged in", role)
+	} else if client.DeviceID == "" {
+		return nil, fmt.Errorf("beeper stream %s client doesn't have a device ID", role)
 	}
-	return s.client, nil
+	return client, nil
+}
+
+func (s *BeeperStreamSender) requireClient() (*Client, error) {
+	if s == nil {
+		return requireStreamClient(nil, "sender")
+	}
+	return requireStreamClient(s.client, "sender")
 }
 
 func (s *BeeperStreamSender) queuePendingSubscribe(ctx context.Context, evt *event.Event) {
@@ -485,10 +492,6 @@ func (state *beeperStreamState) activeSubscribers(now time.Time) []beeperStreamS
 		state.lastEviction = now
 	}
 	return active
-}
-
-func (state *beeperStreamState) getGCM() (cipher.AEAD, bool) {
-	return state.gcm, state.gcm != nil
 }
 
 func BeeperStreamDescriptorEqual(a, b *event.BeeperStreamInfo) bool {

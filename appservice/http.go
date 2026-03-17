@@ -239,14 +239,26 @@ func (as *AppService) interceptToDeviceEvent(ctx context.Context, evt *event.Eve
 	if evt == nil {
 		return false
 	}
+	if evt.ToUserID == "" && evt.ToDeviceID == "" {
+		return false
+	}
 	var clients []*mautrix.Client
-	if evt.ToUserID != "" {
-		if client := as.ExistingClient(evt.ToUserID); client != nil {
-			clients = append(clients, client)
+	seenClients := make(map[*mautrix.Client]struct{})
+	addClient := func(client *mautrix.Client) {
+		if client == nil {
+			return
 		}
+		if _, seen := seenClients[client]; seen {
+			return
+		}
+		seenClients[client] = struct{}{}
+		clients = append(clients, client)
+	}
+	if evt.ToUserID != "" {
+		addClient(as.existingClient(evt.ToUserID))
 	}
 	if as.botClient != nil && (evt.ToUserID == "" || evt.ToUserID == as.BotMXID()) {
-		clients = append(clients, as.botClient)
+		addClient(as.botClient)
 	}
 	as.botDeviceClientsLock.RLock()
 	for _, client := range as.botDeviceClientsByPurpose {
@@ -262,7 +274,7 @@ func (as *AppService) interceptToDeviceEvent(ctx context.Context, evt *event.Eve
 		if client.DeviceID != "" && client.DeviceID != evt.ToDeviceID {
 			continue
 		}
-		clients = append(clients, client)
+		addClient(client)
 	}
 	as.botDeviceClientsLock.RUnlock()
 	for _, client := range clients {
