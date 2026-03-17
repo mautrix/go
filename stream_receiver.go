@@ -9,7 +9,6 @@ package mautrix
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
@@ -36,6 +35,7 @@ type BeeperStreamReceiver struct {
 
 	lock          sync.Mutex
 	subscriptions map[beeperStreamKey]*beeperStreamSubscription
+	wg            sync.WaitGroup
 }
 
 type beeperStreamSubscription struct {
@@ -45,34 +45,25 @@ type beeperStreamSubscription struct {
 }
 
 func NewBeeperStreamReceiver(client *Client, opts *BeeperStreamReceiverOptions) *BeeperStreamReceiver {
-	var log zerolog.Logger
-	switch {
-	case opts != nil && opts.Logger != nil:
-		log = opts.Logger.With().Str("component", defaultBeeperStreamComponent+"_receiver").Logger()
-	case client != nil:
-		log = client.Log.With().Str("component", defaultBeeperStreamComponent+"_receiver").Logger()
-	default:
-		log = zerolog.Nop()
+	var optsLogger *zerolog.Logger
+	if opts != nil {
+		optsLogger = opts.Logger
 	}
 	receiver := &BeeperStreamReceiver{
 		client:               client,
-		log:                  log,
-		defaultExpiry:        DefaultBeeperStreamExpiry,
-		minimumRenewInterval: defaultBeeperRenewInterval,
+		log:                  resolveStreamLogger(optsLogger, client, beeperStreamComponentName+"_receiver"),
+		defaultExpiry:        DefaultBeeperStreamSubscribeExpiry,
+		minimumRenewInterval: defaultBeeperStreamRenewInterval,
 		subscriptions:        make(map[beeperStreamKey]*beeperStreamSubscription),
 	}
-	if opts != nil {
-		if opts.DefaultExpiry > 0 {
-			receiver.defaultExpiry = opts.DefaultExpiry
-		}
-		if opts.MinimumRenewInterval > 0 {
-			receiver.minimumRenewInterval = opts.MinimumRenewInterval
-		}
-		receiver.onUpdate = opts.OnUpdate
-	}
+	receiver.applyOptions(opts)
 	return receiver
 }
 
+// GetOrCreateBeeperStreamReceiver returns the cached stream receiver for this client.
+//
+// The first call initializes the singleton and registers its to-device interceptor.
+// Later calls update mutable options on the existing receiver before returning it.
 func (cli *Client) GetOrCreateBeeperStreamReceiver(opts *BeeperStreamReceiverOptions) *BeeperStreamReceiver {
 	if cli == nil {
 		return nil
@@ -80,6 +71,7 @@ func (cli *Client) GetOrCreateBeeperStreamReceiver(opts *BeeperStreamReceiverOpt
 	cli.beeperStreamReceiverLock.Lock()
 	defer cli.beeperStreamReceiverLock.Unlock()
 	if cli.beeperStreamReceiver != nil {
+		cli.beeperStreamReceiver.applyOptions(opts)
 		return cli.beeperStreamReceiver
 	}
 	cli.beeperStreamReceiver = NewBeeperStreamReceiver(cli, opts)
@@ -97,6 +89,9 @@ func (r *BeeperStreamReceiver) HandleTimelineEvent(ctx context.Context, evt *eve
 		}
 	}
 	msg := evt.Content.AsMessage()
+	if msg == nil {
+		return
+	}
 	if msg.BeeperStream != nil && evt.RoomID != "" && evt.ID != "" {
 		_ = r.EnsureSubscription(ctx, evt.RoomID, evt.ID, msg.BeeperStream)
 		return
@@ -121,6 +116,9 @@ func (r *BeeperStreamReceiver) HandleToDeviceEvent(ctx context.Context, evt *eve
 		return true
 	case event.ToDeviceEncrypted:
 		content := evt.Content.AsEncrypted()
+		if content == nil {
+			return false
+		}
 		if content.Algorithm != id.AlgorithmBeeperStreamAESGCM {
 			return false
 		}
@@ -145,7 +143,7 @@ func (r *BeeperStreamReceiver) EnsureSubscription(ctx context.Context, roomID id
 		existing.cancel()
 		delete(r.subscriptions, key)
 	}
-	subCtx, cancel := context.WithCancel(context.Background())
+	subCtx, cancel := context.WithCancel(receiverLoopContext(ctx))
 	sub := &beeperStreamSubscription{
 		key:        key,
 		descriptor: descriptor,
@@ -154,7 +152,8 @@ func (r *BeeperStreamReceiver) EnsureSubscription(ctx context.Context, roomID id
 	r.subscriptions[key] = sub
 	r.lock.Unlock()
 
-	go r.runSubscriptionLoop(withContextLogger(subCtx, zerolog.Ctx(ctx)), sub)
+	r.wg.Add(1)
+	go r.runSubscriptionLoop(subCtx, sub)
 	return nil
 }
 
@@ -171,7 +170,19 @@ func (r *BeeperStreamReceiver) StopSubscription(roomID id.RoomID, eventID id.Eve
 	}
 }
 
+func (r *BeeperStreamReceiver) Stop() {
+	r.lock.Lock()
+	subs := r.subscriptions
+	r.subscriptions = make(map[beeperStreamKey]*beeperStreamSubscription)
+	r.lock.Unlock()
+	for _, sub := range subs {
+		sub.cancel()
+	}
+	r.wg.Wait()
+}
+
 func (r *BeeperStreamReceiver) runSubscriptionLoop(ctx context.Context, sub *beeperStreamSubscription) {
+	defer r.wg.Done()
 	expiry := ResolveBeeperStreamSubscribeExpiry(sub.descriptor, r.defaultExpiry)
 	renewInterval := expiry / 2
 	if renewInterval < r.minimumRenewInterval {
@@ -240,6 +251,9 @@ func (r *BeeperStreamReceiver) handleStreamUpdateEvent(ctx context.Context, send
 		return
 	}
 	update := content.AsBeeperStreamUpdate()
+	if update == nil {
+		return
+	}
 	if update.RoomID == "" || update.EventID == "" {
 		return
 	}
@@ -258,6 +272,24 @@ func (r *BeeperStreamReceiver) handleStreamUpdateEvent(ctx context.Context, send
 	}
 }
 
+func (r *BeeperStreamReceiver) applyOptions(opts *BeeperStreamReceiverOptions) {
+	if r == nil || opts == nil {
+		return
+	}
+	if opts.Logger != nil {
+		r.log = opts.Logger.With().Str("component", beeperStreamComponentName+"_receiver").Logger()
+	}
+	if opts.DefaultExpiry > 0 {
+		r.defaultExpiry = opts.DefaultExpiry
+	}
+	if opts.MinimumRenewInterval > 0 {
+		r.minimumRenewInterval = opts.MinimumRenewInterval
+	}
+	if opts.OnUpdate != nil {
+		r.onUpdate = opts.OnUpdate
+	}
+}
+
 func (r *BeeperStreamReceiver) handleEncryptedStreamEvent(ctx context.Context, evt *event.Event) {
 	content := evt.Content.AsEncrypted()
 	if content == nil {
@@ -271,6 +303,7 @@ func (r *BeeperStreamReceiver) handleEncryptedStreamEvent(ctx context.Context, e
 			subs = append(subs, sub)
 		}
 	} else {
+		zerolog.Ctx(ctx).Debug().Msg("Encrypted beeper stream event missing route metadata, trying all active subscriptions")
 		for _, sub := range r.subscriptions {
 			if sub.descriptor == nil || sub.descriptor.Encryption == nil {
 				continue
@@ -298,14 +331,17 @@ func (r *BeeperStreamReceiver) handleEncryptedStreamEvent(ctx context.Context, e
 }
 
 func (r *BeeperStreamReceiver) requireClient() (*Client, error) {
-	if r == nil || r.client == nil {
-		return nil, fmt.Errorf("beeper stream receiver doesn't have a client")
-	} else if r.client.UserID == "" {
-		return nil, fmt.Errorf("beeper stream receiver client isn't logged in")
-	} else if r.client.DeviceID == "" {
-		return nil, fmt.Errorf("beeper stream receiver client doesn't have a device ID")
+	if r == nil {
+		return requireStreamClient(nil, "receiver")
 	}
-	return r.client, nil
+	return requireStreamClient(r.client, "receiver")
+}
+
+func receiverLoopContext(ctx context.Context) context.Context {
+	if ctx == nil {
+		return context.Background()
+	}
+	return withContextLogger(ctx, zerolog.Ctx(ctx))
 }
 
 func withContextLogger(ctx context.Context, log *zerolog.Logger) context.Context {

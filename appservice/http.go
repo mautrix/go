@@ -240,12 +240,10 @@ func (as *AppService) interceptToDeviceEvent(ctx context.Context, evt *event.Eve
 		return false
 	}
 	as.toDeviceInterceptorsLock.RLock()
-	interceptors := append([]mautrix.ToDeviceInterceptor(nil), as.toDeviceInterceptors...)
+	interceptors := as.toDeviceInterceptors
 	as.toDeviceInterceptorsLock.RUnlock()
-	for _, interceptor := range interceptors {
-		if interceptor != nil && interceptor(ctx, evt) {
-			return true
-		}
+	if mautrix.RunToDeviceInterceptors(ctx, interceptors, evt) {
+		return true
 	}
 	var clients []*mautrix.Client
 	if evt.ToUserID != "" {
@@ -256,22 +254,20 @@ func (as *AppService) interceptToDeviceEvent(ctx context.Context, evt *event.Eve
 	if as.botClient != nil && (evt.ToUserID == "" || evt.ToUserID == as.BotMXID()) {
 		clients = append(clients, as.botClient)
 	}
-	if evt.ToDeviceID != "" {
-		as.botDeviceClientsLock.RLock()
-		for _, client := range as.botDeviceClientsByPurpose {
-			if client == nil {
-				continue
-			}
-			if evt.ToUserID != "" && client.UserID != evt.ToUserID {
-				continue
-			}
-			if client.DeviceID != "" && client.DeviceID != evt.ToDeviceID {
-				continue
-			}
-			clients = append(clients, client)
+	as.botDeviceClientsLock.RLock()
+	for _, client := range as.botDeviceClientsByPurpose {
+		if client == nil {
+			continue
 		}
-		as.botDeviceClientsLock.RUnlock()
+		if evt.ToUserID != "" && client.UserID != evt.ToUserID {
+			continue
+		}
+		if evt.ToDeviceID != "" && client.DeviceID != "" && client.DeviceID != evt.ToDeviceID {
+			continue
+		}
+		clients = append(clients, client)
 	}
+	as.botDeviceClientsLock.RUnlock()
 	for _, client := range clients {
 		if client != nil && client.HandleToDeviceEvent(ctx, evt) {
 			return true

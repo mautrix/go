@@ -353,7 +353,7 @@ func (helper *CryptoHelper) verifyKeysAreOnServer(ctx context.Context) bool {
 func (helper *CryptoHelper) Start() {
 	if helper.bridge.Config.Encryption.Appservice {
 		helper.log.Debug().Msg("End-to-bridge encryption is in appservice mode, registering event listeners and not starting syncer")
-		helper.addAppserviceCryptoListeners()
+		helper.mach.AddAppserviceListener(helper.bridge.EventProcessor)
 		return
 	}
 	helper.syncDone.Add(1)
@@ -370,22 +370,6 @@ func (helper *CryptoHelper) Start() {
 	}
 }
 
-func (helper *CryptoHelper) addAppserviceCryptoListeners() {
-	helper.bridge.EventProcessor.On(event.ToDeviceEncrypted, helper.mach.HandleToDeviceEvent)
-	helper.bridge.EventProcessor.On(event.ToDeviceRoomKeyRequest, helper.mach.HandleToDeviceEvent)
-	helper.bridge.EventProcessor.On(event.ToDeviceRoomKeyWithheld, helper.mach.HandleToDeviceEvent)
-	helper.bridge.EventProcessor.On(event.ToDeviceBeeperRoomKeyAck, helper.mach.HandleToDeviceEvent)
-	helper.bridge.EventProcessor.On(event.ToDeviceOrgMatrixRoomKeyWithheld, helper.mach.HandleToDeviceEvent)
-	helper.bridge.EventProcessor.On(event.ToDeviceVerificationRequest, helper.mach.HandleToDeviceEvent)
-	helper.bridge.EventProcessor.On(event.ToDeviceVerificationStart, helper.mach.HandleToDeviceEvent)
-	helper.bridge.EventProcessor.On(event.ToDeviceVerificationAccept, helper.mach.HandleToDeviceEvent)
-	helper.bridge.EventProcessor.On(event.ToDeviceVerificationKey, helper.mach.HandleToDeviceEvent)
-	helper.bridge.EventProcessor.On(event.ToDeviceVerificationMAC, helper.mach.HandleToDeviceEvent)
-	helper.bridge.EventProcessor.On(event.ToDeviceVerificationCancel, helper.mach.HandleToDeviceEvent)
-	helper.bridge.EventProcessor.OnOTK(helper.mach.HandleOTKCounts)
-	helper.bridge.EventProcessor.OnDeviceList(helper.mach.HandleDeviceLists)
-	helper.log.Debug().Msg("Added listeners for encryption data coming from appservice transactions")
-}
 
 func (helper *CryptoHelper) Stop() {
 	helper.log.Debug().Msg("CryptoHelper.Stop() called, stopping bridge bot sync")
