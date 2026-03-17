@@ -44,7 +44,7 @@ type BeeperStreamReceiver struct {
 	lock                    sync.RWMutex
 	stopped                 bool
 	subscriptions           map[beeperStreamKey]*beeperStreamSubscription
-	subscriptionsByStreamID map[string]*beeperStreamSubscription
+	subscriptionsByStreamID map[id.StreamID]*beeperStreamSubscription
 	wg                      sync.WaitGroup
 }
 
@@ -65,7 +65,7 @@ func NewBeeperStreamReceiver(client *Client, opts *BeeperStreamReceiverOptions) 
 		defaultExpiry:           DefaultBeeperStreamSubscribeExpiry,
 		minimumRenewInterval:    defaultBeeperStreamRenewInterval,
 		subscriptions:           make(map[beeperStreamKey]*beeperStreamSubscription),
-		subscriptionsByStreamID: make(map[string]*beeperStreamSubscription),
+		subscriptionsByStreamID: make(map[id.StreamID]*beeperStreamSubscription),
 	}
 	receiver.applyOptions(opts)
 	return receiver
@@ -211,7 +211,7 @@ func (r *BeeperStreamReceiver) Stop() {
 	r.stopped = true
 	subs := r.subscriptions
 	r.subscriptions = make(map[beeperStreamKey]*beeperStreamSubscription)
-	r.subscriptionsByStreamID = make(map[string]*beeperStreamSubscription)
+	r.subscriptionsByStreamID = make(map[id.StreamID]*beeperStreamSubscription)
 	r.lock.Unlock()
 	for _, sub := range subs {
 		sub.cancel()
@@ -222,7 +222,7 @@ func (r *BeeperStreamReceiver) Stop() {
 func (r *BeeperStreamReceiver) runSubscriptionLoop(ctx context.Context, sub *beeperStreamSubscription) {
 	defer r.wg.Done()
 	r.lock.RLock()
-	expiry := ResolveBeeperStreamSubscribeExpiry(sub.descriptor, r.defaultExpiry)
+	expiry := resolveBeeperStreamSubscribeExpiry(sub.descriptor, r.defaultExpiry)
 	renewInterval := max(expiry/2, r.minimumRenewInterval)
 	r.lock.RUnlock()
 	if err := r.sendStreamSubscribe(ctx, sub.key, sub.descriptor, expiry); err != nil && !errors.Is(err, context.Canceled) {
@@ -369,7 +369,7 @@ func (r *BeeperStreamReceiver) handleEncryptedStreamEvent(ctx context.Context, e
 	logicalType, parsedContent, err := DecryptBeeperStreamEvent(content, sub.descriptor.Encryption.Key)
 	if err != nil {
 		r.log.Debug().Err(err).
-			Str("stream_id", content.StreamID).
+			Str("stream_id", content.StreamID.String()).
 			Msg("Failed to decrypt beeper stream update")
 		return
 	}

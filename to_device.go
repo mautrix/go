@@ -8,6 +8,7 @@ package mautrix
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"maunium.net/go/mautrix/event"
@@ -15,25 +16,35 @@ import (
 
 type ToDeviceInterceptor func(context.Context, *event.Event) bool
 
-// RunToDeviceInterceptors calls each interceptor in order and returns true if any interceptor handled the event.
-func RunToDeviceInterceptors(ctx context.Context, interceptors []ToDeviceInterceptor, evt *event.Event) bool {
+func interceptToDeviceEvent(ctx context.Context, interceptors []ToDeviceInterceptor, evt *event.Event) (handled, keep bool) {
+	err := prepareToDeviceEvent(evt)
+	if err != nil {
+		if errors.Is(err, event.ErrUnsupportedContentType) || errors.Is(err, event.ErrContentAlreadyParsed) {
+			return false, true
+		}
+		return false, false
+	}
 	for _, interceptor := range interceptors {
-		if ShouldInterceptToDeviceEvent(ctx, interceptor, evt) {
-			return true
+		if interceptor != nil && interceptor(ctx, evt) {
+			return true, true
 		}
 	}
-	return false
+	return false, true
 }
 
-// ShouldInterceptToDeviceEvent returns true when interceptor handles the event.
-func ShouldInterceptToDeviceEvent(ctx context.Context, interceptor ToDeviceInterceptor, evt *event.Event) bool {
-	if interceptor == nil || evt == nil {
-		return false
+func prepareToDeviceEvent(evt *event.Event) error {
+	if evt == nil {
+		return nil
+	}
+	evt.Type.Class = event.ToDeviceEventType
+	evt.Mautrix.EventSource = event.SourceToDevice
+	if evt.Mautrix.ReceivedAt.IsZero() {
+		evt.Mautrix.ReceivedAt = time.Now()
 	}
 	if evt.Content.Parsed == nil {
-		_ = evt.Content.ParseRaw(evt.Type)
+		return evt.Content.ParseRaw(evt.Type)
 	}
-	return interceptor(ctx, evt)
+	return nil
 }
 
 // FilterSyncToDeviceEvents applies interceptor handling for to-device /sync payloads.
@@ -49,10 +60,8 @@ func FilterSyncToDeviceEvents(ctx context.Context, events []*event.Event, interc
 		if evt == nil {
 			continue
 		}
-		evt.Type.Class = event.ToDeviceEventType
-		evt.Mautrix.EventSource = event.SourceToDevice
-		evt.Mautrix.ReceivedAt = time.Now()
-		if ShouldInterceptToDeviceEvent(ctx, interceptor, evt) {
+		handled, keep := interceptToDeviceEvent(ctx, []ToDeviceInterceptor{interceptor}, evt)
+		if !keep || handled {
 			continue
 		}
 		// Reset Parsed so sync dispatch can parse the event normally.
@@ -79,5 +88,6 @@ func (cli *Client) HandleToDeviceEvent(ctx context.Context, evt *event.Event) bo
 	interceptors := make([]ToDeviceInterceptor, len(cli.toDeviceInterceptors))
 	copy(interceptors, cli.toDeviceInterceptors)
 	cli.toDeviceInterceptorsLock.RUnlock()
-	return RunToDeviceInterceptors(ctx, interceptors, evt)
+	handled, _ := interceptToDeviceEvent(ctx, interceptors, evt)
+	return handled
 }

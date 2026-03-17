@@ -217,21 +217,21 @@ func (content *MessageEventContent) RemovePerMessageProfileFallback() {
 type BeeperStreamInfo struct {
 	UserID     id.UserID                   `json:"user_id"`
 	Type       string                      `json:"type"`
-	ExpiryMS   int64                       `json:"expiry,omitempty"`
+	ExpiryMS   int64                       `json:"expiry_ms,omitempty"`
 	Encryption *BeeperStreamEncryptionInfo `json:"encryption,omitempty"`
 }
 
 type BeeperStreamEncryptionInfo struct {
 	Algorithm id.Algorithm `json:"algorithm"`
 	Key       string       `json:"key"`
-	StreamID  string       `json:"stream_id"`
+	StreamID  id.StreamID  `json:"stream_id"`
 }
 
 type BeeperStreamSubscribeEventContent struct {
 	RoomID   id.RoomID   `json:"room_id"`
 	EventID  id.EventID  `json:"event_id"`
 	DeviceID id.DeviceID `json:"device_id"`
-	ExpiryMS int64       `json:"expiry"`
+	ExpiryMS int64       `json:"expiry_ms"`
 }
 
 type BeeperStreamUpdateEventContent struct {

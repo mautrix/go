@@ -16,13 +16,6 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-func must[T any](val T, err error) T {
-	if err != nil {
-		panic(err)
-	}
-	return val
-}
-
 func testPublishPayload() map[string]any {
 	return map[string]any{
 		"com.beeper.llm.deltas": []map[string]any{{"delta": "hello"}},
@@ -61,7 +54,8 @@ func newTestBotHomeserver(t *testing.T) (*httptest.Server, *atomic.Int32) {
 
 func activateTestAppServiceStream(t *testing.T, sender *mautrix.BeeperStreamSender) {
 	t.Helper()
-	info := must(sender.BuildDescriptor(context.Background(), "!room:example.com", "com.beeper.llm"))
+	info, err := sender.BuildDescriptor(context.Background(), "!room:example.com", "com.beeper.llm")
+	require.NoError(t, err)
 	require.NoError(t, sender.Start(context.Background(), "!room:example.com", "$event", info))
 }
 
@@ -92,11 +86,10 @@ func TestBotClientBeeperStreamInterception(t *testing.T) {
 	deliverTestBotSubscribe(as, "*")
 
 	require.NoError(t, sender.Publish(context.Background(), "!room:example.com", "$event", testPublishPayload()))
-	require.EqualValues(t, 1, sendToDeviceCalls.Load())
+	require.Equal(t, int32(1), sendToDeviceCalls.Load())
 	select {
 	case <-as.ToDeviceEvents:
 		t.Fatal("expected intercepted to-device event to not be enqueued")
 	default:
 	}
 }
-

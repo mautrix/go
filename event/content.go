@@ -379,20 +379,6 @@ func (content *Content) AsEncrypted() *EncryptedEventContent {
 	}
 	return casted
 }
-func (content *Content) AsBeeperStreamSubscribe() *BeeperStreamSubscribeEventContent {
-	casted, ok := content.Parsed.(*BeeperStreamSubscribeEventContent)
-	if !ok {
-		return &BeeperStreamSubscribeEventContent{}
-	}
-	return casted
-}
-func (content *Content) AsBeeperStreamUpdate() *BeeperStreamUpdateEventContent {
-	casted, ok := content.Parsed.(*BeeperStreamUpdateEventContent)
-	if !ok {
-		return &BeeperStreamUpdateEventContent{}
-	}
-	return casted
-}
 
 func (content *Content) AsRedaction() *RedactionEventContent {
 	casted, ok := content.Parsed.(*RedactionEventContent)
@@ -489,6 +475,20 @@ func (content *Content) AsRoomKeyWithheld() *RoomKeyWithheldEventContent {
 	casted, ok := content.Parsed.(*RoomKeyWithheldEventContent)
 	if !ok {
 		return &RoomKeyWithheldEventContent{}
+	}
+	return casted
+}
+func (content *Content) AsBeeperStreamSubscribe() *BeeperStreamSubscribeEventContent {
+	casted, ok := content.Parsed.(*BeeperStreamSubscribeEventContent)
+	if !ok {
+		return &BeeperStreamSubscribeEventContent{}
+	}
+	return casted
+}
+func (content *Content) AsBeeperStreamUpdate() *BeeperStreamUpdateEventContent {
+	casted, ok := content.Parsed.(*BeeperStreamUpdateEventContent)
+	if !ok {
+		return &BeeperStreamUpdateEventContent{}
 	}
 	return casted
 }

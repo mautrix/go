@@ -39,7 +39,7 @@ type EncryptedEventContent struct {
 	IV string `json:"iv,omitempty"`
 	// Only present for com.beeper.stream.v1.aes-gcm events.
 	// Opaque per-stream identifier (analogous to session_id in Megolm).
-	StreamID string `json:"stream_id,omitempty"`
+	StreamID id.StreamID `json:"stream_id,omitempty"`
 
 	Ciphertext json.RawMessage `json:"ciphertext"`
 

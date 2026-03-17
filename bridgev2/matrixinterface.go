@@ -43,7 +43,6 @@ type MatrixConnector interface {
 	GhostIntent(userID networkid.UserID) MatrixAPI
 	NewUserIntent(ctx context.Context, userID id.UserID, accessToken string) (MatrixAPI, string, error)
 	BotIntent() MatrixAPI
-	BotClient() *mautrix.Client
 
 	SendBridgeStatus(ctx context.Context, state *status.BridgeState) error
 	SendMessageStatus(ctx context.Context, status *MessageStatus, evt *MessageStatusEventInfo)
@@ -60,6 +59,13 @@ type MatrixConnector interface {
 	GenerateReactionEventID(roomID id.RoomID, targetMessage *database.Message, sender networkid.UserID, emojiID networkid.EmojiID) id.EventID
 
 	ServerName() string
+}
+
+// MatrixConnectorWithBeeperStreamTransport is implemented by matrix connectors that can
+// supply the bridge's Beeper stream transport.
+type MatrixConnectorWithBeeperStreamTransport interface {
+	MatrixConnector
+	GetBeeperStreamTransport(ctx context.Context) (mautrix.BeeperStreamTransport, error)
 }
 
 type MatrixConnectorWithArbitraryRoomState interface {

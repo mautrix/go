@@ -103,6 +103,7 @@ type Connector struct {
 
 var (
 	_ bridgev2.MatrixConnector                           = (*Connector)(nil)
+	_ bridgev2.MatrixConnectorWithBeeperStreamTransport  = (*Connector)(nil)
 	_ bridgev2.MatrixConnectorWithServer                 = (*Connector)(nil)
 	_ bridgev2.MatrixConnectorWithArbitraryRoomState     = (*Connector)(nil)
 	_ bridgev2.MatrixConnectorWithPostRoomBridgeHandling = (*Connector)(nil)
@@ -617,8 +618,33 @@ func (br *Connector) BotIntent() bridgev2.MatrixAPI {
 	return &ASIntent{Connector: br, Matrix: br.Bot}
 }
 
-func (br *Connector) BotClient() *mautrix.Client {
-	return br.AS.BotClient()
+func (br *Connector) GetBeeperStreamTransport(_ context.Context) (mautrix.BeeperStreamTransport, error) {
+	if br.AS == nil {
+		return nil, fmt.Errorf("appservice is not initialized")
+	}
+	return br.AS.BotClient().GetOrCreateBeeperStreamSender(&mautrix.BeeperStreamSenderOptions{
+		AuthorizeSubscriber: br.authorizeBeeperStreamSubscriber,
+	}), nil
+}
+
+func (br *Connector) authorizeBeeperStreamSubscriber(ctx context.Context, req *mautrix.BeeperStreamSubscribeRequest) bool {
+	user, err := br.Bridge.GetUserByMXID(ctx, req.UserID)
+	if err != nil {
+		br.Log.Err(err).Stringer("sender", req.UserID).Msg("Failed to load beeper stream subscriber user")
+		return false
+	}
+	if user == nil || !user.Permissions.SendEvents {
+		return false
+	}
+	member, err := br.GetMemberInfo(ctx, req.RoomID, req.UserID)
+	if err != nil {
+		br.Log.Err(err).
+			Stringer("sender", req.UserID).
+			Stringer("room_id", req.RoomID).
+			Msg("Failed to load beeper stream subscriber membership")
+		return false
+	}
+	return member != nil && member.Membership == event.MembershipJoin
 }
 
 func (br *Connector) GetPowerLevels(ctx context.Context, roomID id.RoomID) (*event.PowerLevelsEventContent, error) {

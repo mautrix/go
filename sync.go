@@ -150,14 +150,16 @@ func (s *DefaultSyncer) processSyncEvent(ctx context.Context, roomID id.RoomID, 
 		evt.Type.Class = event.MessageEventType
 	}
 
-	if s.ParseEventContent {
+	if source == event.SourceToDevice {
+		handled, keep := interceptToDeviceEvent(ctx, []ToDeviceInterceptor{s.InterceptToDeviceEvent}, evt)
+		if !keep || handled {
+			return
+		}
+	} else if s.ParseEventContent {
 		err := evt.Content.ParseRaw(evt.Type)
 		if err != nil && !s.ParseErrorHandler(evt, err) {
 			return
 		}
-	}
-	if source == event.SourceToDevice && ShouldInterceptToDeviceEvent(ctx, s.InterceptToDeviceEvent, evt) {
-		return
 	}
 
 	evt.Mautrix.EventSource = source
