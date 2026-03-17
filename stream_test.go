@@ -98,27 +98,22 @@ func newTestStreamClient(t *testing.T, homeserverURL string, userID id.UserID, d
 	return client
 }
 
-func newTestStreamSender(encrypted bool) *BeeperStreamSender {
-	opts := &BeeperStreamSenderOptions{}
+func newTestStreamWithDesc(t *testing.T, encrypted bool, authorize func(context.Context, *BeeperStreamSubscribeRequest) bool) (*BeeperStreamSender, *BeeperStreamDescriptor) {
+	t.Helper()
+	opts := &BeeperStreamSenderOptions{AuthorizeSubscriber: authorize}
 	if encrypted {
 		opts.IsEncrypted = func(context.Context, id.RoomID) (bool, error) { return true, nil }
 	}
-	return NewBeeperStreamSender(&Client{
+	sender := NewBeeperStreamSender(&Client{
 		UserID:     testStreamBotUserID,
 		DeviceID:   testStreamBotDeviceID,
 		StateStore: NewMemoryStateStore(),
 	}, opts)
-}
-
-func newTestStreamPublisher(t *testing.T, encrypted bool, authorize func(context.Context, *BeeperStreamSubscribeRequest) bool) (*BeeperStreamSender, *BeeperStreamPublisher, *BeeperStreamDescriptor) {
-	t.Helper()
-	sender := newTestStreamSender(encrypted)
-	publisher := sender.NewPublisher(&BeeperStreamPublisherOptions{AuthorizeSubscriber: authorize})
-	desc, err := publisher.PrepareStream(context.Background(), testStreamRoomID, testStreamType)
+	desc, err := sender.PrepareStream(context.Background(), testStreamRoomID, testStreamType)
 	if err != nil {
 		t.Fatalf("PrepareStream returned error: %v", err)
 	}
-	return sender, publisher, desc
+	return sender, desc
 }
 
 func startTestStream(t *testing.T, desc *BeeperStreamDescriptor) *BeeperStream {
