@@ -30,14 +30,75 @@ func newTestAppService(t *testing.T, homeserverURL string) *AppService {
 	return as
 }
 
-func TestGetOrCreateBotDeviceClientUsesStoredDeviceID(t *testing.T) {
-	var loginCalls atomic.Int32
+func newUnexpectedHomeserver(t *testing.T) (*httptest.Server, *atomic.Int32) {
+	t.Helper()
+	var calls atomic.Int32
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		loginCalls.Add(1)
+		calls.Add(1)
 		t.Fatalf("unexpected homeserver request: %s %s", r.Method, r.URL.Path)
 	}))
-	defer ts.Close()
+	t.Cleanup(ts.Close)
+	return ts, &calls
+}
 
+func newTestBotDeviceHomeserver(t *testing.T) (*httptest.Server, *atomic.Int32, *atomic.Int32) {
+	t.Helper()
+	var loginCalls atomic.Int32
+	var sendToDeviceCalls atomic.Int32
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/_matrix/client/v3/login":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"flows": []map[string]any{{"type": string(mautrix.AuthTypeAppservice)}},
+			})
+		case r.Method == http.MethodPost && r.URL.Path == "/_matrix/client/v3/login":
+			loginCalls.Add(1)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"user_id":      "@bot:example.com",
+				"device_id":    "NEWDEVICE",
+				"access_token": "device-access-token",
+			})
+		case r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/_matrix/client/v3/sendToDevice/"):
+			sendToDeviceCalls.Add(1)
+			_ = json.NewEncoder(w).Encode(map[string]any{})
+		default:
+			t.Fatalf("unexpected homeserver request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	t.Cleanup(ts.Close)
+	return ts, &loginCalls, &sendToDeviceCalls
+}
+
+func activateTestAppServiceStream(t *testing.T, publisher *mautrix.BeeperStreamPublisher) *mautrix.BeeperStream {
+	t.Helper()
+	desc, err := publisher.PrepareStream(context.Background(), "!room:example.com", "com.beeper.llm")
+	if err != nil {
+		t.Fatalf("PrepareStream returned error: %v", err)
+	}
+	stream, err := desc.Activate(context.Background(), "$event")
+	if err != nil {
+		t.Fatalf("Activate returned error: %v", err)
+	}
+	return stream
+}
+
+func deliverTestBotSubscribe(as *AppService, deviceID id.DeviceID) {
+	as.handleEvents(context.Background(), []*event.Event{{
+		Sender:     "@alice:example.com",
+		ToUserID:   as.BotMXID(),
+		ToDeviceID: deviceID,
+		Type:       event.ToDeviceBeeperStreamSubscribe,
+		Content: event.Content{Parsed: &event.BeeperStreamSubscribeEventContent{
+			RoomID:   "!room:example.com",
+			EventID:  "$event",
+			DeviceID: "SUBDEVICE",
+			ExpiryMS: 60_000,
+		}},
+	}}, event.ToDeviceEventType)
+}
+
+func TestGetOrCreateBotDeviceClientUsesStoredDeviceID(t *testing.T) {
+	ts, loginCalls := newUnexpectedHomeserver(t)
 	as := newTestAppService(t, ts.URL)
 	var savedDeviceID id.DeviceID
 	client, err := as.GetOrCreateBotDeviceClient(context.Background(), BotDeviceClientOptions{
@@ -69,30 +130,7 @@ func TestGetOrCreateBotDeviceClientUsesStoredDeviceID(t *testing.T) {
 }
 
 func TestGetOrCreateBotDeviceClientProvisioningAndInterception(t *testing.T) {
-	var loginCalls atomic.Int32
-	var sendToDeviceCalls atomic.Int32
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/_matrix/client/v3/login":
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"flows": []map[string]any{{"type": string(mautrix.AuthTypeAppservice)}},
-			})
-		case r.Method == http.MethodPost && r.URL.Path == "/_matrix/client/v3/login":
-			loginCalls.Add(1)
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"user_id":      "@bot:example.com",
-				"device_id":    "NEWDEVICE",
-				"access_token": "device-access-token",
-			})
-		case r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/_matrix/client/v3/sendToDevice/"):
-			sendToDeviceCalls.Add(1)
-			_ = json.NewEncoder(w).Encode(map[string]any{})
-		default:
-			t.Fatalf("unexpected homeserver request: %s %s", r.Method, r.URL.Path)
-		}
-	}))
-	defer ts.Close()
-
+	ts, loginCalls, sendToDeviceCalls := newTestBotDeviceHomeserver(t)
 	as := newTestAppService(t, ts.URL)
 	var savedDeviceID id.DeviceID
 	client, err := as.GetOrCreateBotDeviceClient(context.Background(), BotDeviceClientOptions{
@@ -131,30 +169,10 @@ func TestGetOrCreateBotDeviceClientProvisioningAndInterception(t *testing.T) {
 	}
 
 	sender := client.GetOrCreateBeeperStreamSender(nil)
-	publisher := sender.NewPublisher(&mautrix.BeeperStreamPublisherOptions{
+	stream := activateTestAppServiceStream(t, sender.NewPublisher(&mautrix.BeeperStreamPublisherOptions{
 		AuthorizeSubscriber: func(context.Context, *mautrix.BeeperStreamSubscribeRequest) bool { return true },
-	})
-	desc, err := publisher.PrepareStream(context.Background(), "!room:example.com", "com.beeper.llm")
-	if err != nil {
-		t.Fatalf("PrepareStream returned error: %v", err)
-	}
-	stream, err := desc.Activate(context.Background(), "$event")
-	if err != nil {
-		t.Fatalf("Activate returned error: %v", err)
-	}
-
-	as.handleEvents(context.Background(), []*event.Event{{
-		Sender:     "@alice:example.com",
-		ToUserID:   as.BotMXID(),
-		ToDeviceID: "NEWDEVICE",
-		Type:       event.ToDeviceBeeperStreamSubscribe,
-		Content: event.Content{Parsed: &event.BeeperStreamSubscribeEventContent{
-			RoomID:   "!room:example.com",
-			EventID:  "$event",
-			DeviceID: "SUBDEVICE",
-			ExpiryMS: 60_000,
-		}},
-	}}, event.ToDeviceEventType)
+	}))
+	deliverTestBotSubscribe(as, "NEWDEVICE")
 
 	if err = stream.Publish(context.Background(), map[string]any{
 		"com.beeper.llm.deltas": []map[string]any{{"delta": "hello"}},
@@ -172,31 +190,8 @@ func TestGetOrCreateBotDeviceClientProvisioningAndInterception(t *testing.T) {
 }
 
 func TestNewBeeperStreamPublisherPassesOptions(t *testing.T) {
-	var loginCalls atomic.Int32
-	var sendToDeviceCalls atomic.Int32
+	ts, loginCalls, sendToDeviceCalls := newTestBotDeviceHomeserver(t)
 	var authorizeCalls atomic.Int32
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/_matrix/client/v3/login":
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"flows": []map[string]any{{"type": string(mautrix.AuthTypeAppservice)}},
-			})
-		case r.Method == http.MethodPost && r.URL.Path == "/_matrix/client/v3/login":
-			loginCalls.Add(1)
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"user_id":      "@bot:example.com",
-				"device_id":    "NEWDEVICE",
-				"access_token": "device-access-token",
-			})
-		case r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/_matrix/client/v3/sendToDevice/"):
-			sendToDeviceCalls.Add(1)
-			_ = json.NewEncoder(w).Encode(map[string]any{})
-		default:
-			t.Fatalf("unexpected homeserver request: %s %s", r.Method, r.URL.Path)
-		}
-	}))
-	defer ts.Close()
-
 	as := newTestAppService(t, ts.URL)
 	publisher, err := as.NewBeeperStreamPublisher(context.Background(), BotDeviceClientOptions{
 		Purpose:                  "stream",
@@ -214,27 +209,8 @@ func TestNewBeeperStreamPublisherPassesOptions(t *testing.T) {
 		t.Fatalf("expected one login call, got %d", loginCalls.Load())
 	}
 
-	desc, err := publisher.PrepareStream(context.Background(), "!room:example.com", "com.beeper.llm")
-	if err != nil {
-		t.Fatalf("PrepareStream returned error: %v", err)
-	}
-	stream, err := desc.Activate(context.Background(), "$event")
-	if err != nil {
-		t.Fatalf("Activate returned error: %v", err)
-	}
-
-	as.handleEvents(context.Background(), []*event.Event{{
-		Sender:     "@alice:example.com",
-		ToUserID:   as.BotMXID(),
-		ToDeviceID: "NEWDEVICE",
-		Type:       event.ToDeviceBeeperStreamSubscribe,
-		Content: event.Content{Parsed: &event.BeeperStreamSubscribeEventContent{
-			RoomID:   "!room:example.com",
-			EventID:  "$event",
-			DeviceID: "SUBDEVICE",
-			ExpiryMS: 60_000,
-		}},
-	}}, event.ToDeviceEventType)
+	stream := activateTestAppServiceStream(t, publisher)
+	deliverTestBotSubscribe(as, "NEWDEVICE")
 
 	if err = stream.Publish(context.Background(), map[string]any{
 		"com.beeper.llm.deltas": []map[string]any{{"delta": "hello"}},
