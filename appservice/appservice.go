@@ -40,8 +40,6 @@ func Create() *AppService {
 		Log:                       zerolog.Nop(),
 		clients:                   make(map[id.UserID]*mautrix.Client),
 		intents:                   make(map[id.UserID]*IntentAPI),
-		botDeviceClientsByPurpose: make(map[string]*mautrix.Client),
-		botDeviceClientLocks:      make(map[string]*sync.Mutex),
 		HTTPClient:                &http.Client{Timeout: 180 * time.Second, Jar: jar},
 		StateStore:                mautrix.NewMemoryStateStore().(StateStore),
 		Router:                    http.NewServeMux(),
@@ -178,11 +176,6 @@ type AppService struct {
 	clientsLock sync.RWMutex
 	intents     map[id.UserID]*IntentAPI
 	intentsLock sync.RWMutex
-
-	botDeviceClientsByPurpose map[string]*mautrix.Client
-	botDeviceClientsLock      sync.RWMutex
-	botDeviceClientLocks      map[string]*sync.Mutex
-	botDeviceClientLocksLock  sync.Mutex
 
 	ws                    *websocket.Conn
 	StopWebsocket         func(error)

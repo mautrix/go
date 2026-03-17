@@ -220,7 +220,7 @@ func (s *BeeperStreamSender) isForDifferentDevice(evt *event.Event) bool {
 	if evt.ToUserID != "" && evt.ToUserID != s.client.UserID {
 		return true
 	}
-	return evt.ToDeviceID != "" && s.client.DeviceID != "" && evt.ToDeviceID != s.client.DeviceID
+	return evt.ToDeviceID != "" && evt.ToDeviceID != "*" && s.client.DeviceID != "" && evt.ToDeviceID != s.client.DeviceID
 }
 
 func (s *BeeperStreamSender) tryDecryptAndSubscribe(ctx context.Context, evt *event.Event, content *event.EncryptedEventContent, state *beeperStreamState) bool {
@@ -379,11 +379,19 @@ func resolveStreamLogger(optsLogger *zerolog.Logger, client *Client, component s
 	}
 }
 
-func requireStreamClient(client *Client, role string) (*Client, error) {
+func requireStreamSenderClient(client *Client, role string) (*Client, error) {
 	if client == nil {
 		return nil, fmt.Errorf("beeper stream %s doesn't have a client", role)
 	} else if client.UserID == "" {
 		return nil, fmt.Errorf("beeper stream %s client isn't logged in", role)
+	}
+	return client, nil
+}
+
+func requireStreamReceiverClient(client *Client, role string) (*Client, error) {
+	client, err := requireStreamSenderClient(client, role)
+	if err != nil {
+		return nil, err
 	} else if client.DeviceID == "" {
 		return nil, fmt.Errorf("beeper stream %s client doesn't have a device ID", role)
 	}
@@ -392,9 +400,9 @@ func requireStreamClient(client *Client, role string) (*Client, error) {
 
 func (s *BeeperStreamSender) requireClient() (*Client, error) {
 	if s == nil {
-		return requireStreamClient(nil, "sender")
+		return requireStreamSenderClient(nil, "sender")
 	}
-	return requireStreamClient(s.client, "sender")
+	return requireStreamSenderClient(s.client, "sender")
 }
 
 func (s *BeeperStreamSender) queuePendingSubscribe(ctx context.Context, evt *event.Event) {
@@ -498,7 +506,7 @@ func BeeperStreamDescriptorEqual(a, b *event.BeeperStreamInfo) bool {
 	switch {
 	case a == nil || b == nil:
 		return a == b
-	case a.UserID != b.UserID || a.DeviceID != b.DeviceID || a.Type != b.Type || a.ExpiryMS != b.ExpiryMS:
+	case a.UserID != b.UserID || a.Type != b.Type || a.ExpiryMS != b.ExpiryMS:
 		return false
 	case a.Encryption == nil || b.Encryption == nil:
 		return a.Encryption == b.Encryption
@@ -524,7 +532,7 @@ func ResolveBeeperStreamSubscribeExpiry(descriptor *event.BeeperStreamInfo, defa
 func validateBeeperStreamDescriptor(info *event.BeeperStreamInfo) error {
 	if info == nil {
 		return fmt.Errorf("missing beeper stream descriptor")
-	} else if info.UserID == "" || info.DeviceID == "" || info.Type == "" {
+	} else if info.UserID == "" || info.Type == "" {
 		return fmt.Errorf("missing beeper stream descriptor fields")
 	}
 	if info.Encryption == nil {
@@ -663,7 +671,6 @@ func (s *BeeperStreamSender) PrepareStream(ctx context.Context, roomID id.RoomID
 	}
 	info := &event.BeeperStreamInfo{
 		UserID:   client.UserID,
-		DeviceID: client.DeviceID,
 		Type:     streamType,
 		ExpiryMS: DefaultBeeperStreamDescriptorExpiry.Milliseconds(),
 	}

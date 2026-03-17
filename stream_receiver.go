@@ -280,7 +280,7 @@ func (r *BeeperStreamReceiver) sendStreamSubscribe(ctx context.Context, key beep
 	_, err = client.SendToDevice(ctx, eventType, &ReqSendToDevice{
 		Messages: map[id.UserID]map[id.DeviceID]*event.Content{
 			descriptor.UserID: {
-				descriptor.DeviceID: content,
+				id.DeviceID("*"): content,
 			},
 		},
 	})
@@ -387,7 +387,7 @@ func (r *BeeperStreamReceiver) handleEncryptedStreamEvent(ctx context.Context, e
 
 func (r *BeeperStreamReceiver) requireClient() (*Client, error) {
 	if r == nil {
-		return requireStreamClient(nil, "receiver")
+		return requireStreamReceiverClient(nil, "receiver")
 	}
-	return requireStreamClient(r.client, "receiver")
+	return requireStreamReceiverClient(r.client, "receiver")
 }

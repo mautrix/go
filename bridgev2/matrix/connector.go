@@ -618,6 +618,10 @@ func (br *Connector) BotIntent() bridgev2.MatrixAPI {
 	return &ASIntent{Connector: br, Matrix: br.Bot}
 }
 
+func (br *Connector) BotClient() *mautrix.Client {
+	return br.AS.BotClient()
+}
+
 func (br *Connector) GetPowerLevels(ctx context.Context, roomID id.RoomID) (*event.PowerLevelsEventContent, error) {
 	return br.Bot.PowerLevels(ctx, roomID)
 }

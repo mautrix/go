@@ -216,7 +216,6 @@ func (content *MessageEventContent) RemovePerMessageProfileFallback() {
 
 type BeeperStreamInfo struct {
 	UserID     id.UserID                   `json:"user_id"`
-	DeviceID   id.DeviceID                 `json:"device_id"`
 	Type       string                      `json:"type"`
 	ExpiryMS   int64                       `json:"expiry,omitempty"`
 	Encryption *BeeperStreamEncryptionInfo `json:"encryption,omitempty"`
