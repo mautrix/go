@@ -24,6 +24,7 @@ const (
 	KeyBridgeInfoVersion       Key = "bridge_info_version"
 	KeyEncryptionStateResynced Key = "encryption_state_resynced"
 	KeyRecoveryKey             Key = "recovery_key"
+	KeyStreamDeviceID          Key = "stream_device_id"
 )
 
 type KVQuery struct {

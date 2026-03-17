@@ -38,8 +38,16 @@ type HelperOptions struct {
 	IsEncrypted func(context.Context, id.RoomID) (bool, error)
 }
 
+type SubscribeRequest struct {
+	RoomID   id.RoomID
+	EventID  id.EventID
+	UserID   id.UserID
+	DeviceID id.DeviceID
+	Expiry   time.Duration
+}
+
 type GeneratorOptions struct {
-	AuthorizeSubscriber func(context.Context, id.UserID) bool
+	AuthorizeSubscriber func(context.Context, *SubscribeRequest) bool
 }
 
 type StreamDescriptorRequest struct {
@@ -75,13 +83,13 @@ type Helper struct {
 	lock    sync.Mutex
 	streams map[streamKey]*streamState
 
-	pendingLock               sync.Mutex
-	pendingEncryptedSubscribe []pendingEncryptedSubscribe
+	pendingLock      sync.Mutex
+	pendingSubscribe []pendingSubscribeEvent
 }
 
 type Generator struct {
 	helper              *Helper
-	authorizeSubscriber func(context.Context, id.UserID) bool
+	authorizeSubscriber func(context.Context, *SubscribeRequest) bool
 }
 
 type streamKey struct {
@@ -99,7 +107,7 @@ type streamState struct {
 	descriptor *event.BeeperStreamInfo
 	updates    []*event.Content
 
-	authorizeSubscriber func(context.Context, id.UserID) bool
+	authorizeSubscriber func(context.Context, *SubscribeRequest) bool
 
 	subscribers map[streamSubscriber]time.Time
 	finished    bool
@@ -113,7 +121,7 @@ type streamEncryptedPayload struct {
 	Content json.RawMessage `json:"content"`
 }
 
-type pendingEncryptedSubscribe struct {
+type pendingSubscribeEvent struct {
 	evt        *event.Event
 	receivedAt time.Time
 }
@@ -218,7 +226,7 @@ func (g *Generator) Start(ctx context.Context, req *StartRequest) error {
 	}
 	h.streams[key] = state
 	h.lock.Unlock()
-	h.replayPendingEncryptedSubscribes(ctx)
+	h.replayPendingSubscribes(ctx)
 	return nil
 }
 
@@ -287,7 +295,10 @@ func (h *Helper) handleSubscribeEvent(ctx context.Context, evt *event.Event) boo
 	if subscribe.RoomID == "" || subscribe.EventID == "" {
 		return true
 	}
-	h.handleSubscribe(ctx, evt.Sender, subscribe)
+	if h.handleSubscribe(ctx, evt.Sender, subscribe) {
+		return true
+	}
+	h.queuePendingSubscribe(ctx, evt)
 	return true
 }
 
@@ -312,7 +323,7 @@ func (h *Helper) handleEncryptedEvent(ctx context.Context, evt *event.Event) boo
 		}
 	}
 	log.Debug().Msg("Custom encrypted to-device event doesn't match an active stream, queueing as pending")
-	h.queuePendingEncryptedSubscribe(ctx, evt)
+	h.queuePendingSubscribe(ctx, evt)
 	return true
 }
 
@@ -382,35 +393,47 @@ func (h *Helper) tryDecryptAndSubscribe(ctx context.Context, evt *event.Event, c
 		Str("subscribe_device_id", subscribe.DeviceID.String()).
 		Int64("subscribe_expiry_ms", subscribe.ExpiryMS).
 		Msg("Matched custom encrypted subscribe payload to active stream")
-	h.handleSubscribe(ctx, evt.Sender, &subscribe)
-	return true
+	return h.handleSubscribe(ctx, evt.Sender, &subscribe)
 }
 
-func (h *Helper) handleSubscribe(ctx context.Context, sender id.UserID, subscribe *event.BeeperStreamSubscribeEventContent) {
+func (h *Helper) handleSubscribe(ctx context.Context, sender id.UserID, subscribe *event.BeeperStreamSubscribeEventContent) bool {
 	if subscribe == nil {
-		return
+		return false
 	}
 	key := streamKey{roomID: subscribe.RoomID, eventID: subscribe.EventID}
 	h.lock.Lock()
 	state := h.streams[key]
-	if state == nil || state.finished {
+	if state == nil {
 		h.lock.Unlock()
 		zerolog.Ctx(ctx).Debug().
 			Str("sender", sender.String()).
 			Str("room_id", subscribe.RoomID.String()).
 			Str("event_id", subscribe.EventID.String()).
-			Bool("stream_found", state != nil).
-			Bool("stream_finished", state != nil && state.finished).
-			Msg("Ignoring subscribe for missing or finished stream")
-		return
+			Msg("Ignoring subscribe for missing stream")
+		return false
+	} else if state.finished {
+		h.lock.Unlock()
+		zerolog.Ctx(ctx).Debug().
+			Str("sender", sender.String()).
+			Str("room_id", subscribe.RoomID.String()).
+			Str("event_id", subscribe.EventID.String()).
+			Msg("Ignoring subscribe for finished stream")
+		return true
 	}
 	authFunc := state.authorizeSubscriber
 	h.lock.Unlock()
+	authReq := &SubscribeRequest{
+		RoomID:   subscribe.RoomID,
+		EventID:  subscribe.EventID,
+		UserID:   sender,
+		DeviceID: subscribe.DeviceID,
+		Expiry:   time.Duration(subscribe.ExpiryMS) * time.Millisecond,
+	}
 
 	// Authorize outside the lock to avoid blocking all stream operations on a DB query.
-	if authFunc != nil && !authFunc(ctx, sender) {
+	if authFunc != nil && !authFunc(ctx, authReq) {
 		zerolog.Ctx(ctx).Debug().Stringer("sender", sender).Msg("Ignoring stream subscribe from unauthorized user")
-		return
+		return true
 	}
 
 	h.lock.Lock()
@@ -418,9 +441,9 @@ func (h *Helper) handleSubscribe(ctx context.Context, sender id.UserID, subscrib
 	state = h.streams[key]
 	if state == nil || state.finished {
 		h.lock.Unlock()
-		return
+		return true
 	}
-	expiry := time.Duration(subscribe.ExpiryMS) * time.Millisecond
+	expiry := authReq.Expiry
 	if expiry <= 0 {
 		expiry = time.Duration(state.descriptor.ExpiryMS) * time.Millisecond
 	}
@@ -458,9 +481,10 @@ func (h *Helper) handleSubscribe(ctx context.Context, sender id.UserID, subscrib
 				delete(state.subscribers, sub)
 			}
 			h.lock.Unlock()
-			return
+			return true
 		}
 	}
+	return true
 }
 
 func (h *Helper) recordUpdate(req *PublishRequest) (desc *event.BeeperStreamInfo, gcm cipher.AEAD, update *event.Content, subscribers []streamSubscriber, err error) {
@@ -522,47 +546,42 @@ func (h *Helper) requireClient() (*mautrix.Client, error) {
 	return h.client, nil
 }
 
-func (h *Helper) queuePendingEncryptedSubscribe(ctx context.Context, evt *event.Event) {
+func (h *Helper) queuePendingSubscribe(ctx context.Context, evt *event.Event) {
 	if evt == nil {
 		return
 	}
-	cloned := &event.Event{
-		Sender:     evt.Sender,
-		ToUserID:   evt.ToUserID,
-		ToDeviceID: evt.ToDeviceID,
-		Type:       evt.Type,
-	}
-	if encrypted := evt.Content.AsEncrypted(); encrypted != nil {
-		contentCopy := *encrypted
-		cloned.Content = event.Content{Parsed: &contentCopy}
+	cloned := clonePendingSubscribeEvent(evt)
+	if cloned == nil {
+		return
 	}
 	now := h.now()
 	h.pendingLock.Lock()
 	defer h.pendingLock.Unlock()
-	var filtered []pendingEncryptedSubscribe
-	for _, pending := range h.pendingEncryptedSubscribe {
+	var filtered []pendingSubscribeEvent
+	for _, pending := range h.pendingSubscribe {
 		if now.Sub(pending.receivedAt) <= pendingSubscribeTTL {
 			filtered = append(filtered, pending)
 		}
 	}
-	h.pendingEncryptedSubscribe = append(filtered, pendingEncryptedSubscribe{
+	h.pendingSubscribe = append(filtered, pendingSubscribeEvent{
 		evt:        cloned,
 		receivedAt: now,
 	})
-	if len(h.pendingEncryptedSubscribe) > maxPendingSubscribes {
-		h.pendingEncryptedSubscribe = h.pendingEncryptedSubscribe[len(h.pendingEncryptedSubscribe)-maxPendingSubscribes:]
+	if len(h.pendingSubscribe) > maxPendingSubscribes {
+		h.pendingSubscribe = h.pendingSubscribe[len(h.pendingSubscribe)-maxPendingSubscribes:]
 	}
 	zerolog.Ctx(ctx).Debug().
-		Int("pending_subscribes", len(h.pendingEncryptedSubscribe)).
+		Int("pending_subscribes", len(h.pendingSubscribe)).
 		Str("sender", evt.Sender.String()).
+		Str("event_type", evt.Type.Type).
 		Str("to_device_id", evt.ToDeviceID.String()).
-		Msg("Queued custom encrypted subscribe for possible future stream registration")
+		Msg("Queued subscribe for possible future stream registration")
 }
 
-func (h *Helper) replayPendingEncryptedSubscribes(ctx context.Context) {
+func (h *Helper) replayPendingSubscribes(ctx context.Context) {
 	now := h.now()
 	h.pendingLock.Lock()
-	pending := append([]pendingEncryptedSubscribe(nil), h.pendingEncryptedSubscribe...)
+	pending := append([]pendingSubscribeEvent(nil), h.pendingSubscribe...)
 	h.pendingLock.Unlock()
 	if len(pending) == 0 {
 		return
@@ -572,11 +591,7 @@ func (h *Helper) replayPendingEncryptedSubscribes(ctx context.Context) {
 		if candidate.evt == nil || now.Sub(candidate.receivedAt) > pendingSubscribeTTL {
 			continue
 		}
-		content := candidate.evt.Content.AsEncrypted()
-		if content == nil {
-			continue
-		}
-		if h.tryPendingEncryptedSubscribe(ctx, candidate.evt, content) {
+		if h.tryPendingSubscribe(ctx, candidate.evt) {
 			consumed[candidate.evt] = struct{}{}
 		}
 	}
@@ -585,8 +600,8 @@ func (h *Helper) replayPendingEncryptedSubscribes(ctx context.Context) {
 	}
 	h.pendingLock.Lock()
 	defer h.pendingLock.Unlock()
-	var filtered []pendingEncryptedSubscribe
-	for _, candidate := range h.pendingEncryptedSubscribe {
+	var filtered []pendingSubscribeEvent
+	for _, candidate := range h.pendingSubscribe {
 		if candidate.evt == nil || now.Sub(candidate.receivedAt) > pendingSubscribeTTL {
 			continue
 		}
@@ -595,21 +610,68 @@ func (h *Helper) replayPendingEncryptedSubscribes(ctx context.Context) {
 		}
 		filtered = append(filtered, candidate)
 	}
-	h.pendingEncryptedSubscribe = filtered
+	h.pendingSubscribe = filtered
 	zerolog.Ctx(ctx).Debug().
 		Int("replayed_subscribes", len(consumed)).
-		Int("pending_subscribes", len(h.pendingEncryptedSubscribe)).
-		Msg("Replayed pending custom encrypted subscribes after stream registration")
+		Int("pending_subscribes", len(h.pendingSubscribe)).
+		Msg("Replayed pending subscribes after stream registration")
 }
 
-func (h *Helper) tryPendingEncryptedSubscribe(ctx context.Context, evt *event.Event, content *event.EncryptedEventContent) bool {
-	states := h.collectEncryptedCandidates(content)
-	for _, state := range states {
-		if h.tryDecryptAndSubscribe(ctx, evt, content, state) {
-			return true
+func (h *Helper) tryPendingSubscribe(ctx context.Context, evt *event.Event) bool {
+	if evt == nil {
+		return false
+	}
+	switch evt.Type {
+	case event.ToDeviceBeeperStreamSubscribe:
+		subscribe := event.CastOrDefault[event.BeeperStreamSubscribeEventContent](&evt.Content)
+		if subscribe.RoomID == "" || subscribe.EventID == "" {
+			return false
+		}
+		return h.handleSubscribe(ctx, evt.Sender, subscribe)
+	case event.ToDeviceEncrypted:
+		content := evt.Content.AsEncrypted()
+		if content == nil || content.Algorithm != id.AlgorithmBeeperStreamAESGCM {
+			return false
+		}
+		states := h.collectEncryptedCandidates(content)
+		for _, state := range states {
+			if h.tryDecryptAndSubscribe(ctx, evt, content, state) {
+				return true
+			}
 		}
 	}
 	return false
+}
+
+func clonePendingSubscribeEvent(evt *event.Event) *event.Event {
+	if evt == nil {
+		return nil
+	}
+	cloned := &event.Event{
+		Sender:     evt.Sender,
+		ToUserID:   evt.ToUserID,
+		ToDeviceID: evt.ToDeviceID,
+		Type:       evt.Type,
+	}
+	switch evt.Type {
+	case event.ToDeviceBeeperStreamSubscribe:
+		subscribe := event.CastOrDefault[event.BeeperStreamSubscribeEventContent](&evt.Content)
+		if subscribe == nil {
+			return nil
+		}
+		contentCopy := *subscribe
+		cloned.Content = event.Content{Parsed: &contentCopy}
+	case event.ToDeviceEncrypted:
+		encrypted := evt.Content.AsEncrypted()
+		if encrypted == nil {
+			return nil
+		}
+		contentCopy := *encrypted
+		cloned.Content = event.Content{Parsed: &contentCopy}
+	default:
+		return nil
+	}
+	return cloned
 }
 
 func (state *streamState) activeSubscribers(now time.Time) []streamSubscriber {
@@ -738,7 +800,7 @@ func streamRouteFromContent(content *event.Content) (id.RoomID, id.EventID) {
 	if content == nil {
 		return "", ""
 	}
-	if update := event.CastOrDefault[event.BeeperStreamUpdateEventContent](content); update.RoomID != "" || update.EventID != "" {
+	if update := event.CastOrDefault[event.BeeperStreamUpdateEventContent](content); update != nil && (update.RoomID != "" || update.EventID != "") {
 		return update.RoomID, update.EventID
 	}
 	return "", ""

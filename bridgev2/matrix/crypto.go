@@ -30,7 +30,6 @@ import (
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/sqlstatestore"
-	"maunium.net/go/mautrix/streamhelper"
 )
 
 func init() {
@@ -131,10 +130,9 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 
 	helper.client.Syncer = &cryptoSyncer{
 		OlmMachine:          helper.mach,
-		filterToDeviceEvent: helper.handleStreamEvent,
+		filterToDeviceEvent: helper.bridge.handleStreamToDeviceEvent,
 	}
 	helper.client.Store = helper.store
-	helper.bridge.streamHelper = streamhelper.New(helper.client, nil)
 
 	err = helper.mach.Load(ctx)
 	if err != nil {
@@ -401,7 +399,7 @@ func (helper *CryptoHelper) handleAppserviceToDeviceEncrypted(ctx context.Contex
 }
 
 func (helper *CryptoHelper) handleStreamEvent(ctx context.Context, evt *event.Event) bool {
-	return helper.bridge.streamHelper != nil && helper.bridge.streamHelper.HandleToDeviceEvent(ctx, evt)
+	return helper.bridge.handleStreamToDeviceEvent(ctx, evt)
 }
 
 func (helper *CryptoHelper) Stop() {

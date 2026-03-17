@@ -87,8 +87,10 @@ type Connector struct {
 	Capabilities            *bridgev2.MatrixCapabilities
 	IgnoreUnsupportedServer bool
 
-	EventProcessor *appservice.EventProcessor
-	streamHelper   *streamhelper.Helper
+	EventProcessor   *appservice.EventProcessor
+	streamHelper     *streamhelper.Helper
+	streamHelperLock sync.Mutex
+	streamClient     *mautrix.Client
 
 	userIDRegex *regexp.Regexp
 
@@ -125,10 +127,6 @@ func NewConnector(cfg *bridgeconfig.Config) *Connector {
 	return c
 }
 
-func (br *Connector) GetStreamHelper() *streamhelper.Helper {
-	return br.streamHelper
-}
-
 func (br *Connector) Init(bridge *bridgev2.Bridge) {
 	br.Bridge = bridge
 	br.Log = &bridge.Log
@@ -136,6 +134,7 @@ func (br *Connector) Init(bridge *bridgev2.Bridge) {
 	br.AS = br.Config.MakeAppService()
 	br.AS.Log = bridge.Log
 	br.AS.StateStore = br.StateStore
+	br.AS.Registration.EphemeralEvents = true
 	br.EventProcessor = appservice.NewEventProcessor(br.AS)
 	if !br.Config.AppService.AsyncTransactions {
 		br.EventProcessor.ExecMode = appservice.Sync

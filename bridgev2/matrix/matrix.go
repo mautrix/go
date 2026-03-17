@@ -73,10 +73,10 @@ func (br *Connector) handleEphemeralEvent(ctx context.Context, evt *event.Event)
 }
 
 func (br *Connector) handleToDeviceEvent(ctx context.Context, evt *event.Event) {
-	if evt.Type == event.ToDeviceEncrypted && br.Config != nil && br.Config.Encryption.Appservice && br.Crypto != nil {
+	if br.handleStreamToDeviceEvent(ctx, evt) {
 		return
 	}
-	if br.streamHelper != nil && br.streamHelper.HandleToDeviceEvent(ctx, evt) {
+	if evt.Type == event.ToDeviceEncrypted && br.Config != nil && br.Config.Encryption.Appservice && br.Crypto != nil {
 		return
 	}
 }

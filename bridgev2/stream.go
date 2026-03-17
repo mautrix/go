@@ -12,7 +12,6 @@ import (
 	"sync"
 
 	"maunium.net/go/mautrix/event"
-	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/streamhelper"
 )
 
@@ -30,7 +29,7 @@ type FinishStreamRequest = streamhelper.FinishRequest
 
 type matrixConnectorWithStreamHelper interface {
 	MatrixConnector
-	GetStreamHelper() *streamhelper.Helper
+	GetOrCreateStreamHelper(ctx context.Context) (*streamhelper.Helper, error)
 }
 
 type userLoginBeeperStream struct {
@@ -45,7 +44,7 @@ func newUserLoginBeeperStream(login *UserLogin) BeeperStreamTransport {
 }
 
 func (st *userLoginBeeperStream) BuildDescriptor(ctx context.Context, req *StreamDescriptorRequest) (*event.BeeperStreamInfo, error) {
-	gen, err := st.getGenerator()
+	gen, err := st.getGenerator(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +52,7 @@ func (st *userLoginBeeperStream) BuildDescriptor(ctx context.Context, req *Strea
 }
 
 func (st *userLoginBeeperStream) Start(ctx context.Context, req *StartStreamRequest) error {
-	gen, err := st.getGenerator()
+	gen, err := st.getGenerator(ctx)
 	if err != nil {
 		return err
 	}
@@ -61,7 +60,7 @@ func (st *userLoginBeeperStream) Start(ctx context.Context, req *StartStreamRequ
 }
 
 func (st *userLoginBeeperStream) Publish(ctx context.Context, req *PublishStreamRequest) error {
-	gen, err := st.getGenerator()
+	gen, err := st.getGenerator(ctx)
 	if err != nil {
 		return err
 	}
@@ -69,14 +68,14 @@ func (st *userLoginBeeperStream) Publish(ctx context.Context, req *PublishStream
 }
 
 func (st *userLoginBeeperStream) Finish(ctx context.Context, req *FinishStreamRequest) error {
-	gen, err := st.getGenerator()
+	gen, err := st.getGenerator(ctx)
 	if err != nil {
 		return err
 	}
 	return gen.Finish(ctx, req)
 }
 
-func (st *userLoginBeeperStream) getGenerator() (*streamhelper.Generator, error) {
+func (st *userLoginBeeperStream) getGenerator(ctx context.Context) (*streamhelper.Generator, error) {
 	st.generatorLock.Lock()
 	defer st.generatorLock.Unlock()
 	if st.generator != nil {
@@ -86,9 +85,9 @@ func (st *userLoginBeeperStream) getGenerator() (*streamhelper.Generator, error)
 	if !ok {
 		return nil, fmt.Errorf("matrix connector doesn't support streams")
 	}
-	helper := conn.GetStreamHelper()
-	if helper == nil {
-		return nil, fmt.Errorf("stream helper isn't initialized")
+	helper, err := conn.GetOrCreateStreamHelper(ctx)
+	if err != nil {
+		return nil, err
 	}
 	st.generator = helper.NewGenerator(&streamhelper.GeneratorOptions{
 		AuthorizeSubscriber: st.authorizeSubscriber,
@@ -96,11 +95,22 @@ func (st *userLoginBeeperStream) getGenerator() (*streamhelper.Generator, error)
 	return st.generator, nil
 }
 
-func (st *userLoginBeeperStream) authorizeSubscriber(ctx context.Context, sender id.UserID) bool {
-	user, err := st.login.Bridge.GetUserByMXID(ctx, sender)
+func (st *userLoginBeeperStream) authorizeSubscriber(ctx context.Context, req *streamhelper.SubscribeRequest) bool {
+	user, err := st.login.Bridge.GetUserByMXID(ctx, req.UserID)
 	if err != nil {
-		st.login.Log.Err(err).Stringer("sender", sender).Msg("Failed to load stream subscriber user")
+		st.login.Log.Err(err).Stringer("sender", req.UserID).Msg("Failed to load stream subscriber user")
 		return false
 	}
-	return user != nil && user.Permissions.SendEvents
+	if user == nil || !user.Permissions.SendEvents {
+		return false
+	}
+	member, err := st.login.Bridge.Matrix.GetMemberInfo(ctx, req.RoomID, req.UserID)
+	if err != nil {
+		st.login.Log.Err(err).
+			Stringer("sender", req.UserID).
+			Stringer("room_id", req.RoomID).
+			Msg("Failed to load stream subscriber membership")
+		return false
+	}
+	return member != nil && member.Membership == event.MembershipJoin
 }

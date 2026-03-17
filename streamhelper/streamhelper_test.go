@@ -130,9 +130,11 @@ func TestHandlePlainSubscribe(t *testing.T) {
 		DeviceID:   "BOTDEVICE",
 		StateStore: mautrix.NewMemoryStateStore(),
 	}, nil)
+	var gotAuth *SubscribeRequest
 	gen := helper.NewGenerator(&GeneratorOptions{
-		AuthorizeSubscriber: func(_ context.Context, sender id.UserID) bool {
-			return sender == "@alice:example.com"
+		AuthorizeSubscriber: func(_ context.Context, req *SubscribeRequest) bool {
+			gotAuth = req
+			return req.UserID == "@alice:example.com"
 		},
 	})
 	desc, err := gen.BuildDescriptor(context.Background(), &StreamDescriptorRequest{
@@ -172,6 +174,66 @@ func TestHandlePlainSubscribe(t *testing.T) {
 	if len(state.subscribers) != 1 {
 		t.Fatalf("expected 1 subscriber, got %d", len(state.subscribers))
 	}
+	if gotAuth == nil {
+		t.Fatal("expected authorize callback to be invoked")
+	}
+	if gotAuth.RoomID != "!room:example.com" || gotAuth.EventID != "$event" || gotAuth.UserID != "@alice:example.com" || gotAuth.DeviceID != "SUBDEVICE" {
+		t.Fatalf("unexpected authorize callback request: %#v", gotAuth)
+	}
+}
+
+func TestPendingPlainSubscribeReplay(t *testing.T) {
+	helper := New(&mautrix.Client{
+		UserID:     "@bot:example.com",
+		DeviceID:   "BOTDEVICE",
+		StateStore: mautrix.NewMemoryStateStore(),
+	}, nil)
+	gen := helper.NewGenerator(&GeneratorOptions{
+		AuthorizeSubscriber: func(context.Context, *SubscribeRequest) bool { return true },
+	})
+	evt := &event.Event{
+		Sender: "@alice:example.com",
+		Type:   event.ToDeviceBeeperStreamSubscribe,
+		Content: event.Content{Parsed: &event.BeeperStreamSubscribeEventContent{
+			RoomID:   "!room:example.com",
+			EventID:  "$event",
+			DeviceID: "SUBDEVICE",
+			ExpiryMS: 60_000,
+		}},
+	}
+	if !helper.HandleToDeviceEvent(context.Background(), evt) {
+		t.Fatal("expected plain subscribe to be consumed")
+	}
+	if len(helper.pendingSubscribe) != 1 {
+		t.Fatalf("expected 1 pending subscribe, got %d", len(helper.pendingSubscribe))
+	}
+
+	desc, err := gen.BuildDescriptor(context.Background(), &StreamDescriptorRequest{
+		RoomID: "!room:example.com",
+		Type:   "com.beeper.llm",
+	})
+	if err != nil {
+		t.Fatalf("BuildDescriptor returned error: %v", err)
+	}
+	err = gen.Start(context.Background(), &StartRequest{
+		RoomID:     "!room:example.com",
+		EventID:    "$event",
+		Type:       "com.beeper.llm",
+		Descriptor: desc,
+	})
+	if err != nil {
+		t.Fatalf("Start returned error: %v", err)
+	}
+	if len(helper.pendingSubscribe) != 0 {
+		t.Fatalf("expected pending subscribes to be replayed, got %d left", len(helper.pendingSubscribe))
+	}
+	state := helper.streams[streamKey{roomID: "!room:example.com", eventID: "$event"}]
+	if state == nil {
+		t.Fatal("expected stream state to exist")
+	}
+	if len(state.subscribers) != 1 {
+		t.Fatalf("expected 1 replayed subscriber, got %d", len(state.subscribers))
+	}
 }
 
 func TestPendingEncryptedSubscribeReplay(t *testing.T) {
@@ -183,7 +245,7 @@ func TestPendingEncryptedSubscribeReplay(t *testing.T) {
 		IsEncrypted: func(context.Context, id.RoomID) (bool, error) { return true, nil },
 	})
 	gen := helper.NewGenerator(&GeneratorOptions{
-		AuthorizeSubscriber: func(context.Context, id.UserID) bool { return true },
+		AuthorizeSubscriber: func(context.Context, *SubscribeRequest) bool { return true },
 	})
 	desc, err := gen.BuildDescriptor(context.Background(), &StreamDescriptorRequest{
 		RoomID: "!room:example.com",
@@ -214,8 +276,8 @@ func TestPendingEncryptedSubscribeReplay(t *testing.T) {
 	if !helper.HandleToDeviceEvent(context.Background(), evt) {
 		t.Fatal("expected encrypted subscribe to be consumed")
 	}
-	if len(helper.pendingEncryptedSubscribe) != 1 {
-		t.Fatalf("expected 1 pending subscribe, got %d", len(helper.pendingEncryptedSubscribe))
+	if len(helper.pendingSubscribe) != 1 {
+		t.Fatalf("expected 1 pending subscribe, got %d", len(helper.pendingSubscribe))
 	}
 
 	err = gen.Start(context.Background(), &StartRequest{
@@ -227,8 +289,8 @@ func TestPendingEncryptedSubscribeReplay(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Start returned error: %v", err)
 	}
-	if len(helper.pendingEncryptedSubscribe) != 0 {
-		t.Fatalf("expected pending subscribes to be replayed, got %d left", len(helper.pendingEncryptedSubscribe))
+	if len(helper.pendingSubscribe) != 0 {
+		t.Fatalf("expected pending subscribes to be replayed, got %d left", len(helper.pendingSubscribe))
 	}
 	state := helper.streams[streamKey{roomID: "!room:example.com", eventID: "$event"}]
 	if state == nil {
