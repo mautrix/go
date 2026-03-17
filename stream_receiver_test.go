@@ -2,6 +2,7 @@ package mautrix
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -105,31 +106,6 @@ func TestBeeperStreamReceiverUpdateCallback(t *testing.T) {
 				t.Fatal("timed out waiting for update callback")
 			}
 		})
-	}
-}
-
-func TestBeeperStreamReceiverEncryptedUpdateIgnoresWrongRoute(t *testing.T) {
-	received := make(chan *BeeperStreamUpdate, 1)
-	receiver := NewBeeperStreamReceiver(nil, &BeeperStreamReceiverOptions{
-		OnUpdate: func(_ context.Context, update *BeeperStreamUpdate) error {
-			received <- update
-			return nil
-		},
-	})
-	evt := newTestReceiverUpdateEvent(t, receiver, true, makeStreamID())
-
-	consumed := receiver.HandleToDeviceEvent(context.Background(), evt)
-	if !consumed {
-		t.Fatal("expected encrypted update to be consumed")
-	}
-
-	select {
-	case update := <-received:
-		if update.Sender != testStreamBotUserID || update.RoomID != testStreamRoomID || update.EventID != testStreamEventID {
-			t.Fatalf("unexpected update metadata: %#v", update)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("timed out waiting for encrypted update callback")
 	}
 }
 

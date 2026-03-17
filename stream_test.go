@@ -98,22 +98,27 @@ func newTestStreamClient(t *testing.T, homeserverURL string, userID id.UserID, d
 	return client
 }
 
-func newTestStreamWithDesc(t *testing.T, encrypted bool, authorize func(context.Context, *BeeperStreamSubscribeRequest) bool) (*BeeperStreamSender, *BeeperStreamDescriptor) {
-	t.Helper()
-	opts := &BeeperStreamSenderOptions{AuthorizeSubscriber: authorize}
+func newTestStreamSender(encrypted bool) *BeeperStreamSender {
+	opts := &BeeperStreamSenderOptions{}
 	if encrypted {
 		opts.IsEncrypted = func(context.Context, id.RoomID) (bool, error) { return true, nil }
 	}
-	sender := NewBeeperStreamSender(&Client{
+	return NewBeeperStreamSender(&Client{
 		UserID:     testStreamBotUserID,
 		DeviceID:   testStreamBotDeviceID,
 		StateStore: NewMemoryStateStore(),
 	}, opts)
-	desc, err := sender.PrepareStream(context.Background(), testStreamRoomID, testStreamType)
+}
+
+func newTestStreamPublisher(t *testing.T, encrypted bool, authorize func(context.Context, *BeeperStreamSubscribeRequest) bool) (*BeeperStreamSender, *BeeperStreamPublisher, *BeeperStreamDescriptor) {
+	t.Helper()
+	sender := newTestStreamSender(encrypted)
+	publisher := sender.NewPublisher(&BeeperStreamPublisherOptions{AuthorizeSubscriber: authorize})
+	desc, err := publisher.PrepareStream(context.Background(), testStreamRoomID, testStreamType)
 	if err != nil {
 		t.Fatalf("PrepareStream returned error: %v", err)
 	}
-	return sender, desc
+	return sender, publisher, desc
 }
 
 func startTestStream(t *testing.T, desc *BeeperStreamDescriptor) *BeeperStream {
@@ -292,7 +297,7 @@ func TestEncryptDecryptStreamPayloadRoundTrip(t *testing.T) {
 
 func TestHandlePlainSubscribe(t *testing.T) {
 	var gotAuth *BeeperStreamSubscribeRequest
-	sender, _, desc := newTestStreamPublisher(t, false, func(_ context.Context, req *BeeperStreamSubscribeRequest) bool {
+	sender, desc := newTestStreamWithDesc(t, false, func(_ context.Context, req *BeeperStreamSubscribeRequest) bool {
 		gotAuth = req
 		return req.UserID == testStreamSubscriberID
 	})
@@ -323,7 +328,7 @@ func TestPendingSubscribeReplay(t *testing.T) {
 		{name: "encrypted", encrypted: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			sender, _, desc := newTestStreamPublisher(t, tc.encrypted, func(context.Context, *BeeperStreamSubscribeRequest) bool {
+			sender, desc := newTestStreamWithDesc(t, tc.encrypted, func(context.Context, *BeeperStreamSubscribeRequest) bool {
 				return true
 			})
 
@@ -348,7 +353,7 @@ func TestPendingSubscribeReplay(t *testing.T) {
 }
 
 func TestHandleEncryptedSubscribeWithoutStreamIDDropped(t *testing.T) {
-	sender, _, desc := newTestStreamPublisher(t, true, func(context.Context, *BeeperStreamSubscribeRequest) bool {
+	sender, desc := newTestStreamWithDesc(t, true, func(context.Context, *BeeperStreamSubscribeRequest) bool {
 		return true
 	})
 	encrypted, err := EncryptBeeperStreamEvent(event.ToDeviceBeeperStreamSubscribe, newTestSubscribeContent(), "", desc.Info.Encryption.Key)
@@ -368,7 +373,7 @@ func TestHandleEncryptedSubscribeWithoutStreamIDDropped(t *testing.T) {
 }
 
 func TestBeeperStreamDescriptorActivateRejectsInvalidEncryptedDescriptor(t *testing.T) {
-	_, _, desc := newTestStreamPublisher(t, true, func(context.Context, *BeeperStreamSubscribeRequest) bool {
+	_, desc := newTestStreamWithDesc(t, true, func(context.Context, *BeeperStreamSubscribeRequest) bool {
 		return true
 	})
 	desc.Info.Encryption.StreamID = ""
@@ -378,7 +383,7 @@ func TestBeeperStreamDescriptorActivateRejectsInvalidEncryptedDescriptor(t *test
 }
 
 func TestBeeperStreamDescriptorActivateOneShot(t *testing.T) {
-	_, _, desc := newTestStreamPublisher(t, true, func(context.Context, *BeeperStreamSubscribeRequest) bool {
+	_, desc := newTestStreamWithDesc(t, true, func(context.Context, *BeeperStreamSubscribeRequest) bool {
 		return true
 	})
 	if _, err := desc.Activate(context.Background(), testStreamEventID); err != nil {
@@ -390,7 +395,7 @@ func TestBeeperStreamDescriptorActivateOneShot(t *testing.T) {
 }
 
 func TestBeeperStreamDescriptorActivateRejectsStreamIDCollision(t *testing.T) {
-	sender, publisher, descA := newTestStreamPublisher(t, true, func(context.Context, *BeeperStreamSubscribeRequest) bool {
+	sender, publisher, descA := newTestStreamWithDesc(t, true, func(context.Context, *BeeperStreamSubscribeRequest) bool {
 		return true
 	})
 	if _, err := descA.Activate(context.Background(), testStreamEventID); err != nil {
@@ -410,7 +415,7 @@ func TestBeeperStreamDescriptorActivateRejectsStreamIDCollision(t *testing.T) {
 }
 
 func TestBeeperStreamDescriptorActivateSnapshotsDescriptor(t *testing.T) {
-	sender, _, desc := newTestStreamPublisher(t, true, func(context.Context, *BeeperStreamSubscribeRequest) bool {
+	sender, desc := newTestStreamWithDesc(t, true, func(context.Context, *BeeperStreamSubscribeRequest) bool {
 		return true
 	})
 	original := cloneBeeperStreamInfo(desc.Info)
