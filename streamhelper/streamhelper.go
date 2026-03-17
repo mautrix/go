@@ -293,7 +293,21 @@ func (h *Helper) handleEncryptedEvent(ctx context.Context, evt *event.Event) boo
 		Str("room_id", content.RoomID.String()).
 		Str("event_id", content.EventID.String()).
 		Logger()
+	states := h.collectEncryptedCandidates(content)
+
+	for _, state := range states {
+		if h.tryDecryptAndSubscribe(ctx, evt, content, state) {
+			return true
+		}
+	}
+	log.Debug().Msg("Custom encrypted to-device event doesn't match an active stream, queueing as pending")
+	h.queuePendingEncryptedSubscribe(ctx, evt)
+	return true
+}
+
+func (h *Helper) collectEncryptedCandidates(content *event.EncryptedEventContent) []*streamState {
 	h.lock.Lock()
+	defer h.lock.Unlock()
 	states := make([]*streamState, 0, len(h.streams))
 	if content.RoomID != "" && content.EventID != "" {
 		key := streamKey{roomID: content.RoomID, eventID: content.EventID}
@@ -308,16 +322,7 @@ func (h *Helper) handleEncryptedEvent(ctx context.Context, evt *event.Event) boo
 			states = append(states, state)
 		}
 	}
-	h.lock.Unlock()
-
-	for _, state := range states {
-		if h.tryDecryptAndSubscribe(ctx, evt, content, state) {
-			return true
-		}
-	}
-	log.Debug().Msg("Custom encrypted to-device event doesn't match an active stream, queueing as pending")
-	h.queuePendingEncryptedSubscribe(ctx, evt)
-	return true
+	return states
 }
 
 func (h *Helper) isForDifferentDevice(evt *event.Event) bool {
@@ -420,6 +425,10 @@ func (h *Helper) handleSubscribe(ctx context.Context, sender id.UserID, subscrib
 }
 
 func (h *Helper) recordUpdate(req *PublishRequest) (desc *event.BeeperStreamInfo, update *event.Content, subscribers []streamSubscriber, err error) {
+	update, err = newStreamUpdateContent(req)
+	if err != nil {
+		return
+	}
 	key := streamKey{roomID: req.RoomID, eventID: req.EventID}
 	h.lock.Lock()
 	defer h.lock.Unlock()
@@ -429,10 +438,6 @@ func (h *Helper) recordUpdate(req *PublishRequest) (desc *event.BeeperStreamInfo
 		return
 	} else if state.finished {
 		err = fmt.Errorf("stream %s/%s already finished", req.RoomID, req.EventID)
-		return
-	}
-	update, err = newStreamUpdateContent(req)
-	if err != nil {
 		return
 	}
 	state.updates = append(state.updates, update)
@@ -494,7 +499,7 @@ func (h *Helper) queuePendingEncryptedSubscribe(ctx context.Context, evt *event.
 	now := h.now()
 	h.pendingLock.Lock()
 	defer h.pendingLock.Unlock()
-	filtered := h.pendingEncryptedSubscribe[:0]
+	var filtered []pendingEncryptedSubscribe
 	for _, pending := range h.pendingEncryptedSubscribe {
 		if now.Sub(pending.receivedAt) <= pendingSubscribeTTL {
 			filtered = append(filtered, pending)
