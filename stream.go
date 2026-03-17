@@ -144,48 +144,6 @@ func (s *BeeperStreamSender) defaultIsEncrypted(ctx context.Context, roomID id.R
 	return s.client.StateStore.IsEncrypted(ctx, roomID)
 }
 
-func (s *BeeperStreamSender) publish(ctx context.Context, roomID id.RoomID, eventID id.EventID, content map[string]any) error {
-	if s == nil {
-		return fmt.Errorf("beeper stream sender is nil")
-	} else if roomID == "" || eventID == "" {
-		return fmt.Errorf("missing beeper stream identifiers")
-	}
-	desc, gcm, update, subscribers, err := s.recordUpdate(roomID, eventID, content)
-	if err != nil {
-		return err
-	}
-	return s.sendUpdateToSubscribers(ctx, desc, gcm, update, subscribers)
-}
-
-func (s *BeeperStreamSender) finish(_ context.Context, roomID id.RoomID, eventID id.EventID) error {
-	if s == nil {
-		return fmt.Errorf("beeper stream sender is nil")
-	} else if roomID == "" || eventID == "" {
-		return fmt.Errorf("missing beeper stream identifiers")
-	}
-	key := beeperStreamKey{roomID: roomID, eventID: eventID}
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	state := s.streams[key]
-	if state == nil {
-		return fmt.Errorf("beeper stream %s/%s not found", roomID, eventID)
-	}
-	state.finished = true
-	state.subscribers = nil
-	if state.descriptor.Encryption != nil && state.descriptor.Encryption.StreamID != "" {
-		delete(s.streamsByStreamID, state.descriptor.Encryption.StreamID)
-	}
-	if state.cleanup != nil {
-		state.cleanup.Stop()
-	}
-	state.cleanup = time.AfterFunc(streamCleanupGrace, func() {
-		s.lock.Lock()
-		defer s.lock.Unlock()
-		delete(s.streams, key)
-	})
-	return nil
-}
-
 func (s *BeeperStreamSender) HandleToDeviceEvent(ctx context.Context, evt *event.Event) bool {
 	if s == nil || evt == nil {
 		return false
@@ -270,11 +228,10 @@ func (s *BeeperStreamSender) tryDecryptAndSubscribe(ctx context.Context, evt *ev
 		Str("stream_room_id", state.key.roomID.String()).
 		Str("stream_event_id", state.key.eventID.String()).
 		Logger()
-	gcm, ok := state.getGCM()
-	if !ok {
+	if state.gcm == nil {
 		return false
 	}
-	payload, err := decryptStreamPayload(content, gcm)
+	payload, err := decryptStreamPayload(content, state.gcm)
 	if err != nil {
 		log.Debug().Err(err).Msg("Failed to decrypt custom encrypted subscribe")
 		return false
@@ -336,7 +293,7 @@ func (s *BeeperStreamSender) handleSubscribe(ctx context.Context, sender id.User
 	sub := beeperStreamSubscriber{userID: sender, deviceID: subscribe.DeviceID}
 	state.subscribers[sub] = s.now().Add(expiry)
 	desc := state.descriptor
-	gcm, _ := state.getGCM()
+	gcm := state.gcm
 	updates := append([]*event.Content(nil), state.updates...)
 	s.lock.Unlock()
 
@@ -375,7 +332,7 @@ func (s *BeeperStreamSender) recordUpdate(roomID id.RoomID, eventID id.EventID, 
 		state.updates = state.updates[len(state.updates)-maxUpdatesPerStream:]
 	}
 	desc = state.descriptor
-	gcm, _ = state.getGCM()
+	gcm = state.gcm
 	subscribers = state.activeSubscribers(s.now())
 	return
 }
@@ -658,12 +615,36 @@ type BeeperStream struct {
 
 // Publish sends an update to all active subscribers.
 func (s *BeeperStream) Publish(ctx context.Context, content map[string]any) error {
-	return s.sender.publish(ctx, s.roomID, s.eventID, content)
+	desc, gcm, update, subscribers, err := s.sender.recordUpdate(s.roomID, s.eventID, content)
+	if err != nil {
+		return err
+	}
+	return s.sender.sendUpdateToSubscribers(ctx, desc, gcm, update, subscribers)
 }
 
 // Finish closes the stream.
-func (s *BeeperStream) Finish(ctx context.Context) error {
-	return s.sender.finish(ctx, s.roomID, s.eventID)
+func (s *BeeperStream) Finish(_ context.Context) error {
+	key := beeperStreamKey{roomID: s.roomID, eventID: s.eventID}
+	s.sender.lock.Lock()
+	defer s.sender.lock.Unlock()
+	state := s.sender.streams[key]
+	if state == nil {
+		return fmt.Errorf("beeper stream %s/%s not found", s.roomID, s.eventID)
+	}
+	state.finished = true
+	state.subscribers = nil
+	if state.descriptor.Encryption != nil && state.descriptor.Encryption.StreamID != "" {
+		delete(s.sender.streamsByStreamID, state.descriptor.Encryption.StreamID)
+	}
+	if state.cleanup != nil {
+		state.cleanup.Stop()
+	}
+	state.cleanup = time.AfterFunc(streamCleanupGrace, func() {
+		s.sender.lock.Lock()
+		defer s.sender.lock.Unlock()
+		delete(s.sender.streams, key)
+	})
+	return nil
 }
 
 // PrepareStream creates a stream descriptor for a Matrix event.
