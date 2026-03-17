@@ -23,7 +23,7 @@ func (br *Bridge) GetOrCreateBeeperStreamSender() *mautrix.BeeperStreamSender {
 func (br *Bridge) GetBeeperStreamTransport(_ context.Context) (mautrix.BeeperStreamTransport, error) {
 	sender := br.GetOrCreateBeeperStreamSender()
 	if sender == nil {
-		return nil, fmt.Errorf("matrix connector doesn't support beeper streams")
+		return nil, fmt.Errorf("bot client is not initialized")
 	}
 	return sender, nil
 }

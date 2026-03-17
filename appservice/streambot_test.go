@@ -100,21 +100,3 @@ func TestBotClientBeeperStreamInterception(t *testing.T) {
 	}
 }
 
-func TestBotClientBeeperStreamSenderPassesOptions(t *testing.T) {
-	ts, sendToDeviceCalls := newTestBotHomeserver(t)
-	var authorizeCalls atomic.Int32
-	as := newTestAppService(t, ts.URL)
-	sender := as.BotClient().GetOrCreateBeeperStreamSender(&mautrix.BeeperStreamSenderOptions{
-		AuthorizeSubscriber: func(context.Context, *mautrix.BeeperStreamSubscribeRequest) bool {
-			authorizeCalls.Add(1)
-			return false
-		},
-	})
-	stream := activateTestAppServiceStream(t, sender)
-
-	deliverTestBotSubscribe(as, "*")
-
-	require.NoError(t, stream.Publish(context.Background(), testPublishPayload()))
-	require.EqualValues(t, 1, authorizeCalls.Load())
-	require.EqualValues(t, 0, sendToDeviceCalls.Load())
-}

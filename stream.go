@@ -641,28 +641,8 @@ func (s *BeeperStream) Publish(ctx context.Context, content map[string]any) erro
 }
 
 // Finish closes the stream.
-func (s *BeeperStream) Finish(_ context.Context) error {
-	key := beeperStreamKey{roomID: s.roomID, eventID: s.eventID}
-	s.sender.lock.Lock()
-	defer s.sender.lock.Unlock()
-	state := s.sender.streams[key]
-	if state == nil {
-		return fmt.Errorf("beeper stream %s/%s not found", s.roomID, s.eventID)
-	}
-	state.finished = true
-	state.subscribers = nil
-	if state.descriptor.Encryption != nil && state.descriptor.Encryption.StreamID != "" {
-		delete(s.sender.streamsByStreamID, state.descriptor.Encryption.StreamID)
-	}
-	if state.cleanup != nil {
-		state.cleanup.Stop()
-	}
-	state.cleanup = time.AfterFunc(streamCleanupGrace, func() {
-		s.sender.lock.Lock()
-		defer s.sender.lock.Unlock()
-		delete(s.sender.streams, key)
-	})
-	return nil
+func (s *BeeperStream) Finish(ctx context.Context) error {
+	return s.sender.Finish(ctx, s.roomID, s.eventID)
 }
 
 // PrepareStream creates a stream descriptor for a Matrix event.
