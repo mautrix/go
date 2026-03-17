@@ -340,3 +340,63 @@ func TestStreamPublishAndFinishWithDirectClient(t *testing.T) {
 		t.Fatal("expected Publish after Finish to fail")
 	}
 }
+
+func TestBeeperStreamHandleAPI(t *testing.T) {
+	var sendPath string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sendPath = r.URL.Path
+		_ = json.NewEncoder(w).Encode(map[string]any{})
+	}))
+	defer ts.Close()
+
+	client, err := NewClient(ts.URL, testStreamBotUserID, "access-token")
+	if err != nil {
+		t.Fatalf("NewClient returned error: %v", err)
+	}
+	client.DeviceID = testStreamBotDeviceID
+	client.StateStore = NewMemoryStateStore()
+
+	publisher := client.NewBeeperStreamPublisher(
+		&BeeperStreamPublisherOptions{AuthorizeSubscriber: func(context.Context, *BeeperStreamSubscribeRequest) bool { return true }},
+		nil,
+	)
+
+	streamDesc, err := publisher.PrepareStream(context.Background(), testStreamRoomID, testStreamType)
+	if err != nil {
+		t.Fatalf("PrepareStream returned error: %v", err)
+	}
+	if streamDesc.Info == nil {
+		t.Fatal("PrepareStream returned nil Info")
+	}
+	if streamDesc.Info.UserID != testStreamBotUserID || streamDesc.Info.DeviceID != testStreamBotDeviceID {
+		t.Fatalf("PrepareStream descriptor has unexpected identity: %+v", streamDesc.Info)
+	}
+
+	stream, err := streamDesc.Activate(context.Background(), testStreamEventID)
+	if err != nil {
+		t.Fatalf("Activate returned error: %v", err)
+	}
+	if stream.RoomID() != testStreamRoomID || stream.EventID() != testStreamEventID {
+		t.Fatalf("unexpected stream identity: room=%s event=%s", stream.RoomID(), stream.EventID())
+	}
+
+	// Subscribe a device so Publish actually sends a to-device event
+	sender := client.GetOrCreateBeeperStreamSender(nil)
+	if !sender.HandleToDeviceEvent(context.Background(), newTestSubscribeEvent(t, nil, testStreamBotUserID, testStreamBotDeviceID)) {
+		t.Fatal("expected subscribe to be consumed")
+	}
+
+	if err = stream.Publish(context.Background(), map[string]any{testStreamDeltaKey: []map[string]any{{"delta": "hi"}}}); err != nil {
+		t.Fatalf("Publish returned error: %v", err)
+	}
+	if !strings.Contains(sendPath, "/sendToDevice/com.beeper.stream.update/") {
+		t.Fatalf("unexpected sendToDevice path %q", sendPath)
+	}
+
+	if err = stream.Finish(context.Background()); err != nil {
+		t.Fatalf("Finish returned error: %v", err)
+	}
+	if err = stream.Publish(context.Background(), map[string]any{"delta": "bye"}); err == nil {
+		t.Fatal("expected Publish after Finish to fail")
+	}
+}

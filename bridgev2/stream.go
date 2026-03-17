@@ -14,17 +14,13 @@ import (
 	"maunium.net/go/mautrix/event"
 )
 
-type beeperStreamPublisherProvider interface {
-	GetOrCreateBeeperStreamPublisher(ctx context.Context, opts *mautrix.BeeperStreamPublisherOptions) (*mautrix.BeeperStreamPublisher, error)
-}
-
 func (login *UserLogin) GetBeeperStreamTransport(ctx context.Context) (mautrix.BeeperStreamTransport, error) {
 	login.beeperStreamLock.Lock()
 	defer login.beeperStreamLock.Unlock()
 	if login.beeperStreamPublisher != nil {
 		return login.beeperStreamPublisher, nil
 	}
-	provider, ok := login.Bridge.Matrix.(beeperStreamPublisherProvider)
+	provider, ok := login.Bridge.Matrix.(MatrixConnectorWithBeeperStream)
 	if !ok {
 		return nil, fmt.Errorf("matrix connector doesn't support beeper streams")
 	}

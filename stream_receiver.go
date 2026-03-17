@@ -122,7 +122,7 @@ func (r *BeeperStreamReceiver) HandleToDeviceEvent(ctx context.Context, evt *eve
 		if content.Algorithm != id.AlgorithmBeeperStreamAESGCM {
 			return false
 		}
-		r.handleEncryptedStreamEvent(ctx, evt)
+		r.handleEncryptedStreamEvent(ctx, evt, content)
 		return true
 	default:
 		return false
@@ -290,27 +290,16 @@ func (r *BeeperStreamReceiver) applyOptions(opts *BeeperStreamReceiverOptions) {
 	}
 }
 
-func (r *BeeperStreamReceiver) handleEncryptedStreamEvent(ctx context.Context, evt *event.Event) {
-	content := evt.Content.AsEncrypted()
-	if content == nil {
-		return
+func (s *beeperStreamSubscription) getDescriptor() *event.BeeperStreamInfo {
+	return s.descriptor
+}
+
+func (r *BeeperStreamReceiver) handleEncryptedStreamEvent(ctx context.Context, evt *event.Event, content *event.EncryptedEventContent) {
+	if content.RoomID == "" || content.EventID == "" {
+		zerolog.Ctx(ctx).Debug().Msg("Encrypted beeper stream event missing route metadata, trying all active subscriptions")
 	}
 	r.lock.Lock()
-	subs := make([]*beeperStreamSubscription, 0, len(r.subscriptions))
-	if content.RoomID != "" && content.EventID != "" {
-		if sub := r.subscriptions[beeperStreamKey{roomID: content.RoomID, eventID: content.EventID}]; sub != nil &&
-			sub.descriptor != nil && sub.descriptor.Encryption != nil {
-			subs = append(subs, sub)
-		}
-	} else {
-		zerolog.Ctx(ctx).Debug().Msg("Encrypted beeper stream event missing route metadata, trying all active subscriptions")
-		for _, sub := range r.subscriptions {
-			if sub.descriptor == nil || sub.descriptor.Encryption == nil {
-				continue
-			}
-			subs = append(subs, sub)
-		}
-	}
+	subs := collectEncryptedEntries(r.subscriptions, content)
 	r.lock.Unlock()
 
 	for _, sub := range subs {

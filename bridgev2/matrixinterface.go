@@ -133,6 +133,13 @@ type MatrixConnectorWithHTTPSettings interface {
 	GetHTTPClientSettings() exhttp.ClientSettings
 }
 
+// MatrixConnectorWithBeeperStream is an optional capability for connectors that support
+// the com.beeper.stream pub/sub protocol.
+type MatrixConnectorWithBeeperStream interface {
+	MatrixConnector
+	GetOrCreateBeeperStreamPublisher(ctx context.Context, opts *mautrix.BeeperStreamPublisherOptions) (*mautrix.BeeperStreamPublisher, error)
+}
+
 type MatrixSendExtra struct {
 	Timestamp    time.Time
 	MessageMeta  *database.Message
