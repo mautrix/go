@@ -37,8 +37,8 @@ type UserLogin struct {
 
 	inPortalCache *exsync.Set[networkid.PortalKey]
 
-	streamGenLock   sync.Mutex
-	streamGenerator *mautrix.StreamGenerator
+	beeperStreamLock      sync.Mutex
+	beeperStreamPublisher *mautrix.BeeperStreamPublisher
 
 	spaceCreateLock sync.Mutex
 	deleteLock      sync.Mutex

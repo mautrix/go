@@ -14,36 +14,34 @@ import (
 	"maunium.net/go/mautrix/event"
 )
 
-// streamGeneratorProvider is the narrow capability interface for matrix connectors that support streams.
-type streamGeneratorProvider interface {
-	GetOrCreateStreamGenerator(ctx context.Context, opts *mautrix.StreamGeneratorOptions) (*mautrix.StreamGenerator, error)
+type beeperStreamPublisherProvider interface {
+	GetOrCreateBeeperStreamPublisher(ctx context.Context, opts *mautrix.BeeperStreamPublisherOptions) (*mautrix.BeeperStreamPublisher, error)
 }
 
-// GetStreamGenerator returns this login's *mautrix.StreamGenerator, initializing it lazily.
-func (login *UserLogin) GetStreamGenerator(ctx context.Context) (*mautrix.StreamGenerator, error) {
-	login.streamGenLock.Lock()
-	defer login.streamGenLock.Unlock()
-	if login.streamGenerator != nil {
-		return login.streamGenerator, nil
+func (login *UserLogin) GetBeeperStreamTransport(ctx context.Context) (mautrix.BeeperStreamTransport, error) {
+	login.beeperStreamLock.Lock()
+	defer login.beeperStreamLock.Unlock()
+	if login.beeperStreamPublisher != nil {
+		return login.beeperStreamPublisher, nil
 	}
-	provider, ok := login.Bridge.Matrix.(streamGeneratorProvider)
+	provider, ok := login.Bridge.Matrix.(beeperStreamPublisherProvider)
 	if !ok {
-		return nil, fmt.Errorf("matrix connector doesn't support streams")
+		return nil, fmt.Errorf("matrix connector doesn't support beeper streams")
 	}
-	gen, err := provider.GetOrCreateStreamGenerator(ctx, &mautrix.StreamGeneratorOptions{
-		AuthorizeSubscriber: login.authorizeStreamSubscriber,
+	publisher, err := provider.GetOrCreateBeeperStreamPublisher(ctx, &mautrix.BeeperStreamPublisherOptions{
+		AuthorizeSubscriber: login.authorizeBeeperStreamSubscriber,
 	})
 	if err != nil {
 		return nil, err
 	}
-	login.streamGenerator = gen
-	return gen, nil
+	login.beeperStreamPublisher = publisher
+	return publisher, nil
 }
 
-func (login *UserLogin) authorizeStreamSubscriber(ctx context.Context, req *mautrix.StreamSubscribeRequest) bool {
+func (login *UserLogin) authorizeBeeperStreamSubscriber(ctx context.Context, req *mautrix.BeeperStreamSubscribeRequest) bool {
 	user, err := login.Bridge.GetUserByMXID(ctx, req.UserID)
 	if err != nil {
-		login.Log.Err(err).Stringer("sender", req.UserID).Msg("Failed to load stream subscriber user")
+		login.Log.Err(err).Stringer("sender", req.UserID).Msg("Failed to load beeper stream subscriber user")
 		return false
 	}
 	if user == nil || !user.Permissions.SendEvents {
@@ -54,7 +52,7 @@ func (login *UserLogin) authorizeStreamSubscriber(ctx context.Context, req *maut
 		login.Log.Err(err).
 			Stringer("sender", req.UserID).
 			Stringer("room_id", req.RoomID).
-			Msg("Failed to load stream subscriber membership")
+			Msg("Failed to load beeper stream subscriber membership")
 		return false
 	}
 	return member != nil && member.Membership == event.MembershipJoin

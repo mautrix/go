@@ -18,13 +18,13 @@ import (
 
 const streamBotDeviceKey database.Key = "stream_device_id"
 
-func (br *Connector) GetOrCreateStreamGenerator(ctx context.Context, opts *mautrix.StreamGeneratorOptions) (*mautrix.StreamGenerator, error) {
+func (br *Connector) GetOrCreateBeeperStreamPublisher(ctx context.Context, opts *mautrix.BeeperStreamPublisherOptions) (*mautrix.BeeperStreamPublisher, error) {
 	client, err := br.getStreamDeviceClient(ctx)
 	if err != nil {
 		return nil, err
 	}
-	helper := client.GetOrCreateStreamHelper(&mautrix.StreamHelperOptions{Logger: br.Log})
-	return helper.NewGenerator(opts), nil
+	sender := client.GetOrCreateBeeperStreamSender(&mautrix.BeeperStreamSenderOptions{Logger: br.Log})
+	return sender.NewPublisher(opts), nil
 }
 
 func (br *Connector) getStreamDeviceClient(ctx context.Context) (*mautrix.Client, error) {

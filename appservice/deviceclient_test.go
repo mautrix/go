@@ -130,18 +130,18 @@ func TestGetOrCreateBotDeviceClientProvisioningAndInterception(t *testing.T) {
 		t.Fatalf("expected cached client to avoid additional login calls, got %d", loginCalls.Load())
 	}
 
-	helper := client.GetOrCreateStreamHelper(nil)
-	gen := helper.NewGenerator(&mautrix.StreamGeneratorOptions{
-		AuthorizeSubscriber: func(context.Context, *mautrix.StreamSubscribeRequest) bool { return true },
+	sender := client.GetOrCreateBeeperStreamSender(nil)
+	publisher := sender.NewPublisher(&mautrix.BeeperStreamPublisherOptions{
+		AuthorizeSubscriber: func(context.Context, *mautrix.BeeperStreamSubscribeRequest) bool { return true },
 	})
-	desc, err := gen.BuildDescriptor(context.Background(), &mautrix.StreamDescriptorRequest{
+	desc, err := publisher.BuildDescriptor(context.Background(), &mautrix.BeeperStreamDescriptorRequest{
 		RoomID: "!room:example.com",
 		Type:   "com.beeper.llm",
 	})
 	if err != nil {
 		t.Fatalf("BuildDescriptor returned error: %v", err)
 	}
-	err = gen.Start(context.Background(), &mautrix.StartStreamRequest{
+	err = publisher.Start(context.Background(), &mautrix.BeeperStartStreamRequest{
 		RoomID:     "!room:example.com",
 		EventID:    "$event",
 		Type:       "com.beeper.llm",
@@ -164,7 +164,7 @@ func TestGetOrCreateBotDeviceClientProvisioningAndInterception(t *testing.T) {
 		}},
 	}}, event.ToDeviceEventType)
 
-	if err = gen.Publish(context.Background(), &mautrix.PublishStreamRequest{
+	if err = publisher.Publish(context.Background(), &mautrix.BeeperPublishStreamRequest{
 		RoomID:  "!room:example.com",
 		EventID: "$event",
 		Content: map[string]any{

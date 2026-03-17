@@ -127,8 +127,10 @@ type Client struct {
 
 	toDeviceInterceptorsLock sync.RWMutex
 	toDeviceInterceptors     []ToDeviceInterceptor
-	streamHelperLock         sync.Mutex
-	streamHelper             *StreamHelper
+	beeperStreamSenderLock   sync.Mutex
+	beeperStreamSender       *BeeperStreamSender
+	beeperStreamReceiverLock sync.Mutex
+	beeperStreamReceiver     *BeeperStreamReceiver
 }
 
 type ClientWellKnown struct {
