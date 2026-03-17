@@ -20,7 +20,6 @@ const (
 	testStreamEventID       id.EventID  = "$event"
 	testStreamType                      = "com.beeper.llm"
 	testStreamBotUserID     id.UserID   = "@bot:example.com"
-	testStreamBotDeviceID   id.DeviceID = "BOTDEVICE"
 	testStreamSubscriberID  id.UserID   = "@alice:example.com"
 	testStreamSubscriberDev id.DeviceID = "SUBDEVICE"
 	testStreamDeltaKey                  = "com.beeper.llm.deltas"
@@ -107,7 +106,6 @@ func newTestStreamWithDesc(t *testing.T, encrypted bool, authorize func(context.
 	}
 	sender := NewBeeperStreamSender(&Client{
 		UserID:     testStreamBotUserID,
-		DeviceID:   testStreamBotDeviceID,
 		StateStore: NewMemoryStateStore(),
 	}, opts)
 	desc, err := sender.PrepareStream(context.Background(), testStreamRoomID, testStreamType)
@@ -342,7 +340,7 @@ func TestHandlePlainSubscribe(t *testing.T) {
 	})
 	startTestStream(t, desc)
 
-	if !sender.HandleToDeviceEvent(context.Background(), newTestSubscribeEvent(t, nil, "", "")) {
+	if !sender.HandleToDeviceEvent(context.Background(), newTestSubscribeEvent(t, nil, testStreamBotUserID, "*")) {
 		t.Fatal("expected plain subscribe to be consumed")
 	}
 
@@ -371,7 +369,7 @@ func TestPendingSubscribeReplay(t *testing.T) {
 				return true
 			})
 
-			if !sender.HandleToDeviceEvent(context.Background(), newTestSubscribeEvent(t, desc.Info, "", "")) {
+			if !sender.HandleToDeviceEvent(context.Background(), newTestSubscribeEvent(t, desc.Info, testStreamBotUserID, "*")) {
 				t.Fatalf("expected %s subscribe to be consumed", tc.name)
 			}
 			if len(sender.pendingSubscribe) != 1 {
@@ -475,7 +473,7 @@ func TestBeeperStreamDescriptorActivateSnapshotsDescriptor(t *testing.T) {
 	if state.descriptor.Encryption.StreamID != original.Encryption.StreamID {
 		t.Fatal("expected stream state to keep original stream_id after descriptor mutation")
 	}
-	if !sender.HandleToDeviceEvent(context.Background(), newTestSubscribeEvent(t, original, "", "")) {
+	if !sender.HandleToDeviceEvent(context.Background(), newTestSubscribeEvent(t, original, testStreamBotUserID, "*")) {
 		t.Fatal("expected encrypted subscribe to be consumed")
 	}
 	if len(state.subscribers) != 1 {
@@ -485,7 +483,7 @@ func TestBeeperStreamDescriptorActivateSnapshotsDescriptor(t *testing.T) {
 
 func TestStreamPublishAndFinish(t *testing.T) {
 	ts, recorder := newSendToDeviceRecorderServer(t)
-	client := newTestStreamClient(t, ts.URL, testStreamBotUserID, testStreamBotDeviceID)
+	client := newTestStreamClient(t, ts.URL, testStreamBotUserID, "")
 
 	sender := client.GetOrCreateBeeperStreamSender(&BeeperStreamSenderOptions{
 		AuthorizeSubscriber: func(context.Context, *BeeperStreamSubscribeRequest) bool { return true },
@@ -497,7 +495,7 @@ func TestStreamPublishAndFinish(t *testing.T) {
 	if streamDesc.Info == nil {
 		t.Fatal("PrepareStream returned nil Info")
 	}
-	if streamDesc.Info.UserID != testStreamBotUserID || streamDesc.Info.DeviceID != testStreamBotDeviceID {
+	if streamDesc.Info.UserID != testStreamBotUserID {
 		t.Fatalf("PrepareStream descriptor has unexpected identity: %+v", streamDesc.Info)
 	}
 
@@ -506,7 +504,7 @@ func TestStreamPublishAndFinish(t *testing.T) {
 		t.Fatalf("Activate returned error: %v", err)
 	}
 
-	if !sender.HandleToDeviceEvent(context.Background(), newTestSubscribeEvent(t, nil, testStreamBotUserID, testStreamBotDeviceID)) {
+	if !sender.HandleToDeviceEvent(context.Background(), newTestSubscribeEvent(t, nil, testStreamBotUserID, "*")) {
 		t.Fatal("expected subscribe to be consumed")
 	}
 

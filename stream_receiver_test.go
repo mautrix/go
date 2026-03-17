@@ -19,7 +19,6 @@ func TestBeeperStreamReceiverHandleTimelineEventSubscribes(t *testing.T) {
 	})
 	desc := &event.BeeperStreamInfo{
 		UserID:   testStreamBotUserID,
-		DeviceID: testStreamBotDeviceID,
 		Type:     testStreamType,
 		ExpiryMS: 60_000,
 	}
@@ -36,7 +35,7 @@ func TestBeeperStreamReceiverHandleTimelineEventSubscribes(t *testing.T) {
 	})
 	defer receiver.StopSubscription(testStreamRoomID, testStreamEventID)
 
-	assertTestStreamSubscribe(t, recorder, testStreamBotUserID, testStreamBotDeviceID)
+	assertTestStreamSubscribe(t, recorder, testStreamBotUserID, "*")
 }
 
 func TestBeeperStreamReceiverEnsureSubscriptionIgnoresCallerCancellation(t *testing.T) {
@@ -49,7 +48,6 @@ func TestBeeperStreamReceiverEnsureSubscriptionIgnoresCallerCancellation(t *test
 	defer receiver.Stop()
 	desc := &event.BeeperStreamInfo{
 		UserID:   testStreamBotUserID,
-		DeviceID: testStreamBotDeviceID,
 		Type:     testStreamType,
 		ExpiryMS: 60_000,
 	}
@@ -58,7 +56,7 @@ func TestBeeperStreamReceiverEnsureSubscriptionIgnoresCallerCancellation(t *test
 	if err := receiver.EnsureSubscription(ctx, testStreamRoomID, testStreamEventID, desc); err != nil {
 		t.Fatalf("EnsureSubscription returned error: %v", err)
 	}
-	assertTestStreamSubscribe(t, recorder, testStreamBotUserID, testStreamBotDeviceID)
+	assertTestStreamSubscribe(t, recorder, testStreamBotUserID, "*")
 }
 
 func TestBeeperStreamReceiverEnsureSubscriptionRejectsUnsupportedEncryption(t *testing.T) {
@@ -67,9 +65,8 @@ func TestBeeperStreamReceiverEnsureSubscriptionRejectsUnsupportedEncryption(t *t
 		DeviceID: testStreamSubscriberDev,
 	}, nil)
 	err := receiver.EnsureSubscription(context.Background(), testStreamRoomID, testStreamEventID, &event.BeeperStreamInfo{
-		UserID:   testStreamBotUserID,
-		DeviceID: testStreamBotDeviceID,
-		Type:     testStreamType,
+		UserID: testStreamBotUserID,
+		Type:   testStreamType,
 		Encryption: &event.BeeperStreamEncryptionInfo{
 			Algorithm: id.AlgorithmMegolmV1,
 			Key:       makeStreamKey(),
@@ -94,9 +91,8 @@ func TestBeeperStreamReceiverHandleTimelineEventInvalidDescriptorNoSubscription(
 			MsgType: event.MsgText,
 			Body:    "Pondering...",
 			BeeperStream: &event.BeeperStreamInfo{
-				UserID:   testStreamBotUserID,
-				DeviceID: testStreamBotDeviceID,
-				Type:     testStreamType,
+				UserID: testStreamBotUserID,
+				Type:   testStreamType,
 				Encryption: &event.BeeperStreamEncryptionInfo{
 					Algorithm: id.AlgorithmMegolmV1,
 					Key:       makeStreamKey(),
@@ -209,9 +205,8 @@ func newTestReceiverUpdateEvent(t *testing.T, receiver *BeeperStreamReceiver, en
 	sub := &beeperStreamSubscription{
 		key: beeperStreamKey{roomID: testStreamRoomID, eventID: testStreamEventID},
 		descriptor: &event.BeeperStreamInfo{
-			UserID:   testStreamBotUserID,
-			DeviceID: testStreamBotDeviceID,
-			Type:     testStreamType,
+			UserID: testStreamBotUserID,
+			Type:   testStreamType,
 		},
 		cancel: func() {},
 	}
