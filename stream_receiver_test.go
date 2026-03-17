@@ -2,6 +2,7 @@ package mautrix
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -159,10 +160,15 @@ func newTestReceiverUpdateEvent(t *testing.T, receiver *BeeperStreamReceiver, en
 		t.Fatalf("newStreamUpdateContent returned error: %v", err)
 	}
 	if !encrypted {
+		// Round-trip through JSON to populate VeryRaw, which ParseRaw depends on.
+		var wireContent event.Content
+		if err = json.Unmarshal(mustMarshalJSON(t, content), &wireContent); err != nil {
+			t.Fatalf("failed to unmarshal wire content: %v", err)
+		}
 		return &event.Event{
 			Sender:  testStreamBotUserID,
 			Type:    event.ToDeviceBeeperStreamUpdate,
-			Content: *content,
+			Content: wireContent,
 		}
 	}
 

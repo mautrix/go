@@ -43,15 +43,6 @@ type BeeperStreamSenderOptions struct {
 	AuthorizeSubscriber func(context.Context, *BeeperStreamSubscribeRequest) bool
 }
 
-// BeeperStreamTransport is an abstract entry point for managing the stream lifecycle.
-// *BeeperStreamSender implements this interface directly.
-type BeeperStreamTransport interface {
-	BuildDescriptor(ctx context.Context, roomID id.RoomID, streamType string) (*event.BeeperStreamInfo, error)
-	Start(ctx context.Context, roomID id.RoomID, eventID id.EventID, descriptor *event.BeeperStreamInfo) error
-	Publish(ctx context.Context, roomID id.RoomID, eventID id.EventID, content map[string]any) error
-	Finish(ctx context.Context, roomID id.RoomID, eventID id.EventID) error
-}
-
 type BeeperStreamSubscribeRequest struct {
 	RoomID   id.RoomID
 	EventID  id.EventID
@@ -256,9 +247,6 @@ func (s *BeeperStreamSender) handleEncryptedEvent(ctx context.Context, evt *even
 }
 
 func (s *BeeperStreamSender) tryEncryptedSubscribeCandidates(ctx context.Context, evt *event.Event, content *event.EncryptedEventContent) bool {
-	if content.StreamID == "" {
-		return false
-	}
 	s.lock.RLock()
 	state := s.streamsByStreamID[content.StreamID]
 	s.lock.RUnlock()
@@ -482,11 +470,12 @@ func (s *BeeperStreamSender) queuePendingSubscribe(ctx context.Context, evt *eve
 func (s *BeeperStreamSender) replayPendingSubscribes(ctx context.Context) {
 	now := s.now()
 	s.pendingLock.Lock()
-	pending := append([]pendingSubscribeEvent(nil), s.pendingSubscribe...)
-	s.pendingLock.Unlock()
-	if len(pending) == 0 {
+	if len(s.pendingSubscribe) == 0 {
+		s.pendingLock.Unlock()
 		return
 	}
+	pending := append([]pendingSubscribeEvent(nil), s.pendingSubscribe...)
+	s.pendingLock.Unlock()
 	consumed := make(map[*event.Event]struct{})
 	for _, candidate := range pending {
 		if candidate.evt == nil || now.Sub(candidate.receivedAt) > pendingSubscribeTTL {
@@ -658,7 +647,7 @@ type BeeperStreamDescriptor struct {
 	activated bool
 }
 
-// activateStream registers a new stream state. Called by Activate and BeeperStreamTransport.Start.
+// activateStream registers a new stream state. Called by Activate and Start.
 func (s *BeeperStreamSender) activateStream(ctx context.Context, roomID id.RoomID, eventID id.EventID, info *event.BeeperStreamInfo) error {
 	descriptor := cloneBeeperStreamInfo(info)
 	if err := validateBeeperStreamDescriptor(descriptor); err != nil {
@@ -801,12 +790,6 @@ func (s *BeeperStreamSender) Start(ctx context.Context, roomID id.RoomID, eventI
 	return s.activateStream(ctx, roomID, eventID, descriptor)
 }
 
-// NewTransport returns the sender itself as a BeeperStreamTransport.
-// *BeeperStreamSender implements BeeperStreamTransport directly; no wrapper is allocated.
-func (s *BeeperStreamSender) NewTransport() BeeperStreamTransport {
-	return s
-}
-
 func EncryptBeeperStreamEvent(logicalType event.Type, content *event.Content, streamID string, base64Key string) (*event.EncryptedEventContent, error) {
 	gcm, err := newStreamGCM(base64Key)
 	if err != nil {
@@ -895,7 +878,7 @@ func encryptStreamPayload(logicalType event.Type, payload *event.Content, stream
 		Algorithm:        id.AlgorithmBeeperStreamAESGCM,
 		IV:               base64.RawStdEncoding.EncodeToString(iv),
 		StreamID:         streamID,
-		StreamCiphertext: []byte(base64.RawStdEncoding.EncodeToString(ciphertext)),
+		StreamCiphertext: base64.RawStdEncoding.AppendEncode(nil, ciphertext),
 	}, nil
 }
 
@@ -904,7 +887,7 @@ func decryptStreamPayload(content *event.EncryptedEventContent, gcm cipher.AEAD)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode beeper stream IV: %w", err)
 	}
-	ciphertext, err := base64.RawStdEncoding.DecodeString(string(content.StreamCiphertext))
+	ciphertext, err := base64.RawStdEncoding.AppendDecode(nil, content.StreamCiphertext)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode beeper stream ciphertext: %w", err)
 	}
@@ -929,11 +912,7 @@ func newStreamUpdateContent(roomID id.RoomID, eventID id.EventID, content map[st
 		return nil, fmt.Errorf("beeper stream payload may not override event_id")
 	}
 	raw := maps.Clone(content)
-	return &event.Content{
-		Parsed: &event.BeeperStreamUpdateEventContent{
-			RoomID:  roomID,
-			EventID: eventID,
-		},
-		Raw: raw,
-	}, nil
+	raw["room_id"] = roomID
+	raw["event_id"] = eventID
+	return &event.Content{Raw: raw}, nil
 }

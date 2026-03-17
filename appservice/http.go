@@ -240,8 +240,11 @@ func (as *AppService) interceptToDeviceEvent(ctx context.Context, evt *event.Eve
 		return false
 	}
 	as.toDeviceInterceptorsLock.RLock()
-	interceptors := make([]mautrix.ToDeviceInterceptor, len(as.toDeviceInterceptors))
-	copy(interceptors, as.toDeviceInterceptors)
+	var interceptors []mautrix.ToDeviceInterceptor
+	if len(as.toDeviceInterceptors) > 0 {
+		interceptors = make([]mautrix.ToDeviceInterceptor, len(as.toDeviceInterceptors))
+		copy(interceptors, as.toDeviceInterceptors)
+	}
 	as.toDeviceInterceptorsLock.RUnlock()
 	if mautrix.RunToDeviceInterceptors(ctx, interceptors, evt) {
 		return true
