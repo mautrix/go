@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -83,7 +84,7 @@ func TestGetOrCreateBotDeviceClientProvisioningAndInterception(t *testing.T) {
 				"device_id":    "NEWDEVICE",
 				"access_token": "device-access-token",
 			})
-		case r.Method == http.MethodPut && r.URL.Path[:31] == "/_matrix/client/v3/sendToDevice/":
+		case r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/_matrix/client/v3/sendToDevice/"):
 			sendToDeviceCalls.Add(1)
 			_ = json.NewEncoder(w).Encode(map[string]any{})
 		default:
