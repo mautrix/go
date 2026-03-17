@@ -19,6 +19,7 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
+// BeeperStreamUpdate contains a single received Beeper stream update.
 type BeeperStreamUpdate struct {
 	Sender  id.UserID
 	RoomID  id.RoomID
@@ -26,6 +27,7 @@ type BeeperStreamUpdate struct {
 	Content *event.Content
 }
 
+// BeeperStreamReceiverOptions configures a [BeeperStreamReceiver].
 type BeeperStreamReceiverOptions struct {
 	Logger               *zerolog.Logger
 	DefaultExpiry        time.Duration
@@ -33,6 +35,7 @@ type BeeperStreamReceiverOptions struct {
 	OnUpdate             func(context.Context, *BeeperStreamUpdate) error
 }
 
+// BeeperStreamReceiver manages Beeper stream subscriptions and update callbacks for a client.
 type BeeperStreamReceiver struct {
 	client *Client
 	log    zerolog.Logger
@@ -54,6 +57,7 @@ type beeperStreamSubscription struct {
 	cancel     context.CancelFunc
 }
 
+// NewBeeperStreamReceiver creates a new [BeeperStreamReceiver] bound to the given client.
 func NewBeeperStreamReceiver(client *Client, opts *BeeperStreamReceiverOptions) *BeeperStreamReceiver {
 	var optsLogger *zerolog.Logger
 	if opts != nil {
@@ -125,6 +129,9 @@ func (r *BeeperStreamReceiver) HandleTimelineEvent(ctx context.Context, evt *eve
 
 func (r *BeeperStreamReceiver) HandleToDeviceEvent(ctx context.Context, evt *event.Event) bool {
 	if r == nil || evt == nil {
+		return false
+	}
+	if err := prepareToDeviceEvent(evt); err != nil {
 		return false
 	}
 	switch evt.Type {
@@ -269,7 +276,7 @@ func (r *BeeperStreamReceiver) sendStreamSubscribe(ctx context.Context, key beep
 		if descriptor.Encryption.Algorithm != id.AlgorithmBeeperStreamAESGCM {
 			return fmt.Errorf("unsupported beeper stream encryption algorithm %q", descriptor.Encryption.Algorithm)
 		}
-		encrypted, err := EncryptBeeperStreamEvent(eventType, subscribeContent, descriptor.Encryption.StreamID, descriptor.Encryption.Key)
+		encrypted, err := encryptBeeperStreamEvent(eventType, subscribeContent, descriptor.Encryption.StreamID, descriptor.Encryption.Key)
 		if err != nil {
 			return err
 		}
@@ -366,7 +373,7 @@ func (r *BeeperStreamReceiver) handleEncryptedStreamEvent(ctx context.Context, e
 	if sub == nil {
 		return
 	}
-	logicalType, parsedContent, err := DecryptBeeperStreamEvent(content, sub.descriptor.Encryption.Key)
+	logicalType, parsedContent, err := decryptBeeperStreamEvent(content, sub.descriptor.Encryption.Key)
 	if err != nil {
 		r.log.Debug().Err(err).
 			Str("stream_id", content.StreamID.String()).

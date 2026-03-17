@@ -191,6 +191,14 @@ func encryptStreamPayload(logicalType event.Type, payload *event.Content, stream
 	}, nil
 }
 
+func encryptBeeperStreamEvent(logicalType event.Type, content *event.Content, streamID id.StreamID, base64Key string) (*event.EncryptedEventContent, error) {
+	gcm, err := newStreamGCM(base64Key)
+	if err != nil {
+		return nil, err
+	}
+	return encryptStreamPayload(logicalType, content, streamID, gcm)
+}
+
 func decryptStreamPayload(content *event.EncryptedEventContent, gcm cipher.AEAD) (*beeperStreamEncryptedPayload, error) {
 	iv, err := base64.RawStdEncoding.DecodeString(content.IV)
 	if err != nil {
@@ -211,6 +219,32 @@ func decryptStreamPayload(content *event.EncryptedEventContent, gcm cipher.AEAD)
 		return nil, err
 	}
 	return &payload, nil
+}
+
+func decryptBeeperStreamEvent(content *event.EncryptedEventContent, base64Key string) (event.Type, *event.Content, error) {
+	gcm, err := newStreamGCM(base64Key)
+	if err != nil {
+		return event.Type{}, nil, err
+	}
+	payload, err := decryptStreamPayload(content, gcm)
+	if err != nil {
+		return event.Type{}, nil, err
+	}
+	logicalType := event.Type{Type: payload.Type, Class: event.ToDeviceEventType}
+	switch payload.Type {
+	case event.ToDeviceBeeperStreamSubscribe.Type:
+		logicalType = event.ToDeviceBeeperStreamSubscribe
+	case event.ToDeviceBeeperStreamUpdate.Type:
+		logicalType = event.ToDeviceBeeperStreamUpdate
+	}
+	var parsed event.Content
+	if err = json.Unmarshal(payload.Content, &parsed); err != nil {
+		return event.Type{}, nil, err
+	}
+	if err = parsed.ParseRaw(logicalType); err != nil {
+		return event.Type{}, nil, err
+	}
+	return logicalType, &parsed, nil
 }
 
 func newStreamUpdateContent(roomID id.RoomID, eventID id.EventID, content map[string]any) (*event.Content, error) {

@@ -208,6 +208,9 @@ func (as *AppService) handleEvents(ctx context.Context, evts []*event.Event, def
 				Str("event_type", evt.Type.Type).
 				Str("event_type_class", evt.Type.Class.Name()).
 				Msg("Failed to parse content of event")
+			if evt.Type.Class == event.ToDeviceEventType {
+				continue
+			}
 		}
 
 		if evt.Type.IsState() {
@@ -255,7 +258,7 @@ func (as *AppService) interceptToDeviceEvent(ctx context.Context, evt *event.Eve
 		addClient(as.existingClient(evt.ToUserID))
 	}
 	if evt.ToUserID == "" || evt.ToUserID == as.BotMXID() {
-		addClient(as.BotClient())
+		addClient(as.existingBotClient())
 	}
 	for _, client := range clients {
 		if client.HandleToDeviceEvent(ctx, evt) {

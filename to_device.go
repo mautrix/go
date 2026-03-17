@@ -14,12 +14,13 @@ import (
 	"maunium.net/go/mautrix/event"
 )
 
+// ToDeviceInterceptor handles a to-device event and returns true if it consumed the event.
 type ToDeviceInterceptor func(context.Context, *event.Event) bool
 
 func interceptToDeviceEvent(ctx context.Context, interceptors []ToDeviceInterceptor, evt *event.Event) (handled, keep bool) {
 	err := prepareToDeviceEvent(evt)
 	if err != nil {
-		if errors.Is(err, event.ErrUnsupportedContentType) || errors.Is(err, event.ErrContentAlreadyParsed) {
+		if errors.Is(err, event.ErrUnsupportedContentType) {
 			return false, true
 		}
 		return false, false

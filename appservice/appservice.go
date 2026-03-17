@@ -421,6 +421,11 @@ func (as *AppService) existingClient(userID id.UserID) *mautrix.Client {
 	return as.clients[userID]
 }
 
+// existingBotClient returns the cached bot [mautrix.Client], if it has already been created.
+func (as *AppService) existingBotClient() *mautrix.Client {
+	return as.existingClient(as.BotMXID())
+}
+
 // BotClient returns the [mautrix.Client] instance for the appservice's sender_localpart user.
 //
 // Like with the generic Client method, [AppService.BotIntent] should be preferred over this.

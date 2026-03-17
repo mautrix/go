@@ -41,9 +41,11 @@ func newSendToDeviceRecorderServer(t *testing.T) (*httptest.Server, *sendToDevic
 	}
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, http.MethodPut, r.Method)
+		body, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
 		recorder.requests <- capturedSendToDeviceRequest{
 			path: r.URL.Path,
-			body: must(io.ReadAll(r.Body)),
+			body: body,
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{})
 	}))
@@ -75,7 +77,8 @@ func (r *sendToDeviceRecorder) rawContent(t *testing.T, req capturedSendToDevice
 
 func newTestStreamClient(t *testing.T, homeserverURL string, userID id.UserID, deviceID id.DeviceID) *Client {
 	t.Helper()
-	client := must(NewClient(homeserverURL, userID, "access-token"))
+	client, err := NewClient(homeserverURL, userID, "access-token")
+	require.NoError(t, err)
 	client.DeviceID = deviceID
 	client.StateStore = NewMemoryStateStore()
 	return client
@@ -100,8 +103,10 @@ func newTestSubscribeEvent(t *testing.T, desc *event.BeeperStreamInfo, toUserID 
 	t.Helper()
 	content := newTestSubscribeContent()
 	if desc != nil && desc.Encryption != nil {
-		gcm := must(newStreamGCM(desc.Encryption.Key))
-		encrypted := must(encryptStreamPayload(event.ToDeviceBeeperStreamSubscribe, content, desc.Encryption.StreamID, gcm))
+		gcm, err := newStreamGCM(desc.Encryption.Key)
+		require.NoError(t, err)
+		encrypted, err := encryptStreamPayload(event.ToDeviceBeeperStreamSubscribe, content, desc.Encryption.StreamID, gcm)
+		require.NoError(t, err)
 		return &event.Event{
 			Sender:  testStreamSubscriberID,
 			Type:    event.ToDeviceEncrypted,
@@ -140,13 +145,6 @@ func assertTestStreamUpdate(t *testing.T, recorder *sendToDeviceRecorder, userID
 	assertStreamUpdateMap(t, decodeJSONMap(t, recorder.rawContent(t, req, userID, deviceID)))
 }
 
-func must[T any](val T, err error) T {
-	if err != nil {
-		panic(err)
-	}
-	return val
-}
-
 func TestStreamPublishAndFinish(t *testing.T) {
 	ts, recorder := newSendToDeviceRecorderServer(t)
 	client := newTestStreamClient(t, ts.URL, testStreamBotUserID, "")
@@ -154,7 +152,8 @@ func TestStreamPublishAndFinish(t *testing.T) {
 	sender := client.GetOrCreateBeeperStreamSender(&BeeperStreamSenderOptions{
 		AuthorizeSubscriber: func(context.Context, *BeeperStreamSubscribeRequest) bool { return true },
 	})
-	info := must(sender.BuildDescriptor(context.Background(), testStreamRoomID, testStreamType))
+	info, err := sender.BuildDescriptor(context.Background(), testStreamRoomID, testStreamType)
+	require.NoError(t, err)
 	require.NotNil(t, info)
 	require.Equal(t, testStreamBotUserID, info.UserID)
 

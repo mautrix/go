@@ -21,73 +21,83 @@ func TestBeeperStreamReceiverUpdate(t *testing.T) {
 		{name: "encrypted", encrypted: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			ts, _ := newSendToDeviceRecorderServer(t)
 			received := make(chan *BeeperStreamUpdate, 1)
-			receiver := NewBeeperStreamReceiver(nil, &BeeperStreamReceiverOptions{
+			client := newTestStreamClient(t, ts.URL, testStreamSubscriberID, "RECEIVER")
+			receiver := client.GetOrCreateBeeperStreamReceiver(&BeeperStreamReceiverOptions{
 				OnUpdate: func(_ context.Context, update *BeeperStreamUpdate) error {
 					received <- update
 					return nil
 				},
 			})
-			evt := newTestReceiverUpdateEvent(t, receiver, tc.encrypted, "")
+			t.Cleanup(receiver.Stop)
 
-			require.True(t, ShouldInterceptToDeviceEvent(context.Background(), receiver.HandleToDeviceEvent, evt))
+			descriptor := newTestReceiverDescriptor(tc.encrypted)
+			require.NoError(t, receiver.EnsureSubscription(context.Background(), testStreamRoomID, testStreamEventID, descriptor))
+
+			evt := newTestReceiverUpdateEvent(t, descriptor, "")
+			require.True(t, client.HandleToDeviceEvent(context.Background(), evt))
 
 			select {
 			case update := <-received:
+				updateContent, err := json.Marshal(update.Content)
+				require.NoError(t, err)
 				require.Equal(t, testStreamBotUserID, update.Sender)
 				require.Equal(t, testStreamRoomID, update.RoomID)
 				require.Equal(t, testStreamEventID, update.EventID)
-				assertStreamUpdateMap(t, decodeJSONMap(t, must(json.Marshal(update.Content))))
+				assertStreamUpdateMap(t, decodeJSONMap(t, updateContent))
 			case <-time.After(time.Second):
 				t.Fatal("timed out waiting for update callback")
 			}
 		})
 	}
+}
 
-	// encrypted update with wrong stream_id is ignored
+func TestBeeperStreamReceiverIgnoresWrongEncryptedStreamID(t *testing.T) {
+	ts, _ := newSendToDeviceRecorderServer(t)
 	var called bool
-	receiver := NewBeeperStreamReceiver(nil, &BeeperStreamReceiverOptions{
+	client := newTestStreamClient(t, ts.URL, testStreamSubscriberID, "RECEIVER")
+	receiver := client.GetOrCreateBeeperStreamReceiver(&BeeperStreamReceiverOptions{
 		OnUpdate: func(_ context.Context, _ *BeeperStreamUpdate) error {
 			called = true
 			return nil
 		},
 	})
-	evt := newTestReceiverUpdateEvent(t, receiver, true, makeStreamID())
-	require.True(t, receiver.HandleToDeviceEvent(context.Background(), evt))
+	t.Cleanup(receiver.Stop)
+
+	descriptor := newTestReceiverDescriptor(true)
+	require.NoError(t, receiver.EnsureSubscription(context.Background(), testStreamRoomID, testStreamEventID, descriptor))
+
+	evt := newTestReceiverUpdateEvent(t, descriptor, makeStreamID())
+	require.True(t, client.HandleToDeviceEvent(context.Background(), evt))
 	require.False(t, called)
 }
 
-func newTestReceiverUpdateEvent(t *testing.T, receiver *BeeperStreamReceiver, encrypted bool, eventStreamID string) *event.Event {
-	t.Helper()
-	sub := &beeperStreamSubscription{
-		key: beeperStreamKey{roomID: testStreamRoomID, eventID: testStreamEventID},
-		descriptor: &event.BeeperStreamInfo{
-			UserID: testStreamBotUserID,
-			Type:   testStreamType,
-		},
-		cancel: func() {},
+func newTestReceiverDescriptor(encrypted bool) *event.BeeperStreamInfo {
+	descriptor := &event.BeeperStreamInfo{
+		UserID: testStreamBotUserID,
+		Type:   testStreamType,
 	}
-	encKey := ""
 	if encrypted {
-		encKey = makeStreamKey()
-		streamID := makeStreamID()
-		sub.descriptor.Encryption = &event.BeeperStreamEncryptionInfo{
+		descriptor.Encryption = &event.BeeperStreamEncryptionInfo{
 			Algorithm: id.AlgorithmBeeperStreamAESGCM,
-			Key:       encKey,
-			StreamID:  streamID,
-		}
-		receiver.subscriptionsByStreamID[streamID] = sub
-		if eventStreamID == "" {
-			eventStreamID = streamID
+			Key:       makeStreamKey(),
+			StreamID:  makeStreamID(),
 		}
 	}
-	receiver.subscriptions[sub.key] = sub
+	return descriptor
+}
 
-	content := must(newStreamUpdateContent(testStreamRoomID, testStreamEventID, newTestPublishContent("hello")))
-	if !encrypted {
-		// Round-trip through JSON to populate VeryRaw, which ParseRaw depends on.
+func newTestReceiverUpdateEvent(t *testing.T, descriptor *event.BeeperStreamInfo, eventStreamID id.StreamID) *event.Event {
+	t.Helper()
+
+	content, err := newStreamUpdateContent(testStreamRoomID, testStreamEventID, newTestPublishContent("hello"))
+	require.NoError(t, err)
+	if descriptor.Encryption == nil {
 		var wireContent event.Content
-		require.NoError(t, json.Unmarshal(must(json.Marshal(content)), &wireContent))
+		data, err := json.Marshal(content)
+		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal(data, &wireContent))
 		return &event.Event{
 			Sender:  testStreamBotUserID,
 			Type:    event.ToDeviceBeeperStreamUpdate,
@@ -95,7 +105,11 @@ func newTestReceiverUpdateEvent(t *testing.T, receiver *BeeperStreamReceiver, en
 		}
 	}
 
-	encryptedContent := must(EncryptBeeperStreamEvent(event.ToDeviceBeeperStreamUpdate, content, eventStreamID, encKey))
+	if eventStreamID == "" {
+		eventStreamID = descriptor.Encryption.StreamID
+	}
+	encryptedContent, err := encryptBeeperStreamEvent(event.ToDeviceBeeperStreamUpdate, content, eventStreamID, descriptor.Encryption.Key)
+	require.NoError(t, err)
 	return &event.Event{
 		Sender:  testStreamBotUserID,
 		Type:    event.ToDeviceEncrypted,

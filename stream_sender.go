@@ -129,6 +129,9 @@ func (s *BeeperStreamSender) HandleToDeviceEvent(ctx context.Context, evt *event
 	if s == nil || evt == nil {
 		return false
 	}
+	if err := prepareToDeviceEvent(evt); err != nil {
+		return false
+	}
 	switch evt.Type {
 	case event.ToDeviceBeeperStreamSubscribe:
 		return s.handleSubscribeEvent(ctx, evt)
