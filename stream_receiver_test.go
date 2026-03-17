@@ -20,12 +20,12 @@ func newTestReceiverOptions() *BeeperStreamReceiverOptions {
 	return &BeeperStreamReceiverOptions{DefaultExpiry: time.Minute, MinimumRenewInterval: time.Hour}
 }
 
-func TestBeeperStreamReceiverHandleTimelineEventSubscribes(t *testing.T) {
+func TestBeeperStreamReceiverHandleTimelineEvent(t *testing.T) {
 	ts, recorder := newSendToDeviceRecorderServer(t)
 	client := newTestStreamClient(t, ts.URL, testStreamSubscriberID, testStreamSubscriberDev)
-	receiver := client.GetOrCreateBeeperStreamReceiver(newTestReceiverOptions())
-	desc := newTestBeeperStreamInfo()
 
+	// valid descriptor triggers subscribe
+	receiver := client.GetOrCreateBeeperStreamReceiver(newTestReceiverOptions())
 	receiver.HandleTimelineEvent(context.Background(), &event.Event{
 		ID:     testStreamEventID,
 		RoomID: testStreamRoomID,
@@ -33,48 +33,16 @@ func TestBeeperStreamReceiverHandleTimelineEventSubscribes(t *testing.T) {
 		Content: event.Content{Parsed: &event.MessageEventContent{
 			MsgType:      event.MsgText,
 			Body:         "Pondering...",
-			BeeperStream: desc,
+			BeeperStream: newTestBeeperStreamInfo(),
 		}},
 	})
 	defer receiver.StopSubscription(testStreamRoomID, testStreamEventID)
-
 	assertTestStreamSubscribe(t, recorder, testStreamBotUserID, "*")
-}
 
-func TestBeeperStreamReceiverEnsureSubscriptionIgnoresCallerCancellation(t *testing.T) {
-	ts, recorder := newSendToDeviceRecorderServer(t)
-	client := newTestStreamClient(t, ts.URL, testStreamSubscriberID, testStreamSubscriberDev)
-	receiver := client.GetOrCreateBeeperStreamReceiver(newTestReceiverOptions())
-	defer receiver.Stop()
-	desc := newTestBeeperStreamInfo()
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	require.NoError(t, receiver.EnsureSubscription(ctx, testStreamRoomID, testStreamEventID, desc))
-	assertTestStreamSubscribe(t, recorder, testStreamBotUserID, "*")
-}
-
-func TestBeeperStreamReceiverEnsureSubscriptionRejectsUnsupportedEncryption(t *testing.T) {
-	receiver := NewBeeperStreamReceiver(&Client{
-		UserID:   testStreamSubscriberID,
-		DeviceID: testStreamSubscriberDev,
-	}, nil)
-	require.Error(t, receiver.EnsureSubscription(context.Background(), testStreamRoomID, testStreamEventID, &event.BeeperStreamInfo{
-		UserID: testStreamBotUserID,
-		Type:   testStreamType,
-		Encryption: &event.BeeperStreamEncryptionInfo{
-			Algorithm: id.AlgorithmMegolmV1,
-			Key:       makeStreamKey(),
-			StreamID:  makeStreamID(),
-		},
-	}))
-}
-
-func TestBeeperStreamReceiverHandleTimelineEventInvalidDescriptorNoSubscription(t *testing.T) {
-	ts, recorder := newSendToDeviceRecorderServer(t)
-	client := newTestStreamClient(t, ts.URL, testStreamSubscriberID, testStreamSubscriberDev)
-	receiver := client.GetOrCreateBeeperStreamReceiver(nil)
-	defer receiver.Stop()
-	receiver.HandleTimelineEvent(context.Background(), &event.Event{
+	// unsupported encryption algorithm: no subscribe, no subscription created
+	receiver2 := NewBeeperStreamReceiver(client, newTestReceiverOptions())
+	defer receiver2.Stop()
+	receiver2.HandleTimelineEvent(context.Background(), &event.Event{
 		ID:     testStreamEventID,
 		RoomID: testStreamRoomID,
 		Type:   event.EventMessage,
@@ -92,12 +60,37 @@ func TestBeeperStreamReceiverHandleTimelineEventInvalidDescriptorNoSubscription(
 			},
 		}},
 	})
-	require.NotContains(t, receiver.subscriptions, beeperStreamKey{roomID: testStreamRoomID, eventID: testStreamEventID})
+	require.NotContains(t, receiver2.subscriptions, beeperStreamKey{roomID: testStreamRoomID, eventID: testStreamEventID})
 	select {
 	case req := <-recorder.requests:
 		t.Fatalf("unexpected subscribe request: %s", req.path)
 	case <-time.After(200 * time.Millisecond):
 	}
+}
+
+func TestBeeperStreamReceiverEnsureSubscription(t *testing.T) {
+	ts, recorder := newSendToDeviceRecorderServer(t)
+	client := newTestStreamClient(t, ts.URL, testStreamSubscriberID, testStreamSubscriberDev)
+
+	// cancelled caller context doesn't prevent subscription
+	receiver := client.GetOrCreateBeeperStreamReceiver(newTestReceiverOptions())
+	defer receiver.Stop()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	require.NoError(t, receiver.EnsureSubscription(ctx, testStreamRoomID, testStreamEventID, newTestBeeperStreamInfo()))
+	assertTestStreamSubscribe(t, recorder, testStreamBotUserID, "*")
+
+	// unsupported encryption algorithm rejected
+	receiver2 := NewBeeperStreamReceiver(&Client{UserID: testStreamSubscriberID, DeviceID: testStreamSubscriberDev}, nil)
+	require.Error(t, receiver2.EnsureSubscription(context.Background(), testStreamRoomID, testStreamEventID, &event.BeeperStreamInfo{
+		UserID: testStreamBotUserID,
+		Type:   testStreamType,
+		Encryption: &event.BeeperStreamEncryptionInfo{
+			Algorithm: id.AlgorithmMegolmV1,
+			Key:       makeStreamKey(),
+			StreamID:  makeStreamID(),
+		},
+	}))
 }
 
 func TestBeeperStreamReceiverStopsOnFinalEdit(t *testing.T) {
@@ -129,7 +122,7 @@ func TestBeeperStreamReceiverStopsOnFinalEdit(t *testing.T) {
 	require.Error(t, ctx.Err(), "expected subscription cancel to be called")
 }
 
-func TestBeeperStreamReceiverUpdateCallback(t *testing.T) {
+func TestBeeperStreamReceiverUpdate(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
 		encrypted bool
@@ -160,18 +153,16 @@ func TestBeeperStreamReceiverUpdateCallback(t *testing.T) {
 			}
 		})
 	}
-}
 
-func TestBeeperStreamReceiverEncryptedUpdateIgnoresWrongRoute(t *testing.T) {
+	// encrypted update with wrong stream_id is ignored
 	var called bool
 	receiver := NewBeeperStreamReceiver(nil, &BeeperStreamReceiverOptions{
-		OnUpdate: func(_ context.Context, update *BeeperStreamUpdate) error {
+		OnUpdate: func(_ context.Context, _ *BeeperStreamUpdate) error {
 			called = true
 			return nil
 		},
 	})
 	evt := newTestReceiverUpdateEvent(t, receiver, true, makeStreamID())
-
 	require.True(t, receiver.HandleToDeviceEvent(context.Background(), evt))
 	require.False(t, called)
 }

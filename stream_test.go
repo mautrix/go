@@ -189,34 +189,30 @@ func must[T any](val T, err error) T {
 	return val
 }
 
-func TestNewStreamUpdateContentMarshal(t *testing.T) {
+func TestStreamUpdateContent(t *testing.T) {
+	// with payload produces correct flattened structure
 	content := must(newStreamUpdateContent(testStreamRoomID, testStreamEventID, newTestPublishContent("hello")))
 	assertStreamUpdateMap(t, decodeJSONMap(t, must(json.Marshal(content))))
-}
 
-func TestNewStreamUpdateContentRejectsReservedKeys(t *testing.T) {
-	for _, key := range []string{"room_id", "event_id"} {
-		t.Run(key, func(t *testing.T) {
-			content := newTestPublishContent("hello")
-			content[key] = "override"
-			_, err := newStreamUpdateContent(testStreamRoomID, testStreamEventID, content)
-			require.Error(t, err, "expected %s override to be rejected", key)
-		})
-	}
-}
-
-func TestNewStreamUpdateContentAllowsNilPayload(t *testing.T) {
-	content := must(newStreamUpdateContent(testStreamRoomID, testStreamEventID, nil))
+	// nil payload produces only room_id and event_id
+	content = must(newStreamUpdateContent(testStreamRoomID, testStreamEventID, nil))
 	parsed := decodeJSONMap(t, must(json.Marshal(content)))
 	require.Equal(t, string(testStreamRoomID), parsed["room_id"])
 	require.Equal(t, string(testStreamEventID), parsed["event_id"])
-	require.Len(t, parsed, 2, "expected only room_id and event_id in nil payload update")
+	require.Len(t, parsed, 2)
+
+	// reserved keys rejected
+	for _, key := range []string{"room_id", "event_id"} {
+		bad := newTestPublishContent("hello")
+		bad[key] = "override"
+		_, err := newStreamUpdateContent(testStreamRoomID, testStreamEventID, bad)
+		require.Error(t, err)
+	}
 }
 
-func TestEncryptDecryptStreamPayloadRoundTrip(t *testing.T) {
-	key := makeStreamKey()
+func TestStreamPayloadCrypto(t *testing.T) {
 	content := must(newStreamUpdateContent(testStreamRoomID, testStreamEventID, newTestPublishContent("hello")))
-	gcm := must(newStreamGCM(key))
+	gcm := must(newStreamGCM(makeStreamKey()))
 	streamID := makeStreamID()
 	encrypted := must(encryptStreamPayload(event.ToDeviceBeeperStreamUpdate, content, streamID, gcm))
 	require.Equal(t, id.AlgorithmBeeperStreamAESGCM, encrypted.Algorithm)
@@ -227,10 +223,7 @@ func TestEncryptDecryptStreamPayloadRoundTrip(t *testing.T) {
 	decrypted := must(decryptStreamPayload(encrypted, gcm))
 	require.Equal(t, event.ToDeviceBeeperStreamUpdate.Type, decrypted.Type)
 	assertStreamUpdateMap(t, decodeJSONMap(t, decrypted.Content))
-}
 
-func TestDecryptStreamPayloadRejectsInvalidIVLength(t *testing.T) {
-	gcm := must(newStreamGCM(makeStreamKey()))
 	_, err := decryptStreamPayload(&event.EncryptedEventContent{
 		IV:               base64.RawStdEncoding.EncodeToString([]byte{1, 2, 3}),
 		StreamCiphertext: base64.RawStdEncoding.AppendEncode(nil, []byte("payload")),
@@ -293,26 +286,25 @@ func TestHandleEncryptedSubscribeWithoutStreamIDDropped(t *testing.T) {
 	require.Empty(t, sender.pendingSubscribe)
 }
 
-func TestBeeperStreamDescriptorActivateRejectsInvalidEncryptedDescriptor(t *testing.T) {
+func TestBeeperStreamDescriptorActivate(t *testing.T) {
+	// missing stream_id rejected
 	_, desc := newEncryptedTestDesc(t)
 	desc.Info.Encryption.StreamID = ""
 	_, err := desc.Activate(context.Background(), testStreamEventID)
 	require.Error(t, err)
-}
 
-func TestBeeperStreamDescriptorActivateOneShot(t *testing.T) {
-	_, desc := newEncryptedTestDesc(t)
+	// one-shot: second activate on same descriptor fails
+	_, desc = newEncryptedTestDesc(t)
 	must(desc.Activate(context.Background(), testStreamEventID))
-	_, err := desc.Activate(context.Background(), "$second")
+	_, err = desc.Activate(context.Background(), "$second")
 	require.Error(t, err)
-}
 
-func TestBeeperStreamDescriptorActivateRejectsStreamIDCollision(t *testing.T) {
+	// stream_id collision rejected, no state left behind
 	sender, descA := newEncryptedTestDesc(t)
 	must(descA.Activate(context.Background(), testStreamEventID))
 	descB := must(sender.PrepareStream(context.Background(), testStreamRoomID, testStreamType))
 	descB.Info.Encryption.StreamID = descA.Info.Encryption.StreamID
-	_, err := descB.Activate(context.Background(), "$second")
+	_, err = descB.Activate(context.Background(), "$second")
 	require.Error(t, err)
 	require.NotContains(t, sender.streams, beeperStreamKey{roomID: testStreamRoomID, eventID: "$second"})
 }
