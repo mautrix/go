@@ -61,6 +61,9 @@ type DefaultSyncer struct {
 	ParseErrorHandler func(evt *event.Event, err error) bool
 	// FilterJSON is used when the client starts syncing and doesn't get an existing filter ID from SyncStore's LoadFilterID.
 	FilterJSON *Filter
+	// InterceptToDeviceEvent is called before dispatching a to-device event.
+	// If it returns true, the event is consumed and won't be forwarded to listeners.
+	InterceptToDeviceEvent ToDeviceInterceptor
 }
 
 var _ Syncer = (*DefaultSyncer)(nil)
@@ -152,6 +155,9 @@ func (s *DefaultSyncer) processSyncEvent(ctx context.Context, roomID id.RoomID, 
 		if err != nil && !s.ParseErrorHandler(evt, err) {
 			return
 		}
+	}
+	if source == event.SourceToDevice && s.InterceptToDeviceEvent != nil && s.InterceptToDeviceEvent(ctx, evt) {
+		return
 	}
 
 	evt.Mautrix.EventSource = source

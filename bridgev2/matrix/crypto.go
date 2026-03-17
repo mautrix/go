@@ -130,7 +130,7 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 
 	helper.client.Syncer = &cryptoSyncer{
 		OlmMachine:          helper.mach,
-		filterToDeviceEvent: helper.bridge.handleStreamToDeviceEvent,
+		filterToDeviceEvent: helper.client.HandleToDeviceEvent,
 	}
 	helper.client.Store = helper.store
 
@@ -353,7 +353,6 @@ func (helper *CryptoHelper) verifyKeysAreOnServer(ctx context.Context) bool {
 func (helper *CryptoHelper) Start() {
 	if helper.bridge.Config.Encryption.Appservice {
 		helper.log.Debug().Msg("End-to-bridge encryption is in appservice mode, registering event listeners and not starting syncer")
-		helper.bridge.AS.Registration.EphemeralEvents = true
 		helper.addAppserviceCryptoListeners()
 		return
 	}
@@ -372,7 +371,7 @@ func (helper *CryptoHelper) Start() {
 }
 
 func (helper *CryptoHelper) addAppserviceCryptoListeners() {
-	helper.bridge.EventProcessor.On(event.ToDeviceEncrypted, helper.handleAppserviceToDeviceEncrypted)
+	helper.bridge.EventProcessor.On(event.ToDeviceEncrypted, helper.mach.HandleToDeviceEvent)
 	helper.bridge.EventProcessor.On(event.ToDeviceRoomKeyRequest, helper.mach.HandleToDeviceEvent)
 	helper.bridge.EventProcessor.On(event.ToDeviceRoomKeyWithheld, helper.mach.HandleToDeviceEvent)
 	helper.bridge.EventProcessor.On(event.ToDeviceBeeperRoomKeyAck, helper.mach.HandleToDeviceEvent)
@@ -386,20 +385,6 @@ func (helper *CryptoHelper) addAppserviceCryptoListeners() {
 	helper.bridge.EventProcessor.OnOTK(helper.mach.HandleOTKCounts)
 	helper.bridge.EventProcessor.OnDeviceList(helper.mach.HandleDeviceLists)
 	helper.log.Debug().Msg("Added listeners for encryption data coming from appservice transactions")
-}
-
-func (helper *CryptoHelper) handleAppserviceToDeviceEncrypted(ctx context.Context, evt *event.Event) {
-	if evt.Content.Parsed == nil {
-		_ = evt.Content.ParseRaw(evt.Type)
-	}
-	if helper.handleStreamEvent(ctx, evt) {
-		return
-	}
-	helper.mach.HandleToDeviceEvent(ctx, evt)
-}
-
-func (helper *CryptoHelper) handleStreamEvent(ctx context.Context, evt *event.Event) bool {
-	return helper.bridge.handleStreamToDeviceEvent(ctx, evt)
 }
 
 func (helper *CryptoHelper) Stop() {

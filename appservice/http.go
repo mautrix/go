@@ -215,6 +215,9 @@ func (as *AppService) handleEvents(ctx context.Context, evts []*event.Event, def
 		}
 		var ch chan *event.Event
 		if evt.Type.Class == event.ToDeviceEventType {
+			if as.interceptToDeviceEvent(ctx, evt) {
+				continue
+			}
 			ch = as.ToDeviceEvents
 		} else {
 			ch = as.Events
@@ -230,6 +233,35 @@ func (as *AppService) handleEvents(ctx context.Context, evts []*event.Event, def
 			ch <- evt
 		}
 	}
+}
+
+func (as *AppService) interceptToDeviceEvent(ctx context.Context, evt *event.Event) bool {
+	if evt == nil {
+		return false
+	}
+	as.toDeviceInterceptorsLock.RLock()
+	interceptors := append([]mautrix.ToDeviceInterceptor(nil), as.toDeviceInterceptors...)
+	as.toDeviceInterceptorsLock.RUnlock()
+	for _, interceptor := range interceptors {
+		if interceptor != nil && interceptor(ctx, evt) {
+			return true
+		}
+	}
+	var clients []*mautrix.Client
+	if evt.ToUserID != "" {
+		if client := as.ExistingClient(evt.ToUserID); client != nil {
+			clients = append(clients, client)
+		}
+	}
+	if as.botClient != nil && (evt.ToUserID == "" || evt.ToUserID == as.BotMXID()) {
+		clients = append(clients, as.botClient)
+	}
+	for _, client := range clients {
+		if client != nil && client.HandleToDeviceEvent(ctx, evt) {
+			return true
+		}
+	}
+	return false
 }
 
 // GetRoom handles a /rooms GET call from the homeserver.

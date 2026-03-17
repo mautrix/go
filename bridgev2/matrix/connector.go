@@ -42,7 +42,6 @@ import (
 	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/mediaproxy"
 	"maunium.net/go/mautrix/sqlstatestore"
-	"maunium.net/go/mautrix/streamhelper"
 )
 
 type Crypto interface {
@@ -88,7 +87,7 @@ type Connector struct {
 	IgnoreUnsupportedServer bool
 
 	EventProcessor   *appservice.EventProcessor
-	streamHelper     *streamhelper.Helper
+	streamHelper     *mautrix.StreamHelper
 	streamHelperLock sync.Mutex
 	streamClient     *mautrix.Client
 
@@ -162,8 +161,6 @@ func (br *Connector) Init(bridge *bridgev2.Bridge) {
 	br.EventProcessor.On(event.BeeperAcceptMessageRequest, br.handleRoomEvent)
 	br.EventProcessor.On(event.EphemeralEventReceipt, br.handleEphemeralEvent)
 	br.EventProcessor.On(event.EphemeralEventTyping, br.handleEphemeralEvent)
-	br.EventProcessor.On(event.ToDeviceBeeperStreamSubscribe, br.handleToDeviceEvent)
-	br.EventProcessor.On(event.ToDeviceEncrypted, br.handleToDeviceEvent)
 	br.Bot = br.AS.BotIntent()
 	br.Crypto = NewCryptoHelper(br)
 	br.Bridge.Commands.(*commands.Processor).AddHandlers(

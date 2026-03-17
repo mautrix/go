@@ -12,12 +12,10 @@ import (
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2/database"
-	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
-	"maunium.net/go/mautrix/streamhelper"
 )
 
-func (br *Connector) GetOrCreateStreamHelper(ctx context.Context) (*streamhelper.Helper, error) {
+func (br *Connector) GetOrCreateStreamHelper(ctx context.Context) (*mautrix.StreamHelper, error) {
 	br.streamHelperLock.Lock()
 	defer br.streamHelperLock.Unlock()
 	if br.streamHelper != nil {
@@ -27,17 +25,10 @@ func (br *Connector) GetOrCreateStreamHelper(ctx context.Context) (*streamhelper
 	if err != nil {
 		return nil, err
 	}
-	br.streamHelper = streamhelper.New(client, &streamhelper.HelperOptions{
+	br.streamHelper = br.AS.GetOrCreateStreamHelper(client, &mautrix.StreamHelperOptions{
 		Logger: br.Log,
 	})
 	return br.streamHelper, nil
-}
-
-func (br *Connector) handleStreamToDeviceEvent(ctx context.Context, evt *event.Event) bool {
-	br.streamHelperLock.Lock()
-	helper := br.streamHelper
-	br.streamHelperLock.Unlock()
-	return helper != nil && helper.HandleToDeviceEvent(ctx, evt)
 }
 
 func (br *Connector) getStreamClient(ctx context.Context) (*mautrix.Client, error) {

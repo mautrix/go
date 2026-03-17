@@ -72,15 +72,6 @@ func (br *Connector) handleEphemeralEvent(ctx context.Context, evt *event.Event)
 	br.Bridge.QueueMatrixEvent(ctx, evt)
 }
 
-func (br *Connector) handleToDeviceEvent(ctx context.Context, evt *event.Event) {
-	if br.handleStreamToDeviceEvent(ctx, evt) {
-		return
-	}
-	if evt.Type == event.ToDeviceEncrypted && br.Config != nil && br.Config.Encryption.Appservice && br.Crypto != nil {
-		return
-	}
-}
-
 func (br *Connector) handleEncryptedEvent(ctx context.Context, evt *event.Event) {
 	if br.shouldIgnoreEvent(evt) {
 		return

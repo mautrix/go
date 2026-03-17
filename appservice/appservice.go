@@ -177,6 +177,9 @@ type AppService struct {
 	intents     map[id.UserID]*IntentAPI
 	intentsLock sync.RWMutex
 
+	toDeviceInterceptors     []mautrix.ToDeviceInterceptor
+	toDeviceInterceptorsLock sync.RWMutex
+
 	ws                    *websocket.Conn
 	StopWebsocket         func(error)
 	websocketHandlers     map[string]WebsocketHandler
@@ -412,6 +415,33 @@ func (as *AppService) Client(userID id.UserID) *mautrix.Client {
 		return as.makeClient(userID)
 	}
 	return client
+}
+
+// ExistingClient returns a cached [mautrix.Client] for the given user ID, if one exists.
+func (as *AppService) ExistingClient(userID id.UserID) *mautrix.Client {
+	as.clientsLock.RLock()
+	defer as.clientsLock.RUnlock()
+	return as.clients[userID]
+}
+
+func (as *AppService) AddToDeviceInterceptor(interceptor mautrix.ToDeviceInterceptor) {
+	if interceptor == nil {
+		return
+	}
+	as.toDeviceInterceptorsLock.Lock()
+	defer as.toDeviceInterceptorsLock.Unlock()
+	as.toDeviceInterceptors = append(as.toDeviceInterceptors, interceptor)
+}
+
+// GetOrCreateStreamHelper creates or reuses the client's stream helper and routes
+// appservice to-device events through it.
+func (as *AppService) GetOrCreateStreamHelper(client *mautrix.Client, opts *mautrix.StreamHelperOptions) *mautrix.StreamHelper {
+	if client == nil {
+		return nil
+	}
+	helper := client.GetOrCreateStreamHelper(opts)
+	as.AddToDeviceInterceptor(helper.HandleToDeviceEvent)
+	return helper
 }
 
 // BotClient returns the [mautrix.Client] instance for the appservice's sender_localpart user.

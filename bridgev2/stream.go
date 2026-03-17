@@ -11,8 +11,8 @@ import (
 	"fmt"
 	"sync"
 
+	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
-	"maunium.net/go/mautrix/streamhelper"
 )
 
 type BeeperStreamTransport interface {
@@ -22,21 +22,21 @@ type BeeperStreamTransport interface {
 	Finish(ctx context.Context, req *FinishStreamRequest) error
 }
 
-type StreamDescriptorRequest = streamhelper.StreamDescriptorRequest
-type StartStreamRequest = streamhelper.StartRequest
-type PublishStreamRequest = streamhelper.PublishRequest
-type FinishStreamRequest = streamhelper.FinishRequest
+type StreamDescriptorRequest = mautrix.StreamDescriptorRequest
+type StartStreamRequest = mautrix.StartStreamRequest
+type PublishStreamRequest = mautrix.PublishStreamRequest
+type FinishStreamRequest = mautrix.FinishStreamRequest
 
 type matrixConnectorWithStreamHelper interface {
 	MatrixConnector
-	GetOrCreateStreamHelper(ctx context.Context) (*streamhelper.Helper, error)
+	GetOrCreateStreamHelper(ctx context.Context) (*mautrix.StreamHelper, error)
 }
 
 type userLoginBeeperStream struct {
 	login *UserLogin
 
 	generatorLock sync.Mutex
-	generator     *streamhelper.Generator
+	generator     *mautrix.StreamGenerator
 }
 
 func newUserLoginBeeperStream(login *UserLogin) BeeperStreamTransport {
@@ -75,7 +75,7 @@ func (st *userLoginBeeperStream) Finish(ctx context.Context, req *FinishStreamRe
 	return gen.Finish(ctx, req)
 }
 
-func (st *userLoginBeeperStream) getGenerator(ctx context.Context) (*streamhelper.Generator, error) {
+func (st *userLoginBeeperStream) getGenerator(ctx context.Context) (*mautrix.StreamGenerator, error) {
 	st.generatorLock.Lock()
 	defer st.generatorLock.Unlock()
 	if st.generator != nil {
@@ -89,13 +89,13 @@ func (st *userLoginBeeperStream) getGenerator(ctx context.Context) (*streamhelpe
 	if err != nil {
 		return nil, err
 	}
-	st.generator = helper.NewGenerator(&streamhelper.GeneratorOptions{
+	st.generator = helper.NewGenerator(&mautrix.StreamGeneratorOptions{
 		AuthorizeSubscriber: st.authorizeSubscriber,
 	})
 	return st.generator, nil
 }
 
-func (st *userLoginBeeperStream) authorizeSubscriber(ctx context.Context, req *streamhelper.SubscribeRequest) bool {
+func (st *userLoginBeeperStream) authorizeSubscriber(ctx context.Context, req *mautrix.StreamSubscribeRequest) bool {
 	user, err := st.login.Bridge.GetUserByMXID(ctx, req.UserID)
 	if err != nil {
 		st.login.Log.Err(err).Stringer("sender", req.UserID).Msg("Failed to load stream subscriber user")

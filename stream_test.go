@@ -1,17 +1,16 @@
-package streamhelper
+package mautrix
 
 import (
 	"context"
 	"encoding/json"
 	"testing"
 
-	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
 func TestNewStreamUpdateContentMarshal(t *testing.T) {
-	content, err := newStreamUpdateContent(&PublishRequest{
+	content, err := newStreamUpdateContent(&PublishStreamRequest{
 		RoomID:  "!room:example.com",
 		EventID: "$event",
 		Content: map[string]any{
@@ -52,7 +51,7 @@ func TestNewStreamUpdateContentMarshal(t *testing.T) {
 }
 
 func TestNewStreamUpdateContentRejectsReservedKeys(t *testing.T) {
-	_, err := newStreamUpdateContent(&PublishRequest{
+	_, err := newStreamUpdateContent(&PublishStreamRequest{
 		RoomID:  "!room:example.com",
 		EventID: "$event",
 		Content: map[string]any{
@@ -66,7 +65,7 @@ func TestNewStreamUpdateContentRejectsReservedKeys(t *testing.T) {
 
 func TestEncryptDecryptStreamPayloadRoundTrip(t *testing.T) {
 	key := makeStreamKey()
-	content, err := newStreamUpdateContent(&PublishRequest{
+	content, err := newStreamUpdateContent(&PublishStreamRequest{
 		RoomID:  "!room:example.com",
 		EventID: "$event",
 		Content: map[string]any{
@@ -125,14 +124,14 @@ func TestEncryptDecryptStreamPayloadRoundTrip(t *testing.T) {
 }
 
 func TestHandlePlainSubscribe(t *testing.T) {
-	helper := New(&mautrix.Client{
+	helper := NewStreamHelper(&Client{
 		UserID:     "@bot:example.com",
 		DeviceID:   "BOTDEVICE",
-		StateStore: mautrix.NewMemoryStateStore(),
+		StateStore: NewMemoryStateStore(),
 	}, nil)
-	var gotAuth *SubscribeRequest
-	gen := helper.NewGenerator(&GeneratorOptions{
-		AuthorizeSubscriber: func(_ context.Context, req *SubscribeRequest) bool {
+	var gotAuth *StreamSubscribeRequest
+	gen := helper.NewGenerator(&StreamGeneratorOptions{
+		AuthorizeSubscriber: func(_ context.Context, req *StreamSubscribeRequest) bool {
 			gotAuth = req
 			return req.UserID == "@alice:example.com"
 		},
@@ -144,7 +143,7 @@ func TestHandlePlainSubscribe(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildDescriptor returned error: %v", err)
 	}
-	err = gen.Start(context.Background(), &StartRequest{
+	err = gen.Start(context.Background(), &StartStreamRequest{
 		RoomID:     "!room:example.com",
 		EventID:    "$event",
 		Type:       "com.beeper.llm",
@@ -183,13 +182,13 @@ func TestHandlePlainSubscribe(t *testing.T) {
 }
 
 func TestPendingPlainSubscribeReplay(t *testing.T) {
-	helper := New(&mautrix.Client{
+	helper := NewStreamHelper(&Client{
 		UserID:     "@bot:example.com",
 		DeviceID:   "BOTDEVICE",
-		StateStore: mautrix.NewMemoryStateStore(),
+		StateStore: NewMemoryStateStore(),
 	}, nil)
-	gen := helper.NewGenerator(&GeneratorOptions{
-		AuthorizeSubscriber: func(context.Context, *SubscribeRequest) bool { return true },
+	gen := helper.NewGenerator(&StreamGeneratorOptions{
+		AuthorizeSubscriber: func(context.Context, *StreamSubscribeRequest) bool { return true },
 	})
 	evt := &event.Event{
 		Sender: "@alice:example.com",
@@ -215,7 +214,7 @@ func TestPendingPlainSubscribeReplay(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildDescriptor returned error: %v", err)
 	}
-	err = gen.Start(context.Background(), &StartRequest{
+	err = gen.Start(context.Background(), &StartStreamRequest{
 		RoomID:     "!room:example.com",
 		EventID:    "$event",
 		Type:       "com.beeper.llm",
@@ -237,15 +236,15 @@ func TestPendingPlainSubscribeReplay(t *testing.T) {
 }
 
 func TestPendingEncryptedSubscribeReplay(t *testing.T) {
-	helper := New(&mautrix.Client{
+	helper := NewStreamHelper(&Client{
 		UserID:     "@bot:example.com",
 		DeviceID:   "BOTDEVICE",
-		StateStore: mautrix.NewMemoryStateStore(),
-	}, &HelperOptions{
+		StateStore: NewMemoryStateStore(),
+	}, &StreamHelperOptions{
 		IsEncrypted: func(context.Context, id.RoomID) (bool, error) { return true, nil },
 	})
-	gen := helper.NewGenerator(&GeneratorOptions{
-		AuthorizeSubscriber: func(context.Context, *SubscribeRequest) bool { return true },
+	gen := helper.NewGenerator(&StreamGeneratorOptions{
+		AuthorizeSubscriber: func(context.Context, *StreamSubscribeRequest) bool { return true },
 	})
 	desc, err := gen.BuildDescriptor(context.Background(), &StreamDescriptorRequest{
 		RoomID: "!room:example.com",
@@ -280,7 +279,7 @@ func TestPendingEncryptedSubscribeReplay(t *testing.T) {
 		t.Fatalf("expected 1 pending subscribe, got %d", len(helper.pendingSubscribe))
 	}
 
-	err = gen.Start(context.Background(), &StartRequest{
+	err = gen.Start(context.Background(), &StartStreamRequest{
 		RoomID:     "!room:example.com",
 		EventID:    "$event",
 		Type:       "com.beeper.llm",

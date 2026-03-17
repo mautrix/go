@@ -17,6 +17,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -123,6 +124,11 @@ type Client struct {
 	SetAppServiceDeviceID bool
 
 	syncingID uint32 // Identifies the current Sync. Only one Sync can be active at any given time.
+
+	toDeviceInterceptorsLock sync.RWMutex
+	toDeviceInterceptors     []ToDeviceInterceptor
+	streamHelperLock         sync.Mutex
+	streamHelper             *StreamHelper
 }
 
 type ClientWellKnown struct {
@@ -2894,7 +2900,7 @@ func NewClient(homeserverURL string, userID id.UserID, accessToken string) (*Cli
 	if err != nil {
 		return nil, err
 	}
-	return &Client{
+	cli := &Client{
 		AccessToken:   accessToken,
 		UserAgent:     DefaultUserAgent,
 		HomeserverURL: hsURL,
@@ -2906,5 +2912,9 @@ func NewClient(homeserverURL string, userID id.UserID, accessToken string) (*Cli
 		// The client will work with this storer: it just won't remember across restarts.
 		// In practice, a database backend should be used.
 		Store: NewMemorySyncStore(),
-	}, nil
+	}
+	if syncer, ok := cli.Syncer.(*DefaultSyncer); ok {
+		syncer.InterceptToDeviceEvent = cli.HandleToDeviceEvent
+	}
+	return cli, nil
 }
