@@ -535,25 +535,7 @@ func (syncer *cryptoSyncer) ProcessResponse(ctx context.Context, resp *mautrix.R
 			done <- struct{}{}
 		}()
 		syncer.Log.Trace().Str("since", since).Msg("Starting sync response handling")
-		if syncer.filterToDeviceEvent != nil && len(resp.ToDevice.Events) > 0 {
-			filtered := resp.ToDevice.Events[:0]
-			for _, evt := range resp.ToDevice.Events {
-				if evt == nil {
-					continue
-				}
-				evt.Type.Class = event.ToDeviceEventType
-				evt.Mautrix.EventSource = event.SourceToDevice
-				evt.Mautrix.ReceivedAt = time.Now()
-				if syncer.filterToDeviceEvent(ctx, evt) {
-					continue
-				}
-				// Reset Parsed so ProcessSyncResponse can parse the event normally.
-				// filterToDeviceEvent may have called ParseRaw as a side effect.
-				evt.Content.Parsed = nil
-				filtered = append(filtered, evt)
-			}
-			resp.ToDevice.Events = filtered
-		}
+		resp.ToDevice.Events = mautrix.FilterSyncToDeviceEvents(ctx, resp.ToDevice.Events, syncer.filterToDeviceEvent)
 		syncer.ProcessSyncResponse(ctx, resp, since)
 		syncer.Log.Trace().Str("since", since).Msg("Successfully handled sync response")
 	}()

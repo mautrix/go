@@ -239,16 +239,6 @@ func (as *AppService) interceptToDeviceEvent(ctx context.Context, evt *event.Eve
 	if evt == nil {
 		return false
 	}
-	as.toDeviceInterceptorsLock.RLock()
-	var interceptors []mautrix.ToDeviceInterceptor
-	if len(as.toDeviceInterceptors) > 0 {
-		interceptors = make([]mautrix.ToDeviceInterceptor, len(as.toDeviceInterceptors))
-		copy(interceptors, as.toDeviceInterceptors)
-	}
-	as.toDeviceInterceptorsLock.RUnlock()
-	if mautrix.RunToDeviceInterceptors(ctx, interceptors, evt) {
-		return true
-	}
 	var clients []*mautrix.Client
 	if evt.ToUserID != "" {
 		if client := as.ExistingClient(evt.ToUserID); client != nil {

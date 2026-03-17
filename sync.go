@@ -156,7 +156,7 @@ func (s *DefaultSyncer) processSyncEvent(ctx context.Context, roomID id.RoomID, 
 			return
 		}
 	}
-	if source == event.SourceToDevice && s.InterceptToDeviceEvent != nil && s.InterceptToDeviceEvent(ctx, evt) {
+	if source == event.SourceToDevice && ShouldInterceptToDeviceEvent(ctx, s.InterceptToDeviceEvent, evt) {
 		return
 	}
 

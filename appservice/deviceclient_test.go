@@ -193,18 +193,19 @@ func TestGetOrCreateBeeperStreamSenderPassesOptions(t *testing.T) {
 	ts, loginCalls, sendToDeviceCalls := newTestBotDeviceHomeserver(t)
 	var authorizeCalls atomic.Int32
 	as := newTestAppService(t, ts.URL)
-	sender, err := as.GetOrCreateBeeperStreamSender(context.Background(), BotDeviceClientOptions{
+	client, err := as.GetOrCreateBotDeviceClient(context.Background(), BotDeviceClientOptions{
 		Purpose:                  "stream",
 		InitialDeviceDisplayName: "Stream Bot",
-	}, &mautrix.BeeperStreamSenderOptions{
+	})
+	if err != nil {
+		t.Fatalf("GetOrCreateBotDeviceClient returned error: %v", err)
+	}
+	sender := client.GetOrCreateBeeperStreamSender(&mautrix.BeeperStreamSenderOptions{
 		AuthorizeSubscriber: func(context.Context, *mautrix.BeeperStreamSubscribeRequest) bool {
 			authorizeCalls.Add(1)
 			return false
 		},
 	})
-	if err != nil {
-		t.Fatalf("GetOrCreateBeeperStreamSender returned error: %v", err)
-	}
 	if loginCalls.Load() != 1 {
 		t.Fatalf("expected one login call, got %d", loginCalls.Load())
 	}

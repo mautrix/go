@@ -8,6 +8,7 @@ package mautrix
 
 import (
 	"context"
+	"time"
 
 	"maunium.net/go/mautrix/event"
 )
@@ -17,11 +18,42 @@ type ToDeviceInterceptor func(context.Context, *event.Event) bool
 // RunToDeviceInterceptors calls each interceptor in order and returns true if any interceptor handled the event.
 func RunToDeviceInterceptors(ctx context.Context, interceptors []ToDeviceInterceptor, evt *event.Event) bool {
 	for _, interceptor := range interceptors {
-		if interceptor != nil && interceptor(ctx, evt) {
+		if ShouldInterceptToDeviceEvent(ctx, interceptor, evt) {
 			return true
 		}
 	}
 	return false
+}
+
+// ShouldInterceptToDeviceEvent returns true when interceptor handles the event.
+func ShouldInterceptToDeviceEvent(ctx context.Context, interceptor ToDeviceInterceptor, evt *event.Event) bool {
+	return interceptor != nil && evt != nil && interceptor(ctx, evt)
+}
+
+// FilterSyncToDeviceEvents applies interceptor handling for to-device /sync payloads.
+//
+// It sets the same source metadata that normal sync dispatch would set before invoking
+// the interceptor, and keeps only unconsumed events for downstream handling.
+func FilterSyncToDeviceEvents(ctx context.Context, events []*event.Event, interceptor ToDeviceInterceptor) []*event.Event {
+	if len(events) == 0 || interceptor == nil {
+		return events
+	}
+	filtered := events[:0]
+	for _, evt := range events {
+		if evt == nil {
+			continue
+		}
+		evt.Type.Class = event.ToDeviceEventType
+		evt.Mautrix.EventSource = event.SourceToDevice
+		evt.Mautrix.ReceivedAt = time.Now()
+		if ShouldInterceptToDeviceEvent(ctx, interceptor, evt) {
+			continue
+		}
+		// Reset Parsed so sync dispatch can parse the event normally.
+		evt.Content.Parsed = nil
+		filtered = append(filtered, evt)
+	}
+	return filtered
 }
 
 func (cli *Client) AddToDeviceInterceptor(interceptor ToDeviceInterceptor) {

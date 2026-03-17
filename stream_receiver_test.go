@@ -61,6 +61,60 @@ func TestBeeperStreamReceiverEnsureSubscriptionIgnoresCallerCancellation(t *test
 	assertTestStreamSubscribe(t, recorder, testStreamBotUserID, testStreamBotDeviceID)
 }
 
+func TestBeeperStreamReceiverEnsureSubscriptionRejectsUnsupportedEncryption(t *testing.T) {
+	receiver := NewBeeperStreamReceiver(&Client{
+		UserID:   testStreamSubscriberID,
+		DeviceID: testStreamSubscriberDev,
+	}, nil)
+	err := receiver.EnsureSubscription(context.Background(), testStreamRoomID, testStreamEventID, &event.BeeperStreamInfo{
+		UserID:   testStreamBotUserID,
+		DeviceID: testStreamBotDeviceID,
+		Type:     testStreamType,
+		Encryption: &event.BeeperStreamEncryptionInfo{
+			Algorithm: id.AlgorithmMegolmV1,
+			Key:       makeStreamKey(),
+			StreamID:  makeStreamID(),
+		},
+	})
+	if err == nil {
+		t.Fatal("expected EnsureSubscription to reject unsupported encryption algorithm")
+	}
+}
+
+func TestBeeperStreamReceiverHandleTimelineEventInvalidDescriptorNoSubscription(t *testing.T) {
+	ts, recorder := newSendToDeviceRecorderServer(t)
+	client := newTestStreamClient(t, ts.URL, testStreamSubscriberID, testStreamSubscriberDev)
+	receiver := client.GetOrCreateBeeperStreamReceiver(nil)
+	defer receiver.Stop()
+	receiver.HandleTimelineEvent(context.Background(), &event.Event{
+		ID:     testStreamEventID,
+		RoomID: testStreamRoomID,
+		Type:   event.EventMessage,
+		Content: event.Content{Parsed: &event.MessageEventContent{
+			MsgType: event.MsgText,
+			Body:    "Pondering...",
+			BeeperStream: &event.BeeperStreamInfo{
+				UserID:   testStreamBotUserID,
+				DeviceID: testStreamBotDeviceID,
+				Type:     testStreamType,
+				Encryption: &event.BeeperStreamEncryptionInfo{
+					Algorithm: id.AlgorithmMegolmV1,
+					Key:       makeStreamKey(),
+					StreamID:  makeStreamID(),
+				},
+			},
+		}},
+	})
+	if _, ok := receiver.subscriptions[beeperStreamKey{roomID: testStreamRoomID, eventID: testStreamEventID}]; ok {
+		t.Fatal("expected invalid descriptor to not create subscription")
+	}
+	select {
+	case req := <-recorder.requests:
+		t.Fatalf("unexpected subscribe request: %s", req.path)
+	case <-time.After(200 * time.Millisecond):
+	}
+}
+
 func TestBeeperStreamReceiverStopsOnFinalEdit(t *testing.T) {
 	receiver := NewBeeperStreamReceiver(&Client{
 		UserID:   testStreamSubscriberID,

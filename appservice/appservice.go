@@ -184,9 +184,6 @@ type AppService struct {
 	botDeviceClientLocks      map[string]*sync.Mutex
 	botDeviceClientLocksLock  sync.Mutex
 
-	toDeviceInterceptors     []mautrix.ToDeviceInterceptor
-	toDeviceInterceptorsLock sync.RWMutex
-
 	ws                    *websocket.Conn
 	StopWebsocket         func(error)
 	websocketHandlers     map[string]WebsocketHandler
@@ -429,15 +426,6 @@ func (as *AppService) ExistingClient(userID id.UserID) *mautrix.Client {
 	as.clientsLock.RLock()
 	defer as.clientsLock.RUnlock()
 	return as.clients[userID]
-}
-
-func (as *AppService) AddToDeviceInterceptor(interceptor mautrix.ToDeviceInterceptor) {
-	if interceptor == nil {
-		return
-	}
-	as.toDeviceInterceptorsLock.Lock()
-	defer as.toDeviceInterceptorsLock.Unlock()
-	as.toDeviceInterceptors = append(as.toDeviceInterceptors, interceptor)
 }
 
 // BotClient returns the [mautrix.Client] instance for the appservice's sender_localpart user.
