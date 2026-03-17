@@ -214,10 +214,7 @@ func (r *BeeperStreamReceiver) Stop() {
 func (r *BeeperStreamReceiver) runSubscriptionLoop(ctx context.Context, sub *beeperStreamSubscription) {
 	defer r.wg.Done()
 	expiry := ResolveBeeperStreamSubscribeExpiry(sub.descriptor, r.defaultExpiry)
-	renewInterval := expiry / 2
-	if renewInterval < r.minimumRenewInterval {
-		renewInterval = r.minimumRenewInterval
-	}
+	renewInterval := max(expiry/2, r.minimumRenewInterval)
 	if err := r.sendStreamSubscribe(ctx, sub.key, sub.descriptor, expiry); err != nil && !errors.Is(err, context.Canceled) {
 		r.log.Warn().Err(err).
 			Stringer("room_id", sub.key.roomID).
