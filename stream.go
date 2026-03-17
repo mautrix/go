@@ -355,6 +355,7 @@ func (h *StreamHelper) handleEncryptedEvent(ctx context.Context, evt *event.Even
 		Str("room_id", content.RoomID.String()).
 		Str("event_id", content.EventID.String()).
 		Logger()
+	ctx = log.WithContext(ctx)
 	states := h.collectEncryptedCandidates(content)
 
 	for _, state := range states {
@@ -399,7 +400,6 @@ func (h *StreamHelper) isForDifferentDevice(evt *event.Event) bool {
 
 func (h *StreamHelper) tryDecryptAndSubscribe(ctx context.Context, evt *event.Event, content *event.EncryptedEventContent, state *streamState) bool {
 	log := zerolog.Ctx(ctx).With().
-		Str("sender", evt.Sender.String()).
 		Str("stream_room_id", state.key.roomID.String()).
 		Str("stream_event_id", state.key.eventID.String()).
 		Logger()
