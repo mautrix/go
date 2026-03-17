@@ -58,7 +58,7 @@ func TestBeeperStreamReceiverEnsureSubscriptionRejectsUnsupportedEncryption(t *t
 		UserID:   testStreamSubscriberID,
 		DeviceID: testStreamSubscriberDev,
 	}, nil)
-	err := receiver.EnsureSubscription(context.Background(), testStreamRoomID, testStreamEventID, &event.BeeperStreamInfo{
+	require.Error(t, receiver.EnsureSubscription(context.Background(), testStreamRoomID, testStreamEventID, &event.BeeperStreamInfo{
 		UserID: testStreamBotUserID,
 		Type:   testStreamType,
 		Encryption: &event.BeeperStreamEncryptionInfo{
@@ -66,10 +66,7 @@ func TestBeeperStreamReceiverEnsureSubscriptionRejectsUnsupportedEncryption(t *t
 			Key:       makeStreamKey(),
 			StreamID:  makeStreamID(),
 		},
-	})
-	if err == nil {
-		t.Fatal("expected EnsureSubscription to reject unsupported encryption algorithm")
-	}
+	}))
 }
 
 func TestBeeperStreamReceiverHandleTimelineEventInvalidDescriptorNoSubscription(t *testing.T) {
@@ -95,9 +92,7 @@ func TestBeeperStreamReceiverHandleTimelineEventInvalidDescriptorNoSubscription(
 			},
 		}},
 	})
-	if _, ok := receiver.subscriptions[beeperStreamKey{roomID: testStreamRoomID, eventID: testStreamEventID}]; ok {
-		t.Fatal("expected invalid descriptor to not create subscription")
-	}
+	require.NotContains(t, receiver.subscriptions, beeperStreamKey{roomID: testStreamRoomID, eventID: testStreamEventID})
 	select {
 	case req := <-recorder.requests:
 		t.Fatalf("unexpected subscribe request: %s", req.path)
@@ -130,14 +125,8 @@ func TestBeeperStreamReceiverStopsOnFinalEdit(t *testing.T) {
 		}},
 	})
 
-	if _, ok := receiver.subscriptions[beeperStreamKey{roomID: testStreamRoomID, eventID: testStreamEventID}]; ok {
-		t.Fatal("expected subscription to be removed")
-	}
-	select {
-	case <-ctx.Done():
-	default:
-		t.Fatal("expected subscription cancel to be called")
-	}
+	require.NotContains(t, receiver.subscriptions, beeperStreamKey{roomID: testStreamRoomID, eventID: testStreamEventID})
+	require.Error(t, ctx.Err(), "expected subscription cancel to be called")
 }
 
 func TestBeeperStreamReceiverUpdateCallback(t *testing.T) {
@@ -158,15 +147,13 @@ func TestBeeperStreamReceiverUpdateCallback(t *testing.T) {
 			})
 			evt := newTestReceiverUpdateEvent(t, receiver, tc.encrypted, "")
 
-			if consumed := receiver.HandleToDeviceEvent(context.Background(), evt); !consumed {
-				t.Fatal("expected update to be consumed")
-			}
+			require.True(t, receiver.HandleToDeviceEvent(context.Background(), evt))
 
 			select {
 			case update := <-received:
-				if update.Sender != testStreamBotUserID || update.RoomID != testStreamRoomID || update.EventID != testStreamEventID {
-					t.Fatalf("unexpected update metadata: %#v", update)
-				}
+				require.Equal(t, testStreamBotUserID, update.Sender)
+				require.Equal(t, testStreamRoomID, update.RoomID)
+				require.Equal(t, testStreamEventID, update.EventID)
 				assertStreamUpdateMap(t, decodeJSONMap(t, must(json.Marshal(update.Content))))
 			case <-time.After(time.Second):
 				t.Fatal("timed out waiting for update callback")
@@ -185,13 +172,8 @@ func TestBeeperStreamReceiverEncryptedUpdateIgnoresWrongRoute(t *testing.T) {
 	})
 	evt := newTestReceiverUpdateEvent(t, receiver, true, makeStreamID())
 
-	consumed := receiver.HandleToDeviceEvent(context.Background(), evt)
-	if !consumed {
-		t.Fatal("expected encrypted update to be consumed")
-	}
-	if called {
-		t.Fatal("expected mismatched encrypted update to be ignored")
-	}
+	require.True(t, receiver.HandleToDeviceEvent(context.Background(), evt))
+	require.False(t, called)
 }
 
 func newTestReceiverUpdateEvent(t *testing.T, receiver *BeeperStreamReceiver, encrypted bool, eventStreamID string) *event.Event {

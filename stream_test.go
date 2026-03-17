@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
@@ -42,9 +41,7 @@ func newSendToDeviceRecorderServer(t *testing.T) (*httptest.Server, *sendToDevic
 		requests: make(chan capturedSendToDeviceRequest, 4),
 	}
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPut {
-			t.Fatalf("unexpected method %s", r.Method)
-		}
+		require.Equal(t, http.MethodPut, r.Method)
 		recorder.requests <- capturedSendToDeviceRequest{
 			path: r.URL.Path,
 			body: must(io.ReadAll(r.Body)),
@@ -170,9 +167,7 @@ func requireTestStreamState(t *testing.T, sender *BeeperStreamSender) *beeperStr
 func assertTestStreamSubscribe(t *testing.T, recorder *sendToDeviceRecorder, userID id.UserID, deviceID id.DeviceID) {
 	t.Helper()
 	req := recorder.next(t)
-	if !strings.Contains(req.path, "/sendToDevice/com.beeper.stream.subscribe/") {
-		t.Fatalf("unexpected sendToDevice path %q", req.path)
-	}
+	require.Contains(t, req.path, "/sendToDevice/com.beeper.stream.subscribe/")
 	var subscribe event.BeeperStreamSubscribeEventContent
 	require.NoError(t, json.Unmarshal(recorder.rawContent(t, req, userID, deviceID), &subscribe))
 	require.Equal(t, testStreamRoomID, subscribe.RoomID)
@@ -183,9 +178,7 @@ func assertTestStreamSubscribe(t *testing.T, recorder *sendToDeviceRecorder, use
 func assertTestStreamUpdate(t *testing.T, recorder *sendToDeviceRecorder, userID id.UserID, deviceID id.DeviceID) {
 	t.Helper()
 	req := recorder.next(t)
-	if !strings.Contains(req.path, "/sendToDevice/com.beeper.stream.update/") {
-		t.Fatalf("unexpected sendToDevice path %q", req.path)
-	}
+	require.Contains(t, req.path, "/sendToDevice/com.beeper.stream.update/")
 	assertStreamUpdateMap(t, decodeJSONMap(t, recorder.rawContent(t, req, userID, deviceID)))
 }
 
@@ -227,20 +220,13 @@ func TestEncryptDecryptStreamPayloadRoundTrip(t *testing.T) {
 	gcm := must(newStreamGCM(key))
 	streamID := makeStreamID()
 	encrypted := must(encryptStreamPayload(event.ToDeviceBeeperStreamUpdate, content, streamID, gcm))
-	if encrypted.Algorithm != id.AlgorithmBeeperStreamAESGCM {
-		t.Fatalf("unexpected algorithm: %q", encrypted.Algorithm)
-	}
-	if encrypted.IV == "" || len(encrypted.StreamCiphertext) == 0 {
-		t.Fatalf("encrypted payload missing IV or ciphertext: %#v", encrypted)
-	}
-	if encrypted.StreamID != streamID {
-		t.Fatalf("encrypted payload missing stream ID: %#v", encrypted)
-	}
+	require.Equal(t, id.AlgorithmBeeperStreamAESGCM, encrypted.Algorithm)
+	require.NotEmpty(t, encrypted.IV)
+	require.NotEmpty(t, encrypted.StreamCiphertext)
+	require.Equal(t, streamID, encrypted.StreamID)
 
 	decrypted := must(decryptStreamPayload(encrypted, gcm))
-	if decrypted.Type != event.ToDeviceBeeperStreamUpdate.Type {
-		t.Fatalf("unexpected decrypted type: %q", decrypted.Type)
-	}
+	require.Equal(t, event.ToDeviceBeeperStreamUpdate.Type, decrypted.Type)
 	assertStreamUpdateMap(t, decodeJSONMap(t, decrypted.Content))
 }
 
@@ -250,12 +236,7 @@ func TestDecryptStreamPayloadRejectsInvalidIVLength(t *testing.T) {
 		IV:               base64.RawStdEncoding.EncodeToString([]byte{1, 2, 3}),
 		StreamCiphertext: base64.RawStdEncoding.AppendEncode(nil, []byte("payload")),
 	}, gcm)
-	if err == nil {
-		t.Fatal("expected invalid IV length to fail")
-	}
-	if !strings.Contains(err.Error(), "invalid beeper stream IV length") {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	require.ErrorContains(t, err, "invalid beeper stream IV length")
 }
 
 func TestHandlePlainSubscribe(t *testing.T) {
@@ -266,20 +247,15 @@ func TestHandlePlainSubscribe(t *testing.T) {
 	})
 	startTestStream(t, desc)
 
-	if !sender.HandleToDeviceEvent(context.Background(), newTestSubscribeEvent(t, nil, testStreamBotUserID, "*")) {
-		t.Fatal("expected plain subscribe to be consumed")
-	}
+	require.True(t, sender.HandleToDeviceEvent(context.Background(), newTestSubscribeEvent(t, nil, testStreamBotUserID, "*")))
 
 	state := requireTestStreamState(t, sender)
-	if len(state.subscribers) != 1 {
-		t.Fatalf("expected 1 subscriber, got %d", len(state.subscribers))
-	}
-	if gotAuth == nil {
-		t.Fatal("expected authorize callback to be invoked")
-	}
-	if gotAuth.RoomID != testStreamRoomID || gotAuth.EventID != testStreamEventID || gotAuth.UserID != testStreamSubscriberID || gotAuth.DeviceID != testStreamSubscriberDev {
-		t.Fatalf("unexpected authorize callback request: %#v", gotAuth)
-	}
+	require.Len(t, state.subscribers, 1)
+	require.NotNil(t, gotAuth)
+	require.Equal(t, testStreamRoomID, gotAuth.RoomID)
+	require.Equal(t, testStreamEventID, gotAuth.EventID)
+	require.Equal(t, testStreamSubscriberID, gotAuth.UserID)
+	require.Equal(t, testStreamSubscriberDev, gotAuth.DeviceID)
 }
 
 func TestPendingSubscribeReplay(t *testing.T) {
@@ -295,22 +271,14 @@ func TestPendingSubscribeReplay(t *testing.T) {
 				return true
 			})
 
-			if !sender.HandleToDeviceEvent(context.Background(), newTestSubscribeEvent(t, desc.Info, testStreamBotUserID, "*")) {
-				t.Fatalf("expected %s subscribe to be consumed", tc.name)
-			}
-			if len(sender.pendingSubscribe) != 1 {
-				t.Fatalf("expected 1 pending subscribe, got %d", len(sender.pendingSubscribe))
-			}
+			require.True(t, sender.HandleToDeviceEvent(context.Background(), newTestSubscribeEvent(t, desc.Info, testStreamBotUserID, "*")))
+			require.Len(t, sender.pendingSubscribe, 1)
 
 			startTestStream(t, desc)
 
-			if len(sender.pendingSubscribe) != 0 {
-				t.Fatalf("expected pending subscribes to be replayed, got %d left", len(sender.pendingSubscribe))
-			}
+			require.Empty(t, sender.pendingSubscribe)
 			state := requireTestStreamState(t, sender)
-			if len(state.subscribers) != 1 {
-				t.Fatalf("expected 1 replayed subscriber, got %d", len(state.subscribers))
-			}
+			require.Len(t, state.subscribers, 1)
 		})
 	}
 }
@@ -318,16 +286,12 @@ func TestPendingSubscribeReplay(t *testing.T) {
 func TestHandleEncryptedSubscribeWithoutStreamIDDropped(t *testing.T) {
 	sender, desc := newEncryptedTestDesc(t)
 	encrypted := must(EncryptBeeperStreamEvent(event.ToDeviceBeeperStreamSubscribe, newTestSubscribeContent(), "", desc.Info.Encryption.Key))
-	if !sender.HandleToDeviceEvent(context.Background(), &event.Event{
+	require.True(t, sender.HandleToDeviceEvent(context.Background(), &event.Event{
 		Sender:  testStreamSubscriberID,
 		Type:    event.ToDeviceEncrypted,
 		Content: event.Content{Parsed: encrypted},
-	}) {
-		t.Fatal("expected encrypted subscribe to be consumed")
-	}
-	if len(sender.pendingSubscribe) != 0 {
-		t.Fatalf("expected encrypted subscribe without stream_id to be dropped, got %d pending", len(sender.pendingSubscribe))
-	}
+	}))
+	require.Empty(t, sender.pendingSubscribe)
 }
 
 func TestBeeperStreamDescriptorActivateRejectsInvalidEncryptedDescriptor(t *testing.T) {
@@ -367,22 +331,12 @@ func TestBeeperStreamDescriptorActivateSnapshotsDescriptor(t *testing.T) {
 	original := &originalInfo
 	must(desc.Activate(context.Background(), testStreamEventID))
 	state := requireTestStreamState(t, sender)
-	if state.descriptor == desc.Info {
-		t.Fatal("expected activated stream descriptor to be copied")
-	}
-	if state.descriptor.Encryption == desc.Info.Encryption {
-		t.Fatal("expected activated stream encryption descriptor to be deep-copied")
-	}
+	require.NotSame(t, desc.Info, state.descriptor)
+	require.NotSame(t, desc.Info.Encryption, state.descriptor.Encryption)
 	desc.Info.Encryption.StreamID = makeStreamID()
-	if state.descriptor.Encryption.StreamID != original.Encryption.StreamID {
-		t.Fatal("expected stream state to keep original stream_id after descriptor mutation")
-	}
-	if !sender.HandleToDeviceEvent(context.Background(), newTestSubscribeEvent(t, original, testStreamBotUserID, "*")) {
-		t.Fatal("expected encrypted subscribe to be consumed")
-	}
-	if len(state.subscribers) != 1 {
-		t.Fatalf("expected 1 subscriber from original stream_id, got %d", len(state.subscribers))
-	}
+	require.Equal(t, original.Encryption.StreamID, state.descriptor.Encryption.StreamID)
+	require.True(t, sender.HandleToDeviceEvent(context.Background(), newTestSubscribeEvent(t, original, testStreamBotUserID, "*")))
+	require.Len(t, state.subscribers, 1)
 }
 
 func TestStreamPublishAndFinish(t *testing.T) {
@@ -393,24 +347,16 @@ func TestStreamPublishAndFinish(t *testing.T) {
 		AuthorizeSubscriber: func(context.Context, *BeeperStreamSubscribeRequest) bool { return true },
 	})
 	streamDesc := must(sender.PrepareStream(context.Background(), testStreamRoomID, testStreamType))
-	if streamDesc.Info == nil {
-		t.Fatal("PrepareStream returned nil Info")
-	}
-	if streamDesc.Info.UserID != testStreamBotUserID {
-		t.Fatalf("PrepareStream descriptor has unexpected identity: %+v", streamDesc.Info)
-	}
+	require.NotNil(t, streamDesc.Info)
+	require.Equal(t, testStreamBotUserID, streamDesc.Info.UserID)
 
 	stream := must(streamDesc.Activate(context.Background(), testStreamEventID))
 
-	if !sender.HandleToDeviceEvent(context.Background(), newTestSubscribeEvent(t, nil, testStreamBotUserID, "*")) {
-		t.Fatal("expected subscribe to be consumed")
-	}
+	require.True(t, sender.HandleToDeviceEvent(context.Background(), newTestSubscribeEvent(t, nil, testStreamBotUserID, "*")))
 
 	require.NoError(t, stream.Publish(context.Background(), newTestPublishContent("hello")))
 	assertTestStreamUpdate(t, recorder, testStreamSubscriberID, testStreamSubscriberDev)
 
 	require.NoError(t, stream.Finish(context.Background()))
-	if err := stream.Publish(context.Background(), newTestPublishContent("bye")); err == nil {
-		t.Fatal("expected Publish after Finish to fail")
-	}
+	require.Error(t, stream.Publish(context.Background(), newTestPublishContent("bye")))
 }

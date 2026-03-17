@@ -92,9 +92,7 @@ func TestBotClientBeeperStreamInterception(t *testing.T) {
 	deliverTestBotSubscribe(as, "*")
 
 	require.NoError(t, stream.Publish(context.Background(), testPublishPayload()))
-	if sendToDeviceCalls.Load() != 1 {
-		t.Fatalf("expected intercepted subscriber to receive one update, got %d calls", sendToDeviceCalls.Load())
-	}
+	require.EqualValues(t, 1, sendToDeviceCalls.Load())
 	select {
 	case <-as.ToDeviceEvents:
 		t.Fatal("expected intercepted to-device event to not be enqueued")
@@ -117,10 +115,6 @@ func TestBotClientBeeperStreamSenderPassesOptions(t *testing.T) {
 	deliverTestBotSubscribe(as, "*")
 
 	require.NoError(t, stream.Publish(context.Background(), testPublishPayload()))
-	if authorizeCalls.Load() != 1 {
-		t.Fatalf("expected authorize callback to be called once, got %d", authorizeCalls.Load())
-	}
-	if sendToDeviceCalls.Load() != 0 {
-		t.Fatalf("expected denied subscriber to receive no updates, got %d send calls", sendToDeviceCalls.Load())
-	}
+	require.EqualValues(t, 1, authorizeCalls.Load())
+	require.EqualValues(t, 0, sendToDeviceCalls.Load())
 }
