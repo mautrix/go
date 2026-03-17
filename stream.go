@@ -633,9 +633,6 @@ func ResolveBeeperStreamSubscribeExpiry(descriptor *event.BeeperStreamInfo, defa
 			expiry = descriptorExpiry
 		}
 	}
-	if expiry <= 0 {
-		expiry = DefaultBeeperStreamSubscribeExpiry
-	}
 	return expiry
 }
 

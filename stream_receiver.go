@@ -33,10 +33,11 @@ type BeeperStreamReceiver struct {
 	minimumRenewInterval time.Duration
 	onUpdate             func(context.Context, *BeeperStreamUpdate) error
 
-	lock                  sync.Mutex
-	subscriptions         map[beeperStreamKey]*beeperStreamSubscription
+	lock                    sync.Mutex
+	stopped                 bool
+	subscriptions           map[beeperStreamKey]*beeperStreamSubscription
 	subscriptionsByStreamID map[string]*beeperStreamSubscription
-	wg                    sync.WaitGroup
+	wg                      sync.WaitGroup
 }
 
 type beeperStreamSubscription struct {
@@ -95,7 +96,7 @@ func (r *BeeperStreamReceiver) HandleTimelineEvent(ctx context.Context, evt *eve
 		return
 	}
 	if msg.BeeperStream != nil && evt.RoomID != "" && evt.ID != "" {
-		// Issue 5: Skip subscription for already-expired streams.
+		// Skip subscription for already-expired streams.
 		if msg.BeeperStream.ExpiryMS > 0 && evt.Timestamp > 0 {
 			expiryTime := time.UnixMilli(evt.Timestamp).Add(
 				time.Duration(msg.BeeperStream.ExpiryMS) * time.Millisecond)
@@ -145,6 +146,10 @@ func (r *BeeperStreamReceiver) EnsureSubscription(ctx context.Context, roomID id
 	}
 	key := beeperStreamKey{roomID: roomID, eventID: eventID}
 	r.lock.Lock()
+	if r.stopped {
+		r.lock.Unlock()
+		return nil
+	}
 	if existing := r.subscriptions[key]; existing != nil {
 		if BeeperStreamDescriptorEqual(existing.descriptor, descriptor) {
 			r.lock.Unlock()
@@ -156,7 +161,11 @@ func (r *BeeperStreamReceiver) EnsureSubscription(ctx context.Context, roomID id
 			delete(r.subscriptionsByStreamID, existing.descriptor.Encryption.StreamID)
 		}
 	}
-	subCtx, cancel := context.WithCancel(receiverLoopContext(ctx))
+	loopCtx := ctx
+	if loopCtx == nil {
+		loopCtx = context.Background()
+	}
+	subCtx, cancel := context.WithCancel(loopCtx)
 	sub := &beeperStreamSubscription{
 		key:        key,
 		descriptor: descriptor,
@@ -191,6 +200,7 @@ func (r *BeeperStreamReceiver) StopSubscription(roomID id.RoomID, eventID id.Eve
 
 func (r *BeeperStreamReceiver) Stop() {
 	r.lock.Lock()
+	r.stopped = true
 	subs := r.subscriptions
 	r.subscriptions = make(map[beeperStreamKey]*beeperStreamSubscription)
 	r.subscriptionsByStreamID = make(map[string]*beeperStreamSubscription)
@@ -267,7 +277,7 @@ func (r *BeeperStreamReceiver) sendStreamSubscribe(ctx context.Context, key beep
 }
 
 // handleStreamUpdateEvent dispatches a plain (unencrypted) stream update.
-// Issue 1: verifies a subscription exists for (room_id, event_id) and that the sender matches.
+// Verifies a subscription exists for (room_id, event_id) and that the sender matches.
 func (r *BeeperStreamReceiver) handleStreamUpdateEvent(ctx context.Context, sender id.UserID, content *event.Content) {
 	if content == nil {
 		return
@@ -295,18 +305,24 @@ func (r *BeeperStreamReceiver) handleStreamUpdateEvent(ctx context.Context, send
 			Msg("Beeper stream update from unexpected sender, dropping")
 		return
 	}
-	if r.onUpdate != nil {
-		if err := r.onUpdate(ctx, &BeeperStreamUpdate{
-			Sender:  sender,
-			RoomID:  update.RoomID,
-			EventID: update.EventID,
-			Content: content,
-		}); err != nil {
-			zerolog.Ctx(ctx).Warn().Err(err).
-				Stringer("room_id", update.RoomID).
-				Stringer("event_id", update.EventID).
-				Msg("Beeper stream update callback failed")
-		}
+	r.dispatchUpdate(ctx, sender, update.RoomID, update.EventID, content)
+}
+
+// dispatchUpdate invokes the onUpdate callback for a verified stream update.
+func (r *BeeperStreamReceiver) dispatchUpdate(ctx context.Context, sender id.UserID, roomID id.RoomID, eventID id.EventID, content *event.Content) {
+	if r.onUpdate == nil {
+		return
+	}
+	if err := r.onUpdate(ctx, &BeeperStreamUpdate{
+		Sender:  sender,
+		RoomID:  roomID,
+		EventID: eventID,
+		Content: content,
+	}); err != nil {
+		zerolog.Ctx(ctx).Warn().Err(err).
+			Stringer("room_id", roomID).
+			Stringer("event_id", eventID).
+			Msg("Beeper stream update callback failed")
 	}
 }
 
@@ -329,8 +345,7 @@ func (r *BeeperStreamReceiver) applyOptions(opts *BeeperStreamReceiverOptions) {
 }
 
 // handleEncryptedStreamEvent decrypts and dispatches an encrypted stream update.
-// Issue 2: verifies the sender matches the subscription descriptor after decryption.
-// Issue 3: uses subscriptionsByStreamID for O(1) lookup by stream_id.
+// Uses subscriptionsByStreamID for O(1) lookup and verifies the sender matches the descriptor.
 func (r *BeeperStreamReceiver) handleEncryptedStreamEvent(ctx context.Context, evt *event.Event, content *event.EncryptedEventContent) {
 	if content.StreamID == "" {
 		return
@@ -352,7 +367,6 @@ func (r *BeeperStreamReceiver) handleEncryptedStreamEvent(ctx context.Context, e
 	if update.RoomID != sub.key.roomID || update.EventID != sub.key.eventID {
 		return
 	}
-	// Issue 2: Verify sender matches the descriptor before dispatching.
 	if evt.Sender != sub.descriptor.UserID {
 		r.log.Warn().
 			Stringer("sender", evt.Sender).
@@ -362,7 +376,7 @@ func (r *BeeperStreamReceiver) handleEncryptedStreamEvent(ctx context.Context, e
 			Msg("Encrypted beeper stream update from unexpected sender, dropping")
 		return
 	}
-	r.handleStreamUpdateEvent(ctx, evt.Sender, parsedContent)
+	r.dispatchUpdate(ctx, evt.Sender, update.RoomID, update.EventID, parsedContent)
 }
 
 func (r *BeeperStreamReceiver) requireClient() (*Client, error) {
@@ -372,9 +386,3 @@ func (r *BeeperStreamReceiver) requireClient() (*Client, error) {
 	return requireStreamClient(r.client, "receiver")
 }
 
-func receiverLoopContext(ctx context.Context) context.Context {
-	if ctx == nil {
-		return context.Background()
-	}
-	return zerolog.Ctx(ctx).WithContext(ctx)
-}
