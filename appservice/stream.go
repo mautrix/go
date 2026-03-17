@@ -13,20 +13,18 @@ import (
 )
 
 // NewBeeperStreamPublisher returns a stream publisher backed by a device-bearing bot client.
-// It wraps GetOrCreateBotDeviceClient and NewBeeperStreamPublisher so that non-bridge bots
-// do not need to duplicate the device-provisioning wiring.
-// opts.Purpose must be set by the caller.
+// It wraps GetOrCreateBotDeviceClient and NewBeeperStreamPublisher so callers don't need to
+// duplicate device-provisioning and sender/publisher wiring.
+// clientOpts.Purpose must be set by the caller.
 func (as *AppService) NewBeeperStreamPublisher(
 	ctx context.Context,
-	opts BotDeviceClientOptions,
-	authorizeSubscriber func(context.Context, *mautrix.BeeperStreamSubscribeRequest) bool,
+	clientOpts BotDeviceClientOptions,
+	publisherOpts *mautrix.BeeperStreamPublisherOptions,
+	senderOpts *mautrix.BeeperStreamSenderOptions,
 ) (*mautrix.BeeperStreamPublisher, error) {
-	client, err := as.GetOrCreateBotDeviceClient(ctx, opts)
+	client, err := as.GetOrCreateBotDeviceClient(ctx, clientOpts)
 	if err != nil {
 		return nil, err
 	}
-	return client.NewBeeperStreamPublisher(
-		&mautrix.BeeperStreamPublisherOptions{AuthorizeSubscriber: authorizeSubscriber},
-		nil,
-	), nil
+	return client.NewBeeperStreamPublisher(publisherOpts, senderOpts), nil
 }

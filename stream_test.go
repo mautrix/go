@@ -254,6 +254,95 @@ func TestPendingSubscribeReplay(t *testing.T) {
 	}
 }
 
+func TestHandleEncryptedSubscribeWithoutStreamIDDropped(t *testing.T) {
+	sender, _, desc := newTestStreamPublisher(t, true, func(context.Context, *BeeperStreamSubscribeRequest) bool {
+		return true
+	})
+	encrypted, err := EncryptBeeperStreamEvent(event.ToDeviceBeeperStreamSubscribe, newTestSubscribeContent(), "", desc.Info.Encryption.Key)
+	if err != nil {
+		t.Fatalf("EncryptBeeperStreamEvent returned error: %v", err)
+	}
+	if !sender.HandleToDeviceEvent(context.Background(), &event.Event{
+		Sender:  testStreamSubscriberID,
+		Type:    event.ToDeviceEncrypted,
+		Content: event.Content{Parsed: encrypted},
+	}) {
+		t.Fatal("expected encrypted subscribe to be consumed")
+	}
+	if len(sender.pendingSubscribe) != 0 {
+		t.Fatalf("expected encrypted subscribe without stream_id to be dropped, got %d pending", len(sender.pendingSubscribe))
+	}
+}
+
+func TestBeeperStreamDescriptorActivateRejectsInvalidEncryptedDescriptor(t *testing.T) {
+	_, _, desc := newTestStreamPublisher(t, true, func(context.Context, *BeeperStreamSubscribeRequest) bool {
+		return true
+	})
+	desc.Info.Encryption.StreamID = ""
+	if _, err := desc.Activate(context.Background(), testStreamEventID); err == nil {
+		t.Fatal("expected Activate to fail with missing encrypted stream_id")
+	}
+}
+
+func TestBeeperStreamDescriptorActivateOneShot(t *testing.T) {
+	_, _, desc := newTestStreamPublisher(t, true, func(context.Context, *BeeperStreamSubscribeRequest) bool {
+		return true
+	})
+	if _, err := desc.Activate(context.Background(), testStreamEventID); err != nil {
+		t.Fatalf("first Activate returned error: %v", err)
+	}
+	if _, err := desc.Activate(context.Background(), "$second"); err == nil {
+		t.Fatal("expected second Activate on same descriptor to fail")
+	}
+}
+
+func TestBeeperStreamDescriptorActivateRejectsStreamIDCollision(t *testing.T) {
+	sender, publisher, descA := newTestStreamPublisher(t, true, func(context.Context, *BeeperStreamSubscribeRequest) bool {
+		return true
+	})
+	if _, err := descA.Activate(context.Background(), testStreamEventID); err != nil {
+		t.Fatalf("first Activate returned error: %v", err)
+	}
+	descB, err := publisher.PrepareStream(context.Background(), testStreamRoomID, testStreamType)
+	if err != nil {
+		t.Fatalf("PrepareStream returned error: %v", err)
+	}
+	descB.Info.Encryption.StreamID = descA.Info.Encryption.StreamID
+	if _, err = descB.Activate(context.Background(), "$second"); err == nil {
+		t.Fatal("expected Activate to fail on stream_id collision")
+	}
+	if _, exists := sender.streams[beeperStreamKey{roomID: testStreamRoomID, eventID: "$second"}]; exists {
+		t.Fatal("unexpected stream state for failed activation")
+	}
+}
+
+func TestBeeperStreamDescriptorActivateSnapshotsDescriptor(t *testing.T) {
+	sender, _, desc := newTestStreamPublisher(t, true, func(context.Context, *BeeperStreamSubscribeRequest) bool {
+		return true
+	})
+	original := cloneBeeperStreamInfo(desc.Info)
+	if _, err := desc.Activate(context.Background(), testStreamEventID); err != nil {
+		t.Fatalf("Activate returned error: %v", err)
+	}
+	state := requireTestStreamState(t, sender)
+	if state.descriptor == desc.Info {
+		t.Fatal("expected activated stream descriptor to be copied")
+	}
+	if state.descriptor.Encryption == desc.Info.Encryption {
+		t.Fatal("expected activated stream encryption descriptor to be deep-copied")
+	}
+	desc.Info.Encryption.StreamID = makeStreamID()
+	if state.descriptor.Encryption.StreamID != original.Encryption.StreamID {
+		t.Fatal("expected stream state to keep original stream_id after descriptor mutation")
+	}
+	if !sender.HandleToDeviceEvent(context.Background(), newTestSubscribeEvent(t, original, "", "")) {
+		t.Fatal("expected encrypted subscribe to be consumed")
+	}
+	if len(state.subscribers) != 1 {
+		t.Fatalf("expected 1 subscriber from original stream_id, got %d", len(state.subscribers))
+	}
+}
+
 func TestStreamPublishAndFinishWithDirectClient(t *testing.T) {
 	var sendPath string
 	var sendBody []byte

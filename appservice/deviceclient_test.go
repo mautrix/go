@@ -170,3 +170,81 @@ func TestGetOrCreateBotDeviceClientProvisioningAndInterception(t *testing.T) {
 	default:
 	}
 }
+
+func TestNewBeeperStreamPublisherPassesOptions(t *testing.T) {
+	var loginCalls atomic.Int32
+	var sendToDeviceCalls atomic.Int32
+	var authorizeCalls atomic.Int32
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/_matrix/client/v3/login":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"flows": []map[string]any{{"type": string(mautrix.AuthTypeAppservice)}},
+			})
+		case r.Method == http.MethodPost && r.URL.Path == "/_matrix/client/v3/login":
+			loginCalls.Add(1)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"user_id":      "@bot:example.com",
+				"device_id":    "NEWDEVICE",
+				"access_token": "device-access-token",
+			})
+		case r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/_matrix/client/v3/sendToDevice/"):
+			sendToDeviceCalls.Add(1)
+			_ = json.NewEncoder(w).Encode(map[string]any{})
+		default:
+			t.Fatalf("unexpected homeserver request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer ts.Close()
+
+	as := newTestAppService(t, ts.URL)
+	publisher, err := as.NewBeeperStreamPublisher(context.Background(), BotDeviceClientOptions{
+		Purpose:                  "stream",
+		InitialDeviceDisplayName: "Stream Bot",
+	}, &mautrix.BeeperStreamPublisherOptions{
+		AuthorizeSubscriber: func(context.Context, *mautrix.BeeperStreamSubscribeRequest) bool {
+			authorizeCalls.Add(1)
+			return false
+		},
+	}, nil)
+	if err != nil {
+		t.Fatalf("NewBeeperStreamPublisher returned error: %v", err)
+	}
+	if loginCalls.Load() != 1 {
+		t.Fatalf("expected one login call, got %d", loginCalls.Load())
+	}
+
+	desc, err := publisher.PrepareStream(context.Background(), "!room:example.com", "com.beeper.llm")
+	if err != nil {
+		t.Fatalf("PrepareStream returned error: %v", err)
+	}
+	stream, err := desc.Activate(context.Background(), "$event")
+	if err != nil {
+		t.Fatalf("Activate returned error: %v", err)
+	}
+
+	as.handleEvents(context.Background(), []*event.Event{{
+		Sender:     "@alice:example.com",
+		ToUserID:   as.BotMXID(),
+		ToDeviceID: "NEWDEVICE",
+		Type:       event.ToDeviceBeeperStreamSubscribe,
+		Content: event.Content{Parsed: &event.BeeperStreamSubscribeEventContent{
+			RoomID:   "!room:example.com",
+			EventID:  "$event",
+			DeviceID: "SUBDEVICE",
+			ExpiryMS: 60_000,
+		}},
+	}}, event.ToDeviceEventType)
+
+	if err = stream.Publish(context.Background(), map[string]any{
+		"com.beeper.llm.deltas": []map[string]any{{"delta": "hello"}},
+	}); err != nil {
+		t.Fatalf("Publish returned error: %v", err)
+	}
+	if authorizeCalls.Load() != 1 {
+		t.Fatalf("expected authorize callback to be called once, got %d", authorizeCalls.Load())
+	}
+	if sendToDeviceCalls.Load() != 0 {
+		t.Fatalf("expected denied subscriber to receive no updates, got %d send calls", sendToDeviceCalls.Load())
+	}
+}

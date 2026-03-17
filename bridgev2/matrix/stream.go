@@ -19,16 +19,7 @@ import (
 const streamBotDeviceKey database.Key = "stream_device_id"
 
 func (br *Connector) GetOrCreateBeeperStreamPublisher(ctx context.Context, opts *mautrix.BeeperStreamPublisherOptions) (*mautrix.BeeperStreamPublisher, error) {
-	client, err := br.getStreamDeviceClient(ctx)
-	if err != nil {
-		return nil, err
-	}
-	sender := client.GetOrCreateBeeperStreamSender(&mautrix.BeeperStreamSenderOptions{Logger: br.Log})
-	return sender.NewPublisher(opts), nil
-}
-
-func (br *Connector) getStreamDeviceClient(ctx context.Context) (*mautrix.Client, error) {
-	return br.AS.GetOrCreateBotDeviceClient(ctx, appservice.BotDeviceClientOptions{
+	return br.AS.NewBeeperStreamPublisher(ctx, appservice.BotDeviceClientOptions{
 		Purpose:                  "stream",
 		InitialDeviceDisplayName: fmt.Sprintf("%s bridge stream", br.Bridge.Network.GetName().DisplayName),
 		MSC4190:                  br.Config.Encryption.MSC4190,
@@ -39,5 +30,5 @@ func (br *Connector) getStreamDeviceClient(ctx context.Context) (*mautrix.Client
 			br.Bridge.DB.KV.Set(ctx, streamBotDeviceKey, deviceID.String())
 			return nil
 		},
-	})
+	}, opts, &mautrix.BeeperStreamSenderOptions{Logger: br.Log})
 }

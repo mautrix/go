@@ -26,14 +26,14 @@ import (
 )
 
 const (
-	DefaultBeeperStreamDescriptorExpiry  = 30 * time.Minute
-	DefaultBeeperStreamSubscribeExpiry   = 5 * time.Minute
-	defaultBeeperStreamRenewInterval     = 30 * time.Second
-	streamCleanupGrace                   = 30 * time.Second
-	pendingSubscribeTTL                  = 5 * time.Second
-	maxPendingSubscribes                 = 64
-	maxUpdatesPerStream                  = 1024
-	beeperStreamComponentName            = "beeper_stream"
+	DefaultBeeperStreamDescriptorExpiry = 30 * time.Minute
+	DefaultBeeperStreamSubscribeExpiry  = 5 * time.Minute
+	defaultBeeperStreamRenewInterval    = 30 * time.Second
+	streamCleanupGrace                  = 30 * time.Second
+	pendingSubscribeTTL                 = 5 * time.Second
+	maxPendingSubscribes                = 64
+	maxUpdatesPerStream                 = 1024
+	beeperStreamComponentName           = "beeper_stream"
 )
 
 type BeeperStreamSenderOptions struct {
@@ -264,6 +264,10 @@ func (s *BeeperStreamSender) handleEncryptedEvent(ctx context.Context, evt *even
 		Str("stream_id", content.StreamID).
 		Logger()
 	ctx = log.WithContext(ctx)
+	if content.StreamID == "" {
+		log.Debug().Msg("Custom encrypted to-device event missing stream_id, dropping")
+		return true
+	}
 	if !s.tryEncryptedSubscribeCandidates(ctx, evt, content) {
 		log.Debug().Msg("Custom encrypted to-device event doesn't match an active beeper stream, queueing as pending")
 		s.queuePendingSubscribe(ctx, evt)
@@ -636,6 +640,37 @@ func ResolveBeeperStreamSubscribeExpiry(descriptor *event.BeeperStreamInfo, defa
 	return expiry
 }
 
+func cloneBeeperStreamInfo(info *event.BeeperStreamInfo) *event.BeeperStreamInfo {
+	if info == nil {
+		return nil
+	}
+	cloned := *info
+	if info.Encryption != nil {
+		enc := *info.Encryption
+		cloned.Encryption = &enc
+	}
+	return &cloned
+}
+
+func validateBeeperStreamDescriptor(info *event.BeeperStreamInfo) error {
+	if info == nil {
+		return fmt.Errorf("missing beeper stream descriptor")
+	} else if info.UserID == "" || info.DeviceID == "" || info.Type == "" {
+		return fmt.Errorf("missing beeper stream descriptor fields")
+	}
+	if info.Encryption == nil {
+		return nil
+	}
+	if info.Encryption.Algorithm != id.AlgorithmBeeperStreamAESGCM {
+		return fmt.Errorf("unsupported beeper stream encryption algorithm %q", info.Encryption.Algorithm)
+	} else if info.Encryption.Key == "" {
+		return fmt.Errorf("missing beeper stream encryption key")
+	} else if info.Encryption.StreamID == "" {
+		return fmt.Errorf("missing beeper stream encryption stream_id")
+	}
+	return nil
+}
+
 // BeeperStreamDescriptor holds the stream info to embed in the initial Matrix event.
 // Returned by PrepareStream; call Activate after sending the Matrix event to start publishing.
 type BeeperStreamDescriptor struct {
@@ -643,51 +678,77 @@ type BeeperStreamDescriptor struct {
 	roomID    id.RoomID
 	// Info should be embedded in the com.beeper.stream field of the Matrix message event.
 	Info *event.BeeperStreamInfo
+
+	lock      sync.Mutex
+	activated bool
 }
 
 // Activate starts the stream after the Matrix message event has been sent.
 // eventID is the ID returned by the send call. Returns a handle for publishing updates.
 func (d *BeeperStreamDescriptor) Activate(ctx context.Context, eventID id.EventID) (*BeeperStream, error) {
+	d.lock.Lock()
 	if d.publisher == nil || d.Info == nil {
+		d.lock.Unlock()
 		return nil, fmt.Errorf("missing beeper stream descriptor")
 	} else if d.roomID == "" || eventID == "" {
+		d.lock.Unlock()
 		return nil, fmt.Errorf("missing beeper stream identifiers")
+	} else if d.activated {
+		d.lock.Unlock()
+		return nil, fmt.Errorf("beeper stream descriptor already activated")
+	}
+	descriptor := cloneBeeperStreamInfo(d.Info)
+	if err := validateBeeperStreamDescriptor(descriptor); err != nil {
+		d.lock.Unlock()
+		return nil, err
 	}
 	s, err := d.publisher.requireSender()
 	if err != nil {
+		d.lock.Unlock()
 		return nil, err
 	}
 	key := beeperStreamKey{roomID: d.roomID, eventID: eventID}
 	s.lock.Lock()
 	if _, exists := s.streams[key]; exists {
 		s.lock.Unlock()
+		d.lock.Unlock()
 		return nil, fmt.Errorf("beeper stream %s/%s already started", d.roomID, eventID)
+	}
+	if descriptor.Encryption != nil {
+		if _, exists := s.streamsByStreamID[descriptor.Encryption.StreamID]; exists {
+			s.lock.Unlock()
+			d.lock.Unlock()
+			return nil, fmt.Errorf("beeper stream %s/%s has duplicate stream_id", d.roomID, eventID)
+		}
 	}
 	state := &beeperStreamState{
 		key:                 key,
-		descriptor:          d.Info,
+		descriptor:          descriptor,
 		authorizeSubscriber: d.publisher.authorizeSubscriber,
 		subscribers:         make(map[beeperStreamSubscriber]time.Time),
 	}
-	if d.Info.Encryption != nil {
-		gcm, err := newStreamGCM(d.Info.Encryption.Key)
+	if descriptor.Encryption != nil {
+		gcm, err := newStreamGCM(descriptor.Encryption.Key)
 		if err != nil {
 			s.lock.Unlock()
+			d.lock.Unlock()
 			return nil, fmt.Errorf("failed to initialize beeper stream cipher: %w", err)
 		}
 		state.gcm = gcm
 	}
 	s.streams[key] = state
-	if d.Info.Encryption != nil && d.Info.Encryption.StreamID != "" {
-		s.streamsByStreamID[d.Info.Encryption.StreamID] = state
+	if descriptor.Encryption != nil {
+		s.streamsByStreamID[descriptor.Encryption.StreamID] = state
 	}
 	s.lock.Unlock()
+	d.activated = true
+	d.lock.Unlock()
 	s.replayPendingSubscribes(ctx)
 	return &BeeperStream{
 		publisher:  d.publisher,
 		roomID:     d.roomID,
 		eventID:    eventID,
-		descriptor: d.Info,
+		descriptor: cloneBeeperStreamInfo(descriptor),
 	}, nil
 }
 
@@ -700,9 +761,11 @@ type BeeperStream struct {
 	descriptor *event.BeeperStreamInfo
 }
 
-func (s *BeeperStream) RoomID() id.RoomID                   { return s.roomID }
-func (s *BeeperStream) EventID() id.EventID                 { return s.eventID }
-func (s *BeeperStream) Descriptor() *event.BeeperStreamInfo { return s.descriptor }
+func (s *BeeperStream) RoomID() id.RoomID   { return s.roomID }
+func (s *BeeperStream) EventID() id.EventID { return s.eventID }
+func (s *BeeperStream) Descriptor() *event.BeeperStreamInfo {
+	return cloneBeeperStreamInfo(s.descriptor)
+}
 
 // Publish sends an update to all active subscribers.
 func (s *BeeperStream) Publish(ctx context.Context, content map[string]any) error {
