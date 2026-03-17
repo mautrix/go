@@ -53,11 +53,11 @@ var TypeMap = map[Type]reflect.Type{
 	StateBeeperRoomFeatures:       reflect.TypeOf(RoomFeatures{}),
 	StateBeeperDisappearingTimer:  reflect.TypeOf(BeeperDisappearingTimer{}),
 
-	EventMessage:            reflect.TypeOf(MessageEventContent{}),
-	EventSticker:            reflect.TypeOf(MessageEventContent{}),
+	EventMessage:   reflect.TypeOf(MessageEventContent{}),
+	EventSticker:   reflect.TypeOf(MessageEventContent{}),
 	EventEncrypted: reflect.TypeOf(EncryptedEventContent{}),
-	EventRedaction:          reflect.TypeOf(RedactionEventContent{}),
-	EventReaction:           reflect.TypeOf(ReactionEventContent{}),
+	EventRedaction: reflect.TypeOf(RedactionEventContent{}),
+	EventReaction:  reflect.TypeOf(ReactionEventContent{}),
 
 	EventUnstablePollStart:    reflect.TypeOf(PollStartEventContent{}),
 	EventUnstablePollResponse: reflect.TypeOf(PollResponseEventContent{}),
