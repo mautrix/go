@@ -154,7 +154,20 @@ func UpdateConfigFromEnv(cfg, networkData any, prefix string) error {
 			}
 			field.val.SetMapIndex(reflect.ValueOf(mapKeyStr), reflect.ValueOf(parsedVal))
 		} else {
-			field.val.Set(reflect.ValueOf(parsedVal))
+			switch typedVal := parsedVal.(type) {
+			case int64:
+				field.val.SetInt(typedVal)
+			case uint64:
+				field.val.SetUint(typedVal)
+			case float64:
+				field.val.SetFloat(typedVal)
+			case bool:
+				field.val.SetBool(typedVal)
+			case string:
+				field.val.SetString(typedVal)
+			default:
+				return fmt.Errorf("unexpected parsed value type %T", parsedVal)
+			}
 		}
 	}
 	return nil
