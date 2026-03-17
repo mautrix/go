@@ -185,7 +185,6 @@ func (s *BeeperStreamSender) handleEncryptedEvent(ctx context.Context, evt *even
 	}
 	log := zerolog.Ctx(ctx).With().
 		Str("sender", evt.Sender.String()).
-		Str("to_device_id", evt.ToDeviceID.String()).
 		Str("stream_id", content.StreamID).
 		Logger()
 	ctx = log.WithContext(ctx)
@@ -217,10 +216,7 @@ func (s *BeeperStreamSender) isForDifferentDevice(evt *event.Event) bool {
 	if evt == nil {
 		return false
 	}
-	if evt.ToUserID != "" && evt.ToUserID != s.client.UserID {
-		return true
-	}
-	return evt.ToDeviceID != "" && evt.ToDeviceID != "*" && s.client.DeviceID != "" && evt.ToDeviceID != s.client.DeviceID
+	return evt.ToUserID != "" && evt.ToUserID != s.client.UserID
 }
 
 func (s *BeeperStreamSender) tryDecryptAndSubscribe(ctx context.Context, evt *event.Event, content *event.EncryptedEventContent, state *beeperStreamState) bool {
@@ -423,7 +419,6 @@ func (s *BeeperStreamSender) queuePendingSubscribe(ctx context.Context, evt *eve
 		Int("pending_subscribes", len(s.pendingSubscribe)).
 		Str("sender", evt.Sender.String()).
 		Str("event_type", evt.Type.Type).
-		Str("to_device_id", evt.ToDeviceID.String()).
 		Msg("Queued subscribe for possible future beeper stream registration")
 }
 

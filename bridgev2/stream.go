@@ -14,13 +14,21 @@ import (
 	"maunium.net/go/mautrix/event"
 )
 
+type beeperStreamBotClientProvider interface {
+	BotClient() *mautrix.Client
+}
+
 func (br *Bridge) GetOrCreateBeeperStreamSender(ctx context.Context) (*mautrix.BeeperStreamSender, error) {
 	br.beeperStreamLock.Lock()
 	defer br.beeperStreamLock.Unlock()
 	if br.beeperStreamSender != nil {
 		return br.beeperStreamSender, nil
 	}
-	client := br.Matrix.BotClient()
+	provider, ok := br.Matrix.(beeperStreamBotClientProvider)
+	if !ok {
+		return nil, fmt.Errorf("matrix connector doesn't expose a bot client")
+	}
+	client := provider.BotClient()
 	if client == nil {
 		return nil, fmt.Errorf("matrix connector doesn't have a bot client")
 	}
