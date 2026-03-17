@@ -726,7 +726,6 @@ type MessageRequestAcceptingNetworkAPI interface {
 	HandleMatrixAcceptMessageRequest(ctx context.Context, msg *MatrixAcceptMessageRequest) error
 }
 
-
 type ResolveIdentifierResponse struct {
 	// Ghost is the ghost of the user that the identifier resolves to.
 	// This field should be set whenever possible. However, it is not required,

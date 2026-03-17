@@ -385,7 +385,7 @@ func (h *Helper) handleSubscribe(ctx context.Context, sender id.UserID, subscrib
 	}
 	if state.authorizeSubscriber != nil && !state.authorizeSubscriber(ctx, sender) {
 		h.lock.Unlock()
-		zerolog.Ctx(ctx).Debug().Str("sender", sender.String()).Msg("Ignoring stream subscribe from unauthorized user")
+		zerolog.Ctx(ctx).Debug().Stringer("sender", sender).Msg("Ignoring stream subscribe from unauthorized user")
 		return
 	}
 	expiry := time.Duration(subscribe.ExpiryMS) * time.Millisecond

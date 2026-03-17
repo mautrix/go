@@ -103,7 +103,7 @@ func (st *userLoginBeeperStream) getGenerator() (*streamhelper.Generator, error)
 func (st *userLoginBeeperStream) authorizeSubscriber(ctx context.Context, sender id.UserID) bool {
 	user, err := st.login.Bridge.GetUserByMXID(ctx, sender)
 	if err != nil {
-		st.login.Log.Err(err).Str("sender", sender.String()).Msg("Failed to load stream subscriber user")
+		st.login.Log.Err(err).Stringer("sender", sender).Msg("Failed to load stream subscriber user")
 		return false
 	}
 	return user != nil && user.Permissions.SendEvents

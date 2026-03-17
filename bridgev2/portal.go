@@ -972,7 +972,6 @@ func (portal *Portal) handleMatrixTyping(ctx context.Context, evt *event.Event) 
 	return EventHandlingResultSuccess
 }
 
-
 func (portal *Portal) sendTypings(ctx context.Context, userIDs []id.UserID, typing bool) {
 	for _, userID := range userIDs {
 		login, ok := portal.currentlyTypingLogins[userID]
