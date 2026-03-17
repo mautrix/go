@@ -13,34 +13,116 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-func TestNewStreamUpdateContentMarshal(t *testing.T) {
-	content, err := newStreamUpdateContent(&PublishStreamRequest{
-		RoomID:  "!room:example.com",
-		EventID: "$event",
-		Content: map[string]any{
-			"com.beeper.llm.deltas": []map[string]any{
-				{"delta": "hello"},
-			},
-		},
+const (
+	testStreamRoomID        id.RoomID   = "!room:example.com"
+	testStreamEventID       id.EventID  = "$event"
+	testStreamType                      = "com.beeper.llm"
+	testStreamBotUserID     id.UserID   = "@bot:example.com"
+	testStreamBotDeviceID   id.DeviceID = "BOTDEVICE"
+	testStreamSubscriberID  id.UserID   = "@alice:example.com"
+	testStreamSubscriberDev id.DeviceID = "SUBDEVICE"
+	testStreamDeltaKey                  = "com.beeper.llm.deltas"
+)
+
+func newTestStreamHelper(encrypted bool) *StreamHelper {
+	opts := &StreamHelperOptions{}
+	if encrypted {
+		opts.IsEncrypted = func(context.Context, id.RoomID) (bool, error) { return true, nil }
+	}
+	return NewStreamHelper(&Client{
+		UserID:     testStreamBotUserID,
+		DeviceID:   testStreamBotDeviceID,
+		StateStore: NewMemoryStateStore(),
+	}, opts)
+}
+
+func newTestStreamGenerator(t *testing.T, encrypted bool, authorize func(context.Context, *StreamSubscribeRequest) bool) (*StreamHelper, *StreamGenerator, *event.BeeperStreamInfo) {
+	t.Helper()
+	helper := newTestStreamHelper(encrypted)
+	gen := helper.NewGenerator(&StreamGeneratorOptions{AuthorizeSubscriber: authorize})
+	desc, err := gen.BuildDescriptor(context.Background(), &StreamDescriptorRequest{
+		RoomID: testStreamRoomID,
+		Type:   testStreamType,
 	})
 	if err != nil {
-		t.Fatalf("newStreamUpdateContent returned error: %v", err)
+		t.Fatalf("BuildDescriptor returned error: %v", err)
 	}
+	return helper, gen, desc
+}
 
-	data, err := json.Marshal(content)
-	if err != nil {
-		t.Fatalf("failed to marshal update content: %v", err)
+func startTestStream(t *testing.T, gen *StreamGenerator, desc *event.BeeperStreamInfo) {
+	t.Helper()
+	if err := gen.Start(context.Background(), &StartStreamRequest{
+		RoomID:     testStreamRoomID,
+		EventID:    testStreamEventID,
+		Type:       testStreamType,
+		Descriptor: desc,
+	}); err != nil {
+		t.Fatalf("Start returned error: %v", err)
 	}
+}
 
+func newTestPublishRequest(delta string) *PublishStreamRequest {
+	return &PublishStreamRequest{
+		RoomID:  testStreamRoomID,
+		EventID: testStreamEventID,
+		Content: map[string]any{
+			testStreamDeltaKey: []map[string]any{{"delta": delta}},
+		},
+	}
+}
+
+func newTestSubscribeContent() *event.Content {
+	return &event.Content{Parsed: &event.BeeperStreamSubscribeEventContent{
+		RoomID:   testStreamRoomID,
+		EventID:  testStreamEventID,
+		DeviceID: testStreamSubscriberDev,
+		ExpiryMS: 60_000,
+	}}
+}
+
+func newTestSubscribeEvent(t *testing.T, desc *event.BeeperStreamInfo, toUserID id.UserID, toDeviceID id.DeviceID) *event.Event {
+	t.Helper()
+	content := newTestSubscribeContent()
+	if desc != nil && desc.Encryption != nil {
+		gcm, err := newStreamGCM(desc.Encryption.Key)
+		if err != nil {
+			t.Fatalf("newStreamGCM returned error: %v", err)
+		}
+		encrypted, err := encryptStreamPayload(event.ToDeviceBeeperStreamSubscribe, content, testStreamRoomID, testStreamEventID, gcm)
+		if err != nil {
+			t.Fatalf("encryptStreamPayload returned error: %v", err)
+		}
+		return &event.Event{
+			Sender:  testStreamSubscriberID,
+			Type:    event.ToDeviceEncrypted,
+			Content: event.Content{Parsed: encrypted},
+		}
+	}
+	return &event.Event{
+		Sender:     testStreamSubscriberID,
+		ToUserID:   toUserID,
+		ToDeviceID: toDeviceID,
+		Type:       event.ToDeviceBeeperStreamSubscribe,
+		Content:    *content,
+	}
+}
+
+func decodeJSONMap(t *testing.T, data []byte) map[string]any {
+	t.Helper()
 	var parsed map[string]any
-	if err = json.Unmarshal(data, &parsed); err != nil {
-		t.Fatalf("failed to unmarshal update content: %v", err)
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("failed to unmarshal JSON map: %v", err)
 	}
+	return parsed
+}
 
-	if parsed["room_id"] != "!room:example.com" {
+func assertStreamUpdateMap(t *testing.T, parsed map[string]any) {
+	t.Helper()
+	if parsed["room_id"] != string(testStreamRoomID) {
 		t.Fatalf("unexpected room_id: %#v", parsed["room_id"])
 	}
-	if parsed["event_id"] != "$event" {
+	if parsed["event_id"] != string(testStreamEventID) {
 		t.Fatalf("unexpected event_id: %#v", parsed["event_id"])
 	}
 	if _, ok := parsed["type"]; ok {
@@ -49,35 +131,48 @@ func TestNewStreamUpdateContentMarshal(t *testing.T) {
 	if _, ok := parsed["content"]; ok {
 		t.Fatalf("unexpected nested content field: %#v", parsed["content"])
 	}
-	if _, ok := parsed["com.beeper.llm.deltas"]; !ok {
-		t.Fatalf("missing com.beeper.llm.deltas in marshaled content: %#v", parsed)
+	if _, ok := parsed[testStreamDeltaKey]; !ok {
+		t.Fatalf("missing %s in content: %#v", testStreamDeltaKey, parsed)
 	}
 }
 
+func requireTestStreamState(t *testing.T, helper *StreamHelper) *streamState {
+	t.Helper()
+	state := helper.streams[streamKey{roomID: testStreamRoomID, eventID: testStreamEventID}]
+	if state == nil {
+		t.Fatal("expected stream state to exist")
+	}
+	return state
+}
+
+func TestNewStreamUpdateContentMarshal(t *testing.T) {
+	content, err := newStreamUpdateContent(newTestPublishRequest("hello"))
+	if err != nil {
+		t.Fatalf("newStreamUpdateContent returned error: %v", err)
+	}
+
+	data, err := json.Marshal(content)
+	if err != nil {
+		t.Fatalf("failed to marshal update content: %v", err)
+	}
+	assertStreamUpdateMap(t, decodeJSONMap(t, data))
+}
+
 func TestNewStreamUpdateContentRejectsReservedKeys(t *testing.T) {
-	_, err := newStreamUpdateContent(&PublishStreamRequest{
-		RoomID:  "!room:example.com",
-		EventID: "$event",
-		Content: map[string]any{
-			"room_id": "override",
-		},
-	})
-	if err == nil {
-		t.Fatal("expected room_id override to be rejected")
+	for _, key := range []string{"room_id", "event_id"} {
+		t.Run(key, func(t *testing.T) {
+			req := newTestPublishRequest("hello")
+			req.Content[key] = "override"
+			if _, err := newStreamUpdateContent(req); err == nil {
+				t.Fatalf("expected %s override to be rejected", key)
+			}
+		})
 	}
 }
 
 func TestEncryptDecryptStreamPayloadRoundTrip(t *testing.T) {
 	key := makeStreamKey()
-	content, err := newStreamUpdateContent(&PublishStreamRequest{
-		RoomID:  "!room:example.com",
-		EventID: "$event",
-		Content: map[string]any{
-			"com.beeper.llm.deltas": []map[string]any{
-				{"delta": "hello"},
-			},
-		},
-	})
+	content, err := newStreamUpdateContent(newTestPublishRequest("hello"))
 	if err != nil {
 		t.Fatalf("newStreamUpdateContent returned error: %v", err)
 	}
@@ -87,7 +182,7 @@ func TestEncryptDecryptStreamPayloadRoundTrip(t *testing.T) {
 		t.Fatalf("newStreamGCM returned error: %v", err)
 	}
 
-	encrypted, err := encryptStreamPayload(event.ToDeviceBeeperStreamUpdate, content, "!room:example.com", "$event", gcm)
+	encrypted, err := encryptStreamPayload(event.ToDeviceBeeperStreamUpdate, content, testStreamRoomID, testStreamEventID, gcm)
 	if err != nil {
 		t.Fatalf("encryptStreamPayload returned error: %v", err)
 	}
@@ -97,7 +192,7 @@ func TestEncryptDecryptStreamPayloadRoundTrip(t *testing.T) {
 	if encrypted.IV == "" || len(encrypted.StreamCiphertext) == 0 {
 		t.Fatalf("encrypted payload missing IV or ciphertext: %#v", encrypted)
 	}
-	if encrypted.RoomID != "!room:example.com" || encrypted.EventID != "$event" {
+	if encrypted.RoomID != testStreamRoomID || encrypted.EventID != testStreamEventID {
 		t.Fatalf("encrypted payload missing routing identifiers: %#v", encrypted)
 	}
 
@@ -108,199 +203,63 @@ func TestEncryptDecryptStreamPayloadRoundTrip(t *testing.T) {
 	if decrypted.Type != event.ToDeviceBeeperStreamUpdate.Type {
 		t.Fatalf("unexpected decrypted type: %q", decrypted.Type)
 	}
-
-	var parsed map[string]any
-	if err = json.Unmarshal(decrypted.Content, &parsed); err != nil {
-		t.Fatalf("failed to unmarshal decrypted content: %v", err)
-	}
-	if parsed["room_id"] != "!room:example.com" || parsed["event_id"] != "$event" {
-		t.Fatalf("unexpected decrypted identifiers: %#v", parsed)
-	}
-	if _, ok := parsed["com.beeper.llm.deltas"]; !ok {
-		t.Fatalf("missing com.beeper.llm.deltas in decrypted content: %#v", parsed)
-	}
-	if _, ok := parsed["type"]; ok {
-		t.Fatalf("unexpected type field after decryption: %#v", parsed["type"])
-	}
-	if _, ok := parsed["content"]; ok {
-		t.Fatalf("unexpected nested content field after decryption: %#v", parsed["content"])
-	}
+	assertStreamUpdateMap(t, decodeJSONMap(t, decrypted.Content))
 }
 
 func TestHandlePlainSubscribe(t *testing.T) {
-	helper := NewStreamHelper(&Client{
-		UserID:     "@bot:example.com",
-		DeviceID:   "BOTDEVICE",
-		StateStore: NewMemoryStateStore(),
-	}, nil)
 	var gotAuth *StreamSubscribeRequest
-	gen := helper.NewGenerator(&StreamGeneratorOptions{
-		AuthorizeSubscriber: func(_ context.Context, req *StreamSubscribeRequest) bool {
-			gotAuth = req
-			return req.UserID == "@alice:example.com"
-		},
+	helper, gen, desc := newTestStreamGenerator(t, false, func(_ context.Context, req *StreamSubscribeRequest) bool {
+		gotAuth = req
+		return req.UserID == testStreamSubscriberID
 	})
-	desc, err := gen.BuildDescriptor(context.Background(), &StreamDescriptorRequest{
-		RoomID: "!room:example.com",
-		Type:   "com.beeper.llm",
-	})
-	if err != nil {
-		t.Fatalf("BuildDescriptor returned error: %v", err)
-	}
-	err = gen.Start(context.Background(), &StartStreamRequest{
-		RoomID:     "!room:example.com",
-		EventID:    "$event",
-		Type:       "com.beeper.llm",
-		Descriptor: desc,
-	})
-	if err != nil {
-		t.Fatalf("Start returned error: %v", err)
-	}
+	startTestStream(t, gen, desc)
 
-	evt := &event.Event{
-		Sender: "@alice:example.com",
-		Type:   event.ToDeviceBeeperStreamSubscribe,
-		Content: event.Content{Parsed: &event.BeeperStreamSubscribeEventContent{
-			RoomID:   "!room:example.com",
-			EventID:  "$event",
-			DeviceID: "SUBDEVICE",
-			ExpiryMS: 60_000,
-		}},
-	}
-	if !helper.HandleToDeviceEvent(context.Background(), evt) {
+	if !helper.HandleToDeviceEvent(context.Background(), newTestSubscribeEvent(t, nil, "", "")) {
 		t.Fatal("expected plain subscribe to be consumed")
 	}
-	state := helper.streams[streamKey{roomID: "!room:example.com", eventID: "$event"}]
-	if state == nil {
-		t.Fatal("expected stream state to exist")
-	}
+
+	state := requireTestStreamState(t, helper)
 	if len(state.subscribers) != 1 {
 		t.Fatalf("expected 1 subscriber, got %d", len(state.subscribers))
 	}
 	if gotAuth == nil {
 		t.Fatal("expected authorize callback to be invoked")
 	}
-	if gotAuth.RoomID != "!room:example.com" || gotAuth.EventID != "$event" || gotAuth.UserID != "@alice:example.com" || gotAuth.DeviceID != "SUBDEVICE" {
+	if gotAuth.RoomID != testStreamRoomID || gotAuth.EventID != testStreamEventID || gotAuth.UserID != testStreamSubscriberID || gotAuth.DeviceID != testStreamSubscriberDev {
 		t.Fatalf("unexpected authorize callback request: %#v", gotAuth)
 	}
 }
 
-func TestPendingPlainSubscribeReplay(t *testing.T) {
-	helper := NewStreamHelper(&Client{
-		UserID:     "@bot:example.com",
-		DeviceID:   "BOTDEVICE",
-		StateStore: NewMemoryStateStore(),
-	}, nil)
-	gen := helper.NewGenerator(&StreamGeneratorOptions{
-		AuthorizeSubscriber: func(context.Context, *StreamSubscribeRequest) bool { return true },
-	})
-	evt := &event.Event{
-		Sender: "@alice:example.com",
-		Type:   event.ToDeviceBeeperStreamSubscribe,
-		Content: event.Content{Parsed: &event.BeeperStreamSubscribeEventContent{
-			RoomID:   "!room:example.com",
-			EventID:  "$event",
-			DeviceID: "SUBDEVICE",
-			ExpiryMS: 60_000,
-		}},
-	}
-	if !helper.HandleToDeviceEvent(context.Background(), evt) {
-		t.Fatal("expected plain subscribe to be consumed")
-	}
-	if len(helper.pendingSubscribe) != 1 {
-		t.Fatalf("expected 1 pending subscribe, got %d", len(helper.pendingSubscribe))
-	}
+func TestPendingSubscribeReplay(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		encrypted bool
+	}{
+		{name: "plain", encrypted: false},
+		{name: "encrypted", encrypted: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			helper, gen, desc := newTestStreamGenerator(t, tc.encrypted, func(context.Context, *StreamSubscribeRequest) bool {
+				return true
+			})
 
-	desc, err := gen.BuildDescriptor(context.Background(), &StreamDescriptorRequest{
-		RoomID: "!room:example.com",
-		Type:   "com.beeper.llm",
-	})
-	if err != nil {
-		t.Fatalf("BuildDescriptor returned error: %v", err)
-	}
-	err = gen.Start(context.Background(), &StartStreamRequest{
-		RoomID:     "!room:example.com",
-		EventID:    "$event",
-		Type:       "com.beeper.llm",
-		Descriptor: desc,
-	})
-	if err != nil {
-		t.Fatalf("Start returned error: %v", err)
-	}
-	if len(helper.pendingSubscribe) != 0 {
-		t.Fatalf("expected pending subscribes to be replayed, got %d left", len(helper.pendingSubscribe))
-	}
-	state := helper.streams[streamKey{roomID: "!room:example.com", eventID: "$event"}]
-	if state == nil {
-		t.Fatal("expected stream state to exist")
-	}
-	if len(state.subscribers) != 1 {
-		t.Fatalf("expected 1 replayed subscriber, got %d", len(state.subscribers))
-	}
-}
+			if !helper.HandleToDeviceEvent(context.Background(), newTestSubscribeEvent(t, desc, "", "")) {
+				t.Fatalf("expected %s subscribe to be consumed", tc.name)
+			}
+			if len(helper.pendingSubscribe) != 1 {
+				t.Fatalf("expected 1 pending subscribe, got %d", len(helper.pendingSubscribe))
+			}
 
-func TestPendingEncryptedSubscribeReplay(t *testing.T) {
-	helper := NewStreamHelper(&Client{
-		UserID:     "@bot:example.com",
-		DeviceID:   "BOTDEVICE",
-		StateStore: NewMemoryStateStore(),
-	}, &StreamHelperOptions{
-		IsEncrypted: func(context.Context, id.RoomID) (bool, error) { return true, nil },
-	})
-	gen := helper.NewGenerator(&StreamGeneratorOptions{
-		AuthorizeSubscriber: func(context.Context, *StreamSubscribeRequest) bool { return true },
-	})
-	desc, err := gen.BuildDescriptor(context.Background(), &StreamDescriptorRequest{
-		RoomID: "!room:example.com",
-		Type:   "com.beeper.llm",
-	})
-	if err != nil {
-		t.Fatalf("BuildDescriptor returned error: %v", err)
-	}
-	subscribeContent := &event.Content{Parsed: &event.BeeperStreamSubscribeEventContent{
-		RoomID:   "!room:example.com",
-		EventID:  "$event",
-		DeviceID: "SUBDEVICE",
-		ExpiryMS: 60_000,
-	}}
-	testGCM, err := newStreamGCM(desc.Encryption.Key)
-	if err != nil {
-		t.Fatalf("newStreamGCM returned error: %v", err)
-	}
-	encrypted, err := encryptStreamPayload(event.ToDeviceBeeperStreamSubscribe, subscribeContent, "!room:example.com", "$event", testGCM)
-	if err != nil {
-		t.Fatalf("encryptStreamPayload returned error: %v", err)
-	}
-	evt := &event.Event{
-		Sender:  "@alice:example.com",
-		Type:    event.ToDeviceEncrypted,
-		Content: event.Content{Parsed: encrypted},
-	}
-	if !helper.HandleToDeviceEvent(context.Background(), evt) {
-		t.Fatal("expected encrypted subscribe to be consumed")
-	}
-	if len(helper.pendingSubscribe) != 1 {
-		t.Fatalf("expected 1 pending subscribe, got %d", len(helper.pendingSubscribe))
-	}
+			startTestStream(t, gen, desc)
 
-	err = gen.Start(context.Background(), &StartStreamRequest{
-		RoomID:     "!room:example.com",
-		EventID:    "$event",
-		Type:       "com.beeper.llm",
-		Descriptor: desc,
-	})
-	if err != nil {
-		t.Fatalf("Start returned error: %v", err)
-	}
-	if len(helper.pendingSubscribe) != 0 {
-		t.Fatalf("expected pending subscribes to be replayed, got %d left", len(helper.pendingSubscribe))
-	}
-	state := helper.streams[streamKey{roomID: "!room:example.com", eventID: "$event"}]
-	if state == nil {
-		t.Fatal("expected stream state to exist")
-	}
-	if len(state.subscribers) != 1 {
-		t.Fatalf("expected 1 replayed subscriber, got %d", len(state.subscribers))
+			if len(helper.pendingSubscribe) != 0 {
+				t.Fatalf("expected pending subscribes to be replayed, got %d left", len(helper.pendingSubscribe))
+			}
+			state := requireTestStreamState(t, helper)
+			if len(state.subscribers) != 1 {
+				t.Fatalf("expected 1 replayed subscriber, got %d", len(state.subscribers))
+			}
+		})
 	}
 }
 
@@ -321,56 +280,31 @@ func TestStreamPublishAndFinishWithDirectClient(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client, err := NewClient(ts.URL, "@bot:example.com", "access-token")
+	client, err := NewClient(ts.URL, testStreamBotUserID, "access-token")
 	if err != nil {
 		t.Fatalf("NewClient returned error: %v", err)
 	}
-	client.DeviceID = "BOTDEVICE"
+	client.DeviceID = testStreamBotDeviceID
 	client.StateStore = NewMemoryStateStore()
+
 	helper := client.GetOrCreateStreamHelper(nil)
 	gen := helper.NewGenerator(&StreamGeneratorOptions{
 		AuthorizeSubscriber: func(context.Context, *StreamSubscribeRequest) bool { return true },
 	})
 	desc, err := gen.BuildDescriptor(context.Background(), &StreamDescriptorRequest{
-		RoomID: "!room:example.com",
-		Type:   "com.beeper.llm",
+		RoomID: testStreamRoomID,
+		Type:   testStreamType,
 	})
 	if err != nil {
 		t.Fatalf("BuildDescriptor returned error: %v", err)
 	}
-	err = gen.Start(context.Background(), &StartStreamRequest{
-		RoomID:     "!room:example.com",
-		EventID:    "$event",
-		Type:       "com.beeper.llm",
-		Descriptor: desc,
-	})
-	if err != nil {
-		t.Fatalf("Start returned error: %v", err)
-	}
+	startTestStream(t, gen, desc)
 
-	if !helper.HandleToDeviceEvent(context.Background(), &event.Event{
-		Sender:     "@alice:example.com",
-		ToUserID:   "@bot:example.com",
-		ToDeviceID: "BOTDEVICE",
-		Type:       event.ToDeviceBeeperStreamSubscribe,
-		Content: event.Content{Parsed: &event.BeeperStreamSubscribeEventContent{
-			RoomID:   "!room:example.com",
-			EventID:  "$event",
-			DeviceID: "SUBDEVICE",
-			ExpiryMS: 60_000,
-		}},
-	}) {
+	if !helper.HandleToDeviceEvent(context.Background(), newTestSubscribeEvent(t, nil, testStreamBotUserID, testStreamBotDeviceID)) {
 		t.Fatal("expected subscribe to be consumed")
 	}
 
-	err = gen.Publish(context.Background(), &PublishStreamRequest{
-		RoomID:  "!room:example.com",
-		EventID: "$event",
-		Content: map[string]any{
-			"com.beeper.llm.deltas": []map[string]any{{"delta": "hello"}},
-		},
-	})
-	if err != nil {
+	if err = gen.Publish(context.Background(), newTestPublishRequest("hello")); err != nil {
 		t.Fatalf("Publish returned error: %v", err)
 	}
 	if sendPath == "" {
@@ -386,37 +320,23 @@ func TestStreamPublishAndFinishWithDirectClient(t *testing.T) {
 	if err = json.Unmarshal(sendBody, &req); err != nil {
 		t.Fatalf("failed to unmarshal sendToDevice request: %v", err)
 	}
-	targetUser, ok := req.Messages["@alice:example.com"]
+	targetUser, ok := req.Messages[string(testStreamSubscriberID)]
 	if !ok {
 		t.Fatalf("missing target user in request: %#v", req.Messages)
 	}
-	rawContent, ok := targetUser["SUBDEVICE"]
+	rawContent, ok := targetUser[string(testStreamSubscriberDev)]
 	if !ok {
 		t.Fatalf("missing target device in request: %#v", targetUser)
 	}
-	var content map[string]any
-	if err = json.Unmarshal(rawContent, &content); err != nil {
-		t.Fatalf("failed to unmarshal stream update content: %v", err)
-	}
-	if content["room_id"] != "!room:example.com" || content["event_id"] != "$event" {
-		t.Fatalf("unexpected stream update routing content: %#v", content)
-	}
+	assertStreamUpdateMap(t, decodeJSONMap(t, rawContent))
 
-	err = gen.Finish(context.Background(), &FinishStreamRequest{
-		RoomID:  "!room:example.com",
-		EventID: "$event",
-	})
-	if err != nil {
+	if err = gen.Finish(context.Background(), &FinishStreamRequest{
+		RoomID:  testStreamRoomID,
+		EventID: testStreamEventID,
+	}); err != nil {
 		t.Fatalf("Finish returned error: %v", err)
 	}
-	err = gen.Publish(context.Background(), &PublishStreamRequest{
-		RoomID:  "!room:example.com",
-		EventID: "$event",
-		Content: map[string]any{
-			"com.beeper.llm.deltas": []map[string]any{{"delta": "bye"}},
-		},
-	})
-	if err == nil {
+	if err = gen.Publish(context.Background(), newTestPublishRequest("bye")); err == nil {
 		t.Fatal("expected Publish after Finish to fail")
 	}
 }
