@@ -136,11 +136,11 @@ func (as *AppService) handleTransaction(ctx context.Context, id string, txn *Tra
 		} else if txn.MSC2409EphemeralEvents != nil {
 			as.handleEvents(ctx, txn.MSC2409EphemeralEvents, event.EphemeralEventType)
 		}
-		if txn.ToDeviceEvents != nil {
-			as.handleEvents(ctx, txn.ToDeviceEvents, event.ToDeviceEventType)
-		} else if txn.MSC2409ToDeviceEvents != nil {
-			as.handleEvents(ctx, txn.MSC2409ToDeviceEvents, event.ToDeviceEventType)
-		}
+	}
+	if txn.ToDeviceEvents != nil {
+		as.handleEvents(ctx, txn.ToDeviceEvents, event.ToDeviceEventType)
+	} else if txn.MSC2409ToDeviceEvents != nil {
+		as.handleEvents(ctx, txn.MSC2409ToDeviceEvents, event.ToDeviceEventType)
 	}
 	as.handleEvents(ctx, txn.Events, event.UnknownEventType)
 	if txn.DeviceLists != nil {

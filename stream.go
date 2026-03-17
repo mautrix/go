@@ -555,14 +555,6 @@ func validateBeeperStreamDescriptor(info *event.BeeperStreamInfo) error {
 	return nil
 }
 
-// BeeperStreamDescriptor holds the `com.beeper.stream` payload for a Matrix event.
-type BeeperStreamDescriptor struct {
-	sender *BeeperStreamSender
-	roomID id.RoomID
-	// Info is the `com.beeper.stream` payload.
-	Info *event.BeeperStreamInfo
-}
-
 func (s *BeeperStreamSender) activateStream(ctx context.Context, roomID id.RoomID, eventID id.EventID, info *event.BeeperStreamInfo) error {
 	if err := validateBeeperStreamDescriptor(info); err != nil {
 		return err
@@ -607,46 +599,8 @@ func (s *BeeperStreamSender) activateStream(ctx context.Context, roomID id.RoomI
 	return nil
 }
 
-// Activate registers the sent Matrix event and returns a stream handle.
-func (d *BeeperStreamDescriptor) Activate(ctx context.Context, eventID id.EventID) (*BeeperStream, error) {
-	if d.sender == nil || d.Info == nil {
-		return nil, fmt.Errorf("missing beeper stream descriptor")
-	} else if d.roomID == "" || eventID == "" {
-		return nil, fmt.Errorf("missing beeper stream identifiers")
-	}
-	if err := d.sender.activateStream(ctx, d.roomID, eventID, d.Info); err != nil {
-		return nil, err
-	}
-	return &BeeperStream{
-		sender:  d.sender,
-		roomID:  d.roomID,
-		eventID: eventID,
-	}, nil
-}
-
-// BeeperStream publishes updates for an active stream.
-type BeeperStream struct {
-	sender  *BeeperStreamSender
-	roomID  id.RoomID
-	eventID id.EventID
-}
-
-// Publish sends an update to all active subscribers.
-func (s *BeeperStream) Publish(ctx context.Context, content map[string]any) error {
-	desc, gcm, update, subscribers, err := s.sender.recordUpdate(s.roomID, s.eventID, content)
-	if err != nil {
-		return err
-	}
-	return s.sender.sendUpdateToSubscribers(ctx, desc, gcm, update, subscribers)
-}
-
-// Finish closes the stream.
-func (s *BeeperStream) Finish(ctx context.Context) error {
-	return s.sender.Finish(ctx, s.roomID, s.eventID)
-}
-
-// PrepareStream creates a stream descriptor for a Matrix event.
-func (s *BeeperStreamSender) PrepareStream(ctx context.Context, roomID id.RoomID, streamType string) (*BeeperStreamDescriptor, error) {
+// BuildDescriptor implements BeeperStreamTransport.
+func (s *BeeperStreamSender) BuildDescriptor(ctx context.Context, roomID id.RoomID, streamType string) (*event.BeeperStreamInfo, error) {
 	if s == nil {
 		return nil, fmt.Errorf("beeper stream sender is nil")
 	} else if roomID == "" || streamType == "" {
@@ -672,20 +626,7 @@ func (s *BeeperStreamSender) PrepareStream(ctx context.Context, roomID id.RoomID
 			StreamID:  makeStreamID(),
 		}
 	}
-	return &BeeperStreamDescriptor{
-		sender: s,
-		roomID: roomID,
-		Info:   info,
-	}, nil
-}
-
-// BuildDescriptor implements BeeperStreamTransport by calling PrepareStream and returning the Info.
-func (s *BeeperStreamSender) BuildDescriptor(ctx context.Context, roomID id.RoomID, streamType string) (*event.BeeperStreamInfo, error) {
-	desc, err := s.PrepareStream(ctx, roomID, streamType)
-	if err != nil {
-		return nil, err
-	}
-	return desc.Info, nil
+	return info, nil
 }
 
 // Start implements BeeperStreamTransport by activating the stream for the given event.

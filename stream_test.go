@@ -154,17 +154,17 @@ func TestStreamPublishAndFinish(t *testing.T) {
 	sender := client.GetOrCreateBeeperStreamSender(&BeeperStreamSenderOptions{
 		AuthorizeSubscriber: func(context.Context, *BeeperStreamSubscribeRequest) bool { return true },
 	})
-	streamDesc := must(sender.PrepareStream(context.Background(), testStreamRoomID, testStreamType))
-	require.NotNil(t, streamDesc.Info)
-	require.Equal(t, testStreamBotUserID, streamDesc.Info.UserID)
+	info := must(sender.BuildDescriptor(context.Background(), testStreamRoomID, testStreamType))
+	require.NotNil(t, info)
+	require.Equal(t, testStreamBotUserID, info.UserID)
 
-	stream := must(streamDesc.Activate(context.Background(), testStreamEventID))
+	require.NoError(t, sender.Start(context.Background(), testStreamRoomID, testStreamEventID, info))
 
 	require.True(t, sender.HandleToDeviceEvent(context.Background(), newTestSubscribeEvent(t, nil, testStreamBotUserID, "*")))
 
-	require.NoError(t, stream.Publish(context.Background(), newTestPublishContent("hello")))
+	require.NoError(t, sender.Publish(context.Background(), testStreamRoomID, testStreamEventID, newTestPublishContent("hello")))
 	assertTestStreamUpdate(t, recorder, testStreamSubscriberID, testStreamSubscriberDev)
 
-	require.NoError(t, stream.Finish(context.Background()))
-	require.Error(t, stream.Publish(context.Background(), newTestPublishContent("bye")))
+	require.NoError(t, sender.Finish(context.Background(), testStreamRoomID, testStreamEventID))
+	require.Error(t, sender.Publish(context.Background(), testStreamRoomID, testStreamEventID, newTestPublishContent("bye")))
 }

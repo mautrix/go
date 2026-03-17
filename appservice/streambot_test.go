@@ -59,10 +59,10 @@ func newTestBotHomeserver(t *testing.T) (*httptest.Server, *atomic.Int32) {
 	return ts, &sendToDeviceCalls
 }
 
-func activateTestAppServiceStream(t *testing.T, sender *mautrix.BeeperStreamSender) *mautrix.BeeperStream {
+func activateTestAppServiceStream(t *testing.T, sender *mautrix.BeeperStreamSender) {
 	t.Helper()
-	desc := must(sender.PrepareStream(context.Background(), "!room:example.com", "com.beeper.llm"))
-	return must(desc.Activate(context.Background(), "$event"))
+	info := must(sender.BuildDescriptor(context.Background(), "!room:example.com", "com.beeper.llm"))
+	require.NoError(t, sender.Start(context.Background(), "!room:example.com", "$event", info))
 }
 
 func deliverTestBotSubscribe(as *AppService, deviceID id.DeviceID) {
@@ -87,11 +87,11 @@ func TestBotClientBeeperStreamInterception(t *testing.T) {
 	sender := client.GetOrCreateBeeperStreamSender(&mautrix.BeeperStreamSenderOptions{
 		AuthorizeSubscriber: func(context.Context, *mautrix.BeeperStreamSubscribeRequest) bool { return true },
 	})
-	stream := activateTestAppServiceStream(t, sender)
+	activateTestAppServiceStream(t, sender)
 
 	deliverTestBotSubscribe(as, "*")
 
-	require.NoError(t, stream.Publish(context.Background(), testPublishPayload()))
+	require.NoError(t, sender.Publish(context.Background(), "!room:example.com", "$event", testPublishPayload()))
 	require.EqualValues(t, 1, sendToDeviceCalls.Load())
 	select {
 	case <-as.ToDeviceEvents:
