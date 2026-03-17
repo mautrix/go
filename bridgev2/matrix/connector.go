@@ -110,6 +110,7 @@ var (
 	_ bridgev2.MatrixConnectorWithNameDisambiguation     = (*Connector)(nil)
 	_ bridgev2.MatrixConnectorWithURLPreviews            = (*Connector)(nil)
 	_ bridgev2.MatrixConnectorWithAnalytics              = (*Connector)(nil)
+	_ bridgev2.MatrixConnectorWithBeeperStreamSender     = (*Connector)(nil)
 )
 
 func NewConnector(cfg *bridgeconfig.Config) *Connector {
@@ -615,6 +616,10 @@ func (br *Connector) NewUserIntent(ctx context.Context, userID id.UserID, access
 
 func (br *Connector) BotIntent() bridgev2.MatrixAPI {
 	return &ASIntent{Connector: br, Matrix: br.Bot}
+}
+
+func (br *Connector) GetOrCreateBeeperStreamSender(opts *mautrix.BeeperStreamSenderOptions) *mautrix.BeeperStreamSender {
+	return br.AS.BotClient().GetOrCreateBeeperStreamSender(opts)
 }
 
 func (br *Connector) GetPowerLevels(ctx context.Context, roomID id.RoomID) (*event.PowerLevelsEventContent, error) {

@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"slices"
 	"sync"
 	"time"
 
@@ -290,7 +291,7 @@ func (s *BeeperStreamSender) handleSubscribe(ctx context.Context, sender id.User
 	state.subscribers[sub] = s.now().Add(expiry)
 	desc := state.descriptor
 	gcm := state.gcm
-	updates := append([]*event.Content(nil), state.updates...)
+	updates := slices.Clone(state.updates)
 	s.lock.Unlock()
 
 	for _, update := range updates {
@@ -429,7 +430,7 @@ func (s *BeeperStreamSender) replayPendingSubscribes(ctx context.Context) {
 		s.pendingLock.Unlock()
 		return
 	}
-	pending := append([]pendingSubscribeEvent(nil), s.pendingSubscribe...)
+	pending := slices.Clone(s.pendingSubscribe)
 	s.pendingLock.Unlock()
 	consumed := make(map[*event.Event]struct{})
 	for _, candidate := range pending {

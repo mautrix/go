@@ -45,13 +45,9 @@ func newSendToDeviceRecorderServer(t *testing.T) (*httptest.Server, *sendToDevic
 		if r.Method != http.MethodPut {
 			t.Fatalf("unexpected method %s", r.Method)
 		}
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			t.Fatalf("failed to read request body: %v", err)
-		}
 		recorder.requests <- capturedSendToDeviceRequest{
 			path: r.URL.Path,
-			body: body,
+			body: must(io.ReadAll(r.Body)),
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{})
 	}))
@@ -75,18 +71,10 @@ func (r *sendToDeviceRecorder) rawContent(t *testing.T, req capturedSendToDevice
 	var payload struct {
 		Messages map[string]map[string]json.RawMessage `json:"messages"`
 	}
-	if err := json.Unmarshal(req.body, &payload); err != nil {
-		t.Fatalf("failed to unmarshal sendToDevice request: %v", err)
-	}
-	targetUser, ok := payload.Messages[string(userID)]
-	if !ok {
-		t.Fatalf("missing target user in request: %#v", payload.Messages)
-	}
-	rawContent, ok := targetUser[string(deviceID)]
-	if !ok {
-		t.Fatalf("missing target device in request: %#v", targetUser)
-	}
-	return rawContent
+	require.NoError(t, json.Unmarshal(req.body, &payload))
+	require.Contains(t, payload.Messages, string(userID), "missing target user in request")
+	require.Contains(t, payload.Messages[string(userID)], string(deviceID), "missing target device in request")
+	return payload.Messages[string(userID)][string(deviceID)]
 }
 
 func newTestStreamClient(t *testing.T, homeserverURL string, userID id.UserID, deviceID id.DeviceID) *Client {
@@ -159,37 +147,23 @@ func newTestSubscribeEvent(t *testing.T, desc *event.BeeperStreamInfo, toUserID 
 func decodeJSONMap(t *testing.T, data []byte) map[string]any {
 	t.Helper()
 	var parsed map[string]any
-	if err := json.Unmarshal(data, &parsed); err != nil {
-		t.Fatalf("failed to unmarshal JSON map: %v", err)
-	}
+	require.NoError(t, json.Unmarshal(data, &parsed))
 	return parsed
 }
 
 func assertStreamUpdateMap(t *testing.T, parsed map[string]any) {
 	t.Helper()
-	if parsed["room_id"] != string(testStreamRoomID) {
-		t.Fatalf("unexpected room_id: %#v", parsed["room_id"])
-	}
-	if parsed["event_id"] != string(testStreamEventID) {
-		t.Fatalf("unexpected event_id: %#v", parsed["event_id"])
-	}
-	if _, ok := parsed["type"]; ok {
-		t.Fatalf("unexpected type field: %#v", parsed["type"])
-	}
-	if _, ok := parsed["content"]; ok {
-		t.Fatalf("unexpected nested content field: %#v", parsed["content"])
-	}
-	if _, ok := parsed[testStreamDeltaKey]; !ok {
-		t.Fatalf("missing %s in content: %#v", testStreamDeltaKey, parsed)
-	}
+	require.Equal(t, string(testStreamRoomID), parsed["room_id"])
+	require.Equal(t, string(testStreamEventID), parsed["event_id"])
+	require.NotContains(t, parsed, "type")
+	require.NotContains(t, parsed, "content")
+	require.Contains(t, parsed, testStreamDeltaKey)
 }
 
 func requireTestStreamState(t *testing.T, sender *BeeperStreamSender) *beeperStreamState {
 	t.Helper()
 	state := sender.streams[beeperStreamKey{roomID: testStreamRoomID, eventID: testStreamEventID}]
-	if state == nil {
-		t.Fatal("expected stream state to exist")
-	}
+	require.NotNil(t, state, "expected stream state to exist")
 	return state
 }
 
@@ -200,12 +174,10 @@ func assertTestStreamSubscribe(t *testing.T, recorder *sendToDeviceRecorder, use
 		t.Fatalf("unexpected sendToDevice path %q", req.path)
 	}
 	var subscribe event.BeeperStreamSubscribeEventContent
-	if err := json.Unmarshal(recorder.rawContent(t, req, userID, deviceID), &subscribe); err != nil {
-		t.Fatalf("failed to unmarshal subscribe request: %v", err)
-	}
-	if subscribe.RoomID != testStreamRoomID || subscribe.EventID != testStreamEventID || subscribe.DeviceID != testStreamSubscriberDev {
-		t.Fatalf("unexpected subscribe payload: %#v", subscribe)
-	}
+	require.NoError(t, json.Unmarshal(recorder.rawContent(t, req, userID, deviceID), &subscribe))
+	require.Equal(t, testStreamRoomID, subscribe.RoomID)
+	require.Equal(t, testStreamEventID, subscribe.EventID)
+	require.Equal(t, testStreamSubscriberDev, subscribe.DeviceID)
 }
 
 func assertTestStreamUpdate(t *testing.T, recorder *sendToDeviceRecorder, userID id.UserID, deviceID id.DeviceID) {
@@ -224,14 +196,9 @@ func must[T any](val T, err error) T {
 	return val
 }
 
-func mustMarshalJSON(t *testing.T, value any) []byte {
-	t.Helper()
-	return must(json.Marshal(value))
-}
-
 func TestNewStreamUpdateContentMarshal(t *testing.T) {
 	content := must(newStreamUpdateContent(testStreamRoomID, testStreamEventID, newTestPublishContent("hello")))
-	assertStreamUpdateMap(t, decodeJSONMap(t, mustMarshalJSON(t, content)))
+	assertStreamUpdateMap(t, decodeJSONMap(t, must(json.Marshal(content))))
 }
 
 func TestNewStreamUpdateContentRejectsReservedKeys(t *testing.T) {
@@ -248,7 +215,7 @@ func TestNewStreamUpdateContentRejectsReservedKeys(t *testing.T) {
 
 func TestNewStreamUpdateContentAllowsNilPayload(t *testing.T) {
 	content := must(newStreamUpdateContent(testStreamRoomID, testStreamEventID, nil))
-	parsed := decodeJSONMap(t, mustMarshalJSON(t, content))
+	parsed := decodeJSONMap(t, must(json.Marshal(content)))
 	if parsed["room_id"] != string(testStreamRoomID) {
 		t.Fatalf("unexpected room_id: %#v", parsed["room_id"])
 	}

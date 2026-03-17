@@ -41,7 +41,7 @@ type BeeperStreamReceiver struct {
 	minimumRenewInterval time.Duration
 	onUpdate             func(context.Context, *BeeperStreamUpdate) error
 
-	lock                    sync.Mutex
+	lock                    sync.RWMutex
 	stopped                 bool
 	subscriptions           map[beeperStreamKey]*beeperStreamSubscription
 	subscriptionsByStreamID map[string]*beeperStreamSubscription
@@ -318,10 +318,13 @@ func (r *BeeperStreamReceiver) handleStreamUpdateEvent(ctx context.Context, send
 }
 
 func (r *BeeperStreamReceiver) dispatchUpdate(ctx context.Context, sender id.UserID, roomID id.RoomID, eventID id.EventID, content *event.Content) {
-	if r.onUpdate == nil {
+	r.lock.RLock()
+	onUpdate := r.onUpdate
+	r.lock.RUnlock()
+	if onUpdate == nil {
 		return
 	}
-	if err := r.onUpdate(ctx, &BeeperStreamUpdate{
+	if err := onUpdate(ctx, &BeeperStreamUpdate{
 		Sender:  sender,
 		RoomID:  roomID,
 		EventID: eventID,
@@ -338,6 +341,8 @@ func (r *BeeperStreamReceiver) applyOptions(opts *BeeperStreamReceiverOptions) {
 	if r == nil || opts == nil {
 		return
 	}
+	r.lock.Lock()
+	defer r.lock.Unlock()
 	if opts.Logger != nil {
 		r.log = opts.Logger.With().Str("component", beeperStreamReceiverComponentName).Logger()
 	}

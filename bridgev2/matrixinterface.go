@@ -133,6 +133,11 @@ type MatrixConnectorWithHTTPSettings interface {
 	GetHTTPClientSettings() exhttp.ClientSettings
 }
 
+type MatrixConnectorWithBeeperStreamSender interface {
+	MatrixConnector
+	GetOrCreateBeeperStreamSender(opts *mautrix.BeeperStreamSenderOptions) *mautrix.BeeperStreamSender
+}
+
 type MatrixSendExtra struct {
 	Timestamp    time.Time
 	MessageMeta  *database.Message
