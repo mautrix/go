@@ -382,4 +382,3 @@ func (r *BeeperStreamReceiver) requireClient() (*Client, error) {
 	}
 	return requireStreamClient(r.client, "receiver")
 }
-

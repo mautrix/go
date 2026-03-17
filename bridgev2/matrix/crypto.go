@@ -370,7 +370,6 @@ func (helper *CryptoHelper) Start() {
 	}
 }
 
-
 func (helper *CryptoHelper) Stop() {
 	helper.log.Debug().Msg("CryptoHelper.Stop() called, stopping bridge bot sync")
 	helper.client.StopSync()
