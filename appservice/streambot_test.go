@@ -77,7 +77,7 @@ func deliverTestBotSubscribe(as *AppService, deviceID id.DeviceID) {
 func TestBotClientBeeperStreamInterception(t *testing.T) {
 	ts, sendToDeviceCalls := newTestBotHomeserver(t)
 	as := newTestAppService(t, ts.URL)
-	client := as.BotClient()
+	client := as.Client(as.BotMXID())
 	sender := client.GetOrCreateBeeperStreamSender(&mautrix.BeeperStreamSenderOptions{
 		AuthorizeSubscriber: func(context.Context, *mautrix.BeeperStreamSubscribeRequest) bool { return true },
 	})
