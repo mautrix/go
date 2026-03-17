@@ -60,7 +60,7 @@ func NewBeeperStreamReceiver(client *Client, opts *BeeperStreamReceiverOptions) 
 	}
 	receiver := &BeeperStreamReceiver{
 		client:                  client,
-		log:                     resolveStreamLogger(optsLogger, client, beeperStreamComponentName+"_receiver"),
+		log:                     resolveStreamLogger(optsLogger, client, beeperStreamReceiverComponentName),
 		defaultExpiry:           DefaultBeeperStreamSubscribeExpiry,
 		minimumRenewInterval:    defaultBeeperStreamRenewInterval,
 		subscriptions:           make(map[beeperStreamKey]*beeperStreamSubscription),
@@ -168,11 +168,7 @@ func (r *BeeperStreamReceiver) EnsureSubscription(ctx context.Context, roomID id
 			delete(r.subscriptionsByStreamID, existing.descriptor.Encryption.StreamID)
 		}
 	}
-	loopCtx := ctx
-	if loopCtx == nil {
-		loopCtx = context.Background()
-	}
-	subCtx, cancel := context.WithCancel(loopCtx)
+	subCtx, cancel := context.WithCancel(ctx)
 	sub := &beeperStreamSubscription{
 		key:        key,
 		descriptor: descriptor,
@@ -335,7 +331,7 @@ func (r *BeeperStreamReceiver) applyOptions(opts *BeeperStreamReceiverOptions) {
 		return
 	}
 	if opts.Logger != nil {
-		r.log = opts.Logger.With().Str("component", beeperStreamComponentName+"_receiver").Logger()
+		r.log = opts.Logger.With().Str("component", beeperStreamReceiverComponentName).Logger()
 	}
 	if opts.DefaultExpiry > 0 {
 		r.defaultExpiry = opts.DefaultExpiry

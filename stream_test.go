@@ -228,6 +228,15 @@ func assertTestStreamUpdate(t *testing.T, recorder *sendToDeviceRecorder, userID
 	assertStreamUpdateMap(t, decodeJSONMap(t, recorder.rawContent(t, req, userID, deviceID)))
 }
 
+func mustMarshalJSON(t *testing.T, value any) []byte {
+	t.Helper()
+	data, err := json.Marshal(value)
+	if err != nil {
+		t.Fatalf("failed to marshal JSON: %v", err)
+	}
+	return data
+}
+
 func TestNewStreamUpdateContentMarshal(t *testing.T) {
 	content, err := newStreamUpdateContent(testStreamRoomID, testStreamEventID, newTestPublishContent("hello"))
 	if err != nil {
@@ -457,9 +466,6 @@ func TestStreamPublishAndFinish(t *testing.T) {
 	stream, err := streamDesc.Activate(context.Background(), testStreamEventID)
 	if err != nil {
 		t.Fatalf("Activate returned error: %v", err)
-	}
-	if stream.RoomID() != testStreamRoomID || stream.EventID() != testStreamEventID {
-		t.Fatalf("unexpected stream identity: room=%s event=%s", stream.RoomID(), stream.EventID())
 	}
 
 	if !sender.HandleToDeviceEvent(context.Background(), newTestSubscribeEvent(t, nil, testStreamBotUserID, testStreamBotDeviceID)) {

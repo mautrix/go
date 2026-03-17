@@ -274,7 +274,7 @@ func (as *AppService) interceptToDeviceEvent(ctx context.Context, evt *event.Eve
 	}
 	as.botDeviceClientsLock.RUnlock()
 	for _, client := range clients {
-		if client != nil && client.HandleToDeviceEvent(ctx, evt) {
+		if client.HandleToDeviceEvent(ctx, evt) {
 			return true
 		}
 	}

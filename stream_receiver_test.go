@@ -2,7 +2,6 @@ package mautrix
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 	"time"
 
@@ -176,13 +175,4 @@ func newTestReceiverUpdateEvent(t *testing.T, receiver *BeeperStreamReceiver, en
 		Type:    event.ToDeviceEncrypted,
 		Content: event.Content{Parsed: encryptedContent},
 	}
-}
-
-func mustMarshalJSON(t *testing.T, value any) []byte {
-	t.Helper()
-	data, err := json.Marshal(value)
-	if err != nil {
-		t.Fatalf("failed to marshal JSON: %v", err)
-	}
-	return data
 }

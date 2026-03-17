@@ -41,15 +41,6 @@ func (br *Bridge) GetOrCreateBeeperStreamSender(ctx context.Context) (*mautrix.B
 	return br.beeperStreamSender, nil
 }
 
-// GetBeeperStreamTransport returns a BeeperStreamTransport backed by the bridge bot's stream sender.
-func (br *Bridge) GetBeeperStreamTransport(ctx context.Context) (mautrix.BeeperStreamTransport, error) {
-	sender, err := br.GetOrCreateBeeperStreamSender(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return sender.NewTransport(), nil
-}
-
 func (br *Bridge) authorizeBeeperStreamSubscriber(ctx context.Context, req *mautrix.BeeperStreamSubscribeRequest) bool {
 	user, err := br.GetUserByMXID(ctx, req.UserID)
 	if err != nil {

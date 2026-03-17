@@ -34,6 +34,7 @@ const (
 	maxPendingSubscribes                = 64
 	maxUpdatesPerStream                 = 1024
 	beeperStreamComponentName           = "beeper_stream"
+	beeperStreamReceiverComponentName   = beeperStreamComponentName + "_receiver"
 )
 
 type BeeperStreamSenderOptions struct {
@@ -255,29 +256,24 @@ func (s *BeeperStreamSender) handleEncryptedEvent(ctx context.Context, evt *even
 }
 
 func (s *BeeperStreamSender) tryEncryptedSubscribeCandidates(ctx context.Context, evt *event.Event, content *event.EncryptedEventContent) bool {
-	for _, state := range s.collectEncryptedCandidates(content) {
-		if s.tryDecryptAndSubscribe(ctx, evt, content, state) {
-			return true
-		}
-	}
-	return false
-}
-
-func (s *BeeperStreamSender) collectEncryptedCandidates(content *event.EncryptedEventContent) []*beeperStreamState {
 	if content.StreamID == "" {
-		return nil
+		return false
 	}
 	s.lock.RLock()
-	defer s.lock.RUnlock()
-	if state, ok := s.streamsByStreamID[content.StreamID]; ok {
-		return []*beeperStreamState{state}
+	state := s.streamsByStreamID[content.StreamID]
+	s.lock.RUnlock()
+	if state == nil {
+		return false
 	}
-	return nil
+	return s.tryDecryptAndSubscribe(ctx, evt, content, state)
 }
 
 func (s *BeeperStreamSender) isForDifferentDevice(evt *event.Event) bool {
-	if evt == nil || s.client == nil {
-		return s.client == nil
+	if s.client == nil {
+		return true
+	}
+	if evt == nil {
+		return false
 	}
 	if evt.ToUserID != "" && evt.ToUserID != s.client.UserID {
 		return true
@@ -571,7 +567,7 @@ func clonePendingSubscribeEvent(evt *event.Event) *event.Event {
 }
 
 func (state *beeperStreamState) activeSubscribers(now time.Time) []beeperStreamSubscriber {
-	active := make([]beeperStreamSubscriber, 0, len(state.subscribers))
+	var active []beeperStreamSubscriber
 	doEvict := now.Sub(state.lastEviction) >= streamCleanupGrace
 	for subscriber, expiry := range state.subscribers {
 		if now.After(expiry) {
@@ -738,12 +734,6 @@ type BeeperStream struct {
 	roomID     id.RoomID
 	eventID    id.EventID
 	descriptor *event.BeeperStreamInfo
-}
-
-func (s *BeeperStream) RoomID() id.RoomID   { return s.roomID }
-func (s *BeeperStream) EventID() id.EventID { return s.eventID }
-func (s *BeeperStream) Descriptor() *event.BeeperStreamInfo {
-	return cloneBeeperStreamInfo(s.descriptor)
 }
 
 // Publish sends an update to all active subscribers.
@@ -942,12 +932,12 @@ func newStreamUpdateContent(roomID id.RoomID, eventID id.EventID, content map[st
 	if roomID == "" || eventID == "" {
 		return nil, fmt.Errorf("missing beeper stream identifiers")
 	}
-	raw := maps.Clone(content)
-	if _, ok := raw["room_id"]; ok {
+	if _, ok := content["room_id"]; ok {
 		return nil, fmt.Errorf("beeper stream payload may not override room_id")
-	} else if _, ok = raw["event_id"]; ok {
+	} else if _, ok := content["event_id"]; ok {
 		return nil, fmt.Errorf("beeper stream payload may not override event_id")
 	}
+	raw := maps.Clone(content)
 	return &event.Content{
 		Parsed: &event.BeeperStreamUpdateEventContent{
 			RoomID:  roomID,
