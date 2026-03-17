@@ -509,7 +509,7 @@ func (state *beeperStreamState) activeSubscribers(now time.Time) []beeperStreamS
 	return active
 }
 
-func BeeperStreamDescriptorEqual(a, b *event.BeeperStreamInfo) bool {
+func beeperStreamDescriptorEqual(a, b *event.BeeperStreamInfo) bool {
 	switch {
 	case a == nil || b == nil:
 		return a == b

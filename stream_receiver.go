@@ -162,7 +162,7 @@ func (r *BeeperStreamReceiver) EnsureSubscription(ctx context.Context, roomID id
 		return nil
 	}
 	if existing := r.subscriptions[key]; existing != nil {
-		if BeeperStreamDescriptorEqual(existing.descriptor, descriptor) {
+		if beeperStreamDescriptorEqual(existing.descriptor, descriptor) {
 			r.lock.Unlock()
 			return nil
 		}
@@ -301,9 +301,9 @@ func (r *BeeperStreamReceiver) handleStreamUpdateEvent(ctx context.Context, send
 		return
 	}
 	key := beeperStreamKey{roomID: update.RoomID, eventID: update.EventID}
-	r.lock.Lock()
+	r.lock.RLock()
 	sub := r.subscriptions[key]
-	r.lock.Unlock()
+	r.lock.RUnlock()
 	if sub == nil {
 		return
 	}
@@ -363,14 +363,17 @@ func (r *BeeperStreamReceiver) handleEncryptedStreamEvent(ctx context.Context, e
 	if content.StreamID == "" {
 		return
 	}
-	r.lock.Lock()
+	r.lock.RLock()
 	sub := r.subscriptionsByStreamID[content.StreamID]
-	r.lock.Unlock()
+	r.lock.RUnlock()
 	if sub == nil {
 		return
 	}
 	logicalType, parsedContent, err := DecryptBeeperStreamEvent(content, sub.descriptor.Encryption.Key)
 	if err != nil {
+		r.log.Debug().Err(err).
+			Str("stream_id", content.StreamID).
+			Msg("Failed to decrypt beeper stream update")
 		return
 	}
 	if logicalType != event.ToDeviceBeeperStreamUpdate {
