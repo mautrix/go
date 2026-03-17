@@ -853,6 +853,8 @@ func decryptStreamPayload(content *event.EncryptedEventContent, gcm cipher.AEAD)
 	iv, err := base64.RawStdEncoding.DecodeString(content.IV)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode beeper stream IV: %w", err)
+	} else if len(iv) != gcm.NonceSize() {
+		return nil, fmt.Errorf("invalid beeper stream IV length %d", len(iv))
 	}
 	ciphertext, err := base64.RawStdEncoding.AppendDecode(nil, content.StreamCiphertext)
 	if err != nil {
@@ -879,6 +881,9 @@ func newStreamUpdateContent(roomID id.RoomID, eventID id.EventID, content map[st
 		return nil, fmt.Errorf("beeper stream payload may not override event_id")
 	}
 	raw := maps.Clone(content)
+	if raw == nil {
+		raw = make(map[string]any, 2)
+	}
 	raw["room_id"] = roomID
 	raw["event_id"] = eventID
 	return &event.Content{Raw: raw}, nil

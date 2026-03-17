@@ -2,6 +2,7 @@ package mautrix
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -262,6 +263,23 @@ func TestNewStreamUpdateContentRejectsReservedKeys(t *testing.T) {
 	}
 }
 
+func TestNewStreamUpdateContentAllowsNilPayload(t *testing.T) {
+	content, err := newStreamUpdateContent(testStreamRoomID, testStreamEventID, nil)
+	if err != nil {
+		t.Fatalf("newStreamUpdateContent returned error: %v", err)
+	}
+	parsed := decodeJSONMap(t, mustMarshalJSON(t, content))
+	if parsed["room_id"] != string(testStreamRoomID) {
+		t.Fatalf("unexpected room_id: %#v", parsed["room_id"])
+	}
+	if parsed["event_id"] != string(testStreamEventID) {
+		t.Fatalf("unexpected event_id: %#v", parsed["event_id"])
+	}
+	if len(parsed) != 2 {
+		t.Fatalf("expected only room_id and event_id in nil payload update, got %#v", parsed)
+	}
+}
+
 func TestEncryptDecryptStreamPayloadRoundTrip(t *testing.T) {
 	key := makeStreamKey()
 	content, err := newStreamUpdateContent(testStreamRoomID, testStreamEventID, newTestPublishContent("hello"))
@@ -297,6 +315,23 @@ func TestEncryptDecryptStreamPayloadRoundTrip(t *testing.T) {
 		t.Fatalf("unexpected decrypted type: %q", decrypted.Type)
 	}
 	assertStreamUpdateMap(t, decodeJSONMap(t, decrypted.Content))
+}
+
+func TestDecryptStreamPayloadRejectsInvalidIVLength(t *testing.T) {
+	gcm, err := newStreamGCM(makeStreamKey())
+	if err != nil {
+		t.Fatalf("newStreamGCM returned error: %v", err)
+	}
+	_, err = decryptStreamPayload(&event.EncryptedEventContent{
+		IV:               base64.RawStdEncoding.EncodeToString([]byte{1, 2, 3}),
+		StreamCiphertext: base64.RawStdEncoding.AppendEncode(nil, []byte("payload")),
+	}, gcm)
+	if err == nil {
+		t.Fatal("expected invalid IV length to fail")
+	}
+	if !strings.Contains(err.Error(), "invalid beeper stream IV length") {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestHandlePlainSubscribe(t *testing.T) {

@@ -39,6 +39,28 @@ func TestBeeperStreamReceiverHandleTimelineEventSubscribes(t *testing.T) {
 	assertTestStreamSubscribe(t, recorder, testStreamBotUserID, testStreamBotDeviceID)
 }
 
+func TestBeeperStreamReceiverEnsureSubscriptionIgnoresCallerCancellation(t *testing.T) {
+	ts, recorder := newSendToDeviceRecorderServer(t)
+	client := newTestStreamClient(t, ts.URL, testStreamSubscriberID, testStreamSubscriberDev)
+	receiver := client.GetOrCreateBeeperStreamReceiver(&BeeperStreamReceiverOptions{
+		DefaultExpiry:        time.Minute,
+		MinimumRenewInterval: time.Hour,
+	})
+	defer receiver.Stop()
+	desc := &event.BeeperStreamInfo{
+		UserID:   testStreamBotUserID,
+		DeviceID: testStreamBotDeviceID,
+		Type:     testStreamType,
+		ExpiryMS: 60_000,
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := receiver.EnsureSubscription(ctx, testStreamRoomID, testStreamEventID, desc); err != nil {
+		t.Fatalf("EnsureSubscription returned error: %v", err)
+	}
+	assertTestStreamSubscribe(t, recorder, testStreamBotUserID, testStreamBotDeviceID)
+}
+
 func TestBeeperStreamReceiverStopsOnFinalEdit(t *testing.T) {
 	receiver := NewBeeperStreamReceiver(&Client{
 		UserID:   testStreamSubscriberID,

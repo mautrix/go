@@ -9,6 +9,7 @@ package mautrix
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -107,7 +108,12 @@ func (r *BeeperStreamReceiver) HandleTimelineEvent(ctx context.Context, evt *eve
 				return
 			}
 		}
-		_ = r.EnsureSubscription(ctx, evt.RoomID, evt.ID, msg.BeeperStream)
+		if err := r.EnsureSubscription(ctx, evt.RoomID, evt.ID, msg.BeeperStream); err != nil {
+			zerolog.Ctx(ctx).Warn().Err(err).
+				Stringer("room_id", evt.RoomID).
+				Stringer("event_id", evt.ID).
+				Msg("Failed to ensure beeper stream subscription")
+		}
 		return
 	}
 	if msg.RelatesTo != nil && msg.RelatesTo.Type == event.RelReplace && msg.RelatesTo.EventID != "" {
@@ -146,6 +152,8 @@ func (r *BeeperStreamReceiver) HandleToDeviceEvent(ctx context.Context, evt *eve
 func (r *BeeperStreamReceiver) EnsureSubscription(ctx context.Context, roomID id.RoomID, eventID id.EventID, descriptor *event.BeeperStreamInfo) error {
 	if descriptor == nil {
 		return nil
+	} else if err := validateBeeperStreamDescriptor(descriptor); err != nil {
+		return err
 	}
 	key := beeperStreamKey{roomID: roomID, eventID: eventID}
 	r.lock.Lock()
@@ -164,7 +172,11 @@ func (r *BeeperStreamReceiver) EnsureSubscription(ctx context.Context, roomID id
 			delete(r.subscriptionsByStreamID, existing.descriptor.Encryption.StreamID)
 		}
 	}
-	subCtx, cancel := context.WithCancel(ctx)
+	subscribeCtx := context.Background()
+	if ctx != nil {
+		subscribeCtx = context.WithoutCancel(ctx)
+	}
+	subCtx, cancel := context.WithCancel(subscribeCtx)
 	sub := &beeperStreamSubscription{
 		key:        key,
 		descriptor: descriptor,
@@ -255,6 +267,9 @@ func (r *BeeperStreamReceiver) sendStreamSubscribe(ctx context.Context, key beep
 	eventType := event.ToDeviceBeeperStreamSubscribe
 	content := subscribeContent
 	if descriptor.Encryption != nil {
+		if descriptor.Encryption.Algorithm != id.AlgorithmBeeperStreamAESGCM {
+			return fmt.Errorf("unsupported beeper stream encryption algorithm %q", descriptor.Encryption.Algorithm)
+		}
 		encrypted, err := EncryptBeeperStreamEvent(eventType, subscribeContent, descriptor.Encryption.StreamID, descriptor.Encryption.Key)
 		if err != nil {
 			return err
