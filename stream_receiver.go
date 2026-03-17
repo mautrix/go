@@ -386,8 +386,12 @@ func (r *BeeperStreamReceiver) handleEncryptedStreamEvent(ctx context.Context, e
 }
 
 func (r *BeeperStreamReceiver) requireClient() (*Client, error) {
-	if r == nil {
-		return requireStreamClient(nil, "receiver")
+	if r == nil || r.client == nil {
+		return nil, fmt.Errorf("beeper stream receiver doesn't have a client")
+	} else if r.client.UserID == "" {
+		return nil, fmt.Errorf("beeper stream receiver client isn't logged in")
+	} else if r.client.DeviceID == "" {
+		return nil, fmt.Errorf("beeper stream receiver client doesn't have a device ID")
 	}
-	return requireStreamClient(r.client, "receiver")
+	return r.client, nil
 }

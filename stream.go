@@ -388,9 +388,15 @@ func (s *BeeperStreamSender) sendUpdateToSubscribers(ctx context.Context, descri
 	if err != nil {
 		return err
 	}
-	eventType, content, err := makeToDeviceContent(descriptor, gcm, event.ToDeviceBeeperStreamUpdate, update)
-	if err != nil {
-		return err
+	eventType := event.ToDeviceBeeperStreamUpdate
+	content := update
+	if descriptor != nil && descriptor.Encryption != nil && gcm != nil {
+		encrypted, encErr := encryptStreamPayload(eventType, update, descriptor.Encryption.StreamID, gcm)
+		if encErr != nil {
+			return encErr
+		}
+		eventType = event.ToDeviceEncrypted
+		content = &event.Content{Parsed: encrypted}
 	}
 	req := &ReqSendToDevice{
 		Messages: make(map[id.UserID]map[id.DeviceID]*event.Content, len(subscribers)),
@@ -431,15 +437,11 @@ func (s *BeeperStreamSender) queuePendingSubscribe(ctx context.Context, evt *eve
 	if evt == nil {
 		return
 	}
-	cloned := clonePendingSubscribeEvent(evt)
-	if cloned == nil {
-		return
-	}
 	now := s.now()
 	s.pendingLock.Lock()
 	defer s.pendingLock.Unlock()
 	s.pendingSubscribe = append(s.pendingSubscribe, pendingSubscribeEvent{
-		evt:        cloned,
+		evt:        evt,
 		receivedAt: now,
 	})
 	if len(s.pendingSubscribe) > maxPendingSubscribes {
@@ -510,37 +512,6 @@ func (s *BeeperStreamSender) tryPendingSubscribe(ctx context.Context, evt *event
 	return false
 }
 
-func clonePendingSubscribeEvent(evt *event.Event) *event.Event {
-	if evt == nil {
-		return nil
-	}
-	cloned := &event.Event{
-		Sender:     evt.Sender,
-		ToUserID:   evt.ToUserID,
-		ToDeviceID: evt.ToDeviceID,
-		Type:       evt.Type,
-	}
-	switch evt.Type {
-	case event.ToDeviceBeeperStreamSubscribe:
-		subscribe, ok := evt.Content.Parsed.(*event.BeeperStreamSubscribeEventContent)
-		if !ok {
-			return nil
-		}
-		contentCopy := *subscribe
-		cloned.Content = event.Content{Parsed: &contentCopy}
-	case event.ToDeviceEncrypted:
-		encrypted, ok := evt.Content.Parsed.(*event.EncryptedEventContent)
-		if !ok {
-			return nil
-		}
-		contentCopy := *encrypted
-		cloned.Content = event.Content{Parsed: &contentCopy}
-	default:
-		return nil
-	}
-	return cloned
-}
-
 func (state *beeperStreamState) activeSubscribers(now time.Time) []beeperStreamSubscriber {
 	var active []beeperStreamSubscriber
 	doEvict := now.Sub(state.lastEviction) >= streamCleanupGrace
@@ -590,18 +561,6 @@ func ResolveBeeperStreamSubscribeExpiry(descriptor *event.BeeperStreamInfo, defa
 	return expiry
 }
 
-func cloneBeeperStreamInfo(info *event.BeeperStreamInfo) *event.BeeperStreamInfo {
-	if info == nil {
-		return nil
-	}
-	cloned := *info
-	if info.Encryption != nil {
-		enc := *info.Encryption
-		cloned.Encryption = &enc
-	}
-	return &cloned
-}
-
 func validateBeeperStreamDescriptor(info *event.BeeperStreamInfo) error {
 	if info == nil {
 		return fmt.Errorf("missing beeper stream descriptor")
@@ -630,9 +589,14 @@ type BeeperStreamDescriptor struct {
 }
 
 func (s *BeeperStreamSender) activateStream(ctx context.Context, roomID id.RoomID, eventID id.EventID, info *event.BeeperStreamInfo) error {
-	descriptor := cloneBeeperStreamInfo(info)
-	if err := validateBeeperStreamDescriptor(descriptor); err != nil {
+	if err := validateBeeperStreamDescriptor(info); err != nil {
 		return err
+	}
+	cloned := *info
+	descriptor := &cloned
+	if info.Encryption != nil {
+		enc := *info.Encryption
+		descriptor.Encryption = &enc
 	}
 	key := beeperStreamKey{roomID: roomID, eventID: eventID}
 	s.lock.Lock()
@@ -769,17 +733,6 @@ func DecryptBeeperStreamEvent(content *event.EncryptedEventContent, base64Key st
 		return event.Type{}, nil, err
 	}
 	return logicalType, &parsed, nil
-}
-
-func makeToDeviceContent(descriptor *event.BeeperStreamInfo, gcm cipher.AEAD, logicalType event.Type, payload *event.Content) (event.Type, *event.Content, error) {
-	if descriptor != nil && descriptor.Encryption != nil && gcm != nil {
-		encrypted, err := encryptStreamPayload(logicalType, payload, descriptor.Encryption.StreamID, gcm)
-		if err != nil {
-			return event.Type{}, nil, err
-		}
-		return event.ToDeviceEncrypted, &event.Content{Parsed: encrypted}, nil
-	}
-	return logicalType, payload, nil
 }
 
 func makeStreamKey() string {

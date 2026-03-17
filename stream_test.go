@@ -457,7 +457,10 @@ func TestBeeperStreamDescriptorActivateSnapshotsDescriptor(t *testing.T) {
 	sender, desc := newTestStreamWithDesc(t, true, func(context.Context, *BeeperStreamSubscribeRequest) bool {
 		return true
 	})
-	original := cloneBeeperStreamInfo(desc.Info)
+	originalInfo := *desc.Info
+	originalEnc := *desc.Info.Encryption
+	originalInfo.Encryption = &originalEnc
+	original := &originalInfo
 	if _, err := desc.Activate(context.Background(), testStreamEventID); err != nil {
 		t.Fatalf("Activate returned error: %v", err)
 	}
