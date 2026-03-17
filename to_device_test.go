@@ -1,4 +1,10 @@
-package mautrix
+// Copyright (c) 2026 Tulir Asokan
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+package mautrix_test
 
 import (
 	"context"
@@ -7,6 +13,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	mautrix "maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 )
 
@@ -17,7 +24,7 @@ func TestFilterSyncToDeviceEventsDropsMalformedEvents(t *testing.T) {
 		Content: event.Content{VeryRaw: json.RawMessage(`{`)},
 	}}
 
-	filtered := FilterSyncToDeviceEvents(context.Background(), events, func(context.Context, *event.Event) bool {
+	filtered := mautrix.FilterSyncToDeviceEvents(context.Background(), events, func(context.Context, *event.Event) bool {
 		called = true
 		return true
 	})
@@ -33,7 +40,7 @@ func TestFilterSyncToDeviceEventsKeepsUnsupportedEvents(t *testing.T) {
 		Content: event.Content{VeryRaw: json.RawMessage(`{"foo":"bar"}`)},
 	}}
 
-	filtered := FilterSyncToDeviceEvents(context.Background(), events, func(context.Context, *event.Event) bool {
+	filtered := mautrix.FilterSyncToDeviceEvents(context.Background(), events, func(context.Context, *event.Event) bool {
 		called = true
 		return true
 	})

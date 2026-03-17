@@ -26,6 +26,35 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
+func (as *AppService) handleToDeviceEvent(ctx context.Context, evt *event.Event) bool {
+	if as == nil || evt == nil {
+		return false
+	}
+	clients := make([]*mautrix.Client, 0, 2)
+	seen := make(map[*mautrix.Client]struct{}, 2)
+	addClient := func(client *mautrix.Client) {
+		if client == nil {
+			return
+		}
+		if _, ok := seen[client]; ok {
+			return
+		}
+		seen[client] = struct{}{}
+		clients = append(clients, client)
+	}
+
+	addClient(as.existingClient(evt.ToUserID))
+	if evt.ToUserID == "" || evt.ToUserID == as.BotMXID() {
+		addClient(as.existingClient(as.BotMXID()))
+	}
+	for _, client := range clients {
+		if client.HandleToDeviceEvent(ctx, evt) {
+			return true
+		}
+	}
+	return false
+}
+
 // Start starts the HTTP server that listens for calls from the Matrix homeserver.
 func (as *AppService) Start() {
 	as.server = &http.Server{
@@ -220,7 +249,7 @@ func (as *AppService) handleEvents(ctx context.Context, evts []*event.Event, def
 		}
 		var ch chan *event.Event
 		if evt.Type.Class == event.ToDeviceEventType {
-			if as.interceptToDeviceEvent(ctx, evt) {
+			if as.handleToDeviceEvent(ctx, evt) {
 				continue
 			}
 			ch = as.ToDeviceEvents
@@ -238,16 +267,6 @@ func (as *AppService) handleEvents(ctx context.Context, evts []*event.Event, def
 			ch <- evt
 		}
 	}
-}
-
-func (as *AppService) interceptToDeviceEvent(ctx context.Context, evt *event.Event) bool {
-	if evt == nil || as.botClient == nil {
-		return false
-	}
-	if evt.ToUserID != "" && evt.ToUserID != as.BotMXID() {
-		return false
-	}
-	return as.botClient.HandleToDeviceEvent(ctx, evt)
 }
 
 // GetRoom handles a /rooms GET call from the homeserver.

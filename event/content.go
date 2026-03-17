@@ -75,10 +75,10 @@ var TypeMap = map[Type]reflect.Type{
 	AccountDataMarkedUnread:    reflect.TypeOf(MarkedUnreadEventContent{}),
 	AccountDataBeeperMute:      reflect.TypeOf(BeeperMuteEventContent{}),
 
-	EphemeralEventTyping:    reflect.TypeOf(TypingEventContent{}),
-	EphemeralEventReceipt:   reflect.TypeOf(ReceiptEventContent{}),
-	EphemeralEventPresence:  reflect.TypeOf(PresenceEventContent{}),
-	EphemeralEventEncrypted: reflect.TypeOf(EncryptedEventContent{}),
+	EphemeralEventTyping:         reflect.TypeOf(TypingEventContent{}),
+	EphemeralEventReceipt:        reflect.TypeOf(ReceiptEventContent{}),
+	EphemeralEventPresence:       reflect.TypeOf(PresenceEventContent{}),
+	EphemeralEventEncrypted:      reflect.TypeOf(EncryptedEventContent{}),
 
 	InRoomVerificationReady:  reflect.TypeOf(VerificationReadyEventContent{}),
 	InRoomVerificationStart:  reflect.TypeOf(VerificationStartEventContent{}),
@@ -110,7 +110,8 @@ var TypeMap = map[Type]reflect.Type{
 
 	ToDeviceOrgMatrixRoomKeyWithheld: reflect.TypeOf(RoomKeyWithheldEventContent{}),
 
-	ToDeviceBeeperRoomKeyAck:      reflect.TypeOf(BeeperRoomKeyAckEventContent{}),
+	ToDeviceBeeperRoomKeyAck: reflect.TypeOf(BeeperRoomKeyAckEventContent{}),
+
 	ToDeviceBeeperStreamSubscribe: reflect.TypeOf(BeeperStreamSubscribeEventContent{}),
 	ToDeviceBeeperStreamUpdate:    reflect.TypeOf(BeeperStreamUpdateEventContent{}),
 
@@ -379,7 +380,6 @@ func (content *Content) AsEncrypted() *EncryptedEventContent {
 	}
 	return casted
 }
-
 func (content *Content) AsRedaction() *RedactionEventContent {
 	casted, ok := content.Parsed.(*RedactionEventContent)
 	if !ok {

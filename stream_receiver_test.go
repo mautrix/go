@@ -1,3 +1,9 @@
+// Copyright (c) 2026 Tulir Asokan
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 package mautrix
 
 import (
@@ -6,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"maunium.net/go/mautrix/event"
@@ -39,13 +46,13 @@ func TestBeeperStreamReceiverUpdate(t *testing.T) {
 			require.True(t, client.HandleToDeviceEvent(context.Background(), evt))
 
 			select {
-			case update := <-received:
-				updateContent, err := json.Marshal(update.Content)
-				require.NoError(t, err)
-				require.Equal(t, testStreamBotUserID, update.Sender)
-				require.Equal(t, testStreamRoomID, update.RoomID)
-				require.Equal(t, testStreamEventID, update.EventID)
-				assertStreamUpdateMap(t, decodeJSONMap(t, updateContent))
+		case update := <-received:
+			updateContent, err := json.Marshal(update.Content)
+			require.NoError(t, err)
+			assert.Equal(t, testStreamBotUserID, update.Sender)
+			assert.Equal(t, testStreamRoomID, update.RoomID)
+			assert.Equal(t, testStreamEventID, update.EventID)
+			assertStreamUpdateMap(t, decodeJSONMap(t, updateContent))
 			case <-time.After(time.Second):
 				t.Fatal("timed out waiting for update callback")
 			}

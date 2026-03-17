@@ -165,8 +165,8 @@ func (s *BeeperStreamSender) handleEncryptedEvent(ctx context.Context, evt *even
 		return true
 	}
 	log := zerolog.Ctx(ctx).With().
-		Str("sender", evt.Sender.String()).
-		Str("stream_id", content.StreamID.String()).
+		Stringer("sender", evt.Sender).
+		Stringer("stream_id", content.StreamID).
 		Logger()
 	ctx = log.WithContext(ctx)
 	if content.StreamID == "" {
@@ -202,8 +202,8 @@ func (s *BeeperStreamSender) isForDifferentUser(evt *event.Event) bool {
 
 func (s *BeeperStreamSender) tryDecryptAndSubscribe(ctx context.Context, evt *event.Event, content *event.EncryptedEventContent, state *beeperStreamState) bool {
 	log := zerolog.Ctx(ctx).With().
-		Str("stream_room_id", state.key.roomID.String()).
-		Str("stream_event_id", state.key.eventID.String()).
+		Stringer("stream_room_id", state.key.roomID).
+		Stringer("stream_event_id", state.key.eventID).
 		Logger()
 	if state.gcm == nil {
 		return false
@@ -224,8 +224,8 @@ func (s *BeeperStreamSender) tryDecryptAndSubscribe(ctx context.Context, evt *ev
 	}
 	if subscribe.RoomID != state.key.roomID || subscribe.EventID != state.key.eventID {
 		log.Debug().
-			Str("subscribe_room_id", subscribe.RoomID.String()).
-			Str("subscribe_event_id", subscribe.EventID.String()).
+			Stringer("subscribe_room_id", subscribe.RoomID).
+			Stringer("subscribe_event_id", subscribe.EventID).
 			Msg("Decrypted custom subscribe payload did not match beeper stream candidate")
 		return false
 	}
@@ -368,7 +368,7 @@ func (s *BeeperStreamSender) queuePendingSubscribe(ctx context.Context, evt *eve
 	}
 	zerolog.Ctx(ctx).Debug().
 		Int("pending_subscribes", len(s.pendingSubscribe)).
-		Str("sender", evt.Sender.String()).
+		Stringer("sender", evt.Sender).
 		Str("event_type", evt.Type.Type).
 		Msg("Queued subscribe for possible future beeper stream registration")
 }

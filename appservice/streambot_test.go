@@ -1,3 +1,9 @@
+// Copyright (c) 2026 Tulir Asokan
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 package appservice
 
 import (
@@ -16,7 +22,15 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-func testPublishPayload() map[string]any {
+const (
+	testBotRoomID     = "!room:example.com"
+	testBotEventID    = "$event"
+	testBotStreamType = "com.beeper.llm"
+	testBotSubscriber = "@alice:example.com"
+	testBotSubDevice  = "SUBDEVICE"
+)
+
+func newTestPublishPayload() map[string]any {
 	return map[string]any{
 		"com.beeper.llm.deltas": []map[string]any{{"delta": "hello"}},
 	}
@@ -54,21 +68,22 @@ func newTestBotHomeserver(t *testing.T) (*httptest.Server, *atomic.Int32) {
 
 func activateTestAppServiceStream(t *testing.T, sender *mautrix.BeeperStreamSender) {
 	t.Helper()
-	info, err := sender.BuildDescriptor(context.Background(), "!room:example.com", "com.beeper.llm")
+	info, err := sender.BuildDescriptor(context.Background(), testBotRoomID, testBotStreamType)
 	require.NoError(t, err)
-	require.NoError(t, sender.Start(context.Background(), "!room:example.com", "$event", info))
+	require.NoError(t, sender.Start(context.Background(), testBotRoomID, testBotEventID, info))
 }
 
-func deliverTestBotSubscribe(as *AppService, deviceID id.DeviceID) {
+func deliverTestBotSubscribe(t *testing.T, as *AppService, deviceID id.DeviceID) {
+	t.Helper()
 	as.handleEvents(context.Background(), []*event.Event{{
-		Sender:     "@alice:example.com",
+		Sender:     testBotSubscriber,
 		ToUserID:   as.BotMXID(),
 		ToDeviceID: deviceID,
 		Type:       event.ToDeviceBeeperStreamSubscribe,
 		Content: event.Content{Parsed: &event.BeeperStreamSubscribeEventContent{
-			RoomID:   "!room:example.com",
-			EventID:  "$event",
-			DeviceID: "SUBDEVICE",
+			RoomID:   testBotRoomID,
+			EventID:  testBotEventID,
+			DeviceID: testBotSubDevice,
 			ExpiryMS: 60_000,
 		}},
 	}}, event.ToDeviceEventType)
@@ -77,15 +92,15 @@ func deliverTestBotSubscribe(as *AppService, deviceID id.DeviceID) {
 func TestBotClientBeeperStreamInterception(t *testing.T) {
 	ts, sendToDeviceCalls := newTestBotHomeserver(t)
 	as := newTestAppService(t, ts.URL)
-	client := as.Client(as.BotMXID())
+	client := as.BotClient()
 	sender := client.GetOrCreateBeeperStreamSender(&mautrix.BeeperStreamSenderOptions{
 		AuthorizeSubscriber: func(context.Context, *mautrix.BeeperStreamSubscribeRequest) bool { return true },
 	})
 	activateTestAppServiceStream(t, sender)
 
-	deliverTestBotSubscribe(as, "*")
+	deliverTestBotSubscribe(t, as, "*")
 
-	require.NoError(t, sender.Publish(context.Background(), "!room:example.com", "$event", testPublishPayload()))
+	require.NoError(t, sender.Publish(context.Background(), testBotRoomID, testBotEventID, newTestPublishPayload()))
 	require.Equal(t, int32(1), sendToDeviceCalls.Load())
 	select {
 	case <-as.ToDeviceEvents:

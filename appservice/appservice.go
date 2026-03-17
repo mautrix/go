@@ -414,6 +414,13 @@ func (as *AppService) Client(userID id.UserID) *mautrix.Client {
 	return client
 }
 
+func (as *AppService) existingClient(userID id.UserID) *mautrix.Client {
+	as.clientsLock.RLock()
+	client := as.clients[userID]
+	as.clientsLock.RUnlock()
+	return client
+}
+
 // BotClient returns the [mautrix.Client] instance for the appservice's sender_localpart user.
 //
 // Like with the generic Client method, [AppService.BotIntent] should be preferred over this.

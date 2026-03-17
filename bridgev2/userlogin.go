@@ -55,10 +55,11 @@ func (br *Bridge) loadUserLogin(ctx context.Context, user *User, dbUserLogin *da
 		//      Currently this will double-load it
 	}
 	userLogin := &UserLogin{
-		UserLogin:     dbUserLogin,
-		Bridge:        br,
-		User:          user,
-		Log:           user.Log.With().Str("login_id", string(dbUserLogin.ID)).Logger(),
+		UserLogin: dbUserLogin,
+		Bridge:    br,
+		User:      user,
+		Log:       user.Log.With().Str("login_id", string(dbUserLogin.ID)).Logger(),
+
 		inPortalCache: exsync.NewSet[networkid.PortalKey](),
 	}
 	err := br.Network.LoadUserLogin(ctx, userLogin)
