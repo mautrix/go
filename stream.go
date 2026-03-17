@@ -37,6 +37,17 @@ const (
 	beeperStreamReceiverComponentName   = "beeper_stream_receiver"
 )
 
+// BeeperStreamTransport is a low-level interface for managing beeper streams,
+// where the caller controls the room/event IDs explicitly (e.g. ai-bridge).
+type BeeperStreamTransport interface {
+	BuildDescriptor(ctx context.Context, roomID id.RoomID, streamType string) (*event.BeeperStreamInfo, error)
+	Start(ctx context.Context, roomID id.RoomID, eventID id.EventID, descriptor *event.BeeperStreamInfo) error
+	Publish(ctx context.Context, roomID id.RoomID, eventID id.EventID, content map[string]any) error
+	Finish(ctx context.Context, roomID id.RoomID, eventID id.EventID) error
+}
+
+var _ BeeperStreamTransport = (*BeeperStreamSender)(nil)
+
 type BeeperStreamSenderOptions struct {
 	Logger              *zerolog.Logger
 	IsEncrypted         func(context.Context, id.RoomID) (bool, error)
@@ -686,6 +697,54 @@ func (s *BeeperStreamSender) PrepareStream(ctx context.Context, roomID id.RoomID
 		roomID: roomID,
 		Info:   info,
 	}, nil
+}
+
+// BuildDescriptor implements BeeperStreamTransport by calling PrepareStream and returning the Info.
+func (s *BeeperStreamSender) BuildDescriptor(ctx context.Context, roomID id.RoomID, streamType string) (*event.BeeperStreamInfo, error) {
+	desc, err := s.PrepareStream(ctx, roomID, streamType)
+	if err != nil {
+		return nil, err
+	}
+	return desc.Info, nil
+}
+
+// Start implements BeeperStreamTransport by activating the stream for the given event.
+func (s *BeeperStreamSender) Start(ctx context.Context, roomID id.RoomID, eventID id.EventID, descriptor *event.BeeperStreamInfo) error {
+	return s.activateStream(ctx, roomID, eventID, descriptor)
+}
+
+// Publish implements BeeperStreamTransport by recording an update and sending it to subscribers.
+func (s *BeeperStreamSender) Publish(ctx context.Context, roomID id.RoomID, eventID id.EventID, content map[string]any) error {
+	desc, gcm, update, subscribers, err := s.recordUpdate(roomID, eventID, content)
+	if err != nil {
+		return err
+	}
+	return s.sendUpdateToSubscribers(ctx, desc, gcm, update, subscribers)
+}
+
+// Finish implements BeeperStreamTransport by closing the stream identified by roomID/eventID.
+func (s *BeeperStreamSender) Finish(_ context.Context, roomID id.RoomID, eventID id.EventID) error {
+	key := beeperStreamKey{roomID: roomID, eventID: eventID}
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	state := s.streams[key]
+	if state == nil {
+		return fmt.Errorf("beeper stream %s/%s not found", roomID, eventID)
+	}
+	state.finished = true
+	state.subscribers = nil
+	if state.descriptor.Encryption != nil && state.descriptor.Encryption.StreamID != "" {
+		delete(s.streamsByStreamID, state.descriptor.Encryption.StreamID)
+	}
+	if state.cleanup != nil {
+		state.cleanup.Stop()
+	}
+	state.cleanup = time.AfterFunc(streamCleanupGrace, func() {
+		s.lock.Lock()
+		defer s.lock.Unlock()
+		delete(s.streams, key)
+	})
+	return nil
 }
 
 func EncryptBeeperStreamEvent(logicalType event.Type, content *event.Content, streamID string, base64Key string) (*event.EncryptedEventContent, error) {

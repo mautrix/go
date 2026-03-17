@@ -8,25 +8,24 @@ package bridgev2
 
 import (
 	"context"
+	"fmt"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 )
 
 func (br *Bridge) GetOrCreateBeeperStreamSender() *mautrix.BeeperStreamSender {
-	br.beeperStreamSenderLock.Lock()
-	defer br.beeperStreamSenderLock.Unlock()
-	if br.beeperStreamSender != nil {
-		return br.beeperStreamSender
-	}
-	connector, ok := br.Matrix.(MatrixConnectorWithBeeperStreamSender)
-	if !ok {
-		return nil
-	}
-	br.beeperStreamSender = connector.GetBeeperStreamSender(&mautrix.BeeperStreamSenderOptions{
+	return br.Matrix.BotClient().GetOrCreateBeeperStreamSender(&mautrix.BeeperStreamSenderOptions{
 		AuthorizeSubscriber: br.authorizeBeeperStreamSubscriber,
 	})
-	return br.beeperStreamSender
+}
+
+func (br *Bridge) GetBeeperStreamTransport(_ context.Context) (mautrix.BeeperStreamTransport, error) {
+	sender := br.GetOrCreateBeeperStreamSender()
+	if sender == nil {
+		return nil, fmt.Errorf("matrix connector doesn't support beeper streams")
+	}
+	return sender, nil
 }
 
 func (br *Bridge) authorizeBeeperStreamSubscriber(ctx context.Context, req *mautrix.BeeperStreamSubscribeRequest) bool {
