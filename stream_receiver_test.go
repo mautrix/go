@@ -30,7 +30,7 @@ func TestBeeperStreamReceiverUpdate(t *testing.T) {
 			})
 			evt := newTestReceiverUpdateEvent(t, receiver, tc.encrypted, "")
 
-			require.True(t, receiver.HandleToDeviceEvent(context.Background(), evt))
+			require.True(t, ShouldInterceptToDeviceEvent(context.Background(), receiver.HandleToDeviceEvent, evt))
 
 			select {
 			case update := <-received:

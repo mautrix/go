@@ -27,7 +27,13 @@ func RunToDeviceInterceptors(ctx context.Context, interceptors []ToDeviceInterce
 
 // ShouldInterceptToDeviceEvent returns true when interceptor handles the event.
 func ShouldInterceptToDeviceEvent(ctx context.Context, interceptor ToDeviceInterceptor, evt *event.Event) bool {
-	return interceptor != nil && evt != nil && interceptor(ctx, evt)
+	if interceptor == nil || evt == nil {
+		return false
+	}
+	if evt.Content.Parsed == nil {
+		_ = evt.Content.ParseRaw(evt.Type)
+	}
+	return interceptor(ctx, evt)
 }
 
 // FilterSyncToDeviceEvents applies interceptor handling for to-device /sync payloads.

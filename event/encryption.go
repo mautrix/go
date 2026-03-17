@@ -63,39 +63,41 @@ func (content *EncryptedEventContent) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
+	var stringCiphertext *[]byte
 	switch content.Algorithm {
 	case id.AlgorithmOlmV1:
 		content.OlmCiphertext = make(OlmCiphertexts)
 		return json.Unmarshal(content.Ciphertext, &content.OlmCiphertext)
 	case id.AlgorithmMegolmV1:
-		if len(content.Ciphertext) == 0 || content.Ciphertext[0] != '"' || content.Ciphertext[len(content.Ciphertext)-1] != '"' {
-			return fmt.Errorf("ciphertext %w", id.ErrInputNotJSONString)
-		}
-		content.MegolmCiphertext = content.Ciphertext[1 : len(content.Ciphertext)-1]
+		stringCiphertext = &content.MegolmCiphertext
 	case id.AlgorithmBeeperStreamAESGCM:
+		stringCiphertext = &content.StreamCiphertext
+	}
+	if stringCiphertext != nil {
 		if len(content.Ciphertext) == 0 || content.Ciphertext[0] != '"' || content.Ciphertext[len(content.Ciphertext)-1] != '"' {
 			return fmt.Errorf("ciphertext %w", id.ErrInputNotJSONString)
 		}
-		content.StreamCiphertext = content.Ciphertext[1 : len(content.Ciphertext)-1]
+		*stringCiphertext = content.Ciphertext[1 : len(content.Ciphertext)-1]
 	}
 	return nil
 }
 
 func (content *EncryptedEventContent) MarshalJSON() ([]byte, error) {
 	var err error
+	var stringCiphertext []byte
 	switch content.Algorithm {
 	case id.AlgorithmOlmV1:
 		content.Ciphertext, err = json.Marshal(content.OlmCiphertext)
 	case id.AlgorithmMegolmV1:
-		content.Ciphertext = make([]byte, len(content.MegolmCiphertext)+2)
-		content.Ciphertext[0] = '"'
-		content.Ciphertext[len(content.Ciphertext)-1] = '"'
-		copy(content.Ciphertext[1:len(content.Ciphertext)-1], content.MegolmCiphertext)
+		stringCiphertext = content.MegolmCiphertext
 	case id.AlgorithmBeeperStreamAESGCM:
-		content.Ciphertext = make([]byte, len(content.StreamCiphertext)+2)
+		stringCiphertext = content.StreamCiphertext
+	}
+	if stringCiphertext != nil {
+		content.Ciphertext = make(json.RawMessage, len(stringCiphertext)+2)
 		content.Ciphertext[0] = '"'
 		content.Ciphertext[len(content.Ciphertext)-1] = '"'
-		copy(content.Ciphertext[1:len(content.Ciphertext)-1], content.StreamCiphertext)
+		copy(content.Ciphertext[1:len(content.Ciphertext)-1], stringCiphertext)
 	}
 	if err != nil {
 		return nil, err
