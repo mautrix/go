@@ -110,7 +110,6 @@ var (
 	_ bridgev2.MatrixConnectorWithNameDisambiguation     = (*Connector)(nil)
 	_ bridgev2.MatrixConnectorWithURLPreviews            = (*Connector)(nil)
 	_ bridgev2.MatrixConnectorWithAnalytics              = (*Connector)(nil)
-	_ bridgev2.MatrixConnectorWithBeeperStream           = (*Connector)(nil)
 )
 
 func NewConnector(cfg *bridgeconfig.Config) *Connector {

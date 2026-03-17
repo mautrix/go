@@ -18,6 +18,13 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
+type BeeperStreamUpdate struct {
+	Sender  id.UserID
+	RoomID  id.RoomID
+	EventID id.EventID
+	Content *event.Content
+}
+
 type BeeperStreamReceiverOptions struct {
 	Logger               *zerolog.Logger
 	DefaultExpiry        time.Duration

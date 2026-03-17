@@ -12,19 +12,17 @@ import (
 	"maunium.net/go/mautrix"
 )
 
-// NewBeeperStreamPublisher returns a stream publisher backed by a device-bearing bot client.
-// It wraps GetOrCreateBotDeviceClient and NewBeeperStreamPublisher so callers don't need to
-// duplicate device-provisioning and sender/publisher wiring.
+// GetOrCreateBeeperStreamSender returns a stream sender backed by a device-bearing bot client.
+// It wraps GetOrCreateBotDeviceClient so callers don't need to duplicate device-provisioning wiring.
 // clientOpts.Purpose must be set by the caller.
-func (as *AppService) NewBeeperStreamPublisher(
+func (as *AppService) GetOrCreateBeeperStreamSender(
 	ctx context.Context,
 	clientOpts BotDeviceClientOptions,
-	publisherOpts *mautrix.BeeperStreamPublisherOptions,
 	senderOpts *mautrix.BeeperStreamSenderOptions,
-) (*mautrix.BeeperStreamPublisher, error) {
+) (*mautrix.BeeperStreamSender, error) {
 	client, err := as.GetOrCreateBotDeviceClient(ctx, clientOpts)
 	if err != nil {
 		return nil, err
 	}
-	return client.NewBeeperStreamPublisher(publisherOpts, senderOpts), nil
+	return client.GetOrCreateBeeperStreamSender(senderOpts), nil
 }

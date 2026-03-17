@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -23,6 +24,79 @@ const (
 	testStreamSubscriberDev id.DeviceID = "SUBDEVICE"
 	testStreamDeltaKey                  = "com.beeper.llm.deltas"
 )
+
+type capturedSendToDeviceRequest struct {
+	path string
+	body []byte
+}
+
+type sendToDeviceRecorder struct {
+	requests chan capturedSendToDeviceRequest
+}
+
+func newSendToDeviceRecorderServer(t *testing.T) (*httptest.Server, *sendToDeviceRecorder) {
+	t.Helper()
+	recorder := &sendToDeviceRecorder{
+		requests: make(chan capturedSendToDeviceRequest, 4),
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Fatalf("unexpected method %s", r.Method)
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("failed to read request body: %v", err)
+		}
+		recorder.requests <- capturedSendToDeviceRequest{
+			path: r.URL.Path,
+			body: body,
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{})
+	}))
+	t.Cleanup(ts.Close)
+	return ts, recorder
+}
+
+func (r *sendToDeviceRecorder) next(t *testing.T) capturedSendToDeviceRequest {
+	t.Helper()
+	select {
+	case req := <-r.requests:
+		return req
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for sendToDevice request")
+		return capturedSendToDeviceRequest{}
+	}
+}
+
+func (r *sendToDeviceRecorder) rawContent(t *testing.T, req capturedSendToDeviceRequest, userID id.UserID, deviceID id.DeviceID) json.RawMessage {
+	t.Helper()
+	var payload struct {
+		Messages map[string]map[string]json.RawMessage `json:"messages"`
+	}
+	if err := json.Unmarshal(req.body, &payload); err != nil {
+		t.Fatalf("failed to unmarshal sendToDevice request: %v", err)
+	}
+	targetUser, ok := payload.Messages[string(userID)]
+	if !ok {
+		t.Fatalf("missing target user in request: %#v", payload.Messages)
+	}
+	rawContent, ok := targetUser[string(deviceID)]
+	if !ok {
+		t.Fatalf("missing target device in request: %#v", targetUser)
+	}
+	return rawContent
+}
+
+func newTestStreamClient(t *testing.T, homeserverURL string, userID id.UserID, deviceID id.DeviceID) *Client {
+	t.Helper()
+	client, err := NewClient(homeserverURL, userID, "access-token")
+	if err != nil {
+		t.Fatalf("NewClient returned error: %v", err)
+	}
+	client.DeviceID = deviceID
+	client.StateStore = NewMemoryStateStore()
+	return client
+}
 
 func newTestStreamSender(encrypted bool) *BeeperStreamSender {
 	opts := &BeeperStreamSenderOptions{}
@@ -133,6 +207,30 @@ func requireTestStreamState(t *testing.T, sender *BeeperStreamSender) *beeperStr
 		t.Fatal("expected stream state to exist")
 	}
 	return state
+}
+
+func assertTestStreamSubscribe(t *testing.T, recorder *sendToDeviceRecorder, userID id.UserID, deviceID id.DeviceID) {
+	t.Helper()
+	req := recorder.next(t)
+	if !strings.Contains(req.path, "/sendToDevice/com.beeper.stream.subscribe/") {
+		t.Fatalf("unexpected sendToDevice path %q", req.path)
+	}
+	var subscribe event.BeeperStreamSubscribeEventContent
+	if err := json.Unmarshal(recorder.rawContent(t, req, userID, deviceID), &subscribe); err != nil {
+		t.Fatalf("failed to unmarshal subscribe request: %v", err)
+	}
+	if subscribe.RoomID != testStreamRoomID || subscribe.EventID != testStreamEventID || subscribe.DeviceID != testStreamSubscriberDev {
+		t.Fatalf("unexpected subscribe payload: %#v", subscribe)
+	}
+}
+
+func assertTestStreamUpdate(t *testing.T, recorder *sendToDeviceRecorder, userID id.UserID, deviceID id.DeviceID) {
+	t.Helper()
+	req := recorder.next(t)
+	if !strings.Contains(req.path, "/sendToDevice/com.beeper.stream.update/") {
+		t.Fatalf("unexpected sendToDevice path %q", req.path)
+	}
+	assertStreamUpdateMap(t, decodeJSONMap(t, recorder.rawContent(t, req, userID, deviceID)))
 }
 
 func TestNewStreamUpdateContentMarshal(t *testing.T) {
@@ -343,137 +441,71 @@ func TestBeeperStreamDescriptorActivateSnapshotsDescriptor(t *testing.T) {
 	}
 }
 
-func TestStreamPublishAndFinishWithDirectClient(t *testing.T) {
-	var sendPath string
-	var sendBody []byte
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPut {
-			t.Fatalf("unexpected method %s", r.Method)
-		}
-		sendPath = r.URL.Path
-		var err error
-		sendBody, err = io.ReadAll(r.Body)
-		if err != nil {
-			t.Fatalf("failed to read request body: %v", err)
-		}
-		_ = json.NewEncoder(w).Encode(map[string]any{})
-	}))
-	defer ts.Close()
+func TestStreamPublishAndFinish(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		newPublisher func(*Client) *BeeperStreamPublisher
+	}{
+		{
+			name: "direct_sender",
+			newPublisher: func(client *Client) *BeeperStreamPublisher {
+				return client.GetOrCreateBeeperStreamSender(nil).NewPublisher(&BeeperStreamPublisherOptions{
+					AuthorizeSubscriber: func(context.Context, *BeeperStreamSubscribeRequest) bool { return true },
+				})
+			},
+		},
+		{
+			name: "client_api",
+			newPublisher: func(client *Client) *BeeperStreamPublisher {
+				return client.NewBeeperStreamPublisher(
+					&BeeperStreamPublisherOptions{
+						AuthorizeSubscriber: func(context.Context, *BeeperStreamSubscribeRequest) bool { return true },
+					},
+					nil,
+				)
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ts, recorder := newSendToDeviceRecorderServer(t)
+			client := newTestStreamClient(t, ts.URL, testStreamBotUserID, testStreamBotDeviceID)
 
-	client, err := NewClient(ts.URL, testStreamBotUserID, "access-token")
-	if err != nil {
-		t.Fatalf("NewClient returned error: %v", err)
-	}
-	client.DeviceID = testStreamBotDeviceID
-	client.StateStore = NewMemoryStateStore()
+			publisher := tc.newPublisher(client)
+			streamDesc, err := publisher.PrepareStream(context.Background(), testStreamRoomID, testStreamType)
+			if err != nil {
+				t.Fatalf("PrepareStream returned error: %v", err)
+			}
+			if streamDesc.Info == nil {
+				t.Fatal("PrepareStream returned nil Info")
+			}
+			if streamDesc.Info.UserID != testStreamBotUserID || streamDesc.Info.DeviceID != testStreamBotDeviceID {
+				t.Fatalf("PrepareStream descriptor has unexpected identity: %+v", streamDesc.Info)
+			}
 
-	sender := client.GetOrCreateBeeperStreamSender(nil)
-	publisher := sender.NewPublisher(&BeeperStreamPublisherOptions{
-		AuthorizeSubscriber: func(context.Context, *BeeperStreamSubscribeRequest) bool { return true },
-	})
-	desc, err := publisher.PrepareStream(context.Background(), testStreamRoomID, testStreamType)
-	if err != nil {
-		t.Fatalf("PrepareStream returned error: %v", err)
-	}
-	stream, err := desc.Activate(context.Background(), testStreamEventID)
-	if err != nil {
-		t.Fatalf("Activate returned error: %v", err)
-	}
+			stream, err := streamDesc.Activate(context.Background(), testStreamEventID)
+			if err != nil {
+				t.Fatalf("Activate returned error: %v", err)
+			}
+			if stream.RoomID() != testStreamRoomID || stream.EventID() != testStreamEventID {
+				t.Fatalf("unexpected stream identity: room=%s event=%s", stream.RoomID(), stream.EventID())
+			}
 
-	if !sender.HandleToDeviceEvent(context.Background(), newTestSubscribeEvent(t, nil, testStreamBotUserID, testStreamBotDeviceID)) {
-		t.Fatal("expected subscribe to be consumed")
-	}
+			sender := client.GetOrCreateBeeperStreamSender(nil)
+			if !sender.HandleToDeviceEvent(context.Background(), newTestSubscribeEvent(t, nil, testStreamBotUserID, testStreamBotDeviceID)) {
+				t.Fatal("expected subscribe to be consumed")
+			}
 
-	if err = stream.Publish(context.Background(), newTestPublishContent("hello")); err != nil {
-		t.Fatalf("Publish returned error: %v", err)
-	}
-	if sendPath == "" {
-		t.Fatal("expected SendToDevice request")
-	}
-	if !strings.Contains(sendPath, "/sendToDevice/com.beeper.stream.update/") {
-		t.Fatalf("unexpected sendToDevice path %q", sendPath)
-	}
+			if err = stream.Publish(context.Background(), newTestPublishContent("hello")); err != nil {
+				t.Fatalf("Publish returned error: %v", err)
+			}
+			assertTestStreamUpdate(t, recorder, testStreamSubscriberID, testStreamSubscriberDev)
 
-	var req struct {
-		Messages map[string]map[string]json.RawMessage `json:"messages"`
-	}
-	if err = json.Unmarshal(sendBody, &req); err != nil {
-		t.Fatalf("failed to unmarshal sendToDevice request: %v", err)
-	}
-	targetUser, ok := req.Messages[string(testStreamSubscriberID)]
-	if !ok {
-		t.Fatalf("missing target user in request: %#v", req.Messages)
-	}
-	rawContent, ok := targetUser[string(testStreamSubscriberDev)]
-	if !ok {
-		t.Fatalf("missing target device in request: %#v", targetUser)
-	}
-	assertStreamUpdateMap(t, decodeJSONMap(t, rawContent))
-
-	if err = stream.Finish(context.Background()); err != nil {
-		t.Fatalf("Finish returned error: %v", err)
-	}
-	if err = stream.Publish(context.Background(), newTestPublishContent("bye")); err == nil {
-		t.Fatal("expected Publish after Finish to fail")
-	}
-}
-
-func TestBeeperStreamHandleAPI(t *testing.T) {
-	var sendPath string
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		sendPath = r.URL.Path
-		_ = json.NewEncoder(w).Encode(map[string]any{})
-	}))
-	defer ts.Close()
-
-	client, err := NewClient(ts.URL, testStreamBotUserID, "access-token")
-	if err != nil {
-		t.Fatalf("NewClient returned error: %v", err)
-	}
-	client.DeviceID = testStreamBotDeviceID
-	client.StateStore = NewMemoryStateStore()
-
-	publisher := client.NewBeeperStreamPublisher(
-		&BeeperStreamPublisherOptions{AuthorizeSubscriber: func(context.Context, *BeeperStreamSubscribeRequest) bool { return true }},
-		nil,
-	)
-
-	streamDesc, err := publisher.PrepareStream(context.Background(), testStreamRoomID, testStreamType)
-	if err != nil {
-		t.Fatalf("PrepareStream returned error: %v", err)
-	}
-	if streamDesc.Info == nil {
-		t.Fatal("PrepareStream returned nil Info")
-	}
-	if streamDesc.Info.UserID != testStreamBotUserID || streamDesc.Info.DeviceID != testStreamBotDeviceID {
-		t.Fatalf("PrepareStream descriptor has unexpected identity: %+v", streamDesc.Info)
-	}
-
-	stream, err := streamDesc.Activate(context.Background(), testStreamEventID)
-	if err != nil {
-		t.Fatalf("Activate returned error: %v", err)
-	}
-	if stream.RoomID() != testStreamRoomID || stream.EventID() != testStreamEventID {
-		t.Fatalf("unexpected stream identity: room=%s event=%s", stream.RoomID(), stream.EventID())
-	}
-
-	// Subscribe a device so Publish actually sends a to-device event
-	sender := client.GetOrCreateBeeperStreamSender(nil)
-	if !sender.HandleToDeviceEvent(context.Background(), newTestSubscribeEvent(t, nil, testStreamBotUserID, testStreamBotDeviceID)) {
-		t.Fatal("expected subscribe to be consumed")
-	}
-
-	if err = stream.Publish(context.Background(), map[string]any{testStreamDeltaKey: []map[string]any{{"delta": "hi"}}}); err != nil {
-		t.Fatalf("Publish returned error: %v", err)
-	}
-	if !strings.Contains(sendPath, "/sendToDevice/com.beeper.stream.update/") {
-		t.Fatalf("unexpected sendToDevice path %q", sendPath)
-	}
-
-	if err = stream.Finish(context.Background()); err != nil {
-		t.Fatalf("Finish returned error: %v", err)
-	}
-	if err = stream.Publish(context.Background(), map[string]any{"delta": "bye"}); err == nil {
-		t.Fatal("expected Publish after Finish to fail")
+			if err = stream.Finish(context.Background()); err != nil {
+				t.Fatalf("Finish returned error: %v", err)
+			}
+			if err = stream.Publish(context.Background(), newTestPublishContent("bye")); err == nil {
+				t.Fatal("expected Publish after Finish to fail")
+			}
+		})
 	}
 }

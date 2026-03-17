@@ -19,6 +19,7 @@ import (
 	"go.mau.fi/util/exhttp"
 	"go.mau.fi/util/exsync"
 
+	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2/bridgeconfig"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
@@ -61,6 +62,9 @@ type Bridge struct {
 
 	BackgroundCtx       context.Context
 	cancelBackgroundCtx context.CancelFunc
+
+	beeperStreamLock   sync.Mutex
+	beeperStreamSender *mautrix.BeeperStreamSender
 }
 
 func NewBridge(

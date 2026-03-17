@@ -18,7 +18,6 @@ import (
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/exsync"
 
-	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2/bridgeconfig"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
@@ -36,9 +35,6 @@ type UserLogin struct {
 	BridgeState *BridgeStateQueue
 
 	inPortalCache *exsync.Set[networkid.PortalKey]
-
-	beeperStreamLock      sync.Mutex
-	beeperStreamPublisher *mautrix.BeeperStreamPublisher
 
 	spaceCreateLock sync.Mutex
 	deleteLock      sync.Mutex

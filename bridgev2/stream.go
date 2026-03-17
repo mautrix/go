@@ -14,47 +14,54 @@ import (
 	"maunium.net/go/mautrix/event"
 )
 
-func (login *UserLogin) GetOrCreateBeeperStreamPublisher(ctx context.Context) (*mautrix.BeeperStreamPublisher, error) {
-	login.beeperStreamLock.Lock()
-	defer login.beeperStreamLock.Unlock()
-	if login.beeperStreamPublisher != nil {
-		return login.beeperStreamPublisher, nil
+// beeperStreamClientProvider is a narrow interface for connectors that can provide
+// a device-bearing client for the stream bot. It is only used inside
+// Bridge.GetOrCreateBeeperStreamSender and is not part of the MatrixConnector hierarchy.
+type beeperStreamClientProvider interface {
+	GetBeeperStreamClient(ctx context.Context) (*mautrix.Client, error)
+}
+
+func (br *Bridge) GetOrCreateBeeperStreamSender(ctx context.Context) (*mautrix.BeeperStreamSender, error) {
+	br.beeperStreamLock.Lock()
+	defer br.beeperStreamLock.Unlock()
+	if br.beeperStreamSender != nil {
+		return br.beeperStreamSender, nil
 	}
-	provider, ok := login.Bridge.Matrix.(MatrixConnectorWithBeeperStream)
+	provider, ok := br.Matrix.(beeperStreamClientProvider)
 	if !ok {
 		return nil, fmt.Errorf("matrix connector doesn't support beeper streams")
 	}
-	publisher, err := provider.GetOrCreateBeeperStreamPublisher(ctx, &mautrix.BeeperStreamPublisherOptions{
-		AuthorizeSubscriber: login.authorizeBeeperStreamSubscriber,
+	client, err := provider.GetBeeperStreamClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	br.beeperStreamSender = client.GetOrCreateBeeperStreamSender(&mautrix.BeeperStreamSenderOptions{
+		AuthorizeSubscriber: br.authorizeBeeperStreamSubscriber,
 	})
+	return br.beeperStreamSender, nil
+}
+
+// GetBeeperStreamTransport returns a BeeperStreamTransport backed by the bridge bot's stream sender.
+func (br *Bridge) GetBeeperStreamTransport(ctx context.Context) (mautrix.BeeperStreamTransport, error) {
+	sender, err := br.GetOrCreateBeeperStreamSender(ctx)
 	if err != nil {
 		return nil, err
 	}
-	login.beeperStreamPublisher = publisher
-	return publisher, nil
+	return sender.NewTransport(), nil
 }
 
-// GetBeeperStreamTransport returns a BeeperStreamTransport for the bridge bot's stream publisher.
-func (login *UserLogin) GetBeeperStreamTransport(ctx context.Context) (mautrix.BeeperStreamTransport, error) {
-	publisher, err := login.GetOrCreateBeeperStreamPublisher(ctx)
+func (br *Bridge) authorizeBeeperStreamSubscriber(ctx context.Context, req *mautrix.BeeperStreamSubscribeRequest) bool {
+	user, err := br.GetUserByMXID(ctx, req.UserID)
 	if err != nil {
-		return nil, err
-	}
-	return publisher.NewTransport(), nil
-}
-
-func (login *UserLogin) authorizeBeeperStreamSubscriber(ctx context.Context, req *mautrix.BeeperStreamSubscribeRequest) bool {
-	user, err := login.Bridge.GetUserByMXID(ctx, req.UserID)
-	if err != nil {
-		login.Log.Err(err).Stringer("sender", req.UserID).Msg("Failed to load beeper stream subscriber user")
+		br.Log.Err(err).Stringer("sender", req.UserID).Msg("Failed to load beeper stream subscriber user")
 		return false
 	}
 	if user == nil || !user.Permissions.SendEvents {
 		return false
 	}
-	member, err := login.Bridge.Matrix.GetMemberInfo(ctx, req.RoomID, req.UserID)
+	member, err := br.Matrix.GetMemberInfo(ctx, req.RoomID, req.UserID)
 	if err != nil {
-		login.Log.Err(err).
+		br.Log.Err(err).
 			Stringer("sender", req.UserID).
 			Stringer("room_id", req.RoomID).
 			Msg("Failed to load beeper stream subscriber membership")
