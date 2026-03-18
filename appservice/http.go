@@ -26,20 +26,6 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-func (as *AppService) handleToDeviceEvent(ctx context.Context, evt *event.Event) bool {
-	if as == nil || evt == nil {
-		return false
-	}
-	if evt.ToUserID != "" && evt.ToUserID != as.BotMXID() {
-		return false
-	}
-	client := as.botClient
-	if client == nil {
-		return false
-	}
-	return client.HandleToDeviceEvent(ctx, evt)
-}
-
 // Start starts the HTTP server that listens for calls from the Matrix homeserver.
 func (as *AppService) Start() {
 	as.server = &http.Server{
@@ -217,7 +203,7 @@ func (as *AppService) handleEvents(ctx context.Context, evts []*event.Event, def
 		if errors.Is(err, event.ErrUnsupportedContentType) {
 			log.Debug().Stringer("event_id", evt.ID).Msg("Not parsing content of unsupported event")
 		} else if errors.Is(err, event.ErrContentAlreadyParsed) {
-			// The event may already have been parsed by an interceptor producer.
+			// The event may already have been parsed before reaching appservice listeners.
 		} else if err != nil {
 			log.Warn().Err(err).
 				Str("event_id", evt.ID.String()).
@@ -234,9 +220,6 @@ func (as *AppService) handleEvents(ctx context.Context, evts []*event.Event, def
 		}
 		var ch chan *event.Event
 		if evt.Type.Class == event.ToDeviceEventType {
-			if as.handleToDeviceEvent(ctx, evt) {
-				continue
-			}
 			ch = as.ToDeviceEvents
 		} else {
 			ch = as.Events

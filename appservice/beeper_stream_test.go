@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -94,16 +95,65 @@ func TestBotClientBeeperStreamInterception(t *testing.T) {
 	as := newTestAppService(t, ts.URL)
 	client := as.BotClient()
 	streams := client.BeeperStreams()
-	streams.SetAuthorizeSubscriber(func(context.Context, *mautrix.BeeperStreamSubscribeRequest) bool { return true })
+	subscribeHandled := make(chan struct{}, 1)
+	streams.SetAuthorizeSubscriber(func(context.Context, *mautrix.BeeperStreamSubscribeRequest) bool {
+		select {
+		case subscribeHandled <- struct{}{}:
+		default:
+		}
+		return true
+	})
+	ep := NewEventProcessor(as)
+	ep.ExecMode = Sync
+	ep.PrependHandler(event.ToDeviceBeeperStreamSubscribe, func(ctx context.Context, evt *event.Event) {
+		_, _ = client.PreDispatchToDeviceEvent(ctx, evt)
+	})
+	ep.PrependHandler(event.ToDeviceBeeperStreamEncrypted, func(ctx context.Context, evt *event.Event) {
+		handled, keep := client.PreDispatchToDeviceEvent(ctx, evt)
+		if !keep || handled || evt.Type != event.ToDeviceBeeperStreamUpdate {
+			return
+		}
+		ep.Dispatch(ctx, evt)
+	})
+	ep.Start(context.Background())
+	defer ep.Stop()
 	activateTestAppServiceStream(t, streams)
 
 	deliverTestBotSubscribe(t, as, client.DeviceID)
+	require.Eventually(t, func() bool {
+		select {
+		case <-subscribeHandled:
+			return true
+		default:
+			return false
+		}
+	}, time.Second, 10*time.Millisecond)
 
 	require.NoError(t, streams.Publish(context.Background(), testBotRoomID, testBotEventID, newTestPublishPayload()))
-	require.Equal(t, int32(1), sendToDeviceCalls.Load())
+	require.Eventually(t, func() bool {
+		return sendToDeviceCalls.Load() == 1
+	}, time.Second, 10*time.Millisecond)
 	select {
 	case <-as.ToDeviceEvents:
-		t.Fatal("expected intercepted to-device event to not be enqueued")
+		t.Fatal("expected to-device event to be consumed from appservice queue")
+	default:
+	}
+}
+
+func TestBotClientDropsMalformedToDeviceEvent(t *testing.T) {
+	as := newTestAppService(t, "")
+
+	as.handleEvents(context.Background(), []*event.Event{{
+		Sender:     testBotSubscriber,
+		ToUserID:   as.BotMXID(),
+		ToDeviceID: testBotSubDevice,
+		Type:       event.ToDeviceBeeperStreamSubscribe,
+		Content:    event.Content{VeryRaw: json.RawMessage(`{`)},
+	}}, event.ToDeviceEventType)
+
+	select {
+	case <-as.ToDeviceEvents:
+		t.Fatal("expected malformed to-device event to be dropped")
 	default:
 	}
 }

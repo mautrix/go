@@ -157,7 +157,18 @@ func (br *Connector) Init(bridge *bridgev2.Bridge) {
 	br.EventProcessor.On(event.EphemeralEventReceipt, br.handleEphemeralEvent)
 	br.EventProcessor.On(event.EphemeralEventTyping, br.handleEphemeralEvent)
 	br.Bot = br.AS.BotIntent()
-	br.AS.BotClient().BeeperStreams().SetAuthorizeSubscriber(br.authorizeBeeperStreamSubscriber)
+	botClient := br.AS.BotClient()
+	botClient.BeeperStreams().SetAuthorizeSubscriber(br.authorizeBeeperStreamSubscriber)
+	br.EventProcessor.PrependHandler(event.ToDeviceBeeperStreamSubscribe, func(ctx context.Context, evt *event.Event) {
+		_, _ = botClient.PreDispatchToDeviceEvent(ctx, evt)
+	})
+	br.EventProcessor.PrependHandler(event.ToDeviceBeeperStreamEncrypted, func(ctx context.Context, evt *event.Event) {
+		handled, keep := botClient.PreDispatchToDeviceEvent(ctx, evt)
+		if !keep || handled || evt.Type != event.ToDeviceBeeperStreamUpdate {
+			return
+		}
+		br.EventProcessor.Dispatch(ctx, evt)
+	})
 	br.Crypto = NewCryptoHelper(br)
 	br.Bridge.Commands.(*commands.Processor).AddHandlers(
 		CommandDiscardMegolmSession, CommandSetPowerLevel,

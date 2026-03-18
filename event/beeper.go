@@ -231,17 +231,56 @@ const (
 	BeeperStreamStatusCancelled BeeperStreamStatus = "cancelled"
 )
 
-func (info *BeeperStreamInfo) WithStatus(status BeeperStreamStatus) *BeeperStreamInfo {
+func (info *BeeperStreamInfo) Clone() *BeeperStreamInfo {
 	if info == nil {
 		return nil
 	}
 	cloned := *info
-	cloned.Status = status
 	if info.Encryption != nil {
 		enc := *info.Encryption
 		cloned.Encryption = &enc
 	}
 	return &cloned
+}
+
+func (info *BeeperStreamInfo) Validate() error {
+	if info == nil {
+		return fmt.Errorf("missing beeper stream descriptor")
+	} else if info.UserID == "" || info.Type == "" {
+		return fmt.Errorf("missing beeper stream descriptor fields")
+	}
+	switch info.Status {
+	case BeeperStreamStatusActive, BeeperStreamStatusComplete, BeeperStreamStatusCancelled:
+	default:
+		return fmt.Errorf("invalid beeper stream status %q", info.Status)
+	}
+	if info.Encryption == nil {
+		return nil
+	}
+	if info.Encryption.Algorithm != id.AlgorithmBeeperStreamAESGCM {
+		return fmt.Errorf("unsupported beeper stream encryption algorithm %q", info.Encryption.Algorithm)
+	} else if info.Encryption.Key == "" {
+		return fmt.Errorf("missing beeper stream encryption key")
+	}
+	return nil
+}
+
+func (info *BeeperStreamInfo) ValidateActive() error {
+	if info == nil {
+		return fmt.Errorf("missing beeper stream descriptor")
+	} else if info.Status != BeeperStreamStatusActive {
+		return fmt.Errorf("beeper stream descriptor must be active when using it")
+	}
+	return info.Validate()
+}
+
+func (info *BeeperStreamInfo) WithStatus(status BeeperStreamStatus) *BeeperStreamInfo {
+	cloned := info.Clone()
+	if cloned == nil {
+		return nil
+	}
+	cloned.Status = status
+	return cloned
 }
 
 type BeeperStreamEncryptionInfo struct {

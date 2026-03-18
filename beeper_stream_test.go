@@ -9,6 +9,7 @@ package mautrix
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -112,6 +113,24 @@ func newTestSubscribeEvent(toUserID id.UserID, toDeviceID id.DeviceID) *event.Ev
 	}
 }
 
+func newTestEncryptedSubscribeEvent(t *testing.T, descriptor *event.BeeperStreamInfo) *event.Event {
+	t.Helper()
+	payload, err := json.Marshal(map[string]any{
+		"device_id": testStreamSubscriberDev,
+		"expiry_ms": 60_000,
+	})
+	require.NoError(t, err)
+	encrypted, err := encryptLogicalEvent(event.ToDeviceBeeperStreamSubscribe, payload, testStreamRoomID, testStreamEventID, descriptor.Encryption.Key)
+	require.NoError(t, err)
+	return &event.Event{
+		Sender:     testStreamSubscriberID,
+		ToUserID:   testStreamBotUserID,
+		ToDeviceID: testStreamPublisherDev,
+		Type:       event.ToDeviceBeeperStreamEncrypted,
+		Content:    event.Content{Parsed: encrypted},
+	}
+}
+
 func newTestDescriptor(encrypted bool) *event.BeeperStreamInfo {
 	descriptor := &event.BeeperStreamInfo{
 		UserID:   testStreamBotUserID,
@@ -133,7 +152,9 @@ func newTestEncryptedUpdateEvent(t *testing.T, descriptor *event.BeeperStreamInf
 	t.Helper()
 	content, err := newUpdateContent(testStreamRoomID, testStreamEventID, newTestPublishContent("hello"))
 	require.NoError(t, err)
-	payload, err := stripUpdateRouting(content)
+	raw, err := rawMapFromContent(content)
+	require.NoError(t, err)
+	payload, err := json.Marshal(removeStreamRouting(raw))
 	require.NoError(t, err)
 	encrypted, err := encryptLogicalEvent(event.ToDeviceBeeperStreamUpdate, payload, testStreamRoomID, testStreamEventID, descriptor.Encryption.Key)
 	require.NoError(t, err)
@@ -153,8 +174,8 @@ func decodeJSONMap(t *testing.T, data []byte) map[string]any {
 
 func assertStreamUpdateMap(t *testing.T, parsed map[string]any) {
 	t.Helper()
-	require.Equal(t, string(testStreamRoomID), parsed["room_id"])
-	require.Equal(t, string(testStreamEventID), parsed["event_id"])
+	require.Equal(t, string(testStreamRoomID), fmt.Sprint(parsed["room_id"]))
+	require.Equal(t, string(testStreamEventID), fmt.Sprint(parsed["event_id"]))
 	require.Contains(t, parsed, testStreamDeltaKey)
 }
 
@@ -206,6 +227,49 @@ func TestBeeperStreamsPublishAndUnregister(t *testing.T) {
 	require.Error(t, streams.Publish(context.Background(), testStreamRoomID, testStreamEventID, newTestPublishContent("bye")))
 }
 
+func TestBeeperStreamsReplayPendingSubscribeOnRegister(t *testing.T) {
+	ts, recorder := newSendToDeviceRecorderServer(t)
+	client := newTestStreamClient(t, ts.URL, testStreamBotUserID, testStreamPublisherDev)
+	streams := client.BeeperStreams()
+	streams.SetAuthorizeSubscriber(func(context.Context, *BeeperStreamSubscribeRequest) bool { return true })
+
+	require.True(t, client.HandleToDeviceEvent(context.Background(), newTestSubscribeEvent(testStreamBotUserID, testStreamPublisherDev)))
+
+	require.NoError(t, streams.Register(context.Background(), testStreamRoomID, testStreamEventID, newTestDescriptor(false)))
+	require.NoError(t, streams.Publish(context.Background(), testStreamRoomID, testStreamEventID, newTestPublishContent("hello")))
+
+	req := recorder.next(t)
+	require.Contains(t, req.path, "/sendToDevice/com.beeper.stream.update/")
+	assertStreamUpdateMap(t, decodeJSONMap(t, recorder.rawContent(t, req, testStreamSubscriberID, testStreamSubscriberDev)))
+}
+
+func TestBeeperStreamsReplayPendingEncryptedSubscribeOnRegister(t *testing.T) {
+	ts, recorder := newSendToDeviceRecorderServer(t)
+	client := newTestStreamClient(t, ts.URL, testStreamBotUserID, testStreamPublisherDev)
+	streams := client.BeeperStreams()
+	streams.SetAuthorizeSubscriber(func(context.Context, *BeeperStreamSubscribeRequest) bool { return true })
+	descriptor := newTestDescriptor(true)
+
+	require.True(t, client.HandleToDeviceEvent(context.Background(), newTestEncryptedSubscribeEvent(t, descriptor)))
+
+	require.NoError(t, streams.Register(context.Background(), testStreamRoomID, testStreamEventID, descriptor))
+	require.NoError(t, streams.Publish(context.Background(), testStreamRoomID, testStreamEventID, newTestPublishContent("hello")))
+
+	req := recorder.next(t)
+	require.Contains(t, req.path, "/sendToDevice/com.beeper.stream.encrypted/")
+	rawContent := recorder.rawContent(t, req, testStreamSubscriberID, testStreamSubscriberDev)
+	var payload event.BeeperStreamEncryptedEventContent
+	require.NoError(t, json.Unmarshal(rawContent, &payload))
+	logicalType, payloadContent, err := decryptLogicalEvent(&payload, descriptor.Encryption.Key)
+	require.NoError(t, err)
+	require.Equal(t, event.ToDeviceBeeperStreamUpdate, logicalType)
+	var parsed map[string]any
+	require.NoError(t, json.Unmarshal(payloadContent, &parsed))
+	parsed["room_id"] = testStreamRoomID
+	parsed["event_id"] = testStreamEventID
+	assertStreamUpdateMap(t, parsed)
+}
+
 func TestBeeperStreamsEncryptedUpdatesReachListeners(t *testing.T) {
 	ts, recorder := newSendToDeviceRecorderServer(t)
 	client := newTestStreamClient(t, ts.URL, testStreamSubscriberID, "RECEIVER")
@@ -234,4 +298,63 @@ func TestBeeperStreamsEncryptedUpdatesReachListeners(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for normalized beeper stream update")
 	}
+}
+
+func TestBeeperStreamsPendingSubscribeExpiresBeforeRegister(t *testing.T) {
+	ts, recorder := newSendToDeviceRecorderServer(t)
+	client := newTestStreamClient(t, ts.URL, testStreamBotUserID, testStreamPublisherDev)
+	streams := client.BeeperStreams()
+	streams.SetAuthorizeSubscriber(func(context.Context, *BeeperStreamSubscribeRequest) bool { return true })
+	now := time.Unix(1_000, 0)
+	streams.now = func() time.Time { return now }
+
+	require.True(t, client.HandleToDeviceEvent(context.Background(), newTestSubscribeEvent(testStreamBotUserID, testStreamPublisherDev)))
+
+	now = now.Add(beeperStreamPendingSubscribeTTL + time.Second)
+	require.NoError(t, streams.Register(context.Background(), testStreamRoomID, testStreamEventID, newTestDescriptor(false)))
+	require.NoError(t, streams.Publish(context.Background(), testStreamRoomID, testStreamEventID, newTestPublishContent("hello")))
+
+	select {
+	case req := <-recorder.requests:
+		t.Fatalf("unexpected sendToDevice request: %s", req.path)
+	case <-time.After(200 * time.Millisecond):
+	}
+}
+
+func TestBeeperStreamsPendingSubscribeQueueTrim(t *testing.T) {
+	client := newTestStreamClient(t, "", testStreamBotUserID, testStreamPublisherDev)
+	streams := client.BeeperStreams()
+
+	for i := 0; i < maxPendingBeeperStreamSubs+1; i++ {
+		evt := &event.Event{
+			Sender: testStreamSubscriberID,
+			Type:   event.ToDeviceBeeperStreamSubscribe,
+			Content: event.Content{Parsed: &event.BeeperStreamSubscribeEventContent{
+				RoomID:   id.RoomID(testStreamRoomID + id.RoomID(fmt.Sprintf("-%d", i))),
+				EventID:  testStreamEventID,
+				DeviceID: testStreamSubscriberDev,
+				ExpiryMS: 60_000,
+			}},
+		}
+		streams.queuePendingSubscribe(context.Background(), evt)
+	}
+
+	require.Len(t, streams.pendingSubscribe, maxPendingBeeperStreamSubs)
+	require.Equal(t, id.RoomID(testStreamRoomID+"-1"), streams.pendingSubscribe[0].key.roomID)
+}
+
+func TestDecryptLogicalEventRejectsInvalidIV(t *testing.T) {
+	descriptor := newTestDescriptor(true)
+	content, err := newUpdateContent(testStreamRoomID, testStreamEventID, newTestPublishContent("hello"))
+	require.NoError(t, err)
+	raw, err := rawMapFromContent(content)
+	require.NoError(t, err)
+	payload, err := json.Marshal(removeStreamRouting(raw))
+	require.NoError(t, err)
+	encrypted, err := encryptLogicalEvent(event.ToDeviceBeeperStreamUpdate, payload, testStreamRoomID, testStreamEventID, descriptor.Encryption.Key)
+	require.NoError(t, err)
+
+	encrypted.IV = "invalid"
+	_, _, err = decryptLogicalEvent(encrypted, descriptor.Encryption.Key)
+	require.Error(t, err)
 }

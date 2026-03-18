@@ -18,17 +18,24 @@ import (
 type ToDevicePreprocessor func(context.Context, *event.Event) (handled, keep bool)
 
 func preprocessToDeviceEvent(ctx context.Context, preprocessor ToDevicePreprocessor, evt *event.Event) (handled, keep bool) {
-	err := prepareToDeviceEvent(evt)
+	handled, keep, _ = PreprocessToDeviceEventWithError(ctx, preprocessor, evt)
+	return handled, keep
+}
+
+// PreprocessToDeviceEventWithError prepares a to-device event and runs an optional preprocessor.
+func PreprocessToDeviceEventWithError(ctx context.Context, preprocessor ToDevicePreprocessor, evt *event.Event) (handled, keep bool, err error) {
+	err = prepareToDeviceEvent(evt)
 	if err != nil {
 		if errors.Is(err, event.ErrUnsupportedContentType) {
-			return false, true
+			return false, true, err
 		}
-		return false, false
+		return false, false, err
 	}
 	if preprocessor == nil {
-		return false, true
+		return false, true, nil
 	}
-	return preprocessor(ctx, evt)
+	handled, keep = preprocessor(ctx, evt)
+	return handled, keep, nil
 }
 
 func prepareToDeviceEvent(evt *event.Event) error {
