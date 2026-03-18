@@ -14,10 +14,10 @@ import (
 	"maunium.net/go/mautrix/event"
 )
 
-// ToDeviceInterceptor handles a to-device event and returns true if it consumed the event.
-type ToDeviceInterceptor func(context.Context, *event.Event) bool
+// ToDevicePreprocessor can consume or rewrite a to-device event before normal dispatch.
+type ToDevicePreprocessor func(context.Context, *event.Event) (handled, keep bool)
 
-func interceptToDeviceEvent(ctx context.Context, interceptors []ToDeviceInterceptor, evt *event.Event) (handled, keep bool) {
+func preprocessToDeviceEvent(ctx context.Context, preprocessor ToDevicePreprocessor, evt *event.Event) (handled, keep bool) {
 	err := prepareToDeviceEvent(evt)
 	if err != nil {
 		if errors.Is(err, event.ErrUnsupportedContentType) {
@@ -25,12 +25,10 @@ func interceptToDeviceEvent(ctx context.Context, interceptors []ToDeviceIntercep
 		}
 		return false, false
 	}
-	for _, interceptor := range interceptors {
-		if interceptor != nil && interceptor(ctx, evt) {
-			return true, true
-		}
+	if preprocessor == nil {
+		return false, true
 	}
-	return false, true
+	return preprocessor(ctx, evt)
 }
 
 func prepareToDeviceEvent(evt *event.Event) error {
@@ -52,8 +50,8 @@ func prepareToDeviceEvent(evt *event.Event) error {
 //
 // It sets the same source metadata that normal sync dispatch would set before invoking
 // the interceptor, and keeps only unconsumed events for downstream handling.
-func FilterSyncToDeviceEvents(ctx context.Context, events []*event.Event, interceptor ToDeviceInterceptor) []*event.Event {
-	if len(events) == 0 || interceptor == nil {
+func FilterSyncToDeviceEvents(ctx context.Context, events []*event.Event, preprocessor ToDevicePreprocessor) []*event.Event {
+	if len(events) == 0 || preprocessor == nil {
 		return events
 	}
 	filtered := events[:0]
@@ -61,7 +59,7 @@ func FilterSyncToDeviceEvents(ctx context.Context, events []*event.Event, interc
 		if evt == nil {
 			continue
 		}
-		handled, keep := interceptToDeviceEvent(ctx, []ToDeviceInterceptor{interceptor}, evt)
+		handled, keep := preprocessToDeviceEvent(ctx, preprocessor, evt)
 		if !keep || handled {
 			continue
 		}
@@ -72,23 +70,28 @@ func FilterSyncToDeviceEvents(ctx context.Context, events []*event.Event, interc
 	return filtered
 }
 
-func (cli *Client) AddToDeviceInterceptor(interceptor ToDeviceInterceptor) {
-	if cli == nil || interceptor == nil {
-		return
-	}
-	cli.toDeviceInterceptorsLock.Lock()
-	defer cli.toDeviceInterceptorsLock.Unlock()
-	cli.toDeviceInterceptors = append(cli.toDeviceInterceptors, interceptor)
-}
-
 func (cli *Client) HandleToDeviceEvent(ctx context.Context, evt *event.Event) bool {
 	if cli == nil || evt == nil {
 		return false
 	}
-	cli.toDeviceInterceptorsLock.RLock()
-	interceptors := make([]ToDeviceInterceptor, len(cli.toDeviceInterceptors))
-	copy(interceptors, cli.toDeviceInterceptors)
-	cli.toDeviceInterceptorsLock.RUnlock()
-	handled, _ := interceptToDeviceEvent(ctx, interceptors, evt)
+	handled, _ := cli.PreDispatchToDeviceEvent(ctx, evt)
 	return handled
+}
+
+func (cli *Client) PreDispatchToDeviceEvent(ctx context.Context, evt *event.Event) (handled, keep bool) {
+	return preprocessToDeviceEvent(ctx, cli.handleBeeperStreamToDeviceEvent, evt)
+}
+
+func (cli *Client) handleBeeperStreamToDeviceEvent(ctx context.Context, evt *event.Event) (handled, keep bool) {
+	if cli == nil || evt == nil {
+		return false, true
+	}
+	cli.beeperStreamLock.Lock()
+	manager := cli.beeperStream
+	cli.beeperStreamLock.Unlock()
+	if manager == nil {
+		return false, true
+	}
+	handled = manager.handleToDeviceEvent(ctx, evt)
+	return handled, true
 }

@@ -247,7 +247,6 @@ func (info *BeeperStreamInfo) WithStatus(status BeeperStreamStatus) *BeeperStrea
 type BeeperStreamEncryptionInfo struct {
 	Algorithm id.Algorithm `json:"algorithm"`
 	Key       string       `json:"key"`
-	StreamID  id.StreamID  `json:"stream_id"`
 }
 
 type BeeperStreamSubscribeEventContent struct {
@@ -260,6 +259,14 @@ type BeeperStreamSubscribeEventContent struct {
 type BeeperStreamUpdateEventContent struct {
 	RoomID  id.RoomID  `json:"room_id"`
 	EventID id.EventID `json:"event_id"`
+}
+
+type BeeperStreamEncryptedEventContent struct {
+	RoomID     id.RoomID    `json:"room_id"`
+	EventID    id.EventID   `json:"event_id"`
+	Algorithm  id.Algorithm `json:"algorithm"`
+	IV         string       `json:"iv"`
+	Ciphertext string       `json:"ciphertext"`
 }
 
 type BeeperEncodedOrder struct {

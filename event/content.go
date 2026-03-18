@@ -109,10 +109,10 @@ var TypeMap = map[Type]reflect.Type{
 
 	ToDeviceOrgMatrixRoomKeyWithheld: reflect.TypeOf(RoomKeyWithheldEventContent{}),
 
-	ToDeviceBeeperRoomKeyAck: reflect.TypeOf(BeeperRoomKeyAckEventContent{}),
-
+	ToDeviceBeeperRoomKeyAck:      reflect.TypeOf(BeeperRoomKeyAckEventContent{}),
 	ToDeviceBeeperStreamSubscribe: reflect.TypeOf(BeeperStreamSubscribeEventContent{}),
 	ToDeviceBeeperStreamUpdate:    reflect.TypeOf(BeeperStreamUpdateEventContent{}),
+	ToDeviceBeeperStreamEncrypted: reflect.TypeOf(BeeperStreamEncryptedEventContent{}),
 
 	CallInvite:       reflect.TypeOf(CallInviteEventContent{}),
 	CallCandidates:   reflect.TypeOf(CallCandidatesEventContent{}),
@@ -488,6 +488,13 @@ func (content *Content) AsBeeperStreamUpdate() *BeeperStreamUpdateEventContent {
 	casted, ok := content.Parsed.(*BeeperStreamUpdateEventContent)
 	if !ok {
 		return &BeeperStreamUpdateEventContent{}
+	}
+	return casted
+}
+func (content *Content) AsBeeperStreamEncrypted() *BeeperStreamEncryptedEventContent {
+	casted, ok := content.Parsed.(*BeeperStreamEncryptedEventContent)
+	if !ok {
+		return &BeeperStreamEncryptedEventContent{}
 	}
 	return casted
 }

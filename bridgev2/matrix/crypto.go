@@ -532,7 +532,7 @@ func (syncer *cryptoSyncer) ProcessResponse(ctx context.Context, resp *mautrix.R
 			done <- struct{}{}
 		}()
 		syncer.Log.Trace().Str("since", since).Msg("Starting sync response handling")
-		resp.ToDevice.Events = mautrix.FilterSyncToDeviceEvents(ctx, resp.ToDevice.Events, syncer.Client.HandleToDeviceEvent)
+		resp.ToDevice.Events = mautrix.FilterSyncToDeviceEvents(ctx, resp.ToDevice.Events, syncer.Client.PreDispatchToDeviceEvent)
 		syncer.ProcessSyncResponse(ctx, resp, since)
 		syncer.Log.Trace().Str("since", since).Msg("Successfully handled sync response")
 	}()

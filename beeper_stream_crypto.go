@@ -20,17 +20,13 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-type beeperStreamEncryptedPayload struct {
+type beeperStreamInnerPayload struct {
 	Type    string          `json:"type"`
 	Content json.RawMessage `json:"content"`
 }
 
 func makeStreamKey() string {
 	return base64.RawStdEncoding.EncodeToString(random.Bytes(32))
-}
-
-func makeStreamID() id.StreamID {
-	return id.StreamID(base64.RawStdEncoding.EncodeToString(random.Bytes(16)))
 }
 
 func newStreamGCM(base64Key string) (cipher.AEAD, error) {
@@ -47,12 +43,19 @@ func newStreamGCM(base64Key string) (cipher.AEAD, error) {
 	return cipher.NewGCM(block)
 }
 
-func encryptPayload(logicalType event.Type, payload *event.Content, streamID id.StreamID, gcm cipher.AEAD) (*event.EncryptedEventContent, error) {
-	plaintextContent, err := json.Marshal(payload)
+func encryptLogicalEvent(logicalType event.Type, content *event.Content, roomID id.RoomID, eventID id.EventID, base64Key string) (*event.BeeperStreamEncryptedEventContent, error) {
+	if roomID == "" || eventID == "" {
+		return nil, fmt.Errorf("missing beeper stream identifiers")
+	}
+	gcm, err := newStreamGCM(base64Key)
 	if err != nil {
 		return nil, err
 	}
-	plaintext, err := json.Marshal(beeperStreamEncryptedPayload{
+	plaintextContent, err := json.Marshal(content)
+	if err != nil {
+		return nil, err
+	}
+	plaintext, err := json.Marshal(beeperStreamInnerPayload{
 		Type:    logicalType.Type,
 		Content: plaintextContent,
 	})
@@ -61,51 +64,36 @@ func encryptPayload(logicalType event.Type, payload *event.Content, streamID id.
 	}
 	iv := random.Bytes(gcm.NonceSize())
 	ciphertext := gcm.Seal(nil, iv, plaintext, nil)
-	return &event.EncryptedEventContent{
-		Algorithm:        id.AlgorithmBeeperStreamAESGCM,
-		IV:               base64.RawStdEncoding.EncodeToString(iv),
-		StreamID:         streamID,
-		StreamCiphertext: base64.RawStdEncoding.AppendEncode(nil, ciphertext),
+	return &event.BeeperStreamEncryptedEventContent{
+		RoomID:     roomID,
+		EventID:    eventID,
+		Algorithm:  id.AlgorithmBeeperStreamAESGCM,
+		IV:         base64.RawStdEncoding.EncodeToString(iv),
+		Ciphertext: base64.RawStdEncoding.EncodeToString(ciphertext),
 	}, nil
 }
 
-func encryptBeeperStreamEvent(logicalType event.Type, content *event.Content, streamID id.StreamID, base64Key string) (*event.EncryptedEventContent, error) {
-	gcm, err := newStreamGCM(base64Key)
-	if err != nil {
-		return nil, err
-	}
-	return encryptPayload(logicalType, content, streamID, gcm)
-}
-
-func decryptPayload(content *event.EncryptedEventContent, gcm cipher.AEAD) (*beeperStreamEncryptedPayload, error) {
-	iv, err := base64.RawStdEncoding.DecodeString(content.IV)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode beeper stream IV: %w", err)
-	} else if len(iv) != gcm.NonceSize() {
-		return nil, fmt.Errorf("invalid beeper stream IV length %d", len(iv))
-	}
-	ciphertext, err := base64.RawStdEncoding.AppendDecode(nil, content.StreamCiphertext)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode beeper stream ciphertext: %w", err)
-	}
-	plaintext, err := gcm.Open(nil, iv, ciphertext, nil)
-	if err != nil {
-		return nil, err
-	}
-	var payload beeperStreamEncryptedPayload
-	if err = json.Unmarshal(plaintext, &payload); err != nil {
-		return nil, err
-	}
-	return &payload, nil
-}
-
-func decryptEvent(content *event.EncryptedEventContent, base64Key string) (event.Type, *event.Content, error) {
+func decryptLogicalEvent(content *event.BeeperStreamEncryptedEventContent, base64Key string) (event.Type, *event.Content, error) {
 	gcm, err := newStreamGCM(base64Key)
 	if err != nil {
 		return event.Type{}, nil, err
 	}
-	payload, err := decryptPayload(content, gcm)
+	iv, err := base64.RawStdEncoding.DecodeString(content.IV)
 	if err != nil {
+		return event.Type{}, nil, fmt.Errorf("failed to decode beeper stream IV: %w", err)
+	} else if len(iv) != gcm.NonceSize() {
+		return event.Type{}, nil, fmt.Errorf("invalid beeper stream IV length %d", len(iv))
+	}
+	ciphertext, err := base64.RawStdEncoding.DecodeString(content.Ciphertext)
+	if err != nil {
+		return event.Type{}, nil, fmt.Errorf("failed to decode beeper stream ciphertext: %w", err)
+	}
+	plaintext, err := gcm.Open(nil, iv, ciphertext, nil)
+	if err != nil {
+		return event.Type{}, nil, err
+	}
+	var payload beeperStreamInnerPayload
+	if err = json.Unmarshal(plaintext, &payload); err != nil {
 		return event.Type{}, nil, err
 	}
 	logicalType := event.Type{Type: payload.Type, Class: event.ToDeviceEventType}
@@ -115,14 +103,26 @@ func decryptEvent(content *event.EncryptedEventContent, base64Key string) (event
 	case event.ToDeviceBeeperStreamUpdate.Type:
 		logicalType = event.ToDeviceBeeperStreamUpdate
 	}
-	var parsed event.Content
-	if err = json.Unmarshal(payload.Content, &parsed); err != nil {
+
+	var raw map[string]any
+	if err = json.Unmarshal(payload.Content, &raw); err != nil {
 		return event.Type{}, nil, err
 	}
+	if raw == nil {
+		raw = make(map[string]any)
+	}
+	raw["room_id"] = content.RoomID
+	raw["event_id"] = content.EventID
+
+	veryRaw, err := json.Marshal(raw)
+	if err != nil {
+		return event.Type{}, nil, err
+	}
+	parsed := &event.Content{VeryRaw: veryRaw, Raw: maps.Clone(raw)}
 	if err = parsed.ParseRaw(logicalType); err != nil {
 		return event.Type{}, nil, err
 	}
-	return logicalType, &parsed, nil
+	return logicalType, parsed, nil
 }
 
 func newUpdateContent(roomID id.RoomID, eventID id.EventID, content map[string]any) (*event.Content, error) {
@@ -140,5 +140,44 @@ func newUpdateContent(roomID id.RoomID, eventID id.EventID, content map[string]a
 	}
 	raw["room_id"] = roomID
 	raw["event_id"] = eventID
-	return &event.Content{Raw: raw}, nil
+	veryRaw, err := json.Marshal(raw)
+	if err != nil {
+		return nil, err
+	}
+	return &event.Content{VeryRaw: veryRaw, Raw: raw}, nil
+}
+
+func stripUpdateRouting(content *event.Content) (*event.Content, error) {
+	if content == nil {
+		return &event.Content{Raw: map[string]any{}}, nil
+	}
+	raw := maps.Clone(content.Raw)
+	if raw == nil {
+		veryRaw, err := json.Marshal(content)
+		if err != nil {
+			return nil, err
+		}
+		if err = json.Unmarshal(veryRaw, &raw); err != nil {
+			return nil, err
+		}
+	}
+	delete(raw, "room_id")
+	delete(raw, "event_id")
+	veryRaw, err := json.Marshal(raw)
+	if err != nil {
+		return nil, err
+	}
+	return &event.Content{VeryRaw: veryRaw, Raw: raw}, nil
+}
+
+func stripSubscribeRouting(deviceID id.DeviceID, expiryMS int64) (*event.Content, error) {
+	raw := map[string]any{
+		"device_id": deviceID,
+		"expiry_ms": expiryMS,
+	}
+	veryRaw, err := json.Marshal(raw)
+	if err != nil {
+		return nil, err
+	}
+	return &event.Content{VeryRaw: veryRaw, Raw: raw}, nil
 }

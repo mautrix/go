@@ -125,10 +125,8 @@ type Client struct {
 
 	syncingID uint32 // Identifies the current Sync. Only one Sync can be active at any given time.
 
-	toDeviceInterceptorsLock sync.RWMutex
-	toDeviceInterceptors     []ToDeviceInterceptor
-	beeperStreamLock         sync.Mutex
-	beeperStream             *BeeperStreamManager
+	beeperStreamLock sync.Mutex
+	beeperStream     *BeeperStreamManager
 }
 
 type ClientWellKnown struct {
@@ -2872,6 +2870,6 @@ func NewClient(homeserverURL string, userID id.UserID, accessToken string) (*Cli
 		// In practice, a database backend should be used.
 		Store: NewMemorySyncStore(),
 	}
-	syncer.InterceptToDeviceEvent = cli.HandleToDeviceEvent
+	syncer.PreDispatchToDevice = cli.PreDispatchToDeviceEvent
 	return cli, nil
 }

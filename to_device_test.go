@@ -24,9 +24,9 @@ func TestFilterSyncToDeviceEventsDropsMalformedEvents(t *testing.T) {
 		Content: event.Content{VeryRaw: json.RawMessage(`{`)},
 	}}
 
-	filtered := mautrix.FilterSyncToDeviceEvents(context.Background(), events, func(context.Context, *event.Event) bool {
+	filtered := mautrix.FilterSyncToDeviceEvents(context.Background(), events, func(context.Context, *event.Event) (bool, bool) {
 		called = true
-		return true
+		return true, true
 	})
 
 	require.False(t, called)
@@ -40,9 +40,9 @@ func TestFilterSyncToDeviceEventsKeepsUnsupportedEvents(t *testing.T) {
 		Content: event.Content{VeryRaw: json.RawMessage(`{"foo":"bar"}`)},
 	}}
 
-	filtered := mautrix.FilterSyncToDeviceEvents(context.Background(), events, func(context.Context, *event.Event) bool {
+	filtered := mautrix.FilterSyncToDeviceEvents(context.Background(), events, func(context.Context, *event.Event) (bool, bool) {
 		called = true
-		return true
+		return true, true
 	})
 
 	require.False(t, called)

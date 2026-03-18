@@ -35,17 +35,11 @@ type EncryptedEventContent struct {
 	DeviceID id.DeviceID `json:"device_id,omitempty"`
 	// Only present for Megolm events
 	SessionID id.SessionID `json:"session_id,omitempty"`
-	// Only present for com.beeper.stream.v1.aes-gcm events
-	IV string `json:"iv,omitempty"`
-	// Only present for com.beeper.stream.v1.aes-gcm events.
-	// Opaque per-stream identifier (analogous to session_id in Megolm).
-	StreamID id.StreamID `json:"stream_id,omitempty"`
 
 	Ciphertext json.RawMessage `json:"ciphertext"`
 
 	MegolmCiphertext []byte         `json:"-"`
 	OlmCiphertext    OlmCiphertexts `json:"-"`
-	StreamCiphertext []byte         `json:"-"`
 
 	RelatesTo *RelatesTo `json:"m.relates_to,omitempty"`
 	Mentions  *Mentions  `json:"m.mentions,omitempty"`
@@ -70,8 +64,6 @@ func (content *EncryptedEventContent) UnmarshalJSON(data []byte) error {
 		return json.Unmarshal(content.Ciphertext, &content.OlmCiphertext)
 	case id.AlgorithmMegolmV1:
 		stringCiphertext = &content.MegolmCiphertext
-	case id.AlgorithmBeeperStreamAESGCM:
-		stringCiphertext = &content.StreamCiphertext
 	}
 	if stringCiphertext != nil {
 		if len(content.Ciphertext) == 0 || content.Ciphertext[0] != '"' || content.Ciphertext[len(content.Ciphertext)-1] != '"' {
@@ -90,8 +82,6 @@ func (content *EncryptedEventContent) MarshalJSON() ([]byte, error) {
 		content.Ciphertext, err = json.Marshal(content.OlmCiphertext)
 	case id.AlgorithmMegolmV1:
 		stringCiphertext = content.MegolmCiphertext
-	case id.AlgorithmBeeperStreamAESGCM:
-		stringCiphertext = content.StreamCiphertext
 	}
 	if stringCiphertext != nil {
 		content.Ciphertext = make(json.RawMessage, len(stringCiphertext)+2)

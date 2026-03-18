@@ -124,24 +124,22 @@ func newTestDescriptor(encrypted bool) *event.BeeperStreamInfo {
 		descriptor.Encryption = &event.BeeperStreamEncryptionInfo{
 			Algorithm: id.AlgorithmBeeperStreamAESGCM,
 			Key:       makeStreamKey(),
-			StreamID:  makeStreamID(),
 		}
 	}
 	return descriptor
 }
 
-func newTestEncryptedUpdateEvent(t *testing.T, descriptor *event.BeeperStreamInfo, streamID id.StreamID) *event.Event {
+func newTestEncryptedUpdateEvent(t *testing.T, descriptor *event.BeeperStreamInfo) *event.Event {
 	t.Helper()
 	content, err := newUpdateContent(testStreamRoomID, testStreamEventID, newTestPublishContent("hello"))
 	require.NoError(t, err)
-	if streamID == "" {
-		streamID = descriptor.Encryption.StreamID
-	}
-	encrypted, err := encryptBeeperStreamEvent(event.ToDeviceBeeperStreamUpdate, content, streamID, descriptor.Encryption.Key)
+	payload, err := stripUpdateRouting(content)
+	require.NoError(t, err)
+	encrypted, err := encryptLogicalEvent(event.ToDeviceBeeperStreamUpdate, payload, testStreamRoomID, testStreamEventID, descriptor.Encryption.Key)
 	require.NoError(t, err)
 	return &event.Event{
 		Sender:  testStreamBotUserID,
-		Type:    event.ToDeviceEncrypted,
+		Type:    event.ToDeviceBeeperStreamEncrypted,
 		Content: event.Content{Parsed: encrypted},
 	}
 }
@@ -223,7 +221,7 @@ func TestBeeperStreamsEncryptedUpdatesReachListeners(t *testing.T) {
 		received <- evt
 	})
 
-	evt := newTestEncryptedUpdateEvent(t, descriptor, "")
+	evt := newTestEncryptedUpdateEvent(t, descriptor)
 	syncer.processSyncEvent(context.Background(), "", evt, event.SourceToDevice, false)
 
 	select {

@@ -96,13 +96,6 @@ func (sessionID SessionID) String() string {
 	return string(sessionID)
 }
 
-// A StreamID is an arbitrary string that identifies a beeper stream encryption context.
-type StreamID string
-
-func (streamID StreamID) String() string {
-	return string(streamID)
-}
-
 // Ed25519 is the base64 representation of an Ed25519 public key
 type Ed25519 string
 type SigningKey = Ed25519
