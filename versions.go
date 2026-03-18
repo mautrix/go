@@ -81,7 +81,6 @@ var (
 	BeeperFeatureAccountDataMute       = UnstableFeature{UnstableFlag: "com.beeper.account_data_mute"}
 	BeeperFeatureInboxState            = UnstableFeature{UnstableFlag: "com.beeper.inbox_state"}
 	BeeperFeatureArbitraryMemberChange = UnstableFeature{UnstableFlag: "com.beeper.arbitrary_member_change"}
-	BeeperFeatureEphemeralEvents       = UnstableFeature{UnstableFlag: "com.beeper.ephemeral"}
 )
 
 func (versions *RespVersions) Supports(feature UnstableFeature) bool {

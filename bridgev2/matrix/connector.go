@@ -145,7 +145,6 @@ func (br *Connector) Init(bridge *bridgev2.Bridge) {
 	br.EventProcessor.On(event.EventReaction, br.handleRoomEvent)
 	br.EventProcessor.On(event.EventRedaction, br.handleRoomEvent)
 	br.EventProcessor.On(event.EventEncrypted, br.handleEncryptedEvent)
-	br.EventProcessor.On(event.EphemeralEventEncrypted, br.handleEncryptedEvent)
 	br.EventProcessor.On(event.StateMember, br.handleRoomEvent)
 	br.EventProcessor.On(event.StatePowerLevels, br.handleRoomEvent)
 	br.EventProcessor.On(event.StateRoomName, br.handleRoomEvent)
@@ -618,13 +617,10 @@ func (br *Connector) BotIntent() bridgev2.MatrixAPI {
 	return &ASIntent{Connector: br, Matrix: br.Bot}
 }
 
-func (br *Connector) GetBeeperStreamTransport(_ context.Context) (mautrix.BeeperStreamTransport, error) {
-	if br.AS == nil {
-		return nil, fmt.Errorf("appservice is not initialized")
-	}
+func (br *Connector) GetBeeperStreamTransport() mautrix.BeeperStreamTransport {
 	return br.AS.BotClient().GetOrCreateBeeperStreamSender(&mautrix.BeeperStreamSenderOptions{
 		AuthorizeSubscriber: br.authorizeBeeperStreamSubscriber,
-	}), nil
+	})
 }
 
 func (br *Connector) authorizeBeeperStreamSubscriber(ctx context.Context, req *mautrix.BeeperStreamSubscribeRequest) bool {

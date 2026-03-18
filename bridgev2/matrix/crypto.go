@@ -350,6 +350,7 @@ func (helper *CryptoHelper) verifyKeysAreOnServer(ctx context.Context) bool {
 func (helper *CryptoHelper) Start() {
 	if helper.bridge.Config.Encryption.Appservice {
 		helper.log.Debug().Msg("End-to-bridge encryption is in appservice mode, registering event listeners and not starting syncer")
+		helper.bridge.AS.Registration.EphemeralEvents = true
 		helper.mach.AddAppserviceListener(helper.bridge.EventProcessor)
 		return
 	}

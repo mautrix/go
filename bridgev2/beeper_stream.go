@@ -7,7 +7,6 @@
 package bridgev2
 
 import (
-	"context"
 	"fmt"
 
 	"maunium.net/go/mautrix"
@@ -15,10 +14,10 @@ import (
 
 // GetBeeperStreamTransport returns the bridge's Beeper stream transport if the matrix
 // connector supports it.
-func (br *Bridge) GetBeeperStreamTransport(ctx context.Context) (mautrix.BeeperStreamTransport, error) {
+func (br *Bridge) GetBeeperStreamTransport() (mautrix.BeeperStreamTransport, error) {
 	provider, ok := br.Matrix.(MatrixConnectorWithBeeperStreamTransport)
 	if !ok {
 		return nil, fmt.Errorf("matrix connector does not provide beeper stream transport")
 	}
-	return provider.GetBeeperStreamTransport(ctx)
+	return provider.GetBeeperStreamTransport(), nil
 }

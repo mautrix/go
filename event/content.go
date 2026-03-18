@@ -75,10 +75,9 @@ var TypeMap = map[Type]reflect.Type{
 	AccountDataMarkedUnread:    reflect.TypeOf(MarkedUnreadEventContent{}),
 	AccountDataBeeperMute:      reflect.TypeOf(BeeperMuteEventContent{}),
 
-	EphemeralEventTyping:         reflect.TypeOf(TypingEventContent{}),
-	EphemeralEventReceipt:        reflect.TypeOf(ReceiptEventContent{}),
-	EphemeralEventPresence:       reflect.TypeOf(PresenceEventContent{}),
-	EphemeralEventEncrypted:      reflect.TypeOf(EncryptedEventContent{}),
+	EphemeralEventTyping:   reflect.TypeOf(TypingEventContent{}),
+	EphemeralEventReceipt:  reflect.TypeOf(ReceiptEventContent{}),
+	EphemeralEventPresence: reflect.TypeOf(PresenceEventContent{}),
 
 	InRoomVerificationReady:  reflect.TypeOf(VerificationReadyEventContent{}),
 	InRoomVerificationStart:  reflect.TypeOf(VerificationStartEventContent{}),

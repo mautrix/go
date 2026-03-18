@@ -65,7 +65,7 @@ type MatrixConnector interface {
 // supply the bridge's Beeper stream transport.
 type MatrixConnectorWithBeeperStreamTransport interface {
 	MatrixConnector
-	GetBeeperStreamTransport(ctx context.Context) (mautrix.BeeperStreamTransport, error)
+	GetBeeperStreamTransport() mautrix.BeeperStreamTransport
 }
 
 type MatrixConnectorWithArbitraryRoomState interface {
@@ -224,9 +224,4 @@ type StreamOrderReadingMatrixAPI interface {
 type MarkAsDMMatrixAPI interface {
 	MatrixAPI
 	MarkAsDM(ctx context.Context, roomID id.RoomID, otherUser id.UserID) error
-}
-
-type EphemeralSendingMatrixAPI interface {
-	MatrixAPI
-	BeeperSendEphemeralEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, content *event.Content, txnID string) (*mautrix.RespSendEvent, error)
 }
