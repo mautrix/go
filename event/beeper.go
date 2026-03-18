@@ -307,7 +307,6 @@ type BeeperStreamEncryptedEventContent struct {
 	IV         string       `json:"iv"`
 	Ciphertext string       `json:"ciphertext"`
 }
-
 type BeeperEncodedOrder struct {
 	order    int64
 	suborder int16
