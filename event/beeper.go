@@ -216,9 +216,32 @@ func (content *MessageEventContent) RemovePerMessageProfileFallback() {
 
 type BeeperStreamInfo struct {
 	UserID     id.UserID                   `json:"user_id"`
+	DeviceID   id.DeviceID                 `json:"device_id,omitempty"`
 	Type       string                      `json:"type"`
 	ExpiryMS   int64                       `json:"expiry_ms,omitempty"`
+	Status     BeeperStreamStatus          `json:"status"`
 	Encryption *BeeperStreamEncryptionInfo `json:"encryption,omitempty"`
+}
+
+type BeeperStreamStatus string
+
+const (
+	BeeperStreamStatusActive    BeeperStreamStatus = "active"
+	BeeperStreamStatusComplete  BeeperStreamStatus = "complete"
+	BeeperStreamStatusCancelled BeeperStreamStatus = "cancelled"
+)
+
+func (info *BeeperStreamInfo) WithStatus(status BeeperStreamStatus) *BeeperStreamInfo {
+	if info == nil {
+		return nil
+	}
+	cloned := *info
+	cloned.Status = status
+	if info.Encryption != nil {
+		enc := *info.Encryption
+		cloned.Encryption = &enc
+	}
+	return &cloned
 }
 
 type BeeperStreamEncryptionInfo struct {

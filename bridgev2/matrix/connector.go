@@ -103,7 +103,6 @@ type Connector struct {
 
 var (
 	_ bridgev2.MatrixConnector                           = (*Connector)(nil)
-	_ bridgev2.MatrixConnectorWithBeeperStreamTransport  = (*Connector)(nil)
 	_ bridgev2.MatrixConnectorWithServer                 = (*Connector)(nil)
 	_ bridgev2.MatrixConnectorWithArbitraryRoomState     = (*Connector)(nil)
 	_ bridgev2.MatrixConnectorWithPostRoomBridgeHandling = (*Connector)(nil)
@@ -158,6 +157,7 @@ func (br *Connector) Init(bridge *bridgev2.Bridge) {
 	br.EventProcessor.On(event.EphemeralEventReceipt, br.handleEphemeralEvent)
 	br.EventProcessor.On(event.EphemeralEventTyping, br.handleEphemeralEvent)
 	br.Bot = br.AS.BotIntent()
+	br.AS.BotClient().BeeperStreams().SetAuthorizeSubscriber(br.authorizeBeeperStreamSubscriber)
 	br.Crypto = NewCryptoHelper(br)
 	br.Bridge.Commands.(*commands.Processor).AddHandlers(
 		CommandDiscardMegolmSession, CommandSetPowerLevel,
@@ -615,12 +615,6 @@ func (br *Connector) NewUserIntent(ctx context.Context, userID id.UserID, access
 
 func (br *Connector) BotIntent() bridgev2.MatrixAPI {
 	return &ASIntent{Connector: br, Matrix: br.Bot}
-}
-
-func (br *Connector) GetBeeperStreamTransport() mautrix.BeeperStreamTransport {
-	return br.AS.BotClient().GetOrCreateBeeperStreamSender(&mautrix.BeeperStreamSenderOptions{
-		AuthorizeSubscriber: br.authorizeBeeperStreamSubscriber,
-	})
 }
 
 func (br *Connector) authorizeBeeperStreamSubscriber(ctx context.Context, req *mautrix.BeeperStreamSubscribeRequest) bool {

@@ -30,29 +30,14 @@ func (as *AppService) handleToDeviceEvent(ctx context.Context, evt *event.Event)
 	if as == nil || evt == nil {
 		return false
 	}
-	clients := make([]*mautrix.Client, 0, 2)
-	seen := make(map[*mautrix.Client]struct{}, 2)
-	addClient := func(client *mautrix.Client) {
-		if client == nil {
-			return
-		}
-		if _, ok := seen[client]; ok {
-			return
-		}
-		seen[client] = struct{}{}
-		clients = append(clients, client)
+	if evt.ToUserID != "" && evt.ToUserID != as.BotMXID() {
+		return false
 	}
-
-	addClient(as.existingClient(evt.ToUserID))
-	if evt.ToUserID == "" || evt.ToUserID == as.BotMXID() {
-		addClient(as.existingClient(as.BotMXID()))
+	client := as.botClient
+	if client == nil {
+		return false
 	}
-	for _, client := range clients {
-		if client.HandleToDeviceEvent(ctx, evt) {
-			return true
-		}
-	}
-	return false
+	return client.HandleToDeviceEvent(ctx, evt)
 }
 
 // Start starts the HTTP server that listens for calls from the Matrix homeserver.

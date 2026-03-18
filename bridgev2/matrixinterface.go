@@ -61,13 +61,6 @@ type MatrixConnector interface {
 	ServerName() string
 }
 
-// MatrixConnectorWithBeeperStreamTransport is implemented by matrix connectors that can
-// supply the bridge's Beeper stream transport.
-type MatrixConnectorWithBeeperStreamTransport interface {
-	MatrixConnector
-	GetBeeperStreamTransport() mautrix.BeeperStreamTransport
-}
-
 type MatrixConnectorWithArbitraryRoomState interface {
 	MatrixConnector
 	GetStateEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string) (*event.Event, error)
