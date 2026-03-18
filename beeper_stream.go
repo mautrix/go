@@ -328,17 +328,9 @@ func (m *BeeperStreamManager) sendSubscribe(ctx context.Context, key beeperStrea
 		targetDevice = descriptor.DeviceID
 	}
 	// Subscribers follow the publisher-provided descriptor wire contract.
-	if descriptor.Encryption != nil {
-		payload, err := stripSubscribeRouting(client.DeviceID, expiry.Milliseconds())
-		if err != nil {
-			return err
-		}
-		encrypted, err := encryptLogicalEvent(event.ToDeviceBeeperStreamSubscribe, payload, key.roomID, key.eventID, descriptor.Encryption.Key)
-		if err != nil {
-			return err
-		}
-		eventType = event.ToDeviceBeeperStreamEncrypted
-		content = &event.Content{Parsed: encrypted}
+	eventType, content, err = maybeEncryptLogicalEvent(eventType, content, descriptor)
+	if err != nil {
+		return err
 	}
 	_, err = client.SendToDevice(ctx, eventType, &ReqSendToDevice{
 		Messages: map[id.UserID]map[id.DeviceID]*event.Content{
@@ -426,33 +418,17 @@ func (m *BeeperStreamManager) handleEncryptedForPublisher(ctx context.Context, e
 	if state.gcm == nil {
 		return true
 	}
-	logicalType, parsedContent, err := decryptLogicalEvent(content, state.descriptor.Encryption.Key)
-	if err != nil {
-		zerolog.Ctx(ctx).Debug().Err(err).Msg("Failed to decrypt custom encrypted beeper stream event")
+	if decryptAndRewriteLogicalEvent(ctx, evt, content, state.descriptor.Encryption.Key, event.ToDeviceBeeperStreamSubscribe) {
 		return true
 	}
-	if logicalType != event.ToDeviceBeeperStreamSubscribe {
-		return true
-	}
-	evt.Type = logicalType
-	evt.Type.Class = event.ToDeviceEventType
-	evt.Content = *parsedContent
 	return m.handleSubscribeEvent(ctx, evt)
 }
 
 func (m *BeeperStreamManager) handleEncryptedForSubscriber(ctx context.Context, evt *event.Event, content *event.BeeperStreamEncryptedEventContent, sub *beeperStreamSubscription) bool {
-	logicalType, parsedContent, err := decryptLogicalEvent(content, sub.descriptor.Encryption.Key)
-	if err != nil {
-		m.log.Debug().Err(err).
-			Stringer("room_id", content.RoomID).
-			Stringer("event_id", content.EventID).
-			Msg("Failed to decrypt beeper stream event")
+	if decryptAndRewriteLogicalEvent(ctx, evt, content, sub.descriptor.Encryption.Key, event.ToDeviceBeeperStreamUpdate) {
 		return true
 	}
-	if logicalType != event.ToDeviceBeeperStreamUpdate {
-		return true
-	}
-	update := parsedContent.AsBeeperStreamUpdate()
+	update := evt.Content.AsBeeperStreamUpdate()
 	if update.RoomID != sub.key.roomID || update.EventID != sub.key.eventID {
 		return true
 	}
@@ -465,9 +441,6 @@ func (m *BeeperStreamManager) handleEncryptedForSubscriber(ctx context.Context, 
 			Msg("Encrypted beeper stream update from unexpected sender, dropping")
 		return true
 	}
-	evt.Type = logicalType
-	evt.Type.Class = event.ToDeviceEventType
-	evt.Content = *parsedContent
 	return false
 }
 
@@ -538,17 +511,10 @@ func (m *BeeperStreamManager) sendUpdate(ctx context.Context, descriptor *event.
 	eventType := event.ToDeviceBeeperStreamUpdate
 	content := update
 	if descriptor != nil && descriptor.Encryption != nil && gcm != nil {
-		payload, err := stripUpdateRouting(update)
+		eventType, content, err = maybeEncryptLogicalEvent(eventType, content, descriptor)
 		if err != nil {
 			return err
 		}
-		updateInfo := update.AsBeeperStreamUpdate()
-		encrypted, encErr := encryptLogicalEvent(event.ToDeviceBeeperStreamUpdate, payload, updateInfo.RoomID, updateInfo.EventID, descriptor.Encryption.Key)
-		if encErr != nil {
-			return encErr
-		}
-		eventType = event.ToDeviceBeeperStreamEncrypted
-		content = &event.Content{Parsed: encrypted}
 	}
 	req := &ReqSendToDevice{
 		Messages: make(map[id.UserID]map[id.DeviceID]*event.Content, len(subscribers)),

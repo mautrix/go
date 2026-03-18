@@ -7,6 +7,7 @@
 package mautrix
 
 import (
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/base64"
@@ -14,6 +15,7 @@ import (
 	"fmt"
 	"maps"
 
+	"github.com/rs/zerolog"
 	"go.mau.fi/util/random"
 
 	"maunium.net/go/mautrix/event"
@@ -180,4 +182,54 @@ func stripSubscribeRouting(deviceID id.DeviceID, expiryMS int64) (*event.Content
 		return nil, err
 	}
 	return &event.Content{VeryRaw: veryRaw, Raw: raw}, nil
+}
+
+func maybeEncryptLogicalEvent(logicalType event.Type, content *event.Content, descriptor *event.BeeperStreamInfo) (event.Type, *event.Content, error) {
+	if descriptor == nil || descriptor.Encryption == nil {
+		return logicalType, content, nil
+	}
+	switch logicalType {
+	case event.ToDeviceBeeperStreamSubscribe:
+		subscribe := content.AsBeeperStreamSubscribe()
+		payload, err := stripSubscribeRouting(subscribe.DeviceID, subscribe.ExpiryMS)
+		if err != nil {
+			return event.Type{}, nil, err
+		}
+		encrypted, err := encryptLogicalEvent(logicalType, payload, subscribe.RoomID, subscribe.EventID, descriptor.Encryption.Key)
+		if err != nil {
+			return event.Type{}, nil, err
+		}
+		return event.ToDeviceBeeperStreamEncrypted, &event.Content{Parsed: encrypted}, nil
+	case event.ToDeviceBeeperStreamUpdate:
+		update := content.AsBeeperStreamUpdate()
+		payload, err := stripUpdateRouting(content)
+		if err != nil {
+			return event.Type{}, nil, err
+		}
+		encrypted, err := encryptLogicalEvent(logicalType, payload, update.RoomID, update.EventID, descriptor.Encryption.Key)
+		if err != nil {
+			return event.Type{}, nil, err
+		}
+		return event.ToDeviceBeeperStreamEncrypted, &event.Content{Parsed: encrypted}, nil
+	default:
+		return logicalType, content, nil
+	}
+}
+
+func decryptAndRewriteLogicalEvent(ctx context.Context, evt *event.Event, encrypted *event.BeeperStreamEncryptedEventContent, base64Key string, expectedType event.Type) bool {
+	logicalType, parsedContent, err := decryptLogicalEvent(encrypted, base64Key)
+	if err != nil {
+		zerolog.Ctx(ctx).Debug().Err(err).
+			Stringer("room_id", encrypted.RoomID).
+			Stringer("event_id", encrypted.EventID).
+			Msg("Failed to decrypt beeper stream event")
+		return true
+	}
+	if logicalType != expectedType {
+		return true
+	}
+	evt.Type = logicalType
+	evt.Type.Class = event.ToDeviceEventType
+	evt.Content = *parsedContent
+	return false
 }
