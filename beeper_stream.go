@@ -118,6 +118,10 @@ func (m *BeeperStreamManager) NewDescriptor(ctx context.Context, roomID id.RoomI
 	return info, nil
 }
 
+func (m *BeeperStreamManager) HandleToDeviceEvent(ctx context.Context, evt *event.Event) *event.Event {
+	return m.handleEvent(ctx, evt)
+}
+
 func (m *BeeperStreamManager) handleEvent(ctx context.Context, evt *event.Event) *event.Event {
 	if m == nil || evt == nil {
 		return nil
