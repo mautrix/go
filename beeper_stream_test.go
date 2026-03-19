@@ -210,13 +210,12 @@ func TestBeeperStreamsPublishAndUnregister(t *testing.T) {
 	ts, recorder := newSendToDeviceRecorderServer(t)
 	client := newTestStreamClient(t, ts.URL, testStreamBotUserID, testStreamPublisherDev)
 	streams := client.BeeperStreams()
-	streams.SetAuthorizeSubscriber(func(context.Context, *BeeperStreamSubscribeRequest) bool { return true })
 
 	info, err := streams.NewDescriptor(context.Background(), testStreamRoomID, testStreamType)
 	require.NoError(t, err)
 	require.NoError(t, streams.Register(context.Background(), testStreamRoomID, testStreamEventID, info))
 
-	require.True(t, client.HandleToDeviceEvent(context.Background(), newTestSubscribeEvent(testStreamBotUserID, testStreamPublisherDev)))
+	require.Nil(t, streams.HandleEvent(context.Background(), newTestSubscribeEvent(testStreamBotUserID, testStreamPublisherDev)))
 
 	require.NoError(t, streams.Publish(context.Background(), testStreamRoomID, testStreamEventID, newTestPublishContent("hello")))
 	req := recorder.next(t)
@@ -231,9 +230,8 @@ func TestBeeperStreamsReplayPendingSubscribeOnRegister(t *testing.T) {
 	ts, recorder := newSendToDeviceRecorderServer(t)
 	client := newTestStreamClient(t, ts.URL, testStreamBotUserID, testStreamPublisherDev)
 	streams := client.BeeperStreams()
-	streams.SetAuthorizeSubscriber(func(context.Context, *BeeperStreamSubscribeRequest) bool { return true })
 
-	require.True(t, client.HandleToDeviceEvent(context.Background(), newTestSubscribeEvent(testStreamBotUserID, testStreamPublisherDev)))
+	require.Nil(t, streams.HandleEvent(context.Background(), newTestSubscribeEvent(testStreamBotUserID, testStreamPublisherDev)))
 
 	require.NoError(t, streams.Register(context.Background(), testStreamRoomID, testStreamEventID, newTestDescriptor(false)))
 	require.NoError(t, streams.Publish(context.Background(), testStreamRoomID, testStreamEventID, newTestPublishContent("hello")))
@@ -247,10 +245,9 @@ func TestBeeperStreamsReplayPendingEncryptedSubscribeOnRegister(t *testing.T) {
 	ts, recorder := newSendToDeviceRecorderServer(t)
 	client := newTestStreamClient(t, ts.URL, testStreamBotUserID, testStreamPublisherDev)
 	streams := client.BeeperStreams()
-	streams.SetAuthorizeSubscriber(func(context.Context, *BeeperStreamSubscribeRequest) bool { return true })
 	descriptor := newTestDescriptor(true)
 
-	require.True(t, client.HandleToDeviceEvent(context.Background(), newTestEncryptedSubscribeEvent(t, descriptor)))
+	require.Nil(t, streams.HandleEvent(context.Background(), newTestEncryptedSubscribeEvent(t, descriptor)))
 
 	require.NoError(t, streams.Register(context.Background(), testStreamRoomID, testStreamEventID, descriptor))
 	require.NoError(t, streams.Publish(context.Background(), testStreamRoomID, testStreamEventID, newTestPublishContent("hello")))
@@ -304,11 +301,10 @@ func TestBeeperStreamsPendingSubscribeExpiresBeforeRegister(t *testing.T) {
 	ts, recorder := newSendToDeviceRecorderServer(t)
 	client := newTestStreamClient(t, ts.URL, testStreamBotUserID, testStreamPublisherDev)
 	streams := client.BeeperStreams()
-	streams.SetAuthorizeSubscriber(func(context.Context, *BeeperStreamSubscribeRequest) bool { return true })
 	now := time.Unix(1_000, 0)
 	streams.now = func() time.Time { return now }
 
-	require.True(t, client.HandleToDeviceEvent(context.Background(), newTestSubscribeEvent(testStreamBotUserID, testStreamPublisherDev)))
+	require.Nil(t, streams.HandleEvent(context.Background(), newTestSubscribeEvent(testStreamBotUserID, testStreamPublisherDev)))
 
 	now = now.Add(beeperStreamPendingSubscribeTTL + time.Second)
 	require.NoError(t, streams.Register(context.Background(), testStreamRoomID, testStreamEventID, newTestDescriptor(false)))

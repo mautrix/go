@@ -8,17 +8,13 @@ package appservice
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
-	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
@@ -26,16 +22,9 @@ import (
 const (
 	testBotRoomID     = "!room:example.com"
 	testBotEventID    = "$event"
-	testBotStreamType = "com.beeper.llm"
 	testBotSubscriber = "@alice:example.com"
 	testBotSubDevice  = "SUBDEVICE"
 )
-
-func newTestPublishPayload() map[string]any {
-	return map[string]any{
-		"com.beeper.llm.deltas": []map[string]any{{"delta": "hello"}},
-	}
-}
 
 func newTestAppService(t *testing.T, homeserverURL string) *AppService {
 	t.Helper()
@@ -51,27 +40,13 @@ func newTestAppService(t *testing.T, homeserverURL string) *AppService {
 	return as
 }
 
-func newTestBotHomeserver(t *testing.T) (*httptest.Server, *atomic.Int32) {
+func newTestBotHomeserver(t *testing.T) *httptest.Server {
 	t.Helper()
-	var sendToDeviceCalls atomic.Int32
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/_matrix/client/v3/sendToDevice/"):
-			sendToDeviceCalls.Add(1)
-			_ = json.NewEncoder(w).Encode(map[string]any{})
-		default:
-			t.Fatalf("unexpected homeserver request: %s %s", r.Method, r.URL.Path)
-		}
+		t.Fatalf("unexpected homeserver request: %s %s", r.Method, r.URL.Path)
 	}))
 	t.Cleanup(ts.Close)
-	return ts, &sendToDeviceCalls
-}
-
-func activateTestAppServiceStream(t *testing.T, streams *mautrix.BeeperStreamManager) {
-	t.Helper()
-	descriptor, err := streams.NewDescriptor(context.Background(), testBotRoomID, testBotStreamType)
-	require.NoError(t, err)
-	require.NoError(t, streams.Register(context.Background(), testBotRoomID, testBotEventID, descriptor))
+	return ts
 }
 
 func deliverTestBotSubscribe(t *testing.T, as *AppService, deviceID id.DeviceID) {
@@ -90,70 +65,52 @@ func deliverTestBotSubscribe(t *testing.T, as *AppService, deviceID id.DeviceID)
 	}}, event.ToDeviceEventType)
 }
 
-func TestBotClientBeeperStreamInterception(t *testing.T) {
-	ts, sendToDeviceCalls := newTestBotHomeserver(t)
+func TestHandleTransactionDispatchesToDeviceWithoutEphemeralFlag(t *testing.T) {
+	ts := newTestBotHomeserver(t)
 	as := newTestAppService(t, ts.URL)
-	client := as.BotClient()
-	streams := client.BeeperStreams()
-	subscribeHandled := make(chan struct{}, 1)
-	streams.SetAuthorizeSubscriber(func(context.Context, *mautrix.BeeperStreamSubscribeRequest) bool {
-		select {
-		case subscribeHandled <- struct{}{}:
-		default:
-		}
-		return true
-	})
-	ep := NewEventProcessor(as)
-	ep.ExecMode = Sync
-	ep.PrependHandler(event.ToDeviceBeeperStreamSubscribe, func(ctx context.Context, evt *event.Event) {
-		_, _ = client.PreDispatchToDeviceEvent(ctx, evt)
-	})
-	ep.PrependHandler(event.ToDeviceBeeperStreamEncrypted, func(ctx context.Context, evt *event.Event) {
-		handled, keep := client.PreDispatchToDeviceEvent(ctx, evt)
-		if !keep || handled || evt.Type != event.ToDeviceBeeperStreamUpdate {
-			return
-		}
-		ep.Dispatch(ctx, evt)
-	})
-	ep.Start(context.Background())
-	defer ep.Stop()
-	activateTestAppServiceStream(t, streams)
+	as.Registration.EphemeralEvents = false
 
-	deliverTestBotSubscribe(t, as, client.DeviceID)
-	require.Eventually(t, func() bool {
-		select {
-		case <-subscribeHandled:
-			return true
-		default:
-			return false
-		}
-	}, time.Second, 10*time.Millisecond)
+	as.handleTransaction(context.Background(), "txn1", &Transaction{
+		ToDeviceEvents: []*event.Event{{
+			Sender:     testBotSubscriber,
+			ToUserID:   as.BotMXID(),
+			ToDeviceID: testBotSubDevice,
+			Type:       event.ToDeviceBeeperStreamSubscribe,
+			Content: event.Content{Parsed: &event.BeeperStreamSubscribeEventContent{
+				RoomID:   testBotRoomID,
+				EventID:  testBotEventID,
+				DeviceID: testBotSubDevice,
+				ExpiryMS: 60_000,
+			}},
+		}},
+	})
 
-	require.NoError(t, streams.Publish(context.Background(), testBotRoomID, testBotEventID, newTestPublishPayload()))
-	require.Eventually(t, func() bool {
-		return sendToDeviceCalls.Load() == 1
-	}, time.Second, 10*time.Millisecond)
 	select {
-	case <-as.ToDeviceEvents:
-		t.Fatal("expected to-device event to be consumed from appservice queue")
-	default:
+	case evt := <-as.ToDeviceEvents:
+		require.Equal(t, event.ToDeviceBeeperStreamSubscribe, evt.Type)
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for to-device event")
 	}
 }
 
-func TestBotClientDropsMalformedToDeviceEvent(t *testing.T) {
-	as := newTestAppService(t, "")
+func TestEventProcessorReceivesBeeperStreamToDeviceEvents(t *testing.T) {
+	ts := newTestBotHomeserver(t)
+	as := newTestAppService(t, ts.URL)
+	ep := NewEventProcessor(as)
+	ep.ExecMode = Sync
+	received := make(chan *event.Event, 1)
+	ep.On(event.ToDeviceBeeperStreamSubscribe, func(_ context.Context, evt *event.Event) {
+		received <- evt
+	})
+	ep.Start(context.Background())
+	defer ep.Stop()
 
-	as.handleEvents(context.Background(), []*event.Event{{
-		Sender:     testBotSubscriber,
-		ToUserID:   as.BotMXID(),
-		ToDeviceID: testBotSubDevice,
-		Type:       event.ToDeviceBeeperStreamSubscribe,
-		Content:    event.Content{VeryRaw: json.RawMessage(`{`)},
-	}}, event.ToDeviceEventType)
+	deliverTestBotSubscribe(t, as, testBotSubDevice)
 
 	select {
-	case <-as.ToDeviceEvents:
-		t.Fatal("expected malformed to-device event to be dropped")
-	default:
+	case evt := <-received:
+		require.Equal(t, event.ToDeviceBeeperStreamSubscribe, evt.Type)
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for event processor delivery")
 	}
 }

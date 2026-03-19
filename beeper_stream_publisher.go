@@ -144,29 +144,30 @@ func (m *BeeperStreamManager) Publish(ctx context.Context, roomID id.RoomID, eve
 	return m.sendUpdate(ctx, descriptor, update, subscribers)
 }
 
-func (m *BeeperStreamManager) handleSubscribeEvent(ctx context.Context, evt *event.Event) bool {
+func (m *BeeperStreamManager) handleSubscribeEvent(ctx context.Context, evt *event.Event) {
 	if m.isForDifferentUser(evt) {
-		return true
+		return
 	}
 	subscribe := evt.Content.AsBeeperStreamSubscribe()
 	if subscribe.RoomID == "" || subscribe.EventID == "" {
-		return true
+		return
 	}
 	if m.handleSubscribe(ctx, evt.Sender, subscribe) {
-		return true
+		return
 	}
 	m.queuePendingSubscribe(ctx, evt)
-	return true
 }
 
-func (m *BeeperStreamManager) handleEncryptedForPublisher(ctx context.Context, evt *event.Event, content *event.BeeperStreamEncryptedEventContent, state *beeperStreamPublished) bool {
+func (m *BeeperStreamManager) handleEncryptedForPublisher(ctx context.Context, evt *event.Event, content *event.BeeperStreamEncryptedEventContent, state *beeperStreamPublished) *event.Event {
 	if state.descriptor == nil || state.descriptor.Encryption == nil {
-		return true
+		return nil
 	}
-	if rewriteDecryptedLogicalEvent(ctx, evt, content, state.descriptor.Encryption.Key, event.ToDeviceBeeperStreamSubscribe) {
-		return true
+	normalized := decryptedLogicalEvent(ctx, evt, content, state.descriptor.Encryption.Key, event.ToDeviceBeeperStreamSubscribe)
+	if normalized == nil {
+		return nil
 	}
-	return m.handleSubscribeEvent(ctx, evt)
+	m.handleSubscribeEvent(ctx, normalized)
+	return nil
 }
 
 func (m *BeeperStreamManager) handleSubscribe(ctx context.Context, sender id.UserID, subscribe *event.BeeperStreamSubscribeEventContent) bool {
@@ -183,27 +184,7 @@ func (m *BeeperStreamManager) handleSubscribe(ctx context.Context, sender id.Use
 		m.lock.Unlock()
 		return true
 	}
-	authFunc := m.authorizeSubscriber
-	authReq := &BeeperStreamSubscribeRequest{
-		RoomID:   subscribe.RoomID,
-		EventID:  subscribe.EventID,
-		UserID:   sender,
-		DeviceID: subscribe.DeviceID,
-		Expiry:   time.Duration(subscribe.ExpiryMS) * time.Millisecond,
-	}
-	if authFunc != nil {
-		m.lock.Unlock()
-		if !authFunc(ctx, authReq) {
-			return true
-		}
-		m.lock.Lock()
-		state = m.publishedStreams[key]
-		if state == nil || state.inactive {
-			m.lock.Unlock()
-			return true
-		}
-	}
-	expiry := resolveSubscribeExpiry(state.descriptor, authReq.Expiry)
+	expiry := resolveSubscribeExpiry(state.descriptor, time.Duration(subscribe.ExpiryMS)*time.Millisecond)
 	subscriber := beeperStreamSubscriber{userID: sender, deviceID: subscribe.DeviceID}
 	state.subscribers[subscriber] = m.now().Add(expiry)
 	descriptor := state.descriptor.Clone()
@@ -352,7 +333,8 @@ func (m *BeeperStreamManager) tryPendingSubscribe(ctx context.Context, candidate
 		if state == nil {
 			return false
 		}
-		return m.handleEncryptedForPublisher(ctx, candidate.evt, content, state)
+		m.handleEncryptedForPublisher(ctx, candidate.evt, content, state)
+		return true
 	default:
 		return false
 	}

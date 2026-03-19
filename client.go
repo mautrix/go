@@ -2856,20 +2856,17 @@ func NewClient(homeserverURL string, userID id.UserID, accessToken string) (*Cli
 	if err != nil {
 		return nil, err
 	}
-	syncer := NewDefaultSyncer()
-	cli := &Client{
+	return &Client{
 		AccessToken:   accessToken,
 		UserAgent:     DefaultUserAgent,
 		HomeserverURL: hsURL,
 		UserID:        userID,
 		Client:        &http.Client{Timeout: 180 * time.Second},
-		Syncer:        syncer,
+		Syncer:        NewDefaultSyncer(),
 		Log:           zerolog.Nop(),
 		// By default, use an in-memory store which will never save filter ids / next batch tokens to disk.
 		// The client will work with this storer: it just won't remember across restarts.
 		// In practice, a database backend should be used.
 		Store: NewMemorySyncStore(),
-	}
-	syncer.PreDispatchToDevice = cli.PreDispatchToDeviceEvent
-	return cli, nil
+	}, nil
 }

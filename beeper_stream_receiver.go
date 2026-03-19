@@ -158,22 +158,23 @@ func (m *BeeperStreamManager) handlePlainUpdateEvent(evt *event.Event) bool {
 	return false
 }
 
-func (m *BeeperStreamManager) handleEncryptedForSubscriber(ctx context.Context, evt *event.Event, content *event.BeeperStreamEncryptedEventContent, sub *beeperStreamSubscription) bool {
-	if rewriteDecryptedLogicalEvent(ctx, evt, content, sub.descriptor.Encryption.Key, event.ToDeviceBeeperStreamUpdate) {
-		return true
+func (m *BeeperStreamManager) handleEncryptedForSubscriber(ctx context.Context, evt *event.Event, content *event.BeeperStreamEncryptedEventContent, sub *beeperStreamSubscription) *event.Event {
+	normalized := decryptedLogicalEvent(ctx, evt, content, sub.descriptor.Encryption.Key, event.ToDeviceBeeperStreamUpdate)
+	if normalized == nil {
+		return nil
 	}
-	update := evt.Content.AsBeeperStreamUpdate()
+	update := normalized.Content.AsBeeperStreamUpdate()
 	if update.RoomID != sub.key.roomID || update.EventID != sub.key.eventID {
-		return true
+		return nil
 	}
-	if evt.Sender != sub.descriptor.UserID {
+	if normalized.Sender != sub.descriptor.UserID {
 		m.log.Warn().
-			Stringer("sender", evt.Sender).
+			Stringer("sender", normalized.Sender).
 			Stringer("expected_user_id", sub.descriptor.UserID).
 			Stringer("room_id", update.RoomID).
 			Stringer("event_id", update.EventID).
 			Msg("Encrypted beeper stream update from unexpected sender, dropping")
-		return true
+		return nil
 	}
-	return false
+	return normalized
 }

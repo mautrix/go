@@ -61,9 +61,6 @@ type DefaultSyncer struct {
 	ParseErrorHandler func(evt *event.Event, err error) bool
 	// FilterJSON is used when the client starts syncing and doesn't get an existing filter ID from SyncStore's LoadFilterID.
 	FilterJSON *Filter
-	// PreDispatchToDevice is called before dispatching a to-device event.
-	// It may consume the event or rewrite it before normal listeners see it.
-	PreDispatchToDevice ToDevicePreprocessor
 }
 
 var _ Syncer = (*DefaultSyncer)(nil)
@@ -150,12 +147,7 @@ func (s *DefaultSyncer) processSyncEvent(ctx context.Context, roomID id.RoomID, 
 		evt.Type.Class = event.MessageEventType
 	}
 
-	if source == event.SourceToDevice {
-		handled, keep := preprocessToDeviceEvent(ctx, s.PreDispatchToDevice, evt)
-		if !keep || handled {
-			return
-		}
-	} else if s.ParseEventContent {
+	if s.ParseEventContent {
 		err := evt.Content.ParseRaw(evt.Type)
 		if err != nil && !s.ParseErrorHandler(evt, err) {
 			return

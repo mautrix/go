@@ -33,22 +33,13 @@ const (
 	maxBeeperStreamUpdates           = 1024
 )
 
-type BeeperStreamSubscribeRequest struct {
-	RoomID   id.RoomID
-	EventID  id.EventID
-	UserID   id.UserID
-	DeviceID id.DeviceID
-	Expiry   time.Duration
-}
-
 type BeeperStreamManager struct {
 	client *Client
 	log    zerolog.Logger
 
-	lock                sync.RWMutex
-	authorizeSubscriber func(context.Context, *BeeperStreamSubscribeRequest) bool
-	publishedStreams    map[beeperStreamKey]*beeperStreamPublished
-	subscriptions       map[beeperStreamKey]*beeperStreamSubscription
+	lock             sync.RWMutex
+	publishedStreams map[beeperStreamKey]*beeperStreamPublished
+	subscriptions    map[beeperStreamKey]*beeperStreamSubscription
 
 	pendingLock      sync.Mutex
 	pendingSubscribe []pendingSubscribeEvent
@@ -77,17 +68,31 @@ func (cli *Client) BeeperStreams() *BeeperStreamManager {
 		subscriptions:    make(map[beeperStreamKey]*beeperStreamSubscription),
 		now:              time.Now,
 	}
+	manager.registerSyncHandlers()
 	cli.beeperStream = manager
 	return manager
 }
 
-func (m *BeeperStreamManager) SetAuthorizeSubscriber(authorize func(context.Context, *BeeperStreamSubscribeRequest) bool) {
+func (m *BeeperStreamManager) registerSyncHandlers() {
 	if m == nil {
 		return
 	}
-	m.lock.Lock()
-	m.authorizeSubscriber = authorize
-	m.lock.Unlock()
+	syncer, ok := m.client.Syncer.(ExtensibleSyncer)
+	if !ok {
+		return
+	}
+	syncer.OnEventType(event.ToDeviceBeeperStreamSubscribe, func(ctx context.Context, evt *event.Event) {
+		m.HandleEvent(ctx, evt)
+	})
+	dispatcher, ok := m.client.Syncer.(DispatchableSyncer)
+	if !ok {
+		return
+	}
+	syncer.OnEventType(event.ToDeviceBeeperStreamEncrypted, func(ctx context.Context, evt *event.Event) {
+		if normalized := m.HandleEvent(ctx, evt); normalized != nil {
+			dispatcher.Dispatch(ctx, normalized)
+		}
+	})
 }
 
 func (m *BeeperStreamManager) NewDescriptor(ctx context.Context, roomID id.RoomID, streamType string) (*event.BeeperStreamInfo, error) {
@@ -116,26 +121,25 @@ func (m *BeeperStreamManager) NewDescriptor(ctx context.Context, roomID id.RoomI
 	return info, nil
 }
 
-func (m *BeeperStreamManager) handleToDeviceEvent(ctx context.Context, evt *event.Event) bool {
+func (m *BeeperStreamManager) HandleEvent(ctx context.Context, evt *event.Event) *event.Event {
 	if m == nil || evt == nil {
-		return false
+		return nil
 	}
 	switch evt.Type {
 	case event.ToDeviceBeeperStreamSubscribe:
-		return m.handleSubscribeEvent(ctx, evt)
+		m.handleSubscribeEvent(ctx, evt)
 	case event.ToDeviceBeeperStreamUpdate:
-		return m.handlePlainUpdateEvent(evt)
+		m.handlePlainUpdateEvent(evt)
 	case event.ToDeviceBeeperStreamEncrypted:
 		return m.handleEncryptedEvent(ctx, evt)
-	default:
-		return false
 	}
+	return nil
 }
 
-func (m *BeeperStreamManager) handleEncryptedEvent(ctx context.Context, evt *event.Event) bool {
+func (m *BeeperStreamManager) handleEncryptedEvent(ctx context.Context, evt *event.Event) *event.Event {
 	content := evt.Content.AsBeeperStreamEncrypted()
 	if content.RoomID == "" || content.EventID == "" || content.Ciphertext == "" {
-		return true
+		return nil
 	}
 	key := beeperStreamKey{roomID: content.RoomID, eventID: content.EventID}
 	m.lock.RLock()
@@ -149,33 +153,34 @@ func (m *BeeperStreamManager) handleEncryptedEvent(ctx context.Context, evt *eve
 		return m.handleEncryptedForSubscriber(ctx, evt, content, sub)
 	}
 	m.queuePendingSubscribe(ctx, evt)
-	return true
+	return nil
 }
 
-func rewriteDecryptedLogicalEvent(ctx context.Context, evt *event.Event, encrypted *event.BeeperStreamEncryptedEventContent, base64Key string, expectedType event.Type) bool {
+func decryptedLogicalEvent(ctx context.Context, evt *event.Event, encrypted *event.BeeperStreamEncryptedEventContent, base64Key string, expectedType event.Type) *event.Event {
 	logicalType, payload, err := decryptLogicalEvent(encrypted, base64Key)
 	if err != nil {
 		zerolog.Ctx(ctx).Debug().Err(err).
 			Stringer("room_id", encrypted.RoomID).
 			Stringer("event_id", encrypted.EventID).
 			Msg("Failed to decrypt beeper stream event")
-		return true
+		return nil
 	}
 	if logicalType != expectedType {
-		return true
+		return nil
 	}
 	var raw map[string]any
 	if err = json.Unmarshal(payload, &raw); err != nil {
-		return true
+		return nil
 	}
 	parsed, err := contentFromRawMap(addStreamRouting(raw, encrypted.RoomID, encrypted.EventID))
 	if err != nil || parsed.ParseRaw(logicalType) != nil {
-		return true
+		return nil
 	}
-	evt.Type = logicalType
-	evt.Type.Class = event.ToDeviceEventType
-	evt.Content = *parsed
-	return false
+	normalized := *evt
+	normalized.Type = logicalType
+	normalized.Type.Class = event.ToDeviceEventType
+	normalized.Content = *parsed
+	return &normalized
 }
 
 func rawMapFromContent(content *event.Content) (map[string]any, error) {

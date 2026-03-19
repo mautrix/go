@@ -157,18 +157,6 @@ func (br *Connector) Init(bridge *bridgev2.Bridge) {
 	br.EventProcessor.On(event.EphemeralEventReceipt, br.handleEphemeralEvent)
 	br.EventProcessor.On(event.EphemeralEventTyping, br.handleEphemeralEvent)
 	br.Bot = br.AS.BotIntent()
-	botClient := br.AS.BotClient()
-	botClient.BeeperStreams().SetAuthorizeSubscriber(br.authorizeBeeperStreamSubscriber)
-	br.EventProcessor.PrependHandler(event.ToDeviceBeeperStreamSubscribe, func(ctx context.Context, evt *event.Event) {
-		_, _ = botClient.PreDispatchToDeviceEvent(ctx, evt)
-	})
-	br.EventProcessor.PrependHandler(event.ToDeviceBeeperStreamEncrypted, func(ctx context.Context, evt *event.Event) {
-		handled, keep := botClient.PreDispatchToDeviceEvent(ctx, evt)
-		if !keep || handled || evt.Type != event.ToDeviceBeeperStreamUpdate {
-			return
-		}
-		br.EventProcessor.Dispatch(ctx, evt)
-	})
 	br.Crypto = NewCryptoHelper(br)
 	br.Bridge.Commands.(*commands.Processor).AddHandlers(
 		CommandDiscardMegolmSession, CommandSetPowerLevel,
@@ -626,26 +614,6 @@ func (br *Connector) NewUserIntent(ctx context.Context, userID id.UserID, access
 
 func (br *Connector) BotIntent() bridgev2.MatrixAPI {
 	return &ASIntent{Connector: br, Matrix: br.Bot}
-}
-
-func (br *Connector) authorizeBeeperStreamSubscriber(ctx context.Context, req *mautrix.BeeperStreamSubscribeRequest) bool {
-	user, err := br.Bridge.GetUserByMXID(ctx, req.UserID)
-	if err != nil {
-		br.Log.Err(err).Stringer("sender", req.UserID).Msg("Failed to load beeper stream subscriber user")
-		return false
-	}
-	if user == nil || !user.Permissions.SendEvents {
-		return false
-	}
-	member, err := br.GetMemberInfo(ctx, req.RoomID, req.UserID)
-	if err != nil {
-		br.Log.Err(err).
-			Stringer("sender", req.UserID).
-			Stringer("room_id", req.RoomID).
-			Msg("Failed to load beeper stream subscriber membership")
-		return false
-	}
-	return member != nil && member.Membership == event.MembershipJoin
 }
 
 func (br *Connector) GetPowerLevels(ctx context.Context, roomID id.RoomID) (*event.PowerLevelsEventContent, error) {
