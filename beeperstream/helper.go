@@ -157,21 +157,17 @@ func (h *Helper) NewDescriptor(ctx context.Context, roomID id.RoomID, streamType
 	return info, nil
 }
 
-func (h *Helper) HandleToDeviceEvent(ctx context.Context, evt *event.Event) *event.Event {
-	return h.handleEvent(ctx, evt)
-}
-
 func (h *Helper) HandleSyncResponse(ctx context.Context, resp *mautrix.RespSync) {
 	if h == nil || resp == nil {
 		return
 	}
 	for _, evt := range resp.ToDevice.Events {
-		h.HandleToDeviceEvent(ctx, evt)
+		h.handleEvent(ctx, evt)
 	}
 }
 
 func (h *Helper) handleEvent(ctx context.Context, evt *event.Event) *event.Event {
-	if h == nil || evt == nil || h.closed.Load() {
+	if h == nil || evt == nil || h.closed.Load() || h.isForDifferentTarget(evt) {
 		return nil
 	}
 	switch evt.Type {
@@ -287,11 +283,11 @@ func (h *Helper) isEncrypted(ctx context.Context, roomID id.RoomID) bool {
 	return err == nil && encrypted
 }
 
-func (h *Helper) isForDifferentUser(evt *event.Event) bool {
+func (h *Helper) isForDifferentTarget(evt *event.Event) bool {
 	if h == nil || h.client == nil || evt == nil {
 		return false
 	}
-	return evt.ToUserID != "" && evt.ToUserID != h.client.UserID
+	return evt.ToUserID != "" && (evt.ToUserID != h.client.UserID || evt.ToDeviceID != h.client.DeviceID)
 }
 
 func (h *Helper) requireClient(requireDevice bool) (*mautrix.Client, error) {

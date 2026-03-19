@@ -276,6 +276,50 @@ func TestHelperReplayPendingEncryptedSubscribeOnRegister(t *testing.T) {
 	assertStreamUpdateMap(t, parsed)
 }
 
+func TestHelperHandleSyncResponseForwardsBridgeSubscribe(t *testing.T) {
+	ts, recorder := newSendToDeviceRecorderServer(t)
+	client := newTestStreamClient(t, ts.URL, testStreamBotUserID, testStreamPublisherDev)
+	streams := newTestHelper(t, client)
+
+	info, err := streams.NewDescriptor(context.Background(), testStreamRoomID, testStreamType)
+	require.NoError(t, err)
+	require.NoError(t, streams.Register(context.Background(), testStreamRoomID, testStreamEventID, info))
+
+	streams.HandleSyncResponse(context.Background(), &mautrix.RespSync{
+		ToDevice: mautrix.SyncEventsList{Events: []*event.Event{
+			newTestSubscribeEvent(testStreamBotUserID, testStreamPublisherDev),
+		}},
+	})
+
+	require.NoError(t, streams.Publish(context.Background(), testStreamRoomID, testStreamEventID, newTestPublishContent("hello")))
+	req := recorder.next(t)
+	require.Contains(t, req.path, "/sendToDevice/com.beeper.stream.update/")
+	assertStreamUpdateMap(t, decodeJSONMap(t, recorder.rawContent(t, req, testStreamSubscriberID, testStreamSubscriberDev)))
+}
+
+func TestHelperHandleSyncResponseIgnoresWrongDevice(t *testing.T) {
+	ts, recorder := newSendToDeviceRecorderServer(t)
+	client := newTestStreamClient(t, ts.URL, testStreamBotUserID, testStreamPublisherDev)
+	streams := newTestHelper(t, client)
+
+	info, err := streams.NewDescriptor(context.Background(), testStreamRoomID, testStreamType)
+	require.NoError(t, err)
+	require.NoError(t, streams.Register(context.Background(), testStreamRoomID, testStreamEventID, info))
+
+	streams.HandleSyncResponse(context.Background(), &mautrix.RespSync{
+		ToDevice: mautrix.SyncEventsList{Events: []*event.Event{
+			newTestSubscribeEvent(testStreamBotUserID, "OTHERDEVICE"),
+		}},
+	})
+
+	require.NoError(t, streams.Publish(context.Background(), testStreamRoomID, testStreamEventID, newTestPublishContent("hello")))
+	select {
+	case req := <-recorder.requests:
+		t.Fatalf("unexpected sendToDevice request: %s", req.path)
+	case <-time.After(200 * time.Millisecond):
+	}
+}
+
 func TestHelperInitIsIdempotent(t *testing.T) {
 	ts, recorder := newSendToDeviceRecorderServer(t)
 	client := newTestStreamClient(t, ts.URL, testStreamSubscriberID, "RECEIVER")

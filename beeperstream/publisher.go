@@ -153,9 +153,6 @@ func (h *Helper) Publish(ctx context.Context, roomID id.RoomID, eventID id.Event
 }
 
 func (h *Helper) handleSubscribeEvent(ctx context.Context, evt *event.Event) {
-	if h.isForDifferentUser(evt) {
-		return
-	}
 	subscribe := evt.Content.AsBeeperStreamSubscribe()
 	if subscribe.RoomID == "" || subscribe.EventID == "" {
 		return
