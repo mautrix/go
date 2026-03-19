@@ -4,7 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-package mautrix
+package beeperstream
 
 import (
 	"context"
@@ -12,93 +12,132 @@ import (
 	"fmt"
 	"maps"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog"
 
+	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
 const (
-	// DefaultBeeperStreamDescriptorExpiry is the default lifetime of a beeper stream descriptor.
-	DefaultBeeperStreamDescriptorExpiry = 30 * time.Minute
-	// DefaultBeeperStreamSubscribeExpiry is the default lifetime of a beeper stream subscription.
-	DefaultBeeperStreamSubscribeExpiry = 5 * time.Minute
+	// DefaultDescriptorExpiry is the default lifetime of a beeper stream descriptor.
+	DefaultDescriptorExpiry = 30 * time.Minute
+	// DefaultSubscribeExpiry is the default lifetime of a beeper stream subscription.
+	DefaultSubscribeExpiry = 5 * time.Minute
 
-	defaultBeeperStreamRenewInterval = 30 * time.Second
-	beeperStreamCleanupGrace         = 30 * time.Second
-	beeperStreamPendingSubscribeTTL  = 5 * time.Second
-	maxPendingBeeperStreamSubs       = 64
-	maxBeeperStreamUpdates           = 1024
+	defaultRenewInterval      = 30 * time.Second
+	cleanupGrace              = 30 * time.Second
+	pendingSubscribeTTL       = 5 * time.Second
+	maxPendingSubscriptions   = 64
+	maxStreamUpdatesPerStream = 1024
 )
 
-type BeeperStreamManager struct {
-	client *Client
+type Helper struct {
+	client *mautrix.Client
 	log    zerolog.Logger
 
 	lock             sync.RWMutex
-	publishedStreams map[beeperStreamKey]*beeperStreamPublished
-	subscriptions    map[beeperStreamKey]*beeperStreamSubscription
+	publishedStreams map[streamKey]*publishedStream
+	subscriptions    map[streamKey]*subscription
 
 	pendingLock      sync.Mutex
 	pendingSubscribe []pendingSubscribeEvent
 
+	initLock    sync.Mutex
+	initialized bool
+	closed      atomic.Bool
+
 	now func() time.Time
 }
 
-type beeperStreamKey struct {
+type streamKey struct {
 	roomID  id.RoomID
 	eventID id.EventID
 }
 
-func (cli *Client) BeeperStreams() *BeeperStreamManager {
-	if cli == nil {
-		return nil
+func New(client *mautrix.Client) (*Helper, error) {
+	if client == nil {
+		return nil, fmt.Errorf("beeper stream client is nil")
 	}
-	cli.beeperStreamLock.Lock()
-	defer cli.beeperStreamLock.Unlock()
-	if cli.beeperStream != nil {
-		return cli.beeperStream
-	}
-	manager := &BeeperStreamManager{
-		client:           cli,
-		log:              cli.Log.With().Str("component", "beeper_stream").Logger(),
-		publishedStreams: make(map[beeperStreamKey]*beeperStreamPublished),
-		subscriptions:    make(map[beeperStreamKey]*beeperStreamSubscription),
+	return &Helper{
+		client:           client,
+		log:              client.Log.With().Str("component", "beeper_stream").Logger(),
+		publishedStreams: make(map[streamKey]*publishedStream),
+		subscriptions:    make(map[streamKey]*subscription),
 		now:              time.Now,
-	}
-	manager.registerSyncHandlers()
-	cli.beeperStream = manager
-	return manager
+	}, nil
 }
 
-func (m *BeeperStreamManager) registerSyncHandlers() {
-	syncer, ok := m.client.Syncer.(ExtensibleSyncer)
+func (h *Helper) Init(_ context.Context) error {
+	if h == nil {
+		return fmt.Errorf("beeper stream helper is nil")
+	} else if h.closed.Load() {
+		return fmt.Errorf("beeper stream helper is closed")
+	}
+	h.initLock.Lock()
+	defer h.initLock.Unlock()
+	if h.initialized {
+		return nil
+	}
+	syncer, ok := h.client.Syncer.(mautrix.ExtensibleSyncer)
 	if !ok {
-		return
+		return fmt.Errorf("the client syncer must implement ExtensibleSyncer")
+	}
+	dispatcher, ok := h.client.Syncer.(mautrix.DispatchableSyncer)
+	if !ok {
+		return fmt.Errorf("the client syncer must implement DispatchableSyncer")
 	}
 	syncer.OnEventType(event.ToDeviceBeeperStreamSubscribe, func(ctx context.Context, evt *event.Event) {
-		m.handleEvent(ctx, evt)
+		h.handleEvent(ctx, evt)
 	})
-	dispatcher, ok := m.client.Syncer.(DispatchableSyncer)
-	if !ok {
-		return
-	}
 	syncer.OnEventType(event.ToDeviceBeeperStreamEncrypted, func(ctx context.Context, evt *event.Event) {
-		if normalized := m.handleEvent(ctx, evt); normalized != nil {
+		if normalized := h.handleEvent(ctx, evt); normalized != nil {
 			dispatcher.Dispatch(ctx, normalized)
 		}
 	})
+	h.initialized = true
+	return nil
 }
 
-func (m *BeeperStreamManager) NewDescriptor(ctx context.Context, roomID id.RoomID, streamType string) (*event.BeeperStreamInfo, error) {
-	if m == nil {
-		return nil, fmt.Errorf("beeper stream manager is nil")
+func (h *Helper) Close() error {
+	if h == nil || !h.closed.CompareAndSwap(false, true) {
+		return nil
+	}
+
+	h.lock.Lock()
+	for key, sub := range h.subscriptions {
+		if sub != nil {
+			sub.cancel()
+		}
+		delete(h.subscriptions, key)
+	}
+	for key, state := range h.publishedStreams {
+		if state != nil && state.cleanup != nil {
+			state.cleanup.Stop()
+		}
+		delete(h.publishedStreams, key)
+	}
+	h.lock.Unlock()
+
+	h.pendingLock.Lock()
+	h.pendingSubscribe = nil
+	h.pendingLock.Unlock()
+
+	return nil
+}
+
+func (h *Helper) NewDescriptor(ctx context.Context, roomID id.RoomID, streamType string) (*event.BeeperStreamInfo, error) {
+	if h == nil {
+		return nil, fmt.Errorf("beeper stream helper is nil")
+	} else if h.closed.Load() {
+		return nil, fmt.Errorf("beeper stream helper is closed")
 	} else if roomID == "" || streamType == "" {
 		return nil, fmt.Errorf("missing beeper stream descriptor request fields")
 	}
-	client, err := m.requireClient(false)
+	client, err := h.requireClient(false)
 	if err != nil {
 		return nil, err
 	}
@@ -106,10 +145,10 @@ func (m *BeeperStreamManager) NewDescriptor(ctx context.Context, roomID id.RoomI
 		UserID:   client.UserID,
 		DeviceID: client.DeviceID,
 		Type:     streamType,
-		ExpiryMS: DefaultBeeperStreamDescriptorExpiry.Milliseconds(),
+		ExpiryMS: DefaultDescriptorExpiry.Milliseconds(),
 		Status:   event.BeeperStreamStatusActive,
 	}
-	if m.isEncrypted(ctx, roomID) {
+	if h.isEncrypted(ctx, roomID) {
 		info.Encryption = &event.BeeperStreamEncryptionInfo{
 			Algorithm: id.AlgorithmBeeperStreamAESGCM,
 			Key:       makeStreamKey(),
@@ -118,40 +157,49 @@ func (m *BeeperStreamManager) NewDescriptor(ctx context.Context, roomID id.RoomI
 	return info, nil
 }
 
-func (m *BeeperStreamManager) HandleToDeviceEvent(ctx context.Context, evt *event.Event) *event.Event {
-	return m.handleEvent(ctx, evt)
+func (h *Helper) HandleToDeviceEvent(ctx context.Context, evt *event.Event) *event.Event {
+	return h.handleEvent(ctx, evt)
 }
 
-func (m *BeeperStreamManager) handleEvent(ctx context.Context, evt *event.Event) *event.Event {
-	if m == nil || evt == nil {
+func (h *Helper) HandleSyncResponse(ctx context.Context, resp *mautrix.RespSync) {
+	if h == nil || resp == nil {
+		return
+	}
+	for _, evt := range resp.ToDevice.Events {
+		h.HandleToDeviceEvent(ctx, evt)
+	}
+}
+
+func (h *Helper) handleEvent(ctx context.Context, evt *event.Event) *event.Event {
+	if h == nil || evt == nil || h.closed.Load() {
 		return nil
 	}
 	switch evt.Type {
 	case event.ToDeviceBeeperStreamSubscribe:
-		m.handleSubscribeEvent(ctx, evt)
+		h.handleSubscribeEvent(ctx, evt)
 	case event.ToDeviceBeeperStreamEncrypted:
-		return m.handleEncryptedEvent(ctx, evt)
+		return h.handleEncryptedEvent(ctx, evt)
 	}
 	return nil
 }
 
-func (m *BeeperStreamManager) handleEncryptedEvent(ctx context.Context, evt *event.Event) *event.Event {
+func (h *Helper) handleEncryptedEvent(ctx context.Context, evt *event.Event) *event.Event {
 	content := evt.Content.AsBeeperStreamEncrypted()
 	if content.RoomID == "" || content.EventID == "" || content.Ciphertext == "" {
 		return nil
 	}
-	key := beeperStreamKey{roomID: content.RoomID, eventID: content.EventID}
-	m.lock.RLock()
-	published := m.publishedStreams[key]
-	sub := m.subscriptions[key]
-	m.lock.RUnlock()
+	key := streamKey{roomID: content.RoomID, eventID: content.EventID}
+	h.lock.RLock()
+	published := h.publishedStreams[key]
+	sub := h.subscriptions[key]
+	h.lock.RUnlock()
 	if published != nil {
-		return m.handleEncryptedForPublisher(ctx, evt, content, published)
+		return h.handleEncryptedForPublisher(ctx, evt, content, published)
 	}
 	if sub != nil {
-		return m.handleEncryptedForSubscriber(ctx, evt, content, sub)
+		return h.handleEncryptedForSubscriber(ctx, evt, content, sub)
 	}
-	m.queuePendingSubscribe(ctx, evt)
+	h.queuePendingSubscribe(ctx, evt)
 	return nil
 }
 
@@ -231,35 +279,35 @@ func removeStreamRouting(raw map[string]any) map[string]any {
 	return withoutRouting
 }
 
-func (m *BeeperStreamManager) isEncrypted(ctx context.Context, roomID id.RoomID) bool {
-	if m == nil || m.client == nil || m.client.StateStore == nil {
+func (h *Helper) isEncrypted(ctx context.Context, roomID id.RoomID) bool {
+	if h == nil || h.client == nil || h.client.StateStore == nil {
 		return false
 	}
-	encrypted, err := m.client.StateStore.IsEncrypted(ctx, roomID)
+	encrypted, err := h.client.StateStore.IsEncrypted(ctx, roomID)
 	return err == nil && encrypted
 }
 
-func (m *BeeperStreamManager) isForDifferentUser(evt *event.Event) bool {
-	if m == nil || m.client == nil || evt == nil {
+func (h *Helper) isForDifferentUser(evt *event.Event) bool {
+	if h == nil || h.client == nil || evt == nil {
 		return false
 	}
-	return evt.ToUserID != "" && evt.ToUserID != m.client.UserID
+	return evt.ToUserID != "" && evt.ToUserID != h.client.UserID
 }
 
-func (m *BeeperStreamManager) requireClient(requireDevice bool) (*Client, error) {
-	if m == nil || m.client == nil {
-		return nil, fmt.Errorf("beeper stream manager doesn't have a client")
-	} else if m.client.UserID == "" {
+func (h *Helper) requireClient(requireDevice bool) (*mautrix.Client, error) {
+	if h == nil || h.client == nil {
+		return nil, fmt.Errorf("beeper stream helper doesn't have a client")
+	} else if h.client.UserID == "" {
 		return nil, fmt.Errorf("beeper stream client isn't logged in")
-	} else if requireDevice && m.client.DeviceID == "" {
+	} else if requireDevice && h.client.DeviceID == "" {
 		return nil, fmt.Errorf("beeper stream client doesn't have a device ID")
 	}
-	return m.client, nil
+	return h.client, nil
 }
 
 func resolveSubscribeExpiry(descriptor *event.BeeperStreamInfo, fallback time.Duration) time.Duration {
 	if fallback <= 0 {
-		fallback = DefaultBeeperStreamSubscribeExpiry
+		fallback = DefaultSubscribeExpiry
 	}
 	if descriptor != nil && descriptor.ExpiryMS > 0 {
 		descriptorExpiry := time.Duration(descriptor.ExpiryMS) * time.Millisecond

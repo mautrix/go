@@ -17,7 +17,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -124,9 +123,6 @@ type Client struct {
 	SetAppServiceDeviceID bool
 
 	syncingID uint32 // Identifies the current Sync. Only one Sync can be active at any given time.
-
-	beeperStreamLock sync.Mutex
-	beeperStream     *BeeperStreamManager
 }
 
 type ClientWellKnown struct {

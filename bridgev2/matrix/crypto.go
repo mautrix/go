@@ -23,6 +23,7 @@ import (
 	"go.mau.fi/util/dbutil"
 
 	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/beeperstream"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/crypto"
@@ -54,6 +55,7 @@ type CryptoHelper struct {
 	cancelSync func()
 
 	cancelPeriodicDeleteLoop func()
+	beeperStreams            *beeperstream.Helper
 }
 
 func NewCryptoHelper(c *Connector) Crypto {
@@ -128,7 +130,11 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 		}
 	}
 
-	helper.client.Syncer = &cryptoSyncer{helper.mach}
+	err = helper.initBeeperStreams()
+	if err != nil {
+		return err
+	}
+	helper.client.Syncer = &cryptoSyncer{OlmMachine: helper.mach, beeperStreams: helper.beeperStreams}
 	helper.client.Store = helper.store
 
 	err = helper.mach.Load(ctx)
@@ -377,6 +383,7 @@ func (helper *CryptoHelper) Stop() {
 	if helper.cancelPeriodicDeleteLoop != nil {
 		helper.cancelPeriodicDeleteLoop()
 	}
+	helper.closeBeeperStreams()
 	helper.syncDone.Wait()
 }
 
@@ -414,6 +421,7 @@ func (helper *CryptoHelper) Reset(ctx context.Context, startAfterReset bool) {
 	helper.client = nil
 	helper.store = nil
 	helper.mach = nil
+	helper.beeperStreams = nil
 	err = helper.Init(ctx)
 	if err != nil {
 		helper.log.WithLevel(zerolog.FatalLevel).Err(err).Msg("Error reinitializing end-to-bridge encryption")
@@ -427,6 +435,24 @@ func (helper *CryptoHelper) Reset(ctx context.Context, startAfterReset bool) {
 
 func (helper *CryptoHelper) Client() *mautrix.Client {
 	return helper.client
+}
+
+func (helper *CryptoHelper) initBeeperStreams() error {
+	streams, err := beeperstream.New(helper.client)
+	if err != nil {
+		return err
+	}
+	helper.beeperStreams = streams
+	return nil
+}
+
+func (helper *CryptoHelper) closeBeeperStreams() {
+	if helper.beeperStreams == nil {
+		return
+	}
+	if err := helper.beeperStreams.Close(); err != nil {
+		helper.log.Warn().Err(err).Msg("Failed to close beeper stream helper")
+	}
 }
 
 func (helper *CryptoHelper) Decrypt(ctx context.Context, evt *event.Event) (*event.Event, error) {
@@ -516,6 +542,7 @@ func (helper *CryptoHelper) ShareKeys(ctx context.Context) error {
 
 type cryptoSyncer struct {
 	*crypto.OlmMachine
+	beeperStreams *beeperstream.Helper
 }
 
 func (syncer *cryptoSyncer) ProcessResponse(ctx context.Context, resp *mautrix.RespSync, since string) error {
@@ -533,9 +560,8 @@ func (syncer *cryptoSyncer) ProcessResponse(ctx context.Context, resp *mautrix.R
 		}()
 		syncer.Log.Trace().Str("since", since).Msg("Starting sync response handling")
 		syncer.ProcessSyncResponse(ctx, resp, since)
-		streams := syncer.Client.BeeperStreams()
-		for _, evt := range resp.ToDevice.Events {
-			streams.HandleToDeviceEvent(ctx, evt)
+		if syncer.beeperStreams != nil {
+			syncer.beeperStreams.HandleSyncResponse(ctx, resp)
 		}
 		syncer.Log.Trace().Str("since", since).Msg("Successfully handled sync response")
 	}()

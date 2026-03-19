@@ -4,75 +4,81 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-package mautrix
+package beeperstream
 
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
+	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
-type beeperStreamSubscription struct {
-	key        beeperStreamKey
+type subscription struct {
+	key        streamKey
 	descriptor *event.BeeperStreamInfo
 	cancel     context.CancelFunc
 }
 
-func (m *BeeperStreamManager) Subscribe(ctx context.Context, roomID id.RoomID, eventID id.EventID, descriptor *event.BeeperStreamInfo) error {
-	if err := descriptor.ValidateActive(); err != nil {
+func (h *Helper) Subscribe(ctx context.Context, roomID id.RoomID, eventID id.EventID, descriptor *event.BeeperStreamInfo) error {
+	if h == nil {
+		return fmt.Errorf("beeper stream helper is nil")
+	} else if h.closed.Load() {
+		return fmt.Errorf("beeper stream helper is closed")
+	} else if err := descriptor.ValidateActive(); err != nil {
 		return err
 	}
-	key := beeperStreamKey{roomID: roomID, eventID: eventID}
-	m.lock.Lock()
-	if existing := m.subscriptions[key]; existing != nil {
+	key := streamKey{roomID: roomID, eventID: eventID}
+	h.lock.Lock()
+	if existing := h.subscriptions[key]; existing != nil {
 		if descriptorEqual(existing.descriptor, descriptor) {
-			m.lock.Unlock()
+			h.lock.Unlock()
 			return nil
 		}
 		existing.cancel()
-		delete(m.subscriptions, key)
+		delete(h.subscriptions, key)
 	}
 	subscribeCtx := context.Background()
 	if ctx != nil {
 		subscribeCtx = context.WithoutCancel(ctx)
 	}
 	subCtx, cancel := context.WithCancel(subscribeCtx)
-	sub := &beeperStreamSubscription{
+	sub := &subscription{
 		key:        key,
 		descriptor: descriptor.Clone(),
 		cancel:     cancel,
 	}
-	m.subscriptions[key] = sub
-	m.lock.Unlock()
+	h.subscriptions[key] = sub
+	h.lock.Unlock()
 
-	go m.runSubscriptionLoop(subCtx, sub)
+	go h.runSubscriptionLoop(subCtx, sub)
 	return nil
 }
 
-func (m *BeeperStreamManager) Unsubscribe(roomID id.RoomID, eventID id.EventID) {
-	if m == nil {
+func (h *Helper) Unsubscribe(roomID id.RoomID, eventID id.EventID) {
+	if h == nil || h.closed.Load() {
 		return
 	}
-	key := beeperStreamKey{roomID: roomID, eventID: eventID}
-	m.lock.Lock()
-	sub := m.subscriptions[key]
+	key := streamKey{roomID: roomID, eventID: eventID}
+	h.lock.Lock()
+	sub := h.subscriptions[key]
 	if sub != nil {
-		delete(m.subscriptions, key)
+		delete(h.subscriptions, key)
 	}
-	m.lock.Unlock()
+	h.lock.Unlock()
 	if sub != nil {
 		sub.cancel()
 	}
 }
 
-func (m *BeeperStreamManager) runSubscriptionLoop(ctx context.Context, sub *beeperStreamSubscription) {
-	expiry := resolveSubscribeExpiry(sub.descriptor, DefaultBeeperStreamSubscribeExpiry)
-	renewInterval := max(expiry/2, defaultBeeperStreamRenewInterval)
-	if err := m.sendSubscribe(ctx, sub.key, sub.descriptor, expiry); err != nil && ctx.Err() == nil {
-		m.log.Warn().Err(err).
+func (h *Helper) runSubscriptionLoop(ctx context.Context, sub *subscription) {
+	expiry := resolveSubscribeExpiry(sub.descriptor, DefaultSubscribeExpiry)
+	renewInterval := max(expiry/2, defaultRenewInterval)
+	if err := h.sendSubscribe(ctx, sub.key, sub.descriptor, expiry); err != nil && ctx.Err() == nil {
+		h.log.Warn().Err(err).
 			Stringer("room_id", sub.key.roomID).
 			Stringer("event_id", sub.key.eventID).
 			Msg("Failed to send initial beeper stream subscribe")
@@ -84,8 +90,8 @@ func (m *BeeperStreamManager) runSubscriptionLoop(ctx context.Context, sub *beep
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if err := m.sendSubscribe(ctx, sub.key, sub.descriptor, expiry); err != nil && ctx.Err() == nil {
-				m.log.Warn().Err(err).
+			if err := h.sendSubscribe(ctx, sub.key, sub.descriptor, expiry); err != nil && ctx.Err() == nil {
+				h.log.Warn().Err(err).
 					Stringer("room_id", sub.key.roomID).
 					Stringer("event_id", sub.key.eventID).
 					Msg("Failed to renew beeper stream subscribe")
@@ -94,8 +100,8 @@ func (m *BeeperStreamManager) runSubscriptionLoop(ctx context.Context, sub *beep
 	}
 }
 
-func (m *BeeperStreamManager) sendSubscribe(ctx context.Context, key beeperStreamKey, descriptor *event.BeeperStreamInfo, expiry time.Duration) error {
-	client, err := m.requireClient(true)
+func (h *Helper) sendSubscribe(ctx context.Context, key streamKey, descriptor *event.BeeperStreamInfo, expiry time.Duration) error {
+	client, err := h.requireClient(true)
 	if err != nil {
 		return err
 	}
@@ -111,7 +117,6 @@ func (m *BeeperStreamManager) sendSubscribe(ctx context.Context, key beeperStrea
 	if descriptor.DeviceID != "" {
 		targetDevice = descriptor.DeviceID
 	}
-	// Subscribers follow the publisher-provided descriptor wire contract.
 	if descriptor.Encryption != nil {
 		payload, err := json.Marshal(map[string]any{
 			"device_id": client.DeviceID,
@@ -127,7 +132,7 @@ func (m *BeeperStreamManager) sendSubscribe(ctx context.Context, key beeperStrea
 		eventType = event.ToDeviceBeeperStreamEncrypted
 		content = &event.Content{Parsed: encrypted}
 	}
-	_, err = client.SendToDevice(ctx, eventType, &ReqSendToDevice{
+	_, err = client.SendToDevice(ctx, eventType, &mautrix.ReqSendToDevice{
 		Messages: map[id.UserID]map[id.DeviceID]*event.Content{
 			descriptor.UserID: {
 				targetDevice: content,
@@ -137,7 +142,7 @@ func (m *BeeperStreamManager) sendSubscribe(ctx context.Context, key beeperStrea
 	return err
 }
 
-func (m *BeeperStreamManager) handleEncryptedForSubscriber(ctx context.Context, evt *event.Event, content *event.BeeperStreamEncryptedEventContent, sub *beeperStreamSubscription) *event.Event {
+func (h *Helper) handleEncryptedForSubscriber(ctx context.Context, evt *event.Event, content *event.BeeperStreamEncryptedEventContent, sub *subscription) *event.Event {
 	normalized := decryptedLogicalEvent(ctx, evt, content, sub.descriptor.Encryption.Key, event.ToDeviceBeeperStreamUpdate)
 	if normalized == nil {
 		return nil
@@ -147,7 +152,7 @@ func (m *BeeperStreamManager) handleEncryptedForSubscriber(ctx context.Context, 
 		return nil
 	}
 	if normalized.Sender != sub.descriptor.UserID {
-		m.log.Warn().
+		h.log.Warn().
 			Stringer("sender", normalized.Sender).
 			Stringer("expected_user_id", sub.descriptor.UserID).
 			Stringer("room_id", update.RoomID).

@@ -4,7 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-package mautrix
+package beeperstream
 
 import (
 	"crypto/aes"
@@ -19,7 +19,7 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-type beeperStreamInnerPayload struct {
+type innerPayload struct {
 	Type    string          `json:"type"`
 	Content json.RawMessage `json:"content"`
 }
@@ -50,7 +50,7 @@ func encryptLogicalEvent(logicalType event.Type, payload json.RawMessage, roomID
 	if err != nil {
 		return nil, err
 	}
-	plaintext, err := json.Marshal(beeperStreamInnerPayload{
+	plaintext, err := json.Marshal(innerPayload{
 		Type:    logicalType.Type,
 		Content: payload,
 	})
@@ -87,7 +87,7 @@ func decryptLogicalEvent(content *event.BeeperStreamEncryptedEventContent, base6
 	if err != nil {
 		return event.Type{}, nil, err
 	}
-	var payload beeperStreamInnerPayload
+	var payload innerPayload
 	if err = json.Unmarshal(plaintext, &payload); err != nil {
 		return event.Type{}, nil, err
 	}
