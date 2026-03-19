@@ -137,10 +137,10 @@ func (m *BeeperStreamManager) sendSubscribe(ctx context.Context, key beeperStrea
 	return err
 }
 
-func (m *BeeperStreamManager) handlePlainUpdateEvent(evt *event.Event) bool {
+func (m *BeeperStreamManager) handlePlainUpdateEvent(evt *event.Event) {
 	update := evt.Content.AsBeeperStreamUpdate()
 	if update.RoomID == "" || update.EventID == "" {
-		return true
+		return
 	}
 	key := beeperStreamKey{roomID: update.RoomID, eventID: update.EventID}
 	m.lock.RLock()
@@ -153,9 +153,8 @@ func (m *BeeperStreamManager) handlePlainUpdateEvent(evt *event.Event) bool {
 			Stringer("room_id", update.RoomID).
 			Stringer("event_id", update.EventID).
 			Msg("Beeper stream update from unexpected sender, dropping")
-		return true
+		return
 	}
-	return false
 }
 
 func (m *BeeperStreamManager) handleEncryptedForSubscriber(ctx context.Context, evt *event.Event, content *event.BeeperStreamEncryptedEventContent, sub *beeperStreamSubscription) *event.Event {

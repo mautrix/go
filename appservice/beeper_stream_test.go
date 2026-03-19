@@ -8,8 +8,6 @@ package appservice
 
 import (
 	"context"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -26,27 +24,14 @@ const (
 	testBotSubDevice  = "SUBDEVICE"
 )
 
-func newTestAppService(t *testing.T, homeserverURL string) *AppService {
-	t.Helper()
+func newTestAppService() *AppService {
 	as := Create()
 	as.HomeserverDomain = "example.com"
 	as.Registration = &Registration{
 		AppToken:        "app-token",
 		SenderLocalpart: "bot",
 	}
-	if homeserverURL != "" {
-		require.NoError(t, as.SetHomeserverURL(homeserverURL))
-	}
 	return as
-}
-
-func newTestBotHomeserver(t *testing.T) *httptest.Server {
-	t.Helper()
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("unexpected homeserver request: %s %s", r.Method, r.URL.Path)
-	}))
-	t.Cleanup(ts.Close)
-	return ts
 }
 
 func deliverTestBotSubscribe(t *testing.T, as *AppService, deviceID id.DeviceID) {
@@ -66,8 +51,7 @@ func deliverTestBotSubscribe(t *testing.T, as *AppService, deviceID id.DeviceID)
 }
 
 func TestHandleTransactionDispatchesToDeviceWithoutEphemeralFlag(t *testing.T) {
-	ts := newTestBotHomeserver(t)
-	as := newTestAppService(t, ts.URL)
+	as := newTestAppService()
 	as.Registration.EphemeralEvents = false
 
 	as.handleTransaction(context.Background(), "txn1", &Transaction{
@@ -94,8 +78,7 @@ func TestHandleTransactionDispatchesToDeviceWithoutEphemeralFlag(t *testing.T) {
 }
 
 func TestEventProcessorReceivesBeeperStreamToDeviceEvents(t *testing.T) {
-	ts := newTestBotHomeserver(t)
-	as := newTestAppService(t, ts.URL)
+	as := newTestAppService()
 	ep := NewEventProcessor(as)
 	ep.ExecMode = Sync
 	received := make(chan *event.Event, 1)

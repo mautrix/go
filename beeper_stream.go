@@ -82,14 +82,14 @@ func (m *BeeperStreamManager) registerSyncHandlers() {
 		return
 	}
 	syncer.OnEventType(event.ToDeviceBeeperStreamSubscribe, func(ctx context.Context, evt *event.Event) {
-		m.HandleEvent(ctx, evt)
+		m.handleEvent(ctx, evt)
 	})
 	dispatcher, ok := m.client.Syncer.(DispatchableSyncer)
 	if !ok {
 		return
 	}
 	syncer.OnEventType(event.ToDeviceBeeperStreamEncrypted, func(ctx context.Context, evt *event.Event) {
-		if normalized := m.HandleEvent(ctx, evt); normalized != nil {
+		if normalized := m.handleEvent(ctx, evt); normalized != nil {
 			dispatcher.Dispatch(ctx, normalized)
 		}
 	})
@@ -121,7 +121,7 @@ func (m *BeeperStreamManager) NewDescriptor(ctx context.Context, roomID id.RoomI
 	return info, nil
 }
 
-func (m *BeeperStreamManager) HandleEvent(ctx context.Context, evt *event.Event) *event.Event {
+func (m *BeeperStreamManager) handleEvent(ctx context.Context, evt *event.Event) *event.Event {
 	if m == nil || evt == nil {
 		return nil
 	}
