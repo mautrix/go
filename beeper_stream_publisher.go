@@ -25,7 +25,6 @@ type beeperStreamSubscriber struct {
 }
 
 type beeperStreamPublished struct {
-	key        beeperStreamKey
 	descriptor *event.BeeperStreamInfo
 	updates    []*event.Content
 
@@ -47,7 +46,6 @@ func (m *BeeperStreamManager) Register(ctx context.Context, roomID id.RoomID, ev
 	}
 	key := beeperStreamKey{roomID: roomID, eventID: eventID}
 	state := &beeperStreamPublished{
-		key:         key,
 		descriptor:  descriptor.Clone(),
 		subscribers: make(map[beeperStreamSubscriber]time.Time),
 	}

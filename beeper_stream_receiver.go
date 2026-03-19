@@ -137,26 +137,6 @@ func (m *BeeperStreamManager) sendSubscribe(ctx context.Context, key beeperStrea
 	return err
 }
 
-func (m *BeeperStreamManager) handlePlainUpdateEvent(evt *event.Event) {
-	update := evt.Content.AsBeeperStreamUpdate()
-	if update.RoomID == "" || update.EventID == "" {
-		return
-	}
-	key := beeperStreamKey{roomID: update.RoomID, eventID: update.EventID}
-	m.lock.RLock()
-	sub := m.subscriptions[key]
-	m.lock.RUnlock()
-	if sub != nil && sub.descriptor.UserID != "" && evt.Sender != "" && evt.Sender != sub.descriptor.UserID {
-		m.log.Warn().
-			Stringer("sender", evt.Sender).
-			Stringer("expected_user_id", sub.descriptor.UserID).
-			Stringer("room_id", update.RoomID).
-			Stringer("event_id", update.EventID).
-			Msg("Beeper stream update from unexpected sender, dropping")
-		return
-	}
-}
-
 func (m *BeeperStreamManager) handleEncryptedForSubscriber(ctx context.Context, evt *event.Event, content *event.BeeperStreamEncryptedEventContent, sub *beeperStreamSubscription) *event.Event {
 	normalized := decryptedLogicalEvent(ctx, evt, content, sub.descriptor.Encryption.Key, event.ToDeviceBeeperStreamUpdate)
 	if normalized == nil {

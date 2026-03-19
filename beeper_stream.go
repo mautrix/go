@@ -74,9 +74,6 @@ func (cli *Client) BeeperStreams() *BeeperStreamManager {
 }
 
 func (m *BeeperStreamManager) registerSyncHandlers() {
-	if m == nil {
-		return
-	}
 	syncer, ok := m.client.Syncer.(ExtensibleSyncer)
 	if !ok {
 		return
@@ -128,8 +125,6 @@ func (m *BeeperStreamManager) handleEvent(ctx context.Context, evt *event.Event)
 	switch evt.Type {
 	case event.ToDeviceBeeperStreamSubscribe:
 		m.handleSubscribeEvent(ctx, evt)
-	case event.ToDeviceBeeperStreamUpdate:
-		m.handlePlainUpdateEvent(evt)
 	case event.ToDeviceBeeperStreamEncrypted:
 		return m.handleEncryptedEvent(ctx, evt)
 	}
