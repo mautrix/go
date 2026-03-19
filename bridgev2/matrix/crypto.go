@@ -128,7 +128,7 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 		}
 	}
 
-	helper.client.Syncer = &cryptoSyncer{OlmMachine: helper.mach}
+	helper.client.Syncer = &cryptoSyncer{helper.mach}
 	helper.client.Store = helper.store
 
 	err = helper.mach.Load(ctx)
