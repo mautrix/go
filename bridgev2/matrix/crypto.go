@@ -305,7 +305,7 @@ func (helper *CryptoHelper) loginBot(ctx context.Context) (*mautrix.Client, bool
 
 	flows, err := client.GetLoginFlows(ctx)
 	if err != nil {
-		return nil, deviceID != "", fmt.Errorf("failed to get supported login flows: %w", err)
+		return nil, deviceID != "", fmt.Errorf("failed to get supported login flows (maybe MSC4190 is not enabled?): %w", err)
 	} else if !flows.HasFlow(mautrix.AuthTypeAppservice) {
 		return nil, deviceID != "", fmt.Errorf("homeserver does not support appservice login")
 	}
