@@ -320,6 +320,74 @@ func TestHelperHandleSyncResponseIgnoresWrongDevice(t *testing.T) {
 	}
 }
 
+func TestHelperHandleSyncResponseIgnoresWrongUser(t *testing.T) {
+	ts, recorder := newSendToDeviceRecorderServer(t)
+	client := newTestStreamClient(t, ts.URL, testStreamBotUserID, testStreamPublisherDev)
+	streams := newTestHelper(t, client)
+
+	info, err := streams.NewDescriptor(context.Background(), testStreamRoomID, testStreamType)
+	require.NoError(t, err)
+	require.NoError(t, streams.Register(context.Background(), testStreamRoomID, testStreamEventID, info))
+
+	streams.HandleSyncResponse(context.Background(), &mautrix.RespSync{
+		ToDevice: mautrix.SyncEventsList{Events: []*event.Event{
+			newTestSubscribeEvent("@other:example.com", testStreamPublisherDev),
+		}},
+	})
+
+	require.NoError(t, streams.Publish(context.Background(), testStreamRoomID, testStreamEventID, newTestPublishContent("hello")))
+	select {
+	case req := <-recorder.requests:
+		t.Fatalf("unexpected sendToDevice request: %s", req.path)
+	case <-time.After(200 * time.Millisecond):
+	}
+}
+
+func TestHelperHandleSyncResponseIgnoresWrongDeviceWithoutUserID(t *testing.T) {
+	ts, recorder := newSendToDeviceRecorderServer(t)
+	client := newTestStreamClient(t, ts.URL, testStreamBotUserID, testStreamPublisherDev)
+	streams := newTestHelper(t, client)
+
+	info, err := streams.NewDescriptor(context.Background(), testStreamRoomID, testStreamType)
+	require.NoError(t, err)
+	require.NoError(t, streams.Register(context.Background(), testStreamRoomID, testStreamEventID, info))
+
+	streams.HandleSyncResponse(context.Background(), &mautrix.RespSync{
+		ToDevice: mautrix.SyncEventsList{Events: []*event.Event{
+			newTestSubscribeEvent("", "OTHERDEVICE"),
+		}},
+	})
+
+	require.NoError(t, streams.Publish(context.Background(), testStreamRoomID, testStreamEventID, newTestPublishContent("hello")))
+	select {
+	case req := <-recorder.requests:
+		t.Fatalf("unexpected sendToDevice request: %s", req.path)
+	case <-time.After(200 * time.Millisecond):
+	}
+}
+
+func TestHelperHandleSyncResponseReturnsNormalizedEvents(t *testing.T) {
+	ts, recorder := newSendToDeviceRecorderServer(t)
+	client := newTestStreamClient(t, ts.URL, testStreamSubscriberID, "RECEIVER")
+	streams := newTestHelper(t, client)
+	descriptor := newTestDescriptor(true)
+
+	require.NoError(t, streams.Subscribe(context.Background(), testStreamRoomID, testStreamEventID, descriptor))
+	t.Cleanup(func() { streams.Unsubscribe(testStreamRoomID, testStreamEventID) })
+	_ = recorder.next(t)
+
+	normalized := streams.HandleSyncResponse(context.Background(), &mautrix.RespSync{
+		ToDevice: mautrix.SyncEventsList{Events: []*event.Event{newTestEncryptedUpdateEvent(t, descriptor)}},
+	})
+
+	require.Len(t, normalized, 1)
+	require.Equal(t, event.ToDeviceBeeperStreamUpdate, normalized[0].Type)
+	update := normalized[0].Content.AsBeeperStreamUpdate()
+	require.Equal(t, testStreamRoomID, update.RoomID)
+	require.Equal(t, testStreamEventID, update.EventID)
+	require.Contains(t, normalized[0].Content.Raw, testStreamDeltaKey)
+}
+
 func TestHelperInitIsIdempotent(t *testing.T) {
 	ts, recorder := newSendToDeviceRecorderServer(t)
 	client := newTestStreamClient(t, ts.URL, testStreamSubscriberID, "RECEIVER")

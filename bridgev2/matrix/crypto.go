@@ -55,7 +55,6 @@ type CryptoHelper struct {
 	cancelSync func()
 
 	cancelPeriodicDeleteLoop func()
-	beeperStreams            *beeperstream.Helper
 }
 
 func NewCryptoHelper(c *Connector) Crypto {
@@ -130,11 +129,11 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 		}
 	}
 
-	err = helper.initBeeperStreams()
+	streams, err := beeperstream.New(helper.client)
 	if err != nil {
 		return err
 	}
-	helper.client.Syncer = &cryptoSyncer{OlmMachine: helper.mach, beeperStreams: helper.beeperStreams}
+	helper.client.Syncer = &cryptoSyncer{OlmMachine: helper.mach, beeperStreams: streams}
 	helper.client.Store = helper.store
 
 	err = helper.mach.Load(ctx)
@@ -383,7 +382,6 @@ func (helper *CryptoHelper) Stop() {
 	if helper.cancelPeriodicDeleteLoop != nil {
 		helper.cancelPeriodicDeleteLoop()
 	}
-	helper.closeBeeperStreams()
 	helper.syncDone.Wait()
 }
 
@@ -421,7 +419,6 @@ func (helper *CryptoHelper) Reset(ctx context.Context, startAfterReset bool) {
 	helper.client = nil
 	helper.store = nil
 	helper.mach = nil
-	helper.beeperStreams = nil
 	err = helper.Init(ctx)
 	if err != nil {
 		helper.log.WithLevel(zerolog.FatalLevel).Err(err).Msg("Error reinitializing end-to-bridge encryption")
@@ -435,24 +432,6 @@ func (helper *CryptoHelper) Reset(ctx context.Context, startAfterReset bool) {
 
 func (helper *CryptoHelper) Client() *mautrix.Client {
 	return helper.client
-}
-
-func (helper *CryptoHelper) initBeeperStreams() error {
-	streams, err := beeperstream.New(helper.client)
-	if err != nil {
-		return err
-	}
-	helper.beeperStreams = streams
-	return nil
-}
-
-func (helper *CryptoHelper) closeBeeperStreams() {
-	if helper.beeperStreams == nil {
-		return
-	}
-	if err := helper.beeperStreams.Close(); err != nil {
-		helper.log.Warn().Err(err).Msg("Failed to close beeper stream helper")
-	}
 }
 
 func (helper *CryptoHelper) Decrypt(ctx context.Context, evt *event.Event) (*event.Event, error) {

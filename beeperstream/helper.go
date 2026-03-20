@@ -46,9 +46,9 @@ type Helper struct {
 	pendingLock      sync.Mutex
 	pendingSubscribe []pendingSubscribeEvent
 
-	initLock    sync.Mutex
-	initialized bool
-	closed      atomic.Bool
+	initLock        sync.Mutex
+	syncInitialized bool
+	closed          atomic.Bool
 
 	now func() time.Time
 }
@@ -71,6 +71,7 @@ func New(client *mautrix.Client) (*Helper, error) {
 	}, nil
 }
 
+// Init attaches beeper stream handling to a normal /sync-based client.
 func (h *Helper) Init(_ context.Context) error {
 	if h == nil {
 		return fmt.Errorf("beeper stream helper is nil")
@@ -79,7 +80,7 @@ func (h *Helper) Init(_ context.Context) error {
 	}
 	h.initLock.Lock()
 	defer h.initLock.Unlock()
-	if h.initialized {
+	if h.syncInitialized {
 		return nil
 	}
 	syncer, ok := h.client.Syncer.(mautrix.ExtensibleSyncer)
@@ -90,16 +91,28 @@ func (h *Helper) Init(_ context.Context) error {
 	if !ok {
 		return fmt.Errorf("the client syncer must implement DispatchableSyncer")
 	}
-	syncer.OnEventType(event.ToDeviceBeeperStreamSubscribe, func(ctx context.Context, evt *event.Event) {
+	h.registerIngressAdapter(
+		func(evtType event.Type, handler func(context.Context, *event.Event)) {
+			syncer.OnEventType(evtType, handler)
+		},
+		dispatcher.Dispatch,
+	)
+	h.syncInitialized = true
+	return nil
+}
+
+func (h *Helper) registerIngressAdapter(
+	on func(event.Type, func(context.Context, *event.Event)),
+	dispatch func(context.Context, *event.Event),
+) {
+	on(event.ToDeviceBeeperStreamSubscribe, func(ctx context.Context, evt *event.Event) {
 		h.handleEvent(ctx, evt)
 	})
-	syncer.OnEventType(event.ToDeviceBeeperStreamEncrypted, func(ctx context.Context, evt *event.Event) {
-		if normalized := h.handleEvent(ctx, evt); normalized != nil {
-			dispatcher.Dispatch(ctx, normalized)
+	on(event.ToDeviceBeeperStreamEncrypted, func(ctx context.Context, evt *event.Event) {
+		if normalized := h.handleEvent(ctx, evt); normalized != nil && dispatch != nil {
+			dispatch(ctx, normalized)
 		}
 	})
-	h.initialized = true
-	return nil
 }
 
 func (h *Helper) Close() error {
@@ -157,13 +170,17 @@ func (h *Helper) NewDescriptor(ctx context.Context, roomID id.RoomID, streamType
 	return info, nil
 }
 
-func (h *Helper) HandleSyncResponse(ctx context.Context, resp *mautrix.RespSync) {
+func (h *Helper) HandleSyncResponse(ctx context.Context, resp *mautrix.RespSync) []*event.Event {
 	if h == nil || resp == nil {
-		return
+		return nil
 	}
+	var normalized []*event.Event
 	for _, evt := range resp.ToDevice.Events {
-		h.handleEvent(ctx, evt)
+		if evt := h.handleEvent(ctx, evt); evt != nil {
+			normalized = append(normalized, evt)
+		}
 	}
+	return normalized
 }
 
 func (h *Helper) handleEvent(ctx context.Context, evt *event.Event) *event.Event {
@@ -287,7 +304,8 @@ func (h *Helper) isForDifferentTarget(evt *event.Event) bool {
 	if h == nil || h.client == nil || evt == nil {
 		return false
 	}
-	return evt.ToUserID != "" && (evt.ToUserID != h.client.UserID || evt.ToDeviceID != h.client.DeviceID)
+	return (evt.ToUserID != "" && evt.ToUserID != h.client.UserID) ||
+		(evt.ToDeviceID != "" && evt.ToDeviceID != h.client.DeviceID)
 }
 
 func (h *Helper) requireClient(requireDevice bool) (*mautrix.Client, error) {
