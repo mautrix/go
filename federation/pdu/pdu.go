@@ -120,6 +120,10 @@ func (pdu *PDU) ToClientEvent(roomVersion id.RoomVersion) (*event.Event, error) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal content: %w", err)
 	}
+	err = json.Unmarshal(pdu.Unsigned, &evt.Unsigned)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal unsigned content: %w", err)
+	}
 	return evt, nil
 }
 
