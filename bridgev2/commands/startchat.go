@@ -262,7 +262,7 @@ func fnCreatePortal(ce *Event) {
 		ce.Log.Err(err).Msg("Failed to get portal")
 		ce.Reply("Failed to get portal")
 	} else if portal == nil {
-		ce.Reply("No portal found with ID %s", format.SafeMarkdownCode(portalID))
+		ce.Reply("No portal found with ID %s. Try `$cmdprefix filter allow` instead", format.SafeMarkdownCode(portalID))
 	} else if portal.MXID != "" {
 		// TODO allow showing room ID if the user is already in the room, even if they don't have admin permissions
 		if ce.User.Permissions.Admin {

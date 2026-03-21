@@ -147,6 +147,17 @@ type PortalCreateFilterItem struct {
 	Receiver *networkid.UserLoginID `yaml:"receiver"`
 }
 
+func (pcfi *PortalCreateFilterItem) Equals(other *PortalCreateFilterItem) bool {
+	if pcfi == nil || other == nil {
+		return pcfi == other
+	} else if pcfi.ID != other.ID {
+		return false
+	} else if pcfi.Receiver == nil || other.Receiver == nil {
+		return pcfi.Receiver == other.Receiver
+	}
+	return *pcfi.Receiver == *other.Receiver
+}
+
 func (pcfi *PortalCreateFilterItem) Matches(key networkid.PortalKey) bool {
 	return pcfi != nil && pcfi.ID == key.ID && (pcfi.Receiver == nil || *pcfi.Receiver == key.Receiver)
 }
@@ -164,19 +175,26 @@ func (pcfi *PortalCreateFilterItem) UnmarshalYAML(node *yaml.Node) error {
 	return nil
 }
 
+type PortalCreateFilterMode string
+
+const (
+	PortalCreateFilterModeAllow PortalCreateFilterMode = "allow"
+	PortalCreateFilterModeDeny  PortalCreateFilterMode = "deny"
+)
+
 type PortalCreateFilter struct {
-	Mode string                    `yaml:"mode"`
+	Mode PortalCreateFilterMode    `yaml:"mode"`
 	List []*PortalCreateFilterItem `yaml:"list"`
 }
 
-func (pcf *PortalCreateFilter) Allow(key networkid.PortalKey) bool {
+func (pcf *PortalCreateFilter) ShouldAllow(key networkid.PortalKey) bool {
 	match := slices.ContainsFunc(pcf.List, func(item *PortalCreateFilterItem) bool {
 		return item.Matches(key)
 	})
 	switch pcf.Mode {
-	case "allow":
+	case PortalCreateFilterModeAllow:
 		return match
-	case "deny":
+	case PortalCreateFilterModeDeny:
 		return !match
 	default:
 		return true

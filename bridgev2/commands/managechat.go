@@ -9,9 +9,12 @@ package commands
 import (
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"maunium.net/go/mautrix/bridgev2"
+	"maunium.net/go/mautrix/bridgev2/bridgeconfig"
+	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/format"
 )
@@ -131,5 +134,84 @@ func fnDeleteChat(ce *Event) {
 		ce.Reply("Failed to delete chat: %v", err)
 	} else {
 		ce.React("✅️")
+	}
+}
+
+var CommandFilter = &FullHandler{
+	Func: fnFilter,
+	Name: "filter",
+	Help: HelpMeta{
+		Section:     HelpSectionChats,
+		Description: "Manage the room creation filter. Changes are currently in-memory only",
+		Args:        "<allow/deny> <chat ID> [receiver]",
+	},
+	RequiresAdmin: true,
+}
+
+func markdownPCFI(pcfi *bridgeconfig.PortalCreateFilterItem) string {
+	if pcfi == nil {
+		return "<nil>"
+	} else if pcfi.Receiver == nil {
+		return format.SafeMarkdownCode(pcfi.ID)
+	}
+	return fmt.Sprintf("%s (receiver: %s)", format.SafeMarkdownCode(pcfi.ID), format.SafeMarkdownCode(*pcfi.Receiver))
+}
+
+func fnFilter(ce *Event) {
+	if len(ce.Args) < 2 || len(ce.Args) > 3 {
+		ce.Reply("Usage: %s <allow/deny> <chat ID> [receiver]", ce.Command)
+		return
+	}
+	target := &bridgeconfig.PortalCreateFilterItem{
+		ID: networkid.PortalID(ce.Args[1]),
+	}
+	if len(ce.Args) == 3 {
+		target.Receiver = (*networkid.UserLoginID)(&ce.Args[2])
+	}
+	pcf := &ce.Bridge.Config.PortalCreateFilter
+	found := slices.ContainsFunc(pcf.List, func(item *bridgeconfig.PortalCreateFilterItem) bool {
+		return item.Equals(target)
+	})
+	switch strings.ToLower(ce.Args[0]) {
+	case "allow":
+		switch pcf.Mode {
+		case bridgeconfig.PortalCreateFilterModeAllow:
+			if found {
+				ce.Reply("%s is already on the allow list", markdownPCFI(target))
+			} else {
+				pcf.List = append(pcf.List, target)
+				ce.Reply("Added %s to allow list", markdownPCFI(target))
+			}
+		case bridgeconfig.PortalCreateFilterModeDeny:
+			if !found {
+				ce.Reply("%s is not on the deny list", markdownPCFI(target))
+			} else {
+				pcf.List = slices.DeleteFunc(pcf.List, func(item *bridgeconfig.PortalCreateFilterItem) bool {
+					return item.Equals(target)
+				})
+				ce.Reply("Removed %s from deny list", markdownPCFI(target))
+			}
+		}
+	case "disallow", "block", "deny":
+		switch pcf.Mode {
+		case bridgeconfig.PortalCreateFilterModeAllow:
+			if !found {
+				ce.Reply("%s is not on the allow list", markdownPCFI(target))
+			} else {
+				pcf.List = slices.DeleteFunc(pcf.List, func(item *bridgeconfig.PortalCreateFilterItem) bool {
+					return item.Equals(target)
+				})
+				ce.Reply("Removed %s from allow list", markdownPCFI(target))
+			}
+		case bridgeconfig.PortalCreateFilterModeDeny:
+			if found {
+				ce.Reply("%s is already on the deny list", markdownPCFI(target))
+			} else {
+				pcf.List = append(pcf.List, target)
+				ce.Reply("Added %s to deny list", markdownPCFI(target))
+			}
+		}
+	default:
+		ce.Reply("Usage: %s <allow/deny> <chat ID> [receiver]", ce.Command)
 	}
 }
