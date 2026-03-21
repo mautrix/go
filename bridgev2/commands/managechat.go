@@ -7,6 +7,7 @@
 package commands
 
 import (
+	"fmt"
 	"slices"
 	"time"
 
@@ -17,7 +18,11 @@ import (
 
 var CommandID = &FullHandler{
 	Func: func(ce *Event) {
-		ce.Reply("This room is bridged to %s on %s", format.SafeMarkdownCode(ce.Portal.ID), ce.Bridge.Network.GetName().DisplayName)
+		var receiver string
+		if ce.Portal.Receiver != "" {
+			receiver = fmt.Sprintf(" (receiver: %s)", format.SafeMarkdownCode(ce.Portal.Receiver))
+		}
+		ce.Reply("This room is bridged to %s%s on %s", format.SafeMarkdownCode(ce.Portal.ID), receiver, ce.Bridge.Network.GetName().DisplayName)
 	},
 	Name: "id",
 	Help: HelpMeta{
