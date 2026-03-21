@@ -7,12 +7,15 @@
 package bridgeconfig
 
 import (
+	"fmt"
+	"slices"
 	"time"
 
 	"go.mau.fi/util/dbutil"
 	"go.mau.fi/zeroconfig"
 	"gopkg.in/yaml.v3"
 
+	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/mediaproxy"
 )
@@ -62,30 +65,31 @@ type CleanupOnLogouts struct {
 }
 
 type BridgeConfig struct {
-	CommandPrefix                 string           `yaml:"command_prefix"`
-	PersonalFilteringSpaces       bool             `yaml:"personal_filtering_spaces"`
-	PrivateChatPortalMeta         bool             `yaml:"private_chat_portal_meta"`
-	AsyncEvents                   bool             `yaml:"async_events"`
-	SplitPortals                  bool             `yaml:"split_portals"`
-	ResendBridgeInfo              bool             `yaml:"resend_bridge_info"`
-	NoBridgeInfoStateKey          bool             `yaml:"no_bridge_info_state_key"`
-	BridgeStatusNotices           string           `yaml:"bridge_status_notices"`
-	UnknownErrorAutoReconnect     time.Duration    `yaml:"unknown_error_auto_reconnect"`
-	UnknownErrorMaxAutoReconnects int              `yaml:"unknown_error_max_auto_reconnects"`
-	BridgeMatrixLeave             bool             `yaml:"bridge_matrix_leave"`
-	BridgeNotices                 bool             `yaml:"bridge_notices"`
-	TagOnlyOnCreate               bool             `yaml:"tag_only_on_create"`
-	OnlyBridgeTags                []event.RoomTag  `yaml:"only_bridge_tags"`
-	MuteOnlyOnCreate              bool             `yaml:"mute_only_on_create"`
-	DeduplicateMatrixMessages     bool             `yaml:"deduplicate_matrix_messages"`
-	CrossRoomReplies              bool             `yaml:"cross_room_replies"`
-	OutgoingMessageReID           bool             `yaml:"outgoing_message_re_id"`
-	RevertFailedStateChanges      bool             `yaml:"revert_failed_state_changes"`
-	KickMatrixUsers               bool             `yaml:"kick_matrix_users"`
-	CleanupOnLogout               CleanupOnLogouts `yaml:"cleanup_on_logout"`
-	Relay                         RelayConfig      `yaml:"relay"`
-	Permissions                   PermissionConfig `yaml:"permissions"`
-	Backfill                      BackfillConfig   `yaml:"backfill"`
+	CommandPrefix                 string             `yaml:"command_prefix"`
+	PersonalFilteringSpaces       bool               `yaml:"personal_filtering_spaces"`
+	PrivateChatPortalMeta         bool               `yaml:"private_chat_portal_meta"`
+	AsyncEvents                   bool               `yaml:"async_events"`
+	SplitPortals                  bool               `yaml:"split_portals"`
+	ResendBridgeInfo              bool               `yaml:"resend_bridge_info"`
+	NoBridgeInfoStateKey          bool               `yaml:"no_bridge_info_state_key"`
+	BridgeStatusNotices           string             `yaml:"bridge_status_notices"`
+	UnknownErrorAutoReconnect     time.Duration      `yaml:"unknown_error_auto_reconnect"`
+	UnknownErrorMaxAutoReconnects int                `yaml:"unknown_error_max_auto_reconnects"`
+	BridgeMatrixLeave             bool               `yaml:"bridge_matrix_leave"`
+	BridgeNotices                 bool               `yaml:"bridge_notices"`
+	TagOnlyOnCreate               bool               `yaml:"tag_only_on_create"`
+	OnlyBridgeTags                []event.RoomTag    `yaml:"only_bridge_tags"`
+	MuteOnlyOnCreate              bool               `yaml:"mute_only_on_create"`
+	DeduplicateMatrixMessages     bool               `yaml:"deduplicate_matrix_messages"`
+	CrossRoomReplies              bool               `yaml:"cross_room_replies"`
+	OutgoingMessageReID           bool               `yaml:"outgoing_message_re_id"`
+	RevertFailedStateChanges      bool               `yaml:"revert_failed_state_changes"`
+	KickMatrixUsers               bool               `yaml:"kick_matrix_users"`
+	CleanupOnLogout               CleanupOnLogouts   `yaml:"cleanup_on_logout"`
+	Relay                         RelayConfig        `yaml:"relay"`
+	PortalCreateFilter            PortalCreateFilter `yaml:"portal_create_filter"`
+	Permissions                   PermissionConfig   `yaml:"permissions"`
+	Backfill                      BackfillConfig     `yaml:"backfill"`
 }
 
 type MatrixConfig struct {
@@ -136,4 +140,45 @@ type ManagementRoomTexts struct {
 	WelcomeConnected   string `yaml:"welcome_connected"`
 	WelcomeUnconnected string `yaml:"welcome_unconnected"`
 	AdditionalHelp     string `yaml:"additional_help"`
+}
+
+type PortalCreateFilterItem struct {
+	ID       networkid.PortalID     `yaml:"id"`
+	Receiver *networkid.UserLoginID `yaml:"receiver"`
+}
+
+func (pcfi *PortalCreateFilterItem) Matches(key networkid.PortalKey) bool {
+	return pcfi != nil && pcfi.ID == key.ID && (pcfi.Receiver == nil || *pcfi.Receiver == key.Receiver)
+}
+
+type umPortalCreateFilterItem PortalCreateFilterItem
+
+func (pcfi *PortalCreateFilterItem) UnmarshalYAML(node *yaml.Node) error {
+	err := node.Decode((*umPortalCreateFilterItem)(pcfi))
+	if err != nil {
+		err2 := node.Decode(&pcfi.ID)
+		if err2 != nil {
+			return fmt.Errorf("both decode attempts failed: %w / %w", err, err2)
+		}
+	}
+	return nil
+}
+
+type PortalCreateFilter struct {
+	Mode string                    `yaml:"mode"`
+	List []*PortalCreateFilterItem `yaml:"list"`
+}
+
+func (pcf *PortalCreateFilter) Allow(key networkid.PortalKey) bool {
+	match := slices.ContainsFunc(pcf.List, func(item *PortalCreateFilterItem) bool {
+		return item.Matches(key)
+	})
+	switch pcf.Mode {
+	case "allow":
+		return match
+	case "deny":
+		return !match
+	default:
+		return true
+	}
 }

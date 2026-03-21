@@ -118,6 +118,15 @@ bridge:
         # Note that you need to manually remove the displayname from message_formats above.
         displayname_format: "{{ .DisambiguatedName }}"
 
+    # Filter for automatically creating portals.
+    portal_create_filter:
+        # The mode for filtering, either `deny` or `allow`
+        mode: deny
+        # The list of portal IDs to deny or allow depending on the mode config.
+        # Items here can either be the plain portal ID as a string, or an object with `id` and `receiver` fields.
+        # The receiver field is necessary if you want to target a specific DM portal for example.
+        list: []
+
     # Permissions for using the bridge.
     # Permitted values:
     #    relay - Talk through the relaybot (if enabled), no access otherwise
