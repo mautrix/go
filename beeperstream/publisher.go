@@ -46,7 +46,7 @@ func (h *Helper) Register(ctx context.Context, roomID id.RoomID, eventID id.Even
 		return fmt.Errorf("beeper stream helper is nil")
 	} else if h.closed.Load() {
 		return fmt.Errorf("beeper stream helper is closed")
-	} else if err := descriptor.ValidateActive(); err != nil {
+	} else if err := descriptor.Validate(); err != nil {
 		return err
 	}
 	key := streamKey{roomID: roomID, eventID: eventID}
@@ -163,7 +163,7 @@ func (h *Helper) handleSubscribeEvent(ctx context.Context, evt *event.Event) {
 	h.queuePendingSubscribe(ctx, evt)
 }
 
-func (h *Helper) handleEncryptedForPublisher(ctx context.Context, evt *event.Event, content *event.BeeperStreamEncryptedEventContent, state *publishedStream) *event.Event {
+func (h *Helper) handleEncryptedForPublisher(ctx context.Context, evt *event.Event, content *event.EncryptedEventContent, state *publishedStream) *event.Event {
 	if state.descriptor == nil || state.descriptor.Encryption == nil {
 		return nil
 	}
@@ -237,7 +237,7 @@ func (h *Helper) sendUpdate(ctx context.Context, descriptor *event.BeeperStreamI
 		if err != nil {
 			return err
 		}
-		eventType = event.ToDeviceBeeperStreamEncrypted
+		eventType = event.ToDeviceEncrypted
 		content = &event.Content{Parsed: encrypted}
 	}
 	req := &mautrix.ReqSendToDevice{
@@ -327,9 +327,9 @@ func (h *Helper) tryPendingSubscribe(ctx context.Context, candidate pendingSubsc
 			return false
 		}
 		return h.handleSubscribe(ctx, candidate.evt.Sender, subscribe)
-	case event.ToDeviceBeeperStreamEncrypted:
-		content := candidate.evt.Content.AsBeeperStreamEncrypted()
-		if content.RoomID == "" || content.EventID == "" {
+	case event.ToDeviceEncrypted:
+		content := candidate.evt.Content.AsEncrypted()
+		if content.Algorithm != id.AlgorithmBeeperStreamAESGCM || content.RoomID == "" || content.EventID == "" {
 			return false
 		}
 		h.lock.RLock()
@@ -356,9 +356,9 @@ func pendingSubscribeKey(evt *event.Event) (streamKey, bool) {
 			return streamKey{}, false
 		}
 		return streamKey{roomID: content.RoomID, eventID: content.EventID}, true
-	case event.ToDeviceBeeperStreamEncrypted:
-		content := evt.Content.AsBeeperStreamEncrypted()
-		if content.RoomID == "" || content.EventID == "" {
+	case event.ToDeviceEncrypted:
+		content := evt.Content.AsEncrypted()
+		if content.Algorithm != id.AlgorithmBeeperStreamAESGCM || content.RoomID == "" || content.EventID == "" {
 			return streamKey{}, false
 		}
 		return streamKey{roomID: content.RoomID, eventID: content.EventID}, true

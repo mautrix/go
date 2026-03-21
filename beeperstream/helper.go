@@ -108,7 +108,7 @@ func (h *Helper) registerIngressAdapter(
 	on(event.ToDeviceBeeperStreamSubscribe, func(ctx context.Context, evt *event.Event) {
 		h.handleEvent(ctx, evt)
 	})
-	on(event.ToDeviceBeeperStreamEncrypted, func(ctx context.Context, evt *event.Event) {
+	on(event.ToDeviceEncrypted, func(ctx context.Context, evt *event.Event) {
 		if normalized := h.handleEvent(ctx, evt); normalized != nil && dispatch != nil {
 			dispatch(ctx, normalized)
 		}
@@ -159,7 +159,6 @@ func (h *Helper) NewDescriptor(ctx context.Context, roomID id.RoomID, streamType
 		DeviceID: client.DeviceID,
 		Type:     streamType,
 		ExpiryMS: DefaultDescriptorExpiry.Milliseconds(),
-		Status:   event.BeeperStreamStatusActive,
 	}
 	if h.isEncrypted(ctx, roomID) {
 		info.Encryption = &event.BeeperStreamEncryptionInfo{
@@ -190,15 +189,15 @@ func (h *Helper) handleEvent(ctx context.Context, evt *event.Event) *event.Event
 	switch evt.Type {
 	case event.ToDeviceBeeperStreamSubscribe:
 		h.handleSubscribeEvent(ctx, evt)
-	case event.ToDeviceBeeperStreamEncrypted:
+	case event.ToDeviceEncrypted:
 		return h.handleEncryptedEvent(ctx, evt)
 	}
 	return nil
 }
 
 func (h *Helper) handleEncryptedEvent(ctx context.Context, evt *event.Event) *event.Event {
-	content := evt.Content.AsBeeperStreamEncrypted()
-	if content.RoomID == "" || content.EventID == "" || content.Ciphertext == "" {
+	content := evt.Content.AsEncrypted()
+	if content.Algorithm != id.AlgorithmBeeperStreamAESGCM || content.RoomID == "" || content.EventID == "" || len(content.Ciphertext) == 0 {
 		return nil
 	}
 	key := streamKey{roomID: content.RoomID, eventID: content.EventID}
@@ -216,7 +215,7 @@ func (h *Helper) handleEncryptedEvent(ctx context.Context, evt *event.Event) *ev
 	return nil
 }
 
-func decryptedLogicalEvent(ctx context.Context, evt *event.Event, encrypted *event.BeeperStreamEncryptedEventContent, base64Key string, expectedType event.Type) *event.Event {
+func decryptedLogicalEvent(ctx context.Context, evt *event.Event, encrypted *event.EncryptedEventContent, base64Key string, expectedType event.Type) *event.Event {
 	logicalType, payload, err := decryptLogicalEvent(encrypted, base64Key)
 	if err != nil {
 		zerolog.Ctx(ctx).Debug().Err(err).
@@ -237,6 +236,7 @@ func decryptedLogicalEvent(ctx context.Context, evt *event.Event, encrypted *eve
 		return nil
 	}
 	normalized := *evt
+	normalized.RoomID = encrypted.RoomID
 	normalized.Type = logicalType
 	normalized.Type.Class = event.ToDeviceEventType
 	normalized.Content = *parsed
@@ -336,7 +336,7 @@ func descriptorEqual(a, b *event.BeeperStreamInfo) bool {
 	switch {
 	case a == nil || b == nil:
 		return a == b
-	case a.UserID != b.UserID || a.DeviceID != b.DeviceID || a.Type != b.Type || a.ExpiryMS != b.ExpiryMS || a.Status != b.Status:
+	case a.UserID != b.UserID || a.DeviceID != b.DeviceID || a.Type != b.Type || a.ExpiryMS != b.ExpiryMS:
 		return false
 	case a.Encryption == nil || b.Encryption == nil:
 		return a.Encryption == b.Encryption

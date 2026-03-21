@@ -38,6 +38,13 @@ type EncryptedEventContent struct {
 
 	Ciphertext json.RawMessage `json:"ciphertext"`
 
+	// Only present for com.beeper.stream.v1.aes-gcm events.
+	IV string `json:"iv,omitempty"`
+	// Only present for com.beeper.stream.v1.aes-gcm events. Used to route stream payloads.
+	RoomID id.RoomID `json:"room_id,omitempty"`
+	// Only present for com.beeper.stream.v1.aes-gcm events. Used to route stream payloads.
+	EventID id.EventID `json:"event_id,omitempty"`
+
 	MegolmCiphertext []byte         `json:"-"`
 	OlmCiphertext    OlmCiphertexts `json:"-"`
 

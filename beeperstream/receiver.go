@@ -28,7 +28,7 @@ func (h *Helper) Subscribe(ctx context.Context, roomID id.RoomID, eventID id.Eve
 		return fmt.Errorf("beeper stream helper is nil")
 	} else if h.closed.Load() {
 		return fmt.Errorf("beeper stream helper is closed")
-	} else if err := descriptor.ValidateActive(); err != nil {
+	} else if err := descriptor.Validate(); err != nil {
 		return err
 	}
 	key := streamKey{roomID: roomID, eventID: eventID}
@@ -129,7 +129,7 @@ func (h *Helper) sendSubscribe(ctx context.Context, key streamKey, descriptor *e
 		if err != nil {
 			return err
 		}
-		eventType = event.ToDeviceBeeperStreamEncrypted
+		eventType = event.ToDeviceEncrypted
 		content = &event.Content{Parsed: encrypted}
 	}
 	_, err = client.SendToDevice(ctx, eventType, &mautrix.ReqSendToDevice{
@@ -142,7 +142,7 @@ func (h *Helper) sendSubscribe(ctx context.Context, key streamKey, descriptor *e
 	return err
 }
 
-func (h *Helper) handleEncryptedForSubscriber(ctx context.Context, evt *event.Event, content *event.BeeperStreamEncryptedEventContent, sub *subscription) *event.Event {
+func (h *Helper) handleEncryptedForSubscriber(ctx context.Context, evt *event.Event, content *event.EncryptedEventContent, sub *subscription) *event.Event {
 	normalized := decryptedLogicalEvent(ctx, evt, content, sub.descriptor.Encryption.Key, event.ToDeviceBeeperStreamUpdate)
 	if normalized == nil {
 		return nil

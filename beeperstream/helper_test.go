@@ -134,7 +134,7 @@ func newTestEncryptedSubscribeEvent(t *testing.T, descriptor *event.BeeperStream
 		Sender:     testStreamSubscriberID,
 		ToUserID:   testStreamBotUserID,
 		ToDeviceID: testStreamPublisherDev,
-		Type:       event.ToDeviceBeeperStreamEncrypted,
+		Type:       event.ToDeviceEncrypted,
 		Content:    event.Content{Parsed: encrypted},
 	}
 }
@@ -145,7 +145,6 @@ func newTestDescriptor(encrypted bool) *event.BeeperStreamInfo {
 		DeviceID: testStreamPublisherDev,
 		Type:     testStreamType,
 		ExpiryMS: DefaultDescriptorExpiry.Milliseconds(),
-		Status:   event.BeeperStreamStatusActive,
 	}
 	if encrypted {
 		descriptor.Encryption = &event.BeeperStreamEncryptionInfo{
@@ -168,7 +167,7 @@ func newTestEncryptedUpdateEvent(t *testing.T, descriptor *event.BeeperStreamInf
 	require.NoError(t, err)
 	return &event.Event{
 		Sender:  testStreamBotUserID,
-		Type:    event.ToDeviceBeeperStreamEncrypted,
+		Type:    event.ToDeviceEncrypted,
 		Content: event.Content{Parsed: encrypted},
 	}
 }
@@ -197,7 +196,6 @@ func TestHelperNewDescriptor(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, testStreamBotUserID, info.UserID)
 	require.Equal(t, testStreamPublisherDev, info.DeviceID)
-	require.Equal(t, event.BeeperStreamStatusActive, info.Status)
 	require.NotNil(t, info.Encryption)
 }
 
@@ -262,9 +260,9 @@ func TestHelperReplayPendingEncryptedSubscribeOnRegister(t *testing.T) {
 	require.NoError(t, streams.Publish(context.Background(), testStreamRoomID, testStreamEventID, newTestPublishContent("hello")))
 
 	req := recorder.next(t)
-	require.Contains(t, req.path, "/sendToDevice/com.beeper.stream.encrypted/")
+	require.Contains(t, req.path, "/sendToDevice/m.room.encrypted/")
 	rawContent := recorder.rawContent(t, req, testStreamSubscriberID, testStreamSubscriberDev)
-	var payload event.BeeperStreamEncryptedEventContent
+	var payload event.EncryptedEventContent
 	require.NoError(t, json.Unmarshal(rawContent, &payload))
 	logicalType, payloadContent, err := decryptLogicalEvent(&payload, descriptor.Encryption.Key)
 	require.NoError(t, err)
@@ -382,6 +380,7 @@ func TestHelperHandleSyncResponseReturnsNormalizedEvents(t *testing.T) {
 
 	require.Len(t, normalized, 1)
 	require.Equal(t, event.ToDeviceBeeperStreamUpdate, normalized[0].Type)
+	require.Equal(t, testStreamRoomID, normalized[0].RoomID)
 	update := normalized[0].Content.AsBeeperStreamUpdate()
 	require.Equal(t, testStreamRoomID, update.RoomID)
 	require.Equal(t, testStreamEventID, update.EventID)

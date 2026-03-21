@@ -44,11 +44,12 @@ var DuplicateMessageIndex = crypto.ErrDuplicateMessageIndex
 var UnknownMessageIndex = olm.ErrUnknownMessageIndex
 
 type CryptoHelper struct {
-	bridge *Connector
-	client *mautrix.Client
-	mach   *crypto.OlmMachine
-	store  *SQLCryptoStore
-	log    *zerolog.Logger
+	bridge  *Connector
+	client  *mautrix.Client
+	mach    *crypto.OlmMachine
+	store   *SQLCryptoStore
+	log     *zerolog.Logger
+	streams *beeperstream.Helper
 
 	lock       sync.RWMutex
 	syncDone   sync.WaitGroup
@@ -133,6 +134,7 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	helper.streams = streams
 	helper.client.Syncer = &cryptoSyncer{OlmMachine: helper.mach, beeperStreams: streams}
 	helper.client.Store = helper.store
 
@@ -517,6 +519,13 @@ func (helper *CryptoHelper) HandleMemberEvent(ctx context.Context, evt *event.Ev
 // ShareKeys uploads the given number of one-time-keys to the server.
 func (helper *CryptoHelper) ShareKeys(ctx context.Context) error {
 	return helper.mach.ShareKeys(ctx, -1)
+}
+
+func (helper *CryptoHelper) BeeperStreamPublisher() bridgev2.BeeperStreamPublisher {
+	if helper == nil {
+		return nil
+	}
+	return helper.streams
 }
 
 type cryptoSyncer struct {

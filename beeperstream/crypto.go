@@ -12,6 +12,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strconv"
 
 	"go.mau.fi/util/random"
 
@@ -42,7 +43,7 @@ func newStreamGCM(base64Key string) (cipher.AEAD, error) {
 	return cipher.NewGCM(block)
 }
 
-func encryptLogicalEvent(logicalType event.Type, payload json.RawMessage, roomID id.RoomID, eventID id.EventID, base64Key string) (*event.BeeperStreamEncryptedEventContent, error) {
+func encryptLogicalEvent(logicalType event.Type, payload json.RawMessage, roomID id.RoomID, eventID id.EventID, base64Key string) (*event.EncryptedEventContent, error) {
 	if roomID == "" || eventID == "" {
 		return nil, fmt.Errorf("missing beeper stream identifiers")
 	}
@@ -59,16 +60,16 @@ func encryptLogicalEvent(logicalType event.Type, payload json.RawMessage, roomID
 	}
 	iv := random.Bytes(gcm.NonceSize())
 	ciphertext := gcm.Seal(nil, iv, plaintext, nil)
-	return &event.BeeperStreamEncryptedEventContent{
+	return &event.EncryptedEventContent{
+		Algorithm:  id.AlgorithmBeeperStreamAESGCM,
 		RoomID:     roomID,
 		EventID:    eventID,
-		Algorithm:  id.AlgorithmBeeperStreamAESGCM,
 		IV:         base64.RawStdEncoding.EncodeToString(iv),
-		Ciphertext: base64.RawStdEncoding.EncodeToString(ciphertext),
+		Ciphertext: json.RawMessage(strconv.Quote(base64.RawStdEncoding.EncodeToString(ciphertext))),
 	}, nil
 }
 
-func decryptLogicalEvent(content *event.BeeperStreamEncryptedEventContent, base64Key string) (event.Type, json.RawMessage, error) {
+func decryptLogicalEvent(content *event.EncryptedEventContent, base64Key string) (event.Type, json.RawMessage, error) {
 	gcm, err := newStreamGCM(base64Key)
 	if err != nil {
 		return event.Type{}, nil, err
@@ -79,7 +80,11 @@ func decryptLogicalEvent(content *event.BeeperStreamEncryptedEventContent, base6
 	} else if len(iv) != gcm.NonceSize() {
 		return event.Type{}, nil, fmt.Errorf("invalid beeper stream IV length %d", len(iv))
 	}
-	ciphertext, err := base64.RawStdEncoding.DecodeString(content.Ciphertext)
+	var encodedCiphertext string
+	if err = json.Unmarshal(content.Ciphertext, &encodedCiphertext); err != nil {
+		return event.Type{}, nil, fmt.Errorf("failed to decode beeper stream ciphertext JSON: %w", err)
+	}
+	ciphertext, err := base64.RawStdEncoding.DecodeString(encodedCiphertext)
 	if err != nil {
 		return event.Type{}, nil, fmt.Errorf("failed to decode beeper stream ciphertext: %w", err)
 	}

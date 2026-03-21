@@ -219,17 +219,8 @@ type BeeperStreamInfo struct {
 	DeviceID   id.DeviceID                 `json:"device_id,omitempty"`
 	Type       string                      `json:"type"`
 	ExpiryMS   int64                       `json:"expiry_ms,omitempty"`
-	Status     BeeperStreamStatus          `json:"status"`
 	Encryption *BeeperStreamEncryptionInfo `json:"encryption,omitempty"`
 }
-
-type BeeperStreamStatus string
-
-const (
-	BeeperStreamStatusActive    BeeperStreamStatus = "active"
-	BeeperStreamStatusComplete  BeeperStreamStatus = "complete"
-	BeeperStreamStatusCancelled BeeperStreamStatus = "cancelled"
-)
 
 func (info *BeeperStreamInfo) Clone() *BeeperStreamInfo {
 	if info == nil {
@@ -249,11 +240,6 @@ func (info *BeeperStreamInfo) Validate() error {
 	} else if info.UserID == "" || info.Type == "" {
 		return fmt.Errorf("missing beeper stream descriptor fields")
 	}
-	switch info.Status {
-	case BeeperStreamStatusActive, BeeperStreamStatusComplete, BeeperStreamStatusCancelled:
-	default:
-		return fmt.Errorf("invalid beeper stream status %q", info.Status)
-	}
 	if info.Encryption == nil {
 		return nil
 	}
@@ -263,24 +249,6 @@ func (info *BeeperStreamInfo) Validate() error {
 		return fmt.Errorf("missing beeper stream encryption key")
 	}
 	return nil
-}
-
-func (info *BeeperStreamInfo) ValidateActive() error {
-	if info == nil {
-		return fmt.Errorf("missing beeper stream descriptor")
-	} else if info.Status != BeeperStreamStatusActive {
-		return fmt.Errorf("beeper stream descriptor must be active when using it")
-	}
-	return info.Validate()
-}
-
-func (info *BeeperStreamInfo) WithStatus(status BeeperStreamStatus) *BeeperStreamInfo {
-	cloned := info.Clone()
-	if cloned == nil {
-		return nil
-	}
-	cloned.Status = status
-	return cloned
 }
 
 type BeeperStreamEncryptionInfo struct {
@@ -298,14 +266,6 @@ type BeeperStreamSubscribeEventContent struct {
 type BeeperStreamUpdateEventContent struct {
 	RoomID  id.RoomID  `json:"room_id"`
 	EventID id.EventID `json:"event_id"`
-}
-
-type BeeperStreamEncryptedEventContent struct {
-	RoomID     id.RoomID    `json:"room_id"`
-	EventID    id.EventID   `json:"event_id"`
-	Algorithm  id.Algorithm `json:"algorithm"`
-	IV         string       `json:"iv"`
-	Ciphertext string       `json:"ciphertext"`
 }
 type BeeperEncodedOrder struct {
 	order    int64
