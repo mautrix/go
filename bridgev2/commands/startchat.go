@@ -220,6 +220,69 @@ func fnCreateGroup(ce *Event) {
 	ce.Reply("Successfully created group `%s`%s", resp.ID, postfix)
 }
 
+var CommandCreatePortal = &FullHandler{
+	Func: fnCreatePortal,
+	Name: "create-portal",
+	Help: HelpMeta{
+		Section:     HelpSectionChats,
+		Description: "Create a new Matrix room for an existing chat on the remote network",
+		Args:        "[login ID] <chat ID>",
+	},
+}
+
+func fnCreatePortal(ce *Event) {
+	if len(ce.Args) == 0 || len(ce.Args) > 2 {
+		ce.Reply("Usage: `$cmdprefix create-portal [login ID] <chat ID>`")
+		return
+	}
+	portalID := networkid.PortalID(ce.Args[len(ce.Args)-1])
+	var login *bridgev2.UserLogin
+	if len(ce.Args) == 2 {
+		loginID := networkid.UserLoginID(ce.Args[0])
+		login = ce.Bridge.GetCachedUserLoginByID(loginID)
+		if login == nil {
+			ce.Reply("No login found with ID %s", format.SafeMarkdownCode(loginID))
+			return
+		} else if login.UserMXID != ce.User.MXID && !ce.User.Permissions.Admin {
+			ce.Reply("Login %s does not belong to you", format.SafeMarkdownCode(loginID))
+			return
+		}
+	} else {
+		login = ce.User.GetDefaultLogin()
+		if login == nil {
+			ce.Reply("You're not logged in")
+			return
+		}
+	}
+	portal, err := ce.Bridge.GetExistingPortalByKey(ce.Ctx, networkid.PortalKey{
+		ID:       portalID,
+		Receiver: login.ID,
+	})
+	if err != nil {
+		ce.Log.Err(err).Msg("Failed to get portal")
+		ce.Reply("Failed to get portal")
+	} else if portal == nil {
+		ce.Reply("No portal found with ID %s", format.SafeMarkdownCode(portalID))
+	} else if portal.MXID != "" {
+		// TODO allow showing room ID if the user is already in the room, even if they don't have admin permissions
+		if ce.User.Permissions.Admin {
+			ce.Reply("That chat already has a Matrix room at [%s](%s)", portal.Name, portal.MXID.URI().MatrixToURL())
+		} else {
+			ce.Reply("That chat already has a Matrix room")
+		}
+	} else if info, err := login.Client.GetChatInfo(ce.Ctx, portal); err != nil {
+		ce.Log.Err(err).Msg("Failed to get chat info for creating portal")
+		ce.Reply("Failed to get chat info: %v", err)
+	} else if info == nil {
+		ce.Reply("Chat info not found")
+	} else if err = portal.CreateMatrixRoom(ce.Ctx, login, info); err != nil {
+		ce.Log.Err(err).Msg("Failed to create portal room")
+		ce.Reply("Failed to create portal room: %v", err)
+	} else {
+		ce.Reply("Successfully created portal room [%s](%s)", portal.Name, portal.MXID.URI().MatrixToURL())
+	}
+}
+
 var CommandSearch = &FullHandler{
 	Func: fnSearch,
 	Name: "search",
