@@ -43,18 +43,23 @@ var CommandSyncChat = &FullHandler{
 		Description: "Sync the current portal room",
 	},
 	RequiresPortal: true,
-	RequiresLogin:  true,
 }
 
 func fnSyncChat(ce *Event) {
-	login, _, err := ce.Portal.FindPreferredLogin(ce.Ctx, ce.User, false)
+	login, _, err := ce.Portal.FindPreferredLogin(ce.Ctx, ce.User, true)
 	if err != nil {
 		ce.Log.Err(err).Msg("Failed to find login for sync")
 		ce.Reply("Failed to find login: %v", err)
 		return
 	} else if login == nil {
-		ce.Reply("No login found for sync")
-		return
+		if ce.Portal.Relay == nil {
+			ce.Reply("No login found for sync")
+			return
+		} else if !canManageRelay(ce) {
+			ce.Reply("Only users with relay management permissions can use sync-portal through the relay")
+			return
+		}
+		login = ce.Portal.Relay
 	}
 	info, err := login.Client.GetChatInfo(ce.Ctx, ce.Portal)
 	if err != nil {
