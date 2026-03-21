@@ -50,20 +50,23 @@ var CommandStartChat = &FullHandler{
 	NetworkAPI:    NetworkAPIImplements[bridgev2.IdentifierResolvingNetworkAPI],
 }
 
-func getClientForStartingChat[T bridgev2.NetworkAPI](ce *Event, thing string) (*bridgev2.UserLogin, T, []string) {
-	var remainingArgs []string
+func getClientForStartingChat[T bridgev2.NetworkAPI](ce *Event, thing string) (login *bridgev2.UserLogin, api T, remainingArgs []string) {
 	if len(ce.Args) > 1 {
 		remainingArgs = ce.Args[1:]
 	}
-	var login *bridgev2.UserLogin
 	if len(ce.Args) > 0 {
 		login = ce.Bridge.GetCachedUserLoginByID(networkid.UserLoginID(ce.Args[0]))
 	}
 	if login == nil || login.UserMXID != ce.User.MXID {
 		remainingArgs = ce.Args
 		login = ce.User.GetDefaultLogin()
+		if login == nil {
+			ce.Reply("You're not logged in")
+			return
+		}
 	}
-	api, ok := login.Client.(T)
+	var ok bool
+	api, ok = login.Client.(T)
 	if !ok {
 		ce.Reply("This bridge does not support %s", thing)
 	}
