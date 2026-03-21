@@ -43,6 +43,26 @@ type sendToDeviceRecorder struct {
 	requests chan capturedSendToDeviceRequest
 }
 
+type testEventProcessor struct {
+	handlers map[event.Type][]func(context.Context, *event.Event)
+}
+
+func newTestEventProcessor() *testEventProcessor {
+	return &testEventProcessor{
+		handlers: make(map[event.Type][]func(context.Context, *event.Event)),
+	}
+}
+
+func (ep *testEventProcessor) On(evtType event.Type, handler func(context.Context, *event.Event)) {
+	ep.handlers[evtType] = append(ep.handlers[evtType], handler)
+}
+
+func (ep *testEventProcessor) Dispatch(ctx context.Context, evt *event.Event) {
+	for _, handler := range ep.handlers[evt.Type] {
+		handler(ctx, evt)
+	}
+}
+
 func newSendToDeviceRecorderServer(t *testing.T) (*httptest.Server, *sendToDeviceRecorder) {
 	t.Helper()
 	recorder := &sendToDeviceRecorder{
@@ -172,6 +192,24 @@ func newTestEncryptedUpdateEvent(t *testing.T, descriptor *event.BeeperStreamInf
 	}
 }
 
+func rawifyEventContent(t *testing.T, evt *event.Event) *event.Event {
+	t.Helper()
+	require.NotNil(t, evt)
+	raw, err := evt.Content.MarshalJSON()
+	require.NoError(t, err)
+	return &event.Event{
+		Sender:     evt.Sender,
+		Type:       evt.Type,
+		ToUserID:   evt.ToUserID,
+		ToDeviceID: evt.ToDeviceID,
+		RoomID:     evt.RoomID,
+		ID:         evt.ID,
+		Content: event.Content{
+			VeryRaw: raw,
+		},
+	}
+}
+
 func decodeJSONMap(t *testing.T, data []byte) map[string]any {
 	t.Helper()
 	var parsed map[string]any
@@ -295,6 +333,34 @@ func TestHelperHandleSyncResponseForwardsBridgeSubscribe(t *testing.T) {
 	assertStreamUpdateMap(t, decodeJSONMap(t, recorder.rawContent(t, req, testStreamSubscriberID, testStreamSubscriberDev)))
 }
 
+func TestHelperInitAppserviceForwardsEncryptedBridgeSubscribe(t *testing.T) {
+	ts, recorder := newSendToDeviceRecorderServer(t)
+	client := newTestStreamClient(t, ts.URL, testStreamBotUserID, testStreamPublisherDev)
+	streams := newTestHelper(t, client)
+	processor := newTestEventProcessor()
+	descriptor := newTestDescriptor(true)
+
+	require.NoError(t, streams.InitAppservice(context.Background(), processor))
+	require.NoError(t, streams.Register(context.Background(), testStreamRoomID, testStreamEventID, descriptor))
+
+	processor.Dispatch(context.Background(), newTestEncryptedSubscribeEvent(t, descriptor))
+
+	require.NoError(t, streams.Publish(context.Background(), testStreamRoomID, testStreamEventID, newTestPublishContent("hello")))
+	req := recorder.next(t)
+	require.Contains(t, req.path, "/sendToDevice/m.room.encrypted/")
+	rawContent := recorder.rawContent(t, req, testStreamSubscriberID, testStreamSubscriberDev)
+	var payload event.EncryptedEventContent
+	require.NoError(t, json.Unmarshal(rawContent, &payload))
+	logicalType, payloadContent, err := decryptLogicalEvent(&payload, descriptor.Encryption.Key)
+	require.NoError(t, err)
+	require.Equal(t, event.ToDeviceBeeperStreamUpdate, logicalType)
+	var parsed map[string]any
+	require.NoError(t, json.Unmarshal(payloadContent, &parsed))
+	parsed["room_id"] = testStreamRoomID
+	parsed["event_id"] = testStreamEventID
+	assertStreamUpdateMap(t, parsed)
+}
+
 func TestHelperHandleSyncResponseIgnoresWrongDevice(t *testing.T) {
 	ts, recorder := newSendToDeviceRecorderServer(t)
 	client := newTestStreamClient(t, ts.URL, testStreamBotUserID, testStreamPublisherDev)
@@ -385,6 +451,28 @@ func TestHelperHandleSyncResponseReturnsNormalizedEvents(t *testing.T) {
 	require.Equal(t, testStreamRoomID, update.RoomID)
 	require.Equal(t, testStreamEventID, update.EventID)
 	require.Contains(t, normalized[0].Content.Raw, testStreamDeltaKey)
+}
+
+func TestHelperHandleSyncResponseParsesRawEncryptedEvents(t *testing.T) {
+	ts, recorder := newSendToDeviceRecorderServer(t)
+	client := newTestStreamClient(t, ts.URL, testStreamSubscriberID, "RECEIVER")
+	streams := newTestHelper(t, client)
+	descriptor := newTestDescriptor(true)
+
+	require.NoError(t, streams.Subscribe(context.Background(), testStreamRoomID, testStreamEventID, descriptor))
+	t.Cleanup(func() { streams.Unsubscribe(testStreamRoomID, testStreamEventID) })
+	_ = recorder.next(t)
+
+	rawEvt := rawifyEventContent(t, newTestEncryptedUpdateEvent(t, descriptor))
+	normalized := streams.HandleSyncResponse(context.Background(), &mautrix.RespSync{
+		ToDevice: mautrix.SyncEventsList{Events: []*event.Event{rawEvt}},
+	})
+
+	require.Len(t, normalized, 1)
+	require.Equal(t, event.ToDeviceBeeperStreamUpdate, normalized[0].Type)
+	update := normalized[0].Content.AsBeeperStreamUpdate()
+	require.Equal(t, testStreamRoomID, update.RoomID)
+	require.Equal(t, testStreamEventID, update.EventID)
 }
 
 func TestHelperInitIsIdempotent(t *testing.T) {

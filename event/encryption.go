@@ -52,6 +52,14 @@ type EncryptedEventContent struct {
 	Mentions  *Mentions  `json:"m.mentions,omitempty"`
 }
 
+func (content *EncryptedEventContent) IsBeeperStream() bool {
+	return content != nil &&
+		content.Algorithm == id.AlgorithmBeeperStreamAESGCM &&
+		content.RoomID != "" &&
+		content.EventID != "" &&
+		len(content.Ciphertext) > 0
+}
+
 type OlmCiphertexts map[id.Curve25519]struct {
 	Body string        `json:"body"`
 	Type id.OlmMsgType `json:"type"`

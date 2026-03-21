@@ -9,6 +9,7 @@ package beeperstream
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"sync"
@@ -48,6 +49,7 @@ type Helper struct {
 
 	initLock        sync.Mutex
 	syncInitialized bool
+	asInitialized   bool
 	closed          atomic.Bool
 
 	now func() time.Time
@@ -98,6 +100,28 @@ func (h *Helper) Init(_ context.Context) error {
 		dispatcher.Dispatch,
 	)
 	h.syncInitialized = true
+	return nil
+}
+
+// InitAppservice attaches beeper stream handling to an appservice event processor.
+func (h *Helper) InitAppservice(_ context.Context, ep interface {
+	On(event.Type, func(context.Context, *event.Event))
+	Dispatch(context.Context, *event.Event)
+}) error {
+	if h == nil {
+		return fmt.Errorf("beeper stream helper is nil")
+	} else if h.closed.Load() {
+		return fmt.Errorf("beeper stream helper is closed")
+	} else if ep == nil {
+		return fmt.Errorf("beeper stream appservice event processor is nil")
+	}
+	h.initLock.Lock()
+	defer h.initLock.Unlock()
+	if h.asInitialized {
+		return nil
+	}
+	h.registerIngressAdapter(ep.On, ep.Dispatch)
+	h.asInitialized = true
 	return nil
 }
 
@@ -175,11 +199,26 @@ func (h *Helper) HandleSyncResponse(ctx context.Context, resp *mautrix.RespSync)
 	}
 	var normalized []*event.Event
 	for _, evt := range resp.ToDevice.Events {
+		prepareToDeviceEvent(evt)
 		if evt := h.handleEvent(ctx, evt); evt != nil {
 			normalized = append(normalized, evt)
 		}
 	}
 	return normalized
+}
+
+func prepareToDeviceEvent(evt *event.Event) {
+	if evt == nil {
+		return
+	}
+	evt.Type.Class = event.ToDeviceEventType
+	if evt.Content.Parsed != nil || len(evt.Content.VeryRaw) == 0 {
+		return
+	}
+	err := evt.Content.ParseRaw(evt.Type)
+	if err != nil && !errors.Is(err, event.ErrContentAlreadyParsed) {
+		evt.Content.Parsed = nil
+	}
 }
 
 func (h *Helper) handleEvent(ctx context.Context, evt *event.Event) *event.Event {
@@ -197,7 +236,7 @@ func (h *Helper) handleEvent(ctx context.Context, evt *event.Event) *event.Event
 
 func (h *Helper) handleEncryptedEvent(ctx context.Context, evt *event.Event) *event.Event {
 	content := evt.Content.AsEncrypted()
-	if content.Algorithm != id.AlgorithmBeeperStreamAESGCM || content.RoomID == "" || content.EventID == "" || len(content.Ciphertext) == 0 {
+	if !content.IsBeeperStream() {
 		return nil
 	}
 	key := streamKey{roomID: content.RoomID, eventID: content.EventID}

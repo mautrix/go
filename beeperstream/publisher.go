@@ -329,7 +329,7 @@ func (h *Helper) tryPendingSubscribe(ctx context.Context, candidate pendingSubsc
 		return h.handleSubscribe(ctx, candidate.evt.Sender, subscribe)
 	case event.ToDeviceEncrypted:
 		content := candidate.evt.Content.AsEncrypted()
-		if content.Algorithm != id.AlgorithmBeeperStreamAESGCM || content.RoomID == "" || content.EventID == "" {
+		if !content.IsBeeperStream() {
 			return false
 		}
 		h.lock.RLock()
@@ -358,7 +358,7 @@ func pendingSubscribeKey(evt *event.Event) (streamKey, bool) {
 		return streamKey{roomID: content.RoomID, eventID: content.EventID}, true
 	case event.ToDeviceEncrypted:
 		content := evt.Content.AsEncrypted()
-		if content.Algorithm != id.AlgorithmBeeperStreamAESGCM || content.RoomID == "" || content.EventID == "" {
+		if !content.IsBeeperStream() {
 			return streamKey{}, false
 		}
 		return streamKey{roomID: content.RoomID, eventID: content.EventID}, true
