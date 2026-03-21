@@ -385,7 +385,7 @@ encryption:
     # Whether to require all messages to be encrypted and drop any unencrypted messages.
     require: false
     # Whether to use MSC3202/MSC4203 instead of /sync long polling for receiving encryption-related data.
-    # This option is not yet compatible with standard Matrix servers like Synapse and should not be used.
+    # This is an experimental option, see the docs for more info.
     # Changing this option requires updating the appservice registration file.
     appservice: false
     # Whether to use MSC4190 instead of appservice login to create the bridge bot device.
@@ -394,6 +394,7 @@ encryption:
     # Changing this option requires updating the appservice registration file.
     msc4190: false
     # Whether to encrypt reactions and reply metadata as per MSC4392.
+    # This is not supported by most clients.
     msc4392: false
     # Should the bridge bot generate a recovery key and cross-signing keys and verify itself?
     # Note that without the latest version of MSC4190, this will fail if you reset the bridge database.
