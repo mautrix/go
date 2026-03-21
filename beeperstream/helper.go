@@ -47,10 +47,9 @@ type Helper struct {
 	pendingLock      sync.Mutex
 	pendingSubscribe []pendingSubscribeEvent
 
-	initLock        sync.Mutex
-	syncInitialized bool
-	asInitialized   bool
-	closed          atomic.Bool
+	initLock    sync.Mutex
+	initialized bool
+	closed      atomic.Bool
 
 	now func() time.Time
 }
@@ -82,7 +81,7 @@ func (h *Helper) Init(_ context.Context) error {
 	}
 	h.initLock.Lock()
 	defer h.initLock.Unlock()
-	if h.syncInitialized {
+	if h.initialized {
 		return nil
 	}
 	syncer, ok := h.client.Syncer.(mautrix.ExtensibleSyncer)
@@ -99,7 +98,7 @@ func (h *Helper) Init(_ context.Context) error {
 		},
 		dispatcher.Dispatch,
 	)
-	h.syncInitialized = true
+	h.initialized = true
 	return nil
 }
 
@@ -117,11 +116,11 @@ func (h *Helper) InitAppservice(_ context.Context, ep interface {
 	}
 	h.initLock.Lock()
 	defer h.initLock.Unlock()
-	if h.asInitialized {
+	if h.initialized {
 		return nil
 	}
 	h.registerIngressAdapter(ep.On, ep.Dispatch)
-	h.asInitialized = true
+	h.initialized = true
 	return nil
 }
 
