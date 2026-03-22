@@ -5324,6 +5324,8 @@ func (portal *Portal) RemoveMXID(ctx context.Context) error {
 		return nil
 	}
 	portal.MXID = ""
+	portal.Relay = nil
+	portal.RelayLoginID = ""
 	portal.RoomCreated.Clear()
 	err := portal.Save(ctx)
 	if err != nil {

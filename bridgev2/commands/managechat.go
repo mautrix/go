@@ -35,6 +35,126 @@ var CommandID = &FullHandler{
 	RequiresPortal: true,
 }
 
+var CommandBridge = &FullHandler{
+	Func: fnBridge,
+	Name: "bridge",
+	Help: HelpMeta{
+		Section:     HelpSectionChats,
+		Description: "Bridge an existing chat on the remote network to this Matrix room",
+		Args:        "[login ID] <chat ID>",
+	},
+	RequiresEventLevel: event.StateBridge,
+}
+
+func fnBridge(ce *Event) {
+	if len(ce.Args) == 0 || len(ce.Args) > 2 {
+		ce.Reply("Usage: `$cmdprefix bridge [login ID] <chat ID>`")
+		return
+	} else if !canPlumb(ce) {
+		ce.Reply("You don't have permission to bridge this room")
+		return
+	} else if ce.Portal != nil {
+		ce.Reply("This room is already bridged")
+		return
+	}
+	var allowOverwrite, ignorePermissions bool
+	ce.Args = slices.DeleteFunc(ce.Args, func(s string) bool {
+		switch strings.ToLower(s) {
+		case "--overwrite":
+			allowOverwrite = true
+			return true
+		case "--ignore-permissions":
+			ignorePermissions = true
+			return true
+		default:
+			return false
+		}
+	})
+	if !ignorePermissions {
+		pls, err := ce.Bridge.Matrix.GetPowerLevels(ce.Ctx, ce.RoomID)
+		if err != nil {
+			ce.Log.Err(err).Msg("Failed to get power levels for plumbing")
+			ce.Reply("Failed to check power levels in room: %v", err)
+			return
+		} else if pls.GetUserLevel(ce.Bot.GetMXID()) < pls.GetEventLevel(event.StateBridge) {
+			ce.Reply("I don't have sufficient permissions for `m.bridge` events. Adjust power levels or use the `--ignore-permissions` flag to ignore.")
+			return
+		}
+	}
+	portal, login, ok := getCreatePortalInput(ce, ce.Bridge.Config.Relay.AllowBridge)
+	if !ok {
+		return
+	} else if portal.MXID != "" {
+		// TODO check overwrite permissions
+		canOverwrite := ce.User.Permissions.Admin || hasRoomPermissions(ce, portal.MXID, fakeEvtPlumb)
+		if !canOverwrite {
+			ce.Reply("That chat is already bridged to another room, and you don't have the permission to delete it.")
+			return
+		} else if !allowOverwrite {
+			ce.Reply("That chat is already bridged to [%s](%s). Use `--overwrite` to delete the existing room.", portal.Name, portal.MXID.URI().MatrixToURL())
+			return
+		}
+	}
+	if info, err := login.Client.GetChatInfo(ce.Ctx, portal); err != nil {
+		ce.Log.Err(err).Msg("Failed to get chat info for plumbing")
+		ce.Reply("Failed to get chat info: %v", err)
+	} else if info == nil {
+		ce.Reply("Chat info not found")
+	} else if err = portal.UpdateMatrixRoomID(ce.Ctx, ce.RoomID, bridgev2.UpdateMatrixRoomIDParams{
+		FailIfMXIDSet:    !allowOverwrite,
+		TombstoneOldRoom: true,
+		DeleteOldRoom:    true,
+		ChatInfo:         info,
+		ChatInfoSource:   login,
+	}); err != nil {
+		ce.Log.Err(err).Msg("Failed to plumb room")
+		ce.Reply("Failed to plumb room: %v", err)
+	} else {
+		var relaySuffix string
+		if slices.Contains(ce.Bridge.Config.Relay.DefaultRelays, login.ID) {
+			err = portal.SetRelay(ce.Ctx, login)
+			if err != nil {
+				ce.Log.Err(err).Msg("Failed to set relay for portal after plumbing")
+				relaySuffix = fmt.Sprintf(", but failed to set %s as relay", format.SafeMarkdownCode(login.ID))
+			} else {
+				relaySuffix = fmt.Sprintf(" and set %s as relay", format.SafeMarkdownCode(login.ID))
+			}
+		}
+		ce.Reply(
+			"Successfully plumbed this room to %s on %s%s",
+			format.SafeMarkdownCode(portal.ID),
+			ce.Bridge.Network.GetName().DisplayName,
+			relaySuffix,
+		)
+	}
+}
+
+var CommandUnbridge = &FullHandler{
+	Func: func(ce *Event) {
+		if !canPlumb(ce) {
+			ce.Reply("You don't have permission to unbridge this portal")
+			return
+		}
+		mxid := ce.Portal.MXID
+		err := ce.Portal.RemoveMXID(ce.Ctx)
+		if err != nil {
+			ce.Reply("Failed to remove portal mxid: %v", err)
+			return
+		}
+		err = ce.Bot.DeleteRoom(ce.Ctx, mxid, true)
+		if err != nil {
+			ce.Reply("Failed to clean up room: %v", err)
+		}
+		ce.MessageStatus.DisableMSS = true
+	},
+	Name: "unbridge",
+	Help: HelpMeta{
+		Section:     HelpSectionChats,
+		Description: "Unbridge the current portal room",
+	},
+	RequiresPortal: true,
+}
+
 var CommandSyncChat = &FullHandler{
 	Func: fnSyncChat,
 	Name: "sync-portal",
@@ -46,7 +166,7 @@ var CommandSyncChat = &FullHandler{
 }
 
 func fnSyncChat(ce *Event) {
-	login, _, err := ce.Portal.FindPreferredLogin(ce.Ctx, ce.User, true)
+	login, _, err := ce.Portal.FindPreferredLogin(ce.Ctx, ce.User, ce.Bridge.Config.Relay.AllowBridge)
 	if err != nil {
 		ce.Log.Err(err).Msg("Failed to find login for sync")
 		ce.Reply("Failed to find login: %v", err)

@@ -233,31 +233,41 @@ var CommandCreatePortal = &FullHandler{
 	},
 }
 
-func fnCreatePortal(ce *Event) {
-	if len(ce.Args) == 0 || len(ce.Args) > 2 {
-		ce.Reply("Usage: `$cmdprefix create-portal [login ID] <chat ID>`")
-		return
-	}
+func getCreatePortalInput(ce *Event, allowRelay bool) (portal *bridgev2.Portal, login *bridgev2.UserLogin, ok bool) {
 	portalID := networkid.PortalID(ce.Args[len(ce.Args)-1])
-	var login *bridgev2.UserLogin
 	if len(ce.Args) == 2 {
 		loginID := networkid.UserLoginID(ce.Args[0])
 		login = ce.Bridge.GetCachedUserLoginByID(loginID)
 		if login == nil {
 			ce.Reply("No login found with ID %s", format.SafeMarkdownCode(loginID))
 			return
-		} else if login.UserMXID != ce.User.MXID && !ce.User.Permissions.Admin {
+		} else if login.UserMXID != ce.User.MXID &&
+			!(ce.User.Permissions.Admin || (allowRelay && slices.Contains(ce.Bridge.Config.Relay.DefaultRelays, login.ID))) {
 			ce.Reply("Login %s does not belong to you", format.SafeMarkdownCode(loginID))
 			return
 		}
-	} else {
-		login = ce.User.GetDefaultLogin()
-		if login == nil {
+	} else if login = ce.User.GetDefaultLogin(); login == nil {
+		if !allowRelay || len(ce.Bridge.Config.Relay.DefaultRelays) == 0 {
 			ce.Reply("You're not logged in")
 			return
 		}
+		for _, relayID := range ce.Bridge.Config.Relay.DefaultRelays {
+			login = ce.Bridge.GetCachedUserLoginByID(relayID)
+			if login != nil {
+				break
+			}
+		}
+		if login == nil {
+			ce.Reply("You're not logged in and none of the default relays were found")
+			return
+		}
 	}
-	portal, err := ce.Bridge.GetExistingPortalByKey(ce.Ctx, networkid.PortalKey{
+	if !login.Client.IsLoggedIn() {
+		ce.Reply("Login %s is not logged in", format.SafeMarkdownCode(login.ID))
+		return
+	}
+	var err error
+	portal, err = ce.Bridge.GetExistingPortalByKey(ce.Ctx, networkid.PortalKey{
 		ID:       portalID,
 		Receiver: login.ID,
 	})
@@ -266,7 +276,22 @@ func fnCreatePortal(ce *Event) {
 		ce.Reply("Failed to get portal")
 	} else if portal == nil {
 		ce.Reply("No portal found with ID %s. Try `$cmdprefix filter allow` instead", format.SafeMarkdownCode(portalID))
-	} else if portal.MXID != "" {
+	} else {
+		ok = true
+	}
+	return
+}
+
+func fnCreatePortal(ce *Event) {
+	if len(ce.Args) == 0 || len(ce.Args) > 2 {
+		ce.Reply("Usage: `$cmdprefix create-portal [login ID] <chat ID>`")
+		return
+	}
+	portal, login, ok := getCreatePortalInput(ce, false)
+	if !ok {
+		return
+	}
+	if portal.MXID != "" {
 		// TODO allow showing room ID if the user is already in the room, even if they don't have admin permissions
 		if ce.User.Permissions.Admin {
 			ce.Reply("That chat already has a Matrix room at [%s](%s)", portal.Name, portal.MXID.URI().MatrixToURL())

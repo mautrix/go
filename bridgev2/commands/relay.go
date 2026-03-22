@@ -12,9 +12,13 @@ import (
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/id"
 )
 
-var fakeEvtSetRelay = event.Type{Type: "fi.mau.bridge.set_relay", Class: event.StateEventType}
+var (
+	fakeEvtSetRelay = event.Type{Type: "fi.mau.bridge.set_relay", Class: event.StateEventType}
+	fakeEvtPlumb    = event.Type{Type: "fi.mau.bridge.plumb", Class: event.StateEventType}
+)
 
 var CommandSetRelay = &FullHandler{
 	Func: fnSetRelay,
@@ -143,14 +147,19 @@ func canManageRelay(ce *Event) bool {
 	return ce.User.Permissions.ManageRelay &&
 		(ce.User.Permissions.Admin ||
 			(ce.Portal.Relay != nil && ce.Portal.Relay.UserMXID == ce.User.MXID) ||
-			hasRelayRoomPermissions(ce))
+			hasRoomPermissions(ce, ce.RoomID, fakeEvtSetRelay))
 }
 
-func hasRelayRoomPermissions(ce *Event) bool {
-	levels, err := ce.Bridge.Matrix.GetPowerLevels(ce.Ctx, ce.RoomID)
+func canPlumb(ce *Event) bool {
+	return ce.User.Permissions.ManageRelay &&
+		(ce.User.Permissions.Admin || hasRoomPermissions(ce, ce.RoomID, fakeEvtPlumb))
+}
+
+func hasRoomPermissions(ce *Event, roomID id.RoomID, evtType event.Type) bool {
+	levels, err := ce.Bridge.Matrix.GetPowerLevels(ce.Ctx, roomID)
 	if err != nil {
 		ce.Log.Err(err).Msg("Failed to check room power levels")
 		return false
 	}
-	return levels.GetUserLevel(ce.User.MXID) >= levels.GetEventLevel(fakeEvtSetRelay)
+	return levels.GetUserLevel(ce.User.MXID) >= levels.GetEventLevel(evtType)
 }

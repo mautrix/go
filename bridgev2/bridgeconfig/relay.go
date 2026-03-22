@@ -21,6 +21,7 @@ import (
 type RelayConfig struct {
 	Enabled           bool                         `yaml:"enabled"`
 	AdminOnly         bool                         `yaml:"admin_only"`
+	AllowBridge       bool                         `yaml:"allow_bridge"`
 	DefaultRelays     []networkid.UserLoginID      `yaml:"default_relays"`
 	MessageFormats    map[event.MessageType]string `yaml:"message_formats"`
 	DisplaynameFormat string                       `yaml:"displayname_format"`
