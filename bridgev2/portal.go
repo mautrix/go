@@ -1982,9 +1982,12 @@ func (portal *Portal) handleMatrixMembership(
 	}
 
 	membershipChangeType := MembershipChangeType{From: prevContent.Membership, To: content.Membership, IsSelf: isSelf}
-	if !portal.Bridge.Config.BridgeMatrixLeave && membershipChangeType == Leave {
-		log.Debug().Msg("Dropping leave event")
-		return EventHandlingResultIgnored //.WithMSSError(ErrIgnoringLeaveEvent)
+	if membershipChangeType == Leave {
+		sender.inPortalCache.Remove(portal.PortalKey)
+		if !portal.Bridge.Config.BridgeMatrixLeave {
+			log.Debug().Msg("Dropping leave event")
+			return EventHandlingResultIgnored
+		}
 	}
 	targetGhost, _ := target.(*Ghost)
 	membershipChange := &MatrixMembershipChange{
@@ -2294,6 +2297,11 @@ func (portal *Portal) UpdateMatrixRoomID(
 	} else if oldRoom != "" && params.FailIfMXIDSet {
 		return ErrRoomAlreadyExists
 	}
+	err := portal.Bridge.DB.UserPortal.MarkAllNotInSpace(ctx, portal.PortalKey)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to update in_space flag for user portals before updating portal MXID")
+	}
+	portal.removeInPortalCache(ctx)
 	log := zerolog.Ctx(ctx)
 	portal.Bridge.cacheLock.Lock()
 	// Wrap unlock in a sync.OnceFunc because we want to both defer it to catch early returns
@@ -2305,17 +2313,17 @@ func (portal *Portal) UpdateMatrixRoomID(
 		return ErrTargetRoomIsPortal
 	} else if alreadyExists {
 		log.Debug().Msg("Replacement room is already a portal, overwriting")
-		existingPortal.MXID = ""
-		existingPortal.RoomCreated.Clear()
-		err := existingPortal.Save(ctx)
+		err = existingPortal.removeMXID(ctx, true)
 		if err != nil {
 			return fmt.Errorf("failed to clear mxid of existing portal: %w", err)
 		}
-		delete(portal.Bridge.portalsByMXID, portal.MXID)
 	}
 	portal.MXID = newRoomID
 	portal.RoomCreated.Set()
 	portal.Bridge.portalsByMXID[portal.MXID] = portal
+	if oldRoom != "" && portal.Bridge.portalsByMXID[oldRoom] == portal {
+		delete(portal.Bridge.portalsByMXID, oldRoom)
+	}
 	portal.NameSet = false
 	portal.AvatarSet = false
 	portal.TopicSet = false
@@ -2328,7 +2336,7 @@ func (portal *Portal) UpdateMatrixRoomID(
 	unlockCacheLock()
 	portal.updateLogger()
 
-	err := portal.Save(ctx)
+	err = portal.Save(ctx)
 	if err != nil {
 		log.Err(err).Msg("Failed to save portal in UpdateMatrixRoomID")
 		return err
@@ -5320,9 +5328,14 @@ func (portal *Portal) safeDBDelete(ctx context.Context) error {
 }
 
 func (portal *Portal) RemoveMXID(ctx context.Context) error {
+	return portal.removeMXID(ctx, false)
+}
+
+func (portal *Portal) removeMXID(ctx context.Context, alreadyLocked bool) error {
 	if portal.MXID == "" {
 		return nil
 	}
+	oldMXID := portal.MXID
 	portal.MXID = ""
 	portal.Relay = nil
 	portal.RelayLoginID = ""
@@ -5331,9 +5344,16 @@ func (portal *Portal) RemoveMXID(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	portal.Bridge.cacheLock.Lock()
-	defer portal.Bridge.cacheLock.Unlock()
-	delete(portal.Bridge.portalsByMXID, portal.MXID)
+	err = portal.Bridge.DB.UserPortal.MarkAllNotInSpace(ctx, portal.PortalKey)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to update in_space flag for user portals after removing portal MXID")
+	}
+	portal.removeInPortalCache(ctx)
+	if !alreadyLocked {
+		portal.Bridge.cacheLock.Lock()
+		defer portal.Bridge.cacheLock.Unlock()
+	}
+	delete(portal.Bridge.portalsByMXID, oldMXID)
 	return nil
 }
 
