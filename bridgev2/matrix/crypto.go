@@ -23,6 +23,7 @@ import (
 	"go.mau.fi/util/dbutil"
 
 	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/beeperstream"
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/crypto"
@@ -43,11 +44,12 @@ var DuplicateMessageIndex = crypto.ErrDuplicateMessageIndex
 var UnknownMessageIndex = olm.ErrUnknownMessageIndex
 
 type CryptoHelper struct {
-	bridge *Connector
-	client *mautrix.Client
-	mach   *crypto.OlmMachine
-	store  *SQLCryptoStore
-	log    *zerolog.Logger
+	bridge  *Connector
+	client  *mautrix.Client
+	mach    *crypto.OlmMachine
+	store   *SQLCryptoStore
+	log     *zerolog.Logger
+	streams *beeperstream.Helper
 
 	lock       sync.RWMutex
 	syncDone   sync.WaitGroup
@@ -128,7 +130,12 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 		}
 	}
 
-	helper.client.Syncer = &cryptoSyncer{helper.mach}
+	streams, err := beeperstream.New(helper.client)
+	if err != nil {
+		return err
+	}
+	helper.streams = streams
+	helper.client.Syncer = &cryptoSyncer{OlmMachine: helper.mach, handleSyncResponse: streams.HandleSyncResponse}
 	helper.client.Store = helper.store
 
 	err = helper.mach.Load(ctx)
@@ -352,6 +359,12 @@ func (helper *CryptoHelper) Start() {
 		helper.log.Debug().Msg("End-to-bridge encryption is in appservice mode, registering event listeners and not starting syncer")
 		helper.bridge.AS.Registration.EphemeralEvents = true
 		helper.mach.AddAppserviceListener(helper.bridge.EventProcessor)
+		if helper.streams != nil {
+			err := helper.streams.InitAppservice(context.Background(), helper.bridge.EventProcessor)
+			if err != nil {
+				helper.log.Err(err).Msg("Failed to initialize beeper stream appservice listener")
+			}
+		}
 		return
 	}
 	helper.syncDone.Add(1)
@@ -514,8 +527,16 @@ func (helper *CryptoHelper) ShareKeys(ctx context.Context) error {
 	return helper.mach.ShareKeys(ctx, -1)
 }
 
+func (helper *CryptoHelper) BeeperStreamPublisher() bridgev2.BeeperStreamPublisher {
+	if helper == nil {
+		return nil
+	}
+	return helper.streams
+}
+
 type cryptoSyncer struct {
 	*crypto.OlmMachine
+	handleSyncResponse func(context.Context, *mautrix.RespSync) []*event.Event
 }
 
 func (syncer *cryptoSyncer) ProcessResponse(ctx context.Context, resp *mautrix.RespSync, since string) error {
@@ -533,6 +554,9 @@ func (syncer *cryptoSyncer) ProcessResponse(ctx context.Context, resp *mautrix.R
 		}()
 		syncer.Log.Trace().Str("since", since).Msg("Starting sync response handling")
 		syncer.ProcessSyncResponse(ctx, resp, since)
+		if syncer.handleSyncResponse != nil {
+			syncer.handleSyncResponse(ctx, resp)
+		}
 		syncer.Log.Trace().Str("since", since).Msg("Successfully handled sync response")
 	}()
 	select {

@@ -294,6 +294,20 @@ func (br *Connector) GetCapabilities() *bridgev2.MatrixCapabilities {
 	return br.Capabilities
 }
 
+func (br *Connector) GetBeeperStreamPublisher() bridgev2.BeeperStreamPublisher {
+	type publisherProvider interface {
+		BeeperStreamPublisher() bridgev2.BeeperStreamPublisher
+	}
+	if br == nil || br.Crypto == nil {
+		return nil
+	}
+	provider, ok := br.Crypto.(publisherProvider)
+	if !ok {
+		return nil
+	}
+	return provider.BeeperStreamPublisher()
+}
+
 func sendStopSignal(ch chan struct{}) {
 	if ch != nil {
 		select {

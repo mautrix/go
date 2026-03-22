@@ -214,6 +214,59 @@ func (content *MessageEventContent) RemovePerMessageProfileFallback() {
 	}
 }
 
+type BeeperStreamInfo struct {
+	UserID     id.UserID                   `json:"user_id"`
+	DeviceID   id.DeviceID                 `json:"device_id,omitempty"`
+	Type       string                      `json:"type"`
+	ExpiryMS   int64                       `json:"expiry_ms,omitempty"`
+	Encryption *BeeperStreamEncryptionInfo `json:"encryption,omitempty"`
+}
+
+func (info *BeeperStreamInfo) Clone() *BeeperStreamInfo {
+	if info == nil {
+		return nil
+	}
+	cloned := *info
+	if info.Encryption != nil {
+		enc := *info.Encryption
+		cloned.Encryption = &enc
+	}
+	return &cloned
+}
+
+func (info *BeeperStreamInfo) Validate() error {
+	if info == nil {
+		return fmt.Errorf("missing beeper stream descriptor")
+	} else if info.UserID == "" || info.Type == "" {
+		return fmt.Errorf("missing beeper stream descriptor fields")
+	}
+	if info.Encryption == nil {
+		return nil
+	}
+	if info.Encryption.Algorithm != id.AlgorithmBeeperStreamAESGCM {
+		return fmt.Errorf("unsupported beeper stream encryption algorithm %q", info.Encryption.Algorithm)
+	} else if info.Encryption.Key == "" {
+		return fmt.Errorf("missing beeper stream encryption key")
+	}
+	return nil
+}
+
+type BeeperStreamEncryptionInfo struct {
+	Algorithm id.Algorithm `json:"algorithm"`
+	Key       string       `json:"key"`
+}
+
+type BeeperStreamSubscribeEventContent struct {
+	RoomID   id.RoomID   `json:"room_id"`
+	EventID  id.EventID  `json:"event_id"`
+	DeviceID id.DeviceID `json:"device_id"`
+	ExpiryMS int64       `json:"expiry_ms"`
+}
+
+type BeeperStreamUpdateEventContent struct {
+	RoomID  id.RoomID  `json:"room_id"`
+	EventID id.EventID `json:"event_id"`
+}
 type BeeperEncodedOrder struct {
 	order    int64
 	suborder int16
