@@ -135,7 +135,7 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 		return err
 	}
 	helper.streams = streams
-	helper.client.Syncer = &cryptoSyncer{OlmMachine: helper.mach, beeperStreams: streams}
+	helper.client.Syncer = &cryptoSyncer{OlmMachine: helper.mach, helper: helper}
 	helper.client.Store = helper.store
 
 	err = helper.mach.Load(ctx)
@@ -536,7 +536,7 @@ func (helper *CryptoHelper) BeeperStreamPublisher() bridgev2.BeeperStreamPublish
 
 type cryptoSyncer struct {
 	*crypto.OlmMachine
-	beeperStreams *beeperstream.Helper
+	helper *CryptoHelper
 }
 
 func (syncer *cryptoSyncer) ProcessResponse(ctx context.Context, resp *mautrix.RespSync, since string) error {
@@ -554,8 +554,8 @@ func (syncer *cryptoSyncer) ProcessResponse(ctx context.Context, resp *mautrix.R
 		}()
 		syncer.Log.Trace().Str("since", since).Msg("Starting sync response handling")
 		syncer.ProcessSyncResponse(ctx, resp, since)
-		if syncer.beeperStreams != nil {
-			syncer.beeperStreams.HandleSyncResponse(ctx, resp)
+		if syncer.helper.streams != nil {
+			syncer.helper.streams.HandleSyncResponse(ctx, resp)
 		}
 		syncer.Log.Trace().Str("since", since).Msg("Successfully handled sync response")
 	}()

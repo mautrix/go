@@ -491,6 +491,7 @@ func (content *Content) AsBeeperStreamUpdate() *BeeperStreamUpdateEventContent {
 	}
 	return casted
 }
+
 func (content *Content) AsCallInvite() *CallInviteEventContent {
 	casted, ok := content.Parsed.(*CallInviteEventContent)
 	if !ok {
