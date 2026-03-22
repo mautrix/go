@@ -2492,7 +2492,7 @@ func (portal *Portal) handleRemoteEvent(ctx context.Context, source *UserLogin, 
 	log := zerolog.Ctx(ctx)
 	if portal.MXID == "" {
 		mcp, ok := evt.(RemoteEventThatMayCreatePortal)
-		if !ok || !mcp.ShouldCreatePortal() || !portal.Bridge.Config.PortalCreateFilter.ShouldAllow(portal.PortalKey) {
+		if !ok || !mcp.ShouldCreatePortal() || !portal.Bridge.Config.PortalCreateFilter.ShouldAllow(source.ID, portal.PortalKey) {
 			log.Debug().Msg("Dropping event as portal doesn't exist")
 			return EventHandlingResultIgnored
 		}

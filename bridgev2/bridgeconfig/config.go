@@ -185,9 +185,14 @@ const (
 type PortalCreateFilter struct {
 	Mode PortalCreateFilterMode    `yaml:"mode"`
 	List []*PortalCreateFilterItem `yaml:"list"`
+
+	AlwaysDenyFromLogin []networkid.UserLoginID `yaml:"always_deny_from_login"`
 }
 
-func (pcf *PortalCreateFilter) ShouldAllow(key networkid.PortalKey) bool {
+func (pcf *PortalCreateFilter) ShouldAllow(source networkid.UserLoginID, key networkid.PortalKey) bool {
+	if slices.Contains(pcf.AlwaysDenyFromLogin, source) {
+		return false
+	}
 	match := slices.ContainsFunc(pcf.List, func(item *PortalCreateFilterItem) bool {
 		return item.Matches(key)
 	})

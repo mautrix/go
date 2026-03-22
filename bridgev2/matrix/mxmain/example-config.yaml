@@ -128,6 +128,10 @@ bridge:
         # Items here can either be the plain portal ID as a string, or an object with `id` and `receiver` fields.
         # The receiver field is necessary if you want to target a specific DM portal for example.
         list: []
+        # A list of user login IDs from which to always deny creating portals.
+        # This is meant to be used with default relays, such that the relay bot
+        # being added to a group wouldn't automatically trigger portal creation.
+        always_deny_from_login: []
 
     # Permissions for using the bridge.
     # Permitted values:
