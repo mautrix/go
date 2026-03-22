@@ -138,6 +138,7 @@ type MessageEventContent struct {
 	BeeperActionMessage      *BeeperActionMessage     `json:"com.beeper.action_message,omitempty"`
 
 	BeeperLinkPreviews []*BeeperLinkPreview `json:"com.beeper.linkpreviews,omitempty"`
+	BeeperStream       *BeeperStreamInfo    `json:"com.beeper.stream,omitempty"`
 
 	BeeperDisappearingTimer *BeeperDisappearingTimer `json:"com.beeper.disappearing_timer,omitempty"`
 
