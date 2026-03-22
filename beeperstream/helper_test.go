@@ -148,14 +148,14 @@ func newTestEncryptedSubscribeEvent(t *testing.T, descriptor *event.BeeperStream
 		"expiry_ms": 60_000,
 	})
 	require.NoError(t, err)
-	encrypted, err := encryptLogicalEvent(event.ToDeviceBeeperStreamSubscribe, payload, testStreamRoomID, testStreamEventID, descriptor.Encryption.Key)
+	encContent, err := encryptLogicalEvent(event.ToDeviceBeeperStreamSubscribe, payload, testStreamRoomID, testStreamEventID, descriptor.Encryption.Key)
 	require.NoError(t, err)
 	return &event.Event{
 		Sender:     testStreamSubscriberID,
 		ToUserID:   testStreamBotUserID,
 		ToDeviceID: testStreamPublisherDev,
 		Type:       event.ToDeviceEncrypted,
-		Content:    event.Content{Parsed: encrypted},
+		Content:    *encContent,
 	}
 }
 
@@ -183,12 +183,12 @@ func newTestEncryptedUpdateEvent(t *testing.T, descriptor *event.BeeperStreamInf
 	require.NoError(t, err)
 	payload, err := json.Marshal(removeStreamRouting(raw))
 	require.NoError(t, err)
-	encrypted, err := encryptLogicalEvent(event.ToDeviceBeeperStreamUpdate, payload, testStreamRoomID, testStreamEventID, descriptor.Encryption.Key)
+	encContent, err := encryptLogicalEvent(event.ToDeviceBeeperStreamUpdate, payload, testStreamRoomID, testStreamEventID, descriptor.Encryption.Key)
 	require.NoError(t, err)
 	return &event.Event{
 		Sender:  testStreamBotUserID,
 		Type:    event.ToDeviceEncrypted,
-		Content: event.Content{Parsed: encrypted},
+		Content: *encContent,
 	}
 }
 
@@ -300,9 +300,9 @@ func TestHelperReplayPendingEncryptedSubscribeOnRegister(t *testing.T) {
 	req := recorder.next(t)
 	require.Contains(t, req.path, "/sendToDevice/m.room.encrypted/")
 	rawContent := recorder.rawContent(t, req, testStreamSubscriberID, testStreamSubscriberDev)
-	var payload event.EncryptedEventContent
-	require.NoError(t, json.Unmarshal(rawContent, &payload))
-	logicalType, payloadContent, err := decryptLogicalEvent(&payload, descriptor.Encryption.Key)
+	var encContent event.Content
+	require.NoError(t, json.Unmarshal(rawContent, &encContent))
+	logicalType, payloadContent, err := decryptLogicalEvent(&encContent, descriptor.Encryption.Key)
 	require.NoError(t, err)
 	require.Equal(t, event.ToDeviceBeeperStreamUpdate, logicalType)
 	var parsed map[string]any
@@ -349,9 +349,9 @@ func TestHelperInitAppserviceForwardsEncryptedBridgeSubscribe(t *testing.T) {
 	req := recorder.next(t)
 	require.Contains(t, req.path, "/sendToDevice/m.room.encrypted/")
 	rawContent := recorder.rawContent(t, req, testStreamSubscriberID, testStreamSubscriberDev)
-	var payload event.EncryptedEventContent
-	require.NoError(t, json.Unmarshal(rawContent, &payload))
-	logicalType, payloadContent, err := decryptLogicalEvent(&payload, descriptor.Encryption.Key)
+	var encContent event.Content
+	require.NoError(t, json.Unmarshal(rawContent, &encContent))
+	logicalType, payloadContent, err := decryptLogicalEvent(&encContent, descriptor.Encryption.Key)
 	require.NoError(t, err)
 	require.Equal(t, event.ToDeviceBeeperStreamUpdate, logicalType)
 	var parsed map[string]any
@@ -583,10 +583,10 @@ func TestDecryptLogicalEventRejectsInvalidIV(t *testing.T) {
 	require.NoError(t, err)
 	payload, err := json.Marshal(removeStreamRouting(raw))
 	require.NoError(t, err)
-	encrypted, err := encryptLogicalEvent(event.ToDeviceBeeperStreamUpdate, payload, testStreamRoomID, testStreamEventID, descriptor.Encryption.Key)
+	encContent, err := encryptLogicalEvent(event.ToDeviceBeeperStreamUpdate, payload, testStreamRoomID, testStreamEventID, descriptor.Encryption.Key)
 	require.NoError(t, err)
 
-	encrypted.IV = "invalid"
-	_, _, err = decryptLogicalEvent(encrypted, descriptor.Encryption.Key)
+	encContent.Raw["iv"] = "invalid"
+	_, _, err = decryptLogicalEvent(encContent, descriptor.Encryption.Key)
 	require.Error(t, err)
 }

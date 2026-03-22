@@ -41,11 +41,7 @@ func (h *Helper) Subscribe(ctx context.Context, roomID id.RoomID, eventID id.Eve
 		existing.cancel()
 		delete(h.subscriptions, key)
 	}
-	subscribeCtx := context.Background()
-	if ctx != nil {
-		subscribeCtx = context.WithoutCancel(ctx)
-	}
-	subCtx, cancel := context.WithCancel(subscribeCtx)
+	subCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	sub := &subscription{
 		key:        key,
 		descriptor: descriptor.Clone(),
@@ -125,12 +121,12 @@ func (h *Helper) sendSubscribe(ctx context.Context, key streamKey, descriptor *e
 		if err != nil {
 			return err
 		}
-		encrypted, err := encryptLogicalEvent(event.ToDeviceBeeperStreamSubscribe, payload, key.roomID, key.eventID, descriptor.Encryption.Key)
+		encContent, err := encryptLogicalEvent(event.ToDeviceBeeperStreamSubscribe, payload, key.roomID, key.eventID, descriptor.Encryption.Key)
 		if err != nil {
 			return err
 		}
 		eventType = event.ToDeviceEncrypted
-		content = &event.Content{Parsed: encrypted}
+		content = encContent
 	}
 	_, err = client.SendToDevice(ctx, eventType, &mautrix.ReqSendToDevice{
 		Messages: map[id.UserID]map[id.DeviceID]*event.Content{
@@ -142,8 +138,8 @@ func (h *Helper) sendSubscribe(ctx context.Context, key streamKey, descriptor *e
 	return err
 }
 
-func (h *Helper) handleEncryptedForSubscriber(ctx context.Context, evt *event.Event, content *event.EncryptedEventContent, sub *subscription) *event.Event {
-	normalized := decryptedLogicalEvent(ctx, evt, content, sub.descriptor.Encryption.Key, event.ToDeviceBeeperStreamUpdate)
+func (h *Helper) handleEncryptedForSubscriber(ctx context.Context, evt *event.Event, sub *subscription) *event.Event {
+	normalized := decryptedLogicalEvent(ctx, evt, sub.descriptor.Encryption.Key, event.ToDeviceBeeperStreamUpdate)
 	if normalized == nil {
 		return nil
 	}

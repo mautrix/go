@@ -483,7 +483,7 @@ func (mach *OlmMachine) HandleToDeviceEvent(ctx context.Context, evt *event.Even
 	}
 	switch content := evt.Content.Parsed.(type) {
 	case *event.EncryptedEventContent:
-		if content.IsBeeperStream() {
+		if content.Algorithm == id.AlgorithmBeeperStreamAESGCM {
 			log.Debug().Msg("Skipping beeper stream encrypted to-device event in Olm machine")
 			return
 		}

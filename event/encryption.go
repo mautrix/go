@@ -38,26 +38,11 @@ type EncryptedEventContent struct {
 
 	Ciphertext json.RawMessage `json:"ciphertext"`
 
-	// Only present for com.beeper.stream.v1.aes-gcm events.
-	IV string `json:"iv,omitempty"`
-	// Only present for com.beeper.stream.v1.aes-gcm events. Used to route stream payloads.
-	RoomID id.RoomID `json:"room_id,omitempty"`
-	// Only present for com.beeper.stream.v1.aes-gcm events. Used to route stream payloads.
-	EventID id.EventID `json:"event_id,omitempty"`
-
 	MegolmCiphertext []byte         `json:"-"`
 	OlmCiphertext    OlmCiphertexts `json:"-"`
 
 	RelatesTo *RelatesTo `json:"m.relates_to,omitempty"`
 	Mentions  *Mentions  `json:"m.mentions,omitempty"`
-}
-
-func (content *EncryptedEventContent) IsBeeperStream() bool {
-	return content != nil &&
-		content.Algorithm == id.AlgorithmBeeperStreamAESGCM &&
-		content.RoomID != "" &&
-		content.EventID != "" &&
-		len(content.Ciphertext) > 0
 }
 
 type OlmCiphertexts map[id.Curve25519]struct {

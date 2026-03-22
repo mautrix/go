@@ -145,13 +145,11 @@ func (h *Helper) Close() error {
 
 	h.lock.Lock()
 	for key, sub := range h.subscriptions {
-		if sub != nil {
-			sub.cancel()
-		}
+		sub.cancel()
 		delete(h.subscriptions, key)
 	}
 	for key, state := range h.publishedStreams {
-		if state != nil && state.cleanup != nil {
+		if state.cleanup != nil {
 			state.cleanup.Stop()
 		}
 		delete(h.publishedStreams, key)
@@ -211,6 +209,9 @@ func prepareToDeviceEvent(evt *event.Event) {
 		return
 	}
 	evt.Type.Class = event.ToDeviceEventType
+	if len(evt.Content.VeryRaw) > 0 && evt.Content.Raw == nil {
+		_ = json.Unmarshal(evt.Content.VeryRaw, &evt.Content.Raw)
+	}
 	if evt.Content.Parsed != nil || len(evt.Content.VeryRaw) == 0 {
 		return
 	}
@@ -235,30 +236,39 @@ func (h *Helper) handleEvent(ctx context.Context, evt *event.Event) *event.Event
 
 func (h *Helper) handleEncryptedEvent(ctx context.Context, evt *event.Event) *event.Event {
 	content := evt.Content.AsEncrypted()
-	if !content.IsBeeperStream() {
+	if content.Algorithm != id.AlgorithmBeeperStreamAESGCM {
 		return nil
 	}
-	key := streamKey{roomID: content.RoomID, eventID: content.EventID}
+	evtRaw := evt.Content.Raw
+	roomID, _ := evtRaw["room_id"].(string)
+	eventID, _ := evtRaw["event_id"].(string)
+	if roomID == "" || eventID == "" || len(content.Ciphertext) == 0 {
+		return nil
+	}
+	key := streamKey{roomID: id.RoomID(roomID), eventID: id.EventID(eventID)}
 	h.lock.RLock()
 	published := h.publishedStreams[key]
 	sub := h.subscriptions[key]
 	h.lock.RUnlock()
 	if published != nil {
-		return h.handleEncryptedForPublisher(ctx, evt, content, published)
+		return h.handleEncryptedForPublisher(ctx, evt, published)
 	}
 	if sub != nil {
-		return h.handleEncryptedForSubscriber(ctx, evt, content, sub)
+		return h.handleEncryptedForSubscriber(ctx, evt, sub)
 	}
 	h.queuePendingSubscribe(ctx, evt)
 	return nil
 }
 
-func decryptedLogicalEvent(ctx context.Context, evt *event.Event, encrypted *event.EncryptedEventContent, base64Key string, expectedType event.Type) *event.Event {
-	logicalType, payload, err := decryptLogicalEvent(encrypted, base64Key)
+func decryptedLogicalEvent(ctx context.Context, evt *event.Event, base64Key string, expectedType event.Type) *event.Event {
+	evtRaw := evt.Content.Raw
+	roomID, _ := evtRaw["room_id"].(string)
+	eventID, _ := evtRaw["event_id"].(string)
+	logicalType, payload, err := decryptLogicalEvent(&evt.Content, base64Key)
 	if err != nil {
 		zerolog.Ctx(ctx).Debug().Err(err).
-			Stringer("room_id", encrypted.RoomID).
-			Stringer("event_id", encrypted.EventID).
+			Str("room_id", roomID).
+			Str("event_id", eventID).
 			Msg("Failed to decrypt beeper stream event")
 		return nil
 	}
@@ -269,12 +279,12 @@ func decryptedLogicalEvent(ctx context.Context, evt *event.Event, encrypted *eve
 	if err = json.Unmarshal(payload, &raw); err != nil {
 		return nil
 	}
-	parsed, err := contentFromRawMap(addStreamRouting(raw, encrypted.RoomID, encrypted.EventID))
+	parsed, err := contentFromRawMap(addStreamRouting(raw, id.RoomID(roomID), id.EventID(eventID)))
 	if err != nil || parsed.ParseRaw(logicalType) != nil {
 		return nil
 	}
 	normalized := *evt
-	normalized.RoomID = encrypted.RoomID
+	normalized.RoomID = id.RoomID(roomID)
 	normalized.Type = logicalType
 	normalized.Type.Class = event.ToDeviceEventType
 	normalized.Content = *parsed

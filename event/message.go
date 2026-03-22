@@ -229,10 +229,6 @@ func (content *MessageEventContent) SetEdit(original id.EventID) {
 	}
 }
 
-func (content *MessageEventContent) SetBeeperStream(info *BeeperStreamInfo) {
-	content.BeeperStream = info
-}
-
 // TextToHTML converts the given text to a HTML-safe representation by escaping HTML characters
 // and replacing newlines with <br/> tags.
 func TextToHTML(text string) string {

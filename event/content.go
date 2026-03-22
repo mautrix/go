@@ -483,6 +483,7 @@ func (content *Content) AsBeeperStreamSubscribe() *BeeperStreamSubscribeEventCon
 	}
 	return casted
 }
+
 func (content *Content) AsBeeperStreamUpdate() *BeeperStreamUpdateEventContent {
 	casted, ok := content.Parsed.(*BeeperStreamUpdateEventContent)
 	if !ok {

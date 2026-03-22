@@ -163,11 +163,11 @@ func (h *Helper) handleSubscribeEvent(ctx context.Context, evt *event.Event) {
 	h.queuePendingSubscribe(ctx, evt)
 }
 
-func (h *Helper) handleEncryptedForPublisher(ctx context.Context, evt *event.Event, content *event.EncryptedEventContent, state *publishedStream) *event.Event {
+func (h *Helper) handleEncryptedForPublisher(ctx context.Context, evt *event.Event, state *publishedStream) *event.Event {
 	if state.descriptor == nil || state.descriptor.Encryption == nil {
 		return nil
 	}
-	normalized := decryptedLogicalEvent(ctx, evt, content, state.descriptor.Encryption.Key, event.ToDeviceBeeperStreamSubscribe)
+	normalized := decryptedLogicalEvent(ctx, evt, state.descriptor.Encryption.Key, event.ToDeviceBeeperStreamSubscribe)
 	if normalized == nil {
 		return nil
 	}
@@ -233,12 +233,12 @@ func (h *Helper) sendUpdate(ctx context.Context, descriptor *event.BeeperStreamI
 		if err != nil {
 			return err
 		}
-		encrypted, err := encryptLogicalEvent(event.ToDeviceBeeperStreamUpdate, payload, updateInfo.RoomID, updateInfo.EventID, descriptor.Encryption.Key)
+		encContent, err := encryptLogicalEvent(event.ToDeviceBeeperStreamUpdate, payload, updateInfo.RoomID, updateInfo.EventID, descriptor.Encryption.Key)
 		if err != nil {
 			return err
 		}
 		eventType = event.ToDeviceEncrypted
-		content = &event.Content{Parsed: encrypted}
+		content = encContent
 	}
 	req := &mautrix.ReqSendToDevice{
 		Messages: make(map[id.UserID]map[id.DeviceID]*event.Content, len(subscribers)),
@@ -329,7 +329,7 @@ func (h *Helper) tryPendingSubscribe(ctx context.Context, candidate pendingSubsc
 		return h.handleSubscribe(ctx, candidate.evt.Sender, subscribe)
 	case event.ToDeviceEncrypted:
 		content := candidate.evt.Content.AsEncrypted()
-		if !content.IsBeeperStream() {
+		if content.Algorithm != id.AlgorithmBeeperStreamAESGCM {
 			return false
 		}
 		h.lock.RLock()
@@ -338,7 +338,7 @@ func (h *Helper) tryPendingSubscribe(ctx context.Context, candidate pendingSubsc
 		if state == nil {
 			return false
 		}
-		h.handleEncryptedForPublisher(ctx, candidate.evt, content, state)
+		h.handleEncryptedForPublisher(ctx, candidate.evt, state)
 		return true
 	default:
 		return false
@@ -358,10 +358,16 @@ func pendingSubscribeKey(evt *event.Event) (streamKey, bool) {
 		return streamKey{roomID: content.RoomID, eventID: content.EventID}, true
 	case event.ToDeviceEncrypted:
 		content := evt.Content.AsEncrypted()
-		if !content.IsBeeperStream() {
+		if content.Algorithm != id.AlgorithmBeeperStreamAESGCM {
 			return streamKey{}, false
 		}
-		return streamKey{roomID: content.RoomID, eventID: content.EventID}, true
+		raw := evt.Content.Raw
+		roomID, _ := raw["room_id"].(string)
+		eventID, _ := raw["event_id"].(string)
+		if roomID == "" || eventID == "" || len(content.Ciphertext) == 0 {
+			return streamKey{}, false
+		}
+		return streamKey{roomID: id.RoomID(roomID), eventID: id.EventID(eventID)}, true
 	default:
 		return streamKey{}, false
 	}
