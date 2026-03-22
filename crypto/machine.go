@@ -346,7 +346,7 @@ func (mach *OlmMachine) ProcessSyncResponse(ctx context.Context, resp *mautrix.R
 
 // HandleMemberEvent handles a single membership event.
 //
-// Currently this is not automatically called, so you must add a listener yourself:
+// Currently, this is not automatically called, so you must add a listener yourself:
 //
 //	client.Syncer.(mautrix.ExtensibleSyncer).OnEventType(event.StateMember, c.crypto.HandleMemberEvent)
 func (mach *OlmMachine) HandleMemberEvent(ctx context.Context, evt *event.Event) {
@@ -375,6 +375,7 @@ func (mach *OlmMachine) HandleMemberEvent(ctx context.Context, evt *event.Event)
 		(prevContent.Membership == event.MembershipLeave && content.Membership == event.MembershipBan) {
 		return
 	}
+	// TODO on joins and invites, it would be enough to mark the session as needing re-sharing to that user instead of deleting it
 	mach.Log.Trace().
 		Str("room_id", evt.RoomID.String()).
 		Str("user_id", evt.GetStateKey()).
