@@ -135,7 +135,7 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 		return err
 	}
 	helper.streams = streams
-	helper.client.Syncer = &cryptoSyncer{helper: helper}
+	helper.client.Syncer = &cryptoSyncer{OlmMachine: helper.mach, handleSyncResponse: streams.HandleSyncResponse}
 	helper.client.Store = helper.store
 
 	err = helper.mach.Load(ctx)
@@ -535,7 +535,8 @@ func (helper *CryptoHelper) BeeperStreamPublisher() bridgev2.BeeperStreamPublish
 }
 
 type cryptoSyncer struct {
-	helper *CryptoHelper
+	*crypto.OlmMachine
+	handleSyncResponse func(context.Context, *mautrix.RespSync) []*event.Event
 }
 
 func (syncer *cryptoSyncer) ProcessResponse(ctx context.Context, resp *mautrix.RespSync, since string) error {
@@ -543,7 +544,7 @@ func (syncer *cryptoSyncer) ProcessResponse(ctx context.Context, resp *mautrix.R
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
-				syncer.helper.mach.Log.Error().
+				syncer.Log.Error().
 					Str("since", since).
 					Interface("error", err).
 					Str("stack", string(debug.Stack())).
@@ -551,17 +552,17 @@ func (syncer *cryptoSyncer) ProcessResponse(ctx context.Context, resp *mautrix.R
 			}
 			done <- struct{}{}
 		}()
-		syncer.helper.mach.Log.Trace().Str("since", since).Msg("Starting sync response handling")
-		syncer.helper.mach.ProcessSyncResponse(ctx, resp, since)
-		if syncer.helper.streams != nil {
-			syncer.helper.streams.HandleSyncResponse(ctx, resp)
+		syncer.Log.Trace().Str("since", since).Msg("Starting sync response handling")
+		syncer.ProcessSyncResponse(ctx, resp, since)
+		if syncer.handleSyncResponse != nil {
+			syncer.handleSyncResponse(ctx, resp)
 		}
-		syncer.helper.mach.Log.Trace().Str("since", since).Msg("Successfully handled sync response")
+		syncer.Log.Trace().Str("since", since).Msg("Successfully handled sync response")
 	}()
 	select {
 	case <-done:
 	case <-time.After(30 * time.Second):
-		syncer.helper.mach.Log.Warn().Str("since", since).Msg("Handling sync response is taking unusually long")
+		syncer.Log.Warn().Str("since", since).Msg("Handling sync response is taking unusually long")
 	}
 	return nil
 }
@@ -570,7 +571,7 @@ func (syncer *cryptoSyncer) OnFailedSync(_ *mautrix.RespSync, err error) (time.D
 	if errors.Is(err, mautrix.MUnknownToken) {
 		return 0, err
 	}
-	syncer.helper.mach.Log.Error().Err(err).Msg("Error /syncing, waiting 10 seconds")
+	syncer.Log.Error().Err(err).Msg("Error /syncing, waiting 10 seconds")
 	return 10 * time.Second, nil
 }
 
