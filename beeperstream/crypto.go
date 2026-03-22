@@ -12,7 +12,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"strconv"
 
 	"go.mau.fi/util/random"
 
@@ -61,10 +60,14 @@ func encryptLogicalEvent(logicalType event.Type, payload json.RawMessage, roomID
 	iv := random.Bytes(gcm.NonceSize())
 	ciphertext := gcm.Seal(nil, iv, plaintext, nil)
 	ciphertextB64 := base64.RawStdEncoding.EncodeToString(ciphertext)
+	ciphertextJSON, err := json.Marshal(ciphertextB64)
+	if err != nil {
+		return nil, err
+	}
 	return &event.Content{
 		Parsed: &event.EncryptedEventContent{
 			Algorithm:  id.AlgorithmBeeperStreamAESGCM,
-			Ciphertext: json.RawMessage(strconv.Quote(ciphertextB64)),
+			Ciphertext: ciphertextJSON,
 		},
 		Raw: map[string]any{
 			"algorithm":  string(id.AlgorithmBeeperStreamAESGCM),

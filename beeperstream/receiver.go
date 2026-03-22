@@ -139,6 +139,9 @@ func (h *Helper) sendSubscribe(ctx context.Context, key streamKey, descriptor *e
 }
 
 func (h *Helper) handleEncryptedForSubscriber(ctx context.Context, evt *event.Event, sub *subscription) *event.Event {
+	if sub.descriptor.Encryption == nil {
+		return nil
+	}
 	normalized := decryptedLogicalEvent(ctx, evt, sub.descriptor.Encryption.Key, event.ToDeviceBeeperStreamUpdate)
 	if normalized == nil {
 		return nil

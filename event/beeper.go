@@ -267,6 +267,7 @@ type BeeperStreamUpdateEventContent struct {
 	RoomID  id.RoomID  `json:"room_id"`
 	EventID id.EventID `json:"event_id"`
 }
+
 type BeeperEncodedOrder struct {
 	order    int64
 	suborder int16

@@ -372,10 +372,7 @@ func resolveSubscribeExpiry(descriptor *event.BeeperStreamInfo, fallback time.Du
 		fallback = DefaultSubscribeExpiry
 	}
 	if descriptor != nil && descriptor.ExpiryMS > 0 {
-		descriptorExpiry := time.Duration(descriptor.ExpiryMS) * time.Millisecond
-		if descriptorExpiry < fallback {
-			return descriptorExpiry
-		}
+		return min(time.Duration(descriptor.ExpiryMS)*time.Millisecond, fallback)
 	}
 	return fallback
 }

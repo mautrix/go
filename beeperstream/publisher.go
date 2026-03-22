@@ -13,8 +13,6 @@ import (
 	"slices"
 	"time"
 
-	"github.com/rs/zerolog"
-
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -271,7 +269,7 @@ func (h *Helper) queuePendingSubscribe(ctx context.Context, evt *event.Event) {
 		pendingCount = len(h.pendingSubscribe)
 	}
 	h.pendingLock.Unlock()
-	zerolog.Ctx(ctx).Debug().
+	h.log.Debug().
 		Int("pending_subscribes", pendingCount).
 		Stringer("sender", evt.Sender).
 		Str("event_type", evt.Type.Type).
