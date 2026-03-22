@@ -264,6 +264,7 @@ var (
 	AccountDataIgnoredUserList = Type{"m.ignored_user_list", AccountDataEventType}
 	AccountDataMarkedUnread    = Type{"m.marked_unread", AccountDataEventType}
 	AccountDataBeeperMute      = Type{"com.beeper.mute", AccountDataEventType}
+	AccountDataSpaceOrder      = Type{"org.matrix.msc3230.space_order", AccountDataEventType}
 
 	AccountDataSecretStorageDefaultKey = Type{"m.secret_storage.default_key", AccountDataEventType}
 	AccountDataSecretStorageKey        = Type{"m.secret_storage.key", AccountDataEventType}
