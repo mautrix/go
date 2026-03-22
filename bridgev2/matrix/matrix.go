@@ -24,6 +24,9 @@ import (
 )
 
 func (br *Connector) handleRoomEvent(ctx context.Context, evt *event.Event) {
+	if evt.Type == event.StateMember && br.Crypto != nil && !br.isGhostMXID(id.UserID(evt.GetStateKey())) {
+		br.Crypto.HandleMemberEvent(ctx, evt)
+	}
 	if br.shouldIgnoreEvent(evt) {
 		return
 	}
@@ -36,9 +39,6 @@ func (br *Connector) handleRoomEvent(ctx context.Context, evt *event.Event) {
 		zerolog.Ctx(ctx).Warn().Msg("Dropping unencrypted event as encryption is configured to be required")
 		br.sendCryptoStatusError(ctx, evt, errMessageNotEncrypted, nil, 0, true)
 		return
-	}
-	if evt.Type == event.StateMember && br.Crypto != nil {
-		br.Crypto.HandleMemberEvent(ctx, evt)
 	}
 	br.Bridge.QueueMatrixEvent(ctx, evt)
 }
