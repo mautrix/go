@@ -24,7 +24,7 @@ import (
 )
 
 func (br *Connector) handleRoomEvent(ctx context.Context, evt *event.Event) {
-	if evt.Type == event.StateMember && br.Crypto != nil && !br.isGhostMXID(id.UserID(evt.GetStateKey())) {
+	if evt.Type == event.StateMember && br.Crypto != nil && !br.Bridge.IsGhostMXID(id.UserID(evt.GetStateKey())) {
 		br.Crypto.HandleMemberEvent(ctx, evt)
 	}
 	if br.shouldIgnoreEvent(evt) {

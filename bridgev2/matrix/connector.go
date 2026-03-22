@@ -595,11 +595,6 @@ func (br *Connector) ParseGhostMXID(userID id.UserID) (networkid.UserID, bool) {
 	return networkid.UserID(decoded), true
 }
 
-func (br *Connector) isGhostMXID(userID id.UserID) bool {
-	_, ok := br.ParseGhostMXID(userID)
-	return ok
-}
-
 func (br *Connector) FormatGhostMXID(userID networkid.UserID) id.UserID {
 	localpart := br.Config.AppService.FormatUsername(id.EncodeUserLocalpart(string(userID)))
 	return id.NewUserID(localpart, br.Config.Homeserver.Domain)
