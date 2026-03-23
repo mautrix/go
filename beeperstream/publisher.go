@@ -164,7 +164,7 @@ func (h *Helper) handleSubscribeEvent(ctx context.Context, evt *event.Event) {
 	h.queuePendingSubscribe(ctx, evt)
 }
 
-func (h *Helper) handleEncryptedForPublisher(ctx context.Context, evt *event.Event, key streamKey, state *publishedStream) *event.Event {
+func (h *Helper) handleEncryptedForPublisher(ctx context.Context, evt *event.Event, key streamKey, state *publishedStream) []*event.Event {
 	if state.descriptor == nil || state.descriptor.Encryption == nil {
 		return nil
 	}
@@ -197,18 +197,49 @@ func (h *Helper) handleSubscribe(ctx context.Context, sender id.UserID, subscrib
 	updates := slices.Clone(state.updates)
 	h.lock.Unlock()
 
-	for _, update := range updates {
-		if err := h.sendUpdate(ctx, descriptor, update, []subscriber{sub}); err != nil {
-			h.lock.Lock()
-			state = h.publishedStreams[key]
-			if state != nil {
-				delete(state.subscribers, sub)
-			}
-			h.lock.Unlock()
-			return true
+	if err := h.sendReplayUpdates(ctx, descriptor, updates, []subscriber{sub}); err != nil {
+		h.lock.Lock()
+		state = h.publishedStreams[key]
+		if state != nil {
+			delete(state.subscribers, sub)
 		}
+		h.lock.Unlock()
+		return true
 	}
 	return true
+}
+
+func makeReplayUpdateContent(updates []*event.Content) (*event.Content, error) {
+	if len(updates) == 0 {
+		return nil, nil
+	} else if len(updates) == 1 {
+		return updates[0], nil
+	}
+	updateInfo, err := streamUpdateIdentifiers(updates[0])
+	if err != nil {
+		return nil, err
+	}
+	batched := make([]map[string]any, 0, len(updates))
+	for _, update := range updates {
+		raw, err := rawMapFromContent(update)
+		if err != nil {
+			return nil, err
+		}
+		batched = append(batched, stripUpdateRouting(raw))
+	}
+	return contentFromRawMap(map[string]any{
+		"room_id":  updateInfo.RoomID,
+		"event_id": updateInfo.EventID,
+		"updates":  batched,
+	})
+}
+
+func (h *Helper) sendReplayUpdates(ctx context.Context, descriptor *event.BeeperStreamInfo, updates []*event.Content, subscribers []subscriber) error {
+	content, err := makeReplayUpdateContent(updates)
+	if err != nil || content == nil {
+		return err
+	}
+	return h.sendUpdate(ctx, descriptor, content, subscribers)
 }
 
 func (h *Helper) sendUpdate(ctx context.Context, descriptor *event.BeeperStreamInfo, update *event.Content, subscribers []subscriber) error {

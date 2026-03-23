@@ -270,8 +270,9 @@ type BeeperStreamSubscribeEventContent struct {
 }
 
 type BeeperStreamUpdateEventContent struct {
-	RoomID  id.RoomID  `json:"room_id"`
-	EventID id.EventID `json:"event_id"`
+	RoomID  id.RoomID        `json:"room_id"`
+	EventID id.EventID       `json:"event_id"`
+	Updates []map[string]any `json:"updates,omitempty"`
 }
 
 type BeeperEncodedOrder struct {

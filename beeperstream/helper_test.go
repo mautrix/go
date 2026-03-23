@@ -224,6 +224,25 @@ func assertStreamUpdateMap(t *testing.T, parsed map[string]any) {
 	require.Contains(t, parsed, testStreamDeltaKey)
 }
 
+func assertBatchedStreamUpdateMap(t *testing.T, parsed map[string]any, wantDeltas ...string) {
+	t.Helper()
+	require.Equal(t, string(testStreamRoomID), fmt.Sprint(parsed["room_id"]))
+	require.Equal(t, string(testStreamEventID), fmt.Sprint(parsed["event_id"]))
+	updates, ok := parsed["updates"].([]any)
+	require.True(t, ok)
+	require.Len(t, updates, len(wantDeltas))
+	for i, want := range wantDeltas {
+		update, ok := updates[i].(map[string]any)
+		require.True(t, ok)
+		deltas, ok := update[testStreamDeltaKey].([]any)
+		require.True(t, ok)
+		require.Len(t, deltas, 1)
+		delta, ok := deltas[0].(map[string]any)
+		require.True(t, ok)
+		require.Equal(t, want, fmt.Sprint(delta["delta"]))
+	}
+}
+
 func TestHelperNewDescriptor(t *testing.T) {
 	client := newTestStreamClient(t, "", testStreamBotUserID, testStreamPublisherDev)
 	require.NoError(t, client.StateStore.SetEncryptionEvent(context.Background(), testStreamRoomID, &event.EncryptionEventContent{
@@ -302,6 +321,28 @@ func TestHelperRegisterSupportsLatestOnlyReplayBuffer(t *testing.T) {
 	}
 }
 
+func TestHelperReplayPendingSubscribeBatchesBufferedUpdates(t *testing.T) {
+	ts, recorder := newSendToDeviceRecorderServer(t)
+	client := newTestStreamClient(t, ts.URL, testStreamBotUserID, testStreamPublisherDev)
+	streams := newTestHelper(t, client)
+
+	require.NoError(t, streams.Register(context.Background(), testStreamRoomID, testStreamEventID, newTestDescriptor(false)))
+	require.NoError(t, streams.Publish(context.Background(), testStreamRoomID, testStreamEventID, newTestPublishContent("hello")))
+	require.NoError(t, streams.Publish(context.Background(), testStreamRoomID, testStreamEventID, newTestPublishContent("bye")))
+
+	require.Nil(t, streams.handleEvent(context.Background(), newTestSubscribeEvent(testStreamBotUserID, testStreamPublisherDev)))
+
+	req := recorder.next(t)
+	require.Contains(t, req.path, "/sendToDevice/com.beeper.stream.update/")
+	assertBatchedStreamUpdateMap(t, decodeJSONMap(t, recorder.rawContent(t, req, testStreamSubscriberID, testStreamSubscriberDev)), "hello", "bye")
+
+	select {
+	case extra := <-recorder.requests:
+		t.Fatalf("unexpected extra replay update: %s", extra.path)
+	case <-time.After(200 * time.Millisecond):
+	}
+}
+
 func TestHelperReplayPendingSubscribeOnRegister(t *testing.T) {
 	ts, recorder := newSendToDeviceRecorderServer(t)
 	client := newTestStreamClient(t, ts.URL, testStreamBotUserID, testStreamPublisherDev)
@@ -341,6 +382,32 @@ func TestHelperReplayPendingEncryptedSubscribeOnRegister(t *testing.T) {
 	var parsed map[string]any
 	require.NoError(t, json.Unmarshal(payloadContent, &parsed))
 	assertStreamUpdateMap(t, parsed)
+}
+
+func TestHelperReplayPendingEncryptedSubscribeBatchesBufferedUpdates(t *testing.T) {
+	ts, recorder := newSendToDeviceRecorderServer(t)
+	client := newTestStreamClient(t, ts.URL, testStreamBotUserID, testStreamPublisherDev)
+	streams := newTestHelper(t, client)
+	descriptor := newTestDescriptor(true)
+
+	require.NoError(t, streams.Register(context.Background(), testStreamRoomID, testStreamEventID, descriptor))
+	require.NoError(t, streams.Publish(context.Background(), testStreamRoomID, testStreamEventID, newTestPublishContent("hello")))
+	require.NoError(t, streams.Publish(context.Background(), testStreamRoomID, testStreamEventID, newTestPublishContent("bye")))
+
+	require.Nil(t, streams.handleEvent(context.Background(), newTestEncryptedSubscribeEvent(t, descriptor)))
+
+	req := recorder.next(t)
+	require.Contains(t, req.path, "/sendToDevice/m.room.encrypted/")
+	rawContent := recorder.rawContent(t, req, testStreamSubscriberID, testStreamSubscriberDev)
+	var encContent event.Content
+	require.NoError(t, json.Unmarshal(rawContent, &encContent))
+	require.NoError(t, encContent.ParseRaw(event.ToDeviceEncrypted))
+	logicalType, payloadContent, err := decryptLogicalEvent(&encContent, descriptor.Encryption.Key)
+	require.NoError(t, err)
+	require.Equal(t, event.ToDeviceBeeperStreamUpdate, logicalType)
+	var parsed map[string]any
+	require.NoError(t, json.Unmarshal(payloadContent, &parsed))
+	assertBatchedStreamUpdateMap(t, parsed, "hello", "bye")
 }
 
 func TestHelperHandleSyncResponseForwardsBridgeSubscribe(t *testing.T) {
@@ -504,6 +571,51 @@ func TestHelperHandleSyncResponseParsesRawEncryptedEvents(t *testing.T) {
 	update := normalized[0].Content.AsBeeperStreamUpdate()
 	require.Equal(t, testStreamRoomID, update.RoomID)
 	require.Equal(t, testStreamEventID, update.EventID)
+}
+
+func TestHelperHandleSyncResponseExpandsBatchedEncryptedReplay(t *testing.T) {
+	ts, recorder := newSendToDeviceRecorderServer(t)
+	client := newTestStreamClient(t, ts.URL, testStreamSubscriberID, "RECEIVER")
+	streams := newTestHelper(t, client)
+	descriptor := newTestDescriptor(true)
+
+	require.NoError(t, streams.Subscribe(context.Background(), testStreamRoomID, testStreamEventID, descriptor))
+	t.Cleanup(func() { streams.Unsubscribe(testStreamRoomID, testStreamEventID) })
+	_ = recorder.next(t)
+
+	first, err := normalizeUpdateContent(testStreamRoomID, testStreamEventID, newTestPublishContent("hello"))
+	require.NoError(t, err)
+	second, err := normalizeUpdateContent(testStreamRoomID, testStreamEventID, newTestPublishContent("bye"))
+	require.NoError(t, err)
+	batched, err := makeReplayUpdateContent([]*event.Content{first, second})
+	require.NoError(t, err)
+	payload, err := marshalContent(batched)
+	require.NoError(t, err)
+	encContent, err := encryptLogicalEvent(event.ToDeviceBeeperStreamUpdate, payload, testStreamRoomID, testStreamEventID, descriptor.Encryption.Key)
+	require.NoError(t, err)
+
+	normalized := streams.HandleSyncResponse(context.Background(), &mautrix.RespSync{
+		ToDevice: mautrix.SyncEventsList{Events: []*event.Event{{
+			Sender:  testStreamBotUserID,
+			Type:    event.ToDeviceEncrypted,
+			Content: *encContent,
+		}}},
+	})
+
+	require.Len(t, normalized, 2)
+	for i, want := range []string{"hello", "bye"} {
+		require.Equal(t, event.ToDeviceBeeperStreamUpdate, normalized[i].Type)
+		update := normalized[i].Content.AsBeeperStreamUpdate()
+		require.Equal(t, testStreamRoomID, update.RoomID)
+		require.Equal(t, testStreamEventID, update.EventID)
+		raw := normalized[i].Content.Raw
+		deltas, ok := raw[testStreamDeltaKey].([]any)
+		require.True(t, ok)
+		require.Len(t, deltas, 1)
+		delta, ok := deltas[0].(map[string]any)
+		require.True(t, ok)
+		require.Equal(t, want, fmt.Sprint(delta["delta"]))
+	}
 }
 
 func TestHelperInitIsIdempotent(t *testing.T) {

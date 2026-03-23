@@ -147,7 +147,7 @@ func (h *Helper) sendSubscribe(ctx context.Context, key streamKey, descriptor *e
 	return err
 }
 
-func (h *Helper) handleEncryptedForSubscriber(ctx context.Context, evt *event.Event, key streamKey, sub *subscription) *event.Event {
+func (h *Helper) handleEncryptedForSubscriber(ctx context.Context, evt *event.Event, key streamKey, sub *subscription) []*event.Event {
 	if sub.descriptor.Encryption == nil {
 		return nil
 	}
@@ -168,5 +168,5 @@ func (h *Helper) handleEncryptedForSubscriber(ctx context.Context, evt *event.Ev
 			Msg("Encrypted beeper stream update from unexpected sender, dropping")
 		return nil
 	}
-	return normalized
+	return expandStreamUpdateEvent(normalized)
 }

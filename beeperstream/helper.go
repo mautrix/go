@@ -193,8 +193,8 @@ func (h *Helper) HandleSyncResponse(ctx context.Context, resp *mautrix.RespSync)
 	var normalized []*event.Event
 	for _, evt := range resp.ToDevice.Events {
 		prepareToDeviceEvent(evt)
-		if evt := h.handleEvent(ctx, evt); evt != nil {
-			normalized = append(normalized, evt)
+		if evts := h.handleEvent(ctx, evt); len(evts) > 0 {
+			normalized = append(normalized, evts...)
 		}
 	}
 	return normalized
@@ -217,20 +217,22 @@ func prepareToDeviceEvent(evt *event.Event) {
 	}
 }
 
-func (h *Helper) handleEvent(ctx context.Context, evt *event.Event) *event.Event {
+func (h *Helper) handleEvent(ctx context.Context, evt *event.Event) []*event.Event {
 	if h == nil || evt == nil || h.closed.Load() || h.isForDifferentTarget(evt) {
 		return nil
 	}
 	switch evt.Type {
 	case event.ToDeviceBeeperStreamSubscribe:
 		h.handleSubscribeEvent(ctx, evt)
+	case event.ToDeviceBeeperStreamUpdate:
+		return expandStreamUpdateEvent(evt)
 	case event.ToDeviceEncrypted:
 		return h.handleEncryptedEvent(ctx, evt)
 	}
 	return nil
 }
 
-func (h *Helper) handleEncryptedEvent(ctx context.Context, evt *event.Event) *event.Event {
+func (h *Helper) handleEncryptedEvent(ctx context.Context, evt *event.Event) []*event.Event {
 	content := evt.Content.AsEncrypted()
 	if content.Algorithm != id.AlgorithmBeeperStreamV1 {
 		return nil
@@ -348,6 +350,38 @@ func normalizeUpdateContent(roomID id.RoomID, eventID id.EventID, content map[st
 	raw["room_id"] = roomID
 	raw["event_id"] = eventID
 	return contentFromRawMap(raw)
+}
+
+func stripUpdateRouting(content map[string]any) map[string]any {
+	raw := maps.Clone(content)
+	delete(raw, "room_id")
+	delete(raw, "event_id")
+	delete(raw, "updates")
+	return raw
+}
+
+func expandStreamUpdateEvent(evt *event.Event) []*event.Event {
+	if evt == nil {
+		return nil
+	}
+	update := evt.Content.AsBeeperStreamUpdate()
+	if len(update.Updates) == 0 {
+		return []*event.Event{evt}
+	}
+	expanded := make([]*event.Event, 0, len(update.Updates))
+	for _, delta := range update.Updates {
+		content, err := normalizeUpdateContent(update.RoomID, update.EventID, delta)
+		if err != nil {
+			return nil
+		}
+		if err = content.ParseRaw(event.ToDeviceBeeperStreamUpdate); err != nil {
+			return nil
+		}
+		normalized := *evt
+		normalized.Content = *content
+		expanded = append(expanded, &normalized)
+	}
+	return expanded
 }
 
 func containsType(types []event.Type, want event.Type) bool {
