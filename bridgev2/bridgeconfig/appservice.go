@@ -25,6 +25,7 @@ type AppserviceConfig struct {
 	PublicAddress string `yaml:"public_address"`
 	Hostname      string `yaml:"hostname"`
 	Port          uint16 `yaml:"port"`
+	NoServer      bool   `yaml:"-"`
 
 	ID  string        `yaml:"id"`
 	Bot BotUserConfig `yaml:"bot"`

@@ -200,6 +200,8 @@ func (br *Connector) Start(ctx context.Context) error {
 		br.wsStartupWait = &wg
 		br.wsShortCircuitReconnectBackoff = make(chan struct{})
 		go br.startWebsocket(&wg)
+	} else if br.Config.AppService.NoServer {
+		br.Log.Debug().Msg("Not starting appservice HTTP server, assuming someone else is routing traffic")
 	} else if br.AS.Host.IsConfigured() {
 		br.Log.Debug().Msg("Starting appservice HTTP server")
 		go br.AS.Start()
