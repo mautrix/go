@@ -494,6 +494,10 @@ func marshalField(val any) json.RawMessage {
 
 var nullJSON = json.RawMessage("null")
 
+func (as *ASIntent) SetProfile(ctx context.Context, data any) error {
+	return as.Matrix.UnstableOverwriteProfile(ctx, data)
+}
+
 func (as *ASIntent) SetExtraProfileMeta(ctx context.Context, data any) error {
 	if as.Connector.SpecVersions.Supports(mautrix.BeeperFeatureArbitraryProfileMeta) {
 		return as.Matrix.BeeperUpdateProfile(ctx, data)

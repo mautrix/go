@@ -29,6 +29,7 @@ type MatrixCapabilities struct {
 	BatchSending          bool
 	ArbitraryMemberChange bool
 	ExtraProfileMeta      bool
+	ReplaceEntireProfile  bool
 }
 
 type MatrixConnector interface {
@@ -197,6 +198,7 @@ type MatrixAPI interface {
 	SetDisplayName(ctx context.Context, name string) error
 	SetAvatarURL(ctx context.Context, avatarURL id.ContentURIString) error
 	SetExtraProfileMeta(ctx context.Context, data any) error
+	SetProfile(ctx context.Context, data any) error
 
 	CreateRoom(ctx context.Context, req *mautrix.ReqCreateRoom) (id.RoomID, error)
 	DeleteRoom(ctx context.Context, roomID id.RoomID, puppetsOnly bool) error
@@ -217,9 +219,4 @@ type StreamOrderReadingMatrixAPI interface {
 type MarkAsDMMatrixAPI interface {
 	MatrixAPI
 	MarkAsDM(ctx context.Context, roomID id.RoomID, otherUser id.UserID) error
-}
-
-type ProfileUpdatingMatrixAPI interface {
-	MatrixAPI
-	PutProfile(ctx context.Context, displayName *string, avatarURL *id.ContentURIString, extra any) error
 }

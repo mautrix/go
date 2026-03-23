@@ -16,6 +16,7 @@ import (
 	"slices"
 
 	"github.com/rs/zerolog"
+	"github.com/tidwall/sjson"
 	"go.mau.fi/util/exerrors"
 	"go.mau.fi/util/exmime"
 
@@ -167,7 +168,7 @@ func (ghost *Ghost) UpdateName(ctx context.Context, name string) bool {
 	return true
 }
 
-func (ghost *Ghost) prepareAvatar(ctx context.Context, avatar *Avatar) (changed, needsMatrixUpdate bool) {
+func (ghost *Ghost) prepareAvatar(ctx context.Context, avatar *Avatar) (changed, mxcChanged bool) {
 	if ghost.AvatarID == avatar.ID && (avatar.Remove || ghost.AvatarMXC != "") && ghost.AvatarSet {
 		return false, false
 	}
@@ -191,11 +192,11 @@ func (ghost *Ghost) prepareAvatar(ctx context.Context, avatar *Avatar) (changed,
 }
 
 func (ghost *Ghost) UpdateAvatar(ctx context.Context, avatar *Avatar) bool {
-	changed, needsMatrixUpdate := ghost.prepareAvatar(ctx, avatar)
+	changed, mxcChanged := ghost.prepareAvatar(ctx, avatar)
 	if !changed {
 		return false
 	}
-	if needsMatrixUpdate {
+	if mxcChanged {
 		if err := ghost.Intent.SetAvatarURL(ctx, ghost.AvatarMXC); err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to set avatar URL")
 		} else {
@@ -222,6 +223,17 @@ func (ghost *Ghost) getExtraProfileMeta() any {
 	baseExtraMarshaled := exerrors.Must(json.Marshal(baseExtra))
 	exerrors.PanicIfNotNil(json.Unmarshal(baseExtraMarshaled, &mergedExtra))
 	return mergedExtra
+}
+
+func (ghost *Ghost) getFullProfile() json.RawMessage {
+	marshaled := exerrors.Must(json.Marshal(ghost.getExtraProfileMeta()))
+	if ghost.Name != "" {
+		marshaled = exerrors.Must(sjson.SetBytes(marshaled, "displayname", ghost.Name))
+	}
+	if ghost.AvatarMXC != "" {
+		marshaled = exerrors.Must(sjson.SetBytes(marshaled, "avatar_url", ghost.AvatarMXC))
+	}
+	return marshaled
 }
 
 func (ghost *Ghost) prepareContactInfo(identifiers []string, isBot *bool, extraProfile database.ExtraProfile) bool {
@@ -312,35 +324,31 @@ func (ghost *Ghost) updateDMPortals(ctx context.Context) {
 }
 
 func (ghost *Ghost) UpdateInfo(ctx context.Context, info *UserInfo) {
-	update := false
 	oldName := ghost.Name
 	oldAvatar := ghost.AvatarMXC
 
 	nameChanged := info.Name != nil && ghost.prepareName(*info.Name)
-	update = update || nameChanged
 
-	var avatarChanged, avatarNeedsMatrix bool
+	var avatarChanged, avatarMXCChanged bool
 	if info.Avatar != nil {
-		avatarChanged, avatarNeedsMatrix = ghost.prepareAvatar(ctx, info.Avatar)
+		avatarChanged, avatarMXCChanged = ghost.prepareAvatar(ctx, info.Avatar)
 	} else if oldAvatar == "" && !ghost.AvatarSet {
 		// Special case: nil avatar means we're not expecting one ever, if we don't currently have
 		// one we flag it as set to avoid constantly refetching in UpdateInfoIfNecessary.
 		ghost.AvatarSet = true
 		avatarChanged = true
 	}
-	update = update || avatarChanged
 
 	var contactInfoChanged bool
 	if info.Identifiers != nil || info.IsBot != nil || info.ExtraProfile != nil {
 		contactInfoChanged = ghost.prepareContactInfo(info.Identifiers, info.IsBot, info.ExtraProfile)
 	}
-	update = update || contactInfoChanged
 
-	ghost.pushProfileChanges(ctx, nameChanged, avatarNeedsMatrix, contactInfoChanged)
-
+	update := nameChanged || avatarChanged || contactInfoChanged
 	if info.ExtraUpdates != nil {
 		update = info.ExtraUpdates(ctx, ghost) || update
 	}
+	ghost.pushProfileChanges(ctx, nameChanged, avatarMXCChanged, contactInfoChanged)
 	if oldName != ghost.Name || oldAvatar != ghost.AvatarMXC {
 		ghost.updateDMPortals(ctx)
 	}
@@ -356,31 +364,13 @@ func (ghost *Ghost) pushProfileChanges(ctx context.Context, nameChanged, avatarC
 	if !nameChanged && !avatarChanged && !contactInfoChanged {
 		return
 	}
-	if profileUpdater, ok := ghost.Intent.(ProfileUpdatingMatrixAPI); ok {
-		var name *string
-		var avatarURL *id.ContentURIString
-		var extra any
-		if nameChanged {
-			name = &ghost.Name
-		}
-		if avatarChanged {
-			avatarURL = &ghost.AvatarMXC
-		}
-		if contactInfoChanged {
-			extra = ghost.getExtraProfileMeta()
-		}
-		if err := profileUpdater.PutProfile(ctx, name, avatarURL, extra); err != nil {
+	if ghost.Bridge.Matrix.GetCapabilities().ReplaceEntireProfile {
+		if err := ghost.Intent.SetProfile(ctx, ghost.getFullProfile()); err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to set profile")
 		} else {
-			if nameChanged {
-				ghost.NameSet = true
-			}
-			if avatarChanged {
-				ghost.AvatarSet = true
-			}
-			if contactInfoChanged {
-				ghost.ContactInfoSet = true
-			}
+			ghost.NameSet = true
+			ghost.AvatarSet = true
+			ghost.ContactInfoSet = true
 		}
 	} else {
 		if nameChanged {
