@@ -133,9 +133,7 @@ func (h *Helper) registerIngressAdapter(
 	on func(event.Type, func(context.Context, *event.Event)),
 	dispatch func(context.Context, *event.Event),
 ) {
-	on(event.ToDeviceBeeperStreamSubscribe, func(ctx context.Context, evt *event.Event) {
-		h.handleEvent(ctx, evt)
-	})
+	on(event.ToDeviceBeeperStreamSubscribe, h.handleSubscribeEvent)
 	on(event.ToDeviceEncrypted, func(ctx context.Context, evt *event.Event) {
 		if normalized := h.handleEvent(ctx, evt); normalized != nil && dispatch != nil {
 			dispatch(ctx, normalized)
