@@ -271,6 +271,37 @@ func TestHelperPublishAndUnregister(t *testing.T) {
 	require.Error(t, streams.Publish(context.Background(), testStreamRoomID, testStreamEventID, newTestPublishContent("bye")))
 }
 
+func TestHelperRegisterSupportsLatestOnlyReplayBuffer(t *testing.T) {
+	ts, recorder := newSendToDeviceRecorderServer(t)
+	client := newTestStreamClient(t, ts.URL, testStreamBotUserID, testStreamPublisherDev)
+	streams := newTestHelper(t, client)
+	descriptor := newTestDescriptor(false)
+	descriptor.MaxBufferedUpdates = 1
+
+	require.NoError(t, streams.Register(context.Background(), testStreamRoomID, testStreamEventID, descriptor))
+	require.NoError(t, streams.Publish(context.Background(), testStreamRoomID, testStreamEventID, newTestPublishContent("hello")))
+	require.NoError(t, streams.Publish(context.Background(), testStreamRoomID, testStreamEventID, newTestPublishContent("bye")))
+
+	require.Nil(t, streams.handleEvent(context.Background(), newTestSubscribeEvent(testStreamBotUserID, testStreamPublisherDev)))
+
+	req := recorder.next(t)
+	require.Contains(t, req.path, "/sendToDevice/com.beeper.stream.update/")
+	rawContent := decodeJSONMap(t, recorder.rawContent(t, req, testStreamSubscriberID, testStreamSubscriberDev))
+	assertStreamUpdateMap(t, rawContent)
+	deltas, ok := rawContent[testStreamDeltaKey].([]any)
+	require.True(t, ok)
+	require.Len(t, deltas, 1)
+	delta, ok := deltas[0].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "bye", fmt.Sprint(delta["delta"]))
+
+	select {
+	case extra := <-recorder.requests:
+		t.Fatalf("unexpected extra replay update: %s", extra.path)
+	case <-time.After(200 * time.Millisecond):
+	}
+}
+
 func TestHelperReplayPendingSubscribeOnRegister(t *testing.T) {
 	ts, recorder := newSendToDeviceRecorderServer(t)
 	client := newTestStreamClient(t, ts.URL, testStreamBotUserID, testStreamPublisherDev)
@@ -477,44 +508,29 @@ func TestHelperHandleSyncResponseParsesRawEncryptedEvents(t *testing.T) {
 
 func TestHelperInitIsIdempotent(t *testing.T) {
 	ts, recorder := newSendToDeviceRecorderServer(t)
-	client := newTestStreamClient(t, ts.URL, testStreamSubscriberID, "RECEIVER")
+	client := newTestStreamClient(t, ts.URL, testStreamBotUserID, testStreamPublisherDev)
 	streams := newTestHelper(t, client)
-	descriptor := newTestDescriptor(true)
+	descriptor := newTestDescriptor(false)
 
 	require.NoError(t, streams.Init(context.Background()))
 	require.NoError(t, streams.Init(context.Background()))
-	require.NoError(t, streams.Subscribe(context.Background(), testStreamRoomID, testStreamEventID, descriptor))
-	t.Cleanup(func() {
-		streams.Unsubscribe(testStreamRoomID, testStreamEventID)
-		_ = streams.Close()
-	})
-	_ = recorder.next(t)
+	require.NoError(t, streams.Register(context.Background(), testStreamRoomID, testStreamEventID, descriptor))
 
-	received := make(chan *event.Event, 2)
 	syncer := client.Syncer.(*mautrix.DefaultSyncer)
-	syncer.OnEventType(event.ToDeviceBeeperStreamUpdate, func(_ context.Context, evt *event.Event) {
-		received <- evt
-	})
-
-	evt := newTestEncryptedUpdateEvent(t, descriptor)
 	syncer.ProcessResponse(context.Background(), &mautrix.RespSync{
-		ToDevice: mautrix.SyncEventsList{Events: []*event.Event{evt}},
+		ToDevice: mautrix.SyncEventsList{Events: []*event.Event{
+			newTestSubscribeEvent(testStreamBotUserID, testStreamPublisherDev),
+		}},
 	}, "")
 
-	select {
-	case got := <-received:
-		require.Equal(t, event.ToDeviceBeeperStreamUpdate, got.Type)
-		update := got.Content.AsBeeperStreamUpdate()
-		require.Equal(t, testStreamRoomID, update.RoomID)
-		require.Equal(t, testStreamEventID, update.EventID)
-		require.Contains(t, got.Content.Raw, testStreamDeltaKey)
-	case <-time.After(time.Second):
-		t.Fatal("timed out waiting for normalized beeper stream update")
-	}
+	require.NoError(t, streams.Publish(context.Background(), testStreamRoomID, testStreamEventID, newTestPublishContent("hello")))
+	req := recorder.next(t)
+	require.Contains(t, req.path, "/sendToDevice/com.beeper.stream.update/")
+	assertStreamUpdateMap(t, decodeJSONMap(t, recorder.rawContent(t, req, testStreamSubscriberID, testStreamSubscriberDev)))
 
 	select {
-	case extra := <-received:
-		t.Fatalf("unexpected duplicate beeper stream update: %+v", extra)
+	case extra := <-recorder.requests:
+		t.Fatalf("unexpected duplicate sendToDevice request after double init: %s", extra.path)
 	case <-time.After(200 * time.Millisecond):
 	}
 }

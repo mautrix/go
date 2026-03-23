@@ -93,15 +93,10 @@ func (h *Helper) Init(_ context.Context) error {
 	if !ok {
 		return fmt.Errorf("the client syncer must implement ExtensibleSyncer")
 	}
-	dispatcher, ok := h.client.Syncer.(mautrix.DispatchableSyncer)
-	if !ok {
-		return fmt.Errorf("the client syncer must implement DispatchableSyncer")
-	}
 	h.registerIngressAdapter(
 		func(evtType event.Type, handler func(context.Context, *event.Event)) {
 			syncer.OnEventType(evtType, handler)
 		},
-		dispatcher.Dispatch,
 	)
 	h.initialized = true
 	return nil
@@ -110,7 +105,6 @@ func (h *Helper) Init(_ context.Context) error {
 // InitAppservice attaches beeper stream handling to an appservice event processor.
 func (h *Helper) InitAppservice(_ context.Context, ep interface {
 	On(event.Type, func(context.Context, *event.Event))
-	Dispatch(context.Context, *event.Event)
 }) error {
 	if h == nil {
 		return fmt.Errorf("beeper stream helper is nil")
@@ -124,20 +118,17 @@ func (h *Helper) InitAppservice(_ context.Context, ep interface {
 	if h.initialized {
 		return nil
 	}
-	h.registerIngressAdapter(ep.On, ep.Dispatch)
+	h.registerIngressAdapter(ep.On)
 	h.initialized = true
 	return nil
 }
 
 func (h *Helper) registerIngressAdapter(
 	on func(event.Type, func(context.Context, *event.Event)),
-	dispatch func(context.Context, *event.Event),
 ) {
 	on(event.ToDeviceBeeperStreamSubscribe, h.handleSubscribeEvent)
 	on(event.ToDeviceEncrypted, func(ctx context.Context, evt *event.Event) {
-		if normalized := h.handleEvent(ctx, evt); normalized != nil && dispatch != nil {
-			dispatch(ctx, normalized)
-		}
+		h.handleEvent(ctx, evt)
 	})
 }
 
@@ -418,11 +409,18 @@ func resolveSubscribeExpiry(descriptor *event.BeeperStreamInfo, fallback time.Du
 	return fallback
 }
 
+func resolveMaxBufferedUpdates(descriptor *event.BeeperStreamInfo) int {
+	if descriptor != nil && descriptor.MaxBufferedUpdates > 0 {
+		return descriptor.MaxBufferedUpdates
+	}
+	return maxStreamUpdatesPerStream
+}
+
 func descriptorEqual(a, b *event.BeeperStreamInfo) bool {
 	switch {
 	case a == nil || b == nil:
 		return a == b
-	case a.UserID != b.UserID || a.DeviceID != b.DeviceID || a.Type != b.Type || a.ExpiryMS != b.ExpiryMS:
+	case a.UserID != b.UserID || a.DeviceID != b.DeviceID || a.Type != b.Type || a.ExpiryMS != b.ExpiryMS || a.MaxBufferedUpdates != b.MaxBufferedUpdates:
 		return false
 	case a.Encryption == nil || b.Encryption == nil:
 		return a.Encryption == b.Encryption

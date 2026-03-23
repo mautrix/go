@@ -23,9 +23,10 @@ type subscriber struct {
 }
 
 type publishedStream struct {
-	descriptor *event.BeeperStreamInfo
-	streamID   string
-	updates    []*event.Content
+	descriptor         *event.BeeperStreamInfo
+	streamID           string
+	maxBufferedUpdates int
+	updates            []*event.Content
 
 	subscribers  map[subscriber]time.Time
 	inactive     bool
@@ -50,8 +51,9 @@ func (h *Helper) Register(ctx context.Context, roomID id.RoomID, eventID id.Even
 	}
 	key := streamKey{roomID: roomID, eventID: eventID}
 	state := &publishedStream{
-		descriptor:  descriptor.Clone(),
-		subscribers: make(map[subscriber]time.Time),
+		descriptor:         descriptor.Clone(),
+		maxBufferedUpdates: resolveMaxBufferedUpdates(descriptor),
+		subscribers:        make(map[subscriber]time.Time),
 	}
 	if descriptor.Encryption != nil {
 		state.streamID = deriveStreamID(descriptor.Encryption.Key, roomID, eventID)
@@ -142,8 +144,8 @@ func (h *Helper) Publish(ctx context.Context, roomID id.RoomID, eventID id.Event
 		return fmt.Errorf("beeper stream %s/%s is inactive", roomID, eventID)
 	}
 	state.updates = append(state.updates, update)
-	if len(state.updates) > maxStreamUpdatesPerStream {
-		state.updates = state.updates[len(state.updates)-maxStreamUpdatesPerStream:]
+	if len(state.updates) > state.maxBufferedUpdates {
+		state.updates = state.updates[len(state.updates)-state.maxBufferedUpdates:]
 	}
 	descriptor := state.descriptor.Clone()
 	subscribers := state.activeSubscribers(h.now())

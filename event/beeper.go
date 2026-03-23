@@ -217,11 +217,12 @@ func (content *MessageEventContent) RemovePerMessageProfileFallback() {
 }
 
 type BeeperStreamInfo struct {
-	UserID     id.UserID                   `json:"user_id"`
-	DeviceID   id.DeviceID                 `json:"device_id,omitempty"`
-	Type       string                      `json:"type"`
-	ExpiryMS   int64                       `json:"expiry_ms,omitempty"`
-	Encryption *BeeperStreamEncryptionInfo `json:"encryption,omitempty"`
+	UserID             id.UserID                   `json:"user_id"`
+	DeviceID           id.DeviceID                 `json:"device_id,omitempty"`
+	Type               string                      `json:"type"`
+	ExpiryMS           int64                       `json:"expiry_ms,omitempty"`
+	MaxBufferedUpdates int                         `json:"max_buffered_updates,omitempty"`
+	Encryption         *BeeperStreamEncryptionInfo `json:"encryption,omitempty"`
 }
 
 func (info *BeeperStreamInfo) Clone() *BeeperStreamInfo {
@@ -242,6 +243,8 @@ func (info *BeeperStreamInfo) Validate() error {
 		return fmt.Errorf("missing beeper stream descriptor")
 	} else if info.UserID == "" || info.Type == "" {
 		return fmt.Errorf("missing beeper stream descriptor fields")
+	} else if info.MaxBufferedUpdates < 0 {
+		return fmt.Errorf("invalid beeper stream max buffered updates %d", info.MaxBufferedUpdates)
 	}
 	if info.Encryption == nil {
 		return nil
