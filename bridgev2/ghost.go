@@ -146,14 +146,20 @@ type UserInfo struct {
 	ExtraUpdates ExtraUpdater[*Ghost]
 }
 
-func (ghost *Ghost) UpdateName(ctx context.Context, name string) bool {
+func (ghost *Ghost) prepareName(name string) bool {
 	if ghost.Name == name && ghost.NameSet {
 		return false
 	}
 	ghost.Name = name
 	ghost.NameSet = false
-	err := ghost.Intent.SetDisplayName(ctx, name)
-	if err != nil {
+	return true
+}
+
+func (ghost *Ghost) UpdateName(ctx context.Context, name string) bool {
+	if !ghost.prepareName(name) {
+		return false
+	}
+	if err := ghost.Intent.SetDisplayName(ctx, name); err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to set display name")
 	} else {
 		ghost.NameSet = true
@@ -161,9 +167,9 @@ func (ghost *Ghost) UpdateName(ctx context.Context, name string) bool {
 	return true
 }
 
-func (ghost *Ghost) UpdateAvatar(ctx context.Context, avatar *Avatar) bool {
+func (ghost *Ghost) prepareAvatar(ctx context.Context, avatar *Avatar) (changed, needsMatrixUpdate bool) {
 	if ghost.AvatarID == avatar.ID && (avatar.Remove || ghost.AvatarMXC != "") && ghost.AvatarSet {
-		return false
+		return false, false
 	}
 	ghost.AvatarID = avatar.ID
 	if !avatar.Remove {
@@ -171,9 +177,9 @@ func (ghost *Ghost) UpdateAvatar(ctx context.Context, avatar *Avatar) bool {
 		if err != nil {
 			ghost.AvatarSet = false
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to reupload avatar")
-			return true
+			return true, false
 		} else if newHash == ghost.AvatarHash && ghost.AvatarMXC != "" && ghost.AvatarSet {
-			return true
+			return true, false
 		}
 		ghost.AvatarHash = newHash
 		ghost.AvatarMXC = newMXC
@@ -181,10 +187,20 @@ func (ghost *Ghost) UpdateAvatar(ctx context.Context, avatar *Avatar) bool {
 		ghost.AvatarMXC = ""
 	}
 	ghost.AvatarSet = false
-	if err := ghost.Intent.SetAvatarURL(ctx, ghost.AvatarMXC); err != nil {
-		zerolog.Ctx(ctx).Err(err).Msg("Failed to set avatar URL")
-	} else {
-		ghost.AvatarSet = true
+	return true, true
+}
+
+func (ghost *Ghost) UpdateAvatar(ctx context.Context, avatar *Avatar) bool {
+	changed, needsMatrixUpdate := ghost.prepareAvatar(ctx, avatar)
+	if !changed {
+		return false
+	}
+	if needsMatrixUpdate {
+		if err := ghost.Intent.SetAvatarURL(ctx, ghost.AvatarMXC); err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to set avatar URL")
+		} else {
+			ghost.AvatarSet = true
+		}
 	}
 	return true
 }
@@ -208,7 +224,7 @@ func (ghost *Ghost) getExtraProfileMeta() any {
 	return mergedExtra
 }
 
-func (ghost *Ghost) UpdateContactInfo(ctx context.Context, identifiers []string, isBot *bool, extraProfile database.ExtraProfile) bool {
+func (ghost *Ghost) prepareContactInfo(identifiers []string, isBot *bool, extraProfile database.ExtraProfile) bool {
 	if !ghost.Bridge.Matrix.GetCapabilities().ExtraProfileMeta {
 		ghost.ContactInfoSet = false
 		return false
@@ -228,8 +244,15 @@ func (ghost *Ghost) UpdateContactInfo(ctx context.Context, identifiers []string,
 	if ghost.ContactInfoSet && !changed {
 		return false
 	}
-	err := ghost.Intent.SetExtraProfileMeta(ctx, ghost.getExtraProfileMeta())
-	if err != nil {
+	ghost.ContactInfoSet = false
+	return true
+}
+
+func (ghost *Ghost) UpdateContactInfo(ctx context.Context, identifiers []string, isBot *bool, extraProfile database.ExtraProfile) bool {
+	if !ghost.prepareContactInfo(identifiers, isBot, extraProfile) {
+		return false
+	}
+	if err := ghost.Intent.SetExtraProfileMeta(ctx, ghost.getExtraProfileMeta()); err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to set extra profile metadata")
 	} else {
 		ghost.ContactInfoSet = true
@@ -292,20 +315,29 @@ func (ghost *Ghost) UpdateInfo(ctx context.Context, info *UserInfo) {
 	update := false
 	oldName := ghost.Name
 	oldAvatar := ghost.AvatarMXC
-	if info.Name != nil {
-		update = ghost.UpdateName(ctx, *info.Name) || update
-	}
+
+	nameChanged := info.Name != nil && ghost.prepareName(*info.Name)
+	update = update || nameChanged
+
+	var avatarChanged, avatarNeedsMatrix bool
 	if info.Avatar != nil {
-		update = ghost.UpdateAvatar(ctx, info.Avatar) || update
+		avatarChanged, avatarNeedsMatrix = ghost.prepareAvatar(ctx, info.Avatar)
 	} else if oldAvatar == "" && !ghost.AvatarSet {
 		// Special case: nil avatar means we're not expecting one ever, if we don't currently have
 		// one we flag it as set to avoid constantly refetching in UpdateInfoIfNecessary.
 		ghost.AvatarSet = true
-		update = true
+		avatarChanged = true
 	}
+	update = update || avatarChanged
+
+	var contactInfoChanged bool
 	if info.Identifiers != nil || info.IsBot != nil || info.ExtraProfile != nil {
-		update = ghost.UpdateContactInfo(ctx, info.Identifiers, info.IsBot, info.ExtraProfile) || update
+		contactInfoChanged = ghost.prepareContactInfo(info.Identifiers, info.IsBot, info.ExtraProfile)
 	}
+	update = update || contactInfoChanged
+
+	ghost.pushProfileChanges(ctx, nameChanged, avatarNeedsMatrix, contactInfoChanged)
+
 	if info.ExtraUpdates != nil {
 		update = info.ExtraUpdates(ctx, ghost) || update
 	}
@@ -316,6 +348,61 @@ func (ghost *Ghost) UpdateInfo(ctx context.Context, info *UserInfo) {
 		err := ghost.Bridge.DB.Ghost.Update(ctx, ghost.Ghost)
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to update ghost in database after updating info")
+		}
+	}
+}
+
+func (ghost *Ghost) pushProfileChanges(ctx context.Context, nameChanged, avatarChanged, contactInfoChanged bool) {
+	if !nameChanged && !avatarChanged && !contactInfoChanged {
+		return
+	}
+	if profileUpdater, ok := ghost.Intent.(ProfileUpdatingMatrixAPI); ok {
+		var name *string
+		var avatarURL *id.ContentURIString
+		var extra any
+		if nameChanged {
+			name = &ghost.Name
+		}
+		if avatarChanged {
+			avatarURL = &ghost.AvatarMXC
+		}
+		if contactInfoChanged {
+			extra = ghost.getExtraProfileMeta()
+		}
+		if err := profileUpdater.PutProfile(ctx, name, avatarURL, extra); err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to set profile")
+		} else {
+			if nameChanged {
+				ghost.NameSet = true
+			}
+			if avatarChanged {
+				ghost.AvatarSet = true
+			}
+			if contactInfoChanged {
+				ghost.ContactInfoSet = true
+			}
+		}
+	} else {
+		if nameChanged {
+			if err := ghost.Intent.SetDisplayName(ctx, ghost.Name); err != nil {
+				zerolog.Ctx(ctx).Err(err).Msg("Failed to set display name")
+			} else {
+				ghost.NameSet = true
+			}
+		}
+		if avatarChanged {
+			if err := ghost.Intent.SetAvatarURL(ctx, ghost.AvatarMXC); err != nil {
+				zerolog.Ctx(ctx).Err(err).Msg("Failed to set avatar URL")
+			} else {
+				ghost.AvatarSet = true
+			}
+		}
+		if contactInfoChanged {
+			if err := ghost.Intent.SetExtraProfileMeta(ctx, ghost.getExtraProfileMeta()); err != nil {
+				zerolog.Ctx(ctx).Err(err).Msg("Failed to set extra profile metadata")
+			} else {
+				ghost.ContactInfoSet = true
+			}
 		}
 	}
 }

@@ -218,3 +218,8 @@ type MarkAsDMMatrixAPI interface {
 	MatrixAPI
 	MarkAsDM(ctx context.Context, roomID id.RoomID, otherUser id.UserID) error
 }
+
+type ProfileUpdatingMatrixAPI interface {
+	MatrixAPI
+	PutProfile(ctx context.Context, displayName *string, avatarURL *id.ContentURIString, extra any) error
+}
