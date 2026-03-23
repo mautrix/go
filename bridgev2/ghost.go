@@ -237,7 +237,8 @@ func (ghost *Ghost) getFullProfile() json.RawMessage {
 }
 
 func (ghost *Ghost) prepareContactInfo(identifiers []string, isBot *bool, extraProfile database.ExtraProfile) bool {
-	if !ghost.Bridge.Matrix.GetCapabilities().ExtraProfileMeta {
+	caps := ghost.Bridge.Matrix.GetCapabilities()
+	if !caps.ExtraProfileMeta && !caps.ReplaceEntireProfile {
 		ghost.ContactInfoSet = false
 		return false
 	}
