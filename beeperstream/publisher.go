@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Tulir Asokan
+// Copyright (c) 2026 Batuhan İçöz
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,7 +8,6 @@ package beeperstream
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"slices"
 	"time"
@@ -25,6 +24,7 @@ type subscriber struct {
 
 type publishedStream struct {
 	descriptor *event.BeeperStreamInfo
+	streamID   string
 	updates    []*event.Content
 
 	subscribers  map[subscriber]time.Time
@@ -35,6 +35,7 @@ type publishedStream struct {
 
 type pendingSubscribeEvent struct {
 	key        streamKey
+	streamID   string
 	evt        *event.Event
 	receivedAt time.Time
 }
@@ -52,6 +53,9 @@ func (h *Helper) Register(ctx context.Context, roomID id.RoomID, eventID id.Even
 		descriptor:  descriptor.Clone(),
 		subscribers: make(map[subscriber]time.Time),
 	}
+	if descriptor.Encryption != nil {
+		state.streamID = deriveStreamID(descriptor.Encryption.Key, roomID, eventID)
+	}
 	h.lock.Lock()
 	if existing := h.publishedStreams[key]; existing != nil {
 		if descriptorEqual(existing.descriptor, state.descriptor) {
@@ -59,11 +63,17 @@ func (h *Helper) Register(ctx context.Context, roomID id.RoomID, eventID id.Even
 			h.replayPendingSubscribe(ctx, key)
 			return nil
 		}
+		if existing.streamID != "" {
+			delete(h.encryptedPubl, existing.streamID)
+		}
 		if existing.cleanup != nil {
 			existing.cleanup.Stop()
 		}
 	}
 	h.publishedStreams[key] = state
+	if state.streamID != "" {
+		h.encryptedPubl[state.streamID] = key
+	}
 	h.lock.Unlock()
 	h.replayPendingSubscribe(ctx, key)
 	return nil
@@ -82,6 +92,9 @@ func (h *Helper) Unregister(roomID id.RoomID, eventID id.EventID) {
 	}
 	state.inactive = true
 	state.subscribers = nil
+	if state.streamID != "" {
+		delete(h.encryptedPubl, state.streamID)
+	}
 	if state.cleanup != nil {
 		state.cleanup.Stop()
 	}
@@ -91,18 +104,6 @@ func (h *Helper) Unregister(roomID id.RoomID, eventID id.EventID) {
 		h.lock.Unlock()
 	})
 	h.lock.Unlock()
-}
-
-func newUpdateContent(roomID id.RoomID, eventID id.EventID, content map[string]any) (*event.Content, error) {
-	if roomID == "" || eventID == "" {
-		return nil, fmt.Errorf("missing beeper stream identifiers")
-	}
-	if _, ok := content["room_id"]; ok {
-		return nil, fmt.Errorf("beeper stream payload may not override room_id")
-	} else if _, ok := content["event_id"]; ok {
-		return nil, fmt.Errorf("beeper stream payload may not override event_id")
-	}
-	return contentFromRawMap(addStreamRouting(content, roomID, eventID))
 }
 
 func streamUpdateIdentifiers(content *event.Content) (*event.BeeperStreamUpdateEventContent, error) {
@@ -126,7 +127,7 @@ func (h *Helper) Publish(ctx context.Context, roomID id.RoomID, eventID id.Event
 	} else if h.closed.Load() {
 		return fmt.Errorf("beeper stream helper is closed")
 	}
-	update, err := newUpdateContent(roomID, eventID, delta)
+	update, err := normalizeUpdateContent(roomID, eventID, delta)
 	if err != nil {
 		return err
 	}
@@ -161,11 +162,11 @@ func (h *Helper) handleSubscribeEvent(ctx context.Context, evt *event.Event) {
 	h.queuePendingSubscribe(ctx, evt)
 }
 
-func (h *Helper) handleEncryptedForPublisher(ctx context.Context, evt *event.Event, state *publishedStream) *event.Event {
+func (h *Helper) handleEncryptedForPublisher(ctx context.Context, evt *event.Event, key streamKey, state *publishedStream) *event.Event {
 	if state.descriptor == nil || state.descriptor.Encryption == nil {
 		return nil
 	}
-	normalized := decryptedLogicalEvent(ctx, evt, state.descriptor.Encryption.Key, event.ToDeviceBeeperStreamSubscribe)
+	normalized := decryptedLogicalEvent(ctx, evt, state.descriptor.Encryption.Key, key, event.ToDeviceBeeperStreamSubscribe)
 	if normalized == nil {
 		return nil
 	}
@@ -223,11 +224,7 @@ func (h *Helper) sendUpdate(ctx context.Context, descriptor *event.BeeperStreamI
 		if err != nil {
 			return err
 		}
-		raw, err := rawMapFromContent(update)
-		if err != nil {
-			return err
-		}
-		payload, err := json.Marshal(removeStreamRouting(raw))
+		payload, err := marshalContent(update)
 		if err != nil {
 			return err
 		}
@@ -252,7 +249,7 @@ func (h *Helper) sendUpdate(ctx context.Context, descriptor *event.BeeperStreamI
 }
 
 func (h *Helper) queuePendingSubscribe(ctx context.Context, evt *event.Event) {
-	key, ok := pendingSubscribeKey(evt)
+	key, streamID, ok := pendingSubscribeKey(evt)
 	if !ok || h.closed.Load() {
 		return
 	}
@@ -260,6 +257,7 @@ func (h *Helper) queuePendingSubscribe(ctx context.Context, evt *event.Event) {
 	h.pendingLock.Lock()
 	h.pendingSubscribe = append(h.pendingSubscribe, pendingSubscribeEvent{
 		key:        key,
+		streamID:   streamID,
 		evt:        evt,
 		receivedAt: now,
 	})
@@ -278,6 +276,13 @@ func (h *Helper) queuePendingSubscribe(ctx context.Context, evt *event.Event) {
 
 func (h *Helper) replayPendingSubscribe(ctx context.Context, key streamKey) {
 	now := h.now()
+	h.lock.RLock()
+	state := h.publishedStreams[key]
+	streamID := ""
+	if state != nil {
+		streamID = state.streamID
+	}
+	h.lock.RUnlock()
 	h.pendingLock.Lock()
 	if len(h.pendingSubscribe) == 0 {
 		h.pendingLock.Unlock()
@@ -289,7 +294,7 @@ func (h *Helper) replayPendingSubscribe(ctx context.Context, key streamKey) {
 		if candidate.evt == nil || now.Sub(candidate.receivedAt) > pendingSubscribeTTL {
 			continue
 		}
-		if candidate.key == key {
+		if candidate.key == key || (streamID != "" && candidate.streamID == streamID) {
 			replay = append(replay, candidate)
 			continue
 		}
@@ -327,47 +332,48 @@ func (h *Helper) tryPendingSubscribe(ctx context.Context, candidate pendingSubsc
 		return h.handleSubscribe(ctx, candidate.evt.Sender, subscribe)
 	case event.ToDeviceEncrypted:
 		content := candidate.evt.Content.AsEncrypted()
-		if content.Algorithm != id.AlgorithmBeeperStreamAESGCM {
+		if content.Algorithm != id.AlgorithmBeeperStreamV1 {
+			return false
+		}
+		if content.StreamID == "" || len(content.MegolmCiphertext) == 0 {
 			return false
 		}
 		h.lock.RLock()
-		state := h.publishedStreams[candidate.key]
+		key, ok := h.encryptedPubl[content.StreamID]
+		state := h.publishedStreams[key]
 		h.lock.RUnlock()
-		if state == nil {
+		if !ok || state == nil {
 			return false
 		}
-		h.handleEncryptedForPublisher(ctx, candidate.evt, state)
+		h.handleEncryptedForPublisher(ctx, candidate.evt, key, state)
 		return true
 	default:
 		return false
 	}
 }
 
-func pendingSubscribeKey(evt *event.Event) (streamKey, bool) {
+func pendingSubscribeKey(evt *event.Event) (streamKey, string, bool) {
 	if evt == nil {
-		return streamKey{}, false
+		return streamKey{}, "", false
 	}
 	switch evt.Type {
 	case event.ToDeviceBeeperStreamSubscribe:
 		content := evt.Content.AsBeeperStreamSubscribe()
 		if content.RoomID == "" || content.EventID == "" {
-			return streamKey{}, false
+			return streamKey{}, "", false
 		}
-		return streamKey{roomID: content.RoomID, eventID: content.EventID}, true
+		return streamKey{roomID: content.RoomID, eventID: content.EventID}, "", true
 	case event.ToDeviceEncrypted:
 		content := evt.Content.AsEncrypted()
-		if content.Algorithm != id.AlgorithmBeeperStreamAESGCM {
-			return streamKey{}, false
+		if content.Algorithm != id.AlgorithmBeeperStreamV1 {
+			return streamKey{}, "", false
 		}
-		raw := evt.Content.Raw
-		roomID, _ := raw["room_id"].(string)
-		eventID, _ := raw["event_id"].(string)
-		if roomID == "" || eventID == "" || len(content.Ciphertext) == 0 {
-			return streamKey{}, false
+		if content.StreamID == "" || len(content.MegolmCiphertext) == 0 {
+			return streamKey{}, "", false
 		}
-		return streamKey{roomID: id.RoomID(roomID), eventID: id.EventID(eventID)}, true
+		return streamKey{}, content.StreamID, true
 	default:
-		return streamKey{}, false
+		return streamKey{}, "", false
 	}
 }
 

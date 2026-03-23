@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Tulir Asokan
+// Copyright (c) 2026 Batuhan İçöz
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,7 +8,6 @@ package beeperstream
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -19,6 +18,7 @@ import (
 
 type subscription struct {
 	key        streamKey
+	streamID   string
 	descriptor *event.BeeperStreamInfo
 	cancel     context.CancelFunc
 }
@@ -38,6 +38,9 @@ func (h *Helper) Subscribe(ctx context.Context, roomID id.RoomID, eventID id.Eve
 			h.lock.Unlock()
 			return nil
 		}
+		if existing.streamID != "" {
+			delete(h.encryptedSubs, existing.streamID)
+		}
 		existing.cancel()
 		delete(h.subscriptions, key)
 	}
@@ -47,7 +50,13 @@ func (h *Helper) Subscribe(ctx context.Context, roomID id.RoomID, eventID id.Eve
 		descriptor: descriptor.Clone(),
 		cancel:     cancel,
 	}
+	if descriptor.Encryption != nil {
+		sub.streamID = deriveStreamID(descriptor.Encryption.Key, roomID, eventID)
+	}
 	h.subscriptions[key] = sub
+	if sub.streamID != "" {
+		h.encryptedSubs[sub.streamID] = key
+	}
 	h.lock.Unlock()
 
 	go h.runSubscriptionLoop(subCtx, sub)
@@ -63,6 +72,9 @@ func (h *Helper) Unsubscribe(roomID id.RoomID, eventID id.EventID) {
 	sub := h.subscriptions[key]
 	if sub != nil {
 		delete(h.subscriptions, key)
+		if sub.streamID != "" {
+			delete(h.encryptedSubs, sub.streamID)
+		}
 	}
 	h.lock.Unlock()
 	if sub != nil {
@@ -114,10 +126,7 @@ func (h *Helper) sendSubscribe(ctx context.Context, key streamKey, descriptor *e
 		targetDevice = descriptor.DeviceID
 	}
 	if descriptor.Encryption != nil {
-		payload, err := json.Marshal(map[string]any{
-			"device_id": client.DeviceID,
-			"expiry_ms": expiry.Milliseconds(),
-		})
+		payload, err := marshalContent(subscribeContent)
 		if err != nil {
 			return err
 		}
@@ -138,11 +147,11 @@ func (h *Helper) sendSubscribe(ctx context.Context, key streamKey, descriptor *e
 	return err
 }
 
-func (h *Helper) handleEncryptedForSubscriber(ctx context.Context, evt *event.Event, sub *subscription) *event.Event {
+func (h *Helper) handleEncryptedForSubscriber(ctx context.Context, evt *event.Event, key streamKey, sub *subscription) *event.Event {
 	if sub.descriptor.Encryption == nil {
 		return nil
 	}
-	normalized := decryptedLogicalEvent(ctx, evt, sub.descriptor.Encryption.Key, event.ToDeviceBeeperStreamUpdate)
+	normalized := decryptedLogicalEvent(ctx, evt, sub.descriptor.Encryption.Key, key, event.ToDeviceBeeperStreamUpdate)
 	if normalized == nil {
 		return nil
 	}

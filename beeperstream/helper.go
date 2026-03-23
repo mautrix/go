@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Tulir Asokan
+// Copyright (c) 2026 Batuhan İçöz
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,6 +7,7 @@
 package beeperstream
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -42,7 +43,9 @@ type Helper struct {
 
 	lock             sync.RWMutex
 	publishedStreams map[streamKey]*publishedStream
+	encryptedPubl    map[string]streamKey
 	subscriptions    map[streamKey]*subscription
+	encryptedSubs    map[string]streamKey
 
 	pendingLock      sync.Mutex
 	pendingSubscribe []pendingSubscribeEvent
@@ -67,7 +70,9 @@ func New(client *mautrix.Client) (*Helper, error) {
 		client:           client,
 		log:              client.Log.With().Str("component", "beeper_stream").Logger(),
 		publishedStreams: make(map[streamKey]*publishedStream),
+		encryptedPubl:    make(map[string]streamKey),
 		subscriptions:    make(map[streamKey]*subscription),
+		encryptedSubs:    make(map[string]streamKey),
 		now:              time.Now,
 	}, nil
 }
@@ -148,12 +153,14 @@ func (h *Helper) Close() error {
 		sub.cancel()
 		delete(h.subscriptions, key)
 	}
+	clear(h.encryptedSubs)
 	for key, state := range h.publishedStreams {
 		if state.cleanup != nil {
 			state.cleanup.Stop()
 		}
 		delete(h.publishedStreams, key)
 	}
+	clear(h.encryptedPubl)
 	h.lock.Unlock()
 
 	h.pendingLock.Lock()
@@ -183,7 +190,7 @@ func (h *Helper) NewDescriptor(ctx context.Context, roomID id.RoomID, streamType
 	}
 	if h.isEncrypted(ctx, roomID) {
 		info.Encryption = &event.BeeperStreamEncryptionInfo{
-			Algorithm: id.AlgorithmBeeperStreamAESGCM,
+			Algorithm: id.AlgorithmBeeperStreamV1,
 			Key:       makeStreamKey(),
 		}
 	}
@@ -236,55 +243,49 @@ func (h *Helper) handleEvent(ctx context.Context, evt *event.Event) *event.Event
 
 func (h *Helper) handleEncryptedEvent(ctx context.Context, evt *event.Event) *event.Event {
 	content := evt.Content.AsEncrypted()
-	if content.Algorithm != id.AlgorithmBeeperStreamAESGCM {
+	if content.Algorithm != id.AlgorithmBeeperStreamV1 {
 		return nil
 	}
-	evtRaw := evt.Content.Raw
-	roomID, _ := evtRaw["room_id"].(string)
-	eventID, _ := evtRaw["event_id"].(string)
-	if roomID == "" || eventID == "" || len(content.Ciphertext) == 0 {
+	if content.StreamID == "" || len(content.MegolmCiphertext) == 0 {
 		return nil
 	}
-	key := streamKey{roomID: id.RoomID(roomID), eventID: id.EventID(eventID)}
 	h.lock.RLock()
-	published := h.publishedStreams[key]
-	sub := h.subscriptions[key]
+	publishedKey, hasPublished := h.encryptedPubl[content.StreamID]
+	published := h.publishedStreams[publishedKey]
+	subKey, hasSub := h.encryptedSubs[content.StreamID]
+	sub := h.subscriptions[subKey]
 	h.lock.RUnlock()
-	if published != nil {
-		return h.handleEncryptedForPublisher(ctx, evt, published)
+	if hasPublished && published != nil {
+		return h.handleEncryptedForPublisher(ctx, evt, publishedKey, published)
 	}
-	if sub != nil {
-		return h.handleEncryptedForSubscriber(ctx, evt, sub)
+	if hasSub && sub != nil {
+		return h.handleEncryptedForSubscriber(ctx, evt, subKey, sub)
 	}
 	h.queuePendingSubscribe(ctx, evt)
 	return nil
 }
 
-func decryptedLogicalEvent(ctx context.Context, evt *event.Event, base64Key string, expectedType event.Type) *event.Event {
-	evtRaw := evt.Content.Raw
-	roomID, _ := evtRaw["room_id"].(string)
-	eventID, _ := evtRaw["event_id"].(string)
-	logicalType, payload, err := decryptLogicalEvent(&evt.Content, base64Key)
+func decryptedLogicalEvent(ctx context.Context, evt *event.Event, key []byte, expectedKey streamKey, expectedTypes ...event.Type) *event.Event {
+	encrypted := evt.Content.AsEncrypted()
+	logicalType, payload, err := decryptLogicalEvent(&evt.Content, key)
 	if err != nil {
 		zerolog.Ctx(ctx).Debug().Err(err).
-			Str("room_id", roomID).
-			Str("event_id", eventID).
+			Str("stream_id", encrypted.StreamID).
 			Msg("Failed to decrypt beeper stream event")
 		return nil
 	}
-	if logicalType != expectedType {
+	if len(expectedTypes) > 0 && !containsType(expectedTypes, logicalType) {
 		return nil
 	}
-	var raw map[string]any
-	if err = json.Unmarshal(payload, &raw); err != nil {
-		return nil
-	}
-	parsed, err := contentFromRawMap(addStreamRouting(raw, id.RoomID(roomID), id.EventID(eventID)))
+	parsed, err := contentFromRawJSON(payload)
 	if err != nil || parsed.ParseRaw(logicalType) != nil {
 		return nil
 	}
+	if !validateLogicalRouting(parsed, logicalType, expectedKey.roomID, expectedKey.eventID) {
+		return nil
+	}
 	normalized := *evt
-	normalized.RoomID = id.RoomID(roomID)
+	normalized.RoomID = expectedKey.roomID
 	normalized.Type = logicalType
 	normalized.Type.Class = event.ToDeviceEventType
 	normalized.Content = *parsed
@@ -320,24 +321,66 @@ func contentFromRawMap(raw map[string]any) (*event.Content, error) {
 	return &event.Content{VeryRaw: veryRaw, Raw: maps.Clone(raw)}, nil
 }
 
-func addStreamRouting(raw map[string]any, roomID id.RoomID, eventID id.EventID) map[string]any {
-	withRouting := maps.Clone(raw)
-	if withRouting == nil {
-		withRouting = make(map[string]any, 2)
+func contentFromRawJSON(veryRaw json.RawMessage) (*event.Content, error) {
+	content := &event.Content{VeryRaw: append(json.RawMessage(nil), veryRaw...)}
+	if len(content.VeryRaw) == 0 {
+		content.VeryRaw = []byte("{}")
 	}
-	withRouting["room_id"] = roomID
-	withRouting["event_id"] = eventID
-	return withRouting
+	if err := json.Unmarshal(content.VeryRaw, &content.Raw); err != nil {
+		return nil, err
+	}
+	if content.Raw == nil {
+		content.Raw = make(map[string]any)
+	}
+	return content, nil
 }
 
-func removeStreamRouting(raw map[string]any) map[string]any {
-	withoutRouting := maps.Clone(raw)
-	if withoutRouting == nil {
-		return make(map[string]any)
+func marshalContent(content *event.Content) (json.RawMessage, error) {
+	if content == nil {
+		return json.RawMessage(`{}`), nil
 	}
-	delete(withoutRouting, "room_id")
-	delete(withoutRouting, "event_id")
-	return withoutRouting
+	raw, err := content.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	return append(json.RawMessage(nil), raw...), nil
+}
+
+func normalizeUpdateContent(roomID id.RoomID, eventID id.EventID, content map[string]any) (*event.Content, error) {
+	if roomID == "" || eventID == "" {
+		return nil, fmt.Errorf("missing beeper stream identifiers")
+	}
+	raw := maps.Clone(content)
+	if _, ok := raw["room_id"]; ok {
+		return nil, fmt.Errorf("beeper stream payload may not override room_id")
+	} else if _, ok := raw["event_id"]; ok {
+		return nil, fmt.Errorf("beeper stream payload may not override event_id")
+	}
+	raw["room_id"] = roomID
+	raw["event_id"] = eventID
+	return contentFromRawMap(raw)
+}
+
+func containsType(types []event.Type, want event.Type) bool {
+	for _, candidate := range types {
+		if candidate == want {
+			return true
+		}
+	}
+	return false
+}
+
+func validateLogicalRouting(content *event.Content, evtType event.Type, roomID id.RoomID, eventID id.EventID) bool {
+	switch evtType {
+	case event.ToDeviceBeeperStreamSubscribe:
+		subscribe := content.AsBeeperStreamSubscribe()
+		return subscribe.RoomID == roomID && subscribe.EventID == eventID
+	case event.ToDeviceBeeperStreamUpdate:
+		update := content.AsBeeperStreamUpdate()
+		return update.RoomID == roomID && update.EventID == eventID
+	default:
+		return false
+	}
 }
 
 func (h *Helper) isEncrypted(ctx context.Context, roomID id.RoomID) bool {
@@ -387,6 +430,6 @@ func descriptorEqual(a, b *event.BeeperStreamInfo) bool {
 		return a.Encryption == b.Encryption
 	default:
 		return a.Encryption.Algorithm == b.Encryption.Algorithm &&
-			a.Encryption.Key == b.Encryption.Key
+			bytes.Equal(a.Encryption.Key, b.Encryption.Key)
 	}
 }

@@ -16,6 +16,8 @@ import (
 	"strconv"
 	"strings"
 
+	"go.mau.fi/util/jsonbytes"
+
 	"maunium.net/go/mautrix/id"
 )
 
@@ -229,6 +231,7 @@ func (info *BeeperStreamInfo) Clone() *BeeperStreamInfo {
 	cloned := *info
 	if info.Encryption != nil {
 		enc := *info.Encryption
+		enc.Key = append(jsonbytes.UnpaddedBytes(nil), info.Encryption.Key...)
 		cloned.Encryption = &enc
 	}
 	return &cloned
@@ -243,17 +246,17 @@ func (info *BeeperStreamInfo) Validate() error {
 	if info.Encryption == nil {
 		return nil
 	}
-	if info.Encryption.Algorithm != id.AlgorithmBeeperStreamAESGCM {
+	if info.Encryption.Algorithm != id.AlgorithmBeeperStreamV1 {
 		return fmt.Errorf("unsupported beeper stream encryption algorithm %q", info.Encryption.Algorithm)
-	} else if info.Encryption.Key == "" {
+	} else if len(info.Encryption.Key) == 0 {
 		return fmt.Errorf("missing beeper stream encryption key")
 	}
 	return nil
 }
 
 type BeeperStreamEncryptionInfo struct {
-	Algorithm id.Algorithm `json:"algorithm"`
-	Key       string       `json:"key"`
+	Algorithm id.Algorithm            `json:"algorithm"`
+	Key       jsonbytes.UnpaddedBytes `json:"key"`
 }
 
 type BeeperStreamSubscribeEventContent struct {

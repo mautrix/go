@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Tulir Asokan
+// Copyright (c) 2026 Batuhan İçöz
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -9,10 +9,13 @@ package beeperstream
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 
+	"go.mau.fi/util/jsonbytes"
 	"go.mau.fi/util/random"
 
 	"maunium.net/go/mautrix/event"
@@ -24,15 +27,12 @@ type innerPayload struct {
 	Content json.RawMessage `json:"content"`
 }
 
-func makeStreamKey() string {
-	return base64.RawStdEncoding.EncodeToString(random.Bytes(32))
+func makeStreamKey() jsonbytes.UnpaddedBytes {
+	return random.Bytes(32)
 }
 
-func newStreamGCM(base64Key string) (cipher.AEAD, error) {
-	key, err := base64.RawStdEncoding.DecodeString(base64Key)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode stream key: %w", err)
-	} else if len(key) != 32 {
+func newStreamGCM(key []byte) (cipher.AEAD, error) {
+	if len(key) != 32 {
 		return nil, fmt.Errorf("invalid stream key length %d", len(key))
 	}
 	block, err := aes.NewCipher(key)
@@ -42,11 +42,18 @@ func newStreamGCM(base64Key string) (cipher.AEAD, error) {
 	return cipher.NewGCM(block)
 }
 
-func encryptLogicalEvent(logicalType event.Type, payload json.RawMessage, roomID id.RoomID, eventID id.EventID, base64Key string) (*event.Content, error) {
+func deriveStreamID(key []byte, roomID id.RoomID, eventID id.EventID) string {
+	mac := hmac.New(sha256.New, key)
+	mac.Write([]byte(roomID))
+	mac.Write([]byte(eventID))
+	return base64.RawStdEncoding.EncodeToString(mac.Sum(nil))
+}
+
+func encryptLogicalEvent(logicalType event.Type, payload json.RawMessage, roomID id.RoomID, eventID id.EventID, key []byte) (*event.Content, error) {
 	if roomID == "" || eventID == "" {
 		return nil, fmt.Errorf("missing beeper stream identifiers")
 	}
-	gcm, err := newStreamGCM(base64Key)
+	gcm, err := newStreamGCM(key)
 	if err != nil {
 		return nil, err
 	}
@@ -59,45 +66,32 @@ func encryptLogicalEvent(logicalType event.Type, payload json.RawMessage, roomID
 	}
 	iv := random.Bytes(gcm.NonceSize())
 	ciphertext := gcm.Seal(nil, iv, plaintext, nil)
-	ciphertextB64 := base64.RawStdEncoding.EncodeToString(ciphertext)
-	ciphertextJSON, err := json.Marshal(ciphertextB64)
-	if err != nil {
-		return nil, err
-	}
 	return &event.Content{
 		Parsed: &event.EncryptedEventContent{
-			Algorithm:  id.AlgorithmBeeperStreamAESGCM,
-			Ciphertext: ciphertextJSON,
-		},
-		Raw: map[string]any{
-			"algorithm":  string(id.AlgorithmBeeperStreamAESGCM),
-			"iv":         base64.RawStdEncoding.EncodeToString(iv),
-			"room_id":    string(roomID),
-			"event_id":   string(eventID),
-			"ciphertext": ciphertextB64,
+			Algorithm:        id.AlgorithmBeeperStreamV1,
+			StreamID:         deriveStreamID(key, roomID, eventID),
+			IV:               iv,
+			MegolmCiphertext: ciphertext,
 		},
 	}, nil
 }
 
-func decryptLogicalEvent(content *event.Content, base64Key string) (event.Type, json.RawMessage, error) {
-	gcm, err := newStreamGCM(base64Key)
+func decryptLogicalEvent(content *event.Content, key []byte) (event.Type, json.RawMessage, error) {
+	gcm, err := newStreamGCM(key)
 	if err != nil {
 		return event.Type{}, nil, err
 	}
-	raw := content.Raw
-	ivStr, _ := raw["iv"].(string)
-	iv, err := base64.RawStdEncoding.DecodeString(ivStr)
-	if err != nil {
-		return event.Type{}, nil, fmt.Errorf("failed to decode beeper stream IV: %w", err)
-	} else if len(iv) != gcm.NonceSize() {
-		return event.Type{}, nil, fmt.Errorf("invalid beeper stream IV length %d", len(iv))
+	encrypted := content.AsEncrypted()
+	if encrypted.Algorithm == "" && content != nil && content.Parsed == nil && len(content.VeryRaw) > 0 {
+		if err = content.ParseRaw(event.ToDeviceEncrypted); err != nil {
+			return event.Type{}, nil, err
+		}
+		encrypted = content.AsEncrypted()
 	}
-	ciphStr, _ := raw["ciphertext"].(string)
-	ciphertext, err := base64.RawStdEncoding.DecodeString(ciphStr)
-	if err != nil {
-		return event.Type{}, nil, fmt.Errorf("failed to decode beeper stream ciphertext: %w", err)
+	if len(encrypted.IV) != gcm.NonceSize() {
+		return event.Type{}, nil, fmt.Errorf("invalid beeper stream IV length %d", len(encrypted.IV))
 	}
-	plaintext, err := gcm.Open(nil, iv, ciphertext, nil)
+	plaintext, err := gcm.Open(nil, encrypted.IV, encrypted.MegolmCiphertext, nil)
 	if err != nil {
 		return event.Type{}, nil, err
 	}

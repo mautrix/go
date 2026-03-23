@@ -143,10 +143,12 @@ func newTestSubscribeEvent(toUserID id.UserID, toDeviceID id.DeviceID) *event.Ev
 
 func newTestEncryptedSubscribeEvent(t *testing.T, descriptor *event.BeeperStreamInfo) *event.Event {
 	t.Helper()
-	payload, err := json.Marshal(map[string]any{
-		"device_id": testStreamSubscriberDev,
-		"expiry_ms": 60_000,
-	})
+	payload, err := marshalContent(&event.Content{Parsed: &event.BeeperStreamSubscribeEventContent{
+		RoomID:   testStreamRoomID,
+		EventID:  testStreamEventID,
+		DeviceID: testStreamSubscriberDev,
+		ExpiryMS: 60_000,
+	}})
 	require.NoError(t, err)
 	encContent, err := encryptLogicalEvent(event.ToDeviceBeeperStreamSubscribe, payload, testStreamRoomID, testStreamEventID, descriptor.Encryption.Key)
 	require.NoError(t, err)
@@ -168,7 +170,7 @@ func newTestDescriptor(encrypted bool) *event.BeeperStreamInfo {
 	}
 	if encrypted {
 		descriptor.Encryption = &event.BeeperStreamEncryptionInfo{
-			Algorithm: id.AlgorithmBeeperStreamAESGCM,
+			Algorithm: id.AlgorithmBeeperStreamV1,
 			Key:       makeStreamKey(),
 		}
 	}
@@ -177,11 +179,9 @@ func newTestDescriptor(encrypted bool) *event.BeeperStreamInfo {
 
 func newTestEncryptedUpdateEvent(t *testing.T, descriptor *event.BeeperStreamInfo) *event.Event {
 	t.Helper()
-	content, err := newUpdateContent(testStreamRoomID, testStreamEventID, newTestPublishContent("hello"))
+	content, err := normalizeUpdateContent(testStreamRoomID, testStreamEventID, newTestPublishContent("hello"))
 	require.NoError(t, err)
-	raw, err := rawMapFromContent(content)
-	require.NoError(t, err)
-	payload, err := json.Marshal(removeStreamRouting(raw))
+	payload, err := marshalContent(content)
 	require.NoError(t, err)
 	encContent, err := encryptLogicalEvent(event.ToDeviceBeeperStreamUpdate, payload, testStreamRoomID, testStreamEventID, descriptor.Encryption.Key)
 	require.NoError(t, err)
@@ -302,13 +302,13 @@ func TestHelperReplayPendingEncryptedSubscribeOnRegister(t *testing.T) {
 	rawContent := recorder.rawContent(t, req, testStreamSubscriberID, testStreamSubscriberDev)
 	var encContent event.Content
 	require.NoError(t, json.Unmarshal(rawContent, &encContent))
+	require.NoError(t, encContent.ParseRaw(event.ToDeviceEncrypted))
+	require.Equal(t, deriveStreamID(descriptor.Encryption.Key, testStreamRoomID, testStreamEventID), encContent.AsEncrypted().StreamID)
 	logicalType, payloadContent, err := decryptLogicalEvent(&encContent, descriptor.Encryption.Key)
 	require.NoError(t, err)
 	require.Equal(t, event.ToDeviceBeeperStreamUpdate, logicalType)
 	var parsed map[string]any
 	require.NoError(t, json.Unmarshal(payloadContent, &parsed))
-	parsed["room_id"] = testStreamRoomID
-	parsed["event_id"] = testStreamEventID
 	assertStreamUpdateMap(t, parsed)
 }
 
@@ -351,13 +351,13 @@ func TestHelperInitAppserviceForwardsEncryptedBridgeSubscribe(t *testing.T) {
 	rawContent := recorder.rawContent(t, req, testStreamSubscriberID, testStreamSubscriberDev)
 	var encContent event.Content
 	require.NoError(t, json.Unmarshal(rawContent, &encContent))
+	require.NoError(t, encContent.ParseRaw(event.ToDeviceEncrypted))
+	require.Equal(t, deriveStreamID(descriptor.Encryption.Key, testStreamRoomID, testStreamEventID), encContent.AsEncrypted().StreamID)
 	logicalType, payloadContent, err := decryptLogicalEvent(&encContent, descriptor.Encryption.Key)
 	require.NoError(t, err)
 	require.Equal(t, event.ToDeviceBeeperStreamUpdate, logicalType)
 	var parsed map[string]any
 	require.NoError(t, json.Unmarshal(payloadContent, &parsed))
-	parsed["room_id"] = testStreamRoomID
-	parsed["event_id"] = testStreamEventID
 	assertStreamUpdateMap(t, parsed)
 }
 
@@ -519,6 +519,111 @@ func TestHelperInitIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestHelperRejectsMismatchedEncryptedRouting(t *testing.T) {
+	ts, recorder := newSendToDeviceRecorderServer(t)
+	client := newTestStreamClient(t, ts.URL, testStreamSubscriberID, "RECEIVER")
+	streams := newTestHelper(t, client)
+	descriptor := newTestDescriptor(true)
+
+	require.NoError(t, streams.Subscribe(context.Background(), testStreamRoomID, testStreamEventID, descriptor))
+	t.Cleanup(func() { streams.Unsubscribe(testStreamRoomID, testStreamEventID) })
+	_ = recorder.next(t)
+
+	update, err := normalizeUpdateContent(testStreamRoomID, id.EventID("$other"), newTestPublishContent("hello"))
+	require.NoError(t, err)
+	payload, err := marshalContent(update)
+	require.NoError(t, err)
+	encContent, err := encryptLogicalEvent(event.ToDeviceBeeperStreamUpdate, payload, testStreamRoomID, testStreamEventID, descriptor.Encryption.Key)
+	require.NoError(t, err)
+
+	normalized := streams.HandleSyncResponse(context.Background(), &mautrix.RespSync{
+		ToDevice: mautrix.SyncEventsList{Events: []*event.Event{{
+			Sender:  testStreamBotUserID,
+			Type:    event.ToDeviceEncrypted,
+			Content: *encContent,
+		}}},
+	})
+	require.Empty(t, normalized)
+}
+
+func TestHelperRejectsUnknownEncryptedLogicalType(t *testing.T) {
+	ts, recorder := newSendToDeviceRecorderServer(t)
+	client := newTestStreamClient(t, ts.URL, testStreamSubscriberID, "RECEIVER")
+	streams := newTestHelper(t, client)
+	descriptor := newTestDescriptor(true)
+
+	require.NoError(t, streams.Subscribe(context.Background(), testStreamRoomID, testStreamEventID, descriptor))
+	t.Cleanup(func() { streams.Unsubscribe(testStreamRoomID, testStreamEventID) })
+	_ = recorder.next(t)
+
+	payload, err := marshalContent(&event.Content{Raw: newTestPublishContent("hello")})
+	require.NoError(t, err)
+	encContent, err := encryptLogicalEvent(event.Type{Type: "com.beeper.stream.unknown", Class: event.ToDeviceEventType}, payload, testStreamRoomID, testStreamEventID, descriptor.Encryption.Key)
+	require.NoError(t, err)
+
+	normalized := streams.HandleSyncResponse(context.Background(), &mautrix.RespSync{
+		ToDevice: mautrix.SyncEventsList{Events: []*event.Event{{
+			Sender:  testStreamBotUserID,
+			Type:    event.ToDeviceEncrypted,
+			Content: *encContent,
+		}}},
+	})
+	require.Empty(t, normalized)
+}
+
+func TestHelperRejectsEncryptedEventMissingStreamID(t *testing.T) {
+	ts, recorder := newSendToDeviceRecorderServer(t)
+	client := newTestStreamClient(t, ts.URL, testStreamSubscriberID, "RECEIVER")
+	streams := newTestHelper(t, client)
+	descriptor := newTestDescriptor(true)
+
+	require.NoError(t, streams.Subscribe(context.Background(), testStreamRoomID, testStreamEventID, descriptor))
+	t.Cleanup(func() { streams.Unsubscribe(testStreamRoomID, testStreamEventID) })
+	_ = recorder.next(t)
+
+	evt := newTestEncryptedUpdateEvent(t, descriptor)
+	evt.Content.AsEncrypted().StreamID = ""
+
+	normalized := streams.HandleSyncResponse(context.Background(), &mautrix.RespSync{
+		ToDevice: mautrix.SyncEventsList{Events: []*event.Event{evt}},
+	})
+	require.Empty(t, normalized)
+}
+
+func TestHelperRejectsOldEncryptedRoutingShape(t *testing.T) {
+	ts, recorder := newSendToDeviceRecorderServer(t)
+	client := newTestStreamClient(t, ts.URL, testStreamSubscriberID, "RECEIVER")
+	streams := newTestHelper(t, client)
+	descriptor := newTestDescriptor(true)
+
+	require.NoError(t, streams.Subscribe(context.Background(), testStreamRoomID, testStreamEventID, descriptor))
+	t.Cleanup(func() { streams.Unsubscribe(testStreamRoomID, testStreamEventID) })
+	_ = recorder.next(t)
+
+	evt := newTestEncryptedUpdateEvent(t, descriptor)
+	raw, err := evt.Content.MarshalJSON()
+	require.NoError(t, err)
+
+	var parsed map[string]any
+	require.NoError(t, json.Unmarshal(raw, &parsed))
+	delete(parsed, "stream_id")
+	parsed["room_id"] = string(testStreamRoomID)
+	parsed["event_id"] = string(testStreamEventID)
+	oldShape, err := json.Marshal(parsed)
+	require.NoError(t, err)
+
+	normalized := streams.HandleSyncResponse(context.Background(), &mautrix.RespSync{
+		ToDevice: mautrix.SyncEventsList{Events: []*event.Event{{
+			Sender: testStreamBotUserID,
+			Type:   event.ToDeviceEncrypted,
+			Content: event.Content{
+				VeryRaw: oldShape,
+			},
+		}}},
+	})
+	require.Empty(t, normalized)
+}
+
 func TestHelperPendingSubscribeExpiresBeforeRegister(t *testing.T) {
 	ts, recorder := newSendToDeviceRecorderServer(t)
 	client := newTestStreamClient(t, ts.URL, testStreamBotUserID, testStreamPublisherDev)
@@ -577,16 +682,15 @@ func TestHelperCloseCancelsSubscriptions(t *testing.T) {
 
 func TestDecryptLogicalEventRejectsInvalidIV(t *testing.T) {
 	descriptor := newTestDescriptor(true)
-	content, err := newUpdateContent(testStreamRoomID, testStreamEventID, newTestPublishContent("hello"))
+	content, err := normalizeUpdateContent(testStreamRoomID, testStreamEventID, newTestPublishContent("hello"))
 	require.NoError(t, err)
-	raw, err := rawMapFromContent(content)
-	require.NoError(t, err)
-	payload, err := json.Marshal(removeStreamRouting(raw))
+	payload, err := marshalContent(content)
 	require.NoError(t, err)
 	encContent, err := encryptLogicalEvent(event.ToDeviceBeeperStreamUpdate, payload, testStreamRoomID, testStreamEventID, descriptor.Encryption.Key)
 	require.NoError(t, err)
 
-	encContent.Raw["iv"] = "invalid"
+	enc := encContent.AsEncrypted()
+	enc.IV = []byte("invalid")
 	_, _, err = decryptLogicalEvent(encContent, descriptor.Encryption.Key)
 	require.Error(t, err)
 }
