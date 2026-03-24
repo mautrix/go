@@ -99,12 +99,12 @@ func decryptLogicalEvent(content *event.Content, key []byte) (event.Type, json.R
 	if err = json.Unmarshal(plaintext, &payload); err != nil {
 		return event.Type{}, nil, err
 	}
-	logicalType := event.Type{Type: payload.Type, Class: event.ToDeviceEventType}
 	switch payload.Type {
 	case event.ToDeviceBeeperStreamSubscribe.Type:
-		logicalType = event.ToDeviceBeeperStreamSubscribe
+		return event.ToDeviceBeeperStreamSubscribe, payload.Content, nil
 	case event.ToDeviceBeeperStreamUpdate.Type:
-		logicalType = event.ToDeviceBeeperStreamUpdate
+		return event.ToDeviceBeeperStreamUpdate, payload.Content, nil
+	default:
+		return event.Type{}, nil, fmt.Errorf("unknown beeper stream event type %q", payload.Type)
 	}
-	return logicalType, payload.Content, nil
 }
