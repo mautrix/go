@@ -243,7 +243,7 @@ func (br *Bridge) QueueRemoteEvent(login *UserLogin, evt RemoteEvent) EventHandl
 			Object("portal_key", key).
 			Bool("uncertain_receiver", isUncertain).
 			Msg("Portal not found to handle remote event")
-		return EventHandlingResultFailed.WithError(ErrPortalNotFoundInEventHandler)
+		return EventHandlingResultIgnored
 	}
 	// TODO put this in a better place, and maybe cache to avoid constant db queries
 	login.MarkInPortal(ctx, portal)
