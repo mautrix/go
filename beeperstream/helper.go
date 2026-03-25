@@ -50,8 +50,6 @@ type Helper struct {
 	pendingLock      sync.Mutex
 	pendingSubscribe []pendingSubscribeEvent
 
-	updateHandler atomic.Pointer[func(context.Context, *event.Event)]
-
 	initLock    sync.Mutex
 	initialized bool
 	closed      atomic.Bool
