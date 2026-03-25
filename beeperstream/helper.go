@@ -50,6 +50,8 @@ type Helper struct {
 	pendingLock      sync.Mutex
 	pendingSubscribe []pendingSubscribeEvent
 
+	updateHandler atomic.Pointer[func(context.Context, *event.Event)]
+
 	initLock    sync.Mutex
 	initialized bool
 	closed      atomic.Bool
@@ -93,11 +95,7 @@ func (h *Helper) Init(_ context.Context) error {
 	if !ok {
 		return fmt.Errorf("the client syncer must implement ExtensibleSyncer")
 	}
-	h.registerIngressAdapter(
-		func(evtType event.Type, handler func(context.Context, *event.Event)) {
-			syncer.OnEventType(evtType, handler)
-		},
-	)
+	h.registerIngressAdapter(syncer.OnEventType)
 	h.initialized = true
 	return nil
 }
@@ -118,18 +116,37 @@ func (h *Helper) InitAppservice(_ context.Context, ep interface {
 	if h.initialized {
 		return nil
 	}
-	h.registerIngressAdapter(ep.On)
+	h.registerIngressAdapter(func(evtType event.Type, handler mautrix.EventHandler) {
+		ep.On(evtType, handler)
+	})
 	h.initialized = true
 	return nil
 }
 
+// OnUpdate registers a handler that is called for each expanded beeper stream
+// update event received via the Init/InitAppservice path.
+func (h *Helper) OnUpdate(handler func(context.Context, *event.Event)) {
+	h.updateHandler.Store(&handler)
+}
+
+func (h *Helper) dispatchUpdate(ctx context.Context, evt *event.Event) {
+	if handler := h.updateHandler.Load(); handler != nil {
+		(*handler)(ctx, evt)
+	}
+}
+
+func (h *Helper) handleAndDispatch(ctx context.Context, evt *event.Event) {
+	for _, expanded := range h.handleEvent(ctx, evt) {
+		h.dispatchUpdate(ctx, expanded)
+	}
+}
+
 func (h *Helper) registerIngressAdapter(
-	on func(event.Type, func(context.Context, *event.Event)),
+	on func(event.Type, mautrix.EventHandler),
 ) {
 	on(event.ToDeviceBeeperStreamSubscribe, h.handleSubscribeEvent)
-	on(event.ToDeviceEncrypted, func(ctx context.Context, evt *event.Event) {
-		h.handleEvent(ctx, evt)
-	})
+	on(event.ToDeviceBeeperStreamUpdate, h.handleAndDispatch)
+	on(event.ToDeviceEncrypted, h.handleAndDispatch)
 }
 
 func (h *Helper) Close() error {
@@ -193,8 +210,9 @@ func (h *Helper) HandleSyncResponse(ctx context.Context, resp *mautrix.RespSync)
 	var normalized []*event.Event
 	for _, evt := range resp.ToDevice.Events {
 		prepareToDeviceEvent(evt)
-		if evts := h.handleEvent(ctx, evt); len(evts) > 0 {
-			normalized = append(normalized, evts...)
+		for _, expanded := range h.handleEvent(ctx, evt) {
+			h.dispatchUpdate(ctx, expanded)
+			normalized = append(normalized, expanded)
 		}
 	}
 	return normalized
@@ -237,7 +255,7 @@ func (h *Helper) handleEncryptedEvent(ctx context.Context, evt *event.Event) []*
 	if content.Algorithm != id.AlgorithmBeeperStreamV1 {
 		return nil
 	}
-	if content.StreamID == "" || len(content.MegolmCiphertext) == 0 {
+	if content.StreamID == "" || len(content.BeeperStreamCiphertext) == 0 {
 		return nil
 	}
 	h.lock.RLock()

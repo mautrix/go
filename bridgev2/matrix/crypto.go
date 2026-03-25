@@ -135,6 +135,7 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 		return err
 	}
 	helper.streams = streams
+	helper.streams.OnUpdate(helper.bridge.EventProcessor.Dispatch)
 	helper.client.Syncer = &cryptoSyncer{OlmMachine: helper.mach, handleSyncResponse: streams.HandleSyncResponse}
 	helper.client.Store = helper.store
 
@@ -391,6 +392,9 @@ func (helper *CryptoHelper) Stop() {
 		helper.cancelPeriodicDeleteLoop()
 	}
 	helper.syncDone.Wait()
+	if helper.streams != nil {
+		_ = helper.streams.Close()
+	}
 }
 
 func (helper *CryptoHelper) clearDatabase(ctx context.Context) {

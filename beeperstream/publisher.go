@@ -368,7 +368,7 @@ func (h *Helper) tryPendingSubscribe(ctx context.Context, candidate pendingSubsc
 		if content.Algorithm != id.AlgorithmBeeperStreamV1 {
 			return false
 		}
-		if content.StreamID == "" || len(content.MegolmCiphertext) == 0 {
+		if content.StreamID == "" || len(content.BeeperStreamCiphertext) == 0 {
 			return false
 		}
 		h.lock.RLock()
@@ -401,7 +401,7 @@ func pendingSubscribeKey(evt *event.Event) (streamKey, string, bool) {
 		if content.Algorithm != id.AlgorithmBeeperStreamV1 {
 			return streamKey{}, "", false
 		}
-		if content.StreamID == "" || len(content.MegolmCiphertext) == 0 {
+		if content.StreamID == "" || len(content.BeeperStreamCiphertext) == 0 {
 			return streamKey{}, "", false
 		}
 		return streamKey{}, content.StreamID, true

@@ -68,10 +68,10 @@ func encryptLogicalEvent(logicalType event.Type, payload json.RawMessage, roomID
 	ciphertext := gcm.Seal(nil, iv, plaintext, nil)
 	return &event.Content{
 		Parsed: &event.EncryptedEventContent{
-			Algorithm:        id.AlgorithmBeeperStreamV1,
-			StreamID:         deriveStreamID(key, roomID, eventID),
-			IV:               iv,
-			MegolmCiphertext: ciphertext,
+			Algorithm:              id.AlgorithmBeeperStreamV1,
+			StreamID:               deriveStreamID(key, roomID, eventID),
+			IV:                     iv,
+			BeeperStreamCiphertext: ciphertext,
 		},
 	}, nil
 }
@@ -91,7 +91,7 @@ func decryptLogicalEvent(content *event.Content, key []byte) (event.Type, json.R
 	if len(encrypted.IV) != gcm.NonceSize() {
 		return event.Type{}, nil, fmt.Errorf("invalid beeper stream IV length %d", len(encrypted.IV))
 	}
-	plaintext, err := gcm.Open(nil, encrypted.IV, encrypted.MegolmCiphertext, nil)
+	plaintext, err := gcm.Open(nil, encrypted.IV, encrypted.BeeperStreamCiphertext, nil)
 	if err != nil {
 		return event.Type{}, nil, err
 	}
