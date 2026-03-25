@@ -461,7 +461,7 @@ func TestHelperInitAppserviceForwardsEncryptedBridgeSubscribe(t *testing.T) {
 	processor := newTestEventProcessor()
 	descriptor := newTestDescriptor(true)
 
-	require.NoError(t, streams.InitAppservice(context.Background(), processor))
+	require.NoError(t, streams.InitAppservice(processor))
 	require.NoError(t, streams.Register(context.Background(), testStreamRoomID, testStreamEventID, descriptor))
 
 	processor.Dispatch(context.Background(), newTestEncryptedSubscribeEvent(t, descriptor))
@@ -624,8 +624,8 @@ func TestHelperInitIsIdempotent(t *testing.T) {
 	streams := newTestHelper(t, client)
 	descriptor := newTestDescriptor(false)
 
-	require.NoError(t, streams.Init(context.Background()))
-	require.NoError(t, streams.Init(context.Background()))
+	require.NoError(t, streams.Init())
+	require.NoError(t, streams.Init())
 	require.NoError(t, streams.Register(context.Background(), testStreamRoomID, testStreamEventID, descriptor))
 
 	syncer := client.Syncer.(*mautrix.DefaultSyncer)

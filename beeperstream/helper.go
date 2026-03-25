@@ -80,7 +80,7 @@ func New(client *mautrix.Client) (*Helper, error) {
 }
 
 // Init attaches beeper stream handling to a normal /sync-based client.
-func (h *Helper) Init(_ context.Context) error {
+func (h *Helper) Init() error {
 	if h == nil {
 		return fmt.Errorf("beeper stream helper is nil")
 	} else if h.closed.Load() {
@@ -101,7 +101,7 @@ func (h *Helper) Init(_ context.Context) error {
 }
 
 // InitAppservice attaches beeper stream handling to an appservice event processor.
-func (h *Helper) InitAppservice(_ context.Context, ep interface {
+func (h *Helper) InitAppservice(ep interface {
 	On(event.Type, mautrix.EventHandler)
 }) error {
 	if h == nil {

@@ -135,9 +135,6 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 		return err
 	}
 	helper.streams = streams
-	if !helper.bridge.Config.Encryption.Appservice {
-		helper.streams.OnUpdate(helper.bridge.EventProcessor.Dispatch)
-	}
 	helper.client.Syncer = &cryptoSyncer{OlmMachine: helper.mach, handleSyncResponse: streams.HandleSyncResponse}
 	helper.client.Store = helper.store
 
@@ -363,13 +360,14 @@ func (helper *CryptoHelper) Start() {
 		helper.bridge.AS.Registration.EphemeralEvents = true
 		helper.mach.AddAppserviceListener(helper.bridge.EventProcessor)
 		if helper.streams != nil {
-			err := helper.streams.InitAppservice(context.Background(), helper.bridge.EventProcessor)
+			err := helper.streams.InitAppservice(helper.bridge.EventProcessor)
 			if err != nil {
 				helper.log.Err(err).Msg("Failed to initialize beeper stream appservice listener")
 			}
 		}
 		return
 	}
+	helper.streams.OnUpdate(helper.bridge.EventProcessor.Dispatch)
 	helper.syncDone.Add(1)
 	defer helper.syncDone.Done()
 	helper.log.Debug().Msg("Starting syncer for receiving to-device messages")
