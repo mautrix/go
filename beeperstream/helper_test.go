@@ -43,6 +43,26 @@ type sendToDeviceRecorder struct {
 	requests chan capturedSendToDeviceRequest
 }
 
+type testEventProcessor struct {
+	handlers map[event.Type][]func(context.Context, *event.Event)
+}
+
+func newTestEventProcessor() *testEventProcessor {
+	return &testEventProcessor{
+		handlers: make(map[event.Type][]func(context.Context, *event.Event)),
+	}
+}
+
+func (ep *testEventProcessor) On(evtType event.Type, handler func(context.Context, *event.Event)) {
+	ep.handlers[evtType] = append(ep.handlers[evtType], handler)
+}
+
+func (ep *testEventProcessor) Dispatch(ctx context.Context, evt *event.Event) {
+	for _, handler := range ep.handlers[evt.Type] {
+		handler(ctx, evt)
+	}
+}
+
 func newSendToDeviceRecorderServer(t *testing.T) (*httptest.Server, *sendToDeviceRecorder) {
 	t.Helper()
 	recorder := &sendToDeviceRecorder{
@@ -432,6 +452,34 @@ func TestHelperHandleSyncResponseIgnoresWrongDevice(t *testing.T) {
 		t.Fatalf("unexpected sendToDevice request: %s", req.path)
 	case <-time.After(200 * time.Millisecond):
 	}
+}
+
+func TestHelperInitAppserviceForwardsEncryptedBridgeSubscribe(t *testing.T) {
+	ts, recorder := newSendToDeviceRecorderServer(t)
+	client := newTestStreamClient(t, ts.URL, testStreamBotUserID, testStreamPublisherDev)
+	streams := newTestHelper(t, client)
+	processor := newTestEventProcessor()
+	descriptor := newTestDescriptor(true)
+
+	require.NoError(t, streams.InitAppservice(context.Background(), processor))
+	require.NoError(t, streams.Register(context.Background(), testStreamRoomID, testStreamEventID, descriptor))
+
+	processor.Dispatch(context.Background(), newTestEncryptedSubscribeEvent(t, descriptor))
+
+	require.NoError(t, streams.Publish(context.Background(), testStreamRoomID, testStreamEventID, newTestPublishContent("hello")))
+	req := recorder.next(t)
+	require.Contains(t, req.path, "/sendToDevice/m.room.encrypted/")
+	rawContent := recorder.rawContent(t, req, testStreamSubscriberID, testStreamSubscriberDev)
+	var encContent event.Content
+	require.NoError(t, json.Unmarshal(rawContent, &encContent))
+	require.NoError(t, encContent.ParseRaw(event.ToDeviceEncrypted))
+	require.Equal(t, deriveStreamID(descriptor.Encryption.Key, testStreamRoomID, testStreamEventID), encContent.AsEncrypted().StreamID)
+	logicalType, payloadContent, err := decryptLogicalEvent(&encContent, descriptor.Encryption.Key)
+	require.NoError(t, err)
+	require.Equal(t, event.ToDeviceBeeperStreamUpdate, logicalType)
+	var parsed map[string]any
+	require.NoError(t, json.Unmarshal(payloadContent, &parsed))
+	assertStreamUpdateMap(t, parsed)
 }
 
 func TestHelperHandleSyncResponseIgnoresWrongUser(t *testing.T) {
