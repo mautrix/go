@@ -18,7 +18,7 @@ import (
 )
 
 // EventHandler handles a single event from a sync response.
-type EventHandler func(ctx context.Context, evt *event.Event)
+type EventHandler = func(ctx context.Context, evt *event.Event)
 
 // SyncHandler handles a whole sync response. If the return value is false, handling will be stopped completely.
 type SyncHandler func(ctx context.Context, resp *RespSync, since string) bool

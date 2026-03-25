@@ -102,7 +102,7 @@ func (h *Helper) Init(_ context.Context) error {
 
 // InitAppservice attaches beeper stream handling to an appservice event processor.
 func (h *Helper) InitAppservice(_ context.Context, ep interface {
-	On(event.Type, func(context.Context, *event.Event))
+	On(event.Type, mautrix.EventHandler)
 }) error {
 	if h == nil {
 		return fmt.Errorf("beeper stream helper is nil")
@@ -116,9 +116,7 @@ func (h *Helper) InitAppservice(_ context.Context, ep interface {
 	if h.initialized {
 		return nil
 	}
-	h.registerIngressAdapter(func(evtType event.Type, handler mautrix.EventHandler) {
-		ep.On(evtType, handler)
-	})
+	h.registerIngressAdapter(ep.On)
 	h.initialized = true
 	return nil
 }
