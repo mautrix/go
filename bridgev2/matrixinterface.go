@@ -31,6 +31,13 @@ type MatrixCapabilities struct {
 	ExtraProfileMeta      bool
 }
 
+type BeeperStreamPublisher interface {
+	NewDescriptor(ctx context.Context, roomID id.RoomID, streamType string) (*event.BeeperStreamInfo, error)
+	Register(ctx context.Context, roomID id.RoomID, eventID id.EventID, descriptor *event.BeeperStreamInfo) error
+	Publish(ctx context.Context, roomID id.RoomID, eventID id.EventID, delta map[string]any) error
+	Unregister(roomID id.RoomID, eventID id.EventID)
+}
+
 type MatrixConnector interface {
 	Init(*Bridge)
 	Start(ctx context.Context) error
@@ -111,6 +118,11 @@ type MatrixConnectorWithPostRoomBridgeHandling interface {
 type MatrixConnectorWithAnalytics interface {
 	MatrixConnector
 	TrackAnalytics(userID id.UserID, event string, properties map[string]any)
+}
+
+type MatrixConnectorWithBeeperStreams interface {
+	MatrixConnector
+	GetBeeperStreamPublisher() BeeperStreamPublisher
 }
 
 type DirectNotificationData struct {

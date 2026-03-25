@@ -57,6 +57,7 @@ type Crypto interface {
 	Reset(ctx context.Context, startAfterReset bool)
 	Client() *mautrix.Client
 	ShareKeys(context.Context) error
+	BeeperStreamPublisher() bridgev2.BeeperStreamPublisher
 }
 
 type Connector struct {
@@ -294,6 +295,13 @@ func (br *Connector) GetRouter() *http.ServeMux {
 
 func (br *Connector) GetCapabilities() *bridgev2.MatrixCapabilities {
 	return br.Capabilities
+}
+
+func (br *Connector) GetBeeperStreamPublisher() bridgev2.BeeperStreamPublisher {
+	if br == nil || br.Crypto == nil {
+		return nil
+	}
+	return br.Crypto.BeeperStreamPublisher()
 }
 
 func sendStopSignal(ch chan struct{}) {

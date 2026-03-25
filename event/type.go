@@ -131,7 +131,7 @@ func (et *Type) GuessClass() TypeClass {
 		EventUnstablePollEnd.Type, BeeperTranscription.Type, BeeperDeleteChat.Type, BeeperAcceptMessageRequest.Type:
 		return MessageEventType
 	case ToDeviceRoomKey.Type, ToDeviceRoomKeyRequest.Type, ToDeviceForwardedRoomKey.Type, ToDeviceRoomKeyWithheld.Type,
-		ToDeviceBeeperRoomKeyAck.Type:
+		ToDeviceBeeperRoomKeyAck.Type, ToDeviceBeeperStreamSubscribe.Type, ToDeviceBeeperStreamUpdate.Type:
 		return ToDeviceEventType
 	default:
 		return UnknownEventType
@@ -298,5 +298,7 @@ var (
 
 	ToDeviceOrgMatrixRoomKeyWithheld = Type{"org.matrix.room_key.withheld", ToDeviceEventType}
 
-	ToDeviceBeeperRoomKeyAck = Type{"com.beeper.room_key.ack", ToDeviceEventType}
+	ToDeviceBeeperRoomKeyAck      = Type{"com.beeper.room_key.ack", ToDeviceEventType}
+	ToDeviceBeeperStreamSubscribe = Type{"com.beeper.stream.subscribe", ToDeviceEventType}
+	ToDeviceBeeperStreamUpdate    = Type{"com.beeper.stream.update", ToDeviceEventType}
 )

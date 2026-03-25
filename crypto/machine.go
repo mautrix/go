@@ -389,8 +389,12 @@ func (mach *OlmMachine) HandleMemberEvent(ctx context.Context, evt *event.Event)
 }
 
 func (mach *OlmMachine) HandleEncryptedEvent(ctx context.Context, evt *event.Event) *DecryptedOlmEvent {
-	if _, ok := evt.Content.Parsed.(*event.EncryptedEventContent); !ok {
+	content, ok := evt.Content.Parsed.(*event.EncryptedEventContent)
+	if !ok {
 		mach.machOrContextLog(ctx).Warn().Msg("Passed invalid event to encrypted handler")
+		return nil
+	} else if content.Algorithm == id.AlgorithmBeeperStreamV1 {
+		mach.machOrContextLog(ctx).Debug().Msg("Skipping beeper stream encrypted to-device event in Olm machine")
 		return nil
 	}
 

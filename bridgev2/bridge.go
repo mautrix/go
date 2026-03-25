@@ -230,6 +230,17 @@ func (br *Bridge) PostStart(ctx context.Context) {
 	br.DB.KV.Set(ctx, database.KeyBridgeInfoVersion, fmt.Sprintf("%d,%d", expectedBridgeInfoVer, expectedCapVer))
 }
 
+func (br *Bridge) GetBeeperStreamPublisher() BeeperStreamPublisher {
+	if br == nil || br.Matrix == nil {
+		return nil
+	}
+	withStreams, ok := br.Matrix.(MatrixConnectorWithBeeperStreams)
+	if !ok {
+		return nil
+	}
+	return withStreams.GetBeeperStreamPublisher()
+}
+
 func parseBridgeInfoVersion(version string) (info, capabilities int, err error) {
 	_, err = fmt.Sscanf(version, "%d,%d", &info, &capabilities)
 	if version == "" {
