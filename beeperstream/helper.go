@@ -121,30 +121,12 @@ func (h *Helper) InitAppservice(ep interface {
 	return nil
 }
 
-// OnUpdate registers a handler that is called for each expanded beeper stream
-// update event received via the Init/InitAppservice path.
-func (h *Helper) OnUpdate(handler func(context.Context, *event.Event)) {
-	h.updateHandler.Store(&handler)
-}
-
-func (h *Helper) dispatchUpdate(ctx context.Context, evt *event.Event) {
-	if handler := h.updateHandler.Load(); handler != nil {
-		(*handler)(ctx, evt)
-	}
-}
-
-func (h *Helper) handleAndDispatch(ctx context.Context, evt *event.Event) {
-	for _, expanded := range h.handleEvent(ctx, evt) {
-		h.dispatchUpdate(ctx, expanded)
-	}
-}
-
 func (h *Helper) registerIngressAdapter(
 	on func(event.Type, mautrix.EventHandler),
 ) {
 	on(event.ToDeviceBeeperStreamSubscribe, h.handleSubscribeEvent)
-	on(event.ToDeviceBeeperStreamUpdate, h.handleAndDispatch)
-	on(event.ToDeviceEncrypted, h.handleAndDispatch)
+	on(event.ToDeviceBeeperStreamUpdate, h.handleIngressEvent)
+	on(event.ToDeviceEncrypted, h.handleIngressEvent)
 }
 
 func (h *Helper) Close() error {
@@ -208,12 +190,13 @@ func (h *Helper) HandleSyncResponse(ctx context.Context, resp *mautrix.RespSync)
 	var normalized []*event.Event
 	for _, evt := range resp.ToDevice.Events {
 		prepareToDeviceEvent(evt)
-		for _, expanded := range h.handleEvent(ctx, evt) {
-			h.dispatchUpdate(ctx, expanded)
-			normalized = append(normalized, expanded)
-		}
+		normalized = append(normalized, h.handleEvent(ctx, evt)...)
 	}
 	return normalized
+}
+
+func (h *Helper) handleIngressEvent(ctx context.Context, evt *event.Event) {
+	h.handleEvent(ctx, evt)
 }
 
 func prepareToDeviceEvent(evt *event.Event) {
