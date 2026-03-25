@@ -367,7 +367,6 @@ func (helper *CryptoHelper) Start() {
 		}
 		return
 	}
-	helper.streams.OnUpdate(helper.bridge.EventProcessor.Dispatch)
 	helper.syncDone.Add(1)
 	defer helper.syncDone.Done()
 	helper.log.Debug().Msg("Starting syncer for receiving to-device messages")
