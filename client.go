@@ -1277,6 +1277,16 @@ func (cli *Client) BeeperUpdateProfile(ctx context.Context, data any) (err error
 	return
 }
 
+// UnstableOverwriteProfile replaces the user's entire profile
+func (cli *Client) UnstableOverwriteProfile(ctx context.Context, data any) (err error) {
+	urlPath := cli.BuildClientURL("v3", "profile", cli.UserID)
+	if cli.SpecVersions.Supports(FeatureUnstableReplaceProfile) && !cli.SpecVersions.Supports(FeatureStableReplaceProfile) {
+		urlPath = cli.BuildClientURL("unstable", "com.beeper.msc4437", "profile", cli.UserID)
+	}
+	_, err = cli.MakeRequest(ctx, http.MethodPut, urlPath, data, nil)
+	return
+}
+
 // GetAccountData gets the user's account data of this type. See https://spec.matrix.org/v1.2/client-server-api/#get_matrixclientv3useruseridaccount_datatype
 func (cli *Client) GetAccountData(ctx context.Context, name string, output interface{}) (err error) {
 	urlPath := cli.BuildClientURL("v3", "user", cli.UserID, "account_data", name)

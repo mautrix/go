@@ -29,6 +29,7 @@ type MatrixCapabilities struct {
 	BatchSending          bool
 	ArbitraryMemberChange bool
 	ExtraProfileMeta      bool
+	ReplaceEntireProfile  bool
 }
 
 type BeeperStreamPublisher interface {
@@ -209,6 +210,7 @@ type MatrixAPI interface {
 	SetDisplayName(ctx context.Context, name string) error
 	SetAvatarURL(ctx context.Context, avatarURL id.ContentURIString) error
 	SetExtraProfileMeta(ctx context.Context, data any) error
+	SetProfile(ctx context.Context, data any) error
 
 	CreateRoom(ctx context.Context, req *mautrix.ReqCreateRoom) (id.RoomID, error)
 	DeleteRoom(ctx context.Context, roomID id.RoomID, puppetsOnly bool) error
