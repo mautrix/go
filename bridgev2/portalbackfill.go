@@ -83,15 +83,15 @@ func (portal *Portal) doForwardBackfill(ctx context.Context, source *UserLogin, 
 	portal.sendBackfill(ctx, source, resp.Messages, true, resp.MarkRead, false, resp.CompleteCallback)
 }
 
-func (portal *Portal) DoBackwardsBackfill(ctx context.Context, source *UserLogin, task *database.BackfillTask) error {
+func (portal *Portal) doBackwardsBackfill(ctx context.Context, source *UserLogin, task *database.BackfillTask, resp *FetchMessagesResponse) (bool, error) {
 	log := zerolog.Ctx(ctx)
 	api, ok := source.Client.(BackfillingNetworkAPI)
 	if !ok {
-		return fmt.Errorf("network API does not support backfilling")
+		return false, fmt.Errorf("network API does not support backfilling")
 	}
 	firstMessage, err := portal.Bridge.DB.Message.GetFirstPortalMessage(ctx, portal.PortalKey)
 	if err != nil {
-		return fmt.Errorf("failed to get first portal message: %w", err)
+		return false, fmt.Errorf("failed to get first portal message: %w", err)
 	}
 	logEvt := log.Info().
 		Str("cursor", string(task.Cursor)).
@@ -102,22 +102,31 @@ func (portal *Portal) DoBackwardsBackfill(ctx context.Context, source *UserLogin
 	} else {
 		logEvt = logEvt.Str("db_oldest_message_id", "")
 	}
-	logEvt.Msg("Fetching messages for backward backfill")
-	resp, err := api.FetchMessages(ctx, FetchMessagesParams{
-		Portal:        portal,
-		ThreadRoot:    "",
-		Forward:       false,
-		Cursor:        task.Cursor,
-		AnchorMessage: firstMessage,
-		Count:         portal.Bridge.Config.Backfill.Queue.BatchSize,
-		Task:          task,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to fetch messages for backward backfill: %w", err)
-	} else if resp == nil {
-		log.Debug().Msg("Didn't get backfill response, marking task as done")
-		task.IsDone = true
-		return nil
+	if resp == nil {
+		logEvt.Msg("Fetching messages for backward backfill")
+		resp, err = api.FetchMessages(ctx, FetchMessagesParams{
+			Portal:        portal,
+			ThreadRoot:    "",
+			Forward:       false,
+			Cursor:        task.Cursor,
+			AnchorMessage: firstMessage,
+			Count:         portal.Bridge.Config.Backfill.Queue.BatchSize,
+			Task:          task,
+		})
+		if err != nil {
+			return false, fmt.Errorf("failed to fetch messages for backward backfill: %w", err)
+		} else if resp == nil {
+			log.Debug().Msg("Didn't get backfill response, marking task as done")
+			task.IsDone = true
+			return false, nil
+		} else if resp.Pending {
+			log.Debug().Msg("Backfill response is pending")
+			// TODO make configurable by admin and/or network connector?
+			task.NextDispatchMinTS = time.Now().Add(24 * time.Hour)
+			return true, nil
+		}
+	} else {
+		log.Debug().Msg("Using data from event for backwards backfill")
 	}
 	log.Debug().
 		Str("new_cursor", string(resp.Cursor)).
@@ -137,20 +146,20 @@ func (portal *Portal) DoBackwardsBackfill(ctx context.Context, source *UserLogin
 		if resp.CompleteCallback != nil {
 			resp.CompleteCallback()
 		}
-		return nil
+		return false, nil
 	}
 	resp.Messages = portal.cutoffMessages(ctx, resp.Messages, resp.AggressiveDeduplication, false, firstMessage)
 	if len(resp.Messages) == 0 {
 		if resp.CompleteCallback != nil {
 			resp.CompleteCallback()
 		}
-		return fmt.Errorf("no messages left to backfill after cutting off too new messages")
+		return false, fmt.Errorf("no messages left to backfill after cutting off too new messages")
 	}
 	portal.sendBackfill(ctx, source, resp.Messages, false, resp.MarkRead, false, resp.CompleteCallback)
 	if len(resp.Messages) > 0 {
 		task.OldestMessageID = resp.Messages[0].ID
 	}
-	return nil
+	return false, nil
 }
 
 func (portal *Portal) fetchThreadBackfill(ctx context.Context, source *UserLogin, anchor *database.Message) *FetchMessagesResponse {

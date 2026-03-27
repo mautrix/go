@@ -90,3 +90,19 @@ var _ bridgev2.RemoteChatInfoChange = (*ChatInfoChange)(nil)
 func (evt *ChatInfoChange) GetChatInfoChange(ctx context.Context) (*bridgev2.ChatInfoChange, error) {
 	return evt.ChatInfoChange, nil
 }
+
+// Backfill is a simple implementation of [bridgev2.RemoteBackfill].
+type Backfill struct {
+	EventMeta
+	Data        *bridgev2.FetchMessagesResponse
+	GetDataFunc func(ctx context.Context, portal *bridgev2.Portal) (*bridgev2.FetchMessagesResponse, error)
+}
+
+var _ bridgev2.RemoteBackfill = (*Backfill)(nil)
+
+func (evt *Backfill) GetBackfillData(ctx context.Context, portal *bridgev2.Portal) (*bridgev2.FetchMessagesResponse, error) {
+	if evt.GetDataFunc != nil {
+		return evt.GetDataFunc(ctx, portal)
+	}
+	return evt.Data, nil
+}

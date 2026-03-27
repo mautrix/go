@@ -552,6 +552,10 @@ type FetchMessagesResponse struct {
 	// to mark the messages as read immediately after backfilling.
 	MarkRead bool
 
+	// If a backfill event was requested in the background and will later be sent using RemoteBackfill,
+	// this should be set to true. The queue will suspend the task for at least 24 hours until the event.
+	Pending bool
+
 	// Should the bridge check each message against the database to ensure it's not a duplicate before bridging?
 	// By default, the bridge will only drop messages that are older than the last bridged message for forward backfills,
 	// or newer than the first for backward.

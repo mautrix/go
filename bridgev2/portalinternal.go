@@ -117,12 +117,20 @@ func (portal *PortalInternals) HandleMatrixEdit(ctx context.Context, sender *Use
 	return (*Portal)(portal).handleMatrixEdit(ctx, sender, origSender, evt, content, caps)
 }
 
-func (portal *PortalInternals) HandleMatrixReaction(ctx context.Context, sender *UserLogin, evt *event.Event) EventHandlingResult {
+func (portal *PortalInternals) HandleMatrixReaction(ctx context.Context, sender *UserLogin, evt *event.Event) (handleRes EventHandlingResult) {
 	return (*Portal)(portal).handleMatrixReaction(ctx, sender, evt)
 }
 
 func (portal *PortalInternals) GetTargetUser(ctx context.Context, userID id.UserID) (GhostOrUserLogin, error) {
 	return (*Portal)(portal).getTargetUser(ctx, userID)
+}
+
+func (portal *PortalInternals) HandleMatrixAcceptMessageRequest(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) EventHandlingResult {
+	return (*Portal)(portal).handleMatrixAcceptMessageRequest(ctx, sender, origSender, evt)
+}
+
+func (portal *PortalInternals) AutoAcceptMessageRequest(ctx context.Context, evt *event.Event, sender *UserLogin, origSender *OrigSender, caps *event.RoomFeatures) error {
+	return (*Portal)(portal).autoAcceptMessageRequest(ctx, evt, sender, origSender, caps)
 }
 
 func (portal *PortalInternals) HandleMatrixDeleteChat(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) EventHandlingResult {
@@ -265,10 +273,6 @@ func (portal *PortalInternals) HandleRemoteChatDelete(ctx context.Context, sourc
 	return (*Portal)(portal).handleRemoteChatDelete(ctx, source, evt)
 }
 
-func (portal *PortalInternals) HandleRemoteBackfill(ctx context.Context, source *UserLogin, backfill RemoteBackfill) (res EventHandlingResult) {
-	return (*Portal)(portal).handleRemoteBackfill(ctx, source, backfill)
-}
-
 func (portal *PortalInternals) UpdateName(ctx context.Context, name string, sender MatrixAPI, ts time.Time, excludeFromTimeline bool) bool {
 	return (*Portal)(portal).updateName(ctx, name, sender, ts, excludeFromTimeline)
 }
@@ -337,6 +341,14 @@ func (portal *PortalInternals) AddToUserSpaces(ctx context.Context) {
 	(*Portal)(portal).addToUserSpaces(ctx)
 }
 
+func (portal *PortalInternals) SafeDBDelete(ctx context.Context) error {
+	return (*Portal)(portal).safeDBDelete(ctx)
+}
+
+func (portal *PortalInternals) RemoveMXID(ctx context.Context, alreadyLocked bool) error {
+	return (*Portal)(portal).removeMXID(ctx, alreadyLocked)
+}
+
 func (portal *PortalInternals) RemoveInPortalCache(ctx context.Context) {
 	(*Portal)(portal).removeInPortalCache(ctx)
 }
@@ -351,6 +363,10 @@ func (portal *PortalInternals) UnlockedDeleteCache() {
 
 func (portal *PortalInternals) DoForwardBackfill(ctx context.Context, source *UserLogin, lastMessage *database.Message, bundledData any) {
 	(*Portal)(portal).doForwardBackfill(ctx, source, lastMessage, bundledData)
+}
+
+func (portal *PortalInternals) DoBackwardsBackfill(ctx context.Context, source *UserLogin, task *database.BackfillTask, resp *FetchMessagesResponse) (bool, error) {
+	return (*Portal)(portal).doBackwardsBackfill(ctx, source, task, resp)
 }
 
 func (portal *PortalInternals) FetchThreadBackfill(ctx context.Context, source *UserLogin, anchor *database.Message) *FetchMessagesResponse {

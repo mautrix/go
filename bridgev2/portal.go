@@ -96,8 +96,9 @@ type Portal struct {
 	events  chan portalEvent
 	deleted *exsync.Event
 
-	eventsLock sync.Mutex
-	eventIdx   int
+	backfillLock sync.Mutex
+	eventsLock   sync.Mutex
+	eventIdx     int
 }
 
 var PortalEventBuffer = 64
@@ -2568,7 +2569,7 @@ func (portal *Portal) handleRemoteEvent(ctx context.Context, source *UserLogin, 
 	case RemoteEventChatDelete:
 		res = portal.handleRemoteChatDelete(ctx, source, evt.(RemoteChatDelete))
 	case RemoteEventBackfill:
-		res = portal.handleRemoteBackfill(ctx, source, evt.(RemoteBackfill))
+		res = portal.HandleRemoteBackfill(ctx, source, evt.(RemoteBackfill))
 	default:
 		log.Warn().Msg("Got remote event with unknown type")
 	}
@@ -3895,13 +3896,33 @@ func (portal *Portal) handleRemoteChatDelete(ctx context.Context, source *UserLo
 	}
 }
 
-func (portal *Portal) handleRemoteBackfill(ctx context.Context, source *UserLogin, backfill RemoteBackfill) (res EventHandlingResult) {
-	//data, err := backfill.GetBackfillData(ctx, portal)
-	//if err != nil {
-	//	zerolog.Ctx(ctx).Err(err).Msg("Failed to get backfill data")
-	//	return
-	//}
-	return
+func (portal *Portal) HandleRemoteBackfill(ctx context.Context, source *UserLogin, backfill RemoteBackfill) EventHandlingResult {
+	data, err := backfill.GetBackfillData(ctx, portal)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to get backfill data")
+		return EventHandlingResultFailed.WithError(err)
+	}
+	task, err := portal.Bridge.DB.BackfillTask.GetNextForPortal(ctx, portal.PortalKey, true)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to get backfill task from database")
+		return EventHandlingResultFailed.WithError(err)
+	} else if task == nil {
+		zerolog.Ctx(ctx).Warn().Msg("No backfill task found for portal")
+		return EventHandlingResultIgnored
+	}
+	go func() {
+		_, err = portal.doBackfillTask(ctx, source, task, data)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to do backwards backfill from event")
+			return
+		}
+		zerolog.Ctx(ctx).Debug().Msg("Finished backfill from event")
+		err = portal.Bridge.DB.BackfillTask.Update(ctx, task)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to update backfill task in database after backfill")
+		}
+	}()
+	return EventHandlingResultSuccess
 }
 
 type ChatInfoChange struct {

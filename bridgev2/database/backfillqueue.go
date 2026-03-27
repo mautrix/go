@@ -33,6 +33,8 @@ type BackfillTask struct {
 	DispatchedAt      time.Time
 	CompletedAt       time.Time
 	NextDispatchMinTS time.Time
+
+	FromQueue bool
 }
 
 var BackfillNextDispatchNever = time.Unix(0, (1<<63)-1)
@@ -96,7 +98,7 @@ const (
 			bridge_id, portal_id, portal_receiver, user_login_id, batch_count, is_done,
 			cursor, oldest_message_id, dispatched_at, completed_at, next_dispatch_min_ts
 		FROM backfill_task
-		WHERE bridge_id = $1 AND portal_id = $2 AND portal_receiver = $3 AND is_done = false AND user_login_id <> ''
+		WHERE bridge_id = $1 AND portal_id = $2 AND portal_receiver = $3
 	`
 	deleteBackfillQueueQuery = `
 		DELETE FROM backfill_task
@@ -140,8 +142,14 @@ func (btq *BackfillTaskQuery) GetNext(ctx context.Context) (*BackfillTask, error
 	return btq.QueryOne(ctx, getNextBackfillQuery, btq.BridgeID, time.Now().UnixNano())
 }
 
-func (btq *BackfillTaskQuery) GetNextForPortal(ctx context.Context, portalKey networkid.PortalKey) (*BackfillTask, error) {
-	return btq.QueryOne(ctx, getNextBackfillQueryForPortal, btq.BridgeID, portalKey.ID, portalKey.Receiver)
+func (btq *BackfillTaskQuery) GetNextForPortal(ctx context.Context, portalKey networkid.PortalKey, allowCompletedTask bool) (*BackfillTask, error) {
+	task, err := btq.QueryOne(ctx, getNextBackfillQueryForPortal, btq.BridgeID, portalKey.ID, portalKey.Receiver)
+	if err != nil {
+		return nil, err
+	} else if !allowCompletedTask && (task.IsDone || task.UserLoginID == "") {
+		return nil, nil
+	}
+	return task, nil
 }
 
 func (btq *BackfillTaskQuery) Delete(ctx context.Context, portalKey networkid.PortalKey) error {
