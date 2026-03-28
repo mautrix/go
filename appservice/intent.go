@@ -515,6 +515,27 @@ func (intent *IntentAPI) SetAvatarURL(ctx context.Context, avatarURL id.ContentU
 	return intent.Client.SetAvatarURL(ctx, avatarURL)
 }
 
+func (intent *IntentAPI) SetProfileField(ctx context.Context, key string, value any) error {
+	if err := intent.EnsureRegistered(ctx); err != nil {
+		return err
+	}
+	return intent.Client.SetProfileField(ctx, key, value)
+}
+
+func (intent *IntentAPI) UnstableOverwriteProfile(ctx context.Context, data any) (err error) {
+	if err := intent.EnsureRegistered(ctx); err != nil {
+		return err
+	}
+	return intent.Client.UnstableOverwriteProfile(ctx, data)
+}
+
+func (intent *IntentAPI) BeeperUpdateProfile(ctx context.Context, data any) error {
+	if err := intent.EnsureRegistered(ctx); err != nil {
+		return err
+	}
+	return intent.Client.BeeperUpdateProfile(ctx, data)
+}
+
 func (intent *IntentAPI) Whoami(ctx context.Context) (*mautrix.RespWhoami, error) {
 	if err := intent.EnsureRegistered(ctx); err != nil {
 		return nil, err
