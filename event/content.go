@@ -42,6 +42,9 @@ var TypeMap = map[Type]reflect.Type{
 	StateRoomPolicy:         reflect.TypeOf(RoomPolicyEventContent{}),
 	StateUnstableRoomPolicy: reflect.TypeOf(RoomPolicyEventContent{}),
 
+	StateImagePack:         reflect.TypeOf(ImagePackEventContent{}),
+	StateUnstableImagePack: reflect.TypeOf(ImagePackEventContent{}),
+
 	StateLegacyPolicyRoom:     reflect.TypeOf(ModPolicyContent{}),
 	StateLegacyPolicyServer:   reflect.TypeOf(ModPolicyContent{}),
 	StateLegacyPolicyUser:     reflect.TypeOf(ModPolicyContent{}),
@@ -74,6 +77,9 @@ var TypeMap = map[Type]reflect.Type{
 	AccountDataIgnoredUserList: reflect.TypeOf(IgnoredUserListEventContent{}),
 	AccountDataMarkedUnread:    reflect.TypeOf(MarkedUnreadEventContent{}),
 	AccountDataBeeperMute:      reflect.TypeOf(BeeperMuteEventContent{}),
+
+	AccountDataImagePackRooms:         reflect.TypeOf(ImagePackRoomsEventContent{}),
+	AccountDataUnstableImagePackRooms: reflect.TypeOf(ImagePackRoomsEventContent{}),
 
 	EphemeralEventTyping:   reflect.TypeOf(TypingEventContent{}),
 	EphemeralEventReceipt:  reflect.TypeOf(ReceiptEventContent{}),

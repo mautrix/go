@@ -337,6 +337,21 @@ type serializableFileInfo struct {
 	Size     json.Number `json:"size,omitempty"`
 }
 
+func (fileInfo *FileInfo) IsZero() bool {
+	return fileInfo.MimeType == "" &&
+		fileInfo.ThumbnailInfo == nil &&
+		fileInfo.ThumbnailURL == "" &&
+		fileInfo.ThumbnailFile == nil &&
+		fileInfo.Blurhash == "" &&
+		fileInfo.AnoaBlurhash == "" &&
+		!fileInfo.MauGIF &&
+		!fileInfo.IsAnimated &&
+		fileInfo.Width == 0 &&
+		fileInfo.Height == 0 &&
+		fileInfo.Duration == 0 &&
+		fileInfo.Size == 0
+}
+
 func (sfi *serializableFileInfo) CopyFrom(fileInfo *FileInfo) *serializableFileInfo {
 	if fileInfo == nil {
 		return nil
