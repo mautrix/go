@@ -44,28 +44,30 @@ type Event struct {
 }
 
 // Reply sends a reply to command as notice, with optional string formatting and automatic $cmdprefix replacement.
-func (ce *Event) Reply(msg string, args ...any) {
+func (ce *Event) Reply(msg string, args ...any) id.EventID {
 	msg = strings.ReplaceAll(msg, "$cmdprefix ", ce.Bridge.Config.CommandPrefix+" ")
 	if len(args) > 0 {
 		msg = fmt.Sprintf(msg, args...)
 	}
-	ce.ReplyAdvanced(msg, true, false)
+	return ce.ReplyAdvanced(msg, true, false)
 }
 
 // ReplyAdvanced sends a reply to command as notice. It allows using HTML and disabling markdown,
 // but doesn't have built-in string formatting.
-func (ce *Event) ReplyAdvanced(msg string, allowMarkdown, allowHTML bool) {
+func (ce *Event) ReplyAdvanced(msg string, allowMarkdown, allowHTML bool) id.EventID {
 	content := format.RenderMarkdown(msg, allowMarkdown, allowHTML)
 	content.MsgType = event.MsgNotice
-	_, err := ce.Bot.SendMessage(ce.Ctx, ce.OrigRoomID, event.EventMessage, &event.Content{Parsed: &content}, nil)
+	resp, err := ce.Bot.SendMessage(ce.Ctx, ce.OrigRoomID, event.EventMessage, &event.Content{Parsed: &content}, nil)
 	if err != nil {
 		ce.Log.Err(err).Msg("Failed to reply to command")
+		return ""
 	}
+	return resp.EventID
 }
 
 // React sends a reaction to the command.
-func (ce *Event) React(key string) {
-	_, err := ce.Bot.SendMessage(ce.Ctx, ce.OrigRoomID, event.EventReaction, &event.Content{
+func (ce *Event) React(key string) id.EventID {
+	resp, err := ce.Bot.SendMessage(ce.Ctx, ce.OrigRoomID, event.EventReaction, &event.Content{
 		Parsed: &event.ReactionEventContent{
 			RelatesTo: event.RelatesTo{
 				Type:    event.RelAnnotation,
@@ -76,7 +78,9 @@ func (ce *Event) React(key string) {
 	}, nil)
 	if err != nil {
 		ce.Log.Err(err).Msg("Failed to react to command")
+		return ""
 	}
+	return resp.EventID
 }
 
 // Redact redacts the command.
