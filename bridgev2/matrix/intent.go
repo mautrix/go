@@ -148,6 +148,10 @@ func (as *ASIntent) MarkRead(ctx context.Context, roomID id.RoomID, eventID id.E
 		req.FullyRead = eventID
 		req.BeeperFullyReadExtra = extraData
 	}
+	if as.Matrix.IsCustomPuppet {
+		markedUnreadContent, _ := json.Marshal(&event.MarkedUnreadEventContent{Unread: false})
+		as.Connector.MarkAccountDataSent(as.Matrix.UserID, roomID, event.AccountDataMarkedUnread.Type, markedUnreadContent)
+	}
 	if as.Matrix.IsCustomPuppet && as.Connector.SpecVersions.Supports(mautrix.BeeperFeatureInboxState) && as.Connector.Config.Homeserver.Software != bridgeconfig.SoftwareHungry {
 		err = as.Matrix.SetBeeperInboxState(ctx, roomID, &mautrix.ReqSetBeeperInboxState{
 			//MarkedUnread: ptr.Ptr(false),
@@ -167,6 +171,10 @@ func (as *ASIntent) MarkRead(ctx context.Context, roomID id.RoomID, eventID id.E
 func (as *ASIntent) MarkUnread(ctx context.Context, roomID id.RoomID, unread bool) error {
 	if as.Connector.Config.Homeserver.Software == bridgeconfig.SoftwareHungry {
 		return nil
+	}
+	if as.Matrix.IsCustomPuppet {
+		markedUnreadContent, _ := json.Marshal(&event.MarkedUnreadEventContent{Unread: unread})
+		as.Connector.MarkAccountDataSent(as.Matrix.UserID, roomID, event.AccountDataMarkedUnread.Type, markedUnreadContent)
 	}
 	if as.Matrix.IsCustomPuppet && as.Connector.SpecVersions.Supports(mautrix.BeeperFeatureInboxState) {
 		return as.Matrix.SetBeeperInboxState(ctx, roomID, &mautrix.ReqSetBeeperInboxState{
@@ -709,6 +717,9 @@ func (as *ASIntent) DeleteRoom(ctx context.Context, roomID id.RoomID, puppetsOnl
 }
 
 func (as *ASIntent) TagRoom(ctx context.Context, roomID id.RoomID, tag event.RoomTag, isTagged bool) error {
+	if as.Matrix.IsCustomPuppet {
+		as.Connector.MarkAccountDataSent(as.Matrix.UserID, roomID, event.AccountDataRoomTags.Type, nil)
+	}
 	tags, err := as.Matrix.GetTags(ctx, roomID)
 	if err != nil {
 		return fmt.Errorf("failed to get room tags: %w", err)
@@ -744,6 +755,10 @@ func (as *ASIntent) MuteRoom(ctx context.Context, roomID id.RoomID, until time.T
 		mutedUntil = -1
 	} else {
 		mutedUntil = until.UnixMilli()
+	}
+	if as.Matrix.IsCustomPuppet {
+		muteContent, _ := json.Marshal(&event.BeeperMuteEventContent{MutedUntil: mutedUntil})
+		as.Connector.MarkAccountDataSent(as.Matrix.UserID, roomID, event.AccountDataBeeperMute.Type, muteContent)
 	}
 	if as.Connector.SpecVersions.Supports(mautrix.BeeperFeatureAccountDataMute) {
 		return as.Matrix.SetRoomAccountData(ctx, roomID, event.AccountDataBeeperMute.Type, &event.BeeperMuteEventContent{
