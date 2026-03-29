@@ -583,6 +583,10 @@ components:
           description: The Matrix room ID of the direct chat with the user.
           examples:
           - '!OKhS0I5q2fCzdnl2qgeozDQw:t2bot.io'
+        extra_profile:
+          type: object
+          description: Extra profile metadata for the user on the remote network.
+          additionalProperties: true
     GroupCreateParams:
       type: object
       description: |
