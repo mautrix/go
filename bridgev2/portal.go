@@ -830,6 +830,8 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 		return handleMatrixRoomMeta(portal, ctx, login, origSender, evt, isStateRequest, RoomTopicHandlingNetworkAPI.HandleMatrixRoomTopic)
 	case event.StateRoomAvatar:
 		return handleMatrixRoomMeta(portal, ctx, login, origSender, evt, isStateRequest, RoomAvatarHandlingNetworkAPI.HandleMatrixRoomAvatar)
+	case event.StatePinnedEvents:
+		return handleMatrixRoomMeta(portal, ctx, login, origSender, evt, isStateRequest, PinHandlingNetworkAPI.HandleMatrixPinChange)
 	case event.StateBeeperDisappearingTimer:
 		return handleMatrixRoomMeta(portal, ctx, login, origSender, evt, isStateRequest, DisappearTimerChangingNetworkAPI.HandleMatrixDisappearingTimer)
 	case event.StateEncryption:
