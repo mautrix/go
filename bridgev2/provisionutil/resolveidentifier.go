@@ -39,6 +39,9 @@ func ResolveIdentifier(
 	identifier string,
 	createChat bool,
 ) (*RespResolveIdentifier, error) {
+	if !login.Client.IsLoggedIn() {
+		return nil, bridgev2.RespError(mautrix.MForbidden.WithMessage("Not logged in"))
+	}
 	api, ok := login.Client.(bridgev2.IdentifierResolvingNetworkAPI)
 	if !ok {
 		return nil, bridgev2.RespError(mautrix.MUnrecognized.WithMessage("This bridge does not support resolving identifiers"))

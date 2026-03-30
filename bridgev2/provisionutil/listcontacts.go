@@ -24,6 +24,9 @@ type RespSearchUsers struct {
 }
 
 func GetContactList(ctx context.Context, login *bridgev2.UserLogin) (*RespGetContactList, error) {
+	if !login.Client.IsLoggedIn() {
+		return nil, bridgev2.RespError(mautrix.MForbidden.WithMessage("Not logged in"))
+	}
 	api, ok := login.Client.(bridgev2.ContactListingNetworkAPI)
 	if !ok {
 		return nil, bridgev2.RespError(mautrix.MUnrecognized.WithMessage("This bridge does not support listing contacts"))
@@ -39,6 +42,9 @@ func GetContactList(ctx context.Context, login *bridgev2.UserLogin) (*RespGetCon
 }
 
 func SearchUsers(ctx context.Context, login *bridgev2.UserLogin, query string) (*RespSearchUsers, error) {
+	if !login.Client.IsLoggedIn() {
+		return nil, bridgev2.RespError(mautrix.MForbidden.WithMessage("Not logged in"))
+	}
 	api, ok := login.Client.(bridgev2.UserSearchingNetworkAPI)
 	if !ok {
 		return nil, bridgev2.RespError(mautrix.MUnrecognized.WithMessage("This bridge does not support searching for users"))

@@ -28,6 +28,9 @@ type RespCreateGroup struct {
 }
 
 func CreateGroup(ctx context.Context, login *bridgev2.UserLogin, params *bridgev2.GroupCreateParams) (*RespCreateGroup, error) {
+	if !login.Client.IsLoggedIn() {
+		return nil, bridgev2.RespError(mautrix.MForbidden.WithMessage("Not logged in"))
+	}
 	api, ok := login.Client.(bridgev2.GroupCreatingNetworkAPI)
 	if !ok {
 		return nil, bridgev2.RespError(mautrix.MUnrecognized.WithMessage("This bridge does not support creating groups"))
