@@ -145,6 +145,8 @@ func doMigrateLegacy(helper up.Helper, python bool) {
 	CopyToOtherLocation(helper, up.Bool, []string{"bridge", "encryption", "default"}, []string{"encryption", "default"})
 	CopyToOtherLocation(helper, up.Bool, []string{"bridge", "encryption", "require"}, []string{"encryption", "require"})
 	CopyToOtherLocation(helper, up.Bool, []string{"bridge", "encryption", "appservice"}, []string{"encryption", "appservice"})
+	CopyToOtherLocation(helper, up.Bool, []string{"bridge", "encryption", "msc4190"}, []string{"encryption", "msc4190"})
+	CopyToOtherLocation(helper, up.Bool, []string{"bridge", "encryption", "self_sign"}, []string{"encryption", "self_sign"})
 	CopyToOtherLocation(helper, up.Bool, []string{"bridge", "encryption", "allow_key_sharing"}, []string{"encryption", "allow_key_sharing"})
 	CopyToOtherLocation(helper, up.Bool, []string{"bridge", "encryption", "delete_keys", "delete_outbound_on_ack"}, []string{"encryption", "delete_keys", "delete_outbound_on_ack"})
 	CopyToOtherLocation(helper, up.Bool, []string{"bridge", "encryption", "delete_keys", "dont_store_outbound"}, []string{"encryption", "delete_keys", "dont_store_outbound"})
