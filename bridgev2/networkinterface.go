@@ -899,7 +899,7 @@ var (
 	Kick          = MembershipChangeType{From: event.MembershipJoin, To: event.MembershipLeave}
 	BanJoined     = MembershipChangeType{From: event.MembershipJoin, To: event.MembershipBan}
 	Invite        = MembershipChangeType{From: event.MembershipLeave, To: event.MembershipInvite}
-	Join          = MembershipChangeType{From: event.MembershipLeave, To: event.MembershipJoin}
+	Join          = MembershipChangeType{From: event.MembershipLeave, To: event.MembershipJoin, IsSelf: true}
 	BanLeft       = MembershipChangeType{From: event.MembershipLeave, To: event.MembershipBan}
 	Knock         = MembershipChangeType{From: event.MembershipLeave, To: event.MembershipKnock, IsSelf: true}
 	AcceptKnock   = MembershipChangeType{From: event.MembershipKnock, To: event.MembershipInvite}

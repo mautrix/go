@@ -1978,14 +1978,17 @@ func (portal *Portal) handleMatrixMembership(
 		return EventHandlingResultIgnored.WithMSSError(ErrMembershipNotSupported)
 	}
 	targetMXID := id.UserID(*evt.StateKey)
-	isSelf := sender.User.MXID == targetMXID
 	target, err := portal.getTargetUser(ctx, targetMXID)
 	if err != nil {
 		log.Err(err).Msg("Failed to get member event target")
 		return EventHandlingResultFailed.WithMSSError(err)
 	}
 
-	membershipChangeType := MembershipChangeType{From: prevContent.Membership, To: content.Membership, IsSelf: isSelf}
+	membershipChangeType := MembershipChangeType{
+		From:   prevContent.Membership,
+		To:     content.Membership,
+		IsSelf: evt.Sender == targetMXID,
+	}
 	if membershipChangeType == Leave {
 		sender.inPortalCache.Remove(portal.PortalKey)
 		if !portal.Bridge.Config.BridgeMatrixLeave {
