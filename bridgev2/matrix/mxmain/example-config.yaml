@@ -55,6 +55,9 @@ bridge:
     # In portals with no relay set, should Matrix users be kicked if they're
     # not logged into an account that's in the remote chat?
     kick_matrix_users: true
+    # Should the bridge listen to com.beeper.state_request events?
+    # This is not necessary for anything outside of Beeper.
+    enable_send_state_requests: false
 
     # What should be done to portal rooms when a user logs out or is logged out?
     # Permitted values:

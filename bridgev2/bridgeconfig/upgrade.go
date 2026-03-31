@@ -43,6 +43,7 @@ func doUpgrade(helper up.Helper) {
 	helper.Copy(up.Bool, "bridge", "cross_room_replies")
 	helper.Copy(up.Bool, "bridge", "revert_failed_state_changes")
 	helper.Copy(up.Bool, "bridge", "kick_matrix_users")
+	helper.Copy(up.Bool, "bridge", "enable_send_state_requests")
 	helper.Copy(up.Bool, "bridge", "cleanup_on_logout", "enabled")
 	helper.Copy(up.Str, "bridge", "cleanup_on_logout", "manual", "private")
 	helper.Copy(up.Str, "bridge", "cleanup_on_logout", "manual", "relayed")

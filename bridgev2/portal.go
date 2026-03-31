@@ -602,6 +602,9 @@ func (portal *Portal) handleSingleEvent(ctx context.Context, rawEvt any, doneCal
 }
 
 func (portal *Portal) unwrapBeeperSendState(ctx context.Context, evt *event.Event) error {
+	if !portal.Bridge.Config.EnableSendStateRequests {
+		return fmt.Errorf("send state requests are not enabled")
+	}
 	content, ok := evt.Content.Parsed.(*event.BeeperSendStateEventContent)
 	if !ok {
 		return fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed)
