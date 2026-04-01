@@ -1811,7 +1811,18 @@ func (portal *Portal) getTargetUser(ctx context.Context, userID id.UserID) (Ghos
 		return nil, fmt.Errorf("failed to get ghost: %w", err)
 	} else if targetGhost != nil {
 		return targetGhost, nil
-	} else if targetUser, err := portal.Bridge.GetUserByMXID(ctx, userID); err != nil {
+	}
+	// If the userID is not an MXID, treat it as a raw network user ID.
+	// This matches how CreateGroup handles participants that can be either format.
+	if len(userID) == 0 || userID[0] != '@' {
+		if targetGhost, err := portal.Bridge.GetGhostByID(ctx, networkid.UserID(userID)); err != nil {
+			return nil, fmt.Errorf("failed to get ghost by network ID: %w", err)
+		} else if targetGhost != nil {
+			return targetGhost, nil
+		}
+		return nil, fmt.Errorf("no ghost found for network ID %q", userID)
+	}
+	if targetUser, err := portal.Bridge.GetUserByMXID(ctx, userID); err != nil {
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	} else if targetUserLogin, _, err := portal.FindPreferredLogin(ctx, targetUser, false); err != nil {
 		return nil, fmt.Errorf("failed to find preferred login: %w", err)
