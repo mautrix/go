@@ -714,6 +714,15 @@ type DisappearTimerChangingNetworkAPI interface {
 	HandleMatrixDisappearingTimer(ctx context.Context, msg *MatrixDisappearingTimer) (bool, error)
 }
 
+// PinHandlingNetworkAPI is an optional interface that network connectors can implement to handle pinned events changes.
+type PinHandlingNetworkAPI interface {
+	NetworkAPI
+	// HandleMatrixPinChange is called when the pinned events in a portal room are changed.
+	// The new pinned event IDs are in Content.Pinned, and the previous ones are in PrevContent.Pinned.
+	// The connector should diff them to determine which messages were pinned or unpinned.
+	HandleMatrixPinChange(ctx context.Context, msg *MatrixPinChange) (bool, error)
+}
+
 // DeleteChatHandlingNetworkAPI is an optional interface that network connectors
 // can implement to delete a chat from the remote network.
 type DeleteChatHandlingNetworkAPI interface {
@@ -1416,6 +1425,7 @@ type MatrixRoomMeta[ContentType any] struct {
 type MatrixRoomName = MatrixRoomMeta[*event.RoomNameEventContent]
 type MatrixRoomAvatar = MatrixRoomMeta[*event.RoomAvatarEventContent]
 type MatrixRoomTopic = MatrixRoomMeta[*event.TopicEventContent]
+type MatrixPinChange = MatrixRoomMeta[*event.PinnedEventsEventContent]
 type MatrixDisappearingTimer = MatrixRoomMeta[*event.BeeperDisappearingTimer]
 
 type MatrixReadReceipt struct {

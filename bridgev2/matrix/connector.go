@@ -151,6 +151,7 @@ func (br *Connector) Init(bridge *bridgev2.Bridge) {
 	br.EventProcessor.On(event.BeeperSendState, br.handleRoomEvent)
 	br.EventProcessor.On(event.StateRoomAvatar, br.handleRoomEvent)
 	br.EventProcessor.On(event.StateTopic, br.handleRoomEvent)
+	br.EventProcessor.On(event.StatePinnedEvents, br.handleRoomEvent)
 	br.EventProcessor.On(event.StateTombstone, br.handleRoomEvent)
 	br.EventProcessor.On(event.StateBeeperDisappearingTimer, br.handleRoomEvent)
 	br.EventProcessor.On(event.BeeperDeleteChat, br.handleRoomEvent)
