@@ -2368,14 +2368,43 @@ func (cli *Client) MarkReadWithContent(ctx context.Context, roomID id.RoomID, ev
 // To mark a message in a specific thread as read, use pass a ReqSendReceipt as the content.
 func (cli *Client) SendReceipt(ctx context.Context, roomID id.RoomID, eventID id.EventID, receiptType event.ReceiptType, content interface{}) (err error) {
 	urlPath := cli.BuildClientURL("v3", "rooms", roomID, "receipt", receiptType, eventID)
-	_, err = cli.MakeRequest(ctx, http.MethodPost, urlPath, content, nil)
+	_, err = cli.MakeRequest(ctx, http.MethodPost, urlPath, cli.prepareReceiptRequest(content, receiptType), nil)
 	return
 }
 
 func (cli *Client) SetReadMarkers(ctx context.Context, roomID id.RoomID, content interface{}) (err error) {
 	urlPath := cli.BuildClientURL("v3", "rooms", roomID, "read_markers")
-	_, err = cli.MakeRequest(ctx, http.MethodPost, urlPath, content, nil)
+	_, err = cli.MakeRequest(ctx, http.MethodPost, urlPath, cli.prepareReadMarkersRequest(content), nil)
 	return
+}
+
+func (cli *Client) supportsMoveFullyReadBackward() bool {
+	return cli.SpecVersions != nil && cli.SpecVersions.Supports(FeatureMoveFullyReadBackward)
+}
+
+func (cli *Client) prepareReceiptRequest(content interface{}, receiptType event.ReceiptType) interface{} {
+	req, ok := content.(*ReqSendReceipt)
+	if !ok || req == nil {
+		return content
+	}
+	if !req.BeeperAllowBackward {
+		return content
+	}
+	cloned := *req
+	if !cli.supportsMoveFullyReadBackward() || string(receiptType) != "m.fully_read" {
+		cloned.BeeperAllowBackward = false
+	}
+	return &cloned
+}
+
+func (cli *Client) prepareReadMarkersRequest(content interface{}) interface{} {
+	req, ok := content.(*ReqSetReadMarkers)
+	if !ok || req == nil || !req.BeeperAllowBackward || cli.supportsMoveFullyReadBackward() {
+		return content
+	}
+	cloned := *req
+	cloned.BeeperAllowBackward = false
+	return &cloned
 }
 
 func (cli *Client) SetBeeperInboxState(ctx context.Context, roomID id.RoomID, content *ReqSetBeeperInboxState) (err error) {

@@ -74,6 +74,7 @@ var (
 	FeatureRedactSendAsEvent         = UnstableFeature{UnstableFlag: "com.beeper.msc4169"}
 	FeatureUnstableReplaceProfile    = UnstableFeature{UnstableFlag: "com.beeper.msc4437"}
 	FeatureStableReplaceProfile      = UnstableFeature{UnstableFlag: "com.beeper.msc4437.stable"}
+	FeatureMoveFullyReadBackward     = UnstableFeature{UnstableFlag: "com.beeper.msc4446"}
 
 	BeeperFeatureHungry                = UnstableFeature{UnstableFlag: "com.beeper.hungry"}
 	BeeperFeatureBatchSending          = UnstableFeature{UnstableFlag: "com.beeper.batch_sending"}

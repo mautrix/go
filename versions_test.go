@@ -41,7 +41,8 @@ const sampleVersions = `{
     "org.matrix.msc2716": false,
     "org.matrix.msc3030": false,
     "org.matrix.msc3440.stable": true,
-    "fi.mau.msc2815": false
+    "fi.mau.msc2815": false,
+    "com.beeper.msc4446": true
   }
 }`
 
@@ -54,6 +55,7 @@ func TestRespVersions_UnmarshalJSON(t *testing.T) {
 	assert.True(t, resp.Contains(mautrix.SpecR061))
 	assert.True(t, resp.ContainsGreaterOrEqual(mautrix.MustParseSpecVersion("r0.0.0")))
 	assert.True(t, !resp.ContainsGreaterOrEqual(mautrix.MustParseSpecVersion("v123.456")))
+	assert.True(t, resp.Supports(mautrix.FeatureMoveFullyReadBackward))
 }
 
 func TestParseSpecVersion(t *testing.T) {
