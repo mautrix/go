@@ -2497,7 +2497,14 @@ func (portal *Portal) handleMatrixRedaction(
 		log.Err(err).Msg("Failed to handle Matrix redaction")
 		return EventHandlingResultFailed.WithMSSError(err)
 	}
-	// TODO delete msg/reaction db row
+	if redactionTargetMsg != nil {
+		err = portal.Bridge.DB.Message.Delete(ctx, redactionTargetMsg.RowID)
+	} else if redactionTargetReaction != nil {
+		err = portal.Bridge.DB.Reaction.Delete(ctx, redactionTargetReaction)
+	}
+	if err != nil {
+		log.Err(err).Msg("Failed to delete redacted event from database")
+	}
 	return EventHandlingResultSuccess.WithMSS()
 }
 
