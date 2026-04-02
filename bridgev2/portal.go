@@ -407,7 +407,7 @@ func (portal *Portal) handleSingleEventWithDelayLogging(idx int, rawEvt any) (ou
 	start := time.Now()
 	var handleDuration time.Duration
 	// Note: this will not set the success flag if the handler times out
-	outerRes = EventHandlingResult{Queued: true}
+	outerRes = EventHandlingResult{Queued: true, Error: ErrHandlerBackgrounded}
 	go portal.handleSingleEvent(ctx, rawEvt, func(res EventHandlingResult) {
 		outerRes = res
 		handleDuration = time.Since(start)
@@ -861,7 +861,7 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 func (portal *Portal) handleMatrixReceipts(ctx context.Context, evt *event.Event) EventHandlingResult {
 	content, ok := evt.Content.Parsed.(*event.ReceiptEventContent)
 	if !ok {
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithError(fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed))
 	}
 	for evtID, receipts := range *content {
 		readReceipts, ok := receipts[event.ReceiptTypeRead]
@@ -961,7 +961,7 @@ func (portal *Portal) callReadReceiptHandler(
 func (portal *Portal) handleMatrixTyping(ctx context.Context, evt *event.Event) EventHandlingResult {
 	content, ok := evt.Content.Parsed.(*event.TypingEventContent)
 	if !ok {
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithError(fmt.Errorf("%w: %T", ErrUnexpectedParsedContentType, evt.Content.Parsed))
 	}
 	portal.currentlyTypingLock.Lock()
 	defer portal.currentlyTypingLock.Unlock()
@@ -1179,12 +1179,10 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 		voteTo, err = portal.Bridge.DB.Message.GetPartByMXID(ctx, relatesTo.GetReferenceID())
 		if err != nil {
 			log.Err(err).Msg("Failed to get poll target message from database")
-			// TODO send status
-			return EventHandlingResultFailed
+			return EventHandlingResultFailed.WithMSSError(fmt.Errorf("%w: failed to get poll message: %w", ErrDatabaseError, err))
 		} else if voteTo == nil {
 			log.Warn().Stringer("vote_to_id", relatesTo.GetReferenceID()).Msg("Poll target message not found")
-			// TODO send status
-			return EventHandlingResultFailed
+			return EventHandlingResultFailed.WithMSSError(ErrUnknownPoll)
 		}
 	}
 	var replyToID id.EventID
@@ -2817,7 +2815,7 @@ func (portal *Portal) sendConvertedMessage(
 		ctx, id, converted, false,
 	)
 	output := make([]*database.Message, 0, len(converted.Parts))
-	allSuccess := true
+	var errorList []error
 	for i, part := range converted.Parts {
 		portal.applyRelationMeta(ctx, part.Content, replyTo, threadRoot, prevThreadEvent)
 		part.Content.BeeperDisappearingTimer = converted.Disappear.ToEventContent()
@@ -2851,7 +2849,7 @@ func (portal *Portal) sendConvertedMessage(
 			})
 			if err != nil {
 				logContext(log.Err(err)).Str("part_id", string(part.ID)).Msg("Failed to send message part to Matrix")
-				allSuccess = false
+				errorList = append(errorList, fmt.Errorf("failed to send message part to Matrix: %w", err))
 				continue
 			}
 			logContext(log.Debug()).
@@ -2863,7 +2861,7 @@ func (portal *Portal) sendConvertedMessage(
 		err := portal.Bridge.DB.Message.Insert(ctx, dbMessage)
 		if err != nil {
 			logContext(log.Err(err)).Str("part_id", string(part.ID)).Msg("Failed to save message part to database")
-			allSuccess = false
+			errorList = append(errorList, fmt.Errorf("%w: failed to save message part to database: %w", ErrDatabaseError, err))
 		}
 		if converted.Disappear.Type != event.DisappearingTypeNone && !dbMessage.HasFakeMXID() {
 			if converted.Disappear.Type == event.DisappearingTypeAfterSend && converted.Disappear.DisappearAt.IsZero() {
@@ -2881,8 +2879,8 @@ func (portal *Portal) sendConvertedMessage(
 		}
 		output = append(output, dbMessage)
 	}
-	if !allSuccess {
-		return output, EventHandlingResultFailed
+	if len(errorList) > 0 {
+		return output, EventHandlingResultFailed.WithError(errors.Join(errorList...))
 	}
 	return output, EventHandlingResultSuccess
 }
@@ -3014,7 +3012,7 @@ func (portal *Portal) handleRemoteMessage(ctx context.Context, source *UserLogin
 	}
 	intent, ok := portal.GetIntentFor(ctx, evt.GetSender(), source, RemoteEventMessage)
 	if !ok {
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithError(ErrFailedToGetIntent)
 	}
 	ts := getEventTS(evt)
 	converted, err := evt.ConvertMessage(ctx, portal, intent)
@@ -3079,7 +3077,7 @@ func (portal *Portal) handleRemoteEdit(ctx context.Context, source *UserLogin, e
 	}
 	intent, ok := portal.GetIntentFor(ctx, evt.GetSender(), source, RemoteEventEdit)
 	if !ok {
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithError(ErrFailedToGetIntent)
 	} else if intent.GetMXID() != existing[0].SenderMXID {
 		log.Warn().
 			Stringer("edit_sender_mxid", intent.GetMXID()).
@@ -3117,7 +3115,7 @@ func (portal *Portal) sendConvertedEdit(
 	streamOrder int64,
 ) EventHandlingResult {
 	log := zerolog.Ctx(ctx)
-	allSuccess := true
+	var errorList []error
 	for i, part := range converted.ModifiedParts {
 		if part.Content.Mentions == nil {
 			part.Content.Mentions = &event.Mentions{}
@@ -3153,7 +3151,7 @@ func (portal *Portal) sendConvertedEdit(
 			})
 			if err != nil {
 				log.Err(err).Stringer("part_mxid", part.Part.MXID).Msg("Failed to edit message part")
-				allSuccess = false
+				errorList = append(errorList, fmt.Errorf("failed to edit message part: %w", err))
 				continue
 			} else {
 				log.Debug().
@@ -3168,7 +3166,7 @@ func (portal *Portal) sendConvertedEdit(
 		err := portal.Bridge.DB.Message.Update(ctx, part.Part)
 		if err != nil {
 			log.Err(err).Int64("part_rowid", part.Part.RowID).Msg("Failed to update message part in database")
-			allSuccess = false
+			errorList = append(errorList, fmt.Errorf("%w: failed to update message part in database: %w", ErrDatabaseError, err))
 		}
 	}
 	for _, part := range converted.DeletedParts {
@@ -3182,7 +3180,7 @@ func (portal *Portal) sendConvertedEdit(
 		})
 		if err != nil {
 			log.Err(err).Stringer("part_mxid", part.MXID).Msg("Failed to redact message part deleted in edit")
-			allSuccess = false
+			errorList = append(errorList, fmt.Errorf("failed to redact message part deleted in edit: %w", err))
 		} else {
 			log.Debug().
 				Stringer("redaction_event_id", resp.EventID).
@@ -3193,17 +3191,17 @@ func (portal *Portal) sendConvertedEdit(
 		err = portal.Bridge.DB.Message.Delete(ctx, part.RowID)
 		if err != nil {
 			log.Err(err).Int64("part_rowid", part.RowID).Msg("Failed to delete message part from database")
-			allSuccess = false
+			errorList = append(errorList, fmt.Errorf("%w: failed to delete message part from database: %w", ErrDatabaseError, err))
 		}
 	}
 	if converted.AddedParts != nil {
 		_, res := portal.sendConvertedMessage(ctx, targetID, intent, senderID, converted.AddedParts, ts, streamOrder, nil)
 		if !res.Success {
-			allSuccess = false
+			errorList = append(errorList, res.Error)
 		}
 	}
-	if !allSuccess {
-		return EventHandlingResultFailed
+	if len(errorList) > 0 {
+		return EventHandlingResultFailed.WithError(errors.Join(errorList...))
 	}
 	return EventHandlingResultSuccess
 }
@@ -3398,7 +3396,7 @@ func (portal *Portal) handleRemoteReaction(ctx context.Context, source *UserLogi
 	ts := getEventTS(evt)
 	intent, ok := portal.GetIntentFor(ctx, evt.GetSender(), source, RemoteEventReaction)
 	if !ok {
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithError(ErrFailedToGetIntent)
 	}
 	var extra map[string]any
 	if extraContentProvider, ok := evt.(RemoteReactionWithExtraContent); ok {
@@ -3508,7 +3506,7 @@ func (portal *Portal) handleRemoteReactionRemove(ctx context.Context, source *Us
 		var ok bool
 		intent, ok = portal.GetIntentFor(ctx, evt.GetSender(), source, RemoteEventReactionRemove)
 		if !ok {
-			return EventHandlingResultFailed
+			return EventHandlingResultFailed.WithError(ErrFailedToGetIntent)
 		}
 	}
 	ts := getEventTS(evt)
@@ -3553,7 +3551,7 @@ func (portal *Portal) handleRemoteMessageRemove(ctx context.Context, source *Use
 
 	intent, ok := portal.GetIntentFor(ctx, evt.GetSender(), source, RemoteEventMessageRemove)
 	if !ok {
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithError(ErrFailedToGetIntent)
 	}
 	if intent == portal.Bridge.Bot && len(targetParts) > 0 {
 		senderIntent, err := portal.getIntentForMXID(ctx, targetParts[0].SenderMXID)
@@ -3573,7 +3571,7 @@ func (portal *Portal) handleRemoteMessageRemove(ctx context.Context, source *Use
 
 func (portal *Portal) redactMessageParts(ctx context.Context, parts []*database.Message, intent MatrixAPI, ts time.Time) EventHandlingResult {
 	log := zerolog.Ctx(ctx)
-	var anyFailed bool
+	var errorList []error
 	for _, part := range parts {
 		if part.HasFakeMXID() {
 			continue
@@ -3585,7 +3583,7 @@ func (portal *Portal) redactMessageParts(ctx context.Context, parts []*database.
 		}, &MatrixSendExtra{Timestamp: ts, MessageMeta: part})
 		if err != nil {
 			log.Err(err).Stringer("part_mxid", part.MXID).Msg("Failed to redact message part")
-			anyFailed = true
+			errorList = append(errorList, err)
 		} else {
 			log.Debug().
 				Stringer("redaction_event_id", resp.EventID).
@@ -3594,8 +3592,8 @@ func (portal *Portal) redactMessageParts(ctx context.Context, parts []*database.
 				Msg("Sent redaction of message part to Matrix")
 		}
 	}
-	if anyFailed {
-		return EventHandlingResultFailed
+	if len(errorList) > 0 {
+		return EventHandlingResultFailed.WithError(errors.Join(errorList...))
 	}
 	return EventHandlingResultSuccess
 }
@@ -3644,7 +3642,7 @@ func (portal *Portal) handleRemoteReadReceipt(ctx context.Context, source *UserL
 	sender := evt.GetSender()
 	intent, ok := portal.GetIntentFor(ctx, sender, source, RemoteEventReadReceipt)
 	if !ok {
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithError(ErrFailedToGetIntent)
 	}
 	var addTargetLog func(evt *zerolog.Event) *zerolog.Event
 	if lastTarget == nil {
@@ -3704,7 +3702,7 @@ func (portal *Portal) handleRemoteDeliveryReceipt(ctx context.Context, source *U
 	}
 	intent, ok := portal.GetIntentFor(ctx, evt.GetSender(), source, RemoteEventDeliveryReceipt)
 	if !ok {
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithError(ErrFailedToGetIntent)
 	}
 	log := zerolog.Ctx(ctx)
 	for _, target := range evt.GetReceiptTargets() {
@@ -3740,7 +3738,7 @@ func (portal *Portal) handleRemoteTyping(ctx context.Context, source *UserLogin,
 	}
 	intent, ok := portal.GetIntentFor(ctx, evt.GetSender(), source, RemoteEventTyping)
 	if !ok {
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithError(ErrFailedToGetIntent)
 	}
 	timeout := evt.GetTimeout()
 	err := intent.MarkTyping(ctx, portal.MXID, typingType, timeout)
