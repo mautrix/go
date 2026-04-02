@@ -2376,7 +2376,7 @@ func (portal *Portal) UpdateMatrixRoomID(
 		}
 	}()
 	if params.TombstoneOldRoom && oldRoom != "" {
-		_, err = portal.Bridge.Bot.SendState(ctx, portal.MXID, event.StateTombstone, "", &event.Content{
+		_, err = portal.Bridge.Bot.SendState(ctx, oldRoom, event.StateTombstone, "", &event.Content{
 			Parsed: &event.TombstoneEventContent{
 				Body:            "Room has been replaced.",
 				ReplacementRoom: newRoomID,
