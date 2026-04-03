@@ -399,6 +399,8 @@ func (portal *Portal) eventLoop() {
 	}
 }
 
+var PanicOnStuckEvent = false
+
 func (portal *Portal) handleSingleEventWithDelayLogging(idx int, rawEvt any) (outerRes EventHandlingResult) {
 	ctx := portal.getEventCtxWithLog(rawEvt, idx)
 	log := zerolog.Ctx(ctx)
@@ -406,8 +408,8 @@ func (portal *Portal) handleSingleEventWithDelayLogging(idx int, rawEvt any) (ou
 	var backgrounded atomic.Bool
 	start := time.Now()
 	var handleDuration time.Duration
-	// Note: this will not set the success flag if the handler times out
-	outerRes = EventHandlingResult{Queued: true, Error: ErrHandlerBackgrounded}
+	// Note: this will assume success if the handler times out
+	outerRes = EventHandlingResult{Queued: true, Success: true, Error: ErrHandlerBackgrounded}
 	go portal.handleSingleEvent(ctx, rawEvt, func(res EventHandlingResult) {
 		outerRes = res
 		handleDuration = time.Since(start)
@@ -442,10 +444,13 @@ func (portal *Portal) handleSingleEventWithDelayLogging(idx int, rawEvt any) (ou
 			}
 		}
 	}
+	backgrounded.Store(true)
+	if PanicOnStuckEvent {
+		panic(fmt.Errorf("event handling started at %v is still not finished", start))
+	}
 	log.Warn().
 		Time("started_at", start).
 		Msg("Event handling is taking too long, continuing in background")
-	backgrounded.Store(true)
 	return
 }
 
