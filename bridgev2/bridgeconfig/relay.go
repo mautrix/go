@@ -73,7 +73,7 @@ func isMedia(msgType event.MessageType) bool {
 func (rc *RelayConfig) FormatMessage(content *event.MessageEventContent, sender any) (*event.MessageEventContent, error) {
 	_, isSupported := rc.MessageFormats[content.MsgType]
 	if !isSupported {
-		return nil, fmt.Errorf("unsupported msgtype for relaying")
+		return nil, fmt.Errorf("relay format for %q is not defined in config", content.MsgType)
 	}
 	contentCopy := *content
 	content = &contentCopy

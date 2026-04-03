@@ -1156,6 +1156,10 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 			return EventHandlingResultIgnored.WithMSSError(ErrIgnoringPollFromRelayedUser)
 		}
 		if !caps.PerMessageProfileRelay {
+			if evt.Type == event.EventSticker {
+				msgContent.MsgType = event.MsgImage
+				evt.Type = event.EventMessage
+			}
 			msgContent, err = portal.Bridge.Config.Relay.FormatMessage(msgContent, origSender)
 			if err != nil {
 				log.Err(err).Msg("Failed to format message for relaying")
@@ -1465,7 +1469,11 @@ func (portal *Portal) handleMatrixEdit(
 			content.MsgType = event.CapMsgSticker
 		}
 	}
-	if origSender != nil {
+	if origSender != nil && !caps.PerMessageProfileRelay {
+		if evt.Type == event.EventSticker {
+			content.MsgType = event.MsgImage
+			evt.Type = event.EventMessage
+		}
 		var err error
 		content, err = portal.Bridge.Config.Relay.FormatMessage(content, origSender)
 		if err != nil {
