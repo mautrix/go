@@ -24,7 +24,7 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-func (br *BridgeMain) LegacyMigrateWithAnotherUpgrader(renameTablesQuery, copyDataQuery string, newDBVersion int, otherTable dbutil.UpgradeTable, otherTableName string, otherNewVersion int) func(ctx context.Context) error {
+func (br *BridgeMain) LegacyMigrateWithAnotherUpgrader(rawRenameTablesQuery any, copyDataQuery string, newDBVersion int, otherTable dbutil.UpgradeTable, otherTableName string, otherNewVersion int) func(ctx context.Context) error {
 	return func(ctx context.Context) error {
 		// Unique constraints must have globally unique names on postgres, and renaming the table doesn't rename them,
 		// so just drop the ones that may conflict with the new schema.
@@ -42,7 +42,14 @@ func (br *BridgeMain) LegacyMigrateWithAnotherUpgrader(renameTablesQuery, copyDa
 		if err != nil {
 			return err
 		}
-		_, err = br.DB.Exec(ctx, renameTablesQuery)
+		switch renameTablesQuery := rawRenameTablesQuery.(type) {
+		case string:
+			_, err = br.DB.Exec(ctx, renameTablesQuery)
+		case func(context.Context, *dbutil.Database) error:
+			err = renameTablesQuery(ctx, br.DB)
+		default:
+			return fmt.Errorf("invalid type for renameTablesQuery: %T", rawRenameTablesQuery)
+		}
 		if err != nil {
 			return err
 		}
