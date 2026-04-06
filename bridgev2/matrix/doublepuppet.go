@@ -41,7 +41,7 @@ func (dp *doublePuppetUtil) newClient(ctx context.Context, mxid id.UserID, acces
 	}
 	homeserverURL, found := dp.br.Config.DoublePuppet.Servers[homeserver]
 	if !found {
-		if homeserver == dp.br.AS.HomeserverDomain {
+		if homeserver == dp.br.Config.Homeserver.Domain {
 			homeserverURL = ""
 		} else if dp.br.Config.DoublePuppet.AllowDiscovery {
 			dp.discoveryCacheLock.Lock()

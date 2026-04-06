@@ -185,6 +185,10 @@ func (br *BridgeMain) GenerateRegistration() {
 	} else if br.Config.Homeserver.Domain == "example.com" {
 		_, _ = fmt.Fprintln(os.Stderr, "Homeserver domain is not set")
 		os.Exit(20)
+	} else if br.Config.AppService.Bot.AccessToken != "" {
+		_, _ = fmt.Fprintln(os.Stderr, "Generating a registration is not necessary in bot mode")
+		_, _ = fmt.Fprintln(os.Stderr, "To use appservice mode instead of bot mode, remove appservice -> bot -> access_token")
+		os.Exit(20)
 	}
 	reg := br.Config.GenerateRegistration()
 	err := reg.Save(br.RegistrationPath)
@@ -295,9 +299,9 @@ func (br *BridgeMain) validateConfig() error {
 		return errors.New("homeserver.domain not configured")
 	case !bridgeconfig.AllowedHomeserverSoftware[br.Config.Homeserver.Software]:
 		return errors.New("invalid value for homeserver.software (use `standard` if you don't know what the field is for)")
-	case br.Config.AppService.ASToken == "This value is generated when generating the registration":
+	case br.Config.AppService.ASToken == "This value is generated when generating the registration" && br.Config.AppService.Bot.AccessToken == "":
 		return errors.New("appservice.as_token not configured. Did you forget to generate the registration? ")
-	case br.Config.AppService.HSToken == "This value is generated when generating the registration":
+	case br.Config.AppService.HSToken == "This value is generated when generating the registration" && br.Config.AppService.Bot.AccessToken == "":
 		return errors.New("appservice.hs_token not configured. Did you forget to generate the registration? ")
 	case br.Config.Database.URI == "postgres://user:password@host/database?sslmode=disable":
 		return errors.New("database.uri not configured")
@@ -305,6 +309,10 @@ func (br *BridgeMain) validateConfig() error {
 		return errors.New("bridge.permissions not configured")
 	case !strings.Contains(br.Config.AppService.FormatUsername("1234567890"), "1234567890"):
 		return errors.New("username template is missing user ID placeholder")
+	case br.Config.AppService.Bot.AccessToken != "" && br.Config.Homeserver.Websocket:
+		return errors.New("appservice websockets cannot be used in single-bot mode")
+	case br.Config.AppService.Bot.AccessToken != "" && br.Config.Encryption.Appservice:
+		return errors.New("appservice encryption cannot be used in single-bot mode")
 	default:
 		cfgValidator, ok := br.Connector.(bridgev2.ConfigValidatingNetwork)
 		if ok {

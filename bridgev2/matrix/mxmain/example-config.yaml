@@ -229,6 +229,9 @@ appservice:
         # to leave display name/avatar as-is.
         displayname: $<<.DisplayName>> bridge bot
         avatar: $<<.NetworkIcon>>
+        # To use a single bot with per-message profiles instead of an appservice, specify the access token here.
+        # When set, as_token and hs_token will not be used.
+        access_token: null
 
     # Whether to receive ephemeral events via appservice transactions.
     ephemeral_events: true

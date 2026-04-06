@@ -118,6 +118,7 @@ type BotUserConfig struct {
 	Username    string `yaml:"username"`
 	Displayname string `yaml:"displayname"`
 	Avatar      string `yaml:"avatar"`
+	AccessToken string `yaml:"access_token"`
 
 	ParsedAvatar id.ContentURI `yaml:"-"`
 }

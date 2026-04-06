@@ -80,8 +80,8 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 		helper.bridge.Bridge.DB.Database,
 		dbutil.ZeroLogger(helper.bridge.Log.With().Str("db_section", "crypto").Logger()),
 		string(helper.bridge.Bridge.ID),
-		helper.bridge.AS.BotMXID(),
-		fmt.Sprintf("@%s:%s", strings.ReplaceAll(helper.bridge.Config.AppService.FormatUsername("%"), "_", `\_`), helper.bridge.AS.HomeserverDomain),
+		helper.bridge.Bot.UserID,
+		fmt.Sprintf("@%s:%s", strings.ReplaceAll(helper.bridge.Config.AppService.FormatUsername("%"), "_", `\_`), helper.bridge.Config.Homeserver.Domain),
 		helper.bridge.Config.Encryption.PickleKey,
 	)
 
@@ -91,7 +91,12 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 	}
 
 	var isExistingDevice bool
-	helper.client, isExistingDevice, err = helper.loginBot(ctx)
+	if helper.bridge.BotMode {
+		helper.client = helper.bridge.Bot.Client
+		isExistingDevice, err = helper.checkBotDevice(ctx)
+	} else {
+		helper.client, isExistingDevice, err = helper.loginBot(ctx)
+	}
 	if err != nil {
 		return err
 	}
@@ -135,8 +140,10 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 		return err
 	}
 	helper.streams = streams
-	helper.client.Syncer = &cryptoSyncer{OlmMachine: helper.mach, handleSyncResponse: streams.HandleSyncResponse}
-	helper.client.Store = helper.store
+	if !helper.bridge.BotMode {
+		helper.client.Syncer = &cryptoSyncer{OlmMachine: helper.mach, handleSyncResponse: streams.HandleSyncResponse}
+		helper.client.Store = helper.store
+	}
 
 	err = helper.mach.Load(ctx)
 	if err != nil {
@@ -287,6 +294,16 @@ func (helper *CryptoHelper) allowKeyShare(ctx context.Context, device *id.Device
 		return &crypto.KeyShareRejectUnverified
 	}
 }
+func (helper *CryptoHelper) checkBotDevice(ctx context.Context) (bool, error) {
+	deviceID, err := helper.store.FindDeviceID(ctx)
+	if err != nil {
+		return false, fmt.Errorf("failed to find existing device ID: %w", err)
+	} else if deviceID != "" && deviceID != helper.client.DeviceID {
+		return false, fmt.Errorf("device ID from database doesn't match bot's actual device ID: %s != %s", deviceID, helper.bridge.whoami.DeviceID)
+	}
+	helper.store.DeviceID = helper.client.DeviceID
+	return deviceID != "", nil
+}
 
 func (helper *CryptoHelper) loginBot(ctx context.Context) (*mautrix.Client, bool, error) {
 	deviceID, err := helper.store.FindDeviceID(ctx)
@@ -355,6 +372,9 @@ func (helper *CryptoHelper) verifyKeysAreOnServer(ctx context.Context) bool {
 }
 
 func (helper *CryptoHelper) Start() {
+	if helper.bridge.BotMode {
+		return
+	}
 	if helper.bridge.Config.Encryption.Appservice {
 		helper.log.Debug().Msg("End-to-bridge encryption is in appservice mode, registering event listeners and not starting syncer")
 		helper.bridge.AS.Registration.EphemeralEvents = true
@@ -383,7 +403,9 @@ func (helper *CryptoHelper) Start() {
 
 func (helper *CryptoHelper) Stop() {
 	helper.log.Debug().Msg("CryptoHelper.Stop() called, stopping bridge bot sync")
-	helper.client.StopSync()
+	if !helper.bridge.BotMode {
+		helper.client.StopSync()
+	}
 	if helper.cancelSync != nil {
 		helper.cancelSync()
 	}
@@ -535,6 +557,13 @@ func (helper *CryptoHelper) BeeperStreamPublisher() bridgev2.BeeperStreamPublish
 		return nil
 	}
 	return helper.streams
+}
+
+func (helper *CryptoHelper) ProcessSyncResponse(ctx context.Context, resp *mautrix.RespSync, since string) bool {
+	helper.lock.RLock()
+	m := helper.mach
+	helper.lock.RUnlock()
+	return m.ProcessSyncResponse(ctx, resp, since)
 }
 
 type cryptoSyncer struct {

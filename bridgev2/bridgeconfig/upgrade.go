@@ -94,6 +94,7 @@ func doUpgrade(helper up.Helper) {
 	helper.Copy(up.Str, "appservice", "bot", "username")
 	helper.Copy(up.Str, "appservice", "bot", "displayname")
 	helper.Copy(up.Str, "appservice", "bot", "avatar")
+	helper.Copy(up.Str, "appservice", "bot", "access_token")
 	helper.Copy(up.Bool, "appservice", "ephemeral_events")
 	helper.Copy(up.Bool, "appservice", "async_transactions")
 	helper.Copy(up.Str, "appservice", "as_token")
