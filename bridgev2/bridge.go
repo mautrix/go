@@ -58,6 +58,7 @@ type Bridge struct {
 
 	wakeupBackfillQueue chan struct{}
 	stopBackfillQueue   *exsync.Event
+	manualBackfills     chan *ManualBackfill
 
 	BackgroundCtx       context.Context
 	cancelBackgroundCtx context.CancelFunc
@@ -88,6 +89,7 @@ func NewBridge(
 		ghostsByID:     make(map[networkid.UserID]*Ghost),
 
 		wakeupBackfillQueue: make(chan struct{}),
+		manualBackfills:     make(chan *ManualBackfill, 64),
 		stopBackfillQueue:   exsync.NewEvent(),
 	}
 	if br.Config == nil {

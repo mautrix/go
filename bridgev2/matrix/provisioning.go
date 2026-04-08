@@ -15,6 +15,7 @@ import (
 	"net/http/pprof"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/xid"
@@ -125,6 +126,7 @@ func (prov *ProvisioningAPI) Init() {
 	prov.Router.HandleFunc("GET /v3/resolve_identifier/{identifier}", prov.GetResolveIdentifier)
 	prov.Router.HandleFunc("POST /v3/create_dm/{identifier}", prov.PostCreateDM)
 	prov.Router.HandleFunc("POST /v3/create_group/{type}", prov.PostCreateGroup)
+	prov.Router.HandleFunc("POST /v3/backfill/{roomID}", prov.PostPaginate)
 
 	if prov.br.Config.Provisioning.EnableSessionTransfers {
 		prov.log.Debug().Msg("Enabling session transfer API")
@@ -702,6 +704,54 @@ func (prov *ProvisioningAPI) PostCreateGroup(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	exhttp.WriteJSONResponse(w, http.StatusOK, resp)
+}
+
+func (prov *ProvisioningAPI) PostPaginate(w http.ResponseWriter, r *http.Request) {
+	if !prov.br.Capabilities.BatchSending {
+		mautrix.MUnrecognized.WithMessage("Homeserver does not support batch sending historical messages").Write(w)
+		return
+	}
+	login := prov.GetLoginForRequest(w, r)
+	if login == nil {
+		return
+	}
+	portal, err := prov.br.Bridge.GetPortalByMXID(r.Context(), id.RoomID(r.PathValue("roomID")))
+	if err != nil {
+		RespondWithError(w, err, "Internal error getting portal")
+	} else if portal == nil {
+		mautrix.MNotFound.WithMessage("Portal not found").Write(w)
+	} else if task, err := prov.br.Bridge.DB.BackfillTask.GetNextForPortal(r.Context(), portal.PortalKey, false); err != nil {
+		RespondWithError(w, err, "Internal error getting backfill task")
+	} else if task == nil {
+		w.WriteHeader(http.StatusNoContent)
+	} else {
+		doneChan := make(chan error, 1)
+		var done atomic.Bool
+		prov.br.Bridge.WakeupBackfillQueue(&bridgev2.ManualBackfill{
+			Source: login,
+			Portal: portal,
+			DoneCallback: func(err error) {
+				if done.Swap(true) {
+					return
+				}
+				doneChan <- err
+				close(doneChan)
+			},
+		})
+		select {
+		case err = <-doneChan:
+			if err != nil {
+				RespondWithError(w, err, "Internal error backfilling")
+			} else {
+				exhttp.WriteEmptyJSONResponse(w, http.StatusOK)
+			}
+		case <-time.After(25 * time.Second):
+			zerolog.Ctx(r.Context()).Warn().Msg("Backfill did not complete within 25 seconds, returning timeout")
+			mautrix.MUnknown.WithMessage("Backfill did not complete within 25 seconds").Write(w)
+		case <-r.Context().Done():
+			zerolog.Ctx(r.Context()).Warn().Msg("Request cancelled while waiting for backfill to complete")
+		}
+	}
 }
 
 type ReqExportCredentials struct {

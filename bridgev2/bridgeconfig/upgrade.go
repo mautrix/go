@@ -150,6 +150,7 @@ func doUpgrade(helper up.Helper) {
 	helper.Copy(up.Int, "backfill", "unread_hours_threshold")
 	helper.Copy(up.Int, "backfill", "threads", "max_initial_messages")
 	helper.Copy(up.Bool, "backfill", "queue", "enabled")
+	helper.Copy(up.Bool, "backfill", "queue", "manual")
 	helper.Copy(up.Int, "backfill", "queue", "batch_size")
 	helper.Copy(up.Int, "backfill", "queue", "batch_delay")
 	helper.Copy(up.Int, "backfill", "queue", "max_batches")

@@ -105,24 +105,34 @@ func (portal *Portal) doBackwardsBackfill(ctx context.Context, source *UserLogin
 	if resp == nil {
 		logEvt.Msg("Fetching messages for backward backfill")
 		resp, err = api.FetchMessages(ctx, FetchMessagesParams{
-			Portal:        portal,
-			ThreadRoot:    "",
-			Forward:       false,
-			Cursor:        task.Cursor,
-			AnchorMessage: firstMessage,
-			Count:         portal.Bridge.Config.Backfill.Queue.BatchSize,
-			Task:          task,
+			Portal:         portal,
+			ThreadRoot:     "",
+			Forward:        false,
+			Cursor:         task.Cursor,
+			AnchorMessage:  firstMessage,
+			Count:          portal.Bridge.Config.Backfill.Queue.BatchSize,
+			Task:           task,
+			AllowSlowFetch: !task.FromQueue || !portal.Bridge.Config.Backfill.Queue.Manual,
 		})
 		if err != nil {
 			return false, fmt.Errorf("failed to fetch messages for backward backfill: %w", err)
 		} else if resp == nil {
 			log.Debug().Msg("Didn't get backfill response, marking task as done")
 			task.IsDone = true
+			task.QueueDone = true
 			return false, nil
 		} else if resp.Pending {
 			log.Debug().Msg("Backfill response is pending")
 			// TODO make configurable by admin and/or network connector?
 			task.NextDispatchMinTS = time.Now().Add(24 * time.Hour)
+			return true, nil
+		} else if resp.MoreRequiresSlowFetch {
+			if !task.FromQueue {
+				log.Warn().Msg("Backfill response indicates more messages require slow fetching even though task is not from queue")
+			} else {
+				log.Debug().Msg("Backfill response indicates more messages require slow fetching, setting queue done flag")
+			}
+			task.QueueDone = true
 			return true, nil
 		}
 	} else {

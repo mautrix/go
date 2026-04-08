@@ -8,6 +8,7 @@ package bridgev2
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"runtime/debug"
 	"time"
@@ -21,11 +22,22 @@ const BackfillMinBackoffAfterRoomCreate = 1 * time.Minute
 const BackfillQueueErrorBackoff = 1 * time.Minute
 const BackfillQueueMaxEmptyBackoff = 10 * time.Minute
 
-func (br *Bridge) WakeupBackfillQueue() {
+func (br *Bridge) WakeupBackfillQueue(manualTask ...*ManualBackfill) {
+	for _, task := range manualTask {
+		br.manualBackfills <- task
+	}
 	select {
 	case br.wakeupBackfillQueue <- struct{}{}:
 	default:
 	}
+}
+
+type ManualBackfill struct {
+	Source *UserLogin
+	Portal *Portal
+	Data   *FetchMessagesResponse
+
+	DoneCallback func(error)
 }
 
 func (br *Bridge) RunBackfillQueue() {
@@ -53,36 +65,85 @@ func (br *Bridge) RunBackfillQueue() {
 			extraDelay := batchDelay * time.Duration(noTasksFoundCount)
 			nextDelay += min(BackfillQueueMaxEmptyBackoff, extraDelay)
 		}
-		timer := time.NewTimer(nextDelay)
 		select {
 		case <-br.wakeupBackfillQueue:
-			if !timer.Stop() {
-				select {
-				case <-timer.C:
-				default:
-				}
-			}
 			noTasksFoundCount = 0
 		case <-stopChan:
-			if !timer.Stop() {
-				select {
-				case <-timer.C:
-				default:
-				}
-			}
 			log.Info().Msg("Stopping backfill queue")
 			return
-		case <-timer.C:
+		case <-time.After(nextDelay):
 		}
-		backfillTask, err := br.DB.BackfillTask.GetNext(ctx)
+		select {
+		case manualTask := <-br.manualBackfills:
+			manualTask.addLogAndDo(ctx)
+		default:
+			backfillTask, err := br.DB.BackfillTask.GetNext(ctx)
+			if err != nil {
+				log.Err(err).Msg("Failed to get next backfill queue entry")
+				time.Sleep(BackfillQueueErrorBackoff)
+				continue
+			} else if backfillTask != nil {
+				backfillTask.FromQueue = true
+				br.DoBackfillTask(ctx, backfillTask)
+				noTasksFoundCount = 0
+			}
+		}
+	}
+}
+
+func (mt *ManualBackfill) addLogAndDo(ctx context.Context) {
+	log := zerolog.Ctx(ctx).With().
+		Object("portal_key", mt.Portal.PortalKey).
+		Str("login_id", string(mt.Source.ID)).
+		Str("task_type", "manual").
+		Logger()
+	ctx = log.WithContext(ctx)
+	mt.Do(ctx)
+}
+
+func (mt *ManualBackfill) Do(ctx context.Context) {
+	log := zerolog.Ctx(ctx)
+	var pending bool
+	var err error
+	if !mt.Portal.backfillLock.TryLock() {
+		log.Warn().Msg("Backfill already in progress")
+		mt.Portal.backfillLock.Lock()
+	}
+	defer func() {
+		if pending {
+			if mt.DoneCallback != nil {
+				if mt.Portal.nextBackfillDoneCallback != nil {
+					mt.Portal.nextBackfillDoneCallback(errors.New("done callback overridden"))
+				}
+				mt.Portal.nextBackfillDoneCallback = mt.DoneCallback
+				mt.DoneCallback = nil
+			}
+			return
+		}
+		if mt.DoneCallback != nil {
+			mt.DoneCallback(err)
+		}
+		if mt.Portal.nextBackfillDoneCallback != nil {
+			mt.Portal.nextBackfillDoneCallback(err)
+			mt.Portal.nextBackfillDoneCallback = nil
+		}
+		mt.Portal.backfillLock.Unlock()
+	}()
+	var task *database.BackfillTask
+	task, err = mt.Portal.Bridge.DB.BackfillTask.GetNextForPortal(ctx, mt.Portal.PortalKey, mt.Data != nil)
+	if err != nil {
+		log.Err(err).Msg("Failed to get backfill task from database")
+	} else if task == nil {
+		log.Warn().Msg("No backfill task found for portal")
+	} else if err = mt.Portal.Bridge.DB.BackfillTask.MarkDispatched(ctx, task); err != nil {
+		log.Err(err).Msg("Failed to mark backfill task as dispatched")
+	} else if pending, err = mt.Portal.doBackfillTask(ctx, mt.Source, task, mt.Data); err != nil {
+		log.Err(err).Msg("Failed to do backwards backfill from event")
+	} else {
+		log.Debug().Bool("pending", pending).Msg("Finished backfill from event")
+		err = mt.Portal.Bridge.DB.BackfillTask.Update(ctx, task)
 		if err != nil {
-			log.Err(err).Msg("Failed to get next backfill queue entry")
-			time.Sleep(BackfillQueueErrorBackoff)
-			continue
-		} else if backfillTask != nil {
-			backfillTask.FromQueue = true
-			br.DoBackfillTask(ctx, backfillTask)
-			noTasksFoundCount = 0
+			log.Err(err).Msg("Failed to update backfill task in database after backfill")
 		}
 	}
 }
@@ -220,16 +281,15 @@ func (br *Bridge) getPortalAndDoBackfillTask(ctx context.Context, task *database
 			Int("batch_count", task.BatchCount).
 			Msg("Calculated existing batch count")
 	}
-	return portal.doBackfillTask(ctx, login, task, nil)
-}
-
-func (portal *Portal) doBackfillTask(ctx context.Context, source *UserLogin, task *database.BackfillTask, resp *FetchMessagesResponse) (bool, error) {
 	if !portal.backfillLock.TryLock() {
 		zerolog.Ctx(ctx).Warn().Msg("Backfill already in progress")
 		portal.backfillLock.Lock()
 	}
 	defer portal.backfillLock.Unlock()
+	return portal.doBackfillTask(ctx, login, task, nil)
+}
 
+func (portal *Portal) doBackfillTask(ctx context.Context, source *UserLogin, task *database.BackfillTask, resp *FetchMessagesResponse) (bool, error) {
 	maxBatches := portal.Bridge.Config.Backfill.Queue.MaxBatches
 	api, ok := source.Client.(BackfillingNetworkAPI)
 	if !ok {
@@ -254,6 +314,7 @@ func (portal *Portal) doBackfillTask(ctx context.Context, source *UserLogin, tas
 			Msg("Not actually backfilling: max batches reached")
 	}
 	task.IsDone = task.IsDone || (maxBatches > 0 && task.BatchCount >= maxBatches)
+	task.QueueDone = task.IsDone || task.QueueDone
 	batchDelay := time.Duration(portal.Bridge.Config.Backfill.Queue.BatchDelay) * time.Second
 	task.CompletedAt = time.Now()
 	task.NextDispatchMinTS = task.CompletedAt.Add(batchDelay)

@@ -96,9 +96,11 @@ type Portal struct {
 	events  chan portalEvent
 	deleted *exsync.Event
 
-	backfillLock sync.Mutex
-	eventsLock   sync.Mutex
-	eventIdx     int
+	eventsLock sync.Mutex
+	eventIdx   int
+
+	backfillLock             sync.Mutex
+	nextBackfillDoneCallback func(error)
 }
 
 var PortalEventBuffer = 64
@@ -3921,31 +3923,21 @@ func (portal *Portal) handleRemoteChatDelete(ctx context.Context, source *UserLo
 }
 
 func (portal *Portal) HandleRemoteBackfill(ctx context.Context, source *UserLogin, backfill RemoteBackfill) EventHandlingResult {
+	if !portal.Bridge.Config.Backfill.Enabled {
+		zerolog.Ctx(ctx).Debug().Msg("Ignoring async backfill event because backfill is disabled")
+		return EventHandlingResultIgnored
+	}
 	data, err := backfill.GetBackfillData(ctx, portal)
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to get backfill data")
 		return EventHandlingResultFailed.WithError(err)
 	}
-	task, err := portal.Bridge.DB.BackfillTask.GetNextForPortal(ctx, portal.PortalKey, true)
-	if err != nil {
-		zerolog.Ctx(ctx).Err(err).Msg("Failed to get backfill task from database")
-		return EventHandlingResultFailed.WithError(err)
-	} else if task == nil {
-		zerolog.Ctx(ctx).Warn().Msg("No backfill task found for portal")
-		return EventHandlingResultIgnored
+	mt := &ManualBackfill{Source: source, Portal: portal, Data: data}
+	if portal.Bridge.Config.Backfill.Queue.Enabled {
+		portal.Bridge.WakeupBackfillQueue(mt)
+	} else {
+		go mt.Do(ctx)
 	}
-	go func() {
-		_, err = portal.doBackfillTask(ctx, source, task, data)
-		if err != nil {
-			zerolog.Ctx(ctx).Err(err).Msg("Failed to do backwards backfill from event")
-			return
-		}
-		zerolog.Ctx(ctx).Debug().Msg("Finished backfill from event")
-		err = portal.Bridge.DB.BackfillTask.Update(ctx, task)
-		if err != nil {
-			zerolog.Ctx(ctx).Err(err).Msg("Failed to update backfill task in database after backfill")
-		}
-	}()
 	return EventHandlingResultSuccess
 }
 

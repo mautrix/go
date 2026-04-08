@@ -357,6 +357,8 @@ backfill:
     queue:
         # Should the backfill queue be enabled?
         enabled: false
+        # Should manual calls to backfill queue tasks be allowed?
+        manual: false
         # Number of messages to backfill in one batch.
         batch_size: 100
         # Delay between batches in seconds.

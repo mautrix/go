@@ -1,4 +1,4 @@
--- v0 -> v27 (compatible with v9+): Latest revision
+-- v0 -> v28 (compatible with v9+): Latest revision
 CREATE TABLE "user" (
 	bridge_id       TEXT NOT NULL,
 	mxid            TEXT NOT NULL,
@@ -201,6 +201,7 @@ CREATE TABLE backfill_task (
 
 	batch_count          INTEGER NOT NULL,
 	is_done              BOOLEAN NOT NULL,
+	queue_done           BOOLEAN NOT NULL DEFAULT false,
 	cursor               TEXT,
 	oldest_message_id    TEXT,
 	dispatched_at        BIGINT,

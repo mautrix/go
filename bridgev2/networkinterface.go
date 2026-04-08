@@ -454,6 +454,10 @@ type FetchMessagesParams struct {
 	// The preferred number of messages to return. The returned batch can be bigger or smaller
 	// without any side effects, but the network connector should aim for this number.
 	Count int
+	// Whether the network connector should allow slow fetches of messages.
+	// If false and the network connector hits a case where a slow fetch is necessary,
+	// the response should set MoreRequiresSlowFetch in the response instead of fetching messages.
+	AllowSlowFetch bool
 
 	// When a forward backfill is triggered by a [RemoteChatResyncBackfillBundle], this will contain
 	// the bundled data returned by the event. It can be used as an optimization to avoid fetching
@@ -552,6 +556,10 @@ type FetchMessagesResponse struct {
 	// to mark the messages as read immediately after backfilling.
 	MarkRead bool
 
+	// If further fetches require requests that take longer than normal message fetches, this can be set to true.
+	// The bridge will then skip this portal in the backfill queue and only paginate further if the user requests it.
+	// This should not be set if AllowSlowFetch is true in the fetch params.
+	MoreRequiresSlowFetch bool
 	// If a backfill event was requested in the background and will later be sent using RemoteBackfill,
 	// this should be set to true. The queue will suspend the task for at least 24 hours until the event.
 	Pending bool
