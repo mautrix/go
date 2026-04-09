@@ -710,6 +710,9 @@ func (prov *ProvisioningAPI) PostPaginate(w http.ResponseWriter, r *http.Request
 	if !prov.br.Capabilities.BatchSending {
 		mautrix.MUnrecognized.WithMessage("Homeserver does not support batch sending historical messages").Write(w)
 		return
+	} else if !prov.br.Config.Backfill.Queue.Manual {
+		mautrix.MUnrecognized.WithMessage("Manual backfill is not enabled").Write(w)
+		return
 	}
 	login := prov.GetLoginForRequest(w, r)
 	if login == nil {
