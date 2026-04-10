@@ -728,6 +728,11 @@ func (prov *ProvisioningAPI) PostPaginate(w http.ResponseWriter, r *http.Request
 	} else if task == nil {
 		w.WriteHeader(http.StatusNoContent)
 	} else {
+		log := zerolog.Ctx(r.Context())
+		log.Info().
+			Object("portal_key", portal.PortalKey).
+			Any("current_backfill_task", task).
+			Msg("Sending manual backfill request to backfill queue")
 		doneChan := make(chan error, 1)
 		var done atomic.Bool
 		prov.br.Bridge.WakeupBackfillQueue(&bridgev2.ManualBackfill{
@@ -735,8 +740,10 @@ func (prov *ProvisioningAPI) PostPaginate(w http.ResponseWriter, r *http.Request
 			Portal: portal,
 			DoneCallback: func(err error) {
 				if done.Swap(true) {
+					log.Warn().Err(err).Msg("Backfill done callback called multiple times, ignoring")
 					return
 				}
+				log.Debug().Msg("Backfill done callback called, sending result to channel")
 				doneChan <- err
 				close(doneChan)
 			},
@@ -749,10 +756,10 @@ func (prov *ProvisioningAPI) PostPaginate(w http.ResponseWriter, r *http.Request
 				exhttp.WriteEmptyJSONResponse(w, http.StatusOK)
 			}
 		case <-time.After(25 * time.Second):
-			zerolog.Ctx(r.Context()).Warn().Msg("Backfill did not complete within 25 seconds, returning timeout")
+			log.Warn().Msg("Backfill did not complete within 25 seconds, returning timeout")
 			mautrix.MUnknown.WithMessage("Backfill did not complete within 25 seconds").Write(w)
 		case <-r.Context().Done():
-			zerolog.Ctx(r.Context()).Warn().Msg("Request cancelled while waiting for backfill to complete")
+			log.Warn().Msg("Request cancelled while waiting for backfill to complete")
 		}
 	}
 }

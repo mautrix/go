@@ -23,6 +23,20 @@ const BackfillQueueErrorBackoff = 1 * time.Minute
 const BackfillQueueMaxEmptyBackoff = 10 * time.Minute
 
 func (br *Bridge) WakeupBackfillQueue(manualTask ...*ManualBackfill) {
+	if br.IsStopping() {
+		for _, task := range manualTask {
+			if task.DoneCallback != nil {
+				task.DoneCallback(errBackfillQueueStopped)
+			}
+		}
+		return
+	}
+	if !br.Config.Backfill.Queue.Enabled {
+		for _, task := range manualTask {
+			go task.addLogAndDo(task.Portal.Log.WithContext(br.BackgroundCtx))
+		}
+		return
+	}
 	for _, task := range manualTask {
 		br.manualBackfills <- task
 	}
@@ -38,6 +52,21 @@ type ManualBackfill struct {
 	Data   *FetchMessagesResponse
 
 	DoneCallback func(error)
+}
+
+var errBackfillQueueStopped = errors.New("backfill queue stopped")
+
+func (br *Bridge) flushManualBackfillQueue() {
+	for {
+		select {
+		case manualTask := <-br.manualBackfills:
+			if manualTask.DoneCallback != nil {
+				manualTask.DoneCallback(errBackfillQueueStopped)
+			}
+		default:
+			return
+		}
+	}
 }
 
 func (br *Bridge) RunBackfillQueue() {
@@ -70,6 +99,7 @@ func (br *Bridge) RunBackfillQueue() {
 			noTasksFoundCount = 0
 		case <-stopChan:
 			log.Info().Msg("Stopping backfill queue")
+			br.flushManualBackfillQueue()
 			return
 		case <-time.After(nextDelay):
 		}
@@ -103,14 +133,14 @@ func (mt *ManualBackfill) addLogAndDo(ctx context.Context) {
 
 func (mt *ManualBackfill) Do(ctx context.Context) {
 	log := zerolog.Ctx(ctx)
-	var pending bool
+	var completed bool
 	var err error
 	if !mt.Portal.backfillLock.TryLock() {
 		log.Warn().Msg("Backfill already in progress")
 		mt.Portal.backfillLock.Lock()
 	}
 	defer func() {
-		if pending {
+		if !completed {
 			if mt.DoneCallback != nil {
 				if mt.Portal.nextBackfillDoneCallback != nil {
 					mt.Portal.nextBackfillDoneCallback(errors.New("done callback overridden"))
@@ -137,10 +167,10 @@ func (mt *ManualBackfill) Do(ctx context.Context) {
 		log.Warn().Msg("No backfill task found for portal")
 	} else if err = mt.Portal.Bridge.DB.BackfillTask.MarkDispatched(ctx, task); err != nil {
 		log.Err(err).Msg("Failed to mark backfill task as dispatched")
-	} else if pending, err = mt.Portal.doBackfillTask(ctx, mt.Source, task, mt.Data); err != nil {
+	} else if completed, err = mt.Portal.doBackfillTask(ctx, mt.Source, task, mt.Data); err != nil {
 		log.Err(err).Msg("Failed to do backwards backfill from event")
 	} else {
-		log.Debug().Bool("pending", pending).Msg("Finished backfill from event")
+		log.Debug().Bool("completed", completed).Msg("Finished backfill from event")
 		err = mt.Portal.Bridge.DB.BackfillTask.Update(ctx, task)
 		if err != nil {
 			log.Err(err).Msg("Failed to update backfill task in database after backfill")

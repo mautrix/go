@@ -3932,12 +3932,7 @@ func (portal *Portal) HandleRemoteBackfill(ctx context.Context, source *UserLogi
 		zerolog.Ctx(ctx).Err(err).Msg("Failed to get backfill data")
 		return EventHandlingResultFailed.WithError(err)
 	}
-	mt := &ManualBackfill{Source: source, Portal: portal, Data: data}
-	if portal.Bridge.Config.Backfill.Queue.Enabled {
-		portal.Bridge.WakeupBackfillQueue(mt)
-	} else {
-		go mt.Do(ctx)
-	}
+	portal.Bridge.WakeupBackfillQueue(&ManualBackfill{Source: source, Portal: portal, Data: data})
 	return EventHandlingResultSuccess
 }
 
