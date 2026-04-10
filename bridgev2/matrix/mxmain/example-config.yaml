@@ -94,6 +94,9 @@ bridge:
         # Should only admins be allowed to set themselves as relay users?
         # If true, non-admins can only set users listed in default_relays as relays in a room.
         admin_only: true
+        # Should default relays be preferred when an explicit login ID isn't specified even if the user is logged in?
+        # This applies to the set-relay and bridge commands sent by any user, including admins.
+        prefer_default: true
         # Should non-admins be allowed to use the bridge and sync-chat commands via default relays specified below?
         allow_bridge: true
         # List of user login IDs which anyone can set as a relay, as long as the relay user is in the room.

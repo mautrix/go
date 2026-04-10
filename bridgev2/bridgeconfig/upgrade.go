@@ -55,6 +55,7 @@ func doUpgrade(helper up.Helper) {
 	helper.Copy(up.Str, "bridge", "cleanup_on_logout", "bad_credentials", "shared_has_users")
 	helper.Copy(up.Bool, "bridge", "relay", "enabled")
 	helper.Copy(up.Bool, "bridge", "relay", "admin_only")
+	helper.Copy(up.Bool, "bridge", "relay", "prefer_default")
 	helper.Copy(up.Bool, "bridge", "relay", "allow_bridge")
 	helper.Copy(up.List, "bridge", "relay", "default_relays")
 	helper.Copy(up.Map, "bridge", "relay", "message_formats")

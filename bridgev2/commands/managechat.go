@@ -47,10 +47,7 @@ var CommandBridge = &FullHandler{
 }
 
 func fnBridge(ce *Event) {
-	if len(ce.Args) == 0 || len(ce.Args) > 2 {
-		ce.Reply("Usage: `$cmdprefix bridge [login ID] <chat ID>`")
-		return
-	} else if !canPlumb(ce) {
+	if !canPlumb(ce) {
 		ce.Reply("You don't have permission to bridge this room")
 		return
 	} else if ce.Portal != nil {
@@ -70,6 +67,10 @@ func fnBridge(ce *Event) {
 			return false
 		}
 	})
+	if len(ce.Args) == 0 || len(ce.Args) > 2 {
+		ce.Reply("Usage: `$cmdprefix bridge [login ID] <chat ID>`")
+		return
+	}
 	if !ignorePermissions {
 		pls, err := ce.Bridge.Matrix.GetPowerLevels(ce.Ctx, ce.RoomID)
 		if err != nil {
@@ -81,7 +82,11 @@ func fnBridge(ce *Event) {
 			return
 		}
 	}
-	portal, login, ok := getCreatePortalInput(ce, ce.Bridge.Config.Relay.AllowBridge)
+	portal, login, ok := getCreatePortalInput(
+		ce,
+		ce.Bridge.Config.Relay.AllowBridge,
+		ce.Bridge.Config.Relay.PreferDefault && len(ce.Bridge.Config.Relay.DefaultRelays) > 0,
+	)
 	if !ok {
 		return
 	} else if portal.MXID != "" {
