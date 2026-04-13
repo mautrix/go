@@ -58,6 +58,7 @@ type Crypto interface {
 	Client() *mautrix.Client
 	ShareKeys(context.Context) error
 	BeeperStreamPublisher() bridgev2.BeeperStreamPublisher
+	ProcessSyncResponse(ctx context.Context, resp *mautrix.RespSync, since string) bool
 }
 
 type Connector struct {
@@ -87,9 +88,14 @@ type Connector struct {
 	Capabilities            *bridgev2.MatrixCapabilities
 	IgnoreUnsupportedServer bool
 
+	BotMode     bool
+	stopBotSync context.CancelFunc
+	botSyncDone sync.WaitGroup
+
 	EventProcessor *appservice.EventProcessor
 
 	userIDRegex *regexp.Regexp
+	whoami      *mautrix.RespWhoami
 
 	Websocket                      bool
 	wsStopPinger                   chan struct{}
@@ -131,6 +137,7 @@ func (br *Connector) Init(bridge *bridgev2.Bridge) {
 	br.AS = br.Config.MakeAppService()
 	br.AS.Log = bridge.Log
 	br.AS.StateStore = br.StateStore
+	br.Bot = br.AS.BotIntent()
 	br.EventProcessor = appservice.NewEventProcessor(br.AS)
 	if !br.Config.AppService.AsyncTransactions {
 		br.EventProcessor.ExecMode = appservice.Sync
@@ -148,11 +155,11 @@ func (br *Connector) Init(bridge *bridgev2.Bridge) {
 		event.StateMember,
 		event.StatePowerLevels,
 		event.StateRoomName,
-		event.BeeperSendState,
 		event.StateRoomAvatar,
 		event.StateTopic,
 		event.StateTombstone,
 		event.StateBeeperDisappearingTimer,
+		event.BeeperSendState,
 		event.BeeperDeleteChat,
 		event.BeeperAcceptMessageRequest,
 	} {
@@ -161,7 +168,6 @@ func (br *Connector) Init(bridge *bridgev2.Bridge) {
 	br.EventProcessor.On(event.EventEncrypted, br.handleEncryptedEvent)
 	br.EventProcessor.On(event.EphemeralEventReceipt, br.handleEphemeralEvent)
 	br.EventProcessor.On(event.EphemeralEventTyping, br.handleEphemeralEvent)
-	br.Bot = br.AS.BotIntent()
 	br.Crypto = NewCryptoHelper(br)
 	br.Bridge.Commands.(*commands.Processor).AddHandlers(
 		CommandDiscardMegolmSession, CommandSetPowerLevel,
@@ -170,6 +176,15 @@ func (br *Connector) Init(bridge *bridgev2.Bridge) {
 	br.Provisioning = &ProvisioningAPI{br: br}
 	br.DoublePuppet = newDoublePuppetUtil(br)
 	br.deterministicEventIDServer = "backfill." + br.Config.Homeserver.Domain
+	if br.Config.AppService.Bot.AccessToken != "" {
+		br.Bot.SetAppServiceUserID = false
+		br.Bot.SetAppServiceDeviceID = false
+		br.Bot.Registered = true
+		br.Bot.AccessToken = br.Config.AppService.Bot.AccessToken
+		br.AS.Registration.AppToken = ""
+		br.BotMode = true
+		br.configureRelaySyncer()
+	}
 }
 
 func (br *Connector) Start(ctx context.Context) error {
@@ -234,6 +249,9 @@ func (br *Connector) Start(ctx context.Context) error {
 		br.deterministicEventIDServer = strings.TrimPrefix(parsed.Hostname(), "www.")
 	}
 	br.AS.Ready = true
+	if br.BotMode {
+		go br.startRelaySyncer()
+	}
 	if br.Websocket && br.Config.Homeserver.WSPingInterval > 0 {
 		br.wsStopPinger = make(chan struct{}, 1)
 		go br.websocketServerPinger()
@@ -332,6 +350,9 @@ func (br *Connector) Stop() {
 	if br.Crypto != nil {
 		br.Crypto.Stop()
 	}
+	if br.BotMode {
+		br.stopRelaySyncer()
+	}
 	if wsStopChan := br.wsStopped; wsStopChan != nil {
 		select {
 		case <-wsStopChan:
@@ -417,16 +438,20 @@ func (br *Connector) ensureConnection(ctx context.Context) {
 			Msg("Unexpected user ID in whoami call")
 		os.Exit(17)
 	}
+	br.whoami = resp
+	if br.BotMode {
+		br.Bot.DeviceID = resp.DeviceID
+	}
 
 	if br.Websocket {
 		br.Log.Debug().Msg("Websocket mode: no need to check status of homeserver -> bridge connection")
-		return
+	} else if br.BotMode {
+		br.Log.Debug().Msg("Bot mode: no need to check status of homeserver -> bridge connection")
 	} else if !br.SpecVersions.Supports(mautrix.FeatureAppservicePing) {
 		br.Log.Debug().Msg("Homeserver does not support checking status of homeserver -> bridge connection")
-		return
+	} else {
+		br.Bot.EnsureAppserviceConnection(ctx)
 	}
-
-	br.Bot.EnsureAppserviceConnection(ctx)
 }
 
 func (br *Connector) fetchCapabilities(ctx context.Context) *mautrix.RespCapabilities {
@@ -500,6 +525,12 @@ func (br *Connector) UpdateBotProfile(ctx context.Context) {
 }
 
 func (br *Connector) GhostIntent(userID networkid.UserID) bridgev2.MatrixAPI {
+	if br.BotMode {
+		return &RelayIntent{
+			ASIntent: br.Bridge.Bot.(*ASIntent),
+			ID:       userID,
+		}
+	}
 	return &ASIntent{
 		Matrix:    br.AS.Intent(br.FormatGhostMXID(userID)),
 		Connector: br,
@@ -600,6 +631,9 @@ func (br *Connector) SendMessageCheckpoints(ctx context.Context, checkpoints []*
 }
 
 func (br *Connector) ParseGhostMXID(userID id.UserID) (networkid.UserID, bool) {
+	if br.BotMode {
+		return "", false
+	}
 	match := br.userIDRegex.FindStringSubmatch(string(userID))
 	if match == nil || userID == br.Bot.UserID {
 		return "", false

@@ -337,11 +337,11 @@ type ElementFunctionalMembersContent struct {
 }
 
 func (efmc *ElementFunctionalMembersContent) Add(mxid id.UserID) bool {
-	if slices.Contains(efmc.ServiceMembers, mxid) {
-		return false
+	if mxid != "" && !slices.Contains(efmc.ServiceMembers, mxid) {
+		efmc.ServiceMembers = append(efmc.ServiceMembers, mxid)
+		return true
 	}
-	efmc.ServiceMembers = append(efmc.ServiceMembers, mxid)
-	return true
+	return false
 }
 
 type PolicyServerPublicKeys struct {

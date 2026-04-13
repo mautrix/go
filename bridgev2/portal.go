@@ -4350,7 +4350,7 @@ func (portal *Portal) sendStateWithIntentOrBot(ctx context.Context, sender Matri
 		sender = portal.Bridge.Bot
 	}
 	resp, err = sender.SendState(ctx, portal.MXID, eventType, stateKey, content, ts)
-	if errors.Is(err, mautrix.MForbidden) && sender != portal.Bridge.Bot {
+	if errors.Is(err, mautrix.MForbidden) && sender != portal.Bridge.Bot && sender.GetMXID() != "" {
 		if content.Raw == nil {
 			content.Raw = make(map[string]any)
 		}
@@ -4481,13 +4481,13 @@ func (portal *Portal) getInitialMemberList(ctx context.Context, members *ChatMem
 			if member.PowerLevel != nil {
 				pl.EnsureUserLevel(extraUserID, *member.PowerLevel)
 			}
-			if intent != nil {
+			if intent != nil && intent.GetMXID() != "" {
 				// If intent is present along with a user ID, it's the ghost of a logged-in user,
 				// so add it to the functional members list
 				functional = append(functional, intent.GetMXID())
 			}
 		}
-		if intent != nil {
+		if intent != nil && intent.GetMXID() != "" {
 			invite = append(invite, intent.GetMXID())
 			if member.PowerLevel != nil {
 				pl.EnsureUserLevel(intent.GetMXID(), *member.PowerLevel)
@@ -4594,6 +4594,9 @@ func (portal *Portal) syncParticipants(
 		}
 	}
 	syncUser := func(extraUserID id.UserID, member ChatMember, intent MatrixAPI) bool {
+		if extraUserID == "" {
+			return false
+		}
 		if member.Membership == "" {
 			member.Membership = event.MembershipJoin
 		}
@@ -4689,6 +4692,9 @@ func (portal *Portal) syncParticipants(
 		return true
 	}
 	syncIntent := func(intent MatrixAPI, member ChatMember) {
+		if intent == nil {
+			return
+		}
 		if !syncUser(intent.GetMXID(), member, intent) {
 			return
 		}
@@ -4717,12 +4723,8 @@ func (portal *Portal) syncParticipants(
 		if err != nil {
 			return err
 		}
-		if intent != nil {
-			syncIntent(intent, member)
-		}
-		if extraUserID != "" {
-			syncUser(extraUserID, member, nil)
-		}
+		syncIntent(intent, member)
+		syncUser(extraUserID, member, nil)
 	}
 	if powerChanged {
 		_, err = portal.sendStateWithIntentOrBot(ctx, sender, event.StatePowerLevels, "", &event.Content{Parsed: currentPower}, ts)

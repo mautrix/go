@@ -45,6 +45,7 @@ type ASIntent struct {
 
 var _ bridgev2.MatrixAPI = (*ASIntent)(nil)
 var _ bridgev2.MarkAsDMMatrixAPI = (*ASIntent)(nil)
+var _ bridgev2.MatrixAPIWithArbitraryRoomState = (*ASIntent)(nil)
 
 func (as *ASIntent) SendMessage(ctx context.Context, roomID id.RoomID, eventType event.Type, content *event.Content, extra *bridgev2.MatrixSendExtra) (*mautrix.RespSendEvent, error) {
 	if extra == nil {
@@ -121,6 +122,9 @@ func (as *ASIntent) fillMemberEvent(ctx context.Context, roomID id.RoomID, userI
 
 func (as *ASIntent) SendState(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string, content *event.Content, ts time.Time) (resp *mautrix.RespSendEvent, err error) {
 	if eventType == event.StateMember {
+		if stateKey == "" {
+			return &mautrix.RespSendEvent{}, nil
+		}
 		as.fillMemberEvent(ctx, roomID, id.UserID(stateKey), content)
 	}
 	resp, err = as.Matrix.SendStateEvent(ctx, roomID, eventType, stateKey, content, mautrix.ReqSendEvent{Timestamp: ts.UnixMilli()})
