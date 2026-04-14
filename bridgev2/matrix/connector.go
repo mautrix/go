@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 	"regexp"
 	"strings"
 	"sync"
@@ -212,11 +211,13 @@ func (br *Connector) Start(ctx context.Context) error {
 		go br.AS.Start()
 	} else {
 		br.Log.WithLevel(zerolog.FatalLevel).Msg("Neither appservice HTTP listener nor websocket is enabled")
-		os.Exit(23)
+		return ExitError{23}
 	}
 
 	br.Log.Debug().Msg("Checking connection to homeserver")
-	br.ensureConnection(ctx)
+	if err := br.ensureConnection(ctx); err != nil {
+		return err
+	}
 	go br.fetchMediaConfig(ctx)
 	if br.Crypto != nil {
 		err = br.Crypto.Init(ctx)
@@ -355,7 +356,7 @@ func (br *Connector) logInitialRequestError(err error, defaultMessage string) {
 	}
 }
 
-func (br *Connector) ensureConnection(ctx context.Context) {
+func (br *Connector) ensureConnection(ctx context.Context) error {
 	triedToRegister := false
 	for {
 		versions, err := br.Bot.Versions(ctx)
@@ -365,15 +366,22 @@ func (br *Connector) ensureConnection(ctx context.Context) {
 				err = br.Bot.EnsureRegistered(ctx)
 				if err != nil {
 					br.logInitialRequestError(err, "Failed to register after /versions failed with M_FORBIDDEN")
-					os.Exit(16)
+					return fmt.Errorf("%w: failed to register after /versions failed with M_FORBIDDEN: %w", ExitError{16}, err)
 				}
 				triedToRegister = true
 			} else if errors.Is(err, mautrix.MUnknownToken) || errors.Is(err, mautrix.MExclusive) {
 				br.logInitialRequestError(err, "/versions request failed with auth error")
-				os.Exit(16)
+				return fmt.Errorf("%w: /versions request failed with auth error: %w", ExitError{16}, err)
+			} else if errors.Is(err, context.Canceled) {
+				br.logInitialRequestError(err, "/versions request was canceled")
+				return fmt.Errorf("%w: /versions request was canceled: %w", ExitError{16}, err)
 			} else {
 				br.Log.Err(err).Msg("Failed to connect to homeserver, retrying in 10 seconds...")
-				time.Sleep(10 * time.Second)
+				select {
+				case <-time.After(10 * time.Second):
+				case <-ctx.Done():
+					return fmt.Errorf("%w: %w", ExitError{16}, ctx.Err())
+				}
 			}
 		} else {
 			br.SpecVersions = versions
@@ -395,38 +403,37 @@ func (br *Connector) ensureConnection(ctx context.Context) {
 	}
 	if br.Config.Homeserver.Software == bridgeconfig.SoftwareHungry && !br.SpecVersions.Supports(mautrix.BeeperFeatureHungry) {
 		br.Log.WithLevel(zerolog.FatalLevel).Msg("The config claims the homeserver is hungryserv, but the /versions response didn't confirm it")
-		os.Exit(18)
+		return ExitError{18}
 	} else if !br.SpecVersions.ContainsGreaterOrEqual(MinSpecVersion) {
 		br.Log.WithLevel(unsupportedServerLogLevel).
 			Stringer("server_supports", br.SpecVersions.GetLatest()).
 			Stringer("bridge_requires", MinSpecVersion).
 			Msg("The homeserver is outdated (supported spec versions are below minimum required by bridge)")
 		if !br.IgnoreUnsupportedServer {
-			os.Exit(18)
+			return ExitError{18}
 		}
 	}
 
 	resp, err := br.Bot.Whoami(ctx)
 	if err != nil {
 		br.logInitialRequestError(err, "/whoami request failed with unknown error")
-		os.Exit(16)
+		return fmt.Errorf("%w: /whoami request failed with unknown error: %w", ExitError{16}, err)
 	} else if resp.UserID != br.Bot.UserID {
 		br.Log.WithLevel(zerolog.FatalLevel).
 			Stringer("got_user_id", resp.UserID).
 			Stringer("expected_user_id", br.Bot.UserID).
 			Msg("Unexpected user ID in whoami call")
-		os.Exit(17)
+		return ExitError{17}
 	}
 
 	if br.Websocket {
 		br.Log.Debug().Msg("Websocket mode: no need to check status of homeserver -> bridge connection")
-		return
 	} else if !br.SpecVersions.Supports(mautrix.FeatureAppservicePing) {
 		br.Log.Debug().Msg("Homeserver does not support checking status of homeserver -> bridge connection")
-		return
+	} else if !br.Bot.EnsureAppserviceConnection(ctx) {
+		return ExitError{13}
 	}
-
-	br.Bot.EnsureAppserviceConnection(ctx)
+	return nil
 }
 
 func (br *Connector) fetchCapabilities(ctx context.Context) *mautrix.RespCapabilities {

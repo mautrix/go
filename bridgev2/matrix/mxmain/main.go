@@ -369,7 +369,10 @@ func (br *BridgeMain) LoadConfig() {
 func (br *BridgeMain) Start() {
 	ctx := br.Log.WithContext(context.Background())
 	err := br.Bridge.StartConnectors(ctx)
-	if err != nil {
+	var exitError matrix.ExitError
+	if errors.As(err, &exitError) {
+		exitError.Exit()
+	} else if err != nil {
 		var dbUpgradeErr bridgev2.DBUpgradeError
 		if errors.As(err, &dbUpgradeErr) {
 			br.LogDBUpgradeErrorAndExit(dbUpgradeErr.Section, dbUpgradeErr.Err, "Failed to initialize database")

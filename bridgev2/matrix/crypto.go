@@ -143,7 +143,9 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 		return err
 	}
 	if isExistingDevice {
-		if !helper.verifyKeysAreOnServer(ctx) {
+		if ok, err := helper.verifyKeysAreOnServer(ctx); err != nil {
+			return err
+		} else if !ok {
 			return nil
 		}
 	} else {
@@ -154,7 +156,7 @@ func (helper *CryptoHelper) Init(ctx context.Context) error {
 	}
 	if helper.bridge.Config.Encryption.SelfSign {
 		if !helper.doSelfSign(ctx) {
-			os.Exit(34)
+			return ExitError{34}
 		}
 	}
 
@@ -334,7 +336,7 @@ func (helper *CryptoHelper) loginBot(ctx context.Context) (*mautrix.Client, bool
 	return client, deviceID != "", nil
 }
 
-func (helper *CryptoHelper) verifyKeysAreOnServer(ctx context.Context) bool {
+func (helper *CryptoHelper) verifyKeysAreOnServer(ctx context.Context) (bool, error) {
 	helper.log.Debug().Msg("Making sure keys are still on server")
 	resp, err := helper.client.QueryKeys(ctx, &mautrix.ReqQueryKeys{
 		DeviceKeys: map[id.UserID]mautrix.DeviceIDList{
@@ -343,15 +345,15 @@ func (helper *CryptoHelper) verifyKeysAreOnServer(ctx context.Context) bool {
 	})
 	if err != nil {
 		helper.log.WithLevel(zerolog.FatalLevel).Err(err).Msg("Failed to query own keys to make sure device still exists")
-		os.Exit(33)
+		return false, fmt.Errorf("%w: failed to query own keys to make sure device still exists:%w", ExitError{33}, err)
 	}
 	device, ok := resp.DeviceKeys[helper.client.UserID][helper.client.DeviceID]
 	if ok && len(device.Keys) > 0 {
-		return true
+		return true, nil
 	}
 	helper.log.Warn().Msg("Existing device doesn't have keys on server, resetting crypto")
 	helper.Reset(ctx, false)
-	return false
+	return false, nil
 }
 
 func (helper *CryptoHelper) Start() {
