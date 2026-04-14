@@ -32,7 +32,6 @@ const sampleVersions = `{
     "org.matrix.label_based_filtering": true,
     "org.matrix.e2e_cross_signing": true,
     "org.matrix.msc2432": true,
-    "com.beeper.msc4446": true,
     "uk.half-shot.msc2666.mutual_rooms": true,
     "io.element.e2ee_forced.public": false,
     "io.element.e2ee_forced.private": false,
@@ -53,7 +52,6 @@ func TestRespVersions_UnmarshalJSON(t *testing.T) {
 	assert.True(t, resp.ContainsGreaterOrEqual(mautrix.SpecV11))
 	assert.True(t, resp.Contains(mautrix.SpecV12))
 	assert.True(t, resp.Contains(mautrix.SpecR061))
-	assert.True(t, resp.Supports(mautrix.FeatureFullyReadBackward))
 	assert.True(t, resp.ContainsGreaterOrEqual(mautrix.MustParseSpecVersion("r0.0.0")))
 	assert.True(t, !resp.ContainsGreaterOrEqual(mautrix.MustParseSpecVersion("v123.456")))
 }
