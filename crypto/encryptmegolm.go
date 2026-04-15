@@ -141,6 +141,9 @@ func (mach *OlmMachine) EncryptMegolmEventWithStateKey(ctx context.Context, room
 	if err != nil {
 		return nil, err
 	}
+	// goolm encrypt alters the plaintext, so process
+	// it before encryption
+	relates_to := getRelatesTo(content, plaintext)
 	log := mach.machOrContextLog(ctx).With().
 		Str("event_type", evtType.Type).
 		Any("state_key", stateKey).
@@ -168,7 +171,7 @@ func (mach *OlmMachine) EncryptMegolmEventWithStateKey(ctx context.Context, room
 		Algorithm:        id.AlgorithmMegolmV1,
 		SessionID:        session.ID(),
 		MegolmCiphertext: ciphertext,
-		RelatesTo:        getRelatesTo(content, plaintext),
+		RelatesTo:        relates_to,
 
 		// These are deprecated
 		SenderKey: mach.account.IdentityKey(),
