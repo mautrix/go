@@ -7,6 +7,7 @@
 package event
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -151,7 +152,7 @@ type Relatable interface {
 }
 
 func (content *Content) UnmarshalJSON(data []byte) error {
-	content.VeryRaw = data
+	content.VeryRaw = bytes.Clone(data)
 	err := json.Unmarshal(data, &content.Raw)
 	return err
 }

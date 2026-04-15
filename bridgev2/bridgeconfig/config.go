@@ -85,6 +85,8 @@ type BridgeConfig struct {
 	OutgoingMessageReID           bool               `yaml:"outgoing_message_re_id"`
 	RevertFailedStateChanges      bool               `yaml:"revert_failed_state_changes"`
 	KickMatrixUsers               bool               `yaml:"kick_matrix_users"`
+	EnableSendStateRequests       bool               `yaml:"enable_send_state_requests"`
+	PhoneNumbersInProfile         bool               `yaml:"phone_numbers_in_profile"`
 	CleanupOnLogout               CleanupOnLogouts   `yaml:"cleanup_on_logout"`
 	Relay                         RelayConfig        `yaml:"relay"`
 	PortalCreateFilter            PortalCreateFilter `yaml:"portal_create_filter"`

@@ -175,6 +175,7 @@ func (br *BridgeMain) PreInit() {
 		br.GenerateRegistration()
 		os.Exit(0)
 	}
+	LoadGlobalConfigEnv()
 }
 
 func (br *BridgeMain) GenerateRegistration() {
@@ -369,13 +370,16 @@ func (br *BridgeMain) LoadConfig() {
 func (br *BridgeMain) Start() {
 	ctx := br.Log.WithContext(context.Background())
 	err := br.Bridge.StartConnectors(ctx)
-	if err != nil {
-		var dbUpgradeErr bridgev2.DBUpgradeError
-		if errors.As(err, &dbUpgradeErr) {
-			br.LogDBUpgradeErrorAndExit(dbUpgradeErr.Section, dbUpgradeErr.Err, "Failed to initialize database")
-		} else {
-			br.Log.Fatal().Err(err).Msg("Failed to start bridge")
-		}
+	var exitError matrix.ExitError
+	var dbUpgradeErr bridgev2.DBUpgradeError
+	if errors.As(err, &exitError) {
+		exitError.Exit()
+	} else if errors.As(err, &dbUpgradeErr) {
+		br.LogDBUpgradeErrorAndExit(dbUpgradeErr.Section, dbUpgradeErr.Err, "Failed to initialize database")
+	} else if errors.Is(err, bridgev2.ErrSplitPortalMigrationFailed) {
+		os.Exit(31)
+	} else if err != nil {
+		br.Log.Fatal().Err(err).Msg("Failed to start bridge")
 	}
 	err = br.PostMigrate(ctx)
 	if err != nil {

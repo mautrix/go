@@ -18,6 +18,8 @@ type HTTPProxyRequest struct {
 	Query   string          `json:"query"`
 	Headers http.Header     `json:"headers"`
 	Body    json.RawMessage `json:"body"`
+
+	EscapedPath bool `json:"escaped_path,omitempty"`
 }
 
 type HTTPProxyResponse struct {
@@ -51,13 +53,21 @@ func (as *AppService) WebsocketHTTPProxy(cmd WebsocketCommand) (bool, interface{
 	if cmd.Ctx == nil {
 		cmd.Ctx = context.Background()
 	}
-	reqURL := (&url.URL{
+	reqURLStruct := &url.URL{
 		Scheme:   "http",
 		Host:     "localhost",
 		Path:     req.Path,
 		RawQuery: req.Query,
-	}).String()
-	httpReq, err := http.NewRequestWithContext(cmd.Ctx, req.Method, reqURL, bytes.NewReader(req.Body))
+	}
+	if req.EscapedPath {
+		reqURLStruct.RawPath = req.Path
+		var err error
+		reqURLStruct.Path, err = url.PathUnescape(req.Path)
+		if err != nil {
+			return false, fmt.Errorf("failed to unescape request path: %w", err)
+		}
+	}
+	httpReq, err := http.NewRequestWithContext(cmd.Ctx, req.Method, reqURLStruct.String(), bytes.NewReader(req.Body))
 	if err != nil {
 		return false, fmt.Errorf("failed to create fake HTTP request: %w", err)
 	}

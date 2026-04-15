@@ -9,6 +9,7 @@ package olm_test
 import (
 	"bytes"
 	"fmt"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -114,6 +115,27 @@ func TestSession_EncryptDecrypt(t *testing.T) {
 			decrypted, err := receiverSession.Decrypt(string(ciphertext), msgType)
 			require.NoError(t, err)
 			assert.Equal(t, []byte(fmt.Sprintf("%d", i)), decrypted)
+		}
+
+		// Misordered messages
+		messages := make([][]byte, 10)
+		plainMessages := make([]string, 10)
+		for i := 0; i < 10; i++ {
+			plainMessages[i] = fmt.Sprintf("meow%d", i)
+			msgType, ciphertext, err := senderSession.Encrypt([]byte(plainMessages[i]))
+			require.NoError(t, err)
+			assert.Equal(t, id.OlmMsgTypeMsg, msgType)
+			messages[i] = ciphertext
+
+		}
+		rand.Shuffle(len(messages), func(i, j int) {
+			messages[i], messages[j] = messages[j], messages[i]
+			plainMessages[i], plainMessages[j] = plainMessages[j], plainMessages[i]
+		})
+		for i, ciphertext := range messages {
+			decrypted, err := receiverSession.Decrypt(string(ciphertext), id.OlmMsgTypeMsg)
+			require.NoError(t, err)
+			assert.Equal(t, []byte(plainMessages[i]), decrypted)
 		}
 	}
 }

@@ -51,10 +51,10 @@ func Decrypt(key, iv, ciphertext []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(ciphertext) < aes.BlockSize {
+	if len(ciphertext) == 0 || len(ciphertext)%aes.BlockSize != 0 {
 		return nil, ErrNotMultipleBlockSize
 	}
 
 	cipher.NewCBCDecrypter(block, iv).CryptBlocks(ciphertext, ciphertext)
-	return pkcs7.Unpad(ciphertext), nil
+	return pkcs7.Unpad(ciphertext)
 }

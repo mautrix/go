@@ -79,6 +79,10 @@ func fnLogin(ce *Event) {
 		)
 		return
 	}
+	if existingState := LoadCommandState(ce.User); existingState != nil {
+		ce.Reply("You already have an ongoing %s. You can use `$cmdprefix cancel` to cancel it.", strings.ToLower(existingState.Action))
+		return
+	}
 	flows := ce.Bridge.Network.GetLoginFlows()
 	var chosenFlowID string
 	if len(ce.Args) > 0 {

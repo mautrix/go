@@ -14,6 +14,7 @@ import (
 	"maps"
 	"net/http"
 	"slices"
+	"strings"
 
 	"github.com/rs/zerolog"
 	"github.com/tidwall/sjson"
@@ -244,6 +245,11 @@ func (ghost *Ghost) prepareContactInfo(identifiers []string, isBot *bool, extraP
 	}
 	if identifiers != nil {
 		slices.Sort(identifiers)
+		if !ghost.Bridge.Config.PhoneNumbersInProfile {
+			identifiers = slices.DeleteFunc(identifiers, func(id string) bool {
+				return strings.HasPrefix(id, "tel:")
+			})
+		}
 	}
 	changed := extraProfile.CopyTo(&ghost.ExtraProfile)
 	if identifiers != nil {

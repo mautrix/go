@@ -15,7 +15,4 @@ func Register() {
 	olm.InitNewPKSigning = func() (olm.PKSigning, error) {
 		return NewSigning()
 	}
-	olm.InitNewPKDecryptionFromPrivateKey = func(privateKey []byte) (olm.PKDecryption, error) {
-		return NewDecryptionFromPrivate(privateKey)
-	}
 }

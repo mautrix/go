@@ -46,9 +46,6 @@ func Register() {
 	olm.InitNewPKSigningFromSeed = func(seed []byte) (olm.PKSigning, error) {
 		return NewPKSigningFromSeed(seed)
 	}
-	olm.InitNewPKDecryptionFromPrivateKey = func(privateKey []byte) (olm.PKDecryption, error) {
-		return NewPkDecryption(privateKey)
-	}
 
 	olm.InitInboundGroupSessionFromPickled = func(pickled, key []byte) (olm.InboundGroupSession, error) {
 		return InboundGroupSessionFromPickled(pickled, key)

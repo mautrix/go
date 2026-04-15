@@ -413,6 +413,15 @@ type NetworkAPI interface {
 	HandleMatrixMessage(ctx context.Context, msg *MatrixMessage) (message *MatrixMessageResponse, err error)
 }
 
+// NetworkAPIWithUserID is an optional interface for fetching the remote user ID of the logged-in user.
+// Networks where such mapping is not possible should not implement this interface.
+// The GetUserID method may also return an empty string to indicate the user ID is not available.
+type NetworkAPIWithUserID interface {
+	NetworkAPI
+	// GetUserID returns the user ID of this client on the remote network.
+	GetUserID() networkid.UserID
+}
+
 type ConnectBackgroundParams struct {
 	// RawData is the raw data in the push that triggered the background connection.
 	RawData json.RawMessage
@@ -454,6 +463,10 @@ type FetchMessagesParams struct {
 	// The preferred number of messages to return. The returned batch can be bigger or smaller
 	// without any side effects, but the network connector should aim for this number.
 	Count int
+	// Whether the network connector should allow slow fetches of messages.
+	// If false and the network connector hits a case where a slow fetch is necessary,
+	// the response should set MoreRequiresSlowFetch in the response instead of fetching messages.
+	AllowSlowFetch bool
 
 	// When a forward backfill is triggered by a [RemoteChatResyncBackfillBundle], this will contain
 	// the bundled data returned by the event. It can be used as an optimization to avoid fetching
@@ -552,6 +565,10 @@ type FetchMessagesResponse struct {
 	// to mark the messages as read immediately after backfilling.
 	MarkRead bool
 
+	// If further fetches require requests that take longer than normal message fetches, this can be set to true.
+	// The bridge will then skip this portal in the backfill queue and only paginate further if the user requests it.
+	// This should not be set if AllowSlowFetch is true in the fetch params.
+	MoreRequiresSlowFetch bool
 	// If a backfill event was requested in the background and will later be sent using RemoteBackfill,
 	// this should be set to true. The queue will suspend the task for at least 24 hours until the event.
 	Pending bool
@@ -899,7 +916,7 @@ var (
 	Kick          = MembershipChangeType{From: event.MembershipJoin, To: event.MembershipLeave}
 	BanJoined     = MembershipChangeType{From: event.MembershipJoin, To: event.MembershipBan}
 	Invite        = MembershipChangeType{From: event.MembershipLeave, To: event.MembershipInvite}
-	Join          = MembershipChangeType{From: event.MembershipLeave, To: event.MembershipJoin}
+	Join          = MembershipChangeType{From: event.MembershipLeave, To: event.MembershipJoin, IsSelf: true}
 	BanLeft       = MembershipChangeType{From: event.MembershipLeave, To: event.MembershipBan}
 	Knock         = MembershipChangeType{From: event.MembershipLeave, To: event.MembershipKnock, IsSelf: true}
 	AcceptKnock   = MembershipChangeType{From: event.MembershipKnock, To: event.MembershipInvite}

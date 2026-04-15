@@ -257,6 +257,9 @@ func (as *AppService) YAML() (string, error) {
 
 // BotMXID returns the user ID corresponding to the appservice's sender_localpart
 func (as *AppService) BotMXID() id.UserID {
+	if as.botClient != nil {
+		return as.botClient.UserID
+	}
 	return id.NewUserID(as.Registration.SenderLocalpart, as.HomeserverDomain)
 }
 
@@ -299,6 +302,9 @@ func (as *AppService) makeIntent(userID id.UserID) *IntentAPI {
 // It does not currently validate that the given user ID is actually in the
 // appservice's namespace. Validation may be added later.
 func (as *AppService) Intent(userID id.UserID) *IntentAPI {
+	if userID == as.BotMXID() {
+		return as.BotIntent()
+	}
 	as.intentsLock.RLock()
 	intent, ok := as.intents[userID]
 	as.intentsLock.RUnlock()
@@ -405,6 +411,9 @@ func (as *AppService) makeClient(userID id.UserID) *mautrix.Client {
 // Usually you should prefer creating intents and using intent methods over direct client methods.
 // You can always access the client inside an intent with [IntentAPI.Client].
 func (as *AppService) Client(userID id.UserID) *mautrix.Client {
+	if userID == as.BotMXID() {
+		return as.BotClient()
+	}
 	as.clientsLock.RLock()
 	client, ok := as.clients[userID]
 	as.clientsLock.RUnlock()

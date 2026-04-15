@@ -29,7 +29,7 @@ func (br *Bridge) handleBotInvite(ctx context.Context, evt *event.Event, sender 
 	err := br.Bot.EnsureJoined(ctx, evt.RoomID)
 	if err != nil {
 		log.Err(err).Msg("Failed to accept invite to room")
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithError(err)
 	}
 	log.Debug().Msg("Accepted invite to room as bot")
 	members, err := br.Matrix.GetMembers(ctx, evt.RoomID)
@@ -143,12 +143,12 @@ func (br *Bridge) handleGhostDMInvite(ctx context.Context, evt *event.Event, sen
 	invitedGhost, err := br.GetGhostByID(ctx, ghostID)
 	if err != nil {
 		log.Err(err).Msg("Failed to get invited ghost")
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithError(fmt.Errorf("failed to get invited ghost: %w", err))
 	}
 	err = invitedGhost.Intent.EnsureJoined(ctx, evt.RoomID)
 	if err != nil {
 		log.Err(err).Msg("Failed to accept invite to room")
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithError(fmt.Errorf("failed to accept invite: %w", err))
 	}
 	var resp *CreateChatResponse
 	var sourceLogin *UserLogin
@@ -175,7 +175,7 @@ func (br *Bridge) handleGhostDMInvite(ctx context.Context, evt *event.Event, sen
 		} else if err != nil {
 			log.Err(err).Msg("Failed to resolve identifier")
 			sendErrorAndLeave(ctx, evt, invitedGhost.Intent, "Failed to create chat")
-			return EventHandlingResultFailed
+			return EventHandlingResultFailed.WithError(err)
 		} else {
 			sourceLogin = login
 			break
@@ -184,7 +184,7 @@ func (br *Bridge) handleGhostDMInvite(ctx context.Context, evt *event.Event, sen
 	if resp == nil {
 		log.Warn().Msg("No login could resolve the identifier")
 		sendErrorAndLeave(ctx, evt, br.Matrix.GhostIntent(ghostID), "Failed to create chat via any login")
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithError(fmt.Errorf("no login could resolve the invited identifier"))
 	}
 	portal := resp.Portal
 	if portal == nil {
@@ -192,7 +192,7 @@ func (br *Bridge) handleGhostDMInvite(ctx context.Context, evt *event.Event, sen
 		if err != nil {
 			log.Err(err).Msg("Failed to get portal by key")
 			sendErrorAndLeave(ctx, evt, br.Matrix.GhostIntent(ghostID), "Failed to create portal entry")
-			return EventHandlingResultFailed
+			return EventHandlingResultFailed.WithError(fmt.Errorf("failed to get portal by key: %w", err))
 		}
 	}
 	portal.CleanupOrphanedDM(ctx, sender.MXID)
@@ -200,13 +200,13 @@ func (br *Bridge) handleGhostDMInvite(ctx context.Context, evt *event.Event, sen
 	if err != nil {
 		log.Err(err).Msg("Failed to ensure bot is invited to room")
 		sendErrorAndLeave(ctx, evt, invitedGhost.Intent, "Failed to invite bridge bot")
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithError(fmt.Errorf("failed to ensure bot is invited: %w", err))
 	}
 	err = br.Bot.EnsureJoined(ctx, evt.RoomID)
 	if err != nil {
 		log.Err(err).Msg("Failed to ensure bot is joined to room")
 		sendErrorAndLeave(ctx, evt, invitedGhost.Intent, "Failed to join with bridge bot")
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithError(fmt.Errorf("failed to ensure bot is joined: %w", err))
 	}
 
 	portal.roomCreateLock.Lock()

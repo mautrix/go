@@ -138,6 +138,8 @@ func (o *MegolmInboundSession) Decrypt(ciphertext []byte) ([]byte, uint, error) 
 		return nil, 0, fmt.Errorf("decrypt: %w", olm.ErrBadSignature)
 	}
 
+	// Note: this will mutate the latest ratchet state even if decryption fails.
+	// We don't care because the signature was already checked, plus the initial ratchet is preserved.
 	targetRatch, err := o.getRatchet(msg.MessageIndex)
 	if err != nil {
 		return nil, 0, err

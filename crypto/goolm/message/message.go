@@ -1,7 +1,6 @@
 package message
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 
@@ -33,8 +32,8 @@ func (r *Message) Decode(input []byte) (err error) {
 	r.Counter = 0
 	r.RatchetKey = nil
 	r.Ciphertext = nil
-	if len(input) == 0 {
-		return nil
+	if len(input) < countMACBytesMessage {
+		return fmt.Errorf("%w (%d bytes)", olm.ErrInputToSmall, len(input))
 	}
 
 	decoder := NewDecoder(input[:len(input)-countMACBytesMessage])
@@ -90,17 +89,8 @@ func (r *Message) EncodeAndMAC(cipher aessha2.AESSHA2) ([]byte, error) {
 	return append(encoder.Bytes(), mac[:countMACBytesMessage]...), err
 }
 
-// VerifyMAC verifies the givenMAC to the calculated MAC of the message.
-func (r *Message) VerifyMAC(key []byte, cipher aessha2.AESSHA2, ciphertext, givenMAC []byte) (bool, error) {
-	checkMAC, err := cipher.MAC(ciphertext)
-	if err != nil {
-		return false, err
-	}
-	return bytes.Equal(checkMAC[:countMACBytesMessage], givenMAC), nil
-}
-
 // VerifyMACInline verifies the MAC taken from the message to the calculated MAC of the message.
-func (r *Message) VerifyMACInline(key []byte, cipher aessha2.AESSHA2, message []byte) (bool, error) {
+func (r *Message) VerifyMACInline(cipher aessha2.AESSHA2, message []byte) (bool, error) {
 	givenMAC := message[len(message)-countMACBytesMessage:]
-	return r.VerifyMAC(key, cipher, message[:len(message)-countMACBytesMessage], givenMAC)
+	return cipher.VerifyMAC(message[:len(message)-countMACBytesMessage], givenMAC, countMACBytesMessage)
 }

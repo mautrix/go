@@ -23,7 +23,10 @@ func TestCipherAESSha256(t *testing.T) {
 	mac, err := cipher.MAC(encrypted)
 	assert.NoError(t, err)
 
-	verified, err := cipher.VerifyMAC(encrypted, mac[:8])
+	_, err = cipher.VerifyMAC(encrypted, mac[:4], 8)
+	assert.Error(t, err)
+
+	verified, err := cipher.VerifyMAC(encrypted, mac[:8], 8)
 	assert.NoError(t, err)
 	assert.True(t, verified, "signature verification failed")
 

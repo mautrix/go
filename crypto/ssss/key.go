@@ -29,28 +29,28 @@ type Key struct {
 //
 // Errors are only returned if crypto/rand runs out of randomness.
 func NewKey(passphrase string) (*Key, error) {
-	// We don't support any other algorithms currently.
-	keyData := KeyMetadata{Algorithm: AlgorithmAESHMACSHA2}
-
-	var ssssKey []byte
 	if len(passphrase) > 0 {
 		// There's a passphrase. We need to generate a salt for it, set the metadata
 		// and then compute the key using the passphrase and the metadata.
-		saltBytes := random.Bytes(24)
-		keyData.Passphrase = &PassphraseMetadata{
-			Algorithm:  PassphraseAlgorithmPBKDF2,
-			Iterations: 500000,
-			Salt:       base64.StdEncoding.EncodeToString(saltBytes),
-			Bits:       256,
-		}
-		var err error
-		ssssKey, err = keyData.Passphrase.GetKey(passphrase)
+		passphraseMeta := NewPassphraseMetadata()
+		ssssKey, err := passphraseMeta.GetKey(passphrase)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get key from passphrase: %w", err)
 		}
-	} else {
-		// No passphrase, just generate a random key
-		ssssKey = random.Bytes(32)
+		return WrapKey(ssssKey, passphraseMeta)
+	}
+	// No passphrase, just generate a random key
+	return WrapKey(random.Bytes(32), nil)
+}
+
+func WrapKey(ssssKey []byte, passphraseMeta *PassphraseMetadata) (*Key, error) {
+	if len(ssssKey) != 32 {
+		return nil, fmt.Errorf("%w: must be 32 bytes", ErrInvalidRecoveryKey)
+	}
+	// We don't support any other algorithms currently.
+	keyData := KeyMetadata{
+		Algorithm:  AlgorithmAESHMACSHA2,
+		Passphrase: passphraseMeta,
 	}
 
 	// Generate a random ID for the key. It's what identifies the key in account data.

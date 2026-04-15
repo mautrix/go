@@ -35,7 +35,9 @@ func TestPKCS7(t *testing.T) {
 			assert.Zero(t, len(padded)%tc.blockLen, "padded length is not a multiple of block size")
 
 			// Test unpad
-			assert.Equal(t, tc.input, pkcs7.Unpad(tc.expected))
+			unpadded, err := pkcs7.Unpad(tc.expected)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.input, unpadded)
 		})
 	}
 }
@@ -45,7 +47,8 @@ func TestPKCS7_RoundtripWithAESBlockSize(t *testing.T) {
 		input := bytes.Repeat([]byte{byte(i)}, i)
 		padded := pkcs7.Pad(input, aes.BlockSize)
 		assert.Zero(t, len(padded)%aes.BlockSize, "padded length is not a multiple of the AES block size")
-		unpadded := pkcs7.Unpad(padded)
+		unpadded, err := pkcs7.Unpad(padded)
+		assert.NoError(t, err)
 		assert.Equal(t, bytes.Repeat([]byte{byte(i)}, i), unpadded)
 	}
 }

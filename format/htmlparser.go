@@ -267,7 +267,7 @@ func (parser *HTMLParser) spanToString(node *html.Node, ctx Context) string {
 			}
 		}
 	}
-	if parser.ColorConverter != nil {
+	if parser.ColorConverter != nil && (node.Data == "span" || node.Data == "font") {
 		fg := parser.getAttribute(node, "data-mx-color")
 		if len(fg) == 0 && node.Data == "font" {
 			fg = parser.getAttribute(node, "color")
@@ -346,7 +346,7 @@ func (parser *HTMLParser) tagToString(node *html.Node, ctx Context) string {
 		return parser.Newline
 	case "b", "strong", "i", "em", "s", "strike", "del", "u", "ins", "tt", "code":
 		return parser.basicFormatToString(node, ctx)
-	case "span", "font":
+	case "span", "div", "font":
 		return parser.spanToString(node, ctx)
 	case "a":
 		return parser.linkToString(node, ctx)

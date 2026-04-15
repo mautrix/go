@@ -31,6 +31,7 @@ type IntentAPI struct {
 	registerLock sync.Mutex
 
 	IsCustomPuppet bool
+	Registered     bool
 }
 
 func (as *AppService) NewIntentAPI(localpart string) *IntentAPI {
@@ -60,7 +61,7 @@ func (intent *IntentAPI) Register(ctx context.Context) error {
 }
 
 func (intent *IntentAPI) EnsureRegistered(ctx context.Context) error {
-	if intent.IsCustomPuppet {
+	if intent.IsCustomPuppet || intent.Registered {
 		return nil
 	}
 	intent.registerLock.Lock()
@@ -69,6 +70,7 @@ func (intent *IntentAPI) EnsureRegistered(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to check if user is registered: %w", err)
 	} else if isRegistered {
+		intent.Registered = true
 		return nil
 	}
 
@@ -80,6 +82,7 @@ func (intent *IntentAPI) EnsureRegistered(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to mark user as registered in state store: %w", err)
 	}
+	intent.Registered = true
 	return nil
 }
 

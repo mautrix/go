@@ -1,7 +1,6 @@
 package session
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
@@ -275,8 +274,8 @@ func (s *OlmSession) matchesInboundSession(theirIdentityKeyEncoded *id.Curve2551
 	if theirIdentityKey != nil {
 		same = same && theirIdentityKey.Equal(s.AliceIdentityKey)
 	}
-	same = same && bytes.Equal(msg.BaseKey, s.AliceBaseKey)
-	same = same && bytes.Equal(msg.OneTimeKey, s.BobOneTimeKey)
+	same = same && msg.BaseKey.Equal(s.AliceBaseKey)
+	same = same && msg.OneTimeKey.Equal(s.BobOneTimeKey)
 	return same, nil
 }
 

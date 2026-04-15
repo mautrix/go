@@ -32,10 +32,13 @@ func Unpickle(key, input []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	if len(ciphertext) < pickleMACLength {
+		return nil, fmt.Errorf("decrypt pickle: input too short")
+	}
 	ciphertext, mac := ciphertext[:len(ciphertext)-pickleMACLength], ciphertext[len(ciphertext)-pickleMACLength:]
 	if c, err := aessha2.NewAESSHA2(key, kdfPickle); err != nil {
 		return nil, err
-	} else if verified, err := c.VerifyMAC(ciphertext, mac); err != nil {
+	} else if verified, err := c.VerifyMAC(ciphertext, mac, pickleMACLength); err != nil {
 		return nil, err
 	} else if !verified {
 		return nil, fmt.Errorf("decrypt pickle: %w", olm.ErrBadMAC)

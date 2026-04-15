@@ -14,6 +14,7 @@ import (
 	"github.com/rs/zerolog/log" // zerolog-allow-global-log
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.mau.fi/util/exerrors"
 
 	"maunium.net/go/mautrix/crypto"
 	"maunium.net/go/mautrix/crypto/verificationhelper"
@@ -86,7 +87,7 @@ func TestSelfVerification_Accept_QRContents(t *testing.T) {
 			// See the spec for the QR Code format:
 			// https://spec.matrix.org/v1.10/client-server-api/#qr-code-format
 			if tc.receivingGeneratedCrossSigningKeys {
-				masterKeyBytes := receivingMachine.GetOwnCrossSigningPublicKeys(ctx).MasterKey.Bytes()
+				masterKeyBytes := exerrors.Must(receivingMachine.GetOwnCrossSigningPublicKeys(ctx)).MasterKey.Bytes()
 
 				// The receiving device should have shown a QR Code with
 				// trusted mode
@@ -100,7 +101,7 @@ func TestSelfVerification_Accept_QRContents(t *testing.T) {
 				assert.EqualValues(t, sendingMachine.OwnIdentity().SigningKey.Bytes(), sendingShownQRCode.Key1) // own device key
 				assert.EqualValues(t, masterKeyBytes, sendingShownQRCode.Key2)                                  // master key
 			} else if tc.sendingGeneratedCrossSigningKeys {
-				masterKeyBytes := sendingMachine.GetOwnCrossSigningPublicKeys(ctx).MasterKey.Bytes()
+				masterKeyBytes := exerrors.Must(sendingMachine.GetOwnCrossSigningPublicKeys(ctx)).MasterKey.Bytes()
 
 				// The receiving device should have shown a QR code with
 				// untrusted mode

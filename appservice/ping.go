@@ -10,7 +10,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"os"
 	"strings"
 	"time"
 
@@ -19,7 +18,7 @@ import (
 	"maunium.net/go/mautrix"
 )
 
-func (intent *IntentAPI) EnsureAppserviceConnection(ctx context.Context) {
+func (intent *IntentAPI) EnsureAppserviceConnection(ctx context.Context) bool {
 	var pingResp *mautrix.RespAppservicePing
 	var txnID string
 	var retryCount int
@@ -55,7 +54,7 @@ func (intent *IntentAPI) EnsureAppserviceConnection(ctx context.Context) {
 		if outOfRetries {
 			evt.Msg("Homeserver -> appservice connection is not working")
 			zerolog.Ctx(ctx).Info().Msg("See https://docs.mau.fi/faq/as-ping for more info")
-			os.Exit(13)
+			return false
 		}
 		evt.Msg("Homeserver -> appservice connection is not working, retrying in 5 seconds...")
 		time.Sleep(5 * time.Second)
@@ -65,4 +64,5 @@ func (intent *IntentAPI) EnsureAppserviceConnection(ctx context.Context) {
 		Str("txn_id", txnID).
 		Int64("duration_ms", pingResp.DurationMS).
 		Msg("Homeserver -> appservice connection works")
+	return true
 }

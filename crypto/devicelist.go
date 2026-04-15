@@ -67,7 +67,10 @@ func (mach *OlmMachine) GetCachedDevices(ctx context.Context, userID id.UserID) 
 	} else if len(userIDs) == 0 {
 		return nil, ErrUserNotTracked
 	}
-	ownKeys := mach.GetOwnCrossSigningPublicKeys(ctx)
+	ownKeys, err := mach.GetOwnCrossSigningPublicKeys(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get own cross-signing public keys: %w", err)
+	}
 	var ownUserSigningKey id.Ed25519
 	if ownKeys != nil {
 		ownUserSigningKey = ownKeys.UserSigningKey

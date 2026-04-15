@@ -40,11 +40,12 @@ func fnSetRelay(ce *Event) {
 		return
 	}
 	onlySetDefaultRelays := !ce.User.Permissions.Admin && ce.Bridge.Config.Relay.AdminOnly
+	preferDefaultRelay := ce.Bridge.Config.Relay.PreferDefault && len(ce.Bridge.Config.Relay.DefaultRelays) > 0
 	var relay *bridgev2.UserLogin
 	if len(ce.Args) == 0 && ce.Portal.Receiver == "" {
 		relay = ce.User.GetDefaultLogin()
 		isLoggedIn := relay != nil
-		if onlySetDefaultRelays {
+		if onlySetDefaultRelays || preferDefaultRelay {
 			relay = nil
 		}
 		if relay == nil {
@@ -69,7 +70,11 @@ func fnSetRelay(ce *Event) {
 			}
 			if relay == nil {
 				if isLoggedIn {
-					ce.Reply("You're not allowed to use yourself as relay and none of the default relay users are in the chat")
+					if onlySetDefaultRelays {
+						ce.Reply("You're not allowed to use yourself as relay and none of the default relay users are in the chat")
+					} else {
+						ce.Reply("None of the default relay users are in the chat. If you want to use yourself as the relay, specify your login ID explicitly")
+					}
 				} else {
 					ce.Reply("You're not logged in and none of the default relay users are in the chat")
 				}

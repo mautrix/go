@@ -242,6 +242,10 @@ func ReverseTextToHTML(input string) string {
 }
 
 func (content *MessageEventContent) EnsureHasHTML() {
+	if content.MsgType.IsMedia() && (content.FileName == "" || content.FileName == content.Body) {
+		content.FileName = content.Body
+		content.Body = ""
+	}
 	if len(content.FormattedBody) == 0 || content.Format != FormatHTML {
 		content.FormattedBody = TextToHTML(content.Body)
 		content.Format = FormatHTML

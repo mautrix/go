@@ -21,38 +21,39 @@ type CrossSigningPublicKeysCache struct {
 }
 
 func (mach *OlmMachine) GetOwnVerificationStatus(ctx context.Context) (hasKeys, isVerified bool, err error) {
-	pubkeys := mach.GetOwnCrossSigningPublicKeys(ctx)
-	if pubkeys != nil {
-		hasKeys = true
-		isVerified, err = mach.CryptoStore.IsKeySignedBy(
-			ctx, mach.Client.UserID, mach.GetAccount().SigningKey(), mach.Client.UserID, pubkeys.SelfSigningKey,
-		)
-		if err != nil {
-			err = fmt.Errorf("failed to check if current device is signed by own self-signing key: %w", err)
-		}
+	var pubkeys *CrossSigningPublicKeysCache
+	pubkeys, err = mach.GetOwnCrossSigningPublicKeys(ctx)
+	if err != nil || pubkeys == nil {
+		return
+	}
+	hasKeys = true
+	isVerified, err = mach.CryptoStore.IsKeySignedBy(
+		ctx, mach.Client.UserID, mach.GetAccount().SigningKey(), mach.Client.UserID, pubkeys.SelfSigningKey,
+	)
+	if err != nil {
+		err = fmt.Errorf("failed to check if current device is signed by own self-signing key: %w", err)
 	}
 	return
 }
 
-func (mach *OlmMachine) GetOwnCrossSigningPublicKeys(ctx context.Context) *CrossSigningPublicKeysCache {
+func (mach *OlmMachine) GetOwnCrossSigningPublicKeys(ctx context.Context) (*CrossSigningPublicKeysCache, error) {
 	if mach.crossSigningPubkeys != nil {
-		return mach.crossSigningPubkeys
+		return mach.crossSigningPubkeys, nil
 	}
 	if mach.CrossSigningKeys != nil {
 		mach.crossSigningPubkeys = mach.CrossSigningKeys.PublicKeys()
-		return mach.crossSigningPubkeys
+		return mach.crossSigningPubkeys, nil
 	}
 	if mach.crossSigningPubkeysFetched {
-		return nil
+		return nil, nil
 	}
 	cspk, err := mach.GetCrossSigningPublicKeys(ctx, mach.Client.UserID)
 	if err != nil {
-		mach.Log.Error().Err(err).Msg("Failed to get own cross-signing public keys")
-		return nil
+		return nil, err
 	}
 	mach.crossSigningPubkeys = cspk
 	mach.crossSigningPubkeysFetched = true
-	return mach.crossSigningPubkeys
+	return mach.crossSigningPubkeys, nil
 }
 
 func (mach *OlmMachine) GetCrossSigningPublicKeys(ctx context.Context, userID id.UserID) (*CrossSigningPublicKeysCache, error) {

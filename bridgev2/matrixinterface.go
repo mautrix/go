@@ -232,3 +232,11 @@ type MarkAsDMMatrixAPI interface {
 	MatrixAPI
 	MarkAsDM(ctx context.Context, roomID id.RoomID, otherUser id.UserID) error
 }
+
+// MatrixAPIWithArbitraryRoomState is an extension of MatrixAPI that allows fetching arbitrary state events from a room.
+// This should only be used with double puppets when the bridge wants to ensure that the caller has access to the room.
+// For any other use case, use MatrixConnectorWithArbitraryRoomState instead, which uses the bridge bot.
+type MatrixAPIWithArbitraryRoomState interface {
+	MatrixAPI
+	GetStateEvent(ctx context.Context, roomID id.RoomID, eventType event.Type, stateKey string) (*event.Event, error)
+}

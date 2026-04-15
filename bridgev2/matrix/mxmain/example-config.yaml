@@ -55,6 +55,11 @@ bridge:
     # In portals with no relay set, should Matrix users be kicked if they're
     # not logged into an account that's in the remote chat?
     kick_matrix_users: true
+    # Should the bridge listen to com.beeper.state_request events?
+    # This is not necessary for anything outside of Beeper.
+    enable_send_state_requests: false
+    # Should the com.beeper.bridge.identifiers list in global ghost profiles include phone numbers?
+    phone_numbers_in_profile: false
 
     # What should be done to portal rooms when a user logs out or is logged out?
     # Permitted values:
@@ -91,6 +96,9 @@ bridge:
         # Should only admins be allowed to set themselves as relay users?
         # If true, non-admins can only set users listed in default_relays as relays in a room.
         admin_only: true
+        # Should default relays be preferred when an explicit login ID isn't specified even if the user is logged in?
+        # This applies to the set-relay and bridge commands sent by any user, including admins.
+        prefer_default: true
         # Should non-admins be allowed to use the bridge and sync-chat commands via default relays specified below?
         allow_bridge: true
         # List of user login IDs which anyone can set as a relay, as long as the relay user is in the room.
@@ -339,6 +347,7 @@ backfill:
     # Whether to do backfilling at all.
     enabled: false
     # Maximum number of messages to backfill in empty rooms.
+    # If this is zero or negative, backfill will be disabled in new rooms.
     max_initial_messages: 50
     # Maximum number of missed messages to backfill after bridge restarts.
     max_catchup_messages: 500
@@ -354,6 +363,8 @@ backfill:
     queue:
         # Should the backfill queue be enabled?
         enabled: false
+        # Should manual calls to backfill queue tasks be allowed?
+        manual: false
         # Number of messages to backfill in one batch.
         batch_size: 100
         # Delay between batches in seconds.
@@ -397,7 +408,6 @@ encryption:
     # Whether to use MSC4190 instead of appservice login to create the bridge bot device.
     # Requires the homeserver to support MSC4190 and the device masquerading parts of MSC3202.
     # Only relevant when using end-to-bridge encryption, required when using encryption with next-gen auth (MSC3861).
-    # Changing this option requires updating the appservice registration file.
     msc4190: false
     # Whether to encrypt reactions and reply metadata as per MSC4392.
     # This is not supported by most clients.

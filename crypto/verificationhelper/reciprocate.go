@@ -48,8 +48,10 @@ func (vh *VerificationHelper) HandleScannedQRData(ctx context.Context, data []by
 	// Verify the keys
 	log.Info().Msg("Verifying keys from QR code")
 
-	ownCrossSigningPublicKeys := vh.mach.GetOwnCrossSigningPublicKeys(ctx)
-	if ownCrossSigningPublicKeys == nil {
+	ownCrossSigningPublicKeys, err := vh.mach.GetOwnCrossSigningPublicKeys(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get own cross-signing public keys: %w", err)
+	} else if ownCrossSigningPublicKeys == nil {
 		return crypto.ErrCrossSigningPubkeysNotCached
 	}
 
@@ -286,8 +288,10 @@ func (vh *VerificationHelper) generateQRCode(ctx context.Context, txn *Verificat
 		return nil, nil
 	}
 
-	ownCrossSigningPublicKeys := vh.mach.GetOwnCrossSigningPublicKeys(ctx)
-	if ownCrossSigningPublicKeys == nil || len(ownCrossSigningPublicKeys.MasterKey) == 0 {
+	ownCrossSigningPublicKeys, err := vh.mach.GetOwnCrossSigningPublicKeys(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get own cross-signing public keys: %w", err)
+	} else if ownCrossSigningPublicKeys == nil || len(ownCrossSigningPublicKeys.MasterKey) == 0 {
 		return nil, errors.New("failed to get own cross-signing master public key")
 	}
 

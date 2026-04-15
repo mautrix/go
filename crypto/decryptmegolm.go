@@ -92,7 +92,7 @@ func (mach *OlmMachine) DecryptMegolmEvent(ctx context.Context, evt *event.Event
 	// Allow the server to move encrypted events between rooms if both the real room and target room are on a non-federatable .local domain.
 	// The message index checks to prevent replay attacks still apply and aren't based on the room ID,
 	// so the event ID and timestamp must remain the same when the event is moved to a different room.
-	if origRoomID, ok := evt.Content.Raw["com.beeper.original_room_id"].(string); ok && strings.HasSuffix(origRoomID, ".local") && strings.HasSuffix(evt.RoomID.String(), ".local") {
+	if origRoomID, ok := evt.Content.Raw["com.beeper.original_room_id"].(string); ok && strings.HasSuffix(origRoomID, ".local") && strings.HasSuffix(evt.RoomID.String(), ".local") && mach.AllowBeeperRoomReroute {
 		encryptionRoomID = id.RoomID(origRoomID)
 	}
 	sess, plaintext, messageIndex, err := mach.actuallyDecryptMegolmEvent(ctx, evt, encryptionRoomID, content)

@@ -46,15 +46,23 @@ var CommandBridge = &FullHandler{
 	RequiresEventLevel: event.StateBridge,
 }
 
+func alreadyBridged(ce *Event) bool {
+	if ce.Portal != nil {
+		var receiver string
+		if ce.Portal.Receiver != "" {
+			receiver = fmt.Sprintf(" (receiver: %s)", format.SafeMarkdownCode(ce.Portal.Receiver))
+		}
+		ce.Reply("This room is already bridged to %s%s on %s", format.SafeMarkdownCode(ce.Portal.ID), receiver, ce.Bridge.Network.GetName().DisplayName)
+		return true
+	}
+	return false
+}
+
 func fnBridge(ce *Event) {
-	if len(ce.Args) == 0 || len(ce.Args) > 2 {
-		ce.Reply("Usage: `$cmdprefix bridge [login ID] <chat ID>`")
-		return
-	} else if !canPlumb(ce) {
+	if !canPlumb(ce) {
 		ce.Reply("You don't have permission to bridge this room")
 		return
-	} else if ce.Portal != nil {
-		ce.Reply("This room is already bridged")
+	} else if alreadyBridged(ce) {
 		return
 	}
 	var allowOverwrite, ignorePermissions bool
@@ -70,6 +78,10 @@ func fnBridge(ce *Event) {
 			return false
 		}
 	})
+	if len(ce.Args) == 0 || len(ce.Args) > 2 {
+		ce.Reply("Usage: `$cmdprefix bridge [login ID] <chat ID>`")
+		return
+	}
 	if !ignorePermissions {
 		pls, err := ce.Bridge.Matrix.GetPowerLevels(ce.Ctx, ce.RoomID)
 		if err != nil {
@@ -81,7 +93,11 @@ func fnBridge(ce *Event) {
 			return
 		}
 	}
-	portal, login, ok := getCreatePortalInput(ce, ce.Bridge.Config.Relay.AllowBridge)
+	portal, login, ok := getCreatePortalInput(
+		ce,
+		ce.Bridge.Config.Relay.AllowBridge,
+		ce.Bridge.Config.Relay.PreferDefault && len(ce.Bridge.Config.Relay.DefaultRelays) > 0,
+	)
 	if !ok {
 		return
 	} else if portal.MXID != "" {

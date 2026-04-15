@@ -80,13 +80,14 @@ func (br *Bridge) QueueMatrixEvent(ctx context.Context, evt *event.Event) EventH
 		sender, err = br.GetUserByMXID(ctx, evt.Sender)
 		if err != nil {
 			log.Err(err).Msg("Failed to get sender user for incoming Matrix event")
-			status := WrapErrorInStatus(fmt.Errorf("%w: failed to get sender user: %w", ErrDatabaseError, err))
+			err = fmt.Errorf("%w: failed to get sender user: %w", ErrDatabaseError, err)
+			status := WrapErrorInStatus(err)
 			br.Matrix.SendMessageStatus(ctx, &status, StatusEventInfoFromEvent(evt))
-			return EventHandlingResultFailed
+			return EventHandlingResultFailed.WithError(err)
 		} else if sender == nil {
 			log.Error().Msg("Couldn't get sender for incoming non-ephemeral Matrix event")
 			br.Matrix.SendMessageStatus(ctx, &ErrEventSenderUserNotFound, StatusEventInfoFromEvent(evt))
-			return EventHandlingResultFailed
+			return EventHandlingResultFailed.WithError(ErrEventSenderUserNotFound)
 		} else if !sender.Permissions.SendEvents {
 			if !br.rejectInviteOnNoPermission(ctx, evt, "interact with") {
 				br.Matrix.SendMessageStatus(ctx, &ErrNoPermissionToInteract, StatusEventInfoFromEvent(evt))
@@ -128,19 +129,19 @@ func (br *Bridge) QueueMatrixEvent(ctx context.Context, evt *event.Event) EventH
 			err := br.DB.User.Update(ctx, sender.User)
 			if err != nil {
 				log.Err(err).Msg("Failed to clear user's management room in database")
-				return EventHandlingResultFailed
-			} else {
-				log.Debug().Msg("Cleared user's management room due to leave event")
+				return EventHandlingResultFailed.WithError(fmt.Errorf("failed to clear user's management room: %w", err))
 			}
+			log.Debug().Msg("Cleared user's management room due to leave event")
 		}
 		return EventHandlingResultSuccess
 	}
 	portal, err := br.GetPortalByMXID(ctx, evt.RoomID)
 	if err != nil {
 		log.Err(err).Msg("Failed to get portal for incoming Matrix event")
-		status := WrapErrorInStatus(fmt.Errorf("%w: failed to get portal: %w", ErrDatabaseError, err))
+		err = fmt.Errorf("%w: failed to get portal: %w", ErrDatabaseError, err)
+		status := WrapErrorInStatus(err)
 		br.Matrix.SendMessageStatus(ctx, &status, StatusEventInfoFromEvent(evt))
-		return EventHandlingResultFailed
+		return EventHandlingResultFailed.WithError(err)
 	} else if portal != nil {
 		return portal.queueEvent(ctx, &portalMatrixEvent{
 			evt:    evt,

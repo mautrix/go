@@ -147,6 +147,9 @@ func getState[T any](ctx context.Context, roomID id.RoomID, evtType event.Type, 
 }
 
 func fnCreateGroup(ce *Event) {
+	if alreadyBridged(ce) {
+		return
+	}
 	login, api, remainingArgs := getClientForStartingChat[bridgev2.GroupCreatingNetworkAPI](ce, "creating group")
 	if api == nil {
 		return
@@ -183,10 +186,16 @@ func fnCreateGroup(ce *Event) {
 			if user, err := ce.Bridge.GetExistingUserByMXID(ce.Ctx, userID); err != nil {
 				ce.Log.Err(err).Stringer("user_id", userID).Msg("Failed to get user for room member")
 			} else if user != nil {
-				// TODO add user logins to participants
-				//for _, login := range user.GetUserLogins() {
-				//	params.Participants = append(params.Participants, login.GetUserID())
-				//}
+				for _, login := range user.GetUserLogins() {
+					nui, ok := login.Client.(bridgev2.NetworkAPIWithUserID)
+					if !ok {
+						continue
+					}
+					loginUserID := nui.GetUserID()
+					if loginUserID != "" && nui.IsLoggedIn() {
+						params.Participants = append(params.Participants, loginUserID)
+					}
+				}
 			}
 		}
 	}
@@ -233,7 +242,7 @@ var CommandCreatePortal = &FullHandler{
 	},
 }
 
-func getCreatePortalInput(ce *Event, allowRelay bool) (portal *bridgev2.Portal, login *bridgev2.UserLogin, ok bool) {
+func getCreatePortalInput(ce *Event, allowRelay, preferRelay bool) (portal *bridgev2.Portal, login *bridgev2.UserLogin, ok bool) {
 	portalID := networkid.PortalID(ce.Args[len(ce.Args)-1])
 	if len(ce.Args) == 2 {
 		loginID := networkid.UserLoginID(ce.Args[0])
@@ -246,7 +255,7 @@ func getCreatePortalInput(ce *Event, allowRelay bool) (portal *bridgev2.Portal, 
 			ce.Reply("Login %s does not belong to you", format.SafeMarkdownCode(loginID))
 			return
 		}
-	} else if login = ce.User.GetDefaultLogin(); login == nil {
+	} else if login = ce.User.GetDefaultLogin(); login == nil || preferRelay {
 		if !allowRelay || len(ce.Bridge.Config.Relay.DefaultRelays) == 0 {
 			ce.Reply("You're not logged in")
 			return
@@ -275,7 +284,11 @@ func getCreatePortalInput(ce *Event, allowRelay bool) (portal *bridgev2.Portal, 
 		ce.Log.Err(err).Msg("Failed to get portal")
 		ce.Reply("Failed to get portal")
 	} else if portal == nil {
-		ce.Reply("No portal found with ID %s. Try `$cmdprefix filter allow` instead", format.SafeMarkdownCode(portalID))
+		if ce.Command == "create-portal" {
+			ce.Reply("No portal found with ID %s. Try `$cmdprefix filter allow` instead", format.SafeMarkdownCode(portalID))
+		} else {
+			ce.Reply("No portal found with ID %s. You may need to receive a message in the chat first", format.SafeMarkdownCode(portalID))
+		}
 	} else {
 		ok = true
 	}
@@ -287,7 +300,7 @@ func fnCreatePortal(ce *Event) {
 		ce.Reply("Usage: `$cmdprefix create-portal [login ID] <chat ID>`")
 		return
 	}
-	portal, login, ok := getCreatePortalInput(ce, false)
+	portal, login, ok := getCreatePortalInput(ce, false, false)
 	if !ok {
 		return
 	}

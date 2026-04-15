@@ -103,6 +103,7 @@ func (s *DefaultSyncer) ProcessResponse(ctx context.Context, res *RespSync, sinc
 	s.processSyncEvents(ctx, "", res.AccountData.Events, event.SourceAccountData, false)
 
 	for roomID, roomData := range res.Rooms.Join {
+		s.processSyncEvents(ctx, roomID, roomData.Sticky.Events, event.SourceJoin|event.SourceSticky, false)
 		if roomData.StateAfter == nil {
 			s.processSyncEvents(ctx, roomID, roomData.State.Events, event.SourceJoin|event.SourceState, false)
 			s.processSyncEvents(ctx, roomID, roomData.Timeline.Events, event.SourceJoin|event.SourceTimeline, false)

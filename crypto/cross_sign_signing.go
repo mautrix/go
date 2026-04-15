@@ -69,8 +69,10 @@ func (mach *OlmMachine) SignUser(ctx context.Context, userID id.UserID, masterKe
 
 // SignOwnMasterKey uses the current account for signing the current user's master key and uploads the signature.
 func (mach *OlmMachine) SignOwnMasterKey(ctx context.Context) error {
-	crossSigningPubkeys := mach.GetOwnCrossSigningPublicKeys(ctx)
-	if crossSigningPubkeys == nil {
+	crossSigningPubkeys, err := mach.GetOwnCrossSigningPublicKeys(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get own cross-signing public keys: %w", err)
+	} else if crossSigningPubkeys == nil {
 		return ErrCrossSigningPubkeysNotCached
 	} else if mach.account == nil {
 		return ErrOlmAccountNotLoaded

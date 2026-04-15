@@ -64,6 +64,9 @@ func TestTrustOwnDevice(t *testing.T) {
 		SigningKey: id.Ed25519("deviceKey"),
 	}
 	assert.False(t, m.IsDeviceTrusted(context.TODO(), ownDevice), "Own device trusted while it shouldn't be")
+	trustState, err := m.ResolveTrustContext(context.TODO(), ownDevice)
+	assert.NoError(t, err)
+	assert.Equal(t, id.TrustStateUnset, trustState)
 
 	m.CryptoStore.PutSignature(context.TODO(), ownDevice.UserID, m.CrossSigningKeys.SelfSigningKey.PublicKey(),
 		ownDevice.UserID, m.CrossSigningKeys.MasterKey.PublicKey(), "sig1")
@@ -74,6 +77,10 @@ func TestTrustOwnDevice(t *testing.T) {
 	require.NoError(t, err, "Error checking if own user is trusted")
 	assert.True(t, trusted, "Own user not trusted while they should be")
 	assert.True(t, m.IsDeviceTrusted(context.TODO(), ownDevice), "Own device not trusted while it should be")
+
+	trustState, err = m.ResolveTrustContext(context.TODO(), ownDevice)
+	assert.NoError(t, err)
+	assert.Equal(t, id.TrustStateCrossSignedVerified, trustState)
 }
 
 func TestTrustOtherUser(t *testing.T) {
@@ -119,27 +126,53 @@ func TestTrustOtherDevice(t *testing.T) {
 	assert.False(t, trusted, "Other user trusted while they shouldn't be")
 	assert.False(t, m.IsDeviceTrusted(context.TODO(), theirDevice), "Other device trusted while it shouldn't be")
 
+	trustState, err := m.ResolveTrustContext(context.TODO(), theirDevice)
+	assert.NoError(t, err)
+	assert.Equal(t, id.TrustStateUnset, trustState)
+
 	theirMasterKey, _ := olm.NewPKSigning()
 	m.CryptoStore.PutCrossSigningKey(context.TODO(), otherUser, id.XSUsageMaster, theirMasterKey.PublicKey())
 	theirSSK, _ := olm.NewPKSigning()
 	m.CryptoStore.PutCrossSigningKey(context.TODO(), otherUser, id.XSUsageSelfSigning, theirSSK.PublicKey())
 
-	m.CryptoStore.PutSignature(context.TODO(), m.Client.UserID, m.CrossSigningKeys.UserSigningKey.PublicKey(),
-		m.Client.UserID, m.CrossSigningKeys.MasterKey.PublicKey(), "sig1")
 	m.CryptoStore.PutSignature(context.TODO(), otherUser, theirMasterKey.PublicKey(),
 		m.Client.UserID, m.CrossSigningKeys.UserSigningKey.PublicKey(), "sig2")
-
-	trusted, err = m.IsUserTrusted(context.TODO(), otherUser)
-	require.NoError(t, err, "Error checking if other user is trusted")
-	assert.True(t, trusted, "Other user not trusted while they should be")
-
 	m.CryptoStore.PutSignature(context.TODO(), otherUser, theirSSK.PublicKey(),
 		otherUser, theirMasterKey.PublicKey(), "sig3")
 
 	assert.False(t, m.IsDeviceTrusted(context.TODO(), theirDevice), "Other device trusted before it has been signed with user's SSK")
+	trustState, err = m.ResolveTrustContext(context.TODO(), theirDevice)
+	assert.NoError(t, err)
+	assert.Equal(t, id.TrustStateUnset, trustState)
 
 	m.CryptoStore.PutSignature(context.TODO(), otherUser, theirDevice.SigningKey,
 		otherUser, theirSSK.PublicKey(), "sig4")
-
 	assert.True(t, m.IsDeviceTrusted(context.TODO(), theirDevice), "Other device not trusted after it has been signed with user's SSK")
+	trustState, err = m.ResolveTrustContext(context.TODO(), theirDevice)
+	assert.NoError(t, err)
+	assert.Equal(t, id.TrustStateCrossSignedTOFU, trustState)
+
+	m.CryptoStore.PutSignature(context.TODO(), m.Client.UserID, m.CrossSigningKeys.UserSigningKey.PublicKey(),
+		m.Client.UserID, m.CrossSigningKeys.MasterKey.PublicKey(), "sig1")
+	trusted, err = m.IsUserTrusted(context.TODO(), otherUser)
+	require.NoError(t, err, "Error checking if other user is trusted")
+	assert.True(t, trusted, "Other user not trusted while they should be")
+
+	trustState, err = m.ResolveTrustContext(context.TODO(), theirDevice)
+	assert.NoError(t, err)
+	assert.Equal(t, id.TrustStateCrossSignedVerified, trustState)
+
+	rotatedMasterKey, _ := olm.NewPKSigning()
+	m.CryptoStore.PutCrossSigningKey(context.TODO(), otherUser, id.XSUsageMaster, rotatedMasterKey.PublicKey())
+	rotatedSSK, _ := olm.NewPKSigning()
+	m.CryptoStore.PutCrossSigningKey(context.TODO(), otherUser, id.XSUsageSelfSigning, rotatedSSK.PublicKey())
+
+	m.CryptoStore.PutSignature(context.TODO(), otherUser, rotatedSSK.PublicKey(),
+		otherUser, rotatedMasterKey.PublicKey(), "sig3")
+	m.CryptoStore.PutSignature(context.TODO(), otherUser, theirDevice.SigningKey,
+		otherUser, rotatedSSK.PublicKey(), "sig4")
+
+	trustState, err = m.ResolveTrustContext(context.TODO(), theirDevice)
+	assert.NoError(t, err)
+	assert.Equal(t, id.TrustStateCrossSignedUntrusted, trustState)
 }

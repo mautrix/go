@@ -78,6 +78,13 @@ func TestQRCodeDecode(t *testing.T) {
 			assert.EqualValues(t, expectedKey1, decoded.Key1)
 			assert.EqualValues(t, expectedKey2, decoded.Key2)
 			assert.EqualValues(t, expectedSharedSecret, decoded.SharedSecret)
+
+			// Test that truncating the shared secret causes an error up to the point
+			// where we have 8 bytes of the shared secret (secret length isn't validated)
+			for i := 6; i < len(qrcodeData)-len(expectedSharedSecret)+7; i++ {
+				_, err := verificationhelper.NewQRCodeFromBytes(qrcodeData[:i])
+				assert.ErrorIs(t, err, verificationhelper.ErrInvalidQRCodeLength)
+			}
 		})
 	}
 }

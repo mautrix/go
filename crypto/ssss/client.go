@@ -34,10 +34,9 @@ type DefaultSecretStorageKeyContent struct {
 func (mach *Machine) GetDefaultKeyID(ctx context.Context) (string, error) {
 	var data DefaultSecretStorageKeyContent
 	err := mach.Client.GetAccountData(ctx, event.AccountDataSecretStorageDefaultKey.Type, &data)
-	if err != nil {
-		if httpErr, ok := err.(mautrix.HTTPError); ok && errors.Is(httpErr.RespError, mautrix.MNotFound) {
-			return "", ErrNoDefaultKeyAccountDataEvent
-		}
+	if errors.Is(err, mautrix.MNotFound) {
+		return "", ErrNoDefaultKeyAccountDataEvent
+	} else if err != nil {
 		return "", fmt.Errorf("failed to get default key account data from server: %w", err)
 	}
 	if len(data.KeyID) == 0 {

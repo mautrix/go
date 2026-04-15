@@ -122,8 +122,10 @@ func (vh *VerificationHelper) ConfirmSAS(ctx context.Context, txnID id.Verificat
 	}
 
 	// Master signing key
-	crossSigningKeys := vh.mach.GetOwnCrossSigningPublicKeys(ctx)
-	if crossSigningKeys != nil {
+	crossSigningKeys, err := vh.mach.GetOwnCrossSigningPublicKeys(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get own cross-signing public keys: %w", err)
+	} else if crossSigningKeys != nil {
 		masterKey = crossSigningKeys.MasterKey.String()
 		crossSigningKeyID := id.NewKeyID(id.KeyAlgorithmEd25519, masterKey)
 		keys[crossSigningKeyID], err = vh.verificationMACHKDF(txn, vh.client.UserID, vh.client.DeviceID, txn.TheirUserID, txn.TheirDeviceID, crossSigningKeyID.String(), masterKey)
@@ -716,8 +718,11 @@ func (vh *VerificationHelper) onVerificationMAC(ctx context.Context, txn Verific
 			}
 			key = theirDevice.SigningKey.String()
 		} else { // This is the master key
-			crossSigningKeys := vh.mach.GetOwnCrossSigningPublicKeys(ctx)
+			crossSigningKeys, err := vh.mach.GetOwnCrossSigningPublicKeys(ctx)
 			if crossSigningKeys == nil {
+				if err != nil {
+					log.Err(err).Msg("Failed to get own cross-signing public keys")
+				}
 				vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUser, "cross-signing keys not found")
 				return
 			}

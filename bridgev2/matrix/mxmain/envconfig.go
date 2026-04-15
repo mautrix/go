@@ -15,7 +15,24 @@ import (
 	"strings"
 
 	"go.mau.fi/util/random"
+
+	"maunium.net/go/mautrix/bridgev2"
 )
+
+func LoadGlobalConfigEnv() {
+	peb, err := strconv.Atoi(os.Getenv("MAUTRIX_PORTAL_EVENT_BUFFER"))
+	if err == nil && peb >= 0 {
+		bridgev2.PortalEventBuffer = peb
+	}
+	pose, err := strconv.ParseBool(os.Getenv("MAUTRIX_PANIC_ON_STUCK_EVENT"))
+	if err == nil {
+		bridgev2.PanicOnStuckEvent = pose
+	}
+	ehtt, err := strconv.Atoi(os.Getenv("MAUTRIX_EVENT_HANDLING_TIMEOUT_TICKS"))
+	if err == nil && ehtt > 0 {
+		bridgev2.EventHandlingTimeoutTicks = ehtt
+	}
+}
 
 var randomParseFilePrefix = random.String(16) + "READFILE:"
 

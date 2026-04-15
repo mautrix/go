@@ -9,7 +9,6 @@ package bridgev2
 import (
 	"context"
 	"fmt"
-	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -58,6 +57,7 @@ type Bridge struct {
 
 	wakeupBackfillQueue chan struct{}
 	stopBackfillQueue   *exsync.Event
+	manualBackfills     chan *ManualBackfill
 
 	BackgroundCtx       context.Context
 	cancelBackgroundCtx context.CancelFunc
@@ -88,6 +88,7 @@ func NewBridge(
 		ghostsByID:     make(map[networkid.UserID]*Ghost),
 
 		wakeupBackfillQueue: make(chan struct{}),
+		manualBackfills:     make(chan *ManualBackfill, 64),
 		stopBackfillQueue:   exsync.NewEvent(),
 	}
 	if br.Config == nil {
@@ -189,8 +190,11 @@ func (br *Bridge) StartConnectors(ctx context.Context) error {
 		}
 	}
 	if !br.Background {
-		var postMigrate func()
-		br.didSplitPortals, postMigrate = br.MigrateToSplitPortals(ctx)
+		didSplitPortals, postMigrate, err := br.MigrateToSplitPortals(ctx)
+		if err != nil {
+			return fmt.Errorf("%w: %w", ErrSplitPortalMigrationFailed, err)
+		}
+		br.didSplitPortals = didSplitPortals
 		if postMigrate != nil {
 			defer postMigrate()
 		}
@@ -293,31 +297,28 @@ func (br *Bridge) ResendBridgeInfo(ctx context.Context, resendInfo, resendCaps b
 		Msg("Resent bridge info to all portals")
 }
 
-func (br *Bridge) MigrateToSplitPortals(ctx context.Context) (bool, func()) {
+func (br *Bridge) MigrateToSplitPortals(ctx context.Context) (bool, func(), error) {
 	log := zerolog.Ctx(ctx).With().Str("action", "migrate to split portals").Logger()
 	ctx = log.WithContext(ctx)
 	if !br.Config.SplitPortals || br.DB.KV.Get(ctx, database.KeySplitPortalsEnabled) == "true" {
-		return false, nil
+		return false, nil, nil
 	}
 	affected, err := br.DB.Portal.MigrateToSplitPortals(ctx)
 	if err != nil {
 		log.WithLevel(zerolog.FatalLevel).Err(err).Msg("Failed to migrate portals")
-		os.Exit(31)
-		return false, nil
+		return false, nil, fmt.Errorf("failed to migrate database: %w", err)
 	}
 	log.Info().Int64("rows_affected", affected).Msg("Migrated to split portals")
 	affected2, err := br.DB.Portal.FixParentsAfterSplitPortalMigration(ctx)
 	if err != nil {
 		log.Err(err).Msg("Failed to fix parent portals after split portal migration")
-		os.Exit(31)
-		return false, nil
+		return false, nil, fmt.Errorf("failed to fix parent portals: %w", err)
 	}
 	log.Info().Int64("rows_affected", affected2).Msg("Updated parent receivers after split portal migration")
 	withoutReceiver, err := br.DB.Portal.GetAllWithoutReceiver(ctx)
 	if err != nil {
 		log.WithLevel(zerolog.FatalLevel).Err(err).Msg("Failed to get portals that failed to migrate")
-		os.Exit(31)
-		return false, nil
+		return false, nil, fmt.Errorf("failed to get portals without receiver: %w", err)
 	}
 	var roomsToDelete []id.RoomID
 	log.Info().Int("remaining_portals", len(withoutReceiver)).Msg("Deleting remaining portals without receiver")
@@ -350,7 +351,7 @@ func (br *Bridge) MigrateToSplitPortals(ctx context.Context) (bool, func()) {
 			}
 		}
 		log.Info().Int("room_count", len(roomsToDelete)).Msg("Finished deleting rooms that failed to migrate")
-	}
+	}, nil
 }
 
 func (br *Bridge) StartLogins(ctx context.Context) error {
