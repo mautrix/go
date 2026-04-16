@@ -534,13 +534,15 @@ type RespBeeperBatchSend struct {
 
 // RespCapabilities is the JSON response for https://spec.matrix.org/v1.3/client-server-api/#get_matrixclientv3capabilities
 type RespCapabilities struct {
-	RoomVersions              *CapRoomVersions              `json:"m.room_versions,omitempty"`
-	ChangePassword            *CapBooleanTrue               `json:"m.change_password,omitempty"`
-	SetDisplayname            *CapBooleanTrue               `json:"m.set_displayname,omitempty"`
-	SetAvatarURL              *CapBooleanTrue               `json:"m.set_avatar_url,omitempty"`
-	ThreePIDChanges           *CapBooleanTrue               `json:"m.3pid_changes,omitempty"`
-	GetLoginToken             *CapBooleanTrue               `json:"m.get_login_token,omitempty"`
-	UnstableAccountModeration *CapUnstableAccountModeration `json:"uk.timedout.msc4323,omitempty"`
+	RoomVersions          *CapRoomVersions      `json:"m.room_versions,omitempty"`
+	ChangePassword        *CapBooleanTrue       `json:"m.change_password,omitempty"`
+	SetDisplayname        *CapBooleanTrue       `json:"m.set_displayname,omitempty"`
+	SetAvatarURL          *CapBooleanTrue       `json:"m.set_avatar_url,omitempty"`
+	ThreePIDChanges       *CapBooleanTrue       `json:"m.3pid_changes,omitempty"`
+	GetLoginToken         *CapBooleanTrue       `json:"m.get_login_token,omitempty"`
+	AccountModeration     *CapAccountModeration `json:"m.account_moderation,omitempty"`
+	ForcedForgetUponLeave *CapBooleanTrue       `json:"m.forget_upon_leave,omitempty"`
+	ProfileFields         *CapProfileFields     `json:"m.profile_fields,omitempty"`
 
 	Custom map[string]interface{} `json:"-"`
 }
@@ -649,9 +651,15 @@ func (vers *CapRoomVersions) IsAvailable(version string) bool {
 	return available
 }
 
-type CapUnstableAccountModeration struct {
+type CapAccountModeration struct {
 	Suspend bool `json:"suspend"`
 	Lock    bool `json:"lock"`
+}
+
+type CapProfileFields struct {
+	Allowed    []string `json:"allowed,omitempty"`
+	Disallowed []string `json:"disallowed,omitempty"`
+	Enabled    bool     `json:"enabled"`
 }
 
 type RespPublicRooms struct {
