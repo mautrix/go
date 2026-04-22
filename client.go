@@ -17,10 +17,12 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/exsync"
 	"go.mau.fi/util/ptr"
 	"go.mau.fi/util/random"
 	"go.mau.fi/util/retryafter"
@@ -96,6 +98,10 @@ type Client struct {
 	RequestHook  func(req *http.Request)
 	ResponseHook func(req *http.Request, resp *http.Response, err error, duration time.Duration)
 
+	RequestRetryTrigger *exsync.Event
+
+	// Deprecated: this hook is no longer used by mautrix internals and is kept only
+	// for compile compatibility with downstream consumers.
 	UpdateRequestOnRetry func(req *http.Request, cause error) *http.Request
 
 	SyncPresence event.Presence
@@ -620,15 +626,15 @@ func (cli *Client) doRetry(
 		Str("url", req.URL.String()).
 		Int("retry_in_seconds", int(backoff.Seconds())).
 		Msg("Request failed, retrying")
-	select {
-	case <-time.After(backoff):
-	case <-req.Context().Done():
-		if !errors.Is(context.Cause(req.Context()), ErrContextCancelRetry) {
+
+	// if this was due to our RequestRetryTrigger then just retry immediately
+	// the req.Context() will still be live, otherwise do a normal backoff
+	if !errors.Is(cause, ErrContextCancelRetry) {
+		select {
+		case <-time.After(backoff):
+		case <-req.Context().Done():
 			return nil, nil, req.Context().Err()
 		}
-	}
-	if cli.UpdateRequestOnRetry != nil {
-		req = cli.UpdateRequestOnRetry(req, cause)
 	}
 	return cli.executeCompiledRequest(req, retries-1, backoff*2, responseJSON, handler, dontReadResponse, sizeLimit, client)
 }
@@ -738,6 +744,46 @@ func ParseErrorResponse(req *http.Request, res *http.Response) ([]byte, error) {
 	}
 }
 
+func (cli *Client) prepareRequestAttempt(req *http.Request) (*http.Request, func()) {
+	// if there's no retry trigger, nothing to do
+	if cli.RequestRetryTrigger == nil {
+		return req, func() {}
+	}
+
+	attemptCtx, cancel := context.WithCancelCause(req.Context())
+	var finishOnce sync.Once
+	finish := func() {
+		finishOnce.Do(func() {
+			cancel(context.Canceled)
+		})
+	}
+
+	resetChan := cli.RequestRetryTrigger.GetChan()
+	go func() {
+		// if we hear of a reset, cancel the request context
+		select {
+		case <-resetChan:
+			cancel(ErrContextCancelRetry)
+		case <-attemptCtx.Done():
+		}
+	}()
+
+	return req.WithContext(attemptCtx), finish
+}
+
+type cleanupReadCloser struct {
+	io.ReadCloser
+	cleanup func()
+}
+
+func (crc cleanupReadCloser) Close() error {
+	err := crc.ReadCloser.Close()
+	if crc.cleanup != nil {
+		crc.cleanup()
+	}
+	return err
+}
+
 func (cli *Client) executeCompiledRequest(
 	req *http.Request,
 	retries int,
@@ -748,30 +794,46 @@ func (cli *Client) executeCompiledRequest(
 	sizeLimit int64,
 	client *http.Client,
 ) ([]byte, *http.Response, error) {
-	cli.RequestStart(req)
+	attemptReq, cleanup := cli.prepareRequestAttempt(req)
+	cli.RequestStart(attemptReq)
 	startTime := time.Now()
-	res, err := client.Do(req)
+	res, err := client.Do(attemptReq)
 	duration := time.Since(startTime)
-	if res != nil && !dontReadResponse {
-		defer res.Body.Close()
+	if res != nil {
+		// Cleanup the child attempt context once the body is closed
+		res.Body = cleanupReadCloser{
+			ReadCloser: res.Body,
+			cleanup:    cleanup,
+		}
+		if !dontReadResponse {
+			defer res.Body.Close()
+		}
 	}
 	if err != nil {
-		// Either error is *not* canceled or the underlying cause of cancelation explicitly asks to retry
+		// cleanup child attempt context on error
+		cleanup()
+
+		// Either error is *not* canceled or the underlying cause of cancellation explicitly asks to retry
+		attemptCause := context.Cause(attemptReq.Context())
+		retryCause := err
+		if errors.Is(attemptCause, ErrContextCancelRetry) {
+			retryCause = attemptCause
+		}
 		canRetry := !errors.Is(err, context.Canceled) ||
-			errors.Is(context.Cause(req.Context()), ErrContextCancelRetry)
+			errors.Is(attemptCause, ErrContextCancelRetry)
 		if retries > 0 && canRetry {
 			return cli.doRetry(
-				req, err, retries, backoff, responseJSON, handler, dontReadResponse, sizeLimit, client,
+				req, retryCause, retries, backoff, responseJSON, handler, dontReadResponse, sizeLimit, client,
 			)
 		}
 		err = HTTPError{
-			Request:  req,
+			Request:  attemptReq,
 			Response: res,
 
 			Message:      "request error",
 			WrappedError: err,
 		}
-		cli.LogRequestDone(req, res, err, nil, 0, duration)
+		cli.LogRequestDone(attemptReq, res, err, nil, 0, duration)
 		return nil, res, err
 	}
 
@@ -784,11 +846,11 @@ func (cli *Client) executeCompiledRequest(
 
 	var body []byte
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		body, err = ParseErrorResponse(req, res)
-		cli.LogRequestDone(req, res, nil, nil, len(body), duration)
+		body, err = ParseErrorResponse(attemptReq, res)
+		cli.LogRequestDone(attemptReq, res, nil, nil, len(body), duration)
 	} else {
-		body, err = handler(req, res, responseJSON, sizeLimit)
-		cli.LogRequestDone(req, res, nil, err, len(body), duration)
+		body, err = handler(attemptReq, res, responseJSON, sizeLimit)
+		cli.LogRequestDone(attemptReq, res, nil, err, len(body), duration)
 	}
 	return body, res, err
 }
