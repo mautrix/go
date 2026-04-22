@@ -747,7 +747,6 @@ func (cli *Client) prepareRequestAttempt(req *http.Request) (*http.Request, func
 	}
 
 	attemptCtx, cancel := context.WithCancelCause(req.Context())
-	var cleanupOnce sync.Once
 
 	go func() {
 		// If we hear of a reset, cancel the request context with a retry message
