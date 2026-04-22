@@ -751,12 +751,7 @@ func (cli *Client) prepareRequestAttempt(req *http.Request) (*http.Request, func
 	}
 
 	attemptCtx, cancel := context.WithCancelCause(req.Context())
-	var finishOnce sync.Once
-	finish := func() {
-		finishOnce.Do(func() {
-			cancel(context.Canceled)
-		})
-	}
+	var cleanupOnce sync.Once
 
 	resetChan := cli.RequestRetryTrigger.GetChan()
 	go func() {
@@ -768,7 +763,11 @@ func (cli *Client) prepareRequestAttempt(req *http.Request) (*http.Request, func
 		}
 	}()
 
-	return req.WithContext(attemptCtx), finish
+	return req.WithContext(attemptCtx), func() {
+		cleanupOnce.Do(func() {
+			cancel(context.Canceled)
+		})
+	}
 }
 
 type cleanupReadCloser struct {
