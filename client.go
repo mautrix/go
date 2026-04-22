@@ -100,10 +100,6 @@ type Client struct {
 
 	RequestRetryTrigger *exsync.Event
 
-	// Deprecated: this hook is no longer used by mautrix internals and is kept only
-	// for compile compatibility with downstream consumers.
-	UpdateRequestOnRetry func(req *http.Request, cause error) *http.Request
-
 	SyncPresence event.Presence
 	SyncTraceLog bool
 
