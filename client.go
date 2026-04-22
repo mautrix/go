@@ -753,13 +753,10 @@ func (cli *Client) prepareRequestAttempt(req *http.Request) (*http.Request, func
 	attemptCtx, cancel := context.WithCancelCause(req.Context())
 	var cleanupOnce sync.Once
 
-	resetChan := cli.RequestRetryTrigger.GetChan()
 	go func() {
-		// if we hear of a reset, cancel the request context
-		select {
-		case <-resetChan:
+		// If we hear of a reset, cancel the request context with a retry message
+		if cli.RequestRetryTrigger.Wait(attemptCtx) == nil {
 			cancel(ErrContextCancelRetry)
-		case <-attemptCtx.Done():
 		}
 	}()
 
