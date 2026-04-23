@@ -743,7 +743,7 @@ func ParseErrorResponse(req *http.Request, res *http.Response) ([]byte, error) {
 func (cli *Client) prepareRequestAttempt(req *http.Request) (*http.Request, func()) {
 	// if there's no retry trigger, nothing to do
 	if cli.RequestRetryTrigger == nil {
-		return req, func() {}
+		return req, nil
 	}
 
 	attemptCtx, cancel := context.WithCancelCause(req.Context())
@@ -765,12 +765,45 @@ type cleanupReadCloser struct {
 	cleanup func()
 }
 
+type cleanupReadCloserWriterTo struct {
+	io.ReadCloser
+	cleanup func()
+}
+
 func (crc cleanupReadCloser) Close() error {
 	err := crc.ReadCloser.Close()
 	if crc.cleanup != nil {
 		crc.cleanup()
 	}
 	return err
+}
+
+func (crc cleanupReadCloserWriterTo) Close() error {
+	err := crc.ReadCloser.Close()
+	if crc.cleanup != nil {
+		crc.cleanup()
+	}
+	return err
+}
+
+func (crc cleanupReadCloserWriterTo) WriteTo(w io.Writer) (int64, error) {
+	return crc.ReadCloser.(io.WriterTo).WriteTo(w)
+}
+
+func maybeWrapRespBody(rc io.ReadCloser, cleanup func()) io.ReadCloser {
+	if cleanup == nil {
+		return rc
+	}
+	if _, ok := rc.(io.WriterTo); ok {
+		return cleanupReadCloserWriterTo{
+			ReadCloser: rc,
+			cleanup:    cleanup,
+		}
+	}
+	return cleanupReadCloser{
+		ReadCloser: rc,
+		cleanup:    cleanup,
+	}
 }
 
 func (cli *Client) executeCompiledRequest(
@@ -790,17 +823,16 @@ func (cli *Client) executeCompiledRequest(
 	duration := time.Since(startTime)
 	if res != nil {
 		// Cleanup the child attempt context once the body is closed
-		res.Body = cleanupReadCloser{
-			ReadCloser: res.Body,
-			cleanup:    cleanup,
-		}
+		res.Body = maybeWrapRespBody(res.Body, cleanup)
 		if !dontReadResponse {
 			defer res.Body.Close()
 		}
 	}
 	if err != nil {
 		// cleanup child attempt context on error
-		cleanup()
+		if cleanup != nil {
+			cleanup()
+		}
 
 		// Either error is *not* canceled or the underlying cause of cancellation explicitly asks to retry
 		attemptCause := context.Cause(attemptReq.Context())

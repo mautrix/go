@@ -356,6 +356,24 @@ func (r readSeekCloser) Close() error {
 	return nil
 }
 
+type testRoundTripper func(*http.Request) (*http.Response, error)
+
+func (trt testRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	return trt(req)
+}
+
+type writerToReadCloser struct {
+	*bytes.Reader
+}
+
+func (wrc *writerToReadCloser) Close() error {
+	return nil
+}
+
+func (wrc *writerToReadCloser) WriteTo(w io.Writer) (int64, error) {
+	return io.Copy(w, wrc.Reader)
+}
+
 func TestRequestRetryTriggerReplaysRequestBody(t *testing.T) {
 	requestStarted := make(chan struct{})
 	bodyBytes := []byte("hello retry body")
@@ -414,4 +432,60 @@ func TestRequestRetryTriggerReplaysRequestBody(t *testing.T) {
 	require.EqualValues(t, 2, attempts.Load())
 	require.Equal(t, bodyBytes, <-receivedBodies)
 	require.Equal(t, bodyBytes, <-receivedBodies)
+}
+
+func TestDontReadResponseCleanupWrapperPreservesWriterTo(t *testing.T) {
+	body := &writerToReadCloser{Reader: bytes.NewReader([]byte("hello writer-to"))}
+	client := newTestClient(t, "https://example.com")
+	client.Client = &http.Client{
+		Transport: testRoundTripper(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"application/octet-stream"}},
+				Body:       body,
+			}, nil
+		}),
+	}
+
+	_, resp, err := client.MakeFullRequestWithResp(context.Background(), FullRequest{
+		Method:           http.MethodGet,
+		URL:              "https://example.com",
+		DontReadResponse: true,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+
+	writerTo, ok := resp.Body.(io.WriterTo)
+	require.True(t, ok)
+
+	var copied bytes.Buffer
+	_, err = writerTo.WriteTo(&copied)
+	require.NoError(t, err)
+	require.Equal(t, "hello writer-to", copied.String())
+	require.NoError(t, resp.Body.Close())
+}
+
+func TestDontReadResponseWithoutRetryTriggerDoesNotWrapBody(t *testing.T) {
+	body := &writerToReadCloser{Reader: bytes.NewReader([]byte("hello raw body"))}
+	client := newTestClient(t, "https://example.com")
+	client.RequestRetryTrigger = nil
+	client.Client = &http.Client{
+		Transport: testRoundTripper(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"application/octet-stream"}},
+				Body:       body,
+			}, nil
+		}),
+	}
+
+	_, resp, err := client.MakeFullRequestWithResp(context.Background(), FullRequest{
+		Method:           http.MethodGet,
+		URL:              "https://example.com",
+		DontReadResponse: true,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	require.Same(t, body, resp.Body)
+	require.NoError(t, resp.Body.Close())
 }
