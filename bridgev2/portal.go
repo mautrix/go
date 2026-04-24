@@ -4319,22 +4319,41 @@ func (portal *Portal) UpdateBridgeInfo(ctx context.Context) {
 func (portal *Portal) UpdateCapabilities(ctx context.Context, source *UserLogin, implicit bool) bool {
 	if portal.MXID == "" {
 		return false
-	} else if !implicit && time.Since(portal.lastCapUpdate) < 24*time.Hour {
-		return false
-	} else if portal.CapState.ID != "" && source.ID != portal.CapState.Source && source.ID != portal.Receiver {
+	}
+	// Check whether capability anchor events (m.bridge, uk.half-shot.bridge,
+	// com.beeper.room_features) still exist on the homeserver. If any is
+	// missing, bypass the throttle and capID short-circuit below so the full
+	// anchor set gets re-emitted. Without this check, a portal whose state
+	// events got lost on the server would never self-heal here — the bridge
+	// would happily return early on both "nothing changed" signals while the
+	// client sees no anchors and disables feature-gated UI.
+	anchorMissing := portal.anyCapabilityAnchorMissing(ctx)
+	if !anchorMissing {
+		if !implicit && time.Since(portal.lastCapUpdate) < 24*time.Hour {
+			return false
+		}
+	}
+	if portal.CapState.ID != "" && source.ID != portal.CapState.Source && source.ID != portal.Receiver {
 		// TODO allow capability state source to change if the old user login is removed from the portal
 		return false
 	}
 	caps := source.Client.GetCapabilities(ctx, portal)
 	capID := caps.GetID()
-	if capID == portal.CapState.ID {
+	if !anchorMissing && capID == portal.CapState.ID {
 		return false
 	}
 	zerolog.Ctx(ctx).Debug().
 		Str("user_login_id", string(source.ID)).
 		Str("old_id", portal.CapState.ID).
 		Str("new_id", capID).
+		Bool("anchor_missing", anchorMissing).
 		Msg("Sending new room capability event")
+	// If the caps event itself wasn't the only thing missing, also re-emit
+	// the bridge info pair so the full anchor set on the homeserver matches
+	// what a fresh portal would have.
+	if anchorMissing {
+		portal.UpdateBridgeInfo(ctx)
+	}
 	success := portal.sendRoomMeta(ctx, nil, time.Now(), event.StateBeeperRoomFeatures, portal.getBridgeInfoStateKey(), caps, false, nil)
 	if !success {
 		return false
@@ -4360,6 +4379,45 @@ func (portal *Portal) UpdateCapabilities(ctx context.Context, source *UserLogin,
 		}
 	}
 	return true
+}
+
+// anyCapabilityAnchorMissing reports whether any of the state events that
+// together define a portal's capability anchor set (m.bridge,
+// uk.half-shot.bridge, com.beeper.room_features) is missing from the
+// homeserver. The check only runs when the matrix connector implements the
+// optional MatrixConnectorWithArbitraryRoomState interface; otherwise it
+// returns false (no self-heal, fall back to the caller's existing behavior).
+// Lookup errors are logged and treated as "not missing" to avoid forcing a
+// re-emit on a transient failure.
+func (portal *Portal) anyCapabilityAnchorMissing(ctx context.Context) bool {
+	connector, ok := portal.Bridge.Matrix.(MatrixConnectorWithArbitraryRoomState)
+	if !ok {
+		return false
+	}
+	log := zerolog.Ctx(ctx)
+	stateKey := portal.getBridgeInfoStateKey()
+	anchorTypes := []event.Type{
+		event.StateBridge,
+		event.StateHalfShotBridge,
+		event.StateBeeperRoomFeatures,
+	}
+	for _, evType := range anchorTypes {
+		evt, err := connector.GetStateEvent(ctx, portal.MXID, evType, stateKey)
+		if err != nil {
+			log.Warn().Err(err).
+				Stringer("event_type", evType).
+				Msg("Failed to check capability anchor event, assuming present")
+			continue
+		}
+		if evt == nil {
+			log.Info().
+				Stringer("event_type", evType).
+				Str("state_key", stateKey).
+				Msg("Capability anchor event missing on homeserver, will re-emit")
+			return true
+		}
+	}
+	return false
 }
 
 func (portal *Portal) sendStateWithIntentOrBot(ctx context.Context, sender MatrixAPI, eventType event.Type, stateKey string, content *event.Content, ts time.Time) (resp *mautrix.RespSendEvent, err error) {
