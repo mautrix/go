@@ -5267,25 +5267,81 @@ func (portal *Portal) createMatrixRoomInLoop(ctx context.Context, source *UserLo
 	if cancellableCtx.Err() != nil {
 		return cancellableCtx.Err()
 	}
+
+	// If the caller supplied a deterministic BeeperLocalRoomID, persist the
+	// portal row before sending the create request. Bridges that write state
+	// events to a local store (e.g. on-device local bridges backed by SQLite
+	// via a send queue) can otherwise end up with state events persisted but
+	// no portal row if the process is interrupted between CreateRoom and
+	// Save. Pre-persisting flips that failure mode: a partial write leaves a
+	// portal row without state events, which per-bridge recovery code can
+	// detect and heal by re-emitting state events against the known portal.
+	//
+	// When BeeperLocalRoomID is empty the server assigns the room ID, so we
+	// can only save after CreateRoom returns (original path, preserved
+	// below). If BeeperLocalRoomID is set but the server ignores it and
+	// returns a different ID, we correct the portal row after CreateRoom.
+	if req.BeeperLocalRoomID != "" {
+		portal.AvatarSet = true
+		portal.TopicSet = true
+		portal.NameSet = true
+		portal.MXID = req.BeeperLocalRoomID
+		portal.RoomCreated.Set()
+		portal.Bridge.cacheLock.Lock()
+		portal.Bridge.portalsByMXID[req.BeeperLocalRoomID] = portal
+		portal.Bridge.cacheLock.Unlock()
+		portal.updateLogger()
+		if err := portal.Save(ctx); err != nil {
+			log.Err(err).Msg("Failed to pre-persist portal before creating Matrix room")
+			// Roll back in-memory state so the portal can be retried cleanly.
+			portal.Bridge.cacheLock.Lock()
+			delete(portal.Bridge.portalsByMXID, req.BeeperLocalRoomID)
+			portal.Bridge.cacheLock.Unlock()
+			portal.MXID = ""
+			return err
+		}
+	}
+
 	roomID, err := portal.Bridge.Bot.CreateRoom(ctx, &req)
 	if err != nil {
 		log.Err(err).Msg("Failed to create Matrix room")
 		return err
 	}
 	log.Info().Stringer("room_id", roomID).Msg("Matrix room created")
-	portal.AvatarSet = true
-	portal.TopicSet = true
-	portal.NameSet = true
-	portal.MXID = roomID
-	portal.RoomCreated.Set()
-	portal.Bridge.cacheLock.Lock()
-	portal.Bridge.portalsByMXID[roomID] = portal
-	portal.Bridge.cacheLock.Unlock()
-	portal.updateLogger()
-	err = portal.Save(ctx)
-	if err != nil {
-		log.Err(err).Msg("Failed to save portal to database after creating Matrix room")
-		return err
+
+	if portal.MXID == "" {
+		// No pre-persist ran — save the portal now that the server has told
+		// us the room ID it assigned.
+		portal.AvatarSet = true
+		portal.TopicSet = true
+		portal.NameSet = true
+		portal.MXID = roomID
+		portal.RoomCreated.Set()
+		portal.Bridge.cacheLock.Lock()
+		portal.Bridge.portalsByMXID[roomID] = portal
+		portal.Bridge.cacheLock.Unlock()
+		portal.updateLogger()
+		if err = portal.Save(ctx); err != nil {
+			log.Err(err).Msg("Failed to save portal to database after creating Matrix room")
+			return err
+		}
+	} else if portal.MXID != roomID {
+		// The server ignored BeeperLocalRoomID and assigned a different ID.
+		// Update the cache and row to match what the server actually created.
+		log.Warn().
+			Stringer("pre_save_room_id", portal.MXID).
+			Stringer("server_room_id", roomID).
+			Msg("Server returned a different room ID than BeeperLocalRoomID; correcting portal row")
+		portal.Bridge.cacheLock.Lock()
+		delete(portal.Bridge.portalsByMXID, portal.MXID)
+		portal.Bridge.portalsByMXID[roomID] = portal
+		portal.Bridge.cacheLock.Unlock()
+		portal.MXID = roomID
+		portal.updateLogger()
+		if err = portal.Save(ctx); err != nil {
+			log.Err(err).Msg("Failed to save portal after correcting room ID mismatch")
+			return err
+		}
 	}
 	if info.CanBackfill && portal.RoomType != database.RoomTypeSpace {
 		err = portal.Bridge.DB.BackfillTask.Upsert(ctx, &database.BackfillTask{
