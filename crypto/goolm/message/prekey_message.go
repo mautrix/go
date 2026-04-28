@@ -91,17 +91,11 @@ func (r *PreKeyMessage) Decode(input []byte) (err error) {
 	}
 }
 
-// CheckField verifies the fields. If theirIdentityKey is nil, it is not compared to the key in the message.
-func (r *PreKeyMessage) CheckFields(theirIdentityKey *crypto.Curve25519PublicKey) bool {
-	ok := true
-	ok = ok && (theirIdentityKey != nil || r.IdentityKey != nil)
-	if r.IdentityKey != nil {
-		ok = ok && (len(r.IdentityKey) == crypto.Curve25519PrivateKeyLength)
-	}
-	ok = ok && len(r.Message) != 0
-	ok = ok && len(r.BaseKey) == crypto.Curve25519PrivateKeyLength
-	ok = ok && len(r.OneTimeKey) == crypto.Curve25519PrivateKeyLength
-	return ok
+func (r *PreKeyMessage) CheckFields() bool {
+	return len(r.IdentityKey) == crypto.Curve25519PrivateKeyLength &&
+		len(r.Message) != 0 &&
+		len(r.BaseKey) == crypto.Curve25519PrivateKeyLength &&
+		len(r.OneTimeKey) == crypto.Curve25519PrivateKeyLength
 }
 
 // Encode encodes the message.

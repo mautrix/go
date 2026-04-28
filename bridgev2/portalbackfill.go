@@ -8,6 +8,7 @@ package bridgev2
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"time"
@@ -90,6 +91,8 @@ func (portal *Portal) doForwardBackfill(ctx context.Context, source *UserLogin, 
 	}
 }
 
+var errNoMessagesLeftAfterCutoff = errors.New("no messages left to backfill after cutting off too new messages")
+
 func (portal *Portal) doBackwardsBackfill(ctx context.Context, source *UserLogin, task *database.BackfillTask, resp *FetchMessagesResponse) (bool, error) {
 	log := zerolog.Ctx(ctx)
 	api, ok := source.Client.(BackfillingNetworkAPI)
@@ -153,6 +156,7 @@ func (portal *Portal) doBackwardsBackfill(ctx context.Context, source *UserLogin
 	task.Cursor = resp.Cursor
 	if !resp.HasMore {
 		task.IsDone = true
+		task.QueueDone = true
 	}
 	if len(resp.Messages) == 0 {
 		if !resp.HasMore {
@@ -170,7 +174,14 @@ func (portal *Portal) doBackwardsBackfill(ctx context.Context, source *UserLogin
 		if resp.CompleteCallback != nil {
 			resp.CompleteCallback()
 		}
-		return false, fmt.Errorf("no messages left to backfill after cutting off too new messages")
+		// Hack to handle some migrated portals where message timestamps are unknown.
+		// They can't be backfilled further, so just mark them as done.
+		if firstMessage != nil && firstMessage.Timestamp.Unix() == 0 {
+			task.IsDone = true
+			task.QueueDone = true
+			return false, nil
+		}
+		return false, errNoMessagesLeftAfterCutoff
 	}
 	err = portal.sendBackfill(ctx, source, resp.Messages, false, resp.MarkRead, false, resp.CompleteCallback)
 	if err != nil {

@@ -33,9 +33,17 @@ type PowerLevelfulRoom interface {
 }
 
 // EventfulRoom is an extension of Room to support MSC3664.
+//
+// Deprecated: use ScopedEventfulRoom instead.
 type EventfulRoom interface {
 	Room
 	GetEvent(id.EventID) *event.Event
+}
+
+// ScopedEventfulRoom is an extension of Room to support MSC3664.
+type ScopedEventfulRoom interface {
+	Room
+	GetEvent(id.RoomID, id.EventID) *event.Event
 }
 
 // PushCondKind is the type of a push condition.
@@ -280,15 +288,23 @@ func (cond *PushCondition) matchRelatedEvent(room Room, evt *event.Event) bool {
 			_ = json.Unmarshal([]byte(res.Raw), &relatesTo)
 		}
 	}
-	if evtID := cond.getRelationEventID(relatesTo); evtID == "" {
+	evtID := cond.getRelationEventID(relatesTo)
+	if evtID == "" {
 		return false
-	} else if eventfulRoom, ok := room.(EventfulRoom); !ok {
-		return false
-	} else if evt = eventfulRoom.GetEvent(relatesTo.EventID); evt == nil {
-		return false
-	} else {
-		return cond.matchValue(evt)
 	}
+	if scopedEventfulRoom, ok := room.(ScopedEventfulRoom); !ok {
+		if eventfulRoom, ok := room.(EventfulRoom); !ok {
+			return false
+		} else {
+			evt = eventfulRoom.GetEvent(evtID)
+		}
+	} else {
+		evt = scopedEventfulRoom.GetEvent(evt.RoomID, evtID)
+	}
+	if evt == nil {
+		return false
+	}
+	return cond.matchValue(evt)
 }
 
 func (cond *PushCondition) matchDisplayName(room Room, evt *event.Event) bool {

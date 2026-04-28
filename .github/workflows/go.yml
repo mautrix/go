@@ -48,7 +48,7 @@ jobs:
           cache: true
 
       - name: Set up gotestfmt
-        uses: GoTestTools/gotestfmt-action@v2
+        uses: GoTestTools/gotestfmt-action@eba2ac97f623e866e7b1b117c99f18b43cd36d18
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 

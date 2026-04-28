@@ -102,7 +102,8 @@ const imageMessageEvent = `{
 			"w": 64,
 			"h": 64,
 			"size": 12345,
-			"thumbnail_url": "mxc://example.com/image_thumb"
+			"thumbnail_url": "mxc://example.com/image_thumb",
+			"custom_field": "meow"
 		}
 	}
 }`
@@ -129,9 +130,27 @@ func TestMessageEventContent__ParseMedia(t *testing.T) {
 	assert.Equal(t, id.ContentURI{Homeserver: "example.com", FileID: "image"}, parsedURL)
 	assert.Nil(t, content.NewContent)
 	assert.Equal(t, "image/png", content.GetInfo().MimeType)
-	assert.EqualValues(t, 64, content.GetInfo().Width)
-	assert.EqualValues(t, 64, content.GetInfo().Height)
-	assert.EqualValues(t, 12345, content.GetInfo().Size)
+	assert.Equal(t, 64, content.GetInfo().Width)
+	assert.Equal(t, 64, content.GetInfo().Height)
+	assert.Equal(t, 12345, content.GetInfo().Size)
+	assert.Equal(t, map[string]any{"custom_field": "meow"}, content.GetInfo().Extra)
+
+	content.GetInfo().Extra["cat"] = 5
+	content.GetInfo().Extra["w"] = 1234
+	marshaledExtra, err := json.Marshal(content.GetInfo())
+	assert.NoError(t, err)
+	var unmarshaledMap map[string]any
+	err = json.Unmarshal(marshaledExtra, &unmarshaledMap)
+	assert.NoError(t, err)
+	assert.Equal(t, map[string]any{
+		"mimetype":      "image/png",
+		"w":             64.0,
+		"h":             64.0,
+		"size":          12345.0,
+		"thumbnail_url": "mxc://example.com/image_thumb",
+		"custom_field":  "meow",
+		"cat":           5.0,
+	}, unmarshaledMap)
 }
 
 var parsedMessage = &event.Content{

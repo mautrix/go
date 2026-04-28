@@ -15,7 +15,6 @@ import (
 )
 
 const (
-	accountPickleVersionJSON   byte   = 1
 	accountPickleVersionLibOLM uint32 = 4
 	MaxOneTimeKeys             int    = 100 //maximum number of stored one time keys per Account
 )

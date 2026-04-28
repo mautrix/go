@@ -16,7 +16,6 @@ import (
 )
 
 const (
-	olmSessionPickleVersionJSON   uint8  = 1
 	olmSessionPickleVersionLibOlm uint32 = 1
 )
 
@@ -90,7 +89,10 @@ func NewOutboundOlmSession(identityKeyAlice crypto.Curve25519KeyPair, identityKe
 	secret = append(secret, baseIdSecret...)
 	secret = append(secret, baseOneTimeSecret...)
 	//Init Ratchet
-	s.Ratchet.InitializeAsAlice(secret, ratchetKey)
+	err = s.Ratchet.InitializeAsAlice(secret, ratchetKey)
+	if err != nil {
+		return nil, fmt.Errorf("ratchet initialize: %w", err)
+	}
 	s.AliceIdentityKey = identityKeyAlice.PublicKey
 	s.AliceBaseKey = baseKey.PublicKey
 	s.BobOneTimeKey = oneTimeKeyBob
@@ -111,21 +113,14 @@ func NewInboundOlmSession(identityKeyAlice *crypto.Curve25519PublicKey, received
 	if err != nil {
 		return nil, fmt.Errorf("OneTimeKeyMessage decode: %w", err)
 	}
-	if !oneTimeMsg.CheckFields(identityKeyAlice) {
+	if !oneTimeMsg.CheckFields() {
 		return nil, fmt.Errorf("OneTimeKeyMessage check fields: %w", olm.ErrBadMessageFormat)
 	}
 
 	//Either the identityKeyAlice is set and/or the oneTimeMsg.IdentityKey is set, which is checked
 	// by oneTimeMsg.CheckFields
-	if identityKeyAlice != nil && len(oneTimeMsg.IdentityKey) != 0 {
-		//if both are set, compare them
-		if !identityKeyAlice.Equal(oneTimeMsg.IdentityKey) {
-			return nil, fmt.Errorf("OneTimeKeyMessage identity keys: %w", olm.ErrBadMessageKeyID)
-		}
-	}
-	if identityKeyAlice == nil {
-		//for downstream use set
-		identityKeyAlice = &oneTimeMsg.IdentityKey
+	if identityKeyAlice != nil && !identityKeyAlice.Equal(oneTimeMsg.IdentityKey) {
+		return nil, fmt.Errorf("OneTimeKeyMessage identity keys: %w", olm.ErrBadMessageKeyID)
 	}
 
 	oneTimeKeyBob := searchBobOTK(oneTimeMsg.OneTimeKey)
@@ -136,7 +131,7 @@ func NewInboundOlmSession(identityKeyAlice *crypto.Curve25519PublicKey, received
 	//Calculate shared secret via Triple Diffie-Hellman
 	var secret []byte
 	//ECDH(E_B,I_A)
-	idSecret, err := oneTimeKeyBob.Key.SharedSecret(*identityKeyAlice)
+	idSecret, err := oneTimeKeyBob.Key.SharedSecret(oneTimeMsg.IdentityKey)
 	if err != nil {
 		return nil, err
 	}
@@ -160,11 +155,14 @@ func NewInboundOlmSession(identityKeyAlice *crypto.Curve25519PublicKey, received
 		return nil, fmt.Errorf("message decode: %w", err)
 	}
 
-	if len(msg.RatchetKey) == 0 {
+	if len(msg.RatchetKey) != crypto.Curve25519PublicKeyLength {
 		return nil, fmt.Errorf("message missing ratchet key: %w", olm.ErrBadMessageFormat)
 	}
 	//Init Ratchet
-	s.Ratchet.InitializeAsBob(secret, msg.RatchetKey)
+	err = s.Ratchet.InitializeAsBob(secret, msg.RatchetKey)
+	if err != nil {
+		return nil, fmt.Errorf("ratchet initialize: %w", err)
+	}
 	s.AliceBaseKey = oneTimeMsg.BaseKey
 	s.AliceIdentityKey = oneTimeMsg.IdentityKey
 	s.BobOneTimeKey = oneTimeKeyBob.Key.PublicKey
@@ -243,14 +241,12 @@ func (s *OlmSession) matchesInboundSession(theirIdentityKeyEncoded *id.Curve2551
 	if err != nil {
 		return false, err
 	}
-	if !msg.CheckFields(theirIdentityKey) {
+	if !msg.CheckFields() {
 		return false, nil
 	}
 
 	same := true
-	if msg.IdentityKey != nil {
-		same = same && msg.IdentityKey.Equal(s.AliceIdentityKey)
-	}
+	same = same && msg.IdentityKey.Equal(s.AliceIdentityKey)
 	if theirIdentityKey != nil {
 		same = same && theirIdentityKey.Equal(s.AliceIdentityKey)
 	}

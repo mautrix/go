@@ -677,6 +677,11 @@ func (portal *Portal) FindPreferredLogin(ctx context.Context, user *User, allowR
 		}
 	}
 	if !allowRelay {
+		if len(logins) > 0 {
+			return nil, nil, fmt.Errorf("%w (no logins found that are in portal)", ErrNotLoggedIn)
+		} else if portal.Relay != nil {
+			return nil, nil, fmt.Errorf("%w (relay not allowed for this event)", ErrNotLoggedIn)
+		}
 		return nil, nil, ErrNotLoggedIn
 	}
 	// Portal has relay, use it
@@ -694,7 +699,7 @@ func (portal *Portal) FindPreferredLogin(ctx context.Context, user *User, allowR
 			Msg("No usable user portal rows found, returning random login")
 		return firstLogin, nil, nil
 	} else {
-		return nil, nil, ErrNotLoggedIn
+		return nil, nil, fmt.Errorf("%w (no usable logins found)", ErrNotLoggedIn)
 	}
 }
 
@@ -762,10 +767,11 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 	if err != nil {
 		log.Err(err).Msg("Failed to get user login to handle Matrix event")
 		if errors.Is(err, ErrNotLoggedIn) {
-			shouldSendNotice := evt.Content.AsMessage().MsgType != event.MsgNotice
-			return EventHandlingResultFailed.WithMSSError(
-				WrapErrorInStatus(err).WithMessage("You're not logged in").WithIsCertain(true).WithSendNotice(shouldSendNotice),
-			)
+			shouldSendNotice := evt.Type == event.EventMessage && evt.Content.AsMessage().MsgType != event.MsgNotice
+			return EventHandlingResultFailed.WithMSSError(WrapErrorInStatus(err).
+				WithMessage(fmt.Sprintf("You're %s", err)).
+				WithIsCertain(true).
+				WithSendNotice(shouldSendNotice))
 		} else {
 			return EventHandlingResultFailed.WithMSSError(
 				WrapErrorInStatus(err).WithMessage("Failed to get login to handle event").WithIsCertain(true).WithSendNotice(true),
@@ -1964,7 +1970,9 @@ func (portal *Portal) handleMatrixDeleteChat(
 		log.Err(err).Msg("Failed to delete portal from database")
 		return EventHandlingResultFailed.WithMSSError(err)
 	}
-	err = portal.Bridge.Bot.DeleteRoom(ctx, portal.MXID, false)
+	// The event context has likely been canceled by delete, so use a background context for the delete call
+	noCancelCtx := log.WithContext(portal.Bridge.BackgroundCtx)
+	err = portal.Bridge.Bot.DeleteRoom(noCancelCtx, portal.MXID, false)
 	if err != nil {
 		log.Err(err).Msg("Failed to delete Matrix room")
 		return EventHandlingResultFailed.WithMSSError(err)

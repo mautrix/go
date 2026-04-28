@@ -239,7 +239,7 @@ func decryptForExistingChain(chain *receiverChain, message *message.Message, raw
 	}
 	skippedKeys := make([]skippedMessageKey, 0, min(maxSkippedMessageKeys, max(message.Counter-chain.CKey.Index, 0)))
 	for chain.CKey.Index < message.Counter {
-		if message.Counter-chain.CKey.Index < maxSkippedMessageKeys {
+		if message.Counter-chain.CKey.Index <= maxSkippedMessageKeys {
 			messageKey := chain.chainKey().createMessageKeys()
 			skippedKey := skippedMessageKey{
 				MKey: messageKey,

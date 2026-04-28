@@ -160,6 +160,7 @@ func (mt *ManualBackfill) Do(ctx context.Context) {
 		}
 	}()
 	var task *database.BackfillTask
+	updateTask := false
 	task, err = mt.Portal.Bridge.DB.BackfillTask.GetNextForPortal(ctx, mt.Portal.PortalKey, mt.Data != nil)
 	if err != nil {
 		log.Err(err).Msg("Failed to get backfill task from database")
@@ -169,8 +170,12 @@ func (mt *ManualBackfill) Do(ctx context.Context) {
 		log.Err(err).Msg("Failed to mark backfill task as dispatched")
 	} else if completed, err = mt.Portal.doBackfillTask(ctx, mt.Source, task, mt.Data); err != nil {
 		log.Err(err).Msg("Failed to do backwards backfill from event")
+		updateTask = errors.Is(err, errNoMessagesLeftAfterCutoff)
 	} else {
 		log.Debug().Bool("completed", completed).Msg("Finished backfill from event")
+		updateTask = true
+	}
+	if updateTask {
 		err = mt.Portal.Bridge.DB.BackfillTask.Update(ctx, task)
 		if err != nil {
 			log.Err(err).Msg("Failed to update backfill task in database after backfill")
@@ -203,11 +208,12 @@ func (br *Bridge) DoBackfillTask(ctx context.Context, task *database.BackfillTas
 		time.Sleep(BackfillQueueErrorBackoff)
 		return
 	}
+	updateTask := true
 	completed, err := br.getPortalAndDoBackfillTask(ctx, task)
 	if err != nil {
 		log.Err(err).Msg("Failed to do backfill task")
+		updateTask = errors.Is(err, errNoMessagesLeftAfterCutoff)
 		time.Sleep(BackfillQueueErrorBackoff)
-		return
 	} else if completed {
 		log.Info().
 			Int("batch_count", task.BatchCount).
@@ -219,10 +225,12 @@ func (br *Bridge) DoBackfillTask(ctx context.Context, task *database.BackfillTas
 			Bool("is_done", task.IsDone).
 			Msg("Backfill task not completed")
 	}
-	err = br.DB.BackfillTask.Update(ctx, task)
-	if err != nil {
-		log.Err(err).Msg("Failed to update backfill task")
-		time.Sleep(BackfillQueueErrorBackoff)
+	if updateTask {
+		err = br.DB.BackfillTask.Update(ctx, task)
+		if err != nil {
+			log.Err(err).Msg("Failed to update backfill task")
+			time.Sleep(BackfillQueueErrorBackoff)
+		}
 	}
 }
 

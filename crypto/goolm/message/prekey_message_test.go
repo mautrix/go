@@ -5,7 +5,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"maunium.net/go/mautrix/crypto/goolm/crypto"
 	"maunium.net/go/mautrix/crypto/goolm/message"
 )
 
@@ -26,8 +25,7 @@ func TestPreKeyMessageDecode(t *testing.T) {
 	assert.EqualValues(t, expectedIdKey, msg.IdentityKey)
 	assert.EqualValues(t, expectedbaseKey, msg.BaseKey)
 	assert.Equal(t, expectedmessage, msg.Message)
-	theirIDKey := crypto.Curve25519PublicKey(expectedIdKey)
-	assert.True(t, msg.CheckFields(&theirIDKey), "field check failed")
+	assert.True(t, msg.CheckFields(), "field check failed")
 }
 
 func TestPreKeyMessageEncode(t *testing.T) {

@@ -154,6 +154,19 @@ func (ul *UserLogin) GetSpaceRoom(ctx context.Context) (id.RoomID, error) {
 					URL: netName.NetworkIcon,
 				},
 			},
+		}, {
+			Type: event.StateBridge,
+			Content: event.Content{
+				Parsed: &event.BridgeEventContent{
+					BridgeBot: ul.Bridge.Bot.GetMXID(),
+					Protocol:  netName.AsBridgeInfoSection(),
+					Channel: event.BridgeInfoSection{
+						ID:       "__personal_filtering_space__",
+						Receiver: string(ul.ID),
+					},
+					BeeperRoomTypeV2: "personal_filtering_space",
+				},
+			},
 		}},
 		CreationContent: map[string]any{
 			"type": event.RoomTypeSpace,

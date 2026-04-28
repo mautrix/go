@@ -14,7 +14,6 @@ import (
 )
 
 const (
-	megolmInboundSessionPickleVersionJSON   byte   = 1
 	megolmInboundSessionPickleVersionLibOlm uint32 = 2
 )
 
