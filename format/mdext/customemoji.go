@@ -60,10 +60,11 @@ func (cer *customEmojiRenderer) RegisterFuncs(reg renderer.NodeRendererFuncRegis
 }
 
 var emojiPrefix = []byte("Emoji: ")
+var uriSchemeSeparator = []byte("://")
 
 func (cer *customEmojiRenderer) renderImage(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
 	n, ok := node.(*ast.Image)
-	if ok && entering && bytes.HasPrefix(n.Title, emojiPrefix) && bytes.Contains(n.Destination, []byte("://")) {
+	if ok && entering && bytes.HasPrefix(n.Title, emojiPrefix) && bytes.Contains(n.Destination, uriSchemeSeparator) {
 		n.Title = bytes.TrimPrefix(n.Title, emojiPrefix)
 		n.SetAttributeString("data-mx-emoticon", nil)
 		n.SetAttributeString("height", "32")
