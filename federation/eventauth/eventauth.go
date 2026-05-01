@@ -330,7 +330,7 @@ func authorizeMember(roomVersion id.RoomVersion, evt, createEvt *pdu.PDU, authEv
 		}
 		creator := createEvt.Sender.String()
 		if roomVersion.CreatorInContent() {
-			creator = gjson.GetBytes(evt.Content, "creator").Str
+			creator = gjson.GetBytes(createEvt.Content, "creator").Str
 		}
 		if len(evt.PrevEvents) == 1 &&
 			len(evt.AuthEvents) <= 1 &&
