@@ -54,7 +54,7 @@ func ImportImagePack(ctx context.Context, login *bridgev2.UserLogin, packURL str
 		Raw:    resp.Extra,
 	}
 	if saveToRoom {
-		sendResp, err := login.Bridge.Bot.SendState(ctx, spaceRoom, event.StateUnstableImagePack, resp.Shortcode, evtContent, time.Now())
+		sendResp, err := login.Bridge.Bot.SendState(ctx, spaceRoom, event.StateImagePack, resp.Shortcode, evtContent, time.Now())
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to send image pack state event to space")
 			return nil, fmt.Errorf("failed to send image pack state event to space: %w", err)
