@@ -453,30 +453,34 @@ func (fileInfo *FileInfo) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (fileInfo *FileInfo) MarshalJSON() ([]byte, error) {
-	baseSerialized, err := json.Marshal((&serializableFileInfo{}).CopyFrom(fileInfo))
-	if len(fileInfo.Extra) == 0 || err != nil {
+func MarshalMerge(base any, extraMap map[string]any) (json.RawMessage, error) {
+	// TODO replace all uses of this method with jsonv2's extra field once jsonv2 is available
+	baseSerialized, err := json.Marshal(base)
+	if len(extraMap) == 0 || err != nil {
 		return baseSerialized, err
 	}
-	fileInfo.deleteStandardExtraFields()
-	// TODO replace this with jsonv2's extra field once jsonv2 is available
-	extra, err := json.Marshal(fileInfo.Extra)
+	extraSerialized, err := json.Marshal(extraMap)
 	if err != nil {
 		return nil, err
 	}
 	if len(baseSerialized) <= 4 || baseSerialized[0] != '{' {
-		return extra, nil
-	} else if len(extra) <= 4 || extra[0] != '{' {
+		return extraSerialized, nil
+	} else if len(extraSerialized) <= 4 || extraSerialized[0] != '{' {
 		return baseSerialized, nil
 	}
-	output := make([]byte, 0, len(baseSerialized)+len(extra)-1)
+	output := make([]byte, 0, len(baseSerialized)+len(extraSerialized)-1)
 	output = append(output, baseSerialized[:len(baseSerialized)-1]...)
 	output = append(output, ',')
-	output = append(output, extra[1:]...)
+	output = append(output, extraSerialized[1:]...)
 	if !json.Valid(output) {
-		return nil, fmt.Errorf("failed to merge extra file info: %s", output)
+		return nil, fmt.Errorf("failed to merge extra: %s", output)
 	}
 	return output, nil
+}
+
+func (fileInfo *FileInfo) MarshalJSON() ([]byte, error) {
+	fileInfo.deleteStandardExtraFields()
+	return MarshalMerge((&serializableFileInfo{}).CopyFrom(fileInfo), fileInfo.Extra)
 }
 
 func numberToInt(val json.Number) int {

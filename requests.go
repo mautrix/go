@@ -298,12 +298,45 @@ type ReqKeysSignatures struct {
 type ReqUploadSignatures map[id.UserID]map[string]ReqKeysSignatures
 
 type DeviceKeys struct {
-	UserID     id.UserID              `json:"user_id"`
-	DeviceID   id.DeviceID            `json:"device_id"`
-	Algorithms []id.Algorithm         `json:"algorithms"`
-	Keys       KeyMap                 `json:"keys"`
-	Signatures signatures.Signatures  `json:"signatures"`
-	Unsigned   map[string]interface{} `json:"unsigned,omitempty"`
+	UserID     id.UserID             `json:"user_id"`
+	DeviceID   id.DeviceID           `json:"device_id"`
+	Algorithms []id.Algorithm        `json:"algorithms"`
+	Keys       KeyMap                `json:"keys"`
+	Signatures signatures.Signatures `json:"signatures"`
+	Dehydrated bool                  `json:"dehydrated,omitempty"`
+	Unsigned   map[string]any        `json:"unsigned,omitempty"`
+	Extra      map[string]any        `json:"-"`
+}
+
+type serializableDeviceKeys DeviceKeys
+
+func (dk *DeviceKeys) deleteStandardExtraFields() {
+	if len(dk.Extra) == 0 {
+		return
+	}
+	delete(dk.Extra, "user_id")
+	delete(dk.Extra, "device_id")
+	delete(dk.Extra, "algorithms")
+	delete(dk.Extra, "keys")
+	delete(dk.Extra, "signatures")
+	delete(dk.Extra, "dehydrated")
+	delete(dk.Extra, "unsigned")
+}
+
+func (dk *DeviceKeys) MarshalJSON() ([]byte, error) {
+	dk.deleteStandardExtraFields()
+	return event.MarshalMerge((*serializableDeviceKeys)(dk), dk.Extra)
+}
+
+func (dk *DeviceKeys) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, (*serializableDeviceKeys)(dk)); err != nil {
+		return err
+	}
+	if err := json.Unmarshal(data, &dk.Extra); err != nil {
+		return err
+	}
+	dk.deleteStandardExtraFields()
+	return nil
 }
 
 type CrossSigningKeys struct {
