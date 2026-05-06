@@ -235,11 +235,7 @@ func (mach *OlmMachine) FetchKeys(ctx context.Context, users []id.UserID, includ
 		changed := false
 		for deviceID, deviceKeys := range devices {
 			log := log.With().Stringer("device_id", deviceID).Logger()
-			existing, ok := existingDevices[deviceID]
-			if !ok {
-				// New device
-				changed = true
-			}
+			existing, existed := existingDevices[deviceID]
 			log.Trace().Msg("Validating device")
 			newDevice, err := mach.validateDevice(userID, deviceID, deviceKeys, existing)
 			if err != nil {
@@ -247,6 +243,11 @@ func (mach *OlmMachine) FetchKeys(ctx context.Context, users []id.UserID, includ
 			} else if newDevice != nil {
 				newDevices[deviceID] = newDevice
 				mach.storeDeviceSelfSignatures(ctx, userID, deviceID, resp)
+				if !existed {
+					// New device, always mark as changed so megolm keys are reset even if
+					// the total count stays the same (e.g. one device added and one removed).
+					changed = true
+				}
 			}
 		}
 		log.Trace().Int("new_device_count", len(newDevices)).Msg("Storing new device list")
