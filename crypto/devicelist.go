@@ -350,7 +350,11 @@ func (mach *OlmMachine) validateDevice(userID id.UserID, deviceID id.DeviceID, d
 
 	name, ok := deviceKeys.Unsigned["device_display_name"].(string)
 	if !ok {
-		name = string(deviceID)
+		if deviceKeys.Dehydrated {
+			name = "Dehydrated device"
+		} else {
+			name = string(deviceID)
+		}
 	}
 
 	return &id.Device{
