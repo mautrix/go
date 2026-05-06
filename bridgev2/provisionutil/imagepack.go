@@ -8,6 +8,9 @@ package provisionutil
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"time"
 
@@ -44,6 +47,9 @@ func ImportImagePack(ctx context.Context, login *bridgev2.UserLogin, packURL str
 	resp, err := api.DownloadImagePack(ctx, packURL)
 	if err != nil {
 		zerolog.Ctx(ctx).Err(err).Str("pack_url", packURL).Msg("Failed to download image pack")
+		if !errors.Is(err, mautrix.MNotFound) {
+			login.TrackAnalytics("Image Pack Import Fail", map[string]any{})
+		}
 		return nil, err
 	}
 	if resp.Shortcode == "" && resp.Content.Metadata.BridgedPack != nil {
@@ -59,6 +65,10 @@ func ImportImagePack(ctx context.Context, login *bridgev2.UserLogin, packURL str
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to send image pack state event to space")
 			return nil, fmt.Errorf("failed to send image pack state event to space: %w", err)
 		}
+		shortcodeHash := sha256.Sum256([]byte(resp.Shortcode))
+		login.TrackAnalytics("Image Pack Imported", map[string]any{
+			"shortcode_hash": hex.EncodeToString(shortcodeHash[:16]),
+		})
 		return &RespImagePackSavedToRoom{
 			EventID:  sendResp.EventID,
 			RoomID:   spaceRoom,
