@@ -10,6 +10,7 @@ import (
 	"context"
 
 	"github.com/rs/zerolog"
+	"go.mau.fi/util/exfmt"
 	"go.mau.fi/util/ptr"
 
 	"maunium.net/go/mautrix"
@@ -41,9 +42,9 @@ func CreateGroup(ctx context.Context, login *bridgev2.UserLogin, params *bridgev
 		return nil, bridgev2.RespError(mautrix.MUnrecognized.WithMessage("Unrecognized group type %s", params.Type))
 	}
 	if len(params.Participants) < typeSpec.Participants.MinLength {
-		return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("Must have at least %d members", typeSpec.Participants.MinLength))
+		return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("Must have at least %s (in addition to yourself)", exfmt.Pluralizable("member")(typeSpec.Participants.MinLength)))
 	} else if typeSpec.Participants.MaxLength > 0 && len(params.Participants) > typeSpec.Participants.MaxLength {
-		return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("Must have at most %d members", typeSpec.Participants.MaxLength))
+		return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("Must have at most %s", exfmt.Pluralizable("member")(typeSpec.Participants.MaxLength)))
 	}
 	userIDValidatingNetwork, uidValOK := login.Bridge.Network.(bridgev2.IdentifierValidatingNetwork)
 	for i, participant := range params.Participants {
