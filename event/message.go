@@ -131,7 +131,8 @@ type MessageEventContent struct {
 
 	replyFallbackRemoved bool
 
-	StickerSource *StickerSource `json:"com.beeper.sticker_source,omitempty"`
+	ImageSourcePacks map[id.ContentURIString]*ImageSource    `json:"com.beeper.msc4459.image_source_packs,omitempty"`
+	BridgedEmojis    map[id.ContentURIString]*BridgedSticker `json:"com.beeper.bridged_emojis,omitempty"`
 
 	MessageSendRetry         *BeeperRetryMetadata     `json:"com.beeper.message_send_retry,omitempty"`
 	BeeperGalleryImages      []*MessageEventContent   `json:"com.beeper.gallery.images,omitempty"`
