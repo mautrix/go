@@ -6,7 +6,7 @@
 
 //go:build goexperiment.jsonv2
 
-package canonicaljson
+package canonicaljson_test
 
 import (
 	"encoding/json/jsontext"
@@ -16,6 +16,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"maunium.net/go/mautrix/crypto/canonicaljson"
 )
 
 var canonicalizeTests = []struct {
@@ -62,7 +64,7 @@ func TestCanonicalize(t *testing.T) {
 	for _, test := range canonicalizeTests {
 		t.Run(test.input, func(t *testing.T) {
 			val := jsontext.Value(test.input)
-			err := Canonicalize(&val)
+			err := canonicaljson.Canonicalize(&val)
 			assert.NoError(t, err)
 			assert.Equal(t, test.want, string(val))
 		})
@@ -80,7 +82,7 @@ func TestMarshal_Roundtrip(t *testing.T) {
 			}
 			var temp any
 			require.NoError(t, json.Unmarshal([]byte(test.input), &temp))
-			val, err := Marshal(temp)
+			val, err := canonicaljson.Marshal(temp)
 			require.NoError(t, err)
 			assert.Equal(t, test.want, string(val))
 		})
@@ -101,7 +103,7 @@ func TestMarshal(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			got, err := Marshal(test.input)
+			got, err := canonicaljson.Marshal(test.input)
 			assert.NoError(t, err)
 			assert.Equal(t, test.want, string(got))
 		})
@@ -126,7 +128,7 @@ func TestCanonicalize_Error(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			val := jsontext.Value(test.input)
-			err := Canonicalize(&val)
+			err := canonicaljson.Canonicalize(&val)
 			assert.Error(t, err)
 		})
 	}
@@ -146,7 +148,7 @@ func TestMarshal_Error(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := Marshal(test.input)
+			_, err := canonicaljson.Marshal(test.input)
 			assert.Error(t, err)
 		})
 	}
