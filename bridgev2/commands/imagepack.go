@@ -7,6 +7,8 @@
 package commands
 
 import (
+	"fmt"
+
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/provisionutil"
 	"maunium.net/go/mautrix/format"
@@ -35,8 +37,15 @@ func fnImportImagePack(ce *Event) {
 		ce.Reply("Failed to import pack: %s", err)
 		return
 	}
+	var footer string
+	parts := len(resp.(*provisionutil.RespImagePackSavedToRoom).StateKeys)
+	if parts > 1 {
+		footer = fmt.Sprintf(". Note: the pack was large, so it had to be split up into %d parts", parts)
+	}
 	ce.Reply(
-		"Successfully bridged image pack to %s",
+		"Successfully bridged image pack to %s%s",
 		format.MarkdownLink("your personal filtering space",
-			resp.(*provisionutil.RespImagePackSavedToRoom).RoomID.URI(ce.Bridge.Matrix.ServerName()).MatrixToURL()))
+			resp.(*provisionutil.RespImagePackSavedToRoom).RoomID.URI(ce.Bridge.Matrix.ServerName()).MatrixToURL()),
+		footer,
+	)
 }
