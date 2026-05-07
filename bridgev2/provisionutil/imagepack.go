@@ -34,6 +34,11 @@ type RespImagePackSavedToRoom struct {
 	StateKeys []string     `json:"state_keys,omitempty"`
 }
 
+type spaceableNetworkAPI interface {
+	bridgev2.NetworkAPI
+	GetSpaceRoom() id.RoomID
+}
+
 func ImportImagePack(ctx context.Context, login *bridgev2.UserLogin, packURL string, saveToRoom bool) (any, error) {
 	var spaceRoom id.RoomID
 	if saveToRoom {
@@ -43,7 +48,14 @@ func ImportImagePack(ctx context.Context, login *bridgev2.UserLogin, packURL str
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to get space room for user")
 			return nil, bridgev2.RespError(mautrix.MUnknown.WithMessage("Failed to get space room for user"))
 		} else if spaceRoom == "" {
-			return nil, bridgev2.RespError(mautrix.MNotFound.WithMessage("Can't import image pack to space when personal filtering spaces are disabled"))
+			// Small hack to allow importing emojis on Slack where there's a shared team space portal
+			// instead of individual personal filtering spaces.
+			spaceableAPI, ok := login.Client.(spaceableNetworkAPI)
+			if ok && spaceableAPI.GetSpaceRoom() != "" {
+				spaceRoom = spaceableAPI.GetSpaceRoom()
+			} else {
+				return nil, bridgev2.RespError(mautrix.MNotFound.WithMessage("Can't import image pack to space when personal filtering spaces are disabled"))
+			}
 		}
 	}
 	api, ok := login.Client.(bridgev2.StickerImportingNetworkAPI)
