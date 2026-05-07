@@ -61,6 +61,11 @@ jobs:
       - name: Test
         run: go test -json -v ./... 2>&1 | gotestfmt
 
+      - name: Build (jsonv2)
+        env:
+            GOEXPERIMENT: jsonv2
+        run: go build -v ./...
+
       - name: Test (jsonv2)
         env:
           GOEXPERIMENT: jsonv2

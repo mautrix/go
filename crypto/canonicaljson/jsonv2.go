@@ -72,6 +72,19 @@ func putObjectMembers(ns *[]objectMember) {
 	}
 }
 
+// TODO replace with jsontext.Kind* after dropping Go 1.25 support
+const (
+	KindNull        = 'n'
+	KindFalse       = 'f'
+	KindTrue        = 't'
+	KindString      = '"'
+	KindNumber      = '0'
+	KindBeginObject = '{'
+	KindEndObject   = '}'
+	KindBeginArray  = '['
+	KindEndArray    = ']'
+)
+
 // This is based on the standard implementation of [jsontext.ReorderRawObjects]
 // in https://github.com/golang/go/blob/go1.26.3/src/encoding/json/jsontext/value.go#L298-L395
 // It has been adjusted to:
@@ -89,7 +102,7 @@ func reorderObjectsAndValidate(d *jsontext.Decoder, buf []byte, scratch *[]byte)
 		)
 	}
 	switch tok, err := d.ReadToken(); tok.Kind() {
-	case jsontext.KindBeginObject:
+	case KindBeginObject:
 		// Iterate and collect the name and offsets for every object member.
 		members := getObjectMembers()
 		defer putObjectMembers(members)
@@ -97,7 +110,7 @@ func reorderObjectsAndValidate(d *jsontext.Decoder, buf []byte, scratch *[]byte)
 		isSorted := true
 
 		beforeBody := d.InputOffset() // offset after '{'
-		for d.PeekKind() != jsontext.KindEndObject {
+		for d.PeekKind() != KindEndObject {
 			beforeName := d.InputOffset()
 			name, err := d.ReadValue()
 			if err != nil {
@@ -175,8 +188,8 @@ func reorderObjectsAndValidate(d *jsontext.Decoder, buf []byte, scratch *[]byte)
 			*scratch = sorted
 		}
 		return nil
-	case jsontext.KindBeginArray:
-		for d.PeekKind() != jsontext.KindEndArray {
+	case KindBeginArray:
+		for d.PeekKind() != KindEndArray {
 			err = reorderObjectsAndValidate(d, buf, scratch)
 			if err != nil {
 				return err
@@ -184,7 +197,7 @@ func reorderObjectsAndValidate(d *jsontext.Decoder, buf []byte, scratch *[]byte)
 		}
 		_, err = d.ReadToken()
 		return err
-	case jsontext.KindNumber:
+	case KindNumber:
 		str := tok.String()
 		if str == "-0" {
 			return fmt.Errorf("invalid number: -0")
@@ -211,7 +224,7 @@ func reorderObjectsAndValidate(d *jsontext.Decoder, buf []byte, scratch *[]byte)
 			return fmt.Errorf("number too large: %q", str)
 		}
 		return nil
-	case jsontext.KindNull, jsontext.KindFalse, jsontext.KindTrue, jsontext.KindString:
+	case KindNull, KindFalse, KindTrue, KindString:
 		return err
 	default:
 		// This probably can't happen
