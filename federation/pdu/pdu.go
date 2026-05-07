@@ -148,7 +148,7 @@ func marshalCanonical(data any) (jsontext.Value, error) {
 		return nil, err
 	}
 	marshaled := jsontext.Value(marshaledBytes)
-	err = marshaled.Canonicalize()
+	err = canonicaljson.Canonicalize(&marshaled)
 	if err != nil {
 		return nil, err
 	}
