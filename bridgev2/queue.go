@@ -147,8 +147,18 @@ func (br *Bridge) QueueMatrixEvent(ctx context.Context, evt *event.Event) EventH
 			evt:    evt,
 			sender: sender,
 		})
-	} else if evt.Type == event.StateMember && br.IsGhostMXID(id.UserID(evt.GetStateKey())) && evt.Content.AsMember().Membership == event.MembershipInvite && evt.Content.AsMember().IsDirect {
+	} else if evt.Type == event.StateMember && br.IsGhostMXID(id.UserID(evt.GetStateKey())) && evt.Content.AsMember().Membership == event.MembershipInvite && evt.Content.AsMember().IsDirect && sender != nil {
 		return br.handleGhostDMInvite(ctx, evt, sender)
+	} else if evt.Type == event.BeeperDeleteChat && sender != nil && sender.Permissions.Admin {
+		err = br.Bot.DeleteRoom(ctx, evt.RoomID, true)
+		if err != nil {
+			log.Err(err).Msg("Failed to delete non-portal room")
+			status := WrapErrorInStatus(err)
+			br.Matrix.SendMessageStatus(ctx, &status, StatusEventInfoFromEvent(evt))
+			return EventHandlingResultFailed.WithError(err)
+		}
+		log.Debug().Msg("Successfully deleted non-portal room after delete chat event")
+		return EventHandlingResultSuccess
 	} else {
 		status := WrapErrorInStatus(ErrNoPortal)
 		br.Matrix.SendMessageStatus(ctx, &status, StatusEventInfoFromEvent(evt))
