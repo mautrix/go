@@ -89,7 +89,7 @@ func ImportImagePack(ctx context.Context, login *bridgev2.UserLogin, packURL str
 		for i, content := range packs {
 			stateKey := resp.Shortcode
 			if i > 0 {
-				stateKey = fmt.Sprintf("%s.%d", resp.Shortcode, i)
+				stateKey = fmt.Sprintf("%s.%03d", resp.Shortcode, i)
 			}
 			zerolog.Ctx(ctx).Trace().Str("state_key", stateKey).RawJSON("pack_data", content).Msg("Sending pack")
 			sendResp, err := login.Bridge.Bot.SendState(ctx, spaceRoom, event.StateImagePack, stateKey, &event.Content{VeryRaw: content}, time.Now())
