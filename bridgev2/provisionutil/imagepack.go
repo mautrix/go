@@ -39,25 +39,7 @@ type spaceableNetworkAPI interface {
 	GetSpaceRoom() id.RoomID
 }
 
-func ImportImagePack(ctx context.Context, login *bridgev2.UserLogin, packURL string, saveToRoom bool) (any, error) {
-	var spaceRoom id.RoomID
-	if saveToRoom {
-		var err error
-		spaceRoom, err = login.GetSpaceRoom(ctx)
-		if err != nil {
-			zerolog.Ctx(ctx).Err(err).Msg("Failed to get space room for user")
-			return nil, bridgev2.RespError(mautrix.MUnknown.WithMessage("Failed to get space room for user"))
-		} else if spaceRoom == "" {
-			// Small hack to allow importing emojis on Slack where there's a shared team space portal
-			// instead of individual personal filtering spaces.
-			spaceableAPI, ok := login.Client.(spaceableNetworkAPI)
-			if ok && spaceableAPI.GetSpaceRoom() != "" {
-				spaceRoom = spaceableAPI.GetSpaceRoom()
-			} else {
-				return nil, bridgev2.RespError(mautrix.MNotFound.WithMessage("Can't import image pack to space when personal filtering spaces are disabled"))
-			}
-		}
-	}
+func actuallyImportImagePack(ctx context.Context, login *bridgev2.UserLogin, packURL string) (*bridgev2.ImportedImagePack, error) {
 	api, ok := login.Client.(bridgev2.StickerImportingNetworkAPI)
 	if !ok {
 		return nil, bridgev2.RespError(mautrix.MUnrecognized.WithMessage("This bridge does not support importing image packs"))
@@ -73,48 +55,79 @@ func ImportImagePack(ctx context.Context, login *bridgev2.UserLogin, packURL str
 	if resp.Shortcode == "" && resp.Content.Metadata.BridgedPack != nil {
 		resp.Shortcode = resp.Content.Metadata.BridgedPack.URL
 	}
-	if saveToRoom {
-		var eventIDs []id.EventID
-		var stateKeys []string
-		packs, err := SplitPack(resp)
-		if err != nil {
-			zerolog.Ctx(ctx).Err(err).Msg("Failed to split image pack into multiple state events")
-			return nil, fmt.Errorf("failed to split image pack into multiple state events: %w", err)
-		}
-		if len(packs) > 1 {
-			zerolog.Ctx(ctx).Info().
-				Int("pack_count", len(packs)).
-				Msg("Split pack into parts")
-		}
-		for i, content := range packs {
-			stateKey := resp.Shortcode
-			if i > 0 {
-				stateKey = fmt.Sprintf("%s.%03d", resp.Shortcode, i)
-			}
-			zerolog.Ctx(ctx).Trace().Str("state_key", stateKey).RawJSON("pack_data", content).Msg("Sending pack")
-			sendResp, err := login.Bridge.Bot.SendState(ctx, spaceRoom, event.StateImagePack, stateKey, &event.Content{VeryRaw: content}, time.Now())
-			if err != nil {
-				zerolog.Ctx(ctx).Err(err).Int("pack_idx", i).Msg("Failed to send image pack state event to space")
-				return nil, fmt.Errorf("failed to send image pack state event #%d to space: %w", i+1, err)
-			}
-			eventIDs = append(eventIDs, sendResp.EventID)
-			stateKeys = append(stateKeys, stateKey)
-		}
-		shortcodeHash := sha256.Sum256([]byte(resp.Shortcode))
-		login.TrackAnalytics("Image Pack Imported", map[string]any{
-			"shortcode_hash": hex.EncodeToString(shortcodeHash[:16]),
-		})
-		return &RespImagePackSavedToRoom{
-			RoomID:    spaceRoom,
-			EventID:   eventIDs[0],
-			EventIDs:  eventIDs,
-			StateKey:  stateKeys[0],
-			StateKeys: stateKeys,
-		}, nil
+	return resp, nil
+}
+
+func PreviewImagePack(ctx context.Context, login *bridgev2.UserLogin, packURL string) (*event.Content, error) {
+	resp, err := actuallyImportImagePack(ctx, login, packURL)
+	if err != nil {
+		return nil, err
 	}
+	shortcodeHash := sha256.Sum256([]byte(resp.Shortcode))
+	login.TrackAnalytics("Image Pack Previewed", map[string]any{
+		"shortcode_hash": hex.EncodeToString(shortcodeHash[:16]),
+	})
 	return &event.Content{
 		Parsed: resp.Content,
 		Raw:    resp.Extra,
+	}, nil
+}
+
+func ImportImagePack(ctx context.Context, login *bridgev2.UserLogin, packURL string) (*RespImagePackSavedToRoom, error) {
+	spaceRoom, err := login.GetSpaceRoom(ctx)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to get space room for user")
+		return nil, bridgev2.RespError(mautrix.MUnknown.WithMessage("Failed to get space room for user"))
+	} else if spaceRoom == "" {
+		// Small hack to allow importing emojis on Slack where there's a shared team space portal
+		// instead of individual personal filtering spaces.
+		spaceableAPI, ok := login.Client.(spaceableNetworkAPI)
+		if ok && spaceableAPI.GetSpaceRoom() != "" {
+			spaceRoom = spaceableAPI.GetSpaceRoom()
+		} else {
+			return nil, bridgev2.RespError(mautrix.MNotFound.WithMessage("Can't import image pack to space when personal filtering spaces are disabled"))
+		}
+	}
+	resp, err := actuallyImportImagePack(ctx, login, packURL)
+	if err != nil {
+		return nil, err
+	}
+	var eventIDs []id.EventID
+	var stateKeys []string
+	packs, err := SplitPack(resp)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to split image pack into multiple state events")
+		return nil, fmt.Errorf("failed to split image pack into multiple state events: %w", err)
+	}
+	if len(packs) > 1 {
+		zerolog.Ctx(ctx).Info().
+			Int("pack_count", len(packs)).
+			Msg("Split pack into parts")
+	}
+	for i, content := range packs {
+		stateKey := resp.Shortcode
+		if i > 0 {
+			stateKey = fmt.Sprintf("%s.%03d", resp.Shortcode, i)
+		}
+		zerolog.Ctx(ctx).Trace().Str("state_key", stateKey).RawJSON("pack_data", content).Msg("Sending pack")
+		sendResp, err := login.Bridge.Bot.SendState(ctx, spaceRoom, event.StateImagePack, stateKey, &event.Content{VeryRaw: content}, time.Now())
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Int("pack_idx", i).Msg("Failed to send image pack state event to space")
+			return nil, fmt.Errorf("failed to send image pack state event #%d to space: %w", i+1, err)
+		}
+		eventIDs = append(eventIDs, sendResp.EventID)
+		stateKeys = append(stateKeys, stateKey)
+	}
+	shortcodeHash := sha256.Sum256([]byte(resp.Shortcode))
+	login.TrackAnalytics("Image Pack Imported", map[string]any{
+		"shortcode_hash": hex.EncodeToString(shortcodeHash[:16]),
+	})
+	return &RespImagePackSavedToRoom{
+		RoomID:    spaceRoom,
+		EventID:   eventIDs[0],
+		EventIDs:  eventIDs,
+		StateKey:  stateKeys[0],
+		StateKeys: stateKeys,
 	}, nil
 }
 

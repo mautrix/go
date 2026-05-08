@@ -772,7 +772,13 @@ func (prov *ProvisioningAPI) ImportImagePack(w http.ResponseWriter, r *http.Requ
 	if login == nil {
 		return
 	}
-	resp, err := provisionutil.ImportImagePack(r.Context(), login, r.URL.Query().Get("pack_url"), r.Method == http.MethodPost)
+	var resp any
+	var err error
+	if r.Method == http.MethodPost {
+		resp, err = provisionutil.ImportImagePack(r.Context(), login, r.URL.Query().Get("pack_url"))
+	} else {
+		resp, err = provisionutil.PreviewImagePack(r.Context(), login, r.URL.Query().Get("pack_url"))
+	}
 	if err != nil {
 		RespondWithError(w, err, "Internal error importing image pack")
 		return

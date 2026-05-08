@@ -32,20 +32,20 @@ func fnImportImagePack(ce *Event) {
 		ce.Reply("Usage: `$cmdprefix import-image-pack <url>`")
 		return
 	}
-	resp, err := provisionutil.ImportImagePack(ce.Ctx, login, args[0], true)
+	resp, err := provisionutil.ImportImagePack(ce.Ctx, login, args[0])
 	if err != nil {
 		ce.Reply("Failed to import pack: %s", err)
 		return
 	}
 	var footer string
-	parts := len(resp.(*provisionutil.RespImagePackSavedToRoom).StateKeys)
+	parts := len(resp.StateKeys)
 	if parts > 1 {
 		footer = fmt.Sprintf(". Note: the pack was large, so it had to be split up into %d parts", parts)
 	}
 	ce.Reply(
 		"Successfully bridged image pack to %s%s",
 		format.MarkdownLink("your personal filtering space",
-			resp.(*provisionutil.RespImagePackSavedToRoom).RoomID.URI(ce.Bridge.Matrix.ServerName()).MatrixToURL()),
+			resp.RoomID.URI(ce.Bridge.Matrix.ServerName()).MatrixToURL()),
 		footer,
 	)
 }
