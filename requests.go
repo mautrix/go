@@ -488,6 +488,7 @@ type ReqPublicRooms struct {
 	Limit                int
 	Since                string
 	ThirdPartyInstanceID string
+	Server               string
 }
 
 func (req *ReqPublicRooms) Query() map[string]string {
@@ -506,6 +507,9 @@ func (req *ReqPublicRooms) Query() map[string]string {
 	}
 	if req.ThirdPartyInstanceID != "" {
 		query["third_party_instance_id"] = req.ThirdPartyInstanceID
+	}
+	if req.Server != "" {
+		query["server"] = req.Server
 	}
 	return query
 }
