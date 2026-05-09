@@ -280,7 +280,7 @@ func TestCanonicalize_Error(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			val := jsontext.Value(test.input)
 			err := canonicaljson.Canonicalize(&val)
-			assert.Error(t, err)
+			assert.Error(t, err, "Expected error, got %s instead", val)
 		})
 	}
 }
@@ -292,8 +292,8 @@ func TestMarshal_Roundtrip_Error(t *testing.T) {
 			if err != nil {
 				return // error during unmarshal is fine
 			}
-			_, err = canonicaljson.Marshal(temp)
-			assert.Error(t, err)
+			out, err := canonicaljson.Marshal(temp)
+			assert.Error(t, err, "Expected error, got %s instead", out)
 		})
 	}
 }
@@ -317,8 +317,8 @@ func TestMarshal_Error(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := canonicaljson.Marshal(test.input)
-			assert.Error(t, err)
+			out, err := canonicaljson.Marshal(test.input)
+			assert.Error(t, err, "Expected error, got %s instead", out)
 		})
 	}
 }
