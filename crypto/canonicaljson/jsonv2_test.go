@@ -12,6 +12,8 @@ import (
 	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"math"
+	"os/exec"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -147,8 +149,24 @@ func TestCanonicalize(t *testing.T) {
 			err := canonicaljson.Canonicalize(&val)
 			assert.NoError(t, err)
 			assert.Equal(t, test.want, string(val))
+			t.Run("python", func(t *testing.T) {
+				checkPython(t, string(val))
+			})
 		})
 	}
+}
+
+const pythonCanonicalJSON = `import json, sys; print(json.dumps(json.loads(sys.argv[1]), allow_nan=False, ensure_ascii=False, separators=(',',':'),sort_keys=True))`
+
+var python3, _ = exec.LookPath("python3")
+
+func checkPython(t *testing.T, val string) {
+	if python3 == "" {
+		t.SkipNow()
+	}
+	out, err := exec.CommandContext(t.Context(), python3, "-c", pythonCanonicalJSON, val).Output()
+	require.NoError(t, err)
+	assert.Equal(t, val, strings.TrimSuffix(string(out), "\n"))
 }
 
 // Unmarshal preserves negative zeroes, so Marshal will reject it,
