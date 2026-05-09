@@ -13,6 +13,7 @@ import (
 	"encoding/json/v2"
 	"math"
 	"os/exec"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -317,6 +318,11 @@ func TestMarshal_Error(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			// Go 1.25 emitted NaN and infinities as strings
+			// TODO remove this check after dropping Go 1.25 support
+			if strings.HasPrefix(runtime.Version(), "go1.25") && test.name == "NaN" || test.name == "+Inf" || test.name == "-Inf" {
+				t.SkipNow()
+			}
 			out, err := canonicaljson.Marshal(test.input)
 			assert.Error(t, err, "Expected error, got %s instead", out)
 		})
