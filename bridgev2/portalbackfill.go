@@ -85,7 +85,7 @@ func (portal *Portal) doForwardBackfill(ctx context.Context, source *UserLogin, 
 		}
 		return
 	}
-	err = portal.sendBackfill(ctx, source, resp.Messages, true, resp.MarkRead, false, resp.CompleteCallback)
+	err = portal.sendBackfill(ctx, source, resp.Messages, resp.Forward, resp.MarkRead, false, resp.CompleteCallback)
 	if err != nil {
 		log.Err(err).Msg("Failed to send forward backfill")
 	}
@@ -529,8 +529,8 @@ func (portal *Portal) sendBatch(ctx context.Context, source *UserLogin, messages
 		portal.compileBatchMessage(ctx, source, msg, out, inThread)
 	}
 	req := &mautrix.ReqBeeperBatchSend{
-		ForwardIfNoMessages: !forceForward,
 		Forward:             forceForward,
+		ForwardIfNoMessages: false,
 		SendNotification:    !markRead && forceForward && !inThread,
 		Events:              out.Events,
 	}
