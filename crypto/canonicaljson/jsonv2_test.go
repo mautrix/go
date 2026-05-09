@@ -247,38 +247,52 @@ func TestMarshal(t *testing.T) {
 	}
 }
 
+var canonicalizeErrorTests = []struct {
+	name  string
+	input string
+}{
+	{"duplicate keys", `{"a":1,"a":2}`},
+	{"escape-equivalent duplicate keys", `{"a":1,"\u0061":2}`},
+	{"invalid UTF-8", "\"\xff\xfe\xfd\""},
+	{"lone surrogate", `"\uD800"`},
+	{"lone trailing surrogate", `"\uDC00"`},
+	{"floating point number", `{"a": 1.2}`},
+	{"plain decimal 0.1", `{"a": 0.1}`},
+	{"non-integer that rounds out of range", `{"a": 9007199254740991.5}`},
+	{"too large number", `{"a": 9007199254740992}`},
+	{"too small number", `{"a": -9007199254740992}`},
+	{"zero-prefixed negative number", `{"a": -010}`},
+	{"zero-prefixed number", `{"a": 010}`},
+	{"big exponent number", `{"a": 1e100}`},
+	{"too large via 1e16", `{"a": 1e16}`},
+	{"non-integer small exponent", `{"a": 1e-10}`},
+	{"trailing comma", `{"a":1,}`},
+	{"JS-style comment", `{/*hi*/"a":1}`},
+	{"NaN literal", `{"a": NaN}`},
+	{"Infinity literal", `{"a": Infinity}`},
+	{"unquoted key", `{a:1}`},
+	{"trailing data", `{}{}`},
+	{"empty input", ``},
+}
+
 func TestCanonicalize_Error(t *testing.T) {
-	var tests = []struct {
-		name  string
-		input string
-	}{
-		{"duplicate keys", `{"a":1,"a":2}`},
-		{"escape-equivalent duplicate keys", `{"a":1,"\u0061":2}`},
-		{"invalid UTF-8", "\"\xff\xfe\xfd\""},
-		{"lone surrogate", `"\uD800"`},
-		{"lone trailing surrogate", `"\uDC00"`},
-		{"floating point number", `{"a": 1.2}`},
-		{"plain decimal 0.1", `{"a": 0.1}`},
-		{"non-integer that rounds out of range", `{"a": 9007199254740991.5}`},
-		{"too large number", `{"a": 9007199254740992}`},
-		{"too small number", `{"a": -9007199254740992}`},
-		{"zero-prefixed negative number", `{"a": -010}`},
-		{"zero-prefixed number", `{"a": 010}`},
-		{"big exponent number", `{"a": 1e100}`},
-		{"too large via 1e16", `{"a": 1e16}`},
-		{"non-integer small exponent", `{"a": 1e-10}`},
-		{"trailing comma", `{"a":1,}`},
-		{"JS-style comment", `{/*hi*/"a":1}`},
-		{"NaN literal", `{"a": NaN}`},
-		{"Infinity literal", `{"a": Infinity}`},
-		{"unquoted key", `{a:1}`},
-		{"trailing data", `{}{}`},
-		{"empty input", ``},
-	}
-	for _, test := range tests {
+	for _, test := range canonicalizeErrorTests {
 		t.Run(test.name, func(t *testing.T) {
 			val := jsontext.Value(test.input)
 			err := canonicaljson.Canonicalize(&val)
+			assert.Error(t, err)
+		})
+	}
+}
+func TestMarshal_Roundtrip_Error(t *testing.T) {
+	for _, test := range canonicalizeErrorTests {
+		t.Run(test.name, func(t *testing.T) {
+			var temp any
+			err := json.Unmarshal([]byte(test.input), &temp)
+			if err != nil {
+				return // error during unmarshal is fine
+			}
+			_, err = canonicaljson.Marshal(temp)
 			assert.Error(t, err)
 		})
 	}
