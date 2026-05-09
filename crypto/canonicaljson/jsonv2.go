@@ -16,8 +16,6 @@ import (
 	"fmt"
 	"slices"
 	"sync"
-
-	"go.mau.fi/util/exbytes"
 )
 
 var canonicalOpts = []json.Options{
@@ -50,7 +48,7 @@ type objectMember struct {
 }
 
 func (x objectMember) Compare(y objectMember) int {
-	return cmp.Compare(exbytes.UnsafeString(x.name), exbytes.UnsafeString(y.name))
+	return bytes.Compare(x.name, y.name)
 }
 
 var objectMemberPool = sync.Pool{
