@@ -44,6 +44,7 @@ var canonicalizeTests = []struct {
 	{"quote and backslash already correct", `["a\\B\""]`, `["a\\B\""]`},
 	{"misc unicode escapes", `"\u0120\u0FFF\u1820\uFFFF"`, "\"\u0120\u0FFF\u1820\uFFFF\""},
 	{"utf-16 surrogates", `["\uD842\uDC20", "\uDBFF\uDFFF"]`, "[\"\U00020820\",\"\U0010FFFF\"]"},
+	{"escaped slash", `{"a": "\/"}`, `{"a":"/"}`},
 	{"1.0", `{"a": 1.0}`, `{"a":1}`},
 	{"0.0", `{"a": 0.0}`, `{"a":0}`},
 	{"-0.0", `{"a": -0.0}`, `{"a":0}`},
@@ -239,6 +240,7 @@ func TestMarshal(t *testing.T) {
 		{"float that is integer", 1.0, `1`},
 		{"float 1e10", 1e10, `10000000000`},
 		{"empty struct", struct{}{}, `{}`},
+		{"raw unknown value", unknownRaw{Foo: "meow", Unknown: jsontext.Value(`{  "hello": "world"  }  `)}, `{"foo":"meow","hello":"world"}`},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -305,6 +307,16 @@ func TestMarshal_Roundtrip_Error(t *testing.T) {
 	}
 }
 
+type unknownMap struct {
+	Foo     string         `json:"foo"`
+	Unknown map[string]any `json:",unknown"`
+}
+
+type unknownRaw struct {
+	Foo     string         `json:"foo"`
+	Unknown jsontext.Value `json:",unknown"`
+}
+
 func TestMarshal_Error(t *testing.T) {
 	var tests = []struct {
 		name  string
@@ -321,6 +333,8 @@ func TestMarshal_Error(t *testing.T) {
 		{"-Inf", m{"a": math.Inf(-1)}},
 		{"non-integer float", m{"a": 1.5}},
 		{"uint64 way too large", m{"a": ^uint64(0)}},
+		{"duplicate key in map unknown", unknownMap{Foo: "meow", Unknown: map[string]any{"foo": "woof"}}},
+		{"duplicate key in raw unknown", unknownRaw{Foo: "meow", Unknown: jsontext.Value(`{"foo": "woof"}`)}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
