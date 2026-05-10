@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"time"
 
+	"maunium.net/go/mautrix/crypto/canonicaljson"
 	"maunium.net/go/mautrix/federation/signutil"
 	"maunium.net/go/mautrix/id"
 )
@@ -24,7 +25,7 @@ func (pdu *PDU) Sign(roomVersion id.RoomVersion, serverName string, keyID id.Key
 	if err != nil {
 		return err
 	}
-	rawJSON, err := marshalCanonical(pdu.Clone().RedactForSignature(roomVersion))
+	rawJSON, err := canonicaljson.Marshal(pdu.Clone().RedactForSignature(roomVersion))
 	if err != nil {
 		return fmt.Errorf("failed to marshal redacted PDU to sign: %w", err)
 	}
@@ -38,7 +39,7 @@ func (pdu *PDU) VerifySignature(roomVersion id.RoomVersion, serverName string, g
 	if len(sigs) == 0 {
 		return fmt.Errorf("no signatures found for server %s", serverName)
 	}
-	rawJSON, err := marshalCanonical(pdu.Clone().RedactForSignature(roomVersion))
+	rawJSON, err := canonicaljson.Marshal(pdu.Clone().RedactForSignature(roomVersion))
 	if err != nil {
 		return fmt.Errorf("failed to marshal redacted PDU to verify signature: %w", err)
 	}

@@ -16,6 +16,7 @@ import (
 
 	"github.com/tidwall/gjson"
 
+	"maunium.net/go/mautrix/crypto/canonicaljson"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -27,7 +28,7 @@ func (pdu *PDU) CalculateContentHash() ([32]byte, error) {
 	pduClone.Signatures = nil
 	pduClone.Unsigned = nil
 	pduClone.Hashes = nil
-	rawJSON, err := marshalCanonical(pduClone)
+	rawJSON, err := canonicaljson.Marshal(pduClone)
 	if err != nil {
 		return [32]byte{}, fmt.Errorf("failed to marshal PDU to calculate content hash: %w", err)
 	}
@@ -90,7 +91,7 @@ func (pdu *PDU) GetReferenceHash(roomVersion id.RoomVersion) ([32]byte, error) {
 			return [32]byte{}, err
 		}
 	}
-	rawJSON, err := marshalCanonical(pdu.Clone().RedactForSignature(roomVersion))
+	rawJSON, err := canonicaljson.Marshal(pdu.Clone().RedactForSignature(roomVersion))
 	if err != nil {
 		return [32]byte{}, fmt.Errorf("failed to marshal redacted PDU to calculate event ID: %w", err)
 	}

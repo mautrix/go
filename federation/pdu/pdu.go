@@ -9,7 +9,6 @@
 package pdu
 
 import (
-	"bytes"
 	"crypto/ed25519"
 	"encoding/json/jsontext"
 	"encoding/json/v2"
@@ -22,7 +21,6 @@ import (
 	"go.mau.fi/util/jsonbytes"
 	"go.mau.fi/util/ptr"
 
-	"maunium.net/go/mautrix/crypto/canonicaljson"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
@@ -140,23 +138,4 @@ func (pdu *PDU) AddSignature(serverName string, keyID id.KeyID, signature string
 		pdu.Signatures[serverName] = make(map[id.KeyID]string)
 	}
 	pdu.Signatures[serverName][keyID] = signature
-}
-
-func marshalCanonical(data any) (jsontext.Value, error) {
-	marshaledBytes, err := json.Marshal(data)
-	if err != nil {
-		return nil, err
-	}
-	marshaled := jsontext.Value(marshaledBytes)
-	err = canonicaljson.Canonicalize(&marshaled)
-	if err != nil {
-		return nil, err
-	}
-	check := canonicaljson.CanonicalJSONAssumeValid(marshaled)
-	if !bytes.Equal(marshaled, check) {
-		fmt.Println(string(marshaled))
-		fmt.Println(string(check))
-		return nil, fmt.Errorf("canonical JSON mismatch for %s", string(marshaled))
-	}
-	return marshaled, nil
 }
