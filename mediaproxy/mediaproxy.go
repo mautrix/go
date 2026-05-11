@@ -511,7 +511,7 @@ func doTempFileDownload(
 	}
 	err = respond(tempFile, fileInfo.Size(), mimeType)
 	if err != nil {
-		return true, err
+		return true, fmt.Errorf("failed to write response: %w", err)
 	}
 	return true, nil
 }
