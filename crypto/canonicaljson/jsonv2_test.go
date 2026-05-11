@@ -123,6 +123,16 @@ var canonicalizeTests = []struct {
 	{"1.5e2 to integer 150", `{"a": 1.5e2}`, `{"a":150}`},
 	{"1e2 to integer 100", `{"a": 1e2}`, `{"a":100}`},
 	{"explicit positive exponent", `{"a": 1.5e+2}`, `{"a":150}`},
+	{"integer with negative exponent", `{"a": 10e-1}`, `{"a":1}`},
+	{"max safe integer with negative exponent", `{"a": 90071992547409910e-1}`, `{"a":9007199254740991}`},
+	{"zero with huge negative exponent", `{"a": 0e-1000}`, `{"a":0}`},
+	{"tiny exponent underflows to zero", `{"a": 1e-1000}`, `{"a":0}`},
+	{"negative tiny exponent underflows to zero", `{"a": -1e-1000}`, `{"a":0}`},
+	{"fraction rounds to one", `{"a": 0.99999999999999999}`, `{"a":1}`},
+	{"fraction rounds down to max safe", `{"a": 9007199254740991.1}`, `{"a":9007199254740991}`},
+	{"fraction rounds down within range", `{"a": 9007199254740990.5}`, `{"a":9007199254740990}`},
+	{"fraction rounds up within range", `{"a": 999999999999999.99}`, `{"a":1000000000000000}`},
+	{"scientific fraction near max safe", `{"a": 9.0071992547409911e15}`, `{"a":9007199254740991}`},
 
 	// Sorting edge cases. UTF-8 byte sort means uppercase precedes lowercase,
 	// and shorter prefixes precede longer strings sharing those prefixes.
@@ -132,6 +142,7 @@ var canonicalizeTests = []struct {
 	{"three keys reverse", `{"c":3,"b":2,"a":1}`, `{"a":1,"b":2,"c":3}`},
 	{"first element stays first", `{"a":1,"c":3,"b":2}`, `{"a":1,"b":2,"c":3}`},
 	{"varying member sizes", `{"x":111111,"a":1,"m":22}`, `{"a":1,"m":22,"x":111111}`},
+	{"escaped slash key", `{"b":2,"\/":1}`, `{"/":1,"b":2}`},
 
 	// Nested structures.
 	{"nested arrays with sort", `[[1,2],[3,{"b":2,"a":1}]]`, `[[1,2],[3,{"a":1,"b":2}]]`},
@@ -176,10 +187,11 @@ func checkPython(t *testing.T, val string) {
 // while Canonicalize will accept it and convert to a plain zero.
 // Both behaviors are acceptable, so skip tests for that here.
 var roundtripSkip = map[string]bool{
-	"-0.0":              true,
-	"integer -0":        true,
-	"integer -0e0":      true,
-	"spec: -0 and 1e10": true,
+	"-0.0":         true,
+	"integer -0":   true,
+	"integer -0e0": true,
+	"negative tiny exponent underflows to zero": true,
+	"spec: -0 and 1e10":                         true,
 }
 
 func TestMarshal_Roundtrip(t *testing.T) {
@@ -274,7 +286,9 @@ var canonicalizeErrorTests = []struct {
 	{"zero-prefixed number", `{"a": 010}`},
 	{"big exponent number", `{"a": 1e100}`},
 	{"too large via 1e16", `{"a": 1e16}`},
+	{"too large via negative exponent", `{"a": 90071992547409920e-1}`},
 	{"non-integer small exponent", `{"a": 1e-10}`},
+	{"smallest subnormal float", `{"a": 5e-324}`},
 	{"trailing comma", `{"a":1,}`},
 	{"JS-style comment", `{/*hi*/"a":1}`},
 	{"NaN literal", `{"a": NaN}`},
@@ -340,7 +354,7 @@ func TestMarshal_Error(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// Go 1.25 emitted NaN and infinities as strings
 			// TODO remove this check after dropping Go 1.25 support
-			if strings.HasPrefix(runtime.Version(), "go1.25") && test.name == "NaN" || test.name == "+Inf" || test.name == "-Inf" {
+			if strings.HasPrefix(runtime.Version(), "go1.25") && (test.name == "NaN" || test.name == "+Inf" || test.name == "-Inf") {
 				t.SkipNow()
 			}
 			out, err := canonicaljson.Marshal(test.input)
