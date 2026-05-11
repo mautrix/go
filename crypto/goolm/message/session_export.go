@@ -1,11 +1,8 @@
 package message
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
-
-	"filippo.io/edwards25519"
 
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
 	"maunium.net/go/mautrix/crypto/olm"
@@ -43,8 +40,7 @@ func (s *MegolmSessionExport) Decode(input []byte) error {
 	s.Counter = binary.BigEndian.Uint32(input[1:5])
 	copy(s.RatchetData[:], input[5:133])
 	s.PublicKey = input[133:]
-	pubPoint, err := (&edwards25519.Point{}).SetBytes(s.PublicKey)
-	if err != nil || !bytes.Equal(pubPoint.Bytes(), s.PublicKey) {
+	if !s.PublicKey.IsValidKey() {
 		return fmt.Errorf("MegolmSessionExport.Decode: invalid Ed25519 public key")
 	}
 	return nil
