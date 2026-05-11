@@ -50,13 +50,13 @@ func (a *AESSHA2) MAC(ciphertext []byte) ([]byte, error) {
 	return hash.Sum(nil), err
 }
 
-func (a *AESSHA2) VerifyMAC(ciphertext, theirMAC []byte, minLength int) (bool, error) {
-	if len(theirMAC) < minLength {
-		return false, fmt.Errorf("MAC too short: %d < %d", len(theirMAC), minLength)
+func (a *AESSHA2) VerifyMAC(ciphertext, theirMAC []byte, macLength int) (bool, error) {
+	if macLength > 32 {
+		panic(fmt.Sprintf("invalid mac length: %d", macLength))
+	} else if len(theirMAC) != macLength {
+		return false, fmt.Errorf("unexpected input MAC length: %d != %d", len(theirMAC), macLength)
 	} else if mac, err := a.MAC(ciphertext); err != nil {
 		return false, err
-	} else if len(theirMAC) > len(mac) {
-		return false, fmt.Errorf("MAC too long: %d > %d (min: %d)", len(theirMAC), len(mac), minLength)
 	} else {
 		return hmac.Equal(mac[:len(theirMAC)], theirMAC), nil
 	}
