@@ -39,16 +39,15 @@ func Unpickle(key, input []byte) ([]byte, error) {
 		return nil, fmt.Errorf("decrypt pickle: input too short")
 	}
 	ciphertext, mac := ciphertext[:len(ciphertext)-pickleMACLength], ciphertext[len(ciphertext)-pickleMACLength:]
-	if c, err := aessha2.NewAESSHA2(key, kdfPickle); err != nil {
+	if len(ciphertext)%aes.BlockSize != 0 {
+		return nil, fmt.Errorf("decrypt pickle: ciphertext length %d not a multiple of block size", len(ciphertext))
+	} else if c, err := aessha2.NewAESSHA2(key, kdfPickle); err != nil {
 		return nil, err
 	} else if verified, err := c.VerifyMAC(ciphertext, mac, pickleMACLength); err != nil {
 		return nil, err
 	} else if !verified {
 		return nil, fmt.Errorf("decrypt pickle: %w", olm.ErrBadMAC)
 	} else {
-		// Set to next block size
-		targetCipherText := make([]byte, int(len(ciphertext)/aes.BlockSize)*aes.BlockSize)
-		copy(targetCipherText, ciphertext)
-		return c.Decrypt(targetCipherText)
+		return c.Decrypt(ciphertext)
 	}
 }

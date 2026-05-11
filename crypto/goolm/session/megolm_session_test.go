@@ -164,7 +164,9 @@ func TestOutbountPickle(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, pickledDataFromLibOlm, newPickled)
 
-	pickledDataFromLibOlm = append(pickledDataFromLibOlm, []byte("a")...)
+	pickledDataFromLibOlm[len(pickledDataFromLibOlm)-1] = 'a'
+	pickledDataFromLibOlm[len(pickledDataFromLibOlm)-2] = 'b'
+	pickledDataFromLibOlm[len(pickledDataFromLibOlm)-3] = 'c'
 	_, err = session.MegolmOutboundSessionFromPickled(pickledDataFromLibOlm, pickleKey)
 	assert.ErrorIs(t, err, olm.ErrBadMAC)
 }
