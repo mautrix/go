@@ -3,6 +3,7 @@ package message
 import (
 	"fmt"
 	"io"
+	"math"
 
 	"maunium.net/go/mautrix/crypto/goolm/aessha2"
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
@@ -58,6 +59,10 @@ func (r *Message) Decode(input []byte) (err error) {
 			if value, err := decoder.ReadVarInt(); err != nil {
 				return err
 			} else if curKey == counterTag {
+				// TODO add support for 64-bit counters like vodozemac
+				if value > math.MaxUint32 {
+					return fmt.Errorf("Message.Decode: counter value %d exceeds uint32 limit", value)
+				}
 				r.Counter = uint32(value)
 				r.HasCounter = true
 			}
