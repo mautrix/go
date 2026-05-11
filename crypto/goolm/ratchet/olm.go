@@ -316,6 +316,8 @@ func (r *Ratchet) UnpickleLibOlm(decoder *libolmpickle.Decoder, includesChainInd
 	senderChainsCount, err := decoder.ReadUInt32()
 	if err != nil {
 		return err
+	} else if senderChainsCount > 1000 {
+		return fmt.Errorf("Ratchet.UnpickleLibOlm: too many sender chains: %d", senderChainsCount)
 	}
 
 	for i := uint32(0); i < senderChainsCount; i++ {
@@ -335,6 +337,8 @@ func (r *Ratchet) UnpickleLibOlm(decoder *libolmpickle.Decoder, includesChainInd
 	receiverChainCount, err := decoder.ReadUInt32()
 	if err != nil {
 		return err
+	} else if receiverChainCount > 1000 {
+		return fmt.Errorf("Ratchet.UnpickleLibOlm: too many receiver chains: %d", receiverChainCount)
 	}
 	r.ReceiverChains = make([]receiverChain, receiverChainCount)
 	for i := uint32(0); i < receiverChainCount; i++ {
@@ -342,16 +346,24 @@ func (r *Ratchet) UnpickleLibOlm(decoder *libolmpickle.Decoder, includesChainInd
 			return err
 		}
 	}
+	if len(r.ReceiverChains) > maxReceiverChains {
+		r.ReceiverChains = r.ReceiverChains[:maxReceiverChains]
+	}
 
 	skippedMessageKeysCount, err := decoder.ReadUInt32()
 	if err != nil {
 		return err
+	} else if skippedMessageKeysCount > 1000 {
+		return fmt.Errorf("Ratchet.UnpickleLibOlm: too many skipped message keys: %d", skippedMessageKeysCount)
 	}
 	r.SkippedMessageKeys = make([]skippedMessageKey, skippedMessageKeysCount)
 	for i := uint32(0); i < skippedMessageKeysCount; i++ {
 		if err := r.SkippedMessageKeys[i].UnpickleLibOlm(decoder); err != nil {
 			return err
 		}
+	}
+	if len(r.SkippedMessageKeys) > maxSkippedMessageKeys {
+		r.SkippedMessageKeys = r.SkippedMessageKeys[len(r.SkippedMessageKeys)-maxSkippedMessageKeys:]
 	}
 
 	// pickle version 0x80000001 includes a chain index; pickle version 1 does not.
