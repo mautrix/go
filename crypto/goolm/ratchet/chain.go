@@ -170,10 +170,9 @@ func (m *messageKey) UnpickleLibOlm(decoder *libolmpickle.Decoder) (err error) {
 
 // PickleLibOlm pickles the message key into the encoder.
 func (m messageKey) PickleLibOlm(encoder *libolmpickle.Encoder) {
-	if len(m.Key) == messageKeyLength {
-		encoder.Write(m.Key)
-	} else {
-		encoder.WriteEmptyBytes(messageKeyLength)
+	if len(m.Key) != messageKeyLength {
+		panic("messageKey.PickleLibOlm: key length is not 32 bytes")
 	}
+	encoder.Write(m.Key)
 	encoder.WriteUInt32(m.Index)
 }

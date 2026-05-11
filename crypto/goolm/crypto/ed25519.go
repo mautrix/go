@@ -76,7 +76,7 @@ func (c Ed25519KeyPair) PickleLibOlm(encoder *libolmpickle.Encoder) {
 func (c *Ed25519KeyPair) UnpickleLibOlm(decoder *libolmpickle.Decoder) error {
 	if err := c.PublicKey.UnpickleLibOlm(decoder); err != nil {
 		return err
-	} else if privKey, err := decoder.ReadBytes(ed25519.PrivateKeySize); err != nil {
+	} else if privKey, err := decoder.ReadBytesOrNil(ed25519.PrivateKeySize); err != nil {
 		return err
 	} else {
 		c.PrivateKey = privKey
@@ -152,7 +152,7 @@ func (c Ed25519PublicKey) PickleLibOlm(encoder *libolmpickle.Encoder) {
 // UnpickleLibOlm unpickles the unencryted value and populates the public key
 // accordingly.
 func (c *Ed25519PublicKey) UnpickleLibOlm(decoder *libolmpickle.Decoder) error {
-	key, err := decoder.ReadBytes(ed25519.PublicKeySize)
+	key, err := decoder.ReadBytesOrNil(ed25519.PublicKeySize)
 	*c = key
 	return err
 }
