@@ -3,6 +3,7 @@ package message
 import (
 	"fmt"
 	"io"
+	"math"
 
 	"maunium.net/go/mautrix/crypto/goolm/aessha2"
 	"maunium.net/go/mautrix/crypto/goolm/crypto"
@@ -54,6 +55,9 @@ func (r *GroupMessage) Decode(input []byte) (err error) {
 			if value, err := decoder.ReadVarInt(); err != nil {
 				return err
 			} else if curKey == messageIndexTag {
+				if value > math.MaxUint32 {
+					return fmt.Errorf("GroupMessage.Decode: message index %d exceeds uint32 limit", value)
+				}
 				r.MessageIndex = uint32(value)
 				r.HasMessageIndex = true
 			}
