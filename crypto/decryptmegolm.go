@@ -108,7 +108,7 @@ func (mach *OlmMachine) DecryptMegolmEvent(ctx context.Context, evt *event.Event
 	if sess.SigningKey == ownSigningKey && sess.SenderKey == ownIdentityKey && len(sess.ForwardingChains) == 0 {
 		trustLevel = id.TrustStateVerified
 	} else {
-		if mach.DisableDecryptKeyFetching {
+		if mach.DisableDecryptKeyFetching || !mach.keyFetchAttempted.Add(userSenderKeyTuple{evt.Sender, sess.SenderKey}) {
 			device, err = mach.CryptoStore.FindDeviceByKey(ctx, evt.Sender, sess.SenderKey)
 		} else {
 			device, err = mach.GetOrFetchDeviceByKey(ctx, evt.Sender, sess.SenderKey)

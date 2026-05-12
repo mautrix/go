@@ -83,13 +83,14 @@ func (mach *OlmMachine) EncryptToDevices(ctx context.Context, eventType event.Ty
 
 func (mach *OlmMachine) encryptOlmEvent(ctx context.Context, session *OlmSession, recipient *id.Device, evtType event.Type, content event.Content) *event.EncryptedEventContent {
 	evt := &DecryptedOlmEvent{
-		Sender:        mach.Client.UserID,
-		SenderDevice:  mach.Client.DeviceID,
-		Keys:          OlmEventKeys{Ed25519: mach.account.SigningKey()},
-		Recipient:     recipient.UserID,
-		RecipientKeys: OlmEventKeys{Ed25519: recipient.SigningKey},
-		Type:          evtType,
-		Content:       content,
+		Sender:           mach.Client.UserID,
+		SenderDeviceID:   mach.Client.DeviceID,
+		SenderDeviceKeys: mach.getKeysForOlmMessage(ctx),
+		Keys:             OlmEventKeys{Ed25519: mach.account.SigningKey()},
+		Recipient:        recipient.UserID,
+		RecipientKeys:    OlmEventKeys{Ed25519: recipient.SigningKey},
+		Type:             evtType,
+		Content:          content,
 	}
 	plaintext, err := json.Marshal(evt)
 	if err != nil {

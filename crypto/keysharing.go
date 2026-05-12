@@ -179,7 +179,7 @@ func (mach *OlmMachine) importForwardedRoomKey(ctx context.Context, evt *Decrypt
 	}
 	igs := &InboundGroupSession{
 		Internal:         igsInternal,
-		SigningKey:       evt.Keys.Ed25519,
+		SigningKey:       content.SenderClaimedKey,
 		SenderKey:        content.SenderKey,
 		RoomID:           content.RoomID,
 		ForwardingChains: append(content.ForwardingKeyChain, evt.SenderKey.String()),
