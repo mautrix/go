@@ -110,32 +110,19 @@ func (mach *OlmMachine) HandleSecretRequest(ctx context.Context, userID id.UserI
 		return
 	}
 
-	keys, err := mach.CryptoStore.GetCrossSigningKeys(ctx, mach.Client.UserID)
-	if err != nil {
-		log.Err(err).Msg("Failed to get cross signing keys from crypto store")
-		return
-	}
-
-	crossSigningKey, ok := keys[id.XSUsageSelfSigning]
-	if !ok {
-		log.Warn().Msg("Couldn't find self signing key to verify requesting device")
-		return
-	}
-
 	device, err := mach.GetOrFetchDevice(ctx, mach.Client.UserID, content.RequestingDeviceID)
 	if err != nil {
 		log.Err(err).Msg("Failed to get or fetch requesting device")
 		return
 	}
-
-	verified, err := mach.CryptoStore.IsKeySignedBy(ctx, mach.Client.UserID, device.SigningKey, mach.Client.UserID, crossSigningKey.Key)
+	trust, err := mach.ResolveTrustContext(ctx, device)
 	if err != nil {
 		log.Err(err).Msg("Failed to check if requesting device is verified")
 		return
 	}
 
-	if !verified {
-		log.Warn().Msg("Requesting device is not verified, ignoring request")
+	if trust < id.TrustStateCrossSignedVerified {
+		log.Warn().Stringer("trust_level", trust).Msg("Requesting device is not verified, ignoring request")
 		return
 	}
 

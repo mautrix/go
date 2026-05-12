@@ -96,11 +96,22 @@ func (mach *OlmMachine) GetCachedDevices(ctx context.Context, userID id.UserID) 
 	}
 	if userID == mach.Client.UserID {
 		if ownKeys != nil && ownKeys.MasterKey == theirMasterKey.Key {
-			resp.MasterKeySignedByUs, err = mach.CryptoStore.IsKeySignedBy(ctx, userID, theirMasterKey.Key, userID, mach.OwnIdentity().SigningKey)
+			resp.MasterKeySignedByUs, _, _, err = mach.GetOwnCrossSigningVerificationStatus(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("failed to check if own cross-signing keys are trusted: %w", err)
+			}
 		}
 	} else if ownUserSigningKey != "" && theirMasterKey.Key != "" {
-		// TODO should own master key and user-signing key signatures be checked here too?
 		resp.MasterKeySignedByUs, err = mach.CryptoStore.IsKeySignedBy(ctx, userID, theirMasterKey.Key, mach.Client.UserID, ownUserSigningKey)
+		if resp.MasterKeySignedByUs {
+			ownMKTrusted, _, ownUSKTrusted, err := mach.GetOwnCrossSigningVerificationStatus(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("failed to check if own cross-signing keys are trusted: %w", err)
+			} else if !ownMKTrusted || !ownUSKTrusted {
+				// TODO log warning?
+				resp.MasterKeySignedByUs = false
+			}
+		}
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to check if user is trusted: %w", err)

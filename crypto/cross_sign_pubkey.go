@@ -20,6 +20,39 @@ type CrossSigningPublicKeysCache struct {
 	UserSigningKey id.Ed25519
 }
 
+func (mach *OlmMachine) GetOwnCrossSigningVerificationStatus(ctx context.Context) (masterKeyVerified, selfSigningKeyVerified, userSigningKeyVerified bool, err error) {
+	var pubkeys *CrossSigningPublicKeysCache
+	pubkeys, err = mach.GetOwnCrossSigningPublicKeys(ctx)
+	if err != nil || pubkeys == nil {
+		return
+	}
+	// If we have the private keys, it means we trust the public keys too
+	if mach.CrossSigningKeys != nil && *mach.CrossSigningKeys.PublicKeys() == *pubkeys {
+		return true, true, true, nil
+	}
+	masterKeyVerified, err = mach.CryptoStore.IsKeySignedBy(
+		ctx, mach.Client.UserID, pubkeys.MasterKey, mach.Client.UserID, mach.account.SigningKey(),
+	)
+	if err != nil {
+		err = fmt.Errorf("failed to check if master key is signed by current device key: %w", err)
+		return
+	}
+	selfSigningKeyVerified, err = mach.CryptoStore.IsKeySignedBy(
+		ctx, mach.Client.UserID, pubkeys.SelfSigningKey, mach.Client.UserID, pubkeys.MasterKey,
+	)
+	if err != nil {
+		err = fmt.Errorf("failed to check if self-signing key is signed by master key: %w", err)
+		return
+	}
+	userSigningKeyVerified, err = mach.CryptoStore.IsKeySignedBy(
+		ctx, mach.Client.UserID, pubkeys.UserSigningKey, mach.Client.UserID, pubkeys.MasterKey,
+	)
+	if err != nil {
+		err = fmt.Errorf("failed to check if user-signing key is signed by master key: %w", err)
+	}
+	return
+}
+
 func (mach *OlmMachine) GetOwnVerificationStatus(ctx context.Context) (hasKeys, isVerified bool, err error) {
 	var pubkeys *CrossSigningPublicKeysCache
 	pubkeys, err = mach.GetOwnCrossSigningPublicKeys(ctx)

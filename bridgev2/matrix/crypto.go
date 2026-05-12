@@ -172,7 +172,18 @@ func (helper *CryptoHelper) doSelfSign(ctx context.Context) bool {
 		log.WithLevel(zerolog.FatalLevel).Err(err).Msg("Failed to check verification status")
 		return false
 	}
-	log.Debug().Bool("has_keys", hasKeys).Bool("is_verified", isVerified).Msg("Checked verification status")
+	mkVerified, sskVerified, uskVerified, err := helper.mach.GetOwnCrossSigningVerificationStatus(ctx)
+	if err != nil {
+		log.WithLevel(zerolog.FatalLevel).Err(err).Msg("Failed to check cross-signing key verification status")
+		return false
+	}
+	log.Debug().
+		Bool("has_keys", hasKeys).
+		Bool("device_verified", isVerified).
+		Bool("mk_verified", mkVerified).
+		Bool("usk_verified", uskVerified).
+		Bool("ssk_verified", sskVerified).
+		Msg("Checked verification status")
 	keyInDB := helper.bridge.Bridge.DB.KV.Get(ctx, database.KeyRecoveryKey)
 	if !hasKeys || keyInDB == "overwrite" {
 		if keyInDB != "" && keyInDB != "overwrite" {
@@ -189,7 +200,7 @@ func (helper *CryptoHelper) doSelfSign(ctx context.Context) bool {
 			return false
 		}
 		log.Info().Msg("Generated new recovery key and self-signed bot device")
-	} else if !isVerified {
+	} else if !isVerified || !mkVerified {
 		if keyInDB == "" {
 			log.WithLevel(zerolog.FatalLevel).
 				Msg("Server already has cross-signing keys, but no key in database. Add `recovery_key` to `kv_store`, or set it to `overwrite` to generate new keys.")
