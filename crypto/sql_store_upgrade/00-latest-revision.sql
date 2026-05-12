@@ -1,4 +1,4 @@
--- v0 -> v19 (compatible with v15+): Latest revision
+-- v0 -> v20 (compatible with v20+): Latest revision
 CREATE TABLE IF NOT EXISTS crypto_account (
 	account_id         TEXT    PRIMARY KEY,
 	device_id          TEXT    NOT NULL,
@@ -9,12 +9,11 @@ CREATE TABLE IF NOT EXISTS crypto_account (
 );
 
 CREATE TABLE IF NOT EXISTS crypto_message_index (
-	sender_key CHAR(43),
 	session_id CHAR(43),
 	"index"    INTEGER,
 	event_id   TEXT   NOT NULL,
 	timestamp  BIGINT NOT NULL,
-	PRIMARY KEY (sender_key, session_id, "index")
+	PRIMARY KEY (session_id, "index")
 );
 
 CREATE TABLE IF NOT EXISTS crypto_tracked_user (

@@ -668,13 +668,13 @@ func (store *SQLCryptoStore) IsOutboundGroupSessionShared(ctx context.Context, u
 
 // ValidateMessageIndex returns whether the given event information match the ones stored in the database
 // for the given sender key, session ID and index. If the index hasn't been stored, this will store it.
-func (store *SQLCryptoStore) ValidateMessageIndex(ctx context.Context, senderKey id.SenderKey, sessionID id.SessionID, eventID id.EventID, index uint, timestamp int64) (bool, error) {
+func (store *SQLCryptoStore) ValidateMessageIndex(ctx context.Context, sessionID id.SessionID, eventID id.EventID, index uint, timestamp int64) (bool, error) {
 	if eventID == "" && timestamp == 0 {
 		var notOK bool
 		const validateEmptyQuery = `
-		SELECT EXISTS(SELECT 1 FROM crypto_message_index WHERE sender_key=$1 AND session_id=$2 AND "index"=$3)
+		SELECT EXISTS(SELECT 1 FROM crypto_message_index WHERE session_id=$1 AND "index"=$2)
 		`
-		err := store.DB.QueryRow(ctx, validateEmptyQuery, senderKey, sessionID, index).Scan(&notOK)
+		err := store.DB.QueryRow(ctx, validateEmptyQuery, sessionID, index).Scan(&notOK)
 		if notOK {
 			zerolog.Ctx(ctx).Debug().
 				Uint("message_index", index).
@@ -684,15 +684,15 @@ func (store *SQLCryptoStore) ValidateMessageIndex(ctx context.Context, senderKey
 	}
 
 	const validateQuery = `
-	INSERT INTO crypto_message_index (sender_key, session_id, "index", event_id, timestamp)
-	VALUES ($1, $2, $3, $4, $5)
+	INSERT INTO crypto_message_index (session_id, "index", event_id, timestamp)
+	VALUES ($1, $2, $3, $4)
 	-- have to update something so that RETURNING * always returns the row
-	ON CONFLICT (sender_key, session_id, "index") DO UPDATE SET sender_key=excluded.sender_key
+	ON CONFLICT (session_id, "index") DO UPDATE SET timestamp=crypto_message_index.timestamp
 	RETURNING event_id, timestamp
 	`
 	var expectedEventID id.EventID
 	var expectedTimestamp int64
-	err := store.DB.QueryRow(ctx, validateQuery, senderKey, sessionID, index, eventID, timestamp).Scan(&expectedEventID, &expectedTimestamp)
+	err := store.DB.QueryRow(ctx, validateQuery, sessionID, index, eventID, timestamp).Scan(&expectedEventID, &expectedTimestamp)
 	if err != nil {
 		return false, err
 	} else if expectedEventID != eventID || expectedTimestamp != timestamp {

@@ -73,35 +73,33 @@ func TestValidateMessageIndex(t *testing.T) {
 	stores := getCryptoStores(t)
 	for storeName, store := range stores {
 		t.Run(storeName, func(t *testing.T) {
-			acc := NewOlmAccount()
-
 			// Validating without event ID and timestamp before we have them should work
-			ok, err := store.ValidateMessageIndex(context.TODO(), acc.IdentityKey(), "sess1", "", 0, 0)
+			ok, err := store.ValidateMessageIndex(context.TODO(), "sess1", "", 0, 0)
 			require.NoError(t, err, "Error validating message index")
 			assert.True(t, ok, "First message validation should be valid")
 
 			// First message should validate successfully
-			ok, err = store.ValidateMessageIndex(context.TODO(), acc.IdentityKey(), "sess1", "event1", 0, 1000)
+			ok, err = store.ValidateMessageIndex(context.TODO(), "sess1", "event1", 0, 1000)
 			require.NoError(t, err, "Error validating message index")
 			assert.True(t, ok, "First message validation should be valid")
 
 			// Edit the timestamp and ensure validate fails
-			ok, err = store.ValidateMessageIndex(context.TODO(), acc.IdentityKey(), "sess1", "event1", 0, 1001)
+			ok, err = store.ValidateMessageIndex(context.TODO(), "sess1", "event1", 0, 1001)
 			require.NoError(t, err, "Error validating message index after timestamp change")
 			assert.False(t, ok, "First message validation should fail after timestamp change")
 
 			// Edit the event ID and ensure validate fails
-			ok, err = store.ValidateMessageIndex(context.TODO(), acc.IdentityKey(), "sess1", "event2", 0, 1000)
+			ok, err = store.ValidateMessageIndex(context.TODO(), "sess1", "event2", 0, 1000)
 			require.NoError(t, err, "Error validating message index after event ID change")
 			assert.False(t, ok, "First message validation should fail after event ID change")
 
 			// Validate again with the original parameters and ensure that it still passes
-			ok, err = store.ValidateMessageIndex(context.TODO(), acc.IdentityKey(), "sess1", "event1", 0, 1000)
+			ok, err = store.ValidateMessageIndex(context.TODO(), "sess1", "event1", 0, 1000)
 			require.NoError(t, err, "Error validating message index")
 			assert.True(t, ok, "First message validation should be valid")
 
 			// Validating without event ID and timestamp must fail if we already know them
-			ok, err = store.ValidateMessageIndex(context.TODO(), acc.IdentityKey(), "sess1", "", 0, 0)
+			ok, err = store.ValidateMessageIndex(context.TODO(), "sess1", "", 0, 0)
 			require.NoError(t, err, "Error validating message index")
 			assert.False(t, ok, "First message validation should be invalid")
 		})

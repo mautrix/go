@@ -110,13 +110,13 @@ type Store interface {
 
 	// ValidateMessageIndex validates that the given message details aren't from a replay attack.
 	//
-	// Implementations should store a map from (senderKey, sessionID, index) to (eventID, timestamp), then use that map
+	// Implementations should store a map from (sessionID, index) to (eventID, timestamp), then use that map
 	// to check whether or not the message index is valid:
 	//
 	// * If the map key doesn't exist, the given values should be stored and this should return true.
 	// * If the map key exists and the stored values match the given values, this should return true.
 	// * If the map key exists, but the stored values do not match the given values, this should return false.
-	ValidateMessageIndex(ctx context.Context, senderKey id.SenderKey, sessionID id.SessionID, eventID id.EventID, index uint, timestamp int64) (bool, error)
+	ValidateMessageIndex(ctx context.Context, sessionID id.SessionID, eventID id.EventID, index uint, timestamp int64) (bool, error)
 
 	// GetDevices returns a map from device ID to id.Device struct containing all devices of a given user.
 	GetDevices(context.Context, id.UserID) (map[id.DeviceID]*id.Device, error)
@@ -158,7 +158,6 @@ type Store interface {
 }
 
 type messageIndexKey struct {
-	SenderKey id.SenderKey
 	SessionID id.SessionID
 	Index     uint
 }
@@ -515,11 +514,10 @@ func (gs *MemoryStore) IsOutboundGroupSessionShared(_ context.Context, userID id
 	return
 }
 
-func (gs *MemoryStore) ValidateMessageIndex(_ context.Context, senderKey id.SenderKey, sessionID id.SessionID, eventID id.EventID, index uint, timestamp int64) (bool, error) {
+func (gs *MemoryStore) ValidateMessageIndex(_ context.Context, sessionID id.SessionID, eventID id.EventID, index uint, timestamp int64) (bool, error) {
 	gs.lock.Lock()
 	defer gs.lock.Unlock()
 	key := messageIndexKey{
-		SenderKey: senderKey,
 		SessionID: sessionID,
 		Index:     index,
 	}
