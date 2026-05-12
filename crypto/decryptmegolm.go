@@ -108,7 +108,7 @@ func (mach *OlmMachine) DecryptMegolmEvent(ctx context.Context, evt *event.Event
 	if sess.KeySource == id.KeySourceBackup || sess.KeySource == id.KeySourceImport {
 		// Key backup is currently not trusted, so use a special trust level for it.
 		trustLevel = id.TrustStateBackup
-	} else if sess.SigningKey == ownSigningKey && sess.SenderKey == ownIdentityKey && len(sess.ForwardingChains) == 0 {
+	} else if sess.SigningKey == ownSigningKey && sess.SenderKey == ownIdentityKey && sess.KeySource == id.KeySourceDirect && len(sess.ForwardingChains) == 0 {
 		trustLevel = id.TrustStateVerified
 	} else {
 		if mach.DisableDecryptKeyFetching || !mach.keyFetchAttempted.Add(userSenderKeyTuple{evt.Sender, sess.SenderKey}) {
