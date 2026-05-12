@@ -49,6 +49,9 @@ func (mach *OlmMachine) storeCrossSigningKeys(ctx context.Context, crossSigningK
 		for _, key := range userKeys.Keys {
 			log := log.With().Stringer("key", key).Array("usages", exzerolog.ArrayOfStrs(userKeys.Usage)).Logger()
 			for _, usage := range userKeys.Usage {
+				// Note: we store keys before verification, but that's fine because the presence of keys in the table
+				// doesn't imply it's trusted. All code paths that want trusted keys will also check the signature table.
+				// Also, PutCrossSigningKey will not overwrite the first seen key.
 				log.Trace().Str("usage", string(usage)).Msg("Storing cross-signing key")
 				if err = mach.CryptoStore.PutCrossSigningKey(ctx, userID, usage, key); err != nil {
 					log.Error().Err(err).Msg("Error storing cross-signing key")
