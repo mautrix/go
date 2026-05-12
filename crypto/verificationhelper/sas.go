@@ -24,6 +24,7 @@ import (
 	"golang.org/x/crypto/hkdf"
 	"golang.org/x/exp/slices"
 
+	"maunium.net/go/mautrix/crypto"
 	"maunium.net/go/mautrix/crypto/canonicaljson"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -718,10 +719,15 @@ func (vh *VerificationHelper) onVerificationMAC(ctx context.Context, txn Verific
 			}
 			key = theirDevice.SigningKey.String()
 		} else { // This is the master key
-			crossSigningKeys, err := vh.mach.GetOwnCrossSigningPublicKeys(ctx)
+			var crossSigningKeys *crypto.CrossSigningPublicKeysCache
+			if txn.TheirUserID == vh.client.UserID {
+				crossSigningKeys, err = vh.mach.GetOwnCrossSigningPublicKeys(ctx)
+			} else {
+				crossSigningKeys, err = vh.mach.GetCrossSigningPublicKeys(ctx, txn.TheirUserID)
+			}
 			if crossSigningKeys == nil {
 				if err != nil {
-					log.Err(err).Msg("Failed to get own cross-signing public keys")
+					log.Err(err).Msg("Failed to get cross-signing public keys")
 				}
 				vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUser, "cross-signing keys not found")
 				return
