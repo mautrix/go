@@ -369,12 +369,17 @@ func (mach *OlmMachine) validateDevice(userID id.UserID, deviceID id.DeviceID, d
 		}
 	}
 
+	// This trust state doesn't matter much as most trust happens through cross-signing, but preserve it anyway.
+	trust := id.TrustStateUnset
+	if existing != nil {
+		trust = existing.Trust
+	}
 	return &id.Device{
 		UserID:      userID,
 		DeviceID:    deviceID,
 		IdentityKey: identityKey,
 		SigningKey:  signingKey,
-		Trust:       id.TrustStateUnset,
+		Trust:       trust,
 		Name:        name,
 		Deleted:     false,
 	}, nil
