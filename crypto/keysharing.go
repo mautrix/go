@@ -381,6 +381,12 @@ func (mach *OlmMachine) HandleRoomKeyRequest(ctx context.Context, sender id.User
 }
 
 func (mach *OlmMachine) HandleBeeperRoomKeyAck(ctx context.Context, sender id.UserID, content *event.BeeperRoomKeyAckEventContent) {
+	// Room key acks are only used on Beeper. The server will send an ack when the user uploads a key to key backup.
+	// No special authentication is needed. The server is single-tenant, so DoS isn't a concern.
+	// On any other servers, don't do anything.
+	if !mach.DeleteOutboundKeysOnAck {
+		return
+	}
 	log := mach.machOrContextLog(ctx).With().
 		Str("room_id", content.RoomID.String()).
 		Str("session_id", content.SessionID.String()).
@@ -405,7 +411,7 @@ func (mach *OlmMachine) HandleBeeperRoomKeyAck(ctx context.Context, sender id.Us
 		Logger()
 
 	isInbound := sess.SenderKey == mach.OwnIdentity().IdentityKey
-	if isInbound && mach.DeleteOutboundKeysOnAck && content.FirstMessageIndex == 0 {
+	if isInbound && content.FirstMessageIndex == 0 {
 		log.Debug().Msg("Redacting inbound copy of outbound group session after ack")
 		err = mach.CryptoStore.RedactGroupSession(ctx, content.RoomID, content.SessionID, "outbound session acked")
 		if err != nil {
