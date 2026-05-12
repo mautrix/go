@@ -92,3 +92,6 @@ jobs:
         run: |
           rm -rf crypto/libolm
           go build -tags=goolm -v ./...
+
+      - name: Test
+        run: go test -tags=goolm -json -v ./... 2>&1 | gotestfmt
