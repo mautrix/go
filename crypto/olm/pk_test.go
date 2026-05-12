@@ -6,6 +6,8 @@
 
 // Only run this test if goolm is disabled (that is, libolm is used).
 
+//go:build !goolm
+
 package olm_test
 
 import (

@@ -1,3 +1,5 @@
+//go:build !goolm
+
 package olm_test
 
 import (
