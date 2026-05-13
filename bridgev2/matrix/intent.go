@@ -63,7 +63,7 @@ func (as *ASIntent) SendMessage(ctx context.Context, roomID id.RoomID, eventType
 		if ok && eventType == event.EventMessage {
 			msgContent.AddPerMessageProfileFallback()
 		}
-		if encrypted, err := as.Matrix.StateStore.IsEncrypted(ctx, roomID); err != nil {
+		if encrypted, err := as.Connector.isEncrypted(ctx, roomID); err != nil {
 			return nil, fmt.Errorf("failed to check if room is encrypted: %w", err)
 		} else if encrypted {
 			if as.Connector.Crypto == nil {
@@ -271,7 +271,7 @@ func (as *ASIntent) UploadMedia(ctx context.Context, roomID id.RoomID, data []by
 	}
 	if roomID != "" {
 		var encrypted bool
-		if encrypted, err = as.Matrix.StateStore.IsEncrypted(ctx, roomID); err != nil {
+		if encrypted, err = as.Connector.isEncrypted(ctx, roomID); err != nil {
 			err = fmt.Errorf("failed to check if room is encrypted: %w", err)
 			return
 		} else if encrypted {
@@ -336,7 +336,7 @@ func (as *ASIntent) UploadMediaStream(
 	}
 	if roomID != "" {
 		var encrypted bool
-		if encrypted, err = as.Matrix.StateStore.IsEncrypted(ctx, roomID); err != nil {
+		if encrypted, err = as.Connector.isEncrypted(ctx, roomID); err != nil {
 			err = fmt.Errorf("failed to check if room is encrypted: %w", err)
 			return
 		} else if encrypted {

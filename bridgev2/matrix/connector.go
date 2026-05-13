@@ -699,8 +699,15 @@ func (br *Connector) GetUniqueBridgeID() string {
 	return fmt.Sprintf("%s/%s", br.Config.Homeserver.Domain, br.Config.AppService.ID)
 }
 
+func (br *Connector) isEncrypted(ctx context.Context, roomID id.RoomID) (bool, error) {
+	if br.Config.Encryption.Require {
+		return true, nil
+	}
+	return br.StateStore.IsEncrypted(ctx, roomID)
+}
+
 func (br *Connector) BatchSend(ctx context.Context, roomID id.RoomID, req *mautrix.ReqBeeperBatchSend, extras []*bridgev2.MatrixSendExtra) (*mautrix.RespBeeperBatchSend, error) {
-	if encrypted, err := br.StateStore.IsEncrypted(ctx, roomID); err != nil {
+	if encrypted, err := br.isEncrypted(ctx, roomID); err != nil {
 		return nil, fmt.Errorf("failed to check if room is encrypted: %w", err)
 	} else if encrypted {
 		for _, evt := range req.Events {
