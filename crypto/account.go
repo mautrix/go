@@ -7,7 +7,7 @@
 package crypto
 
 import (
-	"encoding/json"
+	"fmt"
 
 	"github.com/tidwall/sjson"
 
@@ -72,13 +72,18 @@ func (account *OlmAccount) IdentityKey() id.IdentityKey {
 // SignJSON signs the given JSON object following the Matrix specification:
 // https://matrix.org/docs/spec/appendices#signing-json
 func (account *OlmAccount) SignJSON(obj any) (string, error) {
-	objJSON, err := json.Marshal(obj)
+	objJSON, err := canonicaljson.Marshal(obj)
 	if err != nil {
 		return "", err
 	}
 	objJSON, _ = sjson.DeleteBytes(objJSON, "unsigned")
 	objJSON, _ = sjson.DeleteBytes(objJSON, "signatures")
-	signed, err := account.Internal.Sign(canonicaljson.CanonicalJSONAssumeValid(objJSON))
+	// This is probably not necessary
+	err = canonicaljson.Canonicalize(&objJSON)
+	if err != nil {
+		return "", fmt.Errorf("failed to canonicalize JSON after deleting unsigned and signatures: %w", err)
+	}
+	signed, err := account.Internal.Sign(objJSON)
 	return string(signed), err
 }
 

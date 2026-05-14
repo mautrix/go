@@ -126,7 +126,7 @@ type OldVerifyKey struct {
 }
 
 func (sk *SigningKey) SignJSON(data any) (string, error) {
-	marshaled, err := json.Marshal(data)
+	marshaled, err := canonicaljson.Marshal(data)
 	if err != nil {
 		return "", err
 	}
@@ -134,11 +134,15 @@ func (sk *SigningKey) SignJSON(data any) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return base64.RawStdEncoding.EncodeToString(sk.SignRawJSON(marshaled)), nil
+	err = canonicaljson.Canonicalize(&marshaled)
+	if err != nil {
+		return "", fmt.Errorf("failed to canonicalize JSON after deleting signatures: %w", err)
+	}
+	return base64.RawStdEncoding.EncodeToString(sk.SignCanonicalJSON(marshaled)), err
 }
 
-func (sk *SigningKey) SignRawJSON(data json.RawMessage) []byte {
-	return ed25519.Sign(sk.Priv, canonicaljson.CanonicalJSONAssumeValid(data))
+func (sk *SigningKey) SignCanonicalJSON(data json.RawMessage) []byte {
+	return ed25519.Sign(sk.Priv, data)
 }
 
 // GenerateKeyResponse generates a key response signed by this key with the given server name and optionally some old verify keys.

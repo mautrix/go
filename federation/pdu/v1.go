@@ -208,7 +208,7 @@ func (pdu *RoomV1PDU) VerifySignature(roomVersion id.RoomVersion, serverName str
 			return fmt.Errorf("failed to get key %s for %s: %w", keyID, serverName, err)
 		} else if key == "" {
 			return fmt.Errorf("key %s not found for %s", keyID, serverName)
-		} else if err = signutil.VerifyJSONRaw(key, sig, rawJSON); err != nil {
+		} else if err = signutil.VerifyJSONCanonical(key, sig, rawJSON); err != nil {
 			return fmt.Errorf("failed to verify signature from key %s: %w", keyID, err)
 		} else {
 			verified = true

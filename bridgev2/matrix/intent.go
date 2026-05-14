@@ -475,20 +475,16 @@ func dataToFields(data any) (map[string]json.RawMessage, error) {
 	if ok {
 		return fields, nil
 	}
-	d, err := json.Marshal(data)
+	d, err := canonicaljson.Marshal(data)
 	if err != nil {
 		return nil, err
 	}
-	d = canonicaljson.CanonicalJSONAssumeValid(d)
 	err = json.Unmarshal(d, &fields)
 	return fields, err
 }
 
 func marshalField(val any) json.RawMessage {
-	data, _ := json.Marshal(val)
-	if len(data) > 0 && (data[0] == '{' || data[0] == '[') {
-		return canonicaljson.CanonicalJSONAssumeValid(data)
-	}
+	data, _ := canonicaljson.Marshal(val)
 	return data
 }
 

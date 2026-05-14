@@ -33,14 +33,14 @@ func (ep *ExtraProfile) Set(key string, value any) error {
 	if key == "displayname" || key == "avatar_url" {
 		return fmt.Errorf("cannot set reserved profile key %q", key)
 	}
-	marshaled, err := json.Marshal(value)
+	marshaled, err := canonicaljson.Marshal(value)
 	if err != nil {
 		return err
 	}
 	if *ep == nil {
 		*ep = make(ExtraProfile)
 	}
-	(*ep)[key] = canonicaljson.CanonicalJSONAssumeValid(marshaled)
+	(*ep)[key] = marshaled
 	return nil
 }
 
@@ -49,11 +49,9 @@ func (ep *ExtraProfile) With(key string, value any) *ExtraProfile {
 	return ep
 }
 
-func canonicalizeIfObject(data json.RawMessage) json.RawMessage {
-	if len(data) > 0 && (data[0] == '{' || data[0] == '[') {
-		return canonicaljson.CanonicalJSONAssumeValid(data)
-	}
-	return data
+func canonicalize(data json.RawMessage) json.RawMessage {
+	canonicalized, _ := canonicaljson.Marshal(data)
+	return canonicalized
 }
 
 func (ep *ExtraProfile) CopyTo(dest *ExtraProfile) (changed bool) {
@@ -68,7 +66,7 @@ func (ep *ExtraProfile) CopyTo(dest *ExtraProfile) (changed bool) {
 			continue
 		}
 		existing, exists := (*dest)[key]
-		if !exists || !bytes.Equal(canonicalizeIfObject(existing), val) {
+		if !exists || !bytes.Equal(canonicalize(existing), val) {
 			(*dest)[key] = val
 			changed = true
 		}

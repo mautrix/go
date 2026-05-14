@@ -2,7 +2,7 @@ package pk
 
 import (
 	"crypto/rand"
-	"encoding/json"
+	"fmt"
 
 	"github.com/tidwall/sjson"
 
@@ -55,12 +55,17 @@ func (s Signing) Sign(message []byte) ([]byte, error) {
 // SignJSON creates a signature for the given object after encoding it to
 // canonical JSON.
 func (s Signing) SignJSON(obj any) (string, error) {
-	objJSON, err := json.Marshal(obj)
+	objJSON, err := canonicaljson.Marshal(obj)
 	if err != nil {
 		return "", err
 	}
 	objJSON, _ = sjson.DeleteBytes(objJSON, "unsigned")
 	objJSON, _ = sjson.DeleteBytes(objJSON, "signatures")
-	signature, err := s.Sign(canonicaljson.CanonicalJSONAssumeValid(objJSON))
+	// This is probably not necessary
+	err = canonicaljson.Canonicalize(&objJSON)
+	if err != nil {
+		return "", fmt.Errorf("failed to canonicalize JSON after deleting unsigned and signatures: %w", err)
+	}
+	signature, err := s.Sign(objJSON)
 	return string(signature), err
 }

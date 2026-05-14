@@ -23,6 +23,7 @@ import (
 	"go.mau.fi/util/jsontime"
 
 	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/crypto/canonicaljson"
 	"maunium.net/go/mautrix/federation/signutil"
 	"maunium.net/go/mautrix/id"
 )
@@ -607,11 +608,11 @@ type signableRequest struct {
 }
 
 func (r *signableRequest) Verify(key id.SigningKey, sig string) error {
-	message, err := json.Marshal(r)
+	message, err := canonicaljson.Marshal(r)
 	if err != nil {
 		return fmt.Errorf("failed to marshal data: %w", err)
 	}
-	return signutil.VerifyJSONRaw(key, sig, message)
+	return signutil.VerifyJSONCanonical(key, sig, message)
 }
 
 func (r *signableRequest) Sign(key *SigningKey) (string, error) {

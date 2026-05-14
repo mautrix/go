@@ -102,10 +102,10 @@ func TestRespCapabilities_UnmarshalJSON(t *testing.T) {
 }
 
 func TestRespCapabilities_MarshalJSON(t *testing.T) {
-	data, err := json.Marshal(&sampleObject)
+	marshaled, err := canonicaljson.Marshal(&sampleObject)
 	require.NoError(t, err)
-	marshaledString := string(canonicaljson.CanonicalJSONAssumeValid(data))
-	origString := string(canonicaljson.CanonicalJSONAssumeValid([]byte(sampleData)))
-	assert.Equal(t, marshaledString, origString)
+	origData := json.RawMessage(sampleData)
+	require.NoError(t, canonicaljson.Canonicalize(&origData))
+	assert.Equal(t, string(marshaled), string(origData))
 	assert.Len(t, sampleObject.Custom, 1)
 }

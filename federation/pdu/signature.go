@@ -54,7 +54,7 @@ func (pdu *PDU) VerifySignature(roomVersion id.RoomVersion, serverName string, g
 			errorList = append(errorList, fmt.Errorf("key %s not found for %s", keyID, serverName))
 		} else if validUntil.Before(originServerTS) && roomVersion.EnforceSigningKeyValidity() {
 			errorList = append(errorList, fmt.Errorf("key %s for %s is only valid until %s, but event is from %s", keyID, serverName, validUntil, originServerTS))
-		} else if err = signutil.VerifyJSONRaw(key, sig, rawJSON); err != nil {
+		} else if err = signutil.VerifyJSONCanonical(key, sig, rawJSON); err != nil {
 			return fmt.Errorf("failed to verify signature from key %s: %w", keyID, err)
 		} else {
 			verified = true

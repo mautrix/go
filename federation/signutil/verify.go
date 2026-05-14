@@ -7,6 +7,7 @@
 package signutil
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
@@ -28,10 +29,13 @@ func VerifyJSON(serverName string, keyID id.KeyID, key id.SigningKey, data any) 
 	var err error
 	message, ok := data.(json.RawMessage)
 	if !ok {
-		message, err = json.Marshal(data)
+		message, err = canonicaljson.Marshal(data)
 		if err != nil {
 			return fmt.Errorf("failed to marshal data: %w", err)
 		}
+	} else {
+		// Canonicalize later may mutate the data, so clone the input
+		message = bytes.Clone(message)
 	}
 	sigVal := gjson.GetBytes(message, exgjson.Path("signatures", serverName, string(keyID)))
 	if sigVal.Type != gjson.String {
@@ -45,17 +49,24 @@ func VerifyJSON(serverName string, keyID id.KeyID, key id.SigningKey, data any) 
 	if err != nil {
 		return fmt.Errorf("failed to delete unsigned: %w", err)
 	}
-	return VerifyJSONRaw(key, sigVal.Str, message)
+	err = canonicaljson.Canonicalize(&message)
+	if err != nil {
+		return fmt.Errorf("failed to canonicalize JSON after deleting signatures and unsigned: %w", err)
+	}
+	return VerifyJSONCanonical(key, sigVal.Str, message)
 }
 
 func VerifyJSONAny(key id.SigningKey, data any) error {
 	var err error
 	message, ok := data.(json.RawMessage)
 	if !ok {
-		message, err = json.Marshal(data)
+		message, err = canonicaljson.Marshal(data)
 		if err != nil {
 			return fmt.Errorf("failed to marshal data: %w", err)
 		}
+	} else {
+		// Canonicalize later may mutate the data, so clone the input
+		message = bytes.Clone(message)
 	}
 	sigs := gjson.GetBytes(message, "signatures")
 	if !sigs.IsObject() {
@@ -69,6 +80,10 @@ func VerifyJSONAny(key id.SigningKey, data any) error {
 	if err != nil {
 		return fmt.Errorf("failed to delete unsigned: %w", err)
 	}
+	err = canonicaljson.Canonicalize(&message)
+	if err != nil {
+		return fmt.Errorf("failed to canonicalize JSON after deleting signatures and unsigned: %w", err)
+	}
 	var validated bool
 	sigs.ForEach(func(_, value gjson.Result) bool {
 		if !value.IsObject() {
@@ -78,7 +93,7 @@ func VerifyJSONAny(key id.SigningKey, data any) error {
 			if value.Type != gjson.String {
 				return true
 			}
-			validated = VerifyJSONRaw(key, value.Str, message) == nil
+			validated = VerifyJSONCanonical(key, value.Str, message) == nil
 			return !validated
 		})
 		return !validated
@@ -89,7 +104,7 @@ func VerifyJSONAny(key id.SigningKey, data any) error {
 	return nil
 }
 
-func VerifyJSONRaw(key id.SigningKey, sig string, message json.RawMessage) error {
+func VerifyJSONCanonical(key id.SigningKey, sig string, message json.RawMessage) error {
 	sigBytes, err := base64.RawStdEncoding.DecodeString(sig)
 	if err != nil {
 		return fmt.Errorf("failed to decode signature: %w", err)
@@ -98,7 +113,6 @@ func VerifyJSONRaw(key id.SigningKey, sig string, message json.RawMessage) error
 	if err != nil {
 		return fmt.Errorf("failed to decode key: %w", err)
 	}
-	message = canonicaljson.CanonicalJSONAssumeValid(message)
 	if !ed25519.Verify(keyBytes, message, sigBytes) {
 		return ErrInvalidSignature
 	}

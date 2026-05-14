@@ -15,7 +15,6 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -259,11 +258,11 @@ func calculateCommitment(ephemeralPubKey *ecdh.PublicKey, txn VerificationTransa
 	// hashing it, but we are just stuck on that.
 	commitmentHashInput := sha256.New()
 	commitmentHashInput.Write([]byte(base64.RawStdEncoding.EncodeToString(ephemeralPubKey.Bytes())))
-	encodedStartEvt, err := json.Marshal(txn.StartEventContent)
+	encodedStartEvt, err := canonicaljson.Marshal(txn.StartEventContent)
 	if err != nil {
 		return nil, err
 	}
-	commitmentHashInput.Write(canonicaljson.CanonicalJSONAssumeValid(encodedStartEvt))
+	commitmentHashInput.Write(encodedStartEvt)
 	return commitmentHashInput.Sum(nil), nil
 }
 

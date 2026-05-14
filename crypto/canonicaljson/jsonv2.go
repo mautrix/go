@@ -229,3 +229,16 @@ func reorderObjectsAndValidate(d *jsontext.Decoder, buf []byte, scratch *[]byte)
 		return cmp.Or(err, fmt.Errorf("unexpected token: %s", tok))
 	}
 }
+
+// Deprecated: Use the new Canonicalize or Marshal functions
+func CanonicalJSONAssumeValid(input []byte) []byte {
+	out, _ := CanonicalJSON(input)
+	return out
+}
+
+// Deprecated: Use the new Canonicalize or Marshal functions
+func CanonicalJSON(input []byte) ([]byte, error) {
+	out := jsontext.Value(bytes.Clone(input))
+	err := Canonicalize(&out)
+	return out, err
+}
