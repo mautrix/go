@@ -1359,11 +1359,7 @@ func (cli *Client) State(roomID id.RoomID) (stateMap RoomStateMap, err error) {
 // GetMediaConfig fetches the configuration of the content repository, such as upload limitations.
 func (cli *Client) GetMediaConfig() (resp *RespMediaConfig, err error) {
 	var u string
-	if cli.SpecVersions.ContainsGreaterOrEqual(SpecV111) {
-		u = cli.BuildClientURL("v1", "media", "config")
-	} else {
-		u = cli.BuildURL(MediaURLPath{"v3", "config"})
-	}
+	u = cli.BuildClientURL("v1", "media", "config")
 	_, err = cli.MakeRequest("GET", u, nil, &resp)
 	return
 }
@@ -1460,7 +1456,7 @@ func (cli *Client) downloadContext(ctx context.Context, mxcURL id.ContentURI) (*
 		ctx = cli.Log.WithContext(ctx)
 	}
 	url := cli.GetDownloadURL(mxcURL)
-	authedMedia := cli.SpecVersions.ContainsGreaterOrEqual(SpecV111)
+	authedMedia := true
 	if authedMedia {
 		url = cli.BuildClientURL("v1", "media", "download", mxcURL.Homeserver, mxcURL.FileID)
 	}
