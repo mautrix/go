@@ -1,5 +1,7 @@
-## v0.27.1 (unreleased)
+## v0.28.0 (2026-05-16)
 
+* **Breaking change *(federation)*** Changed `NewClient` to take HTTP client
+  settings as an extra parameter.
 * *(federation)* Changed client to block requests to private IPs by default.
   * The `AllowIP` method can be changed to adjust the blocking behavior.
 * *(federation)* Added `DownloadMedia` method.
@@ -7,12 +9,26 @@
   fields.
 * *(event)* Added sticker source info to events (both [MSC4459] and a custom
   format for bridges).
+* *(client)* Added support for `server` parameter in `/publicRooms`
+  (thanks to [@zluudg] in [#497]).
+* *(client)* Added `RequestRetryTrigger` event, which can be used to force all
+  in-flight requests to be interrupted and retried (e.g. in case the network
+  connection changed).
+* *(crypto)* Added support for bundled device keys in Olm messages introduced
+  in Matrix v1.15.
+* *(crypto/canonicaljson)* Added jsonv2-based implementation, which replaces
+  the old gjson/sjson-based implementation when jsonv2 is enabled.
 * *(bridgev2)* Added interface for importing image packs from remote networks.
 * *(bridgev2)* Added more detail to "not logged in" error messages.
 * *(bridgev2)* Expanded `bridge_matrix_leave` option to cover invite rejections
   in addition to actual leaves.
 * *(bridgev2)* Changed group creation error messages to be clearer when there
   aren't enough members to create a group.
+* *(bridgev2/matrix)* Changed message sending to never send unencrypted messages
+  if `encryption.require` is set `true` even if the room is unencrypted.
+* *(crypto)* Changed trust resolution to not trust own cross-signing master key
+  unless the private key is available or the public key is signed by the device
+  key.
 * *(bridgev2)* Fixed event power levels being set incorrectly in some cases if
   `events_default` or `state_default` is changed in the same event.
 * *(bridgev2)* Fixed portal deletion always failing due to context cancellation.
@@ -21,8 +37,9 @@
 * *(bridgev2)* Fixed some cases where backfill would start from a non-latest
   message.
 * *(crypto)* Fixed dehydrated devices not passing device key validation.
-* *(federation/pdu)* Fixed canonical JSON sorting when keys include code points
-  between `\uF000` and `\uFFFF`
+* *(federation/pdu)* Fixed canonicalizing JSON which contains keys with code
+  points between `\uF000` and `\uFFFF` by switching to the crypto/canonicaljson
+  package instead of jsonv2's standard RFC 8785 canonicalization.
 * *(federation/eventauth)* Fixed restricted join checks
   (thanks to [@timedoutuk] in [#491]).
 * *(federation/eventauth)* Fixed creator join check in v10 rooms
@@ -30,8 +47,10 @@
 * *(crypto/goolm)* Fixed various small issues.
 
 [MSC445]: https://github.com/matrix-org/matrix-spec-proposals/pull/4459
-[#491]: github.com/mautrix/go/pull/491
-[#496]: github.com/mautrix/go/pull/496
+[#491]: https://github.com/mautrix/go/pull/491
+[#496]: https://github.com/mautrix/go/pull/496
+[#497]: https://github.com/mautrix/go/pull/497
+[@zluudg]: https://github.com/zluudg
 
 ## v0.27.0 (2026-04-16)
 
