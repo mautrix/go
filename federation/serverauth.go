@@ -126,8 +126,9 @@ func (sa *ServerAuth) GetKeysWithCache(ctx context.Context, serverName string, k
 	} else if res != nil {
 		if res.HasKey(keyID) {
 			return res, nil
-		} else if !sa.Keys.ShouldReQuery(ctx, serverName) {
+		} else if shouldQuery, err := sa.Keys.ShouldReQuery(ctx, serverName); !shouldQuery {
 			zerolog.Ctx(ctx).Trace().
+				Err(err).
 				Str("server_name", serverName).
 				Stringer("key_id", keyID).
 				Msg("Not sending key request for missing key ID, last query was too recent")
@@ -139,7 +140,9 @@ func (sa *ServerAuth) GetKeysWithCache(ctx context.Context, serverName string, k
 		sa.Keys.StoreFetchError(ctx, serverName, err)
 		return nil, err
 	}
-	sa.Keys.StoreKeys(ctx, res)
+	if err := sa.Keys.StoreKeys(ctx, res); err != nil {
+		return nil, err
+	}
 	return res, nil
 }
 
