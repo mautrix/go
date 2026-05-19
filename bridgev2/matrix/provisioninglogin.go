@@ -10,7 +10,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -38,6 +37,9 @@ type ProvLogin struct {
 
 var ErrNilStep = errors.New("bridge returned nil step with no error")
 var ErrTooManyLogins = bridgev2.RespError{ErrCode: "FI.MAU.BRIDGE.TOO_MANY_LOGINS", Err: "Maximum number of logins exceeded"}
+var ErrLoginCancelled = bridgev2.RespError{ErrCode: "FI.MAU.BRIDGE.LOGIN_CANCELLED", Err: "Login process was cancelled"}
+var ErrLoginTimedOut = bridgev2.RespError{ErrCode: "FI.MAU.BRIDGE.LOGIN_TIMED_OUT", Err: "Login process timed out"}
+var ErrLoginAlreadyFinished = bridgev2.RespError{ErrCode: "FI.MAU.BRIDGE.LOGIN_ALREADY_FINISHED", Err: "Login process was already finished"}
 
 func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Request) {
 	overrideLogin, failed := prov.GetExplicitLoginForRequest(w, r)
@@ -118,8 +120,8 @@ func (prov *ProvisioningAPI) PostLoginStep(w http.ResponseWriter, r *http.Reques
 	case bridgev2.LoginStepTypeDisplayAndWait:
 		// no params
 	case bridgev2.LoginStepTypeComplete:
-		// invalid type for POST
-		fallthrough
+		ErrLoginAlreadyFinished.Write(w)
+		return
 	default:
 		mautrix.MUnrecognized.WithMessage("Invalid step type %q", r.PathValue("stepType")).Write(w)
 		return
@@ -164,7 +166,12 @@ func (prov *ProvisioningAPI) doLoginStep(
 	defer login.Lock.Unlock()
 	if login.Ctx.Err() != nil {
 		prov.deleteLogin(login, true)
-		return nil, fmt.Errorf("login context is done: %w", login.Ctx.Err())
+		if login.NextStep.Type == bridgev2.LoginStepTypeComplete {
+			return login.NextStep, nil
+		} else if errors.Is(login.Ctx.Err(), context.DeadlineExceeded) {
+			return nil, ErrLoginTimedOut
+		}
+		return nil, ErrLoginCancelled
 	}
 
 	if returnPrevIfMatch && login.PrevStep != nil && login.PrevStep.StepID == expectedID {
