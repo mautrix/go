@@ -73,7 +73,7 @@ func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	loginID := xid.New().String()
-	ctx, cancel := context.WithTimeout(prov.br.Bridge.BackgroundCtx, 15*time.Minute)
+	ctx, cancel := context.WithTimeout(prov.br.Bridge.BackgroundCtx, 30*time.Minute)
 	ctx = user.Log.With().
 		Str("login_id", loginID).
 		Logger().WithContext(ctx)
