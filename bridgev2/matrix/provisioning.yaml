@@ -218,6 +218,26 @@ paths:
           $ref: '#/components/responses/InternalError'
       security:
       - matrix_auth: [ ]
+  /v3/login/cancel/{loginProcessID}:
+    post:
+      tags: [ auth ]
+      summary: Cancel an ongoing login process.
+      operationId: cancelLogin
+      parameters:
+      - $ref: '#/components/parameters/loginProcessID'
+      responses:
+        200:
+          description: Login successfully cancelled
+          application/json:
+            schema:
+              type: object
+              description: Empty object
+        401:
+          $ref: '#/components/responses/Unauthorized'
+        404:
+          $ref: '#/components/responses/LoginProcessNotFound'
+      security:
+      - matrix_auth: [ ]
   /v3/logout/{loginID}:
     post:
       tags: [ auth ]

@@ -18,7 +18,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/rs/xid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/hlog"
 	"go.mau.fi/util/exerrors"
@@ -72,20 +71,10 @@ type ProvisioningAPI struct {
 	GetUserIDFromRequest func(r *http.Request) id.UserID
 }
 
-type ProvLogin struct {
-	ID       string
-	Process  bridgev2.LoginProcess
-	NextStep *bridgev2.LoginStep
-	Override *bridgev2.UserLogin
-	Lock     sync.Mutex
-}
-
 type provisioningContextKey int
 
 const (
 	provisioningUserKey provisioningContextKey = iota
-	provisioningUserLoginKey
-	provisioningLoginProcessKey
 	ProvisioningKeyRequest
 )
 
@@ -114,6 +103,7 @@ func (prov *ProvisioningAPI) Init() {
 	prov.Router.HandleFunc("GET /v3/login/flows", prov.GetLoginFlows)
 	prov.Router.HandleFunc("POST /v3/login/start/{flowID}", prov.PostLoginStart)
 	prov.Router.HandleFunc("POST /v3/login/step/{loginProcessID}/{stepID}/{stepType}", prov.PostLoginStep)
+	prov.Router.HandleFunc("POST /v3/login/cancel/{loginProcessID}", prov.PostLoginCancel)
 	prov.Router.HandleFunc("POST /v3/logout/{loginID}", prov.PostLogout)
 	prov.Router.HandleFunc("GET /v3/logins", prov.GetLogins)
 	prov.Router.HandleFunc("GET /v3/contacts", prov.GetContactList)
@@ -358,186 +348,6 @@ func (prov *ProvisioningAPI) GetLoginFlows(w http.ResponseWriter, r *http.Reques
 
 func (prov *ProvisioningAPI) GetCapabilities(w http.ResponseWriter, r *http.Request) {
 	exhttp.WriteJSONResponse(w, http.StatusOK, &prov.net.GetCapabilities().Provisioning)
-}
-
-var ErrNilStep = errors.New("bridge returned nil step with no error")
-var ErrTooManyLogins = bridgev2.RespError{ErrCode: "FI.MAU.BRIDGE.TOO_MANY_LOGINS", Err: "Maximum number of logins exceeded"}
-
-func (prov *ProvisioningAPI) PostLoginStart(w http.ResponseWriter, r *http.Request) {
-	overrideLogin, failed := prov.GetExplicitLoginForRequest(w, r)
-	if failed {
-		return
-	}
-	user := prov.GetUser(r)
-	if overrideLogin == nil && user.HasTooManyLogins() {
-		ErrTooManyLogins.AppendMessage(" (%d)", user.Permissions.MaxLogins).Write(w)
-		return
-	}
-	login, err := prov.net.CreateLogin(r.Context(), user, r.PathValue("flowID"))
-	if err != nil {
-		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to create login process")
-		RespondWithError(w, err, "Internal error creating login process")
-		return
-	}
-	var firstStep *bridgev2.LoginStep
-	overridable, ok := login.(bridgev2.LoginProcessWithOverride)
-	if ok && overrideLogin != nil {
-		firstStep, err = overridable.StartWithOverride(r.Context(), overrideLogin)
-	} else {
-		firstStep, err = login.Start(r.Context())
-	}
-	if err == nil && firstStep == nil {
-		err = ErrNilStep
-	}
-	if err != nil {
-		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to start login")
-		RespondWithError(w, err, "Internal error starting login")
-		return
-	}
-	loginID := xid.New().String()
-	prov.loginsLock.Lock()
-	prov.logins[loginID] = &ProvLogin{
-		ID:       loginID,
-		Process:  login,
-		NextStep: firstStep,
-		Override: overrideLogin,
-	}
-	prov.loginsLock.Unlock()
-	zerolog.Ctx(r.Context()).Info().
-		Any("first_step", firstStep).
-		Msg("Created login process")
-	exhttp.WriteJSONResponse(w, http.StatusOK, &RespSubmitLogin{LoginID: loginID, LoginStep: firstStep})
-}
-
-func (prov *ProvisioningAPI) handleCompleteStep(ctx context.Context, login *ProvLogin, step *bridgev2.LoginStep) {
-	zerolog.Ctx(ctx).Info().
-		Str("step_id", step.StepID).
-		Str("user_login_id", string(step.CompleteParams.UserLoginID)).
-		Msg("Login completed successfully")
-	prov.deleteLogin(login, false)
-	if login.Override == nil || login.Override.ID == step.CompleteParams.UserLoginID {
-		return
-	}
-	zerolog.Ctx(ctx).Info().
-		Str("old_login_id", string(login.Override.ID)).
-		Str("new_login_id", string(step.CompleteParams.UserLoginID)).
-		Msg("Login resulted in different remote ID than what was being overridden. Deleting previous login")
-	login.Override.Delete(ctx, status.BridgeState{
-		StateEvent: status.StateLoggedOut,
-		Reason:     "LOGIN_OVERRIDDEN",
-	}, bridgev2.DeleteOpts{LogoutRemote: true})
-}
-
-func (prov *ProvisioningAPI) deleteLogin(login *ProvLogin, cancel bool) {
-	if cancel {
-		login.Process.Cancel()
-	}
-	prov.loginsLock.Lock()
-	delete(prov.logins, login.ID)
-	prov.loginsLock.Unlock()
-}
-
-func (prov *ProvisioningAPI) PostLoginStep(w http.ResponseWriter, r *http.Request) {
-	loginID := r.PathValue("loginProcessID")
-	prov.loginsLock.RLock()
-	login, ok := prov.logins[loginID]
-	prov.loginsLock.RUnlock()
-	if !ok {
-		zerolog.Ctx(r.Context()).Warn().Str("login_id", loginID).Msg("Login not found")
-		mautrix.MNotFound.WithMessage("Login not found").Write(w)
-		return
-	}
-	login.Lock.Lock()
-	// This will only unlock after the handler runs
-	defer login.Lock.Unlock()
-	stepID := r.PathValue("stepID")
-	if login.NextStep.StepID != stepID {
-		zerolog.Ctx(r.Context()).Warn().
-			Str("request_step_id", stepID).
-			Str("expected_step_id", login.NextStep.StepID).
-			Msg("Step ID does not match")
-		mautrix.MBadState.WithMessage("Step ID does not match").Write(w)
-		return
-	}
-	stepType := r.PathValue("stepType")
-	if login.NextStep.Type != bridgev2.LoginStepType(stepType) {
-		zerolog.Ctx(r.Context()).Warn().
-			Str("request_step_type", stepType).
-			Str("expected_step_type", string(login.NextStep.Type)).
-			Msg("Step type does not match")
-		mautrix.MBadState.WithMessage("Step type does not match").Write(w)
-		return
-	}
-	ctx := context.WithValue(r.Context(), provisioningLoginProcessKey, login)
-	r = r.WithContext(ctx)
-	switch bridgev2.LoginStepType(r.PathValue("stepType")) {
-	case bridgev2.LoginStepTypeUserInput, bridgev2.LoginStepTypeCookies:
-		prov.PostLoginSubmitInput(w, r)
-	case bridgev2.LoginStepTypeDisplayAndWait:
-		prov.PostLoginWait(w, r)
-	case bridgev2.LoginStepTypeComplete:
-		fallthrough
-	default:
-		// This is probably impossible because of the above check that the next step type matches the request.
-		mautrix.MUnrecognized.WithMessage("Invalid step type %q", r.PathValue("stepType")).Write(w)
-	}
-}
-
-func (prov *ProvisioningAPI) PostLoginSubmitInput(w http.ResponseWriter, r *http.Request) {
-	var params map[string]string
-	err := json.NewDecoder(r.Body).Decode(&params)
-	if err != nil {
-		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to decode request body")
-		mautrix.MNotJSON.WithMessage("Failed to decode request body").Write(w)
-		return
-	}
-	login := r.Context().Value(provisioningLoginProcessKey).(*ProvLogin)
-	var nextStep *bridgev2.LoginStep
-	switch login.NextStep.Type {
-	case bridgev2.LoginStepTypeUserInput:
-		nextStep, err = login.Process.(bridgev2.LoginProcessUserInput).SubmitUserInput(r.Context(), params)
-	case bridgev2.LoginStepTypeCookies:
-		nextStep, err = login.Process.(bridgev2.LoginProcessCookies).SubmitCookies(r.Context(), params)
-	default:
-		panic("Impossible state")
-	}
-	if err == nil && nextStep == nil {
-		err = ErrNilStep
-	}
-	if err != nil {
-		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to submit input")
-		RespondWithError(w, err, "Internal error submitting input")
-		prov.deleteLogin(login, true)
-		return
-	}
-	login.NextStep = nextStep
-	if nextStep.Type == bridgev2.LoginStepTypeComplete {
-		prov.handleCompleteStep(r.Context(), login, nextStep)
-	} else {
-		zerolog.Ctx(r.Context()).Debug().Any("next_step", nextStep).Msg("Returning next login step")
-	}
-	exhttp.WriteJSONResponse(w, http.StatusOK, &RespSubmitLogin{LoginID: login.ID, LoginStep: nextStep})
-}
-
-func (prov *ProvisioningAPI) PostLoginWait(w http.ResponseWriter, r *http.Request) {
-	login := r.Context().Value(provisioningLoginProcessKey).(*ProvLogin)
-	nextStep, err := login.Process.(bridgev2.LoginProcessDisplayAndWait).Wait(r.Context())
-	if err == nil && nextStep == nil {
-		err = ErrNilStep
-	}
-	if err != nil {
-		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to wait")
-		RespondWithError(w, err, "Internal error waiting for login")
-		prov.deleteLogin(login, true)
-		return
-	}
-	login.NextStep = nextStep
-	if nextStep.Type == bridgev2.LoginStepTypeComplete {
-		prov.handleCompleteStep(r.Context(), login, nextStep)
-	} else {
-		zerolog.Ctx(r.Context()).Debug().Any("next_step", nextStep).Msg("Returning next login step")
-	}
-	exhttp.WriteJSONResponse(w, http.StatusOK, &RespSubmitLogin{LoginID: login.ID, LoginStep: nextStep})
 }
 
 func (prov *ProvisioningAPI) PostLogout(w http.ResponseWriter, r *http.Request) {
