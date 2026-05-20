@@ -3609,7 +3609,9 @@ func (portal *Portal) handleRemoteMessageRemove(ctx context.Context, source *Use
 			intent = senderIntent
 		}
 	}
-	res := portal.redactMessageParts(ctx, targetParts, intent, getEventTS(evt))
+	dontRenderPlaceholderProvider, ok := evt.(RemoteMessageRemoveWithoutPlaceholder)
+	dontRenderPlaceholder := ok && dontRenderPlaceholderProvider.DontRenderPlaceholder()
+	res := portal.redactMessageParts(ctx, targetParts, intent, getEventTS(evt), "", dontRenderPlaceholder)
 	err = portal.Bridge.DB.Message.DeleteAllParts(ctx, portal.Receiver, evt.GetTargetMessage())
 	if err != nil {
 		log.Err(err).Msg("Failed to delete target message from database")
@@ -3617,7 +3619,14 @@ func (portal *Portal) handleRemoteMessageRemove(ctx context.Context, source *Use
 	return res
 }
 
-func (portal *Portal) redactMessageParts(ctx context.Context, parts []*database.Message, intent MatrixAPI, ts time.Time) EventHandlingResult {
+func (portal *Portal) redactMessageParts(
+	ctx context.Context,
+	parts []*database.Message,
+	intent MatrixAPI,
+	ts time.Time,
+	reason string,
+	dontRenderPlaceholder bool,
+) EventHandlingResult {
 	log := zerolog.Ctx(ctx)
 	var errorList []error
 	for _, part := range parts {
@@ -3626,7 +3635,9 @@ func (portal *Portal) redactMessageParts(ctx context.Context, parts []*database.
 		}
 		resp, err := intent.SendMessage(ctx, portal.MXID, event.EventRedaction, &event.Content{
 			Parsed: &event.RedactionEventContent{
-				Redacts: part.MXID,
+				Redacts:               part.MXID,
+				Reason:                reason,
+				DontRenderPlaceholder: dontRenderPlaceholder,
 			},
 		}, &MatrixSendExtra{Timestamp: ts, MessageMeta: part})
 		if err != nil {

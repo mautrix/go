@@ -97,13 +97,15 @@ func (evt *PreConvertedMessage) HandleExisting(ctx context.Context, portal *brid
 type MessageRemove struct {
 	EventMeta
 
-	TargetMessage networkid.MessageID
-	OnlyForMe     bool
+	TargetMessage   networkid.MessageID
+	OnlyForMe       bool
+	HidePlaceholder bool
 }
 
 var (
-	_ bridgev2.RemoteMessageRemove   = (*MessageRemove)(nil)
-	_ bridgev2.RemoteDeleteOnlyForMe = (*MessageRemove)(nil)
+	_ bridgev2.RemoteMessageRemove                   = (*MessageRemove)(nil)
+	_ bridgev2.RemoteDeleteOnlyForMe                 = (*MessageRemove)(nil)
+	_ bridgev2.RemoteMessageRemoveWithoutPlaceholder = (*MessageRemove)(nil)
 )
 
 func (evt *MessageRemove) GetTargetMessage() networkid.MessageID {
@@ -112,4 +114,8 @@ func (evt *MessageRemove) GetTargetMessage() networkid.MessageID {
 
 func (evt *MessageRemove) DeleteOnlyForMe() bool {
 	return evt.OnlyForMe
+}
+
+func (evt *MessageRemove) DontRenderPlaceholder() bool {
+	return evt.HidePlaceholder
 }

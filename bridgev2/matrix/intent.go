@@ -53,6 +53,12 @@ func (as *ASIntent) SendMessage(ctx context.Context, roomID id.RoomID, eventType
 	if eventType == event.EventRedaction && !as.Connector.SpecVersions.Supports(mautrix.FeatureRedactSendAsEvent) {
 		parsedContent := content.Parsed.(*event.RedactionEventContent)
 		as.Matrix.AddDoublePuppetValue(content)
+		if parsedContent.DontRenderPlaceholder {
+			if content.Raw == nil {
+				content.Raw = make(map[string]any)
+			}
+			content.Raw["com.beeper.dont_render_redacted_placeholder"] = true
+		}
 		return as.Matrix.RedactEvent(ctx, roomID, parsedContent.Redacts, mautrix.ReqRedact{
 			Reason: parsedContent.Reason,
 			Extra:  content.Raw,

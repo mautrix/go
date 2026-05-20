@@ -1321,6 +1321,11 @@ type RemoteMessageRemove interface {
 	RemoteEventWithTargetMessage
 }
 
+type RemoteMessageRemoveWithoutPlaceholder interface {
+	RemoteMessageRemove
+	DontRenderPlaceholder() bool
+}
+
 // Deprecated: Renamed to RemoteReadReceipt.
 type RemoteReceipt = RemoteReadReceipt
 
