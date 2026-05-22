@@ -108,6 +108,9 @@ func fnLogin(ce *Event) {
 		}
 		return
 	}
+	if !ce.Sudo && ce.RoomID != ce.User.ManagementRoom {
+		ce.Reply("\u26a0\ufe0f This is not your management room. Entering login info must be prefixed with `$cmdprefix` like other commands.")
+	}
 
 	login, err := ce.Bridge.Network.CreateLogin(ce.Ctx, ce.User, chosenFlowID)
 	if err != nil {

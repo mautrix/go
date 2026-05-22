@@ -39,13 +39,14 @@ type Event struct {
 	ReplyTo    id.EventID
 	Ctx        context.Context
 	Log        *zerolog.Logger
+	Sudo       bool
 
 	MessageStatus *bridgev2.MessageStatus
 }
 
 // Reply sends a reply to command as notice, with optional string formatting and automatic $cmdprefix replacement.
 func (ce *Event) Reply(msg string, args ...any) id.EventID {
-	msg = strings.ReplaceAll(msg, "$cmdprefix ", ce.Bridge.Config.CommandPrefix+" ")
+	msg = strings.ReplaceAll(msg, "$cmdprefix", ce.Bridge.Config.CommandPrefix)
 	if len(args) > 0 {
 		msg = fmt.Sprintf(msg, args...)
 	}

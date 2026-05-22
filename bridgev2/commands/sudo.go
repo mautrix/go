@@ -55,6 +55,7 @@ func fnSudo(ce *Event) {
 		ce.Reply("User not found. Use `--create` if you want to run commands as a user who has never used the bridge.")
 		return
 	}
+	ce.Sudo = true
 	ce.User = targetUser
 	origArgs := ce.Args[1:]
 	ce.Command = strings.ToLower(ce.Args[1])
