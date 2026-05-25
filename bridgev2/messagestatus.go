@@ -131,6 +131,10 @@ func (ms MessageStatus) Unwrap() error {
 	return ms.InternalError
 }
 
+func (ms MessageStatus) Is(other error) bool {
+	return errors.Is(other, ms.InternalError)
+}
+
 func (ms *MessageStatus) checkpointStatus() status.MessageCheckpointStatus {
 	switch ms.Status {
 	case event.MessageStatusSuccess:
