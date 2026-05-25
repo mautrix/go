@@ -273,7 +273,7 @@ func (as *ASIntent) DownloadMediaToFile(ctx context.Context, uri id.ContentURISt
 
 func (as *ASIntent) UploadMedia(ctx context.Context, roomID id.RoomID, data []byte, fileName, mimeType string) (url id.ContentURIString, file *event.EncryptedFileInfo, err error) {
 	if int64(len(data)) > as.Connector.MediaConfig.UploadSize {
-		return "", nil, fmt.Errorf("file too large (%.2f MB > %.2f MB)", float64(len(data))/1000/1000, float64(as.Connector.MediaConfig.UploadSize)/1000/1000)
+		return "", nil, fmt.Errorf("%w (%.2f MB > %.2f MB)", bridgev2.ErrMediaTooLarge, float64(len(data))/1000/1000, float64(as.Connector.MediaConfig.UploadSize)/1000/1000)
 	}
 	if roomID != "" {
 		var encrypted bool
@@ -305,7 +305,7 @@ func (as *ASIntent) UploadMediaStream(
 	cb bridgev2.FileStreamCallback,
 ) (url id.ContentURIString, file *event.EncryptedFileInfo, err error) {
 	if size > as.Connector.MediaConfig.UploadSize {
-		return "", nil, fmt.Errorf("file too large (%.2f MB > %.2f MB)", float64(size)/1000/1000, float64(as.Connector.MediaConfig.UploadSize)/1000/1000)
+		return "", nil, fmt.Errorf("%w (%.2f MB > %.2f MB)", bridgev2.ErrMediaTooLarge, float64(size)/1000/1000, float64(as.Connector.MediaConfig.UploadSize)/1000/1000)
 	}
 	if !requireFile && 0 < size && size < as.Connector.Config.Matrix.UploadFileThreshold {
 		var buf bytes.Buffer
@@ -398,7 +398,7 @@ func (as *ASIntent) UploadMediaStream(
 	}
 	size = info.Size()
 	if size > as.Connector.MediaConfig.UploadSize {
-		return "", nil, fmt.Errorf("file too large (%.2f MB > %.2f MB)", float64(size)/1000/1000, float64(as.Connector.MediaConfig.UploadSize)/1000/1000)
+		return "", nil, fmt.Errorf("%w (%.2f MB > %.2f MB)", bridgev2.ErrMediaTooLarge, float64(size)/1000/1000, float64(as.Connector.MediaConfig.UploadSize)/1000/1000)
 	}
 	req := mautrix.ReqUploadMedia{
 		Content:       replFile,
