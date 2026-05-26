@@ -4938,14 +4938,15 @@ func (portal *Portal) updateParent(ctx context.Context, newParentID networkid.Po
 			zerolog.Ctx(ctx).Err(err).Stringer("old_space_mxid", portal.Parent.MXID).Msg("Failed to remove portal from old space")
 		}
 	}
-	portal.ParentKey = newParent
-	portal.InSpace = false
 	if newParent.ID != "" {
 		portal.Parent, err = portal.Bridge.GetPortalByKey(ctx, newParent)
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to get new parent portal")
+			return false
 		}
 	}
+	portal.ParentKey = newParent
+	portal.InSpace = false
 	if portal.MXID != "" && portal.Parent != nil && (source != nil || portal.Parent.MXID != "") {
 		if portal.Parent.MXID == "" {
 			zerolog.Ctx(ctx).Info().Msg("Parent portal doesn't exist, creating")
@@ -5000,12 +5001,30 @@ func (portal *Portal) UpdateInfo(ctx context.Context, info *ChatInfo, source *Us
 		portal.NameIsCustom = true
 		changed = portal.updateName(ctx, *info.Name, sender, ts, info.ExcludeChangesFromTimeline) || changed
 	}
-	if info.Topic != nil {
-		changed = portal.updateTopic(ctx, *info.Topic, sender, ts, info.ExcludeChangesFromTimeline) || changed
-	}
 	if info.Avatar != nil {
 		portal.NameIsCustom = true
 		changed = portal.updateAvatar(ctx, info.Avatar, sender, ts, info.ExcludeChangesFromTimeline) || changed
+	}
+	if info.Type != nil && portal.RoomType != *info.Type {
+		if portal.MXID != "" && (*info.Type == database.RoomTypeSpace || portal.RoomType == database.RoomTypeSpace) {
+			zerolog.Ctx(ctx).Warn().
+				Str("current_type", string(portal.RoomType)).
+				Str("target_type", string(*info.Type)).
+				Msg("Tried to change existing room type from/to space")
+		} else {
+			changed = true
+			portal.RoomType = *info.Type
+		}
+	}
+	if info.ParentID != nil {
+		changed = portal.updateParent(ctx, *info.ParentID, source) || changed
+	}
+
+	// if the name, avatar, parent, or room type changes, we need to resend m.bridge events to each child portal as well
+	childInfoChanged := changed
+
+	if info.Topic != nil {
+		changed = portal.updateTopic(ctx, *info.Topic, sender, ts, info.ExcludeChangesFromTimeline) || changed
 	}
 	if info.Disappear != nil {
 		changed = portal.UpdateDisappearingSetting(ctx, *info.Disappear, UpdateDisappearingSettingOpts{
@@ -5018,23 +5037,9 @@ func (portal *Portal) UpdateInfo(ctx context.Context, info *ChatInfo, source *Us
 			ExcludeFromTimeline: info.ExcludeChangesFromTimeline,
 		}) || changed
 	}
-	if info.ParentID != nil {
-		changed = portal.updateParent(ctx, *info.ParentID, source) || changed
-	}
 	if info.JoinRule != nil {
 		// TODO change detection instead of spamming this every time?
 		portal.sendRoomMeta(ctx, sender, ts, event.StateJoinRules, "", info.JoinRule, info.ExcludeChangesFromTimeline, nil)
-	}
-	if info.Type != nil && portal.RoomType != *info.Type {
-		if portal.MXID != "" && (*info.Type == database.RoomTypeSpace || portal.RoomType == database.RoomTypeSpace) {
-			zerolog.Ctx(ctx).Warn().
-				Str("current_type", string(portal.RoomType)).
-				Str("target_type", string(*info.Type)).
-				Msg("Tried to change existing room type from/to space")
-		} else {
-			changed = true
-			portal.RoomType = *info.Type
-		}
 	}
 	if info.MessageRequest != nil && *info.MessageRequest != portal.MessageRequest {
 		changed = true
@@ -5071,6 +5076,28 @@ func (portal *Portal) UpdateInfo(ctx context.Context, info *ChatInfo, source *Us
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to save portal to database after updating info")
 		}
+	}
+	if childInfoChanged {
+		portal.updateChildBridgeInfo(ctx)
+	}
+}
+
+func (portal *Portal) updateChildBridgeInfo(ctx context.Context) {
+	if portal.RoomType != database.RoomTypeSpace {
+		return
+	}
+	portals, err := portal.Bridge.GetChildPortals(ctx, portal.PortalKey)
+	if err != nil {
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to get child portals to update bridge info")
+		return
+	}
+	zerolog.Ctx(ctx).Debug().
+		Int("child_count", len(portals)).
+		Stringer("parent_key", portal.PortalKey).
+		Msg("Updating bridge info for child portals")
+	for _, child := range portals {
+		child.UpdateBridgeInfo(ctx)
+		child.updateChildBridgeInfo(ctx)
 	}
 }
 
