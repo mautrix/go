@@ -20,7 +20,21 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
+type rejoinOnRemoteEventContextKey struct{}
+
+func contextWithRemoteEventRejoin(ctx context.Context, allowed bool) context.Context {
+	return context.WithValue(ctx, rejoinOnRemoteEventContextKey{}, allowed)
+}
+
+func remoteEventRejoinAllowed(ctx context.Context) bool {
+	allowed, ok := ctx.Value(rejoinOnRemoteEventContextKey{}).(bool)
+	return !ok || allowed
+}
+
 func (ul *UserLogin) MarkInPortal(ctx context.Context, portal *Portal) {
+	if !remoteEventRejoinAllowed(ctx) {
+		return
+	}
 	if ul.inPortalCache.Has(portal.PortalKey) {
 		return
 	}

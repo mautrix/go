@@ -362,6 +362,11 @@ func (br *BridgeMain) LoadConfig() {
 			os.Exit(10)
 		}
 	}
+	err = cfg.Bridge.RejoinOnEvents.Validate()
+	if err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, "Invalid config:", err)
+		os.Exit(10)
+	}
 	br.Config = &cfg
 }
 

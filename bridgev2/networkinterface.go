@@ -19,6 +19,7 @@ import (
 	"go.mau.fi/util/random"
 
 	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/bridgev2/bridgeconfig"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
@@ -1116,6 +1117,41 @@ func (ret RemoteEventType) String() string {
 		return "RemoteEventBackfill"
 	default:
 		return fmt.Sprintf("RemoteEventType(%d)", int(ret))
+	}
+}
+
+func (ret RemoteEventType) RejoinEventName() string {
+	switch ret {
+	case RemoteEventMessage:
+		return bridgeconfig.RejoinEventMessage
+	case RemoteEventMessageUpsert:
+		return bridgeconfig.RejoinEventMessageUpsert
+	case RemoteEventEdit:
+		return bridgeconfig.RejoinEventEdit
+	case RemoteEventReaction:
+		return bridgeconfig.RejoinEventReaction
+	case RemoteEventReactionRemove:
+		return bridgeconfig.RejoinEventReactionRemove
+	case RemoteEventReactionSync:
+		return bridgeconfig.RejoinEventReactionSync
+	case RemoteEventMessageRemove:
+		return bridgeconfig.RejoinEventMessageRemove
+	case RemoteEventReadReceipt:
+		return bridgeconfig.RejoinEventReadReceipt
+	case RemoteEventDeliveryReceipt:
+		return bridgeconfig.RejoinEventDeliveryReceipt
+	case RemoteEventMarkUnread:
+		return bridgeconfig.RejoinEventMarkUnread
+	case RemoteEventTyping:
+		return bridgeconfig.RejoinEventTyping
+	case RemoteEventChatInfoChange:
+		return bridgeconfig.RejoinEventChatInfoChange
+	case RemoteEventChatResync:
+		return bridgeconfig.RejoinEventChatResync
+	case RemoteEventBackfill:
+		return bridgeconfig.RejoinEventBackfill
+	default:
+		return ""
 	}
 }
 

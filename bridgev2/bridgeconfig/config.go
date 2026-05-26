@@ -75,6 +75,7 @@ type BridgeConfig struct {
 	BridgeStatusNotices           string             `yaml:"bridge_status_notices"`
 	UnknownErrorAutoReconnect     time.Duration      `yaml:"unknown_error_auto_reconnect"`
 	UnknownErrorMaxAutoReconnects int                `yaml:"unknown_error_max_auto_reconnects"`
+	RejoinOnEvents                RejoinOnEvents     `yaml:"rejoin_on_events"`
 	BridgeMatrixLeave             bool               `yaml:"bridge_matrix_leave"`
 	BridgeNotices                 bool               `yaml:"bridge_notices"`
 	TagOnlyOnCreate               bool               `yaml:"tag_only_on_create"`

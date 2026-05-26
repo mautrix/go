@@ -32,6 +32,19 @@ bridge:
     # Maximum number of times to do the auto-reconnect above.
     # The counter is per login, but is never reset except on logout and restart.
     unknown_error_max_auto_reconnects: 10
+    # Remote events that should rejoin/re-invite Matrix users who previously left a portal room.
+    # Permitted values: message, message_upsert, edit, reaction, reaction_remove, reaction_sync,
+    # message_remove, read_receipt, delivery_receipt, mark_unread, typing, chat_info_change,
+    # chat_resync, backfill
+    rejoin_on_events:
+        - message
+        - message_upsert
+        - edit
+        - reaction
+        - reaction_remove
+        - reaction_sync
+        - message_remove
+        - backfill
 
     # Should leaving Matrix rooms be bridged as leaving groups on the remote network?
     bridge_matrix_leave: false
