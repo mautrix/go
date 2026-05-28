@@ -419,6 +419,8 @@ encryption:
     # Enable key sharing? If enabled, key requests for rooms where users are in will be fulfilled.
     # You must use a client that supports requesting keys from other users to use this feature.
     allow_key_sharing: true
+    # Should m.mentions be sent in the unencrypted content? This is non-standard and should not be enabled.
+    plaintext_mentions: false
     # Pickle key for encrypting encryption keys in the bridge database.
     # If set to generate, a random key will be generated.
     pickle_key: generate
