@@ -624,7 +624,7 @@ func (cli *Client) doRetry(
 	if maxBackoff <= 0 {
 		maxBackoff = 10 * time.Minute
 	}
-	backoff = min(backoff, cli.MaxHTTPBackoff)
+	backoff = min(backoff, maxBackoff)
 	log.Warn().Err(cause).
 		Str("method", req.Method).
 		Str("url", req.URL.String()).
