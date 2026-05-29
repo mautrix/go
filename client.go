@@ -748,10 +748,15 @@ func (cli *Client) prepareRequestAttempt(req *http.Request) (*http.Request, func
 
 	attemptCtx, cancel := context.WithCancelCause(req.Context())
 
+	// Register as a waiter synchronously so we're waiting by the time this method returns, avoid
+	// race on trigger notify and the goroutine below.
+	resetCh := cli.RequestRetryTrigger.GetChan()
+
 	go func() {
-		// If we hear of a reset, cancel the request context with a retry message
-		if cli.RequestRetryTrigger.Wait(attemptCtx) == nil {
+		select {
+		case <-resetCh:
 			cancel(ErrContextCancelRetry)
+		case <-attemptCtx.Done():
 		}
 	}()
 
