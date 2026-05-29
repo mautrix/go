@@ -8,6 +8,7 @@ package provisionutil
 
 import (
 	"context"
+	"slices"
 
 	"github.com/rs/zerolog"
 	"go.mau.fi/util/exfmt"
@@ -58,9 +59,19 @@ func CreateGroup(ctx context.Context, login *bridgev2.UserLogin, params *bridgev
 				return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("User ID %q is not valid on this network", participant))
 			}
 		}
-		if api.IsThisUser(ctx, participant) {
-			return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("You can't include yourself in the participants list", participant))
-		}
+	}
+	origParticipantCount := len(params.Participants)
+	params.Participants = slices.DeleteFunc(params.Participants, func(userID networkid.UserID) bool {
+		return api.IsThisUser(ctx, userID)
+	})
+	if len(params.Participants) != origParticipantCount {
+		zerolog.Ctx(ctx).Debug().
+			Int("original_count", origParticipantCount).
+			Int("filtered_count", len(params.Participants)).
+			Msg("Removed self from participants list")
+	}
+	if len(params.Participants) < typeSpec.Participants.MinLength {
+		return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("Must have at least %s (in addition to yourself)", exfmt.Pluralizable("member")(typeSpec.Participants.MinLength)))
 	}
 	if (params.Name == nil || params.Name.Name == "") && typeSpec.Name.Required {
 		return nil, bridgev2.RespError(mautrix.MInvalidParam.WithMessage("Name is required"))
