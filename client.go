@@ -110,6 +110,9 @@ type Client struct {
 	DefaultHTTPRetries int
 	// Amount of time to wait between HTTP retries, defaults to 4 seconds
 	DefaultHTTPBackoff time.Duration
+	// Maximum time to wait between HTTP retries, defaults to 10 minutes.
+	// This applies to both the exponential backoff from gateway/network errors and to 429 errors.
+	MaxHTTPBackoff time.Duration
 	// Set to true to disable automatically sleeping on 429 errors.
 	IgnoreRateLimit bool
 
@@ -617,6 +620,11 @@ func (cli *Client) doRetry(
 			return nil, nil, cause
 		}
 	}
+	maxBackoff := cli.MaxHTTPBackoff
+	if maxBackoff <= 0 {
+		maxBackoff = 10 * time.Minute
+	}
+	backoff = min(backoff, cli.MaxHTTPBackoff)
 	log.Warn().Err(cause).
 		Str("method", req.Method).
 		Str("url", req.URL.String()).
@@ -2154,6 +2162,7 @@ func (cli *Client) uploadMediaToURL(ctx context.Context, data ReqUploadMedia) (*
 				Msg("Error uploading media to external URL, not retrying")
 			return nil, err
 		}
+		// TODO change to exponential like normal retries?
 		backoff := time.Second * time.Duration(cli.DefaultHTTPRetries-retries)
 		cli.Log.Warn().Err(err).
 			Str("url", data.UnstableUploadURL).
