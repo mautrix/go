@@ -110,6 +110,7 @@ func (config *Config) MakeAppService() *appservice.AppService {
 	as.Host.Hostname = config.AppService.Hostname
 	as.Host.Port = config.AppService.Port
 	as.Registration = config.AppService.GetRegistration()
+	as.DefaultHTTPRetries = config.Homeserver.RetryLimit
 	config.Encryption.applyUnstableFlags(as.Registration)
 	return as
 }

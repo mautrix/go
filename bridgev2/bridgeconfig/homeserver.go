@@ -35,4 +35,6 @@ type HomeserverConfig struct {
 	Websocket      bool   `yaml:"websocket"`
 	WSProxy        string `yaml:"websocket_proxy"`
 	WSPingInterval int    `yaml:"ping_interval_seconds"`
+
+	RetryLimit int `yaml:"retry_limit"`
 }

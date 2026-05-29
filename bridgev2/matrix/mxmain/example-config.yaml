@@ -205,6 +205,9 @@ homeserver:
     websocket: false
     # How often should the websocket be pinged? Pinging will be disabled if this is zero.
     ping_interval_seconds: 0
+    # When requests to the homeserver fail with a 502/503/504/429 status or a network error,
+    # how many times should the bridge retry the request before giving up?
+    retry_limit: 4
 
 # Application service host/registration related details.
 # Changing these values requires regeneration of the registration (except when noted otherwise)
