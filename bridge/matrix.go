@@ -607,8 +607,16 @@ func (mx *MatrixHandler) HandleReaction(evt *event.Event) {
 	}
 
 	user := mx.bridge.Child.GetIUser(evt.Sender, true)
-	if user == nil || user.GetPermissionLevel() < bridgeconfig.PermissionLevelUser || !user.IsLoggedIn() {
+	if user == nil {
 		return
+	}
+	permissionLevel := user.GetPermissionLevel()
+	isLoggedIn := user.IsLoggedIn()
+	if permissionLevel < bridgeconfig.PermissionLevelUser || !isLoggedIn {
+		relayConfig, ok := mx.bridge.Config.Bridge.(bridgeconfig.RelayReactionBridgeConfig)
+		if isLoggedIn || !ok || !relayConfig.EnableRelayReactions() || permissionLevel < bridgeconfig.PermissionLevelRelay {
+			return
+		}
 	}
 
 	portal := mx.bridge.Child.GetIPortal(evt.RoomID)

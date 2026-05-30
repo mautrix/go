@@ -176,6 +176,10 @@ type BridgeConfig interface {
 	Validate() error
 }
 
+type RelayReactionBridgeConfig interface {
+	EnableRelayReactions() bool
+}
+
 type DoublePuppetConfig struct {
 	ServerMap       map[string]string `yaml:"double_puppet_server_map"`
 	AllowDiscovery  bool              `yaml:"double_puppet_allow_discovery"`
