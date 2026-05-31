@@ -490,6 +490,9 @@ encryption:
 # e.g. if the prefix is set to `BRIDGE_`, then `BRIDGE_APPSERVICE__AS_TOKEN` will set appservice.as_token.
 # `BRIDGE_appservice.as_token` would work as well, but can't be set in a shell as easily.
 #
+# The variable names can also have a `_FILE` suffix to tell the bridge to read the value from the
+# path set in the variable rather than using the value directly.
+#
 # If this is null, reading config fields from environment will be disabled.
 env_config_prefix: null
 
