@@ -2428,10 +2428,12 @@ func (cli *Client) Context(ctx context.Context, roomID id.RoomID, eventID id.Eve
 	return
 }
 
-func (cli *Client) Search(ctx context.Context, req *ReqSearch) (resp *RespSearch, err error) {
+func (cli *Client) Search(ctx context.Context, req *ReqSearch) (*RespSearch, error) {
 	urlPath := cli.BuildURLWithQuery(ClientURLPath{"v3", "search"}, req.Query())
-	_, err = cli.MakeRequest(ctx, http.MethodPost, urlPath, req, &resp)
-	return
+	wrappedReq := &ReqSearchWrapper{SearchCategories: ReqSearchCategoryWrapper{RoomEvents: req}}
+	var wrappedResp RespSearchWrapper
+	_, err := cli.MakeRequest(ctx, http.MethodPost, urlPath, wrappedReq, &wrappedResp)
+	return wrappedResp.SearchCategories.RoomEvents, err
 }
 
 func (cli *Client) GetEvent(ctx context.Context, roomID id.RoomID, eventID id.EventID) (resp *event.Event, err error) {

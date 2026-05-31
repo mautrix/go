@@ -805,6 +805,6 @@ type SearchResultGroup struct {
 
 type SearchResult struct {
 	Rank    float64      `json:"rank"`
-	Event   *event.Event `json:"event"`
+	Event   *event.Event `json:"result"`
 	Context *RespContext `json:"context,omitempty"`
 }
