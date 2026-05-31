@@ -657,3 +657,55 @@ type ReqSuspend struct {
 type ReqLocked struct {
 	Locked bool `json:"locked"`
 }
+
+type ReqSearchWrapper struct {
+	SearchCategories ReqSearchCategoryWrapper `json:"search_categories"`
+}
+
+type ReqSearchCategoryWrapper struct {
+	RoomEvents *ReqSearch `json:"room_events"`
+}
+
+type ReqSearch struct {
+	// This is a query param
+	NextBatch string `json:"-"`
+
+	SearchTerm   string      `json:"search_term"`
+	Filter       *FilterPart `json:"filter,omitempty"`
+	Keys         []string    `json:"keys,omitempty"`
+	IncludeState bool        `json:"include_state,omitempty"`
+	OrderBy      string      `json:"order_by,omitempty"`
+
+	EventContext SearchEventContext `json:"event_context,omitzero"`
+	Groupings    SearchGroupings    `json:"groupings,omitzero"`
+}
+
+func (rs *ReqSearch) Query() map[string]string {
+	query := map[string]string{}
+	if rs.NextBatch != "" {
+		query["next_batch"] = rs.NextBatch
+	}
+	return query
+}
+
+type SearchEventContext struct {
+	BeforeLimit    int  `json:"before_limit,omitempty"`
+	AfterLimit     int  `json:"after_limit,omitempty"`
+	IncludeProfile bool `json:"include_profile,omitempty"`
+}
+
+func (sec SearchEventContext) IsZero() bool {
+	return sec.BeforeLimit == 0 && sec.AfterLimit == 0 && !sec.IncludeProfile
+}
+
+type SearchGroupings struct {
+	GroupBy []SearchGroup `json:"group_by,omitempty"`
+}
+
+func (sg SearchGroupings) IsZero() bool {
+	return len(sg.GroupBy) == 0
+}
+
+type SearchGroup struct {
+	Key string `json:"key"`
+}
