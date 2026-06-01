@@ -208,6 +208,9 @@ homeserver:
     # When requests to the homeserver fail with a 502/503/504/429 status or a network error,
     # how many times should the bridge retry the request before giving up?
     retry_limit: 4
+    # Maximum time to wait between HTTP retries to the homeserver. Applies to both the
+    # exponential backoff from gateway/network errors and to 429 errors.
+    max_retry_backoff: 10m
 
 # Application service host/registration related details.
 # Changing these values requires regeneration of the registration (except when noted otherwise)

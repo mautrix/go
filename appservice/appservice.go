@@ -168,6 +168,7 @@ type AppService struct {
 	SpecVersions *mautrix.RespVersions
 
 	DefaultHTTPRetries int
+	MaxHTTPBackoff     time.Duration
 
 	Live  bool
 	Ready bool
@@ -369,6 +370,7 @@ func (as *AppService) NewMautrixClient(userID id.UserID) *mautrix.Client {
 		Log:                 as.Log.With().Stringer("as_user_id", userID).Logger(),
 		Client:              as.HTTPClient,
 		DefaultHTTPRetries:  as.DefaultHTTPRetries,
+		MaxHTTPBackoff:      as.MaxHTTPBackoff,
 		SpecVersions:        as.SpecVersions,
 	}
 }
