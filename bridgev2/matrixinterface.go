@@ -56,6 +56,7 @@ type MatrixConnector interface {
 	SendMessageStatus(ctx context.Context, status *MessageStatus, evt *MessageStatusEventInfo)
 
 	GenerateContentURI(ctx context.Context, mediaID networkid.MediaID) (id.ContentURIString, error)
+	ParseContentURI(ctx context.Context, contentURI id.ContentURIString) (networkid.MediaID, error)
 
 	GetPowerLevels(ctx context.Context, roomID id.RoomID) (*event.PowerLevelsEventContent, error)
 	GetMembers(ctx context.Context, roomID id.RoomID) (map[id.UserID]*event.MemberEventContent, error)

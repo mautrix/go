@@ -71,7 +71,20 @@ func (br *Connector) GenerateContentURI(ctx context.Context, mediaID networkid.M
 	return mxc, nil
 }
 
-func (br *Connector) getDirectMedia(ctx context.Context, mediaIDStr string, params map[string]string) (response mediaproxy.GetMediaResponse, err error) {
+func (br *Connector) ParseContentURI(ctx context.Context, mxc id.ContentURIString) (networkid.MediaID, error) {
+	if br.MediaProxy == nil {
+		return nil, bridgev2.ErrDirectMediaNotEnabled
+	}
+	parsed, err := mxc.Parse()
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse mxc URI: %w", err)
+	} else if parsed.Homeserver != br.MediaProxy.GetServerName() {
+		return nil, fmt.Errorf("mxc URI homeserver does not match media proxy server name")
+	}
+	return br.parseMediaID(parsed.FileID)
+}
+
+func (br *Connector) parseMediaID(mediaIDStr string) (networkid.MediaID, error) {
 	mediaID, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(mediaIDStr, br.Config.DirectMedia.MediaIDPrefix))
 	if err != nil || !bytes.HasPrefix(mediaID, []byte(MediaIDPrefix)) || len(mediaID) < len(MediaIDPrefix)+MediaIDTruncatedHashLength+1 {
 		return nil, mediaproxy.ErrInvalidMediaIDSyntax
@@ -82,5 +95,13 @@ func (br *Connector) getDirectMedia(ctx context.Context, mediaIDStr string, para
 		return nil, mautrix.MNotFound.WithMessage("Invalid checksum in media ID part")
 	}
 	remoteMediaID := networkid.MediaID(mediaID[len(MediaIDPrefix) : len(mediaID)-MediaIDTruncatedHashLength])
+	return remoteMediaID, nil
+}
+
+func (br *Connector) getDirectMedia(ctx context.Context, mediaIDStr string, params map[string]string) (response mediaproxy.GetMediaResponse, err error) {
+	remoteMediaID, err := br.parseMediaID(mediaIDStr)
+	if err != nil {
+		return response, err
+	}
 	return br.Bridge.Network.(bridgev2.DirectMediableNetwork).Download(ctx, remoteMediaID, params)
 }
