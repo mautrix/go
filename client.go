@@ -2834,6 +2834,14 @@ func (cli *Client) DeletePushRule(ctx context.Context, scope string, kind pushru
 	return err
 }
 
+func (cli *Client) SetPushRuleEnabled(ctx context.Context, scope string, kind pushrules.PushRuleType, ruleID string, enabled bool) error {
+	urlPath := cli.BuildClientURL("v3", "pushrules", scope, kind, ruleID, "enabled")
+	_, err := cli.MakeRequest(ctx, http.MethodPut, urlPath, map[string]any{
+		"enabled": enabled,
+	}, nil)
+	return err
+}
+
 func (cli *Client) PutPushRule(ctx context.Context, scope string, kind pushrules.PushRuleType, ruleID string, req *ReqPutPushRule) error {
 	query := make(map[string]string)
 	if len(req.After) > 0 {
