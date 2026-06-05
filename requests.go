@@ -297,6 +297,26 @@ type ReqKeysSignatures struct {
 
 type ReqUploadSignatures map[id.UserID]map[string]ReqKeysSignatures
 
+// MSC4350ImpersonatorDeviceKey is the JSON object key for the
+// MSC4350 impersonator field. The unstable prefix MUST be used until
+// the spec is accepted; see
+// https://github.com/matrix-org/matrix-spec-proposals/pull/4350
+const MSC4350ImpersonatorDeviceKey = "fi.mau.msc4350.impersonator"
+
+// ImpersonatorDevice is the embedded device-keys-like object that
+// identifies which device is allowed to cryptographically impersonate
+// the owner of an impersonatable device, per MSC4350.
+//
+// Note: signatures live on the *parent* DeviceKeys, not here. Per spec,
+// the impersonator entry is the canonical device-keys object minus its
+// own signatures.
+type ImpersonatorDevice struct {
+	UserID     id.UserID      `json:"user_id"`
+	DeviceID   id.DeviceID    `json:"device_id"`
+	Algorithms []id.Algorithm `json:"algorithms"`
+	Keys       KeyMap         `json:"keys"`
+}
+
 type DeviceKeys struct {
 	UserID     id.UserID             `json:"user_id"`
 	DeviceID   id.DeviceID           `json:"device_id"`
@@ -305,7 +325,16 @@ type DeviceKeys struct {
 	Signatures signatures.Signatures `json:"signatures"`
 	Dehydrated bool                  `json:"dehydrated,omitempty"`
 	Unsigned   map[string]any        `json:"unsigned,omitempty"`
-	Extra      map[string]any        `json:"-"`
+	// MSC4350Impersonator, when non-nil, marks this device as an
+	// "impersonatable" device whose encryption operations are delegated
+	// to the bridge bot's device identified here. The owning device's
+	// Algorithms MUST be empty and Keys MUST be empty whenever this is
+	// set, and Signatures MUST contain a signature from the impersonator
+	// keyed by "ed25519:<impersonator.DeviceID>".
+	// Marshals to / unmarshals from the unstable JSON key
+	// "fi.mau.msc4350.impersonator". See MSC4350.
+	MSC4350Impersonator *ImpersonatorDevice `json:"fi.mau.msc4350.impersonator,omitempty"`
+	Extra               map[string]any      `json:"-"`
 }
 
 type serializableDeviceKeys DeviceKeys
@@ -321,6 +350,10 @@ func (dk *DeviceKeys) deleteStandardExtraFields() {
 	delete(dk.Extra, "signatures")
 	delete(dk.Extra, "dehydrated")
 	delete(dk.Extra, "unsigned")
+	// MSC4350: the impersonator field is captured by the typed
+	// MSC4350Impersonator field, so drop the raw copy in Extra to
+	// avoid double-encoding on marshal.
+	delete(dk.Extra, MSC4350ImpersonatorDeviceKey)
 }
 
 func (dk *DeviceKeys) MarshalJSON() ([]byte, error) {
