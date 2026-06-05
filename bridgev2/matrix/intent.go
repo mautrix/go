@@ -761,7 +761,7 @@ func (as *ASIntent) MuteRoom(ctx context.Context, roomID id.RoomID, until time.T
 		return err
 	} else {
 		return as.Matrix.PutPushRule(ctx, "global", pushrules.RoomRule, string(roomID), &mautrix.ReqPutPushRule{
-			Actions: []pushrules.PushActionType{pushrules.ActionDontNotify},
+			Actions: []*pushrules.PushAction{{Action: pushrules.ActionDontNotify}},
 		})
 	}
 }

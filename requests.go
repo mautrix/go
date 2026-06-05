@@ -439,9 +439,9 @@ type ReqPutPushRule struct {
 	Before string `json:"-"`
 	After  string `json:"-"`
 
-	Actions    []pushrules.PushActionType `json:"actions"`
-	Conditions []pushrules.PushCondition  `json:"conditions"`
-	Pattern    string                     `json:"pattern"`
+	Actions    []*pushrules.PushAction    `json:"actions"`
+	Conditions []*pushrules.PushCondition `json:"conditions,omitempty"`
+	Pattern    string                     `json:"pattern,omitempty"`
 }
 
 type ReqBeeperBatchSend struct {
