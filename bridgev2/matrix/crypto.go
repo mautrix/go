@@ -602,23 +602,28 @@ func (helper *CryptoHelper) EnsureImpersonatableDevice(ctx context.Context, ghos
 		IdentityKey: identityKey,
 	}
 
-	// /keys/upload requires synapse to know the device_id the keys are
-	// being uploaded for. With appservice masquerading that comes from
-	// the ?device_id= query param (MSC3202). The shared cached client
-	// returned by as.Client doesn't have DeviceID set - it's used for
-	// ghost intent operations that don't tie to a specific device. Build
-	// a one-off client with the impersonatable device id pinned so the
-	// URL builder appends ?device_id= and ?org.matrix.msc3202.device_id=.
+	// Two-step flow:
+	//
+	//   1. PUT /v3/devices/{deviceID}?user_id=<ghost>           (MSC4190 device-create)
+	//   2. POST /v3/keys/upload?user_id=<ghost>&device_id=<X>   (MSC4326 device-keys-upload)
+	//
+	// Step 1 must NOT include a ?device_id= query parameter:
+	// synapse's appservice auth layer treats ?device_id= as
+	// "I claim to already be this device", looks up the device,
+	// and rejects with M_UNKNOWN_DEVICE if it doesn't exist yet -
+	// blocking the very create-device request that would have
+	// brought it into existence. The PUT path itself names the
+	// device, so step 1 doesn't need the query param.
+	//
+	// Step 2 DOES need ?device_id= because /keys/upload otherwise
+	// has no way to know which device the keys belong to.
+	//
+	// We use one client (NewMautrixClient gives us a fresh one that
+	// isn't cached for general use) and toggle SetAppServiceDeviceID
+	// between the calls.
 	ghostClient := helper.bridge.AS.NewMautrixClient(ghostUserID)
-	ghostClient.DeviceID = MSC4350ImpersonatableDeviceID
-	ghostClient.SetAppServiceDeviceID = true
 
-	// MSC4326 device masquerading rejects /keys/upload for a device that
-	// hasn't been registered yet ("Application service trying to use a
-	// device that doesn't exist"). Create the device first via the
-	// MSC4190 PUT /devices/{deviceID} flow, then upload its keys.
-	// CreateDeviceMSC4190 is idempotent in synapse - re-creating the
-	// same device_id is a no-op rather than an error.
+	// Step 1: register device. No DeviceID query param yet.
 	if err := ghostClient.CreateDeviceMSC4190(
 		ctx,
 		MSC4350ImpersonatableDeviceID,
@@ -627,6 +632,10 @@ func (helper *CryptoHelper) EnsureImpersonatableDevice(ctx context.Context, ghos
 		return fmt.Errorf("register impersonatable device for %s: %w", ghostUserID, err)
 	}
 
+	// Step 2: upload device keys. Now the device exists and we can
+	// claim to be it via the ?device_id= query param.
+	ghostClient.DeviceID = MSC4350ImpersonatableDeviceID
+	ghostClient.SetAppServiceDeviceID = true
 	if _, err := UploadImpersonatableDevice(ctx, account, ghostClient, ghostUserID, bot); err != nil {
 		return err
 	}
