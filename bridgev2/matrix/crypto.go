@@ -564,14 +564,6 @@ func (helper *CryptoHelper) ShareKeys(ctx context.Context) error {
 // the crypto helper hasn't finished initialising; both are normal
 // states during bridge startup.
 func (helper *CryptoHelper) EnsureImpersonatableDevice(ctx context.Context, ghostUserID id.UserID) error {
-	// MSC4350 debug instrumentation (temporary - revert before upstreaming).
-	helper.log.Info().
-		Stringer("ghost", ghostUserID).
-		Bool("helper_nil", helper == nil).
-		Bool("config_msc4350", helper != nil && helper.bridge.Config.Encryption.MSC4350).
-		Bool("mach_nil", helper == nil || helper.mach == nil).
-		Bool("client_nil", helper == nil || helper.client == nil).
-		Msg("MSC4350 EnsureImpersonatableDevice entered")
 	if helper == nil || !helper.bridge.Config.Encryption.MSC4350 {
 		return nil
 	}
@@ -580,7 +572,6 @@ func (helper *CryptoHelper) EnsureImpersonatableDevice(ctx context.Context, ghos
 	}
 	account := helper.mach.GetAccount()
 	if account == nil {
-		helper.log.Info().Msg("MSC4350 account is nil, skipping")
 		return nil
 	}
 

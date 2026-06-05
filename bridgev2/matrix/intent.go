@@ -89,31 +89,16 @@ func (as *ASIntent) SendMessage(ctx context.Context, roomID id.RoomID, eventType
 			// A failure here is logged but not fatal - without MSC4350
 			// the sender-mismatch warning resurfaces, but the message
 			// still gets through.
-			// MSC4350 debug instrumentation (temporary - revert before
-			// upstreaming): unconditionally log when we hit the hook so we
-			// can confirm code-path coverage in production logs without
-			// turning on bridge-wide DEBUG.
-			zerolog.Ctx(ctx).Info().
-				Stringer("ghost", as.Matrix.UserID).
-				Bool("is_custom_puppet", as.Matrix.IsCustomPuppet).
-				Stringer("bot_mxid", as.Connector.AS.BotMXID()).
-				Msg("MSC4350 hook reached")
 			if !as.Matrix.IsCustomPuppet && as.Matrix.UserID != as.Connector.AS.BotMXID() {
 				if msc4350Helper, ok := as.Connector.Crypto.(interface {
 					EnsureImpersonatableDevice(context.Context, id.UserID) error
 				}); ok {
-					zerolog.Ctx(ctx).Info().
-						Stringer("ghost", as.Matrix.UserID).
-						Msg("MSC4350 calling EnsureImpersonatableDevice")
 					if ensureErr := msc4350Helper.EnsureImpersonatableDevice(ctx, as.Matrix.UserID); ensureErr != nil {
 						zerolog.Ctx(ctx).Warn().
 							Err(ensureErr).
 							Stringer("ghost", as.Matrix.UserID).
 							Msg("Failed to ensure MSC4350 impersonatable device; continuing with encryption")
 					}
-				} else {
-					zerolog.Ctx(ctx).Warn().
-						Msg("MSC4350 interface assertion failed - Crypto type does not have EnsureImpersonatableDevice")
 				}
 			}
 			err = as.Connector.Crypto.Encrypt(ctx, roomID, eventType, content)
