@@ -602,7 +602,16 @@ func (helper *CryptoHelper) EnsureImpersonatableDevice(ctx context.Context, ghos
 		IdentityKey: identityKey,
 	}
 
-	ghostClient := helper.bridge.AS.Client(ghostUserID)
+	// /keys/upload requires synapse to know the device_id the keys are
+	// being uploaded for. With appservice masquerading that comes from
+	// the ?device_id= query param (MSC3202). The shared cached client
+	// returned by as.Client doesn't have DeviceID set - it's used for
+	// ghost intent operations that don't tie to a specific device. Build
+	// a one-off client with the impersonatable device id pinned so the
+	// URL builder appends ?device_id= and ?org.matrix.msc3202.device_id=.
+	ghostClient := helper.bridge.AS.NewMautrixClient(ghostUserID)
+	ghostClient.DeviceID = MSC4350ImpersonatableDeviceID
+	ghostClient.SetAppServiceDeviceID = true
 	if _, err := UploadImpersonatableDevice(ctx, account, ghostClient, ghostUserID, bot); err != nil {
 		return err
 	}
