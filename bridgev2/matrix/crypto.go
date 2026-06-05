@@ -612,6 +612,21 @@ func (helper *CryptoHelper) EnsureImpersonatableDevice(ctx context.Context, ghos
 	ghostClient := helper.bridge.AS.NewMautrixClient(ghostUserID)
 	ghostClient.DeviceID = MSC4350ImpersonatableDeviceID
 	ghostClient.SetAppServiceDeviceID = true
+
+	// MSC4326 device masquerading rejects /keys/upload for a device that
+	// hasn't been registered yet ("Application service trying to use a
+	// device that doesn't exist"). Create the device first via the
+	// MSC4190 PUT /devices/{deviceID} flow, then upload its keys.
+	// CreateDeviceMSC4190 is idempotent in synapse - re-creating the
+	// same device_id is a no-op rather than an error.
+	if err := ghostClient.CreateDeviceMSC4190(
+		ctx,
+		MSC4350ImpersonatableDeviceID,
+		"MSC4350 impersonatable device",
+	); err != nil {
+		return fmt.Errorf("register impersonatable device for %s: %w", ghostUserID, err)
+	}
+
 	if _, err := UploadImpersonatableDevice(ctx, account, ghostClient, ghostUserID, bot); err != nil {
 		return err
 	}
