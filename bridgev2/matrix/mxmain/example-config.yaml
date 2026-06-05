@@ -412,6 +412,14 @@ encryption:
     # Requires the homeserver to support MSC4190 and the device masquerading parts of MSC3202.
     # Only relevant when using end-to-bridge encryption, required when using encryption with next-gen auth (MSC3861).
     msc4190: false
+    # Whether to use MSC4350 to legitimize the bridge bot's device signing
+    # events on behalf of ghost users (and double-puppeted real users), so
+    # recipient clients no longer flag bridged events with "sender doesn't
+    # match device owner" warnings.
+    # Requires the homeserver to support MSC4350 (synapse: experimental_features.msc4350_enabled)
+    # and a cross-signed bridge bot device (encryption.self_sign).
+    # See https://github.com/matrix-org/matrix-spec-proposals/pull/4350
+    msc4350: false
     # Whether to encrypt reactions and reply metadata as per MSC4392.
     # This is not supported by most clients.
     msc4392: false

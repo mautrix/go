@@ -16,8 +16,19 @@ type EncryptionConfig struct {
 	Require    bool `yaml:"require"`
 	Appservice bool `yaml:"appservice"`
 	MSC4190    bool `yaml:"msc4190"`
-	MSC4392    bool `yaml:"msc4392"`
-	SelfSign   bool `yaml:"self_sign"`
+	// MSC4350: Permitting encryption impersonation for appservices.
+	// When enabled, the bridge will create an "impersonatable" device for
+	// each ghost user (and double-puppeted real user) pointing at the
+	// bridge bot's device as the impersonator. This lets recipient clients
+	// legitimately accept events signed by the bridge bot's device when
+	// attributed to a ghost, removing the "sender doesn't match device
+	// owner" warning. Requires homeserver support for MSC4350 (synapse
+	// experimental_features.msc4350_enabled) and a cross-signed bridge bot
+	// device (encryption.self_sign).
+	// See https://github.com/matrix-org/matrix-spec-proposals/pull/4350
+	MSC4350  bool `yaml:"msc4350"`
+	MSC4392  bool `yaml:"msc4392"`
+	SelfSign bool `yaml:"self_sign"`
 
 	PlaintextMentions bool `yaml:"plaintext_mentions"`
 
