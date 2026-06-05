@@ -7,6 +7,7 @@
 package matrix
 
 import (
+	"context"
 	"fmt"
 
 	"maunium.net/go/mautrix"
@@ -101,4 +102,70 @@ func BuildImpersonatableDeviceKeys(
 		sig,
 	)
 	return impersonatable, nil
+}
+
+// ImpersonatorBotIdentity carries the bot-side inputs to an impersonatable
+// device upload: the bot's user_id/device_id and the public key material
+// that needs to be embedded inside the ghost's device entry.
+type ImpersonatorBotIdentity struct {
+	UserID      id.UserID
+	DeviceID    id.DeviceID
+	SigningKey  id.SigningKey
+	IdentityKey id.IdentityKey
+}
+
+// KeysUploader is the subset of *mautrix.Client used to upload device
+// keys. Defined here so tests can substitute a mock recorder instead of
+// standing up an HTTP server.
+type KeysUploader interface {
+	UploadKeys(ctx context.Context, req *mautrix.ReqUploadKeys) (*mautrix.RespUploadKeys, error)
+}
+
+// Compile-time guard: if the *mautrix.Client.UploadKeys signature ever
+// drifts, this line breaks the build instead of failing silently at
+// call sites.
+var _ KeysUploader = (*mautrix.Client)(nil)
+
+// UploadImpersonatableDevice builds an MSC4350 impersonatable device for
+// the given ghost and uploads it via /keys/upload.
+//
+// uploader MUST be authenticated as the ghost — for an appservice
+// bridge that is whatever the masquerade machinery returns from
+// as.Client(ghostUserID), which auto-appends ?user_id=<ghost> per the
+// appservice spec / MSC4326. We do not perform the masquerade ourselves;
+// the caller is responsible for handing us a correctly-scoped client.
+//
+// Synapse's MSC4350 implementation accepts a re-upload of the same
+// device_id as an idempotent refresh, so calling this more than once
+// for the same ghost is safe — but bridges should still avoid the
+// network round-trip by tracking which ghosts already have an
+// impersonatable device. That persistence layer lands in the next
+// commit; this function intentionally does not consult or update any
+// store.
+//
+// Returns the constructed DeviceKeys (useful for logging or persistence)
+// so the caller can record the device_id without recomputing it.
+func UploadImpersonatableDevice(
+	ctx context.Context,
+	signer ImpersonatorSigner,
+	uploader KeysUploader,
+	ghostUserID id.UserID,
+	bot ImpersonatorBotIdentity,
+) (*mautrix.DeviceKeys, error) {
+	if uploader == nil {
+		return nil, fmt.Errorf("keys uploader is required")
+	}
+	dk, err := BuildImpersonatableDeviceKeys(
+		signer,
+		ghostUserID, MSC4350ImpersonatableDeviceID,
+		bot.UserID, bot.DeviceID,
+		bot.SigningKey, bot.IdentityKey,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := uploader.UploadKeys(ctx, &mautrix.ReqUploadKeys{DeviceKeys: dk}); err != nil {
+		return dk, fmt.Errorf("upload impersonatable device for %s: %w", ghostUserID, err)
+	}
+	return dk, nil
 }

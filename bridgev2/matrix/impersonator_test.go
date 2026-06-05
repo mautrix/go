@@ -7,6 +7,7 @@
 package matrix
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -243,6 +244,122 @@ func TestBuildImpersonatableDeviceKeys_JSONShape(t *testing.T) {
 	}
 	if keys, _ := asMap["keys"].(map[string]any); len(keys) != 0 {
 		t.Errorf("top-level keys must serialize as {}, got %v", keys)
+	}
+}
+
+// recordingUploader is a deterministic KeysUploader that captures the
+// upload request and returns a fixed response (or a configured error).
+type recordingUploader struct {
+	lastRequest  *mautrix.ReqUploadKeys
+	respToReturn *mautrix.RespUploadKeys
+	uploadErr    error
+	callCount    int
+}
+
+func (u *recordingUploader) UploadKeys(_ context.Context, req *mautrix.ReqUploadKeys) (*mautrix.RespUploadKeys, error) {
+	u.callCount++
+	u.lastRequest = req
+	if u.uploadErr != nil {
+		return nil, u.uploadErr
+	}
+	if u.respToReturn != nil {
+		return u.respToReturn, nil
+	}
+	return &mautrix.RespUploadKeys{}, nil
+}
+
+// TestUploadImpersonatableDevice_Happy exercises the full builder +
+// upload path and confirms the request that hits the wire carries the
+// expected device keys.
+func TestUploadImpersonatableDevice_Happy(t *testing.T) {
+	signer := &recordingSigner{sigToReturn: testSignature}
+	uploader := &recordingUploader{}
+	bot := ImpersonatorBotIdentity{
+		UserID: testBotUserID, DeviceID: testBotDeviceID,
+		SigningKey: testBotSigningKey, IdentityKey: testBotIdentityKey,
+	}
+
+	dk, err := UploadImpersonatableDevice(context.Background(), signer, uploader, testGhostUserID, bot)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if dk == nil {
+		t.Fatal("expected DeviceKeys to be returned for caller bookkeeping")
+	}
+	if uploader.callCount != 1 {
+		t.Errorf("expected exactly one UploadKeys call, got %d", uploader.callCount)
+	}
+	if uploader.lastRequest == nil || uploader.lastRequest.DeviceKeys == nil {
+		t.Fatal("expected request to carry DeviceKeys")
+	}
+	if uploader.lastRequest.DeviceKeys.DeviceID != MSC4350ImpersonatableDeviceID {
+		t.Errorf("device_id should be the impersonatable constant, got %q",
+			uploader.lastRequest.DeviceKeys.DeviceID)
+	}
+	if uploader.lastRequest.DeviceKeys.UserID != testGhostUserID {
+		t.Errorf("user_id should be the GHOST, got %q",
+			uploader.lastRequest.DeviceKeys.UserID)
+	}
+	if uploader.lastRequest.OneTimeKeys != nil {
+		t.Errorf("impersonatable upload must NOT include OneTimeKeys, got %#v",
+			uploader.lastRequest.OneTimeKeys)
+	}
+}
+
+// TestUploadImpersonatableDevice_UploadError surfaces a network/HTTP
+// failure to the caller with the ghost user ID baked into the error
+// message so failures are actionable in logs.
+func TestUploadImpersonatableDevice_UploadError(t *testing.T) {
+	signer := &recordingSigner{sigToReturn: testSignature}
+	uploader := &recordingUploader{uploadErr: sentinelErr("simulated 500 from /keys/upload")}
+	bot := ImpersonatorBotIdentity{
+		UserID: testBotUserID, DeviceID: testBotDeviceID,
+		SigningKey: testBotSigningKey, IdentityKey: testBotIdentityKey,
+	}
+
+	_, err := UploadImpersonatableDevice(context.Background(), signer, uploader, testGhostUserID, bot)
+	if err == nil {
+		t.Fatal("expected error from upload to propagate, got nil")
+	}
+	if !strings.Contains(err.Error(), string(testGhostUserID)) {
+		t.Errorf("error should name the ghost user; got %v", err)
+	}
+	if !strings.Contains(err.Error(), "simulated 500") {
+		t.Errorf("error should wrap the underlying upload error; got %v", err)
+	}
+}
+
+// TestUploadImpersonatableDevice_BuildError verifies that builder errors
+// short-circuit BEFORE we send anything over the wire.
+func TestUploadImpersonatableDevice_BuildError(t *testing.T) {
+	signer := &recordingSigner{signErr: sentinelErr("signing key missing")}
+	uploader := &recordingUploader{}
+	bot := ImpersonatorBotIdentity{
+		UserID: testBotUserID, DeviceID: testBotDeviceID,
+		SigningKey: testBotSigningKey, IdentityKey: testBotIdentityKey,
+	}
+
+	_, err := UploadImpersonatableDevice(context.Background(), signer, uploader, testGhostUserID, bot)
+	if err == nil {
+		t.Fatal("expected build error to propagate")
+	}
+	if uploader.callCount != 0 {
+		t.Errorf("must not call upload when build fails; calls=%d", uploader.callCount)
+	}
+}
+
+// TestUploadImpersonatableDevice_NilUploader rejects misuse early. A
+// caller that has chosen not to wire up uploads should not be quietly
+// constructing devices that go nowhere.
+func TestUploadImpersonatableDevice_NilUploader(t *testing.T) {
+	signer := &recordingSigner{sigToReturn: testSignature}
+	bot := ImpersonatorBotIdentity{
+		UserID: testBotUserID, DeviceID: testBotDeviceID,
+		SigningKey: testBotSigningKey, IdentityKey: testBotIdentityKey,
+	}
+	_, err := UploadImpersonatableDevice(context.Background(), signer, nil, testGhostUserID, bot)
+	if err == nil {
+		t.Fatal("expected error when uploader is nil")
 	}
 }
 
