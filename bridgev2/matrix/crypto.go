@@ -56,6 +56,13 @@ type CryptoHelper struct {
 	cancelSync func()
 
 	cancelPeriodicDeleteLoop func()
+
+	// impersonatableMu guards impersonatableUploaded. It is held only
+	// long enough to read/insert into the map; the actual /keys/upload
+	// happens outside the lock so a slow homeserver can't block other
+	// ghosts from being encrypted for.
+	impersonatableMu       sync.Mutex
+	impersonatableUploaded map[id.UserID]struct{}
 }
 
 func NewCryptoHelper(c *Connector) Crypto {
@@ -541,6 +548,60 @@ func (helper *CryptoHelper) HandleMemberEvent(ctx context.Context, evt *event.Ev
 // ShareKeys uploads the given number of one-time-keys to the server.
 func (helper *CryptoHelper) ShareKeys(ctx context.Context) error {
 	return helper.mach.ShareKeys(ctx, -1)
+}
+
+// EnsureImpersonatableDevice uploads an MSC4350 impersonatable device
+// for the given ghost user, with the bridge bot as the impersonator, if
+// the bridge is configured for MSC4350 and the upload hasn't been
+// performed yet for this ghost in the current process.
+//
+// Synapse treats re-uploads of the same device_id as idempotent
+// refreshes, so cache misses across bridge restarts heal themselves on
+// next call - persistence is an efficiency improvement, not a
+// correctness requirement.
+//
+// Returns nil and skips silently when encryption.msc4350 is disabled or
+// the crypto helper hasn't finished initialising; both are normal
+// states during bridge startup.
+func (helper *CryptoHelper) EnsureImpersonatableDevice(ctx context.Context, ghostUserID id.UserID) error {
+	if helper == nil || !helper.bridge.Config.Encryption.MSC4350 {
+		return nil
+	}
+	if helper.mach == nil || helper.client == nil {
+		return nil
+	}
+	account := helper.mach.GetAccount()
+	if account == nil {
+		return nil
+	}
+
+	helper.impersonatableMu.Lock()
+	if helper.impersonatableUploaded == nil {
+		helper.impersonatableUploaded = make(map[id.UserID]struct{})
+	}
+	if _, alreadyUploaded := helper.impersonatableUploaded[ghostUserID]; alreadyUploaded {
+		helper.impersonatableMu.Unlock()
+		return nil
+	}
+	helper.impersonatableMu.Unlock()
+
+	signingKey, identityKey := account.Keys()
+	bot := ImpersonatorBotIdentity{
+		UserID:      helper.client.UserID,
+		DeviceID:    helper.client.DeviceID,
+		SigningKey:  signingKey,
+		IdentityKey: identityKey,
+	}
+
+	ghostClient := helper.bridge.AS.Client(ghostUserID)
+	if _, err := UploadImpersonatableDevice(ctx, account, ghostClient, ghostUserID, bot); err != nil {
+		return err
+	}
+
+	helper.impersonatableMu.Lock()
+	helper.impersonatableUploaded[ghostUserID] = struct{}{}
+	helper.impersonatableMu.Unlock()
+	return nil
 }
 
 func (helper *CryptoHelper) BeeperStreamPublisher() bridgev2.BeeperStreamPublisher {

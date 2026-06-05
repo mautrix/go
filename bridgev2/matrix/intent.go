@@ -82,6 +82,25 @@ func (as *ASIntent) SendMessage(ctx context.Context, roomID id.RoomID, eventType
 					as.Matrix.AddDoublePuppetValueWithTS(content, extra.Timestamp.UnixMilli())
 				}
 			}
+			// MSC4350: ensure the ghost has an impersonatable device on
+			// the server before we encrypt anything as them. Skipped for
+			// the bot itself (it IS the impersonator) and for
+			// double-puppeted real users (DP gets opt-in support later).
+			// A failure here is logged but not fatal - without MSC4350
+			// the sender-mismatch warning resurfaces, but the message
+			// still gets through.
+			if !as.Matrix.IsCustomPuppet && as.Matrix.UserID != as.Connector.AS.BotMXID() {
+				if msc4350Helper, ok := as.Connector.Crypto.(interface {
+					EnsureImpersonatableDevice(context.Context, id.UserID) error
+				}); ok {
+					if ensureErr := msc4350Helper.EnsureImpersonatableDevice(ctx, as.Matrix.UserID); ensureErr != nil {
+						zerolog.Ctx(ctx).Warn().
+							Err(ensureErr).
+							Stringer("ghost", as.Matrix.UserID).
+							Msg("Failed to ensure MSC4350 impersonatable device; continuing with encryption")
+					}
+				}
+			}
 			err = as.Connector.Crypto.Encrypt(ctx, roomID, eventType, content)
 			if err != nil {
 				return nil, err
