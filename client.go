@@ -2855,6 +2855,14 @@ func (cli *Client) PutPushRule(ctx context.Context, scope string, kind pushrules
 	return err
 }
 
+func (cli *Client) PutPushRuleActions(ctx context.Context, scope string, kind pushrules.PushRuleType, ruleID string, actions []*pushrules.PushAction) error {
+	urlPath := cli.BuildClientURL("v3", "pushrules", scope, kind, ruleID, "actions")
+	_, err := cli.MakeRequest(ctx, http.MethodPut, urlPath, &ReqPutPushRule{
+		Actions: actions,
+	}, nil)
+	return err
+}
+
 func (cli *Client) ReportEvent(ctx context.Context, roomID id.RoomID, eventID id.EventID, reason string) error {
 	urlPath := cli.BuildClientURL("v3", "rooms", roomID, "report", eventID)
 	_, err := cli.MakeRequest(ctx, http.MethodPost, urlPath, &ReqReport{Reason: reason, Score: -100}, nil)
