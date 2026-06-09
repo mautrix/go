@@ -13,10 +13,12 @@ type PushActionType string
 
 // The allowed push action types as specified in spec section 11.12.1.4.1.
 const (
-	ActionNotify     PushActionType = "notify"
+	ActionNotify   PushActionType = "notify"
+	ActionSetTweak PushActionType = "set_tweak"
+	// Deprecated: this does nothing. An empty actions array is equivalent
 	ActionDontNotify PushActionType = "dont_notify"
-	ActionCoalesce   PushActionType = "coalesce"
-	ActionSetTweak   PushActionType = "set_tweak"
+	// Deprecated: this was never implemented and was removed from the Matrix spec
+	ActionCoalesce PushActionType = "coalesce"
 )
 
 // PushActionTweak is the type of the tweak in SetTweak push actions.
@@ -33,9 +35,6 @@ type PushActionArray []*PushAction
 
 // PushActionArrayShould contains the important information parsed from a PushActionArray.
 type PushActionArrayShould struct {
-	// Whether the array contained a Notify, DontNotify or Coalesce action type.
-	// Deprecated: an empty array should be treated as no notification, so there's no reason to check this field.
-	NotifySpecified bool
 	// Whether the event in question should trigger a notification.
 	Notify bool
 	// Whether the event in question should be highlighted.
@@ -47,16 +46,14 @@ type PushActionArrayShould struct {
 	SoundName string
 }
 
+var ShouldDoNothing = PushActionArrayShould{}
+
 // Should parses this push action array and returns the relevant details wrapped in a PushActionArrayShould struct.
 func (actions PushActionArray) Should() (should PushActionArrayShould) {
 	for _, action := range actions {
 		switch action.Action {
 		case ActionNotify, ActionCoalesce:
 			should.Notify = true
-			should.NotifySpecified = true
-		case ActionDontNotify:
-			should.Notify = false
-			should.NotifySpecified = true
 		case ActionSetTweak:
 			switch action.Tweak {
 			case TweakHighlight:

@@ -47,7 +47,6 @@ func TestEventToPushRules(t *testing.T) {
 	assert.Equal(t, ".m.rule.contains_user_name", pushRuleset.Content[0].RuleID)
 
 	assert.False(t, pushRuleset.Override[0].Actions.Should().Notify)
-	assert.True(t, pushRuleset.Override[0].Actions.Should().NotifySpecified)
 }
 
 const JSONExamplePushRules = `{

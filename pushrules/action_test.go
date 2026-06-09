@@ -16,7 +16,6 @@ import (
 
 func TestPushActionArray_Should_EmptyArrayReturnsDefaults(t *testing.T) {
 	should := pushrules.PushActionArray{}.Should()
-	assert.False(t, should.NotifySpecified)
 	assert.False(t, should.Notify)
 	assert.False(t, should.Highlight)
 	assert.False(t, should.PlaySound)
@@ -29,7 +28,6 @@ func TestPushActionArray_Should_MixedArrayReturnsExpected1(t *testing.T) {
 		{Action: pushrules.ActionSetTweak, Tweak: pushrules.TweakHighlight},
 		{Action: pushrules.ActionSetTweak, Tweak: pushrules.TweakSound, Value: "ping"},
 	}.Should()
-	assert.True(t, should.NotifySpecified)
 	assert.True(t, should.Notify)
 	assert.True(t, should.Highlight)
 	assert.True(t, should.PlaySound)
@@ -38,11 +36,9 @@ func TestPushActionArray_Should_MixedArrayReturnsExpected1(t *testing.T) {
 
 func TestPushActionArray_Should_MixedArrayReturnsExpected2(t *testing.T) {
 	should := pushrules.PushActionArray{
-		{Action: pushrules.ActionDontNotify},
 		{Action: pushrules.ActionSetTweak, Tweak: pushrules.TweakHighlight, Value: false},
 		{Action: pushrules.ActionSetTweak, Tweak: pushrules.TweakSound, Value: ""},
 	}.Should()
-	assert.True(t, should.NotifySpecified)
 	assert.False(t, should.Notify)
 	assert.False(t, should.Highlight)
 	assert.False(t, should.PlaySound)
@@ -53,39 +49,25 @@ func TestPushActionArray_Should_NotifySet(t *testing.T) {
 	should := pushrules.PushActionArray{
 		{Action: pushrules.ActionNotify},
 	}.Should()
-	assert.True(t, should.NotifySpecified)
 	assert.True(t, should.Notify)
 	assert.False(t, should.Highlight)
 	assert.False(t, should.PlaySound)
 	assert.Empty(t, should.SoundName)
 }
 
-func TestPushActionArray_Should_NotifyAndCoalesceDoTheSameThing(t *testing.T) {
-	should1 := pushrules.PushActionArray{
-		{Action: pushrules.ActionNotify},
-	}.Should()
-	should2 := pushrules.PushActionArray{
-		{Action: pushrules.ActionCoalesce},
-	}.Should()
-	assert.Equal(t, should1, should2)
-}
-
 func TestPushActionArray_Should_DontNotify(t *testing.T) {
-	should := pushrules.PushActionArray{
-		{Action: pushrules.ActionDontNotify},
-	}.Should()
-	assert.True(t, should.NotifySpecified)
+	should := pushrules.PushActionArray{}.Should()
 	assert.False(t, should.Notify)
 	assert.False(t, should.Highlight)
 	assert.False(t, should.PlaySound)
 	assert.Empty(t, should.SoundName)
+	assert.Equal(t, should, pushrules.ShouldDoNothing)
 }
 
 func TestPushActionArray_Should_HighlightBlank(t *testing.T) {
 	should := pushrules.PushActionArray{
 		{Action: pushrules.ActionSetTweak, Tweak: pushrules.TweakHighlight},
 	}.Should()
-	assert.False(t, should.NotifySpecified)
 	assert.False(t, should.Notify)
 	assert.True(t, should.Highlight)
 	assert.False(t, should.PlaySound)
@@ -96,7 +78,6 @@ func TestPushActionArray_Should_HighlightFalse(t *testing.T) {
 	should := pushrules.PushActionArray{
 		{Action: pushrules.ActionSetTweak, Tweak: pushrules.TweakHighlight, Value: false},
 	}.Should()
-	assert.False(t, should.NotifySpecified)
 	assert.False(t, should.Notify)
 	assert.False(t, should.Highlight)
 	assert.False(t, should.PlaySound)
@@ -107,7 +88,6 @@ func TestPushActionArray_Should_SoundName(t *testing.T) {
 	should := pushrules.PushActionArray{
 		{Action: pushrules.ActionSetTweak, Tweak: pushrules.TweakSound, Value: "ping"},
 	}.Should()
-	assert.False(t, should.NotifySpecified)
 	assert.False(t, should.Notify)
 	assert.False(t, should.Highlight)
 	assert.True(t, should.PlaySound)
@@ -118,7 +98,6 @@ func TestPushActionArray_Should_SoundNameEmpty(t *testing.T) {
 	should := pushrules.PushActionArray{
 		{Action: pushrules.ActionSetTweak, Tweak: pushrules.TweakSound, Value: ""},
 	}.Should()
-	assert.False(t, should.NotifySpecified)
 	assert.False(t, should.Notify)
 	assert.False(t, should.Highlight)
 	assert.False(t, should.PlaySound)

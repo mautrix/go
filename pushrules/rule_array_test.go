@@ -31,7 +31,6 @@ func TestPushRuleArray_GetActions_FirstMatchReturns(t *testing.T) {
 	}
 
 	actions2 := pushrules.PushActionArray{
-		{Action: pushrules.ActionDontNotify},
 		{Action: pushrules.ActionSetTweak, Tweak: pushrules.TweakHighlight, Value: false},
 		{Action: pushrules.ActionSetTweak, Tweak: pushrules.TweakSound, Value: "pong"},
 	}
@@ -43,7 +42,8 @@ func TestPushRuleArray_GetActions_FirstMatchReturns(t *testing.T) {
 	}
 
 	actions3 := pushrules.PushActionArray{
-		{Action: pushrules.ActionCoalesce},
+		{Action: pushrules.ActionNotify},
+		{Action: pushrules.ActionSetTweak, Tweak: pushrules.TweakSound, Value: "meow"},
 	}
 	rule3 := &pushrules.PushRule{
 		Type:    pushrules.SenderRule,
@@ -77,7 +77,6 @@ func TestPushRuleArray_GetActions_NoMatchesIsNil(t *testing.T) {
 	}
 
 	actions2 := pushrules.PushActionArray{
-		{Action: pushrules.ActionDontNotify},
 		{Action: pushrules.ActionSetTweak, Tweak: pushrules.TweakHighlight, Value: false},
 		{Action: pushrules.ActionSetTweak, Tweak: pushrules.TweakSound, Value: "pong"},
 	}
@@ -89,7 +88,8 @@ func TestPushRuleArray_GetActions_NoMatchesIsNil(t *testing.T) {
 	}
 
 	actions3 := pushrules.PushActionArray{
-		{Action: pushrules.ActionCoalesce},
+		{Action: pushrules.ActionNotify},
+		{Action: pushrules.ActionSetTweak, Tweak: pushrules.TweakSound, Value: "meow"},
 	}
 	rule3 := &pushrules.PushRule{
 		Type:    pushrules.SenderRule,
@@ -109,7 +109,6 @@ func TestPushRuleArray_GetActions_NoMatchesIsNil(t *testing.T) {
 
 func TestPushRuleMap_GetActions_RoomRuleExists(t *testing.T) {
 	actions1 := pushrules.PushActionArray{
-		{Action: pushrules.ActionDontNotify},
 		{Action: pushrules.ActionSetTweak, Tweak: pushrules.TweakHighlight, Value: false},
 		{Action: pushrules.ActionSetTweak, Tweak: pushrules.TweakSound, Value: "pong"},
 	}
@@ -131,7 +130,8 @@ func TestPushRuleMap_GetActions_RoomRuleExists(t *testing.T) {
 	}
 
 	actions3 := pushrules.PushActionArray{
-		{Action: pushrules.ActionCoalesce},
+		{Action: pushrules.ActionNotify},
+		{Action: pushrules.ActionSetTweak, Tweak: pushrules.TweakSound, Value: "meow"},
 	}
 	rule3 := &pushrules.PushRule{
 		Type:    pushrules.RoomRule,
@@ -158,7 +158,6 @@ func TestPushRuleMap_GetActions_RoomRuleExists(t *testing.T) {
 
 func TestPushRuleMap_GetActions_RoomRuleDoesntExist(t *testing.T) {
 	actions1 := pushrules.PushActionArray{
-		{Action: pushrules.ActionDontNotify},
 		{Action: pushrules.ActionSetTweak, Tweak: pushrules.TweakHighlight, Value: false},
 		{Action: pushrules.ActionSetTweak, Tweak: pushrules.TweakSound, Value: "pong"},
 	}
@@ -196,7 +195,6 @@ func TestPushRuleMap_GetActions_RoomRuleDoesntExist(t *testing.T) {
 
 func TestPushRuleMap_GetActions_SenderRuleExists(t *testing.T) {
 	actions1 := pushrules.PushActionArray{
-		{Action: pushrules.ActionDontNotify},
 		{Action: pushrules.ActionSetTweak, Tweak: pushrules.TweakHighlight, Value: false},
 		{Action: pushrules.ActionSetTweak, Tweak: pushrules.TweakSound, Value: "pong"},
 	}
@@ -218,7 +216,8 @@ func TestPushRuleMap_GetActions_SenderRuleExists(t *testing.T) {
 	}
 
 	actions3 := pushrules.PushActionArray{
-		{Action: pushrules.ActionCoalesce},
+		{Action: pushrules.ActionNotify},
+		{Action: pushrules.ActionSetTweak, Tweak: pushrules.TweakSound, Value: "meow"},
 	}
 	rule3 := &pushrules.PushRule{
 		Type:    pushrules.SenderRule,
@@ -245,7 +244,6 @@ func TestPushRuleMap_GetActions_SenderRuleExists(t *testing.T) {
 
 func TestPushRuleArray_SetTypeAndMap(t *testing.T) {
 	actions1 := pushrules.PushActionArray{
-		{Action: pushrules.ActionDontNotify},
 		{Action: pushrules.ActionSetTweak, Tweak: pushrules.TweakHighlight, Value: false},
 		{Action: pushrules.ActionSetTweak, Tweak: pushrules.TweakSound, Value: "pong"},
 	}
@@ -265,7 +263,8 @@ func TestPushRuleArray_SetTypeAndMap(t *testing.T) {
 	}
 
 	actions3 := pushrules.PushActionArray{
-		{Action: pushrules.ActionCoalesce},
+		{Action: pushrules.ActionNotify},
+		{Action: pushrules.ActionSetTweak, Tweak: pushrules.TweakSound, Value: "meow"},
 	}
 	rule3 := &pushrules.PushRule{
 		Enabled: true,
