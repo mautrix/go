@@ -99,6 +99,7 @@ func (cli *Client) ListDevices(ctx context.Context, userID id.UserID) (resp *Res
 type RespUserInfo struct {
 	UserID       id.UserID           `json:"name"`
 	DisplayName  string              `json:"displayname"`
+	Threepids    []ThreePID          `json:"threepids"`
 	AvatarURL    id.ContentURIString `json:"avatar_url"`
 	Guest        bool                `json:"is_guest"`
 	Admin        bool                `json:"admin"`
@@ -109,7 +110,14 @@ type RespUserInfo struct {
 	AppserviceID string              `json:"appservice_id"`
 	UserType     string              `json:"user_type"`
 
-	// TODO: consent fields, threepids, external IDs
+	// TODO: consent fields, external IDs
+}
+
+type ThreePID struct {
+	Medium      string        `json:"medium"`
+	Address     string        `json:"address"`
+	AddedAt     jsontime.Unix `json:"added_at"`
+	ValidatedAt jsontime.Unix `json:"validated_at"`
 }
 
 // GetUserInfo gets information about a specific user account.
@@ -155,6 +163,7 @@ type ReqCreateOrModifyAccount struct {
 	Locked      *bool `json:"locked,omitempty"`
 
 	Displayname string              `json:"displayname,omitempty"`
+	Threepids   []ThreePID          `json:"threepids,omitempty"`
 	AvatarURL   id.ContentURIString `json:"avatar_url,omitempty"`
 	UserType    string              `json:"user_type,omitempty"`
 }
