@@ -61,6 +61,33 @@ type RespListDevices struct {
 	Total   int          `json:"total"`
 }
 
+type AccountInfo struct {
+	UserID       id.UserID           `json:"name"`
+	DisplayName  string              `json:"displayname"`
+	AvatarURL    id.ContentURIString `json:"avatar_url"`
+	Guest        bool                `json:"is_guest"`
+	Admin        bool                `json:"admin"`
+	UserType     string              `json:"user_type"`
+	Deactivated  bool                `json:"deactivated"`
+	ShadowBanned bool                `json:"shadow_banned"`
+	CreationTS   jsontime.Unix       `json:"creation_ts"`
+}
+
+type RespListAccounts struct {
+	Users     []AccountInfo `json:"users"`
+	NextToken string        `json:"next_token"`
+	Total     int           `json:"total"`
+}
+
+// ListAccounts returns a list of local user accounts on the server.
+//
+// https://matrix-org.github.io/synapse/latest/admin_api/user_admin_api.html#list-accounts
+func (cli *Client) ListAccounts(ctx context.Context) (resp RespListAccounts, err error) {
+	// TODO add query parameters described in the documentation
+	_, err = cli.Client.MakeRequest(ctx, http.MethodGet, cli.BuildAdminURL("v2", "users"), nil, &resp)
+	return resp, err
+}
+
 // ListDevices gets information about all the devices of a specific user.
 //
 // https://matrix-org.github.io/synapse/latest/admin_api/user_admin_api.html#list-all-devices
