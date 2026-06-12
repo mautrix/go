@@ -114,7 +114,11 @@ func (e HTTPError) Error() string {
 	if e.WrappedError != nil {
 		return fmt.Sprintf("%s: %v", e.Message, e.WrappedError)
 	} else if e.RespError != nil {
-		return fmt.Sprintf("%s (HTTP %d): %s", e.RespError.ErrCode, e.Response.StatusCode, e.RespError.Err)
+		msg := e.RespError.Err
+		if e.RespError.InternalError != "" {
+			msg = e.RespError.InternalError
+		}
+		return fmt.Sprintf("%s (HTTP %d): %s", e.RespError.ErrCode, e.Response.StatusCode, msg)
 	} else {
 		msg := fmt.Sprintf("HTTP %d", e.Response.StatusCode)
 		if len(e.ResponseBody) > 0 {
