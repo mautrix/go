@@ -14,6 +14,9 @@ import (
 	"encoding/base64"
 	"fmt"
 	"strings"
+	"time"
+
+	"github.com/rs/zerolog"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2"
@@ -25,6 +28,27 @@ import (
 const MediaIDPrefix = "\U0001F408"
 const MediaIDTruncatedHashLength = 16
 const ContentURIMaxLength = 255
+
+// Direct media downloads can race with message persistence: bridgev2's
+// sendConvertedMessage (portal.go) sends the Matrix event via intent.SendMessage
+// *before* inserting the message row into the database (the row needs the MXID
+// returned by the send, so the order can't be flipped). With a local bridge the
+// Matrix client may auto-download the generated mxc:// URI within milliseconds of
+// the send, before the connector has stored the message row. The connector's
+// Download then can't find the message and returns an error, which the media proxy
+// surfaces to the client as a terminal "not found" (the iOS "Something went wrong").
+//
+// To paper over that narrow race we retry the connector Download a bounded number
+// of times. Connectors signal "message not found" inconsistently (e.g. the Meta
+// connector returns a plain fmt.Errorf("message not found")), so there is no
+// reliable typed/sentinel not-found error to scope the retry to at this layer.
+// We therefore retry on any error; the cost is at most ~directMediaRetryMax *
+// directMediaRetryDelay of added latency on the genuine-failure path, which is
+// acceptable since these requests are already failing.
+const (
+	directMediaRetryMax   = 10
+	directMediaRetryDelay = 200 * time.Millisecond
+)
 
 func (br *Connector) initDirectMedia() error {
 	if !br.Config.DirectMedia.Enabled {
@@ -103,5 +127,22 @@ func (br *Connector) getDirectMedia(ctx context.Context, mediaIDStr string, para
 	if err != nil {
 		return response, err
 	}
-	return br.Bridge.Network.(bridgev2.DirectMediableNetwork).Download(ctx, remoteMediaID, params)
+	dmn := br.Bridge.Network.(bridgev2.DirectMediableNetwork)
+	// Retry the download briefly to work around the send-before-insert race in
+	// bridgev2's sendConvertedMessage (see the directMediaRetry* doc comment above).
+	for attempt := 0; ; attempt++ {
+		response, err = dmn.Download(ctx, remoteMediaID, params)
+		if err == nil || attempt >= directMediaRetryMax {
+			return response, err
+		}
+		zerolog.Ctx(ctx).Debug().Err(err).
+			Int("attempt", attempt+1).
+			Int("max_attempts", directMediaRetryMax+1).
+			Msg("Direct media download failed, retrying in case message is not yet persisted")
+		select {
+		case <-time.After(directMediaRetryDelay):
+		case <-ctx.Done():
+			return response, ctx.Err()
+		}
+	}
 }
