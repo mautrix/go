@@ -4527,6 +4527,21 @@ func (portal *Portal) getInitialMemberList(ctx context.Context, members *ChatMem
 		}
 	}
 	portal.updateOtherUser(ctx, members)
+	if portal.RoomType == database.RoomTypeDM && portal.OtherUserID != "" {
+		intent, extraUserID, otherErr := portal.getIntentAndUserMXIDFor(ctx, EventSender{Sender: portal.OtherUserID}, source, loginsInPortal, 0)
+		if otherErr != nil {
+			return nil, nil, otherErr
+		}
+		var otherMXID id.UserID
+		if intent != nil {
+			otherMXID = intent.GetMXID()
+		} else if extraUserID != "" {
+			otherMXID = extraUserID
+		}
+		if otherMXID != "" && !slices.Contains(invite, otherMXID) {
+			invite = append(invite, otherMXID)
+		}
+	}
 	return
 }
 
