@@ -248,7 +248,11 @@ func (portal *Portal) cutoffMessages(ctx context.Context, messages []*BackfillMe
 	if lastMessage == nil {
 		return messages
 	}
-	if forward {
+	if forward && !aggressiveDedup {
+		// Without aggressive dedup, trim the contiguous prefix of messages at or older than the anchor.
+		// With aggressive dedup, the ID-based pass below decides what's already bridged, so this
+		// timestamp prefix-trim is skipped to preserve never-bridged messages older than the anchor
+		// (e.g. mid-timeline gaps left when a reconnect snapshot advanced the cursor past them).
 		cutoff := -1
 		for i, msg := range messages {
 			if msg.ID == lastMessage.ID || msg.Timestamp.Before(lastMessage.Timestamp) {
@@ -265,7 +269,7 @@ func (portal *Portal) cutoffMessages(ctx context.Context, messages []*BackfillMe
 				Msg("Cutting off forward backfill messages older than latest bridged message")
 			messages = messages[cutoff+1:]
 		}
-	} else {
+	} else if !forward {
 		cutoff := -1
 		for i := len(messages) - 1; i >= 0; i-- {
 			if messages[i].ID == lastMessage.ID || messages[i].Timestamp.After(lastMessage.Timestamp) {
