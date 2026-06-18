@@ -352,7 +352,7 @@ func (br *Bridge) GetExistingPortalByKey(ctx context.Context, key networkid.Port
 
 func (portal *Portal) queueEvent(ctx context.Context, evt portalEvent) EventHandlingResult {
 	if portal.backgroundCtx.Err() != nil {
-		return EventHandlingResultIgnored
+		return EventHandlingResultFailed.WithError(portal.backgroundCtx.Err())
 	}
 	if PortalEventBuffer == 0 {
 		portal.eventsLock.Lock()
@@ -421,9 +421,6 @@ func (portal *Portal) handleSingleEventWithDelayLogging(idx int, rawEvt any) (ou
 	// Note: this will assume success if the handler times out
 	outerRes = EventHandlingResult{Queued: true, Success: true, Error: ErrHandlerBackgrounded}
 	go portal.handleSingleEvent(ctx, rawEvt, func(res EventHandlingResult) {
-		if res.Error != nil && portal.backgroundCtx.Err() != nil {
-			res = EventHandlingResultIgnored
-		}
 		outerRes = res
 		handleDuration = time.Since(start)
 		close(doneCh)
@@ -588,7 +585,10 @@ func (portal *Portal) handleSingleEvent(ctx context.Context, rawEvt any, doneCal
 		res = portal.handleMatrixEvent(ctx, evt.sender, evt.evt, isStateRequest)
 		if res.SendMSS {
 			if res.Error != nil {
-				portal.sendErrorStatus(ctx, evt.evt, res.Error)
+				// If the error is *not* because the bridge is shutting down, send the MSS failure
+				if !errors.Is(res.Error, portal.backgroundCtx.Err()) {
+					portal.sendErrorStatus(ctx, evt.evt, res.Error)
+				}
 			} else {
 				portal.sendSuccessStatus(ctx, evt.evt, 0, "")
 			}
