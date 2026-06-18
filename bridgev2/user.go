@@ -99,6 +99,12 @@ func (br *Bridge) GetExistingUserByMXID(ctx context.Context, userID id.UserID) (
 	return br.unlockedGetUserByMXID(ctx, userID, true)
 }
 
+// AccountDataSyncStopper is an optional interface that MatrixConnector implementations
+// can implement to stop account data sync loops when double puppeting is disabled.
+type AccountDataSyncStopper interface {
+	StopAccountDataSync(userID id.UserID)
+}
+
 func (user *User) LogoutDoublePuppet(ctx context.Context) {
 	user.doublePuppetLock.Lock()
 	defer user.doublePuppetLock.Unlock()
@@ -109,6 +115,9 @@ func (user *User) LogoutDoublePuppet(ctx context.Context) {
 	}
 	user.doublePuppetIntent = nil
 	user.doublePuppetInitialized = false
+	if stopper, ok := user.Bridge.Matrix.(AccountDataSyncStopper); ok {
+		stopper.StopAccountDataSync(user.MXID)
+	}
 }
 
 func (user *User) LoginDoublePuppet(ctx context.Context, token string) error {
