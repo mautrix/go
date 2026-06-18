@@ -94,6 +94,12 @@ func (saup SynapseAdminURLPath) FullPath() []any {
 	return append([]any{"_synapse", "admin"}, []any(saup)...)
 }
 
+type ContinuwuityAdminURLPath []any
+
+func (caup ContinuwuityAdminURLPath) FullPath() []any {
+	return append([]any{"_continuwuity", "admin"}, []any(caup)...)
+}
+
 // BuildURLWithQuery builds a URL with query parameters in addition to the Client's homeserver
 // and appservice user ID set already.
 func (cli *Client) BuildURLWithQuery(urlPath PrefixableURLPath, urlQuery map[string]string) string {
