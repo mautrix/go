@@ -137,6 +137,7 @@ type ReqCreateRoom struct {
 	Topic           string                 `json:"topic,omitempty"`
 	Invite          []id.UserID            `json:"invite,omitempty"`
 	Invite3PID      []ReqInvite3PID        `json:"invite_3pid,omitempty"`
+	InviteReason    string                 `json:"uk.timedout.msc4491.invite_reason,omitempty"`
 	CreationContent map[string]interface{} `json:"creation_content,omitempty"`
 	InitialState    []*event.Event         `json:"initial_state,omitempty"`
 	Preset          string                 `json:"preset,omitempty"`
