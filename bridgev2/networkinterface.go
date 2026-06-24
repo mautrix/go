@@ -1159,6 +1159,11 @@ type RemoteEventWithUncertainPortalReceiver interface {
 	PortalReceiverIsUncertain() bool
 }
 
+type RemoteEventWithUncertainPortalReceiverFetcher interface {
+	RemoteEventWithUncertainPortalReceiver
+	FetchCertainPortalKey(context.Context) networkid.PortalKey
+}
+
 type RemotePreHandler interface {
 	RemoteEvent
 	PreHandle(ctx context.Context, portal *Portal)

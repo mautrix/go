@@ -30,17 +30,20 @@ type EventMeta struct {
 	PreHandleFunc     func(context.Context, *bridgev2.Portal)
 	PostHandleFunc    func(context.Context, *bridgev2.Portal)
 	MutateContextFunc func(context.Context) context.Context
+
+	FetchCertainPortalKeyFunc func(context.Context) networkid.PortalKey
 }
 
 var (
-	_ bridgev2.RemoteEvent                            = (*EventMeta)(nil)
-	_ bridgev2.RemoteEventWithUncertainPortalReceiver = (*EventMeta)(nil)
-	_ bridgev2.RemoteEventThatMayCreatePortal         = (*EventMeta)(nil)
-	_ bridgev2.RemoteEventWithTimestamp               = (*EventMeta)(nil)
-	_ bridgev2.RemoteEventWithStreamOrder             = (*EventMeta)(nil)
-	_ bridgev2.RemotePreHandler                       = (*EventMeta)(nil)
-	_ bridgev2.RemotePostHandler                      = (*EventMeta)(nil)
-	_ bridgev2.RemoteEventWithContextMutation         = (*EventMeta)(nil)
+	_ bridgev2.RemoteEvent                                   = (*EventMeta)(nil)
+	_ bridgev2.RemoteEventWithUncertainPortalReceiver        = (*EventMeta)(nil)
+	_ bridgev2.RemoteEventWithUncertainPortalReceiverFetcher = (*EventMeta)(nil)
+	_ bridgev2.RemoteEventThatMayCreatePortal                = (*EventMeta)(nil)
+	_ bridgev2.RemoteEventWithTimestamp                      = (*EventMeta)(nil)
+	_ bridgev2.RemoteEventWithStreamOrder                    = (*EventMeta)(nil)
+	_ bridgev2.RemotePreHandler                              = (*EventMeta)(nil)
+	_ bridgev2.RemotePostHandler                             = (*EventMeta)(nil)
+	_ bridgev2.RemoteEventWithContextMutation                = (*EventMeta)(nil)
 )
 
 func (evt *EventMeta) AddLogContext(c zerolog.Context) zerolog.Context {
@@ -56,6 +59,13 @@ func (evt *EventMeta) GetPortalKey() networkid.PortalKey {
 
 func (evt *EventMeta) PortalReceiverIsUncertain() bool {
 	return evt.UncertainReceiver
+}
+
+func (evt *EventMeta) FetchCertainPortalKey(ctx context.Context) networkid.PortalKey {
+	if evt.FetchCertainPortalKeyFunc == nil {
+		return networkid.PortalKey{}
+	}
+	return evt.FetchCertainPortalKeyFunc(ctx)
 }
 
 func (evt *EventMeta) GetTimestamp() time.Time {
