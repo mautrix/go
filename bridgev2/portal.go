@@ -560,8 +560,9 @@ func (portal *Portal) handleSingleEvent(ctx context.Context, rawEvt any, doneCal
 				logEvt = logEvt.Any(zerolog.ErrorFieldName, err)
 				errorString = fmt.Sprintf("%v", err)
 			}
+			stack := debug.Stack()
 			logEvt.
-				Bytes("stack", debug.Stack()).
+				Bytes("stack", stack).
 				Msg("Event handling panicked")
 			switch evt := rawEvt.(type) {
 			case *portalMatrixEvent:
@@ -572,7 +573,9 @@ func (portal *Portal) handleSingleEvent(ctx context.Context, rawEvt any, doneCal
 				evt.cb(fmt.Errorf("portal creation panicked"))
 			}
 			portal.Bridge.TrackAnalytics("", "Bridge Event Handler Panic", map[string]any{
-				"error": errorString,
+				"error":        errorString,
+				"stack":        string(stack),
+				"handler_type": fmt.Sprintf("%T", rawEvt),
 			})
 		}
 	}()
