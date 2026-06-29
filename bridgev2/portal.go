@@ -3126,15 +3126,29 @@ func (portal *Portal) handleRemoteEdit(ctx context.Context, source *UserLogin, e
 		log.Warn().Msg("Edit target message not found")
 		return EventHandlingResultIgnored
 	}
-	intent, ok := portal.GetIntentFor(ctx, evt.GetSender(), source, RemoteEventEdit)
-	if !ok {
-		return EventHandlingResultFailed.WithError(ErrFailedToGetIntent)
-	} else if intent.GetMXID() != existing[0].SenderMXID {
-		log.Warn().
-			Stringer("edit_sender_mxid", intent.GetMXID()).
-			Stringer("original_sender_mxid", existing[0].SenderMXID).
-			Msg("Not bridging edit: sender doesn't match original message sender")
-		return EventHandlingResultIgnored
+	var intent MatrixAPI
+	if evt.GetSender().ForceEditOrigSender {
+		var err error
+		intent, err = portal.getIntentForMXID(ctx, existing[0].SenderMXID)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to get intent for edit message sender")
+			return EventHandlingResultFailed.WithError(ErrFailedToGetIntent)
+		} else if intent == nil {
+			zerolog.Ctx(ctx).Debug().Msg("Intent not found for edit message")
+			return EventHandlingResultFailed.WithError(ErrFailedToGetIntent)
+		}
+	} else {
+		var ok bool
+		intent, ok = portal.GetIntentFor(ctx, evt.GetSender(), source, RemoteEventEdit)
+		if !ok {
+			return EventHandlingResultFailed.WithError(ErrFailedToGetIntent)
+		} else if intent.GetMXID() != existing[0].SenderMXID {
+			log.Warn().
+				Stringer("edit_sender_mxid", intent.GetMXID()).
+				Stringer("original_sender_mxid", existing[0].SenderMXID).
+				Msg("Not bridging edit: sender doesn't match original message sender")
+			return EventHandlingResultIgnored
+		}
 	}
 	ts := getEventTS(evt)
 	converted, err := evt.ConvertEdit(ctx, portal, intent, existing)
@@ -3526,6 +3540,8 @@ func (portal *Portal) sendConvertedReaction(
 func (portal *Portal) getIntentForMXID(ctx context.Context, userID id.UserID) (MatrixAPI, error) {
 	if userID == "" {
 		return nil, nil
+	} else if userID == portal.Bridge.Bot.GetMXID() {
+		return portal.Bridge.Bot, nil
 	} else if ghost, err := portal.Bridge.GetGhostByMXID(ctx, userID); err != nil {
 		return nil, fmt.Errorf("failed to get ghost: %w", err)
 	} else if ghost != nil {

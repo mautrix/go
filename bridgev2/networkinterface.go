@@ -77,6 +77,9 @@ type EventSender struct {
 	// This only applies in DM rooms where [database.Portal.OtherUserID] is set and is ignored if IsFromMe is true.
 	// A warning will be logged if the sender is overridden due to this flag.
 	ForceDMUser bool
+
+	// Force using the original message sender to send the edit
+	ForceEditOrigSender bool
 }
 
 func (es EventSender) MarshalZerologObject(evt *zerolog.Event) {
