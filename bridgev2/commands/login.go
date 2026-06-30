@@ -518,7 +518,7 @@ type webauthnLoginCommandState struct {
 	Override *bridgev2.UserLogin
 }
 
-const webauthnSnippet = "Run the following JS on <%s>:\n\n```js\nconsole.log((await navigator.credential.get(%s)).toJSON())\n```\n\nThen paste the resulting JSON object here."
+const webauthnSnippet = "Run the following JS on <%s>:\n\n```js\nconsole.log((await navigator.credentials.get(%s)).toJSON())\n```\n\nThen paste the resulting JSON object here."
 
 func (wlcs *webauthnLoginCommandState) prompt(ce *Event, params *bridgev2.LoginWebAuthnParams) {
 	paramsCopy := ptr.Clone(params)
