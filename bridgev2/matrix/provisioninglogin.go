@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"sync"
 	"time"
@@ -109,12 +110,24 @@ func (prov *ProvisioningAPI) PostLoginStep(w http.ResponseWriter, r *http.Reques
 	stepID := r.PathValue("stepID")
 	stepType := bridgev2.LoginStepType(r.PathValue("stepType"))
 	var params map[string]string
+	var rawParams json.RawMessage
 	switch stepType {
 	case bridgev2.LoginStepTypeUserInput, bridgev2.LoginStepTypeCookies:
 		err := json.NewDecoder(r.Body).Decode(&params)
 		if err != nil {
 			zerolog.Ctx(r.Context()).Err(err).Msg("Failed to decode request body")
 			mautrix.MNotJSON.WithMessage("Failed to decode request body").Write(w)
+			return
+		}
+	case bridgev2.LoginStepTypeWebAuthn:
+		var err error
+		rawParams, err = io.ReadAll(r.Body)
+		if err != nil {
+			zerolog.Ctx(r.Context()).Err(err).Msg("Failed to read request body")
+			mautrix.MNotJSON.WithMessage("Failed to read request body").Write(w)
+			return
+		} else if !json.Valid(rawParams) {
+			mautrix.MNotJSON.WithMessage("Request body is not valid JSON").Write(w)
 			return
 		}
 	case bridgev2.LoginStepTypeDisplayAndWait:
@@ -126,7 +139,7 @@ func (prov *ProvisioningAPI) PostLoginStep(w http.ResponseWriter, r *http.Reques
 		mautrix.MUnrecognized.WithMessage("Invalid step type %q", r.PathValue("stepType")).Write(w)
 		return
 	}
-	resp, err := prov.doLoginStep(r.Context(), login, stepType, stepID, params)
+	resp, err := prov.doLoginStep(r.Context(), login, stepType, stepID, params, rawParams)
 	if err != nil {
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to complete login step")
 		RespondWithError(w, err, "Internal error in login step")
@@ -155,6 +168,7 @@ func (prov *ProvisioningAPI) doLoginStep(
 	expectedType bridgev2.LoginStepType,
 	expectedID string,
 	params map[string]string,
+	rawParams json.RawMessage,
 ) (*bridgev2.LoginStep, error) {
 	log := zerolog.Ctx(ctx).With().Str("login_id", login.ID).Logger()
 	var returnPrevIfMatch bool
@@ -208,6 +222,8 @@ func (prov *ProvisioningAPI) doLoginStep(
 		nextStep, err = login.Process.(bridgev2.LoginProcessCookies).SubmitCookies(login.Ctx, params)
 	case bridgev2.LoginStepTypeDisplayAndWait:
 		nextStep, err = login.Process.(bridgev2.LoginProcessDisplayAndWait).Wait(login.Ctx)
+	case bridgev2.LoginStepTypeWebAuthn:
+		nextStep, err = login.Process.(bridgev2.LoginProcessWebAuthn).SubmitWebAuthnResponse(login.Ctx, rawParams)
 	default:
 		panic("Impossible state")
 	}

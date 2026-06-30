@@ -102,6 +102,7 @@ paths:
         3. Render the information provided in the step.
         4. Call the `/login/step/...` endpoint corresponding to the step type:
            * For `user_input` and `cookies`, acquire the requested fields before calling the endpoint.
+           * For `webauthn`, use `navigator.credentials.get()` or equivalent before calling the endpoint.
            * For `display_and_wait`, call the endpoint immediately
              (as there's nothing to acquire on the client side).
         5. Handle the data returned by the login step endpoint:
@@ -184,6 +185,33 @@ paths:
               type: object
               additionalProperties:
                 type: string
+      responses:
+        200:
+          $ref: '#/components/responses/LoginStepSubmitted'
+        400:
+          $ref: '#/components/responses/BadRequest'
+        401:
+          $ref: '#/components/responses/Unauthorized'
+        404:
+          $ref: '#/components/responses/LoginProcessNotFound'
+        500:
+          $ref: '#/components/responses/InternalError'
+      security:
+      - matrix_auth: [ ]
+  /v3/login/step/{loginProcessID}/{stepID}/webauthn:
+    post:
+      tags: [ auth ]
+      summary: Submit a WebAuthn response in a login process.
+      operationId: submitLoginStepWebAuthn
+      parameters:
+      - $ref: '#/components/parameters/loginProcessID'
+      - $ref: '#/components/parameters/stepID'
+      requestBody:
+        description: The raw WebAuthn response as JSON
+        content:
+          application/json:
+            schema:
+              type: object
       responses:
         200:
           $ref: '#/components/responses/LoginStepSubmitted'
@@ -447,7 +475,7 @@ components:
       required: true
       schema:
         type: string
-        enum: [ display_and_wait, user_input, cookies ]
+        enum: [ display_and_wait, user_input, cookies, webauthn ]
   responses:
     BadRequest:
       description: Something in the request was invalid
@@ -681,7 +709,7 @@ components:
         type:
           type: string
           description: The type of login step
-          enum: [ display_and_wait, user_input, cookies, complete ]
+          enum: [ display_and_wait, user_input, cookies, webauthn, complete ]
         step_id:
           type: string
           description: An unique ID identifying this step. This can be used to implement special behavior in clients.
@@ -848,6 +876,30 @@ components:
                     cookie_domain:
                       type: string
                       description: For the `cookie` type, the domain of the cookie.
+      - description: WebAuthn login step
+        required: [ type, webauthn ]
+        properties:
+          type:
+            type: string
+            const: webauthn
+          webauthn:
+            type: object
+            description: Parameters for the WebAuthn login step
+            properties:
+              url:
+                type: string
+                format: uri
+                description: The root URL where the credentials should be available.
+              public_key:
+                type: object
+              identity:
+                type: object
+              otp:
+                type: array
+                items:
+                  type: string
+              password:
+                type: boolean
       - description: Login complete
         required: [ type, complete ]
         properties:

@@ -8,6 +8,7 @@ package bridgev2
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
@@ -59,6 +60,11 @@ type LoginProcessCookies interface {
 	SubmitCookies(ctx context.Context, cookies map[string]string) (*LoginStep, error)
 }
 
+type LoginProcessWebAuthn interface {
+	LoginProcess
+	SubmitWebAuthnResponse(ctx context.Context, response json.RawMessage) (*LoginStep, error)
+}
+
 type LoginFlow struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
@@ -71,6 +77,7 @@ const (
 	LoginStepTypeUserInput      LoginStepType = "user_input"
 	LoginStepTypeCookies        LoginStepType = "cookies"
 	LoginStepTypeDisplayAndWait LoginStepType = "display_and_wait"
+	LoginStepTypeWebAuthn       LoginStepType = "webauthn"
 	LoginStepTypeComplete       LoginStepType = "complete"
 )
 
@@ -100,7 +107,19 @@ type LoginStep struct {
 	DisplayAndWaitParams *LoginDisplayAndWaitParams `json:"display_and_wait,omitempty"`
 	CookiesParams        *LoginCookiesParams        `json:"cookies,omitempty"`
 	UserInputParams      *LoginUserInputParams      `json:"user_input,omitempty"`
+	WebAuthnParams       *LoginWebAuthnParams       `json:"webauthn,omitempty"`
 	CompleteParams       *LoginCompleteParams       `json:"complete,omitempty"`
+}
+
+type LoginWebAuthnParams struct {
+	// The origin URL where the credential should be extracted from.
+	URL string `json:"url,omitempty"`
+
+	// Standard parameters for https://developer.mozilla.org/en-US/docs/Web/API/CredentialsContainer/get
+	PublicKey json.RawMessage `json:"public_key,omitempty"`
+	Identity  json.RawMessage `json:"identity,omitempty"`
+	OTP       []string        `json:"otp,omitempty"`
+	Password  bool            `json:"password,omitempty"`
 }
 
 type LoginDisplayAndWaitParams struct {
