@@ -220,6 +220,10 @@ func valueEquals(a, b any) bool {
 }
 
 func (cond *PushCondition) matchValue(evt *event.Event) bool {
+	if cond.Kind == KindEventMatch && cond.Key == "content.body" {
+		return matchBodyWordBoundary(evt, cond.Pattern)
+	}
+
 	val, ok := cond.getValue(evt)
 	if !ok {
 		return false

@@ -142,7 +142,7 @@ func (rule *PushRule) Match(room Room, evt *event.Event) bool {
 	case OverrideRule, UnderrideRule:
 		return rule.matchConditions(room, evt)
 	case ContentRule:
-		return rule.matchPattern(room, evt)
+		return matchBodyWordBoundary(evt, rule.Pattern)
 	case RoomRule:
 		return id.RoomID(rule.RuleID) == evt.RoomID
 	case SenderRule:
@@ -161,7 +161,7 @@ func (rule *PushRule) matchConditions(room Room, evt *event.Event) bool {
 	return true
 }
 
-func (rule *PushRule) matchPattern(room Room, evt *event.Event) bool {
+func matchBodyWordBoundary(evt *event.Event, p string) bool {
 	msg, ok := evt.Content.Raw["body"].(string)
 	if !ok {
 		return false
@@ -171,7 +171,7 @@ func (rule *PushRule) matchPattern(room Room, evt *event.Event) bool {
 	// and must match whole words, so wrap the converted glob in (?i) and \b.
 	buf.WriteString(`(?i)\b`)
 	// strings.Builder will never return errors
-	exerrors.PanicIfNotNil(glob.ToRegexPattern(rule.Pattern, &buf))
+	exerrors.PanicIfNotNil(glob.ToRegexPattern(p, &buf))
 	buf.WriteString(`\b`)
 	pattern, err := regexp.Compile(buf.String())
 	if err != nil {
