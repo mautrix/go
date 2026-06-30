@@ -251,6 +251,7 @@ func (mach *OlmMachine) ShareGroupSession(ctx context.Context, roomID id.RoomID,
 	missingUserSessions := make(map[id.DeviceID]*id.Device)
 	var fetchKeysForUsers []id.UserID
 
+	// TODO check crypto_tracked_users to see if any device lists are outdated
 	for _, userID := range users {
 		log := log.With().Stringer("target_user_id", userID).Logger()
 		devices, err := mach.CryptoStore.GetDevices(ctx, userID)

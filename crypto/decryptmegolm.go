@@ -278,6 +278,7 @@ func (mach *OlmMachine) actuallyDecryptMegolmEvent(ctx context.Context, evt *eve
 
 	// Normal clients don't care about tracking the ratchet state, so let them bypass the rest of the function
 	if mach.DisableRatchetTracking {
+		// TODO save session anyway to have the latest used ratchet quickly available?
 		return sess, plaintext, messageIndex, nil
 	}
 
