@@ -742,7 +742,7 @@ func (vh *VerificationHelper) onVerificationMAC(ctx context.Context, txn Verific
 			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUser, "failed to calculate key MAC: %w", err)
 			return
 		}
-		if hmac.Equal(expectedMAC, mac) {
+		if !hmac.Equal(expectedMAC, mac) {
 			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeSASMismatch, "MAC mismatch for key %s", keyID)
 			return
 		}
