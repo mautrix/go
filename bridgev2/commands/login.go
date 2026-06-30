@@ -18,7 +18,6 @@ import (
 
 	"github.com/skip2/go-qrcode"
 	"go.mau.fi/util/curl"
-	"go.mau.fi/util/ptr"
 
 	"maunium.net/go/mautrix/bridgev2"
 	"maunium.net/go/mautrix/bridgev2/networkid"
@@ -518,14 +517,12 @@ type webauthnLoginCommandState struct {
 	Override *bridgev2.UserLogin
 }
 
-const webauthnSnippet = "Run the following JS on <%s>:\n\n```js\nconsole.log((await navigator.credentials.get(%s)).toJSON())\n```\n\nThen paste the resulting JSON object here."
+const webauthnSnippet = "Run the following JS on <%s>:\n\n```js\nconsole.log((await navigator.credentials.get({\n  public_key: PublicKeyCredential.parseRequestOptionsFromJSON(%s)\n})).toJSON())\n```\n\nThen paste the resulting JSON object here."
 
 func (wlcs *webauthnLoginCommandState) prompt(ce *Event, params *bridgev2.LoginWebAuthnParams) {
-	paramsCopy := ptr.Clone(params)
-	paramsCopy.URL = ""
-	marshaled, _ := json.Marshal(paramsCopy)
-
-	ce.Reply(webauthnSnippet, params.URL, marshaled)
+	// TODO support non-publickey methods if needed
+	marshaledPubKey, _ := json.MarshalIndent(params.PublicKey, "", "    ")
+	ce.Reply(webauthnSnippet, params.URL, marshaledPubKey)
 	StoreCommandState(ce.User, &CommandState{
 		Next:   MinimalCommandHandlerFunc(wlcs.submit),
 		Action: "Login",
