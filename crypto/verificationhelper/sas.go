@@ -13,7 +13,6 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
-	"crypto/subtle"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -685,7 +684,7 @@ func (vh *VerificationHelper) onVerificationMAC(ctx context.Context, txn Verific
 		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeSASMismatch, "failed to calculate key list MAC: %w", err)
 		return
 	}
-	if !bytes.Equal(expectedKeyMAC, macEvt.Keys) {
+	if !hmac.Equal(expectedKeyMAC, macEvt.Keys) {
 		vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeSASMismatch, "key list MAC mismatch")
 		return
 	}
@@ -743,7 +742,7 @@ func (vh *VerificationHelper) onVerificationMAC(ctx context.Context, txn Verific
 			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeUser, "failed to calculate key MAC: %w", err)
 			return
 		}
-		if subtle.ConstantTimeCompare(expectedMAC, mac) == 0 {
+		if hmac.Equal(expectedMAC, mac) {
 			vh.cancelVerificationTxn(ctx, txn, event.VerificationCancelCodeSASMismatch, "MAC mismatch for key %s", keyID)
 			return
 		}
