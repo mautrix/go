@@ -170,6 +170,8 @@ func (content *MessageEventContent) GetCapMsgType() CapabilityMsgType {
 	case MsgVideo:
 		if content.Info != nil && content.Info.MauGIF {
 			return CapMsgGIF
+		} else if content.Info != nil && content.Info.MauVideoSticker {
+			return CapMsgSticker
 		}
 		return MsgVideo
 	case MsgFile:
@@ -318,8 +320,9 @@ type FileInfo struct {
 	Blurhash     string
 	AnoaBlurhash string
 
-	MauGIF     bool
-	IsAnimated bool
+	MauGIF          bool
+	MauVideoSticker bool
+	IsAnimated      bool
 
 	Width    int
 	Height   int
@@ -340,8 +343,9 @@ type serializableFileInfo struct {
 	Blurhash     string `json:"blurhash,omitempty"`
 	AnoaBlurhash string `json:"xyz.amorgan.blurhash,omitempty"`
 
-	MauGIF     bool `json:"fi.mau.gif,omitempty"`
-	IsAnimated bool `json:"is_animated,omitempty"`
+	MauGIF          bool `json:"fi.mau.gif,omitempty"`
+	MauVideoSticker bool `json:"fi.mau.video_sticker,omitempty"`
+	IsAnimated      bool `json:"is_animated,omitempty"`
 
 	Width    json.Number `json:"w,omitempty"`
 	Height   json.Number `json:"h,omitempty"`
@@ -359,6 +363,7 @@ func (fileInfo *FileInfo) IsZero() bool {
 		fileInfo.Blurhash == "" &&
 		fileInfo.AnoaBlurhash == "" &&
 		!fileInfo.MauGIF &&
+		!fileInfo.MauVideoSticker &&
 		!fileInfo.IsAnimated &&
 		fileInfo.Width == 0 &&
 		fileInfo.Height == 0 &&
@@ -378,8 +383,9 @@ func (sfi *serializableFileInfo) CopyFrom(fileInfo *FileInfo) *serializableFileI
 		ThumbnailInfo: (&serializableFileInfo{}).CopyFrom(fileInfo.ThumbnailInfo),
 		ThumbnailFile: fileInfo.ThumbnailFile,
 
-		MauGIF:     fileInfo.MauGIF,
-		IsAnimated: fileInfo.IsAnimated,
+		MauGIF:          fileInfo.MauGIF,
+		MauVideoSticker: fileInfo.MauVideoSticker,
+		IsAnimated:      fileInfo.IsAnimated,
 
 		Blurhash:     fileInfo.Blurhash,
 		AnoaBlurhash: fileInfo.AnoaBlurhash,
@@ -404,18 +410,19 @@ func (sfi *serializableFileInfo) CopyFrom(fileInfo *FileInfo) *serializableFileI
 
 func (sfi *serializableFileInfo) CopyTo(fileInfo *FileInfo) {
 	*fileInfo = FileInfo{
-		Width:          numberToInt(sfi.Width),
-		Height:         numberToInt(sfi.Height),
-		Size:           numberToInt(sfi.Size),
-		Duration:       numberToInt(sfi.Duration),
-		MimeType:       sfi.MimeType,
-		ThumbnailURL:   sfi.ThumbnailURL,
-		ThumbnailFile:  sfi.ThumbnailFile,
-		MauGIF:         sfi.MauGIF,
-		IsAnimated:     sfi.IsAnimated,
-		Blurhash:       sfi.Blurhash,
-		AnoaBlurhash:   sfi.AnoaBlurhash,
-		BridgedSticker: sfi.BridgedSticker,
+		Width:           numberToInt(sfi.Width),
+		Height:          numberToInt(sfi.Height),
+		Size:            numberToInt(sfi.Size),
+		Duration:        numberToInt(sfi.Duration),
+		MimeType:        sfi.MimeType,
+		ThumbnailURL:    sfi.ThumbnailURL,
+		ThumbnailFile:   sfi.ThumbnailFile,
+		MauGIF:          sfi.MauGIF,
+		MauVideoSticker: sfi.MauVideoSticker,
+		IsAnimated:      sfi.IsAnimated,
+		Blurhash:        sfi.Blurhash,
+		AnoaBlurhash:    sfi.AnoaBlurhash,
+		BridgedSticker:  sfi.BridgedSticker,
 	}
 	if sfi.ThumbnailInfo != nil {
 		fileInfo.ThumbnailInfo = &FileInfo{}
@@ -434,6 +441,7 @@ func (fileInfo *FileInfo) deleteStandardExtraFields() {
 	delete(fileInfo.Extra, "blurhash")
 	delete(fileInfo.Extra, "xyz.amorgan.blurhash")
 	delete(fileInfo.Extra, "fi.mau.gif")
+	delete(fileInfo.Extra, "fi.mau.video_sticker")
 	delete(fileInfo.Extra, "is_animated")
 	delete(fileInfo.Extra, "w")
 	delete(fileInfo.Extra, "h")

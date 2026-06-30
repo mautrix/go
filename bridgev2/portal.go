@@ -1168,6 +1168,9 @@ func (portal *Portal) handleMatrixMessage(ctx context.Context, sender *UserLogin
 		relatesTo = msgContent.RelatesTo
 		if evt.Type == event.EventSticker {
 			msgContent.MsgType = event.CapMsgSticker
+		} else if msgContent.MsgType == event.MsgVideo && msgContent.Info != nil && msgContent.Info.MauVideoSticker && origSender == nil {
+			msgContent.MsgType = event.CapMsgSticker
+			evt.Type = event.EventSticker
 		}
 		if msgContent.MsgType == event.MsgNotice && !portal.Bridge.Config.BridgeNotices {
 			return EventHandlingResultIgnored.WithMSSError(ErrIgnoringMNotice)
@@ -1505,6 +1508,9 @@ func (portal *Portal) handleMatrixEdit(
 		content = content.NewContent
 		if evt.Type == event.EventSticker {
 			content.MsgType = event.CapMsgSticker
+		} else if content.MsgType == event.MsgVideo && content.Info != nil && content.Info.MauVideoSticker && origSender == nil {
+			content.MsgType = event.CapMsgSticker
+			evt.Type = event.EventSticker
 		}
 	}
 	if origSender != nil && !caps.PerMessageProfileRelay {
