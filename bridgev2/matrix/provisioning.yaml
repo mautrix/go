@@ -890,7 +890,7 @@ components:
                 type: string
                 format: uri
                 description: The root URL where the credentials should be available.
-              public_key:
+              publicKey:
                 type: object
               identity:
                 type: object

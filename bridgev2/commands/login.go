@@ -517,7 +517,7 @@ type webauthnLoginCommandState struct {
 	Override *bridgev2.UserLogin
 }
 
-const webauthnSnippet = "Run the following JS on <%s>:\n\n```js\nconsole.log((await navigator.credentials.get({\n  public_key: PublicKeyCredential.parseRequestOptionsFromJSON(%s)\n})).toJSON())\n```\n\nThen paste the resulting JSON object here."
+const webauthnSnippet = "Run the following JS on <%s>:\n\n```js\nconsole.log((await navigator.credentials.get({\n  publicKey: PublicKeyCredential.parseRequestOptionsFromJSON(%s)\n})).toJSON())\n```\n\nThen paste the resulting JSON object here."
 
 func (wlcs *webauthnLoginCommandState) prompt(ce *Event, params *bridgev2.LoginWebAuthnParams) {
 	// TODO support non-publickey methods if needed
