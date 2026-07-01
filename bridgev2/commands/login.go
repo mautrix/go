@@ -151,6 +151,9 @@ func checkLoginCommandDirectParams(ce *Event, login bridgev2.LoginProcess, nextS
 	case bridgev2.LoginStepTypeDisplayAndWait:
 		ce.Reply("Invalid extra parameters for display and wait login step")
 		return nil
+	case bridgev2.LoginStepTypeWebAuthn:
+		ce.Reply("Invalid extra parameters for webauthn login step")
+		return nil
 	case bridgev2.LoginStepTypeUserInput:
 		if len(ce.Args) != len(nextStep.UserInputParams.Fields) {
 			ce.Reply("Invalid number of extra parameters (expected 0 or %d, got %d)", len(nextStep.UserInputParams.Fields), len(ce.Args))
@@ -509,6 +512,40 @@ func maybeURLDecodeCookie(val string, field *bridgev2.LoginCookieField) string {
 	return decoded
 }
 
+type webauthnLoginCommandState struct {
+	Login    bridgev2.LoginProcessWebAuthn
+	Override *bridgev2.UserLogin
+}
+
+const webauthnSnippet = "Run the following JS on <%s>:\n\n```js\nconsole.log((await navigator.credentials.get({\n  public_key: PublicKeyCredential.parseRequestOptionsFromJSON(%s)\n})).toJSON())\n```\n\nThen paste the resulting JSON object here."
+
+func (wlcs *webauthnLoginCommandState) prompt(ce *Event, params *bridgev2.LoginWebAuthnParams) {
+	// TODO support non-publickey methods if needed
+	marshaledPubKey, _ := json.MarshalIndent(params.PublicKey, "", "    ")
+	ce.Reply(webauthnSnippet, params.URL, marshaledPubKey)
+	StoreCommandState(ce.User, &CommandState{
+		Next:   MinimalCommandHandlerFunc(wlcs.submit),
+		Action: "Login",
+		Meta:   wlcs,
+		Cancel: wlcs.Login.Cancel,
+	})
+}
+
+func (wlcs *webauthnLoginCommandState) submit(ce *Event) {
+	rawArgBytes := []byte(strings.TrimSpace(ce.RawArgs))
+	if !json.Valid(rawArgBytes) {
+		ce.Reply("Input is not valid JSON")
+		return
+	}
+	StoreCommandState(ce.User, nil)
+	nextStep, err := wlcs.Login.SubmitWebAuthnResponse(ce.Ctx, rawArgBytes)
+	if err != nil {
+		ce.Reply("Login failed: %v", err)
+		return
+	}
+	doLoginStep(ce, wlcs.Login, nextStep, wlcs.Override)
+}
+
 func doLoginStep(ce *Event, login bridgev2.LoginProcess, step *bridgev2.LoginStep, override *bridgev2.UserLogin) {
 	ce.Log.Debug().Any("next_step", step).Msg("Got next login step")
 	if step.Instructions != "" {
@@ -535,6 +572,11 @@ func doLoginStep(ce *Event, login bridgev2.LoginProcess, step *bridgev2.LoginSte
 			Data:            make(map[string]string),
 			Override:        override,
 		}).promptNext(ce)
+	case bridgev2.LoginStepTypeWebAuthn:
+		(&webauthnLoginCommandState{
+			Login:    login.(bridgev2.LoginProcessWebAuthn),
+			Override: override,
+		}).prompt(ce, step.WebAuthnParams)
 	case bridgev2.LoginStepTypeComplete:
 		if override != nil && override.ID != step.CompleteParams.UserLoginID {
 			ce.Log.Info().
