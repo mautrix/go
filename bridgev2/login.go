@@ -116,10 +116,8 @@ type LoginWebAuthnParams struct {
 	URL string `json:"url,omitempty"`
 
 	// Standard parameters for https://developer.mozilla.org/en-US/docs/Web/API/CredentialsContainer/get
+	// Only publicKey seems to be used in practice, so the other options aren't allowed yet.
 	PublicKey json.RawMessage `json:"publicKey,omitempty"`
-	Identity  json.RawMessage `json:"identity,omitempty"`
-	OTP       []string        `json:"otp,omitempty"`
-	Password  bool            `json:"password,omitempty"`
 }
 
 type LoginDisplayAndWaitParams struct {

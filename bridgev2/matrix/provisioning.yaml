@@ -892,14 +892,6 @@ components:
                 description: The root URL where the credentials should be available.
               publicKey:
                 type: object
-              identity:
-                type: object
-              otp:
-                type: array
-                items:
-                  type: string
-              password:
-                type: boolean
       - description: Login complete
         required: [ type, complete ]
         properties:
