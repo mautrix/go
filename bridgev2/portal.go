@@ -1976,16 +1976,14 @@ func (portal *Portal) handleMatrixDeleteChat(
 			return EventHandlingResultSuccess
 		}
 	}
+	err = portal.Bridge.Bot.DeleteRoom(ctx, portal.MXID, false)
+	if err != nil {
+		log.Err(err).Msg("Failed to delete Matrix room")
+		return EventHandlingResultFailed.WithMSSError(err)
+	}
 	err = portal.Delete(ctx)
 	if err != nil {
 		log.Err(err).Msg("Failed to delete portal from database")
-		return EventHandlingResultFailed.WithMSSError(err)
-	}
-	// The event context has likely been canceled by delete, so use a background context for the delete call
-	noCancelCtx := log.WithContext(portal.Bridge.BackgroundCtx)
-	err = portal.Bridge.Bot.DeleteRoom(noCancelCtx, portal.MXID, false)
-	if err != nil {
-		log.Err(err).Msg("Failed to delete Matrix room")
 		return EventHandlingResultFailed.WithMSSError(err)
 	}
 	// No MSS here as the portal was deleted
