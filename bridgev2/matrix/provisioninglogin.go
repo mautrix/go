@@ -143,6 +143,14 @@ func (prov *ProvisioningAPI) PostLoginStep(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		zerolog.Ctx(r.Context()).Err(err).Msg("Failed to complete login step")
 		RespondWithError(w, err, "Internal error in login step")
+	} else if resp.Type == bridgev2.LoginStepTypeWebAuthn && prov.br.Config.Provisioning.FailOnWebAuthn {
+		prov.deleteLogin(login, true)
+		zerolog.Ctx(r.Context()).Warn().Msg("Got WebAuthn step, failing login")
+		bridgev2.RespError{
+			ErrCode:    "COM.BEEPER.WEBAUTHN_UNSUPPORTED",
+			Err:        "Logging in with a passkey is not yet supported",
+			StatusCode: http.StatusBadRequest,
+		}.Write(w)
 	} else {
 		exhttp.WriteJSONResponse(w, http.StatusOK, &RespSubmitLogin{LoginID: login.ID, LoginStep: resp})
 	}
