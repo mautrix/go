@@ -237,7 +237,9 @@ func (prov *ProvisioningAPI) AuthMiddleware(h http.Handler) http.Handler {
 		}
 		if !exstrings.ConstantTimeEqual(auth, secret) {
 			var err error
-			if strings.HasPrefix(auth, "openid:") {
+			if !prov.br.Config.Provisioning.AllowMatrixAuth {
+				err = errors.New("matrix auth is disabled")
+			} else if strings.HasPrefix(auth, "openid:") {
 				err = prov.checkFederatedMatrixAuth(r.Context(), userID, strings.TrimPrefix(auth, "openid:"))
 			} else {
 				err = prov.checkMatrixAuth(r.Context(), userID, auth)

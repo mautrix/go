@@ -121,6 +121,7 @@ func doUpgrade(helper up.Helper) {
 	} else {
 		helper.Copy(up.Str, "provisioning", "shared_secret")
 	}
+	helper.Copy(up.Bool, "provisioning", "allow_matrix_auth")
 	helper.Copy(up.Bool, "provisioning", "debug_endpoints")
 	helper.Copy(up.Bool, "provisioning", "enable_session_transfers")
 

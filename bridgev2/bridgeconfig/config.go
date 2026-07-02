@@ -112,6 +112,7 @@ type AnalyticsConfig struct {
 
 type ProvisioningConfig struct {
 	SharedSecret           string `yaml:"shared_secret"`
+	AllowMatrixAuth        bool   `yaml:"allow_matrix_auth"`
 	DebugEndpoints         bool   `yaml:"debug_endpoints"`
 	EnableSessionTransfers bool   `yaml:"enable_session_transfers"`
 }
