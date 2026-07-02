@@ -4656,6 +4656,16 @@ func (portal *Portal) syncParticipants(
 		if member.Membership == "" {
 			member.Membership = event.MembershipJoin
 		}
+		// Symmetric with bridge_matrix_leave: when bridge_remote_leave is
+		// disabled, dropping the leave from the remote network keeps the
+		// user in the Matrix room with their existing history.
+		if !portal.Bridge.Config.BridgeRemoteLeave && member.Membership == event.MembershipLeave {
+			log.Debug().
+				Stringer("user_id", extraUserID).
+				Msg("Dropping remote leave: bridge_remote_leave is disabled")
+			delete(currentMembers, extraUserID)
+			return false
+		}
 		if member.PowerLevel != nil {
 			powerChanged = currentPower.EnsureUserLevelAs(portal.Bridge.Bot.GetMXID(), extraUserID, *member.PowerLevel) || powerChanged
 		}

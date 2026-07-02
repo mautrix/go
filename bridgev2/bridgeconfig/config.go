@@ -76,6 +76,7 @@ type BridgeConfig struct {
 	UnknownErrorAutoReconnect     time.Duration      `yaml:"unknown_error_auto_reconnect"`
 	UnknownErrorMaxAutoReconnects int                `yaml:"unknown_error_max_auto_reconnects"`
 	BridgeMatrixLeave             bool               `yaml:"bridge_matrix_leave"`
+	BridgeRemoteLeave             bool               `yaml:"bridge_remote_leave"`
 	BridgeNotices                 bool               `yaml:"bridge_notices"`
 	TagOnlyOnCreate               bool               `yaml:"tag_only_on_create"`
 	OnlyBridgeTags                []event.RoomTag    `yaml:"only_bridge_tags"`
