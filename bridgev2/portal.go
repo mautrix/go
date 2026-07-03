@@ -859,11 +859,7 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 	case event.EventMessage, event.EventSticker, event.EventUnstablePollStart, event.EventUnstablePollResponse:
 		return portal.handleMatrixMessage(ctx, login, origSender, evt)
 	case event.EventReaction:
-		if origSender != nil {
-			log.Debug().Msg("Ignoring reaction event from relayed user")
-			return EventHandlingResultIgnored.WithMSSError(ErrIgnoringReactionFromRelayedUser)
-		}
-		return portal.handleMatrixReaction(ctx, login, evt)
+		return portal.handleMatrixReaction(ctx, login, origSender, evt)
 	case event.EventRedaction:
 		return portal.handleMatrixRedaction(ctx, login, origSender, evt)
 	case event.StateRoomName:
@@ -1569,7 +1565,7 @@ func (portal *Portal) handleMatrixEdit(
 	return EventHandlingResultSuccess
 }
 
-func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogin, evt *event.Event) (handleRes EventHandlingResult) {
+func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogin, origSender *OrigSender, evt *event.Event) (handleRes EventHandlingResult) {
 	log := zerolog.Ctx(ctx)
 	reactingAPI, ok := sender.Client.(ReactionHandlingNetworkAPI)
 	if !ok {
@@ -1593,7 +1589,7 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 		return EventHandlingResultFailed.WithMSSError(fmt.Errorf("reaction %w", ErrTargetMessageNotFound))
 	}
 	caps := sender.Client.GetCapabilities(ctx, portal)
-	err = portal.autoAcceptMessageRequest(ctx, evt, sender, nil, caps)
+	err = portal.autoAcceptMessageRequest(ctx, evt, sender, origSender, caps)
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to auto-accept message request on reaction")
 		// TODO stop processing?
@@ -1603,11 +1599,12 @@ func (portal *Portal) handleMatrixReaction(ctx context.Context, sender *UserLogi
 	})
 	react := &MatrixReaction{
 		MatrixEventBase: MatrixEventBase[*event.ReactionEventContent]{
-			Event:   evt,
-			Content: content,
-			Portal:  portal,
+			Event:      evt,
+			Content:    content,
+			Portal:     portal,
+			OrigSender: origSender,
 
-			InputTransactionID: portal.parseInputTransactionID(nil, evt),
+			InputTransactionID: portal.parseInputTransactionID(origSender, evt),
 		},
 		TargetMessage: reactionTarget,
 	}
