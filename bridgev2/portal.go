@@ -32,6 +32,7 @@ import (
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
+	"maunium.net/go/mautrix/bridgev2/status"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
@@ -665,12 +666,12 @@ func (portal *Portal) FindPreferredLogin(ctx context.Context, user *User, allowR
 		if login == nil {
 			return nil, nil, fmt.Errorf("%w (receiver login is nil)", ErrNotLoggedIn)
 		} else if !login.Client.IsLoggedIn() {
-			return nil, nil, fmt.Errorf("%w (receiver login is not logged in)", ErrNotLoggedIn)
+			return login, nil, fmt.Errorf("%w (receiver login is not logged in)", ErrNotLoggedIn)
 		} else if login.UserMXID != user.MXID {
 			if allowRelay && portal.Relay != nil {
 				return nil, nil, nil
 			}
-			return nil, nil, fmt.Errorf("%w (relay not set and receiver login is owned by %s, not %s)", ErrNotLoggedIn, login.UserMXID, user.MXID)
+			return login, nil, fmt.Errorf("%w (relay not set and receiver login is owned by %s, not %s)", ErrNotLoggedIn, login.UserMXID, user.MXID)
 		}
 		up, err := portal.Bridge.DB.UserPortal.Get(ctx, login.UserLogin, portal.PortalKey)
 		return login, up, err
@@ -710,7 +711,7 @@ func (portal *Portal) FindPreferredLogin(ctx context.Context, user *User, allowR
 			Msg("No usable user portal rows found, returning random login")
 		return firstLogin, nil, nil
 	} else {
-		return nil, nil, fmt.Errorf("%w (no usable logins found)", ErrNotLoggedIn)
+		return firstLogin, nil, fmt.Errorf("%w (no usable logins found)", ErrNotLoggedIn)
 	}
 }
 
@@ -779,8 +780,14 @@ func (portal *Portal) handleMatrixEvent(ctx context.Context, sender *User, evt *
 		log.Err(err).Msg("Failed to get user login to handle Matrix event")
 		if errors.Is(err, ErrNotLoggedIn) {
 			shouldSendNotice := evt.Type == event.EventMessage && evt.Content.AsMessage().MsgType != event.MsgNotice
+			msg := fmt.Sprintf("You're %s", err)
+			if login != nil && login.UserMXID == sender.MXID {
+				if prevState := login.BridgeState.GetPrev(); prevState.StateEvent == status.StateBadCredentials && prevState.Message != "" {
+					msg = prevState.Message
+				}
+			}
 			return EventHandlingResultFailed.WithMSSError(WrapErrorInStatus(err).
-				WithMessage(fmt.Sprintf("You're %s", err)).
+				WithMessage(msg).
 				WithIsCertain(true).
 				WithSendNotice(shouldSendNotice))
 		} else {
