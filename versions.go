@@ -64,7 +64,7 @@ var (
 	FeatureAppservicePing            = UnstableFeature{UnstableFlag: "fi.mau.msc2659.stable", SpecVersion: SpecV17}
 	FeatureAuthenticatedMedia        = UnstableFeature{UnstableFlag: "org.matrix.msc3916.stable", SpecVersion: SpecV111}
 	FeatureUnstableMutualRooms       = UnstableFeature{UnstableFlag: "uk.half-shot.msc2666.query_mutual_rooms"}
-	FeatureStableMutualRooms         = UnstableFeature{UnstableFlag: "uk.half-shot.msc2666.query_mutual_rooms.stable" /*, SpecVersion: SpecV119*/}
+	FeatureStableMutualRooms         = UnstableFeature{UnstableFlag: "uk.half-shot.msc2666.query_mutual_rooms.stable", SpecVersion: SpecV119}
 	FeatureUserRedaction             = UnstableFeature{UnstableFlag: "org.matrix.msc4194"}
 	FeatureViewRedactedContent       = UnstableFeature{UnstableFlag: "fi.mau.msc2815"}
 	FeatureUnstableAccountModeration = UnstableFeature{UnstableFlag: "uk.timedout.msc4323"}
@@ -130,6 +130,7 @@ var (
 	SpecV116 = MustParseSpecVersion("v1.16")
 	SpecV117 = MustParseSpecVersion("v1.17")
 	SpecV118 = MustParseSpecVersion("v1.18")
+	SpecV119 = MustParseSpecVersion("v1.19")
 )
 
 func (svf SpecVersionFormat) String() string {
