@@ -443,7 +443,7 @@ func (portal *Portal) handleSingleEventWithDelayLogging(idx int, rawEvt any) (ou
 	tick := time.NewTicker(30 * time.Second)
 	_, isCreate := rawEvt.(*portalCreateEvent)
 	defer tick.Stop()
-	for i := 0; i < EventHandlingTimeoutTicks; i++ {
+	for i := 0; i < EventHandlingTimeoutTicks || isCreate; i++ {
 		select {
 		case <-doneCh:
 			if i > 0 {
@@ -457,10 +457,6 @@ func (portal *Portal) handleSingleEventWithDelayLogging(idx int, rawEvt any) (ou
 			log.Warn().
 				Time("started_at", start).
 				Msg("Event handling is taking long")
-			if isCreate {
-				// Never background portal creation events
-				i = 1
-			}
 		}
 	}
 	backgrounded.Store(true)
