@@ -80,8 +80,24 @@ var (
 )
 
 var (
+	ErrOAuthInvalidRequest        = RespError{ErrCode: "invalid_request", OAuth: true}
+	ErrOAuthInvalidClient         = RespError{ErrCode: "invalid_client", OAuth: true}
+	ErrOAuthInvalidGrant          = RespError{ErrCode: "invalid_grant", OAuth: true}
+	ErrOAuthUnauthorizedClient    = RespError{ErrCode: "unauthorized_client", OAuth: true}
+	ErrOAuthUnauthorizedGrantType = RespError{ErrCode: "unauthorized_grant_type", OAuth: true}
+	ErrOAuthInvalidScope          = RespError{ErrCode: "invalid_scope", OAuth: true}
+	ErrOAuthAuthorizationPending  = RespError{ErrCode: "authorization_pending", OAuth: true}
+	ErrOAuthSlowDown              = RespError{ErrCode: "slow_down", OAuth: true}
+	ErrOAuthExpiredToken          = RespError{ErrCode: "expired_token", OAuth: true}
+	ErrOAuthAccessDenied          = RespError{ErrCode: "access_denied", OAuth: true}
+)
+
+var (
 	ErrClientIsNil           = errors.New("client is nil")
 	ErrClientHasNoHomeserver = errors.New("client has no homeserver set")
+
+	ErrFailedToRefreshToken = errors.New("failed to refresh access token")
+	ErrClientIDNotSet       = errors.New("client ID not set")
 
 	ErrResponseTooLong      = errors.New("response content length too long")
 	ErrBodyReadReachedLimit = errors.New("reached response size limit while reading body")
@@ -148,6 +164,7 @@ type RespError struct {
 	ExtraHeader map[string]string
 
 	CanRetry      bool
+	OAuth         bool
 	InternalError string
 }
 
@@ -163,10 +180,23 @@ func (e *RespError) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+func (e *RespError) mutateOAuthError() {
+	if e.ErrCode == "" && e.Err != "" {
+		e.ErrCode = e.Err
+		e.Err, _ = e.ExtraData["error_description"].(string)
+		e.OAuth = true
+	}
+}
+
 func (e *RespError) MarshalJSON() ([]byte, error) {
 	data := exmaps.NonNilClone(e.ExtraData)
-	data["errcode"] = e.ErrCode
-	data["error"] = e.Err
+	if e.OAuth {
+		data["error"] = e.ErrCode
+		data["error_description"] = e.Err
+	} else {
+		data["errcode"] = e.ErrCode
+		data["error"] = e.Err
+	}
 	if e.CanRetry {
 		data["com.beeper.can_retry"] = e.CanRetry
 	} else {
@@ -243,6 +273,13 @@ func (e RespError) WithExtraHeaders(headers map[string]string) RespError {
 
 // Error returns the errcode and error message.
 func (e RespError) Error() string {
+	if e.OAuth {
+		prefix := "oauth: "
+		if e.Err != "" {
+			return prefix + e.ErrCode + ": " + e.Err
+		}
+		return prefix + e.ErrCode
+	}
 	return e.ErrCode + ": " + e.Err
 }
 
