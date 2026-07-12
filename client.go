@@ -99,6 +99,7 @@ type Client struct {
 	oauthMetadataLock sync.Mutex
 	refreshToken      string
 	accessTokenExpiry time.Time
+	longTokenLifetime bool
 	refreshLock       sync.RWMutex
 	SaveNewToken      func(ctx context.Context, refreshToken, accessToken string, expiry time.Time) error
 
@@ -283,7 +284,7 @@ func (cli *Client) SyncWithContext(ctx context.Context) error {
 		}
 	}
 	for {
-		_, err = cli.refreshTokenIfNeeded(ctx, syncTokenRefreshBuffer)
+		_, err = cli.refreshTokenIfNeeded(ctx, true)
 		if err != nil {
 			err = onError(nil, fmt.Errorf("%w in sync loop: %w", ErrFailedToRefreshToken, err))
 			if err != nil {
@@ -784,7 +785,7 @@ func (cli *Client) prepareRequestAttempt(origCtx context.Context, req *http.Requ
 	var token string
 	if origCtx.Value(oauthReqContextKey) == nil {
 		var err error
-		token, err = cli.refreshTokenIfNeeded(origCtx, tokenRefreshBuffer)
+		token, err = cli.refreshTokenIfNeeded(origCtx, false)
 		if err != nil {
 			return nil, nil, "", fmt.Errorf("%w: %w", ErrFailedToRefreshToken, err)
 		}

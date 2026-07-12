@@ -199,12 +199,15 @@ func (cli *Client) OAuthPollDeviceCode(ctx context.Context, params oauth.PollDev
 		cli.refreshToken = resp.RefreshToken
 		cli.AccessToken = resp.AccessToken
 		cli.accessTokenExpiry = start.Add(resp.ExpiresIn.Duration)
+		cli.longTokenLifetime = resp.ExpiresIn.Duration > 1*time.Hour
 	}
 	return
 }
 
-const tokenRefreshBuffer = 10 * time.Second
-const syncTokenRefreshBuffer = 60 * time.Second
+const (
+	tokenRefreshBuffer     = 10 * time.Second
+	syncTokenRefreshBuffer = 60 * time.Second
+)
 
 func (cli *Client) OAuthSetTokens(clientID, refreshToken, accessToken string, expiry time.Time) {
 	cli.refreshLock.Lock()
@@ -212,6 +215,7 @@ func (cli *Client) OAuthSetTokens(clientID, refreshToken, accessToken string, ex
 	cli.refreshToken = refreshToken
 	cli.AccessToken = accessToken
 	cli.accessTokenExpiry = expiry
+	cli.longTokenLifetime = time.Until(expiry) > 1*time.Hour
 	cli.refreshLock.Unlock()
 }
 
@@ -224,7 +228,14 @@ func (cli *Client) shouldRetryWithRefreshedToken(ctx context.Context, prevToken 
 	return cli.refreshToken != "" && (prevToken != cli.AccessToken || time.Until(cli.accessTokenExpiry) < 0)
 }
 
-func (cli *Client) refreshTokenIfNeeded(ctx context.Context, buffer time.Duration) (string, error) {
+func (cli *Client) refreshTokenIfNeeded(ctx context.Context, isSync bool) (string, error) {
+	buffer := tokenRefreshBuffer
+	if isSync {
+		buffer = syncTokenRefreshBuffer
+	}
+	if cli.longTokenLifetime {
+		buffer *= 5
+	}
 	cli.refreshLock.RLock()
 	needed := cli.refreshToken != "" && time.Until(cli.accessTokenExpiry) < buffer
 	token := cli.AccessToken
@@ -279,6 +290,7 @@ func (cli *Client) OAuthRefreshToken(ctx context.Context, buffer time.Duration) 
 			cli.refreshToken = resp.RefreshToken
 			cli.AccessToken = resp.AccessToken
 			cli.accessTokenExpiry = expiry
+			cli.longTokenLifetime = resp.ExpiresIn.Duration > 1*time.Hour
 		}
 	}
 	return
