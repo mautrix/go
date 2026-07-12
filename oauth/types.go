@@ -73,18 +73,6 @@ func ScopeDevice(deviceID id.DeviceID) Scope {
 	return Scope(fmt.Sprintf("urn:matrix:client:device:%s", deviceID))
 }
 
-type SubjectType string
-
-const (
-	SubjectTypePublic SubjectType = "public"
-)
-
-type DisplayValue string
-
-const (
-	DisplayValuePage DisplayValue = "page"
-)
-
 type CodeChallengeMethod string
 
 const (
@@ -102,83 +90,24 @@ const (
 	AuthMethodNone              AuthMethod = "none"
 )
 
-type Algorithm string
-
-const (
-	AlgorithmHS256  Algorithm = "HS256"
-	AlgorithmHS384  Algorithm = "HS384"
-	AlgorithmHS512  Algorithm = "HS512"
-	AlgorithmRS256  Algorithm = "RS256"
-	AlgorithmRS384  Algorithm = "RS384"
-	AlgorithmRS512  Algorithm = "RS512"
-	AlgorithmPS256  Algorithm = "PS256"
-	AlgorithmPS384  Algorithm = "PS384"
-	AlgorithmPS512  Algorithm = "PS512"
-	AlgorithmES256  Algorithm = "ES256"
-	AlgorithmES384  Algorithm = "ES384"
-	AlgorithmES256K Algorithm = "ES256K"
-)
-
-type ClaimType string
-
-const (
-	ClaimTypeNormal ClaimType = "normal"
-)
-
-type Claim string
-
-const (
-	ClaimIssuer          Claim = "iss"
-	ClaimSubject         Claim = "sub"
-	ClaimAudience        Claim = "aud"
-	ClaimIssuedAt        Claim = "iat"
-	ClaimExpiresAt       Claim = "exp"
-	ClaimNonce           Claim = "nonce"
-	ClaimAuthTime        Claim = "auth_time"
-	ClaimAccessTokenHash Claim = "at_hash"
-	ClaimAuthCodeHash    Claim = "c_hash"
-)
-
 type ServerMetadata struct {
-	Issuer                        string                `json:"issuer"`
-	AuthorizationEndpoint         string                `json:"authorization_endpoint"`
-	RegistrationEndpoint          string                `json:"registration_endpoint"`
+	Issuer                      string `json:"issuer"`
+	AuthorizationEndpoint       string `json:"authorization_endpoint"`
+	RegistrationEndpoint        string `json:"registration_endpoint"`
+	DeviceAuthorizationEndpoint string `json:"device_authorization_endpoint,omitempty"`
+	RevocationEndpoint          string `json:"revocation_endpoint"`
+	TokenEndpoint               string `json:"token_endpoint"`
+
 	ResponseTypesSupported        []ResponseType        `json:"response_types_supported"`
 	ResponseModesSupported        []ResponseMode        `json:"response_modes_supported"`
 	GrantTypesSupported           []GrantType           `json:"grant_types_supported"`
 	CodeChallengeMethodsSupported []CodeChallengeMethod `json:"code_challenge_methods_supported"`
+	PromptValuesSupported         []PromptValue         `json:"prompt_values_supported,omitempty"`
 
-	ScopesSupported                   []Scope        `json:"scopes_supported,omitempty"`
-	TokenEndpoint                     string         `json:"token_endpoint,omitempty"`
-	JWKsURI                           string         `json:"jwks_uri,omitempty"`
-	AccountManagementURI              string         `json:"account_management_uri,omitempty"`
-	UserInfoEndpoint                  string         `json:"userinfo_endpoint,omitempty"`
-	SubjectTypesSupported             []SubjectType  `json:"subject_types_supported,omitempty"`
-	IDTokenSigningAlgValuesSupported  []Algorithm    `json:"id_token_signing_alg_values_supported,omitempty"`
-	UserInfoSigningAlgValuesSupported []Algorithm    `json:"userinfo_signing_alg_values_supported,omitempty"`
-	DisplayValuesSupported            []DisplayValue `json:"display_values_supported,omitempty"`
-	ClaimTypesSupported               []ClaimType    `json:"claim_types_supported,omitempty"`
-	ClaimsSupported                   []Claim        `json:"claims_supported,omitempty"`
-	ClaimsParameterSupported          bool           `json:"claims_parameter_supported,omitempty"`
-	RequestParameterSupported         bool           `json:"request_parameter_supported,omitempty"`
-	RequestURIParameterSupported      bool           `json:"request_uri_parameter_supported,omitempty"`
-	PromptValuesSupported             []PromptValue  `json:"prompt_values_supported,omitempty"`
-	DeviceAuthorizationEndpoint       string         `json:"device_authorization_endpoint,omitempty"`
-
+	AccountManagementURI              string                    `json:"account_management_uri,omitempty"`
 	AccountManagementActionsSupported []AccountManagementAction `json:"account_management_actions_supported,omitempty"`
 
-	TokenEndpointAuthMethodsSupported          []AuthMethod `json:"token_endpoint_auth_methods_supported,omitempty"`
-	TokenEndpointAuthSigningAlgValuesSupported []Algorithm  `json:"token_endpoint_auth_signing_alg_values_supported,omitempty"`
-
-	RevocationEndpoint                              string       `json:"revocation_endpoint"`
-	RevocationEndpointAuthMethodsSupported          []AuthMethod `json:"revocation_endpoint_auth_methods_supported,omitempty"`
-	RevocationEndpointAuthSigningAlgValuesSupported []Algorithm  `json:"revocation_endpoint_auth_signing_alg_values_supported,omitempty"`
-
-	IntrospectionEndpoint                              string       `json:"introspection_endpoint,omitempty"`
-	IntrospectionEndpointAuthMethodsSupported          []AuthMethod `json:"introspection_endpoint_auth_methods_supported,omitempty"`
-	IntrospectionEndpointAuthSigningAlgValuesSupported []Algorithm  `json:"introspection_endpoint_auth_signing_alg_values_supported,omitempty"`
-
-	MASGraphQLEndpoint string `json:"org.matrix.matrix-authentication-service.graphql_endpoint,omitempty"`
+	Unrecognized map[string]any `json:",unknown"`
 }
 
 type ApplicationType string
