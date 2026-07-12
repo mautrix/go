@@ -723,7 +723,7 @@ func streamResponse(req *http.Request, res *http.Response, responseJSON any, lim
 	} else if _, err = file.Seek(0, 0); err != nil {
 		return nil, fmt.Errorf("failed to seek to beginning of response file: %w", err)
 	} else if err = json.NewDecoder(file).Decode(responseJSON); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal response body: %w", err)
+		return nil, fmt.Errorf("failed to unmarshal response body to file: %w", err)
 	} else {
 		return nil, nil
 	}
