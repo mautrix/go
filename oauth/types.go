@@ -236,16 +236,17 @@ type GenerateDeviceCodeParams struct {
 	ClientID   string    `json:"client_id,omitempty"`
 }
 
-type AuthorizationState struct {
+type AuthorizationCodeResponse struct {
 	State        string `json:"state"`
 	CodeVerifier string `json:"code_verifier"`
-	RedirectURI  string `json:"redirect_uri"`
+	URL          string `json:"url"`
 }
 
 type ExchangeTokenParams struct {
-	AuthorizationState
-	Code     string `json:"code"`
-	ClientID string `json:"client_id,omitempty"`
+	CodeVerifier string `json:"code_verifier"`
+	RedirectURI  string `json:"redirect_uri"`
+	Code         string `json:"code"`
+	ClientID     string `json:"client_id,omitempty"`
 
 	StoreCredentials bool `json:"-"`
 }

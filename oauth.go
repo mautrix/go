@@ -87,7 +87,7 @@ func (cli *Client) OAuthRegisterClient(ctx context.Context, clientMeta *oauth.Cl
 	return
 }
 
-func (cli *Client) OAuthGetAuthorizationURL(ctx context.Context, params oauth.GetAuthorizationURLParams) (*oauth.AuthorizationState, error) {
+func (cli *Client) OAuthGetAuthorizationURL(ctx context.Context, params oauth.GetAuthorizationURLParams) (*oauth.AuthorizationCodeResponse, error) {
 	clientID := cmp.Or(params.ClientID, cli.oauthClientID)
 	if clientID == "" {
 		return nil, ErrClientIDNotSet
@@ -119,10 +119,10 @@ func (cli *Client) OAuthGetAuthorizationURL(ctx context.Context, params oauth.Ge
 		q.Set("login_hint", fmt.Sprintf("mxid:%s", params.UserIDHint))
 	}
 	authURL.RawQuery = q.Encode()
-	return &oauth.AuthorizationState{
+	return &oauth.AuthorizationCodeResponse{
 		State:        state,
 		CodeVerifier: codeVerifier,
-		RedirectURI:  authURL.String(),
+		URL:          authURL.String(),
 	}, nil
 }
 
