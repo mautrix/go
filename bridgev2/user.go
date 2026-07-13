@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 	"unsafe"
 
 	"github.com/rs/zerolog"
@@ -22,6 +23,7 @@ import (
 	"maunium.net/go/mautrix/bridgev2/database"
 	"maunium.net/go/mautrix/bridgev2/networkid"
 	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/format"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -201,28 +203,70 @@ func (user *User) GetDefaultLogin() *UserLogin {
 	return user.logins[loginKeys[0]]
 }
 
+// one-time setup for a room that has just become a user's management room
+func (br *Bridge) prepareManagementRoom(ctx context.Context, user *User, roomID id.RoomID) error {
+	user.ManagementRoom = roomID
+	if err := user.Save(ctx); err != nil {
+		return fmt.Errorf("failed to save management room ID: %w", err)
+	}
+
+	netName := br.Network.GetName()
+
+	// this is ignored by many clients
+	_, err := br.Bot.SendState(ctx, roomID, event.StateRoomName, "", &event.Content{
+		Parsed: &event.RoomNameEventContent{Name: netName.DisplayName},
+	}, time.Time{})
+	if err != nil {
+		return fmt.Errorf("failed to set room name: %w", err)
+	}
+
+	_, err = br.Bot.SendState(ctx, roomID, event.StateTopic, "", &event.Content{
+		Parsed: &event.TopicEventContent{Topic: fmt.Sprintf("%s bridge management room", netName.DisplayName)},
+	}, time.Time{})
+	if err != nil {
+		return fmt.Errorf("failed to set room topic: %w", err)
+	}
+
+	_, err = br.Bot.SendState(ctx, roomID, event.StateRoomAvatar, "", &event.Content{
+		Parsed: &event.RoomAvatarEventContent{URL: netName.NetworkIcon},
+	}, time.Time{})
+	if err != nil {
+		return fmt.Errorf("failed to set room avatar: %w", err)
+	}
+
+	// no bridge info state key to match hungryserv's current behavior
+	_, err = br.Bot.SendState(ctx, roomID, event.StateBridge, "", &event.Content{
+		Parsed: &event.BridgeEventContent{
+			BridgeBot:             br.Bot.GetMXID(),
+			Creator:               br.Bot.GetMXID(),
+			Protocol:              netName.AsBridgeInfoSection(),
+			BeeperIsBridgeBotRoom: true,
+		},
+	}, time.Time{})
+	if err != nil {
+		return fmt.Errorf("failed to send m.bridge event: %w", err)
+	}
+
+	message := fmt.Sprintf("Hello, I'm a %s bridge bot.\n\nUse `help` for help or `login` to log in.\n\nThis room has been marked as your management room.", netName.DisplayName)
+	_, err = br.Bot.SendMessage(ctx, roomID, event.EventMessage, &event.Content{
+		Parsed: format.RenderMarkdown(message, true, false),
+	}, nil)
+	if err != nil {
+		return fmt.Errorf("failed to send welcome message: %w", err)
+	}
+	return nil
+}
+
 func (user *User) GetManagementRoom(ctx context.Context) (id.RoomID, error) {
 	user.managementCreateLock.Lock()
 	defer user.managementCreateLock.Unlock()
 	if user.ManagementRoom != "" {
 		return user.ManagementRoom, nil
 	}
-	netName := user.Bridge.Network.GetName()
-	var err error
 	autoJoin := user.Bridge.Matrix.GetCapabilities().AutoJoinInvites
 	doublePuppet := user.DoublePuppet(ctx)
 	req := &mautrix.ReqCreateRoom{
 		Visibility: "private",
-		Name:       netName.DisplayName,
-		Topic:      fmt.Sprintf("%s bridge management room", netName.DisplayName),
-		InitialState: []*event.Event{{
-			Type: event.StateRoomAvatar,
-			Content: event.Content{
-				Parsed: &event.RoomAvatarEventContent{
-					URL: netName.NetworkIcon,
-				},
-			},
-		}},
 		PowerLevelOverride: &event.PowerLevelsEventContent{
 			Users: map[id.UserID]int{
 				user.Bridge.Bot.GetMXID(): 9001,
@@ -237,19 +281,18 @@ func (user *User) GetManagementRoom(ctx context.Context) (id.RoomID, error) {
 		// TODO remove this after initial_members is supported in hungryserv
 		req.BeeperAutoJoinInvites = true
 	}
-	user.ManagementRoom, err = user.Bridge.Bot.CreateRoom(ctx, req)
+	roomID, err := user.Bridge.Bot.CreateRoom(ctx, req)
 	if err != nil {
 		return "", fmt.Errorf("failed to create management room: %w", err)
 	}
 	if !autoJoin && doublePuppet != nil {
-		err = doublePuppet.EnsureJoined(ctx, user.ManagementRoom)
+		err = doublePuppet.EnsureJoined(ctx, roomID)
 		if err != nil {
 			zerolog.Ctx(ctx).Err(err).Msg("Failed to auto-join created management room with double puppet")
 		}
 	}
-	err = user.Save(ctx)
-	if err != nil {
-		return "", fmt.Errorf("failed to save management room ID: %w", err)
+	if err = user.Bridge.prepareManagementRoom(ctx, user, roomID); err != nil {
+		return "", fmt.Errorf("failed to prepare management room: %w", err)
 	}
 	return user.ManagementRoom, nil
 }
