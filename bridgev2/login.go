@@ -183,6 +183,9 @@ type LoginCookiesParams struct {
 	// even if this URL is not reached, but it should only automatically close the webview after
 	// both cookies and the URL match.
 	WaitForURLPattern string `json:"wait_for_url_pattern,omitempty"`
+	// If set, the client should load the URL and run ExtractJS in a webview that is not shown to the
+	// user.
+	Hidden bool `json:"hidden,omitempty"`
 }
 
 type LoginInputFieldType string

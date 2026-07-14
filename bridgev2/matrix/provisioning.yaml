@@ -855,6 +855,9 @@ components:
                   A JavaScript snippet that can extract some or all of the fields.
                   The snippet will evaluate to a promise that resolves when the relevant fields are found.
                   Fields that are not present in the promise result must be extracted another way.
+              hidden:
+                type: boolean
+                description: If set, the client should load the URL and run `extract_js` in a webview that is not shown to the user.
               fields:
                 type: array
                 description: The list of cookies or other stored data that must be extracted.
