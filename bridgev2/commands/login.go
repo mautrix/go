@@ -84,6 +84,10 @@ func fnLogin(ce *Event) {
 		return
 	}
 	flows := ce.Bridge.Network.GetLoginFlows()
+	if len(flows) == 0 {
+		ce.Reply("No login flows available.")
+		return
+	}
 	var chosenFlowID string
 	if len(ce.Args) > 0 {
 		inputFlowID := strings.ToLower(ce.Args[0])
