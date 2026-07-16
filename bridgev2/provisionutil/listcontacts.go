@@ -45,7 +45,7 @@ func SearchUsers(ctx context.Context, login *bridgev2.UserLogin, query string) (
 	}
 	resp, err := api.SearchUsers(ctx, query)
 	if err != nil {
-		zerolog.Ctx(ctx).Err(err).Msg("Failed to get contact list")
+		zerolog.Ctx(ctx).Err(err).Msg("Failed to search for users")
 		return nil, err
 	}
 	return &RespSearchUsers{
