@@ -135,13 +135,16 @@ func (e HTTPError) Error() string {
 			msg = e.RespError.InternalError
 		}
 		return fmt.Sprintf("%s (HTTP %d): %s", e.RespError.ErrCode, e.Response.StatusCode, msg)
-	} else {
+	} else if e.Response != nil {
 		msg := fmt.Sprintf("HTTP %d", e.Response.StatusCode)
 		if len(e.ResponseBody) > 0 {
 			msg = fmt.Sprintf("%s: %s", msg, e.ResponseBody)
 		}
 		return msg
+	} else if e.Message != "" {
+		return e.Message
 	}
+	return "unexpected empty error"
 }
 
 func (e HTTPError) Unwrap() error {
