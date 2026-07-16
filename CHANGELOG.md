@@ -1,3 +1,13 @@
+## v0.29.0 (2026-07-16)
+
+* *(client)* Added support for OAuth login and refresh tokens.
+* *(bridgev2)* Added WebAuthn login type.
+* *(bridgev2)* Added hook for fetching full portal key when uncertain portal
+  key isn't found.
+* *(bridgev2)* Added option to force sending edit as the original sender.
+* *(bridgev2)* Changed send message error to use latest bridge state message
+  instead of a generic "you're not logged in" if applicable.
+
 ## v0.28.1 (2026-06-16)
 
 * *(pushrules)* Removed deprecated `NotifySpecified` field in `Should()`.
