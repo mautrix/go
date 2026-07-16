@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -548,6 +549,8 @@ func (c *Client) MakeFullRequest(ctx context.Context, params RequestParams) ([]b
 	return body, resp, nil
 }
 
+var ErrNotConfiguredForAuth = errors.New("client not configured for authentication")
+
 func (c *Client) compileRequest(ctx context.Context, params RequestParams) (*http.Request, error) {
 	reqURL := mautrix.BuildURL(&url.URL{
 		Scheme: "matrix-federation",
@@ -577,9 +580,7 @@ func (c *Client) compileRequest(ctx context.Context, params RequestParams) (*htt
 	req.Header.Set("User-Agent", c.UserAgent)
 	if params.Authenticate {
 		if c.ServerName == "" || c.Key == nil {
-			return nil, mautrix.HTTPError{
-				Message: "client not configured for authentication",
-			}
+			return nil, mautrix.HTTPError{WrappedError: ErrNotConfiguredForAuth}
 		}
 		auth, err := (&signableRequest{
 			Method:      req.Method,
