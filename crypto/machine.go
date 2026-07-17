@@ -56,8 +56,6 @@ type OlmMachine struct {
 	SendKeysMinTrust  id.TrustState
 	ShareKeysMinTrust id.TrustState
 
-	AllowKeyShare func(context.Context, *id.Device, event.RequestedKeyInfo) *KeyShareRejection
-
 	account *OlmAccount
 
 	roomKeyRequestFilled            *sync.Map
@@ -68,6 +66,8 @@ type OlmMachine struct {
 
 	// Optional callback which is called when we save a session to store
 	SessionReceived func(context.Context, id.RoomID, id.SessionID, uint32)
+	AllowKeyShare   func(context.Context, *id.Device, event.RequestedKeyInfo) *KeyShareRejection
+	OnRoomKeyBundle func(context.Context, *event.RoomKeyBundleEventContent)
 
 	devicesToUnwedge     map[id.IdentityKey]bool
 	devicesToUnwedgeLock sync.Mutex
@@ -429,6 +429,9 @@ func (mach *OlmMachine) HandleEncryptedEvent(ctx context.Context, evt *event.Eve
 			}
 		}
 		log.Trace().Msg("Handled forwarded room key event")
+	case *event.RoomKeyBundleEventContent:
+		mach.receiveRoomKeyBundle(ctx, decryptedEvt, decryptedContent)
+		log.Trace().Msg("Handled room key bundle")
 	case *event.DummyEventContent:
 		log.Debug().Msg("Received encrypted dummy event")
 	case *event.SecretSendEventContent:

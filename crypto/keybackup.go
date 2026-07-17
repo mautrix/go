@@ -173,7 +173,6 @@ func (mach *OlmMachine) ImportRoomKeyFromBackupWithoutSaving(
 	sessionID id.SessionID,
 	keyBackupData *backup.MegolmSessionData,
 ) (*InboundGroupSession, error) {
-	log := zerolog.Ctx(ctx)
 	if keyBackupData.Algorithm != id.AlgorithmMegolmV1 {
 		return nil, fmt.Errorf("%w %s", ErrUnknownAlgorithmInKeyBackup, keyBackupData.Algorithm)
 	}
@@ -182,12 +181,7 @@ func (mach *OlmMachine) ImportRoomKeyFromBackupWithoutSaving(
 	if err != nil {
 		return nil, fmt.Errorf("failed to import inbound group session: %w", err)
 	} else if igsInternal.ID() != sessionID {
-		log.Warn().
-			Stringer("room_id", roomID).
-			Stringer("session_id", sessionID).
-			Stringer("actual_session_id", igsInternal.ID()).
-			Msg("Mismatched session ID while creating inbound group session from key backup")
-		return nil, ErrMismatchingSessionIDInKeyBackup
+		return nil, fmt.Errorf("%w (%q != %q)", ErrMismatchingSessionIDInKeyBackup, sessionID, igsInternal.ID())
 	}
 
 	var maxAge time.Duration

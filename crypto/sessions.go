@@ -174,7 +174,7 @@ func (igs *InboundGroupSession) export() (*ExportedSession, error) {
 	}
 	return &ExportedSession{
 		Algorithm:         id.AlgorithmMegolmV1,
-		ForwardingChains:  igs.ForwardingChains,
+		ForwardingChains:  &igs.ForwardingChains,
 		RoomID:            igs.RoomID,
 		SenderKey:         igs.SenderKey,
 		SenderClaimedKeys: SenderClaimedKeys{Ed25519: igs.SigningKey},

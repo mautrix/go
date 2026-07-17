@@ -287,6 +287,7 @@ var (
 	ToDeviceRoomKey          = Type{"m.room_key", ToDeviceEventType}
 	ToDeviceRoomKeyRequest   = Type{"m.room_key_request", ToDeviceEventType}
 	ToDeviceForwardedRoomKey = Type{"m.forwarded_room_key", ToDeviceEventType}
+	ToDeviceRoomKeyBundle    = Type{"m.room_key_bundle", ToDeviceEventType}
 	ToDeviceEncrypted        = Type{"m.room.encrypted", ToDeviceEventType}
 	ToDeviceRoomKeyWithheld  = Type{"m.room_key.withheld", ToDeviceEventType}
 	ToDeviceSecretRequest    = Type{"m.secret.request", ToDeviceEventType}

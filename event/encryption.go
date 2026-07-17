@@ -122,6 +122,11 @@ type ForwardedRoomKeyEventContent struct {
 	ForwardingKeyChain []string     `json:"forwarding_curve25519_key_chain"`
 }
 
+type RoomKeyBundleEventContent struct {
+	File   EncryptedFileInfo `json:"file"`
+	RoomID id.RoomID         `json:"room_id"`
+}
+
 type KeyRequestAction string
 
 const (

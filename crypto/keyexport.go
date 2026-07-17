@@ -37,13 +37,15 @@ type SenderClaimedKeys struct {
 
 type ExportedSession struct {
 	Algorithm         id.Algorithm      `json:"algorithm"`
-	ForwardingChains  []string          `json:"forwarding_curve25519_key_chain"`
 	RoomID            id.RoomID         `json:"room_id"`
 	SenderKey         id.SenderKey      `json:"sender_key"`
 	SenderClaimedKeys SenderClaimedKeys `json:"sender_claimed_keys"`
 	SessionID         id.SessionID      `json:"session_id"`
 	SessionKey        string            `json:"session_key"`
-	SharedHistory     *bool             `json:"shared_history,omitempty"`
+
+	// These are omitted in room key bundles
+	ForwardingChains *[]string `json:"forwarding_curve25519_key_chain,omitempty"`
+	SharedHistory    *bool     `json:"shared_history,omitempty"`
 }
 
 // The default number of pbkdf2 rounds to use when exporting keys
