@@ -173,10 +173,6 @@ func (mach *OlmMachine) importForwardedRoomKey(ctx context.Context, evt *Decrypt
 	if content.MaxMessages != 0 {
 		maxMessages = content.MaxMessages
 	}
-	firstKnownIndex := igsInternal.FirstKnownIndex()
-	if firstKnownIndex > 0 {
-		log.Warn().Uint32("first_known_index", firstKnownIndex).Msg("Importing partial session")
-	}
 	igs := &InboundGroupSession{
 		Internal:         igsInternal,
 		SigningKey:       content.SenderClaimedKey,
@@ -192,18 +188,11 @@ func (mach *OlmMachine) importForwardedRoomKey(ctx context.Context, evt *Decrypt
 		IsScheduled: content.IsScheduled,
 		KeySource:   id.KeySourceForward,
 	}
-	existingIGS, _ := mach.CryptoStore.GetGroupSession(ctx, igs.RoomID, igs.ID())
-	if existingIGS != nil && existingIGS.Internal.FirstKnownIndex() <= igs.Internal.FirstKnownIndex() {
-		// We already have an equivalent or better session in the store, so don't override it.
-		return false
-	}
-	err = mach.CryptoStore.PutGroupSession(ctx, igs)
+	err = mach.storeGroupSession(ctx, igs)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to store new inbound group session")
+		log.Err(err).Msg("Failed to store new inbound group session")
 		return false
 	}
-	mach.MarkSessionReceived(ctx, content.RoomID, content.SessionID, firstKnownIndex)
-	log.Debug().Msg("Received forwarded inbound group session")
 	return true
 }
 

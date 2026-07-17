@@ -107,7 +107,7 @@ func (mach *OlmMachine) importExportedRoomKey(ctx context.Context, session Expor
 	} else if igsInternal.ID() != session.SessionID {
 		return false, ErrMismatchingExportedSessionID
 	}
-	igs := &InboundGroupSession{
+	err = mach.storeGroupSession(ctx, &InboundGroupSession{
 		Internal:         igsInternal,
 		SigningKey:       session.SenderClaimedKeys.Ed25519,
 		SenderKey:        session.SenderKey,
@@ -116,21 +116,8 @@ func (mach *OlmMachine) importExportedRoomKey(ctx context.Context, session Expor
 		KeySource:        id.KeySourceImport,
 		ReceivedAt:       time.Now().UTC(),
 		SharedHistory:    session.SharedHistory,
-	}
-	existingIGS, _ := mach.CryptoStore.GetGroupSession(ctx, igs.RoomID, igs.ID())
-	firstKnownIndex := igs.Internal.FirstKnownIndex()
-	if existingIGS != nil && existingIGS.Internal.FirstKnownIndex() <= firstKnownIndex {
-		// We already have an equivalent or better session in the store, so don't override it,
-		// but do notify the session received callback just in case.
-		mach.MarkSessionReceived(ctx, session.RoomID, igs.ID(), existingIGS.Internal.FirstKnownIndex())
-		return false, nil
-	}
-	err = mach.CryptoStore.PutGroupSession(ctx, igs)
-	if err != nil {
-		return false, fmt.Errorf("failed to store imported session: %w", err)
-	}
-	mach.MarkSessionReceived(ctx, session.RoomID, igs.ID(), firstKnownIndex)
-	return true, nil
+	})
+	return err == nil, err
 }
 
 // ImportKeys imports data that was exported with the format specified in the Matrix spec.

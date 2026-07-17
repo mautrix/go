@@ -615,19 +615,53 @@ func (mach *OlmMachine) createGroupSession(
 			Msg("Mismatched session ID while creating inbound group session")
 		return fmt.Errorf("mismatched session ID while creating inbound group session")
 	}
-	err = mach.CryptoStore.PutGroupSession(ctx, igs)
+	err = mach.storeGroupSession(ctx, igs)
 	if err != nil {
 		log.Err(err).Stringer("session_id", sessionID).Msg("Failed to store new inbound group session")
 		return fmt.Errorf("failed to store new inbound group session: %w", err)
 	}
-	mach.MarkSessionReceived(ctx, roomID, sessionID, igs.Internal.FirstKnownIndex())
-	log.Debug().
-		Str("session_id", sessionID.String()).
-		Str("sender_key", senderKey.String()).
-		Str("max_age", maxAge.String()).
-		Int("max_messages", maxMessages).
-		Bool("is_scheduled", isScheduled).
-		Msg("Received inbound group session")
+	return nil
+}
+
+func (mach *OlmMachine) storeGroupSession(ctx context.Context, igs *InboundGroupSession) error {
+	mach.megolmDecryptLock.Lock()
+	defer mach.megolmDecryptLock.Unlock()
+	origSource := igs.KeySource
+	existing, err := mach.CryptoStore.GetGroupSession(ctx, igs.RoomID, igs.ID())
+	if err != nil {
+		return fmt.Errorf("failed to check for existing group session: %w", err)
+	} else if existing != nil {
+		if existing.Internal.FirstKnownIndex() <= igs.Internal.FirstKnownIndex() {
+			if existing.KeySource == id.KeySourceDirect || igs.KeySource != id.KeySourceDirect {
+				// The new session is no better than the existing one, don't do anything.
+				return nil
+			}
+			// The existing session has an earlier index than the new one, but the new one was received directly,
+			// so save the new key source to flag the session as more trusted.
+			existing.KeySource = igs.KeySource
+			existing.ForwardingChains = igs.ForwardingChains
+			igs = existing
+		} else if existing.KeySource == id.KeySourceDirect {
+			// The new session has an earlier index than the existing one, but the existing one was received directly,
+			// so keep the existing key source to keep the session flagged as trusted.
+			igs.KeySource = existing.KeySource
+			igs.ForwardingChains = existing.ForwardingChains
+		}
+
+		// Use oldest received at time
+		if igs.ReceivedAt.After(existing.ReceivedAt) {
+			igs.ReceivedAt = existing.ReceivedAt
+		}
+	}
+	log := zerolog.Ctx(ctx).With().
+		Bool("is_update", existing == nil).
+		Stringer("update_source", origSource).
+		Logger()
+	err = mach.CryptoStore.PutGroupSession(log.WithContext(ctx), igs)
+	if err != nil {
+		return fmt.Errorf("failed to store new inbound group session: %w", err)
+	}
+	mach.MarkSessionReceived(ctx, igs.RoomID, igs.ID(), igs.Internal.FirstKnownIndex())
 	return nil
 }
 

@@ -349,6 +349,8 @@ func (mach *OlmMachine) validateDevice(userID id.UserID, deviceID id.DeviceID, d
 		return nil, ErrNoIdentityKeyFound
 	}
 
+	// Changing identity keys is allowed as long as the object is signed by the signing key,
+	// though in practice no implementation rotates its identity keys currently.
 	if existing != nil && existing.SigningKey != signingKey {
 		return existing, fmt.Errorf("%w (expected %s, got %s)", ErrMismatchingSigningKey, existing.SigningKey, signingKey)
 	}

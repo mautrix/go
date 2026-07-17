@@ -346,6 +346,7 @@ func (store *SQLCryptoStore) PutGroupSession(ctx context.Context, session *Inbou
 		Int("max_messages", session.MaxMessages).
 		Bool("is_scheduled", session.IsScheduled).
 		Any("shared_history", session.SharedHistory).
+		Uint32("first_message_index", session.Internal.FirstKnownIndex()).
 		Stringer("key_backup_version", session.KeyBackupVersion).
 		Stringer("key_source", session.KeySource).
 		Msg("Upserting megolm inbound group session")
