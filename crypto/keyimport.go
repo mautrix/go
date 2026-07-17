@@ -107,7 +107,7 @@ func (mach *OlmMachine) importExportedRoomKey(ctx context.Context, session Expor
 	} else if igsInternal.ID() != session.SessionID {
 		return false, ErrMismatchingExportedSessionID
 	}
-	err = mach.storeGroupSession(ctx, &InboundGroupSession{
+	igs := &InboundGroupSession{
 		Internal:         igsInternal,
 		SigningKey:       session.SenderClaimedKeys.Ed25519,
 		SenderKey:        session.SenderKey,
@@ -116,7 +116,8 @@ func (mach *OlmMachine) importExportedRoomKey(ctx context.Context, session Expor
 		KeySource:        id.KeySourceImport,
 		ReceivedAt:       time.Now().UTC(),
 		SharedHistory:    session.SharedHistory,
-	})
+	}
+	err = mach.StoreGroupSession(ctx, igs, true)
 	return err == nil, err
 }
 

@@ -234,7 +234,7 @@ func (mach *OlmMachine) ImportRoomKeyFromBackup(ctx context.Context, version id.
 			Uint32("first_known_index", firstKnownIndex).
 			Msg("Importing partial session")
 	}
-	err = mach.storeGroupSession(ctx, imported)
+	err = mach.StoreGroupSession(ctx, imported, true)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrFailedToStoreNewInboundGroupSessionFromBackup, err)
 	}

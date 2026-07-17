@@ -188,7 +188,7 @@ func (mach *OlmMachine) importForwardedRoomKey(ctx context.Context, evt *Decrypt
 		IsScheduled: content.IsScheduled,
 		KeySource:   id.KeySourceForward,
 	}
-	err = mach.storeGroupSession(ctx, igs)
+	err = mach.StoreGroupSession(ctx, igs, true)
 	if err != nil {
 		log.Err(err).Msg("Failed to store new inbound group session")
 		return false

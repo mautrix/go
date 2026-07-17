@@ -254,8 +254,8 @@ func (mach *OlmMachine) checkUndecryptableMessageIndexDuplication(ctx context.Co
 }
 
 func (mach *OlmMachine) actuallyDecryptMegolmEvent(ctx context.Context, evt *event.Event, encryptionRoomID id.RoomID, content *event.EncryptedEventContent) (*InboundGroupSession, []byte, uint, error) {
-	mach.megolmDecryptLock.Lock()
-	defer mach.megolmDecryptLock.Unlock()
+	mach.megolmDecryptLock.Lock(content.SessionID)
+	defer mach.megolmDecryptLock.Unlock(content.SessionID)
 
 	sess, err := mach.CryptoStore.GetGroupSession(ctx, encryptionRoomID, content.SessionID)
 	if err != nil {

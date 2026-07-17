@@ -79,7 +79,7 @@ type OlmMachine struct {
 
 	olmLock           sync.Mutex
 	megolmEncryptLock sync.Mutex
-	megolmDecryptLock sync.Mutex
+	megolmDecryptLock exsync.KeyedMutex[id.SessionID]
 
 	otkUploadLock       sync.Mutex
 	lastOTKUpload       time.Time
@@ -615,7 +615,7 @@ func (mach *OlmMachine) createGroupSession(
 			Msg("Mismatched session ID while creating inbound group session")
 		return fmt.Errorf("mismatched session ID while creating inbound group session")
 	}
-	err = mach.storeGroupSession(ctx, igs)
+	err = mach.StoreGroupSession(ctx, igs, true)
 	if err != nil {
 		log.Err(err).Stringer("session_id", sessionID).Msg("Failed to store new inbound group session")
 		return fmt.Errorf("failed to store new inbound group session: %w", err)
@@ -623,11 +623,14 @@ func (mach *OlmMachine) createGroupSession(
 	return nil
 }
 
-func (mach *OlmMachine) storeGroupSession(ctx context.Context, igs *InboundGroupSession) error {
-	mach.megolmDecryptLock.Lock()
-	defer mach.megolmDecryptLock.Unlock()
+func (mach *OlmMachine) StoreGroupSession(ctx context.Context, igs *InboundGroupSession, lock bool) error {
+	sessID := igs.ID()
+	if lock {
+		mach.megolmDecryptLock.Lock(sessID)
+		defer mach.megolmDecryptLock.Unlock(sessID)
+	}
 	origSource := igs.KeySource
-	existing, err := mach.CryptoStore.GetGroupSession(ctx, igs.RoomID, igs.ID())
+	existing, err := mach.CryptoStore.GetGroupSession(ctx, igs.RoomID, sessID)
 	if err != nil {
 		return fmt.Errorf("failed to check for existing group session: %w", err)
 	} else if existing != nil {
@@ -661,7 +664,7 @@ func (mach *OlmMachine) storeGroupSession(ctx context.Context, igs *InboundGroup
 	if err != nil {
 		return fmt.Errorf("failed to store new inbound group session: %w", err)
 	}
-	mach.MarkSessionReceived(ctx, igs.RoomID, igs.ID(), igs.Internal.FirstKnownIndex())
+	mach.MarkSessionReceived(ctx, igs.RoomID, sessID, igs.Internal.FirstKnownIndex())
 	return nil
 }
 
