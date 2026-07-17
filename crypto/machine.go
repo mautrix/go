@@ -600,9 +600,12 @@ func (mach *OlmMachine) SendEncryptedToDevice(ctx context.Context, device *id.De
 	return err
 }
 
-func (mach *OlmMachine) createGroupSession(ctx context.Context, senderKey id.SenderKey, signingKey id.Ed25519, roomID id.RoomID, sessionID id.SessionID, sessionKey string, maxAge time.Duration, maxMessages int, isScheduled bool) error {
+func (mach *OlmMachine) createGroupSession(
+	ctx context.Context, senderKey id.SenderKey, signingKey id.Ed25519, roomID id.RoomID, sessionID id.SessionID,
+	sessionKey string, maxAge time.Duration, maxMessages int, sharedHistory *bool, isScheduled bool,
+) error {
 	log := zerolog.Ctx(ctx)
-	igs, err := NewInboundGroupSession(senderKey, signingKey, roomID, sessionKey, maxAge, maxMessages, isScheduled)
+	igs, err := NewInboundGroupSession(senderKey, signingKey, roomID, sessionKey, maxAge, maxMessages, sharedHistory, isScheduled)
 	if err != nil {
 		return fmt.Errorf("failed to create inbound group session: %w", err)
 	} else if igs.ID() != sessionID {
@@ -702,6 +705,7 @@ func (mach *OlmMachine) receiveRoomKey(ctx context.Context, evt *DecryptedOlmEve
 	if content.MaxMessages != 0 {
 		maxMessages = content.MaxMessages
 	}
+	// TODO(history sharing): fill shared history with current state if it's unset?
 	if mach.DeletePreviousKeysOnReceive && !content.IsScheduled {
 		log.Debug().Msg("Redacting previous megolm sessions from sender in room")
 		sessionIDs, err := mach.CryptoStore.RedactGroupSessions(ctx, content.RoomID, evt.SenderKey, "received new key from device")
@@ -713,7 +717,10 @@ func (mach *OlmMachine) receiveRoomKey(ctx context.Context, evt *DecryptedOlmEve
 				Msg("Redacted previous megolm sessions")
 		}
 	}
-	err = mach.createGroupSession(ctx, evt.SenderKey, evt.Keys.Ed25519, content.RoomID, content.SessionID, content.SessionKey, maxAge, maxMessages, content.IsScheduled)
+	err = mach.createGroupSession(
+		ctx, evt.SenderKey, evt.Keys.Ed25519, content.RoomID, content.SessionID, content.SessionKey,
+		maxAge, maxMessages, content.SharedHistory, content.IsScheduled,
+	)
 	if err != nil {
 		log.Err(err).Msg("Failed to create inbound group session")
 	}

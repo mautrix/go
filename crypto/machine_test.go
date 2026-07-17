@@ -118,7 +118,7 @@ func TestOlmMachineOlmMegolmSessions(t *testing.T) {
 
 		// store room key in new inbound group session
 		roomKeyEvt := decrypted.Content.AsRoomKey()
-		igs, err := NewInboundGroupSession(senderKey, signingKey, "room1", roomKeyEvt.SessionKey, 0, 0, false)
+		igs, err := NewInboundGroupSession(senderKey, signingKey, "room1", roomKeyEvt.SessionKey, 0, 0, nil, false)
 		require.NoError(t, err, "Error creating inbound group session")
 		err = machineIn.CryptoStore.PutGroupSession(context.TODO(), igs)
 		require.NoError(t, err, "Error storing inbound group session")

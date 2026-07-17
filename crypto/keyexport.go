@@ -43,6 +43,7 @@ type ExportedSession struct {
 	SenderClaimedKeys SenderClaimedKeys `json:"sender_claimed_keys"`
 	SessionID         id.SessionID      `json:"session_id"`
 	SessionKey        string            `json:"session_key"`
+	SharedHistory     *bool             `json:"shared_history,omitempty"`
 }
 
 // The default number of pbkdf2 rounds to use when exporting keys

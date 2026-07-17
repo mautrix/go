@@ -115,6 +115,7 @@ func (mach *OlmMachine) importExportedRoomKey(ctx context.Context, session Expor
 		ForwardingChains: session.ForwardingChains,
 		KeySource:        id.KeySourceImport,
 		ReceivedAt:       time.Now().UTC(),
+		SharedHistory:    session.SharedHistory,
 	}
 	existingIGS, _ := mach.CryptoStore.GetGroupSession(ctx, igs.RoomID, igs.ID())
 	firstKnownIndex := igs.Internal.FirstKnownIndex()

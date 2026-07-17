@@ -197,18 +197,22 @@ func (mach *OlmMachine) newOutboundGroupSession(ctx context.Context, roomID id.R
 			Msg("Failed to get encryption event in room")
 		return nil, fmt.Errorf("failed to get encryption event in room %s: %w", roomID, err)
 	}
-	session, err := NewOutboundGroupSession(roomID, encryptionEvent)
+	// TODO(history sharing): fetch history visibility
+	session, err := NewOutboundGroupSession(roomID, encryptionEvent, nil)
 	if err != nil {
 		return nil, err
 	}
 	if !mach.DontStoreOutboundKeys {
 		signingKey, idKey := mach.account.Keys()
-		err := mach.createGroupSession(ctx, idKey, signingKey, roomID, session.ID(), session.Internal.Key(), session.MaxAge, session.MaxMessages, false)
+		err = mach.createGroupSession(
+			ctx, idKey, signingKey, roomID, session.ID(), session.Internal.Key(),
+			session.MaxAge, session.MaxMessages, session.SharedHistory, false,
+		)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return session, err
+	return session, nil
 }
 
 type deviceSessionWrapper struct {

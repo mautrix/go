@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"time"
 
+	"go.mau.fi/util/ptr"
+
 	"maunium.net/go/mautrix/crypto/olm"
 	"maunium.net/go/mautrix/event"
 
@@ -114,6 +116,7 @@ type InboundGroupSession struct {
 	ReceivedAt       time.Time
 	MaxAge           int64
 	MaxMessages      int
+	SharedHistory    *bool
 	IsScheduled      bool
 	KeyBackupVersion id.KeyBackupVersion
 	KeySource        id.KeySource
@@ -121,7 +124,10 @@ type InboundGroupSession struct {
 	id id.SessionID
 }
 
-func NewInboundGroupSession(senderKey id.SenderKey, signingKey id.Ed25519, roomID id.RoomID, sessionKey string, maxAge time.Duration, maxMessages int, isScheduled bool) (*InboundGroupSession, error) {
+func NewInboundGroupSession(
+	senderKey id.SenderKey, signingKey id.Ed25519, roomID id.RoomID, sessionKey string,
+	maxAge time.Duration, maxMessages int, sharedHistory *bool, isScheduled bool,
+) (*InboundGroupSession, error) {
 	igs, err := olm.NewInboundGroupSession([]byte(sessionKey))
 	if err != nil {
 		return nil, err
@@ -135,6 +141,7 @@ func NewInboundGroupSession(senderKey id.SenderKey, signingKey id.Ed25519, roomI
 		ReceivedAt:       time.Now().UTC(),
 		MaxAge:           maxAge.Milliseconds(),
 		MaxMessages:      maxMessages,
+		SharedHistory:    sharedHistory,
 		IsScheduled:      isScheduled,
 		KeySource:        id.KeySourceDirect,
 	}, nil
@@ -173,6 +180,7 @@ func (igs *InboundGroupSession) export() (*ExportedSession, error) {
 		SenderClaimedKeys: SenderClaimedKeys{Ed25519: igs.SigningKey},
 		SessionID:         igs.ID(),
 		SessionKey:        string(key),
+		SharedHistory:     igs.SharedHistory,
 	}, nil
 }
 
@@ -193,8 +201,9 @@ type OutboundGroupSession struct {
 	Internal olm.OutboundGroupSession
 
 	ExpirationMixin
-	MaxMessages  int
-	MessageCount int
+	MaxMessages   int
+	MessageCount  int
+	SharedHistory *bool
 
 	Users  map[UserDevice]OGSState
 	RoomID id.RoomID
@@ -204,7 +213,11 @@ type OutboundGroupSession struct {
 	content *event.RoomKeyEventContent
 }
 
-func NewOutboundGroupSession(roomID id.RoomID, encryptionContent *event.EncryptionEventContent) (*OutboundGroupSession, error) {
+func NewOutboundGroupSession(
+	roomID id.RoomID,
+	encryptionContent *event.EncryptionEventContent,
+	historyVisibilityContent *event.HistoryVisibilityEventContent,
+) (*OutboundGroupSession, error) {
 	internal, err := olm.NewOutboundGroupSession()
 	if err != nil {
 		return nil, err
@@ -223,6 +236,10 @@ func NewOutboundGroupSession(roomID id.RoomID, encryptionContent *event.Encrypti
 		Users:       make(map[UserDevice]OGSState),
 		RoomID:      roomID,
 	}
+	if historyVisibilityContent != nil {
+		vis := historyVisibilityContent.HistoryVisibility
+		ogs.SharedHistory = ptr.Ptr(vis == event.HistoryVisibilityShared || vis == event.HistoryVisibilityWorldReadable)
+	}
 	if encryptionContent != nil {
 		// Clamp rotation period to prevent unreasonable values
 		// Similar to https://github.com/matrix-org/matrix-rust-sdk/blob/matrix-sdk-crypto-0.7.1/crates/matrix-sdk-crypto/src/olm/group_sessions/outbound.rs#L415-L441
@@ -240,10 +257,11 @@ func NewOutboundGroupSession(roomID id.RoomID, encryptionContent *event.Encrypti
 func (ogs *OutboundGroupSession) ShareContent() event.Content {
 	if ogs.content == nil {
 		ogs.content = &event.RoomKeyEventContent{
-			Algorithm:  id.AlgorithmMegolmV1,
-			RoomID:     ogs.RoomID,
-			SessionID:  ogs.ID(),
-			SessionKey: ogs.Internal.Key(),
+			Algorithm:     id.AlgorithmMegolmV1,
+			RoomID:        ogs.RoomID,
+			SessionID:     ogs.ID(),
+			SessionKey:    ogs.Internal.Key(),
+			SharedHistory: ogs.SharedHistory,
 		}
 	}
 	return event.Content{Parsed: ogs.content}

@@ -208,6 +208,7 @@ func (mach *OlmMachine) ImportRoomKeyFromBackupWithoutSaving(
 		ReceivedAt:       time.Now().UTC(),
 		MaxAge:           maxAge.Milliseconds(),
 		MaxMessages:      maxMessages,
+		SharedHistory:    keyBackupData.SharedHistory,
 		KeyBackupVersion: version,
 		KeySource:        id.KeySourceBackup,
 	}, nil

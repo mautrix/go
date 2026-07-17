@@ -183,6 +183,7 @@ func (mach *OlmMachine) importForwardedRoomKey(ctx context.Context, evt *Decrypt
 		SenderKey:        content.SenderKey,
 		RoomID:           content.RoomID,
 		ForwardingChains: append(content.ForwardingKeyChain, evt.SenderKey.String()),
+		SharedHistory:    content.SharedHistory,
 		id:               content.SessionID,
 
 		ReceivedAt:  time.Now().UTC(),
@@ -362,10 +363,11 @@ func (mach *OlmMachine) HandleRoomKeyRequest(ctx context.Context, sender id.User
 	forwardedRoomKey := event.Content{
 		Parsed: &event.ForwardedRoomKeyEventContent{
 			RoomKeyEventContent: event.RoomKeyEventContent{
-				Algorithm:  id.AlgorithmMegolmV1,
-				RoomID:     igs.RoomID,
-				SessionID:  igs.ID(),
-				SessionKey: string(exportedKey),
+				Algorithm:     id.AlgorithmMegolmV1,
+				RoomID:        igs.RoomID,
+				SessionID:     igs.ID(),
+				SessionKey:    string(exportedKey),
+				SharedHistory: igs.SharedHistory,
 			},
 			SenderKey:          igs.SenderKey,
 			ForwardingKeyChain: igs.ForwardingChains,
